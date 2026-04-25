@@ -1,0 +1,19 @@
+{
+	"extends": "../../../packages/embedder/tsconfig.json",
+	"compilerOptions": {
+		"allowImportingTsExtensions": true,
+		"noEmit": true,
+		"declaration": false,
+		"declarationMap": false,
+		"noUnusedLocals": false,
+		"noUnusedParameters": false,
+		"rootDir": "../../..",
+		"baseUrl": "../../..",
+		"paths": {
+			"@nodix/embedder": ["packages/embedder/src/index.ts"],
+			"@nodix/utils/*": ["packages/utils/src/*"]
+		}
+	},
+	"include": ["**/*.ts", "../../../packages/embedder/src/**/*.ts"],
+	"exclude": ["node_modules"]
+}
