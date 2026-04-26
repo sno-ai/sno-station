@@ -58,8 +58,8 @@ describe.skipIf(!HAS_MODEL)(
 				cacheDir: MODEL_DIR,
 				model: "perplexity-ai/pplx-embed-v1-0.6b",
 				revision: "main",
-				// q8 uses GatherBlockQuantized which onnxruntime-node 1.21 rejects.
-				// fp32 (`model.onnx`) loads cleanly with the bundled ORT.
+				// q4/q8 use GatherBlockQuantized which onnxruntime-node 1.21 rejects.
+				// fp32 (`model.onnx`) loads cleanly with the bundled ORT when present locally.
 				dtype: "fp32",
 				nativeDim: 1024,
 				outputDim: 1024,
