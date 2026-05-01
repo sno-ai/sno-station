@@ -5,15 +5,27 @@ import { sha256Hex } from "./hash.js";
 import { updateIdentity } from "./identity.js";
 import type { PathEnv } from "./paths.js";
 
+const projectIdCache = new Map<string, string>();
+
 export function detectProjectId(cwd = process.cwd(), env: PathEnv = process.env): string {
-	const remote = readGitRemote(cwd);
-	if (remote !== null) {
-		return `p_${sha256Hex(normalizeGitRemote(remote)).slice(0, 16)}`;
+	const resolvedCwd = resolve(cwd);
+	const absCwd = normalizePath(resolvedCwd);
+	const cached = projectIdCache.get(absCwd);
+	if (cached !== undefined) {
+		return cached;
 	}
 
-	const absCwd = normalizePath(resolve(cwd));
+	const remote = readGitRemote(resolvedCwd);
+	if (remote !== null) {
+		const projectId = `p_${sha256Hex(normalizeGitRemote(remote)).slice(0, 16)}`;
+		projectIdCache.set(absCwd, projectId);
+		return projectId;
+	}
+
 	if (absCwd !== normalizePath(homedir()) && absCwd !== normalizePath(resolve("/"))) {
-		return `p_${sha256Hex(absCwd).slice(0, 16)}`;
+		const projectId = `p_${sha256Hex(absCwd).slice(0, 16)}`;
+		projectIdCache.set(absCwd, projectId);
+		return projectId;
 	}
 
 	return getOrCreateDefaultProjectId(env);

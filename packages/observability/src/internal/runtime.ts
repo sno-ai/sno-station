@@ -40,6 +40,8 @@ export class SnoObserveRuntime {
 	private store: BufferStore | null = null;
 	private storePath: string | null = null;
 	private flushEngine: FlushEngine | null = null;
+	private consentStoreCache: ConsentStore | null = null;
+	private consentStoreEnv: PathEnv | null = null;
 	private readonly mutex = new AsyncMutex();
 	private readonly listeners = new Set<Subscription>();
 
@@ -176,6 +178,8 @@ export class SnoObserveRuntime {
 				await this.flush(true);
 			}
 			consentStore.write(next);
+			this.consentStoreCache = null;
+			this.consentStoreEnv = null;
 			for (const agentId of agents) {
 				const chainEpoch = store.nextEpoch(identity.machine_uuid, agentId);
 				this.appendPrepared({
@@ -337,7 +341,12 @@ export class SnoObserveRuntime {
 	}
 
 	private consentStore(): ConsentStore {
-		return new ConsentStore(this.env());
+		const env = this.env();
+		if (this.consentStoreCache === null || this.consentStoreEnv !== env) {
+			this.consentStoreCache = new ConsentStore(env);
+			this.consentStoreEnv = env;
+		}
+		return this.consentStoreCache;
 	}
 
 	private env(): PathEnv & Record<string, string | undefined> {
