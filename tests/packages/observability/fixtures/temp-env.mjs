@@ -1,0 +1,149 @@
+// Shared test helpers: tmpdir-isolated SNO_HOME, fixture event factories, fetch recorder.
+// Used by both unit/ and integration/ tests; not a test file itself.
+import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+export function createTempSnoEnv(prefix = "sno-observe-") {
+	const dir = mkdtempSync(join(tmpdir(), prefix));
+	return {
+		dir,
+		env: {
+			SNO_HOME: dir,
+			SNO_IDENTITY_PATH: join(dir, "identity.json"),
+			SNO_BUFFER_PATH: join(dir, "buffer.db"),
+			SNO_CONSENT_PATH: join(dir, "state", "consent.json"),
+			SNO_TOKEN_PATH: join(dir, "state", "tokens.json"),
+			SNO_OBSERVE_BASE_URL: "https://sno.test",
+			HOME: dir,
+		},
+	};
+}
+
+export function cleanupTempSnoEnv(temp) {
+	rmSync(temp.dir, { recursive: true, force: true });
+}
+
+export function initGitRepo(dir, remote) {
+	mkdirSync(dir);
+	for (const args of [["init"], ["remote", "add", "origin", remote]]) {
+		const result = spawnSync("git", args, { cwd: dir, encoding: "utf8" });
+		assert.equal(result.status, 0, result.stderr);
+	}
+}
+
+export function createFetchRecorder(statuses = []) {
+	const calls = [];
+	const fetchImpl = async (url, init) => {
+		calls.push({
+			url: String(url),
+			init,
+			body: typeof init?.body === "string" ? init.body : undefined,
+			headers: headerRecord(init?.headers),
+		});
+		const statusSpec = statuses.shift() ?? 202;
+		const status = typeof statusSpec === "number" ? statusSpec : statusSpec.status;
+		const headers = {
+			"Content-Type": "application/json",
+			...(typeof statusSpec === "number" ? {} : (statusSpec.headers ?? {})),
+		};
+		const body =
+			typeof statusSpec === "number" || statusSpec.body === undefined
+				? JSON.stringify({ received: status === 200 || status === 202 ? 1 : 0 })
+				: statusSpec.body;
+		return new Response(body, { status, headers });
+	};
+	return { calls, fetch: fetchImpl };
+}
+
+export function headerRecord(headers) {
+	if (headers === undefined) {
+		return {};
+	}
+	if (headers instanceof Headers) {
+		return Object.fromEntries(headers.entries());
+	}
+	if (Array.isArray(headers)) {
+		return Object.fromEntries(headers);
+	}
+	return { ...headers };
+}
+
+export const validPayloads = {
+	"agent.identify": {
+		agent_id: "codex",
+		machine_id: "018f7d0c-fd8b-7ccf-9b9b-0a2ea938ad0d",
+		sdk_version: "0.1.0",
+	},
+	"memory.write": {
+		key_hash: "h_key",
+		byte_len: 12,
+		content_tokens: 3,
+		tokens_method: "fast",
+	},
+	"memory.read": {
+		query_hash: "h_query",
+		query_tokens: 2,
+		k: 5,
+		hit_count: 1,
+		result_tokens: 10,
+		latency_ms: 4,
+		tokens_method: "bpe",
+	},
+	"llm.call": {
+		model: "gpt-4o",
+		prompt_tokens: 10,
+		completion_tokens: 3,
+		latency_ms: 120,
+		cache_read_tokens: 0,
+		cache_write_tokens: 0,
+	},
+	"tool.call": {
+		tool_name: "bash",
+		decision: "allow",
+		input_hash: "h_input",
+		output_hash: "h_output",
+		latency_ms: 8,
+	},
+	"session.start": { session_uuid: "session-1" },
+	"session.end": { session_uuid: "session-1", duration_ms: 1000 },
+	"prompt.submit": { prompt_hash: "h_prompt", byte_len: 9 },
+	"permission.request": { kind: "shell", decision: "deny", target_hash: "h_target" },
+	"consent.change": { from: "metadata-only", to: "off", reason: "test" },
+	error: { kind: "recoverable", message_hash: "h_message", recoverable: true },
+	"cost.summary": {
+		session_uuid: "session-1",
+		event_count: 7,
+		prompt_tokens: 20,
+		completion_tokens: 5,
+		tool_calls: 1,
+		memory_reads: 2,
+		memory_writes: 3,
+	},
+};
+
+export const expectedEventTypes = [
+	"agent.identify",
+	"memory.write",
+	"memory.read",
+	"llm.call",
+	"tool.call",
+	"session.start",
+	"session.end",
+	"prompt.submit",
+	"permission.request",
+	"consent.change",
+	"error",
+	"cost.summary",
+];
+
+export const scope = {
+	user_id: "u_test",
+	machine_id: "018f7d0c-fd8b-7ccf-9b9b-0a2ea938ad0d",
+	agent_id: "codex",
+	project_id: "p_test",
+};
+
+export const distRoot = "../../../../packages/sno-observe/dist";
