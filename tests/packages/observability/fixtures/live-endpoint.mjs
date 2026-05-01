@@ -3,8 +3,7 @@
 // Pre-launch: sno.ai is one deployment. CI runs against the in-process fixture
 // server only. To smoke-test the real sno.ai endpoint, set
 // `SNO_OBSERVE_LIVE_BASE_URL` (e.g. `https://www.sno.ai`) and
-// `SNO_API_KEY` for `audit.verify`. Bearer auth is NOT used on the audit
-// endpoint per `sno-ai-api-contract.md` §6.1.
+// `SNO_API_KEY` for `audit.verify`; production accepts it as a Bearer API key.
 
 export function loadLiveBaseUrl() {
 	const baseUrl = process.env.SNO_OBSERVE_LIVE_BASE_URL;

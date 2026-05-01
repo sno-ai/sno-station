@@ -1,7 +1,7 @@
-// Acceptance suite per tasks §32.1, §32.2, §32.4 (staging-gated).
-// 24h idle + biome smoke (§32.3) live in the package's lint script + this file's
-// idle-timer assertion (kept short-form here; the spec calls for an actual 24h dry
-// run done manually in CI).
+// Acceptance suite per tasks §32.1, §32.2, §32.4 (live-endpoint smoke is
+// manual). 24h idle + biome smoke (§32.3) live in the package's lint script
+// plus this file's idle-timer assertion (kept short-form here; the spec calls
+// for an actual 24h dry run done manually in CI).
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -10,7 +10,7 @@ import { describe, it } from "node:test";
 import { setTimeout as delay } from "node:timers/promises";
 import { SnoObserveRuntime } from "../../../../packages/sno-observe/dist/internal/runtime.js";
 import { parseEventInput } from "../../../../packages/sno-observe/dist/internal/schemas.js";
-import { skipIfNoStaging } from "../fixtures/staging.mjs";
+import { skipIfNoLiveEndpoint } from "../fixtures/live-endpoint.mjs";
 import { validPayloads } from "../fixtures/temp-env.mjs";
 
 function tempEnv(baseUrl) {
@@ -44,13 +44,13 @@ const SDK_EVENT_TYPES = [
 	"cost.summary",
 ];
 
-describe("acceptance — staging end-to-end (32.1, gated)", () => {
+describe("acceptance — live-endpoint end-to-end (32.1, gated)", () => {
 	it("emits all 12 SDK-emittable event types and ships them", async (t) => {
-		const creds = skipIfNoStaging(t);
-		if (creds === null) {
+		const baseUrl = skipIfNoLiveEndpoint(t);
+		if (baseUrl === null) {
 			return;
 		}
-		const env_ = tempEnv(creds.baseUrl);
+		const env_ = tempEnv(baseUrl);
 		const runtime = new SnoObserveRuntime({ env: env_.env, cwd: env_.dir });
 		try {
 			await runtime.setConsent("full", "acceptance-suite");
@@ -78,8 +78,8 @@ describe("acceptance — staging end-to-end (32.1, gated)", () => {
 
 describe("acceptance — idle CPU dry run (32.2)", () => {
 	it("creating a runtime with zero emits triggers zero network calls and zero timers", async () => {
-		// Short proxy for the 24h spec: we install a fetch spy + setTimeout spy and
-		// run the runtime untouched for a brief window. Both spies SHALL stay at zero.
+		// Short proxy for the 24h spec: install a fetch spy and run the runtime
+		// untouched for a brief window. The spy SHALL stay at zero.
 		const env_ = tempEnv("https://sno.test");
 		const fetchCalls = [];
 		const fakeFetch = async (...args) => {
@@ -97,12 +97,11 @@ describe("acceptance — idle CPU dry run (32.2)", () => {
 	});
 });
 
-describe("acceptance — staging bug reporting (32.4)", () => {
+describe("acceptance — upstream bug reporting (32.4)", () => {
 	it("documents the upstream-bug flow", () => {
-		// Procedural assertion: per design.md decision 9 + tasks §32.4, any staging bug
-		// is reported upstream, NOT patched in this package. We assert the decision is
-		// present in design.md (already covered by 28.2-style doc check, repeated here
-		// for completeness of the acceptance suite).
+		// Procedural assertion: per design.md decision 9 + tasks §32.4, any
+		// upstream sno.ai/Helicone bug surfaced by these tests is reported to
+		// the upstream owners, NOT patched in this package.
 		assert.equal(true, true);
 	});
 });
