@@ -212,9 +212,12 @@ export class BufferStore {
 			const rows = this.db
 				.prepare("SELECT rowid FROM events WHERE shipped = 1 ORDER BY created_at ASC, rowid ASC")
 				.all() as RowIdRow[];
-			for (const row of rows) {
-				this.db.prepare("DELETE FROM events WHERE rowid = ? AND shipped = 1").run(row.rowid);
-				pruned += 1;
+			const deleteRow = this.db.prepare("DELETE FROM events WHERE rowid = ? AND shipped = 1");
+			const batchSize = 50;
+			for (let index = 0; index < rows.length; index += batchSize) {
+				for (const row of rows.slice(index, index + batchSize)) {
+					pruned += deleteRow.run(row.rowid).changes;
+				}
 				if (this.databaseSizeBytes() <= maxBytes) {
 					break;
 				}

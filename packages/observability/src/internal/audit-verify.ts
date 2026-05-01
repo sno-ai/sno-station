@@ -11,11 +11,9 @@ export async function verifyAuditEvent(
 	const baseUrl = normalizeBaseUrl(
 		options.baseUrl ?? process.env[BASE_URL_ENV] ?? "https://www.sno.ai",
 	);
-	const headers: Record<string, string> = {};
 	const apiKey = process.env[API_KEY_ENV]?.trim();
-	if (apiKey !== undefined && apiKey.length > 0) {
-		headers.Authorization = `Bearer ${apiKey}`;
-	}
+	const headers: Record<string, string> =
+		apiKey !== undefined && apiKey.length > 0 ? { Authorization: `Bearer ${apiKey}` } : {};
 	const response = await fetchJson<AuditVerifyResult>(
 		`${baseUrl}/api/v1/audit/verify?event_id=${encodeURIComponent(eventId)}`,
 		{ method: "GET", headers },

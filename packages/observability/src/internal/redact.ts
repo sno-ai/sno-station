@@ -1,4 +1,5 @@
 import { existsSync, readFileSync } from "node:fs";
+import { logger } from "./log.js";
 import type { ConsentValue, JsonObject, JsonValue } from "./types.js";
 
 const REDACTED_EMAIL = "<email>";
@@ -89,7 +90,7 @@ function redactString(input: string, userRules: RegExp[]): { value: string; reda
 		/\b(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)\b/gu,
 		REDACTED_IP,
 	);
-	value = value.replace(/\b(?:[0-9a-f]{1,4}:){2,7}[0-9a-f]{1,4}\b/giu, REDACTED_IP);
+	value = value.replace(/\b(?:[0-9a-f]{1,4}:){5,7}[0-9a-f]{1,4}\b/giu, REDACTED_IP);
 	value = value.replace(
 		/\b(?:\+?1[-.\s]?)?(?:\(?\d{3}\)?[-.\s]?)\d{3}[-.\s]?\d{4}\b/gu,
 		REDACTED_PHONE,
@@ -121,7 +122,13 @@ function loadUserRules(path?: string): RegExp[] {
 		}
 		try {
 			rules.push(new RegExp(trimmed, "gu"));
-		} catch {}
+		} catch (error) {
+			logger.warn("invalid redaction rule ignored", {
+				path,
+				pattern: trimmed,
+				error: error instanceof Error ? error.message : String(error),
+			});
+		}
 	}
 	return rules;
 }
