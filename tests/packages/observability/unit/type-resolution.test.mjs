@@ -49,10 +49,14 @@ describe("type-resolution for downstream consumers (30.3)", () => {
 			writeFileSync(
 				join(dir, "probe.ts"),
 				[
-					`import type { Event, AgentId, ConsentValue } from "@nodix/sno-observe";`,
+					`import { createSnoObserve } from "@nodix/sno-observe";`,
+					`import type { Event, AgentId, ConsentValue, RuntimeOptions } from "@nodix/sno-observe";`,
 					`const a: AgentId = "codex";`,
 					`const c: ConsentValue = "metadata-only";`,
 					`const e: Event = { event_type: "memory.write", agent_id: a, payload: { key_hash: "h", byte_len: 1, content_tokens: 1, tokens_method: "fast" }, consent_level: c };`,
+					`const opts: RuntimeOptions = { cwd: "." };`,
+					`const observe = createSnoObserve(opts);`,
+					`void observe;`,
 					`void e;`,
 					"",
 				].join("\n"),

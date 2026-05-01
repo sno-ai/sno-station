@@ -798,7 +798,7 @@ describe("sno observe Node package", () => {
 	});
 
 	it("registers devices, verifies audits with API-key bearer auth, and exposes the public namespace", async () => {
-		assert.deepEqual(Object.keys(publicModule), ["snoObserve"]);
+		assert.deepEqual(Object.keys(publicModule), ["createSnoObserve", "snoObserve"]);
 		assert.deepEqual(Object.keys(snoObserve), [
 			"emit",
 			"flush",
@@ -814,6 +814,10 @@ describe("sno observe Node package", () => {
 		assert.deepEqual(Object.keys(snoObserve.consent), ["get", "set"]);
 		assert.deepEqual(Object.keys(snoObserve.observe), ["pause", "resume", "export"]);
 		assert.deepEqual(Object.keys(snoObserve.audit), ["verify"]);
+		const isolatedObserve = publicModule.createSnoObserve();
+		assert.notEqual(isolatedObserve, snoObserve);
+		assert.deepEqual(Object.keys(isolatedObserve), Object.keys(snoObserve));
+		await isolatedObserve.shutdown();
 
 		const temp = createTempSnoEnv();
 		try {
