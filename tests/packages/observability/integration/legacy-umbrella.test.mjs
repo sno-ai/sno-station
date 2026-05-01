@@ -797,7 +797,7 @@ describe("sno observe Node package", () => {
 		}
 	});
 
-	it("registers devices, verifies audits without bearer auth, and exposes the public namespace", async () => {
+	it("registers devices, verifies audits with API-key bearer auth, and exposes the public namespace", async () => {
 		assert.deepEqual(Object.keys(publicModule), ["snoObserve"]);
 		assert.deepEqual(Object.keys(snoObserve), [
 			"emit",
@@ -888,38 +888,76 @@ describe("sno observe Node package", () => {
 			cleanupTempSnoEnv(expiredTemp);
 		}
 
-		const auditCalls = [];
-		const result = await verifyAuditEvent("event 1", {
-			baseUrl: "https://sno.test",
-			fetch: async (url, init) => {
-				auditCalls.push({ url: String(url), headers: init.headers });
-				return new Response(JSON.stringify({ verified: true, anchor_id: "a_1" }), {
-					status: 200,
-					headers: { "Content-Type": "application/json" },
-				});
-			},
-		});
-		assert.deepEqual(result, { verified: true, anchor_id: "a_1" });
-		assert.equal(auditCalls[0].url, "https://sno.test/api/v1/audit/verify?event_id=event%201");
-		assert.equal(auditCalls[0].headers.Authorization, undefined);
-
-		const falseResult = await verifyAuditEvent("event-2", {
-			baseUrl: "https://sno.test",
-			fetch: async () =>
-				new Response(JSON.stringify({ verified: false, gdpr_scrubbed: true }), {
-					status: 200,
-					headers: { "Content-Type": "application/json" },
-				}),
-		});
-		assert.deepEqual(falseResult, { verified: false, gdpr_scrubbed: true });
-		await assert.rejects(
-			() =>
-				verifyAuditEvent("missing", {
+			const previousApiKey = process.env.SNO_API_KEY;
+			process.env.SNO_API_KEY = "test-api-key";
+			try {
+				const auditCalls = [];
+				const result = await verifyAuditEvent("event 1", {
 					baseUrl: "https://sno.test",
-					fetch: async () => new Response(JSON.stringify({ error: "not found" }), { status: 404 }),
-				}),
-			/event not found or not owned/u,
-		);
+					fetch: async (url, init) => {
+						auditCalls.push({ url: String(url), headers: init.headers });
+						return new Response(JSON.stringify({ verified: true, anchor_id: "a_1" }), {
+							status: 200,
+							headers: { "Content-Type": "application/json" },
+						});
+					},
+				});
+				assert.deepEqual(result, { verified: true, anchor_id: "a_1" });
+				assert.equal(
+					auditCalls[0].url,
+					"https://sno.test/api/v1/audit/verify?event_id=event%201",
+				);
+				assert.equal(auditCalls[0].headers.Authorization, "Bearer test-api-key");
+
+				const falseResult = await verifyAuditEvent("event-2", {
+					baseUrl: "https://sno.test",
+					fetch: async () =>
+						new Response(JSON.stringify({ verified: false, gdpr_scrubbed: true }), {
+							status: 200,
+							headers: { "Content-Type": "application/json" },
+						}),
+				});
+				assert.deepEqual(falseResult, { verified: false, gdpr_scrubbed: true });
+				await assert.rejects(
+					() =>
+						verifyAuditEvent("missing", {
+							baseUrl: "https://sno.test",
+							fetch: async () =>
+								new Response(JSON.stringify({ error: "not found" }), { status: 404 }),
+						}),
+					/event not found or not owned/u,
+				);
+			} finally {
+				if (previousApiKey === undefined) {
+					delete process.env.SNO_API_KEY;
+				} else {
+					process.env.SNO_API_KEY = previousApiKey;
+				}
+			}
+		});
+
+	it("reports doctor diagnostics without bootstrapping local state", () => {
+		const temp = createTempSnoEnv("sno-observe-doctor-");
+		try {
+			const runtime = new SnoObserveRuntime({ env: temp.env });
+			const report = runtime.doctor();
+
+			assert.deepEqual(Object.keys(report), [
+				"identity",
+				"buffer",
+				"consent",
+				"last_ship",
+				"lockfile",
+			]);
+			assert.equal(report.identity.status, "warn");
+			assert.equal(report.buffer.status, "warn");
+			assert.equal(report.consent.status, "ok");
+			assert.equal(report.last_ship.detail, "last successful POST to https://sno.test: never");
+			assert.equal(existsSync(temp.env.SNO_IDENTITY_PATH), false);
+			assert.equal(existsSync(temp.env.SNO_BUFFER_PATH), false);
+		} finally {
+			cleanupTempSnoEnv(temp);
+		}
 	});
 });
 
