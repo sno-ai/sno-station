@@ -14,16 +14,16 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, it } from "node:test";
-import * as publicModule from "../../../packages/sno-observe/dist/index.js";
-import { snoObserve } from "../../../packages/sno-observe/dist/index.js";
-import { verifyAuditEvent } from "../../../packages/sno-observe/dist/internal/audit-verify.js";
-import { BufferStore, decodeEnvelope } from "../../../packages/sno-observe/dist/internal/buffer-store.js";
+import * as publicModule from "../../../../packages/sno-observe/dist/index.js";
+import { snoObserve } from "../../../../packages/sno-observe/dist/index.js";
+import { verifyAuditEvent } from "../../../../packages/sno-observe/dist/internal/audit-verify.js";
+import { BufferStore, decodeEnvelope } from "../../../../packages/sno-observe/dist/internal/buffer-store.js";
 import {
 	canonicalPreimage,
 	computeSelfHash,
-} from "../../../packages/sno-observe/dist/internal/canonical-hash.js";
-import { ConsentStore } from "../../../packages/sno-observe/dist/internal/consent.js";
-import { registerDevice } from "../../../packages/sno-observe/dist/internal/device-flow.js";
+} from "../../../../packages/sno-observe/dist/internal/canonical-hash.js";
+import { ConsentStore } from "../../../../packages/sno-observe/dist/internal/consent.js";
+import { registerDevice } from "../../../../packages/sno-observe/dist/internal/device-flow.js";
 import {
 	InvalidAgentIdError,
 	InvalidConsentError,
@@ -31,21 +31,21 @@ import {
 	InvalidEventTypeError,
 	ChainSeedError,
 	ReRegisterRequiredError,
-} from "../../../packages/sno-observe/dist/internal/errors.js";
-import { bootstrapIdentity } from "../../../packages/sno-observe/dist/internal/identity.js";
-import { sha256Hex } from "../../../packages/sno-observe/dist/internal/hash.js";
-import { getIdentityLockPath } from "../../../packages/sno-observe/dist/internal/paths.js";
+} from "../../../../packages/sno-observe/dist/internal/errors.js";
+import { bootstrapIdentity } from "../../../../packages/sno-observe/dist/internal/identity.js";
+import { sha256Hex } from "../../../../packages/sno-observe/dist/internal/hash.js";
+import { getIdentityLockPath } from "../../../../packages/sno-observe/dist/internal/paths.js";
 import {
 	detectProjectId,
 	normalizeGitRemote,
-} from "../../../packages/sno-observe/dist/internal/project-id.js";
-import { redactEventPayload } from "../../../packages/sno-observe/dist/internal/redact.js";
-import { SnoObserveRuntime } from "../../../packages/sno-observe/dist/internal/runtime.js";
-import { shouldSampleTool } from "../../../packages/sno-observe/dist/internal/sampling.js";
-import { parseConsentValue, parseEventInput } from "../../../packages/sno-observe/dist/internal/schemas.js";
-import { countTokens, countTokensFast } from "../../../packages/sno-observe/dist/internal/tokens.js";
-import { AGENT_IDS, EVENT_TYPES } from "../../../packages/sno-observe/dist/internal/types.js";
-import { createEnvelope, serializeEnvelope } from "../../../packages/sno-observe/dist/internal/wire-envelope.js";
+} from "../../../../packages/sno-observe/dist/internal/project-id.js";
+import { redactEventPayload } from "../../../../packages/sno-observe/dist/internal/redact.js";
+import { SnoObserveRuntime } from "../../../../packages/sno-observe/dist/internal/runtime.js";
+import { shouldSampleTool } from "../../../../packages/sno-observe/dist/internal/sampling.js";
+import { parseConsentValue, parseEventInput } from "../../../../packages/sno-observe/dist/internal/schemas.js";
+import { countTokens, countTokensFast } from "../../../../packages/sno-observe/dist/internal/tokens.js";
+import { AGENT_IDS, EVENT_TYPES } from "../../../../packages/sno-observe/dist/internal/types.js";
+import { createEnvelope, serializeEnvelope } from "../../../../packages/sno-observe/dist/internal/wire-envelope.js";
 
 const expectedEventTypes = [
 	"agent.identify",
@@ -226,7 +226,7 @@ describe("sno observe Node package", () => {
 	it("matches the canonical hash vector and compact envelope shape", () => {
 		const fixture = JSON.parse(
 			readFileSync(
-				fileURLToPath(new URL("fixtures/test-vectors/canonical-hash.json", import.meta.url)),
+				fileURLToPath(new URL("../fixtures/test-vectors/canonical-hash.json", import.meta.url)),
 				"utf8",
 			),
 		);
