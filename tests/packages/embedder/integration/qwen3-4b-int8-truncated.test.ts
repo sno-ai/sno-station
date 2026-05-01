@@ -10,13 +10,13 @@
  * Skipped automatically when the model files are not present.
  */
 
-import { afterAll, beforeAll, describe, expect, it } from "bun:test";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { LocalEmbedProvider } from "@nodix/embedder";
 
 const MODEL_DIR = resolve(
-	import.meta.dir,
+	import.meta.dirname,
 	"../../../../apps/storix-core/embedding/models",
 );
 const MODEL_FILE = resolve(
