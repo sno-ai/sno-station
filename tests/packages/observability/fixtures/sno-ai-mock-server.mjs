@@ -1,4 +1,4 @@
-// Fixture HTTP server for sno-observe tests. Node-only (`node:http`); zero Bun APIs.
+// Fixture HTTP server for sno-observe tests. Node-only (`node:http`).
 // Per design.md Decision 9 + tasks.md §15.3: replays the §10 / §2.2 status-code matrix
 // on demand. Tests pass a `script` of responses via `enqueue(...)` or pre-seed a sequence
 // in `start({ script: [...] })`.
