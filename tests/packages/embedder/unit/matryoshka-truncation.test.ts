@@ -7,7 +7,7 @@
  * similarity meaningful.
  */
 
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it } from "vitest";
 import { truncateAndRenormalize } from "@nodix/embedder";
 
 const TOL = 1e-6;
