@@ -8,6 +8,10 @@ const REDACTED_CARD = "<card>";
 const REDACTED_KEY = "<api-key>";
 const REDACTED_IP = "<ip>";
 const REDACTED_CONTENT = "<content>";
+const MAX_USER_RULE_LENGTH = 256;
+const USER_RULE_CACHE_TTL_MS = 5_000;
+const NESTED_QUANTIFIER_PATTERN =
+	/\((?:\?:|\?=|\?!|\?<=|\?<!)?(?:[^()\\]|\\.)*(?:[+*]|\{\d+(?:,\d*)?\})(?:[^()\\]|\\.)*\)(?:[+*]|\{\d+(?:,\d*)?\})/u;
 
 const sensitiveKeys = new Set([
 	"prompt_text",
@@ -25,6 +29,13 @@ export interface RedactionResult {
 	value: JsonObject;
 	redacted: boolean;
 }
+
+interface UserRuleCacheEntry {
+	loadedAtMs: number;
+	rules: RegExp[];
+}
+
+const userRuleCache = new Map<string, UserRuleCacheEntry>();
 
 export function redactEventPayload(
 	payload: JsonObject,
@@ -102,7 +113,10 @@ function redactString(input: string, userRules: RegExp[]): { value: string; reda
 		/\b(?:sk[_-](?:live[_-])?[A-Za-z0-9_-]{16,}|pk[_-](?:live[_-])?[A-Za-z0-9_-]{16,}|gh[ps]_[A-Za-z0-9_]{16,}|xox[bp]-[A-Za-z0-9-]{16,}|AIza[A-Za-z0-9_-]{16,}|AKIA[0-9A-Z]{16})\b/gu,
 		REDACTED_KEY,
 	);
-	value = value.replace(/"private_key"\s*:\s*"-----BEGIN PRIVATE KEY (redacted)-----[^"]+"/gu, REDACTED_KEY);
+	value = value.replace(
+		/"private_key"\s*:\s*"-----BEGIN (?:RSA )?PRIVATE KEY-----[^"]+"/gu,
+		REDACTED_KEY,
+	);
 	for (const rule of userRules) {
 		value = value.replace(rule, REDACTED_CONTENT);
 	}
@@ -110,7 +124,16 @@ function redactString(input: string, userRules: RegExp[]): { value: string; reda
 }
 
 function loadUserRules(path?: string): RegExp[] {
-	if (path === undefined || !existsSync(path)) {
+	if (path === undefined) {
+		return [];
+	}
+	const now = Date.now();
+	const cached = userRuleCache.get(path);
+	if (cached !== undefined && now - cached.loadedAtMs < USER_RULE_CACHE_TTL_MS) {
+		return cached.rules;
+	}
+	if (!existsSync(path)) {
+		userRuleCache.set(path, { loadedAtMs: now, rules: [] });
 		return [];
 	}
 	const contents = readFileSync(path, "utf8");
@@ -118,6 +141,15 @@ function loadUserRules(path?: string): RegExp[] {
 	for (const line of contents.split(/\r?\n/u)) {
 		const trimmed = line.trim();
 		if (trimmed.length === 0 || trimmed.startsWith("#")) {
+			continue;
+		}
+		const unsafeReason = unsafeUserRuleReason(trimmed);
+		if (unsafeReason !== undefined) {
+			logger.warn("unsafe redaction rule ignored", {
+				path,
+				pattern: trimmed,
+				reason: unsafeReason,
+			});
 			continue;
 		}
 		try {
@@ -130,7 +162,18 @@ function loadUserRules(path?: string): RegExp[] {
 			});
 		}
 	}
+	userRuleCache.set(path, { loadedAtMs: now, rules });
 	return rules;
+}
+
+function unsafeUserRuleReason(pattern: string): string | undefined {
+	if (pattern.length > MAX_USER_RULE_LENGTH) {
+		return "too_long";
+	}
+	if (NESTED_QUANTIFIER_PATTERN.test(pattern)) {
+		return "nested_quantifier";
+	}
+	return undefined;
 }
 
 function passesLuhn(input: string): boolean {

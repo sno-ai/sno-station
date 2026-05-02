@@ -6,12 +6,12 @@ const API_KEY_ENV = "SNO_API_KEY";
 
 export async function verifyAuditEvent(
 	eventId: string,
-	options: { baseUrl?: string; fetch?: typeof fetch } = {},
+	options: { baseUrl?: string; apiKey?: string; fetch?: typeof fetch } = {},
 ): Promise<AuditVerifyResult> {
 	const baseUrl = normalizeBaseUrl(
 		options.baseUrl ?? process.env[BASE_URL_ENV] ?? "https://www.sno.ai",
 	);
-	const apiKey = process.env[API_KEY_ENV]?.trim();
+	const apiKey = (options.apiKey ?? process.env[API_KEY_ENV])?.trim();
 	const headers: Record<string, string> =
 		apiKey !== undefined && apiKey.length > 0 ? { Authorization: `Bearer ${apiKey}` } : {};
 	const response = await fetchJson<AuditVerifyResult>(

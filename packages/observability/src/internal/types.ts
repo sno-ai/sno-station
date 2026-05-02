@@ -124,6 +124,12 @@ export interface AuditVerifyResult {
 	stored_root?: string;
 }
 
+export interface ShutdownResult {
+	flushedCount: number;
+	failedCount: number;
+	lastError?: string;
+}
+
 export interface ExportResult {
 	format: ExportFormat;
 	path?: string;
