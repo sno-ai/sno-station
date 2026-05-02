@@ -1,9 +1,9 @@
 import { v7 as uuidv7 } from "uuid";
 import { type BufferStore, decodeEnvelope, type PendingRow } from "./buffer-store.js";
+import { registerMachine } from "./device-flow.js";
 import { type EventPostResult, postEvent } from "./http.js";
 import { logger } from "./log.js";
 import type { PathEnv } from "./paths.js";
-import { TokenStore } from "./token-state.js";
 import { type Identity, SDK_VERSION } from "./types.js";
 
 export interface FlushOptions {
@@ -170,86 +170,79 @@ export class FlushEngine {
 	}
 }
 
-interface RowResult extends FlushResult {
-	// True only when the request never reached the server (network/timeout).
-	// Any HTTP response — including 401/403/5xx — sets this false because the
-	// server has already seen the bearer and consumed it server-side.
-	transportErrored: boolean;
-}
-
 export async function flushPending(
 	store: BufferStore,
 	options: FlushOptions,
 ): Promise<FlushResult> {
 	const rows = store.getPending(100);
-	const tokenStore = new TokenStore(options.env);
-	// Claim-before-use: atomically flips access_token_consumed=true under a
-	// file lock so two concurrent host processes can't both grab the same
-	// one-shot bearer. claimAccessToken() returns the token to exactly one
-	// caller; others get null and ship without bearer. Skip claiming when
-	// there's nothing to ship — otherwise an idle scheduler tick on an empty
-	// buffer would burn the bearer.
-	let bearer: string | undefined;
-	const bearerClaimed =
-		options.identity.claimed && rows.length > 0 ? tokenStore.claimAccessToken() : null;
-	if (bearerClaimed !== null) {
-		bearer = bearerClaimed;
+	if (rows.length === 0) {
+		store.pruneRetention();
+		return { shipped: 0, terminal: 0, retryable: 0 };
 	}
-	let bearerOutcome: "unused" | "delivered" | "transport_failed" = "unused";
+	const registrationFailure = await registerBeforeFlush(options, rows.length);
+	if (registrationFailure !== null) {
+		store.pruneRetention();
+		return registrationFailure;
+	}
 
 	let shipped = 0;
 	let terminal = 0;
 	let retryable = 0;
 	let retryAfterMs: number | undefined;
 	for (const row of rows) {
-		const usedBearerOnThisRow = bearer !== undefined;
-		const result = await flushRow(store, row, options, bearer);
+		const result = await flushRow(store, row, options);
 		shipped += result.shipped;
 		terminal += result.terminal;
 		retryable += result.retryable;
 		retryAfterMs = minDefined(retryAfterMs, result.retryAfterMs);
-		if (usedBearerOnThisRow) {
-			bearerOutcome = result.transportErrored ? "transport_failed" : "delivered";
-			// Don't reuse the bearer on subsequent rows; the server consumes
-			// it on first claim regardless of the per-row outcome here.
-			bearer = undefined;
-		}
 		if (result.retryable > 0) {
 			break;
 		}
 	}
-	// Revert ONLY when the request never reached the server. Any HTTP response
-	// (including 401/403/5xx) means the server has already seen and consumed
-	// the bearer; reverting in that case re-issues a known-dead token on the
-	// next flush and creates a permanent head-of-line block.
-	if (bearerClaimed !== null && bearerOutcome === "transport_failed") {
-		tokenStore.revertClaim();
-	}
 	store.pruneRetention();
 	return withOptionalRetryAfter({ shipped, terminal, retryable }, retryAfterMs);
+}
+
+async function registerBeforeFlush(
+	options: FlushOptions,
+	pendingCount: number,
+): Promise<FlushResult | null> {
+	try {
+		const registerOptions = {
+			...(options.baseUrl === undefined ? {} : { baseUrl: options.baseUrl }),
+			...(options.env === undefined ? {} : { env: options.env }),
+			...(options.fetch === undefined ? {} : { fetch: options.fetch }),
+		};
+		await registerMachine(options.identity, registerOptions);
+		return null;
+	} catch (error) {
+		logger.warn("sno observe machine registration failed; will retry", {
+			error: error instanceof Error ? error.message : String(error),
+		});
+		return { shipped: 0, terminal: 0, retryable: pendingCount, retryAfterMs: 5_000 };
+	}
 }
 
 async function flushRow(
 	store: BufferStore,
 	row: PendingRow,
 	options: FlushOptions,
-	bearer?: string,
-): Promise<RowResult> {
+): Promise<FlushResult> {
 	try {
 		const response = await postEvent(
-			options.baseUrl ?? "https://www.sno.ai",
+			options.baseUrl ?? "https://sno.ai",
 			row.payload.toString("utf8"),
-			bearer,
+			options.identity.machine_secret,
 			options.fetch,
 		);
-		return { ...handlePostResult(store, row, response), transportErrored: false };
+		return handlePostResult(store, row, response);
 	} catch (error) {
 		store.incrementAttempts(row.rowid);
 		logger.warn("sno observe network error", {
 			event_id: row.event_id,
 			error: error instanceof Error ? error.message : "unknown",
 		});
-		return { shipped: 0, terminal: 0, retryable: 1, transportErrored: true };
+		return { shipped: 0, terminal: 0, retryable: 1 };
 	}
 }
 
@@ -301,7 +294,7 @@ function routeResponse(response: EventPostResult): ResponseRoute {
 		case 403:
 			return {
 				kind: "retry",
-				message: "sno observe bearer required or invalid",
+				message: "sno observe machine bearer required or invalid",
 				error: true,
 			};
 		case 429:
