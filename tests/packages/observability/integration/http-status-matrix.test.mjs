@@ -146,11 +146,11 @@ describe("HTTP status matrix (fixture server, node:http)", () => {
 		});
 	});
 
-	it("403 claimed_cuid_requires_bearer -> retryable + error logged (24.14)", async () => {
+	it("403 machine_scope_forbidden -> retryable + error logged (24.14)", async () => {
 		await withServerAndRuntime(async ({ server, runtime }) => {
 			server.enqueue("/api/v1/events", {
 				status: 403,
-				body: { error: "claimed_cuid_requires_bearer" },
+				body: { error: "machine_scope_forbidden" },
 			});
 			await runtime.emitParsed(memoryEvent(1));
 			const res = await runtime.flush();
@@ -158,11 +158,11 @@ describe("HTTP status matrix (fixture server, node:http)", () => {
 		});
 	});
 
-	it("403 claimed_cuid_invalid_bearer -> retryable + error logged (24.15)", async () => {
+	it("403 ownership_denied -> retryable + error logged (24.15)", async () => {
 		await withServerAndRuntime(async ({ server, runtime }) => {
 			server.enqueue("/api/v1/events", {
 				status: 403,
-				body: { error: "claimed_cuid_invalid_bearer" },
+				body: { error: "ownership_denied" },
 			});
 			await runtime.emitParsed(memoryEvent(1));
 			const res = await runtime.flush();

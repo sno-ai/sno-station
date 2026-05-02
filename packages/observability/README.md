@@ -20,12 +20,14 @@ await snoObserve.flush({ force: true });
 
 ## Runtime Files
 
-- `~/.sno/identity.json`: anonymous CUID2 user id, UUID v7 machine id, and optional registration tokens.
+- `~/.sno/identity.json`: anonymous CUID2 user id, UUID v7 machine id, and local
+  machine secret.
 - `~/.sno/buffer.db`: SQLite event buffer and local hash-chain tails.
 - `~/.sno/state/consent.json`: current consent value, defaulting to `metadata-only`.
 - `~/.sno/redaction-rules.txt`: optional newline-separated regexes for extra redaction.
 
-Tests can override paths with `SNO_HOME`, `SNO_IDENTITY_PATH`, `SNO_BUFFER_PATH`, `SNO_CONSENT_PATH`, and `SNO_TOKEN_PATH`.
+Tests can override paths with `SNO_HOME`, `SNO_IDENTITY_PATH`, `SNO_BUFFER_PATH`,
+and `SNO_CONSENT_PATH`.
 
 ## Consent
 
@@ -37,7 +39,7 @@ Consent values are `off`, `metadata-only`, and `full`. `off` keeps emitted event
 - `snoObserve.flush({ force })`
 - `snoObserve.consent.get()` / `snoObserve.consent.set(value, reason)`
 - `snoObserve.observe.pause()` / `resume()` / `export({ path, format })`
-- `snoObserve.register({ poll })`
+- `snoObserve.register()`
 - `snoObserve.audit.verify(eventId)`
 - `snoObserve.doctor()`
 - `snoObserve.shouldSampleTool(eventId, toolName, rate)`

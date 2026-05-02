@@ -22,13 +22,13 @@ export const statusCodeMatrix = Object.freeze({
 	consentLevelNotInEnum: { status: 400, body: { error: "consent_level_not_in_enum" } },
 	tokensMethodRequired: { status: 400, body: { error: "tokens_method_required" } },
 	unauthorized: { status: 401, body: { error: "unauthorized" } },
-	claimedCuidRequiresBearer: {
+	machineScopeForbidden: {
 		status: 403,
-		body: { error: "claimed_cuid_requires_bearer" },
+		body: { error: "machine_scope_forbidden" },
 	},
-	claimedCuidInvalidBearer: {
+	ownershipDenied: {
 		status: 403,
-		body: { error: "claimed_cuid_invalid_bearer" },
+		body: { error: "ownership_denied" },
 	},
 	payloadConflict: { status: 409, body: { error: "payload_conflict" } },
 	chainSeedRequired: { status: 422, body: { error: "chain_seed_required" } },
