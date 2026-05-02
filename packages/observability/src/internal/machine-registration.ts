@@ -35,7 +35,7 @@ export async function registerMachine(
 	options: RegisterOptions = {},
 ): Promise<RegisterResult> {
 	const env = options.env ?? process.env;
-	const baseUrl = normalizeBaseUrl(options.baseUrl ?? env[BASE_URL_ENV] ?? "https://sno.ai");
+	const baseUrl = normalizeBaseUrl(options.baseUrl ?? env[BASE_URL_ENV] ?? "https://www.sno.ai");
 	const response = await fetchJson<RegisterMachineResponse | ErrorResponse>(
 		`${baseUrl}/api/v1/identity/register-machine`,
 		{
