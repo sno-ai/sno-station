@@ -220,6 +220,88 @@ describe("flush 3-state machine", () => {
 		}
 	});
 
+	it("caches machine registration across successful engine flushes", async () => {
+		const t = tempEnv();
+		const store = new BufferStore(t.env.SNO_BUFFER_PATH);
+		const identity = bootstrapIdentity(t.env);
+		seedIdentify(store);
+		appendMemoryWrite(store, 1);
+		let registrationCalls = 0;
+		const fakeFetch = async (url, init) => {
+			if (String(url).endsWith("/api/v1/identity/register-machine")) {
+				registrationCalls += 1;
+				return registerMachineResponse(init);
+			}
+			return new Response(JSON.stringify({ receipt_id: "r" }), {
+				status: 202,
+				headers: { "Content-Type": "application/json" },
+			});
+		};
+		const engine = new FlushEngine(
+			store,
+			() => identity,
+			() => "https://sno.test",
+			() => t.env,
+		);
+		try {
+			const first = await engine.flush({ identity, env: t.env, fetch: fakeFetch });
+			appendMemoryWrite(store, 2);
+			const second = await engine.flush({ identity, env: t.env, fetch: fakeFetch });
+
+			assert.equal(first.shipped, 2);
+			assert.equal(second.shipped, 1);
+			assert.equal(registrationCalls, 1);
+		} finally {
+			engine.dispose();
+			store.close();
+			rmSync(t.dir, { recursive: true, force: true });
+		}
+	});
+
+	it("re-registers after event auth rejection invalidates the registration cache", async () => {
+		const t = tempEnv();
+		const store = new BufferStore(t.env.SNO_BUFFER_PATH);
+		const identity = bootstrapIdentity(t.env);
+		seedIdentify(store);
+		let registrationCalls = 0;
+		let eventCalls = 0;
+		const fakeFetch = async (url, init) => {
+			if (String(url).endsWith("/api/v1/identity/register-machine")) {
+				registrationCalls += 1;
+				return registerMachineResponse(init);
+			}
+			eventCalls += 1;
+			if (eventCalls === 1) {
+				return new Response(JSON.stringify({ error: "unauthorized" }), {
+					status: 401,
+					headers: { "Content-Type": "application/json" },
+				});
+			}
+			return new Response(JSON.stringify({ receipt_id: "r" }), {
+				status: 202,
+				headers: { "Content-Type": "application/json" },
+			});
+		};
+		const engine = new FlushEngine(
+			store,
+			() => identity,
+			() => "https://sno.test",
+			() => t.env,
+		);
+		try {
+			const first = await engine.flush({ identity, env: t.env, fetch: fakeFetch });
+			const second = await engine.flush({ identity, env: t.env, fetch: fakeFetch });
+
+			assert.equal(first.retryable, 1);
+			assert.equal(second.shipped, 1);
+			assert.equal(registrationCalls, 2);
+		} finally {
+			engine.dispose();
+			store.close();
+			rmSync(t.dir, { recursive: true, force: true });
+		}
+	});
+
 	it("preempts the timer and flushes early on threshold-50 burst (23.2)", async () => {
 		const t = tempEnv();
 		let fetchCalls = 0;

@@ -1,8 +1,8 @@
 import { v7 as uuidv7 } from "uuid";
 import { type BufferStore, decodeEnvelope, type PendingRow } from "./buffer-store.js";
-import { registerMachine } from "./device-flow.js";
 import { type EventPostResult, postEvent } from "./http.js";
 import { logger } from "./log.js";
+import { registerMachine } from "./machine-registration.js";
 import type { PathEnv } from "./paths.js";
 import { type Identity, SDK_VERSION } from "./types.js";
 
@@ -12,6 +12,7 @@ export interface FlushOptions {
 	fetch?: typeof fetch;
 	force?: boolean;
 	identity: Identity;
+	machineRegistrationCache?: MachineRegistrationCache;
 }
 
 export interface FlushResult {
@@ -27,12 +28,17 @@ export interface DrainResult {
 	lastError?: string;
 }
 
+export interface MachineRegistrationCache {
+	registered: boolean;
+}
+
 export class FlushEngine {
 	private state: "idle" | "scheduled" | "flushing" = "idle";
 	private timer: ReturnType<typeof setTimeout> | null = null;
 	private beforeExitInstalled = false;
 	private beforeExitHandler: (() => void) | null = null;
 	private activeFlush: Promise<FlushResult> | null = null;
+	private readonly machineRegistrationCache: MachineRegistrationCache = { registered: false };
 	private disposed = false;
 	private emittedDuringFlush = false;
 	private backoffMs = 5_000;
@@ -97,6 +103,7 @@ export class FlushEngine {
 			const result = await flushPending(this.store, {
 				...options,
 				baseUrl: this.baseUrlProvider(),
+				machineRegistrationCache: this.machineRegistrationCache,
 			});
 			if (result.shipped > 0 && result.retryable === 0) {
 				this.backoffMs = 5_000;
@@ -207,6 +214,9 @@ async function registerBeforeFlush(
 	options: FlushOptions,
 	pendingCount: number,
 ): Promise<FlushResult | null> {
+	if (options.machineRegistrationCache?.registered === true) {
+		return null;
+	}
 	try {
 		const registerOptions = {
 			...(options.baseUrl === undefined ? {} : { baseUrl: options.baseUrl }),
@@ -214,6 +224,9 @@ async function registerBeforeFlush(
 			...(options.fetch === undefined ? {} : { fetch: options.fetch }),
 		};
 		await registerMachine(options.identity, registerOptions);
+		if (options.machineRegistrationCache !== undefined) {
+			options.machineRegistrationCache.registered = true;
+		}
 		return null;
 	} catch (error) {
 		logger.warn("sno observe machine registration failed; will retry", {
@@ -235,6 +248,11 @@ async function flushRow(
 			options.identity.machine_secret,
 			options.fetch,
 		);
+		if (response.status === 401 || response.status === 403) {
+			if (options.machineRegistrationCache !== undefined) {
+				options.machineRegistrationCache.registered = false;
+			}
+		}
 		return handlePostResult(store, row, response);
 	} catch (error) {
 		store.incrementAttempts(row.rowid);
