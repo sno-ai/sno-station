@@ -112,8 +112,8 @@ function buildCsv(rows: PendingRow[]): string {
 			envelope.consent_level,
 			String(envelope.redacted),
 			envelope.scope.agent_id,
-			String(envelope.hash_chain.chain_epoch),
-			String(envelope.hash_chain.seq),
+			String(envelope.chain_epoch),
+			String(envelope.seq),
 			envelope.hash_chain.self,
 			envelope.hash_chain.prev,
 		]

@@ -1,6 +1,6 @@
 {
   "envelope": {
-    "schema_version": 1,
+    "schema_version": "v1",
     "event_id": "11111111-1111-1111-1111-111111111111",
     "event_type": "agent.identify",
     "ts_edge_ms": 1730000000000,

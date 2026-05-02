@@ -266,14 +266,16 @@ export class SnoObserveRuntime {
 
 	async verifyAudit(eventId: string): Promise<AuditVerifyResult> {
 		const identity = bootstrapIdentity(this.env());
+		const baseUrl = this.baseUrl();
 		const fetchImpl = this.options.fetch;
-		await registerMachine(identity, {
-			baseUrl: this.baseUrl(),
+		const registerOptions: RegisterOptions = {
+			baseUrl,
 			env: this.env(),
 			...(fetchImpl === undefined ? {} : { fetch: fetchImpl }),
-		});
+		};
+		await registerMachine(identity, registerOptions);
 		return verifyAuditEvent(eventId, {
-			baseUrl: this.baseUrl(),
+			baseUrl,
 			machineSecret: identity.machine_secret,
 			...(fetchImpl === undefined ? {} : { fetch: fetchImpl }),
 		});
@@ -415,7 +417,7 @@ export class SnoObserveRuntime {
 
 	private baseUrl(): string {
 		const env = this.env();
-		return normalizeBaseUrl(env.SNO_OBSERVE_BASE_URL ?? "https://sno.ai");
+		return normalizeBaseUrl(env.SNO_OBSERVE_BASE_URL ?? "https://www.sno.ai");
 	}
 
 	private notify(eventType: EventType, result: EmitResult): void {
