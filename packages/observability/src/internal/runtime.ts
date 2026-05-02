@@ -2,7 +2,7 @@ import { v7 as uuidv7 } from "uuid";
 import { verifyAuditEvent } from "./audit-verify.js";
 import { BufferStore } from "./buffer-store.js";
 import { ConsentStore } from "./consent.js";
-import { type RegisterOptions, type RegisterResult, registerDevice } from "./device-flow.js";
+import { type RegisterOptions, type RegisterResult, registerMachine } from "./device-flow.js";
 import { createDoctorReport } from "./doctor.js";
 import { InvalidEventPayloadError } from "./errors.js";
 import { type ExportOptions, exportEvents } from "./export.js";
@@ -257,21 +257,22 @@ export class SnoObserveRuntime {
 		if (fetchImpl !== undefined) {
 			registerOptions.fetch = fetchImpl;
 		}
-		return registerDevice(identity, registerOptions);
+		return registerMachine(identity, registerOptions);
 	}
 
-	verifyAudit(eventId: string): Promise<AuditVerifyResult> {
-		const apiKey = this.env().SNO_API_KEY;
-		const options: { baseUrl: string; apiKey?: string; fetch?: typeof fetch } = {
+	async verifyAudit(eventId: string): Promise<AuditVerifyResult> {
+		const identity = bootstrapIdentity(this.env());
+		const fetchImpl = this.options.fetch;
+		await registerMachine(identity, {
 			baseUrl: this.baseUrl(),
-		};
-		if (apiKey !== undefined) {
-			options.apiKey = apiKey;
-		}
-		if (this.options.fetch !== undefined) {
-			options.fetch = this.options.fetch;
-		}
-		return verifyAuditEvent(eventId, options);
+			env: this.env(),
+			...(fetchImpl === undefined ? {} : { fetch: fetchImpl }),
+		});
+		return verifyAuditEvent(eventId, {
+			baseUrl: this.baseUrl(),
+			machineSecret: identity.machine_secret,
+			...(fetchImpl === undefined ? {} : { fetch: fetchImpl }),
+		});
 	}
 
 	async shutdown(): Promise<ShutdownResult> {
@@ -410,7 +411,7 @@ export class SnoObserveRuntime {
 
 	private baseUrl(): string {
 		const env = this.env();
-		return normalizeBaseUrl(env.SNO_OBSERVE_BASE_URL ?? "https://www.sno.ai");
+		return normalizeBaseUrl(env.SNO_OBSERVE_BASE_URL ?? "https://sno.ai");
 	}
 
 	private notify(eventType: EventType, result: EmitResult): void {

@@ -8,8 +8,8 @@ export interface EventPostResult {
 
 const LOCAL_HOSTNAMES = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
 
-// Reject non-HTTPS base URLs (except localhost for tests/dev). Bearer tokens and
-// event payloads MUST NOT be sent over plaintext HTTP.
+// Reject non-HTTPS base URLs (except localhost for tests/dev). Machine bearer
+// credentials and event payloads MUST NOT be sent over plaintext HTTP.
 export function normalizeBaseUrl(input: string): string {
 	const trimmed = input.replace(/\/$/u, "");
 	let parsed: URL;
