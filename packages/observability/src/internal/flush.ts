@@ -21,6 +21,12 @@ export interface FlushResult {
 	retryAfterMs?: number;
 }
 
+export interface DrainResult {
+	flushedCount: number;
+	failedCount: number;
+	lastError?: string;
+}
+
 export class FlushEngine {
 	private state: "idle" | "scheduled" | "flushing" = "idle";
 	private timer: ReturnType<typeof setTimeout> | null = null;
@@ -112,15 +118,23 @@ export class FlushEngine {
 		}
 	}
 
-	async drain(): Promise<void> {
+	async drain(): Promise<DrainResult> {
+		let flushedCount = 0;
+		let failedCount = 0;
+		let lastError: string | undefined;
 		// Wait for any in-flight flush (and any chained flushes triggered while we waited).
 		while (this.activeFlush !== null) {
 			try {
-				await this.activeFlush;
-			} catch {
-				// drain swallows errors; the engine logs them per-row already.
+				const result = await this.activeFlush;
+				flushedCount += result.shipped;
+				failedCount += result.retryable + result.terminal;
+			} catch (error) {
+				failedCount += this.store.countPending();
+				lastError = error instanceof Error ? error.message : String(error);
+				logger.error("sno observe drain failed", { error: lastError });
 			}
 		}
+		return { flushedCount, failedCount, ...(lastError === undefined ? {} : { lastError }) };
 	}
 
 	dispose(): void {

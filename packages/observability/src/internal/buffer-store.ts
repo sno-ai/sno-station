@@ -17,6 +17,8 @@ const GENESIS = "GENESIS";
 const MAX_CHAIN_RETRIES = 3;
 const RETENTION_MAX_BYTES = 100 * 1024 * 1024;
 const RETENTION_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+const QUARANTINE_MAX_ROWS = 1_000;
+const QUARANTINE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
 type BindValue = string | number | Buffer | null;
 
@@ -185,13 +187,15 @@ export class BufferStore {
 
 	quarantine(row: PendingRow, status: number, body: string): void {
 		this.withImmediateTransaction(() => {
+			const now = Date.now();
 			this.db
 				.prepare(
 					`INSERT INTO quarantine (rowid, event_id, status, response_body, quarantined_at)
 					VALUES (?, ?, ?, ?, ?)`,
 				)
-				.run(row.rowid, row.event_id, status, body.slice(0, 8_192), Date.now());
+				.run(row.rowid, row.event_id, status, body.slice(0, 8_192), now);
 			this.db.prepare("UPDATE events SET terminal = 1 WHERE rowid = ?").run(row.rowid);
+			this.pruneQuarantineInsideTx(QUARANTINE_MAX_ROWS, QUARANTINE_MAX_AGE_MS, now);
 		});
 	}
 
@@ -226,6 +230,18 @@ export class BufferStore {
 		return pruned;
 	}
 
+	pruneQuarantine(
+		maxRows = QUARANTINE_MAX_ROWS,
+		maxAgeMs = QUARANTINE_MAX_AGE_MS,
+		now = Date.now(),
+	): number {
+		let pruned = 0;
+		this.withImmediateTransaction(() => {
+			pruned = this.pruneQuarantineInsideTx(maxRows, maxAgeMs, now);
+		});
+		return pruned;
+	}
+
 	countPending(): number {
 		return this.count("SELECT COUNT(*) AS count FROM events WHERE shipped = 0 AND terminal = 0");
 	}
@@ -236,6 +252,10 @@ export class BufferStore {
 
 	countShipped(): number {
 		return this.count("SELECT COUNT(*) AS count FROM events WHERE shipped = 1");
+	}
+
+	countQuarantined(): number {
+		return this.count("SELECT COUNT(*) AS count FROM quarantine");
 	}
 
 	verifyLocalChain(): boolean {
@@ -429,6 +449,27 @@ export class BufferStore {
 	private count(sql: string, ...params: BindValue[]): number {
 		const row = this.db.prepare(sql).get(...params) as CountRow | undefined;
 		return row?.count ?? 0;
+	}
+
+	private pruneQuarantineInsideTx(maxRows: number, maxAgeMs: number, now: number): number {
+		let pruned = this.db
+			.prepare("DELETE FROM quarantine WHERE quarantined_at < ?")
+			.run(now - maxAgeMs).changes;
+		const overflow = this.count("SELECT COUNT(*) AS count FROM quarantine") - maxRows;
+		if (overflow > 0) {
+			pruned += this.db
+				.prepare(
+					`DELETE FROM quarantine
+					WHERE _rowid_ IN (
+						SELECT _rowid_
+						FROM quarantine
+						ORDER BY quarantined_at ASC, _rowid_ ASC
+						LIMIT ?
+					)`,
+				)
+				.run(overflow).changes;
+		}
+		return pruned;
 	}
 
 	private databaseSizeBytes(): number {

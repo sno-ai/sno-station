@@ -1,6 +1,9 @@
 // Tests redaction false-positive guardrails per task §20.5.
 // Per spec: emails inside code samples (`"foo@bar"`) still redact — this is intentional.
 import assert from "node:assert/strict";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, it } from "node:test";
 import { redactEventPayload } from "../../../../packages/sno-observe/dist/internal/redact.js";
 
@@ -56,6 +59,20 @@ describe("redact — false-positive guardrails", () => {
 		assert.equal((serialized.match(/<api-key>/gu) ?? []).length, 3);
 	});
 
+	it("redacts RSA private_key JSON snippets", () => {
+		const result = redactEventPayload(
+			{
+				note:
+					'{"private_key":"-----BEGIN RSA PRIVATE KEY (redacted)-----abc123-----END RSA PRIVATE KEY (redacted)-----"}',
+			},
+			"metadata-only",
+		);
+		const serialized = JSON.stringify(result.value);
+		assert.equal(serialized.includes("BEGIN RSA PRIVATE KEY"), false);
+		assert.equal(serialized.includes("<api-key>"), true);
+		assert.equal(result.redacted, true);
+	});
+
 	it("at consent=off, sensitive-key string values are dropped wholesale", () => {
 		const result = redactEventPayload(
 			{ message: "raw error text", input: "raw input", note: "ada@example.com" },
@@ -67,5 +84,51 @@ describe("redact — false-positive guardrails", () => {
 		assert.equal(serialized.includes("raw input"), false);
 		assert.equal(serialized.includes("ada@example.com"), false);
 		assert.equal(result.redacted, true);
+	});
+
+	it("ignores unsafe user redaction rules while keeping safe ones", () => {
+		const dir = mkdtempSync(join(tmpdir(), "sno-observe-redact-rules-"));
+		const path = join(dir, "rules.txt");
+		try {
+			writeFileSync(path, ["secret-token", "(a+)+$", "x".repeat(257)].join("\n"));
+			const result = redactEventPayload(
+				{ note: `secret-token ${"a".repeat(32)}! ${"x".repeat(257)}` },
+				"metadata-only",
+				path,
+			);
+			const serialized = JSON.stringify(result.value);
+			assert.equal(serialized.includes("secret-token"), false);
+			assert.equal(serialized.includes("aaaaaaaa"), true);
+			assert.equal(serialized.includes("xxxxxxxx"), true);
+			assert.equal(result.redacted, true);
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
+	});
+
+	it("caches user redaction rules on the hot emit path", () => {
+		const dir = mkdtempSync(join(tmpdir(), "sno-observe-redact-rules-cache-"));
+		const path = join(dir, "rules.txt");
+		try {
+			writeFileSync(path, "first-token\n");
+			const first = redactEventPayload(
+				{ note: "first-token second-token" },
+				"metadata-only",
+				path,
+			);
+			writeFileSync(path, "second-token\n");
+			const second = redactEventPayload(
+				{ note: "first-token second-token" },
+				"metadata-only",
+				path,
+			);
+
+			assert.equal(JSON.stringify(first.value).includes("first-token"), false);
+			const serialized = JSON.stringify(second.value);
+			assert.equal(serialized.includes("first-token"), false);
+			assert.equal(serialized.includes("second-token"), true);
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
 	});
 });

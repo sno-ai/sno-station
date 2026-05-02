@@ -248,6 +248,28 @@ describe("flush 3-state machine", () => {
 			rmSync(t.dir, { recursive: true, force: true });
 		}
 	});
+
+	it("shutdown reports unshipped rows when the final flush is retryable", async () => {
+		const t = tempEnv();
+		const runtime = new SnoObserveRuntime({
+			env: t.env,
+			cwd: t.dir,
+			fetch: async () =>
+				new Response(JSON.stringify({ error: "retry" }), {
+					status: 503,
+					headers: { "Content-Type": "application/json" },
+				}),
+		});
+		try {
+			await runtime.emitParsed(memoryEvent(99));
+			const result = await runtime.shutdown();
+			assert.equal(result.flushedCount, 0);
+			assert.equal(result.failedCount > 0, true);
+		} finally {
+			await runtime.shutdown().catch(() => {});
+			rmSync(t.dir, { recursive: true, force: true });
+		}
+	});
 });
 
 describe("tokens — BPE init failure fast fallback (25.3)", () => {

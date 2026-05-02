@@ -64,6 +64,9 @@ function inferFormat(path?: string): ExportFormat {
 	if (path?.endsWith(".csv")) {
 		return "csv";
 	}
+	if (path?.endsWith(".jsonl")) {
+		return "jsonl";
+	}
 	if (path?.endsWith(".tar.gz") || path?.endsWith(".tgz")) {
 		return "tarball";
 	}
