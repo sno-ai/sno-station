@@ -23,7 +23,6 @@ function tempEnv() {
 			SNO_IDENTITY_PATH: join(dir, "identity.json"),
 			SNO_BUFFER_PATH: join(dir, "buffer.db"),
 			SNO_CONSENT_PATH: join(dir, "state", "consent.json"),
-			SNO_TOKEN_PATH: join(dir, "state", "tokens.json"),
 			SNO_OBSERVE_BASE_URL: "https://sno.test",
 			HOME: dir,
 		},
@@ -151,9 +150,12 @@ describe("flush 3-state machine", () => {
 		seedIdentify(store);
 		appendMemoryWrite(store, 1);
 		let postCount = 0;
-		const fakeFetch = async () => {
-			postCount += 1;
-			// Mid-flush emit: simulate concurrent append between batch start and resolve.
+			const fakeFetch = async (url, init) => {
+				if (String(url).endsWith("/api/v1/identity/register-machine")) {
+					return registerMachineResponse(init);
+				}
+				postCount += 1;
+				// Mid-flush emit: simulate concurrent append between batch start and resolve.
 			if (postCount === 1) {
 				appendMemoryWrite(store, 2);
 			}
@@ -189,11 +191,15 @@ describe("flush 3-state machine", () => {
 		const identity = bootstrapIdentity(t.env);
 		seedIdentify(store);
 		appendMemoryWrite(store, 1);
-		const fakeFetch = async () =>
-			new Response(JSON.stringify({ receipt_id: "r" }), {
-				status: 202,
-				headers: { "Content-Type": "application/json" },
-			});
+			const fakeFetch = async (url, init) => {
+				if (String(url).endsWith("/api/v1/identity/register-machine")) {
+					return registerMachineResponse(init);
+				}
+				return new Response(JSON.stringify({ receipt_id: "r" }), {
+					status: 202,
+					headers: { "Content-Type": "application/json" },
+				});
+			};
 		const engine = new FlushEngine(
 			store,
 			() => identity,
@@ -220,7 +226,10 @@ describe("flush 3-state machine", () => {
 		const runtime = new SnoObserveRuntime({
 			env: t.env,
 			cwd: t.dir,
-			fetch: async () => {
+			fetch: async (url, init) => {
+				if (String(url).endsWith("/api/v1/identity/register-machine")) {
+					return registerMachineResponse(init);
+				}
 				fetchCalls += 1;
 				inFlightFetches += 1;
 				try {
@@ -254,11 +263,15 @@ describe("flush 3-state machine", () => {
 		const runtime = new SnoObserveRuntime({
 			env: t.env,
 			cwd: t.dir,
-			fetch: async () =>
-				new Response(JSON.stringify({ error: "retry" }), {
+			fetch: async (url, init) => {
+				if (String(url).endsWith("/api/v1/identity/register-machine")) {
+					return registerMachineResponse(init);
+				}
+				return new Response(JSON.stringify({ error: "retry" }), {
 					status: 503,
 					headers: { "Content-Type": "application/json" },
-				}),
+				});
+			},
 		});
 		try {
 			await runtime.emitParsed(memoryEvent(99));
@@ -271,6 +284,18 @@ describe("flush 3-state machine", () => {
 		}
 	});
 });
+
+function registerMachineResponse(init) {
+	const body = typeof init?.body === "string" ? JSON.parse(init.body) : {};
+	return new Response(
+		JSON.stringify({
+			user_cuid: body.user_cuid,
+			machine_uuid: body.machine_uuid,
+			claimed: false,
+		}),
+		{ status: 200, headers: { "Content-Type": "application/json" } },
+	);
+}
 
 describe("tokens — BPE init failure fast fallback (25.3)", () => {
 	it("returns method=fast for very long inputs without invoking BPE", async () => {

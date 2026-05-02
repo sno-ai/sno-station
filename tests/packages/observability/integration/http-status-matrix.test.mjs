@@ -1,11 +1,13 @@
 // HTTP status code matrix per `sno-ai-api-contract.md` §2.2 + tasks §24.3, §24.3a,
 // §24.5 .. §24.24. Drives the SDK against a real node:http fixture server.
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
 import { BufferStore } from "../../../../packages/sno-observe/dist/internal/buffer-store.js";
+import { machineSecretHash } from "../../../../packages/sno-observe/dist/internal/device-flow.js";
+import { bootstrapIdentity } from "../../../../packages/sno-observe/dist/internal/identity.js";
 import { SnoObserveRuntime } from "../../../../packages/sno-observe/dist/internal/runtime.js";
 import { parseEventInput } from "../../../../packages/sno-observe/dist/internal/schemas.js";
 import { startMockServer } from "../fixtures/sno-ai-mock-server.mjs";
@@ -19,7 +21,6 @@ function tempEnv(baseUrl) {
 			SNO_IDENTITY_PATH: join(dir, "identity.json"),
 			SNO_BUFFER_PATH: join(dir, "buffer.db"),
 			SNO_CONSENT_PATH: join(dir, "state", "consent.json"),
-			SNO_TOKEN_PATH: join(dir, "state", "tokens.json"),
 			SNO_OBSERVE_BASE_URL: baseUrl,
 			HOME: dir,
 		},
@@ -285,46 +286,34 @@ describe("HTTP status matrix (fixture server, node:http)", () => {
 	});
 });
 
-describe("rule-5/6 bearer attach + drop-after-first-202 (24.3, 24.3a)", () => {
-	it("first POST after register attaches Bearer; second POST drops it", async () => {
+describe("machine bearer attach (24.3, 24.3a)", () => {
+	it("registers machine before flush and attaches Bearer machine secret to event POSTs", async () => {
 		const server = await startMockServer();
 		const t = tempEnv(server.baseUrl);
-		// Pre-write tokens so the runtime has a bearer to attach.
-		mkdirSync(join(t.dir, "state"), { recursive: true });
-		const { TokenStore } = await import(
-			"../../../../packages/sno-observe/dist/internal/token-state.js"
-		);
-		new TokenStore(t.env).write({
-			access_token: "jwt-fake",
-			refresh_token: "rt-fake",
-			user_account_id: "u_test",
-		});
-		// Mark identity as claimed so flush.ts attaches bearer.
-		const idPath = t.env.SNO_IDENTITY_PATH;
-		const { bootstrapIdentity } = await import(
-			"../../../../packages/sno-observe/dist/internal/identity.js"
-		);
-		const id = bootstrapIdentity(t.env);
-		writeFileSync(
-			idPath,
-			JSON.stringify({ ...id, claimed: true, user_account_id: "u_test" }, null, 2),
-			{ mode: 0o600 },
-		);
 		const runtime = new SnoObserveRuntime({ env: t.env, cwd: t.dir });
 		try {
 			server.enqueue("/api/v1/events", { status: 202, body: { receipt_id: "r1" } });
 			server.enqueue("/api/v1/events", { status: 202, body: { receipt_id: "r2" } });
-			server.enqueue("/api/v1/events", { status: 202, body: { receipt_id: "r3" } });
 			await runtime.emitParsed(memoryEvent(1));
+			const id = bootstrapIdentity(t.env);
 			await runtime.flush();
-			const calls = server.calls;
-			const auth0 = calls[0]?.headers?.authorization ?? calls[0]?.headers?.Authorization;
-			const auth1 = calls[1]?.headers?.authorization ?? calls[1]?.headers?.Authorization;
-			assert.equal(typeof auth0, "string", `first POST must carry bearer; got ${auth0}`);
-			assert.match(auth0, /^Bearer jwt-fake$/u);
-			assert.equal(auth1, undefined, "second POST must NOT carry bearer");
+
+			const registerCalls = server.calls.filter((call) =>
+				call.url.startsWith("/api/v1/identity/register-machine"),
+			);
+			assert.equal(registerCalls.length, 1);
+			const registerBody = JSON.parse(registerCalls[0].body);
+			assert.equal(registerCalls[0].headers.authorization, undefined);
+			assert.equal(registerBody.machine_secret_hash, machineSecretHash(id.machine_secret));
+			assert.equal(registerCalls[0].body.includes(id.machine_secret), false);
+
+			const eventCalls = server.calls.filter((call) => call.url.startsWith("/api/v1/events"));
+			assert.equal(eventCalls.length, 2);
+			for (const call of eventCalls) {
+				assert.equal(call.headers.authorization, `Bearer ${id.machine_secret}`);
+			}
 			// Verify first POST is agent.identify at chain_epoch=0/seq=0/prev=GENESIS.
-			const firstBody = JSON.parse(calls[0].body);
+			const firstBody = JSON.parse(eventCalls[0].body);
 			assert.equal(firstBody.event_type, "agent.identify");
 			assert.equal(firstBody.hash_chain.chain_epoch, 0);
 			assert.equal(firstBody.hash_chain.seq, 0);
