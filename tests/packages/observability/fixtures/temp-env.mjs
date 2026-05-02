@@ -15,7 +15,6 @@ export function createTempSnoEnv(prefix = "sno-observe-") {
 			SNO_IDENTITY_PATH: join(dir, "identity.json"),
 			SNO_BUFFER_PATH: join(dir, "buffer.db"),
 			SNO_CONSENT_PATH: join(dir, "state", "consent.json"),
-			SNO_TOKEN_PATH: join(dir, "state", "tokens.json"),
 			SNO_OBSERVE_BASE_URL: "https://sno.test",
 			HOME: dir,
 		},
@@ -37,6 +36,17 @@ export function initGitRepo(dir, remote) {
 export function createFetchRecorder(statuses = []) {
 	const calls = [];
 	const fetchImpl = async (url, init) => {
+		if (String(url).endsWith("/api/v1/identity/register-machine")) {
+			const body = typeof init?.body === "string" ? JSON.parse(init.body) : {};
+			return new Response(
+				JSON.stringify({
+					user_cuid: body.user_cuid,
+					machine_uuid: body.machine_uuid,
+					claimed: false,
+				}),
+				{ status: 200, headers: { "Content-Type": "application/json" } },
+			);
+		}
 		calls.push({
 			url: String(url),
 			init,

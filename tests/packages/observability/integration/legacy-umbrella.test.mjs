@@ -23,14 +23,16 @@ import {
 	computeSelfHash,
 } from "../../../../packages/sno-observe/dist/internal/canonical-hash.js";
 import { ConsentStore } from "../../../../packages/sno-observe/dist/internal/consent.js";
-import { registerDevice } from "../../../../packages/sno-observe/dist/internal/device-flow.js";
+import {
+	machineSecretHash,
+	registerMachine,
+} from "../../../../packages/sno-observe/dist/internal/device-flow.js";
 import {
 	InvalidAgentIdError,
 	InvalidConsentError,
 	InvalidEventPayloadError,
 	InvalidEventTypeError,
 	ChainSeedError,
-	ReRegisterRequiredError,
 } from "../../../../packages/sno-observe/dist/internal/errors.js";
 import { bootstrapIdentity } from "../../../../packages/sno-observe/dist/internal/identity.js";
 import { sha256Hex } from "../../../../packages/sno-observe/dist/internal/hash.js";
@@ -282,8 +284,8 @@ describe("sno observe Node package", () => {
 			assert.deepEqual(bootstrapIdentity(temp.env), identity);
 			assert.equal(getIdentityLockPath(temp.env), join(temp.dir, "identity.lock"));
 			assert.equal(identity.version, 1);
-			assert.equal(identity.claimed, false);
 			assert.match(identity.machine_uuid, /^[0-9a-f-]{36}$/u);
+			assert.match(identity.machine_secret, /^[0-9a-f]{64}$/u);
 			if (process.platform !== "win32") {
 				assert.equal(statSync(temp.env.SNO_IDENTITY_PATH).mode & 0o777, 0o600);
 			}
@@ -511,10 +513,11 @@ describe("sno observe Node package", () => {
 			assert.equal(calls.length, 2);
 			assert.equal(existsSync(join(temp.dir, ".claw-storix", "state", "audit.jsonl")), false);
 			assert.equal(readFileSync(temp.env.SNO_BUFFER_PATH).includes("alice@example.com"), false);
-			for (const call of calls) {
-				assert.equal(call.url, "https://sno.test/api/v1/events");
-				assert.deepEqual(call.headers, { "Content-Type": "application/json" });
-				const posted = JSON.parse(call.body);
+				for (const call of calls) {
+					assert.equal(call.url, "https://sno.test/api/v1/events");
+					assert.equal(call.headers["Content-Type"], "application/json");
+					assert.match(call.headers.Authorization, /^Bearer [0-9a-f]{64}$/u);
+					const posted = JSON.parse(call.body);
 				assert.equal(Array.isArray(posted), false);
 				assert.deepEqual(Object.keys(posted), [
 					"event_id",
@@ -797,7 +800,7 @@ describe("sno observe Node package", () => {
 		}
 	});
 
-	it("registers devices, verifies audits with API-key bearer auth, and exposes the public namespace", async () => {
+	it("registers anonymous machines, verifies audits with machine bearer auth, and exposes the public namespace", async () => {
 		assert.deepEqual(Object.keys(publicModule), ["createSnoObserve", "snoObserve"]);
 		assert.deepEqual(Object.keys(snoObserve), [
 			"emit",
@@ -824,121 +827,107 @@ describe("sno observe Node package", () => {
 			const calls = [];
 			const fetchImpl = async (url, init) => {
 				calls.push({ url: String(url), init });
+				const body = JSON.parse(String(init.body));
 				return new Response(
 					JSON.stringify({
-						device_code: "dev_123",
-						user_code: "SNO-123",
-						verification_uri: "https://sno.test/device",
-						interval: 1,
-						expires_in: 60,
+						user_cuid: body.user_cuid,
+						machine_uuid: body.machine_uuid,
+						claimed: false,
 					}),
 					{ status: 200, headers: { "Content-Type": "application/json" } },
 				);
 			};
 			const identity = bootstrapIdentity(temp.env);
 			assert.deepEqual(
-				await registerDevice(identity, {
+				await registerMachine(identity, {
 					baseUrl: "https://sno.test",
 					env: temp.env,
 					fetch: fetchImpl,
-					poll: false,
 				}),
 				{
+					registered: true,
 					claimed: false,
-					userCode: "SNO-123",
-					verificationUri: "https://sno.test/device",
+					userCuid: identity.user_cuid,
+					machineUuid: identity.machine_uuid,
 				},
 			);
 			assert.deepEqual(
 				calls.map((call) => call.url),
-				["https://sno.test/api/v1/device/code"],
+				["https://sno.test/api/v1/identity/register-machine"],
 			);
+			const body = JSON.parse(String(calls[0].init.body));
+			assert.equal(body.machine_secret_hash, machineSecretHash(identity.machine_secret));
+			assert.equal(String(calls[0].init.body).includes(identity.machine_secret), false);
 		} finally {
 			cleanupTempSnoEnv(temp);
 		}
 
-		const expiredTemp = createTempSnoEnv("sno-observe-expired-");
+		const conflictTemp = createTempSnoEnv("sno-observe-conflict-");
 		try {
-			const identity = bootstrapIdentity(expiredTemp.env);
-			let count = 0;
+			const identity = bootstrapIdentity(conflictTemp.env);
 			await assert.rejects(
 				() =>
-					registerDevice(identity, {
+					registerMachine(identity, {
 						baseUrl: "https://sno.test",
-						env: expiredTemp.env,
-						fetch: async () => {
-							count += 1;
-							if (count === 1) {
-								return new Response(
-									JSON.stringify({
-										device_code: "dev_expired",
-										user_code: "SNO-EXP",
-										verification_uri: "https://sno.test/device",
-										interval: 1,
-										expires_in: 2,
-									}),
-									{ status: 200, headers: { "Content-Type": "application/json" } },
-								);
-							}
-							return new Response(JSON.stringify({ error: "expired_token" }), {
-								status: 400,
+						env: conflictTemp.env,
+						fetch: async () =>
+							new Response(JSON.stringify({ error: "machine_secret_mismatch" }), {
+								status: 409,
 								headers: { "Content-Type": "application/json" },
-							});
-						},
+							}),
 					}),
-				ReRegisterRequiredError,
+				/machine_secret_mismatch/u,
 			);
 		} finally {
-			cleanupTempSnoEnv(expiredTemp);
+			cleanupTempSnoEnv(conflictTemp);
 		}
 
-			const previousApiKey = process.env.SNO_API_KEY;
-			process.env.SNO_API_KEY = "test-api-key";
-			try {
-				const auditCalls = [];
-				const result = await verifyAuditEvent("event 1", {
-					baseUrl: "https://sno.test",
-					fetch: async (url, init) => {
-						auditCalls.push({ url: String(url), headers: init.headers });
-						return new Response(JSON.stringify({ verified: true, anchor_id: "a_1" }), {
-							status: 200,
-							headers: { "Content-Type": "application/json" },
-						});
-					},
-				});
-				assert.deepEqual(result, { verified: true, anchor_id: "a_1" });
-				assert.equal(
-					auditCalls[0].url,
-					"https://sno.test/api/v1/audit/verify?event_id=event%201",
-				);
-				assert.equal(auditCalls[0].headers.Authorization, "Bearer test-api-key");
+		const auditTemp = createTempSnoEnv("sno-observe-audit-");
+		try {
+			const identity = bootstrapIdentity(auditTemp.env);
+			const auditCalls = [];
+			const result = await verifyAuditEvent("event 1", {
+				baseUrl: "https://sno.test",
+				machineSecret: identity.machine_secret,
+				fetch: async (url, init) => {
+					auditCalls.push({ url: String(url), headers: init.headers });
+					return new Response(JSON.stringify({ verified: true, anchor_id: "a_1" }), {
+						status: 200,
+						headers: { "Content-Type": "application/json" },
+					});
+				},
+			});
+			assert.deepEqual(result, { verified: true, anchor_id: "a_1" });
+			assert.equal(
+				auditCalls[0].url,
+				"https://sno.test/api/v1/audit/verify?event_id=event%201",
+			);
+			assert.equal(auditCalls[0].headers.Authorization, `Bearer ${identity.machine_secret}`);
 
-				const falseResult = await verifyAuditEvent("event-2", {
-					baseUrl: "https://sno.test",
-					fetch: async () =>
-						new Response(JSON.stringify({ verified: false, gdpr_scrubbed: true }), {
-							status: 200,
-							headers: { "Content-Type": "application/json" },
-						}),
-				});
-				assert.deepEqual(falseResult, { verified: false, gdpr_scrubbed: true });
-				await assert.rejects(
-					() =>
-						verifyAuditEvent("missing", {
-							baseUrl: "https://sno.test",
-							fetch: async () =>
-								new Response(JSON.stringify({ error: "not found" }), { status: 404 }),
-						}),
-					/event not found or not owned/u,
-				);
-			} finally {
-				if (previousApiKey === undefined) {
-					delete process.env.SNO_API_KEY;
-				} else {
-					process.env.SNO_API_KEY = previousApiKey;
-				}
-			}
-		});
+			const falseResult = await verifyAuditEvent("event-2", {
+				baseUrl: "https://sno.test",
+				machineSecret: identity.machine_secret,
+				fetch: async () =>
+					new Response(JSON.stringify({ verified: false, gdpr_scrubbed: true }), {
+						status: 200,
+						headers: { "Content-Type": "application/json" },
+					}),
+			});
+			assert.deepEqual(falseResult, { verified: false, gdpr_scrubbed: true });
+			await assert.rejects(
+				() =>
+					verifyAuditEvent("missing", {
+						baseUrl: "https://sno.test",
+						machineSecret: identity.machine_secret,
+						fetch: async () =>
+							new Response(JSON.stringify({ error: "not found" }), { status: 404 }),
+					}),
+				/event not found or not owned/u,
+			);
+		} finally {
+			cleanupTempSnoEnv(auditTemp);
+		}
+	});
 
 	it("reports doctor diagnostics without bootstrapping local state", () => {
 		const temp = createTempSnoEnv("sno-observe-doctor-");
@@ -1006,7 +995,6 @@ function createTempSnoEnv(prefix = "sno-observe-") {
 			SNO_IDENTITY_PATH: join(dir, "identity.json"),
 			SNO_BUFFER_PATH: join(dir, "buffer.db"),
 			SNO_CONSENT_PATH: join(dir, "state", "consent.json"),
-			SNO_TOKEN_PATH: join(dir, "state", "tokens.json"),
 			SNO_OBSERVE_BASE_URL: "https://sno.test",
 			HOME: dir,
 		},
@@ -1041,6 +1029,17 @@ function cleanupTempSnoEnv(temp) {
 function createFetchRecorder(statuses = []) {
 	const calls = [];
 	const fetchImpl = async (url, init) => {
+		if (String(url).endsWith("/api/v1/identity/register-machine")) {
+			const body = typeof init?.body === "string" ? JSON.parse(init.body) : {};
+			return new Response(
+				JSON.stringify({
+					user_cuid: body.user_cuid,
+					machine_uuid: body.machine_uuid,
+					claimed: false,
+				}),
+				{ status: 200, headers: { "Content-Type": "application/json" } },
+			);
+		}
 		calls.push({
 			url: String(url),
 			init,

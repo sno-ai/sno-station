@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
@@ -17,7 +17,6 @@ function tempEnv() {
 			SNO_IDENTITY_PATH: join(dir, "identity.json"),
 			SNO_BUFFER_PATH: join(dir, "buffer.db"),
 			SNO_CONSENT_PATH: join(dir, "state", "consent.json"),
-			SNO_TOKEN_PATH: join(dir, "state", "tokens.json"),
 			SNO_OBSERVE_BASE_URL: "https://custom.sno.test/base",
 			SNO_API_KEY: "test-api-key",
 			HOME: dir,
@@ -34,6 +33,17 @@ describe("public API routing and export inference", () => {
 			cwd: t.dir,
 			fetch: async (url, init) => {
 				calls.push({ url: String(url), authorization: init.headers.Authorization });
+				if (String(url).endsWith("/api/v1/identity/register-machine")) {
+					const body = JSON.parse(String(init.body));
+					return new Response(
+						JSON.stringify({
+							user_cuid: body.user_cuid,
+							machine_uuid: body.machine_uuid,
+							claimed: false,
+						}),
+						{ status: 200, headers: { "Content-Type": "application/json" } },
+					);
+				}
 				return new Response(JSON.stringify({ verified: true }), {
 					status: 200,
 					headers: { "Content-Type": "application/json" },
@@ -43,10 +53,15 @@ describe("public API routing and export inference", () => {
 		try {
 			const result = await observe.audit.verify("event 1");
 			assert.equal(result.verified, true);
+			const identity = JSON.parse(readFileSync(t.env.SNO_IDENTITY_PATH, "utf8"));
 			assert.deepEqual(calls, [
 				{
+					url: "https://custom.sno.test/base/api/v1/identity/register-machine",
+					authorization: undefined,
+				},
+				{
 					url: "https://custom.sno.test/base/api/v1/audit/verify?event_id=event%201",
-					authorization: "Bearer test-api-key",
+					authorization: `Bearer ${identity.machine_secret}`,
 				},
 			]);
 		} finally {

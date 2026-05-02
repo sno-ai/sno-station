@@ -18,7 +18,6 @@ function tempEnv() {
 			SNO_IDENTITY_PATH: join(dir, "identity.json"),
 			SNO_BUFFER_PATH: join(dir, "buffer.db"),
 			SNO_CONSENT_PATH: join(dir, "state", "consent.json"),
-			SNO_TOKEN_PATH: join(dir, "state", "tokens.json"),
 			SNO_OBSERVE_BASE_URL: "https://sno.test",
 			HOME: dir,
 		},
@@ -52,9 +51,12 @@ describe("idempotent ship + retention (22.3, 22.7)", () => {
 			// Phase 2: restart. Stage 1 — fake server returns 200 idempotent (the row was
 			// effectively shipped on the prior process but the flag never made it to disk).
 			const calls = [];
-			const fakeFetch = async (url, init) => {
-				calls.push({ url: String(url), body: init.body });
-				return new Response(JSON.stringify({ received: 1 }), {
+				const fakeFetch = async (url, init) => {
+					if (String(url).endsWith("/api/v1/identity/register-machine")) {
+						return registerMachineResponse(init);
+					}
+					calls.push({ url: String(url), body: init.body });
+					return new Response(JSON.stringify({ received: 1 }), {
 					status: 200,
 					headers: { "Content-Type": "application/json" },
 				});
@@ -114,9 +116,12 @@ describe("idempotent ship + retention (22.3, 22.7)", () => {
 
 			// Restart: open a new process-level runtime against the same buffer.db.
 			let postCount = 0;
-			const fakeFetch = async () => {
-				postCount += 1;
-				return new Response(JSON.stringify({ receipt_id: `r_${postCount}` }), {
+				const fakeFetch = async (url, init) => {
+					if (String(url).endsWith("/api/v1/identity/register-machine")) {
+						return registerMachineResponse(init);
+					}
+					postCount += 1;
+					return new Response(JSON.stringify({ receipt_id: `r_${postCount}` }), {
 					status: 202,
 					headers: { "Content-Type": "application/json" },
 				});
@@ -141,3 +146,15 @@ describe("idempotent ship + retention (22.3, 22.7)", () => {
 		}
 	});
 });
+
+function registerMachineResponse(init) {
+	const body = typeof init?.body === "string" ? JSON.parse(init.body) : {};
+	return new Response(
+		JSON.stringify({
+			user_cuid: body.user_cuid,
+			machine_uuid: body.machine_uuid,
+			claimed: false,
+		}),
+		{ status: 200, headers: { "Content-Type": "application/json" } },
+	);
+}
