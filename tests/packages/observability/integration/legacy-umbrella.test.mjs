@@ -14,6 +14,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, it } from "node:test";
+import DatabaseConstructor from "better-sqlite3";
 import * as publicModule from "../../../../packages/sno-observe/dist/index.js";
 import { snoObserve } from "../../../../packages/sno-observe/dist/index.js";
 import { verifyAuditEvent } from "../../../../packages/sno-observe/dist/internal/audit-verify.js";
@@ -27,6 +28,7 @@ import {
 	machineSecretHash,
 	registerMachine,
 } from "../../../../packages/sno-observe/dist/internal/machine-registration.js";
+import { exportEvents } from "../../../../packages/sno-observe/dist/internal/export.js";
 import {
 	InvalidAgentIdError,
 	InvalidConsentError,
@@ -279,6 +281,81 @@ describe("sno observe Node package", () => {
 			serializeEnvelope(createFixtureEnvelope(fixture)),
 			serializeEnvelope(createFixtureEnvelope(fixture)),
 		);
+	});
+
+	it("normalizes legacy persisted envelopes for verification and CSV export", () => {
+		const temp = createTempSnoEnv();
+		const dbPath = join(temp.dir, "buffer.db");
+		let store = new BufferStore(dbPath);
+		try {
+			store.append({
+				eventId: "event-identify-legacy",
+				eventType: "agent.identify",
+				tsEdgeMs: 1730000000000,
+				consentLevel: "metadata-only",
+				redacted: false,
+				scope,
+				payload: validPayloads["agent.identify"],
+				terminal: false,
+			});
+			store.append({
+				eventId: "event-memory-legacy",
+				eventType: "memory.write",
+				tsEdgeMs: 1730000000001,
+				consentLevel: "metadata-only",
+				redacted: false,
+				scope,
+				payload: validPayloads["memory.write"],
+				terminal: false,
+			});
+			const rows = store.getAllRows();
+			store.close();
+			store = undefined;
+
+			const db = new DatabaseConstructor(dbPath);
+			try {
+				const update = db.prepare("UPDATE events SET payload = ? WHERE rowid = ?");
+				for (const row of rows) {
+					const envelope = JSON.parse(row.payload.toString("utf8"));
+					const legacyEnvelope = {
+						...envelope,
+						hash_chain: {
+							chain_epoch: envelope.chain_epoch,
+							seq: envelope.seq,
+							prev: envelope.hash_chain.prev,
+							self: envelope.hash_chain.self,
+						},
+					};
+					delete legacyEnvelope.schema_version;
+					delete legacyEnvelope.chain_epoch;
+					delete legacyEnvelope.seq;
+					update.run(Buffer.from(JSON.stringify(legacyEnvelope), "utf8"), row.rowid);
+				}
+			} finally {
+				db.close();
+			}
+
+			const legacyStore = new BufferStore(dbPath);
+			try {
+				assert.equal(legacyStore.verifyLocalChain(), true);
+				const decoded = decodeEnvelope(legacyStore.getAllRows()[1].payload);
+				assert.equal(decoded.schema_version, "v1");
+				assert.equal(decoded.chain_epoch, 0);
+				assert.equal(decoded.seq, 1);
+				assert.deepEqual(Object.keys(decoded.hash_chain), ["prev", "self"]);
+
+				const csv = new TextDecoder().decode(exportEvents(legacyStore, { format: "csv" }).data);
+				assert.match(csv, /event-memory-legacy/u);
+				assert.doesNotMatch(csv, /undefined/u);
+			} finally {
+				legacyStore.close();
+			}
+		} finally {
+			if (store !== undefined) {
+				store.close();
+			}
+			cleanupTempSnoEnv(temp);
+		}
 	});
 
 	it("bootstraps identity and persists the hash chain in SQLite", () => {
@@ -816,6 +893,7 @@ describe("sno observe Node package", () => {
 			"consent",
 			"observe",
 			"register",
+			"claim",
 			"audit",
 			"doctor",
 			"shouldSampleTool",

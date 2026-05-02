@@ -491,7 +491,54 @@ export class BufferStore {
 }
 
 export function decodeEnvelope(payload: Buffer): WireEnvelope {
-	return JSON.parse(payload.toString("utf8")) as WireEnvelope;
+	const parsed = JSON.parse(payload.toString("utf8")) as unknown;
+	if (!isRecord(parsed)) {
+		return parsed as unknown as WireEnvelope;
+	}
+	const envelopeRecord = parsed as DecodedEnvelopeRecord;
+	const hashChain = envelopeRecord.hash_chain;
+	if (!isRecord(hashChain)) {
+		return parsed as unknown as WireEnvelope;
+	}
+	const hashChainRecord = hashChain as DecodedHashChainRecord;
+	const chainEpoch =
+		typeof envelopeRecord.chain_epoch === "number"
+			? envelopeRecord.chain_epoch
+			: typeof hashChainRecord.chain_epoch === "number"
+				? hashChainRecord.chain_epoch
+				: undefined;
+	const seq =
+		typeof envelopeRecord.seq === "number"
+			? envelopeRecord.seq
+			: typeof hashChainRecord.seq === "number"
+				? hashChainRecord.seq
+				: undefined;
+	if (chainEpoch === undefined || seq === undefined) {
+		return parsed as unknown as WireEnvelope;
+	}
+	return {
+		...parsed,
+		schema_version: "v1",
+		chain_epoch: chainEpoch,
+		seq,
+		hash_chain: {
+			prev: hashChainRecord.prev,
+			self: hashChainRecord.self,
+		},
+	} as unknown as WireEnvelope;
+}
+
+interface DecodedEnvelopeRecord extends Record<string, unknown> {
+	hash_chain?: unknown;
+	chain_epoch?: unknown;
+	seq?: unknown;
+}
+
+interface DecodedHashChainRecord extends Record<string, unknown> {
+	prev?: unknown;
+	self?: unknown;
+	chain_epoch?: unknown;
+	seq?: unknown;
 }
 
 function isUniqueConstraintError(error: unknown): boolean {
@@ -500,4 +547,8 @@ function isUniqueConstraintError(error: unknown): boolean {
 	}
 	const code = (error as { code?: unknown }).code;
 	return code === "SQLITE_CONSTRAINT_UNIQUE" || error.message.includes("UNIQUE constraint failed");
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === "object" && value !== null;
 }
