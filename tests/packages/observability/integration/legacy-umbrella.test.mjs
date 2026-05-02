@@ -259,17 +259,22 @@ describe("sno observe Node package", () => {
 			serializeEnvelope(createFixtureEnvelope(fixture)),
 		);
 		assert.deepEqual(Object.keys(parsed), [
+			"schema_version",
 			"event_id",
 			"event_type",
 			"ts_edge_ms",
 			"consent_level",
 			"redacted",
+			"chain_epoch",
+			"seq",
 			"scope",
 			"hash_chain",
 			"payload",
 		]);
-		assert.equal(parsed.chain_epoch, undefined);
-		assert.deepEqual(Object.keys(parsed.hash_chain), ["chain_epoch", "seq", "prev", "self"]);
+		assert.equal(parsed.schema_version, "v1");
+		assert.equal(parsed.chain_epoch, fixture.envelope.chain_epoch);
+		assert.equal(parsed.seq, fixture.envelope.seq);
+		assert.deepEqual(Object.keys(parsed.hash_chain), ["prev", "self"]);
 		assert.equal(
 			serializeEnvelope(createFixtureEnvelope(fixture)),
 			serializeEnvelope(createFixtureEnvelope(fixture)),
@@ -519,16 +524,19 @@ describe("sno observe Node package", () => {
 					assert.match(call.headers.Authorization, /^Bearer [0-9a-f]{64}$/u);
 					const posted = JSON.parse(call.body);
 				assert.equal(Array.isArray(posted), false);
-				assert.deepEqual(Object.keys(posted), [
-					"event_id",
-					"event_type",
-					"ts_edge_ms",
-					"consent_level",
-					"redacted",
-					"scope",
-					"hash_chain",
-					"payload",
-				]);
+			assert.deepEqual(Object.keys(posted), [
+				"schema_version",
+				"event_id",
+				"event_type",
+				"ts_edge_ms",
+				"consent_level",
+				"redacted",
+				"chain_epoch",
+				"seq",
+				"scope",
+				"hash_chain",
+				"payload",
+			]);
 			}
 
 			const store = new BufferStore(temp.env.SNO_BUFFER_PATH);
@@ -614,11 +622,11 @@ describe("sno observe Node package", () => {
 					[0, 1, 0],
 				);
 				assert.deepEqual(
-					envelopes.map((envelope) => envelope.hash_chain.chain_epoch),
+					envelopes.map((envelope) => envelope.chain_epoch),
 					[0, 0, 1],
 				);
 				assert.deepEqual(
-					envelopes.map((envelope) => envelope.hash_chain.seq),
+					envelopes.map((envelope) => envelope.seq),
 					[0, 1, 0],
 				);
 				assert.equal(envelopes[2].hash_chain.prev, "GENESIS");
@@ -660,11 +668,11 @@ describe("sno observe Node package", () => {
 				["agent.identify", "memory.write", "consent.change", "consent.change", "agent.identify"],
 			);
 			assert.deepEqual(
-				posted.map((event) => event.hash_chain.chain_epoch),
+				posted.map((event) => event.chain_epoch),
 				[0, 0, 0, 1, 2],
 			);
 			assert.deepEqual(
-				posted.filter((event) => event.hash_chain.seq === 0).map((event) => event.event_type),
+				posted.filter((event) => event.seq === 0).map((event) => event.event_type),
 				["agent.identify", "agent.identify"],
 			);
 
@@ -961,10 +969,10 @@ function createFixtureEnvelope(fixture) {
 		tsEdgeMs: fixture.envelope.ts_edge_ms,
 		consentLevel: fixture.envelope.consent_level,
 		redacted: fixture.envelope.redacted,
+		chainEpoch: fixture.envelope.chain_epoch,
+		seq: fixture.envelope.seq,
 		scope: fixture.envelope.scope,
 		hashChain: {
-			chain_epoch: fixture.envelope.chain_epoch,
-			seq: fixture.envelope.seq,
 			prev: fixture.envelope.hash_chain.prev,
 			self: fixture.expected_self_hash,
 		},
