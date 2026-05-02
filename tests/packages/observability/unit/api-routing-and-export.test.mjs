@@ -18,7 +18,6 @@ function tempEnv() {
 			SNO_IDENTITY_PATH: join(dir, "identity.json"),
 			SNO_BUFFER_PATH: join(dir, "buffer.db"),
 			SNO_CONSENT_PATH: join(dir, "state", "consent.json"),
-			SNO_TOKEN_PATH: join(dir, "state", "tokens.json"),
 			SNO_OBSERVE_BASE_URL: "https://custom.sno.test/base",
 			HOME: dir,
 		},
@@ -34,17 +33,6 @@ describe("public API routing and export inference", () => {
 			cwd: t.dir,
 			fetch: async (url, init) => {
 				calls.push({ url: String(url), authorization: init.headers.Authorization });
-				if (String(url).endsWith("/api/v1/identity/register-machine")) {
-					const body = JSON.parse(String(init.body));
-					return new Response(
-						JSON.stringify({
-							user_cuid: body.user_cuid,
-							machine_uuid: body.machine_uuid,
-							claimed: false,
-						}),
-						{ status: 200, headers: { "Content-Type": "application/json" } },
-					);
-				}
 				return new Response(JSON.stringify({ verified: true }), {
 					status: 200,
 					headers: { "Content-Type": "application/json" },
@@ -57,10 +45,6 @@ describe("public API routing and export inference", () => {
 			const identity = JSON.parse(readFileSync(t.env.SNO_IDENTITY_PATH, "utf8"));
 			assert.deepEqual(calls, [
 				{
-					url: "https://custom.sno.test/base/api/v1/identity/register-machine",
-					authorization: undefined,
-				},
-				{
 					url: "https://custom.sno.test/base/api/v1/audit/verify?event_id=event%201",
 					authorization: `Bearer ${identity.machine_secret}`,
 				},
@@ -71,11 +55,11 @@ describe("public API routing and export inference", () => {
 		}
 	});
 
-	it("allows direct audit verification with an API key fallback", async () => {
+	it("allows direct audit verification with a machine secret bearer", async () => {
 		const calls = [];
 		const result = await verifyAuditEvent("event 2", {
 			baseUrl: "https://custom.sno.test/base",
-			apiKey: "direct-api-key",
+			machineSecret: "direct-machine-secret",
 			fetch: async (url, init) => {
 				calls.push({ url: String(url), authorization: init.headers.Authorization });
 				return new Response(JSON.stringify({ verified: true }), {
@@ -88,7 +72,7 @@ describe("public API routing and export inference", () => {
 		assert.deepEqual(calls, [
 			{
 				url: "https://custom.sno.test/base/api/v1/audit/verify?event_id=event%202",
-				authorization: "Bearer direct-api-key",
+				authorization: "Bearer direct-machine-secret",
 			},
 		]);
 	});
