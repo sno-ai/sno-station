@@ -18,7 +18,6 @@ function tempEnv() {
 			SNO_IDENTITY_PATH: join(dir, "identity.json"),
 			SNO_BUFFER_PATH: join(dir, "buffer.db"),
 			SNO_CONSENT_PATH: join(dir, "state", "consent.json"),
-			SNO_TOKEN_PATH: join(dir, "state", "tokens.json"),
 			SNO_OBSERVE_BASE_URL: "https://custom.sno.test/base",
 			HOME: dir,
 		},
@@ -71,11 +70,11 @@ describe("public API routing and export inference", () => {
 		}
 	});
 
-	it("allows direct audit verification with an API key fallback", async () => {
+	it("allows direct audit verification with a machine secret bearer", async () => {
 		const calls = [];
 		const result = await verifyAuditEvent("event 2", {
 			baseUrl: "https://custom.sno.test/base",
-			apiKey: "direct-api-key",
+			machineSecret: "direct-machine-secret",
 			fetch: async (url, init) => {
 				calls.push({ url: String(url), authorization: init.headers.Authorization });
 				return new Response(JSON.stringify({ verified: true }), {
@@ -88,7 +87,7 @@ describe("public API routing and export inference", () => {
 		assert.deepEqual(calls, [
 			{
 				url: "https://custom.sno.test/base/api/v1/audit/verify?event_id=event%202",
-				authorization: "Bearer direct-api-key",
+				authorization: "Bearer direct-machine-secret",
 			},
 		]);
 	});

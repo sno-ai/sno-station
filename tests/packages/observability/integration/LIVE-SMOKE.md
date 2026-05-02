@@ -18,7 +18,7 @@ absent, so CI stays green by default:
 ## How to run a manual live smoke
 
 ```sh
-SNO_OBSERVE_LIVE_BASE_URL=https://sno.ai \
+SNO_OBSERVE_LIVE_BASE_URL=https://www.sno.ai \
 SNO_OBSERVE_LIVE_EVENT_ID=<known-event-id-or-omit> \
 npm test
 ```
