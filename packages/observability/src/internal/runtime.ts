@@ -1,4 +1,5 @@
 import { v7 as uuidv7 } from "uuid";
+import { verifyAuditEvent } from "./audit-verify.js";
 import { BufferStore } from "./buffer-store.js";
 import { ConsentStore } from "./consent.js";
 import { type RegisterOptions, type RegisterResult, registerDevice } from "./device-flow.js";
@@ -8,6 +9,7 @@ import { type ExportOptions, exportEvents } from "./export.js";
 import { FlushEngine, type FlushResult } from "./flush.js";
 import { normalizeBaseUrl } from "./http.js";
 import { bootstrapIdentity } from "./identity.js";
+import { logger } from "./log.js";
 import { AsyncMutex } from "./mutex.js";
 import { getBufferPath, getRedactionRulesPath, type PathEnv } from "./paths.js";
 import { detectProjectId } from "./project-id.js";
@@ -16,6 +18,7 @@ import { shouldSampleTool } from "./sampling.js";
 import { parseConsentValue } from "./schemas.js";
 import {
 	type AgentId,
+	type AuditVerifyResult,
 	type ConsentValue,
 	type DoctorReport,
 	type EmitResult,
@@ -26,6 +29,7 @@ import {
 	type JsonObject,
 	type ParsedEvent,
 	SDK_VERSION,
+	type ShutdownResult,
 	type SubscribeEvent,
 	type Subscription,
 } from "./types.js";
@@ -174,9 +178,6 @@ export class SnoObserveRuntime {
 					terminal: false,
 				});
 			}
-			if (current !== "off") {
-				await this.flush(true);
-			}
 			consentStore.write(next);
 			this.consentStoreCache = null;
 			this.consentStoreEnv = null;
@@ -198,6 +199,9 @@ export class SnoObserveRuntime {
 					chainEpoch,
 					terminal: next === "off",
 				});
+			}
+			if (current !== "off") {
+				await this.flushConsentTransition();
 			}
 			if (next !== "off") {
 				this.scheduleFlush();
@@ -256,17 +260,48 @@ export class SnoObserveRuntime {
 		return registerDevice(identity, registerOptions);
 	}
 
-	async shutdown(): Promise<void> {
+	verifyAudit(eventId: string): Promise<AuditVerifyResult> {
+		const apiKey = this.env().SNO_API_KEY;
+		const options: { baseUrl: string; apiKey?: string; fetch?: typeof fetch } = {
+			baseUrl: this.baseUrl(),
+		};
+		if (apiKey !== undefined) {
+			options.apiKey = apiKey;
+		}
+		if (this.options.fetch !== undefined) {
+			options.fetch = this.options.fetch;
+		}
+		return verifyAuditEvent(eventId, options);
+	}
+
+	async shutdown(): Promise<ShutdownResult> {
+		const result: ShutdownResult = { flushedCount: 0, failedCount: 0 };
 		if (this.store !== null) {
-			await this.flush(true);
+			try {
+				const flushResult = await this.flush(true);
+				result.flushedCount += flushResult.shipped;
+				result.failedCount += flushResult.retryable + flushResult.terminal;
+			} catch (error) {
+				result.failedCount += this.store.countPending();
+				result.lastError = errorMessage(error);
+				logger.error("sno observe shutdown flush failed", { error: result.lastError });
+			}
 			// Drain any background flush (e.g. fire-and-forget from emitParsed) before closing the DB.
-			await this.flushEngine?.drain();
+			const drainResult = await this.flushEngine?.drain();
+			if (drainResult !== undefined) {
+				result.flushedCount += drainResult.flushedCount;
+				result.failedCount += drainResult.failedCount;
+				if (drainResult.lastError !== undefined) {
+					result.lastError = drainResult.lastError;
+				}
+			}
 			this.flushEngine?.dispose();
 		}
 		this.store?.close();
 		this.store = null;
 		this.storePath = null;
 		this.flushEngine = null;
+		return result;
 	}
 
 	private appendPrepared(input: {
@@ -310,10 +345,30 @@ export class SnoObserveRuntime {
 	private scheduleFlush(): void {
 		const store = this.getStore();
 		if (store.countPending() >= 50) {
-			void this.flush(false);
+			this.flushInBackground();
 			return;
 		}
 		this.getFlushEngine().schedule(60_000);
+	}
+
+	private async flushConsentTransition(): Promise<void> {
+		try {
+			const result = await this.flush(true);
+			if (result.retryable > 0 || result.terminal > 0) {
+				logger.warn("sno observe consent transition flush incomplete", {
+					retryable: result.retryable,
+					terminal: result.terminal,
+				});
+			}
+		} catch (error) {
+			logger.error("sno observe consent transition flush failed", { error: errorMessage(error) });
+		}
+	}
+
+	private flushInBackground(): void {
+		void this.flush(false).catch((error) => {
+			logger.error("sno observe background flush failed", { error: errorMessage(error) });
+		});
 	}
 
 	private getFlushEngine(): FlushEngine {
@@ -354,7 +409,7 @@ export class SnoObserveRuntime {
 	}
 
 	private baseUrl(): string {
-		const env = this.env() as PathEnv & { SNO_OBSERVE_BASE_URL?: string };
+		const env = this.env();
 		return normalizeBaseUrl(env.SNO_OBSERVE_BASE_URL ?? "https://www.sno.ai");
 	}
 
@@ -406,4 +461,8 @@ function normalizeSystemPayload(input: {
 
 function uniqueAgents(values: AgentId[]): AgentId[] {
 	return [...new Set(values)];
+}
+
+function errorMessage(error: unknown): string {
+	return error instanceof Error ? error.message : String(error);
 }

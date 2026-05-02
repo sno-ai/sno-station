@@ -1,6 +1,9 @@
 // Tests redaction false-positive guardrails per task §20.5.
 // Per spec: emails inside code samples (`"foo@bar"`) still redact — this is intentional.
 import assert from "node:assert/strict";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, it } from "node:test";
 import { redactEventPayload } from "../../../../packages/sno-observe/dist/internal/redact.js";
 
@@ -67,5 +70,25 @@ describe("redact — false-positive guardrails", () => {
 		assert.equal(serialized.includes("raw input"), false);
 		assert.equal(serialized.includes("ada@example.com"), false);
 		assert.equal(result.redacted, true);
+	});
+
+	it("ignores unsafe user redaction rules while keeping safe ones", () => {
+		const dir = mkdtempSync(join(tmpdir(), "sno-observe-redact-rules-"));
+		const path = join(dir, "rules.txt");
+		try {
+			writeFileSync(path, ["secret-token", "(a+)+$", "x".repeat(257)].join("\n"));
+			const result = redactEventPayload(
+				{ note: `secret-token ${"a".repeat(32)}! ${"x".repeat(257)}` },
+				"metadata-only",
+				path,
+			);
+			const serialized = JSON.stringify(result.value);
+			assert.equal(serialized.includes("secret-token"), false);
+			assert.equal(serialized.includes("aaaaaaaa"), true);
+			assert.equal(serialized.includes("xxxxxxxx"), true);
+			assert.equal(result.redacted, true);
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
 	});
 });

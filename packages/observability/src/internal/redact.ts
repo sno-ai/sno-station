@@ -8,6 +8,9 @@ const REDACTED_CARD = "<card>";
 const REDACTED_KEY = "<api-key>";
 const REDACTED_IP = "<ip>";
 const REDACTED_CONTENT = "<content>";
+const MAX_USER_RULE_LENGTH = 256;
+const NESTED_QUANTIFIER_PATTERN =
+	/\((?:\?:|\?=|\?!|\?<=|\?<!)?(?:[^()\\]|\\.)*(?:[+*]|\{\d+(?:,\d*)?\})(?:[^()\\]|\\.)*\)(?:[+*]|\{\d+(?:,\d*)?\})/u;
 
 const sensitiveKeys = new Set([
 	"prompt_text",
@@ -120,6 +123,15 @@ function loadUserRules(path?: string): RegExp[] {
 		if (trimmed.length === 0 || trimmed.startsWith("#")) {
 			continue;
 		}
+		const unsafeReason = unsafeUserRuleReason(trimmed);
+		if (unsafeReason !== undefined) {
+			logger.warn("unsafe redaction rule ignored", {
+				path,
+				pattern: trimmed,
+				reason: unsafeReason,
+			});
+			continue;
+		}
 		try {
 			rules.push(new RegExp(trimmed, "gu"));
 		} catch (error) {
@@ -131,6 +143,16 @@ function loadUserRules(path?: string): RegExp[] {
 		}
 	}
 	return rules;
+}
+
+function unsafeUserRuleReason(pattern: string): string | undefined {
+	if (pattern.length > MAX_USER_RULE_LENGTH) {
+		return "too_long";
+	}
+	if (NESTED_QUANTIFIER_PATTERN.test(pattern)) {
+		return "nested_quantifier";
+	}
+	return undefined;
 }
 
 function passesLuhn(input: string): boolean {

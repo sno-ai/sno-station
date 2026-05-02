@@ -128,4 +128,43 @@ describe("buffer-store retention pruner", () => {
 			rmSync(dir, { recursive: true, force: true });
 		}
 	});
+
+	it("caps quarantine rows independently from shipped-event retention", () => {
+		const { dir, store } = makeStore();
+		try {
+			store.append({
+				eventId: "id-0",
+				eventType: "agent.identify",
+				tsEdgeMs: 1,
+				consentLevel: "metadata-only",
+				redacted: false,
+				scope,
+				payload: validPayloads["agent.identify"],
+				terminal: false,
+			});
+			for (let i = 1; i <= 5; i += 1) {
+				const appended = store.append({
+					eventId: `bad-${i}`,
+					eventType: "memory.write",
+					tsEdgeMs: 1000 + i,
+					consentLevel: "metadata-only",
+					redacted: false,
+					scope,
+					payload: validPayloads["memory.write"],
+					terminal: false,
+				});
+				const row = store.getPending().find((pending) => pending.rowid === appended.rowid);
+				assert.ok(row);
+				store.quarantine(row, 400, "invalid");
+			}
+
+			const pruned = store.pruneQuarantine(2, Number.MAX_SAFE_INTEGER);
+
+			assert.equal(pruned, 3);
+			assert.equal(store.countQuarantined(), 2);
+		} finally {
+			store.close();
+			rmSync(dir, { recursive: true, force: true });
+		}
+	});
 });
