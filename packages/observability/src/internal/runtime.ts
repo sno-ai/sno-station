@@ -2,6 +2,7 @@ import { v7 as uuidv7 } from "uuid";
 import { verifyAuditEvent } from "./audit-verify.js";
 import { BufferStore } from "./buffer-store.js";
 import { ConsentStore } from "./consent.js";
+import { type ClaimOptions, type ClaimResult, claimMachine } from "./device-claim.js";
 import { createDoctorReport } from "./doctor.js";
 import { InvalidEventPayloadError } from "./errors.js";
 import { type ExportOptions, exportEvents } from "./export.js";
@@ -264,6 +265,20 @@ export class SnoObserveRuntime {
 		return registerMachine(identity, registerOptions);
 	}
 
+	claim(options: ClaimOptions = {}): Promise<ClaimResult> {
+		const identity = bootstrapIdentity(this.env());
+		const claimOptions: ClaimOptions = {
+			...options,
+			baseUrl: options.baseUrl ?? this.baseUrl(),
+			env: options.env ?? this.env(),
+		};
+		const fetchImpl = options.fetch ?? this.options.fetch;
+		if (fetchImpl !== undefined) {
+			claimOptions.fetch = fetchImpl;
+		}
+		return claimMachine(identity, claimOptions);
+	}
+
 	async verifyAudit(eventId: string): Promise<AuditVerifyResult> {
 		const identity = bootstrapIdentity(this.env());
 		const baseUrl = this.baseUrl();
@@ -326,8 +341,14 @@ export class SnoObserveRuntime {
 		rejectRawContent(input.eventType, input.payload, input.consent);
 		const payload = normalizeSystemPayload(input);
 		const projectId = detectProjectId(this.options.cwd ?? process.cwd(), this.env());
+		const accountScope =
+			typeof input.identity.user_account_id === "string" &&
+			input.identity.user_account_id.length > 0
+				? { user_account_id: input.identity.user_account_id }
+				: {};
 		const scope: EventScope = {
 			...input.scope,
+			...accountScope,
 			user_id: input.identity.user_cuid,
 			machine_id: input.identity.machine_uuid,
 			agent_id: input.agentId,

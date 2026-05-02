@@ -15,6 +15,7 @@ interface IdentityRecord {
 	machine_secret?: unknown;
 	created_at?: unknown;
 	default_project_id?: unknown;
+	user_account_id?: unknown;
 }
 
 const MACHINE_SECRET_PATTERN = /^[0-9a-f]{64}$/u;
@@ -71,7 +72,10 @@ export function isValidIdentity(value: unknown): value is Identity {
 		typeof record.created_at === "string" &&
 		(record.default_project_id === undefined ||
 			record.default_project_id === null ||
-			typeof record.default_project_id === "string")
+			typeof record.default_project_id === "string") &&
+		(record.user_account_id === undefined ||
+			record.user_account_id === null ||
+			typeof record.user_account_id === "string")
 	);
 }
 
