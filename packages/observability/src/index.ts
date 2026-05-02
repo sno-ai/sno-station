@@ -1,3 +1,4 @@
+import type { ClaimCode, ClaimResult } from "./internal/device-claim.js";
 import { type RuntimeOptions, SnoObserveRuntime } from "./internal/runtime.js";
 import { shouldSampleTool as shouldSampleToolInternal } from "./internal/sampling.js";
 import { parseEventInput } from "./internal/schemas.js";
@@ -66,6 +67,12 @@ function createApi(runtime: SnoObserveRuntime) {
 		return runtime.register(options);
 	}
 
+	function claim(
+		options?: Parameters<SnoObserveRuntime["claim"]>[0],
+	): ReturnType<SnoObserveRuntime["claim"]> {
+		return runtime.claim(options);
+	}
+
 	function doctor(): DoctorReport {
 		return runtime.doctor();
 	}
@@ -88,6 +95,7 @@ function createApi(runtime: SnoObserveRuntime) {
 		consent,
 		observe,
 		register,
+		claim,
 		audit,
 		doctor,
 		shouldSampleTool,
@@ -108,6 +116,7 @@ const SNO_OBSERVE_KEYS = [
 	"consent",
 	"observe",
 	"register",
+	"claim",
 	"audit",
 	"doctor",
 	"shouldSampleTool",
@@ -149,6 +158,8 @@ export const snoObserve: SnoObserveApi = new Proxy({} as SnoObserveApi, {
 
 export type {
 	AgentId,
+	ClaimCode,
+	ClaimResult,
 	ConsentValue,
 	DoctorCheck,
 	DoctorReport,

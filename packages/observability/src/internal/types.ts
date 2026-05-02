@@ -34,6 +34,7 @@ export interface Identity {
 	machine_secret: string;
 	created_at: string;
 	default_project_id?: string | null;
+	user_account_id?: string | null;
 }
 
 export interface EventScope extends JsonObject {
@@ -41,6 +42,7 @@ export interface EventScope extends JsonObject {
 	machine_id: string;
 	agent_id: AgentId;
 	project_id: string;
+	user_account_id?: string;
 }
 
 export interface HashChain {

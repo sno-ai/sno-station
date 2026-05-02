@@ -121,6 +121,10 @@ export async function startMockServer({ script = [] } = {}) {
 				// Default 202 receipt for events ingest, 404 for everything else.
 				if (path === "/api/v1/identity/register-machine") {
 					entry = defaultRegisterMachineResponse(body);
+				} else if (path === "/api/v1/device/code") {
+					entry = defaultDeviceCodeResponse(body);
+				} else if (path === "/api/v1/device/token") {
+					entry = defaultDeviceTokenResponse(body);
 				} else if (path === "/api/v1/events") {
 					entry = { status: 202, body: { receipt_id: "r_default" } };
 				} else if (path === "/api/v1/audit/verify") {
@@ -190,6 +194,42 @@ function defaultRegisterMachineResponse(body) {
 					machine_uuid: parsed.machine_uuid,
 					claimed: false,
 				},
+			};
+		}
+	} catch {}
+	return { status: 400, body: { error: "invalid_request" } };
+}
+
+function defaultDeviceCodeResponse(body) {
+	try {
+		const parsed = JSON.parse(body);
+		if (typeof parsed.user_cuid === "string" && typeof parsed.machine_uuid === "string") {
+			return {
+				status: 200,
+				body: {
+					device_code: `dev_${parsed.machine_uuid}`,
+					user_code: "SNO-CODE",
+					verification_uri: "https://sno.ai/cli/connect",
+					verification_uri_complete: "https://sno.ai/cli/connect?code=SNO-CODE",
+					expires_in: 1800,
+					interval: 1,
+				},
+			};
+		}
+	} catch {}
+	return { status: 400, body: { error: "invalid_request" } };
+}
+
+function defaultDeviceTokenResponse(body) {
+	try {
+		const parsed = JSON.parse(body);
+		if (
+			typeof parsed.device_code === "string" &&
+			parsed.grant_type === "urn:ietf:params:oauth:grant-type:device_code"
+		) {
+			return {
+				status: 200,
+				body: { user_account_id: "acct_mock_123", status: "claimed" },
 			};
 		}
 	} catch {}
