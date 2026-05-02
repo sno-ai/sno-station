@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { describe, it } from "node:test";
 import { createSnoObserve } from "../../../../packages/sno-observe/dist/index.js";
 import { BufferStore } from "../../../../packages/sno-observe/dist/internal/buffer-store.js";
+import { verifyAuditEvent } from "../../../../packages/sno-observe/dist/internal/audit-verify.js";
 import { exportEvents } from "../../../../packages/sno-observe/dist/internal/export.js";
 import { validPayloads, scope } from "../fixtures/temp-env.mjs";
 
@@ -17,6 +18,7 @@ function tempEnv() {
 			SNO_IDENTITY_PATH: join(dir, "identity.json"),
 			SNO_BUFFER_PATH: join(dir, "buffer.db"),
 			SNO_CONSENT_PATH: join(dir, "state", "consent.json"),
+			SNO_TOKEN_PATH: join(dir, "state", "tokens.json"),
 			SNO_OBSERVE_BASE_URL: "https://custom.sno.test/base",
 			SNO_API_KEY: "test-api-key",
 			HOME: dir,
@@ -68,6 +70,28 @@ describe("public API routing and export inference", () => {
 			await observe.shutdown().catch(() => {});
 			rmSync(t.dir, { recursive: true, force: true });
 		}
+	});
+
+	it("allows direct audit verification with an API key fallback", async () => {
+		const calls = [];
+		const result = await verifyAuditEvent("event 2", {
+			baseUrl: "https://custom.sno.test/base",
+			apiKey: "direct-api-key",
+			fetch: async (url, init) => {
+				calls.push({ url: String(url), authorization: init.headers.Authorization });
+				return new Response(JSON.stringify({ verified: true }), {
+					status: 200,
+					headers: { "Content-Type": "application/json" },
+				});
+			},
+		});
+		assert.equal(result.verified, true);
+		assert.deepEqual(calls, [
+			{
+				url: "https://custom.sno.test/base/api/v1/audit/verify?event_id=event%202",
+				authorization: "Bearer direct-api-key",
+			},
+		]);
 	});
 
 	it("infers jsonl format from .jsonl export paths", () => {
