@@ -315,8 +315,9 @@ describe("machine bearer attach (24.3, 24.3a)", () => {
 			// Verify first POST is agent.identify at chain_epoch=0/seq=0/prev=GENESIS.
 			const firstBody = JSON.parse(eventCalls[0].body);
 			assert.equal(firstBody.event_type, "agent.identify");
-			assert.equal(firstBody.hash_chain.chain_epoch, 0);
-			assert.equal(firstBody.hash_chain.seq, 0);
+			assert.equal(firstBody.schema_version, "v1");
+			assert.equal(firstBody.chain_epoch, 0);
+			assert.equal(firstBody.seq, 0);
 			assert.equal(firstBody.hash_chain.prev, "GENESIS");
 		} finally {
 			await runtime.shutdown().catch(() => {});
