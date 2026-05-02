@@ -44,18 +44,19 @@ export interface EventScope extends JsonObject {
 }
 
 export interface HashChain {
-	chain_epoch: number;
-	seq: number;
 	prev: string;
 	self: string;
 }
 
 export interface WireEnvelope {
+	schema_version: "v1";
 	event_id: string;
 	event_type: EventType;
 	ts_edge_ms: number;
 	consent_level: ConsentValue;
 	redacted: boolean;
+	chain_epoch: number;
+	seq: number;
 	scope: EventScope;
 	hash_chain: HashChain;
 	payload: JsonObject;

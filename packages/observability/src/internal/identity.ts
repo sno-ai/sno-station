@@ -79,35 +79,7 @@ function normalizeIdentity(value: unknown): Identity | null {
 	if (isValidIdentity(value)) {
 		return value;
 	}
-	if (typeof value !== "object" || value === null) {
-		return null;
-	}
-	const record = value as IdentityRecord;
-	if (
-		record.version !== 1 ||
-		typeof record.user_cuid !== "string" ||
-		record.user_cuid.length === 0 ||
-		typeof record.machine_uuid !== "string" ||
-		!validateUuid(record.machine_uuid) ||
-		typeof record.created_at !== "string"
-	) {
-		return null;
-	}
-	const machineSecret =
-		typeof record.machine_secret === "string" && MACHINE_SECRET_PATTERN.test(record.machine_secret)
-			? record.machine_secret
-			: generateMachineSecret();
-	const identity: Identity = {
-		version: 1,
-		user_cuid: record.user_cuid,
-		machine_uuid: record.machine_uuid,
-		machine_secret: machineSecret,
-		created_at: record.created_at,
-	};
-	if (record.default_project_id === null || typeof record.default_project_id === "string") {
-		identity.default_project_id = record.default_project_id;
-	}
-	return identity;
+	return null;
 }
 
 function createIdentity(): Identity {

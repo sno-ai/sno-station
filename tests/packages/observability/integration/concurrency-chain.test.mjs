@@ -134,7 +134,7 @@ describe("concurrency / chain integrity", () => {
 				});
 				assert.equal(next.seq, tail.seq + 1);
 				assert.equal(next.envelope.hash_chain.prev, tail.self_hash);
-				assert.equal(next.envelope.hash_chain.chain_epoch, tail.chain_epoch);
+				assert.equal(next.envelope.chain_epoch, tail.chain_epoch);
 				assert.equal(store.verifyLocalChain(), true);
 			} finally {
 				store.close();

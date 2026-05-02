@@ -52,7 +52,7 @@ function resolveDiagnosticPaths(env: DiagnosticEnv): DiagnosticPaths {
 		lockPath: getIdentityLockPath(env),
 		bufferPath: getBufferPath(env),
 		consentPath: getConsentPath(env),
-		baseUrl: normalizeDiagnosticBaseUrl(env.SNO_OBSERVE_BASE_URL ?? "https://sno.ai"),
+		baseUrl: normalizeDiagnosticBaseUrl(env.SNO_OBSERVE_BASE_URL ?? "https://www.sno.ai"),
 	};
 }
 
