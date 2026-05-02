@@ -2,7 +2,6 @@ import { v7 as uuidv7 } from "uuid";
 import { verifyAuditEvent } from "./audit-verify.js";
 import { BufferStore } from "./buffer-store.js";
 import { ConsentStore } from "./consent.js";
-import { type RegisterOptions, type RegisterResult, registerMachine } from "./device-flow.js";
 import { createDoctorReport } from "./doctor.js";
 import { InvalidEventPayloadError } from "./errors.js";
 import { type ExportOptions, exportEvents } from "./export.js";
@@ -10,6 +9,11 @@ import { FlushEngine, type FlushResult } from "./flush.js";
 import { normalizeBaseUrl } from "./http.js";
 import { bootstrapIdentity } from "./identity.js";
 import { logger } from "./log.js";
+import {
+	type RegisterOptions,
+	type RegisterResult,
+	registerMachine,
+} from "./machine-registration.js";
 import { AsyncMutex } from "./mutex.js";
 import { getBufferPath, getRedactionRulesPath, type PathEnv } from "./paths.js";
 import { detectProjectId } from "./project-id.js";
