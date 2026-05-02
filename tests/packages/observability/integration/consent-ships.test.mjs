@@ -74,4 +74,25 @@ describe("consent.change always ships when value changes (21.8)", () => {
 			rmSync(t.dir, { recursive: true, force: true });
 		}
 	});
+
+	it("persists consent even when the transition flush cannot ship", async () => {
+		const t = tempEnv();
+		const runtime = new SnoObserveRuntime({
+			env: t.env,
+			cwd: t.dir,
+			fetch: async () =>
+				new Response(JSON.stringify({ error: "unavailable" }), {
+					status: 503,
+					headers: { "Content-Type": "application/json" },
+				}),
+		});
+		try {
+			const result = await runtime.setConsent("off", "network-down");
+			assert.equal(result, "off");
+			assert.equal(runtime.getConsent(), "off");
+		} finally {
+			await runtime.shutdown().catch(() => {});
+			rmSync(t.dir, { recursive: true, force: true });
+		}
+	});
 });

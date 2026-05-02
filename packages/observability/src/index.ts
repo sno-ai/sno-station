@@ -1,4 +1,3 @@
-import { verifyAuditEvent } from "./internal/audit-verify.js";
 import { type RuntimeOptions, SnoObserveRuntime } from "./internal/runtime.js";
 import { shouldSampleTool as shouldSampleToolInternal } from "./internal/sampling.js";
 import { parseEventInput } from "./internal/schemas.js";
@@ -12,6 +11,7 @@ import type {
 	Event,
 	ExportFormat,
 	ExportResult,
+	ShutdownResult,
 	Subscription,
 } from "./internal/types.js";
 
@@ -56,7 +56,7 @@ function createApi(runtime: SnoObserveRuntime) {
 
 	const audit = {
 		verify(eventId: string): Promise<AuditVerifyResult> {
-			return verifyAuditEvent(eventId);
+			return runtime.verifyAudit(eventId);
 		},
 	};
 
@@ -78,7 +78,7 @@ function createApi(runtime: SnoObserveRuntime) {
 		return runtime.subscribe(listener);
 	}
 
-	function shutdown(): Promise<void> {
+	function shutdown(): Promise<ShutdownResult> {
 		return runtime.shutdown();
 	}
 
@@ -100,7 +100,52 @@ export function createSnoObserve(options: RuntimeOptions = {}) {
 	return createApi(new SnoObserveRuntime(options));
 }
 
-export const snoObserve = createSnoObserve();
+type SnoObserveApi = ReturnType<typeof createSnoObserve>;
+
+const SNO_OBSERVE_KEYS = [
+	"emit",
+	"flush",
+	"consent",
+	"observe",
+	"register",
+	"audit",
+	"doctor",
+	"shouldSampleTool",
+	"subscribe",
+	"shutdown",
+] as const satisfies ReadonlyArray<keyof SnoObserveApi>;
+
+let defaultObserve: SnoObserveApi | undefined;
+const SNO_OBSERVE_KEY_SET: ReadonlySet<PropertyKey> = new Set(SNO_OBSERVE_KEYS);
+
+function getDefaultObserve(): SnoObserveApi {
+	defaultObserve ??= createSnoObserve();
+	return defaultObserve;
+}
+
+export const snoObserve: SnoObserveApi = new Proxy({} as SnoObserveApi, {
+	get(_target, property) {
+		if (!SNO_OBSERVE_KEY_SET.has(property)) {
+			return undefined;
+		}
+		return getDefaultObserve()[property as keyof SnoObserveApi];
+	},
+	has(_target, property) {
+		return SNO_OBSERVE_KEY_SET.has(property);
+	},
+	ownKeys() {
+		return [...SNO_OBSERVE_KEYS];
+	},
+	getOwnPropertyDescriptor(_target, property) {
+		if (!SNO_OBSERVE_KEY_SET.has(property)) {
+			return undefined;
+		}
+		return {
+			configurable: true,
+			enumerable: true,
+		};
+	},
+});
 
 export type {
 	AgentId,
@@ -110,4 +155,5 @@ export type {
 	Event,
 	ExportFormat,
 	RuntimeOptions,
+	ShutdownResult,
 };
