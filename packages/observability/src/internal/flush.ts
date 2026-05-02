@@ -243,7 +243,7 @@ async function flushRow(
 ): Promise<FlushResult> {
 	try {
 		const response = await postEvent(
-			options.baseUrl ?? "https://sno.ai",
+			options.baseUrl ?? "https://www.sno.ai",
 			row.payload.toString("utf8"),
 			options.identity.machine_secret,
 			options.fetch,
