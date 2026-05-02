@@ -641,6 +641,67 @@ describe("sno observe Node package", () => {
 		}
 	});
 
+	it("uses only persisted identity for account scope", async () => {
+		const anonymousTemp = createTempSnoEnv("sno-observe-anonymous-account-scope-");
+		const anonymousRuntime = new SnoObserveRuntime({
+			env: anonymousTemp.env,
+			cwd: anonymousTemp.dir,
+			fetch: createFetchRecorder().fetch,
+		});
+		try {
+			await anonymousRuntime.emitParsed(
+				parseEventInput({
+					event_type: "memory.write",
+					agent_id: "codex",
+					scope: { user_account_id: "acct_from_caller" },
+					payload: validPayloads["memory.write"],
+				}),
+			);
+			const store = new BufferStore(anonymousTemp.env.SNO_BUFFER_PATH);
+			try {
+				const envelopes = store.getAllRows().map((row) => decodeEnvelope(row.payload));
+				assert.equal(envelopes[1].scope.user_account_id, undefined);
+			} finally {
+				store.close();
+			}
+		} finally {
+			await anonymousRuntime.shutdown().catch(() => {});
+			cleanupTempSnoEnv(anonymousTemp);
+		}
+
+		const claimedTemp = createTempSnoEnv("sno-observe-claimed-account-scope-");
+		const identity = bootstrapIdentity(claimedTemp.env);
+		writeFileSync(
+			claimedTemp.env.SNO_IDENTITY_PATH,
+			`${JSON.stringify({ ...identity, user_account_id: "acct_from_identity" }, null, 2)}\n`,
+		);
+		const claimedRuntime = new SnoObserveRuntime({
+			env: claimedTemp.env,
+			cwd: claimedTemp.dir,
+			fetch: createFetchRecorder().fetch,
+		});
+		try {
+			await claimedRuntime.emitParsed(
+				parseEventInput({
+					event_type: "memory.write",
+					agent_id: "codex",
+					scope: { user_account_id: "acct_from_caller" },
+					payload: validPayloads["memory.write"],
+				}),
+			);
+			const store = new BufferStore(claimedTemp.env.SNO_BUFFER_PATH);
+			try {
+				const envelopes = store.getAllRows().map((row) => decodeEnvelope(row.payload));
+				assert.equal(envelopes[1].scope.user_account_id, "acct_from_identity");
+			} finally {
+				store.close();
+			}
+		} finally {
+			await claimedRuntime.shutdown().catch(() => {});
+			cleanupTempSnoEnv(claimedTemp);
+		}
+	});
+
 	it("routes retryable and terminal chain responses conservatively", async () => {
 		const retryTemp = createTempSnoEnv("sno-observe-retry-");
 		const retryRecorder = createFetchRecorder([{ status: 503, headers: { "Retry-After": "5" } }]);

@@ -8,7 +8,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { truncateAndRenormalize } from "@nodix/embedder";
+import { truncateAndRenormalize } from "@snoai/embedder";
 
 const TOL = 1e-6;
 
