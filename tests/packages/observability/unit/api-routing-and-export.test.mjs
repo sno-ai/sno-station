@@ -33,17 +33,6 @@ describe("public API routing and export inference", () => {
 			cwd: t.dir,
 			fetch: async (url, init) => {
 				calls.push({ url: String(url), authorization: init.headers.Authorization });
-				if (String(url).endsWith("/api/v1/identity/register-machine")) {
-					const body = JSON.parse(String(init.body));
-					return new Response(
-						JSON.stringify({
-							user_cuid: body.user_cuid,
-							machine_uuid: body.machine_uuid,
-							claimed: false,
-						}),
-						{ status: 200, headers: { "Content-Type": "application/json" } },
-					);
-				}
 				return new Response(JSON.stringify({ verified: true }), {
 					status: 200,
 					headers: { "Content-Type": "application/json" },
@@ -55,10 +44,6 @@ describe("public API routing and export inference", () => {
 			assert.equal(result.verified, true);
 			const identity = JSON.parse(readFileSync(t.env.SNO_IDENTITY_PATH, "utf8"));
 			assert.deepEqual(calls, [
-				{
-					url: "https://custom.sno.test/base/api/v1/identity/register-machine",
-					authorization: undefined,
-				},
 				{
 					url: "https://custom.sno.test/base/api/v1/audit/verify?event_id=event%201",
 					authorization: `Bearer ${identity.machine_secret}`,
