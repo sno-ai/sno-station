@@ -26,7 +26,7 @@ import { ConsentStore } from "../../../../packages/sno-observe/dist/internal/con
 import {
 	machineSecretHash,
 	registerMachine,
-} from "../../../../packages/sno-observe/dist/internal/device-flow.js";
+} from "../../../../packages/sno-observe/dist/internal/machine-registration.js";
 import {
 	InvalidAgentIdError,
 	InvalidConsentError,

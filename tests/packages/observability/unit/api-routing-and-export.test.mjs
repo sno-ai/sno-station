@@ -20,7 +20,6 @@ function tempEnv() {
 			SNO_CONSENT_PATH: join(dir, "state", "consent.json"),
 			SNO_TOKEN_PATH: join(dir, "state", "tokens.json"),
 			SNO_OBSERVE_BASE_URL: "https://custom.sno.test/base",
-			SNO_API_KEY: "test-api-key",
 			HOME: dir,
 		},
 	};

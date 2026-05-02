@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
 import { BufferStore } from "../../../../packages/sno-observe/dist/internal/buffer-store.js";
-import { machineSecretHash } from "../../../../packages/sno-observe/dist/internal/device-flow.js";
+import { machineSecretHash } from "../../../../packages/sno-observe/dist/internal/machine-registration.js";
 import { bootstrapIdentity } from "../../../../packages/sno-observe/dist/internal/identity.js";
 import { SnoObserveRuntime } from "../../../../packages/sno-observe/dist/internal/runtime.js";
 import { parseEventInput } from "../../../../packages/sno-observe/dist/internal/schemas.js";
