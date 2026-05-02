@@ -20,7 +20,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
-import { LocalEmbedProvider } from "@nodix/embedder";
+import { LocalEmbedProvider } from "@snoai/embedder";
 
 const MODEL_DIR = resolve(
 	import.meta.dirname,

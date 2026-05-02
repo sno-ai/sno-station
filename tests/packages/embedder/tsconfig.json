@@ -10,8 +10,8 @@
 		"rootDir": "../../..",
 		"baseUrl": "../../..",
 		"paths": {
-			"@nodix/embedder": ["packages/embedder/src/index.ts"],
-			"@nodix/utils/*": ["packages/utils/src/*"]
+			"@snoai/embedder": ["packages/embedder/src/index.ts"],
+			"@snoai/utils/*": ["packages/utils/src/*"]
 		}
 	},
 	"include": ["**/*.ts", "../../../packages/embedder/src/**/*.ts"],
