@@ -22,13 +22,13 @@ export const statusCodeMatrix = Object.freeze({
 	consentLevelNotInEnum: { status: 400, body: { error: "consent_level_not_in_enum" } },
 	tokensMethodRequired: { status: 400, body: { error: "tokens_method_required" } },
 	unauthorized: { status: 401, body: { error: "unauthorized" } },
-	claimedCuidRequiresBearer: {
+	machineScopeForbidden: {
 		status: 403,
-		body: { error: "claimed_cuid_requires_bearer" },
+		body: { error: "machine_scope_forbidden" },
 	},
-	claimedCuidInvalidBearer: {
+	ownershipDenied: {
 		status: 403,
-		body: { error: "claimed_cuid_invalid_bearer" },
+		body: { error: "ownership_denied" },
 	},
 	payloadConflict: { status: 409, body: { error: "payload_conflict" } },
 	chainSeedRequired: { status: 422, body: { error: "chain_seed_required" } },
@@ -119,7 +119,9 @@ export async function startMockServer({ script = [] } = {}) {
 			}
 			if (entry === undefined) {
 				// Default 202 receipt for events ingest, 404 for everything else.
-				if (path === "/api/v1/events") {
+				if (path === "/api/v1/identity/register-machine") {
+					entry = defaultRegisterMachineResponse(body);
+				} else if (path === "/api/v1/events") {
 					entry = { status: 202, body: { receipt_id: "r_default" } };
 				} else if (path === "/api/v1/audit/verify") {
 					entry = { status: 200, body: { verified: true, anchor_id: "a_default" } };
@@ -171,6 +173,27 @@ export async function startMockServer({ script = [] } = {}) {
 			});
 		},
 	};
+}
+
+function defaultRegisterMachineResponse(body) {
+	try {
+		const parsed = JSON.parse(body);
+		if (
+			typeof parsed.user_cuid === "string" &&
+			typeof parsed.machine_uuid === "string" &&
+			typeof parsed.machine_secret_hash === "string"
+		) {
+			return {
+				status: 200,
+				body: {
+					user_cuid: parsed.user_cuid,
+					machine_uuid: parsed.machine_uuid,
+					claimed: false,
+				},
+			};
+		}
+	} catch {}
+	return { status: 400, body: { error: "invalid_request" } };
 }
 
 // CLI smoke: `node sno-ai-mock-server.mjs` starts on port 0 and prints baseUrl.

@@ -31,11 +31,8 @@ export interface Identity {
 	version: 1;
 	user_cuid: string;
 	machine_uuid: string;
+	machine_secret: string;
 	created_at: string;
-	claimed: boolean;
-	user_account_id: string | null;
-	access_token: string | null;
-	refresh_token: string | null;
 	default_project_id?: string | null;
 }
 
