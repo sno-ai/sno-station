@@ -36,14 +36,6 @@ export function getPausePath(env: PathEnv = process.env): string {
 	return join(getSnoHome(env), "state", "consent-prior.json");
 }
 
-export function getTokenPath(env: PathEnv = process.env): string {
-	return env.SNO_TOKEN_PATH ?? join(getSnoHome(env), "state", "tokens.json");
-}
-
-export function getTokenLockPath(env: PathEnv = process.env): string {
-	return join(dirname(getTokenPath(env)), "tokens.lock");
-}
-
 export function getRedactionRulesPath(env: PathEnv = process.env): string {
 	return join(getSnoHome(env), "redaction-rules.txt");
 }

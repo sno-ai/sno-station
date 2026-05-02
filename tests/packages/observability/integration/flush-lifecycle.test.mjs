@@ -18,7 +18,6 @@ function tempEnv() {
 			SNO_IDENTITY_PATH: join(dir, "identity.json"),
 			SNO_BUFFER_PATH: join(dir, "buffer.db"),
 			SNO_CONSENT_PATH: join(dir, "state", "consent.json"),
-			SNO_TOKEN_PATH: join(dir, "state", "tokens.json"),
 			HOME: dir,
 		},
 	};
@@ -51,10 +50,13 @@ describe("flush lifecycle — process.emit('beforeExit') triggers force-flush (2
 			terminal: false,
 		});
 		let flushFired = false;
-		const fakeFetch = async () => {
-			flushFired = true;
-			return new Response(JSON.stringify({ receipt_id: "r" }), {
-				status: 202,
+			const fakeFetch = async (url, init) => {
+				if (String(url).endsWith("/api/v1/identity/register-machine")) {
+					return registerMachineResponse(init);
+				}
+				flushFired = true;
+				return new Response(JSON.stringify({ receipt_id: "r" }), {
+					status: 202,
 				headers: { "Content-Type": "application/json" },
 			});
 		};
@@ -81,3 +83,15 @@ describe("flush lifecycle — process.emit('beforeExit') triggers force-flush (2
 		}
 	});
 });
+
+function registerMachineResponse(init) {
+	const body = typeof init?.body === "string" ? JSON.parse(init.body) : {};
+	return new Response(
+		JSON.stringify({
+			user_cuid: body.user_cuid,
+			machine_uuid: body.machine_uuid,
+			claimed: false,
+		}),
+		{ status: 200, headers: { "Content-Type": "application/json" } },
+	);
+}

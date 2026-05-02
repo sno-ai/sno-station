@@ -18,7 +18,6 @@ const env = {
 	SNO_IDENTITY_PATH: process.env.SNO_IDENTITY_PATH,
 	SNO_BUFFER_PATH: process.env.SNO_BUFFER_PATH,
 	SNO_CONSENT_PATH: process.env.SNO_CONSENT_PATH,
-	SNO_TOKEN_PATH: process.env.SNO_TOKEN_PATH,
 	HOME: process.env.SNO_HOME,
 };
 

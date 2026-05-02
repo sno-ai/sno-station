@@ -80,11 +80,15 @@ describe("consent.change always ships when value changes (21.8)", () => {
 		const runtime = new SnoObserveRuntime({
 			env: t.env,
 			cwd: t.dir,
-			fetch: async () =>
-				new Response(JSON.stringify({ error: "unavailable" }), {
+			fetch: async (url, init) => {
+				if (String(url).endsWith("/api/v1/identity/register-machine")) {
+					return registerMachineResponse(init);
+				}
+				return new Response(JSON.stringify({ error: "unavailable" }), {
 					status: 503,
 					headers: { "Content-Type": "application/json" },
-				}),
+				});
+			},
 		});
 		try {
 			const result = await runtime.setConsent("off", "network-down");
@@ -96,3 +100,15 @@ describe("consent.change always ships when value changes (21.8)", () => {
 		}
 	});
 });
+
+function registerMachineResponse(init) {
+	const body = typeof init?.body === "string" ? JSON.parse(init.body) : {};
+	return new Response(
+		JSON.stringify({
+			user_cuid: body.user_cuid,
+			machine_uuid: body.machine_uuid,
+			claimed: false,
+		}),
+		{ status: 200, headers: { "Content-Type": "application/json" } },
+	);
+}

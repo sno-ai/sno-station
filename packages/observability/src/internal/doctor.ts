@@ -52,7 +52,7 @@ function resolveDiagnosticPaths(env: DiagnosticEnv): DiagnosticPaths {
 		lockPath: getIdentityLockPath(env),
 		bufferPath: getBufferPath(env),
 		consentPath: getConsentPath(env),
-		baseUrl: normalizeDiagnosticBaseUrl(env.SNO_OBSERVE_BASE_URL ?? "https://www.sno.ai"),
+		baseUrl: normalizeDiagnosticBaseUrl(env.SNO_OBSERVE_BASE_URL ?? "https://sno.ai"),
 	};
 }
 
@@ -93,18 +93,10 @@ function checkIdentity(path: string): DoctorCheck {
 			path,
 		};
 	}
-	if (parsed.value.claimed === false) {
-		return {
-			name: "identity",
-			status: "ok",
-			detail: "identity present (anonymous; run `sno register` to claim an account)",
-			path,
-		};
-	}
 	return {
 		name: "identity",
 		status: "ok",
-		detail: "identity present (claimed)",
+		detail: "identity present (anonymous machine)",
 		path,
 	};
 }

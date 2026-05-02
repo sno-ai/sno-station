@@ -52,9 +52,3 @@ export class TransportError extends SnoObserveError {
 		super("transport_error", message);
 	}
 }
-
-export class ReRegisterRequiredError extends SnoObserveError {
-	constructor() {
-		super("re_register_required", "device registration expired; run register again");
-	}
-}
