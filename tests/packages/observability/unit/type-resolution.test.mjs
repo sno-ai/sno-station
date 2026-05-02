@@ -14,8 +14,8 @@ describe("type-resolution for downstream consumers (30.3)", () => {
 	it("Event and AgentId resolve under strict tsconfig", () => {
 		const dir = mkdtempSync(join(tmpdir(), "sno-observe-type-"));
 		try {
-			mkdirSync(join(dir, "node_modules", "@nodix"), { recursive: true });
-			symlinkSync(pkgRoot, join(dir, "node_modules", "@nodix", "sno-observe"));
+			mkdirSync(join(dir, "node_modules", "@snoai"), { recursive: true });
+			symlinkSync(pkgRoot, join(dir, "node_modules", "@snoai", "sno-observe"));
 			writeFileSync(
 				join(dir, "package.json"),
 				JSON.stringify(
@@ -49,8 +49,8 @@ describe("type-resolution for downstream consumers (30.3)", () => {
 			writeFileSync(
 				join(dir, "probe.ts"),
 				[
-					`import { createSnoObserve } from "@nodix/sno-observe";`,
-					`import type { Event, AgentId, ConsentValue, RuntimeOptions } from "@nodix/sno-observe";`,
+					`import { createSnoObserve } from "@snoai/sno-observe";`,
+					`import type { Event, AgentId, ConsentValue, RuntimeOptions } from "@snoai/sno-observe";`,
 					`const a: AgentId = "codex";`,
 					`const c: ConsentValue = "metadata-only";`,
 					`const e: Event = { event_type: "memory.write", agent_id: a, payload: { key_hash: "h", byte_len: 1, content_tokens: 1, tokens_method: "fast" }, consent_level: c };`,

@@ -341,13 +341,14 @@ export class SnoObserveRuntime {
 		rejectRawContent(input.eventType, input.payload, input.consent);
 		const payload = normalizeSystemPayload(input);
 		const projectId = detectProjectId(this.options.cwd ?? process.cwd(), this.env());
+		const callerScope = stripCallerAccountScope(input.scope);
 		const accountScope =
 			typeof input.identity.user_account_id === "string" &&
 			input.identity.user_account_id.length > 0
 				? { user_account_id: input.identity.user_account_id }
 				: {};
 		const scope: EventScope = {
-			...input.scope,
+			...callerScope,
 			...accountScope,
 			user_id: input.identity.user_cuid,
 			machine_id: input.identity.machine_uuid,
@@ -452,6 +453,16 @@ export class SnoObserveRuntime {
 			listener(event);
 		}
 	}
+}
+
+function stripCallerAccountScope(scope: JsonObject): JsonObject {
+	const sanitized: JsonObject = {};
+	for (const [key, value] of Object.entries(scope)) {
+		if (key !== "user_account_id") {
+			sanitized[key] = value;
+		}
+	}
+	return sanitized;
 }
 
 function rejectRawContent(eventType: EventType, payload: JsonObject, consent: ConsentValue): void {

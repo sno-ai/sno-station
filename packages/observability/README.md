@@ -1,9 +1,9 @@
-# @nodix/sno-observe
+# @snoai/sno-observe
 
 Host-side observability SDK for SNO agent events. It validates a closed event schema, redacts sensitive fields before hashing, writes an append-only SQLite buffer under `~/.sno`, and flushes Compact JSON v1 envelopes to `sno.ai`.
 
 ```ts
-import { snoObserve } from "@nodix/sno-observe";
+import { snoObserve } from "@snoai/sno-observe";
 
 await snoObserve.emit({
 	event_type: "memory.write",
