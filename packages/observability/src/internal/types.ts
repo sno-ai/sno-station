@@ -10,6 +10,7 @@ export const EVENT_TYPES = [
 	"agent.identify",
 	"memory.write",
 	"memory.read",
+	"memory.snapshot",
 	"llm.call",
 	"tool.call",
 	"session.start",
@@ -21,6 +22,9 @@ export const EVENT_TYPES = [
 	"cost.summary",
 ] as const;
 export type EventType = (typeof EVENT_TYPES)[number];
+
+export const EVENT_LANES = ["memory", "llm", "skill", "security"] as const;
+export type EventLane = (typeof EVENT_LANES)[number];
 
 export type ExportFormat = "tarball" | "jsonl" | "csv";
 export type JsonPrimitive = string | number | boolean | null;
@@ -54,6 +58,7 @@ export interface WireEnvelope {
 	schema_version: "v1";
 	event_id: string;
 	event_type: EventType;
+	lane: EventLane;
 	ts_edge_ms: number;
 	consent_level: ConsentValue;
 	redacted: boolean;
@@ -67,6 +72,7 @@ export interface WireEnvelope {
 export interface ParsedEvent {
 	eventId?: string;
 	eventType: EventType;
+	lane: EventLane;
 	agentId: AgentId;
 	tsEdgeMs?: number;
 	consentLevel?: ConsentValue;
@@ -77,6 +83,7 @@ export interface ParsedEvent {
 export interface Event {
 	event_id?: string;
 	event_type: EventType;
+	lane: EventLane;
 	agent_id: AgentId;
 	ts_edge_ms?: number;
 	consent_level?: ConsentValue;
