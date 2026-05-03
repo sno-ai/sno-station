@@ -1,4 +1,4 @@
-// Flush 3-state machine + BPE token-init fallback per tasks §23.1, §23.2, §23.3, §23.5,
+// Flush 3-state machine + tiktoken token-init fallback per tasks §23.1, §23.2, §23.3, §23.5,
 // §23.6, §25.3. Uses real BufferStore + real FlushEngine; only the network is the fake.
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
@@ -33,6 +33,7 @@ function seedIdentify(store) {
 	store.append({
 		eventId: "id-0",
 		eventType: "agent.identify",
+			lane: "memory",
 		tsEdgeMs: 1,
 		consentLevel: "metadata-only",
 		redacted: false,
@@ -46,6 +47,7 @@ function appendMemoryWrite(store, i) {
 	store.append({
 		eventId: `mw-${i}`,
 		eventType: "memory.write",
+			lane: "memory",
 		tsEdgeMs: 1000 + i,
 		consentLevel: "metadata-only",
 		redacted: false,
@@ -58,12 +60,13 @@ function appendMemoryWrite(store, i) {
 function memoryEvent(i) {
 	return parseEventInput({
 		event_type: "memory.write",
+			lane: "memory",
 		agent_id: "codex",
 		payload: {
 			key_hash: `timer-${i}`,
 			byte_len: 1,
 			content_tokens: 1,
-			tokens_method: "fast",
+			tokens_method: "char_approximation",
 		},
 	});
 }
@@ -379,23 +382,23 @@ function registerMachineResponse(init) {
 	);
 }
 
-describe("tokens — BPE init failure fast fallback (25.3)", () => {
-	it("returns method=fast for very long inputs without invoking BPE", async () => {
-		// Inputs > 100_000 chars short-circuit to fast counter, regardless of BPE state.
+describe("tokens — tiktoken init failure approximation fallback (25.3)", () => {
+	it("returns method=char_approximation for very long inputs without invoking tiktoken", async () => {
+		// Inputs > 100_000 chars short-circuit to approximation, regardless of tiktoken state.
 		const big = "x".repeat(100_001);
 		const result = await countTokens(big);
-		assert.equal(result.method, "fast");
+		assert.equal(result.method, "char_approximation");
 		assert.equal(typeof result.tokens, "number");
 		assert.equal(result.tokens > 0, true);
 	});
 
-	it("falls back to fast when BPE encoder cannot be loaded", async () => {
+	it("falls back to char_approximation when the tokenizer cannot be loaded", async () => {
 		// We can't easily inject a load-failure into the cached encoder promise from a
 		// black-box test, but the contract is: countTokens MUST always return a number,
 		// never throw, even if js-tiktoken is broken. Smoke that here:
 		const result = await countTokens("hello world");
 		assert.equal(typeof result.tokens, "number");
 		assert.equal(result.tokens > 0, true);
-		assert.equal(result.method === "bpe" || result.method === "fast", true);
+		assert.equal(result.method === "tiktoken" || result.method === "char_approximation", true);
 	});
 });

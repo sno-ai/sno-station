@@ -27,12 +27,13 @@ function tempEnv() {
 function memoryEvent(i) {
 	return parseEventInput({
 		event_type: "memory.write",
+			lane: "memory",
 		agent_id: "codex",
 		payload: {
 			key_hash: `h_${i}`,
 			byte_len: 1,
 			content_tokens: 1,
-			tokens_method: "fast",
+			tokens_method: "char_approximation",
 		},
 	});
 }
@@ -100,6 +101,7 @@ describe("idempotent ship + retention (22.3, 22.7)", () => {
 					store.append({
 						eventId: `survive-${i}`,
 						eventType: "memory.write",
+			lane: "memory",
 						tsEdgeMs: 1000 + i,
 						consentLevel: "metadata-only",
 						redacted: false,

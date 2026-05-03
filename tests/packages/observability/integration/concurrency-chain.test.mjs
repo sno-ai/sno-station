@@ -55,12 +55,13 @@ function spawnWorker(env, count, label) {
 function memoryEvent(i) {
 	return parseEventInput({
 		event_type: "memory.write",
+			lane: "memory",
 		agent_id: "codex",
 		payload: {
 			key_hash: `promise-${i}`,
 			byte_len: 1,
 			content_tokens: 1,
-			tokens_method: "fast",
+			tokens_method: "char_approximation",
 		},
 	});
 }
@@ -125,6 +126,7 @@ describe("concurrency / chain integrity", () => {
 				const next = store.append({
 					eventId: "after-restart",
 					eventType: "session.start",
+			lane: "memory",
 					tsEdgeMs: Date.now(),
 					consentLevel: "metadata-only",
 					redacted: false,
