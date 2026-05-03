@@ -2,7 +2,7 @@ import { logger } from "./log.js";
 
 export interface TokenCount {
 	tokens: number;
-	method: "bpe" | "fast";
+	method: "tiktoken" | "char_approximation";
 }
 
 interface Encoder {
@@ -18,13 +18,13 @@ let encoderPromise: Promise<Encoder | null> | null = null;
 
 export async function countTokens(text: string): Promise<TokenCount> {
 	if (text.length > 100_000) {
-		return { tokens: countTokensFast(text), method: "fast" };
+		return { tokens: countTokensFast(text), method: "char_approximation" };
 	}
 	const encoder = await loadEncoder();
 	if (encoder === null) {
-		return { tokens: countTokensFast(text), method: "fast" };
+		return { tokens: countTokensFast(text), method: "char_approximation" };
 	}
-	return { tokens: encoder.encode(text).length, method: "bpe" };
+	return { tokens: encoder.encode(text).length, method: "tiktoken" };
 }
 
 export function countTokensFast(text: string): number {
@@ -44,7 +44,7 @@ async function loadEncoder(): Promise<Encoder | null> {
 			return null;
 		})
 		.catch((error: unknown) => {
-			logger.warn("sno observe tiktoken init failed; falling back to fast counter", {
+			logger.warn("sno observe tiktoken init failed; falling back to char approximation", {
 				error: error instanceof Error ? error.message : String(error),
 			});
 			return null;

@@ -292,6 +292,37 @@ describe("HTTP status matrix (fixture server, node:http)", () => {
 		});
 	});
 
+	it("409 reason payload_conflict -> quarantine + epoch bump + reseed", async () => {
+		await withServerAndRuntime(async ({ server, runtime, t }) => {
+			server.enqueue("/api/v1/events", {
+				status: 202,
+				body: { receipt_id: "r_id" },
+			});
+			server.enqueue("/api/v1/events", {
+				status: 409,
+				body: { reason: "payload_conflict", detail: "payload conflicts with accepted event" },
+			});
+			await runtime.emitParsed(memoryEvent(1));
+			const res = await runtime.flush();
+			assert.equal(res.shipped, 1);
+			assert.equal(res.terminal, 1);
+			assert.equal(res.retryable, 0);
+			const store = new BufferStore(t.env.SNO_BUFFER_PATH);
+			try {
+				const rows = store.getAllRows();
+				const reseedIdentify = rows.find(
+					(r) =>
+						r.chain_epoch === 1 &&
+						r.seq === 0 &&
+						JSON.parse(r.payload.toString("utf8")).event_type === "agent.identify",
+				);
+				assert.notEqual(reseedIdentify, undefined, "epoch=1 reseed identify present");
+			} finally {
+				store.close();
+			}
+		});
+	});
+
 	it("422 without explicit chain error -> retry without quarantine or reseed", async () => {
 		await withServerAndRuntime(async ({ server, runtime, t }) => {
 			server.enqueue("/api/v1/events", {
@@ -314,6 +345,38 @@ describe("HTTP status matrix (fixture server, node:http)", () => {
 				assert.equal(rows[1].terminal, 0);
 				assert.equal(rows[1].attempts, 1);
 				assert.equal(Math.max(...rows.map((r) => r.chain_epoch)), 0);
+			} finally {
+				store.close();
+			}
+		});
+	});
+
+	it("422 reason prev_hash_mismatch -> quarantine suffix, reseed, no retry", async () => {
+		await withServerAndRuntime(async ({ server, runtime, t }) => {
+			server.enqueue("/api/v1/events", {
+				status: 202,
+				body: { receipt_id: "r_id" },
+			});
+			server.enqueue("/api/v1/events", {
+				status: 422,
+				body: { reason: "prev_hash_mismatch", detail: "previous hash does not match" },
+			});
+			await runtime.emitParsed(memoryEvent(1));
+			await runtime.emitParsed(memoryEvent(2));
+			const res = await runtime.flush();
+			assert.deepEqual(res, { shipped: 1, terminal: 2, retryable: 0 });
+			const store = new BufferStore(t.env.SNO_BUFFER_PATH);
+			try {
+				const rows = store.getAllRows();
+				const envelopes = rows.map((row) => JSON.parse(row.payload.toString("utf8")));
+				assert.equal(rows[1].terminal, 1);
+				assert.equal(rows[2].terminal, 1);
+				assert.equal(
+					envelopes.some(
+						(envelope) => envelope.event_type === "agent.identify" && envelope.chain_epoch === 1,
+					),
+					true,
+				);
 			} finally {
 				store.close();
 			}

@@ -22,6 +22,10 @@ export interface FlushResult {
 	retryAfterMs?: number;
 }
 
+interface RowFlushResult extends FlushResult {
+	stopBatch?: boolean;
+}
+
 export interface DrainResult {
 	flushedCount: number;
 	failedCount: number;
@@ -202,7 +206,7 @@ export async function flushPending(
 		terminal += result.terminal;
 		retryable += result.retryable;
 		retryAfterMs = minDefined(retryAfterMs, result.retryAfterMs);
-		if (result.retryable > 0) {
+		if (result.retryable > 0 || result.stopBatch === true) {
 			break;
 		}
 	}
@@ -240,7 +244,7 @@ async function flushRow(
 	store: BufferStore,
 	row: PendingRow,
 	options: FlushOptions,
-): Promise<FlushResult> {
+): Promise<RowFlushResult> {
 	try {
 		const response = await postEvent(
 			options.baseUrl ?? "https://www.sno.ai",
@@ -270,28 +274,46 @@ type ResponseRoute =
 	| { kind: "chain" }
 	| { kind: "retry"; message: string; retryAfterMs?: number; error?: boolean };
 
+const ACCEPTED_DUPLICATE_CODES = new Set([
+	"duplicate_event",
+	"event_already_accepted",
+	"event_already_exists",
+	"already_accepted",
+	"idempotent_replay",
+]);
+
+const CHAIN_REJECTION_CODES = new Set([
+	"payload_conflict",
+	"chain_seed_required",
+	"prev_hash_mismatch",
+	"self_hash_mismatch",
+]);
+
 function handlePostResult(
 	store: BufferStore,
 	row: PendingRow,
 	response: EventPostResult,
-): FlushResult {
+): RowFlushResult {
 	const route = routeResponse(response);
 	switch (route.kind) {
 		case "shipped":
 			store.markShipped(row.rowid);
 			return { shipped: 1, terminal: 0, retryable: 0 };
-		case "invalid":
-			store.quarantine(row, response.status, response.body);
+		case "invalid": {
+			const terminal = store.quarantineEpochSuffix(row, response.status, response.body);
+			reseedChain(store, row);
 			logger.error("sno observe event rejected as invalid", {
 				event_id: row.event_id,
 				status: response.status,
 			});
-			return { shipped: 0, terminal: 1, retryable: 0 };
-		case "chain":
-			store.quarantine(row, response.status, response.body);
+			return { shipped: 0, terminal, retryable: 0, stopBatch: true };
+		}
+		case "chain": {
+			const terminal = store.quarantineEpochSuffix(row, response.status, response.body);
 			reseedChain(store, row);
 			logChainRejection(row, response.status);
-			return { shipped: 0, terminal: 1, retryable: 0 };
+			return { shipped: 0, terminal, retryable: 0, stopBatch: true };
+		}
 		case "retry":
 			return retryRow(store, row, response.status, route.message, route.retryAfterMs, route.error);
 	}
@@ -306,7 +328,7 @@ function routeResponse(response: EventPostResult): ResponseRoute {
 			return { kind: "invalid" };
 		case 409:
 		case 422:
-			return { kind: "chain" };
+			return routeConflict(response);
 		case 401:
 			return { kind: "retry", message: "sno observe unauthorized; will retry" };
 		case 403:
@@ -324,6 +346,44 @@ function routeResponse(response: EventPostResult): ResponseRoute {
 				? retryRoute(response.retryAfterMs ?? undefined)
 				: { kind: "retry", message: "sno observe transport will retry" };
 	}
+}
+
+function routeConflict(response: EventPostResult): ResponseRoute {
+	const code = responseErrorCode(response.body);
+	if (code !== undefined && ACCEPTED_DUPLICATE_CODES.has(code)) {
+		return { kind: "shipped" };
+	}
+	if (code === "chain_predecessor_not_ready") {
+		return retryRoute(response.retryAfterMs ?? 5_000);
+	}
+	if (code !== undefined && CHAIN_REJECTION_CODES.has(code)) {
+		return { kind: "chain" };
+	}
+	return {
+		kind: "retry",
+		message: "sno observe conflict response is not terminal; will retry",
+		retryAfterMs: response.retryAfterMs ?? 5_000,
+	};
+}
+
+function responseErrorCode(body: string): string | undefined {
+	if (body.length === 0) {
+		return undefined;
+	}
+	try {
+		const parsed = JSON.parse(body) as unknown;
+		if (typeof parsed !== "object" || parsed === null) {
+			return undefined;
+		}
+		const record = parsed as Record<string, unknown>;
+		for (const key of ["reason", "error", "code", "error_code"]) {
+			const value = record[key];
+			if (typeof value === "string" && value.length > 0) {
+				return value;
+			}
+		}
+	} catch {}
+	return undefined;
 }
 
 function retryRoute(retryAfterMs?: number): ResponseRoute {
@@ -369,6 +429,7 @@ function reseedChain(store: BufferStore, row: PendingRow): void {
 	store.append({
 		eventId: uuidv7(),
 		eventType: "agent.identify",
+		lane: envelope.lane,
 		tsEdgeMs: Date.now(),
 		consentLevel: envelope.consent_level,
 		redacted: false,
