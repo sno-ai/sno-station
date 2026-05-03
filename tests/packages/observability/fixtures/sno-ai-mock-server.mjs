@@ -209,8 +209,8 @@ function defaultDeviceCodeResponse(body) {
 				body: {
 					device_code: `dev_${parsed.machine_uuid}`,
 					user_code: "SNO-CODE",
-					verification_uri: "https://sno.ai/cli/connect",
-					verification_uri_complete: "https://sno.ai/cli/connect?code=SNO-CODE",
+					verification_uri: "https://www.sno.ai/cli/connect",
+					verification_uri_complete: "https://www.sno.ai/cli/connect?code=SNO-CODE",
 					expires_in: 1800,
 					interval: 1,
 				},
