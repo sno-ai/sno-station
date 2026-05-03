@@ -6,6 +6,7 @@ import { ensureDir } from "./fs-utils.js";
 import type {
 	AgentId,
 	ConsentValue,
+	EventLane,
 	EventScope,
 	EventType,
 	JsonObject,
@@ -41,6 +42,7 @@ export interface PendingRow {
 export interface AppendInput {
 	eventId: string;
 	eventType: EventType;
+	lane: EventLane;
 	tsEdgeMs: number;
 	consentLevel: ConsentValue;
 	redacted: boolean;
@@ -79,6 +81,11 @@ interface AgentRow {
 
 interface RowIdRow {
 	rowid: number;
+}
+
+interface EventRowRef {
+	rowid: number;
+	event_id: string;
 }
 
 interface PragmaValueRow {
@@ -199,6 +206,40 @@ export class BufferStore {
 		});
 	}
 
+	quarantineEpochSuffix(row: PendingRow, status: number, body: string): number {
+		let terminalCount = 0;
+		this.withImmediateTransaction(() => {
+			const now = Date.now();
+			const bodyExcerpt = body.slice(0, 8_192);
+			const suffixRows = this.db
+				.prepare(
+					`SELECT rowid, event_id
+					FROM events
+					WHERE machine_id = ?
+						AND agent_id = ?
+						AND chain_epoch = ?
+						AND seq >= ?
+						AND shipped = 0
+						AND terminal = 0
+					ORDER BY seq ASC, rowid ASC`,
+				)
+				.all(row.machine_id, row.agent_id, row.chain_epoch, row.seq) as EventRowRef[];
+			const insertQuarantine = this.db.prepare(
+				`INSERT INTO quarantine (rowid, event_id, status, response_body, quarantined_at)
+				VALUES (?, ?, ?, ?, ?)`,
+			);
+			const markTerminal = this.db.prepare(
+				"UPDATE events SET terminal = 1 WHERE rowid = ? AND shipped = 0 AND terminal = 0",
+			);
+			for (const suffixRow of suffixRows) {
+				insertQuarantine.run(suffixRow.rowid, suffixRow.event_id, status, bodyExcerpt, now);
+				terminalCount += markTerminal.run(suffixRow.rowid).changes;
+			}
+			this.pruneQuarantineInsideTx(QUARANTINE_MAX_ROWS, QUARANTINE_MAX_AGE_MS, now);
+		});
+		return terminalCount;
+	}
+
 	pruneRetention(
 		maxBytes = RETENTION_MAX_BYTES,
 		maxAgeMs = RETENTION_MAX_AGE_MS,
@@ -208,15 +249,22 @@ export class BufferStore {
 		this.withImmediateTransaction(() => {
 			const olderThan = now - maxAgeMs;
 			pruned += this.db
-				.prepare("DELETE FROM events WHERE shipped = 1 AND created_at < ?")
+				.prepare("DELETE FROM events WHERE (shipped = 1 OR terminal = 1) AND created_at < ?")
 				.run(olderThan).changes;
 			if (this.databaseSizeBytes() <= maxBytes) {
 				return;
 			}
 			const rows = this.db
-				.prepare("SELECT rowid FROM events WHERE shipped = 1 ORDER BY created_at ASC, rowid ASC")
+				.prepare(
+					`SELECT rowid
+						FROM events
+						WHERE shipped = 1 OR terminal = 1
+						ORDER BY created_at ASC, rowid ASC`,
+				)
 				.all() as RowIdRow[];
-			const deleteRow = this.db.prepare("DELETE FROM events WHERE rowid = ? AND shipped = 1");
+			const deleteRow = this.db.prepare(
+				"DELETE FROM events WHERE rowid = ? AND (shipped = 1 OR terminal = 1)",
+			);
 			const batchSize = 50;
 			for (let index = 0; index < rows.length; index += batchSize) {
 				for (const row of rows.slice(index, index + batchSize)) {
@@ -321,6 +369,7 @@ export class BufferStore {
 			const envelope = createEnvelope({
 				eventId: input.eventId,
 				eventType: input.eventType,
+				lane: input.lane,
 				tsEdgeMs: input.tsEdgeMs,
 				consentLevel: input.consentLevel,
 				redacted: input.redacted,

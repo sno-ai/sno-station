@@ -7,6 +7,7 @@ import { createDoctorReport } from "./doctor.js";
 import { InvalidEventPayloadError } from "./errors.js";
 import { type ExportOptions, exportEvents } from "./export.js";
 import { FlushEngine, type FlushResult } from "./flush.js";
+import { sha256Hex } from "./hash.js";
 import { normalizeBaseUrl } from "./http.js";
 import { bootstrapIdentity } from "./identity.js";
 import { logger } from "./log.js";
@@ -27,6 +28,7 @@ import {
 	type ConsentValue,
 	type DoctorReport,
 	type EmitResult,
+	type EventLane,
 	type EventScope,
 	type EventType,
 	type ExportResult,
@@ -81,6 +83,7 @@ export class SnoObserveRuntime {
 					agentId: parsed.agentId,
 					eventId: uuidv7(),
 					eventType: "agent.identify",
+					lane: parsed.lane,
 					tsEdgeMs: Date.now(),
 					consent,
 					payload: {
@@ -99,6 +102,7 @@ export class SnoObserveRuntime {
 				agentId: parsed.agentId,
 				eventId,
 				eventType: parsed.eventType,
+				lane: parsed.lane,
 				tsEdgeMs: parsed.tsEdgeMs ?? Date.now(),
 				consent,
 				payload: parsed.payload,
@@ -138,80 +142,138 @@ export class SnoObserveRuntime {
 
 	async setConsent(value: string, reason = "user changed in SDK"): Promise<ConsentValue> {
 		const next = parseConsentValue(value);
-		return this.mutex.runExclusive(async () => {
-			const consentStore = this.consentStore();
-			const current = consentStore.get();
-			if (current === next) {
-				return current;
-			}
-			const identity = bootstrapIdentity(this.env());
-			const store = this.getStore();
-			const agents = uniqueAgents(store.listAgents());
-			if (agents.length === 0) {
-				agents.push("codex");
-			}
-			for (const agentId of agents) {
-				const currentEpoch = store.getCurrentEpoch(identity.machine_uuid, agentId);
-				if (!store.hasTail(identity.machine_uuid, agentId, currentEpoch)) {
-					this.appendPrepared({
-						identity,
-						agentId,
-						eventId: uuidv7(),
-						eventType: "agent.identify",
-						tsEdgeMs: Date.now(),
-						consent: current,
-						payload: {
-							agent_id: agentId,
-							machine_id: identity.machine_uuid,
-							sdk_version: SDK_VERSION,
-						},
-						scope: {},
-						chainEpoch: currentEpoch,
-						terminal: current === "off",
-					});
-				}
-				this.appendPrepared({
-					identity,
-					agentId,
-					eventId: uuidv7(),
-					eventType: "consent.change",
-					tsEdgeMs: Date.now(),
-					consent: current,
-					payload: { from: current, to: next, reason },
-					scope: {},
-					chainEpoch: currentEpoch,
-					terminal: false,
-				});
-			}
-			consentStore.write(next);
-			this.consentStoreCache = null;
-			this.consentStoreEnv = null;
-			for (const agentId of agents) {
-				const chainEpoch = store.nextEpoch(identity.machine_uuid, agentId);
-				this.appendPrepared({
-					identity,
-					agentId,
-					eventId: uuidv7(),
-					eventType: "agent.identify",
-					tsEdgeMs: Date.now(),
-					consent: next,
-					payload: {
-						agent_id: agentId,
-						machine_id: identity.machine_uuid,
-						sdk_version: SDK_VERSION,
-					},
-					scope: {},
-					chainEpoch,
-					terminal: next === "off",
-				});
-			}
-			if (current !== "off") {
-				await this.flushConsentTransition();
-			}
-			if (next !== "off") {
-				this.scheduleFlush();
-			}
+		return this.mutex.runExclusive(() => this.setConsentLocked(next, reason));
+	}
+
+	private async setConsentLocked(next: ConsentValue, reason: string): Promise<ConsentValue> {
+		const consentStore = this.consentStore();
+		const current = consentStore.get();
+		if (current === next) {
+			return current;
+		}
+		const identity = bootstrapIdentity(this.env());
+		const store = this.getStore();
+		const agents = this.agentsForConsentTransition(store);
+		if (current === "off" && next !== "off") {
+			this.persistConsent(consentStore, next);
+			this.appendResumeFromOff(identity, store, agents, current, next, reason);
+			this.scheduleFlush();
 			return next;
+		}
+		this.appendConsentChangeBeforeRotation(identity, store, agents, current, next, reason);
+		this.persistConsent(consentStore, next);
+		this.appendPostTransitionIdentify(identity, store, agents, next);
+		if (current !== "off") {
+			await this.flushConsentTransition();
+		}
+		if (next !== "off") {
+			this.scheduleFlush();
+		}
+		return next;
+	}
+
+	private agentsForConsentTransition(store: BufferStore): AgentId[] {
+		const agents = uniqueAgents(store.listAgents());
+		return agents.length === 0 ? ["codex"] : agents;
+	}
+
+	private persistConsent(consentStore: ConsentStore, next: ConsentValue): void {
+		consentStore.write(next);
+		this.consentStoreCache = null;
+		this.consentStoreEnv = null;
+	}
+
+	private appendResumeFromOff(
+		identity: Identity,
+		store: BufferStore,
+		agents: AgentId[],
+		current: ConsentValue,
+		next: ConsentValue,
+		reason: string,
+	): void {
+		for (const agentId of agents) {
+			const chainEpoch = store.nextEpoch(identity.machine_uuid, agentId);
+			this.appendAgentIdentify(identity, agentId, chainEpoch, next, false);
+			this.appendConsentChange(identity, agentId, chainEpoch, next, current, next, reason);
+		}
+	}
+
+	private appendConsentChangeBeforeRotation(
+		identity: Identity,
+		store: BufferStore,
+		agents: AgentId[],
+		current: ConsentValue,
+		next: ConsentValue,
+		reason: string,
+	): void {
+		for (const agentId of agents) {
+			const currentEpoch = store.getCurrentEpoch(identity.machine_uuid, agentId);
+			if (!store.hasTail(identity.machine_uuid, agentId, currentEpoch)) {
+				this.appendAgentIdentify(identity, agentId, currentEpoch, current, current === "off");
+			}
+			this.appendConsentChange(identity, agentId, currentEpoch, current, current, next, reason);
+		}
+	}
+
+	private appendPostTransitionIdentify(
+		identity: Identity,
+		store: BufferStore,
+		agents: AgentId[],
+		next: ConsentValue,
+	): void {
+		for (const agentId of agents) {
+			const chainEpoch = store.nextEpoch(identity.machine_uuid, agentId);
+			this.appendAgentIdentify(identity, agentId, chainEpoch, next, next === "off");
+		}
+	}
+
+	private appendAgentIdentify(
+		identity: Identity,
+		agentId: AgentId,
+		chainEpoch: number,
+		consent: ConsentValue,
+		terminal: boolean,
+	): void {
+		this.appendPrepared({
+			identity,
+			agentId,
+			eventId: uuidv7(),
+			eventType: "agent.identify",
+			lane: "memory",
+			tsEdgeMs: Date.now(),
+			consent,
+			payload: {
+				agent_id: agentId,
+				machine_id: identity.machine_uuid,
+				sdk_version: SDK_VERSION,
+			},
+			scope: {},
+			chainEpoch,
+			terminal,
+		});
+	}
+
+	private appendConsentChange(
+		identity: Identity,
+		agentId: AgentId,
+		chainEpoch: number,
+		consent: ConsentValue,
+		from: ConsentValue,
+		to: ConsentValue,
+		reason: string,
+	): void {
+		this.appendPrepared({
+			identity,
+			agentId,
+			eventId: uuidv7(),
+			eventType: "consent.change",
+			lane: "memory",
+			tsEdgeMs: Date.now(),
+			consent,
+			payload: { from, to, reason },
+			scope: {},
+			chainEpoch,
+			terminal: false,
 		});
 	}
 
@@ -219,21 +281,33 @@ export class SnoObserveRuntime {
 		return this.consentStore().get();
 	}
 
+	hashRedactedText(input: string): string {
+		const result = redactEventPayload({ value: input }, "full", getRedactionRulesPath(this.env()));
+		const redacted = (result.value as { value?: unknown }).value;
+		const text = typeof redacted === "string" ? redacted : String(redacted);
+		return sha256Hex(Buffer.from(text, "utf8"));
+	}
+
 	async pause(): Promise<ConsentValue> {
-		const store = this.consentStore();
-		const current = store.get();
-		if (current !== "off") {
+		return this.mutex.runExclusive(async () => {
+			const store = this.consentStore();
+			const current = store.get();
+			if (current === "off") {
+				return current;
+			}
 			store.writePausedPrior(current);
-			return this.setConsent("off", "observe.pause");
-		}
-		return current;
+			return this.setConsentLocked("off", "observe.pause");
+		});
 	}
 
 	async resume(): Promise<ConsentValue> {
-		const store = this.consentStore();
-		const prior = store.getPausedPrior() ?? "metadata-only";
-		store.clearPausedPrior();
-		return this.setConsent(prior, "observe.resume");
+		return this.mutex.runExclusive(async () => {
+			const store = this.consentStore();
+			const prior = store.getPausedPrior() ?? "metadata-only";
+			const result = await this.setConsentLocked(prior, "observe.resume");
+			store.clearPausedPrior();
+			return result;
+		});
 	}
 
 	export(options: ExportOptions = {}): ExportResult {
@@ -331,6 +405,7 @@ export class SnoObserveRuntime {
 		agentId: AgentId;
 		eventId: string;
 		eventType: EventType;
+		lane: EventLane;
 		tsEdgeMs: number;
 		consent: ConsentValue;
 		payload: JsonObject;
@@ -361,6 +436,7 @@ export class SnoObserveRuntime {
 		return this.getStore().append({
 			eventId: input.eventId,
 			eventType: input.eventType,
+			lane: input.lane,
 			tsEdgeMs: input.tsEdgeMs,
 			consentLevel: input.consent,
 			redacted: redactedScope.redacted || redactedPayload.redacted,
