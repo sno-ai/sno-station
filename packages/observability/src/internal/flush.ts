@@ -376,7 +376,7 @@ function responseErrorCode(body: string): string | undefined {
 			return undefined;
 		}
 		const record = parsed as Record<string, unknown>;
-		for (const key of ["error", "code", "error_code"]) {
+		for (const key of ["reason", "error", "code", "error_code"]) {
 			const value = record[key];
 			if (typeof value === "string" && value.length > 0) {
 				return value;
