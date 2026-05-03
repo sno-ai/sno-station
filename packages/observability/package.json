@@ -30,16 +30,14 @@
 		"test": "npm run build && node --test ../../tests/packages/sno-observe/**/*.test.mjs"
 	},
 	"dependencies": {
-		"@paralleldrive/cuid2": "^2.2.2",
+		"@snoai/common-core": "file:../common-core",
 		"better-sqlite3": "^12.9.0",
 		"js-tiktoken": "^1.0.0",
-		"uuid": "^14.0.0",
 		"zod": "^3.24.0"
 	},
 	"devDependencies": {
 		"@types/better-sqlite3": "^7.6.13",
-		"@types/node": "^22.0.0",
-		"@types/uuid": "^10.0.0"
+		"@types/node": "^22.0.0"
 	},
 	"engines": {
 		"node": ">=22.14.0"
