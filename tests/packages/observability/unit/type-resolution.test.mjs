@@ -53,7 +53,7 @@ describe("type-resolution for downstream consumers (30.3)", () => {
 					`import type { Event, AgentId, ConsentValue, RuntimeOptions } from "@snoai/sno-observe";`,
 					`const a: AgentId = "codex";`,
 					`const c: ConsentValue = "metadata-only";`,
-					`const e: Event = { event_type: "memory.write", agent_id: a, payload: { key_hash: "h", byte_len: 1, content_tokens: 1, tokens_method: "fast" }, consent_level: c };`,
+					`const e: Event = { event_type: "memory.write", lane: "memory", agent_id: a, payload: { key_hash: "h", byte_len: 1, content_tokens: 1, tokens_method: "char_approximation" }, consent_level: c };`,
 					`const opts: RuntimeOptions = { cwd: "." };`,
 					`const observe = createSnoObserve(opts);`,
 					`void observe;`,

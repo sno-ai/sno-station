@@ -1,0 +1,130 @@
+import assert from "node:assert/strict";
+import { describe, it } from "node:test";
+import { InvalidEventPayloadError } from "../../../../packages/sno-observe/dist/internal/errors.js";
+import { parseEventInput } from "../../../../packages/sno-observe/dist/internal/schemas.js";
+import { EVENT_LANES, EVENT_TYPES } from "../../../../packages/sno-observe/dist/internal/types.js";
+
+const uuidV7 = "018f7d0c-fd8b-7ccf-9b9b-0a2ea938ad0d";
+
+function memoryWrite(tokens_method) {
+	return {
+		event_type: "memory.write",
+		lane: "memory",
+		agent_id: "codex",
+		payload: {
+			key_hash: "h_key",
+			byte_len: 12,
+			content_tokens: 3,
+			tokens_method,
+		},
+	};
+}
+
+describe("schema alignment", () => {
+	it("requires a valid envelope lane and accepts all M1 lanes", () => {
+		for (const lane of EVENT_LANES) {
+			const parsed = parseEventInput({ ...memoryWrite("qwen_tokenizer"), lane });
+			assert.equal(parsed.lane, lane);
+		}
+
+		assert.throws(
+			() => parseEventInput({ event_type: "memory.write", agent_id: "codex", payload: {} }),
+			InvalidEventPayloadError,
+		);
+		assert.throws(
+			() => parseEventInput({ ...memoryWrite("qwen_tokenizer"), lane: "audit" }),
+			InvalidEventPayloadError,
+		);
+	});
+
+	it("locks the SDK-emittable event catalog", () => {
+		assert.equal(EVENT_TYPES.includes("memory.snapshot"), true);
+		assert.equal(EVENT_TYPES.includes("audit.anchor"), false);
+		assert.equal(EVENT_TYPES.length, 13);
+	});
+
+	it("accepts only the four locked token methods", () => {
+		for (const method of [
+			"qwen_tokenizer",
+			"tiktoken",
+			"provider_reported",
+			"char_approximation",
+		]) {
+			const parsed = parseEventInput(memoryWrite(method));
+			assert.equal(parsed.payload["tokens_method"], method);
+		}
+
+		for (const method of ["bpe", "fast", "unknown"]) {
+			assert.throws(() => parseEventInput(memoryWrite(method)), InvalidEventPayloadError);
+		}
+	});
+
+	it("requires cost.summary UUID-v7 and current counter fields", () => {
+		const payload = {
+			session_uuid: uuidV7,
+			tokens_in: 10,
+			tokens_out: 3,
+			llm_calls: 1,
+			memory_writes: 2,
+			memory_reads: 1,
+			tool_calls: 4,
+		};
+		const parsed = parseEventInput({
+			event_type: "cost.summary",
+			lane: "memory",
+			agent_id: "codex",
+			payload,
+		});
+		assert.deepEqual(parsed.payload, payload);
+
+		parseEventInput({
+			event_type: "cost.summary",
+			lane: "memory",
+			agent_id: "codex",
+			payload: { ...payload, event_count: 9 },
+		});
+
+		assert.throws(
+			() =>
+				parseEventInput({
+					event_type: "cost.summary",
+					lane: "memory",
+					agent_id: "codex",
+					payload: { ...payload, session_uuid: "session-1" },
+				}),
+			InvalidEventPayloadError,
+		);
+		assert.throws(
+			() =>
+				parseEventInput({
+					event_type: "cost.summary",
+					lane: "memory",
+					agent_id: "codex",
+					payload: { ...payload, prompt_tokens: 10, completion_tokens: 3 },
+				}),
+			InvalidEventPayloadError,
+		);
+	});
+
+	it("requires UUID-v7 payload session IDs", () => {
+		for (const event_type of ["session.start", "session.end"]) {
+			parseEventInput({
+				event_type,
+				lane: "memory",
+				agent_id: "codex",
+				payload: { session_uuid: uuidV7 },
+			});
+
+			assert.throws(
+				() =>
+					parseEventInput({
+						event_type,
+						lane: "memory",
+						agent_id: "codex",
+						payload: { session_uuid: "session-1" },
+					}),
+				InvalidEventPayloadError,
+			);
+		}
+	});
+});

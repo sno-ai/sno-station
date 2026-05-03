@@ -32,6 +32,7 @@ describe("flush lifecycle — process.emit('beforeExit') triggers force-flush (2
 		store.append({
 			eventId: "id-0",
 			eventType: "agent.identify",
+			lane: "memory",
 			tsEdgeMs: 1,
 			consentLevel: "metadata-only",
 			redacted: false,
@@ -42,6 +43,7 @@ describe("flush lifecycle — process.emit('beforeExit') triggers force-flush (2
 		store.append({
 			eventId: "mw-1",
 			eventType: "memory.write",
+			lane: "memory",
 			tsEdgeMs: 2,
 			consentLevel: "metadata-only",
 			redacted: false,
