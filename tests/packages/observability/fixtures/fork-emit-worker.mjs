@@ -42,6 +42,7 @@ function ensureIdentifyOnce() {
 		store.append({
 			eventId: `${label}-id-seed`,
 			eventType: "agent.identify",
+			lane: "memory",
 			tsEdgeMs: Date.now(),
 			consentLevel: "metadata-only",
 			redacted: false,
@@ -71,6 +72,7 @@ try {
 		store.append({
 			eventId: `${label}-mw-${i}`,
 			eventType: "memory.write",
+			lane: "memory",
 			tsEdgeMs: Date.now(),
 			consentLevel: "metadata-only",
 			redacted: false,
@@ -79,7 +81,7 @@ try {
 				key_hash: `h-${label}-${i}`,
 				byte_len: 1,
 				content_tokens: 1,
-				tokens_method: "fast",
+				tokens_method: "char_approximation",
 			},
 			terminal: false,
 			chainEpoch: 0,

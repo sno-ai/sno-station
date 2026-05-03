@@ -72,6 +72,7 @@ describe("identity bootstrap / regeneration", () => {
 			store.append({
 				eventId: "old-id-0",
 				eventType: "agent.identify",
+			lane: "memory",
 				tsEdgeMs: 1,
 				consentLevel: "metadata-only",
 				redacted: false,
@@ -86,6 +87,7 @@ describe("identity bootstrap / regeneration", () => {
 			store.append({
 				eventId: "old-mw-1",
 				eventType: "memory.write",
+			lane: "memory",
 				tsEdgeMs: 2,
 				consentLevel: "metadata-only",
 				redacted: false,
@@ -122,6 +124,7 @@ describe("identity bootstrap / regeneration", () => {
 				const newId = reopened.append({
 					eventId: "new-id-0",
 					eventType: "agent.identify",
+			lane: "memory",
 					tsEdgeMs: Date.now(),
 					consentLevel: "metadata-only",
 					redacted: false,
