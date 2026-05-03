@@ -155,6 +155,10 @@ const scope = {
 	project_id: "p_test",
 };
 
+function testUuidV7(index) {
+	return `018f7d0c-fd8b-7${(index % 0x1000).toString(16).padStart(3, "0")}-9b9b-${index.toString(16).padStart(12, "0")}`;
+}
+
 describe("sno observe Node package", () => {
 	it("validates the public SDK event surface", () => {
 		assert.deepEqual(EVENT_TYPES, expectedEventTypes);
@@ -423,7 +427,10 @@ describe("sno observe Node package", () => {
 			assert.deepEqual(bootstrapIdentity(temp.env), identity);
 			assert.equal(getIdentityLockPath(temp.env), join(temp.dir, "identity.lock"));
 			assert.equal(identity.version, 1);
-			assert.match(identity.machine_uuid, /^[0-9a-f-]{36}$/u);
+			assert.match(
+				identity.machine_uuid,
+				/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u,
+			);
 			assert.match(identity.machine_secret, /^[0-9a-f]{64}$/u);
 			if (process.platform !== "win32") {
 				assert.equal(statSync(temp.env.SNO_IDENTITY_PATH).mode & 0o777, 0o600);
@@ -964,7 +971,7 @@ describe("sno observe Node package", () => {
 		try {
 			await emitRuntime.emitParsed(
 				parseEventInput({
-					event_id: "seq-emit-0",
+					event_id: testUuidV7(0),
 					event_type: "agent.identify",
 					lane: "memory",
 					agent_id: "codex",
@@ -974,7 +981,7 @@ describe("sno observe Node package", () => {
 			for (let index = 1; index < 100; index += 1) {
 				await emitRuntime.emitParsed(
 					parseEventInput({
-						event_id: `seq-emit-${index}`,
+						event_id: testUuidV7(index),
 						event_type: "session.start",
 						lane: "memory",
 						agent_id: "codex",
@@ -1259,7 +1266,7 @@ function initGitRepo(dir, remote) {
 
 function findUnsampledToolEventId(toolName, env) {
 	for (let index = 0; index < 1000; index += 1) {
-		const eventId = `unsampled-${index}`;
+		const eventId = testUuidV7(index + 1000);
 		if (!shouldSampleTool(eventId, toolName, 20, env)) {
 			return eventId;
 		}
