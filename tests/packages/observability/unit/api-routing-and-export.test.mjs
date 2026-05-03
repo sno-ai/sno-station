@@ -99,6 +99,7 @@ describe("public API routing and export inference", () => {
 			store.append({
 				eventId: "id-0",
 				eventType: "agent.identify",
+			lane: "memory",
 				tsEdgeMs: 1,
 				consentLevel: "metadata-only",
 				redacted: false,

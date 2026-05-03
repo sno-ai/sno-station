@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
 import { BufferStore } from "../../../../packages/sno-observe/dist/internal/buffer-store.js";
-import { validPayloads, scope } from "../fixtures/temp-env.mjs";
+import { scope, validPayloads } from "../fixtures/temp-env.mjs";
 
 function makeStore() {
 	const dir = mkdtempSync(join(tmpdir(), "sno-observe-retention-"));
@@ -22,6 +22,7 @@ describe("buffer-store retention pruner", () => {
 			store.append({
 				eventId: "id-0",
 				eventType: "agent.identify",
+				lane: "memory",
 				tsEdgeMs: 1,
 				consentLevel: "metadata-only",
 				redacted: false,
@@ -33,6 +34,7 @@ describe("buffer-store retention pruner", () => {
 				store.append({
 					eventId: `mw-${i}`,
 					eventType: "memory.write",
+					lane: "memory",
 					tsEdgeMs: 1000 + i,
 					consentLevel: "metadata-only",
 					redacted: false,
@@ -47,7 +49,10 @@ describe("buffer-store retention pruner", () => {
 				store.markShipped(row.rowid);
 			}
 			// With a tiny maxBytes ceiling, the pruner SHALL drop oldest shipped rows.
-			const pruned = store.pruneRetention(/* maxBytes */ 1, /* maxAgeMs */ 24 * 60 * 60 * 1000);
+			const pruned = store.pruneRetention(
+				/* maxBytes */ 1,
+				/* maxAgeMs */ 24 * 60 * 60 * 1000,
+			);
 			assert.equal(pruned > 0, true);
 		} finally {
 			store.close();
@@ -61,6 +66,7 @@ describe("buffer-store retention pruner", () => {
 			store.append({
 				eventId: "id-0",
 				eventType: "agent.identify",
+				lane: "memory",
 				tsEdgeMs: 1,
 				consentLevel: "metadata-only",
 				redacted: false,
@@ -72,6 +78,7 @@ describe("buffer-store retention pruner", () => {
 				store.append({
 					eventId: `unshipped-${i}`,
 					eventType: "memory.write",
+					lane: "memory",
 					tsEdgeMs: 1000 + i,
 					consentLevel: "metadata-only",
 					redacted: false,
@@ -92,12 +99,57 @@ describe("buffer-store retention pruner", () => {
 		}
 	});
 
+	it("removes terminal rows when total > maxBytes", () => {
+		const { dir, store } = makeStore();
+		try {
+			store.append({
+				eventId: "id-0",
+				eventType: "agent.identify",
+				lane: "memory",
+				tsEdgeMs: 1,
+				consentLevel: "off",
+				redacted: true,
+				scope,
+				payload: validPayloads["agent.identify"],
+				terminal: true,
+			});
+			for (let i = 1; i <= 20; i += 1) {
+				store.append({
+					eventId: `terminal-${i}`,
+					eventType: "memory.write",
+					lane: "memory",
+					tsEdgeMs: 1000 + i,
+					consentLevel: "off",
+					redacted: true,
+					scope,
+					payload: validPayloads["memory.write"],
+					terminal: true,
+				});
+			}
+
+			const pruned = store.pruneRetention(
+				/* maxBytes */ 1,
+				/* maxAgeMs */ 24 * 60 * 60 * 1000,
+			);
+
+			assert.equal(pruned > 0, true);
+			assert.equal(
+				store.getAllRows().every((row) => row.terminal === 1),
+				true,
+			);
+		} finally {
+			store.close();
+			rmSync(dir, { recursive: true, force: true });
+		}
+	});
+
 	it("removes shipped rows older than maxAgeMs", () => {
 		const { dir, store } = makeStore();
 		try {
 			store.append({
 				eventId: "id-0",
 				eventType: "agent.identify",
+				lane: "memory",
 				tsEdgeMs: 1,
 				consentLevel: "metadata-only",
 				redacted: false,
@@ -108,6 +160,7 @@ describe("buffer-store retention pruner", () => {
 			const second = store.append({
 				eventId: "mw-1",
 				eventType: "memory.write",
+				lane: "memory",
 				tsEdgeMs: 2,
 				consentLevel: "metadata-only",
 				redacted: false,
@@ -135,6 +188,7 @@ describe("buffer-store retention pruner", () => {
 			store.append({
 				eventId: "id-0",
 				eventType: "agent.identify",
+				lane: "memory",
 				tsEdgeMs: 1,
 				consentLevel: "metadata-only",
 				redacted: false,
@@ -146,6 +200,7 @@ describe("buffer-store retention pruner", () => {
 				const appended = store.append({
 					eventId: `bad-${i}`,
 					eventType: "memory.write",
+					lane: "memory",
 					tsEdgeMs: 1000 + i,
 					consentLevel: "metadata-only",
 					redacted: false,
@@ -153,7 +208,9 @@ describe("buffer-store retention pruner", () => {
 					payload: validPayloads["memory.write"],
 					terminal: false,
 				});
-				const row = store.getPending().find((pending) => pending.rowid === appended.rowid);
+				const row = store
+					.getPending()
+					.find((pending) => pending.rowid === appended.rowid);
 				assert.ok(row);
 				store.quarantine(row, 400, "invalid");
 			}

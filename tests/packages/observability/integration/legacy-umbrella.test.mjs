@@ -12,32 +12,35 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { describe, it } from "node:test";
+import { fileURLToPath } from "node:url";
 import DatabaseConstructor from "better-sqlite3";
 import * as publicModule from "../../../../packages/sno-observe/dist/index.js";
 import { snoObserve } from "../../../../packages/sno-observe/dist/index.js";
 import { verifyAuditEvent } from "../../../../packages/sno-observe/dist/internal/audit-verify.js";
-import { BufferStore, decodeEnvelope } from "../../../../packages/sno-observe/dist/internal/buffer-store.js";
+import {
+	BufferStore,
+	decodeEnvelope,
+} from "../../../../packages/sno-observe/dist/internal/buffer-store.js";
 import {
 	canonicalPreimage,
 	computeSelfHash,
 } from "../../../../packages/sno-observe/dist/internal/canonical-hash.js";
 import { ConsentStore } from "../../../../packages/sno-observe/dist/internal/consent.js";
 import {
-	machineSecretHash,
-	registerMachine,
-} from "../../../../packages/sno-observe/dist/internal/machine-registration.js";
-import { exportEvents } from "../../../../packages/sno-observe/dist/internal/export.js";
-import {
+	ChainSeedError,
 	InvalidAgentIdError,
 	InvalidConsentError,
 	InvalidEventPayloadError,
 	InvalidEventTypeError,
-	ChainSeedError,
 } from "../../../../packages/sno-observe/dist/internal/errors.js";
-import { bootstrapIdentity } from "../../../../packages/sno-observe/dist/internal/identity.js";
+import { exportEvents } from "../../../../packages/sno-observe/dist/internal/export.js";
 import { sha256Hex } from "../../../../packages/sno-observe/dist/internal/hash.js";
+import { bootstrapIdentity } from "../../../../packages/sno-observe/dist/internal/identity.js";
+import {
+	machineSecretHash,
+	registerMachine,
+} from "../../../../packages/sno-observe/dist/internal/machine-registration.js";
 import { getIdentityLockPath } from "../../../../packages/sno-observe/dist/internal/paths.js";
 import {
 	detectProjectId,
@@ -46,15 +49,25 @@ import {
 import { redactEventPayload } from "../../../../packages/sno-observe/dist/internal/redact.js";
 import { SnoObserveRuntime } from "../../../../packages/sno-observe/dist/internal/runtime.js";
 import { shouldSampleTool } from "../../../../packages/sno-observe/dist/internal/sampling.js";
-import { parseConsentValue, parseEventInput } from "../../../../packages/sno-observe/dist/internal/schemas.js";
-import { countTokens, countTokensFast } from "../../../../packages/sno-observe/dist/internal/tokens.js";
+import {
+	parseConsentValue,
+	parseEventInput,
+} from "../../../../packages/sno-observe/dist/internal/schemas.js";
+import {
+	countTokens,
+	countTokensFast,
+} from "../../../../packages/sno-observe/dist/internal/tokens.js";
 import { AGENT_IDS, EVENT_TYPES } from "../../../../packages/sno-observe/dist/internal/types.js";
-import { createEnvelope, serializeEnvelope } from "../../../../packages/sno-observe/dist/internal/wire-envelope.js";
+import {
+	createEnvelope,
+	serializeEnvelope,
+} from "../../../../packages/sno-observe/dist/internal/wire-envelope.js";
 
 const expectedEventTypes = [
 	"agent.identify",
 	"memory.write",
 	"memory.read",
+	"memory.snapshot",
 	"llm.call",
 	"tool.call",
 	"session.start",
@@ -76,7 +89,7 @@ const validPayloads = {
 		key_hash: "h_key",
 		byte_len: 12,
 		content_tokens: 3,
-		tokens_method: "fast",
+		tokens_method: "char_approximation",
 	},
 	"memory.read": {
 		query_hash: "h_query",
@@ -85,7 +98,16 @@ const validPayloads = {
 		hit_count: 1,
 		result_tokens: 10,
 		latency_ms: 4,
-		tokens_method: "bpe",
+		tokens_method: "tiktoken",
+	},
+	"memory.snapshot": {
+		session_uuid: "018f7d0c-fd8b-7ccf-9b9b-0a2ea938ad0d",
+		snapshot_reason: "session_end",
+		total_entries: 2,
+		total_bytes: 256,
+		total_tokens: 64,
+		oldest_entry_ts_ms: 1730000000000,
+		newest_entry_ts_ms: 1730000001000,
 	},
 	"llm.call": {
 		model: "gpt-4o",
@@ -102,17 +124,24 @@ const validPayloads = {
 		output_hash: "h_output",
 		latency_ms: 8,
 	},
-	"session.start": { session_uuid: "session-1" },
-	"session.end": { session_uuid: "session-1", duration_ms: 1000 },
+	"session.start": { session_uuid: "018f7d0c-fd8b-7ccf-9b9b-0a2ea938ad0d" },
+	"session.end": {
+		session_uuid: "018f7d0c-fd8b-7ccf-9b9b-0a2ea938ad0d",
+		duration_ms: 1000,
+	},
 	"prompt.submit": { prompt_hash: "h_prompt", byte_len: 9 },
-	"permission.request": { kind: "shell", decision: "deny", target_hash: "h_target" },
+	"permission.request": {
+		kind: "shell",
+		decision: "deny",
+		target_hash: "h_target",
+	},
 	"consent.change": { from: "metadata-only", to: "off", reason: "test" },
 	error: { kind: "recoverable", message_hash: "h_message", recoverable: true },
 	"cost.summary": {
-		session_uuid: "session-1",
-		event_count: 7,
-		prompt_tokens: 20,
-		completion_tokens: 5,
+		session_uuid: "018f7d0c-fd8b-7ccf-9b9b-0a2ea938ad0d",
+		tokens_in: 20,
+		tokens_out: 5,
+		llm_calls: 1,
 		tool_calls: 1,
 		memory_reads: 2,
 		memory_writes: 3,
@@ -133,6 +162,7 @@ describe("sno observe Node package", () => {
 			assert.equal(
 				parseEventInput({
 					event_type: eventType,
+					lane: "memory",
 					agent_id: "codex",
 					payload: validPayloads[eventType],
 				}).eventType,
@@ -144,8 +174,9 @@ describe("sno observe Node package", () => {
 			assert.equal(
 				parseEventInput({
 					event_type: "session.start",
+					lane: "memory",
 					agent_id: agentId,
-					payload: { session_uuid: "session-1" },
+					payload: { session_uuid: "018f7d0c-fd8b-7ccf-9b9b-0a2ea938ad0d" },
 				}).agentId,
 				agentId,
 			);
@@ -155,22 +186,34 @@ describe("sno observe Node package", () => {
 			() =>
 				parseEventInput({
 					event_type: "session.start",
+					lane: "memory",
 					agent_id: "claude-cli",
-					payload: { session_uuid: "session-1" },
+					payload: { session_uuid: "018f7d0c-fd8b-7ccf-9b9b-0a2ea938ad0d" },
 				}),
 			InvalidAgentIdError,
 		);
 		assert.throws(
-			() => parseEventInput({ event_type: "audit.anchor", agent_id: "codex", payload: {} }),
+			() =>
+				parseEventInput({
+					event_type: "audit.anchor",
+					lane: "memory",
+					agent_id: "codex",
+					payload: {},
+				}),
 			InvalidEventTypeError,
 		);
 		assert.throws(
 			() =>
 				parseEventInput({
 					event_type: "prompt.submit",
+					lane: "memory",
 					agent_id: "codex",
 					consent_level: "metadata-only",
-					payload: { prompt_hash: "h_prompt", byte_len: 9, prompt_text: "raw prompt" },
+					payload: {
+						prompt_hash: "h_prompt",
+						byte_len: 9,
+						prompt_text: "raw prompt",
+					},
 				}),
 			InvalidEventPayloadError,
 		);
@@ -178,6 +221,7 @@ describe("sno observe Node package", () => {
 			() =>
 				parseEventInput({
 					event_type: "error",
+					lane: "memory",
 					agent_id: "codex",
 					consent_level: "metadata-only",
 					payload: { ...validPayloads.error, message: "raw error text" },
@@ -188,8 +232,13 @@ describe("sno observe Node package", () => {
 			() =>
 				parseEventInput({
 					event_type: "tool.call",
+					lane: "memory",
 					agent_id: "codex",
-					payload: { ...validPayloads["tool.call"], input: "raw", output: "raw" },
+					payload: {
+						...validPayloads["tool.call"],
+						input: "raw",
+						output: "raw",
+					},
 				}),
 			InvalidEventPayloadError,
 		);
@@ -197,8 +246,12 @@ describe("sno observe Node package", () => {
 			() =>
 				parseEventInput({
 					event_type: "llm.call",
+					lane: "memory",
 					agent_id: "codex",
-					payload: { ...validPayloads["llm.call"], tokens_method: "fast" },
+					payload: {
+						...validPayloads["llm.call"],
+						tokens_method: "char_approximation",
+					},
 				}),
 			InvalidEventPayloadError,
 		);
@@ -206,6 +259,7 @@ describe("sno observe Node package", () => {
 			() =>
 				parseEventInput({
 					event_type: "memory.write",
+					lane: "memory",
 					agent_id: "codex",
 					payload: { key_hash: "h_key", byte_len: 12, content_tokens: 3 },
 				}),
@@ -217,6 +271,7 @@ describe("sno observe Node package", () => {
 			() =>
 				parseEventInput({
 					event_type: "memory.write",
+					lane: "memory",
 					agent_id: "codex",
 					payload: {
 						...validPayloads["memory.write"],
@@ -237,6 +292,7 @@ describe("sno observe Node package", () => {
 		const input = {
 			eventId: fixture.envelope.event_id,
 			eventType: fixture.envelope.event_type,
+			lane: "memory",
 			tsEdgeMs: fixture.envelope.ts_edge_ms,
 			scope: fixture.envelope.scope,
 			chainEpoch: fixture.envelope.chain_epoch,
@@ -257,13 +313,12 @@ describe("sno observe Node package", () => {
 			computeSelfHash({ ...input, payload: { answer: 42, world: "hello" } }),
 		);
 
-		const parsed = JSON.parse(
-			serializeEnvelope(createFixtureEnvelope(fixture)),
-		);
+		const parsed = JSON.parse(serializeEnvelope(createFixtureEnvelope(fixture)));
 		assert.deepEqual(Object.keys(parsed), [
 			"schema_version",
 			"event_id",
 			"event_type",
+			"lane",
 			"ts_edge_ms",
 			"consent_level",
 			"redacted",
@@ -291,6 +346,7 @@ describe("sno observe Node package", () => {
 			store.append({
 				eventId: "event-identify-legacy",
 				eventType: "agent.identify",
+				lane: "memory",
 				tsEdgeMs: 1730000000000,
 				consentLevel: "metadata-only",
 				redacted: false,
@@ -301,6 +357,7 @@ describe("sno observe Node package", () => {
 			store.append({
 				eventId: "event-memory-legacy",
 				eventType: "memory.write",
+				lane: "memory",
 				tsEdgeMs: 1730000000001,
 				consentLevel: "metadata-only",
 				redacted: false,
@@ -391,6 +448,7 @@ describe("sno observe Node package", () => {
 						store.append({
 							eventId: "event-memory-first",
 							eventType: "memory.write",
+							lane: "memory",
 							tsEdgeMs: 1730000000000,
 							consentLevel: "metadata-only",
 							redacted: false,
@@ -403,6 +461,7 @@ describe("sno observe Node package", () => {
 				const first = store.append({
 					eventId: "event-identify",
 					eventType: "agent.identify",
+					lane: "memory",
 					tsEdgeMs: 1730000000000,
 					consentLevel: "metadata-only",
 					redacted: false,
@@ -413,6 +472,7 @@ describe("sno observe Node package", () => {
 				const second = store.append({
 					eventId: "event-memory",
 					eventType: "memory.write",
+					lane: "memory",
 					tsEdgeMs: 1730000000001,
 					consentLevel: "metadata-only",
 					redacted: false,
@@ -433,6 +493,7 @@ describe("sno observe Node package", () => {
 				const next = reopened.append({
 					eventId: "event-session",
 					eventType: "session.start",
+					lane: "memory",
 					tsEdgeMs: 1730000000002,
 					consentLevel: "metadata-only",
 					redacted: false,
@@ -446,8 +507,9 @@ describe("sno observe Node package", () => {
 					() =>
 						parseEventInput({
 							event_type: "session.start",
+							lane: "memory",
 							agent_id: "claude-cli",
-							payload: { session_uuid: "session-1" },
+							payload: { session_uuid: "018f7d0c-fd8b-7ccf-9b9b-0a2ea938ad0d" },
 						}),
 					InvalidAgentIdError,
 				);
@@ -456,7 +518,11 @@ describe("sno observe Node package", () => {
 				reopened.markShipped(rows[0].rowid);
 				reopened.markShipped(rows[1].rowid);
 				assert.equal(
-					reopened.pruneRetention(Number.MAX_SAFE_INTEGER, 24 * 60 * 60 * 1000, Date.now() + 90_000_000),
+					reopened.pruneRetention(
+						Number.MAX_SAFE_INTEGER,
+						24 * 60 * 60 * 1000,
+						Date.now() + 90_000_000,
+					),
 					2,
 				);
 				assert.deepEqual(
@@ -515,8 +581,7 @@ describe("sno observe Node package", () => {
 		const redacted = redactEventPayload(
 			{
 				content: "raw memory body",
-				note:
-					"contact alice@example.com +1-415-555-0100 card 4111 1111 1111 1111 key sk_live_<REDACTED> ip 192.168.1.42 v6 2001:0db8:85a3:0000:0000:8a2e:0370:7334 ghp_<REDACTED> xox_<REDACTED> AIza1234567890abcdef AKIA1234567890ABCDEF",
+				note: "contact alice@example.com +1-415-555-0100 card 4111 1111 1111 1111 key sk_live_<REDACTED> ip 192.168.1.42 v6 2001:0db8:85a3:0000:0000:8a2e:0370:7334 ghp_<REDACTED> xox_<REDACTED> AIza1234567890abcdef AKIA1234567890ABCDEF",
 			},
 			"metadata-only",
 		);
@@ -557,10 +622,10 @@ describe("sno observe Node package", () => {
 		}
 
 		const count = await countTokens("x".repeat(100_001));
-		assert.equal(count.method, "fast");
+		assert.equal(count.method, "char_approximation");
 		assert.equal(count.tokens, countTokensFast("x".repeat(100_001)));
 		const smallCount = await countTokens("hello");
-		assert.equal(smallCount.method, "bpe");
+		assert.equal(smallCount.method, "tiktoken");
 
 		let sampled = 0;
 		for (let index = 0; index < 10_000; index += 1) {
@@ -574,7 +639,11 @@ describe("sno observe Node package", () => {
 	it("flushes one compact envelope per request and marks rows shipped", async () => {
 		const temp = createTempSnoEnv();
 		const { calls, fetch } = createFetchRecorder();
-		const runtime = new SnoObserveRuntime({ env: temp.env, cwd: temp.dir, fetch });
+		const runtime = new SnoObserveRuntime({
+			env: temp.env,
+			cwd: temp.dir,
+			fetch,
+		});
 		try {
 			const events = [];
 			const unsubscribe = runtime.subscribe((event) => {
@@ -583,6 +652,7 @@ describe("sno observe Node package", () => {
 			const emitResult = await runtime.emitParsed(
 				parseEventInput({
 					event_type: "memory.write",
+					lane: "memory",
 					agent_id: "codex",
 					payload: validPayloads["memory.write"],
 				}),
@@ -591,29 +661,34 @@ describe("sno observe Node package", () => {
 			assert.equal(emitResult.accepted, true);
 			assert.deepEqual(events, ["memory.write:true"]);
 
-			assert.deepEqual(await runtime.flush(), { shipped: 2, terminal: 0, retryable: 0 });
+			assert.deepEqual(await runtime.flush(), {
+				shipped: 2,
+				terminal: 0,
+				retryable: 0,
+			});
 			assert.equal(calls.length, 2);
 			assert.equal(existsSync(join(temp.dir, ".claw-storix", "state", "audit.jsonl")), false);
 			assert.equal(readFileSync(temp.env.SNO_BUFFER_PATH).includes("alice@example.com"), false);
-				for (const call of calls) {
-					assert.equal(call.url, "https://sno.test/api/v1/events");
-					assert.equal(call.headers["Content-Type"], "application/json");
-					assert.match(call.headers.Authorization, /^Bearer [0-9a-f]{64}$/u);
-					const posted = JSON.parse(call.body);
+			for (const call of calls) {
+				assert.equal(call.url, "https://sno.test/api/v1/events");
+				assert.equal(call.headers["Content-Type"], "application/json");
+				assert.match(call.headers.Authorization, /^Bearer [0-9a-f]{64}$/u);
+				const posted = JSON.parse(call.body);
 				assert.equal(Array.isArray(posted), false);
-			assert.deepEqual(Object.keys(posted), [
-				"schema_version",
-				"event_id",
-				"event_type",
-				"ts_edge_ms",
-				"consent_level",
-				"redacted",
-				"chain_epoch",
-				"seq",
-				"scope",
-				"hash_chain",
-				"payload",
-			]);
+				assert.deepEqual(Object.keys(posted), [
+					"schema_version",
+					"event_id",
+					"event_type",
+					"lane",
+					"ts_edge_ms",
+					"consent_level",
+					"redacted",
+					"chain_epoch",
+					"seq",
+					"scope",
+					"hash_chain",
+					"payload",
+				]);
 			}
 
 			const store = new BufferStore(temp.env.SNO_BUFFER_PATH);
@@ -652,6 +727,7 @@ describe("sno observe Node package", () => {
 			await anonymousRuntime.emitParsed(
 				parseEventInput({
 					event_type: "memory.write",
+					lane: "memory",
 					agent_id: "codex",
 					scope: { user_account_id: "acct_from_caller" },
 					payload: validPayloads["memory.write"],
@@ -684,6 +760,7 @@ describe("sno observe Node package", () => {
 			await claimedRuntime.emitParsed(
 				parseEventInput({
 					event_type: "memory.write",
+					lane: "memory",
 					agent_id: "codex",
 					scope: { user_account_id: "acct_from_caller" },
 					payload: validPayloads["memory.write"],
@@ -734,7 +811,10 @@ describe("sno observe Node package", () => {
 		}
 
 		const chainTemp = createTempSnoEnv("sno-observe-chain-reject-");
-		const chainRecorder = createFetchRecorder([202, 422]);
+		const chainRecorder = createFetchRecorder([
+			202,
+			{ status: 422, body: JSON.stringify({ error: "self_hash_mismatch" }) },
+		]);
 		const chainRuntime = new SnoObserveRuntime({
 			env: chainTemp.env,
 			cwd: chainTemp.dir,
@@ -742,7 +822,11 @@ describe("sno observe Node package", () => {
 		});
 		try {
 			await chainRuntime.emitParsed(memoryWriteEvent("h_conflict"));
-			assert.deepEqual(await chainRuntime.flush(), { shipped: 1, terminal: 1, retryable: 0 });
+			assert.deepEqual(await chainRuntime.flush(), {
+				shipped: 1,
+				terminal: 1,
+				retryable: 0,
+			});
 			const chainStore = new BufferStore(chainTemp.env.SNO_BUFFER_PATH);
 			try {
 				const rows = chainStore.getAllRows();
@@ -780,7 +864,11 @@ describe("sno observe Node package", () => {
 	it("keeps off-period events local across consent transitions", async () => {
 		const temp = createTempSnoEnv();
 		const { calls, fetch } = createFetchRecorder();
-		const runtime = new SnoObserveRuntime({ env: temp.env, cwd: temp.dir, fetch });
+		const runtime = new SnoObserveRuntime({
+			env: temp.env,
+			cwd: temp.dir,
+			fetch,
+		});
 		try {
 			const consentStore = new ConsentStore(temp.env);
 			assert.equal(consentStore.get(), "metadata-only");
@@ -803,11 +891,11 @@ describe("sno observe Node package", () => {
 			const posted = calls.map((call) => JSON.parse(call.body));
 			assert.deepEqual(
 				posted.map((event) => event.event_type),
-				["agent.identify", "memory.write", "consent.change", "consent.change", "agent.identify"],
+				["agent.identify", "memory.write", "consent.change", "agent.identify", "consent.change"],
 			);
 			assert.deepEqual(
 				posted.map((event) => event.chain_epoch),
-				[0, 0, 0, 1, 2],
+				[0, 0, 0, 2, 2],
 			);
 			assert.deepEqual(
 				posted.filter((event) => event.seq === 0).map((event) => event.event_type),
@@ -847,6 +935,7 @@ describe("sno observe Node package", () => {
 				store.append({
 					eventId: `event-${index}`,
 					eventType: index === 0 ? "agent.identify" : "session.start",
+					lane: "memory",
 					tsEdgeMs: 1730000000000 + index,
 					consentLevel: "metadata-only",
 					redacted: false,
@@ -877,6 +966,7 @@ describe("sno observe Node package", () => {
 				parseEventInput({
 					event_id: "seq-emit-0",
 					event_type: "agent.identify",
+					lane: "memory",
 					agent_id: "codex",
 					payload: validPayloads["agent.identify"],
 				}),
@@ -886,6 +976,7 @@ describe("sno observe Node package", () => {
 					parseEventInput({
 						event_id: `seq-emit-${index}`,
 						event_type: "session.start",
+						lane: "memory",
 						agent_id: "codex",
 						payload: validPayloads["session.start"],
 					}),
@@ -908,7 +999,11 @@ describe("sno observe Node package", () => {
 
 		const temp = createTempSnoEnv("sno-observe-subscribe-");
 		const { fetch } = createFetchRecorder();
-		const runtime = new SnoObserveRuntime({ env: temp.env, cwd: temp.dir, fetch });
+		const runtime = new SnoObserveRuntime({
+			env: temp.env,
+			cwd: temp.dir,
+			fetch,
+		});
 		const seen = [];
 		const unsubscribe = runtime.subscribe((event) => seen.push(event));
 		try {
@@ -921,8 +1016,12 @@ describe("sno observe Node package", () => {
 				parseEventInput({
 					event_id: findUnsampledToolEventId(sampledToolName, temp.env),
 					event_type: "tool.call",
+					lane: "memory",
 					agent_id: "codex",
-					payload: { ...validPayloads["tool.call"], tool_name: sampledToolName },
+					payload: {
+						...validPayloads["tool.call"],
+						tool_name: sampledToolName,
+					},
 				}),
 			);
 			assert.deepEqual(
@@ -958,6 +1057,7 @@ describe("sno observe Node package", () => {
 			"audit",
 			"doctor",
 			"shouldSampleTool",
+			"hashRedactedText",
 			"subscribe",
 			"shutdown",
 		]);
@@ -1045,10 +1145,7 @@ describe("sno observe Node package", () => {
 				},
 			});
 			assert.deepEqual(result, { verified: true, anchor_id: "a_1" });
-			assert.equal(
-				auditCalls[0].url,
-				"https://sno.test/api/v1/audit/verify?event_id=event%201",
-			);
+			assert.equal(auditCalls[0].url, "https://sno.test/api/v1/audit/verify?event_id=event%201");
 			assert.equal(auditCalls[0].headers.Authorization, `Bearer ${identity.machine_secret}`);
 
 			const falseResult = await verifyAuditEvent("event-2", {
@@ -1067,7 +1164,9 @@ describe("sno observe Node package", () => {
 						baseUrl: "https://sno.test",
 						machineSecret: identity.machine_secret,
 						fetch: async () =>
-							new Response(JSON.stringify({ error: "not found" }), { status: 404 }),
+							new Response(JSON.stringify({ error: "not found" }), {
+								status: 404,
+							}),
 					}),
 				/event not found or not owned/u,
 			);
@@ -1105,6 +1204,7 @@ function createFixtureEnvelope(fixture) {
 	return createEnvelope({
 		eventId: fixture.envelope.event_id,
 		eventType: fixture.envelope.event_type,
+		lane: "memory",
 		tsEdgeMs: fixture.envelope.ts_edge_ms,
 		consentLevel: fixture.envelope.consent_level,
 		redacted: fixture.envelope.redacted,
@@ -1122,13 +1222,14 @@ function createFixtureEnvelope(fixture) {
 function memoryWriteEvent(keyHash) {
 	return parseEventInput({
 		event_type: "memory.write",
+		lane: "memory",
 		agent_id: "codex",
 		scope: { note: "contact alice@example.com" },
 		payload: {
 			key_hash: keyHash,
 			byte_len: 4,
 			content_tokens: 1,
-			tokens_method: "fast",
+			tokens_method: "char_approximation",
 		},
 	});
 }
@@ -1150,10 +1251,7 @@ function createTempSnoEnv(prefix = "sno-observe-") {
 
 function initGitRepo(dir, remote) {
 	mkdirSync(dir);
-	for (const args of [
-		["init"],
-		["remote", "add", "origin", remote],
-	]) {
+	for (const args of [["init"], ["remote", "add", "origin", remote]]) {
 		const result = spawnSync("git", args, { cwd: dir, encoding: "utf8" });
 		assert.equal(result.status, 0, result.stderr);
 	}

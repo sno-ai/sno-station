@@ -32,6 +32,7 @@ const SDK_EVENT_TYPES = [
 	"agent.identify",
 	"memory.write",
 	"memory.read",
+	"memory.snapshot",
 	"llm.call",
 	"tool.call",
 	"session.start",
@@ -44,7 +45,7 @@ const SDK_EVENT_TYPES = [
 ];
 
 describe("acceptance — live-endpoint end-to-end (32.1, gated)", () => {
-	it("emits all 12 SDK-emittable event types and ships them", async (t) => {
+	it("emits all 13 SDK-emittable event types and ships them", async (t) => {
 		const baseUrl = skipIfNoLiveEndpoint(t);
 		if (baseUrl === null) {
 			return;
@@ -61,6 +62,7 @@ describe("acceptance — live-endpoint end-to-end (32.1, gated)", () => {
 				await runtime.emitParsed(
 					parseEventInput({
 						event_type: eventType,
+			lane: "memory",
 						agent_id: "codex",
 						payload: validPayloads[eventType],
 					}),

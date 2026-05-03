@@ -6,8 +6,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
 import { BufferStore } from "../../../../packages/sno-observe/dist/internal/buffer-store.js";
-import { machineSecretHash } from "../../../../packages/sno-observe/dist/internal/machine-registration.js";
 import { bootstrapIdentity } from "../../../../packages/sno-observe/dist/internal/identity.js";
+import { machineSecretHash } from "../../../../packages/sno-observe/dist/internal/machine-registration.js";
 import { SnoObserveRuntime } from "../../../../packages/sno-observe/dist/internal/runtime.js";
 import { parseEventInput } from "../../../../packages/sno-observe/dist/internal/schemas.js";
 import { startMockServer } from "../fixtures/sno-ai-mock-server.mjs";
@@ -30,12 +30,13 @@ function tempEnv(baseUrl) {
 function memoryEvent(i) {
 	return parseEventInput({
 		event_type: "memory.write",
+		lane: "memory",
 		agent_id: "codex",
 		payload: {
 			key_hash: `h_${i}`,
 			byte_len: 1,
 			content_tokens: 1,
-			tokens_method: "fast",
+			tokens_method: "char_approximation",
 		},
 	});
 }
@@ -56,14 +57,23 @@ async function withServerAndRuntime(fn) {
 describe("HTTP status matrix (fixture server, node:http)", () => {
 	it("202 with receipt_id -> advance, mark shipped (24.5 +ve)", async () => {
 		await withServerAndRuntime(async ({ server, runtime, t }) => {
-			server.enqueue("/api/v1/events", { status: 202, body: { receipt_id: "r_1" } });
-			server.enqueue("/api/v1/events", { status: 202, body: { receipt_id: "r_2" } });
+			server.enqueue("/api/v1/events", {
+				status: 202,
+				body: { receipt_id: "r_1" },
+			});
+			server.enqueue("/api/v1/events", {
+				status: 202,
+				body: { receipt_id: "r_2" },
+			});
 			await runtime.emitParsed(memoryEvent(1));
 			const res = await runtime.flush();
 			assert.equal(res.shipped, 2);
 			const store = new BufferStore(t.env.SNO_BUFFER_PATH);
 			try {
-				assert.equal(store.getAllRows().every((r) => r.shipped === 1), true);
+				assert.equal(
+					store.getAllRows().every((r) => r.shipped === 1),
+					true,
+				);
 			} finally {
 				store.close();
 			}
@@ -73,15 +83,24 @@ describe("HTTP status matrix (fixture server, node:http)", () => {
 	it("202 with receipt_id: null -> advance, mark shipped, NO retry (24.5)", async () => {
 		await withServerAndRuntime(async ({ server, runtime, t }) => {
 			// Per §2.3: three indistinguishable causes; SDK MUST advance, never retry.
-			server.enqueue("/api/v1/events", { status: 202, body: { receipt_id: null } });
-			server.enqueue("/api/v1/events", { status: 202, body: { receipt_id: null } });
+			server.enqueue("/api/v1/events", {
+				status: 202,
+				body: { receipt_id: null },
+			});
+			server.enqueue("/api/v1/events", {
+				status: 202,
+				body: { receipt_id: null },
+			});
 			await runtime.emitParsed(memoryEvent(1));
 			const res = await runtime.flush();
 			assert.equal(res.shipped, 2);
 			assert.equal(res.retryable, 0);
 			const store = new BufferStore(t.env.SNO_BUFFER_PATH);
 			try {
-				assert.equal(store.getAllRows().every((r) => r.shipped === 1), true);
+				assert.equal(
+					store.getAllRows().every((r) => r.shipped === 1),
+					true,
+				);
 			} finally {
 				store.close();
 			}
@@ -108,9 +127,8 @@ describe("HTTP status matrix (fixture server, node:http)", () => {
 		"tokens_method_required", // 24.12
 	];
 	for (const error of subcodes) {
-		it(`400 ${error} -> quarantine, advance, no retry`, async () => {
+		it(`400 ${error} -> quarantine suffix, reseed, no retry`, async () => {
 			await withServerAndRuntime(async ({ server, runtime, t }) => {
-				server.enqueue("/api/v1/events", { status: 400, body: { error } });
 				server.enqueue("/api/v1/events", { status: 400, body: { error } });
 				await runtime.emitParsed(memoryEvent(1));
 				const res = await runtime.flush();
@@ -119,7 +137,15 @@ describe("HTTP status matrix (fixture server, node:http)", () => {
 				const store = new BufferStore(t.env.SNO_BUFFER_PATH);
 				try {
 					const rows = store.getAllRows();
-					assert.equal(rows.every((r) => r.terminal === 1), true);
+					assert.equal(rows[0].terminal, 1);
+					assert.equal(rows[1].terminal, 1);
+					const reseed = rows.find(
+						(r) =>
+							JSON.parse(r.payload.toString("utf8")).event_type === "agent.identify" &&
+							r.chain_epoch === 1,
+					);
+					assert.notEqual(reseed, undefined);
+					assert.equal(reseed.terminal, 0);
 				} finally {
 					store.close();
 				}
@@ -127,9 +153,46 @@ describe("HTTP status matrix (fixture server, node:http)", () => {
 		});
 	}
 
+	it("400 after an accepted predecessor quarantines the broken suffix before reseed", async () => {
+		await withServerAndRuntime(async ({ server, runtime, t }) => {
+			server.enqueue("/api/v1/events", { status: 202, body: { ok: true } });
+			server.enqueue("/api/v1/events", { status: 400, body: { error: "invalid_envelope" } });
+			await runtime.emitParsed(memoryEvent(1));
+			await runtime.emitParsed(memoryEvent(2));
+
+			const res = await runtime.flush();
+			assert.deepEqual(res, { shipped: 1, terminal: 2, retryable: 0 });
+
+			server.enqueue("/api/v1/events", { status: 202, body: { ok: true } });
+			server.enqueue("/api/v1/events", { status: 202, body: { ok: true } });
+			await runtime.emitParsed(memoryEvent(3));
+			const secondRes = await runtime.flush();
+			assert.deepEqual(secondRes, { shipped: 2, terminal: 0, retryable: 0 });
+
+			const store = new BufferStore(t.env.SNO_BUFFER_PATH);
+			try {
+				const rows = store.getAllRows();
+				assert.equal(rows[1].terminal, 1);
+				assert.equal(rows[2].terminal, 1);
+				const reseed = rows.find(
+					(r) =>
+						JSON.parse(r.payload.toString("utf8")).event_type === "agent.identify" &&
+						r.chain_epoch === 1,
+				);
+				assert.notEqual(reseed, undefined);
+				assert.equal(reseed.shipped, 1);
+			} finally {
+				store.close();
+			}
+		});
+	});
+
 	it("401 -> retry path, no quarantine (24.13)", async () => {
 		await withServerAndRuntime(async ({ server, runtime, t }) => {
-			server.enqueue("/api/v1/events", { status: 401, body: { error: "unauthorized" } });
+			server.enqueue("/api/v1/events", {
+				status: 401,
+				body: { error: "unauthorized" },
+			});
 			await runtime.emitParsed(memoryEvent(1));
 			const res = await runtime.flush();
 			assert.equal(res.retryable, 1);
@@ -173,7 +236,10 @@ describe("HTTP status matrix (fixture server, node:http)", () => {
 	it("409 payload_conflict -> quarantine + epoch bump + reseed (24.16)", async () => {
 		await withServerAndRuntime(async ({ server, runtime, t }) => {
 			// First call: agent.identify ships fine (202). Second: memory.write 409.
-			server.enqueue("/api/v1/events", { status: 202, body: { receipt_id: "r_id" } });
+			server.enqueue("/api/v1/events", {
+				status: 202,
+				body: { receipt_id: "r_id" },
+			});
 			server.enqueue("/api/v1/events", {
 				status: 409,
 				body: { error: "payload_conflict" },
@@ -198,11 +264,117 @@ describe("HTTP status matrix (fixture server, node:http)", () => {
 		});
 	});
 
+	it("409 duplicate_event -> mark shipped without reseeding", async () => {
+		await withServerAndRuntime(async ({ server, runtime, t }) => {
+			server.enqueue("/api/v1/events", {
+				status: 202,
+				body: { receipt_id: "r_id" },
+			});
+			server.enqueue("/api/v1/events", {
+				status: 409,
+				body: { error: "duplicate_event" },
+			});
+			await runtime.emitParsed(memoryEvent(1));
+			const res = await runtime.flush();
+			assert.deepEqual(res, { shipped: 2, terminal: 0, retryable: 0 });
+			const store = new BufferStore(t.env.SNO_BUFFER_PATH);
+			try {
+				const rows = store.getAllRows();
+				assert.equal(rows.length, 2);
+				assert.equal(
+					rows.every((r) => r.shipped === 1),
+					true,
+				);
+				assert.equal(Math.max(...rows.map((r) => r.chain_epoch)), 0);
+			} finally {
+				store.close();
+			}
+		});
+	});
+
+	it("422 without explicit chain error -> retry without quarantine or reseed", async () => {
+		await withServerAndRuntime(async ({ server, runtime, t }) => {
+			server.enqueue("/api/v1/events", {
+				status: 202,
+				body: { receipt_id: "r_id" },
+			});
+			server.enqueue("/api/v1/events", {
+				status: 422,
+				body: { error: "temporarily_unknown" },
+			});
+			await runtime.emitParsed(memoryEvent(1));
+			const res = await runtime.flush();
+			assert.equal(res.shipped, 1);
+			assert.equal(res.terminal, 0);
+			assert.equal(res.retryable, 1);
+			const store = new BufferStore(t.env.SNO_BUFFER_PATH);
+			try {
+				const rows = store.getAllRows();
+				assert.equal(rows.length, 2);
+				assert.equal(rows[1].terminal, 0);
+				assert.equal(rows[1].attempts, 1);
+				assert.equal(Math.max(...rows.map((r) => r.chain_epoch)), 0);
+			} finally {
+				store.close();
+			}
+		});
+	});
+
+	it("422 chain rejection quarantines the rejected epoch suffix before reseed", async () => {
+		await withServerAndRuntime(async ({ server, runtime, t }) => {
+			server.enqueue("/api/v1/events", {
+				status: 202,
+				body: { receipt_id: "r_id" },
+			});
+			server.enqueue("/api/v1/events", {
+				status: 422,
+				body: { error: "prev_hash_mismatch" },
+			});
+			await runtime.emitParsed(memoryEvent(1));
+			await runtime.emitParsed(memoryEvent(2));
+			const res = await runtime.flush();
+			assert.deepEqual(res, { shipped: 1, terminal: 2, retryable: 0 });
+			assert.equal(server.calls.filter((call) => call.url === "/api/v1/events").length, 2);
+
+			server.enqueue("/api/v1/events", {
+				status: 202,
+				body: { receipt_id: "r_reseed" },
+			});
+			server.enqueue("/api/v1/events", {
+				status: 202,
+				body: { receipt_id: "r_new" },
+			});
+			await runtime.emitParsed(memoryEvent(3));
+			const secondRes = await runtime.flush();
+			assert.deepEqual(secondRes, { shipped: 2, terminal: 0, retryable: 0 });
+
+			const store = new BufferStore(t.env.SNO_BUFFER_PATH);
+			try {
+				const rows = store.getAllRows();
+				const envelopes = rows.map((row) => JSON.parse(row.payload.toString("utf8")));
+				const reseedRows = envelopes.filter(
+					(envelope) => envelope.event_type === "agent.identify" && envelope.chain_epoch === 1,
+				);
+				assert.equal(reseedRows.length, 1);
+				assert.equal(rows.length, 5);
+				assert.equal(rows[1].terminal, 1);
+				assert.equal(rows[2].terminal, 1);
+				assert.equal(rows[3].shipped, 1);
+				assert.equal(rows[4].shipped, 1);
+			} finally {
+				store.close();
+			}
+		});
+	});
+
 	const epoch422 = ["chain_seed_required", "prev_hash_mismatch", "self_hash_mismatch"];
 	for (const error of epoch422) {
 		it(`422 ${error} -> quarantine + epoch bump + reseed`, async () => {
 			await withServerAndRuntime(async ({ server, runtime, t }) => {
-				server.enqueue("/api/v1/events", { status: 202, body: { receipt_id: "r_id" } });
+				server.enqueue("/api/v1/events", {
+					status: 202,
+					body: { receipt_id: "r_id" },
+				});
 				server.enqueue("/api/v1/events", { status: 422, body: { error } });
 				await runtime.emitParsed(memoryEvent(1));
 				await runtime.flush();
@@ -223,7 +395,10 @@ describe("HTTP status matrix (fixture server, node:http)", () => {
 			server.enqueue("/api/v1/events", {
 				status: 429,
 				headers: { "Retry-After": "60" },
-				body: { error: "Per-cuid quota exceeded", errorType: "RATE_LIMIT_EXCEEDED" },
+				body: {
+					error: "Per-cuid quota exceeded",
+					errorType: "RATE_LIMIT_EXCEEDED",
+				},
 			});
 			await runtime.emitParsed(memoryEvent(1));
 			const res = await runtime.flush();
@@ -236,7 +411,10 @@ describe("HTTP status matrix (fixture server, node:http)", () => {
 		await withServerAndRuntime(async ({ server, runtime }) => {
 			server.enqueue("/api/v1/events", {
 				status: 429,
-				body: { errorType: "RATE_LIMIT_EXCEEDED", error: "Per-cuid quota exceeded" },
+				body: {
+					errorType: "RATE_LIMIT_EXCEEDED",
+					error: "Per-cuid quota exceeded",
+				},
 			});
 			await runtime.emitParsed(memoryEvent(1));
 			const res = await runtime.flush();
@@ -248,7 +426,10 @@ describe("HTTP status matrix (fixture server, node:http)", () => {
 
 	it("500 with no Retry-After -> exponential backoff base 5s (24.23)", async () => {
 		await withServerAndRuntime(async ({ server, runtime }) => {
-			server.enqueue("/api/v1/events", { status: 500, body: { error: "queue_unavailable" } });
+			server.enqueue("/api/v1/events", {
+				status: 500,
+				body: { error: "queue_unavailable" },
+			});
 			await runtime.emitParsed(memoryEvent(1));
 			const res = await runtime.flush();
 			assert.equal(res.retryable, 1);
@@ -274,7 +455,11 @@ describe("HTTP status matrix (fixture server, node:http)", () => {
 		const fetchReset = async () => {
 			throw new Error("ECONNRESET");
 		};
-		const runtime = new SnoObserveRuntime({ env: t.env, cwd: t.dir, fetch: fetchReset });
+		const runtime = new SnoObserveRuntime({
+			env: t.env,
+			cwd: t.dir,
+			fetch: fetchReset,
+		});
 		try {
 			await runtime.emitParsed(memoryEvent(1));
 			const res = await runtime.flush();
@@ -292,8 +477,14 @@ describe("machine bearer attach (24.3, 24.3a)", () => {
 		const t = tempEnv(server.baseUrl);
 		const runtime = new SnoObserveRuntime({ env: t.env, cwd: t.dir });
 		try {
-			server.enqueue("/api/v1/events", { status: 202, body: { receipt_id: "r1" } });
-			server.enqueue("/api/v1/events", { status: 202, body: { receipt_id: "r2" } });
+			server.enqueue("/api/v1/events", {
+				status: 202,
+				body: { receipt_id: "r1" },
+			});
+			server.enqueue("/api/v1/events", {
+				status: 202,
+				body: { receipt_id: "r2" },
+			});
 			await runtime.emitParsed(memoryEvent(1));
 			const id = bootstrapIdentity(t.env);
 			await runtime.flush();
