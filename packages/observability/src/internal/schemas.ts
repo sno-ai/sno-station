@@ -10,7 +10,9 @@ import {
 	type AgentId,
 	CONSENT_VALUES,
 	type ConsentValue,
+	EVENT_LANES,
 	EVENT_TYPES,
+	type EventLane,
 	type EventType,
 	type JsonObject,
 	type JsonValue,
@@ -19,7 +21,14 @@ import {
 
 export const agentIdSchema = z.enum(AGENT_IDS);
 export const consentValueSchema = z.enum(CONSENT_VALUES);
+export const eventLaneSchema = z.enum(EVENT_LANES);
 export const eventTypeSchema = z.enum(EVENT_TYPES);
+export const uuidV7Schema = z
+	.string()
+	.regex(
+		/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu,
+		"must be a UUID-v7 string",
+	);
 
 const jsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
 	z.union([
@@ -33,7 +42,12 @@ const jsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
 );
 
 const jsonObjectSchema = z.record(jsonValueSchema);
-const tokenMethodSchema = z.enum(["bpe", "fast"]);
+const tokenMethodSchema = z.enum([
+	"qwen_tokenizer",
+	"tiktoken",
+	"provider_reported",
+	"char_approximation",
+]);
 
 const payloadSchemas: Record<EventType, z.ZodType<unknown>> = {
 	"agent.identify": z
@@ -65,6 +79,53 @@ const payloadSchemas: Record<EventType, z.ZodType<unknown>> = {
 			tokens_method: tokenMethodSchema,
 		})
 		.strict(),
+	"memory.snapshot": z
+		.object({
+			session_uuid: uuidV7Schema,
+			snapshot_reason: z.enum(["session_end", "startup", "periodic"]),
+			total_entries: z.number().int().nonnegative(),
+			total_bytes: z.number().int().nonnegative(),
+			total_tokens: z.number().int().nonnegative(),
+			oldest_entry_ts_ms: z.number().int().nonnegative().optional(),
+			newest_entry_ts_ms: z.number().int().nonnegative().optional(),
+		})
+		.strict()
+		.superRefine((value, ctx) => {
+			const hasOldest = value.oldest_entry_ts_ms !== undefined;
+			const hasNewest = value.newest_entry_ts_ms !== undefined;
+			if (value.total_entries === 0) {
+				if (hasOldest) {
+					ctx.addIssue({
+						code: z.ZodIssueCode.custom,
+						path: ["oldest_entry_ts_ms"],
+						message: "must be omitted when total_entries is 0",
+					});
+				}
+				if (hasNewest) {
+					ctx.addIssue({
+						code: z.ZodIssueCode.custom,
+						path: ["newest_entry_ts_ms"],
+						message: "must be omitted when total_entries is 0",
+					});
+				}
+				return;
+			}
+			if (!hasOldest) {
+				ctx.addIssue({
+					code: z.ZodIssueCode.custom,
+					path: ["oldest_entry_ts_ms"],
+					message: "is required when total_entries is greater than 0",
+				});
+			}
+			if (!hasNewest) {
+				ctx.addIssue({
+					code: z.ZodIssueCode.custom,
+					path: ["newest_entry_ts_ms"],
+					message: "is required when total_entries is greater than 0",
+				});
+			}
+		}),
+	/** `model` SHOULD use `<provider>:<model_id>` or `embedding:<provider>:<model_id>`. */
 	"llm.call": z
 		.object({
 			model: z.string().min(1),
@@ -86,13 +147,13 @@ const payloadSchemas: Record<EventType, z.ZodType<unknown>> = {
 		.strict(),
 	"session.start": z
 		.object({
-			session_uuid: z.string().min(1),
+			session_uuid: uuidV7Schema,
 			duration_ms: z.number().nonnegative().optional(),
 		})
 		.strict(),
 	"session.end": z
 		.object({
-			session_uuid: z.string().min(1),
+			session_uuid: uuidV7Schema,
 			duration_ms: z.number().nonnegative().optional(),
 		})
 		.strict(),
@@ -116,6 +177,7 @@ const payloadSchemas: Record<EventType, z.ZodType<unknown>> = {
 			reason: z.string().max(256),
 		})
 		.strict(),
+	/** `kind` SHOULD use `<component>:<reason>`, for example `llm.call:provider_throw`. */
 	error: z
 		.object({
 			kind: z.string().min(1),
@@ -125,14 +187,15 @@ const payloadSchemas: Record<EventType, z.ZodType<unknown>> = {
 		.strict(),
 	"cost.summary": z
 		.object({
-			session_uuid: z.string().min(1),
-			event_count: z.number().int().nonnegative(),
-			prompt_tokens: z.number().int().nonnegative(),
-			completion_tokens: z.number().int().nonnegative(),
-			tool_calls: z.number().int().nonnegative(),
-			memory_reads: z.number().int().nonnegative(),
+			session_uuid: uuidV7Schema,
+			tokens_in: z.number().int().nonnegative(),
+			tokens_out: z.number().int().nonnegative(),
+			llm_calls: z.number().int().nonnegative(),
 			memory_writes: z.number().int().nonnegative(),
+			memory_reads: z.number().int().nonnegative(),
+			tool_calls: z.number().int().nonnegative(),
 			cost_usd: z.number().nonnegative().optional(),
+			event_count: z.number().int().nonnegative().optional(),
 		})
 		.strict(),
 };
@@ -141,6 +204,7 @@ const eventInputSchema = z
 	.object({
 		event_id: z.string().min(1).optional(),
 		event_type: z.string().min(1),
+		lane: z.string().min(1),
 		agent_id: z.string().min(1),
 		ts_edge_ms: z.number().int().nonnegative().optional(),
 		consent_level: z.string().optional(),
@@ -167,6 +231,10 @@ export function parseEventInput(input: unknown): ParsedEvent {
 	if (!agentId.success) {
 		throw new InvalidAgentIdError(base.data.agent_id);
 	}
+	const lane = eventLaneSchema.safeParse(base.data.lane);
+	if (!lane.success) {
+		throw new InvalidEventPayloadError(`lane: expected one of ${EVENT_LANES.join(", ")}`);
+	}
 
 	const consentLevel =
 		base.data.consent_level === undefined ? undefined : parseConsentValue(base.data.consent_level);
@@ -186,6 +254,7 @@ export function parseEventInput(input: unknown): ParsedEvent {
 
 	const parsed: ParsedEvent = {
 		eventType: eventType.data,
+		lane: lane.data as EventLane,
 		agentId: agentId.data,
 		scope: base.data.scope ?? {},
 		payload: toJsonObject(payload.data),
