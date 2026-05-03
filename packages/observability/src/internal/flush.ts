@@ -1,4 +1,4 @@
-import { v7 as uuidv7 } from "uuid";
+import { createUUIDv7 } from "@snoai/common-core";
 import { type BufferStore, decodeEnvelope, type PendingRow } from "./buffer-store.js";
 import { type EventPostResult, postEvent } from "./http.js";
 import { logger } from "./log.js";
@@ -427,7 +427,7 @@ function retryRow(
 function reseedChain(store: BufferStore, row: PendingRow): void {
 	const envelope = decodeEnvelope(row.payload);
 	store.append({
-		eventId: uuidv7(),
+		eventId: createUUIDv7(),
 		eventType: "agent.identify",
 		lane: envelope.lane,
 		tsEdgeMs: Date.now(),

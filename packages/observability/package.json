@@ -19,7 +19,7 @@
 		"package.json"
 	],
 	"scripts": {
-		"build": "tsc -p tsconfig.json",
+		"build": "npm run build --workspace @snoai/common-core && tsc -p tsconfig.json",
 		"typecheck": "tsc --noEmit",
 		"lint": "biome check src/",
 		"lint:fix": "biome check --write src/",

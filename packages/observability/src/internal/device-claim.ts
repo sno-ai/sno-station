@@ -1,6 +1,6 @@
 import { SnoObserveError } from "./errors.js";
 import { fetchJson, normalizeBaseUrl } from "./http.js";
-import { updateIdentity } from "./identity.js";
+import { updateValidIdentity } from "./identity.js";
 import { type RegisterOptions, registerMachine } from "./machine-registration.js";
 import type { PathEnv } from "./paths.js";
 import type { Identity } from "./types.js";
@@ -113,7 +113,7 @@ export async function claimMachine(
 	};
 	const userAccountId = await pollForClaim(pollInput);
 
-	const updatedIdentity = updateIdentity(
+	const updatedIdentity = updateValidIdentity(
 		(current) =>
 			current.user_cuid === identity.user_cuid && current.machine_uuid === identity.machine_uuid
 				? { ...current, user_account_id: userAccountId }
@@ -121,6 +121,7 @@ export async function claimMachine(
 		env,
 	);
 	if (
+		updatedIdentity === null ||
 		updatedIdentity.user_cuid !== identity.user_cuid ||
 		updatedIdentity.machine_uuid !== identity.machine_uuid ||
 		updatedIdentity.user_account_id !== userAccountId
