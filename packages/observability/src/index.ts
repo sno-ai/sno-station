@@ -10,8 +10,10 @@ import type {
 	DoctorReport,
 	EmitResult,
 	Event,
+	EventType,
 	ExportFormat,
 	ExportResult,
+	JsonObject,
 	ShutdownResult,
 	Subscription,
 } from "./internal/types.js";
@@ -81,6 +83,10 @@ function createApi(runtime: SnoObserveRuntime) {
 		return shouldSampleToolInternal(eventId, toolName, rate);
 	}
 
+	function hashRedactedText(input: string): string {
+		return runtime.hashRedactedText(input);
+	}
+
 	function subscribe(listener: Subscription): () => void {
 		return runtime.subscribe(listener);
 	}
@@ -99,6 +105,7 @@ function createApi(runtime: SnoObserveRuntime) {
 		audit,
 		doctor,
 		shouldSampleTool,
+		hashRedactedText,
 		subscribe,
 		shutdown,
 	};
@@ -120,6 +127,7 @@ const SNO_OBSERVE_KEYS = [
 	"audit",
 	"doctor",
 	"shouldSampleTool",
+	"hashRedactedText",
 	"subscribe",
 	"shutdown",
 ] as const satisfies ReadonlyArray<keyof SnoObserveApi>;
@@ -164,7 +172,9 @@ export type {
 	DoctorCheck,
 	DoctorReport,
 	Event,
+	EventType,
 	ExportFormat,
+	JsonObject,
 	RuntimeOptions,
 	ShutdownResult,
 };
