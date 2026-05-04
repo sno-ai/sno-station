@@ -36,7 +36,9 @@ export async function postEvent(
 	body: string,
 	bearer?: string,
 	fetchImpl: typeof fetch = fetch,
+	signal?: AbortSignal,
 ): Promise<EventPostResult> {
+	const normalizedBaseUrl = normalizeBaseUrl(baseUrl);
 	const headers: {
 		"Content-Type": string;
 		Authorization?: string;
@@ -46,11 +48,11 @@ export async function postEvent(
 	if (bearer !== undefined) {
 		headers.Authorization = `Bearer ${bearer}`;
 	}
-	const response = await fetchImpl(`${baseUrl.replace(/\/$/u, "")}/api/v1/events`, {
+	const response = await fetchImpl(`${normalizedBaseUrl}/api/v1/events`, {
 		method: "POST",
 		headers,
 		body,
-		signal: AbortSignal.timeout(DEFAULT_REQUEST_TIMEOUT_MS),
+		signal: signal ?? AbortSignal.timeout(DEFAULT_REQUEST_TIMEOUT_MS),
 	});
 	// Body-read failures after the response resolved (truncated stream, abort
 	// during body, decoder error) MUST NOT propagate as transport errors —

@@ -11,6 +11,7 @@ export interface RegisterOptions {
 	baseUrl?: string;
 	env?: PathEnv;
 	fetch?: typeof fetch;
+	signal?: AbortSignal;
 }
 
 export interface RegisterResult {
@@ -49,6 +50,7 @@ export async function registerMachine(
 				machine_uuid: identity.machine_uuid,
 				machine_secret_hash: machineSecretHash(identity.machine_secret),
 			}),
+			...(options.signal === undefined ? {} : { signal: options.signal }),
 		},
 		options.fetch ?? fetch,
 	);
