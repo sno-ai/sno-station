@@ -13,6 +13,7 @@ export interface FlushOptions {
 	force?: boolean;
 	identity: Identity;
 	machineRegistrationCache?: MachineRegistrationCache;
+	signal?: AbortSignal;
 }
 
 export interface FlushResult {
@@ -226,6 +227,7 @@ async function registerBeforeFlush(
 			...(options.baseUrl === undefined ? {} : { baseUrl: options.baseUrl }),
 			...(options.env === undefined ? {} : { env: options.env }),
 			...(options.fetch === undefined ? {} : { fetch: options.fetch }),
+			...(options.signal === undefined ? {} : { signal: options.signal }),
 		};
 		await registerMachine(options.identity, registerOptions);
 		if (options.machineRegistrationCache !== undefined) {
@@ -251,6 +253,7 @@ async function flushRow(
 			row.payload.toString("utf8"),
 			options.identity.machine_secret,
 			options.fetch,
+			options.signal,
 		);
 		if (response.status === 401 || response.status === 403) {
 			if (options.machineRegistrationCache !== undefined) {

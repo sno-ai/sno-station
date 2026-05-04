@@ -20,7 +20,6 @@ const nonEmptyPayload = {
 	snapshot_reason: "session_end",
 	total_entries: 2,
 	total_bytes: 256,
-	total_tokens: 64,
 	oldest_entry_ts_ms: 1730000000000,
 	newest_entry_ts_ms: 1730000001000,
 };
@@ -31,13 +30,18 @@ describe("memory.snapshot schema", () => {
 		assert.deepEqual(parsed.payload, nonEmptyPayload);
 	});
 
+	it("accepts legacy total_tokens during rolling upgrades", () => {
+		const payload = { ...nonEmptyPayload, total_tokens: 42 };
+		const parsed = parseEventInput(snapshot(payload));
+		assert.deepEqual(parsed.payload, payload);
+	});
+
 	it("accepts empty-store snapshots only when timestamps are omitted", () => {
 		const payload = {
 			session_uuid: uuidV7,
 			snapshot_reason: "startup",
 			total_entries: 0,
 			total_bytes: 0,
-			total_tokens: 0,
 		};
 		const parsed = parseEventInput(snapshot(payload));
 		assert.deepEqual(parsed.payload, payload);
@@ -73,7 +77,6 @@ describe("memory.snapshot schema", () => {
 						snapshot_reason: "startup",
 						total_entries: 0,
 						total_bytes: 0,
-						total_tokens: 0,
 						oldest_entry_ts_ms: 1730000000000,
 						newest_entry_ts_ms: 1730000001000,
 					}),
@@ -94,7 +97,7 @@ describe("memory.snapshot schema", () => {
 			() => parseEventInput(snapshot({ ...nonEmptyPayload, oldest_entry_ts_ms: null })),
 			InvalidEventPayloadError,
 		);
-		for (const field of ["total_entries", "total_bytes", "total_tokens"]) {
+		for (const field of ["total_entries", "total_bytes"]) {
 			assert.throws(
 				() => parseEventInput(snapshot({ ...nonEmptyPayload, [field]: -1 })),
 				InvalidEventPayloadError,

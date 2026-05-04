@@ -128,15 +128,22 @@ export class SnoObserveRuntime {
 		});
 	}
 
-	async flush(force = true): Promise<FlushResult> {
+	async flush(
+		options: boolean | { force?: boolean; signal?: AbortSignal } = true,
+	): Promise<FlushResult> {
+		const force = typeof options === "boolean" ? options : (options.force ?? true);
+		const signal = typeof options === "boolean" ? undefined : options.signal;
 		const identity = bootstrapIdentity(this.env());
-		const options = {
+		const flushOptions = {
 			identity,
 			env: this.env(),
 			force,
+			...(signal === undefined ? {} : { signal }),
 		};
 		return this.getFlushEngine().flush(
-			this.options.fetch === undefined ? options : { ...options, fetch: this.options.fetch },
+			this.options.fetch === undefined
+				? flushOptions
+				: { ...flushOptions, fetch: this.options.fetch },
 		);
 	}
 
