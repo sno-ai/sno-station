@@ -24,12 +24,12 @@ function createApi(runtime: SnoObserveRuntime) {
 		return runtime.emitParsed(parsed);
 	}
 
-	function flush(options: { force?: boolean } = {}): Promise<{
+	function flush(options: { force?: boolean; signal?: AbortSignal } = {}): Promise<{
 		shipped: number;
 		terminal: number;
 		retryable: number;
 	}> {
-		return runtime.flush(options.force ?? true);
+		return runtime.flush(options);
 	}
 
 	const consent = {
