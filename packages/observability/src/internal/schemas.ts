@@ -1,3 +1,4 @@
+import { isLowercaseCanonicalUUIDv7 } from "@snoai/common-core";
 import { z } from "zod";
 import {
 	InvalidAgentIdError,
@@ -25,10 +26,7 @@ export const eventLaneSchema = z.enum(EVENT_LANES);
 export const eventTypeSchema = z.enum(EVENT_TYPES);
 export const uuidV7Schema = z
 	.string()
-	.regex(
-		/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu,
-		"must be a UUID-v7 string",
-	);
+	.refine(isLowercaseCanonicalUUIDv7, "must be a lowercase canonical UUID-v7 string");
 
 const jsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
 	z.union([
@@ -53,7 +51,7 @@ const payloadSchemas: Record<EventType, z.ZodType<unknown>> = {
 	"agent.identify": z
 		.object({
 			agent_id: agentIdSchema,
-			machine_id: z.string().min(1),
+			machine_id: uuidV7Schema,
 			agent_version: z.string().min(1).optional(),
 			sdk_version: z.string().min(1),
 		})
@@ -202,7 +200,7 @@ const payloadSchemas: Record<EventType, z.ZodType<unknown>> = {
 
 const eventInputSchema = z
 	.object({
-		event_id: z.string().min(1).optional(),
+		event_id: uuidV7Schema.optional(),
 		event_type: z.string().min(1),
 		lane: z.string().min(1),
 		agent_id: z.string().min(1),
@@ -225,6 +223,12 @@ export function parseEventInput(input: unknown): ParsedEvent {
 	const base = eventInputSchema.safeParse(input);
 	if (!base.success) {
 		throw new InvalidEventPayloadError(base.error.issues.map((issue) => issue.message).join("; "));
+	}
+	const { session_uuid: scopeSessionUuid } = base.data.scope ?? {};
+	if (scopeSessionUuid !== undefined && !uuidV7Schema.safeParse(scopeSessionUuid).success) {
+		throw new InvalidEventPayloadError(
+			"scope.session_uuid: must be a lowercase canonical UUID-v7 string",
+		);
 	}
 
 	const agentId = agentIdSchema.safeParse(base.data.agent_id);

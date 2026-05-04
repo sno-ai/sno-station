@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { isCuid2, isLowercaseCanonicalUUIDv7 } from "@snoai/common-core";
 import { SnoObserveError } from "./errors.js";
 import { fetchJson, normalizeBaseUrl } from "./http.js";
 import type { PathEnv } from "./paths.js";
@@ -73,9 +74,9 @@ function isRegisterMachineResponse(value: unknown): value is RegisterMachineResp
 	const candidate = value as RegisterMachineResponse;
 	return (
 		typeof candidate.user_cuid === "string" &&
-		candidate.user_cuid.length > 0 &&
+		isCuid2(candidate.user_cuid) &&
 		typeof candidate.machine_uuid === "string" &&
-		candidate.machine_uuid.length > 0 &&
+		isLowercaseCanonicalUUIDv7(candidate.machine_uuid) &&
 		typeof candidate.claimed === "boolean"
 	);
 }
