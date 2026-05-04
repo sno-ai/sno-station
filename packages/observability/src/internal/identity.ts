@@ -1,8 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { chmodSync, statSync } from "node:fs";
 import { dirname } from "node:path";
-import { createId } from "@paralleldrive/cuid2";
-import { v7 as uuidv7, validate as validateUuid } from "uuid";
+import { createCuid2, createUUIDv7, isCuid2, isLowercaseCanonicalUUIDv7 } from "@snoai/common-core";
 import { atomicWriteJson, ensureDir, readJsonFile, withFileLock } from "./fs-utils.js";
 import { logger } from "./log.js";
 import { getIdentityLockPath, getIdentityPath, type PathEnv } from "./paths.js";
@@ -56,6 +55,25 @@ export function updateIdentity(
 	});
 }
 
+export function updateValidIdentity(
+	mutate: (identity: Identity) => Identity,
+	env: PathEnv = process.env,
+): Identity | null {
+	const identityPath = getIdentityPath(env);
+	const lockPath = getIdentityLockPath(env);
+	ensureIdentityDir(identityPath);
+	return withFileLock(lockPath, () => {
+		const existing = readJsonFile<unknown>(identityPath);
+		const identity = normalizeIdentity(existing);
+		if (identity === null) {
+			return null;
+		}
+		const updated = mutate(identity);
+		atomicWriteJson(identityPath, updated, 0o600);
+		return updated;
+	});
+}
+
 export function isValidIdentity(value: unknown): value is Identity {
 	if (typeof value !== "object" || value === null) {
 		return false;
@@ -64,9 +82,9 @@ export function isValidIdentity(value: unknown): value is Identity {
 	return (
 		record.version === 1 &&
 		typeof record.user_cuid === "string" &&
-		record.user_cuid.length > 0 &&
+		isCuid2(record.user_cuid) &&
 		typeof record.machine_uuid === "string" &&
-		validateUuid(record.machine_uuid) &&
+		isLowercaseCanonicalUUIDv7(record.machine_uuid) &&
 		typeof record.machine_secret === "string" &&
 		MACHINE_SECRET_PATTERN.test(record.machine_secret) &&
 		typeof record.created_at === "string" &&
@@ -89,8 +107,8 @@ function normalizeIdentity(value: unknown): Identity | null {
 function createIdentity(): Identity {
 	return {
 		version: 1,
-		user_cuid: createId(),
-		machine_uuid: uuidv7(),
+		user_cuid: createCuid2(),
+		machine_uuid: createUUIDv7(),
 		machine_secret: generateMachineSecret(),
 		created_at: new Date().toISOString(),
 	};

@@ -1,4 +1,4 @@
-import { v7 as uuidv7 } from "uuid";
+import { createUUIDv7 } from "@snoai/common-core";
 import { verifyAuditEvent } from "./audit-verify.js";
 import { BufferStore } from "./buffer-store.js";
 import { ConsentStore } from "./consent.js";
@@ -59,7 +59,7 @@ export class SnoObserveRuntime {
 	constructor(private readonly options: RuntimeOptions = {}) {}
 
 	emitParsed(parsed: ParsedEvent): Promise<EmitResult> {
-		const eventId = parsed.eventId ?? uuidv7();
+		const eventId = parsed.eventId ?? createUUIDv7();
 		if (parsed.eventType === "tool.call") {
 			const payload = parsed.payload as JsonObject & { tool_name?: unknown };
 			const toolName = String(payload.tool_name);
@@ -81,7 +81,7 @@ export class SnoObserveRuntime {
 				this.appendPrepared({
 					identity,
 					agentId: parsed.agentId,
-					eventId: uuidv7(),
+					eventId: createUUIDv7(),
 					eventType: "agent.identify",
 					lane: parsed.lane,
 					tsEdgeMs: Date.now(),
@@ -237,7 +237,7 @@ export class SnoObserveRuntime {
 		this.appendPrepared({
 			identity,
 			agentId,
-			eventId: uuidv7(),
+			eventId: createUUIDv7(),
 			eventType: "agent.identify",
 			lane: "memory",
 			tsEdgeMs: Date.now(),
@@ -265,7 +265,7 @@ export class SnoObserveRuntime {
 		this.appendPrepared({
 			identity,
 			agentId,
-			eventId: uuidv7(),
+			eventId: createUUIDv7(),
 			eventType: "consent.change",
 			lane: "memory",
 			tsEdgeMs: Date.now(),

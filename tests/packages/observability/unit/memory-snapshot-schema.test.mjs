@@ -4,6 +4,7 @@ import { InvalidEventPayloadError } from "../../../../packages/sno-observe/dist/
 import { parseEventInput } from "../../../../packages/sno-observe/dist/internal/schemas.js";
 
 const uuidV7 = "018f7d0c-fd8b-7ccf-9b9b-0a2ea938ad0d";
+const uppercaseUuidV7 = uuidV7.toUpperCase();
 
 function snapshot(payload) {
 	return {
@@ -52,9 +53,13 @@ describe("memory.snapshot schema", () => {
 		assert.equal(parsed.payload["snapshot_reason"], "periodic");
 	});
 
-	it("rejects non UUID-v7 session IDs", () => {
+	it("rejects non-lowercase-canonical UUID-v7 session IDs", () => {
 		assert.throws(
 			() => parseEventInput(snapshot({ ...nonEmptyPayload, session_uuid: "session-1" })),
+			InvalidEventPayloadError,
+		);
+		assert.throws(
+			() => parseEventInput(snapshot({ ...nonEmptyPayload, session_uuid: uppercaseUuidV7 })),
 			InvalidEventPayloadError,
 		);
 	});
