@@ -83,6 +83,7 @@ const payloadSchemas: Record<EventType, z.ZodType<unknown>> = {
 			snapshot_reason: z.enum(["session_end", "startup", "periodic"]),
 			total_entries: z.number().int().nonnegative(),
 			total_bytes: z.number().int().nonnegative(),
+			total_tokens: z.number().int().nonnegative().optional(),
 			oldest_entry_ts_ms: z.number().int().nonnegative().optional(),
 			newest_entry_ts_ms: z.number().int().nonnegative().optional(),
 		})

@@ -30,6 +30,12 @@ describe("memory.snapshot schema", () => {
 		assert.deepEqual(parsed.payload, nonEmptyPayload);
 	});
 
+	it("accepts legacy total_tokens during rolling upgrades", () => {
+		const payload = { ...nonEmptyPayload, total_tokens: 42 };
+		const parsed = parseEventInput(snapshot(payload));
+		assert.deepEqual(parsed.payload, payload);
+	});
+
 	it("accepts empty-store snapshots only when timestamps are omitted", () => {
 		const payload = {
 			session_uuid: uuidV7,
