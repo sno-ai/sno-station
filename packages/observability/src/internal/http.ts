@@ -8,6 +8,8 @@ export interface EventPostResult {
 
 const LOCAL_HOSTNAMES = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
 
+const DEFAULT_REQUEST_TIMEOUT_MS = 10_000;
+
 // Reject non-HTTPS base URLs (except localhost for tests/dev). Machine bearer
 // credentials and event payloads MUST NOT be sent over plaintext HTTP.
 export function normalizeBaseUrl(input: string): string {
@@ -48,6 +50,7 @@ export async function postEvent(
 		method: "POST",
 		headers,
 		body,
+		signal: AbortSignal.timeout(DEFAULT_REQUEST_TIMEOUT_MS),
 	});
 	// Body-read failures after the response resolved (truncated stream, abort
 	// during body, decoder error) MUST NOT propagate as transport errors —
@@ -69,7 +72,11 @@ export async function fetchJson<T>(
 	init: RequestInit,
 	fetchImpl: typeof fetch = fetch,
 ): Promise<{ status: number; value: T | null; body: string; headers: Headers }> {
-	const response = await fetchImpl(url, init);
+	const initWithTimeout: RequestInit =
+		init.signal === undefined || init.signal === null
+			? { ...init, signal: AbortSignal.timeout(DEFAULT_REQUEST_TIMEOUT_MS) }
+			: init;
+	const response = await fetchImpl(url, initWithTimeout);
 	const body = await response.text();
 	if (body.length === 0) {
 		return { status: response.status, value: null, body, headers: response.headers };
