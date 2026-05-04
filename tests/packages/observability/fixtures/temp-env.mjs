@@ -107,7 +107,6 @@ export const validPayloads = {
 		snapshot_reason: "session_end",
 		total_entries: 2,
 		total_bytes: 256,
-		total_tokens: 64,
 		oldest_entry_ts_ms: 1730000000000,
 		newest_entry_ts_ms: 1730000001000,
 	},
