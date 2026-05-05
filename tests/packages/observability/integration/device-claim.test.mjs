@@ -1,9 +1,12 @@
 import assert from "node:assert/strict";
 import { readFileSync, writeFileSync } from "node:fs";
 import { describe, it } from "node:test";
+import { createCuid2 } from "../../../../packages/common-core/dist/index.js";
 import { claimMachine } from "../../../../packages/sno-observe/dist/internal/device-claim.js";
 import { bootstrapIdentity } from "../../../../packages/sno-observe/dist/internal/identity.js";
 import { cleanupTempSnoEnv, createTempSnoEnv } from "../fixtures/temp-env.mjs";
+
+const accountCuid = createCuid2();
 
 describe("device claim", () => {
 	it("throws if identity changes before the claim can be persisted", async () => {
@@ -49,7 +52,7 @@ describe("device claim", () => {
 						env: temp.env,
 						fetch: createClaimFetch({
 							onToken(_body, init) {
-								sawTokenSignal = init?.signal === controller.signal;
+								sawTokenSignal = init?.signal instanceof AbortSignal;
 								setTimeout(() => controller.abort(), 0);
 								return { status: 400, body: { error: "authorization_pending" } };
 							},
@@ -88,17 +91,95 @@ describe("device claim", () => {
 				timeoutMs: 5000,
 			});
 
-			assert.equal(result.userAccountId, "acct_mock_123");
+			assert.equal(result.userAccountId, accountCuid);
 			assert.equal(tokenCalls, 2);
 			const saved = JSON.parse(readFileSync(temp.env.SNO_IDENTITY_PATH, "utf8"));
-			assert.equal(saved.user_account_id, "acct_mock_123");
+			assert.equal(saved.user_account_id, accountCuid);
+		} finally {
+			cleanupTempSnoEnv(temp);
+		}
+	});
+
+	it("accepts device authorization responses without optional fields", async () => {
+		const temp = createTempSnoEnv("sno-observe-claim-minimal-code-");
+		const identity = bootstrapIdentity(temp.env);
+		let claimCode;
+		try {
+			const result = await claimMachine(identity, {
+				env: temp.env,
+				fetch: createClaimFetch({
+					deviceCodeBody: {
+						verification_uri_complete: undefined,
+						interval: undefined,
+					},
+				}),
+				onCode(code) {
+					claimCode = code;
+				},
+				timeoutMs: 5000,
+			});
+
+			assert.equal(result.userAccountId, accountCuid);
+			assert.equal(claimCode.verificationUriComplete, undefined);
+			assert.equal(claimCode.interval, 5);
+		} finally {
+			cleanupTempSnoEnv(temp);
+		}
+	});
+
+	it("rejects an unusable device authorization URL", async () => {
+		const temp = createTempSnoEnv("sno-observe-claim-bad-url-");
+		const identity = bootstrapIdentity(temp.env);
+		try {
+			await assert.rejects(
+				() =>
+					claimMachine(identity, {
+						env: temp.env,
+						fetch: createClaimFetch({
+							deviceCodeBody: {
+								verification_uri: "http://www.sno.ai/cli/connect",
+							},
+						}),
+					}),
+				(error) => {
+					assert.equal(error.code, "claim_failed");
+					assert.match(error.message, /device code request failed/u);
+					return true;
+				},
+			);
+		} finally {
+			cleanupTempSnoEnv(temp);
+		}
+	});
+
+	it("rejects non-positive device authorization timing", async () => {
+		const temp = createTempSnoEnv("sno-observe-claim-bad-timing-");
+		const identity = bootstrapIdentity(temp.env);
+		try {
+			await assert.rejects(
+				() =>
+					claimMachine(identity, {
+						env: temp.env,
+						fetch: createClaimFetch({
+							deviceCodeBody: {
+								expires_in: 0,
+								interval: 0,
+							},
+						}),
+					}),
+				(error) => {
+					assert.equal(error.code, "claim_failed");
+					assert.match(error.message, /device code request failed/u);
+					return true;
+				},
+			);
 		} finally {
 			cleanupTempSnoEnv(temp);
 		}
 	});
 });
 
-function createClaimFetch({ onToken } = {}) {
+function createClaimFetch({ deviceCodeBody, onToken } = {}) {
 	return async (url, init) => {
 		const path = new URL(String(url)).pathname;
 		const body = typeof init?.body === "string" ? JSON.parse(init.body) : {};
@@ -117,10 +198,11 @@ function createClaimFetch({ onToken } = {}) {
 				{
 					device_code: "dev_code",
 					user_code: "SNO-CODE",
-						verification_uri: "https://www.sno.ai/cli/connect",
-						verification_uri_complete: "https://www.sno.ai/cli/connect?code=SNO-CODE",
+					verification_uri: "https://www.sno.ai/cli/connect",
+					verification_uri_complete: "https://www.sno.ai/cli/connect?code=SNO-CODE",
 					expires_in: 1800,
 					interval: 1,
+					...deviceCodeBody,
 				},
 				200,
 			);
@@ -134,7 +216,7 @@ function createClaimFetch({ onToken } = {}) {
 }
 
 function claimedBody() {
-	return { user_account_id: "acct_mock_123", status: "claimed" };
+	return { user_account_id: accountCuid };
 }
 
 function jsonResponse(body, status) {

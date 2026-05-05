@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
@@ -99,6 +99,31 @@ describe("anonymous machine registration - fixture paths", () => {
 		}
 	});
 
+	it("rejects a register-machine response without claimed state", async () => {
+		const t = tempEnv();
+		try {
+			const id = bootstrapIdentity(t.env);
+			await assert.rejects(
+				() =>
+					registerMachine(id, {
+						baseUrl: "https://sno.test",
+						env: t.env,
+						fetch: async () =>
+							jsonResponse({
+								user_cuid: id.user_cuid,
+								machine_uuid: id.machine_uuid,
+							}),
+					}),
+				(error) =>
+					error instanceof Error &&
+					"code" in error &&
+					error.code === "machine_registration_failed",
+			);
+		} finally {
+			rmSync(t.dir, { recursive: true, force: true });
+		}
+	});
+
 	it("registration conflict surfaces the server error code", async () => {
 		const t = tempEnv();
 		try {
@@ -146,6 +171,57 @@ describe("anonymous machine registration - fixture paths", () => {
 					"code" in error &&
 					error.code === "machine_registration_identity_mismatch" &&
 					/different identity/u.test(error.message),
+			);
+		} finally {
+			rmSync(t.dir, { recursive: true, force: true });
+		}
+	});
+
+	it("persists a valid account id when register-machine returns one", async () => {
+		const t = tempEnv();
+		try {
+			const id = bootstrapIdentity(t.env);
+			const accountCuid = createCuid2();
+			const result = await registerMachine(id, {
+				baseUrl: "https://sno.test",
+				env: t.env,
+				fetch: async () =>
+					jsonResponse({
+						user_cuid: id.user_cuid,
+						machine_uuid: id.machine_uuid,
+						claimed: true,
+						user_account_id: accountCuid,
+					}),
+			});
+
+			assert.equal(result.userAccountId, accountCuid);
+			const saved = JSON.parse(readFileSync(t.env.SNO_IDENTITY_PATH, "utf8"));
+			assert.equal(saved.user_account_id, accountCuid);
+		} finally {
+			rmSync(t.dir, { recursive: true, force: true });
+		}
+	});
+
+	it("rejects a claimed register-machine response without account id", async () => {
+		const t = tempEnv();
+		try {
+			const id = bootstrapIdentity(t.env);
+			await assert.rejects(
+				() =>
+					registerMachine(id, {
+						baseUrl: "https://sno.test",
+						env: t.env,
+						fetch: async () =>
+							jsonResponse({
+								user_cuid: id.user_cuid,
+								machine_uuid: id.machine_uuid,
+								claimed: true,
+							}),
+					}),
+				(error) =>
+					error instanceof Error &&
+					"code" in error &&
+					error.code === "machine_registration_missing_user_account_id",
 			);
 		} finally {
 			rmSync(t.dir, { recursive: true, force: true });
