@@ -1,4 +1,4 @@
-import { createUUIDv7 } from "@snoai/common-core";
+import { createUUIDv7, isCuid2 } from "@snoai/common-core";
 import { verifyAuditEvent } from "./audit-verify.js";
 import { BufferStore } from "./buffer-store.js";
 import { ConsentStore } from "./consent.js";
@@ -381,22 +381,16 @@ export class SnoObserveRuntime {
 		const result: ShutdownResult = { flushedCount: 0, failedCount: 0 };
 		if (this.store !== null) {
 			try {
-				const flushResult = await this.flush(true);
-				result.flushedCount += flushResult.shipped;
-				result.failedCount += flushResult.retryable + flushResult.terminal;
-			} catch (error) {
-				result.failedCount += this.store.countPending();
-				result.lastError = errorMessage(error);
-				logger.error("sno observe shutdown flush failed", { error: result.lastError });
-			}
-			// Drain any background flush (e.g. fire-and-forget from emitParsed) before closing the DB.
-			const drainResult = await this.flushEngine?.drain();
-			if (drainResult !== undefined) {
+				const drainResult = await this.getFlushEngine().drain();
 				result.flushedCount += drainResult.flushedCount;
 				result.failedCount += drainResult.failedCount;
 				if (drainResult.lastError !== undefined) {
 					result.lastError = drainResult.lastError;
 				}
+			} catch (error) {
+				result.failedCount += this.store.countPending();
+				result.lastError = errorMessage(error);
+				logger.error("sno observe shutdown flush failed", { error: result.lastError });
 			}
 			this.flushEngine?.dispose();
 		}
@@ -425,8 +419,7 @@ export class SnoObserveRuntime {
 		const projectId = detectProjectId(this.options.cwd ?? process.cwd(), this.env());
 		const callerScope = stripCallerAccountScope(input.scope);
 		const accountScope =
-			typeof input.identity.user_account_id === "string" &&
-			input.identity.user_account_id.length > 0
+			typeof input.identity.user_account_id === "string" && isCuid2(input.identity.user_account_id)
 				? { user_account_id: input.identity.user_account_id }
 				: {};
 		const scope: EventScope = {
@@ -490,6 +483,7 @@ export class SnoObserveRuntime {
 				() => bootstrapIdentity(this.env()),
 				() => this.baseUrl(),
 				() => this.env(),
+				() => this.options.fetch,
 			);
 		}
 		return this.flushEngine;

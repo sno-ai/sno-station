@@ -1,8 +1,8 @@
 import { createUUIDv7 } from "@snoai/common-core";
 import { type BufferStore, decodeEnvelope, type PendingRow } from "./buffer-store.js";
+import { type MachineRegistrationCache, registerBeforeFlush } from "./flush-registration.js";
 import { type EventPostResult, postEvent } from "./http.js";
 import { logger } from "./log.js";
-import { registerMachine } from "./machine-registration.js";
 import type { PathEnv } from "./paths.js";
 import { type Identity, SDK_VERSION } from "./types.js";
 
@@ -33,10 +33,6 @@ export interface DrainResult {
 	lastError?: string;
 }
 
-export interface MachineRegistrationCache {
-	registered: boolean;
-}
-
 export class FlushEngine {
 	private state: "idle" | "scheduled" | "flushing" = "idle";
 	private timer: ReturnType<typeof setTimeout> | null = null;
@@ -53,6 +49,7 @@ export class FlushEngine {
 		private readonly identityProvider: () => Identity,
 		private readonly baseUrlProvider: () => string,
 		private readonly envProvider: () => PathEnv = () => process.env,
+		private readonly fetchProvider: () => typeof fetch | undefined = () => undefined,
 	) {}
 
 	schedule(delayMs: number): void {
@@ -72,7 +69,7 @@ export class FlushEngine {
 			if (this.disposed) {
 				return;
 			}
-			void this.flush({ identity: this.identityProvider(), env: this.envProvider() });
+			void this.flush(this.flushOptions(false));
 		}, delayMs);
 		this.timer.unref?.();
 		this.installBeforeExit();
@@ -132,20 +129,26 @@ export class FlushEngine {
 
 	async drain(): Promise<DrainResult> {
 		let flushedCount = 0;
-		let failedCount = 0;
+		let terminalCount = 0;
 		let lastError: string | undefined;
-		// Wait for any in-flight flush (and any chained flushes triggered while we waited).
-		while (this.activeFlush !== null) {
+		while (true) {
 			try {
-				const result = await this.activeFlush;
-				flushedCount += result.shipped;
-				failedCount += result.retryable + result.terminal;
+				const step = await this.drainStep();
+				if (step === null) {
+					break;
+				}
+				flushedCount += step.result.shipped;
+				terminalCount += step.result.terminal;
+				if (step.stop) {
+					break;
+				}
 			} catch (error) {
-				failedCount += this.store.countPending();
 				lastError = error instanceof Error ? error.message : String(error);
 				logger.error("sno observe drain failed", { error: lastError });
+				break;
 			}
 		}
+		const failedCount = terminalCount + this.store.countPending();
 		return { flushedCount, failedCount, ...(lastError === undefined ? {} : { lastError }) };
 	}
 
@@ -169,17 +172,50 @@ export class FlushEngine {
 		}
 		this.beforeExitInstalled = true;
 		this.beforeExitHandler = () => {
+			this.beforeExitInstalled = false;
+			this.beforeExitHandler = null;
 			if (this.disposed) {
 				return;
 			}
-			void this.flush({
-				identity: this.identityProvider(),
-				env: this.envProvider(),
-				force: true,
-			});
+			void this.flush(this.flushOptions(true));
 		};
 		process.once("beforeExit", this.beforeExitHandler);
 	}
+
+	private flushOptions(force: boolean): Omit<FlushOptions, "baseUrl"> {
+		const fetchImpl = this.fetchProvider();
+		return {
+			identity: this.identityProvider(),
+			env: this.envProvider(),
+			force,
+			...(fetchImpl === undefined ? {} : { fetch: fetchImpl }),
+		};
+	}
+
+	private async drainStep(): Promise<{ result: FlushResult; stop: boolean } | null> {
+		const activeFlush = this.activeFlush;
+		if (activeFlush !== null) {
+			return { result: await activeFlush, stop: false };
+		}
+		const pendingBefore = this.store.countPending();
+		if (pendingBefore === 0) {
+			return null;
+		}
+		const result = await this.flush(this.flushOptions(true));
+		const pendingAfter = this.store.countPending();
+		return { result, stop: shouldStopDrain(result, pendingBefore, pendingAfter) };
+	}
+}
+
+function shouldStopDrain(
+	result: FlushResult,
+	pendingBefore: number,
+	pendingAfter: number,
+): boolean {
+	return (
+		result.retryable > 0 ||
+		(pendingAfter >= pendingBefore && result.shipped === 0 && result.terminal === 0)
+	);
 }
 
 export async function flushPending(
@@ -191,7 +227,7 @@ export async function flushPending(
 		store.pruneRetention();
 		return { shipped: 0, terminal: 0, retryable: 0 };
 	}
-	const registrationFailure = await registerBeforeFlush(options, rows.length);
+	const registrationFailure = await registerBeforeFlush(store, rows, options);
 	if (registrationFailure !== null) {
 		store.pruneRetention();
 		return registrationFailure;
@@ -213,33 +249,6 @@ export async function flushPending(
 	}
 	store.pruneRetention();
 	return withOptionalRetryAfter({ shipped, terminal, retryable }, retryAfterMs);
-}
-
-async function registerBeforeFlush(
-	options: FlushOptions,
-	pendingCount: number,
-): Promise<FlushResult | null> {
-	if (options.machineRegistrationCache?.registered === true) {
-		return null;
-	}
-	try {
-		const registerOptions = {
-			...(options.baseUrl === undefined ? {} : { baseUrl: options.baseUrl }),
-			...(options.env === undefined ? {} : { env: options.env }),
-			...(options.fetch === undefined ? {} : { fetch: options.fetch }),
-			...(options.signal === undefined ? {} : { signal: options.signal }),
-		};
-		await registerMachine(options.identity, registerOptions);
-		if (options.machineRegistrationCache !== undefined) {
-			options.machineRegistrationCache.registered = true;
-		}
-		return null;
-	} catch (error) {
-		logger.warn("sno observe machine registration failed; will retry", {
-			error: error instanceof Error ? error.message : String(error),
-		});
-		return { shipped: 0, terminal: 0, retryable: pendingCount, retryAfterMs: 5_000 };
-	}
 }
 
 async function flushRow(
@@ -324,9 +333,14 @@ function handlePostResult(
 
 function routeResponse(response: EventPostResult): ResponseRoute {
 	switch (response.status) {
-		case 200:
 		case 202:
 			return { kind: "shipped" };
+		case 200:
+			return {
+				kind: "retry",
+				message: "sno observe returned unexpected event-ingest status; will retry",
+				retryAfterMs: response.retryAfterMs ?? 5_000,
+			};
 		case 400:
 			return { kind: "invalid" };
 		case 409:
@@ -335,11 +349,7 @@ function routeResponse(response: EventPostResult): ResponseRoute {
 		case 401:
 			return { kind: "retry", message: "sno observe unauthorized; will retry" };
 		case 403:
-			return {
-				kind: "retry",
-				message: "sno observe machine bearer required or invalid",
-				error: true,
-			};
+			return { kind: "invalid" };
 		case 429:
 			return retryRoute(response.retryAfterMs ?? 3_600_000);
 		case 503:
@@ -347,7 +357,7 @@ function routeResponse(response: EventPostResult): ResponseRoute {
 		default:
 			return response.status >= 500
 				? retryRoute(response.retryAfterMs ?? undefined)
-				: { kind: "retry", message: "sno observe transport will retry" };
+				: { kind: "invalid" };
 	}
 }
 
@@ -360,6 +370,9 @@ function routeConflict(response: EventPostResult): ResponseRoute {
 		return retryRoute(response.retryAfterMs ?? 5_000);
 	}
 	if (code !== undefined && CHAIN_REJECTION_CODES.has(code)) {
+		return { kind: "chain" };
+	}
+	if (response.status === 422) {
 		return { kind: "chain" };
 	}
 	return {
@@ -390,14 +403,10 @@ function responseErrorCode(body: string): string | undefined {
 }
 
 function retryRoute(retryAfterMs?: number): ResponseRoute {
-	if (retryAfterMs === undefined) {
-		return { kind: "retry", message: "sno observe transport will retry" };
-	}
-	return {
-		kind: "retry",
-		message: "sno observe transport will retry",
+	return withRetryAfter(
+		{ kind: "retry", message: "sno observe transport will retry" },
 		retryAfterMs,
-	};
+	);
 }
 
 function logChainRejection(row: PendingRow, status: number): void {
@@ -448,21 +457,19 @@ function reseedChain(store: BufferStore, row: PendingRow): void {
 }
 
 function minDefined(left: number | undefined, right: number | undefined): number | undefined {
-	if (left === undefined) {
-		return right;
-	}
-	if (right === undefined) {
-		return left;
-	}
-	return Math.min(left, right);
+	return left === undefined ? right : right === undefined ? left : Math.min(left, right);
 }
 
 function withOptionalRetryAfter(
 	result: FlushResult,
 	retryAfterMs: number | undefined,
 ): FlushResult {
-	if (retryAfterMs === undefined) {
-		return result;
-	}
-	return { ...result, retryAfterMs };
+	return retryAfterMs === undefined ? result : { ...result, retryAfterMs };
+}
+
+function withRetryAfter(
+	result: Extract<ResponseRoute, { kind: "retry" }>,
+	retryAfterMs: number | undefined,
+): Extract<ResponseRoute, { kind: "retry" }> {
+	return retryAfterMs === undefined ? result : { ...result, retryAfterMs };
 }
