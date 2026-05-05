@@ -254,6 +254,28 @@ function registerFreshDbSync(
 	return dbId;
 }
 
+/**
+ * Recovery-only: open the DB with the DEK and return the canary row (or
+ * undefined if the canary table is absent) WITHOUT consulting the manifest.
+ * Internal use by `nodix lock --rebuild-manifest`. The returned db handle is
+ * already closed.
+ */
+export function _readCanaryForRecovery(
+	path: string,
+	dek: Dek,
+): { sentinel: string; db_id: string } | undefined {
+	const pre = preflight(path, dek, true);
+	try {
+		return pre.canaryRow;
+	} finally {
+		try {
+			pre.db.close();
+		} catch {
+			// ignore
+		}
+	}
+}
+
 export function openEncryptedDb(path: string, dek: Dek): Db {
 	const manifest = readManifestIfPresent() ?? emptyManifest();
 	const pre = preflight(path, dek, false);
