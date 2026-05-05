@@ -369,6 +369,56 @@ describe("flush 3-state machine", () => {
 		}
 	});
 
+	it("shutdown stops after awaiting an active retryable flush", async () => {
+		const t = tempEnv();
+		let eventCalls = 0;
+		let releaseFirstEvent;
+		const firstEventResponse = new Promise((resolve) => {
+			releaseFirstEvent = () => {
+				resolve(
+					new Response(JSON.stringify({ error: "retry" }), {
+						status: 503,
+						headers: { "Content-Type": "application/json", "Retry-After": "5" },
+					}),
+				);
+			};
+		});
+		const runtime = new SnoObserveRuntime({
+			env: t.env,
+			cwd: t.dir,
+			fetch: async (url, init) => {
+				if (String(url).endsWith("/api/v1/identity/register-machine")) {
+					return registerMachineResponse(init);
+				}
+				eventCalls += 1;
+				if (eventCalls === 1) {
+					return firstEventResponse;
+				}
+				return new Response(JSON.stringify({ receipt_id: "unexpected_retry" }), {
+					status: 202,
+					headers: { "Content-Type": "application/json" },
+				});
+			},
+		});
+		try {
+			await runtime.emitParsed(memoryEvent(100));
+			const activeFlush = runtime.flush(false);
+			await waitImmediateFlushDone(() => eventCalls === 1);
+
+			const shutdown = runtime.shutdown();
+			releaseFirstEvent();
+			const result = await shutdown;
+			await activeFlush;
+
+			assert.equal(eventCalls, 1);
+			assert.equal(result.flushedCount, 0);
+			assert.equal(result.failedCount > 0, true);
+		} finally {
+			await runtime.shutdown().catch(() => {});
+			rmSync(t.dir, { recursive: true, force: true });
+		}
+	});
+
 	it("shutdown drains scheduled pending rows before closing the buffer", async () => {
 		const t = tempEnv();
 		const runtime = new SnoObserveRuntime({
