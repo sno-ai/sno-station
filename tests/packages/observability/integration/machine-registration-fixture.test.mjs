@@ -202,27 +202,25 @@ describe("anonymous machine registration - fixture paths", () => {
 		}
 	});
 
-	it("rejects a claimed register-machine response without account id", async () => {
+	it("accepts a claimed register-machine response without account id", async () => {
 		const t = tempEnv();
 		try {
 			const id = bootstrapIdentity(t.env);
-			await assert.rejects(
-				() =>
-					registerMachine(id, {
-						baseUrl: "https://sno.test",
-						env: t.env,
-						fetch: async () =>
-							jsonResponse({
-								user_cuid: id.user_cuid,
-								machine_uuid: id.machine_uuid,
-								claimed: true,
-							}),
+			const result = await registerMachine(id, {
+				baseUrl: "https://sno.test",
+				env: t.env,
+				fetch: async () =>
+					jsonResponse({
+						user_cuid: id.user_cuid,
+						machine_uuid: id.machine_uuid,
+						claimed: true,
 					}),
-				(error) =>
-					error instanceof Error &&
-					"code" in error &&
-					error.code === "machine_registration_missing_user_account_id",
-			);
+			});
+
+			assert.equal(result.claimed, true);
+			assert.equal(result.userAccountId, undefined);
+			const saved = JSON.parse(readFileSync(t.env.SNO_IDENTITY_PATH, "utf8"));
+			assert.equal(saved.user_account_id, undefined);
 		} finally {
 			rmSync(t.dir, { recursive: true, force: true });
 		}
