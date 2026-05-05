@@ -23,6 +23,7 @@ import {
 	NODIX_TAG_LEN,
 	NODIX_VERSION_V1,
 } from "./export.js";
+import { readManifestIfPresent } from "./manifest.js";
 import { dekFingerprint4 } from "./wrap.js";
 
 interface ParsedHeader {
@@ -55,9 +56,15 @@ function parseStructure(bytes: Buffer): ParsedHeader {
 	}
 	const header = bytes.subarray(0, NODIX_HEADER_LEN);
 	const sourceFingerprint = bytes.subarray(8, NODIX_HEADER_LEN);
-	const nonce = bytes.subarray(NODIX_HEADER_LEN, NODIX_HEADER_LEN + NODIX_NONCE_LEN);
+	const nonce = bytes.subarray(
+		NODIX_HEADER_LEN,
+		NODIX_HEADER_LEN + NODIX_NONCE_LEN,
+	);
 	const ciphertextEnd = bytes.length - NODIX_TAG_LEN;
-	const ciphertext = bytes.subarray(NODIX_HEADER_LEN + NODIX_NONCE_LEN, ciphertextEnd);
+	const ciphertext = bytes.subarray(
+		NODIX_HEADER_LEN + NODIX_NONCE_LEN,
+		ciphertextEnd,
+	);
 	const tag = bytes.subarray(ciphertextEnd);
 	return { header, sourceFingerprint, nonce, ciphertext, tag };
 }
@@ -67,7 +74,7 @@ interface TarEntry {
 	data: Buffer;
 }
 
-function restorePathForEntry(entryName: string): string {
+function normalizeArchiveEntryName(entryName: string): string {
 	const parts = entryName.split("/");
 	if (
 		entryName.length === 0 ||
@@ -85,7 +92,33 @@ function restorePathForEntry(entryName: string): string {
 			`InvalidExportFormat: unsafe archive entry path '${entryName}'`,
 		);
 	}
-	return `/${normalized}`;
+	return normalized;
+}
+
+function restorePathsByArchiveEntry(): ReadonlyMap<string, string> {
+	const manifest = readManifestIfPresent();
+	const paths = new Map<string, string>();
+	for (const entry of manifest?.dbs ?? []) {
+		const archivePath = normalizeArchiveEntryName(
+			entry.path.replace(/^\/+/, ""),
+		);
+		paths.set(archivePath, entry.path);
+	}
+	return paths;
+}
+
+function restorePathForEntry(
+	entryName: string,
+	restorePaths: ReadonlyMap<string, string>,
+): string {
+	const normalized = normalizeArchiveEntryName(entryName);
+	const restorePath = restorePaths.get(normalized);
+	if (!restorePath) {
+		throw new InvalidExportFormat(
+			`InvalidExportFormat: archive entry is not registered in local manifest '${entryName}'`,
+		);
+	}
+	return restorePath;
 }
 
 async function extractTarball(plaintext: Buffer): Promise<TarEntry[]> {
@@ -111,7 +144,8 @@ async function extractTarball(plaintext: Buffer): Promise<TarEntry[]> {
 
 export async function importEncrypted(sourcePath: string): Promise<void> {
 	const bytes = readFileSync(sourcePath);
-	const { header, sourceFingerprint, nonce, ciphertext, tag } = parseStructure(bytes);
+	const { header, sourceFingerprint, nonce, ciphertext, tag } =
+		parseStructure(bytes);
 
 	// Cross-machine gate: BEFORE any GCM attempt.
 	const dek = await getDek();
@@ -137,8 +171,9 @@ export async function importEncrypted(sourcePath: string): Promise<void> {
 	}
 
 	const entries = await extractTarball(plaintext);
+	const restorePaths = restorePathsByArchiveEntry();
 	for (const e of entries) {
-		const restorePath = restorePathForEntry(e.name);
+		const restorePath = restorePathForEntry(e.name, restorePaths);
 		mkdirSync(dirname(restorePath), { recursive: true });
 		writeFileSync(restorePath, e.data, { mode: 0o600 });
 	}
