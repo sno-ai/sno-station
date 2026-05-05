@@ -368,6 +368,88 @@ describe("flush 3-state machine", () => {
 			rmSync(t.dir, { recursive: true, force: true });
 		}
 	});
+
+	it("shutdown drains scheduled pending rows before closing the buffer", async () => {
+		const t = tempEnv();
+		const runtime = new SnoObserveRuntime({
+			env: t.env,
+			cwd: t.dir,
+			fetch: async (url, init) => {
+				if (String(url).endsWith("/api/v1/identity/register-machine")) {
+					return registerMachineResponse(init);
+				}
+				return new Response(JSON.stringify({ receipt_id: "r" }), {
+					status: 202,
+					headers: { "Content-Type": "application/json" },
+				});
+			},
+		});
+		try {
+			await runtime.emitParsed(memoryEvent(7));
+			const result = await runtime.shutdown();
+			assert.equal(result.flushedCount, 2);
+			assert.equal(result.failedCount, 0);
+			const store = new BufferStore(t.env.SNO_BUFFER_PATH);
+			try {
+				assert.equal(
+					store.getAllRows().every((row) => row.shipped === 1),
+					true,
+				);
+			} finally {
+				store.close();
+			}
+		} finally {
+			await runtime.shutdown().catch(() => {});
+			rmSync(t.dir, { recursive: true, force: true });
+		}
+	});
+
+	it("beforeExit flush hook re-arms after firing once", async () => {
+		const t = tempEnv();
+		const store = new BufferStore(t.env.SNO_BUFFER_PATH);
+		const identity = bootstrapIdentity(t.env);
+		const originalOnce = process.once;
+		const originalOff = process.off;
+		let beforeExitHandler;
+		process.once = function once(event, listener) {
+			if (event === "beforeExit") {
+				beforeExitHandler = listener;
+				return this;
+			}
+			return originalOnce.call(this, event, listener);
+		};
+		process.off = function off(event, listener) {
+			if (event === "beforeExit" && listener === beforeExitHandler) {
+				beforeExitHandler = undefined;
+				return this;
+			}
+			return originalOff.call(this, event, listener);
+		};
+		const engine = new FlushEngine(
+			store,
+			() => identity,
+			() => "https://sno.test",
+			() => t.env,
+		);
+		try {
+			engine.schedule(60_000);
+			const firstHandler = beforeExitHandler;
+			assert.equal(typeof firstHandler, "function");
+			beforeExitHandler = undefined;
+			firstHandler();
+			await new Promise((resolve) => setImmediate(resolve));
+
+			engine.schedule(60_000);
+			assert.equal(typeof beforeExitHandler, "function");
+			assert.notEqual(beforeExitHandler, firstHandler);
+		} finally {
+			engine.dispose();
+			process.once = originalOnce;
+			process.off = originalOff;
+			store.close();
+			rmSync(t.dir, { recursive: true, force: true });
+		}
+	});
 });
 
 function registerMachineResponse(init) {

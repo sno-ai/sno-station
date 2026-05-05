@@ -14,7 +14,7 @@ import { createServer } from "node:http";
 export const statusCodeMatrix = Object.freeze({
 	accepted: { status: 202, body: { receipt_id: "r_matrix" } },
 	softDrop: { status: 202, body: { receipt_id: null } },
-	idempotent: { status: 200, body: { received: 1 } },
+	unexpectedOk: { status: 200, body: { received: 1 } },
 	singleEnvelopeRequired: { status: 400, body: { error: "single_envelope_required" } },
 	invalidEnvelope: { status: 400, body: { error: "invalid_envelope" } },
 	invalidJson: { status: 400, body: { error: "invalid_json" } },
@@ -22,13 +22,13 @@ export const statusCodeMatrix = Object.freeze({
 	consentLevelNotInEnum: { status: 400, body: { error: "consent_level_not_in_enum" } },
 	tokensMethodRequired: { status: 400, body: { error: "tokens_method_required" } },
 	unauthorized: { status: 401, body: { error: "unauthorized" } },
-	machineScopeForbidden: {
+	identityMismatch: {
 		status: 403,
-		body: { error: "machine_scope_forbidden" },
+		body: { error: "identity_mismatch" },
 	},
-	ownershipDenied: {
+	scopeUserMismatch: {
 		status: 403,
-		body: { error: "ownership_denied" },
+		body: { error: "scope_user_mismatch" },
 	},
 	payloadConflict: { status: 409, body: { error: "payload_conflict" } },
 	chainSeedRequired: { status: 422, body: { error: "chain_seed_required" } },

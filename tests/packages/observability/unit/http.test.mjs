@@ -5,15 +5,19 @@ import { postEvent } from "../../../../packages/sno-observe/dist/internal/http.j
 describe("postEvent", () => {
 	it("uses a caller-supplied abort signal", async () => {
 		const controller = new AbortController();
-		let sawSignal = false;
+		let sentSignal;
 		const fetchImpl = async (_url, init) => {
-			sawSignal = init?.signal === controller.signal;
+			sentSignal = init?.signal;
 			return new Response("", { status: 202 });
 		};
 
 		await postEvent("https://sno.test", "{}", undefined, fetchImpl, controller.signal);
 
-		assert.equal(sawSignal, true);
+		assert.notEqual(sentSignal, undefined);
+		assert.notEqual(sentSignal, controller.signal);
+		assert.equal(sentSignal.aborted, false);
+		controller.abort();
+		assert.equal(sentSignal.aborted, true);
 	});
 
 	it("rejects plaintext non-localhost URLs before sending bearer credentials", async () => {
