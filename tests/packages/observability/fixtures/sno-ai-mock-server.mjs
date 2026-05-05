@@ -11,6 +11,8 @@
 
 import { createServer } from "node:http";
 
+export const defaultClaimAccountId = "haiyf8cubvqrgu3eah99o85u";
+
 export const statusCodeMatrix = Object.freeze({
 	accepted: { status: 202, body: { receipt_id: "r_matrix" } },
 	softDrop: { status: 202, body: { receipt_id: null } },
@@ -229,7 +231,7 @@ function defaultDeviceTokenResponse(body) {
 		) {
 			return {
 				status: 200,
-				body: { user_account_id: "acct_mock_123", status: "claimed" },
+				body: { user_account_id: defaultClaimAccountId, status: "claimed" },
 			};
 		}
 	} catch {}

@@ -15,6 +15,7 @@ import { join } from "node:path";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 import DatabaseConstructor from "better-sqlite3";
+import { createCuid2 } from "../../../../packages/common-core/dist/index.js";
 import * as publicModule from "../../../../packages/sno-observe/dist/index.js";
 import { snoObserve } from "../../../../packages/sno-observe/dist/index.js";
 import { verifyAuditEvent } from "../../../../packages/sno-observe/dist/internal/audit-verify.js";
@@ -435,6 +436,18 @@ describe("sno observe Node package", () => {
 				assert.equal(statSync(temp.env.SNO_IDENTITY_PATH).mode & 0o777, 0o600);
 			}
 
+			writeFileSync(
+				temp.env.SNO_IDENTITY_PATH,
+				`${JSON.stringify({ ...identity, user_account_id: "acct_mock_123" }, null, 2)}\n`,
+				{ mode: 0o600 },
+			);
+			const migratedLegacyAccount = bootstrapIdentity(temp.env);
+			assert.equal(migratedLegacyAccount.user_cuid, identity.user_cuid);
+			assert.equal(migratedLegacyAccount.machine_uuid, identity.machine_uuid);
+			assert.equal(migratedLegacyAccount.user_account_id, undefined);
+			const migratedPersisted = JSON.parse(readFileSync(temp.env.SNO_IDENTITY_PATH, "utf8"));
+			assert.equal(migratedPersisted.user_account_id, undefined);
+
 			writeFileSync(temp.env.SNO_IDENTITY_PATH, "{not-json", { mode: 0o600 });
 			const regenerated = bootstrapIdentity(temp.env);
 			const persisted = JSON.parse(readFileSync(temp.env.SNO_IDENTITY_PATH, "utf8"));
@@ -753,9 +766,10 @@ describe("sno observe Node package", () => {
 
 		const claimedTemp = createTempSnoEnv("sno-observe-claimed-account-scope-");
 		const identity = bootstrapIdentity(claimedTemp.env);
+		const accountCuid = createCuid2();
 		writeFileSync(
 			claimedTemp.env.SNO_IDENTITY_PATH,
-			`${JSON.stringify({ ...identity, user_account_id: "acct_from_identity" }, null, 2)}\n`,
+			`${JSON.stringify({ ...identity, user_account_id: accountCuid }, null, 2)}\n`,
 		);
 		const claimedRuntime = new SnoObserveRuntime({
 			env: claimedTemp.env,
@@ -775,7 +789,7 @@ describe("sno observe Node package", () => {
 			const store = new BufferStore(claimedTemp.env.SNO_BUFFER_PATH);
 			try {
 				const envelopes = store.getAllRows().map((row) => decodeEnvelope(row.payload));
-				assert.equal(envelopes[1].scope.user_account_id, "acct_from_identity");
+				assert.equal(envelopes[1].scope.user_account_id, accountCuid);
 			} finally {
 				store.close();
 			}
