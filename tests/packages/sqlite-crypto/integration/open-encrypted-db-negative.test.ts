@@ -12,7 +12,7 @@ import {
 	readFileSync,
 	writeFileSync,
 } from "node:fs";
-import { dirname } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import {
 	CanaryMismatch,
 	DbIdMismatch,
@@ -20,6 +20,7 @@ import {
 	getDek,
 	IntegrityCheckFailed,
 	openEncryptedDb,
+	openEncryptedDbReadonly,
 	WrongKeyError,
 } from "@snoai/nodix-crypto";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -42,7 +43,8 @@ function flipOneByte(path: string, offset = 4096): void {
 		offset = Math.floor(buf.length / 2);
 	}
 	const cur = buf[offset];
-	if (cur === undefined) throw new Error(`offset ${offset} out of bounds in ${path}`);
+	if (cur === undefined)
+		throw new Error(`offset ${offset} out of bounds in ${path}`);
 	buf[offset] = cur ^ 0xff;
 	writeFileSync(path, buf);
 }
@@ -103,6 +105,40 @@ describe("openEncryptedDb — cipher selection enforcement", () => {
 		const cipher = db.pragma("cipher", { simple: true }) as string;
 		expect(cipher).toBe("sqlcipher");
 		db.close();
+	});
+});
+
+describe("openEncryptedDb — path normalization", () => {
+	it("stores normalized manifest paths and reopens equivalent paths", async () => {
+		const dek = await getDek();
+		const dbPath = uniqueDbPath(env, "normalized");
+		const dbsDir = dirname(dbPath);
+		const equivalentPath = join(
+			dbsDir,
+			"..",
+			basename(dbsDir),
+			basename(dbPath),
+		);
+		mkdirSync(dbsDir, { recursive: true });
+
+		const db = openEncryptedDb(equivalentPath, dek);
+		db.exec("CREATE TABLE t (v TEXT)");
+		db.prepare("INSERT INTO t (v) VALUES ('ok')").run();
+		db.close();
+
+		const manifest = JSON.parse(readFileSync(env.manifestFile, "utf8")) as {
+			dbs: Array<{ path: string }>;
+		};
+		expect(manifest.dbs).toHaveLength(1);
+		expect(manifest.dbs[0]?.path).toBe(resolve(equivalentPath));
+
+		const writable = openEncryptedDb(dbPath, dek);
+		expect(writable.prepare("SELECT v FROM t").pluck().get()).toBe("ok");
+		writable.close();
+
+		const readonly = openEncryptedDbReadonly(equivalentPath, dek);
+		expect(readonly.prepare("SELECT v FROM t").pluck().get()).toBe("ok");
+		readonly.close();
 	});
 });
 
