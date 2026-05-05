@@ -68,6 +68,7 @@ export function makeTestEnv(label = "nodix"): TestEnv {
 
 	setEnv("XDG_CONFIG_HOME", xdgConfigHome);
 	setEnv("NODIX_KEYCHAIN_SERVICE", keychainService);
+	setEnv("NODIX_TESTING", "1");
 	// Drop the in-process DEK promise cache — each test gets a fresh resolver.
 	_resetDekCache();
 
@@ -87,6 +88,7 @@ export function makeTestEnv(label = "nodix"): TestEnv {
 			}
 			restoreEnv("XDG_CONFIG_HOME");
 			restoreEnv("NODIX_KEYCHAIN_SERVICE");
+			restoreEnv("NODIX_TESTING");
 			_resetDekCache();
 		},
 	};
@@ -158,7 +160,7 @@ export function recoverDek(env: TestEnv, passphrase?: string): Buffer {
 		NODIX_KEYCHAIN_SERVICE: env.keychainService,
 	};
 	if (passphrase !== undefined) {
-		childEnv["NODIX_PASSPHRASE_STDIN"] = "1";
+		childEnv.NODIX_PASSPHRASE_STDIN = "1";
 	}
 	try {
 		const child = spawnSync(process.execPath, childNodeArgs(fixture), {
@@ -173,7 +175,7 @@ export function recoverDek(env: TestEnv, passphrase?: string): Buffer {
 			);
 		}
 		const m = child.stdout.match(/DEK_HEX:([0-9a-f]{64})/i);
-		if (!m || !m[1]) {
+		if (!m?.[1]) {
 			throw new Error(
 				`recoverDek: no DEK in stdout: ${child.stdout} (stderr=${child.stderr})`,
 			);

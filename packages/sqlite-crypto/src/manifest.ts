@@ -3,6 +3,7 @@ import { open as openHandle, rename } from "node:fs/promises";
 import { dirname } from "node:path";
 import { resolveConfigPaths } from "./config.js";
 import { ManifestCorrupted } from "./errors.js";
+import { crashAfter } from "./fault-injection.js";
 import { writeNewSecretFile } from "./key-file.js";
 import {
 	type DbId,
@@ -110,9 +111,7 @@ export function ensureMarker(): void {
 	mkdirSync(configDir, { recursive: true, mode: 0o700 });
 	writeNewSecretFile(markerFile, Buffer.alloc(0));
 	// Test fault-injection hook (design D18). Default off.
-	if (process.env["NODIX_CRASH_AFTER"] === "after-marker-before-manifest") {
-		process.exit(137);
-	}
+	crashAfter("after-marker-before-manifest");
 }
 
 /**
@@ -129,11 +128,9 @@ export async function atomicWriteManifest(next: ManifestFile): Promise<void> {
 	// dbIds and dekFingerprints are one-way values), but write via the canonical
 	// recipe still for crash-safe semantics.
 	writeFileSync(tmp, serialized, { mode: 0o644 });
-	if (process.env["NODIX_CRASH_AFTER"] === "during-manifest-rename") {
-		// We cannot literally interrupt the rename syscall from JS; the fault
-		// model here is "killed before rename completes." Exit before rename.
-		process.exit(137);
-	}
+	// We cannot literally interrupt the rename syscall from JS; the fault
+	// model here is "killed before rename completes." Exit before rename.
+	crashAfter("during-manifest-rename");
 	await rename(tmp, manifestFile);
 	const dirHandle = await openHandle(dirname(manifestFile), "r");
 	try {

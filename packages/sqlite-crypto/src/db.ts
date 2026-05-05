@@ -17,6 +17,7 @@ import {
 	ManifestMissing,
 	WrongKeyError,
 } from "./errors.js";
+import { crashAfter } from "./fault-injection.js";
 import {
 	appendEntry,
 	emptyManifest,
@@ -195,9 +196,7 @@ function syncAtomicWriteManifest(next: ManifestFile): void {
 	const tmp = `${manifestFile}.tmp-${process.pid}-${Date.now().toString(36)}`;
 	mkdirSync(configDir, { recursive: true, mode: 0o700 });
 	writeFileSync(tmp, JSON.stringify(next), { mode: 0o644 });
-	if (process.env["NODIX_CRASH_AFTER"] === "during-manifest-rename") {
-		process.exit(137);
-	}
+	crashAfter("during-manifest-rename");
 	renameSync(tmp, manifestFile);
 	const dirFd = openSync(configDir, 0);
 	try {
@@ -215,9 +214,7 @@ function registerFreshDbSync(
 ): DbId {
 	const dbId = randomBytes(8).toString("hex") as DbId;
 	const fp = dekFingerprint(dek) as DekFingerprint;
-	if (process.env["NODIX_CRASH_AFTER"] === "before-marker") {
-		process.exit(137);
-	}
+	crashAfter("before-marker");
 	ensureMarker();
 	pre.db.exec("BEGIN");
 	pre.db.exec(
@@ -239,9 +236,7 @@ function registerFreshDbSync(
 		}
 		throw err;
 	}
-	if (process.env["NODIX_CRASH_AFTER"] === "after-manifest-before-commit") {
-		process.exit(137);
-	}
+	crashAfter("after-manifest-before-commit");
 	pre.db.exec("COMMIT");
 	const row = pre.db
 		.prepare(`SELECT sentinel, db_id FROM ${CANARY_TABLE} WHERE id = 1`)

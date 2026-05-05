@@ -7,9 +7,8 @@
  * verified separately.
  *
  * Implementation gate: production code MUST honor a NODIX_CRASH_AFTER env
- * hook ("marker-fsync" | "manifest-rename" | "sqlite-commit") that throws a
- * synthetic `process.exit(137)` at the named transition point. Without the
- * hook this test cannot deterministically reproduce the crash window.
+ * hook only when NODIX_TESTING=1. Without the gated hook this test cannot
+ * deterministically reproduce the crash window.
  */
 
 import { spawnSync } from "node:child_process";
@@ -52,6 +51,25 @@ function spawnKiller(crashPoint: string): {
 }
 
 describe("manifest atomicity (task 2.7)", () => {
+	it("ignores crash hooks outside explicit test mode", () => {
+		const childEnv = {
+			...process.env,
+			XDG_CONFIG_HOME: env.xdgConfigHome,
+			NODIX_KEYCHAIN_SERVICE: env.keychainService,
+			NODIX_CRASH_AFTER: "before-marker",
+			NODIX_DB_PATH: `${env.nodixConfigDir}/dbs/no-test-mode.db`,
+		};
+		delete childEnv.NODIX_TESTING;
+
+		const ok = spawnSync(process.execPath, childNodeArgs(FIXTURE_PATH), {
+			env: childEnv,
+			timeout: 30_000,
+			encoding: "utf8",
+		});
+		expect(ok.status, `stderr: ${ok.stderr}`).toBe(0);
+		expect(existsSync(env.manifestFile)).toBe(true);
+	});
+
 	it("crash before marker fsync → next start treats as fresh-install", () => {
 		const r = spawnKiller("before-marker");
 		expect(r.code === null || r.code !== 0 || r.signal !== null).toBe(true);
