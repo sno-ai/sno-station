@@ -14,6 +14,10 @@ import { parseEventInput } from "../../../../packages/sno-observe/dist/internal/
 import { countTokens } from "../../../../packages/sno-observe/dist/internal/tokens.js";
 import { validPayloads, scope } from "../fixtures/temp-env.mjs";
 
+function testHash(index) {
+	return index.toString(16).padStart(64, "0");
+}
+
 function tempEnv() {
 	const dir = mkdtempSync(join(tmpdir(), "sno-observe-flush-"));
 	return {
@@ -63,7 +67,7 @@ function memoryEvent(i) {
 			lane: "memory",
 		agent_id: "codex",
 		payload: {
-			key_hash: `timer-${i}`,
+			key_hash: testHash(i),
 			byte_len: 1,
 			content_tokens: 1,
 			tokens_method: "char_approximation",

@@ -12,6 +12,10 @@ import { SnoObserveRuntime } from "../../../../packages/sno-observe/dist/interna
 import { parseEventInput } from "../../../../packages/sno-observe/dist/internal/schemas.js";
 import { startMockServer } from "../fixtures/sno-ai-mock-server.mjs";
 
+function testHash(index) {
+	return index.toString(16).padStart(64, "0");
+}
+
 function tempEnv(baseUrl) {
 	const dir = mkdtempSync(join(tmpdir(), "sno-observe-http-"));
 	return {
@@ -33,7 +37,7 @@ function memoryEvent(i) {
 		lane: "memory",
 		agent_id: "codex",
 		payload: {
-			key_hash: `h_${i}`,
+			key_hash: testHash(i),
 			byte_len: 1,
 			content_tokens: 1,
 			tokens_method: "char_approximation",

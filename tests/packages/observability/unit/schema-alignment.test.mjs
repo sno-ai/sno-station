@@ -6,6 +6,7 @@ import { EVENT_LANES, EVENT_TYPES } from "../../../../packages/sno-observe/dist/
 
 const uuidV7 = "018f7d0c-fd8b-7ccf-9b9b-0a2ea938ad0d";
 const uppercaseUuidV7 = uuidV7.toUpperCase();
+const hashA = "a".repeat(64);
 
 function memoryWrite(tokens_method) {
 	return {
@@ -13,7 +14,7 @@ function memoryWrite(tokens_method) {
 		lane: "memory",
 		agent_id: "codex",
 		payload: {
-			key_hash: "h_key",
+			key_hash: hashA,
 			byte_len: 12,
 			content_tokens: 3,
 			tokens_method,
