@@ -6,7 +6,7 @@
 
 import { createDecipheriv } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname } from "node:path";
+import { dirname, posix } from "node:path";
 import { gunzipSync } from "node:zlib";
 import { extract } from "tar-stream";
 import { getDek } from "./dek.js";
@@ -67,6 +67,27 @@ interface TarEntry {
 	data: Buffer;
 }
 
+function restorePathForEntry(entryName: string): string {
+	const parts = entryName.split("/");
+	if (
+		entryName.length === 0 ||
+		entryName.startsWith("/") ||
+		entryName.includes("\0") ||
+		parts.includes("..")
+	) {
+		throw new InvalidExportFormat(
+			`InvalidExportFormat: unsafe archive entry path '${entryName}'`,
+		);
+	}
+	const normalized = posix.normalize(entryName);
+	if (normalized === ".") {
+		throw new InvalidExportFormat(
+			`InvalidExportFormat: unsafe archive entry path '${entryName}'`,
+		);
+	}
+	return `/${normalized}`;
+}
+
 async function extractTarball(plaintext: Buffer): Promise<TarEntry[]> {
 	const tarBytes = gunzipSync(plaintext);
 	return new Promise<TarEntry[]>((resolve, reject) => {
@@ -117,8 +138,7 @@ export async function importEncrypted(sourcePath: string): Promise<void> {
 
 	const entries = await extractTarball(plaintext);
 	for (const e of entries) {
-		// Restore to the original absolute path (re-prepend leading slash).
-		const restorePath = e.name.startsWith("/") ? e.name : `/${e.name}`;
+		const restorePath = restorePathForEntry(e.name);
 		mkdirSync(dirname(restorePath), { recursive: true });
 		writeFileSync(restorePath, e.data, { mode: 0o600 });
 	}
