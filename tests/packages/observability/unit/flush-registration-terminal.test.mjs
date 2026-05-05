@@ -6,13 +6,15 @@ import { SnoObserveRuntime } from "../../../../packages/sno-observe/dist/interna
 import { parseEventInput } from "../../../../packages/sno-observe/dist/internal/schemas.js";
 import { cleanupTempSnoEnv, createTempSnoEnv } from "../fixtures/temp-env.mjs";
 
+const hashA = "a".repeat(64);
+
 function memoryWriteEvent() {
 	return parseEventInput({
 		event_type: "memory.write",
 		lane: "memory",
 		agent_id: "codex",
 		payload: {
-			key_hash: "h_registration_terminal",
+			key_hash: hashA,
 			byte_len: 1,
 			content_tokens: 1,
 			tokens_method: "char_approximation",

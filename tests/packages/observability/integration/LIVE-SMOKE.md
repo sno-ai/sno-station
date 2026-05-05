@@ -13,7 +13,7 @@ absent, so CI stays green by default:
 |--------------------------------------------|--------|--------------------------------------|
 | `audit-verify-live-smoke.test.mjs`         | §26.1  | `audit.verify` round-trip            |
 | `machine-registration-fixture.test.mjs` (gated block) | §27.1 | anonymous `register()` happy path |
-| `acceptance-live-smoke.test.mjs`           | §32.1  | Emit each of the 12 SDK event types  |
+| `acceptance-live-smoke.test.mjs`           | §32.1  | Emit SDK event types + plugin Qwen `llm.call` |
 
 ## How to run a manual live smoke
 
