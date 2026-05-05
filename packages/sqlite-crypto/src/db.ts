@@ -4,7 +4,9 @@ import {
 	fsyncSync,
 	mkdirSync,
 	openSync,
+	readSync,
 	renameSync,
+	statSync,
 	writeFileSync,
 } from "node:fs";
 import { dirname, resolve as resolvePath } from "node:path";
@@ -41,8 +43,14 @@ interface PreflightedDb {
 	canaryRow: { sentinel: string; db_id: string } | undefined;
 }
 
+const SQLITE_PLAINTEXT_HEADER = Buffer.from("SQLite format 3\0", "binary");
+
 function normalizeDbPath(path: string): string {
 	return resolvePath(path);
+}
+
+function isErrnoException(err: unknown): err is Error & { code?: string } {
+	return err instanceof Error && "code" in err;
 }
 
 function isWrongKeySqliteError(err: unknown): boolean {
@@ -50,6 +58,27 @@ function isWrongKeySqliteError(err: unknown): boolean {
 	return /file is not a database|file is encrypted|malformed/i.test(
 		err.message,
 	);
+}
+
+function assertNotPlaintextSqlite(path: string): void {
+	let fd: number | undefined;
+	try {
+		const stat = statSync(path);
+		if (!stat.isFile() || stat.size < SQLITE_PLAINTEXT_HEADER.length) return;
+		fd = openSync(path, "r");
+		const header = Buffer.alloc(SQLITE_PLAINTEXT_HEADER.length);
+		const bytes = readSync(fd, header, 0, header.length, 0);
+		if (bytes === header.length && header.equals(SQLITE_PLAINTEXT_HEADER)) {
+			throw new IntegrityCheckFailed(
+				`PlaintextDbRejected: ${path} is a plaintext SQLite database; remove it before encrypted open`,
+			);
+		}
+	} catch (err) {
+		if (isErrnoException(err) && err.code === "ENOENT") return;
+		throw err;
+	} finally {
+		if (fd !== undefined) closeSync(fd);
+	}
 }
 
 function applyPragmaRecipe(db: Db, dek: Dek): void {
@@ -131,6 +160,7 @@ function probeCanaryRow(
 function preflight(path: string, dek: Dek, readonly = false): PreflightedDb {
 	let db: Db;
 	try {
+		assertNotPlaintextSqlite(path);
 		mkdirSync(dirname(path), { recursive: true });
 		db = new Database(
 			path,
