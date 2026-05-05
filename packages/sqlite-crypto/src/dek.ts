@@ -210,12 +210,17 @@ async function unwrapWithPrompt(state: KeyStateFileWrapped): Promise<Buffer> {
 
 /**
  * Step A → Step B → Step C → Step D state machine per spec.
+ *
+ * @param skipManifestGate when true, bypasses the marker-without-manifest
+ *   check. The CLI's `lock --rebuild-manifest` path uses this so it can read
+ *   the DEK while the manifest is missing — that is exactly the recovery
+ *   scenario it implements.
  */
-async function resolveDek(): Promise<Buffer> {
+async function resolveDek(skipManifestGate = false): Promise<Buffer> {
 	// Step A — manifest/marker inventory.
 	const manifestPresent = isManifestPresent();
 	const markerPresent = isMarkerPresent();
-	if (!manifestPresent && markerPresent) {
+	if (!manifestPresent && markerPresent && !skipManifestGate) {
 		throw new ManifestMissing();
 	}
 	const manifest = manifestPresent ? readManifestIfPresent() : undefined;
@@ -244,6 +249,10 @@ async function resolveDek(): Promise<Buffer> {
 		return await unwrapWithPrompt(keyState);
 	}
 	if (keyState?.mode === "plain") {
+		// Per spec: emit the plain-mode warning at every process's first `getDek()`
+		// call, not only on fresh fallback generation. Idempotent — guarded by
+		// `warnedFallback` so subsequent calls in the same process are silent.
+		emitFallbackWarning();
 		return readPlainDekFromKeyState(keyState);
 	}
 
@@ -272,6 +281,20 @@ export async function getDek(): Promise<Dek> {
 		})();
 	}
 	return dekPromise;
+}
+
+/**
+ * Recovery-only DEK resolver — skips the marker-without-manifest gate.
+ * Internal use by `nodix lock --rebuild-manifest`. Does not populate the
+ * shared dekPromise cache (the production gate is still authoritative for
+ * normal callers).
+ */
+export async function _getDekForRecovery(): Promise<Dek> {
+	const buf = await resolveDek(true);
+	if (buf.length !== 32) {
+		throw new WrongKeyError("resolved DEK has wrong length");
+	}
+	return asDek(buf);
 }
 
 export function _resetDekCache(): void {
@@ -324,6 +347,7 @@ function resolveDekSync(): Buffer {
 		);
 	}
 	if (keyState?.mode === "plain") {
+		emitFallbackWarning();
 		return readPlainDekFromKeyState(keyState);
 	}
 

@@ -1,10 +1,15 @@
 import { type SpawnSyncReturns, spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { _resetDekCache } from "@snoai/nodix-crypto";
+
+const RECOVERY_FIXTURE_DIR = join(
+	dirname(fileURLToPath(import.meta.url)),
+	"fixtures",
+);
 
 /**
  * Per-test isolation helper.
@@ -126,6 +131,59 @@ export interface CliResult {
  * `NODIX_KEYCHAIN_SERVICE` env from `makeTestEnv()` MUST already be set in
  * `process.env` — this helper inherits it. Pass `stdin` to feed prompts.
  */
+/**
+ * Recover the DEK in a child process so passphrase prompts can be fed via
+ * stdin (production interactive recovery path). Returns the resolved DEK as
+ * a 32-byte Buffer. Throws on child failure.
+ *
+ * If `passphrase` is provided, sets `NODIX_PASSPHRASE_STDIN=1` and feeds it.
+ */
+export function recoverDek(env: TestEnv, passphrase?: string): Buffer {
+	mkdirSync(RECOVERY_FIXTURE_DIR, { recursive: true });
+	const fixture = join(
+		RECOVERY_FIXTURE_DIR,
+		`recover-dek-${env.runId}-${randomBytes(2).toString("hex")}.mjs`,
+	);
+	writeFileSync(
+		fixture,
+		`
+		import { getDek } from "@snoai/nodix-crypto";
+		const dek = await getDek();
+		process.stdout.write("DEK_HEX:" + Buffer.from(dek).toString("hex") + "\\n");
+		`,
+	);
+	const childEnv: Record<string, string | undefined> = {
+		...process.env,
+		XDG_CONFIG_HOME: env.xdgConfigHome,
+		NODIX_KEYCHAIN_SERVICE: env.keychainService,
+	};
+	if (passphrase !== undefined) {
+		childEnv["NODIX_PASSPHRASE_STDIN"] = "1";
+	}
+	try {
+		const child = spawnSync(process.execPath, childNodeArgs(fixture), {
+			input: passphrase !== undefined ? `${passphrase}\n` : "",
+			encoding: "utf8",
+			timeout: 30_000,
+			env: childEnv as NodeJS.ProcessEnv,
+		});
+		if (child.status !== 0) {
+			throw new Error(
+				`recoverDek child exited ${child.status} signal=${child.signal}: stdout=${child.stdout} stderr=${child.stderr}`,
+			);
+		}
+		const m = child.stdout.match(/DEK_HEX:([0-9a-f]{64})/i);
+		if (!m || !m[1]) {
+			throw new Error(
+				`recoverDek: no DEK in stdout: ${child.stdout} (stderr=${child.stderr})`,
+			);
+		}
+		return Buffer.from(m[1], "hex");
+	} finally {
+		rmSync(fixture, { force: true });
+	}
+}
+
 export function runCli(
 	args: readonly string[],
 	options: {
