@@ -10,6 +10,7 @@ import {
 	MissingDekError,
 	WrongKeyError,
 } from "./errors.js";
+import { readHiddenLineFromTty } from "./hidden-input.js";
 import {
 	atomicReplaceSecretFile,
 	readSecretFile,
@@ -141,10 +142,14 @@ function emitRemovePassphraseCrashWarning(): void {
 
 async function promptPassphrase(): Promise<Buffer> {
 	const useStdin = process.env["NODIX_PASSPHRASE_STDIN"] === "1";
+	if (!useStdin && process.stdin.isTTY) {
+		const line = await readHiddenLineFromTty("Enter nodix passphrase: ");
+		return Buffer.from(line, "utf8");
+	}
 	const rl = createInterface({
-		input: useStdin ? process.stdin : process.stdin,
+		input: process.stdin,
 		output: process.stderr,
-		terminal: !useStdin,
+		terminal: false,
 	});
 	process.stderr.write("Enter nodix passphrase: ");
 	try {
