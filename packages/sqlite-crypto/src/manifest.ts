@@ -1,0 +1,170 @@
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { open as openHandle, rename } from "node:fs/promises";
+import { dirname } from "node:path";
+import { resolveConfigPaths } from "./config.js";
+import { ManifestCorrupted } from "./errors.js";
+import { writeNewSecretFile } from "./key-file.js";
+import {
+	type DbId,
+	type DekFingerprint,
+	MANIFEST_SCHEMA_VERSION,
+	type ManifestEntry,
+	type ManifestFile,
+} from "./types.js";
+
+/**
+ * Returns the parsed manifest, or `undefined` if the file does not exist.
+ * On any parse failure or unrecognized `schemaVersion`, throws
+ * `ManifestCorrupted`. Never auto-rebuilds.
+ */
+export function readManifestIfPresent(): ManifestFile | undefined {
+	const { manifestFile } = resolveConfigPaths();
+	if (!existsSync(manifestFile)) return undefined;
+	let raw: string;
+	try {
+		raw = readFileSync(manifestFile, "utf8");
+	} catch (err) {
+		throw new ManifestCorrupted(
+			`failed to read manifest at ${manifestFile}: ${(err as Error).message}`,
+		);
+	}
+	let parsed: unknown;
+	try {
+		parsed = JSON.parse(raw);
+	} catch (err) {
+		throw new ManifestCorrupted(
+			`manifest at ${manifestFile} is not valid JSON`,
+			{
+				cause: err,
+			},
+		);
+	}
+	return validateManifest(parsed, manifestFile);
+}
+
+export function isManifestPresent(): boolean {
+	return existsSync(resolveConfigPaths().manifestFile);
+}
+
+export function isMarkerPresent(): boolean {
+	return existsSync(resolveConfigPaths().markerFile);
+}
+
+function validateManifest(input: unknown, path: string): ManifestFile {
+	if (typeof input !== "object" || input === null) {
+		throw new ManifestCorrupted(`manifest at ${path} is not an object`);
+	}
+	const obj = input as Record<string, unknown>;
+	if (obj["schemaVersion"] !== MANIFEST_SCHEMA_VERSION) {
+		throw new ManifestCorrupted(
+			`manifest at ${path} has unsupported schemaVersion ${String(obj["schemaVersion"])}`,
+		);
+	}
+	const createdAt = obj["createdAt"];
+	if (typeof createdAt !== "string") {
+		throw new ManifestCorrupted(`manifest at ${path} missing string createdAt`);
+	}
+	const dbsRaw = obj["dbs"];
+	if (!Array.isArray(dbsRaw)) {
+		throw new ManifestCorrupted(`manifest at ${path} missing dbs array`);
+	}
+	const dbs: ManifestEntry[] = [];
+	for (const e of dbsRaw) {
+		if (typeof e !== "object" || e === null) {
+			throw new ManifestCorrupted(
+				`manifest at ${path} contains a non-object dbs entry`,
+			);
+		}
+		const ent = e as Record<string, unknown>;
+		const entPath = ent["path"];
+		const entDbId = ent["dbId"];
+		const entFp = ent["dekFingerprint"];
+		if (
+			typeof entPath !== "string" ||
+			typeof entDbId !== "string" ||
+			typeof entFp !== "string"
+		) {
+			throw new ManifestCorrupted(
+				`manifest at ${path} contains an entry missing required fields`,
+			);
+		}
+		dbs.push({
+			path: entPath,
+			dbId: entDbId as DbId,
+			dekFingerprint: entFp as DekFingerprint,
+		});
+	}
+	return {
+		schemaVersion: MANIFEST_SCHEMA_VERSION,
+		createdAt,
+		dbs,
+	};
+}
+
+/**
+ * Create the marker file via the canonical recipe. No-op if already present.
+ */
+export function ensureMarker(): void {
+	const { markerFile, configDir } = resolveConfigPaths();
+	if (existsSync(markerFile)) return;
+	mkdirSync(configDir, { recursive: true, mode: 0o700 });
+	writeNewSecretFile(markerFile, Buffer.alloc(0));
+	// Test fault-injection hook (design D18). Default off.
+	if (process.env["NODIX_CRASH_AFTER"] === "after-marker-before-manifest") {
+		process.exit(137);
+	}
+}
+
+/**
+ * Atomically write a fresh manifest file. Caller is responsible for ordering
+ * (must call `ensureMarker()` before the FIRST manifest rename per the
+ * round-7 ordering rule).
+ */
+export async function atomicWriteManifest(next: ManifestFile): Promise<void> {
+	const { manifestFile, configDir } = resolveConfigPaths();
+	mkdirSync(configDir, { recursive: true, mode: 0o700 });
+	const serialized = JSON.stringify(next);
+	const tmp = `${manifestFile}.tmp-${process.pid}-${Date.now().toString(36)}`;
+	// We accept temp-files at mode 0644 for the manifest (it is not secret —
+	// dbIds and dekFingerprints are one-way values), but write via the canonical
+	// recipe still for crash-safe semantics.
+	writeFileSync(tmp, serialized, { mode: 0o644 });
+	if (process.env["NODIX_CRASH_AFTER"] === "during-manifest-rename") {
+		// We cannot literally interrupt the rename syscall from JS; the fault
+		// model here is "killed before rename completes." Exit before rename.
+		process.exit(137);
+	}
+	await rename(tmp, manifestFile);
+	const dirHandle = await openHandle(dirname(manifestFile), "r");
+	try {
+		await dirHandle.sync();
+	} finally {
+		await dirHandle.close();
+	}
+}
+
+export function emptyManifest(): ManifestFile {
+	return {
+		schemaVersion: MANIFEST_SCHEMA_VERSION,
+		createdAt: new Date().toISOString(),
+		dbs: [],
+	};
+}
+
+export function findEntry(
+	manifest: ManifestFile,
+	path: string,
+): ManifestEntry | undefined {
+	return manifest.dbs.find((d) => d.path === path);
+}
+
+export function appendEntry(
+	manifest: ManifestFile,
+	entry: ManifestEntry,
+): ManifestFile {
+	return {
+		schemaVersion: manifest.schemaVersion,
+		createdAt: manifest.createdAt,
+		dbs: [...manifest.dbs, entry],
+	};
+}

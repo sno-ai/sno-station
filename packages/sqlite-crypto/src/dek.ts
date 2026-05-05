@@ -1,0 +1,281 @@
+import { randomBytes } from "node:crypto";
+import { existsSync } from "node:fs";
+import { hostname } from "node:os";
+import { createInterface } from "node:readline";
+import { resolveConfigPaths } from "./config.js";
+import {
+	KeychainUnavailableError,
+	ManifestCorrupted,
+	ManifestMissing,
+	MissingDekError,
+	WrongKeyError,
+} from "./errors.js";
+import {
+	atomicReplaceSecretFile,
+	readSecretFile,
+	writeNewSecretFile,
+} from "./key-file.js";
+import { liveKeychain } from "./keychain.js";
+import {
+	isManifestPresent,
+	isMarkerPresent,
+	readManifestIfPresent,
+} from "./manifest.js";
+import {
+	type Dek,
+	KEY_STATE_VERSION,
+	type KeyStateFile,
+	type KeyStateFilePlain,
+	type KeyStateFileWrapped,
+} from "./types.js";
+import { unwrapDek, type WrappedDek } from "./wrap.js";
+
+let dekPromise: Promise<Dek> | undefined;
+let warnedFallback = false;
+let warnedRemoveCrash = false;
+
+const trackedDekBuffers: Set<Buffer> = new Set();
+let beforeExitHooked = false;
+
+function registerForZeroize(buf: Buffer): void {
+	trackedDekBuffers.add(buf);
+	if (!beforeExitHooked) {
+		beforeExitHooked = true;
+		const handler = (): void => {
+			for (const b of trackedDekBuffers) {
+				try {
+					b.fill(0);
+				} catch {
+					// ignore
+				}
+			}
+		};
+		process.on("beforeExit", handler);
+		process.on("exit", handler);
+	}
+}
+
+function asDek(buf: Buffer): Dek {
+	if (buf.length !== 32) {
+		throw new Error(`DEK must be 32 bytes; got ${buf.length}`);
+	}
+	registerForZeroize(buf);
+	return buf as Dek;
+}
+
+function readPlainKeyFileSync(content: Buffer): KeyStateFile {
+	let parsed: unknown;
+	try {
+		parsed = JSON.parse(content.toString("utf8"));
+	} catch (err) {
+		throw new ManifestCorrupted("key state file is not valid JSON", {
+			cause: err,
+		});
+	}
+	if (typeof parsed !== "object" || parsed === null) {
+		throw new ManifestCorrupted("key state file is not an object");
+	}
+	const obj = parsed as Record<string, unknown>;
+	if (obj["version"] !== KEY_STATE_VERSION) {
+		throw new ManifestCorrupted(
+			`key state file has unsupported version ${String(obj["version"])}`,
+		);
+	}
+	const mode = obj["mode"];
+	if (mode !== "plain" && mode !== "wrapped") {
+		throw new ManifestCorrupted(
+			`key state file has unrecognized mode ${String(mode)}`,
+		);
+	}
+	return obj as unknown as KeyStateFile;
+}
+
+async function readKeyState(): Promise<KeyStateFile | undefined> {
+	const { keyFile } = resolveConfigPaths();
+	if (!existsSync(keyFile)) return undefined;
+	const buf = await readSecretFile(keyFile);
+	return readPlainKeyFileSync(buf);
+}
+
+function makePlainKeyState(dek: Buffer): KeyStateFilePlain {
+	return {
+		version: KEY_STATE_VERSION,
+		mode: "plain",
+		dek: dek.toString("hex"),
+		wrappedDek: null,
+		wrapNonce: null,
+		wrapTag: null,
+		kdfParams: null,
+		salt: null,
+		createdAt: new Date().toISOString(),
+		host: hostname(),
+	};
+}
+
+function emitFallbackWarning(): void {
+	if (warnedFallback) return;
+	warnedFallback = true;
+	const { keyFile } = resolveConfigPaths();
+	process.stderr.write(
+		`[nodix] WARN: OS keychain unavailable. Falling back to ${keyFile} (mode 0600).\n` +
+			`[nodix]      Encryption is on, but the DEK is now protected only by file-system permissions.\n` +
+			`[nodix]      To upgrade: run \`nodix lock --set-passphrase\`.\n`,
+	);
+}
+
+function emitRemovePassphraseCrashWarning(): void {
+	if (warnedRemoveCrash) return;
+	warnedRemoveCrash = true;
+	process.stderr.write(
+		`[nodix] WARN: detected an interrupted \`--remove-passphrase\`. Re-running it is recommended.\n`,
+	);
+}
+
+async function promptPassphrase(): Promise<Buffer> {
+	const useStdin = process.env["NODIX_PASSPHRASE_STDIN"] === "1";
+	const rl = createInterface({
+		input: useStdin ? process.stdin : process.stdin,
+		output: process.stderr,
+		terminal: !useStdin,
+	});
+	process.stderr.write("Enter nodix passphrase: ");
+	try {
+		const line = await new Promise<string>((resolve) => {
+			rl.once("line", resolve);
+		});
+		return Buffer.from(line, "utf8");
+	} finally {
+		rl.close();
+	}
+}
+
+interface DekResolution {
+	dek: Buffer;
+	persistedAsPlain: boolean;
+}
+
+async function generateAndPersistFresh(): Promise<DekResolution> {
+	const dek = randomBytes(32);
+	try {
+		liveKeychain.set(dek.toString("hex"));
+		return { dek, persistedAsPlain: false };
+	} catch (err) {
+		if (err instanceof KeychainUnavailableError) {
+			emitFallbackWarning();
+			const { keyFile } = resolveConfigPaths();
+			writeNewSecretFile(keyFile, JSON.stringify(makePlainKeyState(dek)));
+			return { dek, persistedAsPlain: true };
+		}
+		throw err;
+	}
+}
+
+function readKeychainHex(): string | null {
+	try {
+		return liveKeychain.get();
+	} catch (err) {
+		if (err instanceof KeychainUnavailableError) return null;
+		throw err;
+	}
+}
+
+function readPlainDekFromKeyState(state: KeyStateFilePlain): Buffer {
+	return Buffer.from(state.dek, "hex");
+}
+
+async function unwrapWithPrompt(state: KeyStateFileWrapped): Promise<Buffer> {
+	const passphrase = await promptPassphrase();
+	try {
+		const wrapped: WrappedDek = {
+			version: state.version,
+			salt: state.salt,
+			kdfParams: state.kdfParams,
+			nonce: state.wrapNonce,
+			ciphertext: state.wrappedDek,
+			tag: state.wrapTag,
+		};
+		return await unwrapDek(wrapped, passphrase);
+	} finally {
+		passphrase.fill(0);
+	}
+}
+
+/**
+ * Step A → Step B → Step C → Step D state machine per spec.
+ */
+async function resolveDek(): Promise<Buffer> {
+	// Step A — manifest/marker inventory.
+	const manifestPresent = isManifestPresent();
+	const markerPresent = isMarkerPresent();
+	if (!manifestPresent && markerPresent) {
+		throw new ManifestMissing();
+	}
+	const manifest = manifestPresent ? readManifestIfPresent() : undefined;
+	const registeredDbs = manifest?.dbs.length ?? 0;
+
+	// Step B — key-source inventory.
+	const keychainHex = readKeychainHex();
+	const keyState = await readKeyState();
+
+	// Step B.conflict — keychain hit AND wrapped key file present (post `--remove-passphrase` crash).
+	if (keychainHex && keyState?.mode === "wrapped") {
+		emitRemovePassphraseCrashWarning();
+		// We cannot run a canary-verify here without a registered DB to test against;
+		// in v0.1 we trust the keychain when both are present (its presence is the
+		// late-stage state in `--remove-passphrase`'s two-phase commit per spec
+		// scenario "Both keychain and wrapped state present"). The spurious wrapped
+		// file is left untouched per spec.
+		return Buffer.from(keychainHex, "hex");
+	}
+
+	// Step C — source priority.
+	if (keychainHex) {
+		return Buffer.from(keychainHex, "hex");
+	}
+	if (keyState?.mode === "wrapped") {
+		return await unwrapWithPrompt(keyState);
+	}
+	if (keyState?.mode === "plain") {
+		return readPlainDekFromKeyState(keyState);
+	}
+
+	// Step D — generation gate.
+	if (registeredDbs >= 1) {
+		throw new MissingDekError();
+	}
+	if (manifestPresent && registeredDbs === 0) {
+		// manifest exists but is empty — equivalent to fresh-install for DEK gen
+		const r = await generateAndPersistFresh();
+		return r.dek;
+	}
+	// Fresh install: no manifest, no marker, no DEK source.
+	const r = await generateAndPersistFresh();
+	return r.dek;
+}
+
+export async function getDek(): Promise<Dek> {
+	if (!dekPromise) {
+		dekPromise = (async () => {
+			const buf = await resolveDek();
+			if (buf.length !== 32) {
+				throw new WrongKeyError("resolved DEK has wrong length");
+			}
+			return asDek(buf);
+		})();
+	}
+	return dekPromise;
+}
+
+export function _resetDekCache(): void {
+	dekPromise = undefined;
+	warnedFallback = false;
+	warnedRemoveCrash = false;
+}
+
+export async function _persistPlainKeyState(dek: Buffer): Promise<void> {
+	const { keyFile } = resolveConfigPaths();
+	await atomicReplaceSecretFile(
+		keyFile,
+		JSON.stringify(makePlainKeyState(dek)),
+	);
+}
