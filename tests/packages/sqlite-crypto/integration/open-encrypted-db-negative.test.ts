@@ -49,6 +49,28 @@ function flipOneByte(path: string, offset = 4096): void {
 	writeFileSync(path, buf);
 }
 
+describe("openEncryptedDb — plaintext SQLite rejection", () => {
+	it("refuses to open an existing unencrypted SQLite file", async () => {
+		const dek = await getDek();
+		const dbPath = uniqueDbPath(env, "plaintext");
+		mkdirSync(dirname(dbPath), { recursive: true });
+		writeFileSync(
+			dbPath,
+			Buffer.concat([
+				Buffer.from("SQLite format 3\0", "binary"),
+				Buffer.alloc(4096),
+			]),
+		);
+
+		expect(() => openEncryptedDb(dbPath, dek)).toThrow(/PlaintextDbRejected/);
+		try {
+			openEncryptedDb(dbPath, dek);
+		} catch (e) {
+			expect(e instanceof IntegrityCheckFailed).toBe(true);
+		}
+	});
+});
+
 describe("openEncryptedDb — wrong DEK", () => {
 	it("rejects with WrongKeyError or CanaryMismatch on a different DEK", async () => {
 		const dek = await getDek();
