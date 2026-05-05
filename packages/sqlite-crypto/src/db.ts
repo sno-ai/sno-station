@@ -236,7 +236,7 @@ function registerFreshDbSync(
 		dekFingerprint: fp,
 	});
 	try {
-		syncAtomicWriteManifest(next);
+		pre.db.exec("COMMIT");
 	} catch (err) {
 		try {
 			pre.db.exec("ROLLBACK");
@@ -245,8 +245,8 @@ function registerFreshDbSync(
 		}
 		throw err;
 	}
-	crashAfter("after-manifest-before-commit");
-	pre.db.exec("COMMIT");
+	crashAfter("after-commit-before-manifest");
+	syncAtomicWriteManifest(next);
 	const row = pre.db
 		.prepare(`SELECT sentinel, db_id FROM ${CANARY_TABLE} WHERE id = 1`)
 		.get() as { sentinel: string; db_id: string } | undefined;

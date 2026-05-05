@@ -15,7 +15,12 @@ import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { ManifestMissing } from "@snoai/nodix-crypto";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { childNodeArgs, makeTestEnv, type TestEnv } from "../_helpers.ts";
+import {
+	childNodeArgs,
+	makeTestEnv,
+	runCli,
+	type TestEnv,
+} from "../_helpers.ts";
 
 let env: TestEnv;
 
@@ -32,6 +37,10 @@ const FIXTURE_PATH = new URL(
 	import.meta.url,
 ).pathname;
 
+function killerDbPath(): string {
+	return `${env.nodixConfigDir}/dbs/killer.db`;
+}
+
 function spawnKiller(crashPoint: string): {
 	code: number | null;
 	signal: NodeJS.Signals | null;
@@ -42,7 +51,7 @@ function spawnKiller(crashPoint: string): {
 			XDG_CONFIG_HOME: env.xdgConfigHome,
 			NODIX_KEYCHAIN_SERVICE: env.keychainService,
 			NODIX_CRASH_AFTER: crashPoint,
-			NODIX_DB_PATH: `${env.nodixConfigDir}/dbs/killer.db`,
+			NODIX_DB_PATH: killerDbPath(),
 		},
 		timeout: 30_000,
 		encoding: "utf8",
@@ -86,6 +95,22 @@ describe("manifest atomicity (task 2.7)", () => {
 		// Now use the public API to confirm halt-no-rebuild behavior.
 		const { getDek } = await import("@snoai/nodix-crypto");
 		await expect(getDek()).rejects.toBeInstanceOf(ManifestMissing);
+	});
+
+	it("crash after DB commit before manifest leaves a rebuildable canary", async () => {
+		const r = spawnKiller("after-commit-before-manifest");
+		expect(r.code !== 0 || r.signal !== null).toBe(true);
+		expect(existsSync(env.markerFile)).toBe(true);
+		expect(existsSync(env.manifestFile)).toBe(false);
+
+		const rebuilt = runCli(["lock", "--rebuild-manifest", killerDbPath()], {
+			stdin: "y\n",
+		});
+		expect(rebuilt.status, `stderr: ${rebuilt.stderr}`).toBe(0);
+		const manifest = JSON.parse(readFileSync(env.manifestFile, "utf8")) as {
+			dbs: Array<{ path: string }>;
+		};
+		expect(manifest.dbs.map((db) => db.path)).toContain(killerDbPath());
 	});
 
 	it("crash mid-rename → file is either prior-valid or new-valid, never truncated", () => {

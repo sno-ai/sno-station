@@ -153,8 +153,28 @@ async function promptPassphrase(): Promise<Buffer> {
 	});
 	process.stderr.write("Enter nodix passphrase: ");
 	try {
-		const line = await new Promise<string>((resolve) => {
-			rl.once("line", resolve);
+		const line = await new Promise<string>((resolve, reject) => {
+			let settled = false;
+			const cleanup = (): void => {
+				rl.off("line", onLine);
+				rl.off("close", onClose);
+			};
+			const onLine = (line: string): void => {
+				if (settled) return;
+				settled = true;
+				cleanup();
+				resolve(line);
+			};
+			const onClose = (): void => {
+				if (settled) return;
+				settled = true;
+				cleanup();
+				reject(
+					new WrongKeyError("passphrase input closed before a line was read"),
+				);
+			};
+			rl.once("line", onLine);
+			rl.once("close", onClose);
 		});
 		return Buffer.from(line, "utf8");
 	} finally {

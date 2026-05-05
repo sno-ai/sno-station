@@ -5,10 +5,17 @@
  */
 
 import { createDecipheriv } from "node:crypto";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import {
+	mkdirSync,
+	readFileSync,
+	renameSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
 import { dirname, posix } from "node:path";
 import { gunzipSync } from "node:zlib";
 import { extract } from "tar-stream";
+import { _readCanaryForRecovery } from "./db.js";
 import { getDek } from "./dek.js";
 import {
 	ForeignDekError,
@@ -24,6 +31,7 @@ import {
 	NODIX_VERSION_V1,
 } from "./export.js";
 import { readManifestIfPresent } from "./manifest.js";
+import { CANARY_SENTINEL, type Dek, type ManifestEntry } from "./types.js";
 import { dekFingerprint4 } from "./wrap.js";
 
 interface ParsedHeader {
@@ -95,30 +103,30 @@ function normalizeArchiveEntryName(entryName: string): string {
 	return normalized;
 }
 
-function restorePathsByArchiveEntry(): ReadonlyMap<string, string> {
+function restoreEntriesByArchiveEntry(): ReadonlyMap<string, ManifestEntry> {
 	const manifest = readManifestIfPresent();
-	const paths = new Map<string, string>();
+	const entries = new Map<string, ManifestEntry>();
 	for (const entry of manifest?.dbs ?? []) {
 		const archivePath = normalizeArchiveEntryName(
 			entry.path.replace(/^\/+/, ""),
 		);
-		paths.set(archivePath, entry.path);
+		entries.set(archivePath, entry);
 	}
-	return paths;
+	return entries;
 }
 
-function restorePathForEntry(
+function restoreEntryForArchiveEntry(
 	entryName: string,
-	restorePaths: ReadonlyMap<string, string>,
-): string {
+	restoreEntries: ReadonlyMap<string, ManifestEntry>,
+): ManifestEntry {
 	const normalized = normalizeArchiveEntryName(entryName);
-	const restorePath = restorePaths.get(normalized);
-	if (!restorePath) {
+	const entry = restoreEntries.get(normalized);
+	if (!entry) {
 		throw new InvalidExportFormat(
 			`InvalidExportFormat: archive entry is not registered in local manifest '${entryName}'`,
 		);
 	}
-	return restorePath;
+	return entry;
 }
 
 async function extractTarball(plaintext: Buffer): Promise<TarEntry[]> {
@@ -140,6 +148,37 @@ async function extractTarball(plaintext: Buffer): Promise<TarEntry[]> {
 		ext.on("error", reject);
 		ext.end(tarBytes);
 	});
+}
+
+function verifyRestoredDb(
+	dbPath: string,
+	entry: ManifestEntry,
+	dek: Dek,
+): void {
+	let row: { sentinel: string; db_id: string } | undefined;
+	try {
+		row = _readCanaryForRecovery(dbPath, dek);
+	} catch (err) {
+		throw new InvalidExportFormat(
+			`InvalidExportFormat: restored archive entry '${entry.path}' is not a readable encrypted DB`,
+			{ cause: err },
+		);
+	}
+	if (!row) {
+		throw new InvalidExportFormat(
+			`InvalidExportFormat: restored archive entry '${entry.path}' has no canary row`,
+		);
+	}
+	if (row.sentinel !== CANARY_SENTINEL) {
+		throw new InvalidExportFormat(
+			`InvalidExportFormat: restored archive entry '${entry.path}' has an invalid canary sentinel`,
+		);
+	}
+	if (row.db_id !== entry.dbId) {
+		throw new InvalidExportFormat(
+			`InvalidExportFormat: restored archive entry '${entry.path}' has db_id ${row.db_id}, expected ${entry.dbId}`,
+		);
+	}
 }
 
 export async function importEncrypted(sourcePath: string): Promise<void> {
@@ -171,10 +210,19 @@ export async function importEncrypted(sourcePath: string): Promise<void> {
 	}
 
 	const entries = await extractTarball(plaintext);
-	const restorePaths = restorePathsByArchiveEntry();
+	const restoreEntries = restoreEntriesByArchiveEntry();
 	for (const e of entries) {
-		const restorePath = restorePathForEntry(e.name, restorePaths);
+		const manifestEntry = restoreEntryForArchiveEntry(e.name, restoreEntries);
+		const restorePath = manifestEntry.path;
+		const tmpPath = `${restorePath}.import-${process.pid}-${Date.now().toString(36)}`;
 		mkdirSync(dirname(restorePath), { recursive: true });
-		writeFileSync(restorePath, e.data, { mode: 0o600 });
+		try {
+			writeFileSync(tmpPath, e.data, { mode: 0o600 });
+			verifyRestoredDb(tmpPath, manifestEntry, dek);
+			renameSync(tmpPath, restorePath);
+		} catch (err) {
+			rmSync(tmpPath, { force: true });
+			throw err;
+		}
 	}
 }
