@@ -13,6 +13,7 @@ import {
 import {
 	atomicReplaceSecretFile,
 	readSecretFile,
+	readSecretFileSync,
 	writeNewSecretFile,
 } from "./key-file.js";
 import { liveKeychain } from "./keychain.js";
@@ -94,6 +95,13 @@ async function readKeyState(): Promise<KeyStateFile | undefined> {
 	const { keyFile } = resolveConfigPaths();
 	if (!existsSync(keyFile)) return undefined;
 	const buf = await readSecretFile(keyFile);
+	return readPlainKeyFileSync(buf);
+}
+
+function readKeyStateSync(): KeyStateFile | undefined {
+	const { keyFile } = resolveConfigPaths();
+	if (!existsSync(keyFile)) return undefined;
+	const buf = readSecretFileSync(keyFile);
 	return readPlainKeyFileSync(buf);
 }
 
@@ -268,8 +276,81 @@ export async function getDek(): Promise<Dek> {
 
 export function _resetDekCache(): void {
 	dekPromise = undefined;
+	cachedSyncDek = undefined;
 	warnedFallback = false;
 	warnedRemoveCrash = false;
+}
+
+let cachedSyncDek: Dek | undefined;
+
+function generateAndPersistFreshSync(): Buffer {
+	const dek = randomBytes(32);
+	try {
+		liveKeychain.set(dek.toString("hex"));
+		return dek;
+	} catch (err) {
+		if (err instanceof KeychainUnavailableError) {
+			emitFallbackWarning();
+			const { keyFile } = resolveConfigPaths();
+			writeNewSecretFile(keyFile, JSON.stringify(makePlainKeyState(dek)));
+			return dek;
+		}
+		throw err;
+	}
+}
+
+function resolveDekSync(): Buffer {
+	const manifestPresent = isManifestPresent();
+	const markerPresent = isMarkerPresent();
+	if (!manifestPresent && markerPresent) {
+		throw new ManifestMissing();
+	}
+	const manifest = manifestPresent ? readManifestIfPresent() : undefined;
+	const registeredDbs = manifest?.dbs.length ?? 0;
+
+	const keychainHex = readKeychainHex();
+	const keyState = readKeyStateSync();
+
+	if (keychainHex && keyState?.mode === "wrapped") {
+		emitRemovePassphraseCrashWarning();
+		return Buffer.from(keychainHex, "hex");
+	}
+	if (keychainHex) {
+		return Buffer.from(keychainHex, "hex");
+	}
+	if (keyState?.mode === "wrapped") {
+		throw new WrongKeyError(
+			"WrongKeyError: passphrase-mode DEK requires async getDek() with interactive prompt",
+		);
+	}
+	if (keyState?.mode === "plain") {
+		return readPlainDekFromKeyState(keyState);
+	}
+
+	if (registeredDbs >= 1) {
+		throw new MissingDekError();
+	}
+	return generateAndPersistFreshSync();
+}
+
+/**
+ * Synchronous DEK resolver for sync entry points (e.g. plugin `register()`
+ * contracts that cannot await). Returns the same DEK as {@link getDek} for
+ * non-passphrase modes; throws on passphrase mode (which requires an
+ * interactive prompt that is inherently async).
+ */
+export function getDekSync(): Dek {
+	if (cachedSyncDek) return cachedSyncDek;
+	const buf = resolveDekSync();
+	if (buf.length !== 32) {
+		throw new WrongKeyError("resolved DEK has wrong length");
+	}
+	cachedSyncDek = asDek(buf);
+	// Keep the async cache in sync so subsequent getDek() awaits resolve to
+	// the same value without re-running resolution.
+	const same = cachedSyncDek;
+	dekPromise = Promise.resolve(same);
+	return cachedSyncDek;
 }
 
 export async function _persistPlainKeyState(dek: Buffer): Promise<void> {

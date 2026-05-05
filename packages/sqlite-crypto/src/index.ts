@@ -3,7 +3,7 @@
 
 export { resolveConfigPaths, resolveKeychainService } from "./config.js";
 export { openEncryptedDb, openEncryptedDbReadonly } from "./db.js";
-export { _resetDekCache, getDek } from "./dek.js";
+export { _resetDekCache, getDek, getDekSync } from "./dek.js";
 export * from "./errors.js";
 export {
 	isManifestPresent,
