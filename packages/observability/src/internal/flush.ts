@@ -195,7 +195,10 @@ export class FlushEngine {
 	private async drainStep(): Promise<{ result: FlushResult; stop: boolean } | null> {
 		const activeFlush = this.activeFlush;
 		if (activeFlush !== null) {
-			return { result: await activeFlush, stop: false };
+			const pendingBefore = this.store.countPending();
+			const result = await activeFlush;
+			const pendingAfter = this.store.countPending();
+			return { result, stop: shouldStopDrain(result, pendingBefore, pendingAfter) };
 		}
 		const pendingBefore = this.store.countPending();
 		if (pendingBefore === 0) {
