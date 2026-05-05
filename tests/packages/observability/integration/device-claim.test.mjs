@@ -100,6 +100,42 @@ describe("device claim", () => {
 		}
 	});
 
+	it("uses the server interval after slow_down", async () => {
+		const temp = createTempSnoEnv("sno-observe-claim-slow-down-");
+		const identity = bootstrapIdentity(temp.env);
+		const originalSetTimeout = globalThis.setTimeout;
+		const sleeps = [];
+		let tokenCalls = 0;
+		globalThis.setTimeout = (callback, delay, ...args) => {
+			sleeps.push(delay);
+			callback(...args);
+			return { [Symbol.toPrimitive]: () => 0 };
+		};
+		try {
+			const result = await claimMachine(identity, {
+				env: temp.env,
+				fetch: createClaimFetch({
+					onToken() {
+						tokenCalls += 1;
+						if (tokenCalls === 1) {
+							return { status: 400, body: { error: "slow_down", interval: 30 } };
+						}
+						return { status: 200, body: claimedBody() };
+					},
+				}),
+				pollIntervalMs: 1000,
+				timeoutMs: 60000,
+			});
+
+			assert.equal(result.userAccountId, accountCuid);
+			assert.equal(tokenCalls, 2);
+			assert.deepEqual(sleeps, [30000]);
+		} finally {
+			globalThis.setTimeout = originalSetTimeout;
+			cleanupTempSnoEnv(temp);
+		}
+	});
+
 	it("accepts device authorization responses without optional fields", async () => {
 		const temp = createTempSnoEnv("sno-observe-claim-minimal-code-");
 		const identity = bootstrapIdentity(temp.env);
