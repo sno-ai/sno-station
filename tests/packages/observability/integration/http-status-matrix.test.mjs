@@ -107,14 +107,22 @@ describe("HTTP status matrix (fixture server, node:http)", () => {
 		});
 	});
 
-	it("200 idempotent -> shipped=true, advance (24.6)", async () => {
-		await withServerAndRuntime(async ({ server, runtime }) => {
-			server.enqueue("/api/v1/events", { status: 200, body: { received: 1 } });
+	it("200 unexpected event ingest status -> retryable, no advance", async () => {
+		await withServerAndRuntime(async ({ server, runtime, t }) => {
 			server.enqueue("/api/v1/events", { status: 200, body: { received: 1 } });
 			await runtime.emitParsed(memoryEvent(1));
 			const res = await runtime.flush();
-			assert.equal(res.shipped, 2);
+			assert.equal(res.shipped, 0);
 			assert.equal(res.terminal, 0);
+			assert.equal(res.retryable, 1);
+			const store = new BufferStore(t.env.SNO_BUFFER_PATH);
+			try {
+				const row = store.getAllRows().find((r) => r.terminal === 0 && r.shipped === 0);
+				assert.notEqual(row, undefined);
+				assert.equal(row.attempts, 1);
+			} finally {
+				store.close();
+			}
 		});
 	});
 
@@ -152,6 +160,16 @@ describe("HTTP status matrix (fixture server, node:http)", () => {
 			});
 		});
 	}
+
+	it("unexpected 4xx -> terminal quarantine, no retry", async () => {
+		await withServerAndRuntime(async ({ server, runtime }) => {
+			server.enqueue("/api/v1/events", { status: 404, body: { error: "not_found" } });
+			await runtime.emitParsed(memoryEvent(1));
+			const res = await runtime.flush();
+			assert.equal(res.terminal, 2);
+			assert.equal(res.retryable, 0);
+		});
+	});
 
 	it("400 after an accepted predecessor quarantines the broken suffix before reseed", async () => {
 		await withServerAndRuntime(async ({ server, runtime, t }) => {
@@ -209,27 +227,45 @@ describe("HTTP status matrix (fixture server, node:http)", () => {
 		});
 	});
 
-	it("403 machine_scope_forbidden -> retryable + error logged (24.14)", async () => {
-		await withServerAndRuntime(async ({ server, runtime }) => {
+	it("403 identity_mismatch -> terminal quarantine, no retry", async () => {
+		await withServerAndRuntime(async ({ server, runtime, t }) => {
 			server.enqueue("/api/v1/events", {
 				status: 403,
-				body: { error: "machine_scope_forbidden" },
+				body: { error: "identity_mismatch" },
 			});
 			await runtime.emitParsed(memoryEvent(1));
 			const res = await runtime.flush();
-			assert.equal(res.retryable, 1);
+			assert.equal(res.retryable, 0);
+			assert.equal(res.terminal, 2);
+			const store = new BufferStore(t.env.SNO_BUFFER_PATH);
+			try {
+				const rows = store.getAllRows();
+				assert.equal(rows[0].terminal, 1);
+				assert.equal(rows[1].terminal, 1);
+			} finally {
+				store.close();
+			}
 		});
 	});
 
-	it("403 ownership_denied -> retryable + error logged (24.15)", async () => {
-		await withServerAndRuntime(async ({ server, runtime }) => {
+	it("403 scope_user_mismatch -> terminal quarantine, no retry", async () => {
+		await withServerAndRuntime(async ({ server, runtime, t }) => {
 			server.enqueue("/api/v1/events", {
 				status: 403,
-				body: { error: "ownership_denied" },
+				body: { error: "scope_user_mismatch" },
 			});
 			await runtime.emitParsed(memoryEvent(1));
 			const res = await runtime.flush();
-			assert.equal(res.retryable, 1);
+			assert.equal(res.retryable, 0);
+			assert.equal(res.terminal, 2);
+			const store = new BufferStore(t.env.SNO_BUFFER_PATH);
+			try {
+				const rows = store.getAllRows();
+				assert.equal(rows[0].terminal, 1);
+				assert.equal(rows[1].terminal, 1);
+			} finally {
+				store.close();
+			}
 		});
 	});
 
@@ -323,7 +359,7 @@ describe("HTTP status matrix (fixture server, node:http)", () => {
 		});
 	});
 
-	it("422 without explicit chain error -> retry without quarantine or reseed", async () => {
+	it("422 without explicit chain error -> terminal chain rejection and reseed", async () => {
 		await withServerAndRuntime(async ({ server, runtime, t }) => {
 			server.enqueue("/api/v1/events", {
 				status: 202,
@@ -336,15 +372,13 @@ describe("HTTP status matrix (fixture server, node:http)", () => {
 			await runtime.emitParsed(memoryEvent(1));
 			const res = await runtime.flush();
 			assert.equal(res.shipped, 1);
-			assert.equal(res.terminal, 0);
-			assert.equal(res.retryable, 1);
+			assert.equal(res.terminal, 1);
+			assert.equal(res.retryable, 0);
 			const store = new BufferStore(t.env.SNO_BUFFER_PATH);
 			try {
 				const rows = store.getAllRows();
-				assert.equal(rows.length, 2);
-				assert.equal(rows[1].terminal, 0);
-				assert.equal(rows[1].attempts, 1);
-				assert.equal(Math.max(...rows.map((r) => r.chain_epoch)), 0);
+				assert.equal(rows[1].terminal, 1);
+				assert.equal(Math.max(...rows.map((r) => r.chain_epoch)), 1);
 			} finally {
 				store.close();
 			}

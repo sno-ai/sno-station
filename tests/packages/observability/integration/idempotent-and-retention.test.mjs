@@ -27,7 +27,7 @@ function tempEnv() {
 function memoryEvent(i) {
 	return parseEventInput({
 		event_type: "memory.write",
-			lane: "memory",
+		lane: "memory",
 		agent_id: "codex",
 		payload: {
 			key_hash: `h_${i}`,
@@ -38,8 +38,8 @@ function memoryEvent(i) {
 	});
 }
 
-describe("idempotent ship + retention (22.3, 22.7)", () => {
-	it("kill between POST-success and DB-flag → restart → 200 idempotent → row marked shipped (22.3)", async () => {
+describe("accepted replay + retention (22.3, 22.7)", () => {
+	it("kill before DB-flag → restart → 202 accepted replay → row marked shipped (22.3)", async () => {
 		const t = tempEnv();
 		try {
 			// Phase 1: emit events, but the fake transport records the body but kills
@@ -49,16 +49,15 @@ describe("idempotent ship + retention (22.3, 22.7)", () => {
 			// Don't flush; close the runtime to simulate kill mid-flow.
 			await r1.shutdown().catch(() => {});
 
-			// Phase 2: restart. Stage 1 — fake server returns 200 idempotent (the row was
-			// effectively shipped on the prior process but the flag never made it to disk).
+			// Phase 2: restart. Sno event ingest success is always 202 under the API contract.
 			const calls = [];
-				const fakeFetch = async (url, init) => {
-					if (String(url).endsWith("/api/v1/identity/register-machine")) {
-						return registerMachineResponse(init);
-					}
-					calls.push({ url: String(url), body: init.body });
-					return new Response(JSON.stringify({ received: 1 }), {
-					status: 200,
+			const fakeFetch = async (url, init) => {
+				if (String(url).endsWith("/api/v1/identity/register-machine")) {
+					return registerMachineResponse(init);
+				}
+				calls.push({ url: String(url), body: init.body });
+				return new Response(JSON.stringify({ receipt_id: "r_replay" }), {
+					status: 202,
 					headers: { "Content-Type": "application/json" },
 				});
 			};
@@ -69,7 +68,7 @@ describe("idempotent ship + retention (22.3, 22.7)", () => {
 				const store = new BufferStore(t.env.SNO_BUFFER_PATH);
 				try {
 					const rows = store.getAllRows();
-					// All rows now marked shipped after the idempotent reship.
+					// All rows now marked shipped after the accepted replay.
 					assert.equal(rows.every((r) => r.shipped === 1), true);
 				} finally {
 					store.close();
@@ -101,7 +100,7 @@ describe("idempotent ship + retention (22.3, 22.7)", () => {
 					store.append({
 						eventId: `survive-${i}`,
 						eventType: "memory.write",
-			lane: "memory",
+						lane: "memory",
 						tsEdgeMs: 1000 + i,
 						consentLevel: "metadata-only",
 						redacted: false,
@@ -118,12 +117,12 @@ describe("idempotent ship + retention (22.3, 22.7)", () => {
 
 			// Restart: open a new process-level runtime against the same buffer.db.
 			let postCount = 0;
-				const fakeFetch = async (url, init) => {
-					if (String(url).endsWith("/api/v1/identity/register-machine")) {
-						return registerMachineResponse(init);
-					}
-					postCount += 1;
-					return new Response(JSON.stringify({ receipt_id: `r_${postCount}` }), {
+			const fakeFetch = async (url, init) => {
+				if (String(url).endsWith("/api/v1/identity/register-machine")) {
+					return registerMachineResponse(init);
+				}
+				postCount += 1;
+				return new Response(JSON.stringify({ receipt_id: `r_${postCount}` }), {
 					status: 202,
 					headers: { "Content-Type": "application/json" },
 				});
