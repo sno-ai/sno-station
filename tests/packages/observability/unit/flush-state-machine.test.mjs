@@ -14,6 +14,10 @@ import { parseEventInput } from "../../../../packages/sno-observe/dist/internal/
 import { countTokens } from "../../../../packages/sno-observe/dist/internal/tokens.js";
 import { validPayloads, scope } from "../fixtures/temp-env.mjs";
 
+function testHash(index) {
+	return index.toString(16).padStart(64, "0");
+}
+
 function tempEnv() {
 	const dir = mkdtempSync(join(tmpdir(), "sno-observe-flush-"));
 	return {
@@ -63,7 +67,7 @@ function memoryEvent(i) {
 			lane: "memory",
 		agent_id: "codex",
 		payload: {
-			key_hash: `timer-${i}`,
+			key_hash: testHash(i),
 			byte_len: 1,
 			content_tokens: 1,
 			tokens_method: "char_approximation",
@@ -365,6 +369,138 @@ describe("flush 3-state machine", () => {
 			assert.equal(result.failedCount > 0, true);
 		} finally {
 			await runtime.shutdown().catch(() => {});
+			rmSync(t.dir, { recursive: true, force: true });
+		}
+	});
+
+	it("shutdown stops after awaiting an active retryable flush", async () => {
+		const t = tempEnv();
+		let eventCalls = 0;
+		let releaseFirstEvent;
+		const firstEventResponse = new Promise((resolve) => {
+			releaseFirstEvent = () => {
+				resolve(
+					new Response(JSON.stringify({ error: "retry" }), {
+						status: 503,
+						headers: { "Content-Type": "application/json", "Retry-After": "5" },
+					}),
+				);
+			};
+		});
+		const runtime = new SnoObserveRuntime({
+			env: t.env,
+			cwd: t.dir,
+			fetch: async (url, init) => {
+				if (String(url).endsWith("/api/v1/identity/register-machine")) {
+					return registerMachineResponse(init);
+				}
+				eventCalls += 1;
+				if (eventCalls === 1) {
+					return firstEventResponse;
+				}
+				return new Response(JSON.stringify({ receipt_id: "unexpected_retry" }), {
+					status: 202,
+					headers: { "Content-Type": "application/json" },
+				});
+			},
+		});
+		try {
+			await runtime.emitParsed(memoryEvent(100));
+			const activeFlush = runtime.flush(false);
+			await waitImmediateFlushDone(() => eventCalls === 1);
+
+			const shutdown = runtime.shutdown();
+			releaseFirstEvent();
+			const result = await shutdown;
+			await activeFlush;
+
+			assert.equal(eventCalls, 1);
+			assert.equal(result.flushedCount, 0);
+			assert.equal(result.failedCount > 0, true);
+		} finally {
+			await runtime.shutdown().catch(() => {});
+			rmSync(t.dir, { recursive: true, force: true });
+		}
+	});
+
+	it("shutdown drains scheduled pending rows before closing the buffer", async () => {
+		const t = tempEnv();
+		const runtime = new SnoObserveRuntime({
+			env: t.env,
+			cwd: t.dir,
+			fetch: async (url, init) => {
+				if (String(url).endsWith("/api/v1/identity/register-machine")) {
+					return registerMachineResponse(init);
+				}
+				return new Response(JSON.stringify({ receipt_id: "r" }), {
+					status: 202,
+					headers: { "Content-Type": "application/json" },
+				});
+			},
+		});
+		try {
+			await runtime.emitParsed(memoryEvent(7));
+			const result = await runtime.shutdown();
+			assert.equal(result.flushedCount, 2);
+			assert.equal(result.failedCount, 0);
+			const store = new BufferStore(t.env.SNO_BUFFER_PATH);
+			try {
+				assert.equal(
+					store.getAllRows().every((row) => row.shipped === 1),
+					true,
+				);
+			} finally {
+				store.close();
+			}
+		} finally {
+			await runtime.shutdown().catch(() => {});
+			rmSync(t.dir, { recursive: true, force: true });
+		}
+	});
+
+	it("beforeExit flush hook re-arms after firing once", async () => {
+		const t = tempEnv();
+		const store = new BufferStore(t.env.SNO_BUFFER_PATH);
+		const identity = bootstrapIdentity(t.env);
+		const originalOnce = process.once;
+		const originalOff = process.off;
+		let beforeExitHandler;
+		process.once = function once(event, listener) {
+			if (event === "beforeExit") {
+				beforeExitHandler = listener;
+				return this;
+			}
+			return originalOnce.call(this, event, listener);
+		};
+		process.off = function off(event, listener) {
+			if (event === "beforeExit" && listener === beforeExitHandler) {
+				beforeExitHandler = undefined;
+				return this;
+			}
+			return originalOff.call(this, event, listener);
+		};
+		const engine = new FlushEngine(
+			store,
+			() => identity,
+			() => "https://sno.test",
+			() => t.env,
+		);
+		try {
+			engine.schedule(60_000);
+			const firstHandler = beforeExitHandler;
+			assert.equal(typeof firstHandler, "function");
+			beforeExitHandler = undefined;
+			firstHandler();
+			await new Promise((resolve) => setImmediate(resolve));
+
+			engine.schedule(60_000);
+			assert.equal(typeof beforeExitHandler, "function");
+			assert.notEqual(beforeExitHandler, firstHandler);
+		} finally {
+			engine.dispose();
+			process.once = originalOnce;
+			process.off = originalOff;
+			store.close();
 			rmSync(t.dir, { recursive: true, force: true });
 		}
 	});

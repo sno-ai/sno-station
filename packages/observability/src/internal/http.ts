@@ -52,7 +52,7 @@ export async function postEvent(
 		method: "POST",
 		headers,
 		body,
-		signal: signal ?? AbortSignal.timeout(DEFAULT_REQUEST_TIMEOUT_MS),
+		signal: withRequestTimeout(signal),
 	});
 	// Body-read failures after the response resolved (truncated stream, abort
 	// during body, decoder error) MUST NOT propagate as transport errors —
@@ -74,10 +74,10 @@ export async function fetchJson<T>(
 	init: RequestInit,
 	fetchImpl: typeof fetch = fetch,
 ): Promise<{ status: number; value: T | null; body: string; headers: Headers }> {
-	const initWithTimeout: RequestInit =
-		init.signal === undefined || init.signal === null
-			? { ...init, signal: AbortSignal.timeout(DEFAULT_REQUEST_TIMEOUT_MS) }
-			: init;
+	const initWithTimeout: RequestInit = {
+		...init,
+		signal: withRequestTimeout(init.signal ?? undefined),
+	};
 	const response = await fetchImpl(url, initWithTimeout);
 	const body = await response.text();
 	if (body.length === 0) {
@@ -93,6 +93,11 @@ export async function fetchJson<T>(
 	} catch {
 		throw new TransportError(`invalid JSON response from ${url}`);
 	}
+}
+
+function withRequestTimeout(signal: AbortSignal | undefined): AbortSignal {
+	const timeout = AbortSignal.timeout(DEFAULT_REQUEST_TIMEOUT_MS);
+	return signal === undefined ? timeout : AbortSignal.any([signal, timeout]);
 }
 
 export function parseRetryAfter(value: string | null): number | null {

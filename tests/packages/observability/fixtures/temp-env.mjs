@@ -81,6 +81,10 @@ export function headerRecord(headers) {
 	return { ...headers };
 }
 
+export function testHash(index) {
+	return index.toString(16).padStart(64, "0");
+}
+
 export const validPayloads = {
 	"agent.identify": {
 		agent_id: "codex",
@@ -88,13 +92,13 @@ export const validPayloads = {
 		sdk_version: "0.1.0",
 	},
 	"memory.write": {
-		key_hash: "h_key",
+		key_hash: testHash(1),
 		byte_len: 12,
 		content_tokens: 3,
 		tokens_method: "char_approximation",
 	},
 	"memory.read": {
-		query_hash: "h_query",
+		query_hash: testHash(2),
 		query_tokens: 2,
 		k: 5,
 		hit_count: 1,
@@ -121,16 +125,16 @@ export const validPayloads = {
 	"tool.call": {
 		tool_name: "bash",
 		decision: "allow",
-		input_hash: "h_input",
-		output_hash: "h_output",
+		input_hash: testHash(3),
+		output_hash: testHash(4),
 		latency_ms: 8,
 	},
 	"session.start": { session_uuid: "018f7d0c-fd8b-7ccf-9b9b-0a2ea938ad0d" },
 	"session.end": { session_uuid: "018f7d0c-fd8b-7ccf-9b9b-0a2ea938ad0d", duration_ms: 1000 },
-	"prompt.submit": { prompt_hash: "h_prompt", byte_len: 9 },
-	"permission.request": { kind: "shell", decision: "deny", target_hash: "h_target" },
+	"prompt.submit": { prompt_hash: testHash(5), byte_len: 9 },
+	"permission.request": { kind: "shell", decision: "deny", target_hash: testHash(6) },
 	"consent.change": { from: "metadata-only", to: "off", reason: "test" },
-	error: { kind: "recoverable", message_hash: "h_message", recoverable: true },
+	error: { kind: "recoverable", message_hash: testHash(7), recoverable: true },
 	"cost.summary": {
 		session_uuid: "018f7d0c-fd8b-7ccf-9b9b-0a2ea938ad0d",
 		tokens_in: 20,
