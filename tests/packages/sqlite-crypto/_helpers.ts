@@ -1,7 +1,9 @@
+import { type SpawnSyncReturns, spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { _resetDekCache } from "@snoai/nodix-crypto";
 
 /**
@@ -96,4 +98,56 @@ export function uniqueDbPath(env: TestEnv, name = "test"): string {
  */
 export function childNodeArgs(fixturePath: string): string[] {
 	return ["--import", "tsx", fixturePath];
+}
+
+const HELPER_DIR = fileURLToPath(new URL(".", import.meta.url));
+/** Absolute path to the production CLI source — the bin's `dist/cli/nodix.js` is built from this. */
+export const CLI_SRC_PATH = join(
+	HELPER_DIR,
+	"..",
+	"..",
+	"..",
+	"packages",
+	"nodix-crypto",
+	"src",
+	"cli",
+	"nodix.ts",
+);
+
+export interface CliResult {
+	status: number | null;
+	stdout: string;
+	stderr: string;
+	signal: NodeJS.Signals | null;
+}
+
+/**
+ * Spawn the production `nodix` CLI from source via `tsx`. The XDG /
+ * `NODIX_KEYCHAIN_SERVICE` env from `makeTestEnv()` MUST already be set in
+ * `process.env` — this helper inherits it. Pass `stdin` to feed prompts.
+ */
+export function runCli(
+	args: readonly string[],
+	options: {
+		stdin?: string;
+		timeoutMs?: number;
+		env?: Record<string, string>;
+	} = {},
+): CliResult {
+	const child: SpawnSyncReturns<string> = spawnSync(
+		process.execPath,
+		[...childNodeArgs(CLI_SRC_PATH), ...args],
+		{
+			input: options.stdin ?? "",
+			encoding: "utf8",
+			timeout: options.timeoutMs ?? 30_000,
+			env: { ...process.env, ...(options.env ?? {}) },
+		},
+	);
+	return {
+		status: child.status,
+		stdout: child.stdout ?? "",
+		stderr: child.stderr ?? "",
+		signal: child.signal ?? null,
+	};
 }
