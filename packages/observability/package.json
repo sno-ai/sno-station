@@ -27,7 +27,9 @@
 		"lint:no-bun-apis": "bash scripts/check-no-bun-apis.sh",
 		"lint:deep-import-blocked": "node scripts/check-deep-import-blocked.mjs",
 		"lint:guards": "npm run lint:no-hmac && npm run lint:no-bun-apis && npm run lint:deep-import-blocked",
-		"test": "npm run build && node --test ../../tests/packages/sno-observe/**/*.test.mjs"
+		"test:unit": "npm run build && node --test ../../tests/packages/sno-observe/unit/*.test.mjs",
+		"test:integration": "npm run build && node --test ../../tests/packages/sno-observe/integration/*.test.mjs",
+		"test:all": "npm run build && node --test ../../tests/packages/sno-observe/**/*.test.mjs"
 	},
 	"dependencies": {
 		"@snoai/common-core": "file:../common-core",

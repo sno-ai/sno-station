@@ -14,6 +14,10 @@ import { SnoObserveRuntime } from "../../../../packages/sno-observe/dist/interna
 import { parseEventInput } from "../../../../packages/sno-observe/dist/internal/schemas.js";
 import { validPayloads, scope } from "../fixtures/temp-env.mjs";
 
+function testHash(index) {
+	return index.toString(16).padStart(64, "0");
+}
+
 const workerPath = fileURLToPath(new URL("../fixtures/fork-emit-worker.mjs", import.meta.url));
 
 function tempEnv() {
@@ -58,7 +62,7 @@ function memoryEvent(i) {
 			lane: "memory",
 		agent_id: "codex",
 		payload: {
-			key_hash: `promise-${i}`,
+			key_hash: testHash(i),
 			byte_len: 1,
 			content_tokens: 1,
 			tokens_method: "char_approximation",

@@ -1,0 +1,18 @@
+{
+	"extends": "../../../packages/nodix-crypto/tsconfig.json",
+	"compilerOptions": {
+		"allowImportingTsExtensions": true,
+		"noEmit": true,
+		"declaration": false,
+		"declarationMap": false,
+		"noUnusedLocals": false,
+		"noUnusedParameters": false,
+		"rootDir": "../../..",
+		"baseUrl": "../../..",
+		"paths": {
+			"@snoai/nodix-crypto": ["packages/nodix-crypto/src/index.ts"]
+		}
+	},
+	"include": ["**/*.ts", "../../../packages/nodix-crypto/src/**/*.ts"],
+	"exclude": ["node_modules"]
+}

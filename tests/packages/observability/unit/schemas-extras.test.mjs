@@ -12,6 +12,8 @@ import {
 	EVENT_TYPES,
 } from "../../../../packages/sno-observe/dist/internal/types.js";
 
+const hashA = "a".repeat(64);
+
 describe("schemas — extras", () => {
 	it("rejects audit.anchor at the SDK boundary (server-only event)", () => {
 		// Per design.md §0 / spec §5: SDK MUST NOT emit audit.anchor.
@@ -46,7 +48,7 @@ describe("schemas — extras", () => {
 						lane: "memory",
 						agent_id: "codex",
 						consent_level: consent,
-						payload: { prompt_hash: "h", byte_len: 1, prompt_text: "raw" },
+						payload: { prompt_hash: hashA, byte_len: 1, prompt_text: "raw" },
 					}),
 				InvalidEventPayloadError,
 			);
@@ -63,7 +65,7 @@ describe("schemas — extras", () => {
 					consent_level: "metadata-only",
 					payload: {
 						kind: "recoverable",
-						message_hash: "h",
+						message_hash: hashA,
 						recoverable: true,
 						message: "raw",
 					},
