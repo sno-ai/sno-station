@@ -7,7 +7,7 @@ import {
 	renameSync,
 	writeFileSync,
 } from "node:fs";
-import { dirname } from "node:path";
+import { dirname, resolve as resolvePath } from "node:path";
 import Database, { type Database as Db } from "better-sqlite3-multiple-ciphers";
 import { resolveConfigPaths } from "./config.js";
 import {
@@ -39,6 +39,10 @@ import { dekFingerprint } from "./wrap.js";
 interface PreflightedDb {
 	db: Db;
 	canaryRow: { sentinel: string; db_id: string } | undefined;
+}
+
+function normalizeDbPath(path: string): string {
+	return resolvePath(path);
 }
 
 function isWrongKeySqliteError(err: unknown): boolean {
@@ -212,6 +216,7 @@ function registerFreshDbSync(
 	manifest: ManifestFile,
 	pre: PreflightedDb,
 ): DbId {
+	const dbPath = normalizeDbPath(path);
 	const dbId = randomBytes(8).toString("hex") as DbId;
 	const fp = dekFingerprint(dek) as DekFingerprint;
 	crashAfter("before-marker");
@@ -225,7 +230,11 @@ function registerFreshDbSync(
 			`INSERT OR REPLACE INTO ${CANARY_TABLE} (id, sentinel, db_id) VALUES (1, ?, ?)`,
 		)
 		.run(CANARY_SENTINEL, dbId);
-	const next = appendEntry(manifest, { path, dbId, dekFingerprint: fp });
+	const next = appendEntry(manifest, {
+		path: dbPath,
+		dbId,
+		dekFingerprint: fp,
+	});
 	try {
 		syncAtomicWriteManifest(next);
 	} catch (err) {
@@ -243,7 +252,7 @@ function registerFreshDbSync(
 		.get() as { sentinel: string; db_id: string } | undefined;
 	if (!row || row.sentinel !== CANARY_SENTINEL || row.db_id !== dbId) {
 		throw new CanaryMismatch(
-			`canary verify failed after fresh-DB registration for ${path}`,
+			`canary verify failed after fresh-DB registration for ${dbPath}`,
 		);
 	}
 	return dbId;
@@ -272,13 +281,14 @@ export function _readCanaryForRecovery(
 }
 
 export function openEncryptedDb(path: string, dek: Dek): Db {
+	const dbPath = normalizeDbPath(path);
 	const manifest = readManifestIfPresent() ?? emptyManifest();
-	const pre = preflight(path, dek, false);
+	const pre = preflight(dbPath, dek, false);
 	try {
-		const entry = findEntry(manifest, path);
+		const entry = findEntry(manifest, dbPath);
 		if (!entry && !pre.canaryRow) {
 			// Fresh DB.
-			registerFreshDbSync(path, dek, manifest, pre);
+			registerFreshDbSync(dbPath, dek, manifest, pre);
 			return pre.db;
 		}
 		if (entry && pre.canaryRow) {
@@ -289,7 +299,7 @@ export function openEncryptedDb(path: string, dek: Dek): Db {
 		}
 		if (entry && !pre.canaryRow) {
 			throw new CanaryMismatch(
-				`manifest lists ${path} but no canary row found; recovery: nodix lock --rebuild-manifest`,
+				`manifest lists ${dbPath} but no canary row found; recovery: nodix lock --rebuild-manifest`,
 			);
 		}
 		// Canary present, manifest entry absent.
@@ -298,11 +308,11 @@ export function openEncryptedDb(path: string, dek: Dek): Db {
 		const matching = manifest.dbs.find((d) => d.dbId === canaryRow.db_id);
 		if (matching) {
 			throw new DbIdMismatch(
-				`canary db_id ${canaryRow.db_id} matches manifest entry for ${matching.path}, not ${path}`,
+				`canary db_id ${canaryRow.db_id} matches manifest entry for ${matching.path}, not ${dbPath}`,
 			);
 		}
 		throw new ManifestMissing(
-			`canary present at ${path} but no manifest entry; run nodix lock --rebuild-manifest`,
+			`canary present at ${dbPath} but no manifest entry; run nodix lock --rebuild-manifest`,
 		);
 	} catch (err) {
 		try {
@@ -315,24 +325,25 @@ export function openEncryptedDb(path: string, dek: Dek): Db {
 }
 
 export function openEncryptedDbReadonly(path: string, dek: Dek): Db {
+	const dbPath = normalizeDbPath(path);
 	const manifest = readManifestIfPresent();
 	if (!manifest) {
 		throw new ManifestMissing(
-			`read-only open of ${path} requires a manifest; none found`,
+			`read-only open of ${dbPath} requires a manifest; none found`,
 		);
 	}
-	const entry = findEntry(manifest, path);
+	const entry = findEntry(manifest, dbPath);
 	if (!entry) {
 		throw new ManifestMissing(
-			`${path} is not registered in the manifest; refusing read-only open`,
+			`${dbPath} is not registered in the manifest; refusing read-only open`,
 		);
 	}
-	const pre = preflight(path, dek, true);
+	const pre = preflight(dbPath, dek, true);
 	try {
 		ensureFingerprintMatch(entry, dek);
 		if (!pre.canaryRow) {
 			throw new CanaryMismatch(
-				`read-only open of ${path}: no canary row present`,
+				`read-only open of ${dbPath}: no canary row present`,
 			);
 		}
 		verifyCanaryAgainstEntry(pre.canaryRow, entry);
