@@ -45,13 +45,14 @@ const SDK_EVENT_TYPES = [
 	"cost.summary",
 ];
 
-const QWEN_LOCAL_EMBEDDING_LLM_CALL = {
-	model: "embedding:local-onnx:onnx-community/Qwen3-Embedding-0.6B-ONNX",
+const PLUGIN_INTERNAL_PAID_LLM_CALL = {
+	model: "openai-compatible:text-embedding-3-small",
 	prompt_tokens: 21,
 	completion_tokens: 0,
 	latency_ms: 59,
 	cache_read_tokens: 0,
 	cache_write_tokens: 0,
+	token_source: "plugin_internal_paid",
 };
 
 describe("acceptance — live-endpoint end-to-end (32.1, gated)", () => {
@@ -86,7 +87,7 @@ describe("acceptance — live-endpoint end-to-end (32.1, gated)", () => {
 		}
 	});
 
-	it("ships the local Qwen embedding llm.call shape used by the plugin", async (t) => {
+	it("ships the plugin internal paid llm.call shape used by cloud providers", async (t) => {
 		const baseUrl = skipIfNoLiveEndpoint(t);
 		if (baseUrl === null) {
 			return;
@@ -100,7 +101,7 @@ describe("acceptance — live-endpoint end-to-end (32.1, gated)", () => {
 					lane: "memory",
 					agent_id: "openclaw",
 					scope: { session_uuid: createUUIDv7() },
-					payload: QWEN_LOCAL_EMBEDDING_LLM_CALL,
+					payload: PLUGIN_INTERNAL_PAID_LLM_CALL,
 				}),
 			);
 			const res = await runtime.flush({
@@ -110,12 +111,12 @@ describe("acceptance — live-endpoint end-to-end (32.1, gated)", () => {
 			assert.equal(
 				res.retryable,
 				0,
-				`Qwen embedding llm.call did not ship: ${JSON.stringify(res)}`,
+				`plugin internal paid llm.call did not ship: ${JSON.stringify(res)}`,
 			);
 			assert.equal(
 				res.terminal,
 				0,
-				`Qwen embedding llm.call was quarantined: ${JSON.stringify(res)}`,
+				`plugin internal paid llm.call was quarantined: ${JSON.stringify(res)}`,
 			);
 			assert.equal(
 				res.shipped >= 2,
