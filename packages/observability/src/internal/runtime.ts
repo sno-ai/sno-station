@@ -45,6 +45,9 @@ export interface RuntimeOptions {
 	cwd?: string;
 	env?: PathEnv & Record<string, string | undefined>;
 	fetch?: typeof fetch;
+	agentVersion?: string;
+	cliVersion?: string;
+	pluginVersion?: string;
 }
 
 export class SnoObserveRuntime {
@@ -86,11 +89,7 @@ export class SnoObserveRuntime {
 					lane: parsed.lane,
 					tsEdgeMs: Date.now(),
 					consent,
-					payload: {
-						agent_id: parsed.agentId,
-						machine_id: identity.machine_uuid,
-						sdk_version: SDK_VERSION,
-					},
+					payload: agentIdentifyPayload(identity, parsed.agentId, {}, this.options),
 					scope: {},
 					chainEpoch,
 					terminal: consent === "off",
@@ -249,11 +248,7 @@ export class SnoObserveRuntime {
 			lane: "memory",
 			tsEdgeMs: Date.now(),
 			consent,
-			payload: {
-				agent_id: agentId,
-				machine_id: identity.machine_uuid,
-				sdk_version: SDK_VERSION,
-			},
+			payload: agentIdentifyPayload(identity, agentId, {}, this.options),
 			scope: {},
 			chainEpoch,
 			terminal,
@@ -378,27 +373,29 @@ export class SnoObserveRuntime {
 	}
 
 	async shutdown(): Promise<ShutdownResult> {
-		const result: ShutdownResult = { flushedCount: 0, failedCount: 0 };
-		if (this.store !== null) {
-			try {
-				const drainResult = await this.getFlushEngine().drain();
-				result.flushedCount += drainResult.flushedCount;
-				result.failedCount += drainResult.failedCount;
-				if (drainResult.lastError !== undefined) {
-					result.lastError = drainResult.lastError;
+		return this.mutex.runExclusive(async () => {
+			const result: ShutdownResult = { flushedCount: 0, failedCount: 0 };
+			if (this.store !== null) {
+				try {
+					const drainResult = await this.getFlushEngine().drain();
+					result.flushedCount += drainResult.flushedCount;
+					result.failedCount += drainResult.failedCount;
+					if (drainResult.lastError !== undefined) {
+						result.lastError = drainResult.lastError;
+					}
+				} catch (error) {
+					result.failedCount += this.store.countPending();
+					result.lastError = errorMessage(error);
+					logger.error("sno observe shutdown flush failed", { error: result.lastError });
 				}
-			} catch (error) {
-				result.failedCount += this.store.countPending();
-				result.lastError = errorMessage(error);
-				logger.error("sno observe shutdown flush failed", { error: result.lastError });
+				this.flushEngine?.dispose();
 			}
-			this.flushEngine?.dispose();
-		}
-		this.store?.close();
-		this.store = null;
-		this.storePath = null;
-		this.flushEngine = null;
-		return result;
+			this.store?.close();
+			this.store = null;
+			this.storePath = null;
+			this.flushEngine = null;
+			return result;
+		});
 	}
 
 	private appendPrepared(input: {
@@ -415,8 +412,7 @@ export class SnoObserveRuntime {
 		terminal: boolean;
 	}) {
 		rejectRawContent(input.eventType, input.payload, input.consent);
-		const payload = normalizeSystemPayload(input);
-		const projectId = detectProjectId(this.options.cwd ?? process.cwd(), this.env());
+		const payload = normalizeSystemPayload({ ...input, options: this.options });
 		const callerScope = stripCallerAccountScope(input.scope);
 		const accountScope =
 			typeof input.identity.user_account_id === "string" && isCuid2(input.identity.user_account_id)
@@ -428,8 +424,15 @@ export class SnoObserveRuntime {
 			user_id: input.identity.user_cuid,
 			machine_id: input.identity.machine_uuid,
 			agent_id: input.agentId,
-			project_id: projectId,
 		};
+		// Deployed gateway enforces UUID-v7 for project_id while contract §8.7
+		// says "non-empty string or null". The SDK derives `p_<sha256-16hex>`
+		// from git remote / cwd which fails the gateway's stricter check.
+		// Default: omit. Set SNO_OBSERVE_INCLUDE_PROJECT_ID=true to opt back in
+		// once the gateway aligns with the contract.
+		if (this.env()["SNO_OBSERVE_INCLUDE_PROJECT_ID"] === "true") {
+			scope.project_id = detectProjectId(this.options.cwd ?? process.cwd(), this.env());
+		}
 		const redactionRulesPath = getRedactionRulesPath(this.env());
 		const redactedScope = redactScope(scope, redactionRulesPath);
 		const redactedPayload = redactEventPayload(payload, input.consent, redactionRulesPath);
@@ -560,19 +563,36 @@ function normalizeSystemPayload(input: {
 	payload: JsonObject;
 	agentId: AgentId;
 	identity: Identity;
+	options: RuntimeOptions;
 }): JsonObject {
 	if (input.eventType !== "agent.identify") {
 		return input.payload;
 	}
-	const payload = input.payload as JsonObject & { agent_version?: unknown };
-	const agentVersion =
-		typeof payload.agent_version === "string" ? { agent_version: payload.agent_version } : {};
+	return agentIdentifyPayload(input.identity, input.agentId, input.payload, input.options);
+}
+
+function agentIdentifyPayload(
+	identity: Identity,
+	agentId: AgentId,
+	payload: JsonObject = {},
+	options: RuntimeOptions = {},
+): JsonObject {
+	const agentVersion = optionalString(payload["agent_version"]) ?? optionalString(options.agentVersion);
+	const cliVersion = optionalString(payload["cli_version"]) ?? optionalString(options.cliVersion);
+	const pluginVersion =
+		optionalString(payload["plugin_version"]) ?? optionalString(options.pluginVersion);
 	return {
-		agent_id: input.agentId,
-		machine_id: input.identity.machine_uuid,
-		...agentVersion,
+		agent_id: agentId,
+		machine_id: identity.machine_uuid,
+		...(agentVersion ? { agent_version: agentVersion } : {}),
+		...(cliVersion ? { cli_version: cliVersion } : {}),
+		...(pluginVersion ? { plugin_version: pluginVersion } : {}),
 		sdk_version: SDK_VERSION,
 	};
+}
+
+function optionalString(value: unknown): string | undefined {
+	return typeof value === "string" && value.length > 0 ? value : undefined;
 }
 
 function uniqueAgents(values: AgentId[]): AgentId[] {
