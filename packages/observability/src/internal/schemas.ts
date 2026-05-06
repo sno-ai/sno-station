@@ -46,6 +46,7 @@ const tokenMethodSchema = z.enum([
 	"provider_reported",
 	"char_approximation",
 ]);
+const tokenSourceSchema = z.enum(["host_agent_paid", "plugin_internal_paid"]);
 
 const payloadSchemas: Record<EventType, z.ZodType<unknown>> = {
 	"agent.identify": z
@@ -53,6 +54,8 @@ const payloadSchemas: Record<EventType, z.ZodType<unknown>> = {
 			agent_id: agentIdSchema,
 			machine_id: uuidV7Schema,
 			agent_version: z.string().min(1).optional(),
+			cli_version: z.string().min(1).optional(),
+			plugin_version: z.string().min(1).optional(),
 			sdk_version: z.string().min(1),
 		})
 		.strict(),
@@ -83,7 +86,6 @@ const payloadSchemas: Record<EventType, z.ZodType<unknown>> = {
 			snapshot_reason: z.enum(["session_end", "startup", "periodic"]),
 			total_entries: z.number().int().nonnegative(),
 			total_bytes: z.number().int().nonnegative(),
-			total_tokens: z.number().int().nonnegative().optional(),
 			oldest_entry_ts_ms: z.number().int().nonnegative().optional(),
 			newest_entry_ts_ms: z.number().int().nonnegative().optional(),
 		})
@@ -132,6 +134,7 @@ const payloadSchemas: Record<EventType, z.ZodType<unknown>> = {
 			latency_ms: z.number().nonnegative(),
 			cache_read_tokens: z.number().int().nonnegative(),
 			cache_write_tokens: z.number().int().nonnegative(),
+			token_source: tokenSourceSchema,
 		})
 		.strict(),
 	"tool.call": z
@@ -192,6 +195,12 @@ const payloadSchemas: Record<EventType, z.ZodType<unknown>> = {
 			memory_writes: z.number().int().nonnegative(),
 			memory_reads: z.number().int().nonnegative(),
 			tool_calls: z.number().int().nonnegative(),
+			host_agent_prompt_tokens: z.number().int().nonnegative(),
+			host_agent_completion_tokens: z.number().int().nonnegative(),
+			plugin_internal_prompt_tokens: z.number().int().nonnegative(),
+			plugin_internal_completion_tokens: z.number().int().nonnegative(),
+			local_memory_input_tokens: z.number().int().nonnegative(),
+			local_memory_output_tokens: z.number().int().nonnegative(),
 			cost_usd: z.number().nonnegative().optional(),
 			event_count: z.number().int().nonnegative().optional(),
 		})
