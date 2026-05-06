@@ -121,6 +121,7 @@ export const validPayloads = {
 		latency_ms: 120,
 		cache_read_tokens: 0,
 		cache_write_tokens: 0,
+		token_source: "host_agent_paid",
 	},
 	"tool.call": {
 		tool_name: "bash",
@@ -143,6 +144,12 @@ export const validPayloads = {
 		tool_calls: 1,
 		memory_reads: 2,
 		memory_writes: 3,
+		host_agent_prompt_tokens: 10,
+		host_agent_completion_tokens: 3,
+		plugin_internal_prompt_tokens: 10,
+		plugin_internal_completion_tokens: 2,
+		local_memory_input_tokens: 12,
+		local_memory_output_tokens: 8,
 	},
 };
 

@@ -70,6 +70,12 @@ describe("schema alignment", () => {
 			memory_writes: 2,
 			memory_reads: 1,
 			tool_calls: 4,
+			host_agent_prompt_tokens: 7,
+			host_agent_completion_tokens: 2,
+			plugin_internal_prompt_tokens: 3,
+			plugin_internal_completion_tokens: 1,
+			local_memory_input_tokens: 11,
+			local_memory_output_tokens: 5,
 		};
 		const parsed = parseEventInput({
 			event_type: "cost.summary",
@@ -112,7 +118,55 @@ describe("schema alignment", () => {
 					event_type: "cost.summary",
 					lane: "memory",
 					agent_id: "codex",
-					payload: { ...payload, prompt_tokens: 10, completion_tokens: 3 },
+					payload: {
+						...payload,
+						plugin_internal_prompt_tokens: undefined,
+					},
+				}),
+			InvalidEventPayloadError,
+		);
+	});
+
+	it("requires llm.call token_source for paid token attribution", () => {
+		const payload = {
+			model: "gpt-4o",
+			prompt_tokens: 10,
+			completion_tokens: 3,
+			latency_ms: 120,
+			cache_read_tokens: 0,
+			cache_write_tokens: 0,
+			token_source: "host_agent_paid",
+		};
+		const parsed = parseEventInput({
+			event_type: "llm.call",
+			lane: "memory",
+			agent_id: "openclaw",
+			payload,
+		});
+		assert.equal(parsed.payload.token_source, "host_agent_paid");
+		parseEventInput({
+			event_type: "llm.call",
+			lane: "memory",
+			agent_id: "openclaw",
+			payload: { ...payload, token_source: "plugin_internal_paid" },
+		});
+		assert.throws(
+			() =>
+				parseEventInput({
+					event_type: "llm.call",
+					lane: "memory",
+					agent_id: "openclaw",
+					payload: { ...payload, token_source: undefined },
+				}),
+			InvalidEventPayloadError,
+		);
+		assert.throws(
+			() =>
+				parseEventInput({
+					event_type: "llm.call",
+					lane: "memory",
+					agent_id: "openclaw",
+					payload: { ...payload, token_source: "cache" },
 				}),
 			InvalidEventPayloadError,
 		);
