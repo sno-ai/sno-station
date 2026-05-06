@@ -320,6 +320,8 @@ function handlePostResult(
 			logger.error("sno observe event rejected as invalid", {
 				event_id: row.event_id,
 				status: response.status,
+				reject_body: typeof response.body === "string" ? response.body.slice(0, 800) : "",
+				envelope: row.payload.toString("utf8").slice(0, 1200),
 			});
 			return { shipped: 0, terminal, retryable: 0, stopBatch: true };
 		}
