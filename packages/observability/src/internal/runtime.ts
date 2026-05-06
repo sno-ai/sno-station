@@ -74,7 +74,7 @@ export class SnoObserveRuntime {
 		}
 		return this.mutex.runExclusive(async () => {
 			const identity = bootstrapIdentity(this.env());
-			const consent = parsed.consentLevel ?? this.consentStore().get();
+			const consent = this.consentStore().get();
 			const store = this.getStore();
 			const chainEpoch = store.getCurrentEpoch(identity.machine_uuid, parsed.agentId);
 			if (
@@ -530,7 +530,14 @@ export class SnoObserveRuntime {
 			reason: result.reason,
 		};
 		for (const listener of this.listeners) {
-			listener(event);
+			try {
+				listener(event);
+			} catch (error) {
+				logger.warn("sno observe subscriber failed", {
+					error: error instanceof Error ? error.message : String(error),
+					event_type: eventType,
+				});
+			}
 		}
 	}
 }
