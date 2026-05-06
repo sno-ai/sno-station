@@ -413,7 +413,6 @@ export class SnoObserveRuntime {
 	}) {
 		rejectRawContent(input.eventType, input.payload, input.consent);
 		const payload = normalizeSystemPayload({ ...input, options: this.options });
-		const projectId = detectProjectId(this.options.cwd ?? process.cwd(), this.env());
 		const callerScope = stripCallerAccountScope(input.scope);
 		const accountScope =
 			typeof input.identity.user_account_id === "string" && isCuid2(input.identity.user_account_id)
@@ -426,10 +425,14 @@ export class SnoObserveRuntime {
 			machine_id: input.identity.machine_uuid,
 			agent_id: input.agentId,
 		};
-		// project_id intentionally omitted: deployed gateway enforces UUID-v7
-		// shape, but the SDK derives `p_<sha256-16hex>` from git remote / cwd.
-		// Until gateway aligns with contract §8.7 (nullable string), skip.
-		void projectId;
+		// Deployed gateway enforces UUID-v7 for project_id while contract §8.7
+		// says "non-empty string or null". The SDK derives `p_<sha256-16hex>`
+		// from git remote / cwd which fails the gateway's stricter check.
+		// Default: omit. Set SNO_OBSERVE_INCLUDE_PROJECT_ID=true to opt back in
+		// once the gateway aligns with the contract.
+		if (this.env()["SNO_OBSERVE_INCLUDE_PROJECT_ID"] === "true") {
+			scope.project_id = detectProjectId(this.options.cwd ?? process.cwd(), this.env());
+		}
 		const redactionRulesPath = getRedactionRulesPath(this.env());
 		const redactedScope = redactScope(scope, redactionRulesPath);
 		const redactedPayload = redactEventPayload(payload, input.consent, redactionRulesPath);
