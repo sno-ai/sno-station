@@ -958,6 +958,67 @@ describe("sno observe Node package", () => {
 		}
 	});
 
+	it("does not let event consent override stored consent off", async () => {
+		const temp = createTempSnoEnv();
+		const { calls, fetch } = createFetchRecorder();
+		const runtime = new SnoObserveRuntime({
+			env: temp.env,
+			cwd: temp.dir,
+			fetch,
+		});
+		try {
+			await runtime.setConsent("off", "stored off");
+			const event = memoryWriteEvent("h_override");
+			event.consentLevel = "full";
+			const result = await runtime.emitParsed(event);
+			await runtime.flush();
+
+			assert.deepEqual(
+				{ accepted: result.accepted, reason: result.reason },
+				{ accepted: false, reason: "consent_off" },
+			);
+			assert.deepEqual(
+				calls.map((call) => JSON.parse(call.body).event_type),
+				["agent.identify", "consent.change"],
+			);
+		} finally {
+			await runtime.shutdown().catch(() => {});
+			cleanupTempSnoEnv(temp);
+		}
+	});
+
+	it("does not let subscriber failures block emit or flush", async () => {
+		const temp = createTempSnoEnv();
+		const { calls, fetch } = createFetchRecorder();
+		const runtime = new SnoObserveRuntime({
+			env: temp.env,
+			cwd: temp.dir,
+			fetch,
+		});
+		const unsubscribe = runtime.subscribe(() => {
+			throw new Error("subscriber failed");
+		});
+		try {
+			const result = await runtime.emitParsed(memoryWriteEvent("h_subscriber_throw"));
+			const flushed = await runtime.flush();
+
+			assert.equal(result.accepted, true);
+			assert.deepEqual(flushed, {
+				shipped: 2,
+				terminal: 0,
+				retryable: 0,
+			});
+			assert.deepEqual(
+				calls.map((call) => JSON.parse(call.body).event_type),
+				["agent.identify", "memory.write"],
+			);
+		} finally {
+			unsubscribe();
+			await runtime.shutdown().catch(() => {});
+			cleanupTempSnoEnv(temp);
+		}
+	});
+
 	it("keeps sequential chains gap-free and reports every emit outcome to subscribers", async () => {
 		const chainTemp = createTempSnoEnv("sno-observe-seq-");
 		const store = new BufferStore(chainTemp.env.SNO_BUFFER_PATH);
