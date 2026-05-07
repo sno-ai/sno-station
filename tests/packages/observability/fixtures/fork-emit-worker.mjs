@@ -1,4 +1,4 @@
-// Forked worker for cross-process chain tests. Reads SNO_HOME from env, opens the
+// Forked worker for cross-process chain tests. Reads SNO_PROFILE_DIR from env, opens the
 // shared buffer.db via BufferStore, and emits N memory.write events. Reports a JSON
 // summary on stdout.
 //
@@ -19,11 +19,11 @@ const count = Number(process.argv[2] ?? "0");
 const label = process.argv[3] ?? "w";
 
 const env = {
-	SNO_HOME: process.env.SNO_HOME,
+	SNO_PROFILE_DIR: process.env.SNO_PROFILE_DIR,
 	SNO_IDENTITY_PATH: process.env.SNO_IDENTITY_PATH,
 	SNO_BUFFER_PATH: process.env.SNO_BUFFER_PATH,
 	SNO_CONSENT_PATH: process.env.SNO_CONSENT_PATH,
-	HOME: process.env.SNO_HOME,
+	HOME: process.env.SNO_PROFILE_DIR,
 };
 
 const identity = bootstrapIdentity(env);
