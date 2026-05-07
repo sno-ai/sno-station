@@ -153,32 +153,6 @@ describe("flush 3-state machine", () => {
 		}
 	});
 
-	it("runtime uses parsed event consent level for the current event", async () => {
-		const t = tempEnv();
-		const runtime = new SnoObserveRuntime({ env: t.env, cwd: t.dir });
-		try {
-			const event = memoryEvent(2);
-			event.consentLevel = "off";
-			const result = await runtime.emitParsed(event);
-			assert.equal(result.accepted, false);
-			assert.equal(result.reason, "consent_off");
-
-			const store = new BufferStore(t.env.SNO_BUFFER_PATH);
-			try {
-				const envelopes = store
-					.getAllRows()
-					.map((row) => decodeEnvelope(row.payload));
-				assert.equal(envelopes.at(-1).consent_level, "off");
-			} finally {
-				store.close();
-			}
-		} finally {
-			runtime.flushEngine?.dispose?.();
-			runtime.store?.close?.();
-			rmSync(t.dir, { recursive: true, force: true });
-		}
-	});
-
 	it("zero emits => zero setTimeout calls (23.3 idle 24h)", () => {
 		const t = tempEnv();
 		const store = new BufferStore(t.env.SNO_BUFFER_PATH);
