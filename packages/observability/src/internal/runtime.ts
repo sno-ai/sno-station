@@ -73,7 +73,7 @@ export class SnoObserveRuntime {
 		}
 		return this.mutex.runExclusive(async () => {
 			const identity = bootstrapIdentity(this.env());
-			const consent = this.consentStore().get();
+			const consent = parsed.consentLevel ?? this.consentStore().get();
 			const store = this.getStore();
 			const chainEpoch = store.getCurrentEpoch(identity.machine_uuid, parsed.agentId);
 			if (
@@ -575,7 +575,8 @@ function agentIdentifyPayload(
 	payload: JsonObject = {},
 	options: RuntimeOptions = {},
 ): JsonObject {
-	const agentVersion = optionalString(payload["agent_version"]) ?? optionalString(options.agentVersion);
+	const agentVersion =
+		optionalString(payload["agent_version"]) ?? optionalString(options.agentVersion);
 	const cliVersion = optionalString(payload["cli_version"]) ?? optionalString(options.cliVersion);
 	const pluginVersion =
 		optionalString(payload["plugin_version"]) ?? optionalString(options.pluginVersion);

@@ -4,6 +4,7 @@ import { dirname, join } from "node:path";
 export interface PathEnv {
 	[key: string]: string | undefined;
 	SNO_PROFILE_DIR?: string;
+	SNO_HOME?: string;
 	SNO_IDENTITY_PATH?: string;
 	SNO_BUFFER_PATH?: string;
 	SNO_CONSENT_PATH?: string;
@@ -11,7 +12,7 @@ export interface PathEnv {
 }
 
 export function getSnoProfileDir(env: PathEnv = process.env): string {
-	return env.SNO_PROFILE_DIR ?? join(homedir(), ".sno");
+	return env.SNO_PROFILE_DIR ?? env.SNO_HOME ?? join(homedir(), ".sno");
 }
 
 export function getIdentityPath(env: PathEnv = process.env): string {
