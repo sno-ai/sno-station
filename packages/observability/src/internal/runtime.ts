@@ -18,7 +18,6 @@ import {
 } from "./machine-registration.js";
 import { AsyncMutex } from "./mutex.js";
 import { getBufferPath, getRedactionRulesPath, type PathEnv } from "./paths.js";
-import { detectProjectId } from "./project-id.js";
 import { redactEventPayload, redactScope } from "./redact.js";
 import { shouldSampleTool } from "./sampling.js";
 import { parseConsentValue } from "./schemas.js";
@@ -74,7 +73,7 @@ export class SnoObserveRuntime {
 		}
 		return this.mutex.runExclusive(async () => {
 			const identity = bootstrapIdentity(this.env());
-			const consent = parsed.consentLevel ?? this.consentStore().get();
+			const consent = this.consentStore().get();
 			const store = this.getStore();
 			const chainEpoch = store.getCurrentEpoch(identity.machine_uuid, parsed.agentId);
 			if (
@@ -425,14 +424,6 @@ export class SnoObserveRuntime {
 			machine_id: input.identity.machine_uuid,
 			agent_id: input.agentId,
 		};
-		// Deployed gateway enforces UUID-v7 for project_id while contract §8.7
-		// says "non-empty string or null". The SDK derives `p_<sha256-16hex>`
-		// from git remote / cwd which fails the gateway's stricter check.
-		// Default: omit. Set SNO_OBSERVE_INCLUDE_PROJECT_ID=true to opt back in
-		// once the gateway aligns with the contract.
-		if (this.env()["SNO_OBSERVE_INCLUDE_PROJECT_ID"] === "true") {
-			scope.project_id = detectProjectId(this.options.cwd ?? process.cwd(), this.env());
-		}
 		const redactionRulesPath = getRedactionRulesPath(this.env());
 		const redactedScope = redactScope(scope, redactionRulesPath);
 		const redactedPayload = redactEventPayload(payload, input.consent, redactionRulesPath);
@@ -530,7 +521,14 @@ export class SnoObserveRuntime {
 			reason: result.reason,
 		};
 		for (const listener of this.listeners) {
-			listener(event);
+			try {
+				listener(event);
+			} catch (error) {
+				logger.warn("sno observe subscriber failed", {
+					error: error instanceof Error ? error.message : String(error),
+					event_type: eventType,
+				});
+			}
 		}
 	}
 }
@@ -577,7 +575,8 @@ function agentIdentifyPayload(
 	payload: JsonObject = {},
 	options: RuntimeOptions = {},
 ): JsonObject {
-	const agentVersion = optionalString(payload["agent_version"]) ?? optionalString(options.agentVersion);
+	const agentVersion =
+		optionalString(payload["agent_version"]) ?? optionalString(options.agentVersion);
 	const cliVersion = optionalString(payload["cli_version"]) ?? optionalString(options.cliVersion);
 	const pluginVersion =
 		optionalString(payload["plugin_version"]) ?? optionalString(options.pluginVersion);

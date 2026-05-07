@@ -1,4 +1,4 @@
-// Shared test helpers: tmpdir-isolated SNO_HOME, fixture event factories, fetch recorder.
+// Shared test helpers: tmpdir-isolated SNO_PROFILE_DIR, fixture event factories, fetch recorder.
 // Used by both unit/ and integration/ tests; not a test file itself.
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
@@ -11,7 +11,7 @@ export function createTempSnoEnv(prefix = "sno-observe-") {
 	return {
 		dir,
 		env: {
-			SNO_HOME: dir,
+			SNO_PROFILE_DIR: dir,
 			SNO_IDENTITY_PATH: join(dir, "identity.json"),
 			SNO_BUFFER_PATH: join(dir, "buffer.db"),
 			SNO_CONSENT_PATH: join(dir, "state", "consent.json"),
