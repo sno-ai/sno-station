@@ -73,7 +73,7 @@ export class SnoObserveRuntime {
 		}
 		return this.mutex.runExclusive(async () => {
 			const identity = bootstrapIdentity(this.env());
-			const consent = parsed.consentLevel ?? this.consentStore().get();
+			const consent = this.consentStore().get();
 			const store = this.getStore();
 			const chainEpoch = store.getCurrentEpoch(identity.machine_uuid, parsed.agentId);
 			if (
