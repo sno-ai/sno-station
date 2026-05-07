@@ -18,7 +18,6 @@ import {
 } from "./machine-registration.js";
 import { AsyncMutex } from "./mutex.js";
 import { getBufferPath, getRedactionRulesPath, type PathEnv } from "./paths.js";
-import { detectProjectId } from "./project-id.js";
 import { redactEventPayload, redactScope } from "./redact.js";
 import { shouldSampleTool } from "./sampling.js";
 import { parseConsentValue } from "./schemas.js";
@@ -424,7 +423,6 @@ export class SnoObserveRuntime {
 			user_id: input.identity.user_cuid,
 			machine_id: input.identity.machine_uuid,
 			agent_id: input.agentId,
-			project_id: detectProjectId(this.options.cwd ?? process.cwd(), this.env()),
 		};
 		const redactionRulesPath = getRedactionRulesPath(this.env());
 		const redactedScope = redactScope(scope, redactionRulesPath);

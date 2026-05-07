@@ -6,7 +6,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it, mock } from "node:test";
 import { setTimeout as delay } from "node:timers/promises";
-import { BufferStore } from "../../../../packages/sno-observe/dist/internal/buffer-store.js";
+import {
+	BufferStore,
+	decodeEnvelope,
+} from "../../../../packages/sno-observe/dist/internal/buffer-store.js";
 import { FlushEngine } from "../../../../packages/sno-observe/dist/internal/flush.js";
 import { bootstrapIdentity } from "../../../../packages/sno-observe/dist/internal/identity.js";
 import { SnoObserveRuntime } from "../../../../packages/sno-observe/dist/internal/runtime.js";
@@ -123,6 +126,27 @@ describe("flush 3-state machine", () => {
 			runtime.flushEngine?.dispose?.();
 			runtime.store?.close?.();
 			spy.mock.restore();
+			rmSync(t.dir, { recursive: true, force: true });
+		}
+	});
+
+	it("runtime does not auto-attach legacy project_id values to scope", async () => {
+		const t = tempEnv();
+		const runtime = new SnoObserveRuntime({ env: t.env, cwd: t.dir });
+		try {
+			await runtime.emitParsed(memoryEvent(1));
+			const store = new BufferStore(t.env.SNO_BUFFER_PATH);
+			try {
+				const envelopes = store.getAllRows().map((row) => decodeEnvelope(row.payload));
+				assert.equal(envelopes.length, 2);
+				assert.equal(envelopes[0].scope.project_id, undefined);
+				assert.equal(envelopes[1].scope.project_id, undefined);
+			} finally {
+				store.close();
+			}
+		} finally {
+			runtime.flushEngine?.dispose?.();
+			runtime.store?.close?.();
 			rmSync(t.dir, { recursive: true, force: true });
 		}
 	});
