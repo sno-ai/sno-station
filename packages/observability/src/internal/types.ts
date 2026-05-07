@@ -45,8 +45,6 @@ export interface EventScope extends JsonObject {
 	user_id: string;
 	machine_id: string;
 	agent_id: AgentId;
-	// Deployed gateway enforces UUID-v7 for project_id while contract §8.7 says
-	// "non-empty string or null" — until they reconcile, the SDK omits it.
 	project_id?: string;
 	user_account_id?: string;
 }
