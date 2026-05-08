@@ -2,7 +2,11 @@
 // See openspec/changes/add-local-aes-encryption/specs/nodix-crypto-core/spec.md.
 
 export { resolveConfigPaths, resolveKeychainService } from "./config.js";
-export { openEncryptedDb, openEncryptedDbReadonly } from "./db.js";
+export {
+	_readCanaryForRecovery,
+	openEncryptedDb,
+	openEncryptedDbReadonly,
+} from "./db.js";
 export { _resetDekCache, getDek, getDekSync } from "./dek.js";
 export * from "./errors.js";
 export {
