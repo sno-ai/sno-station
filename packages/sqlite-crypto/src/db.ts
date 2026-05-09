@@ -115,7 +115,7 @@ function applyPragmaRecipe(db: Db, dek: Dek): void {
 	}
 	if (Array.isArray(checkRows) && checkRows.length > 0) {
 		const messages = checkRows
-			.map((r) => r.cipher_integrity_check)
+			.map((r) => r["cipher_integrity_check"])
 			.filter((v): v is string => typeof v === "string");
 		const okMarkers = ["ok", "PRAGMA cipher_integrity_check"];
 		if (messages.length > 0 && !messages.every((m) => okMarkers.includes(m))) {
