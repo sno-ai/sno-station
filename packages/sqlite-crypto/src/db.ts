@@ -115,7 +115,7 @@ function applyPragmaRecipe(db: Db, dek: Dek): void {
 	}
 	if (Array.isArray(checkRows) && checkRows.length > 0) {
 		const messages = checkRows
-			.map((r) => r["cipher_integrity_check"])
+			.map((r) => r.cipher_integrity_check)
 			.filter((v): v is string => typeof v === "string");
 		const okMarkers = ["ok", "PRAGMA cipher_integrity_check"];
 		if (messages.length > 0 && !messages.every((m) => okMarkers.includes(m))) {
@@ -335,15 +335,25 @@ export function openEncryptedDb(path: string, dek: Dek): Db {
 		// Canary present, manifest entry absent.
 		const canaryRow = pre.canaryRow;
 		if (!canaryRow) throw new CanaryMismatch("missing canary row");
+		if (canaryRow.sentinel !== CANARY_SENTINEL) {
+			throw new CanaryMismatch(
+				`canary sentinel mismatch at ${dbPath}; refusing manifest recovery`,
+			);
+		}
 		const matching = manifest.dbs.find((d) => d.dbId === canaryRow.db_id);
 		if (matching) {
 			throw new DbIdMismatch(
 				`canary db_id ${canaryRow.db_id} matches manifest entry for ${matching.path}, not ${dbPath}`,
 			);
 		}
-		throw new ManifestMissing(
-			`canary present at ${dbPath} but no manifest entry; run nodix lock --rebuild-manifest`,
-		);
+		ensureMarker();
+		const next = appendEntry(manifest, {
+			path: dbPath,
+			dbId: canaryRow.db_id as DbId,
+			dekFingerprint: dekFingerprint(dek) as DekFingerprint,
+		});
+		syncAtomicWriteManifest(next);
+		return pre.db;
 	} catch (err) {
 		try {
 			pre.db.close();
