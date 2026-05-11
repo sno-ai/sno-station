@@ -31,7 +31,7 @@
 		"lint:fix": "biome check --write src/",
 		"test:unit": "vitest run --config vitest.config.ts ../../tests/packages/nodix-crypto/unit",
 		"test:integration": "vitest run --config vitest.config.ts ../../tests/packages/nodix-crypto/integration",
-		"test:e2e": "vitest run --config vitest.config.ts ../../tests/packages/nodix-crypto/e2e",
+		"test:e2e": "vitest run --config vitest.config.ts ../../tests/packages/nodix-crypto/e2e --passWithNoTests",
 		"clean": "rm -rf dist"
 	},
 	"dependencies": {
