@@ -33,6 +33,8 @@ export interface DrainResult {
 	lastError?: string;
 }
 
+const MAX_STAGNANT_DRAIN_STEPS = 100;
+
 export class FlushEngine {
 	private state: "idle" | "scheduled" | "flushing" = "idle";
 	private timer: ReturnType<typeof setTimeout> | null = null;
@@ -131,7 +133,8 @@ export class FlushEngine {
 		let flushedCount = 0;
 		let terminalCount = 0;
 		let lastError: string | undefined;
-		while (true) {
+		let stagnantDrainSteps = 0;
+		while (stagnantDrainSteps < MAX_STAGNANT_DRAIN_STEPS) {
 			try {
 				const step = await this.drainStep();
 				if (step === null) {
@@ -142,13 +145,30 @@ export class FlushEngine {
 				if (step.stop) {
 					break;
 				}
+				if (step.pendingAfter < step.pendingBefore) {
+					stagnantDrainSteps = 0;
+				} else {
+					stagnantDrainSteps += 1;
+				}
 			} catch (error) {
 				lastError = error instanceof Error ? error.message : String(error);
 				logger.error("sno observe drain failed", { error: lastError });
 				break;
 			}
 		}
-		const failedCount = terminalCount + this.store.countPending();
+		const pendingCount = this.store.countPending();
+		if (
+			stagnantDrainSteps >= MAX_STAGNANT_DRAIN_STEPS &&
+			pendingCount > 0 &&
+			lastError === undefined
+		) {
+			lastError = "sno observe drain made no progress";
+			logger.warn("sno observe drain stopped after repeated no-progress steps", {
+				max_stagnant_drain_steps: MAX_STAGNANT_DRAIN_STEPS,
+				pending_count: pendingCount,
+			});
+		}
+		const failedCount = terminalCount + pendingCount;
 		return { flushedCount, failedCount, ...(lastError === undefined ? {} : { lastError }) };
 	}
 
@@ -192,13 +212,23 @@ export class FlushEngine {
 		};
 	}
 
-	private async drainStep(): Promise<{ result: FlushResult; stop: boolean } | null> {
+	private async drainStep(): Promise<{
+		result: FlushResult;
+		stop: boolean;
+		pendingBefore: number;
+		pendingAfter: number;
+	} | null> {
 		const activeFlush = this.activeFlush;
 		if (activeFlush !== null) {
 			const pendingBefore = this.store.countPending();
 			const result = await activeFlush;
 			const pendingAfter = this.store.countPending();
-			return { result, stop: shouldStopDrain(result, pendingBefore, pendingAfter) };
+			return {
+				result,
+				stop: shouldStopDrain(result, pendingBefore, pendingAfter),
+				pendingBefore,
+				pendingAfter,
+			};
 		}
 		const pendingBefore = this.store.countPending();
 		if (pendingBefore === 0) {
@@ -206,7 +236,12 @@ export class FlushEngine {
 		}
 		const result = await this.flush(this.flushOptions(true));
 		const pendingAfter = this.store.countPending();
-		return { result, stop: shouldStopDrain(result, pendingBefore, pendingAfter) };
+		return {
+			result,
+			stop: shouldStopDrain(result, pendingBefore, pendingAfter),
+			pendingBefore,
+			pendingAfter,
+		};
 	}
 }
 

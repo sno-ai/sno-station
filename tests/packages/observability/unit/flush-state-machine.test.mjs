@@ -50,7 +50,7 @@ function seedIdentify(store) {
 	});
 }
 
-function appendMemoryWrite(store, i) {
+function appendMemoryWrite(store, i, eventScope = scope) {
 	store.append({
 		eventId: `mw-${i}`,
 		eventType: "memory.write",
@@ -58,7 +58,7 @@ function appendMemoryWrite(store, i) {
 		tsEdgeMs: 1000 + i,
 		consentLevel: "metadata-only",
 		redacted: false,
-		scope,
+		scope: eventScope,
 		payload: validPayloads["memory.write"],
 		terminal: false,
 	});
@@ -503,6 +503,39 @@ describe("flush 3-state machine", () => {
 			} finally {
 				store.close();
 			}
+		} finally {
+			await runtime.shutdown().catch(() => {});
+			rmSync(t.dir, { recursive: true, force: true });
+		}
+	});
+
+	it("shutdown stops when drain keeps receiving new pending rows", async () => {
+		const t = tempEnv();
+		let runtime;
+		let eventCalls = 0;
+		let runtimeScope;
+		runtime = new SnoObserveRuntime({
+			env: t.env,
+			cwd: t.dir,
+			fetch: async (url, init) => {
+				if (String(url).endsWith("/api/v1/identity/register-machine")) {
+					return registerMachineResponse(init);
+				}
+				eventCalls += 1;
+				appendMemoryWrite(runtime.store, 1_000 + eventCalls, runtimeScope);
+				return new Response(JSON.stringify({ receipt_id: "r" }), {
+					status: 202,
+					headers: { "Content-Type": "application/json" },
+				});
+			},
+		});
+		try {
+			await runtime.emitParsed(memoryEvent(8));
+			runtimeScope = decodeEnvelope(runtime.store.getAllRows()[0].payload).scope;
+			const result = await runtime.shutdown();
+			assert.equal(result.lastError, "sno observe drain made no progress");
+			assert.equal(result.failedCount > 0, true);
+			assert.equal(eventCalls > 0, true);
 		} finally {
 			await runtime.shutdown().catch(() => {});
 			rmSync(t.dir, { recursive: true, force: true });
