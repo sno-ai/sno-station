@@ -19,7 +19,7 @@
 		"package.json"
 	],
 	"scripts": {
-		"build": "tsc -p tsconfig.json",
+		"build": "npm run build --workspace @snoai/common-core && tsc -p tsconfig.json",
 		"typecheck": "tsc --noEmit",
 		"lint": "biome check src/",
 		"lint:fix": "biome check --write src/",
@@ -27,19 +27,19 @@
 		"lint:no-bun-apis": "bash scripts/check-no-bun-apis.sh",
 		"lint:deep-import-blocked": "node scripts/check-deep-import-blocked.mjs",
 		"lint:guards": "npm run lint:no-hmac && npm run lint:no-bun-apis && npm run lint:deep-import-blocked",
-		"test": "npm run build && node --test ../../tests/packages/sno-observe/**/*.test.mjs"
+		"test:unit": "npm run build && node --test ../../tests/packages/sno-observe/unit/*.test.mjs",
+		"test:integration": "npm run build && node --test ../../tests/packages/sno-observe/integration/*.test.mjs",
+		"test:all": "npm run build && node --test ../../tests/packages/sno-observe/**/*.test.mjs"
 	},
 	"dependencies": {
-		"@paralleldrive/cuid2": "^2.2.2",
+		"@snoai/common-core": "file:../common-core",
 		"better-sqlite3": "^12.9.0",
 		"js-tiktoken": "^1.0.0",
-		"uuid": "^14.0.0",
 		"zod": "^3.24.0"
 	},
 	"devDependencies": {
 		"@types/better-sqlite3": "^7.6.13",
-		"@types/node": "^22.0.0",
-		"@types/uuid": "^10.0.0"
+		"@types/node": "^22.0.0"
 	},
 	"engines": {
 		"node": ">=22.14.0"

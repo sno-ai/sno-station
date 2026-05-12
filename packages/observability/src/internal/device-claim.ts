@@ -1,6 +1,7 @@
+import { isCuid2 } from "@snoai/common-core";
 import { SnoObserveError } from "./errors.js";
 import { fetchJson, normalizeBaseUrl } from "./http.js";
-import { updateIdentity } from "./identity.js";
+import { updateValidIdentity } from "./identity.js";
 import { type RegisterOptions, registerMachine } from "./machine-registration.js";
 import type { PathEnv } from "./paths.js";
 import type { Identity } from "./types.js";
@@ -49,11 +50,12 @@ interface DeviceCodeResponse {
 
 interface DeviceTokenResponse {
 	user_account_id: string;
-	status: "claimed";
+	status?: "claimed";
 }
 
 interface ErrorResponse {
 	error?: string;
+	interval?: number;
 	message?: string;
 }
 
@@ -113,7 +115,7 @@ export async function claimMachine(
 	};
 	const userAccountId = await pollForClaim(pollInput);
 
-	const updatedIdentity = updateIdentity(
+	const updatedIdentity = updateValidIdentity(
 		(current) =>
 			current.user_cuid === identity.user_cuid && current.machine_uuid === identity.machine_uuid
 				? { ...current, user_account_id: userAccountId }
@@ -121,6 +123,7 @@ export async function claimMachine(
 		env,
 	);
 	if (
+		updatedIdentity === null ||
 		updatedIdentity.user_cuid !== identity.user_cuid ||
 		updatedIdentity.machine_uuid !== identity.machine_uuid ||
 		updatedIdentity.user_account_id !== userAccountId
@@ -196,7 +199,7 @@ async function pollForClaim(input: PollInput): Promise<string> {
 			continue;
 		}
 		if (response.status === 400 && errorCode === "slow_down") {
-			state.delayMs = normalizeDelay(state.delayMs + 5000);
+			state.delayMs = parseServerIntervalMs(response.value) ?? normalizeDelay(state.delayMs + 5000);
 			await sleepWithinTimeout(state.delayMs, input.startedAt, input.timeoutMs, input.signal);
 			continue;
 		}
@@ -268,14 +271,26 @@ function isDeviceCodeResponse(value: unknown): value is DeviceCodeResponse {
 		typeof candidate.user_code === "string" &&
 		candidate.user_code.length > 0 &&
 		typeof candidate.verification_uri === "string" &&
-		candidate.verification_uri.length > 0 &&
+		isHttpsUrl(candidate.verification_uri) &&
 		(candidate.verification_uri_complete === undefined ||
-			typeof candidate.verification_uri_complete === "string") &&
+			(typeof candidate.verification_uri_complete === "string" &&
+				isHttpsUrl(candidate.verification_uri_complete))) &&
 		typeof candidate.expires_in === "number" &&
 		Number.isFinite(candidate.expires_in) &&
+		candidate.expires_in > 0 &&
 		(candidate.interval === undefined ||
-			(typeof candidate.interval === "number" && Number.isFinite(candidate.interval)))
+			(typeof candidate.interval === "number" &&
+				Number.isFinite(candidate.interval) &&
+				candidate.interval >= 1))
 	);
+}
+
+function isHttpsUrl(value: string): boolean {
+	try {
+		return new URL(value).protocol === "https:";
+	} catch {
+		return false;
+	}
 }
 
 function isDeviceTokenResponse(value: unknown): value is DeviceTokenResponse {
@@ -283,11 +298,7 @@ function isDeviceTokenResponse(value: unknown): value is DeviceTokenResponse {
 		return false;
 	}
 	const candidate = value as DeviceTokenResponse;
-	return (
-		candidate.status === "claimed" &&
-		typeof candidate.user_account_id === "string" &&
-		candidate.user_account_id.length > 0
-	);
+	return typeof candidate.user_account_id === "string" && isCuid2(candidate.user_account_id);
 }
 
 function claimError(action: string, status: number, value: unknown, body: string): SnoObserveError {
@@ -311,6 +322,16 @@ function parseServerError(value: unknown): ErrorResponse | null {
 
 function parseErrorCode(value: unknown): string | null {
 	return parseServerError(value)?.error ?? null;
+}
+
+function parseServerIntervalMs(value: unknown): number | null {
+	if (typeof value !== "object" || value === null) {
+		return null;
+	}
+	const interval = (value as ErrorResponse).interval;
+	return typeof interval === "number" && Number.isFinite(interval) && interval > 0
+		? normalizeDelay(interval * 1000)
+		: null;
 }
 
 function normalizeDelay(value: number): number {

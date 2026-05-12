@@ -1,4 +1,4 @@
-// Shared test helpers: tmpdir-isolated SNO_HOME, fixture event factories, fetch recorder.
+// Shared test helpers: tmpdir-isolated SNO_PROFILE_DIR, fixture event factories, fetch recorder.
 // Used by both unit/ and integration/ tests; not a test file itself.
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
@@ -11,7 +11,7 @@ export function createTempSnoEnv(prefix = "sno-observe-") {
 	return {
 		dir,
 		env: {
-			SNO_HOME: dir,
+			SNO_PROFILE_DIR: dir,
 			SNO_IDENTITY_PATH: join(dir, "identity.json"),
 			SNO_BUFFER_PATH: join(dir, "buffer.db"),
 			SNO_CONSENT_PATH: join(dir, "state", "consent.json"),
@@ -81,6 +81,10 @@ export function headerRecord(headers) {
 	return { ...headers };
 }
 
+export function testHash(index) {
+	return index.toString(16).padStart(64, "0");
+}
+
 export const validPayloads = {
 	"agent.identify": {
 		agent_id: "codex",
@@ -88,13 +92,13 @@ export const validPayloads = {
 		sdk_version: "0.1.0",
 	},
 	"memory.write": {
-		key_hash: "h_key",
+		key_hash: testHash(1),
 		byte_len: 12,
 		content_tokens: 3,
 		tokens_method: "char_approximation",
 	},
 	"memory.read": {
-		query_hash: "h_query",
+		query_hash: testHash(2),
 		query_tokens: 2,
 		k: 5,
 		hit_count: 1,
@@ -107,7 +111,6 @@ export const validPayloads = {
 		snapshot_reason: "session_end",
 		total_entries: 2,
 		total_bytes: 256,
-		total_tokens: 64,
 		oldest_entry_ts_ms: 1730000000000,
 		newest_entry_ts_ms: 1730000001000,
 	},
@@ -118,20 +121,21 @@ export const validPayloads = {
 		latency_ms: 120,
 		cache_read_tokens: 0,
 		cache_write_tokens: 0,
+		token_source: "host_agent_paid",
 	},
 	"tool.call": {
 		tool_name: "bash",
 		decision: "allow",
-		input_hash: "h_input",
-		output_hash: "h_output",
+		input_hash: testHash(3),
+		output_hash: testHash(4),
 		latency_ms: 8,
 	},
 	"session.start": { session_uuid: "018f7d0c-fd8b-7ccf-9b9b-0a2ea938ad0d" },
 	"session.end": { session_uuid: "018f7d0c-fd8b-7ccf-9b9b-0a2ea938ad0d", duration_ms: 1000 },
-	"prompt.submit": { prompt_hash: "h_prompt", byte_len: 9 },
-	"permission.request": { kind: "shell", decision: "deny", target_hash: "h_target" },
+	"prompt.submit": { prompt_hash: testHash(5), byte_len: 9 },
+	"permission.request": { kind: "shell", decision: "deny", target_hash: testHash(6) },
 	"consent.change": { from: "metadata-only", to: "off", reason: "test" },
-	error: { kind: "recoverable", message_hash: "h_message", recoverable: true },
+	error: { kind: "recoverable", message_hash: testHash(7), recoverable: true },
 	"cost.summary": {
 		session_uuid: "018f7d0c-fd8b-7ccf-9b9b-0a2ea938ad0d",
 		tokens_in: 20,
@@ -140,6 +144,12 @@ export const validPayloads = {
 		tool_calls: 1,
 		memory_reads: 2,
 		memory_writes: 3,
+		host_agent_prompt_tokens: 10,
+		host_agent_completion_tokens: 3,
+		plugin_internal_prompt_tokens: 10,
+		plugin_internal_completion_tokens: 2,
+		local_memory_input_tokens: 12,
+		local_memory_output_tokens: 8,
 	},
 };
 

@@ -6,20 +6,27 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it, mock } from "node:test";
 import { setTimeout as delay } from "node:timers/promises";
-import { BufferStore } from "../../../../packages/sno-observe/dist/internal/buffer-store.js";
+import {
+	BufferStore,
+	decodeEnvelope,
+} from "../../../../packages/sno-observe/dist/internal/buffer-store.js";
 import { FlushEngine } from "../../../../packages/sno-observe/dist/internal/flush.js";
 import { bootstrapIdentity } from "../../../../packages/sno-observe/dist/internal/identity.js";
 import { SnoObserveRuntime } from "../../../../packages/sno-observe/dist/internal/runtime.js";
 import { parseEventInput } from "../../../../packages/sno-observe/dist/internal/schemas.js";
 import { countTokens } from "../../../../packages/sno-observe/dist/internal/tokens.js";
-import { validPayloads, scope } from "../fixtures/temp-env.mjs";
+import { scope, validPayloads } from "../fixtures/temp-env.mjs";
+
+function testHash(index) {
+	return index.toString(16).padStart(64, "0");
+}
 
 function tempEnv() {
 	const dir = mkdtempSync(join(tmpdir(), "sno-observe-flush-"));
 	return {
 		dir,
 		env: {
-			SNO_HOME: dir,
+			SNO_PROFILE_DIR: dir,
 			SNO_IDENTITY_PATH: join(dir, "identity.json"),
 			SNO_BUFFER_PATH: join(dir, "buffer.db"),
 			SNO_CONSENT_PATH: join(dir, "state", "consent.json"),
@@ -33,7 +40,7 @@ function seedIdentify(store) {
 	store.append({
 		eventId: "id-0",
 		eventType: "agent.identify",
-			lane: "memory",
+		lane: "memory",
 		tsEdgeMs: 1,
 		consentLevel: "metadata-only",
 		redacted: false,
@@ -43,15 +50,15 @@ function seedIdentify(store) {
 	});
 }
 
-function appendMemoryWrite(store, i) {
+function appendMemoryWrite(store, i, eventScope = scope) {
 	store.append({
 		eventId: `mw-${i}`,
 		eventType: "memory.write",
-			lane: "memory",
+		lane: "memory",
 		tsEdgeMs: 1000 + i,
 		consentLevel: "metadata-only",
 		redacted: false,
-		scope,
+		scope: eventScope,
 		payload: validPayloads["memory.write"],
 		terminal: false,
 	});
@@ -60,10 +67,10 @@ function appendMemoryWrite(store, i) {
 function memoryEvent(i) {
 	return parseEventInput({
 		event_type: "memory.write",
-			lane: "memory",
+		lane: "memory",
 		agent_id: "codex",
 		payload: {
-			key_hash: `timer-${i}`,
+			key_hash: testHash(i),
 			byte_len: 1,
 			content_tokens: 1,
 			tokens_method: "char_approximation",
@@ -123,6 +130,29 @@ describe("flush 3-state machine", () => {
 		}
 	});
 
+	it("runtime does not auto-attach legacy project_id values to scope", async () => {
+		const t = tempEnv();
+		const runtime = new SnoObserveRuntime({ env: t.env, cwd: t.dir });
+		try {
+			await runtime.emitParsed(memoryEvent(1));
+			const store = new BufferStore(t.env.SNO_BUFFER_PATH);
+			try {
+				const envelopes = store
+					.getAllRows()
+					.map((row) => decodeEnvelope(row.payload));
+				assert.equal(envelopes.length, 2);
+				assert.equal(envelopes[0].scope.project_id, undefined);
+				assert.equal(envelopes[1].scope.project_id, undefined);
+			} finally {
+				store.close();
+			}
+		} finally {
+			runtime.flushEngine?.dispose?.();
+			runtime.store?.close?.();
+			rmSync(t.dir, { recursive: true, force: true });
+		}
+	});
+
 	it("zero emits => zero setTimeout calls (23.3 idle 24h)", () => {
 		const t = tempEnv();
 		const store = new BufferStore(t.env.SNO_BUFFER_PATH);
@@ -174,7 +204,11 @@ describe("flush 3-state machine", () => {
 			() => t.env,
 		);
 		try {
-			const result = await engine.flush({ identity, env: t.env, fetch: fakeFetch });
+			const result = await engine.flush({
+				identity,
+				env: t.env,
+				fetch: fakeFetch,
+			});
 			// Initial batch shipped both rows that existed at batch start (limit=100).
 			assert.equal(result.shipped >= 2, true);
 			// Re-armed timer should drain the row appended mid-flush; allow it to fire.
@@ -246,9 +280,17 @@ describe("flush 3-state machine", () => {
 			() => t.env,
 		);
 		try {
-			const first = await engine.flush({ identity, env: t.env, fetch: fakeFetch });
+			const first = await engine.flush({
+				identity,
+				env: t.env,
+				fetch: fakeFetch,
+			});
 			appendMemoryWrite(store, 2);
-			const second = await engine.flush({ identity, env: t.env, fetch: fakeFetch });
+			const second = await engine.flush({
+				identity,
+				env: t.env,
+				fetch: fakeFetch,
+			});
 
 			assert.equal(first.shipped, 2);
 			assert.equal(second.shipped, 1);
@@ -291,8 +333,16 @@ describe("flush 3-state machine", () => {
 			() => t.env,
 		);
 		try {
-			const first = await engine.flush({ identity, env: t.env, fetch: fakeFetch });
-			const second = await engine.flush({ identity, env: t.env, fetch: fakeFetch });
+			const first = await engine.flush({
+				identity,
+				env: t.env,
+				fetch: fakeFetch,
+			});
+			const second = await engine.flush({
+				identity,
+				env: t.env,
+				fetch: fakeFetch,
+			});
 
 			assert.equal(first.retryable, 1);
 			assert.equal(second.shipped, 1);
@@ -332,7 +382,9 @@ describe("flush 3-state machine", () => {
 			for (let i = 0; i < 50; i += 1) {
 				await runtime.emitParsed(memoryEvent(i));
 			}
-			await waitImmediateFlushDone(() => fetchCalls > 0 && inFlightFetches === 0);
+			await waitImmediateFlushDone(
+				() => fetchCalls > 0 && inFlightFetches === 0,
+			);
 			assert.equal(fetchCalls > 0, true);
 			assert.equal(clearSpy.mock.callCount() > 0, true);
 			await runtime.shutdown();
@@ -368,6 +420,174 @@ describe("flush 3-state machine", () => {
 			rmSync(t.dir, { recursive: true, force: true });
 		}
 	});
+
+	it("shutdown stops after awaiting an active retryable flush", async () => {
+		const t = tempEnv();
+		let eventCalls = 0;
+		let releaseFirstEvent;
+		const firstEventResponse = new Promise((resolve) => {
+			releaseFirstEvent = () => {
+				resolve(
+					new Response(JSON.stringify({ error: "retry" }), {
+						status: 503,
+						headers: { "Content-Type": "application/json", "Retry-After": "5" },
+					}),
+				);
+			};
+		});
+		const runtime = new SnoObserveRuntime({
+			env: t.env,
+			cwd: t.dir,
+			fetch: async (url, init) => {
+				if (String(url).endsWith("/api/v1/identity/register-machine")) {
+					return registerMachineResponse(init);
+				}
+				eventCalls += 1;
+				if (eventCalls === 1) {
+					return firstEventResponse;
+				}
+				return new Response(
+					JSON.stringify({ receipt_id: "unexpected_retry" }),
+					{
+						status: 202,
+						headers: { "Content-Type": "application/json" },
+					},
+				);
+			},
+		});
+		try {
+			await runtime.emitParsed(memoryEvent(100));
+			const activeFlush = runtime.flush(false);
+			await waitImmediateFlushDone(() => eventCalls === 1);
+
+			const shutdown = runtime.shutdown();
+			releaseFirstEvent();
+			const result = await shutdown;
+			await activeFlush;
+
+			assert.equal(eventCalls, 1);
+			assert.equal(result.flushedCount, 0);
+			assert.equal(result.failedCount > 0, true);
+		} finally {
+			await runtime.shutdown().catch(() => {});
+			rmSync(t.dir, { recursive: true, force: true });
+		}
+	});
+
+	it("shutdown drains scheduled pending rows before closing the buffer", async () => {
+		const t = tempEnv();
+		const runtime = new SnoObserveRuntime({
+			env: t.env,
+			cwd: t.dir,
+			fetch: async (url, init) => {
+				if (String(url).endsWith("/api/v1/identity/register-machine")) {
+					return registerMachineResponse(init);
+				}
+				return new Response(JSON.stringify({ receipt_id: "r" }), {
+					status: 202,
+					headers: { "Content-Type": "application/json" },
+				});
+			},
+		});
+		try {
+			await runtime.emitParsed(memoryEvent(7));
+			const result = await runtime.shutdown();
+			assert.equal(result.flushedCount, 2);
+			assert.equal(result.failedCount, 0);
+			const store = new BufferStore(t.env.SNO_BUFFER_PATH);
+			try {
+				assert.equal(
+					store.getAllRows().every((row) => row.shipped === 1),
+					true,
+				);
+			} finally {
+				store.close();
+			}
+		} finally {
+			await runtime.shutdown().catch(() => {});
+			rmSync(t.dir, { recursive: true, force: true });
+		}
+	});
+
+	it("shutdown stops when drain keeps receiving new pending rows", async () => {
+		const t = tempEnv();
+		let runtime;
+		let eventCalls = 0;
+		let runtimeScope;
+		runtime = new SnoObserveRuntime({
+			env: t.env,
+			cwd: t.dir,
+			fetch: async (url, init) => {
+				if (String(url).endsWith("/api/v1/identity/register-machine")) {
+					return registerMachineResponse(init);
+				}
+				eventCalls += 1;
+				appendMemoryWrite(runtime.store, 1_000 + eventCalls, runtimeScope);
+				return new Response(JSON.stringify({ receipt_id: "r" }), {
+					status: 202,
+					headers: { "Content-Type": "application/json" },
+				});
+			},
+		});
+		try {
+			await runtime.emitParsed(memoryEvent(8));
+			runtimeScope = decodeEnvelope(runtime.store.getAllRows()[0].payload).scope;
+			const result = await runtime.shutdown();
+			assert.equal(result.lastError, "sno observe drain made no progress");
+			assert.equal(result.failedCount > 0, true);
+			assert.equal(eventCalls > 0, true);
+		} finally {
+			await runtime.shutdown().catch(() => {});
+			rmSync(t.dir, { recursive: true, force: true });
+		}
+	});
+
+	it("beforeExit flush hook re-arms after firing once", async () => {
+		const t = tempEnv();
+		const store = new BufferStore(t.env.SNO_BUFFER_PATH);
+		const identity = bootstrapIdentity(t.env);
+		const originalOnce = process.once;
+		const originalOff = process.off;
+		let beforeExitHandler;
+		process.once = function once(event, listener) {
+			if (event === "beforeExit") {
+				beforeExitHandler = listener;
+				return this;
+			}
+			return originalOnce.call(this, event, listener);
+		};
+		process.off = function off(event, listener) {
+			if (event === "beforeExit" && listener === beforeExitHandler) {
+				beforeExitHandler = undefined;
+				return this;
+			}
+			return originalOff.call(this, event, listener);
+		};
+		const engine = new FlushEngine(
+			store,
+			() => identity,
+			() => "https://sno.test",
+			() => t.env,
+		);
+		try {
+			engine.schedule(60_000);
+			const firstHandler = beforeExitHandler;
+			assert.equal(typeof firstHandler, "function");
+			beforeExitHandler = undefined;
+			firstHandler();
+			await new Promise((resolve) => setImmediate(resolve));
+
+			engine.schedule(60_000);
+			assert.equal(typeof beforeExitHandler, "function");
+			assert.notEqual(beforeExitHandler, firstHandler);
+		} finally {
+			engine.dispose();
+			process.once = originalOnce;
+			process.off = originalOff;
+			store.close();
+			rmSync(t.dir, { recursive: true, force: true });
+		}
+	});
 });
 
 function registerMachineResponse(init) {
@@ -399,6 +619,9 @@ describe("tokens — tiktoken init failure approximation fallback (25.3)", () =>
 		const result = await countTokens("hello world");
 		assert.equal(typeof result.tokens, "number");
 		assert.equal(result.tokens > 0, true);
-		assert.equal(result.method === "tiktoken" || result.method === "char_approximation", true);
+		assert.equal(
+			result.method === "tiktoken" || result.method === "char_approximation",
+			true,
+		);
 	});
 });

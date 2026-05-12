@@ -4,17 +4,18 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
 import { createSnoObserve } from "../../../../packages/sno-observe/dist/index.js";
-import { BufferStore } from "../../../../packages/sno-observe/dist/internal/buffer-store.js";
 import { verifyAuditEvent } from "../../../../packages/sno-observe/dist/internal/audit-verify.js";
+import { BufferStore } from "../../../../packages/sno-observe/dist/internal/buffer-store.js";
 import { exportEvents } from "../../../../packages/sno-observe/dist/internal/export.js";
-import { validPayloads, scope } from "../fixtures/temp-env.mjs";
+import { getSnoProfileDir } from "../../../../packages/sno-observe/dist/internal/paths.js";
+import { scope, validPayloads } from "../fixtures/temp-env.mjs";
 
 function tempEnv() {
 	const dir = mkdtempSync(join(tmpdir(), "sno-observe-api-"));
 	return {
 		dir,
 		env: {
-			SNO_HOME: dir,
+			SNO_PROFILE_DIR: dir,
 			SNO_IDENTITY_PATH: join(dir, "identity.json"),
 			SNO_BUFFER_PATH: join(dir, "buffer.db"),
 			SNO_CONSENT_PATH: join(dir, "state", "consent.json"),
@@ -25,6 +26,21 @@ function tempEnv() {
 }
 
 describe("public API routing and export inference", () => {
+	it("falls back to legacy SNO_HOME when SNO_PROFILE_DIR is absent", () => {
+		const dir = mkdtempSync(join(tmpdir(), "sno-observe-home-"));
+		const profileDir = mkdtempSync(join(tmpdir(), "sno-observe-profile-"));
+		try {
+			assert.equal(getSnoProfileDir({ SNO_HOME: dir }), dir);
+			assert.equal(
+				getSnoProfileDir({ SNO_PROFILE_DIR: profileDir, SNO_HOME: dir }),
+				profileDir,
+			);
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+			rmSync(profileDir, { recursive: true, force: true });
+		}
+	});
+
 	it("routes audit.verify through runtime env and fetch options", async () => {
 		const t = tempEnv();
 		const calls = [];
@@ -32,7 +48,10 @@ describe("public API routing and export inference", () => {
 			env: t.env,
 			cwd: t.dir,
 			fetch: async (url, init) => {
-				calls.push({ url: String(url), authorization: init.headers.Authorization });
+				calls.push({
+					url: String(url),
+					authorization: init.headers.Authorization,
+				});
 				if (String(url).endsWith("/api/v1/identity/register-machine")) {
 					const body = JSON.parse(String(init.body));
 					return new Response(
@@ -53,7 +72,9 @@ describe("public API routing and export inference", () => {
 		try {
 			const result = await observe.audit.verify("event 1");
 			assert.equal(result.verified, true);
-			const identity = JSON.parse(readFileSync(t.env.SNO_IDENTITY_PATH, "utf8"));
+			const identity = JSON.parse(
+				readFileSync(t.env.SNO_IDENTITY_PATH, "utf8"),
+			);
 			assert.deepEqual(calls, [
 				{
 					url: "https://custom.sno.test/base/api/v1/identity/register-machine",
@@ -76,7 +97,10 @@ describe("public API routing and export inference", () => {
 			baseUrl: "https://custom.sno.test/base",
 			machineSecret: "direct-machine-secret",
 			fetch: async (url, init) => {
-				calls.push({ url: String(url), authorization: init.headers.Authorization });
+				calls.push({
+					url: String(url),
+					authorization: init.headers.Authorization,
+				});
 				return new Response(JSON.stringify({ verified: true }), {
 					status: 200,
 					headers: { "Content-Type": "application/json" },
@@ -99,7 +123,7 @@ describe("public API routing and export inference", () => {
 			store.append({
 				eventId: "id-0",
 				eventType: "agent.identify",
-			lane: "memory",
+				lane: "memory",
 				tsEdgeMs: 1,
 				consentLevel: "metadata-only",
 				redacted: false,
@@ -112,7 +136,9 @@ describe("public API routing and export inference", () => {
 			const data = result.data;
 			assert.equal(data instanceof Uint8Array, true);
 			assert.equal(
-				new TextDecoder().decode(data).includes("\"event_type\":\"agent.identify\""),
+				new TextDecoder()
+					.decode(data)
+					.includes('"event_type":"agent.identify"'),
 				true,
 			);
 		} finally {

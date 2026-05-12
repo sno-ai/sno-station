@@ -5,6 +5,8 @@ import { parseEventInput } from "../../../../packages/sno-observe/dist/internal/
 import { EVENT_LANES, EVENT_TYPES } from "../../../../packages/sno-observe/dist/internal/types.js";
 
 const uuidV7 = "018f7d0c-fd8b-7ccf-9b9b-0a2ea938ad0d";
+const uppercaseUuidV7 = uuidV7.toUpperCase();
+const hashA = "a".repeat(64);
 
 function memoryWrite(tokens_method) {
 	return {
@@ -12,7 +14,7 @@ function memoryWrite(tokens_method) {
 		lane: "memory",
 		agent_id: "codex",
 		payload: {
-			key_hash: "h_key",
+			key_hash: hashA,
 			byte_len: 12,
 			content_tokens: 3,
 			tokens_method,
@@ -59,7 +61,7 @@ describe("schema alignment", () => {
 		}
 	});
 
-	it("requires cost.summary UUID-v7 and current counter fields", () => {
+	it("requires cost.summary lowercase canonical UUID-v7 and current counter fields", () => {
 		const payload = {
 			session_uuid: uuidV7,
 			tokens_in: 10,
@@ -68,6 +70,12 @@ describe("schema alignment", () => {
 			memory_writes: 2,
 			memory_reads: 1,
 			tool_calls: 4,
+			host_agent_prompt_tokens: 7,
+			host_agent_completion_tokens: 2,
+			plugin_internal_prompt_tokens: 3,
+			plugin_internal_completion_tokens: 1,
+			local_memory_input_tokens: 11,
+			local_memory_output_tokens: 5,
 		};
 		const parsed = parseEventInput({
 			event_type: "cost.summary",
@@ -100,13 +108,71 @@ describe("schema alignment", () => {
 					event_type: "cost.summary",
 					lane: "memory",
 					agent_id: "codex",
-					payload: { ...payload, prompt_tokens: 10, completion_tokens: 3 },
+					payload: { ...payload, session_uuid: uppercaseUuidV7 },
+				}),
+			InvalidEventPayloadError,
+		);
+		assert.throws(
+			() =>
+				parseEventInput({
+					event_type: "cost.summary",
+					lane: "memory",
+					agent_id: "codex",
+					payload: {
+						...payload,
+						plugin_internal_prompt_tokens: undefined,
+					},
 				}),
 			InvalidEventPayloadError,
 		);
 	});
 
-	it("requires UUID-v7 payload session IDs", () => {
+	it("requires llm.call token_source for paid token attribution", () => {
+		const payload = {
+			model: "gpt-4o",
+			prompt_tokens: 10,
+			completion_tokens: 3,
+			latency_ms: 120,
+			cache_read_tokens: 0,
+			cache_write_tokens: 0,
+			token_source: "host_agent_paid",
+		};
+		const parsed = parseEventInput({
+			event_type: "llm.call",
+			lane: "memory",
+			agent_id: "openclaw",
+			payload,
+		});
+		assert.equal(parsed.payload.token_source, "host_agent_paid");
+		parseEventInput({
+			event_type: "llm.call",
+			lane: "memory",
+			agent_id: "openclaw",
+			payload: { ...payload, token_source: "plugin_internal_paid" },
+		});
+		assert.throws(
+			() =>
+				parseEventInput({
+					event_type: "llm.call",
+					lane: "memory",
+					agent_id: "openclaw",
+					payload: { ...payload, token_source: undefined },
+				}),
+			InvalidEventPayloadError,
+		);
+		assert.throws(
+			() =>
+				parseEventInput({
+					event_type: "llm.call",
+					lane: "memory",
+					agent_id: "openclaw",
+					payload: { ...payload, token_source: "cache" },
+				}),
+			InvalidEventPayloadError,
+		);
+	});
+
+	it("requires lowercase canonical UUID-v7 payload session IDs", () => {
 		for (const event_type of ["session.start", "session.end"]) {
 			parseEventInput({
 				event_type,
@@ -122,9 +188,44 @@ describe("schema alignment", () => {
 						lane: "memory",
 						agent_id: "codex",
 						payload: { session_uuid: "session-1" },
+				}),
+				InvalidEventPayloadError,
+			);
+			assert.throws(
+				() =>
+					parseEventInput({
+						event_type,
+						lane: "memory",
+						agent_id: "codex",
+						payload: { session_uuid: uppercaseUuidV7 },
 					}),
 				InvalidEventPayloadError,
 			);
 		}
+	});
+
+	it("requires lowercase canonical UUID-v7 envelope and identity IDs", () => {
+		assert.throws(
+			() => parseEventInput({ ...memoryWrite("qwen_tokenizer"), event_id: uppercaseUuidV7 }),
+			InvalidEventPayloadError,
+		);
+		assert.throws(
+			() => parseEventInput({ ...memoryWrite("qwen_tokenizer"), scope: { session_uuid: uppercaseUuidV7 } }),
+			InvalidEventPayloadError,
+		);
+		assert.throws(
+			() =>
+				parseEventInput({
+					event_type: "agent.identify",
+					lane: "memory",
+					agent_id: "codex",
+					payload: {
+						agent_id: "codex",
+						machine_id: uppercaseUuidV7,
+						sdk_version: "0.1.0",
+					},
+				}),
+			InvalidEventPayloadError,
+		);
 	});
 });

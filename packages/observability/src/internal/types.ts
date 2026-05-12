@@ -45,7 +45,7 @@ export interface EventScope extends JsonObject {
 	user_id: string;
 	machine_id: string;
 	agent_id: AgentId;
-	project_id: string;
+	project_id?: string;
 	user_account_id?: string;
 }
 

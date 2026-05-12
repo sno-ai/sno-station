@@ -26,8 +26,8 @@ await snoObserve.flush({ force: true });
 - `~/.sno/state/consent.json`: current consent value, defaulting to `metadata-only`.
 - `~/.sno/redaction-rules.txt`: optional newline-separated regexes for extra redaction.
 
-Tests can override paths with `SNO_HOME`, `SNO_IDENTITY_PATH`, `SNO_BUFFER_PATH`,
-and `SNO_CONSENT_PATH`.
+Tests and non-default profiles can override paths with `SNO_PROFILE_DIR`,
+`SNO_IDENTITY_PATH`, `SNO_BUFFER_PATH`, and `SNO_CONSENT_PATH`.
 
 ## Consent
 
