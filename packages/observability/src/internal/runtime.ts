@@ -1,4 +1,4 @@
-import { v7 as uuidv7 } from "uuid";
+import { createUUIDv7, isCuid2 } from "@snoai/common-core";
 import { verifyAuditEvent } from "./audit-verify.js";
 import { BufferStore } from "./buffer-store.js";
 import { ConsentStore } from "./consent.js";
@@ -18,7 +18,6 @@ import {
 } from "./machine-registration.js";
 import { AsyncMutex } from "./mutex.js";
 import { getBufferPath, getRedactionRulesPath, type PathEnv } from "./paths.js";
-import { detectProjectId } from "./project-id.js";
 import { redactEventPayload, redactScope } from "./redact.js";
 import { shouldSampleTool } from "./sampling.js";
 import { parseConsentValue } from "./schemas.js";
@@ -45,6 +44,9 @@ export interface RuntimeOptions {
 	cwd?: string;
 	env?: PathEnv & Record<string, string | undefined>;
 	fetch?: typeof fetch;
+	agentVersion?: string;
+	cliVersion?: string;
+	pluginVersion?: string;
 }
 
 export class SnoObserveRuntime {
@@ -59,7 +61,7 @@ export class SnoObserveRuntime {
 	constructor(private readonly options: RuntimeOptions = {}) {}
 
 	emitParsed(parsed: ParsedEvent): Promise<EmitResult> {
-		const eventId = parsed.eventId ?? uuidv7();
+		const eventId = parsed.eventId ?? createUUIDv7();
 		if (parsed.eventType === "tool.call") {
 			const payload = parsed.payload as JsonObject & { tool_name?: unknown };
 			const toolName = String(payload.tool_name);
@@ -71,7 +73,7 @@ export class SnoObserveRuntime {
 		}
 		return this.mutex.runExclusive(async () => {
 			const identity = bootstrapIdentity(this.env());
-			const consent = parsed.consentLevel ?? this.consentStore().get();
+			const consent = this.consentStore().get();
 			const store = this.getStore();
 			const chainEpoch = store.getCurrentEpoch(identity.machine_uuid, parsed.agentId);
 			if (
@@ -81,16 +83,12 @@ export class SnoObserveRuntime {
 				this.appendPrepared({
 					identity,
 					agentId: parsed.agentId,
-					eventId: uuidv7(),
+					eventId: createUUIDv7(),
 					eventType: "agent.identify",
 					lane: parsed.lane,
 					tsEdgeMs: Date.now(),
 					consent,
-					payload: {
-						agent_id: parsed.agentId,
-						machine_id: identity.machine_uuid,
-						sdk_version: SDK_VERSION,
-					},
+					payload: agentIdentifyPayload(identity, parsed.agentId, {}, this.options),
 					scope: {},
 					chainEpoch,
 					terminal: consent === "off",
@@ -128,15 +126,22 @@ export class SnoObserveRuntime {
 		});
 	}
 
-	async flush(force = true): Promise<FlushResult> {
+	async flush(
+		options: boolean | { force?: boolean; signal?: AbortSignal } = true,
+	): Promise<FlushResult> {
+		const force = typeof options === "boolean" ? options : (options.force ?? true);
+		const signal = typeof options === "boolean" ? undefined : options.signal;
 		const identity = bootstrapIdentity(this.env());
-		const options = {
+		const flushOptions = {
 			identity,
 			env: this.env(),
 			force,
+			...(signal === undefined ? {} : { signal }),
 		};
 		return this.getFlushEngine().flush(
-			this.options.fetch === undefined ? options : { ...options, fetch: this.options.fetch },
+			this.options.fetch === undefined
+				? flushOptions
+				: { ...flushOptions, fetch: this.options.fetch },
 		);
 	}
 
@@ -237,16 +242,12 @@ export class SnoObserveRuntime {
 		this.appendPrepared({
 			identity,
 			agentId,
-			eventId: uuidv7(),
+			eventId: createUUIDv7(),
 			eventType: "agent.identify",
 			lane: "memory",
 			tsEdgeMs: Date.now(),
 			consent,
-			payload: {
-				agent_id: agentId,
-				machine_id: identity.machine_uuid,
-				sdk_version: SDK_VERSION,
-			},
+			payload: agentIdentifyPayload(identity, agentId, {}, this.options),
 			scope: {},
 			chainEpoch,
 			terminal,
@@ -265,7 +266,7 @@ export class SnoObserveRuntime {
 		this.appendPrepared({
 			identity,
 			agentId,
-			eventId: uuidv7(),
+			eventId: createUUIDv7(),
 			eventType: "consent.change",
 			lane: "memory",
 			tsEdgeMs: Date.now(),
@@ -371,33 +372,29 @@ export class SnoObserveRuntime {
 	}
 
 	async shutdown(): Promise<ShutdownResult> {
-		const result: ShutdownResult = { flushedCount: 0, failedCount: 0 };
-		if (this.store !== null) {
-			try {
-				const flushResult = await this.flush(true);
-				result.flushedCount += flushResult.shipped;
-				result.failedCount += flushResult.retryable + flushResult.terminal;
-			} catch (error) {
-				result.failedCount += this.store.countPending();
-				result.lastError = errorMessage(error);
-				logger.error("sno observe shutdown flush failed", { error: result.lastError });
-			}
-			// Drain any background flush (e.g. fire-and-forget from emitParsed) before closing the DB.
-			const drainResult = await this.flushEngine?.drain();
-			if (drainResult !== undefined) {
-				result.flushedCount += drainResult.flushedCount;
-				result.failedCount += drainResult.failedCount;
-				if (drainResult.lastError !== undefined) {
-					result.lastError = drainResult.lastError;
+		return this.mutex.runExclusive(async () => {
+			const result: ShutdownResult = { flushedCount: 0, failedCount: 0 };
+			if (this.store !== null) {
+				try {
+					const drainResult = await this.getFlushEngine().drain();
+					result.flushedCount += drainResult.flushedCount;
+					result.failedCount += drainResult.failedCount;
+					if (drainResult.lastError !== undefined) {
+						result.lastError = drainResult.lastError;
+					}
+				} catch (error) {
+					result.failedCount += this.store.countPending();
+					result.lastError = errorMessage(error);
+					logger.error("sno observe shutdown flush failed", { error: result.lastError });
 				}
+				this.flushEngine?.dispose();
 			}
-			this.flushEngine?.dispose();
-		}
-		this.store?.close();
-		this.store = null;
-		this.storePath = null;
-		this.flushEngine = null;
-		return result;
+			this.store?.close();
+			this.store = null;
+			this.storePath = null;
+			this.flushEngine = null;
+			return result;
+		});
 	}
 
 	private appendPrepared(input: {
@@ -414,12 +411,10 @@ export class SnoObserveRuntime {
 		terminal: boolean;
 	}) {
 		rejectRawContent(input.eventType, input.payload, input.consent);
-		const payload = normalizeSystemPayload(input);
-		const projectId = detectProjectId(this.options.cwd ?? process.cwd(), this.env());
+		const payload = normalizeSystemPayload({ ...input, options: this.options });
 		const callerScope = stripCallerAccountScope(input.scope);
 		const accountScope =
-			typeof input.identity.user_account_id === "string" &&
-			input.identity.user_account_id.length > 0
+			typeof input.identity.user_account_id === "string" && isCuid2(input.identity.user_account_id)
 				? { user_account_id: input.identity.user_account_id }
 				: {};
 		const scope: EventScope = {
@@ -428,7 +423,6 @@ export class SnoObserveRuntime {
 			user_id: input.identity.user_cuid,
 			machine_id: input.identity.machine_uuid,
 			agent_id: input.agentId,
-			project_id: projectId,
 		};
 		const redactionRulesPath = getRedactionRulesPath(this.env());
 		const redactedScope = redactScope(scope, redactionRulesPath);
@@ -483,6 +477,7 @@ export class SnoObserveRuntime {
 				() => bootstrapIdentity(this.env()),
 				() => this.baseUrl(),
 				() => this.env(),
+				() => this.options.fetch,
 			);
 		}
 		return this.flushEngine;
@@ -526,7 +521,14 @@ export class SnoObserveRuntime {
 			reason: result.reason,
 		};
 		for (const listener of this.listeners) {
-			listener(event);
+			try {
+				listener(event);
+			} catch (error) {
+				logger.warn("sno observe subscriber failed", {
+					error: error instanceof Error ? error.message : String(error),
+					event_type: eventType,
+				});
+			}
 		}
 	}
 }
@@ -559,19 +561,37 @@ function normalizeSystemPayload(input: {
 	payload: JsonObject;
 	agentId: AgentId;
 	identity: Identity;
+	options: RuntimeOptions;
 }): JsonObject {
 	if (input.eventType !== "agent.identify") {
 		return input.payload;
 	}
-	const payload = input.payload as JsonObject & { agent_version?: unknown };
+	return agentIdentifyPayload(input.identity, input.agentId, input.payload, input.options);
+}
+
+function agentIdentifyPayload(
+	identity: Identity,
+	agentId: AgentId,
+	payload: JsonObject = {},
+	options: RuntimeOptions = {},
+): JsonObject {
 	const agentVersion =
-		typeof payload.agent_version === "string" ? { agent_version: payload.agent_version } : {};
+		optionalString(payload["agent_version"]) ?? optionalString(options.agentVersion);
+	const cliVersion = optionalString(payload["cli_version"]) ?? optionalString(options.cliVersion);
+	const pluginVersion =
+		optionalString(payload["plugin_version"]) ?? optionalString(options.pluginVersion);
 	return {
-		agent_id: input.agentId,
-		machine_id: input.identity.machine_uuid,
-		...agentVersion,
+		agent_id: agentId,
+		machine_id: identity.machine_uuid,
+		...(agentVersion ? { agent_version: agentVersion } : {}),
+		...(cliVersion ? { cli_version: cliVersion } : {}),
+		...(pluginVersion ? { plugin_version: pluginVersion } : {}),
 		sdk_version: SDK_VERSION,
 	};
+}
+
+function optionalString(value: unknown): string | undefined {
+	return typeof value === "string" && value.length > 0 ? value : undefined;
 }
 
 function uniqueAgents(values: AgentId[]): AgentId[] {

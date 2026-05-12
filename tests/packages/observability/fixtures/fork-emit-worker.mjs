@@ -1,4 +1,4 @@
-// Forked worker for cross-process chain tests. Reads SNO_HOME from env, opens the
+// Forked worker for cross-process chain tests. Reads SNO_PROFILE_DIR from env, opens the
 // shared buffer.db via BufferStore, and emits N memory.write events. Reports a JSON
 // summary on stdout.
 //
@@ -7,18 +7,23 @@
 // (UNIQUE constraint OR ChainSeedError on retry), skip the identify and proceed —
 // the actual event then appends at seq>=1 with prev = winning identify's self_hash.
 
+import { createHash } from "node:crypto";
 import { BufferStore } from "../../../../packages/sno-observe/dist/internal/buffer-store.js";
 import { bootstrapIdentity } from "../../../../packages/sno-observe/dist/internal/identity.js";
+
+function testHash(label, index) {
+	return createHash("sha256").update(`${label}:${index}`).digest("hex");
+}
 
 const count = Number(process.argv[2] ?? "0");
 const label = process.argv[3] ?? "w";
 
 const env = {
-	SNO_HOME: process.env.SNO_HOME,
+	SNO_PROFILE_DIR: process.env.SNO_PROFILE_DIR,
 	SNO_IDENTITY_PATH: process.env.SNO_IDENTITY_PATH,
 	SNO_BUFFER_PATH: process.env.SNO_BUFFER_PATH,
 	SNO_CONSENT_PATH: process.env.SNO_CONSENT_PATH,
-	HOME: process.env.SNO_HOME,
+	HOME: process.env.SNO_PROFILE_DIR,
 };
 
 const identity = bootstrapIdentity(env);
@@ -78,7 +83,7 @@ try {
 			redacted: false,
 			scope,
 			payload: {
-				key_hash: `h-${label}-${i}`,
+				key_hash: testHash(label, i),
 				byte_len: 1,
 				content_tokens: 1,
 				tokens_method: "char_approximation",

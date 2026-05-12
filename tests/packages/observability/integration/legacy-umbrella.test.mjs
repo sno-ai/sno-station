@@ -15,6 +15,7 @@ import { join } from "node:path";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 import DatabaseConstructor from "better-sqlite3";
+import { createCuid2 } from "../../../../packages/common-core/dist/index.js";
 import * as publicModule from "../../../../packages/sno-observe/dist/index.js";
 import { snoObserve } from "../../../../packages/sno-observe/dist/index.js";
 import { verifyAuditEvent } from "../../../../packages/sno-observe/dist/internal/audit-verify.js";
@@ -79,6 +80,10 @@ const expectedEventTypes = [
 	"cost.summary",
 ];
 
+function testHash(index) {
+	return index.toString(16).padStart(64, "0");
+}
+
 const validPayloads = {
 	"agent.identify": {
 		agent_id: "codex",
@@ -86,13 +91,13 @@ const validPayloads = {
 		sdk_version: "0.1.0",
 	},
 	"memory.write": {
-		key_hash: "h_key",
+		key_hash: testHash(1),
 		byte_len: 12,
 		content_tokens: 3,
 		tokens_method: "char_approximation",
 	},
 	"memory.read": {
-		query_hash: "h_query",
+		query_hash: testHash(2),
 		query_tokens: 2,
 		k: 5,
 		hit_count: 1,
@@ -105,7 +110,6 @@ const validPayloads = {
 		snapshot_reason: "session_end",
 		total_entries: 2,
 		total_bytes: 256,
-		total_tokens: 64,
 		oldest_entry_ts_ms: 1730000000000,
 		newest_entry_ts_ms: 1730000001000,
 	},
@@ -116,12 +120,13 @@ const validPayloads = {
 		latency_ms: 120,
 		cache_read_tokens: 0,
 		cache_write_tokens: 0,
+		token_source: "host_agent_paid",
 	},
 	"tool.call": {
 		tool_name: "bash",
 		decision: "allow",
-		input_hash: "h_input",
-		output_hash: "h_output",
+		input_hash: testHash(3),
+		output_hash: testHash(4),
 		latency_ms: 8,
 	},
 	"session.start": { session_uuid: "018f7d0c-fd8b-7ccf-9b9b-0a2ea938ad0d" },
@@ -129,14 +134,14 @@ const validPayloads = {
 		session_uuid: "018f7d0c-fd8b-7ccf-9b9b-0a2ea938ad0d",
 		duration_ms: 1000,
 	},
-	"prompt.submit": { prompt_hash: "h_prompt", byte_len: 9 },
+	"prompt.submit": { prompt_hash: testHash(5), byte_len: 9 },
 	"permission.request": {
 		kind: "shell",
 		decision: "deny",
-		target_hash: "h_target",
+		target_hash: testHash(6),
 	},
 	"consent.change": { from: "metadata-only", to: "off", reason: "test" },
-	error: { kind: "recoverable", message_hash: "h_message", recoverable: true },
+	error: { kind: "recoverable", message_hash: testHash(7), recoverable: true },
 	"cost.summary": {
 		session_uuid: "018f7d0c-fd8b-7ccf-9b9b-0a2ea938ad0d",
 		tokens_in: 20,
@@ -145,6 +150,12 @@ const validPayloads = {
 		tool_calls: 1,
 		memory_reads: 2,
 		memory_writes: 3,
+		host_agent_prompt_tokens: 10,
+		host_agent_completion_tokens: 3,
+		plugin_internal_prompt_tokens: 10,
+		plugin_internal_completion_tokens: 2,
+		local_memory_input_tokens: 12,
+		local_memory_output_tokens: 8,
 	},
 };
 
@@ -154,6 +165,10 @@ const scope = {
 	agent_id: "codex",
 	project_id: "p_test",
 };
+
+function testUuidV7(index) {
+	return `018f7d0c-fd8b-7${(index % 0x1000).toString(16).padStart(3, "0")}-9b9b-${index.toString(16).padStart(12, "0")}`;
+}
 
 describe("sno observe Node package", () => {
 	it("validates the public SDK event surface", () => {
@@ -210,7 +225,7 @@ describe("sno observe Node package", () => {
 					agent_id: "codex",
 					consent_level: "metadata-only",
 					payload: {
-						prompt_hash: "h_prompt",
+						prompt_hash: testHash(5),
 						byte_len: 9,
 						prompt_text: "raw prompt",
 					},
@@ -261,7 +276,7 @@ describe("sno observe Node package", () => {
 					event_type: "memory.write",
 					lane: "memory",
 					agent_id: "codex",
-					payload: { key_hash: "h_key", byte_len: 12, content_tokens: 3 },
+					payload: { key_hash: testHash(1), byte_len: 12, content_tokens: 3 },
 				}),
 			InvalidEventPayloadError,
 		);
@@ -423,11 +438,26 @@ describe("sno observe Node package", () => {
 			assert.deepEqual(bootstrapIdentity(temp.env), identity);
 			assert.equal(getIdentityLockPath(temp.env), join(temp.dir, "identity.lock"));
 			assert.equal(identity.version, 1);
-			assert.match(identity.machine_uuid, /^[0-9a-f-]{36}$/u);
+			assert.match(
+				identity.machine_uuid,
+				/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u,
+			);
 			assert.match(identity.machine_secret, /^[0-9a-f]{64}$/u);
 			if (process.platform !== "win32") {
 				assert.equal(statSync(temp.env.SNO_IDENTITY_PATH).mode & 0o777, 0o600);
 			}
+
+			writeFileSync(
+				temp.env.SNO_IDENTITY_PATH,
+				`${JSON.stringify({ ...identity, user_account_id: "acct_mock_123" }, null, 2)}\n`,
+				{ mode: 0o600 },
+			);
+			const migratedLegacyAccount = bootstrapIdentity(temp.env);
+			assert.equal(migratedLegacyAccount.user_cuid, identity.user_cuid);
+			assert.equal(migratedLegacyAccount.machine_uuid, identity.machine_uuid);
+			assert.equal(migratedLegacyAccount.user_account_id, undefined);
+			const migratedPersisted = JSON.parse(readFileSync(temp.env.SNO_IDENTITY_PATH, "utf8"));
+			assert.equal(migratedPersisted.user_account_id, undefined);
 
 			writeFileSync(temp.env.SNO_IDENTITY_PATH, "{not-json", { mode: 0o600 });
 			const regenerated = bootstrapIdentity(temp.env);
@@ -747,9 +777,10 @@ describe("sno observe Node package", () => {
 
 		const claimedTemp = createTempSnoEnv("sno-observe-claimed-account-scope-");
 		const identity = bootstrapIdentity(claimedTemp.env);
+		const accountCuid = createCuid2();
 		writeFileSync(
 			claimedTemp.env.SNO_IDENTITY_PATH,
-			`${JSON.stringify({ ...identity, user_account_id: "acct_from_identity" }, null, 2)}\n`,
+			`${JSON.stringify({ ...identity, user_account_id: accountCuid }, null, 2)}\n`,
 		);
 		const claimedRuntime = new SnoObserveRuntime({
 			env: claimedTemp.env,
@@ -769,7 +800,7 @@ describe("sno observe Node package", () => {
 			const store = new BufferStore(claimedTemp.env.SNO_BUFFER_PATH);
 			try {
 				const envelopes = store.getAllRows().map((row) => decodeEnvelope(row.payload));
-				assert.equal(envelopes[1].scope.user_account_id, "acct_from_identity");
+				assert.equal(envelopes[1].scope.user_account_id, accountCuid);
 			} finally {
 				store.close();
 			}
@@ -927,6 +958,67 @@ describe("sno observe Node package", () => {
 		}
 	});
 
+	it("does not let event consent override stored consent off", async () => {
+		const temp = createTempSnoEnv();
+		const { calls, fetch } = createFetchRecorder();
+		const runtime = new SnoObserveRuntime({
+			env: temp.env,
+			cwd: temp.dir,
+			fetch,
+		});
+		try {
+			await runtime.setConsent("off", "stored off");
+			const event = memoryWriteEvent("h_override");
+			event.consentLevel = "full";
+			const result = await runtime.emitParsed(event);
+			await runtime.flush();
+
+			assert.deepEqual(
+				{ accepted: result.accepted, reason: result.reason },
+				{ accepted: false, reason: "consent_off" },
+			);
+			assert.deepEqual(
+				calls.map((call) => JSON.parse(call.body).event_type),
+				["agent.identify", "consent.change"],
+			);
+		} finally {
+			await runtime.shutdown().catch(() => {});
+			cleanupTempSnoEnv(temp);
+		}
+	});
+
+	it("does not let subscriber failures block emit or flush", async () => {
+		const temp = createTempSnoEnv();
+		const { calls, fetch } = createFetchRecorder();
+		const runtime = new SnoObserveRuntime({
+			env: temp.env,
+			cwd: temp.dir,
+			fetch,
+		});
+		const unsubscribe = runtime.subscribe(() => {
+			throw new Error("subscriber failed");
+		});
+		try {
+			const result = await runtime.emitParsed(memoryWriteEvent("h_subscriber_throw"));
+			const flushed = await runtime.flush();
+
+			assert.equal(result.accepted, true);
+			assert.deepEqual(flushed, {
+				shipped: 2,
+				terminal: 0,
+				retryable: 0,
+			});
+			assert.deepEqual(
+				calls.map((call) => JSON.parse(call.body).event_type),
+				["agent.identify", "memory.write"],
+			);
+		} finally {
+			unsubscribe();
+			await runtime.shutdown().catch(() => {});
+			cleanupTempSnoEnv(temp);
+		}
+	});
+
 	it("keeps sequential chains gap-free and reports every emit outcome to subscribers", async () => {
 		const chainTemp = createTempSnoEnv("sno-observe-seq-");
 		const store = new BufferStore(chainTemp.env.SNO_BUFFER_PATH);
@@ -964,7 +1056,7 @@ describe("sno observe Node package", () => {
 		try {
 			await emitRuntime.emitParsed(
 				parseEventInput({
-					event_id: "seq-emit-0",
+					event_id: testUuidV7(0),
 					event_type: "agent.identify",
 					lane: "memory",
 					agent_id: "codex",
@@ -974,7 +1066,7 @@ describe("sno observe Node package", () => {
 			for (let index = 1; index < 100; index += 1) {
 				await emitRuntime.emitParsed(
 					parseEventInput({
-						event_id: `seq-emit-${index}`,
+						event_id: testUuidV7(index),
 						event_type: "session.start",
 						lane: "memory",
 						agent_id: "codex",
@@ -1239,7 +1331,7 @@ function createTempSnoEnv(prefix = "sno-observe-") {
 	return {
 		dir,
 		env: {
-			SNO_HOME: dir,
+			SNO_PROFILE_DIR: dir,
 			SNO_IDENTITY_PATH: join(dir, "identity.json"),
 			SNO_BUFFER_PATH: join(dir, "buffer.db"),
 			SNO_CONSENT_PATH: join(dir, "state", "consent.json"),
@@ -1259,7 +1351,7 @@ function initGitRepo(dir, remote) {
 
 function findUnsampledToolEventId(toolName, env) {
 	for (let index = 0; index < 1000; index += 1) {
-		const eventId = `unsampled-${index}`;
+		const eventId = testUuidV7(index + 1000);
 		if (!shouldSampleTool(eventId, toolName, 20, env)) {
 			return eventId;
 		}

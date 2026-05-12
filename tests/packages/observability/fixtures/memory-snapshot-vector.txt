@@ -7,5 +7,5 @@ memory.snapshot
 1
 metadata-only
 0
-{"newest_entry_ts_ms":1730000001000,"oldest_entry_ts_ms":1730000000000,"session_uuid":"018f7d0c-fd8b-7ccf-9b9b-0a2ea938ad0d","snapshot_reason":"session_end","total_bytes":256,"total_entries":2,"total_tokens":64}
+{"newest_entry_ts_ms":1730000001000,"oldest_entry_ts_ms":1730000000000,"session_uuid":"018f7d0c-fd8b-7ccf-9b9b-0a2ea938ad0d","snapshot_reason":"session_end","total_bytes":256,"total_entries":2}
 GENESIS

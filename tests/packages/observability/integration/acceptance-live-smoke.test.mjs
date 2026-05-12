@@ -8,6 +8,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
 import { setTimeout as delay } from "node:timers/promises";
+import { createUUIDv7 } from "../../../../packages/common-core/dist/index.js";
 import { SnoObserveRuntime } from "../../../../packages/sno-observe/dist/internal/runtime.js";
 import { parseEventInput } from "../../../../packages/sno-observe/dist/internal/schemas.js";
 import { skipIfNoLiveEndpoint } from "../fixtures/live-endpoint.mjs";
@@ -18,7 +19,7 @@ function tempEnv(baseUrl) {
 	return {
 		dir,
 		env: {
-			SNO_HOME: dir,
+			SNO_PROFILE_DIR: dir,
 			SNO_IDENTITY_PATH: join(dir, "identity.json"),
 			SNO_BUFFER_PATH: join(dir, "buffer.db"),
 			SNO_CONSENT_PATH: join(dir, "state", "consent.json"),
@@ -44,6 +45,16 @@ const SDK_EVENT_TYPES = [
 	"cost.summary",
 ];
 
+const PLUGIN_INTERNAL_PAID_LLM_CALL = {
+	model: "openai-compatible:text-embedding-3-small",
+	prompt_tokens: 21,
+	completion_tokens: 0,
+	latency_ms: 59,
+	cache_read_tokens: 0,
+	cache_write_tokens: 0,
+	token_source: "plugin_internal_paid",
+};
+
 describe("acceptance — live-endpoint end-to-end (32.1, gated)", () => {
 	it("emits all 13 SDK-emittable event types and ships them", async (t) => {
 		const baseUrl = skipIfNoLiveEndpoint(t);
@@ -62,7 +73,7 @@ describe("acceptance — live-endpoint end-to-end (32.1, gated)", () => {
 				await runtime.emitParsed(
 					parseEventInput({
 						event_type: eventType,
-			lane: "memory",
+						lane: "memory",
 						agent_id: "codex",
 						payload: validPayloads[eventType],
 					}),
@@ -70,6 +81,48 @@ describe("acceptance — live-endpoint end-to-end (32.1, gated)", () => {
 			}
 			const res = await runtime.flush();
 			assert.equal(res.shipped > 0, true);
+		} finally {
+			await runtime.shutdown().catch(() => {});
+			rmSync(env_.dir, { recursive: true, force: true });
+		}
+	});
+
+	it("ships the plugin internal paid llm.call shape used by cloud providers", async (t) => {
+		const baseUrl = skipIfNoLiveEndpoint(t);
+		if (baseUrl === null) {
+			return;
+		}
+		const env_ = tempEnv(baseUrl);
+		const runtime = new SnoObserveRuntime({ env: env_.env, cwd: env_.dir });
+		try {
+			await runtime.emitParsed(
+				parseEventInput({
+					event_type: "llm.call",
+					lane: "memory",
+					agent_id: "openclaw",
+					scope: { session_uuid: createUUIDv7() },
+					payload: PLUGIN_INTERNAL_PAID_LLM_CALL,
+				}),
+			);
+			const res = await runtime.flush({
+				force: true,
+				signal: AbortSignal.timeout(30_000),
+			});
+			assert.equal(
+				res.retryable,
+				0,
+				`plugin internal paid llm.call did not ship: ${JSON.stringify(res)}`,
+			);
+			assert.equal(
+				res.terminal,
+				0,
+				`plugin internal paid llm.call was quarantined: ${JSON.stringify(res)}`,
+			);
+			assert.equal(
+				res.shipped >= 2,
+				true,
+				`Expected agent.identify + llm.call shipped: ${JSON.stringify(res)}`,
+			);
 		} finally {
 			await runtime.shutdown().catch(() => {});
 			rmSync(env_.dir, { recursive: true, force: true });
@@ -85,9 +138,16 @@ describe("acceptance — idle CPU dry run (32.2)", () => {
 		const fetchCalls = [];
 		const fakeFetch = async (...args) => {
 			fetchCalls.push(args);
-			return new Response("{}", { status: 202, headers: { "Content-Type": "application/json" } });
+			return new Response("{}", {
+				status: 202,
+				headers: { "Content-Type": "application/json" },
+			});
 		};
-		const runtime = new SnoObserveRuntime({ env: env_.env, cwd: env_.dir, fetch: fakeFetch });
+		const runtime = new SnoObserveRuntime({
+			env: env_.env,
+			cwd: env_.dir,
+			fetch: fakeFetch,
+		});
 		try {
 			await delay(100);
 			assert.equal(fetchCalls.length, 0);

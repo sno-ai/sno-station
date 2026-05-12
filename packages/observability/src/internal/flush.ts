@@ -1,8 +1,8 @@
-import { v7 as uuidv7 } from "uuid";
+import { createUUIDv7 } from "@snoai/common-core";
 import { type BufferStore, decodeEnvelope, type PendingRow } from "./buffer-store.js";
+import { type MachineRegistrationCache, registerBeforeFlush } from "./flush-registration.js";
 import { type EventPostResult, postEvent } from "./http.js";
 import { logger } from "./log.js";
-import { registerMachine } from "./machine-registration.js";
 import type { PathEnv } from "./paths.js";
 import { type Identity, SDK_VERSION } from "./types.js";
 
@@ -13,6 +13,7 @@ export interface FlushOptions {
 	force?: boolean;
 	identity: Identity;
 	machineRegistrationCache?: MachineRegistrationCache;
+	signal?: AbortSignal;
 }
 
 export interface FlushResult {
@@ -32,9 +33,7 @@ export interface DrainResult {
 	lastError?: string;
 }
 
-export interface MachineRegistrationCache {
-	registered: boolean;
-}
+const MAX_STAGNANT_DRAIN_STEPS = 100;
 
 export class FlushEngine {
 	private state: "idle" | "scheduled" | "flushing" = "idle";
@@ -52,6 +51,7 @@ export class FlushEngine {
 		private readonly identityProvider: () => Identity,
 		private readonly baseUrlProvider: () => string,
 		private readonly envProvider: () => PathEnv = () => process.env,
+		private readonly fetchProvider: () => typeof fetch | undefined = () => undefined,
 	) {}
 
 	schedule(delayMs: number): void {
@@ -71,7 +71,7 @@ export class FlushEngine {
 			if (this.disposed) {
 				return;
 			}
-			void this.flush({ identity: this.identityProvider(), env: this.envProvider() });
+			void this.flush(this.flushOptions(false));
 		}, delayMs);
 		this.timer.unref?.();
 		this.installBeforeExit();
@@ -131,20 +131,44 @@ export class FlushEngine {
 
 	async drain(): Promise<DrainResult> {
 		let flushedCount = 0;
-		let failedCount = 0;
+		let terminalCount = 0;
 		let lastError: string | undefined;
-		// Wait for any in-flight flush (and any chained flushes triggered while we waited).
-		while (this.activeFlush !== null) {
+		let stagnantDrainSteps = 0;
+		while (stagnantDrainSteps < MAX_STAGNANT_DRAIN_STEPS) {
 			try {
-				const result = await this.activeFlush;
-				flushedCount += result.shipped;
-				failedCount += result.retryable + result.terminal;
+				const step = await this.drainStep();
+				if (step === null) {
+					break;
+				}
+				flushedCount += step.result.shipped;
+				terminalCount += step.result.terminal;
+				if (step.stop) {
+					break;
+				}
+				if (step.pendingAfter < step.pendingBefore) {
+					stagnantDrainSteps = 0;
+				} else {
+					stagnantDrainSteps += 1;
+				}
 			} catch (error) {
-				failedCount += this.store.countPending();
 				lastError = error instanceof Error ? error.message : String(error);
 				logger.error("sno observe drain failed", { error: lastError });
+				break;
 			}
 		}
+		const pendingCount = this.store.countPending();
+		if (
+			stagnantDrainSteps >= MAX_STAGNANT_DRAIN_STEPS &&
+			pendingCount > 0 &&
+			lastError === undefined
+		) {
+			lastError = "sno observe drain made no progress";
+			logger.warn("sno observe drain stopped after repeated no-progress steps", {
+				max_stagnant_drain_steps: MAX_STAGNANT_DRAIN_STEPS,
+				pending_count: pendingCount,
+			});
+		}
+		const failedCount = terminalCount + pendingCount;
 		return { flushedCount, failedCount, ...(lastError === undefined ? {} : { lastError }) };
 	}
 
@@ -168,17 +192,68 @@ export class FlushEngine {
 		}
 		this.beforeExitInstalled = true;
 		this.beforeExitHandler = () => {
+			this.beforeExitInstalled = false;
+			this.beforeExitHandler = null;
 			if (this.disposed) {
 				return;
 			}
-			void this.flush({
-				identity: this.identityProvider(),
-				env: this.envProvider(),
-				force: true,
-			});
+			void this.flush(this.flushOptions(true));
 		};
 		process.once("beforeExit", this.beforeExitHandler);
 	}
+
+	private flushOptions(force: boolean): Omit<FlushOptions, "baseUrl"> {
+		const fetchImpl = this.fetchProvider();
+		return {
+			identity: this.identityProvider(),
+			env: this.envProvider(),
+			force,
+			...(fetchImpl === undefined ? {} : { fetch: fetchImpl }),
+		};
+	}
+
+	private async drainStep(): Promise<{
+		result: FlushResult;
+		stop: boolean;
+		pendingBefore: number;
+		pendingAfter: number;
+	} | null> {
+		const activeFlush = this.activeFlush;
+		if (activeFlush !== null) {
+			const pendingBefore = this.store.countPending();
+			const result = await activeFlush;
+			const pendingAfter = this.store.countPending();
+			return {
+				result,
+				stop: shouldStopDrain(result, pendingBefore, pendingAfter),
+				pendingBefore,
+				pendingAfter,
+			};
+		}
+		const pendingBefore = this.store.countPending();
+		if (pendingBefore === 0) {
+			return null;
+		}
+		const result = await this.flush(this.flushOptions(true));
+		const pendingAfter = this.store.countPending();
+		return {
+			result,
+			stop: shouldStopDrain(result, pendingBefore, pendingAfter),
+			pendingBefore,
+			pendingAfter,
+		};
+	}
+}
+
+function shouldStopDrain(
+	result: FlushResult,
+	pendingBefore: number,
+	pendingAfter: number,
+): boolean {
+	return (
+		result.retryable > 0 ||
+		(pendingAfter >= pendingBefore && result.shipped === 0 && result.terminal === 0)
+	);
 }
 
 export async function flushPending(
@@ -190,7 +265,7 @@ export async function flushPending(
 		store.pruneRetention();
 		return { shipped: 0, terminal: 0, retryable: 0 };
 	}
-	const registrationFailure = await registerBeforeFlush(options, rows.length);
+	const registrationFailure = await registerBeforeFlush(store, rows, options);
 	if (registrationFailure !== null) {
 		store.pruneRetention();
 		return registrationFailure;
@@ -214,32 +289,6 @@ export async function flushPending(
 	return withOptionalRetryAfter({ shipped, terminal, retryable }, retryAfterMs);
 }
 
-async function registerBeforeFlush(
-	options: FlushOptions,
-	pendingCount: number,
-): Promise<FlushResult | null> {
-	if (options.machineRegistrationCache?.registered === true) {
-		return null;
-	}
-	try {
-		const registerOptions = {
-			...(options.baseUrl === undefined ? {} : { baseUrl: options.baseUrl }),
-			...(options.env === undefined ? {} : { env: options.env }),
-			...(options.fetch === undefined ? {} : { fetch: options.fetch }),
-		};
-		await registerMachine(options.identity, registerOptions);
-		if (options.machineRegistrationCache !== undefined) {
-			options.machineRegistrationCache.registered = true;
-		}
-		return null;
-	} catch (error) {
-		logger.warn("sno observe machine registration failed; will retry", {
-			error: error instanceof Error ? error.message : String(error),
-		});
-		return { shipped: 0, terminal: 0, retryable: pendingCount, retryAfterMs: 5_000 };
-	}
-}
-
 async function flushRow(
 	store: BufferStore,
 	row: PendingRow,
@@ -251,6 +300,7 @@ async function flushRow(
 			row.payload.toString("utf8"),
 			options.identity.machine_secret,
 			options.fetch,
+			options.signal,
 		);
 		if (response.status === 401 || response.status === 403) {
 			if (options.machineRegistrationCache !== undefined) {
@@ -305,6 +355,8 @@ function handlePostResult(
 			logger.error("sno observe event rejected as invalid", {
 				event_id: row.event_id,
 				status: response.status,
+				reject_body: typeof response.body === "string" ? response.body.slice(0, 800) : "",
+				envelope: row.payload.toString("utf8").slice(0, 1200),
 			});
 			return { shipped: 0, terminal, retryable: 0, stopBatch: true };
 		}
@@ -321,9 +373,14 @@ function handlePostResult(
 
 function routeResponse(response: EventPostResult): ResponseRoute {
 	switch (response.status) {
-		case 200:
 		case 202:
 			return { kind: "shipped" };
+		case 200:
+			return {
+				kind: "retry",
+				message: "sno observe returned unexpected event-ingest status; will retry",
+				retryAfterMs: response.retryAfterMs ?? 5_000,
+			};
 		case 400:
 			return { kind: "invalid" };
 		case 409:
@@ -332,11 +389,7 @@ function routeResponse(response: EventPostResult): ResponseRoute {
 		case 401:
 			return { kind: "retry", message: "sno observe unauthorized; will retry" };
 		case 403:
-			return {
-				kind: "retry",
-				message: "sno observe machine bearer required or invalid",
-				error: true,
-			};
+			return { kind: "invalid" };
 		case 429:
 			return retryRoute(response.retryAfterMs ?? 3_600_000);
 		case 503:
@@ -344,7 +397,7 @@ function routeResponse(response: EventPostResult): ResponseRoute {
 		default:
 			return response.status >= 500
 				? retryRoute(response.retryAfterMs ?? undefined)
-				: { kind: "retry", message: "sno observe transport will retry" };
+				: { kind: "invalid" };
 	}
 }
 
@@ -357,6 +410,9 @@ function routeConflict(response: EventPostResult): ResponseRoute {
 		return retryRoute(response.retryAfterMs ?? 5_000);
 	}
 	if (code !== undefined && CHAIN_REJECTION_CODES.has(code)) {
+		return { kind: "chain" };
+	}
+	if (response.status === 422) {
 		return { kind: "chain" };
 	}
 	return {
@@ -387,14 +443,10 @@ function responseErrorCode(body: string): string | undefined {
 }
 
 function retryRoute(retryAfterMs?: number): ResponseRoute {
-	if (retryAfterMs === undefined) {
-		return { kind: "retry", message: "sno observe transport will retry" };
-	}
-	return {
-		kind: "retry",
-		message: "sno observe transport will retry",
+	return withRetryAfter(
+		{ kind: "retry", message: "sno observe transport will retry" },
 		retryAfterMs,
-	};
+	);
 }
 
 function logChainRejection(row: PendingRow, status: number): void {
@@ -427,7 +479,7 @@ function retryRow(
 function reseedChain(store: BufferStore, row: PendingRow): void {
 	const envelope = decodeEnvelope(row.payload);
 	store.append({
-		eventId: uuidv7(),
+		eventId: createUUIDv7(),
 		eventType: "agent.identify",
 		lane: envelope.lane,
 		tsEdgeMs: Date.now(),
@@ -445,21 +497,19 @@ function reseedChain(store: BufferStore, row: PendingRow): void {
 }
 
 function minDefined(left: number | undefined, right: number | undefined): number | undefined {
-	if (left === undefined) {
-		return right;
-	}
-	if (right === undefined) {
-		return left;
-	}
-	return Math.min(left, right);
+	return left === undefined ? right : right === undefined ? left : Math.min(left, right);
 }
 
 function withOptionalRetryAfter(
 	result: FlushResult,
 	retryAfterMs: number | undefined,
 ): FlushResult {
-	if (retryAfterMs === undefined) {
-		return result;
-	}
-	return { ...result, retryAfterMs };
+	return retryAfterMs === undefined ? result : { ...result, retryAfterMs };
+}
+
+function withRetryAfter(
+	result: Extract<ResponseRoute, { kind: "retry" }>,
+	retryAfterMs: number | undefined,
+): Extract<ResponseRoute, { kind: "retry" }> {
+	return retryAfterMs === undefined ? result : { ...result, retryAfterMs };
 }

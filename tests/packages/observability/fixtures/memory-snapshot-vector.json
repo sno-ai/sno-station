@@ -19,11 +19,10 @@
 			"snapshot_reason": "session_end",
 			"total_entries": 2,
 			"total_bytes": 256,
-			"total_tokens": 64,
 			"oldest_entry_ts_ms": 1730000000000,
 			"newest_entry_ts_ms": 1730000001000
 		},
 		"prev": "GENESIS"
 	},
-	"expected_self_hash": "311f90ea37961cc62483e1f10a086616c96927ad9eb23198b88671b5d3eae76b"
+	"expected_self_hash": "9da43dfc975305fd8b7462d2659831c72ad8881dd09fb8bed244d0c02a9b1998"
 }

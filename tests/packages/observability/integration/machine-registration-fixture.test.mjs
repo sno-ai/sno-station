@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
+import { createCuid2, createUUIDv7 } from "../../../../packages/common-core/dist/index.js";
 import {
 	machineSecretHash,
 	registerMachine,
@@ -15,7 +16,7 @@ function tempEnv() {
 	return {
 		dir,
 		env: {
-			SNO_HOME: dir,
+			SNO_PROFILE_DIR: dir,
 			SNO_IDENTITY_PATH: join(dir, "identity.json"),
 			SNO_BUFFER_PATH: join(dir, "buffer.db"),
 			SNO_CONSENT_PATH: join(dir, "state", "consent.json"),
@@ -98,6 +99,31 @@ describe("anonymous machine registration - fixture paths", () => {
 		}
 	});
 
+	it("rejects a register-machine response without claimed state", async () => {
+		const t = tempEnv();
+		try {
+			const id = bootstrapIdentity(t.env);
+			await assert.rejects(
+				() =>
+					registerMachine(id, {
+						baseUrl: "https://sno.test",
+						env: t.env,
+						fetch: async () =>
+							jsonResponse({
+								user_cuid: id.user_cuid,
+								machine_uuid: id.machine_uuid,
+							}),
+					}),
+				(error) =>
+					error instanceof Error &&
+					"code" in error &&
+					error.code === "machine_registration_failed",
+			);
+		} finally {
+			rmSync(t.dir, { recursive: true, force: true });
+		}
+	});
+
 	it("registration conflict surfaces the server error code", async () => {
 		const t = tempEnv();
 		try {
@@ -119,6 +145,82 @@ describe("anonymous machine registration - fixture paths", () => {
 					error.code === "machine_secret_mismatch" &&
 					/machine secret mismatch/u.test(error.message),
 			);
+		} finally {
+			rmSync(t.dir, { recursive: true, force: true });
+		}
+	});
+
+	it("rejects a register-machine response that echoes a different identity", async () => {
+		const t = tempEnv();
+		try {
+			const id = bootstrapIdentity(t.env);
+			await assert.rejects(
+				() =>
+					registerMachine(id, {
+						baseUrl: "https://sno.test",
+						env: t.env,
+						fetch: async () =>
+							jsonResponse({
+								user_cuid: createCuid2(),
+								machine_uuid: createUUIDv7(),
+								claimed: false,
+							}),
+					}),
+				(error) =>
+					error instanceof Error &&
+					"code" in error &&
+					error.code === "machine_registration_identity_mismatch" &&
+					/different identity/u.test(error.message),
+			);
+		} finally {
+			rmSync(t.dir, { recursive: true, force: true });
+		}
+	});
+
+	it("persists a valid account id when register-machine returns one", async () => {
+		const t = tempEnv();
+		try {
+			const id = bootstrapIdentity(t.env);
+			const accountCuid = createCuid2();
+			const result = await registerMachine(id, {
+				baseUrl: "https://sno.test",
+				env: t.env,
+				fetch: async () =>
+					jsonResponse({
+						user_cuid: id.user_cuid,
+						machine_uuid: id.machine_uuid,
+						claimed: true,
+						user_account_id: accountCuid,
+					}),
+			});
+
+			assert.equal(result.userAccountId, accountCuid);
+			const saved = JSON.parse(readFileSync(t.env.SNO_IDENTITY_PATH, "utf8"));
+			assert.equal(saved.user_account_id, accountCuid);
+		} finally {
+			rmSync(t.dir, { recursive: true, force: true });
+		}
+	});
+
+	it("accepts a claimed register-machine response without account id", async () => {
+		const t = tempEnv();
+		try {
+			const id = bootstrapIdentity(t.env);
+			const result = await registerMachine(id, {
+				baseUrl: "https://sno.test",
+				env: t.env,
+				fetch: async () =>
+					jsonResponse({
+						user_cuid: id.user_cuid,
+						machine_uuid: id.machine_uuid,
+						claimed: true,
+					}),
+			});
+
+			assert.equal(result.claimed, true);
+			assert.equal(result.userAccountId, undefined);
+			const saved = JSON.parse(readFileSync(t.env.SNO_IDENTITY_PATH, "utf8"));
+			assert.equal(saved.user_account_id, undefined);
 		} finally {
 			rmSync(t.dir, { recursive: true, force: true });
 		}
