@@ -697,7 +697,7 @@ describe("sno observe Node package", () => {
 				retryable: 0,
 			});
 			assert.equal(calls.length, 2);
-			assert.equal(existsSync(join(temp.dir, ".claw-storix", "state", "audit.jsonl")), false);
+			assert.equal(existsSync(join(temp.dir, ".mem-claw", "state", "audit.jsonl")), false);
 			assert.equal(readFileSync(temp.env.SNO_BUFFER_PATH).includes("alice@example.com"), false);
 			for (const call of calls) {
 				assert.equal(call.url, "https://sno.test/api/v1/events");
