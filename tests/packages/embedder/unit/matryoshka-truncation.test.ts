@@ -3,7 +3,7 @@
  *
  * Pure math, no I/O. Validates the slice-and-renormalize step that
  * lets us bring a 2560-d Qwen3-4B vector down to a 2048-d float row
- * stored in `vec_claw_memories(float[2048])` while keeping cosine
+ * stored in `vec_mem_claw_memories(float[2048])` while keeping cosine
  * similarity meaningful.
  */
 
