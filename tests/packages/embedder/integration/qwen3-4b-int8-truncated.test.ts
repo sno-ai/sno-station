@@ -13,12 +13,9 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
-import { LocalEmbedProvider } from "@snoai/embedder";
+import { LOCAL_EMBEDDING_CACHE_DIR_DEFAULT, LocalEmbedProvider } from "@snoai/embedder";
 
-const MODEL_DIR = resolve(
-	import.meta.dirname,
-	"../../../../apps/storix-core/embedding/models",
-);
+const MODEL_DIR = resolve(LOCAL_EMBEDDING_CACHE_DIR_DEFAULT);
 const MODEL_FILE = resolve(
 	MODEL_DIR,
 	"majentik/Qwen3-Embedding-4B-ONNX-INT8/onnx/model_quantized.onnx",
