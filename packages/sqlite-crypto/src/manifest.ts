@@ -131,7 +131,23 @@ export async function atomicWriteManifest(next: ManifestFile): Promise<void> {
 	// rename can never point at unflushed pages on a power loss.
 	const fd = openSync(tmp, "w", 0o644);
 	try {
-		writeSync(fd, serialized);
+		const payload = Buffer.from(serialized, "utf8");
+		let written = 0;
+		while (written < payload.length) {
+			const n = writeSync(
+				fd,
+				payload,
+				written,
+				payload.length - written,
+				written,
+			);
+			if (n <= 0) {
+				throw new Error(
+					`writeSync returned ${n} for ${tmp} after ${written}/${payload.length} bytes`,
+				);
+			}
+			written += n;
+		}
 		fsyncSync(fd);
 	} finally {
 		closeSync(fd);
