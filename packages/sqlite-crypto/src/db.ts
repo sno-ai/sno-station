@@ -233,7 +233,23 @@ function syncAtomicWriteManifest(next: ManifestFile): void {
 	// rename can never point at unflushed pages on a power loss.
 	const tmpFd = openSync(tmp, "w", 0o644);
 	try {
-		writeSync(tmpFd, JSON.stringify(next));
+		const payload = Buffer.from(JSON.stringify(next), "utf8");
+		let written = 0;
+		while (written < payload.length) {
+			const n = writeSync(
+				tmpFd,
+				payload,
+				written,
+				payload.length - written,
+				written,
+			);
+			if (n <= 0) {
+				throw new Error(
+					`writeSync returned ${n} for ${tmp} after ${written}/${payload.length} bytes`,
+				);
+			}
+			written += n;
+		}
 		fsyncSync(tmpFd);
 	} finally {
 		closeSync(tmpFd);
