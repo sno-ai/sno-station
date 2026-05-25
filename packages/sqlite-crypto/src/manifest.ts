@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { closeSync, existsSync, fsyncSync, mkdirSync, openSync, readFileSync, writeSync } from "node:fs";
 import { open as openHandle, rename } from "node:fs/promises";
 import { dirname } from "node:path";
 import { resolveConfigPaths } from "./config.js";
@@ -127,7 +127,15 @@ export async function atomicWriteManifest(next: ManifestFile): Promise<void> {
 	// We accept temp-files at mode 0644 for the manifest (it is not secret —
 	// dbIds and dekFingerprints are one-way values), but write via the canonical
 	// recipe still for crash-safe semantics.
-	writeFileSync(tmp, serialized, { mode: 0o644 });
+	// fsync the tmp file before rename so the directory entry installed by
+	// rename can never point at unflushed pages on a power loss.
+	const fd = openSync(tmp, "w", 0o644);
+	try {
+		writeSync(fd, serialized);
+		fsyncSync(fd);
+	} finally {
+		closeSync(fd);
+	}
 	// We cannot literally interrupt the rename syscall from JS; the fault
 	// model here is "killed before rename completes." Exit before rename.
 	crashAfter("during-manifest-rename");
