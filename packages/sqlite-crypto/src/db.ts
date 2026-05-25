@@ -7,7 +7,7 @@ import {
 	readSync,
 	renameSync,
 	statSync,
-	writeFileSync,
+	writeSync,
 } from "node:fs";
 import { dirname, resolve as resolvePath } from "node:path";
 import Database, { type Database as Db } from "better-sqlite3-multiple-ciphers";
@@ -229,7 +229,15 @@ function syncAtomicWriteManifest(next: ManifestFile): void {
 	const { manifestFile, configDir } = resolveConfigPaths();
 	const tmp = `${manifestFile}.tmp-${process.pid}-${Date.now().toString(36)}`;
 	mkdirSync(configDir, { recursive: true, mode: 0o700 });
-	writeFileSync(tmp, JSON.stringify(next), { mode: 0o644 });
+	// fsync the tmp file before rename so the directory entry installed by
+	// rename can never point at unflushed pages on a power loss.
+	const tmpFd = openSync(tmp, "w", 0o644);
+	try {
+		writeSync(tmpFd, JSON.stringify(next));
+		fsyncSync(tmpFd);
+	} finally {
+		closeSync(tmpFd);
+	}
 	crashAfter("during-manifest-rename");
 	renameSync(tmp, manifestFile);
 	const dirFd = openSync(configDir, 0);
