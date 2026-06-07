@@ -92,6 +92,10 @@ function createApi(runtime: SnoObserveRuntime) {
 		return runtime.subscribe(listener);
 	}
 
+	function drain(): Promise<{ flushedCount: number; failedCount: number }> {
+		return runtime.drain();
+	}
+
 	function shutdown(): Promise<ShutdownResult> {
 		return runtime.shutdown();
 	}
@@ -99,6 +103,7 @@ function createApi(runtime: SnoObserveRuntime) {
 	return {
 		emit,
 		flush,
+		drain,
 		consent,
 		observe,
 		register,
@@ -121,6 +126,7 @@ type SnoObserveApi = ReturnType<typeof createSnoObserve>;
 const SNO_OBSERVE_KEYS = [
 	"emit",
 	"flush",
+	"drain",
 	"consent",
 	"observe",
 	"register",

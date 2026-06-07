@@ -114,14 +114,14 @@ describe("flush 3-state machine", () => {
 		}
 	});
 
-	it("first runtime emit on empty buffer schedules a 60s timer (23.1)", async () => {
+	it("first runtime emit on empty buffer schedules a 5s timer (23.1)", async () => {
 		const t = tempEnv();
 		const runtime = new SnoObserveRuntime({ env: t.env, cwd: t.dir });
 		const spy = mock.method(globalThis, "setTimeout");
 		try {
 			await runtime.emitParsed(memoryEvent(1));
 			assert.equal(spy.mock.callCount(), 1);
-			assert.equal(spy.mock.calls[0].arguments[1], 60_000);
+			assert.equal(spy.mock.calls[0].arguments[1], 5_000);
 		} finally {
 			runtime.flushEngine?.dispose?.();
 			runtime.store?.close?.();

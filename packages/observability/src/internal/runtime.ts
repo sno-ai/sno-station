@@ -6,7 +6,7 @@ import { type ClaimOptions, type ClaimResult, claimMachine } from "./device-clai
 import { createDoctorReport } from "./doctor.js";
 import { InvalidEventPayloadError } from "./errors.js";
 import { type ExportOptions, exportEvents } from "./export.js";
-import { FlushEngine, type FlushResult } from "./flush.js";
+import { type DrainResult, FlushEngine, type FlushResult, SCHEDULE_FLUSH_DELAY_MS } from "./flush.js";
 import { sha256Hex } from "./hash.js";
 import { normalizeBaseUrl } from "./http.js";
 import { bootstrapIdentity } from "./identity.js";
@@ -143,6 +143,10 @@ export class SnoObserveRuntime {
 				? flushOptions
 				: { ...flushOptions, fetch: this.options.fetch },
 		);
+	}
+
+	async drain(): Promise<DrainResult> {
+		return this.getFlushEngine().drain();
 	}
 
 	async setConsent(value: string, reason = "user changed in SDK"): Promise<ConsentValue> {
@@ -447,7 +451,7 @@ export class SnoObserveRuntime {
 			this.flushInBackground();
 			return;
 		}
-		this.getFlushEngine().schedule(60_000);
+		this.getFlushEngine().schedule(SCHEDULE_FLUSH_DELAY_MS);
 	}
 
 	private async flushConsentTransition(): Promise<void> {
