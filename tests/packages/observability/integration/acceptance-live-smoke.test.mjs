@@ -34,6 +34,7 @@ const SDK_EVENT_TYPES = [
 	"memory.write",
 	"memory.read",
 	"memory.snapshot",
+	"memory.telemetry",
 	"llm.call",
 	"tool.call",
 	"session.start",
@@ -56,7 +57,7 @@ const PLUGIN_INTERNAL_PAID_LLM_CALL = {
 };
 
 describe("acceptance — live-endpoint end-to-end (32.1, gated)", () => {
-	it("emits all 13 SDK-emittable event types and ships them", async (t) => {
+	it("emits all 14 SDK-emittable event types and ships them", async (t) => {
 		const baseUrl = skipIfNoLiveEndpoint(t);
 		if (baseUrl === null) {
 			return;

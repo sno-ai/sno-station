@@ -29,9 +29,10 @@ describe("schemas — extras", () => {
 		);
 	});
 
-	it("EVENT_TYPES is exactly the 13 SDK-emittable event types", () => {
-		// Per plugin-integration-spec.md §5: 13 distinct SDK literals (audit.anchor excluded).
-		assert.equal(EVENT_TYPES.length, 13);
+	it("EVENT_TYPES is exactly the 14 SDK-emittable event types", () => {
+		// Per plugin-integration-spec.md §5 plus memory telemetry extension: audit.anchor excluded.
+		assert.equal(EVENT_TYPES.length, 14);
+		assert.equal(EVENT_TYPES.includes("memory.telemetry"), true);
 		assert.equal(EVENT_TYPES.includes("audit.anchor"), false);
 	});
 

@@ -41,8 +41,9 @@ describe("schema alignment", () => {
 
 	it("locks the SDK-emittable event catalog", () => {
 		assert.equal(EVENT_TYPES.includes("memory.snapshot"), true);
+		assert.equal(EVENT_TYPES.includes("memory.telemetry"), true);
 		assert.equal(EVENT_TYPES.includes("audit.anchor"), false);
-		assert.equal(EVENT_TYPES.length, 13);
+		assert.equal(EVENT_TYPES.length, 14);
 	});
 
 	it("accepts only the four locked token methods", () => {

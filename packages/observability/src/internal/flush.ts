@@ -6,6 +6,8 @@ import { logger } from "./log.js";
 import type { PathEnv } from "./paths.js";
 import { type Identity, SDK_VERSION } from "./types.js";
 
+export const SCHEDULE_FLUSH_DELAY_MS = 5_000;
+
 export interface FlushOptions {
 	baseUrl?: string;
 	env?: PathEnv;
@@ -83,6 +85,12 @@ export class FlushEngine {
 		}
 		if (this.state === "flushing") {
 			this.emittedDuringFlush = true;
+			if (options.force && this.activeFlush) {
+				await this.activeFlush;
+				if (!this.disposed && this.store.countPending() > 0) {
+					return this.flush(options);
+				}
+			}
 			return this.activeFlush ?? { shipped: 0, terminal: 0, retryable: 0 };
 		}
 		const activeFlush = this.runFlush(options);
@@ -119,7 +127,7 @@ export class FlushEngine {
 				this.schedule(delayMs);
 			} else if (this.emittedDuringFlush && this.store.countPending() > 0) {
 				this.state = "idle";
-				this.schedule(60_000);
+				this.schedule(SCHEDULE_FLUSH_DELAY_MS);
 			}
 			return result;
 		} finally {
