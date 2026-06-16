@@ -11,6 +11,7 @@ export const EVENT_TYPES = [
 	"memory.write",
 	"memory.read",
 	"memory.snapshot",
+	"memory.telemetry",
 	"llm.call",
 	"tool.call",
 	"session.start",
