@@ -69,6 +69,7 @@ const expectedEventTypes = [
 	"memory.write",
 	"memory.read",
 	"memory.snapshot",
+	"memory.telemetry",
 	"llm.call",
 	"tool.call",
 	"session.start",
@@ -112,6 +113,38 @@ const validPayloads = {
 		total_bytes: 256,
 		oldest_entry_ts_ms: 1730000000000,
 		newest_entry_ts_ms: 1730000001000,
+	},
+	"memory.telemetry": {
+		sync_kind: "memory_events",
+		first_event_id: 1,
+		last_event_id: 2,
+		event_count: 2,
+		event_types: { create: 1, recall: 1 },
+		events: [
+			{
+				event_id: 1,
+				event_type: "create",
+				fact_id: "fact-1",
+				memory_kind: "episodic",
+				timestamp_ms: 1730000000000,
+				agent_id: "codex",
+				project_id: "p_test",
+				content_hash: testHash(8),
+			},
+			{
+				event_id: 2,
+				event_type: "recall",
+				fact_id: "fact-1",
+				memory_kind: "episodic",
+				timestamp_ms: 1730000001000,
+				session_uuid: "session-1",
+				turn_id: "turn-1",
+				agent_id: "codex",
+				project_id: "p_test",
+				retrieval_rank: 1,
+				retrieval_score: 0.7,
+			},
+		],
 	},
 	"llm.call": {
 		model: "gpt-4o",
@@ -1139,10 +1172,11 @@ describe("sno observe Node package", () => {
 
 	it("registers anonymous machines, verifies audits with machine bearer auth, and exposes the public namespace", async () => {
 		assert.deepEqual(Object.keys(publicModule), ["createSnoObserve", "snoObserve"]);
-		assert.deepEqual(Object.keys(snoObserve), [
-			"emit",
-			"flush",
-			"consent",
+			assert.deepEqual(Object.keys(snoObserve), [
+				"emit",
+				"flush",
+				"drain",
+				"consent",
 			"observe",
 			"register",
 			"claim",

@@ -47,6 +47,31 @@ const tokenMethodSchema = z.enum([
 	"char_approximation",
 ]);
 const tokenSourceSchema = z.enum(["host_agent_paid", "plugin_internal_paid"]);
+const memoryTelemetryEventSchema = z.object({
+	event_id: z.number().int().positive(),
+	event_type: z.enum([
+		"create",
+		"update",
+		"recall",
+		"supersede",
+		"delete",
+		"inject",
+		"epoch_boundary",
+		"purge",
+	]),
+	fact_id: z.string().min(1).optional(),
+	memory_kind: z.string().min(1).optional(),
+	timestamp_ms: z.number().int().nonnegative(),
+	session_uuid: z.string().min(1).optional(),
+	turn_id: z.string().min(1).optional(),
+	agent_id: z.string().min(1),
+	project_id: z.string().min(1).optional(),
+	content_hash: z.string().min(1).optional(),
+	retrieval_rank: z.number().int().nonnegative().optional(),
+	retrieval_score: z.number().finite().optional(),
+	consolidation_epoch_id: z.string().min(1).optional(),
+	status: z.string().min(1).optional(),
+});
 
 const payloadSchemas: Record<EventType, z.ZodType<unknown>> = {
 	"agent.identify": z
@@ -123,6 +148,48 @@ const payloadSchemas: Record<EventType, z.ZodType<unknown>> = {
 					code: z.ZodIssueCode.custom,
 					path: ["newest_entry_ts_ms"],
 					message: "is required when total_entries is greater than 0",
+				});
+			}
+		}),
+	"memory.telemetry": z
+		.object({
+			sync_kind: z.literal("memory_events"),
+			first_event_id: z.number().int().positive(),
+			last_event_id: z.number().int().positive(),
+			event_count: z.number().int().positive(),
+			event_types: z.record(z.number().int().nonnegative()),
+			events: z.array(memoryTelemetryEventSchema.strict()).min(1).max(50),
+		})
+		.strict()
+		.superRefine((value, ctx) => {
+			if (value.first_event_id > value.last_event_id) {
+				ctx.addIssue({
+					code: z.ZodIssueCode.custom,
+					path: ["first_event_id"],
+					message: "must be less than or equal to last_event_id",
+				});
+			}
+			if (value.event_count !== value.events.length) {
+				ctx.addIssue({
+					code: z.ZodIssueCode.custom,
+					path: ["event_count"],
+					message: "must equal events.length",
+				});
+			}
+			const firstEvent = value.events[0];
+			const lastEvent = value.events[value.events.length - 1];
+			if (firstEvent && firstEvent.event_id !== value.first_event_id) {
+				ctx.addIssue({
+					code: z.ZodIssueCode.custom,
+					path: ["events", 0, "event_id"],
+					message: "must equal first_event_id",
+				});
+			}
+			if (lastEvent && lastEvent.event_id !== value.last_event_id) {
+				ctx.addIssue({
+					code: z.ZodIssueCode.custom,
+					path: ["events", value.events.length - 1, "event_id"],
+					message: "must equal last_event_id",
 				});
 			}
 		}),
