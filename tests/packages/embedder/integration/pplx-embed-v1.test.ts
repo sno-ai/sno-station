@@ -1,8 +1,8 @@
 /**
  * Integration test: perplexity-ai/pplx-embed-v1-0.6b (1024-d, mean pooling).
  *
- * Critical difference from the bundled Qwen3-Embedding-0.6B: pplx-embed is
- * trained with **mean pooling** and **`include_prompt: true`** (read from
+ * Critical runtime requirement: pplx-embed is trained with **mean pooling**
+ * and **`include_prompt: true`** (read from
  * `1_Pooling/config.json`), not last-token pooling. Wiring it as last-token
  * would silently produce useless embeddings — the test loads the model and
  * verifies that mean pooling produces unit-norm vectors with the expected
