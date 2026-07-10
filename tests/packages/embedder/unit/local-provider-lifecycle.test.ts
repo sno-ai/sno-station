@@ -115,4 +115,26 @@ describe("LocalEmbedProvider shared lifecycle", () => {
 		await second.dispose();
 		expect(dispose).toHaveBeenCalledTimes(1);
 	});
+
+	it("publishes a pending load when its owner is disposed before another provider waits", async () => {
+		const pending = createDeferred<ReturnType<typeof createExtractor>["extractor"]>();
+		pipelineMock.mockReturnValueOnce(pending.promise);
+
+		const first = new LocalEmbedProvider({ cacheDir: "/tmp/embedder-models" });
+		const firstWarmup = first.warmup();
+		const second = new LocalEmbedProvider({ cacheDir: "/tmp/embedder-models" });
+		await first.dispose();
+
+		const { extractor, dispose } = createExtractor();
+		pending.resolve(extractor);
+
+		await expect(firstWarmup).rejects.toThrow("disposed");
+		await second.warmup();
+
+		expect(pipelineMock).toHaveBeenCalledTimes(1);
+		expect(dispose).not.toHaveBeenCalled();
+
+		await second.dispose();
+		expect(dispose).toHaveBeenCalledTimes(1);
+	});
 });
