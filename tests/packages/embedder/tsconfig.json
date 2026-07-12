@@ -1,6 +1,7 @@
 {
 	"extends": "../../../packages/embedder/tsconfig.json",
 	"compilerOptions": {
+		"isolatedDeclarations": false,
 		"allowImportingTsExtensions": true,
 		"noEmit": true,
 		"declaration": false,
@@ -8,10 +9,9 @@
 		"noUnusedLocals": false,
 		"noUnusedParameters": false,
 		"rootDir": "../../..",
-		"baseUrl": "../../..",
 		"paths": {
-			"@snoai/embedder": ["packages/embedder/src/index.ts"],
-			"@snoai/utils/*": ["packages/utils/src/*"]
+			"@snoai/embedder": ["../../../packages/embedder/src/index.ts"],
+			"@snoai/utils/*": ["../../../packages/utils/src/*"]
 		}
 	},
 	"include": ["**/*.ts", "../../../packages/embedder/src/**/*.ts"],
