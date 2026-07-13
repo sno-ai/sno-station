@@ -91,7 +91,16 @@ function applyPragmaRecipe(db: Db, dek: Dek): void {
 	// 4. Smoke assertion — multi-ciphers default is `chacha20`. Reading any
 	//    internal state with a wrong DEK fails with "file is not a database"
 	//    once SQLCipher attempts to decrypt the header.
-	let checkRows: Array<Record<string, unknown>>;
+	//
+	// NOTE: earlier versions also ran `PRAGMA cipher_integrity_check` here,
+	// believing it swept every page. On SQLite3MultipleCiphers that pragma is a
+	// SILENT NO-OP (returns an empty rowset instantly — the driver implements
+	// the SQLCipher FORMAT, not SQLCipher-specific pragmas), so the intended
+	// verification never ran anywhere. The working full sweep is
+	// runIntegrityCheck() below; callers schedule it out-of-band (e.g. an hourly
+	// maintenance pass) because it reads every page. Per-page HMACs are still
+	// verified on EVERY page read by the codec itself, so a damaged page can
+	// never be silently served regardless of sweep cadence.
 	try {
 		const cipher = db.pragma("cipher", { simple: true }) as string;
 		if (cipher !== "sqlcipher") {
@@ -99,10 +108,6 @@ function applyPragmaRecipe(db: Db, dek: Dek): void {
 				`WrongKeyError: PRAGMA cipher returned ${cipher}, expected sqlcipher`,
 			);
 		}
-		// 5. Cryptographic integrity check across all pages.
-		checkRows = db.pragma("cipher_integrity_check") as Array<
-			Record<string, unknown>
-		>;
 	} catch (err) {
 		if (err instanceof WrongKeyError) throw err;
 		if (isWrongKeySqliteError(err)) {
@@ -113,16 +118,34 @@ function applyPragmaRecipe(db: Db, dek: Dek): void {
 		}
 		throw err;
 	}
-	if (Array.isArray(checkRows) && checkRows.length > 0) {
-		const messages = checkRows
-			.map((r) => r["cipher_integrity_check"])
-			.filter((v): v is string => typeof v === "string");
-		const okMarkers = ["ok", "PRAGMA cipher_integrity_check"];
-		if (messages.length > 0 && !messages.every((m) => okMarkers.includes(m))) {
-			throw new IntegrityCheckFailed(
-				`IntegrityCheckFailed: cipher_integrity_check reported: ${messages.slice(0, 3).join("; ")}`,
-			);
-		}
+}
+
+/**
+ * Full-database integrity sweep. `PRAGMA integrity_check` reads every page
+ * through the encrypted codec, so each page's HMAC is verified as a side
+ * effect — this is the working replacement for the intended (but no-op)
+ * `cipher_integrity_check`. O(database size); run it from maintenance
+ * schedules, never on the open path.
+ *
+ * Throws IntegrityCheckFailed unless the result is exactly `ok`.
+ */
+export function runIntegrityCheck(db: Db): void {
+	let rows: Array<Record<string, unknown>>;
+	try {
+		rows = db.pragma("integrity_check") as Array<Record<string, unknown>>;
+	} catch (err) {
+		throw new IntegrityCheckFailed(
+			`IntegrityCheckFailed: integrity_check could not run: ${(err as Error).message}`,
+			{ cause: err },
+		);
+	}
+	const messages = rows
+		.map((r) => r["integrity_check"])
+		.filter((v): v is string => typeof v === "string");
+	if (messages.length !== 1 || messages[0] !== "ok") {
+		throw new IntegrityCheckFailed(
+			`IntegrityCheckFailed: integrity_check reported: ${messages.slice(0, 3).join("; ") || "no result"}`,
+		);
 	}
 }
 
