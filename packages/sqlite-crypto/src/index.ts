@@ -6,6 +6,7 @@ export {
 	_readCanaryForRecovery,
 	openEncryptedDb,
 	openEncryptedDbReadonly,
+	runIntegrityCheck,
 } from "./db.js";
 export { _resetDekCache, getDek, getDekSync } from "./dek.js";
 export * from "./errors.js";
