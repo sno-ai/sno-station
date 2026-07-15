@@ -1,0 +1,17 @@
+{
+	"extends": "../../../packages/sno-station-core-crypto/tsconfig.json",
+	"compilerOptions": {
+		"allowImportingTsExtensions": true,
+		"noEmit": true,
+		"declaration": false,
+		"declarationMap": false,
+		"noUnusedLocals": false,
+		"noUnusedParameters": false,
+		"rootDir": "../../..",
+		"paths": {
+			"@snoai/sno-station-core-crypto": ["../../../packages/sno-station-core-crypto/src/index.ts"]
+		}
+	},
+	"include": ["**/*.ts", "../../../packages/sno-station-core-crypto/src/**/*.ts"],
+	"exclude": ["node_modules"]
+}
