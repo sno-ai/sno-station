@@ -36,6 +36,7 @@ export interface DrainResult {
 }
 
 const MAX_STAGNANT_DRAIN_STEPS = 100;
+const PERMANENT_PREDECESSOR_GAP_MS = 5 * 60 * 1_000;
 
 export class FlushEngine {
 	private state: "idle" | "scheduled" | "flushing" = "idle";
@@ -341,6 +342,7 @@ const ACCEPTED_DUPLICATE_CODES = new Set([
 ]);
 
 const CHAIN_REJECTION_CODES = new Set([
+	"chain_gap",
 	"payload_conflict",
 	"chain_seed_required",
 	"prev_hash_mismatch",
@@ -352,7 +354,7 @@ function handlePostResult(
 	row: PendingRow,
 	response: EventPostResult,
 ): RowFlushResult {
-	const route = routeResponse(response);
+	const route = routeResponse(response, row);
 	switch (route.kind) {
 		case "shipped":
 			store.markShipped(row.rowid);
@@ -379,7 +381,7 @@ function handlePostResult(
 	}
 }
 
-function routeResponse(response: EventPostResult): ResponseRoute {
+function routeResponse(response: EventPostResult, row: PendingRow): ResponseRoute {
 	switch (response.status) {
 		case 202:
 			return { kind: "shipped" };
@@ -393,7 +395,7 @@ function routeResponse(response: EventPostResult): ResponseRoute {
 			return { kind: "invalid" };
 		case 409:
 		case 422:
-			return routeConflict(response);
+			return routeConflict(response, row);
 		case 401:
 			return { kind: "retry", message: "sno observe unauthorized; will retry" };
 		case 403:
@@ -403,18 +405,19 @@ function routeResponse(response: EventPostResult): ResponseRoute {
 		case 503:
 			return retryRoute(response.retryAfterMs ?? 5_000);
 		default:
-			return response.status >= 500
-				? retryRoute(response.retryAfterMs ?? undefined)
-				: { kind: "invalid" };
+			return retryRoute(response.retryAfterMs ?? undefined);
 	}
 }
 
-function routeConflict(response: EventPostResult): ResponseRoute {
+function routeConflict(response: EventPostResult, row: PendingRow): ResponseRoute {
 	const code = responseErrorCode(response.body);
 	if (code !== undefined && ACCEPTED_DUPLICATE_CODES.has(code)) {
 		return { kind: "shipped" };
 	}
 	if (code === "chain_predecessor_not_ready") {
+		if (isPermanentPredecessorGap(response.body, row)) {
+			return { kind: "chain" };
+		}
 		return retryRoute(response.retryAfterMs ?? 5_000);
 	}
 	if (code !== undefined && CHAIN_REJECTION_CODES.has(code)) {
@@ -430,20 +433,66 @@ function routeConflict(response: EventPostResult): ResponseRoute {
 	};
 }
 
+function isPermanentPredecessorGap(body: string, row: PendingRow): boolean {
+	try {
+		const parsed = JSON.parse(body) as unknown;
+		if (!isRecord(parsed)) {
+			return false;
+		}
+		const error = parsed["error"];
+		if (!isRecord(error)) {
+			return false;
+		}
+		const expectedSeq = integerDetail(error["expected_seq"]);
+		const receivedSeq = integerDetail(error["received_seq"]);
+		const lastCommittedSeq = integerDetail(error["last_committed_seq"]);
+		const stallMs = integerDetail(error["chain_stall_ms"]);
+		return (
+			error["machine_uuid"] === row.machine_id &&
+			error["agent_id"] === row.agent_id &&
+			integerDetail(error["chain_epoch"]) === row.chain_epoch &&
+			error["latest_state"] === "committed" &&
+			stallMs !== undefined &&
+			stallMs >= PERMANENT_PREDECESSOR_GAP_MS &&
+			expectedSeq !== undefined &&
+			receivedSeq === row.seq &&
+			receivedSeq === expectedSeq + 1 &&
+			lastCommittedSeq === expectedSeq - 1
+		);
+	} catch {
+		return false;
+	}
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === "object" && value !== null;
+}
+
+function integerDetail(value: unknown): number | undefined {
+	const parsed = typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN;
+	return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : undefined;
+}
+
 function responseErrorCode(body: string): string | undefined {
 	if (body.length === 0) {
 		return undefined;
 	}
 	try {
 		const parsed = JSON.parse(body) as unknown;
-		if (typeof parsed !== "object" || parsed === null) {
+		if (!isRecord(parsed)) {
 			return undefined;
 		}
-		const record = parsed as Record<string, unknown>;
 		for (const key of ["reason", "error", "code", "error_code"]) {
-			const value = record[key];
+			const value = parsed[key];
 			if (typeof value === "string" && value.length > 0) {
 				return value;
+			}
+		}
+		const nestedError = parsed["error"];
+		if (isRecord(nestedError)) {
+			const code = nestedError["code"];
+			if (typeof code === "string" && code.length > 0) {
+				return code;
 			}
 		}
 	} catch {}
