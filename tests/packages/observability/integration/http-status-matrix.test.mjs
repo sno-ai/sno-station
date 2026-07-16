@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, it } from "node:test";
+import { describe, it, mock } from "node:test";
 import { BufferStore } from "../../../../packages/sno-observe/dist/internal/buffer-store.js";
 import { bootstrapIdentity } from "../../../../packages/sno-observe/dist/internal/identity.js";
 import { machineSecretHash } from "../../../../packages/sno-observe/dist/internal/machine-registration.js";
@@ -45,6 +45,34 @@ function memoryEvent(i) {
 	});
 }
 
+function permanentGapDetails(identity, overrides = {}) {
+	return {
+		code: "chain_predecessor_not_ready",
+		machine_uuid: identity.machine_uuid,
+		agent_id: "codex",
+		chain_epoch: 0,
+		expected_seq: 1,
+		received_seq: 2,
+		latest_state: "committed",
+		last_committed_seq: 0,
+		chain_stall_ms: 300_001,
+		...overrides,
+	};
+}
+
+async function flushThirdRowAgainstGap(body) {
+	let result;
+	await withServerAndRuntime(async ({ server, runtime }) => {
+		server.enqueue("/api/v1/events", { status: 202, body: { receipt_id: "r_id" } });
+		server.enqueue("/api/v1/events", { status: 202, body: { receipt_id: "r_1" } });
+		server.enqueue("/api/v1/events", { status: 409, body });
+		await runtime.emitParsed(memoryEvent(1));
+		await runtime.emitParsed(memoryEvent(2));
+		result = await runtime.flush();
+	});
+	return result;
+}
+
 async function withServerAndRuntime(fn) {
 	const server = await startMockServer();
 	const t = tempEnv(server.baseUrl);
@@ -56,6 +84,18 @@ async function withServerAndRuntime(fn) {
 		await server.stop();
 		rmSync(t.dir, { recursive: true, force: true });
 	}
+}
+
+function registerMachineResponse(init) {
+	const body = typeof init?.body === "string" ? JSON.parse(init.body) : {};
+	return new Response(
+		JSON.stringify({
+			user_cuid: body.user_cuid,
+			machine_uuid: body.machine_uuid,
+			claimed: false,
+		}),
+		{ status: 200, headers: { "Content-Type": "application/json" } },
+	);
 }
 
 describe("HTTP status matrix (fixture server, node:http)", () => {
@@ -111,6 +151,21 @@ describe("HTTP status matrix (fixture server, node:http)", () => {
 		});
 	});
 
+	it("202 with malformed body still marks only the submitted row shipped", async () => {
+		await withServerAndRuntime(async ({ server, runtime, t }) => {
+			server.enqueue("/api/v1/events", { status: 202, body: "{" });
+			server.enqueue("/api/v1/events", { status: 202, body: "{" });
+			await runtime.emitParsed(memoryEvent(1));
+			assert.deepEqual(await runtime.flush(), { shipped: 2, terminal: 0, retryable: 0 });
+			const store = new BufferStore(t.env.SNO_BUFFER_PATH);
+			try {
+				assert.equal(store.getAllRows().every((row) => row.shipped === 1), true);
+			} finally {
+				store.close();
+			}
+		});
+	});
+
 	it("200 unexpected event ingest status -> retryable, no advance", async () => {
 		await withServerAndRuntime(async ({ server, runtime, t }) => {
 			server.enqueue("/api/v1/events", { status: 200, body: { received: 1 } });
@@ -130,6 +185,82 @@ describe("HTTP status matrix (fixture server, node:http)", () => {
 		});
 	});
 
+	it("event and registration POSTs reject redirects instead of replaying payloads", async () => {
+		const t = tempEnv("https://sno.test");
+		let eventCalls = 0;
+		const runtime = new SnoObserveRuntime({
+			env: t.env,
+			cwd: t.dir,
+			fetch: async (url, init) => {
+				assert.equal(init.redirect, "error");
+				if (String(url).endsWith("/api/v1/identity/register-machine")) {
+					return registerMachineResponse(init);
+				}
+				eventCalls += 1;
+				throw new TypeError("redirect mode is set to error");
+			},
+		});
+		try {
+			await runtime.emitParsed(memoryEvent(1));
+			assert.equal((await runtime.flush()).retryable, 1);
+			assert.equal(eventCalls, 1);
+		} finally {
+			await runtime.shutdown().catch(() => {});
+			rmSync(t.dir, { recursive: true, force: true });
+		}
+	});
+
+	it("301, 302, 307, and 308 cannot redirect registration or event payloads", async () => {
+		for (const status of [301, 302, 307, 308]) {
+			for (const path of ["/api/v1/identity/register-machine", "/api/v1/events"]) {
+				const server = await startMockServer();
+				const t = tempEnv(server.baseUrl);
+				server.enqueue(path, {
+					status,
+					headers: { Location: `${server.baseUrl}/redirect-target` },
+				});
+				const runtime = new SnoObserveRuntime({ env: t.env, cwd: t.dir });
+				try {
+					await runtime.emitParsed(memoryEvent(1));
+					assert.equal((await runtime.flush()).retryable, 1);
+					assert.equal(server.calls.some((call) => call.url === "/redirect-target"), false);
+				} finally {
+					runtime.flushEngine?.dispose?.();
+					runtime.store?.close?.();
+					await server.stop();
+					rmSync(t.dir, { recursive: true, force: true });
+				}
+			}
+		}
+	});
+
+	it("machine_already_registered continues with an authenticated event POST", async () => {
+		const t = tempEnv("https://sno.test");
+		let eventCalls = 0;
+		const runtime = new SnoObserveRuntime({
+			env: t.env,
+			cwd: t.dir,
+			fetch: async (url, init) => {
+				if (String(url).endsWith("/api/v1/identity/register-machine")) {
+					return new Response(JSON.stringify({ error: "machine_already_registered" }), {
+						status: 409,
+					});
+				}
+				eventCalls += 1;
+				assert.match(init.headers.Authorization, /^Bearer /u);
+				return new Response(JSON.stringify({ receipt_id: "r" }), { status: 202 });
+			},
+		});
+		try {
+			await runtime.emitParsed(memoryEvent(1));
+			assert.equal((await runtime.flush()).shipped, 2);
+			assert.equal(eventCalls, 2);
+		} finally {
+			await runtime.shutdown().catch(() => {});
+			rmSync(t.dir, { recursive: true, force: true });
+		}
+	});
+
 	const subcodes = [
 		"single_envelope_required", // 24.8 batch_wrapper_rejected → maps to single_envelope_required per §2.2
 		"invalid_envelope", // 24.7 schema_invalid
@@ -139,7 +270,7 @@ describe("HTTP status matrix (fixture server, node:http)", () => {
 		"tokens_method_required", // 24.12
 	];
 	for (const error of subcodes) {
-		it(`400 ${error} -> quarantine suffix, reseed, no retry`, async () => {
+		it(`400 ${error} on agent.identify -> quarantine suffix without reseed`, async () => {
 			await withServerAndRuntime(async ({ server, runtime, t }) => {
 				server.enqueue("/api/v1/events", { status: 400, body: { error } });
 				await runtime.emitParsed(memoryEvent(1));
@@ -156,14 +287,85 @@ describe("HTTP status matrix (fixture server, node:http)", () => {
 							JSON.parse(r.payload.toString("utf8")).event_type === "agent.identify" &&
 							r.chain_epoch === 1,
 					);
-					assert.notEqual(reseed, undefined);
-					assert.equal(reseed.terminal, 0);
+					assert.equal(reseed, undefined);
 				} finally {
 					store.close();
 				}
 			});
 		});
 	}
+
+	it("409 chain rejection on agent.identify does not create a reseed loop", async () => {
+		await withServerAndRuntime(async ({ server, runtime, t }) => {
+			server.enqueue("/api/v1/events", { status: 409, body: { code: "payload_conflict" } });
+			await runtime.emitParsed(memoryEvent(1));
+			assert.deepEqual(await runtime.flush(), { shipped: 0, terminal: 2, retryable: 0 });
+			const rejected = await runtime.emitParsed(memoryEvent(2));
+			assert.equal(rejected.accepted, false);
+			assert.equal(rejected.reason, "chain_retired");
+			await runtime.shutdown();
+			const restarted = new SnoObserveRuntime({ env: t.env, cwd: t.dir });
+			try {
+				const afterRestart = await restarted.emitParsed(memoryEvent(3));
+				assert.equal(afterRestart.accepted, false);
+				assert.equal(afterRestart.reason, "chain_retired");
+				assert.equal(restarted.doctor().buffer.status, "warn");
+			} finally {
+				await restarted.shutdown().catch(() => {});
+			}
+			const store = new BufferStore(t.env.SNO_BUFFER_PATH);
+			try {
+				assert.equal(store.getAllRows().length, 2);
+				assert.equal(store.countPending(), 0);
+			} finally {
+				store.close();
+			}
+		});
+	});
+
+	it("persisted reseed-required state recovers after a crash boundary", async () => {
+		const server = await startMockServer();
+		const t = tempEnv(server.baseUrl);
+		const runtime = new SnoObserveRuntime({ env: t.env, cwd: t.dir });
+		try {
+			await runtime.emitParsed(memoryEvent(1));
+			await runtime.emitParsed(memoryEvent(2));
+			const store = new BufferStore(t.env.SNO_BUFFER_PATH);
+			try {
+				const rejected = store.getAllRows()[1];
+				store.quarantineEpochSuffix(
+					rejected,
+					422,
+					"prev_hash_mismatch",
+					"",
+					"reseed_required",
+				);
+			} finally {
+				store.close();
+			}
+			await runtime.shutdown();
+
+			const restarted = new SnoObserveRuntime({ env: t.env, cwd: t.dir });
+			try {
+				const emitted = await restarted.emitParsed(memoryEvent(3));
+				assert.equal(emitted.accepted, true);
+				assert.equal(emitted.chainEpoch, 1);
+				const check = new BufferStore(t.env.SNO_BUFFER_PATH);
+				try {
+					const newEpoch = check.getAllRows().filter((row) => row.chain_epoch === 1);
+					assert.deepEqual(newEpoch.map((row) => row.seq), [0, 1]);
+				} finally {
+					check.close();
+				}
+			} finally {
+				await restarted.shutdown().catch(() => {});
+			}
+		} finally {
+			await runtime.shutdown().catch(() => {});
+			await server.stop();
+			rmSync(t.dir, { recursive: true, force: true });
+		}
+	});
 
 	it("unexpected 4xx -> retryable, no quarantine", async () => {
 		await withServerAndRuntime(async ({ server, runtime }) => {
@@ -174,6 +376,18 @@ describe("HTTP status matrix (fixture server, node:http)", () => {
 			assert.equal(res.retryable, 1);
 		});
 	});
+
+	for (const status of [400, 403]) {
+		it(`${status} with an unknown code remains retryable`, async () => {
+			await withServerAndRuntime(async ({ server, runtime }) => {
+				server.enqueue("/api/v1/events", { status, body: { error: "future_contract_code" } });
+				await runtime.emitParsed(memoryEvent(1));
+				const result = await runtime.flush();
+				assert.equal(result.retryable, 1);
+				assert.equal(result.terminal, 0);
+			});
+		});
+	}
 
 	it("400 after an accepted predecessor quarantines the broken suffix before reseed", async () => {
 		await withServerAndRuntime(async ({ server, runtime, t }) => {
@@ -332,6 +546,31 @@ describe("HTTP status matrix (fixture server, node:http)", () => {
 		});
 	});
 
+	it("409 nested accepted-duplicate code marks the exact row shipped", async () => {
+		await withServerAndRuntime(async ({ server, runtime, t }) => {
+			server.enqueue("/api/v1/events", {
+				status: 409,
+				body: { error: { code: "event_already_accepted" } },
+			});
+			server.enqueue("/api/v1/events", {
+				status: 424,
+				body: { error: "dependency_failed", retryable: true },
+			});
+			await runtime.emitParsed(memoryEvent(1));
+			const result = await runtime.flush();
+			assert.equal(result.shipped, 1);
+			assert.equal(result.retryable, 1);
+			const store = new BufferStore(t.env.SNO_BUFFER_PATH);
+			try {
+				const rows = store.getAllRows();
+				assert.equal(rows[0].shipped, 1);
+				assert.equal(rows[1].shipped, 0);
+			} finally {
+				store.close();
+			}
+		});
+	});
+
 	it("409 reason payload_conflict -> quarantine + epoch bump + reseed", async () => {
 		await withServerAndRuntime(async ({ server, runtime, t }) => {
 			server.enqueue("/api/v1/events", {
@@ -363,7 +602,7 @@ describe("HTTP status matrix (fixture server, node:http)", () => {
 		});
 	});
 
-	it("422 without explicit chain error -> terminal chain rejection and reseed", async () => {
+	it("422 without explicit chain error -> retryable without reseed", async () => {
 		await withServerAndRuntime(async ({ server, runtime, t }) => {
 			server.enqueue("/api/v1/events", {
 				status: 202,
@@ -376,13 +615,13 @@ describe("HTTP status matrix (fixture server, node:http)", () => {
 			await runtime.emitParsed(memoryEvent(1));
 			const res = await runtime.flush();
 			assert.equal(res.shipped, 1);
-			assert.equal(res.terminal, 1);
-			assert.equal(res.retryable, 0);
+			assert.equal(res.terminal, 0);
+			assert.equal(res.retryable, 1);
 			const store = new BufferStore(t.env.SNO_BUFFER_PATH);
 			try {
 				const rows = store.getAllRows();
-				assert.equal(rows[1].terminal, 1);
-				assert.equal(Math.max(...rows.map((r) => r.chain_epoch)), 1);
+				assert.equal(rows[1].terminal, 0);
+				assert.equal(Math.max(...rows.map((r) => r.chain_epoch)), 0);
 			} finally {
 				store.close();
 			}
@@ -559,19 +798,7 @@ describe("HTTP status matrix (fixture server, node:http)", () => {
 			server.enqueue("/api/v1/events", {
 				status: 409,
 				headers: { "Retry-After": "5" },
-				body: {
-					error: {
-						code: "chain_predecessor_not_ready",
-						machine_uuid: identity.machine_uuid,
-						agent_id: "codex",
-						chain_epoch: 0,
-						expected_seq: 1,
-						received_seq: 2,
-						latest_state: "committed",
-						last_committed_seq: 0,
-						chain_stall_ms: 300_001,
-					},
-				},
+				body: { error: permanentGapDetails(identity) },
 			});
 			await runtime.emitParsed(memoryEvent(1));
 			await runtime.emitParsed(memoryEvent(2));
@@ -588,10 +815,400 @@ describe("HTTP status matrix (fixture server, node:http)", () => {
 					rows.find((row) => row.chain_epoch === 1 && row.seq === 0 && row.terminal === 0),
 					undefined,
 				);
+				assert.equal(store.getQueueStats().quarantinedCount, 1);
+				assert.equal(store.getQueueStats().latestQuarantineReason, "permanent_predecessor_gap");
 			} finally {
 				store.close();
 			}
 		});
+	});
+
+	it("409 top-level code and facts can prove a permanent predecessor gap", async () => {
+		await withServerAndRuntime(async ({ server, runtime, t }) => {
+			const identity = bootstrapIdentity(t.env);
+			server.enqueue("/api/v1/events", { status: 202, body: { receipt_id: "r_id" } });
+			server.enqueue("/api/v1/events", { status: 202, body: { receipt_id: "r_1" } });
+			server.enqueue("/api/v1/events", {
+				status: 409,
+				body: permanentGapDetails(identity),
+			});
+			await runtime.emitParsed(memoryEvent(1));
+			await runtime.emitParsed(memoryEvent(2));
+			assert.deepEqual(await runtime.flush(), { shipped: 2, terminal: 1, retryable: 0 });
+		});
+	});
+
+	it("409 can prove a permanent gap immediately after genesis", async () => {
+		await withServerAndRuntime(async ({ server, runtime, t }) => {
+			const identity = bootstrapIdentity(t.env);
+			server.enqueue("/api/v1/events", { status: 202, body: { receipt_id: "r_id" } });
+			server.enqueue("/api/v1/events", {
+				status: 409,
+				body: permanentGapDetails(identity, {
+					expected_seq: 0,
+					received_seq: 1,
+					last_committed_seq: -1,
+				}),
+			});
+			await runtime.emitParsed(memoryEvent(1));
+			assert.deepEqual(await runtime.flush(), { shipped: 1, terminal: 1, retryable: 0 });
+			const store = new BufferStore(t.env.SNO_BUFFER_PATH);
+			try {
+				assert.notEqual(
+					store
+						.getAllRows()
+						.find((row) => row.chain_epoch === 1 && row.seq === 0 && row.terminal === 0),
+					undefined,
+				);
+			} finally {
+				store.close();
+			}
+		});
+	});
+
+	const malformedBodies = [
+		["empty body", ""],
+		["invalid JSON", "{"],
+		["truncated JSON", '{"error":{"code":"chain_predecessor_not_ready"'],
+		["array", []],
+		["null", null],
+		["scalar", 17],
+	];
+	for (const [name, body] of malformedBodies) {
+		it(`409 ${name} remains retryable without throwing`, async () => {
+			const result = await flushThirdRowAgainstGap(body);
+			assert.deepEqual(result, { shipped: 2, terminal: 0, retryable: 1, retryAfterMs: 5_000 });
+		});
+	}
+
+	it("oversized response body is discarded and remains retryable", async () => {
+		await withServerAndRuntime(async ({ server, runtime }) => {
+			server.enqueue("/api/v1/events", {
+				status: 400,
+				body: JSON.stringify({ code: "invalid_envelope", padding: "x".repeat(128 * 1024) }),
+			});
+			await runtime.emitParsed(memoryEvent(1));
+			const result = await runtime.flush();
+			assert.equal(result.retryable, 1);
+			assert.equal(result.terminal, 0);
+		});
+	});
+
+	it("chunked oversized response is canceled at the read limit", async () => {
+		const t = tempEnv("https://sno.test");
+		let canceled = false;
+		let chunksRead = 0;
+		const runtime = new SnoObserveRuntime({
+			env: t.env,
+			cwd: t.dir,
+			fetch: async (url, init) => {
+				if (String(url).endsWith("/api/v1/identity/register-machine")) {
+					const body = typeof init?.body === "string" ? JSON.parse(init.body) : {};
+					return new Response(
+						JSON.stringify({
+							user_cuid: body.user_cuid,
+							machine_uuid: body.machine_uuid,
+							claimed: false,
+						}),
+						{ status: 200 },
+					);
+				}
+				return new Response(
+					new ReadableStream({
+						pull(controller) {
+							chunksRead += 1;
+							controller.enqueue(new Uint8Array(32 * 1024));
+						},
+						cancel() {
+							canceled = true;
+						},
+					}),
+					{ status: 400 },
+				);
+			},
+		});
+		try {
+			await runtime.emitParsed(memoryEvent(1));
+			const result = await runtime.flush();
+			assert.equal(result.retryable, 1);
+			assert.equal(canceled, true);
+			assert.equal(chunksRead >= 3 && chunksRead <= 4, true);
+		} finally {
+			await runtime.shutdown().catch(() => {});
+			rmSync(t.dir, { recursive: true, force: true });
+		}
+	});
+
+	const invalidGapFacts = [
+		["missing expected sequence", { expected_seq: undefined }],
+		["null expected sequence", { expected_seq: null }],
+		["string expected sequence", { expected_seq: "1" }],
+		["negative expected sequence", { expected_seq: -1 }],
+		["fractional expected sequence", { expected_seq: 1.5 }],
+		["unsafe expected sequence", { expected_seq: Number.MAX_SAFE_INTEGER + 1 }],
+		["contradictory received sequence", { received_seq: 3 }],
+		["contradictory committed sequence", { last_committed_seq: 1 }],
+		["mismatched machine", { machine_uuid: "01900000-0000-7000-8000-000000000000" }],
+		["mismatched agent", { agent_id: "openclaw" }],
+		["mismatched epoch", { chain_epoch: 496491 }],
+		["non-committed latest state", { latest_state: "pending" }],
+		["recent stall", { chain_stall_ms: 299_999 }],
+		["string stall", { chain_stall_ms: "300001" }],
+	];
+	for (const [name, overrides] of invalidGapFacts) {
+		it(`409 ${name} cannot reset the chain`, async () => {
+			await withServerAndRuntime(async ({ server, runtime, t }) => {
+				const identity = bootstrapIdentity(t.env);
+				server.enqueue("/api/v1/events", { status: 202, body: { receipt_id: "r_id" } });
+				server.enqueue("/api/v1/events", { status: 202, body: { receipt_id: "r_1" } });
+				server.enqueue("/api/v1/events", {
+					status: 409,
+					body: { error: permanentGapDetails(identity, overrides) },
+				});
+				await runtime.emitParsed(memoryEvent(1));
+				await runtime.emitParsed(memoryEvent(2));
+				const result = await runtime.flush();
+				assert.equal(result.retryable, 1);
+				assert.equal(result.terminal, 0);
+				const store = new BufferStore(t.env.SNO_BUFFER_PATH);
+				try {
+					assert.equal(Math.max(...store.getAllRows().map((row) => row.chain_epoch)), 0);
+				} finally {
+					store.close();
+				}
+			});
+		});
+	}
+
+
+	for (const codeField of ["code", "reason", "error_code"]) {
+		it(`contradictory ${codeField} and nested error.code remain retryable`, async () => {
+			await withServerAndRuntime(async ({ server, runtime, t }) => {
+				const identity = bootstrapIdentity(t.env);
+				server.enqueue("/api/v1/events", { status: 202, body: { receipt_id: "r_id" } });
+				server.enqueue("/api/v1/events", { status: 202, body: { receipt_id: "r_1" } });
+				server.enqueue("/api/v1/events", {
+					status: 409,
+					body: {
+						[codeField]: "payload_conflict",
+						error: permanentGapDetails(identity),
+					},
+				});
+				await runtime.emitParsed(memoryEvent(1));
+				await runtime.emitParsed(memoryEvent(2));
+				const result = await runtime.flush();
+				assert.equal(result.retryable, 1);
+				assert.equal(result.terminal, 0);
+			});
+		});
+	}
+
+	it("contradictory string error and reason remain retryable", async () => {
+		await withServerAndRuntime(async ({ server, runtime, t }) => {
+			const identity = bootstrapIdentity(t.env);
+			server.enqueue("/api/v1/events", { status: 202, body: { receipt_id: "r_id" } });
+			server.enqueue("/api/v1/events", { status: 202, body: { receipt_id: "r_1" } });
+			server.enqueue("/api/v1/events", {
+				status: 409,
+				body: {
+					...permanentGapDetails(identity),
+					reason: "chain_predecessor_not_ready",
+					error: "payload_conflict",
+				},
+			});
+			await runtime.emitParsed(memoryEvent(1));
+			await runtime.emitParsed(memoryEvent(2));
+			const result = await runtime.flush();
+			assert.equal(result.retryable, 1);
+			assert.equal(result.terminal, 0);
+		});
+	});
+
+	it("terminal response logs omit the receiver body", async (testContext) => {
+		const writes = [];
+		const write = testContext.mock.method(process.stderr, "write", (chunk) => {
+			writes.push(String(chunk));
+			return true;
+		});
+		try {
+			await withServerAndRuntime(async ({ server, runtime }) => {
+				server.enqueue("/api/v1/events", {
+					status: 400,
+					body: { code: "invalid_envelope", detail: "full-content-secret" },
+				});
+				await runtime.emitParsed(memoryEvent(1));
+				assert.equal((await runtime.flush()).terminal > 0, true);
+			});
+			assert.equal(writes.join("").includes("full-content-secret"), false);
+		} finally {
+			write.mock.restore();
+		}
+	});
+
+	for (const status of [408, 424, 429, 500, 502, 599, 418]) {
+		it(`${status} remains bounded-retryable`, async () => {
+			await withServerAndRuntime(async ({ server, runtime }) => {
+				server.enqueue("/api/v1/events", { status, body: { error: "hostile_response" } });
+				await runtime.emitParsed(memoryEvent(1));
+				const result = await runtime.flush();
+				assert.equal(result.retryable, 1);
+				assert.equal(result.terminal, 0);
+			});
+		});
+	}
+
+	it("malformed Retry-After does not throw or create a tight retry loop", async () => {
+		await withServerAndRuntime(async ({ server, runtime }) => {
+			server.enqueue("/api/v1/events", {
+				status: 424,
+				headers: { "Retry-After": "not-a-delay" },
+				body: { error: "dependency_failed", retryable: true },
+			});
+			await runtime.emitParsed(memoryEvent(1));
+			const result = await runtime.flush({ force: false });
+			assert.equal(result.retryable, 1);
+			await new Promise((resolve) => setTimeout(resolve, 100));
+			assert.equal(server.calls.filter((call) => call.url === "/api/v1/events").length, 1);
+		});
+	});
+
+	it("unsafe Retry-After is capped to a bounded delay", async () => {
+		await withServerAndRuntime(async ({ server, runtime }) => {
+			server.enqueue("/api/v1/events", {
+				status: 424,
+				headers: { "Retry-After": "9999999999999999999" },
+				body: { error: "dependency_failed", retryable: true },
+			});
+			await runtime.emitParsed(memoryEvent(1));
+			const result = await runtime.flush();
+			assert.equal(result.retryable, 1);
+			assert.equal(result.retryAfterMs, 24 * 60 * 60 * 1_000);
+		});
+	});
+
+	it("repeated poison-row retries are log-rate-limited by stable failure key", async () => {
+		const writes = [];
+		const originalWrite = process.stderr.write;
+		let now = Date.now();
+		const nowMock = mock.method(Date, "now", () => now);
+		const randomMock = mock.method(Math, "random", () => 0);
+		process.stderr.write = (chunk) => {
+			writes.push(String(chunk));
+			return true;
+		};
+		try {
+			await withServerAndRuntime(async ({ server, runtime }) => {
+				for (let index = 0; index < 8; index += 1) {
+					server.enqueue("/api/v1/events", { status: 409, body: { error: "unknown_conflict" } });
+				}
+				await runtime.emitParsed(memoryEvent(1));
+				for (let index = 0; index < 8; index += 1) {
+					const result = await runtime.flush();
+					assert.equal(result.retryable, 1);
+					now += result.retryAfterMs;
+				}
+				assert.equal(server.calls.filter((call) => call.url === "/api/v1/events").length, 8);
+			});
+		} finally {
+			process.stderr.write = originalWrite;
+			nowMock.mock.restore();
+			randomMock.mock.restore();
+		}
+		assert.equal(writes.filter((line) => line.includes("conflict response")).length, 1);
+	});
+
+	it("stderr failure cannot escape sender response handling", async () => {
+		const originalWrite = process.stderr.write;
+		process.stderr.write = () => {
+			throw new Error("EPIPE");
+		};
+		try {
+			await withServerAndRuntime(async ({ server, runtime }) => {
+				server.enqueue("/api/v1/events", { status: 418, body: "{" });
+				await runtime.emitParsed(memoryEvent(1));
+				const result = await runtime.flush();
+				assert.equal(result.retryable, 1);
+			});
+		} finally {
+			process.stderr.write = originalWrite;
+		}
+	});
+
+	it("timeout remains retryable and does not escape flush", async () => {
+		const t = tempEnv("http://127.0.0.1:9");
+		const runtime = new SnoObserveRuntime({
+			env: t.env,
+			cwd: t.dir,
+			fetch: async () => {
+				throw new DOMException("timed out", "TimeoutError");
+			},
+		});
+		try {
+			await runtime.emitParsed(memoryEvent(1));
+			assert.equal((await runtime.flush()).retryable >= 1, true);
+		} finally {
+			await runtime.shutdown().catch(() => {});
+			rmSync(t.dir, { recursive: true, force: true });
+		}
+	});
+
+	it("attempt safeguard rejects new events explicitly without growing the queue", async () => {
+		const t = tempEnv("http://127.0.0.1:9");
+		const identity = bootstrapIdentity(t.env);
+		const store = new BufferStore(t.env.SNO_BUFFER_PATH);
+		try {
+			const identify = store.append({
+				eventId: "poison-identify",
+				eventType: "agent.identify",
+				lane: "memory",
+				tsEdgeMs: Date.now(),
+				consentLevel: "metadata-only",
+				redacted: false,
+				scope: {
+					user_id: identity.user_cuid,
+					machine_id: identity.machine_uuid,
+					agent_id: "codex",
+				},
+				payload: {
+					agent_id: "codex",
+					machine_id: identity.machine_uuid,
+					sdk_version: "0.1.0",
+				},
+				terminal: false,
+			});
+			for (let attempt = 0; attempt < 100; attempt += 1) {
+				store.incrementAttempts(identify.rowid);
+			}
+		} finally {
+			store.close();
+		}
+		const runtime = new SnoObserveRuntime({ env: t.env, cwd: t.dir });
+			try {
+				const result = await runtime.emitParsed(memoryEvent(1));
+				assert.deepEqual(result, {
+				accepted: false,
+				eventId: result.eventId,
+				reason: "buffer_safeguard",
+				});
+				const independent = await runtime.emitParsed({
+					...memoryEvent(2),
+					agentId: "openclaw",
+				});
+				assert.equal(independent.accepted, true);
+				const check = new BufferStore(t.env.SNO_BUFFER_PATH);
+				try {
+					assert.equal(check.countAll(), 3);
+			} finally {
+				check.close();
+			}
+			const doctorDetail = runtime.doctor().buffer.detail;
+				assert.match(doctorDetail, /queue_depth=3/u);
+			assert.match(doctorDetail, /retry_count=100/u);
+			assert.match(doctorDetail, /quarantined_count=0/u);
+		} finally {
+			await runtime.shutdown().catch(() => {});
+			rmSync(t.dir, { recursive: true, force: true });
+		}
 	});
 
 	it("409 mismatched long-stalled missing predecessor -> remains retryable", async () => {

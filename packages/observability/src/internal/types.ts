@@ -95,7 +95,7 @@ export interface Event {
 export interface EmitResult {
 	accepted: boolean;
 	eventId: string;
-	reason?: "consent_off" | "tool_unsampled";
+	reason?: "buffer_safeguard" | "chain_retired" | "consent_off" | "tool_unsampled";
 	rowid?: number;
 	seq?: number;
 	chainEpoch?: number;

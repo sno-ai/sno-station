@@ -9,6 +9,8 @@ export interface EventPostResult {
 const LOCAL_HOSTNAMES = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
 
 const DEFAULT_REQUEST_TIMEOUT_MS = 10_000;
+const MAX_RETRY_AFTER_MS = 24 * 60 * 60 * 1_000;
+const MAX_EVENT_RESPONSE_BODY_BYTES = 64 * 1024;
 
 // Reject non-HTTPS base URLs (except localhost for tests/dev). Machine bearer
 // credentials and event payloads MUST NOT be sent over plaintext HTTP.
@@ -53,6 +55,7 @@ export async function postEvent(
 		headers,
 		body,
 		signal: withRequestTimeout(signal),
+		redirect: "error",
 	});
 	// Body-read failures after the response resolved (truncated stream, abort
 	// during body, decoder error) MUST NOT propagate as transport errors —
@@ -60,13 +63,45 @@ export async function postEvent(
 	// it. Treat the body as empty in that case so flush.ts routes by status.
 	let responseBody = "";
 	try {
-		responseBody = await response.text();
+		responseBody = await readBoundedEventResponse(response);
 	} catch {}
 	return {
 		status: response.status,
 		body: responseBody,
 		retryAfterMs: parseRetryAfter(response.headers.get("Retry-After")),
 	};
+}
+
+async function readBoundedEventResponse(response: Response): Promise<string> {
+	if (response.body === null) {
+		return "";
+	}
+	const reader = response.body.getReader();
+	const chunks: Uint8Array[] = [];
+	let totalBytes = 0;
+	try {
+		while (true) {
+			const chunk = await reader.read();
+			if (chunk.done) {
+				break;
+			}
+			totalBytes += chunk.value.byteLength;
+			if (totalBytes > MAX_EVENT_RESPONSE_BODY_BYTES) {
+				await reader.cancel().catch(() => {});
+				return "";
+			}
+			chunks.push(chunk.value);
+		}
+	} finally {
+		reader.releaseLock();
+	}
+	const body = new Uint8Array(totalBytes);
+	let offset = 0;
+	for (const chunk of chunks) {
+		body.set(chunk, offset);
+		offset += chunk.byteLength;
+	}
+	return new TextDecoder().decode(body);
 }
 
 export async function fetchJson<T>(
@@ -77,6 +112,7 @@ export async function fetchJson<T>(
 	const initWithTimeout: RequestInit = {
 		...init,
 		signal: withRequestTimeout(init.signal ?? undefined),
+		redirect: "error",
 	};
 	const response = await fetchImpl(url, initWithTimeout);
 	const body = await response.text();
@@ -106,11 +142,15 @@ export function parseRetryAfter(value: string | null): number | null {
 	}
 	const seconds = Number(value);
 	if (Number.isFinite(seconds)) {
-		return Math.max(0, seconds * 1000);
+		return boundedRetryAfter(seconds * 1000);
 	}
 	const date = Date.parse(value);
 	if (Number.isNaN(date)) {
 		return null;
 	}
-	return Math.max(0, date - Date.now());
+	return boundedRetryAfter(date - Date.now());
+}
+
+function boundedRetryAfter(delayMs: number): number {
+	return Math.min(MAX_RETRY_AFTER_MS, Math.max(0, delayMs));
 }
