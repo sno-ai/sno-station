@@ -1,5 +1,5 @@
 {
-	"extends": "../../../packages/nodix-crypto/tsconfig.json",
+	"extends": "../../../packages/sno-station-core-crypto/tsconfig.json",
 	"compilerOptions": {
 		"allowImportingTsExtensions": true,
 		"noEmit": true,
@@ -9,9 +9,9 @@
 		"noUnusedParameters": false,
 		"rootDir": "../../..",
 		"paths": {
-			"@snoai/nodix-crypto": ["../../../packages/nodix-crypto/src/index.ts"]
+			"@snoai/sno-station-core-crypto": ["../../../packages/sno-station-core-crypto/src/index.ts"]
 		}
 	},
-	"include": ["**/*.ts", "../../../packages/nodix-crypto/src/**/*.ts"],
+	"include": ["**/*.ts", "../../../packages/sno-station-core-crypto/src/**/*.ts"],
 	"exclude": ["node_modules"]
 }

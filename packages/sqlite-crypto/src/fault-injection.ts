@@ -1,7 +1,7 @@
 export function crashAfter(point: string): void {
 	if (
-		process.env["NODIX_TESTING"] === "1" &&
-		process.env["NODIX_CRASH_AFTER"] === point
+		process.env["SNO_STATION_CORE_TESTING"] === "1" &&
+		process.env["SNO_STATION_CORE_CRASH_AFTER"] === point
 	) {
 		process.exit(137);
 	}
@@ -9,7 +9,7 @@ export function crashAfter(point: string): void {
 
 export function forceCanaryFailure(): boolean {
 	return (
-		process.env["NODIX_TESTING"] === "1" &&
-		process.env["NODIX_FORCE_CANARY_FAIL"] === "1"
+		process.env["SNO_STATION_CORE_TESTING"] === "1" &&
+		process.env["SNO_STATION_CORE_FORCE_CANARY_FAIL"] === "1"
 	);
 }

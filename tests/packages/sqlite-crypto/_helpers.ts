@@ -4,7 +4,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { _resetDekCache } from "@snoai/nodix-crypto";
+import { _resetDekCache } from "@snoai/sno-station-core-crypto";
 
 const RECOVERY_FIXTURE_DIR = join(
 	dirname(fileURLToPath(import.meta.url)),
@@ -15,12 +15,12 @@ const RECOVERY_FIXTURE_DIR = join(
  * Per-test isolation helper.
  *
  * The production code reads `process.env.XDG_CONFIG_HOME` and
- * `process.env.NODIX_KEYCHAIN_SERVICE` (see design.md D18). Tests use this
+ * `process.env.SNO_STATION_CORE_KEYCHAIN_SERVICE` (see design.md D18). Tests use this
  * helper to redirect both away from the real host state.
  *
  * Each test run gets:
- *   - a fresh `XDG_CONFIG_HOME` under `os.tmpdir()/nodix-test-<runId>`
- *   - a unique `NODIX_KEYCHAIN_SERVICE` so concurrent runs / parallel tests
+ *   - a fresh `XDG_CONFIG_HOME` under `os.tmpdir()/sno-station-core-test-<runId>`
+ *   - a unique `SNO_STATION_CORE_KEYCHAIN_SERVICE` so concurrent runs / parallel tests
  *     never collide on the same keychain entry
  *
  * Caller is responsible for `cleanup()` in `afterEach`. The helper deliberately
@@ -30,7 +30,7 @@ const RECOVERY_FIXTURE_DIR = join(
 export interface TestEnv {
 	readonly runId: string;
 	readonly xdgConfigHome: string;
-	readonly nodixConfigDir: string;
+	readonly snoStationCoreConfigDir: string;
 	readonly keyFile: string;
 	readonly manifestFile: string;
 	readonly markerFile: string;
@@ -57,25 +57,25 @@ function restoreEnv(name: string): void {
 	previousEnv.delete(name);
 }
 
-export function makeTestEnv(label = "nodix"): TestEnv {
+export function makeTestEnv(label = "sno-station-core"): TestEnv {
 	const runId = `${Date.now().toString(36)}-${randomBytes(4).toString("hex")}`;
 	const xdgConfigHome = mkdtempSync(join(tmpdir(), `${label}-test-`));
-	const nodixConfigDir = join(xdgConfigHome, "nodix");
-	const keyFile = join(nodixConfigDir, "key");
-	const manifestFile = join(nodixConfigDir, "dbs.json");
-	const markerFile = join(nodixConfigDir, ".manifest-rename-marker");
-	const keychainService = `ai.sno.nodix.test-${runId}`;
+	const snoStationCoreConfigDir = join(xdgConfigHome, "sno-station-core");
+	const keyFile = join(snoStationCoreConfigDir, "key");
+	const manifestFile = join(snoStationCoreConfigDir, "dbs.json");
+	const markerFile = join(snoStationCoreConfigDir, ".manifest-rename-marker");
+	const keychainService = `ai.sno.sno-station-core.test-${runId}`;
 
 	setEnv("XDG_CONFIG_HOME", xdgConfigHome);
-	setEnv("NODIX_KEYCHAIN_SERVICE", keychainService);
-	setEnv("NODIX_TESTING", "1");
+	setEnv("SNO_STATION_CORE_KEYCHAIN_SERVICE", keychainService);
+	setEnv("SNO_STATION_CORE_TESTING", "1");
 	// Drop the in-process DEK promise cache — each test gets a fresh resolver.
 	_resetDekCache();
 
 	return {
 		runId,
 		xdgConfigHome,
-		nodixConfigDir,
+		snoStationCoreConfigDir,
 		keyFile,
 		manifestFile,
 		markerFile,
@@ -87,20 +87,20 @@ export function makeTestEnv(label = "nodix"): TestEnv {
 				// best-effort
 			}
 			restoreEnv("XDG_CONFIG_HOME");
-			restoreEnv("NODIX_KEYCHAIN_SERVICE");
-			restoreEnv("NODIX_TESTING");
+			restoreEnv("SNO_STATION_CORE_KEYCHAIN_SERVICE");
+			restoreEnv("SNO_STATION_CORE_TESTING");
 			_resetDekCache();
 		},
 	};
 }
 
 export function uniqueDbPath(env: TestEnv, name = "test"): string {
-	return join(env.nodixConfigDir, "dbs", `${name}-${env.runId}.db`);
+	return join(env.snoStationCoreConfigDir, "dbs", `${name}-${env.runId}.db`);
 }
 
 /**
  * Build node CLI args for spawning a child that imports the workspace package
- * `@snoai/nodix-crypto`. The package's `exports.import` points at `./src/index.ts`,
+ * `@snoai/sno-station-core-crypto`. The package's `exports.import` points at `./src/index.ts`,
  * so children must be launched with the `tsx` loader to strip types on import.
  */
 export function childNodeArgs(fixturePath: string): string[] {
@@ -108,17 +108,17 @@ export function childNodeArgs(fixturePath: string): string[] {
 }
 
 const HELPER_DIR = fileURLToPath(new URL(".", import.meta.url));
-/** Absolute path to the production CLI source — the bin's `dist/cli/nodix.js` is built from this. */
+/** Absolute path to the production CLI source — the bin's `dist/cli/sno-station-core.js` is built from this. */
 export const CLI_SRC_PATH = join(
 	HELPER_DIR,
 	"..",
 	"..",
 	"..",
 	"packages",
-	"nodix-crypto",
+	"sno-station-core-crypto",
 	"src",
 	"cli",
-	"nodix.ts",
+	"sno-station-core.ts",
 );
 
 export interface CliResult {
@@ -129,8 +129,8 @@ export interface CliResult {
 }
 
 /**
- * Spawn the production `nodix` CLI from source via `tsx`. The XDG /
- * `NODIX_KEYCHAIN_SERVICE` env from `makeTestEnv()` MUST already be set in
+ * Spawn the production `sno-station-core` CLI from source via `tsx`. The XDG /
+ * `SNO_STATION_CORE_KEYCHAIN_SERVICE` env from `makeTestEnv()` MUST already be set in
  * `process.env` — this helper inherits it. Pass `stdin` to feed prompts.
  */
 /**
@@ -138,7 +138,7 @@ export interface CliResult {
  * stdin (production interactive recovery path). Returns the resolved DEK as
  * a 32-byte Buffer. Throws on child failure.
  *
- * If `passphrase` is provided, sets `NODIX_PASSPHRASE_STDIN=1` and feeds it.
+ * If `passphrase` is provided, sets `SNO_STATION_CORE_PASSPHRASE_STDIN=1` and feeds it.
  */
 export function recoverDek(env: TestEnv, passphrase?: string): Buffer {
 	mkdirSync(RECOVERY_FIXTURE_DIR, { recursive: true });
@@ -149,7 +149,7 @@ export function recoverDek(env: TestEnv, passphrase?: string): Buffer {
 	writeFileSync(
 		fixture,
 		`
-		import { getDek } from "@snoai/nodix-crypto";
+		import { getDek } from "@snoai/sno-station-core-crypto";
 		const dek = await getDek();
 		process.stdout.write("DEK_HEX:" + Buffer.from(dek).toString("hex") + "\\n");
 		`,
@@ -157,10 +157,10 @@ export function recoverDek(env: TestEnv, passphrase?: string): Buffer {
 	const childEnv: Record<string, string | undefined> = {
 		...process.env,
 		XDG_CONFIG_HOME: env.xdgConfigHome,
-		NODIX_KEYCHAIN_SERVICE: env.keychainService,
+		SNO_STATION_CORE_KEYCHAIN_SERVICE: env.keychainService,
 	};
 	if (passphrase !== undefined) {
-		childEnv.NODIX_PASSPHRASE_STDIN = "1";
+		childEnv.SNO_STATION_CORE_PASSPHRASE_STDIN = "1";
 	}
 	try {
 		const child = spawnSync(process.execPath, childNodeArgs(fixture), {

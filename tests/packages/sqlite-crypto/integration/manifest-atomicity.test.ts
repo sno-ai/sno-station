@@ -6,14 +6,14 @@
  * truncated. ManifestMissing and ManifestCorrupted halt-no-rebuild behavior
  * verified separately.
  *
- * Implementation gate: production code MUST honor a NODIX_CRASH_AFTER env
- * hook only when NODIX_TESTING=1. Without the gated hook this test cannot
+ * Implementation gate: production code MUST honor a SNO_STATION_CORE_CRASH_AFTER env
+ * hook only when SNO_STATION_CORE_TESTING=1. Without the gated hook this test cannot
  * deterministically reproduce the crash window.
  */
 
 import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, statSync } from "node:fs";
-import { ManifestMissing } from "@snoai/nodix-crypto";
+import { ManifestMissing } from "@snoai/sno-station-core-crypto";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
 	childNodeArgs,
@@ -38,7 +38,7 @@ const FIXTURE_PATH = new URL(
 ).pathname;
 
 function killerDbPath(): string {
-	return `${env.nodixConfigDir}/dbs/killer.db`;
+	return `${env.snoStationCoreConfigDir}/dbs/killer.db`;
 }
 
 function spawnKiller(crashPoint: string): {
@@ -49,9 +49,9 @@ function spawnKiller(crashPoint: string): {
 		env: {
 			...process.env,
 			XDG_CONFIG_HOME: env.xdgConfigHome,
-			NODIX_KEYCHAIN_SERVICE: env.keychainService,
-			NODIX_CRASH_AFTER: crashPoint,
-			NODIX_DB_PATH: killerDbPath(),
+			SNO_STATION_CORE_KEYCHAIN_SERVICE: env.keychainService,
+			SNO_STATION_CORE_CRASH_AFTER: crashPoint,
+			SNO_STATION_CORE_DB_PATH: killerDbPath(),
 		},
 		timeout: 30_000,
 		encoding: "utf8",
@@ -64,11 +64,11 @@ describe("manifest atomicity (task 2.7)", () => {
 		const childEnv = {
 			...process.env,
 			XDG_CONFIG_HOME: env.xdgConfigHome,
-			NODIX_KEYCHAIN_SERVICE: env.keychainService,
-			NODIX_CRASH_AFTER: "before-marker",
-			NODIX_DB_PATH: `${env.nodixConfigDir}/dbs/no-test-mode.db`,
+			SNO_STATION_CORE_KEYCHAIN_SERVICE: env.keychainService,
+			SNO_STATION_CORE_CRASH_AFTER: "before-marker",
+			SNO_STATION_CORE_DB_PATH: `${env.snoStationCoreConfigDir}/dbs/no-test-mode.db`,
 		};
-		delete childEnv.NODIX_TESTING;
+		delete childEnv.SNO_STATION_CORE_TESTING;
 
 		const ok = spawnSync(process.execPath, childNodeArgs(FIXTURE_PATH), {
 			env: childEnv,
@@ -93,7 +93,7 @@ describe("manifest atomicity (task 2.7)", () => {
 		expect(existsSync(env.manifestFile)).toBe(false);
 
 		// Now use the public API to confirm halt-no-rebuild behavior.
-		const { getDek } = await import("@snoai/nodix-crypto");
+		const { getDek } = await import("@snoai/sno-station-core-crypto");
 		await expect(getDek()).rejects.toBeInstanceOf(ManifestMissing);
 	});
 
@@ -119,8 +119,8 @@ describe("manifest atomicity (task 2.7)", () => {
 			env: {
 				...process.env,
 				XDG_CONFIG_HOME: env.xdgConfigHome,
-				NODIX_KEYCHAIN_SERVICE: env.keychainService,
-				NODIX_DB_PATH: `${env.nodixConfigDir}/dbs/clean.db`,
+				SNO_STATION_CORE_KEYCHAIN_SERVICE: env.keychainService,
+				SNO_STATION_CORE_DB_PATH: `${env.snoStationCoreConfigDir}/dbs/clean.db`,
 			},
 			timeout: 30_000,
 			encoding: "utf8",

@@ -1,6 +1,6 @@
 import { inspect } from "node:util";
 
-const SAFE_TOSTRING = Symbol.for("nodix.errors.safeToString");
+const SAFE_TOSTRING = Symbol.for("sno-station-core.errors.safeToString");
 
 // Strip any hex sequence ≥32 chars (256 bits) from any candidate string. Belt-and-braces
 // against a future maintainer accidentally interpolating a key/passphrase into a message.
@@ -9,12 +9,12 @@ function scrub(s: string): string {
 	return s.replace(HEX_LEAK, "[redacted]");
 }
 
-export class NodixCryptoError extends Error {
+export class SnoStationCoreCryptoError extends Error {
 	public readonly code: string;
 
 	constructor(code: string, message: string, options?: ErrorOptions) {
 		super(scrub(message), options);
-		this.name = "NodixCryptoError";
+		this.name = "SnoStationCoreCryptoError";
 		this.code = code;
 	}
 
@@ -35,14 +35,14 @@ export class NodixCryptoError extends Error {
 	}
 }
 
-export class KeychainUnavailableError extends NodixCryptoError {
+export class KeychainUnavailableError extends SnoStationCoreCryptoError {
 	constructor(message = "OS keychain unavailable", options?: ErrorOptions) {
 		super("KEYCHAIN_UNAVAILABLE", message, options);
 		this.name = "KeychainUnavailableError";
 	}
 }
 
-export class WrongKeyError extends NodixCryptoError {
+export class WrongKeyError extends SnoStationCoreCryptoError {
 	constructor(
 		message = "DEK does not match this database",
 		options?: ErrorOptions,
@@ -52,7 +52,7 @@ export class WrongKeyError extends NodixCryptoError {
 	}
 }
 
-export class IntegrityCheckFailed extends NodixCryptoError {
+export class IntegrityCheckFailed extends SnoStationCoreCryptoError {
 	constructor(
 		message = "cryptographic integrity check failed",
 		options?: ErrorOptions,
@@ -62,7 +62,7 @@ export class IntegrityCheckFailed extends NodixCryptoError {
 	}
 }
 
-export class CanaryMismatch extends NodixCryptoError {
+export class CanaryMismatch extends SnoStationCoreCryptoError {
 	constructor(
 		message = "canary row sentinel mismatch",
 		options?: ErrorOptions,
@@ -72,7 +72,7 @@ export class CanaryMismatch extends NodixCryptoError {
 	}
 }
 
-export class DbIdMismatch extends NodixCryptoError {
+export class DbIdMismatch extends SnoStationCoreCryptoError {
 	constructor(
 		message = "canary db_id does not match manifest entry",
 		options?: ErrorOptions,
@@ -82,9 +82,9 @@ export class DbIdMismatch extends NodixCryptoError {
 	}
 }
 
-export class ManifestMissing extends NodixCryptoError {
+export class ManifestMissing extends SnoStationCoreCryptoError {
 	constructor(
-		message = "manifest file is missing despite registration marker present; run `nodix lock --rebuild-manifest`",
+		message = "manifest file is missing despite registration marker present; run `sno-station-core lock --rebuild-manifest`",
 		options?: ErrorOptions,
 	) {
 		super("MANIFEST_MISSING", message, options);
@@ -92,7 +92,7 @@ export class ManifestMissing extends NodixCryptoError {
 	}
 }
 
-export class ManifestCorrupted extends NodixCryptoError {
+export class ManifestCorrupted extends SnoStationCoreCryptoError {
 	constructor(
 		message = "manifest file is unparseable",
 		options?: ErrorOptions,
@@ -102,7 +102,7 @@ export class ManifestCorrupted extends NodixCryptoError {
 	}
 }
 
-export class MissingDekError extends NodixCryptoError {
+export class MissingDekError extends SnoStationCoreCryptoError {
 	constructor(
 		message = "DEK source is missing while encrypted databases are registered; refusing to auto-generate",
 		options?: ErrorOptions,
@@ -112,9 +112,9 @@ export class MissingDekError extends NodixCryptoError {
 	}
 }
 
-export class ForeignDekError extends NodixCryptoError {
+export class ForeignDekError extends SnoStationCoreCryptoError {
 	constructor(
-		message = "export was made under a different DEK; cross-machine import requires `nodix lock --import-dek` (v1.1)",
+		message = "export was made under a different DEK; cross-machine import requires `sno-station-core lock --import-dek` (v1.1)",
 		options?: ErrorOptions,
 	) {
 		super("FOREIGN_DEK", message, options);
@@ -122,9 +122,9 @@ export class ForeignDekError extends NodixCryptoError {
 	}
 }
 
-export class InvalidExportFormat extends NodixCryptoError {
+export class InvalidExportFormat extends SnoStationCoreCryptoError {
 	constructor(
-		message = "input is not a valid .nodix export",
+		message = "input is not a valid .sno-station-core export",
 		options?: ErrorOptions,
 	) {
 		super("INVALID_EXPORT_FORMAT", message, options);
@@ -132,9 +132,9 @@ export class InvalidExportFormat extends NodixCryptoError {
 	}
 }
 
-export class UnsupportedExportVersion extends NodixCryptoError {
+export class UnsupportedExportVersion extends SnoStationCoreCryptoError {
 	constructor(
-		message = "unsupported .nodix export version",
+		message = "unsupported .sno-station-core export version",
 		options?: ErrorOptions,
 	) {
 		super("UNSUPPORTED_EXPORT_VERSION", message, options);
@@ -144,7 +144,7 @@ export class UnsupportedExportVersion extends NodixCryptoError {
 
 // Verifier helper exposed for the typed-error redaction unit test.
 export function safelyStringify(err: unknown): string {
-	if (err instanceof NodixCryptoError) return err.toString();
+	if (err instanceof SnoStationCoreCryptoError) return err.toString();
 	if (err instanceof Error) return scrub(`${err.name}: ${err.message}`);
 	return scrub(inspect(err));
 }

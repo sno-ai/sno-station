@@ -13,7 +13,7 @@ import {
 	KEYCHAIN_ACCOUNT,
 	KEYCHAIN_SERVICE_DEFAULT,
 	MANIFEST_SCHEMA_VERSION,
-} from "@snoai/nodix-crypto";
+} from "@snoai/sno-station-core-crypto";
 import { describe, expect, it } from "vitest";
 
 describe("exported constants match PRD locked values", () => {
@@ -29,17 +29,17 @@ describe("exported constants match PRD locked values", () => {
 	});
 
 	it("canary table + sentinel are stable", () => {
-		expect(CANARY_TABLE).toBe("_nodix_canary");
+		expect(CANARY_TABLE).toBe("_sno_station_core_canary");
 		expect(CANARY_SENTINEL.length).toBeGreaterThanOrEqual(8);
 	});
 
 	it("keychain service default and account match PRD §7.1", () => {
-		expect(KEYCHAIN_SERVICE_DEFAULT).toBe("ai.sno.nodix");
+		expect(KEYCHAIN_SERVICE_DEFAULT).toBe("ai.sno.sno-station-core");
 		expect(KEYCHAIN_ACCOUNT).toBe("default-user");
 	});
 
 	it("export magic and version match PRD §6.3 / D17", () => {
-		expect(EXPORT_MAGIC).toBe("NODIX01");
+		expect(EXPORT_MAGIC).toBe("SNO_STATION_CORE01");
 		expect(EXPORT_VERSION).toBe(0x01);
 	});
 
