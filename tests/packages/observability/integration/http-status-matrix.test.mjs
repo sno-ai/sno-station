@@ -165,13 +165,13 @@ describe("HTTP status matrix (fixture server, node:http)", () => {
 		});
 	}
 
-	it("unexpected 4xx -> terminal quarantine, no retry", async () => {
+	it("unexpected 4xx -> retryable, no quarantine", async () => {
 		await withServerAndRuntime(async ({ server, runtime }) => {
 			server.enqueue("/api/v1/events", { status: 404, body: { error: "not_found" } });
 			await runtime.emitParsed(memoryEvent(1));
 			const res = await runtime.flush();
-			assert.equal(res.terminal, 2);
-			assert.equal(res.retryable, 0);
+			assert.equal(res.terminal, 0);
+			assert.equal(res.retryable, 1);
 		});
 	});
 
@@ -548,6 +548,101 @@ describe("HTTP status matrix (fixture server, node:http)", () => {
 			const res = await runtime.flush();
 			assert.equal(res.retryable, 1);
 			assert.equal(res.retryAfterMs, 5000);
+		});
+	});
+
+	it("409 nested-only long-stalled missing predecessor -> quarantine suffix and reseed", async () => {
+		await withServerAndRuntime(async ({ server, runtime, t }) => {
+			const identity = bootstrapIdentity(t.env);
+			server.enqueue("/api/v1/events", { status: 202, body: { receipt_id: "r_id" } });
+			server.enqueue("/api/v1/events", { status: 202, body: { receipt_id: "r_1" } });
+			server.enqueue("/api/v1/events", {
+				status: 409,
+				headers: { "Retry-After": "5" },
+				body: {
+					error: {
+						code: "chain_predecessor_not_ready",
+						machine_uuid: identity.machine_uuid,
+						agent_id: "codex",
+						chain_epoch: 0,
+						expected_seq: 1,
+						received_seq: 2,
+						latest_state: "committed",
+						last_committed_seq: 0,
+						chain_stall_ms: 300_001,
+					},
+				},
+			});
+			await runtime.emitParsed(memoryEvent(1));
+			await runtime.emitParsed(memoryEvent(2));
+			const res = await runtime.flush();
+
+			assert.deepEqual(res, { shipped: 2, terminal: 1, retryable: 0 });
+			const store = new BufferStore(t.env.SNO_BUFFER_PATH);
+			try {
+				const rows = store.getAllRows();
+				assert.equal(rows[0].shipped, 1);
+				assert.equal(rows[1].shipped, 1);
+				assert.equal(rows[2].terminal, 1);
+				assert.notEqual(
+					rows.find((row) => row.chain_epoch === 1 && row.seq === 0 && row.terminal === 0),
+					undefined,
+				);
+			} finally {
+				store.close();
+			}
+		});
+	});
+
+	it("409 mismatched long-stalled missing predecessor -> remains retryable", async () => {
+		await withServerAndRuntime(async ({ server, runtime }) => {
+			server.enqueue("/api/v1/events", {
+				status: 409,
+				body: {
+					error: {
+						code: "chain_predecessor_not_ready",
+						machine_uuid: "01900000-0000-7000-8000-000000000000",
+						agent_id: "openclaw",
+						chain_epoch: 496491,
+						expected_seq: 3400,
+						received_seq: 3401,
+						latest_state: "committed",
+						last_committed_seq: 3399,
+						chain_stall_ms: 300_001,
+					},
+				},
+			});
+			await runtime.emitParsed(memoryEvent(1));
+			const res = await runtime.flush();
+
+			assert.equal(res.retryable, 1);
+			assert.equal(res.terminal, 0);
+		});
+	});
+
+	it("409 recent missing predecessor -> remains retryable", async () => {
+		await withServerAndRuntime(async ({ server, runtime }) => {
+			server.enqueue("/api/v1/events", {
+				status: 409,
+				headers: { "Retry-After": "5" },
+				body: {
+					reason: "chain_predecessor_not_ready",
+					error: {
+						code: "chain_predecessor_not_ready",
+						expected_seq: 3400,
+						received_seq: 3401,
+						latest_state: "committed",
+						last_committed_seq: 3399,
+						chain_stall_ms: 299_999,
+					},
+				},
+			});
+			await runtime.emitParsed(memoryEvent(1));
+			const res = await runtime.flush();
+
+			assert.equal(res.retryable, 1);
+			assert.equal(res.terminal, 0);
+			assert.equal(res.retryAfterMs, 5_000);
 		});
 	});
 
