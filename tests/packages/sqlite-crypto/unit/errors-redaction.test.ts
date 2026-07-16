@@ -2,7 +2,7 @@
  * Task 2.12 — typed errors must never serialize key material.
  *
  * Asserts that `JSON.stringify(err)`, `err.toString()`, `inspect(err)`, and
- * `err.stack` of every NodixCryptoError subclass contains zero hex sequences
+ * `err.stack` of every SnoStationCoreCryptoError subclass contains zero hex sequences
  * of length ≥32 (256 bits) and no DEK/passphrase substring.
  */
 
@@ -17,16 +17,16 @@ import {
 	ManifestCorrupted,
 	ManifestMissing,
 	MissingDekError,
-	NodixCryptoError,
+	SnoStationCoreCryptoError,
 	safelyStringify,
 	UnsupportedExportVersion,
 	WrongKeyError,
-} from "@snoai/nodix-crypto";
+} from "@snoai/sno-station-core-crypto";
 import { describe, expect, it } from "vitest";
 
 const HEX_LEAK = /[0-9a-fA-F]{32,}/;
 
-const SUBCLASSES: Array<readonly [string, () => NodixCryptoError]> = [
+const SUBCLASSES: Array<readonly [string, () => SnoStationCoreCryptoError]> = [
 	["KeychainUnavailableError", () => new KeychainUnavailableError()],
 	["WrongKeyError", () => new WrongKeyError()],
 	["IntegrityCheckFailed", () => new IntegrityCheckFailed()],
@@ -42,11 +42,11 @@ const SUBCLASSES: Array<readonly [string, () => NodixCryptoError]> = [
 
 const POISON_HEX = "deadbeef".repeat(8); // 64 hex chars; will be redacted by the scrubber
 
-describe("NodixCryptoError redaction", () => {
+describe("SnoStationCoreCryptoError redaction", () => {
 	for (const [name, factory] of SUBCLASSES) {
 		it(`${name} default toString/inspect/JSON contain no hex>=32`, () => {
 			const err = factory();
-			expect(err).toBeInstanceOf(NodixCryptoError);
+			expect(err).toBeInstanceOf(SnoStationCoreCryptoError);
 			expect(err.toString()).not.toMatch(HEX_LEAK);
 			expect(JSON.stringify(err)).not.toMatch(HEX_LEAK);
 			expect(inspect(err)).not.toMatch(HEX_LEAK);
@@ -56,7 +56,7 @@ describe("NodixCryptoError redaction", () => {
 			const err = new (
 				factory().constructor as new (
 					msg: string,
-				) => NodixCryptoError
+				) => SnoStationCoreCryptoError
 			)(`leaking key=${POISON_HEX}`);
 			expect(err.toString()).not.toContain(POISON_HEX);
 			expect(JSON.stringify(err)).not.toContain(POISON_HEX);

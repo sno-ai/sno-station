@@ -1,5 +1,5 @@
 /** @file import.ts
- * @purpose `.nodix` import — structural gate (magic, version) BEFORE GCM
+ * @purpose `.sno-station-core` import — structural gate (magic, version) BEFORE GCM
  *   attempt; cross-machine fingerprint check (`SHA-256(local_DEK)[:4]`)
  *   BEFORE GCM attempt; layered errors per spec.
  */
@@ -24,11 +24,11 @@ import {
 	UnsupportedExportVersion,
 } from "./errors.js";
 import {
-	NODIX_HEADER_LEN,
-	NODIX_MAGIC,
-	NODIX_NONCE_LEN,
-	NODIX_TAG_LEN,
-	NODIX_VERSION_V1,
+	SNO_STATION_CORE_HEADER_LEN,
+	SNO_STATION_CORE_MAGIC,
+	SNO_STATION_CORE_NONCE_LEN,
+	SNO_STATION_CORE_TAG_LEN,
+	SNO_STATION_CORE_VERSION_V1,
 } from "./export.js";
 import { readManifestIfPresent } from "./manifest.js";
 import { CANARY_SENTINEL, type Dek, type ManifestEntry } from "./types.js";
@@ -45,32 +45,35 @@ interface ParsedHeader {
 function parseStructure(bytes: Buffer): ParsedHeader {
 	// Structural gate: magic + version. These are the only checks before any
 	// fingerprint comparison or GCM attempt. They MUST raise distinct error
-	// classes from authentication failures (per nodix-export-format spec).
-	if (bytes.length < NODIX_HEADER_LEN + NODIX_NONCE_LEN + NODIX_TAG_LEN) {
+	// classes from authentication failures (per sno-station-core-export-format spec).
+	if (bytes.length < SNO_STATION_CORE_HEADER_LEN + SNO_STATION_CORE_NONCE_LEN + SNO_STATION_CORE_TAG_LEN) {
 		throw new InvalidExportFormat(
-			`InvalidExportFormat: file is too short to be a .nodix export (got ${bytes.length} bytes)`,
+			`InvalidExportFormat: file is too short to be a .sno-station-core export (got ${bytes.length} bytes)`,
 		);
 	}
-	if (!bytes.subarray(0, NODIX_MAGIC.length).equals(NODIX_MAGIC)) {
+	if (!bytes.subarray(0, SNO_STATION_CORE_MAGIC.length).equals(SNO_STATION_CORE_MAGIC)) {
 		throw new InvalidExportFormat(
-			`InvalidExportFormat: missing magic bytes 'NODIX01'`,
+			`InvalidExportFormat: missing magic bytes 'SNO_STATION_CORE01'`,
 		);
 	}
-	const version = bytes[NODIX_MAGIC.length];
-	if (version !== NODIX_VERSION_V1) {
+	const version = bytes[SNO_STATION_CORE_MAGIC.length];
+	if (version !== SNO_STATION_CORE_VERSION_V1) {
 		throw new UnsupportedExportVersion(
 			`UnsupportedExportVersion: header version 0x${version?.toString(16) ?? "??"}, only 0x01 supported`,
 		);
 	}
-	const header = bytes.subarray(0, NODIX_HEADER_LEN);
-	const sourceFingerprint = bytes.subarray(8, NODIX_HEADER_LEN);
-	const nonce = bytes.subarray(
-		NODIX_HEADER_LEN,
-		NODIX_HEADER_LEN + NODIX_NONCE_LEN,
+	const header = bytes.subarray(0, SNO_STATION_CORE_HEADER_LEN);
+	const sourceFingerprint = bytes.subarray(
+		SNO_STATION_CORE_MAGIC.length + 1,
+		SNO_STATION_CORE_HEADER_LEN,
 	);
-	const ciphertextEnd = bytes.length - NODIX_TAG_LEN;
+	const nonce = bytes.subarray(
+		SNO_STATION_CORE_HEADER_LEN,
+		SNO_STATION_CORE_HEADER_LEN + SNO_STATION_CORE_NONCE_LEN,
+	);
+	const ciphertextEnd = bytes.length - SNO_STATION_CORE_TAG_LEN;
 	const ciphertext = bytes.subarray(
-		NODIX_HEADER_LEN + NODIX_NONCE_LEN,
+		SNO_STATION_CORE_HEADER_LEN + SNO_STATION_CORE_NONCE_LEN,
 		ciphertextEnd,
 	);
 	const tag = bytes.subarray(ciphertextEnd);
@@ -191,8 +194,8 @@ export async function importEncrypted(sourcePath: string): Promise<void> {
 	const localFp = dekFingerprint4(dek);
 	if (!localFp.equals(sourceFingerprint)) {
 		throw new ForeignDekError(
-			"ForeignDekError: this .nodix file was encrypted with a different DEK fingerprint. " +
-				"Cross-machine restore requires the v1.1 `nodix lock --import-dek <hex>` workflow (deferred).",
+			"ForeignDekError: this .sno-station-core file was encrypted with a different DEK fingerprint. " +
+				"Cross-machine restore requires the v1.1 `sno-station-core lock --import-dek <hex>` workflow (deferred).",
 		);
 	}
 

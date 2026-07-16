@@ -1,4 +1,4 @@
-// Branded primitive types for nodix-crypto. Branding prevents accidental cross-mixing
+// Branded primitive types for sno-station-core-crypto. Branding prevents accidental cross-mixing
 // (e.g. passing a raw string where a fingerprint is expected) without runtime cost.
 
 declare const __dekBrand: unique symbol;
@@ -60,7 +60,7 @@ export interface ManifestFile {
 	readonly dbs: readonly ManifestEntry[];
 }
 
-export interface NodixConfigPaths {
+export interface SnoStationCoreConfigPaths {
 	readonly configDir: string;
 	readonly keyFile: string;
 	readonly manifestFile: string;
@@ -73,13 +73,13 @@ export interface OpenEncryptedDbResult {
 	readonly registered: boolean;
 }
 
-export const CANARY_TABLE = "_nodix_canary" as const;
-export const CANARY_SENTINEL = "nodix-v1-canary-ok" as const;
+export const CANARY_TABLE = "_sno_station_core_canary" as const;
+export const CANARY_SENTINEL = "sno-station-core-v1-canary-ok" as const;
 export const KEYCHAIN_ACCOUNT = "default-user" as const;
-export const KEYCHAIN_SERVICE_DEFAULT = "ai.sno.nodix" as const;
+export const KEYCHAIN_SERVICE_DEFAULT = "ai.sno.sno-station-core" as const;
 export const MANIFEST_SCHEMA_VERSION = 1 as const;
 export const KEY_STATE_VERSION = 1 as const;
-export const EXPORT_MAGIC = "NODIX01" as const;
+export const EXPORT_MAGIC = "SNO_STATION_CORE01" as const;
 export const EXPORT_VERSION = 0x01 as const;
 
 export const ARGON2ID_PARAMS: KdfParams = {

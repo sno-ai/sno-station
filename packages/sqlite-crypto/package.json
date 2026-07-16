@@ -1,13 +1,13 @@
 {
-	"name": "@snoai/nodix-crypto",
-	"version": "0.1.0",
+	"name": "@snoai/sno-station-core-crypto",
+	"version": "0.2.0",
 	"license": "Apache-2.0",
-	"description": "Local AES-256 encryption for Nodix-family SQLite databases. Single audit surface for DEK lifecycle, encrypted DB open, manifest, canary, file-fallback, passphrase wrap, and .nodix export.",
+	"description": "Local AES-256 encryption for SNO Station Core SQLite databases. Single audit surface for DEK lifecycle, encrypted DB open, manifest, canary, file-fallback, passphrase wrap, and .sno-station-core export.",
 	"type": "module",
 	"main": "./dist/index.js",
 	"types": "./dist/index.d.ts",
 	"bin": {
-		"nodix": "./dist/cli/nodix.js"
+		"sno-station-core": "./dist/cli/sno-station-core.js"
 	},
 	"exports": {
 		".": {
@@ -31,9 +31,9 @@
 		"typecheck": "tsc --noEmit",
 		"lint": "biome check src/",
 		"lint:fix": "biome check --write src/",
-		"test:unit": "vitest run --config vitest.config.ts ../../tests/packages/nodix-crypto/unit",
-		"test:integration": "vitest run --config vitest.config.ts ../../tests/packages/nodix-crypto/integration",
-		"test:e2e": "vitest run --config vitest.config.ts ../../tests/packages/nodix-crypto/e2e --passWithNoTests",
+		"test:unit": "vitest run --config vitest.config.ts ../../tests/packages/sno-station-core-crypto/unit",
+		"test:integration": "vitest run --config vitest.config.ts ../../tests/packages/sno-station-core-crypto/integration",
+		"test:e2e": "vitest run --config vitest.config.ts ../../tests/packages/sno-station-core-crypto/e2e --passWithNoTests",
 		"clean": "rm -rf dist"
 	},
 	"dependencies": {

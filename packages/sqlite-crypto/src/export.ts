@@ -1,8 +1,8 @@
 /** @file export.ts
- * @purpose `.nodix` AES-256-GCM export bundle producer. Spec:
- *   `openspec/changes/add-local-aes-encryption/specs/nodix-export-format/spec.md`.
- *   Layout: `magic(7) ‖ version(1) ‖ source_dek_fingerprint(4) ‖ nonce(12) ‖
- *   ciphertext(N) ‖ tag(16)` where AAD = first 12 bytes verbatim.
+ * @purpose `.sno-station-core` AES-256-GCM export bundle producer. Spec:
+ *   `openspec/changes/add-local-aes-encryption/specs/sno-station-core-export-format/spec.md`.
+ *   Layout: `magic(18) ‖ version(1) ‖ source_dek_fingerprint(4) ‖ nonce(12) ‖
+ *   ciphertext(N) ‖ tag(16)` where AAD is the complete header.
  */
 
 import { createCipheriv, randomBytes } from "node:crypto";
@@ -14,19 +14,19 @@ import { getDek } from "./dek.js";
 import { readManifestIfPresent } from "./manifest.js";
 import { dekFingerprint4 } from "./wrap.js";
 
-export const NODIX_MAGIC = Buffer.from("NODIX01", "ascii");
-export const NODIX_VERSION_V1 = 0x01;
-export const NODIX_HEADER_LEN = 12;
-export const NODIX_NONCE_LEN = 12;
-export const NODIX_TAG_LEN = 16;
+export const SNO_STATION_CORE_MAGIC = Buffer.from("SNO_STATION_CORE01", "ascii");
+export const SNO_STATION_CORE_VERSION_V1 = 0x01;
+export const SNO_STATION_CORE_HEADER_LEN = SNO_STATION_CORE_MAGIC.length + 1 + 4;
+export const SNO_STATION_CORE_NONCE_LEN = 12;
+export const SNO_STATION_CORE_TAG_LEN = 16;
 
 function buildHeader(fingerprint: Buffer): Buffer {
 	if (fingerprint.length !== 4) {
 		throw new Error(`source_dek_fingerprint must be 4 bytes, got ${fingerprint.length}`);
 	}
 	const versionByte = Buffer.alloc(1);
-	versionByte[0] = NODIX_VERSION_V1;
-	return Buffer.concat([NODIX_MAGIC, versionByte, fingerprint]);
+	versionByte[0] = SNO_STATION_CORE_VERSION_V1;
+	return Buffer.concat([SNO_STATION_CORE_MAGIC, versionByte, fingerprint]);
 }
 
 async function tarballRegisteredDbs(): Promise<Buffer> {
@@ -63,7 +63,7 @@ export async function exportEncrypted(targetPath: string): Promise<void> {
 	const header = buildHeader(fp);
 	const plaintext = await tarballRegisteredDbs();
 
-	const nonce = randomBytes(NODIX_NONCE_LEN);
+	const nonce = randomBytes(SNO_STATION_CORE_NONCE_LEN);
 	const cipher = createCipheriv("aes-256-gcm", dek, nonce);
 	cipher.setAAD(header);
 	const ciphertext = Buffer.concat([cipher.update(plaintext), cipher.final()]);

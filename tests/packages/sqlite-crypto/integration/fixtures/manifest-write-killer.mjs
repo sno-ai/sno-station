@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
- * Fixture for task 2.7. Calls into @snoai/nodix-crypto using the production
- * env hooks (XDG_CONFIG_HOME, NODIX_KEYCHAIN_SERVICE, NODIX_CRASH_AFTER, NODIX_DB_PATH)
- * and lets the production code's NODIX_CRASH_AFTER fault-injector terminate
+ * Fixture for task 2.7. Calls into @snoai/sno-station-core-crypto using the production
+ * env hooks (XDG_CONFIG_HOME, SNO_STATION_CORE_KEYCHAIN_SERVICE, SNO_STATION_CORE_CRASH_AFTER, SNO_STATION_CORE_DB_PATH)
+ * and lets the production code's SNO_STATION_CORE_CRASH_AFTER fault-injector terminate
  * the process at the named transition point.
  *
  * The actual crash hook is implemented inside the production package (M1
@@ -13,15 +13,15 @@
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 
-const dbPath = process.env.NODIX_DB_PATH;
+const dbPath = process.env.SNO_STATION_CORE_DB_PATH;
 if (!dbPath) {
-	console.error("NODIX_DB_PATH must be set");
+	console.error("SNO_STATION_CORE_DB_PATH must be set");
 	process.exit(2);
 }
 
 mkdirSync(dirname(dbPath), { recursive: true });
 
-const { getDek, openEncryptedDb } = await import("@snoai/nodix-crypto");
+const { getDek, openEncryptedDb } = await import("@snoai/sno-station-core-crypto");
 
 const dek = await getDek();
 const db = openEncryptedDb(dbPath, dek);

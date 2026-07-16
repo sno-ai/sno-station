@@ -126,9 +126,9 @@ function emitFallbackWarning(): void {
 	warnedFallback = true;
 	const { keyFile } = resolveConfigPaths();
 	process.stderr.write(
-		`[nodix] WARN: OS keychain unavailable. Falling back to ${keyFile} (mode 0600).\n` +
-			`[nodix]      Encryption is on, but the DEK is now protected only by file-system permissions.\n` +
-			`[nodix]      To upgrade: run \`nodix lock --set-passphrase\`.\n`,
+		`[sno-station-core] WARN: OS keychain unavailable. Falling back to ${keyFile} (mode 0600).\n` +
+			`[sno-station-core]      Encryption is on, but the DEK is now protected only by file-system permissions.\n` +
+			`[sno-station-core]      To upgrade: run \`sno-station-core lock --set-passphrase\`.\n`,
 	);
 }
 
@@ -136,14 +136,14 @@ function emitRemovePassphraseCrashWarning(): void {
 	if (warnedRemoveCrash) return;
 	warnedRemoveCrash = true;
 	process.stderr.write(
-		`[nodix] WARN: detected an interrupted \`--remove-passphrase\`. Re-running it is recommended.\n`,
+		`[sno-station-core] WARN: detected an interrupted \`--remove-passphrase\`. Re-running it is recommended.\n`,
 	);
 }
 
 async function promptPassphrase(): Promise<Buffer> {
-	const useStdin = process.env["NODIX_PASSPHRASE_STDIN"] === "1";
+	const useStdin = process.env["SNO_STATION_CORE_PASSPHRASE_STDIN"] === "1";
 	if (!useStdin && process.stdin.isTTY) {
-		const line = await readHiddenLineFromTty("Enter nodix passphrase: ");
+		const line = await readHiddenLineFromTty("Enter sno-station-core passphrase: ");
 		return Buffer.from(line, "utf8");
 	}
 	const rl = createInterface({
@@ -151,7 +151,7 @@ async function promptPassphrase(): Promise<Buffer> {
 		output: process.stderr,
 		terminal: false,
 	});
-	process.stderr.write("Enter nodix passphrase: ");
+	process.stderr.write("Enter sno-station-core passphrase: ");
 	try {
 		const line = await new Promise<string>((resolve, reject) => {
 			let settled = false;
@@ -310,7 +310,7 @@ export async function getDek(): Promise<Dek> {
 
 /**
  * Recovery-only DEK resolver — skips the marker-without-manifest gate.
- * Internal use by `nodix lock --rebuild-manifest`. Does not populate the
+ * Internal use by `sno-station-core lock --rebuild-manifest`. Does not populate the
  * shared dekPromise cache (the production gate is still authoritative for
  * normal callers).
  */

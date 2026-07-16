@@ -1,5 +1,5 @@
 import { existsSync, readFileSync, unlinkSync } from "node:fs";
-import { CanaryMismatch, getDek, openEncryptedDb } from "@snoai/nodix-crypto";
+import { CanaryMismatch, getDek, openEncryptedDb } from "@snoai/sno-station-core-crypto";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { makeTestEnv, type TestEnv, uniqueDbPath } from "../_helpers.ts";
 
@@ -41,7 +41,7 @@ describe("openEncryptedDb — manifest recovery", () => {
 		const dbPath = uniqueDbPath(env, "bad-canary");
 
 		const db = openEncryptedDb(dbPath, dek);
-		db.exec("UPDATE _nodix_canary SET sentinel = 'wrong'");
+		db.exec("UPDATE _sno_station_core_canary SET sentinel = 'wrong'");
 		db.close();
 
 		unlinkSync(env.manifestFile);

@@ -9,7 +9,7 @@
 
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
-import { getDek, openEncryptedDb } from "@snoai/nodix-crypto";
+import { getDek, openEncryptedDb } from "@snoai/sno-station-core-crypto";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { makeTestEnv, type TestEnv, uniqueDbPath } from "../_helpers.ts";
 
