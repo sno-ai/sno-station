@@ -9,6 +9,7 @@ import {
 	ChainUnavailableError,
 } from "./errors.js";
 import { ensureDir } from "./fs-utils.js";
+import { logger } from "./log.js";
 import type {
 	AgentId,
 	ConsentValue,
@@ -24,6 +25,9 @@ const GENESIS = "GENESIS";
 const MAX_CHAIN_RETRIES = 3;
 const RETENTION_MAX_BYTES = 100 * 1024 * 1024;
 const RETENTION_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+const CHAIN_FORENSIC_CLOSED_EPOCHS = 16;
+const CHAIN_RETENTION_BATCH_SIZE = 2_000;
+const CHAIN_RETENTION_SCAN_LIMIT = CHAIN_RETENTION_BATCH_SIZE * 2;
 const MAX_PENDING_ATTEMPTS = 100;
 const QUARANTINE_MAX_ROWS = 1_000;
 const QUARANTINE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
@@ -97,6 +101,22 @@ interface RowIdRow {
 	rowid: number;
 }
 
+interface ChainRetentionKey {
+	machine_id: string;
+	agent_id: AgentId;
+	chain_epoch: number;
+}
+
+interface ChainRetentionScanRow extends ChainRetentionKey {
+	eligible: 0 | 1;
+}
+
+interface CheckpointRow {
+	busy: number;
+	log: number;
+	checkpointed: number;
+}
+
 interface EventRowRef {
 	rowid: number;
 	event_id: string;
@@ -144,21 +164,96 @@ interface ChainStateRow {
 
 export type ChainRecoveryState = "reseed_required" | "retired";
 
-export interface QueueStats {
+export interface BufferStorageMetrics {
+	logicalBytes: number;
+	physicalBytes: number;
+	walBytes: number;
+	freelistPages: number;
+	freelistBytes: number;
+	freelistRatio: number;
+	remainingEpochs: number;
+	databaseSizeBytes: number;
+}
+
+type PageStorageMetrics = Omit<BufferStorageMetrics, "remainingEpochs">;
+
+export interface RetentionReport extends BufferStorageMetrics {
+	deletedEvents: number;
+	deletedChainTail: number;
+	deletedChainState: number;
+	deletedChainRetry: number;
+	maintenanceDurationMs: number;
+	lastCompactionAtMs: null;
+	compactionReason: "not_run";
+}
+
+export interface QueueStats extends BufferStorageMetrics {
 	activeChainRecoveryCount: number;
 	activeChainRecoveryReason: string | null;
 	pendingCount: number;
 	oldestPendingAgeMs: number;
 	maxAttempts: number;
 	quarantinedCount: number;
-	databaseSizeBytes: number;
 	latestQuarantineReason: string | null;
 }
+
+const CHAIN_RETENTION_ELIGIBILITY_SQL = `CASE WHEN
+	EXISTS (
+		SELECT 1
+		FROM chain_tail AS newer
+		WHERE newer.machine_id = window.machine_id
+			AND newer.agent_id = window.agent_id
+			AND newer.chain_epoch > window.chain_epoch
+		ORDER BY newer.chain_epoch ASC
+		LIMIT 1 OFFSET ?
+	)
+	AND NOT EXISTS (
+		SELECT 1 FROM events AS event
+		WHERE event.machine_id = window.machine_id
+			AND event.agent_id = window.agent_id
+			AND event.chain_epoch = window.chain_epoch
+			AND event.shipped = 0
+	)
+	AND NOT EXISTS (
+		SELECT 1 FROM chain_state AS state
+		WHERE state.machine_id = window.machine_id
+			AND state.agent_id = window.agent_id
+			AND state.chain_epoch = window.chain_epoch
+	)
+	AND NOT EXISTS (
+		SELECT 1 FROM chain_retry AS retry
+		WHERE retry.machine_id = window.machine_id
+			AND retry.agent_id = window.agent_id
+			AND retry.chain_epoch = window.chain_epoch
+	)
+	THEN 1 ELSE 0 END AS eligible`;
+
+function buildChainRetentionScanSql(afterCursor: boolean): string {
+	const keyset = afterCursor
+		? "WHERE (machine_id, agent_id, chain_epoch) > (?, ?, ?)"
+		: "";
+	return `WITH scan_window AS MATERIALIZED (
+		SELECT machine_id, agent_id, chain_epoch
+		FROM chain_tail
+		${keyset}
+		ORDER BY machine_id, agent_id, chain_epoch
+		LIMIT ?
+	)
+	SELECT window.machine_id, window.agent_id, window.chain_epoch,
+		${CHAIN_RETENTION_ELIGIBILITY_SQL}
+	FROM scan_window AS window`;
+}
+
+export const CHAIN_RETENTION_SCAN_SQL = {
+	fromStart: buildChainRetentionScanSql(false),
+	afterCursor: buildChainRetentionScanSql(true),
+} as const;
 
 export type BufferSafeguardReason = "disk_size" | "max_attempts" | "queue_age";
 
 export class BufferStore {
 	private readonly db: InstanceType<typeof DatabaseConstructor>;
+	private chainRetentionCursor: ChainRetentionKey | null = null;
 
 	constructor(readonly path: string) {
 		ensureDir(dirname(path));
@@ -530,14 +625,34 @@ export class BufferStore {
 		maxBytes = RETENTION_MAX_BYTES,
 		maxAgeMs = RETENTION_MAX_AGE_MS,
 		now = Date.now(),
-	): number {
-		let pruned = 0;
+	): RetentionReport {
+		const startedAt = Date.now();
+		let deletedEvents = 0;
+		let deletedChainTail = 0;
+		let deletedChainState = 0;
+		let deletedChainRetry = 0;
+		let nextChainRetentionCursor = this.chainRetentionCursor;
 		if (this.databaseSizeBytes() > maxBytes) {
 			this.checkpointWal();
 		}
 		this.withImmediateTransaction(() => {
+			const scannedRows = this.scanChainRetentionInsideTx();
+			const deleteTail = this.db.prepare(
+				`DELETE FROM chain_tail
+				WHERE machine_id = ? AND agent_id = ? AND chain_epoch = ?`,
+			);
+			for (const row of scannedRows) {
+				if (row.eligible === 0 || deletedChainTail >= CHAIN_RETENTION_BATCH_SIZE) {
+					continue;
+				}
+				deletedChainTail += deleteTail.run(row.machine_id, row.agent_id, row.chain_epoch).changes;
+			}
+			nextChainRetentionCursor = greatestChainRetentionKey(scannedRows);
+			deletedChainState = this.deleteOrphanChainRowsInsideTx("chain_state");
+			deletedChainRetry = this.deleteOrphanChainRowsInsideTx("chain_retry");
+
 			const olderThan = now - maxAgeMs;
-			pruned += this.db
+			deletedEvents += this.db
 				.prepare("DELETE FROM events WHERE (shipped = 1 OR terminal = 1) AND created_at < ?")
 				.run(olderThan).changes;
 			if (this.logicalDataSizeBytes() <= maxBytes) {
@@ -557,17 +672,29 @@ export class BufferStore {
 			const batchSize = 50;
 			for (let index = 0; index < rows.length; index += batchSize) {
 				for (const row of rows.slice(index, index + batchSize)) {
-					pruned += deleteRow.run(row.rowid).changes;
+					deletedEvents += deleteRow.run(row.rowid).changes;
 				}
 				if (this.logicalDataSizeBytes() <= maxBytes) {
 					break;
 				}
 			}
 		});
-		if (pruned > 0) {
+		this.chainRetentionCursor = nextChainRetentionCursor;
+		if (deletedEvents + deletedChainTail + deletedChainState + deletedChainRetry > 0) {
 			this.checkpointWal();
 		}
-		return pruned;
+		const report: RetentionReport = {
+			deletedEvents,
+			deletedChainTail,
+			deletedChainState,
+			deletedChainRetry,
+			...this.readStorageMetrics(),
+			maintenanceDurationMs: Date.now() - startedAt,
+			lastCompactionAtMs: null,
+			compactionReason: "not_run",
+		};
+		logger.debug("sno observe buffer maintenance", { ...report });
+		return report;
 	}
 
 	pruneQuarantine(
@@ -599,6 +726,7 @@ export class BufferStore {
 	}
 
 	getQueueStats(now = Date.now()): QueueStats {
+		const storage = this.readStorageMetrics();
 		const aggregate = this.db
 			.prepare(
 				`SELECT
@@ -635,6 +763,7 @@ export class BufferStore {
 			)
 			.get() as ChainStateRow | undefined;
 		return {
+			...storage,
 			activeChainRecoveryCount: activeRecoveryCount,
 			activeChainRecoveryReason: activeRecovery?.reason ?? null,
 			pendingCount: aggregate.pending_count,
@@ -642,7 +771,6 @@ export class BufferStore {
 				aggregate.oldest_created_at === null ? 0 : Math.max(0, now - aggregate.oldest_created_at),
 			maxAttempts: aggregate.max_attempts ?? 0,
 			quarantinedCount: this.countQuarantined(),
-			databaseSizeBytes: this.databaseSizeBytes(),
 			latestQuarantineReason: latest?.reason ?? null,
 		};
 	}
@@ -967,26 +1095,111 @@ export class BufferStore {
 		return pruned;
 	}
 
+	private scanChainRetentionInsideTx(): ChainRetentionScanRow[] {
+		if (this.chainRetentionCursor !== null) {
+			const rows = this.db
+				.prepare(CHAIN_RETENTION_SCAN_SQL.afterCursor)
+				.all(
+					this.chainRetentionCursor.machine_id,
+					this.chainRetentionCursor.agent_id,
+					this.chainRetentionCursor.chain_epoch,
+					CHAIN_RETENTION_SCAN_LIMIT,
+					CHAIN_FORENSIC_CLOSED_EPOCHS,
+				) as ChainRetentionScanRow[];
+			if (rows.length > 0) {
+				return rows;
+			}
+		}
+		return this.db
+			.prepare(CHAIN_RETENTION_SCAN_SQL.fromStart)
+			.all(CHAIN_RETENTION_SCAN_LIMIT, CHAIN_FORENSIC_CLOSED_EPOCHS) as ChainRetentionScanRow[];
+	}
+
+	private deleteOrphanChainRowsInsideTx(table: "chain_state" | "chain_retry"): number {
+		const rows = this.db
+			.prepare(
+				`SELECT child.machine_id, child.agent_id, child.chain_epoch
+				FROM ${table} AS child
+				WHERE NOT EXISTS (
+					SELECT 1 FROM chain_tail AS tail
+					WHERE tail.machine_id = child.machine_id
+						AND tail.agent_id = child.agent_id
+						AND tail.chain_epoch = child.chain_epoch
+				)
+				AND NOT EXISTS (
+					SELECT 1 FROM events AS event
+					WHERE event.machine_id = child.machine_id
+						AND event.agent_id = child.agent_id
+						AND event.chain_epoch = child.chain_epoch
+						AND event.shipped = 0
+				)
+				ORDER BY child.machine_id, child.agent_id, child.chain_epoch
+				LIMIT ?`,
+			)
+			.all(CHAIN_RETENTION_BATCH_SIZE) as ChainRetentionKey[];
+		const deleteRow = this.db.prepare(
+			`DELETE FROM ${table}
+			WHERE machine_id = ? AND agent_id = ? AND chain_epoch = ?`,
+		);
+		let deleted = 0;
+		for (const row of rows) {
+			deleted += deleteRow.run(row.machine_id, row.agent_id, row.chain_epoch).changes;
+		}
+		return deleted;
+	}
+
 	private databaseSizeBytes(): number {
-		return this.logicalDataSizeBytes() + fileSize(`${this.path}-wal`);
+		return this.readPageStorageMetrics().databaseSizeBytes;
 	}
 
 	private logicalDataSizeBytes(): number {
+		return this.readPageStorageMetrics().logicalBytes;
+	}
+
+	private readStorageMetrics(): BufferStorageMetrics {
+		return {
+			...this.readPageStorageMetrics(),
+			remainingEpochs: this.count("SELECT COUNT(*) AS count FROM chain_tail"),
+		};
+	}
+
+	private readPageStorageMetrics(): PageStorageMetrics {
 		const pageCount = this.db.prepare("PRAGMA page_count").get() as PragmaValueRow;
 		const pageSize = this.db.prepare("PRAGMA page_size").get() as PragmaValueRow;
 		const freelistCount = this.db.prepare("PRAGMA freelist_count").get() as PragmaValueRow;
-		const usedPages = Math.max(
-			0,
-			(pageCount.page_count ?? 0) - (freelistCount.freelist_count ?? 0),
-		);
-		return usedPages * (pageSize.page_size ?? 0);
+		const totalPages = pageCount.page_count ?? 0;
+		const pageSizeBytes = pageSize.page_size ?? 0;
+		const freelistPages = freelistCount.freelist_count ?? 0;
+		const logicalBytes = Math.max(0, totalPages - freelistPages) * pageSizeBytes;
+		const walBytes = fileSize(`${this.path}-wal`);
+		return {
+			logicalBytes,
+			physicalBytes: fileSize(this.path),
+			walBytes,
+			freelistPages,
+			freelistBytes: freelistPages * pageSizeBytes,
+			freelistRatio: totalPages === 0 ? 0 : freelistPages / totalPages,
+			databaseSizeBytes: logicalBytes + walBytes,
+		};
 	}
 
 	private checkpointWal(): void {
 		try {
-			this.db.pragma("wal_checkpoint(TRUNCATE)");
-		} catch {
-			// A concurrent reader can defer WAL truncation; the next prune will retry.
+			const result = this.db.pragma("wal_checkpoint(TRUNCATE)") as unknown;
+			const row = Array.isArray(result) ? result[0] : undefined;
+			if (!isCheckpointRow(row) || row.busy > 0 || row.checkpointed < row.log) {
+				logger.warnRateLimited(
+					"buffer-maintenance:checkpoint",
+					"sno observe buffer checkpoint deferred",
+					checkpointWarningContext(this.path, row),
+				);
+			}
+		} catch (error) {
+			logger.warnRateLimited(
+				"buffer-maintenance:checkpoint",
+				"sno observe buffer checkpoint deferred",
+				{ path: this.path, error: errorMessage(error) },
+			);
 		}
 	}
 
@@ -1011,6 +1224,63 @@ export class BufferStore {
 			throw error;
 		}
 	}
+}
+
+function greatestChainRetentionKey(rows: ChainRetentionScanRow[]): ChainRetentionKey | null {
+	let greatest: ChainRetentionKey | null = null;
+	for (const row of rows) {
+		if (greatest === null || compareChainRetentionKeys(row, greatest) > 0) {
+			greatest = {
+				machine_id: row.machine_id,
+				agent_id: row.agent_id,
+				chain_epoch: row.chain_epoch,
+			};
+		}
+	}
+	return greatest;
+}
+
+function compareChainRetentionKeys(left: ChainRetentionKey, right: ChainRetentionKey): number {
+	const machineOrder = compareSqliteText(left.machine_id, right.machine_id);
+	if (machineOrder !== 0) {
+		return machineOrder;
+	}
+	const agentOrder = compareSqliteText(left.agent_id, right.agent_id);
+	return agentOrder === 0 ? left.chain_epoch - right.chain_epoch : agentOrder;
+}
+
+function compareSqliteText(left: string, right: string): number {
+	return left < right ? -1 : left > right ? 1 : 0;
+}
+
+function isCheckpointRow(value: unknown): value is CheckpointRow {
+	if (!isRecord(value)) {
+		return false;
+	}
+	return (
+		typeof value["busy"] === "number" &&
+		typeof value["log"] === "number" &&
+		typeof value["checkpointed"] === "number"
+	);
+}
+
+function checkpointWarningContext(
+	path: string,
+	row: unknown,
+): { path: string; busy?: number; log_pages?: number; checkpointed_pages?: number; result?: string } {
+	if (!isCheckpointRow(row)) {
+		return { path, result: "missing_or_malformed" };
+	}
+	return {
+		path,
+		busy: row.busy,
+		log_pages: row.log,
+		checkpointed_pages: row.checkpointed,
+	};
+}
+
+function errorMessage(error: unknown): string {
+	return error instanceof Error ? error.message : String(error);
 }
 
 function fileSize(path: string): number {
