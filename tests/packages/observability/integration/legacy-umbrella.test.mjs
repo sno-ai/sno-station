@@ -585,7 +585,7 @@ describe("sno observe Node package", () => {
 						Number.MAX_SAFE_INTEGER,
 						24 * 60 * 60 * 1000,
 						Date.now() + 90_000_000,
-					),
+					).deletedEvents,
 					2,
 				);
 				assert.deepEqual(
