@@ -147,7 +147,7 @@ function checkBuffer(path: string): BufferCheckResult {
 				name: "buffer",
 				status:
 					safeguard === null && stats.activeChainRecoveryCount === 0 ? "ok" : "warn",
-				detail: `buffer reachable (queue_depth=${stats.pendingCount}/${totalEvents}; oldest_age_ms=${stats.oldestPendingAgeMs}; retry_count=${stats.maxAttempts}; quarantined_count=${stats.quarantinedCount}; latest_quarantine_reason=${quarantineReason}; active_chain_recovery_count=${stats.activeChainRecoveryCount}; active_chain_recovery_reason=${stats.activeChainRecoveryReason ?? "none"}; database_size_bytes=${stats.databaseSizeBytes}; safeguard=${safeguard ?? "none"}; ${walStatus})`,
+				detail: `buffer reachable (queue_depth=${stats.pendingCount}/${totalEvents}; oldest_age_ms=${stats.oldestPendingAgeMs}; retry_count=${stats.maxAttempts}; quarantined_count=${stats.quarantinedCount}; latest_quarantine_reason=${quarantineReason}; active_chain_recovery_count=${stats.activeChainRecoveryCount}; active_chain_recovery_reason=${stats.activeChainRecoveryReason ?? "none"}; database_size_bytes=${stats.databaseSizeBytes}; logical_bytes=${stats.logicalBytes}; physical_bytes=${stats.physicalBytes}; wal_bytes=${stats.walBytes}; freelist_pages=${stats.freelistPages}; freelist_bytes=${stats.freelistBytes}; freelist_ratio=${stats.freelistRatio}; remaining_epochs=${stats.remainingEpochs}; safeguard=${safeguard ?? "none"}; ${walStatus})`,
 				path,
 			},
 			pendingCount: stats.pendingCount,
