@@ -295,6 +295,67 @@ describe("buffer-store retention pruner", () => {
 		}
 	});
 
+	it("includes a retained WAL sidecar when projecting append capacity", () => {
+		const dir = mkdtempSync(join(tmpdir(), "sno-observe-wal-capacity-"));
+		const bufferPath = join(dir, "buffer.db");
+		const store = new BufferStore(bufferPath);
+		const reader = new DatabaseConstructor(bufferPath);
+		const writer = new DatabaseConstructor(bufferPath);
+		try {
+			store.append({
+				eventId: "wal-identify",
+				eventType: "agent.identify",
+				lane: "memory",
+				tsEdgeMs: 1,
+				consentLevel: "metadata-only",
+				redacted: false,
+				scope,
+				payload: validPayloads["agent.identify"],
+				terminal: false,
+			});
+			writer.exec("CREATE TABLE wal_pressure (payload BLOB NOT NULL)");
+			reader.exec("BEGIN");
+			reader.prepare("SELECT COUNT(*) AS count FROM events").get();
+			const insert = writer.prepare("INSERT INTO wal_pressure (payload) VALUES (zeroblob(?))");
+			const clear = writer.prepare("DELETE FROM wal_pressure");
+			let stats = store.getQueueStats();
+			for (let index = 0; stats.databaseSizeBytes < RETENTION_MAX_BYTES - 1024 * 1024; index += 1) {
+				assert.equal(index < 1_000, true, "failed to build bounded WAL pressure fixture");
+				insert.run(256 * 1024);
+				clear.run();
+				stats = store.getQueueStats();
+			}
+			assert.equal(stats.databaseSizeBytes < RETENTION_MAX_BYTES, true);
+			assert.equal(stats.logicalBytes < RETENTION_MAX_BYTES / 2, true);
+
+			assert.throws(
+				() =>
+					store.append({
+						eventId: "wal-over-cap",
+						eventType: "memory.write",
+						lane: "memory",
+						tsEdgeMs: 2,
+						consentLevel: "metadata-only",
+						redacted: false,
+						scope,
+						payload: {
+							...validPayloads["memory.write"],
+							padding: "x".repeat(2 * 1024 * 1024),
+						},
+						terminal: false,
+					}),
+				(error) => error?.code === "buffer_capacity",
+			);
+			assert.equal(store.countAll(), 1);
+			reader.exec("ROLLBACK");
+		} finally {
+			writer.close();
+			reader.close();
+			store.close();
+			rmSync(dir, { recursive: true, force: true });
+		}
+	});
+
 	it("separate SQLite connections recheck capacity after the first append commits", () => {
 		const dir = mkdtempSync(join(tmpdir(), "sno-observe-capacity-race-"));
 		const bufferPath = join(dir, "buffer.db");
