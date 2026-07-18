@@ -2,9 +2,12 @@ export interface LogContext {
 	[key: string]: string | number | boolean | null | undefined;
 }
 
+const FAILURE_LOG_INTERVAL_MS = 60 * 60 * 1_000;
+
 export class ObserveLogger {
 	private degraded = false;
 	private lastError: string | null = null;
+	private readonly failureLogTimes = new Map<string, number>();
 
 	debug(message: string, context: LogContext = {}): void {
 		const { SNO_OBSERVE_LOG: logLevel } = process.env;
@@ -21,10 +24,20 @@ export class ObserveLogger {
 		this.write("warn", message, context);
 	}
 
+	warnRateLimited(key: string, message: string, context: LogContext = {}): void {
+		this.writeRateLimited("warn", key, message, context);
+	}
+
 	error(message: string, context: LogContext = {}): void {
 		this.degraded = true;
 		this.lastError = message;
 		this.write("error", message, context);
+	}
+
+	errorRateLimited(key: string, message: string, context: LogContext = {}): void {
+		this.degraded = true;
+		this.lastError = message;
+		this.writeRateLimited("error", key, message, context);
 	}
 
 	getServiceDegraded(): boolean {
@@ -52,9 +65,33 @@ export class ObserveLogger {
 			}
 			safeContext[key] = value;
 		}
-		process.stderr.write(
-			`${JSON.stringify({ ts: new Date().toISOString(), level, message, ...safeContext })}\n`,
-		);
+		try {
+			process.stderr.write(
+				`${JSON.stringify({ ts: new Date().toISOString(), level, message, ...safeContext })}\n`,
+			);
+		} catch {}
+	}
+
+	private writeRateLimited(
+		level: "warn" | "error",
+		key: string,
+		message: string,
+		context: LogContext,
+	): void {
+		const now = Date.now();
+		const last = this.failureLogTimes.get(key);
+		if (last !== undefined && now - last < FAILURE_LOG_INTERVAL_MS) {
+			return;
+		}
+		if (this.failureLogTimes.size >= 1_000) {
+			const oldestKey = this.failureLogTimes.keys().next().value;
+			if (typeof oldestKey === "string") {
+				this.failureLogTimes.delete(oldestKey);
+			}
+		}
+		this.failureLogTimes.delete(key);
+		this.failureLogTimes.set(key, now);
+		this.write(level, message, context);
 	}
 }
 

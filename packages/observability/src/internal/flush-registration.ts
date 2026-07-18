@@ -28,7 +28,6 @@ interface RegisterBeforeFlushResult {
 const TERMINAL_REGISTRATION_CODES = new Set([
 	"claimed_user_requires_auth",
 	"invalid_request",
-	"machine_already_registered",
 	"machine_registration_identity_mismatch",
 	"machine_secret_conflict",
 	"machine_secret_mismatch",
@@ -54,6 +53,12 @@ export async function registerBeforeFlush(
 		}
 		return null;
 	} catch (error) {
+		if (isAlreadyRegistered(error)) {
+			if (options.machineRegistrationCache !== undefined) {
+				options.machineRegistrationCache.registered = true;
+			}
+			return null;
+		}
 		const terminalCode = terminalRegistrationCode(error);
 		if (terminalCode !== undefined) {
 			const terminal = quarantineRows(store, rows, terminalCode, error);
@@ -64,11 +69,24 @@ export async function registerBeforeFlush(
 			});
 			return { shipped: 0, terminal, retryable: 0 };
 		}
-		logger.warn("sno observe machine registration failed; will retry", {
+		const firstRow = rows[0];
+		if (firstRow !== undefined) {
+			store.incrementAttempts(firstRow.rowid);
+		}
+		logger.warnRateLimited(`registration:${errorMessage(error)}`, "sno observe machine registration failed; will retry", {
 			error: errorMessage(error),
 		});
-		return { shipped: 0, terminal: 0, retryable: rows.length, retryAfterMs: 5_000 };
+		return {
+			shipped: 0,
+			terminal: 0,
+			retryable: rows.length,
+			retryAfterMs: registrationRetryDelay((firstRow?.attempts ?? 0) + 1),
+		};
 	}
+}
+
+function isAlreadyRegistered(error: unknown): boolean {
+	return error instanceof SnoObserveError && error.code === "machine_already_registered";
 }
 
 function terminalRegistrationCode(error: unknown): string | undefined {
@@ -87,9 +105,16 @@ function quarantineRows(
 	const body = JSON.stringify({ error: code, message: errorMessage(error) });
 	let terminal = 0;
 	for (const row of rows) {
-		terminal += store.quarantineEpochSuffix(row, 409, body);
+		terminal += store.quarantineEpochSuffix(row, 409, code, body, "retired");
 	}
 	return terminal;
+}
+
+function registrationRetryDelay(attempt: number): number {
+	if (attempt >= 100) {
+		return 15 * 60 * 1_000;
+	}
+	return Math.min(5_000 * 2 ** Math.min(Math.max(0, attempt - 1), 3), 30_000);
 }
 
 function errorMessage(error: unknown): string {

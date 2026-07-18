@@ -47,6 +47,18 @@ export class ChainContentionError extends SnoObserveError {
 	}
 }
 
+export class ChainUnavailableError extends SnoObserveError {
+	constructor(readonly state: "reseed_required" | "retired") {
+		super("chain_unavailable", `chain cannot accept events while ${state}`);
+	}
+}
+
+export class BufferCapacityError extends SnoObserveError {
+	constructor() {
+		super("buffer_capacity", "event would exceed the sender buffer capacity");
+	}
+}
+
 export class TransportError extends SnoObserveError {
 	constructor(message: string) {
 		super("transport_error", message);
