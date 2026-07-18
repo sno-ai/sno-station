@@ -903,7 +903,7 @@ export class BufferStore {
 			const serialized = serializeEnvelope(envelope);
 			const pageSize = this.db.prepare("PRAGMA page_size").get() as PragmaValueRow;
 			const projectedBytes =
-				this.logicalDataSizeBytes() +
+				this.databaseSizeBytes() +
 				Buffer.byteLength(serialized, "utf8") +
 				2 * (pageSize.page_size ?? 4_096);
 			if (projectedBytes > RETENTION_MAX_BYTES) {
