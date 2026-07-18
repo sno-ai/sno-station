@@ -4,7 +4,12 @@ import { BufferStore } from "./buffer-store.js";
 import { ConsentStore } from "./consent.js";
 import { type ClaimOptions, type ClaimResult, claimMachine } from "./device-claim.js";
 import { createDoctorReport } from "./doctor.js";
-import { InvalidEventPayloadError } from "./errors.js";
+import {
+	BufferCapacityError,
+	ChainSeedError,
+	ChainUnavailableError,
+	InvalidEventPayloadError,
+} from "./errors.js";
 import { type ExportOptions, exportEvents } from "./export.js";
 import { type DrainResult, FlushEngine, type FlushResult, SCHEDULE_FLUSH_DELAY_MS } from "./flush.js";
 import { sha256Hex } from "./hash.js";
@@ -75,24 +80,47 @@ export class SnoObserveRuntime {
 			const identity = bootstrapIdentity(this.env());
 			const consent = this.consentStore().get();
 			const store = this.getStore();
-			const chainEpoch = store.getCurrentEpoch(identity.machine_uuid, parsed.agentId);
+			store.pruneRetention();
+			const safeguard = store.getAdmissionSafeguard(identity.machine_uuid, parsed.agentId);
+			if (safeguard !== null) {
+				const stats = store.getQueueStats();
+				logger.errorRateLimited(`buffer-safeguard:${safeguard}`, "sno observe buffer safeguard active", {
+					safeguard,
+					queue_depth: stats.pendingCount,
+					oldest_age_ms: stats.oldestPendingAgeMs,
+					retry_count: stats.maxAttempts,
+					quarantined_count: stats.quarantinedCount,
+					database_size_bytes: stats.databaseSizeBytes,
+				});
+				const result: EmitResult = { accepted: false, eventId, reason: "buffer_safeguard" };
+				this.notify(parsed.eventType, result);
+				this.getFlushEngine().schedule(SCHEDULE_FLUSH_DELAY_MS);
+				return result;
+			}
+			let chainEpoch = store.getCurrentEpoch(identity.machine_uuid, parsed.agentId);
+			const recoveryState = store.getChainRecoveryState(
+				identity.machine_uuid,
+				parsed.agentId,
+				chainEpoch,
+			);
+			if (recoveryState === "retired") {
+				const result: EmitResult = { accepted: false, eventId, reason: "chain_retired" };
+				this.notify(parsed.eventType, result);
+				return result;
+			}
+			if (recoveryState === "reseed_required") {
+				chainEpoch = store.nextEpoch(identity.machine_uuid, parsed.agentId);
+				if (parsed.eventType !== "agent.identify") {
+					this.ensureAgentIdentify(identity, parsed.agentId, parsed.lane, consent, chainEpoch);
+					chainEpoch = store.getCurrentEpoch(identity.machine_uuid, parsed.agentId);
+				}
+			}
 			if (
+				recoveryState === null &&
 				parsed.eventType !== "agent.identify" &&
 				!store.hasTail(identity.machine_uuid, parsed.agentId, chainEpoch)
 			) {
-				this.appendPrepared({
-					identity,
-					agentId: parsed.agentId,
-					eventId: createUUIDv7(),
-					eventType: "agent.identify",
-					lane: parsed.lane,
-					tsEdgeMs: Date.now(),
-					consent,
-					payload: agentIdentifyPayload(identity, parsed.agentId, {}, this.options),
-					scope: {},
-					chainEpoch,
-					terminal: consent === "off",
-				});
+				this.ensureAgentIdentify(identity, parsed.agentId, parsed.lane, consent, chainEpoch);
 			}
 			const terminal = consent === "off" && parsed.eventType !== "consent.change";
 			const appended = this.appendPrepared({
@@ -123,7 +151,47 @@ export class SnoObserveRuntime {
 				this.scheduleFlush();
 			}
 			return result;
+		}).catch((error: unknown) => {
+			if (error instanceof BufferCapacityError) {
+				const result: EmitResult = { accepted: false, eventId, reason: "buffer_safeguard" };
+				this.notify(parsed.eventType, result);
+				return result;
+			}
+			if (error instanceof ChainUnavailableError) {
+				const result: EmitResult = { accepted: false, eventId, reason: "chain_retired" };
+				this.notify(parsed.eventType, result);
+				return result;
+			}
+			throw error;
 		});
+	}
+
+	private ensureAgentIdentify(
+		identity: Identity,
+		agentId: AgentId,
+		lane: EventLane,
+		consent: ConsentValue,
+		chainEpoch: number,
+	): void {
+		try {
+			this.appendPrepared({
+				identity,
+				agentId,
+				eventId: createUUIDv7(),
+				eventType: "agent.identify",
+				lane,
+				tsEdgeMs: Date.now(),
+				consent,
+				payload: agentIdentifyPayload(identity, agentId, {}, this.options),
+				scope: {},
+				chainEpoch,
+				terminal: consent === "off",
+			});
+		} catch (error) {
+			if (!(error instanceof ChainSeedError)) {
+				throw error;
+			}
+		}
 	}
 
 	async flush(

@@ -10,7 +10,10 @@ import {
 	BufferStore,
 	decodeEnvelope,
 } from "../../../../packages/sno-observe/dist/internal/buffer-store.js";
-import { FlushEngine } from "../../../../packages/sno-observe/dist/internal/flush.js";
+import {
+	FlushEngine,
+	flushPending,
+} from "../../../../packages/sno-observe/dist/internal/flush.js";
 import { bootstrapIdentity } from "../../../../packages/sno-observe/dist/internal/identity.js";
 import { SnoObserveRuntime } from "../../../../packages/sno-observe/dist/internal/runtime.js";
 import { parseEventInput } from "../../../../packages/sno-observe/dist/internal/schemas.js";
@@ -302,6 +305,36 @@ describe("flush 3-state machine", () => {
 		}
 	});
 
+	it("an already-registered response does not quarantine pending events", async () => {
+		const t = tempEnv();
+		const store = new BufferStore(t.env.SNO_BUFFER_PATH);
+		const identity = bootstrapIdentity(t.env);
+		seedIdentify(store);
+		let eventCalls = 0;
+		const fakeFetch = async (url, init) => {
+			if (String(url).endsWith("/api/v1/identity/register-machine")) {
+				return new Response(JSON.stringify({ error: "machine_already_registered" }), {
+					status: 409,
+				});
+			}
+			assert.equal(init.headers.Authorization, `Bearer ${identity.machine_secret}`);
+			eventCalls += 1;
+			return new Response(JSON.stringify({ receipt_id: "r" }), { status: 202 });
+		};
+		const engine = new FlushEngine(store, () => identity, () => "https://sno.test", () => t.env);
+		try {
+			const result = await engine.flush({ identity, env: t.env, fetch: fakeFetch });
+			assert.equal(result.shipped, 1);
+			assert.equal(result.terminal, 0);
+			assert.equal(eventCalls, 1);
+			assert.equal(store.countPending(), 0);
+		} finally {
+			engine.dispose();
+			store.close();
+			rmSync(t.dir, { recursive: true, force: true });
+		}
+	});
+
 	it("re-registers after event auth rejection invalidates the registration cache", async () => {
 		const t = tempEnv();
 		const store = new BufferStore(t.env.SNO_BUFFER_PATH);
@@ -331,24 +364,31 @@ describe("flush 3-state machine", () => {
 			() => identity,
 			() => "https://sno.test",
 			() => t.env,
+			() => fakeFetch,
 		);
+		const random = mock.method(Math, "random", () => 0);
+		mock.timers.enable({ apis: ["setTimeout", "Date"] });
 		try {
 			const first = await engine.flush({
 				identity,
 				env: t.env,
 				fetch: fakeFetch,
 			});
-			const second = await engine.flush({
+			const blocked = await engine.flush({
 				identity,
 				env: t.env,
 				fetch: fakeFetch,
 			});
+			mock.timers.tick(5_000);
+			await waitImmediateFlushDone(() => eventCalls === 2);
 
 			assert.equal(first.retryable, 1);
-			assert.equal(second.shipped, 1);
+			assert.equal(blocked.retryable, 1);
 			assert.equal(registrationCalls, 2);
 		} finally {
 			engine.dispose();
+			mock.timers.reset();
+			random.mock.restore();
 			store.close();
 			rmSync(t.dir, { recursive: true, force: true });
 		}
@@ -584,6 +624,740 @@ describe("flush 3-state machine", () => {
 			engine.dispose();
 			process.once = originalOnce;
 			process.off = originalOff;
+			store.close();
+			rmSync(t.dir, { recursive: true, force: true });
+		}
+	});
+
+	it("Retry-After suppresses resends until the deadline", async () => {
+		const t = tempEnv();
+		const store = new BufferStore(t.env.SNO_BUFFER_PATH);
+		const identity = bootstrapIdentity(t.env);
+		seedIdentify(store);
+		let eventCalls = 0;
+		const fakeFetch = async (url, init) => {
+			if (String(url).endsWith("/api/v1/identity/register-machine")) {
+				return registerMachineResponse(init);
+			}
+			eventCalls += 1;
+			if (eventCalls === 1) {
+				return new Response(JSON.stringify({ error: "rate_limited" }), {
+					status: 429,
+					headers: { "Content-Type": "application/json", "Retry-After": "60" },
+				});
+			}
+			return new Response(JSON.stringify({ receipt_id: "r" }), { status: 202 });
+		};
+		const engine = new FlushEngine(
+			store,
+			() => identity,
+			() => "https://sno.test",
+			() => t.env,
+			() => fakeFetch,
+		);
+		const random = mock.method(Math, "random", () => 0);
+		mock.timers.enable({ apis: ["setTimeout", "Date"] });
+		try {
+			const first = await engine.flush({ identity, env: t.env, fetch: fakeFetch });
+			assert.equal(first.retryable, 1);
+			assert.equal(eventCalls, 1);
+			assert.equal(store.getRetryDelay(0), 60_000);
+			const forced = await engine.flush({ identity, env: t.env, fetch: fakeFetch, force: true });
+			assert.equal(forced.retryable, 1);
+			assert.equal(eventCalls, 1);
+			mock.timers.tick(59_999);
+			await new Promise((resolve) => setImmediate(resolve));
+			assert.equal(eventCalls, 1);
+			mock.timers.tick(1);
+			await waitImmediateFlushDone(() => eventCalls === 2);
+			assert.equal(store.countPending(), 0);
+		} finally {
+			engine.dispose();
+			mock.timers.reset();
+			random.mock.restore();
+			store.close();
+			rmSync(t.dir, { recursive: true, force: true });
+		}
+	});
+
+	it("an early timer wake reschedules a persisted retry deadline after restart", async () => {
+		const t = tempEnv();
+		const store = new BufferStore(t.env.SNO_BUFFER_PATH);
+		const identity = bootstrapIdentity(t.env);
+		seedIdentify(store);
+		let eventCalls = 0;
+		const fakeFetch = async (url, init) => {
+			if (String(url).endsWith("/api/v1/identity/register-machine")) {
+				return registerMachineResponse(init);
+			}
+			eventCalls += 1;
+			return eventCalls === 1
+				? new Response(JSON.stringify({ error: "unavailable" }), { status: 500 })
+				: new Response(JSON.stringify({ receipt_id: "r" }), { status: 202 });
+		};
+		const engine = new FlushEngine(
+			store,
+			() => identity,
+			() => "https://sno.test",
+			() => t.env,
+			() => fakeFetch,
+		);
+		const random = mock.method(Math, "random", () => 0);
+		mock.timers.enable({ apis: ["setTimeout", "Date"] });
+		try {
+			store.deferRetriesUntil(60_000);
+			engine.schedule(5_000);
+			mock.timers.tick(5_000);
+			await new Promise((resolve) => setImmediate(resolve));
+			assert.equal(eventCalls, 0);
+			mock.timers.tick(54_999);
+			await new Promise((resolve) => setImmediate(resolve));
+			assert.equal(eventCalls, 0);
+			mock.timers.tick(1);
+			await waitImmediateFlushDone(() => eventCalls === 1);
+			assert.equal(store.countPending(), 1);
+			mock.timers.tick(4_999);
+			await new Promise((resolve) => setImmediate(resolve));
+			assert.equal(eventCalls, 1);
+			mock.timers.tick(1);
+			await waitImmediateFlushDone(() => eventCalls === 2);
+			assert.equal(store.countPending(), 0);
+		} finally {
+			engine.dispose();
+			mock.timers.reset();
+			random.mock.restore();
+			store.close();
+			rmSync(t.dir, { recursive: true, force: true });
+		}
+	});
+
+	it("a chain-local retry does not block an independent agent chain", async () => {
+		const t = tempEnv();
+		const store = new BufferStore(t.env.SNO_BUFFER_PATH);
+		const identity = bootstrapIdentity(t.env);
+		seedIdentify(store);
+		appendMemoryWrite(store, 1);
+		const openclawScope = { ...scope, agent_id: "openclaw" };
+		store.append({
+			eventId: "openclaw-id",
+			eventType: "agent.identify",
+			lane: "memory",
+			tsEdgeMs: 2_000,
+			consentLevel: "metadata-only",
+			redacted: false,
+			scope: openclawScope,
+			payload: { ...validPayloads["agent.identify"], agent_id: "openclaw" },
+			terminal: false,
+		});
+		appendMemoryWrite(store, 2, openclawScope);
+		const submittedAgents = [];
+		const fakeFetch = async (url, init) => {
+			if (String(url).endsWith("/api/v1/identity/register-machine")) {
+				return registerMachineResponse(init);
+			}
+			const envelope = JSON.parse(String(init?.body));
+			submittedAgents.push(envelope.scope.agent_id);
+			if (envelope.scope.agent_id === "codex") {
+				return new Response(JSON.stringify({ code: "chain_predecessor_not_ready" }), {
+					status: 409,
+				});
+			}
+			return new Response(JSON.stringify({ receipt_id: envelope.event_id }), { status: 202 });
+		};
+		const engine = new FlushEngine(store, () => identity, () => "https://sno.test", () => t.env);
+		try {
+			const result = await engine.flush({ identity, env: t.env, fetch: fakeFetch });
+			assert.equal(result.retryable, 1);
+			assert.equal(result.shipped, 2);
+			assert.deepEqual(submittedAgents, ["codex", "openclaw", "openclaw"]);
+			assert.equal(store.getPending().every((row) => row.agent_id === "codex"), true);
+		} finally {
+			engine.dispose();
+			store.close();
+			rmSync(t.dir, { recursive: true, force: true });
+		}
+	});
+
+	it("an unknown client rejection blocks only its submitted chain", async () => {
+		const t = tempEnv();
+		const store = new BufferStore(t.env.SNO_BUFFER_PATH);
+		const identity = bootstrapIdentity(t.env);
+		seedIdentify(store);
+		const openclawScope = { ...scope, agent_id: "openclaw" };
+		store.append({
+			eventId: "openclaw-id",
+			eventType: "agent.identify",
+			lane: "memory",
+			tsEdgeMs: 2_000,
+			consentLevel: "metadata-only",
+			redacted: false,
+			scope: openclawScope,
+			payload: { ...validPayloads["agent.identify"], agent_id: "openclaw" },
+			terminal: false,
+		});
+		let codexCalls = 0;
+		let openclawCalls = 0;
+		const fakeFetch = async (url, init) => {
+			if (String(url).endsWith("/api/v1/identity/register-machine")) {
+				return registerMachineResponse(init);
+			}
+			const envelope = JSON.parse(String(init.body));
+			if (envelope.scope.agent_id === "codex") {
+				codexCalls += 1;
+				return new Response(JSON.stringify({ error: "future_client_contract" }), { status: 400 });
+			}
+			openclawCalls += 1;
+			return new Response(JSON.stringify({ receipt_id: "r" }), { status: 202 });
+		};
+		const engine = new FlushEngine(store, () => identity, () => "https://sno.test", () => t.env);
+		try {
+			const result = await engine.flush({ identity, env: t.env, fetch: fakeFetch });
+			assert.equal(result.retryable, 1);
+			assert.equal(result.shipped, 1);
+			assert.equal(codexCalls, 1);
+			assert.equal(openclawCalls, 1);
+			assert.equal(store.getRetryDelay(), 0);
+			assert.equal(store.getPending().every((row) => row.agent_id === "codex"), true);
+		} finally {
+			engine.dispose();
+			store.close();
+			rmSync(t.dir, { recursive: true, force: true });
+		}
+	});
+
+	it("a chain-local delay cannot shorten a global Retry-After deadline", async () => {
+		const t = tempEnv();
+		const store = new BufferStore(t.env.SNO_BUFFER_PATH);
+		const identity = bootstrapIdentity(t.env);
+		seedIdentify(store);
+		store.append({
+			eventId: "openclaw-id",
+			eventType: "agent.identify",
+			lane: "memory",
+			tsEdgeMs: 2_000,
+			consentLevel: "metadata-only",
+			redacted: false,
+			scope: { ...scope, agent_id: "openclaw" },
+			payload: { ...validPayloads["agent.identify"], agent_id: "openclaw" },
+			terminal: false,
+		});
+		const now = mock.method(Date, "now", () => 1_000);
+		try {
+			const result = await flushPending(store, {
+				identity,
+				env: t.env,
+				fetch: async (url, init) => {
+					if (String(url).endsWith("/api/v1/identity/register-machine")) {
+						return registerMachineResponse(init);
+					}
+					const envelope = JSON.parse(String(init.body));
+					return envelope.scope.agent_id === "codex"
+						? new Response(JSON.stringify({ error: "future_client_contract" }), { status: 400 })
+						: new Response(JSON.stringify({ error: "rate_limited" }), {
+								status: 429,
+								headers: { "Retry-After": "3600" },
+							});
+				},
+			});
+			assert.equal(result.retryable, 2);
+			assert.equal(result.retryAfterMs, 3_600_000);
+			assert.equal(store.getRetryDelay(1_000), 3_600_000);
+			assert.equal(store.getNextChainRetryDelay(1_000), 5_000);
+		} finally {
+			now.mock.restore();
+			store.close();
+			rmSync(t.dir, { recursive: true, force: true });
+		}
+	});
+
+	it("a new independent chain preempts a long chain-only wake timer", async () => {
+		const t = tempEnv();
+		const store = new BufferStore(t.env.SNO_BUFFER_PATH);
+		const identity = bootstrapIdentity(t.env);
+		seedIdentify(store);
+		let openclawCalls = 0;
+		const fakeFetch = async (url, init) => {
+			if (String(url).endsWith("/api/v1/identity/register-machine")) {
+				return registerMachineResponse(init);
+			}
+			const envelope = JSON.parse(String(init.body));
+			if (envelope.scope.agent_id === "codex") {
+				return new Response(JSON.stringify({ error: "future_client_contract" }), {
+					status: 409,
+					headers: { "Retry-After": "3600" },
+				});
+			}
+			openclawCalls += 1;
+			return new Response(JSON.stringify({ receipt_id: "r" }), { status: 202 });
+		};
+		const engine = new FlushEngine(
+			store,
+			() => identity,
+			() => "https://sno.test",
+			() => t.env,
+			() => fakeFetch,
+		);
+		const random = mock.method(Math, "random", () => 0);
+		mock.timers.enable({ apis: ["setTimeout", "Date"] });
+		try {
+			assert.equal((await engine.flush({ identity, env: t.env, fetch: fakeFetch })).retryable, 1);
+			store.append({
+				eventId: "openclaw-id",
+				eventType: "agent.identify",
+				lane: "memory",
+				tsEdgeMs: 2_000,
+				consentLevel: "metadata-only",
+				redacted: false,
+				scope: { ...scope, agent_id: "openclaw" },
+				payload: { ...validPayloads["agent.identify"], agent_id: "openclaw" },
+				terminal: false,
+			});
+			engine.schedule(5_000);
+			mock.timers.tick(4_999);
+			await new Promise((resolve) => setImmediate(resolve));
+			assert.equal(openclawCalls, 0);
+			mock.timers.tick(1);
+			await waitImmediateFlushDone(() => openclawCalls === 1);
+			assert.equal(store.getPending().every((row) => row.agent_id === "codex"), true);
+		} finally {
+			engine.dispose();
+			mock.timers.reset();
+			random.mock.restore();
+			store.close();
+			rmSync(t.dir, { recursive: true, force: true });
+		}
+	});
+
+	it("ready backlog beyond a full batch is not delayed by another chain's long retry", async () => {
+		const t = tempEnv();
+		const store = new BufferStore(t.env.SNO_BUFFER_PATH);
+		const identity = bootstrapIdentity(t.env);
+		seedIdentify(store);
+		const openclawScope = { ...scope, agent_id: "openclaw" };
+		store.append({
+			eventId: "openclaw-id",
+			eventType: "agent.identify",
+			lane: "memory",
+			tsEdgeMs: 2_000,
+			consentLevel: "metadata-only",
+			redacted: false,
+			scope: openclawScope,
+			payload: { ...validPayloads["agent.identify"], agent_id: "openclaw" },
+			terminal: false,
+		});
+		for (let index = 1; index <= 100; index += 1) {
+			appendMemoryWrite(store, index, openclawScope);
+		}
+		let openclawCalls = 0;
+		const fakeFetch = async (url, init) => {
+			if (String(url).endsWith("/api/v1/identity/register-machine")) {
+				return registerMachineResponse(init);
+			}
+			const envelope = JSON.parse(String(init.body));
+			if (envelope.scope.agent_id === "codex") {
+				return new Response(JSON.stringify({ error: "future_client_contract" }), {
+					status: 409,
+					headers: { "Retry-After": "3600" },
+				});
+			}
+			openclawCalls += 1;
+			return new Response(JSON.stringify({ receipt_id: "r" }), { status: 202 });
+		};
+		const engine = new FlushEngine(
+			store,
+			() => identity,
+			() => "https://sno.test",
+			() => t.env,
+			() => fakeFetch,
+		);
+		const random = mock.method(Math, "random", () => 0);
+		mock.timers.enable({ apis: ["setTimeout", "Date"] });
+		try {
+			const first = await engine.flush({ identity, env: t.env, fetch: fakeFetch });
+			assert.equal(first.retryable, 1);
+			assert.equal(first.shipped, 99);
+			mock.timers.tick(5_000);
+			await waitImmediateFlushDone(() => openclawCalls === 101);
+			assert.equal(store.getPending().every((row) => row.agent_id === "codex"), true);
+		} finally {
+			engine.dispose();
+			mock.timers.reset();
+			random.mock.restore();
+			store.close();
+			rmSync(t.dir, { recursive: true, force: true });
+		}
+	});
+
+	it("doctor warns when events are pending and none have shipped", async () => {
+		const t = tempEnv();
+		const runtime = new SnoObserveRuntime({ env: t.env, cwd: t.dir });
+		try {
+			await runtime.emitParsed(memoryEvent(1));
+			const report = runtime.doctor();
+			assert.equal(report.last_ship.status, "warn");
+			assert.match(report.last_ship.detail, /2 event\(s\) pending/u);
+		} finally {
+			runtime.flushEngine?.dispose?.();
+			runtime.store?.close?.();
+			rmSync(t.dir, { recursive: true, force: true });
+		}
+	});
+
+	it("doctor warns about a current backlog after a prior successful shipment", async () => {
+		const t = tempEnv();
+		const runtime = new SnoObserveRuntime({ env: t.env, cwd: t.dir });
+		try {
+			await runtime.emitParsed(memoryEvent(1));
+			const store = new BufferStore(t.env.SNO_BUFFER_PATH);
+			try {
+				store.markShipped(store.getAllRows()[0].rowid);
+			} finally {
+				store.close();
+			}
+			const report = runtime.doctor();
+			assert.equal(report.last_ship.status, "warn");
+			assert.match(report.last_ship.detail, /1 event\(s\) pending/u);
+			assert.match(report.last_ship.detail, /1 previously shipped/u);
+		} finally {
+			runtime.flushEngine?.dispose?.();
+			runtime.store?.close?.();
+			rmSync(t.dir, { recursive: true, force: true });
+		}
+	});
+
+	it("doctor reports inaccessible storage and an invalid endpoint without throwing", () => {
+		const t = tempEnv();
+		const runtime = new SnoObserveRuntime({
+			env: {
+				...t.env,
+				SNO_BUFFER_PATH: t.dir,
+				SNO_OBSERVE_BASE_URL: "http://remote.example",
+			},
+			cwd: t.dir,
+		});
+		try {
+			const report = runtime.doctor();
+			assert.equal(report.buffer.status, "fail");
+			assert.equal(report.last_ship.status, "fail");
+			assert.match(report.last_ship.detail, /invalid observability endpoint/u);
+		} finally {
+			rmSync(t.dir, { recursive: true, force: true });
+		}
+	});
+
+	it("a second runtime cannot bypass a persisted Retry-After deadline", async () => {
+		const t = tempEnv();
+		let firstEventCalls = 0;
+		let secondEventCalls = 0;
+		const first = new SnoObserveRuntime({
+			env: t.env,
+			cwd: t.dir,
+			fetch: async (url, init) => {
+				if (String(url).endsWith("/api/v1/identity/register-machine")) {
+					return registerMachineResponse(init);
+				}
+				firstEventCalls += 1;
+				return new Response(JSON.stringify({ error: "rate_limited" }), {
+					status: 429,
+					headers: { "Retry-After": "60" },
+				});
+			},
+		});
+		const second = new SnoObserveRuntime({
+			env: t.env,
+			cwd: t.dir,
+			fetch: async (url, init) => {
+				if (String(url).endsWith("/api/v1/identity/register-machine")) {
+					return registerMachineResponse(init);
+				}
+				secondEventCalls += 1;
+				return new Response(JSON.stringify({ receipt_id: "unexpected" }), { status: 202 });
+			},
+		});
+		try {
+			await first.emitParsed(memoryEvent(1));
+			assert.equal((await first.flush()).retryable, 1);
+			assert.equal(firstEventCalls, 1);
+			assert.equal((await second.flush()).retryable, 1);
+			assert.equal(secondEventCalls, 0);
+		} finally {
+			await first.shutdown().catch(() => {});
+			await second.shutdown().catch(() => {});
+			rmSync(t.dir, { recursive: true, force: true });
+		}
+	});
+
+	it("a retry deadline written during lease acquisition is rechecked before delivery", async () => {
+		const t = tempEnv();
+		const store = new BufferStore(t.env.SNO_BUFFER_PATH);
+		const identity = bootstrapIdentity(t.env);
+		seedIdentify(store);
+		let retryChecks = 0;
+		let eventCalls = 0;
+		const retryDelay = mock.method(store, "getRetryDelay", () => {
+			retryChecks += 1;
+			return retryChecks === 1 ? 0 : 60_000;
+		});
+		try {
+			const result = await flushPending(store, {
+				identity,
+				env: t.env,
+				fetch: async () => {
+					eventCalls += 1;
+					return new Response(JSON.stringify({ receipt_id: "unexpected" }), { status: 202 });
+				},
+			});
+			assert.equal(result.retryable, 1);
+			assert.equal(result.retryAfterMs, 60_000);
+			assert.equal(eventCalls, 0);
+		} finally {
+			retryDelay.mock.restore();
+			store.close();
+			rmSync(t.dir, { recursive: true, force: true });
+		}
+	});
+
+	it("concurrent runtimes share one SQLite-backed in-flight lease", async () => {
+		const t = tempEnv();
+		let firstEventCalls = 0;
+		let secondEventCalls = 0;
+		let releaseEvent;
+		const eventResponse = new Promise((resolve) => {
+			releaseEvent = () => resolve(new Response(JSON.stringify({ receipt_id: "r" }), { status: 202 }));
+		});
+		const first = new SnoObserveRuntime({
+			env: t.env,
+			cwd: t.dir,
+			fetch: async (url, init) => {
+				if (String(url).endsWith("/api/v1/identity/register-machine")) {
+					return registerMachineResponse(init);
+				}
+				firstEventCalls += 1;
+				return eventResponse;
+			},
+		});
+		const second = new SnoObserveRuntime({
+			env: t.env,
+			cwd: t.dir,
+			fetch: async (url, init) => {
+				if (String(url).endsWith("/api/v1/identity/register-machine")) {
+					return registerMachineResponse(init);
+				}
+				secondEventCalls += 1;
+				return new Response(JSON.stringify({ receipt_id: "unexpected" }), { status: 202 });
+			},
+		});
+		try {
+			await first.emitParsed(memoryEvent(1));
+			const firstFlush = first.flush({ force: true });
+			await waitImmediateFlushDone(() => firstEventCalls === 1);
+			const concurrentResult = await second.flush({ force: true });
+			assert.equal(concurrentResult.retryable, 1);
+			assert.equal(secondEventCalls, 0);
+			const observer = new BufferStore(t.env.SNO_BUFFER_PATH);
+			try {
+				assert.equal(observer.getRetryDelay(), 0);
+			} finally {
+				observer.close();
+			}
+			releaseEvent();
+			const firstResult = await firstFlush;
+			assert.equal(firstResult.shipped, 2);
+			assert.equal(firstEventCalls, 2);
+		} finally {
+			await first.shutdown().catch(() => {});
+			await second.shutdown().catch(() => {});
+			rmSync(t.dir, { recursive: true, force: true });
+		}
+	});
+
+	it("repeated 500 responses back off from five to ten seconds", async () => {
+		const t = tempEnv();
+		const store = new BufferStore(t.env.SNO_BUFFER_PATH);
+		const identity = bootstrapIdentity(t.env);
+		seedIdentify(store);
+		let eventCalls = 0;
+		const fakeFetch = async (url, init) => {
+			if (String(url).endsWith("/api/v1/identity/register-machine")) {
+				return registerMachineResponse(init);
+			}
+			eventCalls += 1;
+			return eventCalls <= 2
+				? new Response(JSON.stringify({ error: "unavailable" }), { status: 500 })
+				: new Response(JSON.stringify({ receipt_id: "r" }), { status: 202 });
+		};
+		const engine = new FlushEngine(
+			store,
+			() => identity,
+			() => "https://sno.test",
+			() => t.env,
+			() => fakeFetch,
+		);
+		const random = mock.method(Math, "random", () => 0);
+		mock.timers.enable({ apis: ["setTimeout", "Date"] });
+		try {
+			assert.equal((await engine.flush({ identity, env: t.env, fetch: fakeFetch })).retryable, 1);
+			mock.timers.tick(4_999);
+			await new Promise((resolve) => setImmediate(resolve));
+			assert.equal(eventCalls, 1);
+			mock.timers.tick(1);
+			await waitImmediateFlushDone(() => eventCalls === 2);
+			mock.timers.tick(9_999);
+			await new Promise((resolve) => setImmediate(resolve));
+			assert.equal(eventCalls, 2);
+			mock.timers.tick(1);
+			await waitImmediateFlushDone(() => eventCalls === 3);
+			assert.equal(store.countPending(), 0);
+		} finally {
+			engine.dispose();
+			mock.timers.reset();
+			random.mock.restore();
+			store.close();
+			rmSync(t.dir, { recursive: true, force: true });
+		}
+	});
+
+	it("long Retry-After receives bounded positive jitter persisted to SQLite", async () => {
+		const t = tempEnv();
+		const store = new BufferStore(t.env.SNO_BUFFER_PATH);
+		const identity = bootstrapIdentity(t.env);
+		seedIdentify(store);
+		const fakeFetch = async (url, init) => {
+			if (String(url).endsWith("/api/v1/identity/register-machine")) {
+				return registerMachineResponse(init);
+			}
+			return new Response(JSON.stringify({ error: "rate_limited" }), {
+				status: 429,
+				headers: { "Retry-After": "60" },
+			});
+		};
+		const engine = new FlushEngine(
+			store,
+			() => identity,
+			() => "https://sno.test",
+			() => t.env,
+			() => fakeFetch,
+		);
+		const random = mock.method(Math, "random", () => 1);
+		mock.timers.enable({ apis: ["setTimeout", "Date"] });
+		try {
+			assert.equal((await engine.flush({ identity, env: t.env, fetch: fakeFetch })).retryable, 1);
+			assert.equal(store.getRetryDelay(0), 72_000);
+		} finally {
+			engine.dispose();
+			mock.timers.reset();
+			random.mock.restore();
+			store.close();
+			rmSync(t.dir, { recursive: true, force: true });
+		}
+	});
+
+	it("scheduled flush failures are caught instead of becoming unhandled rejections", async () => {
+		const t = tempEnv();
+		const store = new BufferStore(t.env.SNO_BUFFER_PATH);
+		const identity = bootstrapIdentity(t.env);
+		const engine = new FlushEngine(store, () => identity, () => "https://sno.test", () => t.env);
+		const writes = [];
+		const write = mock.method(process.stderr, "write", (chunk) => {
+			writes.push(String(chunk));
+			return true;
+		});
+		try {
+			store.close();
+			engine.schedule(0);
+			await delay(20);
+			assert.equal(writes.join("").includes("sno observe scheduled flush failed"), true);
+		} finally {
+			engine.dispose();
+			write.mock.restore();
+			rmSync(t.dir, { recursive: true, force: true });
+		}
+	});
+
+	it("a transient scheduled flush exception re-arms without another emit", async () => {
+		const t = tempEnv();
+		const store = new BufferStore(t.env.SNO_BUFFER_PATH);
+		const identity = bootstrapIdentity(t.env);
+		seedIdentify(store);
+		let retryChecks = 0;
+		let eventCalls = 0;
+		const originalRetryDelay = store.getRetryDelay.bind(store);
+		const retryDelay = mock.method(store, "getRetryDelay", (...args) => {
+			retryChecks += 1;
+			if (retryChecks === 1) {
+				throw new Error("transient sqlite busy");
+			}
+			return originalRetryDelay(...args);
+		});
+		const fakeFetch = async (url, init) => {
+			if (String(url).endsWith("/api/v1/identity/register-machine")) {
+				return registerMachineResponse(init);
+			}
+			eventCalls += 1;
+			return new Response(JSON.stringify({ receipt_id: "r" }), { status: 202 });
+		};
+		const engine = new FlushEngine(
+			store,
+			() => identity,
+			() => "https://sno.test",
+			() => t.env,
+			() => fakeFetch,
+		);
+		mock.timers.enable({ apis: ["setTimeout"] });
+		try {
+			engine.schedule(0);
+			mock.timers.tick(0);
+			await new Promise((resolve) => setImmediate(resolve));
+			assert.equal(eventCalls, 0);
+			mock.timers.tick(5_000);
+			await waitImmediateFlushDone(() => eventCalls === 1);
+			assert.equal(store.countPending(), 0);
+		} finally {
+			engine.dispose();
+			mock.timers.reset();
+			retryDelay.mock.restore();
+			store.close();
+			rmSync(t.dir, { recursive: true, force: true });
+		}
+	});
+
+	it("a successful full batch schedules the remaining backlog", async () => {
+		const t = tempEnv();
+		const store = new BufferStore(t.env.SNO_BUFFER_PATH);
+		const identity = bootstrapIdentity(t.env);
+		seedIdentify(store);
+		for (let index = 1; index <= 101; index += 1) {
+			appendMemoryWrite(store, index);
+		}
+		let eventCalls = 0;
+		const fakeFetch = async (url, init) => {
+			if (String(url).endsWith("/api/v1/identity/register-machine")) {
+				return registerMachineResponse(init);
+			}
+			eventCalls += 1;
+			return new Response(JSON.stringify({ receipt_id: `r_${eventCalls}` }), { status: 202 });
+		};
+		const engine = new FlushEngine(
+			store,
+			() => identity,
+			() => "https://sno.test",
+			() => t.env,
+			() => fakeFetch,
+		);
+		mock.timers.enable({ apis: ["setTimeout"] });
+		try {
+			const first = await engine.flush({ identity, env: t.env, fetch: fakeFetch });
+			assert.equal(first.shipped, 100);
+			assert.equal(store.countPending(), 2);
+			mock.timers.tick(4_999);
+			await new Promise((resolve) => setImmediate(resolve));
+			assert.equal(eventCalls, 100);
+			mock.timers.tick(1);
+			await waitImmediateFlushDone(() => store.countPending() === 0);
+			assert.equal(eventCalls, 102);
+		} finally {
+			engine.dispose();
+			mock.timers.reset();
 			store.close();
 			rmSync(t.dir, { recursive: true, force: true });
 		}

@@ -1,5 +1,10 @@
 import { createUUIDv7 } from "@snoai/common-core";
-import { type BufferStore, decodeEnvelope, type PendingRow } from "./buffer-store.js";
+import {
+	type BufferStore,
+	decodeEnvelope,
+	type PendingChain,
+	type PendingRow,
+} from "./buffer-store.js";
 import { type MachineRegistrationCache, registerBeforeFlush } from "./flush-registration.js";
 import { type EventPostResult, postEvent } from "./http.js";
 import { logger } from "./log.js";
@@ -26,6 +31,7 @@ export interface FlushResult {
 }
 
 interface RowFlushResult extends FlushResult {
+	retryScope?: "chain";
 	stopBatch?: boolean;
 }
 
@@ -36,17 +42,22 @@ export interface DrainResult {
 }
 
 const MAX_STAGNANT_DRAIN_STEPS = 100;
+const PERMANENT_PREDECESSOR_GAP_MS = 5 * 60 * 1_000;
+const MAX_RETRY_BACKOFF_MS = 30_000;
+const SAFEGUARD_RETRY_DELAY_MS = 15 * 60 * 1_000;
 
 export class FlushEngine {
 	private state: "idle" | "scheduled" | "flushing" = "idle";
 	private timer: ReturnType<typeof setTimeout> | null = null;
+	private timerDeadlineMs = 0;
+	private timerPreemptible = false;
 	private beforeExitInstalled = false;
 	private beforeExitHandler: (() => void) | null = null;
 	private activeFlush: Promise<FlushResult> | null = null;
 	private readonly machineRegistrationCache: MachineRegistrationCache = { registered: false };
 	private disposed = false;
-	private emittedDuringFlush = false;
 	private backoffMs = 5_000;
+	private retryNotBeforeMs = 0;
 
 	constructor(
 		private readonly store: BufferStore,
@@ -56,24 +67,49 @@ export class FlushEngine {
 		private readonly fetchProvider: () => typeof fetch | undefined = () => undefined,
 	) {}
 
-	schedule(delayMs: number): void {
+	schedule(delayMs: number, preemptible = false): void {
 		if (this.disposed) {
 			return;
 		}
 		if (this.state === "flushing") {
-			this.emittedDuringFlush = true;
 			return;
 		}
-		if (this.state !== "idle") {
-			return;
+		if (this.state === "scheduled") {
+			const requestedDeadline = Date.now() + delayMs;
+			if (
+				!this.timerPreemptible ||
+				this.timer === null ||
+				requestedDeadline >= this.timerDeadlineMs
+			) {
+				return;
+			}
+			clearTimeout(this.timer);
+			this.timer = null;
+			this.state = "idle";
 		}
 		this.state = "scheduled";
+		this.timerDeadlineMs = Date.now() + delayMs;
+		this.timerPreemptible = preemptible;
 		this.timer = setTimeout(() => {
 			this.timer = null;
+			this.timerDeadlineMs = 0;
+			this.timerPreemptible = false;
 			if (this.disposed) {
 				return;
 			}
-			void this.flush(this.flushOptions(false));
+			this.state = "idle";
+			void this.flush(this.flushOptions(false)).catch((error: unknown) => {
+				logger.errorRateLimited("scheduled-flush", "sno observe scheduled flush failed", {
+					error: errorName(error),
+				});
+				let shouldRetry = true;
+				try {
+					shouldRetry = this.store.countPending() > 0;
+				} catch {}
+				if (!this.disposed && shouldRetry) {
+					this.schedule(SCHEDULE_FLUSH_DELAY_MS, true);
+				}
+			});
 		}, delayMs);
 		this.timer.unref?.();
 		this.installBeforeExit();
@@ -84,14 +120,16 @@ export class FlushEngine {
 			return { shipped: 0, terminal: 0, retryable: 0 };
 		}
 		if (this.state === "flushing") {
-			this.emittedDuringFlush = true;
-			if (options.force && this.activeFlush) {
-				await this.activeFlush;
-				if (!this.disposed && this.store.countPending() > 0) {
-					return this.flush(options);
-				}
-			}
 			return this.activeFlush ?? { shipped: 0, terminal: 0, retryable: 0 };
+		}
+		const retryDelayMs = Math.max(
+			0,
+			this.retryNotBeforeMs - Date.now(),
+			this.store.getRetryDelay(),
+		);
+		if (retryDelayMs > 0) {
+			this.schedule(retryDelayMs);
+			return { shipped: 0, terminal: 0, retryable: 1, retryAfterMs: retryDelayMs };
 		}
 		const activeFlush = this.runFlush(options);
 		this.activeFlush = activeFlush;
@@ -108,24 +146,40 @@ export class FlushEngine {
 		if (this.timer !== null) {
 			clearTimeout(this.timer);
 			this.timer = null;
+			this.timerDeadlineMs = 0;
+			this.timerPreemptible = false;
 		}
 		this.state = "flushing";
-		this.emittedDuringFlush = false;
 		try {
 			const result = await flushPending(this.store, {
 				...options,
 				baseUrl: this.baseUrlProvider(),
 				machineRegistrationCache: this.machineRegistrationCache,
 			});
-			if (result.shipped > 0 && result.retryable === 0) {
+			if (result.shipped > 0) {
 				this.backoffMs = 5_000;
 			}
-			if (result.retryable > 0 && options.force !== true) {
+			if (result.retryable > 0) {
 				this.state = "idle";
-				const delayMs = result.retryAfterMs ?? this.backoffMs;
+				const globalRetryDelayMs = this.store.getRetryDelay();
+				const globalRetry = globalRetryDelayMs > 0;
+				const baseDelayMs = globalRetry
+					? Math.max(globalRetryDelayMs, result.retryAfterMs ?? 0)
+					: (result.retryAfterMs ?? this.backoffMs);
+				const delayMs = jitterDelay(baseDelayMs);
+				this.retryNotBeforeMs = globalRetry ? Date.now() + delayMs : 0;
+				if (globalRetry) {
+					this.store.deferRetriesUntil(this.retryNotBeforeMs);
+				}
 				this.backoffMs = Math.min(this.backoffMs * 2, 30_000);
-				this.schedule(delayMs);
-			} else if (this.emittedDuringFlush && this.store.countPending() > 0) {
+				const wakeDelayMs = !globalRetry && this.store.getReadyPending(1).length > 0
+					? SCHEDULE_FLUSH_DELAY_MS
+					: delayMs;
+				this.schedule(wakeDelayMs, !globalRetry);
+			} else {
+				this.retryNotBeforeMs = 0;
+			}
+			if (result.retryable === 0 && this.store.countPending() > 0) {
 				this.state = "idle";
 				this.schedule(SCHEDULE_FLUSH_DELAY_MS);
 			}
@@ -186,6 +240,8 @@ export class FlushEngine {
 			clearTimeout(this.timer);
 			this.timer = null;
 		}
+		this.timerDeadlineMs = 0;
+		this.timerPreemptible = false;
 		if (this.beforeExitHandler !== null) {
 			process.off("beforeExit", this.beforeExitHandler);
 			this.beforeExitHandler = null;
@@ -205,7 +261,11 @@ export class FlushEngine {
 			if (this.disposed) {
 				return;
 			}
-			void this.flush(this.flushOptions(true));
+			void this.flush(this.flushOptions(true)).catch((error: unknown) => {
+				logger.errorRateLimited("before-exit-flush", "sno observe before-exit flush failed", {
+					error: errorName(error),
+				});
+			});
 		};
 		process.once("beforeExit", this.beforeExitHandler);
 	}
@@ -268,33 +328,125 @@ export async function flushPending(
 	store: BufferStore,
 	options: FlushOptions,
 ): Promise<FlushResult> {
-	const rows = store.getPending(100);
-	if (rows.length === 0) {
+	const persistentRetryDelay = store.getRetryDelay();
+	if (persistentRetryDelay > 0) {
+		return { shipped: 0, terminal: 0, retryable: 1, retryAfterMs: persistentRetryDelay };
+	}
+	const leaseOwner = createUUIDv7();
+	const leaseRetryDelay = store.acquireFlushLease(leaseOwner);
+	if (leaseRetryDelay > 0) {
+		return { shipped: 0, terminal: 0, retryable: 1, retryAfterMs: leaseRetryDelay };
+	}
+	try {
+		const postLeaseRetryDelay = store.getRetryDelay();
+		if (postLeaseRetryDelay > 0) {
+			return { shipped: 0, terminal: 0, retryable: 1, retryAfterMs: postLeaseRetryDelay };
+		}
+		return await flushPendingWithLease(store, options, leaseOwner);
+	} finally {
+		try {
+			store.releaseFlushLease(leaseOwner);
+		} catch {}
+	}
+}
+
+async function flushPendingWithLease(
+	store: BufferStore,
+	options: FlushOptions,
+	leaseOwner: string,
+): Promise<FlushResult> {
+	const firstRows = store.getReadyPending(1);
+	if (firstRows.length === 0) {
+		if (store.countPending() > 0) {
+			return {
+				shipped: 0,
+				terminal: 0,
+				retryable: 1,
+				retryAfterMs: store.getNextChainRetryDelay() || 5_000,
+			};
+		}
 		store.pruneRetention();
+		store.clearElapsedRetryDeadline();
 		return { shipped: 0, terminal: 0, retryable: 0 };
 	}
-	const registrationFailure = await registerBeforeFlush(store, rows, options);
+	const registrationFailure = await registerBeforeFlush(store, firstRows, options);
 	if (registrationFailure !== null) {
 		store.pruneRetention();
-		return registrationFailure;
+		return persistRetryDeadline(store, registrationFailure);
 	}
 
 	let shipped = 0;
 	let terminal = 0;
 	let retryable = 0;
-	let retryAfterMs: number | undefined;
-	for (const row of rows) {
-		const result = await flushRow(store, row, options);
-		shipped += result.shipped;
-		terminal += result.terminal;
-		retryable += result.retryable;
-		retryAfterMs = minDefined(retryAfterMs, result.retryAfterMs);
-		if (result.retryable > 0 || result.stopBatch === true) {
+	let globalRetryable = 0;
+	let chainRetryAfterMs: number | undefined;
+	let globalRetryAfterMs: number | undefined;
+	let submitted = 0;
+	const blockedChains: PendingChain[] = [];
+	let stopBatch = false;
+	while (submitted < 100 && !stopBatch) {
+		const rows = store.getPendingExcludingChains(blockedChains, 100 - submitted);
+		if (rows.length === 0) {
+			break;
+		}
+		let requery = false;
+		for (const row of rows) {
+			if (!store.renewFlushLease(leaseOwner)) {
+				retryable += 1;
+				globalRetryable += 1;
+				globalRetryAfterMs = minDefined(globalRetryAfterMs, 5_000);
+				stopBatch = true;
+				break;
+			}
+			const result = await flushRow(store, row, options);
+			submitted += 1;
+			shipped += result.shipped;
+			terminal += result.terminal;
+			retryable += result.retryable;
+			if (result.retryScope !== "chain") {
+				globalRetryable += result.retryable;
+				globalRetryAfterMs = minDefined(globalRetryAfterMs, result.retryAfterMs);
+			} else {
+				chainRetryAfterMs = minDefined(chainRetryAfterMs, result.retryAfterMs);
+			}
+			if (result.retryScope === "chain") {
+				blockedChains.push({
+					machineId: row.machine_id,
+					agentId: row.agent_id,
+					chainEpoch: row.chain_epoch,
+				});
+				requery = true;
+				break;
+			}
+			if (result.retryable > 0 || result.stopBatch === true) {
+				stopBatch = true;
+				break;
+			}
+		}
+		if (!requery) {
 			break;
 		}
 	}
 	store.pruneRetention();
-	return withOptionalRetryAfter({ shipped, terminal, retryable }, retryAfterMs);
+	const retryAfterMs = globalRetryable > 0 ? globalRetryAfterMs : chainRetryAfterMs;
+	return persistRetryDeadline(
+		store,
+		withOptionalRetryAfter({ shipped, terminal, retryable }, retryAfterMs),
+		globalRetryable > 0,
+	);
+}
+
+function persistRetryDeadline(
+	store: BufferStore,
+	result: FlushResult,
+	persistRetry = result.retryable > 0,
+): FlushResult {
+	if (result.retryable > 0 && persistRetry) {
+		store.deferRetriesUntil(Date.now() + (result.retryAfterMs ?? 5_000));
+	} else if (result.retryable === 0) {
+		store.clearElapsedRetryDeadline();
+	}
+	return result;
 }
 
 async function flushRow(
@@ -318,19 +470,26 @@ async function flushRow(
 		return handlePostResult(store, row, response);
 	} catch (error) {
 		store.incrementAttempts(row.rowid);
-		logger.warn("sno observe network error", {
+		const retryAfterMs = retryDelay(store, row, undefined);
+		logger.warnRateLimited(`network:${row.event_id}:${errorName(error)}`, "sno observe network error", {
 			event_id: row.event_id,
 			error: error instanceof Error ? error.message : "unknown",
 		});
-		return { shipped: 0, terminal: 0, retryable: 1 };
+		return { shipped: 0, terminal: 0, retryable: 1, retryAfterMs };
 	}
 }
 
 type ResponseRoute =
 	| { kind: "shipped" }
-	| { kind: "invalid" }
-	| { kind: "chain" }
-	| { kind: "retry"; message: string; retryAfterMs?: number; error?: boolean };
+	| { kind: "invalid"; reason: string }
+	| { kind: "chain"; reason: string }
+	| {
+			kind: "retry";
+			message: string;
+			retryAfterMs?: number;
+			error?: boolean;
+			retryScope?: "chain";
+	  };
 
 const ACCEPTED_DUPLICATE_CODES = new Set([
 	"duplicate_event",
@@ -341,10 +500,30 @@ const ACCEPTED_DUPLICATE_CODES = new Set([
 ]);
 
 const CHAIN_REJECTION_CODES = new Set([
+	"chain_gap",
 	"payload_conflict",
 	"chain_seed_required",
 	"prev_hash_mismatch",
 	"self_hash_mismatch",
+]);
+
+const INVALID_EVENT_CODES = new Set([
+	"agent_id_not_in_enum",
+	"batch_wrapper_rejected",
+	"consent_level_not_in_enum",
+	"invalid_envelope",
+	"invalid_json",
+	"legacy_flat_shape_rejected",
+	"schema_invalid",
+	"single_envelope_required",
+	"tokens_method_required",
+]);
+
+const FORBIDDEN_EVENT_CODES = new Set([
+	"identity_mismatch",
+	"machine_scope_forbidden",
+	"ownership_denied",
+	"scope_user_mismatch",
 ]);
 
 function handlePostResult(
@@ -352,34 +531,57 @@ function handlePostResult(
 	row: PendingRow,
 	response: EventPostResult,
 ): RowFlushResult {
-	const route = routeResponse(response);
+	const route = routeResponse(response, row);
 	switch (route.kind) {
 		case "shipped":
 			store.markShipped(row.rowid);
 			return { shipped: 1, terminal: 0, retryable: 0 };
 		case "invalid": {
-			const terminal = store.quarantineEpochSuffix(row, response.status, response.body);
-			reseedChain(store, row);
+			const recoveryState = recoveryStateFor(row);
+			const terminal = store.quarantineEpochSuffix(
+				row,
+				response.status,
+				route.reason,
+				response.body,
+				recoveryState,
+			);
+			reseedRejectedSuffix(store, row);
 			logger.error("sno observe event rejected as invalid", {
 				event_id: row.event_id,
 				status: response.status,
-				reject_body: typeof response.body === "string" ? response.body.slice(0, 800) : "",
-				envelope: row.payload.toString("utf8").slice(0, 1200),
+				reason: route.reason,
 			});
 			return { shipped: 0, terminal, retryable: 0, stopBatch: true };
 		}
 		case "chain": {
-			const terminal = store.quarantineEpochSuffix(row, response.status, response.body);
-			reseedChain(store, row);
-			logChainRejection(row, response.status);
+			const recoveryState = recoveryStateFor(row);
+			const terminal = store.quarantineEpochSuffix(
+				row,
+				response.status,
+				route.reason,
+				response.body,
+				recoveryState,
+			);
+			reseedRejectedSuffix(store, row);
+			logChainRejection(row, response.status, route.reason);
 			return { shipped: 0, terminal, retryable: 0, stopBatch: true };
 		}
 		case "retry":
-			return retryRow(store, row, response.status, route.message, route.retryAfterMs, route.error);
+			return retryRow(
+				store,
+				row,
+				response.status,
+				response.body,
+				route.message,
+				route.retryAfterMs,
+				route.error,
+				route.retryScope,
+			);
 	}
 }
 
-function routeResponse(response: EventPostResult): ResponseRoute {
+function routeResponse(response: EventPostResult, row: PendingRow): ResponseRoute {
+	const code = responseErrorCode(response.body);
 	switch (response.status) {
 		case 202:
 			return { kind: "shipped" };
@@ -390,79 +592,181 @@ function routeResponse(response: EventPostResult): ResponseRoute {
 				retryAfterMs: response.retryAfterMs ?? 5_000,
 			};
 		case 400:
-			return { kind: "invalid" };
+			return code !== undefined && INVALID_EVENT_CODES.has(code)
+				? { kind: "invalid", reason: code }
+				: retryRoute(response.retryAfterMs ?? 5_000, "chain");
 		case 409:
 		case 422:
-			return routeConflict(response);
+			return routeConflict(response, row);
 		case 401:
 			return { kind: "retry", message: "sno observe unauthorized; will retry" };
 		case 403:
-			return { kind: "invalid" };
+			return code !== undefined && FORBIDDEN_EVENT_CODES.has(code)
+				? { kind: "invalid", reason: code }
+				: retryRoute(response.retryAfterMs ?? 5_000, "chain");
 		case 429:
 			return retryRoute(response.retryAfterMs ?? 3_600_000);
 		case 503:
 			return retryRoute(response.retryAfterMs ?? 5_000);
 		default:
-			return response.status >= 500
-				? retryRoute(response.retryAfterMs ?? undefined)
-				: { kind: "invalid" };
+			return response.status >= 400 && response.status < 500
+				? retryRoute(response.retryAfterMs ?? undefined, "chain")
+				: retryRoute(response.retryAfterMs ?? undefined);
 	}
 }
 
-function routeConflict(response: EventPostResult): ResponseRoute {
+function routeConflict(response: EventPostResult, row: PendingRow): ResponseRoute {
 	const code = responseErrorCode(response.body);
 	if (code !== undefined && ACCEPTED_DUPLICATE_CODES.has(code)) {
 		return { kind: "shipped" };
 	}
 	if (code === "chain_predecessor_not_ready") {
-		return retryRoute(response.retryAfterMs ?? 5_000);
+		if (isPermanentPredecessorGap(response.body, row)) {
+			return { kind: "chain", reason: "permanent_predecessor_gap" };
+		}
+		return retryRoute(response.retryAfterMs ?? 5_000, "chain");
 	}
 	if (code !== undefined && CHAIN_REJECTION_CODES.has(code)) {
-		return { kind: "chain" };
-	}
-	if (response.status === 422) {
-		return { kind: "chain" };
+		return { kind: "chain", reason: code };
 	}
 	return {
 		kind: "retry",
 		message: "sno observe conflict response is not terminal; will retry",
 		retryAfterMs: response.retryAfterMs ?? 5_000,
+		retryScope: "chain",
 	};
 }
 
-function responseErrorCode(body: string): string | undefined {
-	if (body.length === 0) {
-		return undefined;
+function isPermanentPredecessorGap(body: string, row: PendingRow): boolean {
+	const parsed = parseResponseBody(body);
+	if (parsed === null || parsed.code !== "chain_predecessor_not_ready") {
+		return false;
 	}
-	try {
-		const parsed = JSON.parse(body) as unknown;
-		if (typeof parsed !== "object" || parsed === null) {
-			return undefined;
-		}
-		const record = parsed as Record<string, unknown>;
-		for (const key of ["reason", "error", "code", "error_code"]) {
-			const value = record[key];
-			if (typeof value === "string" && value.length > 0) {
-				return value;
-			}
-		}
-	} catch {}
-	return undefined;
+	const details = gapDetails(parsed.root, parsed.nestedError);
+	if (details === null) {
+		return false;
+	}
+	const expectedSeq = integerDetail(details["expected_seq"]);
+	const receivedSeq = integerDetail(details["received_seq"]);
+	const lastCommittedSeq = committedSequenceDetail(details["last_committed_seq"]);
+	const stallMs = integerDetail(details["chain_stall_ms"]);
+	return (
+		details["machine_uuid"] === row.machine_id &&
+		details["agent_id"] === row.agent_id &&
+		integerDetail(details["chain_epoch"]) === row.chain_epoch &&
+		details["latest_state"] === "committed" &&
+		stallMs !== undefined &&
+		stallMs >= PERMANENT_PREDECESSOR_GAP_MS &&
+		expectedSeq !== undefined &&
+		receivedSeq === row.seq &&
+		receivedSeq === expectedSeq + 1 &&
+		lastCommittedSeq === expectedSeq - 1
+	);
 }
 
-function retryRoute(retryAfterMs?: number): ResponseRoute {
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === "object" && value !== null;
+}
+
+function integerDetail(value: unknown): number | undefined {
+	return typeof value === "number" && Number.isSafeInteger(value) && value >= 0
+		? value
+		: undefined;
+}
+
+function committedSequenceDetail(value: unknown): number | undefined {
+	return typeof value === "number" && Number.isSafeInteger(value) && value >= -1
+		? value
+		: undefined;
+}
+
+function responseErrorCode(body: string): string | undefined {
+	return parseResponseBody(body)?.code;
+}
+
+function parseResponseBody(body: string): {
+	root: Record<string, unknown>;
+	nestedError: Record<string, unknown> | null;
+	code: string | undefined;
+} | null {
+	try {
+		const parsed = JSON.parse(body) as unknown;
+		if (!isRecord(parsed)) {
+			return null;
+		}
+		const nestedError = isRecord(parsed["error"]) ? parsed["error"] : null;
+		const candidates = new Set<string>();
+		for (const key of ["reason", "code", "error_code", "error"]) {
+			const value = parsed[key];
+			if (typeof value === "string" && value.length > 0) {
+				candidates.add(value);
+			}
+		}
+		if (nestedError !== null) {
+			const code = nestedError["code"];
+			if (typeof code === "string" && code.length > 0) {
+				candidates.add(code);
+			}
+		}
+		return {
+			root: parsed,
+			nestedError,
+			code: candidates.size === 1 ? candidates.values().next().value : undefined,
+		};
+	} catch {
+		return null;
+	}
+}
+
+const GAP_DETAIL_KEYS = [
+	"machine_uuid",
+	"agent_id",
+	"chain_epoch",
+	"expected_seq",
+	"received_seq",
+	"latest_state",
+	"last_committed_seq",
+	"chain_stall_ms",
+];
+
+function gapDetails(
+	root: Record<string, unknown>,
+	nested: Record<string, unknown> | null,
+): Record<string, unknown> | null {
+	const details: Record<string, unknown> = {};
+	for (const key of GAP_DETAIL_KEYS) {
+		const rootHas = Object.hasOwn(root, key);
+		const nestedHas = nested !== null && Object.hasOwn(nested, key);
+		if (rootHas && nestedHas && root[key] !== nested[key]) {
+			return null;
+		}
+		if (nestedHas && nested !== null) {
+			details[key] = nested[key];
+		} else if (rootHas) {
+			details[key] = root[key];
+		}
+	}
+	return details;
+}
+
+function retryRoute(retryAfterMs?: number, retryScope?: "chain"): ResponseRoute {
 	return withRetryAfter(
-		{ kind: "retry", message: "sno observe transport will retry" },
+		{
+			kind: "retry",
+			message: "sno observe transport will retry",
+			...(retryScope === undefined ? {} : { retryScope }),
+		},
 		retryAfterMs,
 	);
 }
 
-function logChainRejection(row: PendingRow, status: number): void {
+function logChainRejection(row: PendingRow, status: number, reason: string): void {
 	const envelope = decodeEnvelope(row.payload);
 	logger.error("sno observe chain rejected", {
 		event_id: envelope.event_id,
 		status,
 		agent_id: envelope.scope.agent_id,
+		reason,
 	});
 }
 
@@ -470,22 +774,70 @@ function retryRow(
 	store: BufferStore,
 	row: PendingRow,
 	status: number,
+	body: string,
 	message: string,
 	retryAfterMs?: number,
 	error = false,
-): FlushResult {
+	retryScope?: "chain",
+): RowFlushResult {
 	store.incrementAttempts(row.rowid);
-	const context = { event_id: row.event_id, status, retry_after_ms: retryAfterMs };
-	if (error) {
-		logger.error(message, context);
-	} else {
-		logger.warn(message, context);
+	const effectiveRetryAfterMs = retryDelay(store, row, retryAfterMs, retryScope === "chain");
+	if (retryScope === "chain") {
+		store.deferChainRetriesUntil(
+			{ machineId: row.machine_id, agentId: row.agent_id, chainEpoch: row.chain_epoch },
+			Date.now() + effectiveRetryAfterMs,
+		);
 	}
-	return withOptionalRetryAfter({ shipped: 0, terminal: 0, retryable: 1 }, retryAfterMs);
+	const code = responseErrorCode(body);
+	const context = {
+		event_id: row.event_id,
+		status,
+		failure_code: code,
+		retry_after_ms: effectiveRetryAfterMs,
+	};
+	const failureKey = `http:${row.event_id}:${status}:${code ?? message}`;
+	if (error) {
+		logger.errorRateLimited(failureKey, message, context);
+	} else {
+		logger.warnRateLimited(failureKey, message, context);
+	}
+	return {
+		...withOptionalRetryAfter(
+		{ shipped: 0, terminal: 0, retryable: 1 },
+		effectiveRetryAfterMs,
+		),
+		...(retryScope === undefined ? {} : { retryScope }),
+	};
 }
 
-function reseedChain(store: BufferStore, row: PendingRow): void {
+function retryDelay(
+	store: BufferStore,
+	row: PendingRow,
+	requested: number | undefined,
+	chainScoped = false,
+): number {
+	const attempt = row.attempts + 1;
+	const exponent = Math.min(Math.max(0, attempt - 1), 3);
+	const attemptDelay = Math.min(5_000 * 2 ** exponent, MAX_RETRY_BACKOFF_MS);
+	const safeguardDelay =
+		chainScoped || store.getQueueSafeguard() === null ? 0 : SAFEGUARD_RETRY_DELAY_MS;
+	return Math.max(requested ?? attemptDelay, attemptDelay, safeguardDelay);
+}
+
+function jitterDelay(delayMs: number): number {
+	const jitterWindowMs = Math.min(delayMs * 0.2, MAX_RETRY_BACKOFF_MS);
+	return Math.ceil(delayMs + Math.random() * jitterWindowMs);
+}
+
+function errorName(error: unknown): string {
+	return error instanceof Error ? error.name : typeof error;
+}
+
+function reseedRejectedSuffix(store: BufferStore, row: PendingRow): void {
 	const envelope = decodeEnvelope(row.payload);
+	if (envelope.event_type === "agent.identify") {
+		return;
+	}
 	store.append({
 		eventId: createUUIDv7(),
 		eventType: "agent.identify",
@@ -502,6 +854,12 @@ function reseedChain(store: BufferStore, row: PendingRow): void {
 		terminal: false,
 		chainEpoch: store.nextEpoch(row.machine_id, row.agent_id),
 	});
+}
+
+function recoveryStateFor(row: PendingRow): "reseed_required" | "retired" {
+	return decodeEnvelope(row.payload).event_type === "agent.identify"
+		? "retired"
+		: "reseed_required";
 }
 
 function minDefined(left: number | undefined, right: number | undefined): number | undefined {

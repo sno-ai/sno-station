@@ -1,8 +1,15 @@
+import { statSync } from "node:fs";
 import { dirname } from "node:path";
 import DatabaseConstructor from "better-sqlite3";
 import { computeSelfHash } from "./canonical-hash.js";
-import { ChainContentionError, ChainSeedError } from "./errors.js";
+import {
+	BufferCapacityError,
+	ChainContentionError,
+	ChainSeedError,
+	ChainUnavailableError,
+} from "./errors.js";
 import { ensureDir } from "./fs-utils.js";
+import { logger } from "./log.js";
 import type {
 	AgentId,
 	ConsentValue,
@@ -18,8 +25,13 @@ const GENESIS = "GENESIS";
 const MAX_CHAIN_RETRIES = 3;
 const RETENTION_MAX_BYTES = 100 * 1024 * 1024;
 const RETENTION_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+const CHAIN_FORENSIC_CLOSED_EPOCHS = 16;
+const CHAIN_RETENTION_BATCH_SIZE = 2_000;
+const CHAIN_RETENTION_SCAN_LIMIT = CHAIN_RETENTION_BATCH_SIZE * 2;
+const MAX_PENDING_ATTEMPTS = 100;
 const QUARANTINE_MAX_ROWS = 1_000;
 const QUARANTINE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+const QUARANTINE_CAPACITY_RESERVE_BYTES = 1024 * 1024;
 
 type BindValue = string | number | Buffer | null;
 
@@ -37,6 +49,12 @@ export interface PendingRow {
 	terminal: 0 | 1;
 	created_at: number;
 	attempts: number;
+}
+
+export interface PendingChain {
+	machineId: string;
+	agentId: AgentId;
+	chainEpoch: number;
 }
 
 export interface AppendInput {
@@ -83,18 +101,159 @@ interface RowIdRow {
 	rowid: number;
 }
 
+interface ChainRetentionKey {
+	machine_id: string;
+	agent_id: AgentId;
+	chain_epoch: number;
+}
+
+interface ChainRetentionScanRow extends ChainRetentionKey {
+	eligible: 0 | 1;
+}
+
+interface CheckpointRow {
+	busy: number;
+	log: number;
+	checkpointed: number;
+}
+
 interface EventRowRef {
 	rowid: number;
 	event_id: string;
 }
 
 interface PragmaValueRow {
+	freelist_count?: number;
 	page_count?: number;
 	page_size?: number;
 }
 
+interface QueueAggregateRow {
+	pending_count: number;
+	oldest_created_at: number | null;
+	max_attempts: number | null;
+}
+
+interface AgentQueueAggregateRow {
+	oldest_created_at: number | null;
+	max_attempts: number | null;
+}
+
+interface QuarantineReasonRow {
+	reason: string;
+}
+
+interface TableInfoRow {
+	name: string;
+}
+
+interface SenderControlRow {
+	retry_not_before: number;
+	lease_owner: string | null;
+	lease_until: number;
+}
+
+interface RetryDeadlineRow {
+	retry_not_before: number | null;
+}
+
+interface ChainStateRow {
+	state: "reseed_required" | "retired";
+	reason?: string;
+}
+
+export type ChainRecoveryState = "reseed_required" | "retired";
+
+export interface BufferStorageMetrics {
+	logicalBytes: number;
+	physicalBytes: number;
+	walBytes: number;
+	freelistPages: number;
+	freelistBytes: number;
+	freelistRatio: number;
+	remainingEpochs: number;
+	databaseSizeBytes: number;
+}
+
+type PageStorageMetrics = Omit<BufferStorageMetrics, "remainingEpochs">;
+
+export interface RetentionReport extends BufferStorageMetrics {
+	deletedEvents: number;
+	deletedChainTail: number;
+	deletedChainState: number;
+	deletedChainRetry: number;
+	maintenanceDurationMs: number;
+	lastCompactionAtMs: null;
+	compactionReason: "not_run";
+}
+
+export interface QueueStats extends BufferStorageMetrics {
+	activeChainRecoveryCount: number;
+	activeChainRecoveryReason: string | null;
+	pendingCount: number;
+	oldestPendingAgeMs: number;
+	maxAttempts: number;
+	quarantinedCount: number;
+	latestQuarantineReason: string | null;
+}
+
+const CHAIN_RETENTION_ELIGIBILITY_SQL = `CASE WHEN
+	EXISTS (
+		SELECT 1
+		FROM chain_tail AS newer
+		WHERE newer.machine_id = window.machine_id
+			AND newer.agent_id = window.agent_id
+			AND newer.chain_epoch > window.chain_epoch
+		ORDER BY newer.chain_epoch ASC
+		LIMIT 1 OFFSET ?
+	)
+	AND NOT EXISTS (
+		SELECT 1 FROM events AS event
+		WHERE event.machine_id = window.machine_id
+			AND event.agent_id = window.agent_id
+			AND event.chain_epoch = window.chain_epoch
+			AND event.shipped = 0
+	)
+	AND NOT EXISTS (
+		SELECT 1 FROM chain_state AS state
+		WHERE state.machine_id = window.machine_id
+			AND state.agent_id = window.agent_id
+			AND state.chain_epoch = window.chain_epoch
+	)
+	AND NOT EXISTS (
+		SELECT 1 FROM chain_retry AS retry
+		WHERE retry.machine_id = window.machine_id
+			AND retry.agent_id = window.agent_id
+			AND retry.chain_epoch = window.chain_epoch
+	)
+	THEN 1 ELSE 0 END AS eligible`;
+
+function buildChainRetentionScanSql(afterCursor: boolean): string {
+	const keyset = afterCursor
+		? "WHERE (machine_id, agent_id, chain_epoch) > (?, ?, ?)"
+		: "";
+	return `WITH scan_window AS MATERIALIZED (
+		SELECT machine_id, agent_id, chain_epoch
+		FROM chain_tail
+		${keyset}
+		ORDER BY machine_id, agent_id, chain_epoch
+		LIMIT ?
+	)
+	SELECT window.machine_id, window.agent_id, window.chain_epoch,
+		${CHAIN_RETENTION_ELIGIBILITY_SQL}
+	FROM scan_window AS window`;
+}
+
+export const CHAIN_RETENTION_SCAN_SQL = {
+	fromStart: buildChainRetentionScanSql(false),
+	afterCursor: buildChainRetentionScanSql(true),
+} as const;
+
+export type BufferSafeguardReason = "disk_size" | "max_attempts" | "queue_age";
+
 export class BufferStore {
 	private readonly db: InstanceType<typeof DatabaseConstructor>;
+	private chainRetentionCursor: ChainRetentionKey | null = null;
 
 	constructor(readonly path: string) {
 		ensureDir(dirname(path));
@@ -151,6 +310,71 @@ export class BufferStore {
 			.all(limit) as PendingRow[];
 	}
 
+	getPendingExcludingChains(blockedChains: readonly PendingChain[], limit = 50): PendingRow[] {
+		const exclusions = blockedChains
+			.map(() => "(machine_id = ? AND agent_id = ? AND chain_epoch = ?)")
+			.join(" OR ");
+		const whereExclusions = exclusions.length === 0 ? "" : `AND NOT (${exclusions})`;
+		const bindings: BindValue[] = blockedChains.flatMap((chain) => [
+			chain.machineId,
+			chain.agentId,
+			chain.chainEpoch,
+		]);
+		return this.db
+			.prepare(
+				`SELECT rowid, event_id, machine_id, agent_id, chain_epoch, seq, self_hash, prev,
+					payload, shipped, terminal, created_at, attempts
+				FROM events
+				WHERE shipped = 0 AND terminal = 0
+				${whereExclusions}
+				AND NOT EXISTS (
+					SELECT 1 FROM chain_retry AS retry
+					WHERE retry.machine_id = events.machine_id
+						AND retry.agent_id = events.agent_id
+						AND retry.chain_epoch = events.chain_epoch
+						AND retry.retry_not_before > ?
+				)
+				ORDER BY rowid ASC
+				LIMIT ?`,
+			)
+			.all(...bindings, Date.now(), limit) as PendingRow[];
+	}
+
+	getReadyPending(limit = 50): PendingRow[] {
+		return this.getPendingExcludingChains([], limit);
+	}
+
+	getNextChainRetryDelay(now = Date.now()): number {
+		const row = this.db
+			.prepare(
+				`SELECT MIN(retry.retry_not_before) AS retry_not_before
+				FROM chain_retry AS retry
+				WHERE retry.retry_not_before > ?
+					AND EXISTS (
+						SELECT 1 FROM events
+						WHERE events.machine_id = retry.machine_id
+							AND events.agent_id = retry.agent_id
+							AND events.chain_epoch = retry.chain_epoch
+							AND events.shipped = 0 AND events.terminal = 0
+					)`,
+			)
+			.get(now) as RetryDeadlineRow;
+		return row.retry_not_before === null ? 0 : Math.max(0, row.retry_not_before - now);
+	}
+
+	deferChainRetriesUntil(chain: PendingChain, deadlineMs: number): void {
+		this.withImmediateTransaction(() => {
+			this.db
+				.prepare(
+					`INSERT INTO chain_retry (machine_id, agent_id, chain_epoch, retry_not_before)
+					VALUES (?, ?, ?, ?)
+					ON CONFLICT(machine_id, agent_id, chain_epoch)
+					DO UPDATE SET retry_not_before = MAX(retry_not_before, excluded.retry_not_before)`,
+				)
+				.run(chain.machineId, chain.agentId, chain.chainEpoch, deadlineMs);
+		});
+	}
+
 	getAllRows(): PendingRow[] {
 		return this.db
 			.prepare(
@@ -176,12 +400,14 @@ export class BufferStore {
 
 	markShipped(rowid: number): void {
 		this.withImmediateTransaction(() => {
+			this.deleteChainRetryForRow(rowid);
 			this.db.prepare("UPDATE events SET shipped = 1 WHERE rowid = ?").run(rowid);
 		});
 	}
 
 	markTerminal(rowid: number): void {
 		this.withImmediateTransaction(() => {
+			this.deleteChainRetryForRow(rowid);
 			this.db.prepare("UPDATE events SET terminal = 1 WHERE rowid = ?").run(rowid);
 		});
 	}
@@ -192,25 +418,159 @@ export class BufferStore {
 		});
 	}
 
-	quarantine(row: PendingRow, status: number, body: string): void {
+	getChainRecoveryState(
+		machineId: string,
+		agentId: AgentId,
+		chainEpoch: number,
+	): ChainRecoveryState | null {
+		const row = this.db
+			.prepare(
+				`SELECT state FROM chain_state
+				WHERE machine_id = ? AND agent_id = ? AND chain_epoch = ?`,
+			)
+			.get(machineId, agentId, chainEpoch) as ChainStateRow | undefined;
+		return row?.state ?? null;
+	}
+
+	getRetryDelay(now = Date.now()): number {
+		const control = this.senderControl();
+		return Math.max(0, control.retry_not_before - now);
+	}
+
+	deferRetriesUntil(deadlineMs: number): void {
+		this.withImmediateTransaction(() => {
+			this.db
+				.prepare(
+					`UPDATE sender_control
+					SET retry_not_before = MAX(retry_not_before, ?)
+					WHERE id = 1`,
+				)
+				.run(deadlineMs);
+		});
+	}
+
+	clearElapsedRetryDeadline(now = Date.now()): void {
+		this.withImmediateTransaction(() => {
+			this.db
+				.prepare(
+					`UPDATE sender_control SET retry_not_before = 0
+					WHERE id = 1 AND retry_not_before <= ?`,
+				)
+				.run(now);
+		});
+	}
+
+	acquireFlushLease(owner: string, now = Date.now(), leaseMs = 30_000): number {
+		let retryAfterMs = 0;
+		this.withImmediateTransaction(() => {
+			const control = this.senderControl();
+			if (
+				control.lease_owner !== null &&
+				control.lease_owner !== owner &&
+				control.lease_until > now
+			) {
+				retryAfterMs = control.lease_until - now;
+				return;
+			}
+			this.db
+				.prepare(
+					`UPDATE sender_control
+					SET lease_owner = ?, lease_until = ?
+					WHERE id = 1`,
+				)
+				.run(owner, now + leaseMs);
+		});
+		return retryAfterMs;
+	}
+
+	renewFlushLease(owner: string, now = Date.now(), leaseMs = 30_000): boolean {
+		let renewed = false;
+		this.withImmediateTransaction(() => {
+			renewed =
+				this.db
+					.prepare(
+						`UPDATE sender_control SET lease_until = ?
+						WHERE id = 1 AND lease_owner = ?`,
+					)
+					.run(now + leaseMs, owner).changes === 1;
+		});
+		return renewed;
+	}
+
+	releaseFlushLease(owner: string): void {
+		this.withImmediateTransaction(() => {
+			this.db
+				.prepare(
+					`UPDATE sender_control SET lease_owner = NULL, lease_until = 0
+					WHERE id = 1 AND lease_owner = ?`,
+				)
+				.run(owner);
+		});
+	}
+
+	quarantine(row: PendingRow, status: number, reason: string, body: string): void {
 		this.withImmediateTransaction(() => {
 			const now = Date.now();
 			this.db
 				.prepare(
-					`INSERT INTO quarantine (rowid, event_id, status, response_body, quarantined_at)
-					VALUES (?, ?, ?, ?, ?)`,
+					`INSERT INTO quarantine (
+						rowid, event_id, status, reason, response_body, quarantined_at
+					) VALUES (?, ?, ?, ?, ?, ?)`,
 				)
-				.run(row.rowid, row.event_id, status, body.slice(0, 8_192), now);
+				.run(row.rowid, row.event_id, status, reason, body.slice(0, 8_192), now);
+			this.deleteChainRetryForRow(row.rowid);
 			this.db.prepare("UPDATE events SET terminal = 1 WHERE rowid = ?").run(row.rowid);
 			this.pruneQuarantineInsideTx(QUARANTINE_MAX_ROWS, QUARANTINE_MAX_AGE_MS, now);
 		});
 	}
 
-	quarantineEpochSuffix(row: PendingRow, status: number, body: string): number {
+	quarantineEpochSuffix(
+		row: PendingRow,
+		status: number,
+		reason: string,
+		body: string,
+		recoveryState: ChainRecoveryState,
+	): number {
 		let terminalCount = 0;
 		this.withImmediateTransaction(() => {
 			const now = Date.now();
 			const bodyExcerpt = body.slice(0, 8_192);
+			const suffixCount = this.count(
+				`SELECT COUNT(*) AS count FROM events
+				WHERE machine_id = ? AND agent_id = ? AND chain_epoch = ? AND seq >= ?
+					AND shipped = 0 AND terminal = 0`,
+				row.machine_id,
+				row.agent_id,
+				row.chain_epoch,
+				row.seq,
+			);
+			const pageSizeRow = this.db.prepare("PRAGMA page_size").get() as PragmaValueRow;
+			const terminalWalBudget = suffixCount * (pageSizeRow.page_size ?? 4_096);
+			if (
+				this.databaseSizeBytes() + terminalWalBudget + QUARANTINE_CAPACITY_RESERVE_BYTES >
+				RETENTION_MAX_BYTES
+			) {
+				throw new BufferCapacityError();
+			}
+			terminalCount = this.db
+				.prepare(
+					`UPDATE events SET terminal = 1
+					WHERE machine_id = ? AND agent_id = ? AND chain_epoch = ? AND seq >= ?
+						AND shipped = 0 AND terminal = 0`,
+				)
+				.run(row.machine_id, row.agent_id, row.chain_epoch, row.seq).changes;
+			const detailBytes = Math.max(
+				512,
+				Buffer.byteLength(bodyExcerpt, "utf8") + Buffer.byteLength(reason, "utf8") + 256,
+			);
+			const availableBytes = Math.max(
+				0,
+				RETENTION_MAX_BYTES -
+					this.databaseSizeBytes() -
+					terminalWalBudget -
+					QUARANTINE_CAPACITY_RESERVE_BYTES,
+			);
+			const detailLimit = Math.min(QUARANTINE_MAX_ROWS, Math.floor(availableBytes / detailBytes));
 			const suffixRows = this.db
 				.prepare(
 					`SELECT rowid, event_id
@@ -220,23 +580,44 @@ export class BufferStore {
 						AND chain_epoch = ?
 						AND seq >= ?
 						AND shipped = 0
-						AND terminal = 0
-					ORDER BY seq ASC, rowid ASC`,
+						AND terminal = 1
+					ORDER BY seq ASC, rowid ASC
+					LIMIT ?`,
 				)
-				.all(row.machine_id, row.agent_id, row.chain_epoch, row.seq) as EventRowRef[];
+				.all(row.machine_id, row.agent_id, row.chain_epoch, row.seq, detailLimit) as EventRowRef[];
 			const insertQuarantine = this.db.prepare(
-				`INSERT INTO quarantine (rowid, event_id, status, response_body, quarantined_at)
-				VALUES (?, ?, ?, ?, ?)`,
-			);
-			const markTerminal = this.db.prepare(
-				"UPDATE events SET terminal = 1 WHERE rowid = ? AND shipped = 0 AND terminal = 0",
+				`INSERT INTO quarantine (
+					rowid, event_id, status, reason, response_body, quarantined_at
+				) VALUES (?, ?, ?, ?, ?, ?)`,
 			);
 			for (const suffixRow of suffixRows) {
-				insertQuarantine.run(suffixRow.rowid, suffixRow.event_id, status, bodyExcerpt, now);
-				terminalCount += markTerminal.run(suffixRow.rowid).changes;
+				insertQuarantine.run(
+					suffixRow.rowid,
+					suffixRow.event_id,
+					status,
+					reason,
+					bodyExcerpt,
+					now,
+				);
 			}
+			this.db
+				.prepare(
+					"DELETE FROM chain_retry WHERE machine_id = ? AND agent_id = ? AND chain_epoch = ?",
+				)
+				.run(row.machine_id, row.agent_id, row.chain_epoch);
+			this.db
+				.prepare(
+					`INSERT INTO chain_state (
+						machine_id, agent_id, chain_epoch, state, reason, updated_at
+					) VALUES (?, ?, ?, ?, ?, ?)
+					ON CONFLICT(machine_id, agent_id, chain_epoch)
+					DO UPDATE SET state = excluded.state, reason = excluded.reason,
+						updated_at = excluded.updated_at`,
+				)
+				.run(row.machine_id, row.agent_id, row.chain_epoch, recoveryState, reason, now);
 			this.pruneQuarantineInsideTx(QUARANTINE_MAX_ROWS, QUARANTINE_MAX_AGE_MS, now);
 		});
+		this.checkpointWal();
 		return terminalCount;
 	}
 
@@ -244,14 +625,37 @@ export class BufferStore {
 		maxBytes = RETENTION_MAX_BYTES,
 		maxAgeMs = RETENTION_MAX_AGE_MS,
 		now = Date.now(),
-	): number {
-		let pruned = 0;
+	): RetentionReport {
+		const startedAt = Date.now();
+		let deletedEvents = 0;
+		let deletedChainTail = 0;
+		let deletedChainState = 0;
+		let deletedChainRetry = 0;
+		let nextChainRetentionCursor = this.chainRetentionCursor;
+		if (this.databaseSizeBytes() > maxBytes) {
+			this.checkpointWal();
+		}
 		this.withImmediateTransaction(() => {
+			const scannedRows = this.scanChainRetentionInsideTx();
+			const deleteTail = this.db.prepare(
+				`DELETE FROM chain_tail
+				WHERE machine_id = ? AND agent_id = ? AND chain_epoch = ?`,
+			);
+			for (const row of scannedRows) {
+				if (row.eligible === 0 || deletedChainTail >= CHAIN_RETENTION_BATCH_SIZE) {
+					continue;
+				}
+				deletedChainTail += deleteTail.run(row.machine_id, row.agent_id, row.chain_epoch).changes;
+			}
+			nextChainRetentionCursor = greatestChainRetentionKey(scannedRows);
+			deletedChainState = this.deleteOrphanChainRowsInsideTx("chain_state");
+			deletedChainRetry = this.deleteOrphanChainRowsInsideTx("chain_retry");
+
 			const olderThan = now - maxAgeMs;
-			pruned += this.db
+			deletedEvents += this.db
 				.prepare("DELETE FROM events WHERE (shipped = 1 OR terminal = 1) AND created_at < ?")
 				.run(olderThan).changes;
-			if (this.databaseSizeBytes() <= maxBytes) {
+			if (this.logicalDataSizeBytes() <= maxBytes) {
 				return;
 			}
 			const rows = this.db
@@ -268,14 +672,29 @@ export class BufferStore {
 			const batchSize = 50;
 			for (let index = 0; index < rows.length; index += batchSize) {
 				for (const row of rows.slice(index, index + batchSize)) {
-					pruned += deleteRow.run(row.rowid).changes;
+					deletedEvents += deleteRow.run(row.rowid).changes;
 				}
-				if (this.databaseSizeBytes() <= maxBytes) {
+				if (this.logicalDataSizeBytes() <= maxBytes) {
 					break;
 				}
 			}
 		});
-		return pruned;
+		this.chainRetentionCursor = nextChainRetentionCursor;
+		if (deletedEvents + deletedChainTail + deletedChainState + deletedChainRetry > 0) {
+			this.checkpointWal();
+		}
+		const report: RetentionReport = {
+			deletedEvents,
+			deletedChainTail,
+			deletedChainState,
+			deletedChainRetry,
+			...this.readStorageMetrics(),
+			maintenanceDurationMs: Date.now() - startedAt,
+			lastCompactionAtMs: null,
+			compactionReason: "not_run",
+		};
+		logger.debug("sno observe buffer maintenance", { ...report });
+		return report;
 	}
 
 	pruneQuarantine(
@@ -304,6 +723,97 @@ export class BufferStore {
 
 	countQuarantined(): number {
 		return this.count("SELECT COUNT(*) AS count FROM quarantine");
+	}
+
+	getQueueStats(now = Date.now()): QueueStats {
+		const storage = this.readStorageMetrics();
+		const aggregate = this.db
+			.prepare(
+				`SELECT
+					COUNT(*) AS pending_count,
+					MIN(created_at) AS oldest_created_at,
+					MAX(attempts) AS max_attempts
+				FROM events
+				WHERE shipped = 0 AND terminal = 0`,
+			)
+			.get() as QueueAggregateRow;
+		const latest = this.db
+			.prepare("SELECT reason FROM quarantine ORDER BY quarantined_at DESC, _rowid_ DESC LIMIT 1")
+			.get() as QuarantineReasonRow | undefined;
+		const activeRecoveryCount = this.count(
+			`SELECT COUNT(*) AS count
+			FROM chain_state AS state
+			WHERE state.chain_epoch = (
+				SELECT MAX(tail.chain_epoch)
+				FROM chain_tail AS tail
+				WHERE tail.machine_id = state.machine_id AND tail.agent_id = state.agent_id
+			)`,
+		);
+		const activeRecovery = this.db
+			.prepare(
+				`SELECT state.state, state.reason
+				FROM chain_state AS state
+				WHERE state.chain_epoch = (
+					SELECT MAX(tail.chain_epoch)
+					FROM chain_tail AS tail
+					WHERE tail.machine_id = state.machine_id AND tail.agent_id = state.agent_id
+				)
+				ORDER BY state.updated_at DESC
+				LIMIT 1`,
+			)
+			.get() as ChainStateRow | undefined;
+		return {
+			...storage,
+			activeChainRecoveryCount: activeRecoveryCount,
+			activeChainRecoveryReason: activeRecovery?.reason ?? null,
+			pendingCount: aggregate.pending_count,
+			oldestPendingAgeMs:
+				aggregate.oldest_created_at === null ? 0 : Math.max(0, now - aggregate.oldest_created_at),
+			maxAttempts: aggregate.max_attempts ?? 0,
+			quarantinedCount: this.countQuarantined(),
+			latestQuarantineReason: latest?.reason ?? null,
+		};
+	}
+
+	getQueueSafeguard(now = Date.now()): BufferSafeguardReason | null {
+		const stats = this.getQueueStats(now);
+		if (stats.databaseSizeBytes >= RETENTION_MAX_BYTES) {
+			return "disk_size";
+		}
+		if (stats.maxAttempts >= MAX_PENDING_ATTEMPTS) {
+			return "max_attempts";
+		}
+		if (stats.oldestPendingAgeMs >= RETENTION_MAX_AGE_MS) {
+			return "queue_age";
+		}
+		return null;
+	}
+
+	getAdmissionSafeguard(
+		machineId: string,
+		agentId: AgentId,
+		now = Date.now(),
+	): BufferSafeguardReason | null {
+		if (this.databaseSizeBytes() >= RETENTION_MAX_BYTES) {
+			return "disk_size";
+		}
+		const aggregate = this.db
+			.prepare(
+				`SELECT MIN(created_at) AS oldest_created_at, MAX(attempts) AS max_attempts
+				FROM events
+				WHERE shipped = 0 AND terminal = 0 AND machine_id = ? AND agent_id = ?`,
+			)
+			.get(machineId, agentId) as AgentQueueAggregateRow;
+		if ((aggregate.max_attempts ?? 0) >= MAX_PENDING_ATTEMPTS) {
+			return "max_attempts";
+		}
+		if (
+			aggregate.oldest_created_at !== null &&
+			now - aggregate.oldest_created_at >= RETENTION_MAX_AGE_MS
+		) {
+			return "queue_age";
+		}
+		return null;
 	}
 
 	verifyLocalChain(): boolean {
@@ -342,6 +852,14 @@ export class BufferStore {
 			const chainEpoch =
 				input.chainEpoch ??
 				this.getCurrentEpochInsideTx(input.scope.machine_id, input.scope.agent_id);
+			const recoveryState = this.getChainRecoveryStateInsideTx(
+				input.scope.machine_id,
+				input.scope.agent_id,
+				chainEpoch,
+			);
+			if (recoveryState !== null) {
+				throw new ChainUnavailableError(recoveryState);
+			}
 			const tail = this.getTailInsideTx(input.scope.machine_id, input.scope.agent_id, chainEpoch);
 			const seq = tail === undefined ? 0 : tail.last_seq + 1;
 			const prev = tail === undefined ? GENESIS : tail.last_self_hash;
@@ -383,6 +901,14 @@ export class BufferStore {
 				payload: input.payload,
 			});
 			const serialized = serializeEnvelope(envelope);
+			const pageSize = this.db.prepare("PRAGMA page_size").get() as PragmaValueRow;
+			const projectedBytes =
+				this.databaseSizeBytes() +
+				Buffer.byteLength(serialized, "utf8") +
+				2 * (pageSize.page_size ?? 4_096);
+			if (projectedBytes > RETENTION_MAX_BYTES) {
+				throw new BufferCapacityError();
+			}
 			const createdAt = Date.now();
 			const insert = this.db
 				.prepare(
@@ -464,10 +990,40 @@ export class BufferStore {
 				rowid INTEGER NOT NULL,
 				event_id TEXT NOT NULL,
 				status INTEGER NOT NULL,
+				reason TEXT NOT NULL,
 				response_body TEXT NOT NULL,
 				quarantined_at INTEGER NOT NULL
 			);
+			CREATE TABLE IF NOT EXISTS chain_state (
+				machine_id TEXT NOT NULL,
+				agent_id TEXT NOT NULL,
+				chain_epoch INTEGER NOT NULL,
+				state TEXT NOT NULL,
+				reason TEXT NOT NULL,
+				updated_at INTEGER NOT NULL,
+				PRIMARY KEY(machine_id, agent_id, chain_epoch)
+			);
+			CREATE TABLE IF NOT EXISTS sender_control (
+				id INTEGER PRIMARY KEY CHECK (id = 1),
+				retry_not_before INTEGER NOT NULL DEFAULT 0,
+				lease_owner TEXT,
+				lease_until INTEGER NOT NULL DEFAULT 0
+			);
+			CREATE TABLE IF NOT EXISTS chain_retry (
+				machine_id TEXT NOT NULL,
+				agent_id TEXT NOT NULL,
+				chain_epoch INTEGER NOT NULL,
+				retry_not_before INTEGER NOT NULL,
+				PRIMARY KEY(machine_id, agent_id, chain_epoch)
+			);
+			INSERT OR IGNORE INTO sender_control (id) VALUES (1);
 		`);
+		const quarantineColumns = this.db.prepare("PRAGMA table_info(quarantine)").all() as TableInfoRow[];
+		if (!quarantineColumns.some((column) => column.name === "reason")) {
+			this.db.exec(
+				"ALTER TABLE quarantine ADD COLUMN reason TEXT NOT NULL DEFAULT 'unspecified'",
+			);
+		}
 	}
 
 	private getTailInsideTx(
@@ -493,6 +1049,24 @@ export class BufferStore {
 			)
 			.get(machineId, agentId) as EpochRow | undefined;
 		return row?.chain_epoch ?? 0;
+	}
+
+	private getChainRecoveryStateInsideTx(
+		machineId: string,
+		agentId: AgentId,
+		chainEpoch: number,
+	): ChainRecoveryState | null {
+		const row = this.db
+			.prepare(
+				`SELECT state FROM chain_state
+				WHERE machine_id = ? AND agent_id = ? AND chain_epoch = ?`,
+			)
+			.get(machineId, agentId, chainEpoch) as ChainStateRow | undefined;
+		return row?.state ?? null;
+	}
+
+	private senderControl(): SenderControlRow {
+		return this.db.prepare("SELECT * FROM sender_control WHERE id = 1").get() as SenderControlRow;
 	}
 
 	private count(sql: string, ...params: BindValue[]): number {
@@ -521,10 +1095,123 @@ export class BufferStore {
 		return pruned;
 	}
 
+	private scanChainRetentionInsideTx(): ChainRetentionScanRow[] {
+		if (this.chainRetentionCursor !== null) {
+			const rows = this.db
+				.prepare(CHAIN_RETENTION_SCAN_SQL.afterCursor)
+				.all(
+					this.chainRetentionCursor.machine_id,
+					this.chainRetentionCursor.agent_id,
+					this.chainRetentionCursor.chain_epoch,
+					CHAIN_RETENTION_SCAN_LIMIT,
+					CHAIN_FORENSIC_CLOSED_EPOCHS,
+				) as ChainRetentionScanRow[];
+			if (rows.length > 0) {
+				return rows;
+			}
+		}
+		return this.db
+			.prepare(CHAIN_RETENTION_SCAN_SQL.fromStart)
+			.all(CHAIN_RETENTION_SCAN_LIMIT, CHAIN_FORENSIC_CLOSED_EPOCHS) as ChainRetentionScanRow[];
+	}
+
+	private deleteOrphanChainRowsInsideTx(table: "chain_state" | "chain_retry"): number {
+		const rows = this.db
+			.prepare(
+				`SELECT child.machine_id, child.agent_id, child.chain_epoch
+				FROM ${table} AS child
+				WHERE NOT EXISTS (
+					SELECT 1 FROM chain_tail AS tail
+					WHERE tail.machine_id = child.machine_id
+						AND tail.agent_id = child.agent_id
+						AND tail.chain_epoch = child.chain_epoch
+				)
+				AND NOT EXISTS (
+					SELECT 1 FROM events AS event
+					WHERE event.machine_id = child.machine_id
+						AND event.agent_id = child.agent_id
+						AND event.chain_epoch = child.chain_epoch
+						AND event.shipped = 0
+				)
+				ORDER BY child.machine_id, child.agent_id, child.chain_epoch
+				LIMIT ?`,
+			)
+			.all(CHAIN_RETENTION_BATCH_SIZE) as ChainRetentionKey[];
+		const deleteRow = this.db.prepare(
+			`DELETE FROM ${table}
+			WHERE machine_id = ? AND agent_id = ? AND chain_epoch = ?`,
+		);
+		let deleted = 0;
+		for (const row of rows) {
+			deleted += deleteRow.run(row.machine_id, row.agent_id, row.chain_epoch).changes;
+		}
+		return deleted;
+	}
+
 	private databaseSizeBytes(): number {
+		return this.readPageStorageMetrics().databaseSizeBytes;
+	}
+
+	private logicalDataSizeBytes(): number {
+		return this.readPageStorageMetrics().logicalBytes;
+	}
+
+	private readStorageMetrics(): BufferStorageMetrics {
+		return {
+			...this.readPageStorageMetrics(),
+			remainingEpochs: this.count("SELECT COUNT(*) AS count FROM chain_tail"),
+		};
+	}
+
+	private readPageStorageMetrics(): PageStorageMetrics {
 		const pageCount = this.db.prepare("PRAGMA page_count").get() as PragmaValueRow;
 		const pageSize = this.db.prepare("PRAGMA page_size").get() as PragmaValueRow;
-		return (pageCount.page_count ?? 0) * (pageSize.page_size ?? 0);
+		const freelistCount = this.db.prepare("PRAGMA freelist_count").get() as PragmaValueRow;
+		const totalPages = pageCount.page_count ?? 0;
+		const pageSizeBytes = pageSize.page_size ?? 0;
+		const freelistPages = freelistCount.freelist_count ?? 0;
+		const logicalBytes = Math.max(0, totalPages - freelistPages) * pageSizeBytes;
+		const walBytes = fileSize(`${this.path}-wal`);
+		return {
+			logicalBytes,
+			physicalBytes: fileSize(this.path),
+			walBytes,
+			freelistPages,
+			freelistBytes: freelistPages * pageSizeBytes,
+			freelistRatio: totalPages === 0 ? 0 : freelistPages / totalPages,
+			databaseSizeBytes: logicalBytes + walBytes,
+		};
+	}
+
+	private checkpointWal(): void {
+		try {
+			const result = this.db.pragma("wal_checkpoint(TRUNCATE)") as unknown;
+			const row = Array.isArray(result) ? result[0] : undefined;
+			if (!isCheckpointRow(row) || row.busy > 0 || row.checkpointed < row.log) {
+				logger.warnRateLimited(
+					"buffer-maintenance:checkpoint",
+					"sno observe buffer checkpoint deferred",
+					checkpointWarningContext(this.path, row),
+				);
+			}
+		} catch (error) {
+			logger.warnRateLimited(
+				"buffer-maintenance:checkpoint",
+				"sno observe buffer checkpoint deferred",
+				{ path: this.path, error: errorMessage(error) },
+			);
+		}
+	}
+
+	private deleteChainRetryForRow(rowid: number): void {
+		this.db
+			.prepare(
+				`DELETE FROM chain_retry
+				WHERE (machine_id, agent_id, chain_epoch) = (
+					SELECT machine_id, agent_id, chain_epoch FROM events WHERE rowid = ?
+				)`,
+			)
+			.run(rowid);
 	}
 
 	private withImmediateTransaction(fn: () => void): void {
@@ -536,6 +1223,71 @@ export class BufferStore {
 			this.db.exec("ROLLBACK");
 			throw error;
 		}
+	}
+}
+
+function greatestChainRetentionKey(rows: ChainRetentionScanRow[]): ChainRetentionKey | null {
+	let greatest: ChainRetentionKey | null = null;
+	for (const row of rows) {
+		if (greatest === null || compareChainRetentionKeys(row, greatest) > 0) {
+			greatest = {
+				machine_id: row.machine_id,
+				agent_id: row.agent_id,
+				chain_epoch: row.chain_epoch,
+			};
+		}
+	}
+	return greatest;
+}
+
+function compareChainRetentionKeys(left: ChainRetentionKey, right: ChainRetentionKey): number {
+	const machineOrder = compareSqliteText(left.machine_id, right.machine_id);
+	if (machineOrder !== 0) {
+		return machineOrder;
+	}
+	const agentOrder = compareSqliteText(left.agent_id, right.agent_id);
+	return agentOrder === 0 ? left.chain_epoch - right.chain_epoch : agentOrder;
+}
+
+function compareSqliteText(left: string, right: string): number {
+	return left < right ? -1 : left > right ? 1 : 0;
+}
+
+function isCheckpointRow(value: unknown): value is CheckpointRow {
+	if (!isRecord(value)) {
+		return false;
+	}
+	return (
+		typeof value["busy"] === "number" &&
+		typeof value["log"] === "number" &&
+		typeof value["checkpointed"] === "number"
+	);
+}
+
+function checkpointWarningContext(
+	path: string,
+	row: unknown,
+): { path: string; busy?: number; log_pages?: number; checkpointed_pages?: number; result?: string } {
+	if (!isCheckpointRow(row)) {
+		return { path, result: "missing_or_malformed" };
+	}
+	return {
+		path,
+		busy: row.busy,
+		log_pages: row.log,
+		checkpointed_pages: row.checkpointed,
+	};
+}
+
+function errorMessage(error: unknown): string {
+	return error instanceof Error ? error.message : String(error);
+}
+
+function fileSize(path: string): number {
+	try {
+		return statSync(path).size;
+	} catch {
+		return 0;
 	}
 }
 
