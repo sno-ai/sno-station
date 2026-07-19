@@ -1,5 +1,17 @@
-import { statSync } from "node:fs";
-import { dirname } from "node:path";
+import { randomUUID } from "node:crypto";
+import {
+	closeSync,
+	existsSync,
+	fsyncSync,
+	openSync,
+	readFileSync,
+	renameSync,
+	statfsSync,
+	statSync,
+	unlinkSync,
+	writeFileSync,
+} from "node:fs";
+import { basename, dirname } from "node:path";
 import DatabaseConstructor from "better-sqlite3";
 import { computeSelfHash } from "./canonical-hash.js";
 import {
@@ -32,6 +44,10 @@ const MAX_PENDING_ATTEMPTS = 100;
 const QUARANTINE_MAX_ROWS = 1_000;
 const QUARANTINE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 const QUARANTINE_CAPACITY_RESERVE_BYTES = 1024 * 1024;
+const COMPACTION_MIN_FREELIST_BYTES = 1024 * 1024;
+const COMPACTION_SPACE_RESERVE_BYTES = 16 * 1024 * 1024;
+const COMPACTION_COOLDOWN_MS = 24 * 60 * 60 * 1000;
+const COMPACTION_LEASE_MS = 5 * 60 * 1000;
 
 type BindValue = string | number | Buffer | null;
 
@@ -162,6 +178,16 @@ interface ChainStateRow {
 	reason?: string;
 }
 
+interface MaintenanceControlRow {
+	lease_owner: string | null;
+	lease_until_ms: number;
+	phase: string;
+	protected_inventory_json: string | null;
+	last_compaction_at_ms: number | null;
+	last_reason: CompactionReason;
+	updated_at_ms: number;
+}
+
 export type ChainRecoveryState = "reseed_required" | "retired";
 
 export interface BufferStorageMetrics {
@@ -177,14 +203,29 @@ export interface BufferStorageMetrics {
 
 type PageStorageMetrics = Omit<BufferStorageMetrics, "remainingEpochs">;
 
+export type CompactionReason =
+	| "not_run"
+	| "not_needed"
+	| "lease_busy"
+	| "checkpoint_busy"
+	| "invalid_metadata"
+	| "insufficient_space"
+	| "backup_failed"
+	| "backup_verified"
+	| "vacuuming"
+	| "reopening"
+	| "interrupted_primary_recovered"
+	| "recovery_required"
+	| "completed";
+
 export interface RetentionReport extends BufferStorageMetrics {
 	deletedEvents: number;
 	deletedChainTail: number;
 	deletedChainState: number;
 	deletedChainRetry: number;
 	maintenanceDurationMs: number;
-	lastCompactionAtMs: null;
-	compactionReason: "not_run";
+	lastCompactionAtMs: number | null;
+	compactionReason: CompactionReason;
 }
 
 export interface QueueStats extends BufferStorageMetrics {
@@ -195,6 +236,8 @@ export interface QueueStats extends BufferStorageMetrics {
 	maxAttempts: number;
 	quarantinedCount: number;
 	latestQuarantineReason: string | null;
+	lastCompactionAtMs: number | null;
+	compactionReason: CompactionReason;
 }
 
 const CHAIN_RETENTION_ELIGIBILITY_SQL = `CASE WHEN
@@ -251,16 +294,30 @@ export const CHAIN_RETENTION_SCAN_SQL = {
 
 export type BufferSafeguardReason = "disk_size" | "max_attempts" | "queue_age";
 
+export function compactionHasRequiredSpace(
+	availableBytes: number,
+	primaryMainBytes: number,
+	walBytes: number,
+): boolean {
+	if (![availableBytes, primaryMainBytes, walBytes].every(isNonNegativeSafeInteger)) {
+		return false;
+	}
+	const required = compactionRequiredFreeBytes(BigInt(primaryMainBytes), BigInt(walBytes));
+	return BigInt(availableBytes) >= required;
+}
+
 export class BufferStore {
-	private readonly db: InstanceType<typeof DatabaseConstructor>;
+	private db: InstanceType<typeof DatabaseConstructor>;
 	private chainRetentionCursor: ChainRetentionKey | null = null;
 
 	constructor(readonly path: string) {
 		ensureDir(dirname(path));
-		this.db = new DatabaseConstructor(path);
-		this.db.pragma("journal_mode = WAL");
-		this.db.pragma("busy_timeout = 5000");
+		if (existsSync(this.recoveryMarkerPath())) {
+			throw new Error("sno observe maintenance recovery requires operator action");
+		}
+		this.db = this.openDatabase();
 		this.migrate();
+		this.recoverInterruptedMaintenance();
 	}
 
 	close(): void {
@@ -683,6 +740,7 @@ export class BufferStore {
 		if (deletedEvents + deletedChainTail + deletedChainState + deletedChainRetry > 0) {
 			this.checkpointWal();
 		}
+		const maintenance = this.maintenanceControl();
 		const report: RetentionReport = {
 			deletedEvents,
 			deletedChainTail,
@@ -690,11 +748,142 @@ export class BufferStore {
 			deletedChainRetry,
 			...this.readStorageMetrics(),
 			maintenanceDurationMs: Date.now() - startedAt,
-			lastCompactionAtMs: null,
-			compactionReason: "not_run",
+			lastCompactionAtMs: maintenance.last_compaction_at_ms,
+			compactionReason: maintenance.last_reason,
 		};
 		logger.debug("sno observe buffer maintenance", { ...report });
 		return report;
+	}
+
+	async compactIfNeeded(now = Date.now()): Promise<RetentionReport> {
+		const startedAt = Date.now();
+		const rawControl = this.readMaintenanceControl();
+		if (!isMaintenanceControlRow(rawControl) || this.hasMalformedRetentionMetadata()) {
+			return this.compactionReport("invalid_metadata", startedAt);
+		}
+		this.recoverInterruptedMaintenance(now);
+		const initial = this.readStorageMetrics();
+		const control = this.maintenanceControl();
+		if (
+			this.countPending() > 0 ||
+			initial.freelistBytes < COMPACTION_MIN_FREELIST_BYTES ||
+			(control.last_compaction_at_ms !== null &&
+				now - control.last_compaction_at_ms < COMPACTION_COOLDOWN_MS)
+		) {
+			return this.compactionReport("not_needed", startedAt);
+		}
+
+		const owner = createMaintenanceOwner();
+		if (!this.acquireMaintenance(owner, now)) {
+			return this.compactionReport("lease_busy", startedAt);
+		}
+
+		const backupPath = `${this.path}.pre-compaction.bak`;
+		try {
+			if (this.countPending() > 0) {
+				this.releaseMaintenance(owner, "not_needed", now);
+				return this.compactionReport("not_needed", startedAt);
+			}
+			if (!this.checkpointWal()) {
+				this.releaseMaintenance(owner, "checkpoint_busy", now);
+				return this.compactionReport("checkpoint_busy", startedAt);
+			}
+			const mainBytes = fileSize(this.path);
+			const walBytes = fileSize(`${this.path}-wal`);
+			const filesystem = statfsSync(dirname(this.path), { bigint: true });
+			const availableBytes = filesystem.bavail * filesystem.bsize;
+			const requiredBytes = compactionRequiredFreeBytes(BigInt(mainBytes), BigInt(walBytes));
+			if (availableBytes < requiredBytes) {
+				this.releaseMaintenance(owner, "insufficient_space", now);
+				return this.compactionReport("insufficient_space", startedAt);
+			}
+			if (existsSync(backupPath)) {
+				this.releaseMaintenance(owner, "backup_failed", now);
+				return this.compactionReport("backup_failed", startedAt);
+			}
+
+			const inventory = this.protectedInventory(this.db);
+			await this.db.backup(backupPath);
+			const backup = new DatabaseConstructor(backupPath, { readonly: true });
+			try {
+				if (
+					backup.pragma("integrity_check", { simple: true }) !== "ok" ||
+					this.protectedInventory(backup) !== inventory
+				) {
+					throw new Error("compaction backup verification failed");
+				}
+			} finally {
+				backup.close();
+			}
+			this.transitionMaintenance(
+				owner,
+				now + COMPACTION_LEASE_MS,
+				"backup_verified",
+				inventory,
+				"backup_verified",
+				now,
+			);
+			this.logCompactionPhase("backup_verified", owner, startedAt);
+			await new Promise<void>((resolve) => setImmediate(resolve));
+			this.transitionMaintenance(
+				owner,
+				now + COMPACTION_LEASE_MS,
+				"vacuuming",
+				inventory,
+				"vacuuming",
+				now,
+			);
+			this.logCompactionPhase("vacuuming", owner, startedAt);
+
+			this.db.close();
+			const maintenance = new DatabaseConstructor(this.path);
+			try {
+				maintenance.pragma("busy_timeout = 5000");
+				maintenance.exec("VACUUM");
+			} finally {
+				maintenance.close();
+			}
+			this.db = this.openDatabase();
+			if (!this.checkpointWal()) {
+				throw new Error("post-compaction checkpoint failed");
+			}
+			if (
+				this.db.pragma("integrity_check", { simple: true }) !== "ok" ||
+				this.protectedInventory(this.db) !== inventory
+			) {
+				throw new Error("compaction primary verification failed");
+			}
+			const reclaimed = this.readStorageMetrics();
+			if (
+				reclaimed.physicalBytes + reclaimed.walBytes >=
+				initial.physicalBytes + initial.walBytes
+			) {
+				throw new Error("compaction did not reclaim physical storage");
+			}
+			this.transitionMaintenance(
+				owner,
+				now + COMPACTION_LEASE_MS,
+				"reopening",
+				inventory,
+				"reopening",
+				now,
+			);
+			this.logCompactionPhase("reopening", owner, startedAt);
+			this.completeMaintenance(owner, now);
+			this.logCompactionPhase("completed", owner, startedAt);
+			unlinkSync(backupPath);
+			return this.compactionReport("completed", startedAt);
+		} catch (error) {
+			if (!this.db.open) {
+				this.db = this.openDatabase();
+			}
+			const control = this.maintenanceControl();
+			if (control.lease_owner === owner) {
+				this.expireOwnedMaintenance(owner, now);
+				this.recoverInterruptedMaintenance(now, owner);
+			}
+			throw error;
+		}
 	}
 
 	pruneQuarantine(
@@ -727,6 +916,8 @@ export class BufferStore {
 
 	getQueueStats(now = Date.now()): QueueStats {
 		const storage = this.readStorageMetrics();
+		const rawMaintenance = this.readMaintenanceControl();
+		const maintenance = isMaintenanceControlRow(rawMaintenance) ? rawMaintenance : null;
 		const aggregate = this.db
 			.prepare(
 				`SELECT
@@ -772,6 +963,8 @@ export class BufferStore {
 			maxAttempts: aggregate.max_attempts ?? 0,
 			quarantinedCount: this.countQuarantined(),
 			latestQuarantineReason: latest?.reason ?? null,
+			lastCompactionAtMs: maintenance?.last_compaction_at_ms ?? null,
+			compactionReason: maintenance?.last_reason ?? "invalid_metadata",
 		};
 	}
 
@@ -849,6 +1042,7 @@ export class BufferStore {
 	private appendOnce(input: AppendInput): AppendResult {
 		this.db.exec("BEGIN IMMEDIATE");
 		try {
+			this.assertMaintenanceWritable();
 			const chainEpoch =
 				input.chainEpoch ??
 				this.getCurrentEpochInsideTx(input.scope.machine_id, input.scope.agent_id);
@@ -1016,7 +1210,18 @@ export class BufferStore {
 				retry_not_before INTEGER NOT NULL,
 				PRIMARY KEY(machine_id, agent_id, chain_epoch)
 			);
+			CREATE TABLE IF NOT EXISTS maintenance_control (
+				id INTEGER PRIMARY KEY CHECK (id = 1),
+				lease_owner TEXT,
+				lease_until_ms INTEGER NOT NULL DEFAULT 0,
+				phase TEXT NOT NULL DEFAULT 'idle',
+				protected_inventory_json TEXT,
+				last_compaction_at_ms INTEGER,
+				last_reason TEXT NOT NULL DEFAULT 'not_run',
+				updated_at_ms INTEGER NOT NULL DEFAULT 0
+			);
 			INSERT OR IGNORE INTO sender_control (id) VALUES (1);
+			INSERT OR IGNORE INTO maintenance_control (id) VALUES (1);
 		`);
 		const quarantineColumns = this.db.prepare("PRAGMA table_info(quarantine)").all() as TableInfoRow[];
 		if (!quarantineColumns.some((column) => column.name === "reason")) {
@@ -1069,6 +1274,324 @@ export class BufferStore {
 		return this.db.prepare("SELECT * FROM sender_control WHERE id = 1").get() as SenderControlRow;
 	}
 
+	private maintenanceControl(): MaintenanceControlRow {
+		const control = this.readMaintenanceControl();
+		if (!isMaintenanceControlRow(control)) {
+			throw new Error("sno observe maintenance metadata is invalid");
+		}
+		return control;
+	}
+
+	private readMaintenanceControl(): unknown {
+		return this.db
+			.prepare(
+				`SELECT lease_owner, lease_until_ms, phase, protected_inventory_json,
+					last_compaction_at_ms, last_reason, updated_at_ms
+				FROM maintenance_control WHERE id = 1`,
+			)
+			.get();
+	}
+
+	private hasMalformedRetentionMetadata(): boolean {
+		return (
+			this.count(
+				`SELECT COUNT(*) AS count FROM chain_state
+				WHERE typeof(state) != 'text' OR state NOT IN ('reseed_required', 'retired')`,
+			) > 0 ||
+			this.count(
+				`SELECT COUNT(*) AS count FROM chain_retry
+				WHERE typeof(retry_not_before) != 'integer' OR retry_not_before < 0`,
+			) > 0
+		);
+	}
+
+	private acquireMaintenance(owner: string, now: number): boolean {
+		let acquired = false;
+		this.withImmediateTransaction(() => {
+			acquired =
+				this.db
+					.prepare(
+						`UPDATE maintenance_control
+						SET lease_owner = ?, lease_until_ms = ?, phase = 'leased',
+							protected_inventory_json = NULL, last_reason = 'not_run', updated_at_ms = ?
+						WHERE id = 1 AND phase = 'idle'
+							AND (lease_owner IS NULL OR lease_until_ms <= ?)`,
+					)
+					.run(owner, now + COMPACTION_LEASE_MS, now, now).changes === 1;
+		}, true);
+		return acquired;
+	}
+
+	private transitionMaintenance(
+		owner: string,
+		leaseUntilMs: number,
+		phase: string,
+		inventory: string | null,
+		reason: CompactionReason,
+		updatedAtMs: number,
+	): void {
+		this.withImmediateTransaction(() => {
+			const changed = this.db
+				.prepare(
+					`UPDATE maintenance_control
+					SET lease_owner = ?, lease_until_ms = ?, phase = ?,
+						protected_inventory_json = ?, last_reason = ?, updated_at_ms = ?
+					WHERE id = 1 AND lease_owner = ?`,
+				)
+				.run(owner, leaseUntilMs, phase, inventory, reason, updatedAtMs, owner).changes;
+			if (changed !== 1) {
+				throw new Error("sno observe maintenance lease ownership changed");
+			}
+		}, true);
+	}
+
+	private releaseMaintenance(owner: string, reason: CompactionReason, now: number): void {
+		this.transitionMaintenance(owner, 0, "idle", null, reason, now);
+		this.withImmediateTransaction(() => {
+			this.db
+				.prepare(
+					`UPDATE maintenance_control SET lease_owner = NULL
+					WHERE id = 1 AND lease_owner = ? AND phase = 'idle'`,
+				)
+				.run(owner);
+		}, true);
+	}
+
+	private completeMaintenance(owner: string, now: number): void {
+		this.withImmediateTransaction(() => {
+			const changed = this.db
+				.prepare(
+					`UPDATE maintenance_control
+					SET lease_owner = NULL, lease_until_ms = 0, phase = 'idle',
+						protected_inventory_json = NULL, last_compaction_at_ms = ?,
+						last_reason = 'completed', updated_at_ms = ?
+					WHERE id = 1 AND lease_owner = ?`,
+				)
+				.run(now, now, owner).changes;
+			if (changed !== 1) {
+				throw new Error("sno observe maintenance lease ownership changed");
+			}
+		}, true);
+	}
+
+	private recoverInterruptedMaintenance(now = Date.now(), recoveringOwner?: string): void {
+		const rawControl = this.readMaintenanceControl();
+		if (!isMaintenanceControlRow(rawControl)) {
+			return;
+		}
+		const control = rawControl;
+		const backupPath = `${this.path}.pre-compaction.bak`;
+		if (control.phase === "idle") {
+			this.recoverIdleBackup(backupPath, control, now);
+			return;
+		}
+		if (
+			control.lease_until_ms > now ||
+			(control.lease_owner !== recoveringOwner && maintenanceOwnerIsRunning(control.lease_owner))
+		) {
+			return;
+		}
+		if (control.phase === "leased") {
+			if (this.db.pragma("integrity_check", { simple: true }) !== "ok") {
+				this.markRecoveryRequired(control, now, "pre_backup_primary_integrity_failed");
+			}
+			if (existsSync(backupPath)) {
+				unlinkSync(backupPath);
+			}
+			this.clearInterruptedMaintenance(now);
+			return;
+		}
+		if (control.protected_inventory_json === null || !existsSync(backupPath)) {
+			this.markRecoveryRequired(control, now, "verified_backup_missing");
+		}
+		const backup = new DatabaseConstructor(backupPath, { readonly: true });
+		try {
+			const primarySafe =
+				this.db.pragma("integrity_check", { simple: true }) === "ok" &&
+				this.protectedInventory(this.db) === control.protected_inventory_json;
+			const backupSafe =
+				backup.pragma("integrity_check", { simple: true }) === "ok" &&
+				this.protectedInventory(backup) === control.protected_inventory_json;
+			if (!primarySafe || !backupSafe) {
+				this.markRecoveryRequired(control, now, "primary_or_backup_verification_failed");
+			}
+		} finally {
+			backup.close();
+		}
+		unlinkSync(backupPath);
+		this.clearInterruptedMaintenance(now);
+	}
+
+	private recoverIdleBackup(
+		backupPath: string,
+		control: MaintenanceControlRow,
+		now: number,
+	): void {
+		if (!existsSync(backupPath)) {
+			return;
+		}
+		const backup = new DatabaseConstructor(backupPath, { readonly: true });
+		try {
+			const safe =
+				this.db.pragma("integrity_check", { simple: true }) === "ok" &&
+				backup.pragma("integrity_check", { simple: true }) === "ok" &&
+				this.protectedInventory(this.db) === this.protectedInventory(backup);
+			if (!safe) {
+				this.markRecoveryRequired(control, now, "idle_backup_verification_failed");
+			}
+		} finally {
+			backup.close();
+		}
+		unlinkSync(backupPath);
+	}
+
+	private expireOwnedMaintenance(owner: string, now: number): void {
+		this.withImmediateTransaction(() => {
+			this.db
+				.prepare(
+					`UPDATE maintenance_control SET lease_until_ms = ?, updated_at_ms = ?
+					WHERE id = 1 AND lease_owner = ?`,
+				)
+				.run(now, now, owner);
+		}, true);
+	}
+
+	private markRecoveryRequired(
+		control: MaintenanceControlRow,
+		detectedAtMs: number,
+		reason: string,
+	): never {
+		const markerPath = this.recoveryMarkerPath();
+		const temporaryPath = `${markerPath}.${process.pid}.${randomUUID()}.tmp`;
+		const payload = `${JSON.stringify({
+			schema_version: 1,
+			attempt_owner: control.lease_owner,
+			detected_at_ms: detectedAtMs,
+			reason,
+			primary: basename(this.path),
+			backup: basename(`${this.path}.pre-compaction.bak`),
+		})}\n`;
+		const file = openSync(temporaryPath, "wx", 0o600);
+		try {
+			writeFileSync(file, payload, "utf8");
+			fsyncSync(file);
+		} finally {
+			closeSync(file);
+		}
+		renameSync(temporaryPath, markerPath);
+		const directory = openSync(dirname(markerPath), "r");
+		try {
+			fsyncSync(directory);
+		} finally {
+			closeSync(directory);
+		}
+		throw new Error("sno observe maintenance recovery requires operator action");
+	}
+
+	private recoveryMarkerPath(): string {
+		return `${this.path}.recovery-required.json`;
+	}
+
+	private clearInterruptedMaintenance(now: number): void {
+		this.withImmediateTransaction(() => {
+			this.db
+				.prepare(
+					`UPDATE maintenance_control
+					SET lease_owner = NULL, lease_until_ms = 0, phase = 'idle',
+						protected_inventory_json = NULL,
+						last_reason = 'interrupted_primary_recovered', updated_at_ms = ?
+					WHERE id = 1 AND lease_until_ms <= ?`,
+				)
+				.run(now, now);
+		}, true);
+	}
+
+	private assertMaintenanceWritable(now = Date.now()): void {
+		const rawControl = this.readMaintenanceControl();
+		if (!isMaintenanceControlRow(rawControl)) {
+			throw new Error("sno observe maintenance metadata is invalid");
+		}
+		const control = rawControl;
+		if (
+			control.phase !== "idle" ||
+			(control.lease_owner !== null && control.lease_until_ms > now)
+		) {
+			throw new Error("sno observe maintenance lease blocks buffer mutation");
+		}
+	}
+
+	private compactionReport(reason: CompactionReason, startedAt: number): RetentionReport {
+		const rawMaintenance = this.readMaintenanceControl();
+		const lastCompactionAtMs = isMaintenanceControlRow(rawMaintenance)
+			? rawMaintenance.last_compaction_at_ms
+			: null;
+		return {
+			deletedEvents: 0,
+			deletedChainTail: 0,
+			deletedChainState: 0,
+			deletedChainRetry: 0,
+			...this.readStorageMetrics(),
+			maintenanceDurationMs: Date.now() - startedAt,
+			lastCompactionAtMs,
+			compactionReason: reason,
+		};
+	}
+
+	private protectedInventory(
+		database: InstanceType<typeof DatabaseConstructor>,
+	): string {
+		const countFrom = (sql: string): number => {
+			const row = database.prepare(sql).get() as CountRow | undefined;
+			return row?.count ?? 0;
+		};
+		return JSON.stringify({
+			events: countFrom("SELECT COUNT(*) AS count FROM events"),
+			quarantine: countFrom("SELECT COUNT(*) AS count FROM quarantine"),
+			chainTail: countFrom("SELECT COUNT(*) AS count FROM chain_tail"),
+			chainState: countFrom("SELECT COUNT(*) AS count FROM chain_state"),
+			chainRetry: countFrom("SELECT COUNT(*) AS count FROM chain_retry"),
+			unshippedEvents: countFrom("SELECT COUNT(*) AS count FROM events WHERE shipped = 0"),
+			terminalEvents: countFrom("SELECT COUNT(*) AS count FROM events WHERE terminal = 1"),
+			activeStateReferences: countFrom(
+				`SELECT COUNT(*) AS count FROM chain_state AS state
+				WHERE EXISTS (
+					SELECT 1 FROM chain_tail AS tail
+					WHERE tail.machine_id = state.machine_id
+						AND tail.agent_id = state.agent_id
+						AND tail.chain_epoch = state.chain_epoch
+				)`,
+			),
+			activeRetryReferences: countFrom(
+				`SELECT COUNT(*) AS count FROM chain_retry AS retry
+				WHERE EXISTS (
+					SELECT 1 FROM chain_tail AS tail
+					WHERE tail.machine_id = retry.machine_id
+						AND tail.agent_id = retry.agent_id
+						AND tail.chain_epoch = retry.chain_epoch
+				)`,
+			),
+		});
+	}
+
+	private logCompactionPhase(
+		phase: "backup_verified" | "vacuuming" | "reopening" | "completed",
+		owner: string,
+		attemptStartedAtMs: number,
+	): void {
+		logger.debug("sno observe buffer compaction phase", {
+			maintenance_phase: phase,
+			maintenance_owner: owner,
+			attempt_started_at_ms: attemptStartedAtMs,
+		});
+	}
+
+	private openDatabase(): InstanceType<typeof DatabaseConstructor> {
+		const database = new DatabaseConstructor(this.path);
+		database.pragma("journal_mode = WAL");
+		database.pragma("busy_timeout = 5000");
+		return database;
+	}
+
 	private count(sql: string, ...params: BindValue[]): number {
 		const row = this.db.prepare(sql).get(...params) as CountRow | undefined;
 		return row?.count ?? 0;
@@ -1106,8 +1629,20 @@ export class BufferStore {
 					CHAIN_RETENTION_SCAN_LIMIT,
 					CHAIN_FORENSIC_CLOSED_EPOCHS,
 				) as ChainRetentionScanRow[];
-			if (rows.length > 0) {
+			if (rows.length === CHAIN_RETENTION_SCAN_LIMIT) {
 				return rows;
+			}
+			if (rows.length > 0) {
+				const cursor = this.chainRetentionCursor;
+				const wrapped = (
+					this.db
+						.prepare(CHAIN_RETENTION_SCAN_SQL.fromStart)
+						.all(
+							CHAIN_RETENTION_SCAN_LIMIT - rows.length,
+							CHAIN_FORENSIC_CLOSED_EPOCHS,
+						) as ChainRetentionScanRow[]
+				).filter((row) => compareChainRetentionKeys(row, cursor) <= 0);
+				return [...rows, ...wrapped];
 			}
 		}
 		return this.db
@@ -1183,7 +1718,7 @@ export class BufferStore {
 		};
 	}
 
-	private checkpointWal(): void {
+	private checkpointWal(): boolean {
 		try {
 			const result = this.db.pragma("wal_checkpoint(TRUNCATE)") as unknown;
 			const row = Array.isArray(result) ? result[0] : undefined;
@@ -1193,13 +1728,16 @@ export class BufferStore {
 					"sno observe buffer checkpoint deferred",
 					checkpointWarningContext(this.path, row),
 				);
+				return false;
 			}
+			return true;
 		} catch (error) {
 			logger.warnRateLimited(
 				"buffer-maintenance:checkpoint",
 				"sno observe buffer checkpoint deferred",
 				{ path: this.path, error: errorMessage(error) },
 			);
+			return false;
 		}
 	}
 
@@ -1214,9 +1752,12 @@ export class BufferStore {
 			.run(rowid);
 	}
 
-	private withImmediateTransaction(fn: () => void): void {
+	private withImmediateTransaction(fn: () => void, maintenanceMutation = false): void {
 		this.db.exec("BEGIN IMMEDIATE");
 		try {
+			if (!maintenanceMutation) {
+				this.assertMaintenanceWritable();
+			}
 			fn();
 			this.db.exec("COMMIT");
 		} catch (error) {
@@ -1352,4 +1893,134 @@ function isUniqueConstraintError(error: unknown): boolean {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null;
+}
+
+function isNonNegativeSafeInteger(value: unknown): value is number {
+	return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
+}
+
+function compactionRequiredFreeBytes(primaryMainBytes: bigint, walBytes: bigint): bigint {
+	return 3n * primaryMainBytes + walBytes + BigInt(COMPACTION_SPACE_RESERVE_BYTES);
+}
+
+function maintenanceOwnerIsRunning(owner: string | null): boolean {
+	if (owner === null) {
+		return false;
+	}
+	const [rawPid, expectedStartToken] = owner.split(":", 3);
+	const pid = Number(rawPid);
+	if (!Number.isSafeInteger(pid) || pid <= 0) {
+		return false;
+	}
+	if (expectedStartToken === undefined || readProcessStartToken(pid) !== expectedStartToken) {
+		return false;
+	}
+	try {
+		process.kill(pid, 0);
+		return true;
+	} catch (error) {
+		return !isNodeErrorWithCode(error, "ESRCH");
+	}
+}
+
+function createMaintenanceOwner(): string {
+	const startToken = readProcessStartToken(process.pid);
+	if (startToken === null) {
+		return `${process.pid}:unverifiable:${randomUUID()}`;
+	}
+	return `${process.pid}:${startToken}:${randomUUID()}`;
+}
+
+function readProcessStartToken(pid: number): string | null {
+	try {
+		const stat = readFileSync(`/proc/${pid}/stat`, "utf8");
+		const commandEnd = stat.lastIndexOf(")");
+		if (commandEnd === -1) {
+			return null;
+		}
+		return stat.slice(commandEnd + 2).split(" ")[19] ?? null;
+	} catch {
+		return null;
+	}
+}
+
+function isNodeErrorWithCode(error: unknown, code: string): boolean {
+	return typeof error === "object" && error !== null && "code" in error && error.code === code;
+}
+
+function isMaintenanceControlRow(value: unknown): value is MaintenanceControlRow {
+	if (!isRecord(value)) {
+		return false;
+	}
+	const phase = value["phase"];
+	const owner = value["lease_owner"];
+	const inventory = value["protected_inventory_json"];
+	return (
+		(owner === null || (typeof owner === "string" && owner.length > 0)) &&
+		isNonNegativeSafeInteger(value["lease_until_ms"]) &&
+		isMaintenancePhase(phase) &&
+		(inventory === null || isProtectedInventoryJson(inventory)) &&
+		(value["last_compaction_at_ms"] === null ||
+			isNonNegativeSafeInteger(value["last_compaction_at_ms"])) &&
+		isCompactionReason(value["last_reason"]) &&
+		isNonNegativeSafeInteger(value["updated_at_ms"]) &&
+		(phase === "idle" ? inventory === null : owner !== null) &&
+		(phase === "leased" ? inventory === null : true) &&
+		(["backup_verified", "vacuuming", "reopening"].includes(phase)
+			? inventory !== null
+			: true)
+	);
+}
+
+function isMaintenancePhase(value: unknown): value is MaintenanceControlRow["phase"] {
+	return (
+		typeof value === "string" &&
+		["idle", "leased", "backup_verified", "vacuuming", "reopening"].includes(value)
+	);
+}
+
+function isCompactionReason(value: unknown): value is CompactionReason {
+	return (
+		typeof value === "string" &&
+		[
+			"not_run",
+			"not_needed",
+			"lease_busy",
+			"checkpoint_busy",
+			"invalid_metadata",
+			"insufficient_space",
+			"backup_failed",
+			"backup_verified",
+			"vacuuming",
+			"reopening",
+			"interrupted_primary_recovered",
+			"recovery_required",
+			"completed",
+		].includes(value)
+	);
+}
+
+function isProtectedInventoryJson(value: unknown): value is string {
+	if (typeof value !== "string") {
+		return false;
+	}
+	try {
+		const parsed = JSON.parse(value) as unknown;
+		return (
+			isRecord(parsed) &&
+			[
+				"events",
+				"quarantine",
+				"chainTail",
+				"chainState",
+				"chainRetry",
+				"unshippedEvents",
+				"terminalEvents",
+				"activeStateReferences",
+				"activeRetryReferences",
+			].every((key) => isNonNegativeSafeInteger(parsed[key]))
+		);
+	} catch {
+		return false;
+	}
 }
