@@ -365,7 +365,7 @@ async function flushPendingWithLease(
 				retryAfterMs: store.getNextChainRetryDelay() || 5_000,
 			};
 		}
-		store.pruneRetention();
+		await maintainAfterRetention(store);
 		store.clearElapsedRetryDeadline();
 		return { shipped: 0, terminal: 0, retryable: 0 };
 	}
@@ -427,13 +427,26 @@ async function flushPendingWithLease(
 			break;
 		}
 	}
-	store.pruneRetention();
+	await maintainAfterRetention(store);
 	const retryAfterMs = globalRetryable > 0 ? globalRetryAfterMs : chainRetryAfterMs;
 	return persistRetryDeadline(
 		store,
 		withOptionalRetryAfter({ shipped, terminal, retryable }, retryAfterMs),
 		globalRetryable > 0,
 	);
+}
+
+async function maintainAfterRetention(store: BufferStore): Promise<void> {
+	const report = store.pruneRetention();
+	if (
+		report.deletedEvents === 0 &&
+		report.deletedChainTail === 0 &&
+		report.deletedChainState === 0 &&
+		report.deletedChainRetry === 0 &&
+		store.countPending() === 0
+	) {
+		await store.compactIfNeeded();
+	}
 }
 
 function persistRetryDeadline(
