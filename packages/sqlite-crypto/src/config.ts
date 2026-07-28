@@ -61,11 +61,10 @@ export function resolveConfigPaths(): SnoStationCoreConfigPaths {
 	const base = xdg && xdg.length > 0 ? xdg : join(homedir(), ".config");
 	const configDir = join(base, "sno-station-core");
 	const explicitKeyFile = process.env[KEY_FILE_ENV]?.trim();
+	const keyFile = explicitKeyFile || join(configDir, "key");
 	return {
 		configDir,
-		keyFile: explicitKeyFile
-			? assertDurableKeyFilePath(explicitKeyFile)
-			: join(configDir, "key"),
+		keyFile: assertDurableKeyFilePath(keyFile),
 		manifestFile: join(configDir, "dbs.json"),
 		markerFile: join(configDir, ".manifest-rename-marker"),
 	};

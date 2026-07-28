@@ -107,6 +107,9 @@ from `~/.config/sno-station-core/key`. Provisioning refuses temporary,
 scratch, cache, runtime, and already-populated paths, and refuses to create a
 replacement after any encrypted database is registered. Missing-key runtime
 resolution fails loudly with the same command instead of generating a key.
+The durability check applies to every resolved key path, including the default
+path derived from `XDG_CONFIG_HOME`; a pre-existing scratch key is rejected,
+not read or deleted.
 
 The Memora evaluation harness has a narrower, non-interactive contract: it
 requires this explicitly provisioned file in plain mode and does not fall back
