@@ -2,7 +2,11 @@ import { randomBytes } from "node:crypto";
 import { existsSync } from "node:fs";
 import { hostname } from "node:os";
 import { createInterface } from "node:readline";
-import { resolveConfigPaths } from "./config.js";
+import {
+	assertDurableKeyFilePath,
+	hasExplicitKeyFile,
+	resolveConfigPaths,
+} from "./config.js";
 import {
 	KeychainUnavailableError,
 	ManifestCorrupted,
@@ -92,18 +96,26 @@ function readPlainKeyFileSync(content: Buffer): KeyStateFile {
 	return obj as unknown as KeyStateFile;
 }
 
+async function readKeyStateAt(path: string): Promise<KeyStateFile | undefined> {
+	if (!existsSync(path)) return undefined;
+	const buf = await readSecretFile(path);
+	return readPlainKeyFileSync(buf);
+}
+
+function readKeyStateAtSync(path: string): KeyStateFile | undefined {
+	if (!existsSync(path)) return undefined;
+	const buf = readSecretFileSync(path);
+	return readPlainKeyFileSync(buf);
+}
+
 async function readKeyState(): Promise<KeyStateFile | undefined> {
 	const { keyFile } = resolveConfigPaths();
-	if (!existsSync(keyFile)) return undefined;
-	const buf = await readSecretFile(keyFile);
-	return readPlainKeyFileSync(buf);
+	return await readKeyStateAt(keyFile);
 }
 
 function readKeyStateSync(): KeyStateFile | undefined {
 	const { keyFile } = resolveConfigPaths();
-	if (!existsSync(keyFile)) return undefined;
-	const buf = readSecretFileSync(keyFile);
-	return readPlainKeyFileSync(buf);
+	return readKeyStateAtSync(keyFile);
 }
 
 function makePlainKeyState(dek: Buffer): KeyStateFilePlain {
@@ -182,27 +194,6 @@ async function promptPassphrase(): Promise<Buffer> {
 	}
 }
 
-interface DekResolution {
-	dek: Buffer;
-	persistedAsPlain: boolean;
-}
-
-async function generateAndPersistFresh(): Promise<DekResolution> {
-	const dek = randomBytes(32);
-	try {
-		liveKeychain.set(dek.toString("hex"));
-		return { dek, persistedAsPlain: false };
-	} catch (err) {
-		if (err instanceof KeychainUnavailableError) {
-			emitFallbackWarning();
-			const { keyFile } = resolveConfigPaths();
-			writeNewSecretFile(keyFile, JSON.stringify(makePlainKeyState(dek)));
-			return { dek, persistedAsPlain: true };
-		}
-		throw err;
-	}
-}
-
 function readKeychainHex(): string | null {
 	try {
 		return liveKeychain.get();
@@ -252,7 +243,7 @@ async function resolveDek(skipManifestGate = false): Promise<Buffer> {
 	const registeredDbs = manifest?.dbs.length ?? 0;
 
 	// Step B — key-source inventory.
-	const keychainHex = readKeychainHex();
+	const keychainHex = hasExplicitKeyFile() ? null : readKeychainHex();
 	const keyState = await readKeyState();
 
 	// Step B.conflict — keychain hit AND wrapped key file present (post `--remove-passphrase` crash).
@@ -275,24 +266,14 @@ async function resolveDek(skipManifestGate = false): Promise<Buffer> {
 	}
 	if (keyState?.mode === "plain") {
 		// Per spec: emit the plain-mode warning at every process's first `getDek()`
-		// call, not only on fresh fallback generation. Idempotent — guarded by
-		// `warnedFallback` so subsequent calls in the same process are silent.
+		// call. Idempotent — guarded by `warnedFallback` so subsequent calls in
+		// the same process are silent.
 		emitFallbackWarning();
 		return readPlainDekFromKeyState(keyState);
 	}
-
-	// Step D — generation gate.
-	if (registeredDbs >= 1) {
-		throw new MissingDekError();
-	}
-	if (manifestPresent && registeredDbs === 0) {
-		// manifest exists but is empty — equivalent to fresh-install for DEK gen
-		const r = await generateAndPersistFresh();
-		return r.dek;
-	}
-	// Fresh install: no manifest, no marker, no DEK source.
-	const r = await generateAndPersistFresh();
-	return r.dek;
+	// Step D — explicit provisioning gate. Normal resolution never creates a key.
+	void registeredDbs;
+	throw new MissingDekError();
 }
 
 export async function getDek(): Promise<Dek> {
@@ -331,19 +312,49 @@ export function _resetDekCache(): void {
 
 let cachedSyncDek: Dek | undefined;
 
-function generateAndPersistFreshSync(): Buffer {
+export function _provisionKey(): string {
+	const manifestPresent = isManifestPresent();
+	const markerPresent = isMarkerPresent();
+	if (!manifestPresent && markerPresent) {
+		throw new ManifestMissing();
+	}
+	const registeredDbs = manifestPresent
+		? (readManifestIfPresent()?.dbs.length ?? 0)
+		: 0;
+	if (registeredDbs > 0) {
+		throw new MissingDekError(
+			"encrypted databases are already registered; refusing to provision a replacement key",
+		);
+	}
+	const { keyFile: configuredKeyFile } = resolveConfigPaths();
+	const keyFile = assertDurableKeyFilePath(configuredKeyFile);
+	if (existsSync(keyFile)) {
+		throw new WrongKeyError(
+			`a key file already exists at ${keyFile}; refusing to replace it`,
+		);
+	}
+	if (!hasExplicitKeyFile() && readKeychainHex()) {
+		throw new WrongKeyError(
+			"an OS keychain DEK already exists; refusing to provision another key",
+		);
+	}
+
 	const dek = randomBytes(32);
 	try {
-		liveKeychain.set(dek.toString("hex"));
-		return dek;
-	} catch (err) {
-		if (err instanceof KeychainUnavailableError) {
-			emitFallbackWarning();
-			const { keyFile } = resolveConfigPaths();
-			writeNewSecretFile(keyFile, JSON.stringify(makePlainKeyState(dek)));
-			return dek;
+		writeNewSecretFile(keyFile, JSON.stringify(makePlainKeyState(dek)));
+		const persisted = readKeyStateAtSync(keyFile);
+		if (
+			persisted?.mode !== "plain" ||
+			!Buffer.from(persisted.dek, "hex").equals(dek)
+		) {
+			throw new WrongKeyError(
+				"provisioned key file failed readback verification",
+			);
 		}
-		throw err;
+		_resetDekCache();
+		return keyFile;
+	} finally {
+		dek.fill(0);
 	}
 }
 
@@ -356,7 +367,7 @@ function resolveDekSync(): Buffer {
 	const manifest = manifestPresent ? readManifestIfPresent() : undefined;
 	const registeredDbs = manifest?.dbs.length ?? 0;
 
-	const keychainHex = readKeychainHex();
+	const keychainHex = hasExplicitKeyFile() ? null : readKeychainHex();
 	const keyState = readKeyStateSync();
 
 	if (keychainHex && keyState?.mode === "wrapped") {
@@ -375,11 +386,8 @@ function resolveDekSync(): Buffer {
 		emitFallbackWarning();
 		return readPlainDekFromKeyState(keyState);
 	}
-
-	if (registeredDbs >= 1) {
-		throw new MissingDekError();
-	}
-	return generateAndPersistFreshSync();
+	void registeredDbs;
+	throw new MissingDekError();
 }
 
 /**
