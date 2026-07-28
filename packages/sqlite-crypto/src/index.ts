@@ -1,7 +1,12 @@
 // @snoai/sno-station-core-crypto — single audit surface for SNO Station Core SQLite encryption.
 // See openspec/changes/add-local-aes-encryption/specs/sno-station-core-crypto-core/spec.md.
 
-export { resolveConfigPaths, resolveKeychainService } from "./config.js";
+export {
+	assertDurableKeyFilePath,
+	KEY_FILE_ENV,
+	resolveConfigPaths,
+	resolveKeychainService,
+} from "./config.js";
 export {
 	_readCanaryForRecovery,
 	openEncryptedDb,

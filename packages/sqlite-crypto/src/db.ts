@@ -425,9 +425,9 @@ export function openEncryptedDbReadonly(path: string, dek: Dek): Db {
 			`${dbPath} is not registered in the manifest; refusing read-only open`,
 		);
 	}
+	ensureFingerprintMatch(entry, dek);
 	const pre = preflight(dbPath, dek, true);
 	try {
-		ensureFingerprintMatch(entry, dek);
 		if (!pre.canaryRow) {
 			throw new CanaryMismatch(
 				`read-only open of ${dbPath}: no canary row present`,

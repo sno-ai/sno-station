@@ -2,7 +2,7 @@
 
 Local AES-256 encryption layer for SNO Station Core SQLite databases. Thin first-party wrapper over vetted libraries: `better-sqlite3-multiple-ciphers` (SQLCipher v4 mode), `@napi-rs/keyring`, `argon2`, and Node's built-in `crypto`.
 
-The full threat model, fallback caveats, and recovery procedures live in [`docs/security.md`](../../docs/security.md).
+The full threat model, explicit provisioning rules, and key-custody caveats live in [`docs/security.md`](../../docs/security.md).
 
 ---
 
@@ -68,6 +68,7 @@ Layered import error contract:
 The package ships a `sno-station-core` binary:
 
 ```sh
+sno-station-core lock --provision-key             # explicitly create the one durable key
 sno-station-core lock --status                    # mode + 8-char fingerprint + manifest health
 sno-station-core lock --set-passphrase            # upgrade to passphrase mode (two prompts)
 sno-station-core lock --remove-passphrase         # revert to keychain / file-fallback
@@ -81,13 +82,36 @@ Test-only environment hooks (D18 isolation):
 
 | Var | Purpose |
 |---|---|
-| `XDG_CONFIG_HOME` | Redirect `~/.config/sno-station-core/...` to a tmpdir |
+| `XDG_CONFIG_HOME` | Redirect manifests for test isolation; never provisions a key |
 | `SNO_STATION_CORE_KEYCHAIN_SERVICE` | Per-test keychain isolation |
+| `SNO_STATION_CORE_KEY_FILE` | Select an already-provisioned durable key file independently of `XDG_CONFIG_HOME`; temporary paths are rejected |
 | `SNO_STATION_CORE_PASSPHRASE_STDIN` | Read passphrase from piped stdin (non-TTY) |
 | `SNO_STATION_CORE_CRASH_AFTER` | Force `process.exit(137)` at named two-phase transition |
 | `SNO_STATION_CORE_FORCE_CANARY_FAIL` | Force the canary verify step to throw |
 
-These hooks are read in production paths so test recovery exercises the production code path; they have no effect when unset.
+These hooks are read in production paths so tests exercise the production code path; they have no effect when unset.
+
+---
+
+## Explicit operator provisioning
+
+Normal library calls never create a DEK. A senior operator provisions the one
+durable key deliberately before any encrypted store is created:
+
+```sh
+sno-station-core lock --provision-key
+```
+
+Set `SNO_STATION_CORE_KEY_FILE` first when the durable operator path differs
+from `~/.config/sno-station-core/key`. Provisioning refuses temporary,
+scratch, cache, runtime, and already-populated paths, and refuses to create a
+replacement after any encrypted database is registered. Missing-key runtime
+resolution fails loudly with the same command instead of generating a key.
+
+The Memora evaluation harness has a narrower, non-interactive contract: it
+requires this explicitly provisioned file in plain mode and does not fall back
+to a keychain-only or passphrase-prompt path. This keeps one durable VM key
+authoritative across server-root wipes.
 
 ---
 
@@ -102,4 +126,4 @@ These hooks are read in production paths so test recovery exercises the producti
 - **Protects**: cold disk theft, copied DB files, unauthorized OS-user processes that cannot read your keychain.
 - **Does not protect**: an unlocked compromised account with malware running as your user, root-level memory scraping, OS swap, intentionally-shared content sent to your configured LLM provider.
 
-See `docs/security.md` for the full breakdown including the file-fallback cold-backup caveat (when libsecret/dbus is unavailable, the DEK is protected only by file-system permissions on `~/.config/sno-station-core/key`).
+See `docs/security.md` for the full breakdown, including the filesystem-permission boundary for explicitly provisioned file keys.

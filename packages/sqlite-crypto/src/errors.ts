@@ -104,7 +104,7 @@ export class ManifestCorrupted extends SnoStationCoreCryptoError {
 
 export class MissingDekError extends SnoStationCoreCryptoError {
 	constructor(
-		message = "DEK source is missing while encrypted databases are registered; refusing to auto-generate",
+		message = "DEK source is missing; refusing implicit key creation. Provision the durable operator key explicitly with `sno-station-core lock --provision-key`",
 		options?: ErrorOptions,
 	) {
 		super("MISSING_DEK", message, options);
