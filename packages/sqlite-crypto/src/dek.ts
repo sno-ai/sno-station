@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { existsSync } from "node:fs";
+import { existsSync, statSync } from "node:fs";
 import { hostname } from "node:os";
 import { createInterface } from "node:readline";
 import {
@@ -34,7 +34,7 @@ import {
 	type KeyStateFilePlain,
 	type KeyStateFileWrapped,
 } from "./types.js";
-import { unwrapDek, type WrappedDek } from "./wrap.js";
+import { dekFingerprint, unwrapDek, type WrappedDek } from "./wrap.js";
 
 let dekPromise: Promise<Dek> | undefined;
 let warnedFallback = false;
@@ -271,8 +271,12 @@ async function resolveDek(skipManifestGate = false): Promise<Buffer> {
 		emitFallbackWarning();
 		return readPlainDekFromKeyState(keyState);
 	}
-	// Step D — explicit provisioning gate. Normal resolution never creates a key.
-	void registeredDbs;
+	// Step D — explicit lifecycle gate. Normal resolution never creates or restores a key.
+	if (registeredDbs > 0) {
+		throw new MissingDekError(
+			"DEK source is missing while encrypted databases are registered; restore the operator-held copy with `sno-station-core lock --restore-key <operator-recovery-key-file>`",
+		);
+	}
 	throw new MissingDekError();
 }
 
@@ -323,7 +327,7 @@ export function _provisionKey(): string {
 		: 0;
 	if (registeredDbs > 0) {
 		throw new MissingDekError(
-			"encrypted databases are already registered; refusing to provision a replacement key",
+			"encrypted databases are already registered; refusing to provision a replacement key. Restore the operator-held copy with `sno-station-core lock --restore-key <operator-recovery-key-file>`",
 		);
 	}
 	const { keyFile: configuredKeyFile } = resolveConfigPaths();
@@ -358,6 +362,64 @@ export function _provisionKey(): string {
 	}
 }
 
+export function _restoreKey(recoveryKeyFile: string): string {
+	const { keyFile } = resolveConfigPaths();
+	const recoveryFile = assertDurableKeyFilePath(recoveryKeyFile);
+	if (recoveryFile === keyFile) {
+		throw new WrongKeyError(
+			"operator recovery file and primary key file resolve to the same path",
+		);
+	}
+	if (existsSync(keyFile)) {
+		throw new WrongKeyError(
+			`a primary key file already exists at ${keyFile}; refusing to replace it`,
+		);
+	}
+	const recoveryStat = statSync(recoveryFile);
+	if (!recoveryStat.isFile() || (recoveryStat.mode & 0o777) !== 0o600) {
+		throw new WrongKeyError(
+			"operator recovery file must be a regular mode-0600 file",
+		);
+	}
+	const manifest = readManifestIfPresent();
+	if (!manifest || manifest.dbs.length === 0) {
+		throw new MissingDekError(
+			"no registered encrypted database is available to validate the operator recovery file",
+		);
+	}
+
+	const recoveryBytes = readSecretFileSync(recoveryFile);
+	let recoveredDek: Buffer | undefined;
+	try {
+		const state = readPlainKeyFileSync(recoveryBytes);
+		if (
+			state.mode !== "plain" ||
+			!/^[0-9a-f]{64}$/i.test(state.dek)
+		) {
+			throw new WrongKeyError(
+				"operator recovery file must contain a valid plain-mode DEK state",
+			);
+		}
+		recoveredDek = Buffer.from(state.dek, "hex");
+		const fingerprint = dekFingerprint(recoveredDek);
+		if (
+			manifest.dbs.some(
+				(entry) => entry.dekFingerprint !== fingerprint,
+			)
+		) {
+			throw new WrongKeyError(
+				"operator recovery file does not match every registered encrypted database",
+			);
+		}
+		writeNewSecretFile(keyFile, recoveryBytes);
+		_resetDekCache();
+		return keyFile;
+	} finally {
+		recoveredDek?.fill(0);
+		recoveryBytes.fill(0);
+	}
+}
+
 function resolveDekSync(): Buffer {
 	const manifestPresent = isManifestPresent();
 	const markerPresent = isMarkerPresent();
@@ -386,7 +448,11 @@ function resolveDekSync(): Buffer {
 		emitFallbackWarning();
 		return readPlainDekFromKeyState(keyState);
 	}
-	void registeredDbs;
+	if (registeredDbs > 0) {
+		throw new MissingDekError(
+			"DEK source is missing while encrypted databases are registered; restore the operator-held copy with `sno-station-core lock --restore-key <operator-recovery-key-file>`",
+		);
+	}
 	throw new MissingDekError();
 }
 
