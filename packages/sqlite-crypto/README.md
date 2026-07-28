@@ -69,6 +69,7 @@ The package ships a `sno-station-core` binary:
 
 ```sh
 sno-station-core lock --provision-key             # explicitly create the one durable key
+sno-station-core lock --restore-key <path>        # restore a missing primary from an operator-held copy
 sno-station-core lock --status                    # mode + 8-char fingerprint + manifest health
 sno-station-core lock --set-passphrase            # upgrade to passphrase mode (two prompts)
 sno-station-core lock --remove-passphrase         # revert to keychain / file-fallback
@@ -111,10 +112,27 @@ The durability check applies to every resolved key path, including the default
 path derived from `XDG_CONFIG_HOME`; a pre-existing scratch key is rejected,
 not read or deleted.
 
+The operator must retain a separate mode-`0600` recovery copy in durable,
+operator-controlled storage. If the primary file becomes unavailable, restore
+it explicitly:
+
+```sh
+sno-station-core lock --restore-key /operator-controlled/recovery/key
+```
+
+Set `SNO_STATION_CORE_KEY_FILE` first when restoring to a non-default primary
+path. The command refuses to overwrite an existing primary, rejects temporary
+or weakly permissioned recovery files, verifies the recovery copy against
+every registered database fingerprint, writes the restored primary as mode
+`0600`, and leaves the recovery copy unchanged. Runtime failures with
+registered encrypted databases name this command instead of suggesting a new
+key.
+
 The Memora evaluation harness has a narrower, non-interactive contract: it
 requires this explicitly provisioned file in plain mode and does not fall back
 to a keychain-only or passphrase-prompt path. This keeps one durable VM key
-authoritative across server-root wipes.
+authoritative across server-root wipes. Its operator recovery copy must live
+outside the same wipe and cleanup roots.
 
 ---
 
