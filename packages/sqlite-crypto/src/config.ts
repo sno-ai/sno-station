@@ -58,10 +58,12 @@ export function assertDurableKeyFilePath(
  */
 export function resolveConfigPaths(): SnoStationCoreConfigPaths {
 	const xdg = process.env["XDG_CONFIG_HOME"]?.trim();
-	const base = xdg && xdg.length > 0 ? xdg : join(homedir(), ".config");
-	const configDir = join(base, "sno-station-core");
+	const defaultConfigBase = join(homedir(), ".config");
+	const configBase = xdg && xdg.length > 0 ? xdg : defaultConfigBase;
+	const configDir = join(configBase, "sno-station-core");
 	const explicitKeyFile = process.env[KEY_FILE_ENV]?.trim();
-	const keyFile = explicitKeyFile || join(configDir, "key");
+	const keyFile =
+		explicitKeyFile || join(defaultConfigBase, "sno-station-core", "key");
 	return {
 		configDir,
 		keyFile: assertDurableKeyFilePath(keyFile),
