@@ -1,10 +1,12 @@
 import { type SpawnSyncReturns, spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { _resetDekCache } from "@snoai/sno-station-core-crypto";
+import { KEY_FILE_ENV } from "../../../packages/sno-station-core-crypto/src/config.ts";
+import { _provisionKey } from "../../../packages/sno-station-core-crypto/src/dek.ts";
 
 const RECOVERY_FIXTURE_DIR = join(
 	dirname(fileURLToPath(import.meta.url)),
@@ -14,12 +16,13 @@ const RECOVERY_FIXTURE_DIR = join(
 /**
  * Per-test isolation helper.
  *
- * The production code reads `process.env.XDG_CONFIG_HOME` and
- * `process.env.SNO_STATION_CORE_KEYCHAIN_SERVICE` (see design.md D18). Tests use this
- * helper to redirect both away from the real host state.
+ * The production code reads the manifest root, explicit key path, and
+ * keychain namespace from the environment. Tests isolate all three from real
+ * host state.
  *
  * Each test run gets:
- *   - a fresh `XDG_CONFIG_HOME` under `os.tmpdir()/sno-station-core-test-<runId>`
+ *   - a disposable manifest/database root under `os.tmpdir()`
+ *   - a separately and explicitly provisioned fake key under the test user's home
  *   - a unique `SNO_STATION_CORE_KEYCHAIN_SERVICE` so concurrent runs / parallel tests
  *     never collide on the same keychain entry
  *
@@ -30,6 +33,7 @@ const RECOVERY_FIXTURE_DIR = join(
 export interface TestEnv {
 	readonly runId: string;
 	readonly xdgConfigHome: string;
+	readonly durableKeyRoot: string;
 	readonly snoStationCoreConfigDir: string;
 	readonly keyFile: string;
 	readonly manifestFile: string;
@@ -57,24 +61,36 @@ function restoreEnv(name: string): void {
 	previousEnv.delete(name);
 }
 
-export function makeTestEnv(label = "sno-station-core"): TestEnv {
+export function makeTestEnv(
+	label = "sno-station-core",
+	options: { provisionKey?: boolean } = {},
+): TestEnv {
 	const runId = `${Date.now().toString(36)}-${randomBytes(4).toString("hex")}`;
 	const xdgConfigHome = mkdtempSync(join(tmpdir(), `${label}-test-`));
+	const durableKeyRoot = mkdtempSync(
+		join(homedir(), ".sno-station-core-test-"),
+	);
 	const snoStationCoreConfigDir = join(xdgConfigHome, "sno-station-core");
-	const keyFile = join(snoStationCoreConfigDir, "key");
+	const keyFile = join(durableKeyRoot, "key");
 	const manifestFile = join(snoStationCoreConfigDir, "dbs.json");
 	const markerFile = join(snoStationCoreConfigDir, ".manifest-rename-marker");
 	const keychainService = `ai.sno.sno-station-core.test-${runId}`;
 
+	mkdirSync(snoStationCoreConfigDir, { recursive: true, mode: 0o700 });
 	setEnv("XDG_CONFIG_HOME", xdgConfigHome);
 	setEnv("SNO_STATION_CORE_KEYCHAIN_SERVICE", keychainService);
+	setEnv(KEY_FILE_ENV, keyFile);
 	setEnv("SNO_STATION_CORE_TESTING", "1");
 	// Drop the in-process DEK promise cache — each test gets a fresh resolver.
 	_resetDekCache();
+	if (options.provisionKey !== false) {
+		_provisionKey();
+	}
 
 	return {
 		runId,
 		xdgConfigHome,
+		durableKeyRoot,
 		snoStationCoreConfigDir,
 		keyFile,
 		manifestFile,
@@ -86,8 +102,14 @@ export function makeTestEnv(label = "sno-station-core"): TestEnv {
 			} catch {
 				// best-effort
 			}
+			try {
+				rmSync(durableKeyRoot, { recursive: true, force: true });
+			} catch {
+				// best-effort
+			}
 			restoreEnv("XDG_CONFIG_HOME");
 			restoreEnv("SNO_STATION_CORE_KEYCHAIN_SERVICE");
+			restoreEnv(KEY_FILE_ENV);
 			restoreEnv("SNO_STATION_CORE_TESTING");
 			_resetDekCache();
 		},
@@ -160,7 +182,7 @@ export function recoverDek(env: TestEnv, passphrase?: string): Buffer {
 		SNO_STATION_CORE_KEYCHAIN_SERVICE: env.keychainService,
 	};
 	if (passphrase !== undefined) {
-		childEnv.SNO_STATION_CORE_PASSPHRASE_STDIN = "1";
+		childEnv["SNO_STATION_CORE_PASSPHRASE_STDIN"] = "1";
 	}
 	try {
 		const child = spawnSync(process.execPath, childNodeArgs(fixture), {
