@@ -35,11 +35,11 @@ const jsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
 		z.boolean(),
 		z.null(),
 		z.array(jsonValueSchema),
-		z.record(jsonValueSchema),
+		z.record(z.string(), jsonValueSchema),
 	]),
 );
 
-const jsonObjectSchema = z.record(jsonValueSchema);
+const jsonObjectSchema = z.record(z.string(), jsonValueSchema);
 const tokenMethodSchema = z.enum([
 	"qwen_tokenizer",
 	"tiktoken",
@@ -157,7 +157,7 @@ const payloadSchemas: Record<EventType, z.ZodType<unknown>> = {
 			first_event_id: z.number().int().positive(),
 			last_event_id: z.number().int().positive(),
 			event_count: z.number().int().positive(),
-			event_types: z.record(z.number().int().nonnegative()),
+			event_types: z.record(z.string(), z.number().int().nonnegative()),
 			events: z.array(memoryTelemetryEventSchema.strict()).min(1).max(50),
 		})
 		.strict()

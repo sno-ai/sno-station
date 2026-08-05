@@ -35,7 +35,7 @@
 		"@snoai/common-core": "file:../common-core",
 		"better-sqlite3": "^12.9.0",
 		"js-tiktoken": "^1.0.0",
-		"zod": "^3.24.0"
+		"zod": "^4.4.3"
 	},
 	"devDependencies": {
 		"@types/better-sqlite3": "^7.6.13",
