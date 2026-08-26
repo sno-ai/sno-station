@@ -399,6 +399,11 @@ export function openEncryptedDb(path: string, dek: Dek): Db {
 		assertSentinel(canaryRow, dbPath);
 		const entry = findEntry(manifest, canaryRow.db_id);
 		if (!entry) {
+			if (manifest.dbs.some((candidate) => candidate.path === dbPath)) {
+				throw new DbIdMismatch(
+					`DbIdMismatch: ${dbPath} is registered to a different database id`,
+				);
+			}
 			// Known database, unknown to this manifest — adopt it.
 			ensureMarker();
 			syncAtomicWriteManifest(

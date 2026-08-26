@@ -10,10 +10,11 @@
  * other's rows.
  */
 
-import { mkdirSync, renameSync, copyFileSync, existsSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import {
 	DbIdMismatch,
+	type Dek,
 	getDek,
 	openEncryptedDb,
 	openEncryptedDbReadonly,
@@ -31,7 +32,7 @@ afterEach(() => {
 	env.cleanup();
 });
 
-function seed(path: string, dek: Buffer): void {
+function seed(path: string, dek: Dek): void {
 	mkdirSync(dirname(path), { recursive: true });
 	const db = openEncryptedDb(path, dek);
 	db.exec("CREATE TABLE t (v TEXT)");
@@ -39,7 +40,7 @@ function seed(path: string, dek: Buffer): void {
 	db.close();
 }
 
-function readBack(path: string, dek: Buffer, readonly: boolean): string {
+function readBack(path: string, dek: Dek, readonly: boolean): string {
 	const db = readonly
 		? openEncryptedDbReadonly(path, dek)
 		: openEncryptedDb(path, dek);
@@ -96,5 +97,21 @@ describe("a relocated database still opens", () => {
 		expect(() => openEncryptedDbReadonly(copy, dek)).toThrow(DbIdMismatch);
 		// The original is untouched by the refusal.
 		expect(readBack(original, dek, false)).toBe("kept");
+	});
+
+	it("refuses a different database placed at an already-registered path", async () => {
+		const dek = await getDek();
+		const registered = uniqueDbPath(env, "registered");
+		const foreign = uniqueDbPath(env, "foreign");
+		seed(registered, dek);
+		const registeredManifest = readFileSync(env.manifestFile, "utf8");
+
+		rmSync(env.manifestFile);
+		seed(foreign, dek);
+		copyFileSync(foreign, registered);
+		writeFileSync(env.manifestFile, registeredManifest);
+
+		expect(() => openEncryptedDb(registered, dek)).toThrow(DbIdMismatch);
+		expect(readFileSync(env.manifestFile, "utf8")).toBe(registeredManifest);
 	});
 });
