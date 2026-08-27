@@ -101,6 +101,18 @@ describe("a relocated database still opens", () => {
 		expect(readBack(original, dek, false)).toBe("kept");
 	});
 
+	it("ignores an empty stub left at the recorded path", async () => {
+		const dek = await getDek();
+		const original = uniqueDbPath(env, "stub-original");
+		const moved = uniqueDbPath(env, "stub-moved");
+		seed(original, dek);
+		moveDb(original, moved);
+		writeFileSync(original, "");
+
+		expect(readBack(moved, dek, false)).toBe("kept");
+		expect(readBack(moved, dek, true)).toBe("kept");
+	});
+
 	it("refuses a different database placed at an already-registered path", async () => {
 		const dek = await getDek();
 		const registered = uniqueDbPath(env, "registered");
