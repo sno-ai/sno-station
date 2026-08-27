@@ -264,8 +264,6 @@ function readCanaryDbId(path: string, dek: Dek): string | undefined {
 	try {
 		candidate = preflight(path, dek, true);
 		return candidate.canaryRow?.db_id;
-	} catch {
-		return undefined;
 	} finally {
 		try {
 			candidate?.db.close();
