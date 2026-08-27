@@ -494,9 +494,9 @@ export function openEncryptedDbReadonly(path: string, dek: Dek): Db {
 		assertDestinationNotRegistered(manifest, entry, dbPath);
 		assertNotDuplicate(entry, dbPath, dek);
 		if (entry.path !== dbPath) {
-			throw new DbIdMismatch(
-				`DbIdMismatch: read-only open of relocated database ${dbPath} requires a writable open to record the new location`,
-			);
+			// The database handle stays read-only. The external manifest claims the
+			// first observed location so a later copy is rejected as a duplicate.
+			syncAtomicWriteManifest(withEntryPath(manifest, entry.dbId, dbPath));
 		}
 		return pre.db;
 	} catch (err) {
