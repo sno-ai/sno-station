@@ -114,4 +114,18 @@ describe("a relocated database still opens", () => {
 		expect(() => openEncryptedDb(registered, dek)).toThrow(DbIdMismatch);
 		expect(readFileSync(env.manifestFile, "utf8")).toBe(registeredManifest);
 	});
+
+	it("refuses a known database moved onto another database's registered path", async () => {
+		const dek = await getDek();
+		const databaseA = uniqueDbPath(env, "known-a");
+		const databaseB = uniqueDbPath(env, "known-b");
+		seed(databaseA, dek);
+		seed(databaseB, dek);
+		const registeredManifest = readFileSync(env.manifestFile, "utf8");
+
+		moveDb(databaseA, databaseB);
+
+		expect(() => openEncryptedDb(databaseB, dek)).toThrow(DbIdMismatch);
+		expect(readFileSync(env.manifestFile, "utf8")).toBe(registeredManifest);
+	});
 });
