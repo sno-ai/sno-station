@@ -259,9 +259,25 @@ function assertSentinel(
  *
  * Only the second is an error, and the surviving file is the whole evidence.
  */
-function assertNotDuplicate(entry: ManifestEntry, dbPath: string): void {
+function readCanaryDbId(path: string, dek: Dek): string | undefined {
+	let candidate: PreflightedDb | undefined;
+	try {
+		candidate = preflight(path, dek, true);
+		return candidate.canaryRow?.db_id;
+	} catch {
+		return undefined;
+	} finally {
+		try {
+			candidate?.db.close();
+		} catch {
+			// ignore
+		}
+	}
+}
+
+function assertNotDuplicate(entry: ManifestEntry, dbPath: string, dek: Dek): void {
 	if (entry.path === dbPath) return;
-	if (existsSync(entry.path)) {
+	if (existsSync(entry.path) && readCanaryDbId(entry.path, dek) === entry.dbId) {
 		throw new DbIdMismatch(
 			`DbIdMismatch: db ${entry.dbId} is registered at ${entry.path}, which still exists; ${dbPath} is a second copy claiming the same database`,
 		);
@@ -433,7 +449,7 @@ export function openEncryptedDb(path: string, dek: Dek): Db {
 		}
 		ensureFingerprintMatch(entry, dek);
 		assertDestinationNotRegistered(manifest, entry, dbPath);
-		assertNotDuplicate(entry, dbPath);
+		assertNotDuplicate(entry, dbPath, dek);
 		if (entry.path !== dbPath) {
 			// It moved. Record where it lives now so the entry stays useful.
 			syncAtomicWriteManifest(withEntryPath(manifest, entry.dbId, dbPath));
@@ -476,7 +492,7 @@ export function openEncryptedDbReadonly(path: string, dek: Dek): Db {
 		}
 		ensureFingerprintMatch(entry, dek);
 		assertDestinationNotRegistered(manifest, entry, dbPath);
-		assertNotDuplicate(entry, dbPath);
+		assertNotDuplicate(entry, dbPath, dek);
 		if (entry.path !== dbPath) {
 			throw new DbIdMismatch(
 				`DbIdMismatch: read-only open of relocated database ${dbPath} requires a writable open to record the new location`,
