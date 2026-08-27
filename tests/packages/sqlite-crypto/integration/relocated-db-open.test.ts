@@ -10,7 +10,16 @@
  * other's rows.
  */
 
-import { copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import {
+	chmodSync,
+	copyFileSync,
+	existsSync,
+	mkdirSync,
+	readFileSync,
+	renameSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
 import { dirname } from "node:path";
 import {
 	DbIdMismatch,
@@ -18,6 +27,7 @@ import {
 	getDek,
 	openEncryptedDb,
 	openEncryptedDbReadonly,
+	WrongKeyError,
 } from "@snoai/sno-station-core-crypto";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { makeTestEnv, type TestEnv, uniqueDbPath } from "../_helpers.ts";
@@ -107,6 +117,32 @@ describe("a relocated database still opens", () => {
 		// The original is untouched by the refusal.
 		expect(readBack(original, dek, false)).toBe("kept");
 	});
+
+	it.each([
+		["read-write", openEncryptedDb],
+		["read-only", openEncryptedDbReadonly],
+	] as const)(
+		"fails closed during %s access when the registered database cannot be inspected",
+		async (_mode, open) => {
+			const dek = await getDek();
+			const original = uniqueDbPath(env, "unreadable-original");
+			const copy = uniqueDbPath(env, "unreadable-copy");
+			seed(original, dek);
+			mkdirSync(dirname(copy), { recursive: true });
+			copyFileSync(original, copy);
+			const registeredManifest = readFileSync(env.manifestFile, "utf8");
+
+			chmodSync(original, 0o000);
+			try {
+				expect(() => open(copy, dek)).toThrow(WrongKeyError);
+				expect(readFileSync(env.manifestFile, "utf8")).toBe(registeredManifest);
+			} finally {
+				chmodSync(original, 0o600);
+			}
+
+			expect(readBack(original, dek, false)).toBe("kept");
+		},
+	);
 
 	it("ignores an empty stub left at the recorded path", async () => {
 		const dek = await getDek();
