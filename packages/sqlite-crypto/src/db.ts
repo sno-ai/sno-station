@@ -268,6 +268,22 @@ function assertNotDuplicate(entry: ManifestEntry, dbPath: string): void {
 	}
 }
 
+function assertDestinationNotRegistered(
+	manifest: ManifestFile,
+	entry: ManifestEntry,
+	dbPath: string,
+): void {
+	if (
+		manifest.dbs.some(
+			(candidate) => candidate.path === dbPath && candidate.dbId !== entry.dbId,
+		)
+	) {
+		throw new DbIdMismatch(
+			`DbIdMismatch: ${dbPath} is registered to a different database id`,
+		);
+	}
+}
+
 function syncAtomicWriteManifest(next: ManifestFile): void {
 	const { manifestFile, configDir } = resolveConfigPaths();
 	const tmp = `${manifestFile}.tmp-${process.pid}-${Date.now().toString(36)}`;
@@ -416,15 +432,7 @@ export function openEncryptedDb(path: string, dek: Dek): Db {
 			return pre.db;
 		}
 		ensureFingerprintMatch(entry, dek);
-		if (
-			manifest.dbs.some(
-				(candidate) => candidate.path === dbPath && candidate.dbId !== entry.dbId,
-			)
-		) {
-			throw new DbIdMismatch(
-				`DbIdMismatch: ${dbPath} is registered to a different database id`,
-			);
-		}
+		assertDestinationNotRegistered(manifest, entry, dbPath);
 		assertNotDuplicate(entry, dbPath);
 		if (entry.path !== dbPath) {
 			// It moved. Record where it lives now so the entry stays useful.
@@ -467,6 +475,7 @@ export function openEncryptedDbReadonly(path: string, dek: Dek): Db {
 			);
 		}
 		ensureFingerprintMatch(entry, dek);
+		assertDestinationNotRegistered(manifest, entry, dbPath);
 		assertNotDuplicate(entry, dbPath);
 		// A read-only open cannot record the new location; the next writable open
 		// does that.

@@ -126,6 +126,7 @@ describe("a relocated database still opens", () => {
 		moveDb(databaseA, databaseB);
 
 		expect(() => openEncryptedDb(databaseB, dek)).toThrow(DbIdMismatch);
+		expect(() => openEncryptedDbReadonly(databaseB, dek)).toThrow(DbIdMismatch);
 		expect(readFileSync(env.manifestFile, "utf8")).toBe(registeredManifest);
 	});
 });
