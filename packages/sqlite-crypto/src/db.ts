@@ -416,6 +416,15 @@ export function openEncryptedDb(path: string, dek: Dek): Db {
 			return pre.db;
 		}
 		ensureFingerprintMatch(entry, dek);
+		if (
+			manifest.dbs.some(
+				(candidate) => candidate.path === dbPath && candidate.dbId !== entry.dbId,
+			)
+		) {
+			throw new DbIdMismatch(
+				`DbIdMismatch: ${dbPath} is registered to a different database id`,
+			);
+		}
 		assertNotDuplicate(entry, dbPath);
 		if (entry.path !== dbPath) {
 			// It moved. Record where it lives now so the entry stays useful.
