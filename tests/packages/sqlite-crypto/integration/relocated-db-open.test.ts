@@ -74,7 +74,7 @@ describe("a relocated database still opens", () => {
 		expect(readBack(to, dek, true)).toBe("kept");
 	});
 
-	it("opens read-only after the file is moved, without needing a writable open first", async () => {
+	it("requires writable adoption before read-only access at a moved path", async () => {
 		const dek = await getDek();
 		const from = uniqueDbPath(env, "move-ro");
 		const to = uniqueDbPath(env, "move-ro-elsewhere");
@@ -82,6 +82,8 @@ describe("a relocated database still opens", () => {
 
 		moveDb(from, to);
 
+		expect(() => readBack(to, dek, true)).toThrow(DbIdMismatch);
+		expect(readBack(to, dek, false)).toBe("kept");
 		expect(readBack(to, dek, true)).toBe("kept");
 	});
 

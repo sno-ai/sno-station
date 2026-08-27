@@ -477,8 +477,11 @@ export function openEncryptedDbReadonly(path: string, dek: Dek): Db {
 		ensureFingerprintMatch(entry, dek);
 		assertDestinationNotRegistered(manifest, entry, dbPath);
 		assertNotDuplicate(entry, dbPath);
-		// A read-only open cannot record the new location; the next writable open
-		// does that.
+		if (entry.path !== dbPath) {
+			throw new DbIdMismatch(
+				`DbIdMismatch: read-only open of relocated database ${dbPath} requires a writable open to record the new location`,
+			);
+		}
 		return pre.db;
 	} catch (err) {
 		try {
