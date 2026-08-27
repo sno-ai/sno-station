@@ -74,17 +74,24 @@ describe("a relocated database still opens", () => {
 		expect(readBack(to, dek, true)).toBe("kept");
 	});
 
-	it("requires writable adoption before read-only access at a moved path", async () => {
+	it("records a moved path during read-only access before rejecting later copies", async () => {
 		const dek = await getDek();
 		const from = uniqueDbPath(env, "move-ro");
 		const to = uniqueDbPath(env, "move-ro-elsewhere");
+		const secondCopy = uniqueDbPath(env, "move-ro-second-copy");
 		seed(from, dek);
 
 		moveDb(from, to);
 
-		expect(() => readBack(to, dek, true)).toThrow(DbIdMismatch);
-		expect(readBack(to, dek, false)).toBe("kept");
 		expect(readBack(to, dek, true)).toBe("kept");
+		const manifest = JSON.parse(readFileSync(env.manifestFile, "utf8")) as {
+			dbs: Array<{ path: string }>;
+		};
+		expect(manifest.dbs).toContainEqual(expect.objectContaining({ path: to }));
+
+		mkdirSync(dirname(secondCopy), { recursive: true });
+		copyFileSync(to, secondCopy);
+		expect(() => readBack(secondCopy, dek, true)).toThrow(DbIdMismatch);
 	});
 
 	it("still refuses a duplicate: the original is left in place", async () => {
