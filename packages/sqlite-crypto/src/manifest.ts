@@ -172,11 +172,34 @@ export function emptyManifest(): ManifestFile {
 	};
 }
 
+/**
+ * Find a database's entry by the id the database carries inside itself.
+ *
+ * Identity is the id in the canary row, never the file's location. A store that
+ * is moved, copied to a new machine, or served from a different mount is the
+ * same database and must still open; keying this lookup on the path is what
+ * made a relocated store unopenable while its contents were perfectly intact.
+ * `entry.path` remains as bookkeeping — it records where the database was last
+ * seen, and `openEncryptedDb` uses it to tell a move apart from a duplicate.
+ */
 export function findEntry(
 	manifest: ManifestFile,
-	path: string,
+	dbId: string,
 ): ManifestEntry | undefined {
-	return manifest.dbs.find((d) => d.path === path);
+	return manifest.dbs.find((d) => d.dbId === dbId);
+}
+
+/** Same manifest with one entry's last-seen path updated. */
+export function withEntryPath(
+	manifest: ManifestFile,
+	dbId: DbId,
+	path: string,
+): ManifestFile {
+	return {
+		schemaVersion: manifest.schemaVersion,
+		createdAt: manifest.createdAt,
+		dbs: manifest.dbs.map((d) => (d.dbId === dbId ? { ...d, path } : d)),
+	};
 }
 
 export function appendEntry(

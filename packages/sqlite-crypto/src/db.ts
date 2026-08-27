@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import {
 	closeSync,
+	existsSync,
 	fsyncSync,
 	mkdirSync,
 	openSync,
@@ -26,6 +27,7 @@ import {
 	ensureMarker,
 	findEntry,
 	readManifestIfPresent,
+	withEntryPath,
 } from "./manifest.js";
 import {
 	CANARY_SENTINEL,
@@ -232,18 +234,66 @@ function ensureFingerprintMatch(entry: ManifestEntry, dek: Dek): void {
 	}
 }
 
-function verifyCanaryAgainstEntry(
+function assertSentinel(
 	row: { sentinel: string; db_id: string },
-	entry: ManifestEntry,
+	dbPath: string,
 ): void {
 	if (row.sentinel !== CANARY_SENTINEL) {
 		throw new CanaryMismatch(
-			`CanaryMismatch: sentinel mismatch for ${entry.path}; expected '${CANARY_SENTINEL}'`,
+			`CanaryMismatch: sentinel mismatch for ${dbPath}; expected '${CANARY_SENTINEL}'`,
 		);
 	}
-	if (row.db_id !== entry.dbId) {
+}
+
+/**
+ * Decide whether this file at this path IS the database the entry describes.
+ *
+ * The id inside the file already settled identity, so a differing path means
+ * one of two things, and they are not the same event:
+ *
+ *  - the database MOVED — nothing remains at the recorded location, and this is
+ *    an ordinary relocation the caller is entitled to;
+ *  - the database was DUPLICATED — the recorded location still holds a file, so
+ *    two files now claim one id and opening either one silently serves the
+ *    other's contents.
+ *
+ * Only the second is an error, and the surviving file is the whole evidence.
+ */
+function readCanaryDbId(path: string, dek: Dek): string | undefined {
+	let candidate: PreflightedDb | undefined;
+	try {
+		candidate = preflight(path, dek, true);
+		return candidate.canaryRow?.db_id;
+	} finally {
+		try {
+			candidate?.db.close();
+		} catch {
+			// ignore
+		}
+	}
+}
+
+function assertNotDuplicate(entry: ManifestEntry, dbPath: string, dek: Dek): void {
+	if (entry.path === dbPath) return;
+	if (existsSync(entry.path) && readCanaryDbId(entry.path, dek) === entry.dbId) {
 		throw new DbIdMismatch(
-			`DbIdMismatch: canary db_id ${row.db_id} does not match manifest dbId ${entry.dbId} for ${entry.path}`,
+			`DbIdMismatch: db ${entry.dbId} is registered at ${entry.path}, which still exists; ${dbPath} is a second copy claiming the same database`,
+		);
+	}
+}
+
+function assertDestinationNotRegistered(
+	manifest: ManifestFile,
+	entry: ManifestEntry,
+	dbPath: string,
+): void {
+	if (
+		manifest.dbs.some(
+			(candidate) => candidate.path === dbPath && candidate.dbId !== entry.dbId,
+		)
+	) {
+		throw new DbIdMismatch(
+			`DbIdMismatch: ${dbPath} is registered to a different database id`,
 		);
 	}
 }
@@ -362,44 +412,46 @@ export function openEncryptedDb(path: string, dek: Dek): Db {
 	const manifest = readManifestIfPresent() ?? emptyManifest();
 	const pre = preflight(dbPath, dek, false);
 	try {
-		const entry = findEntry(manifest, dbPath);
-		if (!entry && !pre.canaryRow) {
-			// Fresh DB.
+		const canaryRow = pre.canaryRow;
+		if (!canaryRow) {
+			// No canary: either a brand-new file, or a registered database whose
+			// canary table is gone. Re-registering the second would mint a second id
+			// for one database, so the recorded location is checked before trusting
+			// "new" — that check is diagnostic, not identity.
+			if (manifest.dbs.some((d) => d.path === dbPath)) {
+				throw new CanaryMismatch(
+					`manifest lists ${dbPath} but no canary row found; recovery: sno-station-core lock --rebuild-manifest`,
+				);
+			}
 			registerFreshDbSync(dbPath, dek, manifest, pre);
 			return pre.db;
 		}
-		if (entry && pre.canaryRow) {
-			// Existing.
-			ensureFingerprintMatch(entry, dek);
-			verifyCanaryAgainstEntry(pre.canaryRow, entry);
+		assertSentinel(canaryRow, dbPath);
+		const entry = findEntry(manifest, canaryRow.db_id);
+		if (!entry) {
+			if (manifest.dbs.some((candidate) => candidate.path === dbPath)) {
+				throw new DbIdMismatch(
+					`DbIdMismatch: ${dbPath} is registered to a different database id`,
+				);
+			}
+			// Known database, unknown to this manifest — adopt it.
+			ensureMarker();
+			syncAtomicWriteManifest(
+				appendEntry(manifest, {
+					path: dbPath,
+					dbId: canaryRow.db_id as DbId,
+					dekFingerprint: dekFingerprint(dek) as DekFingerprint,
+				}),
+			);
 			return pre.db;
 		}
-		if (entry && !pre.canaryRow) {
-			throw new CanaryMismatch(
-				`manifest lists ${dbPath} but no canary row found; recovery: sno-station-core lock --rebuild-manifest`,
-			);
+		ensureFingerprintMatch(entry, dek);
+		assertDestinationNotRegistered(manifest, entry, dbPath);
+		assertNotDuplicate(entry, dbPath, dek);
+		if (entry.path !== dbPath) {
+			// It moved. Record where it lives now so the entry stays useful.
+			syncAtomicWriteManifest(withEntryPath(manifest, entry.dbId, dbPath));
 		}
-		// Canary present, manifest entry absent.
-		const canaryRow = pre.canaryRow;
-		if (!canaryRow) throw new CanaryMismatch("missing canary row");
-		if (canaryRow.sentinel !== CANARY_SENTINEL) {
-			throw new CanaryMismatch(
-				`canary sentinel mismatch at ${dbPath}; refusing manifest recovery`,
-			);
-		}
-		const matching = manifest.dbs.find((d) => d.dbId === canaryRow.db_id);
-		if (matching) {
-			throw new DbIdMismatch(
-				`canary db_id ${canaryRow.db_id} matches manifest entry for ${matching.path}, not ${dbPath}`,
-			);
-		}
-		ensureMarker();
-		const next = appendEntry(manifest, {
-			path: dbPath,
-			dbId: canaryRow.db_id as DbId,
-			dekFingerprint: dekFingerprint(dek) as DekFingerprint,
-		});
-		syncAtomicWriteManifest(next);
 		return pre.db;
 	} catch (err) {
 		try {
@@ -419,21 +471,31 @@ export function openEncryptedDbReadonly(path: string, dek: Dek): Db {
 			`read-only open of ${dbPath} requires a manifest; none found`,
 		);
 	}
-	const entry = findEntry(manifest, dbPath);
-	if (!entry) {
-		throw new ManifestMissing(
-			`${dbPath} is not registered in the manifest; refusing read-only open`,
-		);
-	}
-	ensureFingerprintMatch(entry, dek);
+	// Open first: the database states its own id, and that is what the manifest
+	// is searched by. A wrong DEK still fails here, before any lookup.
 	const pre = preflight(dbPath, dek, true);
 	try {
-		if (!pre.canaryRow) {
+		const canaryRow = pre.canaryRow;
+		if (!canaryRow) {
 			throw new CanaryMismatch(
 				`read-only open of ${dbPath}: no canary row present`,
 			);
 		}
-		verifyCanaryAgainstEntry(pre.canaryRow, entry);
+		assertSentinel(canaryRow, dbPath);
+		const entry = findEntry(manifest, canaryRow.db_id);
+		if (!entry) {
+			throw new ManifestMissing(
+				`db ${canaryRow.db_id} at ${dbPath} is not registered in the manifest; refusing read-only open`,
+			);
+		}
+		ensureFingerprintMatch(entry, dek);
+		assertDestinationNotRegistered(manifest, entry, dbPath);
+		assertNotDuplicate(entry, dbPath, dek);
+		if (entry.path !== dbPath) {
+			// The database handle stays read-only. The external manifest claims the
+			// first observed location so a later copy is rejected as a duplicate.
+			syncAtomicWriteManifest(withEntryPath(manifest, entry.dbId, dbPath));
+		}
 		return pre.db;
 	} catch (err) {
 		try {
