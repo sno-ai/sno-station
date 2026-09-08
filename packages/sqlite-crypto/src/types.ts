@@ -68,7 +68,7 @@ export interface SnoStationCoreConfigPaths {
 }
 
 export interface OpenEncryptedDbResult {
-	readonly db: import("better-sqlite3-multiple-ciphers").Database;
+	readonly db: import("better-sqlite3").Database;
 	readonly dbId: DbId;
 	readonly registered: boolean;
 }
