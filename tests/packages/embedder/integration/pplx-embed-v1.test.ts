@@ -83,7 +83,7 @@ describe.skipIf(!HAS_MODEL)(
 		});
 
 		it("query encoding stays unit-norm", async () => {
-			const v = await provider.embedQuery("how does memory dedup work?");
+			const v = await provider.embed("how does memory dedup work?");
 			expect(v.length).toBe(1024);
 			expect(Math.abs(l2(v) - 1)).toBeLessThan(1e-3);
 		});
