@@ -33,12 +33,12 @@
 	},
 	"dependencies": {
 		"@snoai/common-core": "file:../common-core",
-		"better-sqlite3": "^12.11.1",
+		"better-sqlite3": "^13.0.3",
 		"js-tiktoken": "^1.0.0",
 		"zod": "^4.5.4"
 	},
 	"devDependencies": {
-		"@types/better-sqlite3": "^7.6.13",
+		"@types/better-sqlite3": "^9.6.0",
 		"@types/node": "^22.0.0"
 	},
 	"engines": {
