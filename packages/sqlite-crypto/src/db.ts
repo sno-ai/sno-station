@@ -10,8 +10,9 @@ import {
 	statSync,
 	writeSync,
 } from "node:fs";
+import { createRequire } from "node:module";
 import { dirname, resolve as resolvePath } from "node:path";
-import Database, { type Database as Db } from "better-sqlite3-multiple-ciphers";
+import type SqliteDatabase from "better-sqlite3";
 import { resolveConfigPaths } from "./config.js";
 import {
 	CanaryMismatch,
@@ -39,6 +40,12 @@ import {
 	type ManifestFile,
 } from "./types.js";
 import { dekFingerprint } from "./wrap.js";
+
+// The encrypted driver's exports hide its declarations; its database API uses the SQLite types.
+const Database = createRequire(import.meta.url)(
+	"better-sqlite3-multiple-ciphers",
+) as typeof SqliteDatabase;
+type Db = SqliteDatabase.Database;
 
 interface PreflightedDb {
 	db: Db;
