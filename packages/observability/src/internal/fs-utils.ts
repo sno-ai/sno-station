@@ -10,6 +10,7 @@ import {
 	writeFileSync,
 } from "node:fs";
 import { dirname } from "node:path";
+import { logger } from "./log.js";
 
 export function ensureDir(path: string): void {
 	mkdirSync(path, { recursive: true });
@@ -18,7 +19,15 @@ export function ensureDir(path: string): void {
 export function readJsonFile<T>(path: string): T | null {
 	try {
 		return JSON.parse(readFileSync(path, "utf8")) as T;
-	} catch {
+	} catch (error) {
+		if (!(typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT")) {
+			logger.warnRateLimited(`read-json:${path}`, "Sno Observe optional JSON file is unreadable", { path, error }, {
+				event_name: "observe.optional_file.unreadable",
+				file: "packages/sno-observe/src/internal/fs-utils.ts",
+				function: "readJsonFile",
+				site_id: "observe.fs_utils.read_json.failed",
+			});
+		}
 		return null;
 	}
 }
