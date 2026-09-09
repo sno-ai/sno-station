@@ -147,8 +147,13 @@ function loadUserRules(path?: string): RegExp[] {
 		if (unsafeReason !== undefined) {
 			logger.warn("unsafe redaction rule ignored", {
 				path,
-				pattern: trimmed,
+				pattern_length: trimmed.length,
 				reason: unsafeReason,
+			}, {
+				event_name: "sno.observe.internal.redact.loaduserrules",
+				file: "packages/sno-observe/src/internal/redact.ts",
+				function: "loadUserRules",
+				site_id: "sno.observe.internal.redact.loaduserrules.1",
 			});
 			continue;
 		}
@@ -157,8 +162,13 @@ function loadUserRules(path?: string): RegExp[] {
 		} catch (error) {
 			logger.warn("invalid redaction rule ignored", {
 				path,
-				pattern: trimmed,
-				error: error instanceof Error ? error.message : String(error),
+				pattern_length: trimmed.length,
+				error,
+			}, {
+				event_name: "sno.observe.internal.redact.loaduserrules",
+				file: "packages/sno-observe/src/internal/redact.ts",
+				function: "loadUserRules",
+				site_id: "sno.observe.internal.redact.loaduserrules.2",
 			});
 		}
 	}
