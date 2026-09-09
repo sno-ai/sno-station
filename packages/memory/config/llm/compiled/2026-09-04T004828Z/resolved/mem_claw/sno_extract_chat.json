@@ -1,0 +1,10 @@
+{
+  "description": "Signed Sno chat extraction endpoint for mem_claw",
+  "model": "qwen3.8-27b-extract",
+  "provider": "sno-gpu",
+  "providerOptions": {
+    "sno-gpu": {
+      "gpuPath": "/extract/v1/chat/completions"
+    }
+  }
+}

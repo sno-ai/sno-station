@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "kind": "llmix-trust-manifest",
+  "expectedRootDigest": "sha256:07f3e810d384be713287b01ee441a217d5c238790c972e30dc3f52363de9ce71",
+  "sourceSetDigest": "sha256:f3d20e4fd0c2086182913ec62f61ff168b12f2214a08df27f27a97bd3f7f0c55",
+  "releasePlanDigest": "sha256:0aef8be6a126e2f02086afcfa65c133309d4163c4930bcfe72fc2a808e251568",
+  "registryRootTrustPolicy": {
+    "version": 1,
+    "minSignatures": 1,
+    "trustedSigners": [
+      {
+        "type": "did-web",
+        "domain": "www.sno.ai"
+      }
+    ]
+  },
+  "rekorPolicy": null,
+  "minimumRevision": "2026-09-04T004828Z",
+  "minimumPublishedAt": null,
+  "highWatermark": "2026-09-04T004828Z",
+  "registryRootSignerIdentity": {
+    "type": "did-web",
+    "signer": "did-web:www.sno.ai",
+    "keyId": "did:web:www.sno.ai#sno-mem-openclaw-release",
+    "payloadDigest": "sha256:e1108e35ed8c55a4424305c0ab74df0631e0f657b62c2ba04b04e11341c9ee5b"
+  },
+  "registryRoot": {
+    "path": "apps/mem-claw/config/llm/compiled/2026-09-04T004828Z/registry-root.json",
+    "revision": "2026-09-04T004828Z",
+    "publishedAt": "2026-09-04T00:48:29.141Z",
+    "highWatermark": "2026-09-04T004828Z"
+  },
+  "releasePlan": {
+    "path": "/mnt/ramdisk/tmp/tmp.0wyAKBafMB/release-plan.json",
+    "sourceCount": 6
+  }
+}
