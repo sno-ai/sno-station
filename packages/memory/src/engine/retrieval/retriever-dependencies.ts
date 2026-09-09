@@ -1,0 +1,66 @@
+/** @file retriever-dependencies.ts
+ * @purpose Centralizes external dependencies shared by retriever modules.
+ * @boundary Re-export only; no retrieval behavior lives here.
+ */
+
+export { createLogger } from "@snoai/utils/logger";
+export {
+	CANDIDATE_POOL_SIZE,
+	CHUNKING_VERSION,
+	DEFAULT_BM25_WEIGHT,
+	DEFAULT_HARD_MIN_SCORE,
+	DEFAULT_MIN_SCORE,
+	DEFAULT_RERANK_BATCH_CONCURRENCY,
+	DEFAULT_RERANK_MODEL,
+	DEFAULT_RERANK_TIMEOUT_MS,
+	DEFAULT_TEI_RERANK_MAX_CANDIDATES,
+	DEFAULT_TEI_RERANK_MAX_TEXT_LENGTH,
+	DEFAULT_VECTOR_WEIGHT,
+	IMPORTANCE_WEIGHT_BASE,
+	LENGTH_NORM_ANCHOR,
+	LIGHTWEIGHT_COSINE_WEIGHT,
+	LIGHTWEIGHT_FUSION_WEIGHT,
+	LIGHTWEIGHT_RERANK_PENALTY,
+	MAX_AGGREGATION_ROWS,
+	MAX_CANDIDATE_POOL_SIZE,
+	MMR_LAMBDA,
+	PRECISION_RECALL_POOL_SIZE_FACTOR,
+	RECENCY_HALF_LIFE_DAYS,
+	RECENCY_WEIGHT,
+	RERANK_BLEND_CROSS,
+	RERANK_BLEND_VECTOR,
+	RERANK_PRESERVATION_BM25_HIGH_THRESHOLD,
+	RERANK_PRESERVATION_BM25_MID_THRESHOLD,
+	RERANK_PRESERVATION_HIGH_RETURNED,
+	RERANK_PRESERVATION_HIGH_UNRETURNED,
+	RERANK_PRESERVATION_LOW_RETURNED,
+	RERANK_PRESERVATION_LOW_UNRETURNED,
+	RERANK_PRESERVATION_MID_RETURNED,
+	RERANK_PRESERVATION_MID_UNRETURNED,
+	TEMPORAL_DYNAMIC_HALF_LIFE_DIVISOR,
+	TIME_DECAY_FLOOR,
+	TIME_DECAY_HALF_LIFE_DAYS,
+} from "@/config";
+export { appendQaTrace, computeConfigHash, isTraceEnabled } from "@/eval/trace";
+export type { Embedder } from "@/extraction/embedding-provider-client";
+export {
+	isMemoryExpired,
+	parseInsightMetadata,
+} from "@/extraction/memory-metadata-codec";
+export type { AccessTracker } from "@/retrieval/access-tracker";
+export {
+	computeEffectiveHalfLife,
+	parseAccessMetadata,
+} from "@/retrieval/access-tracker";
+export type { RetrievalStatsCollector } from "@/retrieval/retrieval-stats";
+export type { RetrievalTrace } from "@/retrieval/retrieval-trace";
+export { TraceCollector } from "@/retrieval/retrieval-trace";
+export { RetrievalError } from "@/shared/errors";
+export type {
+	AggregationQuery,
+	MemoryCategory,
+	MemorySearchResult,
+	RetrievalResult,
+} from "@/shared/types";
+export { clamp01 } from "@/shared/utils";
+export type { MemoryStore, SearchOptions } from "@/storage/store";
