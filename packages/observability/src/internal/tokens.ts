@@ -45,7 +45,12 @@ async function loadEncoder(): Promise<Encoder | null> {
 		})
 		.catch((error: unknown) => {
 			logger.warn("sno observe tiktoken init failed; falling back to char approximation", {
-				error: error instanceof Error ? error.message : String(error),
+				error,
+			}, {
+				event_name: "sno.observe.internal.tokens.loadencoder",
+				file: "packages/sno-observe/src/internal/tokens.ts",
+				function: "loadEncoder",
+				site_id: "sno.observe.internal.tokens.loadencoder.1",
 			});
 			return null;
 		});
