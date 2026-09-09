@@ -91,6 +91,11 @@ export class SnoObserveRuntime {
 					retry_count: stats.maxAttempts,
 					quarantined_count: stats.quarantinedCount,
 					database_size_bytes: stats.databaseSizeBytes,
+				}, {
+					event_name: "sno.observe.internal.runtime.emitparsed",
+					file: "packages/sno-observe/src/internal/runtime.ts",
+					function: "emitParsed",
+					site_id: "sno.observe.internal.runtime.emitparsed.1",
 				});
 				const result: EmitResult = { accepted: false, eventId, reason: "buffer_safeguard" };
 				this.notify(parsed.eventType, result);
@@ -457,7 +462,12 @@ export class SnoObserveRuntime {
 				} catch (error) {
 					result.failedCount += this.store.countPending();
 					result.lastError = errorMessage(error);
-					logger.error("sno observe shutdown flush failed", { error: result.lastError });
+					logger.error("sno observe shutdown flush failed", { error: result.lastError }, {
+						event_name: "sno.observe.internal.runtime.shutdown",
+						file: "packages/sno-observe/src/internal/runtime.ts",
+						function: "shutdown",
+						site_id: "sno.observe.internal.runtime.shutdown.2",
+					});
 				}
 				this.flushEngine?.dispose();
 			}
@@ -466,7 +476,7 @@ export class SnoObserveRuntime {
 			this.storePath = null;
 			this.flushEngine = null;
 			return result;
-		});
+		}).finally(() => logger.flushSuppressed());
 	}
 
 	private appendPrepared(input: {
@@ -529,16 +539,31 @@ export class SnoObserveRuntime {
 				logger.warn("sno observe consent transition flush incomplete", {
 					retryable: result.retryable,
 					terminal: result.terminal,
+				}, {
+					event_name: "sno.observe.internal.runtime.flushconsenttransition",
+					file: "packages/sno-observe/src/internal/runtime.ts",
+					function: "flushConsentTransition",
+					site_id: "sno.observe.internal.runtime.flushconsenttransition.3",
 				});
 			}
 		} catch (error) {
-			logger.error("sno observe consent transition flush failed", { error: errorMessage(error) });
+			logger.error("sno observe consent transition flush failed", { error }, {
+				event_name: "sno.observe.internal.runtime.flushconsenttransition",
+				file: "packages/sno-observe/src/internal/runtime.ts",
+				function: "flushConsentTransition",
+				site_id: "sno.observe.internal.runtime.flushconsenttransition.4",
+			});
 		}
 	}
 
 	private flushInBackground(): void {
 		void this.flush(false).catch((error) => {
-			logger.error("sno observe background flush failed", { error: errorMessage(error) });
+			logger.error("sno observe background flush failed", { error }, {
+				event_name: "sno.observe.internal.runtime.flushinbackground",
+				file: "packages/sno-observe/src/internal/runtime.ts",
+				function: "flushInBackground",
+				site_id: "sno.observe.internal.runtime.flushinbackground.5",
+			});
 		});
 	}
 
@@ -597,8 +622,13 @@ export class SnoObserveRuntime {
 				listener(event);
 			} catch (error) {
 				logger.warn("sno observe subscriber failed", {
-					error: error instanceof Error ? error.message : String(error),
+					error,
 					event_type: eventType,
+				}, {
+					event_name: "sno.observe.internal.runtime.notify",
+					file: "packages/sno-observe/src/internal/runtime.ts",
+					function: "notify",
+					site_id: "sno.observe.internal.runtime.notify.6",
 				});
 			}
 		}

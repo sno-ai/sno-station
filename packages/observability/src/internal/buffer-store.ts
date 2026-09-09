@@ -751,7 +751,12 @@ export class BufferStore {
 			lastCompactionAtMs: maintenance.last_compaction_at_ms,
 			compactionReason: maintenance.last_reason,
 		};
-		logger.debug("sno observe buffer maintenance", { ...report });
+		logger.debug("sno observe buffer maintenance", { ...report }, {
+			event_name: "sno.observe.internal.buffer.store.pruneretention",
+			file: "packages/sno-observe/src/internal/buffer-store.ts",
+			function: "pruneRetention",
+			site_id: "sno.observe.internal.buffer.store.pruneretention.1",
+		});
 		return report;
 	}
 
@@ -1582,6 +1587,11 @@ export class BufferStore {
 			maintenance_phase: phase,
 			maintenance_owner: owner,
 			attempt_started_at_ms: attemptStartedAtMs,
+		}, {
+			event_name: "sno.observe.internal.buffer.store.logcompactionphase",
+			file: "packages/sno-observe/src/internal/buffer-store.ts",
+			function: "logCompactionPhase",
+			site_id: "sno.observe.internal.buffer.store.logcompactionphase.2",
 		});
 	}
 
@@ -1723,20 +1733,22 @@ export class BufferStore {
 			const result = this.db.pragma("wal_checkpoint(TRUNCATE)") as unknown;
 			const row = Array.isArray(result) ? result[0] : undefined;
 			if (!isCheckpointRow(row) || row.busy > 0 || row.checkpointed < row.log) {
-				logger.warnRateLimited(
-					"buffer-maintenance:checkpoint",
-					"sno observe buffer checkpoint deferred",
-					checkpointWarningContext(this.path, row),
-				);
+				logger.warnRateLimited("buffer-maintenance:checkpoint", "sno observe buffer checkpoint deferred", checkpointWarningContext(this.path, row), {
+					event_name: "sno.observe.internal.buffer.store.checkpointwal",
+					file: "packages/sno-observe/src/internal/buffer-store.ts",
+					function: "checkpointWal",
+					site_id: "sno.observe.internal.buffer.store.checkpointwal.3",
+				});
 				return false;
 			}
 			return true;
 		} catch (error) {
-			logger.warnRateLimited(
-				"buffer-maintenance:checkpoint",
-				"sno observe buffer checkpoint deferred",
-				{ path: this.path, error: errorMessage(error) },
-			);
+			logger.warnRateLimited("buffer-maintenance:checkpoint", "sno observe buffer checkpoint deferred", { path: this.path, error }, {
+				event_name: "sno.observe.internal.buffer.store.checkpointwal",
+				file: "packages/sno-observe/src/internal/buffer-store.ts",
+				function: "checkpointWal",
+				site_id: "sno.observe.internal.buffer.store.checkpointwal.4",
+			});
 			return false;
 		}
 	}
@@ -1818,10 +1830,6 @@ function checkpointWarningContext(
 		log_pages: row.log,
 		checkpointed_pages: row.checkpointed,
 	};
-}
-
-function errorMessage(error: unknown): string {
-	return error instanceof Error ? error.message : String(error);
 }
 
 function fileSize(path: string): number {

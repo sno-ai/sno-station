@@ -63,9 +63,14 @@ export async function registerBeforeFlush(
 		if (terminalCode !== undefined) {
 			const terminal = quarantineRows(store, rows, terminalCode, error);
 			logger.error("sno observe machine registration failed permanently", {
-				error: errorMessage(error),
+				error,
 				code: terminalCode,
 				terminal,
+			}, {
+				event_name: "sno.observe.internal.flush.registration.registerbeforeflush",
+				file: "packages/sno-observe/src/internal/flush-registration.ts",
+				function: "registerBeforeFlush",
+				site_id: "sno.observe.internal.flush.registration.registerbeforeflush.1",
 			});
 			return { shipped: 0, terminal, retryable: 0 };
 		}
@@ -74,7 +79,12 @@ export async function registerBeforeFlush(
 			store.incrementAttempts(firstRow.rowid);
 		}
 		logger.warnRateLimited(`registration:${errorMessage(error)}`, "sno observe machine registration failed; will retry", {
-			error: errorMessage(error),
+			error,
+		}, {
+			event_name: "sno.observe.internal.flush.registration.registerbeforeflush",
+			file: "packages/sno-observe/src/internal/flush-registration.ts",
+			function: "registerBeforeFlush",
+			site_id: "sno.observe.internal.flush.registration.registerbeforeflush.2",
 		});
 		return {
 			shipped: 0,
