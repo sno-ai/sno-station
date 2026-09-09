@@ -4,8 +4,8 @@
  */
 
 import { z } from "zod";
-import { MEMORY_CATEGORIES } from "@/shared/types";
-import type { MemoryCategory } from "@/shared/types";
+import { MEMORY_CATEGORIES } from "../shared/types";
+import type { MemoryCategory } from "../shared/types";
 
 export type EntryLike = {
 	text?: string;

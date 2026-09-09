@@ -15,7 +15,7 @@ import {
 	type TaskLifecycleAssertionDraft,
 	type TaskLifecycleCommandSource,
 	type TaskLifecycleTimeSource,
-} from "@/extraction/task-lifecycle-assertion";
+} from "./task-lifecycle-assertion";
 import {
 	buildTaskLifecycleCandidateSet,
 	findUniqueActiveTaskByDescription,
@@ -24,19 +24,19 @@ import {
 	type TaskLifecycleInstanceSnapshot,
 	type TaskLifecycleJudgmentAttempt,
 	type TaskLifecycleResolution,
-} from "@/extraction/task-lifecycle-resolver";
-import { TASK_LIFECYCLE_JUDGMENT_SKILL } from "@/extraction/task-lifecycle-judgment-skill";
-import { type LlmClient, LlmClientTerminalError } from "@/shared/llm-client";
+} from "./task-lifecycle-resolver";
+import { TASK_LIFECYCLE_JUDGMENT_SKILL } from "./task-lifecycle-judgment-skill";
+import { type LlmClient, LlmClientTerminalError } from "../../model/llm-client";
 import {
 	type MutationAttemptCompletion,
 	runWithMutationAttempt,
-} from "@/operations/runtime-audit-log";
+} from "../operations/runtime-audit-log";
 import {
 	type MemoryStore,
 	type TaskLifecycleWriteInput,
 	TaskLifecycleStaleResolutionError,
 	type TaskLifecycleWriteResult,
-} from "@/storage/store";
+} from "../../store/store";
 
 export interface TaskLifecycleRouteInput {
 	assertion: TaskLifecycleAssertionDraft;

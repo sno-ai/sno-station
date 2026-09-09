@@ -3,8 +3,8 @@
  * @boundary Prototype-mounted MemoryStore methods; no compaction or maintenance ownership.
  */
 
-import { MemoryStore, type MemoryStoreInternals } from "@/storage/memory-store-base";
-import { bytesToF32, JSON_ID_BATCH_SIZE } from "@/storage/memory-store-shared";
+import { MemoryStore, type MemoryStoreInternals } from "./memory-store-base";
+import { bytesToF32, JSON_ID_BATCH_SIZE } from "./memory-store-shared";
 
 Object.assign(MemoryStore.prototype, {
 	getVectorsByIds(this: MemoryStoreInternals, ids: string[]): Map<string, Float32Array> {

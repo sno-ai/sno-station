@@ -3,7 +3,7 @@
  * @boundary Prototype-mounted MemoryStore methods; no constructor state ownership.
  */
 
-import { MemoryStore, type MemoryStoreInternals } from "@/storage/memory-store-base";
+import { MemoryStore, type MemoryStoreInternals } from "./memory-store-base";
 import {
 	type ChunkSearchResult,
 	type ChunkSearchRow,
@@ -17,7 +17,7 @@ import {
 	type SearchOptions,
 	StorageError,
 	sanitizeFtsQuery,
-} from "@/storage/memory-store-shared";
+} from "./memory-store-shared";
 
 type SemanticVecRow = { id: string; distance: number };
 type SemanticMetaRow = Omit<ChunkSearchRow, "distance">;

@@ -3,7 +3,7 @@
  * @boundary Prototype-mounted MemoryStore methods; no constructor state ownership.
  */
 
-import { MemoryStore, type MemoryStoreInternals } from "@/storage/memory-store-base";
+import { MemoryStore, type MemoryStoreInternals } from "./memory-store-base";
 import {
 	aggregateChunksToMemories,
 	type ChunkCandidate,
@@ -23,7 +23,7 @@ import {
 	type SearchOptions,
 	SNIPPET_NEIGHBOR_AFTER,
 	SNIPPET_NEIGHBOR_BEFORE,
-} from "@/storage/memory-store-shared";
+} from "./memory-store-shared";
 
 type AggregationRow = MemoryRow & { scopeRowCount: number };
 

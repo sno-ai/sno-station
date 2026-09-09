@@ -2,8 +2,8 @@ import { z } from "zod";
 import {
 	llmRoutingConfigSchema,
 	type LlmRoutingConfig,
-} from "../shared/plugin-config-mode-schema";
-import { AGGREGATION_OPERATIONS, MEMORY_CATEGORIES, type MemoryCategory } from "../shared/types";
+} from "./config/plugin-config-mode-schema";
+import { AGGREGATION_OPERATIONS, MEMORY_CATEGORIES, type MemoryCategory } from "../engine/shared/types";
 
 export type JsonValue = z.infer<ReturnType<typeof z.json>>;
 export type ScopeCtx = { principal: string; project: string; session: string };

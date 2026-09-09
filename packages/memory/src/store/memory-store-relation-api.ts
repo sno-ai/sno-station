@@ -12,7 +12,7 @@ import {
 	type MemoryRelationWalkInput,
 	MemoryStore,
 	type MemoryStoreInternals,
-} from "@/storage/memory-store-base";
+} from "./memory-store-base";
 
 interface RelationDictionaryResource {
 	relations: Array<{ type: string; ratified: boolean }>;

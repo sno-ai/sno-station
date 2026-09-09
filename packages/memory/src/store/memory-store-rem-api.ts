@@ -6,21 +6,21 @@
 import type {
 	RemMutationResult,
 	WriteTextVersionInput,
-} from "../../../../packages/rem-core/src/index.ts";
-import { writeRemTwoFacetTransaction } from "../../../../packages/rem-core/src/index.js";
+} from "../engine/rem/index";
+import { writeRemTwoFacetTransaction } from "../engine/rem/index.js";
 import { createHash } from "node:crypto";
 import { createLogger } from "@snoai/utils/logger";
 import {
 	getMemClawStateDir,
 	runWithMemoryAudit,
-} from "@/operations/runtime-audit-log";
-import { MemoryStore, type MemoryStoreInternals } from "@/storage/memory-store-base";
+} from "../engine/operations/runtime-audit-log";
+import { MemoryStore, type MemoryStoreInternals } from "./memory-store-base";
 import {
 	hashInputForEntry,
 	type PreparedChunkRow,
 	stableHash,
 	CHUNKING_VERSION,
-} from "@/storage/memory-store-shared";
+} from "./memory-store-shared";
 
 const log = createLogger("mem-claw:rem-write");
 
@@ -94,7 +94,7 @@ Object.assign(MemoryStore.prototype, {
 	},
 });
 
-export { deriveRemUpdateStamp } from "@/storage/rem-update-stamp-migration";
+export { deriveRemUpdateStamp } from "./rem-update-stamp-migration";
 
 async function applyTransaction(
 	store: MemoryStoreInternals,

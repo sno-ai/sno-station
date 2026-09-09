@@ -10,10 +10,10 @@
  */
 
 import { Temporal } from "@js-temporal/polyfill";
-import type { AtomicGauntletRecord } from "@/extraction/atomic-extraction-gauntlet";
-import type { AtomicExtractionResolvedTime } from "@/extraction/atomic-extraction-reply";
-import { resolveDateLocally } from "@/extraction/date-resolution";
-import { DEFAULT_LOCALE, type Locale } from "@/i18n/locales";
+import type { AtomicGauntletRecord } from "./atomic-extraction-gauntlet";
+import type { AtomicExtractionResolvedTime } from "./atomic-extraction-reply";
+import { resolveDateLocally } from "./date-resolution";
+import { DEFAULT_LOCALE, type Locale } from "../i18n/locales";
 
 type DateUnit = "day" | "week" | "month" | "year";
 

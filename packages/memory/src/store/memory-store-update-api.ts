@@ -7,23 +7,23 @@ import {
 	allowedWriters,
 	canExtractorWrite,
 	type WriterAuthority,
-} from "@/shared/memory-kind-policy";
+} from "../engine/shared/memory-kind-policy";
 import {
 	type MemoryCategory,
 	type MemoryMetadata,
 	type MemoryTier,
 	MEMORY_CATEGORIES,
 	normalizeCategory,
-} from "@/shared/types";
+} from "../engine/shared/types";
 import {
 	MemoryStore,
 	StaleSupersedeTargetError,
 	type MemoryStoreInternals,
-} from "@/storage/memory-store-base";
+} from "./memory-store-base";
 import {
 	sanitizeMemoryMetadataObject,
 	sanitizeUpdateChanges,
-} from "@/storage/content-sanitizer-bridge";
+} from "./content-sanitizer-bridge";
 import {
 	assertMetadataOnlyUpdatePreservesHashInput,
 	clamp01,
@@ -36,8 +36,8 @@ import {
 	StorageError,
 	stableHash,
 	type UpdateChanges,
-} from "@/storage/memory-store-shared";
-import { validateStoreWriteMetadata } from "@/storage/memory-store-write-validation";
+} from "./memory-store-shared";
+import { validateStoreWriteMetadata } from "./memory-store-write-validation";
 
 type MetadataRow = { id: string; category: MemoryCategory; metadata: string | null };
 

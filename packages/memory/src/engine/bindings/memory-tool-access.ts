@@ -3,8 +3,8 @@
  * @boundary Scope and agent-access checks only.
  */
 
-import type { MemoryScopePolicy } from "@/plugin/memory-tool-dependencies";
-import { MemClawError } from "@/plugin/memory-tool-dependencies";
+import type { MemoryScopePolicy } from "./memory-tool-dependencies";
+import { MemClawError } from "./memory-tool-dependencies";
 
 export function assertAccessibleScope(
 	scopePolicy: MemoryScopePolicy,

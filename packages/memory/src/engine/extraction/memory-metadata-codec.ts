@@ -19,18 +19,18 @@ import {
 	normalizeTier,
 	normalizeTimestamp,
 	validateMemoryCategory,
-} from "@/extraction/memory-metadata-normalizers";
+} from "./memory-metadata-normalizers";
 import type {
 	EntryLike,
 	InsightMetadata,
 	InsightMetadataPatch,
 	MemoryRelation,
-} from "@/extraction/memory-metadata-types";
-import { memoryMetadata } from "@/extraction/memory-metadata-types";
-import { isoDateFromMs, normalizeIsoDateTimeString } from "@/shared/iso-date-time";
-import type { MemoryCategory } from "@/shared/types";
+} from "./memory-metadata-types";
+import { memoryMetadata } from "./memory-metadata-types";
+import { isoDateFromMs, normalizeIsoDateTimeString } from "../shared/iso-date-time";
+import type { MemoryCategory } from "../shared/types";
 
-export { deriveFactKey } from "@/extraction/memory-metadata-normalizers";
+export { deriveFactKey } from "./memory-metadata-normalizers";
 export type {
 	EntryLike,
 	InsightMetadata,
@@ -39,7 +39,7 @@ export type {
 	MemoryRelation,
 	MemorySource,
 	MemoryState,
-} from "@/extraction/memory-metadata-types";
+} from "./memory-metadata-types";
 export {
 	type ContextualSupport,
 	MAX_SUPPORT_SLICES,
@@ -49,7 +49,7 @@ export {
 	type SupportContext,
 	type SupportInfoV2,
 	updateSupportStats,
-} from "@/extraction/memory-support-info";
+} from "./memory-support-info";
 
 export class ExtractionError extends Error {
 	constructor(message: string) {

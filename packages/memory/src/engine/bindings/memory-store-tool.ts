@@ -8,21 +8,21 @@ import {
 	getDefaultScopeForTool,
 	type ResolvedAgentAccess,
 	resolveAgentAccess,
-} from "@/plugin/memory-tool-access";
-import type { MemoryCategory } from "@/plugin/memory-tool-dependencies";
-import { appendAuditEntry, clamp01, DEFAULT_IMPORTANCE, DEFAULT_LOCALE, detectCategory, normalizeCategory, serializeIntervalMetadata, stableHash, stripEnvelopeMetadata } from "@/plugin/memory-tool-dependencies";
-import { resolveMemoryDate, type DateResolutionResult } from "@/extraction/date-resolution";
+} from "./memory-tool-access";
+import type { MemoryCategory } from "./memory-tool-dependencies";
+import { appendAuditEntry, clamp01, DEFAULT_IMPORTANCE, DEFAULT_LOCALE, detectCategory, normalizeCategory, serializeIntervalMetadata, stableHash, stripEnvelopeMetadata } from "./memory-tool-dependencies";
+import { resolveMemoryDate, type DateResolutionResult } from "../extraction/date-resolution";
 import {
 	killSwitchResponse,
 	makeResult,
 	runWithAudit,
 	shouldBlockMemoryTools,
-} from "@/plugin/memory-tool-results";
-import { storeParamsSchema, type ToolContext, type ToolResult } from "@/plugin/memory-tool-schemas";
+} from "./memory-tool-results";
+import { storeParamsSchema, type ToolContext, type ToolResult } from "./memory-tool-schemas";
 import {
 	createRetireByNameRunBudget,
 	runProfileSectionUpdate,
-} from "@/extraction/profile-section-writer";
+} from "../extraction/profile-section-writer";
 
 type StoreParams = ReturnType<(typeof storeParamsSchema)["parse"]>;
 const MEMORY_STORE_CATEGORIES = ["episodic", "profile"] as const;

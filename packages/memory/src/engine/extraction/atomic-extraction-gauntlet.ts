@@ -4,23 +4,23 @@
  */
 
 import { createLogger } from "@snoai/utils/logger";
-import attributeDictionary from "../../config/attribute-dictionary.json" with { type: "json" };
+import attributeDictionary from "../../../config/attribute-dictionary.json" with { type: "json" };
 import type {
 	AtomicExtractionRecord,
 	AtomicExtractionSourceSpan,
 	AtomicExtractionTurn,
-} from "@/extraction/atomic-extraction-reply";
-import { normalizeAtomicTemporalRecord } from "@/extraction/atomic-temporal-normalization";
+} from "./atomic-extraction-reply";
+import { normalizeAtomicTemporalRecord } from "./atomic-temporal-normalization";
 import {
 	restoreAtomicSanitizedSpan,
 	sanitizeAtomicPromptValue,
 	withAtomicSanitizerMatches,
-} from "@/extraction/atomic-replacement-sanitizer";
-import { DEFAULT_LOCALE, type Locale } from "@/i18n/locales";
+} from "./atomic-replacement-sanitizer";
+import { DEFAULT_LOCALE, type Locale } from "../i18n/locales";
 import {
 	type MemoryRelationPredicate,
 	normalizeMemoryRelationPredicate,
-} from "@/storage/store";
+} from "../../store/store";
 
 const log = createLogger("mem-claw:atomic-extraction-gauntlet");
 

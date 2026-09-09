@@ -3,8 +3,8 @@
  * @boundary Matching code consumes registry data; taxonomy strings live in the JSON resource.
  */
 
-import registryResource from "../../config/b-profile-section-registry.json" with { type: "json" };
-import type { Locale } from "@/i18n/locales";
+import registryResource from "../../../config/b-profile-section-registry.json" with { type: "json" };
+import type { Locale } from "../i18n/locales";
 
 export type BProfileSectionLocaleMap = Record<Locale, readonly string[]>;
 

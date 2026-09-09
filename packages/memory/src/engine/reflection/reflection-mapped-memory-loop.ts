@@ -4,25 +4,25 @@ const diagnosticLog = createDiagnosticLogger("mem-claw:reflection-mapped-memory-
  * @purpose Stores mapped reflection bullets as semantic memories.
  */
 
-import type { createEmbedder } from "@/extraction/embedding-provider-client";
+import type { createEmbedder } from "../extraction/embedding-provider-client";
 import {
 	buildInsightMetadata,
 	stringifyInsightMetadata,
-} from "@/extraction/memory-metadata-codec";
+} from "../extraction/memory-metadata-codec";
 import {
 	createRetireByNameRunBudget,
 	runProfileSectionUpdate,
-} from "@/extraction/profile-section-writer";
+} from "../extraction/profile-section-writer";
 import {
 	buildReflectionAntiPatternSignature,
 	buildReflectionMappedMetadata,
 	type ReflectionMappedKind,
-} from "@/reflection/mapped-memory-metadata-builder";
-import type { LlmClient } from "@/shared/llm-client";
-import type { LlmRoutingConfig } from "@/shared/plugin-config-mode-schema";
-import { extractInjectableReflectionMappedMemoryItems } from "@/reflection/markdown-slice-parser";
-import type { MemoryCategory } from "@/shared/types";
-import type { MemoryStore } from "@/storage/store";
+} from "./mapped-memory-metadata-builder";
+import type { LlmClient } from "../../model/llm-client";
+import type { LlmRoutingConfig } from "../../contract/config/plugin-config-mode-schema";
+import { extractInjectableReflectionMappedMemoryItems } from "./markdown-slice-parser";
+import type { MemoryCategory } from "../shared/types";
+import type { MemoryStore } from "../../store/store";
 
 const MAX_MAPPED_ENTRIES = 100;
 const MAPPED_DEDUP_THRESHOLD = 0.95;

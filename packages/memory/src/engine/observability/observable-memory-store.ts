@@ -4,19 +4,19 @@
  */
 
 import type { JsonObject } from "@snoai/sno-observe";
-import type { EmbeddingConfig } from "@/extraction/embedding-provider-client";
+import type { EmbeddingConfig } from "../extraction/embedding-provider-client";
 import {
 	getMemClawStateDir,
 	runWithMemoryAudit,
 	runWithMemoryAuditSync,
-} from "@/operations/runtime-audit-log";
-import { StorageError } from "@/shared/errors";
+} from "../operations/runtime-audit-log";
+import { StorageError } from "../shared/errors";
 import type {
 	MemoryEntry,
 	MemoryMetadata,
 	MemorySearchResult,
 	MemoryTier,
-} from "@/shared/types";
+} from "../shared/types";
 import {
 	MemoryStore,
 	type ChunkSearchResult,
@@ -33,7 +33,7 @@ import {
 	type SupersedeClose,
 	type SupersedePreserveExisting,
 	type UpdateChanges,
-} from "@/storage/store";
+} from "../../store/store";
 import { observeBackgroundCooldownKey, type PluginObservability } from "./adapter";
 import { countEmbeddingTokens } from "./token-counter";
 

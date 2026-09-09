@@ -14,7 +14,7 @@ import {
 	type SQLiteTableWithColumns,
 	text,
 } from "drizzle-orm/sqlite-core";
-import { DEFAULT_IMPORTANCE } from "@/config";
+import { DEFAULT_IMPORTANCE } from "../../config/index";
 
 type TextColumn<
 	Name extends string,

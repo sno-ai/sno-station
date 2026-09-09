@@ -9,8 +9,8 @@ import {
 	sanitizeStructuredJsonForStorage,
 	type SanitizerSource,
 } from "@snoai/content-sanitizer";
-import { redactSecrets } from "@/security/redact";
-import type { StoreInput, UpdateChanges } from "@/storage/memory-store-shared";
+import { redactSecrets } from "../engine/security/redact";
+import type { StoreInput, UpdateChanges } from "./memory-store-shared";
 
 const METADATA_FIELD_SANITIZE_FAILURE_MARKER = "[REDACTED_PRIVATE]";
 const INTERNAL_IDEMPOTENCY_KEY_PATTERN = /^[0-9a-f]{64}$/;

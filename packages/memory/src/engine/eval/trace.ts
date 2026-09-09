@@ -47,7 +47,7 @@ import {
 	MULTI_HIT_BONUS_PER_HIT,
 	SNIPPET_NEIGHBOR_AFTER,
 	SNIPPET_NEIGHBOR_BEFORE,
-} from "@/config";
+} from "../../../config/index";
 
 const log = createLogger("mem-claw:eval-trace");
 

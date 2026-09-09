@@ -3,12 +3,12 @@
  * @boundary Explicit SQLite table rebuild only; runtime startup does not call it.
  */
 
-import { StorageError } from "@/shared/errors";
+import { StorageError } from "../engine/shared/errors";
 import {
 	ATOMIC_MEMORY_ROW_CONSTRAINTS,
 	CREATE_ATOMIC_MEMORY_CUTOVER_TABLE_SQL,
-} from "@/storage/atomic-memory-cutover-sql";
-import type { SqliteDatabaseLike } from "@/storage/sqlite-runtime";
+} from "./atomic-memory-cutover-sql";
+import type { SqliteDatabaseLike } from "./sqlite-runtime";
 
 interface SchemaObjectRow {
 	sql: string;

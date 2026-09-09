@@ -3,18 +3,18 @@
  * @boundary Reads and rewrites one store file; no model calls, no network.
  */
 
-import { createEmbedder } from "@/extraction/embedding-provider-client";
-import { getMemClawStateDir } from "@/operations/runtime-audit-log";
-import { JSON_SYSTEM_CONTENT } from "@/shared/llm-client";
-import { stableHash } from "@/shared/utils";
-import { hashInputForEntry } from "@/storage/memory-store-shared";
+import { createEmbedder } from "../engine/extraction/embedding-provider-client";
+import { getMemClawStateDir } from "../engine/operations/runtime-audit-log";
+import { JSON_SYSTEM_CONTENT } from "../model/llm-client";
+import { stableHash } from "../engine/shared/utils";
+import { hashInputForEntry } from "./memory-store-shared";
 import {
 	initSqliteRuntime,
 	openSqliteDatabase,
 	type SqliteDatabaseLike,
-} from "@/storage/sqlite-runtime";
-import { MemoryStore, type MemoryStoreInternals } from "@/storage/store";
-import { MEMORY_TELEMETRY_DELETE_REASONS } from "@/telemetry/memory-telemetry-types";
+} from "./sqlite-runtime";
+import { MemoryStore, type MemoryStoreInternals } from "./store";
+import { MEMORY_TELEMETRY_DELETE_REASONS } from "../engine/telemetry/memory-telemetry-types";
 
 /**
  * Three passes, in this order, over one store.

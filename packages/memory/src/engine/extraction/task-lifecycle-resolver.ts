@@ -10,8 +10,8 @@ import type {
 	TaskLifecycleAssertion,
 	TaskLifecycleOccurrenceAnchors,
 	TaskLifecycleRevisionDetails,
-} from "@/extraction/task-lifecycle-assertion";
-import { normalizeForCompare, tokenizeForFts } from "@/shared/i18n-text";
+} from "./task-lifecycle-assertion";
+import { normalizeForCompare, tokenizeForFts } from "../shared/i18n-text";
 
 const relationCandidateLimit = 25;
 const occurrenceAnchorKeys = [

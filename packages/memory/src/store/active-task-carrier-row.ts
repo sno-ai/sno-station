@@ -6,15 +6,15 @@
 import {
 	activeTaskShape,
 	boundActiveTaskTitle,
-} from "@/extraction/active-task-projection";
-import { buildIndexedText } from "@/extraction/extraction-text-sanitizer";
+} from "../engine/extraction/active-task-projection";
+import { buildIndexedText } from "../engine/extraction/extraction-text-sanitizer";
 import {
 	buildInsightMetadata,
 	stringifyInsightMetadata,
-} from "@/extraction/memory-metadata-codec";
-import { hashLengthPrefixedTuple } from "@/extraction/task-lifecycle-assertion";
-import { hashInputForEntry, stableHash } from "@/storage/memory-store-shared";
-import { validateStoreWriteMetadata } from "@/storage/memory-store-write-validation";
+} from "../engine/extraction/memory-metadata-codec";
+import { hashLengthPrefixedTuple } from "../engine/extraction/task-lifecycle-assertion";
+import { hashInputForEntry, stableHash } from "./memory-store-shared";
+import { validateStoreWriteMetadata } from "./memory-store-write-validation";
 
 export interface ActiveTaskCarrierFacts {
 	projectId: string;

@@ -3,7 +3,7 @@
  * @boundary Response-text normalization only; the caller owns every schema decision.
  */
 
-import { repairCommonJson } from "@/shared/llm-json-utils";
+import { repairCommonJson } from "../../model/llm-json-utils";
 
 interface BalancedSpan {
 	start: number;

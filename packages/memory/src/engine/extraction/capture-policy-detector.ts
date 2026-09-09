@@ -8,10 +8,10 @@ import {
 	CAPTURE_MAX_EMOJI_COUNT,
 	CAPTURE_MIN_LENGTH_CJK,
 	CAPTURE_MIN_LENGTH_STANDARD,
-} from "@/config";
-import { ALL_RESOURCES, RESOURCES_BY_LOCALE } from "@/i18n/all-resources";
-import { resolveLocale } from "@/i18n/resolver";
-import { normalizeQuery } from "@/retrieval/retrieval-gate";
+} from "../../../config/index";
+import { ALL_RESOURCES, RESOURCES_BY_LOCALE } from "../i18n/all-resources";
+import { resolveLocale } from "../i18n/resolver";
+import { normalizeQuery } from "../retrieval/retrieval-gate";
 import {
 	looksLikeRelevantMemoriesContextFragment,
 	RELEVANT_MEMORIES_CLOSE_TAG,
@@ -19,8 +19,8 @@ import {
 	RELEVANT_MEMORIES_OPEN_TAG,
 	RELEVANT_MEMORIES_UNTRUSTED_LINE,
 	RELEVANT_MEMORY_RECORD_PREFIX,
-} from "@/retrieval/relevant-memories-context";
-import { type MemoryCategory, normalizeCategory } from "@/shared/types";
+} from "../retrieval/relevant-memories-context";
+import { type MemoryCategory, normalizeCategory } from "../shared/types";
 import { buildConfusableSkeleton } from "./confusable-skeleton";
 
 const PROMPT_INJECTION_PATTERNS: RegExp[] = [

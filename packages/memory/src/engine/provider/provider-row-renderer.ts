@@ -3,7 +3,7 @@
  * @boundary Pure presentation only; authorization belongs to provider-search-manager.ts.
  */
 
-import type { MemoryEntry } from "@/shared/types";
+import type { MemoryEntry } from "../shared/types";
 
 const PROVIDER_ROW_ID_RE =
 	/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;

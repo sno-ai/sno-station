@@ -10,7 +10,7 @@ import type {
 	JournalEntry,
 	RemOperationType,
 	RemJournalWriter,
-} from "../../../../packages/rem-core/src/index.js";
+} from "../engine/rem/index.js";
 
 export class RemChassisJournal implements RemJournalWriter {
 	private operationQueue: Promise<void> = Promise.resolve();

@@ -3,19 +3,19 @@
  * @boundary Slice extraction only; mapped-memory parsing lives separately.
  */
 
-import { RESOURCES_BY_LOCALE } from "@/i18n/all-resources";
-import type { ReflectionSliceClassifiersNs } from "@/i18n/res/_types";
-import { resolveLocale } from "@/i18n/resolver";
-import { parseSectionBullets } from "@/reflection/reflection-markdown-sections";
+import { RESOURCES_BY_LOCALE } from "../i18n/all-resources";
+import type { ReflectionSliceClassifiersNs } from "../i18n/res/_types";
+import { resolveLocale } from "../i18n/resolver";
+import { parseSectionBullets } from "./reflection-markdown-sections";
 import {
 	PARSER_HEADINGS,
 	type ReflectionSliceItem,
 	type ReflectionSlices,
-} from "@/reflection/reflection-markdown-types";
+} from "./reflection-markdown-types";
 import {
 	sanitizeInjectableReflectionLines,
 	sanitizeReflectionSliceLines,
-} from "@/reflection/reflection-slice-sanitizer";
+} from "./reflection-slice-sanitizer";
 
 /** Tests whether is invariant rule like without mutating reflection text slicing state. */
 function isInvariantRuleLike(line: string, classifiers: ReflectionSliceClassifiersNs): boolean {

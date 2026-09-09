@@ -9,8 +9,8 @@ import {
 	MemoryStore,
 	type MemorySuppressionInput,
 	type MemorySuppressionResult,
-} from "@/storage/memory-store-base";
-import { StorageError } from "@/storage/memory-store-shared";
+} from "./memory-store-base";
+import { StorageError } from "./memory-store-shared";
 
 export function hashMemorySuppressionContent(content: string): string {
 	return createHash("sha256").update(content.normalize("NFC"), "utf8").digest("hex");

@@ -3,8 +3,8 @@
  * @boundary Primitive coercion and default layer/category derivation only.
  */
 
-import type { MemoryLayer, MemorySource, MemoryState } from "@/extraction/memory-metadata-types";
-import { type MemoryCategory, type MemoryTier, normalizeCategory } from "@/shared/types";
+import type { MemoryLayer, MemorySource, MemoryState } from "./memory-metadata-types";
+import { type MemoryCategory, type MemoryTier, normalizeCategory } from "../shared/types";
 
 export type FactKeySource = {
 	kind: MemoryCategory;

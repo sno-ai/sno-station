@@ -3,14 +3,14 @@
  * @boundary Pure decision logic; no I/O, no client construction, no transport code.
  */
 
-import type { MemoryLlmAdapterSlot } from "@/shared/llm-client-types";
+import type { MemoryLlmAdapterSlot } from "./llm-client-types";
 import {
 	type LlmOccasion,
 	type LlmRoutingConfig,
 	type LlmRoutingConfigInput,
 	type LlmTier,
 	llmRoutingConfigSchema,
-} from "@/shared/plugin-config-mode-schema";
+} from "../contract/config/plugin-config-mode-schema";
 
 export type { LlmRoutingConfig };
 

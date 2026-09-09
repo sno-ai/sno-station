@@ -45,4 +45,4 @@ export function buildSessionMetadataBlock(
 	return `${lines.join("\n")}\n\n`;
 }
 
-export { buildTemporalResolutionRule } from "@/extraction/temporal-resolution-skill";
+export { buildTemporalResolutionRule } from "../../../extraction/temporal-resolution-skill";

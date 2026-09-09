@@ -20,8 +20,8 @@ import {
 	validateRemEnableGateDigestKeys,
 	type RemDatabaseLike,
 	type RemOperationalConfiguration,
-} from "../../../../packages/rem-core/src/index.js";
-import { openSqliteDatabaseReadonly } from "@/storage/sqlite-runtime";
+} from "../engine/rem/index.js";
+import { openSqliteDatabaseReadonly } from "../store/sqlite-runtime";
 
 type EntryDecision =
 	| { decision: "allow"; reasonCode: null; outcome?: "no-action" }

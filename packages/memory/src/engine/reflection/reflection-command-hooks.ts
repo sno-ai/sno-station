@@ -6,41 +6,41 @@ const diagnosticLog = createDiagnosticLogger("mem-claw:reflection-command-hooks"
  */
 
 
-import { appendSelfImprovementEntry } from "@/operations/learning-file-maintenance";
+import { appendSelfImprovementEntry } from "../operations/learning-file-maintenance";
 import {
 	generateReflectionText,
 	readSessionConversationWithResetFallback,
 	writeReflectionToFilesystem,
-} from "@/reflection/daily-log-generator";
+} from "./daily-log-generator";
 import {
 	type ReflectionDerivedCache,
 	setReflectionDerivedCacheEntry,
-} from "@/reflection/derived-line-cache";
+} from "./derived-line-cache";
 import {
 	DEFAULT_REFLECTION_BOUNDARY_DERIVED_SUPPRESSION_MS,
 	isSessionBoundaryReflectionAction,
 	type ReflectionDerivedSuppressionCache,
 	setReflectionDerivedSuppression,
-} from "@/reflection/derived-suppression-cache";
-import { createReflectionEventId } from "@/reflection/event-payload-builder";
-import { extractReflectionLearningGovernanceCandidates } from "@/reflection/markdown-slice-parser";
-import { storeReflectionEntries } from "@/reflection/memory-entry-projector";
-import type { ReflectionDeps } from "@/reflection/reflection-deps";
+} from "./derived-suppression-cache";
+import { createReflectionEventId } from "./event-payload-builder";
+import { extractReflectionLearningGovernanceCandidates } from "./markdown-slice-parser";
+import { storeReflectionEntries } from "./memory-entry-projector";
+import type { ReflectionDeps } from "./reflection-deps";
 import {
 	DEFAULT_MEMORY_LLM_CONFIG,
 	createReflectionGenerator,
 	resolveWorkspaceDirFromEvent,
-} from "@/reflection/reflection-embedded-generator";
+} from "./reflection-embedded-generator";
 import {
 	governanceEntryType,
 	runMappedMemoryLoop,
-} from "@/reflection/reflection-mapped-memory-loop";
-import { runWithSerialGuard } from "@/reflection/session-serial-guard";
-import type { createErrorSignalTracker } from "@/security/error-signals";
-import { createLlmClient } from "@/shared/llm-client";
-import { pickLlmRoutingConfig } from "@/shared/llm-mode-routing";
-import type { PluginConfig } from "@/shared/types";
-import { getMemClawDataDir } from "@/storage/data-paths";
+} from "./reflection-mapped-memory-loop";
+import { runWithSerialGuard } from "./session-serial-guard";
+import type { createErrorSignalTracker } from "../security/error-signals";
+import { createLlmClient } from "../../model/llm-client";
+import { pickLlmRoutingConfig } from "../../model/llm-mode-routing";
+import type { PluginConfig } from "../shared/types";
+import { getMemClawDataDir } from "../../store/data-paths";
 
 interface ReflectionDiagnostics {
 	outcome: string;

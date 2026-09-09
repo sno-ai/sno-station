@@ -10,15 +10,15 @@ import {
 	parseRerankResponse,
 	type RerankItem,
 	RERANK_DEFAULT_ENDPOINTS,
-} from "@/retrieval/retrieval-rerank-provider";
-import { clamp01WithFloor, dotProduct, log } from "@/retrieval/retrieval-scoring-utils";
+} from "./retrieval-rerank-provider";
+import { clamp01WithFloor, dotProduct, log } from "./retrieval-scoring-utils";
 import {
 	MemoryRetriever,
 	type MemoryRetrieverInternals,
 	type RerankFallbackReason,
 	type RerankOutcome,
-} from "@/retrieval/retriever-core";
-import type { RetrievalResult } from "@/retrieval/retriever-dependencies";
+} from "./retriever-core";
+import type { RetrievalResult } from "./retriever-dependencies";
 import {
 	clamp01,
 	DEFAULT_RERANK_BATCH_CONCURRENCY,
@@ -40,7 +40,7 @@ import {
 	RERANK_PRESERVATION_MID_RETURNED,
 	RERANK_PRESERVATION_MID_UNRETURNED,
 	RetrievalError,
-} from "@/retrieval/retriever-dependencies";
+} from "./retriever-dependencies";
 
 Object.assign(MemoryRetriever.prototype, {
 	async rerank(

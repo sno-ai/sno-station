@@ -8,8 +8,8 @@ import path from "node:path";
 import {
 	parseRemOperationalConfiguration,
 	type RemOperationalConfiguration,
-} from "../../../../packages/rem-core/src/index.js";
-import { getMemClawStateDir, getStateDir } from "@/shared/paths";
+} from "../engine/rem/index.js";
+import { getMemClawStateDir, getStateDir } from "../engine/shared/paths";
 
 export const REM_SIDECAR_HOST = "127.0.0.1";
 export const REM_SIDECAR_ORIGIN = "http://127.0.0.1";

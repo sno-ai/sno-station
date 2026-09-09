@@ -6,9 +6,9 @@
 import {
 	MemoryStore,
 	type MemoryStoreInternals,
-} from "@/storage/memory-store-base";
-import type { MemoryRow } from "@/storage/memory-store-shared";
-import { StorageError } from "@/storage/memory-store-shared";
+} from "./memory-store-base";
+import type { MemoryRow } from "./memory-store-shared";
+import { StorageError } from "./memory-store-shared";
 
 Object.assign(MemoryStore.prototype, {
 	listAtomicValidAt(

@@ -1,4 +1,4 @@
-import type { SqliteDatabaseLike } from "@/storage/sqlite-runtime";
+import type { SqliteDatabaseLike } from "./sqlite-runtime";
 
 interface ObjectRename {
 	legacy: string;

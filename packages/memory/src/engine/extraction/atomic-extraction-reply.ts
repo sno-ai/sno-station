@@ -5,13 +5,13 @@
 
 import { z } from "zod";
 import { createLogger } from "@snoai/utils/logger";
-import atomicExtractionSchema from "../../config/atomic-extraction-response.schema.json" with {
+import atomicExtractionSchema from "../../../config/atomic-extraction-response.schema.json" with {
 	type: "json",
 };
-import attributeDictionary from "../../config/attribute-dictionary.json" with { type: "json" };
-import relationDictionary from "../../config/relation-dictionary.json" with { type: "json" };
-import stateVocabulary from "../../config/state-vocabulary.json" with { type: "json" };
-import { modelReplyJsonCandidates } from "@/shared/model-reply-text";
+import attributeDictionary from "../../../config/attribute-dictionary.json" with { type: "json" };
+import relationDictionary from "../../../config/relation-dictionary.json" with { type: "json" };
+import stateVocabulary from "../../../config/state-vocabulary.json" with { type: "json" };
+import { modelReplyJsonCandidates } from "../shared/model-reply-text";
 
 export type AtomicExtractionTurnRole = "system" | "user" | "assistant";
 

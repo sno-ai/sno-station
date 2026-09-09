@@ -13,29 +13,29 @@ import {
 	getAuditPath,
 	isKillSwitchActive,
 	type AuditStatus,
-} from "@/operations/runtime-audit-log";
+} from "../engine/operations/runtime-audit-log";
 import {
 	PLUGIN_ENTRY_KEY,
 	readOpenClawConfig,
 	resolveOpenClawConfigPath,
-} from "@/plugin/embedder-config-files";
+} from "../engine/bindings/embedder-config-files";
 import {
 	REM_CORRELATION_ID_HEADER,
 	REM_RUN_PATH,
 	REM_SIDECAR_HOST,
 	REM_SIDECAR_TOKEN_HEADER,
 	getRemDiscoveryPath,
-} from "@/sidecar/config";
-import { enumerateRemCandidateScopes } from "@/sidecar/rem-batch-executor";
+} from "./config";
+import { enumerateRemCandidateScopes } from "./rem-batch-executor";
 import {
 	ensureRemTriggerScope,
 	loadRemTriggerState,
 	type RemTriggerScopeState,
 	type RemTriggerStateDocument,
 	writeRemTriggerStateAtomic,
-} from "@/sidecar/rem-trigger-state";
-import type { SqliteDatabaseLike } from "@/storage/sqlite-runtime";
-import { pluginConfigSchema } from "@/shared/types";
+} from "./rem-trigger-state";
+import type { SqliteDatabaseLike } from "../store/sqlite-runtime";
+import { pluginConfigSchema } from "../engine/shared/types";
 
 export const REM_DAILY_SCHEDULE_HOUR = 3;
 export const REM_VOLUME_THRESHOLD = 100;

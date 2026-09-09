@@ -7,17 +7,17 @@ import {
 	assertAccessibleScopeForTool,
 	resolveAgentAccess,
 	resolveReadableScopesForTool,
-} from "@/plugin/memory-tool-access";
+} from "./memory-tool-access";
 
-import { clampInt, DEFAULT_LIST_LIMIT, MemClawError, isKillSwitchActive, MAX_LIST_LIMIT, readEstimatedSpendToday, normalizeCategory } from "@/plugin/memory-tool-dependencies";
-import { serializeMemory } from "@/plugin/memory-tool-formatting";
+import { clampInt, DEFAULT_LIST_LIMIT, MemClawError, isKillSwitchActive, MAX_LIST_LIMIT, readEstimatedSpendToday, normalizeCategory } from "./memory-tool-dependencies";
+import { serializeMemory } from "./memory-tool-formatting";
 import {
 	killSwitchResponse,
 	makeResult,
 	runWithAudit,
 	shouldBlockMemoryTools,
-} from "@/plugin/memory-tool-results";
-import { listParamsSchema, type ToolContext, type ToolResult } from "@/plugin/memory-tool-schemas";
+} from "./memory-tool-results";
+import { listParamsSchema, type ToolContext, type ToolResult } from "./memory-tool-schemas";
 
 
 

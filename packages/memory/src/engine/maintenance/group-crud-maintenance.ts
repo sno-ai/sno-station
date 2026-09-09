@@ -4,22 +4,22 @@
  */
 
 import { randomUUID } from "node:crypto";
-import attributeDictionary from "../../config/attribute-dictionary.json" with { type: "json" };
-import stateVocabulary from "../../config/state-vocabulary.json" with { type: "json" };
+import attributeDictionary from "../../../config/attribute-dictionary.json" with { type: "json" };
+import stateVocabulary from "../../../config/state-vocabulary.json" with { type: "json" };
 import {
 	type AtomicKeyedRecord,
 	type AtomicProfileKeyingTransport,
 	runAtomicProfileKeying,
-} from "@/extraction/atomic-profile-keying";
-import type { Embedder } from "@/extraction/embedding-provider-client";
+} from "../extraction/atomic-profile-keying";
+import type { Embedder } from "../extraction/embedding-provider-client";
 import {
 	ENTITY_IDENTITY_CANDIDATE_LIMIT,
 	rankAtomicMemoryEntityCandidates,
 	recordAtomicEntityIdentityJournal,
-} from "@/storage/memory-store-atomic-entity-api";
-import { applyEntityNameKeyMigration } from "@/storage/entity-name-key-migration";
-import { applyStateCategoryMigration } from "@/storage/state-category-migration";
-import type { SqliteDatabaseLike } from "@/storage/sqlite-runtime";
+} from "../../store/memory-store-atomic-entity-api";
+import { applyEntityNameKeyMigration } from "../../store/entity-name-key-migration";
+import { applyStateCategoryMigration } from "../../store/state-category-migration";
+import type { SqliteDatabaseLike } from "../../store/sqlite-runtime";
 
 const MIGRATION_ID = "group-crud-maintenance-v1";
 const ENTITY_PREFIX = "entity:";

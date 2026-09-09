@@ -5,8 +5,8 @@
 
 import type { LLMConfig } from "@snoai/llmix";
 
-import type { AgentLlmPort } from "@/shared/agent-llm-port";
-import type { LlmRoutingConfig } from "@/shared/plugin-config-mode-schema";
+import type { AgentLlmPort } from "./agent-llm-port";
+import type { LlmRoutingConfig } from "../contract/config/plugin-config-mode-schema";
 
 export const LLM_PRESETS = [
 	"mem_claw/openai_gpt_5_nano",

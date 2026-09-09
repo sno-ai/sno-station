@@ -4,7 +4,7 @@
  */
 
 import { z, type ZodIssue } from "zod";
-import attributeDictionaryResource from "../../config/attribute-dictionary.json" with {
+import attributeDictionaryResource from "../../../config/attribute-dictionary.json" with {
 	type: "json",
 };
 import {
@@ -12,10 +12,10 @@ import {
 	parseAttributeDictionary,
 	resolveAttributeSlug,
 	type AttributeSlugIndex,
-} from "@/extraction/attribute-slug-matcher";
-import { normalizeTopicToSectionName } from "@/extraction/b-profile-section-dictionary-provider";
-import { PROFILE_IDENTITY_SECTION } from "@/extraction/profile-section-writer";
-import type { MemoryLane } from "@/shared/types";
+} from "./attribute-slug-matcher";
+import { normalizeTopicToSectionName } from "./b-profile-section-dictionary-provider";
+import { PROFILE_IDENTITY_SECTION } from "./profile-section-writer";
+import type { MemoryLane } from "../shared/types";
 
 const payloadSchema = z.record(z.string(), z.unknown());
 const candidateSchema = z.record(z.string(), z.unknown());

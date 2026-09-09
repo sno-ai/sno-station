@@ -14,14 +14,14 @@ import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 import {
 	installRemSchema,
 	type RemDatabaseLike,
-} from "../../../../packages/rem-core/src/index.js";
-import * as schema from "@/storage/schema";
-import { applyEntityNameKeyMigration } from "@/storage/entity-name-key-migration";
-import { migrateLegacyDatabaseNamespace } from "@/storage/legacy-database-namespace-migration";
-import { resolveSimpleTokenizerPath } from "@/storage/simple-tokenizer-path";
-import { loadSqliteVecExtension } from "@/storage/sqlite-vec-path";
-import { initSqliteRuntimeSync, openSqliteDatabase } from "@/storage/sqlite-runtime";
-import { migrateUnplacedCandidates } from "@/storage/unplaced-candidate-migration";
+} from "../engine/rem/index.js";
+import * as schema from "./schema";
+import { applyEntityNameKeyMigration } from "./entity-name-key-migration";
+import { migrateLegacyDatabaseNamespace } from "./legacy-database-namespace-migration";
+import { resolveSimpleTokenizerPath } from "./simple-tokenizer-path";
+import { loadSqliteVecExtension } from "./sqlite-vec-path";
+import { initSqliteRuntimeSync, openSqliteDatabase } from "./sqlite-runtime";
+import { migrateUnplacedCandidates } from "./unplaced-candidate-migration";
 
 type RemMigrationDecision =
 	| { decision: "allow"; reasonCode: null }

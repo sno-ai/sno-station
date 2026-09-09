@@ -12,9 +12,9 @@
  */
 
 import { createLogger } from "@snoai/utils/logger";
-import { DEFAULT_RECALL_LIFECYCLE, type RecallLifecycleConfig } from "@/config";
-import type { MemoryMetadata } from "@/shared/types";
-import type { MemoryStore } from "@/storage/store";
+import { DEFAULT_RECALL_LIFECYCLE, type RecallLifecycleConfig } from "../../../config/index";
+import type { MemoryMetadata } from "../shared/types";
+import type { MemoryStore } from "../../store/store";
 
 const log = createLogger("mem-claw:access-tracker");
 

@@ -1,12 +1,12 @@
 import { createLogger } from "@snoai/utils/logger";
-import type { SqliteDatabaseLike, SqliteStatementLike } from "@/storage/sqlite-runtime";
-import { loadMemoryTelemetryKeySet, type MemoryTelemetryKeySet } from "@/telemetry/memory-telemetry-config";
-import { validateMemoryTelemetryMetadata } from "@/telemetry/memory-telemetry-metadata";
+import type { SqliteDatabaseLike, SqliteStatementLike } from "../../store/sqlite-runtime";
+import { loadMemoryTelemetryKeySet, type MemoryTelemetryKeySet } from "./memory-telemetry-config";
+import { validateMemoryTelemetryMetadata } from "./memory-telemetry-metadata";
 import {
 	createMemoryTelemetryReceiptService,
 	type MemoryTelemetryReceiptService,
-} from "@/telemetry/memory-telemetry-receipts";
-import type { MemoryTelemetryEventType, MemoryTelemetryMetadata } from "@/telemetry/memory-telemetry-types";
+} from "./memory-telemetry-receipts";
+import type { MemoryTelemetryEventType, MemoryTelemetryMetadata } from "./memory-telemetry-types";
 
 const log = createLogger("mem-claw:memory-telemetry-events");
 

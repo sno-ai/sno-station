@@ -4,20 +4,20 @@
  */
 
 import { pathToFileURL } from "node:url";
-import { createAtomicGenericExtractionTransport } from "@/extraction/atomic-generic-extractor";
-import { createBProfileKeyingTransport } from "@/extraction/atomic-profile-keying";
-import { createEmbedder, type Embedder } from "@/extraction/embedding-provider-client";
-import { runGroupCrudMaintenancePass } from "@/maintenance/group-crud-maintenance";
+import { createAtomicGenericExtractionTransport } from "../extraction/atomic-generic-extractor";
+import { createBProfileKeyingTransport } from "../extraction/atomic-profile-keying";
+import { createEmbedder, type Embedder } from "../extraction/embedding-provider-client";
+import { runGroupCrudMaintenancePass } from "./group-crud-maintenance";
 import {
 	createModelGroupCrudEntityIdentityJudgementPort,
 	createModelGroupCrudStateKeyingJudgementPort,
-} from "@/maintenance/group-crud-maintenance-ports";
-import { readOpenClawConfig, resolveOpenClawConfigPath } from "@/plugin/embedder-config-files";
-import { createLlmClient } from "@/shared/llm-client";
-import { pickLlmRoutingConfig } from "@/shared/llm-mode-routing";
-import { getMemClawStateDir } from "@/shared/paths";
-import { pluginConfigSchema } from "@/shared/types";
-import { initSqliteRuntimeSync, openSqliteDatabase } from "@/storage/sqlite-runtime";
+} from "./group-crud-maintenance-ports";
+import { readOpenClawConfig, resolveOpenClawConfigPath } from "../bindings/embedder-config-files";
+import { createLlmClient } from "../../model/llm-client";
+import { pickLlmRoutingConfig } from "../../model/llm-mode-routing";
+import { getMemClawStateDir } from "../shared/paths";
+import { pluginConfigSchema } from "../shared/types";
+import { initSqliteRuntimeSync, openSqliteDatabase } from "../../store/sqlite-runtime";
 
 function readArguments(): { storePath: string } {
 	const [storePath, extra] = process.argv.slice(2);

@@ -8,8 +8,8 @@ import {
 	getRemUpdateLocaleResource,
 	REM_UPDATE_LOCALES,
 	type RemUpdateRewriteConfig,
-} from "../../../../packages/rem-core/src/index.js";
-import type { SqliteDatabaseLike } from "@/storage/sqlite-runtime";
+} from "../engine/rem/index.js";
+import type { SqliteDatabaseLike } from "./sqlite-runtime";
 
 export function deriveRemUpdateStamp(input: {
 	source: string;

@@ -3,7 +3,7 @@
  * @boundary Prototype-mounted MemoryStore methods; no constructor state ownership.
  */
 
-import { MemoryStore, type MemoryStoreInternals } from "@/storage/memory-store-base";
+import { MemoryStore, type MemoryStoreInternals } from "./memory-store-base";
 import {
 	CHUNK_BACKFILL_BATCH_SIZE,
 	CHUNK_BACKFILL_FAILURE_RESET_MS,
@@ -12,7 +12,7 @@ import {
 	log,
 	type PreparedChunkRow,
 	StorageError,
-} from "@/storage/memory-store-shared";
+} from "./memory-store-shared";
 
 Object.assign(MemoryStore.prototype, {
 	async backfillMissingChunks(this: MemoryStoreInternals): Promise<number> {

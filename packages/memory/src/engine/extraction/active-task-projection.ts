@@ -4,8 +4,8 @@
  */
 
 import { countTokens } from "@snoai/chunking";
-import { getActiveSectionRegistry } from "@/extraction/b-profile-section-dictionary-provider";
-import registryResource from "../../config/b-profile-section-registry.json" with { type: "json" };
+import { getActiveSectionRegistry } from "./b-profile-section-dictionary-provider";
+import registryResource from "../../../config/b-profile-section-registry.json" with { type: "json" };
 
 /**
  * The bundled default. Boot restores a cached dictionary over it

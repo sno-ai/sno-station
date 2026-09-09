@@ -4,7 +4,7 @@ import {
 	writeEmergencyDiagnostic as writeRecord,
 	type DiagnosticInput,
 } from "@snoai/utils/log-encoder";
-import packageMetadata from "../../package.json" with { type: "json" };
+import packageMetadata from "../../../package.json" with { type: "json" };
 import { logSiteCatalog } from "./log-site-catalog.generated";
 
 function bindApplication(input: DiagnosticInput): DiagnosticInput {

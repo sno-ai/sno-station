@@ -5,8 +5,8 @@
  */
 
 import { createHash } from "node:crypto";
-import { DEFAULT_REFLECTION_MAX_TRACKED_SESSIONS } from "@/config";
-import { redactSecrets } from "@/security/redact";
+import { DEFAULT_REFLECTION_MAX_TRACKED_SESSIONS } from "../../../config/index";
+import { redactSecrets } from "./redact";
 
 export type ReflectionErrorSignal = {
 	at: number;

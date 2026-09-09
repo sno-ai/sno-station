@@ -3,7 +3,7 @@
  * @boundary Pure session-id normalization and in-memory LRU cleanup only.
  */
 
-import type { PluginHookAgentContext } from "@/plugin/openclaw-hook-types";
+import type { PluginHookAgentContext } from "./sno-station-mem-hook-types";
 
 // Session-local LRU state for recall history and turn counters.
 

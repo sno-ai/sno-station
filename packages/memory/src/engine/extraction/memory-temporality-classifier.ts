@@ -4,11 +4,11 @@
  */
 
 import { Temporal } from "@js-temporal/polyfill";
-import { resolveDateLocally } from "@/extraction/date-resolution";
-import type { InsightMetadata } from "@/extraction/memory-metadata-types";
-import { DEFAULT_LOCALE, isSupportedLocale } from "@/i18n/locales";
-import { parseIsoDateTimeMs } from "@/shared/iso-date-time";
-import type { MemoryCategory } from "@/shared/types";
+import { resolveDateLocally } from "./date-resolution";
+import type { InsightMetadata } from "./memory-metadata-types";
+import { DEFAULT_LOCALE, isSupportedLocale } from "../i18n/locales";
+import { parseIsoDateTimeMs } from "../shared/iso-date-time";
+import type { MemoryCategory } from "../shared/types";
 
 export type TemporalType = "static" | "dynamic";
 export type TemporalResolutionStatus = "resolved" | "unresolved" | "static";

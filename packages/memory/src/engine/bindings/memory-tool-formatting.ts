@@ -4,8 +4,8 @@
  */
 
 import { sanitizeContentIngress } from "@snoai/content-sanitizer";
-import { stripHtmlTags, stripRoleLabelPrefix } from "@/shared/i18n-text";
-import { isoDateFromMs } from "@/shared/iso-date-time";
+import { stripHtmlTags, stripRoleLabelPrefix } from "../shared/i18n-text";
+import { isoDateFromMs } from "../shared/iso-date-time";
 
 export function sanitizeRecalledText(text: string): string {
 	// Centralize the tool execution fallback value at the boundary of this helper.

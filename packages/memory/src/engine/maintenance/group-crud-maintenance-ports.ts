@@ -6,16 +6,16 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import type { AtomicGenericExtractionTransport } from "@/extraction/atomic-generic-extractor";
+import type { AtomicGenericExtractionTransport } from "../extraction/atomic-generic-extractor";
 import {
 	decodeAtomicEntityIdentityReply,
 	renderAtomicEntityIdentityPrompt,
-} from "@/extraction/entity-identity-judgment";
+} from "../extraction/entity-identity-judgment";
 import type {
 	GroupCrudEntityIdentityJudgementPort,
 	GroupCrudStateKeyingJudgementPort,
-} from "@/maintenance/group-crud-maintenance";
-import type { LlmClient } from "@/shared/llm-client";
+} from "./group-crud-maintenance";
+import type { LlmClient } from "../../model/llm-client";
 
 const STATE_KEYING_SKILL_PATH = path.join("skills", "key-state-attribute", "SKILL.md");
 

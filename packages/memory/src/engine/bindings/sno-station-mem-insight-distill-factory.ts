@@ -8,7 +8,7 @@ const diagnosticLog = createDiagnosticLogger("mem-claw:openclaw-insight-distill-
 import {
 	AtomicInsightDistiller,
 	createSignedAtomicMemoryExtractionTransports,
-} from "@/extraction/atomic-memory-extraction";
+} from "../extraction/atomic-memory-extraction";
 import {
 	appendAuditEntry,
 	type Embedder,
@@ -16,9 +16,9 @@ import {
 	type OpenClawPluginApi,
 	type PluginConfig,
 	type PluginObservability,
-} from "@/plugin/openclaw-runtime-dependencies";
-import type { AgentLlmPort } from "@/shared/agent-llm-port";
-import { pickLlmRoutingConfig, resolveLlmRoute } from "@/shared/llm-mode-routing";
+} from "./sno-station-mem-runtime-dependencies";
+import type { AgentLlmPort } from "../../model/agent-llm-port";
+import { pickLlmRoutingConfig, resolveLlmRoute } from "../../model/llm-mode-routing";
 
 // Insight Distill factory.
 

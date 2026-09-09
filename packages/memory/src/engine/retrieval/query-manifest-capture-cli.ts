@@ -7,25 +7,25 @@ import { dirname, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { readFile, realpath, writeFile } from "node:fs/promises";
 import { z } from "zod";
-import { writeEmergencyDiagnostic } from "@/observability/early-diagnostics";
-import { createEmbedder } from "@/extraction/embedding-provider-client";
+import { writeEmergencyDiagnostic } from "../observability/early-diagnostics";
+import { createEmbedder } from "../extraction/embedding-provider-client";
 import {
 	captureQueryManifest,
 	hashQueryManifestStorePath,
 	serializeQueryManifestCapture,
 	type ReviewedQueryInput,
-} from "@/retrieval/query-manifest-capture";
-import { embeddingConfigSchema } from "@/shared/plugin-config-embedding-schema";
-import { retrievalConfigSchema } from "@/shared/plugin-config-retrieval-schema";
-import { parseVecTableDimension } from "@/storage/connection";
-import { resolveSimpleTokenizerPath } from "@/storage/simple-tokenizer-path";
-import { loadSqliteVecExtension } from "@/storage/sqlite-vec-path";
+} from "./query-manifest-capture";
+import { embeddingConfigSchema } from "../../contract/config/plugin-config-embedding-schema";
+import { retrievalConfigSchema } from "../../contract/config/plugin-config-retrieval-schema";
+import { parseVecTableDimension } from "../../store/connection";
+import { resolveSimpleTokenizerPath } from "../../store/simple-tokenizer-path";
+import { loadSqliteVecExtension } from "../../store/sqlite-vec-path";
 import {
 	initSqliteRuntimeSync,
 	openSqliteDatabase,
 	type SqliteRuntimeHandle,
-} from "@/storage/sqlite-runtime";
-import { MemoryStore } from "@/storage/store";
+} from "../../store/sqlite-runtime";
+import { MemoryStore } from "../../store/store";
 
 const reviewedQuerySchema: z.ZodType<ReviewedQueryInput> = z
 	.object({

@@ -1,21 +1,21 @@
 import { resolve } from "node:path";
 import { createLogger } from "@snoai/utils/logger";
 import { isLowercaseCanonicalUUIDv7 } from "@snoai/common-core";
-import type { ProviderHostConfig as OpenClawConfig } from "@/contract/provider-runtime-types";
+import type { ProviderHostConfig as OpenClawConfig } from "../../contract/provider-runtime-types";
 
 
 
 
-import type { OpenClawMemoryRuntime } from "@/contract/provider-runtime-types";
+import type { OpenClawMemoryRuntime } from "../../contract/provider-runtime-types";
 import {
 	readProviderAuthority,
 	resolveProviderAuthority,
-} from "@/provider/provider-authority";
+} from "./provider-authority";
 
-import { MemClawProviderSearchManager } from "@/provider/provider-search-manager";
-import type { ProviderIdentity } from "@/provider/provider-types";
-import type { PluginConfig } from "@/shared/types";
-import type { MemoryStore } from "@/storage/store";
+import { MemClawProviderSearchManager } from "./provider-search-manager";
+import type { ProviderIdentity } from "./provider-types";
+import type { PluginConfig } from "../shared/types";
+import type { MemoryStore } from "../../store/store";
 const diagnosticLog = createLogger("mem-claw:provider-registration");
 type AgentEntry = {
 	id?: unknown;

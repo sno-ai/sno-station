@@ -3,14 +3,14 @@
  * @boundary Runtime collaborators and cross-file method typing only.
  */
 
-import type { RecallLifecycleConfig } from "@/config";
-import type { TierPromoter } from "@/operations/memory-tier-promoter";
-import type { RetentionScorer } from "@/operations/selective-forgetting-scorer";
+import type { RecallLifecycleConfig } from "../../../config/index";
+import type { TierPromoter } from "../operations/memory-tier-promoter";
+import type { RetentionScorer } from "../operations/selective-forgetting-scorer";
 import {
 	DEFAULT_RETRIEVAL_CONFIG,
 	type RetrievalConfig,
 	type RetrievalContext,
-} from "@/retrieval/retrieval-config";
+} from "./retrieval-config";
 import type {
 	AccessTracker,
 	Embedder,
@@ -20,7 +20,7 @@ import type {
 	RetrievalStatsCollector,
 	RetrievalTrace,
 	TraceCollector,
-} from "@/retrieval/retriever-dependencies";
+} from "./retriever-dependencies";
 
 /**
  * Enumerates every branch in `rerank()` that fell back to the pre-rerank

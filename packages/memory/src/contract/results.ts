@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { MEMORY_CATEGORIES, type MemoryEntry, type RetrievalResult } from "../shared/types";
+import { MEMORY_CATEGORIES, type MemoryEntry, type RetrievalResult } from "../engine/shared/types";
 import type { JsonValue } from "./inputs";
 
 export const DEGRADED_REASONS: readonly [

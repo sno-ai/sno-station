@@ -20,14 +20,14 @@ export type MemoryLane = "active" | "parked" | "quarantined";
 
 export const CANDIDATE_EXTRACTION_TRACE_VERSION = "insight-distill-2026-06-27";
 
-export type { SessionStrategy } from "@/shared/session-strategy";
-export { SESSION_STRATEGIES } from "@/shared/session-strategy";
+export type { SessionStrategy } from "../../contract/config/session-strategy";
+export { SESSION_STRATEGIES } from "../../contract/config/session-strategy";
 
 // Type-only import (erased at runtime, so no value-level cycle even though
 // memory-metadata-types.ts imports MEMORY_CATEGORIES from here). The Zod schema
 // in that module is the single source of truth for insight metadata; deriving
 // the bulk of MemoryMetadata from it keeps enums/fields from drifting.
-import type { MemoryMetadataBaseFields } from "@/extraction/memory-metadata-types";
+import type { MemoryMetadataBaseFields } from "../extraction/memory-metadata-types";
 
 export interface MemoryEntry {
 	id: string;
@@ -295,8 +295,8 @@ export function normalizeCategory(raw: string): MemoryCategory | undefined {
 	return undefined;
 }
 
-export type { PluginConfig } from "@/shared/plugin-config-schema";
-export { pluginConfigSchema } from "@/shared/plugin-config-schema";
+export type { PluginConfig } from "../../contract/config/plugin-config-schema";
+export { pluginConfigSchema } from "../../contract/config/plugin-config-schema";
 
 export interface RetrievalResult {
 	entry: MemoryEntry;

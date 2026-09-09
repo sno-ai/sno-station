@@ -13,10 +13,10 @@ import type {
 	MemoryRetriever,
 	MemoryScopePolicy,
 	MemoryStore,
-} from "@/plugin/memory-tool-dependencies";
-import { AGGREGATION_OPERATIONS, MEMORY_CATEGORIES, z } from "@/plugin/memory-tool-dependencies";
-import type { LlmClient } from "@/shared/llm-client-types";
-import type { LlmRoutingConfig } from "@/shared/plugin-config-mode-schema";
+} from "./memory-tool-dependencies";
+import { AGGREGATION_OPERATIONS, MEMORY_CATEGORIES, z } from "./memory-tool-dependencies";
+import type { LlmClient } from "../../model/llm-client-types";
+import type { LlmRoutingConfig } from "../../contract/config/plugin-config-mode-schema";
 
 
 

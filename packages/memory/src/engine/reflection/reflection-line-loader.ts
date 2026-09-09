@@ -3,20 +3,20 @@
  * @boundary Reads in-memory entries only; no persistence or I/O.
  */
 
-import { parseReflectionMetadata } from "@/reflection/entry-metadata-parser";
+import { parseReflectionMetadata } from "./entry-metadata-parser";
 import {
 	computeReflectionScore,
 	normalizeReflectionLineForAggregation,
-} from "@/reflection/line-quality-ranker";
-import { sanitizeInjectableReflectionLines } from "@/reflection/markdown-slice-parser";
+} from "./line-quality-ranker";
+import { sanitizeInjectableReflectionLines } from "./markdown-slice-parser";
 import {
 	getReflectionItemDecayDefaults,
 	REFLECTION_DERIVED_DECAY_K,
 	REFLECTION_DERIVED_DECAY_MIDPOINT_DAYS,
 	REFLECTION_INVARIANT_DECAY_K,
 	REFLECTION_INVARIANT_DECAY_MIDPOINT_DAYS,
-} from "@/reflection/slice-item-payload-builder";
-import type { MemoryEntry } from "@/shared/types";
+} from "./slice-item-payload-builder";
+import type { MemoryEntry } from "../shared/types";
 import {
 	DEFAULT_REFLECTION_DERIVED_MAX_AGE_MS,
 	REFLECTION_DERIVE_FALLBACK_BASE_WEIGHT,

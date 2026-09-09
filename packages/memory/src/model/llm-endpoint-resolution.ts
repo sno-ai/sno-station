@@ -3,13 +3,13 @@
  * @boundary The only place an inference origin and path are composed.
  */
 
-import type { LlmPreset, LlmProvider, ResolvedLlmConfig } from "@/shared/llm-client-types";
-import type { LlmTransport } from "@/shared/llm-mode-routing";
-import type { LlmOccasion } from "@/shared/plugin-config-mode-schema";
+import type { LlmPreset, LlmProvider, ResolvedLlmConfig } from "./llm-client-types";
+import type { LlmTransport } from "./llm-mode-routing";
+import type { LlmOccasion } from "../contract/config/plugin-config-mode-schema";
 import {
 	resolveBundledLlmixPreset,
 	resolveConfiguredBundledLlmixEndpoint,
-} from "@/shared/llmix-registry";
+} from "./llmix-registry";
 
 const SNO_GPU_ORIGIN = "https://rt3-llm.sno.ai";
 const PROVIDER_API_BASES: Record<Exclude<LlmProvider, "sno-gpu">, string> = {

@@ -4,16 +4,16 @@
  */
 
 import type { JsonObject } from "@snoai/sno-observe";
-import type { Embedder, EmbeddingConfig } from "@/extraction/embedding-provider-client";
-import { getMemClawStateDir, runWithMemoryAudit } from "@/operations/runtime-audit-log";
+import type { Embedder, EmbeddingConfig } from "../extraction/embedding-provider-client";
+import { getMemClawStateDir, runWithMemoryAudit } from "../operations/runtime-audit-log";
 import {
 	DEFAULT_RETRIEVAL_CONFIG,
 	MemoryRetriever,
 	type RetrievalConfig,
 	type RetrievalContext,
-} from "@/retrieval/retriever";
-import type { RetrievalResult } from "@/shared/types";
-import type { MemoryStore } from "@/storage/store";
+} from "../retrieval/retriever";
+import type { RetrievalResult } from "../shared/types";
+import type { MemoryStore } from "../../store/store";
 import { observeBackgroundCooldownKey, type PluginObservability } from "./adapter";
 import { countEmbeddingTokens, countManyEmbeddingTokens } from "./token-counter";
 

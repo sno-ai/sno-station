@@ -7,8 +7,8 @@ import {
 	type ExtractionTimestampResolution,
 	MemoryStore,
 	type MemoryStoreInternals,
-} from "@/storage/memory-store-base";
-import { StorageError } from "@/storage/memory-store-shared";
+} from "./memory-store-base";
+import { StorageError } from "./memory-store-shared";
 
 function readResolvedAtMs(row: unknown): number | undefined {
 	if (typeof row !== "object" || row === null) return undefined;

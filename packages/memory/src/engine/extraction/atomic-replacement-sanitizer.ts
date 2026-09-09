@@ -3,7 +3,7 @@
  * @boundary Atomic extraction model inputs, model outputs, and stored-memory prompt rendering.
  */
 
-import { DEFAULT_LOCALE, type Locale } from "@/i18n/locales";
+import { DEFAULT_LOCALE, type Locale } from "../i18n/locales";
 
 type ReplacementKind = "escape" | "mask" | "mask-attribute";
 

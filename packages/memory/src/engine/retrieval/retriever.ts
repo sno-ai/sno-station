@@ -3,12 +3,12 @@
  * @boundary Re-export only; implementation lives in focused retrieval modules.
  */
 
-import "@/retrieval/retriever-query-tools";
-import "@/retrieval/retriever-search-modes";
-import "@/retrieval/retriever-rerank";
-import "@/retrieval/retriever-scoring-pipeline";
-import "@/retrieval/retriever-execution";
+import "./retriever-query-tools";
+import "./retriever-search-modes";
+import "./retriever-rerank";
+import "./retriever-scoring-pipeline";
+import "./retriever-execution";
 
-export * from "@/retrieval/retrieval-config";
-export { collectParallelStage } from "@/retrieval/retrieval-scoring-utils";
-export * from "@/retrieval/retriever-core";
+export * from "./retrieval-config";
+export { collectParallelStage } from "./retrieval-scoring-utils";
+export * from "./retriever-core";

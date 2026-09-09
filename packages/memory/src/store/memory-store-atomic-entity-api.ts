@@ -3,14 +3,14 @@
  * @boundary Read-only resolution; new registrations commit with their introducing cards.
  */
 
-import type { Embedder } from "@/extraction/embedding-provider-client";
+import type { Embedder } from "../engine/extraction/embedding-provider-client";
 import {
 	type AtomicMemoryEntityResolution,
 	MemoryStore,
 	type MemoryStoreInternals,
-} from "@/storage/memory-store-base";
-import { stableHash, StorageError } from "@/storage/memory-store-shared";
-import type { SqliteDatabaseLike } from "@/storage/sqlite-runtime";
+} from "./memory-store-base";
+import { stableHash, StorageError } from "./memory-store-shared";
+import type { SqliteDatabaseLike } from "./sqlite-runtime";
 
 interface EntityRow {
 	entityId: string;

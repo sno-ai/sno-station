@@ -5,7 +5,7 @@
  */
 
 import { randomUUID } from "node:crypto";
-import type { RemFacetPolicy } from "../../../../packages/rem-core/src/index.js";
+import type { RemFacetPolicy } from "../engine/rem/index.js";
 import {
 	aggregateChunksToMemories,
 	buildChunkId,
@@ -33,15 +33,15 @@ import {
 	SNIPPET_NEIGHBOR_AFTER,
 	SNIPPET_NEIGHBOR_BEFORE,
 	VECTOR_DIMENSION_DEFAULT,
-} from "@/config";
-import type { Embedder } from "@/extraction/embedding-provider-client";
-import { StorageError } from "@/shared/errors";
-import type { WriterAuthority } from "@/shared/memory-kind-policy";
+} from "../../config/index";
+import type { Embedder } from "../engine/extraction/embedding-provider-client";
+import { StorageError } from "../engine/shared/errors";
+import type { WriterAuthority } from "../engine/shared/memory-kind-policy";
 import {
 	buildAmbientCaptureHashInput,
 	readAmbientCaptureHashMetadata,
-} from "@/shared/ambient-capture-hash";
-import type { AggregationQuery, MemoryCategory, MemoryEntry, MemoryLane, MemorySearchResult } from "@/shared/types";
+} from "../engine/shared/ambient-capture-hash";
+import type { AggregationQuery, MemoryCategory, MemoryEntry, MemoryLane, MemorySearchResult } from "../engine/shared/types";
 import {
 	bytesToF32,
 	clamp01,
@@ -50,11 +50,11 @@ import {
 	sanitizeFtsQuery,
 	sanitizeFtsConjunctiveQuery,
 	stableHash,
-} from "@/shared/utils";
-import { type DrizzleDB, initDb } from "@/storage/connection";
-import type { SqliteDatabaseLike } from "@/storage/sqlite-runtime";
-import type { MemoryTelemetryStoreConfig } from "@/telemetry/memory-telemetry-events";
-import type { MemoryTelemetryDeleteReason } from "@/telemetry/memory-telemetry-types";
+} from "../engine/shared/utils";
+import { type DrizzleDB, initDb } from "./connection";
+import type { SqliteDatabaseLike } from "./sqlite-runtime";
+import type { MemoryTelemetryStoreConfig } from "../engine/telemetry/memory-telemetry-events";
+import type { MemoryTelemetryDeleteReason } from "../engine/telemetry/memory-telemetry-types";
 
 export type {
 	ChunkCandidate,

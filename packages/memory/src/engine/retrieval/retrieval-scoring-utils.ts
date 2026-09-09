@@ -3,8 +3,8 @@
  * @boundary Pure helper functions shared by retriever modules.
  */
 
-import type { RetrievalResult } from "@/retrieval/retriever-dependencies";
-import { clamp01, createLogger } from "@/retrieval/retriever-dependencies";
+import type { RetrievalResult } from "./retriever-dependencies";
+import { clamp01, createLogger } from "./retriever-dependencies";
 
 export const log: ReturnType<typeof createLogger> = createLogger("mem-claw:retriever");
 

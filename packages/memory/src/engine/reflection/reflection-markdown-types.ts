@@ -3,7 +3,7 @@
  * @boundary Shared parser types and section heading literals only.
  */
 
-import type { MemoryCategory } from "@/shared/types";
+import type { MemoryCategory } from "../shared/types";
 
 export interface ReflectionSlices {
 	invariants: string[];

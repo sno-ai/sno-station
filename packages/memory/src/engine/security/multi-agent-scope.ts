@@ -18,7 +18,7 @@
  * unless they explicitly specify a team scope.
  */
 
-import type { MemoryScopePolicy } from "@/security/scopes";
+import type { MemoryScopePolicy } from "./scopes";
 
 /**
  * Parse the MEM_CLAW_SHARED_SCOPES env var value into a list of scope names.

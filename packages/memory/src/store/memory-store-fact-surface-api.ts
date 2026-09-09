@@ -3,8 +3,8 @@
  * @boundary Read admission only; full-text parked-card discovery does not call this API.
  */
 
-import { MemoryStore, type MemoryStoreInternals } from "@/storage/memory-store-base";
-import { hashMemorySuppressionContent } from "@/storage/memory-store-suppression-api";
+import { MemoryStore, type MemoryStoreInternals } from "./memory-store-base";
+import { hashMemorySuppressionContent } from "./memory-store-suppression-api";
 
 export const ATOMIC_FACT_SURFACE_LANE = "active";
 

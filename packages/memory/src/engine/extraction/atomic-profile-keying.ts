@@ -4,32 +4,32 @@
  */
 
 import { z } from "zod";
-import attributeDictionaryResource from "../../config/attribute-dictionary.json" with {
+import attributeDictionaryResource from "../../../config/attribute-dictionary.json" with {
 	type: "json",
 };
 import {
 	type AtomicGauntletRecord,
 	runAtomicExtractionGauntlet,
-} from "@/extraction/atomic-extraction-gauntlet";
+} from "./atomic-extraction-gauntlet";
 import {
 	buildAttributeSlugIndex,
 	parseAttributeDictionary,
 	resolveAttributeSlug,
-} from "@/extraction/attribute-slug-matcher";
-import { extractBProfileCandidatesFromChunk } from "@/extraction/b-profile-extraction";
+} from "./attribute-slug-matcher";
+import { extractBProfileCandidatesFromChunk } from "./b-profile-extraction";
 import type {
 	AtomicExtractionRecord,
 	AtomicExtractionTurn,
-} from "@/extraction/atomic-extraction-reply";
+} from "./atomic-extraction-reply";
 import {
 	sanitizeAtomicPromptValue,
 	sanitizeAtomicText,
 	withAtomicSanitizerMatches,
-} from "@/extraction/atomic-replacement-sanitizer";
-import { DEFAULT_LOCALE, type Locale } from "@/i18n/locales";
-import { isTerminalLlmFailure, type LlmClient } from "@/shared/llm-client";
-import { escapeTranscriptRoleContinuations } from "@/shared/transcript-role-codec";
-import type { CandidateMemory } from "@/shared/types";
+} from "./atomic-replacement-sanitizer";
+import { DEFAULT_LOCALE, type Locale } from "../i18n/locales";
+import { isTerminalLlmFailure, type LlmClient } from "../../model/llm-client";
+import { escapeTranscriptRoleContinuations } from "../shared/transcript-role-codec";
+import type { CandidateMemory } from "../shared/types";
 
 const ENHANCEMENT_BATCH_SIZE = 4;
 

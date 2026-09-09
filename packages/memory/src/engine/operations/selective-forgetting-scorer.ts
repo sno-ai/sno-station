@@ -14,11 +14,11 @@
  * - Intrinsic: importance × confidence
  */
 
-import { TEMPORAL_DYNAMIC_HALF_LIFE_DIVISOR } from "@/config";
-import { parseInsightMetadata } from "@/extraction/memory-metadata-codec";
-import type { DecayableMemory, DecayScore, MemoryTier } from "@/shared/types";
+import { TEMPORAL_DYNAMIC_HALF_LIFE_DIVISOR } from "../../../config/index";
+import { parseInsightMetadata } from "../extraction/memory-metadata-codec";
+import type { DecayableMemory, DecayScore, MemoryTier } from "../shared/types";
 
-export type { DecayableMemory } from "@/shared/types";
+export type { DecayableMemory } from "../shared/types";
 
 // Types
 

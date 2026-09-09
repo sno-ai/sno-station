@@ -4,7 +4,7 @@
  */
 
 import { addLogFileTarget, closeLogger, createLogger } from "@snoai/utils/logger";
-import { emitRuntimeStartSnapshot, initializeRuntimeDiagnostics } from "@/observability/runtime-diagnostics";
+import { emitRuntimeStartSnapshot, initializeRuntimeDiagnostics } from "../engine/observability/runtime-diagnostics";
 import { getRemTraceLogPath, isRemTraceEnabled } from "./config";
 import type { RunningRemSidecar } from "./server";
 

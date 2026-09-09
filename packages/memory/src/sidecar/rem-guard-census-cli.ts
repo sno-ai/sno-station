@@ -8,7 +8,7 @@ import path from "node:path";
 import {
 	discoverRemWritersFromCallGraph,
 	validateRemGuardCensus,
-} from "../../../../packages/rem-core/src/index.js";
+} from "../engine/rem/index.js";
 
 const repoRoot = path.resolve(import.meta.dirname, "../../../..");
 const appRoot = path.join(repoRoot, "apps/mem-claw");

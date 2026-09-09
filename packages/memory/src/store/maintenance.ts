@@ -8,22 +8,22 @@
 import { createHash, type Hash } from "node:crypto";
 import { createLogger } from "@snoai/utils/logger";
 import { runIntegrityCheck } from "@snoai/sno-station-core-crypto";
-import { BACKUP_INTERVAL_MS } from "@/config";
+import { BACKUP_INTERVAL_MS } from "../../config/index";
 import {
 	activateKillSwitch,
 	appendAuditEntry,
 	deactivateKillSwitch,
 	readKillSwitchState,
-} from "@/operations/runtime-audit-log";
-import { runBackup } from "@/storage/backup";
-import type { MemoryStore } from "@/storage/memory-store-base";
+} from "../engine/operations/runtime-audit-log";
+import { runBackup } from "./backup";
+import type { MemoryStore } from "./memory-store-base";
 import {
 	evaluateRemAutomaticTriggers,
 	readRemAutomaticOperations,
-} from "@/sidecar/rem-trigger";
-import { getMemClawStateDir } from "@/shared/paths";
-import { recordMemoryTelemetryIncident } from "@/telemetry/memory-telemetry-incidents";
-import type { MemoryTelemetryUsageOutbox } from "@/telemetry/memory-telemetry-outbox";
+} from "../sidecar/rem-trigger";
+import { getMemClawStateDir } from "../engine/shared/paths";
+import { recordMemoryTelemetryIncident } from "../engine/telemetry/memory-telemetry-incidents";
+import type { MemoryTelemetryUsageOutbox } from "../engine/telemetry/memory-telemetry-outbox";
 
 const log = createLogger("mem-claw:maintenance");
 

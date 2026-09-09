@@ -3,8 +3,8 @@
  * @boundary Prototype-mounted MemoryStore methods; no constructor state ownership.
  */
 
-import { MemoryStore, type MemoryStoreInternals } from "@/storage/memory-store-base";
-import type { MemoryCategory, MemoryEntry, MemoryRow } from "@/storage/memory-store-shared";
+import { MemoryStore, type MemoryStoreInternals } from "./memory-store-base";
+import type { MemoryCategory, MemoryEntry, MemoryRow } from "./memory-store-shared";
 
 Object.assign(MemoryStore.prototype, {
 	readExistingByHash(

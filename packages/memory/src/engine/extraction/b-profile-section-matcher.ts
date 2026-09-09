@@ -3,13 +3,13 @@
  * @boundary Fallback fills general forms; correction reuses a registered key only on a decisive match.
  */
 
-import { getActiveSectionRegistry } from "@/extraction/b-profile-section-dictionary-provider";
+import { getActiveSectionRegistry } from "./b-profile-section-dictionary-provider";
 import {
 	canonicalizeProfileSectionName,
 	normalizeProfileSectionForm,
-} from "@/extraction/b-profile-section-canonicalizer";
-import type { BProfileSectionRegistry } from "@/extraction/b-profile-section-registry";
-import { boundaryAwareRegex, normalizeForCompare, tokenizeForFts } from "@/shared/i18n-text";
+} from "./b-profile-section-canonicalizer";
+import type { BProfileSectionRegistry } from "./b-profile-section-registry";
+import { boundaryAwareRegex, normalizeForCompare, tokenizeForFts } from "../shared/i18n-text";
 
 const MINIMUM_SCORE = 0.58;
 const MINIMUM_WIN_MARGIN = 0.05;

@@ -5,8 +5,8 @@
 
 import { createHash } from "node:crypto";
 import { z } from "zod";
-import { buildExtractionIdempotencyKey } from "@/extraction/insight-distill-write-actions";
-import type { CandidateMemory } from "@/shared/types";
+import { buildExtractionIdempotencyKey } from "./insight-distill-write-actions";
+import type { CandidateMemory } from "../shared/types";
 
 const commandIdPattern = /^[0-9a-f]{64}$/u;
 const activeTaskIdPattern = /^ati_[0-9a-f]{64}$/u;

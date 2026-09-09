@@ -3,17 +3,17 @@
  * @boundary Reads in-memory entries only; no persistence or I/O.
  */
 
-import { parseReflectionMetadata } from "@/reflection/entry-metadata-parser";
+import { parseReflectionMetadata } from "./entry-metadata-parser";
 import {
 	computeReflectionScore,
 	normalizeReflectionLineForAggregation,
-} from "@/reflection/line-quality-ranker";
+} from "./line-quality-ranker";
 import {
 	getReflectionMappedDecayDefaults,
 	type ReflectionMappedKind,
-} from "@/reflection/mapped-memory-metadata-builder";
-import { sanitizeReflectionSliceLines } from "@/reflection/markdown-slice-parser";
-import type { MemoryEntry } from "@/shared/types";
+} from "./mapped-memory-metadata-builder";
+import { sanitizeReflectionSliceLines } from "./markdown-slice-parser";
+import type { MemoryEntry } from "../shared/types";
 import { DEFAULT_REFLECTION_MAPPED_MAX_AGE_MS } from "./reflection-entry-projector-types";
 import {
 	isOwnedByAgent,

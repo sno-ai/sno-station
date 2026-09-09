@@ -3,8 +3,8 @@
  * @boundary Runs after schema migration on every store open; performs no migration itself.
  */
 
-import { StorageError } from "@/shared/errors";
-import type { SqliteDatabaseLike } from "@/storage/sqlite-runtime";
+import { StorageError } from "../engine/shared/errors";
+import type { SqliteDatabaseLike } from "./sqlite-runtime";
 
 interface TodoStoreCounts {
 	beforeCount: number;

@@ -6,15 +6,15 @@
 import type {
 	PluginHookAgentContext,
 	PluginHookBeforeResetEvent,
-} from "@/plugin/openclaw-hook-types";
+} from "./sno-station-mem-hook-types";
 import {
 	type createScopePolicy,
 	type Embedder,
 	type MemoryStore,
 	type OpenClawPluginApi,
 	type PluginConfig,
-} from "@/plugin/openclaw-runtime-dependencies";
-import { clearSessionState, resolveRuntimeSessionId } from "@/plugin/openclaw-session-state";
+} from "./sno-station-mem-runtime-dependencies";
+import { clearSessionState, resolveRuntimeSessionId } from "./sno-station-mem-session-state";
 
 /** Stores reset-time session context before the host discards conversation state. */
 export async function onBeforeReset(

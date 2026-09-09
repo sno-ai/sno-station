@@ -3,19 +3,19 @@
  * @boundary One host tool registration and its handler logic.
  */
 
-import { isScopeAccessibleForTool, resolveAgentAccess } from "@/plugin/memory-tool-access";
-import type { MemoryCategory } from "@/plugin/memory-tool-dependencies";
-import { appendAuditEntry, clamp01, DEFAULT_LOCALE, deriveFactKey, MemClawError, normalizeCategory, StorageError, serializeIntervalMetadata, stripEnvelopeMetadata } from "@/plugin/memory-tool-dependencies";
-import { resolveMemoryDate } from "@/extraction/date-resolution";
-import { parseEntryMetadata } from "@/plugin/memory-tool-formatting";
+import { isScopeAccessibleForTool, resolveAgentAccess } from "./memory-tool-access";
+import type { MemoryCategory } from "./memory-tool-dependencies";
+import { appendAuditEntry, clamp01, DEFAULT_LOCALE, deriveFactKey, MemClawError, normalizeCategory, StorageError, serializeIntervalMetadata, stripEnvelopeMetadata } from "./memory-tool-dependencies";
+import { resolveMemoryDate } from "../extraction/date-resolution";
+import { parseEntryMetadata } from "./memory-tool-formatting";
 import {
 	killSwitchResponse,
 	makeResult,
 	runWithAudit,
 	shouldBlockMemoryTools,
-} from "@/plugin/memory-tool-results";
-import { type ToolContext, type ToolResult, updateParamsSchema } from "@/plugin/memory-tool-schemas";
-import { canToolWrite } from "@/shared/memory-kind-policy";
+} from "./memory-tool-results";
+import { type ToolContext, type ToolResult, updateParamsSchema } from "./memory-tool-schemas";
+import { canToolWrite } from "../shared/memory-kind-policy";
 
 function validateExistingToolCategory(raw: string): MemoryCategory | ToolResult {
 	const category = normalizeCategory(raw);

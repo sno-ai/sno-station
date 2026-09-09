@@ -1,8 +1,8 @@
 import { createLogger, privateLogReference } from "@snoai/utils/logger";
-import type { SqliteDatabaseLike, SqliteStatementLike } from "@/storage/sqlite-runtime";
-import { recordMemoryTelemetryIncident } from "@/telemetry/memory-telemetry-incidents";
-import { validateMemoryTelemetryMetadata } from "@/telemetry/memory-telemetry-metadata";
-import type { MemoryTelemetryMetadata } from "@/telemetry/memory-telemetry-types";
+import type { SqliteDatabaseLike, SqliteStatementLike } from "../../store/sqlite-runtime";
+import { recordMemoryTelemetryIncident } from "./memory-telemetry-incidents";
+import { validateMemoryTelemetryMetadata } from "./memory-telemetry-metadata";
+import type { MemoryTelemetryMetadata } from "./memory-telemetry-types";
 
 type MemoryTelemetryUsageEventType = "recall" | "inject";
 type OutboxStatus = "pending" | "failed" | "flushing" | "quarantined";

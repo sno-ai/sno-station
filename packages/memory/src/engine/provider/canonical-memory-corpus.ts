@@ -11,8 +11,8 @@ import {
 	sep,
 	posix,
 } from "node:path";
-import type { OpenClawMemorySearchResult as MemorySearchResult } from "@/provider/openclaw-memory-contracts";
-import { clampInt } from "@/shared/utils";
+import type { OpenClawMemorySearchResult as MemorySearchResult } from "../../contract/provider-runtime-types";
+import { clampInt } from "../shared/utils";
 import { createLogger } from "@snoai/utils/logger";
 const diagnosticLog = createLogger("mem-claw:canonical-memory-corpus");
 

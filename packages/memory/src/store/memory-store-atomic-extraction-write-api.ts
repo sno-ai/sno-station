@@ -3,18 +3,18 @@
  * @boundary Dark atomic-v3 storage door only; no model calls, suppression, or cutover activation.
  */
 
-import { deriveRemWriteIdentity } from "../../../../packages/rem-core/src/index.js";
-import { ARRIVAL_RETIREMENT_CANDIDATE_CAP } from "@/config";
+import { deriveRemWriteIdentity } from "../engine/rem/index.js";
+import { ARRIVAL_RETIREMENT_CANDIDATE_CAP } from "../../config/index";
 import {
 	type AtomicExtractionWriteCard,
 	type AtomicExtractionWriteInput,
 	type AtomicExtractionWriteResult,
 	MemoryStore,
 	type MemoryStoreInternals,
-} from "@/storage/memory-store-base";
-import { randomUUID, stableHash, StorageError } from "@/storage/memory-store-shared";
-import { hashMemorySuppressionContent } from "@/storage/memory-store-suppression-api";
-import { validateAtomicCardWrite } from "@/storage/memory-store-write-validation";
+} from "./memory-store-base";
+import { randomUUID, stableHash, StorageError } from "./memory-store-shared";
+import { hashMemorySuppressionContent } from "./memory-store-suppression-api";
+import { validateAtomicCardWrite } from "./memory-store-write-validation";
 import {
 	closeMemoryRow,
 	sameSourceTurn,
@@ -22,12 +22,12 @@ import {
 	type MemorySourceOrder,
 	readMemorySourceOrder,
 	readMemorySourceOrderOrOldest,
-} from "@/storage/memory-source-order";
+} from "./memory-source-order";
 import {
 	atomicAttributeFamily,
 	isKnownAtomicAttribute,
 	isOneCardinalityAttribute,
-} from "@/storage/atomic-attribute-cardinality";
+} from "./atomic-attribute-cardinality";
 
 export interface PreparedAtomicCard {
 	id: string;

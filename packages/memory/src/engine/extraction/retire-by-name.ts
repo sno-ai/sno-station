@@ -4,12 +4,12 @@
  */
 
 import { createHash } from "node:crypto";
-import { parseInsightMetadata } from "@/extraction/memory-metadata-codec";
-import { RETIRED_POSITION_JUDGMENT_SKILL } from "@/extraction/retired-position-judgment-skill";
-import { isTerminalLlmFailure, type LlmClient } from "@/shared/llm-client";
-import { canExtractorWrite } from "@/shared/memory-kind-policy";
-import type { MemoryEntry, MemoryMetadata } from "@/shared/types";
-import type { MemoryStore } from "@/storage/store";
+import { parseInsightMetadata } from "./memory-metadata-codec";
+import { RETIRED_POSITION_JUDGMENT_SKILL } from "./retired-position-judgment-skill";
+import { isTerminalLlmFailure, type LlmClient } from "../../model/llm-client";
+import { canExtractorWrite } from "../shared/memory-kind-policy";
+import type { MemoryEntry, MemoryMetadata } from "../shared/types";
+import type { MemoryStore } from "../../store/store";
 
 const SHORTLIST_LIMIT = 8;
 export const RETIRE_BY_NAME_MAX_JUDGMENTS_PER_WRITE = 8;

@@ -7,9 +7,9 @@
 import { mkdirSync, readdirSync, realpathSync, renameSync, rmSync } from "node:fs";
 import path from "node:path";
 import { createLogger } from "@snoai/utils/logger";
-import { BACKUP_RETENTION_COUNT } from "@/config";
-import { loadSqliteVecExtension } from "@/storage/sqlite-vec-path";
-import { openSqliteDatabase } from "@/storage/sqlite-runtime";
+import { BACKUP_RETENTION_COUNT } from "../../config/index";
+import { loadSqliteVecExtension } from "./sqlite-vec-path";
+import { openSqliteDatabase } from "./sqlite-runtime";
 
 const log = createLogger("mem-claw:backup");
 

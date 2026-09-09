@@ -12,7 +12,7 @@ import { countTokens } from "@snoai/chunking";
 import { z } from "zod";
 import attributeDictionary from "../../config/attribute-dictionary.json" with { type: "json" };
 import stateVocabulary from "../../config/state-vocabulary.json" with { type: "json" };
-import { REM_MODEL_OUTPUT_TOKEN_CAP } from "@/sidecar/config";
+import { REM_MODEL_OUTPUT_TOKEN_CAP } from "./config";
 import {
 	assembleRemPopulation,
 	parseRemEnableConfiguration,
@@ -62,47 +62,47 @@ import {
 	type RemRepository,
 	type RemUpdateLocale,
 	assertJobIdentity,
-} from "../../../../packages/rem-core/src/index.js";
-import { createEmbedder, type Embedder } from "@/extraction/embedding-provider-client";
+} from "../engine/rem/index.js";
+import { createEmbedder, type Embedder } from "../engine/extraction/embedding-provider-client";
 import {
 	readOpenClawConfig,
 	resolveOpenClawConfigPath,
 	resolveSqliteDbPath,
-} from "@/plugin/embedder-config-files";
-import { createLlmClient, type LlmClient } from "@/shared/llm-client";
-import { readModelReplyJson } from "@/shared/model-reply-text";
-import { pickLlmRoutingConfig } from "@/shared/llm-mode-routing";
-import { REM_UPDATE_JUDGMENT_SKILL } from "@/sidecar/rem-update-judgment-skill";
-import { pluginConfigSchema } from "@/shared/types";
-import { loadStorageExtensions } from "@/storage/connection";
-import { getMemClawStateDir } from "@/operations/runtime-audit-log";
-import { MemoryStore } from "@/storage/store";
-import { scoreCandidatesBySimilarity } from "@/storage/memory-store-atomic-extraction-write-api";
+} from "../engine/bindings/embedder-config-files";
+import { createLlmClient, type LlmClient } from "../model/llm-client";
+import { readModelReplyJson } from "../engine/shared/model-reply-text";
+import { pickLlmRoutingConfig } from "../model/llm-mode-routing";
+import { REM_UPDATE_JUDGMENT_SKILL } from "./rem-update-judgment-skill";
+import { pluginConfigSchema } from "../engine/shared/types";
+import { loadStorageExtensions } from "../store/connection";
+import { getMemClawStateDir } from "../engine/operations/runtime-audit-log";
+import { MemoryStore } from "../store/store";
+import { scoreCandidatesBySimilarity } from "../store/memory-store-atomic-extraction-write-api";
 import {
 	initSqliteRuntime,
 	openSqliteDatabase,
 	type SqliteDatabaseLike,
-} from "@/storage/sqlite-runtime";
+} from "../store/sqlite-runtime";
 import {
 	createMemClawRemMutationExecutor,
 	createMemClawRemPorts,
 	createMemClawRemRecovery,
 	type RemMutationWriter,
 	type RemWriterOperation,
-} from "@/storage/rem-sqlite-adapter";
+} from "../store/rem-sqlite-adapter";
 import {
 	createCoverageGatedConflictPort,
 	createRemReplaceCarrierPort,
 	issueReplaceCoverageAllow,
-} from "@/storage/rem-sqlite-adapter";
-import { deriveRemUpdateStamp } from "@/storage/rem-update-stamp-migration";
+} from "../store/rem-sqlite-adapter";
+import { deriveRemUpdateStamp } from "../store/rem-update-stamp-migration";
 import {
 	closeMemoryRow,
 	compareMemorySourceOrder,
 	readMemorySourceOrder,
-} from "@/storage/memory-source-order";
-import { createRetriever, type MemoryRetriever } from "@/retrieval/retriever";
-import { DEFAULT_RETRIEVAL_CONFIG } from "@/retrieval/retrieval-config";
+} from "../store/memory-source-order";
+import { createRetriever, type MemoryRetriever } from "../engine/retrieval/retriever";
+import { DEFAULT_RETRIEVAL_CONFIG } from "../engine/retrieval/retrieval-config";
 
 export {
 	assembleRemPopulation,

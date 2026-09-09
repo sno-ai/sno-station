@@ -7,7 +7,7 @@ import { createHash } from "node:crypto";
 import { dirname } from "node:path";
 import { createLogger, privateLogReference } from "@snoai/utils/logger";
 import { z } from "zod";
-import { MAX_LIST_LIMIT } from "@/config";
+import { MAX_LIST_LIMIT } from "../../../config/index";
 import {
 	adapterAViewFromRecord,
 	orderAdapterAPair,
@@ -17,47 +17,47 @@ import {
 	renderAdapterAChatPrompt,
 	type AdapterAMemoryView,
 	type AdapterAVerdict,
-} from "../../../../packages/rem-core/src/index.js";
-import liveClauseVerdictAttestation from "../../../../packages/rem-core/fixtures/live-clause-verdict-gold/attestation.json" with {
+} from "../rem/index.js";
+import liveClauseVerdictAttestation from "../../../fixtures/live-clause-verdict-gold/attestation.json" with {
 	type: "json",
 };
-import liveClauseVerdictCorpus from "../../../../packages/rem-core/fixtures/live-clause-verdict-gold/corpus.json" with {
+import liveClauseVerdictCorpus from "../../../fixtures/live-clause-verdict-gold/corpus.json" with {
 	type: "json",
 };
-import { canonicalizeProfileSectionName } from "@/extraction/b-profile-section-canonicalizer";
-import { buildIndexedText } from "@/extraction/extraction-text-sanitizer";
+import { canonicalizeProfileSectionName } from "./b-profile-section-canonicalizer";
+import { buildIndexedText } from "./extraction-text-sanitizer";
 import {
 	registerLiveClauseVerdictArtifacts,
 	type LiveClauseVerdictRegistration,
-} from "@/extraction/live-clause-verdict-gate";
+} from "./live-clause-verdict-gate";
 import {
 	buildInsightMetadata,
 	deriveFactKey,
 	parseInsightMetadata,
 	stringifyInsightMetadata,
-} from "@/extraction/memory-metadata-codec";
+} from "./memory-metadata-codec";
 import {
 	RETIRE_BY_NAME_MAX_DURATION_MS,
 	RETIRE_BY_NAME_MAX_JUDGMENTS_PER_WRITE,
 	retireRowsByName,
-} from "@/extraction/retire-by-name";
-import { RETIRED_POSITION_JUDGMENT_SKILL } from "@/extraction/retired-position-judgment-skill";
-import { routeTaskLifecycleCandidate } from "@/extraction/task-lifecycle-route";
+} from "./retire-by-name";
+import { RETIRED_POSITION_JUDGMENT_SKILL } from "./retired-position-judgment-skill";
+import { routeTaskLifecycleCandidate } from "./task-lifecycle-route";
 import {
 	currentMutationAttemptId,
 	type MutationAttemptCompletion,
 	runWithMutationAttempt,
-} from "@/operations/runtime-audit-log";
-import { type LlmClient, LlmClientTerminalError } from "@/shared/llm-client";
-import { resolveLlmRoute } from "@/shared/llm-mode-routing";
-import type { LlmRoutingConfig } from "@/shared/plugin-config-mode-schema";
-import type { MemoryEntry } from "@/shared/types";
-import { StorageError } from "@/shared/errors";
+} from "../operations/runtime-audit-log";
+import { type LlmClient, LlmClientTerminalError } from "../../model/llm-client";
+import { resolveLlmRoute } from "../../model/llm-mode-routing";
+import type { LlmRoutingConfig } from "../../contract/config/plugin-config-mode-schema";
+import type { MemoryEntry } from "../shared/types";
+import { StorageError } from "../shared/errors";
 import {
 	StaleSupersedeTargetError,
 	type MemoryStore,
 	type StoreInput,
-} from "@/storage/store";
+} from "../../store/store";
 
 export type ProfileSectionOutcome = "merged" | "appended" | "tombstoned" | "no-op";
 
