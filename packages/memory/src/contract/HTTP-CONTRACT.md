@@ -1,6 +1,6 @@
 # Sno Station Mem HTTP contract
 
-Contract revision: 1. Producer requirements version: 4.1.
+Contract revision: 1. Producer requirements version: 4.5.
 
 The authoritative runtime schemas are `inputSchemas` and `outputSchemas`, exported by
 `contract/index.ts`. `contractJsonSchemas(method)` publishes the corresponding JSON schemas.
@@ -17,9 +17,25 @@ Every verb request supplies `Authorization: Bearer <token>` and
 The skin identifier in an initialization payload must match its request header.
 All request and response bodies are JSON. Unknown fields in contract objects are refused.
 
-`scope` is always `{principal: string, project: string, session: string}`. All fields are
-required and nonblank. The client obtains the principal from the operating-system user name.
+`scope` requires nonblank `principal`, `project`, and `session` strings. Its optional `host`
+object accepts only `agentId`, `sessionKey`, `sessionId`, `sessionTimezone`, and `workspace`
+strings. Unknown host fields are refused. The client obtains the principal from the operating-system user name.
 The server refuses another principal before engine or store access. No scope field is defaulted.
+
+`project` is the existing logical workspace key or `agent:<id>` key. The sidecar resolves its
+persisted mapping on every verb call and applies the same resolved project to all reads and
+writes of that call. Initialization does not return a substituted scope. Host identities and
+workspace facts are explicit fields; they are never encoded into project/session/skin strings.
+
+Registration requires `skinId`, authoritative `routing`, and `settings`. Settings retain the
+existing non-routing plugin configuration: embedding, retrieval, scope policy, provider identity,
+capture, reflection, telemetry, and the other existing configuration fields. The existing component validators check settings. Raw configuration normalization runs once
+in the skin, before transfer; normalized settings are not fed through that raw parser again. Settings cannot introduce
+another mode or route override. Each skin's registration remains separate.
+
+Recall options include `corpus: memory|wiki|all|sessions`, defaulting to `memory`. Native
+file reads use the explicit host workspace. Existing corpus refusals and file boundaries remain
+observable; they are not converted into successful empty database results.
 
 ## Routes
 

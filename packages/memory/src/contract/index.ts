@@ -5,6 +5,7 @@ import { outputSchemas, type ContractOutputs, type DegradedReason } from "./resu
 
 export * from "./inputs";
 export * from "./results";
+export * from "./settings";
 
 export type ContractMethod = keyof ContractInputs;
 export interface MemoryContract {
@@ -44,7 +45,7 @@ export function contractJsonSchemas(method: ContractMethod): {
 	output: z.core.JSONSchema.JSONSchema;
 } {
 	return {
-		input: z.toJSONSchema(inputSchemas[method]),
+		input: z.toJSONSchema(inputSchemas[method], { io: "input" }),
 		output: z.toJSONSchema(outputSchemas[method]),
 	};
 }

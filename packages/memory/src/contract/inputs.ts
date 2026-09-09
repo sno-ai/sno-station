@@ -4,9 +4,17 @@ import {
 	type LlmRoutingConfig,
 } from "./config/plugin-config-mode-schema";
 import { AGGREGATION_OPERATIONS, MEMORY_CATEGORIES, type MemoryCategory } from "../engine/shared/types";
+import { engineSettingsSchema, type EngineSettings } from "./settings";
 
 export type JsonValue = z.infer<ReturnType<typeof z.json>>;
-export type ScopeCtx = { principal: string; project: string; session: string };
+export type HostContext = {
+	agentId?: string;
+	sessionKey?: string;
+	sessionId?: string;
+	sessionTimezone?: string;
+	workspace?: string;
+};
+export type ScopeCtx = { principal: string; project: string; session: string; host?: HostContext };
 export type Message = {
 	role: "system" | "developer" | "user" | "assistant" | "tool";
 	content: JsonValue;
@@ -16,9 +24,11 @@ export type Turn = { turnId: string; rewindEpoch: number; messages: Message[] };
 export type Registration = {
 	skinId: string;
 	routing: LlmRoutingConfig;
+	settings: EngineSettings;
 	model?: { baseUrl: string; credential: string; model: string };
 };
 export type RecallOptions = {
+	corpus?: "memory" | "wiki" | "all" | "sessions";
 	source?: "auto" | "manual";
 	limit?: number;
 	minScore?: number;
@@ -66,6 +76,11 @@ const category = z.enum(MEMORY_CATEGORIES);
 const metadata = z.record(z.string(), z.json());
 export const scopeSchema: z.ZodType<ScopeCtx, unknown> = z.strictObject({
 	principal: nonempty, project: nonempty, session: nonempty,
+	host: z.strictObject({
+		agentId: z.string().optional(), sessionKey: z.string().optional(),
+		sessionId: z.string().optional(), sessionTimezone: z.string().optional(),
+		workspace: z.string().optional(),
+	}).optional(),
 });
 export const messageSchema: z.ZodType<Message, unknown> = z.strictObject({
 	role: z.enum(["system", "developer", "user", "assistant", "tool"]),
@@ -77,11 +92,13 @@ export const turnSchema: z.ZodType<Turn, unknown> = z.strictObject({
 export const registrationSchema: z.ZodType<Registration, unknown> = z.strictObject({
 	skinId: nonempty,
 	routing: llmRoutingConfigSchema,
+	settings: engineSettingsSchema,
 	model: z.strictObject({
 		baseUrl: z.url({ protocol: /^https?$/ }), credential: z.string(), model: nonempty,
 	}).optional(),
 });
 export const recallOptionsSchema: z.ZodType<RecallOptions, unknown> = z.strictObject({
+	corpus: z.enum(["memory", "wiki", "all", "sessions"]).default("memory"),
 	source: z.enum(["auto", "manual"]).optional(),
 	limit: z.number().int().optional(), minScore: z.number().finite().optional(),
 	category: category.optional(), includeMetadata: z.boolean().optional(),
