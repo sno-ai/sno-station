@@ -101,6 +101,11 @@ export class FlushEngine {
 			void this.flush(this.flushOptions(false)).catch((error: unknown) => {
 				logger.errorRateLimited("scheduled-flush", "sno observe scheduled flush failed", {
 					error: errorName(error),
+				}, {
+					event_name: "sno.observe.internal.flush.schedule",
+					file: "packages/sno-observe/src/internal/flush.ts",
+					function: "schedule",
+					site_id: "sno.observe.internal.flush.schedule.1",
 				});
 				let shouldRetry = true;
 				try {
@@ -214,7 +219,12 @@ export class FlushEngine {
 				}
 			} catch (error) {
 				lastError = error instanceof Error ? error.message : String(error);
-				logger.error("sno observe drain failed", { error: lastError });
+				logger.error("sno observe drain failed", { error: lastError }, {
+					event_name: "sno.observe.internal.flush.drain",
+					file: "packages/sno-observe/src/internal/flush.ts",
+					function: "drain",
+					site_id: "sno.observe.internal.flush.drain.2",
+				});
 				break;
 			}
 		}
@@ -228,6 +238,11 @@ export class FlushEngine {
 			logger.warn("sno observe drain stopped after repeated no-progress steps", {
 				max_stagnant_drain_steps: MAX_STAGNANT_DRAIN_STEPS,
 				pending_count: pendingCount,
+			}, {
+				event_name: "sno.observe.internal.flush.drain",
+				file: "packages/sno-observe/src/internal/flush.ts",
+				function: "drain",
+				site_id: "sno.observe.internal.flush.drain.3",
 			});
 		}
 		const failedCount = terminalCount + pendingCount;
@@ -264,6 +279,11 @@ export class FlushEngine {
 			void this.flush(this.flushOptions(true)).catch((error: unknown) => {
 				logger.errorRateLimited("before-exit-flush", "sno observe before-exit flush failed", {
 					error: errorName(error),
+				}, {
+					event_name: "sno.observe.internal.flush.installbeforeexit",
+					file: "packages/sno-observe/src/internal/flush.ts",
+					function: "installBeforeExit",
+					site_id: "sno.observe.internal.flush.installbeforeexit.4",
 				});
 			});
 		};
@@ -346,7 +366,14 @@ export async function flushPending(
 	} finally {
 		try {
 			store.releaseFlushLease(leaseOwner);
-		} catch {}
+		} catch (error) {
+			logger.warn("Sno Observe flush lease release failed", { error }, {
+				event_name: "observe.flush.lease_release_failed",
+				file: "packages/sno-observe/src/internal/flush.ts",
+				function: "flushPending",
+				site_id: "observe.flush.lease_release_failed",
+			});
+		}
 	}
 }
 
@@ -486,7 +513,12 @@ async function flushRow(
 		const retryAfterMs = retryDelay(store, row, undefined);
 		logger.warnRateLimited(`network:${row.event_id}:${errorName(error)}`, "sno observe network error", {
 			event_id: row.event_id,
-			error: error instanceof Error ? error.message : "unknown",
+			error,
+		}, {
+			event_name: "sno.observe.internal.flush.flushrow",
+			file: "packages/sno-observe/src/internal/flush.ts",
+			function: "flushRow",
+			site_id: "sno.observe.internal.flush.flushrow.5",
 		});
 		return { shipped: 0, terminal: 0, retryable: 1, retryAfterMs };
 	}
@@ -563,6 +595,11 @@ function handlePostResult(
 				event_id: row.event_id,
 				status: response.status,
 				reason: route.reason,
+			}, {
+				event_name: "sno.observe.internal.flush.handlepostresult",
+				file: "packages/sno-observe/src/internal/flush.ts",
+				function: "handlePostResult",
+				site_id: "sno.observe.internal.flush.handlepostresult.6",
 			});
 			return { shipped: 0, terminal, retryable: 0, stopBatch: true };
 		}
@@ -780,6 +817,11 @@ function logChainRejection(row: PendingRow, status: number, reason: string): voi
 		status,
 		agent_id: envelope.scope.agent_id,
 		reason,
+	}, {
+		event_name: "sno.observe.internal.flush.logchainrejection",
+		file: "packages/sno-observe/src/internal/flush.ts",
+		function: "logChainRejection",
+		site_id: "sno.observe.internal.flush.logchainrejection.7",
 	});
 }
 
@@ -810,9 +852,19 @@ function retryRow(
 	};
 	const failureKey = `http:${row.event_id}:${status}:${code ?? message}`;
 	if (error) {
-		logger.errorRateLimited(failureKey, message, context);
+		logger.errorRateLimited(failureKey, "Sno Observe delivery deferred", context, {
+			event_name: "sno.observe.internal.flush.retryrow",
+			file: "packages/sno-observe/src/internal/flush.ts",
+			function: "retryRow",
+			site_id: "sno.observe.internal.flush.retryrow.8",
+		});
 	} else {
-		logger.warnRateLimited(failureKey, message, context);
+		logger.warnRateLimited(failureKey, "Sno Observe delivery deferred", context, {
+			event_name: "sno.observe.internal.flush.retryrow",
+			file: "packages/sno-observe/src/internal/flush.ts",
+			function: "retryRow",
+			site_id: "sno.observe.internal.flush.retryrow.9",
+		});
 	}
 	return {
 		...withOptionalRetryAfter(

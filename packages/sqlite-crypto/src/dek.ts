@@ -1,3 +1,4 @@
+import { writeEmergencyDiagnostic } from "@snoai/utils/log-encoder";
 import { randomBytes } from "node:crypto";
 import { existsSync, statSync } from "node:fs";
 import { hostname } from "node:os";
@@ -137,19 +138,23 @@ function emitFallbackWarning(): void {
 	if (warnedFallback) return;
 	warnedFallback = true;
 	const { keyFile } = resolveConfigPaths();
-	process.stderr.write(
-		`[sno-station-core] WARN: OS keychain unavailable. Falling back to ${keyFile} (mode 0600).\n` +
-			`[sno-station-core]      Encryption is on, but the DEK is now protected only by file-system permissions.\n` +
-			`[sno-station-core]      To upgrade: run \`sno-station-core lock --set-passphrase\`.\n`,
-	);
+	writeEmergencyDiagnostic({ level: "warn", body: "OS keychain unavailable. Encryption uses file permissions. Run sno-station-core lock --set-passphrase for passphrase protection.", attributes: { file: keyFile, reason_code: "keychain_unavailable", file_mode: 0o600 }, source: {
+		event_name: "crypto.file_fallback",
+		file: "packages/sno-station-core-crypto/src/dek.ts",
+		function: "emitFallbackWarning",
+		site_id: "crypto.file_fallback",
+	} });
 }
 
 function emitRemovePassphraseCrashWarning(): void {
 	if (warnedRemoveCrash) return;
 	warnedRemoveCrash = true;
-	process.stderr.write(
-		`[sno-station-core] WARN: detected an interrupted \`--remove-passphrase\`. Re-running it is recommended.\n`,
-	);
+	writeEmergencyDiagnostic({ level: "warn", body: "Interrupted passphrase removal detected. Run sno-station-core lock --remove-passphrase to complete it.", attributes: { reason_code: "interrupted_passphrase_removal" }, source: {
+		event_name: "crypto.interrupted_removal",
+		file: "packages/sno-station-core-crypto/src/dek.ts",
+		function: "emitRemovePassphraseCrashWarning",
+		site_id: "crypto.interrupted_removal",
+	} });
 }
 
 async function promptPassphrase(): Promise<Buffer> {

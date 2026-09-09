@@ -168,7 +168,12 @@ function ensureIdentityDir(identityPath: string): void {
 	} catch (error) {
 		logger.warn("sno observe identity directory mode could not be tightened", {
 			path: dir,
-			error: error instanceof Error ? error.message : String(error),
+			error,
+		}, {
+			event_name: "sno.observe.internal.identity.ensureidentitydir",
+			file: "packages/sno-observe/src/internal/identity.ts",
+			function: "ensureIdentityDir",
+			site_id: "sno.observe.internal.identity.ensureidentitydir.1",
 		});
 	}
 }
@@ -183,6 +188,11 @@ function warnIfPermissiveMode(path: string): void {
 			logger.warn("sno observe identity file has permissive mode", {
 				path,
 				mode: mode.toString(8),
+			}, {
+				event_name: "sno.observe.internal.identity.warnifpermissivemode",
+				file: "packages/sno-observe/src/internal/identity.ts",
+				function: "warnIfPermissiveMode",
+				site_id: "sno.observe.internal.identity.warnifpermissivemode.2",
 			});
 		}
 	} catch {}
