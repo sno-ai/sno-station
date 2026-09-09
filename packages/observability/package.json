@@ -32,6 +32,7 @@
 		"test:all": "npm run build && node --test ../../tests/packages/sno-observe/**/*.test.mjs"
 	},
 	"dependencies": {
+		"@snoai/utils": "file:../utils",
 		"@snoai/common-core": "file:../common-core",
 		"better-sqlite3": "^13.0.3",
 		"js-tiktoken": "^1.0.0",
