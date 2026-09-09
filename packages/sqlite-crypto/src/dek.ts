@@ -138,7 +138,7 @@ function emitFallbackWarning(): void {
 	if (warnedFallback) return;
 	warnedFallback = true;
 	const { keyFile } = resolveConfigPaths();
-	writeEmergencyDiagnostic({ level: "warn", body: "OS keychain unavailable. Encryption uses file permissions. Run sno-station-core lock --set-passphrase for passphrase protection.", attributes: { key_file_path: keyFile, reason_code: "keychain_unavailable", file_mode: 0o600 }, source: {
+	writeEmergencyDiagnostic({ level: "warn", body: "OS keychain unavailable. Encryption uses file permissions. Run sno-station-core lock --set-passphrase for passphrase protection.", attributes: { file: keyFile, reason_code: "keychain_unavailable", file_mode: 0o600 }, source: {
 		event_name: "crypto.file_fallback",
 		file: "packages/sno-station-core-crypto/src/dek.ts",
 		function: "emitFallbackWarning",
