@@ -3,7 +3,7 @@
  * @boundary Prototype-mounted MemoryStore methods; no constructor state ownership.
  */
 
-import { MemoryStore, type MemoryStoreInternals } from "@/storage/memory-store-base";
+import { MemoryStore, type MemoryStoreInternals } from "./memory-store-base";
 import {
 	buildChunkId,
 	buildDensePayload,
@@ -18,8 +18,8 @@ import {
 	type PreparedChunkRow,
 	StorageError,
 	shouldDropSummary,
-} from "@/storage/memory-store-shared";
-import { RETRIEVAL_STORAGE_CHUNK_PROFILE } from "@/config";
+} from "./memory-store-shared";
+import { RETRIEVAL_STORAGE_CHUNK_PROFILE } from "../../config/index";
 
 Object.assign(MemoryStore.prototype, {
 	toEntry(this: MemoryStoreInternals, row: MemoryRow): MemoryEntry {

@@ -1,13 +1,13 @@
 import {
 	getMemClawStateDir,
 	runWithMemoryAuditSync,
-} from "@/operations/runtime-audit-log";
-import type { SqliteDatabaseLike } from "@/storage/sqlite-runtime";
-import { loadMemoryTelemetryKeySet, type MemoryTelemetryKeySet } from "@/telemetry/memory-telemetry-config";
+} from "../operations/runtime-audit-log";
+import type { SqliteDatabaseLike } from "../../store/sqlite-runtime";
+import { loadMemoryTelemetryKeySet, type MemoryTelemetryKeySet } from "./memory-telemetry-config";
 import {
 	createMemoryTelemetryReceiptService,
 	type MemoryTelemetryReceiptService,
-} from "@/telemetry/memory-telemetry-receipts";
+} from "./memory-telemetry-receipts";
 import {
 	createMemoryTelemetryPurgeService,
 	type MemoryTelemetryConfirmPurgeInput,
@@ -15,9 +15,9 @@ import {
 	type MemoryTelemetryPurgePreviewOptions,
 	type MemoryTelemetryPurgeResult,
 	type MemoryTelemetryPurgeService,
-} from "@/telemetry/memory-telemetry-purge";
-import type { MemoryTelemetryEventType, MemoryTelemetryReceiptStatus } from "@/telemetry/memory-telemetry-types";
-import type { MemoryTelemetryUsageOutbox } from "@/telemetry/memory-telemetry-outbox";
+} from "./memory-telemetry-purge";
+import type { MemoryTelemetryEventType, MemoryTelemetryReceiptStatus } from "./memory-telemetry-types";
+import type { MemoryTelemetryUsageOutbox } from "./memory-telemetry-outbox";
 
 export interface CreateMemoryTelemetryApiOptions {
 	sqlite: SqliteDatabaseLike;

@@ -7,17 +7,17 @@ import {
 	buildInsightMetadata,
 	parseInsightMetadata,
 	stringifyInsightMetadata,
-} from "@/extraction/memory-metadata-codec";
-import { activeTaskShape } from "@/extraction/active-task-projection";
-import { canonicalizeProfileSectionName } from "@/extraction/b-profile-section-canonicalizer";
-import { StorageError } from "@/shared/errors";
-import { canToolWrite, canTrustedWrite } from "@/shared/memory-kind-policy";
+} from "../engine/extraction/memory-metadata-codec";
+import { activeTaskShape } from "../engine/extraction/active-task-projection";
+import { canonicalizeProfileSectionName } from "../engine/extraction/b-profile-section-canonicalizer";
+import { StorageError } from "../engine/shared/errors";
+import { canToolWrite, canTrustedWrite } from "../engine/shared/memory-kind-policy";
 import {
 	MEMORY_CATEGORIES,
 	type MemoryCategory,
 	type MemoryLane,
 	normalizeCategory,
-} from "@/shared/types";
+} from "../engine/shared/types";
 import { countTokens } from "@snoai/chunking";
 import { createLogger } from "@snoai/utils/logger";
 import { Temporal } from "@js-temporal/polyfill";

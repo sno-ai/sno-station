@@ -8,17 +8,17 @@ import {
 	isScopeAccessibleForTool,
 	resolveAgentAccess,
 	resolveReadableScopesForTool,
-} from "@/plugin/memory-tool-access";
+} from "./memory-tool-access";
 
-import { clamp01, clampInt, MemClawError, FORGET_QUERY_DEFAULT_LIMIT, FORGET_QUERY_MIN_SCORE, MAX_CANDIDATE_POOL_SIZE } from "@/plugin/memory-tool-dependencies";
+import { clamp01, clampInt, MemClawError, FORGET_QUERY_DEFAULT_LIMIT, FORGET_QUERY_MIN_SCORE, MAX_CANDIDATE_POOL_SIZE } from "./memory-tool-dependencies";
 import {
 	killSwitchResponse,
 	makeResult,
 	runWithAudit,
 	shouldBlockMemoryTools,
-} from "@/plugin/memory-tool-results";
-import { forgetParamsSchema, type ToolContext, type ToolResult } from "@/plugin/memory-tool-schemas";
-import { MEMORY_TELEMETRY_DELETE_REASONS } from "@/telemetry/memory-telemetry-types";
+} from "./memory-tool-results";
+import { forgetParamsSchema, type ToolContext, type ToolResult } from "./memory-tool-schemas";
+import { MEMORY_TELEMETRY_DELETE_REASONS } from "../telemetry/memory-telemetry-types";
 
 
 

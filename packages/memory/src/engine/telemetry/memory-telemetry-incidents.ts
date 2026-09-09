@@ -1,4 +1,4 @@
-import type { SqliteDatabaseLike } from "@/storage/sqlite-runtime";
+import type { SqliteDatabaseLike } from "../../store/sqlite-runtime";
 
 export type MemoryTelemetryIncidentSeverity = "warning" | "error";
 

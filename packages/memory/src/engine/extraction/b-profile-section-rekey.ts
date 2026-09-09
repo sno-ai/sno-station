@@ -4,24 +4,24 @@
  */
 
 import { createLogger } from "@snoai/utils/logger";
-import { MAX_LIST_LIMIT } from "@/config";
-import { canonicalizeProfileSectionName } from "@/extraction/b-profile-section-canonicalizer";
+import { MAX_LIST_LIMIT } from "../../../config/index";
+import { canonicalizeProfileSectionName } from "./b-profile-section-canonicalizer";
 import {
 	getActiveSectionRegistry,
 	normalizeTopicToSectionName,
 	restoreCachedSectionDictionary,
 	type SectionDictionaryCache,
-} from "@/extraction/b-profile-section-dictionary-provider";
-import { buildIndexedText } from "@/extraction/extraction-text-sanitizer";
+} from "./b-profile-section-dictionary-provider";
+import { buildIndexedText } from "./extraction-text-sanitizer";
 import {
 	buildInsightMetadata,
 	deriveFactKey,
 	parseInsightMetadata,
 	stringifyInsightMetadata,
-} from "@/extraction/memory-metadata-codec";
-import type { ProductMode } from "@/shared/plugin-config-mode-schema";
-import type { MemoryEntry } from "@/shared/types";
-import type { MemoryStore } from "@/storage/store";
+} from "./memory-metadata-codec";
+import type { ProductMode } from "../../contract/config/plugin-config-mode-schema";
+import type { MemoryEntry } from "../shared/types";
+import type { MemoryStore } from "../../store/store";
 
 const log = createLogger("mem-claw:b-profile-section-rekey");
 const GENERAL_SECTION = "preferences.general";

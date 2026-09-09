@@ -5,20 +5,20 @@ const diagnosticLog = createDiagnosticLogger("mem-claw:reflection-injection-hook
  */
 
 
-import type { ReflectionDerivedCache } from "@/reflection/derived-line-cache";
-import { getReflectionDerivedCacheEntry } from "@/reflection/derived-line-cache";
+import type { ReflectionDerivedCache } from "./derived-line-cache";
+import { getReflectionDerivedCacheEntry } from "./derived-line-cache";
 import {
 	deleteReflectionDerivedSuppression,
 	getReflectionDerivedSuppression,
 	type ReflectionDerivedSuppressionCache,
-} from "@/reflection/derived-suppression-cache";
-import { isInternalReflectionSessionKey } from "@/reflection/reflection-embedded-generator";
-import type { ReflectionLineSource } from "@/reflection/memory-entry-projector";
-import type { ReflectionSliceLoader } from "@/reflection/reflection-slice-loader";
-import type { createErrorSignalTracker } from "@/security/error-signals";
-import type { createScopePolicy } from "@/security/scopes";
-import type { PluginConfig } from "@/shared/types";
-import type { MemoryTelemetryUsageOutbox } from "@/telemetry/memory-telemetry-outbox";
+} from "./derived-suppression-cache";
+import { isInternalReflectionSessionKey } from "./reflection-embedded-generator";
+import type { ReflectionLineSource } from "./memory-entry-projector";
+import type { ReflectionSliceLoader } from "./reflection-slice-loader";
+import type { createErrorSignalTracker } from "../security/error-signals";
+import type { createScopePolicy } from "../security/scopes";
+import type { PluginConfig } from "../shared/types";
+import type { MemoryTelemetryUsageOutbox } from "../telemetry/memory-telemetry-outbox";
 
 type ReflectionInjectionSurface =
 	| "reflection_inherited_rules"

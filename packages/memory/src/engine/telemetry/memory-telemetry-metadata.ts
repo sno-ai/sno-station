@@ -2,7 +2,7 @@ import {
 	isMemoryTelemetryEventType,
 	type MemoryTelemetryEventType,
 	type MemoryTelemetryMetadata,
-} from "@/telemetry/memory-telemetry-types";
+} from "./memory-telemetry-types";
 
 const RAW_CONTENT_KEYS = new Set([
 	"text",

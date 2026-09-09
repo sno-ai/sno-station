@@ -2,8 +2,8 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import type {
 	MemoryTelemetryKeySet,
 	MemoryTelemetryKey,
-} from "@/telemetry/memory-telemetry-config";
-import type { MemoryTelemetryReceiptStatus } from "@/telemetry/memory-telemetry-types";
+} from "./memory-telemetry-config";
+import type { MemoryTelemetryReceiptStatus } from "./memory-telemetry-types";
 
 const CONTENT_HASH_PATTERN = /^[a-f0-9]{64}$/;
 const TIMESTAMP_MS_PATTERN = /^[0-9]{13}$/;

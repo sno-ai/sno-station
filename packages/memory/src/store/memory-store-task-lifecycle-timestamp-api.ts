@@ -10,8 +10,8 @@ import {
 	type TaskLifecycleTimestampInput,
 	type TaskLifecycleTimestampResolution,
 	type TaskLifecycleTimestampSource,
-} from "@/storage/memory-store-base";
-import { StorageError } from "@/storage/memory-store-shared";
+} from "./memory-store-base";
+import { StorageError } from "./memory-store-shared";
 
 const commandIdPattern = /^[0-9a-f]{64}$/u;
 const timestampSources = new Set<TaskLifecycleTimestampSource>([

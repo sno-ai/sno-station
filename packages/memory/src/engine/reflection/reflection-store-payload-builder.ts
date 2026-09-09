@@ -6,13 +6,13 @@
 import {
 	buildReflectionEventPayload,
 	createReflectionEventId,
-} from "@/reflection/event-payload-builder";
+} from "./event-payload-builder";
 import {
 	extractInjectableReflectionSliceItems,
 	extractInjectableReflectionSlices,
 	type ReflectionSlices,
-} from "@/reflection/markdown-slice-parser";
-import { buildReflectionItemPayloads } from "@/reflection/slice-item-payload-builder";
+} from "./markdown-slice-parser";
+import { buildReflectionItemPayloads } from "./slice-item-payload-builder";
 import {
 	type BuildReflectionStorePayloadsParams,
 	REFLECTION_DERIVE_LOGISTIC_K,

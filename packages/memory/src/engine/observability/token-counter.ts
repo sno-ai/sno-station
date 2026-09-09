@@ -5,7 +5,7 @@
 
 import { LOCAL_EMBEDDING_MODEL } from "@snoai/embedder";
 import { encodingForModel, getEncoding, type TiktokenModel } from "js-tiktoken";
-import type { EmbeddingConfig } from "@/extraction/embedding-provider-client";
+import type { EmbeddingConfig } from "../extraction/embedding-provider-client";
 
 export type TokensMethod =
 	| "qwen_tokenizer"

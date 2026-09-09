@@ -5,15 +5,15 @@
  *   reads them, and nothing promotes one into a memory today.
  */
 
-import { MemoryStore, type MemoryStoreInternals } from "@/storage/memory-store-base";
+import { MemoryStore, type MemoryStoreInternals } from "./memory-store-base";
 import type {
 	MemoryCategory,
 	RecordUnplacedCandidateInput,
 	RecordUnplacedCandidateResult,
 	UnplacedCandidate,
 	UnplacedCandidateQuery,
-} from "@/storage/memory-store-shared";
-import { StorageError } from "@/shared/errors";
+} from "./memory-store-shared";
+import { StorageError } from "../engine/shared/errors";
 
 Object.assign(MemoryStore.prototype, {
 	recordUnplacedCandidate(

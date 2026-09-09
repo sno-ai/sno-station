@@ -4,8 +4,8 @@
  */
 
 import { existsSync } from "node:fs";
-import type { PluginConfig } from "@/shared/types";
-import { openSqliteDatabaseReadonly, type SqliteDatabaseLike } from "@/storage/sqlite-runtime";
+import type { PluginConfig } from "../shared/types";
+import { openSqliteDatabaseReadonly, type SqliteDatabaseLike } from "../../store/sqlite-runtime";
 
 export type SnapshotReason = "startup" | "session_end";
 

@@ -3,8 +3,8 @@
  * @boundary Idempotent SQLite table rebuild only; no identity judgment.
  */
 
-import { StorageError } from "@/shared/errors";
-import type { SqliteDatabaseLike } from "@/storage/sqlite-runtime";
+import { StorageError } from "../engine/shared/errors";
+import type { SqliteDatabaseLike } from "./sqlite-runtime";
 
 export interface EntityNameKeyMigrationResult {
 	status: "migrated" | "noop";

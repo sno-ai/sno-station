@@ -15,12 +15,12 @@
 // LH: shared wrapper-stripping impl; previously a near-identical copy lived here.
 // LH: Bug #2 fix — same input must produce same output across both entry paths.
 // LH: codex-review 2026-04-26.
-import { stripLeadingRuntimeWrappers } from "@/extraction/runtime-wrapper-sanitizer";
+import { stripLeadingRuntimeWrappers } from "./runtime-wrapper-sanitizer";
 import {
 	RELEVANT_MEMORIES_CLOSE_TAG,
 	RELEVANT_MEMORIES_OPEN_TAG,
 	RELEVANT_MEMORIES_PREAMBLE_LINES,
-} from "@/retrieval/relevant-memories-context";
+} from "../retrieval/relevant-memories-context";
 
 const AMBIENT_LEARNING_INBOUND_META_SENTINELS = [
 	"Conversation info (untrusted metadata):",

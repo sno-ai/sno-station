@@ -3,9 +3,9 @@
  * @boundary Exported SQL only; importing this module never changes a store.
  */
 
-import { MEMORY_CATEGORIES } from "@/shared/types";
-import type { SqliteDatabaseLike } from "@/storage/sqlite-runtime";
-import { StorageError } from "@/storage/memory-store-shared";
+import { MEMORY_CATEGORIES } from "../engine/shared/types";
+import type { SqliteDatabaseLike } from "./sqlite-runtime";
+import { StorageError } from "./memory-store-shared";
 
 export const ATOMIC_MEMORY_TEXT_IMMUTABILITY_TRIGGER = "nodix_memories_text_immutable";
 

@@ -7,8 +7,8 @@
 import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
 import { createInterface } from "node:readline";
-import { COST_ESTIMATE_CACHE_TTL_MS } from "@/config";
-import { getCostPath } from "@/operations/runtime-audit-log";
+import { COST_ESTIMATE_CACHE_TTL_MS } from "../../../config/index";
+import { getCostPath } from "./runtime-audit-log";
 import { createLogger } from "@snoai/utils/logger";
 const diagnosticLog = createLogger("mem-claw:daily-spend-estimator");
 

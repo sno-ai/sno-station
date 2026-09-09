@@ -17,22 +17,22 @@ import type {
 	LlmPreset,
 	LlmProvider,
 	ResolvedLlmConfig,
-} from "@/shared/llm-client-types";
-import { MEMORY_LLM_ADAPTER_SLOTS } from "@/shared/llm-client-types";
+} from "./llm-client-types";
+import { MEMORY_LLM_ADAPTER_SLOTS } from "./llm-client-types";
 import {
 	resolveLlmEndpoint,
 	resolveSignedPreset,
 	type ResolvedLlmEndpoint,
-} from "@/shared/llm-endpoint-resolution";
-import { extractJsonFromResponse, previewText, repairCommonJson } from "@/shared/llm-json-utils";
-import { readModelReplyJson } from "@/shared/model-reply-text";
-import { resolveLlmOccasion, resolveLlmRoute } from "@/shared/llm-mode-routing";
+} from "./llm-endpoint-resolution";
+import { extractJsonFromResponse, previewText, repairCommonJson } from "./llm-json-utils";
+import { readModelReplyJson } from "../engine/shared/model-reply-text";
+import { resolveLlmOccasion, resolveLlmRoute } from "./llm-mode-routing";
 import {
 	callProvider,
 	getProviderTerminalCategory,
 	resolveProviderApiKey,
-} from "@/shared/llm-provider-transport";
-import type { LlmOccasion } from "@/shared/plugin-config-mode-schema";
+} from "./llm-provider-transport";
+import type { LlmOccasion } from "../contract/config/plugin-config-mode-schema";
 
 export type {
 	LlmClient,

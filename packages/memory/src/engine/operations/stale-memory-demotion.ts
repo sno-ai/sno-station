@@ -4,9 +4,9 @@
  */
 
 import { createLogger } from "@snoai/utils/logger";
-import { parseInsightMetadata } from "@/extraction/memory-metadata-codec";
-import { parseAccessMetadata } from "@/retrieval/access-tracker";
-import type { DecayableMemory, MemoryEntry, MemoryTier } from "@/shared/types";
+import { parseInsightMetadata } from "../extraction/memory-metadata-codec";
+import { parseAccessMetadata } from "../retrieval/access-tracker";
+import type { DecayableMemory, MemoryEntry, MemoryTier } from "../shared/types";
 import { createRetentionScorer } from "./selective-forgetting-scorer";
 
 const log = createLogger("mem-claw:stale-memory-demotion");

@@ -3,15 +3,15 @@
  * @boundary Prototype-mounted MemoryRetriever methods; no constructor state ownership.
  */
 
-import { experimentMmrDisabled } from "@/config";
+import { experimentMmrDisabled } from "../../../config/index";
 import {
 	createRetentionScorer,
 	DEFAULT_DECAY_CONFIG,
-} from "@/operations/selective-forgetting-scorer";
-import { dotProduct } from "@/retrieval/retrieval-scoring-utils";
-import type { TraceCollector } from "@/retrieval/retrieval-trace";
-import { MemoryRetriever, type MemoryRetrieverInternals } from "@/retrieval/retriever-core";
-import type { RetrievalResult } from "@/retrieval/retriever-dependencies";
+} from "../operations/selective-forgetting-scorer";
+import { dotProduct } from "./retrieval-scoring-utils";
+import type { TraceCollector } from "./retrieval-trace";
+import { MemoryRetriever, type MemoryRetrieverInternals } from "./retriever-core";
+import type { RetrievalResult } from "./retriever-dependencies";
 import {
 	clamp01,
 	computeEffectiveHalfLife,
@@ -21,8 +21,8 @@ import {
 	parseInsightMetadata,
 	TEMPORAL_DYNAMIC_HALF_LIFE_DIVISOR,
 	TIME_DECAY_FLOOR,
-} from "@/retrieval/retriever-dependencies";
-import { DEFAULT_MEMORY_TIER, type DecayableMemory, type DecayScore, type MemoryTier } from "@/shared/types";
+} from "./retriever-dependencies";
+import { DEFAULT_MEMORY_TIER, type DecayableMemory, type DecayScore, type MemoryTier } from "../shared/types";
 
 // Pinned per openspec/changes/mem-lifecycle PRD §6.1 — single source of truth
 // is `DEFAULT_DECAY_CONFIG.searchBoostMin`. Re-exporting via const here would

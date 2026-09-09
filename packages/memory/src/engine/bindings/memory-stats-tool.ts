@@ -8,16 +8,16 @@ import {
 	getStoreScopeFilterForTool,
 	resolveAgentAccess,
 	resolveReadableScopesForTool,
-} from "@/plugin/memory-tool-access";
+} from "./memory-tool-access";
 
-import { isKillSwitchActive, isSystemBypassId, readEstimatedSpendToday } from "@/plugin/memory-tool-dependencies";
+import { isKillSwitchActive, isSystemBypassId, readEstimatedSpendToday } from "./memory-tool-dependencies";
 import {
 	killSwitchResponse,
 	makeResult,
 	runWithAudit,
 	shouldBlockMemoryTools,
-} from "@/plugin/memory-tool-results";
-import { statsParamsSchema, type ToolContext, type ToolResult } from "@/plugin/memory-tool-schemas";
+} from "./memory-tool-results";
+import { statsParamsSchema, type ToolContext, type ToolResult } from "./memory-tool-schemas";
 
 
 

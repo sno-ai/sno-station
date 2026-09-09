@@ -11,7 +11,7 @@
  * for monitoring retrieval quality and performance.
  */
 
-import type { RetrievalTrace } from "@/retrieval/retrieval-trace";
+import type { RetrievalTrace } from "./retrieval-trace";
 
 // Types
 

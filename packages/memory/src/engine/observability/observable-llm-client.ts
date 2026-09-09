@@ -5,8 +5,8 @@
 
 import { Mutex } from "async-mutex";
 import type { JsonObject } from "@snoai/sno-observe";
-import type { LlmClient, LlmClientConfig, MemoryLlmRequest } from "@/shared/llm-client";
-import { resolveLlmRoute } from "@/shared/llm-mode-routing";
+import type { LlmClient, LlmClientConfig, MemoryLlmRequest } from "../../model/llm-client";
+import { resolveLlmRoute } from "../../model/llm-mode-routing";
 import { observeBackgroundCooldownKey, type PluginObservability } from "./adapter";
 import { countTextTokens } from "./token-counter";
 

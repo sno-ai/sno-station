@@ -17,14 +17,14 @@ import {
 	CJK_RATIO_THRESHOLD,
 	DEFAULT_CHARS_PER_TOKEN,
 	DEFAULT_MAX_CONTEXT_TOKENS,
-} from "@/config";
+} from "../../../config/index";
 import {
 	buildProvider,
 	type EmbeddingConfig,
 	type EmbeddingProviderKind,
-} from "@/extraction/embedding-provider-factory";
-import { weightedAverageFloat32 } from "@/extraction/embedding-vector-aggregation";
-import { EmbeddingError } from "@/shared/errors";
+} from "./embedding-provider-factory";
+import { weightedAverageFloat32 } from "./embedding-vector-aggregation";
+import { EmbeddingError } from "../shared/errors";
 
 const log = createLogger("mem-claw:embed");
 

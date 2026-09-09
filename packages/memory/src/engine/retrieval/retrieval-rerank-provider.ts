@@ -3,7 +3,7 @@
  * @boundary HTTP payload shaping and response parsing only.
  */
 
-import { RetrievalError } from "@/retrieval/retriever-dependencies";
+import { RetrievalError } from "./retriever-dependencies";
 
 export interface RerankItem {
 	index: number;

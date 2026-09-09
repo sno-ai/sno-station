@@ -3,10 +3,10 @@
  * @boundary Types and defaults only; no ranking execution.
  */
 
-import { DEFAULT_RECALL_LIFECYCLE, type RecallLifecycleConfig } from "@/config";
-import type { MemoryCategory } from "@/retrieval/retriever-dependencies";
-import type { AggregationQuery } from "@/shared/types";
-import type { RemFacetPolicy } from "../../../../packages/rem-core/src/index.js";
+import { DEFAULT_RECALL_LIFECYCLE, type RecallLifecycleConfig } from "../../../config/index";
+import type { MemoryCategory } from "./retriever-dependencies";
+import type { AggregationQuery } from "../shared/types";
+import type { RemFacetPolicy } from "../rem/index.js";
 import {
 	CANDIDATE_POOL_SIZE,
 	DEFAULT_BM25_WEIGHT,
@@ -26,7 +26,7 @@ import {
 	RERANK_BLEND_VECTOR,
 	TIME_DECAY_FLOOR,
 	TIME_DECAY_HALF_LIFE_DAYS,
-} from "@/retrieval/retriever-dependencies";
+} from "./retriever-dependencies";
 
 export type RerankProvider = "jina" | "siliconflow" | "voyage" | "pinecone" | "dashscope" | "tei";
 

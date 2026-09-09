@@ -8,10 +8,10 @@ import { Temporal } from "@js-temporal/polyfill";
 import {
 	EXPLICIT_MEMORY_COMMAND_MANAGEMENT_PATTERNS,
 	EXPLICIT_MEMORY_COMMAND_POSITIVE_PATTERNS,
-} from "@/extraction/capture-policy-detector";
-import { normalizeAmbientLearningText } from "@/plugin/openclaw-runtime-dependencies";
-import { parseIsoDateTimeMs } from "@/shared/iso-date-time";
-import { escapeTranscriptRoleContinuations } from "@/shared/transcript-role-codec";
+} from "../extraction/capture-policy-detector";
+import { normalizeAmbientLearningText } from "./sno-station-mem-runtime-dependencies";
+import { parseIsoDateTimeMs } from "../shared/iso-date-time";
+import { escapeTranscriptRoleContinuations } from "../shared/transcript-role-codec";
 
 
 

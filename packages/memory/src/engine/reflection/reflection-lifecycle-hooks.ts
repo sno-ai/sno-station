@@ -3,13 +3,13 @@
  */
 
 
-import { DEFAULT_REFLECTION_ERROR_SCAN_MAX_CHARS } from "@/config";
-import type { ReflectionDerivedCache } from "@/reflection/derived-line-cache";
+import { DEFAULT_REFLECTION_ERROR_SCAN_MAX_CHARS } from "../../../config/index";
+import type { ReflectionDerivedCache } from "./derived-line-cache";
 import {
 	deleteReflectionDerivedSuppression,
 	type ReflectionDerivedSuppressionCache,
-} from "@/reflection/derived-suppression-cache";
-import { isInternalReflectionSessionKey } from "@/reflection/reflection-embedded-generator";
+} from "./derived-suppression-cache";
+import { isInternalReflectionSessionKey } from "./reflection-embedded-generator";
 import {
 	containsErrorSignal,
 	type createErrorSignalTracker,
@@ -17,8 +17,8 @@ import {
 	normalizeErrorSignature,
 	sha256Hex,
 	summarizeErrorText,
-} from "@/security/error-signals";
-import type { PluginConfig } from "@/shared/types";
+} from "../security/error-signals";
+import type { PluginConfig } from "../shared/types";
 
 
 

@@ -3,18 +3,18 @@
  * @boundary Reflection markdown to mapped-memory DTOs only.
  */
 
-import { parseSectionBullets } from "@/reflection/reflection-markdown-sections";
+import { parseSectionBullets } from "./reflection-markdown-sections";
 import {
 	PARSER_HEADINGS,
 	type ReflectionMappedKind,
 	type ReflectionMappedMemory,
 	type ReflectionMappedMemoryItem,
-} from "@/reflection/reflection-markdown-types";
+} from "./reflection-markdown-types";
 import {
 	sanitizeInjectableReflectionLines,
 	sanitizeReflectionSliceLines,
-} from "@/reflection/reflection-slice-sanitizer";
-import type { MemoryCategory } from "@/shared/types";
+} from "./reflection-slice-sanitizer";
+import type { MemoryCategory } from "../shared/types";
 
 /**
  * Extracts reflection mapped memories from raw runtime payloads with partial-data tolerance.

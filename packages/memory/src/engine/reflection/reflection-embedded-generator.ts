@@ -2,20 +2,20 @@
  * @purpose Builds the LLMIx-backed reflection generator.
  */
 
-import type { ReflectionGenerator } from "@/reflection/daily-log-generator";
+import type { ReflectionGenerator } from "./daily-log-generator";
 import {
 	pruneReflectionDerivedCache,
 	type ReflectionDerivedCache,
-} from "@/reflection/derived-line-cache";
+} from "./derived-line-cache";
 import {
 	pruneReflectionDerivedSuppression,
 	type ReflectionDerivedSuppressionCache,
-} from "@/reflection/derived-suppression-cache";
-import type { createErrorSignalTracker } from "@/security/error-signals";
-import type { AgentLlmPort } from "@/shared/agent-llm-port";
-import { createLlmClient } from "@/shared/llm-client";
-import type { LlmRoutingConfig } from "@/shared/plugin-config-mode-schema";
-import type { PluginConfig } from "@/shared/types";
+} from "./derived-suppression-cache";
+import type { createErrorSignalTracker } from "../security/error-signals";
+import type { AgentLlmPort } from "../../model/agent-llm-port";
+import { createLlmClient } from "../../model/llm-client";
+import type { LlmRoutingConfig } from "../../contract/config/plugin-config-mode-schema";
+import type { PluginConfig } from "../shared/types";
 
 export const DEFAULT_MEMORY_LLM_CONFIG: NonNullable<PluginConfig["extraction"]["llm"]> = {
 	preset: "mem_claw/sno_ai_extract",

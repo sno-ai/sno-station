@@ -8,19 +8,19 @@ const diagnosticLog = createDiagnosticLogger("mem-claw:daily-log-generator");
 
 import { appendFile, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
-import { REFLECTION_MAX_FILENAME_ATTEMPTS } from "@/config";
-import { RESOURCES_BY_LOCALE } from "@/i18n/all-resources";
-import { resolveLocale } from "@/i18n/resolver";
+import { REFLECTION_MAX_FILENAME_ATTEMPTS } from "../../../config/index";
+import { RESOURCES_BY_LOCALE } from "../i18n/all-resources";
+import { resolveLocale } from "../i18n/resolver";
 import {
 	extractTextContent,
 	sanitizeFileToken,
 	sortFileNamesByMtimeDesc,
-} from "@/operations/session-summary-storage";
-import { prepareReflectionPromptInputs } from "@/reflection/reflection-prompt-input";
-import { runWithReflectionTransientRetryOnce } from "@/reflection/transient-generation-retry";
-import type { ReflectionErrorSignal } from "@/security/error-signals";
-import { sha256Hex } from "@/security/error-signals";
-import { redactSecrets } from "@/security/redact";
+} from "../operations/session-summary-storage";
+import { prepareReflectionPromptInputs } from "./reflection-prompt-input";
+import { runWithReflectionTransientRetryOnce } from "./transient-generation-retry";
+import type { ReflectionErrorSignal } from "../security/error-signals";
+import { sha256Hex } from "../security/error-signals";
+import { redactSecrets } from "../security/redact";
 
 // Re-export from canonical location so existing consumers (e.g. tests)
 // that import extractTextContent from "@/reflection/daily-log-generator" continue to work.

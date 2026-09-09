@@ -6,7 +6,7 @@
 import {
 	allocateActiveTaskId,
 	allocateActiveTaskRevisionId,
-} from "@/extraction/task-lifecycle-assertion";
+} from "../engine/extraction/task-lifecycle-assertion";
 import {
 	applyTaskLifecycleRevisionPatch,
 	buildTaskLifecycleCandidateSet,
@@ -14,7 +14,7 @@ import {
 	type TaskLifecycleCanonicalRevisionDetails,
 	type TaskLifecycleInstanceSnapshot,
 	type TaskLifecycleRelationCandidate,
-} from "@/extraction/task-lifecycle-resolver";
+} from "../engine/extraction/task-lifecycle-resolver";
 import {
 	MemoryStore,
 	type MemoryStoreInternals,
@@ -27,12 +27,12 @@ import {
 	type TaskLifecycleWriteInput,
 	type TaskLifecycleWriteOutcome,
 	type TaskLifecycleWriteResult,
-} from "@/storage/memory-store-base";
+} from "./memory-store-base";
 import {
 	commitPreparedAtomicExtractionWrite,
 	prepareAtomicExtractionWrite,
-} from "@/storage/memory-store-atomic-extraction-write-api";
-import { StorageError } from "@/storage/memory-store-shared";
+} from "./memory-store-atomic-extraction-write-api";
+import { StorageError } from "./memory-store-shared";
 
 interface PersistedCommandRow {
 	canonicalTupleJson: string | null;

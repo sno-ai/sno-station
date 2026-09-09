@@ -5,18 +5,18 @@
 
 import { z } from "zod";
 import { Semaphore } from "async-mutex";
-import { projectProfileCandidates } from "@/extraction/b-profile-projection";
-import { stripEnvelopeMetadata } from "@/extraction/extraction-text-sanitizer";
-import type { ExtractionDropRecord } from "@/extraction/insight-distill-types";
-import { redactSecrets } from "@/security/redact";
-import { LlmClientTerminalError, type LlmClient } from "@/shared/llm-client";
-import type { ChatMessage } from "@/shared/llm-client-types";
+import { projectProfileCandidates } from "./b-profile-projection";
+import { stripEnvelopeMetadata } from "./extraction-text-sanitizer";
+import type { ExtractionDropRecord } from "./insight-distill-types";
+import { redactSecrets } from "../security/redact";
+import { LlmClientTerminalError, type LlmClient } from "../../model/llm-client";
+import type { ChatMessage } from "../../model/llm-client-types";
 import {
 	escapeTranscriptRoleContinuations,
 	unescapeTranscriptRoleContinuation,
-} from "@/shared/transcript-role-codec";
-import type { CandidateMemory } from "@/shared/types";
-import { readModelReplyJson } from "@/shared/model-reply-text";
+} from "../shared/transcript-role-codec";
+import type { CandidateMemory } from "../shared/types";
+import { readModelReplyJson } from "../shared/model-reply-text";
 
 const MESSAGE_LINE_PATTERN = /^(system|user|assistant):\s?(.*)$/;
 /** One ask plus one retry, shared by every retryable reply class. */

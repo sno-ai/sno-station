@@ -8,14 +8,14 @@ import { mkdir, open, readFile, rename, unlink } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { createLogger } from "@snoai/utils/logger";
 import { z } from "zod";
-import type { ProductMode } from "@/shared/plugin-config-mode-schema";
-import { getMemClawDataDir } from "@/storage/data-paths";
+import type { ProductMode } from "../../contract/config/plugin-config-mode-schema";
+import { getMemClawDataDir } from "../../store/data-paths";
 import {
 	B_PROFILE_SECTION_REGISTRY,
 	type BProfileSectionRegistry,
 	normalizeTopicToSectionName as normalizeWithRegistry,
-} from "@/extraction/b-profile-section-registry";
-import { SUPPORTED_LOCALES } from "@/i18n/locales";
+} from "./b-profile-section-registry";
+import { SUPPORTED_LOCALES } from "../i18n/locales";
 
 const log = createLogger("mem-claw:b-profile-section-dictionary");
 const CACHE_FILE_NAME = "b-profile-section-dictionary.json";

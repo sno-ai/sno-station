@@ -4,7 +4,7 @@
  */
 
 import { AsyncLocalStorage } from "node:async_hooks";
-import { Embedder, type EmbeddingConfig } from "@/extraction/embedding-provider-client";
+import { Embedder, type EmbeddingConfig } from "../extraction/embedding-provider-client";
 import type { PluginObservability } from "./adapter";
 import { bestEffort } from "./best-effort";
 

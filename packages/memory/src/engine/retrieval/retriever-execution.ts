@@ -3,18 +3,18 @@
  * @boundary Prototype-mounted MemoryRetriever methods; no constructor state ownership.
  */
 
-import { parseInsightMetadata } from "@/extraction/memory-metadata-codec";
+import { parseInsightMetadata } from "../extraction/memory-metadata-codec";
 import { randomUUID } from "node:crypto";
 import { currentLogContext, privateLogReference, withLogContext } from "@snoai/utils/logger";
-import { createRetentionScorer } from "@/operations/selective-forgetting-scorer";
-import { parseAccessMetadata } from "@/retrieval/access-tracker";
+import { createRetentionScorer } from "../operations/selective-forgetting-scorer";
+import { parseAccessMetadata } from "./access-tracker";
 import {
 	type RetrievalContext,
 	withServingValidityDefault,
-} from "@/retrieval/retrieval-config";
-import { collectParallelStage, log } from "@/retrieval/retrieval-scoring-utils";
-import { MemoryRetriever, type MemoryRetrieverInternals } from "@/retrieval/retriever-core";
-import type { RetrievalResult, RetrievalTrace } from "@/retrieval/retriever-dependencies";
+} from "./retrieval-config";
+import { collectParallelStage, log } from "./retrieval-scoring-utils";
+import { MemoryRetriever, type MemoryRetrieverInternals } from "./retriever-core";
+import type { RetrievalResult, RetrievalTrace } from "./retriever-dependencies";
 import {
 	appendQaTrace,
 	CHUNKING_VERSION,
@@ -22,8 +22,8 @@ import {
 	isTraceEnabled,
 	RetrievalError,
 	TraceCollector,
-} from "@/retrieval/retriever-dependencies";
-import { DEFAULT_MEMORY_TIER, type DecayableMemory, type MemoryTier } from "@/shared/types";
+} from "./retriever-dependencies";
+import { DEFAULT_MEMORY_TIER, type DecayableMemory, type MemoryTier } from "../shared/types";
 
 Object.assign(MemoryRetriever.prototype, {
 	async retrieve(

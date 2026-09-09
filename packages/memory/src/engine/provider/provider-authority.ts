@@ -4,13 +4,13 @@
  */
 
 import { createUUIDv7, isLowercaseCanonicalUUIDv7 } from "@snoai/common-core";
-import { StorageError } from "@/shared/errors";
-import type { MemoryStore } from "@/storage/store";
+import { StorageError } from "../shared/errors";
+import type { MemoryStore } from "../../store/store";
 import type {
 	ProviderAuthorityInput,
 	ProviderIdentity,
 	ProviderMembershipGrantInput,
-} from "@/provider/provider-types";
+} from "./provider-types";
 
 interface ProjectMappingRow {
 	project_id: string;

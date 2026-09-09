@@ -3,7 +3,7 @@
  * @boundary The agent_end hook path only; registration and service lifecycle are elsewhere.
  */
 
-import { resolveDateLocally } from "@/extraction/date-resolution";
+import { resolveDateLocally } from "../extraction/date-resolution";
 import { randomUUID } from "node:crypto";
 import { createLogger, currentLogContext, withLogContext } from "@snoai/utils/logger";
 import {
@@ -11,8 +11,8 @@ import {
 	deriveSessionDateTime,
 	extractAllMessageTexts,
 	isAmbientLearningMessage,
-} from "@/plugin/openclaw-message-transcript";
-import type { PluginHookAgentContext, PluginHookAgentEndEvent } from "@/plugin/openclaw-hook-types";
+} from "./sno-station-mem-message-transcript";
+import type { PluginHookAgentContext, PluginHookAgentEndEvent } from "./sno-station-mem-hook-types";
 import {
 	appendAuditEntry,
 	type AtomicInsightDistiller,
@@ -28,12 +28,12 @@ import {
 	redactSecrets,
 	serializeIntervalMetadata,
 	shouldSkipReflectionMessage,
-} from "@/plugin/openclaw-runtime-dependencies";
+} from "./sno-station-mem-runtime-dependencies";
 import {
 	auditMissingHookAgentIdentity,
 	isChatIdBasedAgentId,
 	resolveHookAgentId,
-} from "@/plugin/openclaw-runtime-mode";
+} from "./sno-station-mem-runtime-mode";
 const log = createLogger("mem-claw:ambient-learning");
 
 async function runLocalFirstCapture(input: {

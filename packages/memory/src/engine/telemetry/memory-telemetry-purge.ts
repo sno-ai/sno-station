@@ -1,10 +1,10 @@
 import {
 	getMemClawStateDir,
 	runWithMemoryAuditSync,
-} from "@/operations/runtime-audit-log";
-import type { SqliteDatabaseLike } from "@/storage/sqlite-runtime";
-import { validateMemoryTelemetryMetadata } from "@/telemetry/memory-telemetry-metadata";
-import type { MemoryTelemetryMetadata } from "@/telemetry/memory-telemetry-types";
+} from "../operations/runtime-audit-log";
+import type { SqliteDatabaseLike } from "../../store/sqlite-runtime";
+import { validateMemoryTelemetryMetadata } from "./memory-telemetry-metadata";
+import type { MemoryTelemetryMetadata } from "./memory-telemetry-types";
 
 const DELETE_BATCH_SIZE = 500;
 /** Purge-safety lookback: recall events inside this window block cascade purges. Event retention MUST keep at least this much usage history (coupled by unit test). */

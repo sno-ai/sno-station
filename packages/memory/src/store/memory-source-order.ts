@@ -3,7 +3,7 @@
  * @boundary Mechanical ordering and close persistence only; no candidate selection or judgement.
  */
 
-import type { SqliteDatabaseLike } from "@/storage/sqlite-runtime";
+import type { SqliteDatabaseLike } from "./sqlite-runtime";
 
 export interface MemorySourceOrder {
 	valid_from: number | null;

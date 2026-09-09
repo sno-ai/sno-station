@@ -7,18 +7,18 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
-import type { AtomicGenericExtractionTransport } from "@/extraction/atomic-generic-extractor";
-import { readModelReplyJson } from "@/shared/model-reply-text";
+import type { AtomicGenericExtractionTransport } from "./atomic-generic-extractor";
+import { readModelReplyJson } from "../shared/model-reply-text";
 import type {
 	AtomicMemoryEntityRegistration,
 	AtomicMemoryEntityResolution,
-} from "@/storage/memory-store-base";
+} from "../../store/memory-store-base";
 import {
 	type AtomicEntityIdentityStore,
 	listAtomicMemoryEntityCandidates,
 	recordAtomicEntityIdentityJournal,
-} from "@/storage/memory-store-atomic-entity-api";
-import { randomUUID } from "@/storage/memory-store-shared";
+} from "../../store/memory-store-atomic-entity-api";
+import { randomUUID } from "../../store/memory-store-shared";
 
 const SKILL_PATH = path.join("skills", "resolve-entity-identity", "SKILL.md");
 const responseSchema = z.object({ entity_id: z.string().min(1) }).strict();

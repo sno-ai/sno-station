@@ -12,8 +12,8 @@
  */
 
 import { createHash } from "node:crypto";
-import type { ReflectionMappedMemoryItem } from "@/reflection/markdown-slice-parser";
-import type { MemoryCategory } from "@/shared/types";
+import type { ReflectionMappedMemoryItem } from "./markdown-slice-parser";
+import type { MemoryCategory } from "../shared/types";
 
 export type ReflectionMappedKind = "user-model" | "agent-model" | "lesson" | "decision";
 export type ReflectionMappedCategory = MemoryCategory;

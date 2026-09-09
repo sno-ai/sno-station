@@ -6,7 +6,7 @@
 export {
 	createScopePolicy,
 	MemoryScopePolicy,
-} from "@/security/memory-scope-policy";
+} from "./memory-scope-policy";
 export {
 	createAgentScope,
 	createCustomScope,
@@ -16,16 +16,16 @@ export {
 	isScopeAccessible,
 	parseScopeId,
 	resolveScopeFilter,
-} from "@/security/scope-helpers";
+} from "./scope-helpers";
 export {
 	_resetLegacyFallbackWarningState,
 	isSystemBypassId,
 	parseAgentIdFromSessionKey,
-} from "@/security/scope-identity";
+} from "./scope-identity";
 export {
 	DEFAULT_SCOPE_CONFIG,
 	SCOPE_PATTERNS,
 	type ScopeConfig,
 	type ScopeDefinition,
 	type ScopePolicy,
-} from "@/security/scope-policy-types";
+} from "./scope-policy-types";

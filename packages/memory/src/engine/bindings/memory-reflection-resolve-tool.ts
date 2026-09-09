@@ -4,23 +4,23 @@
  */
 
 import { z } from "zod";
-import { parseReflectionMetadata } from "@/reflection/entry-metadata-parser";
+import { parseReflectionMetadata } from "../reflection/entry-metadata-parser";
 import {
 	assertAccessibleScopeForTool,
 	isScopeAccessibleForTool,
 	resolveAgentAccess,
 	resolveReadableScopesForTool,
-} from "@/plugin/memory-tool-access";
+} from "./memory-tool-access";
 
-import { clampInt } from "@/plugin/memory-tool-dependencies";
+import { clampInt } from "./memory-tool-dependencies";
 import {
 	killSwitchResponse,
 	makeResult,
 	runWithAudit,
 	shouldBlockMemoryTools,
-} from "@/plugin/memory-tool-results";
-import type { ToolContext, ToolResult } from "@/plugin/memory-tool-schemas";
-import type { MemoryEntry } from "@/shared/types";
+} from "./memory-tool-results";
+import type { ToolContext, ToolResult } from "./memory-tool-schemas";
+import type { MemoryEntry } from "../shared/types";
 
 const REFLECTION_ITEM_TYPE = "memory-reflection-item";
 /** Bounded scan ceiling for query-mode candidate discovery. */

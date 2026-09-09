@@ -1,12 +1,12 @@
 import { createHash } from "node:crypto";
 import { configureLogger, createLogger, effectiveLogLevel, loggerFileStatus } from "@snoai/utils/logger";
-import packageMetadata from "../../package.json" with { type: "json" };
-import attributeDictionary from "../../config/attribute-dictionary.json" with { type: "json" };
-import { ATOMIC_EXTRACTION_RESPONSE_JSON_SCHEMA } from "@/extraction/atomic-extraction-reply";
-import { ATOMIC_EXTRACTION_SKILL_HASH } from "@/extraction/atomic-extraction-skill";
-import type { LlmPreset, MemoryLlmAdapterSlot } from "@/shared/llm-client-types";
-import { pickLlmRoutingConfig, resolveLlmOccasion, resolveLlmRoute } from "@/shared/llm-mode-routing";
-import type { LlmRoutingConfigInput } from "@/shared/plugin-config-mode-schema";
+import packageMetadata from "../../../package.json" with { type: "json" };
+import attributeDictionary from "../../../config/attribute-dictionary.json" with { type: "json" };
+import { ATOMIC_EXTRACTION_RESPONSE_JSON_SCHEMA } from "../extraction/atomic-extraction-reply";
+import { ATOMIC_EXTRACTION_SKILL_HASH } from "../extraction/atomic-extraction-skill";
+import type { LlmPreset, MemoryLlmAdapterSlot } from "../../model/llm-client-types";
+import { pickLlmRoutingConfig, resolveLlmOccasion, resolveLlmRoute } from "../../model/llm-mode-routing";
+import type { LlmRoutingConfigInput } from "../../contract/config/plugin-config-mode-schema";
 import { logSiteCatalog } from "./log-site-catalog.generated";
 
 const APPLICATION_NAME = "mem-claw";

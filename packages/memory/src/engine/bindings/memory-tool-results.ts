@@ -10,8 +10,8 @@ import {
 	readKillSwitchState,
 	RetrievalError,
 	z,
-} from "@/plugin/memory-tool-dependencies";
-import type { ToolContext, ToolResult } from "@/plugin/memory-tool-schemas";
+} from "./memory-tool-dependencies";
+import type { ToolContext, ToolResult } from "./memory-tool-schemas";
 
 const KILL_SWITCH_TEXT = "mem-claw paused (kill switch active). Use /memory resume to restore.";
 

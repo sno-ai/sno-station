@@ -19,20 +19,20 @@ import type {
 	ReplaceCoverageDecision,
 	SoftCloseInput,
 	WriteTextVersionInput,
-} from "../../../../packages/rem-core/src/index.ts";
+} from "../engine/rem/index";
 import {
 	hashRemMemoryRow,
 	REM_ROW_HASH_VERSION,
 	REM_ROW_HASH_VERSION_LEGACY,
-} from "../../../../packages/rem-core/src/index.js";
+} from "../engine/rem/index.js";
 import type {
 	RawSqliteDatabase,
 	SqliteDatabaseLike,
-} from "@/storage/sqlite-runtime";
-import type { LlmClient } from "@/shared/llm-client";
-import { stableHash } from "@/shared/utils";
-import { hashInputForEntry } from "@/storage/memory-store-shared";
-import type { MemoryStore } from "@/storage/store";
+} from "./sqlite-runtime";
+import type { LlmClient } from "../model/llm-client";
+import { stableHash } from "../engine/shared/utils";
+import { hashInputForEntry } from "./memory-store-shared";
+import type { MemoryStore } from "./store";
 
 const log = createLogger("mem-claw:rem-sqlite-adapter");
 

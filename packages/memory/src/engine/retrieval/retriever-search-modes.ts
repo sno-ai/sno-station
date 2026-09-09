@@ -3,15 +3,15 @@
  * @boundary Prototype-mounted MemoryRetriever methods; no constructor state ownership.
  */
 
-import type { RetrievalContext } from "@/retrieval/retrieval-config";
-import { log } from "@/retrieval/retrieval-scoring-utils";
-import { MemoryRetriever, type MemoryRetrieverInternals } from "@/retrieval/retriever-core";
+import type { RetrievalContext } from "./retrieval-config";
+import { log } from "./retrieval-scoring-utils";
+import { MemoryRetriever, type MemoryRetrieverInternals } from "./retriever-core";
 import type {
 	MemorySearchResult,
 	RetrievalResult,
 	SearchOptions,
-} from "@/retrieval/retriever-dependencies";
-import { experimentCandidatePoolOverride } from "@/config";
+} from "./retriever-dependencies";
+import { experimentCandidatePoolOverride } from "../../../config/index";
 import {
 	clamp01,
 	MAX_AGGREGATION_ROWS,
@@ -19,7 +19,7 @@ import {
 	PRECISION_RECALL_POOL_SIZE_FACTOR,
 	RetrievalError,
 	type TraceCollector,
-} from "@/retrieval/retriever-dependencies";
+} from "./retriever-dependencies";
 
 export function buildRemFacetRecallStatement(input: {
 	facet: "current" | "history";

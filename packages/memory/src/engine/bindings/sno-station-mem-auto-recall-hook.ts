@@ -7,7 +7,7 @@ import type {
 	PluginHookAgentContext,
 	PluginHookBeforeAgentStartEvent,
 	PluginHookBeforeAgentStartResult,
-} from "@/plugin/openclaw-hook-types";
+} from "./sno-station-mem-hook-types";
 import {
 	appendAuditEntry,
 	type createScopePolicy,
@@ -25,17 +25,17 @@ import {
 	setLruEntry,
 	shouldSkipRetrieval,
 	touchLruEntry,
-} from "@/plugin/openclaw-runtime-dependencies";
+} from "./sno-station-mem-runtime-dependencies";
 import {
 	auditMissingHookAgentIdentity,
 	isChatIdBasedAgentId,
 	resolveHookAgentId,
-} from "@/plugin/openclaw-runtime-mode";
-import { resolveRuntimeSessionId } from "@/plugin/openclaw-session-state";
-import type { RetrievalResult } from "@/shared/types";
-import type { MemoryTelemetryUsageOutbox } from "@/telemetry/memory-telemetry-outbox";
-import type { MemoryTelemetryMetadata } from "@/telemetry/memory-telemetry-types";
-import { retrieveForAutoRecall, type RecallFilterDiagnostics } from "@/retrieval/rem-consumer-retrieval";
+} from "./sno-station-mem-runtime-mode";
+import { resolveRuntimeSessionId } from "./sno-station-mem-session-state";
+import type { RetrievalResult } from "../shared/types";
+import type { MemoryTelemetryUsageOutbox } from "../telemetry/memory-telemetry-outbox";
+import type { MemoryTelemetryMetadata } from "../telemetry/memory-telemetry-types";
+import { retrieveForAutoRecall, type RecallFilterDiagnostics } from "../retrieval/rem-consumer-retrieval";
 import { randomUUID } from "node:crypto";
 import { createLogger, currentLogContext, withLogContext } from "@snoai/utils/logger";
 const log = createLogger("mem-claw:auto-recall");

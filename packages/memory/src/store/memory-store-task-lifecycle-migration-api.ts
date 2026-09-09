@@ -8,12 +8,12 @@ import { isDeepStrictEqual } from "node:util";
 import {
 	buildActiveTaskProjection,
 	type ActiveTaskProjectionSource,
-} from "@/extraction/active-task-projection";
-import { hashLengthPrefixedTuple } from "@/extraction/task-lifecycle-assertion";
+} from "../engine/extraction/active-task-projection";
+import { hashLengthPrefixedTuple } from "../engine/extraction/task-lifecycle-assertion";
 import {
 	buildInsightMetadata,
 	stringifyInsightMetadata,
-} from "@/extraction/memory-metadata-codec";
+} from "../engine/extraction/memory-metadata-codec";
 import {
 	MemoryStore,
 	type MemoryStoreInternals,
@@ -22,16 +22,16 @@ import {
 	type TaskLifecycleMigrationManifest,
 	type TaskLifecycleMigrationManifestRow,
 	type TaskLifecycleMigrationSourceRow,
-} from "@/storage/memory-store-base";
+} from "./memory-store-base";
 import {
 	hashInputForEntry,
 	StorageError,
 	stableHash,
-} from "@/storage/memory-store-shared";
+} from "./memory-store-shared";
 import {
 	hostTimezone,
 	validateStoreWriteMetadata,
-} from "@/storage/memory-store-write-validation";
+} from "./memory-store-write-validation";
 
 const digestPattern = /^[0-9a-f]{64}$/u;
 

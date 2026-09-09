@@ -6,9 +6,9 @@
 import {
 	DEFAULT_RECALL_TOKEN_BUDGET,
 	MIN_RECALL_TOKEN_BUDGET,
-} from "@/config";
+} from "../../../config/index";
 
-export { DEFAULT_RECALL_TOKEN_BUDGET, MIN_RECALL_TOKEN_BUDGET } from "@/config";
+export { DEFAULT_RECALL_TOKEN_BUDGET, MIN_RECALL_TOKEN_BUDGET } from "../../../config/index";
 
 export interface PackedRecallRows<T> {
 	rows: T[];

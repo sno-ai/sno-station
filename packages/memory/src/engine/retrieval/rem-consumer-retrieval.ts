@@ -6,17 +6,17 @@
  * open rows. A maintained store also expands subject groups before packing.
  */
 
-import type { MemoryRetriever } from "@/retrieval/retriever";
+import type { MemoryRetriever } from "./retriever";
 import {
 	packRecallRows,
 	type PackedRecallRows,
-} from "@/retrieval/recall-token-packer";
-import type { AggregationQuery, MemoryCategory, RetrievalResult } from "@/shared/types";
+} from "./recall-token-packer";
+import type { AggregationQuery, MemoryCategory, RetrievalResult } from "../shared/types";
 import {
 	compareMemorySourceOrder,
 	readMemorySourceOrderOrOldest,
-} from "@/storage/memory-source-order";
-import type { RemFacetPolicy } from "../../../../packages/rem-core/src/index.js";
+} from "../../store/memory-source-order";
+import type { RemFacetPolicy } from "../rem/index.js";
 
 const GROUP_CRUD_MAINTENANCE_RECEIPT = "group-crud-maintenance-v1";
 

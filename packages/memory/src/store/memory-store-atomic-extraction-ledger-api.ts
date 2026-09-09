@@ -16,8 +16,8 @@ import {
 	MemoryStore,
 	type MemoryStoreInternals,
 	type ReopenAtomicExtractionChunkResult,
-} from "@/storage/memory-store-base";
-import { log, StorageError } from "@/storage/memory-store-shared";
+} from "./memory-store-base";
+import { log, StorageError } from "./memory-store-shared";
 import { privateLogReference } from "@snoai/utils/logger";
 
 interface AtomicExtractionLedgerDatabaseRow {

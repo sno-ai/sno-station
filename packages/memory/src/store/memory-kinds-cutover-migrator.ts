@@ -6,16 +6,16 @@
 import { existsSync, mkdirSync, rmSync, writeFileSync, renameSync } from "node:fs";
 import { resolve as resolvePath } from "node:path";
 import { readManifestIfPresent, resolveConfigPaths } from "@snoai/sno-station-core-crypto";
-import { buildInsightMetadata, parseInsightMetadata, stringifyInsightMetadata } from "@/extraction/memory-metadata-codec";
-import type { InsightMetadataPatch } from "@/extraction/memory-metadata-types";
+import { buildInsightMetadata, parseInsightMetadata, stringifyInsightMetadata } from "../engine/extraction/memory-metadata-codec";
+import type { InsightMetadataPatch } from "../engine/extraction/memory-metadata-types";
 import {
 	getMemClawStateDir,
 	runWithMemoryAuditSync,
-} from "@/operations/runtime-audit-log";
-import { StorageError } from "@/shared/errors";
-import { MEMORY_CATEGORIES, type MemoryCategory } from "@/shared/types";
-import { stableHash } from "@/shared/utils";
-import { openSqliteDatabase, type SqliteDatabaseLike } from "@/storage/sqlite-runtime";
+} from "../engine/operations/runtime-audit-log";
+import { StorageError } from "../engine/shared/errors";
+import { MEMORY_CATEGORIES, type MemoryCategory } from "../engine/shared/types";
+import { stableHash } from "../engine/shared/utils";
+import { openSqliteDatabase, type SqliteDatabaseLike } from "./sqlite-runtime";
 
 export const MEMORY_KINDS_FOUNDATION_MARKER = "nodix_memory_kinds_foundation_v1";
 

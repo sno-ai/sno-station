@@ -7,13 +7,13 @@ import {
 	deriveDefaultLayer,
 	normalizeSource,
 	normalizeState,
-} from "@/extraction/memory-metadata-normalizers";
-import type { MemoryMetadata } from "@/shared/types";
+} from "../engine/extraction/memory-metadata-normalizers";
+import type { MemoryMetadata } from "../engine/shared/types";
 import {
 	MemoryStore,
 	type MemoryStoreInternals,
 	type ProfileRecoveryEntry,
-} from "@/storage/memory-store-base";
+} from "./memory-store-base";
 import {
 	clampInt,
 	DEFAULT_LIST_LIMIT,
@@ -24,7 +24,7 @@ import {
 	type MemoryEntry,
 	type MemoryRow,
 	type StatsResult,
-} from "@/storage/memory-store-shared";
+} from "./memory-store-shared";
 
 Object.assign(MemoryStore.prototype, {
 	readProfileRecoveryEntries(

@@ -3,16 +3,16 @@
  * @boundary Store embedding, duplicate search, and write orchestration.
  */
 
-import { parseReflectionMetadata } from "@/reflection/entry-metadata-parser";
+import { parseReflectionMetadata } from "./entry-metadata-parser";
 import {
 	buildInsightMetadata,
 	stringifyInsightMetadata,
-} from "@/extraction/memory-metadata-codec";
-import type { ReflectionEventMetadata } from "@/reflection/event-payload-builder";
-import { buildReflectionAntiPatternSignature } from "@/reflection/mapped-memory-metadata-builder";
-import type { ReflectionSlices } from "@/reflection/markdown-slice-parser";
-import type { ReflectionItemMetadata } from "@/reflection/slice-item-payload-builder";
-import type { MemoryCategory, MemorySearchResult } from "@/shared/types";
+} from "../extraction/memory-metadata-codec";
+import type { ReflectionEventMetadata } from "./event-payload-builder";
+import { buildReflectionAntiPatternSignature } from "./mapped-memory-metadata-builder";
+import type { ReflectionSlices } from "./markdown-slice-parser";
+import type { ReflectionItemMetadata } from "./slice-item-payload-builder";
+import type { MemoryCategory, MemorySearchResult } from "../shared/types";
 import type {
 	ReflectionStoreKind,
 	ReflectionStorePayload,

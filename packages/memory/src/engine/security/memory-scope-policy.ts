@@ -8,14 +8,14 @@ import {
 	normalizeAgentAccessMap,
 	normalizeExtraAccessibleScopes,
 	withOwnReflectionScope,
-} from "@/security/scope-identity";
+} from "./scope-identity";
 import {
 	DEFAULT_SCOPE_CONFIG,
 	SCOPE_PATTERNS,
 	type ScopeConfig,
 	type ScopeDefinition,
 	type ScopePolicy,
-} from "@/security/scope-policy-types";
+} from "./scope-policy-types";
 
 export class MemoryScopePolicy implements ScopePolicy {
 	private config: ScopeConfig;

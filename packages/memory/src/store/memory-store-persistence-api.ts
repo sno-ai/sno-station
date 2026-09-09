@@ -12,12 +12,12 @@ import {
 	type SupersedeActiveFactGuard,
 	type SupersedeClose,
 	type SupersedePreserveExisting,
-} from "@/storage/memory-store-base";
-import { deriveRemWriteIdentity } from "../../../../packages/rem-core/src/index.js";
+} from "./memory-store-base";
+import { deriveRemWriteIdentity } from "../engine/rem/index.js";
 import {
 	sanitizeMemoryMetadataString,
 	sanitizeStoreInput,
-} from "@/storage/content-sanitizer-bridge";
+} from "./content-sanitizer-bridge";
 import {
 	clamp01,
 	DEFAULT_IMPORTANCE,
@@ -32,8 +32,8 @@ import {
 	type StoreResult,
 	stableHash,
 	withStoreWriteOutcome,
-} from "@/storage/memory-store-shared";
-import { validateStoreWriteMetadata } from "@/storage/memory-store-write-validation";
+} from "./memory-store-shared";
+import { validateStoreWriteMetadata } from "./memory-store-write-validation";
 
 /**
  * The memory table holds memories. These create paths omit `lane` from their

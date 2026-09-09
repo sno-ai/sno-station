@@ -16,7 +16,7 @@
  * Demotion: Core → Working → Peripheral (based on decay, age)
  */
 
-import type { DecayScore, MemoryTier } from "@/shared/types";
+import type { DecayScore, MemoryTier } from "../shared/types";
 
 // Types
 

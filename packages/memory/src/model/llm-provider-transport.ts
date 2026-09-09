@@ -15,7 +15,7 @@ import type {
 	ProviderResult,
 	ProviderResponseTrace,
 	TokenUsage,
-} from "@/shared/llm-client-types";
+} from "./llm-client-types";
 
 const log = createLogger("mem-claw:llm-provider-transport");
 const routeInFlight = new Map<string, number>();

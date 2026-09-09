@@ -7,15 +7,15 @@ import {
 	REFLECTION_MAX_DERIVED,
 	REFLECTION_MAX_INVARIANTS,
 	REFLECTION_SLICE_CACHE_TTL_MS,
-} from "@/config";
+} from "../../../config/index";
 import {
 	loadAgentReflectionSlicesFromEntries,
 	type LoadedReflectionSlices,
 	type ReflectionLineSource,
-} from "@/reflection/memory-entry-projector";
-import type { createScopePolicy } from "@/security/scopes";
-import { setLruEntry, touchLruEntry } from "@/shared/lru";
-import type { MemoryStore } from "@/storage/store";
+} from "./memory-entry-projector";
+import type { createScopePolicy } from "../security/scopes";
+import { setLruEntry, touchLruEntry } from "../shared/lru";
+import type { MemoryStore } from "../../store/store";
 
 interface ReflectionSliceCacheEntry {
 	updatedAt: number;

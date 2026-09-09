@@ -10,65 +10,65 @@ import { z } from "zod";
 import {
 	decideRemRetirementTargetFromReply,
 	renderRemRetirementTargetPrompt,
-} from "../../../../packages/rem-core/src/index.js";
-import attributeDictionary from "../../config/attribute-dictionary.json" with { type: "json" };
-import stateVocabulary from "../../config/state-vocabulary.json" with { type: "json" };
+} from "../rem/index.js";
+import attributeDictionary from "../../../config/attribute-dictionary.json" with { type: "json" };
+import stateVocabulary from "../../../config/state-vocabulary.json" with { type: "json" };
 
 import {
 	createBProfileKeyingTransport,
 	runAtomicProfileKeying,
 	type AtomicKeyedRecord,
 	type AtomicProfileKeyingTransport,
-} from "@/extraction/atomic-profile-keying";
+} from "./atomic-profile-keying";
 import {
 	type AtomicGauntletRecord,
 	runAtomicExtractionGauntlet,
 	type AtomicResplitTransport,
-} from "@/extraction/atomic-extraction-gauntlet";
+} from "./atomic-extraction-gauntlet";
 import {
 	type AtomicExtractionRecord,
 	type AtomicExtractionTurn,
 	parseAtomicExtractionReply,
-} from "@/extraction/atomic-extraction-reply";
+} from "./atomic-extraction-reply";
 import {
 	ATOMIC_EXTRACTION_SKILL,
 	atomicExtractionSkillReference,
-} from "@/extraction/atomic-extraction-skill";
+} from "./atomic-extraction-skill";
 import {
 	createAtomicGenericExtractionTransport,
 	runAtomicGenericExtractionPass,
 	runAtomicNumericTurnSweep,
 	type AtomicGenericExtractionResult,
 	type AtomicGenericExtractionTransport,
-} from "@/extraction/atomic-generic-extractor";
+} from "./atomic-generic-extractor";
 import {
 	numberAtomicTurns,
 	renderAtomicPromptData,
-} from "@/extraction/atomic-replacement-sanitizer";
-import { sessionZoneCarriedBy } from "@/extraction/date-resolution";
-import { resolveAtomicEntityIdentity } from "@/extraction/entity-identity-judgment";
-import { prepareDeterministicTaskLifecycleWrite } from "@/extraction/task-lifecycle-route";
+} from "./atomic-replacement-sanitizer";
+import { sessionZoneCarriedBy } from "./date-resolution";
+import { resolveAtomicEntityIdentity } from "./entity-identity-judgment";
+import { prepareDeterministicTaskLifecycleWrite } from "./task-lifecycle-route";
 import {
 	createAtomicSubjectGuardTransport,
 	runAtomicSubjectGuard,
 	type AtomicSubjectGuardTransport,
-} from "@/extraction/atomic-subject-guard";
-import { buildAtomicWriteCards } from "@/extraction/atomic-write-projection";
-import { DEFAULT_LOCALE, type Locale } from "@/i18n/locales";
-import { createLlmClient, type LlmClient, type LlmClientConfig } from "@/shared/llm-client";
-import { resolveLlmRoute } from "@/shared/llm-mode-routing";
-import { readModelReplyJson } from "@/shared/model-reply-text";
-import type { LlmRoutingConfig } from "@/shared/plugin-config-mode-schema";
-import { REM_UPDATE_JUDGMENT_SKILL } from "@/sidecar/rem-update-judgment-skill";
+} from "./atomic-subject-guard";
+import { buildAtomicWriteCards } from "./atomic-write-projection";
+import { DEFAULT_LOCALE, type Locale } from "../i18n/locales";
+import { createLlmClient, type LlmClient, type LlmClientConfig } from "../../model/llm-client";
+import { resolveLlmRoute } from "../../model/llm-mode-routing";
+import { readModelReplyJson } from "../shared/model-reply-text";
+import type { LlmRoutingConfig } from "../../contract/config/plugin-config-mode-schema";
+import { REM_UPDATE_JUDGMENT_SKILL } from "../../sidecar/rem-update-judgment-skill";
 import {
 	closeAtomicArrivalRetirementTargets,
 	journalAtomicArrivalRetirementRefusal,
 	readAtomicArrivalRetirementCandidateSet,
-} from "@/storage/memory-store-atomic-extraction-write-api";
+} from "../../store/memory-store-atomic-extraction-write-api";
 import {
 	listAtomicMemoryEntityCandidates,
 	normalizeEntityName,
-} from "@/storage/memory-store-atomic-entity-api";
+} from "../../store/memory-store-atomic-entity-api";
 import type {
 	AtomicExtractionLedgerKey,
 	AtomicExtractionRunParameters,
@@ -77,8 +77,8 @@ import type {
 	AtomicMemoryEntityRegistration,
 	MemoryStore,
 	TaskLifecycleWriteInput,
-} from "@/storage/store";
-import { countTodoTransitionsWithoutSource } from "@/storage/todo-store";
+} from "../../store/store";
+import { countTodoTransitionsWithoutSource } from "../../store/todo-store";
 
 export interface AtomicMemoryExtractionTransports {
 	generic: AtomicGenericExtractionTransport;

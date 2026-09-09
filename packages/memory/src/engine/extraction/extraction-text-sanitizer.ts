@@ -4,8 +4,8 @@
  */
 
 import { sanitizeContentIngress } from "@snoai/content-sanitizer";
-import { stripAmbientLearningInjectedPrefix } from "@/extraction/ambient-learning-text-normalizer";
-import { stripLeadingRuntimeWrappers } from "@/extraction/runtime-wrapper-sanitizer";
+import { stripAmbientLearningInjectedPrefix } from "./ambient-learning-text-normalizer";
+import { stripLeadingRuntimeWrappers } from "./runtime-wrapper-sanitizer";
 
 /**
  * Build the string that goes into the `text` column of nodix_memories.

@@ -2,27 +2,27 @@ import {
 	assertAccessibleScopeForTool,
 	resolveAgentAccess,
 	resolveReadableScopesForTool,
-} from "@/plugin/memory-tool-access";
-import type { TodoListResult } from "@/plugin/memory-tool-dependencies";
-import { clamp01, clampInt, countTokens, DEFAULT_MIN_SCORE, DEFAULT_SCOPE, formatAtDepth, MAX_CANDIDATE_POOL_SIZE, MAX_AGGREGATION_MEMORY_CHARS, MAX_AGGREGATION_RESULT_TOKENS, MAX_RECALLED_TODOS, MAX_RECALLED_TODO_TOKENS, normalizeCategory, truncateGraphemes } from "@/plugin/memory-tool-dependencies";
+} from "./memory-tool-access";
+import type { TodoListResult } from "./memory-tool-dependencies";
+import { clamp01, clampInt, countTokens, DEFAULT_MIN_SCORE, DEFAULT_SCOPE, formatAtDepth, MAX_CANDIDATE_POOL_SIZE, MAX_AGGREGATION_MEMORY_CHARS, MAX_AGGREGATION_RESULT_TOKENS, MAX_RECALLED_TODOS, MAX_RECALLED_TODO_TOKENS, normalizeCategory, truncateGraphemes } from "./memory-tool-dependencies";
 import {
 	episodicEventDate,
 	safeParseMetadata,
 	sanitizeRecalledText,
 	serializeMemory,
-} from "@/plugin/memory-tool-formatting";
+} from "./memory-tool-formatting";
 import {
 	killSwitchResponse,
 	makeResult,
 	runWithAudit,
 	shouldBlockMemoryTools,
-} from "@/plugin/memory-tool-results";
-import { recallParamsSchema, type ToolContext, type ToolResult } from "@/plugin/memory-tool-schemas";
+} from "./memory-tool-results";
+import { recallParamsSchema, type ToolContext, type ToolResult } from "./memory-tool-schemas";
 import {
 	packManualRecallRows,
 	type RecallFilterDiagnostics,
 	retrieveForMemoryRecallOrEval,
-} from "@/retrieval/rem-consumer-retrieval";
+} from "../retrieval/rem-consumer-retrieval";
 import { createLogger, currentLogContext, privateLogReference, withLogContext } from "@snoai/utils/logger";
 import { randomUUID } from "node:crypto";
 
@@ -97,7 +97,7 @@ function prependTodoBlock(result: ToolResult, todos: TodoListResult): ToolResult
 
 
 
-export async function executeMemoryRecallTool(ctx: ToolContext, access: ReturnType<typeof resolveAgentAccess>, _toolCallId: unknown, params: unknown): Promise<ToolResult> {
+export async function executeMemoryRecallTool(ctx: ToolContext, access: ReturnType<typeof resolveAgentAccess>, _toolCallId: unknown, params: unknown, options: { name: string; label: string; description: string }): Promise<ToolResult> {
 			const raw = typeof params === "object" && params !== null ? params as Record<string, unknown> : {};
 			return withLogContext({ operation_id: currentLogContext().operation_id ?? randomUUID(),
 				...(typeof raw.external_reference === "string" ? { external_reference: raw.external_reference,

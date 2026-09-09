@@ -4,7 +4,7 @@
  * @see daily-log-generator.ts, memory-entry-projector.ts, lru.ts.
  */
 
-import type { ReflectionLineSource } from "@/reflection/memory-entry-projector";
+import type { ReflectionLineSource } from "./memory-entry-projector";
 
 export type ReflectionDerivedCacheEntry = {
 	updatedAt: number;

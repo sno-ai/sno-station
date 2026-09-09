@@ -12,24 +12,24 @@ import type {
 	OpenClawMemorySearchRuntimeDebug as MemorySearchRuntimeDebug,
 	OpenClawMemorySource as MemorySource,
 	OpenClawMemorySyncProgressUpdate as MemorySyncProgressUpdate,
-} from "@/provider/openclaw-memory-contracts";
-import { MAX_LIST_LIMIT } from "@/config";
-import { parseInsightMetadata } from "@/extraction/memory-metadata-codec";
+} from "../../contract/provider-runtime-types";
+import { MAX_LIST_LIMIT } from "../../../config/index";
+import { parseInsightMetadata } from "../extraction/memory-metadata-codec";
 import {
 	listCanonicalMemoryFiles,
 	readCanonicalMemoryFile,
 	searchCanonicalMemoryFiles,
 	type CanonicalMemoryDiagnostics,
-} from "@/provider/canonical-memory-corpus";
+} from "./canonical-memory-corpus";
 import {
 	isProviderRowId,
 	providerRowPath,
 	renderProviderRowMemory,
-} from "@/provider/provider-row-renderer";
-import type { ProviderIdentity } from "@/provider/provider-types";
-import type { MemoryEntry, MemorySearchResult as StoreSearchResult } from "@/shared/types";
-import { clampInt } from "@/shared/utils";
-import type { MemoryStore } from "@/storage/store";
+} from "./provider-row-renderer";
+import type { ProviderIdentity } from "./provider-types";
+import type { MemoryEntry, MemorySearchResult as StoreSearchResult } from "../shared/types";
+import { clampInt } from "../shared/utils";
+import type { MemoryStore } from "../../store/store";
 import { randomUUID } from "node:crypto";
 import { createLogger, currentLogContext, privateLogReference, withLogContext } from "@snoai/utils/logger";
 const diagnosticLog = createLogger("mem-claw:provider-search-manager");

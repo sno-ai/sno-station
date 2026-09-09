@@ -17,10 +17,10 @@ import { appendFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { createLogger } from "@snoai/utils/logger";
-import { KILL_SWITCH_CACHE_TTL_MS } from "@/config";
-import { redactSecrets } from "@/security/redact";
+import { KILL_SWITCH_CACHE_TTL_MS } from "../../../config/index";
+import { redactSecrets } from "../security/redact";
 
-export { getMemClawStateDir, getStateDir } from "@/shared/paths";
+export { getMemClawStateDir, getStateDir } from "../shared/paths";
 
 export type AuditEvent =
 	| "tool_call"

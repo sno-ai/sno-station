@@ -7,8 +7,8 @@
 
 import { randomUUID } from "node:crypto";
 import { createLogger } from "@snoai/utils/logger";
-import { stableHash } from "@/shared/utils";
-import type { SqliteDatabaseLike } from "@/storage/sqlite-runtime";
+import { stableHash } from "../engine/shared/utils";
+import type { SqliteDatabaseLike } from "./sqlite-runtime";
 
 const log = createLogger("unplaced-candidate-migration");
 

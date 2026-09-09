@@ -9,7 +9,7 @@ import {
 	type TodoListInput,
 	type TodoListResult,
 	type TodoRecord,
-} from "@/storage/memory-store-base";
+} from "./memory-store-base";
 
 Object.assign(MemoryStore.prototype, {
 	listTodos(this: MemoryStoreInternals, input: TodoListInput): TodoListResult {

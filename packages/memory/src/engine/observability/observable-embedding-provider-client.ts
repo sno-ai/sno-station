@@ -3,4 +3,4 @@
  * @boundary Re-export only; implementation lives in observable-embedder.ts.
  */
 
-export { ObservableEmbedder } from "@/observability/observable-embedder";
+export { ObservableEmbedder } from "./observable-embedder";

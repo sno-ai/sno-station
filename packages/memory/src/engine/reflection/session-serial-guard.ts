@@ -6,7 +6,7 @@ const diagnosticLog = createDiagnosticLogger("mem-claw:session-serial-guard");
  * @see strategy-hook-runner.ts.
  */
 
-import { setLruEntry } from "@/shared/lru";
+import { setLruEntry } from "../shared/lru";
 
 /**
  * Serial guard for reflection - see PRD section 4.3.

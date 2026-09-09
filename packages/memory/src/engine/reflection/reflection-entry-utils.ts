@@ -3,7 +3,7 @@
  * @boundary Side-effect-free helpers for metadata and numeric fallback handling.
  */
 
-import type { ReflectionMappedKind } from "@/reflection/mapped-memory-metadata-builder";
+import type { ReflectionMappedKind } from "./mapped-memory-metadata-builder";
 
 export function isReflectionMetadataType(type: unknown): boolean {
 	return type === "memory-reflection-item" || type === "memory-reflection";

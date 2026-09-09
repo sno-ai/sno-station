@@ -5,7 +5,7 @@
 
 import { createLogger } from "@snoai/utils/logger";
 
-import { SCOPE_PATTERNS } from "@/security/scope-policy-types";
+import { SCOPE_PATTERNS } from "./scope-policy-types";
 
 const log = createLogger("mem-claw:scopes");
 

@@ -13,7 +13,7 @@ import {
 	type EventType,
 	type JsonObject,
 } from "@snoai/sno-observe";
-import type { PluginConfig } from "@/shared/types";
+import type { PluginConfig } from "../shared/types";
 import { bestEffort, bestEffortSync, type ObserveLogger } from "./best-effort";
 import { CostAggregator } from "./cost-aggregator";
 import { readMemClawPackageVersion, readSnoStationCoreWorkspaceVersion } from "./version-metadata";

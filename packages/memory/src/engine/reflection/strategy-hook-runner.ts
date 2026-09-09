@@ -10,22 +10,22 @@ const diagnosticLog = createDiagnosticLogger("mem-claw:strategy-hook-runner");
 import {
 	DEFAULT_REFLECTION_MAX_TRACKED_SESSIONS,
 	DEFAULT_REFLECTION_SESSION_TTL_MS,
-} from "@/config";
-import type { ReflectionDerivedCache } from "@/reflection/derived-line-cache";
-import type { ReflectionDerivedSuppressionCache } from "@/reflection/derived-suppression-cache";
+} from "../../../config/index";
+import type { ReflectionDerivedCache } from "./derived-line-cache";
+import type { ReflectionDerivedSuppressionCache } from "./derived-suppression-cache";
 
-import type { ReflectionDeps } from "@/reflection/reflection-deps";
+import type { ReflectionDeps } from "./reflection-deps";
 import {
 	isInternalReflectionSessionKey,
 	pruneReflectionState,
-} from "@/reflection/reflection-embedded-generator";
+} from "./reflection-embedded-generator";
 
 
-import { createReflectionSliceLoader } from "@/reflection/reflection-slice-loader";
-import { createErrorSignalTracker } from "@/security/error-signals";
-import type { PluginConfig } from "@/shared/types";
+import { createReflectionSliceLoader } from "./reflection-slice-loader";
+import { createErrorSignalTracker } from "../security/error-signals";
+import type { PluginConfig } from "../shared/types";
 
-export type { ReflectionDeps } from "@/reflection/reflection-deps";
+export type { ReflectionDeps } from "./reflection-deps";
 export { isInternalReflectionSessionKey };
 
 export function createReflectionStrategyState(config: PluginConfig, deps: ReflectionDeps): ReflectionStrategyState {

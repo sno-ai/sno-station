@@ -15,7 +15,7 @@ import {
 	assertLocalFilesystem,
 	getMemClawDataDir,
 	getInstallManifestPath,
-} from "@/storage/data-paths";
+} from "./data-paths";
 import {
 	freshInstallManifest,
 	INSTALL_MANIFEST_TEMP_SUFFIX,
@@ -24,7 +24,7 @@ import {
 	readInstallManifest,
 	resolveDbPath,
 	writeInstallManifestAtomic,
-} from "@/storage/install-manifest";
+} from "./install-manifest";
 
 const log = createLogger("mem-claw:data-bootstrap");
 

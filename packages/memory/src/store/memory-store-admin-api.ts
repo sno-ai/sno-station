@@ -3,7 +3,7 @@
  * @boundary Prototype-mounted MemoryStore methods; no constructor state ownership.
  */
 
-import { MemoryStore, type MemoryStoreInternals } from "@/storage/memory-store-base";
+import { MemoryStore, type MemoryStoreInternals } from "./memory-store-base";
 import {
 	type BulkDeleteResult,
 	DELETE_BATCH_SIZE,
@@ -12,8 +12,8 @@ import {
 	type MemoryCategory,
 	type MemoryDeleteOptions,
 	StorageError,
-} from "@/storage/memory-store-shared";
-import { MEMORY_TELEMETRY_DELETE_REASONS } from "@/telemetry/memory-telemetry-types";
+} from "./memory-store-shared";
+import { MEMORY_TELEMETRY_DELETE_REASONS } from "../engine/telemetry/memory-telemetry-types";
 
 type DeleteEventRow = {
 	id: string;

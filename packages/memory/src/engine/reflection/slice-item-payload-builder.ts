@@ -8,7 +8,7 @@
  * Reflection item payload builder (invariant/derived items).
  */
 
-import type { ReflectionSliceItem } from "@/reflection/markdown-slice-parser";
+import type { ReflectionSliceItem } from "./markdown-slice-parser";
 
 export type ReflectionItemKind = "invariant" | "derived";
 

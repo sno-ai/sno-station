@@ -5,8 +5,8 @@
 
 import { createLogger, privateLogReference } from "@snoai/utils/logger";
 
-import { isSystemBypassId, shouldWarnLegacyFallbackBypassId } from "@/security/scope-identity";
-import { SCOPE_PATTERNS, type ScopePolicy } from "@/security/scope-policy-types";
+import { isSystemBypassId, shouldWarnLegacyFallbackBypassId } from "./scope-identity";
+import { SCOPE_PATTERNS, type ScopePolicy } from "./scope-policy-types";
 
 const log = createLogger("mem-claw:scopes");
 

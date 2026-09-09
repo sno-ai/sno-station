@@ -3,10 +3,10 @@
  * @boundary Prototype-mounted MemoryRetriever methods; no constructor state ownership.
  */
 
-import type { RetrievalContext } from "@/retrieval/retrieval-config";
-import { MemoryRetriever, type MemoryRetrieverInternals } from "@/retrieval/retriever-core";
-import type { MemorySearchResult, RetrievalResult } from "@/retrieval/retriever-dependencies";
-import { isMemoryExpired, parseInsightMetadata } from "@/retrieval/retriever-dependencies";
+import type { RetrievalContext } from "./retrieval-config";
+import { MemoryRetriever, type MemoryRetrieverInternals } from "./retriever-core";
+import type { MemorySearchResult, RetrievalResult } from "./retriever-dependencies";
+import { isMemoryExpired, parseInsightMetadata } from "./retriever-dependencies";
 
 Object.assign(MemoryRetriever.prototype, {
 	throwIfAborted(this: MemoryRetrieverInternals, context: RetrievalContext): void {

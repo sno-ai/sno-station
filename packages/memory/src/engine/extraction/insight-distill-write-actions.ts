@@ -5,12 +5,12 @@
 
 import { validateExtractedContentForStorage } from "@snoai/content-sanitizer";
 import { createLogger } from "@snoai/utils/logger";
-import { buildIndexedText } from "@/extraction/extraction-text-sanitizer";
+import { buildIndexedText } from "./extraction-text-sanitizer";
 import {
 	resolveDateLocally,
 	resolveMemoryDate,
 	type DateResolutionResult,
-} from "@/extraction/date-resolution";
+} from "./date-resolution";
 import {
 	appendRelation,
 	buildInsightMetadata,
@@ -18,26 +18,26 @@ import {
 	parseSupportInfo,
 	stringifyInsightMetadata,
 	updateSupportStats,
-} from "@/extraction/memory-metadata-codec";
-import type { MemoryRelation } from "@/extraction/memory-metadata-types";
+} from "./memory-metadata-codec";
+import type { MemoryRelation } from "./memory-metadata-types";
 import {
 	parseSessionTimestamp,
 	serializeIntervalMetadata,
-} from "@/extraction/memory-temporality-classifier";
+} from "./memory-temporality-classifier";
 import type {
 	CandidateExtractionTrace,
 	CandidateMemory,
 	CandidateRelation,
 	MemoryEntry,
 	MemoryCategory,
-} from "@/shared/types";
-import type { LlmClient } from "@/shared/llm-client";
-import type { LlmRoutingConfig } from "@/shared/plugin-config-mode-schema";
-import { stableHash } from "@/shared/utils";
+} from "../shared/types";
+import type { LlmClient } from "../../model/llm-client";
+import type { LlmRoutingConfig } from "../../contract/config/plugin-config-mode-schema";
+import { stableHash } from "../shared/utils";
 import type {
 	MemoryStore,
 	StoreInput,
-} from "@/storage/store";
+} from "../../store/store";
 
 const log = createLogger("mem-claw:insight-distill");
 

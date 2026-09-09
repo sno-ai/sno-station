@@ -4,36 +4,36 @@
  */
 
 import { createLogger } from "@snoai/utils/logger";
-import attributeDictionary from "../../config/attribute-dictionary.json" with { type: "json" };
-import relationDictionary from "../../config/relation-dictionary.json" with { type: "json" };
-import stateVocabulary from "../../config/state-vocabulary.json" with { type: "json" };
+import attributeDictionary from "../../../config/attribute-dictionary.json" with { type: "json" };
+import relationDictionary from "../../../config/relation-dictionary.json" with { type: "json" };
+import stateVocabulary from "../../../config/state-vocabulary.json" with { type: "json" };
 import {
 	ATOMIC_EXTRACTION_SKILL,
 	ATOMIC_EXTRACTION_SKILL_HASH,
 	atomicExtractionSkillReference,
-} from "@/extraction/atomic-extraction-skill";
+} from "./atomic-extraction-skill";
 import {
 	ATOMIC_EXTRACTION_RESPONSE_JSON_SCHEMA,
 	type AtomicExtractionRecord,
 	type AtomicExtractionTurn,
 	parseAtomicExtractionReply,
-} from "@/extraction/atomic-extraction-reply";
+} from "./atomic-extraction-reply";
 import {
 	numberAtomicTurns,
 	renderAtomicPromptData,
 	sanitizeAtomicPromptValue,
 	withAtomicSanitizerMatches,
-} from "@/extraction/atomic-replacement-sanitizer";
-import { DEFAULT_LOCALE, type Locale } from "@/i18n/locales";
-import type { LlmClient, LlmClientConfig } from "@/shared/llm-client";
-import { createLlmClient } from "@/shared/llm-client";
+} from "./atomic-replacement-sanitizer";
+import { DEFAULT_LOCALE, type Locale } from "../i18n/locales";
+import type { LlmClient, LlmClientConfig } from "../../model/llm-client";
+import { createLlmClient } from "../../model/llm-client";
 import type {
 	AtomicExtractionLedgerKey,
 	AtomicExtractionReprocessReason,
 	AtomicExtractionRunParameters,
 	BeginAtomicExtractionChunkResult,
 	MemoryStore,
-} from "@/storage/store";
+} from "../../store/store";
 
 const log = createLogger("mem-claw:atomic-extraction");
 const ATOMIC_REPROCESS_ATTEMPT_CAP = 1;

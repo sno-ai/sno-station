@@ -3,7 +3,7 @@
  * @boundary Pure lookups only — no I/O, no side effects.
  */
 
-import type { MemoryCategory } from "@/shared/types";
+import type { MemoryCategory } from "./types";
 
 export type WritePolicy = "append-only" | "mutation-native" | "derived-only";
 

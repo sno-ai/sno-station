@@ -10,21 +10,21 @@ import { fileURLToPath } from "node:url";
 import { createLogger } from "@snoai/utils/logger";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
-import { StorageError } from "@/shared/errors";
-import { applyEntityNameKeyMigration } from "@/storage/entity-name-key-migration";
-import * as schema from "@/storage/schema";
-import { assertMemoryKindsCutoverStartupGuard } from "@/storage/memory-kinds-cutover-migrator";
-import { migrateLegacyDatabaseNamespace } from "@/storage/legacy-database-namespace-migration";
-import { resolveSimpleTokenizerPath } from "@/storage/simple-tokenizer-path";
-import { loadSqliteVecExtension } from "@/storage/sqlite-vec-path";
+import { StorageError } from "../engine/shared/errors";
+import { applyEntityNameKeyMigration } from "./entity-name-key-migration";
+import * as schema from "./schema";
+import { assertMemoryKindsCutoverStartupGuard } from "./memory-kinds-cutover-migrator";
+import { migrateLegacyDatabaseNamespace } from "./legacy-database-namespace-migration";
+import { resolveSimpleTokenizerPath } from "./simple-tokenizer-path";
+import { loadSqliteVecExtension } from "./sqlite-vec-path";
 import {
 	openSqliteDatabase,
 	SqliteFileMissingError,
 	type SqliteDatabaseLike,
 	type SqliteRuntimeHandle,
-} from "@/storage/sqlite-runtime";
-import { assertTodoStoreCountParity } from "@/storage/todo-store";
-import { migrateUnplacedCandidates } from "@/storage/unplaced-candidate-migration";
+} from "./sqlite-runtime";
+import { assertTodoStoreCountParity } from "./todo-store";
+import { migrateUnplacedCandidates } from "./unplaced-candidate-migration";
 
 const log = createLogger("mem-claw:db");
 
@@ -47,7 +47,7 @@ type DrizzleDBWithoutVector = RuntimeDrizzleDB & {
 	$client: SqliteDatabaseLike;
 };
 
-export { validateStoragePath } from "@/storage/path-validation";
+export { validateStoragePath } from "./path-validation";
 
 /**
  * Opens the Node SQLite runtime and applies SQLite connection setup fallback behavior for missing data.

@@ -20,7 +20,7 @@ import type {
 	LlmPreset,
 	LlmProvider,
 	ResolvedLlmConfig,
-} from "@/shared/llm-client-types";
+} from "./llm-client-types";
 
 export const MEM_CLAW_RELEASE_ANCHOR_URL =
 	"https://www.sno.ai/.well-known/sno-mem-openclaw-release.json";

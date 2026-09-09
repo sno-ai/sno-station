@@ -7,9 +7,9 @@
 import { createHash } from "node:crypto";
 import { open, stat } from "node:fs/promises";
 import { sanitizeContentIngress } from "@snoai/content-sanitizer";
-import { DEFAULT_IMPORTANCE, FTS_QUERY_TOKEN_CAP } from "@/config";
-import { redactSecrets } from "@/security/redact";
-import { stripHtmlTags, tokenizeForFts, truncateGraphemes } from "@/shared/i18n-text";
+import { DEFAULT_IMPORTANCE, FTS_QUERY_TOKEN_CAP } from "../../../config/index";
+import { redactSecrets } from "../security/redact";
+import { stripHtmlTags, tokenizeForFts, truncateGraphemes } from "./i18n-text";
 
 /**
  * Clamps integer options into the configured range before they reach storage or ranking code.

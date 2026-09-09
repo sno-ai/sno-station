@@ -6,17 +6,17 @@
 export {
 	extractReflectionLearningGovernanceCandidates,
 	extractReflectionLessons,
-} from "@/reflection/reflection-governance-parser";
+} from "./reflection-governance-parser";
 export {
 	extractInjectableReflectionMappedMemories,
 	extractInjectableReflectionMappedMemoryItems,
 	extractReflectionMappedMemories,
 	extractReflectionMappedMemoryItems,
-} from "@/reflection/reflection-mapped-memory-parser";
+} from "./reflection-mapped-memory-parser";
 export {
 	extractSectionMarkdown,
 	parseSectionBullets,
-} from "@/reflection/reflection-markdown-sections";
+} from "./reflection-markdown-sections";
 export {
 	PARSER_HEADINGS,
 	type ReflectionGovernanceEntry,
@@ -25,17 +25,17 @@ export {
 	type ReflectionMappedMemoryItem,
 	type ReflectionSliceItem,
 	type ReflectionSlices,
-} from "@/reflection/reflection-markdown-types";
+} from "./reflection-markdown-types";
 export {
 	extractInjectableReflectionSliceItems,
 	extractInjectableReflectionSlices,
 	extractReflectionSliceItems,
 	extractReflectionSlices,
-} from "@/reflection/reflection-slice-extractor";
+} from "./reflection-slice-extractor";
 export {
 	isPlaceholderReflectionSliceLine,
 	isUnsafeInjectableReflectionLine,
 	normalizeReflectionSliceLine,
 	sanitizeInjectableReflectionLines,
 	sanitizeReflectionSliceLines,
-} from "@/reflection/reflection-slice-sanitizer";
+} from "./reflection-slice-sanitizer";

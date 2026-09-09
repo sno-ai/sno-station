@@ -23,13 +23,13 @@ import {
 	REM_ENABLE_GATE_BINDINGS,
 	type RemBuiltOperationType,
 	type RemOperationType,
-} from "../../../../packages/rem-core/src/index.js";
+} from "../engine/rem/index.js";
 import {
 	appendAuditEntryStrict,
 	getAuditPath,
 	getMemClawStateDir,
 	getStateDir,
-} from "@/operations/runtime-audit-log";
+} from "../engine/operations/runtime-audit-log";
 import {
 	getRemChassisJournalPath,
 	HEALTH_PATH,

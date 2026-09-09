@@ -6,12 +6,12 @@
 import {
 	extractSectionMarkdown,
 	parseSectionBullets,
-} from "@/reflection/reflection-markdown-sections";
+} from "./reflection-markdown-sections";
 import {
 	PARSER_HEADINGS,
 	type ReflectionGovernanceEntry,
-} from "@/reflection/reflection-markdown-types";
-import { sanitizeReflectionSliceLines } from "@/reflection/reflection-slice-sanitizer";
+} from "./reflection-markdown-types";
+import { sanitizeReflectionSliceLines } from "./reflection-slice-sanitizer";
 
 /** Extracts reflection lessons from raw runtime payloads with partial-data tolerance. */
 export function extractReflectionLessons(reflectionText: string): string[] {

@@ -5,11 +5,11 @@
 
 import { Temporal } from "@js-temporal/polyfill";
 import { z } from "zod";
-import atomicWriteConfigResource from "../../config/atomic-memory-write.json" with { type: "json" };
-import type { AtomicKeyedRecord } from "@/extraction/atomic-profile-keying";
-import { sanitizeAtomicPromptValue } from "@/extraction/atomic-replacement-sanitizer";
-import { DEFAULT_LOCALE, type Locale } from "@/i18n/locales";
-import type { AtomicExtractionWriteCard } from "@/storage/store";
+import atomicWriteConfigResource from "../../../config/atomic-memory-write.json" with { type: "json" };
+import type { AtomicKeyedRecord } from "./atomic-profile-keying";
+import { sanitizeAtomicPromptValue } from "./atomic-replacement-sanitizer";
+import { DEFAULT_LOCALE, type Locale } from "../i18n/locales";
+import type { AtomicExtractionWriteCard } from "../../store/store";
 
 export interface AtomicMemoryWriteConfig {
 	importance: Record<"high" | "medium" | "low", number>;

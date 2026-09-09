@@ -6,17 +6,17 @@
 import type {
 	RemMutationResult,
 	WriteTextVersionInput,
-} from "../../../../packages/rem-core/src/index.ts";
+} from "../engine/rem/index";
 
-import type { MemoryTier, MemoryMetadata } from "@/shared/types";
+import type { MemoryTier, MemoryMetadata } from "../engine/shared/types";
 import type {
 	AdmittedTaskLifecycleAssertion,
 	TaskLifecycleCommandClaim,
-} from "@/extraction/task-lifecycle-assertion";
+} from "../engine/extraction/task-lifecycle-assertion";
 import type {
 	TaskLifecycleInstanceSnapshot,
 	TaskLifecycleResolution,
-} from "@/extraction/task-lifecycle-resolver";
+} from "../engine/extraction/task-lifecycle-resolver";
 import {
 	type BulkDeleteResult,
 	type ChunkSearchResult,
@@ -48,9 +48,9 @@ import {
 	type UnplacedCandidateQuery,
 	type UpdateChanges,
 	VECTOR_DIMENSION_DEFAULT,
-} from "@/storage/memory-store-shared";
-import { MemoryTelemetryEventWriter } from "@/telemetry/memory-telemetry-events";
-import { migrateLegacyRemUpdateStamps } from "@/storage/rem-update-stamp-migration";
+} from "./memory-store-shared";
+import { MemoryTelemetryEventWriter } from "../engine/telemetry/memory-telemetry-events";
+import { migrateLegacyRemUpdateStamps } from "./rem-update-stamp-migration";
 
 export type {
 	BulkDeleteResult,
@@ -71,7 +71,7 @@ export type {
 	UnplacedCandidate,
 	UnplacedCandidateQuery,
 	UpdateChanges,
-} from "@/storage/memory-store-shared";
+} from "./memory-store-shared";
 
 export type SupersedeActiveFactGuard =
 	| {

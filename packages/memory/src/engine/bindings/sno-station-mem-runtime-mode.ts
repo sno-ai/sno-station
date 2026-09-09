@@ -5,8 +5,8 @@ const diagnosticLog = createDiagnosticLogger("mem-claw:openclaw-runtime-mode");
  * @boundary Environment/argv checks and scoped audit breadcrumbs only.
  */
 
-import type { OpenClawPluginApi } from "@/plugin/openclaw-runtime-dependencies";
-import { appendAuditEntry, isSystemBypassId } from "@/plugin/openclaw-runtime-dependencies";
+import type { OpenClawPluginApi } from "./sno-station-mem-runtime-dependencies";
+import { appendAuditEntry, isSystemBypassId } from "./sno-station-mem-runtime-dependencies";
 
 /** Detects completion bootstrap mode so plugin startup can expose only completion wiring. */
 export function isCompletionMode(): boolean {

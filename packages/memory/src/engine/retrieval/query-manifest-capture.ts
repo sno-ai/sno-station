@@ -11,17 +11,17 @@ import {
 	DEFAULT_TOP_K,
 	MAX_CANDIDATE_POOL_SIZE,
 	PRECISION_RECALL_POOL_SIZE_FACTOR,
-} from "@/config";
-import { formatRelevantMemoriesContext } from "@/extraction/capture-policy-detector";
+} from "../../../config/index";
+import { formatRelevantMemoriesContext } from "../extraction/capture-policy-detector";
 import {
 	ACTIVE_TASK_PROJECTION_MAX_ITEMS,
 	buildActiveTaskProjection,
-} from "@/extraction/active-task-projection";
-import type { Embedder } from "@/extraction/embedding-provider-client";
-import { createRetriever, type RetrievalConfig } from "@/retrieval/retriever";
-import type { RetrievalStageMetadata } from "@/retrieval/retrieval-trace";
-import type { MemoryEntry, RetrievalResult } from "@/shared/types";
-import type { MemoryStore } from "@/storage/store";
+} from "../extraction/active-task-projection";
+import type { Embedder } from "../extraction/embedding-provider-client";
+import { createRetriever, type RetrievalConfig } from "./retriever";
+import type { RetrievalStageMetadata } from "./retrieval-trace";
+import type { MemoryEntry, RetrievalResult } from "../shared/types";
+import type { MemoryStore } from "../../store/store";
 
 export type QueryIntent = "lookup" | "list-all" | "recommend" | "synthesis" | "other";
 export type QueryTaskMode = "current" | "history" | "non-task";

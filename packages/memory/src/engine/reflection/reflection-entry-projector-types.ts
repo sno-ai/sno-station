@@ -3,9 +3,9 @@
  * @boundary Types and public defaults only.
  */
 
-import type { ReflectionEventMetadata } from "@/reflection/event-payload-builder";
-import type { ReflectionItemMetadata } from "@/reflection/slice-item-payload-builder";
-import type { MemoryCategory, MemorySearchResult } from "@/shared/types";
+import type { ReflectionEventMetadata } from "./event-payload-builder";
+import type { ReflectionItemMetadata } from "./slice-item-payload-builder";
+import type { MemoryCategory, MemorySearchResult } from "../shared/types";
 
 export const REFLECTION_DERIVE_LOGISTIC_MIDPOINT_DAYS = 3;
 export const REFLECTION_DERIVE_LOGISTIC_K = 1.2;

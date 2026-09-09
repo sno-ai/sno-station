@@ -3,8 +3,8 @@
  * @boundary Prototype-mounted MemoryStore methods; no constructor state ownership.
  */
 
-import { MemoryStore, type MemoryStoreInternals } from "@/storage/memory-store-base";
-import { sanitizeStoreInput } from "@/storage/content-sanitizer-bridge";
+import { MemoryStore, type MemoryStoreInternals } from "./memory-store-base";
+import { sanitizeStoreInput } from "./content-sanitizer-bridge";
 import {
 	clamp01,
 	DEFAULT_IMPORTANCE,
@@ -12,8 +12,8 @@ import {
 	type MemoryEntry,
 	StorageError,
 	stableHash,
-} from "@/storage/memory-store-shared";
-import { validateStoreWriteMetadata } from "@/storage/memory-store-write-validation";
+} from "./memory-store-shared";
+import { validateStoreWriteMetadata } from "./memory-store-write-validation";
 
 Object.assign(MemoryStore.prototype, {
 	async importEntry(
