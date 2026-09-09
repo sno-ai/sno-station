@@ -1,0 +1,4 @@
+{
+	"gemini-embedding-001": { "per1kTokens": 0.00001, "provider": "google" },
+	"rerank-2.5": { "per1kTokens": 0.00005, "provider": "voyage" }
+}
