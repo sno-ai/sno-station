@@ -1,0 +1,5 @@
+{
+  "description": "LLMix preset mem_claw/openrouter_auto",
+  "model": "openrouter/auto",
+  "provider": "openrouter"
+}

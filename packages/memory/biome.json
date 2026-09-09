@@ -1,0 +1,31 @@
+{
+	"$schema": "https://biomejs.dev/schemas/2.4.0/schema.json",
+	"root": false,
+	"extends": ["../../biome.json"],
+	"linter": {
+		"enabled": true,
+		"rules": {
+			"recommended": true
+		}
+	},
+	"overrides": [
+		{
+			"includes": ["src/**"],
+			"linter": {
+				"rules": {
+					"style": {
+						"noRestrictedImports": {
+							"level": "error",
+							"options": {
+								"paths": {
+									"better-sqlite3": "Direct better-sqlite3 imports are forbidden in apps/mem-claw/src/**. Open SQLite via the encrypted chokepoint in @/storage/sqlite-runtime (which routes through @snoai/sno-station-core-crypto). See design.md D11.",
+									"better-sqlite3-multiple-ciphers": "Direct better-sqlite3-multiple-ciphers imports are forbidden in apps/mem-claw/src/**. Use the chokepoint in @/storage/sqlite-runtime; @snoai/sno-station-core-crypto owns the cipher driver."
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	]
+}

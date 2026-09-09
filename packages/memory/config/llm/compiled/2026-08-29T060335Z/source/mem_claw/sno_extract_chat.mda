@@ -1,0 +1,27 @@
+---
+name: llmix-mem-claw-sno-extract-chat
+description: Signed Sno chat extraction endpoint for mem_claw
+metadata:
+  snoai-llmix:
+    module: mem_claw
+    preset: sno_extract_chat
+    common:
+      provider: sno-gpu
+      model: qwen3.6-27b-extract
+    providerOptions:
+      sno-gpu:
+        gpuPath: /extract/v1/chat/completions
+integrity:
+  algorithm: sha256
+  digest: sha256:0667b1318fe1d6d2d00c375724d0cf0d8a4b1c4e0258c317c0c243c8a157c1f5
+signatures:
+  - signer: did-web:www.sno.ai
+    key-id: did:web:www.sno.ai#sno-mem-openclaw-release
+    payload-digest: sha256:0667b1318fe1d6d2d00c375724d0cf0d8a4b1c4e0258c317c0c243c8a157c1f5
+    algorithm: ed25519
+    signature: iekslgmySSqeFDapZB6XG0lFwwBPFltupWOmbrBg7Vsxy5qw9OhPNtz0pXRRlHnA/x7cqgAabg+QHc7DFtDcBw==
+    payload-type: application/vnd.mda.integrity+json
+---
+# mem_claw/sno_extract_chat
+
+Signed Sno chat extraction endpoint for Sno Memory for OpenClaw.
