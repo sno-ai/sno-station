@@ -618,7 +618,7 @@ describe("REM ordered wave", () => {
 								readback: createHash("sha256")
 									.update(
 										readFileSync(
-											join(stateRoot, "mem-claw", "rem-gates", artifactId + ".json"),
+											join(stateRoot, "sno-station-mem", "rem-gates", artifactId + ".json"),
 										),
 									)
 									.digest("hex"),
@@ -709,7 +709,7 @@ describe("REM independently enumerated guard census", () => {
 						input: {
 							manifestPath: join(repoRoot(), "apps/mem-claw/config/rem/guard-manifest.json"),
 							requiredGuardsPath: join(repoRoot(), "apps/mem-claw/config/rem/required-guards.json"),
-							sourceRoots: [join(repoRoot(), "packages/rem-core"), join(repoRoot(), "apps/mem-claw/src/sidecar")],
+							sourceRoots: [join(repoRoot(), "packages/rem-core"), join(repoRoot(), "packages/sno-station-mem/src/sidecar")],
 							productionRoots: [join(repoRoot(), "packages/sno-station-mem/src/sidecar/main.ts")],
 						},
 						cleanup: () => undefined,
@@ -993,7 +993,7 @@ describe.sequential("ACC-37 production edge: ordered wave governance", () => {
 				stats: { operations: 0, top_refusal_reasons: ["switched-off:rem-update"] },
 			});
 			const chassisJournal = readJsonLines(
-				join(fixture.stateRoot, "mem-claw", "rem-chassis-journal.jsonl"),
+				join(fixture.stateRoot, "sno-station-mem", "rem-chassis-journal.jsonl"),
 			);
 			expect(chassisJournal).toEqual(
 				expect.arrayContaining([
@@ -1024,7 +1024,7 @@ describe.sequential("ACC-37 production edge: ordered wave governance", () => {
 			const waveId = productionIdentity(wave);
 			const terminal = await fixture.waitForTerminal(waveId, 10_000);
 			expect(terminal["state"]).toBe("done");
-			const jobs = readJsonLines(join(fixture.stateRoot, "mem-claw", "rem-wave-jobs.jsonl"));
+			const jobs = readJsonLines(join(fixture.stateRoot, "sno-station-mem", "rem-wave-jobs.jsonl"));
 			const durable = jobs.findLast(
 				(row) =>
 					(row["waveId"] === waveId || row["wave_id"] === waveId) &&
@@ -1036,7 +1036,7 @@ describe.sequential("ACC-37 production edge: ordered wave governance", () => {
 				scope,
 			});
 			const terminalJournal = readJsonLines(
-				join(fixture.stateRoot, "mem-claw", "rem-chassis-journal.jsonl"),
+				join(fixture.stateRoot, "sno-station-mem", "rem-chassis-journal.jsonl"),
 			).filter((row) => row["job_id"] === waveId && row["outcome"] === "no-action");
 			expect(
 				terminalJournal.map((row) => ({
@@ -1056,7 +1056,7 @@ describe.sequential("ACC-37 production edge: ordered wave governance", () => {
 	it("finishes the wave when the chassis journal cannot append", { timeout: 20_000 }, async () => {
 		const fixture = await startRemProductionEntryFixture();
 		try {
-			const journalPath = join(fixture.stateRoot, "mem-claw", "rem-chassis-journal.jsonl");
+			const journalPath = join(fixture.stateRoot, "sno-station-mem", "rem-chassis-journal.jsonl");
 			mkdirSync(journalPath, { recursive: true });
 			const wave = await fixture.submitWave(
 				["rem-replace", "rem-update"],
@@ -1083,7 +1083,7 @@ describe.sequential("ACC-34 production POST enters one versioned ordered wave", 
 			);
 			const waveId = productionIdentity(response);
 			await fixture.waitForTerminal(waveId, 10_000);
-			const rows = readJsonLines(join(fixture.stateRoot, "mem-claw", "rem-wave-jobs.jsonl"));
+			const rows = readJsonLines(join(fixture.stateRoot, "sno-station-mem", "rem-wave-jobs.jsonl"));
 			expect(rows.findLast((row) => row["waveId"] === waveId || row["wave_id"] === waveId)).toMatchObject({
 				payloadVersion: 1,
 				requestedOperations: ["rem-replace"],
@@ -1121,7 +1121,7 @@ describe.sequential("ACC-34 production POST enters one versioned ordered wave", 
 			expect(productionIdentity(update)).toBe(productionIdentity(replace));
 			const waveId = productionIdentity(replace);
 			await fixture.waitForTerminal(waveId, 10_000);
-			const rows = readJsonLines(join(fixture.stateRoot, "mem-claw", "rem-wave-jobs.jsonl"));
+			const rows = readJsonLines(join(fixture.stateRoot, "sno-station-mem", "rem-wave-jobs.jsonl"));
 			expect(rows.findLast((row) => row["waveId"] === waveId || row["wave_id"] === waveId)).toMatchObject({
 				requestedOperations: ["rem-replace", "rem-update"],
 			});
@@ -1177,7 +1177,7 @@ describe.sequential("ACC-34 production POST enters one versioned ordered wave", 
 		});
 		try {
 			const archived = readJsonLines(
-				join(fixture.stateRoot, "mem-claw", "rem-jobs.v0.jsonl"),
+				join(fixture.stateRoot, "sno-station-mem", "rem-jobs.v0.jsonl"),
 			);
 			expect(archived.at(-1)).toMatchObject({
 				job_id: "legacy-running-job",
@@ -1211,7 +1211,7 @@ describe.sequential("ACC-34 production POST enters one versioned ordered wave", 
 	it("refuses Memora correlation verification when an enabled operation is missing", () => {
 		const stateRoot = mkdtempSync(join(tmpdir(), "acc34-rem-correlation-"));
 		try {
-			const stateDirectory = join(stateRoot, "mem-claw");
+			const stateDirectory = join(stateRoot, "sno-station-mem");
 			const correlationId = "correlation-acc34-missing-update";
 			const waveId = "rem-wave-acc34-missing-update";
 			mkdirSync(stateDirectory, { recursive: true });
@@ -1280,7 +1280,7 @@ verify_rem_correlation "$2" "$3"`,
 	it("refuses Memora correlation verification when rem-replace is requested twice", () => {
 		const stateRoot = mkdtempSync(join(tmpdir(), "acc34-rem-correlation-"));
 		try {
-			const stateDirectory = join(stateRoot, "mem-claw");
+			const stateDirectory = join(stateRoot, "sno-station-mem");
 			const correlationId = "correlation-acc34-duplicate-replace";
 			const waveId = "rem-wave-acc34-duplicate-replace";
 			mkdirSync(stateDirectory, { recursive: true });
