@@ -1,14 +1,14 @@
 import { createHash } from "node:crypto";
 import { performance } from "node:perf_hooks";
 import { describe, expect, it } from "vitest";
-import type { SqliteDatabaseLike } from "../../../../apps/mem-claw/src/storage/sqlite-runtime.ts";
-import type { MemoryTelemetryKeySet } from "../../../../apps/mem-claw/src/telemetry/memory-telemetry-config.ts";
-import { MemoryTelemetryEventWriter } from "../../../../apps/mem-claw/src/telemetry/memory-telemetry-events.ts";
+import type { SqliteDatabaseLike } from "../../../../packages/sno-station-mem/src/store/sqlite-runtime.ts";
+import type { MemoryTelemetryKeySet } from "../../../../packages/sno-station-mem/src/engine/telemetry/memory-telemetry-config.ts";
+import { MemoryTelemetryEventWriter } from "../../../../packages/sno-station-mem/src/engine/telemetry/memory-telemetry-events.ts";
 import {
 	MemoryTelemetryUsageOutbox,
 	type MemoryTelemetryUsageInput,
-} from "../../../../apps/mem-claw/src/telemetry/memory-telemetry-outbox.ts";
-import { createTestDb } from "../helpers/test-db.ts";
+} from "../../../../packages/sno-station-mem/src/engine/telemetry/memory-telemetry-outbox.ts";
+import { createTestDb } from "../../../apps/mem-claw/helpers/test-db.ts";
 
 const ITERATIONS = 80;
 const WARMUP_ITERATIONS = 8;
