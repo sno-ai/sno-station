@@ -7,25 +7,25 @@ import { mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
-import type { Embedder } from "@/extraction/embedding-provider-client";
+import type { Embedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client";
 import {
 	buildInsightMetadata,
 	stringifyInsightMetadata,
-} from "@/extraction/memory-metadata-codec";
+} from "../../../../packages/sno-station-mem/src/engine/extraction/memory-metadata-codec";
 import { InsightDistiller } from "@/extraction/memory-extraction-pipeline";
 import {
 	routeTaskLifecycleCandidate,
 	routeTaskLifecycleAssertion,
 	TaskLifecycleJudgmentUnavailableError,
 	type TaskLifecycleRouteInput,
-} from "@/extraction/task-lifecycle-route";
-import type { TaskLifecycleAssertionDraft } from "@/extraction/task-lifecycle-assertion";
+} from "../../../../packages/sno-station-mem/src/engine/extraction/task-lifecycle-route";
+import type { TaskLifecycleAssertionDraft } from "../../../../packages/sno-station-mem/src/engine/extraction/task-lifecycle-assertion";
 import {
 	buildTaskLifecycleCandidateSet,
 	taskLifecycleCandidateSetVersion,
-} from "@/extraction/task-lifecycle-resolver";
-import type { LlmClient } from "@/shared/llm-client";
-import { MemoryStore, TaskLifecycleStaleResolutionError } from "@/storage/store";
+} from "../../../../packages/sno-station-mem/src/engine/extraction/task-lifecycle-resolver";
+import type { LlmClient } from "../../../../packages/sno-station-mem/src/model/llm-client";
+import { MemoryStore, TaskLifecycleStaleResolutionError } from "../../../../packages/sno-station-mem/src/store/store";
 import { _provisionKey } from "../../../../packages/sno-station-core-crypto/src/dek.ts";
 import { createTestDb, createTestEmbedder, type TestDb } from "../helpers/test-db";
 import { createTestLlmClient } from "../helpers/llm-client";
@@ -171,7 +171,7 @@ describe("task lifecycle hard cut", () => {
 		);
 		const taskLifecycleSkill = readFileSync(
 			new URL(
-				"../../../../apps/mem-claw/skills/judge-task-lifecycle/SKILL.md",
+				"../../../../packages/sno-station-mem/skills/judge-task-lifecycle/SKILL.md",
 				import.meta.url,
 			),
 			"utf8",
@@ -209,7 +209,7 @@ describe("task lifecycle hard cut", () => {
 		);
 		expect(taskLifecycleSkill).toContain("Match tasks by meaning, not exact wording.");
 		const registry = readFileSync(
-			new URL("../../../../apps/mem-claw/config/b-profile-section-registry.json", import.meta.url),
+			new URL("../../../../packages/sno-station-mem/config/b-profile-section-registry.json", import.meta.url),
 			"utf8",
 		);
 		expect(registry).not.toContain('"task_lifecycle"');
