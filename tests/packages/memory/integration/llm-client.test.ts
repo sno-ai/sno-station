@@ -1,9 +1,9 @@
 import { createServer } from "node:http";
 import { afterEach, describe, expect, it } from "vitest";
-import { createLlmClient } from "../../../../apps/mem-claw/src/shared/llm-client.ts";
-import type { DispatchContext } from "../../../../apps/mem-claw/src/shared/llm-client-types.ts";
-import { callProvider } from "../../../../apps/mem-claw/src/shared/llm-provider-transport.ts";
-import { MEM_CLAW_RELEASE_ANCHOR_URL } from "../../../../apps/mem-claw/src/shared/llmix-registry.ts";
+import { createLlmClient } from "../../../../packages/sno-station-mem/src/model/llm-client.ts";
+import type { DispatchContext } from "../../../../packages/sno-station-mem/src/model/llm-client-types.ts";
+import { callProvider } from "../../../../packages/sno-station-mem/src/model/llm-provider-transport.ts";
+import { MEM_CLAW_RELEASE_ANCHOR_URL } from "../../../../packages/sno-station-mem/src/model/llmix-registry.ts";
 
 const originalFetch = globalThis.fetch;
 const didDocument = {
@@ -674,10 +674,10 @@ describe("mem-claw llm-client", () => {
 
 	it("uses LLMIx sno_ai_extract routing without sending SNO_MEM_CLAW_LLM_INTERNAL_KEY to overrides", async () => {
 		const originalGpuBaseUrl = process.env.GPU_BASE_URL;
-		const originalSnoKey = process.env.SNO_MEM_CLAW_LLM_API_KEY;
+		const originalSnoKey = process.env.SNO_STATION_MEM_LLM_API_KEY;
 		const originalInternalSecret = process.env.SNO_MEM_CLAW_LLM_INTERNAL_KEY;
 		process.env.GPU_BASE_URL = "https://gpu.example.test";
-		delete process.env.SNO_MEM_CLAW_LLM_API_KEY;
+		delete process.env.SNO_STATION_MEM_LLM_API_KEY;
 		process.env.SNO_MEM_CLAW_LLM_INTERNAL_KEY = "internal-secret";
 
 		const requests: Array<{ url: string; headers: Headers }> = [];
@@ -714,8 +714,8 @@ describe("mem-claw llm-client", () => {
 		} finally {
 			if (originalGpuBaseUrl === undefined) delete process.env.GPU_BASE_URL;
 			else process.env.GPU_BASE_URL = originalGpuBaseUrl;
-			if (originalSnoKey === undefined) delete process.env.SNO_MEM_CLAW_LLM_API_KEY;
-			else process.env.SNO_MEM_CLAW_LLM_API_KEY = originalSnoKey;
+			if (originalSnoKey === undefined) delete process.env.SNO_STATION_MEM_LLM_API_KEY;
+			else process.env.SNO_STATION_MEM_LLM_API_KEY = originalSnoKey;
 			if (originalInternalSecret === undefined) delete process.env.SNO_MEM_CLAW_LLM_INTERNAL_KEY;
 			else process.env.SNO_MEM_CLAW_LLM_INTERNAL_KEY = originalInternalSecret;
 		}
