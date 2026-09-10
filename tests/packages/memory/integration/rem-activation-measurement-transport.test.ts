@@ -10,17 +10,17 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { parseRemOperationalConfiguration } from "../../../../packages/rem-core/src/index.ts";
+import { parseRemOperationalConfiguration } from "../../../../packages/sno-station-mem/src/engine/rem/index.ts";
 import {
 	createRemModelStageResponsePort,
 	runRemBatchJob,
-} from "../../../../apps/mem-claw/src/sidecar/rem-batch-executor.ts";
-import { createRemOwnerDecidedOperationalConfiguration } from "../helpers/rem-entry-config-fixture.ts";
+} from "../../../../packages/sno-station-mem/src/sidecar/rem-batch-executor.ts";
+import { createRemOwnerDecidedOperationalConfiguration } from "../../../apps/mem-claw/helpers/rem-entry-config-fixture.ts";
 import {
 	startRemProductionEntryFixture,
 	seedProductionMemory,
-} from "../helpers/rem-production-entry-fixture.ts";
-import { createTestDb } from "../helpers/test-db.ts";
+} from "../../../apps/mem-claw/helpers/rem-production-entry-fixture.ts";
+import { createTestDb } from "../../../apps/mem-claw/helpers/test-db.ts";
 
 describe("REM activation measurement transport", () => {
 	it("ACC-47 records zero non-binding pairs for an update-only wave", { timeout: 20_000 }, async () => {
@@ -80,13 +80,13 @@ describe("REM activation measurement transport", () => {
 		const database = createTestDb();
 		const stateRoot = mkdtempSync(join(tmpdir(), "rem-clause-carry-floor-"));
 		const priorEnvironment = {
-			MEM_CLAW_DATA_DIR_ROOT: process.env["MEM_CLAW_DATA_DIR_ROOT"],
-			MEM_CLAW_REM_EXPECTED_DB_PATH: process.env["MEM_CLAW_REM_EXPECTED_DB_PATH"],
+			SNO_STATION_MEM_DATA_DIR_ROOT: process.env["SNO_STATION_MEM_DATA_DIR_ROOT"],
+			SNO_STATION_MEM_REM_EXPECTED_DB_PATH: process.env["SNO_STATION_MEM_REM_EXPECTED_DB_PATH"],
 			OPENCLAW_STATE_DIR: process.env["OPENCLAW_STATE_DIR"],
 		};
 		try {
-			process.env["MEM_CLAW_DATA_DIR_ROOT"] = dirname(database.dbPath);
-			process.env["MEM_CLAW_REM_EXPECTED_DB_PATH"] = database.dbPath;
+			process.env["SNO_STATION_MEM_DATA_DIR_ROOT"] = dirname(database.dbPath);
+			process.env["SNO_STATION_MEM_REM_EXPECTED_DB_PATH"] = database.dbPath;
 			process.env["OPENCLAW_STATE_DIR"] = stateRoot;
 			writeFileSync(
 				join(stateRoot, "openclaw.json"),
@@ -159,10 +159,10 @@ describe("REM activation measurement transport", () => {
 			expect(result.actionsApplied).toBe(1);
 			expect(survivor.text).toContain("The researcher works late.");
 		} finally {
-			restoreEnvironment("MEM_CLAW_DATA_DIR_ROOT", priorEnvironment.MEM_CLAW_DATA_DIR_ROOT);
+			restoreEnvironment("SNO_STATION_MEM_DATA_DIR_ROOT", priorEnvironment.SNO_STATION_MEM_DATA_DIR_ROOT);
 			restoreEnvironment(
-				"MEM_CLAW_REM_EXPECTED_DB_PATH",
-				priorEnvironment.MEM_CLAW_REM_EXPECTED_DB_PATH,
+				"SNO_STATION_MEM_REM_EXPECTED_DB_PATH",
+				priorEnvironment.SNO_STATION_MEM_REM_EXPECTED_DB_PATH,
 			);
 			restoreEnvironment("OPENCLAW_STATE_DIR", priorEnvironment.OPENCLAW_STATE_DIR);
 			database.cleanup();
@@ -178,13 +178,13 @@ async function runMeasuredReplace(candidateCount: number): Promise<{
 	const database = createTestDb();
 	const stateRoot = mkdtempSync(join(tmpdir(), "rem-measurement-"));
 	const priorEnvironment = {
-		MEM_CLAW_DATA_DIR_ROOT: process.env["MEM_CLAW_DATA_DIR_ROOT"],
-		MEM_CLAW_REM_EXPECTED_DB_PATH: process.env["MEM_CLAW_REM_EXPECTED_DB_PATH"],
+		SNO_STATION_MEM_DATA_DIR_ROOT: process.env["SNO_STATION_MEM_DATA_DIR_ROOT"],
+		SNO_STATION_MEM_REM_EXPECTED_DB_PATH: process.env["SNO_STATION_MEM_REM_EXPECTED_DB_PATH"],
 		OPENCLAW_STATE_DIR: process.env["OPENCLAW_STATE_DIR"],
 	};
 	try {
-		process.env["MEM_CLAW_DATA_DIR_ROOT"] = dirname(database.dbPath);
-		process.env["MEM_CLAW_REM_EXPECTED_DB_PATH"] = database.dbPath;
+		process.env["SNO_STATION_MEM_DATA_DIR_ROOT"] = dirname(database.dbPath);
+		process.env["SNO_STATION_MEM_REM_EXPECTED_DB_PATH"] = database.dbPath;
 		process.env["OPENCLAW_STATE_DIR"] = stateRoot;
 		writeFileSync(
 			join(stateRoot, "openclaw.json"),
@@ -239,10 +239,10 @@ async function runMeasuredReplace(candidateCount: number): Promise<{
 			pairCapBinding: result.measurements.pairCapBinding,
 		};
 	} finally {
-		restoreEnvironment("MEM_CLAW_DATA_DIR_ROOT", priorEnvironment.MEM_CLAW_DATA_DIR_ROOT);
+		restoreEnvironment("SNO_STATION_MEM_DATA_DIR_ROOT", priorEnvironment.SNO_STATION_MEM_DATA_DIR_ROOT);
 		restoreEnvironment(
-			"MEM_CLAW_REM_EXPECTED_DB_PATH",
-			priorEnvironment.MEM_CLAW_REM_EXPECTED_DB_PATH,
+			"SNO_STATION_MEM_REM_EXPECTED_DB_PATH",
+			priorEnvironment.SNO_STATION_MEM_REM_EXPECTED_DB_PATH,
 		);
 		restoreEnvironment("OPENCLAW_STATE_DIR", priorEnvironment.OPENCLAW_STATE_DIR);
 		database.cleanup();
