@@ -4,7 +4,7 @@
  */
 
 import { createLogger as createDiagnosticLogger } from "@snoai/utils/logger";
-const diagnosticLog = createDiagnosticLogger("mem-claw:adapter");
+const diagnosticLog = createDiagnosticLogger("sno-station-mem:adapter");
 import {
 	type AgentId,
 	createSnoObserve,

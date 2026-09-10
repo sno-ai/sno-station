@@ -1,3 +1,4 @@
+import { PERSISTED_CONTENT_HASH_V1 } from "../model/signed-registry-constants";
 /** @file memory-kinds-cutover-migrator.ts
  * @purpose Offline one-time memory-kind cutover and startup invariants.
  * @boundary Raw SQLite migration path only; runtime startup may call the guard.
@@ -338,11 +339,11 @@ function hashInputForMigratedEntry(text: string, metadata: string): string {
 		? parsed.merge_lineage.filter((item): item is string => typeof item === "string")
 		: [];
 	if (mergeLineage.length > 0) {
-		return JSON.stringify(["mem-claw:hash:v1", text, { merge_lineage: mergeLineage }]);
+		return JSON.stringify([PERSISTED_CONTENT_HASH_V1, text, { merge_lineage: mergeLineage }]);
 	}
 	const mappedKind = parsed.mappedKind;
 	if (typeof mappedKind === "string" && mappedKind.length > 0) {
-		return JSON.stringify(["mem-claw:hash:v1", text, mappedKind]);
+		return JSON.stringify([PERSISTED_CONTENT_HASH_V1, text, mappedKind]);
 	}
 	return text;
 }

@@ -9,7 +9,7 @@ import { parseAccessMetadata } from "../retrieval/access-tracker";
 import type { DecayableMemory, MemoryEntry, MemoryTier } from "../shared/types";
 import { createRetentionScorer } from "./selective-forgetting-scorer";
 
-const log = createLogger("mem-claw:stale-memory-demotion");
+const log = createLogger("sno-station-mem:stale-memory-demotion");
 
 /**
  * Minimal store surface needed for stale-tier demotion. `MemoryStore`

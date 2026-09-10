@@ -10,7 +10,7 @@ import { createInterface } from "node:readline";
 import { COST_ESTIMATE_CACHE_TTL_MS } from "../../../config/index";
 import { getCostPath } from "./runtime-audit-log";
 import { createLogger } from "@snoai/utils/logger";
-const diagnosticLog = createLogger("mem-claw:daily-spend-estimator");
+const diagnosticLog = createLogger("sno-station-mem:daily-spend-estimator");
 
 type SpendCacheEntry = {
 	day: string;

@@ -1,3 +1,4 @@
+import { FIXED_PROTOCOL_VALUE_64 } from "../../model/signed-registry-constants";
 /** @file canonical-memory-corpus.ts
  * @purpose Searches and reads the built-in OpenClaw canonical memory Markdown corpus.
  * @boundary Only exposes root MEMORY.md and ordinary Markdown files under memory/ in one workspace.
@@ -14,7 +15,7 @@ import {
 import type { OpenClawMemorySearchResult as MemorySearchResult } from "../../contract/provider-runtime-types";
 import { clampInt } from "../shared/utils";
 import { createLogger } from "@snoai/utils/logger";
-const diagnosticLog = createLogger("mem-claw:canonical-memory-corpus");
+const diagnosticLog = createLogger("sno-station-mem:canonical-memory-corpus");
 
 const ROOT_MEMORY_FILE = "MEMORY.md";
 const MEMORY_DIR = "memory";
@@ -22,7 +23,7 @@ const DEFAULT_READ_LINES = 200;
 const MAX_READ_LINES = 2_000;
 
 const DENIED_SEGMENTS = new Set([
-	".openclaw",
+	FIXED_PROTOCOL_VALUE_64,
 	"config",
 	"configs",
 	"context",

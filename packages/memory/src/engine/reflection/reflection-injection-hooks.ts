@@ -1,5 +1,6 @@
+import { FIXED_PROTOCOL_VALUE_79 } from "../../model/signed-registry-constants";
 import { createLogger as createDiagnosticLogger, privateLogReference } from "@snoai/utils/logger";
-const diagnosticLog = createDiagnosticLogger("mem-claw:reflection-injection-hooks");
+const diagnosticLog = createDiagnosticLogger("sno-station-mem:reflection-injection-hooks");
 /** @file reflection-injection-hooks.ts
  * @purpose Registers prompt injection hooks for reflection slices and error reminders.
  */
@@ -155,7 +156,7 @@ export function createReflectionInjectionHandler1(params: ReflectionInjectionPar
 				return {
 					prependContext: [
 						"<inherited-rules>",
-						"Stable rules inherited from mem-claw reflections. Treat as long-term behavioral constraints unless user overrides.",
+						FIXED_PROTOCOL_VALUE_79,
 						body,
 						"</inherited-rules>",
 					].join("\n"),

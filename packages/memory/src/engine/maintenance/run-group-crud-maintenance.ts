@@ -1,3 +1,4 @@
+import { FIXED_MEMORY_SNO_EXTRACT_CHAT, FIXED_MEMORY_SNO_EXTRACT_PROFILE, FIXED_PROTOCOL_VALUE_74 } from "../../model/signed-registry-constants";
 /** @file run-group-crud-maintenance.ts
  * @purpose Runs group CRUD maintenance twice against one encrypted project store.
  * @boundary Explicit command only; reports are written as JSON lines to stdout.
@@ -35,7 +36,7 @@ async function main(): Promise<void> {
 	try {
 		const hostConfig = readOpenClawConfig(resolveOpenClawConfigPath());
 		const pluginConfig = pluginConfigSchema.parse(
-			hostConfig?.plugins?.entries?.["sno-mem-claw"]?.config ?? {},
+			hostConfig?.plugins?.entries?.[FIXED_PROTOCOL_VALUE_74]?.config ?? {},
 		);
 		embedder = createEmbedder(pluginConfig.embedding, getMemClawStateDir());
 		const routing = pickLlmRoutingConfig({
@@ -45,12 +46,12 @@ async function main(): Promise<void> {
 			},
 		});
 		const chatClient = createLlmClient({
-			preset: "mem_claw/sno_extract_chat",
+			preset: FIXED_MEMORY_SNO_EXTRACT_CHAT,
 			timeoutMs: 60_000,
 			routing,
 		});
 		const profileClient = createLlmClient({
-			preset: "mem_claw/sno_extract_profile",
+			preset: FIXED_MEMORY_SNO_EXTRACT_PROFILE,
 			timeoutMs: 60_000,
 			routing,
 		});

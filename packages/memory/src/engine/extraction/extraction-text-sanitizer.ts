@@ -1,3 +1,4 @@
+import { PERSISTED_PROVIDER_SYSTEM } from "../../model/signed-registry-constants";
 /** @file extraction-text-sanitizer.ts
  * @purpose Normalize runtime payload text before it reaches memory extraction.
  * @boundary Removes channel/runtime envelope metadata only; does not classify or persist memories.
@@ -104,7 +105,7 @@ export function stripEnvelopeMetadata(text: string): string {
 	cleaned = cleaned.replace(/\n{3,}/g, "\n\n");
 
 	return sanitizeContentIngress({
-		source: "openclaw",
+		source: PERSISTED_PROVIDER_SYSTEM,
 		content: cleaned,
 	}).projections.plainText;
 }

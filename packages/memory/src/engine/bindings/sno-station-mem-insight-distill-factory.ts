@@ -4,7 +4,7 @@
  */
 
 import { createLogger as createDiagnosticLogger } from "@snoai/utils/logger";
-const diagnosticLog = createDiagnosticLogger("mem-claw:openclaw-insight-distill-factory");
+const diagnosticLog = createDiagnosticLogger("sno-station-mem:sno-station-mem-insight-distill-factory");
 import {
 	AtomicInsightDistiller,
 	createSignedAtomicMemoryExtractionTransports,

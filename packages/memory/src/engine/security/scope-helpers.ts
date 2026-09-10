@@ -8,7 +8,7 @@ import { createLogger, privateLogReference } from "@snoai/utils/logger";
 import { isSystemBypassId, shouldWarnLegacyFallbackBypassId } from "./scope-identity";
 import { SCOPE_PATTERNS, type ScopePolicy } from "./scope-policy-types";
 
-const log = createLogger("mem-claw:scopes");
+const log = createLogger("sno-station-mem:scopes");
 
 export function createAgentScope(agentId: string): string {
 	return SCOPE_PATTERNS.AGENT(agentId);

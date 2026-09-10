@@ -1,9 +1,10 @@
+import { PERSISTED_PROVIDER_SYSTEM } from "../../model/signed-registry-constants";
 /** @file provider-types.ts
  * @purpose Local provider authority contracts at the OpenClaw adapter boundary.
  * @boundary Trusted internal ids in, internal project-agent identity out.
  */
 
-export type ProviderExternalSystem = "openclaw";
+export type ProviderExternalSystem = typeof PERSISTED_PROVIDER_SYSTEM;
 
 export interface ProviderIdentity {
 	userId: string;

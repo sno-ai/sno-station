@@ -1,5 +1,6 @@
+import { FIXED_PROTOCOL_VALUE_75 } from "../../model/signed-registry-constants";
 import { createLogger } from "@snoai/utils/logger";
-const diagnosticLog = createLogger("mem-claw:learning-file-maintenance");
+const diagnosticLog = createLogger("sno-station-mem:learning-file-maintenance");
 /** @file learning-file-maintenance.ts
  * @purpose Manages learning files and skill extraction artifacts for improvement loops.
  * @boundary Filesystem layout, markdown records, and promotion state.
@@ -239,7 +240,7 @@ function normalizeSelfImprovementEntryParams(
 		area: params.area ?? "config",
 		priority: params.priority ?? "medium",
 		status: params.status ?? "pending",
-		source: params.source ?? "mem-claw/self_improvement_log",
+		source: params.source ?? FIXED_PROTOCOL_VALUE_75,
 	};
 }
 

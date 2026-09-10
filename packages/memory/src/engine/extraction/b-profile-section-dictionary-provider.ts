@@ -17,7 +17,7 @@ import {
 } from "./b-profile-section-registry";
 import { SUPPORTED_LOCALES } from "../i18n/locales";
 
-const log = createLogger("mem-claw:b-profile-section-dictionary");
+const log = createLogger("sno-station-mem:b-profile-section-dictionary");
 const CACHE_FILE_NAME = "b-profile-section-dictionary.json";
 const localeTermMapSchema = z
 	.object({

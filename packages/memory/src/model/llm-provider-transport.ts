@@ -1,3 +1,4 @@
+import { FIXED_PROTOCOL_VALUE_69 } from "./signed-registry-constants";
 /** @file llm-provider-transport.ts
  * @purpose Sends OpenAI-compatible chat requests with retries and provider routing.
  * @boundary HTTP transport, base URL resolution, key rotation, and retry behavior.
@@ -17,7 +18,7 @@ import type {
 	TokenUsage,
 } from "./llm-client-types";
 
-const log = createLogger("mem-claw:llm-provider-transport");
+const log = createLogger("sno-station-mem:llm-provider-transport");
 const routeInFlight = new Map<string, number>();
 
 type RequestDiagnostic = {
@@ -78,7 +79,7 @@ async function observeRequest<T>(
 	});
 }
 
-const CCPROXY_OPENAI_BASE_URL = "http://localhost:8070/codex/v1";
+const CCPROXY_OPENAI_BASE_URL = FIXED_PROTOCOL_VALUE_69;
 const CCPROXY_PLACEHOLDER_API_KEY = "ccproxy-placeholder";
 const HELICONE_AUTH_HOSTNAMES = new Set([
 	"oai.helicone.ai",
@@ -397,7 +398,7 @@ function isHeliconeBaseUrl(baseUrl: string): boolean {
 }
 
 function resolveHeliconeApiKey(value?: string): string | undefined {
-	return value?.trim() || process.env.HELICONE_API_KEY?.trim() || undefined;
+	return value?.trim() || process.env.SNO_STATION_MEM_HELICONE_API_KEY?.trim() || undefined;
 }
 
 function isCcproxyOpenAiBaseUrl(value: string | undefined): boolean {
@@ -629,10 +630,10 @@ function resolveEnvApiKey(
 ): string | undefined {
 	if (provider === "sno-gpu") {
 		return userBaseUrlOverride
-			? process.env.SNO_MEM_CLAW_LLM_API_KEY
-			: (process.env.SNO_MEM_CLAW_LLM_API_KEY ?? process.env.SNO_MEM_CLAW_LLM_INTERNAL_KEY);
+			? process.env.SNO_STATION_MEM_LLM_API_KEY
+			: (process.env.SNO_STATION_MEM_LLM_API_KEY ?? process.env.SNO_MEM_CLAW_LLM_INTERNAL_KEY);
 	}
-	if (provider === "openrouter") return process.env.OPENROUTER_API_KEY;
+	if (provider === "openrouter") return process.env.SNO_STATION_MEM_OPENROUTER_API_KEY;
 	return undefined;
 }
 

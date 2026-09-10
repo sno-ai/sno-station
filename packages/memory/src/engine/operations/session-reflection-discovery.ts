@@ -184,7 +184,7 @@ export function resolveReflectionSessionSearchDirs(
 	addSessionEntryDirs(sessionEntries, addDir);
 	addDir(join(params.workspaceDir, "sessions"));
 
-	addHome(asNonEmptyString(process.env.OPENCLAW_HOME));
+	addHome(asNonEmptyString(process.env.SNO_STATION_MEM_HOME));
 	addHome(deriveOpenClawHomeFromWorkspacePath(params.workspaceDir));
 	if (params.currentSessionFile) {
 		addHome(deriveOpenClawHomeFromSessionFilePath(params.currentSessionFile));

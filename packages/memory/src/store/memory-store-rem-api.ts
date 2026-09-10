@@ -22,7 +22,7 @@ import {
 	CHUNKING_VERSION,
 } from "./memory-store-shared";
 
-const log = createLogger("mem-claw:rem-write");
+const log = createLogger("sno-station-mem:rem-write");
 
 interface RemMemoryRow {
 	id: string;

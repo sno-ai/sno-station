@@ -26,7 +26,7 @@ import {
 import { createLogger, currentLogContext, privateLogReference, withLogContext } from "@snoai/utils/logger";
 import { randomUUID } from "node:crypto";
 
-const log = createLogger("mem-claw:memory-recall-tool");
+const log = createLogger("sno-station-mem:memory-recall-tool");
 
 
 

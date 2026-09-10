@@ -1,3 +1,4 @@
+import { FIXED_MEMORY_SNO_AI_EXTRACT } from "../../model/signed-registry-constants";
 /** @file profile-section-writer.ts
  * @purpose Mutation-native profile section writer for current-state memory.
  * @boundary Owns profile rows only; no retrieval injection or conflict scan.
@@ -93,7 +94,7 @@ const PROFILE_CONFLICT_TOP_K = 5;
 const CLEAR_RETIRE_BY_NAME_PENDING_ATTEMPTS = 3;
 /** Work items one profile row's pending marker may hold. Past this the oldest is dropped. */
 const RETIRE_BY_NAME_MAX_PENDING_WORK_ITEMS = 16;
-const log = createLogger("mem-claw:profile-section-writer");
+const log = createLogger("sno-station-mem:profile-section-writer");
 
 function adapterAViewFromEntry(entry: MemoryEntry): AdapterAMemoryView {
 	const metadata = parseInsightMetadata(entry.metadata, entry);
@@ -241,7 +242,7 @@ export const PROFILE_SECTION_JUDGMENT_INSTRUCTIONS = [
 	"For preferences.general, ownership is an independent retirement reason and does not require the incoming clause to contradict or replace the stored clause. Each listed sibling suffix names the topic it owns. Retire a stored general clause when its meaning belongs to that topic; for example, when preferences.films is listed, retire a stored general clause saying the user likes James Stewart movies. Keep a general clause when no listed sibling owns its topic. One fact family has one owner.",
 ] as const;
 export const PROFILE_SECTION_JUDGMENT_MODEL_CONFIG = {
-	preset: "mem_claw/sno_ai_extract",
+	preset: FIXED_MEMORY_SNO_AI_EXTRACT as typeof FIXED_MEMORY_SNO_AI_EXTRACT,
 	provider: "sno-gpu",
 	model: "qwen3.8-27b-extract",
 } as const;

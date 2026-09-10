@@ -23,7 +23,7 @@ import type { ProductMode } from "../../contract/config/plugin-config-mode-schem
 import type { MemoryEntry } from "../shared/types";
 import type { MemoryStore } from "../../store/store";
 
-const log = createLogger("mem-claw:b-profile-section-rekey");
+const log = createLogger("sno-station-mem:b-profile-section-rekey");
 const GENERAL_SECTION = "preferences.general";
 const MISSING_TOPIC_FLAG = "profile.preference.missing_topic";
 export const B_PROFILE_CANONICAL_FORM_REPAIR_VERSION = 1;

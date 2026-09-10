@@ -1,3 +1,4 @@
+import { FIXED_EXTERNAL_VALUE_49, FIXED_EXTERNAL_VALUE_51, FIXED_EXTERNAL_VALUE_52, FIXED_EXTERNAL_VALUE_53, FIXED_EXTERNAL_VALUE_54, FIXED_EXTERNAL_VALUE_55, FIXED_EXTERNAL_VALUE_56, FIXED_EXTERNAL_VALUE_57, FIXED_EXTERNAL_VALUE_58, FIXED_IDX_MEMORY, FIXED_IDX_MEMORY_ACTIVE_TASK_CURRENT_REVISION, FIXED_IDX_MEMORY_ACTIVE_TASK_EVIDENCE_INSTANCE, FIXED_IDX_MEMORY_ACTIVE_TASK_INSTANCES_PROJECTION, FIXED_IDX_MEMORY_MEMORIES_CATEGORY, FIXED_IDX_MEMORY_MEMORIES_CONTENT_HASH, FIXED_IDX_MEMORY_MEMORIES_FACT_ID, FIXED_IDX_MEMORY_MEMORIES_LANE_PROJECT, FIXED_IDX_MEMORY_MEMORIES_PROJECT, FIXED_IDX_MEMORY_MEMORIES_PROJECT_CONTENT_HASH, FIXED_IDX_MEMORY_MEMORIES_PROJECT_FACT_KEY_ACTIVE, FIXED_IDX_MEMORY_MEMORIES_PROJECT_TIMESTAMP, FIXED_MEMORY, FIXED_MEMORY_ACTIVE_TASK_EVIDENCE, FIXED_MEMORY_ACTIVE_TASK_INSTANCES, FIXED_MEMORY_ACTIVE_TASK_MIGRATION_EVIDENCE, FIXED_MEMORY_ACTIVE_TASK_MIGRATION_MANIFESTS, FIXED_MEMORY_ACTIVE_TASK_REVISIONS, FIXED_MEMORY_ACTIVE_TASK_TRANSITIONS, FIXED_MEMORY_CHUNKS, FIXED_MEMORY_CHUNKS_AD, FIXED_MEMORY_CHUNKS_AI, FIXED_MEMORY_CHUNKS_AU, FIXED_MEMORY_CHUNKS_FTS, FIXED_MEMORY_CHUNKS_MEMORY_ID_IDX, FIXED_MEMORY_CHUNKS_MEM_FACET_IDX, FIXED_MEMORY_CHUNKS_MEM_IDX, FIXED_MEMORY_EXTRACTION_TIMESTAMPS, FIXED_MEMORY_MEMORIES, FIXED_MEMORY_MEMORIES_FACT_ID_INSERT_GUARD, FIXED_MEMORY_MEMORIES_FACT_ID_UPDATE_GUARD, FIXED_MEMORY_MIGRATION_MARKERS, FIXED_MEMORY_PROFILE_RECOVERY_ENTRIES, FIXED_MEMORY_PROVIDER_AGENT_MAPPINGS, FIXED_MEMORY_PROVIDER_PROJECT_AGENTS, FIXED_MEMORY_PROVIDER_PROJECT_MAPPINGS, FIXED_MEMORY_TASK_LIFECYCLE_COMMANDS, FIXED_MEMORY_UNPLACED_CANDIDATES, FIXED_VEC_MEMORY, FIXED_VEC_MEMORY_CHUNKS } from "../model/signed-registry-constants";
 import type { SqliteDatabaseLike } from "./sqlite-runtime";
 
 interface ObjectRename {
@@ -6,28 +7,28 @@ interface ObjectRename {
 }
 
 const TABLE_RENAMES: readonly ObjectRename[] = [
-	{ legacy: "mem_claw_memories", current: "nodix_memories" },
-	{ legacy: "mem_claw_chunks", current: "nodix_memory_chunks" },
-	{ legacy: "mem_claw_extraction_timestamps", current: "nodix_memory_extraction_timestamps" },
-	{ legacy: "mem_claw_provider_project_mappings", current: "nodix_provider_project_mappings" },
-	{ legacy: "mem_claw_provider_agent_mappings", current: "nodix_provider_agent_mappings" },
-	{ legacy: "mem_claw_provider_project_agents", current: "nodix_provider_project_agents" },
-	{ legacy: "mem_claw_task_lifecycle_commands", current: "nodix_task_lifecycle_commands" },
-	{ legacy: "mem_claw_active_task_instances", current: "nodix_active_task_instances" },
-	{ legacy: "mem_claw_active_task_revisions", current: "nodix_active_task_revisions" },
-	{ legacy: "mem_claw_active_task_transitions", current: "nodix_active_task_transitions" },
-	{ legacy: "mem_claw_active_task_evidence", current: "nodix_active_task_evidence" },
+	{ legacy: FIXED_MEMORY_MEMORIES, current: "nodix_memories" },
+	{ legacy: FIXED_MEMORY_CHUNKS, current: "nodix_memory_chunks" },
+	{ legacy: FIXED_MEMORY_EXTRACTION_TIMESTAMPS, current: "nodix_memory_extraction_timestamps" },
+	{ legacy: FIXED_MEMORY_PROVIDER_PROJECT_MAPPINGS, current: "nodix_provider_project_mappings" },
+	{ legacy: FIXED_MEMORY_PROVIDER_AGENT_MAPPINGS, current: "nodix_provider_agent_mappings" },
+	{ legacy: FIXED_MEMORY_PROVIDER_PROJECT_AGENTS, current: "nodix_provider_project_agents" },
+	{ legacy: FIXED_MEMORY_TASK_LIFECYCLE_COMMANDS, current: "nodix_task_lifecycle_commands" },
+	{ legacy: FIXED_MEMORY_ACTIVE_TASK_INSTANCES, current: "nodix_active_task_instances" },
+	{ legacy: FIXED_MEMORY_ACTIVE_TASK_REVISIONS, current: "nodix_active_task_revisions" },
+	{ legacy: FIXED_MEMORY_ACTIVE_TASK_TRANSITIONS, current: "nodix_active_task_transitions" },
+	{ legacy: FIXED_MEMORY_ACTIVE_TASK_EVIDENCE, current: "nodix_active_task_evidence" },
 	{
-		legacy: "mem_claw_active_task_migration_evidence",
+		legacy: FIXED_MEMORY_ACTIVE_TASK_MIGRATION_EVIDENCE,
 		current: "nodix_active_task_migration_evidence",
 	},
 	{
-		legacy: "mem_claw_active_task_migration_manifests",
+		legacy: FIXED_MEMORY_ACTIVE_TASK_MIGRATION_MANIFESTS,
 		current: "nodix_active_task_migration_manifests",
 	},
-	{ legacy: "mem_claw_unplaced_candidates", current: "nodix_unplaced_memory_candidates" },
-	{ legacy: "mem_claw_profile_recovery_entries", current: "nodix_profile_recovery_entries" },
-	{ legacy: "mem_claw_migration_markers", current: "nodix_memory_migration_markers" },
+	{ legacy: FIXED_MEMORY_UNPLACED_CANDIDATES, current: "nodix_unplaced_memory_candidates" },
+	{ legacy: FIXED_MEMORY_PROFILE_RECOVERY_ENTRIES, current: "nodix_profile_recovery_entries" },
+	{ legacy: FIXED_MEMORY_MIGRATION_MARKERS, current: "nodix_memory_migration_markers" },
 	{ legacy: "memory_events", current: "nodix_memory_events" },
 	{ legacy: "memory_usage_outbox", current: "nodix_memory_usage_outbox" },
 	{ legacy: "memory_telemetry_incidents", current: "nodix_memory_telemetry_incidents" },
@@ -52,32 +53,32 @@ const TABLE_RENAMES: readonly ObjectRename[] = [
 ];
 
 const INDEX_RENAMES: readonly ObjectRename[] = [
-	{ legacy: "idx_mem_claw_memories_project_content_hash", current: "nodix_idx_memories_project_content_hash" },
-	{ legacy: "idx_mem_claw_memories_project", current: "nodix_idx_memories_project" },
-	{ legacy: "idx_mem_claw_memories_category", current: "nodix_idx_memories_category" },
-	{ legacy: "idx_mem_claw_memories_project_timestamp", current: "nodix_idx_memories_project_timestamp" },
-	{ legacy: "idx_mem_claw_memories_content_hash", current: "nodix_idx_memories_content_hash" },
-	{ legacy: "idx_mem_claw_memories_fact_id", current: "nodix_idx_memories_fact_id" },
+	{ legacy: FIXED_IDX_MEMORY_MEMORIES_PROJECT_CONTENT_HASH, current: "nodix_idx_memories_project_content_hash" },
+	{ legacy: FIXED_IDX_MEMORY_MEMORIES_PROJECT, current: "nodix_idx_memories_project" },
+	{ legacy: FIXED_IDX_MEMORY_MEMORIES_CATEGORY, current: "nodix_idx_memories_category" },
+	{ legacy: FIXED_IDX_MEMORY_MEMORIES_PROJECT_TIMESTAMP, current: "nodix_idx_memories_project_timestamp" },
+	{ legacy: FIXED_IDX_MEMORY_MEMORIES_CONTENT_HASH, current: "nodix_idx_memories_content_hash" },
+	{ legacy: FIXED_IDX_MEMORY_MEMORIES_FACT_ID, current: "nodix_idx_memories_fact_id" },
 	{ legacy: "idx_mcm_reflection_items", current: "nodix_idx_memories_reflection_items" },
 	{ legacy: "idx_mcm_idempotency_key", current: "nodix_idx_memories_idempotency_key" },
-	{ legacy: "idx_mem_claw_memories_lane_project", current: "nodix_idx_memories_lane_project" },
+	{ legacy: FIXED_IDX_MEMORY_MEMORIES_LANE_PROJECT, current: "nodix_idx_memories_lane_project" },
 	{
-		legacy: "idx_mem_claw_memories_project_fact_key_active",
+		legacy: FIXED_IDX_MEMORY_MEMORIES_PROJECT_FACT_KEY_ACTIVE,
 		current: "nodix_idx_memories_project_fact_key_active",
 	},
-	{ legacy: "mem_claw_chunks_mem_idx", current: "nodix_idx_memory_chunks_memory" },
-	{ legacy: "mem_claw_chunks_memory_id_idx", current: "nodix_idx_memory_chunks_memory_id" },
-	{ legacy: "mem_claw_chunks_mem_facet_idx", current: "nodix_idx_memory_chunks_memory_facet" },
+	{ legacy: FIXED_MEMORY_CHUNKS_MEM_IDX, current: "nodix_idx_memory_chunks_memory" },
+	{ legacy: FIXED_MEMORY_CHUNKS_MEMORY_ID_IDX, current: "nodix_idx_memory_chunks_memory_id" },
+	{ legacy: FIXED_MEMORY_CHUNKS_MEM_FACET_IDX, current: "nodix_idx_memory_chunks_memory_facet" },
 	{
-		legacy: "idx_mem_claw_active_task_current_revision",
+		legacy: FIXED_IDX_MEMORY_ACTIVE_TASK_CURRENT_REVISION,
 		current: "nodix_idx_active_task_current_revision",
 	},
 	{
-		legacy: "idx_mem_claw_active_task_instances_projection",
+		legacy: FIXED_IDX_MEMORY_ACTIVE_TASK_INSTANCES_PROJECTION,
 		current: "nodix_idx_active_task_instances_projection",
 	},
 	{
-		legacy: "idx_mem_claw_active_task_evidence_instance",
+		legacy: FIXED_IDX_MEMORY_ACTIVE_TASK_EVIDENCE_INSTANCE,
 		current: "nodix_idx_active_task_evidence_instance",
 	},
 	{ legacy: "idx_unplaced_project_reason", current: "nodix_idx_unplaced_project_reason" },
@@ -98,25 +99,25 @@ const INDEX_RENAMES: readonly ObjectRename[] = [
 ];
 
 const LEGACY_TRIGGER_NAMES = [
-	"mem_claw_chunks_ai",
-	"mem_claw_chunks_ad",
-	"mem_claw_chunks_au",
-	"mem_claw_memories_fact_id_insert_guard",
-	"mem_claw_memories_fact_id_update_guard",
+	FIXED_MEMORY_CHUNKS_AI,
+	FIXED_MEMORY_CHUNKS_AD,
+	FIXED_MEMORY_CHUNKS_AU,
+	FIXED_MEMORY_MEMORIES_FACT_ID_INSERT_GUARD,
+	FIXED_MEMORY_MEMORIES_FACT_ID_UPDATE_GUARD,
 ] as const;
 
 const LEGACY_MEMORY_GUARD_TRIGGER_NAMES = [
-	"mem_claw_memories_fact_id_insert_guard",
-	"mem_claw_memories_fact_id_update_guard",
+	FIXED_MEMORY_MEMORIES_FACT_ID_INSERT_GUARD,
+	FIXED_MEMORY_MEMORIES_FACT_ID_UPDATE_GUARD,
 ] as const;
 
 const KNOWN_LEGACY_OBJECT_NAMES = new Set([
 	...TABLE_RENAMES.map(({ legacy }) => legacy),
 	...INDEX_RENAMES.map(({ legacy }) => legacy),
 	...LEGACY_TRIGGER_NAMES,
-	"vec_mem_claw_chunks",
+	FIXED_VEC_MEMORY_CHUNKS,
 ]);
-const LEGACY_OBJECT_PREFIXES = ["mem_claw", "vec_mem_claw", "idx_mem_claw"] as const;
+const LEGACY_OBJECT_PREFIXES = [FIXED_MEMORY, FIXED_VEC_MEMORY, FIXED_IDX_MEMORY] as const;
 
 export type LegacyDatabaseNamespaceMigrationResult = "empty" | "current" | "migrated";
 
@@ -124,10 +125,10 @@ export function migrateLegacyDatabaseNamespace(
 	database: SqliteDatabaseLike,
 	configuredVectorDim?: number,
 ): LegacyDatabaseNamespaceMigrationResult {
-	const hasLegacySchema = tableExists(database, "mem_claw_memories");
+	const hasLegacySchema = tableExists(database, FIXED_MEMORY_MEMORIES);
 	const hasCurrentSchema = tableExists(database, "nodix_memories");
 	if (hasLegacySchema && hasCurrentSchema) {
-		throw new Error("database contains both mem_claw_memories and nodix_memories");
+		throw new Error(FIXED_EXTERNAL_VALUE_49);
 	}
 	if (!hasLegacySchema) {
 		assertLegacyObjectsRemoved(database);
@@ -137,14 +138,14 @@ export function migrateLegacyDatabaseNamespace(
 	if (configuredVectorDim !== undefined) {
 		assertLegacyVectorDimensionSupported(database, configuredVectorDim);
 	}
-	const hadLegacyChunkSearch = tableExists(database, "mem_claw_chunks_fts");
+	const hadLegacyChunkSearch = tableExists(database, FIXED_MEMORY_CHUNKS_FTS);
 	const hadLegacyMemoryGuards = LEGACY_MEMORY_GUARD_TRIGGER_NAMES.some(
 		(name) => readSchemaSql(database, "trigger", name) !== undefined,
 	);
 
 	database.transaction(() => {
 		const rowCounts = readLegacyRowCounts(database);
-		const vectorCount = readTableRowCount(database, "vec_mem_claw_chunks");
+		const vectorCount = readTableRowCount(database, FIXED_VEC_MEMORY_CHUNKS);
 		dropLegacyTriggers(database);
 		dropLegacyFts(database);
 		renameTables(database);
@@ -163,7 +164,7 @@ export function migrateLegacyDatabaseNamespace(
 }
 
 function assertLegacyBoundarySupported(database: SqliteDatabaseLike): void {
-	const rows = database.prepare("PRAGMA table_info(mem_claw_memories)").all() as Array<{
+	const rows = database.prepare(FIXED_EXTERNAL_VALUE_51).all() as Array<{
 		name?: string;
 	}>;
 	const columnNames = new Set(rows.map(({ name }) => name).filter((name): name is string => !!name));
@@ -177,15 +178,15 @@ function assertLegacyVectorDimensionSupported(
 	database: SqliteDatabaseLike,
 	configuredVectorDim: number,
 ): void {
-	const legacySql = readSchemaSql(database, "table", "vec_mem_claw_chunks");
+	const legacySql = readSchemaSql(database, "table", FIXED_VEC_MEMORY_CHUNKS);
 	if (legacySql === undefined) return;
 	const dimensionToken = legacySql.match(/embedding\s+float\[(\d+)\]/i)?.[1];
-	if (dimensionToken === undefined) throw new Error("cannot read vec_mem_claw_chunks dimension");
+	if (dimensionToken === undefined) throw new Error(FIXED_EXTERNAL_VALUE_52);
 	const dimension = Number.parseInt(dimensionToken, 10);
-	const vectorCount = readTableRowCount(database, "vec_mem_claw_chunks") ?? 0;
+	const vectorCount = readTableRowCount(database, FIXED_VEC_MEMORY_CHUNKS) ?? 0;
 	if (vectorCount > 0 && dimension !== configuredVectorDim) {
 		throw new Error(
-			`vec_mem_claw_chunks does not match the current schema (configured dim ${configuredVectorDim}, found dim ${dimension}); database left unchanged; wipe or re-import vectors before continuing`,
+			`${FIXED_EXTERNAL_VALUE_53}${configuredVectorDim}, found dim ${dimension}); database left unchanged; wipe or re-import vectors before continuing`,
 		);
 	}
 }
@@ -217,8 +218,8 @@ function dropLegacyTriggers(database: SqliteDatabaseLike): void {
 }
 
 function dropLegacyFts(database: SqliteDatabaseLike): void {
-	if (tableExists(database, "mem_claw_chunks_fts")) {
-		database.exec("DROP TABLE mem_claw_chunks_fts");
+	if (tableExists(database, FIXED_MEMORY_CHUNKS_FTS)) {
+		database.exec(FIXED_EXTERNAL_VALUE_54);
 	}
 }
 
@@ -238,30 +239,24 @@ function renameTables(database: SqliteDatabaseLike): void {
 }
 
 function migrateLegacyVectors(database: SqliteDatabaseLike): void {
-	const legacySql = readSchemaSql(database, "table", "vec_mem_claw_chunks");
+	const legacySql = readSchemaSql(database, "table", FIXED_VEC_MEMORY_CHUNKS);
 	if (legacySql === undefined) return;
 	if (tableExists(database, "nodix_memory_chunk_vectors")) {
-		throw new Error("database contains both vec_mem_claw_chunks and nodix_memory_chunk_vectors");
+		throw new Error(FIXED_EXTERNAL_VALUE_55);
 	}
 	const dimension = legacySql.match(/embedding\s+float\[(\d+)\]/i)?.[1];
-	if (dimension === undefined) throw new Error("cannot read vec_mem_claw_chunks dimension");
+	if (dimension === undefined) throw new Error(FIXED_EXTERNAL_VALUE_52);
 	const hasPartitionKey = /partition\s+key/i.test(legacySql);
 	const copyVectors = hasPartitionKey
-		? "INSERT INTO nodix_memory_chunk_vectors(id, project_id, embedding) SELECT id, project_id, embedding FROM vec_mem_claw_chunks"
-		: `INSERT INTO nodix_memory_chunk_vectors(id, project_id, embedding)
-			SELECT vectors.id, memories.project_id, vectors.embedding
-			FROM vec_mem_claw_chunks AS vectors
-			JOIN nodix_memory_chunks AS chunks ON chunks.chunk_id = vectors.id
-			JOIN nodix_memories AS memories ON memories.id = chunks.memory_id`;
+		? FIXED_EXTERNAL_VALUE_56
+		: `${FIXED_EXTERNAL_VALUE_57}`;
 	database.exec(`
 		CREATE VIRTUAL TABLE nodix_memory_chunk_vectors USING vec0(
 			id TEXT PRIMARY KEY,
 			project_id TEXT PARTITION KEY,
 			embedding float[${dimension}]
 		);
-		${copyVectors};
-		DROP TABLE vec_mem_claw_chunks;
-	`);
+		${copyVectors}${FIXED_EXTERNAL_VALUE_58}`);
 }
 
 function renameIndexes(database: SqliteDatabaseLike): void {

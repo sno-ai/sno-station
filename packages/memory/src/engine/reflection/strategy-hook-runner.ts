@@ -5,7 +5,7 @@
  */
 
 import { createLogger as createDiagnosticLogger } from "@snoai/utils/logger";
-const diagnosticLog = createDiagnosticLogger("mem-claw:strategy-hook-runner");
+const diagnosticLog = createDiagnosticLogger("sno-station-mem:strategy-hook-runner");
 
 import {
 	DEFAULT_REFLECTION_MAX_TRACKED_SESSIONS,

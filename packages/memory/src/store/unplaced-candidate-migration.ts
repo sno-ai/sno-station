@@ -1,3 +1,4 @@
+import { FIXED_EXTERNAL_VALUE_62, PERSISTED_CANDIDATE_HASH_V1 } from "../model/signed-registry-constants";
 /** @file unplaced-candidate-migration.ts
  * @purpose One-time data move: relocate every non-active memory row into
  *   `nodix_unplaced_memory_candidates`. Runs after the drizzle DDL migration and is
@@ -33,7 +34,7 @@ interface LegacyRow {
  * direction.
  */
 function legacyDedupeHash(legacyRowId: string): string {
-	return stableHash(JSON.stringify(["mem-claw:unplaced-candidate:legacy:v1", legacyRowId]));
+	return stableHash(JSON.stringify([PERSISTED_CANDIDATE_HASH_V1, legacyRowId]));
 }
 
 /**
@@ -114,7 +115,7 @@ export function migrateUnplacedCandidates(sqlite: SqliteDatabaseLike): number {
 
 	const moved = move() as number;
 	log.warn("relocated non-active memory rows into the unplaced-candidate table", { moved }, {
-		event_name: "mem_claw.unplaced-candidate-migration.relocated.non.active.memory.rows.into.the.unplaced.candidate.table",
+		event_name: FIXED_EXTERNAL_VALUE_62,
 		file: "apps/mem-claw/src/storage/unplaced-candidate-migration.ts",
 		function: "migrateUnplacedCandidates",
 		site_id: "unplaced-candidate-migration.migrateUnplacedCandidates.c87865ef90",

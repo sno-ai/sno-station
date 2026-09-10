@@ -22,7 +22,7 @@ import { countTokens } from "@snoai/chunking";
 import { createLogger } from "@snoai/utils/logger";
 import { Temporal } from "@js-temporal/polyfill";
 
-const log = createLogger("mem-claw:active-task-shape-alarm");
+const log = createLogger("sno-station-mem:active-task-shape-alarm");
 
 export interface StoreWriteValidationInput {
 	text: string;

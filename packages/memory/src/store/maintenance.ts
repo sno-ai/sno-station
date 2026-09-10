@@ -25,7 +25,7 @@ import { getMemClawStateDir } from "../engine/shared/paths";
 import { recordMemoryTelemetryIncident } from "../engine/telemetry/memory-telemetry-incidents";
 import type { MemoryTelemetryUsageOutbox } from "../engine/telemetry/memory-telemetry-outbox";
 
-const log = createLogger("mem-claw:maintenance");
+const log = createLogger("sno-station-mem:maintenance");
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 

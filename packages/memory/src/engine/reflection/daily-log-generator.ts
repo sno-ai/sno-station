@@ -1,5 +1,5 @@
 import { createLogger as createDiagnosticLogger } from "@snoai/utils/logger";
-const diagnosticLog = createDiagnosticLogger("mem-claw:daily-log-generator");
+const diagnosticLog = createDiagnosticLogger("sno-station-mem:daily-log-generator");
 /** @file daily-log-generator.ts
  * @purpose Runs reflection analysis and writes durable improvement-oriented records.
  * @boundary LLM prompts, reflection stores, retry handling, and learning extraction.

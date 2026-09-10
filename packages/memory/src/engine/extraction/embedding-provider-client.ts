@@ -26,7 +26,7 @@ import {
 import { weightedAverageFloat32 } from "./embedding-vector-aggregation";
 import { EmbeddingError } from "../shared/errors";
 
-const log = createLogger("mem-claw:embed");
+const log = createLogger("sno-station-mem:embed");
 
 export type { EmbeddingConfig, EmbeddingProviderKind };
 

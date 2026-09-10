@@ -1,3 +1,4 @@
+import { FIXED_PROTOCOL_VALUE_74 } from "../../model/signed-registry-constants";
 import { createLogger, privateLogReference } from "@snoai/utils/logger";
 import type { SqliteDatabaseLike, SqliteStatementLike } from "../../store/sqlite-runtime";
 import { recordMemoryTelemetryIncident } from "./memory-telemetry-incidents";
@@ -62,7 +63,7 @@ interface CountRow {
 const DEFAULT_USAGE_OUTBOX_BATCH_SIZE = 50;
 const USAGE_OUTBOX_CLAIM_LEASE_MS = 60_000;
 const activeFlushes = new Map<string, Promise<MemoryTelemetryFlushResult>>();
-const log = createLogger("mem-claw:usage-outbox");
+const log = createLogger("sno-station-mem:usage-outbox");
 
 export class MemoryTelemetryUsageOutbox {
 	private readonly sqlite: SqliteDatabaseLike;
@@ -74,7 +75,7 @@ export class MemoryTelemetryUsageOutbox {
 	constructor(options: MemoryTelemetryUsageOutboxOptions) {
 		this.sqlite = options.sqlite;
 		this.dbPath = options.dbPath;
-		this.agentId = options.agentId ?? "sno-mem-claw";
+		this.agentId = options.agentId ?? FIXED_PROTOCOL_VALUE_74;
 		this.batchSize = options.batchSize ?? DEFAULT_USAGE_OUTBOX_BATCH_SIZE;
 		this.insertUsageStatement = this.sqlite.prepare(
 			`INSERT INTO nodix_memory_usage_outbox

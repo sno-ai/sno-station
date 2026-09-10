@@ -43,7 +43,7 @@ export const REM_TRIGGER_ATTEMPT_LIMIT = 3;
 export const REM_TRIGGER_DISPATCH_TIMEOUT_MS = 10_000;
 
 const REM_COMPLETION_AUDIT_TAIL_BYTES = 16 * 1024 * 1024;
-const log = createLogger("mem-claw:rem-trigger");
+const log = createLogger("sno-station-mem:rem-trigger");
 
 type RemAutomaticTrigger = "daily" | "volume";
 export type RemAutomaticOperation = "rem-replace" | "rem-update";

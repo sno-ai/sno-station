@@ -2,7 +2,7 @@ import { createLogger } from "@snoai/utils/logger";
 import { eld } from "eld/medium";
 import { DEFAULT_LOCALE, isSupportedLocale, type Locale } from "./locales";
 
-const log = createLogger("mem-claw:i18n-detector");
+const log = createLogger("sno-station-mem:i18n-detector");
 
 // Any Han code point — used only as a "is there Chinese here at all" guard.
 const HAS_HAN = /[一-鿿]/u;

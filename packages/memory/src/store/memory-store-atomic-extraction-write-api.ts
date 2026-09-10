@@ -1,3 +1,4 @@
+import { FIXED_PROTOCOL_VALUE_73 } from "../model/signed-registry-constants";
 /** @file memory-store-atomic-extraction-write-api.ts
  * @purpose Appends atomic extraction cards, relations, chunks, and ledger completion together.
  * @boundary Dark atomic-v3 storage door only; no model calls, suppression, or cutover activation.
@@ -104,7 +105,7 @@ async function prepareCards(
 			const metadata = buildMetadata(card);
 			const contentHash = stableHash(
 				JSON.stringify([
-					"mem-claw:atomic-card:v1",
+					FIXED_PROTOCOL_VALUE_73,
 					input.projectId,
 					card.idempotencyKey,
 					card.text,

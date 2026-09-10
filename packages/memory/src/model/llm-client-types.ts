@@ -1,3 +1,4 @@
+import { FIXED_MEMORY_OPENAI_GPT_5_NANO, FIXED_MEMORY_OPENROUTER_AUTO, FIXED_MEMORY_SNO_AI_EXTRACT, FIXED_MEMORY_SNO_CONFLICT_VERDICT, FIXED_MEMORY_SNO_EXTRACT_CHAT, FIXED_MEMORY_SNO_EXTRACT_PROFILE } from "./signed-registry-constants";
 /** @file llm-client-types.ts
  * @purpose Defines provider-neutral LLM client contracts.
  * @boundary Types only; transport and JSON parsing live in sibling modules.
@@ -9,12 +10,12 @@ import type { AgentLlmPort } from "./agent-llm-port";
 import type { LlmRoutingConfig } from "../contract/config/plugin-config-mode-schema";
 
 export const LLM_PRESETS = [
-	"mem_claw/openai_gpt_5_nano",
-	"mem_claw/openrouter_auto",
-	"mem_claw/sno_ai_extract",
-	"mem_claw/sno_extract_chat",
-	"mem_claw/sno_extract_profile",
-	"mem_claw/sno_conflict_verdict",
+	FIXED_MEMORY_OPENAI_GPT_5_NANO as typeof FIXED_MEMORY_OPENAI_GPT_5_NANO,
+	FIXED_MEMORY_OPENROUTER_AUTO as typeof FIXED_MEMORY_OPENROUTER_AUTO,
+	FIXED_MEMORY_SNO_AI_EXTRACT as typeof FIXED_MEMORY_SNO_AI_EXTRACT,
+	FIXED_MEMORY_SNO_EXTRACT_CHAT as typeof FIXED_MEMORY_SNO_EXTRACT_CHAT,
+	FIXED_MEMORY_SNO_EXTRACT_PROFILE as typeof FIXED_MEMORY_SNO_EXTRACT_PROFILE,
+	FIXED_MEMORY_SNO_CONFLICT_VERDICT as typeof FIXED_MEMORY_SNO_CONFLICT_VERDICT,
 ] as const;
 
 export type LlmPreset = (typeof LLM_PRESETS)[number];

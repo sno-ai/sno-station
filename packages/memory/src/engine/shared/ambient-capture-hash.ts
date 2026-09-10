@@ -36,7 +36,7 @@ export function buildAmbientCaptureHashInput(
 	metadata: AmbientCaptureHashMetadata,
 ): string {
 	return JSON.stringify([
-		"mem-claw:ambient-chunk:v1",
+		"sno-station-mem:ambient-chunk:v1",
 		text,
 		normalizeAmbientCaptureHashMetadata(metadata),
 	]);

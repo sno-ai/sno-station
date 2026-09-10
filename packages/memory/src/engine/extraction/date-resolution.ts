@@ -11,7 +11,7 @@ import { readModelReplyJson } from "../shared/model-reply-text";
 import type { LlmRoutingConfig } from "../../contract/config/plugin-config-mode-schema";
 import { createLogger } from "@snoai/utils/logger";
 
-const log = createLogger("mem-claw:date-resolution");
+const log = createLogger("sno-station-mem:date-resolution");
 
 type KnownValues = Partial<Record<Component, number>>;
 type ChronoParser = { parse(text: string, reference?: ParsingReference): ParsedResult[] };

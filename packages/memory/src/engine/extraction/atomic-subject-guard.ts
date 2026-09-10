@@ -34,7 +34,7 @@ import {
 import { isTerminalLlmFailure, type LlmClient } from "../../model/llm-client";
 import { DEFAULT_LOCALE, type Locale } from "../i18n/locales";
 
-const log = createLogger("mem-claw:atomic-subject-guard");
+const log = createLogger("sno-station-mem:atomic-subject-guard");
 
 const guardReplySchema = z
 	.object({

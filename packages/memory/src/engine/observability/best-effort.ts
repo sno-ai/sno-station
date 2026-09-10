@@ -5,7 +5,7 @@
 
 import { createLogger } from "@snoai/utils/logger";
 
-const log = createLogger("mem-claw:best-effort");
+const log = createLogger("sno-station-mem:best-effort");
 
 export type ObserveLogger = {
 	warn(message: string): void;

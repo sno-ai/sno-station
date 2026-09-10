@@ -144,7 +144,7 @@ export function stableHash(text: string): string {
  */
 export function debugContentPreview(text: string | undefined, maxChars = 80): string | undefined {
 	// Guard this branch early so the remaining module behavior path works with normalized inputs.
-	if (process.env.MEM_CLAW_DEBUG_CONTENT !== "1") return undefined;
+	if (process.env.SNO_STATION_MEM_DEBUG_CONTENT !== "1") return undefined;
 	if (!text) return undefined;
 	const collapsed = redactSecrets(text).replace(/\s+/g, " ").trim();
 	if (collapsed.length === 0) return undefined;

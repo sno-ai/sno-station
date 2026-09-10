@@ -1,3 +1,4 @@
+import { FIXED_PROTOCOL_VALUE_77 } from "../../model/signed-registry-constants";
 /** @file provider-row-renderer.ts
  * @purpose Renders stored row memories as deterministic provider files.
  * @boundary Pure presentation only; authorization belongs to provider-search-manager.ts.
@@ -40,7 +41,7 @@ export function providerRowPath(id: string): string {
 	if (!isProviderRowId(id)) {
 		throw new Error("Provider row id must be a lowercase UUID");
 	}
-	return `mem-claw/${id}.md`;
+	return `${FIXED_PROTOCOL_VALUE_77}${id}.md`;
 }
 
 export function renderProviderRowMemory(entry: MemoryEntry): string {

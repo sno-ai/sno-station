@@ -1,5 +1,5 @@
 import { createLogger as createDiagnosticLogger, privateLogReference } from "@snoai/utils/logger";
-const diagnosticLog = createDiagnosticLogger("mem-claw:session-serial-guard");
+const diagnosticLog = createDiagnosticLogger("sno-station-mem:session-serial-guard");
 /** @file session-serial-guard.ts
  * @purpose Serializes reflection runs per session via in-flight lock + post-completion debounce.
  * @boundary Reflection hook entry - called once per command:new / command:reset.

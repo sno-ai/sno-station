@@ -1,3 +1,4 @@
+import { FIXED_MEMORY_SNO_EXTRACT_CHAT, FIXED_MEMORY_SNO_EXTRACT_PROFILE } from "../../model/signed-registry-constants";
 /** @file atomic-memory-extraction.ts
  * @purpose Runs the complete dark atomic extraction path through its one storage door.
  * @boundary Product entrypoint; callers supply chunk identity, routing snapshot, and idempotency.
@@ -176,7 +177,7 @@ interface AtomicInsightDistillerConfig {
 	locale?: Locale;
 }
 
-const log = createLogger("mem-claw:atomic-extraction-windows");
+const log = createLogger("sno-station-mem:atomic-extraction-windows");
 interface WindowDiagnostics {
 	proposed: number;
 	parseRejected: number;
@@ -601,11 +602,11 @@ export function createSignedAtomicMemoryExtractionTransports(
 	const usesAgentTier = !("off" in chatRoute) && chatRoute.tier === "agent";
 	const chat = createLlmClient({
 		...config,
-		preset: usesAgentTier ? config.preset : "mem_claw/sno_extract_chat",
+		preset: usesAgentTier ? config.preset : FIXED_MEMORY_SNO_EXTRACT_CHAT,
 	});
 	const profile = createLlmClient({
 		...config,
-		preset: usesAgentTier ? config.preset : "mem_claw/sno_extract_profile",
+		preset: usesAgentTier ? config.preset : FIXED_MEMORY_SNO_EXTRACT_PROFILE,
 	});
 	return {
 		generic: createAtomicGenericExtractionTransport(chat),

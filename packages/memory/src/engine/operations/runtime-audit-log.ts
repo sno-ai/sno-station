@@ -306,7 +306,7 @@ function enqueueAuditWrite(auditPath: string, line: string): Promise<void> {
 			await appendFile(auditPath, line);
 		});
 	const next = write.catch((error) => {
-			createLogger("mem-claw:audit").warn("Audit entry append failed", { error }, {
+			createLogger("sno-station-mem:audit").warn("Audit entry append failed", { error }, {
 				event_name: "memory.audit.append.failed",
 				file: "apps/mem-claw/src/operations/runtime-audit-log.ts",
 				function: "enqueueAuditWrite", site_id: "memory.audit.append.failed",

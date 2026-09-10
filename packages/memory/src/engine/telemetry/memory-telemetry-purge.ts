@@ -1,3 +1,4 @@
+import { FIXED_PROTOCOL_VALUE_74 } from "../../model/signed-registry-constants";
 import {
 	getMemClawStateDir,
 	runWithMemoryAuditSync,
@@ -101,7 +102,7 @@ export function createMemoryTelemetryPurgeService(
 ): MemoryTelemetryPurgeService {
 	return new DefaultMemoryTelemetryPurgeService(
 		options.sqlite,
-		options.agentId ?? "sno-mem-claw",
+		options.agentId ?? FIXED_PROTOCOL_VALUE_74,
 		options.canDeleteFact ?? (() => true),
 	);
 }

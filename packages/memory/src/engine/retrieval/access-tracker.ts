@@ -16,7 +16,7 @@ import { DEFAULT_RECALL_LIFECYCLE, type RecallLifecycleConfig } from "../../../c
 import type { MemoryMetadata } from "../shared/types";
 import type { MemoryStore } from "../../store/store";
 
-const log = createLogger("mem-claw:access-tracker");
+const log = createLogger("sno-station-mem:access-tracker");
 
 // Types
 
