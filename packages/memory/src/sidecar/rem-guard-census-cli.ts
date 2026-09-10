@@ -21,7 +21,7 @@ if (writers.writers.length !== 7) {
 const guards = validateRemGuardCensus({
 	manifestPath: path.join(appRoot, "config/rem/guard-manifest.json"),
 	requiredGuardsPath: path.join(appRoot, "config/rem/required-guards.json"),
-	sourceRoots: [path.join(appRoot, "src"), path.join(repoRoot, "packages/rem-core/src")],
+	sourceRoots: [path.join(appRoot, "src"), path.join(appRoot, "src/engine/rem")],
 	productionRoots: [sourceEntry],
 });
 if (guards.decision === "refuse") {

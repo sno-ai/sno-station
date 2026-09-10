@@ -1,6 +1,6 @@
 # Sno Station Mem HTTP contract
 
-Contract revision: 1. Producer requirements version: 4.5.
+Contract revision: 1. Producer requirements version: 4.7.
 
 The authoritative runtime schemas are `inputSchemas` and `outputSchemas`, exported by
 `contract/index.ts`. `contractJsonSchemas(method)` publishes the corresponding JSON schemas.
@@ -18,8 +18,9 @@ The skin identifier in an initialization payload must match its request header.
 All request and response bodies are JSON. Unknown fields in contract objects are refused.
 
 `scope` requires nonblank `principal`, `project`, and `session` strings. Its optional `host`
-object accepts only `agentId`, `sessionKey`, `sessionId`, `sessionTimezone`, and `workspace`
-strings. Unknown host fields are refused. The client obtains the principal from the operating-system user name.
+object accepts only `agentId`, `sessionKey`, `sessionId`, `sessionTimezone`, `workspace`, `sessionFile`, `boundary`, `at`, and `systemCaller`.
+The first six are strings; `boundary` is new/reset/session-end, `at` is an epoch timestamp,
+and `systemCaller` is a boolean derived from the existing host operator-admin scope. Unknown host fields are refused. The client obtains the principal from the operating-system user name.
 The server refuses another principal before engine or store access. No scope field is defaulted.
 
 `project` is the existing logical workspace key or `agent:<id>` key. The sidecar resolves its
@@ -47,7 +48,7 @@ records the first development-machine measurement and phase E rechecks the deplo
 | Route | Input fields beside scope | Successful result fields beside degraded:false | Timeout (ms) |
 |---|---|---|---|
 | `/v1/init` | registration | principal, skinId | 30000 |
-| `/v1/get-recall` | query, options | recallId, contextText, hits | 120000 |
+| `/v1/get-recall` | query, options | recallId, contextText; optional hits, memoryIds, toolResult, nativeHits, unavailable | 120000 |
 | `/v1/capture` | turn | turnId, committed | 900000 |
 | `/v1/mutate` | op | result: ToolResponse | 900000 |
 | `/v1/inspect` | op | result: InspectData | 30000 |
@@ -72,7 +73,7 @@ a timed-out mutation; use its normal read path to establish the durable state.
 
 ## Request shapes
 
-- `registration`: `{skinId, routing, model?}`. `routing` uses the existing routing schema,
+- `registration`: `{skinId, routing, settings, model?}`. `routing` uses the existing routing schema,
   including `mode`, `remEnhanced.occasions`, `agentNative.flavor` and `language`. `model`, when
   supplied, is `{baseUrl, credential, model}`. Each initialization replaces only the calling
   skin's registration. Credentials are held in memory and never logged.
@@ -80,7 +81,7 @@ a timed-out mutation; use its normal read path to establish the durable state.
   stable across retries. The epoch is a nonnegative integer. Each message has
   `{role, content, at}`; role is system/developer/user/assistant/tool, content is JSON, and at
   is a nonnegative finite epoch timestamp in milliseconds.
-- Recall `options`: optional source (auto/manual), limit, minScore, category, includeMetadata,
+- Recall `options`: optional source (auto/manual/native), limit, minScore, category, includeMetadata,
   includeHistory, includeRefused, tokenBudget, externalReference, externalReferenceVisibility,
   and aggregation `{operation, terms}`. The options object itself is required. An empty object
   selects the existing retriever defaults. Aggregation operations remain count/first/last/evidence.
@@ -95,7 +96,7 @@ a timed-out mutation; use its normal read path to establish the durable state.
 | clear | confirm; optional all; all-project clearing retains its existing system-authority check |
 | resolveReflection | exactly one memoryId/query; optional dryRun, note, limit |
 
-- `inspect.op`: stats has no additional field; list permits category/limit/offset/importanceMin;
+- `inspect.op`: stats accepts an optional scope; an omitted scope requires systemCaller and returns principal-wide statistics; list permits category/limit/offset/importanceMin;
   get requires exactly one id/path and permits from/lines for a file excerpt; listReflection
   permits limit/unresolvedOnly. These reads never enter the recall cache.
 - Usage `signal`: `{event, memoryIds, at, toolName?, text?}`, where event is
@@ -123,7 +124,7 @@ Every method result contains `degraded:boolean`. A degraded result must contain 
 |---|---|---|
 | 400 | invalid-input | malformed JSON, schema failure or missing skin identity |
 | 401 | unauthorized | missing or incorrect token; body not read |
-| 403 | principal-mismatch | foreign principal refused before access |
+| 403 | principal-mismatch / system-caller-required | foreign principal or missing operator authority refused before access |
 | 404 | not_found | unknown path or unknown existing REM job |
 | 409 | store-mismatch | caller path differs from the install binding |
 | 413 | payload_too_large | request exceeds server body limit |
@@ -133,7 +134,7 @@ Every method result contains `degraded:boolean`. A degraded result must contain 
 
 Closed degraded reasons: sidecar-unreachable, sidecar-unresponsive, principal-mismatch,
 store-mismatch, no-agent-endpoint, invalid-input, timeout, storage-unavailable, engine-failed,
-paused. The client never opens a store or queues a write when the daemon fails.
+paused, system-caller-required. The client never opens a store or queues a write when the daemon fails.
 
 ## State and reserved environment names
 
