@@ -9,7 +9,7 @@ import {
 	readSessionMessages,
 	readSessionContentWithResetFallback,
 	sortFileNamesByMtimeDesc,
-} from "../../../../apps/mem-claw/src/operations/session-summary-storage.ts";
+} from "../../../../packages/sno-station-mem/src/engine/operations/session-summary-storage.ts";
 
 /**
  * mtime-based session file sorting — integration tests.
