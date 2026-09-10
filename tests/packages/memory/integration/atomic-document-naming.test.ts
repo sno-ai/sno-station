@@ -4,12 +4,12 @@
  */
 
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
-import type { Embedder } from "@/extraction/embedding-provider-client";
+import type { Embedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client";
 import {
 	AtomicInsightDistiller,
 	type AtomicMemoryExtractionTransports,
-} from "@/extraction/atomic-memory-extraction";
-import { MemoryStore } from "@/storage/store";
+} from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-memory-extraction";
+import { MemoryStore } from "../../../../packages/sno-station-mem/src/store/store";
 import { createTestDb, createTestEmbedder, type TestDb } from "../helpers/test-db";
 
 const PROJECT_ID = "atomic-document-naming";

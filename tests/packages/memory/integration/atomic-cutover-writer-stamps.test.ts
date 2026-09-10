@@ -7,9 +7,9 @@ import { globSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
-import type { Embedder } from "@/extraction/embedding-provider-client";
-import { applyAtomicMemoryCutoverMigration } from "@/storage/atomic-memory-cutover-sql";
-import { MemoryStore } from "@/storage/store";
+import type { Embedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client";
+import { applyAtomicMemoryCutoverMigration } from "../../../../packages/sno-station-mem/src/store/atomic-memory-cutover-sql";
+import { MemoryStore } from "../../../../packages/sno-station-mem/src/store/store";
 import { createTestDb, createTestEmbedder, type TestDb } from "../helpers/test-db";
 
 interface AtomicStampRow {
