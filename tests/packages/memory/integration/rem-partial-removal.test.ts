@@ -11,11 +11,11 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
 	createRemModelStageResponsePort,
 	runRemBatchJob,
-} from "../../../../apps/mem-claw/src/sidecar/rem-batch-executor.ts";
-import { parseRemOperationalConfiguration } from "../../../../packages/rem-core/src/index.ts";
-import { createRemOwnerDecidedOperationalConfiguration } from "../helpers/rem-entry-config-fixture.ts";
-import { seedProductionMemory } from "../helpers/rem-production-entry-fixture.ts";
-import { createTestDb, type TestDb } from "../helpers/test-db.ts";
+} from "../../../../packages/sno-station-mem/src/sidecar/rem-batch-executor.ts";
+import { parseRemOperationalConfiguration } from "../../../../packages/sno-station-mem/src/engine/rem/index.ts";
+import { createRemOwnerDecidedOperationalConfiguration } from "../../../apps/mem-claw/helpers/rem-entry-config-fixture.ts";
+import { seedProductionMemory } from "../../../apps/mem-claw/helpers/rem-production-entry-fixture.ts";
+import { createTestDb, type TestDb } from "../../../apps/mem-claw/helpers/test-db.ts";
 
 // Measured 2026-09-04, content_writer session 30 then session 80: the store holds the first row
 // live and untouched after the second is stated, and the answer lists both directors as current.
@@ -26,8 +26,8 @@ const REWRITTEN =
 	"The recipients of the email to introduce optimized content workflow strategies are Creative Directors.";
 
 const priorEnvironment = {
-	MEM_CLAW_DATA_DIR_ROOT: process.env["MEM_CLAW_DATA_DIR_ROOT"],
-	MEM_CLAW_REM_EXPECTED_DB_PATH: process.env["MEM_CLAW_REM_EXPECTED_DB_PATH"],
+	SNO_STATION_MEM_DATA_DIR_ROOT: process.env["SNO_STATION_MEM_DATA_DIR_ROOT"],
+	SNO_STATION_MEM_REM_EXPECTED_DB_PATH: process.env["SNO_STATION_MEM_REM_EXPECTED_DB_PATH"],
 	OPENCLAW_STATE_DIR: process.env["OPENCLAW_STATE_DIR"],
 };
 const cleanups: Array<() => void> = [];
@@ -123,8 +123,8 @@ function prepareBatchFixture(scope: string): TestDb {
 		}),
 		"utf8",
 	);
-	process.env["MEM_CLAW_DATA_DIR_ROOT"] = dirname(fixture.dbPath);
-	process.env["MEM_CLAW_REM_EXPECTED_DB_PATH"] = fixture.dbPath;
+	process.env["SNO_STATION_MEM_DATA_DIR_ROOT"] = dirname(fixture.dbPath);
+	process.env["SNO_STATION_MEM_REM_EXPECTED_DB_PATH"] = fixture.dbPath;
 	process.env["OPENCLAW_STATE_DIR"] = stateRoot;
 	cleanups.push(() => {
 		fixture.cleanup();
