@@ -14,8 +14,8 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { openSqliteDatabase, type SqliteRuntimeHandle } from "../../../../apps/mem-claw/src/storage/sqlite-runtime.ts";
-import { createTestDb } from "../helpers/test-db.ts";
+import { openSqliteDatabase, type SqliteRuntimeHandle } from "../../../../packages/sno-station-mem/src/store/sqlite-runtime.ts";
+import { createTestDb } from "../../../apps/mem-claw/helpers/test-db.ts";
 
 describe("chokepoint prepared-statement cache", () => {
 	let dbPath: string;

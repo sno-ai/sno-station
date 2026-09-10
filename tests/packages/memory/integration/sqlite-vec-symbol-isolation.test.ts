@@ -19,7 +19,7 @@ import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 import { afterEach, describe, expect, it } from "vitest";
 import { getLoadablePath } from "sqlite-vec";
-import { resolveSqliteVecPath } from "@/storage/sqlite-vec-path";
+import { resolveSqliteVecPath } from "../../../../packages/sno-station-mem/src/store/sqlite-vec-path";
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../../..");
 const BUNDLED_VEC = resolve(
@@ -60,7 +60,7 @@ describe("sqlite-vec symbol isolation", () => {
 					: [];
 			},
 		);
-		expect(sqliteVecImports).toEqual(["apps/mem-claw/src/storage/sqlite-vec-path.ts"]);
+		expect(sqliteVecImports).toEqual(["packages/sno-station-mem/src/store/sqlite-vec-path.ts"]);
 	});
 
 	it("exports only sqlite3_vec_init", () => {
