@@ -11,12 +11,12 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
 	createRemModelStageResponsePort,
 	runRemBatchJob,
-} from "../../../../apps/mem-claw/src/sidecar/rem-batch-executor.ts";
-import { REM_UPDATE_JUDGMENT_SKILL } from "../../../../apps/mem-claw/src/sidecar/rem-update-judgment-skill.ts";
-import { parseRemOperationalConfiguration } from "../../../../packages/rem-core/src/index.ts";
-import { createRemOwnerDecidedOperationalConfiguration } from "../helpers/rem-entry-config-fixture.ts";
-import { seedProductionMemory } from "../helpers/rem-production-entry-fixture.ts";
-import { createTestDb, type TestDb } from "../helpers/test-db.ts";
+} from "../../../../packages/sno-station-mem/src/sidecar/rem-batch-executor.ts";
+import { REM_UPDATE_JUDGMENT_SKILL } from "../../../../packages/sno-station-mem/src/sidecar/rem-update-judgment-skill.ts";
+import { parseRemOperationalConfiguration } from "../../../../packages/sno-station-mem/src/engine/rem/index.ts";
+import { createRemOwnerDecidedOperationalConfiguration } from "../../../apps/mem-claw/helpers/rem-entry-config-fixture.ts";
+import { seedProductionMemory } from "../../../apps/mem-claw/helpers/rem-production-entry-fixture.ts";
+import { createTestDb, type TestDb } from "../../../apps/mem-claw/helpers/test-db.ts";
 
 // The two texts are the real corpus rows measured 2026-09-04 in the content_writer store.
 const OUTDATED_FACT = "The user enjoys books that delve into war and conflict.";
@@ -25,18 +25,18 @@ const OUTDATED_ROW_ID = "rem-retirement-outdated-war-and-conflict";
 const RETIREMENT_ROW_ID = "rem-retirement-sentence-war-and-conflict";
 
 const priorEnvironment = {
-	MEM_CLAW_DATA_DIR_ROOT: process.env["MEM_CLAW_DATA_DIR_ROOT"],
-	MEM_CLAW_REM_EXPECTED_DB_PATH: process.env["MEM_CLAW_REM_EXPECTED_DB_PATH"],
+	SNO_STATION_MEM_DATA_DIR_ROOT: process.env["SNO_STATION_MEM_DATA_DIR_ROOT"],
+	SNO_STATION_MEM_REM_EXPECTED_DB_PATH: process.env["SNO_STATION_MEM_REM_EXPECTED_DB_PATH"],
 	OPENCLAW_STATE_DIR: process.env["OPENCLAW_STATE_DIR"],
 };
 const cleanups: Array<() => void> = [];
 
 afterEach(() => {
 	for (const cleanup of cleanups.splice(0).reverse()) cleanup();
-	restoreEnvironment("MEM_CLAW_DATA_DIR_ROOT", priorEnvironment.MEM_CLAW_DATA_DIR_ROOT);
+	restoreEnvironment("SNO_STATION_MEM_DATA_DIR_ROOT", priorEnvironment.SNO_STATION_MEM_DATA_DIR_ROOT);
 	restoreEnvironment(
-		"MEM_CLAW_REM_EXPECTED_DB_PATH",
-		priorEnvironment.MEM_CLAW_REM_EXPECTED_DB_PATH,
+		"SNO_STATION_MEM_REM_EXPECTED_DB_PATH",
+		priorEnvironment.SNO_STATION_MEM_REM_EXPECTED_DB_PATH,
 	);
 	restoreEnvironment("OPENCLAW_STATE_DIR", priorEnvironment.OPENCLAW_STATE_DIR);
 });
@@ -128,13 +128,13 @@ describe("a retirement sentence nominates the row it retires", () => {
 			const engineSources = [
 				readFileSync(
 					new URL(
-						"../../../../apps/mem-claw/src/sidecar/rem-batch-executor.ts",
+						"../../../../packages/sno-station-mem/src/sidecar/rem-batch-executor.ts",
 						import.meta.url,
 					),
 					"utf8",
 				),
 				readFileSync(
-					new URL("../../../../packages/rem-core/src/rem-update-judgment.ts", import.meta.url),
+					new URL("../../../../packages/sno-station-mem/src/engine/rem/rem-update-judgment.ts", import.meta.url),
 					"utf8",
 				),
 			].join("\n");
@@ -347,7 +347,7 @@ describe("a retirement sentence nominates the row it retires", () => {
 		// The router keeps its coarse patterns and gains nothing about targets: it may nominate a row
 		// for judgement, and it may not name what that row retires.
 		const classifier = readFileSync(
-			new URL("../../../../packages/rem-core/src/classifier.ts", import.meta.url),
+			new URL("../../../../packages/sno-station-mem/src/engine/rem/classifier.ts", import.meta.url),
 			"utf8",
 		);
 		for (const targetVocabulary of ["target_row_id", "retirementTarget", "retirement-target"]) {
@@ -403,8 +403,8 @@ function prepareBatchFixture(scope: string): TestDb {
 		}),
 		"utf8",
 	);
-	process.env["MEM_CLAW_DATA_DIR_ROOT"] = dirname(fixture.dbPath);
-	process.env["MEM_CLAW_REM_EXPECTED_DB_PATH"] = fixture.dbPath;
+	process.env["SNO_STATION_MEM_DATA_DIR_ROOT"] = dirname(fixture.dbPath);
+	process.env["SNO_STATION_MEM_REM_EXPECTED_DB_PATH"] = fixture.dbPath;
 	process.env["OPENCLAW_STATE_DIR"] = stateRoot;
 	cleanups.push(() => {
 		fixture.cleanup();

@@ -19,18 +19,18 @@ import { createServer, type Server } from "node:http";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { activateKillSwitch } from "../../../../apps/mem-claw/src/operations/runtime-audit-log.ts";
+import { activateKillSwitch } from "../../../../packages/sno-station-mem/src/engine/operations/runtime-audit-log.ts";
 import {
 	computeRemDailyDue,
 	evaluateRemAutomaticTriggers,
 	remAutomaticCorrelationId,
 	readRemAutomaticOperations,
-} from "../../../../apps/mem-claw/src/sidecar/rem-trigger.ts";
+} from "../../../../packages/sno-station-mem/src/sidecar/rem-trigger.ts";
 import {
 	loadRemTriggerState,
 	writeRemTriggerStateAtomic,
-} from "../../../../apps/mem-claw/src/sidecar/rem-trigger-state.ts";
-import { createTestDb, type TestDb } from "../helpers/test-db.ts";
+} from "../../../../packages/sno-station-mem/src/sidecar/rem-trigger-state.ts";
+import { createTestDb, type TestDb } from "../../../apps/mem-claw/helpers/test-db.ts";
 
 type AuditRow = {
 	event: string;
