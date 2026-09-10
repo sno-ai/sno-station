@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 const fixtureDir = resolve(
-	fileURLToPath(new URL("../fixtures", import.meta.url)),
+	fileURLToPath(new URL("../../../apps/mem-claw/fixtures", import.meta.url)),
 );
 
 const oldCategoryValues = new Set(["identity", "preference", "entity", "event"]);
