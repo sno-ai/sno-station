@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { SUPPORTED_LOCALES } from "../../../../apps/mem-claw/src/i18n/locales.ts";
-import { t } from "../../../../apps/mem-claw/src/i18n/registry.ts";
-import { ALL_NAMESPACES } from "../../../../apps/mem-claw/src/i18n/res/_types.ts";
+import { SUPPORTED_LOCALES } from "../../../../packages/sno-station-mem/src/engine/i18n/locales.ts";
+import { t } from "../../../../packages/sno-station-mem/src/engine/i18n/registry.ts";
+import { ALL_NAMESPACES } from "../../../../packages/sno-station-mem/src/engine/i18n/res/_types.ts";
 
 /**
  * Parity gate for C3 wire-up. Every supported locale MUST expose the same

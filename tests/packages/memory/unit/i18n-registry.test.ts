@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { combineAlt } from "../../../../apps/mem-claw/src/i18n/registry.ts";
+import { combineAlt } from "../../../../packages/sno-station-mem/src/engine/i18n/registry.ts";
 
 describe("i18n registry — combineAlt", () => {
 	it("returns single regex unchanged", () => {
