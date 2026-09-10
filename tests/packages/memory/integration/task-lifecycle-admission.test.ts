@@ -10,10 +10,10 @@ import {
 	buildTaskLifecycleCommandClaim,
 	type TaskLifecycleAssertionDraft,
 	TaskLifecycleCommandMismatchError,
-} from "@/extraction/task-lifecycle-assertion";
-import type { Embedder } from "@/extraction/embedding-provider-client";
-import { MemoryStore, TaskLifecycleTimestampCollisionError } from "@/storage/store";
-import { createTestDb, createTestEmbedder, type TestDb } from "../helpers/test-db.ts";
+} from "../../../../packages/sno-station-mem/src/engine/extraction/task-lifecycle-assertion";
+import type { Embedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client";
+import { MemoryStore, TaskLifecycleTimestampCollisionError } from "../../../../packages/sno-station-mem/src/store/store";
+import { createTestDb, createTestEmbedder, type TestDb } from "../../../apps/mem-claw/helpers/test-db.ts";
 
 const baseDraft: TaskLifecycleAssertionDraft = {
 	kind: "task_lifecycle",
