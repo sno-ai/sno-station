@@ -25,8 +25,10 @@ and `systemCaller` is a boolean derived from the existing host operator-admin sc
 The server refuses another principal before engine or store access. No scope field is defaulted.
 
 `project` is the existing logical workspace key or `agent:<id>` key. The sidecar resolves its
-persisted mapping on every verb call and applies the same resolved project to all reads and
-writes of that call. Initialization does not return a substituted scope. Host identities and
+persisted mapping on every verb call and writes to that resolved project. Optional `readable`
+lists further logical scopes the call may read (the skin sends the agent's accessible set when
+the caller named no scope); the sidecar refuses any `project` or `readable` entry its installed
+scope policy does not grant the calling agent, and reads span the admitted set. Initialization does not return a substituted scope. Host identities and
 workspace facts are explicit fields; they are never encoded into project/session/skin strings.
 
 Registration requires `skinId`, authoritative `routing`, and `settings`. Settings retain the
