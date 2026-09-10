@@ -10,10 +10,10 @@
  */
 
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import type { Embedder } from "@/extraction/embedding-provider-client";
-import { cleanStore } from "@/storage/store-cleanup-cli";
-import { MemoryStore } from "@/storage/store";
-import { createTestDb, createTestEmbedder } from "../helpers/test-db.ts";
+import type { Embedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client";
+import { cleanStore } from "../../../../packages/sno-station-mem/src/store/store-cleanup-cli";
+import { MemoryStore } from "../../../../packages/sno-station-mem/src/store/store";
+import { createTestDb, createTestEmbedder } from "../../../apps/mem-claw/helpers/test-db.ts";
 
 let testEmbedder: Embedder;
 const SCOPE = "global";

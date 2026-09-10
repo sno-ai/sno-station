@@ -4,16 +4,16 @@ import { createHash } from "node:crypto";
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
-import type { Embedder } from "../../../../apps/mem-claw/src/extraction/embedding-provider-client.ts";
+import type { Embedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client.ts";
 import {
 	activateKillSwitch,
 	flushAuditWrites,
 	getAuditPath,
 	readKillSwitchState,
-} from "../../../../apps/mem-claw/src/operations/runtime-audit-log.ts";
-import { runMaintenancePass } from "../../../../apps/mem-claw/src/storage/maintenance.ts";
-import { MemoryStore } from "../../../../apps/mem-claw/src/storage/store.ts";
-import { createTestDb, createTestEmbedder } from "../helpers/test-db.ts";
+} from "../../../../packages/sno-station-mem/src/engine/operations/runtime-audit-log.ts";
+import { runMaintenancePass } from "../../../../packages/sno-station-mem/src/store/maintenance.ts";
+import { MemoryStore } from "../../../../packages/sno-station-mem/src/store/store.ts";
+import { createTestDb, createTestEmbedder } from "../../../apps/mem-claw/helpers/test-db.ts";
 
 let testEmbedder: Embedder;
 
