@@ -34,7 +34,7 @@ it("preserves every setting the retained REM runtime reads without persisting ei
 	expect(bytes).not.toContain("zebra-rerank-private-marker");
 	const before = pluginConfigSchema.parse(original);
 	const after = pluginConfigSchema.parse(readSnoStationMemConfig(getInstallationConfigPath()).plugins?.entries?.[PLUGIN_ENTRY_KEY]?.config);
-	for (const field of ["dbPath", "embedding", "retrieval", "memoryTelemetry", "autoRecallTimeoutMs"] as const) {
+	for (const field of ["mode", "dbPath", "embedding", "retrieval", "memoryTelemetry", "autoRecallTimeoutMs"] as const) {
 		expect(after[field], field).toEqual(before[field]);
 	}
 	expect(after.extraction.llm.apiKey === before.extraction.llm.apiKey).toBe(true);
