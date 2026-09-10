@@ -1,4 +1,4 @@
-import { FIXED_PROTOCOL_VALUE_69 } from "./signed-registry-constants";
+import { FIXED_PROTOCOL_VALUE_69, FIXED_EXTRACTION_KEY_NAME } from "./signed-registry-constants";
 /** @file llm-provider-transport.ts
  * @purpose Sends OpenAI-compatible chat requests with retries and provider routing.
  * @boundary HTTP transport, base URL resolution, key rotation, and retry behavior.
@@ -74,7 +74,7 @@ async function observeRequest<T>(
 				server_queue_ms: "unavailable", server_service_ms: "unavailable",
 				finish_reason: diagnostic.finishReason ?? "unavailable",
 				usage: diagnostic.usage ? { source: diagnostic.usage.estimated ? "estimated" : "provider_reported", ...diagnostic.usage } : { source: "unavailable" },
-			}, { event_name: "llm.request.completed", file: "apps/mem-claw/src/shared/llm-provider-transport.ts", function: "observeRequest", site_id: "llm.transport.request.completed" });
+			}, { event_name: "llm.request.completed", file: "packages/sno-station-mem/src/model/llm-provider-transport.ts", function: "observeRequest", site_id: "llm.transport.request.completed" });
 		}
 	});
 }
@@ -136,7 +136,7 @@ function requestAbortSignal(timeoutMs: number, callerSignal: unknown): RequestAb
 	};
 }
 
-const PROVIDER_TERMINAL_ERROR_PREFIX = "mem-claw provider terminal";
+const PROVIDER_TERMINAL_ERROR_PREFIX = "sno-station-mem provider terminal";
 
 export type ProviderTerminalCategory = "cancelled" | "timeout" | "auth";
 
@@ -415,15 +415,15 @@ function isCcproxyOpenAiBaseUrl(value: string | undefined): boolean {
 	}
 }
 
-async function clawDispatch(ctx: LlmixDispatchContext): Promise<ProviderResult> {
+async function snoStationMemDispatch(ctx: LlmixDispatchContext): Promise<ProviderResult> {
 	const cfgExt = ctx.config as DispatchContext["config"];
 	const provider = ctx.provider;
 	if (provider !== "openai" && provider !== "openrouter" && provider !== "sno-gpu") {
-		throw new Error(`mem-claw llm-client: unsupported provider "${provider}"`);
+		throw new Error(`sno-station-mem llm-client: unsupported provider "${provider}"`);
 	}
 	const endpointUrl = cfgExt.endpointUrl;
 	if (typeof endpointUrl !== "string") {
-		throw new Error("mem-claw llm-client: resolved endpointUrl is required");
+		throw new Error("sno-station-mem llm-client: resolved endpointUrl is required");
 	}
 	const timeoutMs = (cfgExt.timeoutMs as number | undefined) ?? 30_000;
 	const callBody = buildCallBody(ctx.kwargs, provider);
@@ -569,14 +569,14 @@ export function createApiKeySelector(apiKeys: string): () => string {
 		.filter((key) => key.length > 0);
 
 	if (keys.length === 0) {
-		throw new Error("mem-claw llm-client: apiKey must contain at least one non-empty key");
+		throw new Error("sno-station-mem llm-client: apiKey must contain at least one non-empty key");
 	}
 
 	let nextIndex = 0;
 	return () => {
 		const key = keys[nextIndex];
 		if (key === undefined) {
-			throw new Error("mem-claw llm-client: failed to select apiKey");
+			throw new Error("sno-station-mem llm-client: failed to select apiKey");
 		}
 		nextIndex = (nextIndex + 1) % keys.length;
 		return key;
@@ -593,7 +593,7 @@ export async function callProvider(ctx: LlmixDispatchContext): Promise<LocalCall
 			typeof raw.prompt !== "string" ||
 			typeof raw.timeoutMs !== "number"
 		) {
-			throw new Error("mem-claw llm-client: invalid raw profile completion config");
+			throw new Error("sno-station-mem llm-client: invalid raw profile completion config");
 		}
 		return {
 			...(await callSnoProfileCompletion({
@@ -618,7 +618,7 @@ export async function callProvider(ctx: LlmixDispatchContext): Promise<LocalCall
 		};
 	}
 	return {
-		...(await clawDispatch(ctx)),
+		...(await snoStationMemDispatch(ctx)),
 		success: true,
 	};
 }
@@ -631,7 +631,7 @@ function resolveEnvApiKey(
 	if (provider === "sno-gpu") {
 		return userBaseUrlOverride
 			? process.env.SNO_STATION_MEM_LLM_API_KEY
-			: (process.env.SNO_STATION_MEM_LLM_API_KEY ?? process.env.SNO_MEM_CLAW_LLM_INTERNAL_KEY);
+			: (process.env.SNO_STATION_MEM_LLM_API_KEY ?? process.env[FIXED_EXTRACTION_KEY_NAME]);
 	}
 	if (provider === "openrouter") return process.env.SNO_STATION_MEM_OPENROUTER_API_KEY;
 	return undefined;
@@ -653,7 +653,7 @@ export function resolveProviderApiKey(
 	if (envKey?.trim()) return envKey;
 	const hint =
 		resolved.provider === "sno-gpu" && userBaseUrlOverride
-			? "set extraction.llm.apiKey or SNO_MEM_CLAW_LLM_API_KEY for overridden Sno AI endpoints"
+			? "set extraction.llm.apiKey or SNO_STATION_MEM_LLM_API_KEY for overridden Sno AI endpoints"
 			: `set extraction.llm.apiKey or the provider environment key for preset ${config.preset}`;
-	throw new Error(`mem-claw llm-client: missing API key; ${hint}`);
+	throw new Error(`sno-station-mem llm-client: missing API key; ${hint}`);
 }

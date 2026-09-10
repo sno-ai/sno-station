@@ -87,7 +87,7 @@ Object.assign(MemoryStore.prototype, {
 		conditions.push("lane = ?");
 		params.push(opts.lane ?? "active");
 		// Empty projectIdFilter means "caller is authorized for ZERO projectIds" — return
-		// empty rather than fail open into a global query (codex review H1, 2026-04-26).
+		// empty rather than fail open into a global query (host review H1, 2026-04-26).
 		// Only short-circuit when no explicit single projectId was provided (single-projectId
 		// takes precedence when both are set, matching the existing if/else-if order).
 		if (
@@ -191,8 +191,8 @@ Object.assign(MemoryStore.prototype, {
 				memory_id: memoryId,
 				error: e,
 			}, {
-				event_name: "mem_claw.memory-store-read-api.malformed.metadata.json",
-				file: "apps/mem-claw/src/storage/memory-store-read-api.ts",
+				event_name: "sno_station_mem.memory-store-read-api.malformed.metadata.json",
+				file: "packages/sno-station-mem/src/store/memory-store-read-api.ts",
 				function: "getMemoryMetadata",
 				site_id: "memory-store-read-api.getMemoryMetadata.35e63c5534",
 			});

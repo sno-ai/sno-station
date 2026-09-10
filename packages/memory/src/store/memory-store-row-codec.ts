@@ -87,7 +87,7 @@ Object.assign(MemoryStore.prototype, {
 		memoryId: string,
 		text: string,
 	): Promise<PreparedChunkRow[]> {
-		// Retrieval storage chunks use mem-claw's LoCoMo-tuned geometry
+		// Retrieval storage chunks use sno-station-mem's LoCoMo-tuned geometry
 		// (256/384/448/32, RETRIEVAL_STORAGE_CHUNK_PROFILE) — small, fact-dense
 		// chunks that survive top-20 auto-recall injection. contentType stays prose
 		// to preserve boundary behavior.

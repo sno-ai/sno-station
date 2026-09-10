@@ -108,8 +108,8 @@ function shapeAlarm(operation: string, reason: string): never {
 	log.error("Active task shape validation failed", {
 		operation, reason_code: reason.replace(/[^a-z0-9]+/gi, "_").toLowerCase(),
 	}, {
-		event_name: "mem_claw.memory-store-write-validation.active.task.shape.alarm",
-		file: "apps/mem-claw/src/storage/memory-store-write-validation.ts",
+		event_name: "sno_station_mem.memory-store-write-validation.active.task.shape.alarm",
+		file: "packages/sno-station-mem/src/store/memory-store-write-validation.ts",
 		function: "shapeAlarm",
 		site_id: "memory-store-write-validation.shapeAlarm.3383666e9c",
 	});

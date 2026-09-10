@@ -9,7 +9,7 @@ import { dirname, join } from "node:path";
 import { createLogger } from "@snoai/utils/logger";
 import { z } from "zod";
 import type { ProductMode } from "../../contract/config/plugin-config-mode-schema";
-import { getMemClawDataDir } from "../../store/data-paths";
+import { getSnoStationMemDataDir } from "../../store/data-paths";
 import {
 	B_PROFILE_SECTION_REGISTRY,
 	type BProfileSectionRegistry,
@@ -218,7 +218,7 @@ class SectionDictionaryFileCache implements SectionDictionaryCache {
 }
 
 export function createSectionDictionaryCache(
-	stateDir: string = getMemClawDataDir(),
+	stateDir: string = getSnoStationMemDataDir(),
 ): SectionDictionaryCache {
 	return new SectionDictionaryFileCache(stateDir);
 }
@@ -252,8 +252,8 @@ export async function restoreCachedSectionDictionary(args: {
 		log.warn("section dictionary cache rejected; using bundled snapshot", {
 			error,
 		}, {
-			event_name: "mem_claw.b-profile-section-dictionary-provider.section.dictionary.cache.rejected.using.bundled.snapshot",
-			file: "apps/mem-claw/src/extraction/b-profile-section-dictionary-provider.ts",
+			event_name: "sno_station_mem.b-profile-section-dictionary-provider.section.dictionary.cache.rejected.using.bundled.snapshot",
+			file: "packages/sno-station-mem/src/engine/extraction/b-profile-section-dictionary-provider.ts",
 			function: "restoreCachedSectionDictionary",
 			site_id: "b-profile-section-dictionary-provider.restoreCachedSectionDictionary.a4518aedd5",
 		});
@@ -292,8 +292,8 @@ async function loadRemoteSectionDictionary(args: {
 		log.warn("section dictionary cache rejected; using bundled snapshot", {
 			error,
 		}, {
-			event_name: "mem_claw.b-profile-section-dictionary-provider.section.dictionary.cache.rejected.using.bundled.snapshot",
-			file: "apps/mem-claw/src/extraction/b-profile-section-dictionary-provider.ts",
+			event_name: "sno_station_mem.b-profile-section-dictionary-provider.section.dictionary.cache.rejected.using.bundled.snapshot",
+			file: "packages/sno-station-mem/src/engine/extraction/b-profile-section-dictionary-provider.ts",
 			function: "loadRemoteSectionDictionary",
 			site_id: "b-profile-section-dictionary-provider.loadRemoteSectionDictionary.ac5ddcab10",
 		});
@@ -323,8 +323,8 @@ async function loadRemoteSectionDictionary(args: {
 			version: args.pluginVersion,
 			error,
 		}, {
-			event_name: "mem_claw.b-profile-section-dictionary-provider.section.dictionary.fetch.marker.could.not.be.persisted.fetch.skipped",
-			file: "apps/mem-claw/src/extraction/b-profile-section-dictionary-provider.ts",
+			event_name: "sno_station_mem.b-profile-section-dictionary-provider.section.dictionary.fetch.marker.could.not.be.persisted.fetch.skipped",
+			file: "packages/sno-station-mem/src/engine/extraction/b-profile-section-dictionary-provider.ts",
 			function: "loadRemoteSectionDictionary",
 			site_id: "b-profile-section-dictionary-provider.loadRemoteSectionDictionary.a8ecb1a4f2",
 		});
@@ -346,8 +346,8 @@ async function loadRemoteSectionDictionary(args: {
 			version: args.pluginVersion,
 			error,
 		}, {
-			event_name: "mem_claw.b-profile-section-dictionary-provider.section.dictionary.fetch.rejected.keeping.last.good.registry",
-			file: "apps/mem-claw/src/extraction/b-profile-section-dictionary-provider.ts",
+			event_name: "sno_station_mem.b-profile-section-dictionary-provider.section.dictionary.fetch.rejected.keeping.last.good.registry",
+			file: "packages/sno-station-mem/src/engine/extraction/b-profile-section-dictionary-provider.ts",
 			function: "loadRemoteSectionDictionary",
 			site_id: "b-profile-section-dictionary-provider.loadRemoteSectionDictionary.15ee874f33",
 		});

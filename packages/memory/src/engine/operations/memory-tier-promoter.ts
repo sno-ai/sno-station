@@ -55,7 +55,7 @@ export interface TierTransition {
 }
 
 /** Minimal memory fields needed for tier evaluation.
- *  Uses `timestamp` to align with mem-claw's MemoryEntry shape. */
+ *  Uses `timestamp` to align with sno-station-mem's MemoryEntry shape. */
 export interface TierableMemory {
 	id: string;
 	tier: MemoryTier;

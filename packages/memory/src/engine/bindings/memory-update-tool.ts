@@ -5,7 +5,7 @@
 
 import { isScopeAccessibleForTool, resolveAgentAccess } from "./memory-tool-access";
 import type { MemoryCategory } from "./memory-tool-dependencies";
-import { appendAuditEntry, clamp01, DEFAULT_LOCALE, deriveFactKey, MemClawError, normalizeCategory, StorageError, serializeIntervalMetadata, stripEnvelopeMetadata } from "./memory-tool-dependencies";
+import { appendAuditEntry, clamp01, DEFAULT_LOCALE, deriveFactKey, SnoStationMemError, normalizeCategory, StorageError, serializeIntervalMetadata, stripEnvelopeMetadata } from "./memory-tool-dependencies";
 import { resolveMemoryDate } from "../extraction/date-resolution";
 import { parseEntryMetadata } from "./memory-tool-formatting";
 import {
@@ -61,7 +61,7 @@ export async function executeMemoryUpdateTool(ctx: ToolContext, access: ReturnTy
 						// Guard this branch early so the remaining tool execution path works with normalized inputs.
 						if (!isScopeAccessibleForTool(ctx.scopePolicy, existing.projectId, access)) {
 							// Surface this invalid tool execution state as an explicit typed failure.
-							throw new MemClawError("invalid_scope", `Scope not accessible: ${existing.projectId}`);
+							throw new SnoStationMemError("invalid_scope", `Scope not accessible: ${existing.projectId}`);
 						}
 						const existingCategory = validateExistingToolCategory(existing.category);
 						if (typeof existingCategory !== "string") return existingCategory;

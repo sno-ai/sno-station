@@ -162,7 +162,7 @@ export function createReflectionInjectionHandler1(params: ReflectionInjectionPar
 					].join("\n"),
 				};
 			} catch (err) {
-				diagnosticLog.warn("Reflection inheritance injection failed", { error: err }, { event_name: "memory.reflection_injection_hooks.reflection.inheritance.injection.failed", file: "apps/mem-claw/src/reflection/reflection-injection-hooks.ts", function: "registerInheritedRulesHook", site_id: "reflection.reflection-injection-hooks.registerInheritedRulesHook.43c14eb8b9" });
+				diagnosticLog.warn("Reflection inheritance injection failed", { error: err }, { event_name: "memory.reflection_injection_hooks.reflection.inheritance.injection.failed", file: "packages/sno-station-mem/src/engine/reflection/reflection-injection-hooks.ts", function: "registerInheritedRulesHook", site_id: "reflection.reflection-injection-hooks.registerInheritedRulesHook.43c14eb8b9" });
 			}
 		};
 }
@@ -184,7 +184,7 @@ export function createReflectionInjectionHandler2(params: ReflectionInjectionPar
 					? getReflectionDerivedSuppression(params.derivedSuppressionCache, suppressionKey, now)
 					: undefined;
 				if (suppression) {
-					diagnosticLog.debug("Reflection derived injection suppressed", { reason_code: suppression.reason, session_reference: privateLogReference(sessionKey) }, { event_name: "memory.reflection_injection_hooks.reflection.derived.injection.suppressed", file: "apps/mem-claw/src/reflection/reflection-injection-hooks.ts", function: "registerDerivedFocusHook", site_id: "reflection.reflection-injection-hooks.registerDerivedFocusHook.d23bb07c04" });
+					diagnosticLog.debug("Reflection derived injection suppressed", { reason_code: suppression.reason, session_reference: privateLogReference(sessionKey) }, { event_name: "memory.reflection_injection_hooks.reflection.derived.injection.suppressed", file: "packages/sno-station-mem/src/engine/reflection/reflection-injection-hooks.ts", function: "registerDerivedFocusHook", site_id: "reflection.reflection-injection-hooks.registerDerivedFocusHook.d23bb07c04" });
 				} else {
 					if (suppressionKey) {
 						deleteReflectionDerivedSuppression(params.derivedSuppressionCache, suppressionKey);
@@ -220,7 +220,7 @@ export function createReflectionInjectionHandler2(params: ReflectionInjectionPar
 					}
 				}
 			} catch (err) {
-				diagnosticLog.warn("Reflection derived injection failed", { error: err }, { event_name: "memory.reflection_injection_hooks.reflection.derived.injection.failed", file: "apps/mem-claw/src/reflection/reflection-injection-hooks.ts", function: "registerDerivedFocusHook", site_id: "reflection.reflection-injection-hooks.registerDerivedFocusHook.bbe1a0ae1e" });
+				diagnosticLog.warn("Reflection derived injection failed", { error: err }, { event_name: "memory.reflection_injection_hooks.reflection.derived.injection.failed", file: "packages/sno-station-mem/src/engine/reflection/reflection-injection-hooks.ts", function: "registerDerivedFocusHook", site_id: "reflection.reflection-injection-hooks.registerDerivedFocusHook.bbe1a0ae1e" });
 			}
 
 			appendPendingErrorBlock(params, sessionKey, blocks);
@@ -264,7 +264,7 @@ export function createReflectionInjectionHandler3(params: ReflectionInjectionPar
 					? getReflectionDerivedSuppression(params.derivedSuppressionCache, suppressionKey, now)
 					: undefined;
 				if (suppression) {
-					diagnosticLog.debug("Reflection derived injection suppressed", { reason_code: suppression.reason, session_reference: privateLogReference(sessionKey) }, { event_name: "memory.reflection_injection_hooks.reflection.derived.injection.suppressed", file: "apps/mem-claw/src/reflection/reflection-injection-hooks.ts", function: "registerV3SliceHook", site_id: "reflection.reflection-injection-hooks.registerV3SliceHook.d23bb07c04" });
+					diagnosticLog.debug("Reflection derived injection suppressed", { reason_code: suppression.reason, session_reference: privateLogReference(sessionKey) }, { event_name: "memory.reflection_injection_hooks.reflection.derived.injection.suppressed", file: "packages/sno-station-mem/src/engine/reflection/reflection-injection-hooks.ts", function: "registerV3SliceHook", site_id: "reflection.reflection-injection-hooks.registerV3SliceHook.d23bb07c04" });
 				} else {
 					if (suppressionKey) {
 						deleteReflectionDerivedSuppression(params.derivedSuppressionCache, suppressionKey);
@@ -290,7 +290,7 @@ export function createReflectionInjectionHandler3(params: ReflectionInjectionPar
 				if (blocks.length === 0) return;
 				return { prependContext: blocks.join("\n\n") };
 			} catch (err) {
-				diagnosticLog.warn("Reflection slice injection failed", { error: err }, { event_name: "memory.reflection_injection_hooks.reflection.slice.injection.failed", file: "apps/mem-claw/src/reflection/reflection-injection-hooks.ts", function: "registerV3SliceHook", site_id: "reflection.reflection-injection-hooks.registerV3SliceHook.1800747d30" });
+				diagnosticLog.warn("Reflection slice injection failed", { error: err }, { event_name: "memory.reflection_injection_hooks.reflection.slice.injection.failed", file: "packages/sno-station-mem/src/engine/reflection/reflection-injection-hooks.ts", function: "registerV3SliceHook", site_id: "reflection.reflection-injection-hooks.registerV3SliceHook.1800747d30" });
 			}
 		};
 }

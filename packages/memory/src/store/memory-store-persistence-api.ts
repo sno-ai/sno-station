@@ -117,8 +117,8 @@ Object.assign(MemoryStore.prototype, {
 			category: safeEntry.category,
 			projectId: safeEntry.projectId,
 		}, {
-			event_name: "mem_claw.memory-store-persistence-api.storing.memory",
-			file: "apps/mem-claw/src/storage/memory-store-persistence-api.ts",
+			event_name: "sno_station_mem.memory-store-persistence-api.storing.memory",
+			file: "packages/sno-station-mem/src/store/memory-store-persistence-api.ts",
 			function: "store",
 			site_id: "memory-store-persistence-api.store.8fd6a993e7",
 		});
@@ -159,7 +159,7 @@ Object.assign(MemoryStore.prototype, {
 		// Snapshot caller-owned fields before entering the mutex/transaction. Without
 		// this, a caller mutating entry.text between hash compute and SQL write
 		// would persist data that disagrees with the validated content_hash.
-		// See codex review 2026-04-26 M1.
+		// See host review 2026-04-26 M1.
 		const text = safeEntry.text;
 		const projectId = safeEntry.projectId;
 		const category = validated.category;
@@ -193,8 +193,8 @@ Object.assign(MemoryStore.prototype, {
 					projectId,
 					memory_id: alreadyWritten.id,
 				}, {
-					event_name: "mem_claw.memory-store-persistence-api.idempotency.key.match.skipping.store",
-					file: "apps/mem-claw/src/storage/memory-store-persistence-api.ts",
+					event_name: "sno_station_mem.memory-store-persistence-api.idempotency.key.match.skipping.store",
+					file: "packages/sno-station-mem/src/store/memory-store-persistence-api.ts",
 					function: "store",
 					site_id: "memory-store-persistence-api.store.2f479e68bf",
 				});
@@ -211,8 +211,8 @@ Object.assign(MemoryStore.prototype, {
 				projectId,
 				memory_id: earlyDup.id,
 			}, {
-				event_name: "mem_claw.memory-store-persistence-api.content.hash.match.skipping.store",
-				file: "apps/mem-claw/src/storage/memory-store-persistence-api.ts",
+				event_name: "sno_station_mem.memory-store-persistence-api.content.hash.match.skipping.store",
+				file: "packages/sno-station-mem/src/store/memory-store-persistence-api.ts",
 				function: "store",
 				site_id: "memory-store-persistence-api.store.14bfc8e321",
 			});
@@ -233,8 +233,8 @@ Object.assign(MemoryStore.prototype, {
 						projectId,
 						memory_id: alreadyWritten.id,
 					}, {
-						event_name: "mem_claw.memory-store-persistence-api.idempotency.key.match.skipping.store",
-						file: "apps/mem-claw/src/storage/memory-store-persistence-api.ts",
+						event_name: "sno_station_mem.memory-store-persistence-api.idempotency.key.match.skipping.store",
+						file: "packages/sno-station-mem/src/store/memory-store-persistence-api.ts",
 						function: "<anonymous callback>",
 						site_id: "memory-store-persistence-api.<anonymous callback>.b07cd1be28",
 					});
@@ -247,8 +247,8 @@ Object.assign(MemoryStore.prototype, {
 					projectId,
 					memory_id: existing.id,
 				}, {
-					event_name: "mem_claw.memory-store-persistence-api.content.hash.match.skipping.store",
-					file: "apps/mem-claw/src/storage/memory-store-persistence-api.ts",
+					event_name: "sno_station_mem.memory-store-persistence-api.content.hash.match.skipping.store",
+					file: "packages/sno-station-mem/src/store/memory-store-persistence-api.ts",
 					function: "<anonymous callback>",
 					site_id: "memory-store-persistence-api.<anonymous callback>.087a18a049",
 				});
@@ -516,7 +516,7 @@ Object.assign(MemoryStore.prototype, {
 		// passed a partial object.
 		// Mirror `store()`'s whitespace-only rejection: empty/whitespace text
 		// yields zero chunks, which would create an unretrievable parent row
-		// (codex 2026-04-29 H1). Trim before length check.
+		// (host 2026-04-29 H1). Trim before length check.
 		const validEntries = entries
 			.filter(
 				(entry): entry is StoreInput =>
@@ -531,7 +531,7 @@ Object.assign(MemoryStore.prototype, {
 		// Snapshot every persisted field per entry before entering the mutex. A
 		// caller mutating entry.text between hash compute and SQL write would
 		// otherwise persist data that disagrees with the validated content_hash.
-		// See codex review 2026-04-26 M1. Allocate parent ids up front so chunk
+		// See host review 2026-04-26 M1. Allocate parent ids up front so chunk
 		// id hashing is stable across retries.
 		const prepared = validEntries.map((entry) => {
 			const entryTimestamp = entry.timestamp;
@@ -763,8 +763,8 @@ Object.assign(MemoryStore.prototype, {
 			projectId: create.projectId,
 			closes: closes.length,
 		}, {
-			event_name: "mem_claw.memory-store-persistence-api.supersede.write",
-			file: "apps/mem-claw/src/storage/memory-store-persistence-api.ts",
+			event_name: "sno_station_mem.memory-store-persistence-api.supersede.write",
+			file: "packages/sno-station-mem/src/store/memory-store-persistence-api.ts",
 			function: "supersede",
 			site_id: "memory-store-persistence-api.supersede.77de7ddab1",
 		});
@@ -793,7 +793,7 @@ Object.assign(MemoryStore.prototype, {
 		);
 		const hash = stableHash(hashInputForEntry(create.text, validated.metadata));
 		const importance = clamp01(create.importance ?? DEFAULT_IMPORTANCE, DEFAULT_IMPORTANCE);
-		// Snapshot caller-owned fields before the mutex (see store()'s codex M1 note).
+		// Snapshot caller-owned fields before the mutex (see store()'s host M1 note).
 		const text = create.text;
 		const projectId = create.projectId;
 		const category = validated.category;
@@ -803,7 +803,7 @@ Object.assign(MemoryStore.prototype, {
 		// A dedup hit against a row this call is about to close must never be
 		// treated as "the replacement already exists" — that would make the
 		// row supersede itself, discard the caller's replacement metadata, and
-		// silently drop the fact from active recall (codex adversarial review
+		// silently drop the fact from active recall (host adversarial review
 		// 2026-07-13).
 		const closingIds = new Set(closes.map((close) => close.id));
 		const dedupCandidate = (row: MemoryRow | undefined): MemoryRow | undefined =>
@@ -1069,7 +1069,7 @@ Object.assign(MemoryStore.prototype, {
 				// receipt is written below — the replacement can share fact_id with
 				// a 1:1 close (preserved fact identity), and writing its receipt
 				// first would make the close event point at itself instead of the
-				// content it actually supersedes (codex adversarial review
+				// content it actually supersedes (host adversarial review
 				// 2026-07-13).
 				for (const closeRow of closeRows) {
 					const closeMetadata = sanitizeMemoryMetadataString(

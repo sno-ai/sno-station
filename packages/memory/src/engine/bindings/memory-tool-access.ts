@@ -4,7 +4,7 @@
  */
 
 import type { MemoryScopePolicy } from "./memory-tool-dependencies";
-import { MemClawError } from "./memory-tool-dependencies";
+import { SnoStationMemError } from "./memory-tool-dependencies";
 
 export function assertAccessibleScope(
 	scopePolicy: MemoryScopePolicy,
@@ -16,7 +16,7 @@ export function assertAccessibleScope(
 	// Guard this branch early so the remaining tool execution path works with normalized inputs.
 	if (!scopePolicy.validateScope(normalized) || !scopePolicy.isAccessible(normalized, agentId)) {
 		// Surface this invalid tool execution state as an explicit typed failure.
-		throw new MemClawError("invalid_scope", `Scope not accessible: ${normalized}`);
+		throw new SnoStationMemError("invalid_scope", `Scope not accessible: ${normalized}`);
 	}
 	// Centralize the tool execution fallback value at the boundary of this helper.
 	return normalized;
@@ -68,7 +68,7 @@ export function assertAccessibleScopeForTool(
 	// Guard guard condition here so the remaining tool execution path works with normalized inputs.
 	if (hasMissingToolIdentity(access)) {
 		// Surface this invalid tool execution state as an explicit typed failure.
-		throw new MemClawError("invalid_scope", `Scope not accessible: ${scope.trim()}`);
+		throw new SnoStationMemError("invalid_scope", `Scope not accessible: ${scope.trim()}`);
 	}
 	// Apply scope policy before any store lookup can reveal or mutate memory.
 	return assertAccessibleScope(scopePolicy, scope, access.agentId);
@@ -108,7 +108,7 @@ export function getDefaultScopeForTool(
 	// Guard guard condition here so the remaining tool execution path works with normalized inputs.
 	if (hasMissingToolIdentity(access)) {
 		// Surface this invalid tool execution state as an explicit typed failure.
-		throw new MemClawError("invalid_scope", "No accessible scope available for memory_store.");
+		throw new SnoStationMemError("invalid_scope", "No accessible scope available for memory_store.");
 	}
 	const defaultScope = scopePolicy.getDefaultScope(access.agentId);
 	// Apply scope policy before any store lookup can reveal or mutate memory.

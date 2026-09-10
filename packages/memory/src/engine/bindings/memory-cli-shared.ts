@@ -11,7 +11,7 @@ import type { Writable } from "node:stream";
 import { DEFAULT_IMPORTANCE, DEFAULT_SCOPE } from "../../../config/index";
 import type { Embedder } from "../extraction/embedding-provider-client";
 import type { MemoryRetriever } from "../retrieval/retriever";
-import { MemClawError } from "../shared/errors";
+import { SnoStationMemError } from "../shared/errors";
 import { MEMORY_CATEGORIES, type MemoryCategory } from "../shared/types";
 import { stableHash } from "../shared/utils";
 import type { MemoryStore } from "../../store/store";
@@ -49,17 +49,17 @@ export async function writeImportSpoolRow(writer: Writable, row: ImportSpoolRow)
 
 export function createImportSpoolPath(filePath: string): string {
 	const safeName = path.basename(filePath).replace(/[^a-zA-Z0-9._-]/g, "_");
-	return path.join(tmpdir(), `mem-claw-import-${process.pid}-${Date.now()}-${safeName}.jsonl`);
+	return path.join(tmpdir(), `sno-station-mem-import-${process.pid}-${Date.now()}-${safeName}.jsonl`);
 }
 
 export function parseImportSpoolRow(line: string): ImportSpoolRow {
 	const parsed = JSON.parse(line) as unknown;
 	if (!isRecord(parsed)) {
-		throw new MemClawError("invalid_import_spool", "Internal import spool row was not an object.");
+		throw new SnoStationMemError("invalid_import_spool", "Internal import spool row was not an object.");
 	}
 	const category = parseCategory(typeof parsed.category === "string" ? parsed.category : undefined);
 	if (typeof parsed.id !== "string" || typeof parsed.text !== "string" || !category) {
-		throw new MemClawError(
+		throw new SnoStationMemError(
 			"invalid_import_spool",
 			"Internal import spool row was missing required fields.",
 		);
@@ -67,7 +67,7 @@ export function parseImportSpoolRow(line: string): ImportSpoolRow {
 	const metadata = isRecord(parsed.metadata) ? parsed.metadata : {};
 	const vector = Array.isArray(parsed.vector) ? parsed.vector : undefined;
 	if (vector && !vector.every((value) => typeof value === "number" && Number.isFinite(value))) {
-		throw new MemClawError(
+		throw new SnoStationMemError(
 			"invalid_import_spool",
 			"Internal import spool row had an invalid vector.",
 		);
@@ -92,7 +92,7 @@ export function parseCategory(value: string | undefined): MemoryCategory | undef
 		return value as MemoryCategory;
 	}
 	// Surface this invalid CLI handling state as an explicit typed failure.
-	throw new MemClawError("invalid_category", `Invalid category: ${value}`);
+	throw new SnoStationMemError("invalid_category", `Invalid category: ${value}`);
 }
 
 /** Implements serialize entry as the local slash-command registration operation. */

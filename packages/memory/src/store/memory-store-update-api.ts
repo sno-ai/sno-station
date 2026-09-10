@@ -180,8 +180,8 @@ Object.assign(MemoryStore.prototype, {
 	): Promise<MemoryEntry | null> {
 		// Log operational context for storage without changing control flow.
 		log.debug("updating memory", { memory_id: id }, {
-			event_name: "mem_claw.memory-store-update-api.updating.memory",
-			file: "apps/mem-claw/src/storage/memory-store-update-api.ts",
+			event_name: "sno_station_mem.memory-store-update-api.updating.memory",
+			file: "packages/sno-station-mem/src/store/memory-store-update-api.ts",
 			function: "update",
 			site_id: "memory-store-update-api.update.31162cf4e4",
 		});
@@ -440,8 +440,8 @@ Object.assign(MemoryStore.prototype, {
 		options?: { writerAuthority?: "offline-family" },
 	): Promise<void> {
 		log.debug("updating tier", { memory_id: memoryId, tier: newTier }, {
-			event_name: "mem_claw.memory-store-update-api.updating.tier",
-			file: "apps/mem-claw/src/storage/memory-store-update-api.ts",
+			event_name: "sno_station_mem.memory-store-update-api.updating.tier",
+			file: "packages/sno-station-mem/src/store/memory-store-update-api.ts",
 			function: "updateTier",
 			site_id: "memory-store-update-api.updateTier.feb5a5165b",
 		});
@@ -468,8 +468,8 @@ Object.assign(MemoryStore.prototype, {
 		patch: Partial<MemoryMetadata>,
 	): Promise<void> {
 		log.debug("updating metadata", { memory_id: memoryId }, {
-			event_name: "mem_claw.memory-store-update-api.updating.metadata",
-			file: "apps/mem-claw/src/storage/memory-store-update-api.ts",
+			event_name: "sno_station_mem.memory-store-update-api.updating.metadata",
+			file: "packages/sno-station-mem/src/store/memory-store-update-api.ts",
 			function: "updateMetadata",
 			site_id: "memory-store-update-api.updateMetadata.6e33353e47",
 		});
@@ -498,8 +498,8 @@ Object.assign(MemoryStore.prototype, {
 		},
 	): Promise<ReflectionResolveOutcome> {
 		log.debug("resolving reflection item", { memory_id: memoryId }, {
-			event_name: "mem_claw.memory-store-update-api.resolving.reflection.item",
-			file: "apps/mem-claw/src/storage/memory-store-update-api.ts",
+			event_name: "sno_station_mem.memory-store-update-api.resolving.reflection.item",
+			file: "packages/sno-station-mem/src/store/memory-store-update-api.ts",
 			function: "resolveReflectionItem",
 			site_id: "memory-store-update-api.resolveReflectionItem.f1d6aa0eab",
 		});
@@ -549,8 +549,8 @@ Object.assign(MemoryStore.prototype, {
 	): Promise<void> {
 		if (entries.length === 0) return;
 		log.debug("applying metadata deltas", { count: entries.length }, {
-			event_name: "mem_claw.memory-store-update-api.applying.metadata.deltas",
-			file: "apps/mem-claw/src/storage/memory-store-update-api.ts",
+			event_name: "sno_station_mem.memory-store-update-api.applying.metadata.deltas",
+			file: "packages/sno-station-mem/src/store/memory-store-update-api.ts",
 			function: "applyMetadataDeltas",
 			site_id: "memory-store-update-api.applyMetadataDeltas.49983b35b4",
 		});
@@ -586,8 +586,8 @@ Object.assign(MemoryStore.prototype, {
 		deltaFn: (current: MemoryMetadata) => Partial<MemoryMetadata>,
 	): Promise<void> {
 		log.debug("applying metadata delta", { memory_id: memoryId }, {
-			event_name: "mem_claw.memory-store-update-api.applying.metadata.delta",
-			file: "apps/mem-claw/src/storage/memory-store-update-api.ts",
+			event_name: "sno_station_mem.memory-store-update-api.applying.metadata.delta",
+			file: "packages/sno-station-mem/src/store/memory-store-update-api.ts",
 			function: "applyMetadataDelta",
 			site_id: "memory-store-update-api.applyMetadataDelta.6961c06549",
 		});

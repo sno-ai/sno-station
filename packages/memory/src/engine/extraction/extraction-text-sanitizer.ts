@@ -71,7 +71,7 @@ function stripDelimitedMetadataBlock(text: string, headerPattern: RegExp): strin
 }
 
 /**
- * Strip platform envelope metadata injected by OpenClaw channels before the
+ * Strip platform envelope metadata injected by SnoStationMem channels before the
  * conversation text reaches the extraction LLM.
  */
 export function stripEnvelopeMetadata(text: string): string {

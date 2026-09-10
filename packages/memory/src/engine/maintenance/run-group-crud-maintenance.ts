@@ -13,10 +13,10 @@ import {
 	createModelGroupCrudEntityIdentityJudgementPort,
 	createModelGroupCrudStateKeyingJudgementPort,
 } from "./group-crud-maintenance-ports";
-import { readOpenClawConfig, resolveOpenClawConfigPath } from "../bindings/embedder-config-files";
+import { readSnoStationMemConfig, resolveSnoStationMemConfigPath } from "../bindings/embedder-config-files";
 import { createLlmClient } from "../../model/llm-client";
 import { pickLlmRoutingConfig } from "../../model/llm-mode-routing";
-import { getMemClawStateDir } from "../shared/paths";
+import { getSnoStationMemStateDir } from "../shared/paths";
 import { pluginConfigSchema } from "../shared/types";
 import { initSqliteRuntimeSync, openSqliteDatabase } from "../../store/sqlite-runtime";
 
@@ -34,11 +34,11 @@ async function main(): Promise<void> {
 	const sqlite = openSqliteDatabase(storePath, { fileMustExist: true });
 	let embedder: Embedder | undefined;
 	try {
-		const hostConfig = readOpenClawConfig(resolveOpenClawConfigPath());
+		const hostConfig = readSnoStationMemConfig(resolveSnoStationMemConfigPath());
 		const pluginConfig = pluginConfigSchema.parse(
 			hostConfig?.plugins?.entries?.[FIXED_PROTOCOL_VALUE_74]?.config ?? {},
 		);
-		embedder = createEmbedder(pluginConfig.embedding, getMemClawStateDir());
+		embedder = createEmbedder(pluginConfig.embedding, getSnoStationMemStateDir());
 		const routing = pickLlmRoutingConfig({
 			mode: "rem-enhanced",
 			remEnhanced: {

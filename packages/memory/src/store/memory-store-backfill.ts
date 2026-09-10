@@ -41,8 +41,8 @@ Object.assign(MemoryStore.prototype, {
 						memory_id: row.id,
 						error,
 					}, {
-						event_name: "mem_claw.memory-store-backfill.legacy.memory.chunk.backfill.skipped.row",
-						file: "apps/mem-claw/src/storage/memory-store-backfill.ts",
+						event_name: "sno_station_mem.memory-store-backfill.legacy.memory.chunk.backfill.skipped.row",
+						file: "packages/sno-station-mem/src/store/memory-store-backfill.ts",
 						function: "backfillMissingChunks",
 						site_id: "memory-store-backfill.backfillMissingChunks.7094298b4a",
 					});
@@ -108,8 +108,8 @@ Object.assign(MemoryStore.prototype, {
 				this.backfillLastFailureAt = 0;
 				if (count > 0) {
 					log.info("backfilled legacy memory chunks", { count }, {
-						event_name: "mem_claw.memory-store-backfill.backfilled.legacy.memory.chunks",
-						file: "apps/mem-claw/src/storage/memory-store-backfill.ts",
+						event_name: "sno_station_mem.memory-store-backfill.backfilled.legacy.memory.chunks",
+						file: "packages/sno-station-mem/src/store/memory-store-backfill.ts",
 						function: "<anonymous callback>",
 						site_id: "memory-store-backfill.<anonymous callback>.c483e84a68",
 					});
@@ -132,8 +132,8 @@ Object.assign(MemoryStore.prototype, {
 					retryInMs,
 					error,
 				}, {
-					event_name: "mem_claw.memory-store-backfill.legacy.memory.chunk.backfill.failed",
-					file: "apps/mem-claw/src/storage/memory-store-backfill.ts",
+					event_name: "sno_station_mem.memory-store-backfill.legacy.memory.chunk.backfill.failed",
+					file: "packages/sno-station-mem/src/store/memory-store-backfill.ts",
 					function: "<anonymous callback>",
 					site_id: "memory-store-backfill.<anonymous callback>.c4019a929d",
 				});

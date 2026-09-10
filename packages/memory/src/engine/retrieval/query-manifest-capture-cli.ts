@@ -217,13 +217,13 @@ async function main(): Promise<void> {
 	if (!serialized) throw new Error("Capture completed without serialized output");
 	if (options.outputPath) {
 		await writeFile(options.outputPath, serialized.bytes, { flag: "wx" });
-		writeEmergencyDiagnostic({ level: "info", body: "Query manifest capture written", attributes: { output_path: options.outputPath, artifact_sha256: serialized.sha256, outcome: "success" }, source: { event_name: "query_manifest.capture.written", file: "apps/mem-claw/src/retrieval/query-manifest-capture-cli.ts", function: "main", site_id: "query_manifest.capture.written" } });
+		writeEmergencyDiagnostic({ level: "info", body: "Query manifest capture written", attributes: { output_path: options.outputPath, artifact_sha256: serialized.sha256, outcome: "success" }, source: { event_name: "query_manifest.capture.written", file: "packages/sno-station-mem/src/engine/retrieval/query-manifest-capture-cli.ts", function: "main", site_id: "query_manifest.capture.written" } });
 	} else {
 		process.stdout.write(serialized.bytes);
 	}
 }
 
 void main().catch((error: unknown) => {
-	writeEmergencyDiagnostic({ level: "error", body: "Query manifest capture failed", attributes: { error, exit_code: 1 }, source: { event_name: "query_manifest.capture.failed", file: "apps/mem-claw/src/retrieval/query-manifest-capture-cli.ts", function: "<module>", site_id: "query_manifest.capture.failed" } });
+	writeEmergencyDiagnostic({ level: "error", body: "Query manifest capture failed", attributes: { error, exit_code: 1 }, source: { event_name: "query_manifest.capture.failed", file: "packages/sno-station-mem/src/engine/retrieval/query-manifest-capture-cli.ts", function: "<module>", site_id: "query_manifest.capture.failed" } });
 	process.exitCode = 1;
 });

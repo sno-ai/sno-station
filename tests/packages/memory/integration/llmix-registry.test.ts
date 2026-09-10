@@ -4,9 +4,9 @@ import { join, resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
-	createSnoMemOpenClawDidWebVerifier,
-	MEM_CLAW_RELEASE_ANCHOR_URL,
-	MEM_CLAW_RELEASE_KEY_ID,
+	createSnoMemSnoStationMemDidWebVerifier,
+	SNO_STATION_MEM_RELEASE_ANCHOR_URL,
+	SNO_STATION_MEM_RELEASE_KEY_ID,
 	openBundledLlmixRegistry,
 } from "../../../../packages/sno-station-mem/src/model/llmix-registry.ts";
 
@@ -30,7 +30,7 @@ const didDocument = {
 };
 
 function anchorFetch(input: string | URL | Request): Promise<Response> {
-	if (String(input) === MEM_CLAW_RELEASE_ANCHOR_URL) {
+	if (String(input) === SNO_STATION_MEM_RELEASE_ANCHOR_URL) {
 		return Promise.resolve(
 			new Response(JSON.stringify(didDocument), {
 				status: 200,
@@ -103,7 +103,7 @@ describe("mem-claw signed LLMIx registry", () => {
 	});
 
 	it("rejects the wrong DID, wrong key id, and generic did:web fallback", async () => {
-		const verifier = createSnoMemOpenClawDidWebVerifier(anchorFetch as typeof fetch);
+		const verifier = createSnoMemSnoStationMemDidWebVerifier(anchorFetch as typeof fetch);
 		await expect(
 			verifier.verify({
 				domain: "www.sno.ai",
@@ -118,7 +118,7 @@ describe("mem-claw signed LLMIx registry", () => {
 		await expect(
 			verifier.verify({
 				domain: "evil.example.test",
-				keyId: MEM_CLAW_RELEASE_KEY_ID,
+				keyId: SNO_STATION_MEM_RELEASE_KEY_ID,
 				algorithm: "ed25519",
 				signature: "",
 				payloadType: "application/vnd.snoai.llmix.registry-root+json",
@@ -126,12 +126,12 @@ describe("mem-claw signed LLMIx registry", () => {
 				paeBytes: new Uint8Array(),
 			}),
 		).resolves.toBe(false);
-		expect(MEM_CLAW_RELEASE_KEY_ID).toBe("did:web:www.sno.ai#sno-mem-openclaw-release");
+		expect(SNO_STATION_MEM_RELEASE_KEY_ID).toBe("did:web:www.sno.ai#sno-mem-openclaw-release");
 	});
 
 	it("fetches only the fixed Sno release anchor URL", async () => {
 		const urls: string[] = [];
-		const verifier = createSnoMemOpenClawDidWebVerifier((async (input) => {
+		const verifier = createSnoMemSnoStationMemDidWebVerifier((async (input) => {
 			urls.push(String(input));
 			return new Response(JSON.stringify(didDocument), {
 				status: 200,
@@ -141,7 +141,7 @@ describe("mem-claw signed LLMIx registry", () => {
 
 		await verifier.verify({
 			domain: "www.sno.ai",
-			keyId: MEM_CLAW_RELEASE_KEY_ID,
+			keyId: SNO_STATION_MEM_RELEASE_KEY_ID,
 			algorithm: "ed25519",
 			signature: "",
 			payloadType: "application/vnd.snoai.llmix.registry-root+json",
@@ -149,7 +149,7 @@ describe("mem-claw signed LLMIx registry", () => {
 			paeBytes: new Uint8Array(),
 		});
 
-		expect(urls).toEqual([MEM_CLAW_RELEASE_ANCHOR_URL]);
+		expect(urls).toEqual([SNO_STATION_MEM_RELEASE_ANCHOR_URL]);
 		expect(urls).not.toContain("https://www.sno.ai/.well-known/did.json");
 	});
 
@@ -158,6 +158,6 @@ describe("mem-claw signed LLMIx registry", () => {
 
 		await expect(
 			openBundledLlmixRegistry(undefined, hangingFetch, { anchorTimeoutMs: 10 }),
-		).rejects.toThrow("mem-claw LLMIx release anchor fetch timed out after 10ms");
+		).rejects.toThrow("sno-station-mem LLMIx release anchor fetch timed out after 10ms");
 	});
 });

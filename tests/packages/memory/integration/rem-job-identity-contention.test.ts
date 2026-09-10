@@ -18,7 +18,7 @@ import {
 	createRemModelStageResponsePort,
 	runRemBatchJob,
 } from "../../../../packages/sno-station-mem/src/sidecar/rem-batch-executor.ts";
-import { createMemClawRemPorts } from "../../../../packages/sno-station-mem/src/store/rem-sqlite-adapter.ts";
+import { createSnoStationMemRemPorts } from "../../../../packages/sno-station-mem/src/store/rem-sqlite-adapter.ts";
 import { createLlmClient } from "../../../../packages/sno-station-mem/src/model/llm-client.ts";
 import { createRemOwnerDecidedOperationalConfiguration } from "../../../apps/mem-claw/helpers/rem-entry-config-fixture.ts";
 import { seedProductionMemory } from "../../../apps/mem-claw/helpers/rem-production-entry-fixture.ts";
@@ -291,7 +291,7 @@ describe("F-B job identity under contention", () => {
 			// A real client, constructed lazily and never called: `conflict.softClose` touches only
 			// SQLite, but the port factory requires the field. Substituting a fake here would be a
 			// fake in the one place this test does not exercise, which is worse than pointless.
-			const ports = createMemClawRemPorts({
+			const ports = createSnoStationMemRemPorts({
 				database: fixture.runtime.db,
 				llmClient: createLlmClient({
 					preset: "mem_claw/sno_conflict_verdict",

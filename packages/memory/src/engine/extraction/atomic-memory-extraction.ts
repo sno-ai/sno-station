@@ -639,7 +639,7 @@ export class AtomicInsightDistiller {
 		if (windows.length === 0) {
 			log.warn("atomic extraction found no parseable turn; nothing will be stored", {
 				session_reference: privateLogReference(sessionKey),
-			}, { event_name: "memory.atomic_memory_extraction.diagnostic", file: "apps/mem-claw/src/extraction/atomic-memory-extraction.ts", function: "extractAndPersist", site_id: "extraction.atomic-memory-extraction.extractAndPersist.7e1c9d2660" });
+			}, { event_name: "memory.atomic_memory_extraction.diagnostic", file: "packages/sno-station-mem/src/engine/extraction/atomic-memory-extraction.ts", function: "extractAndPersist", site_id: "extraction.atomic-memory-extraction.extractAndPersist.7e1c9d2660" });
 		}
 		const scope = options.scope ?? this.config.defaultScope;
 		const startedAt = Date.now();
@@ -797,7 +797,7 @@ export class AtomicInsightDistiller {
 				model_duration_ms: sum("modelMs"), write_duration_ms: sum("writeMs"),
 				model_duration_reason: "sum_actual_transport_gate_durations",
 				later_window_persisted_count: "undetermined", later_window_persisted_reason: "no_cross_window_record_identity",
-			}, { event_name: "memory.capture.completed", file: "apps/mem-claw/src/extraction/atomic-memory-extraction.ts", function: "extractAndPersist", site_id: "memory.capture.completed" });
+			}, { event_name: "memory.capture.completed", file: "packages/sno-station-mem/src/engine/extraction/atomic-memory-extraction.ts", function: "extractAndPersist", site_id: "memory.capture.completed" });
 		}
 		});
 	}
@@ -928,7 +928,7 @@ async function readStandingSubjectCandidates(
 				log.warn("atomic standing subject candidate read failed", {
 					attempt,
 					error,
-				}, { event_name: "memory.atomic_memory_extraction.diagnostic", file: "apps/mem-claw/src/extraction/atomic-memory-extraction.ts", function: "readStandingSubjectCandidates", site_id: "extraction.atomic-memory-extraction.readStandingSubjectCandidates.b88c6fb3aa" });
+				}, { event_name: "memory.atomic_memory_extraction.diagnostic", file: "packages/sno-station-mem/src/engine/extraction/atomic-memory-extraction.ts", function: "readStandingSubjectCandidates", site_id: "extraction.atomic-memory-extraction.readStandingSubjectCandidates.b88c6fb3aa" });
 			}
 		}
 	}
@@ -1179,7 +1179,7 @@ async function reaskStandingSubjects(
 			log.warn("atomic standing subject re-ask failed", {
 				attempt,
 				error,
-			}, { event_name: "memory.atomic_memory_extraction.diagnostic", file: "apps/mem-claw/src/extraction/atomic-memory-extraction.ts", function: "reaskStandingSubjects", site_id: "extraction.atomic-memory-extraction.reaskStandingSubjects.1288498dec" });
+			}, { event_name: "memory.atomic_memory_extraction.diagnostic", file: "packages/sno-station-mem/src/engine/extraction/atomic-memory-extraction.ts", function: "reaskStandingSubjects", site_id: "extraction.atomic-memory-extraction.reaskStandingSubjects.1288498dec" });
 		}
 	}
 	// Every attempt failed. The claims are still written, with the subject left unresolved, as
@@ -1188,7 +1188,7 @@ async function reaskStandingSubjects(
 	log.warn("atomic standing subject re-ask exhausted; subjects left unresolved", {
 		records: records.length,
 		candidates: candidates.length,
-	}, { event_name: "memory.atomic_memory_extraction.diagnostic", file: "apps/mem-claw/src/extraction/atomic-memory-extraction.ts", function: "reaskStandingSubjects", site_id: "extraction.atomic-memory-extraction.reaskStandingSubjects.2b8785b171" });
+	}, { event_name: "memory.atomic_memory_extraction.diagnostic", file: "packages/sno-station-mem/src/engine/extraction/atomic-memory-extraction.ts", function: "reaskStandingSubjects", site_id: "extraction.atomic-memory-extraction.reaskStandingSubjects.2b8785b171" });
 	return new Map();
 }
 
@@ -1439,7 +1439,7 @@ export async function runAtomicMemoryExtraction(
 			discardedTurnIndexes: guarded
 				.filter((record) => !admitted.includes(record))
 				.map(globalTurnIndex),
-		}, { event_name: "memory.atomic_memory_extraction.diagnostic", file: "apps/mem-claw/src/extraction/atomic-memory-extraction.ts", function: "runAtomicMemoryExtraction", site_id: "extraction.atomic-memory-extraction.runAtomicMemoryExtraction.304a5a8d5c" });
+		}, { event_name: "memory.atomic_memory_extraction.diagnostic", file: "packages/sno-station-mem/src/engine/extraction/atomic-memory-extraction.ts", function: "runAtomicMemoryExtraction", site_id: "extraction.atomic-memory-extraction.runAtomicMemoryExtraction.304a5a8d5c" });
 	}
 	const identityNowMs = input.nowMs();
 	const resolved = await resolveSubjects(
@@ -1567,7 +1567,7 @@ export async function runAtomicMemoryExtraction(
 				nominatedRowId: stored.id,
 				session_reference: privateLogReference(input.ledgerKey.conversationId),
 				error,
-			}, { event_name: "memory.atomic_memory_extraction.diagnostic", file: "apps/mem-claw/src/extraction/atomic-memory-extraction.ts", function: "runAtomicMemoryExtraction", site_id: "extraction.atomic-memory-extraction.runAtomicMemoryExtraction.0d9673d494" });
+			}, { event_name: "memory.atomic_memory_extraction.diagnostic", file: "packages/sno-station-mem/src/engine/extraction/atomic-memory-extraction.ts", function: "runAtomicMemoryExtraction", site_id: "extraction.atomic-memory-extraction.runAtomicMemoryExtraction.0d9673d494" });
 			journalAtomicArrivalRetirementRefusal(input.store, {
 				jobId: input.ledgerKey.conversationId,
 				nominatedRowId: stored.id,
@@ -1595,7 +1595,7 @@ export async function runAtomicMemoryExtraction(
 			model_duration_reason: windowDiagnosticContext.getStore() === diagnostic ? "batched_calls_attributed_to_dispatch_window" : "entry_bypassed_session_transport_gate",
 			write_duration_ms: diagnostic.writeMs,
 			later_window_persisted_count: "undetermined", later_window_persisted_reason: "no_cross_window_record_identity",
-		}, { event_name: "memory.extraction.window.completed", file: "apps/mem-claw/src/extraction/atomic-memory-extraction.ts", function: "runAtomicMemoryExtraction", site_id: "memory.extraction.window.completed" });
+		}, { event_name: "memory.extraction.window.completed", file: "packages/sno-station-mem/src/engine/extraction/atomic-memory-extraction.ts", function: "runAtomicMemoryExtraction", site_id: "memory.extraction.window.completed" });
 	}
 }
 
@@ -1627,7 +1627,7 @@ async function judgeRetirementBatch(
 			log.warn("atomic arrival retirement judgement call failed", {
 				attempt,
 				error,
-			}, { event_name: "memory.atomic_memory_extraction.diagnostic", file: "apps/mem-claw/src/extraction/atomic-memory-extraction.ts", function: "judgeRetirementBatch", site_id: "extraction.atomic-memory-extraction.judgeRetirementBatch.64b641b407" });
+			}, { event_name: "memory.atomic_memory_extraction.diagnostic", file: "packages/sno-station-mem/src/engine/extraction/atomic-memory-extraction.ts", function: "judgeRetirementBatch", site_id: "extraction.atomic-memory-extraction.judgeRetirementBatch.64b641b407" });
 		}
 		decision = decideRemRetirementTargetFromReply(reply, offered);
 		if (decision.outcome !== "refuse" || decision.reason !== "model_response_invalid") break;

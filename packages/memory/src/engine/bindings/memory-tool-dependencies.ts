@@ -58,7 +58,7 @@ export {
 export type { MemoryRetriever } from "../retrieval/retriever";
 export type { MemoryScopePolicy } from "../security/scopes";
 export { isSystemBypassId } from "../security/scopes";
-export { MemClawError, RetrievalError, StorageError } from "../shared/errors";
+export { SnoStationMemError, RetrievalError, StorageError } from "../shared/errors";
 export type { AggregationQuery, MemoryCategory } from "../shared/types";
 export {
 	AGGREGATION_OPERATIONS,

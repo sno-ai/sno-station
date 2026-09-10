@@ -170,8 +170,8 @@ export const validateRemOperationalGrammarActivation = (input: {
 }): EntryDecision => {
 	const parsed = parseConfigurationSource(input.configSource);
 	if (parsed.configuration === undefined) return parsed.decision;
-	const memClawRoot = path.join(input.stateRoot, "sno-station-mem");
-	const acceptedPath = path.join(memClawRoot, "rem-operational-config.accepted.json");
+	const snoStationMemRoot = path.join(input.stateRoot, "sno-station-mem");
+	const acceptedPath = path.join(snoStationMemRoot, "rem-operational-config.accepted.json");
 	let beforeSource: string;
 	try {
 		beforeSource = readFileSync(acceptedPath, "utf8");
@@ -194,7 +194,7 @@ export const validateRemOperationalGrammarActivation = (input: {
 	if (before.configuration === undefined) {
 		return { decision: "refuse", reasonCode: "grammar.previousConfigurationMissing" };
 	}
-	const corpusRoot = path.join(memClawRoot, "rem-grammar-corpus");
+	const corpusRoot = path.join(snoStationMemRoot, "rem-grammar-corpus");
 	let corpusBytes: Buffer;
 	try {
 		const names = readdirSync(corpusRoot).sort();
@@ -208,7 +208,7 @@ export const validateRemOperationalGrammarActivation = (input: {
 	let abArtifact: Parameters<typeof validateRemGrammarChange>[0]["abArtifact"];
 	try {
 		const value: unknown = JSON.parse(
-			readFileSync(path.join(memClawRoot, "rem-gates", "facet-policy-grammar-ab.json"), "utf8"),
+			readFileSync(path.join(snoStationMemRoot, "rem-gates", "facet-policy-grammar-ab.json"), "utf8"),
 		);
 		if (isGrammarArtifact(value)) abArtifact = value;
 	} catch {
@@ -225,8 +225,8 @@ export const validateRemOperationalGrammarActivation = (input: {
 	if (decision.decision === "refuse") {
 		return { decision: "refuse", reasonCode: "grammar.abMissingOrFailed" };
 	}
-	mkdirSync(memClawRoot, { recursive: true });
-	const temporaryPath = path.join(memClawRoot, `.rem-operational-config.${randomUUID()}.tmp`);
+	mkdirSync(snoStationMemRoot, { recursive: true });
+	const temporaryPath = path.join(snoStationMemRoot, `.rem-operational-config.${randomUUID()}.tmp`);
 	writeFileSync(temporaryPath, input.configSource, { mode: 0o600 });
 	chmodSync(temporaryPath, 0o600);
 	renameSync(temporaryPath, acceptedPath);

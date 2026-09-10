@@ -51,7 +51,7 @@ describe("observability timeout bounds", () => {
 		await observability.flush({ timeoutMs: 1000 });
 		await vi.advanceTimersByTimeAsync(1000);
 
-		expect(hasDiagnostic("mem_claw.adapter.sno.observe.flush.timed.out")).toBe(false);
+		expect(hasDiagnostic("sno_station_mem.adapter.sno.observe.flush.timed.out")).toBe(false);
 	});
 
 	it("records cost counters synchronously regardless of runtime.emit progress", async () => {

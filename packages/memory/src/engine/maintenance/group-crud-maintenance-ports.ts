@@ -29,7 +29,7 @@ function readStateKeyingSkill(): string {
 		const candidate = path.join(root, STATE_KEYING_SKILL_PATH);
 		if (existsSync(candidate)) return readFileSync(candidate, "utf8");
 	}
-	throw new Error(`mem-claw state keying skill is missing: ${STATE_KEYING_SKILL_PATH}`);
+	throw new Error(`sno-station-mem state keying skill is missing: ${STATE_KEYING_SKILL_PATH}`);
 }
 
 export function createModelGroupCrudEntityIdentityJudgementPort(

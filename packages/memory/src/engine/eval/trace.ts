@@ -72,7 +72,7 @@ export interface QaTrace {
 	latencyMs?: number | undefined;
 	/**
 	 * Diagnostic side-channel for partial-population stages (PRD §4 trace
-	 * population rule + F4 codex finding). When a per-stage score array is
+	 * population rule + F4 host finding). When a per-stage score array is
 	 * incomplete (some results have the value, others don't), the array is
 	 * omitted from the top-level fields and the missing-result chunk ids are
 	 * recorded here so post-deploy debugging can see which chunk failed which
@@ -141,8 +141,8 @@ export function appendQaTrace(trace: QaTrace, traceDirOverride?: string): void {
 		log.warn("failed to append qa trace", {
 			error: err,
 		}, {
-			event_name: "mem_claw.trace.failed.to.append.qa.trace",
-			file: "apps/mem-claw/src/eval/trace.ts",
+			event_name: "sno_station_mem.trace.failed.to.append.qa.trace",
+			file: "packages/sno-station-mem/src/engine/eval/trace.ts",
 			function: "appendQaTrace",
 			site_id: "trace.appendQaTrace.164bcaddd4",
 		});
@@ -228,7 +228,7 @@ export function writeConfigSnapshot(traceDir: string): string {
 				duration_ms: performance.now() - started,
 			}, {
 				event_name: "memory.config.snapshot.completed",
-				file: "apps/mem-claw/src/eval/trace.ts",
+				file: "packages/sno-station-mem/src/engine/eval/trace.ts",
 				function: "writeConfigSnapshot",
 				site_id: "trace.writeConfigSnapshot.completed",
 			});

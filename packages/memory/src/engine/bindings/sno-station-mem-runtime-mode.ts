@@ -1,11 +1,11 @@
 import { createLogger as createDiagnosticLogger } from "@snoai/utils/logger";
 const diagnosticLog = createDiagnosticLogger("sno-station-mem:sno-station-mem-runtime-mode");
-/** @file openclaw-runtime-mode.ts
+/** @file sno-station-mem-runtime-mode.ts
  * @purpose Resolves runtime mode switches and hook agent identity decisions.
  * @boundary Environment/argv checks and scoped audit breadcrumbs only.
  */
 
-import type { OpenClawPluginApi } from "./sno-station-mem-runtime-dependencies";
+import type { SnoStationMemPluginApi } from "./sno-station-mem-runtime-dependencies";
 import { appendAuditEntry, isSystemBypassId } from "./sno-station-mem-runtime-dependencies";
 
 /** Detects completion bootstrap mode so plugin startup can expose only completion wiring. */
@@ -44,7 +44,7 @@ export function parseAgentIdFromSessionKey(sessionKey: string | undefined): stri
 
 export async function runObserveLifecycleTask(
 	label: string,
-	logger: OpenClawPluginApi["logger"],
+	logger: SnoStationMemPluginApi["logger"],
 	timeoutMs: number,
 	task: () => Promise<void>,
 ): Promise<void> {
@@ -56,7 +56,7 @@ export async function runObserveLifecycleTask(
 			run,
 			new Promise<void>((resolve) => {
 				timeoutHandle = setTimeout(() => {
-					diagnosticLog.warn("Memory observation task timed out", { operation: label, timeout_ms: timeoutMs }, { event_name: "memory.openclaw_runtime_mode.memory.observation.task.timed.out", file: "apps/mem-claw/src/plugin/openclaw-runtime-mode.ts", function: "runObserveLifecycleTask", site_id: "plugin.openclaw-runtime-mode.runObserveLifecycleTask.d1856ccb13" });
+					diagnosticLog.warn("Memory observation task timed out", { operation: label, timeout_ms: timeoutMs }, { event_name: "memory.sno-station-mem_runtime_mode.memory.observation.task.timed.out", file: "packages/sno-station-mem/src/engine/bindings/sno-station-mem-runtime-mode.ts", function: "runObserveLifecycleTask", site_id: "plugin.sno-station-mem-runtime-mode.runObserveLifecycleTask.d1856ccb13" });
 					resolve();
 				}, timeoutMs);
 				const nodeTimeout = timeoutHandle as typeof timeoutHandle & {
@@ -119,12 +119,12 @@ export function resolveHookAgentId(
 
 /** Emits a scoped audit breadcrumb when hook metadata is missing or unparseable. */
 export function auditMissingHookAgentIdentity(
-	api: OpenClawPluginApi,
+	api: SnoStationMemPluginApi,
 	hookName: "agent_end" | "before_prompt_build" | "before_reset",
 	stateDir: string,
 	event: "ambient_learning" | "auto_recall" | "session_summary",
 ): void {
-	diagnosticLog.warn("Memory hook lacks agent identity", { operation: hookName, reason_code: "missing_agent_identity" }, { event_name: "memory.openclaw_runtime_mode.memory.hook.lacks.agent.identity", file: "apps/mem-claw/src/plugin/openclaw-runtime-mode.ts", function: "auditMissingHookAgentIdentity", site_id: "plugin.openclaw-runtime-mode.auditMissingHookAgentIdentity.f06795892a" });
+	diagnosticLog.warn("Memory hook lacks agent identity", { operation: hookName, reason_code: "missing_agent_identity" }, { event_name: "memory.sno-station-mem_runtime_mode.memory.hook.lacks.agent.identity", file: "packages/sno-station-mem/src/engine/bindings/sno-station-mem-runtime-mode.ts", function: "auditMissingHookAgentIdentity", site_id: "plugin.sno-station-mem-runtime-mode.auditMissingHookAgentIdentity.f06795892a" });
 	appendAuditEntry(stateDir, {
 		event,
 		hook: hookName,

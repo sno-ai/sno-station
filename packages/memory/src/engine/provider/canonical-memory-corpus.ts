@@ -1,6 +1,6 @@
 import { FIXED_PROTOCOL_VALUE_64 } from "../../model/signed-registry-constants";
 /** @file canonical-memory-corpus.ts
- * @purpose Searches and reads the built-in OpenClaw canonical memory Markdown corpus.
+ * @purpose Searches and reads the built-in SnoStationMem canonical memory Markdown corpus.
  * @boundary Only exposes root MEMORY.md and ordinary Markdown files under memory/ in one workspace.
  */
 
@@ -12,7 +12,7 @@ import {
 	sep,
 	posix,
 } from "node:path";
-import type { OpenClawMemorySearchResult as MemorySearchResult } from "../../contract/provider-runtime-types";
+import type { SnoStationMemMemorySearchResult as MemorySearchResult } from "../../contract/provider-runtime-types";
 import { clampInt } from "../shared/utils";
 import { createLogger } from "@snoai/utils/logger";
 const diagnosticLog = createLogger("sno-station-mem:canonical-memory-corpus");
@@ -243,7 +243,7 @@ export async function listCanonicalMemoryFiles(workspaceDir: string, diagnostics
 	if (diagnostics.io_failure_count > 0) diagnosticLog.warn("Canonical memory discovery degraded", {
 		outcome: "partial", io_failure_count: diagnostics.io_failure_count,
 		unavailable_file_count: diagnostics.unavailable_file_count, file_count: files.length },
-		{ event_name: "memory.provider.canonical.discovery.degraded", file: "apps/mem-claw/src/provider/canonical-memory-corpus.ts", function: "listCanonicalMemoryFiles", site_id: "memory.provider.canonical.discovery.degraded" });
+		{ event_name: "memory.provider.canonical.discovery.degraded", file: "packages/sno-station-mem/src/engine/provider/canonical-memory-corpus.ts", function: "listCanonicalMemoryFiles", site_id: "memory.provider.canonical.discovery.degraded" });
 	return files.sort((left, right) => left.path.localeCompare(right.path));
 }
 

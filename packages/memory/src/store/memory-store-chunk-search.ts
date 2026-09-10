@@ -159,7 +159,7 @@ Object.assign(MemoryStore.prototype, {
 		const minScore = clamp01(opts.minScore ?? DEFAULT_MIN_SCORE, DEFAULT_MIN_SCORE);
 
 		// Empty projectIdFilter means "caller is authorized for ZERO projectIds" — return
-		// empty rather than fail open into a global query (codex review H1, 2026-04-26).
+		// empty rather than fail open into a global query (host review H1, 2026-04-26).
 		if (opts.projectIdFilter !== undefined && opts.projectIdFilter.length === 0) {
 			return [];
 		}
@@ -207,8 +207,8 @@ Object.assign(MemoryStore.prototype, {
 						metaMatches: metaRows.length,
 						resultCount: results.length,
 					}, {
-						event_name: "mem_claw.memory-store-chunk-search.chunk.semantic.search",
-						file: "apps/mem-claw/src/storage/memory-store-chunk-search.ts",
+						event_name: "sno_station_mem.memory-store-chunk-search.chunk.semantic.search",
+						file: "packages/sno-station-mem/src/store/memory-store-chunk-search.ts",
 						function: "searchChunksSemantic",
 						site_id: "memory-store-chunk-search.searchChunksSemantic.7d889feb61",
 					});
@@ -229,8 +229,8 @@ Object.assign(MemoryStore.prototype, {
 				projectIdFilter: opts.projectIdFilter,
 				category: opts.category,
 			}, {
-				event_name: "mem_claw.memory-store-chunk-search.chunk.semantic.search.failed",
-				file: "apps/mem-claw/src/storage/memory-store-chunk-search.ts",
+				event_name: "sno_station_mem.memory-store-chunk-search.chunk.semantic.search.failed",
+				file: "packages/sno-station-mem/src/store/memory-store-chunk-search.ts",
 				function: "searchChunksSemantic",
 				site_id: "memory-store-chunk-search.searchChunksSemantic.fa074292e0",
 			});
@@ -249,7 +249,7 @@ Object.assign(MemoryStore.prototype, {
 		const limit = clampInt(opts.limit ?? 5, 1, MAX_CHUNK_FETCH_LIMIT);
 
 		// Empty projectIdFilter means "caller is authorized for ZERO projectIds" — return
-		// empty rather than fail open into a global query (codex review H1, 2026-04-26).
+		// empty rather than fail open into a global query (host review H1, 2026-04-26).
 		if (opts.projectIdFilter !== undefined && opts.projectIdFilter.length === 0) {
 			return [];
 		}
@@ -306,7 +306,7 @@ Object.assign(MemoryStore.prototype, {
 				// *increases* with match strength. `1/(1+x)` here would invert the ranking
 				// (weak matches would score higher than strong ones).
 				// A sigmoid ported from an upstream reference's `bm25Search` was tried and
-				// reverted the same day (codex-reviewer, high confidence, verified against
+				// reverted the same day (host-reviewer, high confidence, verified against
 				// real FTS5 output): common/high-frequency terms routinely produce
 				// `bm25Rank == 0` (goodness == 0) in normal queries, not just as a
 				// theoretical edge case, and that sigmoid's non-positive-goodness fallback
@@ -338,8 +338,8 @@ Object.assign(MemoryStore.prototype, {
 				minScore,
 				resultCount: results.length,
 			}, {
-				event_name: "mem_claw.memory-store-chunk-search.chunk.keyword.search",
-				file: "apps/mem-claw/src/storage/memory-store-chunk-search.ts",
+				event_name: "sno_station_mem.memory-store-chunk-search.chunk.keyword.search",
+				file: "packages/sno-station-mem/src/store/memory-store-chunk-search.ts",
 				function: "searchChunksKeyword",
 				site_id: "memory-store-chunk-search.searchChunksKeyword.26628a27c1",
 			});
@@ -352,8 +352,8 @@ Object.assign(MemoryStore.prototype, {
 				projectIdFilter: opts.projectIdFilter,
 				category: opts.category,
 			}, {
-				event_name: "mem_claw.memory-store-chunk-search.chunk.keyword.search.failed",
-				file: "apps/mem-claw/src/storage/memory-store-chunk-search.ts",
+				event_name: "sno_station_mem.memory-store-chunk-search.chunk.keyword.search.failed",
+				file: "packages/sno-station-mem/src/store/memory-store-chunk-search.ts",
 				function: "searchChunksKeyword",
 				site_id: "memory-store-chunk-search.searchChunksKeyword.36ca2cc1d7",
 			});

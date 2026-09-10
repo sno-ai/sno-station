@@ -8,7 +8,7 @@ import type { Embedder } from "../../../../packages/sno-station-mem/src/engine/e
 import { parseInsightMetadata } from "../../../../packages/sno-station-mem/src/engine/extraction/memory-metadata-codec.ts";
 import {
 	getAuditPath,
-	getMemClawStateDir,
+	getSnoStationMemStateDir,
 } from "../../../../packages/sno-station-mem/src/engine/operations/runtime-audit-log.ts";
 import { MemoryStore } from "../../../../packages/sno-station-mem/src/store/store.ts";
 import {
@@ -49,7 +49,7 @@ function completedAuditOperations(): string[] {
 }
 
 function completedAuditRecords(): Array<{ details?: Record<string, unknown> }> {
-	return readFileSync(getAuditPath(getMemClawStateDir()), "utf8")
+	return readFileSync(getAuditPath(getSnoStationMemStateDir()), "utf8")
 		.trim()
 		.split("\n")
 		.map((line) => JSON.parse(line) as { details?: Record<string, unknown> })

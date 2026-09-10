@@ -1,6 +1,6 @@
 import { FIXED_PROTOCOL_VALUE_74 } from "../../model/signed-registry-constants";
 import {
-	getMemClawStateDir,
+	getSnoStationMemStateDir,
 	runWithMemoryAuditSync,
 } from "../operations/runtime-audit-log";
 import type { SqliteDatabaseLike } from "../../store/sqlite-runtime";
@@ -119,7 +119,7 @@ class DefaultMemoryTelemetryPurgeService implements MemoryTelemetryPurgeService 
 		_options: MemoryTelemetryPurgePreviewOptions = {},
 	): MemoryTelemetryPurgePreview {
 		return runWithMemoryAuditSync({
-			stateDir: getMemClawStateDir(),
+			stateDir: getSnoStationMemStateDir(),
 			event: "memory_read",
 			operation: "previewImpact",
 			startedDetails: {
@@ -140,7 +140,7 @@ class DefaultMemoryTelemetryPurgeService implements MemoryTelemetryPurgeService 
 
 	confirmPurge(input: MemoryTelemetryConfirmPurgeInput): MemoryTelemetryPurgeResult {
 		return runWithMemoryAuditSync({
-			stateDir: getMemClawStateDir(),
+			stateDir: getSnoStationMemStateDir(),
 			event: "memory_purged",
 			operation: "confirmPurge",
 			startedDetails: { target_fact_id: input.factId },
@@ -171,7 +171,7 @@ class DefaultMemoryTelemetryPurgeService implements MemoryTelemetryPurgeService 
 			// Recompute the graph and every purge-safety guard inside the delete
 			// transaction: a preview built before this call can go stale if a
 			// concurrent write adds a descendant or a recall lands in the
-			// meantime (codex adversarial review 2026-07-13).
+			// meantime (host adversarial review 2026-07-13).
 			const preview = this.buildPreview(targetFactId);
 			const anchor = this.readPurgeEventAnchor(targetFactId);
 

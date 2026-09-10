@@ -361,7 +361,7 @@ export function detectCategoryVote(
 	// These five per-locale banks were cut on 2026-08-21 and PUT BACK the same day, because
 	// deleting them regressed the human-authored answer key: 15 non-English identity rows across
 	// de/es/fr/ja/ko went from `profile` to no category at all, caught by
-	// `tests/apps/mem-claw/unit/extraction-golden-parity.test.ts`. English survived on the
+	// `tests/apps/sno-station-mem/unit/extraction-golden-parity.test.ts`. English survived on the
 	// hardcoded rules above, so a bare deletion is an English-only capability. Which bin a memory
 	// belongs in is a question of meaning: these go when a model judgement replaces them, in the
 	// same change, not before.

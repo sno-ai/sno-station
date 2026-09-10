@@ -1,5 +1,5 @@
 /** @file sqlite-vec-path.ts
- * @purpose Resolves and loads the symbol-isolated sqlite-vec extension shipped with mem-claw.
+ * @purpose Resolves and loads the symbol-isolated sqlite-vec extension shipped with sno-station-mem.
  * @boundary Path selection only; Linux x64 must use the bundled binary.
  */
 

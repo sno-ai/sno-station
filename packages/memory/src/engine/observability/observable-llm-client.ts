@@ -19,7 +19,7 @@ export class ObservableLlmClient implements LlmClient {
 	// continuation resuming — another overlapping completeJson's continuation can run
 	// in that hop and overwrite the inner client's shared lastUsage first. The inner
 	// client has no atomic {result, usage} return, so only serializing the section
-	// that depends on the shared state closes the race. codex review 2026-07-12.
+	// that depends on the shared state closes the race. host review 2026-07-12.
 	private readonly usageMutex = new Mutex();
 
 	constructor(

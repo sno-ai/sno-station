@@ -30,7 +30,7 @@ function markDetectorBroken(error: unknown, reasonCode: string): void {
 		error, reason_code: reasonCode, retryAfterMs: DETECTOR_RETRY_AFTER_MS,
 	}, {
 		event_name: "language.detector.unavailable",
-		file: "apps/mem-claw/src/i18n/detector.ts",
+		file: "packages/sno-station-mem/src/engine/i18n/detector.ts",
 		function: "markDetectorBroken",
 		site_id: "language.detector.unavailable",
 	});

@@ -1,6 +1,6 @@
 import { FIXED_MEMORY_SNO_CONFLICT_VERDICT, FIXED_MEMORY_SNO_EXTRACT_CHAT, FIXED_MEMORY_SNO_EXTRACT_PROFILE, FIXED_PROTOCOL_VALUE_69 } from "./signed-registry-constants";
 /** @file llm-endpoint-resolution.ts
- * @purpose Resolves signed LLMIx presets into complete mem-claw-owned inference endpoints.
+ * @purpose Resolves signed LLMIx presets into complete sno-station-mem-owned inference endpoints.
  * @boundary The only place an inference origin and path are composed.
  */
 
@@ -54,7 +54,7 @@ export async function resolveLlmEndpoint(input: {
 		configuredPresetId: input.configuredPreset,
 		selectEndpointPreset: (provider) => {
 			if (input.transport !== "chat-completions" && provider !== "sno-gpu") {
-				throw new Error(`mem-claw llm-client: ${provider} does not support ${input.transport}`);
+				throw new Error(`sno-station-mem llm-client: ${provider} does not support ${input.transport}`);
 			}
 			return selectEndpointPreset({
 				configuredPreset: input.configuredPreset,

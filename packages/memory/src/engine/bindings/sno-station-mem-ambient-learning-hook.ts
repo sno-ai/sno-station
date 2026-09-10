@@ -1,4 +1,4 @@
-/** @file openclaw-ambient-learning-hook.ts
+/** @file sno-station-mem-ambient-learning-hook.ts
  * @purpose Routes successful agent conversations through atomic memory extraction.
  * @boundary The agent_end hook path only; registration and service lifecycle are elsewhere.
  */
@@ -22,7 +22,7 @@ import {
 	isKillSwitchActive,
 	type MemoryStore,
 	normalizeAmbientLearningText,
-	type OpenClawPluginApi,
+	type SnoStationMemPluginApi,
 	type PluginConfig,
 	parseSessionTimestamp,
 	redactSecrets,
@@ -37,7 +37,7 @@ import {
 const log = createLogger("sno-station-mem:ambient-learning");
 
 async function runLocalFirstCapture(input: {
-	api: OpenClawPluginApi;
+	api: SnoStationMemPluginApi;
 	config: PluginConfig;
 	store: MemoryStore;
 	event: PluginHookAgentEndEvent;
@@ -98,7 +98,7 @@ async function runLocalFirstCapture(input: {
 			stored += 1;
 		} catch (error) {
 			failures += 1;
-			log.warn("Local capture write failed", { error }, { event_name: "memory.capture.write.failed", file: "apps/mem-claw/src/plugin/openclaw-ambient-learning-hook.ts", function: "runLocalFirstCapture", site_id: "memory.capture.local.write.failed" });
+			log.warn("Local capture write failed", { error }, { event_name: "memory.capture.write.failed", file: "packages/sno-station-mem/src/engine/bindings/sno-station-mem-ambient-learning-hook.ts", function: "runLocalFirstCapture", site_id: "memory.capture.local.write.failed" });
 		}
 	}
 	appendAuditEntry(stateDir, {
@@ -109,12 +109,12 @@ async function runLocalFirstCapture(input: {
 	});
 	log.info("Local memory capture completed", { outcome: failures ? "partial" : stored ? "success" : "empty_success",
 		persisted_count: stored, failed_count: failures, input_count: entries.length },
-		{ event_name: "memory.capture.completed", file: "apps/mem-claw/src/plugin/openclaw-ambient-learning-hook.ts", function: "runLocalFirstCapture", site_id: "memory.capture.local.completed" });
+		{ event_name: "memory.capture.completed", file: "packages/sno-station-mem/src/engine/bindings/sno-station-mem-ambient-learning-hook.ts", function: "runLocalFirstCapture", site_id: "memory.capture.local.completed" });
 }
 
 /** Runs atomic extraction after a successful top-level agent conversation. */
 export async function onAgentEnd(
-	api: OpenClawPluginApi,
+	api: SnoStationMemPluginApi,
 	config: PluginConfig,
 	store: MemoryStore,
 	_embedder: Embedder,
@@ -241,7 +241,7 @@ export async function onAgentEnd(
 		const safeMessage = redactSecrets(rawMessage).slice(0, 200);
 		outcome = "failed";
 		reason = "extraction_failed";
-		log.warn("Ambient extraction failed", { error }, { event_name: "memory.capture.hook.failed", file: "apps/mem-claw/src/plugin/openclaw-ambient-learning-hook.ts", function: "onAgentEnd", site_id: "memory.capture.hook.failed" });
+		log.warn("Ambient extraction failed", { error }, { event_name: "memory.capture.hook.failed", file: "packages/sno-station-mem/src/engine/bindings/sno-station-mem-ambient-learning-hook.ts", function: "onAgentEnd", site_id: "memory.capture.hook.failed" });
 		appendAuditEntry(stateDir, {
 			event: "ambient_learning",
 			hook: "agent_end",
@@ -252,7 +252,7 @@ export async function onAgentEnd(
 	}
 	} finally {
 		log.info("Ambient capture hook completed", { outcome, reason_code: reason, duration_ms: performance.now() - started },
-			{ event_name: "memory.capture.hook.completed", file: "apps/mem-claw/src/plugin/openclaw-ambient-learning-hook.ts", function: "onAgentEnd", site_id: "memory.capture.hook.completed" });
+			{ event_name: "memory.capture.hook.completed", file: "packages/sno-station-mem/src/engine/bindings/sno-station-mem-ambient-learning-hook.ts", function: "onAgentEnd", site_id: "memory.capture.hook.completed" });
 	}
 	});
 }

@@ -23,8 +23,8 @@ import { setLruEntry } from "../shared/lru";
  * touches the in-flight Set or debounce Map directly.
  */
 
-const REFLECTION_INFLIGHT = Symbol.for("mem-claw.reflection-inflight");
-const REFLECTION_DEBOUNCE = Symbol.for("mem-claw.reflection-debounce");
+const REFLECTION_INFLIGHT = Symbol.for("sno-station-mem.reflection-inflight");
+const REFLECTION_DEBOUNCE = Symbol.for("sno-station-mem.reflection-debounce");
 
 export const SERIAL_WINDOW_MS = 30_000;
 
@@ -107,13 +107,13 @@ export async function runWithSerialGuard(
 	}
 
 	if (getInflightSet().has(sessionKey)) {
-		diagnosticLog.info("Reflection command already running", { outcome: "skipped", reason_code: "already_in_flight", session_reference: privateLogReference(sessionKey) }, { event_name: "memory.session_serial_guard.reflection.command.already.running", file: "apps/mem-claw/src/reflection/session-serial-guard.ts", function: "runWithSerialGuard", site_id: "reflection.session-serial-guard.runWithSerialGuard.edb3193695" });
+		diagnosticLog.info("Reflection command already running", { outcome: "skipped", reason_code: "already_in_flight", session_reference: privateLogReference(sessionKey) }, { event_name: "memory.session_serial_guard.reflection.command.already.running", file: "packages/sno-station-mem/src/engine/reflection/session-serial-guard.ts", function: "runWithSerialGuard", site_id: "reflection.session-serial-guard.runWithSerialGuard.edb3193695" });
 		return false;
 	}
 
 	const last = getDebounceMap().get(sessionKey);
 	if (last !== undefined && Date.now() - last < SERIAL_WINDOW_MS) {
-		diagnosticLog.info("Reflection command delayed by debounce", { outcome: "skipped", reason_code: "debounced", session_reference: privateLogReference(sessionKey) }, { event_name: "memory.session_serial_guard.reflection.command.delayed.by.debounce", file: "apps/mem-claw/src/reflection/session-serial-guard.ts", function: "runWithSerialGuard", site_id: "reflection.session-serial-guard.runWithSerialGuard.2e95bc0994" });
+		diagnosticLog.info("Reflection command delayed by debounce", { outcome: "skipped", reason_code: "debounced", session_reference: privateLogReference(sessionKey) }, { event_name: "memory.session_serial_guard.reflection.command.delayed.by.debounce", file: "packages/sno-station-mem/src/engine/reflection/session-serial-guard.ts", function: "runWithSerialGuard", site_id: "reflection.session-serial-guard.runWithSerialGuard.2e95bc0994" });
 		return false;
 	}
 

@@ -1,5 +1,5 @@
-/** @file openclaw-runtime-dependencies.ts
- * @purpose Centralizes OpenClaw runtime imports while runtime responsibilities live in focused modules.
+/** @file sno-station-mem-runtime-dependencies.ts
+ * @purpose Centralizes SnoStationMem runtime imports while runtime responsibilities live in focused modules.
  * @boundary Re-export only; no runtime orchestration belongs here.
  */
 
@@ -70,7 +70,7 @@ export { createScopePolicy, isSystemBypassId } from "../security/scopes";
 export { ConfigError } from "../shared/errors";
 export { createLlmClient } from "../../model/llm-client";
 export { pruneOldestEntries, setLruEntry, touchLruEntry } from "../shared/lru";
-export { resolveMemClawDbPath } from "../shared/paths";
+export { resolveSnoStationMemDbPath } from "../shared/paths";
 export type { PluginConfig } from "../shared/types";
 export { pluginConfigSchema } from "../shared/types";
 export { debugContentPreview, stableHash } from "../shared/utils";
@@ -81,10 +81,10 @@ export {
 } from "../../store/data-bootstrap";
 export {
 	getBackupsDir,
-	getMemClawDataDir,
+	getSnoStationMemDataDir,
 } from "../../store/data-paths";
 export { initSqliteRuntimeSync } from "../../store/sqlite-runtime";
 export type { MemoryStore } from "../../store/store";
 
 /** Legacy parameters carry only an unused logger slot; no host operations are exposed. */
-export type OpenClawPluginApi = { logger: unknown };
+export type SnoStationMemPluginApi = { logger: unknown };

@@ -1,4 +1,4 @@
-/** @file openclaw-session-state.ts
+/** @file sno-station-mem-session-state.ts
  * @purpose Manages per-session runtime keys, observability aliases, recall history cleanup.
  * @boundary Pure session-id normalization and in-memory LRU cleanup only.
  */

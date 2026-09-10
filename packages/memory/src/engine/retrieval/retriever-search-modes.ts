@@ -75,7 +75,7 @@ Object.assign(MemoryRetriever.prototype, {
 			bounded: true,
 			scopes: context.scopeFilter?.length ?? 0,
 			...(context.category ? { category: context.category } : {}),
-		}, { event_name: "memory.retriever_search_modes.diagnostic", file: "apps/mem-claw/src/retrieval/retriever-search-modes.ts", function: "aggregationComplete", site_id: "retrieval.retriever-search-modes.aggregationComplete.5a3b7f9337" });
+		}, { event_name: "memory.retriever_search_modes.diagnostic", file: "packages/sno-station-mem/src/engine/retrieval/retriever-search-modes.ts", function: "aggregationComplete", site_id: "retrieval.retriever-search-modes.aggregationComplete.5a3b7f9337" });
 		return mapped;
 	},
 
@@ -100,7 +100,7 @@ Object.assign(MemoryRetriever.prototype, {
 		// searches either. `minScore` is a post-pipeline-score floor (see
 		// config/index.ts) and is applied once, below, after applyScoringPipeline —
 		// passing it here too would double it as a raw-cosine floor on this mode
-		// only (codex-reviewer, 2026-07-05 follow-up).
+		// only (host-reviewer, 2026-07-05 follow-up).
 		const results = await this.store.searchSemantic(vector, {
 			limit: searchLimit,
 			projectIdFilter: context.scopeFilter,
@@ -140,7 +140,7 @@ Object.assign(MemoryRetriever.prototype, {
 		// pipeline runs (the pipeline's shrinker chain can move a score across the
 		// floor in either direction); vectorOnly was missing this and only ever
 		// applied minScore as a pre-pipeline raw-cosine floor above, silently
-		// diverging from the other two modes (codex-reviewer, 2026-07-05).
+		// diverging from the other two modes (host-reviewer, 2026-07-05).
 		trace?.startStage(
 			"min_score_filter",
 			mapped.map((result) => result.entry.id),
@@ -244,7 +244,7 @@ Object.assign(MemoryRetriever.prototype, {
 			// Log operational context for retrieval ranking without changing control flow.
 			log.warn("vector search branch failed, using keyword-only", {
 				error: vectorError,
-			}, { event_name: "memory.retriever_search_modes.diagnostic", file: "apps/mem-claw/src/retrieval/retriever-search-modes.ts", function: "precisionRecall", site_id: "retrieval.retriever-search-modes.precisionRecall.97b8770f50" });
+			}, { event_name: "memory.retriever_search_modes.diagnostic", file: "packages/sno-station-mem/src/engine/retrieval/retriever-search-modes.ts", function: "precisionRecall", site_id: "retrieval.retriever-search-modes.precisionRecall.97b8770f50" });
 		}
 		let keywordResults = keywordSettled.status === "fulfilled" ? keywordSettled.value : [];
 		// Route failure states into a deterministic recovery or reporting branch.
@@ -252,7 +252,7 @@ Object.assign(MemoryRetriever.prototype, {
 			// Log operational context for retrieval ranking without changing control flow.
 			log.warn("keyword search branch failed, using vector-only", {
 				error: keywordError,
-			}, { event_name: "memory.retriever_search_modes.diagnostic", file: "apps/mem-claw/src/retrieval/retriever-search-modes.ts", function: "precisionRecall", site_id: "retrieval.retriever-search-modes.precisionRecall.c20ade60c4" });
+			}, { event_name: "memory.retriever_search_modes.diagnostic", file: "packages/sno-station-mem/src/engine/retrieval/retriever-search-modes.ts", function: "precisionRecall", site_id: "retrieval.retriever-search-modes.precisionRecall.c20ade60c4" });
 		}
 
 		// Close `parallel_search` on what the two branches actually returned, BEFORE any other
@@ -307,7 +307,7 @@ Object.assign(MemoryRetriever.prototype, {
 			keywordCount: keywordResults.length,
 			fusedCount: fused.length,
 			queryExpanded: bm25Query !== context.query,
-		}, { event_name: "memory.retriever_search_modes.diagnostic", file: "apps/mem-claw/src/retrieval/retriever-search-modes.ts", function: "precisionRecall", site_id: "retrieval.retriever-search-modes.precisionRecall.aaf0b2eb17" });
+		}, { event_name: "memory.retriever_search_modes.diagnostic", file: "packages/sno-station-mem/src/engine/retrieval/retriever-search-modes.ts", function: "precisionRecall", site_id: "retrieval.retriever-search-modes.precisionRecall.aaf0b2eb17" });
 
 		trace?.startStage(
 			"rerank",
@@ -358,7 +358,7 @@ Object.assign(MemoryRetriever.prototype, {
 
 	// Name is legacy (kept to avoid a wider rename); this is NOT rank-based RRF.
 	// It is weighted raw-score fusion, ported from the upstream reference
-	// (claw-memory-lancedb-pro `fuseResults`) after a brief detour through
+	// (memory-memory-lancedb-pro `fuseResults`) after a brief detour through
 	// pure-rank RRF measured 65% vs vector-only's 84% on LoCoMo (see
 	// docs/internal-note.md).
 	rrfFuse(

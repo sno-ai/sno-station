@@ -24,8 +24,8 @@ import {
 } from "../../../../packages/sno-station-mem/src/sidecar/rem-batch-executor.ts";
 import {
 	createCoverageGatedConflictPort,
-	createMemClawRemMutationExecutor,
-	createMemClawRemPorts,
+	createSnoStationMemRemMutationExecutor,
+	createSnoStationMemRemPorts,
 	createRemReplaceCarrierPort,
 	issueReplaceCoverageAllow,
 } from "../../../../packages/sno-station-mem/src/store/rem-sqlite-adapter.ts";
@@ -393,7 +393,7 @@ describe("REM storage authorization boundaries", () => {
 			const before = database.runtime.raw
 				.prepare("SELECT text, content_hash FROM nodix_memories WHERE id = ?")
 				.get(rowId);
-			const ports = createMemClawRemPorts({
+			const ports = createSnoStationMemRemPorts({
 				database: database.runtime.db,
 				llmClient: createTestLlmClient(),
 			});
@@ -455,7 +455,7 @@ describe("REM storage authorization boundaries", () => {
 				.prepare("SELECT text, content_hash FROM nodix_memories WHERE id = ?")
 				.get(rowId);
 			const configurationSha256 = "c".repeat(64);
-			const executor = createMemClawRemMutationExecutor({
+			const executor = createSnoStationMemRemMutationExecutor({
 				database: database.runtime.db,
 				jobType: "rem-update",
 				configurationSha256,

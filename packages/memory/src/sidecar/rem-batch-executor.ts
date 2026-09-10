@@ -66,8 +66,8 @@ import {
 } from "../engine/rem/index.js";
 import { createEmbedder, type Embedder } from "../engine/extraction/embedding-provider-client";
 import {
-	readOpenClawConfig,
-	resolveOpenClawConfigPath,
+	readSnoStationMemConfig,
+	resolveSnoStationMemConfigPath,
 	resolveSqliteDbPath,
 } from "../engine/bindings/embedder-config-files";
 import { createLlmClient, type LlmClient } from "../model/llm-client";
@@ -76,7 +76,7 @@ import { pickLlmRoutingConfig } from "../model/llm-mode-routing";
 import { REM_UPDATE_JUDGMENT_SKILL } from "./rem-update-judgment-skill";
 import { pluginConfigSchema } from "../engine/shared/types";
 import { loadStorageExtensions } from "../store/connection";
-import { getMemClawStateDir } from "../engine/operations/runtime-audit-log";
+import { getSnoStationMemStateDir } from "../engine/operations/runtime-audit-log";
 import { MemoryStore } from "../store/store";
 import { scoreCandidatesBySimilarity } from "../store/memory-store-atomic-extraction-write-api";
 import {
@@ -85,9 +85,9 @@ import {
 	type SqliteDatabaseLike,
 } from "../store/sqlite-runtime";
 import {
-	createMemClawRemMutationExecutor,
-	createMemClawRemPorts,
-	createMemClawRemRecovery,
+	createSnoStationMemRemMutationExecutor,
+	createSnoStationMemRemPorts,
+	createSnoStationMemRemRecovery,
 	type RemMutationWriter,
 	type RemWriterOperation,
 } from "../store/rem-sqlite-adapter";
@@ -134,7 +134,7 @@ export function createRemModelStageResponsePort(input: RemModelStageResponsePort
 	return input;
 }
 
-const log = createLogger("rem-sidecar:batch");
+const log = createLogger("sno-station-mem:rem-sidecar:batch");
 const canonicalStoreWriteQueues = new Map<string, Promise<void>>();
 interface CandidateRow {
 	id: string;
@@ -386,8 +386,8 @@ export async function runRemProductionOrderedWave(input: {
 						job_type: jobType,
 						stage,
 					}, {
-						event_name: "mem_claw.rem-batch-executor.ordered.wave.stage.failed",
-						file: "apps/mem-claw/src/sidecar/rem-batch-executor.ts",
+						event_name: "sno_station_mem.rem-batch-executor.ordered.wave.stage.failed",
+						file: "packages/sno-station-mem/src/sidecar/rem-batch-executor.ts",
 						function: "onStageError",
 						site_id: "rem-batch-executor.onStageError.d5f24d50d3",
 					});
@@ -519,8 +519,8 @@ async function runRemBatchJobUnlocked(input: {
 					job_type: input.jobType,
 					candidates: candidates.length,
 				}, {
-					event_name: "mem_claw.rem-batch-executor.scan.started",
-					file: "apps/mem-claw/src/sidecar/rem-batch-executor.ts",
+					event_name: "sno_station_mem.rem-batch-executor.scan.started",
+					file: "packages/sno-station-mem/src/sidecar/rem-batch-executor.ts",
 					function: "runRemBatchJobUnlocked",
 					site_id: "rem-batch-executor.runRemBatchJobUnlocked.55c52b91cf",
 				});
@@ -598,7 +598,7 @@ async function runRemBatchJobUnlocked(input: {
 				...(failure === undefined ? {} : { error: failure }),
 			}, {
 				event_name: "sidecar.batch.completed",
-				file: "apps/mem-claw/src/sidecar/rem-batch-executor.ts",
+				file: "packages/sno-station-mem/src/sidecar/rem-batch-executor.ts",
 				function: "runRemBatchJobUnlocked",
 				site_id: "sidecar.batch.completed",
 			});
@@ -633,8 +633,8 @@ async function openBatchRuntime(input: {
 	modelStageResponses?: RemModelStageResponsePort;
 	configuration?: RemOperationalConfiguration;
 }): Promise<BatchRuntime> {
-	const configPath = resolveOpenClawConfigPath();
-	const hostConfig = existsSync(configPath) ? readOpenClawConfig(configPath) : undefined;
+	const configPath = resolveSnoStationMemConfigPath();
+	const hostConfig = existsSync(configPath) ? readSnoStationMemConfig(configPath) : undefined;
 	const dbPath = resolveSqliteDbPath(hostConfig, (value) =>
 		path.isAbsolute(value) ? value : path.resolve(path.dirname(configPath), value),
 	);
@@ -650,7 +650,7 @@ async function openBatchRuntime(input: {
 		hostConfig?.plugins?.entries?.[FIXED_PROTOCOL_VALUE_74]?.config ?? {};
 	const pluginConfig = pluginConfigSchema.parse(pluginConfigValue);
 	await initSqliteRuntime();
-	const embedder = createEmbedder(pluginConfig.embedding, getMemClawStateDir());
+	const embedder = createEmbedder(pluginConfig.embedding, getSnoStationMemStateDir());
 	let store: MemoryStore | undefined;
 	let database: ReturnType<typeof openSqliteDatabase> | undefined;
 	try {
@@ -667,8 +667,8 @@ async function openBatchRuntime(input: {
 			job_type: input.jobType,
 			database_path: realpathSync(dbPath),
 		}, {
-			event_name: "mem_claw.rem-batch-executor.database.opened",
-			file: "apps/mem-claw/src/sidecar/rem-batch-executor.ts",
+			event_name: "sno_station_mem.rem-batch-executor.database.opened",
+			file: "packages/sno-station-mem/src/sidecar/rem-batch-executor.ts",
 			function: "openBatchRuntime",
 			site_id: "rem-batch-executor.openBatchRuntime.86fa720e8f",
 		});
@@ -700,8 +700,8 @@ async function openBatchRuntime(input: {
 					model: model ?? null,
 					usage: usage ? { ...usage, source: "provider-returned" } : null,
 				}, {
-					event_name: "mem_claw.rem-batch-executor.llm.provider.response",
-					file: "apps/mem-claw/src/sidecar/rem-batch-executor.ts",
+					event_name: "sno_station_mem.rem-batch-executor.llm.provider.response",
+					file: "packages/sno-station-mem/src/sidecar/rem-batch-executor.ts",
 					function: "onProviderResponse",
 					site_id: "rem-batch-executor.onProviderResponse.df4f2d4fa1",
 				});
@@ -745,8 +745,8 @@ async function openBatchRuntime(input: {
 }
 
 function resolveBatchDatabasePath(): string {
-	const configPath = resolveOpenClawConfigPath();
-	const hostConfig = existsSync(configPath) ? readOpenClawConfig(configPath) : undefined;
+	const configPath = resolveSnoStationMemConfigPath();
+	const hostConfig = existsSync(configPath) ? readSnoStationMemConfig(configPath) : undefined;
 	return resolveSqliteDbPath(hostConfig, (value) =>
 		path.isAbsolute(value) ? value : path.resolve(path.dirname(configPath), value),
 	);
@@ -898,7 +898,7 @@ async function runUpdate(input: {
 	// against a persona's ~209 actionable candidates — not a ceiling on work but silent, permanent
 	// discard of 95% of it, with nothing in the output saying so.
 	const candidates = input.candidates;
-	const ports = createMemClawRemPorts({
+	const ports = createSnoStationMemRemPorts({
 		database: input.runtime.database,
 		llmClient: input.runtime.llm,
 		memoryStore: input.runtime.store,
@@ -907,8 +907,8 @@ async function runUpdate(input: {
 		input.configuration === undefined
 			? "0".repeat(64)
 			: deriveRemConfigurationSha256(input.configuration);
-	const recovery = createMemClawRemRecovery(input.runtime.database);
-	const mutationExecutor = createMemClawRemMutationExecutor({
+	const recovery = createSnoStationMemRemRecovery(input.runtime.database);
+	const mutationExecutor = createSnoStationMemRemMutationExecutor({
 		database: input.runtime.database,
 		jobType: input.jobType,
 		configurationSha256,
@@ -957,8 +957,8 @@ async function runUpdate(input: {
 			total: owned.length,
 			row_id: candidate.id,
 		}, {
-			event_name: "mem_claw.rem-batch-executor.update.progress",
-			file: "apps/mem-claw/src/sidecar/rem-batch-executor.ts",
+			event_name: "sno_station_mem.rem-batch-executor.update.progress",
+			file: "packages/sno-station-mem/src/sidecar/rem-batch-executor.ts",
 			function: "runUpdate",
 			site_id: "rem-batch-executor.runUpdate.dbf2a836db",
 		});
@@ -1032,8 +1032,8 @@ async function runUpdate(input: {
 					? { reason: decision.reason }
 					: { retired_value_count: decision.retiredValues.length }),
 			}, {
-				event_name: "mem_claw.rem-batch-executor.update.decision.evaluated",
-				file: "apps/mem-claw/src/sidecar/rem-batch-executor.ts",
+				event_name: "sno_station_mem.rem-batch-executor.update.decision.evaluated",
+				file: "packages/sno-station-mem/src/sidecar/rem-batch-executor.ts",
 				function: "runUpdate",
 				site_id: "rem-batch-executor.runUpdate.7dfc387204",
 			});
@@ -1072,8 +1072,8 @@ async function runUpdate(input: {
 				outcome: verification.outcome,
 				...(verification.outcome === "refuse" ? { reason: verification.reason } : {}),
 			}, {
-				event_name: "mem_claw.rem-batch-executor.update.verification.evaluated",
-				file: "apps/mem-claw/src/sidecar/rem-batch-executor.ts",
+				event_name: "sno_station_mem.rem-batch-executor.update.verification.evaluated",
+				file: "packages/sno-station-mem/src/sidecar/rem-batch-executor.ts",
 				function: "runUpdate",
 				site_id: "rem-batch-executor.runUpdate.7ffc737c24",
 			});
@@ -1235,8 +1235,8 @@ async function runProductionUpdateRelations(input: {
 	configuration?: RemOperationalConfiguration;
 	configurationSha256: string;
 	budget: RemUpdateBudget;
-	mutationExecutor: ReturnType<typeof createMemClawRemMutationExecutor>;
-	recovery: ReturnType<typeof createMemClawRemRecovery>;
+	mutationExecutor: ReturnType<typeof createSnoStationMemRemMutationExecutor>;
+	recovery: ReturnType<typeof createSnoStationMemRemRecovery>;
 }): Promise<{
 	actionsApplied: number;
 	handledRowIds: Set<string>;
@@ -2057,12 +2057,12 @@ async function recordInvalidWriterAttempts(input: {
 	runtime: BatchRuntime;
 	configuration?: RemOperationalConfiguration;
 	configurationSha256: string;
-	recovery: ReturnType<typeof createMemClawRemRecovery>;
+	recovery: ReturnType<typeof createSnoStationMemRemRecovery>;
 	row: Candidate;
 	successor: Candidate;
 	reason: "model_response_absent" | "model_response_invalid";
 }): Promise<void> {
-	const executor = createMemClawRemMutationExecutor({
+	const executor = createSnoStationMemRemMutationExecutor({
 		database: input.runtime.database,
 		jobType: input.jobType,
 		configurationSha256: input.configurationSha256,
@@ -2165,7 +2165,7 @@ async function runReplace(input: {
 }): Promise<RemStageResult> {
 	const startedAtMs = Date.now();
 	let modelTokens = 0;
-	const ports = createMemClawRemPorts({
+	const ports = createSnoStationMemRemPorts({
 		database: input.runtime.database,
 		llmClient: input.runtime.llm,
 		memoryStore: input.runtime.store,
@@ -2174,8 +2174,8 @@ async function runReplace(input: {
 		input.configuration === undefined
 			? "0".repeat(64)
 			: deriveRemConfigurationSha256(input.configuration);
-	const recovery = createMemClawRemRecovery(input.runtime.database);
-	await createMemClawRemMutationExecutor({
+	const recovery = createSnoStationMemRemRecovery(input.runtime.database);
+	await createSnoStationMemRemMutationExecutor({
 		database: input.runtime.database,
 		jobType: input.jobType,
 		configurationSha256,
@@ -2384,8 +2384,8 @@ async function runReplace(input: {
 			total: pairs.length,
 			pair_id: pairClaim.pairId,
 		}, {
-			event_name: "mem_claw.rem-batch-executor.replace.progress",
-			file: "apps/mem-claw/src/sidecar/rem-batch-executor.ts",
+			event_name: "sno_station_mem.rem-batch-executor.replace.progress",
+			file: "packages/sno-station-mem/src/sidecar/rem-batch-executor.ts",
 			function: "runReplace",
 			site_id: "rem-batch-executor.runReplace.e1e35e40e9",
 		});
@@ -2584,8 +2584,8 @@ async function runReplace(input: {
 				reason: coverage.reason,
 				...(coverage.detail === undefined ? {} : { detail: coverage.detail }),
 			}, {
-				event_name: "mem_claw.rem-batch-executor.replace.coverage.refused",
-				file: "apps/mem-claw/src/sidecar/rem-batch-executor.ts",
+				event_name: "sno_station_mem.rem-batch-executor.replace.coverage.refused",
+				file: "packages/sno-station-mem/src/sidecar/rem-batch-executor.ts",
 				function: "runReplace",
 				site_id: "rem-batch-executor.runReplace.de3a5f3ce3",
 			});
@@ -2738,7 +2738,7 @@ async function runReplace(input: {
 				// Its own executor: the one built below is constructed with a soft-close applier bound
 				// to this pair's coverage token, and this write is a text version on the SURVIVOR, a
 				// different row and a different writer.
-				const carryExecutor = createMemClawRemMutationExecutor({
+				const carryExecutor = createSnoStationMemRemMutationExecutor({
 					database: input.runtime.database,
 					jobType: input.jobType,
 					configurationSha256,
@@ -2824,8 +2824,8 @@ async function runReplace(input: {
 				named: arbitration.retiringClauseIndices.length,
 				resolved: retiredFactAtoms.length,
 			}, {
-				event_name: "mem_claw.rem-batch-executor.replace.retiring.index.unresolved",
-				file: "apps/mem-claw/src/sidecar/rem-batch-executor.ts",
+				event_name: "sno_station_mem.rem-batch-executor.replace.retiring.index.unresolved",
+				file: "packages/sno-station-mem/src/sidecar/rem-batch-executor.ts",
 				function: "runReplace",
 				site_id: "rem-batch-executor.runReplace.e4be8cfe8f",
 			});
@@ -2847,7 +2847,7 @@ async function runReplace(input: {
 				ports.clock.now(),
 			);
 		let softCloseRefusalReason: string | undefined;
-		const mutationExecutor = createMemClawRemMutationExecutor({
+		const mutationExecutor = createSnoStationMemRemMutationExecutor({
 			database: input.runtime.database,
 			jobType: input.jobType,
 			configurationSha256,
@@ -3126,8 +3126,8 @@ export async function buildRemReplaceCandidateQueue(input: {
 			total: candidates.length,
 			row_id: candidate.id,
 		}, {
-			event_name: "mem_claw.rem-batch-executor.replace.candidate.progress",
-			file: "apps/mem-claw/src/sidecar/rem-batch-executor.ts",
+			event_name: "sno_station_mem.rem-batch-executor.replace.candidate.progress",
+			file: "packages/sno-station-mem/src/sidecar/rem-batch-executor.ts",
 			function: "buildRemReplaceCandidateQueue",
 			site_id: "rem-batch-executor.buildRemReplaceCandidateQueue.25aa1a67a6",
 		});
@@ -3570,8 +3570,8 @@ function reserveReplaceStage(
 		stage,
 		reason: reservation.reason,
 	}, {
-		event_name: "mem_claw.rem-batch-executor.replace.stage.unmeasured",
-		file: "apps/mem-claw/src/sidecar/rem-batch-executor.ts",
+		event_name: "sno_station_mem.rem-batch-executor.replace.stage.unmeasured",
+		file: "packages/sno-station-mem/src/sidecar/rem-batch-executor.ts",
 		function: "reserveReplaceStage",
 		site_id: "rem-batch-executor.reserveReplaceStage.4e67e45fd5",
 	});

@@ -13,7 +13,7 @@ import { KEYCHAIN_ACCOUNT, KEYCHAIN_SERVICE_DEFAULT } from "@snoai/sno-station-c
 import { createLogger } from "@snoai/utils/logger";
 import {
 	assertLocalFilesystem,
-	getMemClawDataDir,
+	getSnoStationMemDataDir,
 	getInstallManifestPath,
 } from "./data-paths";
 import {
@@ -66,7 +66,7 @@ export interface BootstrapOptions {
  *   3. manifest missing, dir empty → fresh install.
  */
 export function bootstrapDataLayout(options: BootstrapOptions = {}): BootstrapResult {
-	const dataDir = getMemClawDataDir();
+	const dataDir = getSnoStationMemDataDir();
 	mkdirSync(dataDir, { recursive: true, mode: 0o700 });
 	assertLocalFilesystem(dataDir);
 
@@ -81,8 +81,8 @@ export function bootstrapDataLayout(options: BootstrapOptions = {}): BootstrapRe
 			dataFormatVersion: manifest.dataFormatVersion,
 			dbPath,
 		}, {
-			event_name: "mem_claw.data-bootstrap.manifest.loaded",
-			file: "apps/mem-claw/src/storage/data-bootstrap.ts",
+			event_name: "sno_station_mem.data-bootstrap.manifest.loaded",
+			file: "packages/sno-station-mem/src/store/data-bootstrap.ts",
 			function: "bootstrapDataLayout",
 			site_id: "data-bootstrap.bootstrapDataLayout.4fc42585ae",
 		});
@@ -111,8 +111,8 @@ export function bootstrapDataLayout(options: BootstrapOptions = {}): BootstrapRe
 		dataFormatVersion: manifest.dataFormatVersion,
 		dbPath: resolved,
 	}, {
-		event_name: "mem_claw.data-bootstrap.fresh.install.bootstrapped",
-		file: "apps/mem-claw/src/storage/data-bootstrap.ts",
+		event_name: "sno_station_mem.data-bootstrap.fresh.install.bootstrapped",
+		file: "packages/sno-station-mem/src/store/data-bootstrap.ts",
 		function: "bootstrapDataLayout",
 		site_id: "data-bootstrap.bootstrapDataLayout.4af3189946",
 	});

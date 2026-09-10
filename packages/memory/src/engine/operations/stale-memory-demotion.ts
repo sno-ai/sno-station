@@ -97,8 +97,8 @@ export async function runStaleDemotion(
 				memoryId: score.memoryId,
 				error: err instanceof Error ? err : new Error(String(err)),
 			}, {
-				event_name: "mem_claw.stale-memory-demotion.failed.to.demote.stale.memory",
-				file: "apps/mem-claw/src/operations/stale-memory-demotion.ts",
+				event_name: "sno_station_mem.stale-memory-demotion.failed.to.demote.stale.memory",
+				file: "packages/sno-station-mem/src/engine/operations/stale-memory-demotion.ts",
 				function: "runStaleDemotion",
 				site_id: "stale-memory-demotion.runStaleDemotion.e86f004935",
 			});
@@ -106,8 +106,8 @@ export async function runStaleDemotion(
 	}
 
 	log.info("stale-tier demotion complete", { scanned: entries.length, demoted }, {
-		event_name: "mem_claw.stale-memory-demotion.stale.tier.demotion.complete",
-		file: "apps/mem-claw/src/operations/stale-memory-demotion.ts",
+		event_name: "sno_station_mem.stale-memory-demotion.stale.tier.demotion.complete",
+		file: "packages/sno-station-mem/src/engine/operations/stale-memory-demotion.ts",
 		function: "runStaleDemotion",
 		site_id: "stale-memory-demotion.runStaleDemotion.d7a77107bb",
 	});

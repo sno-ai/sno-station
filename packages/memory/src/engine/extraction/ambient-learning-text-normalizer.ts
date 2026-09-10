@@ -14,7 +14,7 @@
 
 // LH: shared wrapper-stripping impl; previously a near-identical copy lived here.
 // LH: Bug #2 fix — same input must produce same output across both entry paths.
-// LH: codex-review 2026-04-26.
+// LH: host-review 2026-04-26.
 import { stripLeadingRuntimeWrappers } from "./runtime-wrapper-sanitizer";
 import {
 	RELEVANT_MEMORIES_CLOSE_TAG,
@@ -36,7 +36,7 @@ const AMBIENT_LEARNING_SESSION_RESET_PREFIX =
 const AMBIENT_LEARNING_ADDRESSING_PREFIX_RE = /^(?:<@!?[0-9]+>|@[A-Za-z0-9_.-]+)[,:\s]*/;
 const AMBIENT_LEARNING_SYSTEM_EVENT_LINE_RE =
 	/^System:\s*\[[^\n]*?\]\s*Exec\s+(?:completed|failed|started)\b.*$/gim;
-// Runtime wrapper regexes + helpers moved to ./runtime-wrapper-sanitizer.ts (LH: Bug #2, codex-review 2026-04-26)
+// Runtime wrapper regexes + helpers moved to ./runtime-wrapper-sanitizer.ts (LH: Bug #2, host-review 2026-04-26)
 
 /** Implements escape reg exp as the local Ambient Learning normalization operation. */
 function escapeRegExp(value: string): string {
@@ -116,7 +116,7 @@ function stripAmbientLearningAddressingPrefix(text: string): string {
 }
 
 // LH: stripRuntimeWrapperBoilerplate / stripRuntimeWrapperLine / stripLeadingRuntimeWrappers
-// LH: now live in ./runtime-wrapper-sanitizer.ts (Bug #2 consolidation, codex-review 2026-04-26).
+// LH: now live in ./runtime-wrapper-sanitizer.ts (Bug #2 consolidation, host-review 2026-04-26).
 
 /**
  * Removes retrieval context and runtime wrapper text before Ambient Learning evaluates

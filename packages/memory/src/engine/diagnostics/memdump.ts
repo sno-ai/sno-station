@@ -1,5 +1,5 @@
 /** @file memdump.ts
- * @purpose Read encrypted mem-claw memory rows as JSON Lines without changing the source store.
+ * @purpose Read encrypted sno-station-mem memory rows as JSON Lines without changing the source store.
  * @boundary External sno-memdump command; it uses the storage runtime's encrypted readonly open.
  */
 
@@ -313,7 +313,7 @@ export async function main(args: string[]): Promise<void> {
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
 	main(process.argv.slice(2)).catch((error) => {
-		writeEmergencyDiagnostic({ level: "error", body: "Memory dump failed", attributes: { error, exit_code: 1 }, source: { event_name: "memdump.main.failed", file: "apps/mem-claw/src/memdump.ts", function: "<module>", site_id: "memdump.main.failed" } });
+		writeEmergencyDiagnostic({ level: "error", body: "Memory dump failed", attributes: { error, exit_code: 1 }, source: { event_name: "memdump.main.failed", file: "packages/sno-station-mem/src/engine/diagnostics/memdump.ts", function: "<module>", site_id: "memdump.main.failed" } });
 		process.exitCode = 1;
 	});
 }

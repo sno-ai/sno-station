@@ -9,7 +9,7 @@ import { pickLlmRoutingConfig, resolveLlmOccasion, resolveLlmRoute } from "../..
 import type { LlmRoutingConfigInput } from "../../contract/config/plugin-config-mode-schema";
 import { logSiteCatalog } from "./log-site-catalog.generated";
 
-const APPLICATION_NAME = "mem-claw";
+const APPLICATION_NAME = "sno-station-mem";
 const log = createLogger("sno-station-mem:runtime");
 let snapshotEmitted = false;
 const OCCASION_CALLS: ReadonlyArray<readonly [MemoryLlmAdapterSlot, string]> = [
@@ -91,7 +91,7 @@ export function emitRuntimeStartSnapshot(input: RuntimeDiagnosticSnapshot): void
 		attribute_dictionary_hash: contentHash(attributeDictionary),
 		config_hash: contentHash({ routing, preset: input.preset, endpoint, hostModel }),
 	}, {
-		event_name: "memory.process.started", file: "apps/mem-claw/src/observability/runtime-diagnostics.ts",
+		event_name: "memory.process.started", file: "packages/sno-station-mem/src/engine/observability/runtime-diagnostics.ts",
 		function: "emitRuntimeStartSnapshot", site_id: "runtime.process.started",
 	});
 }

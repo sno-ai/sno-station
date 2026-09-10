@@ -42,7 +42,7 @@ Object.assign(MemoryRetriever.prototype, {
 			limit: context.limit,
 			mode: this.config.mode,
 			source: context.source,
-		}, { event_name: "memory.retrieval.started", file: "apps/mem-claw/src/retrieval/retriever-execution.ts", function: "retrieve", site_id: "memory.retrieval.started" });
+		}, { event_name: "memory.retrieval.started", file: "packages/sno-station-mem/src/engine/retrieval/retriever-execution.ts", function: "retrieve", site_id: "memory.retrieval.started" });
 		const traceStartMs = Date.now();
 		// Isolate the retrieval ranking operation that can fail because of runtime I/O or input shape.
 		try {
@@ -178,11 +178,11 @@ Object.assign(MemoryRetriever.prototype, {
 				stages: finalTrace?.stages.map(({ name, inputCount, outputCount, scoreRange, durationMs, metadata }) =>
 					({ name, inputCount, outputCount, scoreRange, durationMs, metadata })),
 				trace_available: isTraceEnabled(),
-			}, { event_name: "memory.retrieval.completed", file: "apps/mem-claw/src/retrieval/retriever-execution.ts", function: "retrieve", site_id: "memory.retrieval.completed" });
+			}, { event_name: "memory.retrieval.completed", file: "packages/sno-station-mem/src/engine/retrieval/retriever-execution.ts", function: "retrieve", site_id: "memory.retrieval.completed" });
 			return results;
 		} catch (error) {
 			log.error("Memory retrieval failed", { outcome: "failed", error, duration_ms: performance.now() - started },
-				{ event_name: "memory.retrieval.completed", file: "apps/mem-claw/src/retrieval/retriever-execution.ts", function: "retrieve", site_id: "memory.retrieval.failed" });
+				{ event_name: "memory.retrieval.completed", file: "packages/sno-station-mem/src/engine/retrieval/retriever-execution.ts", function: "retrieve", site_id: "memory.retrieval.failed" });
 			// Surface this invalid retrieval ranking state as an explicit typed failure.
 			throw new RetrievalError("Failed to retrieve memories", error);
 		}
@@ -261,11 +261,11 @@ Object.assign(MemoryRetriever.prototype, {
 				duration_ms: performance.now() - started, mode, result_count: results.length,
 				stages: finalTrace.stages.map(({ name, inputCount, outputCount, scoreRange, durationMs, metadata }) =>
 					({ name, inputCount, outputCount, scoreRange, durationMs, metadata })),
-			}, { event_name: "memory.retrieval.completed", file: "apps/mem-claw/src/retrieval/retriever-execution.ts", function: "retrieveWithTrace", site_id: "memory.retrieval.traced.completed" });
+			}, { event_name: "memory.retrieval.completed", file: "packages/sno-station-mem/src/engine/retrieval/retriever-execution.ts", function: "retrieveWithTrace", site_id: "memory.retrieval.traced.completed" });
 			return { results, trace: finalTrace };
 		} catch (error) {
 			log.error("Traced memory retrieval failed", { outcome: "failed", error, duration_ms: performance.now() - started },
-				{ event_name: "memory.retrieval.completed", file: "apps/mem-claw/src/retrieval/retriever-execution.ts", function: "retrieveWithTrace", site_id: "memory.retrieval.traced.failed" });
+				{ event_name: "memory.retrieval.completed", file: "packages/sno-station-mem/src/engine/retrieval/retriever-execution.ts", function: "retrieveWithTrace", site_id: "memory.retrieval.traced.failed" });
 			// Surface this invalid retrieval ranking state as an explicit typed failure.
 			throw new RetrievalError("Failed to retrieve memories", error);
 		}
@@ -336,7 +336,7 @@ Object.assign(MemoryRetriever.prototype, {
 				log.warn("tier evaluation failed for memory", {
 					memoryId: r.entry.id,
 					error,
-				}, { event_name: "memory.retrieval.tier.failed", file: "apps/mem-claw/src/retrieval/retriever-execution.ts", function: "evaluateTopKTierTransitions", site_id: "memory.retrieval.tier.failed" });
+				}, { event_name: "memory.retrieval.tier.failed", file: "packages/sno-station-mem/src/engine/retrieval/retriever-execution.ts", function: "evaluateTopKTierTransitions", site_id: "memory.retrieval.tier.failed" });
 			}
 		}
 	},

@@ -320,8 +320,8 @@ export class AccessTracker {
 			log.warn("destroying with pending writes", {
 				pendingCount: this.pending.size,
 			}, {
-				event_name: "mem_claw.access-tracker.destroying.with.pending.writes",
-				file: "apps/mem-claw/src/retrieval/access-tracker.ts",
+				event_name: "sno_station_mem.access-tracker.destroying.with.pending.writes",
+				file: "packages/sno-station-mem/src/engine/retrieval/access-tracker.ts",
 				function: "destroy",
 				site_id: "access-tracker.destroy.5991e0f580",
 			});
@@ -369,8 +369,8 @@ export class AccessTracker {
 						failures,
 						error: err,
 					}, {
-						event_name: "mem_claw.access-tracker.dropping.access.delta.after.repeated.write.failures",
-						file: "apps/mem-claw/src/retrieval/access-tracker.ts",
+						event_name: "sno_station_mem.access-tracker.dropping.access.delta.after.repeated.write.failures",
+						file: "packages/sno-station-mem/src/engine/retrieval/access-tracker.ts",
 						function: "doFlush",
 						site_id: "access-tracker.doFlush.b3bb3939f2",
 					});
@@ -384,8 +384,8 @@ export class AccessTracker {
 				error: err,
 				committed_count: 0,
 			}, {
-				event_name: "mem_claw.access-tracker.access.flush.batch.failed",
-				file: "apps/mem-claw/src/retrieval/access-tracker.ts",
+				event_name: "sno_station_mem.access-tracker.access.flush.batch.failed",
+				file: "packages/sno-station-mem/src/engine/retrieval/access-tracker.ts",
 				function: "doFlush",
 				site_id: "access-tracker.doFlush.f82865a307",
 			});
@@ -429,8 +429,8 @@ export class AccessTracker {
 					previousCount: prevCount,
 					ceiling,
 				}, {
-					event_name: "mem_claw.access-tracker.legacy.access.count.clamped.to.ceiling",
-					file: "apps/mem-claw/src/retrieval/access-tracker.ts",
+					event_name: "sno_station_mem.access-tracker.legacy.access.count.clamped.to.ceiling",
+					file: "packages/sno-station-mem/src/engine/retrieval/access-tracker.ts",
 					function: "buildAccessDelta",
 					site_id: "access-tracker.buildAccessDelta.4ac8f20936",
 				});

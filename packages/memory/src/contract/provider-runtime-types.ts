@@ -1,12 +1,12 @@
-/** @file openclaw-memory-contracts.ts
- * @purpose Owns the memory-manager fields mem-claw implements for OpenClaw.
+/** @file sno-station-mem-memory-contracts.ts
+ * @purpose Owns the memory-manager fields sno-station-mem implements for SnoStationMem.
  * @boundary Structural types only; no host runtime behavior lives here.
  */
 
 
-export type OpenClawMemorySource = "memory" | "sessions";
+export type SnoStationMemMemorySource = "memory" | "sessions";
 
-export type OpenClawMemorySearchResult = {
+export type SnoStationMemMemorySearchResult = {
 	path: string;
 	startLine: number;
 	endLine: number;
@@ -14,11 +14,11 @@ export type OpenClawMemorySearchResult = {
 	vectorScore?: number;
 	textScore?: number;
 	snippet: string;
-	source: OpenClawMemorySource;
+	source: SnoStationMemMemorySource;
 	citation?: string;
 };
 
-export type OpenClawMemoryReadResult = {
+export type SnoStationMemMemoryReadResult = {
 	text: string;
 	path: string;
 	truncated?: boolean;
@@ -27,7 +27,7 @@ export type OpenClawMemoryReadResult = {
 	nextFrom?: number;
 };
 
-export type OpenClawMemoryEmbeddingProbeResult = {
+export type SnoStationMemMemoryEmbeddingProbeResult = {
 	ok: boolean;
 	error?: string;
 	checked?: boolean;
@@ -35,19 +35,19 @@ export type OpenClawMemoryEmbeddingProbeResult = {
 	checkedAtMs?: number;
 };
 
-export type OpenClawMemorySearchRuntimeDebug = {
+export type SnoStationMemMemorySearchRuntimeDebug = {
 	backend: "qmd";
 	effectiveMode?: string;
 	fallback?: string;
 };
 
-export type OpenClawMemorySyncProgressUpdate = {
+export type SnoStationMemMemorySyncProgressUpdate = {
 	completed: number;
 	total: number;
 	label?: string;
 };
 
-export type OpenClawMemoryProviderStatus = {
+export type SnoStationMemMemoryProviderStatus = {
 	backend: "qmd";
 	provider: string;
 	model?: string;
@@ -55,9 +55,9 @@ export type OpenClawMemoryProviderStatus = {
 	chunks?: number;
 	workspaceDir?: string;
 	dbPath?: string;
-	sources?: OpenClawMemorySource[];
+	sources?: SnoStationMemMemorySource[];
 	sourceCounts?: Array<{
-		source: OpenClawMemorySource;
+		source: SnoStationMemMemorySource;
 		files: number;
 		chunks: number;
 	}>;
@@ -76,44 +76,44 @@ export type OpenClawMemoryProviderStatus = {
 	custom?: Record<string, unknown>;
 };
 
-export interface OpenClawMemorySearchManager {
+export interface SnoStationMemMemorySearchManager {
 	search(
 		query: string,
 		opts?: {
 			maxResults?: number;
 			minScore?: number;
-			onDebug?: (debug: OpenClawMemorySearchRuntimeDebug) => void;
-			sources?: OpenClawMemorySource[];
+			onDebug?: (debug: SnoStationMemMemorySearchRuntimeDebug) => void;
+			sources?: SnoStationMemMemorySource[];
 			signal?: AbortSignal;
 		},
-	): Promise<OpenClawMemorySearchResult[]>;
+	): Promise<SnoStationMemMemorySearchResult[]>;
 	readFile(params: {
 		relPath: string;
 		from?: number;
 		lines?: number;
-	}): Promise<OpenClawMemoryReadResult>;
-	status(): OpenClawMemoryProviderStatus;
+	}): Promise<SnoStationMemMemoryReadResult>;
+	status(): SnoStationMemMemoryProviderStatus;
 	sync?(params?: {
 		reason?: string;
 		force?: boolean;
 		sessionFiles?: string[];
-		progress?: (update: OpenClawMemorySyncProgressUpdate) => void;
+		progress?: (update: SnoStationMemMemorySyncProgressUpdate) => void;
 	}): Promise<void>;
-	getCachedEmbeddingAvailability?(): OpenClawMemoryEmbeddingProbeResult | null;
-	probeEmbeddingAvailability(): Promise<OpenClawMemoryEmbeddingProbeResult>;
+	getCachedEmbeddingAvailability?(): SnoStationMemMemoryEmbeddingProbeResult | null;
+	probeEmbeddingAvailability(): Promise<SnoStationMemMemoryEmbeddingProbeResult>;
 	probeVectorStoreAvailability?(): Promise<boolean>;
 	probeVectorAvailability(): Promise<boolean>;
 	close?(): Promise<void>;
 }
 
-export type OpenClawMemoryRuntime = {
+export type SnoStationMemMemoryRuntime = {
 	getMemorySearchManager(params: {
 		cfg: ProviderHostConfig;
 		agentId: string;
 		purpose?: "default" | "status" | "cli";
 		inspectSources?: boolean;
 	}): Promise<{
-		manager: OpenClawMemorySearchManager | null;
+		manager: SnoStationMemMemorySearchManager | null;
 		error?: string;
 	}>;
 	resolveMemoryBackendConfig(params: {

@@ -5,7 +5,7 @@
 
 import type { JsonObject } from "@snoai/sno-observe";
 import type { Embedder, EmbeddingConfig } from "../extraction/embedding-provider-client";
-import { getMemClawStateDir, runWithMemoryAudit } from "../operations/runtime-audit-log";
+import { getSnoStationMemStateDir, runWithMemoryAudit } from "../operations/runtime-audit-log";
 import {
 	DEFAULT_RETRIEVAL_CONFIG,
 	MemoryRetriever,
@@ -118,7 +118,7 @@ function auditRetrieval<T>(
 	const scopes = context.scopeFilter ?? [];
 	const scope = scopes.length === 1 ? (scopes[0] ?? "all") : scopes.length > 1 ? "multiple" : "all";
 	return runWithMemoryAudit({
-		stateDir: getMemClawStateDir(),
+		stateDir: getSnoStationMemStateDir(),
 		event: "memory_searched",
 		operation,
 		scope,

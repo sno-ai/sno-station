@@ -108,7 +108,7 @@ function toDecayableMemory(entry: RetrievalResult["entry"]): DecayableMemory {
  * dropped, were indistinguishable after the fact. `skipReason` matters just as much: a stage
  * disabled by config returns its input untouched, which looks identical to a stage that ran
  * and changed nothing. Ported from the upstream reference's `stageCounts` + `buildDropSummary`
- * (claw-memory-lancedb-pro/src/retriever.ts:655, :303).
+ * (memory-memory-lancedb-pro/src/retriever.ts:655, :303).
  */
 function tracedStage(
 	trace: TraceCollector | undefined,
@@ -391,7 +391,7 @@ Object.assign(MemoryRetriever.prototype, {
 		// Stamp on the same normalized scale as every other selected item's
 		// mmrScore below. It is 1.0 unless a higher-scored result has no vector.
 		// stamping the raw un-normalized score here made rank-1 report the
-		// lowest mmr_score of the whole set in telemetry (codex-reviewer, 2026-07-05).
+		// lowest mmr_score of the whole set in telemetry (host-reviewer, 2026-07-05).
 		selected.push({ ...seed, mmrScore: seed.score / maxScore });
 		let lastAdmitted = firstComparableIndex;
 

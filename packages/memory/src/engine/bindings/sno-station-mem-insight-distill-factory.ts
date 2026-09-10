@@ -1,4 +1,4 @@
-/** @file openclaw-insight-distill-factory.ts
+/** @file sno-station-mem-insight-distill-factory.ts
  * @purpose Builds the optional Insight Distill LLM extractor from validated plugin runtime config.
  * @boundary Extractor construction only; capture execution lives in the Ambient Learning hook.
  */
@@ -13,7 +13,7 @@ import {
 	appendAuditEntry,
 	type Embedder,
 	type MemoryStore,
-	type OpenClawPluginApi,
+	type SnoStationMemPluginApi,
 	type PluginConfig,
 	type PluginObservability,
 } from "./sno-station-mem-runtime-dependencies";
@@ -33,7 +33,7 @@ type InsightDistillFactoryConfig = Omit<PluginConfig, "remEnhanced" | "agentNati
 // LH: The distilled path uses extracted-memory retrieval quality as its baseline, not raw chunk migration metrics.
 // LH: This guard is the main product switch between deterministic capture and LLM-assisted memory formation.
 export function buildInsightDistiller(
-	api: OpenClawPluginApi,
+	api: SnoStationMemPluginApi,
 	config: InsightDistillFactoryConfig,
 	store: MemoryStore,
 	_embedder: Embedder,
@@ -51,22 +51,22 @@ export function buildInsightDistiller(
 		config: routing,
 	});
 	if ("off" in extractRoute) {
-		diagnosticLog.info("Memory extraction disabled", { outcome: "skipped", reason_code: extractRoute.reason }, { event_name: "memory.openclaw_insight_distill_factory.memory.extraction.disabled", file: "apps/mem-claw/src/plugin/openclaw-insight-distill-factory.ts", function: "buildInsightDistiller", site_id: "plugin.openclaw-insight-distill-factory.buildInsightDistiller.8b084be5ca" });
+		diagnosticLog.info("Memory extraction disabled", { outcome: "skipped", reason_code: extractRoute.reason }, { event_name: "memory.sno-station-mem_insight_distill_factory.memory.extraction.disabled", file: "packages/sno-station-mem/src/engine/bindings/sno-station-mem-insight-distill-factory.ts", function: "buildInsightDistiller", site_id: "plugin.sno-station-mem-insight-distill-factory.buildInsightDistiller.8b084be5ca" });
 		return undefined;
 	}
 	if (
 		extractRoute.transport !== "chat-completions" &&
 		extractRoute.transport !== "agent-host-seam"
 	) {
-		diagnosticLog.info("Memory extraction transport unavailable", { outcome: "skipped", transport: extractRoute.transport }, { event_name: "memory.openclaw_insight_distill_factory.memory.extraction.transport.unavailable", file: "apps/mem-claw/src/plugin/openclaw-insight-distill-factory.ts", function: "buildInsightDistiller", site_id: "plugin.openclaw-insight-distill-factory.buildInsightDistiller.6cdc733c64" });
+		diagnosticLog.info("Memory extraction transport unavailable", { outcome: "skipped", transport: extractRoute.transport }, { event_name: "memory.sno-station-mem_insight_distill_factory.memory.extraction.transport.unavailable", file: "packages/sno-station-mem/src/engine/bindings/sno-station-mem-insight-distill-factory.ts", function: "buildInsightDistiller", site_id: "plugin.sno-station-mem-insight-distill-factory.buildInsightDistiller.6cdc733c64" });
 		return undefined;
 	}
 	if (extractRoute.transport === "agent-host-seam" && !agentPort) {
-		diagnosticLog.info("mem-claw insight-distill disabled (host agent binding unavailable)", undefined, {
-			event_name: "mem_claw.openclaw-insight-distill-factory.mem.claw.insight.distill.disabled.host.agent.binding.unavailable",
-			file: "apps/mem-claw/src/plugin/openclaw-insight-distill-factory.ts",
+		diagnosticLog.info("sno-station-mem insight-distill disabled (host agent binding unavailable)", undefined, {
+			event_name: "sno_station_mem.sno-station-mem-insight-distill-factory.sno.station.mem.insight.distill.disabled.host.agent.binding.unavailable",
+			file: "packages/sno-station-mem/src/engine/bindings/sno-station-mem-insight-distill-factory.ts",
 			function: "buildInsightDistiller",
-			site_id: "openclaw-insight-distill-factory.buildInsightDistiller.847c5ab779",
+			site_id: "sno-station-mem-insight-distill-factory.buildInsightDistiller.847c5ab779",
 		});
 		return undefined;
 	}
@@ -75,7 +75,7 @@ export function buildInsightDistiller(
 	const llmCfg = config.extraction.llm;
 	// Guard llm cfg here so the remaining module behavior path works with normalized inputs.
 	if (!llmCfg) {
-		throw new Error(`mem-claw mode "${config.mode}" requires extraction.llm.preset`);
+		throw new Error(`sno-station-mem mode "${config.mode}" requires extraction.llm.preset`);
 	}
 	// Isolate the plugin lifecycle operation that can fail because of runtime I/O or input shape.
 	try {
@@ -114,14 +114,14 @@ export function buildInsightDistiller(
 				});
 			},
 		});
-		diagnosticLog.info("Memory extraction enabled", { outcome: "success", model: llmCfg.preset }, { event_name: "memory.openclaw_insight_distill_factory.memory.extraction.enabled", file: "apps/mem-claw/src/plugin/openclaw-insight-distill-factory.ts", function: "buildInsightDistiller", site_id: "plugin.openclaw-insight-distill-factory.buildInsightDistiller.888f96bfef" });
+		diagnosticLog.info("Memory extraction enabled", { outcome: "success", model: llmCfg.preset }, { event_name: "memory.sno-station-mem_insight_distill_factory.memory.extraction.enabled", file: "packages/sno-station-mem/src/engine/bindings/sno-station-mem-insight-distill-factory.ts", function: "buildInsightDistiller", site_id: "plugin.sno-station-mem-insight-distill-factory.buildInsightDistiller.888f96bfef" });
 		return new AtomicInsightDistiller(store, transports, {
 			defaultScope: config.scopes.default,
 			locale: config.language,
 		});
 	} catch (err) {
 		throw new Error(
-			`mem-claw insight-distill init failed: ${err instanceof Error ? err.message : String(err)}`,
+			`sno-station-mem insight-distill init failed: ${err instanceof Error ? err.message : String(err)}`,
 		);
 	}
 }

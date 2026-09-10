@@ -26,7 +26,7 @@ export type AgentLlmRequest = {
 /**
  * Typed completion result. Cancellation and errors are values, not thrown:
  * a cancelled call must never be readable as "the model found nothing"
- * (the OpenClaw seam resolves aborted calls with a normal-shaped empty
+ * (the SnoStationMem seam resolves aborted calls with a normal-shaped empty
  * response, which is exactly the trap this shape exists to close).
  */
 export type AgentLlmCompletion =

@@ -20,7 +20,7 @@ function resolveSkillPath(): string {
 		const candidate = path.join(root, SKILL_PATH);
 		if (existsSync(candidate)) return candidate;
 	}
-	throw new Error(`mem-claw atomic extraction skill is missing: ${SKILL_PATH}`);
+	throw new Error(`sno-station-mem atomic extraction skill is missing: ${SKILL_PATH}`);
 }
 
 /** The body only: the frontmatter names the skill for tooling and is not part of the prompt. */
@@ -58,6 +58,6 @@ const references = new Map<AtomicExtractionSkillReference, string>(
  */
 export function atomicExtractionSkillReference(name: AtomicExtractionSkillReference): string {
 	const text = references.get(name);
-	if (text === undefined) throw new Error(`mem-claw atomic extraction skill reference missing: ${name}`);
+	if (text === undefined) throw new Error(`sno-station-mem atomic extraction skill reference missing: ${name}`);
 	return text;
 }

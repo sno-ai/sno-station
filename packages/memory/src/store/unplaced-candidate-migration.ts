@@ -116,7 +116,7 @@ export function migrateUnplacedCandidates(sqlite: SqliteDatabaseLike): number {
 	const moved = move() as number;
 	log.warn("relocated non-active memory rows into the unplaced-candidate table", { moved }, {
 		event_name: FIXED_EXTERNAL_VALUE_62,
-		file: "apps/mem-claw/src/storage/unplaced-candidate-migration.ts",
+		file: "packages/sno-station-mem/src/store/unplaced-candidate-migration.ts",
 		function: "migrateUnplacedCandidates",
 		site_id: "unplaced-candidate-migration.migrateUnplacedCandidates.c87865ef90",
 	});

@@ -556,8 +556,8 @@ export async function resolveMemoryDate(input: {
 	});
 	if (!local.needsModel || !input.llm || input.routing?.mode === "local-first") {
 		log.info("Memory date resolution completed", dateDiagnosticFields(local.result.stage), {
-			event_name: "mem_claw.date-resolution.date.resolution.stage",
-			file: "apps/mem-claw/src/extraction/date-resolution.ts",
+			event_name: "sno_station_mem.date-resolution.date.resolution.stage",
+			file: "packages/sno-station-mem/src/engine/extraction/date-resolution.ts",
 			function: "resolveMemoryDate",
 			site_id: "date-resolution.resolveMemoryDate.1224fa35b2",
 		});
@@ -602,8 +602,8 @@ export async function resolveMemoryDate(input: {
 					},
 				};
 				log.info("Memory date resolution completed", dateDiagnosticFields(unresolved.stage), {
-					event_name: "mem_claw.date-resolution.date.resolution.stage",
-					file: "apps/mem-claw/src/extraction/date-resolution.ts",
+					event_name: "sno_station_mem.date-resolution.date.resolution.stage",
+					file: "packages/sno-station-mem/src/engine/extraction/date-resolution.ts",
 					function: "resolveMemoryDate",
 					site_id: "date-resolution.resolveMemoryDate.f9d5985547",
 				});
@@ -612,8 +612,8 @@ export async function resolveMemoryDate(input: {
 			const resolved = modelResult(parsed.data, expression, local.result.stage);
 			if (resolved) {
 				log.info("Memory date resolution completed", dateDiagnosticFields(resolved.stage), {
-					event_name: "mem_claw.date-resolution.date.resolution.stage",
-					file: "apps/mem-claw/src/extraction/date-resolution.ts",
+					event_name: "sno_station_mem.date-resolution.date.resolution.stage",
+					file: "packages/sno-station-mem/src/engine/extraction/date-resolution.ts",
 					function: "resolveMemoryDate",
 					site_id: "date-resolution.resolveMemoryDate.c2334f61f6",
 				});
@@ -632,8 +632,8 @@ export async function resolveMemoryDate(input: {
 		},
 	};
 	log.info("Memory date resolution completed", dateDiagnosticFields(unresolved.stage), {
-		event_name: "mem_claw.date-resolution.date.resolution.stage",
-		file: "apps/mem-claw/src/extraction/date-resolution.ts",
+		event_name: "sno_station_mem.date-resolution.date.resolution.stage",
+		file: "packages/sno-station-mem/src/engine/extraction/date-resolution.ts",
 		function: "resolveMemoryDate",
 		site_id: "date-resolution.resolveMemoryDate.5e94847eb6",
 	});

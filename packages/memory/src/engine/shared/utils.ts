@@ -105,7 +105,7 @@ export function sanitizeFtsConjunctiveQuery(terms: readonly string[]): string {
 }
 
 /** Serializes Float32 vectors into little-endian bytes for SQLite vector storage. */
-// LH: Float32Array is the canonical vector type throughout mem-claw so adapters do not repeatedly coerce number arrays.
+// LH: Float32Array is the canonical vector type throughout sno-station-mem so adapters do not repeatedly coerce number arrays.
 // LH: sqlite-vec expects packed f32 bytes, so conversion belongs in one helper with alignment handled explicitly.
 // LH: Keeping vector serialization centralized protects retrieval math from silent precision and byte-order regressions.
 // LH: Callers should validate vector dimensions before this conversion so byte output is only a storage concern.
@@ -138,7 +138,7 @@ export function stableHash(text: string): string {
 
 /**
  * Return a short, secret-redacted, whitespace-collapsed preview of `text` for
- * debug audit logs — but only when `MEM_CLAW_DEBUG_CONTENT=1`. Off-by-default
+ * debug audit logs — but only when `SNO_STATION_MEM_DEBUG_CONTENT=1`. Off-by-default
  * and passes the text through `redactSecrets` first because previews persist
  * in audit.jsonl on disk. Enable for bench investigations only.
  */
@@ -182,7 +182,7 @@ export async function readFileTail(
 		await handle.read(buf, 0, maxBytes, startPos);
 		const raw = buf.toString("utf-8");
 		// Drop the first partial line since we likely sliced mid-line.
-		// Codex 2026-04-30 (batch-C C3): if no newline is present at all the
+		// host 2026-04-30 (batch-C C3): if no newline is present at all the
 		// entire window is the tail of a single (truncated) record — returning
 		// `raw` would feed downstream JSONL parsers half a record. Return the
 		// empty string instead so callers fall through to "no content".

@@ -320,8 +320,8 @@ Object.assign(MemoryStore.prototype, {
 				reprocessAttemptCount: entry.reprocessAttemptCount,
 				attemptCap,
 			}, {
-				event_name: "mem_claw.memory-store-atomic-extraction-ledger-api.atomic.extraction.chunk.stuck.at.reprocess.attempt.cap",
-				file: "apps/mem-claw/src/storage/memory-store-atomic-extraction-ledger-api.ts",
+				event_name: "sno_station_mem.memory-store-atomic-extraction-ledger-api.atomic.extraction.chunk.stuck.at.reprocess.attempt.cap",
+				file: "packages/sno-station-mem/src/store/memory-store-atomic-extraction-ledger-api.ts",
 				function: "reopenAtomicExtractionChunk",
 				site_id: "memory-store-atomic-extraction-ledger-api.reopenAtomicExtractionChunk.e05258e34b",
 			});

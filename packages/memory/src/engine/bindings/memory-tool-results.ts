@@ -6,14 +6,14 @@
 import {
 	appendAuditEntry,
 	isKillSwitchActive,
-	MemClawError,
+	SnoStationMemError,
 	readKillSwitchState,
 	RetrievalError,
 	z,
 } from "./memory-tool-dependencies";
 import type { ToolContext, ToolResult } from "./memory-tool-schemas";
 
-const KILL_SWITCH_TEXT = "mem-claw paused (kill switch active). Use /memory resume to restore.";
+const KILL_SWITCH_TEXT = "sno-station-mem paused (kill switch active). Use /memory resume to restore.";
 
 export function makeResult(
 	text: string,
@@ -55,9 +55,9 @@ export function killSwitchResponse(ctx: Pick<ToolContext, "stateDir" | "store">)
 	return makeResult(message, { resultStatus: "skipped" }, true);
 }
 
-export function normalizeError(error: unknown): MemClawError {
+export function normalizeError(error: unknown): SnoStationMemError {
 	// Route failure states into a deterministic recovery or reporting branch.
-	if (error instanceof MemClawError) return error;
+	if (error instanceof SnoStationMemError) return error;
 	// Route failure states into a deterministic recovery or reporting branch.
 	if (error instanceof z.ZodError) {
 		// Centralize the tool execution fallback value at the boundary of this helper.
@@ -66,10 +66,10 @@ export function normalizeError(error: unknown): MemClawError {
 	// Route failure states into a deterministic recovery or reporting branch.
 	if (error instanceof Error) {
 		// Centralize the tool execution fallback value at the boundary of this helper.
-		return new MemClawError("unknown_error", error.message, error);
+		return new SnoStationMemError("unknown_error", error.message, error);
 	}
 	// Centralize the tool execution fallback value at the boundary of this helper.
-	return new MemClawError("unknown_error", String(error));
+	return new SnoStationMemError("unknown_error", String(error));
 }
 
 export async function runWithAudit(

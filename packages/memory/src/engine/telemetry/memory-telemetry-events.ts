@@ -85,7 +85,7 @@ export class MemoryTelemetryEventWriter {
 		// disabled with a loud warning rather than letting it propagate out of
 		// MemoryStore construction: telemetry receipts are best-effort
 		// tamper-evidence, and a missing key must NOT brick store construction
-		// (and the whole plugin's `register()`). Matches the mem-claw rule that
+		// (and the whole plugin's `register()`). Matches the sno-station-mem rule that
 		// observability wiring never throws into agent code.
 		try {
 			const keySet =
@@ -100,8 +100,8 @@ export class MemoryTelemetryEventWriter {
 			log.warn("memory telemetry disabled: receipt key unavailable", {
 				error,
 			}, {
-				event_name: "mem_claw.memory-telemetry-events.memory.telemetry.disabled.receipt.key.unavailable",
-				file: "apps/mem-claw/src/telemetry/memory-telemetry-events.ts",
+				event_name: "sno_station_mem.memory-telemetry-events.memory.telemetry.disabled.receipt.key.unavailable",
+				file: "packages/sno-station-mem/src/engine/telemetry/memory-telemetry-events.ts",
 				function: "<anonymous callback>",
 				site_id: "memory-telemetry-events.<anonymous callback>.23cfef2d08",
 			});

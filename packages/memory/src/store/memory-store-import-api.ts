@@ -29,7 +29,7 @@ Object.assign(MemoryStore.prototype, {
 		const safeEntry = sanitizeStoreInput(entry);
 		// Mirror `store()`'s whitespace-only rejection: empty text would
 		// produce a chunkless parent row, breaking the parent+chunks
-		// invariant for restore/migration paths (codex 2026-04-29 M1).
+		// invariant for restore/migration paths (host 2026-04-29 M1).
 		if (safeEntry.text.trim().length === 0) {
 			throw new StorageError("Cannot import memory with empty text");
 		}

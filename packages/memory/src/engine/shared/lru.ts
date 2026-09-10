@@ -1,7 +1,7 @@
 /** @file lru.ts
  * @purpose Provides a small bounded cache primitive for hot-path runtime state.
  * @boundary In-memory capacity limits and deterministic eviction behavior.
- * @see derived-line-cache.ts, retrieval-stats.ts, openclaw-plugin-runtime.ts.
+ * @see derived-line-cache.ts, retrieval-stats.ts, sno-station-mem-plugin-runtime.ts.
  */
 
 /** Generic LRU helpers for bounded Map caches. */

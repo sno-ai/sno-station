@@ -1,5 +1,5 @@
 /** @file version-metadata.ts
- * @purpose Resolves SNO Station Core workspace and mem-claw package version metadata.
+ * @purpose Resolves SNO Station Core workspace and sno-station-mem package version metadata.
  * @boundary Reads local version files/build-time env only; does not fetch release metadata.
  */
 
@@ -9,7 +9,7 @@ import { fileURLToPath } from "node:url";
 
 const VERSION_ENV_KEYS = ["SNO_STATION_MEM_VERSION", "SNO_STATION_MEM_VERSION"] as const;
 const VERSION_LINE_RE = /^version:\s*["']?([^"'\s]+)["']?\s*$/m;
-const MEM_CLAW_PACKAGE_NAME = "@snoai/sno-station-mem";
+const SNO_STATION_MEM_PACKAGE_NAME = "@snoai/sno-station-mem";
 
 export function readSnoStationCoreWorkspaceVersion(
 	env: NodeJS.ProcessEnv = process.env,
@@ -25,9 +25,9 @@ export function readSnoStationCoreWorkspaceVersion(
 	return undefined;
 }
 
-export function readMemClawPackageVersion(): string | undefined {
+export function readSnoStationMemPackageVersion(): string | undefined {
 	for (const startDir of versionSearchRoots()) {
-		const version = readPackageVersionUpward(startDir, MEM_CLAW_PACKAGE_NAME);
+		const version = readPackageVersionUpward(startDir, SNO_STATION_MEM_PACKAGE_NAME);
 		if (version) return version;
 	}
 	return undefined;

@@ -5,7 +5,7 @@
 
 import { dirname } from "node:path";
 
-import { MemClawError } from "../shared/errors";
+import { SnoStationMemError } from "../shared/errors";
 import { z } from "zod";
 import {
 	admitTaskLifecycleAssertion,
@@ -89,8 +89,8 @@ export type TaskLifecycleCandidateRouteResult =
 	| { status: "none" }
 	| { status: "routed"; result: TaskLifecycleRouteResult };
 
-export class TaskLifecycleJudgmentUnavailableError extends MemClawError {
-	// Extends MemClawError so the tool boundary reports why the write stopped. As a bare
+export class TaskLifecycleJudgmentUnavailableError extends SnoStationMemError {
+	// Extends SnoStationMemError so the tool boundary reports why the write stopped. As a bare
 	// Error it normalized to "unknown_error" and the caller lost the reason entirely.
 	constructor(message: string) {
 		super("task_lifecycle_judgment_unavailable", message);
