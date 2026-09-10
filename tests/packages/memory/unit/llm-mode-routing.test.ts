@@ -1,9 +1,9 @@
 /** Proves the surviving product-mode schema and atomic request routing. */
 
 import { describe, expect, it } from "vitest";
-import { llmRoutingConfigSchema } from "@/shared/plugin-config-mode-schema";
-import { pickLlmRoutingConfig, resolveLlmRoute } from "@/shared/llm-mode-routing";
-import { pluginConfigSchema } from "@/shared/types";
+import { llmRoutingConfigSchema } from "../../../../packages/sno-station-mem/src/contract/config/plugin-config-mode-schema";
+import { pickLlmRoutingConfig, resolveLlmRoute } from "../../../../packages/sno-station-mem/src/model/llm-mode-routing";
+import { pluginConfigSchema } from "../../../../packages/sno-station-mem/src/engine/shared/types";
 
 const LOCAL_RERANK = { retrieval: { rerank: "lightweight" } } as const;
 
