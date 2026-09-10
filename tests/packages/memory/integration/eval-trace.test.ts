@@ -14,9 +14,9 @@ import {
 	computeConfigHash,
 	isTraceEnabled,
 	writeConfigSnapshot,
-} from "@/eval/trace";
-import { collectParallelStage } from "@/retrieval/retriever";
-import type { MemoryEntry, RetrievalResult } from "@/shared/types";
+} from "../../../../packages/sno-station-mem/src/engine/eval/trace";
+import { collectParallelStage } from "../../../../packages/sno-station-mem/src/engine/retrieval/retriever";
+import type { MemoryEntry, RetrievalResult } from "../../../../packages/sno-station-mem/src/engine/shared/types";
 
 interface QaTraceLine {
 	query: string;

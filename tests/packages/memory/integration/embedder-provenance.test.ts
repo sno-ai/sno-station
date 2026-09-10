@@ -25,11 +25,11 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { EMBEDDER_MODEL_DEFAULT } from "../../../../apps/mem-claw/config/index.ts";
+import { EMBEDDER_MODEL_DEFAULT } from "../../../../packages/sno-station-mem/config/index.ts";
 import {
 	buildConfigSnapshot,
 	writeConfigSnapshot,
-} from "../../../../apps/mem-claw/src/eval/trace.ts";
+} from "../../../../packages/sno-station-mem/src/engine/eval/trace.ts";
 import { LOCAL_EMBEDDING_MODEL } from "../../../../packages/embedder/src/index.ts";
 
 describe("EMBEDDER_MODEL_DEFAULT lineage — codex C1 regression", () => {
