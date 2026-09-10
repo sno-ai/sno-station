@@ -1,4 +1,4 @@
-import { testInstallationConfigPath } from "../../../apps/mem-claw/helpers/module-config-fixture";
+import { testInstallationConfigPath, writeTestInstallationConfig } from "../../../apps/mem-claw/helpers/module-config-fixture";
 /** @file rem-trigger-evaluator.test.ts
  * @purpose Proves automatic REM decisions, dispatch ordering, retry state, and audit evidence.
  * @boundary Real encrypted SQLite, durable state/audit files, and a real local HTTP boundary.
@@ -711,9 +711,7 @@ describe("REM automatic trigger", () => {
 	it("reads the dispatched operations through the production plugin schema", () => {
 		const configDir = temporaryDirectory("rem-trigger-config-");
 		const configPath = testInstallationConfigPath(configDir);
-		writeFileSync(
-			configPath,
-			JSON.stringify({
+		writeTestInstallationConfig(configDir, {
 				plugins: {
 					entries: {
 						"sno-mem-claw": {
@@ -721,25 +719,15 @@ describe("REM automatic trigger", () => {
 						},
 					},
 				},
-			}),
-			"utf8",
-		);
+			});
 		expect(readRemAutomaticOperations(configPath)).toEqual(["rem-update"]);
 
-		writeFileSync(
-			configPath,
-			JSON.stringify({
+		writeTestInstallationConfig(configDir, {
 				plugins: { entries: { "sno-mem-claw": { config: { mode: "rem-enhanced" } } } },
-			}),
-			"utf8",
-		);
+			});
 		expect(readRemAutomaticOperations(configPath)).toEqual(["rem-replace", "rem-update"]);
 
-		writeFileSync(
-			configPath,
-			JSON.stringify({ plugins: { entries: { "sno-mem-claw": { config: {} } } } }),
-			"utf8",
-		);
+		writeTestInstallationConfig(configDir, { plugins: { entries: { "sno-mem-claw": { config: {} } } } });
 		expect(readRemAutomaticOperations(configPath)).toEqual([]);
 	});
 

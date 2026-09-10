@@ -42,8 +42,8 @@ afterEach(async () => {
 });
 
 function rewriteTestManifestPath(fromPath: string, toPath: string): void {
-	const xdgConfigHome = process.env.SNO_STATION_MEM_XDG_CONFIG_HOME;
-	if (!xdgConfigHome) throw new Error("createTestDb did not install SNO_STATION_MEM_XDG_CONFIG_HOME");
+	const xdgConfigHome = process.env.XDG_CONFIG_HOME;
+	if (!xdgConfigHome) throw new Error("createTestDb did not install XDG_CONFIG_HOME");
 	const manifestPath = join(xdgConfigHome, "sno-station-core", "dbs.json");
 	const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as {
 		dbs: Array<{ path: string }>;
