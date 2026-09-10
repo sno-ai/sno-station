@@ -4,11 +4,11 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { RESOURCES_BY_LOCALE } from "../../../../apps/mem-claw/src/i18n/all-resources.ts";
+import { RESOURCES_BY_LOCALE } from "../../../../packages/sno-station-mem/src/engine/i18n/all-resources.ts";
 import {
 	anyMatchesWholeMessage,
 	matchesWholeMessage,
-} from "../../../../apps/mem-claw/src/shared/whole-message-skip.ts";
+} from "../../../../packages/sno-station-mem/src/engine/shared/whole-message-skip.ts";
 
 describe("whole-message skip rule", () => {
 	it("counts a pattern that accounts for the whole message", () => {
