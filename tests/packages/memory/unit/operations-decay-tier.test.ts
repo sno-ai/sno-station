@@ -2,16 +2,16 @@ import { describe, expect, it } from "vitest";
 import {
 	createTierPromoter,
 	type TierableMemory,
-} from "../../../../apps/mem-claw/src/operations/memory-tier-promoter.ts";
+} from "../../../../packages/sno-station-mem/src/engine/operations/memory-tier-promoter.ts";
 import {
 	createRetentionScorer,
 	DEFAULT_DECAY_CONFIG,
-} from "../../../../apps/mem-claw/src/operations/selective-forgetting-scorer.ts";
+} from "../../../../packages/sno-station-mem/src/engine/operations/selective-forgetting-scorer.ts";
 import type {
 	DecayableMemory,
 	DecayScore,
 	MemoryTier,
-} from "../../../../apps/mem-claw/src/shared/types.ts";
+} from "../../../../packages/sno-station-mem/src/engine/shared/types.ts";
 
 const NOW = 1_700_000_000_000;
 const DAY_MS = 86_400_000;

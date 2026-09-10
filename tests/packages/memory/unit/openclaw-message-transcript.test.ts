@@ -2,12 +2,12 @@ import { describe, expect, it } from "vitest";
 import {
 	parseBProfileMessages,
 	renderBProfilePrompt,
-} from "../../../../apps/mem-claw/src/extraction/b-profile-extraction.ts";
+} from "../../../../packages/sno-station-mem/src/engine/extraction/b-profile-extraction.ts";
 import {
 	buildConversationText,
 	deriveSessionDateTime,
 	normalizeMessageTimestampMs,
-} from "../../../../apps/mem-claw/src/plugin/openclaw-message-transcript.ts";
+} from "../../../../packages/sno-station-mem/src/engine/bindings/sno-station-mem-message-transcript.ts";
 
 describe("openclaw message transcript timestamps", () => {
 	it("rejects impossible calendar dates before timestamp normalization", () => {
