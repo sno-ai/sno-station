@@ -2,8 +2,8 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
 	createRetriever,
 	DEFAULT_RETRIEVAL_CONFIG,
-} from "../../../../apps/mem-claw/src/retrieval/retriever.ts";
-import { RetrievalError } from "../../../../apps/mem-claw/src/shared/errors.ts";
+} from "../../../../packages/sno-station-mem/src/engine/retrieval/retriever.ts";
+import { RetrievalError } from "../../../../packages/sno-station-mem/src/engine/shared/errors.ts";
 
 const ORIGINAL_FETCH = globalThis.fetch;
 

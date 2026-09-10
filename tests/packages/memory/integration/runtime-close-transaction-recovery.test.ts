@@ -1,13 +1,13 @@
 /** Real deployed SQLCipher driver through sqlite-runtime. No mocks or substitute storage. */
 
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
-import type { Embedder } from "../../../../apps/mem-claw/src/extraction/embedding-provider-client.ts";
+import type { Embedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client.ts";
 import {
 	openSqliteDatabase,
 	type SqliteDatabaseLike,
-} from "../../../../apps/mem-claw/src/storage/sqlite-runtime.ts";
-import { MemoryStore } from "../../../../apps/mem-claw/src/storage/store.ts";
-import { createTestDb, createTestEmbedder } from "../helpers/test-db.ts";
+} from "../../../../packages/sno-station-mem/src/store/sqlite-runtime.ts";
+import { MemoryStore } from "../../../../packages/sno-station-mem/src/store/store.ts";
+import { createTestDb, createTestEmbedder } from "../../../apps/mem-claw/helpers/test-db.ts";
 
 type JournalMode = "DELETE" | "WAL";
 
