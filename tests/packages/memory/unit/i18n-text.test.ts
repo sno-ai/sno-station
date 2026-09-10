@@ -7,7 +7,7 @@ import {
 	tokenizeForFts,
 	truncateGraphemes,
 	unicodeBoundaryRegex,
-} from "../../../../apps/mem-claw/src/shared/i18n-text.ts";
+} from "../../../../packages/sno-station-mem/src/engine/shared/i18n-text.ts";
 import { CJK_I18N_FIXTURE_MATRIX, CJK_LOCALES } from "../../../fixtures/cjk-fixtures.ts";
 
 describe("i18n text helpers", () => {
