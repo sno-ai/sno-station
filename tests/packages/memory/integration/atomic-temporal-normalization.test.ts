@@ -8,16 +8,16 @@ import {
 	type AtomicExtractionRecord,
 	type AtomicExtractionResolvedTime,
 	parseAtomicExtractionReply,
-} from "@/extraction/atomic-extraction-reply";
+} from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-extraction-reply";
 import {
 	type AtomicGauntletRecord,
 	runAtomicExtractionGauntlet,
-} from "@/extraction/atomic-extraction-gauntlet";
+} from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-extraction-gauntlet";
 import {
 	ATOMIC_RELATIVE_TIME_PHRASES,
 	normalizeAtomicTemporalRecord,
-} from "@/extraction/atomic-temporal-normalization";
-import { type Locale, SUPPORTED_LOCALES } from "@/i18n/locales";
+} from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-temporal-normalization";
+import { type Locale, SUPPORTED_LOCALES } from "../../../../packages/sno-station-mem/src/engine/i18n/locales";
 
 interface LocalePhrases {
 	locale: Locale;
