@@ -41,6 +41,7 @@ const REFERENCE_NAMES = [
 	"resolve-subject",
 	"missing-durable-half",
 	"user-subject-guard",
+	"progress-classification",
 ] as const;
 export type AtomicExtractionSkillReference = (typeof REFERENCE_NAMES)[number];
 

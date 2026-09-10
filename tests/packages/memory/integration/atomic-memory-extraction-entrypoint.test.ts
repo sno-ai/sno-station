@@ -74,11 +74,12 @@ function wireRecord(overrides: Record<string, unknown>): Record<string, unknown>
 class FixedGenericTransport implements AtomicGenericExtractionTransport {
 	readonly requests: AtomicGenericExtractionRequest[] = [];
 
-	constructor(private readonly reply: string) {}
+	constructor(private readonly reply: string, private readonly progressTurns: readonly number[] = []) {}
 
 	async complete(request: AtomicGenericExtractionRequest) {
 		this.requests.push(request);
-		return { text: this.reply, truncated: false };
+		const turns = JSON.parse(request.prompt.split("<take>\n").at(-1)?.split("\n</take>")[0] ?? "[]") as Array<{role: string; turn_index: number}>;
+		return { text: JSON.stringify({ ...JSON.parse(this.reply), decisions: turns.filter((turn) => turn.role === "user").map((turn) => ({ turn_index: turn.turn_index, progress_only: this.progressTurns.includes(turn.turn_index) })) }), truncated: false };
 	}
 }
 
@@ -121,14 +122,14 @@ class AllowSubjectGuardTransport implements AtomicSubjectGuardTransport {
 	}
 }
 
-function transports(replyRecords: readonly Record<string, unknown>[]): {
+function transports(replyRecords: readonly Record<string, unknown>[], progressTurns: readonly number[] = []): {
 	value: AtomicMemoryExtractionTransports;
 	generic: FixedGenericTransport;
 	profileKeying: EmptyKeyingTransport;
 	resplit: FailedResplitTransport;
 	subjectGuard: AllowSubjectGuardTransport;
 } {
-	const generic = new FixedGenericTransport(JSON.stringify({ records: replyRecords }));
+	const generic = new FixedGenericTransport(JSON.stringify({ records: replyRecords }), progressTurns);
 	const profileKeying = new EmptyKeyingTransport();
 	const resplit = new FailedResplitTransport();
 	const subjectGuard = new AllowSubjectGuardTransport();
@@ -346,13 +347,18 @@ describe("atomic memory extraction production entrypoint", () => {
 		).toThrow();
 	});
 
-	it("stores no task-progress record and spends one generic call on a no-record chunk", async () => {
+	it("drops an emitted progress record before SQLite and spends only one generic call", async () => {
 		const target = setup();
 		const turn: AtomicExtractionTurn = {
 			role: "user",
 			content: "I am halfway through writing the release notes.",
 		};
-		const scripted = transports([]);
+		const scripted = transports([wireRecord({
+			claim_text: "The user is working on the release notes.",
+			subject_kind: "unresolved", subject: "release notes", attribute: null,
+			value: "writing release notes", todo: "open",
+			source_span: { turn_index: 0, quote: turn.content },
+		})], [0]);
 		let nowMs = SESSION_TIMESTAMP_MS;
 
 		const result = await runAtomicMemoryExtraction({

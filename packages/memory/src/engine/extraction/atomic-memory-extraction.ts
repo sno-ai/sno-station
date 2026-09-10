@@ -1,3 +1,4 @@
+import { excludeProgressRecords } from "./atomic-progress-boundary";
 import { FIXED_MEMORY_SNO_EXTRACT_CHAT, FIXED_MEMORY_SNO_EXTRACT_PROFILE } from "../../model/signed-registry-constants";
 /** @file atomic-memory-extraction.ts
  * @purpose Runs the complete dark atomic extraction path through its one storage door.
@@ -1290,6 +1291,9 @@ export async function runAtomicMemoryExtraction(
 		return generic;
 	}
 
+	const progressTurns = generic.progressTurns;
+	generic.records = excludeProgressRecords(generic.records, progressTurns);
+
 	const sourceTurnOffset = input.sourceTurnOffset ?? 0;
 	const admittedSourceTurnIndexes = input.admittedSourceTurnIndexes
 		? new Set(input.admittedSourceTurnIndexes)
@@ -1319,7 +1323,7 @@ export async function runAtomicMemoryExtraction(
 	});
 
 	const gauntlet = await runAtomicExtractionGauntlet({
-		records: swept.length === 0 ? generic.records : [...generic.records, ...swept],
+		records: excludeProgressRecords([...generic.records, ...swept], progressTurns),
 		turns: input.turns,
 		resplitTransport: input.transports.resplit,
 		locale,
@@ -1341,7 +1345,7 @@ export async function runAtomicMemoryExtraction(
 					sessionDateTime: input.sessionDateTime,
 					sessionTimezone: input.sessionTimezone,
 				});
-	const guarded =
+	const subjectGuarded =
 		keyed.length === 0
 			? []
 			: await runAtomicSubjectGuard({
@@ -1352,6 +1356,7 @@ export async function runAtomicMemoryExtraction(
 					sessionDateTime: input.sessionDateTime,
 					sessionTimezone: input.sessionTimezone,
 				});
+	const guarded = excludeProgressRecords(subjectGuarded, progressTurns);
 	input.onSubjectGuardSettled?.();
 	// After the write turn, because admission now reads what earlier windows actually wrote.
 	await input.waitForWriteTurn?.();

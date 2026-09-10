@@ -18,4 +18,12 @@ about a topic does not say the user is interested in it. A quote that cannot be 
 ("I really liked it") supports nothing. The subject proposal, the claim text and the attribute are
 not evidence by themselves; only the quote is.
 
-Return one decision for every supplied record, in the same order.
+An explicit first-person preference ("My favorite drink is tea") directly supports the same
+preference stated about the user. No additional biography or evidence of repeated behavior is
+needed. This does not support a different preference that the quote never states.
+
+For this task, return only the `decisions` object in the supplied response schema, not the
+extraction `claims_found`/`records` envelope. Return one boolean decision for every supplied
+`record_index`, copying each index exactly once. Do not omit an index or return null: use true
+when the quote supports the claim and false when it does not. Check that every supplied index
+has one decision before returning.

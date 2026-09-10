@@ -1,3 +1,6 @@
+import extractionSchema from "../../../config/atomic-extraction-response.schema.json" with { type: "json" };
+import { parseProgressTurns } from "./atomic-progress-boundary";
+import { modelReplyJsonCandidates } from "../shared/model-reply-text";
 import { FIXED_MEMORY_SNO_EXTRACT_CHAT } from "../../model/signed-registry-constants";
 /** @file atomic-generic-extractor.ts
  * @purpose Runs the dark generic atomic extraction pass over complete transcript windows.
@@ -14,7 +17,6 @@ import {
 	atomicExtractionSkillReference,
 } from "./atomic-extraction-skill";
 import {
-	ATOMIC_EXTRACTION_RESPONSE_JSON_SCHEMA,
 	type AtomicExtractionRecord,
 	type AtomicExtractionTurn,
 	parseAtomicExtractionReply,
@@ -38,6 +40,20 @@ import type {
 
 const log = createLogger("sno-station-mem:atomic-extraction");
 const ATOMIC_REPROCESS_ATTEMPT_CAP = 1;
+const GENERIC_RESPONSE_SCHEMA = {
+	...extractionSchema,
+	required: [...extractionSchema.required, "decisions"],
+	properties: {
+		...extractionSchema.properties,
+		decisions: {
+			type: "array",
+			items: {
+				type: "object", required: ["turn_index", "progress_only"], additionalProperties: false,
+				properties: { turn_index: { type: "integer", minimum: 0 }, progress_only: { type: "boolean" } },
+			},
+		},
+	},
+};
 
 export interface AtomicGenericExtractionRequest {
 	prompt: string;
@@ -71,7 +87,7 @@ export interface AtomicGenericExtractionInput {
 }
 
 export type AtomicGenericExtractionResult =
-	| { status: "complete"; records: AtomicExtractionRecord[] }
+	| { status: "complete"; records: AtomicExtractionRecord[]; progressTurns: ReadonlySet<number> }
 	| { status: "pending"; reason: AtomicExtractionReprocessReason }
 	| { status: "skip"; entry: BeginAtomicExtractionChunkResult["entry"] }
 	| { status: "off" };
@@ -100,11 +116,12 @@ export function buildAtomicGenericExtractionPrompt(
 	const transcript = renderAtomicPromptData(numberAtomicTurns(turns), locale);
 	return [
 		ATOMIC_EXTRACTION_SKILL,
+		atomicExtractionSkillReference("progress-classification"),
 		`session_date_time: ${sessionDateTime ?? "unknown"}`,
 		`person_attribute_slugs: ${JSON.stringify(attributeDictionary.slugs.map(({ slug }) => slug))}`,
 		`thing_attribute_slugs: ${JSON.stringify(stateVocabulary.slugs.map(({ slug }) => slug))}`,
 		`relation_dictionary: ${JSON.stringify(relationDictionary.relations)}`,
-		`response_schema: ${JSON.stringify(ATOMIC_EXTRACTION_RESPONSE_JSON_SCHEMA)}`,
+		`response_schema: ${JSON.stringify(GENERIC_RESPONSE_SCHEMA)}`,
 		...(turnIndexesToAccountFor.length === 0
 			? []
 			: [
@@ -332,7 +349,7 @@ export async function runAtomicNumericTurnSweep(
 	if (!parsed.ok) {
 		if (input.diagnostics) input.diagnostics.parseRejected += parsed.malformedCandidateCount;
 		log.warn("atomic numeric turn sweep reply rejected: parse", {
-			reason: parsed.reason,
+			reason: parsed.ok ? "missing-turn-classification" : parsed.reason,
 			sweptTurnCount: uncited.length,
 		}, { event_name: "memory.atomic_generic_extractor.diagnostic", file: "packages/sno-station-mem/src/engine/extraction/atomic-generic-extractor.ts", function: "runAtomicNumericTurnSweep", site_id: "extraction.atomic-generic-extractor.runAtomicNumericTurnSweep.5264647de8" });
 		return [];
@@ -522,11 +539,20 @@ export async function runAtomicGenericExtractionPass(
 			continue;
 		}
 
-		const parsed = parseAtomicExtractionReply(completion.text, input.turns.length);
-		if (parsed.ok) {
+		let progressTurns: ReadonlySet<number> | null = null;
+		let reply = completion.text;
+		for (const candidate of modelReplyJsonCandidates(completion.text)) {
+			try {
+				progressTurns = parseProgressTurns(JSON.parse(candidate), input.turns);
+			} catch { continue; }
+			if (progressTurns !== null) { reply = candidate; break; }
+		}
+		const parsed = parseAtomicExtractionReply(reply, input.turns.length);
+		if (parsed.ok && progressTurns !== null) {
 			if (input.diagnostics) input.diagnostics.proposed += parsed.records.length;
 			return {
 				status: "complete",
+				progressTurns,
 				records: parsed.records.map((record) =>
 					withAtomicSanitizerMatches(record, sanitizedInput.matched),
 				),
@@ -535,7 +561,7 @@ export async function runAtomicGenericExtractionPass(
 		if (input.diagnostics) input.diagnostics.parseRejected += parsed.malformedCandidateCount;
 		log.warn("atomic extraction reply rejected: parse", {
 			attempt,
-			reason: parsed.reason,
+			reason: parsed.ok ? "missing-turn-classification" : parsed.reason,
 			malformedCandidateCount: parsed.malformedCandidateCount,
 			...rejectionPreview(completion.text),
 		}, { event_name: "memory.atomic_generic_extractor.diagnostic", file: "packages/sno-station-mem/src/engine/extraction/atomic-generic-extractor.ts", function: "runAtomicGenericExtractionPass", site_id: "extraction.atomic-generic-extractor.runAtomicGenericExtractionPass.98a701bd95" });
