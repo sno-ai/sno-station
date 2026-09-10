@@ -1,43 +1,66 @@
 /** @file paths.ts
- * @purpose Centralizes shared runtime path resolution helpers.
- * @boundary Environment fallbacks and host-relative path resolution.
- * @see ../operations/runtime-audit-log.ts, ../plugin/openclaw-plugin-runtime.ts, ../plugin/memory-management-cli.ts.
- *
- * @deprecated Prefer `@/storage/data-paths` for the new
- *   `~/.snoai/sno-station-core/mem-claw/data/` layout (PRD safe-uninstall §3.1).
- *   The helpers in this file resolve the older OpenClaw-state tree and remain
- *   only for consumers not yet moved to the safe-uninstall data path.
+ * @purpose Resolves profile state and the install-time principal/store binding.
+ * @boundary Paths and binding files only; this module never opens a memory store.
  */
-
-import { homedir } from "node:os";
+import { mkdir, open, readFile } from "node:fs/promises";
+import { homedir, userInfo } from "node:os";
 import path from "node:path";
+import { z } from "zod";
+import { ContractError } from "../../contract/index";
 
-/**
- * Resolves the OpenClaw state directory shared by audit, cost, and plugin state files.
- * @deprecated Use `@/storage/data-paths#getMemClawDataDir`.
- */
 export function getStateDir(): string {
-	return process.env.OPENCLAW_STATE_DIR ?? path.join(homedir(), ".openclaw");
+	return path.resolve(process.env.SNO_PROFILE_DIR ?? path.join(homedir(), ".sno"));
 }
 
-/**
- * Resolves the mem-claw state directory under the host OpenClaw state root.
- * @deprecated Use `@/storage/data-paths#getMemClawDataDir`.
- */
 export function getMemClawStateDir(): string {
-	return path.join(getStateDir(), "mem-claw");
+	return path.join(getStateDir(), "sno-station-mem");
 }
 
-/**
- * Resolves the mem-claw SQLite DB path from config or state dir.
- * @deprecated Boot-time path resolution moved to
- *   `@/storage/data-bootstrap#bootstrapDataLayout`. Custom config.dbPath is now
- *   recorded in `install.json` at first install.
- */
-export function resolveMemClawDbPath(
-	configuredPath: string | undefined,
-	resolveConfiguredPath: (input: string) => string,
-): string {
-	if (configuredPath) return resolveConfiguredPath(configuredPath);
-	return path.join(getMemClawStateDir(), "mem-claw.sqlite");
+export function getPrincipal(): string {
+	return userInfo().username;
+}
+
+export function getBindingPath(): string {
+	return path.join(getStateDir(), "station", `sno-station-mem-${getPrincipal()}.binding.json`);
+}
+
+export function getDefaultStorePath(): string {
+	return path.join(getMemClawStateDir(), getPrincipal(), "memory.sqlite");
+}
+
+export function resolveMemClawDbPath(configuredPath: string | undefined,
+	resolveConfiguredPath: (input: string) => string): string {
+	return configuredPath ? resolveConfiguredPath(configuredPath) : getDefaultStorePath();
+}
+
+const bindingSchema = z.strictObject({
+	principal: z.string().min(1), storePath: z.string().refine(path.isAbsolute),
+});
+
+export async function readBoundStorePath(requestedPath?: string): Promise<string> {
+	let text: string;
+	try {
+		text = await readFile(getBindingPath(), "utf8");
+	} catch (error) {
+		if (!(error instanceof Error) || !("code" in error) || error.code !== "ENOENT") throw error;
+		return requestedPath ? path.resolve(requestedPath) : getDefaultStorePath();
+	}
+	const binding = bindingSchema.parse(JSON.parse(text));
+	if (binding.principal !== getPrincipal()) throw new ContractError("principal-mismatch");
+	if (requestedPath && path.resolve(requestedPath) !== binding.storePath) throw new ContractError("store-mismatch");
+	return binding.storePath;
+}
+
+export async function bindStore(storePath: string): Promise<string> {
+	if (!storePath.trim()) throw new ContractError("invalid-input");
+	const bindingPath = getBindingPath();
+	await mkdir(path.dirname(bindingPath), { recursive: true, mode: 0o700 });
+	const file = await open(bindingPath, "wx", 0o600);
+	try {
+		await file.writeFile(`${JSON.stringify({ principal: getPrincipal(), storePath: path.resolve(storePath) })}\n`);
+		await file.sync();
+	} finally {
+		await file.close();
+	}
+	return bindingPath;
 }

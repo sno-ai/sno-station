@@ -17,7 +17,7 @@
     }
   },
   "bin": {
-    "sno-station-mem": "./bin/sno-station-mem.js"
+    "sno-station-mem": "./dist/cli.js"
   },
   "files": [
     "bin",

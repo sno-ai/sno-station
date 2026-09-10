@@ -13,6 +13,9 @@ export type HostContext = {
 	sessionId?: string;
 	sessionTimezone?: string;
 	workspace?: string;
+	sessionFile?: string;
+	action?: "new" | "reset" | "session-end";
+	at?: number;
 };
 export type ScopeCtx = { principal: string; project: string; session: string; host?: HostContext };
 export type Message = {
@@ -29,7 +32,7 @@ export type Registration = {
 };
 export type RecallOptions = {
 	corpus?: "memory" | "wiki" | "all" | "sessions";
-	source?: "auto" | "manual";
+	source?: "auto" | "manual" | "native";
 	limit?: number;
 	minScore?: number;
 	category?: MemoryCategory;
@@ -79,7 +82,8 @@ export const scopeSchema: z.ZodType<ScopeCtx, unknown> = z.strictObject({
 	host: z.strictObject({
 		agentId: z.string().optional(), sessionKey: z.string().optional(),
 		sessionId: z.string().optional(), sessionTimezone: z.string().optional(),
-		workspace: z.string().optional(),
+		workspace: z.string().optional(), sessionFile: z.string().optional(),
+		action: z.enum(["new", "reset", "session-end"]).optional(), at: timestamp.optional(),
 	}).optional(),
 });
 export const messageSchema: z.ZodType<Message, unknown> = z.strictObject({
@@ -99,7 +103,7 @@ export const registrationSchema: z.ZodType<Registration, unknown> = z.strictObje
 });
 export const recallOptionsSchema: z.ZodType<RecallOptions, unknown> = z.strictObject({
 	corpus: z.enum(["memory", "wiki", "all", "sessions"]).default("memory"),
-	source: z.enum(["auto", "manual"]).optional(),
+	source: z.enum(["auto", "manual", "native"]).optional(),
 	limit: z.number().int().optional(), minScore: z.number().finite().optional(),
 	category: category.optional(), includeMetadata: z.boolean().optional(),
 	includeHistory: z.boolean().optional(), includeRefused: z.boolean().optional(),
