@@ -4,29 +4,29 @@ import { beforeAll, describe, expect, it } from "vitest";
 import {
 	createBProfileKeyingTransport,
 	type AtomicKeyedRecord,
-} from "@/extraction/atomic-profile-keying";
-import { ATOMIC_EXTRACTION_SKILL } from "@/extraction/atomic-extraction-skill";
-import type { AtomicExtractionTurn } from "@/extraction/atomic-extraction-reply";
+} from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-profile-keying";
+import { ATOMIC_EXTRACTION_SKILL } from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-extraction-skill";
+import type { AtomicExtractionTurn } from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-extraction-reply";
 import {
 	buildAtomicGenericExtractionPrompt,
 	createAtomicGenericExtractionTransport,
 	runAtomicGenericExtractionPass,
-} from "@/extraction/atomic-generic-extractor";
-import { createAtomicResplitTransport } from "@/extraction/atomic-memory-extraction";
-import { createAtomicSubjectGuardTransport } from "@/extraction/atomic-subject-guard";
-import type { Embedder } from "@/extraction/embedding-provider-client";
-import { DEFAULT_LOCALE, SUPPORTED_LOCALES } from "@/i18n/locales";
+} from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-generic-extractor";
+import { createAtomicResplitTransport } from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-memory-extraction";
+import { createAtomicSubjectGuardTransport } from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-subject-guard";
+import type { Embedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client";
+import { DEFAULT_LOCALE, SUPPORTED_LOCALES } from "../../../../packages/sno-station-mem/src/engine/i18n/locales";
 import type {
 	LlmClient,
 	MemoryLlmRequest,
 	ResolvedLlmConfig,
 	TokenUsage,
-} from "@/shared/llm-client-types";
+} from "../../../../packages/sno-station-mem/src/model/llm-client-types";
 import {
 	type AtomicExtractionLedgerKey,
 	type AtomicExtractionRunParameters,
 	MemoryStore,
-} from "@/storage/store";
+} from "../../../../packages/sno-station-mem/src/store/store";
 import { createTestDb, createTestEmbedder } from "../helpers/test-db";
 
 const SAFE_TURNS: AtomicExtractionTurn[] = [

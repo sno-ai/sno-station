@@ -8,19 +8,19 @@ import {
 	createBProfileKeyingTransport,
 	type AtomicProfileKeyingTransport,
 	runAtomicProfileKeying,
-} from "@/extraction/atomic-profile-keying";
-import type { AtomicGauntletRecord } from "@/extraction/atomic-extraction-gauntlet";
+} from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-profile-keying";
+import type { AtomicGauntletRecord } from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-extraction-gauntlet";
 import type {
 	AtomicExtractionRecord,
 	AtomicExtractionTurn,
-} from "@/extraction/atomic-extraction-reply";
-import { LlmClientTerminalError } from "@/shared/llm-client";
+} from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-extraction-reply";
+import { LlmClientTerminalError } from "../../../../packages/sno-station-mem/src/model/llm-client";
 import type {
 	LlmClient,
 	MemoryLlmRequest,
 	ResolvedLlmConfig,
 	TokenUsage,
-} from "@/shared/llm-client-types";
+} from "../../../../packages/sno-station-mem/src/model/llm-client-types";
 
 const TURNS: AtomicExtractionTurn[] = Array.from({ length: 9 }, (_, index) => ({
 	role: "user" as const,
