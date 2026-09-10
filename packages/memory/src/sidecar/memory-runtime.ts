@@ -1,12 +1,12 @@
 import { existsSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
-import { dirname } from "node:path";
+import { dirname, join } from "node:path";
 import { isDeepStrictEqual } from "node:util";
 import { createLogger } from "@snoai/utils/logger";
 import { ContractError, parseInput, parseOutput, type ContractMethod, type ContractOutputs, type Registration, type ScopeCtx } from "../contract/index";
 import { pluginConfigSchema, type PluginConfig } from "../contract/config/plugin-config-schema";
 import { MemoryContractRuntime } from "../engine/contract-runtime";
-import { getInstallationConfigPath, getPrincipal, getSnoStationMemStateDir, readBoundStorePath } from "../engine/shared/paths";
+import { getBindingPath, getInstallationConfigPath, getPrincipal, getSnoStationMemStateDir, readBoundStorePath } from "../engine/shared/paths";
 import { readSnoStationMemConfig, PLUGIN_ENTRY_KEY } from "../engine/bindings/embedder-config-files";
 import { ObservableEmbedder } from "../engine/observability/observable-embedder";
 import { ObservableMemoryStore } from "../engine/observability/observable-memory-store";
@@ -17,7 +17,9 @@ import { DEFAULT_RETRIEVAL_CONFIG } from "../engine/retrieval/retriever";
 import { createTierPromoter } from "../engine/operations/memory-tier-promoter";
 import { MemoryTelemetryUsageOutbox } from "../engine/telemetry/memory-telemetry-outbox";
 import { initSqliteRuntime } from "../store/sqlite-runtime";
+import { startMaintenanceTimer, type MaintenanceTimerHandle } from "../store/maintenance";
 import { RegisteredAgentPort } from "../model/registered-agent-port";
+import { MEMORY_USAGE_FLUSH_INTERVAL_MS } from "./config";
 
 const log = createLogger("sno-station-mem:runtime");
 function engineLog(level: "info" | "warn" | "error" | "debug", message: string): void {
@@ -48,17 +50,22 @@ export class MemoryRuntimePool {
 	readonly counters: { engineAccesses: number; storeAccesses: number } = { engineAccesses: 0, storeAccesses: 0 };
 	private readonly skins = new Map<string, SkinRuntime>();
 	private readonly owned = new Set<SkinRuntime>();
+	private maintenance: MaintenanceTimerHandle | undefined;
+	private usageTimer: NodeJS.Timeout | undefined;
+	private usageFlush: Promise<unknown> | undefined;
+	private readonly usageOutbox: MemoryTelemetryUsageOutbox;
 	private constructor(
 		readonly storePath: string,
 		readonly store: ObservableMemoryStore,
 		readonly config: PluginConfig,
 		private readonly observability: PluginObservability,
 		private readonly embedder: ObservableEmbedder,
-	) {}
+	) { this.usageOutbox = new MemoryTelemetryUsageOutbox({ sqlite: store.sqlite, dbPath: storePath }); }
 
 	static async open(): Promise<MemoryRuntimePool> {
 		const storePath = await readBoundStorePath();
 		const configPath = getInstallationConfigPath();
+		if (existsSync(getBindingPath()) && !existsSync(configPath)) throw new ContractError("storage-unavailable");
 		const installed = existsSync(configPath) ? readSnoStationMemConfig(configPath).plugins?.entries?.[PLUGIN_ENTRY_KEY]?.config : undefined;
 		const config = pluginConfigSchema.parse({ ...installed, dbPath: storePath });
 		await initSqliteRuntime();
@@ -67,7 +74,11 @@ export class MemoryRuntimePool {
 		const observability = new PluginObservability(config, stateDir, engineLogger);
 		const embedder = new ObservableEmbedder(config.embedding, stateDir, observability, () => undefined);
 		const store = new ObservableMemoryStore({ dbPath: storePath, vectorDim: embedder.dimensions, embedder, memoryTelemetry: config.memoryTelemetry }, observability, () => undefined, config.embedding);
-		return new MemoryRuntimePool(storePath, store, config, observability, embedder);
+		const pool = new MemoryRuntimePool(storePath, store, config, observability, embedder);
+		pool.maintenance = startMaintenanceTimer({ store, dbPath: storePath, stateDir,
+			backupDir: join(stateDir, "backups"), usageOutbox: pool.usageOutbox });
+		pool.startUsageTimer();
+		return pool;
 	}
 
 	private async register(scope: ScopeCtx, registration: Registration): Promise<ContractOutputs["init"]> {
@@ -85,7 +96,7 @@ export class MemoryRuntimePool {
 		retriever.setRecallLifecycle(config.recallLifecycle);
 		retriever.setTierPromoter(createTierPromoter());
 		const runtime = new MemoryContractRuntime({ store: this.store, embedder, retriever, accessTracker: tracker, observability,
-			stateDir: this.stateDir, agentPort, logger: engineLogger, telemetryUsage: new MemoryTelemetryUsageOutbox({ sqlite: this.store.sqlite, dbPath: this.storePath }) });
+			stateDir: this.stateDir, agentPort, logger: engineLogger, telemetryUsage: this.usageOutbox });
 		const entry: SkinRuntime = { runtime, tracker, observability, embedder, agentPort, active: 0, retired: false };
 		this.owned.add(entry);
 		try {
@@ -139,9 +150,29 @@ export class MemoryRuntimePool {
 		await entry.observability.shutdown();
 	}
 
+	private startUsageTimer(): void {
+		this.usageTimer = setInterval(() => {
+			if (this.usageFlush) return;
+			this.usageFlush = this.usageOutbox.flushPendingAsync().catch((error: unknown) => {
+				log.warn("Memory usage delivery failed", { error }, {
+					event_name: "memory.sidecar.usage.failed", file: "packages/sno-station-mem/src/sidecar/memory-runtime.ts",
+					function: "<anonymous callback>", site_id: "memory.sidecar.usage.failed",
+				});
+			}).finally(() => { this.usageFlush = undefined; });
+		}, MEMORY_USAGE_FLUSH_INTERVAL_MS);
+		this.usageTimer.unref();
+	}
+
+	stopTimers(): void {
+		this.maintenance?.stop();
+		if (this.usageTimer) clearInterval(this.usageTimer);
+	}
+
 	async close(): Promise<void> {
+		this.stopTimers();
 		for (const entry of this.owned) await this.dispose(entry);
 		this.skins.clear();
+		await this.usageFlush;
 		await this.store.close();
 		await this.embedder.dispose();
 		await this.observability.shutdown();

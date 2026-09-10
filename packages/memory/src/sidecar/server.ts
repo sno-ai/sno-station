@@ -235,6 +235,7 @@ async function startLockedRemSidecar(
 			try {
 				for (const timer of pendingTimers) clearTimeout(timer);
 				pendingTimers.clear();
+				memory.stopTimers();
 				await closeServer(server);
 				await Promise.allSettled(activeTasks);
 				await memory.close();
