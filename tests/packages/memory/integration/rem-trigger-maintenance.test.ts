@@ -86,6 +86,7 @@ describe("REM trigger maintenance timer", () => {
 					schedule_zone: "UTC",
 					last_covered_count: 1,
 					last_volume_pass_date: null,
+					missed_window: null,
 					attempts: { identity: null, count: 0 },
 				},
 			},
@@ -104,7 +105,7 @@ describe("REM trigger maintenance timer", () => {
 		const address = server.address();
 		if (address === null || typeof address === "string") throw new Error("test server did not bind");
 		writeFileSync(
-			path.join(profileRoot, "station", "sidecar.json"),
+			path.join(profileRoot, "station", "sno-station-mem.json"),
 			JSON.stringify({ pid: process.pid, port: address.port, token: "maintenance-token" }),
 			"utf8",
 		);

@@ -71,6 +71,7 @@ describe("REM automatic trigger", () => {
 			schedule_zone: "America/Los_Angeles",
 			last_covered_count: 1,
 			last_volume_pass_date: null,
+			missed_window: null,
 			attempts: { identity: null, count: 0 },
 		});
 		expect(readAudit(fixture.stateDir)).toContainEqual(
@@ -116,6 +117,7 @@ describe("REM automatic trigger", () => {
 			schedule_zone: "UTC",
 			last_covered_count: 1,
 			last_volume_pass_date: null,
+			missed_window: null,
 			attempts: { identity: null, count: 0 },
 		});
 
@@ -176,6 +178,7 @@ describe("REM automatic trigger", () => {
 			schedule_zone: "UTC",
 			last_covered_count: 1,
 			last_volume_pass_date: null,
+			missed_window: null,
 			attempts: { identity: null, count: 0 },
 		});
 
@@ -218,6 +221,7 @@ describe("REM automatic trigger", () => {
 			schedule_zone: "UTC",
 			last_covered_count: 1,
 			last_volume_pass_date: null,
+			missed_window: null,
 			attempts: { identity: null, count: 0 },
 		});
 
@@ -248,6 +252,7 @@ describe("REM automatic trigger", () => {
 			schedule_zone: "UTC",
 			last_covered_count: 1,
 			last_volume_pass_date: null,
+			missed_window: null,
 			attempts: { identity: null, count: 0 },
 		});
 
@@ -281,6 +286,7 @@ describe("REM automatic trigger", () => {
 			schedule_zone: "UTC",
 			last_covered_count: 0,
 			last_volume_pass_date: null,
+			missed_window: null,
 			attempts: { identity: null, count: 0 },
 		});
 
@@ -318,6 +324,7 @@ describe("REM automatic trigger", () => {
 					schedule_zone: "UTC",
 					last_covered_count: 0,
 					last_volume_pass_date: null,
+					missed_window: null,
 					attempts: { identity: correlationId, count: 3 },
 				},
 			},
@@ -336,6 +343,7 @@ describe("REM automatic trigger", () => {
 		expect((await loadRemTriggerState(fixture.stateDir)).scopes).toMatchObject({
 			[fixture.scope]: {
 				last_volume_pass_date: "2026-08-12",
+				missed_window: null,
 				attempts: { identity: null, count: 0 },
 			},
 			[laterScope]: { last_covered_count: 1 },
@@ -352,6 +360,7 @@ describe("REM automatic trigger", () => {
 			schedule_zone: "UTC",
 			last_covered_count: 0,
 			last_volume_pass_date: null,
+			missed_window: null,
 			attempts: { identity: null, count: 0 },
 		});
 
@@ -436,6 +445,7 @@ describe("REM automatic trigger", () => {
 			schedule_zone: "UTC",
 			last_covered_count: 1,
 			last_volume_pass_date: null,
+			missed_window: null,
 			attempts: { identity: null, count: 0 },
 		});
 		mkdirSync(path.join(fixture.stateDir, "audit.jsonl"));
@@ -467,6 +477,7 @@ describe("REM automatic trigger", () => {
 			schedule_zone: "UTC",
 			last_covered_count: 1,
 			last_volume_pass_date: null,
+			missed_window: null,
 			attempts: { identity: null, count: 0 },
 		});
 
@@ -516,6 +527,7 @@ describe("REM automatic trigger", () => {
 			schedule_zone: "UTC",
 			last_covered_count: 1,
 			last_volume_pass_date: "2026-08-12",
+			missed_window: null,
 			attempts: { identity: null, count: 0 },
 		});
 		const correlationId = remAutomaticCorrelationId("volume", fixture.scope, "2026-08-11");
@@ -574,6 +586,7 @@ describe("REM automatic trigger", () => {
 			schedule_zone: "UTC",
 			last_covered_count: 1,
 			last_volume_pass_date: "2026-08-12",
+			missed_window: null,
 			attempts: { identity: null, count: 0 },
 		});
 		const correlationId = remAutomaticCorrelationId("volume", fixture.scope, "2026-08-11");
@@ -600,6 +613,7 @@ describe("REM automatic trigger", () => {
 			schedule_zone: "UTC",
 			last_covered_count: 1,
 			last_volume_pass_date: "2026-08-12",
+			missed_window: null,
 			attempts: { identity: null, count: 0 },
 		});
 		const correlationId = remAutomaticCorrelationId("volume", fixture.scope, "2026-08-11");
@@ -625,6 +639,7 @@ describe("REM automatic trigger", () => {
 			schedule_zone: "UTC",
 			last_covered_count: 0,
 			last_volume_pass_date: "2026-08-12",
+			missed_window: null,
 			attempts: { identity: null, count: 0 },
 		});
 		const correlationId = remAutomaticCorrelationId("volume", fixture.scope, "2026-08-11");
@@ -674,6 +689,7 @@ describe("REM automatic trigger", () => {
 			schedule_zone: "UTC",
 			last_covered_count: 1,
 			last_volume_pass_date: null,
+			missed_window: null,
 			attempts: { identity: null, count: 0 },
 		});
 		const auditPath = path.join(fixture.stateDir, "audit.jsonl");
@@ -693,6 +709,7 @@ describe("REM automatic trigger", () => {
 		expect((await loadRemTriggerState(fixture.stateDir)).scopes[fixture.scope]).toMatchObject({
 			last_covered_count: 1,
 			last_volume_pass_date: null,
+			missed_window: null,
 		});
 	});
 
@@ -720,15 +737,15 @@ describe("REM automatic trigger", () => {
 					},
 				},
 			});
-		expect(readRemAutomaticOperations(configPath)).toEqual(["rem-update"]);
+		expect(readRemAutomaticOperations(configPath)).toEqual({ requestedOperations: ["rem-update"], tickEnabled: true });
 
 		writeTestInstallationConfig(configDir, {
 				plugins: { entries: { "sno-mem-claw": { config: { mode: "rem-enhanced" } } } },
 			});
-		expect(readRemAutomaticOperations(configPath)).toEqual(["rem-replace", "rem-update"]);
+		expect(readRemAutomaticOperations(configPath)).toEqual({ requestedOperations: ["rem-replace", "rem-update"], tickEnabled: true });
 
 		writeTestInstallationConfig(configDir, { plugins: { entries: { "sno-mem-claw": { config: {} } } } });
-		expect(readRemAutomaticOperations(configPath)).toEqual([]);
+		expect(readRemAutomaticOperations(configPath)).toEqual({ requestedOperations: [], tickEnabled: true });
 	});
 
 	function createFixture(candidateCount: number): { database: TestDb; stateDir: string; scope: string } {

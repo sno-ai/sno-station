@@ -1,3 +1,4 @@
+import { readMaintenanceOverrides } from "./config";
 import { randomUUID } from "node:crypto";
 import { readMemorySnapshotPayload, type SnapshotReason } from "../engine/observability/memory-snapshot";
 import { existsSync } from "node:fs";
@@ -80,8 +81,9 @@ export class MemoryRuntimePool {
 		const embedder = new ObservableEmbedder(config.embedding, stateDir, observability, () => undefined);
 		const store = new ObservableMemoryStore({ dbPath: storePath, vectorDim: embedder.dimensions, embedder, memoryTelemetry: config.memoryTelemetry }, observability, () => undefined, config.embedding);
 		const pool = new MemoryRuntimePool(storePath, store, config, observability, embedder);
-		pool.maintenance = startMaintenanceTimer({ store, dbPath: storePath, stateDir,
-			backupDir: join(stateDir, "backups"), usageOutbox: pool.usageOutbox });
+		const maintenance = readMaintenanceOverrides();
+		pool.maintenance = startMaintenanceTimer({ store, dbPath: storePath, stateDir, remClock: maintenance.now, remVolumeThreshold: maintenance.volumeThreshold,
+			backupDir: join(stateDir, "backups"), usageOutbox: pool.usageOutbox }, maintenance.intervalMs, maintenance.intervalMs);
 		pool.startUsageTimer();
 		return pool;
 	}
