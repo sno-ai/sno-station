@@ -4,12 +4,12 @@
  */
 
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
-import type { Embedder } from "../../../../apps/mem-claw/src/extraction/embedding-provider-client.ts";
-import { parseInsightMetadata } from "../../../../apps/mem-claw/src/extraction/memory-metadata-codec.ts";
-import type { MemoryEntry } from "../../../../apps/mem-claw/src/shared/types.ts";
-import { MemoryStore } from "../../../../apps/mem-claw/src/storage/store.ts";
-import { createTestDb, createTestEmbedder, type TestDb } from "../helpers/test-db.ts";
-import { routeTestTask } from "./task-lifecycle-test-route.ts";
+import type { Embedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client.ts";
+import { parseInsightMetadata } from "../../../../packages/sno-station-mem/src/engine/extraction/memory-metadata-codec.ts";
+import type { MemoryEntry } from "../../../../packages/sno-station-mem/src/engine/shared/types.ts";
+import { MemoryStore } from "../../../../packages/sno-station-mem/src/store/store.ts";
+import { createTestDb, createTestEmbedder, type TestDb } from "../../../apps/mem-claw/helpers/test-db.ts";
+import { routeTestTask } from "../../../apps/mem-claw/integration/task-lifecycle-test-route.ts";
 
 const SCOPE = "active-tasks-completion-cas";
 const OPENED_AT = Date.parse("2026-07-19T12:00:00.000Z");

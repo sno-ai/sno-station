@@ -5,14 +5,14 @@
 
 import { copyFileSync, rmSync } from "node:fs";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
-import type { Embedder } from "@/extraction/embedding-provider-client";
+import type { Embedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client";
 import {
 	buildInsightMetadata,
 	stringifyInsightMetadata,
-} from "@/extraction/memory-metadata-codec";
-import { applyAtomicMemoryCutoverMigration } from "@/storage/atomic-memory-cutover-sql";
-import { MemoryStore } from "@/storage/store";
-import { openSqliteDatabase, type SqliteDatabaseLike } from "@/storage/sqlite-runtime";
+} from "../../../../packages/sno-station-mem/src/engine/extraction/memory-metadata-codec";
+import { applyAtomicMemoryCutoverMigration } from "../../../../packages/sno-station-mem/src/store/atomic-memory-cutover-sql";
+import { MemoryStore } from "../../../../packages/sno-station-mem/src/store/store";
+import { openSqliteDatabase, type SqliteDatabaseLike } from "../../../../packages/sno-station-mem/src/store/sqlite-runtime";
 import { createTestDb, createTestEmbedder, type TestDb } from "../helpers/test-db";
 
 const PROJECT_ID = "atomic-cutover-project";
