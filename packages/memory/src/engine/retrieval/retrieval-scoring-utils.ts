@@ -6,7 +6,7 @@
 import type { RetrievalResult } from "./retriever-dependencies";
 import { clamp01, createLogger } from "./retriever-dependencies";
 
-export const log: ReturnType<typeof createLogger> = createLogger("mem-claw:retriever");
+export const log: ReturnType<typeof createLogger> = createLogger("sno-station-mem:retriever");
 
 export function clamp01WithFloor(value: number, floor: number): number {
 	const safeFloor = clamp01(floor, 0);

@@ -38,7 +38,7 @@ import type { MemoryTelemetryMetadata } from "../telemetry/memory-telemetry-type
 import { retrieveForAutoRecall, type RecallFilterDiagnostics } from "../retrieval/rem-consumer-retrieval";
 import { randomUUID } from "node:crypto";
 import { createLogger, currentLogContext, withLogContext } from "@snoai/utils/logger";
-const log = createLogger("mem-claw:auto-recall");
+const log = createLogger("sno-station-mem:auto-recall");
 
 const LOCOMO_BENCHMARK_PROMPT_RE =
 	/^Question:\s*(?<question>[\s\S]*?)\n\s*\nYou are answering a benchmark question\b/;
@@ -275,7 +275,7 @@ export async function onBeforeAgentStart(
 				topResultIds: finalResults.slice(0, 5).map((r) => r.entry.id),
 				topScores: finalResults.slice(0, 5).map((r) => Number(r.score.toFixed(4))),
 				topResultPreviews:
-					process.env.MEM_CLAW_DEBUG_CONTENT === "1"
+					process.env.SNO_STATION_MEM_DEBUG_CONTENT === "1"
 						? finalResults
 								.slice(0, 5)
 								.map((r) =>

@@ -1,3 +1,4 @@
+import { FIXED_PROTOCOL_VALUE_65, FIXED_PROTOCOL_VALUE_66, FIXED_PROTOCOL_VALUE_67, FIXED_PROTOCOL_VALUE_68, FIXED_PROTOCOL_VALUE_76, PERSISTED_PROVIDER_SYSTEM } from "../../model/signed-registry-constants";
 /** @file provider-authority.ts
  * @purpose Resolves OpenClaw external project/agent keys to internal provider authority.
  * @boundary SQLite mapping tables and project-agent membership checks.
@@ -32,8 +33,8 @@ function validateAuthorityInput(input: ProviderAuthorityInput): {
 	if (!isLowercaseCanonicalUUIDv7(userId)) {
 		throw new StorageError("trusted userId must be a lowercase UUID-v7");
 	}
-	if (input.externalSystem !== "openclaw") {
-		throw new StorageError("Provider authority externalSystem must be openclaw");
+	if (input.externalSystem !== PERSISTED_PROVIDER_SYSTEM) {
+		throw new StorageError(FIXED_PROTOCOL_VALUE_76);
 	}
 	const projectKey = input.projectKey.trim();
 	if (projectKey.length === 0) {
@@ -53,7 +54,7 @@ function selectProjectMapping(
 ): ProjectMappingRow | undefined {
 	return store.sqlite
 		.prepare(
-			"SELECT project_id FROM nodix_provider_project_mappings WHERE user_id = ? AND external_system = 'openclaw' AND external_project_key = ? LIMIT 1",
+			FIXED_PROTOCOL_VALUE_65,
 		)
 		.get(userId, projectKey) as ProjectMappingRow | undefined;
 }
@@ -65,7 +66,7 @@ function selectAgentMapping(
 ): AgentMappingRow | undefined {
 	return store.sqlite
 		.prepare(
-			"SELECT agent_id FROM nodix_provider_agent_mappings WHERE user_id = ? AND external_system = 'openclaw' AND external_agent_key = ? LIMIT 1",
+			FIXED_PROTOCOL_VALUE_66,
 		)
 		.get(userId, agentKey) as AgentMappingRow | undefined;
 }
@@ -89,7 +90,7 @@ function ensureProjectMapping(
 	const projectId = createUUIDv7();
 	store.sqlite
 		.prepare(
-			"INSERT OR IGNORE INTO nodix_provider_project_mappings(user_id, external_system, external_project_key, project_id, created_at_ms) VALUES (?, 'openclaw', ?, ?, ?)",
+			FIXED_PROTOCOL_VALUE_67,
 		)
 		.run(userId, projectKey, projectId, Date.now());
 	const winner = selectProjectMapping(store, userId, projectKey);
@@ -105,7 +106,7 @@ function ensureAgentMapping(store: MemoryStore, userId: string, agentKey: string
 	const agentId = createUUIDv7();
 	store.sqlite
 		.prepare(
-			"INSERT OR IGNORE INTO nodix_provider_agent_mappings(user_id, external_system, external_agent_key, agent_id, created_at_ms) VALUES (?, 'openclaw', ?, ?, ?)",
+			FIXED_PROTOCOL_VALUE_68,
 		)
 		.run(userId, agentKey, agentId, Date.now());
 	const winner = selectAgentMapping(store, userId, agentKey);

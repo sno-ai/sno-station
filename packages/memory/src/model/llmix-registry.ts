@@ -1,3 +1,4 @@
+import { FIXED_EXTERNAL_VALUE_8, FIXED_EXTERNAL_VALUE_9 } from "./signed-registry-constants";
 /** @file llmix-registry.ts
  * @purpose Loads the bundled signed LLMIx registry for mem-claw.
  * @boundary Trust-anchor verification and package-relative asset resolution only.
@@ -22,11 +23,11 @@ import type {
 	ResolvedLlmConfig,
 } from "./llm-client-types";
 
-export const MEM_CLAW_RELEASE_ANCHOR_URL =
-	"https://www.sno.ai/.well-known/sno-mem-openclaw-release.json";
+export const MEM_CLAW_RELEASE_ANCHOR_URL: typeof FIXED_EXTERNAL_VALUE_8 =
+	FIXED_EXTERNAL_VALUE_8;
 export const MEM_CLAW_RELEASE_DID = "did:web:www.sno.ai";
-export const MEM_CLAW_RELEASE_KEY_ID =
-	"did:web:www.sno.ai#sno-mem-openclaw-release";
+export const MEM_CLAW_RELEASE_KEY_ID: typeof FIXED_EXTERNAL_VALUE_9 =
+	FIXED_EXTERNAL_VALUE_9;
 export const MEM_CLAW_RELEASE_ANCHOR_TIMEOUT_MS = 5_000;
 const MEM_CLAW_RELEASE_ANCHOR_ATTEMPTS = 2;
 const MEM_CLAW_RELEASE_ANCHOR_RETRY_DELAY_MS = 50;

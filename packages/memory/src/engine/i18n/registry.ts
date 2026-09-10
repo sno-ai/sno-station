@@ -2,7 +2,7 @@ import { createLogger } from "@snoai/utils/logger";
 import { DEFAULT_LOCALE, type Locale, SUPPORTED_LOCALES } from "./locales";
 import type { LocaleResources, Namespace } from "./res/_types";
 
-const log = createLogger("mem-claw:i18n-registry");
+const log = createLogger("sno-station-mem:i18n-registry");
 
 type LocaleLoader = () => Promise<LocaleResources>;
 

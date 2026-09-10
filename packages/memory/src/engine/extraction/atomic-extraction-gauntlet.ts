@@ -22,7 +22,7 @@ import {
 	normalizeMemoryRelationPredicate,
 } from "../../store/store";
 
-const log = createLogger("mem-claw:atomic-extraction-gauntlet");
+const log = createLogger("sno-station-mem:atomic-extraction-gauntlet");
 
 export type AtomicExtractionDispositionReason =
 	| "compound"

@@ -26,7 +26,7 @@ import {
 import { assertTodoStoreCountParity } from "./todo-store";
 import { migrateUnplacedCandidates } from "./unplaced-candidate-migration";
 
-const log = createLogger("mem-claw:db");
+const log = createLogger("sno-station-mem:db");
 
 type RuntimeDrizzleDB = ReturnType<typeof drizzle<typeof schema>>;
 

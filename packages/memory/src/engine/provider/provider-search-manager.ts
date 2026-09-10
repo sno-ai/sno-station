@@ -1,3 +1,4 @@
+import { FIXED_MEMORY_ROW_PATH_PATTERN, FIXED_PROTOCOL_VALUE_74 } from "../../model/signed-registry-constants";
 /** @file provider-search-manager.ts
  * @purpose Implements OpenClaw memory provider search/read against mem-claw rows.
  * @boundary Enforces project-scoped provider identity before exposing generated files.
@@ -32,10 +33,10 @@ import { clampInt } from "../shared/utils";
 import type { MemoryStore } from "../../store/store";
 import { randomUUID } from "node:crypto";
 import { createLogger, currentLogContext, privateLogReference, withLogContext } from "@snoai/utils/logger";
-const diagnosticLog = createLogger("mem-claw:provider-search-manager");
+const diagnosticLog = createLogger("sno-station-mem:provider-search-manager");
 
 const ROW_PATH_RE =
-	/^mem-claw\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.md$/;
+	FIXED_MEMORY_ROW_PATH_PATTERN;
 const DEFAULT_SEARCH_LIMIT = 10;
 const DEFAULT_READ_LINES = 200;
 const MAX_READ_LINES = 2_000;
@@ -288,7 +289,7 @@ export class MemClawProviderSearchManager implements MemorySearchManager {
 			{ event_name: "memory.provider.status.completed", file: "apps/mem-claw/src/provider/provider-search-manager.ts", function: "MemClawProviderSearchManager.status", site_id: "memory.provider.status.completed" });
 		return {
 			backend: "qmd",
-			provider: "sno-mem-claw",
+			provider: FIXED_PROTOCOL_VALUE_74,
 			model: this.options.store.embedder.model,
 			files: memoryCount,
 			chunks: chunkCount,

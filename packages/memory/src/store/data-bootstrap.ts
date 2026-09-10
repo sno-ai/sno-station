@@ -26,9 +26,9 @@ import {
 	writeInstallManifestAtomic,
 } from "./install-manifest";
 
-const log = createLogger("mem-claw:data-bootstrap");
+const log = createLogger("sno-station-mem:data-bootstrap");
 
-const DEFAULT_RELATIVE_DB_PATH = "./mem-claw.sqlite";
+const DEFAULT_RELATIVE_DB_PATH = "./sno-station-mem.sqlite";
 
 export interface BootstrapResult {
 	dbPath: string;

@@ -11,12 +11,12 @@ import { BACKUP_RETENTION_COUNT } from "../../config/index";
 import { loadSqliteVecExtension } from "./sqlite-vec-path";
 import { openSqliteDatabase } from "./sqlite-runtime";
 
-const log = createLogger("mem-claw:backup");
+const log = createLogger("sno-station-mem:backup");
 
-const BACKUP_PREFIX = "mem-claw-";
+const BACKUP_PREFIX = "sno-station-mem-";
 const BACKUP_SUFFIX = ".sqlite";
 const BACKUP_FILE_REGEX =
-	/^mem-claw-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}-p\d+-[a-z0-9]+\.sqlite$/;
+	/^sno-station-mem-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}-p\d+-[a-z0-9]+\.sqlite$/;
 
 /** Format `Date` as a unique UTC timestamp (colon-free for FS-safety). */
 function formatBackupTimestamp(now: Date): string {

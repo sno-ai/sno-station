@@ -39,7 +39,7 @@ import type {
 	StoreInput,
 } from "../../store/store";
 
-const log = createLogger("mem-claw:insight-distill");
+const log = createLogger("sno-station-mem:insight-distill");
 
 function candidateRelationsToMemoryRelations(
 	rels: CandidateRelation[] | undefined,

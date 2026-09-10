@@ -72,7 +72,7 @@ export type AtomicExtractionReplyResult =
 			malformedCandidateCount: number;
 	  };
 
-const log = createLogger("mem-claw:atomic-extraction-reply");
+const log = createLogger("sno-station-mem:atomic-extraction-reply");
 const personAttributeSlugs = new Set(attributeDictionary.slugs.map(({ slug }) => slug));
 const thingAttributeSlugs = new Set(stateVocabulary.slugs.map(({ slug }) => slug));
 const relationPredicates = new Set([

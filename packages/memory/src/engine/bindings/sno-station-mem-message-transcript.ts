@@ -1,3 +1,4 @@
+import { FIXED_PROTOCOL_VALUE_63, PERSISTED_PROVIDER_SYSTEM } from "../../model/signed-registry-constants";
 /** @file openclaw-message-transcript.ts
  * @purpose Normalizes SDK message records into capture transcripts and session timestamps.
  * @boundary Message-shape parsing and redaction for transcript construction only.
@@ -63,7 +64,7 @@ export function extractAllMessageTexts(record: Record<string, unknown>): string[
  * untouched, so no incoming user turn can be dropped by this path — including one whose wording
  * happens to match ours.
  */
-export const PLUGIN_OWNED_SOURCE_CHANNEL = "mem-claw-internal-llm";
+export const PLUGIN_OWNED_SOURCE_CHANNEL: typeof FIXED_PROTOCOL_VALUE_63 = FIXED_PROTOCOL_VALUE_63;
 
 /** Whether a raw SDK message is one this plugin injected as its own model request. */
 export function isPluginOwnedMessage(message: unknown): boolean {
@@ -179,7 +180,7 @@ export function buildConversationText(
 			const normalized = normalizeAmbientLearningText(message.role, text);
 			if (!normalized) continue;
 			const sanitized = sanitizeContentIngress({
-				source: "openclaw",
+				source: PERSISTED_PROVIDER_SYSTEM,
 				content: normalized,
 			}).projections.plainText;
 			if (!sanitized) continue;

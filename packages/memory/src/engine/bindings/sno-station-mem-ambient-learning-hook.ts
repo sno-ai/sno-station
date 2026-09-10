@@ -34,7 +34,7 @@ import {
 	isChatIdBasedAgentId,
 	resolveHookAgentId,
 } from "./sno-station-mem-runtime-mode";
-const log = createLogger("mem-claw:ambient-learning");
+const log = createLogger("sno-station-mem:ambient-learning");
 
 async function runLocalFirstCapture(input: {
 	api: OpenClawPluginApi;

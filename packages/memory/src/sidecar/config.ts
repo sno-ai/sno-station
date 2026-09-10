@@ -53,7 +53,7 @@ export function getRemSidecarLockKey(): string {
 }
 
 export function getRemTraceLogPath(stateRoot: string = getStateDir()): string {
-	return path.join(stateRoot, "mem-claw", REM_TRACE_LOG_NAME);
+	return path.join(stateRoot, "sno-station-mem", REM_TRACE_LOG_NAME);
 }
 
 export function isRemTraceEnabled(): boolean {

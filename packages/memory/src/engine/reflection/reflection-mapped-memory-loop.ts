@@ -1,5 +1,5 @@
 import { createLogger as createDiagnosticLogger } from "@snoai/utils/logger";
-const diagnosticLog = createDiagnosticLogger("mem-claw:reflection-mapped-memory-loop");
+const diagnosticLog = createDiagnosticLogger("sno-station-mem:reflection-mapped-memory-loop");
 /** @file reflection-mapped-memory-loop.ts
  * @purpose Stores mapped reflection bullets as semantic memories.
  */

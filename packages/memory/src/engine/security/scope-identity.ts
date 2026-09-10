@@ -7,7 +7,7 @@ import { createLogger } from "@snoai/utils/logger";
 
 import { SCOPE_PATTERNS } from "./scope-policy-types";
 
-const log = createLogger("mem-claw:scopes");
+const log = createLogger("sno-station-mem:scopes");
 
 const SYSTEM_BYPASS_IDS = new Set(["system", "undefined"]);
 const warnedLegacyFallbackBypassIds = new Set<string>();

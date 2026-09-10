@@ -170,7 +170,7 @@ export const validateRemOperationalGrammarActivation = (input: {
 }): EntryDecision => {
 	const parsed = parseConfigurationSource(input.configSource);
 	if (parsed.configuration === undefined) return parsed.decision;
-	const memClawRoot = path.join(input.stateRoot, "mem-claw");
+	const memClawRoot = path.join(input.stateRoot, "sno-station-mem");
 	const acceptedPath = path.join(memClawRoot, "rem-operational-config.accepted.json");
 	let beforeSource: string;
 	try {
@@ -301,7 +301,7 @@ function validateArtifacts(
 	configuration: RemOperationalConfiguration,
 	includeRouting: boolean,
 ): EntryDecision {
-	const gateRoot = path.join(stateRoot, "mem-claw", "rem-gates");
+	const gateRoot = path.join(stateRoot, "sno-station-mem", "rem-gates");
 	const configurationSha256 = deriveRemConfigurationSha256(configuration);
 	const artifactIds = [
 		"p5-production-config",
@@ -406,7 +406,7 @@ function validateArtifactSemantics(
 }
 
 function validateRoutingArtifact(stateRoot: string, configuration: RemOperationalConfiguration): EntryDecision {
-	const gateRoot = path.join(stateRoot, "mem-claw", "rem-gates");
+	const gateRoot = path.join(stateRoot, "sno-station-mem", "rem-gates");
 	const loaded = loadBoundArtifact(gateRoot, "population-routing", configuration.enableGateDigests["population-routing"]);
 	if (loaded.value === undefined) return loaded.decision;
 	if (loaded.value["profileId"] !== configuration.profileId || loaded.value["configurationSha256"] !== deriveRemConfigurationSha256(configuration)) {
@@ -440,7 +440,7 @@ function meetsMinima(minima: Record<string, number>, measured: Record<string, nu
 }
 
 function recordPreOpenRefusal(stateRoot: string, profileId: string, reasonCode: string): void {
-	const auditPath = path.join(stateRoot, "mem-claw", "rem-operational-audit.jsonl");
+	const auditPath = path.join(stateRoot, "sno-station-mem", "rem-operational-audit.jsonl");
 	mkdirSync(path.dirname(auditPath), { recursive: true });
 	const timestamp = new Date().toISOString();
 	const preOpenAttemptId = createHash("sha256").update(`${timestamp}\u001fentry-artifacts\u001fenv:SNO_REM_CONFIG_JSON`).digest("hex");

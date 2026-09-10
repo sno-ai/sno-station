@@ -449,7 +449,7 @@ async function runChassisJob(
 			}
 			const result = await runRemProductionOrderedWave({
 				stateRoot: getStateDir(),
-				personaDbPath: process.env["MEM_CLAW_REM_EXPECTED_DB_PATH"],
+				personaDbPath: process.env["SNO_STATION_MEM_REM_EXPECTED_DB_PATH"],
 				configSource,
 				scope: queued.scope,
 				waveId: queued.job_id,

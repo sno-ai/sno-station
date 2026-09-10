@@ -34,7 +34,7 @@ import { stableHash } from "../engine/shared/utils";
 import { hashInputForEntry } from "./memory-store-shared";
 import type { MemoryStore } from "./store";
 
-const log = createLogger("mem-claw:rem-sqlite-adapter");
+const log = createLogger("sno-station-mem:rem-sqlite-adapter");
 
 interface MemoryRow {
 	id: string;

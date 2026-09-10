@@ -1,5 +1,5 @@
 import { createLogger as createDiagnosticLogger } from "@snoai/utils/logger";
-const diagnosticLog = createDiagnosticLogger("mem-claw:openclaw-runtime-mode");
+const diagnosticLog = createDiagnosticLogger("sno-station-mem:sno-station-mem-runtime-mode");
 /** @file openclaw-runtime-mode.ts
  * @purpose Resolves runtime mode switches and hook agent identity decisions.
  * @boundary Environment/argv checks and scoped audit breadcrumbs only.
@@ -22,7 +22,7 @@ export function isGatewayMode(): boolean {
 
 /** Detects the eval/runtime kill switch for disabling all plugin registration. */
 export function isPluginDisabled(): boolean {
-	return process.env.MEM_CLAW_DISABLED === "true";
+	return process.env.SNO_STATION_MEM_DISABLED === "true";
 }
 
 /**

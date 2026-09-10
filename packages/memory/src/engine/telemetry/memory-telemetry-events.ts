@@ -1,3 +1,4 @@
+import { FIXED_PROTOCOL_VALUE_74 } from "../../model/signed-registry-constants";
 import { createLogger } from "@snoai/utils/logger";
 import type { SqliteDatabaseLike, SqliteStatementLike } from "../../store/sqlite-runtime";
 import { loadMemoryTelemetryKeySet, type MemoryTelemetryKeySet } from "./memory-telemetry-config";
@@ -8,7 +9,7 @@ import {
 } from "./memory-telemetry-receipts";
 import type { MemoryTelemetryEventType, MemoryTelemetryMetadata } from "./memory-telemetry-types";
 
-const log = createLogger("mem-claw:memory-telemetry-events");
+const log = createLogger("sno-station-mem:memory-telemetry-events");
 
 export interface MemoryTelemetryStoreConfig {
 	enabled?: boolean;
@@ -58,7 +59,7 @@ export class MemoryTelemetryEventWriter {
 	constructor(options: MemoryTelemetryEventWriterOptions) {
 		this.sqlite = options.sqlite;
 		this.enabled = options.config?.enabled ?? true;
-		this.agentId = options.config?.agentId ?? "sno-mem-claw";
+		this.agentId = options.config?.agentId ?? FIXED_PROTOCOL_VALUE_74;
 		this.insertReceiptEventStatement = this.sqlite.prepare(
 			`INSERT INTO nodix_memory_events
 			 (event_type, fact_id, memory_kind, timestamp_ms, agent_id, project_id,

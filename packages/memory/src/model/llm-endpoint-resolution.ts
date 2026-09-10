@@ -1,3 +1,4 @@
+import { FIXED_MEMORY_SNO_CONFLICT_VERDICT, FIXED_MEMORY_SNO_EXTRACT_CHAT, FIXED_MEMORY_SNO_EXTRACT_PROFILE, FIXED_PROTOCOL_VALUE_69 } from "./signed-registry-constants";
 /** @file llm-endpoint-resolution.ts
  * @purpose Resolves signed LLMIx presets into complete mem-claw-owned inference endpoints.
  * @boundary The only place an inference origin and path are composed.
@@ -13,7 +14,7 @@ import {
 
 const SNO_GPU_ORIGIN = "https://rt3-llm.sno.ai";
 const PROVIDER_API_BASES: Record<Exclude<LlmProvider, "sno-gpu">, string> = {
-	openai: "http://localhost:8070/codex/v1",
+	openai: FIXED_PROTOCOL_VALUE_69,
 	openrouter: "https://openrouter.ai/api/v1",
 };
 
@@ -36,11 +37,11 @@ export function selectEndpointPreset(input: {
 	transport: EndpointTransport;
 }): LlmPreset {
 	if (input.provider !== "sno-gpu") return input.configuredPreset;
-	if (input.occasion === "conflictAdjudication") return "mem_claw/sno_conflict_verdict";
+	if (input.occasion === "conflictAdjudication") return FIXED_MEMORY_SNO_CONFLICT_VERDICT;
 	if (input.occasion === "memoryExtract" && input.transport === "raw-completions") {
-		return "mem_claw/sno_extract_profile";
+		return FIXED_MEMORY_SNO_EXTRACT_PROFILE;
 	}
-	return "mem_claw/sno_extract_chat";
+	return FIXED_MEMORY_SNO_EXTRACT_CHAT;
 }
 
 export async function resolveLlmEndpoint(input: {

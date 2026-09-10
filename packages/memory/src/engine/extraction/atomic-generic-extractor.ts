@@ -1,3 +1,4 @@
+import { FIXED_MEMORY_SNO_EXTRACT_CHAT } from "../../model/signed-registry-constants";
 /** @file atomic-generic-extractor.ts
  * @purpose Runs the dark generic atomic extraction pass over complete transcript windows.
  * @boundary One serial model call per window plus its bounded retry; no writes or gauntlet stages.
@@ -35,7 +36,7 @@ import type {
 	MemoryStore,
 } from "../../store/store";
 
-const log = createLogger("mem-claw:atomic-extraction");
+const log = createLogger("sno-station-mem:atomic-extraction");
 const ATOMIC_REPROCESS_ATTEMPT_CAP = 1;
 
 export interface AtomicGenericExtractionRequest {
@@ -447,7 +448,7 @@ export function createSignedAtomicGenericExtractionTransport(
 	config: Omit<LlmClientConfig, "preset">,
 ): AtomicGenericExtractionTransport {
 	return createAtomicGenericExtractionTransport(
-		createLlmClient({ ...config, preset: "mem_claw/sno_extract_chat" }),
+		createLlmClient({ ...config, preset: FIXED_MEMORY_SNO_EXTRACT_CHAT }),
 	);
 }
 

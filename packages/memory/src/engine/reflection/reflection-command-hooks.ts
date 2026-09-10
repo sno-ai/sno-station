@@ -1,6 +1,7 @@
+import { FIXED_PROTOCOL_VALUE_78 } from "../../model/signed-registry-constants";
 import { createLogger as createDiagnosticLogger, privateLogReference, currentLogContext, withLogContext } from "@snoai/utils/logger";
 import { randomUUID } from "node:crypto";
-const diagnosticLog = createDiagnosticLogger("mem-claw:reflection-command-hooks");
+const diagnosticLog = createDiagnosticLogger("sno-station-mem:reflection-command-hooks");
 /** @file reflection-command-hooks.ts
  * @purpose Registers command hooks that write reflection logs and memories.
  */
@@ -383,7 +384,7 @@ async function appendGovernanceEntries(
 				...(entry.area !== undefined ? { area: entry.area } : {}),
 				...(entry.priority !== undefined ? { priority: entry.priority } : {}),
 				...(entry.status !== undefined ? { status: entry.status } : {}),
-				source: `mem-claw/reflection/${eventId}`,
+				source: `${FIXED_PROTOCOL_VALUE_78}${eventId}`,
 			});
 		} catch (err) {
 			diagnosticLog.warn("Reflection learning append failed", { error: err }, { event_name: "memory.reflection_command_hooks.reflection.learning.append.failed", file: "apps/mem-claw/src/reflection/reflection-command-hooks.ts", function: "appendGovernanceEntries", site_id: "reflection.reflection-command-hooks.appendGovernanceEntries.805fa046d0" });

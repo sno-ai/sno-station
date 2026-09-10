@@ -1,3 +1,4 @@
+import { PERSISTED_CONTENT_HASH_V1, PERSISTED_CONTENT_HASH_V3 } from "../model/signed-registry-constants";
 /** @file memory-store-shared.ts
  * @purpose Implements memory persistence, search, updates, deletion, and statistics.
  * @boundary SQLite schema, embedding vectors, FTS, and metadata invariants.
@@ -100,7 +101,7 @@ export {
 	VECTOR_DIMENSION_DEFAULT,
 };
 
-export const log: ReturnType<typeof createLogger> = createLogger("mem-claw:store");
+export const log: ReturnType<typeof createLogger> = createLogger("sno-station-mem:store");
 
 /**
  * PRD §4.2 reflection v3: discriminator added to content-hash input when the
@@ -138,7 +139,7 @@ export function hashInputForEntry(text: string, metadata: string | undefined): s
 		? parsed.merge_lineage.filter((item): item is string => typeof item === "string")
 		: [];
 	if (mergeLineage.length > 0) {
-		return JSON.stringify(["mem-claw:hash:v1", text, { merge_lineage: mergeLineage }]);
+		return JSON.stringify([PERSISTED_CONTENT_HASH_V1, text, { merge_lineage: mergeLineage }]);
 	}
 	// Rows whose identity really is the write, not the sentence. The task-lifecycle carrier and
 	// projection rows leave their superseded predecessor in the table, so a transition that does
@@ -148,7 +149,7 @@ export function hashInputForEntry(text: string, metadata: string | undefined): s
 	const contentIdentityKey = parsed.content_identity_key;
 	if (typeof contentIdentityKey === "string" && contentIdentityKey.length > 0) {
 		return JSON.stringify([
-			"mem-claw:hash:v3",
+			PERSISTED_CONTENT_HASH_V3,
 			text,
 			{ content_identity_key: contentIdentityKey },
 		]);
@@ -162,7 +163,7 @@ export function hashInputForEntry(text: string, metadata: string | undefined): s
 	// the marker prefix keeps non-mapped callers (which return raw `text`) on
 	// a disjoint hash domain even if a user's text happens to equal a JSON
 	// array literal.
-	return JSON.stringify(["mem-claw:hash:v1", text, mappedKind]);
+	return JSON.stringify([PERSISTED_CONTENT_HASH_V1, text, mappedKind]);
 }
 
 interface HashSignificantMetadataProjection {

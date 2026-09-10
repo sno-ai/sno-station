@@ -49,7 +49,7 @@ import {
 	SNIPPET_NEIGHBOR_BEFORE,
 } from "../../../config/index";
 
-const log = createLogger("mem-claw:eval-trace");
+const log = createLogger("sno-station-mem:eval-trace");
 
 export interface QaTrace {
 	context?: Readonly<LogContext>;
@@ -107,7 +107,7 @@ export interface QaTrace {
  * call time so harness-flipped values take effect without a re-import.
  */
 export function isTraceEnabled(): boolean {
-	return process.env.EVAL_TRACE_ENABLED === "true" || EVAL_TRACE_ENABLED;
+	return process.env.SNO_STATION_MEM_EVAL_TRACE_ENABLED === "true" || EVAL_TRACE_ENABLED;
 }
 
 /**
@@ -116,7 +116,7 @@ export function isTraceEnabled(): boolean {
  * set; callers treat that as "no trace this run".
  */
 export function resolveTraceDir(override?: string): string | undefined {
-	const envDir = process.env.EVAL_TRACE_DIR;
+	const envDir = process.env.SNO_STATION_MEM_EVAL_TRACE_DIR;
 	if (envDir && envDir.length > 0) return envDir;
 	if (override && override.length > 0) return override;
 	return undefined;

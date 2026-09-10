@@ -10,7 +10,7 @@ import type { LlmRoutingConfigInput } from "../../contract/config/plugin-config-
 import { logSiteCatalog } from "./log-site-catalog.generated";
 
 const APPLICATION_NAME = "mem-claw";
-const log = createLogger("mem-claw:runtime");
+const log = createLogger("sno-station-mem:runtime");
 let snapshotEmitted = false;
 const OCCASION_CALLS: ReadonlyArray<readonly [MemoryLlmAdapterSlot, string]> = [
 	["memory-extract", "memory-extract-atomic-generic"],

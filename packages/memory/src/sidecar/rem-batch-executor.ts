@@ -1,3 +1,4 @@
+import { FIXED_MEMORY_SNO_EXTRACT_CHAT, FIXED_PROTOCOL_VALUE_74 } from "../model/signed-registry-constants";
 /** @file rem-batch-executor.ts
  * @purpose Runs the production REM scan, judgments, and recoverable mutations for one scope.
  * @boundary One profile's encrypted SQLite database, Sno GPU judgments, and durable REM ledgers.
@@ -638,7 +639,7 @@ async function openBatchRuntime(input: {
 		path.isAbsolute(value) ? value : path.resolve(path.dirname(configPath), value),
 	);
 	if (!existsSync(dbPath)) throw new Error(`REM database does not exist: ${dbPath}`);
-	const expectedDbPath = process.env["MEM_CLAW_REM_EXPECTED_DB_PATH"] ?? dbPath;
+	const expectedDbPath = process.env["SNO_STATION_MEM_REM_EXPECTED_DB_PATH"] ?? dbPath;
 	if (realpathSync(dbPath) !== realpathSync(expectedDbPath)) {
 		throw new Error(
 			`REM database path does not match the runner-owned persona database: ` +
@@ -646,7 +647,7 @@ async function openBatchRuntime(input: {
 		);
 	}
 	const pluginConfigValue =
-		hostConfig?.plugins?.entries?.["sno-mem-claw"]?.config ?? {};
+		hostConfig?.plugins?.entries?.[FIXED_PROTOCOL_VALUE_74]?.config ?? {};
 	const pluginConfig = pluginConfigSchema.parse(pluginConfigValue);
 	await initSqliteRuntime();
 	const embedder = createEmbedder(pluginConfig.embedding, getMemClawStateDir());
@@ -673,7 +674,7 @@ async function openBatchRuntime(input: {
 		});
 		loadStorageExtensions(database);
 		const llm = createLlmClient({
-			preset: "mem_claw/sno_extract_chat",
+			preset: FIXED_MEMORY_SNO_EXTRACT_CHAT,
 			...(pluginConfig.extraction.llm.apiKey
 				? { apiKey: pluginConfig.extraction.llm.apiKey }
 				: {}),

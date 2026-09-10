@@ -1,3 +1,4 @@
+import { FIXED_MEMORY_SNO_AI_EXTRACT } from "../../model/signed-registry-constants";
 /** @file reflection-embedded-generator.ts
  * @purpose Builds the LLMIx-backed reflection generator.
  */
@@ -18,7 +19,7 @@ import type { LlmRoutingConfig } from "../../contract/config/plugin-config-mode-
 import type { PluginConfig } from "../shared/types";
 
 export const DEFAULT_MEMORY_LLM_CONFIG: NonNullable<PluginConfig["extraction"]["llm"]> = {
-	preset: "mem_claw/sno_ai_extract",
+	preset: FIXED_MEMORY_SNO_AI_EXTRACT,
 	timeoutMs: 30_000,
 };
 

@@ -1,3 +1,4 @@
+import { PERSISTED_PROVIDER_SYSTEM } from "../../model/signed-registry-constants";
 import { resolve } from "node:path";
 import { createLogger } from "@snoai/utils/logger";
 import { isLowercaseCanonicalUUIDv7 } from "@snoai/common-core";
@@ -16,7 +17,7 @@ import { MemClawProviderSearchManager } from "./provider-search-manager";
 import type { ProviderIdentity } from "./provider-types";
 import type { PluginConfig } from "../shared/types";
 import type { MemoryStore } from "../../store/store";
-const diagnosticLog = createLogger("mem-claw:provider-registration");
+const diagnosticLog = createLogger("sno-station-mem:provider-registration");
 type AgentEntry = {
 	id?: unknown;
 	workspace?: unknown;
@@ -62,7 +63,7 @@ export async function resolveProviderIdentity(params: {
 	const workspaceDir = readAgentWorkspace(params.cfg, params.agentId);
 	const identity = await resolveProviderAuthority(params.store, {
 		trustedUserId: userId,
-		externalSystem: "openclaw",
+		externalSystem: PERSISTED_PROVIDER_SYSTEM,
 		projectKey: workspaceDir,
 		agentKey: params.agentId,
 	});
@@ -78,7 +79,7 @@ export async function readProviderIdentity(params: {
 	const workspaceDir = readAgentWorkspace(params.cfg, params.agentId);
 	const identity = await readProviderAuthority(params.store, {
 		trustedUserId: userId,
-		externalSystem: "openclaw",
+		externalSystem: PERSISTED_PROVIDER_SYSTEM,
 		projectKey: workspaceDir,
 		agentKey: params.agentId,
 	});

@@ -9,7 +9,7 @@ import { basename, dirname, join } from "node:path";
 import { createInterface } from "node:readline";
 import { DEFAULT_SESSION_MESSAGE_COUNT } from "../../../config/index";
 import { createLogger } from "@snoai/utils/logger";
-const diagnosticLog = createLogger("mem-claw:session-summary-storage");
+const diagnosticLog = createLogger("sno-station-mem:session-summary-storage");
 
 export {
 	type ReflectionSessionSearchParams,
