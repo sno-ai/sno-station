@@ -4,20 +4,20 @@
  */
 
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
-import type { Embedder } from "@/extraction/embedding-provider-client";
+import type { Embedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client";
 import {
 	buildInsightMetadata,
 	stringifyInsightMetadata,
-} from "@/extraction/memory-metadata-codec";
+} from "../../../../packages/sno-station-mem/src/engine/extraction/memory-metadata-codec";
 import {
 	captureQueryManifest,
 	hashQueryManifestStore,
 	serializeQueryManifestCapture,
 	type ReviewedQueryInput,
-} from "@/retrieval/query-manifest-capture";
-import { DEFAULT_RETRIEVAL_CONFIG } from "@/retrieval/retriever";
-import type { MemoryEntry } from "@/shared/types";
-import { MemoryStore } from "@/storage/store";
+} from "../../../../packages/sno-station-mem/src/engine/retrieval/query-manifest-capture";
+import { DEFAULT_RETRIEVAL_CONFIG } from "../../../../packages/sno-station-mem/src/engine/retrieval/retriever";
+import type { MemoryEntry } from "../../../../packages/sno-station-mem/src/engine/shared/types";
+import { MemoryStore } from "../../../../packages/sno-station-mem/src/store/store";
 import { createTestDb, createTestEmbedder, type TestDb } from "../helpers/test-db";
 import { routeTestTask } from "./task-lifecycle-test-route";
 
