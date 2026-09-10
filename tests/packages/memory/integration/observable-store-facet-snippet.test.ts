@@ -18,12 +18,12 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
 	SNIPPET_NEIGHBOR_AFTER,
 	SNIPPET_NEIGHBOR_BEFORE,
-} from "../../../../apps/mem-claw/config/index.ts";
-import type { Embedder } from "../../../../apps/mem-claw/src/extraction/embedding-provider-client.ts";
-import { PluginObservability } from "../../../../apps/mem-claw/src/observability/adapter.ts";
-import { ObservableMemoryStore } from "../../../../apps/mem-claw/src/observability/observable-memory-store.ts";
-import { pluginConfigSchema } from "../../../../apps/mem-claw/src/shared/plugin-config-schema.ts";
-import { createTestDb, createTestEmbedder, type TestDb } from "../helpers/test-db.ts";
+} from "../../../../packages/sno-station-mem/config/index.ts";
+import type { Embedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client.ts";
+import { PluginObservability } from "../../../../packages/sno-station-mem/src/engine/observability/adapter.ts";
+import { ObservableMemoryStore } from "../../../../packages/sno-station-mem/src/engine/observability/observable-memory-store.ts";
+import { pluginConfigSchema } from "../../../../packages/sno-station-mem/src/contract/config/plugin-config-schema.ts";
+import { createTestDb, createTestEmbedder, type TestDb } from "../../../apps/mem-claw/helpers/test-db.ts";
 
 const CURRENT_MARKER = "ZQCURRENTFACET41";
 const RETIRED_MARKER = "ZQRETIREDFACET77";

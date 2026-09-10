@@ -3,21 +3,21 @@
 import { readFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
-import type { Embedder } from "../../../../apps/mem-claw/src/extraction/embedding-provider-client.ts";
+import type { Embedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client.ts";
 import {
 	buildInsightMetadata,
 	deriveFactKey,
 	parseInsightMetadata,
 	stringifyInsightMetadata,
-} from "../../../../apps/mem-claw/src/extraction/memory-metadata-codec.ts";
-import { runProfileSectionUpdate } from "../../../../apps/mem-claw/src/extraction/profile-section-writer.ts";
-import { runWithMutationAttempt } from "../../../../apps/mem-claw/src/operations/runtime-audit-log.ts";
-import type { MemoryEntry } from "../../../../apps/mem-claw/src/shared/types.ts";
+} from "../../../../packages/sno-station-mem/src/engine/extraction/memory-metadata-codec.ts";
+import { runProfileSectionUpdate } from "../../../../packages/sno-station-mem/src/engine/extraction/profile-section-writer.ts";
+import { runWithMutationAttempt } from "../../../../packages/sno-station-mem/src/engine/operations/runtime-audit-log.ts";
+import type { MemoryEntry } from "../../../../packages/sno-station-mem/src/engine/shared/types.ts";
 import {
 	MemoryStore,
 	type StoreInput,
-} from "../../../../apps/mem-claw/src/storage/store.ts";
-import { createTestDb, createTestEmbedder, type TestDb } from "../helpers/test-db.ts";
+} from "../../../../packages/sno-station-mem/src/store/store.ts";
+import { createTestDb, createTestEmbedder, type TestDb } from "../../../apps/mem-claw/helpers/test-db.ts";
 
 const PROJECT_ID = "profile-recovery-durability";
 const SECTION_NAME = "identity";
