@@ -12,22 +12,22 @@ import {
 	admitTaskLifecycleAssertion,
 	buildTaskLifecycleCommandClaim,
 	type TaskLifecycleAssertionDraft,
-} from "@/extraction/task-lifecycle-assertion";
-import type { Embedder } from "@/extraction/embedding-provider-client";
+} from "../../../../packages/sno-station-mem/src/engine/extraction/task-lifecycle-assertion";
+import type { Embedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client";
 import {
 	buildTaskLifecycleCandidateSet,
 	resolveTaskLifecycle,
 	taskLifecycleCandidateSetVersion,
 	type TaskLifecycleCanonicalRevisionDetails,
 	type TaskLifecycleInstanceSnapshot,
-} from "@/extraction/task-lifecycle-resolver";
+} from "../../../../packages/sno-station-mem/src/engine/extraction/task-lifecycle-resolver";
 import {
 	retrieveForAutoRecall,
 	retrieveForMemoryRecallOrEval,
-} from "@/retrieval/rem-consumer-retrieval";
-import { createRetriever, DEFAULT_RETRIEVAL_CONFIG } from "@/retrieval/retriever";
-import type { MemoryRetriever } from "@/retrieval/retriever";
-import { MemoryStore, type TaskLifecycleWriteInput } from "@/storage/store";
+} from "../../../../packages/sno-station-mem/src/engine/retrieval/rem-consumer-retrieval";
+import { createRetriever, DEFAULT_RETRIEVAL_CONFIG } from "../../../../packages/sno-station-mem/src/engine/retrieval/retriever";
+import type { MemoryRetriever } from "../../../../packages/sno-station-mem/src/engine/retrieval/retriever";
+import { MemoryStore, type TaskLifecycleWriteInput } from "../../../../packages/sno-station-mem/src/store/store";
 import { createTestDb, createTestEmbedder, type TestDb } from "../helpers/test-db";
 
 const projectId = "current-vs-done";
