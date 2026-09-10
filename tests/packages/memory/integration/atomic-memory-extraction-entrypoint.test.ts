@@ -78,6 +78,11 @@ class FixedGenericTransport implements AtomicGenericExtractionTransport {
 
 	async complete(request: AtomicGenericExtractionRequest) {
 		this.requests.push(request);
+		if (request.prompt.includes("Task: resolve each unresolved standing subject")) {
+			const data = JSON.parse(request.prompt.split("<take>\n").at(-1)?.split("\n</take>")[0] ?? "null") as { records: Array<{ recordIndex: number }> };
+			return { text: JSON.stringify({ resolutions: data.records.map(({ recordIndex }) => ({ record_index: recordIndex, subject: null })) }), truncated: false };
+		}
+		if (request.prompt.includes('"new_display_name":')) return { text: '{"entity_id":"new"}', truncated: false };
 		const turns = JSON.parse(request.prompt.split("<take>\n").at(-1)?.split("\n</take>")[0] ?? "[]") as Array<{role: string; turn_index: number}>;
 		return { text: JSON.stringify({ ...JSON.parse(this.reply), decisions: turns.filter((turn) => turn.role === "user").map((turn) => ({ turn_index: turn.turn_index, progress_only: this.progressTurns.includes(turn.turn_index) })) }), truncated: false };
 	}
@@ -197,7 +202,7 @@ describe("atomic memory extraction production entrypoint", () => {
 				claim_text: "At 20:15 on 2 September 2026, the user moved to Kyoto.",
 				attribute: "identity.location",
 				value: "Kyoto",
-				resolved_time: { year: 2026, month: 9, day: 2, hour: 20, minute: 15 },
+				temporal_phrase: "At 20:15 on 2 September 2026",
 				source_span: { turn_index: 1, quote: turns[1]?.content },
 			}),
 			wireRecord({
@@ -249,8 +254,11 @@ describe("atomic memory extraction production entrypoint", () => {
 			createdCount: 5,
 			ledger: { state: "complete" },
 		});
-		expect(scripted.generic.requests).toHaveLength(1);
-		expect(scripted.profileKeying.calls).toHaveLength(4);
+		expect(scripted.generic.requests.map(({ prompt }) =>
+			prompt.includes("Task: resolve each unresolved standing subject") ? "resolve-subject" :
+			prompt.includes('"new_display_name":') ? "entity-identity" : "extraction",
+		)).toEqual(["extraction", "resolve-subject", "entity-identity"]);
+		expect(scripted.profileKeying.calls.map(({ turnIndex }) => turnIndex)).toEqual([0, 3]);
 		expect(scripted.resplit.calls).toHaveLength(1);
 		expect(scripted.subjectGuard.guardCalls).toHaveLength(1);
 		const rows = target.database
@@ -281,7 +289,9 @@ describe("atomic memory extraction production entrypoint", () => {
 
 		expect(target.store.getAtomicBySubjectAttribute(PROJECT_ID, "user", "preference.food"))
 			.toMatchObject({ text: "The user prefers tea.", lane: "active" });
-		const event = rows.find((row) => row.category === "episodic");
+		const events = rows.filter((row) => row.category === "episodic" && row.text.includes("Kyoto"));
+		expect(events).toHaveLength(1);
+		const event = events[0];
 		expect(event).toMatchObject({
 			valid_from: EVENT_FROM_MS,
 			valid_until: EVENT_FROM_MS + 1,
@@ -297,7 +307,7 @@ describe("atomic memory extraction production entrypoint", () => {
 		const entityRecord = result.records.find((record) =>
 			record.claimText.includes("Ada Lovelace"),
 		);
-		expect(entityRecord?.subject).toMatch(/^entity:ada-lovelace-[a-f0-9]{12}$/u);
+		expect(entityRecord?.subject).toMatch(/^entity:[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u);
 		const entity = target.database
 			.prepare(
 				"SELECT entity_id, display_name, normalized_name, project_id FROM nodix_memory_entities",
@@ -531,7 +541,7 @@ describe("atomic memory extraction production entrypoint", () => {
 		]);
 		let nowMs = SESSION_TIMESTAMP_MS;
 
-		await runAtomicMemoryExtraction({
+		const measured = await runAtomicMemoryExtraction({
 			store: target.store,
 			projectId: PROJECT_ID,
 			ledgerKey: ledgerKey("todo-same-batch"),
@@ -548,6 +558,7 @@ describe("atomic memory extraction production entrypoint", () => {
 			nowMs: () => nowMs++,
 		});
 
+		expect(measured.status).toBe("complete");
 		expect(
 			target.database
 				.prepare(
