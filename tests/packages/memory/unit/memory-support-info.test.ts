@@ -13,7 +13,7 @@ import {
 	MAX_SUPPORT_SLICES,
 	type SupportInfoV2,
 	updateSupportStats,
-} from "../../../../apps/mem-claw/src/extraction/memory-support-info.ts";
+} from "../../../../packages/sno-station-mem/src/engine/extraction/memory-support-info.ts";
 
 const EMPTY: SupportInfoV2 = { global_strength: 0.5, total_observations: 0, slices: [] };
 
