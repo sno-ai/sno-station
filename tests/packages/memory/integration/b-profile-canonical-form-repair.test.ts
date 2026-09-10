@@ -3,24 +3,24 @@ import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import {
 	createSectionDictionaryCache,
 	loadSectionDictionary,
-} from "@/extraction/b-profile-section-dictionary-provider";
-import { B_PROFILE_SECTION_REGISTRY } from "@/extraction/b-profile-section-registry";
+} from "../../../../packages/sno-station-mem/src/engine/extraction/b-profile-section-dictionary-provider";
+import { B_PROFILE_SECTION_REGISTRY } from "../../../../packages/sno-station-mem/src/engine/extraction/b-profile-section-registry";
 import {
 	B_PROFILE_CANONICAL_FORM_REPAIR_VERSION,
 	runBProfileSectionRekey,
-} from "@/extraction/b-profile-section-rekey";
-import { buildIndexedText } from "@/extraction/extraction-text-sanitizer";
-import { runProfileSectionUpdate } from "@/extraction/profile-section-writer";
+} from "../../../../packages/sno-station-mem/src/engine/extraction/b-profile-section-rekey";
+import { buildIndexedText } from "../../../../packages/sno-station-mem/src/engine/extraction/extraction-text-sanitizer";
+import { runProfileSectionUpdate } from "../../../../packages/sno-station-mem/src/engine/extraction/profile-section-writer";
 import {
 	buildInsightMetadata,
 	deriveFactKey,
 	parseInsightMetadata,
 	stringifyInsightMetadata,
-} from "@/extraction/memory-metadata-codec";
-import type { Embedder } from "@/extraction/embedding-provider-client";
-import type { MemoryCategory, MemoryEntry } from "@/shared/types";
-import { MemoryStore } from "@/storage/store";
-import { createTestDb, createTestEmbedder, type TestDb } from "../helpers/test-db.ts";
+} from "../../../../packages/sno-station-mem/src/engine/extraction/memory-metadata-codec";
+import type { Embedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client";
+import type { MemoryCategory, MemoryEntry } from "../../../../packages/sno-station-mem/src/engine/shared/types";
+import { MemoryStore } from "../../../../packages/sno-station-mem/src/store/store";
+import { createTestDb, createTestEmbedder, type TestDb } from "../../../apps/mem-claw/helpers/test-db.ts";
 
 const NOW = Date.parse("2026-07-24T18:00:00.000Z");
 const FROZEN_PROFILE_SPLIT_REFERENCE = {
