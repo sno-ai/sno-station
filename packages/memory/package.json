@@ -14,6 +14,14 @@
     "./internal/*": {
       "types": "./dist/internal/*.d.ts",
       "import": "./dist/internal/*.js"
+    },
+    "./memdump": {
+      "types": "./dist/memdump.d.ts",
+      "import": "./dist/memdump.js"
+    },
+    "./diagnostic-encoder": {
+      "types": "./dist/diagnostic-encoder.d.ts",
+      "import": "./dist/diagnostic-encoder.js"
     }
   },
   "bin": {
