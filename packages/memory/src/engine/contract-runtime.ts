@@ -202,6 +202,7 @@ export class MemoryContractRuntime implements MemoryContract {
 
 	async mutate(op: Mutation, scope: ScopeCtx): Promise<ContractOutputs["mutate"]> {
 		parseInput("mutate", { op, scope });
+		if (op.op === "clear" && op.all && !scope.host?.systemCaller) throw new ContractError("system-caller-required");
 		const context = await this.toolContext(scope);
 		const access = resolveAgentAccess(context.agentId, context.agentId);
 		const project = context.scopePolicy.getDefaultScope();
@@ -216,7 +217,7 @@ export class MemoryContractRuntime implements MemoryContract {
 			case "resolveReflection": result = await executeMemoryReflectionResolveTool(context, access, randomUUID(), { ...op, memory_id: op.memoryId, dry_run: op.dryRun, scope: project }); break;
 			case "clear": {
 				if (!op.confirm) throw new ContractError("invalid-input");
-				const deleted = await this.services.store.bulkDelete({ projectId: project });
+				const deleted = await this.services.store.bulkDelete(op.all ? {} : { projectId: project });
 				result = { content: [{ type: "text", text: `Deleted ${deleted.deleted} memories.` }], details: { ...deleted } };
 				break;
 			}
@@ -227,9 +228,16 @@ export class MemoryContractRuntime implements MemoryContract {
 
 	async inspect(op: Inspection, scope: ScopeCtx): Promise<ContractOutputs["inspect"]> {
 		parseInput("inspect", { op, scope });
+		if (op.op === "stats" && !op.scope) {
+			if (!scope.host?.systemCaller) throw new ContractError("system-caller-required");
+			return { degraded: false, result: { op: "stats", ...await this.services.store.stats() } };
+		}
 		const project = await this.project(scope);
 		switch (op.op) {
-			case "stats": return { degraded: false, result: { op: "stats", ...await this.services.store.stats(project) } };
+			case "stats": {
+				if (op.scope !== scope.project && op.scope !== project) throw new ContractError("invalid-input");
+				return { degraded: false, result: { op: "stats", ...await this.services.store.stats(project) } };
+			}
 			case "list": return { degraded: false, result: { op: "list", entries: await this.services.store.list({ ...op, projectId: project, importanceMin: op.importanceMin }) } };
 			case "listReflection": return { degraded: false, result: { op: "listReflection", entries: await this.services.store.listReflectionItems({ ...op, projectIdFilter: [project] }) } };
 			case "get": {
@@ -267,9 +275,9 @@ export class MemoryContractRuntime implements MemoryContract {
 		await this.services.accessTracker.flush();
 		if (this.configured().config.sessionStrategy === "memoryReflection") {
 			const state = await this.reflection(scope);
-			if (scope.host?.action === "new" || scope.host?.action === "reset") {
+			if (scope.host?.boundary === "new" || scope.host?.boundary === "reset") {
 				await createRunMemoryReflection({ ...state.command, logger: this.services.logger })({
-					sessionKey: scope.host.sessionKey ?? scope.session, action: scope.host.action, timestamp: scope.host.at,
+					sessionKey: scope.host.sessionKey ?? scope.session, action: scope.host.boundary, timestamp: scope.host.at,
 					context: { workspaceDir: scope.host.workspace, previousSessionEntry: {
 						sessionId: scope.host.sessionId, sessionFile: scope.host.sessionFile,
 					} },

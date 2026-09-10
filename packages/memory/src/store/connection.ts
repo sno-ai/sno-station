@@ -329,7 +329,7 @@ const CONNECTION_DIR = dirname(fileURLToPath(import.meta.url));
 // build at <plugin>/lib/index.js needs "../drizzle". Probe both so the plugin
 // works in dev (tsx watch on source) and prod (bundled deploy on the VM).
 function resolveMigrationsDir(): string {
-	const candidates = [join(CONNECTION_DIR, "../../drizzle"), join(CONNECTION_DIR, "../drizzle")];
+	const candidates = [join(CONNECTION_DIR, "../../drizzle"), join(CONNECTION_DIR, "../drizzle"), join(CONNECTION_DIR, "../../../drizzle")];
 	for (const dir of candidates) {
 		if (existsSync(join(dir, "meta/_journal.json"))) return dir;
 	}
