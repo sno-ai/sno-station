@@ -6,22 +6,22 @@ import {
 	buildReflectionEventPayload,
 	createReflectionEventId,
 	REFLECTION_SCHEMA_VERSION,
-} from "@/reflection/event-payload-builder";
+} from "../../../../packages/sno-station-mem/src/engine/reflection/event-payload-builder";
 import {
 	computeReflectionLogistic,
 	computeReflectionScore,
 	normalizeReflectionLineForAggregation,
 	REFLECTION_FALLBACK_SCORE_FACTOR,
-} from "@/reflection/line-quality-ranker";
+} from "../../../../packages/sno-station-mem/src/engine/reflection/line-quality-ranker";
 import {
 	buildReflectionMappedMetadata,
 	getReflectionMappedDecayDefaults,
 	type ReflectionMappedKind,
-} from "@/reflection/mapped-memory-metadata-builder";
+} from "../../../../packages/sno-station-mem/src/engine/reflection/mapped-memory-metadata-builder";
 import type {
 	ReflectionMappedMemoryItem,
 	ReflectionSliceItem,
-} from "@/reflection/markdown-slice-parser";
+} from "../../../../packages/sno-station-mem/src/engine/reflection/markdown-slice-parser";
 import {
 	buildReflectionItemPayloads,
 	getReflectionItemDecayDefaults,
@@ -34,7 +34,7 @@ import {
 	REFLECTION_INVARIANT_DECAY_MIDPOINT_DAYS,
 	REFLECTION_INVARIANT_QUALITY,
 	type ReflectionItemKind,
-} from "@/reflection/slice-item-payload-builder";
+} from "../../../../packages/sno-station-mem/src/engine/reflection/slice-item-payload-builder";
 
 const runAt = Date.UTC(2026, 4, 7, 12, 34, 56);
 const errorSignals = [{ signatureHash: "sig-b" }, { signatureHash: "sig-a" }];
