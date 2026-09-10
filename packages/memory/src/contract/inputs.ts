@@ -52,6 +52,7 @@ export type Mutation =
 	| { op: "clear"; confirm: boolean; all?: boolean }
 	| { op: "resolveReflection"; memoryId?: string; query?: string; dryRun?: boolean; note?: string; limit?: number };
 export type Inspection =
+	| { op: "storage" }
 	| { op: "stats"; scope?: string }
 	| { op: "list"; category?: MemoryCategory; limit?: number; offset?: number; importanceMin?: number }
 	| { op: "get"; id?: string; path?: string; from?: number; lines?: number }
@@ -61,6 +62,8 @@ export type UsageSignal = {
 	memoryIds: string[];
 	toolName?: string;
 	text?: string;
+	error?: JsonValue;
+	result?: JsonValue;
 	at: number;
 };
 export interface ContractInputs {
@@ -138,6 +141,7 @@ export const mutationSchema: z.ZodType<Mutation, unknown> = z.discriminatedUnion
 	}).refine((value) => (value.memoryId !== undefined) !== (value.query !== undefined)),
 ]);
 export const inspectionSchema: z.ZodType<Inspection, unknown> = z.discriminatedUnion("op", [
+	z.strictObject({ op: z.literal("storage") }),
 	z.strictObject({ op: z.literal("stats"), scope: nonempty.optional() }),
 	z.strictObject({ op: z.literal("list"), category: category.optional(),
 		limit: z.number().int().optional(), offset: z.number().int().optional(),
@@ -150,7 +154,7 @@ export const inspectionSchema: z.ZodType<Inspection, unknown> = z.discriminatedU
 ]);
 export const usageSignalSchema: z.ZodType<UsageSignal, unknown> = z.strictObject({
 	event: z.enum(["inject", "used", "rejected", "tool-error"]), memoryIds: z.array(nonempty),
-	toolName: nonempty.optional(), text: z.string().optional(), at: timestamp,
+	toolName: nonempty.optional(), text: z.string().optional(), error: z.json().optional(), result: z.json().optional(), at: timestamp,
 });
 export const inputSchemas: { [K in keyof ContractInputs]: z.ZodType<ContractInputs[K], unknown> } = {
 	init: z.strictObject({ scope: scopeSchema, registration: registrationSchema }),

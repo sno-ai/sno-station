@@ -26,6 +26,14 @@
     "./client": {
       "types": "./dist/client.d.ts",
       "import": "./dist/client.js"
+    },
+    "./release-download": {
+      "types": "./dist/release-download.d.ts",
+      "import": "./dist/release-download.js"
+    },
+    "./installation-paths": {
+      "types": "./dist/internal/store/data-paths.d.ts",
+      "import": "./dist/internal/store/data-paths.js"
     }
   },
   "bin": {
