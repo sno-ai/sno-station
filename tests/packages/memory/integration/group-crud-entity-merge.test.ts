@@ -22,32 +22,32 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
 
-import type { AtomicResplitTransport } from "@/extraction/atomic-extraction-gauntlet";
-import type { AtomicExtractionTurn } from "@/extraction/atomic-extraction-reply";
+import type { AtomicResplitTransport } from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-extraction-gauntlet";
+import type { AtomicExtractionTurn } from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-extraction-reply";
 import type {
 	AtomicGenericExtractionRequest,
 	AtomicGenericExtractionTransport,
-} from "@/extraction/atomic-generic-extractor";
+} from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-generic-extractor";
 import {
 	type AtomicMemoryExtractionTransports,
 	runAtomicMemoryExtraction,
-} from "@/extraction/atomic-memory-extraction";
-import type { AtomicProfileKeyingTransport } from "@/extraction/atomic-profile-keying";
-import type { AtomicSubjectGuardTransport } from "@/extraction/atomic-subject-guard";
-import type { Embedder } from "@/extraction/embedding-provider-client";
-import { applyEntityNameKeyMigration } from "@/storage/entity-name-key-migration";
-import { applyStateCategoryMigration } from "@/storage/state-category-migration";
+} from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-memory-extraction";
+import type { AtomicProfileKeyingTransport } from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-profile-keying";
+import type { AtomicSubjectGuardTransport } from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-subject-guard";
+import type { Embedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client";
+import { applyEntityNameKeyMigration } from "../../../../packages/sno-station-mem/src/store/entity-name-key-migration";
+import { applyStateCategoryMigration } from "../../../../packages/sno-station-mem/src/store/state-category-migration";
 import {
 	type AtomicExtractionRunParameters,
 	MemoryStore,
-} from "@/storage/store";
+} from "../../../../packages/sno-station-mem/src/store/store";
 import {
 	createRemModelStageResponsePort,
 	runRemBatchJob,
-} from "../../../../apps/mem-claw/src/sidecar/rem-batch-executor.ts";
-import { parseRemOperationalConfiguration } from "../../../../packages/rem-core/src/index.ts";
-import { createRemOwnerDecidedOperationalConfiguration } from "../helpers/rem-entry-config-fixture.ts";
-import { createTestDb, createTestEmbedder, type TestDb } from "../helpers/test-db.ts";
+} from "../../../../packages/sno-station-mem/src/sidecar/rem-batch-executor.ts";
+import { parseRemOperationalConfiguration } from "../../../../packages/sno-station-mem/src/engine/rem/index.ts";
+import { createRemOwnerDecidedOperationalConfiguration } from "../../../apps/mem-claw/helpers/rem-entry-config-fixture.ts";
+import { createTestDb, createTestEmbedder, type TestDb } from "../../../apps/mem-claw/helpers/test-db.ts";
 
 const EXTRACTOR_VERSION = "atomic-v3-entity-merge-test";
 /** Every run shares one session day, so the ledger's session ordinal is what orders the runs. */
@@ -67,8 +67,8 @@ const VARIANT_NAME =
 const C_NAME = "The staffing update note for the research group";
 
 const priorEnvironment = {
-	MEM_CLAW_DATA_DIR_ROOT: process.env["MEM_CLAW_DATA_DIR_ROOT"],
-	MEM_CLAW_REM_EXPECTED_DB_PATH: process.env["MEM_CLAW_REM_EXPECTED_DB_PATH"],
+	SNO_STATION_MEM_DATA_DIR_ROOT: process.env["SNO_STATION_MEM_DATA_DIR_ROOT"],
+	SNO_STATION_MEM_REM_EXPECTED_DB_PATH: process.env["SNO_STATION_MEM_REM_EXPECTED_DB_PATH"],
 	OPENCLAW_STATE_DIR: process.env["OPENCLAW_STATE_DIR"],
 };
 const cleanups: Array<() => void | Promise<void>> = [];
@@ -424,8 +424,8 @@ async function runUpdateWave(
 		}),
 		"utf8",
 	);
-	process.env["MEM_CLAW_DATA_DIR_ROOT"] = dirname(target.fixture.dbPath);
-	process.env["MEM_CLAW_REM_EXPECTED_DB_PATH"] = target.fixture.dbPath;
+	process.env["SNO_STATION_MEM_DATA_DIR_ROOT"] = dirname(target.fixture.dbPath);
+	process.env["SNO_STATION_MEM_REM_EXPECTED_DB_PATH"] = target.fixture.dbPath;
 	process.env["OPENCLAW_STATE_DIR"] = stateRoot;
 	cleanups.push(() => rmSync(stateRoot, { recursive: true, force: true }));
 	const observations: Observation[] = [];
