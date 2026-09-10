@@ -14,7 +14,8 @@ export type HostContext = {
 	sessionTimezone?: string;
 	workspace?: string;
 	sessionFile?: string;
-	action?: "new" | "reset" | "session-end";
+	boundary?: "new" | "reset" | "session-end";
+	systemCaller?: boolean;
 	at?: number;
 };
 export type ScopeCtx = { principal: string; project: string; session: string; host?: HostContext };
@@ -51,7 +52,7 @@ export type Mutation =
 	| { op: "clear"; confirm: boolean; all?: boolean }
 	| { op: "resolveReflection"; memoryId?: string; query?: string; dryRun?: boolean; note?: string; limit?: number };
 export type Inspection =
-	| { op: "stats" }
+	| { op: "stats"; scope?: string }
 	| { op: "list"; category?: MemoryCategory; limit?: number; offset?: number; importanceMin?: number }
 	| { op: "get"; id?: string; path?: string; from?: number; lines?: number }
 	| { op: "listReflection"; limit?: number; unresolvedOnly?: boolean };
@@ -83,7 +84,8 @@ export const scopeSchema: z.ZodType<ScopeCtx, unknown> = z.strictObject({
 		agentId: z.string().optional(), sessionKey: z.string().optional(),
 		sessionId: z.string().optional(), sessionTimezone: z.string().optional(),
 		workspace: z.string().optional(), sessionFile: z.string().optional(),
-		action: z.enum(["new", "reset", "session-end"]).optional(), at: timestamp.optional(),
+		boundary: z.enum(["new", "reset", "session-end"]).optional(), at: timestamp.optional(),
+		systemCaller: z.boolean().optional(),
 	}).optional(),
 });
 export const messageSchema: z.ZodType<Message, unknown> = z.strictObject({
@@ -136,7 +138,7 @@ export const mutationSchema: z.ZodType<Mutation, unknown> = z.discriminatedUnion
 	}).refine((value) => (value.memoryId !== undefined) !== (value.query !== undefined)),
 ]);
 export const inspectionSchema: z.ZodType<Inspection, unknown> = z.discriminatedUnion("op", [
-	z.strictObject({ op: z.literal("stats") }),
+	z.strictObject({ op: z.literal("stats"), scope: nonempty.optional() }),
 	z.strictObject({ op: z.literal("list"), category: category.optional(),
 		limit: z.number().int().optional(), offset: z.number().int().optional(),
 		importanceMin: z.number().finite().optional() }),
