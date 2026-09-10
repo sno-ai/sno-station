@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import { request as httpRequest } from "node:http";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { checkDiscovery, processAlive, readDiscovery, type Discovery } from "./discovery";
@@ -18,6 +19,28 @@ function failureReason(error: unknown): DegradedReason {
 	if (error instanceof ContractError) return error.reason;
 	if (error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError")) return "timeout";
 	return "sidecar-unreachable";
+}
+
+/**
+ * Plain node:http instead of fetch: undici's default dispatcher cuts headers and body at
+ * 300 s, silently under the 900 s route budgets; here the route deadline is the only clock.
+ */
+function postJson(port: number, path: string, headers: Record<string, string>, body: string, signal: AbortSignal): Promise<{ ok: boolean; body: unknown }> {
+	return new Promise((resolve, reject) => {
+		const request = httpRequest({ host: "127.0.0.1", port, path, method: "POST", signal,
+			headers: { ...headers, "Content-Length": Buffer.byteLength(body) } }, response => {
+			const chunks: Buffer[] = [];
+			response.on("data", (chunk: Buffer) => chunks.push(chunk));
+			response.on("error", reject);
+			response.on("end", () => {
+				const status = response.statusCode ?? 0;
+				try { resolve({ ok: status >= 200 && status < 300, body: JSON.parse(Buffer.concat(chunks).toString("utf8")) }); }
+				catch (error) { reject(error); }
+			});
+		});
+		request.on("error", reject);
+		request.end(body);
+	});
 }
 
 function responseError(body: unknown): ContractError {
@@ -64,13 +87,11 @@ export class MemoryClient implements MemoryContract {
 		if (input.scope.principal !== this.principal) throw new ContractError("principal-mismatch");
 		const route = MEMORY_ROUTES[method];
 		try {
-			const response = await fetch(`http://127.0.0.1:${this.port}${route.path}`, {
-				method: "POST",
-				headers: { Authorization: `Bearer ${this.#discovery.token}`, "Content-Type": "application/json", [MEMORY_SKIN_HEADER]: this.skinId },
-				body: JSON.stringify({ ...input, scope: { ...input.scope, principal: this.principal } }),
-				signal: AbortSignal.timeout(route.timeoutMs),
-			});
-			const body: unknown = await response.json();
+			const response = await postJson(this.port, route.path,
+				{ Authorization: `Bearer ${this.#discovery.token}`, "Content-Type": "application/json", [MEMORY_SKIN_HEADER]: this.skinId },
+				JSON.stringify({ ...input, scope: { ...input.scope, principal: this.principal } }),
+				AbortSignal.timeout(route.timeoutMs));
+			const body = response.body;
 			if (!response.ok) throw responseError(body);
 			const parsed = outputSchemas[method].safeParse(body);
 			if (!parsed.success) throw new ContractError("engine-failed");
