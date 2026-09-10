@@ -1,17 +1,17 @@
 /** Real SQLCipher replacement race fixture. No mocks or substitute storage. */
 
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
-import type { Embedder } from "../../../../apps/mem-claw/src/extraction/embedding-provider-client.ts";
+import type { Embedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client.ts";
 import type {
 	SqliteDatabaseLike,
 	SqliteTransactionLike,
-} from "../../../../apps/mem-claw/src/storage/sqlite-runtime.ts";
-import { MemoryStore } from "../../../../apps/mem-claw/src/storage/store.ts";
+} from "../../../../packages/sno-station-mem/src/store/sqlite-runtime.ts";
+import { MemoryStore } from "../../../../packages/sno-station-mem/src/store/store.ts";
 import {
 	MemoryTelemetryUsageOutbox,
 	type MemoryTelemetryUsageInput,
-} from "../../../../apps/mem-claw/src/telemetry/memory-telemetry-outbox.ts";
-import { createTestDb, createTestEmbedder } from "../helpers/test-db.ts";
+} from "../../../../packages/sno-station-mem/src/engine/telemetry/memory-telemetry-outbox.ts";
+import { createTestDb, createTestEmbedder } from "../../../apps/mem-claw/helpers/test-db.ts";
 
 interface CountRow {
 	count: number;
