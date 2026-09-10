@@ -1,6 +1,6 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
-import type { Embedder } from "../../../../apps/mem-claw/src/extraction/embedding-provider-client.ts";
-import { parseInsightMetadata } from "../../../../apps/mem-claw/src/extraction/memory-metadata-codec.ts";
+import type { Embedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client.ts";
+import { parseInsightMetadata } from "../../../../packages/sno-station-mem/src/engine/extraction/memory-metadata-codec.ts";
 import {
 	PROFILE_RETIREMENT_RECHECK_CALL_LABEL,
 	PROFILE_RETIREMENT_RECHECK_PROMPT_SHA256,
@@ -8,15 +8,15 @@ import {
 	PROFILE_SECTION_TEXT_CALL_LABEL,
 	type RetireByNameRunBudget,
 	runProfileSectionUpdate,
-} from "../../../../apps/mem-claw/src/extraction/profile-section-writer.ts";
+} from "../../../../packages/sno-station-mem/src/engine/extraction/profile-section-writer.ts";
 import {
 	type LlmClient,
 	LlmClientTerminalError,
 	type MemoryLlmRequest,
-} from "../../../../apps/mem-claw/src/shared/llm-client.ts";
-import { MemoryStore } from "../../../../apps/mem-claw/src/storage/store.ts";
-import { createTestLlmClient } from "../helpers/llm-client.ts";
-import { createTestDb, createTestEmbedder, type TestDb } from "../helpers/test-db.ts";
+} from "../../../../packages/sno-station-mem/src/model/llm-client.ts";
+import { MemoryStore } from "../../../../packages/sno-station-mem/src/store/store.ts";
+import { createTestLlmClient } from "../../../apps/mem-claw/helpers/llm-client.ts";
+import { createTestDb, createTestEmbedder, type TestDb } from "../../../apps/mem-claw/helpers/test-db.ts";
 
 const SCOPE = "profile-retirement-recheck";
 const SECTION = "preferences.general";

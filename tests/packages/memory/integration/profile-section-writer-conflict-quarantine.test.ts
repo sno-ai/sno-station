@@ -6,16 +6,16 @@ import {
 } from "@snoai/sno-station-core-crypto";
 import { closeLogger } from "@snoai/utils/logger";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import type { Embedder } from "../../../../apps/mem-claw/src/extraction/embedding-provider-client.ts";
+import type { Embedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client.ts";
 import {
 	buildInsightMetadata,
 	stringifyInsightMetadata,
-} from "../../../../apps/mem-claw/src/extraction/memory-metadata-codec.ts";
-import { runProfileSectionUpdate } from "../../../../apps/mem-claw/src/extraction/profile-section-writer.ts";
-import { createLlmClient } from "../../../../apps/mem-claw/src/shared/llm-client.ts";
-import { pluginConfigSchema } from "../../../../apps/mem-claw/src/shared/types.ts";
-import { MemoryStore } from "../../../../apps/mem-claw/src/storage/store.ts";
-import { createTestDb, createTestEmbedder } from "../helpers/test-db.ts";
+} from "../../../../packages/sno-station-mem/src/engine/extraction/memory-metadata-codec.ts";
+import { runProfileSectionUpdate } from "../../../../packages/sno-station-mem/src/engine/extraction/profile-section-writer.ts";
+import { createLlmClient } from "../../../../packages/sno-station-mem/src/model/llm-client.ts";
+import { pluginConfigSchema } from "../../../../packages/sno-station-mem/src/engine/shared/types.ts";
+import { MemoryStore } from "../../../../packages/sno-station-mem/src/store/store.ts";
+import { createTestDb, createTestEmbedder } from "../../../apps/mem-claw/helpers/test-db.ts";
 
 const SCOPE = "profile-conflict-quarantine";
 const SECTION = "identity";
