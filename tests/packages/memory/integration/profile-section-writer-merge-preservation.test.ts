@@ -1,16 +1,16 @@
 /** Real encrypted SQLite + real ONNX embedder. The LLM boundary is deterministic. */
 
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
-import type { Embedder } from "../../../../apps/mem-claw/src/extraction/embedding-provider-client.ts";
-import { parseInsightMetadata } from "../../../../apps/mem-claw/src/extraction/memory-metadata-codec.ts";
-import { runProfileSectionUpdate } from "../../../../apps/mem-claw/src/extraction/profile-section-writer.ts";
+import type { Embedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client.ts";
+import { parseInsightMetadata } from "../../../../packages/sno-station-mem/src/engine/extraction/memory-metadata-codec.ts";
+import { runProfileSectionUpdate } from "../../../../packages/sno-station-mem/src/engine/extraction/profile-section-writer.ts";
 import {
 	createLlmClient,
 	type LlmClient,
-} from "../../../../apps/mem-claw/src/shared/llm-client.ts";
-import { MemoryStore } from "../../../../apps/mem-claw/src/storage/store.ts";
-import { createLegacyProfileTestLlmClient as createTestLlmClient } from "../helpers/llm-client.ts";
-import { createTestDb, createTestEmbedder, type TestDb } from "../helpers/test-db.ts";
+} from "../../../../packages/sno-station-mem/src/model/llm-client.ts";
+import { MemoryStore } from "../../../../packages/sno-station-mem/src/store/store.ts";
+import { createLegacyProfileTestLlmClient as createTestLlmClient } from "../../../apps/mem-claw/helpers/llm-client.ts";
+import { createTestDb, createTestEmbedder, type TestDb } from "../../../apps/mem-claw/helpers/test-db.ts";
 
 const SCOPE = "profile-merge-preservation";
 const SECTION = "entities.project_atlas";
