@@ -4,27 +4,27 @@
  */
 
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import type { AtomicKeyedRecord } from "@/extraction/atomic-profile-keying";
+import type { AtomicKeyedRecord } from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-profile-keying";
 import {
 	type AtomicGauntletRecord,
 	runAtomicExtractionGauntlet,
-} from "@/extraction/atomic-extraction-gauntlet";
-import type { AtomicExtractionRecord } from "@/extraction/atomic-extraction-reply";
+} from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-extraction-gauntlet";
+import type { AtomicExtractionRecord } from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-extraction-reply";
 import {
 	ATOMIC_MEMORY_WRITE_CONFIG,
 	buildAtomicWriteCards,
-} from "@/extraction/atomic-write-projection";
-import type { Embedder } from "@/extraction/embedding-provider-client";
+} from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-write-projection";
+import type { Embedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client";
 import {
 	createRetriever,
 	DEFAULT_RETRIEVAL_CONFIG,
-} from "@/retrieval/retriever";
+} from "../../../../packages/sno-station-mem/src/engine/retrieval/retriever";
 import {
 	ATOMIC_FACT_SURFACE_LANE,
 	type AtomicExtractionLedgerKey,
 	type AtomicExtractionRunParameters,
 	MemoryStore,
-} from "@/storage/store";
+} from "../../../../packages/sno-station-mem/src/store/store";
 import { createTestDb, createTestEmbedder, type TestDb } from "../helpers/test-db";
 
 const PROJECT_ID = "atomic-fact-surface";
