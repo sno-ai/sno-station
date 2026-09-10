@@ -14,7 +14,7 @@ import type { MemoryTelemetryUsageOutbox } from "./telemetry/memory-telemetry-ou
 import type { AgentLlmPort } from "../model/agent-llm-port";
 import { createLlmClient } from "../model/llm-client";
 import type { PluginConfig } from "./shared/types";
-import { MemoryScopePolicy } from "./security/memory-scope-policy";
+import { createScopePolicy, MemoryScopePolicy } from "./security/memory-scope-policy";
 import { parseAgentIdFromSessionKey } from "./security/scope-identity";
 import { resolveProviderIdentity, createMemoryRuntime } from "./provider/provider-registration";
 import { onBeforeAgentStart } from "./bindings/sno-station-mem-auto-recall-hook";
@@ -48,17 +48,19 @@ export interface MemoryRuntimeServices {
 	logger: ReflectionCommandParams["logger"];
 }
 
-/** The contract supplies one already resolved project, without ambient scope expansion. */
-class BoundProjectPolicy extends MemoryScopePolicy {
-	constructor(private readonly project: string) {
-		super({ default: project, definitions: { [project]: {} } });
+const LOGICAL_SCOPE = /^(?:agent|reflection|custom|project|user):|^global$/;
+
+/** One call's policy: writes land on the resolved project; reads span the readable set the sidecar admitted. */
+class CallScopePolicy extends MemoryScopePolicy {
+	constructor(private readonly project: string, private readonly readable: string[]) {
+		super({ default: project, definitions: Object.fromEntries(readable.map(scope => [scope, {}])) });
 	}
-	override getAccessibleScopes(): string[] { return [this.project]; }
-	override getScopeFilter(): string[] { return [this.project]; }
+	override getAccessibleScopes(): string[] { return [...this.readable]; }
+	override getScopeFilter(): string[] { return [...this.readable]; }
 	override getDefaultScope(): string { return this.project; }
-	override getAllScopes(): string[] { return [this.project]; }
-	override isAccessible(scope: string): boolean { return scope === this.project; }
-	override validateScope(scope: string): boolean { return scope === this.project; }
+	override getAllScopes(): string[] { return [...this.readable]; }
+	override isAccessible(scope: string): boolean { return this.readable.includes(scope); }
+	override validateScope(scope: string): boolean { return this.readable.includes(scope); }
 }
 
 export class MemoryContractRuntime implements MemoryContract {
@@ -93,6 +95,21 @@ export class MemoryContractRuntime implements MemoryContract {
 	private agentId(scope: ScopeCtx): string | undefined {
 		if (scope.host) return scope.host.agentId ?? parseAgentIdFromSessionKey(scope.host.sessionKey ?? scope.session);
 		return parseAgentIdFromSessionKey(scope.session) ?? this.configured().registration.skinId;
+	}
+
+	/** Every logical scope a call names is checked against the installed scope policy for the calling agent. */
+	private async scopePolicy(scope: ScopeCtx): Promise<CallScopePolicy> {
+		const installed = createScopePolicy(this.configured().config.scopes);
+		const agentId = this.agentId(scope);
+		const project = await this.project(scope);
+		if (LOGICAL_SCOPE.test(scope.project) && !installed.isAccessible(scope.project, agentId)) throw new ContractError("invalid-input");
+		const readable = [project];
+		for (const requested of scope.readable ?? []) {
+			if (requested === scope.project) continue;
+			if (!LOGICAL_SCOPE.test(requested) || !installed.isAccessible(requested, agentId)) throw new ContractError("invalid-input");
+			if (!readable.includes(requested)) readable.push(requested);
+		}
+		return new CallScopePolicy(project, readable);
 	}
 
 	private async project(scope: ScopeCtx): Promise<string> {
@@ -135,15 +152,17 @@ export class MemoryContractRuntime implements MemoryContract {
 	}
 
 	private async reflection(scope: ScopeCtx): Promise<ReflectionStrategyState> {
-		const project = await this.project(scope);
-		const existing = this.reflectionStates.get(project);
+		const scopePolicy = await this.scopePolicy(scope);
+		// The state carries its policy, so a call with a different readable set never reuses another's.
+		const key = JSON.stringify([scopePolicy.getDefaultScope(), [...scopePolicy.getAccessibleScopes()].sort()]);
+		const existing = this.reflectionStates.get(key);
 		if (existing) return existing;
 		const state = createReflectionStrategyState(this.configured().config, {
 			store: this.services.store, embedder: this.services.embedder,
-			scopePolicy: new BoundProjectPolicy(project), parseAgentIdFromSessionKey,
+			scopePolicy, parseAgentIdFromSessionKey,
 			agentPort: this.services.agentPort, telemetryUsage: this.services.telemetryUsage,
 		});
-		this.reflectionStates.set(project, state);
+		this.reflectionStates.set(key, state);
 		return state;
 	}
 
@@ -151,7 +170,7 @@ export class MemoryContractRuntime implements MemoryContract {
 		const { config, registration } = this.configured();
 		return {
 			...this.services,
-			scopePolicy: new BoundProjectPolicy(await this.project(scope)),
+			scopePolicy: await this.scopePolicy(scope),
 			agentId: this.agentId(scope), workspaceDir: scope.host?.workspace,
 			sessionTimezone: scope.host?.sessionTimezone, language: config.language,
 			selfImprovementEnabled: config.selfImprovement.enabled,
@@ -192,7 +211,7 @@ export class MemoryContractRuntime implements MemoryContract {
 		}
 		if (input.options.source === "manual") {
 			const result = await executeMemoryRecallTool(context, resolveAgentAccess(context.agentId, context.agentId), recallId, {
-				query: input.query, scope: context.scopePolicy.getDefaultScope(), top_k: input.options.limit,
+				query: input.query, scope: context.scopePolicy.getAccessibleScopes().length > 1 ? undefined : context.scopePolicy.getDefaultScope(), top_k: input.options.limit,
 				min_score: input.options.minScore, category: input.options.category,
 				include_metadata: input.options.includeMetadata, include_history: input.options.includeHistory,
 				include_refused: input.options.includeRefused, token_budget: input.options.tokenBudget,
@@ -248,15 +267,17 @@ export class MemoryContractRuntime implements MemoryContract {
 			if (!scope.host?.systemCaller) throw new ContractError("system-caller-required");
 			return { degraded: false, result: { op: "stats", ...await this.services.store.stats() } };
 		}
-		const project = await this.project(scope);
+		const policy = await this.scopePolicy(scope);
+		const project = policy.getDefaultScope();
+		const readable = policy.getAccessibleScopes();
 		switch (op.op) {
 			case "storage": throw new ContractError("system-caller-required");
 			case "stats": {
 				if (op.scope !== scope.project && op.scope !== project) throw new ContractError("invalid-input");
 				return { degraded: false, result: { op: "stats", ...await this.services.store.stats(project) } };
 			}
-			case "list": return { degraded: false, result: { op: "list", entries: await this.services.store.list({ ...op, projectId: project, importanceMin: op.importanceMin }) } };
-			case "listReflection": return { degraded: false, result: { op: "listReflection", entries: await this.services.store.listReflectionItems({ ...op, projectIdFilter: [project] }) } };
+			case "list": return { degraded: false, result: { op: "list", entries: await this.services.store.list({ ...op, projectIdFilter: readable, importanceMin: op.importanceMin }) } };
+			case "listReflection": return { degraded: false, result: { op: "listReflection", entries: await this.services.store.listReflectionItems({ ...op, projectIdFilter: readable }) } };
 			case "get": {
 				if (op.path) {
 					const manager = await this.provider(scope);
@@ -264,7 +285,7 @@ export class MemoryContractRuntime implements MemoryContract {
 					return { degraded: false, result: { op: "get", entry: null, file } };
 				}
 				const entry = op.id ? this.services.store.getById(op.id) : undefined;
-				return { degraded: false, result: { op: "get", entry: entry?.projectId === project ? entry : null } };
+				return { degraded: false, result: { op: "get", entry: entry && readable.includes(entry.projectId) ? entry : null } };
 			}
 		}
 	}
