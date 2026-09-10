@@ -4,15 +4,15 @@
  */
 
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { buildAtomicWriteCards } from "@/extraction/atomic-write-projection";
-import type { AtomicKeyedRecord } from "@/extraction/atomic-profile-keying";
-import type { Embedder } from "@/extraction/embedding-provider-client";
+import { buildAtomicWriteCards } from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-write-projection";
+import type { AtomicKeyedRecord } from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-profile-keying";
+import type { Embedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client";
 import {
 	type AtomicExtractionLedgerKey,
 	type AtomicExtractionRunParameters,
 	MemoryStore,
-} from "@/storage/store";
-import type { SqliteDatabaseLike } from "@/storage/sqlite-runtime";
+} from "../../../../packages/sno-station-mem/src/store/store";
+import type { SqliteDatabaseLike } from "../../../../packages/sno-station-mem/src/store/sqlite-runtime";
 import { createTestDb, createTestEmbedder, type TestDb } from "../helpers/test-db";
 
 const PROJECT_ID = "atomic-event-time-project";
