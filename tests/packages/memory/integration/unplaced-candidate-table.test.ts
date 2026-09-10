@@ -4,10 +4,10 @@
  */
 
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { runMigrations } from "../../../../apps/mem-claw/src/storage/migrations.ts";
-import { openSqliteDatabase } from "../../../../apps/mem-claw/src/storage/sqlite-runtime.ts";
-import { MemoryStore } from "../../../../apps/mem-claw/src/storage/store.ts";
-import { createTestDb, createTestEmbedder, type TestDb } from "../helpers/test-db.ts";
+import { runMigrations } from "../../../../packages/sno-station-mem/src/store/migrations.ts";
+import { openSqliteDatabase } from "../../../../packages/sno-station-mem/src/store/sqlite-runtime.ts";
+import { MemoryStore } from "../../../../packages/sno-station-mem/src/store/store.ts";
+import { createTestDb, createTestEmbedder, type TestDb } from "../../../apps/mem-claw/helpers/test-db.ts";
 
 let embedder: Awaited<ReturnType<typeof createTestEmbedder>> | undefined;
 

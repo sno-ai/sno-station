@@ -4,10 +4,10 @@
  */
 
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
-import type { Embedder } from "@/extraction/embedding-provider-client";
-import { routeTaskLifecycleCandidate } from "@/extraction/task-lifecycle-route";
-import { createLlmClient } from "@/shared/llm-client";
-import { MemoryStore } from "@/storage/store";
+import type { Embedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client";
+import { routeTaskLifecycleCandidate } from "../../../../packages/sno-station-mem/src/engine/extraction/task-lifecycle-route";
+import { createLlmClient } from "../../../../packages/sno-station-mem/src/model/llm-client";
+import { MemoryStore } from "../../../../packages/sno-station-mem/src/store/store";
 import { createTestDb, createTestEmbedder, type TestDb } from "../helpers/test-db";
 import { routeTestTask } from "./task-lifecycle-test-route";
 
