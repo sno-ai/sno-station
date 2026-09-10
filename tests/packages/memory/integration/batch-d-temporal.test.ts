@@ -1,24 +1,24 @@
 /** Real LLM API required. No mocking. Missing keys = FAIL. */
 
 import { describe, expect, it } from "vitest";
-import { stripEnvelopeMetadata } from "../../../../apps/mem-claw/src/extraction/extraction-text-sanitizer.ts";
+import { stripEnvelopeMetadata } from "../../../../packages/sno-station-mem/src/engine/extraction/extraction-text-sanitizer.ts";
 import {
 	buildInsightMetadata,
 	isMemoryExpired,
 	parseInsightMetadata,
-} from "../../../../apps/mem-claw/src/extraction/memory-metadata-codec.ts";
-import { isoDateFromMs } from "../../../../apps/mem-claw/src/shared/iso-date-time.ts";
+} from "../../../../packages/sno-station-mem/src/engine/extraction/memory-metadata-codec.ts";
+import { isoDateFromMs } from "../../../../packages/sno-station-mem/src/engine/shared/iso-date-time.ts";
 import {
 	classifyTemporal,
 	inferExpiry,
 	type TemporalType,
-} from "../../../../apps/mem-claw/src/extraction/memory-temporality-classifier.ts";
+} from "../../../../packages/sno-station-mem/src/engine/extraction/memory-temporality-classifier.ts";
 import {
 	createRetentionScorer,
 	DEFAULT_DECAY_CONFIG,
 	type DecayConfig,
-} from "../../../../apps/mem-claw/src/operations/selective-forgetting-scorer.ts";
-import type { DecayableMemory } from "../../../../apps/mem-claw/src/shared/types.ts";
+} from "../../../../packages/sno-station-mem/src/engine/operations/selective-forgetting-scorer.ts";
+import type { DecayableMemory } from "../../../../packages/sno-station-mem/src/engine/shared/types.ts";
 
 const episodicInsightMetadata = {
 	kind: "episodic",
