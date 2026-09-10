@@ -3,7 +3,6 @@
  * @boundary Environment and filesystem configuration for CLI discovery and local REM state.
  */
 
-import { homedir } from "node:os";
 import path from "node:path";
 import {
 	parseRemOperationalConfiguration,
@@ -23,21 +22,19 @@ export const REM_ASYNC_START_DELAY_MS = 100;
 export const REM_REQUEST_BODY_LIMIT_BYTES: number = 64 * 1024;
 export const REM_MODEL_OUTPUT_TOKEN_CAP = 4096;
 
-const SNO_PROFILE_DIR_ENV = "SNO_PROFILE_DIR";
+import { getDiscoveryPath, getSidecarLockPath } from "../contract/profile";
 const SNO_REM_TEST_HOLD_MS_ENV = "SNO_STATION_MEM_REM_TEST_HOLD_MS";
 const SNO_REM_TRACE_ENV = "SNO_STATION_MEM_REM_TRACE";
 const SNO_REM_CONFIG_JSON_ENV = "SNO_STATION_MEM_REM_CONFIG_JSON";
-const DISCOVERY_RELATIVE_PATH = path.join("station", "sidecar.json");
 const REM_JOB_JOURNAL_NAME = "rem-wave-jobs.jsonl";
-const REM_SIDECAR_LOCK_NAME = "sno-station-mem-sidecar";
 const REM_TRACE_LOG_NAME = "rem-trace.jsonl";
 const REM_CHASSIS_JOURNAL_NAME = "rem-chassis-journal.jsonl";
 export function getSnoProfileDir(): string {
-	return process.env[SNO_PROFILE_DIR_ENV] ?? path.join(homedir(), ".sno");
+	return getStateDir();
 }
 
 export function getRemDiscoveryPath(): string {
-	return path.join(getSnoProfileDir(), DISCOVERY_RELATIVE_PATH);
+	return getDiscoveryPath();
 }
 
 export function getRemJobJournalPath(): string {
@@ -49,7 +46,7 @@ export function getRemChassisJournalPath(): string {
 }
 
 export function getRemSidecarLockKey(): string {
-	return path.join(getSnoStationMemStateDir(), REM_SIDECAR_LOCK_NAME);
+	return getSidecarLockPath();
 }
 
 export function getRemTraceLogPath(stateRoot: string = getStateDir()): string {
