@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { splitExactClauses } from "../../../../packages/rem-core/src/index.ts";
+import { splitExactClauses } from "../../../../packages/sno-station-mem/src/engine/rem/index.ts";
 
 describe("REM exact clause splitter", () => {
 	it("preserves every source byte while exposing deterministic sentence, list, and clause boundaries", () => {
