@@ -18,8 +18,8 @@ import {
 	renderRemUpdateJudgmentPrompt,
 	renderRemUpdateRelationJudgmentPrompt,
 	renderRemUpdateVerificationPrompt,
-} from "../../../../packages/rem-core/src/index.ts";
-import { REM_UPDATE_JUDGMENT_SKILL } from "../../../../apps/mem-claw/src/sidecar/rem-update-judgment-skill.ts";
+} from "../../../../packages/sno-station-mem/src/engine/rem/index.ts";
+import { REM_UPDATE_JUDGMENT_SKILL } from "../../../../packages/sno-station-mem/src/sidecar/rem-update-judgment-skill.ts";
 
 const SOURCE =
 	"The user used to really like books about social dynamics, but is currently drawn to books about tragedy.";
@@ -194,7 +194,7 @@ describe("relation judgement — three booleans, no positions", () => {
 describe("the owner's law, enforced on the source itself", () => {
 	const modulePath = resolve(
 		import.meta.dirname,
-		"../../../../packages/rem-core/src/rem-update-judgment.ts",
+		"../../../../packages/sno-station-mem/src/engine/rem/rem-update-judgment.ts",
 	);
 	const source = readFileSync(modulePath, "utf8");
 
