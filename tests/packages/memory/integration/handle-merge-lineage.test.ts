@@ -6,7 +6,7 @@ import {
 	buildInsightMetadata,
 	parseInsightMetadata,
 	stringifyInsightMetadata,
-} from "../../../../apps/mem-claw/src/extraction/memory-metadata-codec.ts";
+} from "../../../../packages/sno-station-mem/src/engine/extraction/memory-metadata-codec.ts";
 
 const BASE_TS = Date.UTC(2026, 4, 20, 12, 0, 0);
 
