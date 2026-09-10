@@ -25,7 +25,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { readFileTail } from "../../../../apps/mem-claw/src/shared/utils.ts";
+import { readFileTail } from "../../../../packages/sno-station-mem/src/engine/shared/utils.ts";
 
 describe("readFileTail (utils.ts) — codex C3 regression", () => {
 	let tmp: string;
