@@ -160,3 +160,9 @@ file operations. Neither is a database fallback or an additional HTTP method.
 `inspect({ op: "storage" }, scope)` is an operator-only diagnostic approved for the host configuration boundary. It requires `scope.host.systemCaller`, checks the OS principal before storage access, and can run before `init` so invalid model settings do not prevent diagnosis. The result is `{ op: "storage", dimension: number | null, failed: boolean, reason?: string }`; the sidecar reads its existing live connection. It creates no extra route or verb.
 
 `recordUsage` additionally accepts optional JSON `error` and `result` fields so the unchanged error-signal handler receives the original tool event, including successful exit-code text, instead of treating every text result as an error.
+
+### Automatic maintenance controls
+
+The sidecar reads `SNO_STATION_MEM_MAINTENANCE_INTERVAL_MS` (positive integer, also the first-tick delay), `SNO_STATION_MEM_REM_CLOCK_OVERRIDE` (ISO instant) and `SNO_STATION_MEM_REM_VOLUME_THRESHOLD` (positive integer) once at boot. Unset values preserve the normal interval, wall clock and100-row threshold. These overrides make the actual scheduler testable; clients never dispatch the acceptance wave.
+
+Installed `remEnhanced.trigger.tick` defaults true. False still evaluates due windows but never dispatches them. Trigger-state version1 now requires the sixth `missed_window` field on each scope: null or `{due_at, trigger: "daily" | "volume", recorded_at}`. A five-field file is rejected as truncated. A successful dispatch clears the recorded miss.

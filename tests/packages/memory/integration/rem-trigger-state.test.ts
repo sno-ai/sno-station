@@ -1,5 +1,5 @@
 /** @file rem-trigger-state.test.ts
- * @purpose Proves the automatic REM scheduler stores exactly one strict five-field state per scope.
+ * @purpose Proves the automatic REM scheduler stores exactly one strict six-field state per scope.
  * @boundary Real filesystem durability and schema validation; no storage mock.
  * @acceptance ACC-38
  * @class repair
@@ -42,6 +42,7 @@ describe("REM trigger durable state", () => {
 			schedule_zone: "America/Los_Angeles",
 			last_covered_count: 12,
 			last_volume_pass_date: null,
+			missed_window: null,
 			attempts: { identity: null, count: 0 },
 		});
 		await writeRemTriggerStateAtomic(stateDir, initialized.state);
@@ -74,4 +75,19 @@ describe("REM trigger durable state", () => {
 
 		await expect(loadRemTriggerState(stateDir)).rejects.toThrow(/REM trigger state.*invalid/i);
 	});
+	it("ACC-38 round-trips a missed window and rejects a truncated five-field state", async () => {
+		stateDir = mkdtempSync(join(tmpdir(), "rem-trigger-missed-"));
+		const { state } = ensureRemTriggerScope({ version: 1, scopes: {} }, {
+			scope: "scope-a", now: new Date("2026-09-10T03:00:00Z"), candidateCount: 0, resolveScheduleZone: () => "UTC",
+		});
+		const scope = state.scopes["scope-a"];
+		if (!scope) throw new Error("scope missing");
+		scope.missed_window = { due_at: "2026-09-11T03:00:00.000Z", trigger: "daily", recorded_at: "2026-09-11T04:00:00.000Z" };
+		await writeRemTriggerStateAtomic(stateDir, state);
+		expect(await loadRemTriggerState(stateDir)).toEqual(state);
+		const { missed_window: _missed, ...truncated } = scope;
+		writeFileSync(remTriggerStatePath(stateDir), JSON.stringify({ version: 1, scopes: { "scope-a": truncated } }));
+		await expect(loadRemTriggerState(stateDir)).rejects.toThrow(/invalid/i);
+	});
+
 });

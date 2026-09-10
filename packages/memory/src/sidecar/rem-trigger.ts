@@ -56,6 +56,8 @@ export interface RemAutomaticTriggerInput {
 	auditStateDir?: string;
 	requestedOperations: RemAutomaticOperation[];
 	now?: Date;
+	tickEnabled?: boolean;
+	volumeThreshold?: number;
 	discoveryPath?: string;
 	dispatchTimeoutMs?: number;
 	resolveScheduleZone?: () => string;
@@ -78,19 +80,20 @@ const idleEvaluations = new Map<string, number>();
 
 export function readRemAutomaticOperations(
 	configPath: string = resolveSnoStationMemConfigPath(),
-): RemAutomaticOperation[] {
+): { requestedOperations: RemAutomaticOperation[]; tickEnabled: boolean } {
 	// An unbound default store has no installation settings and no automatic REM operations.
-	if (!existsSync(configPath) && !existsSync(getBindingPath())) return [];
+	if (!existsSync(configPath) && !existsSync(getBindingPath())) return { requestedOperations: [], tickEnabled: true };
 	const hostConfig = readSnoStationMemConfig(configPath);
 	const rawConfig = hostConfig.plugins?.entries?.[PLUGIN_ENTRY_KEY]?.config;
 	const config = pluginConfigSchema.parse(rawConfig ?? {});
-	return config.mode === "rem-enhanced" ? config.remOperations : [];
+	return { requestedOperations: config.mode === "rem-enhanced" ? config.remOperations : [], tickEnabled: config.remEnhanced.trigger?.tick ?? true };
 }
 
 export async function evaluateRemAutomaticTriggers(
 	input: RemAutomaticTriggerInput,
 ): Promise<RemAutomaticTriggerReport> {
 	const now = input.now ?? new Date();
+	if (!Number.isInteger(input.volumeThreshold ?? REM_VOLUME_THRESHOLD) || (input.volumeThreshold ?? REM_VOLUME_THRESHOLD) < 1) throw new Error("REM volume threshold must be a positive integer");
 	const auditStateDir = input.auditStateDir ?? input.stateDir;
 	if (Number.isNaN(now.getTime())) throw new Error("REM trigger evaluation time is invalid");
 	if (isKillSwitchActive(input.stateDir)) {
@@ -210,7 +213,7 @@ async function evaluateScope(
 	const localDate = localDateAt(now, scopeState.schedule_zone);
 	const growth = candidateCount - scopeState.last_covered_count;
 	const dailyDue = now.getTime() >= nextDue.getTime();
-	const volumeDue = growth >= REM_VOLUME_THRESHOLD && scopeState.last_volume_pass_date !== localDate;
+	const volumeDue = growth >= (input.volumeThreshold ?? REM_VOLUME_THRESHOLD) && scopeState.last_volume_pass_date !== localDate;
 	if (!dailyDue && !volumeDue) {
 		const consecutiveIdle = (idleEvaluations.get(scope) ?? 0) + 1;
 		idleEvaluations.set(scope, consecutiveIdle);
@@ -218,13 +221,20 @@ async function evaluateScope(
 			row: "waiting-for-schedule",
 			next_due: nextDue.toISOString(),
 			milliseconds_until_due: Math.max(0, nextDue.getTime() - now.getTime()),
-			growth: growthDetails(candidateCount, scopeState.last_covered_count),
+			growth: growthDetails(candidateCount, scopeState.last_covered_count, input.volumeThreshold ?? REM_VOLUME_THRESHOLD),
 			consecutive_idle: consecutiveIdle,
 		});
 		return { state, dispatched: false };
 	}
 
 	const trigger: RemAutomaticTrigger = dailyDue ? "daily" : "volume";
+	if (input.tickEnabled === false) {
+		const missed = replaceScopeState(state, scope, { ...scopeState,
+			missed_window: { due_at: (dailyDue ? nextDue : now).toISOString(), trigger, recorded_at: now.toISOString() },
+		});
+		await writeRemTriggerStateAtomic(input.stateDir, missed);
+		return { state: missed, dispatched: false };
+	}
 	const triggerKey = trigger === "daily" ? nextDue.toISOString() : localDate;
 	const correlationId = remAutomaticCorrelationId(trigger, scope, triggerKey);
 	const priorAttempts =
@@ -235,7 +245,7 @@ async function evaluateScope(
 		next_due: nextDue.toISOString(),
 		pass_at: now.toISOString(),
 		local_date: localDate,
-		growth: growthDetails(candidateCount, scopeState.last_covered_count),
+		growth: growthDetails(candidateCount, scopeState.last_covered_count, input.volumeThreshold ?? REM_VOLUME_THRESHOLD),
 		correlation_id: correlationId,
 		consecutive_idle: 0,
 	});
@@ -255,7 +265,11 @@ async function evaluateScope(
 	} catch (error) {
 		cause = errorMessage(error);
 	}
-	if (cause === undefined) return { state: nextState, dispatched: true };
+	if (cause === undefined) {
+		nextState = replaceScopeState(nextState, scope, { ...requiredScopeState(nextState, scope), missed_window: null });
+		await writeRemTriggerStateAtomic(input.stateDir, nextState);
+		return { state: nextState, dispatched: true };
+	}
 
 	const failed = requiredScopeState(nextState, scope);
 	const exhausted = failed.attempts.count >= REM_TRIGGER_ATTEMPT_LIMIT;
@@ -545,14 +559,14 @@ function addCalendarDays(
 	};
 }
 
-function growthDetails(candidateCount: number, coveredCount: number): Record<string, number> {
+function growthDetails(candidateCount: number, coveredCount: number, threshold: number): Record<string, number> {
 	const growth = candidateCount - coveredCount;
 	return {
 		candidate_count: candidateCount,
 		last_covered_count: coveredCount,
 		delta: growth,
-		threshold: REM_VOLUME_THRESHOLD,
-		remaining: Math.max(0, REM_VOLUME_THRESHOLD - growth),
+		threshold,
+		remaining: Math.max(0, threshold - growth),
 	};
 }
 

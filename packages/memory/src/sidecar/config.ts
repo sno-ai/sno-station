@@ -4,6 +4,7 @@
  */
 
 import path from "node:path";
+import { z } from "zod";
 import {
 	parseRemOperationalConfiguration,
 	type RemOperationalConfiguration,
@@ -85,4 +86,22 @@ export function readRemOperationalConfig(): RemOperationalConfiguration {
 		throw new Error(`${SNO_REM_CONFIG_JSON_ENV} must contain valid JSON`);
 	}
 	return parseRemOperationalConfiguration(decoded);
+}
+
+export const MAINTENANCE_INTERVAL_ENV = "SNO_STATION_MEM_MAINTENANCE_INTERVAL_MS";
+export const REM_CLOCK_OVERRIDE_ENV = "SNO_STATION_MEM_REM_CLOCK_OVERRIDE";
+export const REM_VOLUME_THRESHOLD_ENV = "SNO_STATION_MEM_REM_VOLUME_THRESHOLD";
+
+export function readMaintenanceOverrides(): { intervalMs?: number; now?: Date; volumeThreshold?: number } {
+	const positive = (name: string): number | undefined => {
+		const raw = process.env[name];
+		if (raw === undefined) return undefined;
+		const value = Number(raw);
+		if (!Number.isSafeInteger(value) || value < 1) throw new Error(`${name} must be a positive integer`);
+		return value;
+	};
+	const rawClock = process.env[REM_CLOCK_OVERRIDE_ENV];
+	const now = rawClock === undefined ? undefined : new Date(z.string().datetime({ offset: true }).parse(rawClock));
+	if (now && Number.isNaN(now.getTime())) throw new Error(`${REM_CLOCK_OVERRIDE_ENV} must be an ISO timestamp`);
+	return { intervalMs: positive(MAINTENANCE_INTERVAL_ENV), now, volumeThreshold: positive(REM_VOLUME_THRESHOLD_ENV) };
 }

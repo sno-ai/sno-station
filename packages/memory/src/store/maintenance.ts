@@ -53,6 +53,8 @@ const INTEGRITY_SWEEP_SLOW_WARN_MS = 500;
 
 export interface MaintenanceDeps {
 	store: MemoryStore;
+	remClock?: Date;
+	remVolumeThreshold?: number;
 	usageOutbox?: MemoryTelemetryUsageOutbox;
 	dbPath: string;
 	backupDir: string;
@@ -475,6 +477,7 @@ export interface MaintenanceTimerHandle {
 export function startMaintenanceTimer(
 	deps: MaintenanceDeps,
 	intervalMs: number = BACKUP_INTERVAL_MS,
+	firstTickDelayMs: number = MAINTENANCE_FIRST_TICK_DELAY_MS,
 ): MaintenanceTimerHandle {
 	let interval: NodeJS.Timeout | null = null;
 	let firstTick: NodeJS.Timeout | null = null;
@@ -527,7 +530,8 @@ export function startMaintenanceTimer(
 					database: deps.store.sqlite,
 					stateDir: deps.stateDir,
 					auditStateDir: getSnoStationMemStateDir(),
-					requestedOperations: readRemAutomaticOperations(),
+					...readRemAutomaticOperations(),
+					now: deps.remClock, volumeThreshold: deps.remVolumeThreshold,
 				});
 			} catch (error) {
 				log.warn("maintenance pass threw", { error }, {
@@ -547,7 +551,7 @@ export function startMaintenanceTimer(
 		if (stopped) return;
 		interval = setInterval(tick, intervalMs);
 		interval.unref?.();
-	}, MAINTENANCE_FIRST_TICK_DELAY_MS);
+	}, firstTickDelayMs);
 	firstTick.unref?.();
 	log.debug("maintenance timer started", { intervalMs }, {
 		event_name: "sno_station_mem.maintenance.maintenance.timer.started",
