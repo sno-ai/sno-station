@@ -4,15 +4,15 @@
  */
 
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import type { Embedder } from "@/extraction/embedding-provider-client";
+import type { Embedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client";
 import {
 	type AtomicExtractionLedgerKey,
 	type AtomicExtractionReprocessBounds,
 	type AtomicExtractionReprocessReason,
 	type AtomicExtractionRunParameters,
 	MemoryStore,
-} from "@/storage/store";
-import type { SqliteDatabaseLike } from "@/storage/sqlite-runtime";
+} from "../../../../packages/sno-station-mem/src/store/store";
+import type { SqliteDatabaseLike } from "../../../../packages/sno-station-mem/src/store/sqlite-runtime";
 import { createTestDb, createTestEmbedder, type TestDb } from "../helpers/test-db";
 
 const BASE_PARAMETERS: AtomicExtractionRunParameters = {
