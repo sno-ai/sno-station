@@ -50,6 +50,8 @@ import {
 	REM_SOURCE,
 } from "./config";
 import { acquireRemSidecarLock } from "./lifecycle-lock";
+import { MemoryRuntimePool } from "./memory-runtime";
+import { serveMemoryRoute } from "./memory-routes";
 import { runRemProductionOrderedWave } from "./rem-batch-executor";
 import { validateRemOperationalGrammarActivation } from "./rem-entry-foundations";
 import { RemChassisJournal } from "./rem-chassis-journal";
@@ -116,6 +118,7 @@ export async function startRemSidecar(): Promise<RunningRemSidecar> {
 async function startLockedRemSidecar(
 	lifecycleLock: Awaited<ReturnType<typeof acquireRemSidecarLock>>,
 ): Promise<RunningRemSidecar> {
+	const memory = await MemoryRuntimePool.open();
 	const token = randomBytes(32).toString("hex");
 	const holdMs = readRemTestHoldMs();
 	const chassisJournal = new RemChassisJournal(getRemChassisJournalPath());
@@ -181,6 +184,7 @@ async function startLockedRemSidecar(
 			pendingTimers,
 			activeTasks,
 			context,
+			memory,
 		).catch((error: unknown) => {
 				const httpError =
 					error instanceof HttpError ? error : new HttpError(500, "internal_error");
@@ -233,6 +237,7 @@ async function startLockedRemSidecar(
 				pendingTimers.clear();
 				await closeServer(server);
 				await Promise.allSettled(activeTasks);
+				await memory.close();
 				await removeOwnedDiscovery(discoveryPath, token);
 				cleanedUp = true;
 			} finally {
@@ -268,20 +273,20 @@ async function routeRequest(
 	pendingTimers: Set<NodeJS.Timeout>,
 	activeTasks: Set<Promise<void>>,
 	context: RequestLogContext,
+	memory: MemoryRuntimePool,
 ): Promise<void> {
 	const url = new URL(request.url ?? HEALTH_PATH, REM_SIDECAR_ORIGIN);
-	if (request.method === "GET" && url.pathname === HEALTH_PATH) {
-		// `log_level` is what this process is actually filtering on, not what the launcher asked
-		// for: an invalid LOG_LEVEL falls back silently, and a run's provenance must record the
-		// level that was in force. Unauthenticated like the rest of health, and it names no secret.
-		sendJson(response, 200, { status: "ok", log_level: effectiveLogLevel() });
-		return;
-	}
 	if (!isAuthorized(request, token)) {
 		context.error_code = "unauthorized";
 		sendJson(response, 401, { error: "unauthorized" });
 		return;
 	}
+	if (request.method === "GET" && url.pathname === HEALTH_PATH) {
+		sendJson(response, 200, { status: "ok", log_level: effectiveLogLevel(), principal: memory.principal,
+			storePath: memory.storePath, accessCounters: memory.counters });
+		return;
+	}
+	if (await serveMemoryRoute(request, response, url.pathname, memory, activeTasks)) return;
 	if (request.method === "POST" && url.pathname === REM_RUN_PATH) {
 		const correlationId = readCorrelationId(request) ?? `rem-corr-${randomUUID()}`;
 		context.correlation_id = correlationId;
@@ -794,7 +799,9 @@ function readCorrelationId(request: IncomingMessage): string | undefined {
 }
 
 function isAuthorized(request: IncomingMessage, token: string): boolean {
-	const provided = request.headers[REM_SIDECAR_TOKEN_HEADER];
+	const authorization = request.headers.authorization;
+	const bearer = typeof authorization === "string" && authorization.startsWith("Bearer ") ? authorization.slice(7) : undefined;
+	const provided = bearer ?? (request.url?.startsWith("/v1/") ? undefined : request.headers[REM_SIDECAR_TOKEN_HEADER]);
 	if (typeof provided !== "string") return false;
 	const expectedBuffer = Buffer.from(token);
 	const providedBuffer = Buffer.from(provided);

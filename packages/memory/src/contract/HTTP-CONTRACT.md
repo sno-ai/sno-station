@@ -1,6 +1,6 @@
 # Sno Station Mem HTTP contract
 
-Contract revision: 1. Producer requirements version: 4.9.
+Contract revision: 1. Producer requirements version: 4.11.
 
 The authoritative runtime schemas are `inputSchemas` and `outputSchemas`, exported by
 `contract/index.ts`. `contractJsonSchemas(method)` publishes the corresponding JSON schemas.
@@ -15,6 +15,7 @@ The lock is `<profile root>/sno-station-mem/sidecar.lock`.
 Every verb request supplies `Authorization: Bearer <token>` and
 `x-sno-station-mem-skin: <skinId>`. Authenticate before reading the request body.
 The skin identifier in an initialization payload must match its request header.
+Verb request bodies are limited to 8 MiB. Health requires the discovery token and adds the OS principal, bound store path and guarded-operation access counters; the counters count entry to the engine/store capability, not SQL statements.
 All request and response bodies are JSON. Unknown fields in contract objects are refused.
 
 `scope` requires nonblank `principal`, `project`, and `session` strings. Its optional `host`
@@ -139,7 +140,7 @@ paused, system-caller-required. The client never opens a store or queues a write
 ## State and reserved environment names
 
 `SNO_PROFILE_DIR` selects the profile root; its default is `~/.sno`. `GPU_BASE_URL` retains its
-existing meaning. The externally owned secret identifier is exported from the single
+existing meaning. `XDG_CONFIG_HOME` remains owned by the external crypto package and is not renamed. The externally owned secret identifier is exported from the single
 `model/signed-registry-constants.ts` file together with the signed module/preset identifiers,
 anchor and key identifier. These signed values are unchanged. Every other package-owned
 environment name begins `SNO_STATION_MEM_`.
