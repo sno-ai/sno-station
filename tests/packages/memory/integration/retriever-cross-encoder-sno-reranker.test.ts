@@ -5,8 +5,8 @@ import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import {
 	createRetriever,
 	DEFAULT_RETRIEVAL_CONFIG,
-} from "../../../../apps/mem-claw/src/retrieval/retriever.ts";
-import type { MemoryEntry, MemorySearchResult } from "../../../../apps/mem-claw/src/shared/types.ts";
+} from "../../../../packages/sno-station-mem/src/engine/retrieval/retriever.ts";
+import type { MemoryEntry, MemorySearchResult } from "../../../../packages/sno-station-mem/src/engine/shared/types.ts";
 
 // Real integration test: the Sno cross-encoder reranker is hit over HTTP. No
 // mock of the reranker — the whole point is to prove the mem-claw retriever's
