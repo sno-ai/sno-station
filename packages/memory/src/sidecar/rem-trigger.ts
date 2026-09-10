@@ -1,3 +1,5 @@
+import { existsSync } from "node:fs";
+import { getBindingPath } from "../contract/profile";
 /** @file rem-trigger.ts
  * @purpose Evaluates daily and candidate-growth REM triggers on the gateway maintenance tick.
  * @boundary Reads candidate scopes and durable trigger state, audits decisions, then calls the sidecar.
@@ -77,6 +79,8 @@ const idleEvaluations = new Map<string, number>();
 export function readRemAutomaticOperations(
 	configPath: string = resolveSnoStationMemConfigPath(),
 ): RemAutomaticOperation[] {
+	// An unbound default store has no installation settings and no automatic REM operations.
+	if (!existsSync(configPath) && !existsSync(getBindingPath())) return [];
 	const hostConfig = readSnoStationMemConfig(configPath);
 	const rawConfig = hostConfig.plugins?.entries?.[PLUGIN_ENTRY_KEY]?.config;
 	const config = pluginConfigSchema.parse(rawConfig ?? {});

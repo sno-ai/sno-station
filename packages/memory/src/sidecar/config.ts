@@ -21,6 +21,7 @@ export const REM_SOURCE = "sidecar";
 export const REM_ASYNC_START_DELAY_MS = 100;
 export const REM_REQUEST_BODY_LIMIT_BYTES: number = 64 * 1024;
 export const REM_MODEL_OUTPUT_TOKEN_CAP = 4096;
+export const MEMORY_USAGE_FLUSH_INTERVAL_MS: number = 5 * 60_000;
 
 import { getDiscoveryPath, getSidecarLockPath } from "../contract/profile";
 const SNO_REM_TEST_HOLD_MS_ENV = "SNO_STATION_MEM_REM_TEST_HOLD_MS";
