@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { pluginConfigSchema } from "../../../../apps/mem-claw/src/shared/types.ts";
+import { pluginConfigSchema } from "../../../../packages/sno-station-mem/src/engine/shared/types.ts";
 
 describe("plugin config current schema", () => {
 	it("defaults local ONNX embedding to the low-memory q8 profile", () => {
