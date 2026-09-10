@@ -6,7 +6,14 @@ import { afterEach, describe, expect, it } from "vitest";
 
 const REPO_ROOT = resolve(import.meta.dirname, "../../../..");
 const GUARD = join(REPO_ROOT, "dev-scripts/check-llm-endpoint-construction.sh");
-const SOURCE_ROOT = join(REPO_ROOT, "apps/mem-claw/src");
+const SOURCE_ROOTS = [
+	"contract", "model", "store", "sidecar",
+	"engine/bindings", "engine/diagnostics", "engine/eval", "engine/extraction",
+	"engine/i18n", "engine/maintenance", "engine/observability", "engine/operations",
+	"engine/provider", "engine/reflection", "engine/retrieval", "engine/security",
+	"engine/shared", "engine/telemetry",
+].map((directory) => join(REPO_ROOT, "packages/sno-station-mem/src", directory));
+SOURCE_ROOTS.push(join(REPO_ROOT, "apps/mem-claw/src"));
 const temporaryDirectories: string[] = [];
 
 function runGuard(source: string): ReturnType<typeof spawnSync> {
@@ -151,7 +158,7 @@ describe("LLM endpoint construction guard", () => {
 	});
 
 	it("accepts the current mem-claw source tree", () => {
-		const result = spawnSync("bash", [GUARD, SOURCE_ROOT], { encoding: "utf8" });
+		const result = spawnSync("bash", [GUARD, ...SOURCE_ROOTS], { encoding: "utf8" });
 
 		expect(result.status, String(result.stderr)).toBe(0);
 	});
