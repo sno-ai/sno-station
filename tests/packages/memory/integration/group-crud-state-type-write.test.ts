@@ -7,26 +7,26 @@
  */
 
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
-import type { AtomicProfileKeyingTransport } from "@/extraction/atomic-profile-keying";
-import type { AtomicResplitTransport } from "@/extraction/atomic-extraction-gauntlet";
-import type { AtomicExtractionTurn } from "@/extraction/atomic-extraction-reply";
+import type { AtomicProfileKeyingTransport } from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-profile-keying";
+import type { AtomicResplitTransport } from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-extraction-gauntlet";
+import type { AtomicExtractionTurn } from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-extraction-reply";
 import type {
 	AtomicGenericExtractionRequest,
 	AtomicGenericExtractionTransport,
-} from "@/extraction/atomic-generic-extractor";
+} from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-generic-extractor";
 import {
 	type AtomicMemoryExtractionTransports,
 	createSignedAtomicMemoryExtractionTransports,
 	runAtomicMemoryExtraction,
-} from "@/extraction/atomic-memory-extraction";
-import type { AtomicSubjectGuardTransport } from "@/extraction/atomic-subject-guard";
-import type { Embedder } from "@/extraction/embedding-provider-client";
-import { llmRoutingConfigSchema } from "@/shared/plugin-config-mode-schema";
+} from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-memory-extraction";
+import type { AtomicSubjectGuardTransport } from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-subject-guard";
+import type { Embedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client";
+import { llmRoutingConfigSchema } from "../../../../packages/sno-station-mem/src/contract/config/plugin-config-mode-schema";
 import {
 	type AtomicExtractionRunParameters,
 	MemoryStore,
-} from "@/storage/store";
-import { applyStateCategoryMigration } from "@/storage/state-category-migration";
+} from "../../../../packages/sno-station-mem/src/store/store";
+import { applyStateCategoryMigration } from "../../../../packages/sno-station-mem/src/store/state-category-migration";
 import { createTestDb, createTestEmbedder, type TestDb } from "../helpers/test-db";
 
 const PROJECT_ID = "group-crud-state-write";
