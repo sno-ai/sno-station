@@ -121,6 +121,7 @@ export type TokenUsage = {
 };
 
 export type ProviderResponseTrace = {
+	durationMs?: number;
 	adapterSlot: MemoryLlmAdapterSlot;
 	callLabel: string;
 	provider: LlmProvider;

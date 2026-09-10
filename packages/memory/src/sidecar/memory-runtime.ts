@@ -22,6 +22,8 @@ import { readChunkVecTableState } from "../store/connection";
 import { initSqliteRuntime } from "../store/sqlite-runtime";
 import { startMaintenanceTimer, type MaintenanceTimerHandle } from "../store/maintenance";
 import { RegisteredAgentPort } from "../model/registered-agent-port";
+import { withProviderResponses } from "../model/llm-provider-transport";
+import type { ProviderResponseTrace } from "../model/llm-client-types";
 import { MEMORY_USAGE_FLUSH_INTERVAL_MS } from "./config";
 
 const log = createLogger("sno-station-mem:runtime");
@@ -132,13 +134,17 @@ export class MemoryRuntimePool {
 		entry.active++;
 		this.counters.engineAccesses++;
 		this.counters.storeAccesses++;
+		const responses: ProviderResponseTrace[] = [];
 		try {
-			const call = () => this.call(entry.runtime, method, raw);
+			const call = () => withProviderResponses(responses, () => this.call(entry.runtime, method, raw));
 			const result = parseOutput(method, await (entry.agentPort ? entry.agentPort.run(call) : call()));
 			if (method === "onSessionEnd") await this.snapshot(entry, "session_end");
 			return result;
 		}
-		finally { entry.active--; if (entry.retired && entry.active === 0) await this.dispose(entry); }
+		finally {
+			await this.emitProviderUsage(entry, input.scope, responses);
+			entry.active--; if (entry.retired && entry.active === 0) await this.dispose(entry);
+		}
 	}
 
 	private async call(runtime: MemoryContractRuntime, method: Exclude<ContractMethod, "init">, raw: unknown): Promise<ContractOutputs[ContractMethod]> {
@@ -151,6 +157,20 @@ export class MemoryRuntimePool {
 			case "onSessionEnd": { const p = parseInput(method, raw); return runtime.onSessionEnd(p.messages, p.scope); }
 			case "staticBlock": { const p = parseInput(method, raw); return runtime.staticBlock(p.scope); }
 		}
+	}
+
+	private async emitProviderUsage(entry: SkinRuntime, scope: ScopeCtx, responses: ProviderResponseTrace[]): Promise<void> {
+		if (!scope.host?.observeSessionUuid) return;
+		await entry.observability.trackBestEffort("provider usage", async () => {
+			for (const response of responses) {
+				if (!response.usage || !response.model || response.durationMs === undefined) continue;
+				await entry.observability.emit({ eventType: "llm.call", sessionUuid: scope.host?.observeSessionUuid,
+					payload: { model: `${response.provider}:${response.model}`, prompt_tokens: response.usage.inputTokens,
+						completion_tokens: response.usage.outputTokens, token_source: "plugin_internal_paid",
+						latency_ms: response.durationMs, cache_read_tokens: 0, cache_write_tokens: 0 } });
+			}
+			if (responses.length) await entry.observability.flush({ force: true, timeoutMs: 5_000 });
+		});
 	}
 
 	private async snapshot(entry: SkinRuntime, reason: SnapshotReason): Promise<void> {

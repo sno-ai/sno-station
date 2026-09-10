@@ -8,6 +8,7 @@ import { engineSettingsSchema, type EngineSettings } from "./settings";
 
 export type JsonValue = z.infer<ReturnType<typeof z.json>>;
 export type HostContext = {
+	observeSessionUuid?: string;
 	agentId?: string;
 	sessionKey?: string;
 	sessionId?: string;
@@ -84,6 +85,7 @@ const metadata = z.record(z.string(), z.json());
 export const scopeSchema: z.ZodType<ScopeCtx, unknown> = z.strictObject({
 	principal: nonempty, project: nonempty, session: nonempty,
 	host: z.strictObject({
+		observeSessionUuid: z.uuid().optional(),
 		agentId: z.string().optional(), sessionKey: z.string().optional(),
 		sessionId: z.string().optional(), sessionTimezone: z.string().optional(),
 		workspace: z.string().optional(), sessionFile: z.string().optional(),
