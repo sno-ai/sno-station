@@ -45,7 +45,7 @@ describe("REM activation measurement transport", () => {
 				},
 			});
 
-			const audit = readFileSync(join(fixture.stateRoot, "mem-claw", "audit.jsonl"), "utf8")
+			const audit = readFileSync(join(fixture.stateRoot, "sno-station-mem", "audit.jsonl"), "utf8")
 				.trim()
 				.split("\n")
 				.map((line) => JSON.parse(line) as Record<string, unknown>);
