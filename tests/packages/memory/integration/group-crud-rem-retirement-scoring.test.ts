@@ -7,11 +7,11 @@ import { afterEach, expect, it } from "vitest";
 import {
 	createRemModelStageResponsePort,
 	runRemBatchJob,
-} from "@/sidecar/rem-batch-executor";
-import { MemoryStore } from "@/storage/store";
-import { parseRemOperationalConfiguration } from "../../../../packages/rem-core/src/index.ts";
-import { createRemOwnerDecidedOperationalConfiguration } from "../helpers/rem-entry-config-fixture.ts";
-import { createTestDb, createTestEmbedder, type TestDb } from "../helpers/test-db.ts";
+} from "../../../../packages/sno-station-mem/src/sidecar/rem-batch-executor";
+import { MemoryStore } from "../../../../packages/sno-station-mem/src/store/store";
+import { parseRemOperationalConfiguration } from "../../../../packages/sno-station-mem/src/engine/rem/index.ts";
+import { createRemOwnerDecidedOperationalConfiguration } from "../../../apps/mem-claw/helpers/rem-entry-config-fixture.ts";
+import { createTestDb, createTestEmbedder, type TestDb } from "../../../apps/mem-claw/helpers/test-db.ts";
 
 const SCOPE = "persona:rem-retirement-scoring";
 const NOMINATED_ID = "tea-retirement";
@@ -20,8 +20,8 @@ const NOMINATED_TEXT = "The user no longer drinks tea in the mornings.";
 const BASE_TIME = Date.UTC(2026, 8, 1);
 const CANDIDATE_COUNT = 65;
 const priorEnvironment = {
-	MEM_CLAW_DATA_DIR_ROOT: process.env["MEM_CLAW_DATA_DIR_ROOT"],
-	MEM_CLAW_REM_EXPECTED_DB_PATH: process.env["MEM_CLAW_REM_EXPECTED_DB_PATH"],
+	SNO_STATION_MEM_DATA_DIR_ROOT: process.env["SNO_STATION_MEM_DATA_DIR_ROOT"],
+	SNO_STATION_MEM_REM_EXPECTED_DB_PATH: process.env["SNO_STATION_MEM_REM_EXPECTED_DB_PATH"],
 	OPENCLAW_STATE_DIR: process.env["OPENCLAW_STATE_DIR"],
 };
 const cleanups: Array<() => void | Promise<void>> = [];
@@ -80,8 +80,8 @@ it("offers and closes the oldest candidate despite newer distractors beyond the 
 			},
 		},
 	}));
-	process.env["MEM_CLAW_DATA_DIR_ROOT"] = dirname(fixture.dbPath);
-	process.env["MEM_CLAW_REM_EXPECTED_DB_PATH"] = fixture.dbPath;
+	process.env["SNO_STATION_MEM_DATA_DIR_ROOT"] = dirname(fixture.dbPath);
+	process.env["SNO_STATION_MEM_REM_EXPECTED_DB_PATH"] = fixture.dbPath;
 	process.env["OPENCLAW_STATE_DIR"] = stateRoot;
 
 	// The best semantic match sorts last by id, outside the 64-row cap if it loses its score.
