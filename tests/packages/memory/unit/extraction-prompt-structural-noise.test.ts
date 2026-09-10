@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { SUPPORTED_LOCALES } from "../../../../apps/mem-claw/src/i18n/locales.ts";
-import { t } from "../../../../apps/mem-claw/src/i18n/registry.ts";
+import { SUPPORTED_LOCALES } from "../../../../packages/sno-station-mem/src/engine/i18n/locales.ts";
+import { t } from "../../../../packages/sno-station-mem/src/engine/i18n/registry.ts";
 
 /**
  * Structural-noise guard parity (upstream #836 port, D-number in DEVIATIONS).
