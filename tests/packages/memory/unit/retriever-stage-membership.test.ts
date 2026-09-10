@@ -12,9 +12,9 @@ import { describe, expect, it } from "vitest";
 import {
 	MemoryRetriever,
 	type MemoryRetrieverInternals,
-} from "../../../../apps/mem-claw/src/retrieval/retriever.ts";
-import { TraceCollector } from "../../../../apps/mem-claw/src/retrieval/retrieval-trace.ts";
-import type { RetrievalResult } from "../../../../apps/mem-claw/src/shared/types.ts";
+} from "../../../../packages/sno-station-mem/src/engine/retrieval/retriever.ts";
+import { TraceCollector } from "../../../../packages/sno-station-mem/src/engine/retrieval/retrieval-trace.ts";
+import type { RetrievalResult } from "../../../../packages/sno-station-mem/src/engine/shared/types.ts";
 
 function buildResult(id: string, score: number): RetrievalResult {
 	return {
