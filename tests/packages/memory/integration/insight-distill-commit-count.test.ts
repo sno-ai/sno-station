@@ -12,7 +12,7 @@ import { routeTaskLifecycleAssertion } from "../../../../packages/sno-station-me
 import type { LlmClient } from "../../../../packages/sno-station-mem/src/model/llm-client";
 import type { CandidateMemory, ExtractionStats } from "../../../../packages/sno-station-mem/src/engine/shared/types";
 import { MemoryStore } from "../../../../packages/sno-station-mem/src/store/store";
-import { createTestDb, createTestEmbedder } from "../helpers/test-db";
+import { createTestDb, createTestEmbedder } from "../../../apps/mem-claw/helpers/test-db";
 
 const unavailableRoute: LlmClient = {
 	completeJson: async () => {

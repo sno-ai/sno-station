@@ -1,3 +1,4 @@
+import { writeTestInstallationConfig } from "../../../apps/mem-claw/helpers/module-config-fixture";
 /** @file rem-activation-measurement-transport.test.ts
  * @purpose Proves every supported automatic operation set persists explicit pair-cap measurements.
  * @boundary Real sidecar HTTP entry, strict job journal, and terminal audit JSONL.
@@ -82,15 +83,13 @@ describe("REM activation measurement transport", () => {
 		const priorEnvironment = {
 			SNO_STATION_MEM_DATA_DIR_ROOT: process.env["SNO_STATION_MEM_DATA_DIR_ROOT"],
 			SNO_STATION_MEM_REM_EXPECTED_DB_PATH: process.env["SNO_STATION_MEM_REM_EXPECTED_DB_PATH"],
-			OPENCLAW_STATE_DIR: process.env["OPENCLAW_STATE_DIR"],
+			SNO_PROFILE_DIR: process.env["SNO_PROFILE_DIR"],
 		};
 		try {
 			process.env["SNO_STATION_MEM_DATA_DIR_ROOT"] = dirname(database.dbPath);
 			process.env["SNO_STATION_MEM_REM_EXPECTED_DB_PATH"] = database.dbPath;
-			process.env["OPENCLAW_STATE_DIR"] = stateRoot;
-			writeFileSync(
-				join(stateRoot, "openclaw.json"),
-				JSON.stringify({
+			process.env["SNO_PROFILE_DIR"] = stateRoot;
+			writeTestInstallationConfig(stateRoot, {
 					plugins: {
 						entries: {
 							"sno-mem-claw": {
@@ -101,9 +100,7 @@ describe("REM activation measurement transport", () => {
 							},
 						},
 					},
-				}),
-				"utf8",
-			);
+				});
 			const scope = "persona:clause-carry-floor";
 			const olderText = "The researcher preferred tea. The researcher works late.";
 			const newerText = "The researcher now prefers coffee.";
@@ -164,7 +161,7 @@ describe("REM activation measurement transport", () => {
 				"SNO_STATION_MEM_REM_EXPECTED_DB_PATH",
 				priorEnvironment.SNO_STATION_MEM_REM_EXPECTED_DB_PATH,
 			);
-			restoreEnvironment("OPENCLAW_STATE_DIR", priorEnvironment.OPENCLAW_STATE_DIR);
+			restoreEnvironment("SNO_PROFILE_DIR", priorEnvironment.SNO_PROFILE_DIR);
 			database.cleanup();
 			rmSync(stateRoot, { recursive: true, force: true });
 		}
@@ -180,15 +177,13 @@ async function runMeasuredReplace(candidateCount: number): Promise<{
 	const priorEnvironment = {
 		SNO_STATION_MEM_DATA_DIR_ROOT: process.env["SNO_STATION_MEM_DATA_DIR_ROOT"],
 		SNO_STATION_MEM_REM_EXPECTED_DB_PATH: process.env["SNO_STATION_MEM_REM_EXPECTED_DB_PATH"],
-		OPENCLAW_STATE_DIR: process.env["OPENCLAW_STATE_DIR"],
+		SNO_PROFILE_DIR: process.env["SNO_PROFILE_DIR"],
 	};
 	try {
 		process.env["SNO_STATION_MEM_DATA_DIR_ROOT"] = dirname(database.dbPath);
 		process.env["SNO_STATION_MEM_REM_EXPECTED_DB_PATH"] = database.dbPath;
-		process.env["OPENCLAW_STATE_DIR"] = stateRoot;
-		writeFileSync(
-			join(stateRoot, "openclaw.json"),
-			JSON.stringify({
+		process.env["SNO_PROFILE_DIR"] = stateRoot;
+		writeTestInstallationConfig(stateRoot, {
 				plugins: {
 					entries: {
 						"sno-mem-claw": {
@@ -199,9 +194,7 @@ async function runMeasuredReplace(candidateCount: number): Promise<{
 						},
 					},
 				},
-			}),
-			"utf8",
-		);
+			});
 		const scope = `persona:pair-cap-${candidateCount}`;
 		for (let index = 0; index < candidateCount; index++) {
 			seedProductionMemory(database.runtime.raw, {
@@ -244,7 +237,7 @@ async function runMeasuredReplace(candidateCount: number): Promise<{
 			"SNO_STATION_MEM_REM_EXPECTED_DB_PATH",
 			priorEnvironment.SNO_STATION_MEM_REM_EXPECTED_DB_PATH,
 		);
-		restoreEnvironment("OPENCLAW_STATE_DIR", priorEnvironment.OPENCLAW_STATE_DIR);
+		restoreEnvironment("SNO_PROFILE_DIR", priorEnvironment.SNO_PROFILE_DIR);
 		database.cleanup();
 		rmSync(stateRoot, { recursive: true, force: true });
 	}

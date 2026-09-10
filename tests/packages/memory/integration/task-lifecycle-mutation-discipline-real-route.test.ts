@@ -17,8 +17,8 @@ import {
 	type MemoryLlmRequest,
 } from "../../../../packages/sno-station-mem/src/model/llm-client";
 import { MemoryStore } from "../../../../packages/sno-station-mem/src/store/store";
-import { requireEnv } from "../helpers/env";
-import { createTestDb, createTestEmbedder } from "../helpers/test-db";
+import { requireEnv } from "../../../apps/mem-claw/helpers/env";
+import { createTestDb, createTestEmbedder } from "../../../apps/mem-claw/helpers/test-db";
 
 const repeatLabel = process.env.TASK_LIFECYCLE_REPEAT ?? "manual";
 const firstAt = Date.parse("2026-08-04T11:00:00.000Z");

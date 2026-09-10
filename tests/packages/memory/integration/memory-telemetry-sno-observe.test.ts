@@ -32,8 +32,8 @@ describe("memory telemetry sno-observe forwarding", () => {
 	let originalTelemetryKey: string | undefined;
 
 	beforeEach(() => {
-		originalTelemetryKey = process.env.SNO_MEM_TELEMETRY_HMAC_KEY;
-		process.env.SNO_MEM_TELEMETRY_HMAC_KEY = "memory-telemetry-observe-test-key";
+		originalTelemetryKey = process.env.SNO_STATION_MEM_TELEMETRY_HMAC_KEY;
+		process.env.SNO_STATION_MEM_TELEMETRY_HMAC_KEY = "memory-telemetry-observe-test-key";
 		const testDb = createTestDb();
 		dbPath = testDb.dbPath;
 		cleanup = testDb.cleanup;
@@ -44,9 +44,9 @@ describe("memory telemetry sno-observe forwarding", () => {
 		await store.close();
 		cleanup();
 		if (originalTelemetryKey === undefined) {
-			delete process.env.SNO_MEM_TELEMETRY_HMAC_KEY;
+			delete process.env.SNO_STATION_MEM_TELEMETRY_HMAC_KEY;
 		} else {
-			process.env.SNO_MEM_TELEMETRY_HMAC_KEY = originalTelemetryKey;
+			process.env.SNO_STATION_MEM_TELEMETRY_HMAC_KEY = originalTelemetryKey;
 		}
 	});
 

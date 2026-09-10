@@ -1,6 +1,6 @@
 # Sno Station Mem HTTP contract
 
-Contract revision: 1. Producer requirements version: 4.7.
+Contract revision: 1. Producer requirements version: 4.9.
 
 The authoritative runtime schemas are `inputSchemas` and `outputSchemas`, exported by
 `contract/index.ts`. `contractJsonSchemas(method)` publishes the corresponding JSON schemas.
@@ -149,3 +149,7 @@ Unbound clients use `<profile root>/sno-station-mem/<principal>/memory.sqlite` w
 binding. Bindings live at `<profile root>/station/sno-station-mem-<principal>.binding.json`.
 Pause/resume use the library's shared kill-switch file; workspace learning tools remain local
 file operations. Neither is a database fallback or an additional HTTP method.
+
+## Installation settings
+
+`bind <path>` accepts optional JSON on stdin with `embedding` and `extractionKeyRef`. It creates `<root>/station/sno-station-mem-<principal>.config.json` at mode 0600 with absolute storePath plus those fields. The key reference is the fixed external extraction secret name from the constants file; key material is rejected. REM resolves that reference from its process environment. This file is independent of per-skin init registrations. The binding is published last; a second binding is refused without changing either existing file.

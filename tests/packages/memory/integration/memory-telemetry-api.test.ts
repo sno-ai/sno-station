@@ -27,7 +27,7 @@ describe("memory telemetry local query API", () => {
 	let api: MemoryTelemetryApi;
 	let outbox: MemoryTelemetryUsageOutbox;
 	let auditStateRoot: string;
-	const previousStateDir = process.env.OPENCLAW_STATE_DIR;
+	const previousStateDir = process.env.SNO_PROFILE_DIR;
 	const keySet = {
 		enabled: true,
 		current: { version: 1, key: "api-test-key" },
@@ -36,7 +36,7 @@ describe("memory telemetry local query API", () => {
 
 	beforeEach(() => {
 		auditStateRoot = mkdtempSync(join(tmpdir(), "memory-telemetry-api-audit-"));
-		process.env.OPENCLAW_STATE_DIR = auditStateRoot;
+		process.env.SNO_PROFILE_DIR = auditStateRoot;
 		const testDb = createTestDb();
 		cleanup = testDb.cleanup;
 		store = new MemoryStore({
@@ -60,8 +60,8 @@ describe("memory telemetry local query API", () => {
 		await store.close();
 		cleanup();
 		rmSync(auditStateRoot, { recursive: true, force: true });
-		if (previousStateDir === undefined) delete process.env.OPENCLAW_STATE_DIR;
-		else process.env.OPENCLAW_STATE_DIR = previousStateDir;
+		if (previousStateDir === undefined) delete process.env.SNO_PROFILE_DIR;
+		else process.env.SNO_PROFILE_DIR = previousStateDir;
 	});
 
 	it("verifies the latest local receipt and reports tampering from primary-row hash drift", async () => {

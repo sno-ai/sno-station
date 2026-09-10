@@ -1,3 +1,4 @@
+import { writeTestInstallationConfig } from "../../../apps/mem-claw/helpers/module-config-fixture";
 /** @file rem-update-judgment-flow.test.ts
  * @purpose Drives the rewired one-call rem-update flow end to end over a REAL encrypted
  * SQLite store and the REAL executor, with the model reply supplied through the production
@@ -77,7 +78,7 @@ async function runUpdateWave(input: {
 	const prior = {
 		SNO_STATION_MEM_DATA_DIR_ROOT: process.env["SNO_STATION_MEM_DATA_DIR_ROOT"],
 		SNO_STATION_MEM_REM_EXPECTED_DB_PATH: process.env["SNO_STATION_MEM_REM_EXPECTED_DB_PATH"],
-		OPENCLAW_STATE_DIR: process.env["OPENCLAW_STATE_DIR"],
+		SNO_PROFILE_DIR: process.env["SNO_PROFILE_DIR"],
 	};
 	cleanups.push(() => {
 		for (const [name, value] of Object.entries(prior)) {
@@ -89,10 +90,8 @@ async function runUpdateWave(input: {
 	});
 	process.env["SNO_STATION_MEM_DATA_DIR_ROOT"] = dirname(database.dbPath);
 	process.env["SNO_STATION_MEM_REM_EXPECTED_DB_PATH"] = database.dbPath;
-	process.env["OPENCLAW_STATE_DIR"] = stateRoot;
-	writeFileSync(
-		join(stateRoot, "openclaw.json"),
-		JSON.stringify({
+	process.env["SNO_PROFILE_DIR"] = stateRoot;
+	writeTestInstallationConfig(stateRoot, {
 			plugins: {
 				entries: {
 					"sno-mem-claw": {
@@ -103,9 +102,7 @@ async function runUpdateWave(input: {
 					},
 				},
 			},
-		}),
-		"utf8",
-	);
+		});
 	const scope = `persona:judgment-${input.label}`;
 	const rowId = seedProductionMemory(database.runtime.raw, {
 		scope,

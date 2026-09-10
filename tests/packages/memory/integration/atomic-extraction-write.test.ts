@@ -16,7 +16,7 @@ import {
 	MemoryStore,
 } from "../../../../packages/sno-station-mem/src/store/store";
 import type { SqliteDatabaseLike } from "../../../../packages/sno-station-mem/src/store/sqlite-runtime";
-import { createTestDb, createTestEmbedder, type TestDb } from "../helpers/test-db";
+import { createTestDb, createTestEmbedder, type TestDb } from "../../../apps/mem-claw/helpers/test-db";
 
 const RUN_PARAMETERS: AtomicExtractionRunParameters = {
 	maxInputTokens: 4_096,

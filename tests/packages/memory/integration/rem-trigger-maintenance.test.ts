@@ -1,3 +1,4 @@
+import { writeTestInstallationConfig } from "../../../apps/mem-claw/helpers/module-config-fixture";
 /** @file rem-trigger-maintenance.test.ts
  * @purpose Proves the existing maintenance timer serializes a slow automatic REM evaluation.
  * @boundary Real encrypted SQLite, timer, filesystem discovery/audit, and local HTTP request.
@@ -24,7 +25,7 @@ describe("REM trigger maintenance timer", () => {
 	let root: string | undefined;
 	let server: Server | undefined;
 	const priorEnvironment = {
-		OPENCLAW_STATE_DIR: process.env["OPENCLAW_STATE_DIR"],
+		SNO_PROFILE_DIR: process.env["SNO_PROFILE_DIR"],
 		SNO_PROFILE_DIR: process.env["SNO_PROFILE_DIR"],
 	};
 
@@ -36,7 +37,7 @@ describe("REM trigger maintenance timer", () => {
 		}
 		database?.cleanup();
 		if (root) rmSync(root, { recursive: true, force: true });
-		restoreEnvironment("OPENCLAW_STATE_DIR", priorEnvironment.OPENCLAW_STATE_DIR);
+		restoreEnvironment("SNO_PROFILE_DIR", priorEnvironment.SNO_PROFILE_DIR);
 		restoreEnvironment("SNO_PROFILE_DIR", priorEnvironment.SNO_PROFILE_DIR);
 		database = undefined;
 		root = undefined;
@@ -56,11 +57,9 @@ describe("REM trigger maintenance timer", () => {
 		const backupDir = path.join(root, "backups");
 		mkdirSync(stateDir, { recursive: true });
 		mkdirSync(path.join(profileRoot, "station"), { recursive: true });
-		process.env["OPENCLAW_STATE_DIR"] = stateRoot;
+		process.env["SNO_PROFILE_DIR"] = stateRoot;
 		process.env["SNO_PROFILE_DIR"] = profileRoot;
-		writeFileSync(
-			path.join(stateRoot, "openclaw.json"),
-			JSON.stringify({
+		writeTestInstallationConfig(stateRoot, {
 				plugins: {
 					entries: {
 						"sno-mem-claw": {
@@ -72,9 +71,7 @@ describe("REM trigger maintenance timer", () => {
 						},
 					},
 				},
-			}),
-			"utf8",
-		);
+			});
 		const scope = "persona:maintenance-overlap";
 		const id = "maintenance-overlap-candidate";
 		database.runtime.raw

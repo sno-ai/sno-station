@@ -14,7 +14,7 @@ import type { Embedder } from "../../../../packages/sno-station-mem/src/engine/e
 import { llmRoutingConfigSchema } from "../../../../packages/sno-station-mem/src/contract/config/plugin-config-mode-schema";
 import { type AtomicExtractionRunParameters, MemoryStore } from "../../../../packages/sno-station-mem/src/store/store";
 import { applyStateCategoryMigration } from "../../../../packages/sno-station-mem/src/store/state-category-migration";
-import { createTestDb, createTestEmbedder, type TestDb } from "../helpers/test-db";
+import { createTestDb, createTestEmbedder, type TestDb } from "../../../apps/mem-claw/helpers/test-db";
 
 const PROJECT_ID = "group-crud-project-lead";
 const EXTRACTOR_VERSION = "atomic-v3-project-lead-test";

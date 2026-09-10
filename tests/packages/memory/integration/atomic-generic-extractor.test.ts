@@ -38,7 +38,7 @@ import {
 	type AtomicExtractionRunParameters,
 	MemoryStore,
 } from "../../../../packages/sno-station-mem/src/store/store";
-import { createTestDb, createTestEmbedder, type TestDb } from "../helpers/test-db";
+import { createTestDb, createTestEmbedder, type TestDb } from "../../../apps/mem-claw/helpers/test-db";
 
 const ATTRIBUTE_DICTIONARY_PATH = fileURLToPath(
 	new URL("../../../../packages/sno-station-mem/config/attribute-dictionary.json", import.meta.url),

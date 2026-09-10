@@ -27,8 +27,8 @@ import {
 import type { LlmClient } from "../../../../packages/sno-station-mem/src/model/llm-client";
 import { MemoryStore, TaskLifecycleStaleResolutionError } from "../../../../packages/sno-station-mem/src/store/store";
 import { _provisionKey } from "../../../../packages/sno-station-core-crypto/src/dek.ts";
-import { createTestDb, createTestEmbedder, type TestDb } from "../helpers/test-db";
-import { createTestLlmClient } from "../helpers/llm-client";
+import { createTestDb, createTestEmbedder, type TestDb } from "../../../apps/mem-claw/helpers/test-db";
+import { createTestLlmClient } from "../../../apps/mem-claw/helpers/llm-client";
 
 const projectId = "lifecycle-hard-cut";
 const productionSourceRoot = new URL("../../../../apps/mem-claw/src/", import.meta.url);
@@ -53,8 +53,8 @@ afterEach(() => {
 	fixture = undefined;
 	if (priorKeyFile === undefined) delete process.env.SNO_STATION_CORE_KEY_FILE;
 	else process.env.SNO_STATION_CORE_KEY_FILE = priorKeyFile;
-	if (priorXdgConfigHome === undefined) delete process.env.XDG_CONFIG_HOME;
-	else process.env.XDG_CONFIG_HOME = priorXdgConfigHome;
+	if (priorXdgConfigHome === undefined) delete process.env.SNO_STATION_MEM_XDG_CONFIG_HOME;
+	else process.env.SNO_STATION_MEM_XDG_CONFIG_HOME = priorXdgConfigHome;
 	if (cryptoDirectory) rmSync(cryptoDirectory, { recursive: true, force: true });
 	cryptoDirectory = undefined;
 });
@@ -64,9 +64,9 @@ function setup(): { store: MemoryStore; sqlite: TestDb["sqlite"] } {
 		join(homedir(), ".local", "state", "mem-claw-lifecycle-test-"),
 	);
 	priorKeyFile = process.env.SNO_STATION_CORE_KEY_FILE;
-	priorXdgConfigHome = process.env.XDG_CONFIG_HOME;
+	priorXdgConfigHome = process.env.SNO_STATION_MEM_XDG_CONFIG_HOME;
 	process.env.SNO_STATION_CORE_KEY_FILE = join(cryptoDirectory, "key");
-	process.env.XDG_CONFIG_HOME = join(cryptoDirectory, "xdg");
+	process.env.SNO_STATION_MEM_XDG_CONFIG_HOME = join(cryptoDirectory, "xdg");
 	_provisionKey();
 	fixture = createTestDb();
 	store = new MemoryStore({ dbPath: fixture.dbPath, embedder });

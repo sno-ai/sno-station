@@ -15,7 +15,7 @@ import type {
 	AtomicExtractionTurn,
 } from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-extraction-reply";
 import { MemoryStore } from "../../../../packages/sno-station-mem/src/store/store";
-import { createTestDb, createTestEmbedder, type TestDb } from "../helpers/test-db";
+import { createTestDb, createTestEmbedder, type TestDb } from "../../../apps/mem-claw/helpers/test-db";
 
 const TURNS: AtomicExtractionTurn[] = [
 	{

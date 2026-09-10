@@ -13,7 +13,7 @@ import {
 import { applyAtomicMemoryCutoverMigration } from "../../../../packages/sno-station-mem/src/store/atomic-memory-cutover-sql";
 import { MemoryStore } from "../../../../packages/sno-station-mem/src/store/store";
 import { openSqliteDatabase, type SqliteDatabaseLike } from "../../../../packages/sno-station-mem/src/store/sqlite-runtime";
-import { createTestDb, createTestEmbedder, type TestDb } from "../helpers/test-db";
+import { createTestDb, createTestEmbedder, type TestDb } from "../../../apps/mem-claw/helpers/test-db";
 
 const PROJECT_ID = "atomic-cutover-project";
 const INGESTED_AT = Date.parse("2030-01-01T00:00:00.000Z");

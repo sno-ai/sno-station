@@ -18,8 +18,8 @@ import {
 import { DEFAULT_RETRIEVAL_CONFIG } from "../../../../packages/sno-station-mem/src/engine/retrieval/retriever";
 import type { MemoryEntry } from "../../../../packages/sno-station-mem/src/engine/shared/types";
 import { MemoryStore } from "../../../../packages/sno-station-mem/src/store/store";
-import { createTestDb, createTestEmbedder, type TestDb } from "../helpers/test-db";
-import { routeTestTask } from "./task-lifecycle-test-route";
+import { createTestDb, createTestEmbedder, type TestDb } from "../../../apps/mem-claw/helpers/test-db";
+import { routeTestTask } from "../../../apps/mem-claw/integration/task-lifecycle-test-route";
 
 const REFERENCE_TIME_MS = Date.parse("2026-07-29T17:00:00.000Z");
 const PROJECT_ID = "query-manifest-capture-integration";

@@ -401,7 +401,7 @@ async function runChassisJob(
 				throw new Error(reason);
 			}
 			if (configSource === undefined) {
-				throw new Error("configuration:env:SNO_REM_CONFIG_JSON:missing");
+				throw new Error("configuration:env:SNO_STATION_MEM_REM_CONFIG_JSON:missing");
 			}
 			const cleanRefusalReasons: string[] = [];
 			const enabledOperations: RemBuiltOperationType[] = [];

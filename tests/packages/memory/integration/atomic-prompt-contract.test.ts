@@ -27,7 +27,7 @@ import {
 	type AtomicExtractionRunParameters,
 	MemoryStore,
 } from "../../../../packages/sno-station-mem/src/store/store";
-import { createTestDb, createTestEmbedder } from "../helpers/test-db";
+import { createTestDb, createTestEmbedder } from "../../../apps/mem-claw/helpers/test-db";
 
 const SAFE_TURNS: AtomicExtractionTurn[] = [
 	{ role: "system", content: "Keep every supplied line." },

@@ -81,7 +81,7 @@ describe("mem-claw signed LLMIx registry", () => {
 	it("rejects tampered generated registry output", async () => {
 		const tempRoot = mkdtempSync(join(tmpdir(), "mem-claw-llmix-"));
 		tempRoots.push(tempRoot);
-		cpSync(resolve(repoRoot, "apps/mem-claw/config"), join(tempRoot, "config"), {
+		cpSync(resolve(repoRoot, "packages/sno-station-mem/config"), join(tempRoot, "config"), {
 			recursive: true,
 		});
 		const current = JSON.parse(

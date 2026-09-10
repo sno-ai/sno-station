@@ -18,7 +18,7 @@ import {
 import type { AtomicSubjectGuardTransport } from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-subject-guard";
 import type { Embedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client";
 import { MemoryStore } from "../../../../packages/sno-station-mem/src/store/store";
-import { createTestDb, createTestEmbedder, type TestDb } from "../helpers/test-db";
+import { createTestDb, createTestEmbedder, type TestDb } from "../../../apps/mem-claw/helpers/test-db";
 
 const PROJECT_ID = "atomic-retirement-project";
 const SESSION_DATE_TIME = "2026-09-03T20:15:00.000Z";

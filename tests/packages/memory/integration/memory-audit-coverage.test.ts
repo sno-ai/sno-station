@@ -33,7 +33,7 @@ interface AuditRecord {
 const stores: ObservableMemoryStore[] = [];
 const cleanups: Array<() => void> = [];
 const stateRoots: string[] = [];
-const previousStateDir = process.env.OPENCLAW_STATE_DIR;
+const previousStateDir = process.env.SNO_PROFILE_DIR;
 let embedder: Embedder;
 
 beforeAll(async () => {
@@ -43,7 +43,7 @@ beforeAll(async () => {
 beforeEach(() => {
 	const stateRoot = mkdtempSync(join(tmpdir(), "mem-claw-audit-coverage-"));
 	stateRoots.push(stateRoot);
-	process.env.OPENCLAW_STATE_DIR = stateRoot;
+	process.env.SNO_PROFILE_DIR = stateRoot;
 });
 
 afterEach(async () => {
@@ -52,8 +52,8 @@ afterEach(async () => {
 	for (const stateRoot of stateRoots.splice(0)) {
 		rmSync(stateRoot, { recursive: true, force: true });
 	}
-	if (previousStateDir === undefined) delete process.env.OPENCLAW_STATE_DIR;
-	else process.env.OPENCLAW_STATE_DIR = previousStateDir;
+	if (previousStateDir === undefined) delete process.env.SNO_PROFILE_DIR;
+	else process.env.SNO_PROFILE_DIR = previousStateDir;
 });
 
 describe("production memory audit coverage", () => {

@@ -15,7 +15,7 @@ import {
 	type SqliteDatabaseLike,
 	type SqliteRuntimeHandle,
 } from "../../../../packages/sno-station-mem/src/store/sqlite-runtime";
-import { createTestDb, createTestEmbedder } from "../helpers/test-db";
+import { createTestDb, createTestEmbedder } from "../../../apps/mem-claw/helpers/test-db";
 
 const MIGRATION_PATH = fileURLToPath(
 	new URL("../../../../packages/sno-station-mem/drizzle/0030_atomic_memory_additive.sql", import.meta.url),

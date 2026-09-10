@@ -1,3 +1,4 @@
+import { writeTestInstallationConfig } from "../../../apps/mem-claw/helpers/module-config-fixture";
 /** @file rem-job-identity-contention.test.ts
  * @purpose Proves the F-B job-identity contract survives a contended close and the wave continues.
  * @boundary The real mutation executor and the real conflict port over a real encrypted SQLite file.
@@ -101,15 +102,13 @@ describe("F-B job identity under contention", () => {
 		const priorEnvironment = {
 			SNO_STATION_MEM_DATA_DIR_ROOT: process.env["SNO_STATION_MEM_DATA_DIR_ROOT"],
 			SNO_STATION_MEM_REM_EXPECTED_DB_PATH: process.env["SNO_STATION_MEM_REM_EXPECTED_DB_PATH"],
-			OPENCLAW_STATE_DIR: process.env["OPENCLAW_STATE_DIR"],
+			SNO_PROFILE_DIR: process.env["SNO_PROFILE_DIR"],
 		};
 		try {
 			process.env["SNO_STATION_MEM_DATA_DIR_ROOT"] = dirname(database.dbPath);
 			process.env["SNO_STATION_MEM_REM_EXPECTED_DB_PATH"] = database.dbPath;
-			process.env["OPENCLAW_STATE_DIR"] = stateRoot;
-			writeFileSync(
-				join(stateRoot, "openclaw.json"),
-				JSON.stringify({
+			process.env["SNO_PROFILE_DIR"] = stateRoot;
+			writeTestInstallationConfig(stateRoot, {
 					plugins: {
 						entries: {
 							"sno-mem-claw": {
@@ -120,9 +119,7 @@ describe("F-B job identity under contention", () => {
 							},
 						},
 					},
-				}),
-				"utf8",
-			);
+				});
 			const scope = "persona:fb-job-identity";
 			for (let index = 0; index < 4; index += 1) {
 				seedProductionMemory(database.runtime.raw, {
@@ -250,7 +247,7 @@ describe("F-B job identity under contention", () => {
 			for (const [name, value] of [
 				["SNO_STATION_MEM_DATA_DIR_ROOT", priorEnvironment.SNO_STATION_MEM_DATA_DIR_ROOT],
 				["SNO_STATION_MEM_REM_EXPECTED_DB_PATH", priorEnvironment.SNO_STATION_MEM_REM_EXPECTED_DB_PATH],
-				["OPENCLAW_STATE_DIR", priorEnvironment.OPENCLAW_STATE_DIR],
+				["SNO_PROFILE_DIR", priorEnvironment.SNO_PROFILE_DIR],
 			] as const) {
 				if (value === undefined) delete process.env[name];
 				else process.env[name] = value;

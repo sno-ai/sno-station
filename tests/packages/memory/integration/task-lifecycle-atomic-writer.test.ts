@@ -27,7 +27,7 @@ import {
 	type TaskLifecycleWriteInput,
 	type TaskLifecycleWriteResult,
 } from "../../../../packages/sno-station-mem/src/store/store";
-import { createTestDb, createTestEmbedder, type TestDb } from "../helpers/test-db";
+import { createTestDb, createTestEmbedder, type TestDb } from "../../../apps/mem-claw/helpers/test-db";
 
 const projectId = "lifecycle-writer";
 const firstAt = 2_000_000_000_000;

@@ -27,7 +27,7 @@ const BASE_TS = Date.UTC(2026, 4, 25, 9, 0, 0);
 
 let testEmbedder: Embedder;
 let auditStateRoot: string;
-const previousStateDir = process.env.OPENCLAW_STATE_DIR;
+const previousStateDir = process.env.SNO_PROFILE_DIR;
 
 beforeAll(async () => {
 	testEmbedder = await createTestEmbedder();
@@ -35,13 +35,13 @@ beforeAll(async () => {
 
 beforeEach(() => {
 	auditStateRoot = mkdtempSync(join(tmpdir(), "memory-kinds-cutover-audit-"));
-	process.env.OPENCLAW_STATE_DIR = auditStateRoot;
+	process.env.SNO_PROFILE_DIR = auditStateRoot;
 });
 
 afterEach(() => {
 	rmSync(auditStateRoot, { recursive: true, force: true });
-	if (previousStateDir === undefined) delete process.env.OPENCLAW_STATE_DIR;
-	else process.env.OPENCLAW_STATE_DIR = previousStateDir;
+	if (previousStateDir === undefined) delete process.env.SNO_PROFILE_DIR;
+	else process.env.SNO_PROFILE_DIR = previousStateDir;
 });
 
 function completedAuditOperations(): string[] {
