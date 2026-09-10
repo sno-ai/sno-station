@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { projectProfileCandidates } from "../../../../apps/mem-claw/src/extraction/b-profile-projection.ts";
+import { projectProfileCandidates } from "../../../../packages/sno-station-mem/src/engine/extraction/b-profile-projection.ts";
 
 /**
  * The causal proof for the slug-addressing repair.
