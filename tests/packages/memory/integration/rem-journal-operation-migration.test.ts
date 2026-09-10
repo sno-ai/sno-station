@@ -7,10 +7,10 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
 
-import { createRemRepository } from "../../../../packages/rem-core/src/index.ts";
-import type { Embedder } from "../../../../apps/mem-claw/src/extraction/embedding-provider-client.ts";
-import { MemoryStore } from "../../../../apps/mem-claw/src/storage/store.ts";
-import { createTestDb, createTestEmbedder, type TestDb } from "../helpers/test-db.ts";
+import { createRemRepository } from "../../../../packages/sno-station-mem/src/engine/rem/index.ts";
+import type { Embedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client.ts";
+import { MemoryStore } from "../../../../packages/sno-station-mem/src/store/store.ts";
+import { createTestDb, createTestEmbedder, type TestDb } from "../../../apps/mem-claw/helpers/test-db.ts";
 
 interface JournalRow {
 	sequence: number;
@@ -27,7 +27,7 @@ interface JournalRow {
 }
 
 const PRE_RENAME_SCHEMA = readFileSync(
-	resolve(import.meta.dirname, "../fixtures/rem-journal-pre-rename-schema.sql"),
+	resolve(import.meta.dirname, "../../../apps/mem-claw/fixtures/rem-journal-pre-rename-schema.sql"),
 	"utf8",
 );
 

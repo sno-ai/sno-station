@@ -12,16 +12,16 @@ import { describe, expect, it } from "vitest";
 import {
 	installRemSchema,
 	parseRemOperationalConfiguration,
-} from "../../../../packages/rem-core/src/index.ts";
+} from "../../../../packages/sno-station-mem/src/engine/rem/index.ts";
 import {
 	createRemModelStageResponsePort,
 	runRemBatchJob,
-} from "../../../../apps/mem-claw/src/sidecar/rem-batch-executor.ts";
-import { createMemClawRemPorts } from "../../../../apps/mem-claw/src/storage/rem-sqlite-adapter.ts";
-import { createLlmClient } from "../../../../apps/mem-claw/src/shared/llm-client.ts";
-import { createRemOwnerDecidedOperationalConfiguration } from "../helpers/rem-entry-config-fixture.ts";
-import { seedProductionMemory } from "../helpers/rem-production-entry-fixture.ts";
-import { createTestDb, type TestDb } from "../helpers/test-db.ts";
+} from "../../../../packages/sno-station-mem/src/sidecar/rem-batch-executor.ts";
+import { createMemClawRemPorts } from "../../../../packages/sno-station-mem/src/store/rem-sqlite-adapter.ts";
+import { createLlmClient } from "../../../../packages/sno-station-mem/src/model/llm-client.ts";
+import { createRemOwnerDecidedOperationalConfiguration } from "../../../apps/mem-claw/helpers/rem-entry-config-fixture.ts";
+import { seedProductionMemory } from "../../../apps/mem-claw/helpers/rem-production-entry-fixture.ts";
+import { createTestDb, type TestDb } from "../../../apps/mem-claw/helpers/test-db.ts";
 
 const JOB_ID = "rem-wave-fb-job-identity";
 const JOB_TYPE = "rem-replace" as const;
@@ -99,13 +99,13 @@ describe("F-B job identity under contention", () => {
 		const database = createTestDb();
 		const stateRoot = mkdtempSync(join(tmpdir(), "rem-fb-job-identity-"));
 		const priorEnvironment = {
-			MEM_CLAW_DATA_DIR_ROOT: process.env["MEM_CLAW_DATA_DIR_ROOT"],
-			MEM_CLAW_REM_EXPECTED_DB_PATH: process.env["MEM_CLAW_REM_EXPECTED_DB_PATH"],
+			SNO_STATION_MEM_DATA_DIR_ROOT: process.env["SNO_STATION_MEM_DATA_DIR_ROOT"],
+			SNO_STATION_MEM_REM_EXPECTED_DB_PATH: process.env["SNO_STATION_MEM_REM_EXPECTED_DB_PATH"],
 			OPENCLAW_STATE_DIR: process.env["OPENCLAW_STATE_DIR"],
 		};
 		try {
-			process.env["MEM_CLAW_DATA_DIR_ROOT"] = dirname(database.dbPath);
-			process.env["MEM_CLAW_REM_EXPECTED_DB_PATH"] = database.dbPath;
+			process.env["SNO_STATION_MEM_DATA_DIR_ROOT"] = dirname(database.dbPath);
+			process.env["SNO_STATION_MEM_REM_EXPECTED_DB_PATH"] = database.dbPath;
 			process.env["OPENCLAW_STATE_DIR"] = stateRoot;
 			writeFileSync(
 				join(stateRoot, "openclaw.json"),
@@ -248,8 +248,8 @@ describe("F-B job identity under contention", () => {
 			expect(attempts.every((attempt) => attempt.outcome === "succeeded")).toBe(true);
 		} finally {
 			for (const [name, value] of [
-				["MEM_CLAW_DATA_DIR_ROOT", priorEnvironment.MEM_CLAW_DATA_DIR_ROOT],
-				["MEM_CLAW_REM_EXPECTED_DB_PATH", priorEnvironment.MEM_CLAW_REM_EXPECTED_DB_PATH],
+				["SNO_STATION_MEM_DATA_DIR_ROOT", priorEnvironment.SNO_STATION_MEM_DATA_DIR_ROOT],
+				["SNO_STATION_MEM_REM_EXPECTED_DB_PATH", priorEnvironment.SNO_STATION_MEM_REM_EXPECTED_DB_PATH],
 				["OPENCLAW_STATE_DIR", priorEnvironment.OPENCLAW_STATE_DIR],
 			] as const) {
 				if (value === undefined) delete process.env[name];
