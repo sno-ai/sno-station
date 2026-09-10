@@ -7,13 +7,13 @@ import {
 	decideRemUpdateRelationFromReply,
 	decideRemUpdateVerification,
 	renderRemUpdateRelationJudgmentPrompt,
-} from "../../../../packages/rem-core/src/index.ts";
-import { REM_UPDATE_JUDGMENT_SKILL } from "../../../../apps/mem-claw/src/sidecar/rem-update-judgment-skill.ts";
+} from "../../../../packages/sno-station-mem/src/engine/rem/index.ts";
+import { REM_UPDATE_JUDGMENT_SKILL } from "../../../../packages/sno-station-mem/src/sidecar/rem-update-judgment-skill.ts";
 import {
 	seedProductionMemory,
 	startRemProductionEntryFixture,
-} from "../helpers/rem-production-entry-fixture.ts";
-import { startRemScriptedModelFixture } from "../helpers/rem-scripted-model-fixture.ts";
+} from "../../../apps/mem-claw/helpers/rem-production-entry-fixture.ts";
+import { startRemScriptedModelFixture } from "../../../apps/mem-claw/helpers/rem-scripted-model-fixture.ts";
 
 const repoRoot = resolve(import.meta.dirname, "../../../..");
 const judgmentSource = readFileSync(
@@ -21,7 +21,7 @@ const judgmentSource = readFileSync(
 	"utf8",
 );
 const executorSource = readFileSync(
-	resolve(repoRoot, "apps/mem-claw/src/sidecar/rem-batch-executor.ts"),
+	resolve(repoRoot, "packages/sno-station-mem/src/sidecar/rem-batch-executor.ts"),
 	"utf8",
 );
 

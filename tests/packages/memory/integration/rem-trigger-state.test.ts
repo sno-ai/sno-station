@@ -14,7 +14,7 @@ import {
 	loadRemTriggerState,
 	remTriggerStatePath,
 	writeRemTriggerStateAtomic,
-} from "../../../../apps/mem-claw/src/sidecar/rem-trigger-state.ts";
+} from "../../../../packages/sno-station-mem/src/sidecar/rem-trigger-state.ts";
 
 describe("REM trigger durable state", () => {
 	let stateDir: string | undefined;
