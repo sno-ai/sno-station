@@ -30,8 +30,8 @@ const scriptPath = resolve(
 	"..",
 	"..",
 	"..",
-	"apps",
-	"mem-claw",
+	"packages",
+	"sno-station-mem",
 	"scripts",
 	"jsonl_distill.py",
 );
