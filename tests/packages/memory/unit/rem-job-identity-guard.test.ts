@@ -15,7 +15,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { assertJobIdentity } from "../../../../packages/rem-core/src/types.ts";
+import { assertJobIdentity } from "../../../../packages/sno-station-mem/src/engine/rem/types.ts";
 
 describe("assertJobIdentity", () => {
 	it("accepts every operation type the system defines", () => {
