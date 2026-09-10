@@ -14,11 +14,11 @@
  */
 
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import type { Embedder } from "../../../../apps/mem-claw/src/extraction/embedding-provider-client.ts";
-import { runMappedMemoryLoop } from "../../../../apps/mem-claw/src/reflection/reflection-mapped-memory-loop.ts";
-import { MemoryStore } from "../../../../apps/mem-claw/src/storage/store.ts";
-import { createTestLlmClient } from "../helpers/llm-client.ts";
-import { createTestDb, createTestEmbedder } from "../helpers/test-db.ts";
+import type { Embedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client.ts";
+import { runMappedMemoryLoop } from "../../../../packages/sno-station-mem/src/engine/reflection/reflection-mapped-memory-loop.ts";
+import { MemoryStore } from "../../../../packages/sno-station-mem/src/store/store.ts";
+import { createTestLlmClient } from "../../../apps/mem-claw/helpers/llm-client.ts";
+import { createTestDb, createTestEmbedder } from "../../../apps/mem-claw/helpers/test-db.ts";
 
 let testEmbedder: Embedder;
 let diagnosticWrites: ReturnType<typeof vi.spyOn>;

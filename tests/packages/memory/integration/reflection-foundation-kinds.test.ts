@@ -1,14 +1,14 @@
 /** Real LLM + real ONNX embedder + real encrypted SQLite. Missing deps = FAIL. */
 
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
-import type { Embedder } from "../../../../apps/mem-claw/src/extraction/embedding-provider-client.ts";
-import { parseInsightMetadata } from "../../../../apps/mem-claw/src/extraction/memory-metadata-codec.ts";
-import { runMappedMemoryLoop } from "../../../../apps/mem-claw/src/reflection/reflection-mapped-memory-loop.ts";
-import { storeReflectionEntries } from "../../../../apps/mem-claw/src/reflection/reflection-store-writer.ts";
-import { createLlmClient } from "../../../../apps/mem-claw/src/shared/llm-client.ts";
-import type { MemoryEntry } from "../../../../apps/mem-claw/src/shared/types.ts";
-import { MemoryStore } from "../../../../apps/mem-claw/src/storage/store.ts";
-import { createTestDb, createTestEmbedder } from "../helpers/test-db.ts";
+import type { Embedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client.ts";
+import { parseInsightMetadata } from "../../../../packages/sno-station-mem/src/engine/extraction/memory-metadata-codec.ts";
+import { runMappedMemoryLoop } from "../../../../packages/sno-station-mem/src/engine/reflection/reflection-mapped-memory-loop.ts";
+import { storeReflectionEntries } from "../../../../packages/sno-station-mem/src/engine/reflection/reflection-store-writer.ts";
+import { createLlmClient } from "../../../../packages/sno-station-mem/src/model/llm-client.ts";
+import type { MemoryEntry } from "../../../../packages/sno-station-mem/src/engine/shared/types.ts";
+import { MemoryStore } from "../../../../packages/sno-station-mem/src/store/store.ts";
+import { createTestDb, createTestEmbedder } from "../../../apps/mem-claw/helpers/test-db.ts";
 
 const LLM = createLlmClient({ preset: "mem_claw/sno_ai_extract", timeoutMs: 60_000 });
 const OLD_CATEGORIES = new Set(["identity", "preference", "entity", "event"]);
