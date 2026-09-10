@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
 	selectEndpointPreset,
-} from "../../../../apps/mem-claw/src/shared/llm-endpoint-resolution.ts";
-import type { ResolvedLlmConfig } from "../../../../apps/mem-claw/src/shared/llm-client-types.ts";
-import { resolveProviderApiKey } from "../../../../apps/mem-claw/src/shared/llm-provider-transport.ts";
-import { materializeBundledLlmixEndpoint } from "../../../../apps/mem-claw/src/shared/llmix-registry.ts";
+} from "../../../../packages/sno-station-mem/src/model/llm-endpoint-resolution.ts";
+import type { ResolvedLlmConfig } from "../../../../packages/sno-station-mem/src/model/llm-client-types.ts";
+import { resolveProviderApiKey } from "../../../../packages/sno-station-mem/src/model/llm-provider-transport.ts";
+import { materializeBundledLlmixEndpoint } from "../../../../packages/sno-station-mem/src/model/llmix-registry.ts";
 
 function snoPreset(path: string): ResolvedLlmConfig {
 	return {
