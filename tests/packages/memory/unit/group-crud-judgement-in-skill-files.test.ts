@@ -13,14 +13,14 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
-import { REM_UPDATE_JUDGMENT_SKILL } from "../../../../apps/mem-claw/src/sidecar/rem-update-judgment-skill.ts";
+import { REM_UPDATE_JUDGMENT_SKILL } from "../../../../packages/sno-station-mem/src/sidecar/rem-update-judgment-skill.ts";
 
 const REPO_ROOT = resolve(import.meta.dirname, "../../../..");
-const SKILLS = join(REPO_ROOT, "apps/mem-claw/skills");
+const SKILLS = join(REPO_ROOT, "packages/sno-station-mem/skills");
 const GROUP_CLOSURE = join(SKILLS, "judge-group-closure/SKILL.md");
 const ENTITY_IDENTITY = join(SKILLS, "resolve-entity-identity/SKILL.md");
 const EXTRACTION = join(SKILLS, "extract-atomic-memory/SKILL.md");
-const JUDGMENT_MODULE = join(REPO_ROOT, "apps/mem-claw/src/sidecar/rem-update-judgment-skill.ts");
+const JUDGMENT_MODULE = join(REPO_ROOT, "packages/sno-station-mem/src/sidecar/rem-update-judgment-skill.ts");
 
 function read(path: string): string {
 	return readFileSync(path, "utf8");
@@ -50,7 +50,7 @@ function executableLines(path: string): string {
 
 /** Every TypeScript source of the engine and the shared REM package. */
 function engineSources(): string[] {
-	const roots = [join(REPO_ROOT, "apps/mem-claw/src"), join(REPO_ROOT, "packages/rem-core/src")];
+	const roots = [join(REPO_ROOT, "packages/sno-station-mem/src"), join(REPO_ROOT, "apps/mem-claw/src")];
 	const out: string[] = [];
 	const walk = (dir: string): void => {
 		for (const entry of readdirSync(dir, { withFileTypes: true })) {

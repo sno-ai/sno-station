@@ -3,7 +3,7 @@ import {
 	DEFAULT_LOCALE,
 	isSupportedLocale,
 	SUPPORTED_LOCALES,
-} from "../../../../apps/mem-claw/src/i18n/locales.ts";
+} from "../../../../packages/sno-station-mem/src/engine/i18n/locales.ts";
 
 describe("i18n locales", () => {
 	it("includes the 9 P0 locales", () => {
