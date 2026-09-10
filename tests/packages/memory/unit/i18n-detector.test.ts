@@ -5,10 +5,10 @@ import {
 	detectLocale,
 	detectorFallbackLocale,
 	detectorHealth,
-} from "../../../../apps/mem-claw/src/i18n/detector.ts";
-import { SUPPORTED_LOCALES } from "../../../../apps/mem-claw/src/i18n/locales.ts";
+} from "../../../../packages/sno-station-mem/src/engine/i18n/detector.ts";
+import { SUPPORTED_LOCALES } from "../../../../packages/sno-station-mem/src/engine/i18n/locales.ts";
 
-const FIXTURE_DIR = fileURLToPath(new URL("../i18n/fixtures/", import.meta.url));
+const FIXTURE_DIR = fileURLToPath(new URL("../../../apps/mem-claw/i18n/fixtures/", import.meta.url));
 
 function loadFixture(locale: string): string {
 	return readFileSync(`${FIXTURE_DIR}${locale}.txt`, "utf8").trim();
