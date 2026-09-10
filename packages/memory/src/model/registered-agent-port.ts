@@ -1,10 +1,18 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { createHash } from "node:crypto";
+import { z } from "zod";
 import { ContractError, type DegradedReason } from "../contract/error";
 import type { Registration } from "../contract/inputs";
 import type { AgentLlmCompletion, AgentLlmPort, AgentLlmRequest } from "./agent-llm-port";
 
 const CALLBACK_TIMEOUT_MS = 120_000;
+const CATEGORIES = ["auth", "credential-expired", "credential-revoked", "exhausted", "throttle", "transport", "unknown"] as const;
+/** Failure categories after which retrying the same endpoint cannot succeed. */
+const TERMINAL_CATEGORIES: ReadonlySet<string> = new Set(["auth", "credential-expired", "credential-revoked", "exhausted", "transport"]);
+const relayedFailureSchema = z.object({ error: z.discriminatedUnion("kind", [
+	z.object({ kind: z.literal("cancelled"), reason: z.string() }),
+	z.object({ kind: z.literal("error"), category: z.enum(CATEGORIES), message: z.string() }),
+]) });
 
 export class RegisteredAgentPort implements AgentLlmPort {
 	private readonly failures = new AsyncLocalStorage<Map<string, DegradedReason>>();
@@ -47,6 +55,11 @@ export class RegisteredAgentPort implements AgentLlmPort {
 				}),
 			});
 			if (!response.ok) {
+				const relayed = await relayedFailure(response);
+				if (relayed) {
+					failures?.set(identity, relayed.kind === "cancelled" ? "timeout" : TERMINAL_CATEGORIES.has(relayed.category) ? "no-agent-endpoint" : "engine-failed");
+					return relayed;
+				}
 				failures?.set(identity, response.status === 404 || response.status === 503 ? "no-agent-endpoint" : "engine-failed");
 				return { kind: "error", category: response.status === 401 || response.status === 403 ? "auth" : response.status === 429 ? "throttle" : "transport", message: `registered model HTTP ${response.status}` };
 			}
@@ -64,6 +77,16 @@ export class RegisteredAgentPort implements AgentLlmPort {
 			return signal.aborted ? { kind: "cancelled", reason: "deadline" }
 				: { kind: "error", category: "transport", message: "no-agent-endpoint" };
 		}
+	}
+}
+
+/** A registered callback relays the binding's typed failure in its body; anything else is a plain HTTP failure. */
+async function relayedFailure(response: Response): Promise<Exclude<AgentLlmCompletion, { kind: "ok" }> | undefined> {
+	try {
+		const parsed = relayedFailureSchema.safeParse(await response.json());
+		return parsed.success ? parsed.data.error : undefined;
+	} catch {
+		return undefined;
 	}
 }
 
