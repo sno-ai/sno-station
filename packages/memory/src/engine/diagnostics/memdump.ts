@@ -151,9 +151,9 @@ function readRelocationManifest(path: string): RelocationManifest {
 function installRelocatedManifest(manifestPath: string, dbPath: string): () => void {
 	const manifest = readRelocationManifest(manifestPath);
 	const temporaryConfigHome = mkdtempSync(resolve(tmpdir(), "sno-memdump-config-"));
-	const previousConfigHome = process.env.SNO_STATION_MEM_XDG_CONFIG_HOME;
+	const previousConfigHome = process.env.XDG_CONFIG_HOME;
 	try {
-		process.env.SNO_STATION_MEM_XDG_CONFIG_HOME = temporaryConfigHome;
+		process.env.XDG_CONFIG_HOME = temporaryConfigHome;
 		const relocatedManifestPath = resolveConfigPaths().manifestFile;
 		mkdirSync(dirname(relocatedManifestPath), { recursive: true, mode: 0o700 });
 		writeFileSync(
@@ -165,14 +165,14 @@ function installRelocatedManifest(manifestPath: string, dbPath: string): () => v
 			{ mode: 0o644 },
 		);
 	} catch (error) {
-		if (previousConfigHome === undefined) delete process.env.SNO_STATION_MEM_XDG_CONFIG_HOME;
-		else process.env.SNO_STATION_MEM_XDG_CONFIG_HOME = previousConfigHome;
+		if (previousConfigHome === undefined) delete process.env.XDG_CONFIG_HOME;
+		else process.env.XDG_CONFIG_HOME = previousConfigHome;
 		rmSync(temporaryConfigHome, { recursive: true, force: true });
 		throw error;
 	}
 	return () => {
-		if (previousConfigHome === undefined) delete process.env.SNO_STATION_MEM_XDG_CONFIG_HOME;
-		else process.env.SNO_STATION_MEM_XDG_CONFIG_HOME = previousConfigHome;
+		if (previousConfigHome === undefined) delete process.env.XDG_CONFIG_HOME;
+		else process.env.XDG_CONFIG_HOME = previousConfigHome;
 		rmSync(temporaryConfigHome, { recursive: true, force: true });
 	};
 }

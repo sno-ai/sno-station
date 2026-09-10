@@ -53,8 +53,8 @@ afterEach(() => {
 	fixture = undefined;
 	if (priorKeyFile === undefined) delete process.env.SNO_STATION_CORE_KEY_FILE;
 	else process.env.SNO_STATION_CORE_KEY_FILE = priorKeyFile;
-	if (priorXdgConfigHome === undefined) delete process.env.SNO_STATION_MEM_XDG_CONFIG_HOME;
-	else process.env.SNO_STATION_MEM_XDG_CONFIG_HOME = priorXdgConfigHome;
+	if (priorXdgConfigHome === undefined) delete process.env.XDG_CONFIG_HOME;
+	else process.env.XDG_CONFIG_HOME = priorXdgConfigHome;
 	if (cryptoDirectory) rmSync(cryptoDirectory, { recursive: true, force: true });
 	cryptoDirectory = undefined;
 });
@@ -64,9 +64,9 @@ function setup(): { store: MemoryStore; sqlite: TestDb["sqlite"] } {
 		join(homedir(), ".local", "state", "mem-claw-lifecycle-test-"),
 	);
 	priorKeyFile = process.env.SNO_STATION_CORE_KEY_FILE;
-	priorXdgConfigHome = process.env.SNO_STATION_MEM_XDG_CONFIG_HOME;
+	priorXdgConfigHome = process.env.XDG_CONFIG_HOME;
 	process.env.SNO_STATION_CORE_KEY_FILE = join(cryptoDirectory, "key");
-	process.env.SNO_STATION_MEM_XDG_CONFIG_HOME = join(cryptoDirectory, "xdg");
+	process.env.XDG_CONFIG_HOME = join(cryptoDirectory, "xdg");
 	_provisionKey();
 	fixture = createTestDb();
 	store = new MemoryStore({ dbPath: fixture.dbPath, embedder });

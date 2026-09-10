@@ -26,7 +26,6 @@ describe("REM trigger maintenance timer", () => {
 	let server: Server | undefined;
 	const priorEnvironment = {
 		SNO_PROFILE_DIR: process.env["SNO_PROFILE_DIR"],
-		SNO_PROFILE_DIR: process.env["SNO_PROFILE_DIR"],
 	};
 
 	afterEach(async () => {
@@ -37,7 +36,6 @@ describe("REM trigger maintenance timer", () => {
 		}
 		database?.cleanup();
 		if (root) rmSync(root, { recursive: true, force: true });
-		restoreEnvironment("SNO_PROFILE_DIR", priorEnvironment.SNO_PROFILE_DIR);
 		restoreEnvironment("SNO_PROFILE_DIR", priorEnvironment.SNO_PROFILE_DIR);
 		database = undefined;
 		root = undefined;
@@ -57,9 +55,8 @@ describe("REM trigger maintenance timer", () => {
 		const backupDir = path.join(root, "backups");
 		mkdirSync(stateDir, { recursive: true });
 		mkdirSync(path.join(profileRoot, "station"), { recursive: true });
-		process.env["SNO_PROFILE_DIR"] = stateRoot;
 		process.env["SNO_PROFILE_DIR"] = profileRoot;
-		writeTestInstallationConfig(stateRoot, {
+		writeTestInstallationConfig(profileRoot, {
 				plugins: {
 					entries: {
 						"sno-mem-claw": {

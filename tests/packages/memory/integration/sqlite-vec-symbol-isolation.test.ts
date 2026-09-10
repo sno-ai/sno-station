@@ -52,7 +52,7 @@ describe("sqlite-vec symbol isolation", () => {
 	});
 
 	it("allows the sqlite-vec package import only inside the bundled extension loader", () => {
-		const sqliteVecImports = globSync("apps/mem-claw/src/**/*.ts", { cwd: REPO_ROOT }).flatMap(
+		const sqliteVecImports = globSync("packages/sno-station-mem/src/**/*.ts", { cwd: REPO_ROOT }).flatMap(
 			(file) => {
 				const source = readFileSync(resolve(REPO_ROOT, file), "utf8");
 				return SQLITE_VEC_PACKAGE_IMPORT.test(source)

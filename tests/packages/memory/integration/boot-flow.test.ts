@@ -55,7 +55,7 @@ beforeEach(() => {
 	mkdirSync(snoaiRoot, { recursive: true });
 	mkdirSync(xdgConfig, { recursive: true });
 	setEnv("SNO_STATION_MEM_DATA_DIR_ROOT", join(snoaiRoot, "mem-claw"));
-	setEnv("SNO_STATION_MEM_XDG_CONFIG_HOME", xdgConfig);
+	setEnv("XDG_CONFIG_HOME", xdgConfig);
 	setEnv(
 		"SNO_STATION_CORE_KEYCHAIN_SERVICE",
 		`ai.sno.sno-station-core.test-${Date.now()}-${process.pid}`,
