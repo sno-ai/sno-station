@@ -3,6 +3,7 @@
  * @boundary Turn selection, contract-shaped rendering, reply classification, and retry only.
  */
 
+import { channel } from "node:diagnostics_channel";
 import { z } from "zod";
 import { Semaphore } from "async-mutex";
 import { projectProfileCandidates } from "./b-profile-projection";
@@ -23,6 +24,7 @@ const MESSAGE_LINE_PATTERN = /^(system|user|assistant):\s?(.*)$/;
 const PROFILE_TURN_ATTEMPTS = 2;
 /** Matches the GPU's measured near-linear request concurrency. */
 const PROFILE_TURN_CONCURRENCY = 4;
+const turnDiagnostics = channel("sno-station-mem.profile-turns");
 /**
  * Output cap for one turn, chosen here because the serving side's own default is unusable:
  * measured 2026-08-18, a request carrying no `max_tokens` comes back `finish_reason: "length"`
@@ -279,6 +281,9 @@ export async function extractBProfileCandidatesFromChunk(input: {
 		return content.length === 0 ? [] : [{ turnIndex, content }];
 	});
 	const candidates: CandidateMemory[] = [];
+	if (turnDiagnostics.hasSubscribers) {
+		turnDiagnostics.publish({ event: "start", userTurns: turns.length, concurrentTurns: Math.max(0, turns.length - 1) });
+	}
 	const drops: ExtractionDropRecord[] = [];
 	const projectionDrops: Record<string, number> = {};
 	let turnFailures = 0;
@@ -312,6 +317,12 @@ export async function extractBProfileCandidatesFromChunk(input: {
 		),
 	);
 	outcomes.push(...remaining);
+	if (turnDiagnostics.hasSubscribers) {
+		turnDiagnostics.publish({ event: "settled", userTurns: turns.length,
+			completed: outcomes.filter(outcome => outcome.kind === "completed").length,
+			abandoned: outcomes.filter(outcome => outcome.kind === "abandoned").length,
+			terminal: outcomes.filter(outcome => outcome.kind === "terminal").length });
+	}
 	const terminal = outcomes.find(
 		(outcome): outcome is Extract<ConcurrentTurnOutcome, { kind: "terminal" }> =>
 			outcome.kind === "terminal",
