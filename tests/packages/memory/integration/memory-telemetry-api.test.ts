@@ -2,18 +2,18 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import type { Embedder } from "../../../../apps/mem-claw/src/extraction/embedding-provider-client.ts";
+import type { Embedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client.ts";
 import {
 	getAuditPath,
 	getMemClawStateDir,
-} from "../../../../apps/mem-claw/src/operations/runtime-audit-log.ts";
-import { MemoryStore } from "../../../../apps/mem-claw/src/storage/store.ts";
+} from "../../../../packages/sno-station-mem/src/engine/operations/runtime-audit-log.ts";
+import { MemoryStore } from "../../../../packages/sno-station-mem/src/store/store.ts";
 import {
 	createMemoryTelemetryApi,
 	type MemoryTelemetryApi,
-} from "../../../../apps/mem-claw/src/telemetry/memory-telemetry-api.ts";
-import { MemoryTelemetryUsageOutbox } from "../../../../apps/mem-claw/src/telemetry/memory-telemetry-outbox.ts";
-import { createTestDb, createTestEmbedder } from "../helpers/test-db.ts";
+} from "../../../../packages/sno-station-mem/src/engine/telemetry/memory-telemetry-api.ts";
+import { MemoryTelemetryUsageOutbox } from "../../../../packages/sno-station-mem/src/engine/telemetry/memory-telemetry-outbox.ts";
+import { createTestDb, createTestEmbedder } from "../../../apps/mem-claw/helpers/test-db.ts";
 
 let testEmbedder: Embedder;
 
