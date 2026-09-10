@@ -31,6 +31,7 @@ export default defineConfig([
   "internal/engine/rem/types": "src/engine/rem/types.ts",
   "internal/engine/rem/classifier": "src/engine/rem/classifier.ts",
   "cli": "src/contract/cli.ts",
+  "client": "src/contract/client.ts",
   "memdump": "src/engine/diagnostics/memdump.ts",
   "diagnostic-encoder": "src/engine/observability/early-diagnostics.ts",
   "internal/config/index": "config/index.ts",
