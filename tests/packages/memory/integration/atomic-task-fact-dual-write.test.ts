@@ -1,22 +1,22 @@
 /** @file Proves task lifecycle and atomic fact output commit through one production write call. */
 
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
-import type { AtomicKeyedRecord } from "@/extraction/atomic-profile-keying";
-import { buildAtomicWriteCards } from "@/extraction/atomic-write-projection";
-import type { Embedder } from "@/extraction/embedding-provider-client";
+import type { AtomicKeyedRecord } from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-profile-keying";
+import { buildAtomicWriteCards } from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-write-projection";
+import type { Embedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client";
 import {
 	admitTaskLifecycleAssertion,
 	buildTaskLifecycleCommandClaim,
 	type TaskLifecycleAssertionDraft,
-} from "@/extraction/task-lifecycle-assertion";
-import { resolveTaskLifecycle } from "@/extraction/task-lifecycle-resolver";
+} from "../../../../packages/sno-station-mem/src/engine/extraction/task-lifecycle-assertion";
+import { resolveTaskLifecycle } from "../../../../packages/sno-station-mem/src/engine/extraction/task-lifecycle-resolver";
 import {
 	type AtomicExtractionLedgerKey,
 	type AtomicExtractionRunParameters,
 	type AtomicExtractionWriteInput,
 	MemoryStore,
 	type TaskLifecycleWriteInput,
-} from "@/storage/store";
+} from "../../../../packages/sno-station-mem/src/store/store";
 import { createTestDb, createTestEmbedder, type TestDb } from "../helpers/test-db";
 
 const EXTRACTOR_VERSION = "atomic-v3-task-fact-test";
