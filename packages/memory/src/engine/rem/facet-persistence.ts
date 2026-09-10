@@ -99,8 +99,8 @@ export async function writeRemTwoFacetTransaction(input: {
 				.prepare("UPDATE nodix_memories SET text = ?, metadata = ?, content_hash = ? WHERE id = ?")
 				.run(input.current, input.metadata, nextHash, input.memoryId);
 		}
-		if (process.env["SNO_REM_TEST_FAILPOINT"] === "after_primary_write") {
-			throw new Error("SNO_REM_TEST_FAILPOINT:after_primary_write");
+		if (process.env["SNO_STATION_MEM_REM_TEST_FAILPOINT"] === "after_primary_write") {
+			throw new Error("SNO_STATION_MEM_REM_TEST_FAILPOINT:after_primary_write");
 		}
 		const postRow = input.database.prepare("SELECT * FROM nodix_memories WHERE id = ?").get(
 			input.memoryId,

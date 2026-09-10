@@ -1,3 +1,4 @@
+import { writeTestInstallationConfig } from "../../../apps/mem-claw/helpers/module-config-fixture";
 /** @file rem-retirement-candidate-set.test.ts
  * @purpose A retirement sentence must nominate the row it retires, not itself (PRD 110 REQ-2, REQ-6).
  * @boundary Production REM batch executor over a real SQLite store; the model stage is observed.
@@ -27,7 +28,7 @@ const RETIREMENT_ROW_ID = "rem-retirement-sentence-war-and-conflict";
 const priorEnvironment = {
 	SNO_STATION_MEM_DATA_DIR_ROOT: process.env["SNO_STATION_MEM_DATA_DIR_ROOT"],
 	SNO_STATION_MEM_REM_EXPECTED_DB_PATH: process.env["SNO_STATION_MEM_REM_EXPECTED_DB_PATH"],
-	OPENCLAW_STATE_DIR: process.env["OPENCLAW_STATE_DIR"],
+	SNO_PROFILE_DIR: process.env["SNO_PROFILE_DIR"],
 };
 const cleanups: Array<() => void> = [];
 
@@ -38,7 +39,7 @@ afterEach(() => {
 		"SNO_STATION_MEM_REM_EXPECTED_DB_PATH",
 		priorEnvironment.SNO_STATION_MEM_REM_EXPECTED_DB_PATH,
 	);
-	restoreEnvironment("OPENCLAW_STATE_DIR", priorEnvironment.OPENCLAW_STATE_DIR);
+	restoreEnvironment("SNO_PROFILE_DIR", priorEnvironment.SNO_PROFILE_DIR);
 });
 
 interface StageObservation {
@@ -387,9 +388,7 @@ function journalReasons(database: TestDb): string[] {
 function prepareBatchFixture(scope: string): TestDb {
 	const fixture = createTestDb();
 	const stateRoot = mkdtempSync(join(tmpdir(), `rem-retirement-${scope.replace(/\W+/g, "-")}-`));
-	writeFileSync(
-		join(stateRoot, "openclaw.json"),
-		JSON.stringify({
+	writeTestInstallationConfig(stateRoot, {
 			plugins: {
 				entries: {
 					"sno-mem-claw": {
@@ -400,12 +399,10 @@ function prepareBatchFixture(scope: string): TestDb {
 					},
 				},
 			},
-		}),
-		"utf8",
-	);
+		});
 	process.env["SNO_STATION_MEM_DATA_DIR_ROOT"] = dirname(fixture.dbPath);
 	process.env["SNO_STATION_MEM_REM_EXPECTED_DB_PATH"] = fixture.dbPath;
-	process.env["OPENCLAW_STATE_DIR"] = stateRoot;
+	process.env["SNO_PROFILE_DIR"] = stateRoot;
 	cleanups.push(() => {
 		fixture.cleanup();
 		rmSync(stateRoot, { recursive: true, force: true });

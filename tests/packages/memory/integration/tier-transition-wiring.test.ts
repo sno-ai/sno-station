@@ -83,16 +83,16 @@ describe("Tier transitioner wiring (Phase 0 §5)", () => {
 		cleanup = testDb.cleanup;
 		store = new MemoryStore({ dbPath, embedder: testEmbedder });
 		stateDir = mkdtempSync(join(tmpdir(), "mem-claw-tier-wire-"));
-		prevStateDir = process.env.OPENCLAW_STATE_DIR;
-		process.env.OPENCLAW_STATE_DIR = stateDir;
+		prevStateDir = process.env.SNO_PROFILE_DIR;
+		process.env.SNO_PROFILE_DIR = stateDir;
 	});
 
 	afterEach(() => {
 		store.close();
 		cleanup();
 		rmSync(stateDir, { recursive: true, force: true });
-		if (prevStateDir === undefined) delete process.env.OPENCLAW_STATE_DIR;
-		else process.env.OPENCLAW_STATE_DIR = prevStateDir;
+		if (prevStateDir === undefined) delete process.env.SNO_PROFILE_DIR;
+		else process.env.SNO_PROFILE_DIR = prevStateDir;
 	});
 
 	async function seed(text: string, importance = 0.5): Promise<SeededRow> {

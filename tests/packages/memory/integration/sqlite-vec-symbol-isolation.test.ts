@@ -24,7 +24,7 @@ import { resolveSqliteVecPath } from "../../../../packages/sno-station-mem/src/s
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../../..");
 const BUNDLED_VEC = resolve(
 	REPO_ROOT,
-	"apps/mem-claw/sqlite-extensions/linux-x64/vec0.so",
+	"packages/sno-station-mem/sqlite-extensions/linux-x64/vec0.so",
 );
 const SQLITE_VEC_PACKAGE_IMPORT =
 	/(?:from\s+|import\s*\(\s*|require\s*\(\s*)["']sqlite-vec(?:["'/-])/u;

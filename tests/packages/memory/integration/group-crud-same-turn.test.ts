@@ -21,7 +21,7 @@ import type { AtomicSubjectGuardTransport } from "../../../../packages/sno-stati
 import type { Embedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client";
 import { applyStateCategoryMigration } from "../../../../packages/sno-station-mem/src/store/state-category-migration";
 import { type AtomicExtractionRunParameters, MemoryStore } from "../../../../packages/sno-station-mem/src/store/store";
-import { createTestDb, createTestEmbedder, type TestDb } from "../helpers/test-db";
+import { createTestDb, createTestEmbedder, type TestDb } from "../../../apps/mem-claw/helpers/test-db";
 
 const EXTRACTOR_VERSION = "group-crud-same-turn-test";
 const SESSION_MS = Date.UTC(2026, 8, 7, 16, 20);

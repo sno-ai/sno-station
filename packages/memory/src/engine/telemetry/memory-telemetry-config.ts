@@ -15,8 +15,8 @@ export interface LoadMemoryTelemetryKeySetOptions {
 	currentKeyVersion?: number;
 }
 
-const CURRENT_KEY_ENV = "SNO_MEM_TELEMETRY_HMAC_KEY";
-const HISTORIC_KEY_PREFIX = "SNO_MEM_TELEMETRY_HMAC_KEY_V";
+const CURRENT_KEY_ENV = "SNO_STATION_MEM_TELEMETRY_HMAC_KEY";
+const HISTORIC_KEY_PREFIX = "SNO_STATION_MEM_TELEMETRY_HMAC_KEY_V";
 
 export function loadMemoryTelemetryKeySet(
 	options: LoadMemoryTelemetryKeySetOptions,

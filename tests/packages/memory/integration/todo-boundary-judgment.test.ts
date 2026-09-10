@@ -8,8 +8,8 @@ import type { Embedder } from "../../../../packages/sno-station-mem/src/engine/e
 import { routeTaskLifecycleCandidate } from "../../../../packages/sno-station-mem/src/engine/extraction/task-lifecycle-route";
 import { createLlmClient } from "../../../../packages/sno-station-mem/src/model/llm-client";
 import { MemoryStore } from "../../../../packages/sno-station-mem/src/store/store";
-import { createTestDb, createTestEmbedder, type TestDb } from "../helpers/test-db";
-import { routeTestTask } from "./task-lifecycle-test-route";
+import { createTestDb, createTestEmbedder, type TestDb } from "../../../apps/mem-claw/helpers/test-db";
+import { routeTestTask } from "../../../apps/mem-claw/integration/task-lifecycle-test-route";
 
 const llm = createLlmClient({ preset: "mem_claw/sno_ai_extract", timeoutMs: 120_000 });
 

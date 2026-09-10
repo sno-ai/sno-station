@@ -55,7 +55,7 @@ beforeEach(() => {
 	mkdirSync(snoaiRoot, { recursive: true });
 	mkdirSync(xdgConfig, { recursive: true });
 	setEnv("SNO_STATION_MEM_DATA_DIR_ROOT", join(snoaiRoot, "mem-claw"));
-	setEnv("XDG_CONFIG_HOME", xdgConfig);
+	setEnv("SNO_STATION_MEM_XDG_CONFIG_HOME", xdgConfig);
 	setEnv(
 		"SNO_STATION_CORE_KEYCHAIN_SERVICE",
 		`ai.sno.sno-station-core.test-${Date.now()}-${process.pid}`,
@@ -82,10 +82,10 @@ describe("bootstrapDataLayout — fresh install", () => {
 		expect(existsSync(getInstallManifestPath())).toBe(true);
 		expect(result.manifest.installationId.charAt(14)).toBe("7");
 		expect(result.manifest.dataFormatVersion).toBe(1);
-		expect(result.manifest.dbPath).toBe("./mem-claw.sqlite");
+		expect(result.manifest.dbPath).toBe("./sno-station-mem.sqlite");
 		expect(result.manifest.keyServiceName).toBe(KEYCHAIN_SERVICE_DEFAULT);
 		expect(result.manifest.keyAccount).toBe(KEYCHAIN_ACCOUNT);
-		expect(result.dbPath).toBe(join(dataDir(), "mem-claw.sqlite"));
+		expect(result.dbPath).toBe(join(dataDir(), "sno-station-mem.sqlite"));
 	});
 
 	it("honors absolute config.dbPath in the new manifest", () => {
@@ -100,8 +100,8 @@ describe("bootstrapDataLayout — fresh install", () => {
 			configuredDbPath: "legacy-relative.sqlite",
 		});
 
-		expect(result.manifest.dbPath).toBe("./mem-claw.sqlite");
-		expect(result.dbPath).toBe(join(dataDir(), "mem-claw.sqlite"));
+		expect(result.manifest.dbPath).toBe("./sno-station-mem.sqlite");
+		expect(result.dbPath).toBe(join(dataDir(), "sno-station-mem.sqlite"));
 	});
 
 	it("ignores orphaned install manifest temp files from a crashed first boot", () => {
@@ -111,14 +111,14 @@ describe("bootstrapDataLayout — fresh install", () => {
 		const result = bootstrapDataLayout();
 
 		expect(existsSync(getInstallManifestPath())).toBe(true);
-		expect(result.dbPath).toBe(join(dataDir(), "mem-claw.sqlite"));
+		expect(result.dbPath).toBe(join(dataDir(), "sno-station-mem.sqlite"));
 	});
 });
 
 describe("bootstrapDataLayout — manifest-missing data-present", () => {
 	it("refuses with ManifestMissingButDataPresentError", () => {
 		mkdirSync(dataDir(), { recursive: true });
-		writeFileSync(join(dataDir(), "mem-claw.sqlite"), "stub-cipher-bytes");
+		writeFileSync(join(dataDir(), "sno-station-mem.sqlite"), "stub-cipher-bytes");
 		expect(() => bootstrapDataLayout()).toThrow(
 			ManifestMissingButDataPresentError,
 		);

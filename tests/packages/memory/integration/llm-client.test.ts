@@ -587,9 +587,9 @@ describe("mem-claw llm-client", () => {
 	});
 
 	it("defaults OpenAI extraction to zero-billing ccproxy and keeps localhost overrides possible", async () => {
-		const originalHeliconeApiKey = process.env.HELICONE_API_KEY;
+		const originalHeliconeApiKey = process.env.SNO_STATION_MEM_HELICONE_API_KEY;
 		const originalHeliconeOpenaiBaseUrl = process.env.HELICONE_OPENAI_BASE_URL;
-		delete process.env.HELICONE_API_KEY;
+		delete process.env.SNO_STATION_MEM_HELICONE_API_KEY;
 		delete process.env.HELICONE_OPENAI_BASE_URL;
 
 		const requests: Array<{ url: string; headers: Headers }> = [];
@@ -626,9 +626,9 @@ describe("mem-claw llm-client", () => {
 			);
 		} finally {
 			if (originalHeliconeApiKey === undefined) {
-				delete process.env.HELICONE_API_KEY;
+				delete process.env.SNO_STATION_MEM_HELICONE_API_KEY;
 			} else {
-				process.env.HELICONE_API_KEY = originalHeliconeApiKey;
+				process.env.SNO_STATION_MEM_HELICONE_API_KEY = originalHeliconeApiKey;
 			}
 			if (originalHeliconeOpenaiBaseUrl === undefined) {
 				delete process.env.HELICONE_OPENAI_BASE_URL;

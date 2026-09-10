@@ -1,3 +1,4 @@
+import { writeTestInstallationConfig } from "../../../apps/mem-claw/helpers/module-config-fixture";
 /** @file rem-partial-removal.test.ts
  * @purpose A removal that names ONE item of a multi-item row rewrites the row; it must not close it.
  * @boundary Production REM batch executor over a real SQLite store; the model stages are stand-ins.
@@ -28,7 +29,7 @@ const REWRITTEN =
 const priorEnvironment = {
 	SNO_STATION_MEM_DATA_DIR_ROOT: process.env["SNO_STATION_MEM_DATA_DIR_ROOT"],
 	SNO_STATION_MEM_REM_EXPECTED_DB_PATH: process.env["SNO_STATION_MEM_REM_EXPECTED_DB_PATH"],
-	OPENCLAW_STATE_DIR: process.env["OPENCLAW_STATE_DIR"],
+	SNO_PROFILE_DIR: process.env["SNO_PROFILE_DIR"],
 };
 const cleanups: Array<() => void> = [];
 afterEach(() => {
@@ -110,9 +111,7 @@ describe("a partial removal rewrites the row it names", () => {
 function prepareBatchFixture(scope: string): TestDb {
 	const fixture = createTestDb();
 	const stateRoot = mkdtempSync(join(tmpdir(), `rem-partial-${scope.replace(/\W+/g, "-")}-`));
-	writeFileSync(
-		join(stateRoot, "openclaw.json"),
-		JSON.stringify({
+	writeTestInstallationConfig(stateRoot, {
 			plugins: {
 				entries: {
 					"sno-mem-claw": {
@@ -120,12 +119,10 @@ function prepareBatchFixture(scope: string): TestDb {
 					},
 				},
 			},
-		}),
-		"utf8",
-	);
+		});
 	process.env["SNO_STATION_MEM_DATA_DIR_ROOT"] = dirname(fixture.dbPath);
 	process.env["SNO_STATION_MEM_REM_EXPECTED_DB_PATH"] = fixture.dbPath;
-	process.env["OPENCLAW_STATE_DIR"] = stateRoot;
+	process.env["SNO_PROFILE_DIR"] = stateRoot;
 	cleanups.push(() => {
 		fixture.cleanup();
 		rmSync(stateRoot, { recursive: true, force: true });

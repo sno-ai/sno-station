@@ -1,3 +1,4 @@
+import { writeTestInstallationConfig } from "../../../apps/mem-claw/helpers/module-config-fixture";
 /** Frozen independent encrypted-store foundations for OpenSpec task 2.3. */
 
 import { spawn, spawnSync } from "node:child_process";
@@ -202,7 +203,7 @@ async function runOwnerDecidedWaveChild(input: {
 		env: {
 			...process.env,
 			SNO_STATION_MEM_REM_EXPECTED_DB_PATH: input.dbPath,
-			OPENCLAW_STATE_DIR: input.stateRoot,
+			SNO_PROFILE_DIR: input.stateRoot,
 			REM_ACC6_CONFIG_SOURCE: input.configSource,
 			REM_ACC6_PERSONA_DB_PATH: input.dbPath,
 			REM_ACC6_SCOPE: acc6Scope,
@@ -493,9 +494,7 @@ describe("REM ordered wave", () => {
 						.map((row) => row.id)
 						.sort(),
 				).toEqual([seeded.replaceCurrentId, seeded.replaceStaleId, seeded.updateId].sort());
-				writeFileSync(
-					join(stateRoot, "openclaw.json"),
-					JSON.stringify({
+				writeTestInstallationConfig(stateRoot, {
 						plugins: {
 							entries: {
 								"sno-mem-claw": {
@@ -506,8 +505,7 @@ describe("REM ordered wave", () => {
 								},
 							},
 						},
-					}),
-				);
+					});
 				const configuration = createRemOwnerDecidedOperationalConfiguration();
 				const configSource = prepareRemEntryArtifactFixture(
 					stateRoot,
@@ -707,9 +705,9 @@ describe("REM independently enumerated guard census", () => {
 				? {
 						root: repoRoot(),
 						input: {
-							manifestPath: join(repoRoot(), "apps/mem-claw/config/rem/guard-manifest.json"),
-							requiredGuardsPath: join(repoRoot(), "apps/mem-claw/config/rem/required-guards.json"),
-							sourceRoots: [join(repoRoot(), "packages/rem-core"), join(repoRoot(), "packages/sno-station-mem/src/sidecar")],
+							manifestPath: join(repoRoot(), "packages/sno-station-mem/config/rem/guard-manifest.json"),
+							requiredGuardsPath: join(repoRoot(), "packages/sno-station-mem/config/rem/required-guards.json"),
+							sourceRoots: [join(repoRoot(), "packages/sno-station-mem/src/engine/rem"), join(repoRoot(), "packages/sno-station-mem/src/sidecar")],
 							productionRoots: [join(repoRoot(), "packages/sno-station-mem/src/sidecar/main.ts")],
 						},
 						cleanup: () => undefined,

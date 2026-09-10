@@ -45,7 +45,7 @@ import {
 	type AtomicExtractionRunParameters,
 	MemoryStore,
 } from "../../../../packages/sno-station-mem/src/store/store";
-import { createTestDb, createTestEmbedder, type TestDb } from "../helpers/test-db";
+import { createTestDb, createTestEmbedder, type TestDb } from "../../../apps/mem-claw/helpers/test-db";
 
 const PROJECT_ID = "academic_researcher_weekly";
 const EXTRACTOR_VERSION = "group-crud-maintenance-test";
@@ -65,7 +65,7 @@ const STATE_SLUGS: string[] = (
 		readFileSync(
 			join(
 				resolve(import.meta.dirname, "../../../.."),
-				"apps/mem-claw/config/state-vocabulary.json",
+				"packages/sno-station-mem/config/state-vocabulary.json",
 			),
 			"utf8",
 		),
@@ -362,7 +362,7 @@ function seedByLabel(label: string): Seed {
 
 /**
  * The one state slug each recategorized entity row belongs under, read off the shipped
- * vocabulary (`apps/mem-claw/config/state-vocabulary.json`), keyed by the row's stored text:
+ * vocabulary (`packages/sno-station-mem/config/state-vocabulary.json`), keyed by the row's stored text:
  * the aim of the proposal is a `Project.description-scoped goal` (`project.objective`), and the
  * project lead is a `Project.funder / participant` (`project.stakeholder`). Any other text has no
  * row here, so the double answers null for it — a product that keys the wrong row, or keys a row

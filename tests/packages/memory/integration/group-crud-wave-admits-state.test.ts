@@ -1,3 +1,4 @@
+import { writeTestInstallationConfig } from "../../../apps/mem-claw/helpers/module-config-fixture";
 /** @file PRD 150 QCG-14 — the maintenance waves admit the `state` type (REQ-14).
  *
  * @boundary The production REM batch executor over a real encrypted SQLite store, both waves. The
@@ -30,7 +31,7 @@ const BASE_VALID_FROM = Date.UTC(2026, 8, 1);
 const priorEnvironment = {
 	SNO_STATION_MEM_DATA_DIR_ROOT: process.env["SNO_STATION_MEM_DATA_DIR_ROOT"],
 	SNO_STATION_MEM_REM_EXPECTED_DB_PATH: process.env["SNO_STATION_MEM_REM_EXPECTED_DB_PATH"],
-	OPENCLAW_STATE_DIR: process.env["OPENCLAW_STATE_DIR"],
+	SNO_PROFILE_DIR: process.env["SNO_PROFILE_DIR"],
 };
 const cleanups: Array<() => void> = [];
 
@@ -200,9 +201,7 @@ function replyFor(stage: string, prompt: string): string {
 function prepareFixture(): TestDb {
 	const fixture = createTestDb();
 	const stateRoot = mkdtempSync(join(tmpdir(), "group-crud-state-wave-"));
-	writeFileSync(
-		join(stateRoot, "openclaw.json"),
-		JSON.stringify({
+	writeTestInstallationConfig(stateRoot, {
 			plugins: {
 				entries: {
 					"sno-mem-claw": {
@@ -213,12 +212,10 @@ function prepareFixture(): TestDb {
 					},
 				},
 			},
-		}),
-		"utf8",
-	);
+		});
 	process.env["SNO_STATION_MEM_DATA_DIR_ROOT"] = dirname(fixture.dbPath);
 	process.env["SNO_STATION_MEM_REM_EXPECTED_DB_PATH"] = fixture.dbPath;
-	process.env["OPENCLAW_STATE_DIR"] = stateRoot;
+	process.env["SNO_PROFILE_DIR"] = stateRoot;
 	cleanups.push(() => {
 		fixture.cleanup();
 		rmSync(stateRoot, { recursive: true, force: true });

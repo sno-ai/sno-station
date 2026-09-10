@@ -25,7 +25,7 @@ import {
 	type AtomicExtractionRunParameters,
 	MemoryStore,
 } from "../../../../packages/sno-station-mem/src/store/store";
-import { createTestDb, createTestEmbedder, type TestDb } from "../helpers/test-db";
+import { createTestDb, createTestEmbedder, type TestDb } from "../../../apps/mem-claw/helpers/test-db";
 
 const PROJECT_ID = "atomic-fact-surface";
 const EXTRACTOR_VERSION = "atomic-v3-fact-surface-test";

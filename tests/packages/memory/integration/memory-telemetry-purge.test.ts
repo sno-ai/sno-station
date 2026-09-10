@@ -32,11 +32,11 @@ describe("memory telemetry purge preview and confirmed cascade purge", () => {
 	let store: MemoryStore;
 	let purge: MemoryTelemetryPurgeService;
 	let auditStateRoot: string;
-	const previousStateDir = process.env.OPENCLAW_STATE_DIR;
+	const previousStateDir = process.env.SNO_PROFILE_DIR;
 
 	beforeEach(() => {
 		auditStateRoot = mkdtempSync(join(tmpdir(), "memory-telemetry-purge-audit-"));
-		process.env.OPENCLAW_STATE_DIR = auditStateRoot;
+		process.env.SNO_PROFILE_DIR = auditStateRoot;
 		const testDb = createTestDb();
 		cleanup = testDb.cleanup;
 		store = new MemoryStore({
@@ -60,8 +60,8 @@ describe("memory telemetry purge preview and confirmed cascade purge", () => {
 		await store.close();
 		cleanup();
 		rmSync(auditStateRoot, { recursive: true, force: true });
-		if (previousStateDir === undefined) delete process.env.OPENCLAW_STATE_DIR;
-		else process.env.OPENCLAW_STATE_DIR = previousStateDir;
+		if (previousStateDir === undefined) delete process.env.SNO_PROFILE_DIR;
+		else process.env.SNO_PROFILE_DIR = previousStateDir;
 	});
 
 	function auditRecords(operation: string): AuditRecord[] {

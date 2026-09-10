@@ -17,7 +17,7 @@ import {
 	MemoryStore,
 	type TaskLifecycleWriteInput,
 } from "../../../../packages/sno-station-mem/src/store/store";
-import { createTestDb, createTestEmbedder, type TestDb } from "../helpers/test-db";
+import { createTestDb, createTestEmbedder, type TestDb } from "../../../apps/mem-claw/helpers/test-db";
 
 const EXTRACTOR_VERSION = "atomic-v3-task-fact-test";
 const RUN_PARAMETERS: AtomicExtractionRunParameters = {

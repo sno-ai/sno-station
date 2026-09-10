@@ -1,3 +1,4 @@
+import { writeTestInstallationConfig } from "../../../apps/mem-claw/helpers/module-config-fixture";
 /** REM retirement ranks real stored candidates even when newer rows fill the project search. */
 import { createHash } from "node:crypto";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -22,7 +23,7 @@ const CANDIDATE_COUNT = 65;
 const priorEnvironment = {
 	SNO_STATION_MEM_DATA_DIR_ROOT: process.env["SNO_STATION_MEM_DATA_DIR_ROOT"],
 	SNO_STATION_MEM_REM_EXPECTED_DB_PATH: process.env["SNO_STATION_MEM_REM_EXPECTED_DB_PATH"],
-	OPENCLAW_STATE_DIR: process.env["OPENCLAW_STATE_DIR"],
+	SNO_PROFILE_DIR: process.env["SNO_PROFILE_DIR"],
 };
 const cleanups: Array<() => void | Promise<void>> = [];
 afterEach(async () => {
@@ -68,7 +69,7 @@ it("offers and closes the oldest candidate despite newer distractors beyond the 
 	cleanups.push(() => fixture.cleanup());
 	const stateRoot = mkdtempSync(join(tmpdir(), "rem-retirement-scoring-"));
 	cleanups.push(() => rmSync(stateRoot, { recursive: true, force: true }));
-	writeFileSync(join(stateRoot, "openclaw.json"), JSON.stringify({
+	writeTestInstallationConfig(stateRoot, {
 		plugins: {
 			entries: {
 				"sno-mem-claw": {
@@ -79,10 +80,10 @@ it("offers and closes the oldest candidate despite newer distractors beyond the 
 				},
 			},
 		},
-	}));
+	});
 	process.env["SNO_STATION_MEM_DATA_DIR_ROOT"] = dirname(fixture.dbPath);
 	process.env["SNO_STATION_MEM_REM_EXPECTED_DB_PATH"] = fixture.dbPath;
-	process.env["OPENCLAW_STATE_DIR"] = stateRoot;
+	process.env["SNO_PROFILE_DIR"] = stateRoot;
 
 	// The best semantic match sorts last by id, outside the 64-row cap if it loses its score.
 	seedRow(fixture, {

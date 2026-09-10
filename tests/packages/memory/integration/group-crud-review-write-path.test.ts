@@ -1,3 +1,4 @@
+import { writeTestInstallationConfig } from "../../../apps/mem-claw/helpers/module-config-fixture";
 /** @file PRD 150 review repairs — the write path: order, legacy rows, entity spelling, negation.
  *
  * @boundary The real chunk write (`MemoryStore.storeAtomicExtractionChunk`), the real extraction
@@ -79,7 +80,7 @@ const RUN_PARAMETERS: AtomicExtractionRunParameters = {
 const priorEnvironment = {
 	SNO_STATION_MEM_DATA_DIR_ROOT: process.env["SNO_STATION_MEM_DATA_DIR_ROOT"],
 	SNO_STATION_MEM_REM_EXPECTED_DB_PATH: process.env["SNO_STATION_MEM_REM_EXPECTED_DB_PATH"],
-	OPENCLAW_STATE_DIR: process.env["OPENCLAW_STATE_DIR"],
+	SNO_PROFILE_DIR: process.env["SNO_PROFILE_DIR"],
 };
 const cleanups: Array<() => void | Promise<void>> = [];
 
@@ -882,9 +883,7 @@ describe("PRD 150 review — a pure negation never closes its one-group mechanic
 
 	async function runUpdateWave(fixture: TestDb): Promise<Observation[]> {
 		const stateRoot = mkdtempSync(join(tmpdir(), "group-crud-review-negation-"));
-		writeFileSync(
-			join(stateRoot, "openclaw.json"),
-			JSON.stringify({
+		writeTestInstallationConfig(stateRoot, {
 				plugins: {
 					entries: {
 						"sno-mem-claw": {
@@ -895,12 +894,10 @@ describe("PRD 150 review — a pure negation never closes its one-group mechanic
 						},
 					},
 				},
-			}),
-			"utf8",
-		);
+			});
 		process.env["SNO_STATION_MEM_DATA_DIR_ROOT"] = dirname(fixture.dbPath);
 		process.env["SNO_STATION_MEM_REM_EXPECTED_DB_PATH"] = fixture.dbPath;
-		process.env["OPENCLAW_STATE_DIR"] = stateRoot;
+		process.env["SNO_PROFILE_DIR"] = stateRoot;
 		cleanups.push(() => rmSync(stateRoot, { recursive: true, force: true }));
 		const observations: Observation[] = [];
 		try {

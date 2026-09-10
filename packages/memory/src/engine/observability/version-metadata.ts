@@ -7,7 +7,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const VERSION_ENV_KEYS = ["SNO_STATION_CORE_VERSION", "SNO_STATION_CORE_VERSION"] as const;
+const VERSION_ENV_KEYS = ["SNO_STATION_MEM_VERSION", "SNO_STATION_MEM_VERSION"] as const;
 const VERSION_LINE_RE = /^version:\s*["']?([^"'\s]+)["']?\s*$/m;
 const MEM_CLAW_PACKAGE_NAME = "@snoai/sno-station-mem";
 

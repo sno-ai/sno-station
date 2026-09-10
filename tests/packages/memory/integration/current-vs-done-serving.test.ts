@@ -28,7 +28,7 @@ import {
 import { createRetriever, DEFAULT_RETRIEVAL_CONFIG } from "../../../../packages/sno-station-mem/src/engine/retrieval/retriever";
 import type { MemoryRetriever } from "../../../../packages/sno-station-mem/src/engine/retrieval/retriever";
 import { MemoryStore, type TaskLifecycleWriteInput } from "../../../../packages/sno-station-mem/src/store/store";
-import { createTestDb, createTestEmbedder, type TestDb } from "../helpers/test-db";
+import { createTestDb, createTestEmbedder, type TestDb } from "../../../apps/mem-claw/helpers/test-db";
 
 const projectId = "current-vs-done";
 const firstAt = 2_100_000_000_000;

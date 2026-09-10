@@ -81,7 +81,7 @@ describe("resolveReflectionSessionSearchDirs", () => {
 		);
 	});
 
-	it("derives OPENCLAW_HOME from sessionFile path when workspaceDir is unrelated", () => {
+	it("derives SNO_STATION_MEM_HOME from sessionFile path when workspaceDir is unrelated", () => {
 		const dirs = resolveReflectionSessionSearchDirs({
 			context: {
 				previousSessionEntry: {
