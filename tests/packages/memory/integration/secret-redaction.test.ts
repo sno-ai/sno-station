@@ -10,7 +10,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { redactSecrets } from "@/security/redact.ts";
+import { redactSecrets } from "../../../../packages/sno-station-mem/src/engine/security/redact.ts";
 
 describe("redactSecrets", () => {
 	// ── Scenario 1: OpenAI API key redacted ──────────────────────────
