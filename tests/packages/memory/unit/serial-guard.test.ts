@@ -17,7 +17,7 @@ import {
 	MAX_DEBOUNCE_ENTRIES,
 	runWithSerialGuard,
 	SERIAL_WINDOW_MS,
-} from "../../../../apps/mem-claw/src/reflection/session-serial-guard.ts";
+} from "../../../../packages/sno-station-mem/src/engine/reflection/session-serial-guard.ts";
 
 const noopLogger = { info: () => {} };
 

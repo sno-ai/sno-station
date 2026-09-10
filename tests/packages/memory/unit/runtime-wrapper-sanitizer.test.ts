@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 import {
 	stripLeadingRuntimeWrappers,
 	stripRuntimeWrapperBoilerplate,
-} from "../../../../apps/mem-claw/src/extraction/runtime-wrapper-sanitizer.ts";
+} from "../../../../packages/sno-station-mem/src/engine/extraction/runtime-wrapper-sanitizer.ts";
 
 /**
  * This runs on BOTH the ambient-learning normalization path and the extraction envelope path, so
