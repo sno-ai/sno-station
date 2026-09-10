@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { detectCategory } from "../../../../apps/mem-claw/src/extraction/capture-policy-detector.ts";
+import { detectCategory } from "../../../../packages/sno-station-mem/src/engine/extraction/capture-policy-detector.ts";
 import {
 	clearSessionLocaleCache,
 	resolveLocale,
-} from "../../../../apps/mem-claw/src/i18n/resolver.ts";
+} from "../../../../packages/sno-station-mem/src/engine/i18n/resolver.ts";
 
 describe("i18n resolver", () => {
 	beforeEach(() => {
