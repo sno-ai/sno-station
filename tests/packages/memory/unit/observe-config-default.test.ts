@@ -1,18 +1,18 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const originalObserveEnabled = process.env.SNO_OBSERVE_ENABLED;
+const originalObserveEnabled = process.env.SNO_STATION_MEM_SNO_OBSERVE_ENABLED;
 
 async function parseObserveEnabledWithEnv(
 	value: string | undefined,
 ): Promise<boolean> {
 	vi.resetModules();
 	if (value === undefined) {
-		delete process.env.SNO_OBSERVE_ENABLED;
+		delete process.env.SNO_STATION_MEM_SNO_OBSERVE_ENABLED;
 	} else {
-		process.env.SNO_OBSERVE_ENABLED = value;
+		process.env.SNO_STATION_MEM_SNO_OBSERVE_ENABLED = value;
 	}
 	const { pluginConfigSchema } = await import(
-		"../../../../apps/mem-claw/src/shared/types.ts"
+		"../../../../packages/sno-station-mem/src/engine/shared/types.ts"
 	);
 	return pluginConfigSchema.parse({
 		embedding: { provider: "local-onnx" },
@@ -22,9 +22,9 @@ async function parseObserveEnabledWithEnv(
 afterEach(() => {
 	vi.resetModules();
 	if (originalObserveEnabled === undefined) {
-		delete process.env.SNO_OBSERVE_ENABLED;
+		delete process.env.SNO_STATION_MEM_SNO_OBSERVE_ENABLED;
 	} else {
-		process.env.SNO_OBSERVE_ENABLED = originalObserveEnabled;
+		process.env.SNO_STATION_MEM_SNO_OBSERVE_ENABLED = originalObserveEnabled;
 	}
 });
 
