@@ -4,15 +4,15 @@
  */
 
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
-import { resolveTaskLifecycleEffectiveTime } from "../../../../apps/mem-claw/src/extraction/task-lifecycle-assertion.ts";
-import type { Embedder } from "../../../../apps/mem-claw/src/extraction/embedding-provider-client.ts";
+import { resolveTaskLifecycleEffectiveTime } from "../../../../packages/sno-station-mem/src/engine/extraction/task-lifecycle-assertion.ts";
+import type { Embedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client.ts";
 import {
 	buildTaskLifecycleCandidateSet,
 	taskLifecycleCandidateSetVersion,
-} from "../../../../apps/mem-claw/src/extraction/task-lifecycle-resolver.ts";
-import { routeTaskLifecycleAssertion } from "../../../../apps/mem-claw/src/extraction/task-lifecycle-route.ts";
-import { MemoryStore } from "../../../../apps/mem-claw/src/storage/store.ts";
-import { createTestDb, createTestEmbedder, type TestDb } from "../helpers/test-db.ts";
+} from "../../../../packages/sno-station-mem/src/engine/extraction/task-lifecycle-resolver.ts";
+import { routeTaskLifecycleAssertion } from "../../../../packages/sno-station-mem/src/engine/extraction/task-lifecycle-route.ts";
+import { MemoryStore } from "../../../../packages/sno-station-mem/src/store/store.ts";
+import { createTestDb, createTestEmbedder, type TestDb } from "../../../apps/mem-claw/helpers/test-db.ts";
 
 const projectId = "timestamp-ladder";
 const taskText = "file the quarterly expense report";
