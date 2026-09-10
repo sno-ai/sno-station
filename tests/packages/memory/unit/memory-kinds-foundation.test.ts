@@ -3,7 +3,7 @@ import {
 	MEMORY_CATEGORIES,
 	type MemoryCategory,
 	normalizeCategory,
-} from "../../../../apps/mem-claw/src/shared/types.ts";
+} from "../../../../packages/sno-station-mem/src/engine/shared/types.ts";
 import {
 	isAppendOnly,
 	isMutationNative,
@@ -14,16 +14,16 @@ import {
 	canOfflineFamilyWrite,
 	canProfileWriterWrite,
 	canTrustedWrite,
-} from "../../../../apps/mem-claw/src/shared/memory-kind-policy.ts";
+} from "../../../../packages/sno-station-mem/src/engine/shared/memory-kind-policy.ts";
 import {
 	memoryMetadata,
-} from "../../../../apps/mem-claw/src/extraction/memory-metadata-types.ts";
+} from "../../../../packages/sno-station-mem/src/engine/extraction/memory-metadata-types.ts";
 import {
 	buildInsightMetadata,
 	deriveFactKey,
 	ExtractionError,
 	parseInsightMetadata,
-} from "../../../../apps/mem-claw/src/extraction/memory-metadata-codec.ts";
+} from "../../../../packages/sno-station-mem/src/engine/extraction/memory-metadata-codec.ts";
 
 const NOW = 1718000000000;
 
@@ -89,17 +89,17 @@ describe("memory kind taxonomy", () => {
 	});
 
 	it("LEGACY_MEMORY_CATEGORIES is not exported from types", async () => {
-		const mod = await import("../../../../apps/mem-claw/src/shared/types");
+		const mod = await import("../../../../packages/sno-station-mem/src/engine/shared/types");
 		expect("LEGACY_MEMORY_CATEGORIES" in mod).toBe(false);
 	});
 
 	it("remapLegacyMemoryCategory is not exported from types", async () => {
-		const mod = await import("../../../../apps/mem-claw/src/shared/types");
+		const mod = await import("../../../../packages/sno-station-mem/src/engine/shared/types");
 		expect("remapLegacyMemoryCategory" in mod).toBe(false);
 	});
 
 	it("strategy sets are not exported from types", async () => {
-		const mod = await import("../../../../apps/mem-claw/src/shared/types");
+		const mod = await import("../../../../packages/sno-station-mem/src/engine/shared/types");
 		expect("ALWAYS_MERGE_CATEGORIES" in mod).toBe(false);
 		expect("MERGE_SUPPORTED_CATEGORIES" in mod).toBe(false);
 		expect("TEMPORAL_VERSIONED_CATEGORIES" in mod).toBe(false);
