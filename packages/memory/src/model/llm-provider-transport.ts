@@ -5,6 +5,7 @@ import { FIXED_PROTOCOL_VALUE_69, FIXED_EXTRACTION_KEY_NAME } from "./signed-reg
  */
 
 import type { DispatchContext as LlmixDispatchContext } from "@snoai/llmix";
+import { AsyncLocalStorage } from "node:async_hooks";
 import { createHash, randomUUID } from "node:crypto";
 import { createLogger, withLogContext } from "@snoai/utils/logger";
 import type {
@@ -20,6 +21,13 @@ import type {
 
 const log = createLogger("sno-station-mem:llm-provider-transport");
 const routeInFlight = new Map<string, number>();
+const providerResponses = new AsyncLocalStorage<ProviderResponseTrace[]>();
+
+/** Collect actual provider usage for the current sidecar request, without changing transport. */
+export function withProviderResponses<T>(responses: ProviderResponseTrace[], run: () => Promise<T>): Promise<T> {
+	return providerResponses.run(responses, run);
+}
+
 
 type RequestDiagnostic = {
 	started: number;
@@ -244,6 +252,7 @@ function notifyProviderResponse(
 	callback: ((response: ProviderResponseTrace) => void) | undefined,
 	response: ProviderResponseTrace,
 ): void {
+	providerResponses.getStore()?.push(response);
 	callback?.(response);
 }
 
@@ -372,6 +381,7 @@ export async function callSnoProfileCompletion(
 	const requestId = readProviderRequestId(body.id, response.headers);
 	if (request.onProviderResponse && request.adapterSlot && request.callLabel) {
 		notifyProviderResponse(request.onProviderResponse, {
+			durationMs: performance.now() - diagnostic.started,
 			adapterSlot: request.adapterSlot,
 			callLabel: request.callLabel,
 			provider: "sno-gpu",
@@ -546,6 +556,7 @@ async function snoStationMemDispatch(ctx: LlmixDispatchContext): Promise<Provide
 		cfgExt.callLabel
 	) {
 		notifyProviderResponse(onProviderResponse as (response: ProviderResponseTrace) => void, {
+			durationMs: performance.now() - diagnostic.started,
 			adapterSlot: cfgExt.adapterSlot,
 			callLabel: cfgExt.callLabel,
 			provider,
