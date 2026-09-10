@@ -1,0 +1,139 @@
+import { existsSync } from "node:fs";
+import { mkdir } from "node:fs/promises";
+import { dirname } from "node:path";
+import { isDeepStrictEqual } from "node:util";
+import { createLogger } from "@snoai/utils/logger";
+import { ContractError, parseInput, parseOutput, type ContractMethod, type ContractOutputs, type Registration, type ScopeCtx } from "../contract/index";
+import { pluginConfigSchema, type PluginConfig } from "../contract/config/plugin-config-schema";
+import { MemoryContractRuntime } from "../engine/contract-runtime";
+import { getInstallationConfigPath, getPrincipal, getSnoStationMemStateDir, readBoundStorePath } from "../engine/shared/paths";
+import { readSnoStationMemConfig, PLUGIN_ENTRY_KEY } from "../engine/bindings/embedder-config-files";
+import { ObservableEmbedder } from "../engine/observability/observable-embedder";
+import { ObservableMemoryStore } from "../engine/observability/observable-memory-store";
+import { ObservableMemoryRetriever } from "../engine/observability/observable-retriever";
+import { PluginObservability } from "../engine/observability/adapter";
+import { AccessTracker } from "../engine/retrieval/access-tracker";
+import { DEFAULT_RETRIEVAL_CONFIG } from "../engine/retrieval/retriever";
+import { createTierPromoter } from "../engine/operations/memory-tier-promoter";
+import { MemoryTelemetryUsageOutbox } from "../engine/telemetry/memory-telemetry-outbox";
+import { initSqliteRuntime } from "../store/sqlite-runtime";
+import type { AgentLlmPort } from "../model/agent-llm-port";
+
+const log = createLogger("sno-station-mem:runtime");
+function engineLog(level: "info" | "warn" | "error" | "debug", message: string): void {
+	log[level]("Memory engine message", { message }, {
+		event_name: "memory.sidecar.engine.message", file: "packages/sno-station-mem/src/sidecar/memory-runtime.ts",
+		function: "engineLog", site_id: "memory.sidecar.engine.message",
+	});
+}
+const engineLogger = {
+	info: (message: string): void => engineLog("info", message),
+	warn: (message: string): void => engineLog("warn", message),
+	error: (message: string): void => engineLog("error", message),
+	debug: (message: string): void => engineLog("debug", message),
+};
+interface SkinRuntime {
+	runtime: MemoryContractRuntime;
+	tracker: AccessTracker;
+	observability: PluginObservability;
+	active: number;
+	retired: boolean;
+}
+
+export class MemoryRuntimePool {
+	readonly principal: string = getPrincipal();
+	readonly stateDir: string = getSnoStationMemStateDir();
+	readonly counters: { engineAccesses: number; storeAccesses: number } = { engineAccesses: 0, storeAccesses: 0 };
+	private readonly skins = new Map<string, SkinRuntime>();
+	private readonly owned = new Set<SkinRuntime>();
+	private constructor(
+		readonly storePath: string,
+		readonly store: ObservableMemoryStore,
+		readonly config: PluginConfig,
+		private readonly observability: PluginObservability,
+	) {}
+
+	static async open(): Promise<MemoryRuntimePool> {
+		const storePath = await readBoundStorePath();
+		const configPath = getInstallationConfigPath();
+		const installed = existsSync(configPath) ? readSnoStationMemConfig(configPath).plugins?.entries?.[PLUGIN_ENTRY_KEY]?.config : undefined;
+		const config = pluginConfigSchema.parse({ ...installed, dbPath: storePath });
+		await initSqliteRuntime();
+		await mkdir(dirname(storePath), { recursive: true, mode: 0o700 });
+		const stateDir = getSnoStationMemStateDir();
+		const observability = new PluginObservability(config, stateDir, engineLogger);
+		const embedder = new ObservableEmbedder(config.embedding, stateDir, observability, () => undefined);
+		const store = new ObservableMemoryStore({ dbPath: storePath, vectorDim: embedder.dimensions, embedder, memoryTelemetry: config.memoryTelemetry }, observability, () => undefined, config.embedding);
+		return new MemoryRuntimePool(storePath, store, config, observability);
+	}
+
+	private async register(scope: ScopeCtx, registration: Registration, agentPort?: AgentLlmPort): Promise<ContractOutputs["init"]> {
+		const config: PluginConfig = { ...registration.settings, ...registration.routing };
+		// One principal has one vector space; a second skin cannot silently change its model.
+		if (!isDeepStrictEqual(config.embedding, this.config.embedding)) throw new ContractError("invalid-input");
+		if (config.dbPath && config.dbPath !== this.storePath) throw new ContractError("store-mismatch");
+		const observability = new PluginObservability(config, this.stateDir, engineLogger);
+		const embedder = new ObservableEmbedder(config.embedding, this.stateDir, observability, () => undefined);
+		const retriever = new ObservableMemoryRetriever(this.store, embedder, engineLogger, { ...DEFAULT_RETRIEVAL_CONFIG, ...config.retrieval }, observability, () => undefined, config.embedding);
+		const tracker = new AccessTracker({ store: this.store, recallLifecycle: config.recallLifecycle });
+		retriever.setAccessTracker(tracker);
+		retriever.setRecallLifecycle(config.recallLifecycle);
+		retriever.setTierPromoter(createTierPromoter());
+		const runtime = new MemoryContractRuntime({ store: this.store, embedder, retriever, accessTracker: tracker, observability,
+			stateDir: this.stateDir, agentPort, logger: engineLogger, telemetryUsage: new MemoryTelemetryUsageOutbox({ sqlite: this.store.sqlite, dbPath: this.storePath }) });
+		const entry: SkinRuntime = { runtime, tracker, observability, active: 0, retired: false };
+		this.owned.add(entry);
+		try {
+			const result = await runtime.init(scope, registration);
+			const previous = this.skins.get(registration.skinId);
+			this.skins.set(registration.skinId, entry);
+			if (previous) { previous.retired = true; if (previous.active === 0) await this.dispose(previous); }
+			return result;
+		} catch (error) { await this.dispose(entry); throw error; }
+	}
+
+	async invoke(method: ContractMethod, raw: unknown, skinId: string): Promise<ContractOutputs[ContractMethod]> {
+		const input = parseInput(method, raw);
+		if (input.scope.principal !== this.principal) throw new ContractError("principal-mismatch");
+		if (method === "init") {
+			const init = parseInput("init", raw);
+			if (init.registration.skinId !== skinId) throw new ContractError("invalid-input");
+			this.counters.engineAccesses++;
+			this.counters.storeAccesses++;
+			return this.register(init.scope, init.registration);
+		}
+		const entry = this.skins.get(skinId);
+		if (!entry) throw new ContractError("invalid-input");
+		entry.active++;
+		this.counters.engineAccesses++;
+		this.counters.storeAccesses++;
+		try { return parseOutput(method, await this.call(entry.runtime, method, raw)); }
+		finally { entry.active--; if (entry.retired && entry.active === 0) await this.dispose(entry); }
+	}
+
+	private async call(runtime: MemoryContractRuntime, method: Exclude<ContractMethod, "init">, raw: unknown): Promise<ContractOutputs[ContractMethod]> {
+		switch (method) {
+			case "capture": { const p = parseInput(method, raw); return runtime.capture(p.turn, p.scope); }
+			case "getRecall": { const p = parseInput(method, raw); return runtime.getRecall(p.query, p.scope, p.options); }
+			case "mutate": { const p = parseInput(method, raw); return runtime.mutate(p.op, p.scope); }
+			case "inspect": { const p = parseInput(method, raw); return runtime.inspect(p.op, p.scope); }
+			case "recordUsage": { const p = parseInput(method, raw); return runtime.recordUsage(p.recallId, p.signal, p.scope); }
+			case "onSessionEnd": { const p = parseInput(method, raw); return runtime.onSessionEnd(p.messages, p.scope); }
+			case "staticBlock": { const p = parseInput(method, raw); return runtime.staticBlock(p.scope); }
+		}
+	}
+
+	private async dispose(entry: SkinRuntime): Promise<void> {
+		if (!this.owned.delete(entry)) return;
+		await entry.runtime.close();
+		await entry.tracker.destroy();
+		await entry.observability.shutdown();
+	}
+
+	async close(): Promise<void> {
+		for (const entry of this.owned) await this.dispose(entry);
+		this.skins.clear();
+		await this.store.close();
+		await this.observability.shutdown();
+	}
+}

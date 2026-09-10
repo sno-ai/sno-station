@@ -1,11 +1,14 @@
 import { z } from "zod";
 import { inputSchemas, type ContractInputs, type ScopeCtx, type Registration, type RecallOptions,
 	type Turn, type Mutation, type Inspection, type UsageSignal, type Message } from "./inputs";
-import { outputSchemas, type ContractOutputs, type DegradedReason } from "./results";
+import { outputSchemas, type ContractOutputs } from "./results";
+import { ContractError } from "./error";
 
 export * from "./inputs";
 export * from "./results";
 export * from "./settings";
+export * from "./error";
+export * from "./routes";
 
 export type ContractMethod = keyof ContractInputs;
 export interface MemoryContract {
@@ -17,15 +20,6 @@ export interface MemoryContract {
 	recordUsage(recallId: string, signal: UsageSignal, scope: ScopeCtx): Promise<ContractOutputs["recordUsage"]>;
 	onSessionEnd(messages: Message[], scope: ScopeCtx): Promise<ContractOutputs["onSessionEnd"]>;
 	staticBlock(scope: ScopeCtx): Promise<ContractOutputs["staticBlock"]>;
-}
-
-export class ContractError extends Error {
-	readonly reason: DegradedReason;
-	constructor(reason: DegradedReason) {
-		super(reason);
-		this.name = "ContractError";
-		this.reason = reason;
-	}
 }
 
 export function parseInput<K extends ContractMethod>(method: K, input: unknown): ContractInputs[K] {

@@ -68,6 +68,12 @@ export class MemoryContractRuntime implements MemoryContract {
 	private readonly recallStates = new Map<string, { history: Map<string, Map<string, number>>; turns: Map<string, number> }>();
 	constructor(private readonly services: MemoryRuntimeServices) {}
 
+	async close(): Promise<void> {
+		await this.providerRuntime?.closeAllMemorySearchManagers?.();
+		this.reflectionStates.clear();
+		this.recallStates.clear();
+	}
+
 	async init(scope: ScopeCtx, registration: Registration): Promise<ContractOutputs["init"]> {
 		const input = parseInput("init", { scope, registration });
 		await this.providerRuntime?.closeAllMemorySearchManagers?.();

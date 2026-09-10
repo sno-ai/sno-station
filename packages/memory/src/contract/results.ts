@@ -3,14 +3,8 @@ import { MEMORY_CATEGORIES, type MemoryEntry, type RetrievalResult } from "../en
 import type { SnoStationMemMemorySearchResult } from "./provider-runtime-types";
 import type { JsonValue } from "./inputs";
 
-export const DEGRADED_REASONS: readonly [
-	"sidecar-unreachable", "sidecar-unresponsive", "principal-mismatch", "store-mismatch",
-	"no-agent-endpoint", "invalid-input", "timeout", "storage-unavailable", "engine-failed", "paused", "system-caller-required",
-] = [
-	"sidecar-unreachable", "sidecar-unresponsive", "principal-mismatch", "store-mismatch",
-	"no-agent-endpoint", "invalid-input", "timeout", "storage-unavailable", "engine-failed", "paused", "system-caller-required",
-];
-export type DegradedReason = (typeof DEGRADED_REASONS)[number];
+import { DEGRADED_REASONS, type DegradedReason } from "./error";
+export { DEGRADED_REASONS, type DegradedReason } from "./error";
 export type Result<T> = T & ({ degraded: false } | { degraded: true; reason: DegradedReason });
 export type ToolResponse = {
 	isError?: boolean;
