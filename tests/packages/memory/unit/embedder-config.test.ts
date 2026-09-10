@@ -2,8 +2,8 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { embeddingConfigSchema } from "../../../../apps/mem-claw/src/shared/plugin-config-embedding-schema.ts";
-import { Embedder } from "../../../../apps/mem-claw/src/extraction/embedding-provider-client.ts";
+import { embeddingConfigSchema } from "../../../../packages/sno-station-mem/src/contract/config/plugin-config-embedding-schema.ts";
+import { Embedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client.ts";
 
 describe("Embedder config validation", () => {
 	it.each(["openai-compatible", "voyage-multimodal"])(
