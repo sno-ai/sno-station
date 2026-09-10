@@ -1,17 +1,17 @@
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
 
-import type { Embedder } from "../../../../apps/mem-claw/src/extraction/embedding-provider-client.ts";
-import { parseInsightMetadata } from "../../../../apps/mem-claw/src/extraction/memory-metadata-codec.ts";
-import { runProfileSectionUpdate } from "../../../../apps/mem-claw/src/extraction/profile-section-writer.ts";
+import type { Embedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client.ts";
+import { parseInsightMetadata } from "../../../../packages/sno-station-mem/src/engine/extraction/memory-metadata-codec.ts";
+import { runProfileSectionUpdate } from "../../../../packages/sno-station-mem/src/engine/extraction/profile-section-writer.ts";
 import type {
 	AgentLlmCompletion,
 	AgentLlmPort,
 	AgentLlmRequest,
-} from "../../../../apps/mem-claw/src/shared/agent-llm-port.ts";
-import { createLlmClient } from "../../../../apps/mem-claw/src/shared/llm-client.ts";
-import { pluginConfigSchema } from "../../../../apps/mem-claw/src/shared/types.ts";
-import { MemoryStore } from "../../../../apps/mem-claw/src/storage/store.ts";
-import { createTestDb, createTestEmbedder } from "../helpers/test-db.ts";
+} from "../../../../packages/sno-station-mem/src/model/agent-llm-port.ts";
+import { createLlmClient } from "../../../../packages/sno-station-mem/src/model/llm-client.ts";
+import { pluginConfigSchema } from "../../../../packages/sno-station-mem/src/engine/shared/types.ts";
+import { MemoryStore } from "../../../../packages/sno-station-mem/src/store/store.ts";
+import { createTestDb, createTestEmbedder } from "../../../apps/mem-claw/helpers/test-db.ts";
 
 /**
  * The local ranker, stated explicitly. Nothing in this file exercises the remote

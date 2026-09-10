@@ -7,10 +7,10 @@ import { join, relative, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const REPO_ROOT = resolve(import.meta.dirname, "../../../..");
-const SOURCE_ROOT = join(REPO_ROOT, "apps/mem-claw/src");
+const SOURCE_ROOT = join(REPO_ROOT, "packages/sno-station-mem/src");
 const FORBIDDEN_FILES = [
-	"apps/mem-claw/src/extraction/memory-noise-classifier.ts",
-	"apps/mem-claw/src/extraction/semantic-noise-prototype-bank.ts",
+	"packages/sno-station-mem/src/engine/extraction/memory-noise-classifier.ts",
+	"packages/sno-station-mem/src/engine/extraction/semantic-noise-prototype-bank.ts",
 ] as const;
 
 interface SourceUnit {
@@ -37,8 +37,8 @@ function retirementViolations(units: readonly SourceUnit[]): string[] {
 	const violations: string[] = [];
 	for (const unit of units) {
 		const isEnhancementBoundary =
-			unit.path === "apps/mem-claw/src/extraction/atomic-profile-keying.ts" ||
-			unit.path === "apps/mem-claw/src/extraction/atomic-memory-extraction.ts";
+			unit.path === "packages/sno-station-mem/src/engine/extraction/atomic-profile-keying.ts" ||
+			unit.path === "packages/sno-station-mem/src/engine/extraction/atomic-memory-extraction.ts";
 		if (
 			isEnhancementBoundary &&
 			/\b(?:AtomicEnhancementCap|validateAtomicEnhancementCap|ratificationReceiptPath|expectedCostCurveSha256|enhance-skipped:over-cap)\b|\bcap\s*:/u.test(
@@ -95,7 +95,7 @@ describe("atomic extraction retirement repository guard", () => {
 		expect(violations, violations.join("\n")).toEqual([]);
 
 		const ambient = units.find(
-			({ path }) => path === "apps/mem-claw/src/plugin/openclaw-ambient-learning-hook.ts",
+			({ path }) => path === "packages/sno-station-mem/src/engine/bindings/sno-station-mem-ambient-learning-hook.ts",
 		)?.source;
 		expect(ambient).toBeDefined();
 		expect(ambient).toContain("AtomicInsightDistiller");
@@ -131,7 +131,7 @@ describe("atomic extraction retirement repository guard", () => {
 		{
 			name: "profileKeying cap input",
 			rule: "enhancement-cap",
-			path: "apps/mem-claw/src/extraction/atomic-profile-keying.ts",
+			path: "packages/sno-station-mem/src/engine/extraction/atomic-profile-keying.ts",
 			source: "runAtomicProfileKeying({ cap: validatedCap });",
 		},
 	])("turns red for a planted $name", ({ rule, source, path = "planted.ts" }) => {

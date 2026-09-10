@@ -4,14 +4,14 @@
  */
 
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
-import type { Embedder } from "../../../../apps/mem-claw/src/extraction/embedding-provider-client.ts";
-import { routeTaskLifecycleAssertion } from "../../../../apps/mem-claw/src/extraction/task-lifecycle-route.ts";
+import type { Embedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client.ts";
+import { routeTaskLifecycleAssertion } from "../../../../packages/sno-station-mem/src/engine/extraction/task-lifecycle-route.ts";
 import {
 	buildTaskLifecycleCandidateSet,
 	taskLifecycleCandidateSetVersion,
-} from "../../../../apps/mem-claw/src/extraction/task-lifecycle-resolver.ts";
-import { MemoryStore } from "../../../../apps/mem-claw/src/storage/store.ts";
-import { createTestDb, createTestEmbedder, type TestDb } from "../helpers/test-db.ts";
+} from "../../../../packages/sno-station-mem/src/engine/extraction/task-lifecycle-resolver.ts";
+import { MemoryStore } from "../../../../packages/sno-station-mem/src/store/store.ts";
+import { createTestDb, createTestEmbedder, type TestDb } from "../../../apps/mem-claw/helpers/test-db.ts";
 
 const scope = "active-task-crash-retry-removal";
 const task = "review journal submissions";
