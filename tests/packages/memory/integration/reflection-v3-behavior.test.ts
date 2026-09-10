@@ -15,28 +15,28 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { loadAgentReflectionSlicesFromEntries } from "../../../../apps/mem-claw/src/reflection/memory-entry-projector.ts";
+import { loadAgentReflectionSlicesFromEntries } from "../../../../packages/sno-station-mem/src/engine/reflection/memory-entry-projector.ts";
 import {
 	runWithSerialGuard,
 	SERIAL_WINDOW_MS,
-} from "../../../../apps/mem-claw/src/reflection/session-serial-guard.ts";
+} from "../../../../packages/sno-station-mem/src/engine/reflection/session-serial-guard.ts";
 import type {
 	AgentLlmPort,
 	AgentLlmRequest,
-} from "../../../../apps/mem-claw/src/shared/agent-llm-port.ts";
-import type { MemoryEntry } from "../../../../apps/mem-claw/src/shared/types.ts";
-import { getMemClawDataDir } from "../../../../apps/mem-claw/src/storage/data-paths.ts";
+} from "../../../../packages/sno-station-mem/src/model/agent-llm-port.ts";
+import type { MemoryEntry } from "../../../../packages/sno-station-mem/src/engine/shared/types.ts";
+import { getMemClawDataDir } from "../../../../packages/sno-station-mem/src/store/data-paths.ts";
 import {
 	createReflectionHarness,
 	installEmbeddedRunnerStub,
 	type ReflectionHarness,
-} from "./_helpers/reflection-command-new-harness.ts";
+} from "../../../apps/mem-claw/integration/_helpers/reflection-command-new-harness.ts";
 import {
 	wrapEmbedderWithCallCounter,
 	wrapEmbedderWithSentinelDelay,
 	wrapEmbedderWithSentinelThrow,
 	wrapStoreWithSentinelThrow,
-} from "./_helpers/reflection-fault-wrappers.ts";
+} from "../../../apps/mem-claw/integration/_helpers/reflection-fault-wrappers.ts";
 
 function requireValue<T>(value: T | undefined, message: string): T {
 	if (value === undefined) {
@@ -507,7 +507,7 @@ describe("reflection v3 — Group 3 (mapped-memory routing)", () => {
 		await h.fireCommandNew({ sessionKey: tk("g3-host-second"), agentId: "main" });
 
 		// The real opening of the profile-section writer's prompt, from
-		// `apps/mem-claw/src/extraction/profile-section-writer.ts`. The sentence asserted here
+		// `packages/sno-station-mem/src/engine/extraction/profile-section-writer.ts`. The sentence asserted here
 		// before was "You update one current-state profile section.", which the product has never
 		// emitted, so this case had not passed since it was written on 2026-07-18.
 		expect(
@@ -727,7 +727,7 @@ describe("reflection v3 — Group 3 (mapped-memory routing)", () => {
 		// Wait briefly for the governance append (FS write is sequential after
 		// the layered store completes, but we already polled past the event row)
 		const learningsPath = join(
-			process.env.MEM_CLAW_DATA_DIR_ROOT ? getMemClawDataDir() : join(h.stateDir, "mem-claw"),
+			process.env.SNO_STATION_MEM_DATA_DIR_ROOT ? getMemClawDataDir() : join(h.stateDir, "mem-claw"),
 			".learnings",
 			"LEARNINGS.md",
 		);

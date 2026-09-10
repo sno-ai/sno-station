@@ -10,7 +10,7 @@ import {
 	isReflectionNonRetryError,
 	isTransientReflectionUpstreamError,
 	runWithReflectionTransientRetryOnce,
-} from "../../../../apps/mem-claw/src/reflection/transient-generation-retry.ts";
+} from "../../../../packages/sno-station-mem/src/engine/reflection/transient-generation-retry.ts";
 
 // ---------------------------------------------------------------------------
 // 1-2: isTransientReflectionUpstreamError
