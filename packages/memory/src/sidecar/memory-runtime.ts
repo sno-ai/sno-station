@@ -167,7 +167,7 @@ export class MemoryRuntimePool {
 				await entry.observability.emit({ eventType: "llm.call", sessionUuid: scope.host?.observeSessionUuid,
 					payload: { model: `${response.provider}:${response.model}`, prompt_tokens: response.usage.inputTokens,
 						completion_tokens: response.usage.outputTokens, token_source: "plugin_internal_paid",
-						latency_ms: response.durationMs, cache_read_tokens: 0, cache_write_tokens: 0 } });
+						latency_ms: Math.round(response.durationMs), cache_read_tokens: 0, cache_write_tokens: 0 } });
 			}
 			if (responses.length) await entry.observability.flush({ force: true, timeoutMs: 5_000 });
 		});
