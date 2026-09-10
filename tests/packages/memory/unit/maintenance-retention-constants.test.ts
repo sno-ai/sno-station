@@ -9,8 +9,8 @@ import { describe, expect, it } from "vitest";
 import {
 	MEMORY_EVENTS_USAGE_RETENTION_MS,
 	OUTBOX_QUARANTINE_RETENTION_MS,
-} from "../../../../apps/mem-claw/src/storage/maintenance.ts";
-import { RECENT_RECALL_WINDOW_MS } from "../../../../apps/mem-claw/src/telemetry/memory-telemetry-purge.ts";
+} from "../../../../packages/sno-station-mem/src/store/maintenance.ts";
+import { RECENT_RECALL_WINDOW_MS } from "../../../../packages/sno-station-mem/src/engine/telemetry/memory-telemetry-purge.ts";
 
 describe("maintenance retention constants", () => {
 	it("keeps usage-event retention at or above the purge-safety recall lookback", () => {
