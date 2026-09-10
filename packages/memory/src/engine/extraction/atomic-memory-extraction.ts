@@ -1086,7 +1086,7 @@ async function deriveStoreCategories(
 	let unresolvedIndex = 0;
 	return records.map((record): AtomicKeyedRecord => {
 		if (record.kind === "occurrence") return { ...record, category: "episodic" };
-		if (record.subjectKind === "user") return { ...record, category: "profile", subject: "user" };
+		if (record.subjectKind === "user") return { ...record, category: "profile", subject: record.lane === "parked" ? record.subject : "user" };
 		if (record.subjectKind === "agent") {
 			return { ...record, category: "profile", subject: "agent", attribute: null };
 		}
@@ -1211,7 +1211,12 @@ function buildAtomicTodoWriteFactories(
 	records: readonly AtomicKeyedRecord[],
 ): Array<() => TaskLifecycleWriteInput> {
 	const seen = new Set<string>();
-	return records.flatMap((record, recordIndex) => {
+	// Profile keying groups record kinds; task transitions must still follow transcript order.
+	const ordered = records.map((record, recordIndex) => ({ record, recordIndex })).sort((a, b) =>
+		(a.record.sourceSpan?.turnIndex ?? 0) - (b.record.sourceSpan?.turnIndex ?? 0) ||
+		(a.record.sourceSpan?.startOffset ?? 0) - (b.record.sourceSpan?.startOffset ?? 0),
+	);
+	return ordered.flatMap(({ record, recordIndex }) => {
 		if (
 			record.todo === "none" ||
 			record.lane !== "active" ||
