@@ -2,22 +2,22 @@
 
 import { randomUUID } from "node:crypto";
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import type { Embedder } from "../../../../apps/mem-claw/src/extraction/embedding-provider-client.ts";
+import type { Embedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client.ts";
 import {
 	buildInsightMetadata,
 	parseInsightMetadata,
 	stringifyInsightMetadata,
-} from "../../../../apps/mem-claw/src/extraction/memory-metadata-codec.ts";
-import type { InsightMetadataPatch } from "../../../../apps/mem-claw/src/extraction/memory-metadata-types.ts";
-import { StorageError } from "../../../../apps/mem-claw/src/shared/errors.ts";
+} from "../../../../packages/sno-station-mem/src/engine/extraction/memory-metadata-codec.ts";
+import type { InsightMetadataPatch } from "../../../../packages/sno-station-mem/src/engine/extraction/memory-metadata-types.ts";
+import { StorageError } from "../../../../packages/sno-station-mem/src/engine/shared/errors.ts";
 import {
 	MEMORY_CATEGORIES,
 	type MemoryCategory,
 	type MemoryEntry,
-} from "../../../../apps/mem-claw/src/shared/types.ts";
-import type { StoreInput } from "../../../../apps/mem-claw/src/storage/memory-store-base.ts";
-import { MemoryStore } from "../../../../apps/mem-claw/src/storage/store.ts";
-import { createTestDb, createTestEmbedder } from "../helpers/test-db.ts";
+} from "../../../../packages/sno-station-mem/src/engine/shared/types.ts";
+import type { StoreInput } from "../../../../packages/sno-station-mem/src/store/memory-store-base.ts";
+import { MemoryStore } from "../../../../packages/sno-station-mem/src/store/store.ts";
+import { createTestDb, createTestEmbedder } from "../../../apps/mem-claw/helpers/test-db.ts";
 
 const SCOPE = "memory-kinds-group-5";
 const BASE_TS = Date.UTC(2026, 4, 20, 12, 0, 0);
