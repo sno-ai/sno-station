@@ -10,8 +10,8 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
 	enumerateRemCandidateScopes,
 	readCandidates,
-} from "../../../../apps/mem-claw/src/sidecar/rem-batch-executor.ts";
-import { createTestDb, type TestDb } from "../helpers/test-db.ts";
+} from "../../../../packages/sno-station-mem/src/sidecar/rem-batch-executor.ts";
+import { createTestDb, type TestDb } from "../../../apps/mem-claw/helpers/test-db.ts";
 
 describe("REM automatic trigger foundations", () => {
 	let database: TestDb | undefined;

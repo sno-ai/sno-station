@@ -6,11 +6,11 @@ import {
 	renderAdapterAChatPrompt,
 	renderAdapterAPrompt,
 	type AdapterAMemoryView,
-} from "../../../../packages/rem-core/src/index.ts";
+} from "../../../../packages/sno-station-mem/src/engine/rem/index.ts";
 
 const fixturePath = resolve(
 	import.meta.dirname,
-	"../../../../packages/rem-core/fixtures/adapter-a-prompt-byte-identity.json",
+	"../../../../packages/sno-station-mem/fixtures/adapter-a-prompt-byte-identity.json",
 );
 const fixture = JSON.parse(readFileSync(fixturePath, "utf8")) as {
 	fixtures: Array<{
