@@ -6,11 +6,11 @@
 import { createHash } from "node:crypto";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
 
-import type { Embedder } from "../../../../apps/mem-claw/src/extraction/embedding-provider-client.ts";
-import { MemoryStore } from "../../../../apps/mem-claw/src/storage/store.ts";
-import { deriveRemUpdateStamp } from "../../../../apps/mem-claw/src/storage/memory-store-rem-api.ts";
-import type { RemUpdateRewriteConfig } from "../../../../packages/rem-core/src/index.ts";
-import { createTestDb, createTestEmbedder, type TestDb } from "../helpers/test-db.ts";
+import type { Embedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client.ts";
+import { MemoryStore } from "../../../../packages/sno-station-mem/src/store/store.ts";
+import { deriveRemUpdateStamp } from "../../../../packages/sno-station-mem/src/store/memory-store-rem-api.ts";
+import type { RemUpdateRewriteConfig } from "../../../../packages/sno-station-mem/src/engine/rem/index.ts";
+import { createTestDb, createTestEmbedder, type TestDb } from "../../../apps/mem-claw/helpers/test-db.ts";
 
 interface StampInput {
 	source: string;
@@ -172,7 +172,7 @@ describe("ACC-23 source-derived REM update stamp", () => {
 	});
 
 	it("changes when any canonical source or rewrite-configuration field changes", async () => {
-		const stampModule = (await import("../../../../apps/mem-claw/src/storage/memory-store-rem-api.ts")) as StampModule;
+		const stampModule = (await import("../../../../packages/sno-station-mem/src/store/memory-store-rem-api.ts")) as StampModule;
 		expect(stampModule.deriveRemUpdateStamp).toBeTypeOf("function");
 		const derive = stampModule.deriveRemUpdateStamp;
 		if (!derive) return;

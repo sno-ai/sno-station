@@ -20,26 +20,26 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
 	createRemModelStageResponsePort,
 	runRemBatchJob,
-} from "../../../../apps/mem-claw/src/sidecar/rem-batch-executor.ts";
+} from "../../../../packages/sno-station-mem/src/sidecar/rem-batch-executor.ts";
 import {
 	createCoverageGatedConflictPort,
 	createMemClawRemMutationExecutor,
 	createMemClawRemPorts,
 	createRemReplaceCarrierPort,
 	issueReplaceCoverageAllow,
-} from "../../../../apps/mem-claw/src/storage/rem-sqlite-adapter.ts";
+} from "../../../../packages/sno-station-mem/src/store/rem-sqlite-adapter.ts";
 import {
 	installRemSchema,
 	getRemUpdateLocaleResource,
 	parseRemOperationalConfiguration,
 	type RemMutationResult,
 	type WriteTextVersionInput,
-} from "../../../../packages/rem-core/src/index.ts";
-import { createRemOwnerDecidedOperationalConfiguration } from "../helpers/rem-entry-config-fixture.ts";
-import { createTestLlmClient } from "../helpers/llm-client.ts";
-import { deriveRemUpdateStamp } from "../../../../apps/mem-claw/src/storage/rem-update-stamp-migration.ts";
-import { seedProductionMemory } from "../helpers/rem-production-entry-fixture.ts";
-import { createTestDb } from "../helpers/test-db.ts";
+} from "../../../../packages/sno-station-mem/src/engine/rem/index.ts";
+import { createRemOwnerDecidedOperationalConfiguration } from "../../../apps/mem-claw/helpers/rem-entry-config-fixture.ts";
+import { createTestLlmClient } from "../../../apps/mem-claw/helpers/llm-client.ts";
+import { deriveRemUpdateStamp } from "../../../../packages/sno-station-mem/src/store/rem-update-stamp-migration.ts";
+import { seedProductionMemory } from "../../../apps/mem-claw/helpers/rem-production-entry-fixture.ts";
+import { createTestDb } from "../../../apps/mem-claw/helpers/test-db.ts";
 
 // Matches the pinned transition grammar, so the code router assigns it to rem-update.
 const TRANSITION_TEXT = "Lives in San Diego. Moved from San Francisco in 2024.";
@@ -75,8 +75,8 @@ async function runUpdateWave(input: {
 	const database = createTestDb();
 	const stateRoot = mkdtempSync(join(tmpdir(), "rem-judgment-"));
 	const prior = {
-		MEM_CLAW_DATA_DIR_ROOT: process.env["MEM_CLAW_DATA_DIR_ROOT"],
-		MEM_CLAW_REM_EXPECTED_DB_PATH: process.env["MEM_CLAW_REM_EXPECTED_DB_PATH"],
+		SNO_STATION_MEM_DATA_DIR_ROOT: process.env["SNO_STATION_MEM_DATA_DIR_ROOT"],
+		SNO_STATION_MEM_REM_EXPECTED_DB_PATH: process.env["SNO_STATION_MEM_REM_EXPECTED_DB_PATH"],
 		OPENCLAW_STATE_DIR: process.env["OPENCLAW_STATE_DIR"],
 	};
 	cleanups.push(() => {
@@ -87,8 +87,8 @@ async function runUpdateWave(input: {
 		database.cleanup();
 		rmSync(stateRoot, { recursive: true, force: true });
 	});
-	process.env["MEM_CLAW_DATA_DIR_ROOT"] = dirname(database.dbPath);
-	process.env["MEM_CLAW_REM_EXPECTED_DB_PATH"] = database.dbPath;
+	process.env["SNO_STATION_MEM_DATA_DIR_ROOT"] = dirname(database.dbPath);
+	process.env["SNO_STATION_MEM_REM_EXPECTED_DB_PATH"] = database.dbPath;
 	process.env["OPENCLAW_STATE_DIR"] = stateRoot;
 	writeFileSync(
 		join(stateRoot, "openclaw.json"),
