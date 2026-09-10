@@ -27,6 +27,7 @@ const sharedConfig = {
 export default defineConfig([
 { ...sharedConfig, entry: {
   "index": "src/index.ts",
+  "cli": "src/contract/cli.ts",
   "memdump": "src/engine/diagnostics/memdump.ts",
   "diagnostic-encoder": "src/engine/observability/early-diagnostics.ts",
   "internal/config/index": "config/index.ts",

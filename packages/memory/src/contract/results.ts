@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { MEMORY_CATEGORIES, type MemoryEntry, type RetrievalResult } from "../engine/shared/types";
+import type { OpenClawMemorySearchResult } from "./provider-runtime-types";
 import type { JsonValue } from "./inputs";
 
 export const DEGRADED_REASONS: readonly [
@@ -22,7 +23,7 @@ export type InspectData =
 	| { op: "get"; entry: MemoryEntry | null; file?: { text: string; path: string; truncated?: boolean; from?: number; lines?: number; nextFrom?: number } };
 export interface ContractOutputs {
 	init: Result<{ principal: string; skinId: string }>;
-	getRecall: Result<{ recallId: string; contextText: string; hits: RetrievalResult[] }>;
+	getRecall: Result<{ recallId: string; contextText: string; hits?: RetrievalResult[]; memoryIds?: string[]; toolResult?: ToolResponse; nativeHits?: OpenClawMemorySearchResult[]; unavailable?: string }>;
 	capture: Result<{ turnId: string; committed: boolean }>;
 	mutate: Result<{ result: ToolResponse }>;
 	inspect: Result<{ result: InspectData }>;
@@ -37,6 +38,11 @@ export const memoryEntrySchema: z.ZodType<MemoryEntry, unknown> = z.strictObject
 	timestamp: z.number().finite(), timezone: z.string(), metadata: z.string(), contentHash: z.string(),
 	lane: z.enum(["active", "parked", "quarantined"]), rawCandidateJson: z.string().optional(),
 	dispositionReason: z.string().optional(), dispositionedAt: z.number().finite().optional(),
+});
+const nativeHitSchema: z.ZodType<OpenClawMemorySearchResult, unknown> = z.strictObject({
+	path: z.string(), startLine: z.number().int(), endLine: z.number().int(), score: z.number().finite(),
+	vectorScore: z.number().finite().optional(), textScore: z.number().finite().optional(),
+	snippet: z.string(), source: z.enum(["memory", "sessions"]), citation: z.string().optional(),
 });
 const score = z.strictObject({ score: z.number().finite() });
 const rankedScore = score.extend({ rank: z.number().int() });
@@ -76,7 +82,7 @@ function resultSchema<T extends z.ZodRawShape>(shape: T) {
 
 export const outputSchemas: { [K in keyof ContractOutputs]: z.ZodType<ContractOutputs[K], unknown> } = {
 	init: resultSchema({ principal: z.string().min(1), skinId: z.string().min(1) }),
-	getRecall: resultSchema({ recallId: z.string(), contextText: z.string(), hits: z.array(retrievalResultSchema) }),
+	getRecall: resultSchema({ recallId: z.string(), contextText: z.string(), hits: z.array(retrievalResultSchema).optional(), memoryIds: z.array(z.string().min(1)).optional(), toolResult: toolResponseSchema.optional(), nativeHits: z.array(nativeHitSchema).optional(), unavailable: z.string().optional() }),
 	capture: resultSchema({ turnId: z.string().min(1), committed: z.boolean() }),
 	mutate: resultSchema({ result: toolResponseSchema }),
 	inspect: resultSchema({ result: inspectDataSchema }),
