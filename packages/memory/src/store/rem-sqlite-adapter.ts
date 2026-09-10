@@ -1,5 +1,5 @@
 /** @file rem-sqlite-adapter.ts
- * @purpose Binds capability-safe REM mutation and recovery ports to encrypted mem-claw SQLite.
+ * @purpose Binds capability-safe REM mutation and recovery ports to encrypted sno-station-mem SQLite.
  * @boundary Additive REM tables and recoverable memory-row updates; no deletion or compaction.
  */
 
@@ -90,13 +90,13 @@ interface FacetRecoveryRow {
 	expected_chunk_facets_json: string;
 }
 
-export interface MemClawRemPortOptions {
+export interface SnoStationMemRemPortOptions {
 	database: SqliteDatabaseLike;
 	llmClient: LlmClient;
 	memoryStore?: MemoryStore;
 }
 
-export interface MemClawRemRecovery {
+export interface SnoStationMemRemRecovery {
 	restoreLane(recoveryHandle: string): void;
 	restoreTextVersion(recoveryHandle: string): void;
 	restoreMark(recoveryHandle: string): void;
@@ -262,7 +262,7 @@ export function createRemReplaceCarrierPort(input: {
 	};
 }
 
-export type MemClawRemPorts = Omit<RemPorts, "conflict"> & {
+export type SnoStationMemRemPorts = Omit<RemPorts, "conflict"> & {
 	conflict: {
 		softClose(input: SoftCloseInput): Promise<RemMutationResult>;
 		writeTextVersion(
@@ -271,7 +271,7 @@ export type MemClawRemPorts = Omit<RemPorts, "conflict"> & {
 	};
 };
 
-export function createMemClawRemPorts(options: MemClawRemPortOptions): MemClawRemPorts {
+export function createSnoStationMemRemPorts(options: SnoStationMemRemPortOptions): SnoStationMemRemPorts {
 	return {
 		clock: {
 			now: () => new Date().toISOString(),
@@ -307,9 +307,9 @@ function assertVerifiedTextWrite(verification: RemWriteVerificationToken, rowId:
 	}
 }
 
-export function createMemClawRemRecovery(
+export function createSnoStationMemRemRecovery(
 	database: SqliteDatabaseLike,
-): MemClawRemRecovery {
+): SnoStationMemRemRecovery {
 	return {
 		restoreLane: (recoveryHandle) =>
 			restore(database, recoveryHandle, "lane"),
@@ -343,7 +343,7 @@ interface WriteVerdictRow {
 	retired_fact_atoms_json: string;
 }
 
-export function createMemClawRemMutationExecutor(input: {
+export function createSnoStationMemRemMutationExecutor(input: {
 	database: SqliteDatabaseLike;
 	/**
 	 * The job every attempt this executor opens belongs to. It lives here, not on `openAttempt`,
@@ -356,7 +356,7 @@ export function createMemClawRemMutationExecutor(input: {
 	configurationSha256: string;
 	liveContentionRetries: number;
 	modelResponse?: { kind: "absent" | "invalid"; value?: string | undefined } | undefined;
-	recovery?: MemClawRemRecovery;
+	recovery?: SnoStationMemRemRecovery;
 	applyTextVersion?: (
 		input: WriteTextVersionInput,
 		verification: RemWriteVerificationToken,
@@ -489,8 +489,8 @@ export function createMemClawRemMutationExecutor(input: {
 						reason_code: "mutation_failed",
 						writer: attempt.writer,
 					}, {
-						event_name: "mem_claw.rem-sqlite-adapter.rem.mutation.failed",
-						file: "apps/mem-claw/src/storage/rem-sqlite-adapter.ts",
+						event_name: "sno_station_mem.rem-sqlite-adapter.rem.mutation.failed",
+						file: "packages/sno-station-mem/src/store/rem-sqlite-adapter.ts",
 						function: "mutateAttempt",
 						site_id: "rem-sqlite-adapter.mutateAttempt.4c4b5764ca",
 					});
@@ -682,7 +682,7 @@ async function applyWriterOperation(
 	database: SqliteDatabaseLike,
 	attempt: WriteAttemptRow,
 	operation: RemWriterOperation,
-	recovery: MemClawRemRecovery | undefined,
+	recovery: SnoStationMemRemRecovery | undefined,
 	applyTextVersion:
 		| ((
 				input: WriteTextVersionInput,

@@ -54,8 +54,8 @@ export function resolveScopeFilter(
 		log.warn("resolveScopeFilter: non-bypass agent resolved to empty scope list", {
 			agent_reference: privateLogReference(agentId), scope_count: 0,
 		}, {
-			event_name: "mem_claw.scope-helpers.resolvescopefilter.non.bypass.agent.resolved.to.empty.scope.list",
-			file: "apps/mem-claw/src/security/scope-helpers.ts",
+			event_name: "sno_station_mem.scope-helpers.resolvescopefilter.non.bypass.agent.resolved.to.empty.scope.list",
+			file: "packages/sno-station-mem/src/engine/security/scope-helpers.ts",
 			function: "resolveScopeFilter",
 			site_id: "scope-helpers.resolveScopeFilter.0d7f91dae7",
 		});
@@ -67,8 +67,8 @@ export function resolveScopeFilter(
 			log.warn("resolveScopeFilter: legacy ScopePolicy lacks getScopeFilter, normalizing to bypass", {
 				agent_reference: privateLogReference(key), reason_code: "legacy_scope_policy_bypass",
 			}, {
-				event_name: "mem_claw.scope-helpers.resolvescopefilter.legacy.scopepolicy.lacks.getscopefilter.normalizing",
-				file: "apps/mem-claw/src/security/scope-helpers.ts",
+				event_name: "sno_station_mem.scope-helpers.resolvescopefilter.legacy.scopepolicy.lacks.getscopefilter.normalizing",
+				file: "packages/sno-station-mem/src/engine/security/scope-helpers.ts",
 				function: "resolveScopeFilter",
 				site_id: "scope-helpers.resolveScopeFilter.720935590d",
 			});

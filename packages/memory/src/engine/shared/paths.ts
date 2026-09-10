@@ -14,7 +14,7 @@ export function getStateDir(): string {
 	return path.resolve(process.env.SNO_PROFILE_DIR ?? path.join(homedir(), ".sno"));
 }
 
-export function getMemClawStateDir(): string {
+export function getSnoStationMemStateDir(): string {
 	return path.join(getStateDir(), "sno-station-mem");
 }
 
@@ -31,10 +31,10 @@ export function getInstallationConfigPath(): string {
 }
 
 export function getDefaultStorePath(): string {
-	return path.join(getMemClawStateDir(), getPrincipal(), "memory.sqlite");
+	return path.join(getSnoStationMemStateDir(), getPrincipal(), "memory.sqlite");
 }
 
-export function resolveMemClawDbPath(configuredPath: string | undefined,
+export function resolveSnoStationMemDbPath(configuredPath: string | undefined,
 	resolveConfiguredPath: (input: string) => string): string {
 	return configuredPath ? resolveConfiguredPath(configuredPath) : getDefaultStorePath();
 }

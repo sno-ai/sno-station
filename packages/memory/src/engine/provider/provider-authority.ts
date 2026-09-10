@@ -1,6 +1,6 @@
 import { FIXED_PROTOCOL_VALUE_65, FIXED_PROTOCOL_VALUE_66, FIXED_PROTOCOL_VALUE_67, FIXED_PROTOCOL_VALUE_68, FIXED_PROTOCOL_VALUE_76, PERSISTED_PROVIDER_SYSTEM } from "../../model/signed-registry-constants";
 /** @file provider-authority.ts
- * @purpose Resolves OpenClaw external project/agent keys to internal provider authority.
+ * @purpose Resolves SnoStationMem external project/agent keys to internal provider authority.
  * @boundary SQLite mapping tables and project-agent membership checks.
  */
 

@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, expect, it, vi } from "vitest";
 import { bindStore, getInstallationConfigPath } from "../../../../packages/sno-station-mem/src/engine/shared/paths";
-import { readOpenClawConfig, PLUGIN_ENTRY_KEY } from "../../../../packages/sno-station-mem/src/engine/bindings/embedder-config-files";
+import { readSnoStationMemConfig, PLUGIN_ENTRY_KEY } from "../../../../packages/sno-station-mem/src/engine/bindings/embedder-config-files";
 import { pluginConfigSchema } from "../../../../packages/sno-station-mem/src/contract/config/plugin-config-schema";
 
 const roots: string[] = [];
@@ -33,7 +33,7 @@ it("preserves every setting the retained REM runtime reads without persisting ei
 	expect(bytes).not.toContain("zebra-extraction-private-marker");
 	expect(bytes).not.toContain("zebra-rerank-private-marker");
 	const before = pluginConfigSchema.parse(original);
-	const after = pluginConfigSchema.parse(readOpenClawConfig(getInstallationConfigPath()).plugins?.entries?.[PLUGIN_ENTRY_KEY]?.config);
+	const after = pluginConfigSchema.parse(readSnoStationMemConfig(getInstallationConfigPath()).plugins?.entries?.[PLUGIN_ENTRY_KEY]?.config);
 	for (const field of ["dbPath", "embedding", "retrieval", "memoryTelemetry", "autoRecallTimeoutMs"] as const) {
 		expect(after[field], field).toEqual(before[field]);
 	}

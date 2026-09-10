@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { MEMORY_CATEGORIES, type MemoryEntry, type RetrievalResult } from "../engine/shared/types";
-import type { OpenClawMemorySearchResult } from "./provider-runtime-types";
+import type { SnoStationMemMemorySearchResult } from "./provider-runtime-types";
 import type { JsonValue } from "./inputs";
 
 export const DEGRADED_REASONS: readonly [
@@ -23,7 +23,7 @@ export type InspectData =
 	| { op: "get"; entry: MemoryEntry | null; file?: { text: string; path: string; truncated?: boolean; from?: number; lines?: number; nextFrom?: number } };
 export interface ContractOutputs {
 	init: Result<{ principal: string; skinId: string }>;
-	getRecall: Result<{ recallId: string; contextText: string; hits?: RetrievalResult[]; memoryIds?: string[]; toolResult?: ToolResponse; nativeHits?: OpenClawMemorySearchResult[]; unavailable?: string }>;
+	getRecall: Result<{ recallId: string; contextText: string; hits?: RetrievalResult[]; memoryIds?: string[]; toolResult?: ToolResponse; nativeHits?: SnoStationMemMemorySearchResult[]; unavailable?: string }>;
 	capture: Result<{ turnId: string; committed: boolean }>;
 	mutate: Result<{ result: ToolResponse }>;
 	inspect: Result<{ result: InspectData }>;
@@ -39,7 +39,7 @@ export const memoryEntrySchema: z.ZodType<MemoryEntry, unknown> = z.strictObject
 	lane: z.enum(["active", "parked", "quarantined"]), rawCandidateJson: z.string().optional(),
 	dispositionReason: z.string().optional(), dispositionedAt: z.number().finite().optional(),
 });
-const nativeHitSchema: z.ZodType<OpenClawMemorySearchResult, unknown> = z.strictObject({
+const nativeHitSchema: z.ZodType<SnoStationMemMemorySearchResult, unknown> = z.strictObject({
 	path: z.string(), startLine: z.number().int(), endLine: z.number().int(), score: z.number().finite(),
 	vectorScore: z.number().finite().optional(), textScore: z.number().finite().optional(),
 	snippet: z.string(), source: z.enum(["memory", "sessions"]), citation: z.string().optional(),

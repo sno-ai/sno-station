@@ -1,7 +1,7 @@
 /** @file strategy-hook-runner.ts
  * @purpose Connects runtime events to reflection storage and learning workflows.
  * @boundary Plugin hooks, reflection analysis, and self-improvement integration.
- * @see daily-log-generator.ts, learning-file-hooks.ts, openclaw-plugin-runtime.ts.
+ * @see daily-log-generator.ts, learning-file-hooks.ts, sno-station-mem-plugin-runtime.ts.
  */
 
 import { createLogger as createDiagnosticLogger } from "@snoai/utils/logger";

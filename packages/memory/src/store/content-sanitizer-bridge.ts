@@ -1,5 +1,5 @@
 /** @file content-sanitizer-bridge.ts
- * @purpose Adapts mem-claw storage inputs to the shared content sanitizer package.
+ * @purpose Adapts sno-station-mem storage inputs to the shared content sanitizer package.
  * @boundary Thin storage adapter only; sanitizer policy lives in @snoai/content-sanitizer.
  */
 

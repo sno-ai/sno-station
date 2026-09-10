@@ -12,7 +12,7 @@ function bindApplication(input: DiagnosticInput): DiagnosticInput {
 	const matched = site?.file === input.source.file && site?.function === input.source.function;
 	return {
 		...input,
-		resource: { service_name: "mem-claw", service_version: packageMetadata.version,
+		resource: { service_name: "sno-station-mem", service_version: packageMetadata.version,
 			build_id: logSiteCatalog.build_id, process_id: process.pid,
 			process_instance_id: diagnosticProcessInstanceId },
 		resolvedSource: { catalog_status: matched ? "available" : "unavailable",

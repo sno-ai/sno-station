@@ -93,8 +93,8 @@ export async function runBProfileSectionRekey(args: {
 		log.warn("section dictionary cache rejected during re-key; treating it as absent", {
 			error,
 		}, {
-			event_name: "mem_claw.b-profile-section-rekey.section.dictionary.cache.rejected.during.re.key.treating.it.as.absent",
-			file: "apps/mem-claw/src/extraction/b-profile-section-rekey.ts",
+			event_name: "sno_station_mem.b-profile-section-rekey.section.dictionary.cache.rejected.during.re.key.treating.it.as.absent",
+			file: "packages/sno-station-mem/src/engine/extraction/b-profile-section-rekey.ts",
 			function: "runBProfileSectionRekey",
 			site_id: "b-profile-section-rekey.runBProfileSectionRekey.b452a7657e",
 		});
@@ -113,8 +113,8 @@ export async function runBProfileSectionRekey(args: {
 	if (canonicalRepairPending) {
 		const plan = await buildCanonicalRepairPlan(args.store, args.projectIdFilter);
 		log.info("B-profile canonical-form repair dry run", plan.report, {
-			event_name: "mem_claw.b-profile-section-rekey.b.profile.canonical.form.repair.dry.run",
-			file: "apps/mem-claw/src/extraction/b-profile-section-rekey.ts",
+			event_name: "sno_station_mem.b-profile-section-rekey.b.profile.canonical.form.repair.dry.run",
+			file: "packages/sno-station-mem/src/engine/extraction/b-profile-section-rekey.ts",
 			function: "runBProfileSectionRekey",
 			site_id: "b-profile-section-rekey.runBProfileSectionRekey.4494531e35",
 		});
@@ -125,8 +125,8 @@ export async function runBProfileSectionRekey(args: {
 				dryRun: plan.report,
 				applied: canonicalApplied,
 			}, {
-				event_name: "mem_claw.b-profile-section-rekey.b.profile.canonical.form.repair.reconciliation.failed",
-				file: "apps/mem-claw/src/extraction/b-profile-section-rekey.ts",
+				event_name: "sno_station_mem.b-profile-section-rekey.b.profile.canonical.form.repair.reconciliation.failed",
+				file: "packages/sno-station-mem/src/engine/extraction/b-profile-section-rekey.ts",
 				function: "runBProfileSectionRekey",
 				site_id: "b-profile-section-rekey.runBProfileSectionRekey.5276d7dfea",
 			});
@@ -138,8 +138,8 @@ export async function runBProfileSectionRekey(args: {
 	if (registryRepairPending || canonicalRepairPending) {
 		const plan = await buildRekeyPlan(args.store, args.projectIdFilter);
 		log.info("B-profile section re-key dry run", plan.report, {
-			event_name: "mem_claw.b-profile-section-rekey.b.profile.section.re.key.dry.run",
-			file: "apps/mem-claw/src/extraction/b-profile-section-rekey.ts",
+			event_name: "sno_station_mem.b-profile-section-rekey.b.profile.section.re.key.dry.run",
+			file: "packages/sno-station-mem/src/engine/extraction/b-profile-section-rekey.ts",
 			function: "runBProfileSectionRekey",
 			site_id: "b-profile-section-rekey.runBProfileSectionRekey.1acb6c65f8",
 		});
@@ -150,8 +150,8 @@ export async function runBProfileSectionRekey(args: {
 				dryRun: plan.report,
 				applied: registryApplied,
 			}, {
-				event_name: "mem_claw.b-profile-section-rekey.b.profile.section.re.key.reconciliation.failed",
-				file: "apps/mem-claw/src/extraction/b-profile-section-rekey.ts",
+				event_name: "sno_station_mem.b-profile-section-rekey.b.profile.section.re.key.reconciliation.failed",
+				file: "packages/sno-station-mem/src/engine/extraction/b-profile-section-rekey.ts",
 				function: "runBProfileSectionRekey",
 				site_id: "b-profile-section-rekey.runBProfileSectionRekey.d8bb76de51",
 			});
@@ -172,8 +172,8 @@ export async function runBProfileSectionRekey(args: {
 		});
 	}
 	log.info("B-profile section re-key applied", applied, {
-		event_name: "mem_claw.b-profile-section-rekey.b.profile.section.re.key.applied",
-		file: "apps/mem-claw/src/extraction/b-profile-section-rekey.ts",
+		event_name: "sno_station_mem.b-profile-section-rekey.b.profile.section.re.key.applied",
+		file: "packages/sno-station-mem/src/engine/extraction/b-profile-section-rekey.ts",
 		function: "runBProfileSectionRekey",
 		site_id: "b-profile-section-rekey.runBProfileSectionRekey.ce06a215a3",
 	});
@@ -195,8 +195,8 @@ export function scheduleBProfileSectionRekey(args: {
 		log.error("detached B-profile section re-key failed", {
 			error,
 		}, {
-			event_name: "mem_claw.b-profile-section-rekey.detached.b.profile.section.re.key.failed",
-			file: "apps/mem-claw/src/extraction/b-profile-section-rekey.ts",
+			event_name: "sno_station_mem.b-profile-section-rekey.detached.b.profile.section.re.key.failed",
+			file: "packages/sno-station-mem/src/engine/extraction/b-profile-section-rekey.ts",
 			function: "<anonymous callback>",
 			site_id: "b-profile-section-rekey.<anonymous callback>.9cc8218e54",
 		});
@@ -875,8 +875,8 @@ function assertPlanReconciles(report: BProfileSectionRekeyReport): void {
 		report.unchanged;
 	if (classified === report.sourceRows) return;
 	log.error("B-profile section re-key dry-run counts do not reconcile", report, {
-		event_name: "mem_claw.b-profile-section-rekey.b.profile.section.re.key.dry.run.counts.do.not.reconcile",
-		file: "apps/mem-claw/src/extraction/b-profile-section-rekey.ts",
+		event_name: "sno_station_mem.b-profile-section-rekey.b.profile.section.re.key.dry.run.counts.do.not.reconcile",
+		file: "packages/sno-station-mem/src/engine/extraction/b-profile-section-rekey.ts",
 		function: "assertPlanReconciles",
 		site_id: "b-profile-section-rekey.assertPlanReconciles.03748b5c20",
 	});
@@ -887,8 +887,8 @@ function assertCanonicalPlanReconciles(plan: CanonicalRepairPlan): void {
 	const plannedRows = plan.actions.reduce((count, action) => count + action.sources.length, 0);
 	if (plannedRows + plan.report.unchanged === plan.report.sourceRows) return;
 	log.error("B-profile canonical-form repair dry-run counts do not reconcile", plan.report, {
-		event_name: "mem_claw.b-profile-section-rekey.b.profile.canonical.form.repair.dry.run.counts.do.not.reconcile",
-		file: "apps/mem-claw/src/extraction/b-profile-section-rekey.ts",
+		event_name: "sno_station_mem.b-profile-section-rekey.b.profile.canonical.form.repair.dry.run.counts.do.not.reconcile",
+		file: "packages/sno-station-mem/src/engine/extraction/b-profile-section-rekey.ts",
 		function: "assertCanonicalPlanReconciles",
 		site_id: "b-profile-section-rekey.assertCanonicalPlanReconciles.2ad72089d1",
 	});
@@ -902,8 +902,8 @@ function throwReconciliationError(reason: string, action: PlannedAction): never 
 		projectId: action.source.projectId,
 		targetFactKey: action.targetFactKey,
 	}, {
-		event_name: "mem_claw.b-profile-section-rekey.b.profile.section.re.key.aborted.after.dry.run.divergence",
-		file: "apps/mem-claw/src/extraction/b-profile-section-rekey.ts",
+		event_name: "sno_station_mem.b-profile-section-rekey.b.profile.section.re.key.aborted.after.dry.run.divergence",
+		file: "packages/sno-station-mem/src/engine/extraction/b-profile-section-rekey.ts",
 		function: "throwReconciliationError",
 		site_id: "b-profile-section-rekey.throwReconciliationError.b59b599311",
 	});

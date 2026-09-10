@@ -1,5 +1,5 @@
 import { FIXED_PROTOCOL_VALUE_63, PERSISTED_PROVIDER_SYSTEM } from "../../model/signed-registry-constants";
-/** @file openclaw-message-transcript.ts
+/** @file sno-station-mem-message-transcript.ts
  * @purpose Normalizes SDK message records into capture transcripts and session timestamps.
  * @boundary Message-shape parsing and redaction for transcript construction only.
  */
@@ -51,7 +51,7 @@ export function extractAllMessageTexts(record: Record<string, unknown>): string[
  * Marks a message this plugin injected into the host agent as its OWN model request.
  *
  * `sourceChannel` is the host's own message-origin field — optional, free-form, and part of the
- * persisted transcript schema (`openclaw/dist/transcript-*.d.ts`). It is what survives the gap
+ * persisted transcript schema (`sno-station-mem/dist/transcript-*.d.ts`). It is what survives the gap
  * that matters: the host records our turn, and ambient learning reads the session LATER, from an
  * unrelated async chain and possibly a later process. Nothing scoped to the originating call, and
  * nothing held in memory, is still observable there.

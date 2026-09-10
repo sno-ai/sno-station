@@ -4,7 +4,7 @@
  *   the SQLCipher PRAGMA recipe, manifest registration, and canary-row
  *   verification. There is no direct `better-sqlite3` access in this file —
  *   the import-restriction lint rule in `biome.json` enforces this for the
- *   whole `apps/mem-claw/src/**` tree.
+ *   whole `apps/sno-station-mem/src/**` tree.
  * @boundary Plugin storage runtime. All consumers (`connection.ts`,
  *   `store.ts`, `backup.ts`, `observability/memory-snapshot.ts`) depend on
  *   this abstraction.
@@ -117,7 +117,7 @@ export async function initSqliteRuntime(): Promise<void> {
 }
 
 /**
- * Synchronous variant for entry points that cannot await (e.g. OpenClaw's
+ * Synchronous variant for entry points that cannot await (e.g. SnoStationMem's
  * `register()` contract). Throws when the DEK is in passphrase mode and
  * requires an interactive prompt — those flows must use `initSqliteRuntime()`
  * instead.

@@ -10,7 +10,7 @@ import { readManifestIfPresent, resolveConfigPaths } from "@snoai/sno-station-co
 import { buildInsightMetadata, parseInsightMetadata, stringifyInsightMetadata } from "../engine/extraction/memory-metadata-codec";
 import type { InsightMetadataPatch } from "../engine/extraction/memory-metadata-types";
 import {
-	getMemClawStateDir,
+	getSnoStationMemStateDir,
 	runWithMemoryAuditSync,
 } from "../engine/operations/runtime-audit-log";
 import { StorageError } from "../engine/shared/errors";
@@ -405,7 +405,7 @@ export function runMemoryKindsCutoverMigration(args: {
 	now?: number;
 }): MemoryKindsCutoverResult {
 	return runWithMemoryAuditSync({
-		stateDir: getMemClawStateDir(),
+		stateDir: getSnoStationMemStateDir(),
 		event: "memory_updated",
 		operation: "runMemoryKindsCutoverMigration",
 		run: () => runMemoryKindsCutoverMigrationUnaudited(args),
@@ -430,7 +430,7 @@ function runMemoryKindsCutoverMigrationUnaudited(args: {
 				return { status: "noop", rewrittenRows: 0, checkedRows: validateFoundationInvariants(sqlite.db) };
 			}
 
-			// Known limitation (codex adversarial review 2026-07-13, not fixed
+			// Known limitation (host adversarial review 2026-07-13, not fixed
 			// here): two legacy rows that remap to the same (project, category)
 			// and hash to the same content_hash after migration collide on the
 			// UNIQUE(project_id, content_hash, category) index. This UPDATE then
@@ -494,7 +494,7 @@ export function resetMemoryKindsCutoverDatabase(
 ): ResetMemoryKindsCutoverDatabaseResult {
 	let memoryCount: number | undefined;
 	return runWithMemoryAuditSync({
-		stateDir: getMemClawStateDir(),
+		stateDir: getSnoStationMemStateDir(),
 		event: "memory_deleted",
 		operation: "resetMemoryKindsCutoverDatabase",
 		scope: options.projectId,

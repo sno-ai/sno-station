@@ -12,14 +12,14 @@
  */
 
 /**
- * Strip OpenClaw metadata headers, cron wrappers, and timestamp prefixes
+ * Strip SnoStationMem metadata headers, cron wrappers, and timestamp prefixes
  * so that the raw user intent is what gets evaluated by skip/force patterns.
  */
 export function normalizeQuery(raw: string): string {
 	// Compute the normalized q once so later retrieval scoring checks use one value.
 	let q = raw;
 
-	// OpenClaw metadata headers — "(Conversation info|Sender) (untrusted metadata):"
+	// SnoStationMem metadata headers — "(Conversation info|Sender) (untrusted metadata):"
 	q = q.replace(/^(Conversation info|Sender) \(untrusted metadata\):[\s\S]*?\n\s*\n/gim, "");
 
 	// Cron wrappers — "[cron:...]"

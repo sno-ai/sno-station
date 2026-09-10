@@ -1,6 +1,6 @@
 import { FIXED_EXTERNAL_VALUE_8, FIXED_EXTERNAL_VALUE_9 } from "./signed-registry-constants";
 /** @file llmix-registry.ts
- * @purpose Loads the bundled signed LLMIx registry for mem-claw.
+ * @purpose Loads the bundled signed LLMIx registry for sno-station-mem.
  * @boundary Trust-anchor verification and package-relative asset resolution only.
  */
 
@@ -23,14 +23,14 @@ import type {
 	ResolvedLlmConfig,
 } from "./llm-client-types";
 
-export const MEM_CLAW_RELEASE_ANCHOR_URL: typeof FIXED_EXTERNAL_VALUE_8 =
+export const SNO_STATION_MEM_RELEASE_ANCHOR_URL: typeof FIXED_EXTERNAL_VALUE_8 =
 	FIXED_EXTERNAL_VALUE_8;
-export const MEM_CLAW_RELEASE_DID = "did:web:www.sno.ai";
-export const MEM_CLAW_RELEASE_KEY_ID: typeof FIXED_EXTERNAL_VALUE_9 =
+export const SNO_STATION_MEM_RELEASE_DID = "did:web:www.sno.ai";
+export const SNO_STATION_MEM_RELEASE_KEY_ID: typeof FIXED_EXTERNAL_VALUE_9 =
 	FIXED_EXTERNAL_VALUE_9;
-export const MEM_CLAW_RELEASE_ANCHOR_TIMEOUT_MS = 5_000;
-const MEM_CLAW_RELEASE_ANCHOR_ATTEMPTS = 2;
-const MEM_CLAW_RELEASE_ANCHOR_RETRY_DELAY_MS = 50;
+export const SNO_STATION_MEM_RELEASE_ANCHOR_TIMEOUT_MS = 5_000;
+const SNO_STATION_MEM_RELEASE_ANCHOR_ATTEMPTS = 2;
+const SNO_STATION_MEM_RELEASE_ANCHOR_RETRY_DELAY_MS = 50;
 const ALLOWED_HTTP_ENDPOINT_HOSTS = new Set(["localhost", "127.0.0.1", "100.100.200.71"]);
 
 type RegistryManager = Awaited<ReturnType<typeof ConfigRegistryManager.open>>;
@@ -52,7 +52,7 @@ export type ResolvedBundledLlmixEndpoint = {
 function parsePresetId(preset: LlmPreset): { module: string; preset: string } {
 	const [module, presetName] = preset.split("/");
 	if (!module || !presetName) {
-		throw new Error(`mem-claw llm-client: invalid LLMIx preset id "${preset}"`);
+		throw new Error(`sno-station-mem llm-client: invalid LLMIx preset id "${preset}"`);
 	}
 	return { module, preset: presetName };
 }
@@ -61,7 +61,7 @@ function assertSupportedProvider(provider: Provider): LlmProvider {
 	if (provider === "openai" || provider === "openrouter" || provider === "sno-gpu") {
 		return provider;
 	}
-	throw new Error(`mem-claw llm-client: unsupported LLMIx provider "${provider}"`);
+	throw new Error(`sno-station-mem llm-client: unsupported LLMIx provider "${provider}"`);
 }
 
 function resolveEndpointBase(baseSource: string, preservePath: boolean): string {
@@ -69,14 +69,14 @@ function resolveEndpointBase(baseSource: string, preservePath: boolean): string 
 	try {
 		parsed = new URL(baseSource);
 	} catch {
-		throw new Error(`mem-claw llm-client: invalid extraction.llm.baseURL "${baseSource}"`);
+		throw new Error(`sno-station-mem llm-client: invalid extraction.llm.baseURL "${baseSource}"`);
 	}
 	if (parsed.protocol !== "https:" && !ALLOWED_HTTP_ENDPOINT_HOSTS.has(parsed.hostname)) {
-		throw new Error("mem-claw llm-client: extraction.llm.baseURL must use https");
+		throw new Error("sno-station-mem llm-client: extraction.llm.baseURL must use https");
 	}
 	if (parsed.protocol === "https:" && parsed.hostname.toLowerCase() === "api.openai.com") {
 		throw new Error(
-			"mem-claw llm-client: direct api.openai.com transport is forbidden; use local ccproxy or an explicit custom endpoint",
+			"sno-station-mem llm-client: direct api.openai.com transport is forbidden; use local ccproxy or an explicit custom endpoint",
 		);
 	}
 	if (!preservePath) return parsed.origin;
@@ -102,7 +102,7 @@ export function resolveBundledLlmixRegistryPaths(packageRoot: string = packageRo
 	const registryDir = path.join(packageRoot, "config", "llm");
 	const trustManifestPath = path.join(packageRoot, "config", "llm.trust.json");
 	if (!hasBundledRegistryAssets(packageRoot)) {
-		throw new Error("mem-claw LLMIx registry assets are missing from the installed package");
+		throw new Error("sno-station-mem LLMIx registry assets are missing from the installed package");
 	}
 	return { registryDir, trustManifestPath };
 }
@@ -112,11 +112,11 @@ function isJsonObject(value: unknown): value is Record<string, unknown> {
 }
 
 function readPublicKeyJwk(document: unknown): JsonWebKey | null {
-	if (!isJsonObject(document) || document.id !== MEM_CLAW_RELEASE_DID) return null;
+	if (!isJsonObject(document) || document.id !== SNO_STATION_MEM_RELEASE_DID) return null;
 	const methods = document.verificationMethod;
 	if (!Array.isArray(methods)) return null;
 	for (const method of methods) {
-		if (!isJsonObject(method) || method.id !== MEM_CLAW_RELEASE_KEY_ID) continue;
+		if (!isJsonObject(method) || method.id !== SNO_STATION_MEM_RELEASE_KEY_ID) continue;
 		const jwk = method.publicKeyJwk;
 		if (
 			isJsonObject(jwk) &&
@@ -144,7 +144,7 @@ function releaseAnchorFailureMessage(error: unknown): string | null {
 	if (!isJsonObject(error) || !isJsonObject(error.details)) return null;
 	const cause = error.details.cause;
 	if (typeof cause !== "string") return null;
-	return cause.includes("mem-claw LLMIx release anchor fetch") ? cause : null;
+	return cause.includes("sno-station-mem LLMIx release anchor fetch") ? cause : null;
 }
 
 async function fetchReleaseAnchorOnce(
@@ -156,12 +156,12 @@ async function fetchReleaseAnchorOnce(
 	const timeoutPromise = new Promise<never>((_resolve, reject) => {
 		timeout = setTimeout(() => {
 			controller.abort();
-			reject(new Error(`mem-claw LLMIx release anchor fetch timed out after ${timeoutMs}ms`));
+			reject(new Error(`sno-station-mem LLMIx release anchor fetch timed out after ${timeoutMs}ms`));
 		}, timeoutMs);
 	});
 	try {
 		return await Promise.race([
-			fetchImpl(MEM_CLAW_RELEASE_ANCHOR_URL, { signal: controller.signal }),
+			fetchImpl(SNO_STATION_MEM_RELEASE_ANCHOR_URL, { signal: controller.signal }),
 			timeoutPromise,
 		]);
 	} finally {
@@ -177,30 +177,30 @@ async function fetchReleaseAnchor(
 	fetchImpl: typeof fetch,
 	timeoutMs: number,
 ): Promise<Response> {
-	for (let attempt = 1; attempt <= MEM_CLAW_RELEASE_ANCHOR_ATTEMPTS; attempt++) {
+	for (let attempt = 1; attempt <= SNO_STATION_MEM_RELEASE_ANCHOR_ATTEMPTS; attempt++) {
 		try {
 			const response = await fetchReleaseAnchorOnce(fetchImpl, timeoutMs);
-			if (attempt === MEM_CLAW_RELEASE_ANCHOR_ATTEMPTS || !isTransientAnchorResponse(response)) {
+			if (attempt === SNO_STATION_MEM_RELEASE_ANCHOR_ATTEMPTS || !isTransientAnchorResponse(response)) {
 				return response;
 			}
 		} catch (error) {
-			if (attempt === MEM_CLAW_RELEASE_ANCHOR_ATTEMPTS) throw error;
+			if (attempt === SNO_STATION_MEM_RELEASE_ANCHOR_ATTEMPTS) throw error;
 		}
 		await new Promise<void>((resolve) =>
-			setTimeout(resolve, MEM_CLAW_RELEASE_ANCHOR_RETRY_DELAY_MS),
+			setTimeout(resolve, SNO_STATION_MEM_RELEASE_ANCHOR_RETRY_DELAY_MS),
 		);
 	}
-	throw new Error("mem-claw LLMIx release anchor fetch exhausted");
+	throw new Error("sno-station-mem LLMIx release anchor fetch exhausted");
 }
 
-export function createSnoMemOpenClawDidWebVerifier(
+export function createSnoMemSnoStationMemDidWebVerifier(
 	fetchImpl: typeof fetch = globalThis.fetch,
 	options: ReleaseAnchorVerifierOptions = {},
 ): DidWebVerifier {
-	const anchorTimeoutMs = options.anchorTimeoutMs ?? MEM_CLAW_RELEASE_ANCHOR_TIMEOUT_MS;
+	const anchorTimeoutMs = options.anchorTimeoutMs ?? SNO_STATION_MEM_RELEASE_ANCHOR_TIMEOUT_MS;
 	return {
 		async verify(input) {
-			if (input.domain !== "www.sno.ai" || input.keyId !== MEM_CLAW_RELEASE_KEY_ID) {
+			if (input.domain !== "www.sno.ai" || input.keyId !== SNO_STATION_MEM_RELEASE_KEY_ID) {
 				return false;
 			}
 			if (input.algorithm !== "ed25519") return false;
@@ -221,7 +221,7 @@ export async function openBundledLlmixRegistry(
 	const paths = resolveBundledLlmixRegistryPaths(packageRoot);
 	const trustManifest = await loadLlmixTrustManifest(paths.trustManifestPath);
 	const signedRoot = registryRootOptionsFromTrustManifest(trustManifest, {
-		didWebVerifier: createSnoMemOpenClawDidWebVerifier(fetchImpl, options),
+		didWebVerifier: createSnoMemSnoStationMemDidWebVerifier(fetchImpl, options),
 	});
 	try {
 		return await ConfigRegistryManager.open(paths.registryDir, { signedRoot });
@@ -264,7 +264,7 @@ export function materializeBundledLlmixEndpoint(input: {
 			: "chat/completions";
 	if (!path) {
 		throw new Error(
-			`mem-claw llm-client: signed endpoint path missing from preset ${input.preset.preset}`,
+			`sno-station-mem llm-client: signed endpoint path missing from preset ${input.preset.preset}`,
 		);
 	}
 	return {

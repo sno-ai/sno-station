@@ -4,7 +4,7 @@
  */
 
 import { createEmbedder } from "../engine/extraction/embedding-provider-client";
-import { getMemClawStateDir } from "../engine/operations/runtime-audit-log";
+import { getSnoStationMemStateDir } from "../engine/operations/runtime-audit-log";
 import { JSON_SYSTEM_CONTENT } from "../model/llm-client";
 import { stableHash } from "../engine/shared/utils";
 import { hashInputForEntry } from "./memory-store-shared";
@@ -414,7 +414,7 @@ async function main(): Promise<void> {
 		}
 		return;
 	}
-	const embedder = createEmbedder({}, getMemClawStateDir());
+	const embedder = createEmbedder({}, getSnoStationMemStateDir());
 	const store = new MemoryStore({ dbPath, vectorDim: embedder.dimensions, embedder });
 	try {
 		await cleanStore(store, { apply, label: dbPath });

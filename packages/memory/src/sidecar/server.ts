@@ -27,7 +27,7 @@ import {
 import {
 	appendAuditEntryStrict,
 	getAuditPath,
-	getMemClawStateDir,
+	getSnoStationMemStateDir,
 	getStateDir,
 } from "../engine/operations/runtime-audit-log";
 import {
@@ -60,7 +60,7 @@ import {
 	RemJobStore,
 } from "./rem-job-store";
 
-const log = createLogger("rem-sidecar");
+const log = createLogger("sno-station-mem:rem-sidecar");
 const COMPLETION_PERSIST_ATTEMPTS = 5;
 type CompletionPersistence = "job_journal" | "completed_audit" | "unavailable";
 type RunRequest =
@@ -127,8 +127,8 @@ async function startLockedRemSidecar(
 			correlation_id: job.correlation_id,
 			durable: true,
 		}, {
-			event_name: "mem_claw.server.job.transition.durable",
-			file: "apps/mem-claw/src/sidecar/server.ts",
+			event_name: "sno_station_mem.server.job.transition.durable",
+			file: "packages/sno-station-mem/src/sidecar/server.ts",
 			function: "<anonymous callback>",
 			site_id: "server.<anonymous callback>.5eb5a60e6b",
 		});
@@ -162,8 +162,8 @@ async function startLockedRemSidecar(
 				duration_ms: Math.max(0, Math.round(performance.now() - started)),
 				...context,
 			}, {
-				event_name: "mem_claw.server.http.request",
-				file: "apps/mem-claw/src/sidecar/server.ts",
+				event_name: "sno_station_mem.server.http.request",
+				file: "packages/sno-station-mem/src/sidecar/server.ts",
 				function: "recordRequest",
 				site_id: "server.<anonymous callback>.47c4662916",
 			});
@@ -187,8 +187,8 @@ async function startLockedRemSidecar(
 				context.error_code = httpError.code;
 				if (!(error instanceof HttpError)) {
 					log.error("request_failed", { error }, {
-						event_name: "mem_claw.server.request.failed",
-						file: "apps/mem-claw/src/sidecar/server.ts",
+						event_name: "sno_station_mem.server.request.failed",
+						file: "packages/sno-station-mem/src/sidecar/server.ts",
 						function: "<anonymous callback>",
 						site_id: "server.<anonymous callback>.a7a2656a08",
 					});
@@ -217,8 +217,8 @@ async function startLockedRemSidecar(
 	process.once("exit", exitCleanup);
 
 	log.info("started", { host: REM_SIDECAR_HOST, port: address.port, pid: process.pid }, {
-		event_name: "mem_claw.server.started",
-		file: "apps/mem-claw/src/sidecar/server.ts",
+		event_name: "sno_station_mem.server.started",
+		file: "packages/sno-station-mem/src/sidecar/server.ts",
 		function: "startLockedRemSidecar",
 		site_id: "server.startLockedRemSidecar.96a92b085b",
 	});
@@ -248,7 +248,7 @@ async function startLockedRemSidecar(
 					active_tasks: activeTasks.size,
 				}, {
 					event_name: "sidecar.shutdown.completed",
-					file: "apps/mem-claw/src/sidecar/server.ts",
+					file: "packages/sno-station-mem/src/sidecar/server.ts",
 					function: "startLockedRemSidecar.stop",
 					site_id: "sidecar.shutdown.completed",
 				});
@@ -319,8 +319,8 @@ async function routeRequest(
 			scope: job.scope,
 			correlation_id: job.correlation_id,
 		}, {
-			event_name: "mem_claw.server.job.allocated",
-			file: "apps/mem-claw/src/sidecar/server.ts",
+			event_name: "sno_station_mem.server.job.allocated",
+			file: "packages/sno-station-mem/src/sidecar/server.ts",
 			function: "routeRequest",
 			site_id: "server.routeRequest.0ea180a77c",
 		});
@@ -435,7 +435,7 @@ async function runChassisJob(
 			for (const operation of enabledOperations) {
 				try {
 					loadRemEnableGate({
-						stateDir: getMemClawStateDir(),
+						stateDir: getSnoStationMemStateDir(),
 						jobType: operation,
 						...REM_ENABLE_GATE_BINDINGS,
 						artifactSha256: configuration.enableGateDigests[operation],
@@ -524,8 +524,8 @@ async function runChassisJob(
 						job_type: operationResult.operation,
 						correlation_id: running.correlation_id,
 					}, {
-						event_name: "mem_claw.server.job.completion.journal.failed",
-						file: "apps/mem-claw/src/sidecar/server.ts",
+						event_name: "sno_station_mem.server.job.completion.journal.failed",
+						file: "packages/sno-station-mem/src/sidecar/server.ts",
 						function: "runChassisJob",
 						site_id: "server.runChassisJob.e7639bd8fc",
 					});
@@ -554,7 +554,7 @@ async function runChassisJob(
 				...(failure === undefined ? {} : { error: failure }),
 			}, {
 				event_name: "sidecar.job.completed",
-				file: "apps/mem-claw/src/sidecar/server.ts",
+				file: "packages/sno-station-mem/src/sidecar/server.ts",
 				function: "runChassisJob",
 				site_id: "sidecar.job.completed",
 			});
@@ -580,8 +580,8 @@ async function persistCompletedJob(
 				job_id: job.job_id,
 				correlation_id: job.correlation_id,
 			}, {
-				event_name: "mem_claw.server.job.completion.audit.failed",
-				file: "apps/mem-claw/src/sidecar/server.ts",
+				event_name: "sno_station_mem.server.job.completion.audit.failed",
+				file: "packages/sno-station-mem/src/sidecar/server.ts",
 				function: "persistCompletedJob",
 				site_id: "server.persistCompletedJob.bc6b30658e",
 			});
@@ -599,8 +599,8 @@ async function persistCompletedJob(
 				job_id: job.job_id,
 				correlation_id: job.correlation_id,
 			}, {
-				event_name: "mem_claw.server.job.completion.state.failed",
-				file: "apps/mem-claw/src/sidecar/server.ts",
+				event_name: "sno_station_mem.server.job.completion.state.failed",
+				file: "packages/sno-station-mem/src/sidecar/server.ts",
 				function: "persistCompletedJob",
 				site_id: "server.persistCompletedJob.a959322a6a",
 			});
@@ -619,8 +619,8 @@ async function persistCompletedJob(
 		correlation_id: job.correlation_id,
 		attempts: COMPLETION_PERSIST_ATTEMPTS,
 	}, {
-		event_name: "mem_claw.server.job.completion.persistence.exhausted",
-		file: "apps/mem-claw/src/sidecar/server.ts",
+		event_name: "sno_station_mem.server.job.completion.persistence.exhausted",
+		file: "packages/sno-station-mem/src/sidecar/server.ts",
 		function: "persistCompletedJob",
 		site_id: "server.persistCompletedJob.8dde75d5b4",
 	});
@@ -690,8 +690,8 @@ async function failNonTerminalJob(
 		});
 	} catch (error) {
 		log.error("job_failure_audit_failed", { error, job_id: jobId }, {
-			event_name: "mem_claw.server.job.failure.audit.failed",
-			file: "apps/mem-claw/src/sidecar/server.ts",
+			event_name: "sno_station_mem.server.job.failure.audit.failed",
+			file: "packages/sno-station-mem/src/sidecar/server.ts",
 			function: "failNonTerminalJob",
 			site_id: "server.failNonTerminalJob.cf84e07c6d",
 		});
@@ -719,8 +719,8 @@ async function recoverInterruptedJobs(
 				correlation_id: job.correlation_id,
 				reason: "completion_receipt_missing_replay_same_wave",
 			}, {
-				event_name: "mem_claw.server.job.recovery.resuming",
-				file: "apps/mem-claw/src/sidecar/server.ts",
+				event_name: "sno_station_mem.server.job.recovery.resuming",
+				file: "packages/sno-station-mem/src/sidecar/server.ts",
 				function: "recoverInterruptedJobs",
 				site_id: "server.recoverInterruptedJobs.15309ea841",
 			});
@@ -740,7 +740,7 @@ async function recoverInterruptedJobs(
 async function readCompletedJobStats(): Promise<Map<string, RemJobStats>> {
 	let raw: string;
 	try {
-		raw = await readFile(getAuditPath(getMemClawStateDir()), "utf8");
+		raw = await readFile(getAuditPath(getSnoStationMemStateDir()), "utf8");
 	} catch (error) {
 		if (isNodeError(error) && error.code === "ENOENT") return new Map();
 		throw error;
@@ -770,7 +770,7 @@ async function auditRem(
 	job: RemJob,
 	extra: Record<string, unknown> = {},
 ): Promise<void> {
-	await appendAuditEntryStrict(getMemClawStateDir(), {
+	await appendAuditEntryStrict(getSnoStationMemStateDir(), {
 		event,
 		scope: job.scope,
 		resultStatus: event === "rem_failed" ? "error" : "ok",

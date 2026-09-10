@@ -1,14 +1,14 @@
 /** @file multi-agent-scope.ts
- * @purpose Resolves team-aware memory scopes for OpenClaw runtime integrations.
+ * @purpose Resolves team-aware memory scopes for SnoStationMem runtime integrations.
  * @boundary Workspace identity, session context, and plugin scope configuration.
- * @see scopes.ts, openclaw-plugin-runtime.ts, types.ts.
+ * @see scopes.ts, sno-station-mem-plugin-runtime.ts, types.ts.
  */
 
 /**
  * Multi-Agent Shared Memory Scope Integration
  *
  * Provides env-var-driven scope extension for multi-agent setups.
- * When MEM_CLAW_SHARED_SCOPES is set, agents gain access to the specified
+ * When SNO_STATION_MEM_SHARED_SCOPES is set, agents gain access to the specified
  * team scopes in addition to their own default scopes.
  *
  * Note: this extends `getAccessibleScopes()`, which MemoryScopePolicy's
@@ -21,7 +21,7 @@
 import type { MemoryScopePolicy } from "./scopes";
 
 /**
- * Parse the MEM_CLAW_SHARED_SCOPES env var value into a list of scope names.
+ * Parse the SNO_STATION_MEM_SHARED_SCOPES env var value into a list of scope names.
  * Supports comma-separated values, trims whitespace, and filters empty strings.
  */
 export function parseMultiAgentScopes(envValue: string | undefined): string[] {

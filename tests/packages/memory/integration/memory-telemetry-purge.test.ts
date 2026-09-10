@@ -5,7 +5,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { Embedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client.ts";
 import {
 	getAuditPath,
-	getMemClawStateDir,
+	getSnoStationMemStateDir,
 } from "../../../../packages/sno-station-mem/src/engine/operations/runtime-audit-log.ts";
 import { MemoryStore } from "../../../../packages/sno-station-mem/src/store/store.ts";
 import {
@@ -65,7 +65,7 @@ describe("memory telemetry purge preview and confirmed cascade purge", () => {
 	});
 
 	function auditRecords(operation: string): AuditRecord[] {
-		return readFileSync(getAuditPath(getMemClawStateDir()), "utf8")
+		return readFileSync(getAuditPath(getSnoStationMemStateDir()), "utf8")
 			.trim()
 			.split("\n")
 			.map((line) => JSON.parse(line) as AuditRecord)

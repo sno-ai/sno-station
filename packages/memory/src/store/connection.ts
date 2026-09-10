@@ -156,7 +156,7 @@ export function readChunkVecTableState(db: SqliteDatabaseLike): VecTableState | 
  * tables cannot be ALTERed, so any pre-existing table that doesn't match the
  * current shape — wrong dimension, or predates the partition key — is
  * dropped and recreated. Nothing is shipped until npm publish (see
- * apps/mem-claw/CLAUDE.md), so no installed database has vectors worth
+ * apps/sno-station-mem/host.md), so no installed database has vectors worth
  * migrating in place; a non-empty mismatch fails closed instead.
  */
 function ensureChunkVecTable(db: SqliteDB, vectorDim: number): number {
@@ -212,8 +212,8 @@ function ensureFtsHealthy(db: SqliteDB): void {
 		db.exec("INSERT INTO nodix_memory_chunks_fts(nodix_memory_chunks_fts) VALUES('integrity-check')");
 	} catch {
 		log.warn("FTS integrity check failed, rebuilding", undefined, {
-			event_name: "mem_claw.connection.fts.integrity.check.failed.rebuilding",
-			file: "apps/mem-claw/src/storage/connection.ts",
+			event_name: "sno_station_mem.connection.fts.integrity.check.failed.rebuilding",
+			file: "packages/sno-station-mem/src/store/connection.ts",
 			function: "ensureFtsHealthy",
 			site_id: "connection.ensureFtsHealthy.ad5a3ffcd6",
 		});
@@ -242,8 +242,8 @@ function loadSimpleTokenizer(db: SqliteDatabaseLike): void {
 		"CREATE VIRTUAL TABLE temp.nodix_simple_tokenizer_smoke USING fts5(x, tokenize='simple 0'); DROP TABLE temp.nodix_simple_tokenizer_smoke;",
 	);
 	log.info("simple-tokenizer loaded", { platform, extensionPath }, {
-		event_name: "mem_claw.connection.simple.tokenizer.loaded",
-		file: "apps/mem-claw/src/storage/connection.ts",
+		event_name: "sno_station_mem.connection.simple.tokenizer.loaded",
+		file: "packages/sno-station-mem/src/store/connection.ts",
 		function: "loadSimpleTokenizer",
 		site_id: "connection.loadSimpleTokenizer.778ee7da6c",
 	});
@@ -301,7 +301,7 @@ function assertParentVecAndFtsRemoved(db: SqliteDatabaseLike): void {
 		throw new StorageError(
 			"Legacy parent vec/FTS objects detected after migration 0004; " +
 				"this DB pre-dates the chunk-table swap. Wipe the dev DB and let migrations recreate it: " +
-				"rm -f the configured plugin DB path (default `<state-dir>/mem-claw/mem-claw.sqlite`) and restart.",
+				"rm -f the configured plugin DB path (default `<state-dir>/sno-station-mem/sno-station-mem.sqlite`) and restart.",
 		);
 	}
 }
@@ -341,14 +341,14 @@ const MIGRATIONS_DIR = resolveMigrationsDir();
 // LH: initDb returns only after schema, FTS, and vector prerequisites are usable, which keeps later store code simple.
 // LH: Failing during init protects callers from partially initialized memory state and avoids hard-to-debug recall gaps.
 // LH: WAL mode is enabled for one-writer/many-reader plugin behavior while preserving crash-safe local persistence.
-// LH: Migrations are intentionally local to mem-claw so storage evolution remains reviewable beside the plugin source.
+// LH: Migrations are intentionally local to sno-station-mem so storage evolution remains reviewable beside the plugin source.
 // LH: Do not move extension loading into async service start unless every caller can tolerate unavailable retrieval at boot.
 // LH: Applied migrations must remain byte-stable because Drizzle records their hashes in each database ledger.
 // LH: Runtime vec-table reconciliation lives after migrations so dynamic dimensions do not require rewriting 0001.
 export function initDb(dbPath: string, vectorDim: number): DrizzleDB {
 	log.info("initializing database", { dbPath, vectorDim }, {
-		event_name: "mem_claw.connection.initializing.database",
-		file: "apps/mem-claw/src/storage/connection.ts",
+		event_name: "sno_station_mem.connection.initializing.database",
+		file: "packages/sno-station-mem/src/store/connection.ts",
 		function: "initDb",
 		site_id: "connection.initDb.ee37a0a971",
 	});
@@ -392,8 +392,8 @@ export function initDb(dbPath: string, vectorDim: number): DrizzleDB {
 		const vectorDimension = ensureChunkVecTable(sqlite.db, vectorDim);
 		ensureFtsHealthy(sqlite.db);
 		log.info("database ready", { dbPath }, {
-			event_name: "mem_claw.connection.database.ready",
-			file: "apps/mem-claw/src/storage/connection.ts",
+			event_name: "sno_station_mem.connection.database.ready",
+			file: "packages/sno-station-mem/src/store/connection.ts",
 			function: "initDb",
 			site_id: "connection.initDb.e23d8ab40c",
 		});

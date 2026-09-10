@@ -55,8 +55,8 @@ Object.assign(MemoryStore.prototype, {
 		options?: MemoryDeleteOptions,
 	): Promise<number> {
 		log.info("deleting memories", { idOrPrefix }, {
-			event_name: "mem_claw.memory-store-admin-api.deleting.memories",
-			file: "apps/mem-claw/src/storage/memory-store-admin-api.ts",
+			event_name: "sno_station_mem.memory-store-admin-api.deleting.memories",
+			file: "packages/sno-station-mem/src/store/memory-store-admin-api.ts",
 			function: "delete",
 			site_id: "memory-store-admin-api.delete.5a8c32b1ed",
 		});
@@ -99,8 +99,8 @@ Object.assign(MemoryStore.prototype, {
 		const uniqueIds = Array.from(new Set(ids));
 		if (uniqueIds.length === 0) return 0;
 		log.info("deleting many memories", { count: uniqueIds.length }, {
-			event_name: "mem_claw.memory-store-admin-api.deleting.many.memories",
-			file: "apps/mem-claw/src/storage/memory-store-admin-api.ts",
+			event_name: "sno_station_mem.memory-store-admin-api.deleting.many.memories",
+			file: "packages/sno-station-mem/src/store/memory-store-admin-api.ts",
 			function: "deleteMany",
 			site_id: "memory-store-admin-api.deleteMany.e73022fb31",
 		});
@@ -165,8 +165,8 @@ Object.assign(MemoryStore.prototype, {
 	): Promise<BulkDeleteResult> {
 		// Log operational context for storage without changing control flow.
 		log.info("bulk delete", { projectId: filter.projectId, category: filter.category }, {
-			event_name: "mem_claw.memory-store-admin-api.bulk.delete",
-			file: "apps/mem-claw/src/storage/memory-store-admin-api.ts",
+			event_name: "sno_station_mem.memory-store-admin-api.bulk.delete",
+			file: "packages/sno-station-mem/src/store/memory-store-admin-api.ts",
 			function: "bulkDelete",
 			site_id: "memory-store-admin-api.bulkDelete.2631f303e5",
 		});
@@ -267,8 +267,8 @@ Object.assign(MemoryStore.prototype, {
 					maxIterations: MAX_BULK_DELETE_ITERATIONS,
 					batchSize: DELETE_BATCH_SIZE,
 				}, {
-					event_name: "mem_claw.memory-store-admin-api.bulk.delete.reached.safety.iteration.cap",
-					file: "apps/mem-claw/src/storage/memory-store-admin-api.ts",
+					event_name: "sno_station_mem.memory-store-admin-api.bulk.delete.reached.safety.iteration.cap",
+					file: "packages/sno-station-mem/src/store/memory-store-admin-api.ts",
 					function: "<anonymous callback>",
 					site_id: "memory-store-admin-api.<anonymous callback>.130719fdd0",
 				});
@@ -314,8 +314,8 @@ Object.assign(MemoryStore.prototype, {
 			}
 		} catch (error) {
 			log.warn("sqlite close-time maintenance failed", { error }, {
-				event_name: "mem_claw.memory-store-admin-api.sqlite.close.time.maintenance.failed",
-				file: "apps/mem-claw/src/storage/memory-store-admin-api.ts",
+				event_name: "sno_station_mem.memory-store-admin-api.sqlite.close.time.maintenance.failed",
+				file: "packages/sno-station-mem/src/store/memory-store-admin-api.ts",
 				function: "closeSqlite",
 				site_id: "memory-store-admin-api.closeSqlite.61a563b112",
 			});

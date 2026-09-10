@@ -30,7 +30,7 @@ import { executeMemoryUpdateTool } from "./bindings/memory-update-tool";
 import { executeMemoryReflectionResolveTool } from "./bindings/memory-reflection-resolve-tool";
 import { createReflectionStrategyState, type ReflectionStrategyState } from "./reflection/strategy-hook-runner";
 import { createRunMemoryReflection, type ReflectionCommandParams } from "./reflection/reflection-command-hooks";
-import type { OpenClawMemoryRuntime, OpenClawMemorySearchManager } from "../contract/provider-runtime-types";
+import type { SnoStationMemMemoryRuntime, SnoStationMemMemorySearchManager } from "../contract/provider-runtime-types";
 import { createReflectionLifecycleHandler1, createReflectionLifecycleHandler2 } from "./reflection/reflection-lifecycle-hooks";
 import { createReflectionInjectionHandler1, createReflectionInjectionHandler2, createReflectionInjectionHandler3 } from "./reflection/reflection-injection-hooks";
 import type { PluginHookAgentContext } from "./bindings/sno-station-mem-hook-types";
@@ -63,7 +63,7 @@ class BoundProjectPolicy extends MemoryScopePolicy {
 
 export class MemoryContractRuntime implements MemoryContract {
 	private registration: Registration | undefined;
-	private providerRuntime: OpenClawMemoryRuntime | undefined;
+	private providerRuntime: SnoStationMemMemoryRuntime | undefined;
 	private readonly reflectionStates = new Map<string, ReflectionStrategyState>();
 	private readonly recallStates = new Map<string, { history: Map<string, Map<string, number>>; turns: Map<string, number> }>();
 	constructor(private readonly services: MemoryRuntimeServices) {}
@@ -102,7 +102,7 @@ export class MemoryContractRuntime implements MemoryContract {
 		return resolved.identity.projectId;
 	}
 
-	private async provider(scope: ScopeCtx): Promise<OpenClawMemorySearchManager> {
+	private async provider(scope: ScopeCtx): Promise<SnoStationMemMemorySearchManager> {
 		const agentId = this.agentId(scope);
 		if (!agentId || !scope.host?.workspace || !this.providerRuntime) throw new ContractError("invalid-input");
 		const cfg = { agents: { entries: { [agentId]: { workspace: scope.host.workspace } } } };

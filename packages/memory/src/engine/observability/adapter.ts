@@ -16,7 +16,7 @@ import {
 import type { PluginConfig } from "../shared/types";
 import { bestEffort, bestEffortSync, type ObserveLogger } from "./best-effort";
 import { CostAggregator } from "./cost-aggregator";
-import { readMemClawPackageVersion, readSnoStationCoreWorkspaceVersion } from "./version-metadata";
+import { readSnoStationMemPackageVersion, readSnoStationCoreWorkspaceVersion } from "./version-metadata";
 
 type ObserveRuntime = ReturnType<typeof createSnoObserve>;
 
@@ -46,7 +46,7 @@ const OBSERVE_BACKGROUND_COOLDOWN_MS = 60_000;
 // uncancellable orphaned promises inside the SDK even though the cap-count
 // itself stays bounded. Once this many orphans are outstanding at once, stop
 // admitting new background work for a cooldown instead of growing forever.
-// codex review 2026-07-12.
+// host review 2026-07-12.
 const MAX_OUTSTANDING_ORPHANED_TASKS = 50;
 const ORPHAN_CIRCUIT_COOLDOWN_MS = 60_000;
 const MAX_PENDING_OBSERVE_TASKS = 1_000;
@@ -94,7 +94,7 @@ export class PluginObservability {
 		this.agentId = config.observe.agentId;
 		this.logger = logger;
 		if (this.enabled) {
-			const snoStationCoreVersion = readSnoStationCoreWorkspaceVersion() ?? readMemClawPackageVersion();
+			const snoStationCoreVersion = readSnoStationCoreWorkspaceVersion() ?? readSnoStationMemPackageVersion();
 			this.runtime = createSnoObserve({
 				cwd,
 				env: {
@@ -162,7 +162,7 @@ export class PluginObservability {
 		} catch (error) {
 			diagnosticLog.warn("Cloud event emission failed", { error, outcome: "failed" }, {
 				event_name: "observability.emit.failed",
-				file: "apps/mem-claw/src/observability/adapter.ts",
+				file: "packages/sno-station-mem/src/engine/observability/adapter.ts",
 				function: "PluginObservability.tryEmit",
 				site_id: "observability.emit.failed",
 			});
@@ -184,9 +184,9 @@ export class PluginObservability {
 				run,
 				new Promise<boolean>((resolve) => {
 					timeoutHandle = setTimeout(() => {
-						diagnosticLog.warn("mem-claw observability: emit timed out", undefined, {
-							event_name: "mem_claw.adapter.mem.claw.observability.emit.timed.out",
-							file: "apps/mem-claw/src/observability/adapter.ts",
+						diagnosticLog.warn("sno-station-mem observability: emit timed out", undefined, {
+							event_name: "sno_station_mem.adapter.sno.station.mem.observability.emit.timed.out",
+							file: "packages/sno-station-mem/src/engine/observability/adapter.ts",
 							function: "<anonymous callback>",
 							site_id: "adapter.<anonymous callback>.82f49c57a7",
 						});
@@ -222,7 +222,7 @@ export class PluginObservability {
 				outstanding_count: this.outstandingOrphanedTasks, cooldown_ms: ORPHAN_CIRCUIT_COOLDOWN_MS,
 			}, {
 				event_name: "observability.background.paused",
-				file: "apps/mem-claw/src/observability/adapter.ts",
+				file: "packages/sno-station-mem/src/engine/observability/adapter.ts",
 				function: "PluginObservability.registerOrphanedTask",
 				site_id: "observability.background.paused",
 			});
@@ -261,7 +261,7 @@ export class PluginObservability {
 				action: label, reason: "queue_full", pending_count: this.liveBackgroundTasks.size,
 			}, {
 				event_name: "observability.background.rejected",
-				file: "apps/mem-claw/src/observability/adapter.ts",
+				file: "packages/sno-station-mem/src/engine/observability/adapter.ts",
 				function: "PluginObservability.trackBestEffort",
 				site_id: "observability.background.queue_full",
 			});
@@ -272,7 +272,7 @@ export class PluginObservability {
 				action: label, reason: "timeout_cooldown",
 			}, {
 				event_name: "observability.background.rejected",
-				file: "apps/mem-claw/src/observability/adapter.ts",
+				file: "packages/sno-station-mem/src/engine/observability/adapter.ts",
 				function: "PluginObservability.trackBestEffort",
 				site_id: "observability.background.cooldown",
 			});
@@ -283,7 +283,7 @@ export class PluginObservability {
 				action: label, reason: "orphan_limit", outstanding_count: this.outstandingOrphanedTasks,
 			}, {
 				event_name: "observability.background.rejected",
-				file: "apps/mem-claw/src/observability/adapter.ts",
+				file: "packages/sno-station-mem/src/engine/observability/adapter.ts",
 				function: "PluginObservability.trackBestEffort",
 				site_id: "observability.background.orphan_limit",
 			});
@@ -332,7 +332,7 @@ export class PluginObservability {
 							action: label, timeout_ms: OBSERVE_BACKGROUND_TIMEOUT_MS,
 						}, {
 							event_name: "observability.background.timed_out",
-							file: "apps/mem-claw/src/observability/adapter.ts",
+							file: "packages/sno-station-mem/src/engine/observability/adapter.ts",
 							function: "PluginObservability.runBackgroundTask",
 							site_id: "observability.background.timed_out",
 						});
@@ -374,8 +374,8 @@ export class PluginObservability {
 						new Promise<void>((resolve) => {
 							timeoutHandle = setTimeout(() => {
 								diagnosticLog.warn("sno observe drain timed out", undefined, {
-									event_name: "mem_claw.adapter.sno.observe.drain.timed.out",
-									file: "apps/mem-claw/src/observability/adapter.ts",
+									event_name: "sno_station_mem.adapter.sno.observe.drain.timed.out",
+									file: "packages/sno-station-mem/src/engine/observability/adapter.ts",
 									function: "<anonymous callback>",
 									site_id: "adapter.<anonymous callback>.f036514cb8",
 								});
@@ -413,8 +413,8 @@ export class PluginObservability {
 						new Promise<void>((resolve) => {
 							timeoutHandle = setTimeout(() => {
 								diagnosticLog.warn("sno observe buffer drain timed out", undefined, {
-									event_name: "mem_claw.adapter.sno.observe.buffer.drain.timed.out",
-									file: "apps/mem-claw/src/observability/adapter.ts",
+									event_name: "sno_station_mem.adapter.sno.observe.buffer.drain.timed.out",
+									file: "packages/sno-station-mem/src/engine/observability/adapter.ts",
 									function: "<anonymous callback>",
 									site_id: "adapter.<anonymous callback>.9aedc01548",
 								});
@@ -457,8 +457,8 @@ export class PluginObservability {
 							timeoutHandle = setTimeout(() => {
 								controller?.abort();
 								diagnosticLog.warn("sno observe flush timed out", undefined, {
-									event_name: "mem_claw.adapter.sno.observe.flush.timed.out",
-									file: "apps/mem-claw/src/observability/adapter.ts",
+									event_name: "sno_station_mem.adapter.sno.observe.flush.timed.out",
+									file: "packages/sno-station-mem/src/engine/observability/adapter.ts",
 									function: "<anonymous callback>",
 									site_id: "adapter.<anonymous callback>.52f64c2607",
 								});

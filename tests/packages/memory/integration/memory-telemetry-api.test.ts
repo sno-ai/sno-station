@@ -5,7 +5,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { Embedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client.ts";
 import {
 	getAuditPath,
-	getMemClawStateDir,
+	getSnoStationMemStateDir,
 } from "../../../../packages/sno-station-mem/src/engine/operations/runtime-audit-log.ts";
 import { MemoryStore } from "../../../../packages/sno-station-mem/src/store/store.ts";
 import {
@@ -89,7 +89,7 @@ describe("memory telemetry local query API", () => {
 			.run("f".repeat(64), stored.id);
 
 		expect(api.verifyReceipt(stored.factId ?? stored.id).status).toBe("tampered");
-		const auditRecords = readFileSync(getAuditPath(getMemClawStateDir()), "utf8")
+		const auditRecords = readFileSync(getAuditPath(getSnoStationMemStateDir()), "utf8")
 			.trim()
 			.split("\n")
 			.map((line) => JSON.parse(line) as { details?: Record<string, unknown> });

@@ -76,8 +76,8 @@ function pruneOldBackups(stateDir: string, keep: number): void {
 	}
 	if (toRemove.length > 0) {
 		log.debug("pruned old backups", { removed: toRemove.length, kept: keep }, {
-			event_name: "mem_claw.backup.pruned.old.backups",
-			file: "apps/mem-claw/src/storage/backup.ts",
+			event_name: "sno_station_mem.backup.pruned.old.backups",
+			file: "packages/sno-station-mem/src/store/backup.ts",
 			function: "pruneOldBackups",
 			site_id: "backup.pruneOldBackups.1dca69b51b",
 		});
@@ -100,7 +100,7 @@ export function runBackup(dbPath: string, stateDir: string): string {
 	// mid-write, can leave a partial/corrupt file at the destination. Write to
 	// a `.tmp` path first and rename into place only on success, so a failed
 	// attempt never matches BACKUP_FILE_REGEX and can never be mistaken for a
-	// real backup by pruneOldBackups's retention count (codex adversarial
+	// real backup by pruneOldBackups's retention count (host adversarial
 	// review 2026-07-13).
 	const tempBackupPath = `${safeBackupPath}.tmp`;
 	const sqlite = openSqliteDatabase(dbPath, {
@@ -120,8 +120,8 @@ export function runBackup(dbPath: string, stateDir: string): string {
 
 	pruneOldBackups(resolvedStateDir, BACKUP_RETENTION_COUNT);
 	log.info("backup created", { backupPath: safeBackupPath }, {
-		event_name: "mem_claw.backup.backup.created",
-		file: "apps/mem-claw/src/storage/backup.ts",
+		event_name: "sno_station_mem.backup.backup.created",
+		file: "packages/sno-station-mem/src/store/backup.ts",
 		function: "runBackup",
 		site_id: "backup.runBackup.ca114973f1",
 	});

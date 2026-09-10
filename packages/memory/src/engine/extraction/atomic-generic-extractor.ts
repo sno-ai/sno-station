@@ -303,14 +303,14 @@ export async function runAtomicNumericTurnSweep(
 			sweptTurnCount: uncited.length,
 			sweptTurnIndexes: uncited,
 			error,
-		}, { event_name: "memory.atomic_generic_extractor.diagnostic", file: "apps/mem-claw/src/extraction/atomic-generic-extractor.ts", function: "runAtomicNumericTurnSweep", site_id: "extraction.atomic-generic-extractor.runAtomicNumericTurnSweep.7456414b06" });
+		}, { event_name: "memory.atomic_generic_extractor.diagnostic", file: "packages/sno-station-mem/src/engine/extraction/atomic-generic-extractor.ts", function: "runAtomicNumericTurnSweep", site_id: "extraction.atomic-generic-extractor.runAtomicNumericTurnSweep.7456414b06" });
 		throw error;
 	}
 	if (completion === null) {
 		log.warn("atomic numeric turn sweep call returned empty after client retries", {
 			sweptTurnCount: uncited.length,
 			sweptTurnIndexes: uncited,
-		}, { event_name: "memory.atomic_generic_extractor.diagnostic", file: "apps/mem-claw/src/extraction/atomic-generic-extractor.ts", function: "runAtomicNumericTurnSweep", site_id: "extraction.atomic-generic-extractor.runAtomicNumericTurnSweep.a373dfa454" });
+		}, { event_name: "memory.atomic_generic_extractor.diagnostic", file: "packages/sno-station-mem/src/engine/extraction/atomic-generic-extractor.ts", function: "runAtomicNumericTurnSweep", site_id: "extraction.atomic-generic-extractor.runAtomicNumericTurnSweep.a373dfa454" });
 		return [];
 	}
 	// Counted before the reply is judged: a truncated answer still cost a call, and leaving it out
@@ -325,7 +325,7 @@ export async function runAtomicNumericTurnSweep(
 		log.warn("atomic numeric turn sweep reply rejected: truncated", {
 			sweptTurnCount: uncited.length,
 			outputTokenBudget: input.outputTokenBudget,
-		}, { event_name: "memory.atomic_generic_extractor.diagnostic", file: "apps/mem-claw/src/extraction/atomic-generic-extractor.ts", function: "runAtomicNumericTurnSweep", site_id: "extraction.atomic-generic-extractor.runAtomicNumericTurnSweep.dc917b09a1" });
+		}, { event_name: "memory.atomic_generic_extractor.diagnostic", file: "packages/sno-station-mem/src/engine/extraction/atomic-generic-extractor.ts", function: "runAtomicNumericTurnSweep", site_id: "extraction.atomic-generic-extractor.runAtomicNumericTurnSweep.dc917b09a1" });
 		return [];
 	}
 	const parsed = parseAtomicExtractionReply(completion.text, input.turns.length);
@@ -334,7 +334,7 @@ export async function runAtomicNumericTurnSweep(
 		log.warn("atomic numeric turn sweep reply rejected: parse", {
 			reason: parsed.reason,
 			sweptTurnCount: uncited.length,
-		}, { event_name: "memory.atomic_generic_extractor.diagnostic", file: "apps/mem-claw/src/extraction/atomic-generic-extractor.ts", function: "runAtomicNumericTurnSweep", site_id: "extraction.atomic-generic-extractor.runAtomicNumericTurnSweep.5264647de8" });
+		}, { event_name: "memory.atomic_generic_extractor.diagnostic", file: "packages/sno-station-mem/src/engine/extraction/atomic-generic-extractor.ts", function: "runAtomicNumericTurnSweep", site_id: "extraction.atomic-generic-extractor.runAtomicNumericTurnSweep.5264647de8" });
 		return [];
 	}
 	if (input.diagnostics) input.diagnostics.proposed += parsed.records.length;
@@ -388,9 +388,9 @@ export async function runAtomicNumericTurnSweep(
 		droppedTurnIndexes: dropped.map((record) => record.sourceSpan.turnIndex),
 	};
 	if (dropped.length > 0) {
-		log.warn("atomic numeric turn sweep dropped records outside the swept turns", outcome, { event_name: "memory.atomic_generic_extractor.diagnostic", file: "apps/mem-claw/src/extraction/atomic-generic-extractor.ts", function: "runAtomicNumericTurnSweep", site_id: "extraction.atomic-generic-extractor.runAtomicNumericTurnSweep.5f797c1175" });
+		log.warn("atomic numeric turn sweep dropped records outside the swept turns", outcome, { event_name: "memory.atomic_generic_extractor.diagnostic", file: "packages/sno-station-mem/src/engine/extraction/atomic-generic-extractor.ts", function: "runAtomicNumericTurnSweep", site_id: "extraction.atomic-generic-extractor.runAtomicNumericTurnSweep.5f797c1175" });
 	} else {
-		log.info("atomic numeric turn sweep completed", outcome, { event_name: "memory.atomic_generic_extractor.diagnostic", file: "apps/mem-claw/src/extraction/atomic-generic-extractor.ts", function: "runAtomicNumericTurnSweep", site_id: "extraction.atomic-generic-extractor.runAtomicNumericTurnSweep.fdcb677e24" });
+		log.info("atomic numeric turn sweep completed", outcome, { event_name: "memory.atomic_generic_extractor.diagnostic", file: "packages/sno-station-mem/src/engine/extraction/atomic-generic-extractor.ts", function: "runAtomicNumericTurnSweep", site_id: "extraction.atomic-generic-extractor.runAtomicNumericTurnSweep.fdcb677e24" });
 	}
 	return fresh.map((record) => withAtomicSanitizerMatches(record, sanitizedInput.matched));
 }
@@ -511,7 +511,7 @@ export async function runAtomicGenericExtractionPass(
 				attempt,
 				outputTokenBudget,
 				...rejectionPreview(completion.text),
-			}, { event_name: "memory.atomic_generic_extractor.diagnostic", file: "apps/mem-claw/src/extraction/atomic-generic-extractor.ts", function: "runAtomicGenericExtractionPass", site_id: "extraction.atomic-generic-extractor.runAtomicGenericExtractionPass.cce4a719a3" });
+			}, { event_name: "memory.atomic_generic_extractor.diagnostic", file: "packages/sno-station-mem/src/engine/extraction/atomic-generic-extractor.ts", function: "runAtomicGenericExtractionPass", site_id: "extraction.atomic-generic-extractor.runAtomicGenericExtractionPass.cce4a719a3" });
 			if (attempt === 2) {
 				return markPending(input, "truncation-exhaustion", lastReply, {
 					...begin.entry.runParameters,
@@ -538,7 +538,7 @@ export async function runAtomicGenericExtractionPass(
 			reason: parsed.reason,
 			malformedCandidateCount: parsed.malformedCandidateCount,
 			...rejectionPreview(completion.text),
-		}, { event_name: "memory.atomic_generic_extractor.diagnostic", file: "apps/mem-claw/src/extraction/atomic-generic-extractor.ts", function: "runAtomicGenericExtractionPass", site_id: "extraction.atomic-generic-extractor.runAtomicGenericExtractionPass.98a701bd95" });
+		}, { event_name: "memory.atomic_generic_extractor.diagnostic", file: "packages/sno-station-mem/src/engine/extraction/atomic-generic-extractor.ts", function: "runAtomicGenericExtractionPass", site_id: "extraction.atomic-generic-extractor.runAtomicGenericExtractionPass.98a701bd95" });
 		if (attempt === 2) {
 			return markPending(input, "parse-exhaustion", lastReply, {
 				...begin.entry.runParameters,

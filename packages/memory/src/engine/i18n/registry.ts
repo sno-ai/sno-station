@@ -56,8 +56,8 @@ async function loadLocale(locale: Locale): Promise<LocaleResources> {
 		return mod;
 	} catch (error) {
 		log.warn("locale resource load failed; falling back", { locale, error }, {
-			event_name: "mem_claw.registry.locale.resource.load.failed.falling.back",
-			file: "apps/mem-claw/src/i18n/registry.ts",
+			event_name: "sno_station_mem.registry.locale.resource.load.failed.falling.back",
+			file: "packages/sno-station-mem/src/engine/i18n/registry.ts",
 			function: "loadLocale",
 			site_id: "registry.loadLocale.aad78d489e",
 		});

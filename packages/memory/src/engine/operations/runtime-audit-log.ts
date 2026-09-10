@@ -1,7 +1,7 @@
 /** @file runtime-audit-log.ts
  * @purpose Records audit events for operational visibility and safety-sensitive actions.
  * @boundary Plugin runtime events and filesystem-backed audit persistence.
- * @see openclaw-plugin-runtime.ts, memory-tool-registration.ts, errors.ts.
+ * @see sno-station-mem-plugin-runtime.ts, memory-tool-registration.ts, errors.ts.
  */
 
 import {
@@ -20,7 +20,7 @@ import { createLogger } from "@snoai/utils/logger";
 import { KILL_SWITCH_CACHE_TTL_MS } from "../../../config/index";
 import { redactSecrets } from "../security/redact";
 
-export { getMemClawStateDir, getStateDir } from "../shared/paths";
+export { getSnoStationMemStateDir, getStateDir } from "../shared/paths";
 
 export type AuditEvent =
 	| "tool_call"
@@ -308,7 +308,7 @@ function enqueueAuditWrite(auditPath: string, line: string): Promise<void> {
 	const next = write.catch((error) => {
 			createLogger("sno-station-mem:audit").warn("Audit entry append failed", { error }, {
 				event_name: "memory.audit.append.failed",
-				file: "apps/mem-claw/src/operations/runtime-audit-log.ts",
+				file: "packages/sno-station-mem/src/engine/operations/runtime-audit-log.ts",
 				function: "enqueueAuditWrite", site_id: "memory.audit.append.failed",
 			});
 		});

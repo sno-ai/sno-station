@@ -274,7 +274,7 @@ export async function runAtomicSubjectGuard(
 	if (decisions === null) {
 		log.warn("subject guard gave no usable decision; parking the guarded records", {
 			guardedRecordCount: guardedRecords.length,
-		}, { event_name: "memory.atomic_subject_guard.diagnostic", file: "apps/mem-claw/src/extraction/atomic-subject-guard.ts", function: "runAtomicSubjectGuard", site_id: "extraction.atomic-subject-guard.runAtomicSubjectGuard.037dc017c1" });
+		}, { event_name: "memory.atomic_subject_guard.diagnostic", file: "packages/sno-station-mem/src/engine/extraction/atomic-subject-guard.ts", function: "runAtomicSubjectGuard", site_id: "extraction.atomic-subject-guard.runAtomicSubjectGuard.037dc017c1" });
 		for (const index of guardedIndexes) {
 			const record = records[index];
 			if (record) records[index] = parkSubject(record, "subject-unverified");
@@ -294,7 +294,7 @@ export async function runAtomicSubjectGuard(
 		log.warn("subject guard left records undecided; parking those only", {
 			undecided,
 			guardedRecordCount: guardedRecords.length,
-		}, { event_name: "memory.atomic_subject_guard.diagnostic", file: "apps/mem-claw/src/extraction/atomic-subject-guard.ts", function: "runAtomicSubjectGuard", site_id: "extraction.atomic-subject-guard.runAtomicSubjectGuard.7fbb9c4f6d" });
+		}, { event_name: "memory.atomic_subject_guard.diagnostic", file: "packages/sno-station-mem/src/engine/extraction/atomic-subject-guard.ts", function: "runAtomicSubjectGuard", site_id: "extraction.atomic-subject-guard.runAtomicSubjectGuard.7fbb9c4f6d" });
 	}
 	return records;
 }

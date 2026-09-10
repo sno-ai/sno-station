@@ -9,7 +9,7 @@
 
 // LH: consolidated from two divergent in-file copies (insight-distill + ambient-learning-cleanup)
 // LH: to fix Bug #2 — same input must produce same output regardless of which path runs.
-// LH: codex-review 2026-04-26.
+// LH: host-review 2026-04-26.
 
 const RUNTIME_WRAPPER_LINE_RE = /^\[(?:Subagent Context|Subagent Task)\]\s*/i;
 const RUNTIME_WRAPPER_PREFIX_RE = /^\[(?:Subagent Context|Subagent Task)\]/i;
@@ -94,7 +94,7 @@ export function stripLeadingRuntimeWrappers(text: string): string {
 			continue;
 		}
 
-		// LH: fix asymmetric boilerplate stripping (Bug #1, codex-review 2026-04-26).
+		// LH: fix asymmetric boilerplate stripping (Bug #1, host-review 2026-04-26).
 		// Previously this branch only matched FULL-line boilerplate via an anchored
 		// regex, so a line like "Results auto-announce to your requester. And X."
 		// kept its boilerplate prefix when the wrapper was on its own line above.

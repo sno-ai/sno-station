@@ -16,8 +16,8 @@ import {
 } from "../engine/operations/runtime-audit-log";
 import {
 	PLUGIN_ENTRY_KEY,
-	readOpenClawConfig,
-	resolveOpenClawConfigPath,
+	readSnoStationMemConfig,
+	resolveSnoStationMemConfigPath,
 } from "../engine/bindings/embedder-config-files";
 import {
 	REM_CORRELATION_ID_HEADER,
@@ -75,9 +75,9 @@ const discoverySchema = z
 const idleEvaluations = new Map<string, number>();
 
 export function readRemAutomaticOperations(
-	configPath: string = resolveOpenClawConfigPath(),
+	configPath: string = resolveSnoStationMemConfigPath(),
 ): RemAutomaticOperation[] {
-	const hostConfig = readOpenClawConfig(configPath);
+	const hostConfig = readSnoStationMemConfig(configPath);
 	const rawConfig = hostConfig.plugins?.entries?.[PLUGIN_ENTRY_KEY]?.config;
 	const config = pluginConfigSchema.parse(rawConfig ?? {});
 	return config.mode === "rem-enhanced" ? config.remOperations : [];
@@ -159,8 +159,8 @@ export async function evaluateRemAutomaticTriggers(
 			dispatches += scopeResult.dispatched ? 1 : 0;
 		} catch (error) {
 			log.warn("REM automatic scope evaluation failed", { scope, error }, {
-				event_name: "mem_claw.rem-trigger.rem.automatic.scope.evaluation.failed",
-				file: "apps/mem-claw/src/sidecar/rem-trigger.ts",
+				event_name: "sno_station_mem.rem-trigger.rem.automatic.scope.evaluation.failed",
+				file: "packages/sno-station-mem/src/sidecar/rem-trigger.ts",
 				function: "evaluateRemAutomaticTriggers",
 				site_id: "rem-trigger.evaluateRemAutomaticTriggers.1d59077a5c",
 			});
@@ -171,8 +171,8 @@ export async function evaluateRemAutomaticTriggers(
 				});
 			} catch (auditError) {
 				log.warn("REM automatic scope failure audit failed", { scope, error: auditError }, {
-					event_name: "mem_claw.rem-trigger.rem.automatic.scope.failure.audit.failed",
-					file: "apps/mem-claw/src/sidecar/rem-trigger.ts",
+					event_name: "sno_station_mem.rem-trigger.rem.automatic.scope.failure.audit.failed",
+					file: "packages/sno-station-mem/src/sidecar/rem-trigger.ts",
 					function: "evaluateRemAutomaticTriggers",
 					site_id: "rem-trigger.evaluateRemAutomaticTriggers.ebe1cdd204",
 				});
@@ -181,8 +181,8 @@ export async function evaluateRemAutomaticTriggers(
 				state = await loadRemTriggerState(input.stateDir);
 			} catch (stateError) {
 				log.warn("REM automatic trigger state reload failed", { scope, error: stateError }, {
-					event_name: "mem_claw.rem-trigger.rem.automatic.trigger.state.reload.failed",
-					file: "apps/mem-claw/src/sidecar/rem-trigger.ts",
+					event_name: "sno_station_mem.rem-trigger.rem.automatic.trigger.state.reload.failed",
+					file: "packages/sno-station-mem/src/sidecar/rem-trigger.ts",
 					function: "evaluateRemAutomaticTriggers",
 					site_id: "rem-trigger.evaluateRemAutomaticTriggers.46669e66ff",
 				});
@@ -307,7 +307,7 @@ async function dispatchRemWave(
 	withLogContext({ operation_id: body.job_id, job_id: body.job_id, session_reference: scope, external_reference: correlationId }, () => {
 		log.info("REM dispatch accepted", { outcome: "success", job_id: body.job_id, status: response.status, duration_ms: performance.now() - started }, {
 			event_name: "sidecar.trigger.dispatch.accepted",
-			file: "apps/mem-claw/src/sidecar/rem-trigger.ts",
+			file: "packages/sno-station-mem/src/sidecar/rem-trigger.ts",
 			function: "dispatchRemWave",
 			site_id: "sidecar.trigger.dispatch.accepted",
 		});
@@ -326,7 +326,7 @@ async function applyCompletedBaselines(
 		if (isNodeError(error) && error.code === "ENOENT") return state;
 		log.warn("REM completion audit could not be read", { error, outcome: "skipped", reason_code: "audit_read_failed" }, {
 			event_name: "sidecar.trigger.audit_read.failed",
-			file: "apps/mem-claw/src/sidecar/rem-trigger.ts",
+			file: "packages/sno-station-mem/src/sidecar/rem-trigger.ts",
 			function: "applyCompletedBaselines",
 			site_id: "sidecar.trigger.audit_read.failed",
 		});
@@ -406,7 +406,7 @@ async function applyCompletedBaselines(
 	if (malformedCount > 0) {
 		log.warn("Malformed REM audit records skipped", { malformed_count: malformedCount, outcome: "partial" }, {
 			event_name: "sidecar.trigger.audit_records.skipped",
-			file: "apps/mem-claw/src/sidecar/rem-trigger.ts",
+			file: "packages/sno-station-mem/src/sidecar/rem-trigger.ts",
 			function: "applyCompletedBaselines",
 			site_id: "sidecar.trigger.audit_records.skipped",
 		});

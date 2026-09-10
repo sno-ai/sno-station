@@ -11,7 +11,7 @@ import { writeRemTwoFacetTransaction } from "../engine/rem/index.js";
 import { createHash } from "node:crypto";
 import { createLogger } from "@snoai/utils/logger";
 import {
-	getMemClawStateDir,
+	getSnoStationMemStateDir,
 	runWithMemoryAudit,
 } from "../engine/operations/runtime-audit-log";
 import { MemoryStore, type MemoryStoreInternals } from "./memory-store-base";
@@ -61,7 +61,7 @@ Object.assign(MemoryStore.prototype, {
 			let completedMutation: RemMutationResult | undefined;
 			try {
 				return await runWithMemoryAudit({
-					stateDir: getMemClawStateDir(),
+					stateDir: getSnoStationMemStateDir(),
 					event: "memory_updated",
 					operation: "rem-update",
 					startedDetails: { memory_ids: [input.rowId], requested_count: 1 },
@@ -81,8 +81,8 @@ Object.assign(MemoryStore.prototype, {
 			} catch (error) {
 				if (completedMutation === undefined) throw error;
 				log.error("rem_write_completion_audit_failed", { error, row_id: input.rowId }, {
-					event_name: "mem_claw.memory-store-rem-api.rem.write.completion.audit.failed",
-					file: "apps/mem-claw/src/storage/memory-store-rem-api.ts",
+					event_name: "sno_station_mem.memory-store-rem-api.rem.write.completion.audit.failed",
+					file: "packages/sno-station-mem/src/store/memory-store-rem-api.ts",
 					function: "applyRemTextVersion",
 					site_id: "memory-store-rem-api.applyRemTextVersion.6422a9ebd1",
 				});
@@ -202,8 +202,8 @@ async function applyTransaction(
 		});
 	} catch (error) {
 		log.error("rem_write_receipt_failed", { error, row_id: existing.id }, {
-			event_name: "mem_claw.memory-store-rem-api.rem.write.receipt.failed",
-			file: "apps/mem-claw/src/storage/memory-store-rem-api.ts",
+			event_name: "sno_station_mem.memory-store-rem-api.rem.write.receipt.failed",
+			file: "packages/sno-station-mem/src/store/memory-store-rem-api.ts",
 			function: "applyTransaction",
 			site_id: "memory-store-rem-api.applyTransaction.47fe85179a",
 		});

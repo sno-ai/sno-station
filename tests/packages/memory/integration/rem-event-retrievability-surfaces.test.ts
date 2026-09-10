@@ -13,7 +13,7 @@ import {
 } from "../../../../packages/sno-station-mem/src/engine/rem/index.ts";
 import { createLlmClient } from "../../../../packages/sno-station-mem/src/model/llm-client.ts";
 import {
-	createMemClawRemPorts,
+	createSnoStationMemRemPorts,
 	createRemReplaceCarrierPort,
 } from "../../../../packages/sno-station-mem/src/store/rem-sqlite-adapter.ts";
 import { MemoryStore } from "../../../../packages/sno-station-mem/src/store/store.ts";
@@ -215,7 +215,7 @@ function carrierFor(seeded: {
 }
 
 function portsFor(seeded: { testDb: TestDb }) {
-	return createMemClawRemPorts({
+	return createSnoStationMemRemPorts({
 		database: seeded.testDb.runtime.db,
 		llmClient: createLlmClient({
 			preset: "mem_claw/sno_conflict_verdict",

@@ -21,7 +21,7 @@ import {
 	evaluateRemAutomaticTriggers,
 	readRemAutomaticOperations,
 } from "../sidecar/rem-trigger";
-import { getMemClawStateDir } from "../engine/shared/paths";
+import { getSnoStationMemStateDir } from "../engine/shared/paths";
 import { recordMemoryTelemetryIncident } from "../engine/telemetry/memory-telemetry-incidents";
 import type { MemoryTelemetryUsageOutbox } from "../engine/telemetry/memory-telemetry-outbox";
 
@@ -56,7 +56,7 @@ export interface MaintenanceDeps {
 	usageOutbox?: MemoryTelemetryUsageOutbox;
 	dbPath: string;
 	backupDir: string;
-	/** mem-claw state dir — the kill-switch file lives here. */
+	/** sno-station-mem state dir — the kill-switch file lives here. */
 	stateDir: string;
 	/**
 	 * Integrity sweep implementation; defaults to sno-station-core-crypto's runIntegrityCheck.
@@ -67,7 +67,7 @@ export interface MaintenanceDeps {
 	/**
 	 * Wall-clock budget for usage-event retention pruning per pass; defaults to
 	 * RETENTION_PRUNE_BUDGET_MS. Injectable so a test can force early cutoff of
-	 * a large backlog without waiting on the real budget (codex adversarial
+	 * a large backlog without waiting on the real budget (host adversarial
 	 * review 2026-07-13; same seam pattern as integrityCheck above).
 	 */
 	retentionPruneBudgetMs?: number;
@@ -171,8 +171,8 @@ function recoverDerivedFts(deps: MaintenanceDeps, rawDb: RawIntegrityDb): boolea
 
 	recordIntegrityAudit(deps.stateDir, "rebuild_started", "ok");
 	log.warn("rebuilding derived FTS index after verified derived-only integrity failure", undefined, {
-		event_name: "mem_claw.maintenance.rebuilding.derived.fts.index.after.verified.derived.only.integrity.fai",
-		file: "apps/mem-claw/src/storage/maintenance.ts",
+		event_name: "sno_station_mem.maintenance.rebuilding.derived.fts.index.after.verified.derived.only.integrity.fai",
+		file: "packages/sno-station-mem/src/store/maintenance.ts",
 		function: "recoverDerivedFts",
 		site_id: "maintenance.recoverDerivedFts.753697bd94",
 	});
@@ -188,8 +188,8 @@ function recoverDerivedFts(deps: MaintenanceDeps, rawDb: RawIntegrityDb): boolea
 		);
 		recordIntegrityAudit(deps.stateDir, "recovered", "ok");
 		log.info("derived FTS index rebuilt and integrity reverified", undefined, {
-			event_name: "mem_claw.maintenance.derived.fts.index.rebuilt.and.integrity.reverified",
-			file: "apps/mem-claw/src/storage/maintenance.ts",
+			event_name: "sno_station_mem.maintenance.derived.fts.index.rebuilt.and.integrity.reverified",
+			file: "packages/sno-station-mem/src/store/maintenance.ts",
 			function: "recoverDerivedFts",
 			site_id: "maintenance.recoverDerivedFts.2cf5f62053",
 		});
@@ -199,8 +199,8 @@ function recoverDerivedFts(deps: MaintenanceDeps, rawDb: RawIntegrityDb): boolea
 			reason: error instanceof Error ? error.message : String(error),
 		});
 		log.error("derived FTS recovery failed; storage remains latched", { error }, {
-			event_name: "mem_claw.maintenance.derived.fts.recovery.failed.storage.remains.latched",
-			file: "apps/mem-claw/src/storage/maintenance.ts",
+			event_name: "sno_station_mem.maintenance.derived.fts.recovery.failed.storage.remains.latched",
+			file: "packages/sno-station-mem/src/store/maintenance.ts",
 			function: "recoverDerivedFts",
 			site_id: "maintenance.recoverDerivedFts.c07ad948a2",
 		});
@@ -232,15 +232,15 @@ function failClosed(deps: MaintenanceDeps, error: unknown): void {
 		activateKillSwitch(deps.stateDir, `db integrity failure: ${message.slice(0, 200)}`, "maintenance");
 	} catch (killSwitchError) {
 		log.error("failed to raise kill switch after integrity failure", { error: killSwitchError }, {
-			event_name: "mem_claw.maintenance.failed.to.raise.kill.switch.after.integrity.failure",
-			file: "apps/mem-claw/src/storage/maintenance.ts",
+			event_name: "sno_station_mem.maintenance.failed.to.raise.kill.switch.after.integrity.failure",
+			file: "packages/sno-station-mem/src/store/maintenance.ts",
 			function: "failClosed",
 			site_id: "maintenance.failClosed.b9166d3fe2",
 		});
 	}
 	log.error("storage latched fail-closed after integrity failure", { error: message }, {
-		event_name: "mem_claw.maintenance.storage.latched.fail.closed.after.integrity.failure",
-		file: "apps/mem-claw/src/storage/maintenance.ts",
+		event_name: "sno_station_mem.maintenance.storage.latched.fail.closed.after.integrity.failure",
+		file: "packages/sno-station-mem/src/store/maintenance.ts",
 		function: "failClosed",
 		site_id: "maintenance.failClosed.dd7955e647",
 	});
@@ -249,7 +249,7 @@ function failClosed(deps: MaintenanceDeps, error: unknown): void {
 /**
  * Bounded catch-up: a backlog left by a maintenance gap or a first-time
  * retention rollout can be far larger than one tick's budget. Deleting it
- * all synchronously would block the gateway event loop for minutes (codex
+ * all synchronously would block the gateway event loop for minutes (host
  * adversarial review 2026-07-13). Leave the remainder for later ticks —
  * safe, since usage-event retention is a hygiene job, not a safety
  * invariant (the purge-safety recall lookback only needs the last 30 days,
@@ -306,8 +306,8 @@ export function runMaintenancePass(deps: MaintenanceDeps): MaintenanceReport {
 	if (deps.store.closed) {
 		report.aborted = true;
 		log.info("stopping maintenance for closed or replaced runtime", { dbPath: deps.dbPath }, {
-			event_name: "mem_claw.maintenance.stopping.maintenance.for.closed.or.replaced.runtime",
-			file: "apps/mem-claw/src/storage/maintenance.ts",
+			event_name: "sno_station_mem.maintenance.stopping.maintenance.for.closed.or.replaced.runtime",
+			file: "packages/sno-station-mem/src/store/maintenance.ts",
 			function: "runMaintenancePass",
 			site_id: "maintenance.runMaintenancePass.747b7cbef0",
 		});
@@ -323,7 +323,7 @@ export function runMaintenancePass(deps: MaintenanceDeps): MaintenanceReport {
 	// never be silently served even without this sweep — this is early-warning
 	// defense-in-depth, not the only guard. If INTEGRITY_SWEEP_SLOW_WARN_MS
 	// starts firing routinely as the database grows, move this to a
-	// worker_thread with its own read-only connection (codex adversarial
+	// worker_thread with its own read-only connection (host adversarial
 	// review 2026-07-13; follow-up, not done here).
 	const integrityStart = Date.now();
 	try {
@@ -340,8 +340,8 @@ export function runMaintenancePass(deps: MaintenanceDeps): MaintenanceReport {
 				reason: "clean integrity sweep after restart",
 			});
 			log.info("cleared maintenance integrity latch after clean restart sweep", undefined, {
-				event_name: "mem_claw.maintenance.cleared.maintenance.integrity.latch.after.clean.restart.sweep",
-				file: "apps/mem-claw/src/storage/maintenance.ts",
+				event_name: "sno_station_mem.maintenance.cleared.maintenance.integrity.latch.after.clean.restart.sweep",
+				file: "packages/sno-station-mem/src/store/maintenance.ts",
 				function: "runMaintenancePass",
 				site_id: "maintenance.runMaintenancePass.db1242ce1c",
 			});
@@ -350,8 +350,8 @@ export function runMaintenancePass(deps: MaintenanceDeps): MaintenanceReport {
 			log.warn("integrity sweep is blocking the event loop for longer than expected", {
 				integrityMs: report.integrityMs,
 			}, {
-				event_name: "mem_claw.maintenance.integrity.sweep.is.blocking.the.event.loop.for.longer.than.expected",
-				file: "apps/mem-claw/src/storage/maintenance.ts",
+				event_name: "sno_station_mem.maintenance.integrity.sweep.is.blocking.the.event.loop.for.longer.than.expected",
+				file: "packages/sno-station-mem/src/store/maintenance.ts",
 				function: "runMaintenancePass",
 				site_id: "maintenance.runMaintenancePass.4ae162dc73",
 			});
@@ -388,8 +388,8 @@ export function runMaintenancePass(deps: MaintenanceDeps): MaintenanceReport {
 			);
 		} catch (error) {
 			log.warn("outbox maintenance failed", { error }, {
-				event_name: "mem_claw.maintenance.outbox.maintenance.failed",
-				file: "apps/mem-claw/src/storage/maintenance.ts",
+				event_name: "sno_station_mem.maintenance.outbox.maintenance.failed",
+				file: "packages/sno-station-mem/src/store/maintenance.ts",
 				function: "runMaintenancePass",
 				site_id: "maintenance.runMaintenancePass.c72575daaa",
 			});
@@ -405,8 +405,8 @@ export function runMaintenancePass(deps: MaintenanceDeps): MaintenanceReport {
 		);
 	} catch (error) {
 		log.warn("usage-event retention failed", { error }, {
-			event_name: "mem_claw.maintenance.usage.event.retention.failed",
-			file: "apps/mem-claw/src/storage/maintenance.ts",
+			event_name: "sno_station_mem.maintenance.usage.event.retention.failed",
+			file: "packages/sno-station-mem/src/store/maintenance.ts",
 			function: "runMaintenancePass",
 			site_id: "maintenance.runMaintenancePass.ef7a1e225c",
 		});
@@ -417,8 +417,8 @@ export function runMaintenancePass(deps: MaintenanceDeps): MaintenanceReport {
 		mergeFtsSegments(deps.store);
 	} catch (error) {
 		log.warn("fts merge failed", { error }, {
-			event_name: "mem_claw.maintenance.fts.merge.failed",
-			file: "apps/mem-claw/src/storage/maintenance.ts",
+			event_name: "sno_station_mem.maintenance.fts.merge.failed",
+			file: "packages/sno-station-mem/src/store/maintenance.ts",
 			function: "runMaintenancePass",
 			site_id: "maintenance.runMaintenancePass.90f01cc543",
 		});
@@ -430,8 +430,8 @@ export function runMaintenancePass(deps: MaintenanceDeps): MaintenanceReport {
 		deps.store.sqlite.exec("PRAGMA optimize");
 	} catch (error) {
 		log.warn("pragma optimize failed", { error }, {
-			event_name: "mem_claw.maintenance.pragma.optimize.failed",
-			file: "apps/mem-claw/src/storage/maintenance.ts",
+			event_name: "sno_station_mem.maintenance.pragma.optimize.failed",
+			file: "packages/sno-station-mem/src/store/maintenance.ts",
 			function: "runMaintenancePass",
 			site_id: "maintenance.runMaintenancePass.3a7c9e73cf",
 		});
@@ -442,8 +442,8 @@ export function runMaintenancePass(deps: MaintenanceDeps): MaintenanceReport {
 		report.backupPath = runBackup(deps.dbPath, deps.backupDir);
 	} catch (error) {
 		log.warn("periodic backup failed", { error }, {
-			event_name: "mem_claw.maintenance.periodic.backup.failed",
-			file: "apps/mem-claw/src/storage/maintenance.ts",
+			event_name: "sno_station_mem.maintenance.periodic.backup.failed",
+			file: "packages/sno-station-mem/src/store/maintenance.ts",
 			function: "runMaintenancePass",
 			site_id: "maintenance.runMaintenancePass.11beb09895",
 		});
@@ -455,8 +455,8 @@ export function runMaintenancePass(deps: MaintenanceDeps): MaintenanceReport {
 		quarantinePruned: report.quarantinePruned,
 		usageEventsPruned: report.usageEventsPruned,
 	}, {
-		event_name: "mem_claw.maintenance.maintenance.pass.complete",
-		file: "apps/mem-claw/src/storage/maintenance.ts",
+		event_name: "sno_station_mem.maintenance.maintenance.pass.complete",
+		file: "packages/sno-station-mem/src/store/maintenance.ts",
 		function: "runMaintenancePass",
 		site_id: "maintenance.runMaintenancePass.6a1e15dc18",
 	});
@@ -494,8 +494,8 @@ export function startMaintenanceTimer(
 	const tick = (): void => {
 		if (inFlight) {
 			log.warn("skipping maintenance tick: previous pass still in flight", undefined, {
-				event_name: "mem_claw.maintenance.skipping.maintenance.tick.previous.pass.still.in.flight",
-				file: "apps/mem-claw/src/storage/maintenance.ts",
+				event_name: "sno_station_mem.maintenance.skipping.maintenance.tick.previous.pass.still.in.flight",
+				file: "packages/sno-station-mem/src/store/maintenance.ts",
 				function: "tick",
 				site_id: "maintenance.tick.e111b66415",
 			});
@@ -503,8 +503,8 @@ export function startMaintenanceTimer(
 		}
 		if (deps.store.closed) {
 			log.info("stopping maintenance for closed or replaced runtime", { dbPath: deps.dbPath }, {
-				event_name: "mem_claw.maintenance.stopping.maintenance.for.closed.or.replaced.runtime",
-				file: "apps/mem-claw/src/storage/maintenance.ts",
+				event_name: "sno_station_mem.maintenance.stopping.maintenance.for.closed.or.replaced.runtime",
+				file: "packages/sno-station-mem/src/store/maintenance.ts",
 				function: "tick",
 				site_id: "maintenance.tick.6bd3e0102c",
 			});
@@ -526,13 +526,13 @@ export function startMaintenanceTimer(
 				await evaluateRemAutomaticTriggers({
 					database: deps.store.sqlite,
 					stateDir: deps.stateDir,
-					auditStateDir: getMemClawStateDir(),
+					auditStateDir: getSnoStationMemStateDir(),
 					requestedOperations: readRemAutomaticOperations(),
 				});
 			} catch (error) {
 				log.warn("maintenance pass threw", { error }, {
-					event_name: "mem_claw.maintenance.maintenance.pass.threw",
-					file: "apps/mem-claw/src/storage/maintenance.ts",
+					event_name: "sno_station_mem.maintenance.maintenance.pass.threw",
+					file: "packages/sno-station-mem/src/store/maintenance.ts",
 					function: "<anonymous callback>",
 					site_id: "maintenance.<anonymous callback>.f90713a2e3",
 				});
@@ -550,8 +550,8 @@ export function startMaintenanceTimer(
 	}, MAINTENANCE_FIRST_TICK_DELAY_MS);
 	firstTick.unref?.();
 	log.debug("maintenance timer started", { intervalMs }, {
-		event_name: "mem_claw.maintenance.maintenance.timer.started",
-		file: "apps/mem-claw/src/storage/maintenance.ts",
+		event_name: "sno_station_mem.maintenance.maintenance.timer.started",
+		file: "packages/sno-station-mem/src/store/maintenance.ts",
 		function: "startMaintenanceTimer",
 		site_id: "maintenance.startMaintenanceTimer.06c1e98584",
 	});

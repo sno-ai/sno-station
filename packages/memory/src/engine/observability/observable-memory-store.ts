@@ -6,7 +6,7 @@
 import type { JsonObject } from "@snoai/sno-observe";
 import type { EmbeddingConfig } from "../extraction/embedding-provider-client";
 import {
-	getMemClawStateDir,
+	getSnoStationMemStateDir,
 	runWithMemoryAudit,
 	runWithMemoryAuditSync,
 } from "../operations/runtime-audit-log";
@@ -58,7 +58,7 @@ export class ObservableMemoryStore extends MemoryStore {
 	override async store(entry: StoreInput): Promise<StoreResult> {
 		try {
 			const result = await runWithMemoryAudit({
-				stateDir: getMemClawStateDir(),
+				stateDir: getSnoStationMemStateDir(),
 				event: "memory_injected",
 				operation: "store",
 				scope: entry.projectId,
@@ -101,7 +101,7 @@ export class ObservableMemoryStore extends MemoryStore {
 	override async update(id: string, changes: UpdateChanges): Promise<MemoryEntry | null> {
 		try {
 			const result = await runWithMemoryAudit({
-				stateDir: getMemClawStateDir(),
+				stateDir: getSnoStationMemStateDir(),
 				event: "memory_updated",
 				operation: "update",
 				startedDetails: { memory_ids: [id], requested_count: 1 },
@@ -137,7 +137,7 @@ export class ObservableMemoryStore extends MemoryStore {
 		try {
 			const requested = entries.filter((entry): entry is StoreInput => entry != null);
 			const results = await runWithMemoryAudit({
-				stateDir: getMemClawStateDir(),
+				stateDir: getSnoStationMemStateDir(),
 				event: "memory_injected",
 				operation: "bulkStore",
 				startedDetails: { count: requested.length },
@@ -193,7 +193,7 @@ export class ObservableMemoryStore extends MemoryStore {
 		preserveExisting?: SupersedePreserveExisting;
 	}): Promise<StoreResult> {
 		return runWithMemoryAudit({
-			stateDir: getMemClawStateDir(),
+			stateDir: getSnoStationMemStateDir(),
 			event: "memory_superseded",
 			operation: "supersede",
 			scope: args.create.projectId,
@@ -203,7 +203,7 @@ export class ObservableMemoryStore extends MemoryStore {
 			},
 			run: () =>
 				runWithMemoryAudit({
-					stateDir: getMemClawStateDir(),
+					stateDir: getSnoStationMemStateDir(),
 					event: "memory_injected",
 					operation: "supersede",
 					scope: args.create.projectId,
@@ -225,7 +225,7 @@ export class ObservableMemoryStore extends MemoryStore {
 	): ReturnType<MemoryStore["createMergeWithRawLineage"]> {
 		const scope = args.rawSource.projectId;
 		return runWithMemoryAudit({
-			stateDir: getMemClawStateDir(),
+			stateDir: getSnoStationMemStateDir(),
 			event: "memory_superseded",
 			operation: "createMergeWithRawLineage",
 			scope,
@@ -235,7 +235,7 @@ export class ObservableMemoryStore extends MemoryStore {
 			},
 			run: () =>
 				runWithMemoryAudit({
-					stateDir: getMemClawStateDir(),
+					stateDir: getSnoStationMemStateDir(),
 					event: "memory_injected",
 					operation: "createMergeWithRawLineage",
 					scope,
@@ -267,7 +267,7 @@ export class ObservableMemoryStore extends MemoryStore {
 	): ReturnType<MemoryStore["createEventAndSupersede"]> {
 		const scope = args.replacement.projectId;
 		return runWithMemoryAudit({
-			stateDir: getMemClawStateDir(),
+			stateDir: getSnoStationMemStateDir(),
 			event: "memory_superseded",
 			operation: "createEventAndSupersede",
 			scope,
@@ -277,7 +277,7 @@ export class ObservableMemoryStore extends MemoryStore {
 			},
 			run: () =>
 				runWithMemoryAudit({
-					stateDir: getMemClawStateDir(),
+					stateDir: getSnoStationMemStateDir(),
 					event: "memory_injected",
 					operation: "createEventAndSupersede",
 					scope,
@@ -306,7 +306,7 @@ export class ObservableMemoryStore extends MemoryStore {
 	): ReturnType<MemoryStore["importEntry"]> {
 		let existed = false;
 		return runWithMemoryAudit({
-			stateDir: getMemClawStateDir(),
+			stateDir: getSnoStationMemStateDir(),
 			event: "memory_injected",
 			operation: "importEntry",
 			scope: entry.projectId,
@@ -333,7 +333,7 @@ export class ObservableMemoryStore extends MemoryStore {
 
 	async backfillMissingChunks(): Promise<number> {
 		return runWithMemoryAudit({
-			stateDir: getMemClawStateDir(),
+			stateDir: getSnoStationMemStateDir(),
 			event: "memory_updated",
 			operation: "backfillMissingChunks",
 			run: () => baseBackfillMissingChunks.call(this),
@@ -367,7 +367,7 @@ export class ObservableMemoryStore extends MemoryStore {
 		input: RecordUnplacedCandidateInput,
 	): RecordUnplacedCandidateResult {
 		return runWithMemoryAuditSync({
-			stateDir: getMemClawStateDir(),
+			stateDir: getSnoStationMemStateDir(),
 			event: "memory_injected",
 			operation: "recordUnplacedCandidate",
 			scope: input.projectId,
@@ -404,7 +404,7 @@ export class ObservableMemoryStore extends MemoryStore {
 
 	override async hasId(id: string): Promise<boolean> {
 		return runWithMemoryAudit({
-			stateDir: getMemClawStateDir(),
+			stateDir: getSnoStationMemStateDir(),
 			event: "memory_read",
 			operation: "hasId",
 			startedDetails: { memory_ids: [id], requested_count: 1 },
@@ -454,7 +454,7 @@ export class ObservableMemoryStore extends MemoryStore {
 
 	fetchMemoriesInOrder(memoryIds: string[], opts: SearchOptions = {}): MemoryRow[] {
 		return runWithMemoryAuditSync({
-			stateDir: getMemClawStateDir(),
+			stateDir: getSnoStationMemStateDir(),
 			event: "memory_read",
 			operation: "fetchMemoriesInOrder",
 			startedDetails: { memory_ids: memoryIds, requested_count: memoryIds.length },
@@ -469,7 +469,7 @@ export class ObservableMemoryStore extends MemoryStore {
 
 	override getVectorsByIds(ids: string[]): Map<string, Float32Array> {
 		return runWithMemoryAuditSync({
-			stateDir: getMemClawStateDir(),
+			stateDir: getSnoStationMemStateDir(),
 			event: "memory_read",
 			operation: "getVectorsByIds",
 			startedDetails: { memory_ids: ids, requested_count: ids.length },
@@ -487,7 +487,7 @@ export class ObservableMemoryStore extends MemoryStore {
 		facetPolicy?: SearchOptions["facetPolicy"],
 	): Map<string, Array<{ chunkIndex: number; chunkText: string; facet: "current" | "history" }>> {
 		return runWithMemoryAuditSync({
-			stateDir: getMemClawStateDir(),
+			stateDir: getSnoStationMemStateDir(),
 			event: "memory_read",
 			operation: "getChunksByParent",
 			startedDetails: { memory_ids: memoryIds, requested_count: memoryIds.length },
@@ -502,7 +502,7 @@ export class ObservableMemoryStore extends MemoryStore {
 
 	override async list(opts: ListOptions = {}): Promise<MemoryEntry[]> {
 		return runWithMemoryAudit({
-			stateDir: getMemClawStateDir(),
+			stateDir: getSnoStationMemStateDir(),
 			event: "memory_read",
 			operation: "list",
 			scope: opts.projectId,
@@ -520,7 +520,7 @@ export class ObservableMemoryStore extends MemoryStore {
 		opts: Parameters<MemoryStore["listReflectionItems"]>[0],
 	): ReturnType<MemoryStore["listReflectionItems"]> {
 		return runWithMemoryAudit({
-			stateDir: getMemClawStateDir(),
+			stateDir: getSnoStationMemStateDir(),
 			event: "memory_read",
 			operation: "listReflectionItems",
 			startedDetails: { requested_count: opts.limit },
@@ -536,7 +536,7 @@ export class ObservableMemoryStore extends MemoryStore {
 		memoryId: string,
 	): Promise<MemoryMetadata | undefined> {
 		return runWithMemoryAudit({
-			stateDir: getMemClawStateDir(),
+			stateDir: getSnoStationMemStateDir(),
 			event: "memory_read",
 			operation: "getMemoryMetadata",
 			startedDetails: { memory_ids: [memoryId], requested_count: 1 },
@@ -593,7 +593,7 @@ export class ObservableMemoryStore extends MemoryStore {
 		opts: Parameters<MemoryStore["resolveReflectionItem"]>[1],
 	): ReturnType<MemoryStore["resolveReflectionItem"]> {
 		return runWithMemoryAudit({
-			stateDir: getMemClawStateDir(),
+			stateDir: getSnoStationMemStateDir(),
 			event: "memory_updated",
 			operation: "resolveReflectionItem",
 			startedDetails: { memory_ids: [memoryId], requested_count: 1 },
@@ -612,7 +612,7 @@ export class ObservableMemoryStore extends MemoryStore {
 		options?: Parameters<MemoryStore["delete"]>[1],
 	): Promise<number> {
 		const deletedIds = await runWithMemoryAudit({
-			stateDir: getMemClawStateDir(),
+			stateDir: getSnoStationMemStateDir(),
 			event: "memory_deleted",
 			operation: "delete",
 			startedDetails: { delete_reason: options?.deleteReason },
@@ -637,7 +637,7 @@ export class ObservableMemoryStore extends MemoryStore {
 		options?: Parameters<MemoryStore["deleteMany"]>[1],
 	): Promise<number> {
 		const deletedIds = await runWithMemoryAudit({
-			stateDir: getMemClawStateDir(),
+			stateDir: getSnoStationMemStateDir(),
 			event: "memory_deleted",
 			operation: "deleteMany",
 			startedDetails: { delete_reason: options?.deleteReason, count: ids.length },
@@ -662,7 +662,7 @@ export class ObservableMemoryStore extends MemoryStore {
 		options?: Parameters<MemoryStoreInternals["deleteByIds"]>[1],
 	): void {
 		runWithMemoryAuditSync({
-			stateDir: getMemClawStateDir(),
+			stateDir: getSnoStationMemStateDir(),
 			event: "memory_deleted",
 			operation: "deleteByIds",
 			startedDetails: { deleted_memory_ids: ids, count: ids.length },
@@ -685,7 +685,7 @@ export class ObservableMemoryStore extends MemoryStore {
 		options?: Parameters<MemoryStore["bulkDelete"]>[1],
 	): ReturnType<MemoryStore["bulkDelete"]> {
 		return runWithMemoryAudit({
-			stateDir: getMemClawStateDir(),
+			stateDir: getSnoStationMemStateDir(),
 			event: "memory_deleted",
 			operation: "bulkDelete",
 			scope: filter.projectId,
@@ -707,7 +707,7 @@ export class ObservableMemoryStore extends MemoryStore {
 		requestedIds: string[] = [],
 	): MemoryEntry | undefined {
 		return runWithMemoryAuditSync({
-			stateDir: getMemClawStateDir(),
+			stateDir: getSnoStationMemStateDir(),
 			event: "memory_read",
 			operation,
 			scope,
@@ -728,7 +728,7 @@ export class ObservableMemoryStore extends MemoryStore {
 		run: () => Promise<ChunkSearchResult[]>,
 	): Promise<ChunkSearchResult[]> {
 		return runWithMemoryAudit({
-			stateDir: getMemClawStateDir(),
+			stateDir: getSnoStationMemStateDir(),
 			event: "memory_searched",
 			operation,
 			startedDetails: { requested_count: opts.limit },
@@ -747,7 +747,7 @@ export class ObservableMemoryStore extends MemoryStore {
 		run: () => Promise<MemorySearchResult[]>,
 	): Promise<MemorySearchResult[]> {
 		return runWithMemoryAudit({
-			stateDir: getMemClawStateDir(),
+			stateDir: getSnoStationMemStateDir(),
 			event: "memory_searched",
 			operation,
 			startedDetails: { requested_count: opts.limit },
@@ -767,7 +767,7 @@ export class ObservableMemoryStore extends MemoryStore {
 	): Promise<void> {
 		let existingIds: string[] = [];
 		await runWithMemoryAudit({
-			stateDir: getMemClawStateDir(),
+			stateDir: getSnoStationMemStateDir(),
 			event: "memory_updated",
 			operation,
 			startedDetails: { memory_ids: memoryIds, requested_count: memoryIds.length },

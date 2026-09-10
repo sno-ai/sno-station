@@ -138,13 +138,13 @@ function projectRecord(record: z.infer<typeof wireRecordSchema>): AtomicExtracti
 		log.warn("atomic extraction attribute stored unkeyed", {
 			attribute_length: offeredAttribute.length,
 			subjectKind: record.subject_kind,
-		}, { event_name: "memory.atomic_extraction_reply.diagnostic", file: "apps/mem-claw/src/extraction/atomic-extraction-reply.ts", function: "projectRecord", site_id: "extraction.atomic-extraction-reply.projectRecord.327508ac5f" });
+		}, { event_name: "memory.atomic_extraction_reply.diagnostic", file: "packages/sno-station-mem/src/engine/extraction/atomic-extraction-reply.ts", function: "projectRecord", site_id: "extraction.atomic-extraction-reply.projectRecord.327508ac5f" });
 	}
 	const endedAtPhrase = record.ends_current ? (record.ended_at_phrase ?? null) : null;
 	if (!record.ends_current && (record.ended_at_phrase ?? null) !== null) {
 		log.warn("atomic extraction dropped an ending time on a claim that does not end", {
 			claim_length: record.claim_text.length,
-		}, { event_name: "memory.atomic_extraction_reply.diagnostic", file: "apps/mem-claw/src/extraction/atomic-extraction-reply.ts", function: "projectRecord", site_id: "extraction.atomic-extraction-reply.projectRecord.aac5440fc2" });
+		}, { event_name: "memory.atomic_extraction_reply.diagnostic", file: "packages/sno-station-mem/src/engine/extraction/atomic-extraction-reply.ts", function: "projectRecord", site_id: "extraction.atomic-extraction-reply.projectRecord.aac5440fc2" });
 	}
 	const terminalTodo = record.todo === "done" || record.todo === "removed";
 	const closeReason = terminalTodo ? record.close_reason : null;
@@ -152,7 +152,7 @@ function projectRecord(record: z.infer<typeof wireRecordSchema>): AtomicExtracti
 		log.warn("atomic extraction kept the first relations only", {
 			offered: record.relations.length,
 			kept: MAX_RELATIONS,
-		}, { event_name: "memory.atomic_extraction_reply.diagnostic", file: "apps/mem-claw/src/extraction/atomic-extraction-reply.ts", function: "projectRecord", site_id: "extraction.atomic-extraction-reply.projectRecord.b92c90f285" });
+		}, { event_name: "memory.atomic_extraction_reply.diagnostic", file: "packages/sno-station-mem/src/engine/extraction/atomic-extraction-reply.ts", function: "projectRecord", site_id: "extraction.atomic-extraction-reply.projectRecord.b92c90f285" });
 	}
 	return {
 		kind: record.kind,

@@ -1,7 +1,7 @@
 /** @file data-paths.ts
  * @purpose Resolve the safe-uninstall data directory layout for
- *   `@snoai/mem-claw`: persistent user data under
- *   `~/.snoai/sno-station-core/mem-claw/data/`, separate from OpenClaw's plugin
+ *   `@snoai/sno-station-mem`: persistent user data under
+ *   `~/.snoai/sno-station-core/sno-station-mem/data/`, separate from SnoStationMem's plugin
  *   runtime tree. POSIX only.
  * @boundary Path resolution + filesystem-class assertion. No I/O beyond
  *   a single `statfs` probe in `assertLocalFilesystem`.
@@ -38,22 +38,22 @@ export class NonLocalFilesystemError extends Error {
 }
 
 /**
- * Root of the new data tree. `MEM_CLAW_DATA_DIR_ROOT` env override resolves
+ * Root of the new data tree. `SNO_STATION_MEM_DATA_DIR_ROOT` env override resolves
  * to `<root>/data/` so the override controls the install root, not the data
  * dir directly (matches §3.3 layout).
  */
-export function getMemClawDataDir(): string {
+export function getSnoStationMemDataDir(): string {
 	const override = process.env.SNO_STATION_MEM_DATA_DIR_ROOT?.trim();
 	if (override && override.length > 0) return join(override, "data");
 	return join(homedir(), ".snoai", "sno-station-core", "sno-station-mem", "data");
 }
 
 /**
- * `~/.snoai/sno-station-core/mem-claw/self-upgrade/` — disposable plugin runtime tree.
+ * `~/.snoai/sno-station-core/sno-station-mem/self-upgrade/` — disposable plugin runtime tree.
  *
  * Two env overrides are honored, in priority order:
- *   1. `MEM_CLAW_DATA_DIR_ROOT` — PRD-canonical root → `<root>/self-upgrade/`.
- *   2. `MEM_CLAW_DATA_DIR` — older override used by self-upgrade tests
+ *   1. `SNO_STATION_MEM_DATA_DIR_ROOT` — PRD-canonical root → `<root>/self-upgrade/`.
+ *   2. `SNO_STATION_MEM_DATA_DIR` — older override used by self-upgrade tests
  *      → `<that>/self-upgrade/`. Read-only compatibility only.
  */
 export function getSelfUpgradeStageRoot(): string {
@@ -65,27 +65,27 @@ export function getSelfUpgradeStageRoot(): string {
 }
 
 export function getInstallManifestPath(): string {
-	return join(getMemClawDataDir(), "install.json");
+	return join(getSnoStationMemDataDir(), "install.json");
 }
 
 export function getDefaultDbPath(): string {
-	return join(getMemClawDataDir(), "sno-station-mem.sqlite");
+	return join(getSnoStationMemDataDir(), "sno-station-mem.sqlite");
 }
 
 export function getAuditLogPath(): string {
-	return join(getMemClawDataDir(), "audit.jsonl");
+	return join(getSnoStationMemDataDir(), "audit.jsonl");
 }
 
 export function getCostLogPath(): string {
-	return join(getMemClawDataDir(), "cost.jsonl");
+	return join(getSnoStationMemDataDir(), "cost.jsonl");
 }
 
 export function getKillswitchPath(): string {
-	return join(getMemClawDataDir(), "killswitch");
+	return join(getSnoStationMemDataDir(), "killswitch");
 }
 
 export function getBackupsDir(): string {
-	return join(getMemClawDataDir(), "backups");
+	return join(getSnoStationMemDataDir(), "backups");
 }
 
 /**

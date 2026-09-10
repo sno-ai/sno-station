@@ -1,18 +1,18 @@
 import { FIXED_MEMORY_ROW_PATH_PATTERN, FIXED_PROTOCOL_VALUE_74 } from "../../model/signed-registry-constants";
 /** @file provider-search-manager.ts
- * @purpose Implements OpenClaw memory provider search/read against mem-claw rows.
+ * @purpose Implements SnoStationMem memory provider search/read against sno-station-mem rows.
  * @boundary Enforces project-scoped provider identity before exposing generated files.
  */
 
 import type {
-	OpenClawMemoryEmbeddingProbeResult as MemoryEmbeddingProbeResult,
-	OpenClawMemoryProviderStatus as MemoryProviderStatus,
-	OpenClawMemoryReadResult as MemoryReadResult,
-	OpenClawMemorySearchManager as MemorySearchManager,
-	OpenClawMemorySearchResult as MemorySearchResult,
-	OpenClawMemorySearchRuntimeDebug as MemorySearchRuntimeDebug,
-	OpenClawMemorySource as MemorySource,
-	OpenClawMemorySyncProgressUpdate as MemorySyncProgressUpdate,
+	SnoStationMemMemoryEmbeddingProbeResult as MemoryEmbeddingProbeResult,
+	SnoStationMemMemoryProviderStatus as MemoryProviderStatus,
+	SnoStationMemMemoryReadResult as MemoryReadResult,
+	SnoStationMemMemorySearchManager as MemorySearchManager,
+	SnoStationMemMemorySearchResult as MemorySearchResult,
+	SnoStationMemMemorySearchRuntimeDebug as MemorySearchRuntimeDebug,
+	SnoStationMemMemorySource as MemorySource,
+	SnoStationMemMemorySyncProgressUpdate as MemorySyncProgressUpdate,
 } from "../../contract/provider-runtime-types";
 import { MAX_LIST_LIMIT } from "../../../config/index";
 import { parseInsightMetadata } from "../extraction/memory-metadata-codec";
@@ -42,7 +42,7 @@ const DEFAULT_READ_LINES = 200;
 const MAX_READ_LINES = 2_000;
 const EMBEDDING_FAILURE_RETRY_MS = 30_000;
 
-export interface MemClawProviderSearchManagerOptions {
+export interface SnoStationMemProviderSearchManagerOptions {
 	store: MemoryStore;
 	identity: ProviderIdentity;
 	workspaceDir?: string;
@@ -88,13 +88,13 @@ function readCount(value: unknown): number {
 	return typeof count === "number" ? count : 0;
 }
 
-export class MemClawProviderSearchManager implements MemorySearchManager {
+export class SnoStationMemProviderSearchManager implements MemorySearchManager {
 	private cachedEmbeddingAvailability: MemoryEmbeddingProbeResult | null = null;
 	private embeddingRetryAfterMs = 0;
 	private readonly authorizedCanonicalPaths = new Set<string>();
 	private closed = false;
 
-	constructor(private readonly options: MemClawProviderSearchManagerOptions) {}
+	constructor(private readonly options: SnoStationMemProviderSearchManagerOptions) {}
 
 	async search(
 		query: string,
@@ -131,7 +131,7 @@ export class MemClawProviderSearchManager implements MemorySearchManager {
 			excludeInvalidatedBefore: Date.now(),
 			includeRefused: true,
 		};
-		opts.onDebug?.({ backend: "qmd", effectiveMode: "mem-claw-row-semantic" });
+		opts.onDebug?.({ backend: "qmd", effectiveMode: "sno-station-mem-row-semantic" });
 
 		let rowResults: MemorySearchResult[] = [];
 		const cachedEmbeddingFailure = Date.now() < this.embeddingRetryAfterMs;
@@ -139,7 +139,7 @@ export class MemClawProviderSearchManager implements MemorySearchManager {
 			fallback = cachedEmbeddingFailure ? "cached_embedding_failure" : "vector_unavailable";
 			opts.onDebug?.({
 				backend: "qmd",
-				effectiveMode: "mem-claw-row-keyword",
+				effectiveMode: "sno-station-mem-row-keyword",
 				fallback: "semantic-unavailable",
 			});
 		} else {
@@ -172,7 +172,7 @@ export class MemClawProviderSearchManager implements MemorySearchManager {
 				this.embeddingRetryAfterMs = checkedAtMs + EMBEDDING_FAILURE_RETRY_MS;
 				opts.onDebug?.({
 					backend: "qmd",
-					effectiveMode: "mem-claw-row-keyword",
+					effectiveMode: "sno-station-mem-row-keyword",
 					fallback: "semantic-unavailable",
 				});
 			}
@@ -205,7 +205,7 @@ export class MemClawProviderSearchManager implements MemorySearchManager {
 				canonical_available: this.options.workspaceDir !== undefined,
 				served_ids: served.flatMap((row) => { const id = ROW_PATH_RE.exec(row.path)?.[1]; return id ? [id] : []; }).slice(0, 128),
 				store_reference: privateLogReference(this.options.store.dbPath),
-			}, { event_name: "memory.provider.search.completed", file: "apps/mem-claw/src/provider/provider-search-manager.ts", function: "MemClawProviderSearchManager.search", site_id: "memory.provider.search.completed" });
+			}, { event_name: "memory.provider.search.completed", file: "packages/sno-station-mem/src/engine/provider/provider-search-manager.ts", function: "SnoStationMemProviderSearchManager.search", site_id: "memory.provider.search.completed" });
 		}
 		});
 	}
@@ -259,7 +259,7 @@ export class MemClawProviderSearchManager implements MemorySearchManager {
 			diagnosticLog[outcome === "failed" ? "error" : "info"]("Provider memory read completed", {
 				outcome, reason_code: reason, error: failure, duration_ms: performance.now() - started,
 				artifact_reference: privateLogReference(params.relPath),
-			}, { event_name: "memory.provider.read.completed", file: "apps/mem-claw/src/provider/provider-search-manager.ts", function: "MemClawProviderSearchManager.readFile", site_id: "memory.provider.read.completed" });
+			}, { event_name: "memory.provider.read.completed", file: "packages/sno-station-mem/src/engine/provider/provider-search-manager.ts", function: "SnoStationMemProviderSearchManager.readFile", site_id: "memory.provider.read.completed" });
 		}
 		});
 	}
@@ -286,7 +286,7 @@ export class MemClawProviderSearchManager implements MemorySearchManager {
 		diagnosticLog.debug("Provider memory status read", { outcome: "success", memory_count: memoryCount,
 			chunk_count: chunkCount, vector_available: vectorStoreAvailable, embedding_available: embeddingAvailable,
 			duration_ms: performance.now() - started },
-			{ event_name: "memory.provider.status.completed", file: "apps/mem-claw/src/provider/provider-search-manager.ts", function: "MemClawProviderSearchManager.status", site_id: "memory.provider.status.completed" });
+			{ event_name: "memory.provider.status.completed", file: "packages/sno-station-mem/src/engine/provider/provider-search-manager.ts", function: "SnoStationMemProviderSearchManager.status", site_id: "memory.provider.status.completed" });
 		return {
 			backend: "qmd",
 			provider: FIXED_PROTOCOL_VALUE_74,
@@ -316,7 +316,7 @@ export class MemClawProviderSearchManager implements MemorySearchManager {
 		};
 		} catch (error) {
 			diagnosticLog.error("Provider memory status failed", { outcome: "failed", error, duration_ms: performance.now() - started },
-				{ event_name: "memory.provider.status.completed", file: "apps/mem-claw/src/provider/provider-search-manager.ts", function: "MemClawProviderSearchManager.status", site_id: "memory.provider.status.failed" });
+				{ event_name: "memory.provider.status.completed", file: "packages/sno-station-mem/src/engine/provider/provider-search-manager.ts", function: "SnoStationMemProviderSearchManager.status", site_id: "memory.provider.status.failed" });
 			throw error;
 		}
 	}
@@ -331,7 +331,7 @@ export class MemClawProviderSearchManager implements MemorySearchManager {
 	): Promise<void> {
 		this.assertOpen();
 		if (!this.options.workspaceDir) {
-			params.progress?.({ completed: 1, total: 1, label: "mem-claw rows are live" });
+			params.progress?.({ completed: 1, total: 1, label: "sno-station-mem rows are live" });
 			return;
 		}
 		const canonicalFiles = await listCanonicalMemoryFiles(this.options.workspaceDir);
@@ -387,7 +387,7 @@ export class MemClawProviderSearchManager implements MemorySearchManager {
 		const alreadyClosed = this.closed;
 		this.closed = true;
 		diagnosticLog.debug("Provider memory manager closed", { outcome: "success", already_closed: alreadyClosed },
-			{ event_name: "memory.provider.manager.closed", file: "apps/mem-claw/src/provider/provider-search-manager.ts", function: "MemClawProviderSearchManager.close", site_id: "memory.provider.manager.closed" });
+			{ event_name: "memory.provider.manager.closed", file: "packages/sno-station-mem/src/engine/provider/provider-search-manager.ts", function: "SnoStationMemProviderSearchManager.close", site_id: "memory.provider.manager.closed" });
 	}
 
 	private hasVectorStore(): boolean {

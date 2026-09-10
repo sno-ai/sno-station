@@ -9,7 +9,7 @@ import {
 	resolveReadableScopesForTool,
 } from "./memory-tool-access";
 
-import { clampInt, DEFAULT_LIST_LIMIT, MemClawError, isKillSwitchActive, MAX_LIST_LIMIT, readEstimatedSpendToday, normalizeCategory } from "./memory-tool-dependencies";
+import { clampInt, DEFAULT_LIST_LIMIT, SnoStationMemError, isKillSwitchActive, MAX_LIST_LIMIT, readEstimatedSpendToday, normalizeCategory } from "./memory-tool-dependencies";
 import { serializeMemory } from "./memory-tool-formatting";
 import {
 	killSwitchResponse,
@@ -54,7 +54,7 @@ export async function executeMemoryListTool(ctx: ToolContext, access: ReturnType
 							// Guard only scope here so the remaining tool execution path works with normalized inputs.
 							if (resolvedScopes.length === 1 && !onlyScope) {
 								// Surface this invalid tool execution state as an explicit typed failure.
-								throw new MemClawError(
+								throw new SnoStationMemError(
 									"invalid_scope",
 									"No accessible scope available for memory_list.",
 								);

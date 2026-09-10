@@ -10,7 +10,7 @@ import {
 	LlmClientTerminalError,
 } from "../../../../packages/sno-station-mem/src/model/llm-client.ts";
 import type { LlmRoutingConfig } from "../../../../packages/sno-station-mem/src/model/llm-mode-routing.ts";
-import { MEM_CLAW_RELEASE_ANCHOR_URL } from "../../../../packages/sno-station-mem/src/model/llmix-registry.ts";
+import { SNO_STATION_MEM_RELEASE_ANCHOR_URL } from "../../../../packages/sno-station-mem/src/model/llmix-registry.ts";
 import { createTestLlmClient } from "../../../apps/mem-claw/helpers/llm-client.ts";
 import { escapeTranscriptRoleContinuations } from "../../../../packages/sno-station-mem/src/engine/shared/transcript-role-codec.ts";
 
@@ -102,7 +102,7 @@ describe("B-profile raw extraction", () => {
 	it("cleans a dirty turn to the shape the model is allowed to see", async () => {
 		let providerBody: Record<string, unknown> | undefined;
 		globalThis.fetch = (async (input, init) => {
-			if (String(input) === MEM_CLAW_RELEASE_ANCHOR_URL) {
+			if (String(input) === SNO_STATION_MEM_RELEASE_ANCHOR_URL) {
 				return new Response(JSON.stringify(didDocument), {
 					status: 200,
 					headers: { "Content-Type": "application/json" },
@@ -608,7 +608,7 @@ describe("B-profile raw extraction", () => {
 		let providerUrl = "";
 		let providerBody: Record<string, unknown> | undefined;
 		globalThis.fetch = (async (input, init) => {
-			if (String(input) === MEM_CLAW_RELEASE_ANCHOR_URL) {
+			if (String(input) === SNO_STATION_MEM_RELEASE_ANCHOR_URL) {
 				return new Response(JSON.stringify(didDocument), {
 					status: 200,
 					headers: { "Content-Type": "application/json" },
@@ -672,7 +672,7 @@ describe("B-profile raw extraction", () => {
 		// the request must still go out, and it must go out carrying a cap.
 		let providerBody: Record<string, unknown> | undefined;
 		globalThis.fetch = (async (input, init) => {
-			if (String(input) === MEM_CLAW_RELEASE_ANCHOR_URL) {
+			if (String(input) === SNO_STATION_MEM_RELEASE_ANCHOR_URL) {
 				return new Response(JSON.stringify(didDocument), {
 					status: 200,
 					headers: { "Content-Type": "application/json" },
@@ -707,7 +707,7 @@ describe("B-profile raw extraction", () => {
 		// caller's ability to set one. The classification gate sizes its own budget per batch.
 		let providerBody: Record<string, unknown> | undefined;
 		globalThis.fetch = (async (input, init) => {
-			if (String(input) === MEM_CLAW_RELEASE_ANCHOR_URL) {
+			if (String(input) === SNO_STATION_MEM_RELEASE_ANCHOR_URL) {
 				return new Response(JSON.stringify(didDocument), {
 					status: 200,
 					headers: { "Content-Type": "application/json" },

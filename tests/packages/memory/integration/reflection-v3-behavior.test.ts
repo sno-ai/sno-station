@@ -25,7 +25,7 @@ import type {
 	AgentLlmRequest,
 } from "../../../../packages/sno-station-mem/src/model/agent-llm-port.ts";
 import type { MemoryEntry } from "../../../../packages/sno-station-mem/src/engine/shared/types.ts";
-import { getMemClawDataDir } from "../../../../packages/sno-station-mem/src/store/data-paths.ts";
+import { getSnoStationMemDataDir } from "../../../../packages/sno-station-mem/src/store/data-paths.ts";
 import {
 	createReflectionHarness,
 	installEmbeddedRunnerStub,
@@ -727,7 +727,7 @@ describe("reflection v3 — Group 3 (mapped-memory routing)", () => {
 		// Wait briefly for the governance append (FS write is sequential after
 		// the layered store completes, but we already polled past the event row)
 		const learningsPath = join(
-			process.env.SNO_STATION_MEM_DATA_DIR_ROOT ? getMemClawDataDir() : join(h.stateDir, "mem-claw"),
+			process.env.SNO_STATION_MEM_DATA_DIR_ROOT ? getSnoStationMemDataDir() : join(h.stateDir, "mem-claw"),
 			".learnings",
 			"LEARNINGS.md",
 		);

@@ -35,7 +35,7 @@ function appendStructuredRecallContent(result: ToolResult): ToolResult {
 	const memories = result.details["memories"];
 	const memoryCount = typeof count === "number" ? count : 0;
 	const memoryRows = Array.isArray(memories) ? memories : [];
-	// OpenClaw reads only array length, so keep one entry per reported row even without an id.
+	// SnoStationMem reads only array length, so keep one entry per reported row even without an id.
 	const memoryReferences = Array.from({ length: memoryCount }, (_, index) => {
 		const memory = memoryRows[index];
 		if (
@@ -337,7 +337,7 @@ export async function executeMemoryRecallTool(ctx: ToolContext, access: ReturnTy
 				};
 
 				// What ONE consumer actually receives, not the union of two. The rendered text and the
-				// `memories` array carry the same rows: the OpenClaw host puts the rendered text in the
+				// `memories` array carry the same rows: the SnoStationMem host puts the rendered text in the
 				// model request, the eval reads `memories`, and neither is handed both. Charging each for
 				// the other's copy halved the real budget on the one path whose job is completeness.
 				// The text lives at `content[0].text` — reading `candidate.text` yields 0 forever and the
@@ -369,7 +369,7 @@ export async function executeMemoryRecallTool(ctx: ToolContext, access: ReturnTy
 							budget: MAX_AGGREGATION_RESULT_TOKENS,
 							over_budget: over,
 						},
-						{ event_name: "memory.recall.budget.checked", file: "apps/mem-claw/src/plugin/memory-recall-tool.ts", function: "execute", site_id: "memory.recall.budget.checked" },
+						{ event_name: "memory.recall.budget.checked", file: "packages/sno-station-mem/src/engine/bindings/memory-recall-tool.ts", function: "execute", site_id: "memory.recall.budget.checked" },
 					);
 				}
 				if (readsWholePopulation && consumerTokens(result) > MAX_AGGREGATION_RESULT_TOKENS) {
@@ -419,7 +419,7 @@ export async function executeMemoryRecallTool(ctx: ToolContext, access: ReturnTy
 					served_ids: served.slice(0, 128), served_count: served.length, ids_truncated: served.length > 128,
 					token_budget_removed_count: budgetRemoved, retired_closed_removed_count: retrievalDiagnostics.retired_closed_removed_count ?? "unavailable",
 					sql_excluded_count: "unavailable", sql_excluded_reason: "query_does_not_report_excluded_rows", external_reference: currentLogContext().external_reference,
-				}, { event_name: "memory.recall.completed", file: "apps/mem-claw/src/plugin/memory-recall-tool.ts", function: "execute", site_id: "memory.recall.completed" });
+				}, { event_name: "memory.recall.completed", file: "packages/sno-station-mem/src/engine/bindings/memory-recall-tool.ts", function: "execute", site_id: "memory.recall.completed" });
 			}
 			});
 		}

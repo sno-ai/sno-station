@@ -15,7 +15,7 @@ import {
 	appendAuditEntryStrict,
 	flushAuditWrites,
 	getAuditPath,
-	getMemClawStateDir,
+	getSnoStationMemStateDir,
 	runWithMemoryAuditSync,
 } from "../../../../packages/sno-station-mem/src/engine/operations/runtime-audit-log.ts";
 import { PluginObservability } from "../../../../packages/sno-station-mem/src/engine/observability/adapter.ts";
@@ -120,7 +120,7 @@ describe("production memory audit coverage", () => {
 		);
 		expect(new Set(outcomes)).toEqual(new Set(["created", "existing"]));
 
-		const rawAudit = readFileSync(getAuditPath(getMemClawStateDir()), "utf8");
+		const rawAudit = readFileSync(getAuditPath(getSnoStationMemStateDir()), "utf8");
 		expect(rawAudit).not.toContain("RAW-MEMORY-SENTINEL");
 		expect(rawAudit).not.toContain("supersecretcredential123");
 		expect(rawAudit).not.toContain("supersecretcredential456");
@@ -436,7 +436,7 @@ describe("production memory audit coverage", () => {
 
 	it("fails before mutation when the start record cannot persist", async () => {
 		const store = createStore();
-		const auditPath = getAuditPath(getMemClawStateDir());
+		const auditPath = getAuditPath(getSnoStationMemStateDir());
 		mkdirSync(auditPath, { recursive: true });
 
 		await expect(
@@ -461,7 +461,7 @@ describe("production memory audit coverage", () => {
 				"INSERT INTO nodix_memories (id, fact_id, text, category, project_id, importance, timestamp, timezone, metadata, content_hash) VALUES (?, ?, ?, 'episodic', 'audit-terminal-failure', 0.7, ?, 'UTC', '{}', ?)",
 			)
 			.run(seedId, seedId, "Terminal failure seed.", Date.now(), `${seedId}-hash`);
-		const stateDir = getMemClawStateDir();
+		const stateDir = getSnoStationMemStateDir();
 		const auditPath = getAuditPath(stateDir);
 		const startedPath = `${auditPath}.started`;
 
@@ -493,7 +493,7 @@ describe("production memory audit coverage", () => {
 
 	it("rejects unknown memory audit detail keys before append", async () => {
 		await expect(
-			appendAuditEntryStrict(getMemClawStateDir(), {
+			appendAuditEntryStrict(getSnoStationMemStateDir(), {
 				event: "memory_deleted",
 				resultStatus: "ok",
 				details: {
@@ -504,7 +504,7 @@ describe("production memory audit coverage", () => {
 				},
 			}),
 		).rejects.toThrow(/unknown memory audit detail key/);
-		expect(() => readFileSync(getAuditPath(getMemClawStateDir()), "utf8")).toThrow();
+		expect(() => readFileSync(getAuditPath(getSnoStationMemStateDir()), "utf8")).toThrow();
 	});
 });
 
@@ -525,7 +525,7 @@ function createStore(): ObservableMemoryStore {
 }
 
 function readAudit(): AuditRecord[] {
-	return readAuditFile(getAuditPath(getMemClawStateDir()));
+	return readAuditFile(getAuditPath(getSnoStationMemStateDir()));
 }
 
 function readAuditFile(auditPath: string): AuditRecord[] {

@@ -9,7 +9,7 @@ import {
 	parseRemOperationalConfiguration,
 	type RemOperationalConfiguration,
 } from "../engine/rem/index.js";
-import { getMemClawStateDir, getStateDir } from "../engine/shared/paths";
+import { getSnoStationMemStateDir, getStateDir } from "../engine/shared/paths";
 
 export const REM_SIDECAR_HOST = "127.0.0.1";
 export const REM_SIDECAR_ORIGIN = "http://127.0.0.1";
@@ -29,7 +29,7 @@ const SNO_REM_TRACE_ENV = "SNO_STATION_MEM_REM_TRACE";
 const SNO_REM_CONFIG_JSON_ENV = "SNO_STATION_MEM_REM_CONFIG_JSON";
 const DISCOVERY_RELATIVE_PATH = path.join("station", "sidecar.json");
 const REM_JOB_JOURNAL_NAME = "rem-wave-jobs.jsonl";
-const REM_SIDECAR_LOCK_NAME = "rem-sidecar";
+const REM_SIDECAR_LOCK_NAME = "sno-station-mem-sidecar";
 const REM_TRACE_LOG_NAME = "rem-trace.jsonl";
 const REM_CHASSIS_JOURNAL_NAME = "rem-chassis-journal.jsonl";
 export function getSnoProfileDir(): string {
@@ -41,15 +41,15 @@ export function getRemDiscoveryPath(): string {
 }
 
 export function getRemJobJournalPath(): string {
-	return path.join(getMemClawStateDir(), REM_JOB_JOURNAL_NAME);
+	return path.join(getSnoStationMemStateDir(), REM_JOB_JOURNAL_NAME);
 }
 
 export function getRemChassisJournalPath(): string {
-	return path.join(getMemClawStateDir(), REM_CHASSIS_JOURNAL_NAME);
+	return path.join(getSnoStationMemStateDir(), REM_CHASSIS_JOURNAL_NAME);
 }
 
 export function getRemSidecarLockKey(): string {
-	return path.join(getMemClawStateDir(), REM_SIDECAR_LOCK_NAME);
+	return path.join(getSnoStationMemStateDir(), REM_SIDECAR_LOCK_NAME);
 }
 
 export function getRemTraceLogPath(stateRoot: string = getStateDir()): string {

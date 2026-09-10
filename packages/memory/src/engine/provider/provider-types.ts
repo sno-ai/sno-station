@@ -1,6 +1,6 @@
 import { PERSISTED_PROVIDER_SYSTEM } from "../../model/signed-registry-constants";
 /** @file provider-types.ts
- * @purpose Local provider authority contracts at the OpenClaw adapter boundary.
+ * @purpose Local provider authority contracts at the SnoStationMem adapter boundary.
  * @boundary Trusted internal ids in, internal project-agent identity out.
  */
 

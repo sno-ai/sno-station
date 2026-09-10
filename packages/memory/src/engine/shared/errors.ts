@@ -1,10 +1,10 @@
 /** @file errors.ts
  * @purpose Defines typed plugin errors and stable codes for callers and CLI output.
  * @boundary Runtime boundaries, CLI error mapping, and test assertions.
- * @see memory-management-cli.ts, openclaw-plugin-runtime.ts, memory-tool-registration.ts.
+ * @see memory-management-cli.ts, sno-station-mem-plugin-runtime.ts, memory-tool-registration.ts.
  */
 
-export class MemClawError extends Error {
+export class SnoStationMemError extends Error {
 	public readonly code: string;
 
 	/**
@@ -15,12 +15,12 @@ export class MemClawError extends Error {
 		// This operational safety step establishes state that later reads and cleanup paths depend on.
 		super(message, cause ? { cause } : undefined);
 		// This operational safety step establishes state that later reads and cleanup paths depend on.
-		this.name = "MemClawError";
+		this.name = "SnoStationMemError";
 		// This operational safety step establishes state that later reads and cleanup paths depend on.
 		this.code = code;
 	}
 }
-export class StorageError extends MemClawError {
+export class StorageError extends SnoStationMemError {
 	/**
 	 * Initializes typed error reporting collaborators while keeping runtime work in explicit
 	 * methods.
@@ -32,7 +32,7 @@ export class StorageError extends MemClawError {
 		this.name = "StorageError";
 	}
 }
-export class EmbeddingError extends MemClawError {
+export class EmbeddingError extends SnoStationMemError {
 	/**
 	 * Initializes typed error reporting collaborators while keeping runtime work in explicit
 	 * methods.
@@ -43,7 +43,7 @@ export class EmbeddingError extends MemClawError {
 		this.name = "EmbeddingError";
 	}
 }
-export class RetrievalError extends MemClawError {
+export class RetrievalError extends SnoStationMemError {
 	/**
 	 * Carries the cause's own message in `message`, not only in `cause`.
 	 *
@@ -59,7 +59,7 @@ export class RetrievalError extends MemClawError {
 		this.name = "RetrievalError";
 	}
 }
-export class ConfigError extends MemClawError {
+export class ConfigError extends SnoStationMemError {
 	/**
 	 * Initializes typed error reporting collaborators while keeping runtime work in explicit
 	 * methods.

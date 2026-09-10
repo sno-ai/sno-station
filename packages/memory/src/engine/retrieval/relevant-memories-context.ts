@@ -1,7 +1,7 @@
 /** @file relevant-memories-context.ts
  * @purpose Formats retrieved memories into model-visible context with clear boundaries.
  * @boundary Retriever results, prompt-injection safety, and recall presentation.
- * @see retriever.ts, capture-policy-detector.ts, openclaw-plugin-runtime.ts.
+ * @see retriever.ts, capture-policy-detector.ts, sno-station-mem-plugin-runtime.ts.
  */
 
 export const RELEVANT_MEMORIES_UNTRUSTED_LINE =

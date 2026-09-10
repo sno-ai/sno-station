@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { createLlmClient } from "../../../../packages/sno-station-mem/src/model/llm-client.ts";
 import type { DispatchContext } from "../../../../packages/sno-station-mem/src/model/llm-client-types.ts";
 import { callProvider } from "../../../../packages/sno-station-mem/src/model/llm-provider-transport.ts";
-import { MEM_CLAW_RELEASE_ANCHOR_URL } from "../../../../packages/sno-station-mem/src/model/llmix-registry.ts";
+import { SNO_STATION_MEM_RELEASE_ANCHOR_URL } from "../../../../packages/sno-station-mem/src/model/llmix-registry.ts";
 
 const originalFetch = globalThis.fetch;
 const didDocument = {
@@ -81,7 +81,7 @@ describe("mem-claw llm-client", () => {
 		async (callLabel) => {
 		let providerBody: Record<string, unknown> | null = null;
 		globalThis.fetch = (async (input, init) => {
-			if (String(input) === MEM_CLAW_RELEASE_ANCHOR_URL) {
+			if (String(input) === SNO_STATION_MEM_RELEASE_ANCHOR_URL) {
 				return new Response(JSON.stringify(didDocument), {
 					status: 200,
 					headers: { "Content-Type": "application/json" },
@@ -178,7 +178,7 @@ describe("mem-claw llm-client", () => {
 	it("validates and forwards a request id through the client facade", async () => {
 		let requestId: string | null = null;
 		globalThis.fetch = (async (input, init) => {
-			if (String(input) === MEM_CLAW_RELEASE_ANCHOR_URL) {
+			if (String(input) === SNO_STATION_MEM_RELEASE_ANCHOR_URL) {
 				return new Response(JSON.stringify(didDocument), {
 					status: 200,
 					headers: { "Content-Type": "application/json" },
@@ -210,7 +210,7 @@ describe("mem-claw llm-client", () => {
 		const controller = new AbortController();
 		let providerFetchCount = 0;
 		globalThis.fetch = (async (input, init) => {
-			if (String(input) === MEM_CLAW_RELEASE_ANCHOR_URL) {
+			if (String(input) === SNO_STATION_MEM_RELEASE_ANCHOR_URL) {
 				return new Response(JSON.stringify(didDocument), {
 					status: 200,
 					headers: { "Content-Type": "application/json" },
@@ -305,7 +305,7 @@ describe("mem-claw llm-client", () => {
 	it("terminates a timed-out provider prompt after exactly one attempt", async () => {
 		let providerFetchCount = 0;
 		globalThis.fetch = (async (input, init) => {
-			if (String(input) === MEM_CLAW_RELEASE_ANCHOR_URL) {
+			if (String(input) === SNO_STATION_MEM_RELEASE_ANCHOR_URL) {
 				return new Response(JSON.stringify(didDocument), {
 					status: 200,
 					headers: { "Content-Type": "application/json" },
@@ -348,7 +348,7 @@ describe("mem-claw llm-client", () => {
 		async (status) => {
 			let providerFetchCount = 0;
 			globalThis.fetch = (async (input) => {
-				if (String(input) === MEM_CLAW_RELEASE_ANCHOR_URL) {
+				if (String(input) === SNO_STATION_MEM_RELEASE_ANCHOR_URL) {
 					return new Response(JSON.stringify(didDocument), {
 						status: 200,
 						headers: { "Content-Type": "application/json" },
@@ -378,7 +378,7 @@ describe("mem-claw llm-client", () => {
 
 	it("records conservative estimated usage when provider usage is missing", async () => {
 		globalThis.fetch = (async (input) => {
-			if (String(input) === MEM_CLAW_RELEASE_ANCHOR_URL) {
+			if (String(input) === SNO_STATION_MEM_RELEASE_ANCHOR_URL) {
 				return new Response(JSON.stringify(didDocument), {
 					status: 200,
 					headers: { "Content-Type": "application/json" },
@@ -417,7 +417,7 @@ describe("mem-claw llm-client", () => {
 	it("does not replay cached malformed JSON for identical prompts", async () => {
 		let fetchCallCount = 0;
 		globalThis.fetch = (async (input) => {
-			if (String(input) === MEM_CLAW_RELEASE_ANCHOR_URL) {
+			if (String(input) === SNO_STATION_MEM_RELEASE_ANCHOR_URL) {
 				return new Response(JSON.stringify(didDocument), {
 					status: 200,
 					headers: { "Content-Type": "application/json" },
@@ -452,7 +452,7 @@ describe("mem-claw llm-client", () => {
 	it("rotates two provider keys across exactly three transient attempts before success", async () => {
 		const authorizationHeaders: Array<string | null> = [];
 		globalThis.fetch = (async (input, init) => {
-			if (String(input) === MEM_CLAW_RELEASE_ANCHOR_URL) {
+			if (String(input) === SNO_STATION_MEM_RELEASE_ANCHOR_URL) {
 				return new Response(JSON.stringify(didDocument), {
 					status: 200,
 					headers: { "Content-Type": "application/json" },
@@ -490,7 +490,7 @@ describe("mem-claw llm-client", () => {
 	it("surfaces a real pipeline error (not a silent empty response) once all provider retries are exhausted", async () => {
 		let fetchCallCount = 0;
 		globalThis.fetch = (async (input) => {
-			if (String(input) === MEM_CLAW_RELEASE_ANCHOR_URL) {
+			if (String(input) === SNO_STATION_MEM_RELEASE_ANCHOR_URL) {
 				return new Response(JSON.stringify(didDocument), {
 					status: 200,
 					headers: { "Content-Type": "application/json" },
@@ -523,7 +523,7 @@ describe("mem-claw llm-client", () => {
 		let anchorFetchCount = 0;
 		let providerFetchCount = 0;
 		globalThis.fetch = (async (input) => {
-			if (String(input) === MEM_CLAW_RELEASE_ANCHOR_URL) {
+			if (String(input) === SNO_STATION_MEM_RELEASE_ANCHOR_URL) {
 				anchorFetchCount++;
 				if (anchorFetchCount === 1) {
 					throw new Error("release anchor unavailable");
@@ -559,7 +559,7 @@ describe("mem-claw llm-client", () => {
 		let anchorFetchCount = 0;
 		let providerFetchCount = 0;
 		globalThis.fetch = (async (input) => {
-			if (String(input) === MEM_CLAW_RELEASE_ANCHOR_URL) {
+			if (String(input) === SNO_STATION_MEM_RELEASE_ANCHOR_URL) {
 				anchorFetchCount++;
 				return new Response(JSON.stringify(didDocument), {
 					status: 200,
@@ -594,7 +594,7 @@ describe("mem-claw llm-client", () => {
 
 		const requests: Array<{ url: string; headers: Headers }> = [];
 		globalThis.fetch = (async (input, init) => {
-			if (String(input) === MEM_CLAW_RELEASE_ANCHOR_URL) {
+			if (String(input) === SNO_STATION_MEM_RELEASE_ANCHOR_URL) {
 				return new Response(JSON.stringify(didDocument), {
 					status: 200,
 					headers: { "Content-Type": "application/json" },
@@ -647,7 +647,7 @@ describe("mem-claw llm-client", () => {
 	it("rejects direct public OpenAI billing before provider dispatch", async () => {
 		let providerFetchCount = 0;
 		globalThis.fetch = (async (input) => {
-			if (String(input) === MEM_CLAW_RELEASE_ANCHOR_URL) {
+			if (String(input) === SNO_STATION_MEM_RELEASE_ANCHOR_URL) {
 				return new Response(JSON.stringify(didDocument), {
 					status: 200,
 					headers: { "Content-Type": "application/json" },
@@ -682,7 +682,7 @@ describe("mem-claw llm-client", () => {
 
 		const requests: Array<{ url: string; headers: Headers }> = [];
 		globalThis.fetch = (async (input, init) => {
-			if (String(input) === MEM_CLAW_RELEASE_ANCHOR_URL) {
+			if (String(input) === SNO_STATION_MEM_RELEASE_ANCHOR_URL) {
 				return new Response(JSON.stringify(didDocument), {
 					status: 200,
 					headers: { "Content-Type": "application/json" },

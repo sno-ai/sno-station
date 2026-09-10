@@ -986,8 +986,8 @@ export class MemoryStore {
 			vectorDim: this.vectorDim,
 			hasFtsSupport: this.hasFtsSupport,
 		}, {
-			event_name: "mem_claw.memory-store-base.memory.store.initialized",
-			file: "apps/mem-claw/src/storage/memory-store-base.ts",
+			event_name: "sno_station_mem.memory-store-base.memory.store.initialized",
+			file: "packages/sno-station-mem/src/store/memory-store-base.ts",
 			function: "<anonymous callback>",
 			site_id: "memory-store-base.<anonymous callback>.3dd5e75e4f",
 		});

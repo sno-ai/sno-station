@@ -24,8 +24,8 @@ import {
 	retrieveForMemoryRecallOrEval,
 } from "../../../../packages/sno-station-mem/src/engine/retrieval/rem-consumer-retrieval.ts";
 import {
-	createMemClawRemMutationExecutor,
-	createMemClawRemRecovery,
+	createSnoStationMemRemMutationExecutor,
+	createSnoStationMemRemRecovery,
 	createRemReplaceCarrierPort,
 } from "../../../../packages/sno-station-mem/src/store/rem-sqlite-adapter.ts";
 import { openSqliteDatabaseReadonly } from "../../../../packages/sno-station-mem/src/store/sqlite-runtime.ts";
@@ -796,7 +796,7 @@ describe("REM two-facet persistence", () => {
 				).toEqual([]);
 
 			store.sqlite.markFailed("repeat-update recovery proof");
-			createMemClawRemRecovery(store.sqlite).restoreTextVersion(second.recoveryHandle);
+			createSnoStationMemRemRecovery(store.sqlite).restoreTextVersion(second.recoveryHandle);
 			const restored = store.sqlite.runRecoveryOperation((database) => ({
 				row: database
 					.prepare("SELECT text, content_hash FROM nodix_memories WHERE id = ?")
@@ -909,7 +909,7 @@ describe("REM two-facet persistence", () => {
 			installRemSchema(fixture.runtime.db);
 			const evidenceId = "evidence-post-migration-write";
 			seedRemWriteVerdict(fixture, { rowId: "clremupdate", evidenceId });
-			const executor = createMemClawRemMutationExecutor({
+			const executor = createSnoStationMemRemMutationExecutor({
 				database: fixture.runtime.db,
 				jobType: "rem-update",
 				configurationSha256: "c".repeat(64),

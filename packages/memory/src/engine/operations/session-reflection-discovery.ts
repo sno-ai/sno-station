@@ -8,10 +8,10 @@ function asNonEmptyString(value: unknown): string | undefined {
 }
 
 /**
- * Implements derive open claw home from workspace path as the local session summary storage
+ * Implements derive open memory home from workspace path as the local session summary storage
  * operation.
  */
-function deriveOpenClawHomeFromWorkspacePath(workspacePath: string): string | undefined {
+function deriveSnoStationMemHomeFromWorkspacePath(workspacePath: string): string | undefined {
 	// Compute the normalized normalized once so later session memory checks use one value.
 	const normalized = workspacePath.trim().replace(/[\\/]+$/, "");
 	if (!normalized) return undefined;
@@ -23,10 +23,10 @@ function deriveOpenClawHomeFromWorkspacePath(workspacePath: string): string | un
 }
 
 /**
- * Implements derive open claw home from session file path as the local session summary storage
+ * Implements derive open memory home from session file path as the local session summary storage
  * operation.
  */
-function deriveOpenClawHomeFromSessionFilePath(sessionFilePath: string): string | undefined {
+function deriveSnoStationMemHomeFromSessionFilePath(sessionFilePath: string): string | undefined {
 	const normalized = sessionFilePath.trim();
 	if (!normalized) return undefined;
 	const matched = normalized.match(/^(.*?)[\\/]agents[\\/][^\\/]+[\\/]sessions(?:[\\/][^\\/]+)?$/);
@@ -96,7 +96,7 @@ function addSessionEntryDirs(sessionEntries: SessionEntryRecord[], addDir: AddSt
 function addSessionEntryHomes(sessionEntries: SessionEntryRecord[], addHome: AddStringValue): void {
 	for (const entry of sessionEntries) {
 		const entryFile = asNonEmptyString(entry.sessionFile as unknown);
-		if (entryFile) addHome(deriveOpenClawHomeFromSessionFilePath(entryFile));
+		if (entryFile) addHome(deriveSnoStationMemHomeFromSessionFilePath(entryFile));
 	}
 }
 
@@ -106,12 +106,12 @@ function addConfiguredWorkspaceHomes(cfg: unknown, addHome: AddStringValue): voi
 		const agents = root.agents as Record<string, unknown> | undefined;
 		const defaults = agents?.defaults as Record<string, unknown> | undefined;
 		const defaultWorkspace = asNonEmptyString(defaults?.workspace);
-		if (defaultWorkspace) addHome(deriveOpenClawHomeFromWorkspacePath(defaultWorkspace));
+		if (defaultWorkspace) addHome(deriveSnoStationMemHomeFromWorkspacePath(defaultWorkspace));
 
 		for (const item of readConfiguredAgents(agents)) {
 			if (!item || typeof item !== "object") continue;
 			const workspace = asNonEmptyString((item as Record<string, unknown>).workspace);
-			if (workspace) addHome(deriveOpenClawHomeFromWorkspacePath(workspace));
+			if (workspace) addHome(deriveSnoStationMemHomeFromWorkspacePath(workspace));
 		}
 	} catch {
 		// Invalid config files are ignored for session-summary discovery.
@@ -163,12 +163,12 @@ export function resolveReflectionSessionSearchDirs(
 		seen.add(dir);
 		out.push(dir);
 	};
-	const openclawHomes: string[] = [];
+	const snoStationMemHomes: string[] = [];
 	/** Adds home to the local session summary storage accumulator. */
 	const addHome = (value: string | undefined) => {
 		const home = asNonEmptyString(value);
-		if (!home || openclawHomes.includes(home)) return;
-		openclawHomes.push(home);
+		if (!home || snoStationMemHomes.includes(home)) return;
+		snoStationMemHomes.push(home);
 	};
 	const agentIds: string[] = [];
 	/** Adds agent id to the local session summary storage accumulator. */
@@ -185,15 +185,15 @@ export function resolveReflectionSessionSearchDirs(
 	addDir(join(params.workspaceDir, "sessions"));
 
 	addHome(asNonEmptyString(process.env.SNO_STATION_MEM_HOME));
-	addHome(deriveOpenClawHomeFromWorkspacePath(params.workspaceDir));
+	addHome(deriveSnoStationMemHomeFromWorkspacePath(params.workspaceDir));
 	if (params.currentSessionFile) {
-		addHome(deriveOpenClawHomeFromSessionFilePath(params.currentSessionFile));
+		addHome(deriveSnoStationMemHomeFromSessionFilePath(params.currentSessionFile));
 	}
 	addSessionEntryHomes(sessionEntries, addHome);
 	addConfiguredWorkspaceHomes(params.cfg, addHome);
 	addReflectionAgentIds(params, sessionEntries, addAgentId);
 
-	for (const home of openclawHomes) {
+	for (const home of snoStationMemHomes) {
 		for (const agentId of agentIds) {
 			addDir(join(home, "agents", agentId, "sessions"));
 		}

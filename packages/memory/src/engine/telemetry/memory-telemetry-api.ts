@@ -1,5 +1,5 @@
 import {
-	getMemClawStateDir,
+	getSnoStationMemStateDir,
 	runWithMemoryAuditSync,
 } from "../operations/runtime-audit-log";
 import type { SqliteDatabaseLike } from "../../store/sqlite-runtime";
@@ -189,7 +189,7 @@ class DefaultMemoryTelemetryApi implements MemoryTelemetryApi {
 
 	verifyReceipt(factId: string): MemoryTelemetryVerifyReceiptResult {
 		return runWithMemoryAuditSync({
-			stateDir: getMemClawStateDir(),
+			stateDir: getSnoStationMemStateDir(),
 			event: "memory_read",
 			operation: "verifyReceipt",
 			startedDetails: {

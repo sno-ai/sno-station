@@ -1,6 +1,6 @@
 /** @file rem-trigger-state.ts
  * @purpose Persists the automatic REM scheduler's strict per-scope state.
- * @boundary One atomically replaced JSON file under the mem-claw state directory.
+ * @boundary One atomically replaced JSON file under the sno-station-mem state directory.
  */
 
 import { randomUUID } from "node:crypto";

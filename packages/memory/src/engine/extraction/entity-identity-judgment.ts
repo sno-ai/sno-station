@@ -33,7 +33,7 @@ function readIdentitySkill(): string {
 		const candidate = path.join(root, SKILL_PATH);
 		if (existsSync(candidate)) return readFileSync(candidate, "utf8");
 	}
-	throw new Error(`mem-claw entity identity skill is missing: ${SKILL_PATH}`);
+	throw new Error(`sno-station-mem entity identity skill is missing: ${SKILL_PATH}`);
 }
 
 export function decodeAtomicEntityIdentityReply(reply: string): string | undefined {

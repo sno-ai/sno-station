@@ -10,7 +10,7 @@ import {
 	resolveReadableScopesForTool,
 } from "./memory-tool-access";
 
-import { clamp01, clampInt, MemClawError, FORGET_QUERY_DEFAULT_LIMIT, FORGET_QUERY_MIN_SCORE, MAX_CANDIDATE_POOL_SIZE } from "./memory-tool-dependencies";
+import { clamp01, clampInt, SnoStationMemError, FORGET_QUERY_DEFAULT_LIMIT, FORGET_QUERY_MIN_SCORE, MAX_CANDIDATE_POOL_SIZE } from "./memory-tool-dependencies";
 import {
 	killSwitchResponse,
 	makeResult,
@@ -61,7 +61,7 @@ export async function executeMemoryForgetTool(ctx: ToolContext, access: ReturnTy
 							// Guard this branch early so the remaining tool execution path works with normalized inputs.
 							if (!isScopeAccessibleForTool(ctx.scopePolicy, target.projectId, access)) {
 								// Surface this invalid tool execution state as an explicit typed failure.
-								throw new MemClawError("invalid_scope", `Scope not accessible: ${target.projectId}`);
+								throw new SnoStationMemError("invalid_scope", `Scope not accessible: ${target.projectId}`);
 							}
 							const deleted = await ctx.store.delete(parsed.id, {
 								deleteReason: MEMORY_TELEMETRY_DELETE_REASONS.memoryForget,

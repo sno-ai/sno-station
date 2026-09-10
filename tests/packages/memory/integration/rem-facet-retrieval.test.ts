@@ -7,7 +7,7 @@ import {
 	DEFAULT_RETRIEVAL_CONFIG,
 } from "../../../../packages/sno-station-mem/src/engine/retrieval/retriever.ts";
 import { MAX_CANDIDATE_POOL_SIZE } from "../../../../packages/sno-station-mem/config/index.ts";
-import { createMemClawRemPorts } from "../../../../packages/sno-station-mem/src/store/rem-sqlite-adapter.ts";
+import { createSnoStationMemRemPorts } from "../../../../packages/sno-station-mem/src/store/rem-sqlite-adapter.ts";
 import { MemoryStore } from "../../../../packages/sno-station-mem/src/store/store.ts";
 import { createTestDb, createTestEmbedder, type TestDb } from "../../../apps/mem-claw/helpers/test-db.ts";
 
@@ -43,7 +43,7 @@ describe("REM facet retrieval", () => {
 			projectId: "global",
 			importance: 0.8,
 		});
-		const ports = createMemClawRemPorts({
+		const ports = createSnoStationMemRemPorts({
 			database: testDb.runtime.db,
 			llmClient: createLlmClient({
 				preset: "mem_claw/sno_conflict_verdict",

@@ -1,4 +1,4 @@
-/** @file openclaw-reset-hook.ts
+/** @file sno-station-mem-reset-hook.ts
  * @purpose Clears per-session recall state before reset.
  * @boundary The before_reset cleanup path only.
  */
@@ -11,14 +11,14 @@ import {
 	type createScopePolicy,
 	type Embedder,
 	type MemoryStore,
-	type OpenClawPluginApi,
+	type SnoStationMemPluginApi,
 	type PluginConfig,
 } from "./sno-station-mem-runtime-dependencies";
 import { clearSessionState, resolveRuntimeSessionId } from "./sno-station-mem-session-state";
 
 /** Stores reset-time session context before the host discards conversation state. */
 export async function onBeforeReset(
-	_api: OpenClawPluginApi,
+	_api: SnoStationMemPluginApi,
 	_config: PluginConfig,
 	_store: MemoryStore,
 	_embedder: Embedder,

@@ -21,7 +21,7 @@ let sidecar: RunningRemSidecar;
 try { sidecar = await startRemSidecar(); }
 catch (error) {
 	createLogger("sno-station-mem:sidecar").fatal("Memory sidecar startup failed", { outcome: "failed", error }, {
-		event_name: "memory.sidecar.startup.failed", file: "apps/mem-claw/src/sidecar/main.ts",
+		event_name: "memory.sidecar.startup.failed", file: "packages/sno-station-mem/src/sidecar/main.ts",
 		function: "<module>", site_id: "sidecar.main.startup.failed",
 	});
 	await closeLogger();

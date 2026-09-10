@@ -195,8 +195,8 @@ export async function backfillActiveTaskCarriers(
 			scope_reference: privateLogReference(scope), created_count: count,
 		})),
 	}, {
-		event_name: "mem_claw.active-task-carrier-backfill.active.task.carrier.backfill.complete",
-		file: "apps/mem-claw/src/storage/active-task-carrier-backfill.ts",
+		event_name: "sno_station_mem.active-task-carrier-backfill.active.task.carrier.backfill.complete",
+		file: "packages/sno-station-mem/src/store/active-task-carrier-backfill.ts",
 		function: "backfillActiveTaskCarriers",
 		site_id: "active-task-carrier-backfill.backfillActiveTaskCarriers.facdae917f",
 	});
@@ -214,8 +214,8 @@ export function scheduleActiveTaskCarrierBackfill(target: MemoryStore): void {
 		log.error("detached active-task carrier backfill failed", {
 			error,
 		}, {
-			event_name: "mem_claw.active-task-carrier-backfill.detached.active.task.carrier.backfill.failed",
-			file: "apps/mem-claw/src/storage/active-task-carrier-backfill.ts",
+			event_name: "sno_station_mem.active-task-carrier-backfill.detached.active.task.carrier.backfill.failed",
+			file: "packages/sno-station-mem/src/store/active-task-carrier-backfill.ts",
 			function: "<anonymous callback>",
 			site_id: "active-task-carrier-backfill.<anonymous callback>.0bf95b1f61",
 		});

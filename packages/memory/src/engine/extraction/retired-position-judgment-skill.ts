@@ -19,7 +19,7 @@ function resolveSkillPath(): string {
 		const candidate = path.join(root, SKILL_PATH);
 		if (existsSync(candidate)) return candidate;
 	}
-	throw new Error(`mem-claw retired-position judgment skill is missing: ${SKILL_PATH}`);
+	throw new Error(`sno-station-mem retired-position judgment skill is missing: ${SKILL_PATH}`);
 }
 
 const skillText = readFileSync(resolveSkillPath(), "utf8");

@@ -49,9 +49,8 @@ describe("REM trigger maintenance timer", () => {
 		vi.setSystemTime(new Date("2026-08-12T12:00:00.000Z"));
 		database = createTestDb();
 		root = mkdtempSync(path.join(tmpdir(), "rem-maintenance-"));
-		const stateRoot = path.join(root, "openclaw-state");
-		const stateDir = path.join(stateRoot, "sno-station-mem");
 		const profileRoot = path.join(root, "sno-profile");
+		const stateDir = path.join(profileRoot, "sno-station-mem");
 		const backupDir = path.join(root, "backups");
 		mkdirSync(stateDir, { recursive: true });
 		mkdirSync(path.join(profileRoot, "station"), { recursive: true });

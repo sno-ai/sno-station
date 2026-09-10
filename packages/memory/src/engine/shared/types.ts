@@ -1,7 +1,7 @@
 /** @file types.ts
  * @purpose Centralizes public and internal TypeScript contracts for the plugin.
  * @boundary Store entries, configuration, tool payloads, and runtime adapters.
- * @see schema.ts, memory-tool-registration.ts, openclaw-plugin-runtime.ts.
+ * @see schema.ts, memory-tool-registration.ts, sno-station-mem-plugin-runtime.ts.
  */
 
 import type { ContentType } from "@snoai/chunking";

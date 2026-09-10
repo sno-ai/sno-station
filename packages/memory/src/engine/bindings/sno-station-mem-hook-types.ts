@@ -1,5 +1,5 @@
-/** @file openclaw-hook-types.ts
- * @purpose Names local OpenClaw hook payload aliases that are not exported by the SDK.
+/** @file sno-station-mem-hook-types.ts
+ * @purpose Names local SnoStationMem hook payload aliases that are not exported by the SDK.
  * @boundary Type aliases only; hook behavior lives in dedicated hook modules.
  */
 

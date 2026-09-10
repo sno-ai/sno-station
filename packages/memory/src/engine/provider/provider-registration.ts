@@ -2,18 +2,18 @@ import { PERSISTED_PROVIDER_SYSTEM } from "../../model/signed-registry-constants
 import { resolve } from "node:path";
 import { createLogger } from "@snoai/utils/logger";
 import { isLowercaseCanonicalUUIDv7 } from "@snoai/common-core";
-import type { ProviderHostConfig as OpenClawConfig } from "../../contract/provider-runtime-types";
+import type { ProviderHostConfig as SnoStationMemConfig } from "../../contract/provider-runtime-types";
 
 
 
 
-import type { OpenClawMemoryRuntime } from "../../contract/provider-runtime-types";
+import type { SnoStationMemMemoryRuntime } from "../../contract/provider-runtime-types";
 import {
 	readProviderAuthority,
 	resolveProviderAuthority,
 } from "./provider-authority";
 
-import { MemClawProviderSearchManager } from "./provider-search-manager";
+import { SnoStationMemProviderSearchManager } from "./provider-search-manager";
 import type { ProviderIdentity } from "./provider-types";
 import type { PluginConfig } from "../shared/types";
 import type { MemoryStore } from "../../store/store";
@@ -25,15 +25,15 @@ type AgentEntry = {
 export function readTrustedUserId(config: PluginConfig): string {
 	const userId = config.provider.userId;
 	if (typeof userId !== "string" || userId.trim().length === 0) {
-		throw new Error("sno-mem-claw provider requires provider.userId");
+		throw new Error("sno-station-mem provider requires provider.userId");
 	}
 	const trimmed = userId.trim();
 	if (!isLowercaseCanonicalUUIDv7(trimmed)) {
-		throw new Error("sno-mem-claw provider userId must be a lowercase UUID-v7");
+		throw new Error("sno-station-mem provider userId must be a lowercase UUID-v7");
 	}
 	return trimmed;
 }
-export function readConfiguredAgents(cfg: OpenClawConfig): AgentEntry[] {
+export function readConfiguredAgents(cfg: SnoStationMemConfig): AgentEntry[] {
 	const entries = cfg.agents?.entries;
 	if (entries && Object.keys(entries).length > 0) {
 		return Object.entries(entries)
@@ -42,19 +42,19 @@ export function readConfiguredAgents(cfg: OpenClawConfig): AgentEntry[] {
 	}
 	return (cfg.agents?.list ?? []) as AgentEntry[];
 }
-export function readAgentWorkspace(cfg: OpenClawConfig, agentId: string): string {
+export function readAgentWorkspace(cfg: SnoStationMemConfig, agentId: string): string {
 	const agent = readConfiguredAgents(cfg).find((entry) => entry.id === agentId);
 	if (!agent) {
-		throw new Error("sno-mem-claw provider requires a configured OpenClaw agent");
+		throw new Error("sno-station-mem provider requires a configured sno-station-mem agent");
 	}
 	const workspace = agent?.workspace ?? cfg.agents?.defaults?.workspace;
 	if (typeof workspace !== "string" || workspace.trim().length === 0) {
-		throw new Error("sno-mem-claw provider requires an explicit OpenClaw agent workspace");
+		throw new Error("sno-station-mem provider requires an explicit sno-station-mem agent workspace");
 	}
 	return resolve(workspace);
 }
 export async function resolveProviderIdentity(params: {
-	cfg: OpenClawConfig;
+	cfg: SnoStationMemConfig;
 	config: PluginConfig;
 	store: MemoryStore;
 	agentId: string;
@@ -70,7 +70,7 @@ export async function resolveProviderIdentity(params: {
 	return { identity, workspaceDir };
 }
 export async function readProviderIdentity(params: {
-	cfg: OpenClawConfig;
+	cfg: SnoStationMemConfig;
 	config: PluginConfig;
 	store: MemoryStore;
 	agentId: string;
@@ -89,15 +89,15 @@ export function createMemoryRuntime(params: {
 	config: PluginConfig;
 	store: MemoryStore;
 	stateDir: string;
-}): OpenClawMemoryRuntime {
-	const managers = new Map<string, MemClawProviderSearchManager>();
-	const failedClosingManagers = new Map<string, Set<MemClawProviderSearchManager>>();
+}): SnoStationMemMemoryRuntime {
+	const managers = new Map<string, SnoStationMemProviderSearchManager>();
+	const failedClosingManagers = new Map<string, Set<SnoStationMemProviderSearchManager>>();
 
 	function managerKey(identity: ProviderIdentity, workspaceDir: string): string {
 		return `${identity.userId}:${identity.projectId}:${identity.agentId}:${workspaceDir}`;
 	}
 
-	function rememberFailedClose(key: string, manager: MemClawProviderSearchManager): void {
+	function rememberFailedClose(key: string, manager: SnoStationMemProviderSearchManager): void {
 		const existing = failedClosingManagers.get(key);
 		if (existing) {
 			existing.add(manager);
@@ -131,7 +131,7 @@ export function createMemoryRuntime(params: {
 				const key = managerKey(resolved.identity, resolved.workspaceDir);
 				const existing = managers.get(key);
 				if (existing) return { manager: existing };
-				const manager = new MemClawProviderSearchManager({
+				const manager = new SnoStationMemProviderSearchManager({
 					store: params.store,
 					identity: resolved.identity,
 					workspaceDir: resolved.workspaceDir,
@@ -153,7 +153,7 @@ export function createMemoryRuntime(params: {
 			} finally {
 				diagnosticLog[outcome === "failed" ? "error" : "debug"]("Provider memory manager resolved", { outcome, error: failure,
 					duration_ms: performance.now() - started },
-					{ event_name: "memory.provider.manager.resolved", file: "apps/mem-claw/src/provider/provider-registration.ts", function: "createMemoryRuntime.getMemorySearchManager", site_id: "memory.provider.manager.resolved" });
+					{ event_name: "memory.provider.manager.resolved", file: "packages/sno-station-mem/src/engine/provider/provider-registration.ts", function: "createMemoryRuntime.getMemorySearchManager", site_id: "memory.provider.manager.resolved" });
 			}
 		},
 		resolveMemoryBackendConfig() {
@@ -170,7 +170,7 @@ export function createMemoryRuntime(params: {
 				});
 			} catch (error) {
 				diagnosticLog.warn("Provider manager close lacks identity", { outcome: "skipped", error },
-					{ event_name: "memory.provider.manager.close.skipped", file: "apps/mem-claw/src/provider/provider-registration.ts", function: "createMemoryRuntime.closeMemorySearchManager", site_id: "memory.provider.manager.close.skipped" });
+					{ event_name: "memory.provider.manager.close.skipped", file: "packages/sno-station-mem/src/engine/provider/provider-registration.ts", function: "createMemoryRuntime.closeMemorySearchManager", site_id: "memory.provider.manager.close.skipped" });
 				// Close paths must not create a second failure after a failed identity resolution.
 				return;
 			}
@@ -188,7 +188,7 @@ export function createMemoryRuntime(params: {
 					managers.set(key, manager);
 				}
 				diagnosticLog.warn("Provider manager close retained for retry", { outcome: "failed", error },
-					{ event_name: "memory.provider.manager.close.failed", file: "apps/mem-claw/src/provider/provider-registration.ts", function: "createMemoryRuntime.closeMemorySearchManager", site_id: "memory.provider.manager.close.failed" });
+					{ event_name: "memory.provider.manager.close.failed", file: "packages/sno-station-mem/src/engine/provider/provider-registration.ts", function: "createMemoryRuntime.closeMemorySearchManager", site_id: "memory.provider.manager.close.failed" });
 				throw error;
 			}
 		},
@@ -218,7 +218,7 @@ export function createMemoryRuntime(params: {
 				diagnosticLog[failed ? "warn" : "debug"]("Provider managers shutdown completed", {
 					outcome: failed ? "partial" : "success", closed_count: closedCount,
 					error: failure, duration_ms: performance.now() - started },
-					{ event_name: "memory.provider.managers.shutdown.completed", file: "apps/mem-claw/src/provider/provider-registration.ts", function: "createMemoryRuntime.closeAllMemorySearchManagers", site_id: "memory.provider.managers.shutdown.completed" });
+					{ event_name: "memory.provider.managers.shutdown.completed", file: "packages/sno-station-mem/src/engine/provider/provider-registration.ts", function: "createMemoryRuntime.closeAllMemorySearchManagers", site_id: "memory.provider.managers.shutdown.completed" });
 			}
 		},
 	};
