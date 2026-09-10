@@ -1,16 +1,16 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import type { Embedder } from "../../../../apps/mem-claw/src/extraction/embedding-provider-client.ts";
-import { MemoryStore } from "../../../../apps/mem-claw/src/storage/store.ts";
+import type { Embedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client.ts";
+import { MemoryStore } from "../../../../packages/sno-station-mem/src/store/store.ts";
 import {
 	createMemoryTelemetryApi,
 	type MemoryTelemetryUsageSummaryResult,
-} from "../../../../apps/mem-claw/src/telemetry/memory-telemetry-api.ts";
+} from "../../../../packages/sno-station-mem/src/engine/telemetry/memory-telemetry-api.ts";
 import {
 	forwardMemoryTelemetryToObserve,
 	type MemoryTelemetryObserveEmitInput,
-} from "../../../../apps/mem-claw/src/telemetry/memory-telemetry-sno-observe.ts";
-import { MemoryTelemetryUsageOutbox } from "../../../../apps/mem-claw/src/telemetry/memory-telemetry-outbox.ts";
-import { createTestDb, createTestEmbedder } from "../helpers/test-db.ts";
+} from "../../../../packages/sno-station-mem/src/engine/telemetry/memory-telemetry-sno-observe.ts";
+import { MemoryTelemetryUsageOutbox } from "../../../../packages/sno-station-mem/src/engine/telemetry/memory-telemetry-outbox.ts";
+import { createTestDb, createTestEmbedder } from "../../../apps/mem-claw/helpers/test-db.ts";
 
 let testEmbedder: Embedder;
 

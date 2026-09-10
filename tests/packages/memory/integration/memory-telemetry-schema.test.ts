@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import DatabaseConstructor from "better-sqlite3";
 import { afterEach, describe, expect, it } from "vitest";
-import { createTestDb, type TestDb } from "../helpers/test-db.ts";
+import { createTestDb, type TestDb } from "../../../apps/mem-claw/helpers/test-db.ts";
 
 interface TableInfoRow {
 	name: string;
