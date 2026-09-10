@@ -21,14 +21,14 @@ import {
 	KEYCHAIN_SERVICE_DEFAULT,
 } from "@snoai/sno-station-core-crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { bootstrapDataLayout } from "../../../../apps/mem-claw/src/storage/data-bootstrap.ts";
+import { bootstrapDataLayout } from "../../../../packages/sno-station-mem/src/store/data-bootstrap.ts";
 import {
 	assertLocalFilesystem,
 	getInstallManifestPath,
 	NonLocalFilesystemError,
-} from "../../../../apps/mem-claw/src/storage/data-paths.ts";
-import { ManifestMissingButDataPresentError } from "../../../../apps/mem-claw/src/storage/install-manifest.ts";
-import { _resetSqliteRuntimeForTest } from "../../../../apps/mem-claw/src/storage/sqlite-runtime.ts";
+} from "../../../../packages/sno-station-mem/src/store/data-paths.ts";
+import { ManifestMissingButDataPresentError } from "../../../../packages/sno-station-mem/src/store/install-manifest.ts";
+import { _resetSqliteRuntimeForTest } from "../../../../packages/sno-station-mem/src/store/sqlite-runtime.ts";
 
 const priorEnv = new Map<string, string | undefined>();
 let tempRoot: string;
@@ -54,7 +54,7 @@ beforeEach(() => {
 	xdgConfig = join(tempRoot, "xdg-config");
 	mkdirSync(snoaiRoot, { recursive: true });
 	mkdirSync(xdgConfig, { recursive: true });
-	setEnv("MEM_CLAW_DATA_DIR_ROOT", join(snoaiRoot, "mem-claw"));
+	setEnv("SNO_STATION_MEM_DATA_DIR_ROOT", join(snoaiRoot, "mem-claw"));
 	setEnv("XDG_CONFIG_HOME", xdgConfig);
 	setEnv(
 		"SNO_STATION_CORE_KEYCHAIN_SERVICE",
@@ -165,7 +165,7 @@ describe("statfs — non-local filesystem rejection", () => {
 		const err = new NonLocalFilesystemError(dataDir(), 0x6969);
 		expect(err.fsType).toBe(0x6969);
 		expect(err.message).toContain("non-local filesystem");
-		expect(err.message).toContain("MEM_CLAW_DATA_DIR_ROOT");
+		expect(err.message).toContain("SNO_STATION_MEM_DATA_DIR_ROOT");
 		expect(err.name).toBe("NonLocalFilesystemError");
 	});
 });
