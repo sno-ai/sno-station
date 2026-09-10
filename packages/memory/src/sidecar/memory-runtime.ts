@@ -17,7 +17,7 @@ import { DEFAULT_RETRIEVAL_CONFIG } from "../engine/retrieval/retriever";
 import { createTierPromoter } from "../engine/operations/memory-tier-promoter";
 import { MemoryTelemetryUsageOutbox } from "../engine/telemetry/memory-telemetry-outbox";
 import { initSqliteRuntime } from "../store/sqlite-runtime";
-import type { AgentLlmPort } from "../model/agent-llm-port";
+import { RegisteredAgentPort } from "../model/registered-agent-port";
 
 const log = createLogger("sno-station-mem:runtime");
 function engineLog(level: "info" | "warn" | "error" | "debug", message: string): void {
@@ -38,6 +38,8 @@ interface SkinRuntime {
 	observability: PluginObservability;
 	active: number;
 	retired: boolean;
+	embedder: ObservableEmbedder;
+	agentPort?: RegisteredAgentPort;
 }
 
 export class MemoryRuntimePool {
@@ -51,6 +53,7 @@ export class MemoryRuntimePool {
 		readonly store: ObservableMemoryStore,
 		readonly config: PluginConfig,
 		private readonly observability: PluginObservability,
+		private readonly embedder: ObservableEmbedder,
 	) {}
 
 	static async open(): Promise<MemoryRuntimePool> {
@@ -64,14 +67,16 @@ export class MemoryRuntimePool {
 		const observability = new PluginObservability(config, stateDir, engineLogger);
 		const embedder = new ObservableEmbedder(config.embedding, stateDir, observability, () => undefined);
 		const store = new ObservableMemoryStore({ dbPath: storePath, vectorDim: embedder.dimensions, embedder, memoryTelemetry: config.memoryTelemetry }, observability, () => undefined, config.embedding);
-		return new MemoryRuntimePool(storePath, store, config, observability);
+		return new MemoryRuntimePool(storePath, store, config, observability, embedder);
 	}
 
-	private async register(scope: ScopeCtx, registration: Registration, agentPort?: AgentLlmPort): Promise<ContractOutputs["init"]> {
+	private async register(scope: ScopeCtx, registration: Registration): Promise<ContractOutputs["init"]> {
 		const config: PluginConfig = { ...registration.settings, ...registration.routing };
 		// One principal has one vector space; a second skin cannot silently change its model.
-		if (!isDeepStrictEqual(config.embedding, this.config.embedding)) throw new ContractError("invalid-input");
+		if (!isDeepStrictEqual(config.embedding, this.config.embedding) || !isDeepStrictEqual(config.memoryTelemetry, this.config.memoryTelemetry)) throw new ContractError("invalid-input");
 		if (config.dbPath && config.dbPath !== this.storePath) throw new ContractError("store-mismatch");
+		// Without an endpoint, rem-enhanced keeps the existing GPU fallback. Agent-native must expose refusal.
+		const agentPort = registration.model || config.mode === "agent-native" ? new RegisteredAgentPort(registration.model) : undefined;
 		const observability = new PluginObservability(config, this.stateDir, engineLogger);
 		const embedder = new ObservableEmbedder(config.embedding, this.stateDir, observability, () => undefined);
 		const retriever = new ObservableMemoryRetriever(this.store, embedder, engineLogger, { ...DEFAULT_RETRIEVAL_CONFIG, ...config.retrieval }, observability, () => undefined, config.embedding);
@@ -81,7 +86,7 @@ export class MemoryRuntimePool {
 		retriever.setTierPromoter(createTierPromoter());
 		const runtime = new MemoryContractRuntime({ store: this.store, embedder, retriever, accessTracker: tracker, observability,
 			stateDir: this.stateDir, agentPort, logger: engineLogger, telemetryUsage: new MemoryTelemetryUsageOutbox({ sqlite: this.store.sqlite, dbPath: this.storePath }) });
-		const entry: SkinRuntime = { runtime, tracker, observability, active: 0, retired: false };
+		const entry: SkinRuntime = { runtime, tracker, observability, embedder, agentPort, active: 0, retired: false };
 		this.owned.add(entry);
 		try {
 			const result = await runtime.init(scope, registration);
@@ -107,7 +112,10 @@ export class MemoryRuntimePool {
 		entry.active++;
 		this.counters.engineAccesses++;
 		this.counters.storeAccesses++;
-		try { return parseOutput(method, await this.call(entry.runtime, method, raw)); }
+		try {
+			const call = () => this.call(entry.runtime, method, raw);
+			return parseOutput(method, await (entry.agentPort ? entry.agentPort.run(call) : call()));
+		}
 		finally { entry.active--; if (entry.retired && entry.active === 0) await this.dispose(entry); }
 	}
 
@@ -127,6 +135,7 @@ export class MemoryRuntimePool {
 		if (!this.owned.delete(entry)) return;
 		await entry.runtime.close();
 		await entry.tracker.destroy();
+		await entry.embedder.dispose();
 		await entry.observability.shutdown();
 	}
 
@@ -134,6 +143,7 @@ export class MemoryRuntimePool {
 		for (const entry of this.owned) await this.dispose(entry);
 		this.skins.clear();
 		await this.store.close();
+		await this.embedder.dispose();
 		await this.observability.shutdown();
 	}
 }
