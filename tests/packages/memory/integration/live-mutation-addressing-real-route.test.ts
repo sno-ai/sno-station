@@ -5,12 +5,12 @@
 
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { parseInsightMetadata } from "../../../../apps/mem-claw/src/extraction/memory-metadata-codec.ts";
-import { runProfileSectionUpdate } from "../../../../apps/mem-claw/src/extraction/profile-section-writer.ts";
-import { createLlmClient } from "../../../../apps/mem-claw/src/shared/llm-client.ts";
-import { MemoryStore } from "../../../../apps/mem-claw/src/storage/store.ts";
-import { requireEnv } from "../helpers/env.ts";
-import { createTestDb, createTestEmbedder } from "../helpers/test-db.ts";
+import { parseInsightMetadata } from "../../../../packages/sno-station-mem/src/engine/extraction/memory-metadata-codec.ts";
+import { runProfileSectionUpdate } from "../../../../packages/sno-station-mem/src/engine/extraction/profile-section-writer.ts";
+import { createLlmClient } from "../../../../packages/sno-station-mem/src/model/llm-client.ts";
+import { MemoryStore } from "../../../../packages/sno-station-mem/src/store/store.ts";
+import { requireEnv } from "../../../apps/mem-claw/helpers/env.ts";
+import { createTestDb, createTestEmbedder } from "../../../apps/mem-claw/helpers/test-db.ts";
 
 const REPEAT = Number.parseInt(process.env.LIVE_MUTATION_ADDRESS_REPEAT ?? "1", 10);
 const CANONICAL_SECTION = "preferences.renewable_energy";

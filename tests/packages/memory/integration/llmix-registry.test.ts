@@ -8,7 +8,7 @@ import {
 	MEM_CLAW_RELEASE_ANCHOR_URL,
 	MEM_CLAW_RELEASE_KEY_ID,
 	openBundledLlmixRegistry,
-} from "../../../../apps/mem-claw/src/shared/llmix-registry.ts";
+} from "../../../../packages/sno-station-mem/src/model/llmix-registry.ts";
 
 const repoRoot = resolve(import.meta.dirname, "../../../..");
 const didDocument = {
