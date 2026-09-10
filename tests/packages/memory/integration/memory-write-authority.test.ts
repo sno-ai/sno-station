@@ -2,22 +2,22 @@
 
 import { randomUUID } from "node:crypto";
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import type { Embedder } from "@/extraction/embedding-provider-client";
+import type { Embedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client";
 import {
 	buildInsightMetadata,
 	parseInsightMetadata,
 	stringifyInsightMetadata,
-} from "@/extraction/memory-metadata-codec";
-import { StorageError } from "@/shared/errors";
+} from "../../../../packages/sno-station-mem/src/engine/extraction/memory-metadata-codec";
+import { StorageError } from "../../../../packages/sno-station-mem/src/engine/shared/errors";
 import {
 	MEMORY_CATEGORIES,
 	type MemoryCategory,
 	type MemoryEntry,
 	type MemoryMetadata,
-} from "@/shared/types";
-import type { StoreInput } from "@/storage/memory-store-base";
-import { MemoryStore } from "@/storage/store";
-import { createTestDb, createTestEmbedder } from "../helpers/test-db.ts";
+} from "../../../../packages/sno-station-mem/src/engine/shared/types";
+import type { StoreInput } from "../../../../packages/sno-station-mem/src/store/memory-store-base";
+import { MemoryStore } from "../../../../packages/sno-station-mem/src/store/store";
+import { createTestDb, createTestEmbedder } from "../../../apps/mem-claw/helpers/test-db.ts";
 
 const BASE_TS = Date.parse("2026-07-24T12:00:00.000Z");
 const PROJECT_ID = "write-authority-real-sqlite";
