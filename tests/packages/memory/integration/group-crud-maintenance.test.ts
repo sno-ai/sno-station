@@ -23,13 +23,13 @@ import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
 
-import type { AtomicExtractionRecord } from "@/extraction/atomic-extraction-reply";
+import type { AtomicExtractionRecord } from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-extraction-reply";
 import type {
 	AtomicKeyedRecord,
 	AtomicProfileKeyingTransport,
-} from "@/extraction/atomic-profile-keying";
-import { buildAtomicWriteCards } from "@/extraction/atomic-write-projection";
-import type { Embedder } from "@/extraction/embedding-provider-client";
+} from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-profile-keying";
+import { buildAtomicWriteCards } from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-write-projection";
+import type { Embedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client";
 import {
 	createGroupCrudEntityIdentityJudgementPort,
 	createGroupCrudStateKeyingJudgementPort,
@@ -37,14 +37,14 @@ import {
 	type GroupCrudMaintenanceReport,
 	type GroupCrudStateKeyingJudgementPort,
 	runGroupCrudMaintenancePass,
-} from "@/maintenance/group-crud-maintenance";
-import { readMemorySourceOrder } from "@/storage/memory-source-order";
-import { ENTITY_IDENTITY_CANDIDATE_LIMIT } from "@/storage/memory-store-atomic-entity-api";
+} from "../../../../packages/sno-station-mem/src/engine/maintenance/group-crud-maintenance";
+import { readMemorySourceOrder } from "../../../../packages/sno-station-mem/src/store/memory-source-order";
+import { ENTITY_IDENTITY_CANDIDATE_LIMIT } from "../../../../packages/sno-station-mem/src/store/memory-store-atomic-entity-api";
 import {
 	type AtomicExtractionLedgerKey,
 	type AtomicExtractionRunParameters,
 	MemoryStore,
-} from "@/storage/store";
+} from "../../../../packages/sno-station-mem/src/store/store";
 import { createTestDb, createTestEmbedder, type TestDb } from "../helpers/test-db";
 
 const PROJECT_ID = "academic_researcher_weekly";

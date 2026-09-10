@@ -5,15 +5,15 @@
  */
 
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
-import type { AtomicExtractionTurn } from "@/extraction/atomic-extraction-reply";
+import type { AtomicExtractionTurn } from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-extraction-reply";
 import {
 	createSignedAtomicMemoryExtractionTransports,
 	runAtomicMemoryExtraction,
-} from "@/extraction/atomic-memory-extraction";
-import type { Embedder } from "@/extraction/embedding-provider-client";
-import { llmRoutingConfigSchema } from "@/shared/plugin-config-mode-schema";
-import { type AtomicExtractionRunParameters, MemoryStore } from "@/storage/store";
-import { applyStateCategoryMigration } from "@/storage/state-category-migration";
+} from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-memory-extraction";
+import type { Embedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client";
+import { llmRoutingConfigSchema } from "../../../../packages/sno-station-mem/src/contract/config/plugin-config-mode-schema";
+import { type AtomicExtractionRunParameters, MemoryStore } from "../../../../packages/sno-station-mem/src/store/store";
+import { applyStateCategoryMigration } from "../../../../packages/sno-station-mem/src/store/state-category-migration";
 import { createTestDb, createTestEmbedder, type TestDb } from "../helpers/test-db";
 
 const PROJECT_ID = "group-crud-project-lead";
