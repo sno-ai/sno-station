@@ -12,19 +12,19 @@ import {
 	createRemModelStageResponsePort,
 	runRemBatchJob,
 	type RemModelStage,
-} from "../../../../apps/mem-claw/src/sidecar/rem-batch-executor.ts";
+} from "../../../../packages/sno-station-mem/src/sidecar/rem-batch-executor.ts";
 import {
 	createRemRepository,
 	installRemSchema,
 	parseRemOperationalConfiguration,
-} from "../../../../packages/rem-core/src/index.ts";
-import { createRemOwnerDecidedOperationalConfiguration } from "../helpers/rem-entry-config-fixture.ts";
-import { seedProductionMemory } from "../helpers/rem-production-entry-fixture.ts";
-import { createTestDb, type TestDb } from "../helpers/test-db.ts";
+} from "../../../../packages/sno-station-mem/src/engine/rem/index.ts";
+import { createRemOwnerDecidedOperationalConfiguration } from "../../../apps/mem-claw/helpers/rem-entry-config-fixture.ts";
+import { seedProductionMemory } from "../../../apps/mem-claw/helpers/rem-production-entry-fixture.ts";
+import { createTestDb, type TestDb } from "../../../apps/mem-claw/helpers/test-db.ts";
 
 const priorEnvironment = {
-	MEM_CLAW_DATA_DIR_ROOT: process.env["MEM_CLAW_DATA_DIR_ROOT"],
-	MEM_CLAW_REM_EXPECTED_DB_PATH: process.env["MEM_CLAW_REM_EXPECTED_DB_PATH"],
+	SNO_STATION_MEM_DATA_DIR_ROOT: process.env["SNO_STATION_MEM_DATA_DIR_ROOT"],
+	SNO_STATION_MEM_REM_EXPECTED_DB_PATH: process.env["SNO_STATION_MEM_REM_EXPECTED_DB_PATH"],
 	OPENCLAW_STATE_DIR: process.env["OPENCLAW_STATE_DIR"],
 };
 
@@ -32,8 +32,8 @@ const cleanups: Array<() => void> = [];
 
 afterEach(() => {
 	for (const cleanup of cleanups.splice(0).reverse()) cleanup();
-	restoreEnvironment("MEM_CLAW_DATA_DIR_ROOT", priorEnvironment.MEM_CLAW_DATA_DIR_ROOT);
-	restoreEnvironment("MEM_CLAW_REM_EXPECTED_DB_PATH", priorEnvironment.MEM_CLAW_REM_EXPECTED_DB_PATH);
+	restoreEnvironment("SNO_STATION_MEM_DATA_DIR_ROOT", priorEnvironment.SNO_STATION_MEM_DATA_DIR_ROOT);
+	restoreEnvironment("SNO_STATION_MEM_REM_EXPECTED_DB_PATH", priorEnvironment.SNO_STATION_MEM_REM_EXPECTED_DB_PATH);
 	restoreEnvironment("OPENCLAW_STATE_DIR", priorEnvironment.OPENCLAW_STATE_DIR);
 });
 
@@ -380,8 +380,8 @@ function prepareFixture(): TestDb {
 		}),
 		"utf8",
 	);
-	process.env["MEM_CLAW_DATA_DIR_ROOT"] = dirname(fixture.dbPath);
-	process.env["MEM_CLAW_REM_EXPECTED_DB_PATH"] = fixture.dbPath;
+	process.env["SNO_STATION_MEM_DATA_DIR_ROOT"] = dirname(fixture.dbPath);
+	process.env["SNO_STATION_MEM_REM_EXPECTED_DB_PATH"] = fixture.dbPath;
 	process.env["OPENCLAW_STATE_DIR"] = stateRoot;
 	cleanups.push(() => {
 		fixture.cleanup();

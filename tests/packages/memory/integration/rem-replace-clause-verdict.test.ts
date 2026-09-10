@@ -9,7 +9,7 @@ import {
 	renderReplaceClauseVerdictPrompt,
 	type ReplaceClauseVerdict,
 	type UsableReplaceClauseVerdict,
-} from "../../../../packages/rem-core/src/index.ts";
+} from "../../../../packages/sno-station-mem/src/engine/rem/index.ts";
 
 const repoRoot = resolve(import.meta.dirname, "../../../..");
 const fixturePath = join(
