@@ -12,7 +12,7 @@ import {
 	DEFAULT_RECALL_LIFECYCLE,
 	type RecallLifecycleConfig,
 	recallLifecycleSchema,
-} from "@/config";
+} from "../../../../packages/sno-station-mem/config/index";
 
 // PRD §6.1 pinned values. Changing any entry here SHALL require a new
 // openspec change proposal — defaults SHALL NOT drift through casual edits.
