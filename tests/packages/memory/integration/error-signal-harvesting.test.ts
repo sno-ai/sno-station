@@ -6,7 +6,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { DEFAULT_REFLECTION_MAX_TRACKED_SESSIONS } from "../../../../apps/mem-claw/config/index.ts";
+import { DEFAULT_REFLECTION_MAX_TRACKED_SESSIONS } from "../../../../packages/sno-station-mem/config/index.ts";
 import {
 	containsErrorSignal,
 	normalizeErrorSignature,
@@ -14,8 +14,8 @@ import {
 	extractTextFromToolResult,
 	sha256Hex,
 	createErrorSignalTracker,
-} from "../../../../apps/mem-claw/src/security/error-signals.ts";
-import type { ReflectionErrorSignal } from "../../../../apps/mem-claw/src/security/error-signals.ts";
+} from "../../../../packages/sno-station-mem/src/engine/security/error-signals.ts";
+import type { ReflectionErrorSignal } from "../../../../packages/sno-station-mem/src/engine/security/error-signals.ts";
 
 // ── Helper: build a ReflectionErrorSignal with defaults ─────────────────
 
