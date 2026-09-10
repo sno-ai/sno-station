@@ -16,7 +16,7 @@ import {
 	createReflectionHarness,
 	installEmbeddedRunnerStub,
 	type ReflectionHarness,
-} from "./_helpers/reflection-command-new-harness.ts";
+} from "../../../apps/mem-claw/integration/_helpers/reflection-command-new-harness.ts";
 
 beforeAll(() => {
 	installEmbeddedRunnerStub();
