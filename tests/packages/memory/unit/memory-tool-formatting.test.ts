@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { serializeMemory } from "../../../../apps/mem-claw/src/plugin/memory-tool-formatting.ts";
+import { serializeMemory } from "../../../../packages/sno-station-mem/src/engine/bindings/memory-tool-formatting.ts";
 
 describe("memory tool formatting", () => {
 	it("sanitizes serialized user-visible memory text", () => {

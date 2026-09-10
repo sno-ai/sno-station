@@ -3,8 +3,8 @@ import {
 	MEMORY_TELEMETRY_EVENT_TYPES,
 	isMemoryTelemetryEventType,
 	type MemoryTelemetryEventType,
-} from "../../../../apps/mem-claw/src/telemetry/memory-telemetry-types.ts";
-import { validateMemoryTelemetryMetadata } from "../../../../apps/mem-claw/src/telemetry/memory-telemetry-metadata.ts";
+} from "../../../../packages/sno-station-mem/src/engine/telemetry/memory-telemetry-types.ts";
+import { validateMemoryTelemetryMetadata } from "../../../../packages/sno-station-mem/src/engine/telemetry/memory-telemetry-metadata.ts";
 
 describe("memory telemetry metadata validation", () => {
 	it("accepts the canonical event enum and rejects removed names", () => {
