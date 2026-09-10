@@ -21,6 +21,7 @@ export function resolveSqliteVecPath(): string {
 	const candidates = [
 		join(HERE, "..", "..", "sqlite-extensions", PLATFORM_KEY, "vec0.so"),
 		join(HERE, "..", "sqlite-extensions", PLATFORM_KEY, "vec0.so"),
+		join(HERE, "..", "..", "..", "sqlite-extensions", PLATFORM_KEY, "vec0.so"),
 	];
 	for (const candidate of candidates) {
 		const extensionPath = resolve(candidate);

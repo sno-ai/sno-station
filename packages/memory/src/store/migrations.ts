@@ -275,7 +275,7 @@ function readConnectionVersion(database: RemDatabaseLike): {
 
 function resolveMigrationsDir(): string {
 	const moduleDir = dirname(fileURLToPath(import.meta.url));
-	const candidates = [join(moduleDir, "../../drizzle"), join(moduleDir, "../drizzle")];
+	const candidates = [join(moduleDir, "../../drizzle"), join(moduleDir, "../drizzle"), join(moduleDir, "../../../drizzle")];
 	for (const dir of candidates) {
 		if (existsSync(join(dir, "meta/_journal.json"))) return dir;
 	}

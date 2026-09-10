@@ -61,6 +61,7 @@ export function resolveSimpleTokenizerPath(): SimpleTokenizerPaths {
 	const candidates = [
 		join(HERE, "..", "..", "sqlite-extensions", PLATFORM_KEY),
 		join(HERE, "..", "sqlite-extensions", PLATFORM_KEY),
+		join(HERE, "..", "..", "..", "sqlite-extensions", PLATFORM_KEY),
 	];
 	for (const root of candidates) {
 		const extensionPath = resolve(root, binary);
