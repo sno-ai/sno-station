@@ -10,11 +10,11 @@ import {
 	loadSectionDictionary,
 	normalizeTopicToSectionName,
 	restoreCachedSectionDictionary,
-} from "@/extraction/b-profile-section-dictionary-provider";
+} from "../../../../packages/sno-station-mem/src/engine/extraction/b-profile-section-dictionary-provider";
 import {
 	B_PROFILE_SECTION_REGISTRY,
 	type BProfileSectionRegistry,
-} from "@/extraction/b-profile-section-registry";
+} from "../../../../packages/sno-station-mem/src/engine/extraction/b-profile-section-registry";
 
 const tempDirs: string[] = [];
 
@@ -90,7 +90,7 @@ describe("B-profile section dictionary provider", () => {
 
 	it("keeps the synonym registry out of matching TypeScript", () => {
 		const matchingSource = readFileSync(
-			new URL("../../../../apps/mem-claw/src/extraction/b-profile-section-registry.ts", import.meta.url),
+			new URL("../../../../packages/sno-station-mem/src/engine/extraction/b-profile-section-registry.ts", import.meta.url),
 			"utf8",
 		);
 		for (const section of B_PROFILE_SECTION_REGISTRY.sections) {
