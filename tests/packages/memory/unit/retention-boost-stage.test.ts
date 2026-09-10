@@ -18,19 +18,19 @@ import { describe, expect, it } from "vitest";
 import {
 	DEFAULT_RECALL_LIFECYCLE,
 	type RecallLifecycleConfig,
-} from "../../../../apps/mem-claw/config/index.ts";
-import { DEFAULT_DECAY_CONFIG } from "../../../../apps/mem-claw/src/operations/selective-forgetting-scorer.ts";
-import { boostMultiplier } from "../../../../apps/mem-claw/src/retrieval/retriever-scoring-pipeline.ts";
+} from "../../../../packages/sno-station-mem/config/index.ts";
+import { DEFAULT_DECAY_CONFIG } from "../../../../packages/sno-station-mem/src/engine/operations/selective-forgetting-scorer.ts";
+import { boostMultiplier } from "../../../../packages/sno-station-mem/src/engine/retrieval/retriever-scoring-pipeline.ts";
 import {
 	createRetriever,
 	DEFAULT_RETRIEVAL_CONFIG,
 	type MemoryRetrieverInternals,
-} from "../../../../apps/mem-claw/src/retrieval/retriever.ts";
+} from "../../../../packages/sno-station-mem/src/engine/retrieval/retriever.ts";
 import type {
 	DecayScore,
 	MemoryTier,
 	RetrievalResult,
-} from "../../../../apps/mem-claw/src/shared/types.ts";
+} from "../../../../packages/sno-station-mem/src/engine/shared/types.ts";
 
 const noopStore = {
 	getVectorsByIds: () => new Map<string, Float32Array>(),
