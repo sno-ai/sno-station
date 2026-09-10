@@ -4,15 +4,15 @@
  */
 
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
-import type { Embedder } from "@/extraction/embedding-provider-client";
+import type { Embedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client";
 import { InsightDistiller } from "@/extraction/memory-extraction-pipeline";
 import { processExtractedCandidate } from "@/extraction/insight-distill-candidate-processor";
-import { createLlmClient, type LlmClient } from "@/shared/llm-client";
-import type { LlmRoutingConfig } from "@/shared/llm-mode-routing";
-import type { CandidateMemory, ExtractionStats } from "@/shared/types";
-import { MemoryStore } from "@/storage/store";
-import { requireEnv } from "../helpers/env.ts";
-import { createTestDb, createTestEmbedder, type TestDb } from "../helpers/test-db.ts";
+import { createLlmClient, type LlmClient } from "../../../../packages/sno-station-mem/src/model/llm-client";
+import type { LlmRoutingConfig } from "../../../../packages/sno-station-mem/src/model/llm-mode-routing";
+import type { CandidateMemory, ExtractionStats } from "../../../../packages/sno-station-mem/src/engine/shared/types";
+import { MemoryStore } from "../../../../packages/sno-station-mem/src/store/store";
+import { requireEnv } from "../../../apps/mem-claw/helpers/env.ts";
+import { createTestDb, createTestEmbedder, type TestDb } from "../../../apps/mem-claw/helpers/test-db.ts";
 
 const ROUTING: LlmRoutingConfig = {
 	mode: "rem-enhanced",
