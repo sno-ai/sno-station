@@ -4,23 +4,23 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import type { Embedder } from "../../../../apps/mem-claw/src/extraction/embedding-provider-client.ts";
-import { parseInsightMetadata } from "../../../../apps/mem-claw/src/extraction/memory-metadata-codec.ts";
+import type { Embedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client.ts";
+import { parseInsightMetadata } from "../../../../packages/sno-station-mem/src/engine/extraction/memory-metadata-codec.ts";
 import {
 	getAuditPath,
 	getMemClawStateDir,
-} from "../../../../apps/mem-claw/src/operations/runtime-audit-log.ts";
-import { MemoryStore } from "../../../../apps/mem-claw/src/storage/store.ts";
+} from "../../../../packages/sno-station-mem/src/engine/operations/runtime-audit-log.ts";
+import { MemoryStore } from "../../../../packages/sno-station-mem/src/store/store.ts";
 import {
 	assertMemoryKindsCutoverStartupGuard,
 	MEMORY_KINDS_FOUNDATION_MARKER,
 	resetMemoryKindsCutoverDatabase,
 	runMemoryKindsCutoverMigration,
-} from "../../../../apps/mem-claw/src/storage/memory-kinds-cutover-migrator.ts";
+} from "../../../../packages/sno-station-mem/src/store/memory-kinds-cutover-migrator.ts";
 import {
 	openSqliteDatabase,
-} from "../../../../apps/mem-claw/src/storage/sqlite-runtime.ts";
-import { createTestDb, createTestEmbedder, type TestSqliteDatabase } from "../helpers/test-db.ts";
+} from "../../../../packages/sno-station-mem/src/store/sqlite-runtime.ts";
+import { createTestDb, createTestEmbedder, type TestSqliteDatabase } from "../../../apps/mem-claw/helpers/test-db.ts";
 
 const SCOPE = "memory-kinds-cutover";
 const BASE_TS = Date.UTC(2026, 4, 25, 9, 0, 0);
