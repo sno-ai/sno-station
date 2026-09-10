@@ -1,10 +1,10 @@
 import { createHmac } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { loadMemoryTelemetryKeySet } from "../../../../apps/mem-claw/src/telemetry/memory-telemetry-config.ts";
+import { loadMemoryTelemetryKeySet } from "../../../../packages/sno-station-mem/src/engine/telemetry/memory-telemetry-config.ts";
 import {
 	createMemoryTelemetryReceiptService,
 	type MemoryTelemetryReceiptInput,
-} from "../../../../apps/mem-claw/src/telemetry/memory-telemetry-receipts.ts";
+} from "../../../../packages/sno-station-mem/src/engine/telemetry/memory-telemetry-receipts.ts";
 
 const VALID_HASH = "a".repeat(64);
 const OTHER_HASH = "b".repeat(64);
