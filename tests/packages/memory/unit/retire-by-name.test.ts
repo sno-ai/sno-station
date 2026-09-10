@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { shortlistRetireByNameCandidates } from "../../../../apps/mem-claw/src/extraction/retire-by-name.ts";
+import { shortlistRetireByNameCandidates } from "../../../../packages/sno-station-mem/src/engine/extraction/retire-by-name.ts";
 import {
 	PROFILE_SECTION_JUDGMENT_BINDINGS,
 	PROFILE_SECTION_JUDGMENT_REGISTRATION_ENABLED,
-} from "../../../../apps/mem-claw/src/extraction/profile-section-writer.ts";
-import type { MemoryEntry } from "../../../../apps/mem-claw/src/shared/types.ts";
+} from "../../../../packages/sno-station-mem/src/engine/extraction/profile-section-writer.ts";
+import type { MemoryEntry } from "../../../../packages/sno-station-mem/src/engine/shared/types.ts";
 
 function entry(id: string, text: string): MemoryEntry {
 	return {
