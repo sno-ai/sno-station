@@ -29,15 +29,15 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import {
 	DEFAULT_RECALL_LIFECYCLE,
 	type RecallLifecycleConfig,
-} from "../../../../apps/mem-claw/config/index.ts";
-import type { Embedder } from "../../../../apps/mem-claw/src/extraction/embedding-provider-client.ts";
+} from "../../../../packages/sno-station-mem/config/index.ts";
+import type { Embedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client.ts";
 import {
 	AccessTracker,
 	parseAccessMetadata,
-} from "../../../../apps/mem-claw/src/retrieval/access-tracker.ts";
-import { createRetriever } from "../../../../apps/mem-claw/src/retrieval/retriever.ts";
-import { MemoryStore } from "../../../../apps/mem-claw/src/storage/store.ts";
-import { createTestDb, createTestEmbedder } from "../helpers/test-db.ts";
+} from "../../../../packages/sno-station-mem/src/engine/retrieval/access-tracker.ts";
+import { createRetriever } from "../../../../packages/sno-station-mem/src/engine/retrieval/retriever.ts";
+import { MemoryStore } from "../../../../packages/sno-station-mem/src/store/store.ts";
+import { createTestDb, createTestEmbedder } from "../../../apps/mem-claw/helpers/test-db.ts";
 
 let embedder: Embedder;
 
