@@ -7,19 +7,19 @@ import {
 	installRemSchema,
 	REM_ROW_HASH_VERSION,
 	writeRemTwoFacetTransaction,
-} from "../../../../packages/rem-core/src/index.ts";
-import { openSqliteDatabase } from "../../../../apps/mem-claw/src/storage/sqlite-runtime.ts";
-import { seedRemRecoveryState } from "../helpers/rem-recovery-state-fixture.ts";
-import { seedRemWriteVerdict } from "../helpers/rem-write-verdict-fixture.ts";
-import { createTestDb, type TestDb } from "../helpers/test-db.ts";
+} from "../../../../packages/sno-station-mem/src/engine/rem/index.ts";
+import { openSqliteDatabase } from "../../../../packages/sno-station-mem/src/store/sqlite-runtime.ts";
+import { seedRemRecoveryState } from "../../../apps/mem-claw/helpers/rem-recovery-state-fixture.ts";
+import { seedRemWriteVerdict } from "../../../apps/mem-claw/helpers/rem-write-verdict-fixture.ts";
+import { createTestDb, type TestDb } from "../../../apps/mem-claw/helpers/test-db.ts";
 import {
 	startQcg17ScriptedInvalidResponseFixture,
 	type Qcg17ScriptedInvalidResponseFixture,
-} from "../helpers/rem-qcg17-scripted-invalid-response-fixture.ts";
+} from "../../../apps/mem-claw/helpers/rem-qcg17-scripted-invalid-response-fixture.ts";
 import {
 	seedProductionMemory,
 	startRemProductionEntryFixture,
-} from "../helpers/rem-production-entry-fixture.ts";
+} from "../../../apps/mem-claw/helpers/rem-production-entry-fixture.ts";
 
 type WriterScenario =
 	| "success"
@@ -141,7 +141,7 @@ describe("REM writer discipline census matrix (coverage only; direct lifecycle c
 		const beforeMutation = readMutationState(fixture, rowId);
 		try {
 			const product = await import(
-				"../../../../apps/mem-claw/src/storage/rem-sqlite-adapter.ts"
+				"../../../../packages/sno-station-mem/src/store/rem-sqlite-adapter.ts"
 			);
 			const candidate = (product as Record<string, unknown>)[
 				"createMemClawRemMutationExecutor"
@@ -214,7 +214,7 @@ describe("REM writer discipline census matrix (coverage only; direct lifecycle c
 		seedRemWriteVerdict(fixture, { rowId, evidenceId: `evidence-${rowId}` });
 		try {
 			const product = await import(
-				"../../../../apps/mem-claw/src/storage/rem-sqlite-adapter.ts"
+				"../../../../packages/sno-station-mem/src/store/rem-sqlite-adapter.ts"
 			);
 			const candidate = (product as Record<string, unknown>)[
 				"createMemClawRemMutationExecutor"
@@ -550,7 +550,7 @@ describe("REM verified-write hash symmetry", () => {
 		seedRemWriteVerdict(fixture, { rowId, evidenceId: `evidence-${rowId}` });
 		try {
 			const product = await import(
-				"../../../../apps/mem-claw/src/storage/rem-sqlite-adapter.ts"
+				"../../../../packages/sno-station-mem/src/store/rem-sqlite-adapter.ts"
 			);
 			const createExecutor = (product as Record<string, unknown>)[
 				"createMemClawRemMutationExecutor"
@@ -621,7 +621,7 @@ describe("REM verified-write hash symmetry", () => {
 		seedRemWriteVerdict(fixture, { rowId, evidenceId: `evidence-${rowId}` });
 		try {
 			const product = await import(
-				"../../../../apps/mem-claw/src/storage/rem-sqlite-adapter.ts"
+				"../../../../packages/sno-station-mem/src/store/rem-sqlite-adapter.ts"
 			);
 			const createExecutor = (product as Record<string, unknown>)[
 				"createMemClawRemMutationExecutor"
