@@ -12,16 +12,16 @@ import { describe, expect, it } from "vitest";
 import {
 	HANS_DISTINCT_CHARS,
 	HANT_DISTINCT_CHARS,
-} from "../../../../apps/mem-claw/src/i18n/detector.ts";
-import { SUPPORTED_LOCALES } from "../../../../apps/mem-claw/src/i18n/locales.ts";
+} from "../../../../packages/sno-station-mem/src/engine/i18n/detector.ts";
+import { SUPPORTED_LOCALES } from "../../../../packages/sno-station-mem/src/engine/i18n/locales.ts";
 import {
 	getParentLocale,
 	t,
-} from "../../../../apps/mem-claw/src/i18n/registry.ts";
+} from "../../../../packages/sno-station-mem/src/engine/i18n/registry.ts";
 import {
 	ALL_NAMESPACES,
 	type LocaleResources,
-} from "../../../../apps/mem-claw/src/i18n/res/_types.ts";
+} from "../../../../packages/sno-station-mem/src/engine/i18n/res/_types.ts";
 
 function parseExtractionOutputExample(prompt: string): {
 	memories: Array<Record<string, unknown>>;
