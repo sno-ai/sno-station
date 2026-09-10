@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { TraceCollector } from "../../../../apps/mem-claw/src/retrieval/retrieval-trace.ts";
+import { TraceCollector } from "../../../../packages/sno-station-mem/src/engine/retrieval/retrieval-trace.ts";
 
 describe("TraceCollector", () => {
 	beforeEach(() => {

@@ -17,10 +17,10 @@ import { describe, expect, it } from "vitest";
 import {
 	MemoryRetriever,
 	type MemoryRetrieverInternals,
-} from "../../../../apps/mem-claw/src/retrieval/retriever.ts";
-import { dotProduct } from "../../../../apps/mem-claw/src/retrieval/retrieval-scoring-utils.ts";
-import type { RetrievalResult } from "../../../../apps/mem-claw/src/shared/types.ts";
-import { clamp01 } from "../../../../apps/mem-claw/src/shared/utils.ts";
+} from "../../../../packages/sno-station-mem/src/engine/retrieval/retriever.ts";
+import { dotProduct } from "../../../../packages/sno-station-mem/src/engine/retrieval/retrieval-scoring-utils.ts";
+import type { RetrievalResult } from "../../../../packages/sno-station-mem/src/engine/shared/types.ts";
+import { clamp01 } from "../../../../packages/sno-station-mem/src/engine/shared/utils.ts";
 
 // Lambda must match production default so behavior matches a real call path.
 // Source: apps/mem-claw/config/index.ts (MMR_LAMBDA = 0.7).
