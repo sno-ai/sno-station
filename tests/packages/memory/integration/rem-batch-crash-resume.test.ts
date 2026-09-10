@@ -16,9 +16,9 @@ import {
 	createRemRepository,
 	installRemSchema,
 	type RemVerdictCheckpoint,
-} from "../../../../packages/rem-core/src/index.ts";
-import { openSqliteDatabase } from "../../../../apps/mem-claw/src/storage/sqlite-runtime.ts";
-import { createTestDb, type TestDb } from "../helpers/test-db.ts";
+} from "../../../../packages/sno-station-mem/src/engine/rem/index.ts";
+import { openSqliteDatabase } from "../../../../packages/sno-station-mem/src/store/sqlite-runtime.ts";
+import { createTestDb, type TestDb } from "../../../apps/mem-claw/helpers/test-db.ts";
 
 const repoRoot = resolve(import.meta.dirname, "../../../..");
 const tsxBinary = resolve(repoRoot, "node_modules/.bin/tsx");
