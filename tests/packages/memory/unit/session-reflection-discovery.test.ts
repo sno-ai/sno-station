@@ -2,21 +2,21 @@ import { dirname, join } from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import { resolveReflectionSessionSearchDirs } from "@/operations/session-reflection-discovery";
+import { resolveReflectionSessionSearchDirs } from "../../../../packages/sno-station-mem/src/engine/operations/session-reflection-discovery";
 
-const originalOpenClawHome = process.env.OPENCLAW_HOME;
+const originalOpenClawHome = process.env.SNO_STATION_MEM_HOME;
 
 afterEach(() => {
 	if (originalOpenClawHome === undefined) {
-		delete process.env.OPENCLAW_HOME;
+		delete process.env.SNO_STATION_MEM_HOME;
 		return;
 	}
-	process.env.OPENCLAW_HOME = originalOpenClawHome;
+	process.env.SNO_STATION_MEM_HOME = originalOpenClawHome;
 });
 
 describe("reflection session discovery", () => {
 	it("resolves session directories in stable ordered fallback order with duplicate collapse", () => {
-		process.env.OPENCLAW_HOME = "/env/openclaw";
+		process.env.SNO_STATION_MEM_HOME = "/env/openclaw";
 
 		const currentSessionFile =
 			"/current/openclaw/agents/source-agent/sessions/current.json";
@@ -92,7 +92,7 @@ describe("reflection session discovery", () => {
 	});
 
 	it("rejects dot-segment agent ids before deriving agent session directories", () => {
-		process.env.OPENCLAW_HOME = "/safe/openclaw";
+		process.env.SNO_STATION_MEM_HOME = "/safe/openclaw";
 
 		const dirs = resolveReflectionSessionSearchDirs({
 			workspaceDir: "/workspace/project",
@@ -122,7 +122,7 @@ describe("reflection session discovery", () => {
 	});
 
 	it("falls back to workspace sessions and main agent when optional context is empty", () => {
-		delete process.env.OPENCLAW_HOME;
+		delete process.env.SNO_STATION_MEM_HOME;
 
 		const dirs = resolveReflectionSessionSearchDirs({
 			workspaceDir: "/solo/openclaw/workspace/project-b",
