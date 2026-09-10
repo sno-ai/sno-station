@@ -6,18 +6,18 @@
 
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
 
-import type { Embedder } from "../../../../apps/mem-claw/src/extraction/embedding-provider-client.ts";
+import type { Embedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client.ts";
 import {
 	decideRemUpdateVerification,
 	decideReplaceCoverage,
-} from "../../../../packages/rem-core/src/index.ts";
-import { createLlmClient } from "../../../../apps/mem-claw/src/shared/llm-client.ts";
+} from "../../../../packages/sno-station-mem/src/engine/rem/index.ts";
+import { createLlmClient } from "../../../../packages/sno-station-mem/src/model/llm-client.ts";
 import {
 	createMemClawRemPorts,
 	createRemReplaceCarrierPort,
-} from "../../../../apps/mem-claw/src/storage/rem-sqlite-adapter.ts";
-import { MemoryStore } from "../../../../apps/mem-claw/src/storage/store.ts";
-import { createTestDb, createTestEmbedder, type TestDb } from "../helpers/test-db.ts";
+} from "../../../../packages/sno-station-mem/src/store/rem-sqlite-adapter.ts";
+import { MemoryStore } from "../../../../packages/sno-station-mem/src/store/store.ts";
+import { createTestDb, createTestEmbedder, type TestDb } from "../../../apps/mem-claw/helpers/test-db.ts";
 
 const OLDER = "The researcher bought coffee for $6.50 at Blue Bottle on 2026-08-08.";
 const NEWER = "Coffee at Blue Bottle cost six dollars fifty on August eighth.";

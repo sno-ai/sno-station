@@ -1,15 +1,15 @@
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
 
-import type { Embedder } from "../../../../apps/mem-claw/src/extraction/embedding-provider-client.ts";
-import { createLlmClient } from "../../../../apps/mem-claw/src/shared/llm-client.ts";
+import type { Embedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client.ts";
+import { createLlmClient } from "../../../../packages/sno-station-mem/src/model/llm-client.ts";
 import {
 	createRetriever,
 	DEFAULT_RETRIEVAL_CONFIG,
-} from "../../../../apps/mem-claw/src/retrieval/retriever.ts";
-import { MAX_CANDIDATE_POOL_SIZE } from "../../../../apps/mem-claw/config/index.ts";
-import { createMemClawRemPorts } from "../../../../apps/mem-claw/src/storage/rem-sqlite-adapter.ts";
-import { MemoryStore } from "../../../../apps/mem-claw/src/storage/store.ts";
-import { createTestDb, createTestEmbedder, type TestDb } from "../helpers/test-db.ts";
+} from "../../../../packages/sno-station-mem/src/engine/retrieval/retriever.ts";
+import { MAX_CANDIDATE_POOL_SIZE } from "../../../../packages/sno-station-mem/config/index.ts";
+import { createMemClawRemPorts } from "../../../../packages/sno-station-mem/src/store/rem-sqlite-adapter.ts";
+import { MemoryStore } from "../../../../packages/sno-station-mem/src/store/store.ts";
+import { createTestDb, createTestEmbedder, type TestDb } from "../../../apps/mem-claw/helpers/test-db.ts";
 
 let embedder: Embedder;
 
