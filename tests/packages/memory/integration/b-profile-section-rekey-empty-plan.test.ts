@@ -1,12 +1,12 @@
 import { beforeAll, describe, expect, it } from "vitest";
-import type { Embedder } from "@/extraction/embedding-provider-client";
-import { applyRekeyPlan } from "@/extraction/b-profile-section-rekey";
+import type { Embedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client";
+import { applyRekeyPlan } from "../../../../packages/sno-station-mem/src/engine/extraction/b-profile-section-rekey";
 import {
 	buildInsightMetadata,
 	stringifyInsightMetadata,
-} from "@/extraction/memory-metadata-codec";
-import { MemoryStore } from "@/storage/store";
-import { createTestDb, createTestEmbedder } from "../helpers/test-db.ts";
+} from "../../../../packages/sno-station-mem/src/engine/extraction/memory-metadata-codec";
+import { MemoryStore } from "../../../../packages/sno-station-mem/src/store/store";
+import { createTestDb, createTestEmbedder } from "../../../apps/mem-claw/helpers/test-db.ts";
 
 const NOW = Date.parse("2026-08-07T04:00:00.000Z");
 
