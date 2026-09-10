@@ -21,27 +21,27 @@
 
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
 
-import type { AtomicKeyedRecord } from "@/extraction/atomic-profile-keying";
-import { buildAtomicWriteCards } from "@/extraction/atomic-write-projection";
-import type { Embedder } from "@/extraction/embedding-provider-client";
+import type { AtomicKeyedRecord } from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-profile-keying";
+import { buildAtomicWriteCards } from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-write-projection";
+import type { Embedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client";
 import {
 	retrieveForAutoRecall,
 	retrieveForMemoryRecallOrEval,
-} from "@/retrieval/rem-consumer-retrieval";
-import { createRetriever, DEFAULT_RETRIEVAL_CONFIG } from "@/retrieval/retriever";
-import type { MemoryRetriever } from "@/retrieval/retriever";
-import type { RetrievalResult } from "@/shared/types";
+} from "../../../../packages/sno-station-mem/src/engine/retrieval/rem-consumer-retrieval";
+import { createRetriever, DEFAULT_RETRIEVAL_CONFIG } from "../../../../packages/sno-station-mem/src/engine/retrieval/retriever";
+import type { MemoryRetriever } from "../../../../packages/sno-station-mem/src/engine/retrieval/retriever";
+import type { RetrievalResult } from "../../../../packages/sno-station-mem/src/engine/shared/types";
 import {
 	closeMemoryRow,
 	readMemorySourceOrderOrOldest,
-} from "@/storage/memory-source-order";
-import { applyStateCategoryMigration } from "@/storage/state-category-migration";
+} from "../../../../packages/sno-station-mem/src/store/memory-source-order";
+import { applyStateCategoryMigration } from "../../../../packages/sno-station-mem/src/store/state-category-migration";
 import {
 	type AtomicExtractionLedgerKey,
 	type AtomicExtractionRunParameters,
 	MemoryStore,
-} from "@/storage/store";
-import { createTestDb, createTestEmbedder, type TestDb } from "../helpers/test-db.ts";
+} from "../../../../packages/sno-station-mem/src/store/store";
+import { createTestDb, createTestEmbedder, type TestDb } from "../../../apps/mem-claw/helpers/test-db.ts";
 
 const EXTRACTOR_VERSION = "group-crud-review-recall";
 const PROPOSAL = "entity:project_proposal_1";
