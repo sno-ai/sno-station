@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { RetrievalStatsCollector } from "../../../../apps/mem-claw/src/retrieval/retrieval-stats.ts";
-import { TraceCollector } from "../../../../apps/mem-claw/src/retrieval/retrieval-trace.ts";
+import { RetrievalStatsCollector } from "../../../../packages/sno-station-mem/src/engine/retrieval/retrieval-stats.ts";
+import { TraceCollector } from "../../../../packages/sno-station-mem/src/engine/retrieval/retrieval-trace.ts";
 
 function traceWithRerankFallback(reason?: string) {
 	const trace = new TraceCollector();
