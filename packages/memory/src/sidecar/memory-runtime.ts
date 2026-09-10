@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+import { readMemorySnapshotPayload, type SnapshotReason } from "../engine/observability/memory-snapshot";
 import { existsSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
@@ -16,6 +18,7 @@ import { AccessTracker } from "../engine/retrieval/access-tracker";
 import { DEFAULT_RETRIEVAL_CONFIG } from "../engine/retrieval/retriever";
 import { createTierPromoter } from "../engine/operations/memory-tier-promoter";
 import { MemoryTelemetryUsageOutbox } from "../engine/telemetry/memory-telemetry-outbox";
+import { readChunkVecTableState } from "../store/connection";
 import { initSqliteRuntime } from "../store/sqlite-runtime";
 import { startMaintenanceTimer, type MaintenanceTimerHandle } from "../store/maintenance";
 import { RegisteredAgentPort } from "../model/registered-agent-port";
@@ -103,6 +106,7 @@ export class MemoryRuntimePool {
 			const result = await runtime.init(scope, registration);
 			const previous = this.skins.get(registration.skinId);
 			this.skins.set(registration.skinId, entry);
+			await this.snapshot(entry, "startup");
 			if (previous) { previous.retired = true; if (previous.active === 0) await this.dispose(previous); }
 			return result;
 		} catch (error) { await this.dispose(entry); throw error; }
@@ -111,6 +115,11 @@ export class MemoryRuntimePool {
 	async invoke(method: ContractMethod, raw: unknown, skinId: string): Promise<ContractOutputs[ContractMethod]> {
 		const input = parseInput(method, raw);
 		if (input.scope.principal !== this.principal) throw new ContractError("principal-mismatch");
+		if (method === "inspect" && parseInput("inspect", raw).op.op === "storage") {
+			if (!input.scope.host?.systemCaller) throw new ContractError("system-caller-required");
+			this.counters.storeAccesses++;
+			return { degraded: false, result: { op: "storage", dimension: readChunkVecTableState(this.store.sqlite)?.dimension ?? null, failed: this.store.sqlite.isFailed(), reason: this.store.sqlite.getFailureReason() } };
+		}
 		if (method === "init") {
 			const init = parseInput("init", raw);
 			if (init.registration.skinId !== skinId) throw new ContractError("invalid-input");
@@ -125,7 +134,9 @@ export class MemoryRuntimePool {
 		this.counters.storeAccesses++;
 		try {
 			const call = () => this.call(entry.runtime, method, raw);
-			return parseOutput(method, await (entry.agentPort ? entry.agentPort.run(call) : call()));
+			const result = parseOutput(method, await (entry.agentPort ? entry.agentPort.run(call) : call()));
+			if (method === "onSessionEnd") await this.snapshot(entry, "session_end");
+			return result;
 		}
 		finally { entry.active--; if (entry.retired && entry.active === 0) await this.dispose(entry); }
 	}
@@ -140,6 +151,13 @@ export class MemoryRuntimePool {
 			case "onSessionEnd": { const p = parseInput(method, raw); return runtime.onSessionEnd(p.messages, p.scope); }
 			case "staticBlock": { const p = parseInput(method, raw); return runtime.staticBlock(p.scope); }
 		}
+	}
+
+	private async snapshot(entry: SkinRuntime, reason: SnapshotReason): Promise<void> {
+		await entry.observability.trackBestEffort("memory snapshot", async () => {
+			const payload = await readMemorySnapshotPayload(this.storePath, this.config, randomUUID(), reason, this.store.sqlite);
+			await entry.observability.emit({ eventType: "memory.snapshot", payload });
+		});
 	}
 
 	private async dispose(entry: SkinRuntime): Promise<void> {

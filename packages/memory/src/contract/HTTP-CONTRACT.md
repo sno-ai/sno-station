@@ -154,3 +154,9 @@ file operations. Neither is a database fallback or an additional HTTP method.
 ## Installation settings
 
 `bind <path>` accepts optional JSON on stdin with `embedding` and `extractionKeyRef`. It creates `<root>/station/sno-station-mem-<principal>.config.json` at mode 0600 with absolute storePath plus those fields. The key reference is the fixed external extraction secret name from the constants file; key material is rejected. REM resolves that reference from its process environment. This file is independent of per-skin init registrations. The binding is published last; a second binding is refused without changing either existing file.
+
+## Operator storage inspection
+
+`inspect({ op: "storage" }, scope)` is an operator-only diagnostic approved for the host configuration boundary. It requires `scope.host.systemCaller`, checks the OS principal before storage access, and can run before `init` so invalid model settings do not prevent diagnosis. The result is `{ op: "storage", dimension: number | null, failed: boolean, reason?: string }`; the sidecar reads its existing live connection. It creates no extra route or verb.
+
+`recordUsage` additionally accepts optional JSON `error` and `result` fields so the unchanged error-signal handler receives the original tool event, including successful exit-code text, instead of treating every text result as an error.

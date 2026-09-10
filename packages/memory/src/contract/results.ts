@@ -12,6 +12,7 @@ export type ToolResponse = {
 	details: Record<string, JsonValue>;
 };
 export type InspectData =
+	| { op: "storage"; dimension: number | null; failed: boolean; reason?: string }
 	| { op: "stats"; total: number; projectBreakdown: Record<string, number>; categoryBreakdown: Record<string, number> }
 	| { op: "list" | "listReflection"; entries: MemoryEntry[] }
 	| { op: "get"; entry: MemoryEntry | null; file?: { text: string; path: string; truncated?: boolean; from?: number; lines?: number; nextFrom?: number } };
@@ -57,6 +58,7 @@ export const toolResponseSchema: z.ZodType<ToolResponse, unknown> = z.strictObje
 	details: z.record(z.string(), z.json()),
 });
 export const inspectDataSchema: z.ZodType<InspectData, unknown> = z.discriminatedUnion("op", [
+	z.strictObject({ op: z.literal("storage"), dimension: z.number().int().positive().nullable(), failed: z.boolean(), reason: z.string().optional() }),
 	z.strictObject({ op: z.literal("stats"), total: z.number().int().nonnegative(),
 		projectBreakdown: z.record(z.string(), z.number().int().nonnegative()),
 		categoryBreakdown: z.record(z.string(), z.number().int().nonnegative()) }),

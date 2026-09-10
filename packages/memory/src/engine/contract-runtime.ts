@@ -192,7 +192,7 @@ export class MemoryContractRuntime implements MemoryContract {
 		}
 		if (input.options.source === "manual") {
 			const result = await executeMemoryRecallTool(context, resolveAgentAccess(context.agentId, context.agentId), recallId, {
-				query: input.query, scope: context.scopePolicy.getDefaultScope(), limit: input.options.limit,
+				query: input.query, scope: context.scopePolicy.getDefaultScope(), top_k: input.options.limit,
 				min_score: input.options.minScore, category: input.options.category,
 				include_metadata: input.options.includeMetadata, include_history: input.options.includeHistory,
 				include_refused: input.options.includeRefused, token_budget: input.options.tokenBudget,
@@ -250,6 +250,7 @@ export class MemoryContractRuntime implements MemoryContract {
 		}
 		const project = await this.project(scope);
 		switch (op.op) {
+			case "storage": throw new ContractError("system-caller-required");
 			case "stats": {
 				if (op.scope !== scope.project && op.scope !== project) throw new ContractError("invalid-input");
 				return { degraded: false, result: { op: "stats", ...await this.services.store.stats(project) } };
@@ -279,7 +280,7 @@ export class MemoryContractRuntime implements MemoryContract {
 		if (signal.event === "tool-error" && this.configured().config.sessionStrategy === "memoryReflection") {
 			const state = await this.reflection(scope);
 			createReflectionLifecycleHandler1(state.lifecycle)(
-				{ toolName: signal.toolName, error: signal.text }, this.hostContext(scope));
+				{ toolName: signal.toolName, error: signal.error ?? signal.text, result: signal.result }, this.hostContext(scope));
 		}
 		return { degraded: false, accepted: true };
 	}
