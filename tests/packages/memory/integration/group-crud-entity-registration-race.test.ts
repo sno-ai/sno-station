@@ -1,10 +1,10 @@
 import { expect, it } from "vitest";
 
-import { normalizeEntityName } from "@/storage/memory-store-atomic-entity-api";
-import { applyEntityNameKeyMigration } from "@/storage/entity-name-key-migration";
-import { applyStateCategoryMigration } from "@/storage/state-category-migration";
-import { MemoryStore } from "@/storage/store";
-import { createTestDb, createTestEmbedder } from "../helpers/test-db.ts";
+import { normalizeEntityName } from "../../../../packages/sno-station-mem/src/store/memory-store-atomic-entity-api";
+import { applyEntityNameKeyMigration } from "../../../../packages/sno-station-mem/src/store/entity-name-key-migration";
+import { applyStateCategoryMigration } from "../../../../packages/sno-station-mem/src/store/state-category-migration";
+import { MemoryStore } from "../../../../packages/sno-station-mem/src/store/store";
+import { createTestDb, createTestEmbedder } from "../../../apps/mem-claw/helpers/test-db.ts";
 
 it(
 	"writes the second first mention under the entity that won name registration",
