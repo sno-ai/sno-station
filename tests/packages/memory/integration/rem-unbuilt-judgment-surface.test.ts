@@ -17,7 +17,7 @@ import { startRemScriptedModelFixture } from "../../../apps/mem-claw/helpers/rem
 
 const repoRoot = resolve(import.meta.dirname, "../../../..");
 const judgmentSource = readFileSync(
-	resolve(repoRoot, "packages/rem-core/src/rem-update-judgment.ts"),
+	resolve(repoRoot, "packages/sno-station-mem/src/engine/rem/rem-update-judgment.ts"),
 	"utf8",
 );
 const executorSource = readFileSync(

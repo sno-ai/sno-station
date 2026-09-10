@@ -51,7 +51,7 @@ describe("REM trigger maintenance timer", () => {
 		database = createTestDb();
 		root = mkdtempSync(path.join(tmpdir(), "rem-maintenance-"));
 		const stateRoot = path.join(root, "openclaw-state");
-		const stateDir = path.join(stateRoot, "mem-claw");
+		const stateDir = path.join(stateRoot, "sno-station-mem");
 		const profileRoot = path.join(root, "sno-profile");
 		const backupDir = path.join(root, "backups");
 		mkdirSync(stateDir, { recursive: true });
