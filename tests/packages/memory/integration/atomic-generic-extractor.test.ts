@@ -161,6 +161,13 @@ class ScriptedTransport implements AtomicGenericExtractionTransport {
 		this.requests.push(request);
 		const completion = this.completions.shift();
 		if (!completion) throw new Error("scripted transport exhausted");
+		try {
+			const payload = JSON.parse(completion.text);
+			const turns = JSON.parse(request.prompt.split("<take>\n").at(-1)?.split("\n</take>")[0] ?? "[]") as Array<{role: string; turn_index: number}>;
+			if (payload && !Array.isArray(payload) && Array.isArray(payload.records)) {
+				return { ...completion, text: JSON.stringify({ ...payload, decisions: turns.filter((turn) => turn.role === "user").map((turn) => ({ turn_index: turn.turn_index, progress_only: false })) }) };
+			}
+		} catch { /* Malformed replies stay malformed for the parser tests. */ }
 		return completion;
 	}
 }
@@ -387,9 +394,10 @@ describe("atomic generic extractor", () => {
 		);
 		expect(prompt).not.toContain("turn_indexes_to_account_for:");
 		expect(prompt).toContain(`relation_dictionary: ${JSON.stringify(relationDictionary.relations)}`);
-		expect(prompt).toContain(
-			`response_schema: ${JSON.stringify(ATOMIC_EXTRACTION_RESPONSE_JSON_SCHEMA)}`,
-		);
+		const schema = JSON.parse(prompt.split("response_schema: ")[1]?.split("\n")[0] ?? "null");
+		expect(schema.required).toContain("decisions");
+		expect(schema.properties.records).toEqual((ATOMIC_EXTRACTION_RESPONSE_JSON_SCHEMA as { properties: { records: unknown } }).properties.records);
+		expect(schema.properties.decisions.items.required).toEqual(["turn_index", "progress_only"]);
 		expect(prompt).not.toMatch(/temperature\s*[:=]\s*0(?:\.0+)?/iu);
 	});
 
@@ -407,6 +415,7 @@ describe("atomic generic extractor", () => {
 		});
 		expect(client.request).toEqual({
 			prompt: "exact prompt",
+			extractionSkillHash: createHash("sha256").update(readFileSync(new URL("../../../../packages/sno-station-mem/skills/extract-atomic-memory/SKILL.md", import.meta.url))).digest("hex"),
 			callLabel: "memory-extract-atomic-generic",
 			adapterSlot: "memory-extract",
 			maxTokens: 128,
@@ -619,7 +628,7 @@ describe("atomic generic extractor", () => {
 		expect(readLedger(fixture, outOfEnumKey)).toMatchObject({
 			state: "pending_reprocess",
 			reprocess_reason: "parse-exhaustion",
-			failed_reply: outOfEnum,
+			failed_reply: JSON.stringify({ ...JSON.parse(outOfEnum), decisions: [{ turn_index: 1, progress_only: false }] }),
 		});
 		expectRejectionPreviews(outOfEnumRun.output, 2);
 	});

@@ -21,7 +21,7 @@ working-on claim by paraphrasing it. Keep any separate durable fact the same tur
 Return a record for each remaining claim. Return `{"claims_found":[],"records":[]}` when the window states none. A greeting,
 an acknowledgement or a reply control states no claim.
 
-A turn that carries a figure, a preference, an intention, a task to do, a completed task, a
+After excluding in-flight progress, a turn that carries a figure, a preference, an intention, a task to do, a completed task, a
 removal, or a field of a document has at least one record. A turn that gives the reason for a
 taste stated earlier — "I love the wide-open spaces and the wildlife" after "I've been drawn to
 savannas" — states that taste with its reason, and that is this turn's record. Before you return
@@ -182,6 +182,10 @@ An in-flight progress report — "I am halfway through writing the release notes
 ordinary rules. Classify the original statement before paraphrasing: rewriting this report as
 "the user is working on the release notes" does not make it a separate standing fact. The
 exclusion also applies to `claims_found`; an otherwise empty progress turn returns both arrays empty.
+Being partway through an action is neither a completed occurrence nor a new intention to do it.
+Do not label it `occurrence` or `todo: open`. Before returning, remove any claim and record whose
+only evidence says that an action is currently underway; retain separately stated preferences,
+commitments, completed actions and other durable facts.
 
 A to-do is done when the user explicitly says it was done. "I no longer need to book the
 reservations" closes that to-do as a standing record: `todo` is `done` when the user says it
