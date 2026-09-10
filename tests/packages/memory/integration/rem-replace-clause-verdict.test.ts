@@ -14,7 +14,7 @@ import {
 const repoRoot = resolve(import.meta.dirname, "../../../..");
 const fixturePath = join(
 	repoRoot,
-	"packages/rem-core/fixtures/replace-clause-verdict-gold/corpus.json",
+	"packages/sno-station-mem/fixtures/replace-clause-verdict-gold/corpus.json",
 );
 
 interface GoldCase {
