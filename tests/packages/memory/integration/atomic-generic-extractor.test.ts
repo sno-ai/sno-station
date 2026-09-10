@@ -7,12 +7,12 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import type { Embedder } from "@/extraction/embedding-provider-client";
+import type { Embedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client";
 import {
 	ATOMIC_EXTRACTION_RESPONSE_JSON_SCHEMA,
 	type AtomicExtractionTurn,
 	parseAtomicExtractionReply,
-} from "@/extraction/atomic-extraction-reply";
+} from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-extraction-reply";
 import {
 	buildAtomicExtractionWindows,
 	buildAtomicGenericExtractionPrompt,
@@ -22,37 +22,37 @@ import {
 	type AtomicGenericExtractionRequest,
 	type AtomicGenericExtractionTransport,
 	runAtomicGenericExtractionPass,
-} from "@/extraction/atomic-generic-extractor";
+} from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-generic-extractor";
 import {
 	ATOMIC_DATA_INSTRUCTION,
 	numberAtomicTurns,
-} from "@/extraction/atomic-replacement-sanitizer";
+} from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-replacement-sanitizer";
 import type {
 	LlmClient,
 	MemoryLlmRequest,
 	ResolvedLlmConfig,
 	TokenUsage,
-} from "@/shared/llm-client-types";
+} from "../../../../packages/sno-station-mem/src/model/llm-client-types";
 import {
 	type AtomicExtractionLedgerKey,
 	type AtomicExtractionRunParameters,
 	MemoryStore,
-} from "@/storage/store";
+} from "../../../../packages/sno-station-mem/src/store/store";
 import { createTestDb, createTestEmbedder, type TestDb } from "../helpers/test-db";
 
 const ATTRIBUTE_DICTIONARY_PATH = fileURLToPath(
-	new URL("../../../../apps/mem-claw/config/attribute-dictionary.json", import.meta.url),
+	new URL("../../../../packages/sno-station-mem/config/attribute-dictionary.json", import.meta.url),
 );
 const RELATION_DICTIONARY_PATH = fileURLToPath(
-	new URL("../../../../apps/mem-claw/config/relation-dictionary.json", import.meta.url),
+	new URL("../../../../packages/sno-station-mem/config/relation-dictionary.json", import.meta.url),
 );
 const RESPONSE_SCHEMA_PATH = fileURLToPath(
-	new URL("../../../../apps/mem-claw/config/atomic-extraction-response.schema.json", import.meta.url),
+	new URL("../../../../packages/sno-station-mem/config/atomic-extraction-response.schema.json", import.meta.url),
 );
 const RESPONSE_SCHEMA_HASH_PATH = `${RESPONSE_SCHEMA_PATH}.sha256`;
 const ATTRIBUTE_DICTIONARY_HASH_PATH = `${ATTRIBUTE_DICTIONARY_PATH}.sha256`;
 const STATE_VOCABULARY_PATH = fileURLToPath(
-	new URL("../../../../apps/mem-claw/config/state-vocabulary.json", import.meta.url),
+	new URL("../../../../packages/sno-station-mem/config/state-vocabulary.json", import.meta.url),
 );
 
 const RUN_PARAMETERS: AtomicExtractionRunParameters = {
