@@ -3,8 +3,8 @@ import {
 	createRetriever,
 	DEFAULT_RETRIEVAL_CONFIG,
 	type MemoryRetrieverInternals,
-} from "../../../../apps/mem-claw/src/retrieval/retriever.ts";
-import type { RetrievalResult } from "../../../../apps/mem-claw/src/shared/types.ts";
+} from "../../../../packages/sno-station-mem/src/engine/retrieval/retriever.ts";
+import type { RetrievalResult } from "../../../../packages/sno-station-mem/src/engine/shared/types.ts";
 
 // Pure-function pipeline tests. `applyScoringPipeline` does not touch the store
 // or embedder; MMR is the only stage that would, and it is short-circuited
