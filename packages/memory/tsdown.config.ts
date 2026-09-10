@@ -27,6 +27,9 @@ const sharedConfig = {
 export default defineConfig([
 { ...sharedConfig, entry: {
   "index": "src/index.ts",
+  "internal/engine/rem/index": "src/engine/rem/index.ts",
+  "internal/engine/rem/types": "src/engine/rem/types.ts",
+  "internal/engine/rem/classifier": "src/engine/rem/classifier.ts",
   "cli": "src/contract/cli.ts",
   "memdump": "src/engine/diagnostics/memdump.ts",
   "diagnostic-encoder": "src/engine/observability/early-diagnostics.ts",
