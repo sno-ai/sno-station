@@ -4,8 +4,8 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { parseAccessMetadata } from "../../../../apps/mem-claw/src/retrieval/access-tracker.ts";
-import type { MemoryMetadata } from "../../../../apps/mem-claw/src/shared/types.ts";
+import { parseAccessMetadata } from "../../../../packages/sno-station-mem/src/engine/retrieval/access-tracker.ts";
+import type { MemoryMetadata } from "../../../../packages/sno-station-mem/src/engine/shared/types.ts";
 
 describe("MemoryMetadata structural type", () => {
 	it("accepts a fully populated record with all PRD §6.1 fields", () => {
