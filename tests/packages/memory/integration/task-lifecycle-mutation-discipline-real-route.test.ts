@@ -10,13 +10,13 @@ import {
 	routeTaskLifecycleAssertion,
 	routeTaskLifecycleCandidate,
 	TaskLifecycleJudgmentUnavailableError,
-} from "@/extraction/task-lifecycle-route";
+} from "../../../../packages/sno-station-mem/src/engine/extraction/task-lifecycle-route";
 import {
 	createLlmClient,
 	type LlmClient,
 	type MemoryLlmRequest,
-} from "@/shared/llm-client";
-import { MemoryStore } from "@/storage/store";
+} from "../../../../packages/sno-station-mem/src/model/llm-client";
+import { MemoryStore } from "../../../../packages/sno-station-mem/src/store/store";
 import { requireEnv } from "../helpers/env";
 import { createTestDb, createTestEmbedder } from "../helpers/test-db";
 
