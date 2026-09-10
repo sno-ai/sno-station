@@ -10,6 +10,7 @@ import type { Embedder } from "./extraction/embedding-provider-client";
 import type { MemoryRetriever } from "./retrieval/retriever";
 import type { AccessTracker } from "./retrieval/access-tracker";
 import type { PluginObservability } from "./observability/adapter";
+import type { MemoryTelemetryUsageOutbox } from "./telemetry/memory-telemetry-outbox";
 import type { AgentLlmPort } from "../model/agent-llm-port";
 import { createLlmClient } from "../model/llm-client";
 import type { PluginConfig } from "./shared/types";
@@ -43,6 +44,7 @@ export interface MemoryRuntimeServices {
 	observability: PluginObservability;
 	stateDir: string;
 	agentPort?: AgentLlmPort;
+	telemetryUsage?: MemoryTelemetryUsageOutbox;
 	logger: ReflectionCommandParams["logger"];
 }
 
@@ -63,8 +65,7 @@ export class MemoryContractRuntime implements MemoryContract {
 	private registration: Registration | undefined;
 	private providerRuntime: OpenClawMemoryRuntime | undefined;
 	private readonly reflectionStates = new Map<string, ReflectionStrategyState>();
-	private readonly recallHistory = new Map<string, Map<string, number>>();
-	private readonly turnCounter = new Map<string, number>();
+	private readonly recallStates = new Map<string, { history: Map<string, Map<string, number>>; turns: Map<string, number> }>();
 	constructor(private readonly services: MemoryRuntimeServices) {}
 
 	async init(scope: ScopeCtx, registration: Registration): Promise<ContractOutputs["init"]> {
@@ -73,8 +74,7 @@ export class MemoryContractRuntime implements MemoryContract {
 		this.registration = input.registration;
 		this.providerRuntime = createMemoryRuntime({ config: this.configured().config, store: this.services.store, stateDir: this.services.stateDir });
 		this.reflectionStates.clear();
-		this.recallHistory.clear();
-		this.turnCounter.clear();
+		this.recallStates.clear();
 		await this.project(input.scope);
 		return { degraded: false, principal: scope.principal, skinId: registration.skinId };
 	}
@@ -119,6 +119,15 @@ export class MemoryContractRuntime implements MemoryContract {
 			workspaceDir: scope.host?.workspace };
 	}
 
+	private recallState(project: string): { history: Map<string, Map<string, number>>; turns: Map<string, number> } {
+		let state = this.recallStates.get(project);
+		if (!state) {
+			state = { history: new Map(), turns: new Map() };
+			this.recallStates.set(project, state);
+		}
+		return state;
+	}
+
 	private async reflection(scope: ScopeCtx): Promise<ReflectionStrategyState> {
 		const project = await this.project(scope);
 		const existing = this.reflectionStates.get(project);
@@ -126,7 +135,7 @@ export class MemoryContractRuntime implements MemoryContract {
 		const state = createReflectionStrategyState(this.configured().config, {
 			store: this.services.store, embedder: this.services.embedder,
 			scopePolicy: new BoundProjectPolicy(project), parseAgentIdFromSessionKey,
-			agentPort: this.services.agentPort,
+			agentPort: this.services.agentPort, telemetryUsage: this.services.telemetryUsage,
 		});
 		this.reflectionStates.set(project, state);
 		return state;
@@ -190,13 +199,14 @@ export class MemoryContractRuntime implements MemoryContract {
 				toolResult: JSON.parse(JSON.stringify(result)) });
 		}
 		const host = this.hostContext(input.scope);
+		const state = this.recallState(context.scopePolicy.getDefaultScope());
 		const result = await onBeforeAgentStart(this.services, this.configured().config,
 			this.services.retriever, this.services.store, context.scopePolicy,
-			this.recallHistory, this.turnCounter, { prompt: input.query }, host, this.services.stateDir);
+			state.history, state.turns, { prompt: input.query }, host, this.services.stateDir, this.services.telemetryUsage);
 		const session = resolveRuntimeSessionId(host);
-		const turn = this.turnCounter.get(session);
-		const memoryIds = [...(this.recallHistory.get(session) ?? [])]
-			.filter(([, lastTurn]) => lastTurn === turn).map(([id]) => id);
+		const turn = state.turns.get(session);
+		const memoryIds = result?.prependContext ? [...(state.history.get(session) ?? [])]
+			.filter(([, lastTurn]) => lastTurn === turn).map(([id]) => id) : [];
 		return { degraded: false, recallId, contextText: result?.prependContext ?? "", memoryIds };
 	}
 
@@ -270,8 +280,9 @@ export class MemoryContractRuntime implements MemoryContract {
 
 	async onSessionEnd(messages: Message[], scope: ScopeCtx): Promise<ContractOutputs["onSessionEnd"]> {
 		parseInput("onSessionEnd", { messages, scope });
-		await this.project(scope);
-		clearSessionState(resolveRuntimeSessionId(this.hostContext(scope)), this.recallHistory, this.turnCounter);
+		const project = await this.project(scope);
+		const state = this.recallStates.get(project);
+		if (state) clearSessionState(resolveRuntimeSessionId(this.hostContext(scope)), state.history, state.turns);
 		await this.services.accessTracker.flush();
 		if (this.configured().config.sessionStrategy === "memoryReflection") {
 			const state = await this.reflection(scope);
