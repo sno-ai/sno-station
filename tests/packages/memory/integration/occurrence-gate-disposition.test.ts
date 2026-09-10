@@ -4,13 +4,13 @@
  */
 
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
-import type { Embedder } from "@/extraction/embedding-provider-client";
+import type { Embedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client";
 import { processExtractedCandidate } from "@/extraction/insight-distill-candidate-processor";
-import type { CandidateMemory, ExtractionStats } from "@/shared/types";
-import { MemoryStore } from "@/storage/store";
-import { createTestLlmClient } from "../helpers/llm-client.ts";
-import { createTestDb, createTestEmbedder, type TestDb } from "../helpers/test-db.ts";
-import { routeTestTask } from "./task-lifecycle-test-route.ts";
+import type { CandidateMemory, ExtractionStats } from "../../../../packages/sno-station-mem/src/engine/shared/types";
+import { MemoryStore } from "../../../../packages/sno-station-mem/src/store/store";
+import { createTestLlmClient } from "../../../apps/mem-claw/helpers/llm-client.ts";
+import { createTestDb, createTestEmbedder, type TestDb } from "../../../apps/mem-claw/helpers/test-db.ts";
+import { routeTestTask } from "../../../apps/mem-claw/integration/task-lifecycle-test-route.ts";
 
 const SCOPE = "occurrence-gate-disposition";
 const SESSION_KEY = "occurrence-gate-disposition-session";
