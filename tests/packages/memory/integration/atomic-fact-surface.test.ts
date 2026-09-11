@@ -1,3 +1,4 @@
+import { calculateCalendarTime } from "../../../../packages/sno-station-mem/src/engine/extraction/calendar-instruction";
 /** @file atomic-fact-surface.test.ts
  * @purpose Proves atomic write projection and the single active-lane fact surface.
  * @boundary Deterministic projection plus real encrypted SQLite readers and retrieval.
@@ -52,6 +53,7 @@ function enhancedRecord(
 		value: `${name}-value`,
 		temporalPhrase: null,
 		resolvedTime: null,
+		time: { kind: "unresolved" }, endedTime: { kind: "none" },
 		importance: "medium",
 		changesCurrentState: false,
 		todo: "none",
@@ -137,7 +139,8 @@ describe("atomic write projection", () => {
 			attribute: "identity.location",
 			value: "Kyoto",
 			temporalPhrase: null,
-			resolvedTime: { year: 2023, month: 13, day: 1 },
+			resolvedTime: null,
+			time: { kind: "absolute", year: 2023, month: 2, day: 30, precision: "day" }, endedTime: { kind: "none" },
 			importance: "medium",
 			changesCurrentState: false,
 			todo: "none",
@@ -154,7 +157,6 @@ describe("atomic write projection", () => {
 			kind: "standing",
 			category: "profile",
 			resolvedTime: null,
-			resolvedTimeInvalid: true,
 		});
 		if (!invalidProfile) throw new Error("gauntlet returned no invalid profile record");
 
@@ -162,18 +164,18 @@ describe("atomic write projection", () => {
 				enhancedRecord("instant", {
 					category: "episodic",
 					importance: "high",
-					resolvedTime: { year: 2026, month: 9, day: 1, hour: 12, minute: 30 },
+					resolvedTime: calculateCalendarTime({ kind: "absolute", year: 2026, month: 9, day: 1, hour: 12, minute: 30, precision: "minute" }),
 					keyingNote: "keying-failed",
 				baseProvenance,
 			}),
 			enhancedRecord("day", {
 				category: "episodic",
 				importance: "medium",
-				resolvedTime: { year: 2026, month: 9, day: 1 },
+				resolvedTime: calculateCalendarTime({ kind: "absolute", year: 2026, month: 9, day: 1, precision: "day" }),
 			}),
 			enhancedRecord("profile-open", {
 				importance: "low",
-				resolvedTime: { year: 2026, month: 8, day: 15 },
+				resolvedTime: calculateCalendarTime({ kind: "absolute", year: 2026, month: 8, day: 15, precision: "day" }),
 			}),
 			enhancedRecord("profile-session", { importance: "high" }),
 			enhancedRecord("unresolved", {
@@ -198,7 +200,7 @@ describe("atomic write projection", () => {
 		expect(cards.map(({ importance }) => importance)).toEqual([0.9, 0.7, 0.3, 0.9, 0.3, 0.7]);
 		expect(cards[0]).toMatchObject({
 			validFrom: Date.UTC(2026, 8, 1, 12, 30),
-			validUntil: Date.UTC(2026, 8, 1, 12, 30) + 1,
+			validUntil: Date.UTC(2026, 8, 1, 12, 30) + 60_000,
 		});
 		expect(cards[1]).toMatchObject({
 			validFrom: Date.UTC(2026, 8, 1),
@@ -209,7 +211,7 @@ describe("atomic write projection", () => {
 			validUntil: null,
 		});
 		expect(cards[3]).toMatchObject({
-			validFrom: SESSION_TIMESTAMP_MS,
+			validFrom: null,
 			validUntil: null,
 		});
 		expect(cards[4]).toMatchObject({ validFrom: null, validUntil: null });
@@ -224,8 +226,10 @@ describe("atomic write projection", () => {
 				kind: "episodic",
 				memory_category: "episodic",
 				event_at: "2026-09-01T12:30:00.000Z",
+				temporal_date: "2026-09-01T12:30", temporal_precision: "minute",
+				temporal_resolution_status: "resolved", time_instruction: { kind: "unresolved" }, todo: "none",
 				valid_from: Date.UTC(2026, 8, 1, 12, 30),
-				valid_until: Date.UTC(2026, 8, 1, 12, 30) + 1,
+				valid_until: Date.UTC(2026, 8, 1, 12, 30) + 60_000,
 			});
 			expect(cards[0]?.metadata).not.toHaveProperty("temporal_override");
 		expect(cards[2]?.metadata).toMatchObject({
@@ -238,6 +242,7 @@ describe("atomic write projection", () => {
 			importance_label: "low",
 			source_span: records[4]?.sourceSpan,
 			temporal_phrase: "around harvest",
+			temporal_resolution_status: "unresolved", time_instruction: { kind: "unresolved" }, todo: "none",
 			kind: "episodic",
 			memory_category: "episodic",
 		});
@@ -277,6 +282,7 @@ describe("atomic fact surface", () => {
 			value: "tea",
 			temporalPhrase: null,
 			resolvedTime: null,
+		time: { kind: "unresolved" }, endedTime: { kind: "none" },
 			importance: "medium",
 			changesCurrentState: false,
 			todo: "none",
