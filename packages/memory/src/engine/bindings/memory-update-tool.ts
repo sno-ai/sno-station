@@ -179,8 +179,9 @@ export async function executeMemoryUpdateTool(ctx: ToolContext, access: ReturnTy
 										delete nextMeta.valid_until;
 									}
 								}
-								if (!userProvidedValidFrom && temporalMetadata.valid_from !== undefined) {
-									nextMeta.valid_from = temporalMetadata.valid_from;
+								if (!userProvidedValidFrom) {
+									if (temporalMetadata.valid_from !== undefined) nextMeta.valid_from = temporalMetadata.valid_from;
+									else delete nextMeta.valid_from;
 								}
 								if (!userProvidedEventAt) {
 									if (temporalMetadata.event_at !== undefined) {

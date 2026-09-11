@@ -227,7 +227,7 @@ describe("atomic write projection", () => {
 				memory_category: "episodic",
 				event_at: "2026-09-01T12:30:00.000Z",
 				temporal_date: "2026-09-01T12:30", temporal_precision: "minute",
-				temporal_resolution_status: "resolved", time_instruction: { kind: "unresolved" }, todo: "none",
+				temporal_resolution_status: "resolved", time_instruction: { kind: "unresolved" }, ended_time_instruction: { kind: "none" }, todo: "none",
 				valid_from: Date.UTC(2026, 8, 1, 12, 30),
 				valid_until: Date.UTC(2026, 8, 1, 12, 30) + 60_000,
 			});
@@ -242,7 +242,7 @@ describe("atomic write projection", () => {
 			importance_label: "low",
 			source_span: records[4]?.sourceSpan,
 			temporal_phrase: "around harvest",
-			temporal_resolution_status: "unresolved", time_instruction: { kind: "unresolved" }, todo: "none",
+			temporal_resolution_status: "unresolved", time_instruction: { kind: "unresolved" }, ended_time_instruction: { kind: "none" }, todo: "none",
 			kind: "episodic",
 			memory_category: "episodic",
 		});
