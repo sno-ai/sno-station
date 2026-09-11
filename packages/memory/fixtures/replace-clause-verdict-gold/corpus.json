@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "measurement_scope": "hand-labelled parser conformance; no live model call",
+  "cases": [
+    {
+      "id": "preference-replacement",
+      "older": "The user prefers coffee in the morning.",
+      "newer": "The user now prefers tea in the morning.",
+      "response": { "verdict": "replacement", "retiring_clause_indices": [0] },
+      "expected": { "verdict": "replacement", "retiring_clause_indices": [0] }
+    },
+    {
+      "id": "mixed-facts-retire-one",
+      "older": "The user prefers coffee. The user works late.",
+      "newer": "The user now prefers tea. The user works late.",
+      "response": { "verdict": "replacement", "retiring_clause_indices": [0] },
+      "expected": { "verdict": "replacement", "retiring_clause_indices": [0] }
+    },
+    {
+      "id": "unrelated-facts",
+      "older": "The user avoids coffee after 2pm.",
+      "newer": "The user prefers train travel.",
+      "response": { "verdict": "keep", "retiring_clause_indices": [] },
+      "expected": { "verdict": "keep", "retiring_clause_indices": [] }
+    },
+    {
+      "id": "uncertain-relation",
+      "older": "The user likes films.",
+      "newer": "The user watches a film club on Tuesdays.",
+      "response": { "verdict": "uncertain", "retiring_clause_indices": [] },
+      "expected": { "verdict": "uncertain", "retiring_clause_indices": [] }
+    },
+    {
+      "id": "oov-argon-schedule",
+      "older": "The argon calibration starts at 06:15 UTC.",
+      "newer": "The argon calibration now starts at 08:45 UTC.",
+      "response": { "verdict": "replacement", "retiring_clause_indices": [0] },
+      "expected": { "verdict": "replacement", "retiring_clause_indices": [0] }
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+[
+	{
+		"guardId": "guard.rem.ordered-wave-entry",
+		"module": "rem-entry-foundations.ts",
+		"export": "remOrderedWaveEntryGuard",
+		"productionRoots": ["packages/sno-station-mem/src/sidecar/main.ts"],
+		"requirementIds": ["REQ-6"]
+	}
+]

@@ -1,0 +1,44 @@
+{
+	"schemaVersion": 1,
+	"encoding": "utf8",
+	"fixtures": [
+		{
+			"id": "training-renderer-unicode-and-lf",
+			"renderer": "training",
+			"older": {
+				"text": "The user prefers tea.\nThey drink it at dawn.",
+				"kind": "profile",
+				"validFrom": "2026-01-02T03:04:05Z",
+				"assertedAt": "2026-01-02T03:04:05Z",
+				"contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+			},
+			"newer": {
+				"text": "The user prefers café au lait.",
+				"kind": "episodic",
+				"validFrom": "2026-02-03T04:05:06Z",
+				"assertedAt": "2026-02-03T04:05:06Z",
+				"contentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+			},
+			"utf8Base64": "SnVkZ2UgdGhlIHJlbGF0aW9uc2hpcCBvZiB0aGUgbmV3ZXIgbWVtb3J5IHRvIHRoZSBvbGRlciBtZW1vcnkuCgpPbGRlcjoKa2luZDogcHJvZmlsZQp2YWxpZEZyb206IDIwMjYtMDEtMDJUMDM6MDQ6MDVaCmFzc2VydGVkQXQ6IDIwMjYtMDEtMDJUMDM6MDQ6MDVaCnRleHQ6IFRoZSB1c2VyIHByZWZlcnMgdGVhLgpUaGV5IGRyaW5rIGl0IGF0IGRhd24uCgpOZXdlcjoKa2luZDogZXBpc29kaWMKdmFsaWRGcm9tOiAyMDI2LTAyLTAzVDA0OjA1OjA2Wgphc3NlcnRlZEF0OiAyMDI2LTAyLTAzVDA0OjA1OjA2Wgp0ZXh0OiBUaGUgdXNlciBwcmVmZXJzIGNhZsOpIGF1IGxhaXQuCgpWZXJkaWN0Og=="
+		},
+		{
+			"id": "chat-renderer-unicode-and-lf",
+			"renderer": "chat",
+			"older": {
+				"text": "The user prefers tea.\nThey drink it at dawn.",
+				"kind": "profile",
+				"validFrom": "2026-01-02T03:04:05Z",
+				"assertedAt": "2026-01-02T03:04:05Z",
+				"contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+			},
+			"newer": {
+				"text": "The user prefers café au lait.",
+				"kind": "episodic",
+				"validFrom": "2026-02-03T04:05:06Z",
+				"assertedAt": "2026-02-03T04:05:06Z",
+				"contentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+			},
+			"utf8Base64": "QWRqdWRpY2F0ZSB3aGV0aGVyIHRoZSBuZXdlciBtZW1vcnkgcmVwbGFjZXMgdGhlIG9sZGVyIG1lbW9yeS4KClJldHVybiBlaXRoZXIgb25lIEpTT04gb2JqZWN0LCB7InZlcmRpY3QiOiJyZXBsYWNlbWVudHxrZWVwfHVuY2VydGFpbiJ9LCBvciBleGFjdGx5IG9uZSB2ZXJkaWN0IHRva2VuLgoKcmVwbGFjZW1lbnQ6IHRoZSBuZXdlciBtZW1vcnkgZGlyZWN0bHkgY2hhbmdlcyBvciBjb3JyZWN0cyB0aGUgc2FtZSBmYWN0LCBzdGF0ZSwgb3IgcHJlZmVyZW5jZSwgc28gdGhlIG9sZGVyIG1lbW9yeSBpcyBubyBsb25nZXIgdHJ1ZS4KCmtlZXA6IHRoZSBvbGRlciBtZW1vcnkgcmVtYWlucyB2YWxpZCwgaXMgaGlzdG9yaWNhbCwgY29uY2VybnMgYSBkaWZmZXJlbnQgZmFjdCwgY29leGlzdHMgd2l0aCB0aGUgbmV3ZXIgbWVtb3J5LCBvciBpcyBvbmx5IHJlZmluZWQgd2l0aG91dCBiZWluZyBlcmFzZWQuCgp1bmNlcnRhaW46IHRoZSByZWxhdGlvbnNoaXAgaXMgdW5jbGVhciBvciB0aGUgZXZpZGVuY2UgaXMgaW5zdWZmaWNpZW50LiBQcmVmZXIgdW5jZXJ0YWluIG92ZXIgZ3Vlc3NpbmcuCgpBcHBseSB0aGUgc2FtZSBzZW1hbnRpY3MgcmVnYXJkbGVzcyBvZiBtZW1vcnkga2luZC4KCk9sZGVyIG1lbW9yeToKeyJ0ZXh0IjoiVGhlIHVzZXIgcHJlZmVycyB0ZWEuXG5UaGV5IGRyaW5rIGl0IGF0IGRhd24uIiwia2luZCI6InByb2ZpbGUiLCJ2YWxpZEZyb20iOiIyMDI2LTAxLTAyVDAzOjA0OjA1WiIsImFzc2VydGVkQXQiOiIyMDI2LTAxLTAyVDAzOjA0OjA1WiIsImNvbnRlbnRIYXNoIjoiYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYSJ9CgpOZXdlciBtZW1vcnk6CnsidGV4dCI6IlRoZSB1c2VyIHByZWZlcnMgY2Fmw6kgYXUgbGFpdC4iLCJraW5kIjoiZXBpc29kaWMiLCJ2YWxpZEZyb20iOiIyMDI2LTAyLTAzVDA0OjA1OjA2WiIsImFzc2VydGVkQXQiOiIyMDI2LTAyLTAzVDA0OjA1OjA2WiIsImNvbnRlbnRIYXNoIjoiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYiJ9"
+		}
+	]
+}

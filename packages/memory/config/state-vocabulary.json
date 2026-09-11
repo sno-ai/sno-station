@@ -1,0 +1,77 @@
+{
+  "schema_version": 1,
+  "name": "state-vocabulary",
+  "slug_count": 14,
+  "slugs": [
+    {
+      "slug": "project.budget",
+      "cardinality": "one",
+      "anchor": "MonetaryGrant.amount / Project"
+    },
+    {
+      "slug": "project.timeline",
+      "cardinality": "one",
+      "anchor": "Project.duration"
+    },
+    {
+      "slug": "project.objective",
+      "cardinality": "many",
+      "anchor": "Project.description-scoped goal"
+    },
+    {
+      "slug": "project.deliverable",
+      "cardinality": "many",
+      "anchor": "Project work product"
+    },
+    {
+      "slug": "project.lead",
+      "cardinality": "one",
+      "anchor": "Project.leadOrganizer"
+    },
+    {
+      "slug": "project.stakeholder",
+      "cardinality": "many",
+      "anchor": "Project.funder / participant"
+    },
+    {
+      "slug": "email.purpose",
+      "cardinality": "one",
+      "anchor": "EmailMessage.about"
+    },
+    {
+      "slug": "email.recipient",
+      "cardinality": "many",
+      "anchor": "EmailMessage.toRecipient"
+    },
+    {
+      "slug": "email.key_point",
+      "cardinality": "many",
+      "anchor": "EmailMessage.abstract items"
+    },
+    {
+      "slug": "email.action_item",
+      "cardinality": "many",
+      "anchor": "Action requested of recipients"
+    },
+    {
+      "slug": "meeting.attendee",
+      "cardinality": "many",
+      "anchor": "Event.attendee"
+    },
+    {
+      "slug": "meeting.agenda_item",
+      "cardinality": "many",
+      "anchor": "Event.subEvent / about"
+    },
+    {
+      "slug": "meeting.key_decision",
+      "cardinality": "many",
+      "anchor": "Event outcome / Action.result"
+    },
+    {
+      "slug": "meeting.next_step",
+      "cardinality": "many",
+      "anchor": "Event follow-up / Action"
+    }
+  ]
+}
