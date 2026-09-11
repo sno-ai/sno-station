@@ -30,6 +30,7 @@ export type TemporalInterval =
 			phrase?: string;
 			date?: string;
 			precision?: "year" | "month" | "week" | "day" | "minute";
+			timezone?: string;
 	  }
 	| {
 			type: "ongoing";
@@ -88,6 +89,7 @@ export function serializeIntervalMetadata(
 		if (category === "episodic") base.valid_until = interval.until;
 		if (interval.date !== undefined) base.temporal_date = interval.date;
 		if (interval.precision !== undefined) base.temporal_precision = interval.precision;
+		if (interval.timezone !== undefined) base.temporal_timezone = interval.timezone;
 	} else if (interval.type === "ongoing") {
 		base.valid_from = interval.from;
 		if (interval.until !== undefined) base.valid_until = interval.until;

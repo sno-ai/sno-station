@@ -107,14 +107,18 @@ describe("date-resolution semantic contract", () => {
 		{ reason: "extra field", time: { kind: "none" }, date: "2026-06-05" },
 		{ reason: "bad numeric type", time: { kind: "relative", amount: "-4", unit: "year", precision: "year" } },
 		{ reason: "incomplete", time: { kind: "weekday", weekday: 2 } },
-	])("fails loudly for malformed model instructions %j", async (reply) => {
+	])("keeps the original claim unresolved for malformed model instructions %j", async (reply) => {
 		const port = new RecordingAgentPort(() => ({ kind: "ok", text: JSON.stringify(reply) }));
-		await expect(resolveExpression("yesterday", port)).rejects.toThrow("valid calendar instruction");
+		const result = await resolveExpression("yesterday", port);
+		expect(result.interval).toEqual({ type: "unresolved", resolutionStatus: "unresolved", phrase: "yesterday" });
+		expect(result.stage).toEqual({ modelCalled: true, reason: "invalid-model-instruction" });
 	});
 
 	it("does not salvage a date from keywords after a transport failure", async () => {
 		const port = new RecordingAgentPort(() => ({ kind: "error", category: "transport", message: "HTTP 502" }));
-		await expect(resolveExpression("yesterday at 3", port)).rejects.toThrow();
+		const result = await resolveExpression("yesterday at 3", port);
+		expect(result.interval).toEqual({ type: "unresolved", resolutionStatus: "unresolved", phrase: "yesterday at 3" });
+		expect(result.stage).toEqual({ modelCalled: true, reason: "model-unavailable" });
 	});
 
 	it("calculates a real model decision from the whole sentence", async () => {
@@ -164,7 +168,7 @@ it("updates an old event date without rewriting the memory's statement timestamp
 		expect(updated?.timestamp).toBe(statementTimestamp);
 		const metadata = JSON.parse(updated?.metadata ?? "{}");
 		expect(metadata.temporal_resolution_status).toBe("unresolved");
-		for (const field of ["event_at", "temporal_date", "temporal_precision", "valid_from", "valid_until"]) expect(metadata).not.toHaveProperty(field);
+		for (const field of ["event_at", "temporal_date", "temporal_precision", "temporal_timezone", "valid_from", "valid_until"]) expect(metadata).not.toHaveProperty(field);
 		expect(fixture.sqlite.prepare("SELECT valid_from, valid_until FROM nodix_memories WHERE id = ?").get(row.id)).toEqual({ valid_from: null, valid_until: null });
 
 	} finally { await store.close(); fixture.cleanup(); }
@@ -244,6 +248,8 @@ it("uses a source timezone that differs from the session timezone", async () => 
 	if (sourceTime?.kind !== "absolute" || !sourceTime.timezone) throw new Error("Model omitted the source timezone");
 	expect(Temporal.Instant.from("2026-06-04T22:00:00Z").toZonedDateTimeISO(sourceTime.timezone).offset).toBe("-07:00");
 	expect(result.interval).toMatchObject({ type: "bounded", from: Date.parse("2026-06-04T22:00:00Z"), until: Date.parse("2026-06-04T22:01:00Z") });
+	expect(result.timezone).toBe("Asia/Tokyo");
+	expect(result.interval).toMatchObject({ timezone: sourceTime.timezone });
 	expect(result.timestamp).toBe(Date.parse(SESSION_DATE_TIME));
 }, 120_000);
 
@@ -268,6 +274,9 @@ async function storeWithDateClient(llm: LlmClient) {
 it.each([
 	{ name: "transport failure", completion: { kind: "error", category: "transport", message: "HTTP 502" } as const },
 	{ name: "empty provider reply", completion: { kind: "ok", text: "" } as const },
+	{ name: "host deadline", completion: { kind: "cancelled", reason: "deadline" } as const },
+	{ name: "nonempty invalid schema", completion: { kind: "ok", text: '{"reason":"invalid","time":{"kind":"relative","amount":"yesterday"}}' } as const },
+	{ name: "malformed JSON", completion: { kind: "ok", text: '{"reason": invalid-json' } as const },
 ])("preserves the memory through real LlmClient $name", async ({ completion }) => {
 	const llm = client(new RecordingAgentPort(() => completion));
 	const { result, row, count } = await storeWithDateClient(llm);
@@ -280,10 +289,31 @@ it.each([
 });
 
 it.each([
-	{ name: "nonempty invalid schema", completion: { kind: "ok", text: '{"reason":"invalid","time":{"kind":"relative","amount":"yesterday"}}' } as const },
 	{ name: "terminal authentication error", completion: { kind: "error", category: "auth", message: "HTTP 401 unauthorized" } as const },
+	{ name: "explicit cancellation", completion: { kind: "cancelled", reason: "aborted" } as const },
 ])("refuses to save on $name", async ({ completion }) => {
 	const { result, count } = await storeWithDateClient(client(new RecordingAgentPort(() => completion)));
 	expect(result.isError).toBe(true);
 	expect(count).toBe(0);
+});
+
+
+it("saves a valid real model date as the memory_store success control", async () => {
+	const apiKey = process.env.SNO_MEM_CLAW_LLM_INTERNAL_KEY;
+	if (!apiKey) throw new Error("SNO_MEM_CLAW_LLM_INTERNAL_KEY is required");
+	const { result, row, count } = await storeWithDateClient(createLlmClient({ preset: "mem_claw/sno_extract_chat", apiKey, timeoutMs: 90_000 }));
+	expect(result.isError, JSON.stringify(result)).not.toBe(true);
+	expect(count).toBe(1);
+	expect(row?.text).toBe("The user moved to Kyoto yesterday.");
+	expect(JSON.parse(row?.metadata ?? "{}")).toMatchObject({ temporal_resolution_status: "resolved", temporal_date: "2023-06-08", temporal_precision: "day", valid_from: Date.UTC(2023, 5, 8) });
+});
+
+
+it("preserves the memory when the configured host model port is unavailable", async () => {
+	const llm = createLlmClient({ preset: "mem_claw/sno_ai_extract", routing: routing() });
+	const { result, row, count } = await storeWithDateClient(llm);
+	expect(result.isError, JSON.stringify(result)).not.toBe(true);
+	expect(count).toBe(1);
+	expect(row?.text).toBe("The user moved to Kyoto yesterday.");
+	expect(JSON.parse(row?.metadata ?? "{}")).toMatchObject({ temporal_resolution_status: "unresolved" });
 });

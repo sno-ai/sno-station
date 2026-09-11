@@ -201,3 +201,38 @@ describe("atomic row event time", () => {
 		expect(BIRTH_MS).toBeLessThan(0);
 	});
 });
+
+it("keeps statement timezone separate from event timezone in the durable atomic row", async () => {
+	const fixture = createTestDb();
+	const store = new MemoryStore({ dbPath: fixture.dbPath, embedder });
+	try {
+		const time = { kind: "absolute", year: 2026, month: 6, day: 4, hour: 15, minute: 0, precision: "minute", timezone: "America/Los_Angeles" } as const;
+		const cards = buildAtomicWriteCards({ records: [record({ time, resolvedTime: calculateCalendarTime(time) })], idempotencyKeys: ["timezone-separation"], sourceTurnOffset: 0, sessionTimestampMs: SESSION_MS, timezone: "Asia/Tokyo" });
+		const key = ledgerKey("timezone-separation");
+		store.beginAtomicExtractionChunk({ ...key, rawChunk: "The event was at 15:00 PDT.", routingSnapshotId: "timezone-separation", runParameters: RUN_PARAMETERS, nowMs: WRITE_MS });
+		store.recordAtomicExtractionCalls(key, WRITE_MS + 1);
+		const result = await store.storeAtomicExtractionChunk({ ledgerKey: key, projectId: PROJECT_ID, extractorVersion: EXTRACTOR_VERSION, nowMs: WRITE_MS + 2, cards });
+		const row = store.getById(result.cardIds[0] ?? "");
+		expect(row).toMatchObject({ timestamp: SESSION_MS, timezone: "Asia/Tokyo" });
+		expect(JSON.parse(row?.metadata ?? "{}")).toMatchObject({ temporal_timezone: "America/Los_Angeles", event_at: "2026-06-04T22:00:00.000Z" });
+		expect(fixture.sqlite.prepare("SELECT timestamp, timezone FROM nodix_memories WHERE id = ?").get(row?.id)).toEqual({ timestamp: SESSION_MS, timezone: "Asia/Tokyo" });
+	} finally { await store.close(); fixture.cleanup(); }
+});
+
+it("makes an undated standing fact visible from its statement while an unknown event stays undated", async () => {
+	const fixture = createTestDb();
+	const store = new MemoryStore({ dbPath: fixture.dbPath, embedder });
+	try {
+		const standing = record({ kind: "standing", category: "profile", claimText: "The user prefers tea.", attribute: "preference.food", time: { kind: "none" }, resolvedTime: null });
+		const event = record({ claimText: "The user moved to Kyoto at an unknown time.", time: { kind: "unresolved" }, resolvedTime: null });
+		const key = ledgerKey("undated-visibility");
+		store.beginAtomicExtractionChunk({ ...key, rawChunk: "I prefer tea. I moved to Kyoto.", routingSnapshotId: "undated-visibility", runParameters: RUN_PARAMETERS, nowMs: WRITE_MS });
+		store.recordAtomicExtractionCalls(key, WRITE_MS + 1);
+		const result = await store.storeAtomicExtractionChunk({ ledgerKey: key, projectId: PROJECT_ID, extractorVersion: EXTRACTOR_VERSION, nowMs: WRITE_MS + 2, cards: cardsFor([standing, event]) });
+		const [standingId, eventId] = result.cardIds;
+		expect(store.listAtomicValidAt(PROJECT_ID, SESSION_MS).map((row) => row.id)).toEqual([standingId]);
+		expect(store.listAtomicValidAt(PROJECT_ID, SESSION_MS - 1)).toEqual([]);
+		expect(fixture.sqlite.prepare("SELECT valid_from, valid_until FROM nodix_memories WHERE id = ?").get(standingId)).toEqual({ valid_from: SESSION_MS, valid_until: null });
+		expect(fixture.sqlite.prepare("SELECT valid_from, valid_until FROM nodix_memories WHERE id = ?").get(eventId)).toEqual({ valid_from: null, valid_until: null });
+	} finally { await store.close(); fixture.cleanup(); }
+});

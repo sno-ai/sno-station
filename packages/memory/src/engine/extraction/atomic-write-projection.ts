@@ -53,7 +53,7 @@ function eventTime(
 ): { timestamp: number; validFrom: number | null; validUntil: number | null } {
 	return {
 		timestamp: sessionTimestampMs,
-		validFrom: record.resolvedTime?.from ?? null,
+		validFrom: record.resolvedTime?.from ?? (record.kind === "standing" && record.time.kind === "none" ? sessionTimestampMs : null),
 		validUntil: record.category === "episodic" ? record.resolvedTime?.until ?? null : null,
 	};
 }
@@ -79,6 +79,7 @@ function metadataForRecord(
 		...(record.resolvedTime ? {
 			temporal_date: record.resolvedTime.label,
 			temporal_precision: record.resolvedTime.precision,
+			temporal_timezone: record.resolvedTime.timezone,
 			valid_from: record.resolvedTime.from,
 			...(record.category === "episodic" ? { valid_until: record.resolvedTime.until } : {}),
 			...(record.category === "episodic" && ["day", "minute"].includes(record.resolvedTime.precision)
@@ -174,7 +175,7 @@ export function buildAtomicWriteCards(
 			attribute: sanitizedRecord.attribute,
 			...when,
 			importance: ATOMIC_MEMORY_WRITE_CONFIG.importance[sanitizedRecord.importance],
-			timezone: sanitizedRecord.resolvedTime?.timezone ?? input.timezone,
+			timezone: input.timezone,
 			lane: sanitizedRecord.lane,
 			dispositionReason: sanitizedRecord.dispositionReason,
 			metadata: metadataForRecord(sanitizedRecord, sanitizerMatches),

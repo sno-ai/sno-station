@@ -164,3 +164,15 @@ it.each([
 		expect(card?.metadata).not.toHaveProperty("temporal_date");
 	}
 });
+
+it.each([
+	["2024", "year", true], ["2024-02", "month", true], ["2024-02-29", "day", true],
+	["2024-02-29T10:30", "minute", true], ["2024-02-26/2024-03-04", "week", true],
+	["Friday", "day", false], ["2023-02-29", "day", false], ["2024-13", "month", false],
+	["2024-02-29T25:00", "minute", false], ["2024-02-26/2024-03-05", "week", false],
+	["2024-02-29", "year", false], ["2024", "day", false],
+] as const)("validates calendar label %s at %s precision", (label, precision, valid) => {
+	const metadata = { kind: "episodic", temporal_resolution_status: "resolved", temporal_date: label, temporal_precision: precision };
+	expect(episodicEventDate({ metadata: JSON.stringify(metadata) })).toBe(valid ? label : undefined);
+	if (!valid) expect(episodicEventDate({ metadata: JSON.stringify({ ...metadata, event_at: "2020-03-15T00:00:00Z" }) })).toBe("2020-03-15");
+});

@@ -6,7 +6,7 @@ import { RESOURCES_BY_LOCALE } from "../i18n/all-resources";
 import { DEFAULT_LOCALE } from "../i18n/locales";
 import type { TemporalInterval } from "./memory-temporality-classifier";
 import type { Locale } from "../i18n/locales";
-import type { LlmClient } from "../../model/llm-client";
+import { isTerminalLlmFailure, type LlmClient } from "../../model/llm-client";
 import type { LlmRoutingConfig } from "../../contract/config/plugin-config-mode-schema";
 import { readModelReplyJson } from "../shared/model-reply-text";
 
@@ -59,21 +59,27 @@ export async function resolveMemoryDate(input: DateInput & {
 			expression: input.expression ?? null, session_date_time: anchor ?? null,
 			session_timezone: unresolved.timezone }),
 	].join("\n\n");
-	const raw = await input.llm.completeText({
-		adapterSlot: "date-resolution", callLabel: "date-resolution", prompt, enableThinking: true,
-	});
-	if (raw === null) {
-		log.warn("Memory time judgment unavailable; preserving unresolved time", { model_called: true }, {
+	let raw: string | null = null;
+	try {
+		raw = await input.llm.completeText({
+			adapterSlot: "date-resolution", callLabel: "date-resolution", prompt, enableThinking: true,
+		});
+	} catch (error) {
+		if (isTerminalLlmFailure(error)) throw error;
+		// A failed optional time judgment must not discard the independently supplied text.
+	}
+	const reply = raw ? readModelReplyJson(raw, (value) => {
+		const parsed = replySchema.safeParse(value);
+		return parsed.success ? parsed.data : undefined;
+	}) : undefined;
+	if (!reply) {
+		const reason = raw === null ? "model-unavailable" : "invalid-model-instruction";
+		log.warn("Memory time judgment failed; preserving unresolved time", { model_called: true, reason }, {
 			event_name: "memory.date_resolution.unavailable", file: "packages/sno-station-mem/src/engine/extraction/date-resolution.ts",
 			function: "resolveMemoryDate", site_id: "date-resolution.model_unavailable",
 		});
-		return { ...unresolved, stage: { modelCalled: true, reason: "model-unavailable" } };
+		return { ...unresolved, stage: { modelCalled: true, reason } };
 	}
-	const reply = readModelReplyJson(raw, (value) => {
-		const parsed = replySchema.safeParse(value);
-		return parsed.success ? parsed.data : undefined;
-	});
-	if (!reply) throw new Error("Time interpretation returned no valid calendar instruction");
 	const stage = { modelCalled: true, reason: reply.reason };
 	const calculated = calculateCalendarTime(reply.time, anchor, unresolved.timezone);
 	log.info("Memory date resolution completed", { model_called: true, resolved: calculated !== null }, {
@@ -86,7 +92,7 @@ export async function resolveMemoryDate(input: DateInput & {
 	return {
 		interval: { type: "bounded", resolutionStatus: "resolved", from: calculated.from,
 			until: calculated.until, phrase: input.expression ?? input.text,
-			date: calculated.label, precision: calculated.precision },
-		timestamp: unresolved.timestamp, timezone: calculated.timezone, stage,
+			date: calculated.label, precision: calculated.precision, timezone: calculated.timezone },
+		timestamp: unresolved.timestamp, timezone: unresolved.timezone, stage,
 	};
 }
