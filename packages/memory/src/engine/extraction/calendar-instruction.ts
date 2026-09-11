@@ -15,7 +15,7 @@ const precisionSchema = z.enum(["year", "month", "week", "day", "minute"]);
 const clock = {
 	hour: z.number().int().min(0).max(23).optional(),
 	minute: z.number().int().min(0).max(59).optional(),
-	timezone: z.string().min(1).optional(),
+	timezone: z.string().min(1).describe("A valid IANA time zone identifier or fixed UTC offset in +HH:MM or -HH:MM form; never a natural-language abbreviation. Keep hour and minute in that source zone.").optional(),
 };
 
 export const calendarInstructionSchema: z.ZodType<CalendarInstruction> = z.discriminatedUnion("kind", [
@@ -107,6 +107,7 @@ export function calculateCalendarTime(
 	sessionTimezone?: string,
 ): CalendarResult | null {
 	if (instruction.kind === "none" || instruction.kind === "unresolved") return null;
+	if (instruction.kind === "weekday" && instruction.precision === "minute" && instruction.hour === undefined) return null;
 	const zone = instruction.timezone ?? sessionTimezone ?? sessionZoneCarriedBy(sessionDateTime) ?? "UTC";
 	try {
 		let date: Temporal.ZonedDateTime;

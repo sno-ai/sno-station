@@ -814,7 +814,7 @@ function closedMetadata(
 	const metadata = buildInsightMetadata(row, {
 		...current,
 		...(sectionName ? { section_name: sectionName } : {}),
-		invalidated_at: Math.max(at, current.valid_from),
+		invalidated_at: current.valid_from === undefined ? at : Math.max(at, current.valid_from),
 		superseded_by: createdId,
 	});
 	const nextMetadata: Record<string, unknown> = { ...metadata };

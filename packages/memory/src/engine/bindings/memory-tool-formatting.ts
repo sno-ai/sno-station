@@ -5,7 +5,7 @@
 
 import { sanitizeContentIngress } from "@snoai/content-sanitizer";
 import { stripHtmlTags, stripRoleLabelPrefix } from "../shared/i18n-text";
-import { isoDateFromMs } from "../shared/iso-date-time";
+import { normalizeIsoDateTimeString } from "../shared/iso-date-time";
 
 export function sanitizeRecalledText(text: string): string {
 	// Centralize the tool execution fallback value at the boundary of this helper.
@@ -49,10 +49,12 @@ export function episodicEventDate(entry: { metadata?: string }): string | undefi
 	if (metadata.temporal_resolution_status === "unresolved" || metadata.temporal_resolution_status === "static") return undefined;
 	if (typeof metadata.temporal_date === "string") return metadata.temporal_date;
 	const eventAt = metadata.event_at;
-	if (typeof eventAt === "string" && eventAt.length >= 10) return eventAt.slice(0, 10);
-	if (typeof eventAt === "number" && eventAt > 0) return isoDateFromMs(eventAt);
-	const validFrom = metadata.valid_from;
-	if (typeof validFrom === "number" && validFrom > 0) return isoDateFromMs(validFrom);
+	const iso = normalizeIsoDateTimeString(eventAt);
+	if (iso !== undefined) return iso.slice(0, 10);
+	if (typeof eventAt === "number") {
+		const date = new Date(eventAt);
+		if (Number.isFinite(date.getTime())) return date.toISOString().slice(0, 10);
+	}
 	return undefined;
 }
 

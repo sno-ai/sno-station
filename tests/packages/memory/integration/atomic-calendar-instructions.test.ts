@@ -1,3 +1,5 @@
+import { buildInsightMetadata } from "../../../../packages/sno-station-mem/src/engine/extraction/memory-metadata-codec";
+import { episodicEventDate } from "../../../../packages/sno-station-mem/src/engine/bindings/memory-tool-formatting";
 import { serializeIntervalMetadata } from "../../../../packages/sno-station-mem/src/engine/extraction/memory-temporality-classifier";
 import { describe, expect, it } from "vitest";
 import { parseAtomicExtractionReply } from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-extraction-reply";
@@ -106,4 +108,59 @@ it("preserves a coarse ending range without inventing an exact closing day", asy
 	const card = await project("The user stopped living in Kyoto last year.", null, { kind: "none" }, "2023-06-09T19:55:00Z", { kind: "relative", amount: -1, unit: "year", precision: "year" });
 	expect(card?.endedAt).toBeNull();
 	expect(card?.metadata).toMatchObject({ ended_at_date: "2022", ended_at_precision: "year", ended_at_from: Date.UTC(2022, 0, 1), ended_at_until: Date.UTC(2023, 0, 1), ended_time_instruction: { kind: "relative", amount: -1, unit: "year", precision: "year" } });
+});
+
+
+describe("metadata normalization preserves event uncertainty", () => {
+	const entry = { text: "The user moved from their home country.", category: "episodic" as const, timestamp: Date.parse("2023-06-09T19:55:00Z") };
+
+	it("does not derive an event date from the statement timestamp", () => {
+		const metadata = buildInsightMetadata(entry);
+		expect(metadata.event_at).toBeUndefined();
+		expect(metadata.temporal_resolution_status).toBe("unresolved");
+		expect(metadata.valid_from).toBeUndefined();
+		expect(metadata.valid_until).toBeUndefined();
+		expect(episodicEventDate({ metadata: JSON.stringify(metadata) })).toBeUndefined();
+	});
+
+	it.each(["unresolved", "static"] as const)("does not revive an old event date after a new %s judgment", (status) => {
+		const metadata = buildInsightMetadata({ ...entry, metadata: JSON.stringify({ kind: "episodic", event_at: "2019-01-01T00:00:00Z", valid_from: Date.UTC(2019, 0, 1) }) }, { temporal_resolution_status: status });
+		expect(metadata.event_at).toBeUndefined();
+		expect(episodicEventDate({ metadata: JSON.stringify(metadata) })).toBeUndefined();
+	});
+
+	it("preserves year precision without turning January 1 into the event date", () => {
+		const metadata = buildInsightMetadata({ ...entry, metadata: JSON.stringify({ kind: "episodic", event_at: "2019-01-01T00:00:00Z" }) }, { temporal_resolution_status: "resolved", temporal_date: "2019", temporal_precision: "year", valid_from: Date.UTC(2019, 0, 1), valid_until: Date.UTC(2020, 0, 1) });
+		expect(metadata.event_at).toBeUndefined();
+		expect(episodicEventDate({ metadata: JSON.stringify(metadata) })).toBe("2019");
+	});
+
+	it("accepts an explicitly supplied event timestamp", () => {
+		const metadata = buildInsightMetadata(entry, { event_at: "2020-03-15T00:00:00Z" });
+		expect(metadata.event_at).toBe("2020-03-15T00:00:00Z");
+		expect(episodicEventDate({ metadata: JSON.stringify(metadata) })).toBe("2020-03-15");
+	});
+});
+
+
+it.each([[0, "1970-01-01"], [-1, "1969-12-31"]] as const)("preserves the explicitly supplied numeric event timestamp %s", (eventAt, label) => {
+	const metadata = buildInsightMetadata({ text: "An explicitly dated event.", category: "episodic", timestamp: Date.parse("2023-06-09T19:55:00Z"), metadata: JSON.stringify({ kind: "episodic", event_at: eventAt }) });
+	expect(metadata.event_at).toBe(eventAt);
+	expect(episodicEventDate({ metadata: JSON.stringify(metadata) })).toBe(label);
+});
+
+it.each([
+	{ name: "missing minute clock", time: { kind: "weekday", weekday: 2, direction: "previous", precision: "minute" }, label: undefined, eventAt: undefined, from: null },
+	{ name: "explicit 10:00 clock", time: { kind: "weekday", weekday: 2, direction: "previous", precision: "minute", hour: 10, minute: 0 }, label: "2023-07-18T10:00", eventAt: "2023-07-18T10:00:00.000Z", from: Date.UTC(2023, 6, 18, 10) },
+	{ name: "day without a clock", time: { kind: "weekday", weekday: 2, direction: "previous", precision: "day" }, label: "2023-07-18", eventAt: "2023-07-18T00:00:00.000Z", from: Date.UTC(2023, 6, 18) },
+])("does not inherit the session clock for weekday $name", async ({ time, label, eventAt, from }) => {
+	const card = await project("The user attended the meeting last Tuesday.", "last Tuesday", time, "2023-07-20T14:37:00Z");
+	expect(card).toBeDefined();
+	expect(card?.validFrom).toBe(from);
+	expect(card?.metadata?.event_at).toBe(eventAt);
+	expect(episodicEventDate({ metadata: JSON.stringify(card?.metadata) })).toBe(label);
+	if (label === undefined) {
+		expect(card?.metadata).toMatchObject({ temporal_resolution_status: "unresolved" });
+		expect(card?.metadata).not.toHaveProperty("temporal_date");
+	}
 });

@@ -441,7 +441,8 @@
             },
             "timezone": {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "description": "A valid IANA time zone identifier or fixed UTC offset in +HH:MM or -HH:MM form; never a natural-language abbreviation. Keep hour and minute in that source zone."
             }
           },
           "required": [
@@ -496,7 +497,8 @@
             },
             "timezone": {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "description": "A valid IANA time zone identifier or fixed UTC offset in +HH:MM or -HH:MM form; never a natural-language abbreviation. Keep hour and minute in that source zone."
             }
           },
           "required": [
@@ -545,7 +547,8 @@
             },
             "timezone": {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "description": "A valid IANA time zone identifier or fixed UTC offset in +HH:MM or -HH:MM form; never a natural-language abbreviation. Keep hour and minute in that source zone."
             }
           },
           "required": [

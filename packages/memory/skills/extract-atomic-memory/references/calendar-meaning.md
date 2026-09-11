@@ -31,7 +31,11 @@ Preserve what is actually known. "Four years ago" normally supplies a year, not 
 day. A named weekday supplies a day. A dated event with a stated clock supplies a minute.
 `relative` amount 0 is available when the text establishes the event as current. Use `hour` and
 `minute` for a stated clock on a relative day or weekday. Use `timezone` only when the source
-names it; otherwise the code uses the session zone. For an unknown clock do not choose noon.
+names it; otherwise the code uses the session zone. The timezone field is a valid IANA zone
+identifier or a fixed offset written as `+HH:MM` or `-HH:MM`, never an abbreviation. Interpret
+an abbreviation from its context into that identifier or offset, and keep the stated hour and
+minute unchanged. The code converts between zones. If the abbreviation is ambiguous in context,
+return `unresolved`. For an unknown clock do not choose noon.
 
 Resolve references from the full context, but do not borrow another event's time merely because
 it is nearby. An explicit date for this same event supplies its date; an adjacent event keeps
