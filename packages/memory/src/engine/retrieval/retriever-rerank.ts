@@ -63,13 +63,26 @@ function isTransientRerankError(error: unknown): boolean {
 	return error instanceof TypeError && error.cause !== undefined;
 }
 
-async function fetchRerankWithRetry(send: () => Promise<Response>): Promise<Response> {
+interface RerankReply {
+	response: Response;
+	/** The parsed JSON body of an OK response; absent when the status was not OK. */
+	data?: unknown;
+}
+
+async function fetchRerankWithRetry(send: () => Promise<Response>): Promise<RerankReply> {
 	let lastError: unknown;
 	for (let attempt = 1; attempt <= RERANK_TRANSIENT_ATTEMPTS; attempt += 1) {
 		try {
 			const response = await send();
+			if (response.ok) {
+				// Reading the body is part of the attempt: a socket that dies after the 200
+				// header rejects here, not in fetch(), and must be retried the same way
+				// (PR #225 review).
+				const data: unknown = await response.json();
+				return { response, data };
+			}
 			if (!RERANK_TRANSIENT_STATUSES.has(response.status) || attempt === RERANK_TRANSIENT_ATTEMPTS) {
-				return response;
+				return { response };
 			}
 			// Drop the failed body before the next attempt: undici cannot reuse the
 			// connection while a body is unconsumed, so a run of 5xx would pin one
@@ -186,7 +199,7 @@ Object.assign(MemoryRetriever.prototype, {
 				// transient transport failure is retried inside this batch's wave slot (issue
 				// #222): measured 2026-09-10, 5 of 1,542 searches fell back on an idle box and 56
 				// in 30 minutes beside 8 concurrent searches, each on the first miss.
-				const response = await fetchRerankWithRetry(() =>
+				const { response, data } = await fetchRerankWithRetry(() =>
 					fetch(rerankEndpoint, {
 						method: "POST",
 						headers,
@@ -221,7 +234,6 @@ Object.assign(MemoryRetriever.prototype, {
 					return "http_error";
 				}
 
-				const data: unknown = await response.json();
 				const parsed = parseRerankResponse(provider, data);
 				// Guard items here so the remaining retrieval scoring path works with normalized inputs.
 				if (!parsed) {
