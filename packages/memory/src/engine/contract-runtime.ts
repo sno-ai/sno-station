@@ -111,7 +111,8 @@ export class MemoryContractRuntime implements MemoryContract {
 
 	/** Host identities are normalised the way the tools always did: blank or the literal "undefined" is missing. */
 	private agentId(scope: ScopeCtx): string | undefined {
-		if (scope.host) return resolveAgentId(scope.host.agentId, parseAgentIdFromSessionKey(scope.host.sessionKey ?? scope.session));
+		if (scope.host) return resolveAgentId(scope.host.agentId, parseAgentIdFromSessionKey(scope.host.sessionKey ?? scope.session))
+			?? (scope.host.systemCaller ? "system" : undefined);
 		return parseAgentIdFromSessionKey(scope.session) ?? this.configured().registration.skinId;
 	}
 
@@ -266,7 +267,8 @@ export class MemoryContractRuntime implements MemoryContract {
 		switch (op.op) {
 			case "store": result = await executeMemoryStoreTool(context, access, randomUUID(), { ...op, scope: project }); break;
 			case "forget": result = await executeMemoryForgetTool(context, access, randomUUID(), {
-				...op, scope: project, suppress_key: op.suppressKey, suppress_content: op.suppressContent,
+				...op, scope: op.suppressKey || op.suppressContent || context.scopePolicy.getAccessibleScopes().length === 1 ? project : undefined,
+				suppress_key: op.suppressKey, suppress_content: op.suppressContent,
 				min_score: op.minScore, max_delete: op.maxDelete,
 			}); break;
 			case "update": result = await executeMemoryUpdateTool(context, access, randomUUID(), { ...op, scope: project }); break;

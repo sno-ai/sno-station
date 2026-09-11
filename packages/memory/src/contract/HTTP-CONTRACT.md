@@ -10,7 +10,7 @@ capture acknowledgement exists.
 ## Transport and authentication
 
 Listen on `127.0.0.1` with an ephemeral TCP port and a random per-boot bearer token.
-Discovery is `<profile root>/station/sno-station-mem.json` with `{pid, port, token}`.
+Discovery is `<profile root>/station/sidecar.json` with `{pid, port, token}`.
 The lock is `<profile root>/sno-station-mem/sidecar.lock`.
 Every verb request supplies `Authorization: Bearer <token>` and
 `x-sno-station-mem-skin: <skinId>`. Authenticate before reading the request body.
