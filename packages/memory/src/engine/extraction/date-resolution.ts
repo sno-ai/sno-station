@@ -62,10 +62,17 @@ export async function resolveMemoryDate(input: DateInput & {
 	const raw = await input.llm.completeText({
 		adapterSlot: "date-resolution", callLabel: "date-resolution", prompt, enableThinking: true,
 	});
-	const reply = raw ? readModelReplyJson(raw, (value) => {
+	if (raw === null) {
+		log.warn("Memory time judgment unavailable; preserving unresolved time", { model_called: true }, {
+			event_name: "memory.date_resolution.unavailable", file: "packages/sno-station-mem/src/engine/extraction/date-resolution.ts",
+			function: "resolveMemoryDate", site_id: "date-resolution.model_unavailable",
+		});
+		return { ...unresolved, stage: { modelCalled: true, reason: "model-unavailable" } };
+	}
+	const reply = readModelReplyJson(raw, (value) => {
 		const parsed = replySchema.safeParse(value);
 		return parsed.success ? parsed.data : undefined;
-	}) : undefined;
+	});
 	if (!reply) throw new Error("Time interpretation returned no valid calendar instruction");
 	const stage = { modelCalled: true, reason: reply.reason };
 	const calculated = calculateCalendarTime(reply.time, anchor, unresolved.timezone);
