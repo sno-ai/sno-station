@@ -90,7 +90,33 @@ describe("atomic temporal normalization", () => {
 		{ kind: "relative", amount: "minus four", unit: "year", precision: "year" },
 		{ kind: "weekday", weekday: 8, direction: "previous", precision: "day" },
 		{ kind: "none", amount: -4 },
-	])("rejects malformed structured time %j", (time) => {
-		expect(parseAtomicExtractionReply(JSON.stringify(reply(time)), 1).ok).toBe(false);
+		{ kind: "relative", amount: -1, unit: "days", precision: "day" },
+		{ kind: "relative", amount: -1, unit: "day", precision: "decade" },
+		null,
+	])("keeps valid facts when nested time and ending instructions are malformed: %j", async (badTime) => {
+		const wire = reply({ kind: "relative", amount: -2, unit: "day", precision: "day" }, { kind: "relative", amount: -1, unit: "day", precision: "day" }, true);
+		const first = wire.records[0];
+		if (!first) throw new Error("missing fixture");
+		wire.records.push({ ...first, time: badTime, ended_time: badTime });
+		const parsed = parseAtomicExtractionReply(JSON.stringify(wire), 1);
+		expect(parsed.ok).toBe(true);
+		if (!parsed.ok) throw new Error("the valid neighboring fact was discarded");
+		expect(parsed.records).toHaveLength(2);
+		expect(parsed.records[1]).toMatchObject({ claimText: first.claim_text, time: { kind: "unresolved" }, endedTime: { kind: "unresolved" } });
+		const normalized = await runAtomicExtractionGauntlet({ records: parsed.records, turns: [{ role: "user", content: first.claim_text }], sessionDateTime: "2024-07-17T12:00:00Z", sessionTimezone: "UTC" });
+		expect(normalized).toHaveLength(2);
+		expect(normalized[0]?.resolvedTime?.label).toBe("2024-07-15");
+		expect(normalized[0]?.endedAt?.label).toBe("2024-07-16");
+		expect(normalized[1]?.resolvedTime).toBeNull();
+		expect(normalized[1]?.endedAt).toBeNull();
 	});
+
+	it("still rejects an invalid core claim instead of treating it as a time-only defect", () => {
+		const wire = reply({ kind: "none" });
+		const first = wire.records[0];
+		if (!first) throw new Error("missing fixture");
+		const malformed = { ...first, claim_text: 123, time: null };
+		expect(parseAtomicExtractionReply(JSON.stringify({ records: [first, malformed] }), 1).ok).toBe(false);
+	});
+
 });

@@ -85,6 +85,14 @@ const relationSchema = z
 	})
 	.strip();
 
+const wireTimeSchema = calendarInstructionSchema.catch(() => {
+	log.warn("atomic extraction kept a record with an invalid time judgment", {}, {
+		event_name: "memory.atomic_extraction_reply.diagnostic", file: "packages/sno-station-mem/src/engine/extraction/atomic-extraction-reply.ts",
+		function: "wireTimeSchema", site_id: "extraction.atomic-extraction-reply.invalid_time",
+	});
+	return { kind: "unresolved" };
+});
+
 const wireRecordSchema = z
 	.object({
 		kind: z.enum(["occurrence", "standing"]),
@@ -94,8 +102,8 @@ const wireRecordSchema = z
 		attribute: z.string().nullable(),
 		value: z.string().min(1),
 		temporal_phrase: z.string().min(1).nullable(),
-		time: calendarInstructionSchema.optional(),
-		ended_time: calendarInstructionSchema.optional(),
+		time: wireTimeSchema.optional(),
+		ended_time: wireTimeSchema.optional(),
 		ends_current: z.boolean(),
 		// Optional on the wire: a reply that omits it is repaired to null rather than refused.
 		ended_at_phrase: z.string().min(1).nullable().optional(),
