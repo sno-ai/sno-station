@@ -163,6 +163,11 @@ export async function executeMemoryUpdateTool(ctx: ToolContext, access: ReturnTy
 									effectiveCategory,
 									dateResolution.interval,
 								);
+								for (const field of ["temporal_date", "temporal_precision"] as const) {
+									if (parsed.metadata !== undefined && field in parsed.metadata) continue;
+									if (temporalMetadata[field] !== undefined) nextMeta[field] = temporalMetadata[field];
+									else delete nextMeta[field];
+								}
 								if (!userProvidedTemporalType)
 									nextMeta.memory_temporal_type = temporalMetadata.memory_temporal_type;
 								if (!userProvidedTemporalStatus)
