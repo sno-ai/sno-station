@@ -1,6 +1,6 @@
 import { calculateCalendarTime } from "../../../../packages/sno-station-mem/src/engine/extraction/calendar-instruction";
 /** @file atomic-row-event-time.test.ts
- * @purpose Proves a stored atomic row is dated by when the remembered thing happened, never by the write clock.
+ * @purpose Proves event time, session time, and write time remain distinct in durable atomic rows.
  * @boundary The real write projection and real encrypted SQLite through MemoryStore; no model calls.
  */
 
@@ -25,14 +25,7 @@ const RUN_PARAMETERS: AtomicExtractionRunParameters = {
 	subchunkCount: 1,
 };
 
-/**
- * The conversation happened on 2026-06-04; the write happens on 2026-09-04, three months later.
- *
- * That gap is the whole test. The defect this file exists for bound the row's `timestamp` from
- * the write clock, and a fixture whose write clock sits on the event date cannot tell the two
- * apart — that masking really happened while the defect was being investigated, and it made a
- * live replay look correct.
- */
+/** The event precedes the session; persistence happens three months after that session. */
 const SESSION_MS = Date.UTC(2026, 5, 4, 9, 0);
 const WRITE_MS = Date.UTC(2026, 8, 4, 5, 40);
 /** A user stating a birth year before 1970. Its epoch is negative, and that must be storable. */
@@ -116,7 +109,7 @@ describe("atomic row event time", () => {
 		fixture.cleanup();
 	});
 
-	it("dates a card by its resolved event time, and by the session when there is none", () => {
+	it("keeps the session timestamp separate from the resolved event interval", () => {
 		const [resolved, unresolved] = cardsFor([
 			record(),
 			record({
@@ -128,15 +121,16 @@ describe("atomic row event time", () => {
 		]);
 		if (!resolved || !unresolved) throw new Error("projection returned no cards");
 
-		expect(resolved.timestamp).toBe(Date.UTC(2026, 5, 4));
-		expect(resolved.timestamp).toBe(resolved.validFrom);
+		expect(resolved.timestamp).toBe(SESSION_MS);
+		expect(resolved.validFrom).toBe(Date.UTC(2026, 5, 4));
+		expect(resolved.timestamp).not.toBe(resolved.validFrom);
 		// No resolvable time, so the row falls back to when the conversation happened. This is the
 		// shape a live replay produced: an active row with a null valid_from.
 		expect(unresolved.validFrom).toBeNull();
 		expect(unresolved.timestamp).toBe(SESSION_MS);
 	});
 
-	it("stores the event time on the row, not the write clock three months later", async () => {
+	it("stores the session clock and event interval without using the later write clock", async () => {
 		const key = ledgerKey("event-time");
 		expect(
 			store.beginAtomicExtractionChunk({
@@ -160,7 +154,10 @@ describe("atomic row event time", () => {
 		expect(result).toMatchObject({ createdCount: 1 });
 		const rows = readTimeRows(fixture.runtime.db);
 		expect(rows).toHaveLength(1);
-		expect(rows[0]?.timestamp).toBe(Date.UTC(2026, 5, 4));
+		expect(rows[0]?.timestamp).toBe(SESSION_MS);
+		expect(rows[0]?.valid_from).toBe(Date.UTC(2026, 5, 4));
+		const stored = store.getById(result.cardIds[0] ?? "");
+		expect(JSON.parse(stored?.metadata ?? "{}").source_order.session_moment).toBe(SESSION_MS);
 		expect(rows[0]?.timestamp).not.toBe(WRITE_MS + 2);
 	});
 
@@ -197,9 +194,9 @@ describe("atomic row event time", () => {
 		// birth row, so both rows are asserted, not just the pre-1970 one.
 		expect(result).toMatchObject({ createdCount: 2 });
 		const rows = readTimeRows(fixture.runtime.db);
-		expect(rows.map(({ text, timestamp }) => ({ text, timestamp }))).toEqual([
-			{ text: "The user walked 8,004 steps on 2026-06-04.", timestamp: Date.UTC(2026, 5, 4) },
-			{ text: "The user was born in March 1965.", timestamp: BIRTH_MS },
+		expect(rows.map(({ text, timestamp, valid_from }) => ({ text, timestamp, valid_from }))).toEqual([
+			{ text: "The user walked 8,004 steps on 2026-06-04.", timestamp: SESSION_MS, valid_from: Date.UTC(2026, 5, 4) },
+			{ text: "The user was born in March 1965.", timestamp: SESSION_MS, valid_from: BIRTH_MS },
 		]);
 		expect(BIRTH_MS).toBeLessThan(0);
 	});

@@ -303,7 +303,7 @@ describe("atomic memory extraction production entrypoint", () => {
 			event?.id,
 		);
 		expect(
-			target.store.listAtomicValidAt(PROJECT_ID, EVENT_FROM_MS + 1).map(({ id }) => id),
+			target.store.listAtomicValidAt(PROJECT_ID, EVENT_FROM_MS + 60_000).map(({ id }) => id),
 		).not.toContain(event?.id);
 
 		const entityRecord = result.records.find((record) =>
