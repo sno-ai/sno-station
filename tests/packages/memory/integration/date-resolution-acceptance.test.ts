@@ -246,3 +246,44 @@ it("uses a source timezone that differs from the session timezone", async () => 
 	expect(result.interval).toMatchObject({ type: "bounded", from: Date.parse("2026-06-04T22:00:00Z"), until: Date.parse("2026-06-04T22:01:00Z") });
 	expect(result.timestamp).toBe(Date.parse(SESSION_DATE_TIME));
 }, 120_000);
+
+/** The provider/host boundary is fault-injected; LlmClient, tool, embedding and SQLite are real. */
+async function storeWithDateClient(llm: LlmClient) {
+	const { dirname } = await import("node:path");
+	const { createTestDb, createTestEmbedder } = await import("../../../apps/mem-claw/helpers/test-db");
+	const { MemoryStore } = await import("../../../../packages/sno-station-mem/src/store/store");
+	const { createRetriever } = await import("../../../../packages/sno-station-mem/src/engine/retrieval/retriever");
+	const { createScopePolicy } = await import("../../../../packages/sno-station-mem/src/engine/security/scopes");
+	const { executeMemoryStoreTool } = await import("../../../../packages/sno-station-mem/src/engine/bindings/memory-store-tool");
+	const fixture = createTestDb();
+	const embedder = await createTestEmbedder();
+	const store = new MemoryStore({ dbPath: fixture.dbPath, embedder });
+	try {
+		const result = await executeMemoryStoreTool({ store, embedder, retriever: createRetriever(store, embedder), scopePolicy: createScopePolicy({ default: "global", agentAccess: { "date-failure": ["global"] } }), stateDir: dirname(fixture.dbPath), sessionTimestamp: Date.parse("2023-06-09T19:55:00Z"), sessionTimezone: "UTC", profileToolLlm: llm }, { agentId: "date-failure" }, "store-date-failure", { content: "The user moved to Kyoto yesterday.", category: "episodic" });
+		const id = result.details.id;
+		return { result, row: typeof id === "string" ? store.getById(id) : undefined, count: (fixture.sqlite.prepare("SELECT COUNT(*) AS count FROM nodix_memories WHERE project_id = 'global'").get() as { count: number }).count };
+	} finally { await store.close(); fixture.cleanup(); }
+}
+
+it.each([
+	{ name: "transport failure", completion: { kind: "error", category: "transport", message: "HTTP 502" } as const },
+	{ name: "empty provider reply", completion: { kind: "ok", text: "" } as const },
+])("preserves the memory through real LlmClient $name", async ({ completion }) => {
+	const llm = client(new RecordingAgentPort(() => completion));
+	const { result, row, count } = await storeWithDateClient(llm);
+	expect(result.isError, JSON.stringify(result)).not.toBe(true);
+	expect(count).toBe(1);
+	expect(row?.text).toBe("The user moved to Kyoto yesterday.");
+	const metadata = JSON.parse(row?.metadata ?? "{}");
+	expect(metadata.temporal_resolution_status).toBe("unresolved");
+	for (const key of ["event_at", "temporal_date", "valid_from", "valid_until"]) expect(metadata).not.toHaveProperty(key);
+});
+
+it.each([
+	{ name: "nonempty invalid schema", completion: { kind: "ok", text: '{"reason":"invalid","time":{"kind":"relative","amount":"yesterday"}}' } as const },
+	{ name: "terminal authentication error", completion: { kind: "error", category: "auth", message: "HTTP 401 unauthorized" } as const },
+])("refuses to save on $name", async ({ completion }) => {
+	const { result, count } = await storeWithDateClient(client(new RecordingAgentPort(() => completion)));
+	expect(result.isError).toBe(true);
+	expect(count).toBe(0);
+});

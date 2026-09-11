@@ -94,8 +94,8 @@ const wireRecordSchema = z
 		attribute: z.string().nullable(),
 		value: z.string().min(1),
 		temporal_phrase: z.string().min(1).nullable(),
-		time: calendarInstructionSchema,
-		ended_time: calendarInstructionSchema,
+		time: calendarInstructionSchema.optional(),
+		ended_time: calendarInstructionSchema.optional(),
 		ends_current: z.boolean(),
 		// Optional on the wire: a reply that omits it is repaired to null rather than refused.
 		ended_at_phrase: z.string().min(1).nullable().optional(),
@@ -139,6 +139,11 @@ function projectRecord(record: z.infer<typeof wireRecordSchema>): AtomicExtracti
 		}, { event_name: "memory.atomic_extraction_reply.diagnostic", file: "packages/sno-station-mem/src/engine/extraction/atomic-extraction-reply.ts", function: "projectRecord", site_id: "extraction.atomic-extraction-reply.projectRecord.327508ac5f" });
 	}
 	const endedAtPhrase = record.ends_current ? (record.ended_at_phrase ?? null) : null;
+	if (record.time === undefined || (record.ends_current && record.ended_time === undefined)) {
+		log.warn("atomic extraction kept a record with an omitted time judgment", {
+			time_missing: record.time === undefined, ending_time_missing: record.ends_current && record.ended_time === undefined,
+		}, { event_name: "memory.atomic_extraction_reply.diagnostic", file: "packages/sno-station-mem/src/engine/extraction/atomic-extraction-reply.ts", function: "projectRecord", site_id: "extraction.atomic-extraction-reply.omitted_time" });
+	}
 	if (!record.ends_current && (record.ended_at_phrase ?? null) !== null) {
 		log.warn("atomic extraction dropped an ending time on a claim that does not end", {
 			claim_length: record.claim_text.length,
@@ -163,8 +168,8 @@ function projectRecord(record: z.infer<typeof wireRecordSchema>): AtomicExtracti
 			: {}),
 		value: record.value,
 		temporalPhrase: record.temporal_phrase,
-		time: record.time,
-		endedTime: record.ends_current ? record.ended_time : { kind: "none" },
+		time: record.time ?? { kind: "unresolved" },
+		endedTime: record.ends_current ? (record.ended_time ?? { kind: "unresolved" }) : { kind: "none" },
 		resolvedTime: null,
 		endsCurrent: record.ends_current,
 		endedAtPhrase,

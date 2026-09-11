@@ -50,12 +50,40 @@ describe("atomic temporal normalization", () => {
 		expect(output?.endedAt?.label).toBe("2024-06");
 	});
 
-	it("rejects the obsolete phrase-only model reply instead of guessing", () => {
-		const wire = reply({ kind: "unresolved" });
-		const record = wire.records[0];
-		if (!record) throw new Error("missing fixture record");
-		Reflect.deleteProperty(record, "time");
-		expect(parseAtomicExtractionReply(JSON.stringify(wire), 1).ok).toBe(false);
+	it.each(["time", "ended_time"])("keeps both records when one model record omits %s", async (missing) => {
+		const wire = reply({ kind: "relative", amount: -1, unit: "day", precision: "day" });
+		const first = wire.records[0];
+		if (!first) throw new Error("missing fixture");
+		const second = { ...first };
+		Reflect.deleteProperty(second, missing);
+		wire.records.push(second);
+		const parsed = parseAtomicExtractionReply(JSON.stringify(wire), 1);
+		expect(parsed.ok).toBe(true);
+		if (!parsed.ok) throw new Error("the complete record was discarded");
+		expect(parsed.records).toHaveLength(2);
+		expect(parsed.records[0]?.time).toMatchObject({ kind: "relative", amount: -1 });
+		expect(parsed.records[1]?.time).toEqual(missing === "time" ? { kind: "unresolved" } : first.time);
+		expect(parsed.records[1]?.endedTime).toEqual({ kind: "none" });
+		const normalized = await runAtomicExtractionGauntlet({ records: parsed.records, turns: [{ role: "user", content: first.claim_text }], sessionDateTime: "2024-07-17T12:00:00Z", sessionTimezone: "UTC" });
+		expect(normalized).toHaveLength(2);
+		expect(normalized[0]?.resolvedTime?.label).toBe("2024-07-16");
+		if (missing === "time") expect(normalized[1]?.resolvedTime).toBeNull();
+	});
+
+	it("keeps an ending with missing ended_time unresolved without dropping the other record", async () => {
+		const wire = reply({ kind: "none" }, { kind: "relative", amount: -1, unit: "day", precision: "day" }, true);
+		const first = wire.records[0];
+		if (!first) throw new Error("missing fixture");
+		const second = { ...first };
+		Reflect.deleteProperty(second, "ended_time");
+		wire.records.push(second);
+		const parsed = parseAtomicExtractionReply(JSON.stringify(wire), 1);
+		if (!parsed.ok) throw new Error("the complete record was discarded");
+		expect(parsed.records).toHaveLength(2);
+		expect(parsed.records[1]?.endedTime).toEqual({ kind: "unresolved" });
+		const normalized = await runAtomicExtractionGauntlet({ records: parsed.records, turns: [{ role: "user", content: first.claim_text }], sessionDateTime: "2024-07-17T12:00:00Z", sessionTimezone: "UTC" });
+		expect(normalized[0]?.endedAt?.label).toBe("2024-07-16");
+		expect(normalized[1]?.endedAt).toBeNull();
 	});
 
 	it.each([
