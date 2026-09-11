@@ -183,7 +183,8 @@ const memoryMetadataBase: z.ZodObject<
 });
 
 const episodicMetadata: z.ZodObject<
-	MemoryMetadataCommonShape & {
+	Omit<MemoryMetadataCommonShape, "valid_from"> & {
+		valid_from: z.ZodOptional<z.ZodNumber>;
 		kind: z.ZodLiteral<"episodic">;
 		memory_category: z.ZodLiteral<"episodic">;
 		event_at: z.ZodOptional<z.ZodUnion<readonly [z.ZodString, z.ZodNumber]>>;
@@ -194,6 +195,7 @@ const episodicMetadata: z.ZodObject<
 	.extend({
 		kind: z.literal("episodic"),
 		memory_category: z.literal("episodic"),
+		valid_from: z.number().optional(),
 		event_at: z.union([z.string(), z.number()]).optional(),
 		entity_kind: z.string().optional(),
 	})

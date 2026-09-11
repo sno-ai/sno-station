@@ -33,10 +33,12 @@ function stripFrontmatter(text: string): string {
 const SKILL_FILE = resolveSkillPath();
 
 const loadedSkillFile = readFileSync(SKILL_FILE, "utf8");
-export const ATOMIC_EXTRACTION_SKILL_HASH: string = createHash("sha256").update(loadedSkillFile).digest("hex");
-export const ATOMIC_EXTRACTION_SKILL: string = stripFrontmatter(loadedSkillFile);
+const calendarMeaning = readFileSync(path.join(path.dirname(SKILL_FILE), "references", "calendar-meaning.md"), "utf8");
+export const ATOMIC_EXTRACTION_SKILL_HASH: string = createHash("sha256").update(loadedSkillFile).update(calendarMeaning).digest("hex");
+export const ATOMIC_EXTRACTION_SKILL: string = `${stripFrontmatter(loadedSkillFile)}\n\n${calendarMeaning}`;
 
 const REFERENCE_NAMES = [
+	"calendar-meaning",
 	"account-for-turns",
 	"resolve-subject",
 	"missing-durable-half",

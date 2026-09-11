@@ -141,7 +141,7 @@ export async function retireRowsByName(params: {
 			metadata.source_message_id === params.triggeringEventIdentity ||
 			(params.triggeringSessionIdentity !== undefined &&
 				metadata.source_session === params.triggeringSessionIdentity &&
-				metadata.valid_from >= params.eventTime);
+				metadata.asserted_at >= params.eventTime);
 		if (metadata.invalidated_at !== undefined) return [];
 		if (writtenByTriggeringEvent) {
 			params.judgedCandidateIds.add(entry.id);

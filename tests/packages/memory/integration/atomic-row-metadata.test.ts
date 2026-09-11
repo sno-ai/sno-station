@@ -1,3 +1,4 @@
+import { calculateCalendarTime } from "../../../../packages/sno-station-mem/src/engine/extraction/calendar-instruction";
 /** @file atomic-row-metadata.test.ts
  * @purpose Proves a stored atomic row's metadata names its own memory category, which every reader of that metadata needs.
  * @boundary The real write projection and real encrypted SQLite through MemoryStore; no model calls.
@@ -34,7 +35,8 @@ function record(overrides: Partial<AtomicKeyedRecord> = {}): AtomicKeyedRecord {
 		attribute: null,
 		value: "8,004 steps",
 		temporalPhrase: "on 2026-06-04",
-		resolvedTime: { year: 2026, month: 6, day: 4 },
+		resolvedTime: calculateCalendarTime({ kind: "absolute", year: 2026, month: 6, day: 4, precision: "day" }),
+		time: { kind: "absolute", year: 2026, month: 6, day: 4, precision: "day" }, endedTime: { kind: "none" },
 		importance: "medium",
 		changesCurrentState: false,
 		todo: "none",

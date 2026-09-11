@@ -4,7 +4,7 @@
  */
 
 import { Temporal } from "@js-temporal/polyfill";
-import { resolveDateLocally } from "./date-resolution";
+import { unresolvedMemoryDate } from "./date-resolution";
 import type { InsightMetadata } from "./memory-metadata-types";
 import { DEFAULT_LOCALE, isSupportedLocale } from "../i18n/locales";
 import { parseIsoDateTimeMs } from "../shared/iso-date-time";
@@ -28,6 +28,9 @@ export type TemporalInterval =
 			from: number;
 			until: number;
 			phrase?: string;
+			date?: string;
+			precision?: "year" | "month" | "week" | "day" | "minute";
+			timezone?: string;
 	  }
 	| {
 			type: "ongoing";
@@ -54,13 +57,12 @@ export function inferTemporalInterval(
 	locale?: string,
 	context: SessionTemporalContext = {},
 ): TemporalInterval {
-	return resolveDateLocally({
+	return unresolvedMemoryDate({
 		text,
 		sessionDateTime: sessionDateTime(context),
 		sessionTimezone: context.sessionTimezone,
 		locale: locale && isSupportedLocale(locale) ? locale : DEFAULT_LOCALE,
-		localFirst: true,
-	}).result.interval;
+	}).interval;
 }
 
 export function serializeIntervalMetadata(
@@ -84,7 +86,10 @@ export function serializeIntervalMetadata(
 		base.valid_from = interval.at;
 	} else if (interval.type === "bounded") {
 		base.valid_from = interval.from;
-		base.valid_until = interval.until;
+		if (category === "episodic") base.valid_until = interval.until;
+		if (interval.date !== undefined) base.temporal_date = interval.date;
+		if (interval.precision !== undefined) base.temporal_precision = interval.precision;
+		if (interval.timezone !== undefined) base.temporal_timezone = interval.timezone;
 	} else if (interval.type === "ongoing") {
 		base.valid_from = interval.from;
 		if (interval.until !== undefined) base.valid_until = interval.until;

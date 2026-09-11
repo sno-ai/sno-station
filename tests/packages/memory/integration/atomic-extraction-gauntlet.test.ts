@@ -37,6 +37,7 @@ function record(overrides: Partial<AtomicExtractionRecord> = {}): AtomicExtracti
 		value: "tea",
 		temporalPhrase: null,
 		resolvedTime: null,
+		time: { kind: "none" }, endedTime: { kind: "none" },
 		importance: "medium",
 		changesCurrentState: false,
 		todo: "none",

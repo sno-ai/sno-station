@@ -7,7 +7,7 @@ import { validateExtractedContentForStorage } from "@snoai/content-sanitizer";
 import { createLogger } from "@snoai/utils/logger";
 import { buildIndexedText } from "./extraction-text-sanitizer";
 import {
-	resolveDateLocally,
+	unresolvedMemoryDate,
 	resolveMemoryDate,
 	type DateResolutionResult,
 } from "./date-resolution";
@@ -72,13 +72,12 @@ export function buildCandidateTemporalMetadata(params: {
 	sessionTimezone?: string;
 }): ReturnType<typeof serializeIntervalMetadata> {
 	const text = params.candidate.content || params.candidate.abstract;
-	const interval = resolveDateLocally({
+	const interval = unresolvedMemoryDate({
 		text,
 		expression: params.candidate.temporalPhrase,
 		sessionDateTime: params.sessionDateTime,
 		sessionTimezone: params.sessionTimezone,
-		localFirst: true,
-	}).result.interval;
+	}).interval;
 	const metadata = serializeIntervalMetadata(params.candidate.category, interval);
 	if (params.candidate.temporalPhrase) {
 		metadata.temporal_phrase = params.candidate.temporalPhrase;

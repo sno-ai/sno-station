@@ -162,6 +162,8 @@ export function createBProfileKeyingTransport(
 							attribute,
 							value,
 							temporalPhrase: null,
+							time: { kind: "none" },
+							endedTime: { kind: "none" },
 							resolvedTime: null,
 							endsCurrent: false,
 							endedAtPhrase: null,

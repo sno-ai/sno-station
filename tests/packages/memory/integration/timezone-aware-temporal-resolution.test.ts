@@ -6,7 +6,7 @@
 import { randomUUID } from "node:crypto";
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { Embedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client";
-import { resolveDateLocally } from "../../../../packages/sno-station-mem/src/engine/extraction/date-resolution";
+import { calculateCalendarTime } from "../../../../packages/sno-station-mem/src/engine/extraction/calendar-instruction";
 import {
 	buildInsightMetadata,
 	stringifyInsightMetadata,
@@ -60,340 +60,36 @@ function iso(value: number): string {
 	return new Date(value).toISOString();
 }
 
-describe("timezone-aware temporal resolution", () => {
-	it("keeps today on the session wall-clock date without converting it to UTC", () => {
-		const resolved = resolveDateLocally({
-			text: "The user walked 8,578 steps today.",
-			sessionDateTime: SESSION_ANCHOR,
-			sessionTimezone: SESSION_TIMEZONE,
-			locale: "en",
-			localFirst: true,
-		});
-
-		expect(resolved.needsModel).toBe(false);
-		expect(resolved.result).toMatchObject({
-			timezone: "user",
-			stage: { selectedParser: "en", ambiguityGateFired: false, modelCalled: false },
-			interval: { type: "bounded", resolutionStatus: "resolved" },
-		});
-		if (resolved.result.interval.type !== "bounded") {
-			throw new Error("today must resolve to a bounded day");
-		}
-		expect(iso(resolved.result.interval.from)).toBe("2026-06-05T00:00:00.000Z");
-		expect(iso(resolved.result.interval.until)).toBe("2026-06-06T00:00:00.000Z");
+describe("calendar arithmetic with explicit timezone", () => {
+	it("keeps the session calendar day when UTC is already tomorrow", () => {
+		const result = calculateCalendarTime({ kind: "relative", amount: 0, unit: "day", precision: "day" }, SESSION_ANCHOR, SESSION_TIMEZONE);
+		expect(result?.label).toBe("2026-06-05");
+		expect(iso(result?.from ?? 0)).toBe("2026-06-05T07:00:00.000Z");
 	});
 
-	it("stores a source-named PDT time as an instant with its fixed offset", () => {
-		const resolved = resolveDateLocally({
-			text: "The deploy ran 2026-06-04 15:00 PDT.",
-			sessionDateTime: SESSION_ANCHOR,
-			sessionTimezone: SESSION_TIMEZONE,
-			locale: "en",
-			localFirst: true,
-		});
-
-		expect(resolved.result).toMatchObject({
-			timezone: "-07:00",
-			stage: { selectionReason: "tie-agreed", winningScore: 7 },
-			interval: { type: "instant", resolutionStatus: "resolved" },
-		});
-		if (resolved.result.interval.type !== "instant") {
-			throw new Error("source-named exact time must resolve to an instant");
-		}
-		expect(iso(resolved.result.interval.at)).toBe("2026-06-04T22:00:00.000Z");
+	it("distinguishes a full day from an explicitly supplied midnight", () => {
+		const day = calculateCalendarTime({ kind: "absolute", year: 2026, month: 6, day: 5, precision: "day" }, SESSION_ANCHOR, SESSION_TIMEZONE);
+		const minute = calculateCalendarTime({ kind: "absolute", year: 2026, month: 6, day: 5, hour: 0, minute: 0, precision: "minute" }, SESSION_ANCHOR, SESSION_TIMEZONE);
+		expect(day?.from).toBe(minute?.from);
+		expect((day?.until ?? 0) - (day?.from ?? 0)).toBe(86_400_000);
+		expect((minute?.until ?? 0) - (minute?.from ?? 0)).toBe(60_000);
 	});
 
-	it("distinguishes a date-only value from exact midnight", () => {
-		const dateOnly = resolveDateLocally({
-			text: "2026-06-05",
-			sessionDateTime: SESSION_ANCHOR,
-			sessionTimezone: SESSION_TIMEZONE,
-			locale: "en",
-			localFirst: true,
-		});
-		const midnight = resolveDateLocally({
-			text: "2026-06-05 at midnight",
-			sessionDateTime: SESSION_ANCHOR,
-			sessionTimezone: SESSION_TIMEZONE,
-			locale: "en",
-			localFirst: true,
-		});
-
-		expect(dateOnly.result.interval.type).toBe("bounded");
-		expect(midnight.result.interval.type).toBe("instant");
-		expect(dateOnly.result.timestamp).toBe(midnight.result.timestamp);
-		expect(dateOnly.result.timezone).toBe("user");
-		expect(midnight.result.timezone).toBe("user");
+	it("uses the source offset when no separate session timezone was supplied", () => {
+		const result = calculateCalendarTime({ kind: "relative", amount: 0, unit: "day", precision: "day" }, SESSION_ANCHOR);
+		expect(result?.timezone).toBe("-07:00");
+		expect(result?.label).toBe("2026-06-05");
 	});
 
-	it("uses the configured locale only to settle a disagreeing local-first tie", () => {
-		const english = resolveDateLocally({
-			text: "03/04/2026",
-			sessionDateTime: SESSION_ANCHOR,
-			sessionTimezone: SESSION_TIMEZONE,
-			locale: "en",
-			localFirst: true,
-		});
-		const spanish = resolveDateLocally({
-			text: "03/04/2026",
-			sessionDateTime: SESSION_ANCHOR,
-			sessionTimezone: SESSION_TIMEZONE,
-			locale: "es",
-			localFirst: true,
-		});
-
-		expect(english.result.stage).toMatchObject({
-			selectedParser: "en",
-			selectionReason: "locale-tiebreak",
-		});
-		expect(spanish.result.stage).toMatchObject({
-			selectedParser: "es",
-			selectionReason: "locale-tiebreak",
-		});
-		expect(iso(english.result.timestamp ?? 0).slice(0, 10)).toBe("2026-03-04");
-		expect(iso(spanish.result.timestamp ?? 0).slice(0, 10)).toBe("2026-04-03");
+	it("does not replace a missing relative anchor with the current clock", () => {
+		expect(calculateCalendarTime({ kind: "relative", amount: -1, unit: "day", precision: "day" })).toBeNull();
 	});
 
-	it("keeps an ambiguous hour as a full-day partial while requesting model help", () => {
-		const resolved = resolveDateLocally({
-			text: "yesterday at 3",
-			sessionDateTime: SESSION_ANCHOR,
-			sessionTimezone: SESSION_TIMEZONE,
-			locale: "en",
-			localFirst: false,
-		});
-
-		expect(resolved.needsModel).toBe(true);
-		expect(resolved.partial).toBeDefined();
-		expect(resolved.result).toMatchObject({
-			timezone: "user",
-			stage: { ambiguityGateFired: true },
-			interval: { type: "bounded", resolutionStatus: "resolved" },
-		});
-	});
-
-	it("separates static text from a named expression that nothing resolves", () => {
-		const staticText = resolveDateLocally({
-			text: "The user likes quiet workspaces.",
-			sessionDateTime: SESSION_ANCHOR,
-			sessionTimezone: SESSION_TIMEZONE,
-			locale: "en",
-		});
-		const unresolved = resolveDateLocally({
-			text: "The event happened on glorpday.",
-			expression: "glorpday",
-			sessionDateTime: SESSION_ANCHOR,
-			sessionTimezone: SESSION_TIMEZONE,
-			locale: "en",
-		});
-
-		expect(staticText.needsModel).toBe(false);
-		expect(staticText.result).toMatchObject({
-			timezone: SESSION_TIMEZONE,
-			interval: { type: "static", resolutionStatus: "static" },
-		});
-		expect(unresolved.needsModel).toBe(true);
-		expect(unresolved.result).toMatchObject({
-			timezone: SESSION_TIMEZONE,
-			interval: { type: "unresolved", resolutionStatus: "unresolved", phrase: "glorpday" },
-		});
-	});
-
-	it("uses the Korean phrase table after every parser misses regardless of configured locale", () => {
-		const resolved = resolveDateLocally({
-			text: "모레 배포를 확인해.",
-			sessionDateTime: SESSION_ANCHOR,
-			sessionTimezone: SESSION_TIMEZONE,
-			locale: "en",
-			localFirst: true,
-		});
-
-		expect(resolved.needsModel).toBe(false);
-		expect(resolved.result).toMatchObject({
-			timezone: "user",
-			stage: {
-				selectedParser: "ko-table",
-				selectionReason: "korean-anchor",
-			},
-			interval: {
-				type: "bounded",
-				resolutionStatus: "resolved",
-				from: Date.parse("2026-06-07T00:00:00.000Z"),
-			},
-		});
-	});
-
-	it.each([
-		["오늘", "today", "bounded", "2026-06-05T00:00:00.000Z"],
-		["어제", "yesterday", "bounded", "2026-06-04T00:00:00.000Z"],
-		["내일", "tomorrow", "bounded", "2026-06-06T00:00:00.000Z"],
-		["모레", "day_after_tomorrow", "bounded", "2026-06-07T00:00:00.000Z"],
-		["이번 주", "this_week", "bounded", "2026-06-01T00:00:00.000Z"],
-		["다음 주", "next_week", "bounded", "2026-06-08T00:00:00.000Z"],
-		["지난 주", "last_week", "bounded", "2026-05-25T00:00:00.000Z"],
-		["이번 달", "this_month", "bounded", "2026-06-01T00:00:00.000Z"],
-		["다음 달", "next_month", "bounded", "2026-07-01T00:00:00.000Z"],
-		["오늘 밤", "tonight", "bounded", "2026-06-05T18:00:00.000Z"],
-		["오늘 아침", "this_morning", "bounded", "2026-06-05T00:00:00.000Z"],
-		["최근", "recent", "ongoing", "2026-05-22T21:00:00.000Z"],
-	] as const)(
-		"resolves Korean %s with the shared Temporal %s anchor",
-		(phrase, _anchor, intervalType, expectedFrom) => {
-			const resolved = resolveDateLocally({
-				text: phrase,
-				sessionDateTime: SESSION_ANCHOR,
-				sessionTimezone: SESSION_TIMEZONE,
-				locale: "ko",
-				localFirst: true,
-			});
-			expect(resolved.needsModel).toBe(false);
-			expect(resolved.result).toMatchObject({
-				timezone: "user",
-				stage: { selectedParser: "ko-table", selectionReason: "korean-anchor" },
-				interval: { type: intervalType, resolutionStatus: "resolved" },
-			});
-			const interval = resolved.result.interval;
-			if (interval.type !== "bounded" && interval.type !== "ongoing") {
-				throw new Error("Korean anchor must resolve to a range");
-			}
-			expect(iso(interval.from)).toBe(expectedFrom);
-		},
-	);
-});
-
-/**
- * The ordinary case, and the one nothing covered until 2026-08-29: the user says nothing about a
- * timezone. Every other resolution case in this file hands `resolveDateLocally` an explicit
- * `sessionTimezone`, which is the one situation the product can rely on least. With none supplied
- * the resolver falls back to the host zone (`date-resolution.ts`, `sessionAnchor`), and the whole
- * question is whether it really does — a silent assumption of UTC gives the wrong calendar day for
- * every user west of Greenwich for part of each day, and reads as correct in a UTC test container.
- *
- * The assertions are therefore on the resolved interval rather than on any label: the same input,
- * resolved under two host zones, must land on two different instants. A UTC-assuming resolver
- * returns the same answer both times and fails here.
- */
-describe("no timezone stated — the ordinary path", () => {
-	function withHostTimezone<T>(timezone: string, body: () => T): T {
-		const previous = process.env.TZ;
-		process.env.TZ = timezone;
-		try {
-			return body();
-		} finally {
-			if (previous === undefined) delete process.env.TZ;
-			else process.env.TZ = previous;
-		}
-	}
-
-	/**
-	 * The async form, and it has to exist: the synchronous helper restores `TZ` as soon as the body
-	 * returns, which for an async body is at its first `await`. Everything after that await would
-	 * run under the original zone, so the test would be pinned to where the product happens to read
-	 * the clock rather than to what it reads.
-	 */
-	async function withHostTimezoneAsync<T>(timezone: string, body: () => Promise<T>): Promise<T> {
-		const previous = process.env.TZ;
-		process.env.TZ = timezone;
-		try {
-			return await body();
-		} finally {
-			if (previous === undefined) delete process.env.TZ;
-			else process.env.TZ = previous;
-		}
-	}
-
-	// 2026-06-06T04:00Z is 2026-06-05 21:00 in Los Angeles. One instant, two calendar days — which
-	// is the only input shape that can tell a host-zone reader apart from a UTC-assuming one, since
-	// day-granular results are carried as wall-clock values by design.
-	const SESSION_INSTANT = Date.UTC(2026, 5, 6, 4, 0, 0);
-
-	function resolveTodayWithNoStatedZone(): ReturnType<typeof resolveDateLocally> {
-		return resolveDateLocally({
-			text: "The user walked 8,578 steps today.",
-			// An instant and nothing else — no `sessionTimezone`, which is what arrives when nobody
-			// has said anything about a timezone.
-			sessionTimestamp: SESSION_INSTANT,
-			locale: "en",
-			localFirst: true,
-		});
-	}
-
-	it("puts today on the host's calendar day, not on the UTC one", () => {
-		const pacific = withHostTimezone("America/Los_Angeles", resolveTodayWithNoStatedZone);
-		expect(pacific.needsModel).toBe(false);
-		if (pacific.result.interval.type !== "bounded") {
-			throw new Error("today must resolve to a bounded day");
-		}
-		// Late evening in Los Angeles is already the next day in UTC. A resolver that assumed UTC
-		// files this memory under the 6th, one day off, for every user west of Greenwich.
-		expect(iso(pacific.result.interval.from)).toBe("2026-06-05T00:00:00.000Z");
-		expect(iso(pacific.result.interval.until)).toBe("2026-06-06T00:00:00.000Z");
-
-		const utc = withHostTimezone("UTC", resolveTodayWithNoStatedZone);
-		if (utc.result.interval.type !== "bounded") {
-			throw new Error("today must resolve to a bounded day");
-		}
-		expect(iso(utc.result.interval.from)).toBe("2026-06-06T00:00:00.000Z");
-
-		// The two host zones must disagree. If they agree, the fallback never read the host at all
-		// and both numbers above are accidents of the container's clock.
-		expect(pacific.result.interval.from).not.toBe(utc.result.interval.from);
-	});
-
-	it("stores the timestamp the resolver produced, under the zone it resolved it in", async () => {
-		// The two halves of this feature are settled in different files, and nothing checked the
-		// join. Discarding the resolved value and writing a constant would prove only that each
-		// half has a sane default — so the resolved instant is what gets written here, and the
-		// assertion is that the stored pair is that value and not something re-derived.
-		await withHostTimezoneAsync("America/Los_Angeles", async () => {
-			const resolved = resolveTodayWithNoStatedZone();
-			expect(resolved.needsModel).toBe(false);
-			if (resolved.result.interval.type !== "bounded") {
-				throw new Error("today must resolve to a bounded day");
-			}
-			const resolvedTimestamp = resolved.result.interval.from;
-			const created = await store.store({
-				text: "The user walked 8,578 steps today.",
-				category: "episodic",
-				projectId: PROJECT_ID,
-				timestamp: resolvedTimestamp,
-			});
-			expect(created.timestamp).toBe(resolvedTimestamp);
-			expect(created.timezone).toBe("America/Los_Angeles");
-			expect(persistedPair(created.id)).toEqual({
-				timestamp: resolvedTimestamp,
-				timezone: "America/Los_Angeles",
-			});
-		});
-	});
-
-	it("falls back to the host's own clock when nothing anchors the session", async () => {
-		// No session instant and no timezone: the resolver anchors on the host's current day rather
-		// than refusing, and the write must still produce a row whose timezone is a real zone,
-		// because the column rejects an empty one.
-		const resolved = withHostTimezone("America/Los_Angeles", () =>
-			resolveDateLocally({
-				text: "The user walked 8,578 steps today.",
-				locale: "en",
-				localFirst: true,
-			}),
-		);
-		if (resolved.result.interval.type !== "bounded") {
-			throw new Error("today must resolve to a bounded day");
-		}
-		const hostToday = new Date().toLocaleDateString("en-CA", {
-			timeZone: "America/Los_Angeles",
-		});
-		expect(iso(resolved.result.interval.from)).toBe(`${hostToday}T00:00:00.000Z`);
-
-		const created = await store.store({
-			text: "A memory captured with no session anchor at all.",
-			category: "episodic",
-			projectId: PROJECT_ID,
-			timestamp: FIRST_TIMESTAMP,
-		});
-		expect(created.timezone).toBeTruthy();
-		expect(persistedPair(created.id).timezone).toBe(created.timezone);
+	it("stores the calculated instant and timezone as one pair", async () => {
+		const result = calculateCalendarTime({ kind: "relative", amount: 0, unit: "day", precision: "day" }, SESSION_ANCHOR, SESSION_TIMEZONE);
+		if (!result) throw new Error("missing calendar result");
+		const row = await store.store({ text: "The user walked 8,578 steps today.", category: "episodic", projectId: PROJECT_ID, timestamp: result.from, timezone: result.timezone });
+		expect(persistedPair(row.id)).toEqual({ timestamp: Date.parse("2026-06-05T07:00:00Z"), timezone: SESSION_TIMEZONE });
 	});
 });
 
