@@ -95,3 +95,24 @@ it("keeps independently stated event dates separate", async () => {
 	expect(meeting?.resolvedTime?.label).toBe("2019-03-15");
 	expect(move?.resolvedTime?.label).toBe("2022-04-20");
 }, 120_000);
+
+
+it("accounts for an undated event without keyword recovery", async () => {
+	const apiKey = process.env.SNO_MEM_CLAW_LLM_INTERNAL_KEY;
+	if (!apiKey) throw new Error("SNO_MEM_CLAW_LLM_INTERNAL_KEY is required");
+	const client = createLlmClient({ preset: "mem_claw/sno_extract_chat", apiKey, timeoutMs: 90_000 });
+	const endpoint = await resolveLlmEndpoint({ configuredPreset: "mem_claw/sno_extract_chat", occasion: "memoryExtract", transport: "chat-completions" });
+	const text = "I moved from my home country, but I have not said when.";
+	const turns = [{ role: "user" as const, content: text }];
+	const counts: number[] = [];
+	for (let repeat = 0; repeat < 3; repeat += 1) {
+		const reply = await createAtomicGenericExtractionTransport(client).complete({ prompt: buildAtomicGenericExtractionPrompt(turns, "2023-06-09T19:55:00Z", "en", [0]), maxTokens: 4096 });
+		if (!reply || reply.truncated) throw new Error("Missing or truncated model reply");
+		const parsed = parseAtomicExtractionReply(reply.text, 1);
+		if (!parsed.ok) throw new Error(`Invalid reply: ${reply.text}`);
+		process.stdout.write(JSON.stringify({ host: hostname(), model: endpoint.preset.model, endpoint: endpoint.url, name: "undated turn accounting", repeat, raw: reply.text }) + "\n");
+		counts.push(parsed.records.length);
+		for (const record of parsed.records) expect(record.time.kind).toBe("unresolved");
+	}
+	expect(counts.every((count) => count > 0)).toBe(true);
+}, 300_000);
