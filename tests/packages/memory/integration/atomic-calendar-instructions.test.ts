@@ -4,11 +4,11 @@ import { parseAtomicExtractionReply } from "../../../../packages/sno-station-mem
 import { runAtomicExtractionGauntlet } from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-extraction-gauntlet";
 import { buildAtomicWriteCards } from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-write-projection";
 
-async function project(text: string, phrase: string | null, time: unknown, anchor: string) {
+async function project(text: string, phrase: string | null, time: unknown, anchor: string, ending?: unknown) {
 	const parsed = parseAtomicExtractionReply(JSON.stringify({ records: [{
 		kind: "occurrence", claim_text: text, subject: "Caroline", subject_kind: "named_entity",
 		attribute: null, value: text, temporal_phrase: phrase, time,
-		ends_current: false, ended_at_phrase: null, ended_time: { kind: "none" },
+		ends_current: ending !== undefined, ended_at_phrase: ending ? "last year" : null, ended_time: ending ?? { kind: "none" },
 		importance: "medium", changes_current_state: false, todo: "none", close_reason: null,
 		source_span: { turn_index: 0, quote: text }, relations: [], single_claim: true,
 	}] }), 1);
@@ -99,4 +99,11 @@ it("does not turn a standing fact's start-year precision into an expiry", () => 
 		expect(metadata).not.toHaveProperty("event_at");
 	}
 	expect(serializeIntervalMetadata("episodic", interval)).toMatchObject({ valid_until: Date.UTC(2020, 0, 1), temporal_date: "2019" });
+});
+
+
+it("preserves a coarse ending range without inventing an exact closing day", async () => {
+	const card = await project("The user stopped living in Kyoto last year.", null, { kind: "none" }, "2023-06-09T19:55:00Z", { kind: "relative", amount: -1, unit: "year", precision: "year" });
+	expect(card?.endedAt).toBeNull();
+	expect(card?.metadata).toMatchObject({ ended_at_date: "2022", ended_at_precision: "year", ended_at_from: Date.UTC(2022, 0, 1), ended_at_until: Date.UTC(2023, 0, 1), ended_time_instruction: { kind: "relative", amount: -1, unit: "year", precision: "year" } });
 });
