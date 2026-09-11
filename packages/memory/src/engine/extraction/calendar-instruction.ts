@@ -66,6 +66,10 @@ function anchorDate(value: string | undefined, zone: string): Temporal.ZonedDate
 	try { return Temporal.PlainDateTime.from(value).toZonedDateTime(zone); } catch { return undefined; }
 }
 
+export function calendarSessionTimestamp(value: string | undefined, zone?: string): number | undefined {
+	return anchorDate(value, zone ?? sessionZoneCarriedBy(value) ?? "UTC")?.epochMilliseconds;
+}
+
 function shift(unit: string, amount: number): Temporal.DurationLike {
 	switch (unit) {
 		case "year": return { years: amount };
