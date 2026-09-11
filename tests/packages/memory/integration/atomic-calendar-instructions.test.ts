@@ -63,3 +63,27 @@ describe("model meaning to calendar arithmetic to write metadata", () => {
 		expect(card?.metadata).toMatchObject({ temporal_date: "2027", temporal_precision: "year" });
 	});
 });
+
+describe("calendar boundaries and invalid operations", () => {
+	it.each([
+		["2023-01-31T12:00:00Z", 1, "month", "2023-02-28"],
+		["2024-01-31T12:00:00Z", 1, "month", "2024-02-29"],
+		["2024-03-31T12:00:00Z", -1, "month", "2024-02-29"],
+		["2024-02-29T12:00:00Z", -10, "year", "2014-02-28"],
+	] as const)("constrains %s shifted %s %s", async (anchor, amount, unit, label) => {
+		const card = await project("The event has the stated calendar offset.", null,
+			{ kind: "relative", amount, unit, precision: "day" }, anchor);
+		expect(card?.metadata).toMatchObject({ temporal_date: label, event_at: `${label}T00:00:00.000Z` });
+	});
+
+	it.each([
+		{ kind: "absolute", year: 2023, month: 2, day: 30, precision: "day" },
+		{ kind: "absolute", year: 2023, month: 2, precision: "day" },
+		{ kind: "absolute", year: 2024, month: 3, day: 10, hour: 2, minute: 30, precision: "minute", timezone: "America/Los_Angeles" },
+		{ kind: "absolute", year: 2024, month: 11, day: 3, hour: 1, minute: 30, precision: "minute", timezone: "America/Los_Angeles" },
+	] as const)("does not invent an instant from invalid or ambiguous calendar fields %j", async (instruction) => {
+		const card = await project("The source supplied this time.", null, instruction, "2024-07-17T12:00:00Z");
+		expect(card?.validFrom).toBeNull();
+		expect(card?.metadata).not.toHaveProperty("event_at");
+	});
+});
