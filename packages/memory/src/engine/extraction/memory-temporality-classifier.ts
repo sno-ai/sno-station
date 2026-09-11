@@ -85,7 +85,7 @@ export function serializeIntervalMetadata(
 		base.valid_from = interval.at;
 	} else if (interval.type === "bounded") {
 		base.valid_from = interval.from;
-		base.valid_until = interval.until;
+		if (category === "episodic") base.valid_until = interval.until;
 		if (interval.date !== undefined) base.temporal_date = interval.date;
 		if (interval.precision !== undefined) base.temporal_precision = interval.precision;
 	} else if (interval.type === "ongoing") {

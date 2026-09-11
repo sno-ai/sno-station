@@ -52,7 +52,7 @@ function eventTime(
 	sessionTimestampMs: number,
 ): { timestamp: number; validFrom: number | null; validUntil: number | null } {
 	return {
-		timestamp: record.resolvedTime?.from ?? sessionTimestampMs,
+		timestamp: sessionTimestampMs,
 		validFrom: record.resolvedTime?.from ?? null,
 		validUntil: record.category === "episodic" ? record.resolvedTime?.until ?? null : null,
 	};
@@ -85,6 +85,13 @@ function metadataForRecord(
 				? { event_at: new Date(record.resolvedTime.from).toISOString() } : {}),
 		} : {}),
 		time_instruction: record.time,
+		ended_time_instruction: record.endedTime,
+		...(record.endedAt ? {
+			ended_at_date: record.endedAt.label,
+			ended_at_precision: record.endedAt.precision,
+			ended_at_from: record.endedAt.from,
+			ended_at_until: record.endedAt.until,
+		} : {}),
 		temporal_resolution_status: record.resolvedTime ? "resolved" : record.time.kind === "none" ? "static" : "unresolved",
 		value: record.value,
 		importance_label: record.importance,
@@ -136,7 +143,8 @@ export function buildAtomicWriteCards(
 				: { refusedAttribute: record.refusedAttribute }),
 			globalTurnIndex: input.sourceTurnOffset + sourceTurnIndex(sanitizedRecord),
 			endsCurrent: sanitizedRecord.endsCurrent,
-			endedAt: sanitizedRecord.endedAt?.from ?? null,
+			endedAt: sanitizedRecord.endedAt && ["day", "minute"].includes(sanitizedRecord.endedAt.precision)
+				? sanitizedRecord.endedAt.from : null,
 			text: sanitizedRecord.claimText,
 			category: sanitizedRecord.category,
 			// Parked rows only. Parking nulls subject and attribute, so without this the reason a
