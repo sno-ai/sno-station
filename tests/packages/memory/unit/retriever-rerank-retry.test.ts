@@ -87,6 +87,29 @@ describe("rerank transient-failure retry (issue #222)", () => {
 		expect(outcome.candidates.map((c) => c.entry.id)).toEqual(["b", "a"]);
 	});
 
+	it("retries when the body read fails after a 200 header", async () => {
+		// The socket can die after the headers: fetch() resolves, response.json() rejects.
+		const brokenBody = new Response(
+			new ReadableStream({
+				pull(controller) {
+					controller.error(new TypeError("terminated", { cause: new Error("UND_ERR_SOCKET") }));
+				},
+			}),
+			{ status: 200, headers: { "content-type": "application/json" } },
+		);
+		const fetchMock = vi
+			.fn<typeof fetch>()
+			.mockResolvedValueOnce(brokenBody)
+			.mockResolvedValueOnce(teiResponse());
+		vi.stubGlobal("fetch", fetchMock);
+
+		const outcome = await crossEncoderRetriever().rerank("query", twoCandidates(), queryVector);
+
+		expect(fetchMock).toHaveBeenCalledTimes(2);
+		expect(outcome.fallback).toBeUndefined();
+		expect(outcome.candidates.map((c) => c.entry.id)).toEqual(["b", "a"]);
+	});
+
 	it("gives up after three timeouts and reports the fallback as a timeout", async () => {
 		// Node's fetch with AbortSignal.timeout() rejects with a DOMException named
 		// "TimeoutError" (measured on Node 24), not "AbortError".
