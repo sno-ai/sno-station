@@ -106,6 +106,7 @@ function wireRecord(overrides: Record<string, unknown> = {}): Record<string, unk
 		attribute: "preference.food",
 		value: "tea",
 		temporal_phrase: null,
+		time: { kind: "none" }, ended_time: { kind: "none" },
 		ends_current: false,
 		ended_at_phrase: null,
 		importance: "medium",

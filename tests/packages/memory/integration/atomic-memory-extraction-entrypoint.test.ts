@@ -58,6 +58,7 @@ function wireRecord(overrides: Record<string, unknown>): Record<string, unknown>
 		attribute: "preference.food",
 		value: "tea",
 		temporal_phrase: null,
+		time: { kind: "none" }, ended_time: { kind: "none" },
 		resolved_time: null,
 		importance: "medium",
 		changes_current_state: false,
@@ -203,6 +204,7 @@ describe("atomic memory extraction production entrypoint", () => {
 				attribute: "identity.location",
 				value: "Kyoto",
 				temporal_phrase: "At 20:15 on 2 September 2026",
+				time: { kind: "absolute", year: 2026, month: 9, day: 2, hour: 20, minute: 15, precision: "minute" },
 				source_span: { turn_index: 1, quote: turns[1]?.content },
 			}),
 			wireRecord({
