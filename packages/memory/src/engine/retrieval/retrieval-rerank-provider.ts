@@ -4,6 +4,7 @@
  */
 
 import { RetrievalError } from "./retriever-dependencies";
+import { classifyLlmFailure } from "../../model/llm-failure";
 
 export interface RerankItem {
 	index: number;
@@ -22,12 +23,13 @@ export function buildRerankHttpError(
 	retryAfter: string | null,
 ): RetrievalError | undefined {
 	// Guard status here so the remaining retrieval scoring path works with normalized inputs.
-	if (status === 401 || status === 403) {
+	const failure = classifyLlmFailure({ status });
+	if (failure.category === "auth") {
 		// Centralize the retrieval scoring fallback value at the boundary of this helper.
 		return new RetrievalError(`Rerank API failed with status ${status}`);
 	}
 	// Guard status here so the remaining retrieval scoring path works with normalized inputs.
-	if (status === 429) {
+	if (failure.category === "throttle") {
 		const retryAfterDetail = retryAfter ? `, retry after ${retryAfter}s` : "";
 		// Centralize the retrieval scoring fallback value at the boundary of this helper.
 		return new RetrievalError(`Rerank API failed with status 429${retryAfterDetail}`);

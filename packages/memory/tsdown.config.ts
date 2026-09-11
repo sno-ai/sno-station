@@ -118,6 +118,7 @@ export default defineConfig([
   "internal/engine/telemetry/memory-telemetry-types": "src/engine/telemetry/memory-telemetry-types.ts",
   "internal/model/agent-llm-port": "src/model/agent-llm-port.ts",
   "internal/model/llm-client": "src/model/llm-client.ts",
+  "internal/model/llm-failure": "src/model/llm-failure.ts",
   "internal/model/llm-mode-routing": "src/model/llm-mode-routing.ts",
   "internal/store/atomic-memory-cutover-sql": "src/store/atomic-memory-cutover-sql.ts",
   "internal/store/connection": "src/store/connection.ts",
