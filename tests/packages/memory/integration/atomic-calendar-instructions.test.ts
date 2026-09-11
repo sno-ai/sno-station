@@ -1,3 +1,4 @@
+import { serializeIntervalMetadata } from "../../../../packages/sno-station-mem/src/engine/extraction/memory-temporality-classifier";
 import { describe, expect, it } from "vitest";
 import { parseAtomicExtractionReply } from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-extraction-reply";
 import { runAtomicExtractionGauntlet } from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-extraction-gauntlet";
@@ -86,4 +87,16 @@ describe("calendar boundaries and invalid operations", () => {
 		expect(card?.validFrom).toBeNull();
 		expect(card?.metadata).not.toHaveProperty("event_at");
 	});
+});
+
+
+it("does not turn a standing fact's start-year precision into an expiry", () => {
+	const interval = { type: "bounded" as const, resolutionStatus: "resolved" as const, from: Date.UTC(2019, 0, 1), until: Date.UTC(2020, 0, 1), phrase: "for 4 years", date: "2019", precision: "year" as const };
+	for (const category of ["profile", "state"] as const) {
+		const metadata = serializeIntervalMetadata(category, interval);
+		expect(metadata).toMatchObject({ valid_from: Date.UTC(2019, 0, 1), temporal_date: "2019", temporal_precision: "year" });
+		expect(metadata).not.toHaveProperty("valid_until");
+		expect(metadata).not.toHaveProperty("event_at");
+	}
+	expect(serializeIntervalMetadata("episodic", interval)).toMatchObject({ valid_until: Date.UTC(2020, 0, 1), temporal_date: "2019" });
 });

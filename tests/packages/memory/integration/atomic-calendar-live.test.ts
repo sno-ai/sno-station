@@ -76,3 +76,22 @@ describe("real model understands time; code calculates", () => {
 		}
 	}, 300_000);
 });
+
+it("keeps independently stated event dates separate", async () => {
+	const apiKey = process.env.SNO_MEM_CLAW_LLM_INTERNAL_KEY;
+	if (!apiKey) throw new Error("SNO_MEM_CLAW_LLM_INTERNAL_KEY is required");
+	const client = createLlmClient({ preset: "mem_claw/sno_extract_chat", apiKey, timeoutMs: 90_000 });
+	const endpoint = await resolveLlmEndpoint({ configuredPreset: "mem_claw/sno_extract_chat", occasion: "memoryExtract", transport: "chat-completions" });
+	const text = "I met Ada on March 15, 2019. I moved to Kyoto on April 20, 2022.";
+	const turns = [{ role: "user" as const, content: text }];
+	const reply = await createAtomicGenericExtractionTransport(client).complete({ prompt: buildAtomicGenericExtractionPrompt(turns, "2023-06-09T19:55:00Z"), maxTokens: 4096 });
+	if (!reply || reply.truncated) throw new Error("Missing or truncated model reply");
+	const parsed = parseAtomicExtractionReply(reply.text, 1);
+	if (!parsed.ok) throw new Error(`Invalid model reply: ${reply.text}`);
+	const records = await runAtomicExtractionGauntlet({ records: parsed.records, turns, sessionDateTime: "2023-06-09T19:55:00Z", sessionTimezone: "UTC" });
+	process.stdout.write(JSON.stringify({ host: hostname(), model: endpoint.preset.model, endpoint: endpoint.url, name: "independent event dates", raw: reply.text, dates: records.map((record) => record.resolvedTime?.label) }) + "\n");
+	const meeting = records.find((record) => record.claimText.includes("Ada"));
+	const move = records.find((record) => record.claimText.includes("Kyoto"));
+	expect(meeting?.resolvedTime?.label).toBe("2019-03-15");
+	expect(move?.resolvedTime?.label).toBe("2022-04-20");
+}, 120_000);
