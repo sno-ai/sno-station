@@ -27,7 +27,7 @@ import type {
 	MemoryRelation,
 } from "./memory-metadata-types";
 import { memoryMetadata } from "./memory-metadata-types";
-import { isoDateFromMs, normalizeIsoDateTimeString } from "../shared/iso-date-time";
+import { normalizeIsoDateTimeString } from "../shared/iso-date-time";
 import type { MemoryCategory } from "../shared/types";
 
 export { deriveFactKey } from "./memory-metadata-normalizers";
@@ -227,16 +227,13 @@ function normalizeInsightMetadata(
 	};
 
 	if (memoryCategory === "episodic") {
-		// Every episodic memory carries a date. Validate the patch and existing
-		// values INDEPENDENTLY so an unparseable patch date (e.g. "Friday
-		// afternoon") can never shadow and discard a valid stored `event_at` —
-		// only when neither is a valid date do we fall back to `valid_from`, the
-		// session day ("valid at now"). `temporal_resolution_status` is left
-		// untouched, so a defaulted date is never misreported as a resolved one.
+		// A record timestamp and a range boundary do not establish an event day.
+		const dayUnknown = candidate.temporal_resolution_status === "unresolved" ||
+			candidate.temporal_resolution_status === "static" ||
+			["year", "month", "week"].includes(String(candidate.temporal_precision));
 		candidate.event_at =
 			normalizeIsoDateTimeString(patch.event_at) ??
-			normalizeIsoDateTimeString(parsed.event_at) ??
-			isoDateFromMs(validFrom);
+			(dayUnknown ? undefined : normalizeIsoDateTimeString(parsed.event_at));
 		candidate.entity_kind = normalizeOptionalString(patch.entity_kind ?? parsed.entity_kind);
 	}
 	if (memoryCategory === "profile") {

@@ -140,12 +140,6 @@ export async function executeMemoryUpdateTool(ctx: ToolContext, access: ReturnTy
 									llm: ctx.profileToolLlm,
 									routing: ctx.llmRouting,
 								});
-								if (
-									dateResolution.interval.resolutionStatus === "resolved" &&
-									dateResolution.timestamp !== undefined
-								) {
-									changes.timezone = dateResolution.timezone;
-								}
 								const userProvidedTemporalType =
 									parsed.metadata !== undefined && "memory_temporal_type" in parsed.metadata;
 								const userProvidedTemporalStatus =
