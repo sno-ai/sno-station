@@ -14,7 +14,8 @@ export type ToolResponse = {
 export type InspectData =
 	| { op: "storage"; dimension: number | null; failed: boolean; reason?: string }
 	| { op: "stats"; total: number; projectBreakdown: Record<string, number>; categoryBreakdown: Record<string, number> }
-	| { op: "list" | "listReflection"; entries: MemoryEntry[] }
+	/** `project` is the call's resolved write project, so a caller can address it even when no entry exists. */
+	| { op: "list" | "listReflection"; project: string; entries: MemoryEntry[] }
 	| { op: "get"; entry: MemoryEntry | null; file?: { text: string; path: string; truncated?: boolean; from?: number; lines?: number; nextFrom?: number } };
 export interface ContractOutputs {
 	init: Result<{ principal: string; skinId: string }>;
@@ -62,7 +63,7 @@ export const inspectDataSchema: z.ZodType<InspectData, unknown> = z.discriminate
 	z.strictObject({ op: z.literal("stats"), total: z.number().int().nonnegative(),
 		projectBreakdown: z.record(z.string(), z.number().int().nonnegative()),
 		categoryBreakdown: z.record(z.string(), z.number().int().nonnegative()) }),
-	z.strictObject({ op: z.enum(["list", "listReflection"]), entries: z.array(memoryEntrySchema) }),
+	z.strictObject({ op: z.enum(["list", "listReflection"]), project: z.string().min(1), entries: z.array(memoryEntrySchema) }),
 	z.strictObject({ op: z.literal("get"), entry: memoryEntrySchema.nullable(),
 		file: z.strictObject({ text: z.string(), path: z.string(), truncated: z.boolean().optional(),
 			from: z.number().int().optional(), lines: z.number().int().optional(),

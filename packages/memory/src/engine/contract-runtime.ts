@@ -295,8 +295,8 @@ export class MemoryContractRuntime implements MemoryContract {
 				const counted = await Promise.all(readable.map(scopeId => this.services.store.stats(scopeId)));
 				return { degraded: false, result: { op: "stats", ...sumStats(counted) } };
 			}
-			case "list": return { degraded: false, result: { op: "list", entries: await this.services.store.list({ ...op, projectIdFilter: readable, importanceMin: op.importanceMin }) } };
-			case "listReflection": return { degraded: false, result: { op: "listReflection", entries: await this.services.store.listReflectionItems({ ...op, projectIdFilter: readable }) } };
+			case "list": return { degraded: false, result: { op: "list", project, entries: await this.services.store.list({ ...op, projectIdFilter: readable, importanceMin: op.importanceMin }) } };
+			case "listReflection": return { degraded: false, result: { op: "listReflection", project, entries: await this.services.store.listReflectionItems({ ...op, projectIdFilter: readable }) } };
 			case "get": {
 				if (op.path) {
 					const manager = await this.provider(scope);
