@@ -1,3 +1,4 @@
+import { resolveLlmEndpoint } from "../../../../packages/sno-station-mem/src/model/llm-endpoint-resolution";
 /** Real LlmClient routing; the AgentLlmPort seam injects malformed external replies only. */
 import { describe, expect, it } from "vitest";
 import { hostname } from "node:os";
@@ -102,8 +103,9 @@ describe("date-resolution semantic contract", () => {
 		if (!apiKey) throw new Error("SNO_MEM_CLAW_LLM_INTERNAL_KEY is required");
 		const llm = createLlmClient({ preset: "mem_claw/sno_extract_chat", apiKey, timeoutMs: 90_000 });
 		const config = await llm.getResolvedConfig();
+		const endpoint = await resolveLlmEndpoint({ configuredPreset: "mem_claw/sno_extract_chat", occasion: "dateResolution", transport: "chat-completions" });
 		const result = await resolveMemoryDate({ text: "I've known these friends for 4 years, since I moved from my home country.", expression: "for 4 years", sessionDateTime: "2023-06-09T19:55:00Z", sessionTimezone: "UTC", llm });
-		process.stdout.write(JSON.stringify({ host: hostname(), model: config.model, endpoint: config.baseUrl, result }) + "\n");
+		process.stdout.write(JSON.stringify({ host: hostname(), model: config.model, endpoint: endpoint.url, result }) + "\n");
 		expect(result.stage.modelCalled).toBe(true);
 		expect(result.interval).toMatchObject({ type: "bounded", date: "2019", precision: "year", from: Date.UTC(2019, 0, 1), until: Date.UTC(2020, 0, 1) });
 	}, 120_000);

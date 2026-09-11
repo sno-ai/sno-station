@@ -1,3 +1,4 @@
+import { resolveLlmEndpoint } from "../../../../packages/sno-station-mem/src/model/llm-endpoint-resolution";
 /** Real shipping extraction prompt and signed transport; no substitute model. */
 import { randomUUID } from "node:crypto";
 import { createTestDb, createTestEmbedder } from "../../../apps/mem-claw/helpers/test-db";
@@ -27,17 +28,18 @@ describe("real model understands time; code calculates", () => {
 		if (!apiKey) throw new Error("SNO_MEM_CLAW_LLM_INTERNAL_KEY is required");
 		const client = createLlmClient({ preset: "mem_claw/sno_extract_chat", apiKey, timeoutMs: 90_000 });
 		const config = await client.getResolvedConfig();
+		const endpoint = await resolveLlmEndpoint({ configuredPreset: "mem_claw/sno_extract_chat", occasion: "memoryExtract", transport: "chat-completions" });
 		const transport = createAtomicGenericExtractionTransport(client);
 		const turns = [{ role: "user" as const, content: text }];
 		for (let repeat = 0; repeat < 3; repeat += 1) {
 			const completion = await transport.complete({ prompt: buildAtomicGenericExtractionPrompt(turns, anchor), maxTokens: 4096 });
 			if (!completion || completion.truncated) throw new Error("Missing or truncated real model reply");
 			const parsed = parseAtomicExtractionReply(completion.text, turns.length);
-			process.stdout.write(JSON.stringify({ host: hostname(), model: config.model, endpoint: config.baseUrl, name, repeat, raw: completion.text }) + "\n");
+			process.stdout.write(JSON.stringify({ host: hostname(), model: config.model, endpoint: endpoint.url, name, repeat, raw: completion.text }) + "\n");
 			if (!parsed.ok) throw new Error(`Invalid reply: ${completion.text}`);
 			expect(parsed.records.length).toBeGreaterThan(0);
 			const records = await runAtomicExtractionGauntlet({ records: parsed.records, turns, sessionDateTime: anchor, sessionTimezone: "UTC" });
-			process.stdout.write(JSON.stringify({ host: hostname(), model: config.model, endpoint: config.baseUrl,
+			process.stdout.write(JSON.stringify({ host: hostname(), model: config.model, endpoint: endpoint.url,
 				skillHash: ATOMIC_EXTRACTION_SKILL_HASH, name, repeat, records: records.map(({ claimText, time, resolvedTime }) => ({ claimText, time, resolvedTime })) }) + "\n");
 			if (repeat === 0) {
 				const fixture = createTestDb();
@@ -62,7 +64,7 @@ describe("real model understands time; code calculates", () => {
 						}
 						return episodicEventDate(row);
 					});
-					process.stdout.write(JSON.stringify({ host: hostname(), model: config.model, endpoint: config.baseUrl, name, dbPath: fixture.dbPath, stored: written.createdCount, recalledDates }) + "\n");
+					process.stdout.write(JSON.stringify({ host: hostname(), model: config.model, endpoint: endpoint.url, name, dbPath: fixture.dbPath, stored: written.createdCount, recalledDates }) + "\n");
 				} finally { await store.close(); fixture.cleanup(); }
 			}
 			const dates = records.flatMap((record) => record.resolvedTime ? [record.resolvedTime.label] : []);
