@@ -92,7 +92,7 @@ async function settledSidecarProcesses(): Promise<number[]> {
   return seen;
 }
 async function discoveredPid(): Promise<number> {
-  return JSON.parse(await readFile(join(root, "profile/station/sno-station-mem.json"), "utf8")).pid;
+  return JSON.parse(await readFile(join(root, "profile/station/sidecar.json"), "utf8")).pid;
 }
 async function stateFiles(): Promise<string[]> {
   const files = await readdir(join(root, "profile/sno-station-mem"), { recursive: true });
@@ -151,7 +151,7 @@ beforeEach(async () => {
 afterEach(async () => {
   for (const child of children.splice(0)) { child.disconnect(); child.kill("SIGTERM"); }
   if (!sidecarPid && root) {
-    try { sidecarPid = JSON.parse(await readFile(join(root, "profile/station/sno-station-mem.json"), "utf8")).pid; } catch {}
+    try { sidecarPid = JSON.parse(await readFile(join(root, "profile/station/sidecar.json"), "utf8")).pid; } catch {}
   }
   await stopSidecar();
   for (const extra of extraRoots.splice(0)) {
@@ -182,7 +182,7 @@ it("captures in one published client process, recalls in another, forgets and re
 it("refuses a foreign principal before granting engine or store access", async () => {
   const owner = await initialized();
   expect(await exchange(owner, "capture", [{ turnId: "private-tea", rewindEpoch: 0, messages: [{ role: "user", content: "My stable personal preference is jasmine tea.", at: Date.parse("2026-09-09T18:00:00Z") }] }, scope])).toMatchObject({ degraded: false, committed: true });
-  const discovery = JSON.parse(await readFile(join(root, "profile/station/sno-station-mem.json"), "utf8"));
+  const discovery = JSON.parse(await readFile(join(root, "profile/station/sidecar.json"), "utf8"));
   const headers = { Authorization: `Bearer ${discovery.token}`, "Content-Type": "application/json", "x-sno-station-mem-skin": registration.skinId };
   const health = async () => await (await fetch(`http://127.0.0.1:${discovery.port}/healthz`, { headers })).json();
   const before = await health();
@@ -317,7 +317,7 @@ it("QCG-5: 32 concurrent first connects share one sidecar, one port and one bind
   extraRoots[0].pid = second.connected.pid;
   expect(second.connected.pid).not.toBe(delayedPid);
   expect((await settledSidecarProcesses()).sort()).toEqual([delayedPid, second.connected.pid].sort());
-  expect(JSON.parse(await readFile(join(secondProfile, "station/sno-station-mem.json"), "utf8")).pid).toBe(second.connected.pid);
+  expect(JSON.parse(await readFile(join(secondProfile, "station/sidecar.json"), "utf8")).pid).toBe(second.connected.pid);
   expect(await discoveredPid()).toBe(delayedPid);
 }, 180_000);
 

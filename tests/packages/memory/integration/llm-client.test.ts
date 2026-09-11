@@ -587,9 +587,9 @@ describe("mem-claw llm-client", () => {
 	});
 
 	it("defaults OpenAI extraction to zero-billing ccproxy and keeps localhost overrides possible", async () => {
-		const originalHeliconeApiKey = process.env.SNO_STATION_MEM_HELICONE_API_KEY;
+		const originalHeliconeApiKey = process.env.HELICONE_API_KEY;
 		const originalHeliconeOpenaiBaseUrl = process.env.HELICONE_OPENAI_BASE_URL;
-		delete process.env.SNO_STATION_MEM_HELICONE_API_KEY;
+		delete process.env.HELICONE_API_KEY;
 		delete process.env.HELICONE_OPENAI_BASE_URL;
 
 		const requests: Array<{ url: string; headers: Headers }> = [];
@@ -626,9 +626,9 @@ describe("mem-claw llm-client", () => {
 			);
 		} finally {
 			if (originalHeliconeApiKey === undefined) {
-				delete process.env.SNO_STATION_MEM_HELICONE_API_KEY;
+				delete process.env.HELICONE_API_KEY;
 			} else {
-				process.env.SNO_STATION_MEM_HELICONE_API_KEY = originalHeliconeApiKey;
+				process.env.HELICONE_API_KEY = originalHeliconeApiKey;
 			}
 			if (originalHeliconeOpenaiBaseUrl === undefined) {
 				delete process.env.HELICONE_OPENAI_BASE_URL;
@@ -674,10 +674,10 @@ describe("mem-claw llm-client", () => {
 
 	it("uses LLMIx sno_ai_extract routing without sending SNO_MEM_CLAW_LLM_INTERNAL_KEY to overrides", async () => {
 		const originalGpuBaseUrl = process.env.GPU_BASE_URL;
-		const originalSnoKey = process.env.SNO_STATION_MEM_LLM_API_KEY;
+		const originalSnoKey = process.env.SNO_MEM_CLAW_LLM_API_KEY;
 		const originalInternalSecret = process.env.SNO_MEM_CLAW_LLM_INTERNAL_KEY;
 		process.env.GPU_BASE_URL = "https://gpu.example.test";
-		delete process.env.SNO_STATION_MEM_LLM_API_KEY;
+		delete process.env.SNO_MEM_CLAW_LLM_API_KEY;
 		process.env.SNO_MEM_CLAW_LLM_INTERNAL_KEY = "internal-secret";
 
 		const requests: Array<{ url: string; headers: Headers }> = [];
@@ -714,8 +714,8 @@ describe("mem-claw llm-client", () => {
 		} finally {
 			if (originalGpuBaseUrl === undefined) delete process.env.GPU_BASE_URL;
 			else process.env.GPU_BASE_URL = originalGpuBaseUrl;
-			if (originalSnoKey === undefined) delete process.env.SNO_STATION_MEM_LLM_API_KEY;
-			else process.env.SNO_STATION_MEM_LLM_API_KEY = originalSnoKey;
+			if (originalSnoKey === undefined) delete process.env.SNO_MEM_CLAW_LLM_API_KEY;
+			else process.env.SNO_MEM_CLAW_LLM_API_KEY = originalSnoKey;
 			if (originalInternalSecret === undefined) delete process.env.SNO_MEM_CLAW_LLM_INTERNAL_KEY;
 			else process.env.SNO_MEM_CLAW_LLM_INTERNAL_KEY = originalInternalSecret;
 		}
