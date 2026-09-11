@@ -1,3 +1,4 @@
+import { calculateCalendarTime } from "../../../../packages/sno-station-mem/src/engine/extraction/calendar-instruction";
 /** @file atomic-row-event-time.test.ts
  * @purpose Proves a stored atomic row is dated by when the remembered thing happened, never by the write clock.
  * @boundary The real write projection and real encrypted SQLite through MemoryStore; no model calls.
@@ -55,7 +56,8 @@ function record(overrides: Partial<AtomicKeyedRecord> = {}): AtomicKeyedRecord {
 		attribute: null,
 		value: "8,004 steps",
 		temporalPhrase: "on 2026-06-04",
-		resolvedTime: { year: 2026, month: 6, day: 4 },
+		resolvedTime: calculateCalendarTime({ kind: "absolute", year: 2026, month: 6, day: 4, precision: "day" }),
+		time: { kind: "absolute", year: 2026, month: 6, day: 4, precision: "day" }, endedTime: { kind: "none" },
 		importance: "medium",
 		changesCurrentState: false,
 		todo: "none",
@@ -185,7 +187,7 @@ describe("atomic row event time", () => {
 					claimText: "The user was born in March 1965.",
 					value: "born March 1965",
 					temporalPhrase: "in March 1965",
-					resolvedTime: { year: 1965, month: 3, day: 17 },
+					resolvedTime: calculateCalendarTime({ kind: "absolute", year: 1965, month: 3, day: 17, precision: "day" }),
 				}),
 				record(),
 			]),
