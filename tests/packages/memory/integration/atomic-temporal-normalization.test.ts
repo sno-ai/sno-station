@@ -53,6 +53,7 @@ describe("atomic temporal normalization", () => {
 	it("rejects the obsolete phrase-only model reply instead of guessing", () => {
 		const wire = reply({ kind: "unresolved" });
 		const record = wire.records[0];
+		if (!record) throw new Error("missing fixture record");
 		Reflect.deleteProperty(record, "time");
 		expect(parseAtomicExtractionReply(JSON.stringify(wire), 1).ok).toBe(false);
 	});

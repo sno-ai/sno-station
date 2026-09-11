@@ -85,6 +85,7 @@ function guardedRecord(turn: AtomicExtractionTurn): AtomicKeyedRecord {
 		value: "tea",
 		temporalPhrase: null,
 		resolvedTime: null,
+		time: { kind: "none" }, endedTime: { kind: "none" },
 		importance: "medium",
 		changesCurrentState: false,
 		todo: "none",
@@ -146,8 +147,8 @@ describe("atomic extraction prompt contract", () => {
 				pattern: /pronouns,\s+bare\s+roles,\s+and\s+things\s+the\s+text\s+never\s+names[\s\S]{0,160}are\s+`unresolved`/iu,
 			},
 			{
-				name: "time as the phrase's exact words, resolved by the engine",
-				pattern: /temporal_phrase[\s\S]{0,120}exact\s+words[\s\S]{0,400}engine\s+resolves\s+the\s+phrase/iu,
+				name: "model interprets time in complete context",
+				pattern: /Read the complete conversation and the claim before deciding its time/u,
 			},
 			{
 				name: "verbatim evidence with the supplied turn index",
@@ -160,7 +161,7 @@ describe("atomic extraction prompt contract", () => {
 		];
 		const engineOwned = [
 			{ name: "a date field for the model to compute", pattern: /resolved_time|integer `year`/u },
-			{ name: "an absolute date written into the sentence", pattern: /absolute date/iu },
+			{ name: "a calculated timestamp returned by the model", pattern: /return a calculated timestamp/iu },
 			{ name: "a character limit", pattern: /at most \d+ characters/iu },
 			{ name: "character offsets", pattern: /character offsets/iu },
 			{ name: "weekday arithmetic", pattern: /next <weekday>/iu },

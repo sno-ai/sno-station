@@ -75,15 +75,14 @@ function expectCompound(item: AtomicGauntletRecord, failure?: string): void {
 }
 
 describe("atomic extraction gauntlet", () => {
-	it("batches model-identified compound claims into one re-split and re-runs its outputs", async () => {
+	it("batches both compound signals into one re-split and re-runs its outputs", async () => {
 		const singleClaimFalse = record({
 			claimText: "The user moved twice and changed jobs.",
 			value: "moved twice and changed jobs",
 			sourceSpan: { turnIndex: 0, quote: "I moved to Kyoto." },
 			singleClaim: false,
 		});
-		const modelCompound = record({
-			singleClaim: false,
+		const twoDictionaryKeys = record({
 			claimText: "The user's favorite dish and favorite music changed.",
 			value: "curry and jazz",
 			sourceSpan: {
@@ -107,13 +106,13 @@ describe("atomic extraction gauntlet", () => {
 		const transport = new ScriptedResplitTransport([atomicOutput, stillCompound]);
 
 		const output = await runAtomicExtractionGauntlet({
-			records: [singleClaimFalse, modelCompound],
+			records: [singleClaimFalse, twoDictionaryKeys],
 			turns: TURNS,
 			resplitTransport: transport,
 		});
 
 		expect(transport.calls).toHaveLength(1);
-		expect(transport.calls[0]?.records).toEqual([singleClaimFalse, modelCompound]);
+		expect(transport.calls[0]?.records).toEqual([singleClaimFalse, twoDictionaryKeys]);
 		expect(output).toHaveLength(2);
 		expect(output[0]).toMatchObject({
 			claimText: atomicOutput.claimText,
