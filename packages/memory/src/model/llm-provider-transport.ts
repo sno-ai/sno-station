@@ -1,4 +1,5 @@
 import { FIXED_PROTOCOL_VALUE_69, FIXED_EXTRACTION_KEY_NAME } from "./signed-registry-constants";
+import { classifyLlmFailure } from "./llm-failure";
 /** @file llm-provider-transport.ts
  * @purpose Sends OpenAI-compatible chat requests with retries and provider routing.
  * @boundary HTTP transport, base URL resolution, key rotation, and retry behavior.
@@ -339,7 +340,7 @@ export async function callSnoProfileCompletion(
 		throwTerminalAbort(error, requestAbort);
 	}
 	if (!response.ok) {
-		if (response.status === 401 || response.status === 403) {
+		if (classifyLlmFailure({ status: response.status }).category === "auth") {
 			throw new ProviderTerminalError(
 				"auth",
 				`B-profile extraction returned HTTP ${response.status}`,
@@ -492,7 +493,7 @@ async function snoStationMemDispatch(ctx: LlmixDispatchContext): Promise<Provide
 	}
 
 	if (!response.ok) {
-		if (response.status === 401 || response.status === 403) {
+		if (classifyLlmFailure({ status: response.status }).category === "auth") {
 			throw new ProviderTerminalError(
 				"auth",
 				`HTTP ${response.status}`,

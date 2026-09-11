@@ -5,6 +5,7 @@
  */
 
 import type { LLMConfig } from "@snoai/llmix";
+import { isCredentialFailure } from "./llm-failure";
 import { CallPipeline, KeyPool } from "@snoai/llmix";
 import { createLogger, withLogContext } from "@snoai/utils/logger";
 import { createHash, randomUUID } from "node:crypto";
@@ -433,11 +434,7 @@ export function createLlmClient(config: LlmClientConfig): LlmClient {
 			if (result.kind === "error") {
 				lastError = `[${request.callLabel}] agent-llm ${result.category}: ${result.message}`;
 				log.warn("Host model request failed", { adapter_slot: request.adapterSlot, call_label: request.callLabel, error: lastError }, { event_name: "memory.llm_client.diagnostic", file: "packages/sno-station-mem/src/model/llm-client.ts", function: "requestContent", site_id: "llm.client.host_error" });
-				if (
-					result.category === "auth" ||
-					result.category === "credential-expired" ||
-					result.category === "credential-revoked"
-				) {
+				if (isCredentialFailure(result.category)) {
 					throw new LlmClientTerminalError("auth", lastError);
 				}
 				return null;

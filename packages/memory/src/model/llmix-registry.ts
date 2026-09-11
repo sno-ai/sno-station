@@ -1,4 +1,5 @@
 import { FIXED_EXTERNAL_VALUE_8, FIXED_EXTERNAL_VALUE_9 } from "./signed-registry-constants";
+import { isTransientLlmStatus } from "./llm-failure";
 /** @file llmix-registry.ts
  * @purpose Loads the bundled signed LLMIx registry for sno-station-mem.
  * @boundary Trust-anchor verification and package-relative asset resolution only.
@@ -170,7 +171,7 @@ async function fetchReleaseAnchorOnce(
 }
 
 function isTransientAnchorResponse(response: Response): boolean {
-	return response.status === 408 || response.status === 429 || response.status >= 500;
+	return isTransientLlmStatus(response.status);
 }
 
 async function fetchReleaseAnchor(

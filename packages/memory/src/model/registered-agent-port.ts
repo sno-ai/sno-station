@@ -4,11 +4,10 @@ import { z } from "zod";
 import { ContractError, type DegradedReason } from "../contract/error";
 import type { Registration } from "../contract/inputs";
 import type { AgentLlmCompletion, AgentLlmPort, AgentLlmRequest } from "./agent-llm-port";
+import { classifyLlmFailure, isTerminalLlmFailure } from "./llm-failure";
 
 const CALLBACK_TIMEOUT_MS = 120_000;
 const CATEGORIES = ["auth", "credential-expired", "credential-revoked", "exhausted", "throttle", "transport", "unknown"] as const;
-/** Failure categories after which retrying the same endpoint cannot succeed. */
-const TERMINAL_CATEGORIES: ReadonlySet<string> = new Set(["auth", "credential-expired", "credential-revoked", "exhausted", "transport"]);
 const relayedFailureSchema = z.object({ error: z.discriminatedUnion("kind", [
 	z.object({ kind: z.literal("cancelled"), reason: z.string() }),
 	z.object({ kind: z.literal("error"), category: z.enum(CATEGORIES), message: z.string() }),
@@ -23,8 +22,10 @@ export class RegisteredAgentPort implements AgentLlmPort {
 		return this.failures.run(failures, async () => {
 			try {
 				const result = await operation();
+				// A completed call only surfaces a refusal the engine cannot degrade past; throttle,
+				// transient transport errors and deadlines were already handled by the llm-client.
 				const failure = failures.values().next().value;
-				if (failure) throw new ContractError(failure);
+				if (failure === "no-agent-endpoint") throw new ContractError(failure);
 				return result;
 			} catch (error) {
 				const failure = failures.values().next().value;
@@ -57,11 +58,12 @@ export class RegisteredAgentPort implements AgentLlmPort {
 			if (!response.ok) {
 				const relayed = await relayedFailure(response);
 				if (relayed) {
-					failures?.set(identity, relayed.kind === "cancelled" ? "timeout" : TERMINAL_CATEGORIES.has(relayed.category) ? "no-agent-endpoint" : "engine-failed");
+					failures?.set(identity, relayed.kind === "cancelled" ? "timeout" : isTerminalLlmFailure(relayed.category) ? "no-agent-endpoint" : "engine-failed");
 					return relayed;
 				}
-				failures?.set(identity, response.status === 404 || response.status === 503 ? "no-agent-endpoint" : "engine-failed");
-				return { kind: "error", category: response.status === 401 || response.status === 403 ? "auth" : response.status === 429 ? "throttle" : "transport", message: `registered model HTTP ${response.status}` };
+				const failure = classifyLlmFailure({ status: response.status });
+				failures?.set(identity, failure.endpointRefused ? "no-agent-endpoint" : "engine-failed");
+				return { kind: "error", category: failure.category, message: `registered model HTTP ${response.status}` };
 			}
 			const body: unknown = await response.json();
 			const text = completionText(body);
@@ -73,7 +75,7 @@ export class RegisteredAgentPort implements AgentLlmPort {
 			failures?.delete(identity);
 			return { kind: "ok", text };
 		} catch {
-			failures?.set(identity, signal.aborted ? "timeout" : "no-agent-endpoint");
+			failures?.set(identity, signal.aborted ? "timeout" : "engine-failed");
 			return signal.aborted ? { kind: "cancelled", reason: "deadline" }
 				: { kind: "error", category: "transport", message: "no-agent-endpoint" };
 		}
