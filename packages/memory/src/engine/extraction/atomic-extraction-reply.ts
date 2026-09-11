@@ -4,6 +4,7 @@
  */
 
 import { z } from "zod";
+import { calendarInstructionSchema, type CalendarInstruction, type CalendarResult } from "./calendar-instruction";
 import { createLogger } from "@snoai/utils/logger";
 import atomicExtractionSchema from "../../../config/atomic-extraction-response.schema.json" with {
 	type: "json",
@@ -20,13 +21,7 @@ export interface AtomicExtractionTurn {
 	content: string;
 }
 
-export interface AtomicExtractionResolvedTime {
-	year: number;
-	month: number;
-	day: number;
-	hour?: number;
-	minute?: number;
-}
+export type AtomicExtractionResolvedTime = CalendarResult;
 
 export interface AtomicExtractionSourceSpan {
 	turnIndex: number;
@@ -48,10 +43,12 @@ export interface AtomicExtractionRecord {
 	refusedAttribute?: string;
 	value: string;
 	temporalPhrase: string | null;
-	/** Filled by the engine from `temporalPhrase`; the model never resolves a date. */
+	time: CalendarInstruction;
+	endedTime: CalendarInstruction;
+	/** Calculated only from a structured instruction, never from the phrase. */
 	resolvedTime: AtomicExtractionResolvedTime | null;
 	endsCurrent: boolean;
-	/** The words that say when the ending happened, or null; resolved by the engine into `endedAt`. */
+	/** Source evidence for the ending; `endedTime` is the instruction used for calculation. */
 	endedAtPhrase: string | null;
 	endedAt: AtomicExtractionResolvedTime | null;
 	importance: "high" | "medium" | "low";
@@ -80,7 +77,6 @@ const relationPredicates = new Set([
 	"MENTIONS",
 ]);
 
-// Year alone, or year and month, is a real answer ("last month", "去年"). An absent part is
 const relationSchema = z
 	.object({
 		subject: z.string().min(1),
@@ -98,6 +94,8 @@ const wireRecordSchema = z
 		attribute: z.string().nullable(),
 		value: z.string().min(1),
 		temporal_phrase: z.string().min(1).nullable(),
+		time: calendarInstructionSchema,
+		ended_time: calendarInstructionSchema,
 		ends_current: z.boolean(),
 		// Optional on the wire: a reply that omits it is repaired to null rather than refused.
 		ended_at_phrase: z.string().min(1).nullable().optional(),
@@ -165,6 +163,8 @@ function projectRecord(record: z.infer<typeof wireRecordSchema>): AtomicExtracti
 			: {}),
 		value: record.value,
 		temporalPhrase: record.temporal_phrase,
+		time: record.time,
+		endedTime: record.ends_current ? record.ended_time : { kind: "none" },
 		resolvedTime: null,
 		endsCurrent: record.ends_current,
 		endedAtPhrase,
