@@ -5,6 +5,7 @@ not say whether something is past, future, ongoing, hypothetical, quoted, or abo
 Return one structured calendar instruction in `time`, and another in `ended_time` only for an
 ending. Copy the supporting words into `temporal_phrase` / `ended_at_phrase`. Keep the claim
 wording and its duration. Do not calculate a year, a date, a weekday offset, or an epoch yourself.
+Not knowing when an event happened does not erase that event: keep its record with `unresolved`.
 
 - `none`: a standing fact with no temporal assertion. An undated historical event is instead
   `unresolved`. Do not label an event as happening now merely because the speaker reports it now.
@@ -17,6 +18,10 @@ wording and its duration. Do not calculate a year, a date, a weekday offset, or 
   positive means after. The code adds or subtracts. For "I've known them for four years, since I
   moved", the start/move is `amount: -4, unit: year`, not a future event. For a future four-year
   course, distinguish its start from its end; a four-year duration alone does not date either.
+  When the statement links the start of a duration to another event, both events share that
+  start. In the friendship-and-move example, both the friendship start and the move receive
+  the same negative four-year instruction; the move is not undated. Judge that relationship
+  from the whole statement, not from whether each split claim repeats the time words.
 - `weekday`: give `weekday` (Monday 1 through Sunday 7) and `direction` (`previous` or `next`)
   for a strictly preceding/following occurrence. Read abbreviations, spelling, language and the
   speaker's intended reference in context. The code finds that weekday; do not count days.

@@ -1,7 +1,7 @@
 /** Model-only time interpretation followed by deterministic calendar arithmetic. */
 import { z } from "zod";
 import { createLogger } from "@snoai/utils/logger";
-import { calculateCalendarTime, calendarInstructionSchema, sessionZoneCarriedBy } from "./calendar-instruction";
+import { calculateCalendarTime, calendarInstructionSchema, calendarSessionTimestamp, sessionZoneCarriedBy } from "./calendar-instruction";
 import { RESOURCES_BY_LOCALE } from "../i18n/all-resources";
 import { DEFAULT_LOCALE } from "../i18n/locales";
 import type { TemporalInterval } from "./memory-temporality-classifier";
@@ -19,6 +19,7 @@ export interface DateResolutionStage {
 }
 export interface DateResolutionResult {
 	interval: TemporalInterval;
+	/** When this information was supplied, not when the described event happened. */
 	timestamp?: number;
 	timezone: string;
 	stage: DateResolutionStage;
@@ -36,6 +37,7 @@ interface DateInput {
 export function unresolvedMemoryDate(input: DateInput): DateResolutionResult {
 	return {
 		interval: { type: "unresolved", resolutionStatus: "unresolved", phrase: input.expression ?? input.text },
+		timestamp: input.sessionTimestamp ?? calendarSessionTimestamp(input.sessionDateTime, input.sessionTimezone),
 		timezone: input.sessionTimezone ?? sessionZoneCarriedBy(input.sessionDateTime) ?? "UTC",
 		stage: { modelCalled: false, reason: "no-model-judgment" },
 	};
@@ -78,6 +80,6 @@ export async function resolveMemoryDate(input: DateInput & {
 		interval: { type: "bounded", resolutionStatus: "resolved", from: calculated.from,
 			until: calculated.until, phrase: input.expression ?? input.text,
 			date: calculated.label, precision: calculated.precision },
-		timestamp: calculated.from, timezone: calculated.timezone, stage,
+		timestamp: unresolved.timestamp, timezone: calculated.timezone, stage,
 	};
 }
