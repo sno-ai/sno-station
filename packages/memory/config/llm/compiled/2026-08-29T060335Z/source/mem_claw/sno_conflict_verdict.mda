@@ -1,0 +1,27 @@
+---
+name: llmix-mem-claw-sno-conflict-verdict
+description: Signed Sno conflict verdict endpoint for mem_claw
+metadata:
+  snoai-llmix:
+    module: mem_claw
+    preset: sno_conflict_verdict
+    common:
+      provider: sno-gpu
+      model: a-verdict
+    providerOptions:
+      sno-gpu:
+        gpuPath: /verdict/v1/completions
+integrity:
+  algorithm: sha256
+  digest: sha256:d8d58ea12c4dd6c1c10294e2c158ec641f320d202144fabb129cf57a1462b0a8
+signatures:
+  - signer: did-web:www.sno.ai
+    key-id: did:web:www.sno.ai#sno-mem-openclaw-release
+    payload-digest: sha256:d8d58ea12c4dd6c1c10294e2c158ec641f320d202144fabb129cf57a1462b0a8
+    algorithm: ed25519
+    signature: ISlgK2JnSt0JecV6SRWqPwl87MUdH9quYzFxcCmVzNxS+/bq9PB9mTqI7+lR0yS8Skq33D4UJV46WArn7MIWAQ==
+    payload-type: application/vnd.mda.integrity+json
+---
+# mem_claw/sno_conflict_verdict
+
+Signed Sno conflict verdict endpoint for Sno Memory for OpenClaw.

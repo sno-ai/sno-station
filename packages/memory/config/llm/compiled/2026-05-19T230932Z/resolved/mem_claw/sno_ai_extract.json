@@ -1,0 +1,5 @@
+{
+  "description": "LLMix preset mem_claw/sno_ai_extract",
+  "model": "qwen3.6-27b-extract",
+  "provider": "sno-gpu"
+}

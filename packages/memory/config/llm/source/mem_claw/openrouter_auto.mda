@@ -1,0 +1,24 @@
+---
+name: llmix-mem-claw-openrouter-auto
+description: LLMix preset mem_claw/openrouter_auto
+metadata:
+  snoai-llmix:
+    module: mem_claw
+    preset: openrouter_auto
+    common:
+      provider: openrouter
+      model: openrouter/auto
+integrity:
+  algorithm: sha256
+  digest: sha256:d8b5b5f2e1bcafe4aa5ab122e7d8815ebd2f964985457bb1014c6c8c255cf5c3
+signatures:
+  - signer: did-web:www.sno.ai
+    key-id: did:web:www.sno.ai#sno-mem-openclaw-release
+    payload-digest: sha256:d8b5b5f2e1bcafe4aa5ab122e7d8815ebd2f964985457bb1014c6c8c255cf5c3
+    algorithm: ed25519
+    signature: 6fGDyu/7kJFhSsoxUvOja7X02lhg4s2buh1jXl5j1yzvHYmY4NJua+8SZ0AA8O95RXnXSVRhmfnQdrPL/8YxDg==
+    payload-type: application/vnd.mda.integrity+json
+---
+# mem_claw/openrouter_auto
+
+OpenRouter auto-routing preset for Sno Memory for OpenClaw generative LLM calls.

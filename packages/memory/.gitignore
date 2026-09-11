@@ -1,0 +1,18 @@
+# Vendored simple-tokenizer binaries — fetched by `scripts/download-simple-tokenizer.mjs`
+# Shipped via npm tarball through the `files` list in package.json (postinstall
+# is a no-op if the directory already exists). Track the license but not the
+# binaries themselves.
+sqlite-extensions/*
+!sqlite-extensions/LICENSE-simple-tokenizer
+!sqlite-extensions/LICENSE-sqlite-vec
+!sqlite-extensions/linux-x64/
+sqlite-extensions/linux-x64/*
+!sqlite-extensions/linux-x64/vec0.so
+
+# Bundler-probe scratch dir — written + cleaned by the i18n integration test
+# (tests/apps/mem-claw/integration/i18n-bundler-probe.test.ts).
+.probe-tmp/
+
+# Python/tooling artifacts used by local maintenance scripts.
+__pycache__/
+*.py[cod]

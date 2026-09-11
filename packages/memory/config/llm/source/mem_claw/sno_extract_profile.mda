@@ -1,0 +1,27 @@
+---
+name: llmix-mem-claw-sno-extract-profile
+description: Signed Sno profile extraction endpoint for mem_claw
+metadata:
+  snoai-llmix:
+    module: mem_claw
+    preset: sno_extract_profile
+    common:
+      provider: sno-gpu
+      model: qwen3.8-27b-extract
+    providerOptions:
+      sno-gpu:
+        gpuPath: /extract/profile/v1/completions
+integrity:
+  algorithm: sha256
+  digest: sha256:1f1504240dd9619d88c8d8f3c11dbc0016a5a5f7dc4e8d39074a944dae65b684
+signatures:
+  - signer: did-web:www.sno.ai
+    key-id: did:web:www.sno.ai#sno-mem-openclaw-release
+    payload-digest: sha256:1f1504240dd9619d88c8d8f3c11dbc0016a5a5f7dc4e8d39074a944dae65b684
+    algorithm: ed25519
+    signature: kRZJmqUfuTtMTauJkkwpuk+klMMWkFeI9Wt+FXHo1sotyE1bGymEKyxvRdWCNOuFeedKkUncwttvCqrzLt95AA==
+    payload-type: application/vnd.mda.integrity+json
+---
+# mem_claw/sno_extract_profile
+
+Signed Sno profile extraction endpoint for Sno Memory for OpenClaw.
