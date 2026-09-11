@@ -408,7 +408,7 @@ function isHeliconeBaseUrl(baseUrl: string): boolean {
 }
 
 function resolveHeliconeApiKey(value?: string): string | undefined {
-	return value?.trim() || process.env.SNO_STATION_MEM_HELICONE_API_KEY?.trim() || undefined;
+	return value?.trim() || process.env.HELICONE_API_KEY?.trim() || undefined;
 }
 
 function isCcproxyOpenAiBaseUrl(value: string | undefined): boolean {
@@ -641,10 +641,10 @@ function resolveEnvApiKey(
 ): string | undefined {
 	if (provider === "sno-gpu") {
 		return userBaseUrlOverride
-			? process.env.SNO_STATION_MEM_LLM_API_KEY
-			: (process.env.SNO_STATION_MEM_LLM_API_KEY ?? process.env[FIXED_EXTRACTION_KEY_NAME]);
+			? process.env.SNO_MEM_CLAW_LLM_API_KEY
+			: (process.env.SNO_MEM_CLAW_LLM_API_KEY ?? process.env[FIXED_EXTRACTION_KEY_NAME]);
 	}
-	if (provider === "openrouter") return process.env.SNO_STATION_MEM_OPENROUTER_API_KEY;
+	if (provider === "openrouter") return process.env.OPENROUTER_API_KEY;
 	return undefined;
 }
 
@@ -664,7 +664,7 @@ export function resolveProviderApiKey(
 	if (envKey?.trim()) return envKey;
 	const hint =
 		resolved.provider === "sno-gpu" && userBaseUrlOverride
-			? "set extraction.llm.apiKey or SNO_STATION_MEM_LLM_API_KEY for overridden Sno AI endpoints"
+			? "set extraction.llm.apiKey or SNO_MEM_CLAW_LLM_API_KEY for overridden Sno AI endpoints"
 			: `set extraction.llm.apiKey or the provider environment key for preset ${config.preset}`;
 	throw new Error(`sno-station-mem llm-client: missing API key; ${hint}`);
 }

@@ -10,7 +10,7 @@ export function getPrincipal(): string { return userInfo().username; }
 export function getBindingPath(): string { return path.join(getStateDir(), "station", `sno-station-mem-${getPrincipal()}.binding.json`); }
 export function getInstallationConfigPath(): string { return path.join(getStateDir(), "station", `sno-station-mem-${getPrincipal()}.config.json`); }
 export function getDefaultStorePath(): string { return path.join(getSnoStationMemStateDir(), getPrincipal(), "memory.sqlite"); }
-export function getDiscoveryPath(): string { return path.join(getStateDir(), "station", "sno-station-mem.json"); }
+export function getDiscoveryPath(): string { return path.join(getStateDir(), "station", "sidecar.json"); }
 export function getStartupLogPath(): string { return path.join(getSnoStationMemStateDir(), "sidecar-startup.log"); }
 export function getSidecarLockPath(): string { return path.join(getSnoStationMemStateDir(), "sidecar.lock"); }
 

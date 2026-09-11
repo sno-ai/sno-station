@@ -774,7 +774,7 @@ export function isKillSwitchActive(
 	const killSwitchPath = getKillSwitchPath(stateDir);
 	const cached = killSwitchCache.get(killSwitchPath);
 	// Guard cached here so the remaining operational safety path works with normalized inputs.
-	if (cached?.active && cached.expiresAt > Date.now()) {
+	if (cached?.active && cached.expiresAt > Date.now() && existsSync(killSwitchPath)) {
 		return cached.active;
 	}
 	// Guard exists sync here so the remaining operational safety path works with normalized inputs.
