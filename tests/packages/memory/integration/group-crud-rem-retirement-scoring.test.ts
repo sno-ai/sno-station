@@ -21,7 +21,7 @@ const NOMINATED_TEXT = "The user no longer drinks tea in the mornings.";
 const BASE_TIME = Date.UTC(2026, 8, 1);
 const CANDIDATE_COUNT = 65;
 const priorEnvironment = {
-	SNO_STATION_MEM_DATA_DIR_ROOT: process.env["SNO_STATION_MEM_DATA_DIR_ROOT"],
+	MEM_CLAW_DATA_DIR_ROOT: process.env["MEM_CLAW_DATA_DIR_ROOT"],
 	SNO_STATION_MEM_REM_EXPECTED_DB_PATH: process.env["SNO_STATION_MEM_REM_EXPECTED_DB_PATH"],
 	SNO_PROFILE_DIR: process.env["SNO_PROFILE_DIR"],
 };
@@ -81,7 +81,7 @@ it("offers and closes the oldest candidate despite newer distractors beyond the 
 			},
 		},
 	});
-	process.env["SNO_STATION_MEM_DATA_DIR_ROOT"] = dirname(fixture.dbPath);
+	process.env["MEM_CLAW_DATA_DIR_ROOT"] = dirname(fixture.dbPath);
 	process.env["SNO_STATION_MEM_REM_EXPECTED_DB_PATH"] = fixture.dbPath;
 	process.env["SNO_PROFILE_DIR"] = stateRoot;
 

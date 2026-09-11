@@ -100,12 +100,12 @@ describe("F-B job identity under contention", () => {
 		const database = createTestDb();
 		const stateRoot = mkdtempSync(join(tmpdir(), "rem-fb-job-identity-"));
 		const priorEnvironment = {
-			SNO_STATION_MEM_DATA_DIR_ROOT: process.env["SNO_STATION_MEM_DATA_DIR_ROOT"],
+			MEM_CLAW_DATA_DIR_ROOT: process.env["MEM_CLAW_DATA_DIR_ROOT"],
 			SNO_STATION_MEM_REM_EXPECTED_DB_PATH: process.env["SNO_STATION_MEM_REM_EXPECTED_DB_PATH"],
 			SNO_PROFILE_DIR: process.env["SNO_PROFILE_DIR"],
 		};
 		try {
-			process.env["SNO_STATION_MEM_DATA_DIR_ROOT"] = dirname(database.dbPath);
+			process.env["MEM_CLAW_DATA_DIR_ROOT"] = dirname(database.dbPath);
 			process.env["SNO_STATION_MEM_REM_EXPECTED_DB_PATH"] = database.dbPath;
 			process.env["SNO_PROFILE_DIR"] = stateRoot;
 			writeTestInstallationConfig(stateRoot, {
@@ -245,7 +245,7 @@ describe("F-B job identity under contention", () => {
 			expect(attempts.every((attempt) => attempt.outcome === "succeeded")).toBe(true);
 		} finally {
 			for (const [name, value] of [
-				["SNO_STATION_MEM_DATA_DIR_ROOT", priorEnvironment.SNO_STATION_MEM_DATA_DIR_ROOT],
+				["MEM_CLAW_DATA_DIR_ROOT", priorEnvironment.MEM_CLAW_DATA_DIR_ROOT],
 				["SNO_STATION_MEM_REM_EXPECTED_DB_PATH", priorEnvironment.SNO_STATION_MEM_REM_EXPECTED_DB_PATH],
 				["SNO_PROFILE_DIR", priorEnvironment.SNO_PROFILE_DIR],
 			] as const) {

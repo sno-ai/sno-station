@@ -31,19 +31,19 @@ export class NonLocalFilesystemError extends Error {
 	) {
 		super(
 			`Refusing to operate on non-local filesystem (type=0x${fsType.toString(16)}) at ${dir}. ` +
-				`Atomic rename is not guaranteed; set SNO_STATION_MEM_DATA_DIR_ROOT to a local path.`,
+				`Atomic rename is not guaranteed; set MEM_CLAW_DATA_DIR_ROOT to a local path.`,
 		);
 		this.name = "NonLocalFilesystemError";
 	}
 }
 
 /**
- * Root of the new data tree. `SNO_STATION_MEM_DATA_DIR_ROOT` env override resolves
+ * Root of the new data tree. `MEM_CLAW_DATA_DIR_ROOT` env override resolves
  * to `<root>/data/` so the override controls the install root, not the data
  * dir directly (matches §3.3 layout).
  */
 export function getSnoStationMemDataDir(): string {
-	const override = process.env.SNO_STATION_MEM_DATA_DIR_ROOT?.trim();
+	const override = process.env.MEM_CLAW_DATA_DIR_ROOT?.trim();
 	if (override && override.length > 0) return join(override, "data");
 	return join(homedir(), ".snoai", "sno-station-core", "sno-station-mem", "data");
 }
@@ -52,12 +52,12 @@ export function getSnoStationMemDataDir(): string {
  * `~/.snoai/sno-station-core/sno-station-mem/self-upgrade/` — disposable plugin runtime tree.
  *
  * Two env overrides are honored, in priority order:
- *   1. `SNO_STATION_MEM_DATA_DIR_ROOT` — PRD-canonical root → `<root>/self-upgrade/`.
+ *   1. `MEM_CLAW_DATA_DIR_ROOT` — PRD-canonical root → `<root>/self-upgrade/`.
  *   2. `SNO_STATION_MEM_DATA_DIR` — older override used by self-upgrade tests
  *      → `<that>/self-upgrade/`. Read-only compatibility only.
  */
 export function getSelfUpgradeStageRoot(): string {
-	const newOverride = process.env.SNO_STATION_MEM_DATA_DIR_ROOT?.trim();
+	const newOverride = process.env.MEM_CLAW_DATA_DIR_ROOT?.trim();
 	if (newOverride && newOverride.length > 0) return join(newOverride, "self-upgrade");
 	const directOverride = process.env.SNO_STATION_MEM_DATA_DIR?.trim();
 	if (directOverride && directOverride.length > 0) return join(directOverride, "self-upgrade");

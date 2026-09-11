@@ -81,12 +81,12 @@ describe("REM activation measurement transport", () => {
 		const database = createTestDb();
 		const stateRoot = mkdtempSync(join(tmpdir(), "rem-clause-carry-floor-"));
 		const priorEnvironment = {
-			SNO_STATION_MEM_DATA_DIR_ROOT: process.env["SNO_STATION_MEM_DATA_DIR_ROOT"],
+			MEM_CLAW_DATA_DIR_ROOT: process.env["MEM_CLAW_DATA_DIR_ROOT"],
 			SNO_STATION_MEM_REM_EXPECTED_DB_PATH: process.env["SNO_STATION_MEM_REM_EXPECTED_DB_PATH"],
 			SNO_PROFILE_DIR: process.env["SNO_PROFILE_DIR"],
 		};
 		try {
-			process.env["SNO_STATION_MEM_DATA_DIR_ROOT"] = dirname(database.dbPath);
+			process.env["MEM_CLAW_DATA_DIR_ROOT"] = dirname(database.dbPath);
 			process.env["SNO_STATION_MEM_REM_EXPECTED_DB_PATH"] = database.dbPath;
 			process.env["SNO_PROFILE_DIR"] = stateRoot;
 			writeTestInstallationConfig(stateRoot, {
@@ -156,7 +156,7 @@ describe("REM activation measurement transport", () => {
 			expect(result.actionsApplied).toBe(1);
 			expect(survivor.text).toContain("The researcher works late.");
 		} finally {
-			restoreEnvironment("SNO_STATION_MEM_DATA_DIR_ROOT", priorEnvironment.SNO_STATION_MEM_DATA_DIR_ROOT);
+			restoreEnvironment("MEM_CLAW_DATA_DIR_ROOT", priorEnvironment.MEM_CLAW_DATA_DIR_ROOT);
 			restoreEnvironment(
 				"SNO_STATION_MEM_REM_EXPECTED_DB_PATH",
 				priorEnvironment.SNO_STATION_MEM_REM_EXPECTED_DB_PATH,
@@ -175,12 +175,12 @@ async function runMeasuredReplace(candidateCount: number): Promise<{
 	const database = createTestDb();
 	const stateRoot = mkdtempSync(join(tmpdir(), "rem-measurement-"));
 	const priorEnvironment = {
-		SNO_STATION_MEM_DATA_DIR_ROOT: process.env["SNO_STATION_MEM_DATA_DIR_ROOT"],
+		MEM_CLAW_DATA_DIR_ROOT: process.env["MEM_CLAW_DATA_DIR_ROOT"],
 		SNO_STATION_MEM_REM_EXPECTED_DB_PATH: process.env["SNO_STATION_MEM_REM_EXPECTED_DB_PATH"],
 		SNO_PROFILE_DIR: process.env["SNO_PROFILE_DIR"],
 	};
 	try {
-		process.env["SNO_STATION_MEM_DATA_DIR_ROOT"] = dirname(database.dbPath);
+		process.env["MEM_CLAW_DATA_DIR_ROOT"] = dirname(database.dbPath);
 		process.env["SNO_STATION_MEM_REM_EXPECTED_DB_PATH"] = database.dbPath;
 		process.env["SNO_PROFILE_DIR"] = stateRoot;
 		writeTestInstallationConfig(stateRoot, {
@@ -232,7 +232,7 @@ async function runMeasuredReplace(candidateCount: number): Promise<{
 			pairCapBinding: result.measurements.pairCapBinding,
 		};
 	} finally {
-		restoreEnvironment("SNO_STATION_MEM_DATA_DIR_ROOT", priorEnvironment.SNO_STATION_MEM_DATA_DIR_ROOT);
+		restoreEnvironment("MEM_CLAW_DATA_DIR_ROOT", priorEnvironment.MEM_CLAW_DATA_DIR_ROOT);
 		restoreEnvironment(
 			"SNO_STATION_MEM_REM_EXPECTED_DB_PATH",
 			priorEnvironment.SNO_STATION_MEM_REM_EXPECTED_DB_PATH,
