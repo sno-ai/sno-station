@@ -107,6 +107,31 @@ describe("date-resolution semantic contract", () => {
 		const result = await resolveMemoryDate({ text: "I've known these friends for 4 years, since I moved from my home country.", expression: "for 4 years", sessionDateTime: "2023-06-09T19:55:00Z", sessionTimezone: "UTC", llm });
 		process.stdout.write(JSON.stringify({ host: hostname(), model: config.model, endpoint: endpoint.url, result }) + "\n");
 		expect(result.stage.modelCalled).toBe(true);
+		expect(result.timestamp).toBe(Date.parse("2023-06-09T19:55:00Z"));
 		expect(result.interval).toMatchObject({ type: "bounded", date: "2019", precision: "year", from: Date.UTC(2019, 0, 1), until: Date.UTC(2020, 0, 1) });
 	}, 120_000);
 });
+
+it("updates an old event date without rewriting the memory's statement timestamp", async () => {
+	const apiKey = process.env.SNO_MEM_CLAW_LLM_INTERNAL_KEY;
+	if (!apiKey) throw new Error("SNO_MEM_CLAW_LLM_INTERNAL_KEY is required");
+	const { dirname } = await import("node:path");
+	const { createTestDb, createTestEmbedder } = await import("../../../apps/mem-claw/helpers/test-db");
+	const { MemoryStore } = await import("../../../../packages/sno-station-mem/src/store/store");
+	const { createRetriever } = await import("../../../../packages/sno-station-mem/src/engine/retrieval/retriever");
+	const { createScopePolicy } = await import("../../../../packages/sno-station-mem/src/engine/security/scopes");
+	const { executeMemoryUpdateTool } = await import("../../../../packages/sno-station-mem/src/engine/bindings/memory-update-tool");
+	const fixture = createTestDb();
+	const embedder = await createTestEmbedder();
+	const store = new MemoryStore({ dbPath: fixture.dbPath, embedder });
+	try {
+		const statementTimestamp = Date.parse("2023-06-09T19:55:00Z");
+		const row = await store.store({ text: "The user moved to Kyoto.", category: "episodic", projectId: "global", timestamp: statementTimestamp, timezone: "UTC", metadata: JSON.stringify({ kind: "episodic", memory_category: "episodic" }) });
+		const llm = createLlmClient({ preset: "mem_claw/sno_extract_chat", apiKey, timeoutMs: 90_000 });
+		const result = await executeMemoryUpdateTool({ store, embedder, retriever: createRetriever(store, embedder), scopePolicy: createScopePolicy({ default: "global", agentAccess: { "date-test": ["global"] } }), stateDir: dirname(fixture.dbPath), sessionTimestamp: Date.parse("2026-09-11T00:00:00Z"), sessionTimezone: "UTC", profileToolLlm: llm }, { agentId: "date-test" }, "calendar-update", { id: row.id, text: "The user moved to Kyoto on March 15, 2020." });
+		expect(result.isError, JSON.stringify(result)).not.toBe(true);
+		const stored = store.getById(row.id);
+		expect(stored?.timestamp).toBe(statementTimestamp);
+		expect(JSON.parse(stored?.metadata ?? "{}")).toMatchObject({ temporal_date: "2020-03-15", temporal_precision: "day", valid_from: Date.UTC(2020, 2, 15) });
+	} finally { await store.close(); fixture.cleanup(); }
+}, 120_000);
