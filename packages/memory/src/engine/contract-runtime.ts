@@ -49,9 +49,12 @@ export interface MemoryRuntimeServices {
 	logger: ReflectionCommandParams["logger"];
 }
 
-/** A logical scope is a configured or built-in scope name the installed policy grants this agent; a path is never one. */
-function admittedScope(installed: MemoryScopePolicy, scope: string, agentId: string | undefined): boolean {
-	return !/[\\/]/.test(scope) && installed.validateScope(scope) && installed.isAccessible(scope, agentId);
+/**
+ * A logical scope is a configured or built-in scope name the installed policy grants this agent;
+ * a path is never one. A system caller (host operator) may name any valid scope.
+ */
+function admittedScope(installed: MemoryScopePolicy, scope: string, agentId: string | undefined, systemCaller: boolean): boolean {
+	return !/[\\/]/.test(scope) && installed.validateScope(scope) && (systemCaller || installed.isAccessible(scope, agentId));
 }
 
 function sumStats(results: StatsResult[]): StatsResult {
@@ -116,11 +119,12 @@ export class MemoryContractRuntime implements MemoryContract {
 		const installed = createScopePolicy(this.configured().config.scopes);
 		const agentId = this.agentId(scope);
 		const project = await this.project(scope);
-		if (!/[\\/]/.test(scope.project) && !admittedScope(installed, scope.project, agentId)) throw new ContractError("invalid-input");
+		const systemCaller = scope.host?.systemCaller === true;
+		if (!/[\\/]/.test(scope.project) && !admittedScope(installed, scope.project, agentId, systemCaller)) throw new ContractError("invalid-input");
 		const readable = [project];
 		for (const requested of scope.readable ?? []) {
 			if (requested === scope.project) continue;
-			if (!admittedScope(installed, requested, agentId)) throw new ContractError("invalid-input");
+			if (!admittedScope(installed, requested, agentId, systemCaller)) throw new ContractError("invalid-input");
 			if (!readable.includes(requested)) readable.push(requested);
 		}
 		return new CallScopePolicy(project, readable);
@@ -128,7 +132,7 @@ export class MemoryContractRuntime implements MemoryContract {
 
 	private async project(scope: ScopeCtx): Promise<string> {
 		const { config } = this.configured();
-		if (!scope.host?.workspace || admittedScope(createScopePolicy(config.scopes), scope.project, this.agentId(scope))) return scope.project;
+		if (!scope.host?.workspace || admittedScope(createScopePolicy(config.scopes), scope.project, this.agentId(scope), scope.host.systemCaller === true)) return scope.project;
 		if (resolve(scope.project) !== resolve(scope.host.workspace)) throw new ContractError("invalid-input");
 		const agentId = this.agentId(scope);
 		if (!agentId) throw new ContractError("invalid-input");
