@@ -5,6 +5,7 @@ import {
 	type ScopeCtx, type Registration, type RecallOptions, type Turn, type Mutation,
 	type Inspection, type UsageSignal, type Message,
 } from "../contract/index";
+import type { StatsResult } from "../store/memory-store-shared";
 import type { MemoryStore } from "../store/store";
 import type { Embedder } from "./extraction/embedding-provider-client";
 import type { MemoryRetriever } from "./retrieval/retriever";
@@ -48,7 +49,20 @@ export interface MemoryRuntimeServices {
 	logger: ReflectionCommandParams["logger"];
 }
 
-const LOGICAL_SCOPE = /^(?:agent|reflection|custom|project|user):|^global$/;
+/** A logical scope is a configured or built-in scope name the installed policy grants this agent; a path is never one. */
+function admittedScope(installed: MemoryScopePolicy, scope: string, agentId: string | undefined): boolean {
+	return !/[\\/]/.test(scope) && installed.validateScope(scope) && installed.isAccessible(scope, agentId);
+}
+
+function sumStats(results: StatsResult[]): StatsResult {
+	const summed: StatsResult = { total: 0, projectBreakdown: {}, categoryBreakdown: {} };
+	for (const result of results) {
+		summed.total += result.total;
+		for (const [project, count] of Object.entries(result.projectBreakdown)) summed.projectBreakdown[project] = (summed.projectBreakdown[project] ?? 0) + count;
+		for (const [category, count] of Object.entries(result.categoryBreakdown)) summed.categoryBreakdown[category] = (summed.categoryBreakdown[category] ?? 0) + count;
+	}
+	return summed;
+}
 
 /** One call's policy: writes land on the resolved project; reads span the readable set the sidecar admitted. */
 class CallScopePolicy extends MemoryScopePolicy {
@@ -102,11 +116,11 @@ export class MemoryContractRuntime implements MemoryContract {
 		const installed = createScopePolicy(this.configured().config.scopes);
 		const agentId = this.agentId(scope);
 		const project = await this.project(scope);
-		if (LOGICAL_SCOPE.test(scope.project) && !installed.isAccessible(scope.project, agentId)) throw new ContractError("invalid-input");
+		if (!/[\\/]/.test(scope.project) && !admittedScope(installed, scope.project, agentId)) throw new ContractError("invalid-input");
 		const readable = [project];
 		for (const requested of scope.readable ?? []) {
 			if (requested === scope.project) continue;
-			if (!LOGICAL_SCOPE.test(requested) || !installed.isAccessible(requested, agentId)) throw new ContractError("invalid-input");
+			if (!admittedScope(installed, requested, agentId)) throw new ContractError("invalid-input");
 			if (!readable.includes(requested)) readable.push(requested);
 		}
 		return new CallScopePolicy(project, readable);
@@ -114,7 +128,7 @@ export class MemoryContractRuntime implements MemoryContract {
 
 	private async project(scope: ScopeCtx): Promise<string> {
 		const { config } = this.configured();
-		if (!scope.host?.workspace || /^(?:agent|reflection|custom|project|user):/.test(scope.project) || scope.project === "global") return scope.project;
+		if (!scope.host?.workspace || admittedScope(createScopePolicy(config.scopes), scope.project, this.agentId(scope))) return scope.project;
 		if (resolve(scope.project) !== resolve(scope.host.workspace)) throw new ContractError("invalid-input");
 		const agentId = this.agentId(scope);
 		if (!agentId) throw new ContractError("invalid-input");
@@ -274,7 +288,8 @@ export class MemoryContractRuntime implements MemoryContract {
 			case "storage": throw new ContractError("system-caller-required");
 			case "stats": {
 				if (op.scope !== scope.project && op.scope !== project) throw new ContractError("invalid-input");
-				return { degraded: false, result: { op: "stats", ...await this.services.store.stats(project) } };
+				const counted = await Promise.all(readable.map(scopeId => this.services.store.stats(scopeId)));
+				return { degraded: false, result: { op: "stats", ...sumStats(counted) } };
 			}
 			case "list": return { degraded: false, result: { op: "list", entries: await this.services.store.list({ ...op, projectIdFilter: readable, importanceMin: op.importanceMin }) } };
 			case "listReflection": return { degraded: false, result: { op: "listReflection", entries: await this.services.store.listReflectionItems({ ...op, projectIdFilter: readable }) } };
