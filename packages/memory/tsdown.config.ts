@@ -39,6 +39,7 @@ export default defineConfig([
   "diagnostic-encoder": "src/engine/observability/early-diagnostics.ts",
   "internal/config/index": "config/index.ts",
   "internal/engine/bindings/embedder-config-files": "src/engine/bindings/embedder-config-files.ts",
+  "internal/engine/security/memory-scope-policy": "src/engine/security/memory-scope-policy.ts",
   "internal/engine/bindings/memory-cli-shared": "src/engine/bindings/memory-cli-shared.ts",
   "internal/engine/bindings/memory-forget-tool": "src/engine/bindings/memory-forget-tool.ts",
   "internal/engine/bindings/memory-list-tool": "src/engine/bindings/memory-list-tool.ts",
