@@ -90,7 +90,7 @@ const wireTimeSchema = calendarInstructionSchema.catch(() => {
 		event_name: "memory.atomic_extraction_reply.diagnostic", file: "packages/sno-station-mem/src/engine/extraction/atomic-extraction-reply.ts",
 		function: "wireTimeSchema", site_id: "extraction.atomic-extraction-reply.invalid_time",
 	});
-	return { kind: "unresolved" };
+	return { kind: "unresolved" } as const;
 });
 
 const wireRecordSchema = z

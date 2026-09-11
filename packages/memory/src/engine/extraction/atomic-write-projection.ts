@@ -51,9 +51,12 @@ function eventTime(
 	record: AtomicKeyedRecord,
 	sessionTimestampMs: number,
 ): { timestamp: number; validFrom: number | null; validUntil: number | null } {
+	const resolved = record.resolvedTime;
+	const sameSessionDay = record.category !== "episodic" && resolved?.precision === "day"
+		&& resolved.from <= sessionTimestampMs && sessionTimestampMs < resolved.until;
 	return {
 		timestamp: sessionTimestampMs,
-		validFrom: record.resolvedTime?.from ?? (record.kind === "standing" && record.time.kind === "none" ? sessionTimestampMs : null),
+		validFrom: sameSessionDay ? sessionTimestampMs : resolved?.from ?? (record.kind === "standing" && record.time.kind === "none" ? sessionTimestampMs : null),
 		validUntil: record.category === "episodic" ? record.resolvedTime?.until ?? null : null,
 	};
 }
@@ -61,6 +64,7 @@ function eventTime(
 function metadataForRecord(
 	record: AtomicKeyedRecord,
 	sanitizerMatches: readonly string[],
+	validFrom: number | null,
 ): Record<string, unknown> {
 	return {
 		// Both keys, because the metadata codec resolves a row's category from `kind` first and
@@ -75,12 +79,12 @@ function metadataForRecord(
 		// and a later positive claim on the same group is judged against it (see closeEndedCardAtCreate).
 		ends_current: record.endsCurrent,
 		todo: record.todo,
+		...(validFrom === null ? {} : { valid_from: validFrom }),
 		// A year or month is a range, never a fabricated event day.
 		...(record.resolvedTime ? {
 			temporal_date: record.resolvedTime.label,
 			temporal_precision: record.resolvedTime.precision,
 			temporal_timezone: record.resolvedTime.timezone,
-			valid_from: record.resolvedTime.from,
 			...(record.category === "episodic" ? { valid_until: record.resolvedTime.until } : {}),
 			...(record.category === "episodic" && ["day", "minute"].includes(record.resolvedTime.precision)
 				? { event_at: new Date(record.resolvedTime.from).toISOString() } : {}),
@@ -178,7 +182,7 @@ export function buildAtomicWriteCards(
 			timezone: input.timezone,
 			lane: sanitizedRecord.lane,
 			dispositionReason: sanitizedRecord.dispositionReason,
-			metadata: metadataForRecord(sanitizedRecord, sanitizerMatches),
+			metadata: metadataForRecord(sanitizedRecord, sanitizerMatches, when.validFrom),
 			relations: sanitizedRecord.relations,
 		};
 	});

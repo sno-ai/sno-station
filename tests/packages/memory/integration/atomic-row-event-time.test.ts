@@ -236,3 +236,36 @@ it("makes an undated standing fact visible from its statement while an unknown e
 		expect(fixture.sqlite.prepare("SELECT valid_from, valid_until FROM nodix_memories WHERE id = ?").get(eventId)).toEqual({ valid_from: null, valid_until: null });
 	} finally { await store.close(); fixture.cleanup(); }
 });
+
+it("keeps same-session standing claims in source order when the later claim names today", async () => {
+	const { readAtomicArrivalRetirementCandidateSet } = await import("../../../../packages/sno-station-mem/src/store/memory-store-atomic-extraction-write-api");
+	const fixture = createTestDb();
+	const store = new MemoryStore({ dbPath: fixture.dbPath, embedder });
+	try {
+		async function writeClaim(turn: number, city: string, time: Parameters<typeof calculateCalendarTime>[0]) {
+			const resolvedTime = calculateCalendarTime(time, new Date(SESSION_MS).toISOString(), "UTC");
+			const input = record({ kind: "standing", category: "profile", claimText: `The user lives in ${city}.`, attribute: "identity.location", value: city, time, resolvedTime });
+			const cards = buildAtomicWriteCards({ records: [input], idempotencyKeys: [`standing-order-${turn}`], sourceTurnOffset: turn, sessionTimestampMs: SESSION_MS, timezone: "UTC" });
+			const key = { ...ledgerKey(`standing-order-${turn}`), conversationId: "same-session-standing-order" };
+			store.beginAtomicExtractionChunk({ ...key, rawChunk: input.claimText, routingSnapshotId: "standing-order", runParameters: RUN_PARAMETERS, nowMs: WRITE_MS + turn * 3 });
+			store.recordAtomicExtractionCalls(key, WRITE_MS + turn * 3 + 1);
+			const written = await store.storeAtomicExtractionChunk({ ledgerKey: key, projectId: PROJECT_ID, extractorVersion: EXTRACTOR_VERSION, nowMs: WRITE_MS + turn * 3 + 2, cards });
+			const id = written.cardIds[0];
+			if (!id) throw new Error("standing claim was not stored");
+			return id;
+		}
+		const olderId = await writeClaim(0, "Kyoto", { kind: "none" });
+		const newerId = await writeClaim(1, "Osaka", { kind: "relative", amount: 0, unit: "day", precision: "day" });
+		// This internal reader consumes the real store's SQLite, mutex and embedding resources.
+		const readerStore = store as unknown as Parameters<typeof readAtomicArrivalRetirementCandidateSet>[0];
+		const candidates = await readAtomicArrivalRetirementCandidateSet(readerStore, { projectId: PROJECT_ID, nominatedRowId: newerId, jobId: "standing-order" });
+		expect(candidates?.candidateRows.map((row) => row.id)).toContain(olderId);
+		expect(fixture.sqlite.prepare("SELECT valid_from FROM nodix_memories WHERE id = ?").get(newerId)).toEqual({ valid_from: SESSION_MS });
+		expect(JSON.parse(store.getById(newerId)?.metadata ?? "{}")).toMatchObject({ valid_from: SESSION_MS, temporal_date: "2026-06-04", temporal_precision: "day", temporal_timezone: "UTC" });
+		const historicalId = await writeClaim(2, "Nara", { kind: "relative", amount: -1, unit: "day", precision: "day" });
+		expect(fixture.sqlite.prepare("SELECT valid_from FROM nodix_memories WHERE id = ?").get(historicalId)).toEqual({ valid_from: Date.UTC(2026, 5, 3) });
+		expect(JSON.parse(store.getById(historicalId)?.metadata ?? "{}")).toMatchObject({ valid_from: Date.UTC(2026, 5, 3), temporal_date: "2026-06-03" });
+		const historicalCandidates = await readAtomicArrivalRetirementCandidateSet(readerStore, { projectId: PROJECT_ID, nominatedRowId: historicalId, jobId: "standing-order-historical" });
+		expect(historicalCandidates?.candidateRows).toEqual([]);
+	} finally { await store.close(); fixture.cleanup(); }
+});
