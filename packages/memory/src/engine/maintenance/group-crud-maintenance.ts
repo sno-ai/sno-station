@@ -318,6 +318,8 @@ function profileRecord(row: MemoryRow, metadata: Record<string, unknown>): Atomi
 		attribute: null,
 		value,
 		temporalPhrase: null,
+		time: { kind: "none" },
+		endedTime: { kind: "none" },
 		resolvedTime: null,
 		endsCurrent: false,
 	endedAtPhrase: null,
