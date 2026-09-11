@@ -2,7 +2,8 @@
 import { z } from "zod";
 import { createLogger } from "@snoai/utils/logger";
 import { calculateCalendarTime, calendarInstructionSchema, sessionZoneCarriedBy } from "./calendar-instruction";
-import { atomicExtractionSkillReference } from "./atomic-extraction-skill";
+import { RESOURCES_BY_LOCALE } from "../i18n/all-resources";
+import { DEFAULT_LOCALE } from "../i18n/locales";
 import type { TemporalInterval } from "./memory-temporality-classifier";
 import type { Locale } from "../i18n/locales";
 import type { LlmClient } from "../../model/llm-client";
@@ -51,8 +52,7 @@ export async function resolveMemoryDate(input: DateInput & {
 	const anchor = input.sessionDateTime ?? (input.sessionTimestamp === undefined
 		? undefined : new Date(input.sessionTimestamp).toISOString());
 	const prompt = [
-		atomicExtractionSkillReference("calendar-meaning"),
-		"Judge only the time of the supplied claim. Return reason and time in the supplied JSON schema.",
+		RESOURCES_BY_LOCALE[input.locale ?? input.routing?.language ?? DEFAULT_LOCALE].extractionPrompts.buildDateResolutionPrompt(),
 		JSON.stringify({ schema: z.toJSONSchema(replySchema), sentence: input.text,
 			expression: input.expression ?? null, session_date_time: anchor ?? null,
 			session_timezone: unresolved.timezone }),
