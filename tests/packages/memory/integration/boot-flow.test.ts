@@ -54,7 +54,7 @@ beforeEach(() => {
 	xdgConfig = join(tempRoot, "xdg-config");
 	mkdirSync(snoaiRoot, { recursive: true });
 	mkdirSync(xdgConfig, { recursive: true });
-	setEnv("SNO_STATION_MEM_DATA_DIR_ROOT", join(snoaiRoot, "mem-claw"));
+	setEnv("MEM_CLAW_DATA_DIR_ROOT", join(snoaiRoot, "mem-claw"));
 	setEnv("XDG_CONFIG_HOME", xdgConfig);
 	setEnv(
 		"SNO_STATION_CORE_KEYCHAIN_SERVICE",
@@ -165,7 +165,7 @@ describe("statfs — non-local filesystem rejection", () => {
 		const err = new NonLocalFilesystemError(dataDir(), 0x6969);
 		expect(err.fsType).toBe(0x6969);
 		expect(err.message).toContain("non-local filesystem");
-		expect(err.message).toContain("SNO_STATION_MEM_DATA_DIR_ROOT");
+		expect(err.message).toContain("MEM_CLAW_DATA_DIR_ROOT");
 		expect(err.name).toBe("NonLocalFilesystemError");
 	});
 });

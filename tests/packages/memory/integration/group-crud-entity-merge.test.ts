@@ -68,7 +68,7 @@ const VARIANT_NAME =
 const C_NAME = "The staffing update note for the research group";
 
 const priorEnvironment = {
-	SNO_STATION_MEM_DATA_DIR_ROOT: process.env["SNO_STATION_MEM_DATA_DIR_ROOT"],
+	MEM_CLAW_DATA_DIR_ROOT: process.env["MEM_CLAW_DATA_DIR_ROOT"],
 	SNO_STATION_MEM_REM_EXPECTED_DB_PATH: process.env["SNO_STATION_MEM_REM_EXPECTED_DB_PATH"],
 	SNO_PROFILE_DIR: process.env["SNO_PROFILE_DIR"],
 };
@@ -421,7 +421,7 @@ async function runUpdateWave(
 				},
 			},
 		});
-	process.env["SNO_STATION_MEM_DATA_DIR_ROOT"] = dirname(target.fixture.dbPath);
+	process.env["MEM_CLAW_DATA_DIR_ROOT"] = dirname(target.fixture.dbPath);
 	process.env["SNO_STATION_MEM_REM_EXPECTED_DB_PATH"] = target.fixture.dbPath;
 	process.env["SNO_PROFILE_DIR"] = stateRoot;
 	cleanups.push(() => rmSync(stateRoot, { recursive: true, force: true }));

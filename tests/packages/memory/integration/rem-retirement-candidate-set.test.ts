@@ -26,7 +26,7 @@ const OUTDATED_ROW_ID = "rem-retirement-outdated-war-and-conflict";
 const RETIREMENT_ROW_ID = "rem-retirement-sentence-war-and-conflict";
 
 const priorEnvironment = {
-	SNO_STATION_MEM_DATA_DIR_ROOT: process.env["SNO_STATION_MEM_DATA_DIR_ROOT"],
+	MEM_CLAW_DATA_DIR_ROOT: process.env["MEM_CLAW_DATA_DIR_ROOT"],
 	SNO_STATION_MEM_REM_EXPECTED_DB_PATH: process.env["SNO_STATION_MEM_REM_EXPECTED_DB_PATH"],
 	SNO_PROFILE_DIR: process.env["SNO_PROFILE_DIR"],
 };
@@ -34,7 +34,7 @@ const cleanups: Array<() => void> = [];
 
 afterEach(() => {
 	for (const cleanup of cleanups.splice(0).reverse()) cleanup();
-	restoreEnvironment("SNO_STATION_MEM_DATA_DIR_ROOT", priorEnvironment.SNO_STATION_MEM_DATA_DIR_ROOT);
+	restoreEnvironment("MEM_CLAW_DATA_DIR_ROOT", priorEnvironment.MEM_CLAW_DATA_DIR_ROOT);
 	restoreEnvironment(
 		"SNO_STATION_MEM_REM_EXPECTED_DB_PATH",
 		priorEnvironment.SNO_STATION_MEM_REM_EXPECTED_DB_PATH,
@@ -400,7 +400,7 @@ function prepareBatchFixture(scope: string): TestDb {
 				},
 			},
 		});
-	process.env["SNO_STATION_MEM_DATA_DIR_ROOT"] = dirname(fixture.dbPath);
+	process.env["MEM_CLAW_DATA_DIR_ROOT"] = dirname(fixture.dbPath);
 	process.env["SNO_STATION_MEM_REM_EXPECTED_DB_PATH"] = fixture.dbPath;
 	process.env["SNO_PROFILE_DIR"] = stateRoot;
 	cleanups.push(() => {

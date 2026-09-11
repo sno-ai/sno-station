@@ -78,7 +78,7 @@ const RUN_PARAMETERS: AtomicExtractionRunParameters = {
 };
 
 const priorEnvironment = {
-	SNO_STATION_MEM_DATA_DIR_ROOT: process.env["SNO_STATION_MEM_DATA_DIR_ROOT"],
+	MEM_CLAW_DATA_DIR_ROOT: process.env["MEM_CLAW_DATA_DIR_ROOT"],
 	SNO_STATION_MEM_REM_EXPECTED_DB_PATH: process.env["SNO_STATION_MEM_REM_EXPECTED_DB_PATH"],
 	SNO_PROFILE_DIR: process.env["SNO_PROFILE_DIR"],
 };
@@ -895,7 +895,7 @@ describe("PRD 150 review — a pure negation never closes its one-group mechanic
 					},
 				},
 			});
-		process.env["SNO_STATION_MEM_DATA_DIR_ROOT"] = dirname(fixture.dbPath);
+		process.env["MEM_CLAW_DATA_DIR_ROOT"] = dirname(fixture.dbPath);
 		process.env["SNO_STATION_MEM_REM_EXPECTED_DB_PATH"] = fixture.dbPath;
 		process.env["SNO_PROFILE_DIR"] = stateRoot;
 		cleanups.push(() => rmSync(stateRoot, { recursive: true, force: true }));
