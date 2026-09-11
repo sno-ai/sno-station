@@ -4,6 +4,7 @@
  */
 
 import { z } from "zod";
+import { calendarInstructionSchema, type CalendarInstruction, type CalendarResult } from "./calendar-instruction";
 import { createLogger } from "@snoai/utils/logger";
 import atomicExtractionSchema from "../../../config/atomic-extraction-response.schema.json" with {
 	type: "json",
@@ -20,13 +21,7 @@ export interface AtomicExtractionTurn {
 	content: string;
 }
 
-export interface AtomicExtractionResolvedTime {
-	year: number;
-	month: number;
-	day: number;
-	hour?: number;
-	minute?: number;
-}
+export type AtomicExtractionResolvedTime = CalendarResult;
 
 export interface AtomicExtractionSourceSpan {
 	turnIndex: number;
@@ -48,10 +43,12 @@ export interface AtomicExtractionRecord {
 	refusedAttribute?: string;
 	value: string;
 	temporalPhrase: string | null;
-	/** Filled by the engine from `temporalPhrase`; the model never resolves a date. */
+	time: CalendarInstruction;
+	endedTime: CalendarInstruction;
+	/** Calculated only from a structured instruction, never from the phrase. */
 	resolvedTime: AtomicExtractionResolvedTime | null;
 	endsCurrent: boolean;
-	/** The words that say when the ending happened, or null; resolved by the engine into `endedAt`. */
+	/** Source evidence for the ending; `endedTime` is the instruction used for calculation. */
 	endedAtPhrase: string | null;
 	endedAt: AtomicExtractionResolvedTime | null;
 	importance: "high" | "medium" | "low";
@@ -80,7 +77,6 @@ const relationPredicates = new Set([
 	"MENTIONS",
 ]);
 
-// Year alone, or year and month, is a real answer ("last month", "去年"). An absent part is
 const relationSchema = z
 	.object({
 		subject: z.string().min(1),
@@ -88,6 +84,14 @@ const relationSchema = z
 		object: z.string().min(1),
 	})
 	.strip();
+
+const wireTimeSchema = calendarInstructionSchema.catch(() => {
+	log.warn("atomic extraction kept a record with an invalid time judgment", {}, {
+		event_name: "memory.atomic_extraction_reply.diagnostic", file: "packages/sno-station-mem/src/engine/extraction/atomic-extraction-reply.ts",
+		function: "wireTimeSchema", site_id: "extraction.atomic-extraction-reply.invalid_time",
+	});
+	return { kind: "unresolved" } as const;
+});
 
 const wireRecordSchema = z
 	.object({
@@ -98,6 +102,8 @@ const wireRecordSchema = z
 		attribute: z.string().nullable(),
 		value: z.string().min(1),
 		temporal_phrase: z.string().min(1).nullable(),
+		time: wireTimeSchema.optional(),
+		ended_time: wireTimeSchema.optional(),
 		ends_current: z.boolean(),
 		// Optional on the wire: a reply that omits it is repaired to null rather than refused.
 		ended_at_phrase: z.string().min(1).nullable().optional(),
@@ -141,6 +147,11 @@ function projectRecord(record: z.infer<typeof wireRecordSchema>): AtomicExtracti
 		}, { event_name: "memory.atomic_extraction_reply.diagnostic", file: "packages/sno-station-mem/src/engine/extraction/atomic-extraction-reply.ts", function: "projectRecord", site_id: "extraction.atomic-extraction-reply.projectRecord.327508ac5f" });
 	}
 	const endedAtPhrase = record.ends_current ? (record.ended_at_phrase ?? null) : null;
+	if (record.time === undefined || (record.ends_current && record.ended_time === undefined)) {
+		log.warn("atomic extraction kept a record with an omitted time judgment", {
+			time_missing: record.time === undefined, ending_time_missing: record.ends_current && record.ended_time === undefined,
+		}, { event_name: "memory.atomic_extraction_reply.diagnostic", file: "packages/sno-station-mem/src/engine/extraction/atomic-extraction-reply.ts", function: "projectRecord", site_id: "extraction.atomic-extraction-reply.omitted_time" });
+	}
 	if (!record.ends_current && (record.ended_at_phrase ?? null) !== null) {
 		log.warn("atomic extraction dropped an ending time on a claim that does not end", {
 			claim_length: record.claim_text.length,
@@ -165,6 +176,8 @@ function projectRecord(record: z.infer<typeof wireRecordSchema>): AtomicExtracti
 			: {}),
 		value: record.value,
 		temporalPhrase: record.temporal_phrase,
+		time: record.time ?? { kind: "unresolved" },
+		endedTime: record.ends_current ? (record.ended_time ?? { kind: "unresolved" }) : { kind: "none" },
 		resolvedTime: null,
 		endsCurrent: record.ends_current,
 		endedAtPhrase,

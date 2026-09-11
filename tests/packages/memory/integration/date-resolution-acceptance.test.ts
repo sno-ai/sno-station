@@ -1,33 +1,34 @@
-/** @file date-resolution-acceptance.test.ts
- * @purpose Proves the PRD date-resolution prompt, routing, isolation, and validation contract.
- * @boundary Real MemoryLlmClient with a test-owned AgentLlmPort seam; no provider or storage mocks.
- */
-
-import * as chrono from "chrono-node";
+import { Temporal } from "@js-temporal/polyfill";
+import { calendarInstructionSchema, type CalendarInstruction } from "../../../../packages/sno-station-mem/src/engine/extraction/calendar-instruction";
+import { readModelReplyJson } from "../../../../packages/sno-station-mem/src/engine/shared/model-reply-text";
+import { resolveLlmEndpoint } from "../../../../packages/sno-station-mem/src/model/llm-endpoint-resolution";
+/** Real LlmClient routing; the AgentLlmPort seam injects malformed external replies only. */
 import { describe, expect, it } from "vitest";
-
-import {
-	DATE_RESOLUTION_PARSER_BY_LOCALE,
-	resolveDateLocally,
-	resolveMemoryDate,
-} from "../../../../packages/sno-station-mem/src/engine/extraction/date-resolution.ts";
-import { RESOURCES_BY_LOCALE } from "../../../../packages/sno-station-mem/src/engine/i18n/all-resources.ts";
-import {
-	type Locale,
-	SUPPORTED_LOCALES,
-} from "../../../../packages/sno-station-mem/src/engine/i18n/locales.ts";
-import type {
-	AgentLlmCompletion,
-	AgentLlmPort,
-	AgentLlmRequest,
-} from "../../../../packages/sno-station-mem/src/model/agent-llm-port.ts";
-import { createLlmClient } from "../../../../packages/sno-station-mem/src/model/llm-client.ts";
-import type { LlmClient } from "../../../../packages/sno-station-mem/src/model/llm-client-types.ts";
-import type { LlmRoutingConfig } from "../../../../packages/sno-station-mem/src/model/llm-mode-routing.ts";
+import { hostname } from "node:os";
+import { resolveMemoryDate, unresolvedMemoryDate } from "../../../../packages/sno-station-mem/src/engine/extraction/date-resolution";
+import type { Locale } from "../../../../packages/sno-station-mem/src/engine/i18n/locales";
+import type { AgentLlmCompletion, AgentLlmPort, AgentLlmRequest } from "../../../../packages/sno-station-mem/src/model/agent-llm-port";
+import { createLlmClient } from "../../../../packages/sno-station-mem/src/model/llm-client";
+import type { LlmClient } from "../../../../packages/sno-station-mem/src/model/llm-client-types";
+import type { LlmRoutingConfig } from "../../../../packages/sno-station-mem/src/model/llm-mode-routing";
+/** Observe the actual transport reply without supplying or changing any model output. */
+function observeTimeInstructions(llm: LlmClient, instructions: CalendarInstruction[]): LlmClient {
+	return { ...llm, async completeText(request) {
+		const raw = await llm.completeText(request);
+		if (raw) {
+			const time = readModelReplyJson(raw, (value) => {
+				if (typeof value !== "object" || value === null || !("time" in value)) return undefined;
+				const parsed = calendarInstructionSchema.safeParse(value.time);
+				return parsed.success ? parsed.data : undefined;
+			});
+			if (time) instructions.push(time);
+		}
+		return raw;
+	} };
+}
 
 const SESSION_DATE_TIME = "2026-06-05T21:00:00-07:00";
 const SESSION_TIMEZONE = "America/Los_Angeles";
-
 function routing(locale: Locale = "en", mode: LlmRoutingConfig["mode"] = "rem-enhanced") {
 	return {
 		mode,
@@ -47,32 +48,6 @@ function routing(locale: Locale = "en", mode: LlmRoutingConfig["mode"] = "rem-en
 		agentNative: { flavor: "subscription" },
 		language: locale,
 	} satisfies LlmRoutingConfig;
-}
-
-function validReply(overrides: Record<string, unknown> = {}): string {
-	return JSON.stringify({
-		resolved: true,
-		year: 2026,
-		month: 6,
-		day: 4,
-		hour: null,
-		minute: null,
-		timezone: null,
-		reason: "resolved by the supplied expression and anchor",
-		...overrides,
-	});
-}
-
-function promptPayload(request: AgentLlmRequest): {
-	anchor: string;
-	weekday: number;
-	sentence: string;
-	expression: string;
-	parserReadings: unknown[];
-} {
-	const line = request.prompt.split("\n").at(-1);
-	if (!line) throw new Error("date-resolution prompt has no payload line");
-	return JSON.parse(line) as ReturnType<typeof promptPayload>;
 }
 
 class RecordingAgentPort implements AgentLlmPort {
@@ -115,322 +90,230 @@ async function resolveExpression(
 	});
 }
 
-describe("date-resolution acceptance contract", () => {
-	it("isolates three unresolved phrases so one invalid reply cannot discard two valid results", async () => {
-		const callsByExpression = new Map<string, number>();
-		const port = new RecordingAgentPort((request) => {
-			const expression = promptPayload(request).expression;
-			callsByExpression.set(expression, (callsByExpression.get(expression) ?? 0) + 1);
-			if (expression === "middle-glorpday") {
-				return {
-					kind: "ok",
-					text: validReply({ timestamp: "2026-06-04T00:00:00Z" }),
-				};
-			}
-			return {
-				kind: "ok",
-				text: validReply({ day: expression === "first-glorpday" ? 1 : 3 }),
-			};
-		});
-
-		const results = [];
-		for (const expression of ["first-glorpday", "middle-glorpday", "last-glorpday"]) {
-			results.push(await resolveExpression(expression, port));
-		}
-
-		expect(callsByExpression).toEqual(
-			new Map([
-				["first-glorpday", 1],
-				["middle-glorpday", 1],
-				["last-glorpday", 1],
-			]),
-		);
-		expect(results.map((result) => result.interval.resolutionStatus)).toEqual([
-			"resolved",
-			"unresolved",
-			"resolved",
-		]);
+describe("date-resolution semantic contract", () => {
+	it.each(["yesterday", "in four years", "2026-06-05", "The user likes quiet rooms"])("makes no semantic judgment without a model: %s", async (text) => {
+		const input = { text, sessionDateTime: SESSION_DATE_TIME, sessionTimezone: SESSION_TIMEZONE };
+		expect(await resolveMemoryDate(input)).toEqual(unresolvedMemoryDate(input));
+		expect((await resolveMemoryDate(input)).interval).toEqual({ type: "unresolved", resolutionStatus: "unresolved", phrase: text });
 	});
 
-	it("emits every stage field once for one local resolution", () => {
-		const result = resolveDateLocally({
-			text: "I walked today.",
-			sessionDateTime: SESSION_DATE_TIME,
-			sessionTimezone: SESSION_TIMEZONE,
-			locale: "en",
-			localFirst: true,
-		}).result;
-
-		expect(result.stage).toEqual({
-			selectedParser: "en",
-			selectionReason: "winner",
-			winningScore: 3,
-			runnerUpScore: 0,
-			ambiguityGateFired: false,
-			modelCalled: false,
-			timezone: "user",
-			reason: null,
-		});
-	});
-
-	it("sends the active non-empty locale prompt for all nine locales", async () => {
-		for (const locale of SUPPORTED_LOCALES) {
-			const port = new RecordingAgentPort(() => ({ kind: "ok", text: validReply() }));
-			const localePrompt = RESOURCES_BY_LOCALE[locale].extractionPrompts
-				.buildDateResolutionPrompt()
-				.trim();
-			expect(localePrompt).not.toBe("");
-
-			await resolveExpression(`glorpday-${locale}`, port, locale);
-
-			expect(port.requests).toHaveLength(1);
-			expect(port.requests[0]?.prompt.startsWith(`${localePrompt}\n`)).toBe(true);
-		}
-	});
-
-	it("forwards thinking without provider sampling keys", async () => {
-		const port = new RecordingAgentPort(() => ({ kind: "ok", text: validReply() }));
-		await resolveExpression("thinking-glorpday", port);
-
-		const request = port.requests[0] as AgentLlmRequest & Record<string, unknown>;
-		expect(request.enableThinking).toBe(true);
-		for (const key of ["temperature", "top_p", "top_k", "repetition_penalty"]) {
-			expect(request).not.toHaveProperty(key);
-		}
-	});
-
-	it("uses numeric offset minutes so today stays on June 5", () => {
-		const instant = new Date("2026-06-06T04:00:00.000Z");
-		const numeric = chrono.en.parse("walked today", { instant, timezone: -420 })[0];
-		const iana = chrono.en.parse("walked today", {
-			instant,
-			timezone: "America/Los_Angeles" as unknown as number,
-		})[0];
-
-		expect(numeric?.start.get("day")).toBe(5);
-		expect(iana?.start.get("day")).toBe(6);
-		const product = resolveDateLocally({
-			text: "walked today",
-			sessionDateTime: SESSION_DATE_TIME,
-			sessionTimezone: SESSION_TIMEZONE,
-			locale: "en",
-			localFirst: true,
-		});
-		expect(new Date(product.result.timestamp ?? 0).toISOString().slice(0, 10)).toBe("2026-06-05");
-	});
-
-	it("calls no model for static text and one model for one unreadable named phrase", async () => {
-		const port = new RecordingAgentPort(() => ({ kind: "ok", text: validReply() }));
-		const llm = client(port);
-		const activeRouting = routing();
-
-		const staticResult = await resolveMemoryDate({
-			text: "The user prefers window seats.",
-			sessionDateTime: SESSION_DATE_TIME,
-			sessionTimezone: SESSION_TIMEZONE,
-			locale: "en",
-			llm,
-			routing: activeRouting,
-		});
-		expect(staticResult.interval.resolutionStatus).toBe("static");
-		expect(port.requests).toHaveLength(0);
-
-		await resolveMemoryDate({
-			text: "The event happened on glorpday.",
-			expression: "glorpday",
-			sessionDateTime: SESSION_DATE_TIME,
-			sessionTimezone: SESSION_TIMEZONE,
-			locale: "en",
-			llm,
-			routing: activeRouting,
-		});
-		expect(port.requests).toHaveLength(1);
-	});
-
-	it("keeps unreadable Finnish text and writes no interval under local-first", async () => {
-		const text = "Tapaaminen on siansaksapäivänä.";
-		const port = new RecordingAgentPort(() => {
-			throw new Error("local-first must not call the model");
-		});
-		const result = await resolveMemoryDate({
-			text,
-			expression: text,
-			sessionDateTime: SESSION_DATE_TIME,
-			sessionTimezone: SESSION_TIMEZONE,
-			locale: "en",
-			llm: client(port),
-			routing: routing("en", "local-first"),
-		});
-
-		expect(result.interval).toEqual({
-			type: "unresolved",
-			resolutionStatus: "unresolved",
-			phrase: text,
-		});
-		expect(result.stage.reason).toBe("local-first-unreadable");
-		expect(port.requests).toHaveLength(0);
+	it("keeps local-first unresolved even for recognizable time words", async () => {
+		const port = new RecordingAgentPort(() => { throw new Error("Forbidden model call"); });
+		const result = await resolveMemoryDate({ text: "yesterday", llm: client(port), routing: routing("en", "local-first") });
+		expect(result).toMatchObject({ interval: { resolutionStatus: "unresolved" }, stage: { modelCalled: false } });
 	});
 
 	it.each([
-		["named timezone", { timezone: "PDT" }],
-		["February 30", { month: 2, day: 30 }],
-		["month 13", { month: 13 }],
-		["hour 24", { hour: 24 }],
-		["minute 60", { hour: 12, minute: 60 }],
-		["resolved without day", { day: null }],
-		["unresolved with a date", { resolved: false, year: 2026 }],
-	] as const)("rejects the model schema case %s", async (_name, overrides) => {
-		const port = new RecordingAgentPort(() => ({
-			kind: "ok",
-			text: validReply(overrides),
-		}));
-		const result = await resolveExpression("invalid-schema-glorpday", port);
-
-		expect(result.interval.resolutionStatus).toBe("unresolved");
-		expect(result.stage.reason).toBe("model-unresolved");
+		{ reason: "extra field", time: { kind: "none" }, date: "2026-06-05" },
+		{ reason: "bad numeric type", time: { kind: "relative", amount: "-4", unit: "year", precision: "year" } },
+		{ reason: "incomplete", time: { kind: "weekday", weekday: 2 } },
+	])("keeps the original claim unresolved for malformed model instructions %j", async (reply) => {
+		const port = new RecordingAgentPort(() => ({ kind: "ok", text: JSON.stringify(reply) }));
+		const result = await resolveExpression("yesterday", port);
+		expect(result.interval).toEqual({ type: "unresolved", resolutionStatus: "unresolved", phrase: "yesterday" });
+		expect(result.stage).toEqual({ modelCalled: true, reason: "invalid-model-instruction" });
 	});
 
-	it("accepts a thinking-wrapped reply without requesting response_format", async () => {
-		const port = new RecordingAgentPort(() => ({
-			kind: "ok",
-			text: `<thinking>calendar reasoning</thinking>${validReply({ reason: "wrapped" })}`,
-		}));
-		const result = await resolveExpression("wrapped-glorpday", port);
-
-		expect(result.stage.reason).toBe("wrapped");
-		expect(port.requests[0] as AgentLlmRequest & Record<string, unknown>).not.toHaveProperty(
-			"response_format",
-		);
+	it("does not salvage a date from keywords after a transport failure", async () => {
+		const port = new RecordingAgentPort(() => ({ kind: "error", category: "transport", message: "HTTP 502" }));
+		const result = await resolveExpression("yesterday at 3", port);
+		expect(result.interval).toEqual({ type: "unresolved", resolutionStatus: "unresolved", phrase: "yesterday at 3" });
+		expect(result.stage).toEqual({ modelCalled: true, reason: "model-unavailable" });
 	});
 
-	it("keeps one valid unresolved reply and its reason without retrying", async () => {
-		const port = new RecordingAgentPort(() => ({
-			kind: "ok",
-			text: validReply({
-				resolved: false,
-				year: null,
-				month: null,
-				day: null,
-				hour: null,
-				minute: null,
-				timezone: null,
-				reason: "the expression does not establish a calendar date",
-			}),
-		}));
-		const result = await resolveExpression("unknown-calendar-glorpday", port);
+	it("calculates a real model decision from the whole sentence", async () => {
+		const apiKey = process.env.SNO_MEM_CLAW_LLM_INTERNAL_KEY;
+		if (!apiKey) throw new Error("SNO_MEM_CLAW_LLM_INTERNAL_KEY is required");
+		const timeInstructions: CalendarInstruction[] = [];
+	const llm = observeTimeInstructions(createLlmClient({ preset: "mem_claw/sno_extract_chat", apiKey, timeoutMs: 90_000 }), timeInstructions);
+		const config = await llm.getResolvedConfig();
+		const endpoint = await resolveLlmEndpoint({ configuredPreset: "mem_claw/sno_extract_chat", occasion: "dateResolution", transport: "chat-completions" });
+		const result = await resolveMemoryDate({ text: "I've known these friends for 4 years, since I moved from my home country.", expression: "for 4 years", sessionDateTime: "2023-06-09T19:55:00Z", sessionTimezone: "UTC", llm });
+		process.stdout.write(JSON.stringify({ host: hostname(), model: config.model, endpoint: endpoint.url, result, timeInstructions }) + "\n");
+		expect(result.stage.modelCalled).toBe(true);
+		expect(result.timestamp).toBe(Date.parse("2023-06-09T19:55:00Z"));
+		expect(result.interval).toMatchObject({ type: "bounded", date: "2019", precision: "year", from: Date.UTC(2019, 0, 1), until: Date.UTC(2020, 0, 1) });
+		expect(timeInstructions).toEqual([expect.objectContaining({ kind: "relative", amount: -4, unit: "year", precision: "year" })]);
+	}, 120_000);
+});
 
-		expect(port.requests).toHaveLength(1);
-		expect(result.interval.resolutionStatus).toBe("unresolved");
-		expect(result.stage).toMatchObject({
-			modelCalled: true,
-			reason: "the expression does not establish a calendar date",
-		});
-	});
+it("updates an old event date without rewriting the memory's statement timestamp", async () => {
+	const apiKey = process.env.SNO_MEM_CLAW_LLM_INTERNAL_KEY;
+	if (!apiKey) throw new Error("SNO_MEM_CLAW_LLM_INTERNAL_KEY is required");
+	const { dirname } = await import("node:path");
+	const { createTestDb, createTestEmbedder } = await import("../../../apps/mem-claw/helpers/test-db");
+	const { MemoryStore } = await import("../../../../packages/sno-station-mem/src/store/store");
+	const { createRetriever } = await import("../../../../packages/sno-station-mem/src/engine/retrieval/retriever");
+	const { createScopePolicy } = await import("../../../../packages/sno-station-mem/src/engine/security/scopes");
+	const { executeMemoryUpdateTool } = await import("../../../../packages/sno-station-mem/src/engine/bindings/memory-update-tool");
+	const fixture = createTestDb();
+	const embedder = await createTestEmbedder();
+	const store = new MemoryStore({ dbPath: fixture.dbPath, embedder });
+	try {
+		const statementTimestamp = Date.parse("2023-06-09T19:55:00Z");
+		const row = await store.store({ text: "The user moved to Kyoto.", category: "episodic", projectId: "global", timestamp: statementTimestamp, timezone: "UTC", metadata: JSON.stringify({ kind: "episodic", memory_category: "episodic" }) });
+		// Existing pre-cutover rows remain the text-update caller; new atomic rows are immutable.
+		fixture.sqlite.prepare("UPDATE nodix_memories SET extractor_version = NULL WHERE id = ?").run(row.id);
+		const timeInstructions: CalendarInstruction[] = [];
+	const llm = observeTimeInstructions(createLlmClient({ preset: "mem_claw/sno_extract_chat", apiKey, timeoutMs: 90_000 }), timeInstructions);
+		const ctx = { store, embedder, retriever: createRetriever(store, embedder), scopePolicy: createScopePolicy({ default: "global", agentAccess: { "date-test": ["global"] } }), stateDir: dirname(fixture.dbPath), sessionTimestamp: Date.parse("2026-09-11T00:00:00Z"), sessionTimezone: "UTC", profileToolLlm: llm };
+		const result = await executeMemoryUpdateTool(ctx, { agentId: "date-test" }, "calendar-update", { id: row.id, text: "The user moved to Kyoto on March 15, 2020." });
+		expect(result.isError, JSON.stringify(result)).not.toBe(true);
+		const stored = store.getById(row.id);
+		expect(stored?.timestamp).toBe(statementTimestamp);
+		expect(JSON.parse(stored?.metadata ?? "{}")).toMatchObject({ temporal_date: "2020-03-15", temporal_precision: "day", valid_from: Date.UTC(2020, 2, 15) });
+		const uncertain = await executeMemoryUpdateTool(ctx, { agentId: "date-test" }, "calendar-update-unresolved", { id: row.id, text: "The user moved to Kyoto, but the date of that move is unknown." });
+		expect(uncertain.isError, JSON.stringify(uncertain)).not.toBe(true);
+		const updated = store.getById(row.id);
+		expect(updated?.timestamp).toBe(statementTimestamp);
+		const metadata = JSON.parse(updated?.metadata ?? "{}");
+		expect(metadata.temporal_resolution_status).toBe("unresolved");
+		for (const field of ["event_at", "temporal_date", "temporal_precision", "temporal_timezone", "valid_from", "valid_until"]) expect(metadata).not.toHaveProperty(field);
+		expect(fixture.sqlite.prepare("SELECT valid_from, valid_until FROM nodix_memories WHERE id = ?").get(row.id)).toEqual({ valid_from: null, valid_until: null });
 
-	it("retries HTTP 502 exactly twice and preserves the parser's full-day partial", async () => {
-		const port = new RecordingAgentPort(() => ({
-			kind: "error",
-			category: "transport",
-			message: "HTTP 502",
-		}));
-		const activeRouting = routing("en");
-		const result = await resolveMemoryDate({
-			text: "yesterday at 3",
-			expression: "yesterday at 3",
-			sessionDateTime: SESSION_DATE_TIME,
-			sessionTimezone: SESSION_TIMEZONE,
-			locale: "en",
-			llm: client(port),
-			routing: activeRouting,
-		});
+	} finally { await store.close(); fixture.cleanup(); }
+}, 120_000);
 
-		expect(port.requests).toHaveLength(2);
-		expect(result).toMatchObject({
-			timezone: "user",
-			interval: { type: "bounded", resolutionStatus: "resolved", phrase: "yesterday at 3" },
-			stage: { ambiguityGateFired: true, modelCalled: true, reason: "model-unresolved" },
-		});
-	});
 
-	it("sends only the active phrase context and every required anchor field", async () => {
-		const port = new RecordingAgentPort(() => ({ kind: "ok", text: validReply() }));
-		const sentence = "The deployment happened on context-glorpday.";
-		await resolveMemoryDate({
-			text: sentence,
-			expression: "context-glorpday",
-			sessionDateTime: SESSION_DATE_TIME,
-			sessionTimezone: SESSION_TIMEZONE,
-			locale: "en",
-			llm: client(port),
-			routing: routing(),
-		});
+it("gets a real unresolved judgment for an undated claim without inventing an event interval", async () => {
+	const apiKey = process.env.SNO_MEM_CLAW_LLM_INTERNAL_KEY;
+	if (!apiKey) throw new Error("SNO_MEM_CLAW_LLM_INTERNAL_KEY is required");
+	const timeInstructions: CalendarInstruction[] = [];
+	const llm = observeTimeInstructions(createLlmClient({ preset: "mem_claw/sno_extract_chat", apiKey, timeoutMs: 90_000 }), timeInstructions);
+	const endpoint = await resolveLlmEndpoint({ configuredPreset: "mem_claw/sno_extract_chat", occasion: "dateResolution", transport: "chat-completions" });
+	const text = "I moved from my home country, but I have not said when.";
+	for (let repeat = 0; repeat < 3; repeat += 1) {
+		const result = await resolveMemoryDate({ text, sessionDateTime: "2023-06-09T19:55:00Z", sessionTimezone: "UTC", llm });
+		process.stdout.write(JSON.stringify({ host: hostname(), model: endpoint.preset.model, endpoint: endpoint.url, name: "undated claim time judgment", repeat, result }) + "\n");
+		expect(result.stage.modelCalled).toBe(true);
+		expect(result.stage.reason.trim().length).toBeGreaterThan(0);
+		expect(result.interval).toEqual({ type: "unresolved", resolutionStatus: "unresolved", phrase: text });
+		expect(result.timestamp).toBe(Date.parse("2023-06-09T19:55:00Z"));
+	}
+}, 300_000);
 
-		const request = port.requests[0];
-		if (!request) throw new Error("missing date-resolution request");
-		const payload = promptPayload(request);
-		expect(payload).toMatchObject({
-			anchor: SESSION_DATE_TIME,
-			weekday: 5,
-			sentence,
-			expression: "context-glorpday",
-			parserReadings: [],
-		});
-		expect(request.prompt).not.toContain("SECRET_OTHER_MEMORY");
-	});
 
-	it("derives the model anchor when the caller supplies only a timestamp and timezone", async () => {
-		const port = new RecordingAgentPort(() => ({ kind: "ok", text: validReply() }));
-		await resolveMemoryDate({
-			text: "The deployment happened on timestamp-glorpday.",
-			expression: "timestamp-glorpday",
-			sessionTimestamp: Date.parse(SESSION_DATE_TIME),
-			sessionTimezone: SESSION_TIMEZONE,
-			locale: "en",
-			llm: client(port),
-			routing: routing(),
-		});
+it.each([
+	["de", "Ich bin vor vier Jahren nach Kyoto gezogen."],
+	["es", "Me mudé a Kioto hace cuatro años."],
+	["fr", "J’ai déménagé à Kyoto il y a quatre ans."],
+	["ja", "私は4年前に京都へ引っ越しました。"],
+	["ko", "저는 4년 전에 교토로 이사했습니다."],
+	["ru", "Я переехал в Киото четыре года назад."],
+	["zh-Hant", "我四年前搬到了京都。"],
+] as const)("interprets %s time through the real model, without locale keyword tables", async (locale, text) => {
+	const apiKey = process.env.SNO_MEM_CLAW_LLM_INTERNAL_KEY;
+	if (!apiKey) throw new Error("SNO_MEM_CLAW_LLM_INTERNAL_KEY is required");
+	const timeInstructions: CalendarInstruction[] = [];
+	const llm = observeTimeInstructions(createLlmClient({ preset: "mem_claw/sno_extract_chat", apiKey, timeoutMs: 90_000 }), timeInstructions);
+	const endpoint = await resolveLlmEndpoint({ configuredPreset: "mem_claw/sno_extract_chat", occasion: "dateResolution", transport: "chat-completions" });
+	const result = await resolveMemoryDate({ text, locale, sessionDateTime: "2023-06-09T19:55:00Z", sessionTimezone: "UTC", llm });
+	process.stdout.write(JSON.stringify({ host: hostname(), model: endpoint.preset.model, endpoint: endpoint.url, locale, text, result, timeInstructions }) + "\n");
+	expect(result.stage.modelCalled).toBe(true);
+	expect(result.interval).toMatchObject({ type: "bounded", resolutionStatus: "resolved", date: "2019", precision: "year", from: Date.UTC(2019, 0, 1), until: Date.UTC(2020, 0, 1) });
+	expect(timeInstructions).toEqual([expect.objectContaining({ kind: "relative", amount: -4, unit: "year", precision: "year" })]);
+}, 120_000);
 
-		const request = port.requests[0];
-		if (!request) throw new Error("missing date-resolution request");
-		expect(promptPayload(request).anchor).toBe(SESSION_DATE_TIME);
-	});
 
-	it("carries model reason to the stage and rejects an extra reply field", async () => {
-		const acceptedPort = new RecordingAgentPort(() => ({
-			kind: "ok",
-			text: validReply({ reason: "the anchor makes this the prior day" }),
-		}));
-		const accepted = await resolveExpression("reason-glorpday", acceptedPort);
-		expect(accepted.stage.reason).toBe("the anchor makes this the prior day");
+it("protects an undated row written by the same session from retirement", async () => {
+	const { createTestDb, createTestEmbedder } = await import("../../../apps/mem-claw/helpers/test-db");
+	const { MemoryStore } = await import("../../../../packages/sno-station-mem/src/store/store");
+	const { retireRowsByName } = await import("../../../../packages/sno-station-mem/src/engine/extraction/retire-by-name");
+	const fixture = createTestDb();
+	const store = new MemoryStore({ dbPath: fixture.dbPath, embedder: await createTestEmbedder() });
+	try {
+		const eventTime = Date.parse("2023-06-09T19:55:00Z");
+		const text = "The user moved from their home country.";
+		const row = await store.store({ text, category: "episodic", projectId: "global", timestamp: eventTime, metadata: JSON.stringify({ kind: "episodic", temporal_resolution_status: "unresolved", source_session: "same-session", asserted_at: eventTime }) });
+		expect(JSON.parse(store.getById(row.id)?.metadata ?? "{}")).not.toHaveProperty("valid_from");
+		const judgedCandidateIds = new Set<string>();
+		const result = await retireRowsByName({ store, llm: createLlmClient({ preset: "mem_claw/sno_extract_chat" }), scope: "global", retiredPosition: text, currentPositionId: "another-row", triggeringEventIdentity: "different-message", triggeringSessionIdentity: "same-session", eventTime, judgmentBudget: { remaining: 0 }, judgedCandidateIds });
+		expect(result).toEqual({ retiredIds: [], completed: true });
+		expect(judgedCandidateIds.has(row.id)).toBe(true);
+		expect(JSON.parse(store.getById(row.id)?.metadata ?? "{}").invalidated_at).toBeUndefined();
+	} finally { await store.close(); fixture.cleanup(); }
+});
 
-		const rejectedPort = new RecordingAgentPort(() => ({
-			kind: "ok",
-			text: validReply({ confidence: 0.99 }),
-		}));
-		const rejected = await resolveExpression("extra-field-glorpday", rejectedPort);
-		expect(rejected.interval.resolutionStatus).toBe("unresolved");
-	});
 
-	it("uses the configured parser map and no parser for Korean", () => {
-		expect(DATE_RESOLUTION_PARSER_BY_LOCALE).toEqual({
-			en: "en",
-			de: "de",
-			es: "es",
-			fr: "fr",
-			ja: "ja",
-			ko: null,
-			ru: "ru",
-			zh: "zh",
-			"zh-Hant": "zh-Hant",
-		});
-		const korean = resolveDateLocally({
-			text: "03/04/2026",
-			sessionDateTime: SESSION_DATE_TIME,
-			sessionTimezone: SESSION_TIMEZONE,
-			locale: "ko",
-			localFirst: true,
-		});
-		expect(korean.result.stage.selectedParser).toBeNull();
-		expect(korean.result.stage.selectionReason).toBe("tie-disagreed");
-	});
+it("uses a source timezone that differs from the session timezone", async () => {
+	const apiKey = process.env.SNO_MEM_CLAW_LLM_INTERNAL_KEY;
+	if (!apiKey) throw new Error("SNO_MEM_CLAW_LLM_INTERNAL_KEY is required");
+	const timeInstructions: CalendarInstruction[] = [];
+	const llm = observeTimeInstructions(createLlmClient({ preset: "mem_claw/sno_extract_chat", apiKey, timeoutMs: 90_000 }), timeInstructions);
+	const endpoint = await resolveLlmEndpoint({ configuredPreset: "mem_claw/sno_extract_chat", occasion: "dateResolution", transport: "chat-completions" });
+	const result = await resolveMemoryDate({ text: "The deployment happened on June 4, 2026 at 15:00 PDT.", sessionDateTime: SESSION_DATE_TIME, sessionTimezone: "Asia/Tokyo", llm });
+	process.stdout.write(JSON.stringify({ host: hostname(), model: endpoint.preset.model, endpoint: endpoint.url, name: "source timezone differs from session", timeInstructions, result }) + "\n");
+	expect(timeInstructions).toEqual([expect.objectContaining({ kind: "absolute", year: 2026, month: 6, day: 4, hour: 15, minute: 0, precision: "minute" })]);
+	const sourceTime = timeInstructions[0];
+	if (sourceTime?.kind !== "absolute" || !sourceTime.timezone) throw new Error("Model omitted the source timezone");
+	expect(Temporal.Instant.from("2026-06-04T22:00:00Z").toZonedDateTimeISO(sourceTime.timezone).offset).toBe("-07:00");
+	expect(result.interval).toMatchObject({ type: "bounded", from: Date.parse("2026-06-04T22:00:00Z"), until: Date.parse("2026-06-04T22:01:00Z") });
+	expect(result.timezone).toBe("Asia/Tokyo");
+	expect(result.interval).toMatchObject({ timezone: sourceTime.timezone });
+	expect(result.timestamp).toBe(Date.parse(SESSION_DATE_TIME));
+}, 120_000);
+
+/** The provider/host boundary is fault-injected; LlmClient, tool, embedding and SQLite are real. */
+async function storeWithDateClient(llm: LlmClient) {
+	const { dirname } = await import("node:path");
+	const { createTestDb, createTestEmbedder } = await import("../../../apps/mem-claw/helpers/test-db");
+	const { MemoryStore } = await import("../../../../packages/sno-station-mem/src/store/store");
+	const { createRetriever } = await import("../../../../packages/sno-station-mem/src/engine/retrieval/retriever");
+	const { createScopePolicy } = await import("../../../../packages/sno-station-mem/src/engine/security/scopes");
+	const { executeMemoryStoreTool } = await import("../../../../packages/sno-station-mem/src/engine/bindings/memory-store-tool");
+	const fixture = createTestDb();
+	const embedder = await createTestEmbedder();
+	const store = new MemoryStore({ dbPath: fixture.dbPath, embedder });
+	try {
+		const result = await executeMemoryStoreTool({ store, embedder, retriever: createRetriever(store, embedder), scopePolicy: createScopePolicy({ default: "global", agentAccess: { "date-failure": ["global"] } }), stateDir: dirname(fixture.dbPath), sessionTimestamp: Date.parse("2023-06-09T19:55:00Z"), sessionTimezone: "UTC", profileToolLlm: llm }, { agentId: "date-failure" }, "store-date-failure", { content: "The user moved to Kyoto yesterday.", category: "episodic" });
+		const id = result.details.id;
+		return { result, row: typeof id === "string" ? store.getById(id) : undefined, count: (fixture.sqlite.prepare("SELECT COUNT(*) AS count FROM nodix_memories WHERE project_id = 'global'").get() as { count: number }).count };
+	} finally { await store.close(); fixture.cleanup(); }
+}
+
+it.each([
+	{ name: "transport failure", completion: { kind: "error", category: "transport", message: "HTTP 502" } as const },
+	{ name: "empty provider reply", completion: { kind: "ok", text: "" } as const },
+	{ name: "host deadline", completion: { kind: "cancelled", reason: "deadline" } as const },
+	{ name: "nonempty invalid schema", completion: { kind: "ok", text: '{"reason":"invalid","time":{"kind":"relative","amount":"yesterday"}}' } as const },
+	{ name: "malformed JSON", completion: { kind: "ok", text: '{"reason": invalid-json' } as const },
+])("preserves the memory through real LlmClient $name", async ({ completion }) => {
+	const llm = client(new RecordingAgentPort(() => completion));
+	const { result, row, count } = await storeWithDateClient(llm);
+	expect(result.isError, JSON.stringify(result)).not.toBe(true);
+	expect(count).toBe(1);
+	expect(row?.text).toBe("The user moved to Kyoto yesterday.");
+	const metadata = JSON.parse(row?.metadata ?? "{}");
+	expect(metadata.temporal_resolution_status).toBe("unresolved");
+	for (const key of ["event_at", "temporal_date", "valid_from", "valid_until"]) expect(metadata).not.toHaveProperty(key);
+});
+
+it.each([
+	{ name: "terminal authentication error", completion: { kind: "error", category: "auth", message: "HTTP 401 unauthorized" } as const },
+	{ name: "explicit cancellation", completion: { kind: "cancelled", reason: "aborted" } as const },
+])("refuses to save on $name", async ({ completion }) => {
+	const { result, count } = await storeWithDateClient(client(new RecordingAgentPort(() => completion)));
+	expect(result.isError).toBe(true);
+	expect(count).toBe(0);
+});
+
+
+it("saves a valid real model date as the memory_store success control", async () => {
+	const apiKey = process.env.SNO_MEM_CLAW_LLM_INTERNAL_KEY;
+	if (!apiKey) throw new Error("SNO_MEM_CLAW_LLM_INTERNAL_KEY is required");
+	const { result, row, count } = await storeWithDateClient(createLlmClient({ preset: "mem_claw/sno_extract_chat", apiKey, timeoutMs: 90_000 }));
+	expect(result.isError, JSON.stringify(result)).not.toBe(true);
+	expect(count).toBe(1);
+	expect(row?.text).toBe("The user moved to Kyoto yesterday.");
+	expect(JSON.parse(row?.metadata ?? "{}")).toMatchObject({ temporal_resolution_status: "resolved", temporal_date: "2023-06-08", temporal_precision: "day", valid_from: Date.UTC(2023, 5, 8) });
+});
+
+
+it("preserves the memory when the configured host model port is unavailable", async () => {
+	const llm = createLlmClient({ preset: "mem_claw/sno_ai_extract", routing: routing() });
+	const { result, row, count } = await storeWithDateClient(llm);
+	expect(result.isError, JSON.stringify(result)).not.toBe(true);
+	expect(count).toBe(1);
+	expect(row?.text).toBe("The user moved to Kyoto yesterday.");
+	expect(JSON.parse(row?.metadata ?? "{}")).toMatchObject({ temporal_resolution_status: "unresolved" });
 });

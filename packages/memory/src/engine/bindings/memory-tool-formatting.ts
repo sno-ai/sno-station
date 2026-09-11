@@ -5,7 +5,8 @@
 
 import { sanitizeContentIngress } from "@snoai/content-sanitizer";
 import { stripHtmlTags, stripRoleLabelPrefix } from "../shared/i18n-text";
-import { isoDateFromMs } from "../shared/iso-date-time";
+import { normalizeIsoDateTimeString } from "../shared/iso-date-time";
+import { isCalendarLabel } from "../extraction/calendar-instruction";
 
 export function sanitizeRecalledText(text: string): string {
 	// Centralize the tool execution fallback value at the boundary of this helper.
@@ -42,21 +43,19 @@ export function parseEntryMetadata(entry: { metadata?: string }): Record<string,
 	}
 }
 
-/**
- * Event date (`YYYY-MM-DD`) to surface for a dateable (episodic) memory in
- * recall output, or undefined for non-episodic memories. Prefers the resolved
- * `event_at` (an ISO string — always present on episodic rows) and falls back
- * to `valid_from` (ms epoch) defensively. Giving the agent the event date is
- * what lets it answer time-scoped questions ("this week", "last month").
- */
+/** Display the resolved event precision; unresolved text never inherits a record timestamp. */
 export function episodicEventDate(entry: { metadata?: string }): string | undefined {
 	const metadata = parseEntryMetadata(entry);
 	if (metadata.kind !== "episodic") return undefined;
+	if (metadata.temporal_resolution_status === "unresolved" || metadata.temporal_resolution_status === "static") return undefined;
+	if (isCalendarLabel(metadata.temporal_date, metadata.temporal_precision)) return metadata.temporal_date;
 	const eventAt = metadata.event_at;
-	if (typeof eventAt === "string" && eventAt.length >= 10) return eventAt.slice(0, 10);
-	if (typeof eventAt === "number" && eventAt > 0) return isoDateFromMs(eventAt);
-	const validFrom = metadata.valid_from;
-	if (typeof validFrom === "number" && validFrom > 0) return isoDateFromMs(validFrom);
+	const iso = normalizeIsoDateTimeString(eventAt);
+	if (iso !== undefined) return iso.slice(0, 10);
+	if (typeof eventAt === "number") {
+		const date = new Date(eventAt);
+		if (Number.isFinite(date.getTime())) return date.toISOString().slice(0, 10);
+	}
 	return undefined;
 }
 

@@ -3,7 +3,7 @@
  * @boundary The agent_end hook path only; registration and service lifecycle are elsewhere.
  */
 
-import { resolveDateLocally } from "../extraction/date-resolution";
+import { unresolvedMemoryDate } from "../extraction/date-resolution";
 import { randomUUID } from "node:crypto";
 import { createLogger, currentLogContext, withLogContext } from "@snoai/utils/logger";
 import {
@@ -69,13 +69,12 @@ async function runLocalFirstCapture(input: {
 		if (!entry.text || seen.has(entry.text)) continue;
 		seen.add(entry.text);
 		try {
-			const date = resolveDateLocally({
+			const date = unresolvedMemoryDate({
 				text: entry.text,
 				sessionDateTime,
 				sessionTimezone: ctx.sessionTimezone,
 				locale: config.language,
-				localFirst: true,
-			}).result;
+			});
 			await store.store({
 				text: entry.text,
 				category: "episodic",

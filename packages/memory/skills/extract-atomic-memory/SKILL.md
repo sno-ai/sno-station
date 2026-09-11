@@ -7,7 +7,7 @@ description: Read one conversation window and return every independently mutable
 
 You read one window of a conversation and return the claims it states as records. You have one
 answer and the text in front of you. The engine computes or repairs everything that has a definite
-answer after you answer: dates from time phrases, whether a key is in the list, the turn number,
+answer after you answer: calendar arithmetic from structured instructions, whether a key is in the list, the turn number,
 the JSON envelope. Your work is the part only a reader can do: what is being claimed, about whom,
 whether it happened or stands, and what changed.
 
@@ -135,13 +135,11 @@ leaves the record without a key, and a record without a key can never be replace
 
 ## Time
 
-`temporal_phrase` is the exact words in the turn that carry the claim's time — "yesterday",
-"next Thursday", "June 16", "去年", "this morning" — or `null` when the turn states none. "I just
-spent $4 on coffee" states no time: the purchase happened at the moment of the conversation, and
-`temporal_phrase` is `null`; the engine dates it to the session. Copy the
-words and leave the sentence around them as spoken; the engine resolves the phrase against the
-session's date and time zone and writes the date where readers need it. A phrase you would have
-to guess a date for is still just the phrase: the engine records that it could not be placed.
+Read time in the full context and return its meaning in `time`, following the supplied
+calendar instruction contract. `temporal_phrase` keeps the supporting words; it is evidence,
+never input to a phrase parser. `ended_time` describes an ending and is `none` otherwise.
+The engine performs calendar arithmetic only. Keep the original duration and do not replace it
+with a date you computed. An undated historical event is `unresolved`, not the session date.
 
 `ends_current` is true when the claim says that a preference, or a named thing's standing state,
 has ended: "I used to like spirituals" ends that liking; a proposal whose funding has ended ends

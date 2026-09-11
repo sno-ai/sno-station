@@ -106,6 +106,7 @@ function wireRecord(overrides: Record<string, unknown> = {}): Record<string, unk
 		attribute: "preference.food",
 		value: "tea",
 		temporal_phrase: null,
+		time: { kind: "none" }, ended_time: { kind: "none" },
 		ends_current: false,
 		ended_at_phrase: null,
 		importance: "medium",
@@ -293,7 +294,7 @@ describe("atomic generic extractor", () => {
 		};
 	}
 
-	it("freezes the two kinds, the dictionary-plus-vocabulary enum, phrase-only time, and code-owned fields", () => {
+	it("freezes the two kinds, the dictionary-plus-vocabulary enum, model time instructions, and code-owned fields", () => {
 		// The bytes on disk, not the imported object: a runtime copy could be patched to agree with
 		// the dictionaries while the file the prompt is built from stays stale.
 		const schemaBytes = readFileSync(RESPONSE_SCHEMA_PATH);
@@ -327,8 +328,9 @@ describe("atomic generic extractor", () => {
 		expect(record.properties).not.toHaveProperty("source");
 		expect(record.properties).not.toHaveProperty("maturity");
 
-		// Time reaches the engine as words only: the phrase that carries it, and for an ending the
-		// phrase that says when. No date field exists for the model to compute.
+		// The model supplies semantic operations; code owns the resulting timestamps.
+		expect(record.required).toContain("time");
+		expect(record.required).toContain("ended_time");
 		expect(record.properties).not.toHaveProperty("resolved_time");
 		expect(record.properties).not.toHaveProperty("ended_at");
 		expect(record.required).toContain("temporal_phrase");
@@ -415,7 +417,7 @@ describe("atomic generic extractor", () => {
 		});
 		expect(client.request).toEqual({
 			prompt: "exact prompt",
-			extractionSkillHash: createHash("sha256").update(readFileSync(new URL("../../../../packages/sno-station-mem/skills/extract-atomic-memory/SKILL.md", import.meta.url))).digest("hex"),
+			extractionSkillHash: createHash("sha256").update(readFileSync(new URL("../../../../packages/sno-station-mem/skills/extract-atomic-memory/SKILL.md", import.meta.url))).update(readFileSync(new URL("../../../../packages/sno-station-mem/skills/extract-atomic-memory/references/calendar-meaning.md", import.meta.url))).digest("hex"),
 			callLabel: "memory-extract-atomic-generic",
 			adapterSlot: "memory-extract",
 			maxTokens: 128,

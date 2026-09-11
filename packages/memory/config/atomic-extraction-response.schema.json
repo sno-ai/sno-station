@@ -37,7 +37,9 @@
           "close_reason",
           "source_span",
           "relations",
-          "single_claim"
+          "single_claim",
+          "time",
+          "ended_time"
         ],
         "properties": {
           "kind": {
@@ -355,9 +357,209 @@
           },
           "single_claim": {
             "type": "boolean"
+          },
+          "time": {
+            "$ref": "#/$defs/calendarInstruction"
+          },
+          "ended_time": {
+            "$ref": "#/$defs/calendarInstruction"
           }
         }
       }
+    }
+  },
+  "$defs": {
+    "calendarInstruction": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "none"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "unresolved"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "absolute"
+            },
+            "year": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "month": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 12
+            },
+            "day": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 31
+            },
+            "precision": {
+              "type": "string",
+              "enum": [
+                "year",
+                "month",
+                "week",
+                "day",
+                "minute"
+              ]
+            },
+            "hour": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 23
+            },
+            "minute": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 59
+            },
+            "timezone": {
+              "type": "string",
+              "minLength": 1,
+              "description": "A valid IANA time zone identifier or fixed UTC offset in +HH:MM or -HH:MM form; never a natural-language abbreviation. Keep hour and minute in that source zone."
+            }
+          },
+          "required": [
+            "kind",
+            "year",
+            "precision"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "relative"
+            },
+            "amount": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "unit": {
+              "type": "string",
+              "enum": [
+                "year",
+                "month",
+                "week",
+                "day",
+                "hour",
+                "minute"
+              ]
+            },
+            "precision": {
+              "type": "string",
+              "enum": [
+                "year",
+                "month",
+                "week",
+                "day",
+                "minute"
+              ]
+            },
+            "hour": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 23
+            },
+            "minute": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 59
+            },
+            "timezone": {
+              "type": "string",
+              "minLength": 1,
+              "description": "A valid IANA time zone identifier or fixed UTC offset in +HH:MM or -HH:MM form; never a natural-language abbreviation. Keep hour and minute in that source zone."
+            }
+          },
+          "required": [
+            "kind",
+            "amount",
+            "unit",
+            "precision"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "weekday"
+            },
+            "weekday": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 7
+            },
+            "direction": {
+              "type": "string",
+              "enum": [
+                "previous",
+                "next"
+              ]
+            },
+            "precision": {
+              "type": "string",
+              "enum": [
+                "day",
+                "minute"
+              ]
+            },
+            "hour": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 23
+            },
+            "minute": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 59
+            },
+            "timezone": {
+              "type": "string",
+              "minLength": 1,
+              "description": "A valid IANA time zone identifier or fixed UTC offset in +HH:MM or -HH:MM form; never a natural-language abbreviation. Keep hour and minute in that source zone."
+            }
+          },
+          "required": [
+            "kind",
+            "weekday",
+            "direction",
+            "precision"
+          ],
+          "additionalProperties": false
+        }
+      ]
     }
   }
 }

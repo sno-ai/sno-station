@@ -140,13 +140,6 @@ export async function executeMemoryUpdateTool(ctx: ToolContext, access: ReturnTy
 									llm: ctx.profileToolLlm,
 									routing: ctx.llmRouting,
 								});
-								if (
-									dateResolution.interval.resolutionStatus === "resolved" &&
-									dateResolution.timestamp !== undefined
-								) {
-									changes.timestamp = dateResolution.timestamp;
-									changes.timezone = dateResolution.timezone;
-								}
 								const userProvidedTemporalType =
 									parsed.metadata !== undefined && "memory_temporal_type" in parsed.metadata;
 								const userProvidedTemporalStatus =
@@ -163,6 +156,11 @@ export async function executeMemoryUpdateTool(ctx: ToolContext, access: ReturnTy
 									effectiveCategory,
 									dateResolution.interval,
 								);
+								for (const field of ["temporal_date", "temporal_precision", "temporal_timezone"] as const) {
+									if (parsed.metadata !== undefined && field in parsed.metadata) continue;
+									if (temporalMetadata[field] !== undefined) nextMeta[field] = temporalMetadata[field];
+									else delete nextMeta[field];
+								}
 								if (!userProvidedTemporalType)
 									nextMeta.memory_temporal_type = temporalMetadata.memory_temporal_type;
 								if (!userProvidedTemporalStatus)
@@ -181,8 +179,9 @@ export async function executeMemoryUpdateTool(ctx: ToolContext, access: ReturnTy
 										delete nextMeta.valid_until;
 									}
 								}
-								if (!userProvidedValidFrom && temporalMetadata.valid_from !== undefined) {
-									nextMeta.valid_from = temporalMetadata.valid_from;
+								if (!userProvidedValidFrom) {
+									if (temporalMetadata.valid_from !== undefined) nextMeta.valid_from = temporalMetadata.valid_from;
+									else delete nextMeta.valid_from;
 								}
 								if (!userProvidedEventAt) {
 									if (temporalMetadata.event_at !== undefined) {
