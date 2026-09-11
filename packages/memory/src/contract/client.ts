@@ -10,7 +10,7 @@ import { getPrincipal, readBoundStorePath } from "./profile";
 import { outputSchemas, type ContractOutputs, type InspectData } from "./results";
 import { MEMORY_ROUTES, MEMORY_SKIN_HEADER, MEMORY_START_TIMEOUT_MS, MEMORY_HEALTH_TIMEOUT_MS } from "./routes";
 
-export type { MemoryContract, ScopeCtx, Registration, RecallOptions, Turn, Mutation, Inspection, UsageSignal, Message, ContractOutputs } from "./index";
+export type { MemoryContract, ScopeCtx, Registration, RecallOptions, Turn, Mutation, Inspection, UsageSignal, Message, ContractOutputs, JsonValue } from "./index";
 export { ContractError } from "./error";
 export interface ConnectOptions { skinId: string; storePath?: string }
 export interface DegradedConnection { degraded: true; reason: DegradedReason }
