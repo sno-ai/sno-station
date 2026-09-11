@@ -1,4 +1,9 @@
 /** Real shipping extraction prompt and signed transport; no substitute model. */
+import { randomUUID } from "node:crypto";
+import { createTestDb, createTestEmbedder } from "../../../apps/mem-claw/helpers/test-db";
+import { MemoryStore } from "../../../../packages/sno-station-mem/src/store/store";
+import { buildAtomicWriteCards } from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-write-projection";
+import { episodicEventDate } from "../../../../packages/sno-station-mem/src/engine/bindings/memory-tool-formatting";
 import { hostname } from "node:os";
 import { describe, expect, it } from "vitest";
 import { buildAtomicGenericExtractionPrompt, createAtomicGenericExtractionTransport } from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-generic-extractor";
@@ -28,12 +33,38 @@ describe("real model understands time; code calculates", () => {
 			const completion = await transport.complete({ prompt: buildAtomicGenericExtractionPrompt(turns, anchor), maxTokens: 4096 });
 			if (!completion || completion.truncated) throw new Error("Missing or truncated real model reply");
 			const parsed = parseAtomicExtractionReply(completion.text, turns.length);
-			process.stdout.write(JSON.stringify({ host: hostname(), model: config.model, endpoint: config.baseURL, name, repeat, raw: completion.text }) + "\n");
+			process.stdout.write(JSON.stringify({ host: hostname(), model: config.model, endpoint: config.baseUrl, name, repeat, raw: completion.text }) + "\n");
 			if (!parsed.ok) throw new Error(`Invalid reply: ${completion.text}`);
 			expect(parsed.records.length).toBeGreaterThan(0);
 			const records = await runAtomicExtractionGauntlet({ records: parsed.records, turns, sessionDateTime: anchor, sessionTimezone: "UTC" });
-			process.stdout.write(JSON.stringify({ host: hostname(), model: config.model, endpoint: config.baseURL,
+			process.stdout.write(JSON.stringify({ host: hostname(), model: config.model, endpoint: config.baseUrl,
 				skillHash: ATOMIC_EXTRACTION_SKILL_HASH, name, repeat, records: records.map(({ claimText, time, resolvedTime }) => ({ claimText, time, resolvedTime })) }) + "\n");
+			if (repeat === 0) {
+				const fixture = createTestDb();
+				const store = new MemoryStore({ dbPath: fixture.dbPath, embedder: await createTestEmbedder() });
+				try {
+					const key = { conversationId: randomUUID(), chunkHash: randomUUID(), pipelineVersion: "calendar-live" };
+					store.beginAtomicExtractionChunk({ ...key, rawChunk: text, routingSnapshotId: "calendar-live", runParameters: { maxInputTokens: 16000, outputTokenBudget: 4096, subchunkCount: 1 }, nowMs: Date.now() });
+					store.recordAtomicExtractionCalls(key, Date.now());
+					const cards = buildAtomicWriteCards({ records: records.map((record) => ({ ...record, category: "episodic" as const })), idempotencyKeys: records.map(() => randomUUID()), sourceTurnOffset: 0, sessionTimestampMs: Date.parse(anchor), timezone: "UTC" });
+					const written = await store.storeAtomicExtractionChunk({ ledgerKey: key, projectId: "calendar-live", extractorVersion: "calendar-live", cards, nowMs: Date.now() });
+					expect(written.createdCount).toBe(records.length);
+					const recalledDates = written.cardIds.map((id) => {
+						const row = store.getById(id);
+						if (!row) throw new Error("Written calendar row cannot be read back");
+						const metadata = JSON.parse(row.metadata);
+						if (label === null) {
+							expect(metadata).not.toHaveProperty("event_at");
+							expect(episodicEventDate(row)).toBeUndefined();
+						} else {
+							expect(episodicEventDate(row)).toBe(label);
+							if (label.length === 4) expect(metadata).not.toHaveProperty("event_at");
+						}
+						return episodicEventDate(row);
+					});
+					process.stdout.write(JSON.stringify({ host: hostname(), model: config.model, endpoint: config.baseUrl, name, dbPath: fixture.dbPath, stored: written.createdCount, recalledDates }) + "\n");
+				} finally { await store.close(); fixture.cleanup(); }
+			}
 			const dates = records.flatMap((record) => record.resolvedTime ? [record.resolvedTime.label] : []);
 			if (label === null) expect(dates).toEqual([]);
 			else {
