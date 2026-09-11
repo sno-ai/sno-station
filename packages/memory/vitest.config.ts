@@ -30,7 +30,7 @@ export default defineConfig({
 			NODE_ENV: "test",
 			SNO_STATION_MEM_NODE_ENV: "test",
 			SNO_OBSERVE_ENABLED: "false",
-			SNO_STATION_MEM_SNO_OBSERVE_ENABLED: "false",
+			SNO_OBSERVE_ENABLED: "false",
 		},
 		exclude: [
 			...configDefaults.exclude,

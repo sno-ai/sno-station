@@ -53,13 +53,13 @@ export function getSnoStationMemDataDir(): string {
  *
  * Two env overrides are honored, in priority order:
  *   1. `MEM_CLAW_DATA_DIR_ROOT` — PRD-canonical root → `<root>/self-upgrade/`.
- *   2. `SNO_STATION_MEM_DATA_DIR` — older override used by self-upgrade tests
+ *   2. `MEM_CLAW_DATA_DIR` — older override used by self-upgrade tests
  *      → `<that>/self-upgrade/`. Read-only compatibility only.
  */
 export function getSelfUpgradeStageRoot(): string {
 	const newOverride = process.env.MEM_CLAW_DATA_DIR_ROOT?.trim();
 	if (newOverride && newOverride.length > 0) return join(newOverride, "self-upgrade");
-	const directOverride = process.env.SNO_STATION_MEM_DATA_DIR?.trim();
+	const directOverride = process.env.MEM_CLAW_DATA_DIR?.trim();
 	if (directOverride && directOverride.length > 0) return join(directOverride, "self-upgrade");
 	return join(homedir(), ".snoai", "sno-station-core", "sno-station-mem", "self-upgrade");
 }
