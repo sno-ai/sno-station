@@ -1,4 +1,5 @@
 import { readMaintenanceOverrides } from "./config";
+import { AsyncLocalStorage } from "node:async_hooks";
 import { randomUUID } from "node:crypto";
 import { readMemorySnapshotPayload, type SnapshotReason } from "../engine/observability/memory-snapshot";
 import { existsSync } from "node:fs";
@@ -26,6 +27,10 @@ import { RegisteredAgentPort } from "../model/registered-agent-port";
 import { withProviderResponses } from "../model/llm-provider-transport";
 import type { ProviderResponseTrace } from "../model/llm-client-types";
 import { MEMORY_USAGE_FLUSH_INTERVAL_MS } from "./config";
+
+/** The skin's observe session for the request in flight; store, embedder and retriever events carry it. */
+const observeSession = new AsyncLocalStorage<string | undefined>();
+const observeSessionUuid = (): string | undefined => observeSession.getStore();
 
 const log = createLogger("sno-station-mem:runtime");
 function engineLog(level: "info" | "warn" | "error" | "debug", message: string): void {
@@ -78,8 +83,8 @@ export class MemoryRuntimePool {
 		await mkdir(dirname(storePath), { recursive: true, mode: 0o700 });
 		const stateDir = getSnoStationMemStateDir();
 		const observability = new PluginObservability(config, stateDir, engineLogger);
-		const embedder = new ObservableEmbedder(config.embedding, stateDir, observability, () => undefined);
-		const store = new ObservableMemoryStore({ dbPath: storePath, vectorDim: embedder.dimensions, embedder, memoryTelemetry: config.memoryTelemetry }, observability, () => undefined, config.embedding);
+		const embedder = new ObservableEmbedder(config.embedding, stateDir, observability, observeSessionUuid);
+		const store = new ObservableMemoryStore({ dbPath: storePath, vectorDim: embedder.dimensions, embedder, memoryTelemetry: config.memoryTelemetry }, observability, observeSessionUuid, config.embedding);
 		const pool = new MemoryRuntimePool(storePath, store, config, observability, embedder);
 		const maintenance = readMaintenanceOverrides();
 		pool.maintenance = startMaintenanceTimer({ store, dbPath: storePath, stateDir, remClock: maintenance.now, remVolumeThreshold: maintenance.volumeThreshold,
@@ -96,8 +101,8 @@ export class MemoryRuntimePool {
 		// Without an endpoint, rem-enhanced keeps the existing GPU fallback. Agent-native must expose refusal.
 		const agentPort = registration.model || config.mode === "agent-native" ? new RegisteredAgentPort(registration.model) : undefined;
 		const observability = new PluginObservability(config, this.stateDir, engineLogger);
-		const embedder = new ObservableEmbedder(config.embedding, this.stateDir, observability, () => undefined);
-		const retriever = new ObservableMemoryRetriever(this.store, embedder, engineLogger, { ...DEFAULT_RETRIEVAL_CONFIG, ...config.retrieval }, observability, () => undefined, config.embedding);
+		const embedder = new ObservableEmbedder(config.embedding, this.stateDir, observability, observeSessionUuid);
+		const retriever = new ObservableMemoryRetriever(this.store, embedder, engineLogger, { ...DEFAULT_RETRIEVAL_CONFIG, ...config.retrieval }, observability, observeSessionUuid, config.embedding);
 		const tracker = new AccessTracker({ store: this.store, recallLifecycle: config.recallLifecycle });
 		retriever.setAccessTracker(tracker);
 		retriever.setRecallLifecycle(config.recallLifecycle);
@@ -138,7 +143,7 @@ export class MemoryRuntimePool {
 		this.counters.storeAccesses++;
 		const responses: ProviderResponseTrace[] = [];
 		try {
-			const call = () => withProviderResponses(responses, () => this.call(entry.runtime, method, raw));
+			const call = () => observeSession.run(input.scope.host?.observeSessionUuid, () => withProviderResponses(responses, () => this.call(entry.runtime, method, raw)));
 			const result = parseOutput(method, await (entry.agentPort ? entry.agentPort.run(call) : call()));
 			if (method === "onSessionEnd") await this.snapshot(entry, "session_end");
 			return result;
