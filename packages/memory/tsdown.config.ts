@@ -34,6 +34,8 @@ export default defineConfig([
   "client": "src/contract/client.ts",
   "release-download": "src/contract/release-download.ts",
   "internal/contract/config/plugin-config-schema": "src/contract/config/plugin-config-schema.ts",
+  "internal/contract/profile": "src/contract/profile.ts",
+  "internal/contract/installation-settings": "src/contract/installation-settings.ts",
   "internal/engine/bindings/memory-tool-formatting": "src/engine/bindings/memory-tool-formatting.ts",
   "memdump": "src/engine/diagnostics/memdump.ts",
   "diagnostic-encoder": "src/engine/observability/early-diagnostics.ts",
