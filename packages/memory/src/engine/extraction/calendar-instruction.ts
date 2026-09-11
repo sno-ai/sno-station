@@ -127,6 +127,8 @@ export function calculateCalendarTime(
 	sessionTimezone?: string,
 ): CalendarResult | null {
 	if (instruction.kind === "none" || instruction.kind === "unresolved") return null;
+	if ((instruction.hour !== undefined || instruction.minute !== undefined) && instruction.precision !== "minute") return null;
+	if (instruction.minute !== undefined && instruction.hour === undefined) return null;
 	if (instruction.kind === "weekday" && instruction.precision === "minute" && instruction.hour === undefined) return null;
 	const zone = instruction.timezone ?? sessionTimezone ?? sessionZoneCarriedBy(sessionDateTime) ?? "UTC";
 	try {

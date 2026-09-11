@@ -176,3 +176,27 @@ it.each([
 	expect(episodicEventDate({ metadata: JSON.stringify(metadata) })).toBe(valid ? label : undefined);
 	if (!valid) expect(episodicEventDate({ metadata: JSON.stringify({ ...metadata, event_at: "2020-03-15T00:00:00Z" }) })).toBe("2020-03-15");
 });
+
+it.each([
+	{ kind: "absolute", year: 2023, month: 7, day: 18, precision: "day", hour: 10, minute: 30 },
+	{ kind: "relative", amount: -1, unit: "day", precision: "day", hour: 10, minute: 30 },
+	{ kind: "weekday", weekday: 2, direction: "previous", precision: "day", hour: 10, minute: 30 },
+	{ kind: "absolute", year: 2023, month: 7, day: 18, precision: "minute", minute: 30 },
+	{ kind: "relative", amount: -1, unit: "day", precision: "minute", minute: 30 },
+	{ kind: "weekday", weekday: 2, direction: "previous", precision: "minute", minute: 30 },
+])("keeps inconsistent or incomplete clock instructions unresolved: %j", async (time) => {
+	const card = await project("The user attended a meeting.", null, time, "2023-07-20T14:37:00Z");
+	expect(card).toBeDefined();
+	expect(card?.validFrom).toBeNull();
+	expect(card?.metadata).not.toHaveProperty("event_at");
+	expect(episodicEventDate({ metadata: JSON.stringify(card?.metadata) })).toBeUndefined();
+});
+
+it.each([
+	[{ kind: "absolute", year: 2023, month: 7, day: 18, precision: "minute", hour: 10, minute: 30 }, "2023-07-18T10:30"],
+	[{ kind: "relative", amount: -1, unit: "day", precision: "minute", hour: 10, minute: 30 }, "2023-07-19T10:30"],
+	[{ kind: "weekday", weekday: 2, direction: "previous", precision: "minute", hour: 10, minute: 30 }, "2023-07-18T10:30"],
+])("preserves a complete minute clock: %j", async (time, label) => {
+	const card = await project("The meeting was at the stated date and 10:30.", null, time, "2023-07-20T14:37:00Z");
+	expect(episodicEventDate({ metadata: JSON.stringify(card?.metadata) })).toBe(label);
+});
