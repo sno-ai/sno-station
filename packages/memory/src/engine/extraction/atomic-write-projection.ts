@@ -46,13 +46,13 @@ function sourceTurnIndex(record: AtomicKeyedRecord): number {
 	return turnIndex;
 }
 
-/** The row age uses the session; its event interval comes only from model judgment. */
+/** An unresolved record keeps its session timestamp without claiming an event date. */
 function eventTime(
 	record: AtomicKeyedRecord,
 	sessionTimestampMs: number,
 ): { timestamp: number; validFrom: number | null; validUntil: number | null } {
 	return {
-		timestamp: sessionTimestampMs,
+		timestamp: record.resolvedTime?.from ?? sessionTimestampMs,
 		validFrom: record.resolvedTime?.from ?? null,
 		validUntil: record.category === "episodic" ? record.resolvedTime?.until ?? null : null,
 	};
