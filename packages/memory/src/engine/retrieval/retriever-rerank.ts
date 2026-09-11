@@ -42,6 +42,49 @@ import {
 	RetrievalError,
 } from "./retriever-dependencies";
 
+// Issue #222. A rerank request that fails on the transport is asked again before the
+// pre-rerank order is served: the per-call timeout (Node's fetch rejects an
+// `AbortSignal.timeout()` with a DOMException named "TimeoutError", measured on Node 24 —
+// the earlier "AbortError" check never matched a real timeout, so timeouts were filed as
+// request_error), a reset or refused connection (undici: TypeError "fetch failed" with a
+// `cause`), and a 502/503/504. Fatal statuses (401/403/429) and every other outcome go
+// through unchanged. The retry stays inside the batch's wave slot, so the number of
+// in-flight requests per rerank() call does not grow.
+const RERANK_TRANSIENT_ATTEMPTS = 3;
+const RERANK_TRANSIENT_BACKOFF_MS = 200;
+const RERANK_TRANSIENT_STATUSES = new Set([502, 503, 504]);
+
+function isRerankTimeout(error: unknown): boolean {
+	return error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError");
+}
+
+function isTransientRerankError(error: unknown): boolean {
+	if (isRerankTimeout(error)) return true;
+	return error instanceof TypeError && error.cause !== undefined;
+}
+
+async function fetchRerankWithRetry(send: () => Promise<Response>): Promise<Response> {
+	let lastError: unknown;
+	for (let attempt = 1; attempt <= RERANK_TRANSIENT_ATTEMPTS; attempt += 1) {
+		try {
+			const response = await send();
+			if (!RERANK_TRANSIENT_STATUSES.has(response.status) || attempt === RERANK_TRANSIENT_ATTEMPTS) {
+				return response;
+			}
+			// Drop the failed body before the next attempt: undici cannot reuse the
+			// connection while a body is unconsumed, so a run of 5xx would pin one
+			// connection per attempt (PR #225 review).
+			await response.body?.cancel();
+			lastError = new Error(`rerank API responded ${response.status}`);
+		} catch (error) {
+			if (!isTransientRerankError(error) || attempt === RERANK_TRANSIENT_ATTEMPTS) throw error;
+			lastError = error;
+		}
+		await new Promise((resolve) => setTimeout(resolve, RERANK_TRANSIENT_BACKOFF_MS * attempt));
+	}
+	throw lastError;
+}
+
 Object.assign(MemoryRetriever.prototype, {
 	async rerank(
 		this: MemoryRetrieverInternals,
@@ -139,13 +182,18 @@ Object.assign(MemoryRetriever.prototype, {
 					batchTexts.length,
 				);
 
-				// Await the retrieval ranking dependency before deriving downstream state.
-				const response = await fetch(rerankEndpoint, {
-					method: "POST",
-					headers,
-					body: JSON.stringify(body),
-					signal: AbortSignal.timeout(rerankTimeoutMs),
-				});
+				// Await the retrieval ranking dependency before deriving downstream state. A
+				// transient transport failure is retried inside this batch's wave slot (issue
+				// #222): measured 2026-09-10, 5 of 1,542 searches fell back on an idle box and 56
+				// in 30 minutes beside 8 concurrent searches, each on the first miss.
+				const response = await fetchRerankWithRetry(() =>
+					fetch(rerankEndpoint, {
+						method: "POST",
+						headers,
+						body: JSON.stringify(body),
+						signal: AbortSignal.timeout(rerankTimeoutMs),
+					}),
+				);
 
 				// Guard response.ok here so the remaining retrieval scoring path works with normalized inputs.
 				if (!response.ok) {
@@ -200,7 +248,7 @@ Object.assign(MemoryRetriever.prototype, {
 			// `MAX_CANDIDATE_POOL_SIZE` is 11 TEI requests, and serially that is 11 timeouts' worth of
 			// wall clock on one tool call. A wave is settled before the next one starts and the first
 			// failure ends the whole rerank, which is what the serial loop did, so a wedged reranker
-			// still costs one timeout. Outcomes are read in ascending batch order and the items are
+			// costs one wave of up to RERANK_TRANSIENT_ATTEMPTS timeouts. Outcomes are read in ascending batch order and the items are
 			// appended in that same order, so the list this builds is the one the serial loop built.
 			const items: RerankItem[] = [];
 			for (
@@ -296,17 +344,19 @@ Object.assign(MemoryRetriever.prototype, {
 			}
 			let reason: RerankFallbackReason;
 			// Route failure states into a deterministic recovery or reporting branch.
-			if (error instanceof Error && error.name === "AbortError") {
+			if (isRerankTimeout(error)) {
 				reason = "timeout";
 				// Log operational context for retrieval ranking without changing control flow.
 				log.warn("rerank API timed out, using pre-rerank results", {
 					timeoutMs: rerankTimeoutMs,
+					attempts: RERANK_TRANSIENT_ATTEMPTS,
 				}, { event_name: "memory.retriever_rerank.diagnostic", file: "packages/sno-station-mem/src/engine/retrieval/retriever-rerank.ts", function: "rerank", site_id: "retrieval.retriever-rerank.rerank.4af9c17c75" });
 			} else {
 				reason = "request_error";
 				// Log operational context for retrieval ranking without changing control flow.
 				log.warn("rerank error, using pre-rerank results", {
 					error,
+					attempts: RERANK_TRANSIENT_ATTEMPTS,
 				}, { event_name: "memory.retriever_rerank.diagnostic", file: "packages/sno-station-mem/src/engine/retrieval/retriever-rerank.ts", function: "rerank", site_id: "retrieval.retriever-rerank.rerank.2c5fc67dbf" });
 			}
 			return { candidates, fallback: { reason, provider } };
