@@ -150,6 +150,9 @@ export class MemoryRuntimePool {
 		}
 		finally {
 			await this.emitProviderUsage(entry, input.scope, responses);
+			// The skin owns cost.summary; the sidecar's tallies are never read, so drop them per call.
+			const session = input.scope.host?.observeSessionUuid;
+			if (session) { this.observability.aggregator.delete(session); entry.observability.aggregator.delete(session); }
 			entry.active--; if (entry.retired && entry.active === 0) await this.dispose(entry);
 		}
 	}
