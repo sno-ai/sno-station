@@ -52,6 +52,26 @@ export interface CalendarResult {
 	until: number;
 }
 
+/** Validate only serialized calendar labels and precision, never natural-language meaning. */
+export function isCalendarLabel(value: unknown, precision: unknown): value is string {
+	if (typeof value !== "string") return false;
+	try {
+		switch (precision) {
+			case "year": return /^\d{4}$/u.test(value) && Temporal.PlainYearMonth.from(`${value}-01`).year === Number(value);
+			case "month": return Temporal.PlainYearMonth.from(value).toString() === value;
+			case "day": return Temporal.PlainDate.from(value).toString() === value;
+			case "minute": return Temporal.PlainDateTime.from(value).toString({ smallestUnit: "minute" }) === value;
+			case "week": {
+				const [from, until, extra] = value.split("/");
+				if (!from || !until || extra !== undefined) return false;
+				const start = Temporal.PlainDate.from(from);
+				return start.toString() === from && start.dayOfWeek === 1 && start.add({ days: 7 }).toString() === until;
+			}
+			default: return false;
+		}
+	} catch { return false; }
+}
+
 export function sessionZoneCarriedBy(value: string | undefined): string | undefined {
 	if (!value) return undefined;
 	try { return Temporal.ZonedDateTime.from(value).timeZoneId; } catch { /* Offset-only ISO. */ }

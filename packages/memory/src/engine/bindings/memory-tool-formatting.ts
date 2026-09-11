@@ -6,6 +6,7 @@
 import { sanitizeContentIngress } from "@snoai/content-sanitizer";
 import { stripHtmlTags, stripRoleLabelPrefix } from "../shared/i18n-text";
 import { normalizeIsoDateTimeString } from "../shared/iso-date-time";
+import { isCalendarLabel } from "../extraction/calendar-instruction";
 
 export function sanitizeRecalledText(text: string): string {
 	// Centralize the tool execution fallback value at the boundary of this helper.
@@ -47,7 +48,7 @@ export function episodicEventDate(entry: { metadata?: string }): string | undefi
 	const metadata = parseEntryMetadata(entry);
 	if (metadata.kind !== "episodic") return undefined;
 	if (metadata.temporal_resolution_status === "unresolved" || metadata.temporal_resolution_status === "static") return undefined;
-	if (typeof metadata.temporal_date === "string") return metadata.temporal_date;
+	if (isCalendarLabel(metadata.temporal_date, metadata.temporal_precision)) return metadata.temporal_date;
 	const eventAt = metadata.event_at;
 	const iso = normalizeIsoDateTimeString(eventAt);
 	if (iso !== undefined) return iso.slice(0, 10);
