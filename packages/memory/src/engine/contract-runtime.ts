@@ -16,14 +16,14 @@ import type { AgentLlmPort } from "../model/agent-llm-port";
 import { createLlmClient } from "../model/llm-client";
 import type { PluginConfig } from "./shared/types";
 import { createScopePolicy, MemoryScopePolicy } from "./security/memory-scope-policy";
-import { parseAgentIdFromSessionKey } from "./security/scope-identity";
+import { isSystemBypassId, parseAgentIdFromSessionKey } from "./security/scope-identity";
 import { resolveProviderIdentity, createMemoryRuntime } from "./provider/provider-registration";
 import { onBeforeAgentStart } from "./bindings/sno-station-mem-auto-recall-hook";
 import { resolveRuntimeSessionId, clearSessionState } from "./bindings/sno-station-mem-session-state";
 import { executeMemoryRecallTool } from "./bindings/memory-recall-tool";
 import { buildInsightDistiller } from "./bindings/sno-station-mem-insight-distill-factory";
 import { onAgentEnd } from "./bindings/sno-station-mem-ambient-learning-hook";
-import { resolveAgentAccess } from "./bindings/memory-tool-access";
+import { resolveAgentAccess, resolveAgentId } from "./bindings/memory-tool-access";
 import type { ToolContext, ToolResult } from "./bindings/memory-tool-schemas";
 import { executeMemoryStoreTool } from "./bindings/memory-store-tool";
 import { executeMemoryForgetTool } from "./bindings/memory-forget-tool";
@@ -109,8 +109,9 @@ export class MemoryContractRuntime implements MemoryContract {
 		return { registration: this.registration, config: { ...this.registration.settings, ...this.registration.routing } };
 	}
 
+	/** Host identities are normalised the way the tools always did: blank or the literal "undefined" is missing. */
 	private agentId(scope: ScopeCtx): string | undefined {
-		if (scope.host) return scope.host.agentId ?? parseAgentIdFromSessionKey(scope.host.sessionKey ?? scope.session);
+		if (scope.host) return resolveAgentId(scope.host.agentId, parseAgentIdFromSessionKey(scope.host.sessionKey ?? scope.session));
 		return parseAgentIdFromSessionKey(scope.session) ?? this.configured().registration.skinId;
 	}
 
@@ -120,6 +121,8 @@ export class MemoryContractRuntime implements MemoryContract {
 		const agentId = this.agentId(scope);
 		const project = await this.project(scope);
 		const systemCaller = scope.host?.systemCaller === true;
+		// A bypass identity is only honoured for a host operator; a skin cannot claim it by name.
+		if (isSystemBypassId(agentId) && !systemCaller) throw new ContractError("invalid-input");
 		if (!/[\\/]/.test(scope.project) && !admittedScope(installed, scope.project, agentId, systemCaller)) throw new ContractError("invalid-input");
 		const readable = [project];
 		for (const requested of scope.readable ?? []) {
