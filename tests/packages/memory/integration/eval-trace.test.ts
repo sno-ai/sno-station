@@ -33,31 +33,31 @@ interface QaTraceLine {
 describe("eval-trace (PRD §11.2.2)", () => {
 	let tmp: string;
 	const originalEnv = {
-		SNO_STATION_MEM_EVAL_TRACE_ENABLED: process.env.SNO_STATION_MEM_EVAL_TRACE_ENABLED,
-		SNO_STATION_MEM_EVAL_TRACE_DIR: process.env.SNO_STATION_MEM_EVAL_TRACE_DIR,
+		EVAL_TRACE_ENABLED: process.env.EVAL_TRACE_ENABLED,
+		EVAL_TRACE_DIR: process.env.EVAL_TRACE_DIR,
 	};
 
 	beforeEach(() => {
 		tmp = mkdtempSync(join(tmpdir(), "claw-eval-trace-"));
 		// biome-ignore lint/performance/noDelete: env reset must remove the key, not just nullify.
-		delete process.env.SNO_STATION_MEM_EVAL_TRACE_ENABLED;
+		delete process.env.EVAL_TRACE_ENABLED;
 		// biome-ignore lint/performance/noDelete: env reset must remove the key, not just nullify.
-		delete process.env.SNO_STATION_MEM_EVAL_TRACE_DIR;
+		delete process.env.EVAL_TRACE_DIR;
 	});
 
 	afterEach(() => {
 		rmSync(tmp, { recursive: true, force: true });
-		if (originalEnv.SNO_STATION_MEM_EVAL_TRACE_ENABLED === undefined) {
+		if (originalEnv.EVAL_TRACE_ENABLED === undefined) {
 			// biome-ignore lint/performance/noDelete: restoring undefined removes the key.
-			delete process.env.SNO_STATION_MEM_EVAL_TRACE_ENABLED;
+			delete process.env.EVAL_TRACE_ENABLED;
 		} else {
-			process.env.SNO_STATION_MEM_EVAL_TRACE_ENABLED = originalEnv.SNO_STATION_MEM_EVAL_TRACE_ENABLED;
+			process.env.EVAL_TRACE_ENABLED = originalEnv.EVAL_TRACE_ENABLED;
 		}
-		if (originalEnv.SNO_STATION_MEM_EVAL_TRACE_DIR === undefined) {
+		if (originalEnv.EVAL_TRACE_DIR === undefined) {
 			// biome-ignore lint/performance/noDelete: restoring undefined removes the key.
-			delete process.env.SNO_STATION_MEM_EVAL_TRACE_DIR;
+			delete process.env.EVAL_TRACE_DIR;
 		} else {
-			process.env.SNO_STATION_MEM_EVAL_TRACE_DIR = originalEnv.SNO_STATION_MEM_EVAL_TRACE_DIR;
+			process.env.EVAL_TRACE_DIR = originalEnv.EVAL_TRACE_DIR;
 		}
 	});
 
@@ -82,8 +82,8 @@ describe("eval-trace (PRD §11.2.2)", () => {
 	});
 
 	it("trace enabled writes JSONL and appends across calls", () => {
-		process.env.SNO_STATION_MEM_EVAL_TRACE_ENABLED = "true";
-		process.env.SNO_STATION_MEM_EVAL_TRACE_DIR = tmp;
+		process.env.EVAL_TRACE_ENABLED = "true";
+		process.env.EVAL_TRACE_DIR = tmp;
 		expect(isTraceEnabled()).toBe(true);
 
 		const retrievedChunkIds: string[] = [];
@@ -157,8 +157,8 @@ describe("eval-trace (PRD §11.2.2)", () => {
 		// lives in `retriever.collectParallelStage` and is covered by the
 		// "collectParallelStage derives omittedScoreArrays" test below; here
 		// we only prove the JSON shape survives append+read.
-		process.env.SNO_STATION_MEM_EVAL_TRACE_ENABLED = "true";
-		process.env.SNO_STATION_MEM_EVAL_TRACE_DIR = tmp;
+		process.env.EVAL_TRACE_ENABLED = "true";
+		process.env.EVAL_TRACE_DIR = tmp;
 
 		appendQaTrace({
 			query: "partial-stage probe",
@@ -207,8 +207,8 @@ describe("eval-trace (PRD §11.2.2)", () => {
 	});
 
 	it("fully-populated parallel arrays stay aligned to retrievedChunkIds", () => {
-		process.env.SNO_STATION_MEM_EVAL_TRACE_ENABLED = "true";
-		process.env.SNO_STATION_MEM_EVAL_TRACE_DIR = tmp;
+		process.env.EVAL_TRACE_ENABLED = "true";
+		process.env.EVAL_TRACE_DIR = tmp;
 
 		appendQaTrace({
 			query: "full-stage probe",
