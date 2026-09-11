@@ -296,7 +296,7 @@ describe("atomic memory extraction production entrypoint", () => {
 		const event = events[0];
 		expect(event).toMatchObject({
 			valid_from: EVENT_FROM_MS,
-			valid_until: EVENT_FROM_MS + 1,
+			valid_until: EVENT_FROM_MS + 60_000,
 			lane: "active",
 		});
 		expect(target.store.listAtomicValidAt(PROJECT_ID, EVENT_FROM_MS).map(({ id }) => id)).toContain(
