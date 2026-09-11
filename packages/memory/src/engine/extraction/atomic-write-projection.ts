@@ -3,7 +3,6 @@
  * @boundary Deterministic axes and metadata only; no model calls, suppression, or persistence.
  */
 
-import { Temporal } from "@js-temporal/polyfill";
 import { z } from "zod";
 import atomicWriteConfigResource from "../../../config/atomic-memory-write.json" with { type: "json" };
 import type { AtomicKeyedRecord } from "./atomic-profile-keying";
@@ -47,87 +46,21 @@ function sourceTurnIndex(record: AtomicKeyedRecord): number {
 	return turnIndex;
 }
 
-function resolvedEpochMs(
-	resolvedTime: AtomicKeyedRecord["resolvedTime"],
-	timezone: string,
-): number | null {
-	if (resolvedTime === null) return null;
-	try {
-		return Temporal.ZonedDateTime.from(
-			{
-				timeZone: timezone,
-				year: resolvedTime.year,
-				month: resolvedTime.month,
-				day: resolvedTime.day,
-				hour: resolvedTime.hour ?? 0,
-				minute: resolvedTime.minute ?? 0,
-			},
-			{ overflow: "reject" },
-		).epochMilliseconds;
-	} catch {
-		return null;
-	}
-}
-
-function validTime(
-	record: AtomicKeyedRecord,
-	sessionTimestampMs: number,
-	timezone: string,
-): { validFrom: number | null; validUntil: number | null } {
-	if (record.resolvedTimeInvalid) return { validFrom: null, validUntil: null };
-	const resolved = resolvedEpochMs(record.resolvedTime, timezone);
-	if (resolved !== null) {
-		const timeKnown =
-			record.resolvedTime?.hour !== undefined || record.resolvedTime?.minute !== undefined;
-		if (record.category !== "episodic") {
-			// "Today" resolved to a bare day sits at midnight, below every undated statement of the
-			// same session, so a same-day revision lost its order. A day-only time on the session's
-			// own day means the session moment.
-			const sameDay =
-				!timeKnown &&
-				Temporal.Instant.fromEpochMilliseconds(resolved)
-					.toZonedDateTimeISO(timezone)
-					.toPlainDate()
-					.equals(
-						Temporal.Instant.fromEpochMilliseconds(sessionTimestampMs)
-							.toZonedDateTimeISO(timezone)
-							.toPlainDate(),
-					);
-			return { validFrom: sameDay ? sessionTimestampMs : resolved, validUntil: null };
-		}
-		if (timeKnown) return { validFrom: resolved, validUntil: resolved + 1 };
-		const nextDay = Temporal.Instant.fromEpochMilliseconds(resolved)
-			.toZonedDateTimeISO(timezone)
-			.add({ days: 1 }).epochMilliseconds;
-		return { validFrom: resolved, validUntil: nextDay };
-	}
-	if (record.category !== "episodic" && record.temporalPhrase === null) {
-		return { validFrom: sessionTimestampMs, validUntil: null };
-	}
-	return { validFrom: null, validUntil: null };
-}
-
-/**
- * The row's own clock: when the remembered thing happened, plus the window it holds over.
- *
- * `timestamp` falls back to the session rather than to the write clock. A row the model gave no
- * resolvable time still happened during this conversation, and dating it "now" is what broke
- * recency — measured 2026-09-04, an eval replaying a June week wrote every row with September's
- * date. The write path may not decide this: it holds only the write clock.
- */
+/** The row age uses the session; its event interval comes only from model judgment. */
 function eventTime(
 	record: AtomicKeyedRecord,
 	sessionTimestampMs: number,
-	timezone: string,
 ): { timestamp: number; validFrom: number | null; validUntil: number | null } {
-	const window = validTime(record, sessionTimestampMs, timezone);
-	return { timestamp: window.validFrom ?? sessionTimestampMs, ...window };
+	return {
+		timestamp: sessionTimestampMs,
+		validFrom: record.resolvedTime?.from ?? null,
+		validUntil: record.category === "episodic" ? record.resolvedTime?.until ?? null : null,
+	};
 }
 
 function metadataForRecord(
 	record: AtomicKeyedRecord,
 	sanitizerMatches: readonly string[],
-	when: { timestamp: number; validFrom: number | null; validUntil: number | null },
 ): Record<string, unknown> {
 	return {
 		// Both keys, because the metadata codec resolves a row's category from `kind` first and
@@ -142,23 +75,17 @@ function metadataForRecord(
 		// and a later positive claim on the same group is judged against it (see closeEndedCardAtCreate).
 		ends_current: record.endsCurrent,
 		todo: record.todo,
-		// When the remembered thing happened, in the row's own metadata, because every reader of a
-		// dated event reads it from here and not from the column. The recall renderer puts it in
-		// front of the memory as `[YYYY-MM-DD]`, and a reader told nothing treats the row as a
-		// standing fact rather than an event on a day — measured 2026-09-04, an answer listing nine
-		// coffee purchases said in its own words that it was "excluding three undated coffee
-		// entries", and the week's total came out $21.77 short. Episodic rows only: stamping a day
-		// on a standing preference is the same mistake in the other direction.
-		// A phrase the resolver could not place ("last summer") must not be dated to the session:
-		// the row keeps its phrase and no date, rather than reading as an event of today.
-		...(record.category === "episodic" &&
-		(when.validFrom !== null || record.temporalPhrase === null)
-			? {
-					event_at: new Date(when.timestamp).toISOString(),
-					valid_from: when.validFrom ?? when.timestamp,
-					...(when.validUntil === null ? {} : { valid_until: when.validUntil }),
-				}
-			: {}),
+		// A year or month is a range, never a fabricated event day.
+		...(record.resolvedTime ? {
+			temporal_date: record.resolvedTime.label,
+			temporal_precision: record.resolvedTime.precision,
+			valid_from: record.resolvedTime.from,
+			...(record.category === "episodic" ? { valid_until: record.resolvedTime.until } : {}),
+			...(record.category === "episodic" && ["day", "minute"].includes(record.resolvedTime.precision)
+				? { event_at: new Date(record.resolvedTime.from).toISOString() } : {}),
+		} : {}),
+		time_instruction: record.time,
+		temporal_resolution_status: record.resolvedTime ? "resolved" : record.time.kind === "none" ? "static" : "unresolved",
 		value: record.value,
 		importance_label: record.importance,
 		source_span: record.sourceSpan,
@@ -201,7 +128,7 @@ export function buildAtomicWriteCards(
 				...sanitized.matched,
 			]),
 		];
-		const when = eventTime(sanitizedRecord, input.sessionTimestampMs, input.timezone);
+		const when = eventTime(sanitizedRecord, input.sessionTimestampMs);
 		return {
 			idempotencyKey,
 			...(record.refusedAttribute === undefined
@@ -209,7 +136,7 @@ export function buildAtomicWriteCards(
 				: { refusedAttribute: record.refusedAttribute }),
 			globalTurnIndex: input.sourceTurnOffset + sourceTurnIndex(sanitizedRecord),
 			endsCurrent: sanitizedRecord.endsCurrent,
-			endedAt: resolvedEpochMs(sanitizedRecord.endedAt, input.timezone),
+			endedAt: sanitizedRecord.endedAt?.from ?? null,
 			text: sanitizedRecord.claimText,
 			category: sanitizedRecord.category,
 			// Parked rows only. Parking nulls subject and attribute, so without this the reason a
@@ -239,10 +166,10 @@ export function buildAtomicWriteCards(
 			attribute: sanitizedRecord.attribute,
 			...when,
 			importance: ATOMIC_MEMORY_WRITE_CONFIG.importance[sanitizedRecord.importance],
-			timezone: input.timezone,
+			timezone: sanitizedRecord.resolvedTime?.timezone ?? input.timezone,
 			lane: sanitizedRecord.lane,
 			dispositionReason: sanitizedRecord.dispositionReason,
-			metadata: metadataForRecord(sanitizedRecord, sanitizerMatches, when),
+			metadata: metadataForRecord(sanitizedRecord, sanitizerMatches),
 			relations: sanitizedRecord.relations,
 		};
 	});
