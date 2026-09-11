@@ -210,11 +210,13 @@ export class MemoryContractRuntime implements MemoryContract {
 		const runtimeContext = this.services;
 		const distiller = buildInsightDistiller(runtimeContext, config, this.services.store, this.services.embedder,
 			this.services.observability, () => undefined, this.services.stateDir, this.services.agentPort);
-		await onAgentEnd(runtimeContext, config, this.services.store, this.services.embedder, context.scopePolicy, distiller,
+		const outcome = await onAgentEnd(runtimeContext, config, this.services.store, this.services.embedder, context.scopePolicy, distiller,
 			{ success: true, messages: turn.messages.map(({ at, ...message }) => ({ ...message, timestamp: at })) },
 			this.hostContext(scope),
 			this.services.stateDir);
-		return { degraded: false, turnId: turn.turnId, committed: true };
+		// committed is legal only after extraction and persistence both completed.
+		if (outcome === "failed") throw new ContractError("engine-failed");
+		return { degraded: false, turnId: turn.turnId, committed: outcome === "success" };
 	}
 
 	async getRecall(query: string, scope: ScopeCtx, options: RecallOptions): Promise<ContractOutputs["getRecall"]> {

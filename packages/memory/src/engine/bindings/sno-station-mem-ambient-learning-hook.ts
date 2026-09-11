@@ -113,6 +113,8 @@ async function runLocalFirstCapture(input: {
 }
 
 /** Runs atomic extraction after a successful top-level agent conversation. */
+export type AmbientCaptureOutcome = "skipped" | "success" | "partial" | "failed";
+
 export async function onAgentEnd(
 	api: SnoStationMemPluginApi,
 	config: PluginConfig,
@@ -123,14 +125,14 @@ export async function onAgentEnd(
 	event: PluginHookAgentEndEvent,
 	ctx: PluginHookAgentContext,
 	stateDir: string,
-): Promise<void> {
+): Promise<AmbientCaptureOutcome> {
 	const sessionKey = typeof ctx.sessionKey === "string" ? ctx.sessionKey : "";
 	return withLogContext({ operation_id: currentLogContext().operation_id ?? randomUUID(), session_reference: sessionKey }, async () => {
 	const started = performance.now();
-	let outcome = "skipped";
+	let outcome: AmbientCaptureOutcome = "skipped";
 	let reason = "guard_not_admitted";
 	try {
-	if (isKillSwitchActive(stateDir) || !config.ambientLearning) return;
+	if (isKillSwitchActive(stateDir) || !config.ambientLearning) return outcome;
 	if (sessionKey.includes(":subagent:")) {
 		appendAuditEntry(stateDir, {
 			event: "ambient_learning",
@@ -139,11 +141,11 @@ export async function onAgentEnd(
 			decision: "skipped_subagent",
 			details: { sessionKey },
 		});
-		return;
+		return outcome;
 	}
 	if (!event.success) {
 		reason = "agent_run_failed";
-		return;
+		return outcome;
 	}
 
 	const { agentId: resolvedAgentId, source: agentResolutionSource } = resolveHookAgentId(
@@ -152,7 +154,7 @@ export async function onAgentEnd(
 	);
 	if (agentResolutionSource === "missing" || !resolvedAgentId) {
 		auditMissingHookAgentIdentity(api, "agent_end", stateDir, "ambient_learning");
-		return;
+		return outcome;
 	}
 	if (isChatIdBasedAgentId(resolvedAgentId)) {
 		appendAuditEntry(stateDir, {
@@ -162,18 +164,18 @@ export async function onAgentEnd(
 			decision: "rejected_chatid_agent_format",
 			details: { resolvedAgentId },
 		});
-		return;
+		return outcome;
 	}
 
 	const scope = scopePolicy.getDefaultScope(resolvedAgentId);
 	if (!scopePolicy.validateScope(scope) || !scopePolicy.isAccessible(scope, resolvedAgentId)) {
 		reason = "scope_inaccessible";
-		return;
+		return outcome;
 	}
 	if (config.mode === "local-first") {
 		await runLocalFirstCapture({ api, config, store, event, ctx, stateDir, scope, sessionKey });
 		outcome = "success";
-		return;
+		return outcome;
 	}
 	if (!insightDistiller) {
 		appendAuditEntry(stateDir, {
@@ -183,7 +185,7 @@ export async function onAgentEnd(
 			decision: "atomic_extractor_unavailable",
 			details: { mode: config.mode },
 		});
-		return;
+		return outcome;
 	}
 
 	const conversationText = buildConversationText(
@@ -199,7 +201,7 @@ export async function onAgentEnd(
 			decision: "rejected_empty_conversation",
 			details: { mode: config.mode },
 		});
-		return;
+		return outcome;
 	}
 
 	try {
@@ -254,5 +256,6 @@ export async function onAgentEnd(
 		log.info("Ambient capture hook completed", { outcome, reason_code: reason, duration_ms: performance.now() - started },
 			{ event_name: "memory.capture.hook.completed", file: "packages/sno-station-mem/src/engine/bindings/sno-station-mem-ambient-learning-hook.ts", function: "onAgentEnd", site_id: "memory.capture.hook.completed" });
 	}
+	return outcome;
 	});
 }
