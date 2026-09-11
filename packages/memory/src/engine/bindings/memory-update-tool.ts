@@ -144,7 +144,6 @@ export async function executeMemoryUpdateTool(ctx: ToolContext, access: ReturnTy
 									dateResolution.interval.resolutionStatus === "resolved" &&
 									dateResolution.timestamp !== undefined
 								) {
-									changes.timestamp = dateResolution.timestamp;
 									changes.timezone = dateResolution.timezone;
 								}
 								const userProvidedTemporalType =
