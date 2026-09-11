@@ -115,7 +115,7 @@ Every method result contains `degraded:boolean`. A degraded result must contain 
   score, sources, chunk identity, snippet, group identity and optional aggregation indicators.
 - `ToolResponse` preserves `{content:[{type:"text",text}], details, isError?}` with JSON details.
 - `InspectData` is discriminated by op: stats returns total and both breakdowns; list and
-  listReflection return entries; get returns a nullable entry and optional file excerpt
+  listReflection return entries plus the resolved write `project`; get returns a nullable entry and optional file excerpt
   `{text,path,truncated?,from?,lines?,nextFrom?}`.
 - A failed read must remain visibly degraded. A daemon-down recall returns empty hits and
   reason `sidecar-unreachable`, not a successful empty search.

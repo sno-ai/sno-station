@@ -120,7 +120,7 @@ export class MemoryClient implements MemoryContract {
 			if (op.op === "storage") result = { op: "storage", dimension: null, failed: true };
 			else if (op.op === "stats") result = { op: "stats", total: 0, projectBreakdown: {}, categoryBreakdown: {} };
 			else if (op.op === "get") result = { op: "get", entry: null };
-			else result = { op: op.op, entries: [] };
+			else result = { op: op.op, project: scope.project, entries: [] };
 			return { degraded: true, reason: failureReason(error), result };
 		}
 	}
