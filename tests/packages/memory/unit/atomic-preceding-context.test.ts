@@ -38,3 +38,16 @@ it.each([
 	const admitted = excludeContextOnlyRecords([record], [{ role: "user", content: text }], [{ role: "user", content: context }]);
 	expect(admitted).toEqual(retained ? [record] : []);
 });
+
+it("uses the following attachment as unnumbered context without making it current source", () => {
+	const following = "Melanie: The attached photo shows a blue book cover.";
+	const prompt = buildAtomicGenericExtractionPrompt([{ role: "user", content: current }], "2023-08-23T15:31:00Z", "en", [], [{ role: "user", content: earlier }], [{ role: "user", content: following }]);
+	const context = prompt.split("following_context: ")[1]?.split("\n\ntranscript:")[0] ?? "";
+	const transcript = prompt.split("\n\ntranscript:\n")[1] ?? "";
+	expect(context).toContain(following);
+	expect(context).not.toContain("turn_index");
+	expect(transcript).toContain(current);
+	expect(transcript).not.toContain(following);
+	const futureOnly = { sourceSpan: null, unresolvedSourceSpan: { quote: "The attached photo shows a blue book cover." } };
+	expect(excludeContextOnlyRecords([futureOnly], [{ role: "user", content: current }], [{ role: "user", content: earlier }, { role: "user", content: following }])).toEqual([]);
+});
