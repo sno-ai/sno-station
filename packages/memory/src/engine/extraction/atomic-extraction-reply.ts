@@ -286,19 +286,32 @@ export const ATOMIC_ENRICHMENT_RESPONSE_JSON_SCHEMA: unknown = z.toJSONSchema(en
 export function parseAtomicCaptureReply(
 	raw: string,
 	turns: readonly AtomicExtractionTurn[],
-	{ salvage = false }: { salvage?: boolean } = {},
+	{ salvage = false, onReject }: { salvage?: boolean; onReject?: (gate: string) => void } = {},
 ): { facts: AtomicCapturedFact[]; progressTurns: ReadonlySet<number> } | undefined {
-	return readModelReplyJson(raw, (value) => {
+	let gate = "unreadable-json";
+	const result = readModelReplyJson(raw, (value) => {
 		const parsed = captureReplySchema.safeParse(value);
-		if (!parsed.success) return undefined;
+		if (!parsed.success) {
+			if (gate === "unreadable-json") gate = "capture-schema";
+			return undefined;
+		}
 		const { facts, claims_found } = parsed.data;
 		// Claims can merge or split into facts; reject only a nonempty inventory with no facts.
-		if (claims_found.length > 0 && facts.length === 0) return undefined;
+		if (claims_found.length > 0 && facts.length === 0) {
+			gate = "claims-without-facts";
+			return undefined;
+		}
 		const progressTurns = parseProgressTurns(parsed.data, turns, { salvage });
-		if (progressTurns === null) return undefined;
+		if (progressTurns === null) {
+			gate = "progress-decisions";
+			return undefined;
+		}
 		const wrongIds = facts.filter((fact, index) => fact.id !== index).length;
 		const invalidSpans = facts.filter((fact) => fact.source_span.turn_index >= turns.length).length;
-		if (!salvage && (wrongIds > 0 || invalidSpans > 0)) return undefined;
+		if (!salvage && (wrongIds > 0 || invalidSpans > 0)) {
+			gate = wrongIds > 0 ? "fact-ids" : "source-turn-index";
+			return undefined;
+		}
 		if (wrongIds > 0) {
 			log.warn("atomic capture salvaged fact ids", { gate: 5, affected_facts: wrongIds }, {
 				event_name: "memory.atomic_extraction_reply.diagnostic", file: "packages/sno-station-mem/src/engine/extraction/atomic-extraction-reply.ts", function: "parseAtomicCaptureReply", site_id: "extraction.atomic-extraction-reply.salvage_ids",
@@ -315,6 +328,8 @@ export function parseAtomicCaptureReply(
 			progressTurns,
 		};
 	});
+	if (result === undefined) onReject?.(gate);
+	return result;
 }
 
 function warnUnresolvedEnrichmentTime(
