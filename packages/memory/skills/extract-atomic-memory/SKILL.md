@@ -27,6 +27,12 @@ print it and send it to you by courier" states an intention to print the documen
 to that person by courier. Keep those actions and their method as records. The polite opening
 does not cancel the intention. Do not turn the offer into a completed action.
 
+When a turn describes a shared image, retain the specific visible objects and readable text,
+not only that someone shared a photo. A sign's wording or a pictured book's title is a fact
+about that image. Keep it distinct from what the speaker says they read, made or experienced;
+a caption does not replace their statement. Preserve the connection to the described image
+or event, so the detail can still answer a question about it.
+
 After excluding in-flight progress, a turn that carries a figure, a preference, an intention, a task to do, a completed task, a
 removal, or a field of a document has at least one record. A turn that gives the reason for a
 taste stated earlier — "I love the wide-open spaces and the wildlife" after "I've been drawn to
@@ -46,6 +52,21 @@ record. The engine asks again about figures it finds uncited; names and dates ar
 Return one record for each independently mutable claim. Two claims that share a sentence are
 two records: "I prefer curry and jazz" is a curry record and a jazz record. After splitting,
 return the parts only; the bundle stays out.
+
+Splitting facts does not remove the relationships the speaker explicitly states. Keep a
+claim's temporal or causal qualifier in its `claim_text`: "I have worked here since leaving
+Berlin" retains that connection, not just separate employment and departure facts. The
+separate event can have its own record too. Do not add a connection merely because two
+facts appear near each other or have matching dates.
+The clause that says when, how or why a claim holds is part of that claim, not a second
+independent fact to strip away. Mark that qualified claim `single_claim: true`; keep "since
+leaving Berlin" on the employment claim even if the departure also has its own record.
+
+A recommendation is distinct from liking, owning or finishing something. Retain what was
+recommended and to whom when the conversation identifies the recipient. "Highly recommend
+it" after naming an item is a recommendation claim, not just another positive opinion.
+Likewise, suggested supplies remain a recommendation to the listener, not the speaker's
+inventory or an action the listener has already completed.
 
 When an occurrence also changes a standing fact, return both halves the quoted text supports:
 the occurrence, and the standing claim it leaves behind. Return the half or halves the text
@@ -70,6 +91,11 @@ stands; the engine decides where it is kept.
 - A completion is an occurrence. When the same turn also changes a list, say both: "I finished
   the report" is one occurrence; "I've finished X, so take it off my list" is two claims, the
   occurrence and the list's new standing state.
+- A recommendation or request actually addressed to someone in this conversation is an
+  occurrence of communication: who recommended or requested what, to whom. Its current
+  utterance dates that communication, not the reading, purchase or other action discussed.
+  A general taste remains standing; an offered future action remains an intention, not a
+  completed action.
 - Everything recorded in meeting notes is a standing field of that meeting, including what the
   meeting did: a key decision, an action item, an agenda item, an attendee are what the record
   currently says. The same holds for a proposal's or an e-mail's fields, even when the sentence
@@ -86,6 +112,14 @@ stands; the engine decides where it is kept.
 
 `subject` is who or what the claim is about, and `subject_kind` says what kind of name that is:
 `user`, `agent`, `named_entity`, or `unresolved`.
+
+When the transcript labels its speakers, resolve "I" and "my" against the speaker of the
+record's own source turn, not the preceding speaker or the person being addressed. In
+"Alex: Thanks, Sam. I finished it", Alex finished it. Check that attribution separately for
+each record; neighboring turns can describe different people's activities.
+Resolve "we", "both" and "together" from the group actually discussed. They do not
+automatically mean the speaker and the listener: in a discussion of a parent's activity
+with their children, "we did it together" keeps the parent-and-children group.
 
 Use `named_entity` for a full proper name the text states — a person, an organization, a place —
 and for something the user is dictating that they identify by its title or its purpose sentence:
