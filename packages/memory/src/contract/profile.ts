@@ -4,7 +4,7 @@ import path from "node:path";
 import { z } from "zod";
 import { ContractError } from "./error";
 
-export function getStateDir(): string { return path.resolve(process.env.SNO_PROFILE_DIR ?? path.join(homedir(), ".sno")); }
+export function getStateDir(defaultStateDir?: string): string { return path.resolve(process.env.SNO_PROFILE_DIR ?? defaultStateDir ?? path.join(homedir(), ".sno")); }
 export function getSnoStationMemStateDir(): string { return path.join(getStateDir(), "sno-station-mem"); }
 export function getPrincipal(): string { return userInfo().username; }
 export function getBindingPath(): string { return path.join(getStateDir(), "station", `sno-station-mem-${getPrincipal()}.binding.json`); }
