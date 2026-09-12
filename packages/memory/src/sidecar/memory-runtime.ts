@@ -113,6 +113,8 @@ export class MemoryRuntimePool {
 		this.owned.add(entry);
 		try {
 			const result = await runtime.init(scope, registration);
+			// Keep the serving entry until the successor can use the shared model.
+			await embedder.warmup();
 			const previous = this.skins.get(registration.skinId);
 			this.skins.set(registration.skinId, entry);
 			await this.snapshot(entry, "startup");
