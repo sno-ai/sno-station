@@ -9,7 +9,7 @@ import { stripAmbientLearningInjectedPrefix } from "./ambient-learning-text-norm
 import { stripLeadingRuntimeWrappers } from "./runtime-wrapper-sanitizer";
 
 /**
- * Build the string that goes into the `text` column of nodix_memories.
+ * Build the string that goes into the `text` column of `nodix_memories`.
  *
  * The FTS5 BM25 index is derived from this column only (see
  * drizzle/0001_virtual_tables.sql). Concatenating abstract and content gives
