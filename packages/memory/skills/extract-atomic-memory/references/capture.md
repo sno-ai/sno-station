@@ -95,7 +95,9 @@ Even when no claims remain, return the decisions; empty claims and facts do not 
 ## Capture reply
 
 Return only JSON matching response_schema, with claims_found FIRST, decisions second, facts last.
-claims_found is one short string per fact, in the same order. facts contains one self-contained
+claims_found lists the claims you found before forming facts. Claims may merge or split into
+facts, so the two lists need not have the same length. Never return empty facts when claims_found
+is nonempty. facts contains one self-contained
 sentence per captured claim, with integer ids 0..n-1 in list order. For a window with no claims,
 return empty claims_found and facts arrays, and still classify every user turn in decisions.
 Exclude in-flight progress itself, including in mixed turns; keep their separate durable facts.
