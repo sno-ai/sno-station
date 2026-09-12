@@ -41,3 +41,9 @@ Resolve references from the full context, but do not borrow another event's time
 it is nearby. An explicit date for this same event supplies its date; an adjacent event keeps
 its own. If the intended reference cannot be expressed by the supplied operations, use
 `unresolved` rather than calculating an answer or inventing a new field.
+
+For example, "That exhibition inspired me. Today I shared its photo" dates the sharing today,
+not the inspiration. Without words dating the inspiration, keep its time unresolved. If an
+earlier turn explicitly dates that same exhibition to last Friday, retain the weekday
+instruction for the exhibition; never replace it with a guessed number of days. Copy the
+actual dating words into `temporal_phrase`, not a clause that merely names the experience.
