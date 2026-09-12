@@ -19,7 +19,13 @@ Apply the To-do Boundary before listing claims: an in-flight progress report alo
 neither a claim nor a record. Do not turn its current progress into a standing project or
 working-on claim by paraphrasing it. Keep any separate durable fact the same turn states.
 Return a record for each remaining claim. Return `{"claims_found":[],"records":[]}` when the window states none. A greeting,
-an acknowledgement or a reply control states no claim.
+an acknowledgement or a reply control alone states no claim.
+
+An offer or agreement to do something is a standing intention, including when phrased as
+"I can" in reply to a request. For example, after someone asks for a document, "Sure, I can
+print it and send it to you by courier" states an intention to print the document and send it
+to that person by courier. Keep those actions and their method as records. The polite opening
+does not cancel the intention. Do not turn the offer into a completed action.
 
 After excluding in-flight progress, a turn that carries a figure, a preference, an intention, a task to do, a completed task, a
 removal, or a field of a document has at least one record. A turn that gives the reason for a
