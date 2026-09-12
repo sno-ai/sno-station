@@ -364,7 +364,7 @@ function seedRealWriterState(fixture: TestDb, rowId: string): void {
 	// The test helper's hand-written schema mirrors the migrations only through 0013; `timezone`
 	// arrives with 0028, which Drizzle applies on top the moment a MemoryStore is constructed. Cases
 	// in this suite that never construct one therefore have no such column, and naming it
-	// unconditionally made all 53 of them fail with "table nodix_memories has no column named
+	// unconditionally made all 53 of them fail with "table `nodix_memories` has no column named
 	// timezone". Ask the table what it has rather than assuming which world we are in.
 	const hasTimezone = (
 		fixture.runtime.raw.prepare("PRAGMA table_info(nodix_memories)").all() as Array<{

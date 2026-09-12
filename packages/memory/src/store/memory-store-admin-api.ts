@@ -194,7 +194,7 @@ Object.assign(MemoryStore.prototype, {
 					this.sqlite.prepare("DELETE FROM nodix_memory_chunks").run();
 					this.sqlite.prepare("DELETE FROM nodix_memories").run();
 					// Preserved write attempts hold user content too. They used to live in
-					// nodix_memories and were cleared with it; a clear that spares them
+					// `nodix_memories` and were cleared with it; a clear that spares them
 					// would leave content behind after the user asked for it to be gone.
 					this.sqlite.prepare("DELETE FROM nodix_unplaced_memory_candidates").run();
 				}).immediate();

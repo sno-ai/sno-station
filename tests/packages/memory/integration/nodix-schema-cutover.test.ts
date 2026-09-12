@@ -1,5 +1,5 @@
 /**
- * Fresh-database acceptance for the Nodix SQLite namespace.
+ * Fresh-database acceptance for the Sno Station SQLite namespace.
  * Uses the real encrypted database, FTS5 extension, and sqlite-vec extension.
  */
 
@@ -44,7 +44,7 @@ function insertMemoryAndChunk(database: SqliteDatabaseLike): void {
 				id, text, category, project_id, importance, timestamp, timezone, metadata, content_hash, fact_id
 			) VALUES (?, ?, 'episodic', ?, 0.8, ?, 'UTC', '{}', ?, ?)`,
 		)
-		.run("memory-1", "Nodix stores agent memory at the edge.", "project-1", now, "hash-1", "fact-1");
+		.run("memory-1", "Sno Station stores agent memory at the edge.", "project-1", now, "hash-1", "fact-1");
 	database
 		.prepare(
 			`INSERT INTO nodix_memory_chunks(
@@ -57,8 +57,8 @@ function insertMemoryAndChunk(database: SqliteDatabaseLike): void {
 		.run(
 			"chunk-1",
 			"memory-1",
-			"Nodix stores agent memory at the edge.",
-			"Nodix stores agent memory at the edge.",
+			"Sno Station stores agent memory at the edge.",
+			"Sno Station stores agent memory at the edge.",
 			42,
 			VECTOR_DIM,
 			now,
@@ -71,7 +71,7 @@ function insertMemoryAndChunk(database: SqliteDatabaseLike): void {
 		.run("chunk-1", "project-1", vectorBytes([1, 0, 0]));
 }
 
-describe("Nodix SQLite schema cutover", () => {
+describe("Sno Station SQLite schema cutover", () => {
 	let temporaryDirectory: string;
 	let databasePath: string;
 
@@ -134,7 +134,7 @@ describe("Nodix SQLite schema cutover", () => {
 				database.$client
 					.prepare("SELECT text FROM nodix_memories WHERE id = ?")
 					.get("memory-1"),
-			).toEqual({ text: "Nodix stores agent memory at the edge." });
+			).toEqual({ text: "Sno Station stores agent memory at the edge." });
 			expect(
 				database.$client
 					.prepare(
@@ -155,12 +155,12 @@ describe("Nodix SQLite schema cutover", () => {
 
 			database.$client
 				.prepare("UPDATE nodix_memories SET text = ?, content_hash = ? WHERE id = ?")
-				.run("Nodix keeps updated agent memory at the edge.", "hash-2", "memory-1");
+				.run("Sno Station keeps updated agent memory at the edge.", "hash-2", "memory-1");
 			expect(
 				database.$client
 					.prepare("SELECT text FROM nodix_rem_memory_facets WHERE memory_id = ? AND facet = 'current'")
 					.get("memory-1"),
-			).toEqual({ text: "Nodix keeps updated agent memory at the edge." });
+			).toEqual({ text: "Sno Station keeps updated agent memory at the edge." });
 
 			database.$client.prepare("DELETE FROM nodix_memory_chunk_vectors WHERE id = ?").run("chunk-1");
 			database.$client.prepare("DELETE FROM nodix_memories WHERE id = ?").run("memory-1");
