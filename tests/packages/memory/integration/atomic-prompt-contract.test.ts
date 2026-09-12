@@ -56,9 +56,23 @@ class RecordingAtomicClient implements LlmClient {
 
 	async completeText(request: MemoryLlmRequest): Promise<string> {
 		this.requests.push(request);
-		return request.callLabel === "memory-extract-profile"
-			? '{"profile_candidates":[]}'
-			: '{"records":[]}';
+		if (request.callLabel === "memory-extract-profile") return '{"profile_candidates":[]}';
+		// The generic transport now drives two lanes under one call label. An enrichment prompt
+		// (a `facts:` block) gets an empty enrichment reply; a capture prompt (a transcript, no facts
+		// block) gets an empty capture reply whose decisions cover its user turns; anything else keeps
+		// the legacy records shape. Other transports (resplit, guard, missing-half) are unchanged.
+		if (request.callLabel === "memory-extract-atomic-generic") {
+			if (request.prompt.includes("facts:\n")) return '{"enrichments":[]}';
+			if (request.prompt.includes("<take>")) {
+				const block = request.prompt.split("<take>\n").at(-1)?.split("\n</take>")[0] ?? "[]";
+				const turns = JSON.parse(block) as Array<{ turn_index: number; role: string }>;
+				const decisions = turns
+					.filter((turn) => turn.role === "user")
+					.map((turn) => ({ turn_index: turn.turn_index, progress_only: false }));
+				return JSON.stringify({ claims_found: [], decisions, facts: [] });
+			}
+		}
+		return '{"records":[]}';
 	}
 
 	async getResolvedConfig(): Promise<ResolvedLlmConfig> {
@@ -239,7 +253,7 @@ describe("atomic extraction prompt contract", () => {
 				transport: createAtomicGenericExtractionTransport(client),
 			});
 
-			expect(result).toEqual({ status: "complete", records: [] });
+			expect(result).toEqual({ status: "complete", records: [], progressTurns: new Set() });
 			expect(client.requests).toHaveLength(1);
 			expect(client.requests[0]).not.toHaveProperty("temperature", 0);
 			const ledger = fixture.sqlite
