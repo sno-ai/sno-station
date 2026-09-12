@@ -24,6 +24,7 @@ import {
 import {
 	numberAtomicTurns,
 	renderAtomicPromptData,
+	restoreAtomicSanitizedSpan,
 	sanitizeAtomicPromptValue,
 	withAtomicSanitizerMatches,
 } from "./atomic-replacement-sanitizer";
@@ -75,6 +76,7 @@ export interface AtomicGenericExtractionInput {
 	store: MemoryStore;
 	ledgerKey: AtomicExtractionLedgerKey;
 	turns: readonly AtomicExtractionTurn[];
+	contextTurns?: readonly AtomicExtractionTurn[];
 	rawChunk: string;
 	routingSnapshotId: string;
 	runParameters: AtomicExtractionRunParameters;
@@ -112,6 +114,7 @@ export function buildAtomicGenericExtractionPrompt(
 	sessionDateTime?: string,
 	locale: Locale = DEFAULT_LOCALE,
 	turnIndexesToAccountFor: readonly number[] = [],
+	contextTurns: readonly AtomicExtractionTurn[] = [],
 ): string {
 	const transcript = renderAtomicPromptData(numberAtomicTurns(turns), locale);
 	return [
@@ -122,6 +125,10 @@ export function buildAtomicGenericExtractionPrompt(
 		`thing_attribute_slugs: ${JSON.stringify(stateVocabulary.slugs.map(({ slug }) => slug))}`,
 		`relation_dictionary: ${JSON.stringify(relationDictionary.relations)}`,
 		`response_schema: ${JSON.stringify(GENERIC_RESPONSE_SCHEMA)}`,
+		...(contextTurns.length === 0 ? [] : [
+			atomicExtractionSkillReference("preceding-context"),
+			`preceding_context: ${renderAtomicPromptData(contextTurns, locale).value}`,
+		]),
 		...(turnIndexesToAccountFor.length === 0
 			? []
 			: [
@@ -130,6 +137,24 @@ export function buildAtomicGenericExtractionPrompt(
 				]),
 		`transcript:\n${transcript.value}`,
 	].join("\n\n");
+}
+
+export function excludeContextOnlyRecords<T extends {
+	sourceSpan: { quote: string } | null;
+	unresolvedSourceSpan?: { quote: string };
+}>(
+	records: readonly T[],
+	turns: readonly AtomicExtractionTurn[],
+	contextTurns: readonly AtomicExtractionTurn[],
+	locale: Locale = DEFAULT_LOCALE,
+): T[] {
+	return records.filter((record) => {
+		const quote = (record.sourceSpan ?? record.unresolvedSourceSpan)?.quote;
+		if (!quote?.trim()) return true;
+		const matches = (turn: AtomicExtractionTurn): boolean =>
+			turn.content.includes(quote) || restoreAtomicSanitizedSpan(turn.content, quote, locale) !== null;
+		return turns.some(matches) || !contextTurns.some(matches);
+	});
 }
 
 /**
@@ -264,6 +289,7 @@ export interface AtomicNumericTurnSweepInput {
 	store: MemoryStore;
 	ledgerKey: AtomicExtractionLedgerKey;
 	turns: readonly AtomicExtractionTurn[];
+	contextTurns?: readonly AtomicExtractionTurn[];
 	sessionDateTime?: string;
 	/** Records the ordinary pass returned, whatever lane they will end up in. */
 	records: readonly AtomicExtractionRecord[];
@@ -309,6 +335,7 @@ export async function runAtomicNumericTurnSweep(
 				input.sessionDateTime,
 				input.locale,
 				uncited,
+				input.contextTurns,
 			),
 			maxTokens: input.outputTokenBudget,
 			...(input.requestId ? { requestId: input.requestId } : {}),
@@ -511,7 +538,9 @@ export async function runAtomicGenericExtractionPass(
 
 	const locale = input.locale ?? DEFAULT_LOCALE;
 	const sanitizedInput = sanitizeAtomicPromptValue(input.turns, locale);
-	const prompt = buildAtomicGenericExtractionPrompt(input.turns, input.sessionDateTime, locale);
+	const prompt = buildAtomicGenericExtractionPrompt(
+		input.turns, input.sessionDateTime, locale, [], input.contextTurns,
+	);
 	let outputTokenBudget = begin.entry.runParameters.outputTokenBudget;
 	let lastReply = "";
 	for (let attempt = 1; attempt <= 2; attempt += 1) {
