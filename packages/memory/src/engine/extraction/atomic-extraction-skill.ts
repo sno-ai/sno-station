@@ -44,7 +44,7 @@ const REFERENCE_NAMES = [
 	"missing-durable-half",
 	"user-subject-guard",
 	"progress-classification",
-	"preceding-context",
+	"surrounding-context",
 ] as const;
 export type AtomicExtractionSkillReference = (typeof REFERENCE_NAMES)[number];
 
