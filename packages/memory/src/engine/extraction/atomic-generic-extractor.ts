@@ -1,3 +1,6 @@
+import { dirname } from "node:path";
+import { appendAuditEntry } from "../operations/runtime-audit-log";
+import { redactSecrets } from "../security/redact";
 import extractionSchema from "../../../config/atomic-extraction-response.schema.json" with { type: "json" };
 import { ATOMIC_ENRICHMENT_OUTPUT_TOKEN_BUDGET } from "../../../config/index";
 import { FIXED_MEMORY_SNO_EXTRACT_CHAT } from "../../model/signed-registry-constants";
@@ -103,7 +106,16 @@ export type AtomicGenericExtractionResult =
 
 export function buildAtomicExtractionWindows(
 	turns: readonly AtomicExtractionTurn[],
+	maxTurns?: number,
 ): AtomicExtractionTurn[][] {
+	if (maxTurns !== undefined) {
+		if (!Number.isSafeInteger(maxTurns) || maxTurns < 1) throw new Error("maxTurns must be a positive integer");
+		const windows: AtomicExtractionTurn[][] = [];
+		for (let start = 0; start < turns.length; start += maxTurns) {
+			windows.push(turns.slice(start, start + maxTurns));
+		}
+		return windows;
+	}
 	if (turns.length === 0) return [];
 	const userIndexes = turns.flatMap((turn, index) => (turn.role === "user" ? [index] : []));
 	if (userIndexes.length <= 2) return [[...turns]];
@@ -540,23 +552,31 @@ export async function runAtomicNumericTurnSweep(
 	return fresh.map((record) => withAtomicSanitizerMatches(record, sanitizedInput.matched));
 }
 
-function rejectionPreview(raw: string): { chars: number } {
-	return { chars: raw.length };
+function rejectionPreview(raw: string): { chars: number; preview: string } {
+	return { chars: raw.length, preview: redactSecrets(raw).slice(0, 512) };
 }
 
 function markPending(
 	input: AtomicGenericExtractionInput,
 	reason: AtomicExtractionReprocessReason,
 	failedReply: string | null,
-	runParameters?: AtomicExtractionRunParameters,
+	attemptCount: number,
 ): AtomicGenericExtractionResult {
 	input.store.markAtomicExtractionPending(
 		input.ledgerKey,
 		reason,
 		failedReply,
 		input.nowMs(),
-		runParameters,
 	);
+	appendAuditEntry(dirname(input.store.dbPath), {
+		event: "error", errorCode: "atomic_capture_window_pending",
+		scope: input.ledgerKey.conversationId, resultStatus: "error",
+		details: {
+			reason, session_key: input.ledgerKey.conversationId,
+			chunk_hash: input.ledgerKey.chunkHash, pipeline_version: input.ledgerKey.pipelineVersion,
+			turn_count: input.turns.length, attempt_count: attemptCount,
+		},
+	});
 	return { status: "pending", reason };
 }
 
@@ -635,40 +655,79 @@ export async function runAtomicGenericExtractionPass(
 	}
 	if (input.estimatedInputTokens > begin.entry.runParameters.maxInputTokens) {
 		input.store.recordAtomicExtractionCalls(input.ledgerKey, input.nowMs());
-		return markPending(input, "input-overflow", null);
+		return markPending(input, "input-overflow", null, 0);
 	}
 
-	const locale = input.locale ?? DEFAULT_LOCALE;
-	const sanitizedInput = sanitizeAtomicPromptValue(input.turns, locale);
+	const attempts = { count: 0 };
+	const outputTokenBudget = Math.min(
+		begin.entry.runParameters.outputTokenBudget, input.runParameters.outputTokenBudget,
+	);
+	const result = await captureAtomicWindow(input, outputTokenBudget, attempts);
+	if (result.status === "pending") {
+		return markPending(input, result.reason, result.failedReply, attempts.count);
+	}
+	return result;
+}
+
+type CaptureWindowResult =
+	| Extract<AtomicGenericExtractionResult, { status: "complete" | "off" }>
+	| { status: "pending"; reason: AtomicExtractionReprocessReason; failedReply: string };
+
+async function splitAtomicCaptureWindow(
+	input: AtomicGenericExtractionInput,
+	outputTokenBudget: number,
+	attempts: { count: number },
+): Promise<CaptureWindowResult> {
+	const records: AtomicExtractionRecord[] = [];
+	const progressTurns = new Set<number>();
+	let offset = 0;
+	for (const turns of buildAtomicExtractionWindows(input.turns, Math.ceil(input.turns.length / 2))) {
+		const result = await captureAtomicWindow({
+			...input, turns,
+			contextTurns: [...(input.contextTurns ?? []), ...input.turns.slice(0, offset)],
+			followingTurns: [...input.turns.slice(offset + turns.length), ...(input.followingTurns ?? [])],
+		}, outputTokenBudget, attempts);
+		if (result.status !== "complete") return result;
+		for (const record of result.records) {
+			records.push({ ...record, sourceSpan: { ...record.sourceSpan, turnIndex: record.sourceSpan.turnIndex + offset } });
+		}
+		for (const index of result.progressTurns) progressTurns.add(index + offset);
+		offset += turns.length;
+	}
+	return { status: "complete", records, progressTurns };
+}
+
+async function captureAtomicWindow(
+	input: AtomicGenericExtractionInput,
+	outputTokenBudget: number,
+	attempts: { count: number },
+): Promise<CaptureWindowResult> {
+	const sanitizedInput = sanitizeAtomicPromptValue(input.turns, input.locale ?? DEFAULT_LOCALE);
 	const prompt = buildAtomicCapturePrompt(input);
-	let outputTokenBudget = begin.entry.runParameters.outputTokenBudget;
 	let lastReply = "";
 	for (let attempt = 1; attempt <= 2; attempt += 1) {
+		attempts.count += 1;
 		const completion = await input.transport.complete({
-			prompt,
-			maxTokens: outputTokenBudget,
+			prompt, maxTokens: outputTokenBudget,
 			...(input.requestId ? { requestId: input.requestId } : {}),
 		});
 		if (completion === null) return { status: "off" };
 		lastReply = completion.text;
+		const preview = rejectionPreview(completion.text);
 		input.store.recordAtomicExtractionCalls(input.ledgerKey, input.nowMs());
 		if (completion.truncated) {
-			log.warn("atomic extraction reply rejected: truncated", {
-				attempt,
-				outputTokenBudget,
-				...rejectionPreview(completion.text),
-			}, { event_name: "memory.atomic_generic_extractor.diagnostic", file: "packages/sno-station-mem/src/engine/extraction/atomic-generic-extractor.ts", function: "runAtomicGenericExtractionPass", site_id: "extraction.atomic-generic-extractor.runAtomicGenericExtractionPass.cce4a719a3" });
-			if (attempt === 2) {
-				return markPending(input, "truncation-exhaustion", lastReply, {
-					...begin.entry.runParameters,
-					outputTokenBudget,
-				});
-			}
-			outputTokenBudget *= 2;
+			log.warn(`atomic extraction reply rejected: truncated; preview: ${preview.preview}`, {
+				attempt, outputTokenBudget, turnCount: input.turns.length,
+				chars: preview.chars,
+			}, { event_name: "memory.atomic_generic_extractor.diagnostic", file: "packages/sno-station-mem/src/engine/extraction/atomic-generic-extractor.ts", function: "captureAtomicWindow", site_id: "extraction.atomic-generic-extractor.runAtomicGenericExtractionPass.cce4a719a3" });
+			if (input.turns.length > 1) return splitAtomicCaptureWindow(input, outputTokenBudget, attempts);
+			if (attempt === 2) return { status: "pending", reason: "truncation-exhaustion", failedReply: lastReply };
 			continue;
 		}
-
-		const parsed = parseAtomicCaptureReply(completion.text, input.turns, { salvage: attempt === 2 });
+		let gate = "unreadable-json";
+		const parsed = parseAtomicCaptureReply(completion.text, input.turns, {
+			salvage: attempt === 2, onReject: (reason) => { gate = reason; },
+		});
 		if (parsed !== undefined) {
 			const records: AtomicExtractionRecord[] = [];
 			for (const batch of chunkAtomicCapturedFacts(parsed.facts)) {
@@ -676,25 +735,15 @@ export async function runAtomicGenericExtractionPass(
 			}
 			if (input.diagnostics) input.diagnostics.proposed += records.length;
 			return {
-				status: "complete",
-				progressTurns: parsed.progressTurns,
-				records: records.map((record) =>
-					withAtomicSanitizerMatches(record, sanitizedInput.matched),
-				),
+				status: "complete", progressTurns: parsed.progressTurns,
+				records: records.map((record) => withAtomicSanitizerMatches(record, sanitizedInput.matched)),
 			};
 		}
 		if (input.diagnostics) input.diagnostics.parseRejected += 1;
-		log.warn("atomic extraction reply rejected: parse", {
-			attempt,
-			reason: "invalid-capture-reply",
-			...rejectionPreview(completion.text),
-		}, { event_name: "memory.atomic_generic_extractor.diagnostic", file: "packages/sno-station-mem/src/engine/extraction/atomic-generic-extractor.ts", function: "runAtomicGenericExtractionPass", site_id: "extraction.atomic-generic-extractor.runAtomicGenericExtractionPass.98a701bd95" });
-		if (attempt === 2) {
-			return markPending(input, "parse-exhaustion", lastReply, {
-				...begin.entry.runParameters,
-				outputTokenBudget,
-			});
-		}
+		log.warn(`atomic extraction reply rejected: parse; preview: ${preview.preview}`, {
+			attempt, reason: "invalid-capture-reply", rejection_reason: gate,
+			chars: preview.chars,
+		}, { event_name: "memory.atomic_generic_extractor.diagnostic", file: "packages/sno-station-mem/src/engine/extraction/atomic-generic-extractor.ts", function: "captureAtomicWindow", site_id: "extraction.atomic-generic-extractor.runAtomicGenericExtractionPass.98a701bd95" });
 	}
-	return markPending(input, "parse-exhaustion", lastReply);
+	return { status: "pending", reason: "parse-exhaustion", failedReply: lastReply };
 }
