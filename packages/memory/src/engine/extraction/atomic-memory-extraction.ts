@@ -98,6 +98,7 @@ export interface RunAtomicMemoryExtractionInput {
 	ledgerKey: AtomicExtractionLedgerKey;
 	turns: readonly AtomicExtractionTurn[];
 	contextTurns?: readonly AtomicExtractionTurn[];
+	followingTurns?: readonly AtomicExtractionTurn[];
 	rawChunk: string;
 	routingSnapshotId: string;
 	runParameters: AtomicExtractionRunParameters;
@@ -444,6 +445,7 @@ function parseAtomicConversationTurns(conversationText: string): AtomicExtractio
 interface AtomicConversationWindow {
 	turns: AtomicExtractionTurn[];
 	contextTurns: AtomicExtractionTurn[];
+	followingTurns: AtomicExtractionTurn[];
 	startIndex: number;
 	ownedTurnIndexes: number[];
 }
@@ -454,7 +456,7 @@ function atomicConversationWindows(
 	const userIndexes = turns.flatMap((turn, index) => (turn.role === "user" ? [index] : []));
 	if (userIndexes.length === 0) return [];
 	if (userIndexes.length <= 2) {
-		return [{ turns: [...turns], contextTurns: [], startIndex: 0, ownedTurnIndexes: turns.map((_, index) => index) }];
+		return [{ turns: [...turns], contextTurns: [], followingTurns: [], startIndex: 0, ownedTurnIndexes: turns.map((_, index) => index) }];
 	}
 	return userIndexes.slice(0, -1).map((start, index) => {
 		const from = index === 0 ? 0 : start;
@@ -465,15 +467,21 @@ function atomicConversationWindows(
 			(_, ownedOffset) => ownedFrom + ownedOffset,
 		);
 		const windowTurns = turns.slice(from, until);
+		const followingTurns = turns.slice(until, userIndexes[index + 3] ?? turns.length);
+		while (followingTurns.length > 0 && JSON.stringify({
+			context: [], following: followingTurns, turns: windowTurns,
+		}).length > ATOMIC_EXTRACTION_MAX_INPUT_TOKENS * 4) {
+			followingTurns.pop();
+		}
 		let contextStart = from;
-		// Keep complete preceding turns within the existing input budget. They are context,
-		// not additional source turns, so record ownership and quote indexes stay unchanged.
+		// Keep the next group (which can hold the current turn's attachment) and then
+		// preceding turns within the existing budget, without extending source ownership.
 		while (contextStart > 0 && JSON.stringify({
-			context: turns.slice(contextStart - 1, from), turns: windowTurns,
+			context: turns.slice(contextStart - 1, from), following: followingTurns, turns: windowTurns,
 		}).length <= ATOMIC_EXTRACTION_MAX_INPUT_TOKENS * 4) {
 			contextStart -= 1;
 		}
-		return { turns: windowTurns, contextTurns: turns.slice(contextStart, from), startIndex: from, ownedTurnIndexes };
+		return { turns: windowTurns, contextTurns: turns.slice(contextStart, from), followingTurns, startIndex: from, ownedTurnIndexes };
 	});
 }
 
@@ -714,6 +722,7 @@ export class AtomicInsightDistiller {
 					{
 						turns: windowTurns,
 						contextTurns,
+						followingTurns,
 						startIndex,
 						ownedTurnIndexes,
 						previousWriteTurn,
@@ -725,7 +734,7 @@ export class AtomicInsightDistiller {
 				) => {
 					const diagnostic = windowDiagnostics();
 					diagnostics.push(diagnostic);
-					const rawChunk = JSON.stringify({ context: contextTurns, turns: windowTurns });
+					const rawChunk = JSON.stringify({ context: contextTurns, following: followingTurns, turns: windowTurns });
 					const chunkHash = hashText(`${startIndex}\u0000${rawChunk}`);
 					try {
 						return await windowDiagnosticContext.run(diagnostic, () => runAtomicMemoryExtraction({
@@ -739,6 +748,7 @@ export class AtomicInsightDistiller {
 							},
 							turns: windowTurns,
 							contextTurns,
+							followingTurns,
 							rawChunk,
 							routingSnapshotId: ATOMIC_PIPELINE_VERSION,
 							runParameters: {
@@ -1294,6 +1304,7 @@ export async function runAtomicMemoryExtraction(
 		ledgerKey: input.ledgerKey,
 		turns: input.turns,
 		...(input.contextTurns ? { contextTurns: input.contextTurns } : {}),
+		...(input.followingTurns ? { followingTurns: input.followingTurns } : {}),
 		rawChunk: input.rawChunk,
 		routingSnapshotId: input.routingSnapshotId,
 		runParameters: input.runParameters,
@@ -1332,6 +1343,7 @@ export async function runAtomicMemoryExtraction(
 		ledgerKey: input.ledgerKey,
 		turns: input.turns,
 		...(input.contextTurns ? { contextTurns: input.contextTurns } : {}),
+		...(input.followingTurns ? { followingTurns: input.followingTurns } : {}),
 		sessionDateTime: input.sessionDateTime,
 		records: generic.records,
 		...(eligibleTurnIndexes ? { eligibleTurnIndexes } : {}),
@@ -1350,7 +1362,9 @@ export async function runAtomicMemoryExtraction(
 		sessionDateTime: input.sessionDateTime,
 		sessionTimezone: input.sessionTimezone,
 	});
-	const gauntlet = excludeContextOnlyRecords(candidates, input.turns, input.contextTurns ?? [], locale);
+	const gauntlet = excludeContextOnlyRecords(
+		candidates, input.turns, [...(input.contextTurns ?? []), ...(input.followingTurns ?? [])], locale,
+	);
 	const contextOnlyCount = candidates.length - gauntlet.length;
 	diagnostic.discarded += contextOnlyCount;
 	if (contextOnlyCount > 0) diagnostic.reasons.context_only = contextOnlyCount;

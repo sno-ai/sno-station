@@ -77,6 +77,7 @@ export interface AtomicGenericExtractionInput {
 	ledgerKey: AtomicExtractionLedgerKey;
 	turns: readonly AtomicExtractionTurn[];
 	contextTurns?: readonly AtomicExtractionTurn[];
+	followingTurns?: readonly AtomicExtractionTurn[];
 	rawChunk: string;
 	routingSnapshotId: string;
 	runParameters: AtomicExtractionRunParameters;
@@ -115,6 +116,7 @@ export function buildAtomicGenericExtractionPrompt(
 	locale: Locale = DEFAULT_LOCALE,
 	turnIndexesToAccountFor: readonly number[] = [],
 	contextTurns: readonly AtomicExtractionTurn[] = [],
+	followingTurns: readonly AtomicExtractionTurn[] = [],
 ): string {
 	const transcript = renderAtomicPromptData(numberAtomicTurns(turns), locale);
 	return [
@@ -125,9 +127,10 @@ export function buildAtomicGenericExtractionPrompt(
 		`thing_attribute_slugs: ${JSON.stringify(stateVocabulary.slugs.map(({ slug }) => slug))}`,
 		`relation_dictionary: ${JSON.stringify(relationDictionary.relations)}`,
 		`response_schema: ${JSON.stringify(GENERIC_RESPONSE_SCHEMA)}`,
-		...(contextTurns.length === 0 ? [] : [
-			atomicExtractionSkillReference("preceding-context"),
+		...(contextTurns.length === 0 && followingTurns.length === 0 ? [] : [
+			atomicExtractionSkillReference("surrounding-context"),
 			`preceding_context: ${renderAtomicPromptData(contextTurns, locale).value}`,
+			`following_context: ${renderAtomicPromptData(followingTurns, locale).value}`,
 		]),
 		...(turnIndexesToAccountFor.length === 0
 			? []
@@ -290,6 +293,7 @@ export interface AtomicNumericTurnSweepInput {
 	ledgerKey: AtomicExtractionLedgerKey;
 	turns: readonly AtomicExtractionTurn[];
 	contextTurns?: readonly AtomicExtractionTurn[];
+	followingTurns?: readonly AtomicExtractionTurn[];
 	sessionDateTime?: string;
 	/** Records the ordinary pass returned, whatever lane they will end up in. */
 	records: readonly AtomicExtractionRecord[];
@@ -336,6 +340,7 @@ export async function runAtomicNumericTurnSweep(
 				input.locale,
 				uncited,
 				input.contextTurns,
+				input.followingTurns,
 			),
 			maxTokens: input.outputTokenBudget,
 			...(input.requestId ? { requestId: input.requestId } : {}),
@@ -539,7 +544,7 @@ export async function runAtomicGenericExtractionPass(
 	const locale = input.locale ?? DEFAULT_LOCALE;
 	const sanitizedInput = sanitizeAtomicPromptValue(input.turns, locale);
 	const prompt = buildAtomicGenericExtractionPrompt(
-		input.turns, input.sessionDateTime, locale, [], input.contextTurns,
+		input.turns, input.sessionDateTime, locale, [], input.contextTurns, input.followingTurns,
 	);
 	let outputTokenBudget = begin.entry.runParameters.outputTokenBudget;
 	let lastReply = "";
