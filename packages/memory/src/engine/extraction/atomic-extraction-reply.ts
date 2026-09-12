@@ -4,7 +4,7 @@
  */
 
 import { z } from "zod";
-import { calendarInstructionSchema, type CalendarInstruction, type CalendarResult } from "./calendar-instruction";
+import { calculateCalendarTime, calendarInstructionSchema, type CalendarInstruction, type CalendarResult } from "./calendar-instruction";
 import { createLogger } from "@snoai/utils/logger";
 import atomicExtractionSchema from "../../../config/atomic-extraction-response.schema.json" with {
 	type: "json",
@@ -286,23 +286,65 @@ export const ATOMIC_ENRICHMENT_RESPONSE_JSON_SCHEMA: unknown = z.toJSONSchema(en
 export function parseAtomicCaptureReply(
 	raw: string,
 	turns: readonly AtomicExtractionTurn[],
+	{ salvage = false }: { salvage?: boolean } = {},
 ): { facts: AtomicCapturedFact[]; progressTurns: ReadonlySet<number> } | undefined {
 	return readModelReplyJson(raw, (value) => {
 		const parsed = captureReplySchema.safeParse(value);
 		if (!parsed.success) return undefined;
 		const { facts, claims_found } = parsed.data;
-		const progressTurns = parseProgressTurns(parsed.data, turns);
 		// Claims can merge or split into facts; reject only a nonempty inventory with no facts.
-		if (progressTurns === null || (claims_found.length > 0 && facts.length === 0)) return undefined;
-		if (facts.some((fact, index) => fact.id !== index ||
-			fact.source_span.turn_index >= turns.length)) return undefined;
-		return { facts, progressTurns };
+		if (claims_found.length > 0 && facts.length === 0) return undefined;
+		const progressTurns = parseProgressTurns(parsed.data, turns, { salvage });
+		if (progressTurns === null) return undefined;
+		const wrongIds = facts.filter((fact, index) => fact.id !== index).length;
+		const invalidSpans = facts.filter((fact) => fact.source_span.turn_index >= turns.length).length;
+		if (!salvage && (wrongIds > 0 || invalidSpans > 0)) return undefined;
+		if (wrongIds > 0) {
+			log.warn("atomic capture salvaged fact ids", { gate: 5, affected_facts: wrongIds }, {
+				event_name: "memory.atomic_extraction_reply.diagnostic", file: "packages/sno-station-mem/src/engine/extraction/atomic-extraction-reply.ts", function: "parseAtomicCaptureReply", site_id: "extraction.atomic-extraction-reply.salvage_ids",
+			});
+		}
+		if (invalidSpans > 0) {
+			log.warn("atomic capture dropped facts with invalid source turns", { gate: 6, affected_facts: invalidSpans }, {
+				event_name: "memory.atomic_extraction_reply.diagnostic", file: "packages/sno-station-mem/src/engine/extraction/atomic-extraction-reply.ts", function: "parseAtomicCaptureReply", site_id: "extraction.atomic-extraction-reply.salvage_spans",
+			});
+		}
+		return {
+			facts: facts.map((fact, index) => ({ ...fact, id: index }))
+				.filter((fact) => fact.source_span.turn_index < turns.length),
+			progressTurns,
+		};
 	});
+}
+
+function warnUnresolvedEnrichmentTime(
+	enrichment: z.infer<typeof enrichmentSchema>,
+	sessionDateTime: string | undefined,
+): void {
+	for (const field of ["time", "ended_time"] as const) {
+		const instruction = enrichment[field];
+		if (instruction.kind === "none" || instruction.kind === "unresolved" ||
+			calculateCalendarTime(instruction, sessionDateTime) !== null) continue;
+		const missingComponents: string[] = [];
+		if (instruction.kind === "absolute") {
+			if (instruction.precision !== "year" && instruction.month === undefined) missingComponents.push("month");
+			if (instruction.precision !== "year" && instruction.precision !== "month" &&
+				instruction.day === undefined) missingComponents.push("day");
+		} else if (sessionDateTime === undefined) missingComponents.push("session_date_time");
+		if (instruction.hour === undefined && (instruction.minute !== undefined ||
+			(instruction.precision === "minute" && instruction.kind !== "relative"))) missingComponents.push("hour");
+		log.warn("atomic enrichment time could not be calculated", {
+			fact_id: enrichment.id, field: { name: field }, kind: instruction.kind,
+			precision: { unit: instruction.precision },
+			missing_components: missingComponents.map((name) => ({ name })),
+		}, { event_name: "memory.atomic_extraction_reply.diagnostic", file: "packages/sno-station-mem/src/engine/extraction/atomic-extraction-reply.ts", function: "warnUnresolvedEnrichmentTime", site_id: "extraction.atomic-extraction-reply.unresolved_enrichment_time" });
+	}
 }
 
 export function parseAtomicEnrichmentReply(
 	raw: string,
 	facts: readonly AtomicCapturedFact[],
+	sessionDateTime?: string,
 ): AtomicExtractionRecord[] | undefined {
 	return readModelReplyJson(raw, (value) => {
 		const parsed = enrichmentReplySchema.safeParse(value);
@@ -314,6 +356,7 @@ export function parseAtomicEnrichmentReply(
 		for (const fact of facts) {
 			const enrichment = byId.get(fact.id);
 			if (enrichment === undefined) return undefined;
+			warnUnresolvedEnrichmentTime(enrichment, sessionDateTime);
 			records.push(projectRecord({ ...enrichment, ...fact, claim_text: fact.fact }));
 		}
 		return records;

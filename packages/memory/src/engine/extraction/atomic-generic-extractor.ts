@@ -220,7 +220,7 @@ async function enrichAtomicBatch(
 		});
 		if (completion !== null) input.store.recordAtomicExtractionCalls(input.ledgerKey, input.nowMs());
 		const records = completion === null || completion.truncated ? undefined
-			: parseAtomicEnrichmentReply(completion.text, facts);
+			: parseAtomicEnrichmentReply(completion.text, facts, input.sessionDateTime);
 		log.info("atomic_enrichment_batch", {
 			attempt, factIds: facts.map((fact) => fact.id),
 			predictedOutputTokens: facts.reduce((sum, fact) => sum + estimatedEnrichmentTokens(fact), 0),
@@ -668,7 +668,7 @@ export async function runAtomicGenericExtractionPass(
 			continue;
 		}
 
-		const parsed = parseAtomicCaptureReply(completion.text, input.turns);
+		const parsed = parseAtomicCaptureReply(completion.text, input.turns, { salvage: attempt === 2 });
 		if (parsed !== undefined) {
 			const records: AtomicExtractionRecord[] = [];
 			for (const batch of chunkAtomicCapturedFacts(parsed.facts)) {
