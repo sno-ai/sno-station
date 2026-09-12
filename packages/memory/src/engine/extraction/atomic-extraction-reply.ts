@@ -292,7 +292,8 @@ export function parseAtomicCaptureReply(
 		if (!parsed.success) return undefined;
 		const { facts, claims_found } = parsed.data;
 		const progressTurns = parseProgressTurns(parsed.data, turns);
-		if (progressTurns === null || claims_found.length !== facts.length) return undefined;
+		// Claims can merge or split into facts; reject only a nonempty inventory with no facts.
+		if (progressTurns === null || (claims_found.length > 0 && facts.length === 0)) return undefined;
 		if (facts.some((fact, index) => fact.id !== index ||
 			fact.source_span.turn_index >= turns.length)) return undefined;
 		return { facts, progressTurns };
