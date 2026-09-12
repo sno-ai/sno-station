@@ -72,10 +72,45 @@ function wireRecord(overrides: Record<string, unknown>): Record<string, unknown>
 	};
 }
 
+/** The lane-1 capture face of a record: the fields the merge carries by code, keyed by id. */
+function captureFactRecord(record: Record<string, unknown>, id: number): Record<string, unknown> {
+	return {
+		id,
+		fact: record.claim_text,
+		subject: record.subject,
+		subject_kind: record.subject_kind,
+		temporal_phrase: record.temporal_phrase ?? null,
+		ended_at_phrase: record.ended_at_phrase ?? null,
+		source_span: record.source_span,
+	};
+}
+
+/** The lane-2 enrichment face of a record: the classification fields, keyed by the same id. */
+function enrichmentReplyRecord(record: Record<string, unknown>, id: number): Record<string, unknown> {
+	return {
+		id,
+		kind: record.kind,
+		attribute: record.attribute,
+		value: record.value,
+		ends_current: record.ends_current,
+		importance: record.importance,
+		changes_current_state: record.changes_current_state,
+		todo: record.todo,
+		close_reason: record.close_reason,
+		single_claim: record.single_claim,
+		relations: record.relations,
+		time: record.time,
+		ended_time: record.ended_time,
+	};
+}
+
 class FixedGenericTransport implements AtomicGenericExtractionTransport {
 	readonly requests: AtomicGenericExtractionRequest[] = [];
+	private readonly records: Array<Record<string, unknown>>;
 
-	constructor(private readonly reply: string, private readonly progressTurns: readonly number[] = []) {}
+	constructor(reply: string, private readonly progressTurns: readonly number[] = []) {
+		this.records = (JSON.parse(reply) as { records: Array<Record<string, unknown>> }).records;
+	}
 
 	async complete(request: AtomicGenericExtractionRequest) {
 		this.requests.push(request);
@@ -84,8 +119,21 @@ class FixedGenericTransport implements AtomicGenericExtractionTransport {
 			return { text: JSON.stringify({ resolutions: data.records.map(({ recordIndex }) => ({ record_index: recordIndex, subject: null })) }), truncated: false };
 		}
 		if (request.prompt.includes('"new_display_name":')) return { text: '{"entity_id":"new"}', truncated: false };
+		// Lane 2 (enrichment): the prompt carries a `facts:` block. Return one enrichment per
+		// requested id, mapped back to the scripted record by its id.
+		if (request.prompt.includes("facts:\n")) {
+			const facts = JSON.parse(request.prompt.split("<take>\n").at(-1)?.split("\n</take>")[0] ?? "[]") as Array<{ id: number }>;
+			const missing = facts.find(({ id }) => this.records[id] === undefined);
+			if (missing) throw new Error(`enrichment asked for unknown fact id ${missing.id}`);
+			return { text: JSON.stringify({ enrichments: facts.map(({ id }) => enrichmentReplyRecord(this.records[id] as Record<string, unknown>, id)) }), truncated: false };
+		}
+		// Lane 1 (capture): decisions for every user turn, one fact per scripted record.
 		const turns = JSON.parse(request.prompt.split("<take>\n").at(-1)?.split("\n</take>")[0] ?? "[]") as Array<{role: string; turn_index: number}>;
-		return { text: JSON.stringify({ ...JSON.parse(this.reply), decisions: turns.filter((turn) => turn.role === "user").map((turn) => ({ turn_index: turn.turn_index, progress_only: this.progressTurns.includes(turn.turn_index) })) }), truncated: false };
+		return { text: JSON.stringify({
+			claims_found: this.records.map((record) => record.claim_text),
+			decisions: turns.filter((turn) => turn.role === "user").map((turn) => ({ turn_index: turn.turn_index, progress_only: this.progressTurns.includes(turn.turn_index) })),
+			facts: this.records.map((record, id) => captureFactRecord(record, id)),
+		}), truncated: false };
 	}
 }
 
@@ -259,7 +307,7 @@ describe("atomic memory extraction production entrypoint", () => {
 		expect(scripted.generic.requests.map(({ prompt }) =>
 			prompt.includes("Task: resolve each unresolved standing subject") ? "resolve-subject" :
 			prompt.includes('"new_display_name":') ? "entity-identity" : "extraction",
-		)).toEqual(["extraction", "resolve-subject", "entity-identity"]);
+		)).toEqual(["extraction", "extraction", "resolve-subject", "entity-identity"]);
 		expect(scripted.profileKeying.calls.map(({ turnIndex }) => turnIndex)).toEqual([0, 3]);
 		expect(scripted.resplit.calls).toHaveLength(1);
 		expect(scripted.subjectGuard.guardCalls).toHaveLength(1);
@@ -359,7 +407,7 @@ describe("atomic memory extraction production entrypoint", () => {
 		).toThrow();
 	});
 
-	it("drops an emitted progress record before SQLite and spends only one generic call", async () => {
+	it("drops an emitted progress record before SQLite after capturing and enriching it", async () => {
 		const target = setup();
 		const turn: AtomicExtractionTurn = {
 			role: "user",
@@ -393,7 +441,10 @@ describe("atomic memory extraction production entrypoint", () => {
 
 		expect(result.records).toEqual([]);
 		expect(result.write).toMatchObject({ createdCount: 0, ledger: { state: "complete" } });
-		expect(scripted.generic.requests).toHaveLength(1);
+		// The two lanes make a window two generic calls: the progress-only fact is captured (lane 1)
+		// and enriched (lane 2), then excludeProgressRecords drops it before any store write. The
+		// drop guarantee — no record, no row, and no gauntlet stages — is what this proves.
+		expect(scripted.generic.requests).toHaveLength(2);
 		expect(scripted.profileKeying.calls).toHaveLength(0);
 		expect(scripted.resplit.calls).toHaveLength(0);
 		expect(scripted.subjectGuard.guardCalls).toHaveLength(0);
