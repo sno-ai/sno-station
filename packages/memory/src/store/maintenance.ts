@@ -31,7 +31,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
  * Usage events ('recall'/'inject') older than this are pruned from the
- * nodix_memory_events ledger. MUST stay >= the purge-safety recall lookback
+ * `nodix_memory_events` ledger. MUST stay >= the purge-safety recall lookback
  * (RECENT_RECALL_WINDOW_MS, 30 d) — coupled by a unit test — so retention can
  * never erase evidence the cascade-purge preview depends on. Lifecycle events
  * are never pruned (database-enforced by the guarded delete trigger).
