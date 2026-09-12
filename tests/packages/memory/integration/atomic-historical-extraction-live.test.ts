@@ -114,11 +114,11 @@ from evals.locomo.plugin.judge import judge_completion
 from evals.locomo.plugin.run_locomo_evalserver import THINKING_BLOCK
 payload=json.load(sys.stdin)
 client=OpenAI(base_url="http://localhost:8070/codex/v1",api_key="subscription",timeout=180)
-print(THINKING_BLOCK.sub("",judge_completion(client,model="gpt-5.3-codex",messages=[{"role":"user","content":payload["prompt"]+"\\n\\n"+json.dumps(payload["input"])}])).strip())
+print(THINKING_BLOCK.sub("",judge_completion(client,model="gpt-5.6-terra",messages=[{"role":"user","content":payload["prompt"]+"\\n\\n"+json.dumps(payload["input"])}])).strip())
 `], { input: JSON.stringify({ prompt: judgePrompt, input: judgeInput }), cwd: repoRoot, encoding: "utf8", timeout: 240_000 });
 		record(testCase.id, { runId, phase: "judgeRawReply", content });
 		const verdict = verdictSchema.parse(JSON.parse(content.trim().replace(/^```(?:json)?\s*/, "").replace(/\s*```$/, "")));
-		record(testCase.id, { runId, phase: "verdict", judgeEndpoint: "http://localhost:8070/codex/v1/chat/completions", judgeModel: "gpt-5.3-codex", judgePromptHash, verdict });
+		record(testCase.id, { runId, phase: "verdict", judgeEndpoint: "http://localhost:8070/codex/v1/chat/completions", judgeModel: "gpt-5.6-terra", judgePromptHash, verdict });
 		process.stdout.write(`${testCase.id}: ${JSON.stringify(verdict)}\n`);
 		expect(verdict.criteria.map(({ id }) => id).sort()).toEqual(testCase.criteria.map((_, index) => `criterion-${index}`).sort());
 		for (const criterion of verdict.criteria) {
