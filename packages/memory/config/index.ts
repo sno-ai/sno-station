@@ -412,6 +412,9 @@ export const SESSION_SUMMARY_MAX_CHUNKS = 8;
 // CAPTURE — INPUT FILTERING
 // =============================================================================
 
+/** Transcript budget shared by an atomic window and its preceding context. */
+export const ATOMIC_EXTRACTION_MAX_INPUT_TOKENS = 4_096;
+
 /** Minimum text length for CJK content to be captured */
 export const CAPTURE_MIN_LENGTH_CJK = 4;
 
