@@ -35,7 +35,6 @@ export default defineConfig({
 		exclude: [
 			...configDefaults.exclude,
 			".claude/**",
-			"internal/repo-reference/**",
 		],
 		fileParallelism: false,
 		hookTimeout: 120_000,
