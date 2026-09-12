@@ -72,7 +72,9 @@ returned as unresolved they are recovered.
 
 ## Classify progress-only turns
 
-Read the transcript and return one decision for each user turn, using its supplied turn index.
+Read the transcript and return one decision for each turn whose role is `user`, using its
+supplied turn index. Read the role on each turn; do not assume users have even or odd indexes.
+Assistant and system turns may support facts, but NEVER belong in `decisions`.
 Judge the original turn, not a record or paraphrase. Include these decisions AFTER claims_found and BEFORE facts in the same extraction reply. The engine enforces the decisions even if
 you still emit facts from a progress-only turn.
 
@@ -87,8 +89,8 @@ turn combines progress with an independent durable fact: that fact must remain e
 Judge each turn separately; surrounding preferences do not change a progress-only turn.
 
 Add `decisions` to the extraction envelope: one boolean per user turn, no assistant/system
-turns, no omitted or repeated indexes. This extends the supplied extraction response schema:
-{"claims_found":[],"decisions":[{"turn_index":0,"progress_only":true},{"turn_index":2,"progress_only":false}],"facts":[]}
+turns, no omitted or repeated indexes. Copy indexes from the supplied transcript, not from an
+example or a fresh count. Check that every decision points to a turn whose role is `user`.
 Even when no claims remain, return the decisions; empty claims and facts do not replace them.
 
 

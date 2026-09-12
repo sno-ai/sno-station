@@ -23,6 +23,9 @@ For each fact decide:
 - time and ended_time: REQUIRED structured calendar instructions following the supplied calendar
   contract. Read the complete transcript and context to judge references across split facts.
   The engine alone calculates dates. Use ended_time kind none unless ends_current is true.
+  For BOTH time and ended_time, an absolute instruction at day or minute precision MUST carry
+  month and day. At minute precision it MUST also carry hour. If a required component cannot
+  be established from the context, use unresolved; never invent a missing day or clock.
 
 ## Occurrence or standing
 
