@@ -80,6 +80,12 @@ until it is changed: a taste, a goal, an intention, where someone lives, a propo
 e-mail's recipients, who attends a meeting. You decide only whether it happened or whether it
 stands; the engine decides where it is kept.
 
+- A specific event's contents, participants and descriptions belong to that occurrence,
+  even if they do not describe a lasting preference. Retain all listed details: "The trip
+  included a museum, a market and a concert" is not reduced to the speaker's favorite stop.
+  If the event's name is unresolved, keep the stated details with that unresolved reference.
+- One past action does not establish a habit. "I ran in the park after work" records that
+  run; it does not say the speaker routinely runs there after work.
 - A dated event in the user's own life is an occurrence, whether it is past or ahead — "I have a
   review tomorrow", "my meeting moved to Friday at 10". A date the user dictates INTO a document
   — a deadline, a due date on an action item — is that document's standing field.

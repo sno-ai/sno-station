@@ -47,3 +47,7 @@ not the inspiration. Without words dating the inspiration, keep its time unresol
 earlier turn explicitly dates that same exhibition to last Friday, retain the weekday
 instruction for the exhibition; never replace it with a guessed number of days. Copy the
 actual dating words into `temporal_phrase`, not a clause that merely names the experience.
+
+A weekend is a span, not an exact Saturday or Sunday. When the supplied instruction forms
+cannot represent that span, keep the weekend phrase and use `unresolved`; do not narrow it
+to a single weekday.
