@@ -59,6 +59,12 @@ export function episodicEventDate(entry: { metadata?: string }): string | undefi
 	return undefined;
 }
 
+/** The calendar day a row was said: its session timestamp, the anchor every relative date resolved against. */
+export function saidOnDate(entry: { timestamp: number }): string | undefined {
+	const date = new Date(entry.timestamp);
+	return Number.isFinite(date.getTime()) ? date.toISOString().slice(0, 10) : undefined;
+}
+
 export function isReflectionEntry(entry: { category: string; metadata?: string }): boolean {
 	// Isolate the tool execution operation that can fail because of runtime I/O or input shape.
 	const metadata = parseEntryMetadata(entry);
