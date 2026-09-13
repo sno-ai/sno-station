@@ -11,6 +11,7 @@ import {
 	deriveSessionDateTime,
 	extractAllMessageTexts,
 	isAmbientLearningMessage,
+	transcriptSessionDateTime,
 } from "./sno-station-mem-message-transcript";
 import type { PluginHookAgentContext, PluginHookAgentEndEvent } from "./sno-station-mem-hook-types";
 import {
@@ -61,7 +62,9 @@ async function runLocalFirstCapture(input: {
 	});
 
 	const seen = new Set<string>();
-	const sessionDateTime = deriveSessionDateTime(event.messages, config.captureAssistant);
+	const sessionDateTime =
+		transcriptSessionDateTime(event.messages) ??
+		deriveSessionDateTime(event.messages, config.captureAssistant);
 	const sessionTimestamp = parseSessionTimestamp(sessionDateTime);
 	let stored = 0;
 	let failures = 0;
@@ -191,7 +194,9 @@ export async function onAgentEnd(
 		event.messages,
 		config.captureAssistant,
 	).text;
-	const sessionDateTime = deriveSessionDateTime(event.messages, config.captureAssistant);
+	const sessionDateTime =
+		transcriptSessionDateTime(event.messages) ??
+		deriveSessionDateTime(event.messages, config.captureAssistant);
 	if (!conversationText.trim()) {
 		appendAuditEntry(stateDir, {
 			event: "ambient_learning",

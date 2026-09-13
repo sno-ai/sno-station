@@ -160,6 +160,32 @@ export function deriveSessionDateTime(
 		.toString({ smallestUnit: "millisecond", timeZoneName: "never" });
 }
 
+const TRANSCRIPT_SESSION_DATE_HEADER = /^session_date_time:[ \t]*(\S[^\n]*)$/m;
+
+/**
+ * The session date a transcript states about itself. A replayed or imported log carries the date
+ * it was actually spoken on; the gateway's message timestamps only say when it was replayed, and
+ * anchoring "yesterday" to the replay day files every relative date years off. An ISO
+ * `session_date_time:` line in a user message therefore outranks the message timestamps; a
+ * header that does not parse as ISO is ignored, not guessed at.
+ */
+export function transcriptSessionDateTime(messages: unknown[]): string | undefined {
+	for (const message of messages) {
+		if (!isAmbientLearningMessage(message) || message.role !== "user") continue;
+		for (const text of extractAllMessageTexts(message)) {
+			const header = TRANSCRIPT_SESSION_DATE_HEADER.exec(text)?.[1];
+			if (header === undefined) continue;
+			const timestampMs = parseIsoDateTimeMs(header.trim());
+			if (timestampMs === undefined) return undefined;
+			const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+			return Temporal.Instant.fromEpochMilliseconds(timestampMs)
+				.toZonedDateTimeISO(timezone)
+				.toString({ smallestUnit: "millisecond", timeZoneName: "never" });
+		}
+	}
+	return undefined;
+}
+
 /** Builds the chronological transcript used by session summary and capture logic. */
 export function buildConversationText(
 	messages: unknown[],
