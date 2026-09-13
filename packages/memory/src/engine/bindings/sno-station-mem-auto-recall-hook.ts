@@ -32,6 +32,7 @@ import {
 	resolveHookAgentId,
 } from "./sno-station-mem-runtime-mode";
 import { resolveRuntimeSessionId } from "./sno-station-mem-session-state";
+import { episodicEventDate, saidOnDate } from "./memory-tool-formatting";
 import type { RetrievalResult } from "../shared/types";
 import type { MemoryTelemetryUsageOutbox } from "../telemetry/memory-telemetry-outbox";
 import type { MemoryTelemetryMetadata } from "../telemetry/memory-telemetry-types";
@@ -298,11 +299,19 @@ export async function onBeforeAgentStart(
 
 		return {
 			prependContext: formatRelevantMemoriesContext(
-				finalResults.map((result) => ({
-					category: result.entry.category,
-					text: result.snippet && result.snippet.length > 0 ? result.snippet : result.entry.text,
-					lane: result.entry.lane,
-				})),
+				finalResults.map((result) => {
+					// A dated event carries its own day; anything else carries the day it was said, so a
+					// "when" question is never answered from a row that silently lost its anchor.
+					const eventDate = episodicEventDate(result.entry);
+					return {
+						category: result.entry.category,
+						text: result.snippet && result.snippet.length > 0 ? result.snippet : result.entry.text,
+						lane: result.entry.lane,
+						...(eventDate === undefined
+							? { saidOn: saidOnDate(result.entry) }
+							: { eventDate }),
+					};
+				}),
 			),
 		};
 	} catch (error) {
