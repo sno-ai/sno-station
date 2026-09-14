@@ -176,12 +176,6 @@ export const MAX_AGGREGATION_ROWS = 640;
  */
 export const MAX_AGGREGATION_RESULT_TOKENS = 32_768;
 
-/**
- * Per-row text ceiling on the aggregation path. With the budget above admitting the whole measured
- * population (mean row 317 characters), this clips a pathological row rather than shaping the
- * ordinary result.
- */
-export const MAX_AGGREGATION_MEMORY_CHARS = 1_024;
 
 /** Pool size = max(candidatePoolSize, limit * PRECISION_RECALL_POOL_SIZE_FACTOR) */
 export const PRECISION_RECALL_POOL_SIZE_FACTOR = 2;
@@ -276,37 +270,27 @@ export const DEFAULT_RERANK_BATCH_CONCURRENCY = 4;
  */
 export const DEFAULT_TEI_RERANK_MAX_CANDIDATES = 50;
 
-/**
- * Safety-net per-candidate character cap applied when `rerankProvider: "tei"`
- * and `rerankMaxTextLength` is unset. This repo's Sno TEI reranker rejects
- * any single text over 8192 characters outright ({"error":"text too long:
- * max 8192 characters"}) rather than truncating it — LoCoMo's bulk-import
- * corpus stores whole session transcripts as single memory chunks and
- * regularly exceeds this (measured up to ~9200 chars), so this is not a
- * hypothetical edge case. Text sent to the reranker is truncated to this
- * length; the candidate's actual `entry.text` is never mutated, only the
- * outgoing rerank request payload.
- */
-export const DEFAULT_TEI_RERANK_MAX_TEXT_LENGTH = 8192;
 
 // =============================================================================
 // EMBEDDING — CHUNKER
 // =============================================================================
 
-/** Default maximum context window in tokens for the local ONNX embedder. */
+/**
+ * THE per-record token ceiling, and the only number of its kind in this repository (owner
+ * ruling 2026-09-14). One stored memory record, one embedder input, one rerank candidate,
+ * one row rendered into an aggregation answer: each is at most this many tokens, counted by
+ * the embedder's own tokenizer (`Embedder.countTokens`), never estimated from characters.
+ * Why one number: the local ONNX embedder silently truncates past its context window, the
+ * Sno reranker silently truncates past its own, and a record longer than either scores on
+ * its first half only — measured 2026-09-14, a claim placed past the cut ranked 0.0001.
+ * The reranker's window is shared with the query and a fixed instruction, so this ceiling
+ * must leave that room; it does, and the two tokenizers are the same vocabulary (verified).
+ * Extraction is told to split anything longer (skill `extract-atomic-memory`); the store
+ * refuses a longer record outright. Every other size in this file that describes a piece
+ * of a record derives from this constant — do not write its value, or a fraction of it, as
+ * a literal anywhere else.
+ */
 export const DEFAULT_MAX_CONTEXT_TOKENS = 512;
-
-/** Default chars-per-token ratio (conservative for all scripts including CJK) */
-export const DEFAULT_CHARS_PER_TOKEN = 3.0;
-
-/** Safety margin applied when converting token limit to char limit (90%) */
-export const CHUNKER_SAFETY_MARGIN = 0.9;
-
-/** CJK chars consume ~2-3 tokens each; divide char limits by this for CJK-heavy text */
-export const CJK_CHAR_TOKEN_DIVISOR = 2.5;
-
-/** Text is CJK-heavy when this fraction of non-whitespace chars are CJK */
-export const CJK_RATIO_THRESHOLD = 0.3;
 
 /** Maximum lines per chunk before forcing an earlier split at a line boundary */
 export const DEFAULT_MAX_LINES_PER_CHUNK = 50;
@@ -593,12 +577,19 @@ export const PROFILE_MERGE_THRESHOLD = 0.88;
 // keep the injected window usable. This mem-claw-local override is the source of
 // truth for what memory-store-row-codec actually chunks with; the shared package
 // default is unchanged so other consumers keep the multi-dataset 512/1536 sizing.
-export const RETRIEVAL_STORAGE_CHUNK_PROFILE = {
-	minTokens: 256,
-	targetTokens: 384,
-	maxTokens: 448,
-	overlapTokens: 32,
-} as const;
+// Expressed as fractions of DEFAULT_MAX_CONTEXT_TOKENS (1/2, 3/4, 7/8, 1/16) so the
+// validated geometry is preserved exactly while the only literal stays the ceiling itself.
+export const RETRIEVAL_STORAGE_CHUNK_PROFILE: {
+	readonly minTokens: number;
+	readonly targetTokens: number;
+	readonly maxTokens: number;
+	readonly overlapTokens: number;
+} = {
+	minTokens: DEFAULT_MAX_CONTEXT_TOKENS / 2,
+	targetTokens: (DEFAULT_MAX_CONTEXT_TOKENS * 3) / 4,
+	maxTokens: (DEFAULT_MAX_CONTEXT_TOKENS * 7) / 8,
+	overlapTokens: DEFAULT_MAX_CONTEXT_TOKENS / 16,
+};
 
 /** Minimum tokens per chunk before merge (mirrors RETRIEVAL_STORAGE_CHUNK_PROFILE). */
 export const CHUNK_MIN_TOKENS: typeof RETRIEVAL_STORAGE_CHUNK_PROFILE.minTokens =
