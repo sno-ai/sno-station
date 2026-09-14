@@ -126,6 +126,7 @@ export const updateParamsSchema: z.ZodType<
 		category?: MemoryCategory | undefined;
 		importance?: number | undefined;
 		metadata?: Record<string, unknown> | undefined;
+		timestamp?: number | undefined;
 	},
 	unknown
 > = z
@@ -135,13 +136,15 @@ export const updateParamsSchema: z.ZodType<
 		category: toolCategoryInputSchema.optional(),
 		importance: z.number().optional(),
 		metadata: z.record(z.string(), z.unknown()).optional(),
+		timestamp: z.number().int().nonnegative().optional(),
 	})
 	.refine(
 		(value) =>
 			value.text !== undefined ||
 			value.category !== undefined ||
 			value.importance !== undefined ||
-			value.metadata !== undefined,
+			value.metadata !== undefined ||
+			value.timestamp !== undefined,
 		{ message: "At least one update field is required" },
 	);
 export const statsParamsSchema: z.ZodType<{ scope?: string | undefined }, unknown> =
