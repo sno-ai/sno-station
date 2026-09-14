@@ -37,7 +37,7 @@ import {
 	stableHash,
 	type UpdateChanges,
 } from "./memory-store-shared";
-import { validateStoreWriteMetadata } from "./memory-store-write-validation";
+import { recordTokenCounter, validateStoreWriteMetadata } from "./memory-store-write-validation";
 import { parseInsightMetadata } from "../engine/extraction/memory-metadata-codec";
 
 type MetadataRow = { id: string; category: MemoryCategory; metadata: string | null };
@@ -179,6 +179,7 @@ Object.assign(MemoryStore.prototype, {
 		id: string,
 		changes: UpdateChanges,
 	): Promise<MemoryEntry | null> {
+		const countRecordTokens = await recordTokenCounter(this.embedder);
 		// Log operational context for storage without changing control flow.
 		log.debug("updating memory", { memory_id: id }, {
 			event_name: "sno_station_mem.memory-store-update-api.updating.memory",
@@ -280,6 +281,7 @@ Object.assign(MemoryStore.prototype, {
 							: "active",
 				},
 				"update",
+				countRecordTokens,
 			);
 			const nextCategory = validated.category;
 			const nextMetadata = validated.metadata;

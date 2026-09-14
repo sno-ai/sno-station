@@ -13,7 +13,7 @@ import {
 	StorageError,
 	stableHash,
 } from "./memory-store-shared";
-import { validateStoreWriteMetadata } from "./memory-store-write-validation";
+import { recordTokenCounter, validateStoreWriteMetadata } from "./memory-store-write-validation";
 
 Object.assign(MemoryStore.prototype, {
 	async importEntry(
@@ -53,6 +53,7 @@ Object.assign(MemoryStore.prototype, {
 				enforceWriteAuthority: true,
 			},
 			"importEntry",
+			await recordTokenCounter(this.embedder),
 		);
 		const category = validated.category;
 		const metadata = validated.metadata;
