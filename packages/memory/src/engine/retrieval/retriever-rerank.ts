@@ -24,8 +24,8 @@ import {
 	DEFAULT_RERANK_BATCH_CONCURRENCY,
 	DEFAULT_RERANK_MODEL,
 	DEFAULT_RERANK_TIMEOUT_MS,
+	DEFAULT_MAX_CONTEXT_TOKENS,
 	DEFAULT_TEI_RERANK_MAX_CANDIDATES,
-	DEFAULT_TEI_RERANK_MAX_TEXT_LENGTH,
 	LIGHTWEIGHT_COSINE_WEIGHT,
 	LIGHTWEIGHT_FUSION_WEIGHT,
 	LIGHTWEIGHT_RERANK_PENALTY,
@@ -166,18 +166,23 @@ Object.assign(MemoryRetriever.prototype, {
 		const batchSize =
 			provider === "tei" ? DEFAULT_TEI_RERANK_MAX_CANDIDATES : Math.max(toRerank.length, 1);
 
-		// Some rerank deployments (e.g. the same Sno TEI reranker) also reject a
-		// single over-length document outright ({"error":"text too long: max
-		// 8192 characters"}) — LoCoMo's bulk-import corpus stores whole session
-		// transcripts as one memory chunk and regularly exceeds this. Only the
-		// outgoing request text is truncated; `candidate.entry.text` in the
-		// returned result is untouched.
-		const maxTextLength =
-			this.config.rerankMaxTextLength ??
-			(provider === "tei" ? DEFAULT_TEI_RERANK_MAX_TEXT_LENGTH : undefined);
-		const rerankTexts = toRerank.map((c) =>
-			maxTextLength !== undefined ? c.entry.text.slice(0, maxTextLength) : c.entry.text,
-		);
+		// A candidate is at most DEFAULT_MAX_CONTEXT_TOKENS by construction (the store refuses a
+		// longer record), and the reranker truncates silently past its own window, so a longer
+		// text would be scored on its head only. Rows written before the ceiling are cut here
+		// by exact token count and reported; `candidate.entry.text` in the result is untouched.
+		let truncatedCandidates = 0;
+		const rerankTexts = toRerank.map((c) => {
+			const bounded = this.embedder.truncateToTokens(c.entry.text, DEFAULT_MAX_CONTEXT_TOKENS);
+			if (bounded !== c.entry.text) truncatedCandidates += 1;
+			return bounded;
+		});
+		if (truncatedCandidates > 0) {
+			// Log operational context for retrieval ranking without changing control flow.
+			log.warn("rerank candidates over the record token ceiling were cut for the request", {
+				truncatedCandidates,
+				maxTokens: DEFAULT_MAX_CONTEXT_TOKENS,
+			}, { event_name: "memory.retriever_rerank.diagnostic", file: "packages/sno-station-mem/src/engine/retrieval/retriever-rerank.ts", function: "rerank", site_id: "retrieval.retriever-rerank.rerank.candidate_over_ceiling" });
+		}
 
 		// Isolate the retrieval ranking operation that can fail because of runtime I/O or input shape.
 		try {
