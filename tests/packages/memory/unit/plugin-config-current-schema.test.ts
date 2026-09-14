@@ -9,7 +9,6 @@ describe("plugin config current schema", () => {
 			provider: "local-onnx",
 			dimensions: 1024,
 			dtype: "q8",
-			maxContextTokens: 512,
 			sessionOptions: {
 				graphOptimizationLevel: "extended",
 				enableMemPattern: false,

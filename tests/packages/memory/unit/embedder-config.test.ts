@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { embeddingConfigSchema } from "../../../../packages/sno-station-mem/src/contract/config/plugin-config-embedding-schema.ts";
 import { Embedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client.ts";
+import { DEFAULT_MAX_CONTEXT_TOKENS } from "../../../../packages/sno-station-mem/config/index.ts";
 
 describe("Embedder config validation", () => {
 	it.each(["openai-compatible", "voyage-multimodal"])(
@@ -43,14 +44,13 @@ describe("Embedder config validation", () => {
 			join(tmpdir(), "mem-claw-embedder-config-"),
 		);
 		try {
-			const embedder = new Embedder(
-				{ provider: "local-onnx", maxContextTokens: 32 },
-				stateDir,
-			);
+			const embedder = new Embedder({ provider: "local-onnx" }, stateDir);
 			const embeddedPassages: string[] = [];
 			Object.defineProperty(embedder, "provider", {
 				value: {
 					dispose: async () => undefined,
+					// One token per whitespace-separated word keeps the ceiling arithmetic readable.
+					countTokens: (text: string) => text.split(/\s+/).filter(Boolean).length,
 					embed: async (text: string) => {
 						embeddedPassages.push(text);
 						return new Array(1024).fill(0);
@@ -62,7 +62,8 @@ describe("Embedder config validation", () => {
 				},
 			});
 
-			const vector = await embedder.embed("Alpha package chunk. ".repeat(80));
+			const words = DEFAULT_MAX_CONTEXT_TOKENS * 2;
+			const vector = await embedder.embed("Alpha package chunk. ".repeat(Math.ceil(words / 3)));
 
 			expect(vector).toHaveLength(1024);
 			expect(embeddedPassages.length).toBeGreaterThan(1);
