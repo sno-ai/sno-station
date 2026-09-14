@@ -17,7 +17,7 @@ import {
 import { type ToolContext, type ToolResult, updateParamsSchema } from "./memory-tool-schemas";
 import { canToolWrite } from "../shared/memory-kind-policy";
 
-function validateExistingToolCategory(raw: string): MemoryCategory | ToolResult {
+function validateExistingToolCategory(raw: string, systemCaller: boolean): MemoryCategory | ToolResult {
 	const category = normalizeCategory(raw);
 	if (!category) {
 		return makeResult(
@@ -26,7 +26,8 @@ function validateExistingToolCategory(raw: string): MemoryCategory | ToolResult 
 			true,
 		);
 	}
-	if (!canToolWrite(category)) {
+	// The host operator repairs rows with offline-family authority, the writer every category admits.
+	if (!systemCaller && !canToolWrite(category)) {
 		return makeResult(
 			`memory_update cannot write ${category} rows through the agent tool; write authority requires the owning writer boundary.`,
 			{ errorCode: "write_authority", category },
@@ -63,7 +64,7 @@ export async function executeMemoryUpdateTool(ctx: ToolContext, access: ReturnTy
 							// Surface this invalid tool execution state as an explicit typed failure.
 							throw new SnoStationMemError("invalid_scope", `Scope not accessible: ${existing.projectId}`);
 						}
-						const existingCategory = validateExistingToolCategory(existing.category);
+						const existingCategory = validateExistingToolCategory(existing.category, ctx.systemCaller === true);
 						if (typeof existingCategory !== "string") return existingCategory;
 
 						const changes: {
@@ -75,7 +76,8 @@ export async function executeMemoryUpdateTool(ctx: ToolContext, access: ReturnTy
 							timezone?: string;
 							metadata?: string;
 							expectedMetadata?: string;
-						} = {};
+							writerAuthority?: "offline-family";
+						} = ctx.systemCaller === true ? { writerAuthority: "offline-family" } : {};
 						let strippedNewText: string | undefined;
 						// Guard parsed.text here so the remaining tool execution path works with normalized inputs.
 						if (parsed.text !== undefined) {

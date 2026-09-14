@@ -190,6 +190,11 @@ export interface ToolContext {
 	profileToolLlm?: LlmClient;
 	/** Product-mode routing slice; gates the profile conflict scan. */
 	llmRouting?: LlmRoutingConfig;
+	/**
+	 * The host operator (the contract's `scope.host.systemCaller`), whose repairs write with
+	 * offline-family authority the way maintenance does; a skin or agent never carries this.
+	 */
+	systemCaller?: boolean;
 }
 
 export type ToolResult = {

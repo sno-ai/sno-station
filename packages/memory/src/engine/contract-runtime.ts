@@ -194,6 +194,7 @@ export class MemoryContractRuntime implements MemoryContract {
 			...this.services,
 			scopePolicy: await this.scopePolicy(scope),
 			agentId: this.agentId(scope), workspaceDir: scope.host?.workspace,
+			systemCaller: scope.host?.systemCaller === true,
 			sessionTimezone: scope.host?.sessionTimezone, language: config.language,
 			selfImprovementEnabled: config.selfImprovement.enabled,
 			profileToolLlm: createLlmClient({ ...config.extraction.llm, routing: registration.routing, agentPort: this.services.agentPort }),
