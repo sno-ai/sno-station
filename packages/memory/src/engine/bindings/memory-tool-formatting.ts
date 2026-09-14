@@ -59,9 +59,17 @@ export function episodicEventDate(entry: { metadata?: string }): string | undefi
 	return undefined;
 }
 
-/** The calendar day a row was said: its session timestamp, the anchor every relative date resolved against. */
-export function saidOnDate(entry: { timestamp: number }): string | undefined {
-	const date = new Date(entry.timestamp);
+/**
+ * The calendar day a row was said: the session moment it was extracted in, the anchor every
+ * relative date resolved against. A row with no session moment (rewritten by a maintenance wave,
+ * or written before source order existed) makes no claim about when it was said — its row
+ * timestamp is when it was written, which is not the same day.
+ */
+export function saidOnDate(entry: { metadata?: string }): string | undefined {
+	const order = parseEntryMetadata(entry).source_order;
+	const moment = order && typeof order === "object" ? (order as Record<string, unknown>).session_moment : undefined;
+	if (typeof moment !== "number") return undefined;
+	const date = new Date(moment);
 	return Number.isFinite(date.getTime()) ? date.toISOString().slice(0, 10) : undefined;
 }
 
