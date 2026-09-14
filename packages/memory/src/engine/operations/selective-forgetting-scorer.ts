@@ -55,14 +55,20 @@ export interface DecayConfig {
 	peripheralDecayFloor: number;
 }
 
+// Light by ruling (owner, 2026-09-14): the retention stage's age is a memory's OWN time (the
+// session it was said in, kept so a replayed timeline stays a timeline), so a store that mixes
+// old and recent memories has every old one suppressed against every recent one on age alone.
+// Measured on the LoCoMo store: rows anchored to 2023 beside rows anchored to the replay day
+// ranked 100-250 places below them for their own exact text (floor 0.3, half-life 30 days).
+// A floor of 0.85 caps the whole stage at a 15% suppression; 180 days keeps the slope gentle.
 export const DEFAULT_DECAY_CONFIG: DecayConfig = {
 	temporalDecay: true,
-	recencyHalfLifeDays: 30,
+	recencyHalfLifeDays: 180,
 	recencyWeight: 0.4,
 	frequencyWeight: 0.3,
 	intrinsicWeight: 0.3,
 	staleThreshold: 0.3,
-	searchBoostMin: 0.3,
+	searchBoostMin: 0.85,
 	importanceModulation: 1.5,
 	betaCore: 0.8,
 	betaWorking: 1.0,
