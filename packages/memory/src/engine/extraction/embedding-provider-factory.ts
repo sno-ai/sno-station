@@ -30,10 +30,6 @@ export interface EmbeddingConfig {
 	dtype?: LocalEmbedDtype;
 	/** ONNX Runtime session options for local low-memory operation. */
 	sessionOptions?: LocalEmbedSessionOptions;
-	/** Maximum context window in tokens for chunking (default: 512) */
-	maxContextTokens?: number;
-	/** Chars-per-token ratio for char↔token conversion (default: 3.0) */
-	charsPerToken?: number;
 	/** Enable text chunking for long passages (default: true) */
 	chunking?: boolean;
 }
