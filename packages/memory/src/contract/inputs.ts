@@ -50,7 +50,7 @@ export type RecallOptions = {
 export type Mutation =
 	| { op: "store"; content: string; category?: "episodic" | "profile"; importance?: number; metadata?: Record<string, JsonValue> }
 	| { op: "forget"; id?: string; query?: string; suppressKey?: { subject: string; attribute: string }; suppressContent?: string; minScore?: number; maxDelete?: number; confirm?: boolean }
-	| { op: "update"; id: string; text?: string; category?: MemoryCategory; importance?: number; metadata?: Record<string, JsonValue> }
+	| { op: "update"; id: string; text?: string; category?: MemoryCategory; importance?: number; metadata?: Record<string, JsonValue>; timestamp?: number }
 	| { op: "clear"; confirm: boolean; all?: boolean }
 	| { op: "resolveReflection"; memoryId?: string; query?: string; dryRun?: boolean; note?: string; limit?: number };
 export type Inspection =
@@ -136,8 +136,11 @@ export const mutationSchema: z.ZodType<Mutation, unknown> = z.discriminatedUnion
 	z.strictObject({ op: z.literal("update"), id: nonempty,
 		text: nonempty.optional(), category: category.optional(),
 		importance: z.number().finite().optional(), metadata: metadata.optional(),
+		// The row's own moment (its session time); a host-operator repair field, refused for any
+		// other caller by the update tool.
+		timestamp: z.number().int().nonnegative().optional(),
 	}).refine((value) => value.text !== undefined || value.category !== undefined
-		|| value.importance !== undefined || value.metadata !== undefined),
+		|| value.importance !== undefined || value.metadata !== undefined || value.timestamp !== undefined),
 	z.strictObject({ op: z.literal("clear"), confirm: z.boolean(), all: z.boolean().optional() }),
 	z.strictObject({ op: z.literal("resolveReflection"), memoryId: nonempty.optional(),
 		query: nonempty.optional(), dryRun: z.boolean().optional(), note: z.string().optional(),
