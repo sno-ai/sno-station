@@ -15,7 +15,7 @@ import {
 } from "./memory-store-base";
 import { randomUUID, stableHash, StorageError } from "./memory-store-shared";
 import { hashMemorySuppressionContent } from "./memory-store-suppression-api";
-import { validateAtomicCardWrite } from "./memory-store-write-validation";
+import { assertRecordWithinTokenCeiling, recordTokenCounter, validateAtomicCardWrite } from "./memory-store-write-validation";
 import {
 	closeMemoryRow,
 	sameSourceTurn,
@@ -48,8 +48,12 @@ function assertOptionalTimestamp(value: number | null, name: string): void {
 	}
 }
 
-function validateCard(card: AtomicExtractionWriteCard): void {
+function validateCard(
+	card: AtomicExtractionWriteCard,
+	countRecordTokens: (text: string) => number,
+): void {
 	validateAtomicCardWrite(card);
+	assertRecordWithinTokenCeiling(card.text, countRecordTokens, "storeAtomicExtractionChunk");
 	assertNonEmpty(card.idempotencyKey, "Atomic card idempotencyKey");
 	if (!Number.isSafeInteger(card.globalTurnIndex) || card.globalTurnIndex < 0) {
 		throw new StorageError("Atomic card globalTurnIndex must be a non-negative safe integer");
@@ -100,7 +104,7 @@ async function prepareCards(
 ): Promise<PreparedAtomicCard[]> {
 	return Promise.all(
 		input.cards.map(async (card) => {
-			validateCard(card);
+			validateCard(card, await recordTokenCounter(store.embedder));
 			const id = randomUUID();
 			const metadata = buildMetadata(card);
 			const contentHash = stableHash(
