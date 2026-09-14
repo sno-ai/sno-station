@@ -118,6 +118,16 @@ export async function executeMemoryUpdateTool(ctx: ToolContext, access: ReturnTy
 						if (parsed.importance !== undefined) {
 							changes.importance = clamp01(parsed.importance, existing.importance);
 						}
+						// The row's own moment is a storage fact, not an agent's to move: only the host
+						// operator's repair (systemCaller) may set it — the same authority that moves axes.
+						if (parsed.timestamp !== undefined) {
+							if (ctx.systemCaller !== true) {
+								return makeResult("Refused: timestamp can only be set by the host operator.", {}, true);
+							}
+							// The store moves timestamp and timezone as one; the moment keeps the row's zone.
+							changes.timestamp = parsed.timestamp;
+							changes.timezone = existing.timezone;
+						}
 						const effectiveCategory: MemoryCategory =
 							requestedCategory ??
 							existingCategory;
