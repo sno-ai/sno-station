@@ -30,6 +30,7 @@ import {
 } from "./memory-store-shared";
 import {
 	hostTimezone,
+	recordTokenCounter,
 	validateStoreWriteMetadata,
 } from "./memory-store-write-validation";
 
@@ -359,6 +360,7 @@ async function prepareProjections(
 				lane: "active",
 			},
 			"task-lifecycle-migration-projection",
+			await recordTokenCounter(store.embedder),
 		);
 		prepared.push({
 			projectId,

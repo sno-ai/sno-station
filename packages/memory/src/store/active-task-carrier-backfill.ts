@@ -7,7 +7,7 @@ import { createLogger, privateLogReference } from "@snoai/utils/logger";
 import { buildActiveTaskCarrierRow } from "./active-task-carrier-row";
 import type { MemoryStore, MemoryStoreInternals } from "./memory-store-base";
 import { StorageError } from "./memory-store-shared";
-import { hostTimezone } from "./memory-store-write-validation";
+import { hostTimezone, recordTokenCounter } from "./memory-store-write-validation";
 
 const log = createLogger("active-task-carrier-backfill");
 
@@ -141,6 +141,7 @@ export async function backfillActiveTaskCarriers(
 					timestampMs: createdAtMs,
 				},
 				"active-task-carrier-backfill",
+				await recordTokenCounter(store.embedder),
 			);
 			return {
 				projectId: row.projectId,
