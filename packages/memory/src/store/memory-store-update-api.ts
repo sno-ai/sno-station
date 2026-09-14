@@ -38,6 +38,7 @@ import {
 	type UpdateChanges,
 } from "./memory-store-shared";
 import { validateStoreWriteMetadata } from "./memory-store-write-validation";
+import { parseInsightMetadata } from "../engine/extraction/memory-metadata-codec";
 
 type MetadataRow = { id: string; category: MemoryCategory; metadata: string | null };
 
@@ -285,7 +286,14 @@ Object.assign(MemoryStore.prototype, {
 			const nextTimezone = validated.timezone;
 			const nextMetadataObject = this.parseMetadataObject(nextMetadata);
 			if (writerAuthority !== "offline-family") {
-				assertStorageAxesUnchanged(currentMetadata, nextMetadataObject, "update");
+				// Compare the axes after the same normalization the next metadata went through: a row
+				// whose stored JSON omits `state`/`tier` carries their defaults, and reading it raw made
+				// every online metadata update on such a row look like an axis change and refuse.
+				const currentAxes: StorageAxisMetadata = parseInsightMetadata(existing.metadata ?? undefined, {
+					text: existing.text, category: existingCategory, timestamp: existing.timestamp,
+					metadata: existing.metadata ?? undefined,
+				});
+				assertStorageAxesUnchanged(currentAxes, nextMetadataObject, "update");
 			}
 			assertActiveTaskUpdate(existing.text, nextText, currentMetadata, nextMetadataObject);
 			// PRD §4.2 reflection v3: include mappedKind discriminator from metadata
