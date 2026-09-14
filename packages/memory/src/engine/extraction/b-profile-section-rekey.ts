@@ -5,6 +5,7 @@
 
 import { createLogger } from "@snoai/utils/logger";
 import { MAX_LIST_LIMIT } from "../../../config/index";
+import { recordTokenCounter } from "../../store/memory-store-write-validation";
 import { canonicalizeProfileSectionName } from "./b-profile-section-canonicalizer";
 import {
 	getActiveSectionRegistry,
@@ -12,7 +13,7 @@ import {
 	restoreCachedSectionDictionary,
 	type SectionDictionaryCache,
 } from "./b-profile-section-dictionary-provider";
-import { buildIndexedText } from "./extraction-text-sanitizer";
+import { boundSectionContent, buildIndexedText } from "./extraction-text-sanitizer";
 import {
 	buildInsightMetadata,
 	deriveFactKey,
@@ -512,13 +513,19 @@ async function mergeCanonicalCollision(
 	const targetMetadata = sourceMetadata[0];
 	if (!targetMetadata) throw new Error("B-profile canonical-form repair target metadata missing");
 	const abstract = firstSentence(mergedContent);
+	// Merging two sections into one can cross the per-record ceiling the store refuses to write.
+	const boundedContent = boundSectionContent(
+		mergedContent,
+		abstract,
+		await recordTokenCounter(store.embedder),
+	);
 	const replacementMetadata = buildInsightMetadata(
-		{ text: mergedContent, category: "profile", timestamp: at },
+		{ text: boundedContent, category: "profile", timestamp: at },
 		{
 			...metadataForMergeProduct(targetMetadata),
 			l0_abstract: abstract,
-			l1_overview: mergedContent,
-			l2_content: mergedContent,
+			l1_overview: boundedContent,
+			l2_content: boundedContent,
 			section_name: newSection,
 			supersedes: target.id,
 			valid_from: at,
@@ -527,7 +534,7 @@ async function mergeCanonicalCollision(
 	);
 	await store.supersede({
 		create: {
-			text: buildIndexedText(abstract, mergedContent),
+			text: buildIndexedText(abstract, boundedContent),
 			category: "profile",
 			projectId: target.projectId,
 			importance: Math.max(...sources.map((source) => source.importance)),
@@ -732,13 +739,19 @@ async function mergeCollision(
 	}
 
 	const abstract = firstSentence(mergedContent);
+	// Merging two sections into one can cross the per-record ceiling the store refuses to write.
+	const boundedContent = boundSectionContent(
+		mergedContent,
+		abstract,
+		await recordTokenCounter(store.embedder),
+	);
 	const replacementMetadata = buildInsightMetadata(
-		{ text: mergedContent, category: "profile", timestamp: at },
+		{ text: boundedContent, category: "profile", timestamp: at },
 		{
 			...metadataForMergeProduct(targetMetadata),
 			l0_abstract: abstract,
-			l1_overview: mergedContent,
-			l2_content: mergedContent,
+			l1_overview: boundedContent,
+			l2_content: boundedContent,
 			section_name: newSection,
 			supersedes: target.id,
 			valid_from: at,
@@ -747,7 +760,7 @@ async function mergeCollision(
 	);
 	await store.supersede({
 		create: {
-			text: buildIndexedText(abstract, mergedContent),
+			text: buildIndexedText(abstract, boundedContent),
 			category: "profile",
 			projectId: target.projectId,
 			importance: Math.max(source.importance, target.importance),
