@@ -4,6 +4,8 @@ import {
 	DEFAULT_RETRIEVAL_CONFIG,
 } from "../../../../packages/sno-station-mem/src/engine/retrieval/retriever.ts";
 import { RetrievalError } from "../../../../packages/sno-station-mem/src/engine/shared/errors.ts";
+import { truncateToTokens } from "../../../../packages/sno-station-mem/src/engine/shared/token-bound.ts";
+import { DEFAULT_MAX_CONTEXT_TOKENS } from "../../../../packages/sno-station-mem/config/index.ts";
 
 const ORIGINAL_FETCH = globalThis.fetch;
 
@@ -32,8 +34,12 @@ const storeStub = {
 	searchKeyword: async () => TEST_RESULTS,
 };
 
+// One token per character keeps the ceiling arithmetic readable in the assertions below.
 const embedderStub = {
 	embed: async () => new Float32Array([1, 0, 0]),
+	countTokens: (text: string) => text.length,
+	truncateToTokens: (text: string, maxTokens: number) =>
+		truncateToTokens(text, maxTokens, (t) => t.length),
 };
 
 afterEach(() => {
@@ -647,12 +653,10 @@ describe("retriever rerank error handling", () => {
 		expect(requestedTextCounts).toEqual([50, 10]);
 	});
 
-	it("truncates over-length candidate text sent to the tei reranker without mutating the returned entry", async () => {
-		// Second real bug found 2026-07-06 alongside the batch-size cap: the Sno
-		// TEI reranker also rejects a single text over 8192 characters outright
-		// ({"error":"text too long: max 8192 characters"}) — LoCoMo's
-		// bulk-import corpus stores whole session transcripts as one memory
-		// chunk and regularly exceeds this (measured up to ~9200 chars).
+	it("cuts a candidate over the record token ceiling for the rerank request without mutating the returned entry", async () => {
+		// The Sno reranker truncates silently past its window (measured 2026-09-14: a claim
+		// placed past the cut scored 0.0001), so a row written before the ceiling existed is
+		// cut to DEFAULT_MAX_CONTEXT_TOKENS by exact token count before it is sent.
 		let requestedTextLengths: number[] = [];
 		globalThis.fetch = async (_url, init) => {
 			const body = JSON.parse(String(init?.body)) as { texts: string[] };
@@ -663,7 +667,7 @@ describe("retriever rerank error handling", () => {
 			});
 		};
 
-		const longText = "x".repeat(9232);
+		const longText = "x".repeat(DEFAULT_MAX_CONTEXT_TOKENS * 2);
 		const shortText = "a short memory chunk";
 		const longEntry = { ...TEST_ENTRY, id: "mem-long", text: longText, contentHash: "hash-long" };
 		const shortEntry = {
@@ -691,7 +695,6 @@ describe("retriever rerank error handling", () => {
 				rerankProvider: "tei",
 				rerankEndpoint: "https://example.test/rerank",
 				rerankApiKey: "test-key",
-				// rerankMaxTextLength intentionally left unset — relies on the tei default.
 				minScore: 0,
 				hardMinScore: 0,
 			},
@@ -699,13 +702,13 @@ describe("retriever rerank error handling", () => {
 
 		const results = await retriever.retrieve({ query: "test query", limit: 2 });
 
-		// The outgoing request must be truncated to the 8192-char tei default.
-		expect(requestedTextLengths).toEqual([8192, shortText.length]);
+		// The outgoing request carries the ceiling's worth of tokens, no more.
+		expect(requestedTextLengths).toEqual([DEFAULT_MAX_CONTEXT_TOKENS, shortText.length]);
 
 		// The returned candidate's actual text must be the full, untruncated original.
 		const longResult = results.find((r) => r.entry.id === "mem-long");
 		expect(longResult?.entry.text).toBe(longText);
-		expect(longResult?.entry.text.length).toBe(9232);
+		expect(longResult?.entry.text.length).toBe(DEFAULT_MAX_CONTEXT_TOKENS * 2);
 	});
 });
 
