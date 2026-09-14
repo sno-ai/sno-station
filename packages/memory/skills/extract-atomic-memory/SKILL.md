@@ -53,6 +53,12 @@ Return one record for each independently mutable claim. Two claims that share a 
 two records: "I prefer curry and jazz" is a curry record and a jazz record. After splitting,
 return the parts only; the bundle stays out.
 
+A record is one claim, and one claim fits in a short paragraph. If what you are about to
+return runs longer than that — a whole plan, a full itinerary, a list of steps, a document's
+body — it is several claims wearing one record: split it until each part states one thing.
+The engine refuses a record longer than its fixed ceiling rather than storing a cut-off
+half, so an over-long record is a lost record, not a long one.
+
 Splitting facts does not remove the relationships the speaker explicitly states. Keep a
 claim's temporal or causal qualifier in its `claim_text`: "I have worked here since leaving
 Berlin" retains that connection, not just separate employment and departure facts. The
