@@ -415,6 +415,12 @@ export const SESSION_SUMMARY_MAX_CHUNKS = 8;
 /** Transcript budget shared by an atomic window and its preceding context. */
 export const ATOMIC_EXTRACTION_MAX_INPUT_TOKENS = 4_096;
 export const ATOMIC_ENRICHMENT_OUTPUT_TOKEN_BUDGET = 1_400;
+/**
+ * Output cap of one capture call. The capture reply lists every claim and then every fact with
+ * its quote, roughly 70 tokens per fact; at 4,096 a 35-turn session replayed as one turn hit the
+ * cap and lost the whole window (43 of 272 LoCoMo sessions, measured 2026-09-13).
+ */
+export const ATOMIC_CAPTURE_OUTPUT_TOKEN_BUDGET = 8_192;
 
 /** Minimum text length for CJK content to be captured */
 export const CAPTURE_MIN_LENGTH_CJK = 4;

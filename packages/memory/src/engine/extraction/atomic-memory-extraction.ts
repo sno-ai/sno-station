@@ -1,6 +1,6 @@
 import { excludeProgressRecords } from "./atomic-progress-boundary";
 import { FIXED_MEMORY_SNO_EXTRACT_CHAT, FIXED_MEMORY_SNO_EXTRACT_PROFILE } from "../../model/signed-registry-constants";
-import { ATOMIC_EXTRACTION_MAX_INPUT_TOKENS } from "../../../config/index";
+import { ATOMIC_CAPTURE_OUTPUT_TOKEN_BUDGET, ATOMIC_EXTRACTION_MAX_INPUT_TOKENS } from "../../../config/index";
 /** @file atomic-memory-extraction.ts
  * @purpose Runs the complete dark atomic extraction path through its one storage door.
  * @boundary Product entrypoint; callers supply chunk identity, routing snapshot, and idempotency.
@@ -753,7 +753,7 @@ export class AtomicInsightDistiller {
 							routingSnapshotId: ATOMIC_PIPELINE_VERSION,
 							runParameters: {
 								maxInputTokens: ATOMIC_EXTRACTION_MAX_INPUT_TOKENS,
-								outputTokenBudget: 4_096,
+								outputTokenBudget: ATOMIC_CAPTURE_OUTPUT_TOKEN_BUDGET,
 								subchunkCount: 1,
 							},
 							estimatedInputTokens: Math.ceil(rawChunk.length / 4),
