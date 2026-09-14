@@ -15,6 +15,8 @@ const noopStore = {
 } as never;
 const noopEmbedder = {
 	embed: async () => new Float32Array([1, 0, 0]),
+	// Candidates here are a few words; the ceiling never binds, so the cut is the identity.
+	truncateToTokens: (text: string) => text,
 } as never;
 
 function candidate(id: string, score: number): RetrievalResult {
