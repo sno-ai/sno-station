@@ -26,7 +26,8 @@ import liveClauseVerdictCorpus from "../../../fixtures/live-clause-verdict-gold/
 	type: "json",
 };
 import { canonicalizeProfileSectionName } from "./b-profile-section-canonicalizer";
-import { buildIndexedText } from "./extraction-text-sanitizer";
+import { boundSectionContent, buildIndexedText } from "./extraction-text-sanitizer";
+import { recordTokenCounter } from "../../store/memory-store-write-validation";
 import {
 	registerLiveClauseVerdictArtifacts,
 	type LiveClauseVerdictRegistration,
@@ -611,6 +612,7 @@ async function runProfileSectionUpdateOnce(
 ): Promise<ProfileSectionUpdateResult> {
 	const sectionName = params.sectionName;
 	const factKey = profileFactKey(sectionName);
+	const countRecordTokens = await recordTokenCounter(params.store.embedder);
 	const existing = params.store.getByFactKey(params.scope, factKey);
 	if (!existing) {
 		const content = params.newAssertion;
@@ -618,6 +620,7 @@ async function runProfileSectionUpdateOnce(
 			params,
 			content,
 			input: profileStoreInput({
+				countRecordTokens,
 				scope: params.scope,
 				sectionName,
 				topic: params.topic,
@@ -674,6 +677,7 @@ async function runProfileSectionUpdateOnce(
 			params,
 			content: merged.content,
 			input: profileStoreInput({
+				countRecordTokens,
 				scope: params.scope,
 				sectionName,
 				topic: params.topic,
@@ -745,6 +749,7 @@ async function runProfileSectionUpdateOnce(
 			"profile-tombstone",
 		);
 		const markerInput = profileStoreInput({
+			countRecordTokens,
 			scope: params.scope,
 			sectionName,
 			topic: params.topic,
@@ -821,6 +826,7 @@ async function runProfileSectionUpdateOnce(
 		params,
 		content: merged.content,
 		input: profileStoreInput({
+			countRecordTokens,
 			scope: params.scope,
 			sectionName,
 			topic: params.topic,
@@ -1344,9 +1350,11 @@ function profileStoreInput(args: {
 	supersedes?: string;
 	abstract?: string;
 	overview?: string;
+	countRecordTokens: (text: string) => number;
 }): StoreInput {
-	const text = args.content.trim();
-	const abstract = args.abstract?.trim() || firstSentence(text);
+	const rawText = args.content.trim();
+	const abstract = args.abstract?.trim() || firstSentence(rawText);
+	const text = boundSectionContent(rawText, abstract, args.countRecordTokens);
 	const overview = args.overview?.trim() || `- ${text}`;
 	const metadata = buildInsightMetadata(
 		{ text, category: "profile", timestamp: args.at },
