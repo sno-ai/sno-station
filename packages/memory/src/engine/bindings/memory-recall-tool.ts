@@ -4,7 +4,7 @@ import {
 	resolveReadableScopesForTool,
 } from "./memory-tool-access";
 import type { TodoListResult } from "./memory-tool-dependencies";
-import { clamp01, clampInt, countTokens, DEFAULT_MIN_SCORE, DEFAULT_SCOPE, formatAtDepth, MAX_CANDIDATE_POOL_SIZE, MAX_AGGREGATION_MEMORY_CHARS, MAX_AGGREGATION_RESULT_TOKENS, MAX_RECALLED_TODOS, MAX_RECALLED_TODO_TOKENS, normalizeCategory, truncateGraphemes } from "./memory-tool-dependencies";
+import { clamp01, clampInt, countTokens, DEFAULT_MIN_SCORE, DEFAULT_SCOPE, formatAtDepth, DEFAULT_MAX_CONTEXT_TOKENS, MAX_CANDIDATE_POOL_SIZE, MAX_AGGREGATION_RESULT_TOKENS, MAX_RECALLED_TODOS, MAX_RECALLED_TODO_TOKENS, normalizeCategory, truncateGraphemes } from "./memory-tool-dependencies";
 import {
 	episodicEventDate,
 	safeParseMetadata,
@@ -265,7 +265,7 @@ export async function executeMemoryRecallTool(ctx: ToolContext, access: ReturnTy
 				let displayResults = packedResults.map((result) => {
 					const sourceText = result.snippet?.trim() ? result.snippet : result.entry.text;
 					const displayText = readsWholePopulation
-						? truncateGraphemes(sourceText, MAX_AGGREGATION_MEMORY_CHARS)
+						? ctx.store.embedder.truncateToTokens(sourceText, DEFAULT_MAX_CONTEXT_TOKENS)
 						: sourceText;
 					if (displayText !== sourceText) aggregationTextTruncated = true;
 					return {
