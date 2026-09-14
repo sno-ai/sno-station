@@ -653,16 +653,20 @@ export async function runAtomicGenericExtractionPass(
 		}
 		return runAtomicGenericExtractionPass(input);
 	}
-	if (input.estimatedInputTokens > begin.entry.runParameters.maxInputTokens) {
-		input.store.recordAtomicExtractionCalls(input.ledgerKey, input.nowMs());
-		return markPending(input, "input-overflow", null, 0);
-	}
-
 	const attempts = { count: 0 };
 	const outputTokenBudget = Math.min(
 		begin.entry.runParameters.outputTokenBudget, input.runParameters.outputTokenBudget,
 	);
-	const result = await captureAtomicWindow(input, outputTokenBudget, attempts);
+	const inputOverflow = input.estimatedInputTokens > begin.entry.runParameters.maxInputTokens;
+	// One turn over the input budget is split the same way as one whose reply overflows: a long
+	// replayed transcript is a single turn, and giving up on it unasked lost whole sessions.
+	if (inputOverflow && !(input.turns.length === 1 && splitTurnContent(input.turns[0]?.content ?? "") !== undefined)) {
+		input.store.recordAtomicExtractionCalls(input.ledgerKey, input.nowMs());
+		return markPending(input, "input-overflow", null, 0);
+	}
+	const result = inputOverflow
+		? await splitAtomicCaptureTurn(input, outputTokenBudget, attempts, "")
+		: await captureAtomicWindow(input, outputTokenBudget, attempts);
 	if (result.status === "pending") {
 		return markPending(input, result.reason, result.failedReply, attempts.count);
 	}
@@ -697,6 +701,59 @@ async function splitAtomicCaptureWindow(
 	return { status: "complete", records, progressTurns };
 }
 
+const ATOMIC_CAPTURE_ATTEMPTS = 3;
+
+/**
+ * Halves of one turn's content, cut at the paragraph break nearest its middle. A pasted or
+ * replayed transcript arrives as a single turn, so when its capture reply overflows the output
+ * budget there is no turn boundary to split at; the content itself still has paragraph breaks.
+ * A turn with no break away from its edges cannot be split.
+ */
+function splitTurnContent(content: string): [string, string] | undefined {
+	const middle = Math.floor(content.length / 2);
+	const nearestInRange = (pattern: RegExp): number | undefined => {
+		let best: number | undefined;
+		for (const { index } of content.matchAll(pattern)) {
+			if (index < content.length * 0.2 || index > content.length * 0.8) continue;
+			if (best === undefined || Math.abs(index - middle) < Math.abs(best - middle)) best = index;
+		}
+		return best;
+	};
+	// A paragraph break first; a transcript whose blank lines all sit in its header still has a
+	// line break near its middle.
+	const best = nearestInRange(/\n\s*\n/g) ?? nearestInRange(/\n/g);
+	if (best === undefined) return undefined;
+	return [content.slice(0, best).trimEnd(), content.slice(best).trimStart()];
+}
+
+async function splitAtomicCaptureTurn(
+	input: AtomicGenericExtractionInput,
+	outputTokenBudget: number,
+	attempts: { count: number },
+	failedReply: string,
+): Promise<CaptureWindowResult> {
+	const [turn] = input.turns;
+	const halves = turn === undefined ? undefined : splitTurnContent(turn.content);
+	if (turn === undefined || halves === undefined) {
+		return { status: "pending", reason: "truncation-exhaustion", failedReply };
+	}
+	const records: AtomicExtractionRecord[] = [];
+	const progressTurns = new Set<number>();
+	for (const [half, content] of halves.entries()) {
+		const result = await captureAtomicWindow({
+			...input,
+			turns: [{ ...turn, content }],
+			contextTurns: [...(input.contextTurns ?? []), ...(half === 1 ? [{ ...turn, content: halves[0] }] : [])],
+			followingTurns: [...(half === 0 ? [{ ...turn, content: halves[1] }] : []), ...(input.followingTurns ?? [])],
+		}, outputTokenBudget, attempts);
+		if (result.status !== "complete") return result;
+		// Both halves are the same turn: source turn indexes and progress decisions stay at 0.
+		records.push(...result.records);
+		for (const index of result.progressTurns) progressTurns.add(index);
+	}
+	return { status: "complete", records, progressTurns };
+}
+
 async function captureAtomicWindow(
 	input: AtomicGenericExtractionInput,
 	outputTokenBudget: number,
@@ -705,7 +762,7 @@ async function captureAtomicWindow(
 	const sanitizedInput = sanitizeAtomicPromptValue(input.turns, input.locale ?? DEFAULT_LOCALE);
 	const prompt = buildAtomicCapturePrompt(input);
 	let lastReply = "";
-	for (let attempt = 1; attempt <= 2; attempt += 1) {
+	for (let attempt = 1; attempt <= ATOMIC_CAPTURE_ATTEMPTS; attempt += 1) {
 		attempts.count += 1;
 		const completion = await input.transport.complete({
 			prompt, maxTokens: outputTokenBudget,
@@ -721,12 +778,12 @@ async function captureAtomicWindow(
 				chars: preview.chars,
 			}, { event_name: "memory.atomic_generic_extractor.diagnostic", file: "packages/sno-station-mem/src/engine/extraction/atomic-generic-extractor.ts", function: "captureAtomicWindow", site_id: "extraction.atomic-generic-extractor.runAtomicGenericExtractionPass.cce4a719a3" });
 			if (input.turns.length > 1) return splitAtomicCaptureWindow(input, outputTokenBudget, attempts);
-			if (attempt === 2) return { status: "pending", reason: "truncation-exhaustion", failedReply: lastReply };
-			continue;
+			// A single turn that overflows the budget does not shrink by asking again.
+			return splitAtomicCaptureTurn(input, outputTokenBudget, attempts, lastReply);
 		}
 		let gate = "unreadable-json";
 		const parsed = parseAtomicCaptureReply(completion.text, input.turns, {
-			salvage: attempt === 2, onReject: (reason) => { gate = reason; },
+			salvage: attempt >= 2, onReject: (reason) => { gate = reason; },
 		});
 		if (parsed !== undefined) {
 			const records: AtomicExtractionRecord[] = [];

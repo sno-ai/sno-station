@@ -72,8 +72,10 @@ it.each([
 });
 
 it.each([
-	[false, "parse-exhaustion", 2],
-	[true, "truncation-exhaustion", 3],
+	// Three parse attempts on the window; a truncated two-turn window splits once and the lone
+	// single-sentence turn cannot be split again, so it stops after the split attempt.
+	[false, "parse-exhaustion", 3],
+	[true, "truncation-exhaustion", 2],
 ] as const)("writes one backfill audit entry for %s with scope, reason and attempts", async (truncated, reason, attempts) => {
 	const request = input(async () => ({ text: "```json\n```", truncated }));
 	await runAtomicGenericExtractionPass(request);
@@ -83,6 +85,48 @@ it.each([
 	expect(entries[0]).toMatchObject({ event: "error", errorCode: "atomic_capture_window_pending", scope: "session-recovery", resultStatus: "error", details: {
 		reason, session_key: "session-recovery", chunk_hash: "window-7", pipeline_version: "atomic-v1", turn_count: 2, attempt_count: attempts,
 	} });
+});
+
+it("splits one overflowing turn at a paragraph break and keeps every fact on turn 0", async () => {
+	const paragraphs = Array.from({ length: 6 }, (_, index) => `Message ${index + 1}: Alex did thing number ${index + 1} today.`);
+	const request = input(async ({ prompt }) => {
+		if (prompt.includes("\nfacts:\n")) return { text: "{}", truncated: false };
+		const turns = JSON.parse(prompt.split("transcript:\n")[1]?.split("<take>\n")[1]?.split("\n</take>")[0] ?? "[]") as Array<{ content: string; role: string; turn_index: number }>;
+		const lines = turns.flatMap((turn) => turn.content.split("\n\n"));
+		// The whole six-paragraph turn overflows; each half fits.
+		if (lines.length > 3) return { text: '{"claims_found":[', truncated: true, outputTokens: 4096 };
+		return { truncated: false, text: JSON.stringify({
+			claims_found: lines,
+			decisions: [{ turn_index: 0, progress_only: false }],
+			facts: lines.map((line, id) => ({ id, fact: line, subject: "Alex", subject_kind: "named_entity", temporal_phrase: null, ended_at_phrase: null, source_span: { turn_index: 0, quote: line } })),
+		}) };
+	});
+	request.turns = [{ role: "user", content: paragraphs.join("\n\n") }];
+	const result = await runAtomicGenericExtractionPass(request);
+	expect(result.status).toBe("complete");
+	if (result.status !== "complete") throw new Error("capture failed");
+	expect(result.records.map((record) => record.claimText)).toEqual(paragraphs);
+	expect(new Set(result.records.map((record) => record.sourceSpan.turnIndex))).toEqual(new Set([0]));
+});
+
+it("splits one turn over the input budget instead of parking the window unasked", async () => {
+	const paragraphs = ["Alex adopted a dog in March.", "Alex named the dog Toby.", "Alex walks Toby every morning.", "Alex bought Toby a red leash."];
+	const request = input(async ({ prompt }) => {
+		if (prompt.includes("\nfacts:\n")) return { text: "{}", truncated: false };
+		const turns = JSON.parse(prompt.split("transcript:\n")[1]?.split("<take>\n")[1]?.split("\n</take>")[0] ?? "[]") as Array<{ content: string; role: string; turn_index: number }>;
+		const lines = turns.flatMap((turn) => turn.content.split("\n\n"));
+		return { truncated: false, text: JSON.stringify({
+			claims_found: lines,
+			decisions: [{ turn_index: 0, progress_only: false }],
+			facts: lines.map((line, id) => ({ id, fact: line, subject: "Alex", subject_kind: "named_entity", temporal_phrase: null, ended_at_phrase: null, source_span: { turn_index: 0, quote: line } })),
+		}) };
+	});
+	request.turns = [{ role: "user", content: paragraphs.join("\n\n") }];
+	request.estimatedInputTokens = 5000;
+	const result = await runAtomicGenericExtractionPass(request);
+	expect(result.status).toBe("complete");
+	if (result.status !== "complete") throw new Error("capture failed");
+	expect(result.records.map((record) => record.claimText)).toEqual(paragraphs);
 });
 
 it("forwards both budgets through the signed client into the HTTP body without a socket", async () => {
