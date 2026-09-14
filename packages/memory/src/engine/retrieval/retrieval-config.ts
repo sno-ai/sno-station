@@ -77,14 +77,6 @@ export interface RetrievalConfig {
 	 * not to return them.
 	 */
 	rerankMaxCandidates?: number;
-	/**
-	 * Hard cap on characters per candidate sent to the rerank API. Some
-	 * deployments (e.g. this repo's Sno TEI reranker, capped at 8192 chars)
-	 * reject a single over-length text outright rather than truncating it.
-	 * Only the outgoing rerank request payload is truncated — the candidate's
-	 * actual `entry.text` in the returned result is never mutated.
-	 */
-	rerankMaxTextLength?: number;
 	/** Scaling factor for access-based reinforcement (0 = disabled, default: 0.5) */
 	reinforcementFactor?: number;
 	/** Hard cap: effective half-life <= baseHalfLife * maxHalfLifeMultiplier (default: 3) */
