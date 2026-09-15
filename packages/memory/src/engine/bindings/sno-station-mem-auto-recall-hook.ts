@@ -32,7 +32,7 @@ import {
 	resolveHookAgentId,
 } from "./sno-station-mem-runtime-mode";
 import { resolveRuntimeSessionId } from "./sno-station-mem-session-state";
-import { episodicEventDate, saidOnDate } from "./memory-tool-formatting";
+import { episodicEventDate, saidOnDate, sourceQuote } from "./memory-tool-formatting";
 import type { RetrievalResult } from "../shared/types";
 import type { MemoryTelemetryUsageOutbox } from "../telemetry/memory-telemetry-outbox";
 import type { MemoryTelemetryMetadata } from "../telemetry/memory-telemetry-types";
@@ -303,10 +303,14 @@ export async function onBeforeAgentStart(
 					// A dated event carries its own day; anything else carries the day it was said, so a
 					// "when" question is never answered from a row that silently lost its anchor.
 					const eventDate = episodicEventDate(result.entry);
+					// The original sentence travels with the paraphrase, so a question about exact
+					// wording has something to read. See `sourceQuote`.
+					const quote = sourceQuote(result.entry);
 					return {
 						category: result.entry.category,
 						text: result.snippet && result.snippet.length > 0 ? result.snippet : result.entry.text,
 						lane: result.entry.lane,
+						...(quote === undefined ? {} : { quote }),
 						...(eventDate === undefined
 							? { saidOn: saidOnDate(result.entry) }
 							: { eventDate }),
