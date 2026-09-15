@@ -93,6 +93,7 @@ export const retiredProfileSectionMarker = (canonicalSection: string) =>
 	`${canonicalSection}: none`;
 const PROFILE_CONFLICT_TOP_K = 5;
 const CLEAR_RETIRE_BY_NAME_PENDING_ATTEMPTS = 3;
+const ADVANCE_PROFILE_CONFIRMATION_ATTEMPTS = 3;
 /** Work items one profile row's pending marker may hold. Past this the oldest is dropped. */
 const RETIRE_BY_NAME_MAX_PENDING_WORK_ITEMS = 16;
 const log = createLogger("sno-station-mem:profile-section-writer");
@@ -661,8 +662,11 @@ async function runProfileSectionUpdateOnce(
 		// restated: tea at t1, tea again at t3, then a delayed "coffee now" from t2 compared
 		// itself against t1, passed, and the profile became coffee. Only ever forward, so a
 		// slower older call cannot drag the bar back.
-		await advanceProfileConfirmation(existing, existingValidFrom, params);
-		await resumeRetireByNamePending(existing, params);
+		// The confirmation rewrote this row's metadata, so the pending work below has to read the
+		// row as it now stands; handing it the pre-confirmation snapshot spends one of its own
+		// compare-and-set attempts losing a conflict it can see coming.
+		const confirmed = await advanceProfileConfirmation(existing, existingValidFrom, params);
+		await resumeRetireByNamePending(confirmed, params);
 		return { outcome: "no-op", rowId: existing.id, mutationOutcome: "no-mutation" };
 	}
 	const tombstoneReplay = await tombstoneReplayResult(params, factKey);
@@ -2035,6 +2039,69 @@ async function writeRetireByNamePending(
 		latest = refreshed;
 	}
 	throw new Error("profile-section-writer: pending profile row kept changing");
+}
+
+/**
+ * Move a live profile row's `valid_from` forward to a repeat of the assertion it already
+ * holds, so the out-of-order guard measures staleness from the LAST confirmation.
+ *
+ * Only forward, and only for a row that already carries the field: writing one where there
+ * was none would arm a guard that has never been armed for that row.
+ *
+ * Returns the row as this call leaves it, so the caller's next step reads the metadata that is
+ * now stored instead of the snapshot it came in with.
+ */
+async function advanceProfileConfirmation(
+	current: MemoryEntry,
+	currentValidFrom: number | undefined,
+	params: RunProfileSectionUpdateParams,
+): Promise<MemoryEntry> {
+	if (typeof currentValidFrom !== "number" || params.at <= currentValidFrom) return current;
+	let latest = current;
+	for (let attempt = 0; attempt < ADVANCE_PROFILE_CONFIRMATION_ATTEMPTS; attempt += 1) {
+		const parsed: unknown = JSON.parse(latest.metadata);
+		if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+			throw new Error("profile-section-writer: profile metadata must be an object");
+		}
+		// JSON object validation above makes this the one controlled boundary assertion.
+		const next = { ...(parsed as Record<string, unknown>), valid_from: params.at };
+		try {
+			const updated = await params.store.update(latest.id, {
+				writerAuthority: "profile-writer",
+				metadata: JSON.stringify(next),
+				expectedContentHash: latest.contentHash,
+				expectedMetadata: latest.metadata,
+			});
+			if (!updated) throw new Error("profile-section-writer: confirmed profile row is missing");
+			return updated;
+		} catch (error) {
+			if (
+				!(error instanceof StorageError) ||
+				error.message !== `Cannot update changed memory '${latest.id}'`
+			) {
+				throw error;
+			}
+		}
+		const refreshed = params.store.getById(latest.id);
+		if (!refreshed) throw new Error("profile-section-writer: confirmed profile row is missing");
+		const refreshedMetadata = parseInsightMetadata(refreshed.metadata, refreshed);
+		// Someone closed the row while this repeat was in flight. A close only rewrites metadata,
+		// so the content check below cannot see it, and carrying `valid_from` past the
+		// `invalidated_at` the close wrote makes the codec DROP that field (see
+		// closeProfileMetadata) — the retired value would read as live again beside its
+		// replacement. A closed row is left exactly as the close left it.
+		if (refreshedMetadata.invalidated_at !== undefined) return refreshed;
+		// Someone else wrote the row first. If they carried it to this moment or past it the
+		// bar is already where it belongs, and if they changed the content the row no longer
+		// holds the assertion this confirmation repeats.
+		const refreshedValidFrom = refreshedMetadata.valid_from;
+		if (typeof refreshedValidFrom === "number" && refreshedValidFrom >= params.at) {
+			return refreshed;
+		}
+		if (refreshed.contentHash !== latest.contentHash) return refreshed;
+		latest = refreshed;
+	}
+	throw new Error("profile-section-writer: confirmed profile row kept changing");
 }
 
 async function resumeRetireByNamePending(
