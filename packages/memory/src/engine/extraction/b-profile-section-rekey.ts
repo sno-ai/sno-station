@@ -1001,13 +1001,30 @@ function splitPreferenceClauses(text: string): string[] {
 		.filter(Boolean);
 }
 
+/**
+ * Clause identity for dedup and for the exact-match check that decides which row survives a
+ * merge. Case, Unicode form and whitespace do not change what a clause says, so they are
+ * normalized away — and nothing else is.
+ *
+ * This used to delete every non-alphanumeric character, which merged clauses stating different
+ * facts: "I use C." and "I use C++." both became "i use c", so one of the two preferences was
+ * closed as a duplicate of the other and the count check still passed. Every symbol that
+ * distinguishes a name — `+`, `#`, `/`, `.` inside a word — is meaning, not formatting.
+ * A trailing sentence terminator is not, so the same clause with and without its full stop
+ * stays one clause.
+ */
 function normalizeClause(text: string): string {
-	return text
+	const normalized = text
 		.normalize("NFKC")
 		.toLowerCase()
-		.replace(/[^\p{L}\p{N}]+/gu, " ")
+		.replace(/\s+/g, " ")
 		.trim()
-		.replace(/\s+/g, " ");
+		.replace(/[.!?]+$/u, "")
+		.trim();
+	// A clause carrying no letter and no digit says nothing. Keeping it empty preserves the
+	// emptiness the old rule produced, so punctuation-only fragments still drop out of the
+	// dedup and out of `hasMergeablePreferenceClause`.
+	return /[\p{L}\p{N}]/u.test(normalized) ? normalized : "";
 }
 
 function firstSentence(text: string): string {
