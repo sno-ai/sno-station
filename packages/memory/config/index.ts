@@ -258,43 +258,22 @@ export const DEFAULT_RERANK_TIMEOUT_MS = 15_000;
 export const DEFAULT_RERANK_BATCH_CONCURRENCY = 4;
 
 /**
- * Texts per HTTP request when `rerankProvider: "tei"`, applied whatever `rerankMaxCandidates`
- * allows out in total: that one is the operator's budget, this one is the transport's own
- * per-request limit. Confirmed 2026-09-14 against `rt3-llm.sno.ai/rerank`, which answers a
- * 51-text request with `{"error":"too many texts: max 50, got 51"}`. Self-hosted
- * text-embeddings-inference deployments reject an over-limit batch outright rather than
- * truncating it, and the retriever's error handling treats that HTTP 400 as "reranker
- * unavailable" — so getting this wrong degrades every call to raw fusion scores with zero
- * visible error. Hosted providers (voyage,
- * jina, pinecone, dashscope) have documented, much higher limits and are not
- * defaulted here; only "tei" is the self-hosted, limit-unknown-by-default case.
+ * Texts per HTTP request, applied whatever `rerankMaxCandidates` allows out in total: that one
+ * is the operator's budget, this one is the transport's own per-request limit.
+ *
+ * Confirmed 2026-09-14 against the deployed self-hosted ranker, which answers a 51-text request
+ * with `{"error":"too many texts: max 50, got 51"}`. Such a deployment rejects an over-limit
+ * batch outright rather than truncating it, and the retriever files that HTTP 400 as "reranker
+ * unavailable" — so getting this wrong degrades every call to raw fusion order with no visible
+ * error.
+ *
+ * It binds every provider, not only the self-hosted one it was measured against. Making it
+ * conditional on the configured provider name put the guarantee in a deploy script instead of
+ * in the code. Hosted providers (voyage, jina, pinecone, dashscope) document much higher
+ * limits, so holding them to this one only sends more, smaller requests, which the rerank waves
+ * already run four at a time.
  */
 export const DEFAULT_TEI_RERANK_MAX_CANDIDATES = 50;
-
-/**
- * The reranker's ranking window: one query plus ONE document, together, in tokens.
- *
- * This is the endpoint's enforced production cap, not a tuning knob. Measured 2026-09-14
- * against `rt3-llm.sno.ai/rerank`, which names it in its own refusal body
- * (`"max_input_tokens":512`) and rejects the ENTIRE request the moment one pair exceeds it —
- * `"no candidates were scored or truncated"`, so a single over-budget candidate costs the
- * scores of the other 49 in its batch and drops the whole search to raw fusion scores.
- * Raising this number without raising it on the server turns every rerank call into that
- * silent fallback.
- *
- * Not a second copy of `DEFAULT_MAX_CONTEXT_TOKENS` and not a fraction of it: that one is what
- * a stored record may cost, this one is what the ranking transport accepts in one request. The
- * two are independent, and this one binds first — a record at the record ceiling plus a query
- * of any length is already over this window.
- */
-export const RERANK_PAIR_TOKEN_WINDOW = 512;
-
-/**
- * Tokens the reranker's own prompt template adds to a pair, on top of the query and the
- * document. Measured exactly against the same endpoint on the same day: a 509-token pair is
- * accepted and reported back as 512 input tokens, and a 510-token pair is refused as 513.
- */
-export const RERANK_PROMPT_TEMPLATE_TOKENS = 3;
 
 
 // =============================================================================
@@ -310,13 +289,25 @@ export const RERANK_PROMPT_TEMPLATE_TOKENS = 3;
  * Sno reranker silently truncates past its own, and a record longer than either scores on
  * its first half only — measured 2026-09-14, a claim placed past the cut ranked 0.0001.
  * The reranker's window is shared with the query and a fixed instruction, so this ceiling
- * must leave that room; it does, and the two tokenizers are the same vocabulary (verified).
+ * must leave that room. It does NOT leave it by itself: a record at this ceiling plus any
+ * query at all is already past the reranker's window, which is why the rerank path cuts the
+ * request copy of a candidate down to what the query leaves, inside this same number.
+ * The two tokenizers are no longer one vocabulary either — the deployed ranking model is not
+ * the embedder's model (measured 2026-09-14), so a count taken here is an estimate of the
+ * ranker's count, and the ranker's own refusal is the only exact measure.
  * Extraction is told to split anything longer (skill `extract-atomic-memory`); the store
  * refuses a longer record outright. Every other size in this file that describes a piece
  * of a record derives from this constant — do not write its value, or a fraction of it, as
  * a literal anywhere else.
  */
 export const DEFAULT_MAX_CONTEXT_TOKENS = 512;
+
+/**
+ * Tokens the ranking model's own prompt template adds to a pair, on top of the query and the
+ * document. Measured against the deployed endpoint 2026-09-14: a 509-token pair is accepted
+ * and reported back as 512 input tokens, and a 510-token pair is refused as 513.
+ */
+export const RERANK_PROMPT_TEMPLATE_TOKENS = 3;
 
 /** Maximum lines per chunk before forcing an earlier split at a line boundary */
 export const DEFAULT_MAX_LINES_PER_CHUNK = 50;
