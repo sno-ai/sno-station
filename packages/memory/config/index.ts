@@ -86,9 +86,21 @@ export const CANDIDATE_POOL_SIZE = 64;
  * so it bounds how much of a live store one answer can see. Raised 100 → 512 on 2026-09-06 (owner
  * order): atomic rows are small and many, and at 100 a 159-row live store served 76 rows per
  * question, cutting live to-dos the question asked for; at 512 the whole store came back for
- * 3,476 tokens, half the recall token budget.
+ * 3,476 tokens, half the recall token budget. Raised again 512 -> 2048 on 2026-09-15: the pool is
+ * `max(candidatePoolSize, limit * 2)` clamped here, so at 512 a caller asking for more than 256
+ * memories silently got fewer, and the ceiling — not the ranking — decided what the model saw.
  */
-export const MAX_CANDIDATE_POOL_SIZE = 512;
+export const MAX_CANDIDATE_POOL_SIZE = 2_048;
+
+/**
+ * How many candidates one `memory_recall` call retrieves and ranks.
+ *
+ * Split from `MAX_CANDIDATE_POOL_SIZE` on 2026-09-15. The tool used to ask for that ceiling
+ * directly, so raising the ceiling to let auto-recall inject more memories would also have made
+ * every tool call fuse and rerank four times as many rows for a result the token packer bounds
+ * at `DEFAULT_RECALL_TOKEN_BUDGET` anyway. This keeps the tool's cost where it was measured.
+ */
+export const MAX_RECALL_TOOL_CANDIDATES = 512;
 
 /**
  * How many live rows of the same subject the arrival retirement judgement is shown for one
