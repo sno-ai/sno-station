@@ -10,6 +10,7 @@ import type {
 } from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-generic-extractor";
 import {
 	type AtomicMemoryExtractionTransports,
+	type ClaimedFact,
 	runAtomicMemoryExtraction,
 } from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-memory-extraction";
 import type { AtomicSubjectGuardTransport } from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-subject-guard";
@@ -675,5 +676,61 @@ describe("atomic memory extraction production entrypoint", () => {
 		expect(
 			target.database.prepare("SELECT COUNT(*) AS count FROM nodix_todos").get(),
 		).toEqual({ count: 0 });
+	});
+	it("withdraws the claim of a record dropped for being over the token ceiling", async () => {
+		const target = setup();
+		const turns: AtomicExtractionTurn[] = [{ role: "user", content: "I prefer tea." }];
+		// Well past DEFAULT_MAX_CONTEXT_TOKENS, so the store would refuse it and the filter drops
+		// the card before the write.
+		const tooLong = Array.from({ length: 700 }, (_, index) => `detail${index}`).join(" ");
+		const longRun = transports([
+			wireRecord({ claim_text: `The user prefers tea because ${tooLong}` }),
+		]);
+		let nowMs = SESSION_TIMESTAMP_MS;
+		// One session's windows share this table: it is what stops the next overlapping window
+		// re-writing a fact an earlier one already stored.
+		const claimedSourceSpans = new Map<number, ClaimedFact[]>();
+		const common = {
+			store: target.store,
+			projectId: PROJECT_ID,
+			claimedSourceSpans,
+			// The window owns this turn, which is what turns the claim table on.
+			admittedSourceTurnIndexes: [0],
+			turns,
+			rawChunk: "user: I prefer tea.",
+			routingSnapshotId: "atomic-entrypoint-routing",
+			runParameters: RUN_PARAMETERS,
+			estimatedInputTokens: 120,
+			extractorVersion: EXTRACTOR_VERSION,
+			sessionDateTime: "2026-09-03T20:15:00Z",
+			sessionTimestampMs: SESSION_TIMESTAMP_MS,
+			sessionTimezone: "UTC",
+		};
+
+		const dropped = await runAtomicMemoryExtraction({
+			...common,
+			ledgerKey: { ...ledgerKey("ceiling-first"), conversationId: "atomic-entrypoint-ceiling" },
+			transports: longRun.value,
+			nowMs: () => nowMs++,
+		});
+		if (dropped.status !== "complete") throw new Error(`unexpected result ${dropped.status}`);
+		expect(dropped.write?.createdCount).toBe(0);
+
+		// The next overlapping window states the same turn's claim short enough to fit. Nothing
+		// was stored for that turn, so this copy must be written rather than read as a repeat.
+		const shortRun = transports([wireRecord({})]);
+		const written = await runAtomicMemoryExtraction({
+			...common,
+			ledgerKey: { ...ledgerKey("ceiling-second"), conversationId: "atomic-entrypoint-ceiling" },
+			transports: shortRun.value,
+			nowMs: () => nowMs++,
+		});
+		if (written.status !== "complete") throw new Error(`unexpected result ${written.status}`);
+		expect(written.write?.createdCount).toBe(1);
+
+		const rows = target.database
+			.prepare("SELECT text FROM nodix_memories")
+			.all() as { text: string }[];
+		expect(rows.map((row) => row.text)).toEqual(["The user prefers tea."]);
 	});
 });
