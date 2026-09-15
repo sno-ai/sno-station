@@ -258,17 +258,43 @@ export const DEFAULT_RERANK_TIMEOUT_MS = 15_000;
 export const DEFAULT_RERANK_BATCH_CONCURRENCY = 4;
 
 /**
- * Safety-net batch cap applied when `rerankProvider: "tei"` and
- * `rerankMaxCandidates` is unset. Self-hosted text-embeddings-inference
- * deployments commonly reject an over-limit batch outright rather than
- * truncating it (confirmed against this repo's own Sno TEI reranker: a
- * request over 50 texts returns HTTP 400, which the retriever's error
- * handling silently treats as "reranker unavailable" — every call degrades
- * to raw fusion scores with zero visible error). Hosted providers (voyage,
+ * Texts per HTTP request when `rerankProvider: "tei"`, applied whatever `rerankMaxCandidates`
+ * allows out in total: that one is the operator's budget, this one is the transport's own
+ * per-request limit. Confirmed 2026-09-14 against `rt3-llm.sno.ai/rerank`, which answers a
+ * 51-text request with `{"error":"too many texts: max 50, got 51"}`. Self-hosted
+ * text-embeddings-inference deployments reject an over-limit batch outright rather than
+ * truncating it, and the retriever's error handling treats that HTTP 400 as "reranker
+ * unavailable" — so getting this wrong degrades every call to raw fusion scores with zero
+ * visible error. Hosted providers (voyage,
  * jina, pinecone, dashscope) have documented, much higher limits and are not
  * defaulted here; only "tei" is the self-hosted, limit-unknown-by-default case.
  */
 export const DEFAULT_TEI_RERANK_MAX_CANDIDATES = 50;
+
+/**
+ * The reranker's ranking window: one query plus ONE document, together, in tokens.
+ *
+ * This is the endpoint's enforced production cap, not a tuning knob. Measured 2026-09-14
+ * against `rt3-llm.sno.ai/rerank`, which names it in its own refusal body
+ * (`"max_input_tokens":512`) and rejects the ENTIRE request the moment one pair exceeds it —
+ * `"no candidates were scored or truncated"`, so a single over-budget candidate costs the
+ * scores of the other 49 in its batch and drops the whole search to raw fusion scores.
+ * Raising this number without raising it on the server turns every rerank call into that
+ * silent fallback.
+ *
+ * Not a second copy of `DEFAULT_MAX_CONTEXT_TOKENS` and not a fraction of it: that one is what
+ * a stored record may cost, this one is what the ranking transport accepts in one request. The
+ * two are independent, and this one binds first — a record at the record ceiling plus a query
+ * of any length is already over this window.
+ */
+export const RERANK_PAIR_TOKEN_WINDOW = 512;
+
+/**
+ * Tokens the reranker's own prompt template adds to a pair, on top of the query and the
+ * document. Measured exactly against the same endpoint on the same day: a 509-token pair is
+ * accepted and reported back as 512 input tokens, and a 510-token pair is refused as 513.
+ */
+export const RERANK_PROMPT_TEMPLATE_TOKENS = 3;
 
 
 // =============================================================================
