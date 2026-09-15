@@ -4,7 +4,7 @@ import {
 	resolveReadableScopesForTool,
 } from "./memory-tool-access";
 import type { TodoListResult } from "./memory-tool-dependencies";
-import { clamp01, clampInt, countTokens, DEFAULT_MIN_SCORE, DEFAULT_SCOPE, formatAtDepth, DEFAULT_MAX_CONTEXT_TOKENS, MAX_CANDIDATE_POOL_SIZE, MAX_AGGREGATION_RESULT_TOKENS, MAX_RECALLED_TODOS, MAX_RECALLED_TODO_TOKENS, normalizeCategory, truncateGraphemes } from "./memory-tool-dependencies";
+import { clamp01, clampInt, countTokens, DEFAULT_MIN_SCORE, DEFAULT_SCOPE, formatAtDepth, DEFAULT_MAX_CONTEXT_TOKENS, MAX_RECALL_TOOL_CANDIDATES, MAX_AGGREGATION_RESULT_TOKENS, MAX_RECALLED_TODOS, MAX_RECALLED_TODO_TOKENS, normalizeCategory, truncateGraphemes } from "./memory-tool-dependencies";
 import {
 	episodicEventDate,
 	safeParseMetadata,
@@ -123,7 +123,7 @@ export async function executeMemoryRecallTool(ctx: ToolContext, access: ReturnTy
 					: parsed.scope ?? DEFAULT_SCOPE;
 				// Candidate retrieval keeps its scoring safety bound. The caller's legacy row count no
 				// longer cuts the served set; the token packer below is the final serving boundary.
-				const effectiveTopK = MAX_CANDIDATE_POOL_SIZE;
+				const effectiveTopK = MAX_RECALL_TOOL_CANDIDATES;
 				const minScore = clamp01(parsed.min_score ?? DEFAULT_MIN_SCORE, DEFAULT_MIN_SCORE);
 				// Compute the normalized scope filter once so later tool execution checks use one value.
 				const scopeFilter = parsed.scope
@@ -225,7 +225,7 @@ export async function executeMemoryRecallTool(ctx: ToolContext, access: ReturnTy
 				const requestedRows =
 					readsWholePopulation || parsed.top_k === undefined
 						? limitedResults
-						: limitedResults.slice(0, clampInt(parsed.top_k, 1, MAX_CANDIDATE_POOL_SIZE));
+						: limitedResults.slice(0, clampInt(parsed.top_k, 1, MAX_RECALL_TOOL_CANDIDATES));
 				const packedRecall = readsWholePopulation
 					? { rows: requestedRows, budget_used: 0, dropped_count: 0 }
 					: packManualRecallRows(requestedRows, parsed.token_budget);
