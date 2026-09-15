@@ -24,8 +24,9 @@ import {
 	DEFAULT_RERANK_BATCH_CONCURRENCY,
 	DEFAULT_RERANK_MODEL,
 	DEFAULT_RERANK_TIMEOUT_MS,
-	DEFAULT_MAX_CONTEXT_TOKENS,
 	DEFAULT_TEI_RERANK_MAX_CANDIDATES,
+	RERANK_PAIR_TOKEN_WINDOW,
+	RERANK_PROMPT_TEMPLATE_TOKENS,
 	LIGHTWEIGHT_COSINE_WEIGHT,
 	LIGHTWEIGHT_FUSION_WEIGHT,
 	LIGHTWEIGHT_RERANK_PENALTY,
@@ -166,21 +167,39 @@ Object.assign(MemoryRetriever.prototype, {
 		const batchSize =
 			provider === "tei" ? DEFAULT_TEI_RERANK_MAX_CANDIDATES : Math.max(toRerank.length, 1);
 
-		// A candidate is at most DEFAULT_MAX_CONTEXT_TOKENS by construction (the store refuses a
-		// longer record), and the reranker truncates silently past its own window, so a longer
-		// text would be scored on its head only. Rows written before the ceiling are cut here
-		// by exact token count and reported; `candidate.entry.text` in the result is untouched.
+		// The reranker scores the query and ONE document together in a single token window, and
+		// refuses the WHOLE request when any pair exceeds it — "no candidates were scored or
+		// truncated" (measured 2026-09-14). So one over-budget candidate costs the scores of its
+		// whole batch, which the error path then reports as a plain fallback to fusion scores.
+		//
+		// The document budget is therefore what the query leaves, and it is never the record
+		// ceiling: a record at DEFAULT_MAX_CONTEXT_TOKENS plus a query of any length is already
+		// past the window. Cutting here keeps `candidate.entry.text` in the result untouched.
+		const queryTokens = this.embedder.countTokens(query);
+		const documentTokenBudget =
+			RERANK_PAIR_TOKEN_WINDOW - RERANK_PROMPT_TEMPLATE_TOKENS - queryTokens;
+		// Guard the budget here so the remaining retrieval scoring path works with normalized inputs.
+		if (documentTokenBudget <= 0) {
+			// Log operational context for retrieval ranking without changing control flow.
+			log.warn("rerank skipped: the query alone fills the reranker token window", {
+				queryTokens,
+				window: RERANK_PAIR_TOKEN_WINDOW,
+				templateTokens: RERANK_PROMPT_TEMPLATE_TOKENS,
+			}, { event_name: "memory.retriever_rerank.diagnostic", file: "packages/sno-station-mem/src/engine/retrieval/retriever-rerank.ts", function: "rerank", site_id: "retrieval.retriever-rerank.rerank.query_over_window" });
+			return { candidates, fallback: { reason: "query_over_window", provider } };
+		}
 		let truncatedCandidates = 0;
 		const rerankTexts = toRerank.map((c) => {
-			const bounded = this.embedder.truncateToTokens(c.entry.text, DEFAULT_MAX_CONTEXT_TOKENS);
+			const bounded = this.embedder.truncateToTokens(c.entry.text, documentTokenBudget);
 			if (bounded !== c.entry.text) truncatedCandidates += 1;
 			return bounded;
 		});
 		if (truncatedCandidates > 0) {
 			// Log operational context for retrieval ranking without changing control flow.
-			log.warn("rerank candidates over the record token ceiling were cut for the request", {
+			log.warn("rerank candidates were cut to the document budget the query left", {
 				truncatedCandidates,
-				maxTokens: DEFAULT_MAX_CONTEXT_TOKENS,
+				documentTokenBudget,
+				queryTokens,
 			}, { event_name: "memory.retriever_rerank.diagnostic", file: "packages/sno-station-mem/src/engine/retrieval/retriever-rerank.ts", function: "rerank", site_id: "retrieval.retriever-rerank.rerank.candidate_over_ceiling" });
 		}
 
