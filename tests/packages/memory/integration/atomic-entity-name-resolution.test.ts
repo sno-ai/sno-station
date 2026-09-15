@@ -44,6 +44,8 @@ function record(overrides: Partial<AtomicKeyedRecord> = {}): AtomicKeyedRecord {
 		value: "Non-profit Leadership Team",
 		temporalPhrase: null,
 		resolvedTime: null,
+		// The write projection reads `time.kind` for a standing record with no resolved date.
+		time: { kind: "none" },
 		importance: "medium",
 		changesCurrentState: false,
 		todo: "none",
