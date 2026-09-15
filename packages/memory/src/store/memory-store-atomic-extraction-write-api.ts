@@ -882,11 +882,36 @@ function insertEntities(
 }
 
 /**
- * A card whose name lost the registration race joins the entity that won it. It is then not a
- * fresh entity's card: the flag that spares a fresh entity's rows from the mechanical close would
- * otherwise leave the older open row and this one both current.
+ * Point a card at the entities that won the registration race. The subject is not the only
+ * place a card names one: BOTH ends of every relation carry an entity id too, and a losing id
+ * names a row that was never inserted, so an unmapped endpoint writes a relation pointing at
+ * an entity that does not exist.
+ *
+ * Losing the race ON THE SUBJECT also means this is not a fresh entity's card: the flag that
+ * spares a fresh entity's rows from the mechanical close would otherwise leave the older open
+ * row and this one both current. A card that only mentions a remapped entity through a
+ * relation is still its own subject's first card, so it keeps that flag.
  */
-function joinExistingEntity(original: PreparedAtomicCard, subject: string): PreparedAtomicCard {
+function joinExistingEntities(
+	original: PreparedAtomicCard,
+	remap: ReadonlyMap<string, string>,
+): PreparedAtomicCard {
+	const subject = original.card.subject === null ? undefined : remap.get(original.card.subject);
+	const relations = original.card.relations.map((relation) => {
+		const relationSubject = remap.get(relation.subject);
+		const relationObject = remap.get(relation.object);
+		return relationSubject === undefined && relationObject === undefined
+			? relation
+			: {
+					...relation,
+					subject: relationSubject ?? relation.subject,
+					object: relationObject ?? relation.object,
+				};
+	});
+	// The subject won its own race, so only the relation endpoints moved.
+	if (subject === undefined) {
+		return { ...original, card: { ...original.card, relations } };
+	}
 	const { entity_identity_new: _storedFlag, ...metadata } = JSON.parse(original.metadata) as Record<
 		string,
 		unknown
@@ -895,7 +920,7 @@ function joinExistingEntity(original: PreparedAtomicCard, subject: string): Prep
 	return {
 		...original,
 		metadata: JSON.stringify(metadata),
-		card: { ...original.card, subject, metadata: cardMetadata },
+		card: { ...original.card, subject, relations, metadata: cardMetadata },
 	};
 }
 
@@ -911,8 +936,7 @@ export function commitPreparedAtomicExtractionWrite(
 		const ordinal = sessionOrdinal(store, input.ledgerKey.conversationId);
 		const remap = insertEntities(store, input);
 		for (const original of preparedCards) {
-			const subject = original.card.subject === null ? undefined : remap.get(original.card.subject);
-			const prepared = subject === undefined ? original : joinExistingEntity(original, subject);
+			const prepared = remap.size === 0 ? original : joinExistingEntities(original, remap);
 			const refusal = suppressionReason(store, input.projectId, prepared.card);
 			if (refusal) {
 				suppressed.push({
