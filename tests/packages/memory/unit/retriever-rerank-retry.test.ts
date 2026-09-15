@@ -15,7 +15,10 @@ const noopStore = {
 } as never;
 const noopEmbedder = {
 	embed: async () => new Float32Array([1, 0, 0]),
-	// Candidates here are a few words; the ceiling never binds, so the cut is the identity.
+	// Queries and candidates here are a few words, so the reranker's token window never binds:
+	// one token per whitespace-separated word is enough to keep the budget positive, and the
+	// cut is then the identity.
+	countTokens: (text: string) => text.split(/\s+/).filter(Boolean).length,
 	truncateToTokens: (text: string) => text,
 } as never;
 
