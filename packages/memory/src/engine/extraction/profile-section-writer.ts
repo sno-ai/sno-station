@@ -655,6 +655,13 @@ async function runProfileSectionUpdateOnce(
 		normalizeExactAssertionText(existingContent) ===
 			normalizeExactAssertionText(params.newAssertion)
 	) {
+		// The row does not change, but the confirmation still happened, and the out-of-order
+		// guard above reads `valid_from` to decide what is stale. Leaving it at the FIRST
+		// assertion let a message from between the two overwrite a value the user had just
+		// restated: tea at t1, tea again at t3, then a delayed "coffee now" from t2 compared
+		// itself against t1, passed, and the profile became coffee. Only ever forward, so a
+		// slower older call cannot drag the bar back.
+		await advanceProfileConfirmation(existing, existingValidFrom, params);
 		await resumeRetireByNamePending(existing, params);
 		return { outcome: "no-op", rowId: existing.id, mutationOutcome: "no-mutation" };
 	}
