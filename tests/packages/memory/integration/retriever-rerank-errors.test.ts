@@ -5,7 +5,10 @@ import {
 } from "../../../../packages/sno-station-mem/src/engine/retrieval/retriever.ts";
 import { RetrievalError } from "../../../../packages/sno-station-mem/src/engine/shared/errors.ts";
 import { truncateToTokens } from "../../../../packages/sno-station-mem/src/engine/shared/token-bound.ts";
-import { DEFAULT_MAX_CONTEXT_TOKENS } from "../../../../packages/sno-station-mem/config/index.ts";
+import {
+	DEFAULT_MAX_CONTEXT_TOKENS,
+	RERANK_PROMPT_TEMPLATE_TOKENS,
+} from "../../../../packages/sno-station-mem/config/index.ts";
 
 const ORIGINAL_FETCH = globalThis.fetch;
 
@@ -317,7 +320,10 @@ describe("retriever rerank error handling", () => {
 		expect(results[0]?.score).toBeGreaterThan(results[1]?.score ?? 0);
 	});
 
-	it("tags missing_api_key fallback on the rerank trace stage", async () => {
+	it("refuses a cross-encoder with no key instead of ranking with a different ranker", async () => {
+		// This used to fall back to the local cosine blend and tag the stage `missing_api_key`.
+		// A deployment then ran a ranker nobody had chosen and one warning line was its only
+		// trace, so configuration that cannot be honoured is now refused outright.
 		const retriever = createRetriever(
 			storeStub as never,
 			embedderStub as never,
@@ -330,15 +336,9 @@ describe("retriever rerank error handling", () => {
 			},
 		);
 
-		const { trace } = await retriever.retrieveWithTrace({
-			query: "typescript",
-			limit: 1,
-		});
-		const rerankStage = trace.stages.find((s) => s.name === "rerank");
-		expect(rerankStage?.metadata).toEqual({
-			rerankFallbackReason: "missing_api_key",
-			rerankFallbackProvider: "voyage",
-		});
+		await expect(
+			retriever.retrieveWithTrace({ query: "typescript", limit: 1 }),
+		).rejects.toThrow("requires retrieval.rerankApiKey");
 	});
 
 	it("tags no_endpoint fallback when provider lacks a default endpoint", async () => {
@@ -656,7 +656,7 @@ describe("retriever rerank error handling", () => {
 	it("cuts a candidate over the record token ceiling for the rerank request without mutating the returned entry", async () => {
 		// The Sno reranker truncates silently past its window (measured 2026-09-14: a claim
 		// placed past the cut scored 0.0001), so a row written before the ceiling existed is
-		// cut to DEFAULT_MAX_CONTEXT_TOKENS by exact token count before it is sent.
+		// cut by exact token count, to what the query leaves inside the window, before it is sent.
 		let requestedTextLengths: number[] = [];
 		globalThis.fetch = async (_url, init) => {
 			const body = JSON.parse(String(init?.body)) as { texts: string[] };
@@ -702,8 +702,12 @@ describe("retriever rerank error handling", () => {
 
 		const results = await retriever.retrieve({ query: "test query", limit: 2 });
 
-		// The outgoing request carries the ceiling's worth of tokens, no more.
-		expect(requestedTextLengths).toEqual([DEFAULT_MAX_CONTEXT_TOKENS, shortText.length]);
+		// The document gets what the query leaves inside the reranker's window, not the whole
+		// ceiling: the window holds the query, the model's own prompt and ONE document together.
+		// This stub counts one token per character, so "test query" is 10 of them.
+		const documentBudget = DEFAULT_MAX_CONTEXT_TOKENS - RERANK_PROMPT_TEMPLATE_TOKENS - 10;
+		expect(documentBudget).toBe(499);
+		expect(requestedTextLengths).toEqual([documentBudget, shortText.length]);
 
 		// The returned candidate's actual text must be the full, untruncated original.
 		const longResult = results.find((r) => r.entry.id === "mem-long");
