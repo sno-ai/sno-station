@@ -228,12 +228,6 @@ function assertLegalAxes(
 }
 
 /**
- * The record token ceiling, enforced at the store door. `countRecordTokens` is the
- * embedder's exact count (`Embedder.countTokens`), never a character estimate: the
- * embedder and the reranker both truncate silently past this size, so a longer record
- * would be indexed and ranked on its head only. Refusing is the honest outcome.
- */
-/**
  * The exact record counter, ready to use. The embedder's tokenizer loads with its model, and
  * the OpenClaw skin registers without waiting for that load, so a write can arrive first;
  * `warmup()` is memoized and instant once the model is up, so every write door awaits it here
@@ -246,6 +240,12 @@ export async function recordTokenCounter(
 	return (text) => embedder.countTokens(text);
 }
 
+/**
+ * The record token ceiling, enforced at the store door. `countRecordTokens` is the
+ * embedder's exact count (`Embedder.countTokens`), never a character estimate: the
+ * embedder and the reranker both truncate silently past this size, so a longer record
+ * would be indexed and ranked on its head only. Refusing is the honest outcome.
+ */
 export function assertRecordWithinTokenCeiling(
 	text: string,
 	countRecordTokens: (text: string) => number,
