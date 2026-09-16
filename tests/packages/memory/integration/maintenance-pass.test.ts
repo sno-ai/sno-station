@@ -104,6 +104,22 @@ describe("maintenance pass", () => {
 		expect(report.backupPath && existsSync(report.backupPath)).toBe(true);
 	});
 
+	it("runs only the jobs that are due: no integrity sweep and no backup when only retention is due", () => {
+		insertEvent("recall", "fact-expired-recall", MEMORY_EVENTS_USAGE_RETENTION_MS + DAY_MS);
+		let sweeps = 0;
+
+		const report = runMaintenancePass(
+			{ ...deps, integrityCheck: () => { sweeps += 1; } },
+			new Set(["usage-retention"]),
+		);
+
+		expect(report.aborted).toBe(false);
+		expect(report.usageEventsPruned).toBe(1);
+		expect(sweeps).toBe(0);
+		expect(report.backupPath).toBeUndefined();
+		expect(existsSync(deps.backupDir)).toBe(false);
+	});
+
 	it("bounds retention pruning to one tick's budget, leaving the remainder for the next tick", () => {
 		// A backlog bigger than one delete batch (5000) must not drain
 		// synchronously in a single tick — that would block the gateway event
