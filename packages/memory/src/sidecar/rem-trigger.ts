@@ -209,11 +209,24 @@ async function evaluateScope(
 	now: Date,
 ): Promise<{ state: RemTriggerStateDocument; dispatched: boolean }> {
 	const scopeState = requiredScopeState(state, scope);
-	const nextDue = computeRemDailyDue(scopeState.last_pass_at, scopeState.schedule_zone);
-	const localDate = localDateAt(now, scopeState.schedule_zone);
+	const zone = scopeState.schedule_zone;
+	// At most one automatic pass per local day, whichever trigger comes first (owner ruling
+	// 2026-09-16). `last_volume_pass_date` is the local day whose pass is used up: a completed
+	// volume pass sets it, and so does a completed daily pass (applyCompletedBaselines). A used-up
+	// day closes the volume trigger and moves the daily pass to the next day's schedule.
+	const nextDue = nextDailyDue(scopeState);
+	const localDate = localDateAt(now, zone);
 	const growth = candidateCount - scopeState.last_covered_count;
-	const dailyDue = now.getTime() >= nextDue.getTime();
-	const volumeDue = growth >= (input.volumeThreshold ?? REM_VOLUME_THRESHOLD) && scopeState.last_volume_pass_date !== localDate;
+	// A pass the other trigger dispatched today and has not seen complete already holds today's slot.
+	// Only today's identities count, so a completion that never arrives blocks for a day at most.
+	const scheduledDue = computeRemDailyDue(scopeState.last_pass_at, zone);
+	const pendingVolumeToday = scopeState.attempts.identity === remAutomaticCorrelationId("volume", scope, localDate);
+	const pendingDailyToday = localDateAt(scheduledDue, zone) === localDate
+		&& scopeState.attempts.identity === remAutomaticCorrelationId("daily", scope, scheduledDue.toISOString());
+	const dailyDue = now.getTime() >= nextDue.getTime() && !pendingVolumeToday;
+	const volumeDue = growth >= (input.volumeThreshold ?? REM_VOLUME_THRESHOLD)
+		&& scopeState.last_volume_pass_date !== localDate
+		&& !pendingDailyToday;
 	if (!dailyDue && !volumeDue) {
 		const consecutiveIdle = (idleEvaluations.get(scope) ?? 0) + 1;
 		idleEvaluations.set(scope, consecutiveIdle);
@@ -395,6 +408,10 @@ async function applyCompletedBaselines(
 				...(dispatch.trigger === "daily" && isValidInstant(dispatch.passAt)
 					? { last_pass_at: dispatch.passAt }
 					: {}),
+				// A completed daily pass uses up its local day too, so the volume trigger stays closed.
+				...(dispatch.trigger === "daily" && isLocalDate(dispatch.localDate)
+					? { last_volume_pass_date: dispatch.localDate }
+					: {}),
 				...(dispatch.trigger === "volume" && isLocalDate(dispatch.localDate)
 					? { last_volume_pass_date: dispatch.localDate }
 					: {}),
@@ -461,6 +478,19 @@ export function remAutomaticCorrelationId(
 		.update(JSON.stringify(["rem-automatic-v1", trigger, scope, triggerKey]))
 		.digest("hex");
 	return `rem-auto-${trigger}-${digest}`;
+}
+
+/** The daily due time, pushed to the schedule after the last used-up local day. */
+function nextDailyDue(scopeState: RemTriggerScopeState): Date {
+	const scheduled = computeRemDailyDue(scopeState.last_pass_at, scopeState.schedule_zone);
+	const volumeDate = scopeState.last_volume_pass_date;
+	if (volumeDate === null) return scheduled;
+	const parsed = /^(\d{4})-(\d{2})-(\d{2})$/u.exec(volumeDate);
+	// The state schema only admits YYYY-MM-DD here; anything else leaves the daily schedule alone.
+	if (parsed === null) return scheduled;
+	const following = addCalendarDays({ year: Number(parsed[1]), month: Number(parsed[2]), day: Number(parsed[3]) }, 1);
+	const afterVolume = zonedInstant(scopeState.schedule_zone, following.year, following.month, following.day);
+	return afterVolume.getTime() > scheduled.getTime() ? afterVolume : scheduled;
 }
 
 export function computeRemDailyDue(lastPassAt: string, scheduleZone: string): Date {
