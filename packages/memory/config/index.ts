@@ -362,11 +362,51 @@ export const FORGET_QUERY_MIN_SCORE = 0.8;
 // BACKUP
 // =============================================================================
 
-/** Interval between automatic backups in milliseconds (1 hour) */
-export const BACKUP_INTERVAL_MS = 3_600_000;
+/**
+ * Minimum age of the newest backup before another is taken (1 day). A backup is a full copy of
+ * the store, so an hourly cadence cost a 1.7 GB store 40 GB of disk a day.
+ */
+export const BACKUP_INTERVAL_MS = 86_400_000;
 
 /** Number of backup files to retain before rotation */
-export const BACKUP_RETENTION_COUNT = 24;
+export const BACKUP_RETENTION_COUNT = 6;
+
+/**
+ * Share of the backup volume that must stay free. Before a backup is written the oldest backups are
+ * deleted until the copy fits above this floor, and again afterwards if the volume is still under
+ * it; the newest backup is always kept, and when even that is not enough the backup is skipped.
+ */
+export const BACKUP_MIN_FREE_DISK_RATIO = 0.1;
+
+// =============================================================================
+// MAINTENANCE
+// =============================================================================
+// One timer wakes every MAINTENANCE_TICK_MS and runs each job whose own interval has elapsed.
+// Every job has its own constant so changing one cadence never moves another.
+
+/** How often the maintenance timer wakes to see which jobs are due (1 hour). */
+export const MAINTENANCE_TICK_MS = 3_600_000;
+
+/** Full-page integrity sweep (1 hour). */
+export const INTEGRITY_CHECK_INTERVAL_MS = 3_600_000;
+
+/** Usage-telemetry outbox drain and quarantine cleanup (1 hour). */
+export const USAGE_OUTBOX_INTERVAL_MS = 3_600_000;
+
+/** Pruning of expired recall/inject usage events (1 hour). */
+export const USAGE_EVENT_RETENTION_INTERVAL_MS = 3_600_000;
+
+/** Full-text index segment merge (1 hour). */
+export const FTS_MERGE_INTERVAL_MS = 3_600_000;
+
+/** Query-planner statistics refresh (1 hour). */
+export const PLANNER_STATISTICS_INTERVAL_MS = 3_600_000;
+
+/**
+ * How often the automatic REM trigger is evaluated (1 hour). Evaluating is only a check: REM
+ * itself runs on its own daily schedule and volume rule in src/sidecar/rem-trigger.ts.
+ */
+export const REM_TRIGGER_CHECK_INTERVAL_MS = 3_600_000;
 
 // =============================================================================
 // CACHE — EMBEDDER
