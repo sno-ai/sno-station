@@ -350,6 +350,107 @@ describe("REM automatic trigger", () => {
 		});
 	});
 
+	it("runs at most one automatic pass per local day: a completed daily pass closes the volume trigger", async () => {
+		const fixture = createFixture(101);
+		const requests: Array<{ body: unknown; correlationId: string }> = [];
+		const discoveryPath = await startSidecar(requests, 202);
+		await seedState(fixture, {
+			last_pass_at: "2026-08-11T03:00:00.000Z",
+			schedule_zone: "UTC",
+			last_covered_count: 101,
+			last_volume_pass_date: null,
+			missed_window: null,
+			attempts: { identity: null, count: 0 },
+		});
+		const evaluate = (now: string) => evaluateRemAutomaticTriggers({
+			database: fixture.database.runtime.db,
+			stateDir: fixture.stateDir,
+			requestedOperations: ["rem-update"],
+			now: new Date(now),
+			discoveryPath,
+		});
+
+		await evaluate("2026-08-12T03:00:00.000Z");
+		expect(requests).toHaveLength(1);
+		// The completion records one row considered, so 100 new candidates are over the threshold.
+		appendTerminalAudit(fixture.stateDir, "rem_completed", fixture.scope, requests[0]?.correlationId);
+		await evaluate("2026-08-12T15:00:00.000Z");
+
+		expect(requests).toHaveLength(1);
+		expect((await loadRemTriggerState(fixture.stateDir)).scopes[fixture.scope]).toMatchObject({
+			last_pass_at: "2026-08-12T03:00:00.000Z",
+			last_volume_pass_date: "2026-08-12",
+		});
+	});
+
+	it("runs at most one automatic pass per local day: a volume pass moves the daily pass to the next day's schedule", async () => {
+		const fixture = createFixture(101);
+		const requests: Array<{ body: unknown; correlationId: string }> = [];
+		const discoveryPath = await startSidecar(requests, 202);
+		await seedState(fixture, {
+			last_pass_at: "2026-08-11T03:00:00.000Z",
+			schedule_zone: "UTC",
+			last_covered_count: 1,
+			last_volume_pass_date: null,
+			missed_window: null,
+			attempts: { identity: null, count: 0 },
+		});
+		// After the volume pass the threshold is raised, so only the daily trigger is under test.
+		const evaluate = (now: string, volumeThreshold?: number) => evaluateRemAutomaticTriggers({
+			database: fixture.database.runtime.db,
+			stateDir: fixture.stateDir,
+			requestedOperations: ["rem-update"],
+			now: new Date(now),
+			discoveryPath,
+			volumeThreshold,
+		});
+
+		await evaluate("2026-08-12T02:00:00.000Z");
+		const volumeId = remAutomaticCorrelationId("volume", fixture.scope, "2026-08-12");
+		expect(requests.map((request) => request.correlationId)).toEqual([volumeId]);
+		appendTerminalAudit(fixture.stateDir, "rem_completed", fixture.scope, volumeId);
+
+		// Today's schedule (03:00) and just after midnight both pass without a daily dispatch.
+		await evaluate("2026-08-12T04:00:00.000Z", 1000);
+		await evaluate("2026-08-13T00:30:00.000Z", 1000);
+		expect(requests).toHaveLength(1);
+		expect(readAudit(fixture.stateDir).at(-1)?.details).toMatchObject({ next_due: "2026-08-13T03:00:00.000Z" });
+
+		await evaluate("2026-08-13T03:00:00.000Z", 1000);
+		expect(requests.map((request) => request.correlationId)).toEqual([
+			volumeId,
+			remAutomaticCorrelationId("daily", fixture.scope, "2026-08-13T03:00:00.000Z"),
+		]);
+	});
+
+	it("runs at most one automatic pass per local day: a volume pass still running at the daily schedule is not joined by a daily pass", async () => {
+		const fixture = createFixture(101);
+		const requests: Array<{ body: unknown; correlationId: string }> = [];
+		const discoveryPath = await startSidecar(requests, 202);
+		await seedState(fixture, {
+			last_pass_at: "2026-08-11T03:00:00.000Z",
+			schedule_zone: "UTC",
+			last_covered_count: 1,
+			last_volume_pass_date: null,
+			missed_window: null,
+			attempts: { identity: null, count: 0 },
+		});
+		const evaluate = (now: string) => evaluateRemAutomaticTriggers({
+			database: fixture.database.runtime.db,
+			stateDir: fixture.stateDir,
+			requestedOperations: ["rem-update"],
+			now: new Date(now),
+			discoveryPath,
+		});
+
+		// Accepted at 02:59 and not yet complete when the 03:00 tick arrives.
+		await evaluate("2026-08-12T02:59:00.000Z");
+		await evaluate("2026-08-12T03:00:00.000Z");
+
+		const volumeId = remAutomaticCorrelationId("volume", fixture.scope, "2026-08-12");
+		expect(requests.map((request) => request.correlationId)).toEqual([volumeId, volumeId]);
+	});
+
 	it("lets daily win when daily and volume are due together", async () => {
 		const fixture = createFixture(100);
 		const requests: Array<{ body: unknown; correlationId: string }> = [];
