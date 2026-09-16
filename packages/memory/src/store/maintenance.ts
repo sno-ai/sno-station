@@ -1,6 +1,6 @@
 /** @file maintenance.ts
- * @purpose Hourly ordered maintenance pass: integrity gate, outbox drain, usage-event
- *   retention, FTS merge, planner statistics, backup.
+ * @purpose Ordered maintenance pass: integrity gate, outbox drain, usage-event retention, FTS
+ *   merge, planner statistics, backup, REM trigger check. Each job runs on its own interval.
  * @boundary Owns the gateway maintenance timer; storage failure latches fail-closed.
  * @see backup.ts, memory-telemetry-outbox.ts, sqlite-runtime.ts.
  */
@@ -8,14 +8,23 @@
 import { createHash, type Hash } from "node:crypto";
 import { createLogger } from "@snoai/utils/logger";
 import { runIntegrityCheck } from "@snoai/sno-station-core-crypto";
-import { BACKUP_INTERVAL_MS } from "../../config/index";
+import {
+	BACKUP_INTERVAL_MS,
+	FTS_MERGE_INTERVAL_MS,
+	INTEGRITY_CHECK_INTERVAL_MS,
+	MAINTENANCE_TICK_MS,
+	PLANNER_STATISTICS_INTERVAL_MS,
+	REM_TRIGGER_CHECK_INTERVAL_MS,
+	USAGE_EVENT_RETENTION_INTERVAL_MS,
+	USAGE_OUTBOX_INTERVAL_MS,
+} from "../../config/index";
 import {
 	activateKillSwitch,
 	appendAuditEntry,
 	deactivateKillSwitch,
 	readKillSwitchState,
 } from "../engine/operations/runtime-audit-log";
-import { runBackup } from "./backup";
+import { isBackupDue, runBackup } from "./backup";
 import type { MemoryStore } from "./memory-store-base";
 import {
 	evaluateRemAutomaticTriggers,
@@ -41,8 +50,41 @@ export const MEMORY_EVENTS_USAGE_RETENTION_MS: number = 90 * DAY_MS;
 /** Quarantined outbox rows older than this are deleted by the maintenance pass. */
 export const OUTBOX_QUARANTINE_RETENTION_MS: number = 30 * DAY_MS;
 
-/** First full-integrity sweep runs shortly after boot, then hourly. */
+/** The first tick runs shortly after boot, so every job gets near-boot coverage. */
 export const MAINTENANCE_FIRST_TICK_DELAY_MS = 60_000;
+
+export type MaintenanceJob =
+	| "integrity"
+	| "usage-outbox"
+	| "usage-retention"
+	| "fts-merge"
+	| "planner-statistics"
+	| "backup"
+	| "rem-trigger";
+
+export type MaintenanceIntervals = Readonly<Record<MaintenanceJob, number>>;
+
+/** Each job's own cadence; see the MAINTENANCE section of config/index.ts. */
+export const MAINTENANCE_INTERVALS: MaintenanceIntervals = {
+	integrity: INTEGRITY_CHECK_INTERVAL_MS,
+	"usage-outbox": USAGE_OUTBOX_INTERVAL_MS,
+	"usage-retention": USAGE_EVENT_RETENTION_INTERVAL_MS,
+	"fts-merge": FTS_MERGE_INTERVAL_MS,
+	"planner-statistics": PLANNER_STATISTICS_INTERVAL_MS,
+	backup: BACKUP_INTERVAL_MS,
+	"rem-trigger": REM_TRIGGER_CHECK_INTERVAL_MS,
+};
+
+const ALL_MAINTENANCE_JOBS: ReadonlySet<MaintenanceJob> = new Set(
+	Object.keys(MAINTENANCE_INTERVALS) as MaintenanceJob[],
+);
+
+/** Every job on one interval — what the sidecar's maintenance-interval override asks for. */
+export function uniformMaintenanceIntervals(intervalMs: number): MaintenanceIntervals {
+	return Object.fromEntries(
+		[...ALL_MAINTENANCE_JOBS].map((job) => [job, intervalMs]),
+	) as Record<MaintenanceJob, number>;
+}
 
 const OUTBOX_DRAIN_BUDGET_MS = 30_000;
 const RETENTION_DELETE_BATCH = 5000;
@@ -292,41 +334,11 @@ function mergeFtsSegments(store: MemoryStore): void {
 }
 
 /**
- * Ordered maintenance pass. Step 0 (integrity) gates everything: on failure the
- * pass aborts fail-closed. Steps 1–4 are individually best-effort.
+ * Step 0: full-page integrity sweep. Returns false when the store stays latched and the pass must
+ * abort; `report` carries the timing and recovery outcome either way.
  */
-export function runMaintenancePass(deps: MaintenanceDeps): MaintenanceReport {
-	const report: MaintenanceReport = {
-		aborted: false,
-		integrityRecovery: "none",
-		integrityMs: 0,
-		outboxFlushed: 0,
-		quarantinePruned: 0,
-		usageEventsPruned: 0,
-		backupPath: undefined,
-	};
-	if (deps.store.closed) {
-		report.aborted = true;
-		log.info("stopping maintenance for closed or replaced runtime", { dbPath: deps.dbPath }, {
-			event_name: "sno_station_mem.maintenance.stopping.maintenance.for.closed.or.replaced.runtime",
-			file: "packages/sno-station-mem/src/store/maintenance.ts",
-			function: "runMaintenancePass",
-			site_id: "maintenance.runMaintenancePass.747b7cbef0",
-		});
-		return report;
-	}
-	const now = Date.now();
+function sweepIntegrity(deps: MaintenanceDeps, report: MaintenanceReport): boolean {
 	const priorKillSwitch = readKillSwitchState(deps.stateDir);
-
-	// 0. Full-page integrity sweep FIRST — nothing else may touch a damaged DB.
-	// Runs synchronously on better-sqlite3 (no async driver API exists), so it
-	// blocks the gateway event loop for its duration. Accepted: SQLCipher
-	// verifies each page's HMAC at read time regardless, so a corrupt page can
-	// never be silently served even without this sweep — this is early-warning
-	// defense-in-depth, not the only guard. If INTEGRITY_SWEEP_SLOW_WARN_MS
-	// starts firing routinely as the database grows, move this to a
-	// worker_thread with its own read-only connection (host adversarial
-	// review 2026-07-13; follow-up, not done here).
 	const integrityStart = Date.now();
 	try {
 		const sweep = deps.integrityCheck ?? runIntegrityCheck;
@@ -344,7 +356,7 @@ export function runMaintenancePass(deps: MaintenanceDeps): MaintenanceReport {
 			log.info("cleared maintenance integrity latch after clean restart sweep", undefined, {
 				event_name: "sno_station_mem.maintenance.cleared.maintenance.integrity.latch.after.clean.restart.sweep",
 				file: "packages/sno-station-mem/src/store/maintenance.ts",
-				function: "runMaintenancePass",
+				function: "sweepIntegrity",
 				site_id: "maintenance.runMaintenancePass.db1242ce1c",
 			});
 		}
@@ -354,7 +366,7 @@ export function runMaintenancePass(deps: MaintenanceDeps): MaintenanceReport {
 			}, {
 				event_name: "sno_station_mem.maintenance.integrity.sweep.is.blocking.the.event.loop.for.longer.than.expected",
 				file: "packages/sno-station-mem/src/store/maintenance.ts",
-				function: "runMaintenancePass",
+				function: "sweepIntegrity",
 				site_id: "maintenance.runMaintenancePass.4ae162dc73",
 			});
 		}
@@ -377,12 +389,56 @@ export function runMaintenancePass(deps: MaintenanceDeps): MaintenanceReport {
 		} else {
 			report.integrityRecovery = "retained";
 			report.aborted = true;
-			return report;
+			return false;
 		}
 	}
+	return true;
+}
+
+/**
+ * Ordered maintenance pass. Step 0 (integrity) gates everything: on failure the
+ * pass aborts fail-closed. Steps 1–5 are individually best-effort. `due` names the jobs this pass
+ * runs; a direct call runs all of them.
+ */
+export function runMaintenancePass(
+	deps: MaintenanceDeps,
+	due: ReadonlySet<MaintenanceJob> = ALL_MAINTENANCE_JOBS,
+	backupIntervalMs: number = BACKUP_INTERVAL_MS,
+): MaintenanceReport {
+	const report: MaintenanceReport = {
+		aborted: false,
+		integrityRecovery: "none",
+		integrityMs: 0,
+		outboxFlushed: 0,
+		quarantinePruned: 0,
+		usageEventsPruned: 0,
+		backupPath: undefined,
+	};
+	if (deps.store.closed) {
+		report.aborted = true;
+		log.info("stopping maintenance for closed or replaced runtime", { dbPath: deps.dbPath }, {
+			event_name: "sno_station_mem.maintenance.stopping.maintenance.for.closed.or.replaced.runtime",
+			file: "packages/sno-station-mem/src/store/maintenance.ts",
+			function: "runMaintenancePass",
+			site_id: "maintenance.runMaintenancePass.747b7cbef0",
+		});
+		return report;
+	}
+	const now = Date.now();
+
+	// 0. Full-page integrity sweep FIRST — nothing else may touch a damaged DB.
+	// Runs synchronously on better-sqlite3 (no async driver API exists), so it
+	// blocks the gateway event loop for its duration. Accepted: SQLCipher
+	// verifies each page's HMAC at read time regardless, so a corrupt page can
+	// never be silently served even without this sweep — this is early-warning
+	// defense-in-depth, not the only guard. If INTEGRITY_SWEEP_SLOW_WARN_MS
+	// starts firing routinely as the database grows, move this to a
+	// worker_thread with its own read-only connection (host adversarial
+	// review 2026-07-13; follow-up, not done here).
+	if (due.has("integrity") && !sweepIntegrity(deps, report)) return report;
 
 	// 1. Outbox drain (bounded catch-up) + quarantine hygiene.
-	if (deps.usageOutbox) {
+	if (deps.usageOutbox && due.has("usage-outbox")) {
 		try {
 			report.outboxFlushed = deps.usageOutbox.drainPending(OUTBOX_DRAIN_BUDGET_MS).inserted;
 			report.quarantinePruned = deps.usageOutbox.pruneQuarantined(
@@ -399,7 +455,7 @@ export function runMaintenancePass(deps: MaintenanceDeps): MaintenanceReport {
 	}
 
 	// 2. Usage-event retention (lifecycle events are trigger-protected).
-	try {
+	if (due.has("usage-retention")) try {
 		report.usageEventsPruned = pruneExpiredUsageEvents(
 			deps.store,
 			now,
@@ -415,7 +471,7 @@ export function runMaintenancePass(deps: MaintenanceDeps): MaintenanceReport {
 	}
 
 	// 3. FTS segment merge keeps keyword-search b-trees compact after write bursts.
-	try {
+	if (due.has("fts-merge")) try {
 		mergeFtsSegments(deps.store);
 	} catch (error) {
 		log.warn("fts merge failed", { error }, {
@@ -427,7 +483,7 @@ export function runMaintenancePass(deps: MaintenanceDeps): MaintenanceReport {
 	}
 
 	// 4. Bounded planner-statistics refresh.
-	try {
+	if (due.has("planner-statistics")) try {
 		deps.store.sqlite.exec("PRAGMA analysis_limit=400");
 		deps.store.sqlite.exec("PRAGMA optimize");
 	} catch (error) {
@@ -439,9 +495,11 @@ export function runMaintenancePass(deps: MaintenanceDeps): MaintenanceReport {
 		});
 	}
 
-	// 5. Snapshot backup AFTER retention so the copy is post-prune.
-	try {
-		report.backupPath = runBackup(deps.dbPath, deps.backupDir);
+	// 5. Snapshot backup AFTER retention so the copy is post-prune. Due is read from the newest
+	// backup file, so a restart never takes an extra one.
+	if (due.has("backup")) try {
+		// Inside the try: an unreadable backup directory must not stop the REM check after this pass.
+		if (isBackupDue(deps.backupDir, now, backupIntervalMs)) report.backupPath = runBackup(deps.dbPath, deps.backupDir);
 	} catch (error) {
 		log.warn("periodic backup failed", { error }, {
 			event_name: "sno_station_mem.maintenance.periodic.backup.failed",
@@ -470,19 +528,32 @@ export interface MaintenanceTimerHandle {
 }
 
 /**
- * Gateway maintenance schedule: first tick MAINTENANCE_FIRST_TICK_DELAY_MS
- * after boot (near-boot integrity coverage), then every intervalMs. Self-stops
- * once the storage latch trips.
+ * Gateway maintenance schedule: first tick MAINTENANCE_FIRST_TICK_DELAY_MS after boot, then every
+ * tickMs. Each tick runs the jobs whose own interval has elapsed since they last ran; the first
+ * tick runs all of them. Self-stops once the storage latch trips.
  */
 export function startMaintenanceTimer(
 	deps: MaintenanceDeps,
-	intervalMs: number = BACKUP_INTERVAL_MS,
+	tickMs: number = MAINTENANCE_TICK_MS,
 	firstTickDelayMs: number = MAINTENANCE_FIRST_TICK_DELAY_MS,
+	intervals: MaintenanceIntervals = MAINTENANCE_INTERVALS,
 ): MaintenanceTimerHandle {
 	let interval: NodeJS.Timeout | null = null;
 	let firstTick: NodeJS.Timeout | null = null;
 	let inFlight = false;
 	let stopped = false;
+	const lastRun = new Map<MaintenanceJob, number>();
+	// Timers drift; half a tick of slack keeps a job on an interval equal to the tick from skipping one.
+	const slackMs = tickMs / 2;
+	const dueJobs = (now: number): Set<MaintenanceJob> => {
+		const due = new Set<MaintenanceJob>();
+		for (const job of ALL_MAINTENANCE_JOBS) {
+			const last = lastRun.get(job);
+			// Backup's due check reads the newest backup file inside the pass instead.
+			if (job === "backup" || last === undefined || now - last >= intervals[job] - slackMs) due.add(job);
+		}
+		return due;
+	};
 	const stop = (): void => {
 		stopped = true;
 		if (firstTick) {
@@ -519,13 +590,17 @@ export function startMaintenanceTimer(
 			return;
 		}
 		inFlight = true;
+		const now = Date.now();
+		const due = dueJobs(now);
+		for (const job of due) lastRun.set(job, now);
 		void (async () => {
 			try {
-				const report = runMaintenancePass(deps);
+				const report = runMaintenancePass(deps, due, intervals.backup - slackMs);
 				if (report.aborted) {
 					stop();
 					return;
 				}
+				if (!due.has("rem-trigger")) return;
 				await evaluateRemAutomaticTriggers({
 					database: deps.store.sqlite,
 					stateDir: deps.stateDir,
@@ -549,11 +624,11 @@ export function startMaintenanceTimer(
 		firstTick = null;
 		tick();
 		if (stopped) return;
-		interval = setInterval(tick, intervalMs);
+		interval = setInterval(tick, tickMs);
 		interval.unref?.();
 	}, firstTickDelayMs);
 	firstTick.unref?.();
-	log.debug("maintenance timer started", { intervalMs }, {
+	log.debug("maintenance timer started", { tickMs, intervals }, {
 		event_name: "sno_station_mem.maintenance.maintenance.timer.started",
 		file: "packages/sno-station-mem/src/store/maintenance.ts",
 		function: "startMaintenanceTimer",
