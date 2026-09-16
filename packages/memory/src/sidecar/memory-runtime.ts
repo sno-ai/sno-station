@@ -22,7 +22,7 @@ import { createTierPromoter } from "../engine/operations/memory-tier-promoter";
 import { MemoryTelemetryUsageOutbox } from "../engine/telemetry/memory-telemetry-outbox";
 import { readChunkVecTableState } from "../store/connection";
 import { initSqliteRuntime } from "../store/sqlite-runtime";
-import { startMaintenanceTimer, type MaintenanceTimerHandle } from "../store/maintenance";
+import { startMaintenanceTimer, uniformMaintenanceIntervals, type MaintenanceTimerHandle } from "../store/maintenance";
 import { RegisteredAgentPort } from "../model/registered-agent-port";
 import { withProviderResponses } from "../model/llm-provider-transport";
 import type { ProviderResponseTrace } from "../model/llm-client-types";
@@ -88,7 +88,8 @@ export class MemoryRuntimePool {
 		const pool = new MemoryRuntimePool(storePath, store, config, observability, embedder);
 		const maintenance = readMaintenanceOverrides();
 		pool.maintenance = startMaintenanceTimer({ store, dbPath: storePath, stateDir, remClock: maintenance.now, remVolumeThreshold: maintenance.volumeThreshold,
-			backupDir: join(stateDir, "backups"), usageOutbox: pool.usageOutbox }, maintenance.intervalMs, maintenance.intervalMs);
+			backupDir: join(stateDir, "backups"), usageOutbox: pool.usageOutbox }, maintenance.intervalMs, maintenance.intervalMs,
+			maintenance.intervalMs === undefined ? undefined : uniformMaintenanceIntervals(maintenance.intervalMs));
 		pool.startUsageTimer();
 		return pool;
 	}
