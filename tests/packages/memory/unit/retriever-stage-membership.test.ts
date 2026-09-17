@@ -47,9 +47,14 @@ function makeInternals(config: Record<string, unknown>): MemoryRetrieverInternal
 
 // A floor high enough that the weak half of the pool cannot reach the served set.
 const POOL_EXCEEDS_SERVE_LIMIT = {
+	temporalWeighting: true,
+	recencyHalfLifeDays: 30,
+	recencyWeight: 0.1,
 	lengthNormAnchor: 500,
+	timeDecayHalfLifeDays: 60,
 	hardMinScore: 0.4,
 	mmrLambda: 0.7,
+	recallLifecycle: { retentionScorer: false },
 };
 
 describe("every stage record names its surviving members", () => {
