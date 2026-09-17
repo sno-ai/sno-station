@@ -1,104 +1,18 @@
 /** @file retriever-scoring-pipeline.ts
- * @purpose Applies post-retrieval scoring, decay, noise, and diversity transforms.
+ * @purpose Applies post-retrieval importance, length, score-floor, and diversity transforms.
  * @boundary Prototype-mounted MemoryRetriever methods; no constructor state ownership.
  */
 
 import { experimentMmrDisabled } from "../../../config/index";
-import {
-	createRetentionScorer,
-	DEFAULT_DECAY_CONFIG,
-} from "../operations/selective-forgetting-scorer";
 import { dotProduct } from "./retrieval-scoring-utils";
 import type { TraceCollector } from "./retrieval-trace";
 import { MemoryRetriever, type MemoryRetrieverInternals } from "./retriever-core";
 import type { RetrievalResult } from "./retriever-dependencies";
 import {
 	clamp01,
-	computeEffectiveHalfLife,
 	IMPORTANCE_WEIGHT_BASE,
 	MMR_LAMBDA,
-	parseAccessMetadata,
-	parseInsightMetadata,
-	TEMPORAL_DYNAMIC_HALF_LIFE_DIVISOR,
-	TIME_DECAY_FLOOR,
 } from "./retriever-dependencies";
-import { DEFAULT_MEMORY_TIER, type DecayableMemory, type DecayScore, type MemoryTier } from "../shared/types";
-
-// Pinned per openspec/changes/mem-lifecycle PRD §6.1 — single source of truth
-// is `DEFAULT_DECAY_CONFIG.searchBoostMin`. Re-exporting via const here would
-// fork the constant; importing keeps D86 arm-comparison math drift-free.
-const SEARCH_BOOST_MIN = DEFAULT_DECAY_CONFIG.searchBoostMin;
-
-// Tier-specific recency floors reused by the `withFloor` arm of `boostMultiplier`.
-// Values match the Retention Scorer's per-tier decay floors so the boost stage and
-// the scorer agree on "how much retention can ever survive at this tier".
-function getTierFloor(tier: MemoryTier): number {
-	switch (tier) {
-		case "core":
-			return DEFAULT_DECAY_CONFIG.coreDecayFloor;
-		case "working":
-			return DEFAULT_DECAY_CONFIG.workingDecayFloor;
-		case "peripheral":
-			return DEFAULT_DECAY_CONFIG.peripheralDecayFloor;
-	}
-}
-
-/**
- * Multiplier formula from openspec/changes/mem-lifecycle PRD §4.1 + retention-
- * scoring spec §62. Bounded to `[SEARCH_BOOST_MIN, 1.0]`; never amplifies,
- * only suppresses, so existing scores are an upper bound after the stage.
- *
- * - `bare`: linear interpolation `searchBoostMin + (1 - searchBoostMin) * composite`.
- * - `withFloor`: same shape but the interpolated input is
- *   `max(getTierFloor(tier), composite, recency)` so highly-decayed core
- *   memories cannot fall below the tier floor.
- */
-export function boostMultiplier(
-	score: DecayScore,
-	mode: "bare" | "withFloor",
-	tier: MemoryTier,
-): number {
-	if (mode === "bare") {
-		const linear = SEARCH_BOOST_MIN + (1 - SEARCH_BOOST_MIN) * score.composite;
-		return Math.min(1, Math.max(SEARCH_BOOST_MIN, linear));
-	}
-	const candidate = Math.max(getTierFloor(tier), score.composite, score.recency);
-	const linear = SEARCH_BOOST_MIN + (1 - SEARCH_BOOST_MIN) * candidate;
-	return Math.min(1, Math.max(SEARCH_BOOST_MIN, linear));
-}
-
-/**
- * Adapt a `RetrievalResult.entry` into the `DecayableMemory` shape the
- * Retention Scorer consumes. `MemoryEntry` lacks `tier`, `confidence`,
- * `accessCount`, `lastAccessedAt`, and `createdAt` as native columns; all
- * five come out of the same metadata JSON the rest of the scoring pipeline
- * already parses via `parseInsightMetadata` + `parseAccessMetadata`.
- *
- * `createdAt` maps to `entry.timestamp` because `MemoryStore.store` writes
- * the caller-provided `timestamp` (or `Date.now()`) into both the entry row
- * and the embedding's creation time — there is no separate `created_at`.
- */
-function toDecayableMemory(entry: RetrievalResult["entry"]): DecayableMemory {
-	const insight = parseInsightMetadata(entry.metadata, entry);
-	const access = parseAccessMetadata(entry.metadata);
-	const tier: MemoryTier = insight.tier ?? DEFAULT_MEMORY_TIER;
-	const memory: DecayableMemory = {
-		id: entry.id,
-		importance: entry.importance,
-		confidence: insight.confidence,
-		tier,
-		accessCount: access.accessCount,
-		createdAt: entry.timestamp,
-		lastAccessedAt: access.lastAccessedAt > 0 ? access.lastAccessedAt : entry.timestamp,
-	};
-	if (insight.memory_temporal_type !== undefined) {
-		memory.temporalType = insight.memory_temporal_type;
-	}
-	if (entry.metadata !== undefined) {
-		memory.metadata = entry.metadata;
-	}
-	return memory;
-}
 
 /**
  * Run one stage of the scoring pipeline and record what it did.
@@ -137,11 +51,7 @@ Object.assign(MemoryRetriever.prototype, {
 		results: RetrievalResult[],
 		trace?: TraceCollector,
 	): RetrievalResult[] {
-		// Run every score-mutating stage first so the hardMinScore filter sees the final
-		// per-result score. This keeps two contracts honest: (1) the returned set always
-		// satisfies `score >= hardMinScore` even after multiplicative shrinkers like
-		// time-decay and length-norm, and (2) additive boosts (recency) get a chance to
-		// lift a near-miss above the floor instead of being discarded too early.
+		// Apply score transforms before the floor so it sees the final per-result score.
 		const stage = (
 			name: string,
 			skipReason: string | undefined,
@@ -150,45 +60,15 @@ Object.assign(MemoryRetriever.prototype, {
 		): RetrievalResult[] => tracedStage(trace, name, skipReason, run, input);
 
 		let scored = stage(
-			"recency_boost",
-			this.config.recencyHalfLifeDays <= 0
-				? "recencyHalfLifeDays"
-				: this.config.recencyWeight <= 0
-					? "recencyWeight"
-					: undefined,
-			(input) => this.applyRecencyBoost(input),
-			results,
-		);
-		scored = stage(
 			"importance_weight",
 			undefined,
 			(input) => this.applyImportanceWeight(input),
-			scored,
+			results,
 		);
 		scored = stage(
 			"length_normalization",
 			this.config.lengthNormAnchor <= 0 ? "lengthNormAnchor" : undefined,
 			(input) => this.applyLengthNormalization(input),
-			scored,
-		);
-		scored = stage(
-			"time_decay",
-			this.config.timeDecayHalfLifeDays <= 0 ? "timeDecayHalfLifeDays" : undefined,
-			(input) => this.applyTimeDecay(input),
-			scored,
-		);
-		// Retention Scorer multiplier (openspec/changes/mem-lifecycle PRD §4.1).
-		// Slot picked per §4.1: after time-decay so the retention recency
-		// component layers on top of the time-decay multiplier, and before
-		// hardMinScore so retention-suppressed entries can drop out before
-		// MMR sees them. Pass-through when `recallLifecycle.retentionScorer`
-		// is off — the OFF path returns the input array reference unchanged.
-		scored = stage(
-			"retention_boost",
-			this.config.recallLifecycle?.retentionScorer === true
-				? undefined
-				: "recallLifecycle.retentionScorer",
-			(input) => this.applyRetentionBoost(input),
 			scored,
 		);
 		scored = stage(
@@ -209,24 +89,6 @@ Object.assign(MemoryRetriever.prototype, {
 			scored,
 		);
 		return scored;
-	},
-
-	applyRecencyBoost(this: MemoryRetrieverInternals, results: RetrievalResult[]): RetrievalResult[] {
-		// Guard this branch early so the remaining retrieval scoring path works with normalized inputs.
-		if (this.config.recencyHalfLifeDays <= 0 || this.config.recencyWeight <= 0) {
-			return results;
-		}
-		const now = Date.now();
-		const halfLifeMs = this.config.recencyHalfLifeDays * 24 * 60 * 60 * 1000;
-		return results.map((result) => {
-			const ageMs = Math.max(0, now - result.entry.timestamp);
-			// Compute the normalized decay once so later retrieval scoring checks use one value.
-			const decay = Math.exp((-Math.log(2) * ageMs) / halfLifeMs);
-			return {
-				...result,
-				score: result.score + decay * this.config.recencyWeight,
-			};
-		});
 	},
 
 	applyImportanceWeight(
@@ -256,69 +118,6 @@ Object.assign(MemoryRetriever.prototype, {
 		});
 	},
 
-	applyTimeDecay(this: MemoryRetrieverInternals, results: RetrievalResult[]): RetrievalResult[] {
-		// Branch on configuration before selecting the runtime strategy.
-		if (this.config.timeDecayHalfLifeDays <= 0) {
-			return results;
-		}
-		const floor = this.config.timeDecayFloor ?? TIME_DECAY_FLOOR;
-		const now = Date.now();
-		const baseHalfLifeDays = this.config.timeDecayHalfLifeDays;
-		const reinforcementFactor = this.config.reinforcementFactor ?? 0.5;
-		const maxMultiplier = this.config.maxHalfLifeMultiplier ?? 3;
-
-		return results.map((result) => {
-			// Frequently accessed memories decay more slowly.
-			const access = parseAccessMetadata(result.entry.metadata);
-
-			// Dynamic memories decay faster when temporal decay is enabled.
-			const meta = parseInsightMetadata(result.entry.metadata, result.entry);
-			const adjustedBase =
-				this.config.temporalDecay && meta.memory_temporal_type === "dynamic"
-					? baseHalfLifeDays / TEMPORAL_DYNAMIC_HALF_LIFE_DIVISOR
-					: baseHalfLifeDays;
-
-			const effectiveHalfLifeDays = computeEffectiveHalfLife(
-				adjustedBase,
-				access.accessCount,
-				access.lastAccessedAt,
-				reinforcementFactor,
-				maxMultiplier,
-				now,
-			);
-
-			const halfLifeMs = effectiveHalfLifeDays * 24 * 60 * 60 * 1000;
-			const ageMs = Math.max(0, now - result.entry.timestamp);
-			// Keep the decay multiplier bounded to [floor, 1.0].
-			const factor = floor + (1 - floor) * Math.exp((-Math.log(2) * ageMs) / halfLifeMs);
-			return { ...result, score: result.score * factor };
-		});
-	},
-
-	applyRetentionBoost(
-		this: MemoryRetrieverInternals,
-		results: RetrievalResult[],
-	): RetrievalResult[] {
-		const lifecycle = this._recallLifecycle;
-		// Flag off → return the input array reference unchanged (no `.map`,
-		// no allocation), so the OFF path is an exact no-op on the pipeline.
-		if (lifecycle?.retentionScorer !== true) {
-			return results;
-		}
-		if (this._retentionScorer === undefined) {
-			this._retentionScorer = createRetentionScorer();
-		}
-		const scorer = this._retentionScorer;
-		const mode = lifecycle.tierFloorMode;
-		const now = Date.now();
-		return results.map((result) => {
-			const decayable = toDecayableMemory(result.entry);
-			const score = scorer.score(decayable, now);
-			const multiplier = boostMultiplier(score, mode, decayable.tier);
-			return { ...result, score: result.score * multiplier };
-		});
-	},
-
 	applyMmrDiversity(this: MemoryRetrieverInternals, results: RetrievalResult[]): RetrievalResult[] {
 		// The greedy loop below handles every n correctly: n=0 returns []; n=1 seeds and exits;
 		// n>=2 runs full MMR. An earlier `n<=2` short-circuit returned the input unsorted, which
@@ -339,13 +138,7 @@ Object.assign(MemoryRetriever.prototype, {
 			return a.entry.id.localeCompare(b.entry.id);
 		});
 
-		// Normalize relevance to [0,1] (batch-max) before mixing with `maxSim`, which is
-		// already a true cosine in [0,1]. The upstream shrinker chain (importance,
-		// length-norm, time-decay, retention) routinely compresses `.score` to ~0.03-0.06
-		// for a well-aged memory; without this normalization the diversity term dominates
-		// by roughly an order of magnitude and MMR stops ranking by relevance at all
-		// (confirmed 2026-07-05 scoring-pipeline audit). Sort order / seed pick are
-		// unaffected (dividing by a positive constant preserves order).
+		// Batch-max normalization keeps relevance and cosine similarity on comparable scales.
 		const maxScore = Math.max(sorted[0]?.score ?? 0, 1e-9);
 
 		const n = sorted.length;

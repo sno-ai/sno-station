@@ -25,8 +25,6 @@ export {
 	MAX_CANDIDATE_POOL_SIZE,
 	MMR_LAMBDA,
 	PRECISION_RECALL_POOL_SIZE_FACTOR,
-	RECENCY_HALF_LIFE_DAYS,
-	RECENCY_WEIGHT,
 	RERANK_BLEND_CROSS,
 	RERANK_BLEND_VECTOR,
 	RERANK_PRESERVATION_BM25_HIGH_THRESHOLD,
@@ -38,9 +36,6 @@ export {
 	RERANK_PRESERVATION_MID_RETURNED,
 	RERANK_PRESERVATION_MID_UNRETURNED,
 	RERANK_PROMPT_TEMPLATE_TOKENS,
-	TEMPORAL_DYNAMIC_HALF_LIFE_DIVISOR,
-	TIME_DECAY_FLOOR,
-	TIME_DECAY_HALF_LIFE_DAYS,
 } from "../../../config/index";
 export { appendQaTrace, computeConfigHash, isTraceEnabled } from "../eval/trace";
 export type { Embedder } from "../extraction/embedding-provider-client";
@@ -49,10 +44,6 @@ export {
 	parseInsightMetadata,
 } from "../extraction/memory-metadata-codec";
 export type { AccessTracker } from "./access-tracker";
-export {
-	computeEffectiveHalfLife,
-	parseAccessMetadata,
-} from "./access-tracker";
 export type { RetrievalStatsCollector } from "./retrieval-stats";
 export type { RetrievalTrace } from "./retrieval-trace";
 export { TraceCollector } from "./retrieval-trace";
