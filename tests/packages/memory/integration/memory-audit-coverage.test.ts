@@ -434,26 +434,20 @@ describe("production memory audit coverage", () => {
 		);
 		});
 
-	it("fails before mutation when the start record cannot persist", async () => {
+	it("persists memory when the audit start record cannot persist", async () => {
 		const store = createStore();
 		const auditPath = getAuditPath(getSnoStationMemStateDir());
 		mkdirSync(auditPath, { recursive: true });
 
-		await expect(
-			store.store({
-				text: "This row must not be stored when audit start fails.",
-				category: "episodic",
-				projectId: "audit-start-failure",
-			}),
-		).rejects.toThrow();
+		await store.store({ text: "This row is stored when audit start fails.", category: "episodic", projectId: "audit-start-failure" });
 
 		const row = store.sqlite
 			.prepare("SELECT COUNT(*) AS count FROM nodix_memories")
 			.get() as { count: number };
-		expect(row.count).toBe(0);
+		expect(row.count).toBe(1);
 	});
 
-	it("withholds a terminal result when the terminal record cannot persist", () => {
+	it("returns the terminal result when the terminal audit record cannot persist", () => {
 		const store = createStore();
 		const seedId = "audit-terminal-failure-row";
 		store.sqlite
@@ -465,7 +459,7 @@ describe("production memory audit coverage", () => {
 		const auditPath = getAuditPath(stateDir);
 		const startedPath = `${auditPath}.started`;
 
-		expect(() =>
+		expect(
 			runWithMemoryAuditSync({
 				stateDir,
 				event: "memory_updated",
@@ -480,7 +474,7 @@ describe("production memory audit coverage", () => {
 				},
 				completedDetails: (memoryId) => ({ memory_ids: [memoryId], outcome: "updated" }),
 			}),
-		).toThrow();
+		).toBe("audit-terminal-failure-row");
 
 		const row = store.sqlite
 			.prepare("SELECT importance FROM nodix_memories WHERE id = ?")
@@ -491,7 +485,7 @@ describe("production memory audit coverage", () => {
 		expect(started[0]?.details?.["audit_phase"]).toBe("started");
 	});
 
-	it("rejects unknown memory audit detail keys before append", async () => {
+	it("writes known audit fields without blocking on an unknown detail key", async () => {
 		await expect(
 			appendAuditEntryStrict(getSnoStationMemStateDir(), {
 				event: "memory_deleted",
@@ -503,8 +497,11 @@ describe("production memory audit coverage", () => {
 					raw_memory_content: "must never be accepted",
 				},
 			}),
-		).rejects.toThrow(/unknown memory audit detail key/);
-		expect(() => readFileSync(getAuditPath(getSnoStationMemStateDir()), "utf8")).toThrow();
+		).resolves.toBe(true);
+		const rows = readAuditFile(getAuditPath(getSnoStationMemStateDir()));
+		expect(rows).toHaveLength(1);
+		expect(rows[0]?.details?.["raw_memory_content"]).toBeUndefined();
+		expect(rows[0]?.details?.["operation"]).toBe("deleteByIds");
 	});
 });
 

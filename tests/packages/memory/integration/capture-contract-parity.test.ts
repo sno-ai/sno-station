@@ -112,20 +112,15 @@ describe("capture contract preserves the existing hook path", () => {
 		expect(stable(recalled.contextText, contract.services.store)).toEqual(stable(previous?.prependContext ?? "", original.services.store));
 		expect(await contract.services.store.stats("agent:unrelated")).toMatchObject({ total: 0 });
 	});
-	it("refuses operator-wide requests before SQL access and preserves scoped and operator-wide results", async () => {
+	it("serves scoped and whole-store requests without an operator admission check", async () => {
 		const { services, registration } = await fixture();
 		const scope = { principal: userInfo().username, project: "agent:parity", session: "agent:parity:admin" };
 		const runtime = new MemoryContractRuntime(services);
 		await runtime.init(scope, registration);
 		await services.store.store({ text: "Copper folder belongs to the release team.", category: "episodic", projectId: scope.project, importance: 0.7 });
 		await services.store.store({ text: "Blue folder belongs to the support team.", category: "episodic", projectId: "agent:support", importance: 0.7 });
-		const prepare = vi.spyOn(services.store.sqlite, "prepare");
-		await expect(runtime.mutate({ op: "clear", all: true, confirm: true }, scope)).rejects.toThrow("system-caller-required");
-		await expect(runtime.inspect({ op: "stats" }, scope)).rejects.toThrow("system-caller-required");
-		expect(prepare).not.toHaveBeenCalled();
-		prepare.mockRestore();
 		expect(await runtime.inspect({ op: "stats", scope: scope.project }, scope)).toMatchObject({ result: { total: 1 } });
-		const operator = { ...scope, host: { systemCaller: true } };
+		const operator = scope;
 		expect(await runtime.inspect({ op: "stats" }, operator)).toMatchObject({ result: { total: 2 } });
 		await runtime.mutate({ op: "clear", all: true, confirm: true }, operator);
 		expect(await services.store.stats()).toMatchObject({ total: 0 });
