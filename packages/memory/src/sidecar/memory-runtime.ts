@@ -177,12 +177,12 @@ export class MemoryRuntimePool {
 	private async call(runtime: MemoryContractRuntime, method: Exclude<ContractMethod, "init">, raw: unknown, signal?: AbortSignal): Promise<ContractOutputs[ContractMethod]> {
 		signal?.throwIfAborted();
 		switch (method) {
-			case "capture": { const p = parseInput(method, raw); return runtime.capture(p.turn, p.scope); }
+			case "capture": { const p = parseInput(method, raw); return runtime.capture(p.turn, p.scope, signal); }
 			case "getRecall": { const p = parseInput(method, raw); return runtime.getRecall(p.query, p.scope, p.options, signal); }
-			case "mutate": { const p = parseInput(method, raw); return runtime.mutate(p.op, p.scope); }
+			case "mutate": { const p = parseInput(method, raw); return runtime.mutate(p.op, p.scope, signal); }
 			case "inspect": { const p = parseInput(method, raw); return runtime.inspect(p.op, p.scope); }
 			case "recordUsage": { const p = parseInput(method, raw); return runtime.recordUsage(p.recallId, p.signal, p.scope); }
-			case "onSessionEnd": { const p = parseInput(method, raw); return runtime.onSessionEnd(p.messages, p.scope); }
+			case "onSessionEnd": { const p = parseInput(method, raw); return runtime.onSessionEnd(p.messages, p.scope, signal); }
 			case "staticBlock": { const p = parseInput(method, raw); return runtime.staticBlock(p.scope); }
 		}
 	}

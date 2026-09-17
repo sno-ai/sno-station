@@ -1,3 +1,4 @@
+import { withMemoryOperation, checkMemoryOperation } from "./operation-cancellation";
 import { SnoStationMemProviderSearchManager } from "./provider/provider-search-manager";
 import { randomUUID } from "node:crypto";
 import { resolve } from "node:path";
@@ -197,10 +198,12 @@ export class MemoryContractRuntime implements MemoryContract {
 		};
 	}
 
-	async capture(turn: Turn, scope: ScopeCtx): Promise<ContractOutputs["capture"]> {
+	async capture(turn: Turn, scope: ScopeCtx, signal?: AbortSignal): Promise<ContractOutputs["capture"]> {
+		return withMemoryOperation("capture", signal, async () => {
 		parseInput("capture", { turn, scope });
 		const { config } = this.configured();
 		const context = await this.toolContext(scope);
+		checkMemoryOperation();
 		const runtimeContext = this.services;
 		const distiller = buildInsightDistiller(runtimeContext, config, this.services.store, this.services.embedder,
 			this.services.observability, () => undefined, this.services.stateDir, this.services.agentPort);
@@ -211,6 +214,7 @@ export class MemoryContractRuntime implements MemoryContract {
 		// committed is legal only after extraction and persistence both completed.
 		if (outcome === "failed") throw new ContractError("engine-failed");
 		return { degraded: false, turnId: turn.turnId, committed: outcome === "success" };
+		});
 	}
 
 	async getRecall(query: string, scope: ScopeCtx, options: RecallOptions, signal?: AbortSignal): Promise<ContractOutputs["getRecall"]> {
@@ -256,9 +260,11 @@ export class MemoryContractRuntime implements MemoryContract {
 		return { degraded: false, recallId, contextText: result?.prependContext ?? "", memoryIds };
 	}
 
-	async mutate(op: Mutation, scope: ScopeCtx): Promise<ContractOutputs["mutate"]> {
+	async mutate(op: Mutation, scope: ScopeCtx, signal?: AbortSignal): Promise<ContractOutputs["mutate"]> {
+		return withMemoryOperation("mutate", signal, async () => {
 		parseInput("mutate", { op, scope });
 		const context = await this.toolContext(scope);
+		checkMemoryOperation();
 		const access = resolveAgentAccess(context.agentId, context.agentId);
 		const project = context.scopePolicy.getDefaultScope();
 		let result: ToolResult;
@@ -279,6 +285,7 @@ export class MemoryContractRuntime implements MemoryContract {
 		}
 		for (const state of this.reflectionStates.values()) state.command.clearAllSliceCache();
 		return parseOutput("mutate", { degraded: false, result: JSON.parse(JSON.stringify(result)) });
+		});
 	}
 
 	async inspect(op: Inspection, scope: ScopeCtx): Promise<ContractOutputs["inspect"]> {
@@ -325,12 +332,15 @@ export class MemoryContractRuntime implements MemoryContract {
 		return { degraded: false, accepted: true };
 	}
 
-	async onSessionEnd(messages: Message[], scope: ScopeCtx): Promise<ContractOutputs["onSessionEnd"]> {
+	async onSessionEnd(messages: Message[], scope: ScopeCtx, signal?: AbortSignal): Promise<ContractOutputs["onSessionEnd"]> {
+		return withMemoryOperation("onSessionEnd", signal, async () => {
 		parseInput("onSessionEnd", { messages, scope });
 		const project = await this.project(scope);
+		checkMemoryOperation();
 		const state = this.recallStates.get(project);
 		if (state) clearSessionState(resolveRuntimeSessionId(this.hostContext(scope)), state.history, state.turns);
 		await this.services.accessTracker.flush();
+		checkMemoryOperation();
 		if (this.configured().config.sessionStrategy === "memoryReflection") {
 			const state = await this.reflection(scope);
 			if (scope.host?.boundary === "new" || scope.host?.boundary === "reset") {
@@ -345,6 +355,7 @@ export class MemoryContractRuntime implements MemoryContract {
 			}
 		}
 		return { degraded: false, completed: true };
+		});
 	}
 
 	async staticBlock(scope: ScopeCtx): Promise<ContractOutputs["staticBlock"]> {
