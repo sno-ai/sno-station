@@ -22,11 +22,31 @@ Constraints use JSON Schema names (`minimum`, `maximum`, `minLength`, `minItems`
 Custom refinements and runtime behavior are stated in route prose and are not fully
 covered by the schema-table test. The test checks all listed memory request and success
 response fields, enums, defaults and serializable constraints, plus routes, deadlines,
-error status mappings and example schemas; it does not run the HTTP server.
+error status mappings and example schemas. Its route-index test also probes the real loopback HTTP server with an isolated encrypted store.
 
 Examples are complete, realistic wire examples validated against the actual memory
 schemas, not claims of a live service run. Response text and generated IDs vary.
 No real credentials are included. Use the discovery port in place of `43127`.
+
+## Complete sidecar route index
+
+The server serves exactly these paths. The health path is `/healthz`.
+(proved by: `tests/packages/sno-station-mem/unit/http-contract-doc-sync.test.ts` — `lists exactly all served memory, health and REM route paths`)
+
+<!-- table:all-routes -->
+| Method | Path |
+| --- | --- |
+| GET | /healthz |
+| POST | /rem/run |
+| GET | /rem/jobs/<id> |
+| POST | /v1/init |
+| POST | /v1/get-recall |
+| POST | /v1/capture |
+| POST | /v1/mutate |
+| POST | /v1/inspect |
+| POST | /v1/record-usage |
+| POST | /v1/on-session-end |
+| POST | /v1/static-block |
 
 ## Memory route index
 
@@ -53,12 +73,12 @@ All listed methods use POST. Deadlines are server request ceilings, not latency 
 | Header | Required | If omitted or blank |
 | --- | --- | --- |
 | Content-Type: application/json | Recommended, not enforced | Server still parses the body as JSON |
-| x-sno-station-mem-skin | Optional | Missing/blank uses `default`; a nonblank value is used verbatim |
+| x-sno-station-mem-skin | Optional | Missing/blank uses `default` (proved by: `tests/packages/sno-station-mem/integration/sidecar-no-gates.test.ts` — `selects the default skin for header undefined`; `selects the default skin for header "   "`); a nonblank value is used verbatim |
 | Authorization / x-sidecar-token | No | No authentication check; values do not grant admission |
 
 ### Request body
 
-Initializes or replaces the header-selected skin. `registration.skinId` remains a required nonblank input, but the header overrides its value (including the `default` header fallback). No prior registration is required for other calls: installed settings create the runtime on demand.
+Initializes or replaces the header-selected skin. `registration.skinId` remains a required nonblank input, but the header overrides its value (including the `default` header fallback). No prior registration is required for other calls: installed settings create the runtime on demand. With installed `local-first` settings and an empty store, an unregistered skin calling `inspect` with `op: "list"` and project `global` receives HTTP 200 and `{"degraded":false,"result":{"op":"list","project":"global","entries":[]}}` (proved by: `tests/packages/sno-station-mem/integration/sidecar-no-gates.test.ts` — `serves HTTP inspection before any init using installed settings`).
 
 `routing` is the routing authority. Settings are the existing normalized engine settings, not a second raw plugin configuration. Installed embedding, telemetry and store path override conflicting registration values with an error log. All nested fields are enumerated below. Objects with `additionalProperties:false` reject unknown keys; ordinary input objects strip them.
 
@@ -426,7 +446,7 @@ Response status: `200 OK`; `Content-Type: application/json`.
 | Header | Required | If omitted or blank |
 | --- | --- | --- |
 | Content-Type: application/json | Recommended, not enforced | Server still parses the body as JSON |
-| x-sno-station-mem-skin | Optional | Missing/blank uses `default`; a nonblank value is used verbatim |
+| x-sno-station-mem-skin | Optional | Missing/blank uses `default` (proved by: `tests/packages/sno-station-mem/integration/sidecar-no-gates.test.ts` — `selects the default skin for header undefined`; `selects the default skin for header "   "`); a nonblank value is used verbatim |
 | Authorization / x-sidecar-token | No | No authentication check; values do not grant admission |
 
 ### Request body
@@ -636,7 +656,7 @@ Response status: `200 OK`; `Content-Type: application/json`.
 | Header | Required | If omitted or blank |
 | --- | --- | --- |
 | Content-Type: application/json | Recommended, not enforced | Server still parses the body as JSON |
-| x-sno-station-mem-skin | Optional | Missing/blank uses `default`; a nonblank value is used verbatim |
+| x-sno-station-mem-skin | Optional | Missing/blank uses `default` (proved by: `tests/packages/sno-station-mem/integration/sidecar-no-gates.test.ts` — `selects the default skin for header undefined`; `selects the default skin for header "   "`); a nonblank value is used verbatim |
 | Authorization / x-sidecar-token | No | No authentication check; values do not grant admission |
 
 ### Request body
@@ -763,7 +783,7 @@ Response status: `200 OK`; `Content-Type: application/json`.
 | Header | Required | If omitted or blank |
 | --- | --- | --- |
 | Content-Type: application/json | Recommended, not enforced | Server still parses the body as JSON |
-| x-sno-station-mem-skin | Optional | Missing/blank uses `default`; a nonblank value is used verbatim |
+| x-sno-station-mem-skin | Optional | Missing/blank uses `default` (proved by: `tests/packages/sno-station-mem/integration/sidecar-no-gates.test.ts` — `selects the default skin for header undefined`; `selects the default skin for header "   "`); a nonblank value is used verbatim |
 | Authorization / x-sidecar-token | No | No authentication check; values do not grant admission |
 
 ### Request body
@@ -943,7 +963,7 @@ Response status: `200 OK`; `Content-Type: application/json`.
 | Header | Required | If omitted or blank |
 | --- | --- | --- |
 | Content-Type: application/json | Recommended, not enforced | Server still parses the body as JSON |
-| x-sno-station-mem-skin | Optional | Missing/blank uses `default`; a nonblank value is used verbatim |
+| x-sno-station-mem-skin | Optional | Missing/blank uses `default` (proved by: `tests/packages/sno-station-mem/integration/sidecar-no-gates.test.ts` — `selects the default skin for header undefined`; `selects the default skin for header "   "`); a nonblank value is used verbatim |
 | Authorization / x-sidecar-token | No | No authentication check; values do not grant admission |
 
 ### Request body
@@ -1143,7 +1163,7 @@ Response status: `200 OK`; `Content-Type: application/json`.
 | Header | Required | If omitted or blank |
 | --- | --- | --- |
 | Content-Type: application/json | Recommended, not enforced | Server still parses the body as JSON |
-| x-sno-station-mem-skin | Optional | Missing/blank uses `default`; a nonblank value is used verbatim |
+| x-sno-station-mem-skin | Optional | Missing/blank uses `default` (proved by: `tests/packages/sno-station-mem/integration/sidecar-no-gates.test.ts` — `selects the default skin for header undefined`; `selects the default skin for header "   "`); a nonblank value is used verbatim |
 | Authorization / x-sidecar-token | No | No authentication check; values do not grant admission |
 
 ### Request body
@@ -1267,7 +1287,7 @@ Response status: `200 OK`; `Content-Type: application/json`.
 | Header | Required | If omitted or blank |
 | --- | --- | --- |
 | Content-Type: application/json | Recommended, not enforced | Server still parses the body as JSON |
-| x-sno-station-mem-skin | Optional | Missing/blank uses `default`; a nonblank value is used verbatim |
+| x-sno-station-mem-skin | Optional | Missing/blank uses `default` (proved by: `tests/packages/sno-station-mem/integration/sidecar-no-gates.test.ts` — `selects the default skin for header undefined`; `selects the default skin for header "   "`); a nonblank value is used verbatim |
 | Authorization / x-sidecar-token | No | No authentication check; values do not grant admission |
 
 ### Request body
@@ -1385,7 +1405,7 @@ Response status: `200 OK`; `Content-Type: application/json`.
 | Header | Required | If omitted or blank |
 | --- | --- | --- |
 | Content-Type: application/json | Recommended, not enforced | Server still parses the body as JSON |
-| x-sno-station-mem-skin | Optional | Missing/blank uses `default`; a nonblank value is used verbatim |
+| x-sno-station-mem-skin | Optional | Missing/blank uses `default` (proved by: `tests/packages/sno-station-mem/integration/sidecar-no-gates.test.ts` — `selects the default skin for header undefined`; `selects the default skin for header "   "`); a nonblank value is used verbatim |
 | Authorization / x-sidecar-token | No | No authentication check; values do not grant admission |
 
 ### Request body
@@ -1641,9 +1661,8 @@ Content-Type: application/json
 
 ## Transport and discovery
 
-The server binds an ephemeral TCP port on **127.0.0.1**, without TLS, bearer-token admission
-or a single-instance lock. Read `<profile root>/station/sidecar.json` for discovery; do not
-hardcode a port. It is written atomically with file mode 0600.
+The server binds an ephemeral TCP port on **127.0.0.1**, without TLS or bearer-token admission.
+Read `<profile root>/station/sidecar.json` for discovery; do not hardcode a port. It is written atomically with file mode 0600.
 
 | Discovery field | Type and constraints | Meaning now that authentication is absent |
 | --- | --- | --- |
@@ -1656,12 +1675,139 @@ file returns no discovery; malformed or unreadable discovery raises `sidecar-unr
 The health probe still sends `Authorization: Bearer <token>`, but the server does not check it.
 It verifies only a successful HTTP status and body `status:"ok"`, not store/principal equality.
 Health probe timeout is 5000 ms; startup budget is 30000 ms. These are client limits.
-The client starts the sidecar if discovery is absent or unusable and rereads discovery on calls.
+The client spawns a sidecar only when discovery is absent or its pid is dead. A discovery
+record with a live pid is waited for, never duplicated: startup retries `checkDiscovery`
+every 250 ms within `MEMORY_START_TIMEOUT_MS`, returning the same discovery on success or
+raising `sidecar-unresponsive` when the budget expires. The client rereads discovery on calls.
 Its HTTP transport uses the per-route deadline, avoiding an implicit 300-second fetch cutoff.
+
+## Starting the sidecar from the command line
+
+Source: [cli.ts](cli.ts), [start.ts](start.ts), [profile.ts](profile.ts). The package `bin`
+name is `sno-station-mem`.
+
+```
+sno-station-mem sidecar start
+```
+
+No flags and no stdin. Any extra argument prints `Usage: sno-station-mem bind <path> | sidecar start` followed by a newline to stderr and exits 2 (proved by: `tests/packages/sno-station-mem/integration/sidecar-no-gates.test.ts` — `rejects an extra CLI argument with usage and exit 2`).
+
+Before opening the store or publishing discovery, the sidecar binds
+`<state dir>/station/sidecar.sock` and keeps that Unix domain socket bound until exit.
+On `EADDRINUSE`, a successful connection means another sidecar owns it: the duplicate logs
+one INFO `sidecar.duplicate.exit` with the discovery pid and exits 0 without changing files.
+`ECONNREFUSED` or `ENOENT` means a stale socket; the sidecar removes it and retries binding.
+A short OS lock on the existing station directory serializes this probe/remove/bind sequence;
+it creates no lock file and the OS releases it on crash. Clean stop removes the socket.
+This only prevents duplicate service instances; it is not configuration or admission validation.
+The client has no pid-file lock: a live discovery pid gets health polling within one startup
+budget, returning that record or `sidecar-unresponsive`; missing discovery or a dead pid
+causes a spawn followed by discovery polling. A spawned duplicate's exit 0 does not end polling,
+so concurrent callers both read the winner's discovery.
+
+What it does, in order:
+
+1. Reads the bound store path from `<state dir>/station/sno-station-mem-<os user>.binding.json`
+   (written by `sno-station-mem bind <path>`); without a binding it falls back to the installed
+   configuration, then to the default store path `<state dir>/sno-station-mem/<os user>/memory.sqlite`.
+2. Reads `<state dir>/station/sidecar.json`. If a discovery record exists and its pid is alive,
+   probes health immediately and retries every 250 ms for up to 30000 ms
+   (`MEMORY_START_TIMEOUT_MS`). Success prints the same pid and port and exits 0; budget
+   expiry raises `sidecar-unresponsive`. This path never spawns or rewrites discovery,
+   even if the existing process remains unhealthy (proved by the live-discovery tests in
+   `tests/packages/sno-station-mem/integration/sidecar-no-gates.test.ts`).
+3. Only when discovery is absent or its pid is dead, spawns `sidecar/main.js` detached,
+   with the caller's environment, stdout and stderr
+   appended to `<state dir>/sno-station-mem/sidecar-startup.log` (mode 0600), and unrefs it, so
+   the CLI process may exit while the sidecar keeps running.
+4. Polls discovery every 50 ms for up to 30000 ms (`MEMORY_START_TIMEOUT_MS`). The first record
+   whose pid is alive is health-probed and returned.
+
+Output on success (stdout, exit 0; followed by a newline) (proved by: `tests/packages/sno-station-mem/integration/sidecar-no-gates.test.ts` — `starts the CLI and reuses the live discovery pid`):
+
+```
+Memory sidecar ready: pid=<pid> port=<port>
+```
+
+Output on failure (stderr, exit 1):
+
+```
+Memory sidecar failed to start or open its encrypted store: <reason>. See <startup log path>
+```
+
+`<reason>` is `storage-unavailable` when the child exited or failed to spawn before publishing
+discovery, `sidecar-unreachable` when the 30000 ms budget passed without a live discovery
+record, and `sidecar-unresponsive` when the existing live process does not become healthy
+within the startup budget. Other health failures retain the contract reason. A client never
+needs to invoke this command manually: `connect()` invokes it when discovery is absent or
+fails health, and the command's `startSidecar()` waits for an existing live pid rather than
+duplicating it. The command exists for operators and for hosts that want the sidecar up before the
+first memory call.
+
+## Outbound call: the sidecar calling the registered host model
+
+Source: [../model/registered-agent-port.ts](../model/registered-agent-port.ts). This is the
+only HTTP request the sidecar makes back toward the client. It is used for every occasion that
+routes to the `agent` tier (see `init` → `registration.model`). A client that registers a model
+must serve exactly this shape.
+
+Request:
+
+```
+POST <registration.model.baseUrl>/chat/completions
+Authorization: Bearer <registration.model.credential>
+content-type: application/json
+```
+
+If `baseUrl` already ends in `/chat/completions` it is used as is; otherwise one trailing slash
+is stripped and `/chat/completions` appended. The capture request sends POST, the registered bearer credential, `stream: false`, and system/user messages with nonempty string content (proved by: `tests/packages/sno-station-mem/integration/sidecar-no-gates.test.ts` — `sends the host model HTTP contract and relays error`; `sends the host model HTTP contract and relays cancelled`). Body:
+
+```json
+{
+  "model": "<registration.model.model>",
+  "stream": false,
+  "messages": [
+    { "role": "system", "content": "<system prompt, only when the occasion has one>" },
+    { "role": "user", "content": "<prompt>" }
+  ],
+  "max_tokens": 512,
+  "chat_template_kwargs": { "enable_thinking": false }
+}
+```
+
+`max_tokens` and `chat_template_kwargs` are present only when the occasion sets them. The
+request carries an abort deadline of 120000 ms (`CALLBACK_TIMEOUT_MS`) unless the occasion
+supplies a shorter one; the sidecar's own route deadline may cut it earlier.
+
+Expected success response: HTTP 2xx with an OpenAI-style body; the sidecar reads
+`choices[0].message.content` and requires it to be a string. Anything else on a 2xx is treated
+as `registered model response is invalid` and the call is recorded as `engine-failed`.
+
+Expected failure response: a non-2xx status. The body may relay a typed failure so the sidecar
+can classify it instead of guessing from the status code:
+
+```json
+{ "error": { "kind": "cancelled", "reason": "<text>" } }
+{ "error": { "kind": "error", "category": "<auth|credential-expired|credential-revoked|exhausted|throttle|transport|unknown>", "message": "<text>" } }
+```
+
+Classification into the degraded reasons the memory routes report:
+
+| Host reply | Degraded reason recorded |
+| --- | --- |
+| `kind: "cancelled"` | `timeout` |
+| `kind: "error"` with a terminal category (`auth`, `credential-expired`, `credential-revoked`, `exhausted`) | `no-agent-endpoint` |
+| `kind: "error"` with a non-terminal category | `engine-failed` |
+| non-2xx without a relayed body, status classified as endpoint refusal | `no-agent-endpoint` |
+| non-2xx without a relayed body, other status | `engine-failed` |
+| network error or the 120000 ms deadline | `engine-failed` / `timeout` |
+| `registration.model` absent for agent-native capture | `no-agent-endpoint` (HTTP 503; proved by: `tests/packages/sno-station-mem/integration/sidecar-no-gates.test.ts` — `returns a degraded reason when the agent model endpoint is absent`) |
+
+For an agent-native capture, a host HTTP 503 with `{"error":{"kind":"error","category":"exhausted","message":"x"}}` produces HTTP 503 and `{"degraded":true,"reason":"no-agent-endpoint"}` (proved by: `tests/packages/sno-station-mem/integration/sidecar-no-gates.test.ts` — `sends the host model HTTP contract and relays error`). A host HTTP 503 with `{"error":{"kind":"cancelled","reason":"x"}}` produces HTTP 504 and `{"degraded":true,"reason":"timeout"}` (proved by: `tests/packages/sno-station-mem/integration/sidecar-no-gates.test.ts` — `sends the host model HTTP contract and relays cancelled`). These are mapped HTTP errors, not necessarily HTTP 200 degraded results. The engine can retry or degrade other failures internally; a completed call forcibly surfaces only `no-agent-endpoint`, while a failed call can surface any recorded reason.
 
 ## Request handling: no admission gates
 
-The skin header selects the runtime. Missing or whitespace-only header means `default`.
+The skin header selects the runtime. Missing or whitespace-only header means `default` (proved by: `tests/packages/sno-station-mem/integration/sidecar-no-gates.test.ts` — `selects the default skin for header undefined`; `selects the default skin for header "   "`).
 There is no principal, operator, configured-scope, prior-registration, product-mode,
 owner-calibration, grammar-artifact or kill-switch admission gate. The required scope strings
 still must parse. The client replaces submitted principal with its OS username. Logical scopes
@@ -1707,7 +1853,7 @@ At deadline, a per-request AbortController aborts the body reader and the route 
 opening prevent a late invocation. The signal enters recall, capture, mutation and session-end
 execution. Response close also aborts the request. Capture, mutation and session-end carry
 request-local cancellation through nested calls to model/retrieval signals and write checkpoints.
-Each SQL write and reflection/learning file write checks cancellation before starting. A started
+For capture and mutate paused in embedding before the first write, releasing embedding after HTTP 504 leaves zero new memory rows (proved by: `tests/packages/sno-station-mem/integration/sidecar-no-gates.test.ts` — `retains timed-out capture until the paused write settles before closing storage`; `retains timed-out mutate until the paused write settles before closing storage`). Each SQL write and reflection/learning file write checks cancellation before starting. A started
 SQL transaction or file write finishes; a later write is skipped. The terminal error log records
 `outcome: "aborted"` and `writes: N`: completed SQL write statements and file writes, excluding
 rolled-back statements. This is not a count of memory rows or a rollback of prior commits.
@@ -1772,6 +1918,12 @@ Content-Type: application/json
 ```
 
 ## General error and client semantics
+
+Clients can distinguish these three observed failure shapes:
+
+- An agent-native capture without a registered model returns HTTP 503 and `{"degraded":true,"reason":"no-agent-endpoint"}` (proved by: `tests/packages/sno-station-mem/integration/sidecar-no-gates.test.ts` — `returns a degraded reason when the agent model endpoint is absent`).
+- Updating a nonexistent memory returns HTTP 200 with `degraded:false`, `result.isError:true`, `result.details:{}`, and `result.content:[{"type":"text","text":"Memory entry not found: missing-memory"}]` for id `missing-memory` (proved by: `tests/packages/sno-station-mem/integration/sidecar-no-gates.test.ts` — `returns a tool refusal inside HTTP 200`).
+- An unknown route returns HTTP 404 with `{"error":"not_found"}` (proved by: `tests/packages/sno-station-mem/integration/sidecar-no-gates.test.ts` — `returns an HTTP error body for an unknown route`).
 
 All mapped HTTP exceptions use `{"degraded":true,"reason":"<reason>"}`. No payload,
 stack or credential field is part of that error body. The complete mapping is:
@@ -1891,6 +2043,4 @@ npx vitest run --config vitest.config.ts ../../tests/packages/sno-station-mem/un
 The test reads this file; it does not update it or mock schemas. Adding/removing a route,
 field, nested variant, enum, serialized constraint, default, or mapped reason requires
 updating the corresponding table. It also parses the complete JSON examples through the
-live schemas. Custom refinements, HTTP header/control-flow behavior, REM/health tables,
-maintenance prose and state-file descriptions still need source review. No claim is made
-that this schema test can prove those behaviors or the effects of concurrent source edits.
+live schemas. The route-index case also probes every listed path over loopback HTTP. The cited integration tests prove the specific header, pre-init, failure, deadline, CLI and outbound-call claims above. CLI tests execute the existing `dist/cli.js` artifact; the other new HTTP tests execute source. Existing deadline tests pause embedding and forward to the real implementation; new runtime tests do not mock sidecar internals. Other custom refinements, REM/health field tables, maintenance prose and state-file descriptions still need source review.
