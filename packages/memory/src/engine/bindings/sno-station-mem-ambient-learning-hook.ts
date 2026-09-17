@@ -1,3 +1,4 @@
+import { checkMemoryOperation } from "../operation-cancellation";
 /** @file sno-station-mem-ambient-learning-hook.ts
  * @purpose Routes successful agent conversations through atomic memory extraction.
  * @boundary The agent_end hook path only; registration and service lifecycle are elsewhere.
@@ -66,6 +67,7 @@ async function runLocalFirstCapture(input: {
 	let stored = 0;
 	let failures = 0;
 	for (const entry of entries) {
+		checkMemoryOperation();
 		if (!entry.text || seen.has(entry.text)) continue;
 		seen.add(entry.text);
 		try {
@@ -96,6 +98,7 @@ async function runLocalFirstCapture(input: {
 			});
 			stored += 1;
 		} catch (error) {
+		checkMemoryOperation();
 			failures += 1;
 			log.warn("Local capture write failed", { error }, { event_name: "memory.capture.write.failed", file: "packages/sno-station-mem/src/engine/bindings/sno-station-mem-ambient-learning-hook.ts", function: "runLocalFirstCapture", site_id: "memory.capture.local.write.failed" });
 		}
@@ -202,6 +205,7 @@ export async function onAgentEnd(
 			details,
 		});
 	} catch (error) {
+		checkMemoryOperation();
 		const rawMessage = error instanceof Error ? error.message : String(error);
 		const safeMessage = redactSecrets(rawMessage).slice(0, 200);
 		outcome = "failed";
