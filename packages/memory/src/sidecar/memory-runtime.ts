@@ -134,7 +134,8 @@ export class MemoryRuntimePool {
 		} catch (error) { await this.dispose(entry); throw error; }
 	}
 
-	async invoke(method: ContractMethod, raw: unknown, skinId: string): Promise<ContractOutputs[ContractMethod]> {
+	async invoke(method: ContractMethod, raw: unknown, skinId: string, signal?: AbortSignal): Promise<ContractOutputs[ContractMethod]> {
+		signal?.throwIfAborted();
 		const input = parseInput(method, raw);
 		if (method === "inspect" && parseInput("inspect", raw).op.op === "storage") {
 			this.counters.storeAccesses++;
@@ -153,12 +154,13 @@ export class MemoryRuntimePool {
 			entry = this.skins.get(skinId);
 		}
 		if (!entry) throw new Error("memory.skin.registration.failed");
+		signal?.throwIfAborted();
 		entry.active++;
 		this.counters.engineAccesses++;
 		this.counters.storeAccesses++;
 		const responses: ProviderResponseTrace[] = [];
 		try {
-			const call = () => observeSession.run(input.scope.host?.observeSessionUuid, () => withProviderResponses(responses, () => this.call(entry.runtime, method, raw)));
+			const call = () => observeSession.run(input.scope.host?.observeSessionUuid, () => withProviderResponses(responses, () => this.call(entry.runtime, method, raw, signal)));
 			const result = parseOutput(method, await (entry.agentPort ? entry.agentPort.run(call) : call()));
 			if (method === "onSessionEnd") await this.snapshot(entry, "session_end");
 			return result;
@@ -172,10 +174,11 @@ export class MemoryRuntimePool {
 		}
 	}
 
-	private async call(runtime: MemoryContractRuntime, method: Exclude<ContractMethod, "init">, raw: unknown): Promise<ContractOutputs[ContractMethod]> {
+	private async call(runtime: MemoryContractRuntime, method: Exclude<ContractMethod, "init">, raw: unknown, signal?: AbortSignal): Promise<ContractOutputs[ContractMethod]> {
+		signal?.throwIfAborted();
 		switch (method) {
 			case "capture": { const p = parseInput(method, raw); return runtime.capture(p.turn, p.scope); }
-			case "getRecall": { const p = parseInput(method, raw); return runtime.getRecall(p.query, p.scope, p.options); }
+			case "getRecall": { const p = parseInput(method, raw); return runtime.getRecall(p.query, p.scope, p.options, signal); }
 			case "mutate": { const p = parseInput(method, raw); return runtime.mutate(p.op, p.scope); }
 			case "inspect": { const p = parseInput(method, raw); return runtime.inspect(p.op, p.scope); }
 			case "recordUsage": { const p = parseInput(method, raw); return runtime.recordUsage(p.recallId, p.signal, p.scope); }

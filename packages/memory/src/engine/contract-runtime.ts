@@ -213,9 +213,10 @@ export class MemoryContractRuntime implements MemoryContract {
 		return { degraded: false, turnId: turn.turnId, committed: outcome === "success" };
 	}
 
-	async getRecall(query: string, scope: ScopeCtx, options: RecallOptions): Promise<ContractOutputs["getRecall"]> {
+	async getRecall(query: string, scope: ScopeCtx, options: RecallOptions, signal?: AbortSignal): Promise<ContractOutputs["getRecall"]> {
 		const input = parseInput("getRecall", { query, scope, options });
 		const context = await this.toolContext(input.scope);
+		signal?.throwIfAborted();
 		const recallId = randomUUID();
 		if (input.options.source === "native") {
 			if (input.options.corpus === "wiki" || input.options.corpus === "sessions") {
@@ -223,7 +224,7 @@ export class MemoryContractRuntime implements MemoryContract {
 			}
 			const manager = await this.provider(input.scope);
 			const nativeHits = await manager.search(input.query, {
-				maxResults: input.options.limit, minScore: input.options.minScore, sources: ["memory"],
+				maxResults: input.options.limit, minScore: input.options.minScore, sources: ["memory"], signal,
 			});
 			return { degraded: false, recallId, contextText: "", nativeHits };
 		}
@@ -236,7 +237,8 @@ export class MemoryContractRuntime implements MemoryContract {
 				external_reference: input.options.externalReference,
 				external_reference_visibility: input.options.externalReferenceVisibility,
 				aggregation: input.options.aggregation,
-			}, { name: "memory_recall", label: "Memory Recall", description: "" });
+			}, { name: "memory_recall", label: "Memory Recall", description: "", signal });
+			signal?.throwIfAborted();
 			return parseOutput("getRecall", { degraded: false, recallId,
 				contextText: result.content.map(part => part.text).join("\n\n"),
 				toolResult: JSON.parse(JSON.stringify(result)) });
@@ -245,7 +247,8 @@ export class MemoryContractRuntime implements MemoryContract {
 		const state = this.recallState(context.scopePolicy.getDefaultScope());
 		const result = await onBeforeAgentStart(this.services, this.configured().config,
 			this.services.retriever, this.services.store, context.scopePolicy,
-			state.history, state.turns, { prompt: input.query }, host, this.services.stateDir, this.services.telemetryUsage);
+			state.history, state.turns, { prompt: input.query }, host, this.services.stateDir, this.services.telemetryUsage, signal);
+		signal?.throwIfAborted();
 		const session = resolveRuntimeSessionId(host);
 		const turn = state.turns.get(session);
 		const memoryIds = result?.prependContext ? [...(state.history.get(session) ?? [])]
