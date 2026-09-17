@@ -1,10 +1,11 @@
 /** Real LLM API required. No mocking. Missing keys = FAIL. */
 
 /**
- * D5 A/B Evaluation: Retriever temporal expiry filtering.
+ * D5 A/B Evaluation: Retriever temporal expiry filtering and temporal decay.
  *
- * Tests the retained expiry flag:
+ * Tests two independent config flags:
  * - temporalExpiry (default OFF): drops memories past valid_until
+ * - temporalDecay (default ON): dynamic memories decay 3× faster
  *
  * Uses real embeddings + real SQLite store. No reranker (avoid external API).
  */
@@ -180,9 +181,13 @@ function makeRetrieverConfig(
 ): RetrievalConfig {
 	return {
 		...DEFAULT_RETRIEVAL_CONFIG,
+			temporalWeighting: true,
 		rerank: "none",
 		hardMinScore: 0,
 		minScore: 0,
+		recencyWeight: 0.05,
+		recencyHalfLifeDays: 30,
+		timeDecayHalfLifeDays: 60,
 		...overrides,
 	};
 }
@@ -254,6 +259,7 @@ describe("D5: Retriever temporal expiry filtering", () => {
 			{ warn: () => {} },
 			makeRetrieverConfig({
 				temporalExpiry: false,
+				temporalDecay: false,
 			}),
 		);
 
@@ -280,6 +286,7 @@ describe("D5: Retriever temporal expiry filtering", () => {
 			{ warn: () => {} },
 			makeRetrieverConfig({
 				temporalExpiry: true,
+				temporalDecay: false,
 			}),
 		);
 
@@ -303,6 +310,7 @@ describe("D5: Retriever temporal expiry filtering", () => {
 			{ warn: () => {} },
 			makeRetrieverConfig({
 				temporalExpiry: true,
+				temporalDecay: false,
 			}),
 		);
 
@@ -325,6 +333,7 @@ describe("D5: Retriever temporal expiry filtering", () => {
 			{ warn: () => {} },
 			makeRetrieverConfig({
 				temporalExpiry: true,
+				temporalDecay: false,
 			}),
 		);
 
@@ -347,6 +356,7 @@ describe("D5: Retriever temporal expiry filtering", () => {
 			{ warn: () => {} },
 			makeRetrieverConfig({
 				temporalExpiry: true,
+				temporalDecay: false,
 			}),
 		);
 
@@ -372,5 +382,132 @@ describe("D5: Retriever temporal expiry filtering", () => {
 		// The recommendation is to keep temporalExpiry OFF by default.
 		expect(hasRust).toBe(false);
 		expect(hasGrpc).toBe(false);
+	});
+});
+
+describe("D5: Retriever temporal decay scoring", () => {
+	let dbPath: string;
+	let cleanup: () => void;
+	let store: MemoryStore;
+	let storedIds: string[];
+
+	beforeEach(async () => {
+		const testDb = createTestDb();
+		dbPath = testDb.dbPath;
+		cleanup = testDb.cleanup;
+		store = new MemoryStore({ dbPath, embedder: testEmbedder });
+
+		const embedder = createEmbedder({ dimensions: 1024 }, STATE_DIR);
+
+		// Create a minimal 2-memory corpus: same text/age/importance,
+		// one static + one dynamic, to isolate temporal decay effect.
+		const texts = [
+			"The project architecture uses a three-layer design pattern",
+			"The project design follows a three-tier architecture approach",
+		];
+		const vectors = await embedder.embedMany(texts);
+
+		const sqlite = (
+			store as unknown as {
+				sqlite: {
+					prepare: (sql: string) => {
+						run: (...args: unknown[]) => void;
+					};
+				};
+			}
+		).sqlite;
+
+		storedIds = [];
+		const AGE = 30 * DAY; // 30 days old — enough for decay to show
+		for (let i = 0; i < texts.length; i++) {
+			const text = texts[i];
+			const vector = vectors[i];
+			if (!text || !vector) continue;
+
+			const temporalType = i === 0 ? "static" : "dynamic";
+			const stored = await store.store({
+				text,
+				vector,
+				category: "episodic",
+				projectId: "global",
+				importance: 0.7,
+				metadata: buildMetadataJson(temporalType, undefined),
+			});
+			storedIds.push(stored.id);
+			sqlite
+				.prepare("UPDATE nodix_memories SET timestamp = ? WHERE id = ?")
+				.run(NOW - AGE, stored.id);
+		}
+	});
+
+	afterEach(() => {
+		store.close();
+		cleanup();
+	});
+
+	it("temporalDecay ON: dynamic memory scores lower than static at same age", async () => {
+		const embedder = createEmbedder({ dimensions: 1024 }, STATE_DIR);
+		const retriever = createRetriever(
+			store,
+			embedder,
+			{ warn: () => {} },
+			makeRetrieverConfig({
+				temporalExpiry: false,
+				temporalDecay: true,
+				timeDecayHalfLifeDays: 60,
+			}),
+		);
+
+		const results = await retriever.retrieve({
+			query: "project architecture design pattern",
+			limit: 2,
+		});
+
+		expect(results.length).toBe(2);
+
+		const staticResult = results.find((r) => r.entry.id === storedIds[0]);
+		const dynamicResult = results.find((r) => r.entry.id === storedIds[1]);
+
+		expect(staticResult).toBeDefined();
+		expect(dynamicResult).toBeDefined();
+		if (!staticResult || !dynamicResult) throw new Error("Both temporal candidates must be retrieved");
+
+		// Dynamic should score lower due to 3× faster time decay
+		expect(dynamicResult.score / staticResult.score).toBeLessThan(1);
+	});
+
+	it("temporalDecay OFF: dynamic and static score approximately the same", async () => {
+		const embedder = createEmbedder({ dimensions: 1024 }, STATE_DIR);
+		const retriever = createRetriever(
+			store,
+			embedder,
+			{ warn: () => {} },
+			makeRetrieverConfig({
+				temporalExpiry: false,
+				temporalDecay: false,
+				timeDecayHalfLifeDays: 60,
+			}),
+		);
+
+		const results = await retriever.retrieve({
+			query: "project architecture design pattern",
+			limit: 2,
+		});
+
+		expect(results.length).toBe(2);
+
+		const staticResult = results.find((r) => r.entry.id === storedIds[0]);
+		const dynamicResult = results.find((r) => r.entry.id === storedIds[1]);
+
+		expect(staticResult).toBeDefined();
+		expect(dynamicResult).toBeDefined();
+		if (!staticResult || !dynamicResult) throw new Error("Both temporal candidates must be retrieved");
+
+		// Scores should be similar (not identical because texts differ slightly,
+		// but temporal decay should not cause a significant gap)
+		const ratio = dynamicResult.score / staticResult.score;
+		// With decay OFF, ratio should be close to 1 (within 30% due to text similarity)
+		expect(ratio).toBeGreaterThan(0.7);
+		expect(ratio).toBeLessThan(1.3);
 	});
 });
