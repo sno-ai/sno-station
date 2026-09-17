@@ -95,7 +95,7 @@ function prependTodoBlock(result: ToolResult, todos: TodoListResult): ToolResult
 
 
 
-export async function executeMemoryRecallTool(ctx: ToolContext, access: ReturnType<typeof resolveAgentAccess>, _toolCallId: unknown, params: unknown, options: { name: string; label: string; description: string }): Promise<ToolResult> {
+export async function executeMemoryRecallTool(ctx: ToolContext, access: ReturnType<typeof resolveAgentAccess>, _toolCallId: unknown, params: unknown, options: { name: string; label: string; description: string; signal?: AbortSignal }): Promise<ToolResult> {
 			const raw = typeof params === "object" && params !== null ? params as Record<string, unknown> : {};
 			return withLogContext({ operation_id: currentLogContext().operation_id ?? randomUUID(),
 				...(typeof raw.external_reference === "string" ? { external_reference: raw.external_reference,
@@ -149,6 +149,7 @@ export async function executeMemoryRecallTool(ctx: ToolContext, access: ReturnTy
 				// Await the tool execution dependency before deriving downstream state.
 				const retrieved = await retrieveForMemoryRecallOrEval(ctx.retriever, {
 					diagnostics: retrievalDiagnostics,
+					signal: options.signal,
 					query: parsed.query,
 					limit: effectiveTopK,
 					scopeFilter,
@@ -165,6 +166,7 @@ export async function executeMemoryRecallTool(ctx: ToolContext, access: ReturnTy
 					nowMs: Date.now(),
 					...(ctx.language ? { explicitLocale: ctx.language } : {}),
 				});
+				options.signal?.throwIfAborted();
 				const aggregationIncomplete =
 					readsWholePopulation && retrieved.some((result) => result.aggregationIncomplete === true);
 				// A structured aggregation reads the whole population; filtering it by score would
