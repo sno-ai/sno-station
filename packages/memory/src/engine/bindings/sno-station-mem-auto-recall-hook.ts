@@ -60,6 +60,7 @@ export async function onBeforeAgentStart(
 	ctx: PluginHookAgentContext,
 	stateDir: string,
 	telemetryUsage?: MemoryTelemetryUsageOutbox,
+	signal?: AbortSignal,
 ): Promise<PluginHookBeforeAgentStartResult | undefined> {
 	const sessionKey = typeof ctx.sessionKey === "string" ? ctx.sessionKey : "";
 	return withLogContext({ operation_id: currentLogContext().operation_id ?? randomUUID(), session_reference: sessionKey }, async () => {
@@ -120,12 +121,13 @@ export async function onBeforeAgentStart(
 				query: recallQuery,
 				limit: recallLimit,
 				scopeFilter,
-				signal: recallController.signal,
+				signal: signal ? AbortSignal.any([signal, recallController.signal]) : recallController.signal,
 				sessionId,
 				nowMs: suppressionNow,
 			}),
 			timeoutPromise,
 		]);
+		signal?.throwIfAborted();
 		// Treat the empty collection as a first-class outcome instead of widening behavior.
 		if (results.length === 0) {
 			outcome = "empty_success";
