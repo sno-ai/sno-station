@@ -85,7 +85,7 @@ export class MemoryContractRuntime implements MemoryContract {
 	private registration: Registration | undefined;
 	private readonly providers = new Map<string, SnoStationMemProviderSearchManager>();
 	private readonly reflectionStates = new Map<string, ReflectionStrategyState>();
-	private readonly recallStates = new Map<string, { history: Map<string, Map<string, number>>; turns: Map<string, number> }>();
+	private readonly recallStates = new Map<string, Pick<NonNullable<ToolContext["recallSession"]>, "history" | "toolTokens"> & { turns: Map<string, number> }>();
 	constructor(private readonly services: MemoryRuntimeServices) {}
 
 	async close(): Promise<void> {
@@ -159,10 +159,10 @@ export class MemoryContractRuntime implements MemoryContract {
 			workspaceDir: scope.host?.workspace };
 	}
 
-	private recallState(project: string): { history: Map<string, Map<string, number>>; turns: Map<string, number> } {
+	private recallState(project: string): Pick<NonNullable<ToolContext["recallSession"]>, "history" | "toolTokens"> & { turns: Map<string, number> } {
 		let state = this.recallStates.get(project);
 		if (!state) {
-			state = { history: new Map(), turns: new Map() };
+			state = { history: new Map(), turns: new Map(), toolTokens: new Map() };
 			this.recallStates.set(project, state);
 		}
 		return state;
@@ -233,7 +233,13 @@ export class MemoryContractRuntime implements MemoryContract {
 			return { degraded: false, recallId, contextText: "", nativeHits };
 		}
 		if (input.options.source === "manual") {
-			const result = await executeMemoryRecallTool(context, resolveAgentAccess(context.agentId, context.agentId), recallId, {
+			const host = this.hostContext(input.scope);
+			const state = this.recallState(context.scopePolicy.getDefaultScope());
+			const sessionId = resolveRuntimeSessionId(host);
+			const turn = state.turns.get(sessionId) ?? 0;
+			const result = await executeMemoryRecallTool({ ...context,
+				recallSession: { sessionId, turn, history: state.history, toolTokens: state.toolTokens },
+			}, resolveAgentAccess(context.agentId, context.agentId), recallId, {
 				query: input.query, scope: context.scopePolicy.getAccessibleScopes().length > 1 ? undefined : context.scopePolicy.getDefaultScope(), top_k: input.options.limit,
 				min_score: input.options.minScore, category: input.options.category,
 				include_metadata: input.options.includeMetadata, include_history: input.options.includeHistory,
@@ -338,7 +344,11 @@ export class MemoryContractRuntime implements MemoryContract {
 		const project = await this.project(scope);
 		checkMemoryOperation();
 		const state = this.recallStates.get(project);
-		if (state) clearSessionState(resolveRuntimeSessionId(this.hostContext(scope)), state.history, state.turns);
+		if (state) {
+			const sessionId = resolveRuntimeSessionId(this.hostContext(scope));
+			clearSessionState(sessionId, state.history, state.turns);
+			state.toolTokens.delete(sessionId);
+		}
 		await this.services.accessTracker.flush();
 		checkMemoryOperation();
 		if (this.configured().config.sessionStrategy === "memoryReflection") {
