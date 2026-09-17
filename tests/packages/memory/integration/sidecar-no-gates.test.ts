@@ -4,11 +4,13 @@ import { runMaintenancePass } from "../../../../packages/sno-station-mem/src/sto
 import { setTimeout as delay } from "node:timers/promises";
 import { tmpdir, userInfo } from "node:os";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { pluginConfigSchema } from "../../../../packages/sno-station-mem/src/contract/config/plugin-config-schema";
 import { bindStore } from "../../../../packages/sno-station-mem/src/engine/shared/paths";
 import { startRemSidecar } from "../../../../packages/sno-station-mem/src/sidecar/server";
 import { MemoryRuntimePool } from "../../../../packages/sno-station-mem/src/sidecar/memory-runtime";
+import { MemoryContractRuntime } from "../../../../packages/sno-station-mem/src/engine/contract-runtime";
+import { MemoryRetriever } from "../../../../packages/sno-station-mem/src/engine/retrieval/retriever";
 import { MemoryStore } from "../../../../packages/sno-station-mem/src/store/store";
 import { createTestDb, createTestEmbedder } from "../../../apps/mem-claw/helpers/test-db";
 
@@ -72,21 +74,141 @@ describe("sidecar keeps serving", () => {
 		] as const) {
 			const response = await fetch(`http://127.0.0.1:${sidecar.port}/rem/run`, { method: "POST", body: JSON.stringify(body) });
 			expect(response.status).toBe(400);
-			expect(await response.json()).toEqual({ error });
+			expect(await response.json()).toEqual(error === "unsupported_rem_type" ? { error, unknownTypes: ["typo"] } : { error });
 		}
 		const journal = join(root, "sno-station-mem", "rem-wave-jobs.jsonl");
 		expect(existsSync(journal)).toBe(false);
 	});
-	it("drops unknown REM types while preserving the requested operation", async () => {
+	it("rejects mixed REM types without allocating jobs", async () => {
 		await health();
 		if (!sidecar) throw new Error("missing test sidecar");
 		const response = await fetch(`http://127.0.0.1:${sidecar.port}/rem/run`, { method: "POST",
-			body: JSON.stringify({ types: ["typo", "rem-update"], scope: "global" }),
+			body: JSON.stringify({ types: ["typo", "rem-update", "old-operation"], scope: "global" }),
 		});
-		expect(response.status).toBe(202);
-		const job = await response.json();
-		const state = await (await fetch(`http://127.0.0.1:${sidecar.port}/rem/jobs/${job.job_id}`)).json();
-		expect(state.requested_operations).toEqual(["rem-update"]);
+		expect(response.status).toBe(400);
+		expect(await response.json()).toEqual({ error: "unsupported_rem_type", unknownTypes: ["typo", "old-operation"] });
+		expect(existsSync(join(root, "sno-station-mem", "rem-wave-jobs.jsonl"))).toBe(false);
+	});
+	it("times out a never resolving runtime call, serves another request, and stops", async () => {
+		const opening = vi.spyOn(MemoryRuntimePool, "open");
+		const inspection = vi.spyOn(MemoryContractRuntime.prototype, "inspect")
+			.mockImplementationOnce(() => new Promise(() => {}));
+		let bound: ReturnType<typeof setTimeout> | undefined;
+		try {
+			await health();
+			if (!sidecar) throw new Error("missing test sidecar");
+			const body = JSON.stringify({ scope: { principal: "caller", project: "global", session: "deadline" }, op: { op: "list" } });
+			const response = await fetch(`http://127.0.0.1:${sidecar.port}/v1/inspect`, { method: "POST", body });
+			expect(response.status).toBe(504);
+			expect(await response.json()).toEqual({ degraded: true, reason: "timeout" });
+			const later = await fetch(`http://127.0.0.1:${sidecar.port}/v1/inspect`, { method: "POST", body });
+			expect(later.status).toBe(200);
+			expect(await later.json()).toEqual({ degraded: false, result: { op: "list", project: "global", entries: [] } });
+			const stopping = sidecar.stop();
+			sidecar = undefined;
+			expect(await Promise.race([stopping.then(() => "stopped"), new Promise(resolve => {
+				bound = setTimeout(() => resolve("still running"), 1_000);
+			})])).toBe("stopped");
+			expect(existsSync(join(root, "station", "sidecar.json"))).toBe(false);
+		} finally {
+			clearTimeout(bound);
+			inspection.mockRestore();
+			for (const result of opening.mock.results) if (result.type === "return") await (await result.value).close();
+			opening.mockRestore();
+		}
+	}, 45_000);
+	it("bounds shutdown while a runtime call is still before its deadline", async () => {
+		const opening = vi.spyOn(MemoryRuntimePool, "open");
+		const entered = Promise.withResolvers<void>();
+		const inspection = vi.spyOn(MemoryContractRuntime.prototype, "inspect").mockImplementationOnce(() => {
+			entered.resolve();
+			return new Promise(() => {});
+		});
+		const controller = new AbortController();
+		let bound: ReturnType<typeof setTimeout> | undefined;
+		try {
+			await health();
+			if (!sidecar) throw new Error("missing test sidecar");
+			const request = fetch(`http://127.0.0.1:${sidecar.port}/v1/inspect`, { method: "POST", signal: controller.signal,
+				body: JSON.stringify({ scope: { principal: "caller", project: "global", session: "shutdown" }, op: { op: "list" } }),
+			}).catch(() => undefined);
+			await entered.promise;
+			const stopping = sidecar.stop();
+			sidecar = undefined;
+			expect(await Promise.race([stopping.then(() => "stopped"), new Promise(resolve => {
+				bound = setTimeout(() => resolve("still running"), 6_000);
+			})])).toBe("stopped");
+			expect(existsSync(join(root, "station", "sidecar.json"))).toBe(false);
+			controller.abort();
+			await request;
+		} finally {
+			controller.abort();
+			clearTimeout(bound);
+			inspection.mockRestore();
+			for (const result of opening.mock.results) if (result.type === "return") await (await result.value).close();
+			opening.mockRestore();
+		}
+	}, 12_000);
+	it.each([
+		{ source: "manual" },
+		{ source: "manual", aggregation: { operation: "count", terms: ["notebook"] } },
+	])("aborts retrieval at the HTTP deadline for %j", async options => {
+		const entered = Promise.withResolvers<void>();
+		let aborted = false;
+		const blocked = Promise.withResolvers<[]>();
+		const retrieval = vi.spyOn(MemoryRetriever.prototype, "retrieve").mockImplementationOnce(context => {
+			context.signal?.addEventListener("abort", () => { aborted = true; }, { once: true });
+			entered.resolve();
+			return blocked.promise;
+		});
+		try {
+			await health();
+			if (!sidecar) throw new Error("missing test sidecar");
+			const scope = { principal: "caller", project: "global", session: "abort" };
+			await fetch(`http://127.0.0.1:${sidecar.port}/v1/inspect`, { method: "POST", body: JSON.stringify({ scope, op: { op: "list" } }) });
+			vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+			const request = fetch(`http://127.0.0.1:${sidecar.port}/v1/get-recall`, { method: "POST",
+				body: JSON.stringify({ scope, query: "What notebook records do you remember?", options }),
+			});
+			await entered.promise;
+			await vi.advanceTimersByTimeAsync(120_000);
+			vi.useRealTimers();
+			const response = await request;
+			expect(response.status).toBe(504);
+			expect(await response.json()).toEqual({ degraded: true, reason: "timeout" });
+			expect(aborted).toBe(true);
+		} finally {
+			vi.useRealTimers();
+			blocked.resolve([]);
+			retrieval.mockRestore();
+		}
+	});
+	it("passes cancellation through automatic recall", async () => {
+		const pool = await MemoryRuntimePool.open();
+		const entered = Promise.withResolvers<void>();
+		const blocked = Promise.withResolvers<[]>();
+		const controller = new AbortController();
+		let aborted = false;
+		const retrieval = vi.spyOn(MemoryRetriever.prototype, "retrieve").mockImplementationOnce(context => {
+			context.signal?.addEventListener("abort", () => { aborted = true; blocked.resolve([]); }, { once: true });
+			entered.resolve();
+			return blocked.promise;
+		});
+		const result = pool.invoke("getRecall", {
+			scope: { principal: "caller", project: "global", session: "auto-abort" },
+			query: "What notebook records do you remember?", options: { source: "auto" },
+		}, "auto-abort", controller.signal).catch(error => error);
+		try {
+			await entered.promise;
+			controller.abort(new Error("test cancelled"));
+			expect(aborted).toBe(true);
+			expect((await result).message).toBe("test cancelled");
+		} finally {
+			blocked.resolve([]);
+			await result;
+			retrieval.mockRestore();
+			await pool.close();
+		}
 	});
 	it("answers an unfinished memory request at its route deadline and keeps serving", async () => {
 		await health();
