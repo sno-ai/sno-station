@@ -1,5 +1,5 @@
 /** @file access-tracker.ts
- * @purpose Tracks memory access signals for retention and tier management.
+ * @purpose Tracks memory access signals that feed recency, ranking, and decay decisions.
  * @boundary Memory store metadata and retrieval result identifiers.
  * @see store.ts, retriever.ts, selective-forgetting-scorer.ts, retrieval-stats.ts.
  */
@@ -7,7 +7,8 @@
 /**
  * Access Tracker
  *
- * Tracks access counts and timestamps for retention and tier management.
+ * Tracks memory access patterns to support reinforcement-based decay.
+ * Frequently accessed memories decay more slowly (longer effective half-life).
  */
 
 import { createLogger } from "@snoai/utils/logger";
@@ -43,6 +44,9 @@ const LEGACY_MAX_ACCESS_COUNT = 10_000;
 const DEFAULT_DEBOUNCE_MS = 5_000;
 const MAX_RETRY_DELAY_MS = 60_000;
 const MAX_WRITE_FAILURES_PER_ID = 5;
+
+/** Access count itself decays with a 30-day half-life */
+const ACCESS_DECAY_HALF_LIFE_DAYS = 30;
 
 // Utility
 
@@ -147,6 +151,56 @@ export function buildUpdatedMetadata(
 		access_count: newCount,
 		last_accessed_at: now,
 	});
+}
+
+// Effective Half-Life Computation
+
+/**
+ * Compute the effective half-life for a memory based on its access history.
+ *
+ * The access count itself decays over time (30-day half-life for access
+ * freshness), so stale accesses contribute less reinforcement. The extension
+ * uses a logarithmic curve (`Math.log1p`) to provide diminishing returns.
+ *
+ * @param baseHalfLife        - Base half-life in days (e.g. 30)
+ * @param accessCount         - Raw number of times the memory was accessed
+ * @param lastAccessedAt      - Timestamp (ms) of last access
+ * @param reinforcementFactor - Scaling factor for reinforcement (0 = disabled)
+ * @param maxMultiplier       - Hard cap: result <= baseHalfLife * maxMultiplier
+ * @returns Effective half-life in days
+ */
+// LH: Effective half-life increases with access evidence so frequently useful memories decay more slowly.
+// LH: The formula feeds ranking policy without changing storage schema or mutating tier state.
+// LH: Bounds prevent access bursts from making stale memories immortal.
+export function computeEffectiveHalfLife(
+	baseHalfLife: number,
+	accessCount: number,
+	lastAccessedAt: number,
+	reinforcementFactor: number,
+	maxMultiplier: number,
+	now: number = Date.now(),
+): number {
+	// Short-circuit: no reinforcement or no accesses
+	if (reinforcementFactor === 0 || accessCount <= 0) {
+		return baseHalfLife;
+	}
+
+	const daysSinceLastAccess = Math.max(0, (now - lastAccessedAt) / (1000 * 60 * 60 * 24));
+
+	// Access freshness decays exponentially with 30-day half-life
+	const accessFreshness = Math.exp(-daysSinceLastAccess * (Math.LN2 / ACCESS_DECAY_HALF_LIFE_DAYS));
+
+	// Effective access count after freshness decay
+	const effectiveAccessCount = accessCount * accessFreshness;
+
+	// Logarithmic extension for diminishing returns
+	const extension = baseHalfLife * reinforcementFactor * Math.log1p(effectiveAccessCount);
+
+	const result = baseHalfLife + extension;
+
+	// Hard cap
+	const cap = baseHalfLife * maxMultiplier;
+	return Math.min(result, cap);
 }
 
 // AccessTracker Class
