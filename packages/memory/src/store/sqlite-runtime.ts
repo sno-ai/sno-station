@@ -10,6 +10,7 @@
  *   this abstraction.
  */
 
+import { memoryWrite, memoryTransaction } from "../engine/operation-cancellation";
 import { existsSync } from "node:fs";
 import {
 	type Dek,
@@ -121,13 +122,27 @@ function wrapEncryptedDatabase(rawDb: ChokepointDb): { raw: RawSqliteDatabase; d
 		prepare(sql: string): SqliteStatementLike {
 			const cached = statements.get(sql);
 			if (cached) return cached;
-			const statement = rawDb.prepare(sql);
+			const raw = rawDb.prepare(sql);
+			const statement: SqliteStatementLike = {
+				get: (...params) => raw.readonly ? raw.get(...params) : memoryWrite(() => raw.get(...params)),
+				all: (...params) => raw.readonly ? raw.all(...params) : memoryWrite(() => raw.all(...params)),
+				run: (...params) => raw.readonly ? raw.run(...params) : memoryWrite(() => raw.run(...params)),
+			};
 			statements.set(sql, statement);
 			return statement;
 		},
-		exec: (sql) => rawDb.exec(sql),
+		exec: (sql) => memoryWrite(() => rawDb.exec(sql)),
 		close(): void { statements.clear(); rawDb.close(); },
-		transaction: (fn) => rawDb.transaction(fn) as SqliteTransactionLike,
+		transaction: (fn) => {
+			const transaction = rawDb.transaction(fn) as SqliteTransactionLike;
+			const run = (...args: unknown[]): unknown => memoryTransaction(() => transaction(...args));
+			return Object.assign(run, {
+				default: (...args: unknown[]) => memoryTransaction(() => transaction.default(...args)),
+				deferred: (...args: unknown[]) => memoryTransaction(() => transaction.deferred(...args)),
+				immediate: (...args: unknown[]) => memoryTransaction(() => transaction.immediate(...args)),
+				exclusive: (...args: unknown[]) => memoryTransaction(() => transaction.exclusive(...args)),
+			});
+		},
 		loadExtension: (path) => { rawDb.loadExtension(path); },
 		runRecoveryOperation: (operation) => operation(rawDb),
 	} };
