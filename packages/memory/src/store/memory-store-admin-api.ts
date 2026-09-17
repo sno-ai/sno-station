@@ -303,15 +303,11 @@ Object.assign(MemoryStore.prototype, {
 		if (this.sqliteClosed) return;
 		this.sqliteClosed = true;
 		try {
-			// Skip close-time maintenance entirely on latched (integrity-failed)
-			// storage: no optimize, no checkpoint — plain close only.
-			if (!this.sqlite.isFailed()) {
 				// Bounded ANALYZE refresh so the planner's statistics track real data
 				// shape; PRAGMA optimize only re-analyzes tables this connection queried.
 				this.sqlite.exec("PRAGMA analysis_limit=400");
 				this.sqlite.exec("PRAGMA optimize");
 				this.sqlite.exec("PRAGMA wal_checkpoint(TRUNCATE)");
-			}
 		} catch (error) {
 			log.warn("sqlite close-time maintenance failed", { error }, {
 				event_name: "sno_station_mem.memory-store-admin-api.sqlite.close.time.maintenance.failed",

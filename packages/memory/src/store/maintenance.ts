@@ -1,7 +1,7 @@
 /** @file maintenance.ts
- * @purpose Ordered maintenance pass: integrity gate, outbox drain, usage-event retention, FTS
+ * @purpose Ordered maintenance pass: integrity check, outbox drain, usage-event retention, FTS
  *   merge, planner statistics, backup, REM trigger check. Each job runs on its own interval.
- * @boundary Owns the gateway maintenance timer; storage failure latches fail-closed.
+ * @boundary Owns the gateway maintenance timer; integrity failures are logged without blocking storage.
  * @see backup.ts, memory-telemetry-outbox.ts, sqlite-runtime.ts.
  */
 
@@ -19,10 +19,7 @@ import {
 	USAGE_OUTBOX_INTERVAL_MS,
 } from "../../config/index";
 import {
-	activateKillSwitch,
 	appendAuditEntry,
-	deactivateKillSwitch,
-	readKillSwitchState,
 } from "../engine/operations/runtime-audit-log";
 import { isBackupDue, runBackup } from "./backup";
 import type { MemoryStore } from "./memory-store-base";
@@ -90,8 +87,6 @@ const OUTBOX_DRAIN_BUDGET_MS = 30_000;
 const RETENTION_DELETE_BATCH = 5000;
 const RETENTION_PRUNE_BUDGET_MS = 5_000;
 const FTS_MERGE_MAX_ITERATIONS = 10;
-/** Above this, the integrity sweep is worth flagging as an operational cost. */
-const INTEGRITY_SWEEP_SLOW_WARN_MS = 500;
 
 export interface MaintenanceDeps {
 	store: MemoryStore;
@@ -100,11 +95,11 @@ export interface MaintenanceDeps {
 	usageOutbox?: MemoryTelemetryUsageOutbox;
 	dbPath: string;
 	backupDir: string;
-	/** sno-station-mem state dir — the kill-switch file lives here. */
+	/** sno-station-mem state directory for maintenance records. */
 	stateDir: string;
 	/**
 	 * Integrity sweep implementation; defaults to sno-station-core-crypto's runIntegrityCheck.
-	 * Injectable so the fail-closed integration test can drive the failure path
+	 * Injectable so the integrity integration test can drive the failure path
 	 * (pre-declared in the DB-optimization plan's test design).
 	 */
 	integrityCheck?: (rawDb: Parameters<typeof runIntegrityCheck>[0]) => void;
@@ -242,8 +237,8 @@ function recoverDerivedFts(deps: MaintenanceDeps, rawDb: RawIntegrityDb): boolea
 		recordIntegrityAudit(deps.stateDir, "retained", "error", {
 			reason: error instanceof Error ? error.message : String(error),
 		});
-		log.error("derived FTS recovery failed; storage remains latched", { error }, {
-			event_name: "sno_station_mem.maintenance.derived.fts.recovery.failed.storage.remains.latched",
+		log.error("derived FTS recovery failed; storage continues serving", { error }, {
+			event_name: "memory.storage.fts.recovery.failed",
 			file: "packages/sno-station-mem/src/store/maintenance.ts",
 			function: "recoverDerivedFts",
 			site_id: "maintenance.recoverDerivedFts.c07ad948a2",
@@ -252,40 +247,23 @@ function recoverDerivedFts(deps: MaintenanceDeps, rawDb: RawIntegrityDb): boolea
 	}
 }
 
-/**
- * Fail-closed reaction to a detected integrity failure: record the incident
- * (before latching — it is the last write this handle accepts), latch every
- * SQL entry point on the store's connection, and raise the kill switch so
- * tools and hooks stop at their existing entry checks. Backups are NOT taken
- * and old backups are NOT pruned, preserving the last known-good snapshots.
- */
-function failClosed(deps: MaintenanceDeps, error: unknown): void {
+/** Records an integrity failure without blocking subsequent SQL. */
+function recordIntegrityFailure(deps: MaintenanceDeps, error: unknown): void {
 	const message = error instanceof Error ? error.message : String(error);
 	try {
 		recordMemoryTelemetryIncident(deps.store.sqlite, {
 			incidentType: "storage_integrity_check_failed",
 			severity: "error",
-			message: "database integrity check failed; storage latched fail-closed",
+			message: "database integrity check failed; storage continues serving",
 			payload: { error_code: "integrity_check_failed", last_error: message.slice(0, 500) },
 		});
 	} catch {
 		// Incident persistence is best-effort on a damaged database.
 	}
-	deps.store.sqlite.markFailed(`integrity check failed: ${message}`);
-	try {
-		activateKillSwitch(deps.stateDir, `db integrity failure: ${message.slice(0, 200)}`, "maintenance");
-	} catch (killSwitchError) {
-		log.error("failed to raise kill switch after integrity failure", { error: killSwitchError }, {
-			event_name: "sno_station_mem.maintenance.failed.to.raise.kill.switch.after.integrity.failure",
-			file: "packages/sno-station-mem/src/store/maintenance.ts",
-			function: "failClosed",
-			site_id: "maintenance.failClosed.b9166d3fe2",
-		});
-	}
-	log.error("storage latched fail-closed after integrity failure", { error: message }, {
-		event_name: "sno_station_mem.maintenance.storage.latched.fail.closed.after.integrity.failure",
+	log.error("storage continues serving after integrity failure", { error: message }, {
+		event_name: "memory.storage.integrity.failed",
 		file: "packages/sno-station-mem/src/store/maintenance.ts",
-		function: "failClosed",
+		function: "recordIntegrityFailure",
 		site_id: "maintenance.failClosed.dd7955e647",
 	});
 }
@@ -333,73 +311,24 @@ function mergeFtsSegments(store: MemoryStore): void {
 	}
 }
 
-/**
- * Step 0: full-page integrity sweep. Returns false when the store stays latched and the pass must
- * abort; `report` carries the timing and recovery outcome either way.
- */
-function sweepIntegrity(deps: MaintenanceDeps, report: MaintenanceReport): boolean {
-	const priorKillSwitch = readKillSwitchState(deps.stateDir);
-	const integrityStart = Date.now();
+/** Full integrity check and optional repair; reads and writes stay available. */
+function sweepIntegrity(deps: MaintenanceDeps, report: MaintenanceReport): void {
+	const started = Date.now();
 	try {
 		const sweep = deps.integrityCheck ?? runIntegrityCheck;
-		// $client is typed as the wrapper interface but holds the raw driver
-		// Database at runtime (drizzle was constructed over sqlite.raw) — the
-		// narrow assertion crosses that validated boundary.
-		sweep(deps.store.db.$client as unknown as Parameters<typeof runIntegrityCheck>[0]);
-		report.integrityMs = Date.now() - integrityStart;
-		if (priorKillSwitch.active && priorKillSwitch.activatedBy === "maintenance") {
-			deactivateKillSwitch(deps.stateDir);
-			report.integrityRecovery = "recovered";
-			recordIntegrityAudit(deps.stateDir, "recovered", "ok", {
-				reason: "clean integrity sweep after restart",
-			});
-			log.info("cleared maintenance integrity latch after clean restart sweep", undefined, {
-				event_name: "sno_station_mem.maintenance.cleared.maintenance.integrity.latch.after.clean.restart.sweep",
-				file: "packages/sno-station-mem/src/store/maintenance.ts",
-				function: "sweepIntegrity",
-				site_id: "maintenance.runMaintenancePass.db1242ce1c",
-			});
-		}
-		if (report.integrityMs > INTEGRITY_SWEEP_SLOW_WARN_MS) {
-			log.warn("integrity sweep is blocking the event loop for longer than expected", {
-				integrityMs: report.integrityMs,
-			}, {
-				event_name: "sno_station_mem.maintenance.integrity.sweep.is.blocking.the.event.loop.for.longer.than.expected",
-				file: "packages/sno-station-mem/src/store/maintenance.ts",
-				function: "sweepIntegrity",
-				site_id: "maintenance.runMaintenancePass.4ae162dc73",
-			});
-		}
+		deps.store.sqlite.runRecoveryOperation(raw => raw.transaction(() => {
+			// xIntegrity does not refresh FTS5's cached structure after another connection writes.
+			// Opening a cursor resets it; the read transaction keeps the subsequent sweep on that snapshot.
+			if (deps.store.hasFtsSupport) raw.prepare("SELECT rowid FROM nodix_memory_chunks_fts LIMIT 1").get();
+			sweep(raw);
+		}).deferred());
 	} catch (error) {
-		failClosed(deps, error);
-		if (tryRecoverDerivedFts(deps)) {
-			if (!priorKillSwitch.active || priorKillSwitch.activatedBy === "maintenance") {
-				deactivateKillSwitch(deps.stateDir);
-			} else if (!priorKillSwitch.corrupt) {
-				// Recovery temporarily claims the kill switch; restore a valid earlier pause.
-				activateKillSwitch(
-					deps.stateDir,
-					priorKillSwitch.reason,
-					priorKillSwitch.activatedBy,
-				);
-			}
-			deps.store.sqlite.clearFailedAfterVerifiedRecovery();
-			report.integrityRecovery = "recovered";
-			report.integrityMs = Date.now() - integrityStart;
-		} else {
-			report.integrityRecovery = "retained";
-			report.aborted = true;
-			return false;
-		}
-	}
-	return true;
+		recordIntegrityFailure(deps, error);
+		report.integrityRecovery = tryRecoverDerivedFts(deps) ? "recovered" : "retained";
+	} finally { report.integrityMs = Date.now() - started; }
 }
 
-/**
- * Ordered maintenance pass. Step 0 (integrity) gates everything: on failure the
- * pass aborts fail-closed. Steps 1–5 are individually best-effort. `due` names the jobs this pass
- * runs; a direct call runs all of them.
- */
+/** Runs the requested maintenance jobs independently. */
 export function runMaintenancePass(
 	deps: MaintenanceDeps,
 	due: ReadonlySet<MaintenanceJob> = ALL_MAINTENANCE_JOBS,
@@ -424,18 +353,13 @@ export function runMaintenancePass(
 		});
 		return report;
 	}
+	deps.store.db.retrySetup();
+	deps.store.hasFtsSupport = deps.store.sqlite.prepare(
+		"SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'nodix_memory_chunks_fts' LIMIT 1",
+	).get() !== undefined;
 	const now = Date.now();
 
-	// 0. Full-page integrity sweep FIRST — nothing else may touch a damaged DB.
-	// Runs synchronously on better-sqlite3 (no async driver API exists), so it
-	// blocks the gateway event loop for its duration. Accepted: SQLCipher
-	// verifies each page's HMAC at read time regardless, so a corrupt page can
-	// never be silently served even without this sweep — this is early-warning
-	// defense-in-depth, not the only guard. If INTEGRITY_SWEEP_SLOW_WARN_MS
-	// starts firing routinely as the database grows, move this to a
-	// worker_thread with its own read-only connection (host adversarial
-	// review 2026-07-13; follow-up, not done here).
-	if (due.has("integrity") && !sweepIntegrity(deps, report)) return report;
+	if (due.has("integrity")) sweepIntegrity(deps, report);
 
 	// 1. Outbox drain (bounded catch-up) + quarantine hygiene.
 	if (deps.usageOutbox && due.has("usage-outbox")) {
@@ -530,7 +454,7 @@ export interface MaintenanceTimerHandle {
 /**
  * Gateway maintenance schedule: first tick MAINTENANCE_FIRST_TICK_DELAY_MS after boot, then every
  * tickMs. Each tick runs the jobs whose own interval has elapsed since they last ran; the first
- * tick runs all of them. Self-stops once the storage latch trips.
+ * tick runs all of them. Stops when its store closes.
  */
 export function startMaintenanceTimer(
 	deps: MaintenanceDeps,
@@ -582,10 +506,6 @@ export function startMaintenanceTimer(
 				function: "tick",
 				site_id: "maintenance.tick.6bd3e0102c",
 			});
-			stop();
-			return;
-		}
-		if (deps.store.sqlite.isFailed()) {
 			stop();
 			return;
 		}
