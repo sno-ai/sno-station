@@ -1704,15 +1704,21 @@ the response socket. Content-Type is not used as an admission check.
 Memory route deadlines cover body reading, opening the runtime and awaiting invocation.
 At deadline, a per-request AbortController aborts the body reader and the route returns
 504 `{"degraded":true,"reason":"timeout"}`. Abort checks after body reading and runtime
-opening prevent a late invocation. The signal enters the runtime pool and getRecall paths
-(native search, manual recall and automatic recall). Response close also aborts the request.
-Cancellation is cooperative: capture/mutation/session-end implementations do not receive
-the signal once their method starts, so writes may still complete. Runtime opening can also
-finish after the deadline. Do not replay a timed-out write blindly; read durable state first.
-The bounded request promise is tracked for shutdown; this does not prove underlying work
-has ended. Timers and abort/close listeners are removed when the handler finishes.
-Shutdown waits at most 5000 ms, logs the unfinished phase and pending requests, then closes
-connections and removes its owned discovery record. This is not a write rollback guarantee.
+opening prevent a late invocation. The signal enters recall, capture, mutation and session-end
+execution. Response close also aborts the request. Capture, mutation and session-end carry
+request-local cancellation through nested calls to model/retrieval signals and write checkpoints.
+Each SQL write and reflection/learning file write checks cancellation before starting. A started
+SQL transaction or file write finishes; a later write is skipped. The terminal error log records
+`outcome: "aborted"` and `writes: N`: completed SQL write statements and file writes, excluding
+rolled-back statements. This is not a count of memory rows or a rollback of prior commits.
+Runtime opening can finish after the deadline. Do not replay a timed-out write blindly; read
+durable state first. The actual task stays tracked until invocation and its cleanup settle,
+independently of the 504 response. Handler timers and abort/close listeners are removed when
+the HTTP handler finishes.
+Shutdown waits at most 5000 ms, logs the unfinished phase, task identities and pending requests,
+then closes connections and removes its owned discovery record. Store disposal remains deferred
+until the real tasks finish, even if `stop()` has returned; a task that never settles retains its
+store until process exit. This is not a write rollback guarantee.
 
 REM submission, REM job reads and health have no corresponding application deadline timer.
 Node's HTTP transport limits or client cancellation are separate from this API's 504 behavior.
