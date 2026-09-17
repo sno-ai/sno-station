@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { z } from "zod";
 import { ContractError } from "./error";
-import { getDiscoveryPath, getPrincipal } from "./profile";
+import { getDiscoveryPath } from "./profile";
 import { MEMORY_HEALTH_TIMEOUT_MS } from "./routes";
 
 export interface Discovery { pid: number; port: number; token: string }
@@ -25,7 +25,7 @@ export function processAlive(pid: number): boolean {
 	catch (error) { return error instanceof Error && "code" in error && error.code === "EPERM"; }
 }
 
-export async function checkDiscovery(discovery: Discovery, storePath: string): Promise<void> {
+export async function checkDiscovery(discovery: Discovery, _storePath: string): Promise<void> {
 	try {
 		const response = await fetch(`http://127.0.0.1:${discovery.port}/healthz`, {
 			headers: { Authorization: `Bearer ${discovery.token}` }, signal: AbortSignal.timeout(MEMORY_HEALTH_TIMEOUT_MS),
@@ -33,8 +33,6 @@ export async function checkDiscovery(discovery: Discovery, storePath: string): P
 		if (!response.ok) throw new ContractError("sidecar-unresponsive");
 		const health: unknown = await response.json();
 		if (!health || typeof health !== "object" || !("status" in health) || health.status !== "ok") throw new ContractError("sidecar-unresponsive");
-		if (!("principal" in health) || health.principal !== getPrincipal()) throw new ContractError("principal-mismatch");
-		if (!("storePath" in health) || health.storePath !== storePath) throw new ContractError("store-mismatch");
 	} catch (error) {
 		if (error instanceof ContractError) throw error;
 		throw new ContractError("sidecar-unresponsive");
