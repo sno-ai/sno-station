@@ -135,7 +135,7 @@ Object.assign(MemoryRetriever.prototype, {
 		);
 		mapped = this.filterExpired(mapped);
 		trace?.endStage(mapped.map((result) => result.entry.id));
-		mapped = this.applyScoringPipeline(mapped, trace);
+		mapped = this.applyScoringPipeline(mapped, trace, context.limit);
 		// `precisionRecall` re-checks minScore after the scoring
 		// pipeline runs (the pipeline's shrinker chain can move a score across the
 		// floor in either direction); vectorOnly was missing this and only ever
@@ -332,7 +332,7 @@ Object.assign(MemoryRetriever.prototype, {
 			rerankStageMetadata,
 		);
 
-		fused = this.applyScoringPipeline(fused, trace);
+		fused = this.applyScoringPipeline(fused, trace, context.limit);
 		// Two removals for two different reasons; merging their counts hides which one cut a
 		// memory out of the answer.
 		trace?.startStage(
