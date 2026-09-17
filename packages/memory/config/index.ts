@@ -21,10 +21,23 @@ import { z } from "zod";
 // SCORING & THRESHOLDS
 // =============================================================================
 
-/** Final result floor after importance weighting and optional length normalization. */
+/**
+ * Final result floor, applied to the POST-scoring-pipeline score (after the
+ * multiplicative shrinker chain: importance, length-norm, time-decay,
+ * retention). That chain routinely compresses a genuinely relevant match to
+ * 0.03-0.06 once a memory ages past its decay half-life — a real, expected
+ * production scenario, not an edge case. The old value (0.37) was calibrated
+ * against the PRE-shrinker fused score scale and silently rejected almost
+ * all real recall once shrinkers applied (confirmed 2026-07-05 scoring-
+ * pipeline audit). 0 matches the only value ever proven end-to-end
+ * (LoCoMo stratified-100, 86%, `evals/locomo/outputs/stratified-100-20260705-002827`);
+ * shipped and tested must be the same config. Re-introducing a nonzero floor
+ * needs fresh measured data post the A2/A3 fixes below, not a guess.
+ */
 export const DEFAULT_MIN_SCORE = 0;
 
-/** Hard floor applied after score transforms and before MMR. */
+/** Hard floor applied before any score amplification in the pipeline. See
+ * `DEFAULT_MIN_SCORE` — same reasoning, same fix. */
 export const DEFAULT_HARD_MIN_SCORE = 0;
 
 /** Default importance score for new memories (0.0–1.0) */
@@ -183,6 +196,18 @@ export const PRECISION_RECALL_POOL_SIZE_FACTOR = 2;
 // RETRIEVAL — SCORING PIPELINE
 // =============================================================================
 
+/** Enable age-based retrieval scoring only when explicitly requested. */
+export const TEMPORAL_WEIGHTING_DEFAULT = false;
+
+/** Recency boost half-life in days (entries this old get 50% boost) */
+export const RECENCY_HALF_LIFE_DAYS = 14;
+
+/** Additive recency boost magnitude */
+export const RECENCY_WEIGHT = 0.1;
+
+/** Maximum allowed recency weight */
+export const RECENCY_WEIGHT_MAX = 0.5;
+
 /** Base multiplier for importance weighting (score * (base + importance * base)) */
 export const IMPORTANCE_WEIGHT_BASE = 0.7;
 
@@ -197,10 +222,22 @@ export const IMPORTANCE_WEIGHT_BASE = 0.7;
  */
 export const LENGTH_NORM_ANCHOR = 0;
 
-/** Selective forgetting uses a shorter half-life for dynamic memories. */
+/** Time decay half-life in days */
+export const TIME_DECAY_HALF_LIFE_DAYS = 60;
+
+/** Minimum time decay multiplier (floor for very old entries) */
+export const TIME_DECAY_FLOOR = 0.6;
+
+/** Dynamic memories use a shorter half-life when temporal decay is enabled */
 export const TEMPORAL_DYNAMIC_HALF_LIFE_DIVISOR = 3;
 
-/** Relevance vs diversity tradeoff using batch-normalized relevance and cosine similarity. */
+/**
+ * Relevance vs diversity tradeoff for MMR (0.7 = 70% relevance, 30% diversity).
+ * `applyMmrDiversity` normalizes the relevance term to [0,1] (batch-max) before
+ * applying this weight — without that normalization, the shrinker chain above
+ * compresses relevance so far below the [0,1] cosine-similarity diversity term
+ * that this ratio was moot (diversity always won). Fixed 2026-07-05.
+ */
 export const MMR_LAMBDA = 0.7;
 
 // =============================================================================
@@ -784,9 +821,11 @@ export const FTS_QUERY_TOKEN_CAP = 50;
 // a new openspec change proposal.
 
 type RecallLifecycleConfigShape = {
+	retentionScorer: boolean;
 	tierPromoter: boolean;
 	autoRecallAccessTracking: boolean;
 	traceEnabled: boolean;
+	tierFloorMode: "bare" | "withFloor";
 	tierPromotionTopK: number;
 	accessRateLimitMs: number;
 	accessCountCeiling: number;
@@ -802,6 +841,7 @@ type RecallLifecycleConfigShape = {
 export const recallLifecycleSchema: z.ZodType<RecallLifecycleConfigShape, unknown> = z
 	.object({
 		// --- Booleans (all default true — recallLifecycle fully enabled) ---
+		retentionScorer: z.boolean().default(true), // PRD §6.1
 		tierPromoter: z.boolean().default(true), // PRD §6.1
 		autoRecallAccessTracking: z.boolean().default(true), // PRD §6.1
 		// Lifecycle trace-writer extension: emits one trace row per
@@ -809,6 +849,7 @@ export const recallLifecycleSchema: z.ZodType<RecallLifecycleConfigShape, unknow
 		traceEnabled: z.boolean().default(true),
 
 		// --- Tuning knobs (pinned per PRD §6.1) ---
+		tierFloorMode: z.enum(["bare", "withFloor"]).default("bare"), // PRD §6.1
 		tierPromotionTopK: z.number().int().positive().default(3), // PRD §6.1
 		accessRateLimitMs: z.number().int().nonnegative().default(3_600_000), // PRD §6.1 (1h)
 		accessCountCeiling: z.number().int().positive().default(20), // PRD §6.1
