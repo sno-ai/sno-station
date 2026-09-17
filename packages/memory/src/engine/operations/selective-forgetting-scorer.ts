@@ -37,8 +37,6 @@ export interface DecayConfig {
 	intrinsicWeight: number;
 	/** Below this composite = stale (default: 0.3) */
 	staleThreshold: number;
-	/** Minimum search boost (default: 0.3) */
-	searchBoostMin: number;
 	/** Importance modulation coefficient for half-life (default: 1.5) */
 	importanceModulation: number;
 	/** Weibull beta for Core tier — sub-exponential (default: 0.8) */
@@ -68,7 +66,6 @@ export const DEFAULT_DECAY_CONFIG: DecayConfig = {
 	frequencyWeight: 0.3,
 	intrinsicWeight: 0.3,
 	staleThreshold: 0.3,
-	searchBoostMin: 0.85,
 	importanceModulation: 1.5,
 	betaCore: 0.8,
 	betaWorking: 1.0,
