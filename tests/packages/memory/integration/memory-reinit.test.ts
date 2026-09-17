@@ -64,7 +64,7 @@ async function openRoutes(): Promise<void> {
 	pool = await MemoryRuntimePool.open();
 	pool.stopTimers();
 	const runtime = pool;
-	server = createServer((request, response) => { void serveMemoryRoute(request, response, request.url ?? "", runtime, tasks); });
+	server = createServer((request, response) => { void serveMemoryRoute(request, response, request.url ?? "", async () => runtime, tasks); });
 	await new Promise<void>(resolve => server?.listen(0, "127.0.0.1", resolve));
 	const address = server.address();
 	if (!address || typeof address === "string") throw new Error("Missing HTTP address");
