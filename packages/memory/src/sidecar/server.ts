@@ -1,3 +1,4 @@
+import { MEMORY_SHUTDOWN_TIMEOUT_MS } from "../../config/index";
 import { getPrincipal, readBoundStorePath } from "../contract/profile";
 /** @file server.ts
  * @purpose Runs the loopback HTTP surface and empty asynchronous REM executor.
@@ -100,13 +101,14 @@ class HttpError extends Error {
 }
 
 export async function startRemSidecar(): Promise<RunningRemSidecar> {
+	let stopping = false;
 	let currentMemory: MemoryRuntimePool | undefined;
 	let openingMemory: Promise<MemoryRuntimePool> | undefined;
 	const memory = {
 		current: (): MemoryRuntimePool | undefined => currentMemory,
 		async open(): Promise<MemoryRuntimePool> {
 			if (currentMemory) return currentMemory;
-			openingMemory ??= import("./memory-runtime").then(module => module.MemoryRuntimePool.open()).then(pool => { currentMemory = pool; return pool; })
+			openingMemory ??= import("./memory-runtime").then(module => module.MemoryRuntimePool.open()).then(pool => { currentMemory = pool; if (stopping) pool.stopTimers(); return pool; })
 				.finally(() => { openingMemory = undefined; });
 			return openingMemory;
 		},
@@ -130,14 +132,18 @@ export async function startRemSidecar(): Promise<RunningRemSidecar> {
 	});
 	const pendingTimers = new Set<NodeJS.Timeout>();
 	const activeTasks = new Set<Promise<void>>();
+	const pendingRequests = new Set<string>();
 	const server = createServer((request, response) => {
 		const started = performance.now();
 		const operationId = `rem-http-${randomUUID()}`;
 		const context: RequestLogContext = {};
+		const requestLabel = `${operationId} ${request.method} ${requestPath(request)}`;
+		pendingRequests.add(requestLabel);
 		let requestLogged = false;
 		const recordRequest = (cancelled = false): void => {
 			if (requestLogged) return;
 			requestLogged = true;
+			pendingRequests.delete(requestLabel);
 			let outcome = "success";
 			if (cancelled) outcome = "cancelled";
 			else if (response.statusCode >= 500) outcome = "failed";
@@ -222,18 +228,42 @@ export async function startRemSidecar(): Promise<RunningRemSidecar> {
 		async stop(): Promise<void> {
 			const started = performance.now();
 			let cleanedUp = false;
+			let phase = "http_requests";
+			let timer: NodeJS.Timeout | undefined;
+			stopping = true;
 			process.removeListener("exit", exitCleanup);
 			try {
-				for (const timer of pendingTimers) clearTimeout(timer);
+				for (const pending of pendingTimers) clearTimeout(pending);
 				pendingTimers.clear();
 				currentMemory?.stopTimers();
-				await closeServer(server);
-				await Promise.allSettled(activeTasks);
-				await openingMemory?.catch(() => undefined);
-				await currentMemory?.close();
-				await removeOwnedDiscovery(discoveryPath, token);
-				cleanedUp = true;
+				const cleanup = (async () => {
+					await closeServer(server);
+					phase = "active_tasks";
+					await Promise.allSettled(activeTasks);
+					phase = "runtime_open";
+					await openingMemory?.catch(() => undefined);
+					phase = "runtime_close";
+					await currentMemory?.close();
+					phase = "discovery";
+					await removeOwnedDiscovery(discoveryPath, token);
+					return true;
+				})();
+				cleanedUp = await Promise.race([cleanup, new Promise<false>(resolve => {
+					timer = setTimeout(() => {
+						log.error("sidecar.shutdown.timeout", {
+							phase, active_tasks: activeTasks.size, pending_requests: [...pendingRequests],
+						}, {
+							event_name: "sidecar.shutdown.timeout", file: "packages/sno-station-mem/src/sidecar/server.ts",
+							function: "startRemSidecar.stop", site_id: "sidecar.shutdown.timeout",
+						});
+						server.closeAllConnections();
+						currentMemory?.stopTimers();
+						removeOwnedDiscoverySync(discoveryPath, token);
+						resolve(false);
+					}, MEMORY_SHUTDOWN_TIMEOUT_MS);
+				})]);
 			} finally {
+				clearTimeout(timer);
 				log[cleanedUp ? "info" : "error"]("REM sidecar cleanup completed", {
 					outcome: cleanedUp ? "success" : "failed",
 					duration_ms: performance.now() - started, active_tasks: activeTasks.size,
@@ -276,8 +306,12 @@ async function routeRequest(
 		const types = "types" in input ? input.types : [input.type];
 		const requestedTypes = types.filter(type => REM_BUILT_OPERATION_TYPES.some(operation => operation === type));
 		const unknownTypes = types.filter(type => !requestedTypes.includes(type));
-		if (unknownTypes.length) reportSidecarFailure("unsupported_rem_type", new Error(unknownTypes.join(",")));
-		if (!requestedTypes.length) throw new HttpError(400, "unsupported_rem_type");
+		if (unknownTypes.length) {
+			reportSidecarFailure("unsupported_rem_type", new Error(unknownTypes.join(",")));
+			context.error_code = "unsupported_rem_type";
+			sendJson(response, 400, { error: "unsupported_rem_type", unknownTypes });
+			return;
+		}
 		const store = await pendingStore;
 		let allocation: Awaited<ReturnType<RemJobStore["createQueued"]>>;
 		try {

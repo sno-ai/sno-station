@@ -15,25 +15,27 @@ export async function serveMemoryRoute(request: IncomingMessage, response: Serve
 	const skinId = request.headers[MEMORY_SKIN_HEADER];
 	let timer: NodeJS.Timeout | undefined;
 	const controller = new AbortController();
+	const abort = (): void => controller.abort(new ContractError("timeout"));
+	let rejectDeadline: (() => void) | undefined;
+	response.once("close", abort);
 	try {
 		const deadline = new Promise<never>((_, reject) => {
-			timer = setTimeout(() => {
-				const error = new ContractError("timeout");
-				controller.abort(error);
-				reject(error);
-			}, MEMORY_ROUTES[method].timeoutMs);
+			rejectDeadline = () => reject(controller.signal.reason);
+			controller.signal.addEventListener("abort", rejectDeadline, { once: true });
+			timer = setTimeout(abort, MEMORY_ROUTES[method].timeoutMs);
 		});
 		const task = (async () => {
 			const body = await readBody(request, controller.signal);
 			controller.signal.throwIfAborted();
 			const pool = await openPool();
 			controller.signal.throwIfAborted();
-			return pool.invoke(method, body, typeof skinId === "string" && skinId.trim() ? skinId : MEMORY_DEFAULT_SKIN_ID);
+			return pool.invoke(method, body, typeof skinId === "string" && skinId.trim() ? skinId : MEMORY_DEFAULT_SKIN_ID, controller.signal);
 		})();
-		const completion = task.then(() => undefined, () => undefined);
+		const boundedTask = Promise.race([task, deadline]);
+		const completion = boundedTask.then(() => undefined, () => undefined);
 		activeTasks.add(completion);
 		void completion.finally(() => activeTasks.delete(completion));
-		const result = await Promise.race([task, deadline]);
+		const result = await boundedTask;
 		response.writeHead(200, { "content-type": "application/json" });
 		response.end(JSON.stringify(result));
 	} catch (error) {
@@ -54,7 +56,11 @@ export async function serveMemoryRoute(request: IncomingMessage, response: Serve
 		const status = MEMORY_ERROR_STATUS[reason];
 		if (!response.headersSent) response.writeHead(status, { "content-type": "application/json" });
 		response.end(JSON.stringify({ degraded: true, reason }));
-	} finally { clearTimeout(timer); }
+	} finally {
+		clearTimeout(timer);
+		response.off("close", abort);
+		if (rejectDeadline) controller.signal.removeEventListener("abort", rejectDeadline);
+	}
 	return true;
 }
 
