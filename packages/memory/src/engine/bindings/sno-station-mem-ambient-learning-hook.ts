@@ -20,7 +20,6 @@ import {
 	type createScopePolicy,
 	DEFAULT_IMPORTANCE,
 	type Embedder,
-	isKillSwitchActive,
 	type MemoryStore,
 	normalizeAmbientLearningText,
 	type SnoStationMemPluginApi,
@@ -31,8 +30,6 @@ import {
 	shouldSkipReflectionMessage,
 } from "./sno-station-mem-runtime-dependencies";
 import {
-	auditMissingHookAgentIdentity,
-	isChatIdBasedAgentId,
 	resolveHookAgentId,
 } from "./sno-station-mem-runtime-mode";
 const log = createLogger("sno-station-mem:ambient-learning");
@@ -134,46 +131,8 @@ export async function onAgentEnd(
 	let outcome: AmbientCaptureOutcome = "skipped";
 	let reason = "guard_not_admitted";
 	try {
-	if (isKillSwitchActive(stateDir) || !config.ambientLearning) return outcome;
-	if (sessionKey.includes(":subagent:")) {
-		appendAuditEntry(stateDir, {
-			event: "ambient_learning",
-			hook: "agent_end",
-			resultStatus: "skipped",
-			decision: "skipped_subagent",
-			details: { sessionKey },
-		});
-		return outcome;
-	}
-	if (!event.success) {
-		reason = "agent_run_failed";
-		return outcome;
-	}
-
-	const { agentId: resolvedAgentId, source: agentResolutionSource } = resolveHookAgentId(
-		ctx.agentId,
-		sessionKey,
-	);
-	if (agentResolutionSource === "missing" || !resolvedAgentId) {
-		auditMissingHookAgentIdentity(api, "agent_end", stateDir, "ambient_learning");
-		return outcome;
-	}
-	if (isChatIdBasedAgentId(resolvedAgentId)) {
-		appendAuditEntry(stateDir, {
-			event: "ambient_learning",
-			hook: "agent_end",
-			resultStatus: "skipped",
-			decision: "rejected_chatid_agent_format",
-			details: { resolvedAgentId },
-		});
-		return outcome;
-	}
-
+	const resolvedAgentId = resolveHookAgentId(ctx.agentId, sessionKey).agentId;
 	const scope = scopePolicy.getDefaultScope(resolvedAgentId);
-	if (!scopePolicy.validateScope(scope) || !scopePolicy.isAccessible(scope, resolvedAgentId)) {
-		reason = "scope_inaccessible";
-		return outcome;
-	}
 	if (config.mode === "local-first") {
 		await runLocalFirstCapture({ api, config, store, event, ctx, stateDir, scope, sessionKey });
 		outcome = "success";

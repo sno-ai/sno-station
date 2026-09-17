@@ -42,7 +42,6 @@ export { createTierPromoter } from "../operations/memory-tier-promoter";
 export {
 	appendAuditEntry,
 	flushAuditWrites,
-	isKillSwitchActive,
 } from "../operations/runtime-audit-log";
 
 
