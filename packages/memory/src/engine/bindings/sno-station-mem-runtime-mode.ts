@@ -20,11 +20,6 @@ export function isGatewayMode(): boolean {
 	return process.argv.includes("gateway");
 }
 
-/** Detects the eval/runtime kill switch for disabling all plugin registration. */
-export function isPluginDisabled(): boolean {
-	return process.env.SNO_STATION_MEM_DISABLED === "true";
-}
-
 /**
  * Extracts an agent id from supported session-key formats while ignoring system bypass ids.
  */
@@ -89,7 +84,7 @@ export function isChatIdBasedAgentId(agentId: string | undefined): boolean {
 
 /**
  * Resolve the agentId for hook-level filtering: prefer an explicit ctx.agentId,
- * then fall back to parsing the sessionKey. Missing or system identities fail closed.
+ * then fall back to parsing the sessionKey. Callers supply defaults when no identity is found.
  */
 export type HookAgentResolutionSource = "explicit" | "sessionKey" | "missing";
 
