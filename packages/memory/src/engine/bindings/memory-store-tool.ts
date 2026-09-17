@@ -13,10 +13,8 @@ import type { MemoryCategory } from "./memory-tool-dependencies";
 import { appendAuditEntry, clamp01, DEFAULT_IMPORTANCE, DEFAULT_LOCALE, detectCategory, normalizeCategory, serializeIntervalMetadata, stableHash, stripEnvelopeMetadata } from "./memory-tool-dependencies";
 import { resolveMemoryDate, type DateResolutionResult } from "../extraction/date-resolution";
 import {
-	killSwitchResponse,
 	makeResult,
 	runWithAudit,
-	shouldBlockMemoryTools,
 } from "./memory-tool-results";
 import { storeParamsSchema, type ToolContext, type ToolResult } from "./memory-tool-schemas";
 import {
@@ -25,26 +23,6 @@ import {
 } from "../extraction/profile-section-writer";
 
 type StoreParams = ReturnType<(typeof storeParamsSchema)["parse"]>;
-const MEMORY_STORE_CATEGORIES = ["episodic", "profile"] as const;
-const OFFLINE_ONLY_STORE_CATEGORIES = ["persona", "summary", "lesson"] as const;
-
-function offlineOnlyCategory(value: unknown): MemoryCategory | undefined {
-	return typeof value === "string" &&
-		OFFLINE_ONLY_STORE_CATEGORIES.includes(
-			value as (typeof OFFLINE_ONLY_STORE_CATEGORIES)[number],
-		)
-		? (value as MemoryCategory)
-		: undefined;
-}
-
-function rejectOfflineOnlyCategory(category: MemoryCategory): ToolResult {
-	return makeResult(
-		`Rejected: memory_store cannot write ${category}; write authority requires a trusted store boundary.`,
-		{ resultStatus: "rejected", category },
-		true,
-	);
-}
-
 function resolveStoreScope(
 	parsed: StoreParams,
 	ctx: ToolContext,
@@ -145,13 +123,6 @@ async function executeMemoryStore(
 	access: ResolvedAgentAccess,
 	params: unknown,
 ): Promise<ToolResult> {
-	if (shouldBlockMemoryTools(ctx)) return killSwitchResponse(ctx);
-	const requestedCategory =
-		typeof params === "object" && params !== null
-			? offlineOnlyCategory((params as Record<string, unknown>).category)
-			: undefined;
-	if (requestedCategory) return rejectOfflineOnlyCategory(requestedCategory);
-
 	const parsed = storeParamsSchema.parse(params);
 	const scope = resolveStoreScope(parsed, ctx, access);
 	const importance = clamp01(parsed.importance ?? DEFAULT_IMPORTANCE, DEFAULT_IMPORTANCE);
@@ -166,9 +137,6 @@ async function executeMemoryStore(
 		return makeResult("Skipped: content has no unambiguous memory category.", {
 			resultStatus: "skipped",
 		});
-	}
-	if (category === "persona" || category === "summary" || category === "lesson") {
-		return rejectOfflineOnlyCategory(category);
 	}
 
 	const hash = stableHash(stripped);
@@ -240,6 +208,7 @@ async function executeMemoryStore(
 		routing: ctx.llmRouting,
 	});
 	const stored = await ctx.store.store({
+		offlineFamily: true,
 		text: stripped,
 		category,
 		projectId: scope,
