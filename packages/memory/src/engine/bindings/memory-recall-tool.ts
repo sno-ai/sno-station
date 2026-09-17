@@ -12,10 +12,8 @@ import {
 	serializeMemory,
 } from "./memory-tool-formatting";
 import {
-	killSwitchResponse,
 	makeResult,
 	runWithAudit,
-	shouldBlockMemoryTools,
 } from "./memory-tool-results";
 import { recallParamsSchema, type ToolContext, type ToolResult } from "./memory-tool-schemas";
 import {
@@ -111,8 +109,6 @@ export async function executeMemoryRecallTool(ctx: ToolContext, access: ReturnTy
 			try {
 			// Centralize the tool execution fallback value at the boundary of this helper.
 			const output = await runWithAudit(ctx, options.name, undefined, async () => {
-				// Short-circuit while paused so no storage, model, or audit side effects continue.
-				if (shouldBlockMemoryTools(ctx)) return killSwitchResponse(ctx);
 				const parsed = recallParamsSchema.parse(params);
 				packManualRecallRows([], parsed.token_budget);
 				// An explicit aggregation reports the exact population size while bounding the evidence
