@@ -1,14 +1,21 @@
-import { existsSync, closeSync, mkdirSync, mkdtempSync, openSync, readFileSync, rmSync, statSync, writeFileSync, writeSync } from "node:fs";
-import { request as httpRequest } from "node:http";
+import { existsSync, closeSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, rmdirSync, rmSync, statSync, watch, writeFileSync, writeSync } from "node:fs";
+import { once } from "node:events";
+import { createServer, request as httpRequest } from "node:http";
+import { createConnection } from "node:net";
+import { execFileSync, spawn } from "node:child_process";
+import { fileURLToPath } from "node:url";
+import { z } from "zod";
 import { runMaintenancePass } from "../../../../packages/sno-station-mem/src/store/maintenance";
 import { setTimeout as delay } from "node:timers/promises";
 import { tmpdir, userInfo } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { pluginConfigSchema } from "../../../../packages/sno-station-mem/src/contract/config/plugin-config-schema";
+import { startSidecar } from "../../../../packages/sno-station-mem/src/contract/start";
 import { bindStore } from "../../../../packages/sno-station-mem/src/engine/shared/paths";
 import { startRemSidecar } from "../../../../packages/sno-station-mem/src/sidecar/server";
 import { MemoryRuntimePool } from "../../../../packages/sno-station-mem/src/sidecar/memory-runtime";
+import { readRemAutomaticOperations } from "../../../../packages/sno-station-mem/src/sidecar/rem-trigger";
 import { MemoryContractRuntime } from "../../../../packages/sno-station-mem/src/engine/contract-runtime";
 import { MemoryRetriever } from "../../../../packages/sno-station-mem/src/engine/retrieval/retriever";
 import { RegisteredAgentPort } from "../../../../packages/sno-station-mem/src/model/registered-agent-port";
@@ -45,7 +52,449 @@ async function health(authenticated = true): Promise<void> {
 	expect((await response.json()).status).toBe("ok");
 }
 
+async function contractPost(path: string, body: unknown, skin?: string): Promise<Response> {
+	if (!sidecar) throw new Error("missing test sidecar");
+	return fetch(`http://127.0.0.1:${sidecar.port}${path}`, {
+		method: "POST", headers: skin === undefined ? {} : { "x-sno-station-mem-skin": skin },
+		body: JSON.stringify(body), signal: AbortSignal.timeout(30_000),
+	});
+}
+
+function registration(mode: "local-first" | "agent-native", model?: { baseUrl: string; credential: string; model: string }) {
+	const { remEnhanced, agentNative, language: _language, mode: _mode, ...settings } = pluginConfigSchema.parse({
+		mode, retrieval: { rerank: "none" }, observe: { enabled: false },
+	});
+	return { skinId: "body-skin", settings, routing: { mode, remEnhanced, agentNative, language: "en" }, ...(model ? { model } : {}) };
+}
+
+function runCli(args: string[], entry = "cli.js"): Promise<{ code: number | null; stdout: string; stderr: string }> {
+	const cli = fileURLToPath(new URL(`../../../../packages/sno-station-mem/dist/${entry}`, import.meta.url));
+	return new Promise((resolve, reject) => {
+		const child = spawn(process.execPath, [cli, ...args], { env: process.env, stdio: ["ignore", "pipe", "pipe"] });
+		let stdout = "", stderr = "";
+		const timer = setTimeout(() => child.kill("SIGTERM"), 40_000);
+		child.stdout.on("data", chunk => { stdout += chunk; });
+		child.stderr.on("data", chunk => { stderr += chunk; });
+		child.once("error", error => { clearTimeout(timer); reject(error); });
+		child.once("close", code => { clearTimeout(timer); resolve({ code, stdout, stderr }); });
+	});
+}
+
+function isolatedSidecarPids(): number[] {
+	return readdirSync("/proc").filter(pid => /^\d+$/.test(pid)).flatMap(pid => {
+		try {
+			const command = readFileSync(`/proc/${pid}/cmdline`, "utf8").split("\0");
+			if (!command.some(argument => argument.endsWith("/sidecar/main.js"))) return [];
+			const environment = readFileSync(`/proc/${pid}/environ`, "utf8").split("\0");
+			return environment.includes(`SNO_PROFILE_DIR=${root}`) ? [Number(pid)] : [];
+		} catch (error) {
+			if (error instanceof Error && "code" in error && (error.code === "ENOENT" || error.code === "ESRCH")) return [];
+			throw error;
+		}
+	});
+}
+
+describe("documented HTTP runtime claims", () => {
+	it("retries discovery publication while continuing to serve", async () => {
+		const discoveryPath = join(root, "station", "sidecar.json");
+		mkdirSync(discoveryPath);
+		sidecar = await startRemSidecar();
+		const response = await fetch(`http://127.0.0.1:${sidecar.port}/healthz`, { signal: AbortSignal.timeout(5_000) });
+		expect(response.status).toBe(200);
+		expect((await response.json()).status).toBe("ok");
+		expect(statSync(discoveryPath).isFile()).toBe(false);
+		rmdirSync(discoveryPath);
+		expect(existsSync(discoveryPath)).toBe(false);
+		await vi.waitFor(() => expect(existsSync(discoveryPath)).toBe(true), { timeout: 10_000, interval: 100 });
+		const discovery = JSON.parse(readFileSync(discoveryPath, "utf8"));
+		expect(discovery.pid === process.pid).toBe(true);
+		expect(discovery.port === sidecar.port).toBe(true);
+		const discovered = await fetch(`http://127.0.0.1:${discovery.port}/healthz`, { signal: AbortSignal.timeout(5_000) });
+		expect(discovered.status).toBe(200);
+		expect((await discovered.json()).status).toBe("ok");
+	});
+	it("cancels discovery publication retries on stop", async () => {
+		const discoveryPath = join(root, "station", "sidecar.json");
+		mkdirSync(discoveryPath);
+		sidecar = await startRemSidecar();
+		await sidecar.stop();
+		sidecar = undefined;
+		rmdirSync(discoveryPath);
+		await delay(5_500);
+		expect(existsSync(discoveryPath)).toBe(false);
+	});
+	it.each([undefined, "   "])("selects the default skin for header %j", async skin => {
+		await health();
+		if (!sidecar) throw new Error("missing test sidecar");
+		const url = `http://127.0.0.1:${sidecar.port}/v1/init`;
+		// fetch trims header values before sending; use node:http to send actual spaces.
+		const response = await new Promise<{ status: number | undefined; body: unknown }>((resolve, reject) => {
+			const request = httpRequest(url, {
+				method: "POST", headers: skin === undefined ? {} : { "x-sno-station-mem-skin": skin },
+			}, incoming => {
+				let body = "";
+				incoming.on("data", chunk => { body += chunk; });
+				incoming.once("error", reject);
+				incoming.once("end", () => { try { resolve({ status: incoming.statusCode, body: JSON.parse(body) }); } catch (error) { reject(error); } });
+			});
+			request.setTimeout(5_000, () => request.destroy(new Error("header request timed out")));
+			request.once("error", reject);
+			request.end(JSON.stringify({ scope: { principal: "caller", project: "global", session: "default-skin" }, registration: registration("local-first") }));
+		});
+		expect(response.status).toBe(200);
+		expect(response.body).toMatchObject({ degraded: false, skinId: "default" });
+	});
+	it("serves HTTP inspection before any init using installed settings", async () => {
+		await health();
+		const response = await contractPost("/v1/inspect", {
+			scope: { principal: "caller", project: "global", session: "before-init" }, op: { op: "list" },
+		}, "never-initialized");
+		expect(response.status).toBe(200);
+		expect(await response.json()).toEqual({ degraded: false, result: { op: "list", project: "global", entries: [] } });
+	});
+	it("returns a degraded reason when the agent model endpoint is absent", async () => {
+		await health();
+		const scope = { principal: "caller", project: "global", session: "missing-model" };
+		expect((await contractPost("/v1/init", { scope, registration: registration("agent-native") })).status).toBe(200);
+		const response = await contractPost("/v1/capture", { scope,
+			turn: { turnId: "missing-model", rewindEpoch: 0, messages: [{ role: "user", content: "I keep a blue notebook.", at: 1789606800000 }] },
+		});
+		expect(response.status).toBe(503);
+		expect(await response.json()).toEqual({ degraded: true, reason: "no-agent-endpoint" });
+	});
+	it("returns a tool refusal inside HTTP 200", async () => {
+		await health();
+		const response = await contractPost("/v1/mutate", {
+			scope: { principal: "caller", project: "global", session: "refused" },
+			op: { op: "update", id: "missing-memory", importance: 0.42 },
+		});
+		expect(response.status).toBe(200);
+		expect(await response.json()).toEqual({ degraded: false, result: {
+			content: [{ type: "text", text: "Memory entry not found: missing-memory" }], details: {}, isError: true,
+		} });
+	});
+	it("returns an HTTP error body for an unknown route", async () => {
+		await health();
+		const response = await contractPost("/v1/not-a-route", {});
+		expect(response.status).toBe(404);
+		expect(await response.json()).toEqual({ error: "not_found" });
+	});
+	it.each([
+		{ kind: "error", category: "exhausted", message: "x" },
+		{ kind: "cancelled", reason: "x" },
+	])("sends the host model HTTP contract and relays $kind", async failure => {
+		const requests: Array<{ method: string | undefined; path: string | undefined; authorization: string | undefined; body: unknown }> = [];
+		const host = createServer(async (request, response) => {
+			let body = "";
+			for await (const chunk of request) body += chunk;
+			requests.push({ method: request.method, path: request.url, authorization: request.headers.authorization, body: JSON.parse(body) });
+			response.writeHead(503, { "content-type": "application/json" });
+			response.end(JSON.stringify({ error: failure }));
+		});
+		await new Promise<void>(resolve => host.listen(0, "127.0.0.1", resolve));
+		try {
+			const address = host.address();
+			if (!address || typeof address === "string") throw new Error("missing host model port");
+			await health();
+			const scope = { principal: "caller", project: "global", session: "host-model" };
+			const initialized = await contractPost("/v1/init", { scope, registration: registration("agent-native", {
+				baseUrl: `http://127.0.0.1:${address.port}/host/v1/`, credential: "loopback-credential", model: "loopback-model",
+			}) });
+			expect(initialized.status).toBe(200);
+			const response = await contractPost("/v1/capture", { scope,
+				turn: { turnId: "host-model", rewindEpoch: 0, messages: [{ role: "user", content: "I keep a blue notebook.", at: 1789606800000 }] },
+			});
+			expect(response.status).toBe(failure.kind === "error" ? 503 : 504);
+			expect(await response.json()).toEqual({ degraded: true, reason: failure.kind === "error" ? "no-agent-endpoint" : "timeout" });
+			expect(requests.length).toBeGreaterThan(0);
+			for (const request of requests) {
+				expect(request).toMatchObject({ method: "POST", path: "/host/v1/chat/completions", authorization: "Bearer loopback-credential" });
+				const body = z.object({ model: z.string(), stream: z.boolean(), messages: z.array(z.strictObject({ role: z.string(), content: z.string() })) }).parse(request.body);
+				expect(body).toMatchObject({ model: "loopback-model", stream: false });
+				expect(body.messages.map(message => message.role)).toEqual(["system", "user"]);
+				for (const message of body.messages) {
+					expect(Object.keys(message).sort()).toEqual(["content", "role"]);
+					expect(message.content).toMatch(/\S/);
+				}
+			}
+		} finally { host.closeAllConnections(); await new Promise<void>((resolve, reject) => host.close(error => error ? reject(error) : resolve())); }
+	});
+	it("starts the CLI and reuses the live discovery pid", async () => {
+		const discoveryPath = join(root, "station", "sidecar.json");
+		expect(existsSync(discoveryPath)).toBe(false);
+		try {
+			const first = await runCli(["sidecar", "start"]);
+			expect(first.code, first.stderr).toBe(0);
+			expect(first.stdout).toMatch(/^Memory sidecar ready: pid=[1-9]\d* port=[1-9]\d*\n$/);
+			const discovery = JSON.parse(readFileSync(discoveryPath, "utf8"));
+			expect(first.stdout).toBe(`Memory sidecar ready: pid=${discovery.pid} port=${discovery.port}\n`);
+			const healthResponse = await fetch(`http://127.0.0.1:${discovery.port}/healthz`, {
+				headers: { Authorization: `Bearer ${discovery.token}` }, signal: AbortSignal.timeout(5_000),
+			});
+			expect(healthResponse.status).toBe(200);
+			expect(await healthResponse.json()).toMatchObject({ status: "ok", storePath: database.dbPath });
+			const second = await runCli(["sidecar", "start"]);
+			expect(second.code, second.stderr).toBe(0);
+			expect(second.stdout).toBe(first.stdout);
+			expect(JSON.parse(readFileSync(discoveryPath, "utf8")).pid).toBe(discovery.pid);
+		} finally {
+			if (existsSync(discoveryPath)) {
+				const discovery = JSON.parse(readFileSync(discoveryPath, "utf8"));
+				process.kill(discovery.pid, "SIGTERM");
+				await vi.waitFor(() => expect(existsSync(discoveryPath)).toBe(false), { timeout: 10_000 });
+			}
+		}
+	});
+	it.each(["missing", "dead", "stale socket"])("converges concurrent CLI starts with %s discovery", async state => {
+		const discoveryPath = join(root, "station", "sidecar.json");
+		if (state === "dead") {
+			const exited = spawn(process.execPath, ["-e", ""], { stdio: "ignore" });
+			await once(exited, "close");
+			writeFileSync(discoveryPath, JSON.stringify({ pid: exited.pid, port: 1, token: "a".repeat(64) }));
+		} else expect(existsSync(discoveryPath)).toBe(false);
+		if (state === "stale socket") {
+			const holder = spawn(process.execPath, ["-e", `
+				const server = require("node:net").createServer();
+				server.listen(process.argv[1], () => process.send("bound"));
+			`, join(root, "station", "sidecar.sock")], { stdio: ["ignore", "ignore", "inherit", "ipc"] });
+			try {
+				const [message] = await once(holder, "message", { signal: AbortSignal.timeout(5_000) });
+				expect(message).toBe("bound");
+			} finally {
+				const closed = once(holder, "close");
+				holder.kill("SIGKILL");
+				await closed;
+			}
+			expect(statSync(join(root, "station", "sidecar.sock")).isSocket()).toBe(true);
+		}
+		try {
+			const [first, second] = await Promise.all([runCli(["sidecar", "start"]), runCli(["sidecar", "start"])]);
+			expect(first.code, first.stderr).toBe(0);
+			expect(second.code, second.stderr).toBe(0);
+			expect(first.stdout === second.stdout).toBe(true);
+			expect(first.stdout).toMatch(/^Memory sidecar ready: pid=[1-9]\d* port=[1-9]\d*\n$/);
+			const discovery = z.object({ pid: z.number(), port: z.number() }).parse(JSON.parse(readFileSync(discoveryPath, "utf8")));
+			expect(first.stdout === `Memory sidecar ready: pid=${discovery.pid} port=${discovery.port}\n`).toBe(true);
+			await vi.waitFor(() => expect(isolatedSidecarPids().length).toBe(1), { timeout: 5_000 });
+			const pids = isolatedSidecarPids();
+			expect(pids.length).toBe(1);
+			expect(pids.includes(discovery.pid)).toBe(true);
+			const listeners = execFileSync("ss", ["-ltnpH"], { encoding: "utf8" }).trim().split("\n")
+				.filter(line => pids.some(pid => line.includes(`pid=${pid},`)));
+			expect(listeners.length).toBe(1);
+			expect(listeners.some(line => line.includes(`127.0.0.1:${discovery.port} `))).toBe(true);
+			expect((await fetch(`http://127.0.0.1:${discovery.port}/healthz`, { signal: AbortSignal.timeout(5_000) })).status).toBe(200);
+			expect(statSync(join(root, "station", "sidecar.sock")).isSocket()).toBe(true);
+			const socket = createConnection(join(root, "station", "sidecar.sock"));
+			try {
+				await once(socket, "connect", { signal: AbortSignal.timeout(5_000) });
+				expect(socket.readyState).toBe("open");
+			} finally { socket.destroy(); }
+		} finally {
+			const pids = isolatedSidecarPids();
+			for (const pid of pids) process.kill(pid, "SIGTERM");
+			await vi.waitFor(() => expect(isolatedSidecarPids().length).toBe(0), { timeout: 10_000 });
+		}
+	});
+	it("exits a duplicate sidecar entry without changing discovery or the store", async () => {
+		const discoveryPath = join(root, "station", "sidecar.json");
+		try {
+			const first = await runCli(["sidecar", "start"]);
+			expect(first.code, first.stderr).toBe(0);
+			const original = readFileSync(discoveryPath, "utf8");
+			const discovery = z.object({ pid: z.number(), port: z.number() }).parse(JSON.parse(original));
+			const storeBefore = readFileSync(database.dbPath);
+			const socketBefore = statSync(join(root, "station", "sidecar.sock"));
+			const second = await runCli([], "sidecar/main.js");
+			expect(second.code, second.stderr).toBe(0);
+			const lines = (second.stdout + second.stderr).split("\n").filter(line => line.includes("sidecar.duplicate.exit"));
+			expect(lines.length).toBe(1);
+			const record = z.object({ severity_text: z.string(), event_name: z.string(), attributes: z.object({ pid: z.number() }) })
+				.parse(JSON.parse(lines[0] ?? "null"));
+			expect(record.severity_text).toBe("INFO");
+			expect(record.event_name).toBe("sidecar.duplicate.exit");
+			expect(record.attributes.pid === discovery.pid).toBe(true);
+			expect(readFileSync(discoveryPath, "utf8") === original).toBe(true);
+			expect(readFileSync(database.dbPath).equals(storeBefore)).toBe(true);
+			expect(statSync(join(root, "station", "sidecar.sock")).ino === socketBefore.ino).toBe(true);
+			expect(isolatedSidecarPids().length).toBe(1);
+			expect(isolatedSidecarPids().includes(discovery.pid)).toBe(true);
+			const listeners = execFileSync("ss", ["-ltnpH"], { encoding: "utf8" }).trim().split("\n")
+				.filter(line => line.includes(`pid=${discovery.pid},`));
+			expect(listeners.length).toBe(1);
+			expect((await fetch(`http://127.0.0.1:${discovery.port}/healthz`, { signal: AbortSignal.timeout(5_000) })).status).toBe(200);
+		} finally {
+			for (const pid of isolatedSidecarPids()) process.kill(pid, "SIGTERM");
+			await vi.waitFor(() => expect(isolatedSidecarPids().length).toBe(0), { timeout: 10_000 });
+			expect(existsSync(join(root, "station", "sidecar.sock"))).toBe(false);
+		}
+	});
+	it.each([
+		{ outcome: "recovers", readyAfter: 750 },
+		{ outcome: "times out", readyAfter: -1 },
+	])("waits for a live discovery pid that $outcome without spawning or rewriting discovery", async ({ readyAfter }) => {
+		const child = spawn(process.execPath, ["-e", `
+			const { createServer } = require("node:http");
+			let ready = false, started = false;
+			const server = createServer((request, response) => {
+				if (!started && ${readyAfter} >= 0) {
+					started = true;
+					setTimeout(() => { ready = true; }, ${readyAfter});
+				}
+				response.writeHead(ready && request.url === "/healthz" ? 200 : 503, { "content-type": "application/json" });
+				response.end(JSON.stringify({ status: ready ? "ok" : "starting" }));
+			});
+			server.listen(0, "127.0.0.1", () => process.send({ pid: process.pid, port: server.address().port }));
+		`], { stdio: ["ignore", "ignore", "inherit", "ipc"] });
+		let watcher: ReturnType<typeof watch> | undefined;
+		try {
+			const [message] = await once(child, "message", { signal: AbortSignal.timeout(5_000) });
+			const address = z.object({ pid: z.number().int().positive(), port: z.number().int().positive() }).parse(message);
+			const discoveryPath = join(root, "station", "sidecar.json");
+			const original = JSON.stringify({ ...address, token: "a".repeat(64) });
+			writeFileSync(discoveryPath, original);
+			let rewrites = 0;
+			watcher = watch(join(root, "station"), (_event, filename) => { if (filename === "sidecar.json") rewrites++; });
+			const started = Date.now();
+			if (readyAfter >= 0) {
+				const discovery = await startSidecar();
+				expect(discovery.pid).toBe(address.pid);
+				expect(discovery.port).toBe(address.port);
+				expect(discovery.token).toBe("a".repeat(64));
+				expect(Date.now() - started).toBeGreaterThanOrEqual(750);
+				const response = await fetch(`http://127.0.0.1:${discovery.port}/healthz`, { signal: AbortSignal.timeout(5_000) });
+				expect(response.status).toBe(200);
+				expect(await response.json()).toEqual({ status: "ok" });
+			} else {
+				await expect(startSidecar()).rejects.toMatchObject({ reason: "sidecar-unresponsive" });
+				expect(Date.now() - started).toBeGreaterThanOrEqual(30_000);
+				expect(Date.now() - started).toBeLessThan(35_000);
+			}
+			await delay(50);
+			expect(rewrites).toBe(0);
+			expect(readFileSync(discoveryPath, "utf8")).toBe(original);
+			expect(existsSync(join(root, "sno-station-mem", "sidecar-startup.log"))).toBe(false);
+			expect(() => process.kill(address.pid, 0)).not.toThrow();
+		} finally {
+			watcher?.close();
+			const closed = once(child, "close");
+			child.kill("SIGTERM");
+			await closed;
+		}
+	}, 45_000);
+	it("exits 0 and removes discovery after SIGTERM to the CLI-started sidecar", async () => {
+		const discoveryPath = join(root, "station", "sidecar.json");
+		const exitProbe = join(root, "record-exit.cjs");
+		// The detached sidecar is not our child; observe its exit without changing shutdown.
+		writeFileSync(exitProbe, `process.on("exit", code => require("node:fs").writeFileSync(${JSON.stringify(root)} + "/" + process.pid + ".exit", String(code)));`);
+		vi.stubEnv("NODE_OPTIONS", `${process.env.NODE_OPTIONS ?? ""} --require=${JSON.stringify(exitProbe)}`);
+		let pid: number | undefined;
+		try {
+			const started = await runCli(["sidecar", "start"]);
+			expect(started.code, started.stderr).toBe(0);
+			const discovery = z.object({ pid: z.number().int().positive() }).parse(JSON.parse(readFileSync(discoveryPath, "utf8")));
+			pid = discovery.pid;
+			process.kill(pid, "SIGTERM");
+			await vi.waitFor(() => expect(() => process.kill(discovery.pid, 0)).toThrowError(/ESRCH/), { timeout: 10_000 });
+			pid = undefined;
+			expect(readFileSync(join(root, `${discovery.pid}.exit`), "utf8")).toBe("0");
+			expect(existsSync(join(root, "station", "sidecar.sock"))).toBe(false);
+			expect(existsSync(discoveryPath)).toBe(false);
+		} finally {
+			vi.unstubAllEnvs();
+			if (pid !== undefined) {
+				try { process.kill(pid, "SIGTERM"); }
+				catch (error) { if (!(error instanceof Error && "code" in error && error.code === "ESRCH")) throw error; }
+			}
+		}
+	});
+	it("rejects an extra CLI argument with usage and exit 2", async () => {
+		expect(await runCli(["sidecar", "start", "extra"])).toEqual({ code: 2, stdout: "",
+			stderr: "Usage: sno-station-mem bind <path> | sidecar start\n" });
+		expect(existsSync(join(root, "station", "sidecar.json"))).toBe(false);
+	});
+});
+
 describe("sidecar keeps serving", () => {
+	it("restores the installed REM tick default after the pool closes", async () => {
+		const configPath = join(root, "station", `sno-station-mem-${userInfo().username}.config.json`);
+		const installed = JSON.parse(readFileSync(configPath, "utf8"));
+		delete installed.remEnhanced;
+		writeFileSync(configPath, JSON.stringify(installed));
+		const pool = await MemoryRuntimePool.open();
+		const { mode, remEnhanced, agentNative, language: _language, ...settings } = pool.config;
+		try {
+			const result = await pool.invoke("init", {
+				scope: { principal: userInfo().username, project: "global", session: "tick-close" },
+				registration: { skinId: "tick-close", settings, routing: { mode, agentNative, language: "en",
+					remEnhanced: { occasions: remEnhanced.occasions, trigger: { tick: false } } } },
+			}, "tick-close");
+			expect(result).toMatchObject({ degraded: false });
+			expect(readRemAutomaticOperations(configPath).tickEnabled).toBe(false);
+		} finally {
+			await pool.close();
+		}
+		expect(readRemAutomaticOperations(configPath).tickEnabled).toBe(true);
+	});
+	it("reads the REM tick switch across HTTP skin registrations", async () => {
+		await health();
+		if (!sidecar) throw new Error("missing test sidecar");
+		const url = `http://127.0.0.1:${sidecar.port}/v1/init`;
+		const configPath = join(root, "station", `sno-station-mem-${userInfo().username}.config.json`);
+		const installed = JSON.parse(readFileSync(configPath, "utf8"));
+		delete installed.remEnhanced;
+		writeFileSync(configPath, JSON.stringify(installed));
+		const { mode, remEnhanced, agentNative, language: _language, ...settings } = pluginConfigSchema.parse({ mode: "local-first", retrieval: { rerank: "none" } });
+		const register = async (skinId: string, tick?: boolean): Promise<void> => {
+			const response = await fetch(url, {
+				method: "POST", headers: { "x-sno-station-mem-skin": skinId },
+				body: JSON.stringify({ scope: { principal: userInfo().username, project: "global", session: "tick-switch" },
+					registration: { skinId, settings, routing: { mode, agentNative, language: "en",
+						remEnhanced: { occasions: remEnhanced.occasions, ...(tick === undefined ? {} : { trigger: { tick } }) } } } }),
+			});
+			expect(response.status).toBe(200);
+			expect(await response.json()).toMatchObject({ degraded: false });
+		};
+		await register("a", false);
+		expect(readRemAutomaticOperations(configPath).tickEnabled).toBe(false);
+		await register("b");
+		expect(readRemAutomaticOperations(configPath).tickEnabled).toBe(false);
+		await register("a", true);
+		expect(readRemAutomaticOperations(configPath).tickEnabled).toBe(true);
+	});
+	it("runs accepted delayed REM starts when shutdown overlaps body reading", async () => {
+		vi.stubEnv("SNO_STATION_MEM_REM_TEST_HOLD_MS", "200");
+		try {
+			await health();
+			if (!sidecar) throw new Error("missing test sidecar");
+			const url = `http://127.0.0.1:${sidecar.port}/rem/run`;
+			const accepted = await fetch(url, { method: "POST", headers: { Connection: "close" }, body: JSON.stringify({ type: "rem-update", scope: "queued" }) });
+			expect(accepted.status).toBe(202);
+			await accepted.json();
+			const request = httpRequest(url, { method: "POST", headers: { Connection: "close" } });
+			const response = new Promise<number>((resolve, reject) => {
+				request.on("error", reject);
+				request.on("response", incoming => { incoming.resume(); incoming.on("end", () => resolve(incoming.statusCode ?? 0)); });
+			});
+			request.write('{"type":"rem-update",');
+			await delay(20);
+			expect(readFileSync(join(root, "sno-station-mem", "rem-wave-jobs.jsonl"), "utf8")
+				.trim().split("\n").map(line => JSON.parse(line).state)).toEqual(["queued"]);
+			const started = performance.now();
+			const stopped = sidecar.stop();
+			request.end('"scope":"reading"}');
+			expect(await response).toBe(202);
+			await stopped;
+			sidecar = undefined;
+			expect(performance.now() - started).toBeLessThan(5_000);
+			const jobs = readFileSync(join(root, "sno-station-mem", "rem-wave-jobs.jsonl"), "utf8")
+				.trim().split("\n").filter(Boolean).map(line => JSON.parse(line));
+			expect(jobs.filter(job => job.state === "done").map(job => ({ scope: job.scope, state: job.state })).sort((a, b) => a.scope.localeCompare(b.scope))).toEqual([
+				{ scope: "queued", state: "done" }, { scope: "reading", state: "done" },
+			]);
+		} finally { vi.unstubAllEnvs(); }
+	});
+
 	it("serves without a bearer token", () => health(false));
 	it.each(["/v1/inspect", "/rem/run"])("rejects oversized request bodies at %s", async (route) => {
 		await health();
@@ -365,6 +814,12 @@ describe("sidecar keeps serving", () => {
 	});
 	it("passes cancellation through automatic recall", async () => {
 		const pool = await MemoryRuntimePool.open();
+		const registered = registration("local-first");
+		await pool.invoke("init", {
+			scope: { principal: "caller", project: "global", session: "auto-abort" },
+			registration: { ...registered, skinId: "auto-abort",
+				settings: { ...registered.settings, autoRecall: true, ambientLearning: false } },
+		}, "auto-abort");
 		const entered = Promise.withResolvers<void>();
 		const blocked = Promise.withResolvers<[]>();
 		const controller = new AbortController();
@@ -386,6 +841,24 @@ describe("sidecar keeps serving", () => {
 		} finally {
 			blocked.resolve([]);
 			await result;
+			retrieval.mockRestore();
+			await pool.close();
+		}
+	});
+	it("skips automatic recall when disabled by registration", async () => {
+		const pool = await MemoryRuntimePool.open();
+		const registered = registration("local-first");
+		const scope = { principal: "caller", project: "global", session: "auto-disabled" };
+		const retrieval = vi.spyOn(MemoryRetriever.prototype, "retrieve").mockResolvedValue([]);
+		try {
+			await pool.invoke("init", { scope, registration: { ...registered, skinId: "auto-disabled",
+				settings: { ...registered.settings, autoRecall: false, ambientLearning: false } } }, "auto-disabled");
+			const result = await pool.invoke("getRecall", {
+				scope, query: "What notebook records do you remember?", options: { source: "auto" },
+			}, "auto-disabled");
+			expect(retrieval).toHaveBeenCalledTimes(0);
+			expect(result).toMatchObject({ degraded: false, contextText: "" });
+		} finally {
 			retrieval.mockRestore();
 			await pool.close();
 		}
@@ -455,12 +928,6 @@ describe("sidecar keeps serving", () => {
 		finally { closeSync(descriptor); }
 		expect(statSync(audit).size).toBeGreaterThan(1125716658);
 		await health();
-	});
-	it("starts another sidecar while the first instance is running", async () => {
-		await health();
-		const second = await startRemSidecar();
-		try { expect((await fetch(`http://127.0.0.1:${second.port}/healthz`)).status).toBe(200); }
-		finally { await second.stop(); }
 	});
 	it("keeps keyword recall during a vector mismatch and retries vectors on reopen", async () => {
 		const embedder = await createTestEmbedder();
@@ -585,3 +1052,181 @@ describe("sidecar keeps serving", () => {
 		} finally { await pool.close(); }
 	});
 });
+
+it("holds the socket through a discovery publication after the shutdown bound", async () => {
+	const filesystem = (await import("node:fs/promises")).default;
+	const { syncBuiltinESMExports } = await import("node:module");
+	const { DuplicateSidecarError } = await import("../../../../packages/sno-station-mem/src/sidecar/server");
+	const discoveryPath = join(root, "station", "sidecar.json");
+	const socketPath = join(root, "station", "sidecar.sock");
+	const entered = Promise.withResolvers<void>();
+	const release = Promise.withResolvers<void>();
+	const rename = filesystem.rename;
+	let pauseNext = true;
+	let stopping: Promise<void> | undefined;
+	let stopped = false;
+	mkdirSync(discoveryPath);
+	sidecar = await startRemSidecar();
+	const publication = vi.spyOn(filesystem, "rename").mockImplementation(async (source, destination) => {
+		if (destination === discoveryPath && pauseNext) {
+			pauseNext = false;
+			entered.resolve();
+			await release.promise;
+		}
+		await rename(source, destination);
+	});
+	syncBuiltinESMExports();
+	try {
+		rmdirSync(discoveryPath);
+		await entered.promise;
+		stopping = sidecar.stop().then(() => { stopped = true; });
+		sidecar = undefined;
+		await delay(5_500);
+		const contender = await startRemSidecar().then(async running => {
+			await running.stop();
+			return "started";
+		}, error => {
+			if (!(error instanceof DuplicateSidecarError)) throw error;
+			return "duplicate";
+		});
+		expect(contender).toBe("duplicate");
+		expect(stopped).toBe(false);
+		const socket = createConnection(socketPath);
+		try {
+			await once(socket, "connect", { signal: AbortSignal.timeout(5_000) });
+			expect(socket.readyState).toBe("open");
+		} finally { socket.destroy(); }
+		release.resolve();
+		await stopping;
+		expect(existsSync(socketPath)).toBe(false);
+		expect(existsSync(discoveryPath)).toBe(false);
+		sidecar = await startRemSidecar();
+		const discovery = JSON.parse(readFileSync(discoveryPath, "utf8"));
+		expect(discovery.pid === process.pid).toBe(true);
+		expect(discovery.port === sidecar.port).toBe(true);
+		const response = await fetch(`http://127.0.0.1:${discovery.port}/healthz`, { signal: AbortSignal.timeout(5_000) });
+		expect(response.status).toBe(200);
+		expect((await response.json()).status).toBe("ok");
+		expect(JSON.parse(readFileSync(discoveryPath, "utf8")).token === discovery.token).toBe(true);
+		writeFileSync(discoveryPath, JSON.stringify({ pid: 424242, port: 42424, token: "foreign-owner" }));
+		await sidecar.stop();
+		sidecar = undefined;
+		expect(JSON.parse(readFileSync(discoveryPath, "utf8")))
+			.toEqual({ pid: 424242, port: 42424, token: "foreign-owner" });
+	} finally {
+		release.resolve();
+		await stopping;
+		publication.mockRestore();
+		syncBuiltinESMExports();
+	}
+}, 25_000);
+
+it("excludes jobs accepted before recovery finishes from the startup snapshot", async () => {
+	const filesystem = (await import("node:fs/promises")).default;
+	const { syncBuiltinESMExports } = await import("node:module");
+	const journalPath = join(root, "sno-station-mem", "rem-wave-jobs.jsonl");
+	const discoveryPath = join(root, "station", "sidecar.json");
+	writeFileSync(journalPath, `${JSON.stringify({
+		payloadVersion: 1, waveId: "interrupted-wave", correlationId: "interrupted-correlation",
+		scope: "global", requestedOperations: ["rem-update"], state: "queued",
+		startedAt: null, finishedAt: null, stats: { operations: 7 },
+	})}\n`);
+	const previousHold = process.env.SNO_STATION_MEM_REM_TEST_HOLD_MS;
+	process.env.SNO_STATION_MEM_REM_TEST_HOLD_MS = "300";
+	const rename = filesystem.rename;
+	let accepted: { status: number; job_id: string } | undefined;
+	// Schedule a real HTTP request in the listen-to-publication window; retain the real rename.
+	const publication = vi.spyOn(filesystem, "rename").mockImplementation(async (source, destination) => {
+		if (destination === discoveryPath) {
+			const discovery = JSON.parse(readFileSync(source, "utf8"));
+			const response = await fetch(`http://127.0.0.1:${discovery.port}/rem/run`, {
+				method: "POST", body: JSON.stringify({ type: "rem-update", scope: "global" }),
+				signal: AbortSignal.timeout(5_000),
+			});
+			accepted = { status: response.status, job_id: (await response.json()).job_id };
+		}
+		await rename(source, destination);
+	});
+	syncBuiltinESMExports();
+	try {
+		sidecar = await startRemSidecar();
+		expect(accepted?.status).toBe(202);
+		if (!accepted) throw new Error("missing accepted job");
+		const jobId = accepted.job_id;
+		const terminalRecords = () => readFileSync(journalPath, "utf8").trim().split("\n")
+			.filter(line => line.trim()).map(line => JSON.parse(line))
+			.filter(job => job.state === "done" || job.state === "failed");
+		await vi.waitFor(() => {
+			expect(terminalRecords().filter(job => job.waveId === "interrupted-wave"))
+				.toMatchObject([{ state: "failed", error: "sidecar_restart", stats: { operations: 7 } }]);
+			expect(terminalRecords().filter(job => job.waveId === jobId).length).toBe(1);
+		}, { timeout: 10_000, interval: 20 });
+		await sidecar.stop();
+		sidecar = undefined;
+		const newRecords = terminalRecords().filter(job => job.waveId === jobId);
+		expect(newRecords).toMatchObject([{ state: "done", stats: { operations: 0 } }]);
+		expect(newRecords.map(job => job.error ?? null)).toEqual([null]);
+	} finally {
+		publication.mockRestore();
+		syncBuiltinESMExports();
+		if (previousHold === undefined) delete process.env.SNO_STATION_MEM_REM_TEST_HOLD_MS;
+		else process.env.SNO_STATION_MEM_REM_TEST_HOLD_MS = previousHold;
+	}
+}, 20_000);
+
+it("holds the socket after shutdown times out until the runtime task settles", async () => {
+	const entered = Promise.withResolvers<void>();
+	const blocked = Promise.withResolvers<never>();
+	const closed = Promise.withResolvers<void>();
+	const close = MemoryRuntimePool.prototype.close;
+	const closing = vi.spyOn(MemoryRuntimePool.prototype, "close").mockImplementation(async function () {
+		try { await close.call(this); } finally { closed.resolve(); }
+	});
+	const inspection = vi.spyOn(MemoryContractRuntime.prototype, "inspect").mockImplementationOnce(() => {
+		entered.resolve();
+		return blocked.promise;
+	});
+	const socketPath = join(root, "station", "sidecar.sock");
+	const controller = new AbortController();
+	let request: Promise<Response | undefined> | undefined;
+	let bound: ReturnType<typeof setTimeout> | undefined;
+	let contender: Awaited<ReturnType<typeof startRemSidecar>> | undefined;
+	try {
+		await health();
+		if (!sidecar) throw new Error("missing test sidecar");
+		request = fetch(`http://127.0.0.1:${sidecar.port}/v1/inspect`, { method: "POST", signal: controller.signal,
+			body: JSON.stringify({ scope: { principal: "caller", project: "global", session: "shutdown-guard" }, op: { op: "list" } }),
+		}).catch(() => undefined);
+		await entered.promise;
+		const stopping = sidecar.stop();
+		sidecar = undefined;
+		expect(await Promise.race([stopping.then(() => "stopped"), new Promise(resolve => {
+			bound = setTimeout(() => resolve("still running"), 6_000);
+		})])).toBe("stopped");
+		const storeBefore = readFileSync(database.dbPath);
+		await expect(startRemSidecar().then(running => { contender = running; })).rejects.toThrow();
+		expect(readFileSync(database.dbPath).equals(storeBefore)).toBe(true);
+		expect(existsSync(join(root, "station", "sidecar.json"))).toBe(false);
+		const socket = createConnection(socketPath);
+		try {
+			await once(socket, "connect", { signal: AbortSignal.timeout(5_000) });
+			expect(socket.readyState).toBe("open");
+		} finally { socket.destroy(); }
+		blocked.reject(new Error("inspection released"));
+		await closed.promise;
+		await vi.waitFor(() => expect(existsSync(socketPath)).toBe(false), { timeout: 5_000 });
+		await health();
+		await sidecar?.stop();
+		sidecar = undefined;
+		expect(existsSync(socketPath)).toBe(false);
+	} finally {
+		clearTimeout(bound);
+		controller.abort();
+		blocked.reject(new Error("inspection released"));
+		await request;
+		await contender?.stop();
+		await closed.promise;
+		inspection.mockRestore();
+		closing.mockRestore();
+	}
+}, 15_000);

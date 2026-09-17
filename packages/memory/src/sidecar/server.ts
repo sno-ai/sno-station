@@ -1,5 +1,5 @@
 import { MEMORY_SHUTDOWN_TIMEOUT_MS } from "../../config/index";
-import { getPrincipal, readBoundStorePath } from "../contract/profile";
+import { getPrincipal, getSidecarSocketPath, readBoundStorePath } from "../contract/profile";
 /** @file server.ts
  * @purpose Runs the loopback HTTP surface and empty asynchronous REM executor.
  * @boundary Sno CLI requests, durable REM job state, and the existing local audit writer.
@@ -15,7 +15,11 @@ import {
 	type ServerResponse,
 } from "node:http";
 import path from "node:path";
-import { createLogger, effectiveLogLevel } from "@snoai/utils/logger";
+import { createConnection, createServer as createSocketServer, type Server as SocketServer } from "node:net";
+import { setImmediate as yieldTurn } from "node:timers/promises";
+import locking from "fs-ext";
+import { readDiscovery } from "../contract/discovery";
+import { createLogger, effectiveLogLevel, emitDiagnostic } from "@snoai/utils/logger";
 import { withLogContext } from "@snoai/utils/log-context";
 import { z } from "zod";
 import {
@@ -100,7 +104,85 @@ class HttpError extends Error {
 	}
 }
 
+export class DuplicateSidecarError extends Error {}
+
+async function socketIsLive(socketPath: string): Promise<boolean> {
+	return new Promise((resolve, reject) => {
+		const socket = createConnection(socketPath);
+		socket.once("connect", () => { socket.destroy(); resolve(true); });
+		socket.once("error", error => {
+			socket.destroy();
+			if ("code" in error && (error.code === "ECONNREFUSED" || error.code === "ENOENT")) resolve(false);
+			else reject(error);
+		});
+	});
+}
+
+async function bindSidecarSocket(): Promise<SocketServer> {
+	const socketPath = getSidecarSocketPath();
+	await mkdir(path.dirname(socketPath), { recursive: true, mode: 0o700 });
+	const directory = await open(path.dirname(socketPath), "r");
+	// Serialize probe/unlink/bind on the existing directory, never on a replaceable pid file.
+	try {
+		for (;;) {
+			try { locking.flockSync(directory.fd, "exnb"); break; }
+			catch (error) {
+				if (!(error instanceof Error && "code" in error && error.code === "EAGAIN")) throw error;
+				await yieldTurn();
+			}
+		}
+		const guard = createSocketServer(socket => socket.destroy());
+		for (;;) {
+			try {
+				await new Promise<void>((resolve, reject) => {
+					guard.once("error", reject);
+					guard.listen(socketPath, () => { guard.removeListener("error", reject); resolve(); });
+				});
+				return guard;
+			} catch (error) {
+				if (!(error instanceof Error && "code" in error && error.code === "EADDRINUSE")) throw error;
+				if (await socketIsLive(socketPath)) {
+					const discovery = await readDiscovery().catch(() => undefined);
+					emitDiagnostic("info", "sidecar.duplicate.exit", { pid: discovery?.pid }, {
+						event_name: "sidecar.duplicate.exit", file: "packages/sno-station-mem/src/sidecar/server.ts",
+						function: "bindSidecarSocket", site_id: "sidecar.duplicate.exit",
+					});
+					throw new DuplicateSidecarError();
+				}
+				await rm(socketPath, { force: true });
+			}
+		}
+	} finally { await directory.close(); }
+}
+
 export async function startRemSidecar(): Promise<RunningRemSidecar> {
+	const guard = await bindSidecarSocket();
+	const exitCleanup = (): void => { guard.close(); };
+	process.once("exit", exitCleanup);
+	const releaseGuard = async (): Promise<void> => {
+		await new Promise<void>(resolve => guard.close(() => resolve()));
+		process.removeListener("exit", exitCleanup);
+	};
+	try {
+		const sidecar = await startOwnedRemSidecar();
+		return {
+			port: sidecar.port,
+			async stop(): Promise<void> {
+				let drained: Promise<void> | undefined;
+				try { ({ drained } = await sidecar.stop()); }
+				finally {
+					if (drained) void drained.then(releaseGuard);
+					else await releaseGuard();
+				}
+			},
+		};
+	} catch (error) {
+		await releaseGuard();
+		throw error;
+	}
+}
+
+async function startOwnedRemSidecar(): Promise<{ port: number; stop(): Promise<{ drained?: Promise<void> }> }> {
 	let stopping = false;
 	let currentMemory: MemoryRuntimePool | undefined;
 	let openingMemory: Promise<MemoryRuntimePool> | undefined;
@@ -130,7 +212,10 @@ export async function startRemSidecar(): Promise<RunningRemSidecar> {
 			site_id: "server.<anonymous callback>.5eb5a60e6b",
 		});
 	});
-	const pendingTimers = new Set<NodeJS.Timeout>();
+	const pendingTimers = new Map<NodeJS.Timeout, () => void>();
+	const startPendingStarts = (): void => {
+		for (const start of pendingTimers.values()) start();
+	};
 	const activeTasks = new Set<Promise<void> & { label?: string; method?: string }>();
 	const pendingRequests = new Set<string>();
 	const server = createServer((request, response) => {
@@ -176,6 +261,7 @@ export async function startRemSidecar(): Promise<RunningRemSidecar> {
 			activeTasks,
 			context,
 			memory,
+			() => stopping,
 		).catch((error: unknown) => {
 				let httpError = new HttpError(500, "internal_error");
 				if (error instanceof HttpError) httpError = error;
@@ -195,6 +281,8 @@ export async function startRemSidecar(): Promise<RunningRemSidecar> {
 			}));
 	});
 
+	const jobs = await store;
+	const recoveryJobs = jobs.nonTerminalJobs();
 	await listen(server);
 	const address = server.address();
 	if (!address || typeof address === "string") {
@@ -203,10 +291,27 @@ export async function startRemSidecar(): Promise<RunningRemSidecar> {
 	}
 	const discoveryPath = getRemDiscoveryPath();
 	const discovery = { port: address.port, token, pid: process.pid } satisfies DiscoveryState;
-	await writeDiscovery(discoveryPath, discovery).catch(error => reportSidecarFailure("discovery", error));
+	let discoveryTimer: NodeJS.Timeout | undefined;
+	let discoveryAttempt = 0;
+	const publishDiscovery = async (): Promise<void> => {
+		discoveryAttempt++;
+		try {
+			await writeDiscovery(discoveryPath, discovery);
+			if (discoveryAttempt > 1) log.info("sidecar.discovery.published", { attempt: discoveryAttempt }, {
+				event_name: "sidecar.discovery.published", file: "packages/sno-station-mem/src/sidecar/server.ts",
+				function: "publishDiscovery", site_id: "sidecar.discovery.published",
+			});
+		} catch (error) {
+			log.error("sidecar.discovery.failed", { attempt: discoveryAttempt, error }, {
+				event_name: "sidecar.discovery.failed", file: "packages/sno-station-mem/src/sidecar/server.ts",
+				function: "publishDiscovery", site_id: "sidecar.discovery.failed",
+			});
+			if (!stopping) discoveryTimer = setTimeout(() => { discoveryPublication = publishDiscovery(); }, 5_000);
+		}
+	};
+	let discoveryPublication = publishDiscovery();
+	await discoveryPublication;
 	const recovery = (async () => {
-		const jobs = await store;
-		const recoveryJobs = jobs.nonTerminalJobs();
 		const jobIds = await recoverInterruptedJobs(jobs, await readCompletedJobStats(new Set(recoveryJobs.map(job => job.job_id))), recoveryJobs);
 		for (const jobId of jobIds) await runChassisJob(jobs, chassisJournal, jobId, 0);
 	})().catch(error => reportSidecarFailure("recovery", error));
@@ -225,19 +330,21 @@ export async function startRemSidecar(): Promise<RunningRemSidecar> {
 	});
 	return {
 		port: address.port,
-		async stop(): Promise<void> {
+		async stop(): Promise<{ drained?: Promise<void> }> {
 			const started = performance.now();
 			let cleanedUp = false;
 			let phase = "http_requests";
 			let timer: NodeJS.Timeout | undefined;
 			stopping = true;
+			clearTimeout(discoveryTimer);
 			process.removeListener("exit", exitCleanup);
 			try {
-				for (const pending of pendingTimers) clearTimeout(pending);
-				pendingTimers.clear();
+				startPendingStarts();
 				currentMemory?.stopTimers();
 				const cleanup = (async () => {
 					await closeServer(server);
+					// Requests still reading their body can allocate a delayed start during close.
+					startPendingStarts();
 					phase = "active_tasks";
 					await Promise.allSettled(activeTasks);
 					phase = "runtime_open";
@@ -245,7 +352,7 @@ export async function startRemSidecar(): Promise<RunningRemSidecar> {
 					phase = "runtime_close";
 					await currentMemory?.close();
 					phase = "discovery";
-					await removeOwnedDiscovery(discoveryPath, token);
+					await discoveryPublication;
 					return true;
 				})();
 				cleanedUp = await Promise.race([cleanup, new Promise<false>(resolve => {
@@ -265,12 +372,14 @@ export async function startRemSidecar(): Promise<RunningRemSidecar> {
 						});
 						server.closeAllConnections();
 						currentMemory?.stopTimers();
-						removeOwnedDiscoverySync(discoveryPath, token);
 						resolve(false);
 					}, MEMORY_SHUTDOWN_TIMEOUT_MS);
 				})]);
 			} finally {
 				clearTimeout(timer);
+				// Keep the socket guard until no publication can overwrite a successor.
+				await discoveryPublication;
+				await removeOwnedDiscovery(discoveryPath, token);
 				log[cleanedUp ? "info" : "error"]("REM sidecar cleanup completed", {
 					outcome: cleanedUp ? "success" : "failed",
 					duration_ms: performance.now() - started, active_tasks: activeTasks.size,
@@ -279,6 +388,7 @@ export async function startRemSidecar(): Promise<RunningRemSidecar> {
 					function: "startRemSidecar.stop", site_id: "sidecar.shutdown.completed",
 				});
 			}
+			return cleanedUp ? {} : { drained: Promise.allSettled(activeTasks).then(() => undefined) };
 		},
 	};
 }
@@ -289,10 +399,11 @@ async function routeRequest(
 	pendingStore: Promise<RemJobStore>,
 	chassisJournal: RemChassisJournal,
 	holdMs: number,
-	pendingTimers: Set<NodeJS.Timeout>,
+	pendingTimers: Map<NodeJS.Timeout, () => void>,
 	activeTasks: Set<Promise<void>>,
 	context: RequestLogContext,
 	memory: { current(): MemoryRuntimePool | undefined; open(): Promise<MemoryRuntimePool> },
+	isStopping: () => boolean,
 ): Promise<void> {
 	const url = new URL(request.url ?? HEALTH_PATH, REM_SIDECAR_ORIGIN);
 	if (request.method === "GET" && url.pathname === HEALTH_PATH) {
@@ -348,13 +459,18 @@ async function routeRequest(
 		});
 		if (created) {
 			const delayMs = "types" in input ? 0 : REM_ASYNC_START_DELAY_MS;
-			const timer = setTimeout(() => {
+			const { promise: task, resolve, reject } = Promise.withResolvers<void>();
+			activeTasks.add(Object.assign(task, { label: job.job_id }));
+			void task.catch(error => reportSidecarFailure("rem_run", error))
+				.finally(() => activeTasks.delete(task));
+			const start = (): void => {
+				clearTimeout(timer);
 				pendingTimers.delete(timer);
-				const task = runChassisJob(store, chassisJournal, job.job_id, holdMs);
-				activeTasks.add(Object.assign(task, { label: job.job_id }));
-				void task.finally(() => activeTasks.delete(task));
-			}, delayMs);
-			pendingTimers.add(timer);
+				void runChassisJob(store, chassisJournal, job.job_id, holdMs).then(resolve, reject);
+			};
+			const timer = setTimeout(start, delayMs);
+			pendingTimers.set(timer, start);
+			if (isStopping()) start();
 		}
 		sendJson(response, 202, { job_id: job.job_id, waveId: job.job_id });
 		return;
@@ -726,13 +842,17 @@ async function writeDiscovery(discoveryPath: string, discovery: DiscoveryState):
 	const temporaryPath = `${discoveryPath}.${randomUUID()}.tmp`;
 	const handle = await open(temporaryPath, "wx", 0o600);
 	try {
-		await handle.writeFile(JSON.stringify(discovery), "utf8");
-		await handle.sync();
+		try {
+			await handle.writeFile(JSON.stringify(discovery), "utf8");
+			await handle.sync();
+		} finally {
+			await handle.close();
+		}
+		await rename(temporaryPath, discoveryPath);
+		await syncDirectory(parent);
 	} finally {
-		await handle.close();
+		await rm(temporaryPath, { force: true });
 	}
-	await rename(temporaryPath, discoveryPath);
-	await syncDirectory(parent);
 }
 
 async function removeOwnedDiscovery(discoveryPath: string, token: string): Promise<void> {
