@@ -65,7 +65,8 @@ export class MemoryRetriever {
 	private _statsCollector: RetrievalStatsCollector | undefined;
 	_accessTracker: AccessTracker | undefined;
 	_cachedConfigHash: string | undefined;
-	// Lazily instantiated for post-retrieval tier evaluation.
+	// Lazily instantiated when `recallLifecycle.retentionScorer` is ON. Kept on
+	// the retriever instance so per-pipeline-run construction cost stays O(1).
 	_retentionScorer: RetentionScorer | undefined;
 	// Phase 0 §5 — tier-promoter wiring. Held alongside `_recallLifecycle` so the
 	// post-retrieval evaluation block can gate on both presence and flag in a
@@ -173,9 +174,12 @@ export interface MemoryRetrieverInternals {
 	rerankLightweight(candidates: RetrievalResult[], queryVector: Float32Array): RetrievalResult[];
 	getRerankSourceScore(result: RetrievalResult): number;
 	getRerankPreservationFloor(result: RetrievalResult, unreturned: boolean): number;
-	applyScoringPipeline(results: RetrievalResult[], trace?: TraceCollector): RetrievalResult[];
+	applyScoringPipeline(results: RetrievalResult[], trace?: TraceCollector, limit?: number): RetrievalResult[];
+	applyRecencyBoost(results: RetrievalResult[]): RetrievalResult[];
 	applyImportanceWeight(results: RetrievalResult[]): RetrievalResult[];
 	applyLengthNormalization(results: RetrievalResult[]): RetrievalResult[];
+	applyTimeDecay(results: RetrievalResult[]): RetrievalResult[];
+	applyRetentionBoost(results: RetrievalResult[]): RetrievalResult[];
 	applyMmrDiversity(results: RetrievalResult[]): RetrievalResult[];
 }
 
