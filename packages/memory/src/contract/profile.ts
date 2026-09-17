@@ -11,6 +11,7 @@ export function getBindingPath(): string { return path.join(getStateDir(), "stat
 export function getInstallationConfigPath(): string { return path.join(getStateDir(), "station", `sno-station-mem-${getPrincipal()}.config.json`); }
 export function getDefaultStorePath(): string { return path.join(getSnoStationMemStateDir(), getPrincipal(), "memory.sqlite"); }
 export function getDiscoveryPath(): string { return path.join(getStateDir(), "station", "sidecar.json"); }
+export function getSidecarSocketPath(): string { return path.join(getStateDir(), "station", "sidecar.sock"); }
 export function getStartupLogPath(): string { return path.join(getSnoStationMemStateDir(), "sidecar-startup.log"); }
 
 const bindingSchema = z.strictObject({ principal: z.string().min(1), storePath: z.string().refine(path.isAbsolute) });
