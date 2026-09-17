@@ -45,6 +45,25 @@ function auxiliaryRows(store: MemoryStore) {
 }
 
 describe("capture contract preserves the existing hook path", () => {
+	it("keeps the statement anchor beside a resolved event date", async () => {
+		const { services, config } = await fixture();
+		await services.store.store({
+			text: "Avery visited the botanical garden last week.", category: "episodic",
+			projectId: "agent:parity", importance: 0.9,
+			metadata: JSON.stringify({ kind: "episodic", temporal_date: "2022-09-05/2022-09-12",
+				temporal_precision: "week", temporal_resolution_status: "resolved",
+				source_order: { session_moment: 1663162980000 },
+				source_span: { quote: "I visited the botanical garden last week." } }),
+		});
+		const result = await onBeforeAgentStart(services, config, services.retriever, services.store,
+			new MemoryScopePolicy({ default: "agent:parity" }), new Map(), new Map(),
+			{ prompt: "When did Avery visit the botanical garden?" },
+			{ agentId: "parity", sessionKey: "agent:parity:date-proof" }, services.stateDir);
+		expect(result?.prependContext).toContain('"event_date":"2022-09-05/2022-09-12"');
+		expect(result?.prependContext).toContain('"said_on":"2022-09-14"');
+		expect(result?.prependContext).toContain('"quote":"I visited the botanical garden last week."');
+	});
+
 	it("commits the same durable row bytes before returning, without widening the supplied project", async () => {
 		const original = await fixture();
 		const contract = await fixture();
