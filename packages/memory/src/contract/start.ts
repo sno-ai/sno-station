@@ -10,7 +10,7 @@ import { MEMORY_START_TIMEOUT_MS } from "./routes";
 export async function startSidecar(): Promise<Discovery> {
 	const storePath = await readBoundStorePath();
 	const current = await readDiscovery();
-	if (current && processAlive(current.pid)) { await checkDiscovery(current, storePath); return current; }
+	if (current && await checkDiscovery(current, storePath).then(() => true, () => false)) return current;
 	await mkdir(getSnoStationMemStateDir(), { recursive: true, mode: 0o700 });
 	const log = await open(getStartupLogPath(), "a", 0o600);
 	let failed = false;
@@ -18,7 +18,7 @@ export async function startSidecar(): Promise<Discovery> {
 		const entry = fileURLToPath(new URL("./sidecar/main.js", import.meta.url));
 		const child = spawn(process.execPath, [entry], { detached: true, stdio: ["ignore", log.fd, log.fd], env: process.env });
 		child.once("error", () => { failed = true; });
-		child.once("exit", code => { if (code !== 75) failed = true; });
+		child.once("exit", () => { failed = true; });
 		child.unref();
 	} finally { await log.close(); }
 	const deadline = Date.now() + MEMORY_START_TIMEOUT_MS;

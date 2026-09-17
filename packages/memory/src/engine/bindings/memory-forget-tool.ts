@@ -12,10 +12,8 @@ import {
 
 import { clamp01, clampInt, SnoStationMemError, FORGET_QUERY_DEFAULT_LIMIT, FORGET_QUERY_MIN_SCORE, MAX_CANDIDATE_POOL_SIZE } from "./memory-tool-dependencies";
 import {
-	killSwitchResponse,
 	makeResult,
 	runWithAudit,
-	shouldBlockMemoryTools,
 } from "./memory-tool-results";
 import { forgetParamsSchema, type ToolContext, type ToolResult } from "./memory-tool-schemas";
 import { MEMORY_TELEMETRY_DELETE_REASONS } from "../telemetry/memory-telemetry-types";
@@ -25,8 +23,6 @@ import { MEMORY_TELEMETRY_DELETE_REASONS } from "../telemetry/memory-telemetry-t
 export async function executeMemoryForgetTool(ctx: ToolContext, access: ReturnType<typeof resolveAgentAccess>, _toolCallId: unknown, params: unknown): Promise<ToolResult> {
 					// Centralize the tool execution fallback value at the boundary of this helper.
 					return runWithAudit(ctx, "memory_forget", undefined, async () => {
-						// Short-circuit while paused so no storage, model, or audit side effects continue.
-						if (shouldBlockMemoryTools(ctx)) return killSwitchResponse(ctx);
 						const parsed = forgetParamsSchema.parse(params);
 						if (parsed.suppress_key || parsed.suppress_content) {
 							const projectId = assertAccessibleScopeForTool(
