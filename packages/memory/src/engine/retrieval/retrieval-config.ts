@@ -3,7 +3,6 @@
  * @boundary Types and defaults only; no ranking execution.
  */
 
-import { DEFAULT_RECALL_LIFECYCLE, type RecallLifecycleConfig } from "../../../config/index";
 import type { MemoryCategory } from "./retriever-dependencies";
 import type { AggregationQuery } from "../shared/types";
 import type { RemFacetPolicy } from "../rem/index.js";
@@ -20,12 +19,8 @@ import {
 	LIGHTWEIGHT_COSINE_WEIGHT,
 	LIGHTWEIGHT_FUSION_WEIGHT,
 	MMR_LAMBDA,
-	RECENCY_HALF_LIFE_DAYS,
-	RECENCY_WEIGHT,
 	RERANK_BLEND_CROSS,
 	RERANK_BLEND_VECTOR,
-	TIME_DECAY_FLOOR,
-	TIME_DECAY_HALF_LIFE_DAYS,
 } from "./retriever-dependencies";
 
 export type RerankProvider = "jina" | "siliconflow" | "voyage" | "pinecone" | "dashscope" | "tei";
@@ -37,18 +32,13 @@ export interface RetrievalConfig {
 	minScore: number;
 	rerank: "cross-encoder" | "lightweight" | "none";
 	candidatePoolSize: number;
-	recencyHalfLifeDays: number;
-	recencyWeight: number;
 	/** Drop memories past their valid_until timestamp (default OFF) */
 	temporalExpiry: boolean;
-	/** Dynamic memories decay 3× faster in time-decay scoring (default ON) */
-	temporalDecay: boolean;
 	rerankApiKey?: string;
 	rerankModel?: string;
 	rerankTimeoutMs?: number;
 	lengthNormAnchor: number;
 	hardMinScore: number;
-	timeDecayHalfLifeDays: number;
 	/** Weight for fusion score in rerank blend */
 	rerankBlendVector?: number;
 	/** Weight for cross-encoder score in rerank blend */
@@ -59,8 +49,6 @@ export interface RetrievalConfig {
 	lightweightCosineWeight?: number;
 	/** Base multiplier for importance weighting */
 	importanceWeightBase?: number;
-	/** Minimum multiplier for old entries */
-	timeDecayFloor?: number;
 	/** Relevance vs diversity tradeoff (default: 0.7) */
 	mmrLambda?: number;
 	/** Custom rerank API endpoint URL */
@@ -77,17 +65,7 @@ export interface RetrievalConfig {
 	 * not to return them.
 	 */
 	rerankMaxCandidates?: number;
-	/** Scaling factor for access-based reinforcement (0 = disabled, default: 0.5) */
-	reinforcementFactor?: number;
-	/** Hard cap: effective half-life <= baseHalfLife * maxHalfLifeMultiplier (default: 3) */
-	maxHalfLifeMultiplier?: number;
-	/**
-	 * Phase 0 retention-loop knobs (openspec/changes/mem-lifecycle PRD §6.1).
-	 * Optional so legacy `RetrievalConfig` literals keep parsing; resolved
-	 * default in `DEFAULT_RETRIEVAL_CONFIG` is `DEFAULT_RECALL_LIFECYCLE`
-	 * (all booleans `false`), making the new wire sites pass-through.
-	 */
-	recallLifecycle?: RecallLifecycleConfig;
+
 }
 
 export interface RetrievalContext {
@@ -163,22 +141,16 @@ export const DEFAULT_RETRIEVAL_CONFIG: RetrievalConfig = {
 	minScore: DEFAULT_MIN_SCORE,
 	rerank: "cross-encoder",
 	candidatePoolSize: CANDIDATE_POOL_SIZE,
-	recencyHalfLifeDays: RECENCY_HALF_LIFE_DAYS,
-	recencyWeight: RECENCY_WEIGHT,
 	temporalExpiry: false,
-	temporalDecay: true,
 	rerankModel: DEFAULT_RERANK_MODEL,
 	rerankTimeoutMs: DEFAULT_RERANK_TIMEOUT_MS,
 	rerankProvider: "voyage",
 	lengthNormAnchor: LENGTH_NORM_ANCHOR,
 	hardMinScore: DEFAULT_HARD_MIN_SCORE,
-	timeDecayHalfLifeDays: TIME_DECAY_HALF_LIFE_DAYS,
 	rerankBlendVector: RERANK_BLEND_VECTOR,
 	rerankBlendCross: RERANK_BLEND_CROSS,
 	lightweightFusionWeight: LIGHTWEIGHT_FUSION_WEIGHT,
 	lightweightCosineWeight: LIGHTWEIGHT_COSINE_WEIGHT,
 	importanceWeightBase: IMPORTANCE_WEIGHT_BASE,
-	timeDecayFloor: TIME_DECAY_FLOOR,
 	mmrLambda: MMR_LAMBDA,
-	recallLifecycle: DEFAULT_RECALL_LIFECYCLE,
 };

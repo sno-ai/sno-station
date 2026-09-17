@@ -233,9 +233,6 @@ const QUERY_FALLBACK_MISSING_REASON =
 const REFERENCE_TIME_METHODS = [
 	"filterExpired",
 	"filterExpiredCandidates",
-	"applyRecencyBoost",
-	"applyTimeDecay",
-	"applyRetentionBoost",
 ] as const;
 
 function available<T>(value: T): CapturedValue<T> {
