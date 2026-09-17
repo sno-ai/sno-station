@@ -17,6 +17,9 @@ import {
 import { LOCAL_EMBEDDING_MODEL } from "@snoai/embedder";
 import { z } from "zod";
 
+/** Maximum wait for sidecar requests and resource cleanup during shutdown. */
+export const MEMORY_SHUTDOWN_TIMEOUT_MS: number = 5_000;
+
 // =============================================================================
 // SCORING & THRESHOLDS
 // =============================================================================
