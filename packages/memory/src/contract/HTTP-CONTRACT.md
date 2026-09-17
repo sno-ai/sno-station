@@ -7,29 +7,46 @@ The authoritative runtime schemas are `inputSchemas` and `outputSchemas`, export
 The TypeScript interface is `MemoryContract`. There are eight methods. No queue or deferred
 capture acknowledgement exists.
 
-## Transport and authentication
+## Transport and request handling
 
-Listen on `127.0.0.1` with an ephemeral TCP port and a random per-boot bearer token.
-Discovery is `<profile root>/station/sidecar.json` with `{pid, port, token}`.
-The lock is `<profile root>/sno-station-mem/sidecar.lock`.
-Every verb request supplies `Authorization: Bearer <token>` and
-`x-sno-station-mem-skin: <skinId>`. Authenticate before reading the request body.
-The skin identifier in an initialization payload must match its request header.
-Verb request bodies are limited to 8 MiB. Health requires the discovery token and adds the OS principal, bound store path and guarded-operation access counters; the counters count entry to the engine/store capability, not SQL statements.
-All request and response bodies are JSON. Unknown fields in contract objects are refused.
+Listen on `127.0.0.1` with an ephemeral TCP port. There is no bearer-token admission check
+or single-instance lock. Memory routes and `/rem/run` accept at most 8 MiB per request
+(`MEMORY_BODY_LIMIT_BYTES`), counted as streamed bytes. An oversized body receives
+413 `{error:"payload_too_large"}` and an error-level log; it creates no work.
+Memory routes enforce their `MEMORY_ROUTES[method].timeoutMs` deadline over body reading,
+runtime opening and invocation. An exceeded deadline returns 504
+`{degraded:true,reason:"timeout"}` and an error-level log for that request only. Discovery remains
+`<profile root>/station/sidecar.json` with `{pid, port, token}`; the random token identifies
+which process owns discovery cleanup, not permission to make requests.
 
-`scope` requires nonblank `principal`, `project`, and `session` strings. Its optional `host`
-object accepts only `agentId`, `sessionKey`, `sessionId`, `sessionTimezone`, `workspace`, `sessionFile`, `boundary`, `at`, and `systemCaller`.
-The first six are strings; `boundary` is new/reset/session-end, `at` is an epoch timestamp,
-and `systemCaller` is a boolean derived from the existing host operator-admin scope. Unknown host fields are refused. The client obtains the principal from the operating-system user name.
-The server refuses another principal before engine or store access. No scope field is defaulted.
+The optional `x-sno-station-mem-skin` header identifies the skin. A missing header uses the
+`default` skin. A skin can call before registration: installed settings create its runtime.
+Explicit registration can subsequently supply its host model callback. The header selects
+registration identity. Principal, operator and configured-scope checks do not deny requests.
+The installed store's embedding settings, telemetry settings and path win over conflicting
+registration settings; the conflict is logged at error level.
 
-`project` is the existing logical workspace key or `agent:<id>` key. The sidecar resolves its
-persisted mapping on every verb call and writes to that resolved project. Optional `readable`
-lists further logical scopes the call may read (the skin sends the agent's accessible set when
-the caller named no scope); the sidecar refuses any `project` or `readable` entry its installed
-scope policy does not grant the calling agent, and reads span the admitted set. Initialization does not return a substituted scope. Host identities and
-workspace facts are explicit fields; they are never encoded into project/session/skin strings.
+All request and response bodies are JSON. Parsing errors affect that request alone. Extra request and settings fields are ignored instead of refusing an otherwise usable request.
+`scope` carries `principal`, `project`, and `session`; optional `host` carries host identities,
+workspace facts, session timing and observation identifiers. A project path matching the
+host workspace uses the existing persisted mapping. Logical scopes and explicit `readable`
+scopes are served without admission checks.
+
+Health returns the OS principal, bound path and engine/store entry counts. It does not wait
+for the store to open, audit recovery, model warmup, integrity checks or job-journal replay.
+An underlying I/O or model operation can fail its own request. Such errors are logged and
+do not latch the store or deny later requests. A failed memory-runtime open is retried on the
+next request. The gateway retries failed registration automatically and registers again when
+the sidecar discovery port or process changes. Discovery checking, stale callback/client
+cleanup and re-registration share one promise, so concurrent callers await the same recovery.
+
+Database setup failures log the step and error without blocking HTTP startup. Unfinished
+steps retry on each maintenance pass until successful; another store open also attempts setup.
+Requests touching missing schema fail individually and loudly. A nonempty vector table with
+an incompatible dimension or missing partition key is preserved, logged at error level and
+marked unavailable for vector search for that open. Semantic search logs the unavailable
+branch and contributes no hits; keyword/FTS recall remains available. Every new store open
+retries reconciliation and verification; compatible vectors become searchable again.
 
 Registration requires `skinId`, authoritative `routing`, and `settings`. Settings retain the
 existing non-routing plugin configuration: embedding, retrieval, scope policy, provider identity,
@@ -69,6 +86,11 @@ The existing three HTTP routes remain:
 
 The pre-change server has two REM routes and one health route. The requirements' phrase
 “three REM routes” is read as preserving all three existing routes; no extra REM route is invented.
+An invalid `/rem/run` request shape (including absent/blank scope or an empty type list)
+returns 400 `{error:"invalid_request"}` without allocating a job. Unknown or unbuilt operation
+types are dropped with an error-level log. If no supported operation remains, the response is
+400 `{error:"unsupported_rem_type"}` and no job is created. Mixed requests execute only the
+supported operations explicitly submitted. No default scope or full operation set is substituted.
 REM completion remains asynchronous behind its job record. Capture completion is synchronous:
 `committed:true` is legal only after extraction and persistence have completed.
 A timeout never reports that a write was committed or safely cancelled. Do not blindly replay
@@ -88,24 +110,32 @@ a timed-out mutation; use its normal read path to establish the durable state.
   includeHistory, includeRefused, tokenBudget, externalReference, externalReferenceVisibility,
   and aggregation `{operation, terms}`. The options object itself is required. An empty object
   selects the existing retriever defaults. Aggregation operations remain count/first/last/evidence.
-Ordinary relevance-ranked recall does not use a memory row's timestamp or last-access time
-to boost or suppress its score. The scoring stages are importance weighting, optional length
-normalization, the hard score floor, and MMR ordering. Retrieval recency, time-decay, and
-retention-boost controls were removed as a hard cut on 2026-09-17. Explicit validity filters
-and lifecycle maintenance retain their existing contracts.
+By default, relevance-ranked recall does not use a row's timestamp or last-access time
+to boost or suppress its score. Operator retrieval config `temporalWeighting` defaults to
+`false`; setting it to `true` enables the historical recency, time-decay, and retention
+stages with their existing tuning and lifecycle controls. When disabled, all three stages
+record skip reason `temporalWeighting`. Importance weighting, optional length normalization,
+score floors, explicit validity filters, and lifecycle maintenance keep their existing behavior.
+Operator config `mmrWindowOnly` also defaults to `false`. When enabled, MMR only reorders
+the first request-limit candidates in the reranked stream; candidates outside that window
+cannot displace its members through diversification. These are operator configuration
+fields, not additional recall request options.
+The strict `apps/mem-claw/openclaw.plugin.json` retrieval schema has not yet been extended
+with these switches; it rejects them at the plugin configuration boundary. The switches
+are currently available through engine/sidecar configuration, pending a plugin-manifest update.
 
 - `mutate.op`: exactly one of the five shapes below. Field names are wire names; the engine's
   existing validation, authority, clamping and return behavior stay in force.
 
 | op | Additional fields |
 |---|---|
-| store | content; optional category (episodic/profile), importance, metadata |
+| store | content; optional stored category, importance, metadata |
 | forget | exactly one id/query/suppressKey/suppressContent; optional minScore, maxDelete, confirm; suppressKey is {subject, attribute} |
 | update | id; at least one text/category/importance/metadata |
-| clear | confirm; optional all; all-project clearing retains its existing system-authority check |
+| clear | confirm; optional all; all-project clearing has no system-authority gate |
 | resolveReflection | exactly one memoryId/query; optional dryRun, note, limit |
 
-- `inspect.op`: stats accepts an optional scope; an omitted scope requires systemCaller and returns principal-wide statistics; list permits category/limit/offset/importanceMin;
+- `inspect.op`: stats accepts an optional scope; an omitted scope returns principal-wide statistics; list permits category/limit/offset/importanceMin;
   get requires exactly one id/path and permits from/lines for a file excerpt; listReflection
   permits limit/unresolvedOnly. These reads never enter the recall cache.
 - Usage `signal`: `{event, memoryIds, at, toolName?, text?}`, where event is
@@ -131,19 +161,16 @@ Every method result contains `degraded:boolean`. A degraded result must contain 
 
 | HTTP status | Error code | Meaning |
 |---|---|---|
-| 400 | invalid-input | malformed JSON, schema failure or missing skin identity |
-| 401 | unauthorized | missing or incorrect token; body not read |
-| 403 | principal-mismatch / system-caller-required | foreign principal or missing operator authority refused before access |
+| 400 | invalid-input | this request could not be parsed |
+| 400 | invalid_request / unsupported_rem_type | unusable REM request; no job allocated |
+| 413 | payload_too_large | memory or REM body exceeds 8 MiB; no work created |
+| 504 | timeout | memory route deadline exceeded; underlying work may still complete |
 | 404 | not_found | unknown path or unknown existing REM job |
-| 409 | store-mismatch | caller path differs from the install binding |
-| 413 | payload_too_large | request exceeds server body limit |
-| 503 | no-agent-endpoint / storage-unavailable / paused | required resource is unavailable |
-| 504 | timeout | route ceiling exceeded; no success receipt |
+| 503 | no-agent-endpoint / storage-unavailable | this operation could not obtain its required resource |
 | 500 | engine-failed | execution or output-validation failure |
 
 Closed degraded reasons: sidecar-unreachable, sidecar-unresponsive, principal-mismatch,
-store-mismatch, no-agent-endpoint, invalid-input, timeout, storage-unavailable, engine-failed,
-paused, system-caller-required. The client never opens a store or queues a write when the daemon fails.
+store-mismatch, no-agent-endpoint, invalid-input, timeout, storage-unavailable, engine-failed. The client never opens a store or queues a write when the daemon fails.
 
 ## State and reserved environment names
 
@@ -156,8 +183,7 @@ environment name begins `SNO_STATION_MEM_`.
 `sno-station-mem bind <path>` creates the binding once, refusing an existing binding.
 Unbound clients use `<profile root>/sno-station-mem/<principal>/memory.sqlite` without writing a
 binding. Bindings live at `<profile root>/station/sno-station-mem-<principal>.binding.json`.
-Pause/resume use the library's shared kill-switch file; workspace learning tools remain local
-file operations. Neither is a database fallback or an additional HTTP method.
+Pause/resume commands and kill-switch activation were removed. Existing kill-switch files have no runtime effect. Workspace learning tools remain local file operations.
 
 ## Installation settings
 
@@ -165,7 +191,9 @@ file operations. Neither is a database fallback or an additional HTTP method.
 
 ## Operator storage inspection
 
-`inspect({ op: "storage" }, scope)` is an operator-only diagnostic approved for the host configuration boundary. It requires `scope.host.systemCaller`, checks the OS principal before storage access, and can run before `init` so invalid model settings do not prevent diagnosis. The result is `{ op: "storage", dimension: number | null, failed: boolean, reason?: string }`; the sidecar reads its existing live connection. It creates no extra route or verb.
+`inspect({ op: "storage" }, scope)` reports the current store dimension without principal,
+operator or registration admission. Its `failed` field is false: there is no stored failure
+latch. Actual read failures are reported as operation errors, never a fabricated healthy read.
 
 `recordUsage` additionally accepts optional JSON `error` and `result` fields so the unchanged error-signal handler receives the original tool event, including successful exit-code text, instead of treating every text result as an error.
 
@@ -173,4 +201,26 @@ file operations. Neither is a database fallback or an additional HTTP method.
 
 The sidecar reads `SNO_STATION_MEM_MAINTENANCE_INTERVAL_MS` (positive integer; it becomes the tick, the first-tick delay and every maintenance job's interval, backup and REM trigger check included), `SNO_STATION_MEM_REM_CLOCK_OVERRIDE` (ISO instant) and `SNO_STATION_MEM_REM_VOLUME_THRESHOLD` (positive integer) once at boot. Unset values preserve the normal interval, wall clock and100-row threshold. These overrides make the actual scheduler testable; clients never dispatch the acceptance wave. Each scope gets at most one automatic REM pass per local day, whichever trigger (daily schedule or volume) comes first: a completed pass of either kind records that day in `last_volume_pass_date`, which closes the volume trigger and moves the daily pass to the next day's schedule.
 
-Installed `remEnhanced.trigger.tick` defaults true. False still evaluates due windows but never dispatches them. Trigger-state version1 writes the sixth `missed_window` field on each scope: null or `{due_at, trigger: "daily" | "volume", recorded_at}`. Earlier five-field version1 files load with `missed_window: null` and acquire the field on the next atomic write. Other missing or malformed fields are still rejected. A successful dispatch clears the recorded miss.
+Automatic REM does not honor the old tick-disable or product-mode admission checks. Installed operations select what runs. Trigger-state read/write errors produce error events and due work continues with fresh state. Failed dispatch attempts remain eligible after the former three-attempt limit. The once-per-local-day rule for completed work remains the scheduling rule. A lost state file cannot prove a prior completion, so due work can run again.
+
+## Startup, integrity and JSONL recovery
+
+Schema setup and migrations log their failures and continue. Startup does not run a full
+integrity sweep. Scheduled checks can rebuild a damaged derived FTS index, but an unsuccessful
+check or rebuild does not stop SQL, maintenance, or later requests. No kill-switch file is
+written or honored.
+
+Audit and REM journal recovery read JSONL incrementally. Unreadable files and invalid journal
+rows produce error events. Earlier valid records remain usable. Audit history is retained,
+including every `rem_*` recovery record; there is no destructive startup truncation. Trace
+logging uses the shared rotating file sink and does not read the trace into one string.
+REM requests do not require enablement artifacts, owner-calibration declarations or grammar
+admission. Missing operational settings use the built-in defaults.
+
+The scheduled integrity sweep opens an FTS read cursor and checks integrity in the same
+read transaction. This refreshes the observer connection after another connection changes
+FTS segments. A stale in-memory segment list must not be reported as durable corruption.
+Native database recall can run without a host workspace. A workspace is needed only to read
+an actual file from that workspace. Explicit row updates, including timestamp repairs, do not
+require an operator marker. Store requests can name any stored memory category; category
+metadata is still used by the corresponding writer.

@@ -2,7 +2,7 @@ import { execFile } from "node:child_process";
 import { request as httpRequest } from "node:http";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
-import { checkDiscovery, processAlive, readDiscovery, type Discovery } from "./discovery";
+import { checkDiscovery, readDiscovery, type Discovery } from "./discovery";
 import { ContractError, DEGRADED_REASONS, type DegradedReason } from "./error";
 import type { ContractInputs, Inspection, Message, Mutation, RecallOptions, Registration, ScopeCtx, Turn, UsageSignal } from "./inputs";
 import type { ContractMethod, MemoryContract } from "./index";
@@ -53,10 +53,9 @@ function responseError(body: unknown): ContractError {
 
 export async function connect(options: ConnectOptions): Promise<MemoryClient | DegradedConnection> {
 	try {
-		if (!options.skinId?.trim()) throw new ContractError("invalid-input");
 		const storePath = await readBoundStorePath(options.storePath);
 		let discovery = await readDiscovery();
-		if (!discovery || !processAlive(discovery.pid)) {
+		if (!discovery || !await checkDiscovery(discovery, storePath).then(() => true, () => false)) {
 			try {
 				await promisify(execFile)(process.execPath, [fileURLToPath(new URL("./cli.js", import.meta.url)), "sidecar", "start"], {
 					timeout: MEMORY_START_TIMEOUT_MS + MEMORY_HEALTH_TIMEOUT_MS, maxBuffer: 64 * 1024,
@@ -64,7 +63,7 @@ export async function connect(options: ConnectOptions): Promise<MemoryClient | D
 			} catch { throw new ContractError("storage-unavailable"); }
 			discovery = await readDiscovery();
 		}
-		if (!discovery || !processAlive(discovery.pid)) throw new ContractError("sidecar-unreachable");
+		if (!discovery) throw new ContractError("sidecar-unreachable");
 		await checkDiscovery(discovery, storePath);
 		return new MemoryClient(options.skinId, storePath, discovery);
 	} catch (error) { return { degraded: true, reason: failureReason(error) }; }
@@ -84,11 +83,11 @@ export class MemoryClient implements MemoryContract {
 	}
 
 	private async request<K extends ContractMethod>(method: K, input: ContractInputs[K]): Promise<ContractOutputs[K]> {
-		if (input.scope.principal !== this.principal) throw new ContractError("principal-mismatch");
 		const route = MEMORY_ROUTES[method];
 		try {
-			const response = await postJson(this.port, route.path,
-				{ Authorization: `Bearer ${this.#discovery.token}`, "Content-Type": "application/json", [MEMORY_SKIN_HEADER]: this.skinId },
+			const discovery = await readDiscovery() ?? this.#discovery;
+			const response = await postJson(discovery.port, route.path,
+				{ "Content-Type": "application/json", [MEMORY_SKIN_HEADER]: this.skinId },
 				JSON.stringify({ ...input, scope: { ...input.scope, principal: this.principal } }),
 				AbortSignal.timeout(route.timeoutMs));
 			const body = response.body;
