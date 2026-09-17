@@ -15,11 +15,11 @@ import { SESSION_STRATEGIES } from "./config/session-strategy";
 
 export type EngineSettings = Omit<PluginConfig, keyof LlmRoutingConfig>;
 
-export const engineSettingsSchema: z.ZodType<EngineSettings, unknown> = z.strictObject({
+export const engineSettingsSchema: z.ZodType<EngineSettings, unknown> = z.object({
 	embedding: embeddingConfigSchema,
 	observe: observeConfigSchema,
 	dbPath: z.string().optional(),
-	provider: z.strictObject({ userId: z.string().trim().optional() }),
+	provider: z.object({ userId: z.string().trim().optional() }),
 	ambientLearning: z.boolean(),
 	autoRecall: z.boolean(),
 	autoRecallMinLength: z.number().int().min(1).max(200),
@@ -30,9 +30,9 @@ export const engineSettingsSchema: z.ZodType<EngineSettings, unknown> = z.strict
 	autoRecallExcludeAgents: z.array(z.string()),
 	captureAssistant: z.boolean(),
 	retrieval: retrievalConfigSchema,
-	scopes: z.strictObject({
+	scopes: z.object({
 		default: z.string(),
-		definitions: z.record(z.string(), z.strictObject({
+		definitions: z.record(z.string(), z.object({
 			description: z.string().optional(),
 			metadata: z.record(z.string(), z.json()).optional(),
 		})),
@@ -41,20 +41,16 @@ export const engineSettingsSchema: z.ZodType<EngineSettings, unknown> = z.strict
 	enableManagementTools: z.boolean(),
 	sessionStrategy: z.enum(SESSION_STRATEGIES),
 	sessionMemory: sessionMemoryConfigSchema,
-	compression: z.strictObject({ enabled: z.boolean() }).optional(),
+	compression: z.object({ enabled: z.boolean() }).optional(),
 	selfImprovement: selfImprovementConfigSchema,
 	extraction: extractionConfigSchema,
 	memoryReflection: memoryReflectionConfigSchema,
 	recallLifecycle: recallLifecycleSchema,
-	memoryTelemetry: z.strictObject({ enabled: z.boolean(), currentKeyVersion: z.number().int().positive() }),
+	memoryTelemetry: z.object({ enabled: z.boolean(), currentKeyVersion: z.number().int().positive() }),
 	remOperations: z.array(z.enum(["rem-replace", "rem-update"])).min(1).max(2),
-	onboarding: z.strictObject({
+	onboarding: z.object({
 		version: z.number().int().positive(),
 		completedAt: z.string(),
 		profile: z.enum(["local-active", "capture-only", "manual-only", "custom"]),
 	}).optional(),
-}).superRefine((settings, context) => {
-	if (settings.retrieval.rerank === "cross-encoder" && !settings.retrieval.rerankApiKey?.trim()) {
-		context.addIssue({ code: "custom", path: ["retrieval", "rerankApiKey"], message: "Cross-encoder requires its configured key" });
-	}
 });
