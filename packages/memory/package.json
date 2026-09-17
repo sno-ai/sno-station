@@ -71,7 +71,7 @@
     "test:e2e:agent": "env SNO_AGENT_E2E=1 bash ../../tests/apps/mem-claw/e2e-agent/run-agent-e2e.sh",
     "test:e2e:all": "vitest run --config vitest.config.ts ../../tests/apps/mem-claw/e2e-minus/",
     "test:integration": "npm run test:integration:critical",
-    "test:integration:critical": "vitest run --config vitest.config.ts ../../tests/apps/mem-claw/integration/hook-session-fallback-regressions.test.ts -t \"hook memory operations fail closed\"",
+    "test:integration:critical": "vitest run --config vitest.config.ts ../../tests/apps/mem-claw/integration/memory-connection-retry.test.ts",
     "test:integration:all": "vitest run --config vitest.config.ts ../../tests/packages/sno-station-mem/integration/",
     "test:unit": "vitest run --config vitest.config.ts ../../tests/packages/sno-station-mem/unit/",
     "test:eval": "vitest run --config vitest.config.ts ../../tests/apps/mem-claw/eval/",
