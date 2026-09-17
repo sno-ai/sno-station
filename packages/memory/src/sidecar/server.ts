@@ -131,7 +131,7 @@ export async function startRemSidecar(): Promise<RunningRemSidecar> {
 		});
 	});
 	const pendingTimers = new Set<NodeJS.Timeout>();
-	const activeTasks = new Set<Promise<void>>();
+	const activeTasks = new Set<Promise<void> & { label?: string; method?: string }>();
 	const pendingRequests = new Set<string>();
 	const server = createServer((request, response) => {
 		const started = performance.now();
@@ -210,7 +210,7 @@ export async function startRemSidecar(): Promise<RunningRemSidecar> {
 		const jobIds = await recoverInterruptedJobs(jobs, await readCompletedJobStats(new Set(recoveryJobs.map(job => job.job_id))), recoveryJobs);
 		for (const jobId of jobIds) await runChassisJob(jobs, chassisJournal, jobId, 0);
 	})().catch(error => reportSidecarFailure("recovery", error));
-	activeTasks.add(recovery);
+	activeTasks.add(Object.assign(recovery, { label: "rem-recovery" }));
 	void recovery.finally(() => activeTasks.delete(recovery));
 	const exitCleanup = (): void => {
 		removeOwnedDiscoverySync(discoveryPath, token);
@@ -252,9 +252,16 @@ export async function startRemSidecar(): Promise<RunningRemSidecar> {
 					timer = setTimeout(() => {
 						log.error("sidecar.shutdown.timeout", {
 							phase, active_tasks: activeTasks.size, pending_requests: [...pendingRequests],
+							running_tasks: [...activeTasks].map(task => task.label ?? "rem"),
 						}, {
 							event_name: "sidecar.shutdown.timeout", file: "packages/sno-station-mem/src/sidecar/server.ts",
 							function: "startRemSidecar.stop", site_id: "sidecar.shutdown.timeout",
+						});
+						for (const task of activeTasks) withLogContext({ operation_id: task.label }, () => {
+							log.error("sidecar.shutdown.task.running", { method: task.method ?? "rem" }, {
+								event_name: "sidecar.shutdown.task.running", file: "packages/sno-station-mem/src/sidecar/server.ts",
+								function: "startRemSidecar.stop", site_id: "sidecar.shutdown.task.running",
+							});
 						});
 						server.closeAllConnections();
 						currentMemory?.stopTimers();
@@ -344,7 +351,7 @@ async function routeRequest(
 			const timer = setTimeout(() => {
 				pendingTimers.delete(timer);
 				const task = runChassisJob(store, chassisJournal, job.job_id, holdMs);
-				activeTasks.add(task);
+				activeTasks.add(Object.assign(task, { label: job.job_id }));
 				void task.finally(() => activeTasks.delete(task));
 			}, delayMs);
 			pendingTimers.add(timer);

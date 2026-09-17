@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { createLogger } from "@snoai/utils/logger";
+import { currentLogContext, createLogger } from "@snoai/utils/logger";
 import { ContractError } from "../contract/error";
 import { MEMORY_ROUTES, MEMORY_DEFAULT_SKIN_ID, MEMORY_ERROR_STATUS, MEMORY_SKIN_HEADER, memoryMethod } from "../contract/routes";
 import type { MemoryRuntimePool } from "./memory-runtime";
@@ -32,7 +32,9 @@ export async function serveMemoryRoute(request: IncomingMessage, response: Serve
 			return pool.invoke(method, body, typeof skinId === "string" && skinId.trim() ? skinId : MEMORY_DEFAULT_SKIN_ID, controller.signal);
 		})();
 		const boundedTask = Promise.race([task, deadline]);
-		const completion = boundedTask.then(() => undefined, () => undefined);
+		const completion = Object.assign(task.then(() => undefined, () => undefined), {
+			label: currentLogContext().operation_id ?? method, method,
+		});
 		activeTasks.add(completion);
 		void completion.finally(() => activeTasks.delete(completion));
 		const result = await boundedTask;
