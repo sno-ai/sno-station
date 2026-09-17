@@ -50,8 +50,6 @@ export { readEstimatedSpendToday } from "../operations/daily-spend-estimator";
 export { ensureSelfImprovementLearningFiles } from "../operations/learning-file-maintenance";
 export {
 	appendAuditEntry,
-	isKillSwitchActive,
-	readKillSwitchState,
 } from "../operations/runtime-audit-log";
 export {
 	formatAtDepth,
