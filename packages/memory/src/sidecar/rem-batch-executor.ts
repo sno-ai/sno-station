@@ -1,3 +1,4 @@
+import { readRemOperationalConfig } from "./config";
 import { FIXED_MEMORY_SNO_EXTRACT_CHAT, FIXED_PROTOCOL_VALUE_74 } from "../model/signed-registry-constants";
 /** @file rem-batch-executor.ts
  * @purpose Runs the production REM scan, judgments, and recoverable mutations for one scope.
@@ -42,7 +43,6 @@ import {
 	parseReplaceClauseVerdict,
 	parseReplaceCoverageAtoms,
 	recordNonRefusePairDecision,
-	requireRemOwnerDecisions,
 	runRemStages,
 	REM_UPDATE_LOCALES,
 	getRemUpdateLocaleResource,
@@ -331,45 +331,13 @@ export async function runRemProductionOrderedWave(input: {
 		| "measurements"
 	> & { perOperation: RemPerOperationResult[] })
 > {
-	if (input.waveId !== undefined && input.waveId.trim().length === 0) {
-		return { decision: "refuse", reasonCode: "wave_id_required" };
-	}
-	const parseGate = parseRemEnableConfiguration(input.configSource);
-	if (parseGate.decision === "refuse") return parseGate;
-	const resolved = resolveRemEntryConfiguration(input.configSource);
-	if (resolved.decision === "refuse") return resolved;
-	const ownerDecision = requireRemOwnerDecisions({ configuration: resolved.configuration });
-	if (ownerDecision.decision === "refuse") return ownerDecision;
-	const ownerGate = await runRemOrderedWave({ configuration: resolved.configuration });
-	if (ownerGate.decision === "refuse") return ownerGate;
-	// Last point at which nothing has been opened: every gate above reads configuration only, and
-	// `initSqliteRuntime` below is the first SQLite call in this function. `runRemBatchJob` already
-	// rejects a blank scope, but only from inside the wave, after the journal database is open — so a
-	// blank scope used to cost an open, a preflight and a population assembly before anything said so.
-	// Placed after the configuration gates on purpose: a caller carrying both a bad configuration and
-	// a blank scope keeps receiving the configuration reason.
-	if (input.scope.trim().length === 0) return { decision: "refuse", reasonCode: "scope_required" };
+	const resolved = { configuration: readRemOperationalConfig(input.configSource) };
 	await initSqliteRuntime();
 	const configuredPath = resolveBatchDatabasePath();
-	const personaDbPath = input.personaDbPath ?? configuredPath;
-	const entryGate = await runRemEntryPreflight({
-		stateRoot: input.stateRoot,
-		personaDbPath,
-		configSource: input.configSource,
-	});
-	if (entryGate.decision === "refuse") return entryGate;
-	const population = await assembleRemPopulation({
-		stateRoot: input.stateRoot,
-		personaDbPath,
-		configSource: input.configSource,
-	});
-	if (population.decision === "refuse") return population;
-	if (realpathSync(configuredPath) !== realpathSync(personaDbPath)) {
-		return { decision: "refuse", reasonCode: "persona_store_mismatch" };
-	}
 	const waveId = input.waveId ?? `rem-wave-${randomUUID()}`;
 	const requestedOperations = input.requestedOperations ?? (["rem-replace", "rem-update"] as const);
 	const results: Array<{ operation: RemBuiltOperationType } & RemBatchJobResult> = [];
+	let stageFailed = false;
 	const journalDatabase = openSqliteDatabase(configuredPath, { fileMustExist: true });
 	try {
 		const repository = createRemRepository(journalDatabase.db);
@@ -411,13 +379,12 @@ export async function runRemProductionOrderedWave(input: {
 					},
 				],
 			});
-			if (stageResults[jobType] === "failed") {
-				return { decision: "refuse", reasonCode: "ordered_wave_stage_failed" };
-			}
+			if (stageResults[jobType] === "failed") stageFailed = true;
 		}
 	} finally {
 		journalDatabase.db.close();
 	}
+	if (stageFailed) return { decision: "refuse", reasonCode: "ordered_wave_stage_failed" };
 	const database = openSqliteDatabase(configuredPath, { fileMustExist: true });
 	try {
 		const substantive = validateRemSubstantiveWaveEffects({ database: database.db, waveId });
@@ -638,14 +605,6 @@ async function openBatchRuntime(input: {
 	const dbPath = resolveSqliteDbPath(hostConfig, (value) =>
 		path.isAbsolute(value) ? value : path.resolve(path.dirname(configPath), value),
 	);
-	if (!existsSync(dbPath)) throw new Error(`REM database does not exist: ${dbPath}`);
-	const expectedDbPath = process.env["SNO_STATION_MEM_REM_EXPECTED_DB_PATH"] ?? dbPath;
-	if (realpathSync(dbPath) !== realpathSync(expectedDbPath)) {
-		throw new Error(
-			`REM database path does not match the runner-owned persona database: ` +
-				`resolved ${realpathSync(dbPath)}, expected ${realpathSync(expectedDbPath)}`,
-		);
-	}
 	const pluginConfigValue =
 		hostConfig?.plugins?.entries?.[FIXED_PROTOCOL_VALUE_74]?.config ?? {};
 	const pluginConfig = pluginConfigSchema.parse(pluginConfigValue);
