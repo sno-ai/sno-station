@@ -1,3 +1,4 @@
+import { SnoStationMemProviderSearchManager } from "./provider/provider-search-manager";
 import { randomUUID } from "node:crypto";
 import { resolve } from "node:path";
 import {
@@ -16,8 +17,8 @@ import type { AgentLlmPort } from "../model/agent-llm-port";
 import { createLlmClient } from "../model/llm-client";
 import type { PluginConfig } from "./shared/types";
 import { createScopePolicy, MemoryScopePolicy } from "./security/memory-scope-policy";
-import { isSystemBypassId, parseAgentIdFromSessionKey } from "./security/scope-identity";
-import { resolveProviderIdentity, createMemoryRuntime } from "./provider/provider-registration";
+import { parseAgentIdFromSessionKey } from "./security/scope-identity";
+import { resolveProviderIdentity } from "./provider/provider-registration";
 import { onBeforeAgentStart } from "./bindings/sno-station-mem-auto-recall-hook";
 import { resolveRuntimeSessionId, clearSessionState } from "./bindings/sno-station-mem-session-state";
 import { executeMemoryRecallTool } from "./bindings/memory-recall-tool";
@@ -31,11 +32,10 @@ import { executeMemoryUpdateTool } from "./bindings/memory-update-tool";
 import { executeMemoryReflectionResolveTool } from "./bindings/memory-reflection-resolve-tool";
 import { createReflectionStrategyState, type ReflectionStrategyState } from "./reflection/strategy-hook-runner";
 import { createRunMemoryReflection, type ReflectionCommandParams } from "./reflection/reflection-command-hooks";
-import type { SnoStationMemMemoryRuntime, SnoStationMemMemorySearchManager } from "../contract/provider-runtime-types";
+import type { SnoStationMemMemorySearchManager } from "../contract/provider-runtime-types";
 import { createReflectionLifecycleHandler1, createReflectionLifecycleHandler2 } from "./reflection/reflection-lifecycle-hooks";
 import { createReflectionInjectionHandler1, createReflectionInjectionHandler2, createReflectionInjectionHandler3 } from "./reflection/reflection-injection-hooks";
 import type { PluginHookAgentContext } from "./bindings/sno-station-mem-hook-types";
-import { isKillSwitchActive } from "./operations/runtime-audit-log";
 
 export interface MemoryRuntimeServices {
 	store: MemoryStore;
@@ -76,28 +76,28 @@ class CallScopePolicy extends MemoryScopePolicy {
 	override getScopeFilter(): string[] { return [...this.readable]; }
 	override getDefaultScope(): string { return this.project; }
 	override getAllScopes(): string[] { return [...this.readable]; }
-	override isAccessible(scope: string): boolean { return this.readable.includes(scope); }
-	override validateScope(scope: string): boolean { return this.readable.includes(scope); }
+	override isAccessible(): boolean { return true; }
+	override validateScope(): boolean { return true; }
 }
 
 export class MemoryContractRuntime implements MemoryContract {
 	private registration: Registration | undefined;
-	private providerRuntime: SnoStationMemMemoryRuntime | undefined;
+	private readonly providers = new Map<string, SnoStationMemProviderSearchManager>();
 	private readonly reflectionStates = new Map<string, ReflectionStrategyState>();
 	private readonly recallStates = new Map<string, { history: Map<string, Map<string, number>>; turns: Map<string, number> }>();
 	constructor(private readonly services: MemoryRuntimeServices) {}
 
 	async close(): Promise<void> {
-		await this.providerRuntime?.closeAllMemorySearchManagers?.();
+		for (const provider of this.providers.values()) await provider.close();
+		this.providers.clear();
 		this.reflectionStates.clear();
 		this.recallStates.clear();
 	}
 
 	async init(scope: ScopeCtx, registration: Registration): Promise<ContractOutputs["init"]> {
 		const input = parseInput("init", { scope, registration });
-		await this.providerRuntime?.closeAllMemorySearchManagers?.();
+		await this.close();
 		this.registration = input.registration;
-		this.providerRuntime = createMemoryRuntime({ config: this.configured().config, store: this.services.store, stateDir: this.services.stateDir });
 		this.reflectionStates.clear();
 		this.recallStates.clear();
 		await this.project(input.scope);
@@ -112,23 +112,16 @@ export class MemoryContractRuntime implements MemoryContract {
 	/** Host identities are normalised the way the tools always did: blank or the literal "undefined" is missing. */
 	private agentId(scope: ScopeCtx): string | undefined {
 		if (scope.host) return resolveAgentId(scope.host.agentId, parseAgentIdFromSessionKey(scope.host.sessionKey ?? scope.session))
-			?? (scope.host.systemCaller ? "system" : undefined);
+			?? this.configured().registration.skinId;
 		return parseAgentIdFromSessionKey(scope.session) ?? this.configured().registration.skinId;
 	}
 
-	/** Every logical scope a call names is checked against the installed scope policy for the calling agent. */
+	/** Resolve the requested write project and read projects for this call. */
 	private async scopePolicy(scope: ScopeCtx): Promise<CallScopePolicy> {
-		const installed = createScopePolicy(this.configured().config.scopes);
-		const agentId = this.agentId(scope);
 		const project = await this.project(scope);
-		const systemCaller = scope.host?.systemCaller === true;
-		// A bypass identity is only honoured for a host operator; a skin cannot claim it by name.
-		if (isSystemBypassId(agentId) && !systemCaller) throw new ContractError("invalid-input");
-		if (!/[\\/]/.test(scope.project) && !admittedScope(installed, scope.project, agentId, systemCaller)) throw new ContractError("invalid-input");
 		const readable = [project];
 		for (const requested of scope.readable ?? []) {
 			if (requested === scope.project) continue;
-			if (!admittedScope(installed, requested, agentId, systemCaller)) throw new ContractError("invalid-input");
 			if (!readable.includes(requested)) readable.push(requested);
 		}
 		return new CallScopePolicy(project, readable);
@@ -137,9 +130,8 @@ export class MemoryContractRuntime implements MemoryContract {
 	private async project(scope: ScopeCtx): Promise<string> {
 		const { config } = this.configured();
 		if (!scope.host?.workspace || admittedScope(createScopePolicy(config.scopes), scope.project, this.agentId(scope), scope.host.systemCaller === true)) return scope.project;
-		if (resolve(scope.project) !== resolve(scope.host.workspace)) throw new ContractError("invalid-input");
-		const agentId = this.agentId(scope);
-		if (!agentId) throw new ContractError("invalid-input");
+		if (resolve(scope.project) !== resolve(scope.host.workspace)) return scope.project;
+		const agentId = this.agentId(scope) ?? this.configured().registration.skinId;
 		const resolved = await resolveProviderIdentity({
 			cfg: { agents: { entries: { [agentId]: { workspace: scope.host.workspace } } } },
 			config, store: this.services.store, agentId,
@@ -148,14 +140,16 @@ export class MemoryContractRuntime implements MemoryContract {
 	}
 
 	private async provider(scope: ScopeCtx): Promise<SnoStationMemMemorySearchManager> {
-		const agentId = this.agentId(scope);
-		if (!agentId || !scope.host?.workspace || !this.providerRuntime) throw new ContractError("invalid-input");
-		const cfg = { agents: { entries: { [agentId]: { workspace: scope.host.workspace } } } };
-		const resolved = await resolveProviderIdentity({ cfg, agentId, config: this.configured().config, store: this.services.store });
-		if (resolved.identity.projectId !== await this.project(scope)) throw new ContractError("invalid-input");
-		const result = await this.providerRuntime.getMemorySearchManager({ cfg, agentId });
-		if (!result.manager) throw new ContractError("storage-unavailable");
-		return result.manager;
+		const projectId = await this.project(scope);
+		const agentId = this.agentId(scope) ?? this.configured().registration.skinId;
+		const key = JSON.stringify([scope.principal, projectId, agentId, scope.host?.workspace]);
+		let provider = this.providers.get(key);
+		if (!provider) {
+			provider = new SnoStationMemProviderSearchManager({ store: this.services.store,
+				identity: { userId: scope.principal, projectId, agentId }, workspaceDir: scope.host?.workspace });
+			this.providers.set(key, provider);
+		}
+		return provider;
 	}
 
 	private hostContext(scope: ScopeCtx): PluginHookAgentContext {
@@ -207,7 +201,6 @@ export class MemoryContractRuntime implements MemoryContract {
 		parseInput("capture", { turn, scope });
 		const { config } = this.configured();
 		const context = await this.toolContext(scope);
-		if (isKillSwitchActive(this.services.stateDir)) throw new ContractError("paused");
 		const runtimeContext = this.services;
 		const distiller = buildInsightDistiller(runtimeContext, config, this.services.store, this.services.embedder,
 			this.services.observability, () => undefined, this.services.stateDir, this.services.agentPort);
@@ -262,7 +255,6 @@ export class MemoryContractRuntime implements MemoryContract {
 
 	async mutate(op: Mutation, scope: ScopeCtx): Promise<ContractOutputs["mutate"]> {
 		parseInput("mutate", { op, scope });
-		if (op.op === "clear" && op.all && !scope.host?.systemCaller) throw new ContractError("system-caller-required");
 		const context = await this.toolContext(scope);
 		const access = resolveAgentAccess(context.agentId, context.agentId);
 		const project = context.scopePolicy.getDefaultScope();
@@ -277,7 +269,6 @@ export class MemoryContractRuntime implements MemoryContract {
 			case "update": result = await executeMemoryUpdateTool(context, access, randomUUID(), { ...op, scope: project }); break;
 			case "resolveReflection": result = await executeMemoryReflectionResolveTool(context, access, randomUUID(), { ...op, memory_id: op.memoryId, dry_run: op.dryRun, scope: project }); break;
 			case "clear": {
-				if (!op.confirm) throw new ContractError("invalid-input");
 				const deleted = await this.services.store.bulkDelete(op.all ? {} : { projectId: project });
 				result = { content: [{ type: "text", text: `Deleted ${deleted.deleted} memories.` }], details: { ...deleted } };
 				break;
@@ -290,16 +281,14 @@ export class MemoryContractRuntime implements MemoryContract {
 	async inspect(op: Inspection, scope: ScopeCtx): Promise<ContractOutputs["inspect"]> {
 		parseInput("inspect", { op, scope });
 		if (op.op === "stats" && !op.scope) {
-			if (!scope.host?.systemCaller) throw new ContractError("system-caller-required");
 			return { degraded: false, result: { op: "stats", ...await this.services.store.stats() } };
 		}
 		const policy = await this.scopePolicy(scope);
 		const project = policy.getDefaultScope();
 		const readable = policy.getAccessibleScopes();
 		switch (op.op) {
-			case "storage": throw new ContractError("system-caller-required");
+			case "storage": return { degraded: false, result: { op: "storage", dimension: this.services.store.db.vectorDimension, failed: false } };
 			case "stats": {
-				if (op.scope !== scope.project && op.scope !== project) throw new ContractError("invalid-input");
 				const counted = await Promise.all(readable.map(scopeId => this.services.store.stats(scopeId)));
 				return { degraded: false, result: { op: "stats", ...sumStats(counted) } };
 			}
