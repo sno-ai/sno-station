@@ -11,8 +11,8 @@ export const MEMORY_ROUTES: Readonly<Record<ContractMethod, { path: string; time
 	onSessionEnd: { path: "/v1/on-session-end", timeoutMs: 900_000 },
 	staticBlock: { path: "/v1/static-block", timeoutMs: 30_000 },
 };
-export const MEMORY_SKIN_HEADER = "x-sno-station-mem-skin";
 export const MEMORY_BODY_LIMIT_BYTES: number = 8 * 1024 * 1024;
+export const MEMORY_SKIN_HEADER = "x-sno-station-mem-skin";
 export const MEMORY_HEALTH_TIMEOUT_MS = 5_000;
 export const MEMORY_START_TIMEOUT_MS = 30_000;
 
@@ -23,5 +23,9 @@ export function memoryMethod(pathname: string): ContractMethod | undefined {
 export const MEMORY_ERROR_STATUS: Readonly<Record<DegradedReason, number>> = {
 	"sidecar-unreachable": 503, "sidecar-unresponsive": 503, "principal-mismatch": 403,
 	"store-mismatch": 409, "no-agent-endpoint": 503, "invalid-input": 400, timeout: 504,
-	"storage-unavailable": 503, "engine-failed": 500, paused: 503, "system-caller-required": 403,
+	"storage-unavailable": 503, "engine-failed": 500,
 };
+
+export const MEMORY_RECONNECT_INTERVAL_MS = 1_000;
+
+export const MEMORY_DEFAULT_SKIN_ID = "default";
