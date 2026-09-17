@@ -24,8 +24,6 @@ import type { LlmRoutingConfig } from "../../contract/config/plugin-config-mode-
 
 const TOOL_CATEGORY_INPUTS = [...MEMORY_CATEGORIES] as const;
 const toolCategoryInputSchema = z.enum(TOOL_CATEGORY_INPUTS);
-const STORE_CATEGORY_INPUTS = ["episodic", "profile"] as const;
-const storeCategoryInputSchema = z.enum(STORE_CATEGORY_INPUTS);
 
 export const recallParamsSchema: z.ZodType<
 	{
@@ -66,7 +64,7 @@ export const recallParamsSchema: z.ZodType<
 export const storeParamsSchema: z.ZodType<
 	{
 		content: string;
-		category?: (typeof STORE_CATEGORY_INPUTS)[number] | undefined;
+		category?: MemoryCategory | undefined;
 		scope?: string | undefined;
 		importance?: number | undefined;
 		metadata?: Record<string, unknown> | undefined;
@@ -74,7 +72,7 @@ export const storeParamsSchema: z.ZodType<
 	unknown
 > = z.object({
 	content: z.string().min(1),
-	category: storeCategoryInputSchema.optional(),
+	category: toolCategoryInputSchema.optional(),
 	scope: z.string().optional(),
 	importance: z.number().optional(),
 	metadata: z.record(z.string(), z.unknown()).optional(),
