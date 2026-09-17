@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { DEFAULT_RECALL_LIFECYCLE } from "../../../../packages/sno-station-mem/config/index.ts";
 import {
 	createRetriever,
 	DEFAULT_RETRIEVAL_CONFIG,
@@ -47,23 +48,37 @@ function buildCandidate(input: CandidateInput): RetrievalResult {
 }
 
 describe("retriever scoring pipeline ordering", () => {
-	it("excludes a candidate whose post-decay score falls below hardMinScore", () => {
-		// Raw 0.55 > floor (0.50) but time-decay shrinks it to ~0.33, which violates
-		// the returned-set contract if the floor were applied before decay.
+	it("serves the more relevant memory first regardless of timestamp and last access", () => {
+		const retriever = createRetriever(noopStore, noopEmbedder, undefined, {
+			...DEFAULT_RETRIEVAL_CONFIG,
+		});
+		retriever.setRecallLifecycle(DEFAULT_RECALL_LIFECYCLE);
+		const internals = retriever as unknown as MemoryRetrieverInternals;
+		const now = Date.now();
+		for (const [relevantAge, otherAge] of [[365, 0], [0, 365], [365, 365], [0, 0]]) {
+			const candidates = [
+				buildCandidate({ id: "relevant", score: 0.9, importance: 0.3, timestamp: now - (relevantAge ?? 0) * DAY_MS }),
+				buildCandidate({ id: "other", score: 0.7, importance: 0.3, timestamp: now - (otherAge ?? 0) * DAY_MS }),
+			];
+			for (const candidate of candidates) {
+				candidate.entry.metadata = JSON.stringify({ memory_category: "episodic", accessCount: 1, lastAccessedAt: candidate.entry.timestamp });
+			}
+			const output = internals.applyScoringPipeline(candidates);
+			expect(output.map((row) => row.entry.id)).toEqual(["relevant", "other"]);
+			expect(output[0]?.score).toBeCloseTo(0.711, 10);
+			expect(output[1]?.score).toBeCloseTo(0.553, 10);
+		}
+	});
+
+	it("keeps an old candidate above hardMinScore", () => {
 		const now = Date.now();
 		const retriever = createRetriever(noopStore, noopEmbedder, { warn: () => {} }, {
 			...DEFAULT_RETRIEVAL_CONFIG,
 			hardMinScore: 0.5,
 			minScore: 0,
-			recencyHalfLifeDays: 0,
-			recencyWeight: 0,
 			lengthNormAnchor: 0,
 			importanceWeightBase: 1,
-			timeDecayHalfLifeDays: 30,
-			timeDecayFloor: 0.6,
-			temporalDecay: false,
 			rerank: "none",
-			reinforcementFactor: 0,
 		});
 		const internals = retriever as unknown as MemoryRetrieverInternals;
 
@@ -78,28 +93,19 @@ describe("retriever scoring pipeline ordering", () => {
 
 		const output = internals.applyScoringPipeline(candidates);
 
-		expect(output.map((r) => r.entry.id)).not.toContain("stale-near-floor");
-		for (const r of output) {
-			expect(r.score).toBeGreaterThanOrEqual(0.5);
-		}
+		expect(output.map((r) => r.entry.id)).toEqual(["fresh", "stale-near-floor"]);
+		expect(output[1]?.score).toBe(0.55);
 	});
 
-	it("keeps a near-miss candidate that the recency boost lifts above hardMinScore", () => {
-		// Raw 0.45 < floor (0.50). Recency boost (additive 0.3 * 1.0) lifts it to 0.75.
-		// A pre-stage filter would drop it before the boost ever ran.
+	it("does not lift a fresh near-miss above hardMinScore", () => {
 		const now = Date.now();
 		const retriever = createRetriever(noopStore, noopEmbedder, { warn: () => {} }, {
 			...DEFAULT_RETRIEVAL_CONFIG,
 			hardMinScore: 0.5,
 			minScore: 0,
-			recencyHalfLifeDays: 7,
-			recencyWeight: 0.3,
 			lengthNormAnchor: 0,
 			importanceWeightBase: 1,
-			timeDecayHalfLifeDays: 0,
-			temporalDecay: false,
 			rerank: "none",
-			reinforcementFactor: 0,
 		});
 		const internals = retriever as unknown as MemoryRetrieverInternals;
 
@@ -109,27 +115,18 @@ describe("retriever scoring pipeline ordering", () => {
 
 		const output = internals.applyScoringPipeline(candidates);
 
-		const lifted = output.find((r) => r.entry.id === "fresh-near-miss");
-		expect(lifted).toBeDefined();
-		expect(lifted?.score).toBeGreaterThanOrEqual(0.5);
+		expect(output).toEqual([]);
 	});
 
-	it("matches a pure hardMinScore filter when decay and boost stages are disabled", () => {
-		// With all multiplicative shrinkers and additive boosts off, the new
-		// ordering must agree with what a single hardMinScore filter would return.
+	it("applies hardMinScore without age adjustments", () => {
 		const now = Date.now();
 		const retriever = createRetriever(noopStore, noopEmbedder, { warn: () => {} }, {
 			...DEFAULT_RETRIEVAL_CONFIG,
 			hardMinScore: 0.5,
 			minScore: 0,
-			recencyHalfLifeDays: 0,
-			recencyWeight: 0,
 			lengthNormAnchor: 0,
 			importanceWeightBase: 1,
-			timeDecayHalfLifeDays: 0,
-			temporalDecay: false,
 			rerank: "none",
-			reinforcementFactor: 0,
 		});
 		const internals = retriever as unknown as MemoryRetrieverInternals;
 
@@ -139,12 +136,7 @@ describe("retriever scoring pipeline ordering", () => {
 		];
 
 		const output = internals.applyScoringPipeline(candidates);
-		const expected = candidates.filter((c) => c.score >= 0.5).map((c) => c.entry.id);
-
-		expect(output.map((r) => r.entry.id)).toEqual(expected);
-		for (const r of output) {
-			const original = candidates.find((c) => c.entry.id === r.entry.id);
-			expect(r.score).toBe(original?.score);
-		}
+		expect(output.map((r) => r.entry.id)).toEqual(["above"]);
+		expect(output[0]?.score).toBe(0.8);
 	});
 });
