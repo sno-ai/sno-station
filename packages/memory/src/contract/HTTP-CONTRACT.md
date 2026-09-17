@@ -88,6 +88,12 @@ a timed-out mutation; use its normal read path to establish the durable state.
   includeHistory, includeRefused, tokenBudget, externalReference, externalReferenceVisibility,
   and aggregation `{operation, terms}`. The options object itself is required. An empty object
   selects the existing retriever defaults. Aggregation operations remain count/first/last/evidence.
+Ordinary relevance-ranked recall does not use a memory row's timestamp or last-access time
+to boost or suppress its score. The scoring stages are importance weighting, optional length
+normalization, the hard score floor, and MMR ordering. Retrieval recency, time-decay, and
+retention-boost controls were removed as a hard cut on 2026-09-17. Explicit validity filters
+and lifecycle maintenance retain their existing contracts.
+
 - `mutate.op`: exactly one of the five shapes below. Field names are wire names; the engine's
   existing validation, authority, clamping and return behavior stay in force.
 
