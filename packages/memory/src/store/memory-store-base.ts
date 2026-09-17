@@ -32,7 +32,6 @@ import {
 	type MemorySearchResult,
 	Mutex,
 	type PreparedChunkRow,
-	type QuarantineDispositionReason,
 	type QuarantinedStoreInput,
 	type RecordUnplacedCandidateInput,
 	type RecordUnplacedCandidateResult,
@@ -514,7 +513,7 @@ export class StaleSupersedeTargetError extends StorageError {
 
 export class MemoryStore {
 	public readonly dbPath: string;
-	public readonly hasFtsSupport: boolean;
+	public hasFtsSupport: boolean;
 	readonly db: DrizzleDB;
 	readonly sqlite: SqliteDatabaseLike;
 	readonly vectorDim: number;
@@ -951,15 +950,11 @@ export class MemoryStore {
 		this.sqliteClosed = false;
 		const db = initDb(this.dbPath, this.vectorDim);
 		// The chokepoint wrapper — NOT the raw $client — so every store statement
-		// flows through the statement cache and the fail-closed latch.
+		// flows through the shared statement cache.
 		const sqlite = db.chokepoint;
 		// Isolate the storage operation that can fail because of runtime I/O or input shape.
 		try {
-			if (db.vectorDimension !== this.vectorDim) {
-				throw new StorageError(
-					`Vector dimension mismatch between configuration (${this.vectorDim}) and database (${db.vectorDimension}); use matching dimensions or rebuild vectors`,
-				);
-			}
+			this.vectorDim = db.vectorDimension;
 			const hasFtsSupport =
 				sqlite
 					.prepare(
