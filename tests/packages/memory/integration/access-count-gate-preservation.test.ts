@@ -35,7 +35,7 @@ import {
 	AccessTracker,
 	parseAccessMetadata,
 } from "../../../../packages/sno-station-mem/src/engine/retrieval/access-tracker.ts";
-import { createRetriever } from "../../../../packages/sno-station-mem/src/engine/retrieval/retriever.ts";
+import { createRetriever, DEFAULT_RETRIEVAL_CONFIG } from "../../../../packages/sno-station-mem/src/engine/retrieval/retriever.ts";
 import { MemoryStore } from "../../../../packages/sno-station-mem/src/store/store.ts";
 import { createTestDb, createTestEmbedder } from "../../../apps/mem-claw/helpers/test-db.ts";
 
@@ -50,7 +50,6 @@ const SEED_TEXT =
 const QUERY = "What theme does the user prefer for editors and the OS?";
 const FLAGS_OFF: RecallLifecycleConfig = {
 	...DEFAULT_RECALL_LIFECYCLE,
-	retentionScorer: false,
 	tierPromoter: false,
 	autoRecallAccessTracking: false,
 };
@@ -101,7 +100,6 @@ describe("Phase 0 §20.6 — accessCount only increments on manual when all flag
 
 	it("explicit flags-off config keeps every recallLifecycle boolean false", () => {
 		const flags: ReadonlyArray<keyof RecallLifecycleConfig> = [
-			"retentionScorer",
 			"tierPromoter",
 			"autoRecallAccessTracking",
 		];
@@ -119,7 +117,7 @@ describe("Phase 0 §20.6 — accessCount only increments on manual when all flag
 			debounceMs: 1,
 			recallLifecycle: FLAGS_OFF,
 		});
-		const retriever = createRetriever(store, embedder, { warn: () => {} });
+		const retriever = createRetriever(store, embedder, { warn: () => {} }, { ...DEFAULT_RETRIEVAL_CONFIG, rerank: "none" });
 		retriever.setAccessTracker(tracker);
 		retriever.setRecallLifecycle(FLAGS_OFF);
 
@@ -150,7 +148,7 @@ describe("Phase 0 §20.6 — accessCount only increments on manual when all flag
 			debounceMs: 1,
 			recallLifecycle: FLAGS_OFF,
 		});
-		const retriever = createRetriever(store, embedder, { warn: () => {} });
+		const retriever = createRetriever(store, embedder, { warn: () => {} }, { ...DEFAULT_RETRIEVAL_CONFIG, rerank: "none" });
 		retriever.setAccessTracker(tracker);
 		retriever.setRecallLifecycle(FLAGS_OFF);
 
@@ -182,7 +180,7 @@ describe("Phase 0 §20.6 — accessCount only increments on manual when all flag
 			debounceMs: 1,
 			recallLifecycle: FLAGS_OFF,
 		});
-		const retriever = createRetriever(store, embedder, { warn: () => {} });
+		const retriever = createRetriever(store, embedder, { warn: () => {} }, { ...DEFAULT_RETRIEVAL_CONFIG, rerank: "none" });
 		retriever.setAccessTracker(tracker);
 		retriever.setRecallLifecycle(FLAGS_OFF);
 
@@ -211,7 +209,7 @@ describe("Phase 0 §20.6 — accessCount only increments on manual when all flag
 			debounceMs: 1,
 			recallLifecycle: FLAGS_OFF,
 		});
-		const retriever = createRetriever(store, embedder, { warn: () => {} });
+		const retriever = createRetriever(store, embedder, { warn: () => {} }, { ...DEFAULT_RETRIEVAL_CONFIG, rerank: "none" });
 		retriever.setAccessTracker(tracker);
 		retriever.setRecallLifecycle(FLAGS_OFF);
 
