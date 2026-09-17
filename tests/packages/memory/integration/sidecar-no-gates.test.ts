@@ -11,6 +11,8 @@ import { startRemSidecar } from "../../../../packages/sno-station-mem/src/sideca
 import { MemoryRuntimePool } from "../../../../packages/sno-station-mem/src/sidecar/memory-runtime";
 import { MemoryContractRuntime } from "../../../../packages/sno-station-mem/src/engine/contract-runtime";
 import { MemoryRetriever } from "../../../../packages/sno-station-mem/src/engine/retrieval/retriever";
+import { RegisteredAgentPort } from "../../../../packages/sno-station-mem/src/model/registered-agent-port";
+import { Embedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client";
 import { MemoryStore } from "../../../../packages/sno-station-mem/src/store/store";
 import { createTestDb, createTestEmbedder } from "../../../apps/mem-claw/helpers/test-db";
 
@@ -89,10 +91,181 @@ describe("sidecar keeps serving", () => {
 		expect(await response.json()).toEqual({ error: "unsupported_rem_type", unknownTypes: ["typo", "old-operation"] });
 		expect(existsSync(join(root, "sno-station-mem", "rem-wave-jobs.jsonl"))).toBe(false);
 	});
+	it.each(["capture", "mutate"] as const)("retains timed-out %s until the paused write settles before closing storage", async method => {
+		const entered = Promise.withResolvers<void>();
+		const release = Promise.withResolvers<void>();
+		const closed = Promise.withResolvers<void>();
+		const events: string[] = [];
+		const embedChunks = Embedder.prototype.embedChunks;
+		const close = MemoryRuntimePool.prototype.close;
+		const embedding = vi.spyOn(Embedder.prototype, "embedChunks").mockImplementationOnce(async function (texts) {
+			entered.resolve();
+			await release.promise;
+			try { return await embedChunks.call(this, texts); }
+			finally { events.push("embedding settled"); }
+		});
+		const closing = vi.spyOn(MemoryRuntimePool.prototype, "close").mockImplementation(async function () {
+			events.push("store closing");
+			try { await close.call(this); }
+			finally { closed.resolve(); }
+		});
+		let bound: ReturnType<typeof setTimeout> | undefined;
+		try {
+			await health();
+			if (!sidecar) throw new Error("missing test sidecar");
+			const scope = { principal: "caller", project: "global", session: "paused-write" };
+			await fetch(`http://127.0.0.1:${sidecar.port}/v1/inspect`, { method: "POST", body: JSON.stringify({ scope, op: { op: "list" } }) });
+			vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+			const body = method === "capture"
+				? { scope, turn: { turnId: "paused-write", rewindEpoch: 0, messages: [{ role: "user", content: "I keep a violet notebook.", at: 1789606800000 }] } }
+				: { scope, op: { op: "store", content: "I keep a violet notebook.", category: "episodic" } };
+			const request = fetch(`http://127.0.0.1:${sidecar.port}/v1/${method}`, { method: "POST", body: JSON.stringify(body) });
+			await entered.promise;
+			await vi.advanceTimersByTimeAsync(900_000);
+			vi.useRealTimers();
+			const response = await request;
+			expect(response.status).toBe(504);
+			expect(await response.json()).toEqual({ degraded: true, reason: "timeout" });
+			const stopping = sidecar.stop();
+			sidecar = undefined;
+			expect(await Promise.race([stopping.then(() => "stopped"), new Promise(resolve => {
+				bound = setTimeout(() => resolve("still running"), 6_000);
+			})])).toBe("stopped");
+			expect(events).toEqual([]);
+			release.resolve();
+			await closed.promise;
+			expect(events).toEqual(["embedding settled", "store closing"]);
+			expect(database.sqlite.prepare("SELECT text FROM nodix_memories").all()).toEqual([]);
+		} finally {
+			vi.useRealTimers();
+			clearTimeout(bound);
+			release.resolve();
+			await sidecar?.stop();
+			sidecar = undefined;
+			await closed.promise;
+			embedding.mockRestore();
+			closing.mockRestore();
+		}
+	}, 30_000);
+	it("cancels session-end generation before any reflection file or memory write", async () => {
+		const entered = Promise.withResolvers<void>();
+		const release = Promise.withResolvers<void>();
+		let aborted = false;
+		const generation = vi.spyOn(RegisteredAgentPort.prototype, "complete").mockImplementationOnce(async request => {
+			request.signal?.addEventListener("abort", () => { aborted = true; }, { once: true });
+			entered.resolve();
+			await release.promise;
+			return { kind: "ok", text: "## Lessons\nKeep clear notebook records." };
+		});
+		const pool = await MemoryRuntimePool.open();
+		const controller = new AbortController();
+		const sessionFile = join(root, "session.jsonl");
+		writeFileSync(sessionFile, JSON.stringify({ type: "message", message: { role: "user", content: "Keep clear notebook records." } }));
+		const scope = { principal: "caller", project: "global", session: "agent:probe:session",
+			host: { workspace: root, boundary: "new", sessionFile, sessionId: "session-end" } };
+		const config = pluginConfigSchema.parse({ ...pool.config, mode: "agent-native", sessionStrategy: "memoryReflection" });
+		const { mode, remEnhanced, agentNative, language: _language, ...settings } = config;
+		let result: Promise<unknown> | undefined;
+		try {
+			await pool.invoke("init", { scope, registration: { skinId: "session-end", settings,
+				routing: { mode, remEnhanced, agentNative, language: "en" } } }, "session-end");
+			result = pool.invoke("onSessionEnd", { scope, messages: [] }, "session-end", controller.signal).catch(error => error);
+			await entered.promise;
+			controller.abort(new Error("session cancelled"));
+			release.resolve();
+			expect(await result).toEqual(new Error("session cancelled"));
+			expect(aborted).toBe(true);
+			expect(existsSync(join(root, "memory"))).toBe(false);
+			expect(database.sqlite.prepare("SELECT text FROM nodix_memories").all()).toEqual([]);
+		} finally {
+			release.resolve();
+			await result;
+			generation.mockRestore();
+			await pool.close();
+		}
+	});
+	it("keeps a completed capture write and skips the next write after cancellation", async () => {
+		const pool = await MemoryRuntimePool.open();
+		const entered = Promise.withResolvers<void>();
+		const release = Promise.withResolvers<void>();
+		const controller = new AbortController();
+		const embedChunks = Embedder.prototype.embedChunks;
+		const embedding = vi.spyOn(Embedder.prototype, "embedChunks").mockImplementation(async function (texts) {
+			if (texts.some(text => text.includes("violet"))) {
+				entered.resolve();
+				await release.promise;
+			}
+			return embedChunks.call(this, texts);
+		});
+		const lines: string[] = [];
+		const output = vi.spyOn(process.stderr, "write").mockImplementation(chunk => { lines.push(String(chunk)); return true; });
+		const result = pool.invoke("capture", {
+			scope: { principal: "caller", project: "global", session: "partial-capture" },
+			turn: { turnId: "partial-capture", rewindEpoch: 0, messages: [
+				{ role: "user", content: "I keep a green notebook.", at: 1789606800000 },
+				{ role: "user", content: "I keep a violet notebook.", at: 1789606800001 },
+			] },
+		}, "partial-capture", controller.signal).catch(error => error);
+		try {
+			await entered.promise;
+			controller.abort(new Error("capture cancelled"));
+			release.resolve();
+			expect(await result).toEqual(new Error("capture cancelled"));
+			expect(database.sqlite.prepare("SELECT text FROM nodix_memories").all())
+				.toEqual([{ text: "I keep a green notebook." }]);
+			expect(database.sqlite.prepare("SELECT count(*) AS count FROM nodix_memory_chunks").get()).toEqual({ count: 1 });
+			const records = lines.flatMap(line => line.trim().split("\n")).filter(Boolean).map(line => JSON.parse(line));
+			expect(records.filter(record => record.event_name === "memory.operation.aborted").map(record => record.attributes))
+				.toEqual([{ method: "capture", outcome: "aborted", writes: 5 }]);
+		} finally {
+			release.resolve();
+			await result;
+			embedding.mockRestore();
+			output.mockRestore();
+			await pool.close();
+		}
+	});
+	it("finishes a started memory transaction when cancellation arrives inside its write", async () => {
+		const pool = await MemoryRuntimePool.open();
+		const controller = new AbortController();
+		const prepare = pool.store.sqlite.prepare.bind(pool.store.sqlite);
+		const preparing = vi.spyOn(pool.store.sqlite, "prepare").mockImplementation(sql => {
+			const statement = prepare(sql);
+			if (sql.includes("INSERT INTO nodix_memories(")) {
+				const run = statement.run.bind(statement);
+				statement.run = (...params: unknown[]): unknown => {
+					statement.run = run;
+					const result = run(...params);
+					controller.abort(new Error("transaction cancelled"));
+					return result;
+				};
+			}
+			return statement;
+		});
+		try {
+			const result = await pool.invoke("mutate", {
+				scope: { principal: "caller", project: "global", session: "atomic-cancel" },
+				op: { op: "store", content: "A complete notebook record.", category: "episodic" },
+			}, "atomic-cancel", controller.signal).catch(error => error);
+			expect(result).toEqual(new Error("transaction cancelled"));
+			expect(database.sqlite.prepare("SELECT text FROM nodix_memories").all())
+				.toEqual([{ text: "A complete notebook record." }]);
+			expect(database.sqlite.prepare("SELECT count(*) AS count FROM nodix_memory_chunks").get()).toEqual({ count: 1 });
+			expect(database.sqlite.prepare("SELECT count(*) AS count FROM nodix_rem_census_rows").get()).toEqual({ count: 1 });
+		} finally {
+			preparing.mockRestore();
+			await pool.close();
+		}
+	});
 	it("times out a never resolving runtime call, serves another request, and stops", async () => {
-		const opening = vi.spyOn(MemoryRuntimePool, "open");
+		const closed = Promise.withResolvers<void>();
+		const close = MemoryRuntimePool.prototype.close;
+		const closing = vi.spyOn(MemoryRuntimePool.prototype, "close").mockImplementation(async function () {
+			try { await close.call(this); } finally { closed.resolve(); }
+		});
+		const blocked = Promise.withResolvers<never>();
 		const inspection = vi.spyOn(MemoryContractRuntime.prototype, "inspect")
-			.mockImplementationOnce(() => new Promise(() => {}));
+			.mockImplementationOnce(() => blocked.promise);
 		let bound: ReturnType<typeof setTimeout> | undefined;
 		try {
 			await health();
@@ -107,22 +280,28 @@ describe("sidecar keeps serving", () => {
 			const stopping = sidecar.stop();
 			sidecar = undefined;
 			expect(await Promise.race([stopping.then(() => "stopped"), new Promise(resolve => {
-				bound = setTimeout(() => resolve("still running"), 1_000);
+				bound = setTimeout(() => resolve("still running"), 6_000);
 			})])).toBe("stopped");
 			expect(existsSync(join(root, "station", "sidecar.json"))).toBe(false);
 		} finally {
 			clearTimeout(bound);
+			blocked.reject(new Error("inspection released"));
 			inspection.mockRestore();
-			for (const result of opening.mock.results) if (result.type === "return") await (await result.value).close();
-			opening.mockRestore();
+			await closed.promise;
+			closing.mockRestore();
 		}
 	}, 45_000);
 	it("bounds shutdown while a runtime call is still before its deadline", async () => {
-		const opening = vi.spyOn(MemoryRuntimePool, "open");
+		const closed = Promise.withResolvers<void>();
+		const close = MemoryRuntimePool.prototype.close;
+		const closing = vi.spyOn(MemoryRuntimePool.prototype, "close").mockImplementation(async function () {
+			try { await close.call(this); } finally { closed.resolve(); }
+		});
 		const entered = Promise.withResolvers<void>();
+		const blocked = Promise.withResolvers<never>();
 		const inspection = vi.spyOn(MemoryContractRuntime.prototype, "inspect").mockImplementationOnce(() => {
 			entered.resolve();
-			return new Promise(() => {});
+			return blocked.promise;
 		});
 		const controller = new AbortController();
 		let bound: ReturnType<typeof setTimeout> | undefined;
@@ -144,9 +323,10 @@ describe("sidecar keeps serving", () => {
 		} finally {
 			controller.abort();
 			clearTimeout(bound);
+			blocked.reject(new Error("inspection released"));
 			inspection.mockRestore();
-			for (const result of opening.mock.results) if (result.type === "return") await (await result.value).close();
-			opening.mockRestore();
+			await closed.promise;
+			closing.mockRestore();
 		}
 	}, 12_000);
 	it.each([
