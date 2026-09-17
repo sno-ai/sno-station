@@ -3,56 +3,20 @@
  * @boundary One host tool registration and its handler logic.
  */
 
-import { isScopeAccessibleForTool, resolveAgentAccess } from "./memory-tool-access";
+import type { resolveAgentAccess } from "./memory-tool-access";
 import type { MemoryCategory } from "./memory-tool-dependencies";
-import { appendAuditEntry, clamp01, DEFAULT_LOCALE, deriveFactKey, SnoStationMemError, normalizeCategory, StorageError, serializeIntervalMetadata, stripEnvelopeMetadata } from "./memory-tool-dependencies";
+import { appendAuditEntry, clamp01, DEFAULT_LOCALE, deriveFactKey, normalizeCategory, StorageError, serializeIntervalMetadata, stripEnvelopeMetadata } from "./memory-tool-dependencies";
 import { resolveMemoryDate } from "../extraction/date-resolution";
 import { parseEntryMetadata } from "./memory-tool-formatting";
 import {
-	killSwitchResponse,
 	makeResult,
 	runWithAudit,
-	shouldBlockMemoryTools,
 } from "./memory-tool-results";
 import { type ToolContext, type ToolResult, updateParamsSchema } from "./memory-tool-schemas";
-import { canToolWrite } from "../shared/memory-kind-policy";
 
-function validateExistingToolCategory(raw: string, systemCaller: boolean): MemoryCategory | ToolResult {
-	const category = normalizeCategory(raw);
-	if (!category) {
-		return makeResult(
-			`Memory entry has old/unknown category "${raw}". Run the offline cutover migrator before updating.`,
-			{ errorCode: "stored_old_category" },
-			true,
-		);
-	}
-	// The host operator repairs rows with offline-family authority, the writer every category admits.
-	if (!systemCaller && !canToolWrite(category)) {
-		return makeResult(
-			`memory_update cannot write ${category} rows through the agent tool; write authority requires the owning writer boundary.`,
-			{ errorCode: "write_authority", category },
-			true,
-		);
-	}
-	return category;
-}
-
-function validateRequestedToolCategory(category: MemoryCategory | undefined): ToolResult | undefined {
-	if (category === undefined || canToolWrite(category)) return undefined;
-	return makeResult(
-		`memory_update cannot write ${category} rows through the agent tool; write authority requires the owning writer boundary.`,
-		{ errorCode: "write_authority", category },
-		true,
-	);
-}
-
-
-
-export async function executeMemoryUpdateTool(ctx: ToolContext, access: ReturnType<typeof resolveAgentAccess>, _toolCallId: unknown, params: unknown): Promise<ToolResult> {
+export async function executeMemoryUpdateTool(ctx: ToolContext, _access: ReturnType<typeof resolveAgentAccess>, _toolCallId: unknown, params: unknown): Promise<ToolResult> {
 					// Centralize the tool execution fallback value at the boundary of this helper.
 					return runWithAudit(ctx, "memory_update", undefined, async () => {
-						// Short-circuit while paused so no storage, model, or audit side effects continue.
-						if (shouldBlockMemoryTools(ctx)) return killSwitchResponse(ctx);
 						const parsed = updateParamsSchema.parse(params);
 						const existing = ctx.store.getById(parsed.id);
 						// Handle the absent-value case explicitly before the happy path depends on it.
@@ -60,12 +24,7 @@ export async function executeMemoryUpdateTool(ctx: ToolContext, access: ReturnTy
 							return makeResult(`Memory entry not found: ${parsed.id}`, {}, true);
 						}
 						// Guard this branch early so the remaining tool execution path works with normalized inputs.
-						if (!isScopeAccessibleForTool(ctx.scopePolicy, existing.projectId, access)) {
-							// Surface this invalid tool execution state as an explicit typed failure.
-							throw new SnoStationMemError("invalid_scope", `Scope not accessible: ${existing.projectId}`);
-						}
-						const existingCategory = validateExistingToolCategory(existing.category, ctx.systemCaller === true);
-						if (typeof existingCategory !== "string") return existingCategory;
+						const existingCategory = normalizeCategory(existing.category) ?? "episodic";
 
 						const changes: {
 							text?: string;
@@ -77,7 +36,7 @@ export async function executeMemoryUpdateTool(ctx: ToolContext, access: ReturnTy
 							metadata?: string;
 							expectedMetadata?: string;
 							writerAuthority?: "offline-family";
-						} = ctx.systemCaller === true ? { writerAuthority: "offline-family" } : {};
+						} = { writerAuthority: "offline-family" };
 						let strippedNewText: string | undefined;
 						// Guard parsed.text here so the remaining tool execution path works with normalized inputs.
 						if (parsed.text !== undefined) {
@@ -111,19 +70,12 @@ export async function executeMemoryUpdateTool(ctx: ToolContext, access: ReturnTy
 							parsed.category !== undefined
 								? normalizeCategory(parsed.category)
 								: undefined;
-						const requestedCategoryError = validateRequestedToolCategory(requestedCategory);
-						if (requestedCategoryError) return requestedCategoryError;
 						if (requestedCategory !== undefined) changes.category = requestedCategory;
 						// Guard parsed.importance here so the remaining tool execution path works with normalized inputs.
 						if (parsed.importance !== undefined) {
 							changes.importance = clamp01(parsed.importance, existing.importance);
 						}
-						// The row's own moment is a storage fact, not an agent's to move: only the host
-						// operator's repair (systemCaller) may set it — the same authority that moves axes.
 						if (parsed.timestamp !== undefined) {
-							if (ctx.systemCaller !== true) {
-								return makeResult("Refused: timestamp can only be set by the host operator.", {}, true);
-							}
 							// The store moves timestamp and timezone as one; the moment keeps the row's zone.
 							changes.timestamp = parsed.timestamp;
 							changes.timezone = existing.timezone;

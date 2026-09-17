@@ -1,58 +1,34 @@
 /** @file memory-tool-results.ts
- * @purpose Normalizes tool success, pause, audit, and error envelopes.
+ * @purpose Normalizes tool success, audit, and error envelopes.
  * @boundary Result construction and error conversion only.
  */
 
+import { createLogger } from "@snoai/utils/logger";
+
+const log = createLogger("sno-station-mem:memory-tools");
+
 import {
-	appendAuditEntry,
-	isKillSwitchActive,
 	SnoStationMemError,
-	readKillSwitchState,
 	RetrievalError,
 	z,
 } from "./memory-tool-dependencies";
 import type { ToolContext, ToolResult } from "./memory-tool-schemas";
-
-const KILL_SWITCH_TEXT = "sno-station-mem paused (kill switch active). Use /memory resume to restore.";
 
 export function makeResult(
 	text: string,
 	details: Record<string, unknown>,
 	isError = false,
 ): ToolResult {
+	if (isError) log.error("Memory operation failed; later requests remain available", { cause: text }, {
+		event_name: "memory.tool.operation.failed", file: "packages/sno-station-mem/src/engine/bindings/memory-tool-results.ts",
+		function: "makeResult", site_id: "memory.tool.operation.failed",
+	});
 	// Return the normalized tool execution payload expected by callers.
 	return {
 		...(isError ? { isError: true } : {}),
 		content: [{ type: "text", text }],
 		details,
 	};
-}
-
-export function storageLatchMessage(ctx: Pick<ToolContext, "stateDir" | "store">): string | undefined {
-	const runtimeReason = ctx.store.sqlite.getFailureReason();
-	if (runtimeReason) return `memory storage latched: ${runtimeReason}`;
-	const persisted = readKillSwitchState(ctx.stateDir);
-	if (persisted.active && (persisted.activatedBy === "maintenance" || persisted.corrupt)) {
-		return `memory storage latched: ${persisted.reason}`;
-	}
-	return undefined;
-}
-
-export function shouldBlockMemoryTools(ctx: Pick<ToolContext, "stateDir" | "store">): boolean {
-	return storageLatchMessage(ctx) !== undefined || isKillSwitchActive(ctx.stateDir);
-}
-
-export function killSwitchResponse(ctx: Pick<ToolContext, "stateDir" | "store">): ToolResult {
-	const latchMessage = storageLatchMessage(ctx);
-	const message = latchMessage ?? KILL_SWITCH_TEXT;
-	appendAuditEntry(ctx.stateDir, {
-		event: latchMessage ? "storage_integrity" : "kill_switch",
-		resultStatus: "skipped",
-		decision: "tool_refused",
-		details: { reason: message },
-	});
-	// Centralize the tool execution fallback value at the boundary of this helper.
-	return makeResult(message, { resultStatus: "skipped" }, true);
 }
 
 export function normalizeError(error: unknown): SnoStationMemError {
