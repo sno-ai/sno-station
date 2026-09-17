@@ -46,7 +46,7 @@ function downgradeToLegacyVecTable(store: MemoryStore, dim: number): void {
 	for (const row of oldRows) insert.run(row.id, row.embedding);
 }
 
-describe("vec0 project_id partition key (fail-closed, no in-place migration)", () => {
+describe("vec0 project_id partition key (load and preserve existing rows)", () => {
 	let fixture: Fixture | undefined;
 
 	afterEach(() => {
@@ -70,7 +70,7 @@ describe("vec0 project_id partition key (fail-closed, no in-place migration)", (
 		store.close();
 	});
 
-	it("fails closed on next boot when a non-empty pre-Phase-D table has rows to lose", async () => {
+	it("loads on next boot and preserves a non-empty pre-Phase-D table", async () => {
 		fixture = buildFixture();
 		const { dbPath } = fixture;
 
@@ -86,8 +86,10 @@ describe("vec0 project_id partition key (fail-closed, no in-place migration)", (
 		expect(downgradedState?.rowCount).toBe(1);
 		store.close();
 
-		expect(() => new MemoryStore({ dbPath, embedder: testEmbedder })).toThrow(
-			/does not match the current schema/,
-		);
+		store = new MemoryStore({ dbPath, embedder: testEmbedder });
+		try {
+			expect(store.sqlite.prepare("SELECT count(*) AS count FROM nodix_memory_chunk_vectors").get()).toEqual({ count: 1 });
+			expect(await store.stats()).toMatchObject({ total: 1 });
+		} finally { await store.close(); }
 	});
 });
