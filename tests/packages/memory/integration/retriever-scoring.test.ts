@@ -11,7 +11,7 @@ let testEmbedder: Embedder;
 const STATE_DIR = `/tmp/mem-claw-retriever-state-${Date.now()}`;
 
 /**
- * Retriever scoring integration: recency + importance weights,
+ * Retriever scoring integration: importance weights,
  * and MMR diversity filtering of near-duplicate entries.
  */
 beforeAll(async () => {
@@ -35,7 +35,7 @@ describe("Retriever scoring integration", () => {
 		cleanup();
 	});
 
-	it("entry with highest importance AND most recent timestamp ranks first", async () => {
+	it("entry with highest importance ranks first among similarly relevant memories", async () => {
 		const embedder = createEmbedder(
 			{ dimensions: 1024 },
 			STATE_DIR,
@@ -100,12 +100,10 @@ describe("Retriever scoring integration", () => {
 
 		expect((await store.stats()).total).toBe(5);
 
-		// Retrieve using recency + importance scoring (no external reranker)
+		// Retrieve using importance scoring (no external reranker)
 		const retriever = createRetriever(store, embedder, { warn: () => {} }, {
 			...DEFAULT_RETRIEVAL_CONFIG,
 			rerank: "none",
-			recencyWeight: 0.2,
-			recencyHalfLifeDays: 3,
 			hardMinScore: 0,
 			minScore: 0,
 		});
@@ -122,7 +120,7 @@ describe("Retriever scoring integration", () => {
 		expect(storedIds.length).toBe(5);
 		const expectedTopId = storedIds[3]!;
 
-		// The entry with highest importance (0.9) AND most recent timestamp (now - dayMs)
+		// The entry with highest importance (0.9)
 		// must rank first — no conditional, hard assertion
 		expect(results[0]!.entry.id).toBe(expectedTopId);
 		expect(results[0]!.score).toBeGreaterThan(0);

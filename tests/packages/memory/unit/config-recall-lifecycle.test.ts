@@ -17,10 +17,8 @@ import {
 // PRD §6.1 pinned values. Changing any entry here SHALL require a new
 // openspec change proposal — defaults SHALL NOT drift through casual edits.
 const EXPECTED_DEFAULTS: RecallLifecycleConfig = {
-	retentionScorer: true,
 	tierPromoter: true,
 	autoRecallAccessTracking: true,
-	tierFloorMode: "bare",
 	tierPromotionTopK: 3,
 	accessRateLimitMs: 3_600_000,
 	accessCountCeiling: 20,
@@ -44,21 +42,6 @@ describe("recallLifecycleSchema — defaults pinned by PRD §6.1", () => {
 		const parentSchema = recallLifecycleSchema; // standalone block in Phase 0
 		const parsed = parentSchema.parse(undefined);
 		expect(parsed).toEqual(EXPECTED_DEFAULTS);
-	});
-
-	it("rejects tierFloorMode = 'bareWithFloor' with an enum violation", () => {
-		const result = recallLifecycleSchema.safeParse({
-			tierFloorMode: "bareWithFloor",
-		});
-		expect(result.success).toBe(false);
-		if (!result.success) {
-			const issue = result.error.issues.find((i) =>
-				i.path.includes("tierFloorMode"),
-			);
-			// zod 4 renamed the enum-violation code from `invalid_enum_value`.
-			// The rejection itself is unchanged; only the code string moved.
-			expect(issue?.code).toBe("invalid_value");
-		}
 	});
 
 	it("rejects negative accessRateLimitMs", () => {
