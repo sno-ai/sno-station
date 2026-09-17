@@ -136,12 +136,16 @@ function parseJsonResponse<T>(
 	}
 
 	try {
-		return { ok: true, value: JSON.parse(jsonStr) as T };
+		const value: unknown = JSON.parse(jsonStr);
+		if (accept && !accept(value)) return { ok: false, error: "caller check rejected payload" };
+		return { ok: true, value: value as T };
 	} catch (error) {
 		const repairedJsonStr = repairCommonJson(jsonStr);
 		if (repairedJsonStr !== jsonStr) {
 			try {
-				return { ok: true, value: JSON.parse(repairedJsonStr) as T };
+				const value: unknown = JSON.parse(repairedJsonStr);
+				if (accept && !accept(value)) return { ok: false, error: "caller check rejected payload" };
+				return { ok: true, value: value as T };
 			} catch {
 				return {
 					ok: false,
