@@ -7,7 +7,8 @@ const diagnosticLog = createDiagnosticLogger("sno-station-mem:daily-log-generato
  * @see strategy-hook-runner.ts, memory-entry-projector.ts, learning-file-maintenance.ts.
  */
 
-import { appendFile, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import { appendFile, link, mkdir, readdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import { REFLECTION_MAX_FILENAME_ATTEMPTS } from "../../../config/index";
 import { RESOURCES_BY_LOCALE } from "../i18n/all-resources";
@@ -277,12 +278,18 @@ export async function generateReflectionText(params: {
 
 /** Validates daily log file before it enters the reflection capture policy boundary. */
 export async function ensureDailyLogFile(dailyPath: string, dateStr: string): Promise<void> {
-	// Isolate the reflection capture operation that can fail because of runtime I/O or input shape.
+	const temporaryPath = `${dailyPath}.${randomUUID()}.tmp`;
 	try {
-		await readFile(dailyPath, { encoding: "utf8", signal: memoryOperationSignal() });
-	} catch {
-		// Missing reflection file is initialized with a date header.
-		await memoryFileWrite(() => writeFile(dailyPath, `# ${dateStr}\n\n`, "utf-8"));
+		await memoryFileWrite(() => writeFile(temporaryPath, `# ${dateStr}\n\n`, { encoding: "utf-8", flag: "wx" }));
+		try {
+			await link(temporaryPath, dailyPath);
+		} catch (error) {
+			if (!(error instanceof Error && "code" in error && error.code === "EEXIST")) throw error;
+		}
+	} finally {
+		await unlink(temporaryPath).catch(error => {
+			if (!(error instanceof Error && "code" in error && error.code === "ENOENT")) throw error;
+		});
 	}
 }
 
