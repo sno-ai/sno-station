@@ -300,8 +300,7 @@ export async function onBeforeAgentStart(
 		return {
 			prependContext: formatRelevantMemoriesContext(
 				finalResults.map((result) => {
-					// A dated event carries its own day; anything else carries the day it was said, so a
-					// "when" question is never answered from a row that silently lost its anchor.
+					// Keep the source anchor even when an event date has already been resolved.
 					const eventDate = episodicEventDate(result.entry);
 					// The original sentence travels with the paraphrase, so a question about exact
 					// wording has something to read. See `sourceQuote`.
@@ -311,9 +310,8 @@ export async function onBeforeAgentStart(
 						text: result.snippet && result.snippet.length > 0 ? result.snippet : result.entry.text,
 						lane: result.entry.lane,
 						...(quote === undefined ? {} : { quote }),
-						...(eventDate === undefined
-							? { saidOn: saidOnDate(result.entry) }
-							: { eventDate }),
+						eventDate,
+						saidOn: saidOnDate(result.entry),
 					};
 				}),
 			),
