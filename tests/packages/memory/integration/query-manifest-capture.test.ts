@@ -217,8 +217,6 @@ describe("query manifest capture integration", () => {
 			retrievalConfig: {
 				...DEFAULT_RETRIEVAL_CONFIG,
 				rerank: "none" as const,
-				recencyWeight: 0,
-				timeDecayHalfLifeDays: 0,
 				hardMinScore: 0,
 				minScore: 0,
 			},
@@ -324,8 +322,6 @@ describe("query manifest capture integration", () => {
 			retrievalConfig: {
 				...DEFAULT_RETRIEVAL_CONFIG,
 				rerank: "none",
-				recencyWeight: 0,
-				timeDecayHalfLifeDays: 0,
 				hardMinScore: 0,
 				minScore: 0,
 			},
