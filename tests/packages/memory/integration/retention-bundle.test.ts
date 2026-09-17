@@ -1,6 +1,41 @@
 /** Real ONNX embedder + real encrypted SQLite. No mocking. Missing deps = FAIL. */
 
-/** Retrieval still records accesses and evaluates tier transitions without changing scores. */
+/**
+ * Phase 1 retention bundle (openspec/changes/mem-lifecycle/tasks.md §15.2).
+ *
+ * Bundle = three `recallLifecycle` flags flipped together:
+ *   - retentionScorer
+ *   - tierPromoter
+ *   - autoRecallAccessTracking
+ *
+ * Phase 0 landed the wiring with all three defaulting `false`. Phase 1 flips
+ * the defaults to `true`. This test enforces the bundle's observable contract
+ * at integration scale (real ONNX embedder + real encrypted SQLite + real
+ * retriever pipeline), so the §15.4 default flip lands against an already-
+ * green target.
+ *
+ * Behavioral coverage per PRD `recall-lifecycle-wiring.md` §5.6:
+ *   Group 1 (Retention Scorer wiring)
+ *     1. Stage placement: `applyRetentionBoost` runs after `applyTimeDecay`
+ *        and before `hardMinScore`, so a low-retention candidate can drop
+ *        below `hardMinScore` while a healthy one survives.
+ *     2. Multiplicative not additive: bundle ON re-orders results vs OFF
+ *        (control), and the per-result `score` is the OFF score times a
+ *        retention multiplier in [SEARCH_BOOST_MIN, 1.0].
+ *     3. `tierFloorMode` arm divergence: `bare` and `withFloor` produce
+ *        observably different scores for the same fixture.
+ *   Group 2 (Tier Promoter wiring)
+ *     5. Top-K bound: only the top `tierPromotionTopK` results have their
+ *        tier evaluated; the (K+1)-th result keeps its seeded tier.
+ *
+ * Bundle-OFF control invariants the test ALSO locks down:
+ *   - No tier writes on retrieval.
+ *   - `auto-recall` source does NOT increment `accessCount`; manual source
+ *     still does (preserves the pre-Phase-0 manual-only contract).
+ * Bundle-ON expectations the test ALSO locks down:
+ *   - `auto-recall` source DOES increment `accessCount`.
+ *   - Tier transitions persisted to the metadata column.
+ */
 
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -56,11 +91,17 @@ async function readMetadata(store: MemoryStore, id: string): Promise<Record<stri
 
 const BUNDLE_ON: RecallLifecycleConfig = {
 	...DEFAULT_RECALL_LIFECYCLE,
+	retentionScorer: true,
 	tierPromoter: true,
 	autoRecallAccessTracking: true,
 };
 
-describe("Retrieval access tracking and tier transitions", () => {
+const BUNDLE_ON_WITH_FLOOR: RecallLifecycleConfig = {
+	...BUNDLE_ON,
+	tierFloorMode: "withFloor",
+};
+
+describe("Phase 1 retention bundle (Groups 1 + 2)", () => {
 	let dbPath: string;
 	let cleanup: () => void;
 	let store: MemoryStore;
@@ -110,11 +151,18 @@ describe("Retrieval access tracking and tier transitions", () => {
 		lifecycle: RecallLifecycleConfig,
 		promoter?: TierPromoter,
 	): MemoryRetrieverInternals {
+		// `applyRetentionBoost` + recency-skip gate read `this.config.recallLifecycle`,
+		// while the access-tracker / tier-promoter gates read `this._recallLifecycle`
+		// (set via `setRecallLifecycle`). Phase 0 wired the two source-of-truth
+		// sites separately on purpose; the test pushes the same bundle into both
+		// so the flag flip lands consistently.
 		const retriever = createRetriever(store, testEmbedder, { warn: () => {} }, {
 			...DEFAULT_RETRIEVAL_CONFIG,
+			temporalWeighting: true,
 			rerank: "none",
 			hardMinScore: 0,
 			minScore: 0,
+			recallLifecycle: lifecycle,
 		}) as unknown as MemoryRetrieverInternals;
 		retriever._recallLifecycle = lifecycle;
 		retriever._tierPromoter = promoter ?? createTierPromoter();
@@ -123,6 +171,7 @@ describe("Retrieval access tracking and tier transitions", () => {
 
 	const QUERY_SUBJECT =
 		"PostgreSQL multi-version concurrency control prevents readers from blocking writers.";
+	const FIXTURE_TOPIC = "Postgres";
 
 	async function seedQueryFixtureSet(): Promise<SeededRow[]> {
 		// Topic-aligned seeds so the ONNX embedder retrieves a stable top-K.
@@ -166,6 +215,165 @@ describe("Retrieval access tracking and tier transitions", () => {
 			}),
 		]);
 	}
+
+	it("§5.6 G1 (bundle ON vs OFF): retention multiplier shifts scores within [SEARCH_BOOST_MIN, 1.0]", async () => {
+		const seeds = await seedQueryFixtureSet();
+
+		const offRetriever = buildRetriever({
+			...DEFAULT_RECALL_LIFECYCLE,
+			retentionScorer: false,
+			tierPromoter: false,
+		});
+		const offResults = await offRetriever.retrieve({
+			query: QUERY_SUBJECT,
+			limit: seeds.length,
+		});
+		const offById = new Map(offResults.map((r) => [r.entry.id, r.score] as const));
+
+		const onRetriever = buildRetriever(BUNDLE_ON);
+		const onResults = await onRetriever.retrieve({
+			query: QUERY_SUBJECT,
+			limit: seeds.length,
+		});
+
+		// Both runs must surface a shared subset so per-id score comparison is well-defined.
+		const shared = onResults.filter((r) => offById.has(r.entry.id));
+		expect(shared.length).toBeGreaterThanOrEqual(2);
+
+		let anyChanged = false;
+		for (const r of shared) {
+			const offScore = offById.get(r.entry.id);
+			if (offScore === undefined) continue;
+			// Bare-mode retention multiplier is in [SEARCH_BOOST_MIN=0.85, 1.0].
+			// So bundle-ON score == OFF score * m, m ∈ [0.85, 1.0]. We allow a tiny
+			// floating-point slack (1e-9 relative) on either bound.
+			expect(r.score).toBeLessThanOrEqual(offScore + 1e-9);
+			expect(r.score).toBeGreaterThanOrEqual(offScore * 0.85 - 1e-9);
+			if (Math.abs(r.score - offScore) > 1e-6) anyChanged = true;
+		}
+		// At least one candidate's score must observably change — otherwise the
+		// retention multiplier is a no-op and we'd be silently shipping OFF.
+		expect(anyChanged).toBe(true);
+	});
+
+	it("§5.6 G1 stage placement: bundle ON + a hardMinScore floor drops a low-retention candidate that survives bundle OFF", async () => {
+		// Two seeds: one fresh + frequent (high retention) and one ancient + cold
+		// (low retention). Tier set equal so tier-floor isn't confounding.
+		const fresh = await seed({
+			text: `${FIXTURE_TOPIC} multi-version concurrency hot path.`,
+			importance: 0.5,
+			tier: "working",
+			accessCount: 10,
+			lastAccessedAt: Date.now() - 60_000,
+		});
+		const cold = await seed({
+			text: `${FIXTURE_TOPIC} obscure historical replication command.`,
+			importance: 0.5,
+			tier: "working",
+			accessCount: 0,
+			lastAccessedAt: 0,
+			timestampOffsetMs: 365 * 24 * 60 * 60 * 1000,
+		});
+
+		// Pick a hardMinScore that:
+		//   - bundle OFF: both seeds clear (because retention multiplier is 1.0)
+		//   - bundle ON:  the cold seed's score * retention_multiplier falls below
+		// Run OFF first to get raw OFF scores, then place the floor between them.
+		const probeOff = buildRetriever({
+			...DEFAULT_RECALL_LIFECYCLE,
+			retentionScorer: false,
+			tierPromoter: false,
+		});
+		const probeResults = await probeOff.retrieve({
+			query: QUERY_SUBJECT,
+			limit: 5,
+		});
+		const offByIdProbe = new Map(probeResults.map((r) => [r.entry.id, r.score] as const));
+		const offFresh = offByIdProbe.get(fresh.id);
+		const offCold = offByIdProbe.get(cold.id);
+		if (offFresh === undefined || offCold === undefined) {
+			throw new Error("Both seeded candidates must be retrieved for the floor proof");
+		}
+
+		// Floor sits at 95% of the cold seed's OFF score — clears in OFF but the
+		// retention multiplier (≤ 1.0, and substantially < 1.0 for an ancient
+		// zero-access entry) pushes the bundle-ON score below it.
+		const hardMin = offCold * 0.95;
+		const onRetriever = createRetriever(store, testEmbedder, { warn: () => {} }, {
+			...DEFAULT_RETRIEVAL_CONFIG,
+			temporalWeighting: true,
+			rerank: "none",
+			hardMinScore: hardMin,
+			minScore: 0,
+			recallLifecycle: BUNDLE_ON,
+		}) as unknown as MemoryRetrieverInternals;
+		onRetriever._recallLifecycle = BUNDLE_ON;
+		onRetriever._tierPromoter = createTierPromoter();
+
+		const offLifecycle: RecallLifecycleConfig = {
+			...DEFAULT_RECALL_LIFECYCLE,
+			retentionScorer: false,
+			tierPromoter: false,
+		};
+		const offRetriever = createRetriever(store, testEmbedder, { warn: () => {} }, {
+			...DEFAULT_RETRIEVAL_CONFIG,
+			temporalWeighting: true,
+			rerank: "none",
+			hardMinScore: hardMin,
+			minScore: 0,
+			recallLifecycle: offLifecycle,
+		}) as unknown as MemoryRetrieverInternals;
+		offRetriever._recallLifecycle = offLifecycle;
+
+		const offFiltered = await offRetriever.retrieve({
+			query: QUERY_SUBJECT,
+			limit: 5,
+		});
+		const offIds = new Set(offFiltered.map((r) => r.entry.id));
+		expect(offIds.has(fresh.id)).toBe(true);
+		expect(offIds.has(cold.id)).toBe(true);
+
+		const onFiltered = await onRetriever.retrieve({
+			query: QUERY_SUBJECT,
+			limit: 5,
+		});
+		const onIds = new Set(onFiltered.map((r) => r.entry.id));
+		expect(onIds.has(fresh.id)).toBe(true);
+		// The retention multiplier dropped `cold` below `hardMinScore`. If this
+		// fails, the retention stage is running AFTER the floor (wrong slot) or
+		// not running at all.
+		expect(onIds.has(cold.id)).toBe(false);
+	});
+
+	it("§5.6 G1 tierFloorMode arm: `bare` and `withFloor` produce observably different scores", async () => {
+		// Seed a peripheral entry with the cold-retention shape so the floor
+		// matters: `bare` returns SEARCH_BOOST_MIN (0.3), `withFloor` clamps
+		// against the peripheral tier floor.
+		const peripheral = await seed({
+			text: `${FIXTURE_TOPIC} obscure peripheral fact for tier-floor arm test.`,
+			importance: 0.4,
+			tier: "peripheral",
+			accessCount: 0,
+			lastAccessedAt: 0,
+			timestampOffsetMs: 180 * 24 * 60 * 60 * 1000,
+		});
+
+		const bareR = buildRetriever(BUNDLE_ON);
+		const floorR = buildRetriever(BUNDLE_ON_WITH_FLOOR);
+
+		const bareResults = await bareR.retrieve({ query: QUERY_SUBJECT, limit: 5 });
+		const floorResults = await floorR.retrieve({ query: QUERY_SUBJECT, limit: 5 });
+
+		const bareScore = bareResults.find((r) => r.entry.id === peripheral.id)?.score;
+		const floorScore = floorResults.find((r) => r.entry.id === peripheral.id)?.score;
+		if (bareScore === undefined || floorScore === undefined) {
+			throw new Error("The seeded candidate must be retrieved in both tier-floor arms");
+		}
+		// `withFloor` may clamp up OR down depending on tier; the contract is
+		// only that the two arms are observably different on at least one
+		// fixture. Equality here would mean the arm code path is dead.
+		expect(Math.abs(bareScore - floorScore)).toBeGreaterThan(1e-6);
+	});
 
 	it("§5.6 G2 top-K bound: only top `tierPromotionTopK` results have their tier evaluated", async () => {
 		const seeds = await seedQueryFixtureSet();
@@ -241,6 +449,7 @@ describe("Retrieval access tracking and tier transitions", () => {
 
 		const retriever = buildRetriever({
 			...DEFAULT_RECALL_LIFECYCLE,
+			retentionScorer: false,
 			tierPromoter: false,
 			autoRecallAccessTracking: false,
 		});
