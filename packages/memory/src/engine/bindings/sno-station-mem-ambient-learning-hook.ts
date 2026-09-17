@@ -44,7 +44,7 @@ async function runLocalFirstCapture(input: {
 	stateDir: string;
 	scope: string;
 	sessionKey: string;
-}): Promise<void> {
+}): Promise<{ stored: number; failures: number }> {
 	const { api, config, store, event, ctx, stateDir, scope, sessionKey } = input;
 	const entries = event.messages.flatMap((message) => {
 		if (!isAmbientLearningMessage(message)) return [];
@@ -109,9 +109,12 @@ async function runLocalFirstCapture(input: {
 		resultStatus: failures === 0 ? "ok" : "partial",
 		details: { mode: config.mode, candidates: entries.length, stored, failures },
 	});
-	log.info("Local memory capture completed", { outcome: failures ? "partial" : stored ? "success" : "empty_success",
+	let outcome: AmbientCaptureOutcome = "success";
+	if (failures > 0) outcome = stored > 0 ? "partial" : "failed";
+	log.info("Local memory capture completed", { outcome,
 		persisted_count: stored, failed_count: failures, input_count: entries.length },
 		{ event_name: "memory.capture.completed", file: "packages/sno-station-mem/src/engine/bindings/sno-station-mem-ambient-learning-hook.ts", function: "runLocalFirstCapture", site_id: "memory.capture.local.completed" });
+	return { stored, failures };
 }
 
 /** Runs atomic extraction after a successful top-level agent conversation. */
@@ -134,11 +137,27 @@ export async function onAgentEnd(
 	let outcome: AmbientCaptureOutcome = "skipped";
 	let reason = "guard_not_admitted";
 	try {
+	if (!config.ambientLearning) {
+		reason = "ambient_learning_disabled";
+		return outcome;
+	}
+	if (sessionKey.includes(":subagent:")) {
+		reason = "skipped_subagent";
+		appendAuditEntry(stateDir, {
+			event: "ambient_learning",
+			hook: "agent_end",
+			resultStatus: "skipped",
+			decision: "skipped_subagent",
+			details: { sessionKey },
+		});
+		return outcome;
+	}
 	const resolvedAgentId = resolveHookAgentId(ctx.agentId, sessionKey).agentId;
 	const scope = scopePolicy.getDefaultScope(resolvedAgentId);
 	if (config.mode === "local-first") {
-		await runLocalFirstCapture({ api, config, store, event, ctx, stateDir, scope, sessionKey });
+		const { stored, failures } = await runLocalFirstCapture({ api, config, store, event, ctx, stateDir, scope, sessionKey });
 		outcome = "success";
+		if (failures > 0) outcome = stored > 0 ? "partial" : "failed";
 		return outcome;
 	}
 	if (!insightDistiller) {
