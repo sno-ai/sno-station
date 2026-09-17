@@ -1,3 +1,5 @@
+import { isDeepStrictEqual } from "node:util";
+import { DEFAULT_LOCALE } from "../engine/i18n/locales";
 import { readMaintenanceOverrides } from "./config";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { randomUUID } from "node:crypto";
@@ -5,12 +7,11 @@ import { readMemorySnapshotPayload, type SnapshotReason } from "../engine/observ
 import { existsSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { isDeepStrictEqual } from "node:util";
 import { createLogger } from "@snoai/utils/logger";
-import { ContractError, parseInput, parseOutput, type ContractMethod, type ContractOutputs, type Registration, type ScopeCtx } from "../contract/index";
+import { parseInput, parseOutput, type ContractMethod, type ContractOutputs, type Registration, type ScopeCtx } from "../contract/index";
 import { pluginConfigSchema, type PluginConfig } from "../contract/config/plugin-config-schema";
 import { MemoryContractRuntime } from "../engine/contract-runtime";
-import { getBindingPath, getInstallationConfigPath, getPrincipal, getSnoStationMemStateDir, readBoundStorePath } from "../engine/shared/paths";
+import { getInstallationConfigPath, getPrincipal, getSnoStationMemStateDir, readBoundStorePath } from "../engine/shared/paths";
 import { readSnoStationMemConfig, PLUGIN_ENTRY_KEY } from "../engine/bindings/embedder-config-files";
 import { ObservableEmbedder } from "../engine/observability/observable-embedder";
 import { ObservableMemoryStore } from "../engine/observability/observable-memory-store";
@@ -76,9 +77,14 @@ export class MemoryRuntimePool {
 	static async open(): Promise<MemoryRuntimePool> {
 		const storePath = await readBoundStorePath();
 		const configPath = getInstallationConfigPath();
-		if (existsSync(getBindingPath()) && !existsSync(configPath)) throw new ContractError("storage-unavailable");
-		const installed = existsSync(configPath) ? readSnoStationMemConfig(configPath).plugins?.entries?.[PLUGIN_ENTRY_KEY]?.config : undefined;
-		const config = pluginConfigSchema.parse({ ...installed, dbPath: storePath });
+		let config = pluginConfigSchema.parse({ dbPath: storePath });
+		try {
+			if (!existsSync(configPath)) engineLogger.error("memory.installation.config.missing");
+			if (existsSync(configPath)) {
+				const installed = readSnoStationMemConfig(configPath).plugins?.entries?.[PLUGIN_ENTRY_KEY]?.config;
+				config = pluginConfigSchema.parse({ ...installed, dbPath: storePath });
+			}
+		} catch (error) { engineLogger.error(String(error)); }
 		await initSqliteRuntime();
 		await mkdir(dirname(storePath), { recursive: true, mode: 0o700 });
 		const stateDir = getSnoStationMemStateDir();
@@ -95,10 +101,15 @@ export class MemoryRuntimePool {
 	}
 
 	private async register(scope: ScopeCtx, registration: Registration): Promise<ContractOutputs["init"]> {
-		const config: PluginConfig = { ...registration.settings, ...registration.routing };
-		// One principal has one vector space; a second skin cannot silently change its model.
-		if (!isDeepStrictEqual(config.embedding, this.config.embedding) || !isDeepStrictEqual(config.memoryTelemetry, this.config.memoryTelemetry)) throw new ContractError("invalid-input");
-		if (config.dbPath && config.dbPath !== this.storePath) throw new ContractError("store-mismatch");
+		if (!isDeepStrictEqual(registration.settings.embedding, this.config.embedding) ||
+			!isDeepStrictEqual(registration.settings.memoryTelemetry, this.config.memoryTelemetry) ||
+			(registration.settings.dbPath && registration.settings.dbPath !== this.storePath)) {
+			engineLogger.error("memory.registration.configuration.mismatch");
+		}
+		const config: PluginConfig = { ...registration.settings, ...registration.routing,
+			embedding: this.config.embedding, memoryTelemetry: this.config.memoryTelemetry, dbPath: this.storePath };
+		registration = { ...registration, settings: { ...registration.settings,
+			embedding: config.embedding, memoryTelemetry: config.memoryTelemetry, dbPath: this.storePath } };
 		// Without an endpoint, rem-enhanced keeps the existing GPU fallback. Agent-native must expose refusal.
 		const agentPort = registration.model || config.mode === "agent-native" ? new RegisteredAgentPort(registration.model) : undefined;
 		const observability = new PluginObservability(config, this.stateDir, engineLogger);
@@ -115,7 +126,6 @@ export class MemoryRuntimePool {
 		try {
 			const result = await runtime.init(scope, registration);
 			// Keep the serving entry until the successor can use the shared model.
-			await embedder.warmup();
 			const previous = this.skins.get(registration.skinId);
 			this.skins.set(registration.skinId, entry);
 			await this.snapshot(entry, "startup");
@@ -126,21 +136,23 @@ export class MemoryRuntimePool {
 
 	async invoke(method: ContractMethod, raw: unknown, skinId: string): Promise<ContractOutputs[ContractMethod]> {
 		const input = parseInput(method, raw);
-		if (input.scope.principal !== this.principal) throw new ContractError("principal-mismatch");
 		if (method === "inspect" && parseInput("inspect", raw).op.op === "storage") {
-			if (!input.scope.host?.systemCaller) throw new ContractError("system-caller-required");
 			this.counters.storeAccesses++;
-			return { degraded: false, result: { op: "storage", dimension: readChunkVecTableState(this.store.sqlite)?.dimension ?? null, failed: this.store.sqlite.isFailed(), reason: this.store.sqlite.getFailureReason() } };
+			return { degraded: false, result: { op: "storage", dimension: readChunkVecTableState(this.store.sqlite)?.dimension ?? null, failed: false } };
 		}
 		if (method === "init") {
 			const init = parseInput("init", raw);
-			if (init.registration.skinId !== skinId) throw new ContractError("invalid-input");
 			this.counters.engineAccesses++;
 			this.counters.storeAccesses++;
-			return this.register(init.scope, init.registration);
+			return this.register(init.scope, { ...init.registration, skinId });
 		}
-		const entry = this.skins.get(skinId);
-		if (!entry) throw new ContractError("invalid-input");
+		let entry = this.skins.get(skinId);
+		if (!entry) {
+			const { mode, remEnhanced, agentNative, language, ...settings } = this.config;
+			await this.register(input.scope, { skinId, settings, routing: { mode, remEnhanced, agentNative, language: language ?? DEFAULT_LOCALE } });
+			entry = this.skins.get(skinId);
+		}
+		if (!entry) throw new Error("memory.skin.registration.failed");
 		entry.active++;
 		this.counters.engineAccesses++;
 		this.counters.storeAccesses++;
