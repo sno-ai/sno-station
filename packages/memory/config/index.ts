@@ -73,6 +73,8 @@ export const DEFAULT_TOP_K = 10;
 
 /** Default and minimum character-estimated token budgets for one recall result. */
 export const DEFAULT_RECALL_TOKEN_BUDGET = 7_000;
+/** LoCoMo 2026-09-17: up to 35 tool calls per turn; repeated rows overflowed 14 64K sessions. */
+export const MAX_TURN_RECALL_TOOL_TOKENS = 3 * DEFAULT_RECALL_TOKEN_BUDGET;
 export const MIN_RECALL_TOKEN_BUDGET = 5_000;
 
 /** Weight for vector (semantic) branch in hybrid score fusion */

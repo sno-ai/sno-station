@@ -165,6 +165,12 @@ export const listParamsSchema: z.ZodType<
 });
 
 export interface ToolContext {
+	recallSession?: {
+		sessionId: string;
+		turn: number;
+		history: Map<string, Map<string, number>>;
+		toolTokens: Map<string, { turn: number; tokens: number }>;
+	};
 	retriever: MemoryRetriever;
 	store: MemoryStore;
 	scopePolicy: MemoryScopePolicy;

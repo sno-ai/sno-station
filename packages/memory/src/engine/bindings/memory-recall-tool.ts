@@ -23,6 +23,8 @@ import {
 } from "../retrieval/rem-consumer-retrieval";
 import { createLogger, currentLogContext, privateLogReference, withLogContext } from "@snoai/utils/logger";
 import { randomUUID } from "node:crypto";
+import { MAX_SESSION_RECALL_ENTRIES, MAX_TRACKED_SESSIONS, MAX_TURN_RECALL_TOOL_TOKENS } from "../../../config/index";
+import { pruneOldestEntries, setLruEntry, touchLruEntry } from "../shared/lru";
 
 const log = createLogger("sno-station-mem:memory-recall-tool");
 
@@ -224,10 +226,34 @@ export async function executeMemoryRecallTool(ctx: ToolContext, access: ReturnTy
 					readsWholePopulation || parsed.top_k === undefined
 						? limitedResults
 						: limitedResults.slice(0, clampInt(parsed.top_k, 1, MAX_RECALL_TOOL_CANDIDATES));
+				const session = readsWholePopulation ? undefined : ctx.recallSession;
+				const sessionHistory = session?.history.get(session.sessionId);
+				const unseenRows = session
+					? requestedRows.filter(row => sessionHistory?.get(row.entry.id) !== session.turn)
+					: requestedRows;
+				const alreadyServedCount = requestedRows.length - unseenRows.length;
 				const packedRecall = readsWholePopulation
 					? { rows: requestedRows, budget_used: 0, dropped_count: 0 }
-					: packManualRecallRows(requestedRows, parsed.token_budget);
+					: packManualRecallRows(unseenRows, parsed.token_budget);
 				const packedResults = packedRecall.rows;
+				if (session) {
+					const account = touchLruEntry(session.toolTokens, session.sessionId);
+					const tokens = account?.turn === session.turn ? account.tokens : 0;
+					if (tokens >= MAX_TURN_RECALL_TOOL_TOKENS) {
+						return makeResult(
+							`Recall budget for this turn is exhausted (${tokens} tokens served); ${unseenRows.length} matching memories not shown.`,
+							{ count: unseenRows.length, memories: [],
+								served_ids: packedResults.slice(0, 128).map(row => row.entry.id),
+								budget_exhausted: true, already_served_count: alreadyServedCount },
+						);
+					}
+					const history = touchLruEntry(session.history, session.sessionId) ?? new Map<string, number>();
+					for (const row of packedResults) history.set(row.entry.id, session.turn);
+					pruneOldestEntries(history, MAX_SESSION_RECALL_ENTRIES);
+					setLruEntry(session.history, session.sessionId, history, MAX_TRACKED_SESSIONS);
+					setLruEntry(session.toolTokens, session.sessionId,
+						{ turn: session.turn, tokens: tokens + packedRecall.budget_used }, MAX_TRACKED_SESSIONS);
+				}
 				budgetRemoved = packedRecall.dropped_count;
 				const truncated =
 					aggregationIncomplete ||
@@ -316,11 +342,13 @@ export async function executeMemoryRecallTool(ctx: ToolContext, access: ReturnTy
 						? `<recall-result scope-row-count="${observedScopeRowCount ?? "unknown"}" returned-count="${results.length}" population-complete="${populationComplete}" truncated="${outputTruncated}" />\n`
 						: "";
 					return makeResult(
-						`<relevant-memories>\n${aggregationSummary}Found ${results.length} memories:\n\n${text}\n</relevant-memories>`,
+						`<relevant-memories>\n${aggregationSummary}Found ${results.length} memories:\n\n${text}\n</relevant-memories>` +
+							(alreadyServedCount > 0 ? `\n${alreadyServedCount} memories already shown in this turn were omitted.` : ""),
 						{
 							count: serialized.length,
 							scope: outputScope,
 							memories: serialized,
+							...(session && { already_served_count: alreadyServedCount }),
 							...(!readsWholePopulation && {
 								budget_used: packedRecall.budget_used,
 								dropped_count: packedRecall.dropped_count,
