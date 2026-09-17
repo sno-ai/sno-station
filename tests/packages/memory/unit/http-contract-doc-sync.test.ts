@@ -10,13 +10,19 @@
  * errors: Reason | HTTP status. Per-route errors:METHOD uses the same format.
  * example:METHOD:request/response markers precede exactly one JSON code fence.
  */
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import type { z } from "zod";
 import {
 	contractJsonSchemas, inputSchemas, outputSchemas, MEMORY_ROUTES, MEMORY_ERROR_STATUS, DEGRADED_REASONS,
 } from "../../../../packages/sno-station-mem/src/contract/index";
 import { SNO_OBSERVE_DEFAULT_BASE_URL } from "../../../../packages/sno-station-mem/config/index";
+import { HEALTH_PATH, REM_RUN_PATH, REM_JOBS_PATH_PREFIX } from "../../../../packages/sno-station-mem/src/sidecar/config";
+import { startRemSidecar } from "../../../../packages/sno-station-mem/src/sidecar/server";
+import { bindStore } from "../../../../packages/sno-station-mem/src/engine/shared/paths";
+import { createTestDb } from "../../../apps/mem-claw/helpers/test-db";
 
 type Schema = z.core.JSONSchema.JSONSchema;
 type Row = string[];
@@ -89,6 +95,46 @@ function example(method: string, direction: string): unknown {
 }
 
 describe("sidecar API reference stays in sync", () => {
+	it("lists exactly all served memory, health and REM route paths", async () => {
+		const section = document.split("<!-- table:all-routes -->\n")[1]?.split("\n\n")[0];
+		expect(section).toBeDefined();
+		const paths = section?.split("\n").slice(2).map(line => line.split("|")[2]?.trim()).sort();
+		const served = [...Object.values(MEMORY_ROUTES).map(route => route.path), HEALTH_PATH, REM_RUN_PATH, `${REM_JOBS_PATH_PREFIX}<id>`].sort();
+		expect(served).toEqual(["/healthz", "/rem/jobs/<id>", "/rem/run", "/v1/capture", "/v1/get-recall", "/v1/init",
+			"/v1/inspect", "/v1/mutate", "/v1/on-session-end", "/v1/record-usage", "/v1/static-block"]);
+		expect(paths).toEqual(served);
+		const previousProfile = process.env.SNO_PROFILE_DIR;
+		const database = createTestDb();
+		const stateDir = mkdtempSync(join(tmpdir(), "contract-route-index-"));
+		let server: Awaited<ReturnType<typeof startRemSidecar>> | undefined;
+		try {
+			process.env.SNO_PROFILE_DIR = stateDir;
+			await bindStore(database.dbPath, { mode: "local-first", retrieval: { rerank: "none" } });
+			server = await startRemSidecar();
+			for (const path of served) {
+				const post = path.startsWith("/v1/") || path === "/rem/run";
+				const response = await fetch(`http://127.0.0.1:${server.port}${path.replace("<id>", "missing-job")}`, {
+					method: post ? "POST" : "GET", ...(post ? { body: "{}" } : {}), signal: AbortSignal.timeout(5_000),
+				});
+				if (path === "/healthz") {
+					expect(response.status).toBe(200);
+					expect(await response.json()).toMatchObject({ status: "ok" });
+				} else if (path === "/rem/jobs/<id>") {
+					expect(response.status).toBe(404);
+					expect(await response.json()).toEqual({ error: "job_not_found" });
+				} else {
+					expect(response.status, path).toBe(400);
+					expect(await response.json()).toEqual(path === "/rem/run" ? { error: "invalid_request" } : { degraded: true, reason: "invalid-input" });
+				}
+			}
+		} finally {
+			await server?.stop();
+			database.cleanup();
+			rmSync(stateDir, { recursive: true, force: true });
+			if (previousProfile === undefined) delete process.env.SNO_PROFILE_DIR;
+			else process.env.SNO_PROFILE_DIR = previousProfile;
+		}
+	});
 	it("lists exactly the memory methods, paths and server deadlines", () => {
 		equalRows(table("routes"), methods.map(method => [method, "POST", MEMORY_ROUTES[method].path,
 			String(MEMORY_ROUTES[method].timeoutMs)]), "routes");
