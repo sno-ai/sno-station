@@ -720,7 +720,10 @@ interface RerankProbe {
 }
 
 async function startRerankProbe(
-	respond: (texts: string[], reply: (body: unknown) => void) => void,
+	respond: (
+		texts: string[],
+		reply: (body: unknown, status?: number, headers?: Record<string, string>) => void,
+	) => void,
 ): Promise<RerankProbe> {
 	const { createServer } = await import("node:http");
 	const probe = { url: "", maxInFlight: 0, requestCount: 0 } as RerankProbe;
@@ -733,9 +736,9 @@ async function startRerankProbe(
 			probe.requestCount += 1;
 			probe.maxInFlight = Math.max(probe.maxInFlight, inFlight);
 			const body = JSON.parse(Buffer.concat(chunks).toString("utf8")) as { texts: string[] };
-			respond(body.texts, (payload) => {
+			respond(body.texts, (payload, status = 200, headers = {}) => {
 				inFlight -= 1;
-				response.writeHead(200, { "Content-Type": "application/json" });
+				response.writeHead(status, { "Content-Type": "application/json", ...headers });
 				response.end(JSON.stringify(payload));
 			});
 		});
@@ -771,6 +774,53 @@ const batchedStoreStub = {
 };
 
 describe("retriever rerank batching", () => {
+	it("surfaces 429 with retry-after when an earlier batch exhausts 503 retries", async () => {
+		const probe = await startRerankProbe((texts, reply) => {
+			// Batch zero always fails with 503, including retries; batch one is fatal.
+			if (texts.length === 50) reply("upstream unavailable", 503);
+			else reply("rate limited", 429, { "retry-after": "7" });
+		});
+		try {
+			const searchResults = BATCHED_ENTRIES.slice(0, 51);
+			const retriever = createRetriever(
+				{
+					...batchedStoreStub,
+					searchSemantic: async () => searchResults,
+					searchKeyword: async () => searchResults,
+				} as never,
+				embedderStub as never,
+				{ warn: () => {} },
+				{
+					...DEFAULT_RETRIEVAL_CONFIG,
+					rerank: "cross-encoder",
+					rerankProvider: "tei",
+					rerankEndpoint: probe.url,
+					rerankApiKey: "test-key",
+					candidatePoolSize: 51,
+					minScore: 0,
+					hardMinScore: 0,
+				},
+			);
+
+			try {
+				await retriever.retrieve({ query: "typescript", limit: 51 });
+				throw new Error("expected retrieve() to fail");
+			} catch (error) {
+				expect(error).toBeInstanceOf(RetrievalError);
+				const cause =
+					error instanceof Error &&
+					"cause" in error &&
+					error.cause instanceof Error
+						? error.cause
+						: null;
+				expect(cause).toBeInstanceOf(RetrievalError);
+				expect(cause?.message).toBe("Rerank API failed with status 429, retry after 7s");
+			}
+		} finally {
+			await probe.close();
+		}
+	});
+
 	it("sends the batches in bounded waves and keeps every score on its own row", async () => {
 		// Every text carries its own row number, so the reply can score row N as N. The final order
 		// is then fully determined, and any batch whose indices were re-based onto the wrong offset

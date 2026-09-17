@@ -114,6 +114,33 @@ afterEach(() => {
 });
 
 describe("retriever cross-encoder rerank against the real Sno reranker", () => {
+	it("traces sent, returned, and beyond-cap candidates from the real reranker", async () => {
+		const retriever = createRetriever(
+			storeStub as never,
+			embedder,
+			{ warn: () => {} },
+			{
+				...BASE_CONFIG,
+				rerank: "cross-encoder",
+				rerankProvider: "tei",
+				rerankEndpoint: SNO_RERANK_ENDPOINT,
+				rerankApiKey: internalKey,
+				rerankMaxCandidates: 2,
+			},
+		);
+
+		const { trace } = await retriever.retrieveWithTrace({ query: QUERY, limit: 4 });
+		const stage = trace.stages.find((stage) => stage.name === "rerank");
+
+		expect(stage?.inputCount).toBe(4);
+		expect(stage?.outputCount).toBe(4);
+		expect(stage?.metadata).toEqual({
+			rerankSentCount: 2,
+			rerankReturnedCount: 2,
+			rerankBeyondCapCount: 2,
+		});
+	}, 30_000);
+
 	it("control: without reranking the raw-vector order wins and the relevant memory is buried", async () => {
 		const retriever = createRetriever(
 			storeStub as never,
@@ -164,6 +191,53 @@ describe("retriever cross-encoder rerank against the real Sno reranker", () => {
 			// Prove the Sno reranker was actually called — not silently skipped or
 			// degraded to the local lightweight cosine path.
 			expect(seenUrls.some((url) => url.startsWith(SNO_RERANK_ENDPOINT))).toBe(true);
+		},
+		30_000,
+	);
+
+	it(
+		"ranks the more relevant memory first when both sigmoid scores are saturated",
+		async () => {
+			const candidates: MemorySearchResult[] = [
+				{
+					entry: makeEntry("family-time", "Melanie's kids enjoyed spending time together."),
+					score: 0.8,
+				},
+				{
+					entry: makeEntry(
+						"painting",
+						"Melanie and her kids just finished another painting similar to their last one.",
+					),
+					score: 0.7,
+				},
+			];
+			const retriever = createRetriever(
+				{
+					...storeStub,
+					isMemoryOnFactSurface: (id: string) =>
+						candidates.some((candidate) => candidate.entry.id === id),
+					searchSemantic: async () => candidates,
+				} as never,
+				embedder,
+				{ warn: () => {} },
+				{
+					...BASE_CONFIG,
+					rerank: "cross-encoder",
+					rerankProvider: "tei",
+					rerankEndpoint: SNO_RERANK_ENDPOINT,
+					rerankApiKey: internalKey,
+				},
+			);
+
+			const results = await retriever.retrieve({
+				query: "What did Melanie and her kids paint in their latest project?",
+				limit: 2,
+			});
+
+			expect(results.map((result) => result.entry.text)).toEqual([
+				"Melanie and her kids just finished another painting similar to their last one.",
+				"Melanie's kids enjoyed spending time together.",
+			]);
 		},
 		30_000,
 	);
