@@ -1,3 +1,4 @@
+import { createLogger } from "@snoai/utils/logger";
 import type { JournalEntry } from "./repository.js";
 import type { RemConfig, RemOperationType } from "./types.js";
 
@@ -24,29 +25,22 @@ export async function runRemStages(input: {
 }): Promise<Record<string, "done" | "failed" | "disabled">> {
 	const results: Record<string, "done" | "failed" | "disabled"> = {};
 	for (const stage of input.stages) {
-		if (input.config.stages[stage.name] !== true) {
-			results[stage.name] = "disabled";
-			await input.repository.appendJournal(
-				input.jobId,
-				input.jobType,
-				journal(stage.name, "disabled"),
-			);
-			continue;
-		}
+		let entry: JournalEntry;
 		try {
 			const observed = await stage.run();
 			results[stage.name] = "done";
-			await input.repository.appendJournal(input.jobId, input.jobType, {
-				...journal(stage.name, "done"),
-				...observed,
-			});
+			entry = { ...journal(stage.name, "done"), ...observed };
 		} catch (error) {
 			const reason = error instanceof Error ? error.message : String(error);
 			input.onStageError?.({ stage: stage.name, error });
 			results[stage.name] = "failed";
-			await input.repository.appendJournal(input.jobId, input.jobType, {
-				...journal(stage.name, "failed"),
-				reason,
+			entry = { ...journal(stage.name, "failed"), reason };
+		}
+		try { await input.repository.appendJournal(input.jobId, input.jobType, entry); }
+		catch (error) {
+			createLogger("sno-station-mem:rem-runner").error("rem.stage.journal.failed", { error, stage: stage.name }, {
+				event_name: "rem.stage.journal.failed", file: "packages/sno-station-mem/src/engine/rem/runner.ts",
+				function: "runRemStages", site_id: "rem.stage.journal.failed",
 			});
 		}
 	}
