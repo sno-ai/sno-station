@@ -28,6 +28,7 @@ import { RegisteredAgentPort } from "../model/registered-agent-port";
 import { withProviderResponses } from "../model/llm-provider-transport";
 import type { ProviderResponseTrace } from "../model/llm-client-types";
 import { MEMORY_USAGE_FLUSH_INTERVAL_MS } from "./config";
+import { clearRegisteredRemTicks, setRegisteredRemTick } from "./rem-trigger";
 
 /** The skin's observe session for the request in flight; store, embedder and retriever events carry it. */
 const observeSession = new AsyncLocalStorage<string | undefined>();
@@ -130,6 +131,7 @@ export class MemoryRuntimePool {
 			this.skins.set(registration.skinId, entry);
 			await this.snapshot(entry, "startup");
 			if (previous) { previous.retired = true; if (previous.active === 0) await this.dispose(previous); }
+			setRegisteredRemTick(registration.skinId, config.remEnhanced.trigger?.tick);
 			return result;
 		} catch (error) { await this.dispose(entry); throw error; }
 	}
@@ -236,6 +238,7 @@ export class MemoryRuntimePool {
 
 	async close(): Promise<void> {
 		this.stopTimers();
+		clearRegisteredRemTicks();
 		for (const entry of this.owned) await this.dispose(entry);
 		this.skins.clear();
 		await this.usageFlush;

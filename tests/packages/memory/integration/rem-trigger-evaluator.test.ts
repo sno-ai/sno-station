@@ -54,7 +54,7 @@ describe("REM automatic trigger", () => {
 		server = undefined;
 	});
 
-	it.each([false, true])("dispatches due work with tick=%s and keeps retrying after three failures", async (tickEnabled) => {
+	it("dispatches due work with tick=true and keeps retrying after three failures", async () => {
 		const fixture = createFixture(1);
 		const requests: Array<{ body: unknown; correlationId: string }> = [];
 		const discoveryPath = await startSidecar(requests, 500);
@@ -62,13 +62,61 @@ describe("REM automatic trigger", () => {
 			last_covered_count: 1, last_volume_pass_date: null, missed_window: null, attempts: { identity: null, count: 0 } });
 		for (let index = 0; index < 4; index++) await evaluateRemAutomaticTriggers({
 			database: fixture.database.runtime.db, stateDir: fixture.stateDir, requestedOperations: ["rem-update"],
-			now: new Date("2026-08-12T12:00:00.000Z"), tickEnabled, discoveryPath });
+			now: new Date("2026-08-12T12:00:00.000Z"), tickEnabled: true, discoveryPath });
 		expect(requests).toHaveLength(4);
 		expect(requests.map(request => (request.body as { types: unknown }).types)).toEqual([
 			["rem-update"], ["rem-update"], ["rem-update"], ["rem-update"],
 		]);
 		expect((await loadRemTriggerState(fixture.stateDir)).scopes[fixture.scope]?.last_pass_at).toBe("2026-08-11T12:00:00.000Z");
 	});
+	it("pauses due work with tick=false and dispatches on the next enabled evaluation", async () => {
+		const fixture = createFixture(1);
+		const requests: Array<{ body: unknown; correlationId: string }> = [];
+		const discoveryPath = await startSidecar(requests, 202);
+		await seedState(fixture, {
+			last_pass_at: "2026-08-11T12:00:00.000Z",
+			schedule_zone: "UTC",
+			last_covered_count: 1,
+			last_volume_pass_date: null,
+			missed_window: null,
+			attempts: { identity: null, count: 0 },
+		});
+		const paused = await evaluateRemAutomaticTriggers({
+			database: fixture.database.runtime.db,
+			stateDir: fixture.stateDir,
+			requestedOperations: ["rem-update"],
+			now: new Date("2026-08-12T12:00:00.000Z"),
+			tickEnabled: false,
+			discoveryPath,
+		});
+		expect(paused).toEqual({ evaluations: 1, dispatches: 0 });
+		expect(requests).toEqual([]);
+		expect((await loadRemTriggerState(fixture.stateDir)).scopes[fixture.scope]).toEqual({
+			last_pass_at: "2026-08-11T12:00:00.000Z",
+			schedule_zone: "UTC",
+			last_covered_count: 1,
+			last_volume_pass_date: null,
+			missed_window: {
+				due_at: "2026-08-12T03:00:00.000Z",
+				trigger: "daily",
+				recorded_at: "2026-08-12T12:00:00.000Z",
+			},
+			attempts: { identity: null, count: 0 },
+		});
+		const resumed = await evaluateRemAutomaticTriggers({
+			database: fixture.database.runtime.db,
+			stateDir: fixture.stateDir,
+			requestedOperations: ["rem-update"],
+			now: new Date("2026-08-12T12:01:00.000Z"),
+			tickEnabled: true,
+			discoveryPath,
+		});
+		expect(resumed).toEqual({ evaluations: 1, dispatches: 1 });
+		expect(requests).toHaveLength(1);
+		expect(requests[0]?.body).toMatchObject({ types: ["rem-update"] });
+		expect((await loadRemTriggerState(fixture.stateDir)).scopes[fixture.scope]?.missed_window).toBeNull();
+	});
+
 	it("dispatches when the trigger state cannot be read or written", async () => {
 		const fixture = createFixture(1);
 		const requests: Array<{ body: unknown; correlationId: string }> = [];
@@ -656,6 +704,11 @@ describe("REM automatic trigger", () => {
 					},
 				},
 			});
+		expect(readRemAutomaticOperations(configPath)).toEqual({ requestedOperations: ["rem-update"], tickEnabled: true });
+		const settings = JSON.parse(readFileSync(configPath, "utf8"));
+		writeFileSync(configPath, JSON.stringify({ ...settings, remEnhanced: { trigger: { tick: false } } }));
+		expect(readRemAutomaticOperations(configPath)).toEqual({ requestedOperations: ["rem-update"], tickEnabled: false });
+		writeFileSync(configPath, JSON.stringify({ ...settings, remEnhanced: { trigger: { tick: true } } }));
 		expect(readRemAutomaticOperations(configPath)).toEqual({ requestedOperations: ["rem-update"], tickEnabled: true });
 
 		const defaultDir = temporaryDirectory("rem-trigger-default-config-");
