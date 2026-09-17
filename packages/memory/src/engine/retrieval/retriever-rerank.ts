@@ -378,8 +378,8 @@ Object.assign(MemoryRetriever.prototype, {
 
 			// The batches go out in waves rather than one after another: a pool of
 			// `MAX_CANDIDATE_POOL_SIZE` is 11 TEI requests, and serially that is 11 timeouts' worth of
-			// wall clock on one tool call. A wave is settled before the next one starts and the first
-			// failure ends the whole rerank, which is what the serial loop did, so a wedged reranker
+			// wall clock on one tool call. A wave is settled before the next one starts; any rejection
+			// takes precedence over degradation and ends the whole rerank, so a wedged reranker
 			// costs one wave of up to RERANK_TRANSIENT_ATTEMPTS timeouts. Outcomes are read in ascending batch order and the items are
 			// appended in that same order, so the list this builds is the one the serial loop built.
 			const items: RerankItem[] = [];
@@ -396,7 +396,9 @@ Object.assign(MemoryRetriever.prototype, {
 				for (const outcome of settled) {
 					// Surface this invalid retrieval ranking state as an explicit typed failure.
 					if (outcome.status === "rejected") throw outcome.reason;
-					if (typeof outcome.value === "string") {
+				}
+				for (const outcome of settled) {
+					if (outcome.status === "fulfilled" && typeof outcome.value === "string") {
 						return { candidates, fallback: { reason: outcome.value, provider } };
 					}
 				}
@@ -405,6 +407,16 @@ Object.assign(MemoryRetriever.prototype, {
 					if (outcome.status === "fulfilled" && typeof outcome.value !== "string") {
 						items.push(...outcome.value);
 					}
+				}
+			}
+
+			// TEI logits share one scale across batches; normalize over the whole retrieval.
+			let minScore = Infinity;
+			let maxScore = -Infinity;
+			if (provider === "tei") {
+				for (const item of items) {
+					minScore = Math.min(minScore, item.score);
+					maxScore = Math.max(maxScore, item.score);
 				}
 			}
 
@@ -427,8 +439,14 @@ Object.assign(MemoryRetriever.prototype, {
 				if (!candidate) continue;
 				const sourceScore = this.getRerankSourceScore(candidate);
 				const floor = this.getRerankPreservationFloor(candidate, false);
+				let crossScore = item.score;
+				if (provider === "tei") {
+					crossScore = maxScore === minScore
+						? 1 / (1 + Math.exp(-item.score))
+						: (item.score - minScore) / (maxScore - minScore);
+				}
 				const blendedScore = clamp01WithFloor(
-					item.score * blendCross + sourceScore * blendVector,
+					crossScore * blendCross + sourceScore * blendVector,
 					floor,
 				);
 				// Append only after validation has accepted this value for the current branch.
@@ -467,7 +485,14 @@ Object.assign(MemoryRetriever.prototype, {
 				returnedCount: reranked.length,
 				provider,
 			}, { event_name: "memory.retriever_rerank.diagnostic", file: "packages/sno-station-mem/src/engine/retrieval/retriever-rerank.ts", function: "rerank", site_id: "retrieval.retriever-rerank.rerank.7847c6248a" });
-			return { candidates: merged.length > 0 ? merged : candidates };
+			return {
+				candidates: merged.length > 0 ? merged : candidates,
+				stats: {
+					rerankSentCount: toRerank.length,
+					rerankReturnedCount: reranked.length,
+					rerankBeyondCapCount: beyondCap.length,
+				},
+			};
 		} catch (error) {
 			// Route failure states into a deterministic recovery or reporting branch.
 			if (error instanceof RetrievalError) {

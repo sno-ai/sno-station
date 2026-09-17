@@ -59,6 +59,11 @@ export interface RerankFallbackSignal {
 export interface RerankOutcome {
 	candidates: RetrievalResult[];
 	fallback?: RerankFallbackSignal;
+	stats?: {
+		rerankSentCount: number;
+		rerankReturnedCount: number;
+		rerankBeyondCapCount: number;
+	};
 }
 
 export class MemoryRetriever {
