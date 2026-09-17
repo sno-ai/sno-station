@@ -317,15 +317,14 @@ Object.assign(MemoryRetriever.prototype, {
 		const rerankOutcome = await this.rerank(context.query, fused, queryVector);
 		fused = rerankOutcome.candidates;
 		this.throwIfAborted(context);
-		// Annotate the rerank stage when the configured strategy degraded. Stats
-		// aggregators read this to attribute degraded ranking by reason; trace
-		// readers see why a stage didn't apply the cross-encoder score.
+		// Report cross-encoder coverage on success and the reason when ranking degraded.
 		const rerankStageMetadata = rerankOutcome.fallback
 			? {
+					...rerankOutcome.stats,
 					rerankFallbackReason: rerankOutcome.fallback.reason,
 					rerankFallbackProvider: rerankOutcome.fallback.provider,
 				}
-			: undefined;
+			: rerankOutcome.stats;
 		trace?.endStage(
 			fused.map((r) => r.entry.id),
 			fused.map((r) => r.score),
