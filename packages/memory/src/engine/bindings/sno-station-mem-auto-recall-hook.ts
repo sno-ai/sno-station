@@ -1,3 +1,4 @@
+import { SNO_OBSERVE_DEFAULT_AGENT_ID } from "../../../config/index";
 /** @file sno-station-mem-auto-recall-hook.ts
  * @purpose Handles before-agent auto-recall, filtering, timeout, and context injection.
  * @boundary The before_prompt_build hook path only; capture and reset hooks live elsewhere.
@@ -13,7 +14,6 @@ import {
 	type createScopePolicy,
 	debugContentPreview,
 	formatRelevantMemoriesContext,
-	isKillSwitchActive,
 	MAX_SESSION_RECALL_ENTRIES,
 	MAX_TRACKED_SESSIONS,
 	type MemoryRetriever,
@@ -27,8 +27,6 @@ import {
 	touchLruEntry,
 } from "./sno-station-mem-runtime-dependencies";
 import {
-	auditMissingHookAgentIdentity,
-	isChatIdBasedAgentId,
 	resolveHookAgentId,
 } from "./sno-station-mem-runtime-mode";
 import { resolveRuntimeSessionId } from "./sno-station-mem-session-state";
@@ -71,78 +69,7 @@ export async function onBeforeAgentStart(
 	let repeatRemoved = 0;
 	const retrievalDiagnostics: RecallFilterDiagnostics = {};
 	try {
-	// Keep identity and boundary checks ahead of any privileged operation.
-	if (sessionKey.includes(":subagent:")) {
-		// Persist the decision breadcrumb so later debugging can reconstruct this path.
-		appendAuditEntry(stateDir, {
-			event: "auto_recall",
-			hook: "before_prompt_build",
-			resultStatus: "skipped",
-			decision: "skipped_subagent",
-			details: { sessionKey },
-		});
-		return;
-	}
-	// Short-circuit while paused so no storage, model, or audit side effects continue.
-	if (isKillSwitchActive(stateDir)) return;
-	// Branch on configuration before selecting the runtime strategy.
-	if (!config.autoRecall) {
-		return;
-	}
-
-	// Per-agent inclusion/exclusion gating.
-	// Precedence: a non-empty autoRecallIncludeAgents acts as a whitelist and
-	// fully overrides autoRecallExcludeAgents. When the whitelist is empty,
-	// autoRecallExcludeAgents acts as a blocklist. An empty list in either
-	// position is a no-op.
-	const { agentId: resolvedAgentId, source: agentResolutionSource } = resolveHookAgentId(
-		ctx.agentId,
-		sessionKey,
-	);
-	// Keep identity and boundary checks ahead of any privileged operation.
-	if (agentResolutionSource === "missing" || !resolvedAgentId) {
-		auditMissingHookAgentIdentity(api, "before_prompt_build", stateDir, "auto_recall");
-		return;
-	}
-	// Issue #492 Layer 2: pure-digit agentIds are almost always chat_id snowflakes
-	// (Discord/Telegram). Skip auto-recall so a misrouted ingress cannot drive an
-	// unbounded query against a non-existent agent identity.
-	if (isChatIdBasedAgentId(resolvedAgentId)) {
-		appendAuditEntry(stateDir, {
-			event: "auto_recall",
-			hook: "before_prompt_build",
-			resultStatus: "skipped",
-			decision: "rejected_chatid_agent_format",
-			details: { resolvedAgentId },
-		});
-		return;
-	}
-	// Branch on configuration before selecting the runtime strategy.
-	if (config.autoRecallIncludeAgents.length > 0) {
-		// Branch on configuration before selecting the runtime strategy.
-		if (!config.autoRecallIncludeAgents.includes(resolvedAgentId)) {
-			// Persist the decision breadcrumb so later debugging can reconstruct this path.
-			appendAuditEntry(stateDir, {
-				event: "auto_recall",
-				hook: "before_prompt_build",
-				resultStatus: "skipped",
-				decision: "skipped_agent_filter",
-				details: { resolvedAgentId, listKind: "include" },
-			});
-			return;
-		}
-	} else if (config.autoRecallExcludeAgents.includes(resolvedAgentId)) {
-		// Persist the decision breadcrumb so later debugging can reconstruct this path.
-		appendAuditEntry(stateDir, {
-			event: "auto_recall",
-			hook: "before_prompt_build",
-			resultStatus: "skipped",
-			decision: "skipped_agent_filter",
-			details: { resolvedAgentId, listKind: "exclude" },
-		});
-		return;
-	}
-
+	const resolvedAgentId = resolveHookAgentId(ctx.agentId, sessionKey).agentId ?? SNO_OBSERVE_DEFAULT_AGENT_ID;
 	const incoming = event.prompt;
 	const recallInput = incoming ? extractAutoRecallQuery(incoming) : "";
 	const normalizedIncoming = recallInput ? normalizeQuery(recallInput) : "";
