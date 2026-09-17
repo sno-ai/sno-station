@@ -27,6 +27,7 @@ import {
 	touchLruEntry,
 } from "./sno-station-mem-runtime-dependencies";
 import {
+	isChatIdBasedAgentId,
 	resolveHookAgentId,
 } from "./sno-station-mem-runtime-mode";
 import { resolveRuntimeSessionId } from "./sno-station-mem-session-state";
@@ -70,7 +71,50 @@ export async function onBeforeAgentStart(
 	let repeatRemoved = 0;
 	const retrievalDiagnostics: RecallFilterDiagnostics = {};
 	try {
+	if (sessionKey.includes(":subagent:")) {
+		appendAuditEntry(stateDir, {
+			event: "auto_recall",
+			hook: "before_prompt_build",
+			resultStatus: "skipped",
+			decision: "skipped_subagent",
+			details: { sessionKey },
+		});
+		return;
+	}
+	if (!config.autoRecall) return;
 	const resolvedAgentId = resolveHookAgentId(ctx.agentId, sessionKey).agentId ?? SNO_OBSERVE_DEFAULT_AGENT_ID;
+	if (isChatIdBasedAgentId(resolvedAgentId)) {
+		appendAuditEntry(stateDir, {
+			event: "auto_recall",
+			hook: "before_prompt_build",
+			resultStatus: "skipped",
+			decision: "rejected_chatid_agent_format",
+			details: { resolvedAgentId },
+		});
+		return;
+	}
+	// A non-empty whitelist overrides the blocklist.
+	if (config.autoRecallIncludeAgents.length > 0) {
+		if (!config.autoRecallIncludeAgents.includes(resolvedAgentId)) {
+			appendAuditEntry(stateDir, {
+				event: "auto_recall",
+				hook: "before_prompt_build",
+				resultStatus: "skipped",
+				decision: "skipped_agent_filter",
+				details: { resolvedAgentId, listKind: "include" },
+			});
+			return;
+		}
+	} else if (config.autoRecallExcludeAgents.includes(resolvedAgentId)) {
+		appendAuditEntry(stateDir, {
+			event: "auto_recall",
+			hook: "before_prompt_build",
+			resultStatus: "skipped",
+			decision: "skipped_agent_filter",
+			details: { resolvedAgentId, listKind: "exclude" },
+		});
+		return;
+	}
 	const incoming = event.prompt;
 	const recallInput = incoming ? extractAutoRecallQuery(incoming) : "";
 	const normalizedIncoming = recallInput ? normalizeQuery(recallInput) : "";

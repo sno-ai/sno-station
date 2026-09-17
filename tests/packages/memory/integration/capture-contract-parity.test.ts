@@ -45,6 +45,73 @@ function auxiliaryRows(store: MemoryStore) {
 }
 
 describe("capture contract preserves the existing hook path", () => {
+	it.each([
+		{ name: "ambientLearning is false", ambientLearning: false, sessionKey: "agent:parity:benchmark-answer" },
+		{ name: "the session is a subagent", ambientLearning: true, sessionKey: "agent:parity:subagent:answer" },
+	])("skips capture when $name", async ({ ambientLearning, sessionKey }) => {
+		const { services, config } = await fixture();
+		const writes = vi.spyOn(services.store, "store");
+		const result = await onAgentEnd(services, { ...config, ambientLearning }, services.store,
+			services.embedder, new MemoryScopePolicy({ default: "agent:parity" }), undefined,
+			{ success: true, messages: [{ role: "user", content: "My stable personal preference is jasmine tea." }] },
+			{ agentId: "parity", sessionKey }, services.stateDir);
+		expect(result).toBe("skipped");
+		expect(writes).toHaveBeenCalledTimes(0);
+		expect(services.store.sqlite.prepare("SELECT text FROM nodix_memories").all()).toEqual([]);
+	});
+
+	it.each([
+		{ name: "autoRecall is false", settings: { autoRecall: false }, agentId: "parity", sessionKey: "agent:parity:answer" },
+		{ name: "the agent is excluded", settings: { autoRecallExcludeAgents: ["parity"] }, agentId: "parity", sessionKey: "agent:parity:answer" },
+		{ name: "the session agent is excluded", settings: { autoRecallExcludeAgents: ["parity"] }, agentId: undefined, sessionKey: "agent:parity:answer" },
+		{ name: "the agent is absent from the whitelist", settings: { autoRecallIncludeAgents: ["support"] }, agentId: "parity", sessionKey: "agent:parity:answer" },
+		{ name: "the session is a subagent", settings: {}, agentId: "parity", sessionKey: "agent:parity:subagent:answer" },
+		{ name: "the agent id is a chat id", settings: {}, agentId: "657229412030480397", sessionKey: "agent:657229412030480397:answer" },
+	])("skips auto recall when $name", async ({ settings, agentId, sessionKey }) => {
+		const { services, config } = await fixture();
+		await services.store.store({ text: "My stable personal preference is jasmine tea.",
+			category: "episodic", projectId: "agent:parity", importance: 0.9 });
+		const retrieval = vi.spyOn(services.retriever, "retrieve");
+		const result = await onBeforeAgentStart(services, { ...config, ...settings },
+			services.retriever, services.store, new MemoryScopePolicy({ default: "agent:parity" }),
+			new Map(), new Map(), { prompt: "What is my stable personal preference for tea?" },
+			{ agentId, sessionKey }, services.stateDir);
+		expect(retrieval).toHaveBeenCalledTimes(0);
+		expect(result).toBeUndefined();
+	});
+
+	it("lets the auto recall whitelist override the blocklist", async () => {
+		const { services, config } = await fixture();
+		await services.store.store({ text: "My stable personal preference is jasmine tea.",
+			category: "episodic", projectId: "agent:parity", importance: 0.9 });
+		const result = await onBeforeAgentStart(services,
+			{ ...config, autoRecallIncludeAgents: ["parity"], autoRecallExcludeAgents: ["parity"] },
+			services.retriever, services.store, new MemoryScopePolicy({ default: "agent:parity" }),
+			new Map(), new Map(), { prompt: "What is my stable personal preference for tea?" },
+			{ agentId: "parity", sessionKey: "agent:parity:answer" }, services.stateDir);
+		expect(result?.prependContext).toContain("jasmine tea");
+	});
+
+	it("reports partial and failed local capture from durable writes", async () => {
+		const { services, config } = await fixture();
+		services.store.sqlite.exec(`CREATE TRIGGER fail_capture BEFORE INSERT ON nodix_memories
+			WHEN NEW.text = 'I keep a red notebook.' BEGIN SELECT RAISE(FAIL, 'test write failure'); END`);
+		const capture = () => onAgentEnd(services, config, services.store, services.embedder,
+			new MemoryScopePolicy({ default: "agent:parity" }), undefined,
+			{ success: true, messages: [
+				{ role: "user", content: "I keep a blue notebook." },
+				{ role: "user", content: "I keep a red notebook." },
+			] }, { agentId: "parity", sessionKey: "agent:parity:failures" }, services.stateDir);
+		expect(await capture()).toBe("partial");
+		expect(services.store.sqlite.prepare("SELECT text FROM nodix_memories").all())
+			.toEqual([{ text: "I keep a blue notebook." }]);
+		services.store.sqlite.exec(`DELETE FROM nodix_memories; DROP TRIGGER fail_capture;
+			CREATE TRIGGER fail_capture BEFORE INSERT ON nodix_memories
+			BEGIN SELECT RAISE(FAIL, 'test write failure'); END`);
+		expect(await capture()).toBe("failed");
+		expect(services.store.sqlite.prepare("SELECT text FROM nodix_memories").all()).toEqual([]);
+	});
+
 	it("keeps the statement anchor beside a resolved event date", async () => {
 		const { services, config } = await fixture();
 		await services.store.store({
