@@ -22,6 +22,7 @@ import { RegisteredAgentPort } from "../../../../packages/sno-station-mem/src/mo
 import { Embedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client";
 import { MemoryStore } from "../../../../packages/sno-station-mem/src/store/store";
 import { createTestDb, createTestEmbedder } from "../../../apps/mem-claw/helpers/test-db";
+import { routeTestTask } from "../../../apps/mem-claw/integration/task-lifecycle-test-route";
 
 let root: string;
 let database: ReturnType<typeof createTestDb>;
@@ -1230,3 +1231,274 @@ it("holds the socket after shutdown times out until the runtime task settles", a
 		closing.mockRestore();
 	}
 }, 15_000);
+
+async function startRecallAccount(rows: number, autoRecall = true, longRows = rows > 2, exactChars?: number): Promise<void> {
+	const store = new MemoryStore({ dbPath: database.dbPath, embedder: await createTestEmbedder() });
+	try {
+		for (let index = 0; index < rows; index++) {
+			await store.store({
+				text: (`Notebook record ${index}: The archive holds the expedition route and supply notes. ` +
+					(longRows ? "The notebook describes the route, water supplies, camp equipment and weather observations. ".repeat(exactChars ? 24 : 18) : "")).slice(0, exactChars),
+				category: "episodic", projectId: "global", importance: 0.8,
+			});
+		}
+	} finally { await store.close(); }
+	await health();
+	const registered = registration("local-first");
+	const response = await contractPost("/v1/init", {
+		scope: { principal: "caller", project: "global", session: "recall-account" },
+		registration: { ...registered, settings: { ...registered.settings,
+			autoRecall, autoRecallMinRepeated: 0, autoRecallTimeoutMs: 30_000,
+			retrieval: { ...registered.settings.retrieval, mode: "vector", rerank: "none",
+				minScore: 0, hardMinScore: 0, recallTopK: 1 },
+		} },
+	});
+	expect(response.status).toBe(200);
+}
+
+async function recallAccount(source: "auto" | "manual", session = "recall-account", query = "What route and supplies does the expedition notebook describe?") {
+	const response = await contractPost("/v1/get-recall", {
+		scope: { principal: "caller", project: "global", session }, query,
+		options: { source, minScore: 0 },
+	});
+	expect(response.status).toBe(200);
+	return response.json();
+}
+
+describe("manual recall turn account over HTTP", () => {
+	it("serves each row only once across concurrent manual recalls in the same session", async () => {
+		await startRecallAccount(2, false);
+		await recallAccount("auto", "single-call");
+		const single = await recallAccount("manual", "single-call");
+		expect(single.toolResult.details.memories).toHaveLength(2);
+		expect(single.toolResult.details.budget_used).toBeGreaterThan(0);
+		await recallAccount("auto");
+		const results = await Promise.all([recallAccount("manual"), recallAccount("manual")]);
+		const served = results.filter(result => result.toolResult.details.memories.length === 2);
+		const omitted = results.filter(result => result.toolResult.details.memories.length === 0);
+		expect(served).toHaveLength(1);
+		expect(omitted).toHaveLength(1);
+		expect(served[0].toolResult.details.already_served_count).toBe(0);
+		expect(served[0].toolResult.details.memories.filter((row: { id: string }) =>
+			!single.toolResult.details.memories.some((original: { id: string }) => original.id === row.id))).toEqual([]);
+		expect(omitted[0].toolResult.details).toMatchObject({ already_served_count: 2, memories: [], budget_used: 0 });
+		expect(results.reduce((sum, result) => sum + result.toolResult.details.budget_used, 0)
+			=== single.toolResult.details.budget_used).toBe(true);
+	});
+
+	it("omits auto and tool rows in the same turn, but serves them in a new session and turn", async () => {
+		await startRecallAccount(2);
+		const automatic = await recallAccount("auto");
+		expect(automatic.memoryIds).toHaveLength(1);
+		const first = await recallAccount("manual");
+		expect(first.toolResult.details.already_served_count).toBe(1);
+		expect(first.toolResult.details.memories).toHaveLength(1);
+		expect(first.toolResult.details.memories.filter((row: { id: string }) => automatic.memoryIds.includes(row.id))).toEqual([]);
+		expect(first.contextText).toContain("1 memories already shown in this turn were omitted.");
+		const second = await recallAccount("manual", "recall-account", "What observations are recorded in the expedition notebook?");
+		expect(second.toolResult.details.already_served_count).toBe(2);
+		expect(second.toolResult.details.memories).toEqual([]);
+		expect(second.toolResult.details.budget_used).toBe(0);
+		expect(second.contextText).toContain("2 memories already shown in this turn were omitted.");
+		const fresh = await recallAccount("manual", "recall-fresh-session");
+		expect(fresh.toolResult.details.already_served_count).toBeUndefined();
+		expect(fresh.toolResult.details.memories).toHaveLength(2);
+		expect(fresh.contextText).not.toContain("memories already shown in this turn were omitted.");
+		await recallAccount("auto");
+		const nextTurn = await recallAccount("manual");
+		expect(nextTurn.toolResult.details.already_served_count).toBe(1);
+		expect(nextTurn.toolResult.details.memories).toHaveLength(1);
+	});
+
+	it("caps the last admitted call to the remaining turn budget", { timeout: 300_000 }, async () => {
+		await startRecallAccount(80, false, true, 1960);
+		await recallAccount("auto");
+		let tokens = 0;
+		for (let call = 0; call < 3; call++) {
+			const result = await recallAccount("manual");
+			expect(result.toolResult.details.budget_used).toBeGreaterThan(0);
+			tokens += result.toolResult.details.budget_used;
+		}
+		expect(tokens).toBeGreaterThan(20000);
+		expect(tokens).toBeLessThan(21000);
+		const last = await recallAccount("manual");
+		expect(last.toolResult.isError).toBeUndefined();
+		expect(last.toolResult.details.budget_used >= 0).toBe(true);
+		expect(last.toolResult.details.budget_used <= 21000 - tokens).toBe(true);
+		expect(tokens + last.toolResult.details.budget_used).toBeLessThanOrEqual(21000);
+	});
+
+	it("omits every same-turn row after serving more than 200 short rows", { timeout: 300_000 }, async () => {
+		await startRecallAccount(220, false, false);
+		await recallAccount("auto");
+		const first = await recallAccount("manual");
+		expect(first.toolResult.details.memories).toHaveLength(220);
+		const second = await recallAccount("manual");
+		expect(second.toolResult.details.already_served_count).toBe(220);
+		expect(second.toolResult.details.already_served_count === first.toolResult.details.count).toBe(true);
+		expect(second.toolResult.details.memories).toEqual([]);
+		expect(second.toolResult.details.budget_used).toBe(0);
+	});
+
+	it("stops row text after 21000 tool tokens and resets the account on a new turn", { timeout: 300_000 }, async () => {
+		await startRecallAccount(220, true, true, 400);
+		await recallAccount("auto");
+		let tokens = 0;
+		const ids = new Set<string>();
+		for (let call = 0; call < 10 && tokens < 21_000; call++) {
+			const result = await recallAccount("manual");
+			expect(result.toolResult.isError).toBeUndefined();
+			expect(result.toolResult.details.budget_exhausted).toBeUndefined();
+			expect(result.toolResult.details.budget_used, JSON.stringify({ tokens, details: result.toolResult.details })).toBeGreaterThan(0);
+			for (const row of result.toolResult.details.memories) {
+				expect(ids.has(row.id)).toBe(false);
+				ids.add(row.id);
+			}
+			tokens += result.toolResult.details.budget_used;
+		}
+		expect(tokens).toBe(21000);
+		const exhausted = await recallAccount("manual");
+		expect(exhausted.toolResult.details.budget_exhausted).toBe(true);
+		expect(exhausted.toolResult.details.memories).toEqual([]);
+		expect(exhausted.toolResult.details.count).toBeGreaterThan(0);
+		expect(exhausted.toolResult.details.served_ids.length).toBeGreaterThan(0);
+		expect(exhausted.toolResult.details.served_ids.length).toBeLessThanOrEqual(128);
+		expect(exhausted.toolResult.details.served_ids.filter((id: string) => ids.has(id))).toEqual([]);
+		expect(exhausted.contextText.startsWith("Recall budget for this turn is exhausted")).toBe(true);
+		expect(exhausted.contextText === `Recall budget for this turn is exhausted (${tokens} tokens served); ${exhausted.toolResult.details.count} matching memories not shown.`).toBe(true);
+		expect(exhausted.contextText).not.toContain("The archive holds");
+		const again = await recallAccount("manual");
+		expect(again.toolResult.details.budget_exhausted).toBe(true);
+		expect(again.toolResult.details.count === exhausted.toolResult.details.count).toBe(true);
+		expect(again.toolResult.details.already_served_count === exhausted.toolResult.details.already_served_count).toBe(true);
+		expect(again.toolResult.details.served_ids.every((id: string) => exhausted.toolResult.details.served_ids.includes(id))).toBe(true);
+		const population = await contractPost("/v1/get-recall", {
+			scope: { principal: "caller", project: "global", session: "recall-account" },
+			query: "notebook", options: { source: "manual", aggregation: { operation: "count", terms: ["notebook"] } },
+		});
+		expect(population.status).toBe(200);
+		const complete = await population.json();
+		expect(complete.toolResult.details.budget_exhausted).toBeUndefined();
+		expect(complete.toolResult.details.already_served_count).toBeUndefined();
+		expect(complete.toolResult.details.memories).toHaveLength(1);
+		await recallAccount("auto");
+		const nextTurn = await recallAccount("manual");
+		expect(nextTurn.toolResult.details.budget_exhausted).toBeUndefined();
+		expect(nextTurn.toolResult.details.budget_used).toBeGreaterThan(0);
+		expect(nextTurn.toolResult.details.memories.length).toBeGreaterThan(0);
+	});
+
+	it("charges repeated to-do blocks and omits them when the turn balance cannot fit them", async () => {
+		await startRecallAccount(1, false, true, 400);
+		const store = new MemoryStore({ dbPath: database.dbPath, embedder: await createTestEmbedder() });
+		try {
+			await routeTestTask({ store, projectId: "global", action: "open_or_refine",
+				description: "Pack supplies. ".repeat(149).slice(0, 2233),
+				replayIdentity: "recall-budget-todo", at: 1000 });
+			await recallAccount("auto");
+			// The 2,250-character block costs 750 tokens; the one memory costs 100.
+			for (let call = 0; call < 27; call++) {
+				const result = await recallAccount("manual");
+				expect(result.toolResult.details.budget_exhausted).toBeUndefined();
+				expect(result.toolResult.content[0].text.startsWith("To-dos:\n- [open] Pack supplies.")).toBe(true);
+				expect(result.toolResult.content[0].text).toHaveLength(2250);
+				if (call === 0) {
+					expect(result.toolResult.details.budget_used).toBe(100);
+				} else {
+					expect(result.toolResult.details.memories).toEqual([]);
+					expect(result.toolResult.details.budget_used).toBe(0);
+				}
+			}
+			// 20,350 charged tokens leave 650, which cannot fit another 750-token block.
+			const omitted = await recallAccount("manual");
+			expect(omitted.toolResult.details.budget_exhausted).toBeUndefined();
+			expect(omitted.contextText).not.toContain("To-dos:");
+			store.sqlite.prepare("UPDATE nodix_todos SET description = ? WHERE project_id = ?")
+				.run("Pack supplies. ".repeat(129).slice(0, 1933), "global");
+			const last = await recallAccount("manual");
+			expect(last.toolResult.content[0].text.startsWith("To-dos:")).toBe(true);
+			expect(last.toolResult.content[0].text).toHaveLength(1950);
+			const exhausted = await recallAccount("manual");
+			expect(exhausted.toolResult.details.budget_exhausted).toBe(true);
+			expect(exhausted.contextText).toBe("Recall budget for this turn is exhausted (21000 tokens served); 0 matching memories not shown.");
+			expect(exhausted.contextText).not.toContain("To-dos:");
+		} finally { await store.close(); }
+	});
+
+	it("starts a fresh manual account on each prompt turn with auto recall disabled", async () => {
+		await startRecallAccount(2, false);
+		for (let turn = 0; turn < 2; turn++) {
+			const automatic = await recallAccount("auto");
+			expect(automatic.contextText).toBe("");
+			const manual = await recallAccount("manual");
+			expect(manual.toolResult.details.already_served_count).toBe(0);
+			expect(manual.toolResult.details.memories).toHaveLength(2);
+			expect(manual.contextText).toContain("The archive holds the expedition route and supply notes.");
+		}
+	});
+
+	it("does not omit or cap manual recall without a prompt turn", { timeout: 300_000 }, async () => {
+		await startRecallAccount(30);
+		for (let call = 0; call < 3; call++) {
+			const response = await contractPost("/v1/get-recall", {
+				scope: { principal: "caller", project: "global", session: "recall-account" },
+				query: "What route and supplies does the expedition notebook describe?",
+				options: { source: "manual", minScore: 0, tokenBudget: 20_000 },
+			});
+			expect(response.status).toBe(200);
+			const result = await response.json();
+			expect(result.toolResult.details.already_served_count).toBeUndefined();
+			expect(result.toolResult.details.budget_exhausted).toBeUndefined();
+			expect(result.toolResult.details.memories).toHaveLength(30);
+			expect(result.toolResult.details.budget_used).toBeGreaterThan(10_500);
+			expect(result.contextText).toContain("The archive holds the expedition route and supply notes.");
+		}
+	});
+
+	it("does not mark rows or charge tokens when manual recall is cancelled during metadata writes", { timeout: 300_000 }, async () => {
+		await startRecallAccount(30, false);
+		const pool = await MemoryRuntimePool.open();
+		const scope = { principal: "caller", project: "global", session: "manual-abort" };
+		const registered = registration("local-first");
+		const entered = Promise.withResolvers<void>();
+		const release = Promise.withResolvers<void>();
+		const controller = new AbortController();
+		const updateMetadata = pool.store.updateMetadata.bind(pool.store);
+		const updating = vi.spyOn(pool.store, "updateMetadata").mockImplementationOnce(async (...args) => {
+			const result = await updateMetadata(...args);
+			entered.resolve();
+			await release.promise;
+			return result;
+		});
+		let cancelled: Promise<unknown> | undefined;
+		try {
+			await pool.invoke("init", { scope, registration: { ...registered, skinId: "manual-abort",
+				settings: { ...registered.settings, autoRecall: false,
+					retrieval: { ...registered.settings.retrieval, mode: "vector", rerank: "none", minScore: 0, hardMinScore: 0 } },
+			} }, "manual-abort");
+			const query = "What route and supplies does the expedition notebook describe?";
+			await pool.invoke("getRecall", { scope, query, options: { source: "auto" } }, "manual-abort");
+			const request = { scope, query, options: { source: "manual", minScore: 0, tokenBudget: 20_000 } };
+			cancelled = pool.invoke("getRecall", request, "manual-abort", controller.signal).catch(error => error);
+			await entered.promise;
+			const queued = pool.invoke("getRecall", request, "manual-abort");
+			controller.abort(new Error("manual recall cancelled"));
+			release.resolve();
+			expect(await cancelled).toEqual(new Error("manual recall cancelled"));
+			const retry = await queued;
+			expect(retry).toMatchObject({ toolResult: { details: { count: 30, already_served_count: 0 } } });
+			if (!("toolResult" in retry) || !retry.toolResult) throw new Error("missing recall result");
+			expect(retry.toolResult.details.budget_used).toBeGreaterThan(10_500);
+			expect(retry.toolResult.details.budget_used).toBeLessThan(21_000);
+			const following = await pool.invoke("getRecall", request, "manual-abort");
+			expect(following).toMatchObject({ toolResult: { details: { count: 0, memories: [], already_served_count: 30 } } });
+			if (!("toolResult" in following) || !following.toolResult) throw new Error("missing recall result");
+			expect(following.toolResult.details.budget_exhausted).toBeUndefined();
+		} finally {
+			release.resolve();
+			await cancelled;
+			updating.mockRestore();
+			await pool.close();
+		}
+	});
+});

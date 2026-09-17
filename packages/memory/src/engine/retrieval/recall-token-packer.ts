@@ -25,6 +25,7 @@ export function packRecallRows<T>(
 	rowText: (row: T) => string,
 	tokenBudget: number = DEFAULT_RECALL_TOKEN_BUDGET,
 	groupKey?: (row: T) => string | undefined,
+	remainingTurnBudget: number = Infinity,
 ): PackedRecallRows<T> {
 	if (!Number.isFinite(tokenBudget) || tokenBudget < MIN_RECALL_TOKEN_BUDGET) {
 		throw new RangeError(
@@ -32,6 +33,8 @@ export function packRecallRows<T>(
 		);
 	}
 
+	// The caller budget keeps its input floor; a turn can have less left to spend.
+	tokenBudget = Math.min(tokenBudget, remainingTurnBudget);
 	const packed: T[] = [];
 	let budgetUsed = 0;
 	let droppedCount = 0;
