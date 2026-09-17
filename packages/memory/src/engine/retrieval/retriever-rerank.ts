@@ -48,12 +48,15 @@ import {
 // `AbortSignal.timeout()` with a DOMException named "TimeoutError", measured on Node 24 —
 // the earlier "AbortError" check never matched a real timeout, so timeouts were filed as
 // request_error), a reset or refused connection (undici: TypeError "fetch failed" with a
-// `cause`), and a 502/503/504. Fatal statuses (401/403/429) and every other outcome go
+// `cause`), and a 429/502/503/504. Fatal statuses (401/403) and every other outcome go
 // through unchanged. The retry stays inside the batch's wave slot, so the number of
 // in-flight requests per rerank() call does not grow.
 const RERANK_TRANSIENT_ATTEMPTS = 3;
 const RERANK_TRANSIENT_BACKOFF_MS = 200;
-const RERANK_TRANSIENT_STATUSES = new Set([502, 503, 504]);
+const RERANK_TRANSIENT_STATUSES = new Set([429, 502, 503, 504]);
+// Owner measurement, 2026-09-17: a-clean-test-vm -> https://rt3-llm.sno.ai/rerank
+// returned 429 + retry-after: 1 under eight concurrent recalls; bound each queue wait.
+const RERANK_RETRY_AFTER_MAX_MS = 5_000;
 
 function isRerankTimeout(error: unknown): boolean {
 	return error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError");
@@ -117,6 +120,7 @@ interface RerankReply {
 async function fetchRerankWithRetry(send: () => Promise<Response>): Promise<RerankReply> {
 	let lastError: unknown;
 	for (let attempt = 1; attempt <= RERANK_TRANSIENT_ATTEMPTS; attempt += 1) {
+		let retryDelayMs = RERANK_TRANSIENT_BACKOFF_MS * attempt;
 		try {
 			const response = await send();
 			if (response.ok) {
@@ -129,6 +133,12 @@ async function fetchRerankWithRetry(send: () => Promise<Response>): Promise<Rera
 			if (!RERANK_TRANSIENT_STATUSES.has(response.status) || attempt === RERANK_TRANSIENT_ATTEMPTS) {
 				return { response };
 			}
+			if (response.status === 429) {
+				const retryAfter = response.headers.get("retry-after");
+				if (retryAfter !== null && /^\d+$/.test(retryAfter)) {
+					retryDelayMs = Math.min(Number.parseInt(retryAfter, 10) * 1_000, RERANK_RETRY_AFTER_MAX_MS);
+				}
+			}
 			// Drop the failed body before the next attempt: undici cannot reuse the
 			// connection while a body is unconsumed, so a run of 5xx would pin one
 			// connection per attempt (PR #225 review).
@@ -138,7 +148,7 @@ async function fetchRerankWithRetry(send: () => Promise<Response>): Promise<Rera
 			if (!isTransientRerankError(error) || attempt === RERANK_TRANSIENT_ATTEMPTS) throw error;
 			lastError = error;
 		}
-		await new Promise((resolve) => setTimeout(resolve, RERANK_TRANSIENT_BACKOFF_MS * attempt));
+		await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
 	}
 	throw lastError;
 }
@@ -392,6 +402,11 @@ Object.assign(MemoryRetriever.prototype, {
 				// `allSettled`, not `all`: a fatal HTTP status rejects its batch, and the siblings
 				// already in flight must still be awaited or their own rejections surface unhandled.
 				const settled = await Promise.allSettled(waveStarts.map(runBatch));
+				for (const outcome of settled) {
+					if (outcome.status === "rejected" && outcome.reason instanceof RetrievalError) {
+						throw outcome.reason;
+					}
+				}
 				// Iterate deterministically so retrieval ranking output order remains stable.
 				for (const outcome of settled) {
 					// Surface this invalid retrieval ranking state as an explicit typed failure.

@@ -1,6 +1,7 @@
 import { withMemoryOperation, checkMemoryOperation } from "./operation-cancellation";
 import { SnoStationMemProviderSearchManager } from "./provider/provider-search-manager";
 import { randomUUID } from "node:crypto";
+import { MAX_TRACKED_SESSIONS } from "../../config/index";
 import { resolve } from "node:path";
 import {
 	ContractError, parseInput, parseOutput, type ContractOutputs, type MemoryContract,
@@ -81,11 +82,16 @@ class CallScopePolicy extends MemoryScopePolicy {
 	override validateScope(): boolean { return true; }
 }
 
+type RecallState = Pick<NonNullable<ToolContext["recallSession"]>, "history" | "toolTokens" | "servedThisTurn"> & {
+	turns: Map<string, number>;
+};
+
 export class MemoryContractRuntime implements MemoryContract {
 	private registration: Registration | undefined;
 	private readonly providers = new Map<string, SnoStationMemProviderSearchManager>();
 	private readonly reflectionStates = new Map<string, ReflectionStrategyState>();
-	private readonly recallStates = new Map<string, Pick<NonNullable<ToolContext["recallSession"]>, "history" | "toolTokens"> & { turns: Map<string, number> }>();
+	private readonly recallStates = new Map<string, RecallState>();
+	private readonly manualRecallChains = new Map<string, Promise<unknown>>();
 	constructor(private readonly services: MemoryRuntimeServices) {}
 
 	async close(): Promise<void> {
@@ -159,13 +165,26 @@ export class MemoryContractRuntime implements MemoryContract {
 			workspaceDir: scope.host?.workspace };
 	}
 
-	private recallState(project: string): Pick<NonNullable<ToolContext["recallSession"]>, "history" | "toolTokens"> & { turns: Map<string, number> } {
+	private recallState(project: string): RecallState {
 		let state = this.recallStates.get(project);
 		if (!state) {
-			state = { history: new Map(), turns: new Map(), toolTokens: new Map() };
+			state = { history: new Map(), turns: new Map(), toolTokens: new Map(), servedThisTurn: new Map() };
 			this.recallStates.set(project, state);
 		}
 		return state;
+	}
+
+	private async serializeManualRecall(sessionId: string, run: () => Promise<ToolResult>): Promise<ToolResult> {
+		// Wait for capacity rather than evicting an active session's critical section.
+		while (!this.manualRecallChains.has(sessionId) && this.manualRecallChains.size >= MAX_TRACKED_SESSIONS) {
+			await Promise.race(this.manualRecallChains.values()).catch(() => undefined);
+		}
+		const previous = this.manualRecallChains.get(sessionId) ?? Promise.resolve();
+		const chain = previous.then(run, run).finally(() => {
+			if (this.manualRecallChains.get(sessionId) === chain) this.manualRecallChains.delete(sessionId);
+		});
+		this.manualRecallChains.set(sessionId, chain);
+		return chain;
 	}
 
 	private async reflection(scope: ScopeCtx): Promise<ReflectionStrategyState> {
@@ -236,18 +255,24 @@ export class MemoryContractRuntime implements MemoryContract {
 			const host = this.hostContext(input.scope);
 			const state = this.recallState(context.scopePolicy.getDefaultScope());
 			const sessionId = resolveRuntimeSessionId(host);
-			const turn = state.turns.get(sessionId) ?? 0;
-			const result = await executeMemoryRecallTool({ ...context,
-				recallSession: { sessionId, turn, history: state.history, toolTokens: state.toolTokens },
-			}, resolveAgentAccess(context.agentId, context.agentId), recallId, {
-				query: input.query, scope: context.scopePolicy.getAccessibleScopes().length > 1 ? undefined : context.scopePolicy.getDefaultScope(), top_k: input.options.limit,
-				min_score: input.options.minScore, category: input.options.category,
-				include_metadata: input.options.includeMetadata, include_history: input.options.includeHistory,
-				include_refused: input.options.includeRefused, token_budget: input.options.tokenBudget,
-				external_reference: input.options.externalReference,
-				external_reference_visibility: input.options.externalReferenceVisibility,
-				aggregation: input.options.aggregation,
-			}, { name: "memory_recall", label: "Memory Recall", description: "", signal });
+			const turn = state.turns.get(sessionId);
+			const run = (): Promise<ToolResult> => {
+				signal?.throwIfAborted();
+				return executeMemoryRecallTool({ ...context,
+					...(turn !== undefined && { recallSession: { sessionId, turn, history: state.history, toolTokens: state.toolTokens, servedThisTurn: state.servedThisTurn } }),
+				}, resolveAgentAccess(context.agentId, context.agentId), recallId, {
+					query: input.query, scope: context.scopePolicy.getAccessibleScopes().length > 1 ? undefined : context.scopePolicy.getDefaultScope(), top_k: input.options.limit,
+					min_score: input.options.minScore, category: input.options.category,
+					include_metadata: input.options.includeMetadata, include_history: input.options.includeHistory,
+					include_refused: input.options.includeRefused, token_budget: input.options.tokenBudget,
+					external_reference: input.options.externalReference,
+					external_reference_visibility: input.options.externalReferenceVisibility,
+					aggregation: input.options.aggregation,
+				}, { name: "memory_recall", label: "Memory Recall", description: "", signal });
+			};
+			const result = turn !== undefined && input.options.aggregation === undefined
+				? await this.serializeManualRecall(sessionId, run)
+				: await run();
 			signal?.throwIfAborted();
 			return parseOutput("getRecall", { degraded: false, recallId,
 				contextText: result.content.map(part => part.text).join("\n\n"),
@@ -257,7 +282,7 @@ export class MemoryContractRuntime implements MemoryContract {
 		const state = this.recallState(context.scopePolicy.getDefaultScope());
 		const result = await onBeforeAgentStart(this.services, this.configured().config,
 			this.services.retriever, this.services.store, context.scopePolicy,
-			state.history, state.turns, { prompt: input.query }, host, this.services.stateDir, this.services.telemetryUsage, signal);
+			state.history, state.turns, { prompt: input.query }, host, this.services.stateDir, this.services.telemetryUsage, signal, state.servedThisTurn);
 		signal?.throwIfAborted();
 		const session = resolveRuntimeSessionId(host);
 		const turn = state.turns.get(session);
@@ -348,6 +373,7 @@ export class MemoryContractRuntime implements MemoryContract {
 			const sessionId = resolveRuntimeSessionId(this.hostContext(scope));
 			clearSessionState(sessionId, state.history, state.turns);
 			state.toolTokens.delete(sessionId);
+			state.servedThisTurn.delete(sessionId);
 		}
 		await this.services.accessTracker.flush();
 		checkMemoryOperation();

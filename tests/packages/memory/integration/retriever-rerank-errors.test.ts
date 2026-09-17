@@ -419,7 +419,7 @@ describe("retriever rerank error handling", () => {
 		});
 	});
 
-	it("leaves rerank stage metadata unset on the happy path", async () => {
+	it("reports rerank coverage counts on the happy path", async () => {
 		globalThis.fetch = async () =>
 			new Response(
 				JSON.stringify({ data: [{ index: 0, relevance_score: 0.9 }] }),
@@ -445,7 +445,11 @@ describe("retriever rerank error handling", () => {
 		});
 		const rerankStage = trace.stages.find((s) => s.name === "rerank");
 		expect(rerankStage).toBeDefined();
-		expect(rerankStage).not.toHaveProperty("metadata");
+		expect(rerankStage?.metadata).toEqual({
+			rerankSentCount: 1,
+			rerankReturnedCount: 1,
+			rerankBeyondCapCount: 0,
+		});
 	});
 
 	it("keeps returned high-signal rerank candidates distinct below score saturation", async () => {
@@ -774,6 +778,53 @@ const batchedStoreStub = {
 };
 
 describe("retriever rerank batching", () => {
+	it("surfaces 401 when an earlier batch times out on every attempt", async () => {
+		const probe = await startRerankProbe((texts, reply) => {
+			// Leave batch zero unanswered on every attempt to exercise real fetch timeouts.
+			if (texts.length !== 50) reply("unauthorized", 401);
+		});
+		try {
+			const searchResults = BATCHED_ENTRIES.slice(0, 51);
+			const retriever = createRetriever(
+				{
+					...batchedStoreStub,
+					searchSemantic: async () => searchResults,
+					searchKeyword: async () => searchResults,
+				} as never,
+				embedderStub as never,
+				{ warn: () => {} },
+				{
+					...DEFAULT_RETRIEVAL_CONFIG,
+					rerank: "cross-encoder",
+					rerankProvider: "tei",
+					rerankEndpoint: probe.url,
+					rerankTimeoutMs: 50,
+					rerankApiKey: "test-key",
+					candidatePoolSize: 51,
+					minScore: 0,
+					hardMinScore: 0,
+				},
+			);
+
+			try {
+				await retriever.retrieve({ query: "typescript", limit: 51 });
+				throw new Error("expected retrieve() to fail");
+			} catch (error) {
+				expect(error).toBeInstanceOf(RetrievalError);
+				const cause =
+					error instanceof Error &&
+					"cause" in error &&
+					error.cause instanceof Error
+						? error.cause
+						: null;
+				expect(cause).toBeInstanceOf(RetrievalError);
+				expect(cause?.message).toBe("Rerank API failed with status 401");
+			}
+		} finally {
+			await probe.close();
+		}
+	});
+
 	it("surfaces 429 with retry-after when an earlier batch exhausts 503 retries", async () => {
 		const probe = await startRerankProbe((texts, reply) => {
 			// Batch zero always fails with 503, including retries; batch one is fatal.
@@ -917,4 +968,46 @@ describe("retriever rerank batching", () => {
 			await probe.close();
 		}
 	}, 30_000);
+});
+
+it("retries 429 backpressure and serves the reranked result", async () => {
+	const probe = await startRerankProbe((_texts, reply) => {
+		if (probe.requestCount === 1) {
+			reply("rate limited", 429, { "retry-after": "1" });
+			return;
+		}
+		reply([{ index: 1, score: 10 }, { index: 0, score: -10 }]);
+	});
+	try {
+		const searchResults = BATCHED_ENTRIES.slice(0, 2);
+		const retriever = createRetriever(
+			{
+				...batchedStoreStub,
+				searchSemantic: async () => searchResults,
+				searchKeyword: async () => searchResults,
+			} as never,
+			embedderStub as never,
+			{ warn: () => {} },
+			{
+				...DEFAULT_RETRIEVAL_CONFIG,
+				rerank: "cross-encoder",
+				rerankProvider: "tei",
+				rerankEndpoint: probe.url,
+				rerankApiKey: "test-key",
+				minScore: 0,
+				hardMinScore: 0,
+			},
+		);
+
+		const results = await retriever.retrieve({ query: "typescript", limit: 2 });
+
+		expect(results.map((result) => result.entry.text)).toEqual([
+			"Row 1: TypeScript strict mode avoids implicit any bugs.",
+			"Row 0: TypeScript strict mode avoids implicit any bugs.",
+		]);
+		expect(results.map((result) => result.sources.reranked?.score)).toEqual([10, -10]);
+		expect(probe.requestCount).toBe(2);
+	} finally {
+		await probe.close();
+	}
 });

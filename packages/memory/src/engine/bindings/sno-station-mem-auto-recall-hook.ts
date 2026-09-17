@@ -32,6 +32,7 @@ import {
 } from "./sno-station-mem-runtime-mode";
 import { resolveRuntimeSessionId } from "./sno-station-mem-session-state";
 import { episodicEventDate, saidOnDate, sourceQuote } from "./memory-tool-formatting";
+import type { ToolContext } from "./memory-tool-schemas";
 import type { RetrievalResult } from "../shared/types";
 import type { MemoryTelemetryUsageOutbox } from "../telemetry/memory-telemetry-outbox";
 import type { MemoryTelemetryMetadata } from "../telemetry/memory-telemetry-types";
@@ -62,7 +63,15 @@ export async function onBeforeAgentStart(
 	stateDir: string,
 	telemetryUsage?: MemoryTelemetryUsageOutbox,
 	signal?: AbortSignal,
+	servedThisTurn?: NonNullable<ToolContext["recallSession"]>["servedThisTurn"],
 ): Promise<PluginHookBeforeAgentStartResult | undefined> {
+	const sessionId = resolveRuntimeSessionId(ctx);
+	const currentTurn = (touchLruEntry(turnCounter, sessionId) ?? 0) + 1;
+	setLruEntry(turnCounter, sessionId, currentTurn, MAX_TRACKED_SESSIONS);
+	const turnIds = new Set<string>();
+	if (servedThisTurn) {
+		setLruEntry(servedThisTurn, sessionId, { turn: currentTurn, ids: turnIds }, MAX_TRACKED_SESSIONS);
+	}
 	const sessionKey = typeof ctx.sessionKey === "string" ? ctx.sessionKey : "";
 	return withLogContext({ operation_id: currentLogContext().operation_id ?? randomUUID(), session_reference: sessionKey }, async () => {
 	const started = performance.now();
@@ -131,10 +140,6 @@ export async function onBeforeAgentStart(
 			{ event_name: "memory.auto_recall.query.limited", file: "packages/sno-station-mem/src/engine/bindings/sno-station-mem-auto-recall-hook.ts", function: "onBeforeAgentStart", site_id: "memory.auto_recall.query.limited" });
 		recallQuery = recallQuery.slice(0, maxQueryLen);
 	}
-
-	const sessionId = resolveRuntimeSessionId(ctx);
-	const currentTurn = (touchLruEntry(turnCounter, sessionId) ?? 0) + 1;
-	setLruEntry(turnCounter, sessionId, currentTurn, MAX_TRACKED_SESSIONS);
 
 	// Compute the normalized scope filter once so later module behavior checks use one value.
 	const scopeFilter = scopePolicy.resolveAgentScopes(resolvedAgentId);
@@ -230,6 +235,7 @@ export async function onBeforeAgentStart(
 		// Iterate deterministically so plugin lifecycle output order remains stable.
 		for (const r of finalResults) {
 			sessionHistory.set(r.entry.id, currentTurn);
+			turnIds.add(r.entry.id);
 		}
 		pruneOldestEntries(sessionHistory, MAX_SESSION_RECALL_ENTRIES);
 		setLruEntry(recallHistory, sessionId, sessionHistory, MAX_TRACKED_SESSIONS);

@@ -340,11 +340,13 @@ export async function retrieveForMemoryRecallOrEval(
 export function packManualRecallRows(
 	rows: readonly RetrievalResult[],
 	tokenBudget?: number,
+	remainingTurnBudget?: number,
 ): PackedRecallRows<RetrievalResult> {
 	return packRecallRows(
 		rows,
 		(row) => row.snippet?.trim() || row.entry.text,
 		tokenBudget,
 		(row) => row.recallGroupKey,
+		remainingTurnBudget,
 	);
 }
