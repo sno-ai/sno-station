@@ -8,6 +8,7 @@
  */
 
 import { describe, expect, it } from "vitest";
+import { retrievalConfigSchema } from "../../../../packages/sno-station-mem/src/contract/config/plugin-config-retrieval-schema";
 import {
 	DEFAULT_RECALL_LIFECYCLE,
 	type RecallLifecycleConfig,
@@ -17,8 +18,10 @@ import {
 // PRD §6.1 pinned values. Changing any entry here SHALL require a new
 // openspec change proposal — defaults SHALL NOT drift through casual edits.
 const EXPECTED_DEFAULTS: RecallLifecycleConfig = {
+	retentionScorer: true,
 	tierPromoter: true,
 	autoRecallAccessTracking: true,
+	tierFloorMode: "bare",
 	tierPromotionTopK: 3,
 	accessRateLimitMs: 3_600_000,
 	accessCountCeiling: 20,
@@ -44,6 +47,21 @@ describe("recallLifecycleSchema — defaults pinned by PRD §6.1", () => {
 		expect(parsed).toEqual(EXPECTED_DEFAULTS);
 	});
 
+	it("rejects tierFloorMode = 'bareWithFloor' with an enum violation", () => {
+		const result = recallLifecycleSchema.safeParse({
+			tierFloorMode: "bareWithFloor",
+		});
+		expect(result.success).toBe(false);
+		if (!result.success) {
+			const issue = result.error.issues.find((i) =>
+				i.path.includes("tierFloorMode"),
+			);
+			// zod 4 renamed the enum-violation code from `invalid_enum_value`.
+			// The rejection itself is unchanged; only the code string moved.
+			expect(issue?.code).toBe("invalid_value");
+		}
+	});
+
 	it("rejects negative accessRateLimitMs", () => {
 		const result = recallLifecycleSchema.safeParse({
 			accessRateLimitMs: -1,
@@ -56,4 +74,14 @@ describe("recallLifecycleSchema — defaults pinned by PRD §6.1", () => {
 			expect(issue).toBeDefined();
 		}
 	});
+});
+
+
+it("defaults both retrieval experiments off and accepts explicit enabling", () => {
+	const defaults = retrievalConfigSchema.parse({ rerank: "none" });
+	expect(defaults.temporalWeighting).toBe(false);
+	expect(defaults.mmrWindowOnly).toBe(false);
+	const enabled = retrievalConfigSchema.parse({ rerank: "none", temporalWeighting: true, mmrWindowOnly: true });
+	expect(enabled.temporalWeighting).toBe(true);
+	expect(enabled.mmrWindowOnly).toBe(true);
 });
