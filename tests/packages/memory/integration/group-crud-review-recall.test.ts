@@ -176,8 +176,6 @@ async function seedStore(projectId: string, seeds: readonly Seed[]): Promise<Rec
 		rerank: "none",
 		minScore: 0,
 		hardMinScore: 0,
-		temporalDecay: false,
-		recencyWeight: 0,
 	});
 	return { fixture, store, retriever, projectId, idByLabel };
 }
