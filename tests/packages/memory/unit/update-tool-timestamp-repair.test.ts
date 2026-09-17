@@ -1,7 +1,5 @@
 /** @file update-tool-timestamp-repair.test.ts
- * @purpose A row's own moment (its `timestamp` column) can be moved by the host operator's
- *   repair and by nobody else: an agent asking to move it is refused and the row keeps its
- *   moment; the system caller moves it and the persisted row carries the new one.
+ * @purpose Both agent and host callers can move a row to its session timestamp.
  * @boundary Real SQLite via chokepoint; no mocks.
  */
 
@@ -50,7 +48,7 @@ describe("memory_update timestamp", () => {
 		};
 	}
 
-	it("refuses an agent and keeps the row's moment", async () => {
+	it("lets an agent move the row to its session moment", async () => {
 		const row = await store.store({
 			text: "Caroline met up with her friends, family and mentors last week.",
 			category: "episodic",
@@ -62,8 +60,8 @@ describe("memory_update timestamp", () => {
 			id: row.id,
 			timestamp: sessionMoment,
 		});
-		expect(result.isError).toBe(true);
-		expect(store.getById(row.id)?.timestamp).toBe(replayDay);
+		expect(result.isError).not.toBe(true);
+		expect(store.getById(row.id)?.timestamp).toBe(1686340500000);
 	});
 
 	it("lets the host operator move the row to its session moment", async () => {

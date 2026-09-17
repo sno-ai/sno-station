@@ -55,20 +55,28 @@ function runPipeline(
 }
 
 const ALL_ON = {
+	temporalWeighting: true,
+	recencyHalfLifeDays: 30,
+	recencyWeight: 0.1,
 	lengthNormAnchor: 500,
+	timeDecayHalfLifeDays: 60,
 	hardMinScore: 0,
 	mmrLambda: 0.7,
+	recallLifecycle: { retentionScorer: false },
 };
 
 const STAGE_ORDER = [
+	"recency_boost",
 	"importance_weight",
 	"length_normalization",
+	"time_decay",
+	"retention_boost",
 	"hard_min_score",
 	"mmr_diversity",
 ];
 
 describe("the scoring pipeline records every stage", () => {
-	it("emits the four remaining stages, in pipeline order, with real counts", () => {
+	it("emits all seven stages, in pipeline order, with real counts", () => {
 		const trace = new TraceCollector();
 		const results = [buildResult("a", 0.9), buildResult("b", 0.5), buildResult("c", 0.3)];
 		runPipeline(results, ALL_ON, trace);
@@ -88,7 +96,7 @@ describe("the scoring pipeline records every stage", () => {
 		// A floor above two of the three scores: the floor stage must say WHICH two went.
 		runPipeline(
 			[buildResult("keep", 0.9), buildResult("cut-1", 0.2), buildResult("cut-2", 0.1)],
-			{ ...ALL_ON, hardMinScore: 0.5 },
+			{ ...ALL_ON, recencyWeight: 0, recencyHalfLifeDays: 0, hardMinScore: 0.5 },
 			trace,
 		);
 
@@ -105,7 +113,7 @@ describe("the scoring pipeline records every stage", () => {
 		const trace = new TraceCollector();
 		runPipeline(
 			[buildResult("a", 0.9), buildResult("b", 0.5)],
-			{ ...ALL_ON, lengthNormAnchor: 0 },
+			{ ...ALL_ON, lengthNormAnchor: 0, timeDecayHalfLifeDays: 0 },
 			trace,
 		);
 
@@ -114,6 +122,10 @@ describe("the scoring pipeline records every stage", () => {
 		// A disabled stage and a stage that ran and changed nothing look identical in the
 		// counts. The reason is the only thing that separates a config mistake from a no-op.
 		expect(byName.get("length_normalization")?.metadata?.skipped).toBe("lengthNormAnchor");
+		expect(byName.get("time_decay")?.metadata?.skipped).toBe("timeDecayHalfLifeDays");
+		expect(byName.get("retention_boost")?.metadata?.skipped).toBe(
+			"recallLifecycle.retentionScorer",
+		);
 		// A stage that really ran carries no skip reason.
 		expect(byName.get("importance_weight")?.metadata?.skipped).toBeUndefined();
 	});
