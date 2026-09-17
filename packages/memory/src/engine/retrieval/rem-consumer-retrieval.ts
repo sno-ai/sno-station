@@ -286,6 +286,7 @@ export async function retrieveForMemoryRecallOrEval(
 	retriever: MemoryRetriever,
 	input: {
 		diagnostics?: RecallFilterDiagnostics;
+		signal?: AbortSignal;
 		query: string;
 		limit: number;
 		scopeFilter: string[];
@@ -299,6 +300,7 @@ export async function retrieveForMemoryRecallOrEval(
 ): Promise<RetrievalResult[]> {
 	const retrieved = await retriever.retrieve({
 		query: input.query,
+		signal: input.signal,
 		limit: input.limit,
 		scopeFilter: input.scopeFilter,
 		...(input.category === undefined ? {} : { category: input.category }),
