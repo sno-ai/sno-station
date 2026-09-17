@@ -74,6 +74,15 @@ const discoverySchema = z
 	.strict();
 
 const idleEvaluations = new Map<string, number>();
+const registeredTicks = new Map<string, boolean | undefined>();
+
+export function setRegisteredRemTick(skinId: string, tick: boolean | undefined): void {
+	registeredTicks.set(skinId, tick);
+}
+
+export function clearRegisteredRemTicks(): void {
+	registeredTicks.clear();
+}
 
 export function readRemAutomaticOperations(
 	configPath: string = resolveSnoStationMemConfigPath(),
@@ -86,7 +95,9 @@ export function readRemAutomaticOperations(
 		log.error("REM configuration unavailable; using installed defaults", { cause: errorMessage(error) }, { event_name: "memory.rem.trigger.configuration.unavailable", file: "packages/sno-station-mem/src/sidecar/rem-trigger.ts", function: "evaluateRemAutomaticTriggers", site_id: "memory.rem.trigger.configuration.unavailable" });
 		config = pluginConfigSchema.parse({});
 	}
-	return { requestedOperations: config.remOperations, tickEnabled: true };
+	const ticks = [...registeredTicks.values()];
+	const registeredTick = ticks.includes(false) ? false : ticks.find(tick => tick !== undefined);
+	return { requestedOperations: config.remOperations, tickEnabled: registeredTick ?? config.remEnhanced.trigger?.tick ?? true };
 }
 
 export async function evaluateRemAutomaticTriggers(
@@ -248,6 +259,18 @@ async function evaluateScope(
 	}
 
 	const trigger: RemAutomaticTrigger = dailyDue ? "daily" : "volume";
+	if (input.tickEnabled === false) {
+		const nextState = replaceScopeState(state, scope, {
+			...scopeState,
+			missed_window: {
+				due_at: dailyDue ? nextDue.toISOString() : now.toISOString(),
+				trigger,
+				recorded_at: now.toISOString(),
+			},
+		});
+		await writeRemTriggerStateAtomic(input.stateDir, nextState);
+		return { state: nextState, dispatched: false };
+	}
 	const triggerKey = trigger === "daily" ? nextDue.toISOString() : localDate;
 	const correlationId = remAutomaticCorrelationId(trigger, scope, triggerKey);
 	const priorAttempts =
