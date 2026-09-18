@@ -796,23 +796,6 @@ export const EVAL_QA_TRACES_FILENAME = "qa_traces.jsonl" as const;
 /** Multiplicative penalty applied to unreturned candidates after rerank. */
 export const LIGHTWEIGHT_RERANK_PENALTY = 0.8;
 
-/**
- * Preservation floor multipliers applied during rerank to protect strong
- * base matches. Tiered by BM25 evidence strength.
- *
- * Tier thresholds: BM25 ≥ 0.75 (high), BM25 ≥ 0.6 (mid), else (low).
- * For each tier we keep two floors: returned (kept by reranker) and
- * unreturned (dropped by reranker, score is penalized but preserved).
- */
-export const RERANK_PRESERVATION_BM25_HIGH_THRESHOLD = 0.75;
-export const RERANK_PRESERVATION_BM25_MID_THRESHOLD = 0.6;
-export const RERANK_PRESERVATION_HIGH_RETURNED = 0.95;
-export const RERANK_PRESERVATION_HIGH_UNRETURNED = 0.8;
-export const RERANK_PRESERVATION_MID_RETURNED = 0.9;
-export const RERANK_PRESERVATION_MID_UNRETURNED = 0.75;
-export const RERANK_PRESERVATION_LOW_RETURNED = 0.7;
-export const RERANK_PRESERVATION_LOW_UNRETURNED = 0.5;
-
 /** Maximum tokens kept in a sanitized FTS5 MATCH expression. */
 export const FTS_QUERY_TOKEN_CAP = 50;
 
