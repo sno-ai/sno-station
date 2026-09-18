@@ -7,7 +7,7 @@ import { AtomicInsightDistiller, createSignedAtomicMemoryExtractionTransports } 
 import { llmRoutingConfigSchema } from "../../../../packages/sno-station-mem/src/contract/config/plugin-config-mode-schema";
 
 type Row = { text: string; metadata: string };
-type Temporal = { temporal_resolution_status?: string; temporal_date?: string; temporal_phrase?: string | null };
+type Temporal = { temporal_resolution_status?: string; temporal_date?: string; temporal_phrase?: string | null; source_span?: { turnIndex?: number } };
 
 async function extract(sessionDateTime: string, turns: string[]): Promise<Array<{ text: string } & Temporal>> {
 	const apiKey = process.env.SNO_MEM_CLAW_LLM_INTERNAL_KEY;
@@ -38,8 +38,8 @@ it("keeps a 'recently' event undated instead of inventing a week", async () => {
 		"Caroline: Hey Mel! How're ya doin'? Recently, I had a not-so-great experience on a hike. I ran into a group of religious conservatives who said something that really upset me. It made me think how much work we still have to do for LGBTQ rights. It's been so helpful to have people around me who accept and support me, so I know I'll be ok!",
 		"Melanie: Hey Caroline, sorry about the hike. It sucks when people are so closed-minded. Strong support really helps.",
 	]);
-	// Caroline's encounter only: Melanie's reply happens in the session and may carry its day.
-	const hike = rows.filter((row) => /conservative|upset/iu.test(row.text));
+	// Rows from Caroline's turn only (turn 0): Melanie's reply is turn 1 and may carry its day.
+	const hike = rows.filter((row) => row.source_span?.turnIndex === 0);
 	expect(hike.length).toBeGreaterThan(0);
 	for (const row of hike) {
 		expect(row, row.text).not.toMatchObject({ temporal_resolution_status: "resolved" });
