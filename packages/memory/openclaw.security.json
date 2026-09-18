@@ -1,0 +1,31 @@
+{
+  "plugin": "@snoai/mem-claw",
+  "version": "1.0",
+  "expectedBehaviors": [
+    {
+      "type": "tool_call",
+      "purpose": "memory management tools and hooks"
+    },
+    {
+      "type": "file_write",
+      "purpose": "write sqlite database, audit.jsonl, cost.jsonl, killswitch",
+      "dataFlow": "local-only",
+      "networkTransmission": false
+    },
+    {
+      "type": "network_request",
+      "purpose": "vector embedding generation",
+      "dataFlow": "user-content-to-external-api",
+      "networkTransmission": true
+    }
+  ],
+  "securityNotes": [
+    "User content is sent only to the configured embedding provider for vector generation.",
+    "No memory data is transmitted to any other external endpoints by default.",
+    "All persisted memory, audit, and kill-switch state is local filesystem data."
+  ],
+  "references": [
+    "openspec/changes/mem-claw/specs/plugin-lifecycle/spec.md",
+    "openspec/changes/mem-claw/specs/store-sqlite-vec/spec.md"
+  ]
+}

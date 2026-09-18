@@ -1,0 +1,4 @@
+interface:
+  display_name: "Judge REM memory updates"
+  short_description: "Judge which memory facts stay current"
+  default_prompt: "Judge the supplied REM memory update by meaning and return the requested JSON contract."

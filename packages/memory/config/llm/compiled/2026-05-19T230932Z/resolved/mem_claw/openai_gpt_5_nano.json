@@ -1,0 +1,5 @@
+{
+  "description": "LLMix preset mem_claw/openai_gpt_5_nano",
+  "model": "gpt-5-nano",
+  "provider": "openai"
+}
