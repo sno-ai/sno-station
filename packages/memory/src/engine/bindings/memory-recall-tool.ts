@@ -99,6 +99,7 @@ function prependTodoBlock(result: ToolResult, todos: TodoListResult): ToolResult
 export async function executeMemoryRecallTool(ctx: ToolContext, access: ReturnType<typeof resolveAgentAccess>, _toolCallId: unknown, params: unknown, options: { name: string; label: string; description: string; signal?: AbortSignal }): Promise<ToolResult> {
 			const raw = typeof params === "object" && params !== null ? params as Record<string, unknown> : {};
 			return withLogContext({ operation_id: currentLogContext().operation_id ?? randomUUID(),
+				session_reference: ctx.sessionKey,
 				...(typeof raw.external_reference === "string" ? { external_reference: raw.external_reference,
 					external_reference_visibility: raw.external_reference_visibility === "public" ? "public" : "private" } : {}) }, async () => {
 			const started = performance.now();
