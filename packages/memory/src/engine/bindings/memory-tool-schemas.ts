@@ -180,6 +180,7 @@ export interface ToolContext {
 	selfImprovementEnabled?: boolean;
 	language?: Locale;
 	sessionTimestamp?: number;
+	sessionKey?: string;
 	sessionTimezone?: string;
 	/**
 	 * Invalidates the reflection slice cache (TTL-bounded, built by the

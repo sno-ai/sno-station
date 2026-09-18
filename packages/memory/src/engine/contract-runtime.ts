@@ -244,6 +244,7 @@ export class MemoryContractRuntime implements MemoryContract {
 			const sessionId = resolveRuntimeSessionId(host);
 			const turn = state.turns.get(sessionId);
 			const result = await executeMemoryRecallTool({ ...context,
+				sessionKey: host.sessionKey,
 				...(turn !== undefined && { recallSession: { sessionId, turn, history: state.history } }),
 			}, resolveAgentAccess(context.agentId, context.agentId), recallId, {
 				query: input.query, scope: context.scopePolicy.getAccessibleScopes().length > 1 ? undefined : context.scopePolicy.getDefaultScope(), top_k: input.options.limit,
