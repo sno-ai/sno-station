@@ -4,15 +4,9 @@
  */
 
 import type { RetrievalResult } from "./retriever-dependencies";
-import { clamp01, createLogger } from "./retriever-dependencies";
+import { createLogger } from "./retriever-dependencies";
 
 export const log: ReturnType<typeof createLogger> = createLogger("sno-station-mem:retriever");
-
-export function clamp01WithFloor(value: number, floor: number): number {
-	const safeFloor = clamp01(floor, 0);
-	// Centralize the retrieval scoring fallback value at the boundary of this helper.
-	return Math.max(safeFloor, clamp01(value, safeFloor));
-}
 
 export function dotProduct(a: Float32Array, b: Float32Array): number {
 	let sum = 0;
