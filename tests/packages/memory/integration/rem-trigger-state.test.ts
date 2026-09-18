@@ -5,7 +5,7 @@
  * @class repair
  */
 
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -75,7 +75,7 @@ describe("REM trigger durable state", () => {
 
 		await expect(loadRemTriggerState(stateDir)).rejects.toThrow(/REM trigger state.*invalid/i);
 	});
-	it("ACC-38 round-trips a missed window and rejects a truncated five-field state", async () => {
+	it("ACC-38 round-trips a missed window and rejects a malformed missed window", async () => {
 		stateDir = mkdtempSync(join(tmpdir(), "rem-trigger-missed-"));
 		const { state } = ensureRemTriggerScope({ version: 1, scopes: {} }, {
 			scope: "scope-a", now: new Date("2026-09-10T03:00:00Z"), candidateCount: 0, resolveScheduleZone: () => "UTC",
@@ -85,9 +85,45 @@ describe("REM trigger durable state", () => {
 		scope.missed_window = { due_at: "2026-09-11T03:00:00.000Z", trigger: "daily", recorded_at: "2026-09-11T04:00:00.000Z" };
 		await writeRemTriggerStateAtomic(stateDir, state);
 		expect(await loadRemTriggerState(stateDir)).toEqual(state);
-		const { missed_window: _missed, ...truncated } = scope;
+		const truncated = { ...scope, missed_window: { trigger: "daily" } };
 		writeFileSync(remTriggerStatePath(stateDir), JSON.stringify({ version: 1, scopes: { "scope-a": truncated } }));
 		await expect(loadRemTriggerState(stateDir)).rejects.toThrow(/invalid/i);
+	});
+
+	it("reads five-field version 1 scopes after a store rotation and persists the new field", async () => {
+		stateDir = mkdtempSync(join(tmpdir(), "rem-trigger-old-state-"));
+		const oldScope = {
+			last_pass_at: "2026-09-10T03:00:00.000Z",
+			schedule_zone: "America/Los_Angeles",
+			last_covered_count: 123,
+			last_volume_pass_date: "2026-09-10",
+			attempts: { identity: "rem-auto-daily-existing", count: 2 },
+		};
+		writeFileSync(join(stateDir, "rem-trigger-state.json"), JSON.stringify({
+			version: 1,
+			scopes: {
+				"agent:provider-native-memory": oldScope,
+				"01a083fc-b5e6-7707-86d4-636a9ace990a": oldScope,
+			},
+		}));
+		const loaded = await loadRemTriggerState(stateDir);
+		expect(Object.keys(loaded.scopes)).toEqual([
+			"agent:provider-native-memory", "01a083fc-b5e6-7707-86d4-636a9ace990a",
+		]);
+		for (const scope of Object.values(loaded.scopes)) {
+			expect(scope).toEqual({
+				last_pass_at: "2026-09-10T03:00:00.000Z",
+				schedule_zone: "America/Los_Angeles",
+				last_covered_count: 123,
+				last_volume_pass_date: "2026-09-10",
+				attempts: { identity: "rem-auto-daily-existing", count: 2 },
+				missed_window: null,
+			});
+		}
+		await writeRemTriggerStateAtomic(stateDir, loaded);
+		const persisted = JSON.parse(readFileSync(join(stateDir, "rem-trigger-state.json"), "utf8"));
+		expect(persisted.scopes["agent:provider-native-memory"].missed_window).toBeNull();
+		expect(persisted.scopes["01a083fc-b5e6-7707-86d4-636a9ace990a"].missed_window).toBeNull();
 	});
 
 });

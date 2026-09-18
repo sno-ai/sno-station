@@ -139,10 +139,11 @@ describe("Phase 1 retention bundle (Groups 1 + 2)", () => {
 			timestamp: ts,
 		});
 		const tier = spec.tier ?? "working";
-		const patch: Record<string, unknown> = { tier };
+		const patch: Record<string, unknown> = {};
 		if (spec.accessCount !== undefined) patch.accessCount = spec.accessCount;
 		if (spec.lastAccessedAt !== undefined) patch.lastAccessedAt = spec.lastAccessedAt;
 		await store.updateMetadata(stored.id, patch);
+		await store.updateTier(stored.id, tier, { writerAuthority: "offline-family" });
 		return { id: stored.id, tier };
 	}
 
@@ -157,6 +158,7 @@ describe("Phase 1 retention bundle (Groups 1 + 2)", () => {
 		// so the flag flip lands consistently.
 		const retriever = createRetriever(store, testEmbedder, { warn: () => {} }, {
 			...DEFAULT_RETRIEVAL_CONFIG,
+			temporalWeighting: true,
 			rerank: "none",
 			hardMinScore: 0,
 			minScore: 0,
@@ -242,11 +244,11 @@ describe("Phase 1 retention bundle (Groups 1 + 2)", () => {
 		for (const r of shared) {
 			const offScore = offById.get(r.entry.id);
 			if (offScore === undefined) continue;
-			// Bare-mode retention multiplier is in [SEARCH_BOOST_MIN=0.3, 1.0].
-			// So bundle-ON score == OFF score * m, m ∈ [0.3, 1.0]. We allow a tiny
+			// Bare-mode retention multiplier is in [SEARCH_BOOST_MIN=0.85, 1.0].
+			// So bundle-ON score == OFF score * m, m ∈ [0.85, 1.0]. We allow a tiny
 			// floating-point slack (1e-9 relative) on either bound.
 			expect(r.score).toBeLessThanOrEqual(offScore + 1e-9);
-			expect(r.score).toBeGreaterThanOrEqual(offScore * 0.3 - 1e-9);
+			expect(r.score).toBeGreaterThanOrEqual(offScore * 0.85 - 1e-9);
 			if (Math.abs(r.score - offScore) > 1e-6) anyChanged = true;
 		}
 		// At least one candidate's score must observably change — otherwise the
@@ -290,17 +292,16 @@ describe("Phase 1 retention bundle (Groups 1 + 2)", () => {
 		const offFresh = offByIdProbe.get(fresh.id);
 		const offCold = offByIdProbe.get(cold.id);
 		if (offFresh === undefined || offCold === undefined) {
-			// If the embedder didn't retrieve both, the placement assertion is
-			// not meaningful. Skip rather than flake.
-			return;
+			throw new Error("Both seeded candidates must be retrieved for the floor proof");
 		}
 
-		// Floor sits at 70% of the cold seed's OFF score — clears in OFF but the
+		// Floor sits at 95% of the cold seed's OFF score — clears in OFF but the
 		// retention multiplier (≤ 1.0, and substantially < 1.0 for an ancient
 		// zero-access entry) pushes the bundle-ON score below it.
-		const hardMin = offCold * 0.7;
+		const hardMin = offCold * 0.95;
 		const onRetriever = createRetriever(store, testEmbedder, { warn: () => {} }, {
 			...DEFAULT_RETRIEVAL_CONFIG,
+			temporalWeighting: true,
 			rerank: "none",
 			hardMinScore: hardMin,
 			minScore: 0,
@@ -316,6 +317,7 @@ describe("Phase 1 retention bundle (Groups 1 + 2)", () => {
 		};
 		const offRetriever = createRetriever(store, testEmbedder, { warn: () => {} }, {
 			...DEFAULT_RETRIEVAL_CONFIG,
+			temporalWeighting: true,
 			rerank: "none",
 			hardMinScore: hardMin,
 			minScore: 0,
@@ -365,7 +367,7 @@ describe("Phase 1 retention bundle (Groups 1 + 2)", () => {
 		const bareScore = bareResults.find((r) => r.entry.id === peripheral.id)?.score;
 		const floorScore = floorResults.find((r) => r.entry.id === peripheral.id)?.score;
 		if (bareScore === undefined || floorScore === undefined) {
-			return;
+			throw new Error("The seeded candidate must be retrieved in both tier-floor arms");
 		}
 		// `withFloor` may clamp up OR down depending on tier; the contract is
 		// only that the two arms are observably different on at least one
@@ -377,7 +379,7 @@ describe("Phase 1 retention bundle (Groups 1 + 2)", () => {
 		const seeds = await seedQueryFixtureSet();
 		// All seeds start in `peripheral` so any tier write is detectable.
 		for (const s of seeds) {
-			await store.updateMetadata(s.id, { tier: "peripheral" });
+			await store.updateTier(s.id, "peripheral", { writerAuthority: "offline-family" });
 		}
 
 		const evaluated: string[] = [];
@@ -515,7 +517,7 @@ describe("Phase 1 retention bundle (Groups 1 + 2)", () => {
 		const seeds = await seedQueryFixtureSet();
 		// Force everyone down to peripheral so a `working` write is detectable.
 		for (const s of seeds) {
-			await store.updateMetadata(s.id, { tier: "peripheral" });
+			await store.updateTier(s.id, "peripheral", { writerAuthority: "offline-family" });
 		}
 
 		const promoter: TierPromoter = {

@@ -546,7 +546,6 @@ describe("Decay engine temporal type", () => {
 			frequencyWeight: 0,
 			intrinsicWeight: 0,
 			staleThreshold: 0.1,
-			searchBoostMin: 0.3,
 			importanceModulation: 0, // remove importance modulation for clean ratio
 			betaCore: 1,
 			betaWorking: 1,

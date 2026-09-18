@@ -20,10 +20,11 @@ export {
 	DEFAULT_TOP_K,
 	FORGET_QUERY_DEFAULT_LIMIT,
 	FORGET_QUERY_MIN_SCORE,
+	DEFAULT_MAX_CONTEXT_TOKENS,
 	MAX_AGGREGATION_ROWS,
-	MAX_AGGREGATION_MEMORY_CHARS,
 	MAX_AGGREGATION_RESULT_TOKENS,
 	MAX_CANDIDATE_POOL_SIZE,
+	MAX_RECALL_TOOL_CANDIDATES,
 	MAX_LIST_LIMIT,
 	MAX_RECALLED_TODOS,
 	MAX_RECALLED_TODO_TOKENS,
@@ -49,8 +50,6 @@ export { readEstimatedSpendToday } from "../operations/daily-spend-estimator";
 export { ensureSelfImprovementLearningFiles } from "../operations/learning-file-maintenance";
 export {
 	appendAuditEntry,
-	isKillSwitchActive,
-	readKillSwitchState,
 } from "../operations/runtime-audit-log";
 export {
 	formatAtDepth,

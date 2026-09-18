@@ -21,7 +21,6 @@ import {
 	type MaintenanceDeps,
 } from "../../../../packages/sno-station-mem/src/store/maintenance.ts";
 import { MemoryStore } from "../../../../packages/sno-station-mem/src/store/store.ts";
-import { StorageFailedError } from "../../../../packages/sno-station-mem/src/store/sqlite-runtime.ts";
 import { MemoryTelemetryUsageOutbox } from "../../../../packages/sno-station-mem/src/engine/telemetry/memory-telemetry-outbox.ts";
 import { createTestDb, createTestEmbedder } from "../../../apps/mem-claw/helpers/test-db.ts";
 
@@ -104,6 +103,22 @@ describe("maintenance pass", () => {
 		expect(report.backupPath && existsSync(report.backupPath)).toBe(true);
 	});
 
+	it("runs only the jobs that are due: no integrity sweep and no backup when only retention is due", () => {
+		insertEvent("recall", "fact-expired-recall", MEMORY_EVENTS_USAGE_RETENTION_MS + DAY_MS);
+		let sweeps = 0;
+
+		const report = runMaintenancePass(
+			{ ...deps, integrityCheck: () => { sweeps += 1; } },
+			new Set(["usage-retention"]),
+		);
+
+		expect(report.aborted).toBe(false);
+		expect(report.usageEventsPruned).toBe(1);
+		expect(sweeps).toBe(0);
+		expect(report.backupPath).toBeUndefined();
+		expect(existsSync(deps.backupDir)).toBe(false);
+	});
+
 	it("bounds retention pruning to one tick's budget, leaving the remainder for the next tick", () => {
 		// A backlog bigger than one delete batch (5000) must not drain
 		// synchronously in a single tick — that would block the gateway event
@@ -132,56 +147,16 @@ describe("maintenance pass", () => {
 		expect(countEvents("recall")).toBe(0);
 	});
 
-	it("fails closed on integrity failure: abort, latch, kill switch, no backup", async () => {
-		const rawStatement = store.db.$client.prepare(
-			"SELECT COUNT(*) AS count FROM nodix_memory_usage_outbox",
-		);
-		const rawTransaction = store.db.$client.transaction(() =>
-			store.db.$client.prepare("DELETE FROM nodix_memory_usage_outbox").run(),
-		);
-		// Failure injection via the deps seam pre-declared in the plan's test
-		// design: the sweep implementation is swapped for one that reports what a
-		// corrupt page produces. The REAL sweep's corruption detection is proven
-		// separately against byte-level file damage
-		// (tests/packages/sno-station-core-crypto/unit/integrity-check.test.ts); this test
-		// owns the fail-closed REACTION chain.
-		const failingDeps: MaintenanceDeps = {
-			...deps,
-			integrityCheck: () => {
-				throw new Error("integrity_check reported: row 12 missing from index idx_probe");
-			},
-		};
-
-		const report = runMaintenancePass(failingDeps);
-
-		expect(report.aborted).toBe(true);
-		expect(report.backupPath).toBeUndefined();
-		expect(existsSync(join(deps.backupDir))).toBe(false);
-		expect(existsSync(join(stateDir, "killswitch"))).toBe(true);
-		expect(store.sqlite.isFailed()).toBe(true);
-
-		// Every write path refuses SQL after the latch — including statements
-		// prepared BEFORE the latch (the outbox pre-prepares its accept insert at
-		// construction, so this exercises the statement-object guard).
-		await expect(
-			store.store({ text: "post-latch write", category: "episodic", projectId: "latch-test" }),
-		).rejects.toThrow(StorageFailedError);
-		expect(
-			deps.usageOutbox?.tryAcceptUsage({
-				eventType: "recall",
-				factId: "latched-fact",
-				memoryKind: "episodic",
-				projectId: "latch-test",
-				metadata: { retrieval_rank: 1 },
-			}),
-		).toBe(false);
-		await expect(store.delete("latched-prefix*")).rejects.toThrow(StorageFailedError);
-		// The handle is fully fail-closed: reads latch too.
-		expect(() =>
-			store.sqlite.prepare("SELECT COUNT(*) AS count FROM nodix_memory_usage_outbox").get(),
-		).toThrow(StorageFailedError);
-		expect(() => rawStatement.get()).toThrow(StorageFailedError);
-		expect(() => store.db.$client.prepare("SELECT 1")).toThrow(StorageFailedError);
-		expect(() => rawTransaction()).toThrow(StorageFailedError);
+	it("keeps reading and writing after an integrity failure", async () => {
+		const prepared = store.sqlite.prepare("SELECT 7 AS value");
+		const report = runMaintenancePass({ ...deps, integrityCheck: () => {
+			throw new Error("fts5: corruption found reading blob 1374389534721 from table nodix_memory_chunks_fts");
+		} }, new Set(["integrity"]));
+		expect(report.aborted).toBe(false);
+		expect(existsSync(join(stateDir, "killswitch"))).toBe(false);
+		expect(prepared.get()).toEqual({ value: 7 });
+		await store.store({ text: "Post integrity failure write remains readable.", category: "episodic", projectId: "integrity-test" });
+		const rows = store.sqlite.prepare("SELECT text FROM nodix_memories WHERE project_id = 'integrity-test'").all();
+		expect(rows).toEqual([{ text: "Post integrity failure write remains readable." }]);
 	});
 });

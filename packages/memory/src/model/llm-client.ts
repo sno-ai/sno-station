@@ -1,3 +1,4 @@
+import { memoryOperationSignal, checkMemoryOperation } from "../engine/operation-cancellation";
 /** @file llm-client.ts
  * @purpose Creates the provider-neutral LLM client facade.
  * @boundary Public LLM client API; JSON parsing and transport live in focused modules.
@@ -135,12 +136,16 @@ function parseJsonResponse<T>(
 	}
 
 	try {
-		return { ok: true, value: JSON.parse(jsonStr) as T };
+		const value: unknown = JSON.parse(jsonStr);
+		if (accept && !accept(value)) return { ok: false, error: "caller check rejected payload" };
+		return { ok: true, value: value as T };
 	} catch (error) {
 		const repairedJsonStr = repairCommonJson(jsonStr);
 		if (repairedJsonStr !== jsonStr) {
 			try {
-				return { ok: true, value: JSON.parse(repairedJsonStr) as T };
+				const value: unknown = JSON.parse(repairedJsonStr);
+				if (accept && !accept(value)) return { ok: false, error: "caller check rejected payload" };
+				return { ok: true, value: value as T };
 			} catch {
 				return {
 					ok: false,
@@ -371,6 +376,7 @@ export function createLlmClient(config: LlmClientConfig): LlmClient {
 		systemContent: string,
 		prompt = request.prompt,
 	): Promise<{ raw: string; transport: RequestTransport } | null> => {
+		checkMemoryOperation();
 		lastError = null;
 		lastUsage = null;
 		const transport = resolveRequestTransport(request);
@@ -450,6 +456,7 @@ export function createLlmClient(config: LlmClientConfig): LlmClient {
 			);
 		}
 		const endpoint = await getEndpoint(occasion, transport);
+		checkMemoryOperation();
 		const preset = endpoint.preset;
 		const apiKey = resolveProviderApiKey(config, preset, endpoint.userBaseUrlOverride);
 		if (transport === "raw-completions") {
@@ -554,12 +561,14 @@ export function createLlmClient(config: LlmClientConfig): LlmClient {
 		prompt = request.prompt,
 	): Promise<{ raw: string; transport: RequestTransport } | null> => {
 		let content = await requestContent(request, systemContent, prompt);
+		checkMemoryOperation();
 		const attemptLimit = request.emptyReplyAttempts ?? EMPTY_REPLY_ATTEMPTS;
 		for (let attempt = 2; attempt <= attemptLimit; attempt += 1) {
 			if (content === null || content.raw.trim().length > 0) return content;
 			if (performance.now() >= deadlineMs) break;
 			log.debug("Retrying empty model reply", { adapter_slot: request.adapterSlot, call_label: request.callLabel, attempt, attempt_limit: attemptLimit }, { event_name: "memory.llm_client.diagnostic", file: "packages/sno-station-mem/src/model/llm-client.ts", function: "requestContentRetryingEmpty", site_id: "shared.llm-client.requestContentRetryingEmpty.cd874fefff" });
 			content = await requestContent(request, systemContent, prompt);
+			checkMemoryOperation();
 		}
 		return content;
 	};
@@ -567,7 +576,8 @@ export function createLlmClient(config: LlmClientConfig): LlmClient {
 	return {
 		/** Implements complete json as the local LLM transport operation. */
 		async completeJson<T>(input: MemoryLlmRequest): Promise<T | null> {
-			const request = normalizeMemoryLlmRequest(input);
+			const request = normalizeMemoryLlmRequest({ ...input, signal: memoryOperationSignal(input.signal) });
+			checkMemoryOperation();
 			const deadlineMs = performance.now() + resolveRequestTimeoutMs(request);
 			try {
 				let content = await requestContentRetryingEmpty(request, JSON_SYSTEM_CONTENT, deadlineMs);
@@ -598,6 +608,7 @@ export function createLlmClient(config: LlmClientConfig): LlmClient {
 				log.debug("Model client request diagnostic", { adapter_slot: request.adapterSlot, call_label: request.callLabel, error: lastError }, { event_name: "memory.llm_client.diagnostic", file: "packages/sno-station-mem/src/model/llm-client.ts", function: "completeJson", site_id: "shared.llm-client.completeJson.e04c8e7e82" });
 				return null;
 			} catch (err) {
+				checkMemoryOperation();
 				if (err instanceof LlmClientTerminalError) throw err;
 				lastError = `sno-station-mem: llm-client [${request.callLabel}] request failed for preset ${config.preset}: ${err instanceof Error ? err.message : String(err)}`;
 				log.warn("Model request failed", { adapter_slot: request.adapterSlot, call_label: request.callLabel, error: lastError }, { event_name: "memory.llm_client.diagnostic", file: "packages/sno-station-mem/src/model/llm-client.ts", function: "completeJson", site_id: "llm.client.json.request_failed" });
@@ -606,7 +617,8 @@ export function createLlmClient(config: LlmClientConfig): LlmClient {
 		},
 
 		async completeText(input: MemoryLlmRequest): Promise<string | null> {
-			const request = normalizeMemoryLlmRequest(input);
+			const request = normalizeMemoryLlmRequest({ ...input, signal: memoryOperationSignal(input.signal) });
+			checkMemoryOperation();
 			const deadlineMs = performance.now() + resolveRequestTimeoutMs(request);
 			try {
 				const content = await requestContentRetryingEmpty(
@@ -617,6 +629,7 @@ export function createLlmClient(config: LlmClientConfig): LlmClient {
 				const text = content?.raw.trim();
 				return text && text.length > 0 ? text : null;
 			} catch (err) {
+				checkMemoryOperation();
 				if (err instanceof LlmClientTerminalError) throw err;
 				lastError = `sno-station-mem: llm-client [${request.callLabel}] request failed for preset ${config.preset}: ${err instanceof Error ? err.message : String(err)}`;
 				log.warn("Model client request diagnostic", { adapter_slot: request.adapterSlot, call_label: request.callLabel, error: lastError }, { event_name: "memory.llm_client.diagnostic", file: "packages/sno-station-mem/src/model/llm-client.ts", function: "completeText", site_id: "shared.llm-client.completeText.ffa933b519" });

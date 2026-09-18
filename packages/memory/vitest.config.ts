@@ -9,6 +9,7 @@ export default defineConfig({
 	root: repoRoot,
 	resolve: {
 		alias: [
+			{ find: /^@snoai\/sno-station-mem\/client$/, replacement: resolve(appRoot, "src/contract/client.ts") },
 			{ find: /^@snoai\/sno-station-mem\/internal\/config\/index$/, replacement: resolve(appRoot, "config/index.ts") },
 			{ find: /^@snoai\/sno-station-mem\/internal\//, replacement: `${resolve(appRoot, "src")}/` },
 			{ find: /^@snoai\/sno-station-mem$/, replacement: resolve(appRoot, "src/index.ts") },
@@ -35,7 +36,6 @@ export default defineConfig({
 		exclude: [
 			...configDefaults.exclude,
 			".claude/**",
-			"internal/repo-reference/**",
 		],
 		fileParallelism: false,
 		hookTimeout: 120_000,

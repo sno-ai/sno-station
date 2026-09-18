@@ -176,8 +176,6 @@ function interruptBeforeBatchCommit(
 			});
 		},
 		loadExtension: (path) => sqlite.loadExtension(path),
-		markFailed: (reason) => sqlite.markFailed(reason),
-		isFailed: () => sqlite.isFailed(),
 	};
 }
 
@@ -210,8 +208,6 @@ function interruptAfterBatchCommit(
 			return wrapped;
 		},
 		loadExtension: (path) => sqlite.loadExtension(path),
-		markFailed: (reason) => sqlite.markFailed(reason),
-		isFailed: () => sqlite.isFailed(),
 	};
 }
 

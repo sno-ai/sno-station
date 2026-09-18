@@ -1,3 +1,4 @@
+import { memoryFileWrite, checkMemoryOperation, memoryOperationSignal } from "../operation-cancellation";
 import { createLogger as createDiagnosticLogger } from "@snoai/utils/logger";
 const diagnosticLog = createDiagnosticLogger("sno-station-mem:daily-log-generator");
 /** @file daily-log-generator.ts
@@ -6,7 +7,8 @@ const diagnosticLog = createDiagnosticLogger("sno-station-mem:daily-log-generato
  * @see strategy-hook-runner.ts, memory-entry-projector.ts, learning-file-maintenance.ts.
  */
 
-import { appendFile, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import { appendFile, link, mkdir, readdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import { REFLECTION_MAX_FILENAME_ATTEMPTS } from "../../../config/index";
 import { RESOURCES_BY_LOCALE } from "../i18n/all-resources";
@@ -65,7 +67,7 @@ export async function readSessionConversationForReflection(
 	// Isolate the reflection capture operation that can fail because of runtime I/O or input shape.
 	try {
 		// Await the reflection capture dependency before deriving downstream state.
-		const lines = (await readFile(filePath, "utf8")).trim().split("\n");
+		const lines = (await readFile(filePath, { encoding: "utf8", signal: memoryOperationSignal() })).trim().split("\n");
 		const messages: string[] = [];
 
 		// Iterate deterministically so reflection capture output order remains stable.
@@ -276,12 +278,18 @@ export async function generateReflectionText(params: {
 
 /** Validates daily log file before it enters the reflection capture policy boundary. */
 export async function ensureDailyLogFile(dailyPath: string, dateStr: string): Promise<void> {
-	// Isolate the reflection capture operation that can fail because of runtime I/O or input shape.
+	const temporaryPath = `${dailyPath}.${randomUUID()}.tmp`;
 	try {
-		await readFile(dailyPath, "utf-8");
-	} catch {
-		// Missing reflection file is initialized with a date header.
-		await writeFile(dailyPath, `# ${dateStr}\n\n`, "utf-8");
+		await memoryFileWrite(() => writeFile(temporaryPath, `# ${dateStr}\n\n`, { encoding: "utf-8", flag: "wx" }));
+		try {
+			await link(temporaryPath, dailyPath);
+		} catch (error) {
+			if (!(error instanceof Error && "code" in error && error.code === "EEXIST")) throw error;
+		}
+	} finally {
+		await unlink(temporaryPath).catch(error => {
+			if (!(error instanceof Error && "code" in error && error.code === "ENOENT")) throw error;
+		});
 	}
 }
 
@@ -321,6 +329,7 @@ export async function writeReflectionToFilesystem(
 
 	// Compute the normalized out dir once so later reflection capture checks use one value.
 	const outDir = join(params.workspaceDir, "memory", "reflections", dateStr);
+	checkMemoryOperation();
 	await mkdir(outDir, { recursive: true });
 
 	// Compute the normalized agent token once so later reflection capture checks use one value.
@@ -338,15 +347,15 @@ export async function writeReflectionToFilesystem(
 		const absPath = join(params.workspaceDir, relPath);
 		// Isolate the reflection capture operation that can fail because of runtime I/O or input shape.
 		try {
-			await writeFile(absPath, body, { encoding: "utf-8", flag: "wx" });
+			await memoryFileWrite(() => writeFile(absPath, body, { encoding: "utf-8", flag: "wx" }));
 			// Link each generated reflection from the daily workspace summary.
 			const dailyPath = join(params.workspaceDir, "memory", `${dateStr}.md`);
 			await ensureDailyLogFile(dailyPath, dateStr);
-			await appendFile(
+			await memoryFileWrite(() => appendFile(
 				dailyPath,
 				`- [${timeHms} UTC] Reflection generated: \`${relPath}\`\n`,
 				"utf-8",
-			);
+			));
 			return relPath;
 		} catch (err: unknown) {
 			// Only EEXIST is retryable during unique filename allocation.

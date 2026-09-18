@@ -1,6 +1,6 @@
 import { excludeProgressRecords } from "./atomic-progress-boundary";
 import { FIXED_MEMORY_SNO_EXTRACT_CHAT, FIXED_MEMORY_SNO_EXTRACT_PROFILE } from "../../model/signed-registry-constants";
-import { ATOMIC_EXTRACTION_MAX_INPUT_TOKENS } from "../../../config/index";
+import { ATOMIC_CAPTURE_OUTPUT_TOKEN_BUDGET, ATOMIC_EXTRACTION_MAX_INPUT_TOKENS, DEFAULT_MAX_CONTEXT_TOKENS } from "../../../config/index";
 /** @file atomic-memory-extraction.ts
  * @purpose Runs the complete dark atomic extraction path through its one storage door.
  * @boundary Product entrypoint; callers supply chunk identity, routing snapshot, and idempotency.
@@ -10,6 +10,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { createLogger, privateLogReference, currentLogContext, withLogContext } from "@snoai/utils/logger";
 import { z } from "zod";
+import { countTokens } from "@snoai/chunking";
 import {
 	decideRemRetirementTargetFromReply,
 	renderRemRetirementTargetPrompt,
@@ -58,6 +59,7 @@ import {
 	type AtomicSubjectGuardTransport,
 } from "./atomic-subject-guard";
 import { buildAtomicWriteCards } from "./atomic-write-projection";
+import { recordTokenCounter } from "../../store/memory-store-write-validation";
 import { DEFAULT_LOCALE, type Locale } from "../i18n/locales";
 import { createLlmClient, type LlmClient, type LlmClientConfig } from "../../model/llm-client";
 import { resolveLlmRoute } from "../../model/llm-mode-routing";
@@ -468,17 +470,17 @@ function atomicConversationWindows(
 		);
 		const windowTurns = turns.slice(from, until);
 		const followingTurns = turns.slice(until, userIndexes[index + 3] ?? turns.length);
-		while (followingTurns.length > 0 && JSON.stringify({
+		while (followingTurns.length > 0 && countTokens(JSON.stringify({
 			context: [], following: followingTurns, turns: windowTurns,
-		}).length > ATOMIC_EXTRACTION_MAX_INPUT_TOKENS * 4) {
+		})) > ATOMIC_EXTRACTION_MAX_INPUT_TOKENS) {
 			followingTurns.pop();
 		}
 		let contextStart = from;
 		// Keep the next group (which can hold the current turn's attachment) and then
 		// preceding turns within the existing budget, without extending source ownership.
-		while (contextStart > 0 && JSON.stringify({
+		while (contextStart > 0 && countTokens(JSON.stringify({
 			context: turns.slice(contextStart - 1, from), following: followingTurns, turns: windowTurns,
-		}).length <= ATOMIC_EXTRACTION_MAX_INPUT_TOKENS * 4) {
+		})) <= ATOMIC_EXTRACTION_MAX_INPUT_TOKENS) {
 			contextStart -= 1;
 		}
 		return { turns: windowTurns, contextTurns: turns.slice(contextStart, from), followingTurns, startIndex: from, ownedTurnIndexes };
@@ -753,7 +755,7 @@ export class AtomicInsightDistiller {
 							routingSnapshotId: ATOMIC_PIPELINE_VERSION,
 							runParameters: {
 								maxInputTokens: ATOMIC_EXTRACTION_MAX_INPUT_TOKENS,
-								outputTokenBudget: 4_096,
+								outputTokenBudget: ATOMIC_CAPTURE_OUTPUT_TOKEN_BUDGET,
 								subchunkCount: 1,
 							},
 							estimatedInputTokens: Math.ceil(rawChunk.length / 4),
@@ -1411,6 +1413,8 @@ export async function runAtomicMemoryExtraction(
 	// to write it twice (measured 2026-09-07, an e-mail's recipients row, and four copies of one
 	// preference in an earlier replay).
 	const claimedHere = new Map<number, ClaimedFact[]>();
+	/** The claim recorded for each record, so a record dropped after this pass can withdraw it. */
+	const claimedHereByRecord = new Map<(typeof guarded)[number], ClaimedFact>();
 	/** Records this reply already listed, whole: subject, attribute, value and wording. */
 	const claimedSelf = new Set<string>();
 	const isClaimed = (turnIndex: number, span: ClaimedSpan, factKey: string): boolean =>
@@ -1451,7 +1455,9 @@ export async function runAtomicMemoryExtraction(
 				}
 				claimedSelf.add(selfKey);
 				if (span !== null) {
-					claimedHere.set(turnIndex, [...(claimedHere.get(turnIndex) ?? []), { span, factKey }]);
+					const fact: ClaimedFact = { span, factKey };
+					claimedHere.set(turnIndex, [...(claimedHere.get(turnIndex) ?? []), fact]);
+					claimedHereByRecord.set(record, fact);
 				}
 				if (admittedSourceTurnIndexes.has(turnIndex)) return true;
 				// A turn belonging to the window before this one, which wrote nothing for it. This
@@ -1500,7 +1506,7 @@ export async function runAtomicMemoryExtraction(
 	// it exactly (measured 2026-09-06: "$9.02 on coffee" silently mapped onto "$37.36 on
 	// groceries" and was never stored).
 	const sourceFactKeys = admitted.map(factKeyOf);
-	const cards = buildAtomicWriteCards({
+	const projectedCards = buildAtomicWriteCards({
 		records: resolved.records,
 		idempotencyKeys: resolved.records.map((_record, recordIndex) =>
 			hashText(
@@ -1531,6 +1537,37 @@ export async function runAtomicMemoryExtraction(
 			},
 		};
 	});
+	// The store refuses a record over DEFAULT_MAX_CONTEXT_TOKENS, and one such record must not
+	// take the whole chunk's write down with it. The skill tells the model to split a claim
+	// that long; a record that still arrives over the ceiling is dropped here and counted.
+	const countRecordTokens = await recordTokenCounter(input.store.embedder);
+	const keptCards = projectedCards.map(
+		(card) => countRecordTokens(card.text) <= DEFAULT_MAX_CONTEXT_TOKENS,
+	);
+	const cards = projectedCards.filter((_card, index) => keptCards[index] === true);
+	if (cards.length !== projectedCards.length) {
+		// A dropped card leaves no row, so its claim must not reach the shared table — that is
+		// exactly what `publishClaims` is held back for. Left published, the next overlapping
+		// window reads the turn as already written and drops its own copy, so a fact nobody
+		// stored is never extracted again, even when that window words it short enough to fit.
+		projectedCards.forEach((_card, index) => {
+			if (keptCards[index] === true) return;
+			const record = admitted[index];
+			if (record === undefined) return;
+			const fact = claimedHereByRecord.get(record);
+			const turnIndex = globalTurnIndex(record);
+			if (fact === undefined || turnIndex === null) return;
+			const remaining = (claimedHere.get(turnIndex) ?? []).filter((known) => known !== fact);
+			if (remaining.length === 0) claimedHere.delete(turnIndex);
+			else claimedHere.set(turnIndex, remaining);
+		});
+		diagnostic.reasons.over_token_ceiling = projectedCards.length - cards.length;
+		log.warn("atomic extraction dropped records over the token ceiling", {
+			dropped: projectedCards.length - cards.length,
+			kept: cards.length,
+			maxTokens: DEFAULT_MAX_CONTEXT_TOKENS,
+		}, { event_name: "memory.atomic_extraction.diagnostic", file: "packages/sno-station-mem/src/engine/extraction/atomic-memory-extraction.ts", function: "runAtomicMemoryExtraction", site_id: "extraction.atomic-memory-extraction.over_token_ceiling" });
+	}
 	const atomicFactWrite: AtomicExtractionWriteInput = {
 		ledgerKey: input.ledgerKey,
 		projectId: input.projectId,

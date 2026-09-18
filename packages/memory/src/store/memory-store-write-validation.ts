@@ -20,6 +20,8 @@ import {
 } from "../engine/shared/types";
 import { countTokens } from "@snoai/chunking";
 import { createLogger } from "@snoai/utils/logger";
+import { DEFAULT_MAX_CONTEXT_TOKENS } from "../../config/index";
+import type { Embedder } from "../engine/extraction/embedding-provider-client";
 import { Temporal } from "@js-temporal/polyfill";
 
 const log = createLogger("sno-station-mem:active-task-shape-alarm");
@@ -225,10 +227,44 @@ function assertLegalAxes(
 	}
 }
 
+/**
+ * The exact record counter, ready to use. The embedder's tokenizer loads with its model, and
+ * the OpenClaw skin registers without waiting for that load, so a write can arrive first;
+ * `warmup()` is memoized and instant once the model is up, so every write door awaits it here
+ * rather than throwing on the first capture after boot.
+ */
+export async function recordTokenCounter(
+	embedder: Pick<Embedder, "warmup" | "countTokens">,
+): Promise<(text: string) => number> {
+	await embedder.warmup();
+	return (text) => embedder.countTokens(text);
+}
+
+/**
+ * The record token ceiling, enforced at the store door. `countRecordTokens` is the
+ * embedder's exact count (`Embedder.countTokens`), never a character estimate: the
+ * embedder and the reranker both truncate silently past this size, so a longer record
+ * would be indexed and ranked on its head only. Refusing is the honest outcome.
+ */
+export function assertRecordWithinTokenCeiling(
+	text: string,
+	countRecordTokens: (text: string) => number,
+	operation: string,
+): void {
+	const tokens = countRecordTokens(text);
+	if (tokens > DEFAULT_MAX_CONTEXT_TOKENS) {
+		throw new StorageError(
+			`${operation}: memory text is ${tokens} tokens; DEFAULT_MAX_CONTEXT_TOKENS is ${DEFAULT_MAX_CONTEXT_TOKENS}`,
+		);
+	}
+}
+
 export function validateStoreWriteMetadata(
 	input: StoreWriteValidationInput,
 	operation: string,
+	countRecordTokens: (text: string) => number,
 ): ValidatedStoreWrite {
+	assertRecordWithinTokenCeiling(input.text, countRecordTokens, operation);
 	if (typeof input.category !== "string") {
 		throw new StorageError(`${operation}: memory category must be a string`);
 	}

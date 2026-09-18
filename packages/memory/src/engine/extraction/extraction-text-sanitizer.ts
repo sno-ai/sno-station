@@ -1,12 +1,57 @@
-import { PERSISTED_PROVIDER_SYSTEM } from "../../model/signed-registry-constants";
 /** @file extraction-text-sanitizer.ts
  * @purpose Normalize runtime payload text before it reaches memory extraction.
  * @boundary Removes channel/runtime envelope metadata only; does not classify or persist memories.
  */
 
+import { createLogger } from "@snoai/utils/logger";
 import { sanitizeContentIngress } from "@snoai/content-sanitizer";
+import { DEFAULT_MAX_CONTEXT_TOKENS } from "../../../config/index";
+import { PERSISTED_PROVIDER_SYSTEM } from "../../model/signed-registry-constants";
 import { stripAmbientLearningInjectedPrefix } from "./ambient-learning-text-normalizer";
 import { stripLeadingRuntimeWrappers } from "./runtime-wrapper-sanitizer";
+
+const log = createLogger("sno-station-mem:extraction-text-sanitizer");
+
+/**
+ * Keeps a section's clause list inside `DEFAULT_MAX_CONTEXT_TOKENS`, the repository-wide
+ * per-record ceiling the store refuses to write past.
+ *
+ * A profile section is one row by design (`getByFactKey` is singular), and merging appends, so
+ * a long-lived section grows without bound — measured 2026-09-14 on a real persona store, five
+ * successive versions of `preferences.general` ran 516 → 533 → 538 → 540 → 576 tokens. Past the
+ * ceiling the embedder and the reranker both truncate silently, so the tail of such a section is
+ * already invisible to retrieval; dropping it here is the same loss made honest, and it keeps the
+ * merge writing instead of throwing.
+ *
+ * Oldest clauses go first: `mergeProfileSection` seeds the map with the stored clauses and then
+ * the incoming ones, so insertion order runs oldest to newest. The abstract is kept whatever
+ * happens — it is the section's only summary and it leads the indexed text.
+ */
+export function boundSectionContent(
+	content: string,
+	abstract: string,
+	countRecordTokens: (text: string) => number,
+): string {
+	if (countRecordTokens(buildIndexedText(abstract, content)) <= DEFAULT_MAX_CONTEXT_TOKENS) {
+		return content;
+	}
+	const clauses = content.split("\n");
+	let first = 0;
+	while (
+		first < clauses.length &&
+		countRecordTokens(buildIndexedText(abstract, clauses.slice(first).join("\n"))) >
+			DEFAULT_MAX_CONTEXT_TOKENS
+	) {
+		first += 1;
+	}
+	const kept = clauses.slice(first).join("\n");
+	log.warn("profile section trimmed to the record token ceiling", {
+		droppedClauses: first,
+		keptClauses: clauses.length - first,
+		maxTokens: DEFAULT_MAX_CONTEXT_TOKENS,
+	}, { event_name: "memory.extraction_text_sanitizer.diagnostic", file: "packages/sno-station-mem/src/engine/extraction/extraction-text-sanitizer.ts", function: "boundSectionContent", site_id: "extraction.extraction-text-sanitizer.boundSectionContent.ceiling" });
+	return kept;
+}
 
 /**
  * Build the string that goes into the `text` column of `nodix_memories`.

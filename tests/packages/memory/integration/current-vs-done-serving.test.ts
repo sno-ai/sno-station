@@ -173,8 +173,6 @@ describe("current vs done: serving a finished task", () => {
 			rerank: "none",
 			minScore: 0,
 			hardMinScore: 0,
-			temporalDecay: false,
-			recencyWeight: 0,
 		});
 		return { store, sqlite: testDb.sqlite, retriever };
 	}

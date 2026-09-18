@@ -1,3 +1,5 @@
+import { readJsonlLines } from "../engine/operations/jsonl-lines";
+import { createLogger } from "@snoai/utils/logger";
 /** @file rem-job-store.ts
  * @purpose Persists append-only REM job state transitions.
  * @boundary Durable local JSONL journal used by the standalone REM sidecar.
@@ -5,9 +7,11 @@
 
 import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
-import { mkdir, open, readFile, rename } from "node:fs/promises";
+import { mkdir, open, rename } from "node:fs/promises";
 import path from "node:path";
 import { z } from "zod";
+
+const log = createLogger("sno-station-mem:rem-jobs");
 
 export type RemJobState = "queued" | "running" | "done" | "failed";
 
@@ -178,6 +182,7 @@ export type RemJobTransition = {
 
 export class RemJobStore {
 	private readonly jobs = new Map<string, RemWaveJob>();
+	private readonly persistedJobs = new Set<string>();
 	private readonly mergeKeys = new Map<string, string>();
 	private operationQueue: Promise<void> = Promise.resolve();
 
@@ -191,10 +196,12 @@ export class RemJobStore {
 		onDurableTransition: (job: RemJob) => void = () => undefined,
 	): Promise<RemJobStore> {
 		const store = new RemJobStore(journalPath, onDurableTransition);
-		await store.migrateLegacyJournal();
+		await store.migrateLegacyJournal().catch(error => store.reportFailure(error));
 		await store.load();
 		return store;
 	}
+
+	isPersisted(jobId: string): boolean { return this.persistedJobs.has(jobId); }
 
 	get(jobId: string): RemJob | undefined {
 		const job = this.jobs.get(jobId);
@@ -222,7 +229,7 @@ export class RemJobStore {
 			const mergeKey = `${correlationId}\0${scope}`;
 			const existingId = this.mergeKeys.get(mergeKey);
 			const existing = existingId === undefined ? undefined : this.jobs.get(existingId);
-			if (existing !== undefined) {
+			if (existing !== undefined && existing.state === "queued") {
 				const mergedOperations = canonicalOperations([
 					...existing.requestedOperations,
 					...requestedOperations,
@@ -230,15 +237,21 @@ export class RemJobStore {
 				if (mergedOperations.length === existing.requestedOperations.length) {
 					return { created: false, job: toRemJob(existing) };
 				}
-				if (existing.state !== "queued") throw new Error("wave_closed");
 				const updated = remWaveJobSchema.parse({
 					...existing,
 					requestedOperations: mergedOperations,
 				});
-				await this.append(updated);
+				const durable = await this.persist(updated);
 				this.jobs.set(updated.waveId, updated);
-				this.onDurableTransition(toRemJob(updated));
+				if (durable) this.onDurableTransition(toRemJob(updated));
 				return { created: false, job: toRemJob(updated) };
+			}
+			if (
+				existing !== undefined &&
+				existing.requestedOperations.length === requestedOperations.length &&
+				existing.requestedOperations.every((operation, index) => operation === requestedOperations[index])
+			) {
+				return { created: false, job: toRemJob(existing) };
 			}
 			const job = remWaveJobSchema.parse({
 				payloadVersion: 1,
@@ -251,11 +264,11 @@ export class RemJobStore {
 				finishedAt: null,
 				stats: { operations: 0 },
 			});
-			await this.append(job);
+			const durable = await this.persist(job);
 			this.jobs.set(job.waveId, job);
 			this.mergeKeys.set(mergeKey, job.waveId);
 			const outward = toRemJob(job);
-			this.onDurableTransition(outward);
+			if (durable) this.onDurableTransition(outward);
 			return { created: true, job: outward };
 		});
 	}
@@ -266,7 +279,6 @@ export class RemJobStore {
 			if (!current) {
 				throw new Error(`REM job not found: ${jobId}`);
 			}
-			assertTransition(current.state, transition.state);
 			const next = remWaveJobSchema.parse({
 				...current,
 				state: transition.state,
@@ -275,45 +287,17 @@ export class RemJobStore {
 				...(transition.stats === undefined ? {} : { stats: transition.stats }),
 				...(transition.error === undefined ? {} : { error: transition.error }),
 			});
-			await this.append(next);
+			const durable = await this.persist(next);
 			this.jobs.set(jobId, next);
 			const outward = toRemJob(next);
-			this.onDurableTransition(outward);
+			if (durable) this.onDurableTransition(outward);
 			return outward;
 		});
 	}
 
-	applyCompletionReceipt(jobId: string, finishedAt: string, stats: RemJobStats): RemJob {
-		const current = this.jobs.get(jobId);
-		if (!current) throw new Error(`REM job not found: ${jobId}`);
-		if (current.state !== "running") {
-			throw new Error(`invalid REM completion receipt state: ${current.state}`);
-		}
-		const completed = remWaveJobSchema.parse({
-			...current,
-			state: "done",
-			finishedAt,
-			stats,
-		});
-		this.jobs.set(jobId, completed);
-		const outward = toRemJob(completed);
-		this.onDurableTransition(outward);
-		return outward;
-	}
-
 	private async load(): Promise<void> {
 		if (!existsSync(this.journalPath)) return;
-		const bytes = await readFile(this.journalPath);
-		const contents = bytes.toString("utf8");
-		const lines = contents.split("\n");
-		const endsWithNewline = bytes.length === 0 || bytes[bytes.length - 1] === 0x0a;
-		for (const [index, line] of lines.entries()) {
-			if (!line) continue;
-			if (!endsWithNewline && index === lines.length - 1) {
-				const lastNewline = bytes.lastIndexOf(0x0a);
-				await this.truncateJournal(lastNewline < 0 ? 0 : lastNewline + 1);
-				return;
-			}
+		for await (const line of readJsonlLines(this.journalPath)) {
 			try {
 				const parsed: unknown = JSON.parse(line);
 				const job = remWaveJobSchema.parse(parsed);
@@ -321,7 +305,7 @@ export class RemJobStore {
 				this.mergeKeys.set(`${job.correlationId}\0${job.scope}`, job.waveId);
 			} catch (error) {
 				const reason = error instanceof Error ? error.message : String(error);
-				throw new Error(`invalid REM job journal at line ${index + 1}: ${reason}`);
+				this.reportFailure(reason);
 			}
 		}
 	}
@@ -329,16 +313,16 @@ export class RemJobStore {
 	private async migrateLegacyJournal(): Promise<void> {
 		const legacyPath = path.join(path.dirname(this.journalPath), "rem-jobs.jsonl");
 		if (!existsSync(legacyPath)) return;
-		const lines = (await readFile(legacyPath, "utf8")).split("\n").filter(Boolean);
+
 		const latest = new Map<string, z.infer<typeof legacyJobSchema>>();
-		for (const [index, line] of lines.entries()) {
+		for await (const line of readJsonlLines(legacyPath)) {
 			try {
 				const parsed: unknown = JSON.parse(line);
 				const job = legacyJobSchema.parse(parsed);
 				latest.set(job.job_id, job);
 			} catch (error) {
 				const reason = error instanceof Error ? error.message : String(error);
-				throw new Error(`invalid legacy REM job journal at line ${index + 1}: ${reason}`);
+				this.reportFailure(reason);
 			}
 		}
 		const interrupted = [...latest.values()].filter(
@@ -367,14 +351,18 @@ export class RemJobStore {
 		await rename(legacyPath, path.join(path.dirname(legacyPath), "rem-jobs.v0.jsonl"));
 	}
 
-	private async truncateJournal(length: number): Promise<void> {
-		const handle = await open(this.journalPath, "r+");
-		try {
-			await handle.truncate(length);
-			await handle.sync();
-		} finally {
-			await handle.close();
-		}
+	private reportFailure(error: unknown): void {
+		log.error("rem.journal.failed", { error, path: this.journalPath }, {
+			event_name: "rem.journal.failed", file: "packages/sno-station-mem/src/sidecar/rem-job-store.ts",
+			function: "reportFailure", site_id: "rem.journal.failed",
+		});
+	}
+
+	private async persist(job: RemWaveJob): Promise<boolean> {
+		this.persistedJobs.delete(job.waveId);
+		await this.append(job);
+		this.persistedJobs.add(job.waveId);
+		return true;
 	}
 
 	private async append(job: RemWaveJob): Promise<void> {
@@ -383,7 +371,7 @@ export class RemJobStore {
 		const journalAlreadyExisted = existsSync(this.journalPath);
 		const handle = await open(this.journalPath, "a");
 		try {
-			await handle.writeFile(`${JSON.stringify(job)}\n`, "utf8");
+			await handle.writeFile(`\n${JSON.stringify(job)}\n`, "utf8");
 			await handle.sync();
 		} finally {
 			await handle.close();
@@ -430,14 +418,5 @@ async function syncDirectory(directory: string): Promise<void> {
 		await handle.sync();
 	} finally {
 		await handle.close();
-	}
-}
-
-function assertTransition(current: RemJobState, next: RemJobState): void {
-	const allowed =
-		(current === "queued" && (next === "running" || next === "failed")) ||
-		(current === "running" && (next === "done" || next === "failed"));
-	if (!allowed) {
-		throw new Error(`invalid REM job transition: ${current} -> ${next}`);
 	}
 }

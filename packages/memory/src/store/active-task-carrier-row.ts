@@ -57,6 +57,7 @@ function normalizeForDisplay(description: string): string {
 export function buildActiveTaskCarrierRow(
 	facts: ActiveTaskCarrierFacts,
 	operation: string,
+	countRecordTokens: (text: string) => number,
 ): ActiveTaskCarrierRow {
 	const text = buildIndexedText(facts.description, facts.description);
 	const id = `atc_${hashLengthPrefixedTuple([
@@ -140,6 +141,7 @@ export function buildActiveTaskCarrierRow(
 			lane: "active",
 		},
 		operation,
+		countRecordTokens,
 	);
 	return {
 		id,

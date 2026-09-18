@@ -13,7 +13,7 @@ import {
 	StorageError,
 	stableHash,
 } from "./memory-store-shared";
-import { validateStoreWriteMetadata } from "./memory-store-write-validation";
+import { recordTokenCounter, validateStoreWriteMetadata } from "./memory-store-write-validation";
 
 Object.assign(MemoryStore.prototype, {
 	async importEntry(
@@ -36,6 +36,14 @@ Object.assign(MemoryStore.prototype, {
 		// Round B-2: caller-provided `entry.vector` is intentionally ignored for
 		// back-compat. Caller-supplied parent id is preserved on
 		// `nodix_memories.id`; chunk ids are deterministic from text.
+		// A restore puts the row back as it was. The lane and its disposition fields travel with
+		// it: the column defaults to "active", so leaving them out silently promoted a
+		// quarantined or parked backup row into ordinary recall, while the returned object still
+		// echoed the caller's own lane and hid the change.
+		const lane = safeEntry.lane ?? entry.lane ?? "active";
+		const rawCandidateJson = safeEntry.rawCandidateJson ?? null;
+		const dispositionReason = safeEntry.dispositionReason ?? null;
+		const dispositionedAt = safeEntry.dispositionedAt ?? null;
 		const importance = clamp01(safeEntry.importance ?? entry.importance, DEFAULT_IMPORTANCE);
 		const entryTimestamp = safeEntry.timestamp;
 		const timestamp =
@@ -51,8 +59,10 @@ Object.assign(MemoryStore.prototype, {
 					system: safeEntry.system,
 					offlineFamily: safeEntry.offlineFamily,
 				enforceWriteAuthority: true,
+					lane,
 			},
 			"importEntry",
+			await recordTokenCounter(this.embedder),
 		);
 		const category = validated.category;
 		const metadata = validated.metadata;
@@ -62,12 +72,20 @@ Object.assign(MemoryStore.prototype, {
 		const chunkRows = await this.prepareChunkInserts(entry.id, safeEntry.text);
 
 		return this.writeMutex.runExclusive(() => {
+			// Resolved inside the transaction, where the existing row is read, and reported back
+			// out: the caller is told the identity the database kept.
+			let writtenFactId = entry.factId ?? entry.id;
 			// Keep related table mutations in one transaction so side tables cannot drift.
 			this.sqlite.transaction(() => {
 				const existing = this.sqlite
 					.prepare("SELECT fact_id, content_hash FROM nodix_memories WHERE id = ? LIMIT 1")
 					.get(entry.id) as { fact_id: string | null; content_hash: string } | undefined;
-				const factId = existing?.fact_id ?? entry.id;
+				// A supersede replacement carries its predecessor's `fact_id` on a fresh row id, so
+				// dropping the caller's `factId` and falling back to the row id cut the replacement
+				// chain at every restore: the history no longer joined to the fact it replaced.
+				// An existing row's own identity still wins — a re-import must not re-key it.
+				const factId = existing?.fact_id ?? entry.factId ?? entry.id;
+				writtenFactId = factId;
 				const collision = this.sqlite
 					.prepare(
 						"SELECT id FROM nodix_memories WHERE project_id = ? AND content_hash = ? AND category = ? AND id != ? LIMIT 1",
@@ -87,13 +105,17 @@ Object.assign(MemoryStore.prototype, {
 					.prepare(
 						`INSERT INTO nodix_memories(
 							id, text, category, project_id, importance, timestamp, timezone, metadata,
-							content_hash, fact_id, maturity, source, extractor_version
-						) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'extracted', 'manual', 'memory-import')
+							content_hash, fact_id, lane, raw_candidate_json, disposition_reason,
+							dispositioned_at_ms, maturity, source, extractor_version
+						) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'extracted', 'manual', 'memory-import')
 						ON CONFLICT(id) DO UPDATE SET text = excluded.text, category = excluded.category,
 							project_id = excluded.project_id, importance = excluded.importance,
 							timestamp = excluded.timestamp, timezone = excluded.timezone,
 							metadata = excluded.metadata, content_hash = excluded.content_hash,
-							fact_id = excluded.fact_id, maturity = excluded.maturity,
+							fact_id = excluded.fact_id, lane = excluded.lane,
+							raw_candidate_json = excluded.raw_candidate_json,
+							disposition_reason = excluded.disposition_reason,
+							dispositioned_at_ms = excluded.dispositioned_at_ms, maturity = excluded.maturity,
 							source = excluded.source, extractor_version = excluded.extractor_version`,
 					)
 					.run(
@@ -107,6 +129,10 @@ Object.assign(MemoryStore.prototype, {
 						metadata,
 						hash,
 						factId,
+						lane,
+						rawCandidateJson,
+						dispositionReason,
+						dispositionedAt,
 					);
 				this.writeChunkRowsSync(chunkRows, safeEntry.projectId);
 				this.telemetryEvents.writeReceiptEvent({
@@ -128,6 +154,8 @@ Object.assign(MemoryStore.prototype, {
 				});
 			}).immediate();
 
+			// Report what the database now holds, not what the caller handed in: the two used to
+			// differ silently on `factId` and `lane`.
 			return {
 					...entry,
 					text: safeEntry.text,
@@ -138,6 +166,8 @@ Object.assign(MemoryStore.prototype, {
 				timezone,
 				metadata,
 				contentHash: hash,
+				factId: writtenFactId,
+				lane,
 			};
 		});
 	},

@@ -795,7 +795,6 @@ describe("REM two-facet persistence", () => {
 						.all(),
 				).toEqual([]);
 
-			store.sqlite.markFailed("repeat-update recovery proof");
 			createSnoStationMemRemRecovery(store.sqlite).restoreTextVersion(second.recoveryHandle);
 			const restored = store.sqlite.runRecoveryOperation((database) => ({
 				row: database

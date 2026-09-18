@@ -136,6 +136,7 @@ Object.assign(MemoryRetriever.prototype, {
 		this: MemoryRetrieverInternals,
 		results: RetrievalResult[],
 		trace?: TraceCollector,
+		limit: number = results.length,
 	): RetrievalResult[] {
 		// Run every score-mutating stage first so the hardMinScore filter sees the final
 		// per-result score. This keeps two contracts honest: (1) the returned set always
@@ -149,14 +150,15 @@ Object.assign(MemoryRetriever.prototype, {
 			input: RetrievalResult[],
 		): RetrievalResult[] => tracedStage(trace, name, skipReason, run, input);
 
+		const temporalOff = !this.config.temporalWeighting;
 		let scored = stage(
 			"recency_boost",
-			this.config.recencyHalfLifeDays <= 0
+			temporalOff ? "temporalWeighting" : this.config.recencyHalfLifeDays <= 0
 				? "recencyHalfLifeDays"
 				: this.config.recencyWeight <= 0
 					? "recencyWeight"
 					: undefined,
-			(input) => this.applyRecencyBoost(input),
+			(input) => temporalOff ? input : this.applyRecencyBoost(input),
 			results,
 		);
 		scored = stage(
@@ -173,8 +175,8 @@ Object.assign(MemoryRetriever.prototype, {
 		);
 		scored = stage(
 			"time_decay",
-			this.config.timeDecayHalfLifeDays <= 0 ? "timeDecayHalfLifeDays" : undefined,
-			(input) => this.applyTimeDecay(input),
+			temporalOff ? "temporalWeighting" : this.config.timeDecayHalfLifeDays <= 0 ? "timeDecayHalfLifeDays" : undefined,
+			(input) => temporalOff ? input : this.applyTimeDecay(input),
 			scored,
 		);
 		// Retention Scorer multiplier (openspec/changes/mem-lifecycle PRD §4.1).
@@ -185,10 +187,10 @@ Object.assign(MemoryRetriever.prototype, {
 		// is off — the OFF path returns the input array reference unchanged.
 		scored = stage(
 			"retention_boost",
-			this.config.recallLifecycle?.retentionScorer === true
+			temporalOff ? "temporalWeighting" : this.config.recallLifecycle?.retentionScorer === true
 				? undefined
 				: "recallLifecycle.retentionScorer",
-			(input) => this.applyRetentionBoost(input),
+			(input) => temporalOff ? input : this.applyRetentionBoost(input),
 			scored,
 		);
 		scored = stage(
@@ -205,7 +207,14 @@ Object.assign(MemoryRetriever.prototype, {
 		scored = stage(
 			"mmr_diversity",
 			mmrOff ? "experiment.disableMmr" : undefined,
-			(input) => (mmrOff ? input : this.applyMmrDiversity(input)),
+			(input) => {
+				if (mmrOff) return input;
+				if (!this.config.mmrWindowOnly) return this.applyMmrDiversity(input);
+				const windowIds = new Set(results.slice(0, limit).map((result) => result.entry.id));
+				const window = input.filter((result) => windowIds.has(result.entry.id));
+				const tail = input.filter((result) => !windowIds.has(result.entry.id));
+				return [...this.applyMmrDiversity(window), ...tail];
+			},
 			scored,
 		);
 		return scored;

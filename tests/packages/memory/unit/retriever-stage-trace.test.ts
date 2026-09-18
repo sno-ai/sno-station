@@ -55,6 +55,7 @@ function runPipeline(
 }
 
 const ALL_ON = {
+	temporalWeighting: true,
 	recencyHalfLifeDays: 30,
 	recencyWeight: 0.1,
 	lengthNormAnchor: 500,

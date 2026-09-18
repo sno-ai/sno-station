@@ -7,16 +7,13 @@
 /** Local ONNX embedding with an LRU cache and oversized-text chunking. */
 
 import { CachedEmbeddingProvider, LOCAL_EMBEDDING_MODEL } from "@snoai/embedder";
-import { chunk, getCjkRatio, type ChunkConfig } from "@snoai/chunking";
+import { chunk, type ChunkConfig } from "@snoai/chunking";
 import { createLogger } from "@snoai/utils/logger";
 import {
 	CACHE_SIZE,
 	CACHE_TTL_MS,
-	CHUNKER_SAFETY_MARGIN,
-	CJK_CHAR_TOKEN_DIVISOR,
-	CJK_RATIO_THRESHOLD,
-	DEFAULT_CHARS_PER_TOKEN,
 	DEFAULT_MAX_CONTEXT_TOKENS,
+	RETRIEVAL_STORAGE_CHUNK_PROFILE,
 } from "../../../config/index";
 import {
 	buildProvider,
@@ -25,6 +22,7 @@ import {
 } from "./embedding-provider-factory";
 import { weightedAverageFloat32 } from "./embedding-vector-aggregation";
 import { EmbeddingError } from "../shared/errors";
+import { truncateToTokens } from "../shared/token-bound";
 
 const log = createLogger("sno-station-mem:embed");
 
@@ -32,10 +30,7 @@ export type { EmbeddingConfig, EmbeddingProviderKind };
 
 export class Embedder {
 	private readonly provider: CachedEmbeddingProvider;
-	private readonly maxSingleEmbedChars: number;
 	private readonly chunkingEnabled: boolean;
-	private readonly maxContextTokens: number;
-	private readonly charsPerToken: number;
 	readonly dimensions: number;
 	readonly providerKind: EmbeddingProviderKind;
 	readonly model: string;
@@ -53,11 +48,6 @@ export class Embedder {
 	constructor(config: EmbeddingConfig, _stateDir: string) {
 		// Chunker config
 		this.chunkingEnabled = config.chunking !== false;
-		this.maxContextTokens = config.maxContextTokens ?? DEFAULT_MAX_CONTEXT_TOKENS;
-		this.charsPerToken = config.charsPerToken ?? DEFAULT_CHARS_PER_TOKEN;
-		const maxTokens = this.maxContextTokens;
-		const charsPerToken = this.charsPerToken;
-		this.maxSingleEmbedChars = Math.floor(maxTokens * charsPerToken * CHUNKER_SAFETY_MARGIN);
 
 		const providerKind: EmbeddingProviderKind = config.provider ?? "local-onnx";
 		const inner = buildProvider(config);
@@ -77,7 +67,7 @@ export class Embedder {
 			model: this.model,
 			dimensions: this.dimensions,
 			chunking: this.chunkingEnabled,
-			maxSingleEmbedChars: this.maxSingleEmbedChars,
+			maxContextTokens: DEFAULT_MAX_CONTEXT_TOKENS,
 		}, {
 			event_name: "sno_station_mem.embedding-provider-client.embedder.initialized",
 			file: "packages/sno-station-mem/src/engine/extraction/embedding-provider-client.ts",
@@ -100,16 +90,27 @@ export class Embedder {
 	}
 
 	private buildEmbedderChunkConfig(): Partial<ChunkConfig> {
-		const maxTokens = Math.max(1, Math.floor(this.maxContextTokens * CHUNKER_SAFETY_MARGIN));
-		const minTokens = Math.min(256, maxTokens);
-		const overlapTokens = Math.min(32, Math.max(0, minTokens - 1));
 		return {
 			contentType: "prose",
-			minTokens,
-			targetTokens: maxTokens,
-			maxTokens,
-			overlapTokens,
+			minTokens: RETRIEVAL_STORAGE_CHUNK_PROFILE.minTokens,
+			targetTokens: DEFAULT_MAX_CONTEXT_TOKENS,
+			maxTokens: DEFAULT_MAX_CONTEXT_TOKENS,
+			overlapTokens: RETRIEVAL_STORAGE_CHUNK_PROFILE.overlapTokens,
 		};
+	}
+
+	/**
+	 * Exact token count under the embedding model's own tokenizer — the count the model
+	 * sees, so `DEFAULT_MAX_CONTEXT_TOKENS` checked against it is a hard limit. Synchronous;
+	 * throws until the model has loaded, which `warmup()` does at plugin register time.
+	 */
+	countTokens(text: string): number {
+		return this.provider.countTokens(text);
+	}
+
+	/** Longest prefix of `text` within `maxTokens` under {@link countTokens}. */
+	truncateToTokens(text: string, maxTokens: number): string {
+		return truncateToTokens(text, maxTokens, (t) => this.countTokens(t));
 	}
 
 	/**
@@ -133,19 +134,25 @@ export class Embedder {
 			return this.embedDirect(text);
 		}
 
-		// Decide fast-path vs chunked path against a CJK-aware char budget. CJK-heavy
-		// text packs more tokens per character, so the generic `maxSingleEmbedChars`
-		// underestimates token cost — using it as the gate would push CJK passages
-		// past the provider's token limit before we ever reach the chunker.
-		const cjkHeavy = getCjkRatio(text) > CJK_RATIO_THRESHOLD;
-		const effectiveMaxChars = cjkHeavy
-			? Math.floor(this.maxSingleEmbedChars / CJK_CHAR_TOKEN_DIVISOR)
-			: this.maxSingleEmbedChars;
-		if (text.length <= effectiveMaxChars) {
+		// The gate is the model's own token count, not a character estimate: the ONNX pipeline
+		// truncates silently past its window, so anything that reaches embedDirect over the
+		// ceiling would be embedded on its head only. Chunk geometry below is the shared
+		// estimator's; every chunk is re-counted exactly before it is embedded.
+		const tokens = this.countTokens(text);
+		if (tokens <= DEFAULT_MAX_CONTEXT_TOKENS) {
 			return this.embedDirect(text);
 		}
 
 		const chunks = chunk(text, this.buildEmbedderChunkConfig()).map((draft) => draft.chunkText);
+		for (const piece of chunks) {
+			const pieceTokens = this.countTokens(piece);
+			if (pieceTokens > DEFAULT_MAX_CONTEXT_TOKENS) {
+				// Surface this invalid embedding state as an explicit typed failure.
+				throw new EmbeddingError(
+					`Embedder chunk of ${pieceTokens} tokens exceeds DEFAULT_MAX_CONTEXT_TOKENS (${DEFAULT_MAX_CONTEXT_TOKENS})`,
+				);
+			}
+		}
 		// Guard chunks.length here so the remaining embedding path works with normalized inputs.
 		if (chunks.length <= 1) {
 			return this.embedDirect(chunks[0] ?? text);
@@ -158,8 +165,8 @@ export class Embedder {
 		// asserts must fire zero times during smoke ingest.
 		log.warn("legacy chunker invoked (embedding-API safety net)", {
 			chunks: chunks.length,
-			totalChars: text.length,
-			maxChars: this.maxSingleEmbedChars,
+			totalTokens: tokens,
+			maxTokens: DEFAULT_MAX_CONTEXT_TOKENS,
 		}, {
 			event_name: "sno_station_mem.embedding-provider-client.legacy.chunker.invoked.embedding.api.safety.net",
 			file: "packages/sno-station-mem/src/engine/extraction/embedding-provider-client.ts",

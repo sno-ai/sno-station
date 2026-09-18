@@ -1,3 +1,4 @@
+import { memoryFileWrite, checkMemoryOperation, memoryOperationSignal } from "../operation-cancellation";
 import { FIXED_PROTOCOL_VALUE_75 } from "../../model/signed-registry-constants";
 import { createLogger } from "@snoai/utils/logger";
 const diagnosticLog = createLogger("sno-station-mem:learning-file-maintenance");
@@ -88,6 +89,7 @@ async function withAppendLock<T>(filePath: string, action: () => Promise<T>): Pr
 
 	// Iterate deterministically so learning-file writes output order remains stable.
 	for (;;) {
+		checkMemoryOperation();
 		let handle: Awaited<ReturnType<typeof open>> | undefined;
 		// Isolate the learning-file writes operation that can fail because of runtime I/O or input shape.
 		try {
@@ -145,7 +147,7 @@ async function nextLearningId(filePath: string, prefix: LearningIdPrefix): Promi
 	let count = 0;
 	// Isolate the learning-file writes operation that can fail because of runtime I/O or input shape.
 	try {
-		const content = await readFile(filePath, "utf-8");
+		const content = await readFile(filePath, { encoding: "utf8", signal: memoryOperationSignal() });
 		const matches = content.match(new RegExp(`\\[${prefix}-${date}-\\d{3}\\]`, "g"));
 		count = matches?.length ?? 0;
 	} catch (error) {
@@ -165,7 +167,7 @@ function learningFilesDir(baseDir: string): string {
 async function ensureLearningFile(filePath: string, content: string): Promise<void> {
 	// Isolate the learning-file writes operation that can fail because of runtime I/O or input shape.
 	try {
-		const existing = await readFile(filePath, "utf-8");
+		const existing = await readFile(filePath, { encoding: "utf8", signal: memoryOperationSignal() });
 		// Guard this branch early so the remaining module behavior path works with normalized inputs.
 		if (existing.trim().length > 0) return;
 	} catch (error) {
@@ -175,7 +177,7 @@ async function ensureLearningFile(filePath: string, content: string): Promise<vo
 		}
 		// Missing files are created with the default template below.
 	}
-	await writeFile(filePath, `${content.trim()}\n`, "utf-8");
+	await memoryFileWrite(() => writeFile(filePath, `${content.trim()}\n`, "utf-8"));
 }
 
 async function ensureLearningFileWithLock(filePath: string, content: string): Promise<void> {
@@ -191,6 +193,7 @@ async function ensureLearningFileWithLock(filePath: string, content: string): Pr
  */
 export async function ensureSelfImprovementLearningFiles(baseDir: string): Promise<void> {
 	const learningsDir = learningFilesDir(baseDir);
+	checkMemoryOperation();
 	await mkdir(learningsDir, { recursive: true });
 
 	await ensureLearningFileWithLock(join(learningsDir, "LEARNINGS.md"), DEFAULT_LEARNINGS_TEMPLATE);
@@ -298,7 +301,7 @@ export async function appendSelfImprovementEntry(
 			const nowIso = new Date().toISOString();
 			const entry = renderSelfImprovementEntry(normalized, entryId, nowIso);
 			// Await the learning-file writes dependency before deriving downstream state.
-			const prev = await readFile(filePath, "utf-8").catch((error: unknown) => {
+			const prev = await readFile(filePath, { encoding: "utf8", signal: memoryOperationSignal() }).catch((error: unknown) => {
 				if (!(error instanceof Error && "code" in error && error.code === "ENOENT")) {
 					diagnosticLog.warn("Learning file read failed before append", { error },
 						{ event_name: "memory.learning.append.read.failed", file: "packages/sno-station-mem/src/engine/operations/learning-file-maintenance.ts", function: "appendSelfImprovementEntry", site_id: "memory.learning.append.read.failed" });
@@ -306,7 +309,7 @@ export async function appendSelfImprovementEntry(
 				return "";
 			});
 			const separator = prev.trimEnd().length > 0 ? "\n\n" : "";
-			await appendFile(filePath, `${separator}${entry}`, "utf-8");
+			await memoryFileWrite(() => appendFile(filePath, `${separator}${entry}`, "utf-8"));
 			return entryId;
 		});
 	});

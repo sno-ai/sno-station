@@ -1,3 +1,4 @@
+import { memoryOperationSignal } from "../operation-cancellation";
 /** @file retriever-execution.ts
  * @purpose Runs retrieval entrypoints, traces, and stats recording.
  * @boundary Prototype-mounted MemoryRetriever methods; no constructor state ownership.
@@ -36,7 +37,7 @@ Object.assign(MemoryRetriever.prototype, {
 		const started = performance.now();
 		// PRD 205 REQ-1: a serving recall that passes no validity parameter is
 		// filtered exactly as one that passes the current time.
-		const context = withServingValidityDefault(input);
+		const context = withServingValidityDefault({ ...input, signal: memoryOperationSignal(input.signal) });
 		log.info("retrieval started", {
 			queryLength: context.query.length,
 			limit: context.limit,
@@ -199,7 +200,7 @@ Object.assign(MemoryRetriever.prototype, {
 		const started = performance.now();
 		// Same default as `retrieve()` above: both entrypoints are serving paths,
 		// so neither can be reached with the filter silently absent (PRD 205).
-		const context = withServingValidityDefault(input);
+		const context = withServingValidityDefault({ ...input, signal: memoryOperationSignal(input.signal) });
 		// Isolate the retrieval ranking operation that can fail because of runtime I/O or input shape.
 		try {
 			this.throwIfAborted(context);

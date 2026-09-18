@@ -10,12 +10,10 @@ import {
 	resolveReadableScopesForTool,
 } from "./memory-tool-access";
 
-import { isKillSwitchActive, isSystemBypassId, readEstimatedSpendToday } from "./memory-tool-dependencies";
+import { isSystemBypassId, readEstimatedSpendToday } from "./memory-tool-dependencies";
 import {
-	killSwitchResponse,
 	makeResult,
 	runWithAudit,
-	shouldBlockMemoryTools,
 } from "./memory-tool-results";
 import { statsParamsSchema, type ToolContext, type ToolResult } from "./memory-tool-schemas";
 
@@ -24,8 +22,6 @@ import { statsParamsSchema, type ToolContext, type ToolResult } from "./memory-t
 export async function executeMemoryStatsTool(ctx: ToolContext, access: ReturnType<typeof resolveAgentAccess>, _toolCallId: unknown, params: unknown): Promise<ToolResult> {
 					// Centralize the tool execution fallback value at the boundary of this helper.
 					return runWithAudit(ctx, "memory_stats", undefined, async () => {
-						// Short-circuit while paused so no storage, model, or audit side effects continue.
-						if (shouldBlockMemoryTools(ctx)) return killSwitchResponse(ctx);
 						const parsed = statsParamsSchema.parse(params);
 						// Compute the normalized requested scopes once so later tool execution checks use one value.
 						const requestedScopes = parsed.scope
@@ -83,7 +79,7 @@ export async function executeMemoryStatsTool(ctx: ToolContext, access: ReturnTyp
 							scopeBreakdown: projectBreakdown,
 							categoryBreakdown,
 							estimatedSpendTodayUsd,
-							killSwitchActive: isKillSwitchActive(ctx.stateDir),
+
 						};
 						// Serialize metadata once at the boundary so storage receives a stable payload.
 						return makeResult(JSON.stringify(payload), payload);

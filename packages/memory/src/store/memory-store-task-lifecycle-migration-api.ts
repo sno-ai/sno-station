@@ -30,6 +30,7 @@ import {
 } from "./memory-store-shared";
 import {
 	hostTimezone,
+	recordTokenCounter,
 	validateStoreWriteMetadata,
 } from "./memory-store-write-validation";
 
@@ -294,9 +295,30 @@ async function prepareProjections(
 	manifest: TaskLifecycleMigrationManifest,
 	descriptions: ReadonlyMap<string, string>,
 ): Promise<PreparedMigrationProjection[]> {
+	// An instance can carry several rows, and reading only the active ones puts a finished task
+	// back on the active list: its completed or removed row is passed over and the stale active
+	// one decides. The instance's own outcome wins, and it is read here exactly as the instance
+	// write below reads it — any row of the instance that is not active settles it — so the list
+	// this projects and the status that write records can never disagree.
+	const settled = new Map<string, Set<string>>();
+	for (const { source, census } of manifest.rows) {
+		if (source.legacy_status === "active") continue;
+		const byProject = settled.get(source.project_id) ?? new Set<string>();
+		byProject.add(census.active_task_id);
+		settled.set(source.project_id, byProject);
+	}
+	// Every project in the manifest gets a projection, including one the filter above empties.
+	// `replaceProjections` invalidates a project's old projection only when a new one is built
+	// for it, so a project whose last task settles here would otherwise keep serving the stale
+	// active list that still names the finished task — the very thing this filter exists to stop.
+	// An empty list is a projection like any other ("Active tasks: none").
 	const sources = new Map<string, Map<string, ActiveTaskProjectionSource>>();
+	for (const { source } of manifest.rows) {
+		if (!sources.has(source.project_id)) sources.set(source.project_id, new Map());
+	}
 	for (const { source, census } of manifest.rows) {
 		if (source.legacy_status !== "active" || census.revision_role !== "current") continue;
+		if (settled.get(source.project_id)?.has(census.active_task_id)) continue;
 		const byInstance = sources.get(source.project_id) ?? new Map();
 		if (!byInstance.has(census.active_task_id)) {
 			byInstance.set(census.active_task_id, {
@@ -359,6 +381,7 @@ async function prepareProjections(
 				lane: "active",
 			},
 			"task-lifecycle-migration-projection",
+			await recordTokenCounter(store.embedder),
 		);
 		prepared.push({
 			projectId,

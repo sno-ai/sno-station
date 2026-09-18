@@ -37,7 +37,8 @@ import {
 	stableHash,
 	type UpdateChanges,
 } from "./memory-store-shared";
-import { validateStoreWriteMetadata } from "./memory-store-write-validation";
+import { recordTokenCounter, validateStoreWriteMetadata } from "./memory-store-write-validation";
+import { parseInsightMetadata } from "../engine/extraction/memory-metadata-codec";
 
 type MetadataRow = { id: string; category: MemoryCategory; metadata: string | null };
 
@@ -178,6 +179,7 @@ Object.assign(MemoryStore.prototype, {
 		id: string,
 		changes: UpdateChanges,
 	): Promise<MemoryEntry | null> {
+		const countRecordTokens = await recordTokenCounter(this.embedder);
 		// Log operational context for storage without changing control flow.
 		log.debug("updating memory", { memory_id: id }, {
 			event_name: "sno_station_mem.memory-store-update-api.updating.memory",
@@ -279,13 +281,21 @@ Object.assign(MemoryStore.prototype, {
 							: "active",
 				},
 				"update",
+				countRecordTokens,
 			);
 			const nextCategory = validated.category;
 			const nextMetadata = validated.metadata;
 			const nextTimezone = validated.timezone;
 			const nextMetadataObject = this.parseMetadataObject(nextMetadata);
 			if (writerAuthority !== "offline-family") {
-				assertStorageAxesUnchanged(currentMetadata, nextMetadataObject, "update");
+				// Compare the axes after the same normalization the next metadata went through: a row
+				// whose stored JSON omits `state`/`tier` carries their defaults, and reading it raw made
+				// every online metadata update on such a row look like an axis change and refuse.
+				const currentAxes: StorageAxisMetadata = parseInsightMetadata(existing.metadata ?? undefined, {
+					text: existing.text, category: existingCategory, timestamp: existing.timestamp,
+					metadata: existing.metadata ?? undefined,
+				});
+				assertStorageAxesUnchanged(currentAxes, nextMetadataObject, "update");
 			}
 			assertActiveTaskUpdate(existing.text, nextText, currentMetadata, nextMetadataObject);
 			// PRD §4.2 reflection v3: include mappedKind discriminator from metadata

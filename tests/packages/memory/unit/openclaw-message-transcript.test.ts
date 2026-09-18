@@ -7,9 +7,32 @@ import {
 	buildConversationText,
 	deriveSessionDateTime,
 	normalizeMessageTimestampMs,
+	transcriptSessionDateTime,
 } from "../../../../packages/sno-station-mem/src/engine/bindings/sno-station-mem-message-transcript.ts";
 
 describe("openclaw message transcript timestamps", () => {
+	it("takes the session date a transcript states about itself over the message timestamps", () => {
+		const messages = [
+			{
+				role: "user",
+				content: "# LOCOMO Memory\n\nsample_id: conv-26\nsession_date_time: 2023-05-08T13:56:00\n\nCaroline: I went to the parade yesterday.",
+				timestamp: "2026-09-13T08:00:00.000Z",
+			},
+			{ role: "assistant", content: "Noted.", timestamp: "2026-09-13T08:00:05.000Z" },
+		];
+		expect(transcriptSessionDateTime(messages)?.slice(0, 10)).toBe("2023-05-08");
+		expect(deriveSessionDateTime(messages, true)?.slice(0, 10)).toBe("2026-09-13");
+	});
+
+	it("ignores a session_date_time header that is not ISO", () => {
+		expect(
+			transcriptSessionDateTime([
+				{ role: "user", content: "session_date_time: 1:56 pm on 8 May, 2023\nhello", timestamp: 1 },
+			]),
+		).toBeUndefined();
+		expect(transcriptSessionDateTime([{ role: "user", content: "no header here", timestamp: 1 }])).toBeUndefined();
+	});
+
 	it("rejects impossible calendar dates before timestamp normalization", () => {
 		expect(normalizeMessageTimestampMs("2024-02-30")).toBeUndefined();
 		expect(

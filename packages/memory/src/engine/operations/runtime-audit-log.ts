@@ -1,3 +1,4 @@
+import { readJsonlLines } from "./jsonl-lines";
 /** @file runtime-audit-log.ts
  * @purpose Records audit events for operational visibility and safety-sensitive actions.
  * @boundary Plugin runtime events and filesystem-backed audit persistence.
@@ -8,16 +9,12 @@ import {
 	appendFileSync,
 	existsSync,
 	mkdirSync,
-	readFileSync,
-	rmSync,
-	writeFileSync,
 } from "node:fs";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { appendFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { createLogger } from "@snoai/utils/logger";
-import { KILL_SWITCH_CACHE_TTL_MS } from "../../../config/index";
 import { redactSecrets } from "../security/redact";
 
 export { getSnoStationMemStateDir, getStateDir } from "../shared/paths";
@@ -202,17 +199,7 @@ export interface MutationAttemptRunOptions<T> {
 	failedOutcome?: (error: unknown) => MutationAttemptCompletion;
 }
 
-type KillSwitchCacheEntry = {
-	active: boolean;
-	expiresAt: number;
-};
-
-export type KillSwitchState =
-	| { active: false }
-	| { active: true; reason: string; activatedBy: string; corrupt: boolean };
-
-const auditWriteQueues = new Map<string, Promise<void>>();
-const killSwitchCache = new Map<string, KillSwitchCacheEntry>();
+const auditWriteQueues = new Map<string, Promise<boolean>>();
 const memoryAuditScope = new AsyncLocalStorage<boolean>();
 const mutationAttemptScope = new AsyncLocalStorage<string>();
 const mutationRecoveryPromises = new Map<string, Promise<void>>();
@@ -296,21 +283,23 @@ const MEMORY_AUDIT_ALLOWED_DETAIL_KEYS: Record<MemoryAuditEvent, ReadonlySet<str
 };
 
 /** Implements enqueue audit write as the local audit log state operation. */
-function enqueueAuditWrite(auditPath: string, line: string): Promise<void> {
-	const previous = auditWriteQueues.get(auditPath) ?? Promise.resolve();
+function enqueueAuditWrite(auditPath: string, line: string): Promise<boolean> {
+	const previous = auditWriteQueues.get(auditPath) ?? Promise.resolve(true);
 	const write = previous
 		.catch(() => undefined)
 		.then(async () => {
 			// This operational safety step establishes state that later reads and cleanup paths depend on.
 			mkdirSync(path.dirname(auditPath), { recursive: true });
 			await appendFile(auditPath, line);
+			return true;
 		});
 	const next = write.catch((error) => {
-			createLogger("sno-station-mem:audit").warn("Audit entry append failed", { error }, {
+			createLogger("sno-station-mem:audit").error("Audit entry append failed", { error }, {
 				event_name: "memory.audit.append.failed",
 				file: "packages/sno-station-mem/src/engine/operations/runtime-audit-log.ts",
 				function: "enqueueAuditWrite", site_id: "memory.audit.append.failed",
 			});
+			return false;
 		});
 	auditWriteQueues.set(auditPath, next);
 	void next.finally(() => {
@@ -319,28 +308,13 @@ function enqueueAuditWrite(auditPath: string, line: string): Promise<void> {
 			auditWriteQueues.delete(auditPath);
 		}
 	});
-	return write;
-}
-
-/** Updates kill switch cache while preserving audit log state invariants. */
-function setKillSwitchCache(pathValue: string, active: boolean): void {
-	// Update the local audit logging cache after the key/value pair has been normalized.
-	killSwitchCache.set(pathValue, {
-		active,
-		expiresAt: Date.now() + KILL_SWITCH_CACHE_TTL_MS,
-	});
+	return next;
 }
 
 /** Returns audit path from audit log state state without side effects. */
 export function getAuditPath(stateDir: string): string {
 	// Centralize the operational safety fallback value at the boundary of this helper.
 	return path.join(stateDir, "audit.jsonl");
-}
-
-/** Returns kill switch path from audit log state state without side effects. */
-export function getKillSwitchPath(stateDir: string): string {
-	// Centralize the operational safety fallback value at the boundary of this helper.
-	return path.join(stateDir, "killswitch");
 }
 
 /** Returns cost path from audit log state state without side effects. */
@@ -375,61 +349,21 @@ function prepareAuditEntry(
 		return entry;
 	}
 	const allowed = MEMORY_AUDIT_ALLOWED_DETAIL_KEYS[entry.event];
-	for (const key of Object.keys(entry.details)) {
-		if (!allowed.has(key)) {
-			throw new Error(`unknown memory audit detail key '${key}' for ${entry.event}`);
+	const details: Record<string, unknown> = {};
+	for (const [key, value] of Object.entries(entry.details)) {
+		if (allowed.has(key)) details[key] = value;
+		else {
+			createLogger("sno-station-mem:audit").error("memory.audit.detail.unknown", { event: entry.event, key }, {
+				event_name: "memory.audit.detail.unknown", file: "packages/sno-station-mem/src/engine/operations/runtime-audit-log.ts",
+				function: "prepareAuditEntry", site_id: "memory.audit.detail.unknown",
+			});
 		}
-	}
-	const phase = entry.details["audit_phase"];
-	if (phase !== "started" && phase !== "completed" && phase !== "failed") {
-		throw new Error(`invalid memory audit phase for ${entry.event}`);
-	}
-	if (
-		typeof entry.details["operation"] !== "string" ||
-		typeof entry.details["audit_operation_id"] !== "string"
-	) {
-		throw new Error(`memory audit operation identity is required for ${entry.event}`);
 	}
 	return {
 		...entry,
 		...(entry.scope === undefined ? {} : { scope: redactSecrets(entry.scope) }),
-		details: redactAuditValue(entry.details) as Record<string, unknown>,
+		details: redactAuditValue(details) as Record<string, unknown>,
 	};
-}
-
-export function readKillSwitchState(
-	stateDir: string,
-	warn?: (message: string, fields?: Record<string, unknown>) => void,
-): KillSwitchState {
-	const killSwitchPath = getKillSwitchPath(stateDir);
-	if (!existsSync(killSwitchPath)) return { active: false };
-	try {
-		const parsed: unknown = JSON.parse(readFileSync(killSwitchPath, "utf-8"));
-		if (
-			!isRecord(parsed) ||
-			typeof parsed["activated"] !== "string" ||
-			typeof parsed["reason"] !== "string" ||
-			typeof parsed["activatedBy"] !== "string"
-		) {
-			throw new Error("kill switch metadata is invalid");
-		}
-		return {
-			active: true,
-			reason: parsed["reason"],
-			activatedBy: parsed["activatedBy"],
-			corrupt: false,
-		};
-	} catch (error) {
-		warn?.("kill_switch_corrupt_file", {
-			error: error instanceof Error ? error.message : String(error),
-		});
-		return {
-			active: true,
-			reason: "kill switch metadata is unreadable",
-			activatedBy: "unknown",
-			corrupt: true,
-		};
-	}
 }
 
 /** Persists audit entry through the single audit log state write path. */
@@ -439,40 +373,41 @@ export function readKillSwitchState(
 export function appendAuditEntry(stateDir: string, entry: Omit<AuditEntry, "timestamp">): void {
 	const auditPath = getAuditPath(stateDir);
 	const prepared = prepareAuditEntry(entry);
-	// This operational safety step establishes state that later reads and cleanup paths depend on.
-	mkdirSync(path.dirname(auditPath), { recursive: true });
 	void enqueueAuditWrite(
 		auditPath,
 		`${JSON.stringify({ ...prepared, timestamp: new Date().toISOString() })}\n`,
 	);
 }
 
-/** Persists an audit entry and rejects when this specific write fails. */
+/** Waits for the audit append; failures are logged without blocking the operation. */
 export async function appendAuditEntryStrict(
 	stateDir: string,
 	entry: Omit<AuditEntry, "timestamp">,
-): Promise<void> {
+): Promise<boolean> {
 	const auditPath = getAuditPath(stateDir);
 	const prepared = prepareAuditEntry(entry);
-	mkdirSync(path.dirname(auditPath), { recursive: true });
-	await enqueueAuditWrite(
+	return enqueueAuditWrite(
 		auditPath,
 		`${JSON.stringify({ ...prepared, timestamp: new Date().toISOString() })}\n`,
 	);
 }
 
-/** Persists an audit entry synchronously and throws when the append fails. */
+/** Attempts a synchronous audit append and logs a failure. */
 export function appendAuditEntrySync(
 	stateDir: string,
 	entry: Omit<AuditEntry, "timestamp">,
 ): void {
 	const auditPath = getAuditPath(stateDir);
 	const prepared = prepareAuditEntry(entry);
-	mkdirSync(path.dirname(auditPath), { recursive: true });
-	appendFileSync(
-		auditPath,
-		`${JSON.stringify({ ...prepared, timestamp: new Date().toISOString() })}\n`,
-	);
+	try {
+		mkdirSync(path.dirname(auditPath), { recursive: true });
+		appendFileSync(auditPath, `${JSON.stringify({ ...prepared, timestamp: new Date().toISOString() })}\n`);
+	} catch (error) {
+		createLogger("sno-station-mem:audit").error("memory.audit.append.failed", { error }, {
+			event_name: "memory.audit.append.failed", file: "packages/sno-station-mem/src/engine/operations/runtime-audit-log.ts",
+			function: "appendAuditEntrySync", site_id: "memory.audit.sync.failed",
+		});
+	}
 }
 
 function memoryAuditDetails<E extends MemoryAuditEvent>(
@@ -489,7 +424,7 @@ function memoryAuditDetails<E extends MemoryAuditEvent>(
 	} as MemoryAuditDetailsByEvent[E];
 }
 
-/** Runs an async memory operation only after its durable start record is persisted. */
+/** Records the start and outcome without using audit availability as admission. */
 export async function runWithMemoryAudit<T, E extends MemoryAuditEvent>(
 	options: MemoryAuditRunOptions<T, E>,
 ): Promise<T> {
@@ -548,11 +483,11 @@ interface OpenMutationAttempt {
 	subject?: string;
 }
 
-function readOpenMutationAttempts(stateDir: string): OpenMutationAttempt[] {
+async function readOpenMutationAttempts(stateDir: string): Promise<OpenMutationAttempt[]> {
 	const auditPath = getAuditPath(stateDir);
 	if (!existsSync(auditPath)) return [];
 	const openAttempts = new Map<string, OpenMutationAttempt>();
-	for (const line of readFileSync(auditPath, "utf8").split("\n")) {
+	for await (const line of readJsonlLines(auditPath)) {
 		if (!line.trim()) continue;
 		let parsed: unknown;
 		try {
@@ -649,7 +584,7 @@ async function closeMutationAttempt(
 
 /** Closes mutation attempts whose process stopped before a terminal audit record was written. */
 export async function recoverInterruptedMutationAttempts(stateDir: string): Promise<string[]> {
-	const attempts = readOpenMutationAttempts(stateDir);
+	const attempts = await readOpenMutationAttempts(stateDir);
 	for (const attempt of attempts) {
 		await closeMutationAttempt(stateDir, attempt, { outcome: "interrupted-unknown" });
 	}
@@ -764,46 +699,6 @@ export function runWithMemoryAuditSync<T, E extends MemoryAuditEvent>(
 		});
 		return result;
 	});
-}
-
-/** Tests whether is kill switch active without mutating audit log state state. */
-export function isKillSwitchActive(
-	stateDir: string,
-	warn?: (message: string, fields?: Record<string, unknown>) => void,
-): boolean {
-	const killSwitchPath = getKillSwitchPath(stateDir);
-	const cached = killSwitchCache.get(killSwitchPath);
-	// Guard cached here so the remaining operational safety path works with normalized inputs.
-	if (cached?.active && cached.expiresAt > Date.now() && existsSync(killSwitchPath)) {
-		return cached.active;
-	}
-	// Guard exists sync here so the remaining operational safety path works with normalized inputs.
-	const state = readKillSwitchState(stateDir, warn);
-	setKillSwitchCache(killSwitchPath, state.active);
-	return state.active;
-}
-
-/** Implements activate kill switch as the local audit log state operation. */
-export function activateKillSwitch(stateDir: string, reason: string, activatedBy: string): void {
-	const killSwitchPath = getKillSwitchPath(stateDir);
-	// This operational safety step establishes state that later reads and cleanup paths depend on.
-	mkdirSync(path.dirname(killSwitchPath), { recursive: true });
-	writeFileSync(
-		killSwitchPath,
-		JSON.stringify({
-			activated: new Date().toISOString(),
-			reason,
-			activatedBy,
-		}),
-	);
-	setKillSwitchCache(killSwitchPath, true);
-}
-
-/** Implements deactivate kill switch as the local audit log state operation. */
-export function deactivateKillSwitch(stateDir: string): void {
-	const killSwitchPath = getKillSwitchPath(stateDir);
-	rmSync(killSwitchPath, { force: true });
-	setKillSwitchCache(killSwitchPath, false);
 }
 
 /** Implements flush audit writes as the local audit log state operation. */

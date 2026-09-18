@@ -25,7 +25,8 @@ import {
 	DEFAULT_RERANK_MODEL,
 	DEFAULT_RERANK_TIMEOUT_MS,
 	DEFAULT_TEI_RERANK_MAX_CANDIDATES,
-	DEFAULT_TEI_RERANK_MAX_TEXT_LENGTH,
+	DEFAULT_MAX_CONTEXT_TOKENS,
+	RERANK_PROMPT_TEMPLATE_TOKENS,
 	LIGHTWEIGHT_COSINE_WEIGHT,
 	LIGHTWEIGHT_FUSION_WEIGHT,
 	LIGHTWEIGHT_RERANK_PENALTY,
@@ -47,15 +48,62 @@ import {
 // `AbortSignal.timeout()` with a DOMException named "TimeoutError", measured on Node 24 —
 // the earlier "AbortError" check never matched a real timeout, so timeouts were filed as
 // request_error), a reset or refused connection (undici: TypeError "fetch failed" with a
-// `cause`), and a 502/503/504. Fatal statuses (401/403/429) and every other outcome go
+// `cause`), and a 429/502/503/504. Fatal statuses (401/403) and every other outcome go
 // through unchanged. The retry stays inside the batch's wave slot, so the number of
 // in-flight requests per rerank() call does not grow.
 const RERANK_TRANSIENT_ATTEMPTS = 3;
 const RERANK_TRANSIENT_BACKOFF_MS = 200;
-const RERANK_TRANSIENT_STATUSES = new Set([502, 503, 504]);
+const RERANK_TRANSIENT_STATUSES = new Set([429, 502, 503, 504]);
+// Owner measurement, 2026-09-17: a-clean-test-vm -> https://rt3-llm.sno.ai/rerank
+// returned 429 + retry-after: 1 under eight concurrent recalls; bound each queue wait.
+const RERANK_RETRY_AFTER_MAX_MS = 5_000;
 
 function isRerankTimeout(error: unknown): boolean {
 	return error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError");
+}
+
+/**
+ * The reranker's refusal when a pair is over its window, as the endpoint states it:
+ * `{"detail":{"code":"input_token_limit_exceeded","max_input_tokens":512,
+ * "candidates":[{"index":0,"input_tokens":728,"excess_tokens":216}]}}` (measured 2026-09-14).
+ *
+ * It names every offending text, so the batch can be repaired and sent again instead of
+ * losing the scores of the 49 texts that were fine. The counts are the SERVER's, taken with
+ * the ranking model's tokenizer — which is not the embedder's — so they are the only exact
+ * measure available here of how far over the window a text is.
+ */
+const RERANK_OVER_WINDOW_CODE = "input_token_limit_exceeded";
+
+interface RerankOverWindowRefusal {
+	maxInputTokens: number;
+	overLong: { index: number; inputTokens: number }[];
+}
+
+function parseOverWindowRefusal(body: string): RerankOverWindowRefusal | undefined {
+	let parsed: unknown;
+	try {
+		parsed = JSON.parse(body);
+	} catch {
+		return undefined;
+	}
+	if (typeof parsed !== "object" || parsed === null) return undefined;
+	const detail = (parsed as { detail?: unknown }).detail;
+	if (typeof detail !== "object" || detail === null) return undefined;
+	const shape = detail as { code?: unknown; max_input_tokens?: unknown; candidates?: unknown };
+	if (shape.code !== RERANK_OVER_WINDOW_CODE) return undefined;
+	if (typeof shape.max_input_tokens !== "number" || !Array.isArray(shape.candidates)) {
+		return undefined;
+	}
+	const overLong: { index: number; inputTokens: number }[] = [];
+	for (const candidate of shape.candidates) {
+		if (typeof candidate !== "object" || candidate === null) continue;
+		const named = candidate as { index?: unknown; input_tokens?: unknown };
+		if (typeof named.index !== "number" || typeof named.input_tokens !== "number") continue;
+		overLong.push({ index: named.index, inputTokens: named.input_tokens });
+	}
+	return overLong.length === 0
+		? undefined
+		: { maxInputTokens: shape.max_input_tokens, overLong };
 }
 
 function isTransientRerankError(error: unknown): boolean {
@@ -72,6 +120,7 @@ interface RerankReply {
 async function fetchRerankWithRetry(send: () => Promise<Response>): Promise<RerankReply> {
 	let lastError: unknown;
 	for (let attempt = 1; attempt <= RERANK_TRANSIENT_ATTEMPTS; attempt += 1) {
+		let retryDelayMs = RERANK_TRANSIENT_BACKOFF_MS * attempt;
 		try {
 			const response = await send();
 			if (response.ok) {
@@ -84,6 +133,12 @@ async function fetchRerankWithRetry(send: () => Promise<Response>): Promise<Rera
 			if (!RERANK_TRANSIENT_STATUSES.has(response.status) || attempt === RERANK_TRANSIENT_ATTEMPTS) {
 				return { response };
 			}
+			if (response.status === 429) {
+				const retryAfter = response.headers.get("retry-after");
+				if (retryAfter !== null && /^\d+$/.test(retryAfter)) {
+					retryDelayMs = Math.min(Number.parseInt(retryAfter, 10) * 1_000, RERANK_RETRY_AFTER_MAX_MS);
+				}
+			}
 			// Drop the failed body before the next attempt: undici cannot reuse the
 			// connection while a body is unconsumed, so a run of 5xx would pin one
 			// connection per attempt (PR #225 review).
@@ -93,7 +148,7 @@ async function fetchRerankWithRetry(send: () => Promise<Response>): Promise<Rera
 			if (!isTransientRerankError(error) || attempt === RERANK_TRANSIENT_ATTEMPTS) throw error;
 			lastError = error;
 		}
-		await new Promise((resolve) => setTimeout(resolve, RERANK_TRANSIENT_BACKOFF_MS * attempt));
+		await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
 	}
 	throw lastError;
 }
@@ -158,26 +213,58 @@ Object.assign(MemoryRetriever.prototype, {
 		// reach at 50 rows whatever the candidate pool held; with the pool at 512
 		// that cap decided the answer more often than the ranker did.
 		// `rerankMaxCandidates` stays the TOTAL an operator allows out to the reranker; the
-		// batch size is the transport's own per-request limit, and only TEI has one.
+		// batch size is the transport's own per-request limit.
+		//
+		// The cap is applied to every provider, not only to the one whose limit it was measured
+		// against. It used to read `provider === "tei"`, which made the guarantee depend on a
+		// deploy script setting that name: with the provider left unset the code sends the whole
+		// pool in one request, and the self-hosted ranker answers a 51-text request with
+		// `"too many texts: max 50, got 51"` — an HTTP 400 the error path files as "reranker
+		// unavailable", so every search silently serves raw fusion order. Hosted providers
+		// document much higher limits, so capping them here only sends more, smaller requests,
+		// which the waves below already run four at a time. Costing a little parallelism is the
+		// cheap side of this trade; a silent whole-search degradation is the expensive one.
 		const maxCandidates = this.config.rerankMaxCandidates;
 		const overCap = maxCandidates !== undefined && candidates.length > maxCandidates;
 		const toRerank = overCap ? candidates.slice(0, maxCandidates) : candidates;
 		const beyondCap = overCap ? candidates.slice(maxCandidates) : [];
-		const batchSize =
-			provider === "tei" ? DEFAULT_TEI_RERANK_MAX_CANDIDATES : Math.max(toRerank.length, 1);
+		const batchSize = DEFAULT_TEI_RERANK_MAX_CANDIDATES;
 
-		// Some rerank deployments (e.g. the same Sno TEI reranker) also reject a
-		// single over-length document outright ({"error":"text too long: max
-		// 8192 characters"}) — LoCoMo's bulk-import corpus stores whole session
-		// transcripts as one memory chunk and regularly exceeds this. Only the
-		// outgoing request text is truncated; `candidate.entry.text` in the
-		// returned result is untouched.
-		const maxTextLength =
-			this.config.rerankMaxTextLength ??
-			(provider === "tei" ? DEFAULT_TEI_RERANK_MAX_TEXT_LENGTH : undefined);
-		const rerankTexts = toRerank.map((c) =>
-			maxTextLength !== undefined ? c.entry.text.slice(0, maxTextLength) : c.entry.text,
-		);
+		// The reranker scores the query and ONE document together in a single token window, and
+		// refuses the WHOLE request when any pair exceeds it — "no candidates were scored or
+		// truncated" (measured 2026-09-14). So one over-budget candidate costs the scores of its
+		// whole batch, which the error path then reports as a plain fallback to fusion scores.
+		//
+		// The document budget is therefore what the query leaves, and it is never the record
+		// ceiling: a record at DEFAULT_MAX_CONTEXT_TOKENS plus a query of any length is already
+		// past the window. Cutting here keeps `candidate.entry.text` in the result untouched.
+		const queryTokens = this.embedder.countTokens(query);
+		const documentTokenBudget =
+			DEFAULT_MAX_CONTEXT_TOKENS - RERANK_PROMPT_TEMPLATE_TOKENS - queryTokens;
+		// Guard the budget here so the remaining retrieval scoring path works with normalized inputs.
+		if (documentTokenBudget <= 0) {
+			// Log operational context for retrieval ranking without changing control flow.
+			log.warn("rerank skipped: the query alone fills the reranker token window", {
+				queryTokens,
+				window: DEFAULT_MAX_CONTEXT_TOKENS,
+				templateTokens: RERANK_PROMPT_TEMPLATE_TOKENS,
+			}, { event_name: "memory.retriever_rerank.diagnostic", file: "packages/sno-station-mem/src/engine/retrieval/retriever-rerank.ts", function: "rerank", site_id: "retrieval.retriever-rerank.rerank.query_over_window" });
+			return { candidates, fallback: { reason: "query_over_window", provider } };
+		}
+		let truncatedCandidates = 0;
+		const rerankTexts = toRerank.map((c) => {
+			const bounded = this.embedder.truncateToTokens(c.entry.text, documentTokenBudget);
+			if (bounded !== c.entry.text) truncatedCandidates += 1;
+			return bounded;
+		});
+		if (truncatedCandidates > 0) {
+			// Log operational context for retrieval ranking without changing control flow.
+			log.warn("rerank candidates were cut to the document budget the query left", {
+				truncatedCandidates,
+				documentTokenBudget,
+				queryTokens,
+			}, { event_name: "memory.retriever_rerank.diagnostic", file: "packages/sno-station-mem/src/engine/retrieval/retriever-rerank.ts", function: "rerank", site_id: "retrieval.retriever-rerank.rerank.candidate_over_ceiling" });
+		}
 
 		// Isolate the retrieval ranking operation that can fail because of runtime I/O or input shape.
 		try {
@@ -185,72 +272,115 @@ Object.assign(MemoryRetriever.prototype, {
 			// re-based onto the full candidate list here, so a score can never land
 			// on a different row than the one it was given for.
 			const runBatch = async (start: number): Promise<RerankItem[] | RerankFallbackReason> => {
-				const batchTexts = rerankTexts.slice(start, start + batchSize);
-				const { headers, body } = buildRerankRequest(
-					provider,
-					rerankApiKey,
-					this.config.rerankModel ?? DEFAULT_RERANK_MODEL,
-					query,
-					batchTexts,
-					batchTexts.length,
-				);
-
-				// Await the retrieval ranking dependency before deriving downstream state. A
-				// transient transport failure is retried inside this batch's wave slot (issue
-				// #222): measured 2026-09-10, 5 of 1,542 searches fell back on an idle box and 56
-				// in 30 minutes beside 8 concurrent searches, each on the first miss.
-				const { response, data } = await fetchRerankWithRetry(() =>
-					fetch(rerankEndpoint, {
-						method: "POST",
-						headers,
-						body: JSON.stringify(body),
-						signal: AbortSignal.timeout(rerankTimeoutMs),
-					}),
-				);
-
-				// Guard response.ok here so the remaining retrieval scoring path works with normalized inputs.
-				if (!response.ok) {
-					const retryAfter = response.headers.get("retry-after");
-					const fatalError = buildRerankHttpError(response.status, retryAfter);
-					// Guard guard condition here so the remaining retrieval scoring path works with normalized inputs.
-					if (fatalError) {
-						// Surface this invalid retrieval ranking state as an explicit typed failure.
-						throw fatalError;
-					}
-					// Capture the response body for diagnostics — a bare status code
-					// previously left every non-fatal rerank failure (e.g. a provider's
-					// undocumented batch-size or text-length limit) impossible to
-					// diagnose without manually reproducing the request by hand.
-					const errorBody = await response.text().catch(() => "<unreadable body>");
-					// Log operational context for retrieval ranking without changing control flow.
-					log.warn("rerank API failed, using pre-rerank results", {
-						status: response.status,
-						endpoint_hash: createHash("sha256").update(rerankEndpoint).digest("hex"),
-						retryAfter,
-						sentToRerankCount: batchTexts.length,
-						batchStart: start,
-						body_length: errorBody.length,
-					}, { event_name: "memory.retriever_rerank.diagnostic", file: "packages/sno-station-mem/src/engine/retrieval/retriever-rerank.ts", function: "runBatch", site_id: "retrieval.retriever-rerank.runBatch.76d7d1fac6" });
-					return "http_error";
-				}
-
-				const parsed = parseRerankResponse(provider, data);
-				// Guard items here so the remaining retrieval scoring path works with normalized inputs.
-				if (!parsed) {
-					// Log operational context for retrieval ranking without changing control flow.
-					log.warn("rerank API returned unparseable response", {
+				let batchTexts = rerankTexts.slice(start, start + batchSize);
+				// Two passes at most. The local cut above uses the EMBEDDER's tokenizer, which is
+				// not the tokenizer the ranking model counts with, so a text can still arrive over
+				// the window — most easily in a script the two disagree about. The endpoint then
+				// refuses the whole batch and names the texts at fault, so the second pass sends it
+				// again with just those cut to what its own count says fits. Without this, one
+				// over-window text costs the scores of the other 49 and the search silently serves
+				// raw fusion order.
+				for (let pass = 0; ; pass += 1) {
+					const { headers, body } = buildRerankRequest(
 						provider,
-						endpoint_hash: createHash("sha256").update(rerankEndpoint).digest("hex"),
-						batchStart: start,
-					}, { event_name: "memory.retriever_rerank.diagnostic", file: "packages/sno-station-mem/src/engine/retrieval/retriever-rerank.ts", function: "runBatch", site_id: "retrieval.retriever-rerank.runBatch.4429b8bd8a" });
-					return "invalid_response";
+						rerankApiKey,
+						this.config.rerankModel ?? DEFAULT_RERANK_MODEL,
+						query,
+						batchTexts,
+						batchTexts.length,
+					);
+
+					// Await the retrieval ranking dependency before deriving downstream state. A
+					// transient transport failure is retried inside this batch's wave slot (issue
+					// #222): measured 2026-09-10, 5 of 1,542 searches fell back on an idle box and 56
+					// in 30 minutes beside 8 concurrent searches, each on the first miss.
+					const { response, data } = await fetchRerankWithRetry(() =>
+						fetch(rerankEndpoint, {
+							method: "POST",
+							headers,
+							body: JSON.stringify(body),
+							signal: AbortSignal.timeout(rerankTimeoutMs),
+						}),
+					);
+
+					// Guard response.ok here so the remaining retrieval scoring path works with normalized inputs.
+					if (!response.ok) {
+						const retryAfter = response.headers.get("retry-after");
+						const fatalError = buildRerankHttpError(response.status, retryAfter);
+						// Guard guard condition here so the remaining retrieval scoring path works with normalized inputs.
+						if (fatalError) {
+							// Surface this invalid retrieval ranking state as an explicit typed failure.
+							throw fatalError;
+						}
+						// Capture the response body for diagnostics — a bare status code
+						// previously left every non-fatal rerank failure (e.g. a provider's
+						// undocumented batch-size or text-length limit) impossible to
+						// diagnose without manually reproducing the request by hand.
+						const errorBody = await response.text().catch(() => "<unreadable body>");
+						const refusal = pass === 0 ? parseOverWindowRefusal(errorBody) : undefined;
+						// Guard the refusal here so the remaining retrieval scoring path works with normalized inputs.
+						if (refusal) {
+							const allowed = refusal.maxInputTokens - RERANK_PROMPT_TEMPLATE_TOKENS;
+							batchTexts = batchTexts.map((text, index) => {
+								const named = refusal.overLong.find((c) => c.index === index);
+								// Untouched: this text was inside the window as sent.
+								if (!named) return text;
+								// The reported count covers the WHOLE pair, and the query does not shrink
+								// with the document, so the document's share of the allowance is the
+								// allowance less the query. Scaling the document by the pair's ratio
+								// alone leaves the query counted at the ranker's rate and not paid for:
+								// with a 100-token query and a ranker counting half again what the
+								// embedder does, the resent pair is still over the window and the batch
+								// is lost anyway. Ratio here is the server's count per local token
+								// across query and document together, which is all one refusal reports.
+								const localTokens = this.embedder.countTokens(text);
+								const localPairTokens = queryTokens + localTokens;
+								const target = Math.max(
+									1,
+									Math.floor((allowed * localPairTokens) / named.inputTokens) - queryTokens,
+								);
+								return this.embedder.truncateToTokens(text, target);
+							});
+							// Log operational context for retrieval ranking without changing control flow.
+							log.warn("rerank batch refused over its token window; resending the named texts cut to fit", {
+								status: response.status,
+								overLongCount: refusal.overLong.length,
+								maxInputTokens: refusal.maxInputTokens,
+								sentToRerankCount: batchTexts.length,
+								batchStart: start,
+							}, { event_name: "memory.retriever_rerank.diagnostic", file: "packages/sno-station-mem/src/engine/retrieval/retriever-rerank.ts", function: "runBatch", site_id: "retrieval.retriever-rerank.runBatch.over_window_repair" });
+							continue;
+						}
+						// Log operational context for retrieval ranking without changing control flow.
+						log.warn("rerank API failed, using pre-rerank results", {
+							status: response.status,
+							endpoint_hash: createHash("sha256").update(rerankEndpoint).digest("hex"),
+							retryAfter,
+							sentToRerankCount: batchTexts.length,
+							batchStart: start,
+							body_length: errorBody.length,
+						}, { event_name: "memory.retriever_rerank.diagnostic", file: "packages/sno-station-mem/src/engine/retrieval/retriever-rerank.ts", function: "runBatch", site_id: "retrieval.retriever-rerank.runBatch.76d7d1fac6" });
+						return "http_error";
+					}
+
+					const parsed = parseRerankResponse(provider, data);
+					// Guard items here so the remaining retrieval scoring path works with normalized inputs.
+					if (!parsed) {
+						// Log operational context for retrieval ranking without changing control flow.
+						log.warn("rerank API returned unparseable response", {
+							provider,
+							endpoint_hash: createHash("sha256").update(rerankEndpoint).digest("hex"),
+							batchStart: start,
+						}, { event_name: "memory.retriever_rerank.diagnostic", file: "packages/sno-station-mem/src/engine/retrieval/retriever-rerank.ts", function: "runBatch", site_id: "retrieval.retriever-rerank.runBatch.4429b8bd8a" });
+						return "invalid_response";
+					}
+					const batchItems: RerankItem[] = [];
+					for (const item of parsed) {
+						if (item.index < 0 || item.index >= batchTexts.length) continue;
+						batchItems.push({ index: start + item.index, score: item.score });
+					}
+					return batchItems;
 				}
-				const batchItems: RerankItem[] = [];
-				for (const item of parsed) {
-					if (item.index < 0 || item.index >= batchTexts.length) continue;
-					batchItems.push({ index: start + item.index, score: item.score });
-				}
-				return batchItems;
 			};
 
 			const batchStarts: number[] = [];
@@ -258,8 +388,8 @@ Object.assign(MemoryRetriever.prototype, {
 
 			// The batches go out in waves rather than one after another: a pool of
 			// `MAX_CANDIDATE_POOL_SIZE` is 11 TEI requests, and serially that is 11 timeouts' worth of
-			// wall clock on one tool call. A wave is settled before the next one starts and the first
-			// failure ends the whole rerank, which is what the serial loop did, so a wedged reranker
+			// wall clock on one tool call. A wave is settled before the next one starts; any rejection
+			// takes precedence over degradation and ends the whole rerank, so a wedged reranker
 			// costs one wave of up to RERANK_TRANSIENT_ATTEMPTS timeouts. Outcomes are read in ascending batch order and the items are
 			// appended in that same order, so the list this builds is the one the serial loop built.
 			const items: RerankItem[] = [];
@@ -272,11 +402,18 @@ Object.assign(MemoryRetriever.prototype, {
 				// `allSettled`, not `all`: a fatal HTTP status rejects its batch, and the siblings
 				// already in flight must still be awaited or their own rejections surface unhandled.
 				const settled = await Promise.allSettled(waveStarts.map(runBatch));
+				for (const outcome of settled) {
+					if (outcome.status === "rejected" && outcome.reason instanceof RetrievalError) {
+						throw outcome.reason;
+					}
+				}
 				// Iterate deterministically so retrieval ranking output order remains stable.
 				for (const outcome of settled) {
 					// Surface this invalid retrieval ranking state as an explicit typed failure.
 					if (outcome.status === "rejected") throw outcome.reason;
-					if (typeof outcome.value === "string") {
+				}
+				for (const outcome of settled) {
+					if (outcome.status === "fulfilled" && typeof outcome.value === "string") {
 						return { candidates, fallback: { reason: outcome.value, provider } };
 					}
 				}
@@ -285,6 +422,16 @@ Object.assign(MemoryRetriever.prototype, {
 					if (outcome.status === "fulfilled" && typeof outcome.value !== "string") {
 						items.push(...outcome.value);
 					}
+				}
+			}
+
+			// TEI logits share one scale across batches; normalize over the whole retrieval.
+			let minScore = Infinity;
+			let maxScore = -Infinity;
+			if (provider === "tei") {
+				for (const item of items) {
+					minScore = Math.min(minScore, item.score);
+					maxScore = Math.max(maxScore, item.score);
 				}
 			}
 
@@ -307,8 +454,14 @@ Object.assign(MemoryRetriever.prototype, {
 				if (!candidate) continue;
 				const sourceScore = this.getRerankSourceScore(candidate);
 				const floor = this.getRerankPreservationFloor(candidate, false);
+				let crossScore = item.score;
+				if (provider === "tei") {
+					crossScore = maxScore === minScore
+						? 1 / (1 + Math.exp(-item.score))
+						: (item.score - minScore) / (maxScore - minScore);
+				}
 				const blendedScore = clamp01WithFloor(
-					item.score * blendCross + sourceScore * blendVector,
+					crossScore * blendCross + sourceScore * blendVector,
 					floor,
 				);
 				// Append only after validation has accepted this value for the current branch.
@@ -347,7 +500,14 @@ Object.assign(MemoryRetriever.prototype, {
 				returnedCount: reranked.length,
 				provider,
 			}, { event_name: "memory.retriever_rerank.diagnostic", file: "packages/sno-station-mem/src/engine/retrieval/retriever-rerank.ts", function: "rerank", site_id: "retrieval.retriever-rerank.rerank.7847c6248a" });
-			return { candidates: merged.length > 0 ? merged : candidates };
+			return {
+				candidates: merged.length > 0 ? merged : candidates,
+				stats: {
+					rerankSentCount: toRerank.length,
+					rerankReturnedCount: reranked.length,
+					rerankBeyondCapCount: beyondCap.length,
+				},
+			};
 		} catch (error) {
 			// Route failure states into a deterministic recovery or reporting branch.
 			if (error instanceof RetrievalError) {

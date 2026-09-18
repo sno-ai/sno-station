@@ -33,7 +33,7 @@ import {
 	stableHash,
 	withStoreWriteOutcome,
 } from "./memory-store-shared";
-import { validateStoreWriteMetadata } from "./memory-store-write-validation";
+import { recordTokenCounter, validateStoreWriteMetadata } from "./memory-store-write-validation";
 
 /**
  * The memory table holds memories. These create paths omit `lane` from their
@@ -154,6 +154,7 @@ Object.assign(MemoryStore.prototype, {
 				lane,
 			},
 			"store",
+			await recordTokenCounter(this.embedder),
 		);
 		const importance = clamp01(safeEntry.importance ?? DEFAULT_IMPORTANCE, DEFAULT_IMPORTANCE);
 		// Snapshot caller-owned fields before entering the mutex/transaction. Without
@@ -415,6 +416,7 @@ Object.assign(MemoryStore.prototype, {
 				lane: "quarantined",
 			},
 			"storeQuarantinedCandidate",
+			await recordTokenCounter(this.embedder),
 		);
 		const importance = clamp01(safeEntry.importance ?? DEFAULT_IMPORTANCE, DEFAULT_IMPORTANCE);
 		const text = safeEntry.text;
@@ -509,6 +511,7 @@ Object.assign(MemoryStore.prototype, {
 		this: MemoryStoreInternals,
 		entries: Array<StoreInput | null | undefined>,
 	): Promise<StoreResult[]> {
+		const countRecordTokens = await recordTokenCounter(this.embedder);
 		// Runtime guard: callers (ambient-learning pipeline, future insight-distill
 		// batching) can produce malformed entries — sparse-array slots, missing
 		// text/vector fields. Mirror upstream a8bb8ec's defensive filter shape
@@ -554,6 +557,7 @@ Object.assign(MemoryStore.prototype, {
 					lane,
 				},
 				"bulkStore",
+				countRecordTokens,
 			);
 			// Same boundary as store(): this table holds memories only. Closing it
 			// here too, or bulkStore stays a way around the single-write guard.
@@ -790,6 +794,7 @@ Object.assign(MemoryStore.prototype, {
 				lane: create.lane ?? "active",
 			},
 			"supersede",
+			await recordTokenCounter(this.embedder),
 		);
 		const hash = stableHash(hashInputForEntry(create.text, validated.metadata));
 		const importance = clamp01(create.importance ?? DEFAULT_IMPORTANCE, DEFAULT_IMPORTANCE);
@@ -1134,6 +1139,7 @@ Object.assign(MemoryStore.prototype, {
 			buildRawSourceMetadata: (ids: { rawSourceId: string; mergedId: string }) => string;
 		},
 	): Promise<{ rawSource: MemoryEntry; merged: MemoryEntry }> {
+		const countRecordTokens = await recordTokenCounter(this.embedder);
 		assertPlaceableMemory(args.rawSource, "createMergeWithRawLineage");
 		const rawSourceId = randomUUID();
 		const mergedId = randomUUID();
@@ -1164,6 +1170,7 @@ Object.assign(MemoryStore.prototype, {
 				enforceWriteAuthority: true,
 			},
 			"createMergeWithRawLineage.rawSource",
+			countRecordTokens,
 		);
 		const rawText = rawSource.text;
 		const rawProjectId = rawSource.projectId;
@@ -1186,6 +1193,7 @@ Object.assign(MemoryStore.prototype, {
 				enforceWriteAuthority: true,
 			},
 			"createMergeWithRawLineage.merged",
+			countRecordTokens,
 		);
 		const mergedText = mergedInput.text;
 		const mergedProjectId = mergedInput.projectId;
@@ -1203,6 +1211,7 @@ Object.assign(MemoryStore.prototype, {
 				timestamp: rawTimestamp,
 			},
 			"createMergeWithRawLineage.rawSourceClose",
+			countRecordTokens,
 		);
 
 		const rawChunkRows = await this.prepareChunkInserts(rawSourceId, rawText);
@@ -1259,6 +1268,7 @@ Object.assign(MemoryStore.prototype, {
 						timestamp: row.timestamp,
 					},
 					"createMergeWithRawLineage.closeExisting",
+					countRecordTokens,
 				);
 				return {
 					id: close.id,
@@ -1424,6 +1434,7 @@ Object.assign(MemoryStore.prototype, {
 			profileRecovery?: ProfileRecoveryWrite;
 		},
 	): Promise<{ event: MemoryEntry; replacement: MemoryEntry }> {
+		const countRecordTokens = await recordTokenCounter(this.embedder);
 		assertPlaceableMemory(args.event, "createEventAndSupersede");
 		assertPlaceableMemory(args.replacement, "createEventAndSupersede");
 		assertProfileRecoveryWrite(args.profileRecovery);
@@ -1453,6 +1464,7 @@ Object.assign(MemoryStore.prototype, {
 				enforceWriteAuthority: true,
 			},
 			"createEventAndSupersede.event",
+			countRecordTokens,
 		);
 		const eventText = event.text;
 		const eventProjectId = event.projectId;
@@ -1475,6 +1487,7 @@ Object.assign(MemoryStore.prototype, {
 				enforceWriteAuthority: true,
 			},
 			"createEventAndSupersede.replacement",
+			countRecordTokens,
 		);
 		const replacementText = replacement.text;
 		const replacementProjectId = replacement.projectId;
@@ -1561,6 +1574,7 @@ Object.assign(MemoryStore.prototype, {
 						timestamp: row.timestamp,
 					},
 					"createEventAndSupersede.closeExisting",
+					countRecordTokens,
 				);
 				return {
 					id: close.id,

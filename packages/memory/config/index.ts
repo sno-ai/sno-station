@@ -17,6 +17,9 @@ import {
 import { LOCAL_EMBEDDING_MODEL } from "@snoai/embedder";
 import { z } from "zod";
 
+/** Maximum wait for sidecar requests and resource cleanup during shutdown. */
+export const MEMORY_SHUTDOWN_TIMEOUT_MS: number = 5_000;
+
 // =============================================================================
 // SCORING & THRESHOLDS
 // =============================================================================
@@ -86,9 +89,21 @@ export const CANDIDATE_POOL_SIZE = 64;
  * so it bounds how much of a live store one answer can see. Raised 100 → 512 on 2026-09-06 (owner
  * order): atomic rows are small and many, and at 100 a 159-row live store served 76 rows per
  * question, cutting live to-dos the question asked for; at 512 the whole store came back for
- * 3,476 tokens, half the recall token budget.
+ * 3,476 tokens, half the recall token budget. Raised again 512 -> 2048 on 2026-09-15: the pool is
+ * `max(candidatePoolSize, limit * 2)` clamped here, so at 512 a caller asking for more than 256
+ * memories silently got fewer, and the ceiling — not the ranking — decided what the model saw.
  */
-export const MAX_CANDIDATE_POOL_SIZE = 512;
+export const MAX_CANDIDATE_POOL_SIZE = 2_048;
+
+/**
+ * How many candidates one `memory_recall` call retrieves and ranks.
+ *
+ * Split from `MAX_CANDIDATE_POOL_SIZE` on 2026-09-15. The tool used to ask for that ceiling
+ * directly, so raising the ceiling to let auto-recall inject more memories would also have made
+ * every tool call fuse and rerank four times as many rows for a result the token packer bounds
+ * at `DEFAULT_RECALL_TOKEN_BUDGET` anyway. This keeps the tool's cost where it was measured.
+ */
+export const MAX_RECALL_TOOL_CANDIDATES = 512;
 
 /**
  * How many live rows of the same subject the arrival retirement judgement is shown for one
@@ -176,12 +191,6 @@ export const MAX_AGGREGATION_ROWS = 640;
  */
 export const MAX_AGGREGATION_RESULT_TOKENS = 32_768;
 
-/**
- * Per-row text ceiling on the aggregation path. With the budget above admitting the whole measured
- * population (mean row 317 characters), this clips a pathological row rather than shaping the
- * ordinary result.
- */
-export const MAX_AGGREGATION_MEMORY_CHARS = 1_024;
 
 /** Pool size = max(candidatePoolSize, limit * PRECISION_RECALL_POOL_SIZE_FACTOR) */
 export const PRECISION_RECALL_POOL_SIZE_FACTOR = 2;
@@ -189,6 +198,9 @@ export const PRECISION_RECALL_POOL_SIZE_FACTOR = 2;
 // =============================================================================
 // RETRIEVAL — SCORING PIPELINE
 // =============================================================================
+
+/** Enable age-based retrieval scoring only when explicitly requested. */
+export const TEMPORAL_WEIGHTING_DEFAULT = false;
 
 /** Recency boost half-life in days (entries this old get 50% boost) */
 export const RECENCY_HALF_LIFE_DAYS = 14;
@@ -264,49 +276,56 @@ export const DEFAULT_RERANK_TIMEOUT_MS = 15_000;
 export const DEFAULT_RERANK_BATCH_CONCURRENCY = 4;
 
 /**
- * Safety-net batch cap applied when `rerankProvider: "tei"` and
- * `rerankMaxCandidates` is unset. Self-hosted text-embeddings-inference
- * deployments commonly reject an over-limit batch outright rather than
- * truncating it (confirmed against this repo's own Sno TEI reranker: a
- * request over 50 texts returns HTTP 400, which the retriever's error
- * handling silently treats as "reranker unavailable" — every call degrades
- * to raw fusion scores with zero visible error). Hosted providers (voyage,
- * jina, pinecone, dashscope) have documented, much higher limits and are not
- * defaulted here; only "tei" is the self-hosted, limit-unknown-by-default case.
+ * Texts per HTTP request, applied whatever `rerankMaxCandidates` allows out in total: that one
+ * is the operator's budget, this one is the transport's own per-request limit.
+ *
+ * Confirmed 2026-09-14 against the deployed self-hosted ranker, which answers a 51-text request
+ * with `{"error":"too many texts: max 50, got 51"}`. Such a deployment rejects an over-limit
+ * batch outright rather than truncating it, and the retriever files that HTTP 400 as "reranker
+ * unavailable" — so getting this wrong degrades every call to raw fusion order with no visible
+ * error.
+ *
+ * It binds every provider, not only the self-hosted one it was measured against. Making it
+ * conditional on the configured provider name put the guarantee in a deploy script instead of
+ * in the code. Hosted providers (voyage, jina, pinecone, dashscope) document much higher
+ * limits, so holding them to this one only sends more, smaller requests, which the rerank waves
+ * already run four at a time.
  */
 export const DEFAULT_TEI_RERANK_MAX_CANDIDATES = 50;
 
-/**
- * Safety-net per-candidate character cap applied when `rerankProvider: "tei"`
- * and `rerankMaxTextLength` is unset. This repo's Sno TEI reranker rejects
- * any single text over 8192 characters outright ({"error":"text too long:
- * max 8192 characters"}) rather than truncating it — LoCoMo's bulk-import
- * corpus stores whole session transcripts as single memory chunks and
- * regularly exceeds this (measured up to ~9200 chars), so this is not a
- * hypothetical edge case. Text sent to the reranker is truncated to this
- * length; the candidate's actual `entry.text` is never mutated, only the
- * outgoing rerank request payload.
- */
-export const DEFAULT_TEI_RERANK_MAX_TEXT_LENGTH = 8192;
 
 // =============================================================================
 // EMBEDDING — CHUNKER
 // =============================================================================
 
-/** Default maximum context window in tokens for the local ONNX embedder. */
+/**
+ * THE per-record token ceiling, and the only number of its kind in this repository (owner
+ * ruling 2026-09-14). One stored memory record, one embedder input, one rerank candidate,
+ * one row rendered into an aggregation answer: each is at most this many tokens, counted by
+ * the embedder's own tokenizer (`Embedder.countTokens`), never estimated from characters.
+ * Why one number: the local ONNX embedder silently truncates past its context window, the
+ * Sno reranker silently truncates past its own, and a record longer than either scores on
+ * its first half only — measured 2026-09-14, a claim placed past the cut ranked 0.0001.
+ * The reranker's window is shared with the query and a fixed instruction, so this ceiling
+ * must leave that room. It does NOT leave it by itself: a record at this ceiling plus any
+ * query at all is already past the reranker's window, which is why the rerank path cuts the
+ * request copy of a candidate down to what the query leaves, inside this same number.
+ * The two tokenizers are no longer one vocabulary either — the deployed ranking model is not
+ * the embedder's model (measured 2026-09-14), so a count taken here is an estimate of the
+ * ranker's count, and the ranker's own refusal is the only exact measure.
+ * Extraction is told to split anything longer (skill `extract-atomic-memory`); the store
+ * refuses a longer record outright. Every other size in this file that describes a piece
+ * of a record derives from this constant — do not write its value, or a fraction of it, as
+ * a literal anywhere else.
+ */
 export const DEFAULT_MAX_CONTEXT_TOKENS = 512;
 
-/** Default chars-per-token ratio (conservative for all scripts including CJK) */
-export const DEFAULT_CHARS_PER_TOKEN = 3.0;
-
-/** Safety margin applied when converting token limit to char limit (90%) */
-export const CHUNKER_SAFETY_MARGIN = 0.9;
-
-/** CJK chars consume ~2-3 tokens each; divide char limits by this for CJK-heavy text */
-export const CJK_CHAR_TOKEN_DIVISOR = 2.5;
-
-/** Text is CJK-heavy when this fraction of non-whitespace chars are CJK */
-export const CJK_RATIO_THRESHOLD = 0.3;
+/**
+ * Tokens the ranking model's own prompt template adds to a pair, on top of the query and the
+ * document. Measured against the deployed endpoint 2026-09-14: a 509-token pair is accepted
+ * and reported back as 512 input tokens, and a 510-token pair is refused as 513.
+ */
+export const RERANK_PROMPT_TEMPLATE_TOKENS = 3;
 
 /** Maximum lines per chunk before forcing an earlier split at a line boundary */
 export const DEFAULT_MAX_LINES_PER_CHUNK = 50;
@@ -349,11 +368,51 @@ export const FORGET_QUERY_MIN_SCORE = 0.8;
 // BACKUP
 // =============================================================================
 
-/** Interval between automatic backups in milliseconds (1 hour) */
-export const BACKUP_INTERVAL_MS = 3_600_000;
+/**
+ * Minimum age of the newest backup before another is taken (1 day). A backup is a full copy of
+ * the store, so an hourly cadence cost a 1.7 GB store 40 GB of disk a day.
+ */
+export const BACKUP_INTERVAL_MS = 86_400_000;
 
 /** Number of backup files to retain before rotation */
-export const BACKUP_RETENTION_COUNT = 24;
+export const BACKUP_RETENTION_COUNT = 6;
+
+/**
+ * Share of the backup volume that must stay free. Before a backup is written the oldest backups are
+ * deleted until the copy fits above this floor, and again afterwards if the volume is still under
+ * it; the newest backup is always kept, and when even that is not enough the backup is skipped.
+ */
+export const BACKUP_MIN_FREE_DISK_RATIO = 0.1;
+
+// =============================================================================
+// MAINTENANCE
+// =============================================================================
+// One timer wakes every MAINTENANCE_TICK_MS and runs each job whose own interval has elapsed.
+// Every job has its own constant so changing one cadence never moves another.
+
+/** How often the maintenance timer wakes to see which jobs are due (1 hour). */
+export const MAINTENANCE_TICK_MS = 3_600_000;
+
+/** Full-page integrity sweep (1 hour). */
+export const INTEGRITY_CHECK_INTERVAL_MS = 3_600_000;
+
+/** Usage-telemetry outbox drain and quarantine cleanup (1 hour). */
+export const USAGE_OUTBOX_INTERVAL_MS = 3_600_000;
+
+/** Pruning of expired recall/inject usage events (1 hour). */
+export const USAGE_EVENT_RETENTION_INTERVAL_MS = 3_600_000;
+
+/** Full-text index segment merge (1 hour). */
+export const FTS_MERGE_INTERVAL_MS = 3_600_000;
+
+/** Query-planner statistics refresh (1 hour). */
+export const PLANNER_STATISTICS_INTERVAL_MS = 3_600_000;
+
+/**
+ * How often the automatic REM trigger is evaluated (1 hour). Evaluating is only a check: REM
+ * itself runs on its own daily schedule and volume rule in src/sidecar/rem-trigger.ts.
+ */
+export const REM_TRIGGER_CHECK_INTERVAL_MS = 3_600_000;
 
 // =============================================================================
 // CACHE — EMBEDDER
@@ -414,6 +473,13 @@ export const SESSION_SUMMARY_MAX_CHUNKS = 8;
 
 /** Transcript budget shared by an atomic window and its preceding context. */
 export const ATOMIC_EXTRACTION_MAX_INPUT_TOKENS = 4_096;
+export const ATOMIC_ENRICHMENT_OUTPUT_TOKEN_BUDGET = 1_400;
+/**
+ * Output cap of one capture call. The capture reply lists every claim and then every fact with
+ * its quote, roughly 70 tokens per fact; at 4,096 a 35-turn session replayed as one turn hit the
+ * cap and lost the whole window (43 of 272 LoCoMo sessions, measured 2026-09-13).
+ */
+export const ATOMIC_CAPTURE_OUTPUT_TOKEN_BUDGET = 8_192;
 
 /** Minimum text length for CJK content to be captured */
 export const CAPTURE_MIN_LENGTH_CJK = 4;
@@ -586,12 +652,19 @@ export const PROFILE_MERGE_THRESHOLD = 0.88;
 // keep the injected window usable. This mem-claw-local override is the source of
 // truth for what memory-store-row-codec actually chunks with; the shared package
 // default is unchanged so other consumers keep the multi-dataset 512/1536 sizing.
-export const RETRIEVAL_STORAGE_CHUNK_PROFILE = {
-	minTokens: 256,
-	targetTokens: 384,
-	maxTokens: 448,
-	overlapTokens: 32,
-} as const;
+// Expressed as fractions of DEFAULT_MAX_CONTEXT_TOKENS (1/2, 3/4, 7/8, 1/16) so the
+// validated geometry is preserved exactly while the only literal stays the ceiling itself.
+export const RETRIEVAL_STORAGE_CHUNK_PROFILE: {
+	readonly minTokens: number;
+	readonly targetTokens: number;
+	readonly maxTokens: number;
+	readonly overlapTokens: number;
+} = {
+	minTokens: DEFAULT_MAX_CONTEXT_TOKENS / 2,
+	targetTokens: (DEFAULT_MAX_CONTEXT_TOKENS * 3) / 4,
+	maxTokens: (DEFAULT_MAX_CONTEXT_TOKENS * 7) / 8,
+	overlapTokens: DEFAULT_MAX_CONTEXT_TOKENS / 16,
+};
 
 /** Minimum tokens per chunk before merge (mirrors RETRIEVAL_STORAGE_CHUNK_PROFILE). */
 export const CHUNK_MIN_TOKENS: typeof RETRIEVAL_STORAGE_CHUNK_PROFILE.minTokens =

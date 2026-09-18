@@ -34,10 +34,11 @@ const SKILL_FILE = resolveSkillPath();
 
 const loadedSkillFile = readFileSync(SKILL_FILE, "utf8");
 const calendarMeaning = readFileSync(path.join(path.dirname(SKILL_FILE), "references", "calendar-meaning.md"), "utf8");
-export const ATOMIC_EXTRACTION_SKILL_HASH: string = createHash("sha256").update(loadedSkillFile).update(calendarMeaning).digest("hex");
 export const ATOMIC_EXTRACTION_SKILL: string = `${stripFrontmatter(loadedSkillFile)}\n\n${calendarMeaning}`;
 
 const REFERENCE_NAMES = [
+	"capture",
+	"enrichment",
 	"calendar-meaning",
 	"account-for-turns",
 	"resolve-subject",
@@ -54,6 +55,11 @@ const references = new Map<AtomicExtractionSkillReference, string>(
 		readFileSync(path.join(path.dirname(SKILL_FILE), "references", `${name}.md`), "utf8").trim(),
 	]),
 );
+
+export const ATOMIC_EXTRACTION_SKILL_HASH: string = createHash("sha256")
+	.update(loadedSkillFile).update(calendarMeaning)
+	.update(atomicExtractionSkillReference("capture"))
+	.update(atomicExtractionSkillReference("enrichment")).digest("hex");
 
 /**
  * The task-specific text the engine appends for one call. The model reading the skill has no

@@ -809,14 +809,6 @@ function moveLane(database: SqliteDatabaseLike, input: MoveLaneInput): RemMutati
 		if (row.lane === input.targetLane) {
 			return { applied: false, reason: "already_applied" };
 		}
-		const handle = appendRecovery(
-			database,
-			row,
-			"lane",
-			hashMemoryRow({ ...row, lane: input.targetLane }),
-			input.reason,
-			input.timestamp,
-		);
 		// Parking a row makes it the migration's problem, and that migration aborts on a non-active
 		// row with no replayable record — measured 2026-09-04, it took a whole evaluation down.
 		// A row parked here was written active and so carries none; write one from the row itself.
@@ -830,6 +822,14 @@ function moveLane(database: SqliteDatabaseLike, input: MoveLaneInput): RemMutati
 						reason: input.reason,
 					})
 				: row.raw_candidate_json;
+		const handle = appendRecovery(
+			database,
+			row,
+			"lane",
+			hashMemoryRow({ ...row, lane: input.targetLane, raw_candidate_json: parkedRecord }),
+			input.reason,
+			input.timestamp,
+		);
 		database
 			.prepare("UPDATE nodix_memories SET lane = ?, raw_candidate_json = ? WHERE id = ?")
 			.run(input.targetLane, parkedRecord, input.rowId);
@@ -1171,9 +1171,13 @@ function buildClosedFacetState(
 ): FacetState {
 	const updatedAt = Date.parse(mutationTs);
 	if (!Number.isFinite(updatedAt)) throw new Error("mutation timestamp is invalid");
+	const historyEnd = prior.chunkFacets.reduce((last, chunk) =>
+		chunk.facet === "history" ? Math.max(last, chunk.chunk_index ?? -1) : last, -1);
 	return {
 		facets: [{ facet: "history", text: row.text, updated_at_ms: updatedAt }],
-		chunkFacets: prior.chunkFacets.map((chunk) => ({ ...chunk, facet: "history" })),
+		chunkFacets: prior.chunkFacets.map((chunk) => chunk.facet === "history" ? chunk : {
+			...chunk, facet: "history", chunk_index: historyEnd + 1 + (chunk.chunk_index ?? 0),
+		}),
 	};
 }
 

@@ -8,6 +8,7 @@
  */
 
 import { describe, expect, it } from "vitest";
+import { retrievalConfigSchema } from "../../../../packages/sno-station-mem/src/contract/config/plugin-config-retrieval-schema";
 import {
 	DEFAULT_RECALL_LIFECYCLE,
 	type RecallLifecycleConfig,
@@ -73,4 +74,14 @@ describe("recallLifecycleSchema — defaults pinned by PRD §6.1", () => {
 			expect(issue).toBeDefined();
 		}
 	});
+});
+
+
+it("defaults both retrieval experiments off and accepts explicit enabling", () => {
+	const defaults = retrievalConfigSchema.parse({ rerank: "none" });
+	expect(defaults.temporalWeighting).toBe(false);
+	expect(defaults.mmrWindowOnly).toBe(false);
+	const enabled = retrievalConfigSchema.parse({ rerank: "none", temporalWeighting: true, mmrWindowOnly: true });
+	expect(enabled.temporalWeighting).toBe(true);
+	expect(enabled.mmrWindowOnly).toBe(true);
 });

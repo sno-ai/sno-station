@@ -39,6 +39,28 @@ describe("surviving capture safety policy", () => {
 		expect(context).toContain(RELEVANT_MEMORIES_INSTRUCTION_LINE);
 	});
 
+	it("carries the original sentence beside the rewritten one", () => {
+		// Extraction rewrites what was said, and the rewrite is what the model used to be shown.
+		// A question about the exact words then had nothing to read, although the store had kept
+		// them all along.
+		const context = formatRelevantMemoriesContext([
+			{
+				category: "episodic",
+				text: "The posters at the reading were full of pride and strength.",
+				quote: "The posters said Trans Lives Matter.",
+			},
+		]);
+		expect(context).toContain("Trans Lives Matter");
+		expect(context).toContain("full of pride and strength");
+	});
+
+	it("omits the quote field for a memory that kept no original sentence", () => {
+		const context = formatRelevantMemoriesContext([
+			{ category: "episodic", text: "A shared photo of four peg dolls on a table." },
+		]);
+		expect(context).not.toContain("quote");
+	});
+
 	it("renders imperative-looking memories as bounded untrusted data", () => {
 		const context = formatRelevantMemoriesContext([
 			{

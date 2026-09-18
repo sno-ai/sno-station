@@ -1,9 +1,9 @@
 export const DEGRADED_REASONS: readonly [
 	"sidecar-unreachable", "sidecar-unresponsive", "principal-mismatch", "store-mismatch",
-	"no-agent-endpoint", "invalid-input", "timeout", "storage-unavailable", "engine-failed", "paused", "system-caller-required",
+	"no-agent-endpoint", "invalid-input", "timeout", "storage-unavailable", "engine-failed",
 ] = [
 	"sidecar-unreachable", "sidecar-unresponsive", "principal-mismatch", "store-mismatch",
-	"no-agent-endpoint", "invalid-input", "timeout", "storage-unavailable", "engine-failed", "paused", "system-caller-required",
+	"no-agent-endpoint", "invalid-input", "timeout", "storage-unavailable", "engine-failed",
 ];
 export type DegradedReason = (typeof DEGRADED_REASONS)[number];
 

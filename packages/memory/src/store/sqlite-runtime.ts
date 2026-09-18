@@ -10,6 +10,7 @@
  *   this abstraction.
  */
 
+import { memoryWrite, memoryTransaction } from "../engine/operation-cancellation";
 import { existsSync } from "node:fs";
 import {
 	type Dek,
@@ -47,25 +48,7 @@ export interface SqliteDatabaseLike {
 	close(): void;
 	transaction(fn: (...args: never[]) => unknown): SqliteTransactionLike;
 	loadExtension(path: string): void;
-	/**
-	 * Fail-closed storage latch. Once tripped (integrity failure detected by the
-	 * maintenance pass), EVERY statement execution on this handle — including
-	 * statements prepared BEFORE the latch — and every exec/prepare throws a
-	 * typed StorageFailedError without executing SQL. close() stays allowed.
-	 */
-	markFailed(reason: string): void;
-	isFailed(): boolean;
-	getFailureReason(): string | undefined;
-	clearFailedAfterVerifiedRecovery(): void;
 	runRecoveryOperation<T>(operation: (raw: RawSqliteDatabase) => T): T;
-}
-
-/** Thrown by every SQL entry point on a handle whose storage latch has tripped. */
-export class StorageFailedError extends Error {
-	constructor(reason: string) {
-		super(`sqlite storage is latched failed: ${reason}`);
-		this.name = "StorageFailedError";
-	}
 }
 
 export interface SqliteRuntimeHandle {
@@ -133,138 +116,36 @@ export function _resetSqliteRuntimeForTest(): void {
 	initPromise = undefined;
 }
 
-type Callable = (...args: unknown[]) => unknown;
-
-function isCallable(value: unknown): value is Callable {
-	return typeof value === "function";
-}
-
-function guardObjectMethods<T extends object>(target: T, assertNotFailed: () => void): T {
-	return new Proxy(target, {
-		get(rawTarget, property): unknown {
-			const value: unknown = Reflect.get(rawTarget, property, rawTarget);
-			if (!isCallable(value)) return value;
-			return (...args: unknown[]): unknown => {
-				assertNotFailed();
-				return Reflect.apply(value, rawTarget, args);
-			};
-		},
-	});
-}
-
-function guardTransaction(
-	transaction: SqliteTransactionLike,
-	assertNotFailed: () => void,
-): SqliteTransactionLike {
-	const invoke = (method: Callable, args: unknown[]): unknown => {
-		assertNotFailed();
-		return Reflect.apply(method, transaction, args);
-	};
-	const guarded = ((...args: unknown[]): unknown => invoke(transaction, args)) as SqliteTransactionLike;
-	guarded.default = (...args: unknown[]): unknown => invoke(transaction.default, args);
-	guarded.deferred = (...args: unknown[]): unknown => invoke(transaction.deferred, args);
-	guarded.immediate = (...args: unknown[]): unknown => invoke(transaction.immediate, args);
-	guarded.exclusive = (...args: unknown[]): unknown => invoke(transaction.exclusive, args);
-	return guarded;
-}
-
-interface GuardedDatabase {
-	raw: RawSqliteDatabase;
-	db: SqliteDatabaseLike;
-}
-
-function wrapEncryptedDatabase(rawDb: ChokepointDb): GuardedDatabase {
-	// Per-connection prepared-statement cache keyed by SQL string. Hot paths run a
-	// fixed set of statements; re-preparing each call re-parses and re-plans. Safe to
-	// share by construction: `SqliteStatementLike` exposes only get/all/run, so no
-	// caller can flip statement-level modes (pluck/raw/safeIntegers are unreachable),
-	// and SQLite re-prepares internally on schema change (SQLITE_SCHEMA). better-sqlite3
-	// statements are bound to their connection, so the cache dies with `close()`.
+function wrapEncryptedDatabase(rawDb: ChokepointDb): { raw: RawSqliteDatabase; db: SqliteDatabaseLike } {
 	const statements = new LRUCache<string, SqliteStatementLike>({ max: 256 });
-	// Shared fail-closed latch. The guard lives INSIDE each wrapped statement's
-	// run/get/all, so statements prepared before the latch trips are covered too
-	// (the telemetry event writer pre-prepares its statements at construction).
-	let failedReason: string | undefined;
-	const assertNotFailed = (): void => {
-		if (failedReason !== undefined) throw new StorageFailedError(failedReason);
-	};
-	const guardedRaw = new Proxy(rawDb, {
-		get(target, property): unknown {
-			const value: unknown = Reflect.get(target, property, target);
-			if (!isCallable(value)) return value;
-			if (property === "close") return value.bind(target);
-			return (...args: unknown[]): unknown => {
-				assertNotFailed();
-				const result = Reflect.apply(value, target, args);
-				if (property === "prepare" && typeof result === "object" && result !== null) {
-					return guardObjectMethods(result, assertNotFailed);
-				}
-				if (property === "transaction" && isCallable(result)) {
-					return guardTransaction(result as SqliteTransactionLike, assertNotFailed);
-				}
-				return result;
-			};
-		},
-	}) as ChokepointDb;
-	const wrapStatement = (stmt: SqliteStatementLike): SqliteStatementLike => ({
-		get(...params: unknown[]): unknown {
-			assertNotFailed();
-			return stmt.get(...params);
-		},
-		all(...params: unknown[]): unknown[] {
-			assertNotFailed();
-			return stmt.all(...params);
-		},
-		run(...params: unknown[]): unknown {
-			assertNotFailed();
-			return stmt.run(...params);
-		},
-	});
-	const guardedDb: SqliteDatabaseLike = {
+	return { raw: rawDb, db: {
 		prepare(sql: string): SqliteStatementLike {
-			assertNotFailed();
 			const cached = statements.get(sql);
 			if (cached) return cached;
-			const stmt = wrapStatement(rawDb.prepare(sql) as unknown as SqliteStatementLike);
-			statements.set(sql, stmt);
-			return stmt;
+			const raw = rawDb.prepare(sql);
+			const statement: SqliteStatementLike = {
+				get: (...params) => raw.readonly ? raw.get(...params) : memoryWrite(() => raw.get(...params)),
+				all: (...params) => raw.readonly ? raw.all(...params) : memoryWrite(() => raw.all(...params)),
+				run: (...params) => raw.readonly ? raw.run(...params) : memoryWrite(() => raw.run(...params)),
+			};
+			statements.set(sql, statement);
+			return statement;
 		},
-		exec(sql: string): unknown {
-			assertNotFailed();
-			return rawDb.exec(sql);
+		exec: (sql) => memoryWrite(() => rawDb.exec(sql)),
+		close(): void { statements.clear(); rawDb.close(); },
+		transaction: (fn) => {
+			const transaction = rawDb.transaction(fn) as SqliteTransactionLike;
+			const run = (...args: unknown[]): unknown => memoryTransaction(() => transaction(...args));
+			return Object.assign(run, {
+				default: (...args: unknown[]) => memoryTransaction(() => transaction.default(...args)),
+				deferred: (...args: unknown[]) => memoryTransaction(() => transaction.deferred(...args)),
+				immediate: (...args: unknown[]) => memoryTransaction(() => transaction.immediate(...args)),
+				exclusive: (...args: unknown[]) => memoryTransaction(() => transaction.exclusive(...args)),
+			});
 		},
-		close(): void {
-			statements.clear();
-			rawDb.close();
-		},
-		transaction(fn: (...args: never[]) => unknown): SqliteTransactionLike {
-			assertNotFailed();
-			return guardTransaction(rawDb.transaction(fn) as SqliteTransactionLike, assertNotFailed);
-		},
-		loadExtension(path: string): void {
-			assertNotFailed();
-			rawDb.loadExtension(path);
-		},
-		markFailed(reason: string): void {
-			failedReason = reason;
-		},
-		isFailed(): boolean {
-			return failedReason !== undefined;
-		},
-		getFailureReason(): string | undefined {
-			return failedReason;
-		},
-		clearFailedAfterVerifiedRecovery(): void {
-			failedReason = undefined;
-		},
-		runRecoveryOperation<T>(operation: (raw: RawSqliteDatabase) => T): T {
-			if (failedReason === undefined) {
-				throw new Error("recovery access requires a latched storage handle");
-			}
-			return operation(rawDb);
-		},
-	};
-	return { raw: guardedRaw, db: guardedDb };
+		loadExtension: (path) => { rawDb.loadExtension(path); },
+		runRecoveryOperation: (operation) => operation(rawDb),
+	} };
 }
 
 /**

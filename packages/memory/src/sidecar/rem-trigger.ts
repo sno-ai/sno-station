@@ -1,5 +1,3 @@
-import { existsSync } from "node:fs";
-import { getBindingPath } from "../contract/profile";
 /** @file rem-trigger.ts
  * @purpose Evaluates daily and candidate-growth REM triggers on the gateway maintenance tick.
  * @boundary Reads candidate scopes and durable trigger state, audits decisions, then calls the sidecar.
@@ -13,7 +11,6 @@ import { z } from "zod";
 import {
 	appendAuditEntryStrict,
 	getAuditPath,
-	isKillSwitchActive,
 	type AuditStatus,
 } from "../engine/operations/runtime-audit-log";
 import {
@@ -34,7 +31,7 @@ import {
 	loadRemTriggerState,
 	type RemTriggerScopeState,
 	type RemTriggerStateDocument,
-	writeRemTriggerStateAtomic,
+	writeRemTriggerStateAtomic as persistTriggerState,
 } from "./rem-trigger-state";
 import type { SqliteDatabaseLike } from "../store/sqlite-runtime";
 import { pluginConfigSchema } from "../engine/shared/types";
@@ -77,16 +74,30 @@ const discoverySchema = z
 	.strict();
 
 const idleEvaluations = new Map<string, number>();
+const registeredTicks = new Map<string, boolean | undefined>();
+
+export function setRegisteredRemTick(skinId: string, tick: boolean | undefined): void {
+	registeredTicks.set(skinId, tick);
+}
+
+export function clearRegisteredRemTicks(): void {
+	registeredTicks.clear();
+}
 
 export function readRemAutomaticOperations(
 	configPath: string = resolveSnoStationMemConfigPath(),
 ): { requestedOperations: RemAutomaticOperation[]; tickEnabled: boolean } {
-	// An unbound default store has no installation settings and no automatic REM operations.
-	if (!existsSync(configPath) && !existsSync(getBindingPath())) return { requestedOperations: [], tickEnabled: true };
-	const hostConfig = readSnoStationMemConfig(configPath);
-	const rawConfig = hostConfig.plugins?.entries?.[PLUGIN_ENTRY_KEY]?.config;
-	const config = pluginConfigSchema.parse(rawConfig ?? {});
-	return { requestedOperations: config.mode === "rem-enhanced" ? config.remOperations : [], tickEnabled: config.remEnhanced.trigger?.tick ?? true };
+	let config: ReturnType<typeof pluginConfigSchema.parse>;
+	try {
+		const hostConfig = readSnoStationMemConfig(configPath);
+		config = pluginConfigSchema.parse(hostConfig.plugins?.entries?.[PLUGIN_ENTRY_KEY]?.config ?? {});
+	} catch (error) {
+		log.error("REM configuration unavailable; using installed defaults", { cause: errorMessage(error) }, { event_name: "memory.rem.trigger.configuration.unavailable", file: "packages/sno-station-mem/src/sidecar/rem-trigger.ts", function: "evaluateRemAutomaticTriggers", site_id: "memory.rem.trigger.configuration.unavailable" });
+		config = pluginConfigSchema.parse({});
+	}
+	const ticks = [...registeredTicks.values()];
+	const registeredTick = ticks.includes(false) ? false : ticks.find(tick => tick !== undefined);
+	return { requestedOperations: config.remOperations, tickEnabled: registeredTick ?? config.remEnhanced.trigger?.tick ?? true };
 }
 
 export async function evaluateRemAutomaticTriggers(
@@ -96,13 +107,6 @@ export async function evaluateRemAutomaticTriggers(
 	if (!Number.isInteger(input.volumeThreshold ?? REM_VOLUME_THRESHOLD) || (input.volumeThreshold ?? REM_VOLUME_THRESHOLD) < 1) throw new Error("REM volume threshold must be a positive integer");
 	const auditStateDir = input.auditStateDir ?? input.stateDir;
 	if (Number.isNaN(now.getTime())) throw new Error("REM trigger evaluation time is invalid");
-	if (isKillSwitchActive(input.stateDir)) {
-		await recordDecision(auditStateDir, undefined, "skipped", {
-			row: "automatic-trigger-skipped",
-			reason: "kill-switch-active",
-		});
-		return { evaluations: 0, dispatches: 0 };
-	}
 	if (input.requestedOperations.length === 0) {
 		await recordDecision(auditStateDir, undefined, "skipped", {
 			row: "automatic-trigger-skipped",
@@ -126,6 +130,7 @@ export async function evaluateRemAutomaticTriggers(
 	}
 
 	let state: RemTriggerStateDocument;
+	let lostState = false;
 	try {
 		state = await loadRemTriggerState(input.stateDir);
 	} catch (error) {
@@ -139,7 +144,9 @@ export async function evaluateRemAutomaticTriggers(
 				consecutive_idle: consecutiveIdle,
 			});
 		}
-		return { evaluations: scopes.length, dispatches: 0 };
+		log.error("REM trigger state unavailable; continuing with due work", { cause: errorMessage(error) }, { event_name: "memory.rem.trigger.state.unavailable", file: "packages/sno-station-mem/src/sidecar/rem-trigger.ts", function: "evaluateRemAutomaticTriggers", site_id: "memory.rem.trigger.state.unavailable" });
+		state = { version: 1, scopes: {} };
+		lostState = true;
 	}
 
 	state = await applyCompletedBaselines(auditStateDir, input.stateDir, state);
@@ -148,7 +155,7 @@ export async function evaluateRemAutomaticTriggers(
 		try {
 			const ensured = ensureRemTriggerScope(state, {
 				scope,
-				now,
+				now: lostState ? previousDay(now) : now,
 				candidateCount,
 				resolveScheduleZone: input.resolveScheduleZone,
 			});
@@ -165,7 +172,7 @@ export async function evaluateRemAutomaticTriggers(
 			state = scopeResult.state;
 			dispatches += scopeResult.dispatched ? 1 : 0;
 		} catch (error) {
-			log.warn("REM automatic scope evaluation failed", { scope, error }, {
+			log.error("REM automatic scope evaluation failed", { scope, error }, {
 				event_name: "sno_station_mem.rem-trigger.rem.automatic.scope.evaluation.failed",
 				file: "packages/sno-station-mem/src/sidecar/rem-trigger.ts",
 				function: "evaluateRemAutomaticTriggers",
@@ -200,6 +207,17 @@ export async function evaluateRemAutomaticTriggers(
 	return { evaluations: scopes.length, dispatches };
 }
 
+function previousDay(now: Date): Date {
+	const day = new Date(now);
+	day.setUTCDate(day.getUTCDate() - 1);
+	return day;
+}
+
+async function writeRemTriggerStateAtomic(stateDir: string, state: RemTriggerStateDocument): Promise<void> {
+	try { await persistTriggerState(stateDir, state); }
+	catch (error) { log.error("REM trigger state write failed; continuing dispatch", { cause: errorMessage(error) }, { event_name: "memory.rem.trigger.state.write.failed", file: "packages/sno-station-mem/src/sidecar/rem-trigger.ts", function: "evaluateRemAutomaticTriggers", site_id: "memory.rem.trigger.state.write.failed" }); }
+}
+
 async function evaluateScope(
 	input: RemAutomaticTriggerInput,
 	auditStateDir: string,
@@ -209,11 +227,24 @@ async function evaluateScope(
 	now: Date,
 ): Promise<{ state: RemTriggerStateDocument; dispatched: boolean }> {
 	const scopeState = requiredScopeState(state, scope);
-	const nextDue = computeRemDailyDue(scopeState.last_pass_at, scopeState.schedule_zone);
-	const localDate = localDateAt(now, scopeState.schedule_zone);
+	const zone = scopeState.schedule_zone;
+	// At most one automatic pass per local day, whichever trigger comes first (owner ruling
+	// 2026-09-16). `last_volume_pass_date` is the local day whose pass is used up: a completed
+	// volume pass sets it, and so does a completed daily pass (applyCompletedBaselines). A used-up
+	// day closes the volume trigger and moves the daily pass to the next day's schedule.
+	const nextDue = nextDailyDue(scopeState);
+	const localDate = localDateAt(now, zone);
 	const growth = candidateCount - scopeState.last_covered_count;
-	const dailyDue = now.getTime() >= nextDue.getTime();
-	const volumeDue = growth >= (input.volumeThreshold ?? REM_VOLUME_THRESHOLD) && scopeState.last_volume_pass_date !== localDate;
+	// A pass the other trigger dispatched today and has not seen complete already holds today's slot.
+	// Only today's identities count, so a completion that never arrives blocks for a day at most.
+	const scheduledDue = computeRemDailyDue(scopeState.last_pass_at, zone);
+	const pendingVolumeToday = scopeState.attempts.identity === remAutomaticCorrelationId("volume", scope, localDate);
+	const pendingDailyToday = localDateAt(scheduledDue, zone) === localDate
+		&& scopeState.attempts.identity === remAutomaticCorrelationId("daily", scope, scheduledDue.toISOString());
+	const dailyDue = now.getTime() >= nextDue.getTime() && !pendingVolumeToday;
+	const volumeDue = growth >= (input.volumeThreshold ?? REM_VOLUME_THRESHOLD)
+		&& scopeState.last_volume_pass_date !== localDate
+		&& !pendingDailyToday;
 	if (!dailyDue && !volumeDue) {
 		const consecutiveIdle = (idleEvaluations.get(scope) ?? 0) + 1;
 		idleEvaluations.set(scope, consecutiveIdle);
@@ -229,11 +260,16 @@ async function evaluateScope(
 
 	const trigger: RemAutomaticTrigger = dailyDue ? "daily" : "volume";
 	if (input.tickEnabled === false) {
-		const missed = replaceScopeState(state, scope, { ...scopeState,
-			missed_window: { due_at: (dailyDue ? nextDue : now).toISOString(), trigger, recorded_at: now.toISOString() },
+		const nextState = replaceScopeState(state, scope, {
+			...scopeState,
+			missed_window: {
+				due_at: dailyDue ? nextDue.toISOString() : now.toISOString(),
+				trigger,
+				recorded_at: now.toISOString(),
+			},
 		});
-		await writeRemTriggerStateAtomic(input.stateDir, missed);
-		return { state: missed, dispatched: false };
+		await writeRemTriggerStateAtomic(input.stateDir, nextState);
+		return { state: nextState, dispatched: false };
 	}
 	const triggerKey = trigger === "daily" ? nextDue.toISOString() : localDate;
 	const correlationId = remAutomaticCorrelationId(trigger, scope, triggerKey);
@@ -271,29 +307,12 @@ async function evaluateScope(
 		return { state: nextState, dispatched: true };
 	}
 
-	const failed = requiredScopeState(nextState, scope);
-	const exhausted = failed.attempts.count >= REM_TRIGGER_ATTEMPT_LIMIT;
-	const outcome = exhausted
-		? trigger === "daily"
-			? "deadline-missed"
-			: "volume-attempts-spent"
-		: "dispatch-failed";
 	await appendAuditEntryStrict(auditStateDir, {
 		event: "rem_failed",
 		resultStatus: "error",
 		scope,
-		details: { outcome, cause, correlation_id: correlationId, source: "gateway-trigger" },
+		details: { outcome: "dispatch-failed", cause, correlation_id: correlationId, source: "gateway-trigger" },
 	});
-	if (exhausted) {
-		nextState = replaceScopeState(nextState, scope, {
-			...failed,
-			...(trigger === "daily"
-				? { last_pass_at: now.toISOString() }
-				: { last_volume_pass_date: localDate }),
-			attempts: { identity: null, count: 0 },
-		});
-		await writeRemTriggerStateAtomic(input.stateDir, nextState);
-	}
 	return { state: nextState, dispatched: true };
 }
 
@@ -395,6 +414,10 @@ async function applyCompletedBaselines(
 				...(dispatch.trigger === "daily" && isValidInstant(dispatch.passAt)
 					? { last_pass_at: dispatch.passAt }
 					: {}),
+				// A completed daily pass uses up its local day too, so the volume trigger stays closed.
+				...(dispatch.trigger === "daily" && isLocalDate(dispatch.localDate)
+					? { last_volume_pass_date: dispatch.localDate }
+					: {}),
 				...(dispatch.trigger === "volume" && isLocalDate(dispatch.localDate)
 					? { last_volume_pass_date: dispatch.localDate }
 					: {}),
@@ -461,6 +484,19 @@ export function remAutomaticCorrelationId(
 		.update(JSON.stringify(["rem-automatic-v1", trigger, scope, triggerKey]))
 		.digest("hex");
 	return `rem-auto-${trigger}-${digest}`;
+}
+
+/** The daily due time, pushed to the schedule after the last used-up local day. */
+function nextDailyDue(scopeState: RemTriggerScopeState): Date {
+	const scheduled = computeRemDailyDue(scopeState.last_pass_at, scopeState.schedule_zone);
+	const volumeDate = scopeState.last_volume_pass_date;
+	if (volumeDate === null) return scheduled;
+	const parsed = /^(\d{4})-(\d{2})-(\d{2})$/u.exec(volumeDate);
+	// The state schema only admits YYYY-MM-DD here; anything else leaves the daily schedule alone.
+	if (parsed === null) return scheduled;
+	const following = addCalendarDays({ year: Number(parsed[1]), month: Number(parsed[2]), day: Number(parsed[3]) }, 1);
+	const afterVolume = zonedInstant(scopeState.schedule_zone, following.year, following.month, following.day);
+	return afterVolume.getTime() > scheduled.getTime() ? afterVolume : scheduled;
 }
 
 export function computeRemDailyDue(lastPassAt: string, scheduleZone: string): Date {

@@ -6,11 +6,9 @@ import { dirname, join, resolve } from "node:path";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import type { Embedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client.ts";
 import {
-	activateKillSwitch,
+
 	flushAuditWrites,
-	getAuditPath,
-	readKillSwitchState,
-} from "../../../../packages/sno-station-mem/src/engine/operations/runtime-audit-log.ts";
+	getAuditPath} from "../../../../packages/sno-station-mem/src/engine/operations/runtime-audit-log.ts";
 import { runMaintenancePass } from "../../../../packages/sno-station-mem/src/store/maintenance.ts";
 import { MemoryStore } from "../../../../packages/sno-station-mem/src/store/store.ts";
 import { createTestDb, createTestEmbedder } from "../../../apps/mem-claw/helpers/test-db.ts";
@@ -151,11 +149,7 @@ describe("storage integrity recovery", () => {
 		await seed(fixture.store, "derived");
 		const inventoryBefore = sourceInventory(fixture.store);
 		corruptFtsBlob(fixture.store);
-		activateKillSwitch(
-			fixture.stateDir,
-			"db integrity failure retained across gateway restart",
-			"maintenance",
-		);
+		writeFileSync(join(fixture.stateDir, "killswitch"), JSON.stringify({ reason: "db integrity failure retained across gateway restart", activatedBy: "maintenance" }));
 
 		const report = runMaintenancePass({
 			store: fixture.store,
@@ -165,8 +159,7 @@ describe("storage integrity recovery", () => {
 		});
 
 		expect(report).toMatchObject({ aborted: false, integrityRecovery: "recovered" });
-		expect(fixture.store.sqlite.isFailed()).toBe(false);
-		expect(existsSync(join(fixture.stateDir, "killswitch"))).toBe(false);
+		expect(existsSync(join(fixture.stateDir, "killswitch"))).toBe(true);
 		expect(sourceInventory(fixture.store)).toBe(inventoryBefore);
 		expect(fixture.store.db.$client.pragma("integrity_check")).toEqual([
 			{ integrity_check: "ok" },
@@ -192,65 +185,23 @@ describe("storage integrity recovery", () => {
 		).toHaveLength(1);
 	});
 
-	it("keeps source-table corruption latched fail-closed", async () => {
+	it("keeps source reads and metadata writes available when corrupt FTS cannot be rebuilt", async () => {
 		fixture = createCopiedFixture();
 		await seed(fixture.store, "source");
+		corruptFtsBlob(fixture.store);
 		corruptSourceConstraint(fixture.store);
-
-		const report = runMaintenancePass({
-			store: fixture.store,
-			dbPath: fixture.dbPath,
-			backupDir: join(fixture.stateDir, "backups"),
-			stateDir: fixture.stateDir,
-		});
-
-		expect(report).toMatchObject({ aborted: true, integrityRecovery: "retained" });
-		expect(fixture.store.sqlite.isFailed()).toBe(true);
-		expect(existsSync(join(fixture.stateDir, "killswitch"))).toBe(true);
-		await expect(
-			fixture.store.store({
-				text: "This write must not pass a source-integrity latch.",
-				category: "episodic",
-				projectId: "integrity-source",
-			}),
-		).rejects.toThrow(/latched failed/);
-
-		await flushAuditWrites();
-		const audit = readAudit(fixture.stateDir);
-		expect(
-			audit.filter((entry) => entry.event === "storage_integrity" && entry.decision === "retained"),
-		).toHaveLength(1);
-	});
-
-	it("clears a maintenance-owned latch after a clean restart integrity sweep", async () => {
-		fixture = createCopiedFixture();
-		await seed(fixture.store, "clean-restart");
-		activateKillSwitch(
-			fixture.stateDir,
-			"db integrity failure retained across gateway restart",
-			"maintenance",
-		);
-
-		const report = runMaintenancePass({
-			store: fixture.store,
-			dbPath: fixture.dbPath,
-			backupDir: join(fixture.stateDir, "backups"),
-			stateDir: fixture.stateDir,
-		});
-
-		expect(report).toMatchObject({ aborted: false, integrityRecovery: "recovered" });
+		const report = runMaintenancePass({ store: fixture.store, dbPath: fixture.dbPath,
+			backupDir: join(fixture.stateDir, "backups"), stateDir: fixture.stateDir }, new Set(["integrity"]));
+		expect(report).toMatchObject({ aborted: false, integrityRecovery: "retained" });
 		expect(existsSync(join(fixture.stateDir, "killswitch"))).toBe(false);
-		await flushAuditWrites();
-		expect(
-			readAudit(fixture.stateDir).filter(
-				(entry) => entry.event === "storage_integrity" && entry.decision === "recovered",
-			),
-		).toHaveLength(1);
+		expect(fixture.store.sqlite.prepare("SELECT count(*) AS count FROM nodix_memories").get()).toEqual({ count: 2 });
+		fixture.store.sqlite.prepare("UPDATE nodix_memories SET importance = 0.42 WHERE project_id = 'integrity-source'").run();
+		expect(fixture.store.sqlite.prepare("SELECT importance FROM nodix_memories ORDER BY id").all()).toEqual([{ importance: 0.42 }, { importance: 0.42 }]);
 	});
 
-	it("preserves an ordinary manual pause after a clean integrity sweep", async () => {
+	it("ignores an obsolete manual-pause file during a clean sweep", async () => {
 		fixture = createCopiedFixture();
-		activateKillSwitch(fixture.stateDir, "Manual pause via /memory pause", "slash-command");
+		writeFileSync(join(fixture.stateDir, "killswitch"), JSON.stringify({ reason: "Manual pause via /memory pause", activatedBy: "slash-command" }));
 
 		const report = runMaintenancePass({
 			store: fixture.store,
@@ -263,11 +214,11 @@ describe("storage integrity recovery", () => {
 		expect(existsSync(join(fixture.stateDir, "killswitch"))).toBe(true);
 	});
 
-	it("restores an ordinary manual pause after derived FTS recovery", async () => {
+	it("does not use an obsolete manual-pause file during FTS recovery", async () => {
 		fixture = createCopiedFixture();
 		await seed(fixture.store, "manual-pause");
 		corruptFtsBlob(fixture.store);
-		activateKillSwitch(fixture.stateDir, "Manual pause via /memory pause", "slash-command");
+		writeFileSync(join(fixture.stateDir, "killswitch"), JSON.stringify({ reason: "Manual pause via /memory pause", activatedBy: "slash-command" }));
 
 		const report = runMaintenancePass({
 			store: fixture.store,
@@ -277,12 +228,9 @@ describe("storage integrity recovery", () => {
 		});
 
 		expect(report).toMatchObject({ aborted: false, integrityRecovery: "recovered" });
-		expect(fixture.store.sqlite.isFailed()).toBe(false);
-		expect(readKillSwitchState(fixture.stateDir)).toEqual({
-			active: true,
+		expect(JSON.parse(readFileSync(join(fixture.stateDir, "killswitch"), "utf8"))).toEqual({
 			reason: "Manual pause via /memory pause",
 			activatedBy: "slash-command",
-			corrupt: false,
 		});
 	});
 });
