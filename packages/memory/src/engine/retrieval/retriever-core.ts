@@ -178,7 +178,6 @@ export interface MemoryRetrieverInternals {
 	): Promise<RerankOutcome>;
 	rerankLightweight(candidates: RetrievalResult[], queryVector: Float32Array): RetrievalResult[];
 	getRerankSourceScore(result: RetrievalResult): number;
-	getRerankPreservationFloor(result: RetrievalResult, unreturned: boolean): number;
 	applyScoringPipeline(results: RetrievalResult[], trace?: TraceCollector, limit?: number): RetrievalResult[];
 	applyRecencyBoost(results: RetrievalResult[]): RetrievalResult[];
 	applyImportanceWeight(results: RetrievalResult[]): RetrievalResult[];
