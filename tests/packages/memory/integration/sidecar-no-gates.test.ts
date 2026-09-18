@@ -1265,6 +1265,31 @@ async function recallAccount(source: "auto" | "manual", session = "recall-accoun
 }
 
 describe("manual recall turn account over HTTP", () => {
+	it("logs a hashed session reference for manual recall", async () => {
+		await startRecallAccount(1, false);
+		const previousLogLevel = process.env.LOG_LEVEL;
+		process.env.LOG_LEVEL = "info";
+		const lines: string[] = [];
+		const output = vi.spyOn(process.stderr, "write").mockImplementation(chunk => { lines.push(String(chunk)); return true; });
+		try {
+			const response = await contractPost("/v1/get-recall", {
+				scope: { principal: "caller", project: "global", session: "recall-log",
+					host: { sessionKey: "agent:main:recall-log" } },
+				query: "What route and supplies does the expedition notebook describe?",
+				options: { source: "manual", minScore: 0 },
+			});
+			expect(response.status).toBe(200);
+			expect(await response.json()).toMatchObject({ degraded: false, toolResult: { details: { count: 1 } } });
+			const records = lines.flatMap(line => line.trim().split("\n")).map(line => JSON.parse(line));
+			const completed = records.filter(record => record.event_name === "memory.recall.completed");
+			expect(completed).toHaveLength(1);
+			expect(completed[0].context.session_reference.visibility).toBe("hashed");
+		} finally {
+			output.mockRestore();
+			if (previousLogLevel === undefined) delete process.env.LOG_LEVEL;
+			else process.env.LOG_LEVEL = previousLogLevel;
+		}
+	});
 	it("shares the account when auto recall has a UUID and manual recall has only the session key", async () => {
 		await startRecallAccount(2);
 		const scope = { principal: "caller", project: "global", session: "agent:main:recall-account" };
