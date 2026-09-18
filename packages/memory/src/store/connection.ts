@@ -292,6 +292,7 @@ export function initDb(dbPath: string, vectorDim: number): DrizzleDB {
 	mkdirSync(dirname(dbPath), { recursive: true });
 	const sqlite = openSqliteDatabase(dbPath);
 	const pending = new Map<string, () => unknown>();
+	let firstSetupError: unknown;
 	const retrySetup = (): void => {
 		let incomplete = false;
 		for (const [step, run] of pending) {
@@ -300,6 +301,7 @@ export function initDb(dbPath: string, vectorDim: number): DrizzleDB {
 				// A retried migration can replace objects checked by later steps.
 				if (!incomplete) pending.delete(step);
 			} catch (error) {
+				if (!incomplete) firstSetupError = error;
 				incomplete = true;
 				log.error("storage.setup.failed", { step, error }, {
 					event_name: "storage.setup.failed", file: "packages/sno-station-mem/src/store/connection.ts",
@@ -327,6 +329,14 @@ export function initDb(dbPath: string, vectorDim: number): DrizzleDB {
 		}],
 	] as const) pending.set(step, run);
 	retrySetup();
+	if (pending.size > 0) {
+		try {
+			sqlite.db.close();
+		} catch {
+			// Preserve the original setup failure if closing also fails.
+		}
+		throw firstSetupError;
+	}
 	// Full integrity work runs on the maintenance schedule, not on the HTTP startup path.
 	return db;
 }
