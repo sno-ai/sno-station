@@ -248,8 +248,7 @@ export class RemJobStore {
 			}
 			if (
 				existing !== undefined &&
-				existing.requestedOperations.length === requestedOperations.length &&
-				existing.requestedOperations.every((operation, index) => operation === requestedOperations[index])
+				requestedOperations.every((operation) => existing.requestedOperations.includes(operation))
 			) {
 				return { created: false, job: toRemJob(existing) };
 			}
