@@ -10,7 +10,7 @@ import type { PluginHookAgentContext } from "./sno-station-mem-hook-types";
 /** Normalizes SDK session identifiers into the key used by local LRU state. */
 export function resolveRuntimeSessionId(ctx: PluginHookAgentContext): string {
 	// Centralize the module behavior fallback value at the boundary of this helper.
-	return ctx.sessionId ?? ctx.sessionKey ?? "default";
+	return (ctx.sessionKey?.trim() ? ctx.sessionKey : ctx.sessionId) ?? "default";
 }
 
 /** Returns only host-provided session identity for observability correlation. */

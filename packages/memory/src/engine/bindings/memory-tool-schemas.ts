@@ -169,8 +169,6 @@ export interface ToolContext {
 		sessionId: string;
 		turn: number;
 		history: Map<string, Map<string, number>>;
-		toolTokens: Map<string, { turn: number; tokens: number }>;
-		servedThisTurn: Map<string, { turn: number; ids: Set<string> }>;
 	};
 	retriever: MemoryRetriever;
 	store: MemoryStore;
