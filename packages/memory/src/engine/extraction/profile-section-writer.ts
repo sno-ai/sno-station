@@ -713,7 +713,8 @@ async function runProfileSectionUpdateOnce(
 		};
 	}
 	if (merged.kind === "no-op") {
-		await resumeRetireByNamePending(existing, params);
+		const confirmed = await advanceProfileConfirmation(existing, existingValidFrom, params);
+		await resumeRetireByNamePending(confirmed, params);
 		return { outcome: "no-op", rowId: existing.id, mutationOutcome: "no-mutation" };
 	}
 	if (merged.kind === "tombstone") {

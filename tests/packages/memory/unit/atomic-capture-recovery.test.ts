@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { afterEach, expect, it, vi } from "vitest";
 import { runAtomicGenericExtractionPass, createSignedAtomicGenericExtractionTransport, type AtomicGenericExtractionInput } from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-generic-extractor";
 import { flushAuditWrites } from "../../../../packages/sno-station-mem/src/engine/operations/runtime-audit-log";
+import { parseAtomicCaptureReply } from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-extraction-reply";
 
 const roots: string[] = [];
 afterEach(async () => {
@@ -53,6 +54,23 @@ it("recovers all source turns under a fixed token ceiling instead of doubling an
 	expect(result.records.map((record) => [record.claimText, record.sourceSpan.turnIndex])).toEqual([["Alex likes tea.", 0], ["Sam lives in Rome.", 1]]);
 	expect([...result.progressTurns]).toEqual([]);
 	expect(budgets).toEqual([4096, 4096, 4096]);
+});
+
+it("rejects a nonempty capture when salvage removes every invalid source turn", () => {
+	const rejected: string[] = [];
+	const result = parseAtomicCaptureReply(JSON.stringify({
+		claims_found: ["Alex likes tea."],
+		decisions: [{ turn_index: 0, progress_only: false }],
+		facts: [{
+			id: 0, fact: "Alex likes tea.", subject: "Alex", subject_kind: "named_entity",
+			temporal_phrase: null, ended_at_phrase: null,
+			source_span: { turn_index: 9, quote: "Alex likes tea." },
+		}],
+	}), [{ role: "user", content: "Alex likes tea." }], {
+		salvage: true, onReject: (gate) => rejected.push(gate),
+	});
+	expect(result).toBeUndefined();
+	expect(rejected).toEqual(["claims-without-facts"]);
 });
 
 it.each([
