@@ -22,6 +22,8 @@ Not knowing when an event happened does not erase that event: keep its record wi
   start. In the friendship-and-move example, both the friendship start and the move receive
   the same negative four-year instruction; the move is not undated. Judge that relationship
   from the whole statement, not from whether each split claim repeats the time words.
+  The amount is a number the words state. "Recently", "lately", "a while ago", "a few weeks
+  ago", "the other day" and "soon" state none: they are `unresolved`, never a guessed number.
 - `weekday`: give `weekday` (Monday 1 through Sunday 7) and `direction` (`previous` or `next`)
   for a strictly preceding/following occurrence. Read abbreviations, spelling, language and the
   speaker's intended reference in context. The code finds that weekday; do not count days.
@@ -48,6 +50,7 @@ earlier turn explicitly dates that same exhibition to last Friday, retain the we
 instruction for the exhibition; never replace it with a guessed number of days. Copy the
 actual dating words into `temporal_phrase`, not a clause that merely names the experience.
 
-A weekend is a span, not an exact Saturday or Sunday. When the supplied instruction forms
-cannot represent that span, keep the weekend phrase and use `unresolved`; do not narrow it
-to a single weekday.
+A weekend is a span, not an exact Saturday or Sunday, and no precision names it: keep the
+weekend phrase and use `unresolved`; do not narrow it to a single weekday. A week is not a
+weekend: "last week" is `relative`, `amount: -1`, `unit: week`, `precision: week`; the code
+turns that into the week's date range.
