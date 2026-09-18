@@ -18,6 +18,8 @@ import { MemoryRuntimePool } from "../../../../packages/sno-station-mem/src/side
 import { readRemAutomaticOperations } from "../../../../packages/sno-station-mem/src/sidecar/rem-trigger";
 import { MemoryContractRuntime } from "../../../../packages/sno-station-mem/src/engine/contract-runtime";
 import { MemoryRetriever } from "../../../../packages/sno-station-mem/src/engine/retrieval/retriever";
+import { AccessTracker } from "../../../../packages/sno-station-mem/src/engine/retrieval/access-tracker";
+import { PluginObservability } from "../../../../packages/sno-station-mem/src/engine/observability/adapter";
 import { RegisteredAgentPort } from "../../../../packages/sno-station-mem/src/model/registered-agent-port";
 import { Embedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client";
 import { MemoryStore } from "../../../../packages/sno-station-mem/src/store/store";
@@ -1265,6 +1267,40 @@ async function recallAccount(source: "auto" | "manual", session = "recall-accoun
 }
 
 describe("manual recall turn account over HTTP", () => {
+	it("preserves same-turn omission when the runtime is initialized again", async () => {
+		await startRecallAccount(2);
+		const registered = registration("local-first");
+		const repeatedRegistration = { ...registered, settings: { ...registered.settings,
+			autoRecall: true, autoRecallMinRepeated: 0, autoRecallTimeoutMs: 30_000,
+			retrieval: { ...registered.settings.retrieval, mode: "vector" as const, rerank: "none" as const,
+				minScore: 0, hardMinScore: 0, recallTopK: 1 },
+		} };
+		const config = { ...repeatedRegistration.settings, ...repeatedRegistration.routing };
+		const embedder = await createTestEmbedder();
+		const store = new MemoryStore({ dbPath: database.dbPath, embedder });
+		const accessTracker = new AccessTracker({ store });
+		const observability = new PluginObservability(config, root);
+		const runtime = new MemoryContractRuntime({ store, embedder, accessTracker, observability,
+			retriever: new MemoryRetriever(store, embedder, console, config.retrieval),
+			stateDir: root, logger: console });
+		const scope = { principal: "caller", project: "global", session: "recall-reregistration" };
+		const query = "What route and supplies does the expedition notebook describe?";
+		try {
+			await runtime.init(scope, repeatedRegistration);
+			const automatic = await runtime.getRecall(query, scope, { source: "auto", minScore: 0 });
+			expect(automatic.memoryIds).toHaveLength(1);
+			await runtime.init(scope, repeatedRegistration);
+			const manual = await runtime.getRecall(query, scope, { source: "manual", minScore: 0 });
+			expect(manual.toolResult?.details.already_served_count).toBe(1);
+			expect(manual.toolResult?.details.memories).toHaveLength(1);
+		} finally {
+			await runtime.close();
+			await accessTracker.destroy();
+			await observability.shutdown();
+			await store.close();
+		}
+	});
+
 	it("logs a hashed session reference for manual recall", async () => {
 		await startRecallAccount(1, false);
 		const previousLogLevel = process.env.LOG_LEVEL;
@@ -1296,6 +1332,37 @@ describe("manual recall turn account over HTTP", () => {
 		const query = "What route and supplies does the expedition notebook describe?";
 		const automaticResponse = await contractPost("/v1/get-recall", {
 			scope: { ...scope, host: { sessionKey: scope.session, sessionId: "5548ef70-0a75-4e45-9412-3564a0d53993" } },
+			query, options: { source: "auto", minScore: 0 },
+		});
+		expect(automaticResponse.status).toBe(200);
+		const automatic = await automaticResponse.json();
+		expect(automatic.memoryIds).toHaveLength(1);
+		const manualResponse = await contractPost("/v1/get-recall", {
+			scope: { ...scope, host: { sessionKey: scope.session } }, query, options: { source: "manual", minScore: 0 },
+		});
+		expect(manualResponse.status).toBe(200);
+		const manual = await manualResponse.json();
+		expect(manual.toolResult.details.already_served_count).toBe(1);
+		expect(manual.toolResult.details.memories).toHaveLength(1);
+		expect(manual.toolResult.details.memories.filter((row: { id: string }) => automatic.memoryIds.includes(row.id))).toEqual([]);
+	});
+
+	it("omits auto recall rows when manual recall has no host workspace", async () => {
+		await startRecallAccount(2);
+		const scope = { principal: "caller", project: root, readable: ["global"], session: "agent:main:recall-account" };
+		const registered = registration("local-first");
+		const initialized = await contractPost("/v1/init", {
+			scope, registration: { ...registered, settings: { ...registered.settings,
+				provider: { userId: "01900000-0000-7000-8000-000000000001" },
+				autoRecall: true, autoRecallMinRepeated: 0, autoRecallTimeoutMs: 30_000,
+				retrieval: { ...registered.settings.retrieval, mode: "vector", rerank: "none",
+					minScore: 0, hardMinScore: 0, recallTopK: 1 },
+			} },
+		});
+		expect(initialized.status).toBe(200);
+		const query = "What route and supplies does the expedition notebook describe?";
+		const automaticResponse = await contractPost("/v1/get-recall", {
+			scope: { ...scope, host: { sessionKey: scope.session, workspace: root } },
 			query, options: { source: "auto", minScore: 0 },
 		});
 		expect(automaticResponse.status).toBe(200);

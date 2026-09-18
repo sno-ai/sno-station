@@ -91,14 +91,13 @@ export class MemoryContractRuntime implements MemoryContract {
 	private registration: Registration | undefined;
 	private readonly providers = new Map<string, SnoStationMemProviderSearchManager>();
 	private readonly reflectionStates = new Map<string, ReflectionStrategyState>();
-	private readonly recallStates = new Map<string, RecallState>();
+	private readonly recall: RecallState = { history: new Map(), turns: new Map() };
 	constructor(private readonly services: MemoryRuntimeServices) {}
 
 	async close(): Promise<void> {
 		for (const provider of this.providers.values()) await provider.close();
 		this.providers.clear();
 		this.reflectionStates.clear();
-		this.recallStates.clear();
 	}
 
 	async init(scope: ScopeCtx, registration: Registration): Promise<ContractOutputs["init"]> {
@@ -106,7 +105,6 @@ export class MemoryContractRuntime implements MemoryContract {
 		await this.close();
 		this.registration = input.registration;
 		this.reflectionStates.clear();
-		this.recallStates.clear();
 		await this.project(input.scope);
 		return { degraded: false, principal: scope.principal, skinId: registration.skinId };
 	}
@@ -163,15 +161,6 @@ export class MemoryContractRuntime implements MemoryContract {
 		return { agentId: this.agentId(scope), sessionKey: scope.host?.sessionKey?.trim() ? scope.host.sessionKey : scope.session,
 			sessionId: scope.host?.sessionId, sessionTimezone: scope.host?.sessionTimezone,
 			workspaceDir: scope.host?.workspace };
-	}
-
-	private recallState(project: string): RecallState {
-		let state = this.recallStates.get(project);
-		if (!state) {
-			state = { history: new Map(), turns: new Map() };
-			this.recallStates.set(project, state);
-		}
-		return state;
 	}
 
 	private async reflection(scope: ScopeCtx): Promise<ReflectionStrategyState> {
@@ -240,7 +229,7 @@ export class MemoryContractRuntime implements MemoryContract {
 		}
 		if (input.options.source === "manual") {
 			const host = this.hostContext(input.scope);
-			const state = this.recallState(context.scopePolicy.getDefaultScope());
+			const state = this.recall;
 			const sessionId = resolveRuntimeSessionId(host);
 			const turn = state.turns.get(sessionId);
 			const result = await executeMemoryRecallTool({ ...context,
@@ -271,7 +260,7 @@ export class MemoryContractRuntime implements MemoryContract {
 				toolResult: JSON.parse(JSON.stringify(result)) });
 		}
 		const host = this.hostContext(input.scope);
-		const state = this.recallState(context.scopePolicy.getDefaultScope());
+		const state = this.recall;
 		const result = await onBeforeAgentStart(this.services, this.configured().config,
 			this.services.retriever, this.services.store, context.scopePolicy,
 			state.history, state.turns, { prompt: input.query }, host, this.services.stateDir, this.services.telemetryUsage, signal);
@@ -358,14 +347,11 @@ export class MemoryContractRuntime implements MemoryContract {
 	async onSessionEnd(messages: Message[], scope: ScopeCtx, signal?: AbortSignal): Promise<ContractOutputs["onSessionEnd"]> {
 		return withMemoryOperation("onSessionEnd", signal, async () => {
 		parseInput("onSessionEnd", { messages, scope });
-		const project = await this.project(scope);
 		checkMemoryOperation();
-		const state = this.recallStates.get(project);
+		const state = this.recall;
 		const host = this.hostContext(scope);
-		if (state) {
-			clearSessionState(resolveRuntimeSessionId(host), state.history, state.turns);
-			if (host.sessionId !== undefined) clearSessionState(host.sessionId, state.history, state.turns);
-		}
+		clearSessionState(resolveRuntimeSessionId(host), state.history, state.turns);
+		if (host.sessionId !== undefined) clearSessionState(host.sessionId, state.history, state.turns);
 		await this.services.accessTracker.flush();
 		checkMemoryOperation();
 		if (this.configured().config.sessionStrategy === "memoryReflection") {
