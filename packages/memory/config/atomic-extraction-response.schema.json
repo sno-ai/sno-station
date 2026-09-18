@@ -1,0 +1,565 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://www.sno.ai/schemas/mem-claw/atomic-extraction-response-v1.json",
+  "title": "Atomic extraction response v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "claims_found",
+    "records"
+  ],
+  "properties": {
+    "claims_found": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "One short string for each claim the turns this call owns state, in the order they appear; empty when they state none. Written before records so the list is read before the array is opened."
+    },
+    "records": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "claim_text",
+          "subject",
+          "subject_kind",
+          "attribute",
+          "value",
+          "temporal_phrase",
+          "ends_current",
+          "ended_at_phrase",
+          "importance",
+          "changes_current_state",
+          "todo",
+          "close_reason",
+          "source_span",
+          "relations",
+          "single_claim",
+          "time",
+          "ended_time"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "occurrence",
+              "standing"
+            ]
+          },
+          "claim_text": {
+            "type": "string",
+            "minLength": 1
+          },
+          "subject": {
+            "type": "string",
+            "minLength": 1
+          },
+          "subject_kind": {
+            "enum": [
+              "user",
+              "agent",
+              "named_entity",
+              "unresolved"
+            ]
+          },
+          "attribute": {
+            "anyOf": [
+              {
+                "enum": [
+                  "ability.awards",
+                  "ability.certifications",
+                  "ability.creative",
+                  "ability.practical",
+                  "ability.professional",
+                  "ability.technical",
+                  "contact.address",
+                  "contact.email",
+                  "contact.messaging",
+                  "contact.phone",
+                  "contact.social",
+                  "contact.websites",
+                  "entity.organization",
+                  "entity.person",
+                  "entity.place",
+                  "finance.budget_style",
+                  "finance.investing",
+                  "finance.obligations",
+                  "goal.career",
+                  "goal.family",
+                  "goal.financial",
+                  "goal.health",
+                  "goal.learning",
+                  "goal.personal",
+                  "goal.project",
+                  "goal.travel",
+                  "health.accessibility",
+                  "health.allergies",
+                  "health.conditions",
+                  "health.fitness",
+                  "health.medications",
+                  "health.mental",
+                  "health.sleep",
+                  "identity.aka",
+                  "identity.birth_date",
+                  "identity.birth_place",
+                  "identity.career_history",
+                  "identity.education",
+                  "identity.employer",
+                  "identity.employment_status",
+                  "identity.gender",
+                  "identity.hometown",
+                  "identity.industry",
+                  "identity.institutional_affiliation",
+                  "identity.languages",
+                  "identity.location",
+                  "identity.marital_status",
+                  "identity.name",
+                  "identity.nationality",
+                  "identity.occupation",
+                  "identity.project_role",
+                  "identity.pronouns",
+                  "identity.team_membership",
+                  "identity.timezone",
+                  "identity.work_location",
+                  "interest.arts_culture",
+                  "interest.business",
+                  "interest.education",
+                  "interest.health_wellness",
+                  "interest.history",
+                  "interest.hobbies",
+                  "interest.local",
+                  "interest.nature",
+                  "interest.philosophy",
+                  "interest.politics",
+                  "interest.science",
+                  "interest.sports",
+                  "interest.technology",
+                  "personality.self_view",
+                  "personality.social_energy",
+                  "personality.temperament",
+                  "personality.type",
+                  "possession.collections",
+                  "possession.devices",
+                  "possession.home",
+                  "possession.subscriptions",
+                  "possession.vehicle",
+                  "preference.accommodation",
+                  "preference.art",
+                  "preference.audio",
+                  "preference.cooking",
+                  "preference.devices",
+                  "preference.diet",
+                  "preference.dining",
+                  "preference.drinks",
+                  "preference.entertainment_going_out",
+                  "preference.exercise",
+                  "preference.fashion",
+                  "preference.food",
+                  "preference.games",
+                  "preference.home",
+                  "preference.media_sources",
+                  "preference.music",
+                  "preference.programming",
+                  "preference.reading",
+                  "preference.screen",
+                  "preference.shopping",
+                  "preference.social_media",
+                  "preference.tools",
+                  "preference.transport",
+                  "preference.travel_destinations",
+                  "preference.travel_style",
+                  "preference.travel",
+                  "preference.weather",
+                  "relationship.children",
+                  "relationship.colleagues",
+                  "relationship.friends",
+                  "relationship.parents",
+                  "relationship.partner",
+                  "relationship.pets",
+                  "relationship.relatives",
+                  "relationship.siblings",
+                  "routine.commute",
+                  "routine.daily",
+                  "routine.habits",
+                  "routine.weekly",
+                  "trait.collaboration",
+                  "trait.communication",
+                  "trait.constraint",
+                  "trait.environment",
+                  "trait.planning",
+                  "trait.practice",
+                  "trait.privacy",
+                  "trait.risk",
+                  "trait.schedule",
+                  "trait.tooling_habits",
+                  "value.causes",
+                  "value.ethics",
+                  "value.political",
+                  "value.priorities",
+                  "value.spiritual",
+                  "project.budget",
+                  "project.timeline",
+                  "project.objective",
+                  "project.deliverable",
+                  "project.lead",
+                  "project.stakeholder",
+                  "email.purpose",
+                  "email.recipient",
+                  "email.key_point",
+                  "email.action_item",
+                  "meeting.attendee",
+                  "meeting.agenda_item",
+                  "meeting.key_decision",
+                  "meeting.next_step"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "value": {
+            "type": "string",
+            "minLength": 1
+          },
+          "temporal_phrase": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ends_current": {
+            "type": "boolean"
+          },
+          "ended_at_phrase": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "importance": {
+            "enum": [
+              "high",
+              "medium",
+              "low"
+            ]
+          },
+          "changes_current_state": {
+            "type": "boolean"
+          },
+          "todo": {
+            "enum": [
+              "open",
+              "done",
+              "removed",
+              "none"
+            ]
+          },
+          "close_reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source_span": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "turn_index",
+              "quote"
+            ],
+            "properties": {
+              "turn_index": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "quote": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          "relations": {
+            "type": "array",
+            "maxItems": 3,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "subject",
+                "predicate",
+                "object"
+              ],
+              "properties": {
+                "subject": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "predicate": {
+                  "enum": [
+                    "IS_A",
+                    "WORKS_ON",
+                    "NEEDS",
+                    "PREFERS",
+                    "FORBIDS",
+                    "USES",
+                    "DEPENDS_ON",
+                    "CAUSED",
+                    "FIXED_BY",
+                    "DECIDED",
+                    "SUPERSEDES",
+                    "GOVERNED_BY",
+                    "OWNED_BY",
+                    "MEMBER_OF",
+                    "LOCATED_AT",
+                    "HAS_SKILL",
+                    "INTERESTED_IN",
+                    "HAS_ACCOUNT",
+                    "HAS_OCCUPATION",
+                    "HAS_METRIC",
+                    "WORKS_AT",
+                    "ATTENDED",
+                    "REPORTS_TO",
+                    "COLLABORATES_WITH",
+                    "LEARNED_FROM",
+                    "ABANDONED",
+                    "BLOCKED_BY",
+                    "IMPLEMENTED_IN",
+                    "OCCURS_UNDER",
+                    "CITES",
+                    "CREATED",
+                    "MENTIONS"
+                  ]
+                },
+                "object": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            }
+          },
+          "single_claim": {
+            "type": "boolean"
+          },
+          "time": {
+            "$ref": "#/$defs/calendarInstruction"
+          },
+          "ended_time": {
+            "$ref": "#/$defs/calendarInstruction"
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "calendarInstruction": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "none"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "unresolved"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "absolute"
+            },
+            "year": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "month": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 12
+            },
+            "day": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 31
+            },
+            "precision": {
+              "type": "string",
+              "enum": [
+                "year",
+                "month",
+                "week",
+                "day",
+                "minute"
+              ]
+            },
+            "hour": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 23
+            },
+            "minute": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 59
+            },
+            "timezone": {
+              "type": "string",
+              "minLength": 1,
+              "description": "A valid IANA time zone identifier or fixed UTC offset in +HH:MM or -HH:MM form; never a natural-language abbreviation. Keep hour and minute in that source zone."
+            }
+          },
+          "required": [
+            "kind",
+            "year",
+            "precision"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "relative"
+            },
+            "amount": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "unit": {
+              "type": "string",
+              "enum": [
+                "year",
+                "month",
+                "week",
+                "day",
+                "hour",
+                "minute"
+              ]
+            },
+            "precision": {
+              "type": "string",
+              "enum": [
+                "year",
+                "month",
+                "week",
+                "day",
+                "minute"
+              ]
+            },
+            "hour": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 23
+            },
+            "minute": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 59
+            },
+            "timezone": {
+              "type": "string",
+              "minLength": 1,
+              "description": "A valid IANA time zone identifier or fixed UTC offset in +HH:MM or -HH:MM form; never a natural-language abbreviation. Keep hour and minute in that source zone."
+            }
+          },
+          "required": [
+            "kind",
+            "amount",
+            "unit",
+            "precision"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "weekday"
+            },
+            "weekday": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 7
+            },
+            "direction": {
+              "type": "string",
+              "enum": [
+                "previous",
+                "next"
+              ]
+            },
+            "precision": {
+              "type": "string",
+              "enum": [
+                "day",
+                "minute"
+              ]
+            },
+            "hour": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 23
+            },
+            "minute": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 59
+            },
+            "timezone": {
+              "type": "string",
+              "minLength": 1,
+              "description": "A valid IANA time zone identifier or fixed UTC offset in +HH:MM or -HH:MM form; never a natural-language abbreviation. Keep hour and minute in that source zone."
+            }
+          },
+          "required": [
+            "kind",
+            "weekday",
+            "direction",
+            "precision"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    }
+  }
+}

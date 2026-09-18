@@ -1,0 +1,24 @@
+---
+name: llmix-mem-claw-openai-gpt-5-nano
+description: LLMix preset mem_claw/openai_gpt_5_nano
+metadata:
+  snoai-llmix:
+    module: mem_claw
+    preset: openai_gpt_5_nano
+    common:
+      provider: openai
+      model: gpt-5-nano
+integrity:
+  algorithm: sha256
+  digest: sha256:7632726e5cfb0ccdbadb3cb168d7488e70b2ac83418faf6002bab310cf7031d0
+signatures:
+  - signer: did-web:www.sno.ai
+    key-id: did:web:www.sno.ai#sno-mem-openclaw-release
+    payload-digest: sha256:7632726e5cfb0ccdbadb3cb168d7488e70b2ac83418faf6002bab310cf7031d0
+    algorithm: ed25519
+    signature: uEKK1U1UNX4hlNBnfY3BRdbH+nL1mm3l1Z0i6R93pviDGrTu8DqpL1JCkp/YardeMXQSaf9WGRnp7mESehIxBg==
+    payload-type: application/vnd.mda.integrity+json
+---
+# mem_claw/openai_gpt_5_nano
+
+OpenAI GPT-5 Nano preset for Sno Memory for OpenClaw generative LLM calls.

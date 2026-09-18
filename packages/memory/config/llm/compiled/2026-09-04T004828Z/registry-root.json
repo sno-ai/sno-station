@@ -1,0 +1,97 @@
+{
+  "integrity": {
+    "algorithm": "sha256",
+    "digest": "sha256:e1108e35ed8c55a4424305c0ab74df0631e0f657b62c2ba04b04e11341c9ee5b"
+  },
+  "payload": {
+    "current": {
+      "manifest_sha256": "f991330831476338d18ead0d63503cf4ee48309deeee36defd1e7131041e3eee",
+      "path": "current.json",
+      "revision": "2026-09-04T004828Z",
+      "sha256": "8c5cf723c7a8795d5a14f2d1ab56a2fe2a08b31df8f1723cc4385a5841170b94"
+    },
+    "files": [
+      {
+        "path": "compiled/2026-09-04T004828Z/resolved/mem_claw/openai_gpt_5_nano.json",
+        "role": "resolved",
+        "sha256": "dfd8f8ac660595ee2e7d5b712c6ef8b23c2d4f566aeea55d3dc99d405a2e2e99"
+      },
+      {
+        "path": "compiled/2026-09-04T004828Z/resolved/mem_claw/openrouter_auto.json",
+        "role": "resolved",
+        "sha256": "1eb89d1bc0bf69e0b7828d4d4dec4a09e570772ad764d6f4e7d9781a68614b78"
+      },
+      {
+        "path": "compiled/2026-09-04T004828Z/resolved/mem_claw/sno_ai_extract.json",
+        "role": "resolved",
+        "sha256": "74f239a1af463eb2d088c601c1bf6002e8b5e198d27264be1b90544852c7275b"
+      },
+      {
+        "path": "compiled/2026-09-04T004828Z/resolved/mem_claw/sno_conflict_verdict.json",
+        "role": "resolved",
+        "sha256": "2db5c1b65503208396442ab4e9d9710369b646ca526172f4ea129d253e056192"
+      },
+      {
+        "path": "compiled/2026-09-04T004828Z/resolved/mem_claw/sno_extract_chat.json",
+        "role": "resolved",
+        "sha256": "9305dc259d9a3902c51b63e07afc16dea47f67609899f6f8c1684d88b7d88b2c"
+      },
+      {
+        "path": "compiled/2026-09-04T004828Z/resolved/mem_claw/sno_extract_profile.json",
+        "role": "resolved",
+        "sha256": "33034c156b19fb58fdc3bb1512f7986bfbd4d71db90be4c1029607dbb93c91e6"
+      },
+      {
+        "path": "compiled/2026-09-04T004828Z/source/mem_claw/openai_gpt_5_nano.mda",
+        "role": "source",
+        "sha256": "c004b9c7549efe197fca5ece0f988d5edee483f325cb5fe3102cef0a4f9e2514"
+      },
+      {
+        "path": "compiled/2026-09-04T004828Z/source/mem_claw/openrouter_auto.mda",
+        "role": "source",
+        "sha256": "99a919a214cf1d36b40bafb5b71ed9c8a836dc2644c160f04e8d9d2f098baad4"
+      },
+      {
+        "path": "compiled/2026-09-04T004828Z/source/mem_claw/sno_ai_extract.mda",
+        "role": "source",
+        "sha256": "8a817e3a954f83c98f429829b87adba576b43dc56eeaf8e0d0b18820989773ce"
+      },
+      {
+        "path": "compiled/2026-09-04T004828Z/source/mem_claw/sno_conflict_verdict.mda",
+        "role": "source",
+        "sha256": "a236876afa279e397b927561b0f173e73aa96a4c2c07ab3e68bae48cf5a644b4"
+      },
+      {
+        "path": "compiled/2026-09-04T004828Z/source/mem_claw/sno_extract_chat.mda",
+        "role": "source",
+        "sha256": "9bd3c07f46b05d0c3b923fae3a0d31997ac9384537cde0baa3aeed05e951ee1f"
+      },
+      {
+        "path": "compiled/2026-09-04T004828Z/source/mem_claw/sno_extract_profile.mda",
+        "role": "source",
+        "sha256": "2ebadfcf0bbfc0233cdb5ceec7d22bfcbbea6f341ebc673432b09885da959123"
+      }
+    ],
+    "manifest": {
+      "path": "compiled/2026-09-04T004828Z/manifest.json",
+      "sha256": "f991330831476338d18ead0d63503cf4ee48309deeee36defd1e7131041e3eee"
+    },
+    "published_at": "2026-09-04T00:48:29.141Z",
+    "revision": "2026-09-04T004828Z",
+    "schema": "llmix.config-registry.root",
+    "schema_version": 1
+  },
+  "payload_sha256": "e1108e35ed8c55a4424305c0ab74df0631e0f657b62c2ba04b04e11341c9ee5b",
+  "schema": "llmix.config-registry.root-envelope",
+  "schema_version": 1,
+  "signatures": [
+    {
+      "algorithm": "ed25519",
+      "key-id": "did:web:www.sno.ai#sno-mem-openclaw-release",
+      "payload-digest": "sha256:e1108e35ed8c55a4424305c0ab74df0631e0f657b62c2ba04b04e11341c9ee5b",
+      "payload-type": "application/vnd.snoai.llmix.registry-root+json",
+      "signature": "1lbbSet5ONBaFUTbJ9LngfIVJ4fkuWgSvMGjqo3Wah9qLtq+h5XcDOd43oZ69LYGn3hW2WAHzjKMubNW0MKUCA==",
+      "signer": "did-web:www.sno.ai"
+    }
+  ]
+}

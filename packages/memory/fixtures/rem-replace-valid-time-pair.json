@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "id": "backdated-atlas-region",
+  "later_valid": {
+    "text": "My preferred Atlas deployment region is us-west-2.",
+    "valid_from": "2026-08-05T12:00:00Z"
+  },
+  "backdated_arrival": {
+    "text": "My preferred Atlas deployment region is us-east-1.",
+    "valid_from": "2026-08-04T12:00:00Z",
+    "section_name": "preferences.edge-rem-valid-time",
+    "topic": "deployment-region"
+  },
+  "expected_verdict": "replacement",
+  "measurement": {
+    "measured_at": "2026-08-06T00:55:54Z",
+    "model": "qwen3.6-27b-extract",
+    "provider": "sno-gpu",
+    "prompt_sha256": "8ccb02216ff78f8f5c4ca712adcdee70976ce1c77d4e4693723e0d848286b741"
+  }
+}

@@ -1,0 +1,4 @@
+{
+	global: sqlite3_vec_init;
+	local: *;
+};
