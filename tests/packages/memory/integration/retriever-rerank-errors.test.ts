@@ -910,7 +910,7 @@ describe("retriever rerank batching", () => {
 
 			// Every row must carry the score the reranker gave for ITS OWN text. An index re-based
 			// onto the wrong batch offset shows up here as a row wearing a neighbour's score, which
-			// the blended ranking hides because the preservation floor flattens the gaps away.
+			// checking the final blended ordering alone cannot reliably detect.
 			const misplaced = results.filter((result) => {
 				const rowNumber = Number(/^Row (\d+):/.exec(result.entry.text)?.[1] ?? "-1");
 				const sources = result.sources as { reranked?: { score: number } };
