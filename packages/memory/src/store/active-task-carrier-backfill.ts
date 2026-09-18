@@ -7,7 +7,7 @@ import { createLogger, privateLogReference } from "@snoai/utils/logger";
 import { buildActiveTaskCarrierRow } from "./active-task-carrier-row";
 import type { MemoryStore, MemoryStoreInternals } from "./memory-store-base";
 import { StorageError } from "./memory-store-shared";
-import { hostTimezone } from "./memory-store-write-validation";
+import { hostTimezone, recordTokenCounter } from "./memory-store-write-validation";
 
 const log = createLogger("active-task-carrier-backfill");
 
@@ -20,12 +20,20 @@ interface CarrierlessTaskRow {
 	terminalAtMs: number | null;
 	openingDescription: string | null;
 	currentDescription: string | null;
+	identityState: string | null;
 }
 
 export interface ActiveTaskCarrierBackfillReport {
 	/** project id -> carriers created. Projects needing nothing are absent. */
 	createdByProject: Record<string, number>;
 	created: number;
+	/**
+	 * project id -> instances held back because the migration could not bind them to a command.
+	 * A carrier id is a function of that command, so these cannot get one until the binding is
+	 * resolved. Counted here, and logged, so holding them back can never read as "already done".
+	 */
+	unresolvedByProject: Record<string, number>;
+	unresolved: number;
 }
 
 /**
@@ -45,6 +53,7 @@ function readCarrierlessTasks(store: MemoryStoreInternals): CarrierlessTaskRow[]
 				i.created_at_ms AS createdAtMs,
 				i.status AS status,
 				i.terminal_at_ms AS terminalAtMs,
+				i.identity_state AS identityState,
 				(SELECT r0.description
 					FROM nodix_active_task_revisions r0
 					WHERE r0.project_id = i.project_id AND r0.active_task_id = i.active_task_id
@@ -118,8 +127,28 @@ export async function backfillActiveTaskCarriers(
 	// the prototype methods below are mounted on MemoryStore but not on its
 	// public type.
 	const store = target as unknown as MemoryStoreInternals;
-	const pending = readCarrierlessTasks(store);
-	if (pending.length === 0) return { createdByProject: {}, created: 0 };
+	const all = readCarrierlessTasks(store);
+	// A migrated instance the legacy census could not bind to a command has no opening command
+	// by design, and the carrier id is a function of that command. It is a known state, not a
+	// damaged row, so it is held back and counted rather than failing every other project's
+	// backfill with it.
+	const unresolvedByProject: Record<string, number> = {};
+	const pending: CarrierlessTaskRow[] = [];
+	for (const row of all) {
+		if (row.identityState === "unresolved" && !row.openingCommandId) {
+			unresolvedByProject[row.projectId] = (unresolvedByProject[row.projectId] ?? 0) + 1;
+			continue;
+		}
+		pending.push(row);
+	}
+	const unresolved = Object.values(unresolvedByProject).reduce((sum, count) => sum + count, 0);
+	// Return early only when there was nothing at all. A run that held EVERY carrierless
+	// instance back has nothing to create either, and returning here would leave no trace of it:
+	// the boot entry point below is detached, so nobody reads this report and the log at the end
+	// is the only thing anyone sees.
+	if (pending.length === 0 && unresolved === 0) {
+		return { createdByProject: {}, created: 0, unresolvedByProject, unresolved };
+	}
 	assertComplete(pending);
 
 	const prepared = await Promise.all(
@@ -141,6 +170,7 @@ export async function backfillActiveTaskCarriers(
 					timestampMs: createdAtMs,
 				},
 				"active-task-carrier-backfill",
+				await recordTokenCounter(store.embedder),
 			);
 			return {
 				projectId: row.projectId,
@@ -191,6 +221,7 @@ export async function backfillActiveTaskCarriers(
 	log.warn("active-task carrier backfill complete", {
 		pending: pending.length,
 		created,
+		unresolved,
 		created_by_scope: Object.entries(createdByProject).map(([scope, count]) => ({
 			scope_reference: privateLogReference(scope), created_count: count,
 		})),
@@ -200,7 +231,7 @@ export async function backfillActiveTaskCarriers(
 		function: "backfillActiveTaskCarriers",
 		site_id: "active-task-carrier-backfill.backfillActiveTaskCarriers.facdae917f",
 	});
-	return { createdByProject, created };
+	return { createdByProject, created, unresolvedByProject, unresolved };
 }
 
 /**

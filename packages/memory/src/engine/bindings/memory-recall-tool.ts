@@ -4,7 +4,7 @@ import {
 	resolveReadableScopesForTool,
 } from "./memory-tool-access";
 import type { TodoListResult } from "./memory-tool-dependencies";
-import { clamp01, clampInt, countTokens, DEFAULT_MIN_SCORE, DEFAULT_SCOPE, formatAtDepth, MAX_CANDIDATE_POOL_SIZE, MAX_AGGREGATION_MEMORY_CHARS, MAX_AGGREGATION_RESULT_TOKENS, MAX_RECALLED_TODOS, MAX_RECALLED_TODO_TOKENS, normalizeCategory, truncateGraphemes } from "./memory-tool-dependencies";
+import { clamp01, clampInt, countTokens, DEFAULT_MIN_SCORE, DEFAULT_SCOPE, formatAtDepth, DEFAULT_MAX_CONTEXT_TOKENS, MAX_RECALL_TOOL_CANDIDATES, MAX_AGGREGATION_RESULT_TOKENS, MAX_RECALLED_TODOS, MAX_RECALLED_TODO_TOKENS, normalizeCategory, truncateGraphemes } from "./memory-tool-dependencies";
 import {
 	episodicEventDate,
 	safeParseMetadata,
@@ -12,10 +12,8 @@ import {
 	serializeMemory,
 } from "./memory-tool-formatting";
 import {
-	killSwitchResponse,
 	makeResult,
 	runWithAudit,
-	shouldBlockMemoryTools,
 } from "./memory-tool-results";
 import { recallParamsSchema, type ToolContext, type ToolResult } from "./memory-tool-schemas";
 import {
@@ -87,9 +85,10 @@ function prependTodoBlock(result: ToolResult, todos: TodoListResult): ToolResult
 	if (todos.totalCount > lines.length) {
 		lines.push(`... showing ${lines.length} of ${todos.totalCount} to-dos.`);
 	}
+	const text = `To-dos:\n${lines.join("\n")}`;
 	return {
 		...result,
-		content: [{ type: "text", text: `To-dos:\n${lines.join("\n")}` }, ...result.content],
+		content: [{ type: "text", text }, ...result.content],
 	};
 }
 
@@ -97,9 +96,10 @@ function prependTodoBlock(result: ToolResult, todos: TodoListResult): ToolResult
 
 
 
-export async function executeMemoryRecallTool(ctx: ToolContext, access: ReturnType<typeof resolveAgentAccess>, _toolCallId: unknown, params: unknown, options: { name: string; label: string; description: string }): Promise<ToolResult> {
+export async function executeMemoryRecallTool(ctx: ToolContext, access: ReturnType<typeof resolveAgentAccess>, _toolCallId: unknown, params: unknown, options: { name: string; label: string; description: string; signal?: AbortSignal }): Promise<ToolResult> {
 			const raw = typeof params === "object" && params !== null ? params as Record<string, unknown> : {};
 			return withLogContext({ operation_id: currentLogContext().operation_id ?? randomUUID(),
+				session_reference: ctx.sessionKey,
 				...(typeof raw.external_reference === "string" ? { external_reference: raw.external_reference,
 					external_reference_visibility: raw.external_reference_visibility === "public" ? "public" : "private" } : {}) }, async () => {
 			const started = performance.now();
@@ -111,8 +111,6 @@ export async function executeMemoryRecallTool(ctx: ToolContext, access: ReturnTy
 			try {
 			// Centralize the tool execution fallback value at the boundary of this helper.
 			const output = await runWithAudit(ctx, options.name, undefined, async () => {
-				// Short-circuit while paused so no storage, model, or audit side effects continue.
-				if (shouldBlockMemoryTools(ctx)) return killSwitchResponse(ctx);
 				const parsed = recallParamsSchema.parse(params);
 				packManualRecallRows([], parsed.token_budget);
 				// An explicit aggregation reports the exact population size while bounding the evidence
@@ -123,7 +121,7 @@ export async function executeMemoryRecallTool(ctx: ToolContext, access: ReturnTy
 					: parsed.scope ?? DEFAULT_SCOPE;
 				// Candidate retrieval keeps its scoring safety bound. The caller's legacy row count no
 				// longer cuts the served set; the token packer below is the final serving boundary.
-				const effectiveTopK = MAX_CANDIDATE_POOL_SIZE;
+				const effectiveTopK = MAX_RECALL_TOOL_CANDIDATES;
 				const minScore = clamp01(parsed.min_score ?? DEFAULT_MIN_SCORE, DEFAULT_MIN_SCORE);
 				// Compute the normalized scope filter once so later tool execution checks use one value.
 				const scopeFilter = parsed.scope
@@ -153,6 +151,7 @@ export async function executeMemoryRecallTool(ctx: ToolContext, access: ReturnTy
 				// Await the tool execution dependency before deriving downstream state.
 				const retrieved = await retrieveForMemoryRecallOrEval(ctx.retriever, {
 					diagnostics: retrievalDiagnostics,
+					signal: options.signal,
 					query: parsed.query,
 					limit: effectiveTopK,
 					scopeFilter,
@@ -177,7 +176,7 @@ export async function executeMemoryRecallTool(ctx: ToolContext, access: ReturnTy
 					? retrieved
 					: retrieved.filter((result) => result.score >= minScore);
 				// Treat the empty collection as a first-class outcome instead of widening behavior.
-				if (filtered.length === 0) {
+				if (filtered.length === 0 && (readsWholePopulation || !ctx.recallSession)) {
 					if (parsed.aggregation) {
 						const scopeRowCount = aggregationIncomplete ? "unknown" : "0";
 						return withTodoBlock(makeRecallResult(
@@ -225,10 +224,16 @@ export async function executeMemoryRecallTool(ctx: ToolContext, access: ReturnTy
 				const requestedRows =
 					readsWholePopulation || parsed.top_k === undefined
 						? limitedResults
-						: limitedResults.slice(0, clampInt(parsed.top_k, 1, MAX_CANDIDATE_POOL_SIZE));
+						: limitedResults.slice(0, clampInt(parsed.top_k, 1, MAX_RECALL_TOOL_CANDIDATES));
+				const session = readsWholePopulation ? undefined : ctx.recallSession;
+				const history = session ? session.history.get(session.sessionId) : undefined;
+				const unseenRows = session
+					? requestedRows.filter(row => history?.get(row.entry.id) !== session.turn)
+					: requestedRows;
+				const alreadyServedCount = requestedRows.length - unseenRows.length;
 				const packedRecall = readsWholePopulation
 					? { rows: requestedRows, budget_used: 0, dropped_count: 0 }
-					: packManualRecallRows(requestedRows, parsed.token_budget);
+					: packManualRecallRows(unseenRows, parsed.token_budget);
 				const packedResults = packedRecall.rows;
 				budgetRemoved = packedRecall.dropped_count;
 				const truncated =
@@ -265,7 +270,7 @@ export async function executeMemoryRecallTool(ctx: ToolContext, access: ReturnTy
 				let displayResults = packedResults.map((result) => {
 					const sourceText = result.snippet?.trim() ? result.snippet : result.entry.text;
 					const displayText = readsWholePopulation
-						? truncateGraphemes(sourceText, MAX_AGGREGATION_MEMORY_CHARS)
+						? ctx.store.embedder.truncateToTokens(sourceText, DEFAULT_MAX_CONTEXT_TOKENS)
 						: sourceText;
 					if (displayText !== sourceText) aggregationTextTruncated = true;
 					return {
@@ -318,11 +323,13 @@ export async function executeMemoryRecallTool(ctx: ToolContext, access: ReturnTy
 						? `<recall-result scope-row-count="${observedScopeRowCount ?? "unknown"}" returned-count="${results.length}" population-complete="${populationComplete}" truncated="${outputTruncated}" />\n`
 						: "";
 					return makeResult(
-						`<relevant-memories>\n${aggregationSummary}Found ${results.length} memories:\n\n${text}\n</relevant-memories>`,
+						`<relevant-memories>\n${aggregationSummary}Found ${results.length} memories:\n\n${text}\n</relevant-memories>` +
+							(alreadyServedCount > 0 ? `\n${alreadyServedCount} memories already shown in this turn were omitted.` : ""),
 						{
 							count: serialized.length,
 							scope: outputScope,
 							memories: serialized,
+							...(session && { already_served_count: alreadyServedCount }),
 							...(!readsWholePopulation && {
 								budget_used: packedRecall.budget_used,
 								dropped_count: packedRecall.dropped_count,
@@ -403,7 +410,7 @@ export async function executeMemoryRecallTool(ctx: ToolContext, access: ReturnTy
 						},
 					));
 				}
-				return withTodoBlock(appendStructuredRecallContent(result));
+				return prependTodoBlock(appendStructuredRecallContent(result), todos);
 			});
 			const memories = output.details["memories"];
 			served = Array.isArray(memories) ? memories.flatMap((row: unknown) =>

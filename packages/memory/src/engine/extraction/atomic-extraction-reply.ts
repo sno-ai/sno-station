@@ -4,7 +4,7 @@
  */
 
 import { z } from "zod";
-import { calendarInstructionSchema, type CalendarInstruction, type CalendarResult } from "./calendar-instruction";
+import { calculateCalendarTime, calendarInstructionSchema, type CalendarInstruction, type CalendarResult } from "./calendar-instruction";
 import { createLogger } from "@snoai/utils/logger";
 import atomicExtractionSchema from "../../../config/atomic-extraction-response.schema.json" with {
 	type: "json",
@@ -12,7 +12,8 @@ import atomicExtractionSchema from "../../../config/atomic-extraction-response.s
 import attributeDictionary from "../../../config/attribute-dictionary.json" with { type: "json" };
 import relationDictionary from "../../../config/relation-dictionary.json" with { type: "json" };
 import stateVocabulary from "../../../config/state-vocabulary.json" with { type: "json" };
-import { modelReplyJsonCandidates } from "../shared/model-reply-text";
+import { modelReplyJsonCandidates, readModelReplyJson } from "../shared/model-reply-text";
+import { parseProgressTurns } from "./atomic-progress-boundary";
 
 export type AtomicExtractionTurnRole = "system" | "user" | "assistant";
 
@@ -240,3 +241,146 @@ export function parseAtomicExtractionReply(
 }
 
 export const ATOMIC_EXTRACTION_RESPONSE_JSON_SCHEMA: unknown = atomicExtractionSchema;
+
+const captureFactSchema = wireRecordSchema.pick({
+	subject: true, subject_kind: true, temporal_phrase: true, source_span: true,
+}).extend({
+	id: z.number().int().nonnegative(),
+	fact: z.string().min(1),
+	ended_at_phrase: wireRecordSchema.shape.ended_at_phrase.unwrap(),
+});
+
+const captureReplySchema = z.object({
+	claims_found: z.array(z.string().min(1)),
+	decisions: z.array(z.object({
+		turn_index: z.number().int().nonnegative(), progress_only: z.boolean(),
+	})),
+	facts: z.array(captureFactSchema),
+});
+
+const enrichmentSchema = wireRecordSchema.omit({
+	claim_text: true, subject: true, subject_kind: true, temporal_phrase: true,
+	ended_at_phrase: true, source_span: true,
+}).extend({
+	id: z.number().int().nonnegative(),
+	time: calendarInstructionSchema,
+	ended_time: calendarInstructionSchema,
+	relations: z.array(relationSchema.extend({
+		predicate: z.enum(relationDictionary.relations.map(({ type }) => type)),
+	})).max(MAX_RELATIONS),
+});
+const enrichmentReplySchema = z.object({ enrichments: z.array(enrichmentSchema) });
+
+export interface AtomicCapturedFact {
+	id: number;
+	fact: string;
+	subject: string;
+	subject_kind: AtomicExtractionRecord["subjectKind"];
+	temporal_phrase: string | null;
+	ended_at_phrase: string | null;
+	source_span: { turn_index: number; quote: string };
+}
+export const ATOMIC_CAPTURE_RESPONSE_JSON_SCHEMA: unknown = z.toJSONSchema(captureReplySchema);
+export const ATOMIC_ENRICHMENT_RESPONSE_JSON_SCHEMA: unknown = z.toJSONSchema(enrichmentReplySchema);
+
+export function parseAtomicCaptureReply(
+	raw: string,
+	turns: readonly AtomicExtractionTurn[],
+	{ salvage = false, onReject }: { salvage?: boolean; onReject?: (gate: string) => void } = {},
+): { facts: AtomicCapturedFact[]; progressTurns: ReadonlySet<number> } | undefined {
+	let gate = "unreadable-json";
+	const result = readModelReplyJson(raw, (value) => {
+		const parsed = captureReplySchema.safeParse(value);
+		if (!parsed.success) {
+			if (gate === "unreadable-json") gate = "capture-schema";
+			return undefined;
+		}
+		const { facts, claims_found } = parsed.data;
+		const kept = facts.map((fact, index) => ({ ...fact, id: index }))
+			.filter((fact) => fact.source_span.turn_index < turns.length);
+		// Claims can merge or split into facts; reject only a nonempty inventory with no facts.
+		if (claims_found.length > 0 && kept.length === 0) {
+			gate = "claims-without-facts";
+			return undefined;
+		}
+		const progressTurns = parseProgressTurns(parsed.data, turns, { salvage });
+		if (progressTurns === null) {
+			gate = "progress-decisions";
+			return undefined;
+		}
+		const wrongIds = facts.filter((fact, index) => fact.id !== index).length;
+		const invalidSpans = facts.filter((fact) => fact.source_span.turn_index >= turns.length).length;
+		if (!salvage && (wrongIds > 0 || invalidSpans > 0)) {
+			gate = wrongIds > 0 ? "fact-ids" : "source-turn-index";
+			return undefined;
+		}
+		if (wrongIds > 0) {
+			log.warn("atomic capture salvaged fact ids", { gate: 5, affected_facts: wrongIds }, {
+				event_name: "memory.atomic_extraction_reply.diagnostic", file: "packages/sno-station-mem/src/engine/extraction/atomic-extraction-reply.ts", function: "parseAtomicCaptureReply", site_id: "extraction.atomic-extraction-reply.salvage_ids",
+			});
+		}
+		if (invalidSpans > 0) {
+			log.warn("atomic capture dropped facts with invalid source turns", { gate: 6, affected_facts: invalidSpans }, {
+				event_name: "memory.atomic_extraction_reply.diagnostic", file: "packages/sno-station-mem/src/engine/extraction/atomic-extraction-reply.ts", function: "parseAtomicCaptureReply", site_id: "extraction.atomic-extraction-reply.salvage_spans",
+			});
+		}
+		return { facts: kept, progressTurns };
+	});
+	if (result === undefined) onReject?.(gate);
+	return result;
+}
+
+function warnUnresolvedEnrichmentTime(
+	enrichment: z.infer<typeof enrichmentSchema>,
+	sessionDateTime: string | undefined,
+): void {
+	for (const field of ["time", "ended_time"] as const) {
+		const instruction = enrichment[field];
+		if (instruction.kind === "none" || instruction.kind === "unresolved" ||
+			calculateCalendarTime(instruction, sessionDateTime) !== null) continue;
+		const missingComponents: string[] = [];
+		if (instruction.kind === "absolute") {
+			if (instruction.precision !== "year" && instruction.month === undefined) missingComponents.push("month");
+			if (instruction.precision !== "year" && instruction.precision !== "month" &&
+				instruction.day === undefined) missingComponents.push("day");
+		} else if (sessionDateTime === undefined) missingComponents.push("session_date_time");
+		if (instruction.hour === undefined && (instruction.minute !== undefined ||
+			(instruction.precision === "minute" && instruction.kind !== "relative"))) missingComponents.push("hour");
+		log.warn("atomic enrichment time could not be calculated", {
+			fact_id: enrichment.id, field: { name: field }, kind: instruction.kind,
+			precision: { unit: instruction.precision },
+			missing_components: missingComponents.map((name) => ({ name })),
+		}, { event_name: "memory.atomic_extraction_reply.diagnostic", file: "packages/sno-station-mem/src/engine/extraction/atomic-extraction-reply.ts", function: "warnUnresolvedEnrichmentTime", site_id: "extraction.atomic-extraction-reply.unresolved_enrichment_time" });
+	}
+}
+
+export function parseAtomicEnrichmentReply(
+	raw: string,
+	facts: readonly AtomicCapturedFact[],
+	sessionDateTime?: string,
+): AtomicExtractionRecord[] | undefined {
+	return readModelReplyJson(raw, (value) => {
+		const parsed = enrichmentReplySchema.safeParse(value);
+		if (!parsed.success) return undefined;
+		const byId = new Map(parsed.data.enrichments.map((entry) => [entry.id, entry]));
+		if (parsed.data.enrichments.length !== facts.length || byId.size !== facts.length ||
+			facts.some((fact) => !byId.has(fact.id))) return undefined;
+		const records: AtomicExtractionRecord[] = [];
+		for (const fact of facts) {
+			const enrichment = byId.get(fact.id);
+			if (enrichment === undefined) return undefined;
+			warnUnresolvedEnrichmentTime(enrichment, sessionDateTime);
+			records.push(projectRecord({ ...enrichment, ...fact, claim_text: fact.fact }));
+		}
+		return records;
+	});
+}
+
+export function fallbackAtomicCapturedFact(fact: AtomicCapturedFact): AtomicExtractionRecord {
+	return projectRecord({
+		...fact, claim_text: fact.fact, kind: "occurrence", attribute: null, value: fact.fact,
+		ends_current: false, todo: "none", close_reason: null, changes_current_state: false,
+		importance: "low", single_claim: true, relations: [],
+		time: { kind: "unresolved" }, ended_time: { kind: "none" },
+	});
+}

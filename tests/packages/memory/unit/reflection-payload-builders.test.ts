@@ -1,3 +1,7 @@
+import { appendFileSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { ensureDailyLogFile } from "../../../../packages/sno-station-mem/src/engine/reflection/daily-log-generator";
 import { createHash } from "node:crypto";
 
 import { describe, expect, it } from "vitest";
@@ -60,6 +64,24 @@ function expectedReflectionEventId(params: {
 }
 
 describe("reflection score and payload builders", () => {
+	it("preserves an appended link when daily log creation overlaps", async () => {
+		const root = mkdtempSync(join(tmpdir(), "daily-log-race-"));
+		try {
+			for (let attempt = 0; attempt < 20; attempt++) {
+				const path = join(root, `${attempt}.md`);
+				await Promise.all(Array.from({ length: 16 }, async () => {
+					await ensureDailyLogFile(path, "2026-09-17");
+					appendFileSync(path, "- [First reflection](first.md)\n");
+				}));
+				const content = readFileSync(path, "utf8");
+				expect(content.startsWith("# 2026-09-17\n\n")).toBe(true);
+				expect(content.split("- [First reflection](first.md)\n").length).toBe(17);
+			}
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
 	it("keeps reflection score math, fallback multiplier, and line normalization stable", () => {
 		const logistic = computeReflectionLogistic(10, 5, 0.5);
 		const expectedLogistic = 1 / (1 + Math.exp(0.5 * (10 - 5)));

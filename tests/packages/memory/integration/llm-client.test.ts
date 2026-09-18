@@ -68,6 +68,26 @@ function memoryExtractRequest(prompt: string, callLabel: string): ClientRequest 
 }
 
 describe("mem-claw llm-client", () => {
+	it("honors the caller check for direct and repaired JSON", async () => {
+		let reply = '{"status":"rejected"}';
+		globalThis.fetch = async (input) => {
+			if (String(input) === SNO_STATION_MEM_RELEASE_ANCHOR_URL) {
+				return new Response(JSON.stringify(didDocument), { status: 200 });
+			}
+			return okChat(reply);
+		};
+		const client = createLlmClient({ apiKey: "test-key", preset: "mem_claw/sno_ai_extract", baseURL: "https://llm.example.test/v1" });
+		const request = { ...memoryExtractRequest("Return JSON", "memory-extract-episodic"),
+			accept: (value: unknown) => typeof value === "object" && value !== null && "status" in value && value.status === "accepted" };
+		for (const content of ['{"status":"rejected"}', '{"status":"rejected",}']) {
+			reply = content;
+			expect(await client.completeJson(request)).toBeNull();
+			expect(client.getLastError()).toContain("caller check rejected payload");
+		}
+		reply = '{"status":"accepted"}';
+		expect(await client.completeJson(request)).toEqual({ status: "accepted" });
+	});
+
 	afterEach(() => {
 		globalThis.fetch = originalFetch;
 	});

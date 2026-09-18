@@ -1,3 +1,4 @@
+import { SNO_OBSERVE_DEFAULT_AGENT_ID } from "../../../config/index";
 /** @file sno-station-mem-auto-recall-hook.ts
  * @purpose Handles before-agent auto-recall, filtering, timeout, and context injection.
  * @boundary The before_prompt_build hook path only; capture and reset hooks live elsewhere.
@@ -13,7 +14,6 @@ import {
 	type createScopePolicy,
 	debugContentPreview,
 	formatRelevantMemoriesContext,
-	isKillSwitchActive,
 	MAX_SESSION_RECALL_ENTRIES,
 	MAX_TRACKED_SESSIONS,
 	type MemoryRetriever,
@@ -27,11 +27,11 @@ import {
 	touchLruEntry,
 } from "./sno-station-mem-runtime-dependencies";
 import {
-	auditMissingHookAgentIdentity,
 	isChatIdBasedAgentId,
 	resolveHookAgentId,
 } from "./sno-station-mem-runtime-mode";
 import { resolveRuntimeSessionId } from "./sno-station-mem-session-state";
+import { episodicEventDate, saidOnDate, sourceQuote } from "./memory-tool-formatting";
 import type { RetrievalResult } from "../shared/types";
 import type { MemoryTelemetryUsageOutbox } from "../telemetry/memory-telemetry-outbox";
 import type { MemoryTelemetryMetadata } from "../telemetry/memory-telemetry-types";
@@ -61,7 +61,11 @@ export async function onBeforeAgentStart(
 	ctx: PluginHookAgentContext,
 	stateDir: string,
 	telemetryUsage?: MemoryTelemetryUsageOutbox,
+	signal?: AbortSignal,
 ): Promise<PluginHookBeforeAgentStartResult | undefined> {
+	const sessionId = resolveRuntimeSessionId(ctx);
+	const currentTurn = (touchLruEntry(turnCounter, sessionId) ?? 0) + 1;
+	setLruEntry(turnCounter, sessionId, currentTurn, MAX_TRACKED_SESSIONS);
 	const sessionKey = typeof ctx.sessionKey === "string" ? ctx.sessionKey : "";
 	return withLogContext({ operation_id: currentLogContext().operation_id ?? randomUUID(), session_reference: sessionKey }, async () => {
 	const started = performance.now();
@@ -70,9 +74,7 @@ export async function onBeforeAgentStart(
 	let repeatRemoved = 0;
 	const retrievalDiagnostics: RecallFilterDiagnostics = {};
 	try {
-	// Keep identity and boundary checks ahead of any privileged operation.
 	if (sessionKey.includes(":subagent:")) {
-		// Persist the decision breadcrumb so later debugging can reconstruct this path.
 		appendAuditEntry(stateDir, {
 			event: "auto_recall",
 			hook: "before_prompt_build",
@@ -82,30 +84,8 @@ export async function onBeforeAgentStart(
 		});
 		return;
 	}
-	// Short-circuit while paused so no storage, model, or audit side effects continue.
-	if (isKillSwitchActive(stateDir)) return;
-	// Branch on configuration before selecting the runtime strategy.
-	if (!config.autoRecall) {
-		return;
-	}
-
-	// Per-agent inclusion/exclusion gating.
-	// Precedence: a non-empty autoRecallIncludeAgents acts as a whitelist and
-	// fully overrides autoRecallExcludeAgents. When the whitelist is empty,
-	// autoRecallExcludeAgents acts as a blocklist. An empty list in either
-	// position is a no-op.
-	const { agentId: resolvedAgentId, source: agentResolutionSource } = resolveHookAgentId(
-		ctx.agentId,
-		sessionKey,
-	);
-	// Keep identity and boundary checks ahead of any privileged operation.
-	if (agentResolutionSource === "missing" || !resolvedAgentId) {
-		auditMissingHookAgentIdentity(api, "before_prompt_build", stateDir, "auto_recall");
-		return;
-	}
-	// Issue #492 Layer 2: pure-digit agentIds are almost always chat_id snowflakes
-	// (Discord/Telegram). Skip auto-recall so a misrouted ingress cannot drive an
-	// unbounded query against a non-existent agent identity.
+	if (!config.autoRecall) return;
+	const resolvedAgentId = resolveHookAgentId(ctx.agentId, sessionKey).agentId ?? SNO_OBSERVE_DEFAULT_AGENT_ID;
 	if (isChatIdBasedAgentId(resolvedAgentId)) {
 		appendAuditEntry(stateDir, {
 			event: "auto_recall",
@@ -116,11 +96,9 @@ export async function onBeforeAgentStart(
 		});
 		return;
 	}
-	// Branch on configuration before selecting the runtime strategy.
+	// A non-empty whitelist overrides the blocklist.
 	if (config.autoRecallIncludeAgents.length > 0) {
-		// Branch on configuration before selecting the runtime strategy.
 		if (!config.autoRecallIncludeAgents.includes(resolvedAgentId)) {
-			// Persist the decision breadcrumb so later debugging can reconstruct this path.
 			appendAuditEntry(stateDir, {
 				event: "auto_recall",
 				hook: "before_prompt_build",
@@ -131,7 +109,6 @@ export async function onBeforeAgentStart(
 			return;
 		}
 	} else if (config.autoRecallExcludeAgents.includes(resolvedAgentId)) {
-		// Persist the decision breadcrumb so later debugging can reconstruct this path.
 		appendAuditEntry(stateDir, {
 			event: "auto_recall",
 			hook: "before_prompt_build",
@@ -141,7 +118,6 @@ export async function onBeforeAgentStart(
 		});
 		return;
 	}
-
 	const incoming = event.prompt;
 	const recallInput = incoming ? extractAutoRecallQuery(incoming) : "";
 	const normalizedIncoming = recallInput ? normalizeQuery(recallInput) : "";
@@ -158,10 +134,6 @@ export async function onBeforeAgentStart(
 			{ event_name: "memory.auto_recall.query.limited", file: "packages/sno-station-mem/src/engine/bindings/sno-station-mem-auto-recall-hook.ts", function: "onBeforeAgentStart", site_id: "memory.auto_recall.query.limited" });
 		recallQuery = recallQuery.slice(0, maxQueryLen);
 	}
-
-	const sessionId = resolveRuntimeSessionId(ctx);
-	const currentTurn = (touchLruEntry(turnCounter, sessionId) ?? 0) + 1;
-	setLruEntry(turnCounter, sessionId, currentTurn, MAX_TRACKED_SESSIONS);
 
 	// Compute the normalized scope filter once so later module behavior checks use one value.
 	const scopeFilter = scopePolicy.resolveAgentScopes(resolvedAgentId);
@@ -192,12 +164,13 @@ export async function onBeforeAgentStart(
 				query: recallQuery,
 				limit: recallLimit,
 				scopeFilter,
-				signal: recallController.signal,
+				signal: signal ? AbortSignal.any([signal, recallController.signal]) : recallController.signal,
 				sessionId,
 				nowMs: suppressionNow,
 			}),
 			timeoutPromise,
 		]);
+		signal?.throwIfAborted();
 		// Treat the empty collection as a first-class outcome instead of widening behavior.
 		if (results.length === 0) {
 			outcome = "empty_success";
@@ -298,11 +271,21 @@ export async function onBeforeAgentStart(
 
 		return {
 			prependContext: formatRelevantMemoriesContext(
-				finalResults.map((result) => ({
-					category: result.entry.category,
-					text: result.snippet && result.snippet.length > 0 ? result.snippet : result.entry.text,
-					lane: result.entry.lane,
-				})),
+				finalResults.map((result) => {
+					// Keep the source anchor even when an event date has already been resolved.
+					const eventDate = episodicEventDate(result.entry);
+					// The original sentence travels with the paraphrase, so a question about exact
+					// wording has something to read. See `sourceQuote`.
+					const quote = sourceQuote(result.entry);
+					return {
+						category: result.entry.category,
+						text: result.snippet && result.snippet.length > 0 ? result.snippet : result.entry.text,
+						lane: result.entry.lane,
+						...(quote === undefined ? {} : { quote }),
+						eventDate,
+						saidOn: saidOnDate(result.entry),
+					};
+				}),
 			),
 		};
 	} catch (error) {

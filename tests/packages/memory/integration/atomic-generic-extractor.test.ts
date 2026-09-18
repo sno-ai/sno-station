@@ -207,6 +207,55 @@ function completion(text: string, truncated = false): AtomicGenericExtractionCom
 	return { text, truncated };
 }
 
+/**
+ * The two-lane reply sequence that reproduces a single `{records:[...]}` reply of the old
+ * single-call era: a capture reply carrying the lane-1 fields keyed by id, then one enrichment
+ * reply carrying the lane-2 fields for the same ids. Split by code exactly as the shipped flow
+ * expects, so the projected records — and every downstream assertion on them — are unchanged.
+ * Decisions cover TURNS' one user turn (index 1). Assumes the facts fit one enrichment batch.
+ */
+function captureReplyFor(records: Array<Record<string, unknown>>): string {
+	return JSON.stringify({
+		claims_found: records.map((record) => record.claim_text),
+		decisions: [{ turn_index: 1, progress_only: false }],
+		facts: records.map((record, id) => ({
+			id,
+			fact: record.claim_text,
+			subject: record.subject,
+			subject_kind: record.subject_kind,
+			temporal_phrase: record.temporal_phrase ?? null,
+			ended_at_phrase: record.ended_at_phrase ?? null,
+			source_span: record.source_span,
+		})),
+	});
+}
+
+function enrichmentReplyFor(records: Array<Record<string, unknown>>): string {
+	return JSON.stringify({
+		enrichments: records.map((record, id) => ({
+			id,
+			kind: record.kind,
+			attribute: record.attribute,
+			value: record.value,
+			ends_current: record.ends_current,
+			importance: record.importance,
+			changes_current_state: record.changes_current_state,
+			todo: record.todo,
+			close_reason: record.close_reason,
+			single_claim: record.single_claim,
+			relations: record.relations,
+			time: record.time,
+			ended_time: record.ended_time,
+		})),
+	});
+}
+
+function twoLaneCompletions(
+	records: Array<Record<string, unknown>>,
+): AtomicGenericExtractionCompletion[] {
+	return [completion(captureReplyFor(records)), completion(enrichmentReplyFor(records))];
+}
+
 function readLedger(fixture: TestDb, key: AtomicExtractionLedgerKey): LedgerRow {
 	const row = fixture.runtime.db
 		.prepare(`
@@ -414,10 +463,12 @@ describe("atomic generic extractor", () => {
 		await expect(transport.complete({ prompt: "exact prompt", maxTokens: 128 })).resolves.toEqual({
 			text: "provider reply",
 			truncated: true,
+			// The transport now reports the batch's output-token usage, used by lane-2 budget diagnostics.
+			outputTokens: 128,
 		});
 		expect(client.request).toEqual({
 			prompt: "exact prompt",
-			extractionSkillHash: createHash("sha256").update(readFileSync(new URL("../../../../packages/sno-station-mem/skills/extract-atomic-memory/SKILL.md", import.meta.url))).update(readFileSync(new URL("../../../../packages/sno-station-mem/skills/extract-atomic-memory/references/calendar-meaning.md", import.meta.url))).digest("hex"),
+			extractionSkillHash: createHash("sha256").update(readFileSync(new URL("../../../../packages/sno-station-mem/skills/extract-atomic-memory/SKILL.md", import.meta.url))).update(readFileSync(new URL("../../../../packages/sno-station-mem/skills/extract-atomic-memory/references/calendar-meaning.md", import.meta.url))).update(readFileSync(new URL("../../../../packages/sno-station-mem/skills/extract-atomic-memory/references/capture.md", import.meta.url), "utf8").trim()).update(readFileSync(new URL("../../../../packages/sno-station-mem/skills/extract-atomic-memory/references/enrichment.md", import.meta.url), "utf8").trim()).digest("hex"),
 			callLabel: "memory-extract-atomic-generic",
 			adapterSlot: "memory-extract",
 			maxTokens: 128,
@@ -518,14 +569,15 @@ describe("atomic generic extractor", () => {
 
 	it("runs once normally and persists input-overflow without extra calls", async () => {
 		const successKey = ledgerKey("success");
-		const successTransport = new ScriptedTransport([completion(envelope())]);
+		// Two-lane sequence: capture then one enrichment batch, reproducing the same single record.
+		const successTransport = new ScriptedTransport(twoLaneCompletions([wireRecord()]));
 		await expect(runAtomicGenericExtractionPass(input(successKey, successTransport))).resolves.toMatchObject(
 			{
 				status: "complete",
 				records: [{ claimText: "The user prefers tea." }],
 			},
 		);
-		expect(successTransport.callKinds()).toEqual(["extraction"]);
+		expect(successTransport.callKinds()).toEqual(["extraction", "extraction"]);
 		expect(successTransport.requests[0]?.maxTokens).toBe(2_000);
 		expect(Object.keys(successTransport.requests[0] ?? {}).sort()).toEqual(["maxTokens", "prompt"]);
 		expect(readLedger(fixture, successKey)).toMatchObject({ state: "calls_recorded" });
@@ -554,12 +606,14 @@ describe("atomic generic extractor", () => {
 				value: `tea-${index}`,
 			}),
 		);
-		const transport = new ScriptedTransport([completion(envelope(records))]);
+		// Two-lane sequence: one capture reply with all 12 facts, then one enrichment batch (they fit
+		// a single output-token budget), reproducing all 12 records with no numeric cap.
+		const transport = new ScriptedTransport(twoLaneCompletions(records));
 
 		await expect(
 			runAtomicGenericExtractionPass(input(key, transport)),
 		).resolves.toMatchObject({ status: "complete", records: records.map(() => ({})) });
-		expect(transport.callKinds()).toEqual(["extraction"]);
+		expect(transport.callKinds()).toEqual(["extraction", "extraction"]);
 		expect(readLedger(fixture, key)).toMatchObject({ state: "calls_recorded" });
 	});
 

@@ -181,6 +181,7 @@ function makeRetrieverConfig(
 ): RetrievalConfig {
 	return {
 		...DEFAULT_RETRIEVAL_CONFIG,
+			temporalWeighting: true,
 		rerank: "none",
 		hardMinScore: 0,
 		minScore: 0,
@@ -469,9 +470,10 @@ describe("D5: Retriever temporal decay scoring", () => {
 
 		expect(staticResult).toBeDefined();
 		expect(dynamicResult).toBeDefined();
+		if (!staticResult || !dynamicResult) throw new Error("Both temporal candidates must be retrieved");
 
 		// Dynamic should score lower due to 3× faster time decay
-		expect(dynamicResult!.score).toBeLessThan(staticResult!.score);
+		expect(dynamicResult.score / staticResult.score).toBeLessThan(1);
 	});
 
 	it("temporalDecay OFF: dynamic and static score approximately the same", async () => {
@@ -499,10 +501,11 @@ describe("D5: Retriever temporal decay scoring", () => {
 
 		expect(staticResult).toBeDefined();
 		expect(dynamicResult).toBeDefined();
+		if (!staticResult || !dynamicResult) throw new Error("Both temporal candidates must be retrieved");
 
 		// Scores should be similar (not identical because texts differ slightly,
 		// but temporal decay should not cause a significant gap)
-		const ratio = dynamicResult!.score / staticResult!.score;
+		const ratio = dynamicResult.score / staticResult.score;
 		// With decay OFF, ratio should be close to 1 (within 30% due to text similarity)
 		expect(ratio).toBeGreaterThan(0.7);
 		expect(ratio).toBeLessThan(1.3);

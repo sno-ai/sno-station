@@ -226,6 +226,67 @@ describe("atomic numeric turn sweep", () => {
 		expect(calls, "the extra model call is recorded, not hidden").toEqual([1_000]);
 	});
 
+	it("drops both copies of a first-pass fact and keeps only the new backfill fact", async () => {
+		const { store } = callCountingStore();
+		const { transport } = transportReturning(JSON.stringify({
+			records: [
+				{ claim: "The user spent $5 on coffee.", value: "$5", quote: "$5 on coffee" },
+				{ claim: "The user spent $5 on coffee.", value: "$5", quote: "$5 on coffee" },
+				{ claim: "The user spent $8 on parking.", value: "$8", quote: "$8 on parking" },
+			].map(({ claim, value, quote }) => ({
+				kind: "occurrence", claim_text: claim, subject: "user", subject_kind: "user",
+				attribute: null, value, temporal_phrase: null, time: { kind: "none" },
+				ended_time: { kind: "none" }, ends_current: false, importance: "medium",
+				changes_current_state: false, todo: "none", close_reason: null,
+				source_span: { turn_index: 0, quote }, relations: [], single_claim: true,
+			})),
+		}));
+		const swept = await runAtomicNumericTurnSweep({
+			...BASE, store, transport, nowMs: () => 1_000,
+			turns: [{ role: "user", content: "I spent $5 on coffee and $8 on parking." }],
+			records: [{
+				...record(0, "$5 on coffee"), claimText: "The user spent $5 on coffee.", value: "$5",
+			}],
+		});
+		expect(swept.map((entry) => ({
+			claim: entry.claimText, value: entry.value, source: entry.sourceSpan,
+		}))).toEqual([{
+			claim: "The user spent $8 on parking.", value: "$8",
+			source: { turnIndex: 0, quote: "$8 on parking" },
+		}]);
+	});
+
+	it("keeps different same-amount spends quoted from the whole sentence", async () => {
+		const { store } = callCountingStore();
+		const { transport } = transportReturning(JSON.stringify({
+			records: ["The user spent $5 on coffee.", "The user spent $5 on parking."].map((claim) => ({
+				kind: "occurrence", claim_text: claim, subject: "user", subject_kind: "user",
+				attribute: null, value: "5", temporal_phrase: null, time: { kind: "none" },
+				ended_time: { kind: "none" }, ends_current: false, importance: "medium",
+				changes_current_state: false, todo: "none", close_reason: null,
+				source_span: { turn_index: 0, quote: "I spent $5 on coffee and $5 on parking." },
+				relations: [], single_claim: true,
+			})),
+		}));
+		const swept = await runAtomicNumericTurnSweep({
+			...BASE, store, transport, nowMs: () => 1_000,
+			turns: [{ role: "user", content: "I spent $5 on coffee and $5 on parking." }],
+			records: [],
+		});
+		expect(swept.map((entry) => ({
+			claim: entry.claimText, value: entry.value, source: entry.sourceSpan,
+		}))).toEqual([
+			{
+				claim: "The user spent $5 on coffee.", value: "5",
+				source: { turnIndex: 0, quote: "I spent $5 on coffee and $5 on parking." },
+			},
+			{
+				claim: "The user spent $5 on parking.", value: "5",
+				source: { turnIndex: 0, quote: "I spent $5 on coffee and $5 on parking." },
+			},
+		]);
+	});
+
 	it("costs nothing when the first pass already cited the figure", async () => {
 		const { store, calls } = callCountingStore();
 		const { transport, prompts } = transportReturning(reply([]));

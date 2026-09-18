@@ -24,8 +24,6 @@ import type { LlmRoutingConfig } from "../../contract/config/plugin-config-mode-
 
 const TOOL_CATEGORY_INPUTS = [...MEMORY_CATEGORIES] as const;
 const toolCategoryInputSchema = z.enum(TOOL_CATEGORY_INPUTS);
-const STORE_CATEGORY_INPUTS = ["episodic", "profile"] as const;
-const storeCategoryInputSchema = z.enum(STORE_CATEGORY_INPUTS);
 
 export const recallParamsSchema: z.ZodType<
 	{
@@ -66,7 +64,7 @@ export const recallParamsSchema: z.ZodType<
 export const storeParamsSchema: z.ZodType<
 	{
 		content: string;
-		category?: (typeof STORE_CATEGORY_INPUTS)[number] | undefined;
+		category?: MemoryCategory | undefined;
 		scope?: string | undefined;
 		importance?: number | undefined;
 		metadata?: Record<string, unknown> | undefined;
@@ -74,7 +72,7 @@ export const storeParamsSchema: z.ZodType<
 	unknown
 > = z.object({
 	content: z.string().min(1),
-	category: storeCategoryInputSchema.optional(),
+	category: toolCategoryInputSchema.optional(),
 	scope: z.string().optional(),
 	importance: z.number().optional(),
 	metadata: z.record(z.string(), z.unknown()).optional(),
@@ -126,6 +124,7 @@ export const updateParamsSchema: z.ZodType<
 		category?: MemoryCategory | undefined;
 		importance?: number | undefined;
 		metadata?: Record<string, unknown> | undefined;
+		timestamp?: number | undefined;
 	},
 	unknown
 > = z
@@ -135,13 +134,15 @@ export const updateParamsSchema: z.ZodType<
 		category: toolCategoryInputSchema.optional(),
 		importance: z.number().optional(),
 		metadata: z.record(z.string(), z.unknown()).optional(),
+		timestamp: z.number().int().nonnegative().optional(),
 	})
 	.refine(
 		(value) =>
 			value.text !== undefined ||
 			value.category !== undefined ||
 			value.importance !== undefined ||
-			value.metadata !== undefined,
+			value.metadata !== undefined ||
+			value.timestamp !== undefined,
 		{ message: "At least one update field is required" },
 	);
 export const statsParamsSchema: z.ZodType<{ scope?: string | undefined }, unknown> =
@@ -164,6 +165,11 @@ export const listParamsSchema: z.ZodType<
 });
 
 export interface ToolContext {
+	recallSession?: {
+		sessionId: string;
+		turn: number;
+		history: Map<string, Map<string, number>>;
+	};
 	retriever: MemoryRetriever;
 	store: MemoryStore;
 	scopePolicy: MemoryScopePolicy;
@@ -174,6 +180,7 @@ export interface ToolContext {
 	selfImprovementEnabled?: boolean;
 	language?: Locale;
 	sessionTimestamp?: number;
+	sessionKey?: string;
 	sessionTimezone?: string;
 	/**
 	 * Invalidates the reflection slice cache (TTL-bounded, built by the
@@ -190,6 +197,11 @@ export interface ToolContext {
 	profileToolLlm?: LlmClient;
 	/** Product-mode routing slice; gates the profile conflict scan. */
 	llmRouting?: LlmRoutingConfig;
+	/**
+	 * The host operator (the contract's `scope.host.systemCaller`), whose repairs write with
+	 * offline-family authority the way maintenance does; a skin or agent never carries this.
+	 */
+	systemCaller?: boolean;
 }
 
 export type ToolResult = {

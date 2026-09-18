@@ -87,6 +87,7 @@ function makeRetriever(
 ): MemoryRetrieverInternals {
 	const config = {
 		...DEFAULT_RETRIEVAL_CONFIG,
+			temporalWeighting: true,
 		recencyHalfLifeDays: 0,
 		recencyWeight: 0,
 		lengthNormAnchor: 0,
@@ -203,6 +204,7 @@ describe("applyRetentionBoost stage gating", () => {
 	it("uses injected recallLifecycle rather than constructor defaults", () => {
 		const config = {
 			...DEFAULT_RETRIEVAL_CONFIG,
+			temporalWeighting: true,
 			recencyHalfLifeDays: 0,
 			recencyWeight: 0,
 			lengthNormAnchor: 0,
@@ -372,5 +374,30 @@ describe("applyScoringPipeline integrates retention boost in the correct slot (t
 			expect(r.score).toBeLessThanOrEqual(rawScore);
 			expect(r.score).toBeGreaterThanOrEqual(rawScore * SEARCH_BOOST_MIN);
 		}
+	});
+
+	it("ON flag: a memory said three years ago keeps at least 85% of its score against one said today", () => {
+		// Owner ruling 2026-09-14: the stage ages a memory by its OWN moment, so old memories in a
+		// store that also holds recent ones must not lose more than a light margin on age alone.
+		// Measured before the ruling (floor 0.3, half-life 30 days): rows anchored to 2023 ranked
+		// 100-250 places below replay-day rows for their own exact text.
+		const internals = makeRetriever({
+			...DEFAULT_RECALL_LIFECYCLE,
+			retentionScorer: true,
+			tierFloorMode: "bare",
+		});
+		const threeYears = 3 * 365 * DAY_MS;
+		const candidates = [
+			buildCandidate({ id: "today", score: 0.8, timestamp: now, tier: "working" }),
+			buildCandidate({ id: "old", score: 0.8, timestamp: now - threeYears, tier: "working" }),
+		];
+		const out = internals.applyScoringPipeline(candidates);
+		const today = out.find((r) => r.entry.id === "today")?.score;
+		const old = out.find((r) => r.entry.id === "old")?.score;
+		expect(today).toBeDefined();
+		expect(old).toBeDefined();
+		if (today === undefined || old === undefined) return;
+		expect(old).toBeGreaterThanOrEqual(0.8 * 0.85);
+		expect(old / today).toBeGreaterThanOrEqual(0.85);
 	});
 });

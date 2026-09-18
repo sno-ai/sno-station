@@ -37,29 +37,100 @@ const CONVERSATION = [
 	"assistant: I have everything I need.",
 ].join("\n");
 
-/** The reply shape the model actually returns, which is what `parseAtomicExtractionReply` reads. */
-function keyPointsReply(turnIndex: number, quote: string): string {
+/** One model-returned record (the shape lane 1 splits into a capture fact and a lane-2 enrichment). */
+function keyPointsRecord(turnIndex: number, quote: string): Record<string, unknown> {
+	return {
+		kind: "occurrence",
+		claim_text: "The email's key points are a case study and a strategy session.",
+		subject: "user",
+		subject_kind: "user",
+		attribute: null,
+		value: "a case study and a strategy session",
+		temporal_phrase: null,
+		resolved_time: null,
+		importance: "medium",
+		changes_current_state: false,
+		ends_current: false,
+		todo: "none",
+		close_reason: null,
+		source_span: { turn_index: turnIndex, quote },
+		relations: [],
+		single_claim: true,
+	};
+}
+
+// --- Two-lane reply plumbing shared by both stub transports ---
+// A window is now two model calls: a capture reply (claims_found + per-user-turn decisions + facts)
+// then one enrichment reply keyed by id. These helpers turn the same model-record templates the
+// tests already declare into that two-lane sequence, so the produced records are unchanged.
+
+/** The `<take>` payload of a labelled section (a prompt has several: preceding/following/transcript/facts). */
+function sectionTake(prompt: string, label: string): string {
+	const after = prompt.split(`${label}:\n`)[1] ?? "";
+	return after.split("<take>\n")[1]?.split("\n</take>")[0] ?? "";
+}
+
+function captureTurns(prompt: string): Array<{ turn_index: number; role: string; content: string }> {
+	const block = sectionTake(prompt, "transcript");
+	return block ? (JSON.parse(block) as Array<{ turn_index: number; role: string; content: string }>) : [];
+}
+
+function enrichmentFacts(prompt: string): Array<{ id: number; fact: string }> {
+	const block = sectionTake(prompt, "facts");
+	return block ? (JSON.parse(block) as Array<{ id: number; fact: string }>) : [];
+}
+
+/** The lane-2 fields of a model record, defaulting time to the same values the old projection did. */
+function enrichmentOf(record: Record<string, unknown>): Record<string, unknown> {
+	return {
+		kind: record.kind,
+		attribute: record.attribute,
+		value: record.value,
+		ends_current: record.ends_current,
+		importance: record.importance,
+		changes_current_state: record.changes_current_state,
+		todo: record.todo,
+		close_reason: record.close_reason,
+		single_claim: record.single_claim,
+		relations: record.relations,
+		time: record.time ?? { kind: "unresolved" },
+		ended_time: record.ended_time ?? (record.ends_current ? { kind: "unresolved" } : { kind: "none" }),
+	};
+}
+
+/** Capture reply: decisions cover every user turn of the window; one fact per record. */
+function captureReplyFor(
+	records: ReadonlyArray<Record<string, unknown>>,
+	turns: ReadonlyArray<{ turn_index: number; role: string }>,
+): string {
 	return JSON.stringify({
-		records: [
-			{
-				kind: "occurrence",
-				claim_text: "The email's key points are a case study and a strategy session.",
-				subject: "user",
-				subject_kind: "user",
-				attribute: null,
-				value: "a case study and a strategy session",
-				temporal_phrase: null,
-				resolved_time: null,
-				importance: "medium",
-				changes_current_state: false,
-				ends_current: false,
-				todo: "none",
-				close_reason: null,
-				source_span: { turn_index: turnIndex, quote },
-				relations: [],
-				single_claim: true,
-			},
-		],
+		claims_found: records.map((record) => record.claim_text),
+		decisions: turns
+			.filter((turn) => turn.role === "user")
+			.map((turn) => ({ turn_index: turn.turn_index, progress_only: false })),
+		facts: records.map((record, id) => ({
+			id,
+			fact: record.claim_text,
+			subject: record.subject,
+			subject_kind: record.subject_kind,
+			temporal_phrase: record.temporal_phrase ?? null,
+			ended_at_phrase: record.ended_at_phrase ?? null,
+			source_span: record.source_span,
+		})),
+	});
+}
+
+/** Enrichment reply: one entry per requested fact id, looked up by its claim text. */
+function enrichmentReplyFor(
+	facts: ReadonlyArray<{ id: number; fact: string }>,
+	byClaim: Map<string, Record<string, unknown>>,
+): string {
+	return JSON.stringify({
+		enrichments: facts.map(({ id, fact }) => {
+			const enrichment = byClaim.get(fact);
+			if (enrichment === undefined) throw new Error(`no enrichment registered for captured fact "${fact}"`);
+			return { id, ...enrichment };
+		}),
 	});
 }
 
@@ -81,27 +152,28 @@ function transports(
 	quote = KEY_POINTS_TEXT,
 ): AtomicMemoryExtractionTransports {
 	let truncatedLeft = neighbourTruncatedCalls;
-	const sliceTurns = (prompt: string): { turn_index: number; content: string }[] => {
-		const match = /\[\{"turn_index".*?\}\]/su.exec(prompt);
-		return match ? (JSON.parse(match[0]) as { turn_index: number; content: string }[]) : [];
-	};
+	const byClaim = new Map<string, Record<string, unknown>>();
 	return {
 		generic: {
 			async complete({ prompt }) {
-				const turns = sliceTurns(prompt);
+				// Lane 2: enrich the requested facts by the claim text captured for them.
+				if (prompt.includes("facts:\n")) {
+					return { text: enrichmentReplyFor(enrichmentFacts(prompt), byClaim), truncated: false };
+				}
+				// Lane 1 (capture).
+				const turns = captureTurns(prompt);
 				const owns = turns[0]?.content === OWNING_WINDOW_FIRST_TURN;
 				if (turns[0]?.content === KEY_POINTS_TEXT && truncatedLeft > 0) {
 					truncatedLeft -= 1;
-					return { text: "{\"records\": [", truncated: true };
+					return { text: '{"claims_found": [', truncated: true };
 				}
 				const keyPoints = turns.find(({ content }) => content === KEY_POINTS_TEXT);
-				if (keyPoints === undefined || (silentWindow && owns)) {
-					return { text: JSON.stringify({ records: [] }), truncated: false };
-				}
-				return {
-					text: keyPointsReply(keyPoints.turn_index, quote),
-					truncated: false,
-				};
+				const records =
+					keyPoints === undefined || (silentWindow && owns)
+						? []
+						: [keyPointsRecord(keyPoints.turn_index, quote)];
+				for (const record of records) byClaim.set(record.claim_text as string, enrichmentOf(record));
+				return { text: captureReplyFor(records, turns), truncated: false };
 			},
 		},
 		profileKeying: { async keyTurn() { return null; } },
@@ -161,33 +233,36 @@ function musicRecord(claimText: string, value: string, quote: string, turnIndex:
  * same Yo-Yo Ma claim again under a wider quote when `neighbourRestates` is set.
  */
 function twoClaimTransports(neighbourRestates: boolean): AtomicMemoryExtractionTransports {
-	const sliceTurns = (prompt: string): { turn_index: number; content: string }[] => {
-		const match = /\[\{"turn_index".*?\}\]/su.exec(prompt);
-		return match ? (JSON.parse(match[0]) as { turn_index: number; content: string }[]) : [];
-	};
+	const byClaim = new Map<string, Record<string, unknown>>();
 	return {
 		generic: {
 			async complete({ prompt }) {
-				const turns = sliceTurns(prompt);
+				if (prompt.includes("facts:\n")) {
+					return { text: enrichmentReplyFor(enrichmentFacts(prompt), byClaim), truncated: false };
+				}
+				const turns = captureTurns(prompt);
 				const twoClaim = turns.find(({ content }) => content === TWO_CLAIM_TURN);
-				if (twoClaim === undefined) return { text: JSON.stringify({ records: [] }), truncated: false };
-				const owns = turns[0]?.content !== TWO_CLAIM_TURN;
-				const yoYoMa = musicRecord(
-					"The user is much more into Yo-Yo Ma's cello works.",
-					"Yo-Yo Ma's cello works",
-					owns || !neighbourRestates ? YO_YO_MA_QUOTE : YO_YO_MA_WIDER_QUOTE,
-					twoClaim.turn_index,
-					false,
-				);
-				const ending = musicRecord(
-					"The user no longer likes Duke Ellington; used to like him.",
-					"Duke Ellington",
-					ELLINGTON_QUOTE,
-					twoClaim.turn_index,
-					true,
-				);
-				const records = owns ? [yoYoMa] : neighbourRestates ? [yoYoMa] : [yoYoMa, ending];
-				return { text: JSON.stringify({ records }), truncated: false };
+				let records: Array<Record<string, unknown>> = [];
+				if (twoClaim !== undefined) {
+					const owns = turns[0]?.content !== TWO_CLAIM_TURN;
+					const yoYoMa = musicRecord(
+						"The user is much more into Yo-Yo Ma's cello works.",
+						"Yo-Yo Ma's cello works",
+						owns || !neighbourRestates ? YO_YO_MA_QUOTE : YO_YO_MA_WIDER_QUOTE,
+						twoClaim.turn_index,
+						false,
+					);
+					const ending = musicRecord(
+						"The user no longer likes Duke Ellington; used to like him.",
+						"Duke Ellington",
+						ELLINGTON_QUOTE,
+						twoClaim.turn_index,
+						true,
+					);
+					records = owns ? [yoYoMa] : neighbourRestates ? [yoYoMa] : [yoYoMa, ending];
+				}
+				for (const record of records) byClaim.set(record.claim_text as string, enrichmentOf(record));
+				return { text: captureReplyFor(records, turns), truncated: false };
 			},
 		},
 		profileKeying: { async keyTurn() { return null; } },

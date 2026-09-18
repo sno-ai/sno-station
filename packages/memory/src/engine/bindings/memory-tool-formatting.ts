@@ -59,6 +59,38 @@ export function episodicEventDate(entry: { metadata?: string }): string | undefi
 	return undefined;
 }
 
+/**
+ * The sentence a row was written from, exactly as it was said.
+ *
+ * A row's `text` is what the extractor made of that sentence, and extraction paraphrases: asked
+ * what a poster said, a row reading "posters full of pride and strength" cannot answer "Trans
+ * Lives Matter" even though the turn contained it, and asked how someone described a dancer, a row
+ * reading "talented and passionate" cannot answer "graceful". Both wordings are already in the
+ * store beside the paraphrase; until 2026-09-15 only the paraphrase was ever shown to a model.
+ *
+ * Absent for a row written from a shared photo, and for anything rewritten by a maintenance wave.
+ */
+export function sourceQuote(entry: { metadata?: string }): string | undefined {
+	const span = parseEntryMetadata(entry).source_span;
+	if (!span || typeof span !== "object") return undefined;
+	const quote = (span as { quote?: unknown }).quote;
+	return typeof quote === "string" && quote.trim().length > 0 ? quote : undefined;
+}
+
+/**
+ * The calendar day a row was said: the session moment it was extracted in, the anchor every
+ * relative date resolved against. A row with no session moment (rewritten by a maintenance wave,
+ * or written before source order existed) makes no claim about when it was said — its row
+ * timestamp is when it was written, which is not the same day.
+ */
+export function saidOnDate(entry: { metadata?: string }): string | undefined {
+	const order = parseEntryMetadata(entry).source_order;
+	const moment = order && typeof order === "object" ? (order as Record<string, unknown>).session_moment : undefined;
+	if (typeof moment !== "number") return undefined;
+	const date = new Date(moment);
+	return Number.isFinite(date.getTime()) ? date.toISOString().slice(0, 10) : undefined;
+}
+
 export function isReflectionEntry(entry: { category: string; metadata?: string }): boolean {
 	// Isolate the tool execution operation that can fail because of runtime I/O or input shape.
 	const metadata = parseEntryMetadata(entry);

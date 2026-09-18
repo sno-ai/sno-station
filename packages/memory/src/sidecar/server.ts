@@ -1,9 +1,11 @@
+import { MEMORY_SHUTDOWN_TIMEOUT_MS } from "../../config/index";
+import { getPrincipal, getSidecarSocketPath, readBoundStorePath } from "../contract/profile";
 /** @file server.ts
  * @purpose Runs the loopback HTTP surface and empty asynchronous REM executor.
  * @boundary Sno CLI requests, durable REM job state, and the existing local audit writer.
  */
 
-import { randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { existsSync, readFileSync, rmSync } from "node:fs";
 import { mkdir, open, readFile, rename, rm } from "node:fs/promises";
 import {
@@ -13,14 +15,16 @@ import {
 	type ServerResponse,
 } from "node:http";
 import path from "node:path";
-import { createLogger, effectiveLogLevel } from "@snoai/utils/logger";
+import { createConnection, createServer as createSocketServer, type Server as SocketServer } from "node:net";
+import { setImmediate as yieldTurn } from "node:timers/promises";
+import locking from "fs-ext";
+import { readDiscovery } from "../contract/discovery";
+import { createLogger, effectiveLogLevel, emitDiagnostic } from "@snoai/utils/logger";
 import { withLogContext } from "@snoai/utils/log-context";
 import { z } from "zod";
 import {
-	loadRemEnableGate,
 	parseRemOperationType,
 	REM_BUILT_OPERATION_TYPES,
-	REM_ENABLE_GATE_BINDINGS,
 	type RemBuiltOperationType,
 	type RemOperationType,
 } from "../engine/rem/index.js";
@@ -40,20 +44,16 @@ import {
 	REM_CORRELATION_ID_HEADER,
 	getRemDiscoveryPath,
 	getRemJobJournalPath,
-	getRemSidecarLockKey,
 	REM_JOBS_PATH_PREFIX,
-	REM_REQUEST_BODY_LIMIT_BYTES,
 	REM_RUN_PATH,
 	REM_SIDECAR_HOST,
 	REM_SIDECAR_ORIGIN,
-	REM_SIDECAR_TOKEN_HEADER,
 	REM_SOURCE,
 } from "./config";
-import { acquireRemSidecarLock } from "./lifecycle-lock";
-import { MemoryRuntimePool } from "./memory-runtime";
+import { readJsonlLines } from "../engine/operations/jsonl-lines";
+import type { MemoryRuntimePool } from "./memory-runtime";
+import { PayloadTooLargeError, readRequestBody } from "./request-body";
 import { serveMemoryRoute } from "./memory-routes";
-import { runRemProductionOrderedWave } from "./rem-batch-executor";
-import { validateRemOperationalGrammarActivation } from "./rem-entry-foundations";
 import { RemChassisJournal } from "./rem-chassis-journal";
 import {
 	parseRemJobStats,
@@ -63,7 +63,6 @@ import {
 } from "./rem-job-store";
 
 const log = createLogger("sno-station-mem:rem-sidecar");
-const COMPLETION_PERSIST_ATTEMPTS = 5;
 type CompletionPersistence = "job_journal" | "completed_audit" | "unavailable";
 type RunRequest =
 	| { type: string; scope: string }
@@ -105,24 +104,101 @@ class HttpError extends Error {
 	}
 }
 
-export async function startRemSidecar(): Promise<RunningRemSidecar> {
-	const lifecycleLock = await acquireRemSidecarLock(getRemSidecarLockKey());
+export class DuplicateSidecarError extends Error {}
+
+async function socketIsLive(socketPath: string): Promise<boolean> {
+	return new Promise((resolve, reject) => {
+		const socket = createConnection(socketPath);
+		socket.once("connect", () => { socket.destroy(); resolve(true); });
+		socket.once("error", error => {
+			socket.destroy();
+			if ("code" in error && (error.code === "ECONNREFUSED" || error.code === "ENOENT")) resolve(false);
+			else reject(error);
+		});
+	});
+}
+
+async function bindSidecarSocket(): Promise<SocketServer> {
+	const socketPath = getSidecarSocketPath();
+	await mkdir(path.dirname(socketPath), { recursive: true, mode: 0o700 });
+	const directory = await open(path.dirname(socketPath), "r");
+	// Serialize probe/unlink/bind on the existing directory, never on a replaceable pid file.
 	try {
-		return await startLockedRemSidecar(lifecycleLock);
+		for (;;) {
+			try { locking.flockSync(directory.fd, "exnb"); break; }
+			catch (error) {
+				if (!(error instanceof Error && "code" in error && error.code === "EAGAIN")) throw error;
+				await yieldTurn();
+			}
+		}
+		const guard = createSocketServer(socket => socket.destroy());
+		for (;;) {
+			try {
+				await new Promise<void>((resolve, reject) => {
+					guard.once("error", reject);
+					guard.listen(socketPath, () => { guard.removeListener("error", reject); resolve(); });
+				});
+				return guard;
+			} catch (error) {
+				if (!(error instanceof Error && "code" in error && error.code === "EADDRINUSE")) throw error;
+				if (await socketIsLive(socketPath)) {
+					const discovery = await readDiscovery().catch(() => undefined);
+					emitDiagnostic("info", "sidecar.duplicate.exit", { pid: discovery?.pid }, {
+						event_name: "sidecar.duplicate.exit", file: "packages/sno-station-mem/src/sidecar/server.ts",
+						function: "bindSidecarSocket", site_id: "sidecar.duplicate.exit",
+					});
+					throw new DuplicateSidecarError();
+				}
+				await rm(socketPath, { force: true });
+			}
+		}
+	} finally { await directory.close(); }
+}
+
+export async function startRemSidecar(): Promise<RunningRemSidecar> {
+	const guard = await bindSidecarSocket();
+	const exitCleanup = (): void => { guard.close(); };
+	process.once("exit", exitCleanup);
+	const releaseGuard = async (): Promise<void> => {
+		await new Promise<void>(resolve => guard.close(() => resolve()));
+		process.removeListener("exit", exitCleanup);
+	};
+	try {
+		const sidecar = await startOwnedRemSidecar();
+		return {
+			port: sidecar.port,
+			async stop(): Promise<void> {
+				let drained: Promise<void> | undefined;
+				try { ({ drained } = await sidecar.stop()); }
+				finally {
+					if (drained) void drained.then(releaseGuard);
+					else await releaseGuard();
+				}
+			},
+		};
 	} catch (error) {
-		await lifecycleLock.release();
+		await releaseGuard();
 		throw error;
 	}
 }
 
-async function startLockedRemSidecar(
-	lifecycleLock: Awaited<ReturnType<typeof acquireRemSidecarLock>>,
-): Promise<RunningRemSidecar> {
-	const memory = await MemoryRuntimePool.open();
+async function startOwnedRemSidecar(): Promise<{ port: number; stop(): Promise<{ drained?: Promise<void> }> }> {
+	let stopping = false;
+	let currentMemory: MemoryRuntimePool | undefined;
+	let openingMemory: Promise<MemoryRuntimePool> | undefined;
+	const memory = {
+		current: (): MemoryRuntimePool | undefined => currentMemory,
+		async open(): Promise<MemoryRuntimePool> {
+			if (currentMemory) return currentMemory;
+			openingMemory ??= import("./memory-runtime").then(module => module.MemoryRuntimePool.open()).then(pool => { currentMemory = pool; if (stopping) pool.stopTimers(); return pool; })
+				.finally(() => { openingMemory = undefined; });
+			return openingMemory;
+		},
+	};
 	const token = randomBytes(32).toString("hex");
 	const holdMs = readRemTestHoldMs();
 	const chassisJournal = new RemChassisJournal(getRemChassisJournalPath());
-	const store = await RemJobStore.open(getRemJobJournalPath(), (job) => {
+	const store = RemJobStore.open(getRemJobJournalPath(), (job) => {
 		log.info("job_transition_durable", {
 			event: "job_transition_durable",
 			job_id: job.job_id,
@@ -136,22 +212,23 @@ async function startLockedRemSidecar(
 			site_id: "server.<anonymous callback>.5eb5a60e6b",
 		});
 	});
-	const resumableJobIds = await recoverInterruptedJobs(store, await readCompletedJobStats());
-	const pendingTimers = new Set<NodeJS.Timeout>();
-	const activeTasks = new Set<Promise<void>>();
-	for (const jobId of resumableJobIds) {
-		const task = runChassisJob(store, chassisJournal, jobId, 0, true);
-		activeTasks.add(task);
-		void task.finally(() => activeTasks.delete(task));
-	}
+	const pendingTimers = new Map<NodeJS.Timeout, () => void>();
+	const startPendingStarts = (): void => {
+		for (const start of pendingTimers.values()) start();
+	};
+	const activeTasks = new Set<Promise<void> & { label?: string; method?: string }>();
+	const pendingRequests = new Set<string>();
 	const server = createServer((request, response) => {
 		const started = performance.now();
 		const operationId = `rem-http-${randomUUID()}`;
 		const context: RequestLogContext = {};
+		const requestLabel = `${operationId} ${request.method} ${requestPath(request)}`;
+		pendingRequests.add(requestLabel);
 		let requestLogged = false;
 		const recordRequest = (cancelled = false): void => {
 			if (requestLogged) return;
 			requestLogged = true;
+			pendingRequests.delete(requestLabel);
 			let outcome = "success";
 			if (cancelled) outcome = "cancelled";
 			else if (response.statusCode >= 500) outcome = "failed";
@@ -177,7 +254,6 @@ async function startLockedRemSidecar(
 		void withLogContext({ operation_id: operationId }, () => routeRequest(
 			request,
 			response,
-			token,
 			store,
 			chassisJournal,
 			holdMs,
@@ -185,18 +261,18 @@ async function startLockedRemSidecar(
 			activeTasks,
 			context,
 			memory,
+			() => stopping,
 		).catch((error: unknown) => {
-				const httpError =
-					error instanceof HttpError ? error : new HttpError(500, "internal_error");
+				let httpError = new HttpError(500, "internal_error");
+				if (error instanceof HttpError) httpError = error;
+				else if (error instanceof PayloadTooLargeError) httpError = new HttpError(413, "payload_too_large");
 				context.error_code = httpError.code;
-				if (!(error instanceof HttpError)) {
-					log.error("request_failed", { error }, {
+				log.error("request_failed", { error }, {
 						event_name: "sno_station_mem.server.request.failed",
 						file: "packages/sno-station-mem/src/sidecar/server.ts",
 						function: "<anonymous callback>",
 						site_id: "server.<anonymous callback>.a7a2656a08",
-					});
-				}
+				});
 				if (!response.headersSent) {
 					sendJson(response, httpError.status, { error: httpError.code });
 				} else {
@@ -205,6 +281,8 @@ async function startLockedRemSidecar(
 			}));
 	});
 
+	const jobs = await store;
+	const recoveryJobs = jobs.nonTerminalJobs();
 	await listen(server);
 	const address = server.address();
 	if (!address || typeof address === "string") {
@@ -213,10 +291,34 @@ async function startLockedRemSidecar(
 	}
 	const discoveryPath = getRemDiscoveryPath();
 	const discovery = { port: address.port, token, pid: process.pid } satisfies DiscoveryState;
-	await writeDiscovery(discoveryPath, discovery);
+	let discoveryTimer: NodeJS.Timeout | undefined;
+	let discoveryAttempt = 0;
+	const publishDiscovery = async (): Promise<void> => {
+		discoveryAttempt++;
+		try {
+			await writeDiscovery(discoveryPath, discovery);
+			if (discoveryAttempt > 1) log.info("sidecar.discovery.published", { attempt: discoveryAttempt }, {
+				event_name: "sidecar.discovery.published", file: "packages/sno-station-mem/src/sidecar/server.ts",
+				function: "publishDiscovery", site_id: "sidecar.discovery.published",
+			});
+		} catch (error) {
+			log.error("sidecar.discovery.failed", { attempt: discoveryAttempt, error }, {
+				event_name: "sidecar.discovery.failed", file: "packages/sno-station-mem/src/sidecar/server.ts",
+				function: "publishDiscovery", site_id: "sidecar.discovery.failed",
+			});
+			if (!stopping) discoveryTimer = setTimeout(() => { discoveryPublication = publishDiscovery(); }, 5_000);
+		}
+	};
+	let discoveryPublication = publishDiscovery();
+	await discoveryPublication;
+	const recovery = (async () => {
+		const jobIds = await recoverInterruptedJobs(jobs, await readCompletedJobStats(new Set(recoveryJobs.map(job => job.job_id))), recoveryJobs);
+		for (const jobId of jobIds) await runChassisJob(jobs, chassisJournal, jobId, 0);
+	})().catch(error => reportSidecarFailure("recovery", error));
+	activeTasks.add(Object.assign(recovery, { label: "rem-recovery" }));
+	void recovery.finally(() => activeTasks.delete(recovery));
 	const exitCleanup = (): void => {
 		removeOwnedDiscoverySync(discoveryPath, token);
-		lifecycleLock.releaseSync();
 	};
 	process.once("exit", exitCleanup);
 
@@ -228,38 +330,65 @@ async function startLockedRemSidecar(
 	});
 	return {
 		port: address.port,
-		async stop(): Promise<void> {
+		async stop(): Promise<{ drained?: Promise<void> }> {
 			const started = performance.now();
 			let cleanedUp = false;
+			let phase = "http_requests";
+			let timer: NodeJS.Timeout | undefined;
+			stopping = true;
+			clearTimeout(discoveryTimer);
 			process.removeListener("exit", exitCleanup);
 			try {
-				for (const timer of pendingTimers) clearTimeout(timer);
-				pendingTimers.clear();
-				memory.stopTimers();
-				await closeServer(server);
-				await Promise.allSettled(activeTasks);
-				await memory.close();
-				await removeOwnedDiscovery(discoveryPath, token);
-				cleanedUp = true;
+				startPendingStarts();
+				currentMemory?.stopTimers();
+				const cleanup = (async () => {
+					await closeServer(server);
+					// Requests still reading their body can allocate a delayed start during close.
+					startPendingStarts();
+					phase = "active_tasks";
+					await Promise.allSettled(activeTasks);
+					phase = "runtime_open";
+					await openingMemory?.catch(() => undefined);
+					phase = "runtime_close";
+					await currentMemory?.close();
+					phase = "discovery";
+					await discoveryPublication;
+					return true;
+				})();
+				cleanedUp = await Promise.race([cleanup, new Promise<false>(resolve => {
+					timer = setTimeout(() => {
+						log.error("sidecar.shutdown.timeout", {
+							phase, active_tasks: activeTasks.size, pending_requests: [...pendingRequests],
+							running_tasks: [...activeTasks].map(task => task.label ?? "rem"),
+						}, {
+							event_name: "sidecar.shutdown.timeout", file: "packages/sno-station-mem/src/sidecar/server.ts",
+							function: "startRemSidecar.stop", site_id: "sidecar.shutdown.timeout",
+						});
+						for (const task of activeTasks) withLogContext({ operation_id: task.label }, () => {
+							log.error("sidecar.shutdown.task.running", { method: task.method ?? "rem" }, {
+								event_name: "sidecar.shutdown.task.running", file: "packages/sno-station-mem/src/sidecar/server.ts",
+								function: "startRemSidecar.stop", site_id: "sidecar.shutdown.task.running",
+							});
+						});
+						server.closeAllConnections();
+						currentMemory?.stopTimers();
+						resolve(false);
+					}, MEMORY_SHUTDOWN_TIMEOUT_MS);
+				})]);
 			} finally {
-				let released = false;
-				try {
-					await lifecycleLock.release();
-					released = true;
-				} finally {
-				log[cleanedUp && released ? "info" : "error"]("REM sidecar cleanup completed", {
-					outcome: cleanedUp && released ? "success" : "failed",
-					lifecycle_lock_released: released,
-					duration_ms: performance.now() - started,
-					active_tasks: activeTasks.size,
+				clearTimeout(timer);
+				// Keep the socket guard until no publication can overwrite a successor.
+				await discoveryPublication;
+				await removeOwnedDiscovery(discoveryPath, token);
+				log[cleanedUp ? "info" : "error"]("REM sidecar cleanup completed", {
+					outcome: cleanedUp ? "success" : "failed",
+					duration_ms: performance.now() - started, active_tasks: activeTasks.size,
 				}, {
-					event_name: "sidecar.shutdown.completed",
-					file: "packages/sno-station-mem/src/sidecar/server.ts",
-					function: "startLockedRemSidecar.stop",
-					site_id: "sidecar.shutdown.completed",
+					event_name: "sidecar.shutdown.completed", file: "packages/sno-station-mem/src/sidecar/server.ts",
+					function: "startRemSidecar.stop", site_id: "sidecar.shutdown.completed",
 				});
-				}
 			}
+			return cleanedUp ? {} : { drained: Promise.allSettled(activeTasks).then(() => undefined) };
 		},
 	};
 }
@@ -267,43 +396,41 @@ async function startLockedRemSidecar(
 async function routeRequest(
 	request: IncomingMessage,
 	response: ServerResponse,
-	token: string,
-	store: RemJobStore,
+	pendingStore: Promise<RemJobStore>,
 	chassisJournal: RemChassisJournal,
 	holdMs: number,
-	pendingTimers: Set<NodeJS.Timeout>,
+	pendingTimers: Map<NodeJS.Timeout, () => void>,
 	activeTasks: Set<Promise<void>>,
 	context: RequestLogContext,
-	memory: MemoryRuntimePool,
+	memory: { current(): MemoryRuntimePool | undefined; open(): Promise<MemoryRuntimePool> },
+	isStopping: () => boolean,
 ): Promise<void> {
 	const url = new URL(request.url ?? HEALTH_PATH, REM_SIDECAR_ORIGIN);
-	if (!isAuthorized(request, token)) {
-		context.error_code = "unauthorized";
-		sendJson(response, 401, { error: "unauthorized" });
-		return;
-	}
 	if (request.method === "GET" && url.pathname === HEALTH_PATH) {
-		sendJson(response, 200, { status: "ok", log_level: effectiveLogLevel(), principal: memory.principal,
-			storePath: memory.storePath, accessCounters: memory.counters });
+		sendJson(response, 200, { status: "ok", log_level: effectiveLogLevel(), principal: getPrincipal(),
+			storePath: await readBoundStorePath(), accessCounters: memory.current()?.counters ?? { engineAccesses: 0, storeAccesses: 0 } });
 		return;
 	}
-	if (await serveMemoryRoute(request, response, url.pathname, memory, activeTasks)) return;
+	if (url.pathname.startsWith("/v1/")) {
+		if (await serveMemoryRoute(request, response, url.pathname, () => memory.open(), activeTasks)) return;
+	}
 	if (request.method === "POST" && url.pathname === REM_RUN_PATH) {
 		const correlationId = readCorrelationId(request) ?? `rem-corr-${randomUUID()}`;
 		context.correlation_id = correlationId;
-		const parsedInput = runRequestSchema.safeParse(await readJsonBody(request));
-		if (!parsedInput.success) {
-			context.error_code = "invalid_request";
-			sendJson(response, 400, { error: "invalid_request" });
-			return;
-		}
+		const raw = await readJsonBody(request);
+		const parsedInput = runRequestSchema.safeParse(raw);
+		if (!parsedInput.success) throw new HttpError(400, "invalid_request");
 		const input = parsedInput.data;
-		const requestedTypes = "types" in input ? input.types : [input.type];
-		if (requestedTypes.some((type) => parseRemOperationType(type) === undefined)) {
+		const types = "types" in input ? input.types : [input.type];
+		const requestedTypes = types.filter(type => REM_BUILT_OPERATION_TYPES.some(operation => operation === type));
+		const unknownTypes = types.filter(type => !requestedTypes.includes(type));
+		if (unknownTypes.length) {
+			reportSidecarFailure("unsupported_rem_type", new Error(unknownTypes.join(",")));
 			context.error_code = "unsupported_rem_type";
-			sendJson(response, 400, { error: "unsupported_rem_type" });
+			sendJson(response, 400, { error: "unsupported_rem_type", unknownTypes });
 			return;
 		}
+		const store = await pendingStore;
 		let allocation: Awaited<ReturnType<RemJobStore["createQueued"]>>;
 		try {
 			allocation = await store.createQueued(requestedTypes, input.scope, correlationId);
@@ -332,18 +459,24 @@ async function routeRequest(
 		});
 		if (created) {
 			const delayMs = "types" in input ? 0 : REM_ASYNC_START_DELAY_MS;
-			const timer = setTimeout(() => {
+			const { promise: task, resolve, reject } = Promise.withResolvers<void>();
+			activeTasks.add(Object.assign(task, { label: job.job_id }));
+			void task.catch(error => reportSidecarFailure("rem_run", error))
+				.finally(() => activeTasks.delete(task));
+			const start = (): void => {
+				clearTimeout(timer);
 				pendingTimers.delete(timer);
-				const task = runChassisJob(store, chassisJournal, job.job_id, holdMs);
-				activeTasks.add(task);
-				void task.finally(() => activeTasks.delete(task));
-			}, delayMs);
-			pendingTimers.add(timer);
+				void runChassisJob(store, chassisJournal, job.job_id, holdMs).then(resolve, reject);
+			};
+			const timer = setTimeout(start, delayMs);
+			pendingTimers.set(timer, start);
+			if (isStopping()) start();
 		}
 		sendJson(response, 202, { job_id: job.job_id, waveId: job.job_id });
 		return;
 	}
 	if (request.method === "GET" && url.pathname.startsWith(REM_JOBS_PATH_PREFIX)) {
+		const store = await pendingStore;
 		const jobId = url.pathname.slice(REM_JOBS_PATH_PREFIX.length);
 		const job = store.get(jobId);
 		context.job_id = jobId;
@@ -365,20 +498,14 @@ async function runChassisJob(
 	journal: RemChassisJournal,
 	waveId: string,
 	holdMs: number,
-	resume = false,
 ): Promise<void> {
 	const queued = store.get(waveId);
 	if (queued === undefined) throw new Error(`REM wave not found: ${waveId}`);
 	const resuming = queued.state === "running";
-	if (resuming && !resume) throw new Error(`REM wave is already running: ${waveId}`);
-	if (!resuming && queued.state !== "queued") {
-		throw new Error(`REM wave cannot run from state ${queued.state}: ${waveId}`);
-	}
 	return withLogContext({ operation_id: queued.job_id, job_id: queued.job_id, session_reference: queued.scope, external_reference: queued.correlation_id }, async () => {
 		const started = performance.now();
 		let persistence: CompletionPersistence = "unavailable";
 		let completion: RemJobStats | undefined;
-		let refused = false;
 		let failed = false;
 		let failure: unknown;
 		const requestedOperations = queued.requested_operations.flatMap((operation) => {
@@ -398,65 +525,13 @@ async function runChassisJob(
 				await new Promise((resolvePromise) => setTimeout(resolvePromise, holdMs));
 			}
 			const configSource = readRemConfigSource();
-			let configuration: ReturnType<typeof readRemOperationalConfig>;
-			try {
-				configuration = readRemOperationalConfig();
-			} catch (error) {
-				const reason = `configuration:env:SNO_REM_CONFIG_JSON:${errorMessage(error)}`;
-				await appendChassisRefusal(journal, queued, requestedOperations[0] ?? "rem-replace", "failed", reason);
-				throw new Error(reason);
-			}
-			if (configSource === undefined) {
-				throw new Error("configuration:env:SNO_STATION_MEM_REM_CONFIG_JSON:missing");
-			}
 			const cleanRefusalReasons: string[] = [];
-			const enabledOperations: RemBuiltOperationType[] = [];
-			for (const operation of requestedOperations) {
-				const reason = !configuration.operations[operation]
-					? `switched-off:${operation}`
-					: !isBuiltOperation(operation)
-						? `not-built:${operation}`
-						: undefined;
-				if (reason !== undefined) {
-					await appendChassisRefusal(journal, running, operation, "refused", reason);
-					cleanRefusalReasons.push(reason);
-					continue;
-				}
-				if (isBuiltOperation(operation)) enabledOperations.push(operation);
-			}
-			if (enabledOperations.length === 0) {
-				refused = true;
-				persistence = await completeCleanRefusal(store, running, cleanRefusalReasons);
-				return;
-			}
-			const grammarGate = validateRemOperationalGrammarActivation({
-				stateRoot: getStateDir(),
-				configSource,
-			});
-			if (grammarGate.decision === "refuse") {
-				const operation = requestedOperations[0] ?? "rem-replace";
-				await appendChassisRefusal(journal, queued, operation, "failed", grammarGate.reasonCode);
-				throw new Error(grammarGate.reasonCode);
-			}
-			for (const operation of enabledOperations) {
-				try {
-					loadRemEnableGate({
-						stateDir: getSnoStationMemStateDir(),
-						jobType: operation,
-						...REM_ENABLE_GATE_BINDINGS,
-						artifactSha256: configuration.enableGateDigests[operation],
-						now: new Date().toISOString(),
-					});
-				} catch (error) {
-					const reason = `operation-gate:${operation}:${errorMessage(error)}`;
-					await appendChassisRefusal(journal, queued, operation, "failed", reason);
-					throw new Error(reason);
-				}
-			}
+			const enabledOperations = requestedOperations.filter(isBuiltOperation);
+			const { runRemProductionOrderedWave } = await import("./rem-batch-executor");
 			const result = await runRemProductionOrderedWave({
 				stateRoot: getStateDir(),
 				personaDbPath: process.env["SNO_STATION_MEM_REM_EXPECTED_DB_PATH"],
-				configSource,
+				configSource: configSource ?? JSON.stringify(readRemOperationalConfig()),
 				scope: queued.scope,
 				waveId: queued.job_id,
 				requestedOperations: enabledOperations,
@@ -547,15 +622,14 @@ async function runChassisJob(
 			let outcome = "empty-success";
 			if (failed) outcome = writesApplied ? "partial" : "failed";
 			else if (persistence === "unavailable") outcome = "partial";
-			else if (refused) outcome = "refused";
 			else if ((completion?.applied_count ?? 0) > 0) outcome = "success";
 			log[failed || persistence === "unavailable" ? "error" : "info"]("REM job completed", {
 				outcome,
 				job_id: queued.job_id,
 				basis: persistence,
 				applied_count: completion?.applied_count ?? (writesApplied ? null : 0),
-				candidate_count: completion?.scan?.candidate_count ?? (refused ? 0 : null),
-				parse_failure_count: completion?.parse_failure_count ?? (refused ? 0 : null),
+				candidate_count: completion?.scan?.candidate_count ?? null,
+				parse_failure_count: completion?.parse_failure_count ?? null,
 				duration_ms: performance.now() - started,
 				...(failure === undefined ? {} : { error: failure }),
 			}, {
@@ -569,90 +643,14 @@ async function runChassisJob(
 }
 
 async function persistCompletedJob(
-	store: RemJobStore,
-	job: RemJob,
-	stats: RemJobStats,
+	store: RemJobStore, job: RemJob, stats: RemJobStats,
 ): Promise<CompletionPersistence> {
-	const finishedAt = new Date().toISOString();
-	let retryMs = 100;
-	for (let attempt = 1; attempt <= COMPLETION_PERSIST_ATTEMPTS; attempt += 1) {
-		let auditPersisted = false;
-		try {
-			await auditRem("rem_completed", job, { stats });
-			auditPersisted = true;
-		} catch (error) {
-			log.error("job_completion_audit_failed", {
-				error,
-				job_id: job.job_id,
-				correlation_id: job.correlation_id,
-			}, {
-				event_name: "sno_station_mem.server.job.completion.audit.failed",
-				file: "packages/sno-station-mem/src/sidecar/server.ts",
-				function: "persistCompletedJob",
-				site_id: "server.persistCompletedJob.bc6b30658e",
-			});
-		}
-		try {
-			await store.transition(job.job_id, {
-				state: "done",
-				finished_at: finishedAt,
-				stats,
-			});
-			return "job_journal";
-		} catch (error) {
-			log.error("job_completion_state_failed", {
-				error,
-				job_id: job.job_id,
-				correlation_id: job.correlation_id,
-			}, {
-				event_name: "sno_station_mem.server.job.completion.state.failed",
-				file: "packages/sno-station-mem/src/sidecar/server.ts",
-				function: "persistCompletedJob",
-				site_id: "server.persistCompletedJob.a959322a6a",
-			});
-			if (store.get(job.job_id)?.state === "done") return "job_journal";
-			if (auditPersisted) {
-				store.applyCompletionReceipt(job.job_id, finishedAt, stats);
-				return "completed_audit";
-			}
-		}
-		if (attempt === COMPLETION_PERSIST_ATTEMPTS) break;
-		await new Promise((resolvePromise) => setTimeout(resolvePromise, retryMs));
-		retryMs = Math.min(retryMs * 2, 5_000);
-	}
-	log.error("job_completion_persistence_exhausted", {
-		job_id: job.job_id,
-		correlation_id: job.correlation_id,
-		attempts: COMPLETION_PERSIST_ATTEMPTS,
-	}, {
-		event_name: "sno_station_mem.server.job.completion.persistence.exhausted",
-		file: "packages/sno-station-mem/src/sidecar/server.ts",
-		function: "persistCompletedJob",
-		site_id: "server.persistCompletedJob.8dde75d5b4",
-	});
+	const auditPersisted = await auditRem("rem_completed", job, { stats });
+	await store.transition(job.job_id, { state: "done", finished_at: new Date().toISOString(), stats });
+	if (store.isPersisted(job.job_id)) return "job_journal";
+	if (auditPersisted) return "completed_audit";
+	reportSidecarFailure("completion-persistence", new Error("completed work has no durable completion receipt"));
 	return "unavailable";
-}
-
-async function completeCleanRefusal(
-	store: RemJobStore,
-	job: RemJob,
-	reasons: readonly string[],
-): Promise<CompletionPersistence> {
-	const stats: RemJobStats = {
-		operations: 0,
-		applied_count: 0,
-		actionable_candidate_count: 0,
-		applied_fraction: null,
-		scan: {
-			scope: job.scope,
-			candidate_count: 0,
-			stamped_skipped_count: 0,
-			actionable_candidate_count: 0,
-		},
-		parse_failure_count: 0,
-		top_refusal_reasons: reasons.slice(0, 2),
-	};
-	return persistCompletedJob(store, job, stats);
 }
 
 async function appendChassisRefusal(
@@ -707,9 +705,11 @@ async function failNonTerminalJob(
 async function recoverInterruptedJobs(
 	store: RemJobStore,
 	completedJobStats: ReadonlyMap<string, RemJobStats>,
+	jobs: RemJob[],
 ): Promise<string[]> {
 	const resumableJobIds: string[] = [];
-	for (const job of store.nonTerminalJobs()) {
+	for (const job of jobs) {
+		try {
 		const stats = completedJobStats.get(job.job_id);
 		if (stats !== undefined) {
 			await store.transition(job.job_id, {
@@ -739,26 +739,20 @@ async function recoverInterruptedJobs(
 			finished_at: new Date().toISOString(),
 			error: "sidecar_restart",
 		});
+		} catch (error) { reportSidecarFailure("job-recovery", error); }
 	}
 	return resumableJobIds;
 }
 
-async function readCompletedJobStats(): Promise<Map<string, RemJobStats>> {
-	let raw: string;
-	try {
-		raw = await readFile(getAuditPath(getSnoStationMemStateDir()), "utf8");
-	} catch (error) {
-		if (isNodeError(error) && error.code === "ENOENT") return new Map();
-		throw error;
-	}
+async function readCompletedJobStats(wantedJobs: ReadonlySet<string>): Promise<Map<string, RemJobStats>> {
 	const completed = new Map<string, RemJobStats>();
-	for (const line of raw.split("\n")) {
+	for await (const line of readJsonlLines(getAuditPath(getSnoStationMemStateDir()))) {
 		if (line.length === 0) continue;
 		try {
 			const entry: unknown = JSON.parse(line);
 			if (!isRecord(entry) || entry["event"] !== "rem_completed") continue;
 			const details = entry["details"];
-			if (!isRecord(details) || typeof details["job_id"] !== "string") continue;
+			if (!isRecord(details) || typeof details["job_id"] !== "string" || !wantedJobs.has(details["job_id"])) continue;
 			const type = details["type"];
 			if (typeof type !== "string" || parseRemOperationType(type) === undefined) continue;
 			const stats = parseRemJobStats(details["stats"]);
@@ -775,8 +769,8 @@ async function auditRem(
 	event: "rem_triggered" | "rem_completed" | "rem_failed",
 	job: RemJob,
 	extra: Record<string, unknown> = {},
-): Promise<void> {
-	await appendAuditEntryStrict(getSnoStationMemStateDir(), {
+): Promise<boolean> {
+	return appendAuditEntryStrict(getSnoStationMemStateDir(), {
 		event,
 		scope: job.scope,
 		resultStatus: event === "rem_failed" ? "error" : "ok",
@@ -799,34 +793,12 @@ function readCorrelationId(request: IncomingMessage): string | undefined {
 	return trimmed.length > 0 ? trimmed : undefined;
 }
 
-function isAuthorized(request: IncomingMessage, token: string): boolean {
-	const authorization = request.headers.authorization;
-	const bearer = typeof authorization === "string" && authorization.startsWith("Bearer ") ? authorization.slice(7) : undefined;
-	const provided = bearer ?? (request.url?.startsWith("/v1/") ? undefined : request.headers[REM_SIDECAR_TOKEN_HEADER]);
-	if (typeof provided !== "string") return false;
-	const expectedBuffer = Buffer.from(token);
-	const providedBuffer = Buffer.from(provided);
-	return (
-		expectedBuffer.length === providedBuffer.length &&
-		timingSafeEqual(expectedBuffer, providedBuffer)
-	);
-}
-
 async function readJsonBody(request: IncomingMessage): Promise<unknown> {
-	const chunks: Buffer[] = [];
-	let size = 0;
-	for await (const chunk of request) {
-		const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-		size += buffer.length;
-		if (size > REM_REQUEST_BODY_LIMIT_BYTES) {
-			throw new HttpError(413, "request_too_large");
-		}
-		chunks.push(buffer);
-	}
+	const body = await readRequestBody(request);
 	try {
-		return JSON.parse(Buffer.concat(chunks).toString("utf8")) as unknown;
+		return JSON.parse(body) as unknown;
 	} catch {
-		throw new HttpError(400, "invalid_json");
+		throw new HttpError(400, "invalid_request");
 	}
 }
 
@@ -870,13 +842,17 @@ async function writeDiscovery(discoveryPath: string, discovery: DiscoveryState):
 	const temporaryPath = `${discoveryPath}.${randomUUID()}.tmp`;
 	const handle = await open(temporaryPath, "wx", 0o600);
 	try {
-		await handle.writeFile(JSON.stringify(discovery), "utf8");
-		await handle.sync();
+		try {
+			await handle.writeFile(JSON.stringify(discovery), "utf8");
+			await handle.sync();
+		} finally {
+			await handle.close();
+		}
+		await rename(temporaryPath, discoveryPath);
+		await syncDirectory(parent);
 	} finally {
-		await handle.close();
+		await rm(temporaryPath, { force: true });
 	}
-	await rename(temporaryPath, discoveryPath);
-	await syncDirectory(parent);
 }
 
 async function removeOwnedDiscovery(discoveryPath: string, token: string): Promise<void> {
@@ -914,10 +890,13 @@ async function syncDirectory(directory: string): Promise<void> {
 	}
 }
 
-function isNodeError(error: unknown): error is NodeJS.ErrnoException {
-	return error instanceof Error && "code" in error;
-}
-
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null;
+}
+
+function reportSidecarFailure(step: string, error: unknown): void {
+	log.error("sidecar.operation.failed", { step, error }, {
+		event_name: "sidecar.operation.failed", file: "packages/sno-station-mem/src/sidecar/server.ts",
+		function: "reportSidecarFailure", site_id: "sidecar.operation.failed",
+	});
 }

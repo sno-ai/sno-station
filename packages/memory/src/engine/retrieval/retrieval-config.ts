@@ -3,7 +3,7 @@
  * @boundary Types and defaults only; no ranking execution.
  */
 
-import { DEFAULT_RECALL_LIFECYCLE, type RecallLifecycleConfig } from "../../../config/index";
+import { DEFAULT_RECALL_LIFECYCLE, TEMPORAL_WEIGHTING_DEFAULT, type RecallLifecycleConfig } from "../../../config/index";
 import type { MemoryCategory } from "./retriever-dependencies";
 import type { AggregationQuery } from "../shared/types";
 import type { RemFacetPolicy } from "../rem/index.js";
@@ -31,6 +31,10 @@ import {
 export type RerankProvider = "jina" | "siliconflow" | "voyage" | "pinecone" | "dashscope" | "tei";
 
 export interface RetrievalConfig {
+	/** Enable the historical recency, decay, and retention score transforms. */
+	temporalWeighting: boolean;
+	/** Diversify only within the request limit, preserving reranked window membership. */
+	mmrWindowOnly: boolean;
 	mode: "precision-recall" | "vector";
 	vectorWeight: number;
 	bm25Weight: number;
@@ -77,14 +81,6 @@ export interface RetrievalConfig {
 	 * not to return them.
 	 */
 	rerankMaxCandidates?: number;
-	/**
-	 * Hard cap on characters per candidate sent to the rerank API. Some
-	 * deployments (e.g. this repo's Sno TEI reranker, capped at 8192 chars)
-	 * reject a single over-length text outright rather than truncating it.
-	 * Only the outgoing rerank request payload is truncated — the candidate's
-	 * actual `entry.text` in the returned result is never mutated.
-	 */
-	rerankMaxTextLength?: number;
 	/** Scaling factor for access-based reinforcement (0 = disabled, default: 0.5) */
 	reinforcementFactor?: number;
 	/** Hard cap: effective half-life <= baseHalfLife * maxHalfLifeMultiplier (default: 3) */
@@ -165,6 +161,8 @@ export function withServingValidityDefault(context: RetrievalContext): Retrieval
 }
 
 export const DEFAULT_RETRIEVAL_CONFIG: RetrievalConfig = {
+	temporalWeighting: TEMPORAL_WEIGHTING_DEFAULT,
+	mmrWindowOnly: false,
 	mode: "precision-recall",
 	vectorWeight: DEFAULT_VECTOR_WEIGHT,
 	bm25Weight: DEFAULT_BM25_WEIGHT,

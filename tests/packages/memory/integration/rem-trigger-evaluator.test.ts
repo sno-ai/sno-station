@@ -20,7 +20,7 @@ import { createServer, type Server } from "node:http";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { activateKillSwitch } from "../../../../packages/sno-station-mem/src/engine/operations/runtime-audit-log.ts";
+
 import {
 	computeRemDailyDue,
 	evaluateRemAutomaticTriggers,
@@ -54,6 +54,79 @@ describe("REM automatic trigger", () => {
 		server = undefined;
 	});
 
+	it("dispatches due work with tick=true and keeps retrying after three failures", async () => {
+		const fixture = createFixture(1);
+		const requests: Array<{ body: unknown; correlationId: string }> = [];
+		const discoveryPath = await startSidecar(requests, 500);
+		await seedState(fixture, { last_pass_at: "2026-08-11T12:00:00.000Z", schedule_zone: "UTC",
+			last_covered_count: 1, last_volume_pass_date: null, missed_window: null, attempts: { identity: null, count: 0 } });
+		for (let index = 0; index < 4; index++) await evaluateRemAutomaticTriggers({
+			database: fixture.database.runtime.db, stateDir: fixture.stateDir, requestedOperations: ["rem-update"],
+			now: new Date("2026-08-12T12:00:00.000Z"), tickEnabled: true, discoveryPath });
+		expect(requests).toHaveLength(4);
+		expect(requests.map(request => (request.body as { types: unknown }).types)).toEqual([
+			["rem-update"], ["rem-update"], ["rem-update"], ["rem-update"],
+		]);
+		expect((await loadRemTriggerState(fixture.stateDir)).scopes[fixture.scope]?.last_pass_at).toBe("2026-08-11T12:00:00.000Z");
+	});
+	it("pauses due work with tick=false and dispatches on the next enabled evaluation", async () => {
+		const fixture = createFixture(1);
+		const requests: Array<{ body: unknown; correlationId: string }> = [];
+		const discoveryPath = await startSidecar(requests, 202);
+		await seedState(fixture, {
+			last_pass_at: "2026-08-11T12:00:00.000Z",
+			schedule_zone: "UTC",
+			last_covered_count: 1,
+			last_volume_pass_date: null,
+			missed_window: null,
+			attempts: { identity: null, count: 0 },
+		});
+		const paused = await evaluateRemAutomaticTriggers({
+			database: fixture.database.runtime.db,
+			stateDir: fixture.stateDir,
+			requestedOperations: ["rem-update"],
+			now: new Date("2026-08-12T12:00:00.000Z"),
+			tickEnabled: false,
+			discoveryPath,
+		});
+		expect(paused).toEqual({ evaluations: 1, dispatches: 0 });
+		expect(requests).toEqual([]);
+		expect((await loadRemTriggerState(fixture.stateDir)).scopes[fixture.scope]).toEqual({
+			last_pass_at: "2026-08-11T12:00:00.000Z",
+			schedule_zone: "UTC",
+			last_covered_count: 1,
+			last_volume_pass_date: null,
+			missed_window: {
+				due_at: "2026-08-12T03:00:00.000Z",
+				trigger: "daily",
+				recorded_at: "2026-08-12T12:00:00.000Z",
+			},
+			attempts: { identity: null, count: 0 },
+		});
+		const resumed = await evaluateRemAutomaticTriggers({
+			database: fixture.database.runtime.db,
+			stateDir: fixture.stateDir,
+			requestedOperations: ["rem-update"],
+			now: new Date("2026-08-12T12:01:00.000Z"),
+			tickEnabled: true,
+			discoveryPath,
+		});
+		expect(resumed).toEqual({ evaluations: 1, dispatches: 1 });
+		expect(requests).toHaveLength(1);
+		expect(requests[0]?.body).toMatchObject({ types: ["rem-update"] });
+		expect((await loadRemTriggerState(fixture.stateDir)).scopes[fixture.scope]?.missed_window).toBeNull();
+	});
+
+	it("dispatches when the trigger state cannot be read or written", async () => {
+		const fixture = createFixture(1);
+		const requests: Array<{ body: unknown; correlationId: string }> = [];
+		const discoveryPath = await startSidecar(requests, 202);
+		mkdirSync(path.join(fixture.stateDir, "rem-trigger-state.json"));
+		await evaluateRemAutomaticTriggers({ database: fixture.database.runtime.db, stateDir: fixture.stateDir,
+			requestedOperations: ["rem-update"], now: new Date("2026-08-12T12:00:00.000Z"), discoveryPath });
+		expect(requests).toHaveLength(1);
+		expect((requests[0]?.body as { types: unknown }).types).toEqual(["rem-update"]);
+	});
 	it("initializes an absent scope and continues into the waiting decision", async () => {
 		const fixture = createFixture(1);
 		const now = new Date("2026-08-12T12:00:00.000Z");
@@ -83,29 +156,7 @@ describe("REM automatic trigger", () => {
 		);
 	});
 
-	it("does not dispatch while the kill switch is active", async () => {
-		const fixture = createFixture(101);
-		const requests: Array<{ body: unknown; correlationId: string }> = [];
-		const discoveryPath = await startSidecar(requests, 202);
-		activateKillSwitch(fixture.stateDir, "operator pause", "test");
 
-		const report = await evaluateRemAutomaticTriggers({
-			database: fixture.database.runtime.db,
-			stateDir: fixture.stateDir,
-			requestedOperations: ["rem-replace"],
-			now: new Date("2026-08-12T12:00:00.000Z"),
-			discoveryPath,
-		});
-
-		expect(report).toEqual({ evaluations: 0, dispatches: 0 });
-		expect(requests).toEqual([]);
-		expect(readAudit(fixture.stateDir)).toContainEqual(
-			expect.objectContaining({
-				event: "rem_trigger_evaluated",
-				details: { row: "automatic-trigger-skipped", reason: "kill-switch-active" },
-			}),
-		);
-	});
 
 	it("advances daily state only after the accepted job completes", async () => {
 		const fixture = createFixture(1);
@@ -242,112 +293,111 @@ describe("REM automatic trigger", () => {
 		expect(requests[0]?.correlationId).not.toContain("daily");
 	});
 
-	it("persists three failed daily attempts across evaluations and abandons only that instant", async () => {
-		const fixture = createFixture(1);
+
+
+
+
+
+
+	it("runs at most one automatic pass per local day: a completed daily pass closes the volume trigger", async () => {
+		const fixture = createFixture(101);
 		const requests: Array<{ body: unknown; correlationId: string }> = [];
-		const discoveryPath = await startSidecar(requests, 503);
-		const now = new Date("2026-08-12T12:00:00.000Z");
+		const discoveryPath = await startSidecar(requests, 202);
 		await seedState(fixture, {
-			last_pass_at: "2026-08-11T12:00:00.000Z",
+			last_pass_at: "2026-08-11T03:00:00.000Z",
+			schedule_zone: "UTC",
+			last_covered_count: 101,
+			last_volume_pass_date: null,
+			missed_window: null,
+			attempts: { identity: null, count: 0 },
+		});
+		const evaluate = (now: string) => evaluateRemAutomaticTriggers({
+			database: fixture.database.runtime.db,
+			stateDir: fixture.stateDir,
+			requestedOperations: ["rem-update"],
+			now: new Date(now),
+			discoveryPath,
+		});
+
+		await evaluate("2026-08-12T03:00:00.000Z");
+		expect(requests).toHaveLength(1);
+		// The completion records one row considered, so 100 new candidates are over the threshold.
+		appendTerminalAudit(fixture.stateDir, "rem_completed", fixture.scope, requests[0]?.correlationId);
+		await evaluate("2026-08-12T15:00:00.000Z");
+
+		expect(requests).toHaveLength(1);
+		expect((await loadRemTriggerState(fixture.stateDir)).scopes[fixture.scope]).toMatchObject({
+			last_pass_at: "2026-08-12T03:00:00.000Z",
+			last_volume_pass_date: "2026-08-12",
+		});
+	});
+
+	it("runs at most one automatic pass per local day: a volume pass moves the daily pass to the next day's schedule", async () => {
+		const fixture = createFixture(101);
+		const requests: Array<{ body: unknown; correlationId: string }> = [];
+		const discoveryPath = await startSidecar(requests, 202);
+		await seedState(fixture, {
+			last_pass_at: "2026-08-11T03:00:00.000Z",
 			schedule_zone: "UTC",
 			last_covered_count: 1,
 			last_volume_pass_date: null,
 			missed_window: null,
 			attempts: { identity: null, count: 0 },
 		});
-
-		for (let attempt = 1; attempt <= 3; attempt++) {
-			await evaluateRemAutomaticTriggers({
-				database: fixture.database.runtime.db,
-				stateDir: fixture.stateDir,
-				requestedOperations: ["rem-replace"],
-				now,
-				discoveryPath,
-			});
-		}
-
-		expect(requests).toHaveLength(3);
-		const state = (await loadRemTriggerState(fixture.stateDir)).scopes[fixture.scope];
-		expect(state?.last_pass_at).toBe(now.toISOString());
-		expect(state?.last_volume_pass_date).toBeNull();
-		expect(state?.attempts).toEqual({ identity: null, count: 0 });
-		expect(readAudit(fixture.stateDir).at(-1)?.details).toMatchObject({
-			outcome: "deadline-missed",
+		// After the volume pass the threshold is raised, so only the daily trigger is under test.
+		const evaluate = (now: string, volumeThreshold?: number) => evaluateRemAutomaticTriggers({
+			database: fixture.database.runtime.db,
+			stateDir: fixture.stateDir,
+			requestedOperations: ["rem-update"],
+			now: new Date(now),
+			discoveryPath,
+			volumeThreshold,
 		});
+
+		await evaluate("2026-08-12T02:00:00.000Z");
+		const volumeId = remAutomaticCorrelationId("volume", fixture.scope, "2026-08-12");
+		expect(requests.map((request) => request.correlationId)).toEqual([volumeId]);
+		appendTerminalAudit(fixture.stateDir, "rem_completed", fixture.scope, volumeId);
+
+		// Today's schedule (03:00) and just after midnight both pass without a daily dispatch.
+		await evaluate("2026-08-12T04:00:00.000Z", 1000);
+		await evaluate("2026-08-13T00:30:00.000Z", 1000);
+		expect(requests).toHaveLength(1);
+		expect(readAudit(fixture.stateDir).at(-1)?.details).toMatchObject({ next_due: "2026-08-13T03:00:00.000Z" });
+
+		await evaluate("2026-08-13T03:00:00.000Z", 1000);
+		expect(requests.map((request) => request.correlationId)).toEqual([
+			volumeId,
+			remAutomaticCorrelationId("daily", fixture.scope, "2026-08-13T03:00:00.000Z"),
+		]);
 	});
 
-	it("exhausts volume attempts without delaying the daily guarantee", async () => {
-		const fixture = createFixture(100);
+	it("runs at most one automatic pass per local day: a volume pass still running at the daily schedule is not joined by a daily pass", async () => {
+		const fixture = createFixture(101);
 		const requests: Array<{ body: unknown; correlationId: string }> = [];
-		const discoveryPath = await startSidecar(requests, 503);
-		const now = new Date("2026-08-12T01:00:00.000Z");
+		const discoveryPath = await startSidecar(requests, 202);
 		await seedState(fixture, {
-			last_pass_at: now.toISOString(),
+			last_pass_at: "2026-08-11T03:00:00.000Z",
 			schedule_zone: "UTC",
-			last_covered_count: 0,
+			last_covered_count: 1,
 			last_volume_pass_date: null,
 			missed_window: null,
 			attempts: { identity: null, count: 0 },
 		});
-
-		for (let attempt = 1; attempt <= 3; attempt++) {
-			await evaluateRemAutomaticTriggers({
-				database: fixture.database.runtime.db,
-				stateDir: fixture.stateDir,
-				requestedOperations: ["rem-replace"],
-				now,
-				discoveryPath,
-			});
-		}
-
-		const state = (await loadRemTriggerState(fixture.stateDir)).scopes[fixture.scope];
-		expect(state?.last_pass_at).toBe(now.toISOString());
-		expect(state?.last_volume_pass_date).toBe("2026-08-12");
-		expect(readAudit(fixture.stateDir).at(-1)?.details).toMatchObject({
-			outcome: "volume-attempts-spent",
-		});
-	});
-
-	it("recovers a persisted third attempt and still evaluates later scopes", async () => {
-		const fixture = createFixture(100);
-		const laterScope = `${fixture.scope}:later`;
-		seedCandidateRows(fixture.database, laterScope, 1);
-		const requests: Array<{ body: unknown; correlationId: string }> = [];
-		const discoveryPath = await startSidecar(requests, 503);
-		const now = new Date("2026-08-12T01:00:00.000Z");
-		const correlationId = remAutomaticCorrelationId("volume", fixture.scope, "2026-08-12");
-		await writeRemTriggerStateAtomic(fixture.stateDir, {
-			version: 1,
-			scopes: {
-				[fixture.scope]: {
-					last_pass_at: now.toISOString(),
-					schedule_zone: "UTC",
-					last_covered_count: 0,
-					last_volume_pass_date: null,
-					missed_window: null,
-					attempts: { identity: correlationId, count: 3 },
-				},
-			},
-		});
-
-		const report = await evaluateRemAutomaticTriggers({
+		const evaluate = (now: string) => evaluateRemAutomaticTriggers({
 			database: fixture.database.runtime.db,
 			stateDir: fixture.stateDir,
-			requestedOperations: ["rem-replace"],
-			now,
+			requestedOperations: ["rem-update"],
+			now: new Date(now),
 			discoveryPath,
-			resolveScheduleZone: () => "UTC",
 		});
 
-		expect(report).toEqual({ evaluations: 2, dispatches: 1 });
-		expect((await loadRemTriggerState(fixture.stateDir)).scopes).toMatchObject({
-			[fixture.scope]: {
-				last_volume_pass_date: "2026-08-12",
-				missed_window: null,
-				attempts: { identity: null, count: 0 },
-			},
-			[laterScope]: { last_covered_count: 1 },
-		});
+		// Accepted at 02:59 and not yet complete when the 03:00 tick arrives.
+		await evaluate("2026-08-12T02:59:00.000Z");
+		await evaluate("2026-08-12T03:00:00.000Z");
+
+		const volumeId = remAutomaticCorrelationId("volume", fixture.scope, "2026-08-12");
+		expect(requests.map((request) => request.correlationId)).toEqual([volumeId, volumeId]);
 	});
 
 	it("lets daily win when daily and volume are due together", async () => {
@@ -378,94 +428,11 @@ describe("REM automatic trigger", () => {
 		expect(readAudit(fixture.stateDir)[0]?.details).toMatchObject({ trigger: "daily" });
 	});
 
-	it("records unreadable state without dispatch and no scopes without inventing a scope", async () => {
-		const fixture = createFixture(1);
-		writeFileSync(path.join(fixture.stateDir, "rem-trigger-state.json"), "{", "utf8");
-		await evaluateRemAutomaticTriggers({
-			database: fixture.database.runtime.db,
-			stateDir: fixture.stateDir,
-			requestedOperations: ["rem-replace"],
-			now: new Date("2026-08-12T12:00:00.000Z"),
-		});
-		expect(readAudit(fixture.stateDir)).toContainEqual(
-			expect.objectContaining({
-				scope: fixture.scope,
-				resultStatus: "error",
-				details: expect.objectContaining({
-					row: "state-unreadable",
-					consecutive_idle: 1,
-				}),
-			}),
-		);
 
-		const empty = createFixture(0);
-		await evaluateRemAutomaticTriggers({
-			database: empty.database.runtime.db,
-			stateDir: empty.stateDir,
-			requestedOperations: ["rem-replace"],
-			now: new Date("2026-08-12T12:00:00.000Z"),
-		});
-		expect(readAudit(empty.stateDir)).toEqual([
-			expect.objectContaining({
-				event: "rem_trigger_evaluated",
-				details: expect.objectContaining({ row: "no-scopes" }),
-			}),
-		]);
-		expect(readAudit(empty.stateDir)[0]).not.toHaveProperty("scope");
-	});
 
-	it("records one scope-less decision when the real storage latch rejects enumeration", async () => {
-		const fixture = createFixture(1);
-		fixture.database.runtime.db.markFailed("integration control");
 
-		const report = await evaluateRemAutomaticTriggers({
-			database: fixture.database.runtime.db,
-			stateDir: fixture.stateDir,
-			requestedOperations: ["rem-replace"],
-			now: new Date("2026-08-12T12:00:00.000Z"),
-		});
 
-		expect(report).toEqual({ evaluations: 1, dispatches: 0 });
-		expect(readAudit(fixture.stateDir)).toEqual([
-			expect.objectContaining({
-				resultStatus: "error",
-				details: expect.objectContaining({ row: "enumeration-failed" }),
-			}),
-		]);
-		expect(readAudit(fixture.stateDir)[0]).not.toHaveProperty("scope");
-	});
 
-	it("contains a strict decision append failure before attempt persistence and POST", async () => {
-		const fixture = createFixture(1);
-		const requests: Array<{ body: unknown; correlationId: string }> = [];
-		const discoveryPath = await startSidecar(requests, 202);
-		const now = new Date("2026-08-12T12:00:00.000Z");
-		await seedState(fixture, {
-			last_pass_at: "2026-08-11T12:00:00.000Z",
-			schedule_zone: "UTC",
-			last_covered_count: 1,
-			last_volume_pass_date: null,
-			missed_window: null,
-			attempts: { identity: null, count: 0 },
-		});
-		mkdirSync(path.join(fixture.stateDir, "audit.jsonl"));
-
-		await expect(
-			evaluateRemAutomaticTriggers({
-				database: fixture.database.runtime.db,
-				stateDir: fixture.stateDir,
-				requestedOperations: ["rem-replace"],
-				now,
-				discoveryPath,
-			}),
-		).resolves.toEqual({ evaluations: 1, dispatches: 0 });
-
-		expect(requests).toHaveLength(0);
-		expect((await loadRemTriggerState(fixture.stateDir)).scopes[fixture.scope]?.attempts).toEqual({
-			identity: null,
-			count: 0,
-		});
-	});
 
 	it("times out an unconfirmed dispatch and leaves the same identity due", async () => {
 		const fixture = createFixture(1);
@@ -738,14 +705,19 @@ describe("REM automatic trigger", () => {
 				},
 			});
 		expect(readRemAutomaticOperations(configPath)).toEqual({ requestedOperations: ["rem-update"], tickEnabled: true });
+		const settings = JSON.parse(readFileSync(configPath, "utf8"));
+		writeFileSync(configPath, JSON.stringify({ ...settings, remEnhanced: { trigger: { tick: false } } }));
+		expect(readRemAutomaticOperations(configPath)).toEqual({ requestedOperations: ["rem-update"], tickEnabled: false });
+		writeFileSync(configPath, JSON.stringify({ ...settings, remEnhanced: { trigger: { tick: true } } }));
+		expect(readRemAutomaticOperations(configPath)).toEqual({ requestedOperations: ["rem-update"], tickEnabled: true });
 
-		writeTestInstallationConfig(configDir, {
-				plugins: { entries: { "sno-mem-claw": { config: { mode: "rem-enhanced" } } } },
-			});
-		expect(readRemAutomaticOperations(configPath)).toEqual({ requestedOperations: ["rem-replace", "rem-update"], tickEnabled: true });
+		const defaultDir = temporaryDirectory("rem-trigger-default-config-");
+		writeTestInstallationConfig(defaultDir, { plugins: { entries: { "sno-mem-claw": { config: { mode: "rem-enhanced" } } } } });
+		expect(readRemAutomaticOperations(testInstallationConfigPath(defaultDir))).toEqual({ requestedOperations: ["rem-replace", "rem-update"], tickEnabled: true });
 
-		writeTestInstallationConfig(configDir, { plugins: { entries: { "sno-mem-claw": { config: {} } } } });
-		expect(readRemAutomaticOperations(configPath)).toEqual({ requestedOperations: [], tickEnabled: true });
+		const localDir = temporaryDirectory("rem-trigger-local-config-");
+		writeTestInstallationConfig(localDir, { plugins: { entries: { "sno-mem-claw": { config: {} } } } });
+		expect(readRemAutomaticOperations(testInstallationConfigPath(localDir))).toEqual({ requestedOperations: ["rem-replace", "rem-update"], tickEnabled: true });
 	});
 
 	function createFixture(candidateCount: number): { database: TestDb; stateDir: string; scope: string } {

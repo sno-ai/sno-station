@@ -37,6 +37,8 @@ import type {
  * - `invalid_response`: provider HTTP 2xx but response shape did not parse.
  * - `timeout`: the per-call AbortSignal fired before the provider responded.
  * - `request_error`: any other thrown error inside the fetch path.
+ * - `query_over_window`: the query alone fills the reranker's per-pair token window, so no
+ *   document could be sent with it. Nothing was requested.
  */
 export const RERANK_FALLBACK_REASONS = [
 	"missing_api_key",
@@ -45,6 +47,7 @@ export const RERANK_FALLBACK_REASONS = [
 	"invalid_response",
 	"timeout",
 	"request_error",
+	"query_over_window",
 ] as const;
 export type RerankFallbackReason = (typeof RERANK_FALLBACK_REASONS)[number];
 
@@ -56,6 +59,11 @@ export interface RerankFallbackSignal {
 export interface RerankOutcome {
 	candidates: RetrievalResult[];
 	fallback?: RerankFallbackSignal;
+	stats?: {
+		rerankSentCount: number;
+		rerankReturnedCount: number;
+		rerankBeyondCapCount: number;
+	};
 }
 
 export class MemoryRetriever {
@@ -171,7 +179,7 @@ export interface MemoryRetrieverInternals {
 	rerankLightweight(candidates: RetrievalResult[], queryVector: Float32Array): RetrievalResult[];
 	getRerankSourceScore(result: RetrievalResult): number;
 	getRerankPreservationFloor(result: RetrievalResult, unreturned: boolean): number;
-	applyScoringPipeline(results: RetrievalResult[], trace?: TraceCollector): RetrievalResult[];
+	applyScoringPipeline(results: RetrievalResult[], trace?: TraceCollector, limit?: number): RetrievalResult[];
 	applyRecencyBoost(results: RetrievalResult[]): RetrievalResult[];
 	applyImportanceWeight(results: RetrievalResult[]): RetrievalResult[];
 	applyLengthNormalization(results: RetrievalResult[]): RetrievalResult[];

@@ -124,7 +124,17 @@ function getCaptureMinLength(text: string): number {
  * data.
  */
 export function formatRelevantMemoriesContext(
-	memories: Array<{ category: string; text: string; lane?: "active" | "parked" | "quarantined" }>,
+	memories: Array<{
+		category: string;
+		text: string;
+		lane?: "active" | "parked" | "quarantined";
+		/** Calendar day the remembered event happened, when the row resolved one. */
+		eventDate?: string;
+		/** Calendar day the row was said, for a row with no event date of its own. */
+		saidOn?: string;
+		/** The sentence the row was written from, when one was kept. */
+		quote?: string;
+	}>,
 ): string {
 	// Transform the collection in one place so capture policy ordering and filters stay reviewable.
 	const safe = memories.filter(
@@ -136,7 +146,10 @@ export function formatRelevantMemoriesContext(
 		(entry, index) =>
 			`${RELEVANT_MEMORY_RECORD_PREFIX} ${index + 1}: ${JSON.stringify({
 				category: normalizeCategory(entry.category),
+				...(entry.eventDate === undefined ? {} : { event_date: entry.eventDate }),
+				...(entry.saidOn === undefined ? {} : { said_on: entry.saidOn }),
 				text: escapeMemoryForPrompt(entry.text),
+				...(entry.quote === undefined ? {} : { quote: escapeMemoryForPrompt(entry.quote) }),
 			})}`,
 	);
 	return [

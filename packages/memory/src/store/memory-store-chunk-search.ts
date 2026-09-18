@@ -154,6 +154,13 @@ Object.assign(MemoryStore.prototype, {
 		vector: Float32Array,
 		opts: SearchOptions = {},
 	): Promise<ChunkSearchResult[]> {
+		if (!this.db.vectorSearchAvailable) {
+			log.error("storage.vector.search.unavailable", { dbPath: this.dbPath }, {
+				event_name: "storage.vector.search.unavailable", file: "packages/sno-station-mem/src/store/memory-store-chunk-search.ts",
+				function: "searchChunksSemantic", site_id: "storage.vector.search.unavailable",
+			});
+			return [];
+		}
 		this.validateVector(vector);
 		const limit = clampInt(opts.limit ?? 5, 1, MAX_CHUNK_FETCH_LIMIT);
 		const minScore = clamp01(opts.minScore ?? DEFAULT_MIN_SCORE, DEFAULT_MIN_SCORE);

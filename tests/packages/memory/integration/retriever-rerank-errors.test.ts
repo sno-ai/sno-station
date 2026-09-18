@@ -4,6 +4,11 @@ import {
 	DEFAULT_RETRIEVAL_CONFIG,
 } from "../../../../packages/sno-station-mem/src/engine/retrieval/retriever.ts";
 import { RetrievalError } from "../../../../packages/sno-station-mem/src/engine/shared/errors.ts";
+import { truncateToTokens } from "../../../../packages/sno-station-mem/src/engine/shared/token-bound.ts";
+import {
+	DEFAULT_MAX_CONTEXT_TOKENS,
+	RERANK_PROMPT_TEMPLATE_TOKENS,
+} from "../../../../packages/sno-station-mem/config/index.ts";
 
 const ORIGINAL_FETCH = globalThis.fetch;
 
@@ -32,8 +37,12 @@ const storeStub = {
 	searchKeyword: async () => TEST_RESULTS,
 };
 
+// One token per character keeps the ceiling arithmetic readable in the assertions below.
 const embedderStub = {
 	embed: async () => new Float32Array([1, 0, 0]),
+	countTokens: (text: string) => text.length,
+	truncateToTokens: (text: string, maxTokens: number) =>
+		truncateToTokens(text, maxTokens, (t) => t.length),
 };
 
 afterEach(() => {
@@ -174,8 +183,6 @@ describe("retriever rerank error handling", () => {
 				rerankApiKey: "test-key",
 				minScore: 0.5,
 				hardMinScore: 0,
-				recencyWeight: 0,
-				timeDecayHalfLifeDays: 0,
 				lengthNormAnchor: 0,
 				importanceWeightBase: 0.5,
 			},
@@ -227,8 +234,6 @@ describe("retriever rerank error handling", () => {
 				rerank: "none",
 				minScore: 0.5,
 				hardMinScore: 0,
-				recencyWeight: 0,
-				timeDecayHalfLifeDays: 0,
 				lengthNormAnchor: 0,
 				importanceWeightBase: 0.5,
 			},
@@ -290,8 +295,6 @@ describe("retriever rerank error handling", () => {
 				rerankApiKey: "test-key",
 				minScore: 0,
 				hardMinScore: 0,
-				recencyWeight: 0,
-				timeDecayHalfLifeDays: 0,
 				lengthNormAnchor: 0,
 				importanceWeightBase: 0.5,
 				rerankBlendCross: 0.7,
@@ -311,7 +314,10 @@ describe("retriever rerank error handling", () => {
 		expect(results[0]?.score).toBeGreaterThan(results[1]?.score ?? 0);
 	});
 
-	it("tags missing_api_key fallback on the rerank trace stage", async () => {
+	it("refuses a cross-encoder with no key instead of ranking with a different ranker", async () => {
+		// This used to fall back to the local cosine blend and tag the stage `missing_api_key`.
+		// A deployment then ran a ranker nobody had chosen and one warning line was its only
+		// trace, so configuration that cannot be honoured is now refused outright.
 		const retriever = createRetriever(
 			storeStub as never,
 			embedderStub as never,
@@ -324,15 +330,9 @@ describe("retriever rerank error handling", () => {
 			},
 		);
 
-		const { trace } = await retriever.retrieveWithTrace({
-			query: "typescript",
-			limit: 1,
-		});
-		const rerankStage = trace.stages.find((s) => s.name === "rerank");
-		expect(rerankStage?.metadata).toEqual({
-			rerankFallbackReason: "missing_api_key",
-			rerankFallbackProvider: "voyage",
-		});
+		await expect(
+			retriever.retrieveWithTrace({ query: "typescript", limit: 1 }),
+		).rejects.toThrow("requires retrieval.rerankApiKey");
 	});
 
 	it("tags no_endpoint fallback when provider lacks a default endpoint", async () => {
@@ -419,7 +419,7 @@ describe("retriever rerank error handling", () => {
 		});
 	});
 
-	it("leaves rerank stage metadata unset on the happy path", async () => {
+	it("reports rerank coverage counts on the happy path", async () => {
 		globalThis.fetch = async () =>
 			new Response(
 				JSON.stringify({ data: [{ index: 0, relevance_score: 0.9 }] }),
@@ -445,7 +445,11 @@ describe("retriever rerank error handling", () => {
 		});
 		const rerankStage = trace.stages.find((s) => s.name === "rerank");
 		expect(rerankStage).toBeDefined();
-		expect(rerankStage).not.toHaveProperty("metadata");
+		expect(rerankStage?.metadata).toEqual({
+			rerankSentCount: 1,
+			rerankReturnedCount: 1,
+			rerankBeyondCapCount: 0,
+		});
 	});
 
 	it("keeps returned high-signal rerank candidates distinct below score saturation", async () => {
@@ -499,8 +503,6 @@ describe("retriever rerank error handling", () => {
 				rerankApiKey: "test-key",
 				minScore: 0,
 				hardMinScore: 0,
-				recencyWeight: 0,
-				timeDecayHalfLifeDays: 0,
 				lengthNormAnchor: 0,
 				importanceWeightBase: 0.5,
 				rerankBlendCross: 0.7,
@@ -570,8 +572,6 @@ describe("retriever rerank error handling", () => {
 				rerankMaxCandidates: 3,
 				minScore: 0,
 				hardMinScore: 0,
-				recencyWeight: 0,
-				timeDecayHalfLifeDays: 0,
 				lengthNormAnchor: 0,
 				importanceWeightBase: 1,
 			},
@@ -647,12 +647,10 @@ describe("retriever rerank error handling", () => {
 		expect(requestedTextCounts).toEqual([50, 10]);
 	});
 
-	it("truncates over-length candidate text sent to the tei reranker without mutating the returned entry", async () => {
-		// Second real bug found 2026-07-06 alongside the batch-size cap: the Sno
-		// TEI reranker also rejects a single text over 8192 characters outright
-		// ({"error":"text too long: max 8192 characters"}) — LoCoMo's
-		// bulk-import corpus stores whole session transcripts as one memory
-		// chunk and regularly exceeds this (measured up to ~9200 chars).
+	it("cuts a candidate over the record token ceiling for the rerank request without mutating the returned entry", async () => {
+		// The Sno reranker truncates silently past its window (measured 2026-09-14: a claim
+		// placed past the cut scored 0.0001), so a row written before the ceiling existed is
+		// cut by exact token count, to what the query leaves inside the window, before it is sent.
 		let requestedTextLengths: number[] = [];
 		globalThis.fetch = async (_url, init) => {
 			const body = JSON.parse(String(init?.body)) as { texts: string[] };
@@ -663,7 +661,7 @@ describe("retriever rerank error handling", () => {
 			});
 		};
 
-		const longText = "x".repeat(9232);
+		const longText = "x".repeat(DEFAULT_MAX_CONTEXT_TOKENS * 2);
 		const shortText = "a short memory chunk";
 		const longEntry = { ...TEST_ENTRY, id: "mem-long", text: longText, contentHash: "hash-long" };
 		const shortEntry = {
@@ -691,7 +689,6 @@ describe("retriever rerank error handling", () => {
 				rerankProvider: "tei",
 				rerankEndpoint: "https://example.test/rerank",
 				rerankApiKey: "test-key",
-				// rerankMaxTextLength intentionally left unset — relies on the tei default.
 				minScore: 0,
 				hardMinScore: 0,
 			},
@@ -699,13 +696,17 @@ describe("retriever rerank error handling", () => {
 
 		const results = await retriever.retrieve({ query: "test query", limit: 2 });
 
-		// The outgoing request must be truncated to the 8192-char tei default.
-		expect(requestedTextLengths).toEqual([8192, shortText.length]);
+		// The document gets what the query leaves inside the reranker's window, not the whole
+		// ceiling: the window holds the query, the model's own prompt and ONE document together.
+		// This stub counts one token per character, so "test query" is 10 of them.
+		const documentBudget = DEFAULT_MAX_CONTEXT_TOKENS - RERANK_PROMPT_TEMPLATE_TOKENS - 10;
+		expect(documentBudget).toBe(499);
+		expect(requestedTextLengths).toEqual([documentBudget, shortText.length]);
 
 		// The returned candidate's actual text must be the full, untruncated original.
 		const longResult = results.find((r) => r.entry.id === "mem-long");
 		expect(longResult?.entry.text).toBe(longText);
-		expect(longResult?.entry.text.length).toBe(9232);
+		expect(longResult?.entry.text.length).toBe(DEFAULT_MAX_CONTEXT_TOKENS * 2);
 	});
 });
 
@@ -723,7 +724,10 @@ interface RerankProbe {
 }
 
 async function startRerankProbe(
-	respond: (texts: string[], reply: (body: unknown) => void) => void,
+	respond: (
+		texts: string[],
+		reply: (body: unknown, status?: number, headers?: Record<string, string>) => void,
+	) => void,
 ): Promise<RerankProbe> {
 	const { createServer } = await import("node:http");
 	const probe = { url: "", maxInFlight: 0, requestCount: 0 } as RerankProbe;
@@ -736,9 +740,9 @@ async function startRerankProbe(
 			probe.requestCount += 1;
 			probe.maxInFlight = Math.max(probe.maxInFlight, inFlight);
 			const body = JSON.parse(Buffer.concat(chunks).toString("utf8")) as { texts: string[] };
-			respond(body.texts, (payload) => {
+			respond(body.texts, (payload, status = 200, headers = {}) => {
 				inFlight -= 1;
-				response.writeHead(200, { "Content-Type": "application/json" });
+				response.writeHead(status, { "Content-Type": "application/json", ...headers });
 				response.end(JSON.stringify(payload));
 			});
 		});
@@ -774,6 +778,100 @@ const batchedStoreStub = {
 };
 
 describe("retriever rerank batching", () => {
+	it("surfaces 401 when an earlier batch times out on every attempt", async () => {
+		const probe = await startRerankProbe((texts, reply) => {
+			// Leave batch zero unanswered on every attempt to exercise real fetch timeouts.
+			if (texts.length !== 50) reply("unauthorized", 401);
+		});
+		try {
+			const searchResults = BATCHED_ENTRIES.slice(0, 51);
+			const retriever = createRetriever(
+				{
+					...batchedStoreStub,
+					searchSemantic: async () => searchResults,
+					searchKeyword: async () => searchResults,
+				} as never,
+				embedderStub as never,
+				{ warn: () => {} },
+				{
+					...DEFAULT_RETRIEVAL_CONFIG,
+					rerank: "cross-encoder",
+					rerankProvider: "tei",
+					rerankEndpoint: probe.url,
+					rerankTimeoutMs: 50,
+					rerankApiKey: "test-key",
+					candidatePoolSize: 51,
+					minScore: 0,
+					hardMinScore: 0,
+				},
+			);
+
+			try {
+				await retriever.retrieve({ query: "typescript", limit: 51 });
+				throw new Error("expected retrieve() to fail");
+			} catch (error) {
+				expect(error).toBeInstanceOf(RetrievalError);
+				const cause =
+					error instanceof Error &&
+					"cause" in error &&
+					error.cause instanceof Error
+						? error.cause
+						: null;
+				expect(cause).toBeInstanceOf(RetrievalError);
+				expect(cause?.message).toBe("Rerank API failed with status 401");
+			}
+		} finally {
+			await probe.close();
+		}
+	});
+
+	it("surfaces 429 with retry-after when an earlier batch exhausts 503 retries", async () => {
+		const probe = await startRerankProbe((texts, reply) => {
+			// Batch zero always fails with 503, including retries; batch one is fatal.
+			if (texts.length === 50) reply("upstream unavailable", 503);
+			else reply("rate limited", 429, { "retry-after": "7" });
+		});
+		try {
+			const searchResults = BATCHED_ENTRIES.slice(0, 51);
+			const retriever = createRetriever(
+				{
+					...batchedStoreStub,
+					searchSemantic: async () => searchResults,
+					searchKeyword: async () => searchResults,
+				} as never,
+				embedderStub as never,
+				{ warn: () => {} },
+				{
+					...DEFAULT_RETRIEVAL_CONFIG,
+					rerank: "cross-encoder",
+					rerankProvider: "tei",
+					rerankEndpoint: probe.url,
+					rerankApiKey: "test-key",
+					candidatePoolSize: 51,
+					minScore: 0,
+					hardMinScore: 0,
+				},
+			);
+
+			try {
+				await retriever.retrieve({ query: "typescript", limit: 51 });
+				throw new Error("expected retrieve() to fail");
+			} catch (error) {
+				expect(error).toBeInstanceOf(RetrievalError);
+				const cause =
+					error instanceof Error &&
+					"cause" in error &&
+					error.cause instanceof Error
+						? error.cause
+						: null;
+				expect(cause).toBeInstanceOf(RetrievalError);
+				expect(cause?.message).toBe("Rerank API failed with status 429, retry after 7s");
+			}
+		} finally {
+			await probe.close();
+		}
+	});
+
 	it("sends the batches in bounded waves and keeps every score on its own row", async () => {
 		// Every text carries its own row number, so the reply can score row N as N. The final order
 		// is then fully determined, and any batch whose indices were re-based onto the wrong offset
@@ -870,4 +968,46 @@ describe("retriever rerank batching", () => {
 			await probe.close();
 		}
 	}, 30_000);
+});
+
+it("retries 429 backpressure and serves the reranked result", async () => {
+	const probe = await startRerankProbe((_texts, reply) => {
+		if (probe.requestCount === 1) {
+			reply("rate limited", 429, { "retry-after": "1" });
+			return;
+		}
+		reply([{ index: 1, score: 10 }, { index: 0, score: -10 }]);
+	});
+	try {
+		const searchResults = BATCHED_ENTRIES.slice(0, 2);
+		const retriever = createRetriever(
+			{
+				...batchedStoreStub,
+				searchSemantic: async () => searchResults,
+				searchKeyword: async () => searchResults,
+			} as never,
+			embedderStub as never,
+			{ warn: () => {} },
+			{
+				...DEFAULT_RETRIEVAL_CONFIG,
+				rerank: "cross-encoder",
+				rerankProvider: "tei",
+				rerankEndpoint: probe.url,
+				rerankApiKey: "test-key",
+				minScore: 0,
+				hardMinScore: 0,
+			},
+		);
+
+		const results = await retriever.retrieve({ query: "typescript", limit: 2 });
+
+		expect(results.map((result) => result.entry.text)).toEqual([
+			"Row 1: TypeScript strict mode avoids implicit any bugs.",
+			"Row 0: TypeScript strict mode avoids implicit any bugs.",
+		]);
+		expect(results.map((result) => result.sources.reranked?.score)).toEqual([10, -10]);
+		expect(probe.requestCount).toBe(2);
+	} finally {
+		await probe.close();
+	}
 });

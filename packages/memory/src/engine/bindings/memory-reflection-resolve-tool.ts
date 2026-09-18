@@ -14,10 +14,8 @@ import {
 
 import { clampInt } from "./memory-tool-dependencies";
 import {
-	killSwitchResponse,
 	makeResult,
 	runWithAudit,
-	shouldBlockMemoryTools,
 } from "./memory-tool-results";
 import type { ToolContext, ToolResult } from "./memory-tool-schemas";
 import type { MemoryEntry } from "../shared/types";
@@ -187,7 +185,6 @@ async function resolveByQuery(
 
 export async function executeMemoryReflectionResolveTool(ctx: ToolContext, access: ReturnType<typeof resolveAgentAccess>, _toolCallId: unknown, params: unknown): Promise<ToolResult> {
 					return runWithAudit(ctx, "memory_reflection_resolve", undefined, async () => {
-						if (shouldBlockMemoryTools(ctx)) return killSwitchResponse(ctx);
 						const parsed = resolveParamsSchema.parse(params);
 						if (!parsed.memoryId && !parsed.query) {
 							return makeResult("Provide memoryId or query.", { error: "missing_selector" }, true);

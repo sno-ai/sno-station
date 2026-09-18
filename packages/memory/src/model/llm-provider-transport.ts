@@ -8,6 +8,7 @@ import { classifyLlmFailure } from "./llm-failure";
 import type { DispatchContext as LlmixDispatchContext } from "@snoai/llmix";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { createHash, randomUUID } from "node:crypto";
+import { countTokens } from "@snoai/chunking";
 import { createLogger, withLogContext } from "@snoai/utils/logger";
 import type {
 	DispatchContext,
@@ -194,7 +195,7 @@ function throwTerminalAbort(error: unknown, requestAbort: RequestAbort): never {
 }
 
 function estimateTokens(text: string): number {
-	return Math.max(1, Math.ceil(text.length / 3));
+	return Math.max(1, countTokens(text));
 }
 
 function estimateUsage(messages: unknown[], content: string): TokenUsage {

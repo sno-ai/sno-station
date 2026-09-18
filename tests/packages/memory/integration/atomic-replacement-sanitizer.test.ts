@@ -169,7 +169,12 @@ function extractionRecord(overrides: Partial<AtomicExtractionRecord> = {}): Atom
 		attribute: null,
 		value: "safe value",
 		temporalPhrase: null,
+		time: { kind: "none" },
+		endedTime: { kind: "none" },
 		resolvedTime: null,
+		endsCurrent: false,
+		endedAtPhrase: null,
+		endedAt: null,
 		importance: "medium",
 		changesCurrentState: false,
 		todo: "none",
@@ -198,26 +203,43 @@ function enhancedRecord(overrides: Partial<AtomicKeyedRecord> = {}): AtomicKeyed
 	};
 }
 
-function wireReply(): string {
+// The two-lane reply pair for one "Safe extracted claim." record: a lane-1 capture reply carrying
+// the code-carried fields keyed by id, then a lane-2 enrichment reply for that id.
+function captureReply(): string {
 	return JSON.stringify({
-		records: [
+		claims_found: ["Safe extracted claim."],
+		decisions: [{ turn_index: 0, progress_only: false }],
+		facts: [
 			{
-				kind: "occurrence",
-				claim_text: "Safe extracted claim.",
+				id: 0,
+				fact: "Safe extracted claim.",
 				subject: "user",
 				subject_kind: "user",
+				temporal_phrase: null,
+				ended_at_phrase: null,
+				source_span: { turn_index: 0, quote: `Before ${SANITIZED_ATTACK} after` },
+			},
+		],
+	});
+}
+
+function enrichmentReply(): string {
+	return JSON.stringify({
+		enrichments: [
+			{
+				id: 0,
+				kind: "occurrence",
 				attribute: null,
 				value: "safe value",
-				temporal_phrase: null,
-				resolved_time: null,
+				ends_current: false,
 				importance: "medium",
 				changes_current_state: false,
-				ends_current: false,
 				todo: "none",
 				close_reason: null,
-				source_span: { turn_index: 0, quote: `Before ${SANITIZED_ATTACK} after` },
-				relations: [],
 				single_claim: true,
+				relations: [],
+				time: { kind: "none" },
+				ended_time: { kind: "none" },
 			},
 		],
 	});
@@ -329,7 +351,10 @@ describe("atomic sanitizer boundaries", () => {
 		const transport: AtomicGenericExtractionTransport = {
 			async complete(request) {
 				requests.push(request);
-				return { text: wireReply(), truncated: false };
+				// Lane 2 carries a `facts:` block; lane 1 (capture) does not.
+				return request.prompt.includes("facts:\n")
+					? { text: enrichmentReply(), truncated: false }
+					: { text: captureReply(), truncated: false };
 			},
 		};
 		let nowMs = 1;
@@ -353,7 +378,8 @@ describe("atomic sanitizer boundaries", () => {
 				transport,
 				locale: "en",
 			});
-			expect(requests).toHaveLength(1);
+			// Capture then one enrichment batch; the capture prompt (requests[0]) carries the transcript.
+			expect(requests).toHaveLength(2);
 			expectSanitizedDataPrompt(requests[0]?.prompt ?? "");
 			expect(result).toMatchObject({
 				status: "complete",

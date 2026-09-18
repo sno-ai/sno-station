@@ -498,6 +498,36 @@ describe("B-profile section registry re-key", () => {
 		expect(result.applied).toMatchObject({ merged: 1, rejected: 0, finalCount: 1 });
 	});
 
+	it("keeps two clauses that differ only in punctuation when merging a collision", async () => {
+		fixture = await buildFixture();
+		await seedProfileRow({
+			fixture,
+			sectionName: "preferences.work_planning",
+			content: "The user writes tools in C.",
+			rawTopicPhrase: "work planning",
+		});
+		await seedProfileRow({
+			fixture,
+			sectionName: "preferences.general",
+			content: "The user writes tools in C++.",
+			rawTopicPhrase: "focus ritual",
+			timestamp: NOW + 1,
+		});
+
+		const result = await runBProfileSectionRekey({
+			store: fixture.store,
+			cache: fixture.cache,
+			projectIdFilter: [fixture.scope],
+		});
+
+		const rows = await liveProfileRows(fixture);
+		expect(rows).toHaveLength(1);
+		// Two different languages, not one preference stated twice: dropping the "++" merged them.
+		expect(rows[0]?.text).toContain("The user writes tools in C.");
+		expect(rows[0]?.text).toContain("The user writes tools in C++.");
+		expect(result.applied).toMatchObject({ merged: 1, rejected: 0, finalCount: 1 });
+	});
+
 	it("rejects a collision when the source has no mergeable clause", async () => {
 		fixture = await buildFixture();
 		await seedProfileRow({

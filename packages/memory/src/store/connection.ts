@@ -13,7 +13,6 @@ import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 import { StorageError } from "../engine/shared/errors";
 import { applyEntityNameKeyMigration } from "./entity-name-key-migration";
 import * as schema from "./schema";
-import { assertMemoryKindsCutoverStartupGuard } from "./memory-kinds-cutover-migrator";
 import { migrateLegacyDatabaseNamespace } from "./legacy-database-namespace-migration";
 import { resolveSimpleTokenizerPath } from "./simple-tokenizer-path";
 import { loadSqliteVecExtension } from "./sqlite-vec-path";
@@ -23,7 +22,6 @@ import {
 	type SqliteDatabaseLike,
 	type SqliteRuntimeHandle,
 } from "./sqlite-runtime";
-import { assertTodoStoreCountParity } from "./todo-store";
 import { migrateUnplacedCandidates } from "./unplaced-candidate-migration";
 
 const log = createLogger("sno-station-mem:db");
@@ -33,9 +31,11 @@ type RuntimeDrizzleDB = ReturnType<typeof drizzle<typeof schema>>;
 export type DrizzleDB = RuntimeDrizzleDB & {
 	$client: SqliteDatabaseLike;
 	vectorDimension: number;
+	vectorSearchAvailable: boolean;
+	retrySetup(): void;
 	/**
 	 * The chokepoint wrapper over the same connection. Store code MUST use this
-	 * (statement cache + fail-closed latch live here); `$client` is the raw
+	 * (prepared-statement cache lives here); `$client` is the raw
 	 * driver handle drizzle was constructed over and bypasses both.
 	 */
 	chokepoint: SqliteDatabaseLike;
@@ -54,9 +54,7 @@ export { validateStoragePath } from "./path-validation";
  */
 // LH: The storage runtime is intentionally Node-native and SQLite-first so startup stays local, tiny, and inspectable.
 // LH: The schema belongs to this plugin so migrations can track memory behavior without depending on host internals.
-// LH: Synchronous database opening is a deliberate fail-fast boundary: corrupt paths and missing extensions surface during startup.
 // LH: The sqlite-vec extension is part of the storage contract; semantic recall depends on vector SQL being available before writes.
-// LH: FTS5 health is checked here because keyword recall should fail explicitly instead of silently returning empty evidence.
 // LH: Keep raw SQL at this layer parameterized; only validated SQLite DDL tokens such as float[dim] may be interpolated.
 // LH: The connection layer owns WAL and extension setup because store methods assume those invariants already hold.
 // LH: Future remote stores should adapt this boundary rather than weakening the local ACID guarantees used by tools and hooks.
@@ -157,18 +155,20 @@ export function readChunkVecTableState(db: SqliteDatabaseLike): VecTableState | 
  * current shape — wrong dimension, or predates the partition key — is
  * dropped and recreated. Nothing is shipped until npm publish (see
  * apps/sno-station-mem/host.md), so no installed database has vectors worth
- * migrating in place; a non-empty mismatch fails closed instead.
+ * migrating in place; a non-empty mismatch preserves the table and disables vector search for this open.
  */
-function ensureChunkVecTable(db: SqliteDB, vectorDim: number): number {
+function ensureChunkVecTable(db: SqliteDB, vectorDim: number): number | undefined {
 	if (!Number.isInteger(vectorDim) || vectorDim <= 0) {
 		throw new StorageError(`Invalid vectorDim ${vectorDim}; must be a positive integer`);
 	}
 	const existing = readChunkVecTableState(db);
 	if (existing && (existing.dimension !== vectorDim || !existing.hasPartitionKey)) {
 		if (existing.rowCount > 0) {
-			throw new StorageError(
-				`nodix_memory_chunk_vectors does not match the current schema (configured dim ${vectorDim}, found dim ${existing.dimension}, partition key ${existing.hasPartitionKey}); wipe or re-import vectors before continuing`,
-			);
+			log.error("storage.vector.configuration.mismatch", { vectorDim, existing }, {
+				event_name: "storage.vector.configuration.mismatch", file: "packages/sno-station-mem/src/store/connection.ts",
+				function: "ensureChunkVecTable", site_id: "storage.vector.configuration.mismatch",
+			});
+			return undefined;
 		}
 		db.exec("DROP TABLE nodix_memory_chunk_vectors");
 	}
@@ -196,29 +196,6 @@ function ensureChunkVecTable(db: SqliteDB, vectorDim: number): number {
 		);
 	}
 	return verified.dimension;
-}
-
-/** Implements rebuild fts as the local SQLite connection setup operation. */
-function rebuildFts(db: SqliteDB): void {
-	// This persistence step establishes state that later reads and cleanup paths depend on.
-	db.exec("INSERT INTO nodix_memory_chunks_fts(nodix_memory_chunks_fts) VALUES('rebuild')");
-}
-
-/** Validates fts healthy before it enters the SQLite connection setup boundary. */
-function ensureFtsHealthy(db: SqliteDB): void {
-	// Isolate the database setup operation that can fail because of runtime I/O or input shape.
-	try {
-		// This persistence step establishes state that later reads and cleanup paths depend on.
-		db.exec("INSERT INTO nodix_memory_chunks_fts(nodix_memory_chunks_fts) VALUES('integrity-check')");
-	} catch {
-		log.warn("FTS integrity check failed, rebuilding", undefined, {
-			event_name: "sno_station_mem.connection.fts.integrity.check.failed.rebuilding",
-			file: "packages/sno-station-mem/src/store/connection.ts",
-			function: "ensureFtsHealthy",
-			site_id: "connection.ensureFtsHealthy.ad5a3ffcd6",
-		});
-		rebuildFts(db);
-	}
 }
 
 /**
@@ -263,49 +240,12 @@ export function loadStorageExtensions(sqlite: SqliteRuntimeHandle): void {
  * Mirrors the regex pattern used by `parseVecTableDimension` for
  * `nodix_memory_chunk_vectors` — single SELECT against `sqlite_master`, regex match.
  */
-function assertFts5TokenizerIsSimple(db: SqliteDatabaseLike): void {
-	const row = db
-		.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='nodix_memory_chunks_fts' LIMIT 1")
-		.get() as { sql?: string | null } | null;
-	if (!row?.sql) {
-		throw new StorageError(
-			"nodix_memory_chunks_fts not found after migrations; cannot verify FTS5 tokenizer.",
-		);
-	}
-	if (!/\btokenize\s*=\s*['"]simple\b/i.test(row.sql)) {
-		throw new StorageError(
-			"nodix_memory_chunks_fts must use simple-tokenizer (tokenize='simple ...'); " +
-				`got: ${row.sql}. Wipe the DB so migration 0006 can run.`,
-		);
-	}
-}
-
 /**
  * Round A invariant: detect legacy DBs that pre-date migration 0004
  * (chunk-table swap). If the parent vec/FTS objects still exist, the DB
  * was opened against a build that never ran the new migration — fail loud
  * so the dev wipes the file.
  */
-function assertParentVecAndFtsRemoved(db: SqliteDatabaseLike): void {
-	const parentVec = db
-		.prepare(
-			"SELECT name FROM sqlite_master WHERE type IN ('table','view') AND name = 'nodix_memory_vectors' LIMIT 1",
-		)
-		.get();
-	const parentFts = db
-		.prepare(
-			"SELECT name FROM sqlite_master WHERE type IN ('table','view') AND name = 'nodix_memories_fts' LIMIT 1",
-		)
-		.get();
-	if (parentVec || parentFts) {
-		throw new StorageError(
-			"Legacy parent vec/FTS objects detected after migration 0004; " +
-				"this DB pre-dates the chunk-table swap. Wipe the dev DB and let migrations recreate it: " +
-				"rm -f the configured plugin DB path (default `<state-dir>/sno-station-mem/sno-station-mem.sqlite`) and restart.",
-		);
-	}
-}
-
 export function assertNoLegacyBoundarySchema(db: SqliteDatabaseLike): void {
 	const rows = db.prepare("PRAGMA table_info(nodix_memories)").all() as Array<{
 		name?: string;
@@ -338,11 +278,8 @@ function resolveMigrationsDir(): string {
 const MIGRATIONS_DIR = resolveMigrationsDir();
 
 /** Implements init db as the local SQLite connection setup operation. */
-// LH: initDb returns only after schema, FTS, and vector prerequisites are usable, which keeps later store code simple.
-// LH: Failing during init protects callers from partially initialized memory state and avoids hard-to-debug recall gaps.
 // LH: WAL mode is enabled for one-writer/many-reader plugin behavior while preserving crash-safe local persistence.
 // LH: Migrations are intentionally local to sno-station-mem so storage evolution remains reviewable beside the plugin source.
-// LH: Do not move extension loading into async service start unless every caller can tolerate unavailable retrieval at boot.
 // LH: Applied migrations must remain byte-stable because Drizzle records their hashes in each database ledger.
 // LH: Runtime vec-table reconciliation lives after migrations so dynamic dimensions do not require rewriting 0001.
 export function initDb(dbPath: string, vectorDim: number): DrizzleDB {
@@ -354,61 +291,54 @@ export function initDb(dbPath: string, vectorDim: number): DrizzleDB {
 	});
 	mkdirSync(dirname(dbPath), { recursive: true });
 	const sqlite = openSqliteDatabase(dbPath);
-	// Isolate the database setup operation that can fail because of runtime I/O or input shape.
-	try {
-		loadStorageExtensions(sqlite);
-		sqlite.db.exec("PRAGMA journal_mode=WAL;");
-		// Wait up to 5s for another writer before failing with SQLITE_BUSY.
-		sqlite.db.exec("PRAGMA busy_timeout=5000;");
-		sqlite.db.exec("PRAGMA foreign_keys=ON;");
-		// WAL-recommended durability level: commits skip the per-commit fsync; the WAL
-		// keeps the DB consistent through application crashes (nothing committed is
-		// lost) and OS crashes (file never corrupts; commits since the last checkpoint
-		// may be lost — accepted RPO for a local store with hourly backups).
-		sqlite.db.exec("PRAGMA synchronous=NORMAL;");
-		// 64 MiB page cache. Pages are decrypted on read under SQLCipher, so cache
-		// hits also skip repeat decryption — this budget is sized against the
-		// documented 4 GiB gateway floor.
-		sqlite.db.exec("PRAGMA cache_size=-65536;");
-		sqlite.db.exec("PRAGMA temp_store=MEMORY;");
-		// Cap the WAL file so a burst of large transactions cannot grow it unbounded.
-		sqlite.db.exec("PRAGMA journal_size_limit=67108864;");
-		migrateLegacyDatabaseNamespace(sqlite.db, vectorDim);
-		assertNoLegacyBoundarySchema(sqlite.db);
-		ensureRemMigrationCompatibilityColumns(sqlite.db);
-		const db = drizzle(sqlite.raw, { schema }) as DrizzleDBWithoutVector;
-		migrateCompat(db, {
-			migrationsFolder: MIGRATIONS_DIR,
-		});
-		applyEntityNameKeyMigration(sqlite.db);
-		assertTodoStoreCountParity(sqlite.db);
-		migrateUnplacedCandidates(sqlite.db);
-		assertParentVecAndFtsRemoved(sqlite.db);
-		assertFts5TokenizerIsSimple(sqlite.db);
-		ensureMemoryKindIndexes(sqlite.db);
-		assertMemoryKindsCutoverStartupGuard(sqlite.db);
-		// vec table reconciliation runs after Drizzle migrations so 0004 can stay
-		// byte-stable while fresh DBs still use the configured runtime dimension.
-		const vectorDimension = ensureChunkVecTable(sqlite.db, vectorDim);
-		ensureFtsHealthy(sqlite.db);
-		log.info("database ready", { dbPath }, {
-			event_name: "sno_station_mem.connection.database.ready",
-			file: "packages/sno-station-mem/src/store/connection.ts",
-			function: "initDb",
-			site_id: "connection.initDb.e23d8ab40c",
-		});
-		// Centralize the persistence fallback value at the boundary of this helper.
-		return Object.assign(db, { vectorDimension, chokepoint: sqlite.db });
-	} catch (error) {
-		// Isolate the database setup operation that can fail because of runtime I/O or input shape.
+	const pending = new Map<string, () => unknown>();
+	let firstSetupError: unknown;
+	const retrySetup = (): void => {
+		let incomplete = false;
+		for (const [step, run] of pending) {
+			try {
+				run();
+				// A retried migration can replace objects checked by later steps.
+				if (!incomplete) pending.delete(step);
+			} catch (error) {
+				if (!incomplete) firstSetupError = error;
+				incomplete = true;
+				log.error("storage.setup.failed", { step, error }, {
+					event_name: "storage.setup.failed", file: "packages/sno-station-mem/src/store/connection.ts",
+					function: "retrySetup", site_id: "storage.setup.failed",
+				});
+			}
+		}
+	};
+	const db = Object.assign(drizzle(sqlite.raw, { schema }) as DrizzleDBWithoutVector, {
+		vectorDimension: vectorDim, vectorSearchAvailable: false, chokepoint: sqlite.db, retrySetup,
+	});
+	for (const [step, run] of [
+		["extensions", () => loadStorageExtensions(sqlite)],
+		["pragmas", () => sqlite.db.exec("PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000; PRAGMA foreign_keys=ON; PRAGMA synchronous=NORMAL; PRAGMA cache_size=-65536; PRAGMA temp_store=MEMORY; PRAGMA journal_size_limit=67108864;")],
+		["namespace", () => migrateLegacyDatabaseNamespace(sqlite.db, vectorDim)],
+		["rem-columns", () => ensureRemMigrationCompatibilityColumns(sqlite.db)],
+		["migrations", () => migrateCompat(db, { migrationsFolder: MIGRATIONS_DIR })],
+		["entity-keys", () => applyEntityNameKeyMigration(sqlite.db)],
+		["unplaced-candidates", () => migrateUnplacedCandidates(sqlite.db)],
+		["memory-indexes", () => ensureMemoryKindIndexes(sqlite.db)],
+		["vectors", () => {
+			const dimension = ensureChunkVecTable(sqlite.db, vectorDim);
+			db.vectorSearchAvailable = dimension !== undefined;
+			if (dimension !== undefined) db.vectorDimension = dimension;
+		}],
+	] as const) pending.set(step, run);
+	retrySetup();
+	if (pending.size > 0) {
 		try {
 			sqlite.db.close();
 		} catch {
-			// Close what opened successfully, then surface the original failure.
+			// Preserve the original setup failure if closing also fails.
 		}
-		// Surface this invalid database setup state as an explicit typed failure.
-		throw error;
+		throw firstSetupError;
 	}
+	// Full integrity work runs on the maintenance schedule, not on the HTTP startup path.
+	return db;
 }
 
 /** Implements close db as the local SQLite connection setup operation. */

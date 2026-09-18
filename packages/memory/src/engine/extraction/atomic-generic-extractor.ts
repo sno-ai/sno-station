@@ -1,10 +1,12 @@
+import { dirname } from "node:path";
+import { appendAuditEntry } from "../operations/runtime-audit-log";
+import { redactSecrets } from "../security/redact";
 import extractionSchema from "../../../config/atomic-extraction-response.schema.json" with { type: "json" };
-import { parseProgressTurns } from "./atomic-progress-boundary";
-import { modelReplyJsonCandidates } from "../shared/model-reply-text";
+import { ATOMIC_ENRICHMENT_OUTPUT_TOKEN_BUDGET } from "../../../config/index";
 import { FIXED_MEMORY_SNO_EXTRACT_CHAT } from "../../model/signed-registry-constants";
 /** @file atomic-generic-extractor.ts
  * @purpose Runs the dark generic atomic extraction pass over complete transcript windows.
- * @boundary One serial model call per window plus its bounded retry; no writes or gauntlet stages.
+ * @boundary Capture and serial enrichment batches with retries; no writes or gauntlet stages.
  */
 
 import { createLogger } from "@snoai/utils/logger";
@@ -19,6 +21,12 @@ import {
 import {
 	type AtomicExtractionRecord,
 	type AtomicExtractionTurn,
+	type AtomicCapturedFact,
+	ATOMIC_CAPTURE_RESPONSE_JSON_SCHEMA,
+	ATOMIC_ENRICHMENT_RESPONSE_JSON_SCHEMA,
+	fallbackAtomicCapturedFact,
+	parseAtomicCaptureReply,
+	parseAtomicEnrichmentReply,
 	parseAtomicExtractionReply,
 } from "./atomic-extraction-reply";
 import {
@@ -65,6 +73,7 @@ export interface AtomicGenericExtractionRequest {
 export interface AtomicGenericExtractionCompletion {
 	text: string;
 	truncated: boolean;
+	outputTokens?: number;
 }
 
 export interface AtomicGenericExtractionTransport {
@@ -97,7 +106,16 @@ export type AtomicGenericExtractionResult =
 
 export function buildAtomicExtractionWindows(
 	turns: readonly AtomicExtractionTurn[],
+	maxTurns?: number,
 ): AtomicExtractionTurn[][] {
+	if (maxTurns !== undefined) {
+		if (!Number.isSafeInteger(maxTurns) || maxTurns < 1) throw new Error("maxTurns must be a positive integer");
+		const windows: AtomicExtractionTurn[][] = [];
+		for (let start = 0; start < turns.length; start += maxTurns) {
+			windows.push(turns.slice(start, start + maxTurns));
+		}
+		return windows;
+	}
 	if (turns.length === 0) return [];
 	const userIndexes = turns.flatMap((turn, index) => (turn.role === "user" ? [index] : []));
 	if (userIndexes.length <= 2) return [[...turns]];
@@ -140,6 +158,96 @@ export function buildAtomicGenericExtractionPrompt(
 				]),
 		`transcript:\n${transcript.value}`,
 	].join("\n\n");
+}
+
+function renderAtomicLaneContext(input: AtomicGenericExtractionInput): string {
+	const locale = input.locale ?? DEFAULT_LOCALE;
+	return [
+		`session_date_time: ${input.sessionDateTime ?? "unknown"}`,
+		atomicExtractionSkillReference("surrounding-context"),
+		`preceding_context: ${renderAtomicPromptData(input.contextTurns ?? [], locale).value}`,
+		`following_context: ${renderAtomicPromptData(input.followingTurns ?? [], locale).value}`,
+		`transcript:\n${renderAtomicPromptData(numberAtomicTurns(input.turns), locale).value}`,
+	].join("\n\n");
+}
+
+export function buildAtomicCapturePrompt(input: AtomicGenericExtractionInput): string {
+	return [
+		atomicExtractionSkillReference("capture"),
+		`response_schema: ${JSON.stringify(ATOMIC_CAPTURE_RESPONSE_JSON_SCHEMA)}`,
+		renderAtomicLaneContext(input),
+	].join("\n\n");
+}
+
+export function buildAtomicEnrichmentPrompt(
+	input: AtomicGenericExtractionInput,
+	facts: readonly AtomicCapturedFact[],
+): string {
+	return [
+		atomicExtractionSkillReference("calendar-meaning"),
+		atomicExtractionSkillReference("enrichment"),
+		`person_attribute_slugs: ${JSON.stringify(attributeDictionary.slugs.map(({ slug }) => slug))}`,
+		`thing_attribute_slugs: ${JSON.stringify(stateVocabulary.slugs.map(({ slug }) => slug))}`,
+		`relation_dictionary: ${JSON.stringify(relationDictionary.relations)}`,
+		`response_schema: ${JSON.stringify(ATOMIC_ENRICHMENT_RESPONSE_JSON_SCHEMA)}`,
+		renderAtomicLaneContext(input),
+		`facts:\n${renderAtomicPromptData(facts, input.locale ?? DEFAULT_LOCALE).value}`,
+	].join("\n\n");
+}
+
+function estimatedEnrichmentTokens(fact: AtomicCapturedFact): number {
+	return 78 + Math.ceil((fact.fact.length / 4) * 0.3);
+}
+
+export function chunkAtomicCapturedFacts(
+	facts: readonly AtomicCapturedFact[],
+): AtomicCapturedFact[][] {
+	const batches: AtomicCapturedFact[][] = [];
+	let batch: AtomicCapturedFact[] = [];
+	let tokens = 0;
+	for (const fact of facts) {
+		const estimate = estimatedEnrichmentTokens(fact);
+		if (batch.length > 0 && tokens + estimate > ATOMIC_ENRICHMENT_OUTPUT_TOKEN_BUDGET) {
+			batches.push(batch);
+			batch = [];
+			tokens = 0;
+		}
+		batch.push(fact);
+		tokens += estimate;
+	}
+	if (batch.length > 0) batches.push(batch);
+	return batches;
+}
+
+async function enrichAtomicBatch(
+	input: AtomicGenericExtractionInput,
+	facts: readonly AtomicCapturedFact[],
+	outputTokenBudget: number,
+): Promise<AtomicExtractionRecord[]> {
+	const prompt = buildAtomicEnrichmentPrompt(input, facts);
+	for (let attempt = 1; attempt <= 2; attempt += 1) {
+		const completion = await input.transport.complete({
+			prompt, maxTokens: outputTokenBudget,
+			...(input.requestId ? { requestId: input.requestId } : {}),
+		});
+		if (completion !== null) input.store.recordAtomicExtractionCalls(input.ledgerKey, input.nowMs());
+		const records = completion === null || completion.truncated ? undefined
+			: parseAtomicEnrichmentReply(completion.text, facts, input.sessionDateTime);
+		log.info("atomic_enrichment_batch", {
+			attempt, factIds: facts.map((fact) => fact.id),
+			predictedOutputTokens: facts.reduce((sum, fact) => sum + estimatedEnrichmentTokens(fact), 0),
+			actualOutputTokens: completion?.outputTokens ?? null,
+			truncated: completion?.truncated ?? false, accepted: records !== undefined,
+		}, { event_name: "memory.atomic_generic_extractor.diagnostic", file: "packages/sno-station-mem/src/engine/extraction/atomic-generic-extractor.ts", function: "enrichAtomicBatch", site_id: "extraction.atomic-generic-extractor.enrichAtomicBatch" });
+		if (records !== undefined) return records;
+		if (input.diagnostics) input.diagnostics.parseRejected += 1;
+	}
+	if (facts.length <= 1) return facts.map(fallbackAtomicCapturedFact);
+	const middle = Math.ceil(facts.length / 2);
+	return [
+		...await enrichAtomicBatch(input, facts.slice(0, middle), outputTokenBudget),
+		...await enrichAtomicBatch(input, facts.slice(middle), outputTokenBudget),
+	];
 }
 
 export function excludeContextOnlyRecords<T extends {
@@ -401,7 +509,7 @@ export async function runAtomicNumericTurnSweep(
 	const fresh: AtomicExtractionRecord[] = [];
 	let firstPassRepeatCount = 0;
 	let selfRepeatCount = 0;
-	for (const record of kept) {
+	for (const [index, record] of kept.entries()) {
 		const turnContent = input.turns[record.sourceSpan.turnIndex]?.content ?? "";
 		const pairIndex = input.records.findIndex(
 			(base, index) => !accountedFor.has(index) && restatesSameFact(base, record, turnContent),
@@ -414,7 +522,10 @@ export async function runAtomicNumericTurnSweep(
 		// The sweep can also repeat itself within one reply; those pair against what it just said.
 		// Counted apart from the repeats above: restating the first pass is expected on every
 		// partial recovery, while restating itself in one reply is the model misbehaving.
-		if (fresh.some((earlier) => restatesSameFact(earlier, record, turnContent))) {
+		if (kept.slice(0, index).some((earlier) =>
+			normalizedAtomicText(earlier.claimText) === normalizedAtomicText(record.claimText) &&
+			restatesSameFact(earlier, record, turnContent),
+		)) {
 			selfRepeatCount += 1;
 			continue;
 		}
@@ -444,23 +555,31 @@ export async function runAtomicNumericTurnSweep(
 	return fresh.map((record) => withAtomicSanitizerMatches(record, sanitizedInput.matched));
 }
 
-function rejectionPreview(raw: string): { chars: number } {
-	return { chars: raw.length };
+function rejectionPreview(raw: string): { chars: number; preview: string } {
+	return { chars: raw.length, preview: redactSecrets(raw).slice(0, 512) };
 }
 
 function markPending(
 	input: AtomicGenericExtractionInput,
 	reason: AtomicExtractionReprocessReason,
 	failedReply: string | null,
-	runParameters?: AtomicExtractionRunParameters,
+	attemptCount: number,
 ): AtomicGenericExtractionResult {
 	input.store.markAtomicExtractionPending(
 		input.ledgerKey,
 		reason,
 		failedReply,
 		input.nowMs(),
-		runParameters,
 	);
+	appendAuditEntry(dirname(input.store.dbPath), {
+		event: "error", errorCode: "atomic_capture_window_pending",
+		scope: input.ledgerKey.conversationId, resultStatus: "error",
+		details: {
+			reason, session_key: input.ledgerKey.conversationId,
+			chunk_hash: input.ledgerKey.chunkHash, pipeline_version: input.ledgerKey.pipelineVersion,
+			turn_count: input.turns.length, attempt_count: attemptCount,
+		},
+	});
 	return { status: "pending", reason };
 }
 
@@ -488,6 +607,7 @@ export function createAtomicGenericExtractionTransport(
 			return {
 				text,
 				truncated: usage !== null && usage.outputTokens >= request.maxTokens,
+				...(usage === null ? {} : { outputTokens: usage.outputTokens }),
 			};
 		},
 	};
@@ -536,75 +656,154 @@ export async function runAtomicGenericExtractionPass(
 		}
 		return runAtomicGenericExtractionPass(input);
 	}
-	if (input.estimatedInputTokens > begin.entry.runParameters.maxInputTokens) {
-		input.store.recordAtomicExtractionCalls(input.ledgerKey, input.nowMs());
-		return markPending(input, "input-overflow", null);
-	}
-
-	const locale = input.locale ?? DEFAULT_LOCALE;
-	const sanitizedInput = sanitizeAtomicPromptValue(input.turns, locale);
-	const prompt = buildAtomicGenericExtractionPrompt(
-		input.turns, input.sessionDateTime, locale, [], input.contextTurns, input.followingTurns,
+	const attempts = { count: 0 };
+	const outputTokenBudget = Math.min(
+		begin.entry.runParameters.outputTokenBudget, input.runParameters.outputTokenBudget,
 	);
-	let outputTokenBudget = begin.entry.runParameters.outputTokenBudget;
+	const inputOverflow = input.estimatedInputTokens > begin.entry.runParameters.maxInputTokens;
+	// One turn over the input budget is split the same way as one whose reply overflows: a long
+	// replayed transcript is a single turn, and giving up on it unasked lost whole sessions.
+	if (inputOverflow && !(input.turns.length === 1 && splitTurnContent(input.turns[0]?.content ?? "") !== undefined)) {
+		input.store.recordAtomicExtractionCalls(input.ledgerKey, input.nowMs());
+		return markPending(input, "input-overflow", null, 0);
+	}
+	const result = inputOverflow
+		? await splitAtomicCaptureTurn(input, outputTokenBudget, attempts, "")
+		: await captureAtomicWindow(input, outputTokenBudget, attempts);
+	if (result.status === "pending") {
+		return markPending(input, result.reason, result.failedReply, attempts.count);
+	}
+	return result;
+}
+
+type CaptureWindowResult =
+	| Extract<AtomicGenericExtractionResult, { status: "complete" | "off" }>
+	| { status: "pending"; reason: AtomicExtractionReprocessReason; failedReply: string };
+
+async function splitAtomicCaptureWindow(
+	input: AtomicGenericExtractionInput,
+	outputTokenBudget: number,
+	attempts: { count: number },
+): Promise<CaptureWindowResult> {
+	const records: AtomicExtractionRecord[] = [];
+	const progressTurns = new Set<number>();
+	let offset = 0;
+	for (const turns of buildAtomicExtractionWindows(input.turns, Math.ceil(input.turns.length / 2))) {
+		const result = await captureAtomicWindow({
+			...input, turns,
+			contextTurns: [...(input.contextTurns ?? []), ...input.turns.slice(0, offset)],
+			followingTurns: [...input.turns.slice(offset + turns.length), ...(input.followingTurns ?? [])],
+		}, outputTokenBudget, attempts);
+		if (result.status !== "complete") return result;
+		for (const record of result.records) {
+			records.push({ ...record, sourceSpan: { ...record.sourceSpan, turnIndex: record.sourceSpan.turnIndex + offset } });
+		}
+		for (const index of result.progressTurns) progressTurns.add(index + offset);
+		offset += turns.length;
+	}
+	return { status: "complete", records, progressTurns };
+}
+
+const ATOMIC_CAPTURE_ATTEMPTS = 3;
+
+/**
+ * Halves of one turn's content, cut at the paragraph break nearest its middle. A pasted or
+ * replayed transcript arrives as a single turn, so when its capture reply overflows the output
+ * budget there is no turn boundary to split at; the content itself still has paragraph breaks.
+ * A turn with no break away from its edges cannot be split.
+ */
+function splitTurnContent(content: string): [string, string] | undefined {
+	const middle = Math.floor(content.length / 2);
+	const nearestInRange = (pattern: RegExp): number | undefined => {
+		let best: number | undefined;
+		for (const { index } of content.matchAll(pattern)) {
+			if (index < content.length * 0.2 || index > content.length * 0.8) continue;
+			if (best === undefined || Math.abs(index - middle) < Math.abs(best - middle)) best = index;
+		}
+		return best;
+	};
+	// A paragraph break first; a transcript whose blank lines all sit in its header still has a
+	// line break near its middle.
+	const best = nearestInRange(/\n\s*\n/g) ?? nearestInRange(/\n/g);
+	if (best === undefined) return undefined;
+	return [content.slice(0, best).trimEnd(), content.slice(best).trimStart()];
+}
+
+async function splitAtomicCaptureTurn(
+	input: AtomicGenericExtractionInput,
+	outputTokenBudget: number,
+	attempts: { count: number },
+	failedReply: string,
+): Promise<CaptureWindowResult> {
+	const [turn] = input.turns;
+	const halves = turn === undefined ? undefined : splitTurnContent(turn.content);
+	if (turn === undefined || halves === undefined) {
+		return { status: "pending", reason: "truncation-exhaustion", failedReply };
+	}
+	const records: AtomicExtractionRecord[] = [];
+	const progressTurns = new Set<number>();
+	for (const [half, content] of halves.entries()) {
+		const result = await captureAtomicWindow({
+			...input,
+			turns: [{ ...turn, content }],
+			contextTurns: [...(input.contextTurns ?? []), ...(half === 1 ? [{ ...turn, content: halves[0] }] : [])],
+			followingTurns: [...(half === 0 ? [{ ...turn, content: halves[1] }] : []), ...(input.followingTurns ?? [])],
+		}, outputTokenBudget, attempts);
+		if (result.status !== "complete") return result;
+		// Both halves are the same turn: source turn indexes and progress decisions stay at 0.
+		records.push(...result.records);
+		for (const index of result.progressTurns) progressTurns.add(index);
+	}
+	return { status: "complete", records, progressTurns };
+}
+
+async function captureAtomicWindow(
+	input: AtomicGenericExtractionInput,
+	outputTokenBudget: number,
+	attempts: { count: number },
+): Promise<CaptureWindowResult> {
+	const sanitizedInput = sanitizeAtomicPromptValue(input.turns, input.locale ?? DEFAULT_LOCALE);
+	const prompt = buildAtomicCapturePrompt(input);
 	let lastReply = "";
-	for (let attempt = 1; attempt <= 2; attempt += 1) {
+	for (let attempt = 1; attempt <= ATOMIC_CAPTURE_ATTEMPTS; attempt += 1) {
+		attempts.count += 1;
 		const completion = await input.transport.complete({
-			prompt,
-			maxTokens: outputTokenBudget,
+			prompt, maxTokens: outputTokenBudget,
 			...(input.requestId ? { requestId: input.requestId } : {}),
 		});
 		if (completion === null) return { status: "off" };
 		lastReply = completion.text;
+		const preview = rejectionPreview(completion.text);
 		input.store.recordAtomicExtractionCalls(input.ledgerKey, input.nowMs());
 		if (completion.truncated) {
-			log.warn("atomic extraction reply rejected: truncated", {
-				attempt,
-				outputTokenBudget,
-				...rejectionPreview(completion.text),
-			}, { event_name: "memory.atomic_generic_extractor.diagnostic", file: "packages/sno-station-mem/src/engine/extraction/atomic-generic-extractor.ts", function: "runAtomicGenericExtractionPass", site_id: "extraction.atomic-generic-extractor.runAtomicGenericExtractionPass.cce4a719a3" });
-			if (attempt === 2) {
-				return markPending(input, "truncation-exhaustion", lastReply, {
-					...begin.entry.runParameters,
-					outputTokenBudget,
-				});
+			log.warn(`atomic extraction reply rejected: truncated; preview: ${preview.preview}`, {
+				attempt, outputTokenBudget, turnCount: input.turns.length,
+				chars: preview.chars,
+			}, { event_name: "memory.atomic_generic_extractor.diagnostic", file: "packages/sno-station-mem/src/engine/extraction/atomic-generic-extractor.ts", function: "captureAtomicWindow", site_id: "extraction.atomic-generic-extractor.runAtomicGenericExtractionPass.cce4a719a3" });
+			if (input.turns.length > 1) return splitAtomicCaptureWindow(input, outputTokenBudget, attempts);
+			// A single turn that overflows the budget does not shrink by asking again.
+			return splitAtomicCaptureTurn(input, outputTokenBudget, attempts, lastReply);
+		}
+		let gate = "unreadable-json";
+		const parsed = parseAtomicCaptureReply(completion.text, input.turns, {
+			salvage: attempt >= 2, onReject: (reason) => { gate = reason; },
+		});
+		if (parsed !== undefined) {
+			const records: AtomicExtractionRecord[] = [];
+			for (const batch of chunkAtomicCapturedFacts(parsed.facts)) {
+				records.push(...await enrichAtomicBatch(input, batch, outputTokenBudget));
 			}
-			outputTokenBudget *= 2;
-			continue;
-		}
-
-		let progressTurns: ReadonlySet<number> | null = null;
-		let reply = completion.text;
-		for (const candidate of modelReplyJsonCandidates(completion.text)) {
-			try {
-				progressTurns = parseProgressTurns(JSON.parse(candidate), input.turns);
-			} catch { continue; }
-			if (progressTurns !== null) { reply = candidate; break; }
-		}
-		const parsed = parseAtomicExtractionReply(reply, input.turns.length);
-		if (parsed.ok && progressTurns !== null) {
-			if (input.diagnostics) input.diagnostics.proposed += parsed.records.length;
+			if (input.diagnostics) input.diagnostics.proposed += records.length;
 			return {
-				status: "complete",
-				progressTurns,
-				records: parsed.records.map((record) =>
-					withAtomicSanitizerMatches(record, sanitizedInput.matched),
-				),
+				status: "complete", progressTurns: parsed.progressTurns,
+				records: records.map((record) => withAtomicSanitizerMatches(record, sanitizedInput.matched)),
 			};
 		}
-		if (input.diagnostics) input.diagnostics.parseRejected += parsed.malformedCandidateCount;
-		log.warn("atomic extraction reply rejected: parse", {
-			attempt,
-			reason: parsed.ok ? "missing-turn-classification" : parsed.reason,
-			malformedCandidateCount: parsed.malformedCandidateCount,
-			...rejectionPreview(completion.text),
-		}, { event_name: "memory.atomic_generic_extractor.diagnostic", file: "packages/sno-station-mem/src/engine/extraction/atomic-generic-extractor.ts", function: "runAtomicGenericExtractionPass", site_id: "extraction.atomic-generic-extractor.runAtomicGenericExtractionPass.98a701bd95" });
-		if (attempt === 2) {
-			return markPending(input, "parse-exhaustion", lastReply, {
-				...begin.entry.runParameters,
-				outputTokenBudget,
-			});
-		}
+		if (input.diagnostics) input.diagnostics.parseRejected += 1;
+		log.warn(`atomic extraction reply rejected: parse; preview: ${preview.preview}`, {
+			attempt, reason: "invalid-capture-reply", rejection_reason: gate,
+			chars: preview.chars,
+		}, { event_name: "memory.atomic_generic_extractor.diagnostic", file: "packages/sno-station-mem/src/engine/extraction/atomic-generic-extractor.ts", function: "captureAtomicWindow", site_id: "extraction.atomic-generic-extractor.runAtomicGenericExtractionPass.98a701bd95" });
 	}
-	return markPending(input, "parse-exhaustion", lastReply);
+	return { status: "pending", reason: "parse-exhaustion", failedReply: lastReply };
 }

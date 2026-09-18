@@ -1,3 +1,4 @@
+import { checkMemoryOperation } from "../operation-cancellation";
 /** @file sno-station-mem-ambient-learning-hook.ts
  * @purpose Routes successful agent conversations through atomic memory extraction.
  * @boundary The agent_end hook path only; registration and service lifecycle are elsewhere.
@@ -11,6 +12,7 @@ import {
 	deriveSessionDateTime,
 	extractAllMessageTexts,
 	isAmbientLearningMessage,
+	transcriptSessionDateTime,
 } from "./sno-station-mem-message-transcript";
 import type { PluginHookAgentContext, PluginHookAgentEndEvent } from "./sno-station-mem-hook-types";
 import {
@@ -19,7 +21,6 @@ import {
 	type createScopePolicy,
 	DEFAULT_IMPORTANCE,
 	type Embedder,
-	isKillSwitchActive,
 	type MemoryStore,
 	normalizeAmbientLearningText,
 	type SnoStationMemPluginApi,
@@ -30,8 +31,6 @@ import {
 	shouldSkipReflectionMessage,
 } from "./sno-station-mem-runtime-dependencies";
 import {
-	auditMissingHookAgentIdentity,
-	isChatIdBasedAgentId,
 	resolveHookAgentId,
 } from "./sno-station-mem-runtime-mode";
 const log = createLogger("sno-station-mem:ambient-learning");
@@ -45,7 +44,7 @@ async function runLocalFirstCapture(input: {
 	stateDir: string;
 	scope: string;
 	sessionKey: string;
-}): Promise<void> {
+}): Promise<{ stored: number; failures: number }> {
 	const { api, config, store, event, ctx, stateDir, scope, sessionKey } = input;
 	const entries = event.messages.flatMap((message) => {
 		if (!isAmbientLearningMessage(message)) return [];
@@ -61,11 +60,14 @@ async function runLocalFirstCapture(input: {
 	});
 
 	const seen = new Set<string>();
-	const sessionDateTime = deriveSessionDateTime(event.messages, config.captureAssistant);
+	const sessionDateTime =
+		transcriptSessionDateTime(event.messages) ??
+		deriveSessionDateTime(event.messages, config.captureAssistant);
 	const sessionTimestamp = parseSessionTimestamp(sessionDateTime);
 	let stored = 0;
 	let failures = 0;
 	for (const entry of entries) {
+		checkMemoryOperation();
 		if (!entry.text || seen.has(entry.text)) continue;
 		seen.add(entry.text);
 		try {
@@ -96,6 +98,7 @@ async function runLocalFirstCapture(input: {
 			});
 			stored += 1;
 		} catch (error) {
+		checkMemoryOperation();
 			failures += 1;
 			log.warn("Local capture write failed", { error }, { event_name: "memory.capture.write.failed", file: "packages/sno-station-mem/src/engine/bindings/sno-station-mem-ambient-learning-hook.ts", function: "runLocalFirstCapture", site_id: "memory.capture.local.write.failed" });
 		}
@@ -106,9 +109,12 @@ async function runLocalFirstCapture(input: {
 		resultStatus: failures === 0 ? "ok" : "partial",
 		details: { mode: config.mode, candidates: entries.length, stored, failures },
 	});
-	log.info("Local memory capture completed", { outcome: failures ? "partial" : stored ? "success" : "empty_success",
+	let outcome: AmbientCaptureOutcome = "success";
+	if (failures > 0) outcome = stored > 0 ? "partial" : "failed";
+	log.info("Local memory capture completed", { outcome,
 		persisted_count: stored, failed_count: failures, input_count: entries.length },
 		{ event_name: "memory.capture.completed", file: "packages/sno-station-mem/src/engine/bindings/sno-station-mem-ambient-learning-hook.ts", function: "runLocalFirstCapture", site_id: "memory.capture.local.completed" });
+	return { stored, failures };
 }
 
 /** Runs atomic extraction after a successful top-level agent conversation. */
@@ -131,8 +137,12 @@ export async function onAgentEnd(
 	let outcome: AmbientCaptureOutcome = "skipped";
 	let reason = "guard_not_admitted";
 	try {
-	if (isKillSwitchActive(stateDir) || !config.ambientLearning) return outcome;
+	if (!config.ambientLearning) {
+		reason = "ambient_learning_disabled";
+		return outcome;
+	}
 	if (sessionKey.includes(":subagent:")) {
+		reason = "skipped_subagent";
 		appendAuditEntry(stateDir, {
 			event: "ambient_learning",
 			hook: "agent_end",
@@ -142,38 +152,12 @@ export async function onAgentEnd(
 		});
 		return outcome;
 	}
-	if (!event.success) {
-		reason = "agent_run_failed";
-		return outcome;
-	}
-
-	const { agentId: resolvedAgentId, source: agentResolutionSource } = resolveHookAgentId(
-		ctx.agentId,
-		sessionKey,
-	);
-	if (agentResolutionSource === "missing" || !resolvedAgentId) {
-		auditMissingHookAgentIdentity(api, "agent_end", stateDir, "ambient_learning");
-		return outcome;
-	}
-	if (isChatIdBasedAgentId(resolvedAgentId)) {
-		appendAuditEntry(stateDir, {
-			event: "ambient_learning",
-			hook: "agent_end",
-			resultStatus: "skipped",
-			decision: "rejected_chatid_agent_format",
-			details: { resolvedAgentId },
-		});
-		return outcome;
-	}
-
+	const resolvedAgentId = resolveHookAgentId(ctx.agentId, sessionKey).agentId;
 	const scope = scopePolicy.getDefaultScope(resolvedAgentId);
-	if (!scopePolicy.validateScope(scope) || !scopePolicy.isAccessible(scope, resolvedAgentId)) {
-		reason = "scope_inaccessible";
-		return outcome;
-	}
 	if (config.mode === "local-first") {
-		await runLocalFirstCapture({ api, config, store, event, ctx, stateDir, scope, sessionKey });
+		const { stored, failures } = await runLocalFirstCapture({ api, config, store, event, ctx, stateDir, scope, sessionKey });
 		outcome = "success";
+		if (failures > 0) outcome = stored > 0 ? "partial" : "failed";
 		return outcome;
 	}
 	if (!insightDistiller) {
@@ -191,7 +175,9 @@ export async function onAgentEnd(
 		event.messages,
 		config.captureAssistant,
 	).text;
-	const sessionDateTime = deriveSessionDateTime(event.messages, config.captureAssistant);
+	const sessionDateTime =
+		transcriptSessionDateTime(event.messages) ??
+		deriveSessionDateTime(event.messages, config.captureAssistant);
 	if (!conversationText.trim()) {
 		appendAuditEntry(stateDir, {
 			event: "ambient_learning",
@@ -238,6 +224,7 @@ export async function onAgentEnd(
 			details,
 		});
 	} catch (error) {
+		checkMemoryOperation();
 		const rawMessage = error instanceof Error ? error.message : String(error);
 		const safeMessage = redactSecrets(rawMessage).slice(0, 200);
 		outcome = "failed";

@@ -54,7 +54,7 @@ export function buildRerankRequest(
 					"Content-Type": "application/json",
 					Authorization: `Bearer ${apiKey}`,
 				},
-				body: { query, texts: candidates },
+				body: { query, texts: candidates, raw_scores: true },
 			};
 		case "dashscope":
 			// Return the normalized retrieval ranking payload expected by callers.

@@ -9,13 +9,11 @@ import {
 	resolveReadableScopesForTool,
 } from "./memory-tool-access";
 
-import { clampInt, DEFAULT_LIST_LIMIT, SnoStationMemError, isKillSwitchActive, MAX_LIST_LIMIT, readEstimatedSpendToday, normalizeCategory } from "./memory-tool-dependencies";
+import { clampInt, DEFAULT_LIST_LIMIT, SnoStationMemError, MAX_LIST_LIMIT, readEstimatedSpendToday, normalizeCategory } from "./memory-tool-dependencies";
 import { serializeMemory } from "./memory-tool-formatting";
 import {
-	killSwitchResponse,
 	makeResult,
 	runWithAudit,
-	shouldBlockMemoryTools,
 } from "./memory-tool-results";
 import { listParamsSchema, type ToolContext, type ToolResult } from "./memory-tool-schemas";
 
@@ -24,8 +22,6 @@ import { listParamsSchema, type ToolContext, type ToolResult } from "./memory-to
 export async function executeMemoryListTool(ctx: ToolContext, access: ReturnType<typeof resolveAgentAccess>, _toolCallId: unknown, params: unknown): Promise<ToolResult> {
 					// Centralize the tool execution fallback value at the boundary of this helper.
 					return runWithAudit(ctx, "memory_list", undefined, async () => {
-						// Short-circuit while paused so no storage, model, or audit side effects continue.
-						if (shouldBlockMemoryTools(ctx)) return killSwitchResponse(ctx);
 						const parsed = listParamsSchema.parse(params);
 						const limit = clampInt(parsed.limit ?? DEFAULT_LIST_LIMIT, 1, MAX_LIST_LIMIT);
 						const offset = clampInt(parsed.offset ?? 0, 0, Number.MAX_SAFE_INTEGER);
@@ -45,7 +41,7 @@ export async function executeMemoryListTool(ctx: ToolContext, access: ReturnType
 									limit,
 									offset,
 									estimatedSpendTodayUsd: await readEstimatedSpendToday(ctx.stateDir),
-									killSwitchActive: isKillSwitchActive(ctx.stateDir),
+
 								};
 								// Serialize metadata once at the boundary so storage receives a stable payload.
 								return makeResult(JSON.stringify([]), emptyDetails);
@@ -85,7 +81,7 @@ export async function executeMemoryListTool(ctx: ToolContext, access: ReturnType
 							limit,
 							offset,
 							estimatedSpendTodayUsd,
-							killSwitchActive: isKillSwitchActive(ctx.stateDir),
+
 						};
 						// Serialize metadata once at the boundary so storage receives a stable payload.
 						return makeResult(JSON.stringify(serialized), details);

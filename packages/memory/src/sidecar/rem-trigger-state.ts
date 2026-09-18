@@ -28,7 +28,8 @@ const remTriggerScopeStateSchema: z.ZodType<RemTriggerScopeState> = z
 		schedule_zone: z.string().min(1).refine(isValidScheduleZone, "invalid IANA time zone"),
 		last_covered_count: z.number().int().nonnegative(),
 		last_volume_pass_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/u).nullable(),
-		missed_window: z.object({ due_at: z.string().datetime(), trigger: z.enum(["daily", "volume"]), recorded_at: z.string().datetime() }).strict().nullable(),
+		// Earlier version 1 files have five fields; only the added field may be absent.
+		missed_window: z.object({ due_at: z.string().datetime(), trigger: z.enum(["daily", "volume"]), recorded_at: z.string().datetime() }).strict().nullable().default(null),
 		attempts: z
 			.object({
 				identity: z.string().min(1).nullable(),

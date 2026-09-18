@@ -2,6 +2,8 @@ import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
+import type { Embedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client.ts";
+import { createTestEmbedder } from "../../../apps/mem-claw/helpers/test-db.ts";
 import {
 	createRetriever,
 	DEFAULT_RETRIEVAL_CONFIG,
@@ -13,10 +15,8 @@ import type { MemoryEntry, MemorySearchResult } from "../../../../packages/sno-s
 // `rerank: "cross-encoder"` + `rerankProvider: "tei"` path is wired to the live
 // Sno service (https://rt3-llm.sno.ai/rerank) and actually reorders results.
 //
-// The store/embedder are lightweight stubs only because they are NOT the system
-// under test here — they exist purely to feed a fixed candidate set into the
-// reranker. The single real dependency (the reranker HTTP call) is exercised for
-// real, and the fetch spy below calls through to the real network.
+// The store supplies fixed candidate scores to isolate reranking. The local
+// embedder/tokenizer and reranker HTTP call are real; the fetch spy calls through.
 
 const SNO_RERANK_ENDPOINT = "https://rt3-llm.sno.ai/rerank";
 
@@ -80,27 +80,21 @@ const QUERY = "Which programming language does the user prefer for type safety?"
 
 const storeStub = {
 	hasFtsSupport: true,
+	isMemoryOnFactSurface: (id: string) => CANDIDATES.some((candidate) => candidate.entry.id === id),
 	searchSemantic: async () => CANDIDATES,
 	searchKeyword: async () => [] as MemorySearchResult[],
 	getVectorsByIds: () => new Map<string, Float32Array>(),
 };
 
-const embedderStub = {
-	embed: async () => new Float32Array([1, 0, 0]),
-	providerKind: "local-onnx",
-	model: "test",
-	dimensions: 3,
-};
+let embedder: Embedder;
 
 // Neutralize every score-mutating stage except rerank so the test isolates the
-// reranker's effect on ordering: no recency, no time-decay, no length-norm, no
+// reranker's effect on ordering: no length-norm, no
 // importance skew, pure-relevance MMR, and no score floors.
 const BASE_CONFIG = {
 	...DEFAULT_RETRIEVAL_CONFIG,
 	minScore: 0,
 	hardMinScore: 0,
-	recencyWeight: 0,
-	timeDecayHalfLifeDays: 0,
 	lengthNormAnchor: 0,
 	importanceWeightBase: 1,
 	mmrLambda: 1,
@@ -110,8 +104,9 @@ const BASE_CONFIG = {
 const ORIGINAL_FETCH = globalThis.fetch;
 let internalKey: string;
 
-beforeAll(() => {
+beforeAll(async () => {
 	internalKey = loadInternalServiceSecret();
+	embedder = await createTestEmbedder();
 });
 
 afterEach(() => {
@@ -119,10 +114,37 @@ afterEach(() => {
 });
 
 describe("retriever cross-encoder rerank against the real Sno reranker", () => {
+	it("traces sent, returned, and beyond-cap candidates from the real reranker", async () => {
+		const retriever = createRetriever(
+			storeStub as never,
+			embedder,
+			{ warn: () => {} },
+			{
+				...BASE_CONFIG,
+				rerank: "cross-encoder",
+				rerankProvider: "tei",
+				rerankEndpoint: SNO_RERANK_ENDPOINT,
+				rerankApiKey: internalKey,
+				rerankMaxCandidates: 2,
+			},
+		);
+
+		const { trace } = await retriever.retrieveWithTrace({ query: QUERY, limit: 4 });
+		const stage = trace.stages.find((stage) => stage.name === "rerank");
+
+		expect(stage?.inputCount).toBe(4);
+		expect(stage?.outputCount).toBe(4);
+		expect(stage?.metadata).toEqual({
+			rerankSentCount: 2,
+			rerankReturnedCount: 2,
+			rerankBeyondCapCount: 2,
+		});
+	}, 30_000);
+
 	it("control: without reranking the raw-vector order wins and the relevant memory is buried", async () => {
 		const retriever = createRetriever(
 			storeStub as never,
-			embedderStub as never,
+			embedder,
 			{ warn: () => {} },
 			{ ...BASE_CONFIG, rerank: "none" },
 		);
@@ -150,7 +172,7 @@ describe("retriever cross-encoder rerank against the real Sno reranker", () => {
 
 			const retriever = createRetriever(
 				storeStub as never,
-				embedderStub as never,
+				embedder,
 				{ warn: () => {} },
 				{
 					...BASE_CONFIG,
@@ -169,6 +191,53 @@ describe("retriever cross-encoder rerank against the real Sno reranker", () => {
 			// Prove the Sno reranker was actually called — not silently skipped or
 			// degraded to the local lightweight cosine path.
 			expect(seenUrls.some((url) => url.startsWith(SNO_RERANK_ENDPOINT))).toBe(true);
+		},
+		30_000,
+	);
+
+	it(
+		"ranks the more relevant memory first when both sigmoid scores are saturated",
+		async () => {
+			const candidates: MemorySearchResult[] = [
+				{
+					entry: makeEntry("family-time", "Melanie's kids enjoyed spending time together."),
+					score: 0.8,
+				},
+				{
+					entry: makeEntry(
+						"painting",
+						"Melanie and her kids just finished another painting similar to their last one.",
+					),
+					score: 0.7,
+				},
+			];
+			const retriever = createRetriever(
+				{
+					...storeStub,
+					isMemoryOnFactSurface: (id: string) =>
+						candidates.some((candidate) => candidate.entry.id === id),
+					searchSemantic: async () => candidates,
+				} as never,
+				embedder,
+				{ warn: () => {} },
+				{
+					...BASE_CONFIG,
+					rerank: "cross-encoder",
+					rerankProvider: "tei",
+					rerankEndpoint: SNO_RERANK_ENDPOINT,
+					rerankApiKey: internalKey,
+				},
+			);
+
+			const results = await retriever.retrieve({
+				query: "What did Melanie and her kids paint in their latest project?",
+				limit: 2,
+			});
+
+			expect(results.map((result) => result.entry.text)).toEqual([
+				"Melanie and her kids just finished another painting similar to their last one.",
+				"Melanie's kids enjoyed spending time together.",
+			]);
 		},
 		30_000,
 	);
