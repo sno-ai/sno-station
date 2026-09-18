@@ -296,8 +296,10 @@ export function parseAtomicCaptureReply(
 			return undefined;
 		}
 		const { facts, claims_found } = parsed.data;
+		const kept = facts.map((fact, index) => ({ ...fact, id: index }))
+			.filter((fact) => fact.source_span.turn_index < turns.length);
 		// Claims can merge or split into facts; reject only a nonempty inventory with no facts.
-		if (claims_found.length > 0 && facts.length === 0) {
+		if (claims_found.length > 0 && kept.length === 0) {
 			gate = "claims-without-facts";
 			return undefined;
 		}
@@ -322,11 +324,7 @@ export function parseAtomicCaptureReply(
 				event_name: "memory.atomic_extraction_reply.diagnostic", file: "packages/sno-station-mem/src/engine/extraction/atomic-extraction-reply.ts", function: "parseAtomicCaptureReply", site_id: "extraction.atomic-extraction-reply.salvage_spans",
 			});
 		}
-		return {
-			facts: facts.map((fact, index) => ({ ...fact, id: index }))
-				.filter((fact) => fact.source_span.turn_index < turns.length),
-			progressTurns,
-		};
+		return { facts: kept, progressTurns };
 	});
 	if (result === undefined) onReject?.(gate);
 	return result;

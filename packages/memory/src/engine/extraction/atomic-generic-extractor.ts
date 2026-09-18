@@ -509,7 +509,7 @@ export async function runAtomicNumericTurnSweep(
 	const fresh: AtomicExtractionRecord[] = [];
 	let firstPassRepeatCount = 0;
 	let selfRepeatCount = 0;
-	for (const record of kept) {
+	for (const [index, record] of kept.entries()) {
 		const turnContent = input.turns[record.sourceSpan.turnIndex]?.content ?? "";
 		const pairIndex = input.records.findIndex(
 			(base, index) => !accountedFor.has(index) && restatesSameFact(base, record, turnContent),
@@ -522,7 +522,10 @@ export async function runAtomicNumericTurnSweep(
 		// The sweep can also repeat itself within one reply; those pair against what it just said.
 		// Counted apart from the repeats above: restating the first pass is expected on every
 		// partial recovery, while restating itself in one reply is the model misbehaving.
-		if (fresh.some((earlier) => restatesSameFact(earlier, record, turnContent))) {
+		if (kept.slice(0, index).some((earlier) =>
+			normalizedAtomicText(earlier.claimText) === normalizedAtomicText(record.claimText) &&
+			restatesSameFact(earlier, record, turnContent),
+		)) {
 			selfRepeatCount += 1;
 			continue;
 		}

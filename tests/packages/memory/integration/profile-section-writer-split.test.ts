@@ -121,6 +121,42 @@ describe("profile section judgment/text split", () => {
 		return terminal;
 	}
 
+	it("confirms a partial restatement before refusing an older delayed preference", async () => {
+		await seed("The user likes coffee.\nThe user drinks water with meals.");
+		if (!fixture) throw new Error("fixture missing");
+		const confirmed = await runProfileSectionUpdate({
+			scope: SCOPE,
+			sectionName: SECTION,
+			newAssertion: "The user likes coffee.",
+			source: { messageId: "partial-confirmation" },
+			store: fixture.store,
+			llm: splitLlm({ judgment: { verdict: "no-op", retired_clause_indices: [] } }),
+			at: Date.parse("2026-08-04T09:00:02Z"),
+		});
+		expect(confirmed.outcome).toBe("no-op");
+		expect.soft(parseInsightMetadata(current()?.metadata, current()).valid_from)
+			.toBe(1785834002000);
+		const delayed = await runProfileSectionUpdate({
+			scope: SCOPE,
+			sectionName: SECTION,
+			newAssertion: "The user now likes tea.",
+			source: { messageId: "delayed-preference" },
+			store: fixture.store,
+			llm: splitLlm({
+				judgment: { verdict: "merge", retired_clause_indices: [0] },
+				text: {
+					abstract: "The user now likes tea.",
+					overview: "The user drinks water with meals and likes tea.",
+					content: "The user drinks water with meals.\nThe user now likes tea.",
+				},
+			}),
+			at: Date.parse("2026-08-04T09:00:01Z"),
+		});
+		expect.soft(delayed.outcome).toBe("no-op");
+		expect(parseInsightMetadata(current()?.metadata, current()).l2_content)
+			.toBe("The user likes coffee.\nThe user drinks water with meals.");
+	});
+
 	it("uses a prose-free judgment call before a separate text call", async () => {
 		const existingId = await seed();
 		const calls: string[] = [];

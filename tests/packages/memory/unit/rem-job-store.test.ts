@@ -3,7 +3,7 @@
  * @boundary Real filesystem JSONL; no mocks or substitute storage.
  */
 
-import { appendFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -24,6 +24,61 @@ afterEach(() => {
 });
 
 describe("REM job store", () => {
+	it("reuses the running automatic job on a second tick and after completion", async () => {
+		const journalPath = createJournalPath();
+		writeFileSync(journalPath, `${JSON.stringify({
+			payloadVersion: 1,
+			waveId: "rem-wave-automatic-repeat",
+			correlationId: "rem-auto-daily-repeat",
+			scope: "persona:automatic-repeat",
+			requestedOperations: ["rem-replace", "rem-update"],
+			state: "queued",
+			startedAt: null,
+			finishedAt: null,
+			stats: { operations: 0 },
+		})}\n`);
+		const store = await RemJobStore.open(journalPath);
+		await store.transition("rem-wave-automatic-repeat", { state: "running" });
+		const repeated = await store.createQueued(
+			["rem-update", "rem-replace"], "persona:automatic-repeat", "rem-auto-daily-repeat",
+		);
+		expect.soft(repeated.created).toBe(false);
+		expect.soft(repeated.job.job_id).toBe("rem-wave-automatic-repeat");
+		expect.soft(store.nonTerminalJobs()).toHaveLength(1);
+		await store.transition("rem-wave-automatic-repeat", { state: "done" });
+		const completed = await store.createQueued(
+			["rem-update", "rem-replace"], "persona:automatic-repeat", "rem-auto-daily-repeat",
+		);
+		expect(completed.created).toBe(false);
+		expect(completed.job.job_id).toBe("rem-wave-automatic-repeat");
+		expect(store.nonTerminalJobs()).toHaveLength(0);
+		expect(readFileSync(journalPath, "utf8").trim().split("\n").filter(Boolean)).toHaveLength(3);
+	});
+
+	it("rejects create and state updates when journal append or sync fails", async () => {
+		const results: PromiseSettledResult<unknown>[] = [];
+		for (const device of ["/dev/full", "/dev/null"]) {
+			const journalPath = createJournalPath();
+			const store = await RemJobStore.open(journalPath);
+			const { job } = await store.createQueued("rem-update", "persona:disk-error", "corr-original");
+			rmSync(journalPath);
+			symlinkSync(device, journalPath);
+
+			results.push(...await Promise.allSettled([
+				store.createQueued("rem-update", "persona:disk-error", "corr-new"),
+				store.transition(job.job_id, { state: "running" }),
+			]));
+			expect.soft(store.nonTerminalJobs()).toHaveLength(1);
+			expect.soft(store.get(job.job_id)?.state).toBe("queued");
+		}
+		expect(results).toMatchObject([
+			{ status: "rejected", reason: { code: "ENOSPC" } },
+			{ status: "rejected", reason: { code: "ENOSPC" } },
+			{ status: "rejected", reason: { code: "EINVAL" } },
+			{ status: "rejected", reason: { code: "EINVAL" } },
+		]);
+	});
+
 	it("creates a complete ordered wave in one durable append", async () => {
 		const journalPath = createJournalPath();
 		const store = await RemJobStore.open(journalPath);

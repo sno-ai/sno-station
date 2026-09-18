@@ -246,6 +246,13 @@ export class RemJobStore {
 				if (durable) this.onDurableTransition(toRemJob(updated));
 				return { created: false, job: toRemJob(updated) };
 			}
+			if (
+				existing !== undefined &&
+				existing.requestedOperations.length === requestedOperations.length &&
+				existing.requestedOperations.every((operation, index) => operation === requestedOperations[index])
+			) {
+				return { created: false, job: toRemJob(existing) };
+			}
 			const job = remWaveJobSchema.parse({
 				payloadVersion: 1,
 				waveId: `rem-wave-${randomUUID()}`,
@@ -353,8 +360,9 @@ export class RemJobStore {
 
 	private async persist(job: RemWaveJob): Promise<boolean> {
 		this.persistedJobs.delete(job.waveId);
-		try { await this.append(job); this.persistedJobs.add(job.waveId); return true; }
-		catch (error) { this.reportFailure(error); return false; }
+		await this.append(job);
+		this.persistedJobs.add(job.waveId);
+		return true;
 	}
 
 	private async append(job: RemWaveJob): Promise<void> {
