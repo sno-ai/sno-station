@@ -24,6 +24,35 @@ afterEach(() => {
 });
 
 describe("REM job store", () => {
+	it("reuses a running merged job when a tick requests one of its operations", async () => {
+		const journalPath = createJournalPath();
+		writeFileSync(journalPath, `${JSON.stringify({
+			payloadVersion: 1,
+			waveId: "rem-wave-merged-repeat",
+			correlationId: "rem-auto-merged-repeat",
+			scope: "persona:merged-repeat",
+			requestedOperations: ["rem-replace"],
+			state: "queued",
+			startedAt: null,
+			finishedAt: null,
+			stats: { operations: 0 },
+		})}\n`);
+		const store = await RemJobStore.open(journalPath);
+		const merged = await store.createQueued(
+			"rem-update", "persona:merged-repeat", "rem-auto-merged-repeat",
+		);
+		expect(merged.job.requested_operations).toEqual(["rem-replace", "rem-update"]);
+		await store.transition("rem-wave-merged-repeat", { state: "running" });
+
+		const repeated = await store.createQueued(
+			"rem-replace", "persona:merged-repeat", "rem-auto-merged-repeat",
+		);
+
+		expect.soft(repeated.created).toBe(false);
+		expect.soft(repeated.job.job_id).toBe("rem-wave-merged-repeat");
+		expect.soft(store.nonTerminalJobs()).toHaveLength(1);
+	});
+
 	it("reuses the running automatic job on a second tick and after completion", async () => {
 		const journalPath = createJournalPath();
 		writeFileSync(journalPath, `${JSON.stringify({
