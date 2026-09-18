@@ -23,8 +23,6 @@ import {
 } from "../retrieval/rem-consumer-retrieval";
 import { createLogger, currentLogContext, privateLogReference, withLogContext } from "@snoai/utils/logger";
 import { randomUUID } from "node:crypto";
-import { MAX_SESSION_RECALL_ENTRIES, MAX_TRACKED_SESSIONS, MAX_TURN_RECALL_TOOL_TOKENS } from "../../../config/index";
-import { pruneOldestEntries, setLruEntry, touchLruEntry } from "../shared/lru";
 
 const log = createLogger("sno-station-mem:memory-recall-tool");
 
@@ -69,7 +67,7 @@ function makeRecallResult(text: string, details: Record<string, unknown>): ToolR
 	return appendStructuredRecallContent(makeResult(text, details));
 }
 
-function prependTodoBlock(result: ToolResult, todos: TodoListResult, remainingTokens = Infinity): ToolResult {
+function prependTodoBlock(result: ToolResult, todos: TodoListResult): ToolResult {
 	if (todos.items.length === 0) return result;
 	const lines: string[] = [];
 	for (const todo of todos.items) {
@@ -88,7 +86,6 @@ function prependTodoBlock(result: ToolResult, todos: TodoListResult, remainingTo
 		lines.push(`... showing ${lines.length} of ${todos.totalCount} to-dos.`);
 	}
 	const text = `To-dos:\n${lines.join("\n")}`;
-	if (countTokens(text) > remainingTokens) return result;
 	return {
 		...result,
 		content: [{ type: "text", text }, ...result.content],
@@ -106,7 +103,6 @@ export async function executeMemoryRecallTool(ctx: ToolContext, access: ReturnTy
 					external_reference_visibility: raw.external_reference_visibility === "public" ? "public" : "private" } : {}) }, async () => {
 			const started = performance.now();
 			let budgetRemoved = 0;
-			let todoTokens = 0;
 			const retrievalDiagnostics: RecallFilterDiagnostics = {};
 			let outcome = "failed";
 			let errorCode: unknown;
@@ -171,7 +167,6 @@ export async function executeMemoryRecallTool(ctx: ToolContext, access: ReturnTy
 					nowMs: Date.now(),
 					...(ctx.language ? { explicitLocale: ctx.language } : {}),
 				});
-				options.signal?.throwIfAborted();
 				const aggregationIncomplete =
 					readsWholePopulation && retrieved.some((result) => result.aggregationIncomplete === true);
 				// A structured aggregation reads the whole population; filtering it by score would
@@ -230,26 +225,14 @@ export async function executeMemoryRecallTool(ctx: ToolContext, access: ReturnTy
 						? limitedResults
 						: limitedResults.slice(0, clampInt(parsed.top_k, 1, MAX_RECALL_TOOL_CANDIDATES));
 				const session = readsWholePopulation ? undefined : ctx.recallSession;
-				const turnServed = session ? touchLruEntry(session.servedThisTurn, session.sessionId) : undefined;
+				const history = session ? session.history.get(session.sessionId) : undefined;
 				const unseenRows = session
-					? requestedRows.filter(row => turnServed?.turn !== session.turn || !turnServed.ids.has(row.entry.id))
+					? requestedRows.filter(row => history?.get(row.entry.id) !== session.turn)
 					: requestedRows;
 				const alreadyServedCount = requestedRows.length - unseenRows.length;
-				const account = session ? touchLruEntry(session.toolTokens, session.sessionId) : undefined;
-				const tokens = account && account.turn === session?.turn ? account.tokens : 0;
-				const remaining = MAX_TURN_RECALL_TOOL_TOKENS - tokens;
-				if (session && remaining <= 0) {
-					const withheld = packManualRecallRows(unseenRows, parsed.token_budget);
-					return makeResult(
-						`Recall budget for this turn is exhausted (${tokens} tokens served); ${unseenRows.length} matching memories not shown.`,
-						{ count: unseenRows.length, memories: [],
-							served_ids: withheld.rows.slice(0, 128).map(row => row.entry.id),
-							budget_exhausted: true, already_served_count: alreadyServedCount },
-					);
-				}
 				const packedRecall = readsWholePopulation
 					? { rows: requestedRows, budget_used: 0, dropped_count: 0 }
-					: packManualRecallRows(unseenRows, parsed.token_budget, session ? remaining : undefined);
+					: packManualRecallRows(unseenRows, parsed.token_budget);
 				const packedResults = packedRecall.rows;
 				budgetRemoved = packedRecall.dropped_count;
 				const truncated =
@@ -426,13 +409,7 @@ export async function executeMemoryRecallTool(ctx: ToolContext, access: ReturnTy
 						},
 					));
 				}
-				const structuredResult = appendStructuredRecallContent(result);
-				const withTodos = prependTodoBlock(structuredResult, todos,
-					session ? remaining - packedRecall.budget_used : Infinity);
-				if (session && withTodos !== structuredResult) {
-					todoTokens = countTokens(withTodos.content[0]?.text ?? "");
-				}
-				return withTodos;
+				return prependTodoBlock(appendStructuredRecallContent(result), todos);
 			});
 			const memories = output.details["memories"];
 			served = Array.isArray(memories) ? memories.flatMap((row: unknown) =>
@@ -441,22 +418,6 @@ export async function executeMemoryRecallTool(ctx: ToolContext, access: ReturnTy
 			if (output.details["resultStatus"] === "skipped") outcome = "refused";
 			else if (output.isError) outcome = "failed";
 			else outcome = served.length ? "success" : "empty_success";
-			const session = ctx.recallSession;
-			const budgetUsed = output.details["budget_used"];
-			if (session && !options.signal?.aborted && !output.isError && typeof budgetUsed === "number") {
-				const turnServed = touchLruEntry(session.servedThisTurn, session.sessionId);
-				const ids = turnServed?.turn === session.turn ? turnServed.ids : new Set<string>();
-				for (const id of served) ids.add(id);
-				setLruEntry(session.servedThisTurn, session.sessionId, { turn: session.turn, ids }, MAX_TRACKED_SESSIONS);
-				const history = touchLruEntry(session.history, session.sessionId) ?? new Map<string, number>();
-				for (const id of served) history.set(id, session.turn);
-				pruneOldestEntries(history, MAX_SESSION_RECALL_ENTRIES);
-				setLruEntry(session.history, session.sessionId, history, MAX_TRACKED_SESSIONS);
-				const account = touchLruEntry(session.toolTokens, session.sessionId);
-				const tokens = account?.turn === session.turn ? account.tokens : 0;
-				setLruEntry(session.toolTokens, session.sessionId,
-					{ turn: session.turn, tokens: tokens + budgetUsed + todoTokens }, MAX_TRACKED_SESSIONS);
-			}
 			return output;
 			} finally {
 				log[outcome === "failed" ? "error" : "info"]("Memory recall completed", { outcome, code: errorCode, duration_ms: performance.now() - started,
