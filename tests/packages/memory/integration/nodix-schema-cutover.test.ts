@@ -85,6 +85,12 @@ describe("Sno Station SQLite schema cutover", () => {
 		rmSync(temporaryDirectory, { recursive: true, force: true });
 	});
 
+	it("throws the original setup error instead of returning an incomplete connection", () => {
+		expect(() => {
+			closeDb(initDb(databasePath, 0));
+		}).toThrow("Invalid vectorDim 0; must be a positive integer");
+	});
+
 	it("creates the complete fresh schema without an OpenClaw database name", () => {
 		const database = initDb(databasePath, VECTOR_DIM);
 		try {
