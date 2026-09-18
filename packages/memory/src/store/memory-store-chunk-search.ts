@@ -319,8 +319,7 @@ Object.assign(MemoryStore.prototype, {
 				// theoretical edge case, and that sigmoid's non-positive-goodness fallback
 				// (0.5, ported from upstream's own convention) gave every such
 				// non-discriminative match a free 0.5 score — silently promoting noise to
-				// mid-confidence evidence in the fusion formula and in
-				// `getRerankPreservationFloor`'s tiering. x/(1+x) has no such fallback
+				// mid-confidence evidence in the fusion formula. x/(1+x) has no such fallback
 				// branch: goodness == 0 naturally scores 0.
 				const goodness = Math.max(0, -bm25Rank);
 				// goodness == 0 rows carry zero match evidence; keeping them feeds

@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 /** @file retriever-rerank.ts
- * @purpose Runs remote and local reranking plus preservation floors.
+ * @purpose Runs remote and local reranking.
  * @boundary Prototype-mounted MemoryRetriever methods; no constructor state ownership.
  */
 
@@ -11,7 +11,7 @@ import {
 	type RerankItem,
 	RERANK_DEFAULT_ENDPOINTS,
 } from "./retrieval-rerank-provider";
-import { clamp01WithFloor, dotProduct, log } from "./retrieval-scoring-utils";
+import { dotProduct, log } from "./retrieval-scoring-utils";
 import {
 	MemoryRetriever,
 	type MemoryRetrieverInternals,
@@ -32,14 +32,6 @@ import {
 	LIGHTWEIGHT_RERANK_PENALTY,
 	RERANK_BLEND_CROSS,
 	RERANK_BLEND_VECTOR,
-	RERANK_PRESERVATION_BM25_HIGH_THRESHOLD,
-	RERANK_PRESERVATION_BM25_MID_THRESHOLD,
-	RERANK_PRESERVATION_HIGH_RETURNED,
-	RERANK_PRESERVATION_HIGH_UNRETURNED,
-	RERANK_PRESERVATION_LOW_RETURNED,
-	RERANK_PRESERVATION_LOW_UNRETURNED,
-	RERANK_PRESERVATION_MID_RETURNED,
-	RERANK_PRESERVATION_MID_UNRETURNED,
 	RetrievalError,
 } from "./retriever-dependencies";
 
@@ -453,16 +445,15 @@ Object.assign(MemoryRetriever.prototype, {
 				// Handle the absent-value case explicitly before the happy path depends on it.
 				if (!candidate) continue;
 				const sourceScore = this.getRerankSourceScore(candidate);
-				const floor = this.getRerankPreservationFloor(candidate, false);
 				let crossScore = item.score;
 				if (provider === "tei") {
 					crossScore = maxScore === minScore
 						? 1 / (1 + Math.exp(-item.score))
 						: (item.score - minScore) / (maxScore - minScore);
 				}
-				const blendedScore = clamp01WithFloor(
+				const blendedScore = clamp01(
 					crossScore * blendCross + sourceScore * blendVector,
-					floor,
+					0,
 				);
 				// Append only after validation has accepted this value for the current branch.
 				reranked.push({
@@ -483,9 +474,9 @@ Object.assign(MemoryRetriever.prototype, {
 			].map(
 				(r) => ({
 					...r,
-					score: clamp01WithFloor(
+					score: clamp01(
 						this.getRerankSourceScore(r) * LIGHTWEIGHT_RERANK_PENALTY,
-						this.getRerankPreservationFloor(r, true),
+						0,
 					),
 				}),
 			);
@@ -584,8 +575,7 @@ Object.assign(MemoryRetriever.prototype, {
 			// so cosine ≡ dot product.
 			const cosine = clamp01(dotProduct(queryVector, chunkVector), 0);
 			const blended = fusedScore * wF + cosine * wC;
-			const floor = this.getRerankPreservationFloor(candidate, false);
-			const finalScore = clamp01WithFloor(blended, floor);
+			const finalScore = clamp01(blended, 0);
 			blendedCount += 1;
 			return {
 				...candidate,
@@ -621,32 +611,5 @@ Object.assign(MemoryRetriever.prototype, {
 
 	getRerankSourceScore(this: MemoryRetrieverInternals, result: RetrievalResult): number {
 		return clamp01(Math.max(result.sources.bm25?.score ?? 0, result.sources.vector?.score ?? 0), 0);
-	},
-
-	getRerankPreservationFloor(
-		this: MemoryRetrieverInternals,
-		result: RetrievalResult,
-		unreturned: boolean,
-	): number {
-		const bm25Score = result.sources.bm25?.score ?? 0;
-		const sourceScore = this.getRerankSourceScore(result);
-		// Guard bm25score here so the remaining retrieval scoring path works with normalized inputs.
-		if (bm25Score >= RERANK_PRESERVATION_BM25_HIGH_THRESHOLD) {
-			return (
-				sourceScore *
-				(unreturned ? RERANK_PRESERVATION_HIGH_UNRETURNED : RERANK_PRESERVATION_HIGH_RETURNED)
-			);
-		}
-		// Guard bm25score here so the remaining retrieval scoring path works with normalized inputs.
-		if (bm25Score >= RERANK_PRESERVATION_BM25_MID_THRESHOLD) {
-			return (
-				sourceScore *
-				(unreturned ? RERANK_PRESERVATION_MID_UNRETURNED : RERANK_PRESERVATION_MID_RETURNED)
-			);
-		}
-		return (
-			sourceScore *
-			(unreturned ? RERANK_PRESERVATION_LOW_UNRETURNED : RERANK_PRESERVATION_LOW_RETURNED)
-		);
 	},
 });
