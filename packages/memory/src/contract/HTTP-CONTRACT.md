@@ -1914,7 +1914,7 @@ Host: 127.0.0.1:43127
 HTTP/1.1 200 OK
 Content-Type: application/json
 
-{"status":"ok","log_level":"info","principal":"lh","storePath":"/home/user/.sno/sno-station-mem/lh/memory.sqlite","accessCounters":{"engineAccesses":0,"storeAccesses":0}}
+{"status":"ok","log_level":"info","principal":"alice","storePath":"/home/alice/.sno/sno-station-mem/alice/memory.sqlite","accessCounters":{"engineAccesses":0,"storeAccesses":0}}
 ```
 
 ## General error and client semantics
