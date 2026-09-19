@@ -499,7 +499,7 @@ export const NOISE_MIN_TEXT_LENGTH = 5;
 // =============================================================================
 // CAPTURE — AMBIENT LEARNING TUNABLES (eval-tracked, 2026-04-17)
 // =============================================================================
-// These are the knobs exercised by the sno-e2e memory-bench harness. Before
+// These are the knobs exercised by the memory-bench harness. Before
 // changing a value here, capture the baseline scorecard; after changing, run
 // one `eval-plugin.sh` pass and diff. Comments note the winning value and
 // the bench delta that produced it, so the history is discoverable in code.
