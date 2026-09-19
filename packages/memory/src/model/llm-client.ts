@@ -34,7 +34,7 @@ import {
 	getProviderTerminalCategory,
 	resolveProviderApiKey,
 } from "./llm-provider-transport";
-import type { LlmOccasion } from "../contract/config/plugin-config-mode-schema";
+import type { LlmOccasion } from "../../config/plugin-config-mode-schema";
 
 export type {
 	LlmClient,
