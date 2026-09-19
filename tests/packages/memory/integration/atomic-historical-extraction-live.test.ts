@@ -9,7 +9,7 @@ import { z } from "zod";
 import { createTestDb, createTestEmbedder } from "../../../apps/mem-claw/helpers/test-db";
 import { MemoryStore } from "../../../../packages/sno-station-mem/src/store/store";
 import { AtomicInsightDistiller, createSignedAtomicMemoryExtractionTransports } from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-memory-extraction";
-import { llmRoutingConfigSchema } from "../../../../packages/sno-station-mem/src/contract/config/plugin-config-mode-schema";
+import { llmRoutingConfigSchema } from "../../../../packages/sno-station-mem/config/plugin-config-mode-schema";
 import { resolveLlmEndpoint } from "../../../../packages/sno-station-mem/src/model/llm-endpoint-resolution";
 import fixtureData from "../fixtures/issue-219-historical-extraction.json";
 
