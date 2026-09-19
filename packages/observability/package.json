@@ -2,6 +2,11 @@
 	"name": "@snoai/sno-observe",
 	"version": "0.1.0",
 	"license": "Apache-2.0",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/sno-ai/sno-station.git",
+		"directory": "packages/sno-observe"
+	},
 	"type": "module",
 	"main": "./dist/index.js",
 	"types": "./dist/index.d.ts",
@@ -14,8 +19,8 @@
 	"files": [
 		"dist",
 		"src",
+		"LICENSE",
 		"README.md",
-		"CLAUDE.md",
 		"package.json"
 	],
 	"scripts": {
