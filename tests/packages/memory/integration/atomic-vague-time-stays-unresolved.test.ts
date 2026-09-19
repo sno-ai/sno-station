@@ -4,7 +4,7 @@ import { it, expect } from "vitest";
 import { createTestDb, createTestEmbedder } from "../../../apps/mem-claw/helpers/test-db";
 import { MemoryStore } from "../../../../packages/sno-station-mem/src/store/store";
 import { AtomicInsightDistiller, createSignedAtomicMemoryExtractionTransports } from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-memory-extraction";
-import { llmRoutingConfigSchema } from "../../../../packages/sno-station-mem/src/contract/config/plugin-config-mode-schema";
+import { llmRoutingConfigSchema } from "../../../../packages/sno-station-mem/config/plugin-config-mode-schema";
 
 type Row = { text: string; metadata: string };
 type Temporal = { temporal_resolution_status?: string; temporal_date?: string; temporal_phrase?: string | null; source_span?: { turnIndex?: number } };
