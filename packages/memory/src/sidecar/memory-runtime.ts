@@ -9,7 +9,7 @@ import { mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { createLogger } from "@snoai/utils/logger";
 import { parseInput, parseOutput, type ContractMethod, type ContractOutputs, type Registration, type ScopeCtx } from "../contract/index";
-import { pluginConfigSchema, type PluginConfig } from "../contract/config/plugin-config-schema";
+import { pluginConfigSchema, type PluginConfig } from "../../config/plugin-config-schema";
 import { MemoryContractRuntime } from "../engine/contract-runtime";
 import { getInstallationConfigPath, getPrincipal, getSnoStationMemStateDir, readBoundStorePath } from "../engine/shared/paths";
 import { readSnoStationMemConfig, PLUGIN_ENTRY_KEY } from "../engine/bindings/embedder-config-files";

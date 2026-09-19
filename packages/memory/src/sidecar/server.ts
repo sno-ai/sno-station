@@ -525,17 +525,55 @@ async function runChassisJob(
 				await new Promise((resolvePromise) => setTimeout(resolvePromise, holdMs));
 			}
 			const configSource = readRemConfigSource();
+			const configuration = configSource === undefined
+				? readRemOperationalConfig()
+				: readRemOperationalConfig(configSource);
+			const enabledOperations: RemBuiltOperationType[] = [];
 			const cleanRefusalReasons: string[] = [];
-			const enabledOperations = requestedOperations.filter(isBuiltOperation);
+			for (const operation of requestedOperations) {
+				let reason: string;
+				if (!isBuiltOperation(operation)) {
+					reason = `not-built:${operation}`;
+				} else if (configuration.operations[operation]) {
+					enabledOperations.push(operation);
+					continue;
+				} else {
+					reason = `switched-off:${operation}`;
+				}
+				cleanRefusalReasons.push(reason);
+				await appendChassisRefusal(journal, queued, operation, "refused", reason);
+			}
 			const { runRemProductionOrderedWave } = await import("./rem-batch-executor");
-			const result = await runRemProductionOrderedWave({
-				stateRoot: getStateDir(),
-				personaDbPath: process.env["SNO_STATION_MEM_REM_EXPECTED_DB_PATH"],
-				configSource: configSource ?? JSON.stringify(readRemOperationalConfig()),
-				scope: queued.scope,
-				waveId: queued.job_id,
-				requestedOperations: enabledOperations,
-			});
+			const result = enabledOperations.length === 0
+				? {
+						decision: "allow" as const,
+						reasonCode: null,
+						waveId: queued.job_id,
+						actionsApplied: 0,
+						actionableCandidateCount: 0,
+						appliedFraction: null,
+						candidateCount: 0,
+						stampedSkippedCount: 0,
+						parseFailureCount: 0,
+						topRefusalReasons: [],
+						measurements: {
+							rowsConsidered: 0,
+							pairsBuilt: 0,
+							pairCapBinding: false,
+							modelCalls: 0,
+							modelTokens: 0,
+							wallMs: 0,
+						},
+						perOperation: [],
+					}
+				: await runRemProductionOrderedWave({
+						stateRoot: getStateDir(),
+						personaDbPath: process.env["SNO_STATION_MEM_REM_EXPECTED_DB_PATH"],
+						configSource: JSON.stringify(configuration),
+						scope: queued.scope,
+						waveId: queued.job_id,
+						requestedOperations: enabledOperations,
+					});
 			if (result.decision === "refuse") {
 				const operation = enabledOperations[0] ?? "rem-replace";
 				const reason = result.reasonCode;
@@ -564,22 +602,26 @@ async function runChassisJob(
 					model_tokens: result.measurements.modelTokens,
 					wall_ms: result.measurements.wallMs,
 				},
-				by_operation: result.perOperation.map(({ operation, ...operationResult }) => ({
-					operation,
-					applied_count: operationResult.actionsApplied,
-					actionable_candidate_count: operationResult.actionableCandidateCount,
-					candidate_count: operationResult.candidateCount,
-					parse_failure_count: operationResult.parseFailureCount,
-					top_refusal_reasons: operationResult.topRefusalReasons,
-					measured: {
-						rows_considered: operationResult.measurements.rowsConsidered,
-						pairs_built: operationResult.measurements.pairsBuilt,
-						pair_cap_binding: operationResult.measurements.pairCapBinding,
-						model_calls: operationResult.measurements.modelCalls,
-						model_tokens: operationResult.measurements.modelTokens,
-						wall_ms: operationResult.measurements.wallMs,
-					},
-				})),
+				...(result.perOperation.length === 0
+					? {}
+					: {
+							by_operation: result.perOperation.map(({ operation, ...operationResult }) => ({
+								operation,
+								applied_count: operationResult.actionsApplied,
+								actionable_candidate_count: operationResult.actionableCandidateCount,
+								candidate_count: operationResult.candidateCount,
+								parse_failure_count: operationResult.parseFailureCount,
+								top_refusal_reasons: operationResult.topRefusalReasons,
+								measured: {
+									rows_considered: operationResult.measurements.rowsConsidered,
+									pairs_built: operationResult.measurements.pairsBuilt,
+									pair_cap_binding: operationResult.measurements.pairCapBinding,
+									model_calls: operationResult.measurements.modelCalls,
+									model_tokens: operationResult.measurements.modelTokens,
+									wall_ms: operationResult.measurements.wallMs,
+								},
+							})),
+						}),
 			};
 			completion = completionStats;
 			persistence = await persistCompletedJob(store, running, completionStats);
