@@ -6,7 +6,7 @@ import { randomUUID } from "node:crypto";
 import { access, link, mkdir, open, readFile, unlink } from "node:fs/promises";
 import path from "node:path";
 import { ContractError } from "../../contract/error";
-import { installationInputSchema, type InstallationInput } from "../../contract/installation-settings";
+import { installationInputSchema, type InstallationInput } from "../../../config/installation-settings";
 
 import { getBindingPath, getDefaultStorePath, getInstallationConfigPath, getPrincipal } from "../../contract/profile";
 export { getBindingPath, getDefaultStorePath, getInstallationConfigPath, getPrincipal, getStateDir, getSnoStationMemStateDir, readBoundStorePath } from "../../contract/profile";
