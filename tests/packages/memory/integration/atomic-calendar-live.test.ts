@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import { createTestDb, createTestEmbedder } from "../../../apps/mem-claw/helpers/test-db";
 import { MemoryStore } from "../../../../packages/sno-station-mem/src/store/store";
 import { runAtomicMemoryExtraction, createSignedAtomicMemoryExtractionTransports } from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-memory-extraction";
-import { llmRoutingConfigSchema } from "../../../../packages/sno-station-mem/src/contract/config/plugin-config-mode-schema";
+import { llmRoutingConfigSchema } from "../../../../packages/sno-station-mem/config/plugin-config-mode-schema";
 import { episodicEventDate } from "../../../../packages/sno-station-mem/src/engine/bindings/memory-tool-formatting";
 import { hostname } from "node:os";
 import { describe, expect, it } from "vitest";
