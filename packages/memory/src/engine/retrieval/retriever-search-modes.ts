@@ -358,8 +358,7 @@ Object.assign(MemoryRetriever.prototype, {
 	// Name is legacy (kept to avoid a wider rename); this is NOT rank-based RRF.
 	// It is weighted raw-score fusion, ported from the upstream reference
 	// (memory-memory-lancedb-pro `fuseResults`) after a brief detour through
-	// pure-rank RRF measured 65% vs vector-only's 84% on LoCoMo (see
-	// docs/internal-note.md).
+	// pure-rank RRF measured 65% vs vector-only's 84% on LoCoMo.
 	rrfFuse(
 		this: MemoryRetrieverInternals,
 		vector: MemorySearchResult[],
