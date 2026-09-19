@@ -1,10 +1,9 @@
 /** @file data-bootstrap.ts
- * @purpose Drive PRD §3.3 boot flow: ensure data dir exists, probe
+ * @purpose Drive the boot flow: ensure data dir exists, probe
  *   filesystem, then resolve or create the install manifest
  *   and return the DB path the rest of the runtime should open.
  * @boundary Called once at plugin register-time, AFTER `initSqliteRuntimeSync()`
  *   resolves the DEK. Returns `{ dbPath, manifest, manifestPath }`.
- * @see docs/internal-note.md §3.3.
  */
 
 import { existsSync, mkdirSync, readdirSync } from "node:fs";

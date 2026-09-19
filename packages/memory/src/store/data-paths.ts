@@ -5,7 +5,6 @@
  *   runtime tree. POSIX only.
  * @boundary Path resolution + filesystem-class assertion. No I/O beyond
  *   a single `statfs` probe in `assertLocalFilesystem`.
- * @see docs/internal-note.md §3.1, §3.3.
  */
 
 import { statfsSync } from "node:fs";
