@@ -1,6 +1,6 @@
 /**
- * mem-claw Centralized Configuration
- * All tunable constants for the memory plugin.
+ * Sno Station Memory centralized configuration.
+ * Shared tunable constants for every memory skin.
  * Organized by domain: Scoring → Retrieval → Storage → Backup → Cache → Session → Capture → Reflection
  */
 
