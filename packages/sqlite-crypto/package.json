@@ -2,6 +2,11 @@
 	"name": "@snoai/sno-station-core-crypto",
 	"version": "0.2.0",
 	"license": "Apache-2.0",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/sno-ai/sno-station.git",
+		"directory": "packages/sno-station-core-crypto"
+	},
 	"description": "Local AES-256 encryption for SNO Station Core SQLite databases. Single audit surface for DEK lifecycle, encrypted DB open, manifest, canary, file-fallback, passphrase wrap, and .sno-station-core export.",
 	"type": "module",
 	"main": "./dist/index.js",
@@ -18,6 +23,7 @@
 	"files": [
 		"dist",
 		"src",
+		"LICENSE",
 		"README.md",
 		"package.json"
 	],
