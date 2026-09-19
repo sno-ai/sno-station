@@ -1,17 +1,17 @@
 import { z } from "zod";
 import { recallLifecycleSchema } from "../../config/index";
-import { embeddingConfigSchema } from "./config/plugin-config-embedding-schema";
+import { embeddingConfigSchema } from "../../config/plugin-config-embedding-schema";
 import {
 	extractionConfigSchema,
 	memoryReflectionConfigSchema,
 	selfImprovementConfigSchema,
 	sessionMemoryConfigSchema,
-} from "./config/plugin-config-feature-schema";
-import type { LlmRoutingConfig } from "./config/plugin-config-mode-schema";
-import { observeConfigSchema } from "./config/plugin-config-observe-schema";
-import { retrievalConfigSchema } from "./config/plugin-config-retrieval-schema";
-import type { PluginConfig } from "./config/plugin-config-schema";
-import { SESSION_STRATEGIES } from "./config/session-strategy";
+} from "../../config/plugin-config-feature-schema";
+import type { LlmRoutingConfig } from "../../config/plugin-config-mode-schema";
+import { observeConfigSchema } from "../../config/plugin-config-observe-schema";
+import { retrievalConfigSchema } from "../../config/plugin-config-retrieval-schema";
+import type { PluginConfig } from "../../config/plugin-config-schema";
+import { SESSION_STRATEGIES } from "../../config/session-strategy";
 
 export type EngineSettings = Omit<PluginConfig, keyof LlmRoutingConfig>;
 
