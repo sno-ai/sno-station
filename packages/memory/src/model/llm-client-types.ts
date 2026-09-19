@@ -7,7 +7,7 @@ import { FIXED_MEMORY_OPENAI_GPT_5_NANO, FIXED_MEMORY_OPENROUTER_AUTO, FIXED_MEM
 import type { LLMConfig } from "@snoai/llmix";
 
 import type { AgentLlmPort } from "./agent-llm-port";
-import type { LlmRoutingConfig } from "../contract/config/plugin-config-mode-schema";
+import type { LlmRoutingConfig } from "../../config/plugin-config-mode-schema";
 
 export const LLM_PRESETS = [
 	FIXED_MEMORY_OPENAI_GPT_5_NANO as typeof FIXED_MEMORY_OPENAI_GPT_5_NANO,
