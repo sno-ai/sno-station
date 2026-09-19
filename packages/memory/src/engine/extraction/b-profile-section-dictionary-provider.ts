@@ -8,7 +8,7 @@ import { mkdir, open, readFile, rename, unlink } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { createLogger } from "@snoai/utils/logger";
 import { z } from "zod";
-import type { ProductMode } from "../../contract/config/plugin-config-mode-schema";
+import type { ProductMode } from "../../../config/plugin-config-mode-schema";
 import { getSnoStationMemDataDir } from "../../store/data-paths";
 import {
 	B_PROFILE_SECTION_REGISTRY,

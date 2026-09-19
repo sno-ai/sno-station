@@ -20,7 +20,7 @@ import {
 	parseInsightMetadata,
 	stringifyInsightMetadata,
 } from "./memory-metadata-codec";
-import type { ProductMode } from "../../contract/config/plugin-config-mode-schema";
+import type { ProductMode } from "../../../config/plugin-config-mode-schema";
 import type { MemoryEntry } from "../shared/types";
 import type { MemoryStore } from "../../store/store";
 
