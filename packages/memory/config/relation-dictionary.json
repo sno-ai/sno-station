@@ -2,8 +2,6 @@
   "schema_version": 2,
   "name": "relation-dictionary",
   "generated_at": "2026-08-17",
-  "source_doc": "docs/internal-note.md DEC-8",
-  "upstream_ratification": "sno-starport/docs/internal-note.md:193 — the 22 marked ratified:true were ratified there (20 on 2026-07-08, WORKS_AT and ATTENDED added 2026-08-15). The 9 marked ratified:false were added here on 2026-08-17 from a filing test and are NOT yet ratified upstream; that repository consumes this vocabulary too and owes a decision.",
   "direction_note": "Every relation reads SUBJECT -> OBJECT in the order stated by `covers`. The upstream registry defines the edge NAMES only and says nothing about argument order, so this file supplies it; that is a gap in the ratified contract rather than a disagreement with it, and it is part of what the additions owe upstream. `inverse_synonyms` are surface forms that state the SAME relation with the arguments the other way round: a filer matching one of those must SWAP the two ends. Keeping them in their own field is what stops a reversed phrasing from resolving confidently to a false edge — a collision fails to resolve and is visible, a reversal succeeds and is not.",
   "attribute_boundary": "A one-place fact about a person is an ATTRIBUTE and belongs to attribute-dictionary.json, not here. That includes family: relationship.* holds the user's family facts, so no family relation appears in this file. A family fact between two OTHER named people is homeless in both artifacts — recorded in `refused` rather than left to be rediscovered.",
   "locales": ["en"],
