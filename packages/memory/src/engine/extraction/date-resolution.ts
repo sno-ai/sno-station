@@ -7,7 +7,7 @@ import { DEFAULT_LOCALE } from "../i18n/locales";
 import type { TemporalInterval } from "./memory-temporality-classifier";
 import type { Locale } from "../i18n/locales";
 import { isTerminalLlmFailure, type LlmClient } from "../../model/llm-client";
-import type { LlmRoutingConfig } from "../../contract/config/plugin-config-mode-schema";
+import type { LlmRoutingConfig } from "../../../config/plugin-config-mode-schema";
 import { readModelReplyJson } from "../shared/model-reply-text";
 
 export { sessionZoneCarriedBy } from "./calendar-instruction";

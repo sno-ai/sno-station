@@ -32,7 +32,7 @@ import type {
 	MemoryCategory,
 } from "../shared/types";
 import type { LlmClient } from "../../model/llm-client";
-import type { LlmRoutingConfig } from "../../contract/config/plugin-config-mode-schema";
+import type { LlmRoutingConfig } from "../../../config/plugin-config-mode-schema";
 import { stableHash } from "../shared/utils";
 import type {
 	MemoryStore,
