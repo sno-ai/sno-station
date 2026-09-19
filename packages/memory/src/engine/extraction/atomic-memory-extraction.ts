@@ -64,7 +64,7 @@ import { DEFAULT_LOCALE, type Locale } from "../i18n/locales";
 import { createLlmClient, type LlmClient, type LlmClientConfig } from "../../model/llm-client";
 import { resolveLlmRoute } from "../../model/llm-mode-routing";
 import { readModelReplyJson } from "../shared/model-reply-text";
-import type { LlmRoutingConfig } from "../../contract/config/plugin-config-mode-schema";
+import type { LlmRoutingConfig } from "../../../config/plugin-config-mode-schema";
 import { REM_UPDATE_JUDGMENT_SKILL } from "../../sidecar/rem-update-judgment-skill";
 import {
 	closeAtomicArrivalRetirementTargets,
