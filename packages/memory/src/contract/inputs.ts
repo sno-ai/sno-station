@@ -2,7 +2,7 @@ import { z } from "zod";
 import {
 	llmRoutingConfigSchema,
 	type LlmRoutingConfig,
-} from "./config/plugin-config-mode-schema";
+} from "../../config/plugin-config-mode-schema";
 import { AGGREGATION_OPERATIONS, MEMORY_CATEGORIES, type MemoryCategory } from "../engine/shared/types";
 import { engineSettingsSchema, type EngineSettings } from "./settings";
 
