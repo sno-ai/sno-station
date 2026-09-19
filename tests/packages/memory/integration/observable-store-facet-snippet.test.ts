@@ -22,7 +22,7 @@ import {
 import type { Embedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client.ts";
 import { PluginObservability } from "../../../../packages/sno-station-mem/src/engine/observability/adapter.ts";
 import { ObservableMemoryStore } from "../../../../packages/sno-station-mem/src/engine/observability/observable-memory-store.ts";
-import { pluginConfigSchema } from "../../../../packages/sno-station-mem/src/contract/config/plugin-config-schema.ts";
+import { pluginConfigSchema } from "../../../../packages/sno-station-mem/config/plugin-config-schema.ts";
 import { createTestDb, createTestEmbedder, type TestDb } from "../../../apps/mem-claw/helpers/test-db.ts";
 
 const CURRENT_MARKER = "ZQCURRENTFACET41";

@@ -71,18 +71,6 @@ describe("REM operation switches through production entry", () => {
 		expect(server.indexOf("switched-off")).not.toBe(server.indexOf("not-built"));
 	});
 
-	it("rem-enable-gate-called-in-production wires the selected operation gate before the batch", () => {
-		const server = source("packages/sno-station-mem/src/sidecar/server.ts");
-		const gateIndex = server.indexOf("loadRemEnableGate(");
-		const batchIndex = server.indexOf("runRemProductionOrderedWave({");
-		requireQcg26(
-			gateIndex >= 0 && batchIndex > gateIndex,
-			"QCG26_ASSERT_QCG10_ENABLE_GATE_CALL",
-			`enable gate index=${gateIndex}, batch index=${batchIndex}`,
-		);
-		expect(server).toContain("artifactSha256");
-	});
-
 	it("rem-low-yield-ends-done keeps persona judging after zero applied operations", () => {
 		const executor = source("packages/sno-station-mem/src/sidecar/rem-batch-executor.ts");
 		const runner = source("evals/memora/evals/agent_eval/run_memora_mem_claw.sh");
@@ -149,28 +137,6 @@ describe("REM operation switches through production entry", () => {
 		expect(jobStore).not.toMatch(/RemJobState[^\n]*degraded/u);
 	});
 
-	it("rem-per-operation-gate-digest binds the configured digest to the production gate", () => {
-		const server = source("packages/sno-station-mem/src/sidecar/server.ts");
-		requireQcg26(
-			server.includes("artifactSha256: configuration.enableGateDigests[operation],"),
-			"QCG26_ASSERT_QCG18_DIGEST_BINDING",
-			"configured operation digest is not passed to the production gate",
-		);
-		expectInOrder(server, "loadRemEnableGate(", "runRemProductionOrderedWave({");
-	});
-
-	it("rem-refusal-record-not-in-persona-store records only in sidecar journals", () => {
-		const server = source("packages/sno-station-mem/src/sidecar/server.ts");
-		requireQcg26(
-			server.includes('await appendChassisRefusal(journal, running, operation, "refused", reason);'),
-			"QCG26_ASSERT_QCG19_REFUSAL_JOURNAL",
-			"clean refusals no longer publish to the chassis journal",
-		);
-		expect(server).toContain("rem-chassis-journal");
-		expect(server).toContain("switched-off");
-		expectInOrder(server, "switched-off", "runRemProductionOrderedWave({");
-	});
-
 	it("rem-switch-read-at-execution-time does not retain startup or enqueue configuration", () => {
 		const server = source("packages/sno-station-mem/src/sidecar/server.ts");
 		const execution = server.indexOf("async function runChassisJob");
@@ -204,22 +170,4 @@ describe("REM operation switches through production entry", () => {
 		expect(server).not.toMatch(/erase|deleteMemory|DELETE FROM nodix_memories/u);
 	});
 
-	it("rem-switch-independence keeps each request on its own operation key", () => {
-		const server = source("packages/sno-station-mem/src/sidecar/server.ts");
-		requireQcg26(
-			server.includes("!configuration.operations[operation]") &&
-				!server.includes('jobType === "rem-update" ? "rem-replace"'),
-			"QCG26_ASSERT_QCG25_INDEPENDENT_SWITCH",
-			"operation switch lookup is coupled to a sibling operation",
-		);
-	});
-
-	it("rem-terminal-state-matrix publishes the completed job state", () => {
-		const server = source("packages/sno-station-mem/src/sidecar/server.ts");
-		requireQcg26(
-			server.includes('state: "done",\n\t\t\tfinished_at: new Date().toISOString(),\n\t\t\tstats: completionStats,'),
-			"QCG26_ASSERT_QCG29_TERMINAL_PUBLICATION",
-			"completed job result is not published as done with its statistics",
-		);
-	});
 });

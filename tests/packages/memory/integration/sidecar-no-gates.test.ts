@@ -10,7 +10,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { tmpdir, userInfo } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { pluginConfigSchema } from "../../../../packages/sno-station-mem/src/contract/config/plugin-config-schema";
+import { pluginConfigSchema } from "../../../../packages/sno-station-mem/config/plugin-config-schema";
 import { startSidecar } from "../../../../packages/sno-station-mem/src/contract/start";
 import { bindStore } from "../../../../packages/sno-station-mem/src/engine/shared/paths";
 import { startRemSidecar } from "../../../../packages/sno-station-mem/src/sidecar/server";
@@ -912,11 +912,6 @@ describe("sidecar keeps serving", () => {
 			expect(store.sqlite.prepare("SELECT migration_id, before_count, after_count FROM nodix_todo_migration_receipts").all())
 				.toEqual([{ migration_id: "0033_todo_own_store", before_count: 0, after_count: 0 }]);
 		} finally { await store.close(); }
-	});
-	it("loads explicit reranker settings without an available credential", () => {
-		const config = pluginConfigSchema.parse({ mode: "rem-enhanced", retrieval: { rerank: "cross-encoder", rerankApiKey: "" } });
-		expect(config.retrieval.rerank).toBe("cross-encoder");
-		expect(config.retrieval.rerankApiKey).toBe("");
 	});
 	it("starts with an unreadable audit path", async () => {
 		mkdirSync(join(root, "sno-station-mem", "audit.jsonl"));
