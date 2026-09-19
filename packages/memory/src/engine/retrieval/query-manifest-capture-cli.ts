@@ -15,8 +15,8 @@ import {
 	serializeQueryManifestCapture,
 	type ReviewedQueryInput,
 } from "./query-manifest-capture";
-import { embeddingConfigSchema } from "../../contract/config/plugin-config-embedding-schema";
-import { retrievalConfigSchema } from "../../contract/config/plugin-config-retrieval-schema";
+import { embeddingConfigSchema } from "../../../config/plugin-config-embedding-schema";
+import { retrievalConfigSchema } from "../../../config/plugin-config-retrieval-schema";
 import { parseVecTableDimension } from "../../store/connection";
 import { resolveSimpleTokenizerPath } from "../../store/simple-tokenizer-path";
 import { loadSqliteVecExtension } from "../../store/sqlite-vec-path";
