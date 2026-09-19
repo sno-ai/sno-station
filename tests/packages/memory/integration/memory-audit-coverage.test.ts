@@ -20,7 +20,7 @@ import {
 } from "../../../../packages/sno-station-mem/src/engine/operations/runtime-audit-log.ts";
 import { PluginObservability } from "../../../../packages/sno-station-mem/src/engine/observability/adapter.ts";
 import { ObservableMemoryStore } from "../../../../packages/sno-station-mem/src/engine/observability/observable-memory-store.ts";
-import { pluginConfigSchema } from "../../../../packages/sno-station-mem/src/contract/config/plugin-config-schema.ts";
+import { pluginConfigSchema } from "../../../../packages/sno-station-mem/config/plugin-config-schema.ts";
 import { MemoryStore } from "../../../../packages/sno-station-mem/src/store/store.ts";
 import { createTestDb, createTestEmbedder } from "../../../apps/mem-claw/helpers/test-db.ts";
 
