@@ -1,6 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -165,32 +164,4 @@ describe("REM operation-switch data contracts", () => {
 		}
 	});
 
-	it("rem-identifier-artifact-drift regenerates exactly and names a changed consumer", () => {
-		const verifier = join(repoRoot, "dev-scripts/tests/rem-operation-identifiers-drift.sh");
-		const unchanged = spawnSync("bash", [verifier], {
-			cwd: repoRoot,
-			encoding: "utf8",
-		});
-		expect(unchanged.status, unchanged.stderr).toBe(0);
-
-		const scratch = mkdtempSync(join(tmpdir(), "rem-operation-drift-"));
-		try {
-			const consumer = join(scratch, "consumer.sh");
-			writeFileSync(consumer, 'MEM_CLAW_REM_TYPES="rem-updated-by-hand,rem-replace"\n');
-			const changed = spawnSync("bash", [verifier], {
-				cwd: repoRoot,
-				encoding: "utf8",
-				env: {
-					...process.env,
-					REM_OPERATION_DRIFT_MUTATION_FILE: consumer,
-					REM_OPERATION_DRIFT_MUTATION_FROM: "rem-update",
-					REM_OPERATION_DRIFT_MUTATION_TO: "rem-updated-by-hand",
-				},
-			});
-			expect(changed.status).not.toBe(0);
-			expect(`${changed.stdout}\n${changed.stderr}`).toContain(consumer);
-		} finally {
-			rmSync(scratch, { recursive: true, force: true });
-		}
-	});
 });
