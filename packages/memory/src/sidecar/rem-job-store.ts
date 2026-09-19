@@ -7,7 +7,7 @@ import { createLogger } from "@snoai/utils/logger";
 
 import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
-import { mkdir, open, rename } from "node:fs/promises";
+import { mkdir, open, readFile, rename } from "node:fs/promises";
 import path from "node:path";
 import { z } from "zod";
 
@@ -296,7 +296,16 @@ export class RemJobStore {
 
 	private async load(): Promise<void> {
 		if (!existsSync(this.journalPath)) return;
-		for await (const line of readJsonlLines(this.journalPath)) {
+		const bytes = await readFile(this.journalPath);
+		const lines = bytes.toString("utf8").split("\n");
+		const endsWithNewline = bytes.length === 0 || bytes[bytes.length - 1] === 0x0a;
+		for (const [index, line] of lines.entries()) {
+			if (!line) continue;
+			if (!endsWithNewline && index === lines.length - 1) {
+				const lastNewline = bytes.lastIndexOf(0x0a);
+				await this.truncateJournal(lastNewline < 0 ? 0 : lastNewline + 1);
+				return;
+			}
 			try {
 				const parsed: unknown = JSON.parse(line);
 				const job = remWaveJobSchema.parse(parsed);
@@ -304,7 +313,7 @@ export class RemJobStore {
 				this.mergeKeys.set(`${job.correlationId}\0${job.scope}`, job.waveId);
 			} catch (error) {
 				const reason = error instanceof Error ? error.message : String(error);
-				this.reportFailure(reason);
+				throw new Error(`invalid REM job journal at line ${index + 1}: ${reason}`);
 			}
 		}
 	}
@@ -364,13 +373,23 @@ export class RemJobStore {
 		return true;
 	}
 
+	private async truncateJournal(length: number): Promise<void> {
+		const handle = await open(this.journalPath, "r+");
+		try {
+			await handle.truncate(length);
+			await handle.sync();
+		} finally {
+			await handle.close();
+		}
+	}
+
 	private async append(job: RemWaveJob): Promise<void> {
 		const parent = path.dirname(this.journalPath);
 		await mkdir(parent, { recursive: true });
 		const journalAlreadyExisted = existsSync(this.journalPath);
 		const handle = await open(this.journalPath, "a");
 		try {
-			await handle.writeFile(`\n${JSON.stringify(job)}\n`, "utf8");
+			await handle.writeFile(`${JSON.stringify(job)}\n`, "utf8");
 			await handle.sync();
 		} finally {
 			await handle.close();
