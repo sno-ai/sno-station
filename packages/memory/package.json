@@ -1,7 +1,12 @@
 {
   "name": "@snoai/sno-station-mem",
   "version": "1.0.0-rc.1",
-  "license": "FSL-1.1-ALv2",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sno-ai/sno-station.git",
+    "directory": "packages/sno-station-mem"
+  },
   "type": "module",
   "description": "Shared memory engine, store, model routing and sidecar",
   "main": "./dist/index.js",
