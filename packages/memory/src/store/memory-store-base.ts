@@ -498,7 +498,7 @@ export class StaleSupersedeTargetError extends StorageError {
 	constructor(
 		readonly factKey: string,
 		readonly expectedId: string | null,
-		readonly expectedIds?: readonly string[],
+		readonly expectedIds?: readonly string[] | undefined,
 	) {
 		super(
 			expectedIds && expectedIds.length > 1
