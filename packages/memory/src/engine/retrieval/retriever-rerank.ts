@@ -46,8 +46,8 @@ import {
 const RERANK_TRANSIENT_ATTEMPTS = 3;
 const RERANK_TRANSIENT_BACKOFF_MS = 200;
 const RERANK_TRANSIENT_STATUSES = new Set([429, 502, 503, 504]);
-// Owner measurement, 2026-09-17: a-clean-test-vm -> https://rt3-llm.sno.ai/rerank
-// returned 429 + retry-after: 1 under eight concurrent recalls; bound each queue wait.
+// A production-like concurrency test returned 429 + retry-after: 1 under eight concurrent
+// recalls; bound each queue wait.
 const RERANK_RETRY_AFTER_MAX_MS = 5_000;
 
 function isRerankTimeout(error: unknown): boolean {
