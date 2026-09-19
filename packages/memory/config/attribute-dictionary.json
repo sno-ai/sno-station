@@ -2,7 +2,6 @@
   "schema_version": 1,
   "name": "attribute-dictionary",
   "generated_at": "2026-08-16",
-  "source_doc": "docs/internal-note.md",
   "locales": [
     "en",
     "zh",
