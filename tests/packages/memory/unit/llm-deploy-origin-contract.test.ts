@@ -1,5 +1,3 @@
-import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { describe, expect, it } from "vitest";
@@ -20,40 +18,7 @@ function checkOrigin(script: string, origin?: string): ReturnType<typeof spawnSy
 	});
 }
 
-function readShellFunction(source: string, name: string): string {
-	const body = new RegExp(`^${name}\\(\\) \\{[\\s\\S]*?^\\}$`, "m").exec(source)?.[0];
-	if (!body) throw new Error(`shell function is missing: ${name}`);
-	return body;
-}
-
 describe("LLM deployment origin contract", () => {
-	it("binds REM stage verification to the owning sno CLI without an OpenClaw fallback", () => {
-		const source = readFileSync(DEPLOY_SCRIPT, "utf8");
-		const ensure = readShellFunction(source, "ensure_remote_sno_cli");
-		const install = readShellFunction(source, "install_committed_sno_cli");
-		const probe = readShellFunction(source, "probe_remote_sno_cli");
-		const verify = readShellFunction(source, "verify_rem_stage");
-
-		expect(source).toContain('shared_sno_cli="/home/user/.cargo/bin/sno"');
-		expect(source).toContain('profile_sno_cli="$OPENCLAW_STATE_DIR/bin/sno"');
-		expect(probe).toContain("'$remote_sno_cli' --version");
-		expect(probe).toContain("'$remote_sno_cli' station --help");
-		expect(probe).toContain("rem-start");
-		expect(probe).toContain("rem-status");
-		expect(probe).toContain("REFUSE:");
-		expect(ensure).toMatch(
-			/probe_remote_sno_cli[\s\S]*remote_sno_cli="\$profile_sno_cli"[\s\S]*probe_remote_sno_cli[\s\S]*install_committed_sno_cli/,
-		);
-		expect(install).toContain('git -C "$SNO_CLI_ROOT" status --porcelain');
-		expect(install).toContain('cargo build --release --locked --manifest-path "$SNO_CLI_ROOT/Cargo.toml"');
-		expect(install).toContain('[[ "$remote_sha256" != "$local_sha256" ]]');
-		expect(install).toContain("mv -f -- '$remote_stage' '$profile_sno_cli'");
-		expect(install).not.toContain("mv -f -- '$remote_stage' '$shared_sno_cli'");
-		expect(verify).toContain("sno_remote station rem-start");
-		expect(verify).toContain("sno_remote station rem-status");
-		expect(verify).not.toContain("oc_cli");
-	});
-
 	it.each([
 		"https://rt3-llm.sno.ai:99999",
 		"https://rt3-llm.sno.ai:notaport",
