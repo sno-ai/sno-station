@@ -2,7 +2,7 @@
 
 Local AES-256 encryption layer for SNO Station Core SQLite databases. Thin first-party wrapper over vetted libraries: `better-sqlite3-multiple-ciphers` (SQLCipher v4 mode), `@napi-rs/keyring`, `argon2`, and Node's built-in `crypto`.
 
-The full threat model, explicit provisioning rules, and key-custody caveats live in [`docs/security.md`](../../docs/security.md).
+The full threat model, explicit provisioning rules, and key-custody caveats live in [`docs/security.md`](https://github.com/sno-ai/sno-station/blob/main/docs/security.md).
 
 ---
 
