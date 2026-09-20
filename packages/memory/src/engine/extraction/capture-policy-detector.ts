@@ -20,6 +20,7 @@ import {
 	RELEVANT_MEMORIES_UNTRUSTED_LINE,
 	RELEVANT_MEMORY_RECORD_PREFIX,
 } from "../retrieval/relevant-memories-context";
+import { HTML_TAG_PATTERN } from "../shared/i18n-text";
 import { type MemoryCategory, normalizeCategory } from "../shared/types";
 import { buildConfusableSkeleton } from "./confusable-skeleton";
 
@@ -99,6 +100,7 @@ export function looksLikePromptInjection(text: string): boolean {
 /** Implements escape memory for prompt as the local memory capture policy operation. */
 export function escapeMemoryForPrompt(text: string): string {
 	return text
+		.replace(HTML_TAG_PATTERN, "")
 		.replace(/\s+/g, " ")
 		.trim()
 		.replace(/[&<>"']/g, (char) => PROMPT_ESCAPE_MAP[char] ?? char);
