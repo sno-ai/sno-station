@@ -417,16 +417,6 @@ Object.assign(MemoryRetriever.prototype, {
 				}
 			}
 
-			// TEI logits share one scale across batches; normalize over the whole retrieval.
-			let minScore = Infinity;
-			let maxScore = -Infinity;
-			if (provider === "tei") {
-				for (const item of items) {
-					minScore = Math.min(minScore, item.score);
-					maxScore = Math.max(maxScore, item.score);
-				}
-			}
-
 			// Compute the normalized blend cross once so later retrieval scoring checks use one value.
 			const blendCross = this.config.rerankBlendCross ?? RERANK_BLEND_CROSS;
 			// Compute the normalized blend vector once so later retrieval scoring checks use one value.
@@ -447,9 +437,7 @@ Object.assign(MemoryRetriever.prototype, {
 				const sourceScore = this.getRerankSourceScore(candidate);
 				let crossScore = item.score;
 				if (provider === "tei") {
-					crossScore = maxScore === minScore
-						? 1 / (1 + Math.exp(-item.score))
-						: (item.score - minScore) / (maxScore - minScore);
+					crossScore = 1 / (1 + Math.exp(-item.score));
 				}
 				const blendedScore = clamp01(
 					crossScore * blendCross + sourceScore * blendVector,
