@@ -106,7 +106,7 @@ describe("date-resolution semantic contract", () => {
 	it.each([
 		{ reason: "extra field", time: { kind: "none" }, date: "2026-06-05" },
 		{ reason: "bad numeric type", time: { kind: "relative", amount: "-4", unit: "year", precision: "year" } },
-		{ reason: "incomplete", time: { kind: "weekday", weekday: 2 } },
+		{ reason: "incomplete", time: { kind: "weekday", day_name: "tuesday" } },
 	])("keeps the original claim unresolved for malformed model instructions %j", async (reply) => {
 		const port = new RecordingAgentPort(() => ({ kind: "ok", text: JSON.stringify(reply) }));
 		const result = await resolveExpression("yesterday", port);

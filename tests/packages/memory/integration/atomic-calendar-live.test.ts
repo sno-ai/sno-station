@@ -20,10 +20,14 @@ import { ATOMIC_EXTRACTION_SKILL_HASH } from "../../../../packages/sno-station-m
 // boundary in date-resolution-acceptance.test.ts; no empty extraction is counted as a pass.
 const cases = [
 	{ name: "past duration", text: "I've known these friends for 4 years, since I moved from my home country.", anchor: "2023-06-09T19:55:00Z", label: "2019", instruction: { kind: "relative", amount: -4, unit: "year", precision: "year" } },
-	{ name: "weekday abbreviation", text: "I just joined a new LGBTQ activist group last Tues.", anchor: "2023-07-20T20:56:00Z", label: "2023-07-18", instruction: { kind: "weekday", weekday: 2, direction: "previous", precision: "day" } },
+	{ name: "weekday abbreviation", text: "I just joined a new LGBTQ activist group last Tues.", anchor: "2023-07-20T20:56:00Z", label: "2023-07-18", instruction: { kind: "weekday", day_name: "tuesday", direction: "previous", precision: "day" } },
 	{ name: "future offset", text: "I will move to Kyoto four years from now.", anchor: "2023-06-09T19:55:00Z", label: "2027", instruction: { kind: "relative", amount: 4, unit: "year", precision: "year" } },
 	{ name: "Chinese past duration", text: "我搬到京都已经四年了。", anchor: "2023-06-09T19:55:00Z", label: "2019", instruction: { kind: "relative", amount: -4, unit: "year", precision: "year" } },
 	{ name: "explicit source date", text: "I moved to Kyoto on March 15, 2020.", anchor: "2023-06-09T19:55:00Z", label: "2020-03-15", instruction: { kind: "absolute", year: 2020, month: 3, day: 15, precision: "day" } },
+	{ name: "named Friday on a Sunday", text: "Last Friday, I did yoga and meditation to relax.", anchor: "2023-07-23T15:20:00Z", label: "2023-07-21", instruction: { kind: "weekday", day_name: "friday", direction: "previous", precision: "day" } },
+	{ name: "last weekend", text: "I ran a 5K last weekend.", anchor: "2023-04-07T18:10:00Z", label: "2023-03-27/2023-04-03", instruction: { kind: "relative", amount: -1, unit: "week", precision: "week" } },
+	{ name: "last week", text: "I went hiking with my friends last week.", anchor: "2023-07-16T20:30:00Z", label: "2023-07-10/2023-07-17", instruction: { kind: "relative", amount: -1, unit: "week", precision: "week" } },
+	{ name: "shared today", text: "Today I shared a photo with you: an apple pie on a wooden board.", anchor: "2023-07-03T17:45:00Z", label: "2023-07-03", instruction: { kind: "relative", amount: 0, unit: "day", precision: "day" } },
 ] as const;
 
 describe("real model understands time; code calculates", () => {
