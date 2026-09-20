@@ -21,7 +21,8 @@ Thanks for helping build Sno Station in public. This page is short on purpose.
    npm run build
    npm run typecheck
    npm run lint
-   npm run test:unit --workspace <package-you-changed>
+   npm run test:unit --workspace <package-you-changed> --if-present
+   npm run test:integration --workspace <package-you-changed> --if-present
    ```
 
 4. Sign off every commit (DCO). We do not use a CLA.
