@@ -524,6 +524,57 @@ describe("retriever rerank error handling", () => {
 		expect(results[0]?.score).toBeGreaterThan(results[1]?.score ?? 0);
 	});
 
+	it("keeps tei scores absolute when an outlier candidate is added", async () => {
+		globalThis.fetch = async (_url, init) => {
+			const body = JSON.parse(String(init?.body)) as { texts: string[] };
+			return new Response(JSON.stringify([
+				{ index: 0, score: 1.078 },
+				{ index: 1, score: -1 },
+				{ index: 2, score: 8.688 },
+			].slice(0, body.texts.length)), {
+				status: 200,
+				headers: { "content-type": "application/json" },
+			});
+		};
+		const entries = Array.from({ length: 3 }, (_, index) => ({
+			entry: { ...TEST_ENTRY, id: `mem-${index}`, contentHash: `hash-${index}` },
+			score: 0.5,
+		}));
+
+		for (const count of [2, 3]) {
+			const retriever = createRetriever(
+				{
+					...storeStub,
+					searchSemantic: async () => entries.slice(0, count),
+					searchKeyword: async () => [],
+				} as never,
+				embedderStub as never,
+				{ warn: () => {} },
+				{
+					...DEFAULT_RETRIEVAL_CONFIG,
+					rerank: "cross-encoder",
+					rerankProvider: "tei",
+					rerankEndpoint: "https://example.test/rerank",
+					rerankApiKey: "test-key",
+					minScore: 0,
+					hardMinScore: 0,
+					lengthNormAnchor: 0,
+					importanceWeightBase: 1,
+					temporalWeighting: false,
+					rerankBlendCross: 0.7,
+					rerankBlendVector: 0.3,
+				},
+			);
+
+			const results = await retriever.retrieve({ query: "typescript", limit: 3 });
+
+			expect(results.find((result) => result.entry.id === "mem-0")?.score)
+				.toBeCloseTo(0.6722807207469378, 12);
+			expect(results.find((result) => result.entry.id === "mem-1")?.score)
+				.toBeCloseTo(0.3382589949589966, 12);
+		}
+	});
+
 	it("caps what reaches the reranker at rerankMaxCandidates, carries the rest through, and never misindexes", async () => {
 		// Regression test for a real bug found 2026-07-06: the Sno TEI reranker
 		// rejects a batch over 50 texts outright ({"error":"too many texts: max
