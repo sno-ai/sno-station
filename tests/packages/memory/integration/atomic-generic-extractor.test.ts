@@ -472,6 +472,11 @@ describe("atomic generic extractor", () => {
 			callLabel: "memory-extract-atomic-generic",
 			adapterSlot: "memory-extract",
 			maxTokens: 128,
+			// The capture call carries its own wall time. Inheriting the installation's generic
+			// client timeout (30s by default, 60s on the LoCoMo VM) made a full-length reply
+			// unfinishable once the output budget was raised: measured 2026-09-20, four sessions
+			// timed out after 105-130s of work and stored nothing.
+			timeoutMs: 300_000,
 			emptyReplyAttempts: 1,
 			enableThinking: false,
 		});
