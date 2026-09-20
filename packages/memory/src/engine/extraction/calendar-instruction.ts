@@ -9,7 +9,11 @@ export type CalendarInstruction =
 	| { kind: "unresolved" }
 	| ({ kind: "absolute"; year: number; month?: number; day?: number; precision: CalendarPrecision } & CalendarClock)
 	| ({ kind: "relative"; amount: number; unit: "year" | "month" | "week" | "day" | "hour" | "minute"; precision: CalendarPrecision } & CalendarClock)
-	| ({ kind: "weekday"; weekday: number; direction: "previous" | "next"; precision: "day" | "minute" } & CalendarClock);
+	| ({ kind: "weekday"; day_name: Weekday; direction: "previous" | "next"; precision: "day" | "minute" } & CalendarClock);
+
+/** Day names in ISO order; the wire carries the name because models do not share one numbering. */
+const WEEKDAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"] as const;
+export type Weekday = (typeof WEEKDAYS)[number];
 
 const precisionSchema = z.enum(["year", "month", "week", "day", "minute"]);
 const clock = {
@@ -33,7 +37,7 @@ export const calendarInstructionSchema: z.ZodType<CalendarInstruction> = z.discr
 		precision: precisionSchema, ...clock,
 	}).strict(),
 	z.object({
-		kind: z.literal("weekday"), weekday: z.number().int().min(1).max(7),
+		kind: z.literal("weekday"), day_name: z.enum(WEEKDAYS).describe("The named day as an English lowercase day name, never a number."),
 		direction: z.enum(["previous", "next"]),
 		precision: z.enum(["day", "minute"]), ...clock,
 	}).strict(),
@@ -147,8 +151,9 @@ export function calculateCalendarTime(
 			if (instruction.kind === "relative") date = anchor.add(shift(instruction.unit, instruction.amount));
 			else {
 				const forward = instruction.direction === "next";
-				const delta = forward ? (instruction.weekday - anchor.dayOfWeek + 7) % 7
-					: (anchor.dayOfWeek - instruction.weekday + 7) % 7;
+				const weekday = WEEKDAYS.indexOf(instruction.day_name) + 1;
+				const delta = forward ? (weekday - anchor.dayOfWeek + 7) % 7
+					: (anchor.dayOfWeek - weekday + 7) % 7;
 				date = anchor.add({ days: (forward ? 1 : -1) * (delta || 7) });
 			}
 			if (instruction.hour !== undefined) date = date.with({ hour: instruction.hour, minute: instruction.minute ?? 0 }, { disambiguation: "reject" });
