@@ -18,7 +18,7 @@ Thanks for helping build Sno Station in public. This page is short on purpose.
 
    ```bash
    npm ci
-   npm run build --workspaces
+   npm run build
    npm run typecheck
    npm run lint
    npm run test:unit --workspace <package-you-changed>
