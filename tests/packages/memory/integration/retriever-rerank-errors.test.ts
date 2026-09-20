@@ -4,6 +4,7 @@ import {
 	DEFAULT_RETRIEVAL_CONFIG,
 } from "../../../../packages/sno-station-mem/src/engine/retrieval/retriever.ts";
 import { RetrievalError } from "../../../../packages/sno-station-mem/src/engine/shared/errors.ts";
+import type { MemoryRetrieverInternals } from "../../../../packages/sno-station-mem/src/engine/retrieval/retriever-core.ts";
 import { truncateToTokens } from "../../../../packages/sno-station-mem/src/engine/shared/token-bound.ts";
 import {
 	DEFAULT_MAX_CONTEXT_TOKENS,
@@ -82,15 +83,54 @@ describe("retriever rerank error handling", () => {
 		}
 	});
 
-	it("includes retry-after details for 429 rerank failures", async () => {
+	it("preserves fused candidates with http_error fallback on 429 with retry-after", async () => {
 		globalThis.fetch = async () =>
 			new Response("rate limited", {
 				status: 429,
-				headers: { "retry-after": "7" },
+				headers: { "retry-after": "1" },
 			});
-
 		const retriever = createRetriever(
 			storeStub as never,
+			embedderStub as never,
+			{ warn: () => {} },
+			{
+				...DEFAULT_RETRIEVAL_CONFIG,
+				rerank: "cross-encoder",
+				rerankApiKey: "test-key",
+			},
+		) as unknown as MemoryRetrieverInternals;
+		const candidates = [
+			{ entry: { ...TEST_ENTRY, id: "mem-2" }, score: 0.9, sources: {} },
+			{ entry: TEST_ENTRY, score: 0.8, sources: {} },
+		];
+
+		const result = await retriever.rerank("typescript", candidates, new Float32Array([1, 0, 0]));
+
+		expect(result.fallback?.reason).toBe("http_error");
+		expect(result.candidates).toHaveLength(2);
+		expect(result.candidates.map((candidate) => candidate.entry.id)).toEqual(["mem-2", "mem-1"]);
+		expect(result.candidates.map((candidate) => candidate.score)).toEqual([0.9, 0.8]);
+	});
+
+	it("serves the fused order through retrieve() when the reranker keeps answering 429", async () => {
+		globalThis.fetch = async () =>
+			new Response("rate limited", {
+				status: 429,
+				headers: { "retry-after": "1" },
+			});
+
+		// Three candidates in a known fused order: one row cannot show that the order survived.
+		const fused = [
+			{ entry: { ...TEST_ENTRY, id: "mem-top", contentHash: "hash-top" }, score: 0.95 },
+			{ entry: { ...TEST_ENTRY, id: "mem-mid", contentHash: "hash-mid" }, score: 0.6 },
+			{ entry: { ...TEST_ENTRY, id: "mem-low", contentHash: "hash-low" }, score: 0.3 },
+		];
+		const retriever = createRetriever(
+			{
+				...storeStub,
+				searchSemantic: async () => fused,
+				searchKeyword: async () => fused,
+			} as never,
 			embedderStub as never,
 			{ warn: () => {} },
 			{
@@ -102,21 +142,12 @@ describe("retriever rerank error handling", () => {
 			},
 		);
 
-		try {
-			await retriever.retrieve({ query: "typescript", limit: 1 });
-			throw new Error("expected retrieve() to fail");
-		} catch (error) {
-			expect(error).toBeInstanceOf(RetrievalError);
-			const cause =
-				error instanceof Error &&
-				"cause" in error &&
-				error.cause instanceof Error
-					? error.cause
-					: null;
-			expect(cause).toBeInstanceOf(RetrievalError);
-			expect(cause?.message).toContain("retry after 7s");
-		}
-	});
+		// A one-second throttle used to erase the whole recall (measured 2026-09-20: 1 to 6 questions
+		// per 135 served zero rows). After the transient retries the caller now gets the pre-rerank
+		// results instead of a RetrievalError.
+		const results = await retriever.retrieve({ query: "typescript", limit: 3 });
+		expect(results.map((result) => result.entry.id)).toEqual(["mem-top", "mem-mid", "mem-low"]);
+	}, 20_000);
 
 	it("wraps retrieveWithTrace rerank failures in RetrievalError", async () => {
 		globalThis.fetch = async () => new Response("unauthorized", { status: 401 });
@@ -876,11 +907,12 @@ describe("retriever rerank batching", () => {
 		}
 	});
 
-	it("surfaces 429 with retry-after when an earlier batch exhausts 503 retries", async () => {
+	it("serves every candidate when one batch exhausts 503 retries and the next is throttled", async () => {
+		const seen: number[] = [];
 		const probe = await startRerankProbe((texts, reply) => {
-			// Batch zero always fails with 503, including retries; batch one is fatal.
+			seen.push(texts.length);
 			if (texts.length === 50) reply("upstream unavailable", 503);
-			else reply("rate limited", 429, { "retry-after": "7" });
+			else reply("rate limited", 429, { "retry-after": "1" });
 		});
 		try {
 			const searchResults = BATCHED_ENTRIES.slice(0, 51);
@@ -904,24 +936,15 @@ describe("retriever rerank batching", () => {
 				},
 			);
 
-			try {
-				await retriever.retrieve({ query: "typescript", limit: 51 });
-				throw new Error("expected retrieve() to fail");
-			} catch (error) {
-				expect(error).toBeInstanceOf(RetrievalError);
-				const cause =
-					error instanceof Error &&
-					"cause" in error &&
-					error.cause instanceof Error
-						? error.cause
-						: null;
-				expect(cause).toBeInstanceOf(RetrievalError);
-				expect(cause?.message).toBe("Rerank API failed with status 429, retry after 7s");
-			}
+			const results = await retriever.retrieve({ query: "typescript", limit: 51 });
+			// Both branches have to have run, or this proves only that one of them falls back.
+			expect(seen.filter((size) => size === 50).length).toBeGreaterThan(1);
+			expect(seen.filter((size) => size === 1).length).toBeGreaterThan(1);
+			expect(results).toHaveLength(51);
 		} finally {
 			await probe.close();
 		}
-	});
+	}, 30_000);
 
 	it("sends the batches in bounded waves and keeps every score on its own row", async () => {
 		// Every text carries its own row number, so the reply can score row N as N. The final order

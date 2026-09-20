@@ -298,7 +298,7 @@ Object.assign(MemoryRetriever.prototype, {
 					// Guard response.ok here so the remaining retrieval scoring path works with normalized inputs.
 					if (!response.ok) {
 						const retryAfter = response.headers.get("retry-after");
-						const fatalError = buildRerankHttpError(response.status, retryAfter);
+						const fatalError = buildRerankHttpError(response.status);
 						// Guard guard condition here so the remaining retrieval scoring path works with normalized inputs.
 						if (fatalError) {
 							// Surface this invalid retrieval ranking state as an explicit typed failure.
