@@ -43,10 +43,19 @@ export function parseEntryMetadata(entry: { metadata?: string }): Record<string,
 	}
 }
 
-/** Display the resolved event precision; unresolved text never inherits a record timestamp. */
+/**
+ * Display the resolved event precision; unresolved text never inherits a record timestamp.
+ *
+ * Keyed on whether the claim has a resolved date, never on `kind`. `kind` records where a memory
+ * is kept — an event that is over, or a fact that stands — and a dated plan, intention or
+ * commitment is `standing` by the extraction contract while carrying a date the engine resolved
+ * from the speaker's own words. Gating on `kind` hid those dates from every reader: measured
+ * 2026-09-20 over 1,993 re-extracted rows, 77 held a resolved `temporal_date` that no model was
+ * ever shown, among them "Jon is getting ready for a dance competition near him next month"
+ * resolved to 2023-03.
+ */
 export function episodicEventDate(entry: { metadata?: string }): string | undefined {
 	const metadata = parseEntryMetadata(entry);
-	if (metadata.kind !== "episodic") return undefined;
 	if (metadata.temporal_resolution_status === "unresolved" || metadata.temporal_resolution_status === "static") return undefined;
 	if (isCalendarLabel(metadata.temporal_date, metadata.temporal_precision)) return metadata.temporal_date;
 	const eventAt = metadata.event_at;
