@@ -181,7 +181,10 @@ function buildPipelineConfig(
 		provider: preset.provider,
 		model: preset.model,
 		...(preset.providerOptions ? { providerOptions: preset.providerOptions } : {}),
-		timeout: { totalTime: Math.ceil((config.timeoutMs ?? preset.timeoutMs ?? 30_000) / 1_000) },
+		// Same source as `timeoutMs` below. Reading only the config here let the pipeline's total
+		// time hold a request's own timeout down: a capture call asking for 300s still stopped at
+		// the installation's 60s, so raising the call's timeout did nothing (measured 2026-09-20).
+		timeout: { totalTime: Math.ceil((request.timeoutMs ?? config.timeoutMs ?? preset.timeoutMs ?? 30_000) / 1_000) },
 		common: {
 			enableThinking: request.enableThinking ?? false,
 			maxOutputTokens: request.maxTokens ?? 4096,
@@ -567,9 +570,12 @@ export function createLlmClient(config: LlmClientConfig): LlmClient {
 		const attemptLimit = request.emptyReplyAttempts ?? EMPTY_REPLY_ATTEMPTS;
 		for (let attempt = 2; attempt <= attemptLimit; attempt += 1) {
 			if (content === null || content.raw.trim().length > 0) return content;
-			if (performance.now() >= deadlineMs) break;
+			const remainingMs = deadlineMs - performance.now();
+			if (remainingMs <= 0) break;
 			log.debug("Retrying empty model reply", { adapter_slot: request.adapterSlot, call_label: request.callLabel, attempt, attempt_limit: attemptLimit }, { event_name: "memory.llm_client.diagnostic", file: "packages/sno-station-mem/src/model/llm-client.ts", function: "requestContentRetryingEmpty", site_id: "shared.llm-client.requestContentRetryingEmpty.cd874fefff" });
-			content = await requestContent(request, systemContent, prompt);
+			// The retry gets the time the deadline has left, not another full request timeout:
+			// at the old wording a 300s capture call could spend 600s and still report success.
+			content = await requestContent({ ...request, timeoutMs: remainingMs }, systemContent, prompt);
 			checkMemoryOperation();
 		}
 		return content;
