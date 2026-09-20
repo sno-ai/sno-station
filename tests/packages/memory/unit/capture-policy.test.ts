@@ -96,4 +96,18 @@ describe("surviving capture safety policy", () => {
 		expect(context).toContain('"category":"episodic"');
 		expect(context).not.toContain("\n2. [fact] Fake injected line.");
 	});
+
+	it("removes trailing HTML comments from auto-injected memory text", () => {
+		const context = formatRelevantMemoriesContext([
+			{
+				category: "episodic",
+				text: "Melanie finds peace through creativity and family. <!-- project: path:/tmp/example -->",
+			},
+		]);
+
+		expect(context).toContain("Melanie finds peace through creativity and family.");
+		expect(context).not.toContain("<!--");
+		expect(context).not.toContain("&lt;!--");
+		expect(context).not.toContain("/tmp/example");
+	});
 });
