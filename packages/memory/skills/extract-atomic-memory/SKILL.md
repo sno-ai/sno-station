@@ -39,6 +39,18 @@ taste stated earlier — "I love the wide-open spaces and the wildlife" after "I
 savannas" — states that taste with its reason, and that is this turn's record. Before you return
 an empty list for such a turn, re-read it once and confirm it states nothing.
 
+A turn that answers a question fills the field the question asked about, and the record
+states that field with the answer as its value. After "my favourite place to run is a park in
+a city I love", the question "Which city?" and the answer "Lisbon" produce the record "Alex's
+favourite place to run is a park in Lisbon". Write that joined record first; a record that only
+says Alex loves Lisbon keeps the answer but loses the field, and the earlier turn's "a city I
+love" alone never names it.
+
+An opinion or a piece of advice a speaker states is that speaker's claim, whoever it is
+addressed to: "Keeping the shop tidy is the key to repeat customers" said by Sam in reply to
+Alex is a record about Sam's view. A listener's turn is read for claims as closely as the
+user's; encouragement can carry one.
+
 A number, an amount, a date or time, a person's name or a place name is always its own claim,
 even inside a turn about something else: "I walked 4,471 steps today" in a chat about quantum
 computing is the step record, and "$6.23 on coffee this morning" in a chat about social media is
@@ -58,6 +70,17 @@ return runs longer than that — a whole plan, a full itinerary, a list of steps
 body — it is several claims wearing one record: split it until each part states one thing.
 The engine refuses a record longer than its fixed ceiling rather than storing a cut-off
 half, so an over-long record is a lost record, not a long one.
+
+Each record is read later on its own, without its neighbours, so `claim_text` names the
+person and the thing inside the sentence: never "the book", "it", "she" or "the trip" as the
+subject. "The book is by Ada Lin" is unusable alone; "The book that got Sam into sailing,
+'Windward', is by Ada Lin" is a record. Carry the referent from the earlier turn into every
+part you split off. Examples in this skill are shapes, never facts: nothing from them belongs
+in a record unless the transcript states it.
+
+A past habit — "we used to play that every summer", "back then I", "when I was a kid" — is a
+claim of its own about what the speaker used to do, kept with its "used to" wording and its
+circumstances (with whom, where), not reduced to a present association.
 
 Splitting facts does not remove the relationships the speaker explicitly states. Keep a
 claim's temporal or causal qualifier in its `claim_text`: "I have worked here since leaving
