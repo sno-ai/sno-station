@@ -173,6 +173,17 @@ it.each([
 	}
 });
 
+it("shows the resolved date of a dated plan, which is a standing claim, not an event", () => {
+	// Measured 2026-09-20: 77 rows of a re-extracted store held a resolved date that no reader
+	// was shown, because the renderer keyed on `kind` instead of on having a resolved date.
+	const metadata = {
+		kind: "state", temporal_resolution_status: "resolved",
+		temporal_date: "2023-03", temporal_precision: "month",
+	};
+	expect(episodicEventDate({ metadata: JSON.stringify(metadata) })).toBe("2023-03");
+	expect(episodicEventDate({ metadata: JSON.stringify({ ...metadata, temporal_resolution_status: "static" }) })).toBeUndefined();
+});
+
 it.each([
 	["2024", "year", true], ["2024-02", "month", true], ["2024-02-29", "day", true],
 	["2024-02-29T10:30", "minute", true], ["2024-02-26/2024-03-04", "week", true],
