@@ -439,7 +439,9 @@ export function createLlmClient(config: LlmClientConfig): LlmClient {
 			}
 			if (result.kind === "error") {
 				lastError = `[${request.callLabel}] agent-llm ${result.category}: ${result.message}`;
-				log.warn("Host model request failed", { adapter_slot: request.adapterSlot, call_label: request.callLabel, error: lastError }, { event_name: "memory.llm_client.diagnostic", file: "packages/sno-station-mem/src/model/llm-client.ts", function: "requestContent", site_id: "llm.client.host_error" });
+				// The category is its own attribute: joined into `error` it is hashed with the message,
+				// and a run where every host call failed (471 of 471, 2026-09-19) could not be read.
+				log.warn("Host model request failed", { adapter_slot: request.adapterSlot, call_label: request.callLabel, failure_category: result.category, error: lastError }, { event_name: "memory.llm_client.diagnostic", file: "packages/sno-station-mem/src/model/llm-client.ts", function: "requestContent", site_id: "llm.client.host_error" });
 				if (isCredentialFailure(result.category)) {
 					throw new LlmClientTerminalError("auth", lastError);
 				}
