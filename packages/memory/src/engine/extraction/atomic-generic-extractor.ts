@@ -2,7 +2,7 @@ import { dirname } from "node:path";
 import { appendAuditEntry } from "../operations/runtime-audit-log";
 import { redactSecrets } from "../security/redact";
 import extractionSchema from "../../../config/atomic-extraction-response.schema.json" with { type: "json" };
-import { ATOMIC_ENRICHMENT_OUTPUT_TOKEN_BUDGET } from "../../../config/index";
+import { ATOMIC_CAPTURE_TIMEOUT_MS, ATOMIC_ENRICHMENT_OUTPUT_TOKEN_BUDGET } from "../../../config/index";
 import { FIXED_MEMORY_SNO_EXTRACT_CHAT } from "../../model/signed-registry-constants";
 /** @file atomic-generic-extractor.ts
  * @purpose Runs the dark generic atomic extraction pass over complete transcript windows.
@@ -594,6 +594,7 @@ export function createAtomicGenericExtractionTransport(
 				callLabel: "memory-extract-atomic-generic",
 				adapterSlot: "memory-extract",
 				maxTokens: request.maxTokens,
+				timeoutMs: ATOMIC_CAPTURE_TIMEOUT_MS,
 				emptyReplyAttempts: 1,
 				enableThinking: false,
 				...(request.requestId ? { requestId: request.requestId } : {}),
