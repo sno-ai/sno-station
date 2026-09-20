@@ -495,11 +495,27 @@ export async function runAtomicNumericTurnSweep(
 		return [];
 	}
 	if (input.diagnostics) input.diagnostics.proposed += parsed.records.length;
-	// Only records for the swept turns: the sweep sees the whole transcript so it can resolve
-	// "this morning", and a claim belonging to a turn this window already settled is not the
-	// sweep's to restate.
-	const kept = parsed.records.filter((record) => uncited.includes(record.sourceSpan.turnIndex));
-	const dropped = parsed.records.filter((record) => !uncited.includes(record.sourceSpan.turnIndex));
+	// Only records for the swept turns, and only records that cite a figure: the sweep sees the
+	// whole transcript so it can resolve "this morning", and a claim belonging to a turn this
+	// window already settled is not the sweep's to restate. Without the figure test a swept turn
+	// returns the turn's every claim, and the repeat check below can only pair a restatement whose
+	// value text is identical after normalizing — so a rewording is written a second time.
+	// Measured 2026-09-20 on a 66-session replay: one uncaptured figure anywhere in a session
+	// makes its single turn uncited, and the sweep added 310 records on top of 1,217 captured
+	// facts while only 2% of stored rows quote a figure at all.
+	const citesFigure = (record: AtomicExtractionRecord): boolean => {
+		const offsets = figureOffsetsInTurn(
+			input.turns[record.sourceSpan.turnIndex]?.content ?? "",
+			record.sourceSpan.quote,
+		);
+		return offsets !== null && offsets.length > 0;
+	};
+	const kept = parsed.records.filter(
+		(record) => uncited.includes(record.sourceSpan.turnIndex) && citesFigure(record),
+	);
+	const dropped = parsed.records.filter(
+		(record) => !uncited.includes(record.sourceSpan.turnIndex) || !citesFigure(record),
+	);
 	// Nothing downstream removes a repeat — the gauntlet does not dedupe and neither does the
 	// writer — so without this the ordinary partial recovery writes the first pass's own fact a
 	// second time and quietly doubles a total. The pairing is one-to-one: each first-pass record
