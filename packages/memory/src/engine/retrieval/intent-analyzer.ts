@@ -16,7 +16,7 @@
  * a question phrased outside the pattern banks received the shortest one. Deleted 2026-08-21.
  */
 export function formatAtDepth(
-	entry: { text: string; category: string; projectId: string },
+	entry: { text: string; category: string },
 	score: number,
 	_index: number,
 	extra?: {
@@ -39,5 +39,5 @@ export function formatAtDepth(
 	// queries ("this week", "last month"); empty for non-episodic memories.
 	const datePrefix = extra?.eventDate ? `[${extra.eventDate}] ` : "";
 
-	return `- [${entry.category}:${entry.projectId}] ${datePrefix}${safe} (${scoreStr}${sourceTag})`;
+	return `- [${entry.category}] ${datePrefix}${safe} (${scoreStr}${sourceTag})`;
 }
