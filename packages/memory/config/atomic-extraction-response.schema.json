@@ -516,10 +516,10 @@
               "type": "string",
               "const": "weekday"
             },
-            "weekday": {
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 7
+            "day_name": {
+              "type": "string",
+              "enum": ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"],
+              "description": "The named day as an English lowercase day name, never a number."
             },
             "direction": {
               "type": "string",
@@ -553,7 +553,7 @@
           },
           "required": [
             "kind",
-            "weekday",
+            "day_name",
             "direction",
             "precision"
           ],
