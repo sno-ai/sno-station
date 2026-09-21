@@ -1,4 +1,4 @@
-import { existsSync, closeSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, rmdirSync, rmSync, statSync, watch, writeFileSync, writeSync } from "node:fs";
+import { chmodSync, existsSync, closeSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, rmdirSync, rmSync, statSync, watch, writeFileSync, writeSync } from "node:fs";
 import { once } from "node:events";
 import { createServer, request as httpRequest } from "node:http";
 import { createConnection } from "node:net";
@@ -481,6 +481,20 @@ describe("sidecar keeps serving", () => {
 		} finally {
 			await pool.close();
 			writeFileSync(configPath, original);
+		}
+	});
+	it("rejects inherited registration when the installation config is not mode 0600", async () => {
+		const configPath = join(root, "station", `sno-station-mem-${userInfo().username}.config.json`);
+		chmodSync(configPath, 0o644);
+		const pool = await MemoryRuntimePool.open();
+		try {
+			await expect(pool.invoke("init", {
+				scope: { principal: userInfo().username, project: "global", session: "inherited-open-mode" },
+				registration: { skinId: "hermes", inheritInstalled: true },
+			}, "hermes")).rejects.toThrow("memory.installation.config.unavailable");
+		} finally {
+			await pool.close();
+			chmodSync(configPath, 0o600);
 		}
 	});
 	it("reads the REM tick switch across HTTP skin registrations", async () => {

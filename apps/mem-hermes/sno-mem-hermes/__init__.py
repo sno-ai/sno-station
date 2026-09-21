@@ -543,9 +543,10 @@ class SnoMemoryProvider(MemoryProvider):
         memories, error = _memories(result)
         if error:
             return ""
-        context = _render_memories(
+        context, included = _render_memories(
             memories, _TASK_RECALL_LIMIT, _TASK_RECALL_MAX_CHARS
-        )[0]
+        )
+        self._seen_ids.update(memory["id"] for memory in included)
         return context
 
     def on_session_switch(
@@ -712,6 +713,23 @@ class SnoMemoryProvider(MemoryProvider):
             entry = _inspected_entry(inspected)
             if entry is None:
                 return {"degraded": False, "toolError": "not-found"}
+            metadata = _metadata(entry.get("metadata"))
+            pending = self._require_client().post(
+                "mutate",
+                {
+                    "scope": scope,
+                    "op": {
+                        "op": "update",
+                        "id": memory_id,
+                        "metadata": {
+                            **metadata,
+                            "supersededBy": f"pending:{secrets.token_hex(16)}",
+                        },
+                    },
+                },
+            )
+            if pending.get("degraded"):
+                return pending
             stored = self._require_client().post(
                 "mutate",
                 {
@@ -727,7 +745,6 @@ class SnoMemoryProvider(MemoryProvider):
             new_id = _stored_id(stored)
             if new_id is None:
                 return stored
-            metadata = _metadata(entry.get("metadata"))
             updated = self._require_client().post(
                 "mutate",
                 {

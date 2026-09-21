@@ -86,8 +86,8 @@ export class MemoryRuntimePool {
 		try {
 			if (!existsSync(configPath)) engineLogger.error("memory.installation.config.missing");
 			if (existsSync(configPath)) {
-				installed = installationSettingsSchema.parse(JSON.parse(readFileSync(configPath, "utf8")));
 				const runtimeConfig = readSnoStationMemConfig(configPath).plugins?.entries?.[PLUGIN_ENTRY_KEY]?.config;
+				installed = installationSettingsSchema.parse(JSON.parse(readFileSync(configPath, "utf8")));
 				config = pluginConfigSchema.parse({ ...runtimeConfig, dbPath: storePath });
 			}
 		} catch (error) { engineLogger.error(String(error)); }
