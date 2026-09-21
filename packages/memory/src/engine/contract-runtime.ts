@@ -102,6 +102,7 @@ export class MemoryContractRuntime implements MemoryContract {
 
 	async init(scope: ScopeCtx, registration: Registration): Promise<ContractOutputs["init"]> {
 		const input = parseInput("init", { scope, registration });
+		if (!("settings" in input.registration)) throw new ContractError("invalid-input");
 		await this.close();
 		this.registration = input.registration;
 		this.reflectionStates.clear();

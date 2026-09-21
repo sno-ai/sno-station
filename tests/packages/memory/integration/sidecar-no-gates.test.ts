@@ -154,6 +154,36 @@ describe("documented HTTP runtime claims", () => {
 		expect(response.status).toBe(200);
 		expect(await response.json()).toEqual({ degraded: false, result: { op: "list", project: "global", entries: [] } });
 	});
+	it("initializes from installed settings without changing complete registration", async () => {
+		await health();
+		const scope = { principal: "caller", project: "global", session: "inherited-init" };
+		const inherited = await contractPost("/v1/init", {
+			scope, registration: { skinId: "body-skin", inheritInstalled: true },
+		}, "hermes");
+		expect(inherited.status).toBe(200);
+		expect(await inherited.json()).toMatchObject({ degraded: false, skinId: "hermes" });
+
+		const captured = await contractPost("/v1/capture", { scope,
+			turn: { turnId: "inherited-init", rewindEpoch: 0, messages: [
+				{ role: "user", content: "The launch color is cobalt blue.", at: 1789606800000 },
+				{ role: "assistant", content: "I will remember the cobalt launch color.", at: 1789606801000 },
+			] },
+		}, "hermes");
+		expect(captured.status).toBe(200);
+		expect(await captured.json()).toMatchObject({ degraded: false, committed: true });
+
+		const mixed = await contractPost("/v1/init", {
+			scope, registration: { skinId: "body-skin", inheritInstalled: true, settings: {}, routing: {} },
+		}, "hermes");
+		expect(mixed.status).toBe(400);
+		expect(await mixed.json()).toEqual({ degraded: true, reason: "invalid-input" });
+
+		const complete = await contractPost("/v1/init", {
+			scope, registration: registration("local-first"),
+		}, "existing-client");
+		expect(complete.status).toBe(200);
+		expect(await complete.json()).toMatchObject({ degraded: false, skinId: "existing-client" });
+	});
 	it("returns a degraded reason when the agent model endpoint is absent", async () => {
 		await health();
 		const scope = { principal: "caller", project: "global", session: "missing-model" };
