@@ -714,6 +714,12 @@ class SnoMemoryProvider(MemoryProvider):
             if entry is None:
                 return {"degraded": False, "toolError": "not-found"}
             metadata = _metadata(entry.get("metadata"))
+            successor = metadata.get("supersededBy")
+            if isinstance(successor, str) and not successor.startswith("pending:"):
+                return {
+                    "degraded": False,
+                    "toolError": f"superseded by {successor}; correct that id",
+                }
             pending = self._require_client().post(
                 "mutate",
                 {
@@ -737,7 +743,7 @@ class SnoMemoryProvider(MemoryProvider):
                     "op": {
                         "op": "store",
                         "content": content,
-                        "category": entry.get("rawCategory", "episodic"),
+                        "category": entry.get("category", "episodic"),
                         "metadata": {"correctionOf": memory_id},
                     },
                 },
