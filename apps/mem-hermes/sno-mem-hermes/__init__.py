@@ -281,7 +281,7 @@ class SidecarClient:
             data=json.dumps(body).encode(),
             headers={
                 "Content-Type": "application/json",
-                "x-sno-station-mem-skin": _PROVIDER_NAME,
+                "x-sno-station-mem-skin": _SKIN_ID,
             },
             method="POST",
         )
@@ -350,11 +350,10 @@ class SnoMemoryProvider(MemoryProvider):
         client = SidecarClient(profile_dir)
         client.connect()
         cwd = kwargs.get("cwd")
-        identity = str(kwargs.get("agent_identity") or "default")
         self._project = (
             str(Path(cwd).resolve())
             if isinstance(cwd, str) and cwd
-            else f"hermes:{identity}"
+            else f"hermes:{Path(str(kwargs['hermes_home'])).resolve()}"
         )
         self._session_id = session_id
         self._primary = kwargs.get("agent_context", "primary") == "primary"
@@ -525,18 +524,22 @@ class SnoMemoryProvider(MemoryProvider):
         self._capture(normalized, self._session_id)
         self._seen_ids.clear()
         self._brief_pending = True
-        result = self._require_client().post(
-            "get-recall",
-            {
-                "query": _TASK_QUERY,
-                "scope": self._scope(self._session_id),
-                "options": {
-                    "source": "manual",
-                    "limit": _TASK_RECALL_LIMIT,
-                    "includeMetadata": True,
+        try:
+            result = self._require_client().post(
+                "get-recall",
+                {
+                    "query": _TASK_QUERY,
+                    "scope": self._scope(self._session_id),
+                    "options": {
+                        "source": "manual",
+                        "limit": _TASK_RECALL_LIMIT,
+                        "includeMetadata": True,
+                    },
                 },
-            },
-        )
+            )
+        except (OSError, RuntimeError, ValueError) as error:
+            self._last_error = str(error)
+            return ""
         memories, error = _memories(result)
         if error:
             return ""

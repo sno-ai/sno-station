@@ -85,7 +85,11 @@ Initializes or replaces the header-selected skin. `registration.skinId` remains 
 "model": ...? }`; the sidecar derives routing and settings from its loaded installation settings
 through the shared coding-skin factory. The inherited shape is strict and rejects `settings`,
 `routing`, and other unknown fields. Its optional `model` uses the same schema as the complete
-shape. The skin header still overrides the body skin id.
+shape. The skin header still overrides the body skin id. When the sidecar could not load its
+installation settings at start (file missing, invalid JSON, or schema failure), the inherited shape
+fails with HTTP 500 `{"degraded":true,"reason":"engine-failed"}` instead of registering default
+settings (proved by: `tests/packages/sno-station-mem/integration/sidecar-no-gates.test.ts` —
+`rejects inherited registration when the installation config cannot be read`).
 
 `routing` is the routing authority. Settings are the existing normalized engine settings, not a second raw plugin configuration. Installed embedding, telemetry and store path override conflicting registration values with an error log. All nested fields are enumerated below. Objects with `additionalProperties:false` reject unknown keys; ordinary input objects strip them.
 
