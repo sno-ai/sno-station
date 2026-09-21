@@ -8,7 +8,7 @@ import { LocalEmbedProvider } from "../../../../packages/embedder/src/local-prov
 import { MemoryRuntimePool } from "../../../../packages/sno-station-mem/src/sidecar/memory-runtime";
 import { serveMemoryRoute } from "../../../../packages/sno-station-mem/src/sidecar/memory-routes";
 import { bindStore } from "../../../../packages/sno-station-mem/src/engine/shared/paths";
-import { pluginConfigSchema } from "../../../../packages/sno-station-mem/src/contract/config/plugin-config-schema";
+import { pluginConfigSchema } from "../../../../packages/sno-station-mem/config/plugin-config-schema";
 
 // Resolve the package to current source, not a possibly stale dist artifact.
 vi.mock("@snoai/embedder", async () => import("../../../../packages/embedder/src/index"));

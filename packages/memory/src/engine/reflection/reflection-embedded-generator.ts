@@ -15,7 +15,7 @@ import {
 import type { createErrorSignalTracker } from "../security/error-signals";
 import type { AgentLlmPort } from "../../model/agent-llm-port";
 import { createLlmClient } from "../../model/llm-client";
-import type { LlmRoutingConfig } from "../../contract/config/plugin-config-mode-schema";
+import type { LlmRoutingConfig } from "../../../config/plugin-config-mode-schema";
 import type { PluginConfig } from "../shared/types";
 
 export const DEFAULT_MEMORY_LLM_CONFIG: NonNullable<PluginConfig["extraction"]["llm"]> = {

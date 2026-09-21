@@ -4,7 +4,12 @@ import { join } from "node:path";
 import { afterEach, expect, it, vi } from "vitest";
 import { bindStore, getInstallationConfigPath } from "../../../../packages/sno-station-mem/src/engine/shared/paths";
 import { readSnoStationMemConfig, PLUGIN_ENTRY_KEY } from "../../../../packages/sno-station-mem/src/engine/bindings/embedder-config-files";
-import { pluginConfigSchema } from "../../../../packages/sno-station-mem/src/contract/config/plugin-config-schema";
+import { pluginConfigSchema } from "../../../../packages/sno-station-mem/config/plugin-config-schema";
+import {
+	codingSkinInstallationSchema,
+	createCodingSkinRegistration,
+} from "../../../../packages/sno-station-mem/config/coding-skin";
+import { DEFAULT_MODEL_MODE } from "../../../../packages/sno-station-mem/config/plugin-config-mode-schema";
 
 const roots: string[] = [];
 afterEach(() => { vi.unstubAllEnvs(); for (const root of roots.splice(0)) rmSync(root, { recursive: true }); });
@@ -38,4 +43,43 @@ it("preserves every setting the retained REM runtime reads without persisting ei
 		expect(after[field], field).toEqual(before[field]);
 	}
 	expect(after.extraction.llm.apiKey === before.extraction.llm.apiKey).toBe(true);
+});
+
+it("uses one default mode and preserves every explicit model mode for coding skins", () => {
+	const storePath = join(tmpdir(), "coding-skin-mode.sqlite");
+	const defaultInstall = codingSkinInstallationSchema.parse({ storePath });
+	expect(defaultInstall.mode).toBe(DEFAULT_MODEL_MODE);
+
+	for (const mode of ["local-first", "agent-native", "rem-enhanced"] as const) {
+		const installed = codingSkinInstallationSchema.parse({ storePath, mode });
+		const registration = createCodingSkinRegistration({
+			skinId: "test-skin",
+			installed,
+			model: { baseUrl: "http://127.0.0.1:1/v1", credential: "test", model: "test" },
+		});
+		expect(registration.routing.mode).toBe(mode);
+	}
+});
+
+it("keeps the REM Enhanced model split in the shared routing config", () => {
+	const installed = codingSkinInstallationSchema.parse({
+		storePath: join(tmpdir(), "coding-skin-rem.sqlite"),
+		mode: "rem-enhanced",
+	});
+	const registration = createCodingSkinRegistration({
+		skinId: "test-skin",
+		installed,
+		model: { baseUrl: "http://127.0.0.1:1/v1", credential: "test", model: "test" },
+	});
+	expect(registration.routing.remEnhanced.occasions).toEqual({
+		memoryExtract: "snoRemMem",
+		dedupDecision: "agent",
+		profileSectionMerge: "agent",
+		profileActiveTaskClassify: "agent",
+		profileActiveTaskMatch: "agent",
+		conflictAdjudication: "snoRemMem",
+		summaryBuild: "agent",
+		intentClassifier: "agent",
+		dateResolution: "agent",
+	});
 });

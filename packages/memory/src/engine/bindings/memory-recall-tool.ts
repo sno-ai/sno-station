@@ -322,7 +322,7 @@ export async function executeMemoryRecallTool(ctx: ToolContext, access: ReturnTy
 					const aggregationSummary = readsWholePopulation
 						? `<recall-result scope-row-count="${observedScopeRowCount ?? "unknown"}" returned-count="${results.length}" population-complete="${populationComplete}" truncated="${outputTruncated}" />\n`
 						: "";
-					return makeResult(
+					return withTodoBlock(appendStructuredRecallContent(makeResult(
 						`<relevant-memories>\n${aggregationSummary}Found ${results.length} memories:\n\n${text}\n</relevant-memories>` +
 							(alreadyServedCount > 0 ? `\n${alreadyServedCount} memories already shown in this turn were omitted.` : ""),
 						{
@@ -340,7 +340,7 @@ export async function executeMemoryRecallTool(ctx: ToolContext, access: ReturnTy
 								truncated: outputTruncated,
 							}),
 						},
-					);
+					)));
 				};
 
 				// What ONE consumer actually receives, not the union of two. The rendered text and the
@@ -410,7 +410,7 @@ export async function executeMemoryRecallTool(ctx: ToolContext, access: ReturnTy
 						},
 					));
 				}
-				return prependTodoBlock(appendStructuredRecallContent(result), todos);
+				return result;
 			});
 			const memories = output.details["memories"];
 			served = Array.isArray(memories) ? memories.flatMap((row: unknown) =>

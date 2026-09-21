@@ -12,7 +12,7 @@ import { MemoryScopePolicy } from "../../../../packages/sno-station-mem/src/engi
 import { onAgentEnd } from "../../../../packages/sno-station-mem/src/engine/bindings/sno-station-mem-ambient-learning-hook";
 import { onBeforeAgentStart } from "../../../../packages/sno-station-mem/src/engine/bindings/sno-station-mem-auto-recall-hook";
 import { MemoryContractRuntime } from "../../../../packages/sno-station-mem/src/engine/contract-runtime";
-import { pluginConfigSchema } from "../../../../packages/sno-station-mem/src/contract/config/plugin-config-schema";
+import { pluginConfigSchema } from "../../../../packages/sno-station-mem/config/plugin-config-schema";
 import type { Registration, Turn } from "../../../../packages/sno-station-mem/src/contract/index";
 
 const cleanups: Array<() => Promise<void>> = [];

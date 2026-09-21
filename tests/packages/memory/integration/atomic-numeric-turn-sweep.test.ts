@@ -160,6 +160,35 @@ describe("atomic numeric turn sweep", () => {
 		expect(outcome[0]).toContain('"unrecoveredTurnIndexes":[]');
 	});
 
+	it("keeps only what quotes the figure, not the rest of the swept turn", async () => {
+		// The sweep is given the whole transcript and asked again about a turn whose figures are
+		// uncited, so the model answers with everything that turn states. Only the figure was
+		// missing. Measured 2026-09-20 on a 66-session replay where a session is one turn: one
+		// uncaptured figure made the turn uncited, the sweep returned the session again, and 310
+		// records were added on top of 1,217 captured facts while 2% of stored rows quote a figure.
+		const { store } = callCountingStore();
+		const turn = TURNS[STEPS_TURN]?.content ?? "";
+		const withFigure = turn;
+		const withoutFigure = "Speaking of powerful";
+		const { transport } = transportReturning(JSON.stringify({
+			records: [withFigure, withoutFigure].map((quote, index) => ({
+				kind: "occurrence",
+				claim_text: index === 0 ? "The user walked 4,471 steps today." : "The user finds something powerful.",
+				subject: "user", subject_kind: "user", attribute: null,
+				value: index === 0 ? "4,471 steps" : "powerful",
+				temporal_phrase: "today", resolved_time: { year: 2026, month: 6, day: 4 },
+				importance: "medium", changes_current_state: false, ends_current: false,
+				todo: "none", close_reason: null,
+				source_span: { turn_index: STEPS_TURN, quote },
+				relations: [], single_claim: true,
+			})),
+		}));
+		const swept = await runAtomicNumericTurnSweep({
+			...BASE, store, records: [], transport, nowMs: () => 1_000,
+		});
+		expect(swept.map((r) => r.sourceSpan.quote)).toEqual([withFigure]);
+	});
+
 	it("names the swept turns when the model call throws, then rethrows", async () => {
 		const lines = captureStderr();
 		const { store } = callCountingStore();

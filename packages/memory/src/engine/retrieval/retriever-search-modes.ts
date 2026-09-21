@@ -358,8 +358,7 @@ Object.assign(MemoryRetriever.prototype, {
 	// Name is legacy (kept to avoid a wider rename); this is NOT rank-based RRF.
 	// It is weighted raw-score fusion, ported from the upstream reference
 	// (memory-memory-lancedb-pro `fuseResults`) after a brief detour through
-	// pure-rank RRF measured 65% vs vector-only's 84% on LoCoMo (see
-	// docs/internal-note.md).
+	// pure-rank RRF measured 65% vs vector-only's 84% on LoCoMo.
 	rrfFuse(
 		this: MemoryRetrieverInternals,
 		vector: MemorySearchResult[],
@@ -398,11 +397,7 @@ Object.assign(MemoryRetriever.prototype, {
 			const keywordScore = keywordHit?.score ?? 0;
 			const weightedFusion =
 				vectorScore * this.config.vectorWeight + keywordScore * this.config.bm25Weight;
-			// BM25 high-score floor (>= 0.75): preserves exact keyword matches
-			// (IDs, ticket numbers) that may score low on vector similarity.
-			const score = vectorHit
-				? clamp01(Math.max(weightedFusion, keywordScore >= 0.75 ? keywordScore * 0.92 : 0), 0.1)
-				: clamp01(keywordScore, 0.1);
+			const score = vectorHit ? clamp01(weightedFusion, 0.1) : clamp01(keywordScore, 0.1);
 
 			// Anchor rule (PRD §4): when both branches surface the same parent
 			// with different best chunks, pick the branch whose `bestChunkScore`

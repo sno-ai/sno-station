@@ -8,7 +8,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { retrievalConfigSchema } from "../../../../packages/sno-station-mem/src/contract/config/plugin-config-retrieval-schema";
+import { retrievalConfigSchema } from "../../../../packages/sno-station-mem/config/plugin-config-retrieval-schema";
 import {
 	DEFAULT_RECALL_LIFECYCLE,
 	type RecallLifecycleConfig,

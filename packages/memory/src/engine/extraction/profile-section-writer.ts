@@ -52,7 +52,7 @@ import {
 } from "../operations/runtime-audit-log";
 import { type LlmClient, LlmClientTerminalError } from "../../model/llm-client";
 import { resolveLlmRoute } from "../../model/llm-mode-routing";
-import type { LlmRoutingConfig } from "../../contract/config/plugin-config-mode-schema";
+import type { LlmRoutingConfig } from "../../../config/plugin-config-mode-schema";
 import type { MemoryEntry } from "../shared/types";
 import { StorageError } from "../shared/errors";
 import {

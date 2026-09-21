@@ -21,7 +21,7 @@ import {
 } from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-memory-extraction";
 import type { AtomicSubjectGuardTransport } from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-subject-guard";
 import type { Embedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client";
-import { llmRoutingConfigSchema } from "../../../../packages/sno-station-mem/src/contract/config/plugin-config-mode-schema";
+import { llmRoutingConfigSchema } from "../../../../packages/sno-station-mem/config/plugin-config-mode-schema";
 import {
 	type AtomicExtractionRunParameters,
 	MemoryStore,

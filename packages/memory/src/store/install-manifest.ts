@@ -1,9 +1,8 @@
 /** @file install-manifest.ts
  * @purpose Schema, atomic write, and read+validate for `install.json`. The
  *   manifest is the single source of truth that lets a reinstalled plugin
- *   reattach to the user's existing memory library. Schema follows PRD §3.2.
+ *   reattach to the user's existing memory library.
  * @boundary File I/O on a single JSON file. No SQLite, no DEK access.
- * @see docs/internal-note.md §3.2.
  */
 
 import {

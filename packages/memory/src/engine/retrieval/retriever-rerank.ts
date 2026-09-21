@@ -46,8 +46,8 @@ import {
 const RERANK_TRANSIENT_ATTEMPTS = 3;
 const RERANK_TRANSIENT_BACKOFF_MS = 200;
 const RERANK_TRANSIENT_STATUSES = new Set([429, 502, 503, 504]);
-// Owner measurement, 2026-09-17: a-clean-test-vm -> https://rt3-llm.sno.ai/rerank
-// returned 429 + retry-after: 1 under eight concurrent recalls; bound each queue wait.
+// A production-like concurrency test returned 429 + retry-after: 1 under eight concurrent
+// recalls; bound each queue wait.
 const RERANK_RETRY_AFTER_MAX_MS = 5_000;
 
 function isRerankTimeout(error: unknown): boolean {
@@ -298,7 +298,7 @@ Object.assign(MemoryRetriever.prototype, {
 					// Guard response.ok here so the remaining retrieval scoring path works with normalized inputs.
 					if (!response.ok) {
 						const retryAfter = response.headers.get("retry-after");
-						const fatalError = buildRerankHttpError(response.status, retryAfter);
+						const fatalError = buildRerankHttpError(response.status);
 						// Guard guard condition here so the remaining retrieval scoring path works with normalized inputs.
 						if (fatalError) {
 							// Surface this invalid retrieval ranking state as an explicit typed failure.
@@ -417,16 +417,6 @@ Object.assign(MemoryRetriever.prototype, {
 				}
 			}
 
-			// TEI logits share one scale across batches; normalize over the whole retrieval.
-			let minScore = Infinity;
-			let maxScore = -Infinity;
-			if (provider === "tei") {
-				for (const item of items) {
-					minScore = Math.min(minScore, item.score);
-					maxScore = Math.max(maxScore, item.score);
-				}
-			}
-
 			// Compute the normalized blend cross once so later retrieval scoring checks use one value.
 			const blendCross = this.config.rerankBlendCross ?? RERANK_BLEND_CROSS;
 			// Compute the normalized blend vector once so later retrieval scoring checks use one value.
@@ -447,9 +437,7 @@ Object.assign(MemoryRetriever.prototype, {
 				const sourceScore = this.getRerankSourceScore(candidate);
 				let crossScore = item.score;
 				if (provider === "tei") {
-					crossScore = maxScore === minScore
-						? 1 / (1 + Math.exp(-item.score))
-						: (item.score - minScore) / (maxScore - minScore);
+					crossScore = 1 / (1 + Math.exp(-item.score));
 				}
 				const blendedScore = clamp01(
 					crossScore * blendCross + sourceScore * blendVector,

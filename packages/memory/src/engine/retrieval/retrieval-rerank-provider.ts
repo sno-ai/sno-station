@@ -18,21 +18,12 @@ export const RERANK_DEFAULT_ENDPOINTS: Record<string, string | undefined> = {
 	dashscope: "https://dashscope.aliyuncs.com/api/v1/services/rerank",
 };
 
-export function buildRerankHttpError(
-	status: number,
-	retryAfter: string | null,
-): RetrievalError | undefined {
+export function buildRerankHttpError(status: number): RetrievalError | undefined {
 	// Guard status here so the remaining retrieval scoring path works with normalized inputs.
 	const failure = classifyLlmFailure({ status });
 	if (failure.category === "auth") {
 		// Centralize the retrieval scoring fallback value at the boundary of this helper.
 		return new RetrievalError(`Rerank API failed with status ${status}`);
-	}
-	// Guard status here so the remaining retrieval scoring path works with normalized inputs.
-	if (failure.category === "throttle") {
-		const retryAfterDetail = retryAfter ? `, retry after ${retryAfter}s` : "";
-		// Centralize the retrieval scoring fallback value at the boundary of this helper.
-		return new RetrievalError(`Rerank API failed with status 429${retryAfterDetail}`);
 	}
 	// Signal an intentional miss with undefined instead of overloading an empty value.
 	return undefined;

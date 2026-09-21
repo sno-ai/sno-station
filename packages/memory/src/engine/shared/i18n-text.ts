@@ -6,7 +6,7 @@
 const REGEXP_SPECIAL_CHARS = /[.*+?^${}()|[\]\\]/g;
 const CJK_CHAR_PATTERN = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u;
 const LETTER_OR_NUMBER = String.raw`[\p{L}\p{N}]`;
-const HTML_TAG_PATTERN = /<\/?[A-Za-z][^>]*>/g;
+export const HTML_TAG_PATTERN: RegExp = /<!--[\s\S]*?(?:-->|$)|<\/?[A-Za-z][^>]*>/g;
 const ROLE_LABEL_PREFIX_PATTERN =
 	/(^|\n)([ \t]*)(system|assistant|user|developer|tool|function)\s*:/giu;
 

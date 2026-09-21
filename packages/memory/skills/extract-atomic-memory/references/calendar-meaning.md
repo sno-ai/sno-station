@@ -24,9 +24,11 @@ Not knowing when an event happened does not erase that event: keep its record wi
   from the whole statement, not from whether each split claim repeats the time words.
   The amount is a number the words state. "Recently", "lately", "a while ago", "a few weeks
   ago", "the other day" and "soon" state none: they are `unresolved`, never a guessed number.
-- `weekday`: give `weekday` (Monday 1 through Sunday 7) and `direction` (`previous` or `next`)
-  for a strictly preceding/following occurrence. Read abbreviations, spelling, language and the
-  speaker's intended reference in context. The code finds that weekday; do not count days.
+- `weekday`: give `day_name` as the English day name in lowercase (`monday` through `sunday`)
+  and `direction` (`previous` or `next`) for a strictly preceding/following occurrence: "last
+  Friday" is `{"kind": "weekday", "day_name": "friday", "direction": "previous", "precision":
+  "day"}`. Read abbreviations, spelling, language and the speaker's intended reference in
+  context, then name that day; never a number. The code finds that weekday; do not count days.
 
 For resolved instructions give `precision`: `year`, `month`, `week`, `day`, or `minute`.
 Preserve what is actually known. "Four years ago" normally supplies a year, not an anniversary
@@ -50,7 +52,13 @@ earlier turn explicitly dates that same exhibition to last Friday, retain the we
 instruction for the exhibition; never replace it with a guessed number of days. Copy the
 actual dating words into `temporal_phrase`, not a clause that merely names the experience.
 
-A weekend is a span, not an exact Saturday or Sunday, and no precision names it: keep the
-weekend phrase and use `unresolved`; do not narrow it to a single weekday. A week is not a
-weekend: "last week" is `relative`, `amount: -1`, `unit: week`, `precision: week`; the code
-turns that into the week's date range.
+A weekend is a span, not an exact Saturday or Sunday, and no precision names it: date it by
+the week that holds it. "Last weekend" is `relative`, `amount: -1`, `unit: week`,
+`precision: week`; "this weekend" is `amount: 0`. Do not narrow a weekend to a single weekday
+and do not leave it unresolved. "Last week" is the same instruction, `amount: -1`,
+`unit: week`, `precision: week`; the code turns that into the week's date range. The amount
+counts the stated unit, so "last week" is one week, never seven.
+
+"Today", "tonight", "this morning" and "earlier today" are `relative`, `amount: 0`,
+`unit: day`, `precision: day`; "yesterday" and "last night" are `amount: -1`; "tomorrow" is
+`amount: 1`. A photo or message the speaker shares today is dated today.
