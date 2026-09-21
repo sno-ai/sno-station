@@ -43,7 +43,7 @@ export const codingSkinInstallationSchema: typeof installationSettingsSchema =
 export function createCodingSkinRegistration(input: {
 	skinId: string;
 	installed: InstallationSettings;
-	model: NonNullable<Registration["model"]>;
+	model?: NonNullable<Registration["model"]>;
 }): Registration {
 	const routing = llmRoutingConfigSchema.parse({
 		mode: input.installed.mode,

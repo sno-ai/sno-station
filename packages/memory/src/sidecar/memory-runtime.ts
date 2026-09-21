@@ -4,7 +4,7 @@ import { readMaintenanceOverrides } from "./config";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { randomUUID } from "node:crypto";
 import { readMemorySnapshotPayload, type SnapshotReason } from "../engine/observability/memory-snapshot";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { createLogger } from "@snoai/utils/logger";
@@ -29,6 +29,8 @@ import { withProviderResponses } from "../model/llm-provider-transport";
 import type { ProviderResponseTrace } from "../model/llm-client-types";
 import { MEMORY_USAGE_FLUSH_INTERVAL_MS } from "./config";
 import { clearRegisteredRemTicks, setRegisteredRemTick } from "./rem-trigger";
+import { createCodingSkinRegistration } from "../../config/coding-skin";
+import { installationSettingsSchema, type InstallationSettings } from "../../config/installation-settings";
 
 /** The skin's observe session for the request in flight; store, embedder and retriever events carry it. */
 const observeSession = new AsyncLocalStorage<string | undefined>();
@@ -71,6 +73,7 @@ export class MemoryRuntimePool {
 		readonly storePath: string,
 		readonly store: ObservableMemoryStore,
 		readonly config: PluginConfig,
+		private readonly installed: InstallationSettings | undefined,
 		private readonly observability: PluginObservability,
 		private readonly embedder: ObservableEmbedder,
 	) { this.usageOutbox = new MemoryTelemetryUsageOutbox({ sqlite: store.sqlite, dbPath: storePath }); }
@@ -79,11 +82,13 @@ export class MemoryRuntimePool {
 		const storePath = await readBoundStorePath();
 		const configPath = getInstallationConfigPath();
 		let config = pluginConfigSchema.parse({ dbPath: storePath });
+		let installed: InstallationSettings | undefined;
 		try {
 			if (!existsSync(configPath)) engineLogger.error("memory.installation.config.missing");
 			if (existsSync(configPath)) {
-				const installed = readSnoStationMemConfig(configPath).plugins?.entries?.[PLUGIN_ENTRY_KEY]?.config;
-				config = pluginConfigSchema.parse({ ...installed, dbPath: storePath });
+				const runtimeConfig = readSnoStationMemConfig(configPath).plugins?.entries?.[PLUGIN_ENTRY_KEY]?.config;
+				installed = installationSettingsSchema.parse(JSON.parse(readFileSync(configPath, "utf8")));
+				config = pluginConfigSchema.parse({ ...runtimeConfig, dbPath: storePath });
 			}
 		} catch (error) { engineLogger.error(String(error)); }
 		await initSqliteRuntime();
@@ -92,7 +97,7 @@ export class MemoryRuntimePool {
 		const observability = new PluginObservability(config, stateDir, engineLogger);
 		const embedder = new ObservableEmbedder(config.embedding, stateDir, observability, observeSessionUuid);
 		const store = new ObservableMemoryStore({ dbPath: storePath, vectorDim: embedder.dimensions, embedder, memoryTelemetry: config.memoryTelemetry }, observability, observeSessionUuid, config.embedding);
-		const pool = new MemoryRuntimePool(storePath, store, config, observability, embedder);
+		const pool = new MemoryRuntimePool(storePath, store, config, installed, observability, embedder);
 		const maintenance = readMaintenanceOverrides();
 		pool.maintenance = startMaintenanceTimer({ store, dbPath: storePath, stateDir, remClock: maintenance.now, remVolumeThreshold: maintenance.volumeThreshold,
 			backupDir: join(stateDir, "backups"), usageOutbox: pool.usageOutbox }, maintenance.intervalMs, maintenance.intervalMs,
@@ -147,6 +152,14 @@ export class MemoryRuntimePool {
 			const init = parseInput("init", raw);
 			this.counters.engineAccesses++;
 			this.counters.storeAccesses++;
+			if ("inheritInstalled" in init.registration) {
+				if (!this.installed) throw new Error("memory.installation.config.unavailable");
+				return this.register(init.scope, createCodingSkinRegistration({
+					skinId,
+					installed: this.installed,
+					model: init.registration.model,
+				}));
+			}
 			return this.register(init.scope, { ...init.registration, skinId });
 		}
 		let entry = this.skins.get(skinId);

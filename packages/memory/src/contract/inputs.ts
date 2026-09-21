@@ -27,12 +27,19 @@ export type Message = {
 	at: number;
 };
 export type Turn = { turnId: string; rewindEpoch: number; messages: Message[] };
+export type AgentModelRegistration = { baseUrl: string; credential: string; model: string };
 export type Registration = {
 	skinId: string;
 	routing: LlmRoutingConfig;
 	settings: EngineSettings;
-	model?: { baseUrl: string; credential: string; model: string };
+	model?: AgentModelRegistration;
 };
+export type InheritedRegistration = {
+	skinId: string;
+	inheritInstalled: true;
+	model?: AgentModelRegistration;
+};
+export type InitRegistration = Registration | InheritedRegistration;
 export type RecallOptions = {
 	corpus?: "memory" | "wiki" | "all" | "sessions";
 	source?: "auto" | "manual" | "native";
@@ -69,7 +76,7 @@ export type UsageSignal = {
 	at: number;
 };
 export interface ContractInputs {
-	init: { scope: ScopeCtx; registration: Registration };
+	init: { scope: ScopeCtx; registration: InitRegistration };
 	getRecall: { query: string; scope: ScopeCtx; options: RecallOptions };
 	capture: { turn: Turn; scope: ScopeCtx };
 	mutate: { op: Mutation; scope: ScopeCtx };
@@ -110,6 +117,18 @@ export const registrationSchema: z.ZodType<Registration, unknown> = z.object({
 		baseUrl: z.url({ protocol: /^https?$/ }), credential: z.string(), model: nonempty,
 	}).optional(),
 });
+const inheritedRegistrationSchema: z.ZodType<InheritedRegistration, unknown> = z.strictObject({
+	skinId: nonempty,
+	inheritInstalled: z.literal(true),
+	model: z.object({
+		baseUrl: z.url({ protocol: /^https?$/ }), credential: z.string(), model: nonempty,
+	}).optional(),
+});
+export const initRegistrationSchema: z.ZodType<InitRegistration, unknown> = z.preprocess(value => {
+	if (value && typeof value === "object" && "inheritInstalled" in value && value.inheritInstalled === true
+		&& ("settings" in value || "routing" in value)) return null;
+	return value;
+}, z.union([inheritedRegistrationSchema, registrationSchema]));
 export const recallOptionsSchema: z.ZodType<RecallOptions, unknown> = z.object({
 	corpus: z.enum(["memory", "wiki", "all", "sessions"]).default("memory"),
 	source: z.enum(["auto", "manual", "native"]).optional(),
@@ -162,7 +181,7 @@ export const usageSignalSchema: z.ZodType<UsageSignal, unknown> = z.object({
 	toolName: nonempty.optional(), text: z.string().optional(), error: z.json().optional(), result: z.json().optional(), at: timestamp,
 });
 export const inputSchemas: { [K in keyof ContractInputs]: z.ZodType<ContractInputs[K], unknown> } = {
-	init: z.object({ scope: scopeSchema, registration: registrationSchema }),
+	init: z.object({ scope: scopeSchema, registration: initRegistrationSchema }),
 	getRecall: z.object({ query: nonempty, scope: scopeSchema, options: recallOptionsSchema }),
 	capture: z.object({ turn: turnSchema, scope: scopeSchema }),
 	mutate: z.object({ op: mutationSchema, scope: scopeSchema }),

@@ -1,4 +1,4 @@
-import { existsSync, closeSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, rmdirSync, rmSync, statSync, watch, writeFileSync, writeSync } from "node:fs";
+import { chmodSync, existsSync, closeSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, rmdirSync, rmSync, statSync, watch, writeFileSync, writeSync } from "node:fs";
 import { once } from "node:events";
 import { createServer, request as httpRequest } from "node:http";
 import { createConnection } from "node:net";
@@ -153,6 +153,36 @@ describe("documented HTTP runtime claims", () => {
 		}, "never-initialized");
 		expect(response.status).toBe(200);
 		expect(await response.json()).toEqual({ degraded: false, result: { op: "list", project: "global", entries: [] } });
+	});
+	it("initializes from installed settings without changing complete registration", async () => {
+		await health();
+		const scope = { principal: "caller", project: "global", session: "inherited-init" };
+		const inherited = await contractPost("/v1/init", {
+			scope, registration: { skinId: "body-skin", inheritInstalled: true },
+		}, "hermes");
+		expect(inherited.status).toBe(200);
+		expect(await inherited.json()).toMatchObject({ degraded: false, skinId: "hermes" });
+
+		const captured = await contractPost("/v1/capture", { scope,
+			turn: { turnId: "inherited-init", rewindEpoch: 0, messages: [
+				{ role: "user", content: "The launch color is cobalt blue.", at: 1789606800000 },
+				{ role: "assistant", content: "I will remember the cobalt launch color.", at: 1789606801000 },
+			] },
+		}, "hermes");
+		expect(captured.status).toBe(200);
+		expect(await captured.json()).toMatchObject({ degraded: false, committed: true });
+
+		const mixed = await contractPost("/v1/init", {
+			scope, registration: { skinId: "body-skin", inheritInstalled: true, settings: {}, routing: {} },
+		}, "hermes");
+		expect(mixed.status).toBe(400);
+		expect(await mixed.json()).toEqual({ degraded: true, reason: "invalid-input" });
+
+		const complete = await contractPost("/v1/init", {
+			scope, registration: registration("local-first"),
+		}, "existing-client");
+		expect(complete.status).toBe(200);
+		expect(await complete.json()).toMatchObject({ degraded: false, skinId: "existing-client" });
 	});
 	it("returns a degraded reason when the agent model endpoint is absent", async () => {
 		await health();
@@ -437,6 +467,35 @@ describe("sidecar keeps serving", () => {
 			await pool.close();
 		}
 		expect(readRemAutomaticOperations(configPath).tickEnabled).toBe(true);
+	});
+	it("rejects inherited registration when the installation config cannot be read", async () => {
+		const configPath = join(root, "station", `sno-station-mem-${userInfo().username}.config.json`);
+		const original = readFileSync(configPath);
+		writeFileSync(configPath, "{");
+		const pool = await MemoryRuntimePool.open();
+		try {
+			await expect(pool.invoke("init", {
+				scope: { principal: userInfo().username, project: "global", session: "inherited-missing-config" },
+				registration: { skinId: "hermes", inheritInstalled: true },
+			}, "hermes")).rejects.toThrow("memory.installation.config.unavailable");
+		} finally {
+			await pool.close();
+			writeFileSync(configPath, original);
+		}
+	});
+	it("rejects inherited registration when the installation config is not mode 0600", async () => {
+		const configPath = join(root, "station", `sno-station-mem-${userInfo().username}.config.json`);
+		chmodSync(configPath, 0o644);
+		const pool = await MemoryRuntimePool.open();
+		try {
+			await expect(pool.invoke("init", {
+				scope: { principal: userInfo().username, project: "global", session: "inherited-open-mode" },
+				registration: { skinId: "hermes", inheritInstalled: true },
+			}, "hermes")).rejects.toThrow("memory.installation.config.unavailable");
+		} finally {
+			await pool.close();
+			chmodSync(configPath, 0o600);
+		}
 	});
 	it("reads the REM tick switch across HTTP skin registrations", async () => {
 		await health();
