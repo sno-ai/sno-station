@@ -32,6 +32,7 @@ _HTTP_TIMEOUT_SECONDS = 900
 _CALLBACK_MAX_BODY_BYTES = 1_048_576
 _CALLBACK_TIMEOUT_SECONDS = 900
 _LATER_RECALL_LIMIT = 3
+_LATER_RECALL_MIN_SCORE = 0.3
 _LATER_RECALL_MAX_CHARS = 1_500
 _TOOL_RECALL_LIMIT = 5
 _TASK_QUERY = "current task objective, completed work, blockers, next action, and relevant files or evidence"
@@ -426,6 +427,7 @@ class SnoMemoryProvider(MemoryProvider):
                     "options": {
                         "source": "manual",
                         "limit": _LATER_RECALL_LIMIT,
+                        "minScore": _LATER_RECALL_MIN_SCORE,
                         "includeMetadata": True,
                     },
                 },
@@ -639,7 +641,21 @@ class SnoMemoryProvider(MemoryProvider):
                 },
             },
         )
-        return json.dumps(result)
+        memories, error = _memories(result)
+        if error:
+            return json.dumps(result)
+        text, included = _render_memories(memories, _TOOL_RECALL_LIMIT, sys.maxsize)
+        return json.dumps(
+            {
+                "degraded": False,
+                "recallId": result.get("recallId"),
+                "contextText": text,
+                "toolResult": {
+                    "content": [{"type": "text", "text": text}],
+                    "details": {"count": len(included), "memories": included},
+                },
+            }
+        )
 
     def _get_tool(self, args: dict[str, object]) -> str:
         memory_id = args.get("id")
