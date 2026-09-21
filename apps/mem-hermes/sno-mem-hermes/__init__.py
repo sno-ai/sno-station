@@ -746,7 +746,14 @@ class SnoMemoryProvider(MemoryProvider):
                         "op": "store",
                         "content": content,
                         "category": entry.get("category", "episodic"),
-                        "metadata": {"correctionOf": memory_id},
+                        "metadata": {
+                            "correctionOf": memory_id,
+                            **(
+                                {"section_name": section}
+                                if isinstance(section := metadata.get("section_name"), str)
+                                else {}
+                            ),
+                        },
                     },
                 },
             )
