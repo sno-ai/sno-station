@@ -2,6 +2,7 @@
 	"name": "@snoai/sno-observe",
 	"version": "0.1.0",
 	"license": "Apache-2.0",
+	"publishConfig": { "access": "public" },
 	"repository": {
 		"type": "git",
 		"url": "git+https://github.com/sno-ai/sno-station.git",
@@ -25,6 +26,7 @@
 	],
 	"scripts": {
 		"build": "npm run build --workspace @snoai/common-core && tsc -p tsconfig.json",
+		"prepack": "npm run build",
 		"typecheck": "tsc --noEmit",
 		"lint": "biome check src/",
 		"lint:fix": "biome check --write src/",
@@ -37,8 +39,8 @@
 		"test:all": "npm run build && node --test ../../tests/packages/sno-observe/**/*.test.mjs"
 	},
 	"dependencies": {
-		"@snoai/utils": "file:../utils",
-		"@snoai/common-core": "file:../common-core",
+		"@snoai/utils": "^0.8.0",
+		"@snoai/common-core": "^0.1.0",
 		"better-sqlite3": "^13.0.3",
 		"js-tiktoken": "^1.0.0",
 		"zod": "^4.5.4"

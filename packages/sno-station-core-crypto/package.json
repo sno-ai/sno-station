@@ -2,6 +2,7 @@
 	"name": "@snoai/sno-station-core-crypto",
 	"version": "0.2.0",
 	"license": "Apache-2.0",
+	"publishConfig": { "access": "public" },
 	"repository": {
 		"type": "git",
 		"url": "git+https://github.com/sno-ai/sno-station.git",
@@ -42,7 +43,7 @@
 		"clean": "rm -rf dist"
 	},
 	"dependencies": {
-		"@snoai/utils": "file:../utils",
+		"@snoai/utils": "^0.8.0",
 		"@types/better-sqlite3": "^9.6.0",
 		"@napi-rs/keyring": "^2.0.0",
 		"argon2": "^0.45.1",
