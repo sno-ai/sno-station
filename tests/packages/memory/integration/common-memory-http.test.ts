@@ -6,7 +6,7 @@ import { join, resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { afterEach, beforeEach, expect, it } from "vitest";
 import { makeTestEnv, type TestEnv } from "../../sno-station-core-crypto/_helpers";
-import { pluginConfigSchema } from "../../../../packages/sno-station-mem/src/contract/config/plugin-config-schema";
+import { pluginConfigSchema } from "../../../../packages/sno-station-mem/config/plugin-config-schema";
 
 const repo = resolve(import.meta.dirname, "../../../..");
 const original = join(repo, "packages/sno-station-mem");

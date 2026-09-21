@@ -16,7 +16,7 @@ import type {
 } from "./memory-tool-dependencies";
 import { AGGREGATION_OPERATIONS, MEMORY_CATEGORIES, z } from "./memory-tool-dependencies";
 import type { LlmClient } from "../../model/llm-client-types";
-import type { LlmRoutingConfig } from "../../contract/config/plugin-config-mode-schema";
+import type { LlmRoutingConfig } from "../../../config/plugin-config-mode-schema";
 
 
 

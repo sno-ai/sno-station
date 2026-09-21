@@ -80,6 +80,17 @@ All listed methods use POST. Deadlines are server request ceilings, not latency 
 
 Initializes or replaces the header-selected skin. `registration.skinId` remains a required nonblank input, but the header overrides its value (including the `default` header fallback). No prior registration is required for other calls: installed settings create the runtime on demand. With installed `local-first` settings and an empty store, an unregistered skin calling `inspect` with `op: "list"` and project `global` receives HTTP 200 and `{"degraded":false,"result":{"op":"list","project":"global","entries":[]}}` (proved by: `tests/packages/sno-station-mem/integration/sidecar-no-gates.test.ts` — `serves HTTP inspection before any init using installed settings`).
 
+`registration` has two mutually exclusive shapes. The complete shape supplies `routing` and
+`settings` as before. The inherited shape supplies `{ "skinId": "...", "inheritInstalled": true,
+"model": ...? }`; the sidecar derives routing and settings from its loaded installation settings
+through the shared coding-skin factory. The inherited shape is strict and rejects `settings`,
+`routing`, and other unknown fields. Its optional `model` uses the same schema as the complete
+shape. The skin header still overrides the body skin id. When the sidecar could not load its
+installation settings at start (file missing, invalid JSON, or schema failure), the inherited shape
+fails with HTTP 500 `{"degraded":true,"reason":"engine-failed"}` instead of registering default
+settings (proved by: `tests/packages/sno-station-mem/integration/sidecar-no-gates.test.ts` —
+`rejects inherited registration when the installation config cannot be read`).
+
 `routing` is the routing authority. Settings are the existing normalized engine settings, not a second raw plugin configuration. Installed embedding, telemetry and store path override conflicting registration values with an error log. All nested fields are enumerated below. Objects with `additionalProperties:false` reject unknown keys; ordinary input objects strip them.
 
 Additional refinements: `registration.model.baseUrl` must use HTTP or HTTPS. `registration.model.model` and `registration.skinId` must contain non-whitespace text; credential may be empty. Model credentials remain in memory. When observation is enabled, its base URL must have the configured production origin; test mode permits HTTP(S) loopback. Unless reranking is `none`, retrieval endpoint/model/key `${ENV}` placeholders are resolved, a supplied endpoint requires `rerankProvider`, and the resolved endpoint must be a URL. Missing variables fail parsing. Omitted prefault objects are parsed as `{}` and receive their child defaults. Observation defaults come from process environment, as marked in the table.
@@ -107,156 +118,164 @@ Scope requires nonblank `principal`, `project`, `session`; each supplied `readab
 | scope.host.boundary | string | no | ["new","reset","session-end"] | - | - |
 | scope.host.at | number | no | - | - | {"minimum":0} |
 | scope.host.systemCaller | boolean | no | - | - | - |
-| registration | object | yes | - | - | - |
-| registration.skinId | string | yes | - | - | {"minLength":1} |
-| registration.routing | object | yes | - | - | {"additionalProperties":false} |
-| registration.routing.mode | string | yes | ["local-first","agent-native","rem-enhanced"] | - | - |
-| registration.routing.remEnhanced | object | no | - | {} | {"additionalProperties":false} |
-| registration.routing.remEnhanced.trigger | object | no | - | {} | {"additionalProperties":false} |
-| registration.routing.remEnhanced.trigger.tick | boolean | no | - | true | - |
-| registration.routing.remEnhanced.occasions | object | no | - | {} | {"additionalProperties":false} |
-| registration.routing.remEnhanced.occasions.memoryExtract | string | no | ["snoRemMem","agent"] | "snoRemMem" | - |
-| registration.routing.remEnhanced.occasions.dedupDecision | string | no | ["snoRemMem","agent"] | "agent" | - |
-| registration.routing.remEnhanced.occasions.profileSectionMerge | string | no | ["snoRemMem","agent"] | "agent" | - |
-| registration.routing.remEnhanced.occasions.profileActiveTaskClassify | string | no | ["snoRemMem","agent"] | "agent" | - |
-| registration.routing.remEnhanced.occasions.profileActiveTaskMatch | string | no | ["snoRemMem","agent"] | "agent" | - |
-| registration.routing.remEnhanced.occasions.conflictAdjudication | string | no | ["snoRemMem","agent"] | "snoRemMem" | - |
-| registration.routing.remEnhanced.occasions.summaryBuild | string | no | ["snoRemMem","agent"] | "agent" | - |
-| registration.routing.remEnhanced.occasions.intentClassifier | string | no | ["snoRemMem","agent"] | "agent" | - |
-| registration.routing.remEnhanced.occasions.dateResolution | string | no | ["snoRemMem","agent"] | "agent" | - |
-| registration.routing.agentNative | object | no | - | {} | {"additionalProperties":false} |
-| registration.routing.agentNative.flavor | string | no | ["subscription","byok"] | "subscription" | - |
-| registration.routing.language | string | no | ["en","de","es","fr","zh","zh-Hant","ja","ko","ru"] | "en" | - |
-| registration.settings | object | yes | - | - | - |
-| registration.settings.embedding | object | no | - | {} | - |
-| registration.settings.embedding.provider | string | no | ["local-onnx"] | "local-onnx" | - |
-| registration.settings.embedding.model | string | no | - | - | - |
-| registration.settings.embedding.dimensions | integer | no | - | 1024 | {"exclusiveMinimum":0,"maximum":9007199254740991} |
-| registration.settings.embedding.nativeDim | integer | no | - | - | {"exclusiveMinimum":0,"maximum":9007199254740991} |
-| registration.settings.embedding.revision | string | no | - | - | - |
-| registration.settings.embedding.pooling | string | no | ["last_token","mean","cls"] | - | - |
-| registration.settings.embedding.normalized | boolean | no | - | - | - |
-| registration.settings.embedding.cacheDir | string | no | - | - | - |
-| registration.settings.embedding.dtype | string | no | ["q4","q8","fp16","fp32"] | "q8" | - |
-| registration.settings.embedding.sessionOptions | object | no | - | {} | {"additionalProperties":false} |
-| registration.settings.embedding.sessionOptions.graphOptimizationLevel | string | no | ["disabled","basic","extended","all"] | "extended" | - |
-| registration.settings.embedding.sessionOptions.enableMemPattern | boolean | no | - | false | - |
-| registration.settings.embedding.sessionOptions.enableCpuMemArena | boolean | no | - | false | - |
-| registration.settings.embedding.sessionOptions.executionMode | string | no | ["sequential","parallel"] | - | - |
-| registration.settings.embedding.sessionOptions.interOpNumThreads | integer | no | - | - | {"exclusiveMinimum":0,"maximum":9007199254740991} |
-| registration.settings.embedding.sessionOptions.intraOpNumThreads | integer | no | - | - | {"exclusiveMinimum":0,"maximum":9007199254740991} |
-| registration.settings.embedding.chunking | boolean | no | - | true | - |
-| registration.settings.observe | object | no | - | {} | - |
-| registration.settings.observe.enabled | boolean | no | - | SNO_OBSERVE_ENABLED (true/1; otherwise false) | - |
-| registration.settings.observe.baseUrl | string | no | - | SNO_OBSERVE_BASE_URL or https://www.sno.ai | - |
-| registration.settings.observe.agentId | string | no | ["openclaw","hermes","claude-code","codex"] | "openclaw" | - |
-| registration.settings.dbPath | string | no | - | - | - |
-| registration.settings.provider | object | yes | - | - | - |
-| registration.settings.provider.userId | string | no | - | - | - |
-| registration.settings.ambientLearning | boolean | yes | - | - | - |
-| registration.settings.autoRecall | boolean | yes | - | - | - |
-| registration.settings.autoRecallMinLength | integer | yes | - | - | {"minimum":1,"maximum":200} |
-| registration.settings.autoRecallMinRepeated | integer | yes | - | - | {"minimum":0,"maximum":100} |
-| registration.settings.autoRecallMaxQueryLength | integer | yes | - | - | {"minimum":100,"maximum":10000} |
-| registration.settings.autoRecallTimeoutMs | integer | yes | - | - | {"minimum":500,"maximum":60000} |
-| registration.settings.autoRecallIncludeAgents | array | yes | - | - | - |
-| registration.settings.autoRecallIncludeAgents[] | string | yes | - | - | - |
-| registration.settings.autoRecallExcludeAgents | array | yes | - | - | - |
-| registration.settings.autoRecallExcludeAgents[] | string | yes | - | - | - |
-| registration.settings.captureAssistant | boolean | yes | - | - | - |
-| registration.settings.retrieval | object | no | - | {} | - |
-| registration.settings.retrieval.mode | string | no | ["precision-recall","vector"] | "precision-recall" | - |
-| registration.settings.retrieval.recallTopK | integer | no | - | 20 | {"minimum":1,"maximum":2000} |
-| registration.settings.retrieval.vectorWeight | number | no | - | 0.7 | {"minimum":0,"maximum":1} |
-| registration.settings.retrieval.bm25Weight | number | no | - | 0.3 | {"minimum":0,"maximum":1} |
-| registration.settings.retrieval.minScore | number | no | - | 0 | {"minimum":0,"maximum":1} |
-| registration.settings.retrieval.rerank | string | no | ["cross-encoder","lightweight","none"] | "cross-encoder" | - |
-| registration.settings.retrieval.candidatePoolSize | integer | no | - | 64 | {"minimum":10,"maximum":2000} |
-| registration.settings.retrieval.rerankApiKey | string | no | - | - | - |
-| registration.settings.retrieval.rerankModel | string | no | - | "rerank-2" | - |
-| registration.settings.retrieval.rerankTimeoutMs | integer | no | - | 15000 | {"minimum":1000,"maximum":120000} |
-| registration.settings.retrieval.recencyHalfLifeDays | number | no | - | 14 | {"minimum":0,"maximum":365} |
-| registration.settings.retrieval.recencyWeight | number | no | - | 0.1 | {"minimum":0,"maximum":0.5} |
-| registration.settings.retrieval.temporalWeighting | boolean | no | - | false | - |
-| registration.settings.retrieval.mmrWindowOnly | boolean | no | - | false | - |
-| registration.settings.retrieval.temporalExpiry | boolean | no | - | false | - |
-| registration.settings.retrieval.temporalDecay | boolean | no | - | true | - |
-| registration.settings.retrieval.lengthNormAnchor | integer | no | - | 0 | {"minimum":0,"maximum":5000} |
-| registration.settings.retrieval.hardMinScore | number | no | - | 0 | {"minimum":0,"maximum":1} |
-| registration.settings.retrieval.timeDecayHalfLifeDays | number | no | - | 60 | {"minimum":0,"maximum":365} |
-| registration.settings.retrieval.rerankBlendVector | number | no | - | - | {"minimum":0,"maximum":1} |
-| registration.settings.retrieval.rerankBlendCross | number | no | - | - | {"minimum":0,"maximum":1} |
-| registration.settings.retrieval.lightweightFusionWeight | number | no | - | - | {"minimum":0,"maximum":1} |
-| registration.settings.retrieval.lightweightCosineWeight | number | no | - | - | {"minimum":0,"maximum":1} |
-| registration.settings.retrieval.importanceWeightBase | number | no | - | - | {"minimum":0,"maximum":1} |
-| registration.settings.retrieval.timeDecayFloor | number | no | - | - | {"minimum":0,"maximum":1} |
-| registration.settings.retrieval.mmrLambda | number | no | - | - | {"minimum":0,"maximum":1} |
-| registration.settings.retrieval.rerankEndpoint | string | no | - | - | - |
-| registration.settings.retrieval.rerankProvider | string | no | ["jina","siliconflow","pinecone","voyage","dashscope","tei","custom"] | - | - |
-| registration.settings.retrieval.rerankMaxCandidates | integer | no | - | - | {"minimum":1,"maximum":2000} |
-| registration.settings.retrieval.reinforcementFactor | number | no | - | 0.5 | {"minimum":0,"maximum":5} |
-| registration.settings.retrieval.maxHalfLifeMultiplier | number | no | - | 3 | {"minimum":1,"maximum":10} |
-| registration.settings.scopes | object | yes | - | - | - |
-| registration.settings.scopes.default | string | yes | - | - | - |
-| registration.settings.scopes.definitions | object | yes | - | - | {"propertyNames":{"type":"string"}} |
-| registration.settings.scopes.definitions{} | object | yes | - | - | - |
-| registration.settings.scopes.definitions{}.description | string | no | - | - | - |
-| registration.settings.scopes.definitions{}.metadata | object | no | - | - | {"propertyNames":{"type":"string"}} |
-| registration.settings.scopes.definitions{}.metadata{} | JSON | yes | - | - | - |
-| registration.settings.scopes.agentAccess | object | yes | - | - | {"propertyNames":{"type":"string"}} |
-| registration.settings.scopes.agentAccess{} | array | yes | - | - | - |
-| registration.settings.scopes.agentAccess{}[] | string | yes | - | - | - |
-| registration.settings.enableManagementTools | boolean | yes | - | - | - |
-| registration.settings.sessionStrategy | string | yes | ["memoryReflection","systemSessionMemory","none"] | - | - |
-| registration.settings.sessionMemory | object | no | - | {} | - |
-| registration.settings.sessionMemory.enabled | boolean | no | - | true | - |
-| registration.settings.sessionMemory.messageCount | integer | no | - | 15 | {"minimum":1,"maximum":100} |
-| registration.settings.compression | object | no | - | - | - |
-| registration.settings.compression.enabled | boolean | yes | - | - | - |
-| registration.settings.selfImprovement | object | no | - | {} | - |
-| registration.settings.selfImprovement.enabled | boolean | no | - | true | - |
-| registration.settings.selfImprovement.beforeResetNote | boolean | no | - | true | - |
-| registration.settings.selfImprovement.skipSubagentBootstrap | boolean | no | - | true | - |
-| registration.settings.selfImprovement.ensureLearningFiles | boolean | no | - | true | - |
-| registration.settings.extraction | object | no | - | {} | {"additionalProperties":false} |
-| registration.settings.extraction.llm | object | no | - | {} | {"additionalProperties":false} |
-| registration.settings.extraction.llm.preset | string | no | ["mem_claw/openai_gpt_5_nano","mem_claw/openrouter_auto","mem_claw/sno_ai_extract","mem_claw/sno_extract_chat","mem_claw/sno_extract_profile","mem_claw/sno_conflict_verdict"] | "mem_claw/sno_ai_extract" | - |
-| registration.settings.extraction.llm.baseURL | string | no | - | - | - |
-| registration.settings.extraction.llm.apiKey | string | no | - | - | - |
-| registration.settings.extraction.llm.heliconeApiKey | string | no | - | - | - |
-| registration.settings.extraction.llm.timeoutMs | integer | no | - | 30000 | {"minimum":1000,"maximum":300000} |
-| registration.settings.memoryReflection | object | no | - | {} | - |
-| registration.settings.memoryReflection.messageCount | integer | no | - | 120 | {"minimum":1,"maximum":500} |
-| registration.settings.memoryReflection.maxInputChars | integer | no | - | 24000 | {"minimum":1000,"maximum":200000} |
-| registration.settings.memoryReflection.timeoutMs | integer | no | - | 20000 | {"minimum":5000,"maximum":300000} |
-| registration.settings.memoryReflection.errorReminderMaxEntries | integer | no | - | 3 | {"minimum":0,"maximum":50} |
-| registration.settings.memoryReflection.dedupeErrorSignals | boolean | no | - | true | - |
-| registration.settings.memoryReflection.injectMode | string | no | ["inheritance+derived","inheritance-only","none"] | "inheritance+derived" | - |
-| registration.settings.memoryReflection.storeToDb | boolean | no | - | true | - |
-| registration.settings.memoryReflection.injectIntoPrompt | boolean | no | - | false | - |
-| registration.settings.memoryReflection.agentId | string | no | - | - | - |
-| registration.settings.recallLifecycle | object | no | - | {} | - |
-| registration.settings.recallLifecycle.retentionScorer | boolean | no | - | true | - |
-| registration.settings.recallLifecycle.tierPromoter | boolean | no | - | true | - |
-| registration.settings.recallLifecycle.autoRecallAccessTracking | boolean | no | - | true | - |
-| registration.settings.recallLifecycle.traceEnabled | boolean | no | - | true | - |
-| registration.settings.recallLifecycle.tierFloorMode | string | no | ["bare","withFloor"] | "bare" | - |
-| registration.settings.recallLifecycle.tierPromotionTopK | integer | no | - | 3 | {"exclusiveMinimum":0,"maximum":9007199254740991} |
-| registration.settings.recallLifecycle.accessRateLimitMs | integer | no | - | 3600000 | {"minimum":0,"maximum":9007199254740991} |
-| registration.settings.recallLifecycle.accessCountCeiling | integer | no | - | 20 | {"exclusiveMinimum":0,"maximum":9007199254740991} |
-| registration.settings.memoryTelemetry | object | yes | - | - | - |
-| registration.settings.memoryTelemetry.enabled | boolean | yes | - | - | - |
-| registration.settings.memoryTelemetry.currentKeyVersion | integer | yes | - | - | {"exclusiveMinimum":0,"maximum":9007199254740991} |
-| registration.settings.remOperations | array | yes | - | - | {"minItems":1,"maxItems":2} |
-| registration.settings.remOperations[] | string | yes | ["rem-replace","rem-update"] | - | - |
-| registration.settings.onboarding | object | no | - | - | - |
-| registration.settings.onboarding.version | integer | yes | - | - | {"exclusiveMinimum":0,"maximum":9007199254740991} |
-| registration.settings.onboarding.completedAt | string | yes | - | - | - |
-| registration.settings.onboarding.profile | string | yes | ["local-active","capture-only","manual-only","custom"] | - | - |
-| registration.model | object | no | - | - | - |
-| registration.model.baseUrl | string | yes | - | - | {"format":"uri"} |
-| registration.model.credential | string | yes | - | - | - |
-| registration.model.model | string | yes | - | - | {"minLength":1} |
+| registration | union | yes | - | - | - |
+| registration<0> | object | yes | - | - | {"additionalProperties":false} |
+| registration<0>.skinId | string | yes | - | - | {"minLength":1} |
+| registration<0>.inheritInstalled | boolean | yes | [true] | - | - |
+| registration<0>.model | object | no | - | - | - |
+| registration<0>.model.baseUrl | string | yes | - | - | {"format":"uri"} |
+| registration<0>.model.credential | string | yes | - | - | - |
+| registration<0>.model.model | string | yes | - | - | {"minLength":1} |
+| registration<1> | object | yes | - | - | - |
+| registration<1>.skinId | string | yes | - | - | {"minLength":1} |
+| registration<1>.routing | object | yes | - | - | {"additionalProperties":false} |
+| registration<1>.routing.mode | string | yes | ["local-first","agent-native","rem-enhanced"] | - | - |
+| registration<1>.routing.remEnhanced | object | no | - | {} | {"additionalProperties":false} |
+| registration<1>.routing.remEnhanced.trigger | object | no | - | {} | {"additionalProperties":false} |
+| registration<1>.routing.remEnhanced.trigger.tick | boolean | no | - | true | - |
+| registration<1>.routing.remEnhanced.occasions | object | no | - | {} | {"additionalProperties":false} |
+| registration<1>.routing.remEnhanced.occasions.memoryExtract | string | no | ["snoRemMem","agent"] | "snoRemMem" | - |
+| registration<1>.routing.remEnhanced.occasions.dedupDecision | string | no | ["snoRemMem","agent"] | "agent" | - |
+| registration<1>.routing.remEnhanced.occasions.profileSectionMerge | string | no | ["snoRemMem","agent"] | "agent" | - |
+| registration<1>.routing.remEnhanced.occasions.profileActiveTaskClassify | string | no | ["snoRemMem","agent"] | "agent" | - |
+| registration<1>.routing.remEnhanced.occasions.profileActiveTaskMatch | string | no | ["snoRemMem","agent"] | "agent" | - |
+| registration<1>.routing.remEnhanced.occasions.conflictAdjudication | string | no | ["snoRemMem","agent"] | "snoRemMem" | - |
+| registration<1>.routing.remEnhanced.occasions.summaryBuild | string | no | ["snoRemMem","agent"] | "agent" | - |
+| registration<1>.routing.remEnhanced.occasions.intentClassifier | string | no | ["snoRemMem","agent"] | "agent" | - |
+| registration<1>.routing.remEnhanced.occasions.dateResolution | string | no | ["snoRemMem","agent"] | "agent" | - |
+| registration<1>.routing.agentNative | object | no | - | {} | {"additionalProperties":false} |
+| registration<1>.routing.agentNative.flavor | string | no | ["subscription","byok"] | "subscription" | - |
+| registration<1>.routing.language | string | no | ["en","de","es","fr","zh","zh-Hant","ja","ko","ru"] | "en" | - |
+| registration<1>.settings | object | yes | - | - | - |
+| registration<1>.settings.embedding | object | no | - | {} | - |
+| registration<1>.settings.embedding.provider | string | no | ["local-onnx"] | "local-onnx" | - |
+| registration<1>.settings.embedding.model | string | no | - | - | - |
+| registration<1>.settings.embedding.dimensions | integer | no | - | 1024 | {"exclusiveMinimum":0,"maximum":9007199254740991} |
+| registration<1>.settings.embedding.nativeDim | integer | no | - | - | {"exclusiveMinimum":0,"maximum":9007199254740991} |
+| registration<1>.settings.embedding.revision | string | no | - | - | - |
+| registration<1>.settings.embedding.pooling | string | no | ["last_token","mean","cls"] | - | - |
+| registration<1>.settings.embedding.normalized | boolean | no | - | - | - |
+| registration<1>.settings.embedding.cacheDir | string | no | - | - | - |
+| registration<1>.settings.embedding.dtype | string | no | ["q4","q8","fp16","fp32"] | "q8" | - |
+| registration<1>.settings.embedding.sessionOptions | object | no | - | {} | {"additionalProperties":false} |
+| registration<1>.settings.embedding.sessionOptions.graphOptimizationLevel | string | no | ["disabled","basic","extended","all"] | "extended" | - |
+| registration<1>.settings.embedding.sessionOptions.enableMemPattern | boolean | no | - | false | - |
+| registration<1>.settings.embedding.sessionOptions.enableCpuMemArena | boolean | no | - | false | - |
+| registration<1>.settings.embedding.sessionOptions.executionMode | string | no | ["sequential","parallel"] | - | - |
+| registration<1>.settings.embedding.sessionOptions.interOpNumThreads | integer | no | - | - | {"exclusiveMinimum":0,"maximum":9007199254740991} |
+| registration<1>.settings.embedding.sessionOptions.intraOpNumThreads | integer | no | - | - | {"exclusiveMinimum":0,"maximum":9007199254740991} |
+| registration<1>.settings.embedding.chunking | boolean | no | - | true | - |
+| registration<1>.settings.observe | object | no | - | {} | - |
+| registration<1>.settings.observe.enabled | boolean | no | - | false | - |
+| registration<1>.settings.observe.baseUrl | string | no | - | "https://www.sno.ai" | - |
+| registration<1>.settings.observe.agentId | string | no | ["openclaw","hermes","claude-code","codex"] | "openclaw" | - |
+| registration<1>.settings.dbPath | string | no | - | - | - |
+| registration<1>.settings.provider | object | yes | - | - | - |
+| registration<1>.settings.provider.userId | string | no | - | - | - |
+| registration<1>.settings.ambientLearning | boolean | yes | - | - | - |
+| registration<1>.settings.autoRecall | boolean | yes | - | - | - |
+| registration<1>.settings.autoRecallMinLength | integer | yes | - | - | {"minimum":1,"maximum":200} |
+| registration<1>.settings.autoRecallMinRepeated | integer | yes | - | - | {"minimum":0,"maximum":100} |
+| registration<1>.settings.autoRecallMaxQueryLength | integer | yes | - | - | {"minimum":100,"maximum":10000} |
+| registration<1>.settings.autoRecallTimeoutMs | integer | yes | - | - | {"minimum":500,"maximum":60000} |
+| registration<1>.settings.autoRecallIncludeAgents | array | yes | - | - | - |
+| registration<1>.settings.autoRecallIncludeAgents[] | string | yes | - | - | - |
+| registration<1>.settings.autoRecallExcludeAgents | array | yes | - | - | - |
+| registration<1>.settings.autoRecallExcludeAgents[] | string | yes | - | - | - |
+| registration<1>.settings.captureAssistant | boolean | yes | - | - | - |
+| registration<1>.settings.retrieval | object | no | - | {} | - |
+| registration<1>.settings.retrieval.mode | string | no | ["precision-recall","vector"] | "precision-recall" | - |
+| registration<1>.settings.retrieval.recallTopK | integer | no | - | 20 | {"minimum":1,"maximum":2000} |
+| registration<1>.settings.retrieval.vectorWeight | number | no | - | 0.7 | {"minimum":0,"maximum":1} |
+| registration<1>.settings.retrieval.bm25Weight | number | no | - | 0.3 | {"minimum":0,"maximum":1} |
+| registration<1>.settings.retrieval.minScore | number | no | - | 0 | {"minimum":0,"maximum":1} |
+| registration<1>.settings.retrieval.rerank | string | no | ["cross-encoder","lightweight","none"] | "cross-encoder" | - |
+| registration<1>.settings.retrieval.candidatePoolSize | integer | no | - | 64 | {"minimum":10,"maximum":2000} |
+| registration<1>.settings.retrieval.rerankApiKey | string | no | - | - | - |
+| registration<1>.settings.retrieval.rerankModel | string | no | - | "rerank-2" | - |
+| registration<1>.settings.retrieval.rerankTimeoutMs | integer | no | - | 15000 | {"minimum":1000,"maximum":120000} |
+| registration<1>.settings.retrieval.recencyHalfLifeDays | number | no | - | 14 | {"minimum":0,"maximum":365} |
+| registration<1>.settings.retrieval.recencyWeight | number | no | - | 0.1 | {"minimum":0,"maximum":0.5} |
+| registration<1>.settings.retrieval.temporalWeighting | boolean | no | - | false | - |
+| registration<1>.settings.retrieval.mmrWindowOnly | boolean | no | - | false | - |
+| registration<1>.settings.retrieval.temporalExpiry | boolean | no | - | false | - |
+| registration<1>.settings.retrieval.temporalDecay | boolean | no | - | true | - |
+| registration<1>.settings.retrieval.lengthNormAnchor | integer | no | - | 0 | {"minimum":0,"maximum":5000} |
+| registration<1>.settings.retrieval.hardMinScore | number | no | - | 0 | {"minimum":0,"maximum":1} |
+| registration<1>.settings.retrieval.timeDecayHalfLifeDays | number | no | - | 60 | {"minimum":0,"maximum":365} |
+| registration<1>.settings.retrieval.rerankBlendVector | number | no | - | - | {"minimum":0,"maximum":1} |
+| registration<1>.settings.retrieval.rerankBlendCross | number | no | - | - | {"minimum":0,"maximum":1} |
+| registration<1>.settings.retrieval.lightweightFusionWeight | number | no | - | - | {"minimum":0,"maximum":1} |
+| registration<1>.settings.retrieval.lightweightCosineWeight | number | no | - | - | {"minimum":0,"maximum":1} |
+| registration<1>.settings.retrieval.importanceWeightBase | number | no | - | - | {"minimum":0,"maximum":1} |
+| registration<1>.settings.retrieval.timeDecayFloor | number | no | - | - | {"minimum":0,"maximum":1} |
+| registration<1>.settings.retrieval.mmrLambda | number | no | - | - | {"minimum":0,"maximum":1} |
+| registration<1>.settings.retrieval.rerankEndpoint | string | no | - | - | - |
+| registration<1>.settings.retrieval.rerankProvider | string | no | ["jina","siliconflow","pinecone","voyage","dashscope","tei","custom"] | - | - |
+| registration<1>.settings.retrieval.rerankMaxCandidates | integer | no | - | - | {"minimum":1,"maximum":2000} |
+| registration<1>.settings.retrieval.reinforcementFactor | number | no | - | 0.5 | {"minimum":0,"maximum":5} |
+| registration<1>.settings.retrieval.maxHalfLifeMultiplier | number | no | - | 3 | {"minimum":1,"maximum":10} |
+| registration<1>.settings.scopes | object | yes | - | - | - |
+| registration<1>.settings.scopes.default | string | yes | - | - | - |
+| registration<1>.settings.scopes.definitions | object | yes | - | - | {"propertyNames":{"type":"string"}} |
+| registration<1>.settings.scopes.definitions{} | object | yes | - | - | - |
+| registration<1>.settings.scopes.definitions{}.description | string | no | - | - | - |
+| registration<1>.settings.scopes.definitions{}.metadata | object | no | - | - | {"propertyNames":{"type":"string"}} |
+| registration<1>.settings.scopes.definitions{}.metadata{} | JSON | yes | - | - | - |
+| registration<1>.settings.scopes.agentAccess | object | yes | - | - | {"propertyNames":{"type":"string"}} |
+| registration<1>.settings.scopes.agentAccess{} | array | yes | - | - | - |
+| registration<1>.settings.scopes.agentAccess{}[] | string | yes | - | - | - |
+| registration<1>.settings.enableManagementTools | boolean | yes | - | - | - |
+| registration<1>.settings.sessionStrategy | string | yes | ["memoryReflection","systemSessionMemory","none"] | - | - |
+| registration<1>.settings.sessionMemory | object | no | - | {} | - |
+| registration<1>.settings.sessionMemory.enabled | boolean | no | - | true | - |
+| registration<1>.settings.sessionMemory.messageCount | integer | no | - | 15 | {"minimum":1,"maximum":100} |
+| registration<1>.settings.compression | object | no | - | - | - |
+| registration<1>.settings.compression.enabled | boolean | yes | - | - | - |
+| registration<1>.settings.selfImprovement | object | no | - | {} | - |
+| registration<1>.settings.selfImprovement.enabled | boolean | no | - | true | - |
+| registration<1>.settings.selfImprovement.beforeResetNote | boolean | no | - | true | - |
+| registration<1>.settings.selfImprovement.skipSubagentBootstrap | boolean | no | - | true | - |
+| registration<1>.settings.selfImprovement.ensureLearningFiles | boolean | no | - | true | - |
+| registration<1>.settings.extraction | object | no | - | {} | {"additionalProperties":false} |
+| registration<1>.settings.extraction.llm | object | no | - | {} | {"additionalProperties":false} |
+| registration<1>.settings.extraction.llm.preset | string | no | ["mem_claw/openai_gpt_5_nano","mem_claw/openrouter_auto","mem_claw/sno_ai_extract","mem_claw/sno_extract_chat","mem_claw/sno_extract_profile","mem_claw/sno_conflict_verdict"] | "mem_claw/sno_ai_extract" | - |
+| registration<1>.settings.extraction.llm.baseURL | string | no | - | - | - |
+| registration<1>.settings.extraction.llm.apiKey | string | no | - | - | - |
+| registration<1>.settings.extraction.llm.heliconeApiKey | string | no | - | - | - |
+| registration<1>.settings.extraction.llm.timeoutMs | integer | no | - | 30000 | {"minimum":1000,"maximum":300000} |
+| registration<1>.settings.memoryReflection | object | no | - | {} | - |
+| registration<1>.settings.memoryReflection.messageCount | integer | no | - | 120 | {"minimum":1,"maximum":500} |
+| registration<1>.settings.memoryReflection.maxInputChars | integer | no | - | 24000 | {"minimum":1000,"maximum":200000} |
+| registration<1>.settings.memoryReflection.timeoutMs | integer | no | - | 20000 | {"minimum":5000,"maximum":300000} |
+| registration<1>.settings.memoryReflection.errorReminderMaxEntries | integer | no | - | 3 | {"minimum":0,"maximum":50} |
+| registration<1>.settings.memoryReflection.dedupeErrorSignals | boolean | no | - | true | - |
+| registration<1>.settings.memoryReflection.injectMode | string | no | ["inheritance+derived","inheritance-only","none"] | "inheritance+derived" | - |
+| registration<1>.settings.memoryReflection.storeToDb | boolean | no | - | true | - |
+| registration<1>.settings.memoryReflection.injectIntoPrompt | boolean | no | - | false | - |
+| registration<1>.settings.memoryReflection.agentId | string | no | - | - | - |
+| registration<1>.settings.recallLifecycle | object | no | - | {} | - |
+| registration<1>.settings.recallLifecycle.retentionScorer | boolean | no | - | true | - |
+| registration<1>.settings.recallLifecycle.tierPromoter | boolean | no | - | true | - |
+| registration<1>.settings.recallLifecycle.autoRecallAccessTracking | boolean | no | - | true | - |
+| registration<1>.settings.recallLifecycle.traceEnabled | boolean | no | - | true | - |
+| registration<1>.settings.recallLifecycle.tierFloorMode | string | no | ["bare","withFloor"] | "bare" | - |
+| registration<1>.settings.recallLifecycle.tierPromotionTopK | integer | no | - | 3 | {"exclusiveMinimum":0,"maximum":9007199254740991} |
+| registration<1>.settings.recallLifecycle.accessRateLimitMs | integer | no | - | 3600000 | {"minimum":0,"maximum":9007199254740991} |
+| registration<1>.settings.recallLifecycle.accessCountCeiling | integer | no | - | 20 | {"exclusiveMinimum":0,"maximum":9007199254740991} |
+| registration<1>.settings.memoryTelemetry | object | yes | - | - | - |
+| registration<1>.settings.memoryTelemetry.enabled | boolean | yes | - | - | - |
+| registration<1>.settings.memoryTelemetry.currentKeyVersion | integer | yes | - | - | {"exclusiveMinimum":0,"maximum":9007199254740991} |
+| registration<1>.settings.remOperations | array | yes | - | - | {"minItems":1,"maxItems":2} |
+| registration<1>.settings.remOperations[] | string | yes | ["rem-replace","rem-update"] | - | - |
+| registration<1>.settings.onboarding | object | no | - | - | - |
+| registration<1>.settings.onboarding.version | integer | yes | - | - | {"exclusiveMinimum":0,"maximum":9007199254740991} |
+| registration<1>.settings.onboarding.completedAt | string | yes | - | - | - |
+| registration<1>.settings.onboarding.profile | string | yes | ["local-active","capture-only","manual-only","custom"] | - | - |
+| registration<1>.model | object | no | - | - | - |
+| registration<1>.model.baseUrl | string | yes | - | - | {"format":"uri"} |
+| registration<1>.model.credential | string | yes | - | - | - |
+| registration<1>.model.model | string | yes | - | - | {"minLength":1} |
 
 ### Response body
 
@@ -294,6 +313,27 @@ Additional transport errors: 413 `{"error":"payload_too_large"}` for a body over
 8 MiB; wrong method or unmatched path returns 404 `{"error":"not_found"}`.
 504 is the mapped `timeout` response, not a commit or cancellation guarantee.
 An outer-server failure can return 500 `{"error":"internal_error"}`.
+
+### Inherited-settings request example
+
+```json
+{
+  "scope": {
+    "principal": "lh",
+    "project": "/workspace/sno-station-core",
+    "session": "hermes-session-1"
+  },
+  "registration": {
+    "skinId": "hermes",
+    "inheritInstalled": true,
+    "model": {
+      "baseUrl": "http://127.0.0.1:43128/v1",
+      "credential": "runtime-only-token",
+      "model": "hermes-host"
+    }
+  }
+}
+```
 
 ### Complete request and response example
 
@@ -1914,7 +1954,7 @@ Host: 127.0.0.1:43127
 HTTP/1.1 200 OK
 Content-Type: application/json
 
-{"status":"ok","log_level":"info","principal":"lh","storePath":"/home/user/.sno/sno-station-mem/lh/memory.sqlite","accessCounters":{"engineAccesses":0,"storeAccesses":0}}
+{"status":"ok","log_level":"info","principal":"alice","storePath":"/home/alice/.sno/sno-station-mem/alice/memory.sqlite","accessCounters":{"engineAccesses":0,"storeAccesses":0}}
 ```
 
 ## General error and client semantics

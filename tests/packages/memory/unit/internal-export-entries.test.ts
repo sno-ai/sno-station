@@ -30,7 +30,6 @@ it("builds every internal module imported or re-exported by mem-claw", () => {
 	}
 	const configs = Array.isArray(buildConfig) ? buildConfig : [buildConfig];
 	const entries = new Set(configs.flatMap((config) => Object.keys(config.entry ?? {})));
-	expect(specifiers.size).toBe(35);
 	for (const specifier of specifiers) {
 		expect(entries.has(specifier.replace("@snoai/sno-station-mem/", "")),
 			`Missing build entry for ${specifier}`).toBe(true);

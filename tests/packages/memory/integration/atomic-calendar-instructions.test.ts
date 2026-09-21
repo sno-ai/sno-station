@@ -41,9 +41,17 @@ describe("model meaning to calendar arithmetic to write metadata", () => {
 	it("uses the model's weekday decision without reading the weekday spelling", async () => {
 		const text = "I just joined a new LGBTQ activist group last Tues.";
 		const card = await project(text, "last Tues", {
-			kind: "weekday", weekday: 2, direction: "previous", precision: "day",
+			kind: "weekday", day_name: "tuesday", direction: "previous", precision: "day",
 		}, "2023-07-20T20:56:00Z");
 		expect(card?.metadata).toMatchObject({ event_at: "2023-07-18T00:00:00.000Z" });
+	});
+
+	it("lands a named Friday said on a Sunday on the Friday two days back", async () => {
+		const text = "Last Friday, I did yoga and meditation to relax.";
+		const card = await project(text, "Last Friday", {
+			kind: "weekday", day_name: "friday", direction: "previous", precision: "day",
+		}, "2023-07-23T15:20:00Z");
+		expect(card?.metadata).toMatchObject({ temporal_date: "2023-07-21", event_at: "2023-07-21T00:00:00.000Z" });
 	});
 
 	it("does not override a model's unresolved verdict with a recognizable keyword", async () => {
@@ -150,9 +158,9 @@ it.each([[0, "1970-01-01"], [-1, "1969-12-31"]] as const)("preserves the explici
 });
 
 it.each([
-	{ name: "missing minute clock", time: { kind: "weekday", weekday: 2, direction: "previous", precision: "minute" }, label: undefined, eventAt: undefined, from: null },
-	{ name: "explicit 10:00 clock", time: { kind: "weekday", weekday: 2, direction: "previous", precision: "minute", hour: 10, minute: 0 }, label: "2023-07-18T10:00", eventAt: "2023-07-18T10:00:00.000Z", from: Date.UTC(2023, 6, 18, 10) },
-	{ name: "day without a clock", time: { kind: "weekday", weekday: 2, direction: "previous", precision: "day" }, label: "2023-07-18", eventAt: "2023-07-18T00:00:00.000Z", from: Date.UTC(2023, 6, 18) },
+	{ name: "missing minute clock", time: { kind: "weekday", day_name: "tuesday", direction: "previous", precision: "minute" }, label: undefined, eventAt: undefined, from: null },
+	{ name: "explicit 10:00 clock", time: { kind: "weekday", day_name: "tuesday", direction: "previous", precision: "minute", hour: 10, minute: 0 }, label: "2023-07-18T10:00", eventAt: "2023-07-18T10:00:00.000Z", from: Date.UTC(2023, 6, 18, 10) },
+	{ name: "day without a clock", time: { kind: "weekday", day_name: "tuesday", direction: "previous", precision: "day" }, label: "2023-07-18", eventAt: "2023-07-18T00:00:00.000Z", from: Date.UTC(2023, 6, 18) },
 ])("does not inherit the session clock for weekday $name", async ({ time, label, eventAt, from }) => {
 	const card = await project("The user attended the meeting last Tuesday.", "last Tuesday", time, "2023-07-20T14:37:00Z");
 	expect(card).toBeDefined();
@@ -163,6 +171,17 @@ it.each([
 		expect(card?.metadata).toMatchObject({ temporal_resolution_status: "unresolved" });
 		expect(card?.metadata).not.toHaveProperty("temporal_date");
 	}
+});
+
+it("shows the resolved date of a dated plan, which is a standing claim, not an event", () => {
+	// Measured 2026-09-20: 77 rows of a re-extracted store held a resolved date that no reader
+	// was shown, because the renderer keyed on `kind` instead of on having a resolved date.
+	const metadata = {
+		kind: "state", temporal_resolution_status: "resolved",
+		temporal_date: "2023-03", temporal_precision: "month",
+	};
+	expect(episodicEventDate({ metadata: JSON.stringify(metadata) })).toBe("2023-03");
+	expect(episodicEventDate({ metadata: JSON.stringify({ ...metadata, temporal_resolution_status: "static" }) })).toBeUndefined();
 });
 
 it.each([
@@ -180,10 +199,10 @@ it.each([
 it.each([
 	{ kind: "absolute", year: 2023, month: 7, day: 18, precision: "day", hour: 10, minute: 30 },
 	{ kind: "relative", amount: -1, unit: "day", precision: "day", hour: 10, minute: 30 },
-	{ kind: "weekday", weekday: 2, direction: "previous", precision: "day", hour: 10, minute: 30 },
+	{ kind: "weekday", day_name: "tuesday", direction: "previous", precision: "day", hour: 10, minute: 30 },
 	{ kind: "absolute", year: 2023, month: 7, day: 18, precision: "minute", minute: 30 },
 	{ kind: "relative", amount: -1, unit: "day", precision: "minute", minute: 30 },
-	{ kind: "weekday", weekday: 2, direction: "previous", precision: "minute", minute: 30 },
+	{ kind: "weekday", day_name: "tuesday", direction: "previous", precision: "minute", minute: 30 },
 ])("keeps inconsistent or incomplete clock instructions unresolved: %j", async (time) => {
 	const card = await project("The user attended a meeting.", null, time, "2023-07-20T14:37:00Z");
 	expect(card).toBeDefined();
@@ -195,7 +214,7 @@ it.each([
 it.each([
 	[{ kind: "absolute", year: 2023, month: 7, day: 18, precision: "minute", hour: 10, minute: 30 }, "2023-07-18T10:30"],
 	[{ kind: "relative", amount: -1, unit: "day", precision: "minute", hour: 10, minute: 30 }, "2023-07-19T10:30"],
-	[{ kind: "weekday", weekday: 2, direction: "previous", precision: "minute", hour: 10, minute: 30 }, "2023-07-18T10:30"],
+	[{ kind: "weekday", day_name: "tuesday", direction: "previous", precision: "minute", hour: 10, minute: 30 }, "2023-07-18T10:30"],
 ])("preserves a complete minute clock: %j", async (time, label) => {
 	const card = await project("The meeting was at the stated date and 10:30.", null, time, "2023-07-20T14:37:00Z");
 	expect(episodicEventDate({ metadata: JSON.stringify(card?.metadata) })).toBe(label);

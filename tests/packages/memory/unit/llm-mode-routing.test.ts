@@ -1,16 +1,20 @@
 /** Proves the surviving product-mode schema and atomic request routing. */
 
 import { describe, expect, it } from "vitest";
-import { llmRoutingConfigSchema } from "../../../../packages/sno-station-mem/src/contract/config/plugin-config-mode-schema";
+import {
+	DEFAULT_MODEL_MODE,
+	llmRoutingConfigSchema,
+} from "../../../../packages/sno-station-mem/config/plugin-config-mode-schema";
 import { pickLlmRoutingConfig, resolveLlmRoute } from "../../../../packages/sno-station-mem/src/model/llm-mode-routing";
 import { pluginConfigSchema } from "../../../../packages/sno-station-mem/src/engine/shared/types";
 
 const LOCAL_RERANK = { retrieval: { rerank: "lightweight" } } as const;
 
 describe("plugin config product mode", () => {
-	it("defaults to local-first and strips the legacy gate key", () => {
+	it("defaults to the shared agent-native mode and strips the legacy gate key", () => {
 		const defaults = pluginConfigSchema.parse({});
-		expect(defaults.mode).toBe("local-first");
+		expect(DEFAULT_MODEL_MODE).toBe("agent-native");
+		expect(defaults.mode).toBe(DEFAULT_MODEL_MODE);
 		expect(defaults.agentNative.flavor).toBe("subscription");
 		expect(pickLlmRoutingConfig(defaults).language).toBe("en");
 
@@ -33,13 +37,12 @@ describe("plugin config product mode", () => {
 		).toThrow();
 	});
 
-	it("requires an explicit product mode for LLM routing", () => {
-		expect(() =>
-			pluginConfigSchema.parse({
-				...LOCAL_RERANK,
-				extraction: { llm: { preset: "mem_claw/sno_ai_extract" } },
-			}),
-		).toThrow(/explicit product mode/u);
+	it("applies the shared default when an LLM route omits the mode", () => {
+		const parsed = pluginConfigSchema.parse({
+			...LOCAL_RERANK,
+			extraction: { llm: { preset: "mem_claw/sno_ai_extract" } },
+		});
+		expect(parsed.mode).toBe(DEFAULT_MODEL_MODE);
 	});
 });
 

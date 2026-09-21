@@ -2,7 +2,7 @@ import { dirname } from "node:path";
 import { appendAuditEntry } from "../operations/runtime-audit-log";
 import { redactSecrets } from "../security/redact";
 import extractionSchema from "../../../config/atomic-extraction-response.schema.json" with { type: "json" };
-import { ATOMIC_ENRICHMENT_OUTPUT_TOKEN_BUDGET } from "../../../config/index";
+import { ATOMIC_CAPTURE_TIMEOUT_MS, ATOMIC_ENRICHMENT_OUTPUT_TOKEN_BUDGET } from "../../../config/index";
 import { FIXED_MEMORY_SNO_EXTRACT_CHAT } from "../../model/signed-registry-constants";
 /** @file atomic-generic-extractor.ts
  * @purpose Runs the dark generic atomic extraction pass over complete transcript windows.
@@ -495,11 +495,27 @@ export async function runAtomicNumericTurnSweep(
 		return [];
 	}
 	if (input.diagnostics) input.diagnostics.proposed += parsed.records.length;
-	// Only records for the swept turns: the sweep sees the whole transcript so it can resolve
-	// "this morning", and a claim belonging to a turn this window already settled is not the
-	// sweep's to restate.
-	const kept = parsed.records.filter((record) => uncited.includes(record.sourceSpan.turnIndex));
-	const dropped = parsed.records.filter((record) => !uncited.includes(record.sourceSpan.turnIndex));
+	// Only records for the swept turns, and only records that cite a figure: the sweep sees the
+	// whole transcript so it can resolve "this morning", and a claim belonging to a turn this
+	// window already settled is not the sweep's to restate. Without the figure test a swept turn
+	// returns the turn's every claim, and the repeat check below can only pair a restatement whose
+	// value text is identical after normalizing — so a rewording is written a second time.
+	// Measured 2026-09-20 on a 66-session replay: one uncaptured figure anywhere in a session
+	// makes its single turn uncited, and the sweep added 310 records on top of 1,217 captured
+	// facts while only 2% of stored rows quote a figure at all.
+	const citesFigure = (record: AtomicExtractionRecord): boolean => {
+		const offsets = figureOffsetsInTurn(
+			input.turns[record.sourceSpan.turnIndex]?.content ?? "",
+			record.sourceSpan.quote,
+		);
+		return offsets !== null && offsets.length > 0;
+	};
+	const kept = parsed.records.filter(
+		(record) => uncited.includes(record.sourceSpan.turnIndex) && citesFigure(record),
+	);
+	const dropped = parsed.records.filter(
+		(record) => !uncited.includes(record.sourceSpan.turnIndex) || !citesFigure(record),
+	);
 	// Nothing downstream removes a repeat — the gauntlet does not dedupe and neither does the
 	// writer — so without this the ordinary partial recovery writes the first pass's own fact a
 	// second time and quietly doubles a total. The pairing is one-to-one: each first-pass record
@@ -594,6 +610,7 @@ export function createAtomicGenericExtractionTransport(
 				callLabel: "memory-extract-atomic-generic",
 				adapterSlot: "memory-extract",
 				maxTokens: request.maxTokens,
+				timeoutMs: ATOMIC_CAPTURE_TIMEOUT_MS,
 				emptyReplyAttempts: 1,
 				enableThinking: false,
 				...(request.requestId ? { requestId: request.requestId } : {}),

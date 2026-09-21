@@ -6,7 +6,7 @@ import { FIXED_MEMORY_SNO_CONFLICT_VERDICT, FIXED_MEMORY_SNO_EXTRACT_CHAT, FIXED
 
 import type { LlmPreset, LlmProvider, ResolvedLlmConfig } from "./llm-client-types";
 import type { LlmTransport } from "./llm-mode-routing";
-import type { LlmOccasion } from "../contract/config/plugin-config-mode-schema";
+import type { LlmOccasion } from "../../config/plugin-config-mode-schema";
 import {
 	resolveBundledLlmixPreset,
 	resolveConfiguredBundledLlmixEndpoint,

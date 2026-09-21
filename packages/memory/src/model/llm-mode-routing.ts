@@ -10,7 +10,7 @@ import {
 	type LlmRoutingConfigInput,
 	type LlmTier,
 	llmRoutingConfigSchema,
-} from "../contract/config/plugin-config-mode-schema";
+} from "../../config/plugin-config-mode-schema";
 
 export type { LlmRoutingConfig };
 

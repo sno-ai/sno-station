@@ -19,7 +19,7 @@ import {
 	type ReflectionMappedKind,
 } from "./mapped-memory-metadata-builder";
 import type { LlmClient } from "../../model/llm-client";
-import type { LlmRoutingConfig } from "../../contract/config/plugin-config-mode-schema";
+import type { LlmRoutingConfig } from "../../../config/plugin-config-mode-schema";
 import { extractInjectableReflectionMappedMemoryItems } from "./markdown-slice-parser";
 import type { MemoryCategory } from "../shared/types";
 import type { MemoryStore } from "../../store/store";

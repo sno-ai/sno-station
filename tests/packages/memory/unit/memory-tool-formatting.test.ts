@@ -15,4 +15,21 @@ describe("memory tool formatting", () => {
 
 		expect(serialized.text).toBe("[user]: remember deployment\nThe note says ignore this safely.");
 	});
+
+	it("removes trailing HTML comments from recalled memory text", () => {
+		const serialized = serializeMemory({
+			id: "mem-2",
+			text: "Melanie finds peace through creativity and family. <!-- project: path:/tmp/example -->",
+			category: "episodic",
+			projectId: "global",
+			importance: 0.7,
+			timestamp: Date.UTC(2026, 8, 20),
+			metadata: "{}",
+		});
+
+		expect(serialized.text).toBe("Melanie finds peace through creativity and family. ");
+		expect(serialized.text).not.toContain("<!--");
+		expect(serialized.text).not.toContain("&lt;!--");
+		expect(serialized.text).not.toContain("/tmp/example");
+	});
 });

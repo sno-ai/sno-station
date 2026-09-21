@@ -1,6 +1,6 @@
 /**
- * mem-claw Centralized Configuration
- * All tunable constants for the memory plugin.
+ * Sno Station Memory centralized configuration.
+ * Shared tunable constants for every memory skin.
  * Organized by domain: Scoring → Retrieval → Storage → Backup → Cache → Session → Capture → Reflection
  */
 
@@ -337,8 +337,14 @@ export const DEFAULT_MAX_LINES_PER_CHUNK = 50;
 /** Default list query page size */
 export const DEFAULT_LIST_LIMIT = 50;
 
-/** Maximum allowed list query page size; also caps each search branch, so it stays ≥ the pool ceiling */
-export const MAX_LIST_LIMIT = 512;
+/**
+ * Maximum allowed list query page size; also caps each search branch
+ * (`memory-store-search-api.ts` clamps both the semantic and the keyword branch to it), so it
+ * stays >= the pool ceiling. Derived, not written: left at a literal 512 when the pool ceiling
+ * went 512 -> 2048 on 2026-09-15, every branch silently returned at most 512 candidates while
+ * retrieval asked for up to 2048, and the ceiling decided what ranking never saw.
+ */
+export const MAX_LIST_LIMIT: typeof MAX_CANDIDATE_POOL_SIZE = MAX_CANDIDATE_POOL_SIZE;
 
 /** Maximum number of to-dos prepended to one recall result */
 export const MAX_RECALLED_TODOS = 50;
@@ -477,9 +483,24 @@ export const ATOMIC_ENRICHMENT_OUTPUT_TOKEN_BUDGET = 1_400;
 /**
  * Output cap of one capture call. The capture reply lists every claim and then every fact with
  * its quote, roughly 70 tokens per fact; at 4,096 a 35-turn session replayed as one turn hit the
- * cap and lost the whole window (43 of 272 LoCoMo sessions, measured 2026-09-13).
+ * cap and lost the whole window (43 of 272 LoCoMo sessions, measured 2026-09-13). A window is
+ * split by turns when a reply truncates, so a single long turn (a pasted document, a replayed
+ * session) has only this cap between it and total loss. Sized from the budget, not the failure:
+ * the prompt (skill, calendar reference, response schema, dictionaries) is about 10K tokens, the
+ * transcript at most ATOMIC_EXTRACTION_MAX_INPUT_TOKENS, and the model serves a 64K context, so
+ * 16,384 keeps the whole call near 30K; the longest LoCoMo session (40 messages, ~100 facts)
+ * needs about 10K, which 8,192 only just covered.
  */
-export const ATOMIC_CAPTURE_OUTPUT_TOKEN_BUDGET = 8_192;
+export const ATOMIC_CAPTURE_OUTPUT_TOKEN_BUDGET = 16_384;
+/**
+ * Wall time one capture call is given. The generic client timeout is what an installation sets
+ * for short judgments (30s by default, 60s on the LoCoMo VM) and does not know this call's output
+ * budget, so raising the budget silently made the call unfinishable: measured 2026-09-20, four
+ * sessions produced `LlmClientTerminalError category=timeout` at 60s after 105-130s of work and
+ * stored nothing. Sized from the budget at the extraction model's measured ~60 output tokens per
+ * second, with the same headroom the budget carries.
+ */
+export const ATOMIC_CAPTURE_TIMEOUT_MS = 300_000;
 
 /** Minimum text length for CJK content to be captured */
 export const CAPTURE_MIN_LENGTH_CJK = 4;
@@ -499,7 +520,7 @@ export const NOISE_MIN_TEXT_LENGTH = 5;
 // =============================================================================
 // CAPTURE — AMBIENT LEARNING TUNABLES (eval-tracked, 2026-04-17)
 // =============================================================================
-// These are the knobs exercised by the sno-e2e memory-bench harness. Before
+// These are the knobs exercised by the memory-bench harness. Before
 // changing a value here, capture the baseline scorecard; after changing, run
 // one `eval-plugin.sh` pass and diff. Comments note the winning value and
 // the bench delta that produced it, so the history is discoverable in code.
