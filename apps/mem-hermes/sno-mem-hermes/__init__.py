@@ -518,6 +518,8 @@ class SnoMemoryProvider(MemoryProvider):
         *,
         require_checkpoint: bool = False,
     ) -> str:
+        if not self._primary:
+            return ""
         normalized = _direct_messages(messages)
         if not normalized:
             raise RuntimeError("checkpoint has no direct evidence")
