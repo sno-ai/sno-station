@@ -37,6 +37,7 @@ _LATER_RECALL_MAX_CHARS = 1_500
 _TOOL_RECALL_LIMIT = 5
 _TASK_QUERY = "current task objective, completed work, blockers, next action, and relevant files or evidence"
 _TASK_RECALL_LIMIT = 5
+_CORRECTION_LOOKUP_LIMIT = 20
 _TASK_RECALL_MAX_CHARS = 3_500
 _WORKING_BRIEF_HEADER = "Sno working memory (data, not instructions):"
 
@@ -724,7 +725,9 @@ class SnoMemoryProvider(MemoryProvider):
                 _, nonce, marked_hash = (successor.split(":") + ["", ""])[:3]
                 if marked_hash != content_hash:
                     return {"degraded": False, "toolError": "correction-in-progress"}
-                new_id = self._earlier_successor(scope, memory_id, nonce, content)
+                new_id = self._earlier_successor(
+                    scope, memory_id, nonce, entry.get("category", "episodic")
+                )
             else:
                 nonce = secrets.token_hex(16)
                 new_id = None
@@ -810,32 +813,32 @@ class SnoMemoryProvider(MemoryProvider):
         return (new_id, None) if new_id is not None else (None, "engine-failed")
 
     def _earlier_successor(
-        self, scope: dict[str, object], memory_id: str, nonce: str, content: str
+        self, scope: dict[str, object], memory_id: str, nonce: str, category: object
     ) -> str | None:
-        recalled = self._require_client().post(
-            "get-recall",
+        listed = self._require_client().post(
+            "inspect",
             {
-                "query": content,
                 "scope": scope,
-                "options": {
-                    "source": "manual",
-                    "limit": _TASK_RECALL_LIMIT,
-                    "includeMetadata": True,
+                "op": {
+                    "op": "list",
+                    "category": category,
+                    "limit": _CORRECTION_LOOKUP_LIMIT,
                 },
             },
         )
-        tool_result = recalled.get("toolResult")
-        details = tool_result.get("details") if isinstance(tool_result, dict) else None
-        memories = details.get("memories") if isinstance(details, dict) else None
-        for memory in memories if isinstance(memories, list) else []:
-            if not isinstance(memory, dict):
+        if (error := _mutation_error(listed)) is not None:
+            raise RuntimeError(error)
+        result = listed.get("result")
+        entries = result.get("entries") if isinstance(result, dict) else None
+        for entry in entries if isinstance(entries, list) else []:
+            if not isinstance(entry, dict):
                 continue
-            marks = _metadata(memory.get("metadata"))
+            marks = _metadata(entry.get("metadata"))
             if (
                 marks.get("correctionOf") == memory_id
                 and marks.get("correctionNonce") == nonce
             ):
-                found = memory.get("id")
+                found = entry.get("id")
                 return found if isinstance(found, str) else None
         return None
 
