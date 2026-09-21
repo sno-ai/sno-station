@@ -73,7 +73,7 @@ export class MemoryRuntimePool {
 		readonly storePath: string,
 		readonly store: ObservableMemoryStore,
 		readonly config: PluginConfig,
-		private readonly installed: InstallationSettings,
+		private readonly installed: InstallationSettings | undefined,
 		private readonly observability: PluginObservability,
 		private readonly embedder: ObservableEmbedder,
 	) { this.usageOutbox = new MemoryTelemetryUsageOutbox({ sqlite: store.sqlite, dbPath: storePath }); }
@@ -82,7 +82,7 @@ export class MemoryRuntimePool {
 		const storePath = await readBoundStorePath();
 		const configPath = getInstallationConfigPath();
 		let config = pluginConfigSchema.parse({ dbPath: storePath });
-		let installed = installationSettingsSchema.parse({ storePath });
+		let installed: InstallationSettings | undefined;
 		try {
 			if (!existsSync(configPath)) engineLogger.error("memory.installation.config.missing");
 			if (existsSync(configPath)) {
@@ -152,14 +152,15 @@ export class MemoryRuntimePool {
 			const init = parseInput("init", raw);
 			this.counters.engineAccesses++;
 			this.counters.storeAccesses++;
-			const registration = "inheritInstalled" in init.registration
-				? createCodingSkinRegistration({
+			if ("inheritInstalled" in init.registration) {
+				if (!this.installed) throw new Error("memory.installation.config.unavailable");
+				return this.register(init.scope, createCodingSkinRegistration({
 					skinId,
 					installed: this.installed,
 					model: init.registration.model,
-				})
-				: { ...init.registration, skinId };
-			return this.register(init.scope, registration);
+				}));
+			}
+			return this.register(init.scope, { ...init.registration, skinId });
 		}
 		let entry = this.skins.get(skinId);
 		if (!entry) {

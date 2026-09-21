@@ -468,6 +468,21 @@ describe("sidecar keeps serving", () => {
 		}
 		expect(readRemAutomaticOperations(configPath).tickEnabled).toBe(true);
 	});
+	it("rejects inherited registration when the installation config cannot be read", async () => {
+		const configPath = join(root, "station", `sno-station-mem-${userInfo().username}.config.json`);
+		const original = readFileSync(configPath);
+		writeFileSync(configPath, "{");
+		const pool = await MemoryRuntimePool.open();
+		try {
+			await expect(pool.invoke("init", {
+				scope: { principal: userInfo().username, project: "global", session: "inherited-missing-config" },
+				registration: { skinId: "hermes", inheritInstalled: true },
+			}, "hermes")).rejects.toThrow("memory.installation.config.unavailable");
+		} finally {
+			await pool.close();
+			writeFileSync(configPath, original);
+		}
+	});
 	it("reads the REM tick switch across HTTP skin registrations", async () => {
 		await health();
 		if (!sidecar) throw new Error("missing test sidecar");
