@@ -70,7 +70,7 @@ class PluginRuntime:
         self._credential = ""
         self._server: ThreadingHTTPServer | None = None
         self._thread: threading.Thread | None = None
-        self._provider: SnoMemoryProvider | None = None
+        self._providers: dict[str, SnoMemoryProvider] = {}
 
     def activate(self, ctx: RegistrationContext) -> None:
         self._llm = ctx.llm
@@ -105,13 +105,27 @@ class PluginRuntime:
             "model": "hermes-host",
         }
 
-    def bind_provider(self, provider: SnoMemoryProvider) -> None:
+    def bind_provider(self, session_id: str, provider: SnoMemoryProvider) -> None:
         with self._state_lock:
-            self._provider = provider
+            self._providers[session_id] = provider
+
+    def move_provider(
+        self, old_session_id: str, new_session_id: str, provider: SnoMemoryProvider
+    ) -> None:
+        with self._state_lock:
+            if self._providers.get(old_session_id) is provider:
+                self._providers.pop(old_session_id)
+                self._providers[new_session_id] = provider
+
+    def unbind_provider(self, provider: SnoMemoryProvider) -> None:
+        with self._state_lock:
+            for session_id, current in list(self._providers.items()):
+                if current is provider:
+                    self._providers.pop(session_id)
 
     def startup_brief(self, session_id: str) -> str:
         with self._state_lock:
-            provider = self._provider
+            provider = self._providers.get(session_id)
         return provider.startup_brief(session_id) if provider is not None else ""
 
     def run_sidecar(self, call: object) -> dict[str, object]:
@@ -143,7 +157,8 @@ class PluginRuntime:
         self._server = None
         self._thread = None
         self._llm = None
-        self._provider = None
+        with self._state_lock:
+            self._providers.clear()
         if server is not None:
             server.shutdown()
             server.server_close()
@@ -343,7 +358,6 @@ class SnoMemoryProvider(MemoryProvider):
         self._session_id = session_id
         self._primary = kwargs.get("agent_context", "primary") == "primary"
         self._client = client
-        _RUNTIME.bind_provider(self)
         registration: dict[str, object] = {
             "skinId": _SKIN_ID,
             "inheritInstalled": True,
@@ -358,6 +372,7 @@ class SnoMemoryProvider(MemoryProvider):
         if result.get("degraded"):
             self._last_error = str(result.get("reason") or "sidecar unavailable")
             raise RuntimeError(self._last_error)
+        _RUNTIME.bind_provider(session_id, self)
 
     def system_prompt_block(self) -> str:
         return (
@@ -506,6 +521,7 @@ class SnoMemoryProvider(MemoryProvider):
         if not normalized:
             raise RuntimeError("checkpoint has no direct evidence")
         self._capture(normalized, self._session_id)
+        self._seen_ids.clear()
         self._brief_pending = True
         result = self._require_client().post(
             "get-recall",
@@ -535,7 +551,9 @@ class SnoMemoryProvider(MemoryProvider):
         rewound: bool = False,
         **_kwargs: object,
     ) -> None:
+        old_session_id = self._session_id
         self._session_id = new_session_id
+        _RUNTIME.move_provider(old_session_id, new_session_id, self)
         self._seen_ids.clear()
         self._brief_pending = True
         if rewound:
@@ -545,6 +563,7 @@ class SnoMemoryProvider(MemoryProvider):
             _RUNTIME.invalidate()
 
     def shutdown(self) -> None:
+        _RUNTIME.unbind_provider(self)
         self._client = None
 
     def _capture(
