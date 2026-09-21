@@ -4,13 +4,13 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { checkDiscovery, readDiscovery, type Discovery } from "./discovery";
 import { ContractError, DEGRADED_REASONS, type DegradedReason } from "./error";
-import type { ContractInputs, Inspection, Message, Mutation, RecallOptions, Registration, ScopeCtx, Turn, UsageSignal } from "./inputs";
+import type { ContractInputs, InitRegistration, Inspection, Message, Mutation, RecallOptions, ScopeCtx, Turn, UsageSignal } from "./inputs";
 import type { ContractMethod, MemoryContract } from "./index";
 import { getPrincipal, readBoundStorePath } from "./profile";
 import { outputSchemas, type ContractOutputs, type InspectData } from "./results";
 import { MEMORY_ROUTES, MEMORY_SKIN_HEADER, MEMORY_START_TIMEOUT_MS, MEMORY_HEALTH_TIMEOUT_MS } from "./routes";
 
-export type { MemoryContract, ScopeCtx, Registration, RecallOptions, Turn, Mutation, Inspection, UsageSignal, Message, ContractOutputs, JsonValue } from "./index";
+export type { MemoryContract, ScopeCtx, Registration, InitRegistration, RecallOptions, Turn, Mutation, Inspection, UsageSignal, Message, ContractOutputs, JsonValue } from "./index";
 export { ContractError } from "./error";
 export interface ConnectOptions { skinId: string; storePath?: string }
 export interface DegradedConnection { degraded: true; reason: DegradedReason }
@@ -99,7 +99,7 @@ export class MemoryClient implements MemoryContract {
 		} catch (error) { throw new ContractError(failureReason(error)); }
 	}
 
-	init(scope: ScopeCtx, registration: Registration): Promise<ContractOutputs["init"]> {
+	init(scope: ScopeCtx, registration: InitRegistration): Promise<ContractOutputs["init"]> {
 		return this.request("init", { scope, registration });
 	}
 	async getRecall(query: string, scope: ScopeCtx, options: RecallOptions): Promise<ContractOutputs["getRecall"]> {
