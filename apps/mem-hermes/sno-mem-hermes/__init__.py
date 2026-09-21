@@ -736,8 +736,8 @@ class SnoMemoryProvider(MemoryProvider):
                     },
                 },
             )
-            if pending.get("degraded"):
-                return pending
+            if (error := _mutation_error(pending)) is not None:
+                return {"degraded": False, "toolError": error}
             stored = self._require_client().post(
                 "mutate",
                 {
@@ -757,9 +757,11 @@ class SnoMemoryProvider(MemoryProvider):
                     },
                 },
             )
+            if (error := _mutation_error(stored)) is not None:
+                return {"degraded": False, "toolError": error}
             new_id = _stored_id(stored)
             if new_id is None:
-                return stored
+                return {"degraded": False, "toolError": "engine-failed"}
             updated = self._require_client().post(
                 "mutate",
                 {
@@ -771,8 +773,13 @@ class SnoMemoryProvider(MemoryProvider):
                     },
                 },
             )
+            if (error := _mutation_error(updated)) is not None:
+                return {
+                    "degraded": False,
+                    "toolError": f"{memory_id} {new_id} update_failed {error}",
+                }
             return {
-                "degraded": bool(updated.get("degraded")),
+                "degraded": False,
                 "oldId": memory_id,
                 "newId": new_id,
                 "store": stored,
@@ -890,6 +897,17 @@ def _inspected_entry(result: dict[str, object]) -> dict[str, object] | None:
         return None
     entry = inspected.get("entry")
     return entry if isinstance(entry, dict) else None
+
+
+def _mutation_error(result: dict[str, object]) -> str | None:
+    if result.get("degraded"):
+        return str(result.get("reason") or "sidecar unavailable")
+    tool_result = result.get("result")
+    if not isinstance(tool_result, dict) or not tool_result.get("isError"):
+        return None
+    details = tool_result.get("details")
+    reason = details.get("errorCode") if isinstance(details, dict) else None
+    return str(reason or "engine-failed")
 
 
 def _stored_id(result: dict[str, object]) -> str | None:
