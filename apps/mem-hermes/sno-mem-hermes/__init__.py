@@ -37,6 +37,7 @@ _LATER_RECALL_MAX_CHARS = 1_500
 _TOOL_RECALL_LIMIT = 5
 _TASK_QUERY = "current task objective, completed work, blockers, next action, and relevant files or evidence"
 _TASK_RECALL_LIMIT = 5
+_CORRECTION_LOOKUP_LIMIT = 20
 _TASK_RECALL_MAX_CHARS = 3_500
 _WORKING_BRIEF_HEADER = "Sno working memory (data, not instructions):"
 
@@ -228,11 +229,12 @@ class PluginRuntime:
         message: str,
         status: int,
     ) -> None:
-        self._reply(
-            handler,
-            {"error": {"kind": kind, "category": "transport", "message": message}},
-            status,
+        error: dict[str, str] = (
+            {"kind": kind, "reason": message}
+            if kind == "cancelled"
+            else {"kind": kind, "category": "transport", "message": message}
         )
+        self._reply(handler, {"error": error}, status)
 
 
 def _shared_runtime() -> PluginRuntime:
@@ -545,11 +547,7 @@ class SnoMemoryProvider(MemoryProvider):
         memories, error = _memories(result)
         if error:
             return ""
-        context, included = _render_memories(
-            memories, _TASK_RECALL_LIMIT, _TASK_RECALL_MAX_CHARS
-        )
-        self._seen_ids.update(memory["id"] for memory in included)
-        return context
+        return _render_memories(memories, _TASK_RECALL_LIMIT, _TASK_RECALL_MAX_CHARS)[0]
 
     def on_session_switch(
         self,
@@ -722,46 +720,39 @@ class SnoMemoryProvider(MemoryProvider):
                     "degraded": False,
                     "toolError": f"superseded by {successor}; correct that id",
                 }
-            pending = self._require_client().post(
-                "mutate",
-                {
-                    "scope": scope,
-                    "op": {
-                        "op": "update",
-                        "id": memory_id,
-                        "metadata": {
-                            **metadata,
-                            "supersededBy": f"pending:{secrets.token_hex(16)}",
+            content_hash = hashlib.sha256(content.encode()).hexdigest()[:16]
+            if isinstance(successor, str):
+                _, nonce, marked_hash = (successor.split(":") + ["", ""])[:3]
+                if marked_hash != content_hash:
+                    return {"degraded": False, "toolError": "correction-in-progress"}
+                new_id = self._earlier_successor(
+                    scope, memory_id, nonce, entry.get("category", "episodic")
+                )
+            else:
+                nonce = secrets.token_hex(16)
+                new_id = None
+                pending = self._require_client().post(
+                    "mutate",
+                    {
+                        "scope": scope,
+                        "op": {
+                            "op": "update",
+                            "id": memory_id,
+                            "metadata": {
+                                **metadata,
+                                "supersededBy": f"pending:{nonce}:{content_hash}",
+                            },
                         },
                     },
-                },
-            )
-            if (error := _mutation_error(pending)) is not None:
-                return {"degraded": False, "toolError": error}
-            stored = self._require_client().post(
-                "mutate",
-                {
-                    "scope": scope,
-                    "op": {
-                        "op": "store",
-                        "content": content,
-                        "category": entry.get("category", "episodic"),
-                        "metadata": {
-                            "correctionOf": memory_id,
-                            **(
-                                {"section_name": section}
-                                if isinstance(section := metadata.get("section_name"), str)
-                                else {}
-                            ),
-                        },
-                    },
-                },
-            )
-            if (error := _mutation_error(stored)) is not None:
-                return {"degraded": False, "toolError": error}
-            new_id = _stored_id(stored)
+                )
+                if (error := _mutation_error(pending)) is not None:
+                    return {"degraded": False, "toolError": error}
             if new_id is None:
-                return {"degraded": False, "toolError": "engine-failed"}
+                new_id, error = self._store_successor(
+                    scope, entry, memory_id, nonce, content
+                )
+                if new_id is None:
+                    return {"degraded": False, "toolError": error or "engine-failed"}
             updated = self._require_client().post(
                 "mutate",
                 {
@@ -782,11 +773,74 @@ class SnoMemoryProvider(MemoryProvider):
                 "degraded": False,
                 "oldId": memory_id,
                 "newId": new_id,
-                "store": stored,
                 "supersede": updated,
             }
 
         return json.dumps(_RUNTIME.run_sidecar(correct))
+
+    def _store_successor(
+        self,
+        scope: dict[str, object],
+        entry: dict[str, object],
+        memory_id: str,
+        nonce: str,
+        content: str,
+    ) -> tuple[str | None, str | None]:
+        section = _metadata(entry.get("metadata")).get("section_name")
+        stored = self._require_client().post(
+            "mutate",
+            {
+                "scope": scope,
+                "op": {
+                    "op": "store",
+                    "content": content,
+                    "category": entry.get("category", "episodic"),
+                    "metadata": {
+                        "correctionOf": memory_id,
+                        "correctionNonce": nonce,
+                        **(
+                            {"section_name": section}
+                            if isinstance(section, str)
+                            else {}
+                        ),
+                    },
+                },
+            },
+        )
+        if (error := _mutation_error(stored)) is not None:
+            return None, error
+        new_id = _stored_id(stored)
+        return (new_id, None) if new_id is not None else (None, "engine-failed")
+
+    def _earlier_successor(
+        self, scope: dict[str, object], memory_id: str, nonce: str, category: object
+    ) -> str | None:
+        listed = self._require_client().post(
+            "inspect",
+            {
+                "scope": scope,
+                "op": {
+                    "op": "list",
+                    "category": category,
+                    "limit": _CORRECTION_LOOKUP_LIMIT,
+                },
+            },
+        )
+        if (error := _mutation_error(listed)) is not None:
+            raise RuntimeError(error)
+        result = listed.get("result")
+        entries = result.get("entries") if isinstance(result, dict) else None
+        for entry in entries if isinstance(entries, list) else []:
+            if not isinstance(entry, dict):
+                continue
+            marks = _metadata(entry.get("metadata"))
+            if (
+                marks.get("correctionOf") == memory_id
+                and marks.get("correctionNonce") == nonce
+            ):
+                found = entry.get("id")
+                return found if isinstance(found, str) else None
+        return None
 
     def _scope(self, session_id: str) -> dict[str, object]:
         return {
