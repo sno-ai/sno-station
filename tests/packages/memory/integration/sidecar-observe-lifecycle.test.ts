@@ -3,6 +3,7 @@
  * reports every event under the skin's own agent id, and closes the session on session end.
  * The ingest endpoint is a local stand-in for www.sno.ai; everything before it is real.
  */
+import { createHash } from "node:crypto";
 import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir, userInfo } from "node:os";
 import { join } from "node:path";
@@ -81,6 +82,10 @@ afterAll(() => {
 	return new Promise<void>(resolve => ingest.server.close(() => resolve()));
 });
 
+function sha256(text: string): string {
+	return createHash("sha256").update(text, "utf8").digest("hex");
+}
+
 async function post(path: string, body: unknown, skin: string): Promise<unknown> {
 	if (!sidecar) throw new Error("missing test sidecar");
 	const response = await fetch(`http://127.0.0.1:${sidecar.port}${path}`, {
@@ -110,6 +115,12 @@ describe("sidecar-owned observe sessions for coding skins", () => {
 		expect(await post("/v1/host-event", { scope, event: {
 			kind: "llm", model: "openai:gpt-5.6-codex", promptTokens: 6402, completionTokens: 241, latencyMs: 8420.6,
 		} }, "codex")).toEqual({ degraded: false, accepted: true });
+		expect(await post("/v1/host-event", { scope, event: {
+			kind: "tool", toolName: "Bash", decision: "allow", input: '{"command":"git status"}', output: "On branch dev, mail alice@example.com", latencyMs: 312.4,
+		} }, "codex")).toEqual({ degraded: false, accepted: true });
+		expect(await post("/v1/host-event", { scope, event: {
+			kind: "permission", permissionKind: "Bash", decision: "deny", target: '{"command":"rm -rf /"}',
+		} }, "codex")).toEqual({ degraded: false, accepted: true });
 		await post("/v1/on-session-end", { scope, messages: [] }, "codex");
 
 		const started = ingest.events.find(event => event.event_type === "session.start");
@@ -117,7 +128,7 @@ describe("sidecar-owned observe sessions for coding skins", () => {
 		const sessionUuid = started?.scope.session_uuid ?? "";
 		expect(sessionUuid).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
 		const types = await shippedTypes(sessionUuid, "cost.summary");
-		expect(types).toEqual(["session.start", "prompt.submit", "memory.read", "llm.call", "memory.snapshot", "session.end", "cost.summary"]);
+		expect(types).toEqual(["session.start", "prompt.submit", "memory.read", "llm.call", "tool.call", "permission.request", "memory.snapshot", "session.end", "cost.summary"]);
 
 		const session = ingest.events.filter(event => event.scope.session_uuid === sessionUuid);
 		expect(new Set(session.map(event => event.scope.agent_id))).toEqual(new Set(["codex"]));
@@ -130,11 +141,19 @@ describe("sidecar-owned observe sessions for coding skins", () => {
 			cache_read_tokens: 0, cache_write_tokens: 0, token_source: "host_agent_paid",
 		});
 		expect(byType["llm.call"]?.lane).toBe("llm");
+		expect(byType["tool.call"]?.lane).toBe("skill");
+		expect(byType["tool.call"]?.payload).toMatchObject({ tool_name: "Bash", decision: "allow", latency_ms: 312 });
+		expect(byType["tool.call"]?.payload.input_hash).toMatch(/^[0-9a-f]{64}$/);
+		expect(byType["tool.call"]?.payload.output_hash).toMatch(/^[0-9a-f]{64}$/);
+		expect(byType["tool.call"]?.payload.output_hash).not.toBe(sha256("On branch dev, mail alice@example.com"));
+		expect(byType["tool.call"]?.payload.output_hash).toBe(sha256("On branch dev, mail <email>"));
+		expect(byType["permission.request"]?.lane).toBe("security");
+		expect(byType["permission.request"]?.payload).toEqual({ kind: "Bash", decision: "deny", target_hash: sha256('{"command":"rm -rf /"}') });
 		expect(byType["session.end"]?.payload).toMatchObject({ session_uuid: sessionUuid });
 		expect(byType["session.end"]?.payload.duration_ms).toBeGreaterThanOrEqual(0);
 		expect(byType["memory.snapshot"]?.payload).toMatchObject({ session_uuid: sessionUuid, snapshot_reason: "session_end" });
 		expect(byType["cost.summary"]?.payload).toMatchObject({
-			session_uuid: sessionUuid, llm_calls: 1, memory_reads: 1, host_agent_prompt_tokens: 6402, host_agent_completion_tokens: 241,
+			session_uuid: sessionUuid, llm_calls: 1, memory_reads: 1, tool_calls: 1, host_agent_prompt_tokens: 6402, host_agent_completion_tokens: 241,
 		});
 	});
 });
