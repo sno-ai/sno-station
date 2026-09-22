@@ -20,12 +20,12 @@
  *   node scripts/download-simple-tokenizer.mjs --all-platforms
  */
 
-import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { inflateRawSync } from "node:zlib";
 
 const VERSION = "v0.7.1";
 
@@ -115,10 +115,46 @@ function sha256Hex(bytes) {
 }
 
 function unzipInto(zipPath, destDir) {
-	// Defer to system unzip — present on every platform we ship to.
-	execFileSync("unzip", ["-q", "-o", zipPath, "-d", destDir], {
-		stdio: ["ignore", "pipe", "pipe"],
-	});
+	// Pure Node: a fresh machine has no `unzip` (a-clean-test-vm install proof, 2026-09-22).
+	// Walk the central directory; entries are stored (0) or deflated (8).
+	const buf = readFileSync(zipPath);
+	let eocd = -1;
+	for (let i = buf.length - 22; i >= Math.max(0, buf.length - 22 - 65_535); i--) {
+		if (buf.readUInt32LE(i) === 0x06054b50) {
+			eocd = i;
+			break;
+		}
+	}
+	if (eocd < 0) throw new Error(`${zipPath}: end of central directory not found`);
+	const count = buf.readUInt16LE(eocd + 10);
+	let off = buf.readUInt32LE(eocd + 16);
+	for (let n = 0; n < count; n++) {
+		if (buf.readUInt32LE(off) !== 0x02014b50) throw new Error(`${zipPath}: bad central directory entry`);
+		const method = buf.readUInt16LE(off + 10);
+		const csize = buf.readUInt32LE(off + 20);
+		const nameLen = buf.readUInt16LE(off + 28);
+		const extraLen = buf.readUInt16LE(off + 30);
+		const commentLen = buf.readUInt16LE(off + 32);
+		const extAttr = buf.readUInt32LE(off + 38);
+		const localOff = buf.readUInt32LE(off + 42);
+		const name = buf.toString("utf8", off + 46, off + 46 + nameLen);
+		off += 46 + nameLen + extraLen + commentLen;
+		if (name.includes("..") || name.startsWith("/")) throw new Error(`${zipPath}: unsafe entry ${name}`);
+		const target = join(destDir, name);
+		if (name.endsWith("/")) {
+			mkdirSync(target, { recursive: true });
+			continue;
+		}
+		const dataStart = localOff + 30 + buf.readUInt16LE(localOff + 26) + buf.readUInt16LE(localOff + 28);
+		const data = buf.subarray(dataStart, dataStart + csize);
+		let bytes;
+		if (method === 0) bytes = data;
+		else if (method === 8) bytes = inflateRawSync(data);
+		else throw new Error(`${zipPath}: unsupported compression method ${method} for ${name}`);
+		mkdirSync(dirname(target), { recursive: true });
+		const mode = (extAttr >>> 16) & 0o777;
+		writeFileSync(target, bytes, mode ? { mode } : undefined);
+	}
 }
 
 async function installAsset(spec, opts) {
@@ -157,9 +193,7 @@ async function installAsset(spec, opts) {
 		}
 		const platformDir = join(TARGET_ROOT, spec.platform);
 		mkdirSync(platformDir, { recursive: true });
-		execFileSync("cp", ["-R", `${innerRoot}/.`, platformDir], {
-			stdio: ["ignore", "pipe", "pipe"],
-		});
+		cpSync(innerRoot, platformDir, { recursive: true });
 		if (!existsSync(join(platformDir, spec.binaryName))) {
 			throw new Error(
 				`post-install verification failed: ${join(platformDir, spec.binaryName)} missing`,
