@@ -6,12 +6,12 @@
 import { readFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
-import type { Embedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client";
+import type { Embedder } from "../../../../packages/memory/src/engine/extraction/embedding-provider-client";
 import { processExtractedCandidate } from "@/extraction/insight-distill-candidate-processor";
-import { routeTaskLifecycleAssertion } from "../../../../packages/sno-station-mem/src/engine/extraction/task-lifecycle-route";
-import type { LlmClient } from "../../../../packages/sno-station-mem/src/model/llm-client";
-import type { CandidateMemory, ExtractionStats } from "../../../../packages/sno-station-mem/src/engine/shared/types";
-import { MemoryStore } from "../../../../packages/sno-station-mem/src/store/store";
+import { routeTaskLifecycleAssertion } from "../../../../packages/memory/src/engine/extraction/task-lifecycle-route";
+import type { LlmClient } from "../../../../packages/memory/src/model/llm-client";
+import type { CandidateMemory, ExtractionStats } from "../../../../packages/memory/src/engine/shared/types";
+import { MemoryStore } from "../../../../packages/memory/src/store/store";
 import { createTestDb, createTestEmbedder } from "../../../apps/mem-claw/helpers/test-db";
 
 const unavailableRoute: LlmClient = {

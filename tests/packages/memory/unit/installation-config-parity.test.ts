@@ -2,14 +2,14 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, expect, it, vi } from "vitest";
-import { bindStore, getInstallationConfigPath } from "../../../../packages/sno-station-mem/src/engine/shared/paths";
-import { readSnoStationMemConfig, PLUGIN_ENTRY_KEY } from "../../../../packages/sno-station-mem/src/engine/bindings/embedder-config-files";
-import { pluginConfigSchema } from "../../../../packages/sno-station-mem/config/plugin-config-schema";
+import { bindStore, getInstallationConfigPath } from "../../../../packages/memory/src/engine/shared/paths";
+import { readSnoStationMemConfig, PLUGIN_ENTRY_KEY } from "../../../../packages/memory/src/engine/bindings/embedder-config-files";
+import { pluginConfigSchema } from "../../../../packages/memory/config/plugin-config-schema";
 import {
 	codingSkinInstallationSchema,
 	createCodingSkinRegistration,
-} from "../../../../packages/sno-station-mem/config/coding-skin";
-import { DEFAULT_MODEL_MODE } from "../../../../packages/sno-station-mem/config/plugin-config-mode-schema";
+} from "../../../../packages/memory/config/coding-skin";
+import { DEFAULT_MODEL_MODE } from "../../../../packages/memory/config/plugin-config-mode-schema";
 
 const roots: string[] = [];
 afterEach(() => { vi.unstubAllEnvs(); for (const root of roots.splice(0)) rmSync(root, { recursive: true }); });

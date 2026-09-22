@@ -2,11 +2,11 @@ import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import {
 	buildInsightMetadata,
 	stringifyInsightMetadata,
-} from "../../../../packages/sno-station-mem/src/engine/extraction/memory-metadata-codec";
-import type { Embedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client";
-import { StorageError } from "../../../../packages/sno-station-mem/src/engine/shared/errors";
-import type { MemoryCategory, MemoryEntry } from "../../../../packages/sno-station-mem/src/engine/shared/types";
-import { MemoryStore } from "../../../../packages/sno-station-mem/src/store/store";
+} from "../../../../packages/memory/src/engine/extraction/memory-metadata-codec";
+import type { Embedder } from "../../../../packages/memory/src/engine/extraction/embedding-provider-client";
+import { StorageError } from "../../../../packages/memory/src/engine/shared/errors";
+import type { MemoryCategory, MemoryEntry } from "../../../../packages/memory/src/engine/shared/types";
+import { MemoryStore } from "../../../../packages/memory/src/store/store";
 import { createTestDb, createTestEmbedder, type TestDb } from "../../../apps/mem-claw/helpers/test-db.ts";
 
 const NOW = Date.parse("2026-07-24T19:00:00.000Z");

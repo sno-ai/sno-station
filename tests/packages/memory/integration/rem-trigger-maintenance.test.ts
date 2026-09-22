@@ -12,12 +12,12 @@ import { createServer, type Server } from "node:http";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { writeRemTriggerStateAtomic } from "../../../../packages/sno-station-mem/src/sidecar/rem-trigger-state.ts";
+import { writeRemTriggerStateAtomic } from "../../../../packages/memory/src/sidecar/rem-trigger-state.ts";
 import {
 	MAINTENANCE_FIRST_TICK_DELAY_MS,
 	startMaintenanceTimer,
-} from "../../../../packages/sno-station-mem/src/store/maintenance.ts";
-import type { MemoryStore } from "../../../../packages/sno-station-mem/src/store/memory-store-base.ts";
+} from "../../../../packages/memory/src/store/maintenance.ts";
+import type { MemoryStore } from "../../../../packages/memory/src/store/memory-store-base.ts";
 import { createTestDb, type TestDb } from "../../../apps/mem-claw/helpers/test-db.ts";
 
 describe("REM trigger maintenance timer", () => {

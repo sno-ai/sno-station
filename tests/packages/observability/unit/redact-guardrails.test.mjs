@@ -5,7 +5,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
-import { redactEventPayload } from "../../../../packages/sno-observe/dist/internal/redact.js";
+import { redactEventPayload } from "../../../../packages/observability/dist/internal/redact.js";
 
 describe("redact — false-positive guardrails", () => {
 	it("redacts email-like strings even when they appear inside code samples (20.5)", () => {

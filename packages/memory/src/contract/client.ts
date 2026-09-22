@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { checkDiscovery, readDiscovery, type Discovery } from "./discovery";
 import { ContractError, DEGRADED_REASONS, type DegradedReason } from "./error";
-import type { ContractInputs, InitRegistration, Inspection, Message, Mutation, RecallOptions, ScopeCtx, Turn, UsageSignal } from "./inputs";
+import type { ContractInputs, HostEvent, InitRegistration, Inspection, Message, Mutation, RecallOptions, ScopeCtx, Turn, UsageSignal } from "./inputs";
 import type { ContractMethod, MemoryContract } from "./index";
 import { getPrincipal, readBoundStorePath } from "./profile";
 import { outputSchemas, type ContractOutputs, type InspectData } from "./results";
@@ -101,6 +101,9 @@ export class MemoryClient implements MemoryContract {
 
 	init(scope: ScopeCtx, registration: InitRegistration): Promise<ContractOutputs["init"]> {
 		return this.request("init", { scope, registration });
+	}
+	hostEvent(event: HostEvent, scope: ScopeCtx): Promise<ContractOutputs["hostEvent"]> {
+		return this.request("hostEvent", { scope, event });
 	}
 	async getRecall(query: string, scope: ScopeCtx, options: RecallOptions): Promise<ContractOutputs["getRecall"]> {
 		try { return await this.request("getRecall", { query, scope, options }); }

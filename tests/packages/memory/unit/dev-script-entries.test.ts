@@ -13,7 +13,7 @@ it("runs the REM utilities against the published module and an encrypted migrate
 		const run = (args: string[]) => execFileSync(resolve(repo, "node_modules/.bin/tsx"), args, {
 			cwd: repo, encoding: "utf8", timeout: 30_000, env: process.env,
 		});
-		expect(run(["dev-scripts/generate-rem-operations.ts"])).toContain("packages/sno-station-mem/generated/rem-operations.json");
+		expect(run(["dev-scripts/generate-rem-operations.ts"])).toContain("packages/memory/generated/rem-operations.json");
 		// The artifact generator's main creates evaluation assets and is expressly excluded.
 		expect(run(["-e", "import('./dev-scripts/build-rem-gate-artifacts.ts').then(() => console.log('module-imported'))"])).toContain("module-imported");
 		const census = run(["dev-scripts/census-rem-classifier.mts", fixture.dbPath]);

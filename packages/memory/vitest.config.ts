@@ -9,11 +9,11 @@ export default defineConfig({
 	root: repoRoot,
 	resolve: {
 		alias: [
-			{ find: /^@snoai\/sno-station-mem\/client$/, replacement: resolve(appRoot, "src/contract/client.ts") },
-			{ find: /^@snoai\/sno-station-mem\/coding-skin$/, replacement: resolve(appRoot, "config/coding-skin.ts") },
-			{ find: /^@snoai\/sno-station-mem\/internal\/config\//, replacement: `${resolve(appRoot, "config")}/` },
-			{ find: /^@snoai\/sno-station-mem\/internal\//, replacement: `${resolve(appRoot, "src")}/` },
-			{ find: /^@snoai\/sno-station-mem$/, replacement: resolve(appRoot, "src/index.ts") },
+			{ find: /^@snoai\/memory\/client$/, replacement: resolve(appRoot, "src/contract/client.ts") },
+			{ find: /^@snoai\/memory\/coding-skin$/, replacement: resolve(appRoot, "config/coding-skin.ts") },
+			{ find: /^@snoai\/memory\/internal\/config\//, replacement: `${resolve(appRoot, "config")}/` },
+			{ find: /^@snoai\/memory\/internal\//, replacement: `${resolve(appRoot, "src")}/` },
+			{ find: /^@snoai\/memory$/, replacement: resolve(appRoot, "src/index.ts") },
 			{ find: /^@\/config$/, replacement: resolve(appRoot, "config/index.ts") },
 			{ find: /^@\//, replacement: `${resolve(appRoot, "src")}/` },
 			{

@@ -1,7 +1,7 @@
 import { expect, it } from "vitest";
-import { buildAtomicGenericExtractionPrompt, excludeContextOnlyRecords } from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-generic-extractor";
-import { parseAtomicExtractionReply } from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-extraction-reply";
-import { runAtomicExtractionGauntlet } from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-extraction-gauntlet";
+import { buildAtomicGenericExtractionPrompt, excludeContextOnlyRecords } from "../../../../packages/memory/src/engine/extraction/atomic-generic-extractor";
+import { parseAtomicExtractionReply } from "../../../../packages/memory/src/engine/extraction/atomic-extraction-reply";
+import { runAtomicExtractionGauntlet } from "../../../../packages/memory/src/engine/extraction/atomic-extraction-gauntlet";
 
 const earlier = "Caroline: I visited the museum yesterday.";
 const current = "Melanie: I prefer tea.";

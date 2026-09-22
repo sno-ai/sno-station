@@ -3,20 +3,20 @@
 import { readFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
-import type { Embedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client.ts";
+import type { Embedder } from "../../../../packages/memory/src/engine/extraction/embedding-provider-client.ts";
 import {
 	buildInsightMetadata,
 	deriveFactKey,
 	parseInsightMetadata,
 	stringifyInsightMetadata,
-} from "../../../../packages/sno-station-mem/src/engine/extraction/memory-metadata-codec.ts";
-import { runProfileSectionUpdate } from "../../../../packages/sno-station-mem/src/engine/extraction/profile-section-writer.ts";
-import { runWithMutationAttempt } from "../../../../packages/sno-station-mem/src/engine/operations/runtime-audit-log.ts";
-import type { MemoryEntry } from "../../../../packages/sno-station-mem/src/engine/shared/types.ts";
+} from "../../../../packages/memory/src/engine/extraction/memory-metadata-codec.ts";
+import { runProfileSectionUpdate } from "../../../../packages/memory/src/engine/extraction/profile-section-writer.ts";
+import { runWithMutationAttempt } from "../../../../packages/memory/src/engine/operations/runtime-audit-log.ts";
+import type { MemoryEntry } from "../../../../packages/memory/src/engine/shared/types.ts";
 import {
 	MemoryStore,
 	type StoreInput,
-} from "../../../../packages/sno-station-mem/src/store/store.ts";
+} from "../../../../packages/memory/src/store/store.ts";
 import { createTestDb, createTestEmbedder, type TestDb } from "../../../apps/mem-claw/helpers/test-db.ts";
 
 const PROJECT_ID = "profile-recovery-durability";

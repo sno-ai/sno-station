@@ -1,19 +1,19 @@
-import { calculateCalendarTime } from "../../../../packages/sno-station-mem/src/engine/extraction/calendar-instruction";
+import { calculateCalendarTime } from "../../../../packages/memory/src/engine/extraction/calendar-instruction";
 /** @file atomic-row-event-time.test.ts
  * @purpose Proves event time, session time, and write time remain distinct in durable atomic rows.
  * @boundary The real write projection and real encrypted SQLite through MemoryStore; no model calls.
  */
 
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { buildAtomicWriteCards } from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-write-projection";
-import type { AtomicKeyedRecord } from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-profile-keying";
-import type { Embedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client";
+import { buildAtomicWriteCards } from "../../../../packages/memory/src/engine/extraction/atomic-write-projection";
+import type { AtomicKeyedRecord } from "../../../../packages/memory/src/engine/extraction/atomic-profile-keying";
+import type { Embedder } from "../../../../packages/memory/src/engine/extraction/embedding-provider-client";
 import {
 	type AtomicExtractionLedgerKey,
 	type AtomicExtractionRunParameters,
 	MemoryStore,
-} from "../../../../packages/sno-station-mem/src/store/store";
-import type { SqliteDatabaseLike } from "../../../../packages/sno-station-mem/src/store/sqlite-runtime";
+} from "../../../../packages/memory/src/store/store";
+import type { SqliteDatabaseLike } from "../../../../packages/memory/src/store/sqlite-runtime";
 import { createTestDb, createTestEmbedder, type TestDb } from "../../../apps/mem-claw/helpers/test-db";
 
 const PROJECT_ID = "atomic-event-time-project";
@@ -238,7 +238,7 @@ it("makes an undated standing fact visible from its statement while an unknown e
 });
 
 it("keeps same-session standing claims in source order when the later claim names today", async () => {
-	const { readAtomicArrivalRetirementCandidateSet } = await import("../../../../packages/sno-station-mem/src/store/memory-store-atomic-extraction-write-api");
+	const { readAtomicArrivalRetirementCandidateSet } = await import("../../../../packages/memory/src/store/memory-store-atomic-extraction-write-api");
 	const fixture = createTestDb();
 	const store = new MemoryStore({ dbPath: fixture.dbPath, embedder });
 	try {

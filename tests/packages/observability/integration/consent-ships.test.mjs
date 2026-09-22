@@ -4,9 +4,10 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
-import { BufferStore } from "../../../../packages/sno-observe/dist/internal/buffer-store.js";
-import { SnoObserveRuntime } from "../../../../packages/sno-observe/dist/internal/runtime.js";
-import { createFetchRecorder } from "../fixtures/temp-env.mjs";
+import { BufferStore } from "../../../../packages/observability/dist/internal/buffer-store.js";
+import { SnoObserveRuntime } from "../../../../packages/observability/dist/internal/runtime.js";
+import { parseEventInput } from "../../../../packages/observability/dist/internal/schemas.js";
+import { createFetchRecorder, validPayloads } from "../fixtures/temp-env.mjs";
 
 function tempEnv() {
 	const dir = mkdtempSync(join(tmpdir(), "sno-observe-consent-"));
@@ -23,12 +24,23 @@ function tempEnv() {
 	};
 }
 
+/** Consent audit rows ride the agent's own chain, so an agent must have spoken first. */
+function memoryWrite() {
+	return parseEventInput({
+		event_type: "memory.write",
+		lane: "memory",
+		agent_id: "codex",
+		payload: validPayloads["memory.write"],
+	});
+}
+
 describe("consent.change always ships when value changes (21.8)", () => {
 	it("metadata-only -> off ships consent.change", async () => {
 		const t = tempEnv();
 		const { calls, fetch } = createFetchRecorder();
 		const runtime = new SnoObserveRuntime({ env: t.env, cwd: t.dir, fetch });
 		try {
+			await runtime.emitParsed(memoryWrite());
 			await runtime.setConsent("off", "test-1");
 			const eventTypes = calls.map((c) => JSON.parse(c.body).event_type);
 			assert.equal(eventTypes.includes("consent.change"), true, JSON.stringify(eventTypes));
@@ -43,6 +55,7 @@ describe("consent.change always ships when value changes (21.8)", () => {
 		const { calls, fetch } = createFetchRecorder();
 		const runtime = new SnoObserveRuntime({ env: t.env, cwd: t.dir, fetch });
 		try {
+			await runtime.emitParsed(memoryWrite());
 			await runtime.setConsent("off", "go-off");
 			const before = calls.length;
 			await runtime.setConsent("metadata-only", "back-on");
@@ -80,6 +93,7 @@ describe("consent.change always ships when value changes (21.8)", () => {
 		const { calls, fetch } = createFetchRecorder();
 		const runtime = new SnoObserveRuntime({ env: t.env, cwd: t.dir, fetch });
 		try {
+			await runtime.emitParsed(memoryWrite());
 			await runtime.setConsent("full", "elevate");
 			await runtime.flush();
 			const consentPosts = calls

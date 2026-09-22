@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { extractAutoRecallQuery } from "../../../../packages/sno-station-mem/src/engine/bindings/sno-station-mem-auto-recall-hook.ts";
+import { extractAutoRecallQuery } from "../../../../packages/memory/src/engine/bindings/sno-station-mem-auto-recall-hook.ts";
 
 describe("extractAutoRecallQuery", () => {
 	it("uses only the benchmark question when the LoCoMo harness adds answer rules", () => {

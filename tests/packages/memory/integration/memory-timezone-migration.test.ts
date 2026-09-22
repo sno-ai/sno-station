@@ -10,10 +10,10 @@ import { fileURLToPath } from "node:url";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 import { describe, expect, it } from "vitest";
-import { initSqliteRuntimeSync, openSqliteDatabase } from "../../../../packages/sno-station-mem/src/store/sqlite-runtime";
+import { initSqliteRuntimeSync, openSqliteDatabase } from "../../../../packages/memory/src/store/sqlite-runtime";
 
 const MIGRATIONS_DIR = fileURLToPath(
-	new URL("../../../../packages/sno-station-mem/drizzle", import.meta.url),
+	new URL("../../../../packages/memory/drizzle", import.meta.url),
 );
 
 describe("memory timezone migration", () => {

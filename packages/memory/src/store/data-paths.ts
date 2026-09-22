@@ -1,6 +1,6 @@
 /** @file data-paths.ts
  * @purpose Resolve the safe-uninstall data directory layout for
- *   `@snoai/sno-station-mem`: persistent user data under
+ *   `@snoai/memory`: persistent user data under
  *   `~/.snoai/sno-station-core/sno-station-mem/data/`, separate from SnoStationMem's plugin
  *   runtime tree. POSIX only.
  * @boundary Path resolution + filesystem-class assertion. No I/O beyond

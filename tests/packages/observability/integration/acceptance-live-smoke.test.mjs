@@ -9,8 +9,8 @@ import { join } from "node:path";
 import { describe, it } from "node:test";
 import { setTimeout as delay } from "node:timers/promises";
 import { createUUIDv7 } from "../../../../packages/common-core/dist/index.js";
-import { SnoObserveRuntime } from "../../../../packages/sno-observe/dist/internal/runtime.js";
-import { parseEventInput } from "../../../../packages/sno-observe/dist/internal/schemas.js";
+import { SnoObserveRuntime } from "../../../../packages/observability/dist/internal/runtime.js";
+import { parseEventInput } from "../../../../packages/observability/dist/internal/schemas.js";
 import { skipIfNoLiveEndpoint } from "../fixtures/live-endpoint.mjs";
 import { validPayloads } from "../fixtures/temp-env.mjs";
 

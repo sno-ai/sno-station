@@ -55,7 +55,7 @@ export const VECTOR_DIMENSION_DEFAULT = 1024;
 /** Plugin version identifier */
 export const PLUGIN_VERSION = "0.9.74";
 
-/** Production sno.ai host origin used by @snoai/sno-observe. */
+/** Production sno.ai host origin used by @snoai/observability. */
 export const SNO_OBSERVE_DEFAULT_BASE_URL = "https://www.sno.ai";
 
 /** Default observability agent id for OpenClaw plugin emits. */

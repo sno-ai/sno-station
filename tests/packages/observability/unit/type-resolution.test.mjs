@@ -8,14 +8,14 @@ import { join, resolve } from "node:path";
 import { describe, it } from "node:test";
 
 const repoRoot = resolve(new URL("../../../..", import.meta.url).pathname);
-const pkgRoot = join(repoRoot, "packages/sno-observe");
+const pkgRoot = join(repoRoot, "packages/observability");
 
 describe("type-resolution for downstream consumers (30.3)", () => {
 	it("Event and AgentId resolve under strict tsconfig", () => {
 		const dir = mkdtempSync(join(tmpdir(), "sno-observe-type-"));
 		try {
 			mkdirSync(join(dir, "node_modules", "@snoai"), { recursive: true });
-			symlinkSync(pkgRoot, join(dir, "node_modules", "@snoai", "sno-observe"));
+			symlinkSync(pkgRoot, join(dir, "node_modules", "@snoai", "observability"));
 			writeFileSync(
 				join(dir, "package.json"),
 				JSON.stringify(
@@ -49,8 +49,8 @@ describe("type-resolution for downstream consumers (30.3)", () => {
 			writeFileSync(
 				join(dir, "probe.ts"),
 				[
-					`import { createSnoObserve } from "@snoai/sno-observe";`,
-					`import type { Event, AgentId, ConsentValue, RuntimeOptions } from "@snoai/sno-observe";`,
+					`import { createSnoObserve } from "@snoai/observability";`,
+					`import type { Event, AgentId, ConsentValue, RuntimeOptions } from "@snoai/observability";`,
 					`const a: AgentId = "codex";`,
 					`const c: ConsentValue = "metadata-only";`,
 					`const e: Event = { event_type: "memory.write", lane: "memory", agent_id: a, payload: { key_hash: "${"a".repeat(64)}", byte_len: 1, content_tokens: 1, tokens_method: "char_approximation" }, consent_level: c };`,

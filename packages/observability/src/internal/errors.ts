@@ -25,7 +25,7 @@ export class InvalidConsentError extends SnoObserveError {
 
 export class InvalidEventTypeError extends SnoObserveError {
 	constructor(eventType: string) {
-		super("invalid_event_type", `event_type is not supported by sno-observe: ${eventType}`);
+		super("invalid_event_type", `event_type is not supported by observability: ${eventType}`);
 	}
 }
 
@@ -44,18 +44,6 @@ export class ChainSeedError extends SnoObserveError {
 export class ChainContentionError extends SnoObserveError {
 	constructor() {
 		super("chain_contention", "could not advance hash chain after bounded retries");
-	}
-}
-
-export class ChainUnavailableError extends SnoObserveError {
-	constructor(readonly state: "reseed_required" | "retired") {
-		super("chain_unavailable", `chain cannot accept events while ${state}`);
-	}
-}
-
-export class BufferCapacityError extends SnoObserveError {
-	constructor() {
-		super("buffer_capacity", "event would exceed the sender buffer capacity");
 	}
 }
 

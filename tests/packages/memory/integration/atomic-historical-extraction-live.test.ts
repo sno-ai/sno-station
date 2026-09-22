@@ -7,10 +7,10 @@ import { appendFileSync, mkdirSync, readFileSync, readdirSync } from "node:fs";
 import { it, expect } from "vitest";
 import { z } from "zod";
 import { createTestDb, createTestEmbedder } from "../../../apps/mem-claw/helpers/test-db";
-import { MemoryStore } from "../../../../packages/sno-station-mem/src/store/store";
-import { AtomicInsightDistiller, createSignedAtomicMemoryExtractionTransports } from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-memory-extraction";
-import { llmRoutingConfigSchema } from "../../../../packages/sno-station-mem/config/plugin-config-mode-schema";
-import { resolveLlmEndpoint } from "../../../../packages/sno-station-mem/src/model/llm-endpoint-resolution";
+import { MemoryStore } from "../../../../packages/memory/src/store/store";
+import { AtomicInsightDistiller, createSignedAtomicMemoryExtractionTransports } from "../../../../packages/memory/src/engine/extraction/atomic-memory-extraction";
+import { llmRoutingConfigSchema } from "../../../../packages/memory/config/plugin-config-mode-schema";
+import { resolveLlmEndpoint } from "../../../../packages/memory/src/model/llm-endpoint-resolution";
 import fixtureData from "../fixtures/issue-219-historical-extraction.json";
 
 const repoRoot = fileURLToPath(new URL("../../../../", import.meta.url));
@@ -29,17 +29,17 @@ function record(id: string, value: unknown) {
 }
 
 const productionFiles = [
-	"packages/sno-station-mem/config/index.ts",
-	"packages/sno-station-mem/src/engine/extraction/atomic-memory-extraction.ts",
-	"packages/sno-station-mem/src/engine/extraction/atomic-generic-extractor.ts",
-	"packages/sno-station-mem/src/engine/extraction/atomic-extraction-skill.ts",
-	"packages/sno-station-mem/skills/extract-atomic-memory/SKILL.md",
-	...readdirSync(resolve(repoRoot, "packages/sno-station-mem/skills/extract-atomic-memory/references")).sort().map((name) => `packages/sno-station-mem/skills/extract-atomic-memory/references/${name}`),
+	"packages/memory/config/index.ts",
+	"packages/memory/src/engine/extraction/atomic-memory-extraction.ts",
+	"packages/memory/src/engine/extraction/atomic-generic-extractor.ts",
+	"packages/memory/src/engine/extraction/atomic-extraction-skill.ts",
+	"packages/memory/skills/extract-atomic-memory/SKILL.md",
+	...readdirSync(resolve(repoRoot, "packages/memory/skills/extract-atomic-memory/references")).sort().map((name) => `packages/memory/skills/extract-atomic-memory/references/${name}`),
 ];
 const productionHashes = Object.fromEntries(productionFiles.map((path) => [path, createHash("sha256").update(readFileSync(resolve(repoRoot, path))).digest("hex")]));
 const harnessHashes = Object.fromEntries([
-	"tests/packages/sno-station-mem/integration/atomic-historical-extraction-live.test.ts",
-	"tests/packages/sno-station-mem/fixtures/issue-219-historical-extraction.json",
+	"tests/packages/memory/integration/atomic-historical-extraction-live.test.ts",
+	"tests/packages/memory/fixtures/issue-219-historical-extraction.json",
 	"evals/locomo/plugin/run_locomo_evalserver.py",
 	"evals/locomo/plugin/judge.py",
 ].map((path) => [path, createHash("sha256").update(readFileSync(resolve(repoRoot, path))).digest("hex")]));

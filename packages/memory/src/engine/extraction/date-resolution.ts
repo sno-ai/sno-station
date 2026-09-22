@@ -75,7 +75,7 @@ export async function resolveMemoryDate(input: DateInput & {
 	if (!reply) {
 		const reason = raw === null ? "model-unavailable" : "invalid-model-instruction";
 		log.warn("Memory time judgment failed; preserving unresolved time", { model_called: true, reason }, {
-			event_name: "memory.date_resolution.unavailable", file: "packages/sno-station-mem/src/engine/extraction/date-resolution.ts",
+			event_name: "memory.date_resolution.unavailable", file: "packages/memory/src/engine/extraction/date-resolution.ts",
 			function: "resolveMemoryDate", site_id: "date-resolution.model_unavailable",
 		});
 		return { ...unresolved, stage: { modelCalled: true, reason } };
@@ -84,7 +84,7 @@ export async function resolveMemoryDate(input: DateInput & {
 	const calculated = calculateCalendarTime(reply.time, anchor, unresolved.timezone);
 	log.info("Memory date resolution completed", { model_called: true, resolved: calculated !== null }, {
 		event_name: "sno_station_mem.date-resolution.date.resolution.stage",
-		file: "packages/sno-station-mem/src/engine/extraction/date-resolution.ts",
+		file: "packages/memory/src/engine/extraction/date-resolution.ts",
 		function: "resolveMemoryDate", site_id: "date-resolution.resolveMemoryDate.1224fa35b2",
 	});
 	if (reply.time.kind === "none") return { ...unresolved, interval: { type: "static", resolutionStatus: "static" }, stage };

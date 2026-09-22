@@ -85,7 +85,7 @@ const DEFAULT_REM_CONFIGURATION: RemOperationalConfiguration = {
 
 function reportConfigFailure(error: unknown): void {
 	createLogger("sno-station-mem:config").error("sidecar.config.failed", { error }, {
-		event_name: "sidecar.config.failed", file: "packages/sno-station-mem/src/sidecar/config.ts",
+		event_name: "sidecar.config.failed", file: "packages/memory/src/sidecar/config.ts",
 		function: "reportConfigFailure", site_id: "sidecar.config.failed",
 	});
 }

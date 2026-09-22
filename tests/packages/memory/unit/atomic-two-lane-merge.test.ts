@@ -11,8 +11,8 @@ import {
 	type AtomicCapturedFact,
 	fallbackAtomicCapturedFact,
 	parseAtomicEnrichmentReply,
-} from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-extraction-reply";
-import { chunkAtomicCapturedFacts } from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-generic-extractor";
+} from "../../../../packages/memory/src/engine/extraction/atomic-extraction-reply";
+import { chunkAtomicCapturedFacts } from "../../../../packages/memory/src/engine/extraction/atomic-generic-extractor";
 
 function capturedFact(id: number, fact: string, overrides: Partial<AtomicCapturedFact> = {}): AtomicCapturedFact {
 	return {

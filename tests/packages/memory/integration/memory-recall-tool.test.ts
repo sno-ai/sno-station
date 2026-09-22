@@ -1,11 +1,11 @@
 import { dirname } from "node:path";
 import { countTokens } from "@snoai/chunking";
 import { expect, it } from "vitest";
-import { executeMemoryRecallTool } from "../../../../packages/sno-station-mem/src/engine/bindings/memory-recall-tool.ts";
-import { createEmbedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client.ts";
-import { createRetriever } from "../../../../packages/sno-station-mem/src/engine/retrieval/retriever.ts";
-import { createScopePolicy } from "../../../../packages/sno-station-mem/src/engine/security/scopes.ts";
-import { MemoryStore } from "../../../../packages/sno-station-mem/src/store/store.ts";
+import { executeMemoryRecallTool } from "../../../../packages/memory/src/engine/bindings/memory-recall-tool.ts";
+import { createEmbedder } from "../../../../packages/memory/src/engine/extraction/embedding-provider-client.ts";
+import { createRetriever } from "../../../../packages/memory/src/engine/retrieval/retriever.ts";
+import { createScopePolicy } from "../../../../packages/memory/src/engine/security/scopes.ts";
+import { MemoryStore } from "../../../../packages/memory/src/store/store.ts";
 import { createTestDb } from "../../../apps/mem-claw/helpers/test-db.ts";
 
 it("counts to-dos and structured references in the aggregation consumer budget", async () => {

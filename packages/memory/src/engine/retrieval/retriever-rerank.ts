@@ -188,7 +188,7 @@ Object.assign(MemoryRetriever.prototype, {
 		// Guard rerank endpoint here so the remaining retrieval scoring path works with normalized inputs.
 		if (!rerankEndpoint) {
 			// Log operational context for retrieval ranking without changing control flow.
-			log.warn("rerank skipped: no endpoint for provider", { provider }, { event_name: "memory.retriever_rerank.diagnostic", file: "packages/sno-station-mem/src/engine/retrieval/retriever-rerank.ts", function: "rerank", site_id: "retrieval.retriever-rerank.rerank.6fbc6b3a22" });
+			log.warn("rerank skipped: no endpoint for provider", { provider }, { event_name: "memory.retriever_rerank.diagnostic", file: "packages/memory/src/engine/retrieval/retriever-rerank.ts", function: "rerank", site_id: "retrieval.retriever-rerank.rerank.6fbc6b3a22" });
 			return { candidates, fallback: { reason: "no_endpoint", provider } };
 		}
 		// Compute the normalized rerank timeout ms once so later retrieval scoring checks use one value.
@@ -240,7 +240,7 @@ Object.assign(MemoryRetriever.prototype, {
 				queryTokens,
 				window: DEFAULT_MAX_CONTEXT_TOKENS,
 				templateTokens: RERANK_PROMPT_TEMPLATE_TOKENS,
-			}, { event_name: "memory.retriever_rerank.diagnostic", file: "packages/sno-station-mem/src/engine/retrieval/retriever-rerank.ts", function: "rerank", site_id: "retrieval.retriever-rerank.rerank.query_over_window" });
+			}, { event_name: "memory.retriever_rerank.diagnostic", file: "packages/memory/src/engine/retrieval/retriever-rerank.ts", function: "rerank", site_id: "retrieval.retriever-rerank.rerank.query_over_window" });
 			return { candidates, fallback: { reason: "query_over_window", provider } };
 		}
 		let truncatedCandidates = 0;
@@ -255,7 +255,7 @@ Object.assign(MemoryRetriever.prototype, {
 				truncatedCandidates,
 				documentTokenBudget,
 				queryTokens,
-			}, { event_name: "memory.retriever_rerank.diagnostic", file: "packages/sno-station-mem/src/engine/retrieval/retriever-rerank.ts", function: "rerank", site_id: "retrieval.retriever-rerank.rerank.candidate_over_ceiling" });
+			}, { event_name: "memory.retriever_rerank.diagnostic", file: "packages/memory/src/engine/retrieval/retriever-rerank.ts", function: "rerank", site_id: "retrieval.retriever-rerank.rerank.candidate_over_ceiling" });
 		}
 
 		// Isolate the retrieval ranking operation that can fail because of runtime I/O or input shape.
@@ -340,7 +340,7 @@ Object.assign(MemoryRetriever.prototype, {
 								maxInputTokens: refusal.maxInputTokens,
 								sentToRerankCount: batchTexts.length,
 								batchStart: start,
-							}, { event_name: "memory.retriever_rerank.diagnostic", file: "packages/sno-station-mem/src/engine/retrieval/retriever-rerank.ts", function: "runBatch", site_id: "retrieval.retriever-rerank.runBatch.over_window_repair" });
+							}, { event_name: "memory.retriever_rerank.diagnostic", file: "packages/memory/src/engine/retrieval/retriever-rerank.ts", function: "runBatch", site_id: "retrieval.retriever-rerank.runBatch.over_window_repair" });
 							continue;
 						}
 						// Log operational context for retrieval ranking without changing control flow.
@@ -351,7 +351,7 @@ Object.assign(MemoryRetriever.prototype, {
 							sentToRerankCount: batchTexts.length,
 							batchStart: start,
 							body_length: errorBody.length,
-						}, { event_name: "memory.retriever_rerank.diagnostic", file: "packages/sno-station-mem/src/engine/retrieval/retriever-rerank.ts", function: "runBatch", site_id: "retrieval.retriever-rerank.runBatch.76d7d1fac6" });
+						}, { event_name: "memory.retriever_rerank.diagnostic", file: "packages/memory/src/engine/retrieval/retriever-rerank.ts", function: "runBatch", site_id: "retrieval.retriever-rerank.runBatch.76d7d1fac6" });
 						return "http_error";
 					}
 
@@ -363,7 +363,7 @@ Object.assign(MemoryRetriever.prototype, {
 							provider,
 							endpoint_hash: createHash("sha256").update(rerankEndpoint).digest("hex"),
 							batchStart: start,
-						}, { event_name: "memory.retriever_rerank.diagnostic", file: "packages/sno-station-mem/src/engine/retrieval/retriever-rerank.ts", function: "runBatch", site_id: "retrieval.retriever-rerank.runBatch.4429b8bd8a" });
+						}, { event_name: "memory.retriever_rerank.diagnostic", file: "packages/memory/src/engine/retrieval/retriever-rerank.ts", function: "runBatch", site_id: "retrieval.retriever-rerank.runBatch.4429b8bd8a" });
 						return "invalid_response";
 					}
 					const batchItems: RerankItem[] = [];
@@ -478,7 +478,7 @@ Object.assign(MemoryRetriever.prototype, {
 				sentToRerankCount: toRerank.length,
 				returnedCount: reranked.length,
 				provider,
-			}, { event_name: "memory.retriever_rerank.diagnostic", file: "packages/sno-station-mem/src/engine/retrieval/retriever-rerank.ts", function: "rerank", site_id: "retrieval.retriever-rerank.rerank.7847c6248a" });
+			}, { event_name: "memory.retriever_rerank.diagnostic", file: "packages/memory/src/engine/retrieval/retriever-rerank.ts", function: "rerank", site_id: "retrieval.retriever-rerank.rerank.7847c6248a" });
 			return {
 				candidates: merged.length > 0 ? merged : candidates,
 				stats: {
@@ -501,14 +501,14 @@ Object.assign(MemoryRetriever.prototype, {
 				log.warn("rerank API timed out, using pre-rerank results", {
 					timeoutMs: rerankTimeoutMs,
 					attempts: RERANK_TRANSIENT_ATTEMPTS,
-				}, { event_name: "memory.retriever_rerank.diagnostic", file: "packages/sno-station-mem/src/engine/retrieval/retriever-rerank.ts", function: "rerank", site_id: "retrieval.retriever-rerank.rerank.4af9c17c75" });
+				}, { event_name: "memory.retriever_rerank.diagnostic", file: "packages/memory/src/engine/retrieval/retriever-rerank.ts", function: "rerank", site_id: "retrieval.retriever-rerank.rerank.4af9c17c75" });
 			} else {
 				reason = "request_error";
 				// Log operational context for retrieval ranking without changing control flow.
 				log.warn("rerank error, using pre-rerank results", {
 					error,
 					attempts: RERANK_TRANSIENT_ATTEMPTS,
-				}, { event_name: "memory.retriever_rerank.diagnostic", file: "packages/sno-station-mem/src/engine/retrieval/retriever-rerank.ts", function: "rerank", site_id: "retrieval.retriever-rerank.rerank.2c5fc67dbf" });
+				}, { event_name: "memory.retriever_rerank.diagnostic", file: "packages/memory/src/engine/retrieval/retriever-rerank.ts", function: "rerank", site_id: "retrieval.retriever-rerank.rerank.2c5fc67dbf" });
 			}
 			return { candidates, fallback: { reason, provider } };
 		}
@@ -580,14 +580,14 @@ Object.assign(MemoryRetriever.prototype, {
 			log.warn("lightweight rerank: chunk vector dim mismatch on some candidates", {
 				dimMismatchCount,
 				queryDim: queryVector.length,
-			}, { event_name: "memory.retriever_rerank.diagnostic", file: "packages/sno-station-mem/src/engine/retrieval/retriever-rerank.ts", function: "rerankLightweight", site_id: "retrieval.retriever-rerank.rerankLightweight.70eb2031f1" });
+			}, { event_name: "memory.retriever_rerank.diagnostic", file: "packages/memory/src/engine/retrieval/retriever-rerank.ts", function: "rerankLightweight", site_id: "retrieval.retriever-rerank.rerankLightweight.70eb2031f1" });
 		}
 		log.debug("lightweight rerank applied", {
 			candidateCount: candidates.length,
 			blendedCount,
 			fusionWeight: wF,
 			cosineWeight: wC,
-		}, { event_name: "memory.retriever_rerank.diagnostic", file: "packages/sno-station-mem/src/engine/retrieval/retriever-rerank.ts", function: "rerankLightweight", site_id: "retrieval.retriever-rerank.rerankLightweight.7e8d0eee29" });
+		}, { event_name: "memory.retriever_rerank.diagnostic", file: "packages/memory/src/engine/retrieval/retriever-rerank.ts", function: "rerankLightweight", site_id: "retrieval.retriever-rerank.rerankLightweight.7e8d0eee29" });
 
 		// Sort by new score desc; tie-break on entry id keeps determinism.
 		return reranked.sort((a, b) => {

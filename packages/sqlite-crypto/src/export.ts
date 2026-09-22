@@ -6,12 +6,14 @@
  */
 
 import { createCipheriv, randomBytes } from "node:crypto";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, relative } from "node:path";
 import { gzipSync } from "node:zlib";
 import { pack } from "tar-stream";
+import { snapshotEncryptedDb } from "./db.js";
 import { getDek } from "./dek.js";
 import { readManifestIfPresent } from "./manifest.js";
+import type { Dek } from "./types.js";
 import { dekFingerprint4 } from "./wrap.js";
 
 export const SNO_STATION_CORE_MAGIC = Buffer.from("SNO_STATION_CORE01", "ascii");
@@ -29,7 +31,7 @@ function buildHeader(fingerprint: Buffer): Buffer {
 	return Buffer.concat([SNO_STATION_CORE_MAGIC, versionByte, fingerprint]);
 }
 
-async function tarballRegisteredDbs(): Promise<Buffer> {
+async function tarballRegisteredDbs(dek: Dek): Promise<Buffer> {
 	const manifest = readManifestIfPresent();
 	const entries = manifest?.dbs ?? [];
 	const tarPack = pack();
@@ -41,7 +43,9 @@ async function tarballRegisteredDbs(): Promise<Buffer> {
 	});
 
 	for (const entry of entries) {
-		const data = readFileSync(entry.path);
+		// Snapshot through SQLite: a WAL-mode store that is open in the sidecar keeps
+		// its recent writes in <path>-wal, which a plain file copy never sees.
+		const data = snapshotEncryptedDb(entry.path, dek);
 		// Use a stable archive path: full source path, with the leading slash
 		// stripped so tar interprets it as relative.
 		const archivePath = entry.path.replace(/^\/+/, "");
@@ -61,7 +65,7 @@ export async function exportEncrypted(targetPath: string): Promise<void> {
 	const dek = await getDek();
 	const fp = dekFingerprint4(dek);
 	const header = buildHeader(fp);
-	const plaintext = await tarballRegisteredDbs();
+	const plaintext = await tarballRegisteredDbs(dek);
 
 	const nonce = randomBytes(SNO_STATION_CORE_NONCE_LEN);
 	const cipher = createCipheriv("aes-256-gcm", dek, nonce);

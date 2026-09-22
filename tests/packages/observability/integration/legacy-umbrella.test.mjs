@@ -16,53 +16,52 @@ import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 import DatabaseConstructor from "better-sqlite3";
 import { createCuid2 } from "../../../../packages/common-core/dist/index.js";
-import * as publicModule from "../../../../packages/sno-observe/dist/index.js";
-import { snoObserve } from "../../../../packages/sno-observe/dist/index.js";
-import { verifyAuditEvent } from "../../../../packages/sno-observe/dist/internal/audit-verify.js";
+import * as publicModule from "../../../../packages/observability/dist/index.js";
+import { snoObserve } from "../../../../packages/observability/dist/index.js";
+import { verifyAuditEvent } from "../../../../packages/observability/dist/internal/audit-verify.js";
 import {
 	BufferStore,
 	decodeEnvelope,
-} from "../../../../packages/sno-observe/dist/internal/buffer-store.js";
+} from "../../../../packages/observability/dist/internal/buffer-store.js";
 import {
 	canonicalPreimage,
 	computeSelfHash,
-} from "../../../../packages/sno-observe/dist/internal/canonical-hash.js";
-import { ConsentStore } from "../../../../packages/sno-observe/dist/internal/consent.js";
+} from "../../../../packages/observability/dist/internal/canonical-hash.js";
+import { ConsentStore } from "../../../../packages/observability/dist/internal/consent.js";
 import {
 	ChainSeedError,
 	InvalidAgentIdError,
 	InvalidConsentError,
 	InvalidEventPayloadError,
 	InvalidEventTypeError,
-} from "../../../../packages/sno-observe/dist/internal/errors.js";
-import { exportEvents } from "../../../../packages/sno-observe/dist/internal/export.js";
-import { sha256Hex } from "../../../../packages/sno-observe/dist/internal/hash.js";
-import { bootstrapIdentity } from "../../../../packages/sno-observe/dist/internal/identity.js";
+} from "../../../../packages/observability/dist/internal/errors.js";
+import { exportEvents } from "../../../../packages/observability/dist/internal/export.js";
+import { sha256Hex } from "../../../../packages/observability/dist/internal/hash.js";
+import { bootstrapIdentity } from "../../../../packages/observability/dist/internal/identity.js";
 import {
 	machineSecretHash,
 	registerMachine,
-} from "../../../../packages/sno-observe/dist/internal/machine-registration.js";
-import { getIdentityLockPath } from "../../../../packages/sno-observe/dist/internal/paths.js";
+} from "../../../../packages/observability/dist/internal/machine-registration.js";
+import { getIdentityLockPath } from "../../../../packages/observability/dist/internal/paths.js";
 import {
 	detectProjectId,
 	normalizeGitRemote,
-} from "../../../../packages/sno-observe/dist/internal/project-id.js";
-import { redactEventPayload } from "../../../../packages/sno-observe/dist/internal/redact.js";
-import { SnoObserveRuntime } from "../../../../packages/sno-observe/dist/internal/runtime.js";
-import { shouldSampleTool } from "../../../../packages/sno-observe/dist/internal/sampling.js";
+} from "../../../../packages/observability/dist/internal/project-id.js";
+import { redactEventPayload } from "../../../../packages/observability/dist/internal/redact.js";
+import { SnoObserveRuntime } from "../../../../packages/observability/dist/internal/runtime.js";
 import {
 	parseConsentValue,
 	parseEventInput,
-} from "../../../../packages/sno-observe/dist/internal/schemas.js";
+} from "../../../../packages/observability/dist/internal/schemas.js";
 import {
 	countTokens,
 	countTokensFast,
-} from "../../../../packages/sno-observe/dist/internal/tokens.js";
-import { AGENT_IDS, EVENT_TYPES } from "../../../../packages/sno-observe/dist/internal/types.js";
+} from "../../../../packages/observability/dist/internal/tokens.js";
+import { AGENT_IDS, EVENT_TYPES } from "../../../../packages/observability/dist/internal/types.js";
 import {
 	createEnvelope,
 	serializeEnvelope,
-} from "../../../../packages/sno-observe/dist/internal/wire-envelope.js";
+} from "../../../../packages/observability/dist/internal/wire-envelope.js";
 
 const expectedEventTypes = [
 	"agent.identify",
@@ -386,83 +385,6 @@ describe("sno observe Node package", () => {
 		);
 	});
 
-	it("normalizes legacy persisted envelopes for verification and CSV export", () => {
-		const temp = createTempSnoEnv();
-		const dbPath = join(temp.dir, "buffer.db");
-		let store = new BufferStore(dbPath);
-		try {
-			store.append({
-				eventId: "event-identify-legacy",
-				eventType: "agent.identify",
-				lane: "memory",
-				tsEdgeMs: 1730000000000,
-				consentLevel: "metadata-only",
-				redacted: false,
-				scope,
-				payload: validPayloads["agent.identify"],
-				terminal: false,
-			});
-			store.append({
-				eventId: "event-memory-legacy",
-				eventType: "memory.write",
-				lane: "memory",
-				tsEdgeMs: 1730000000001,
-				consentLevel: "metadata-only",
-				redacted: false,
-				scope,
-				payload: validPayloads["memory.write"],
-				terminal: false,
-			});
-			const rows = store.getAllRows();
-			store.close();
-			store = undefined;
-
-			const db = new DatabaseConstructor(dbPath);
-			try {
-				const update = db.prepare("UPDATE events SET payload = ? WHERE rowid = ?");
-				for (const row of rows) {
-					const envelope = JSON.parse(row.payload.toString("utf8"));
-					const legacyEnvelope = {
-						...envelope,
-						hash_chain: {
-							chain_epoch: envelope.chain_epoch,
-							seq: envelope.seq,
-							prev: envelope.hash_chain.prev,
-							self: envelope.hash_chain.self,
-						},
-					};
-					delete legacyEnvelope.schema_version;
-					delete legacyEnvelope.chain_epoch;
-					delete legacyEnvelope.seq;
-					update.run(Buffer.from(JSON.stringify(legacyEnvelope), "utf8"), row.rowid);
-				}
-			} finally {
-				db.close();
-			}
-
-			const legacyStore = new BufferStore(dbPath);
-			try {
-				assert.equal(legacyStore.verifyLocalChain(), true);
-				const decoded = decodeEnvelope(legacyStore.getAllRows()[1].payload);
-				assert.equal(decoded.schema_version, "v1");
-				assert.equal(decoded.chain_epoch, 0);
-				assert.equal(decoded.seq, 1);
-				assert.deepEqual(Object.keys(decoded.hash_chain), ["prev", "self"]);
-
-				const csv = new TextDecoder().decode(exportEvents(legacyStore, { format: "csv" }).data);
-				assert.match(csv, /event-memory-legacy/u);
-				assert.doesNotMatch(csv, /undefined/u);
-			} finally {
-				legacyStore.close();
-			}
-		} finally {
-			if (store !== undefined) {
-				store.close();
-			}
-			cleanupTempSnoEnv(temp);
-		}
-	});
-
 	it("bootstraps identity and persists the hash chain in SQLite", () => {
 		const temp = createTempSnoEnv();
 		const dbPath = join(temp.dir, "buffer.db");
@@ -636,7 +558,7 @@ describe("sno observe Node package", () => {
 		}
 	});
 
-	it("redacts metadata, samples tools deterministically, and counts large prompts quickly", async () => {
+	it("redacts metadata and counts large prompts quickly", async () => {
 		for (const consent of ["off", "metadata-only", "full"]) {
 			const result = redactEventPayload({ note: "contact alice@example.com" }, consent);
 			assert.equal(JSON.stringify(result.value).includes("alice@example.com"), false);
@@ -661,25 +583,6 @@ describe("sno observe Node package", () => {
 			writeFileSync(rulesPath, "CUSTOMSECRET\\d+\n");
 			const custom = redactEventPayload({ note: "value CUSTOMSECRET123" }, "full", rulesPath);
 			assert.equal(JSON.stringify(custom.value).includes("CUSTOMSECRET123"), false);
-			assert.equal(shouldSampleTool("event-1", "bash exec", 20, temp.env), true);
-			assert.equal(
-				shouldSampleTool("event-1", "bash exec", 20, {
-					...temp.env,
-					SNO_OBSERVE_TOOLS_ALWAYS: "bash",
-				}),
-				true,
-			);
-			assert.equal(
-				shouldSampleTool("event-1", "bash exec", 20, {
-					...temp.env,
-					SNO_OBSERVE_TOOLS_OFF: "bash",
-				}),
-				false,
-			);
-			assert.equal(
-				shouldSampleTool("event-1", "read file", 20, temp.env),
-				shouldSampleTool("event-1", "read file", 20, temp.env),
-			);
 		} finally {
 			cleanupTempSnoEnv(temp);
 		}
@@ -690,13 +593,6 @@ describe("sno observe Node package", () => {
 		const smallCount = await countTokens("hello");
 		assert.equal(smallCount.method, "tiktoken");
 
-		let sampled = 0;
-		for (let index = 0; index < 10_000; index += 1) {
-			if (shouldSampleTool(`event-${index}`, "read file", 20)) {
-				sampled += 1;
-			}
-		}
-		assert.equal(sampled >= 450 && sampled <= 550, true);
 	});
 
 	it("flushes one compact envelope per request and marks rows shipped", async () => {
@@ -887,7 +783,7 @@ describe("sno observe Node package", () => {
 		try {
 			await chainRuntime.emitParsed(memoryWriteEvent("h_conflict"));
 			assert.deepEqual(await chainRuntime.flush(), {
-				shipped: 1,
+				shipped: 2,
 				terminal: 1,
 				retryable: 0,
 			});
@@ -897,25 +793,12 @@ describe("sno observe Node package", () => {
 				const envelopes = rows.map((row) => decodeEnvelope(row.payload));
 				assert.deepEqual(
 					envelopes.map((envelope) => envelope.event_type),
-					["agent.identify", "memory.write", "agent.identify"],
+					["agent.identify", "agent.identify"],
 				);
-				assert.deepEqual(
-					rows.map((row) => row.shipped),
-					[1, 0, 0],
-				);
-				assert.deepEqual(
-					rows.map((row) => row.terminal),
-					[0, 1, 0],
-				);
-				assert.deepEqual(
-					envelopes.map((envelope) => envelope.chain_epoch),
-					[0, 0, 1],
-				);
-				assert.deepEqual(
-					envelopes.map((envelope) => envelope.seq),
-					[0, 1, 0],
-				);
-				assert.equal(envelopes[2].hash_chain.prev, "GENESIS");
+				assert.deepEqual(rows.map((row) => row.shipped), [1, 1]);
+				assert.deepEqual(envelopes.map((envelope) => envelope.chain_epoch), [0, 1]);
+				assert.equal(envelopes[1].hash_chain.prev, "GENESIS");
+				assert.equal(chainStore.countQuarantined(), 1);
 			} finally {
 				chainStore.close();
 			}
@@ -1000,6 +883,7 @@ describe("sno observe Node package", () => {
 			fetch,
 		});
 		try {
+			await runtime.emitParsed(memoryWriteEvent("h_before_off"));
 			await runtime.setConsent("off", "stored off");
 			const event = memoryWriteEvent("h_override");
 			event.consentLevel = "full";
@@ -1012,7 +896,7 @@ describe("sno observe Node package", () => {
 			);
 			assert.deepEqual(
 				calls.map((call) => JSON.parse(call.body).event_type),
-				["agent.identify", "consent.change"],
+				["agent.identify", "memory.write", "consent.change"],
 			);
 		} finally {
 			await runtime.shutdown().catch(() => {});
@@ -1139,9 +1023,8 @@ describe("sno observe Node package", () => {
 			await runtime.setConsent("metadata-only", "subscribe resume");
 			await runtime.emitParsed(
 				parseEventInput({
-					event_id: findUnsampledToolEventId(sampledToolName, temp.env),
 					event_type: "tool.call",
-					lane: "memory",
+					lane: "skill",
 					agent_id: "codex",
 					payload: {
 						...validPayloads["tool.call"],
@@ -1160,7 +1043,7 @@ describe("sno observe Node package", () => {
 				[
 					{ eventType: "memory.write", accepted: true, reason: undefined },
 					{ eventType: "memory.write", accepted: false, reason: "consent_off" },
-					{ eventType: "tool.call", accepted: false, reason: "tool_unsampled" },
+					{ eventType: "tool.call", accepted: true, reason: undefined },
 				],
 			);
 		} finally {
@@ -1182,7 +1065,6 @@ describe("sno observe Node package", () => {
 			"claim",
 			"audit",
 			"doctor",
-			"shouldSampleTool",
 			"hashRedactedText",
 			"subscribe",
 			"shutdown",
@@ -1381,16 +1263,6 @@ function initGitRepo(dir, remote) {
 		const result = spawnSync("git", args, { cwd: dir, encoding: "utf8" });
 		assert.equal(result.status, 0, result.stderr);
 	}
-}
-
-function findUnsampledToolEventId(toolName, env) {
-	for (let index = 0; index < 1000; index += 1) {
-		const eventId = testUuidV7(index + 1000);
-		if (!shouldSampleTool(eventId, toolName, 20, env)) {
-			return eventId;
-		}
-	}
-	throw new Error("unable to find unsampled event id");
 }
 
 function cleanupTempSnoEnv(temp) {

@@ -3,23 +3,23 @@ import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import {
 	createSectionDictionaryCache,
 	loadSectionDictionary,
-} from "../../../../packages/sno-station-mem/src/engine/extraction/b-profile-section-dictionary-provider";
-import { B_PROFILE_SECTION_REGISTRY } from "../../../../packages/sno-station-mem/src/engine/extraction/b-profile-section-registry";
+} from "../../../../packages/memory/src/engine/extraction/b-profile-section-dictionary-provider";
+import { B_PROFILE_SECTION_REGISTRY } from "../../../../packages/memory/src/engine/extraction/b-profile-section-registry";
 import {
 	B_PROFILE_CANONICAL_FORM_REPAIR_VERSION,
 	runBProfileSectionRekey,
-} from "../../../../packages/sno-station-mem/src/engine/extraction/b-profile-section-rekey";
-import { buildIndexedText } from "../../../../packages/sno-station-mem/src/engine/extraction/extraction-text-sanitizer";
-import { runProfileSectionUpdate } from "../../../../packages/sno-station-mem/src/engine/extraction/profile-section-writer";
+} from "../../../../packages/memory/src/engine/extraction/b-profile-section-rekey";
+import { buildIndexedText } from "../../../../packages/memory/src/engine/extraction/extraction-text-sanitizer";
+import { runProfileSectionUpdate } from "../../../../packages/memory/src/engine/extraction/profile-section-writer";
 import {
 	buildInsightMetadata,
 	deriveFactKey,
 	parseInsightMetadata,
 	stringifyInsightMetadata,
-} from "../../../../packages/sno-station-mem/src/engine/extraction/memory-metadata-codec";
-import type { Embedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client";
-import type { MemoryCategory, MemoryEntry } from "../../../../packages/sno-station-mem/src/engine/shared/types";
-import { MemoryStore } from "../../../../packages/sno-station-mem/src/store/store";
+} from "../../../../packages/memory/src/engine/extraction/memory-metadata-codec";
+import type { Embedder } from "../../../../packages/memory/src/engine/extraction/embedding-provider-client";
+import type { MemoryCategory, MemoryEntry } from "../../../../packages/memory/src/engine/shared/types";
+import { MemoryStore } from "../../../../packages/memory/src/store/store";
 import { createTestDb, createTestEmbedder, type TestDb } from "../../../apps/mem-claw/helpers/test-db.ts";
 
 const NOW = Date.parse("2026-07-24T18:00:00.000Z");

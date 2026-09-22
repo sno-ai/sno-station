@@ -4,15 +4,15 @@ import {
 	extractBProfileCandidatesFromChunk,
 	parseBProfileMessages,
 	renderBProfilePrompt,
-} from "../../../../packages/sno-station-mem/src/engine/extraction/b-profile-extraction.ts";
+} from "../../../../packages/memory/src/engine/extraction/b-profile-extraction.ts";
 import {
 	createLlmClient,
 	LlmClientTerminalError,
-} from "../../../../packages/sno-station-mem/src/model/llm-client.ts";
-import type { LlmRoutingConfig } from "../../../../packages/sno-station-mem/src/model/llm-mode-routing.ts";
-import { SNO_STATION_MEM_RELEASE_ANCHOR_URL } from "../../../../packages/sno-station-mem/src/model/llmix-registry.ts";
+} from "../../../../packages/memory/src/model/llm-client.ts";
+import type { LlmRoutingConfig } from "../../../../packages/memory/src/model/llm-mode-routing.ts";
+import { SNO_STATION_MEM_RELEASE_ANCHOR_URL } from "../../../../packages/memory/src/model/llmix-registry.ts";
 import { createTestLlmClient } from "../../../apps/mem-claw/helpers/llm-client.ts";
-import { escapeTranscriptRoleContinuations } from "../../../../packages/sno-station-mem/src/engine/shared/transcript-role-codec.ts";
+import { escapeTranscriptRoleContinuations } from "../../../../packages/memory/src/engine/shared/transcript-role-codec.ts";
 
 const originalFetch = globalThis.fetch;
 const didDocument = {

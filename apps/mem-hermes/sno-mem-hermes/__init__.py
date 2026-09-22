@@ -5,6 +5,7 @@ from concurrent.futures import Future
 import getpass
 import hashlib
 import json
+import logging
 import os
 import secrets
 import shutil
@@ -26,6 +27,7 @@ from hermes_constants import get_hermes_home
 __all__ = ["SnoMemoryProvider", "register"]
 
 _SKIN_ID = "hermes"
+_LOG = logging.getLogger(__name__)
 _PROVIDER_NAME = "sno-mem-hermes"
 _SIDECAR_COMMAND = "sno-station-mem"
 _HTTP_TIMEOUT_SECONDS = 900
@@ -129,6 +131,12 @@ class PluginRuntime:
         with self._state_lock:
             provider = self._providers.get(session_id)
         return provider.startup_brief(session_id) if provider is not None else ""
+
+    def host_llm_call(self, session_id: str, call: dict[str, object]) -> None:
+        with self._state_lock:
+            provider = self._providers.get(session_id)
+        if provider is not None:
+            provider.report_host_llm_call(session_id, call)
 
     def run_sidecar(self, call: object) -> dict[str, object]:
         if not callable(call):
@@ -419,6 +427,9 @@ class SnoMemoryProvider(MemoryProvider):
         return _tool_error("invalid-input")
 
     def prefetch(self, query: str, *, session_id: str = "") -> str:
+        self._report_host_event(
+            session_id or self._session_id, {"kind": "prompt", "prompt": query}
+        )
         try:
             result = self._require_client().post(
                 "get-recall",
@@ -549,6 +560,27 @@ class SnoMemoryProvider(MemoryProvider):
             return ""
         return _render_memories(memories, _TASK_RECALL_LIMIT, _TASK_RECALL_MAX_CHARS)[0]
 
+    def report_host_llm_call(self, session_id: str, call: dict[str, object]) -> None:
+        """One host model call finished: forward its usage to the observe session."""
+        usage = call.get("usage")
+        model = call.get("model")
+        duration = call.get("api_duration")
+        if not isinstance(usage, dict) or not isinstance(model, str) or not model:
+            return
+        provider = call.get("provider")
+        self._report_host_event(
+            session_id,
+            {
+                "kind": "llm",
+                "model": f"{provider}:{model}" if isinstance(provider, str) and provider else model,
+                "promptTokens": _count(usage.get("input_tokens")),
+                "completionTokens": _count(usage.get("output_tokens")),
+                "cacheReadTokens": _count(usage.get("cache_read_tokens")),
+                "cacheWriteTokens": _count(usage.get("cache_write_tokens")),
+                "latencyMs": round(duration * 1000) if isinstance(duration, (int, float)) else 0,
+            },
+        )
+
     def on_session_switch(
         self,
         new_session_id: str,
@@ -558,6 +590,7 @@ class SnoMemoryProvider(MemoryProvider):
         **_kwargs: object,
     ) -> None:
         old_session_id = self._session_id
+        self._end_session(old_session_id)
         self._session_id = new_session_id
         _RUNTIME.move_provider(old_session_id, new_session_id, self)
         self._seen_ids.clear()
@@ -569,8 +602,30 @@ class SnoMemoryProvider(MemoryProvider):
             _RUNTIME.invalidate()
 
     def shutdown(self) -> None:
+        self._end_session(self._session_id)
         _RUNTIME.unbind_provider(self)
         self._client = None
+
+    def _report_host_event(self, session_id: str, event: dict[str, object]) -> None:
+        try:
+            self._require_client().post(
+                "host-event", {"scope": self._scope(session_id), "event": event}
+            )
+        except (OSError, RuntimeError, ValueError) as error:
+            _LOG.error(
+                "host event not reported",
+                extra={"kind": event.get("kind"), "error": str(error)},
+            )
+
+    def _end_session(self, session_id: str) -> None:
+        if not session_id or self._client is None:
+            return
+        try:
+            self._client.post(
+                "on-session-end", {"messages": [], "scope": self._scope(session_id)}
+            )
+        except (OSError, RuntimeError, ValueError) as error:
+            _LOG.error("session end not reported", extra={"error": str(error)})
 
     def _capture(
         self, normalized: list[dict[str, str]], session_id: str
@@ -971,14 +1026,25 @@ def _stored_id(result: dict[str, object]) -> str | None:
     return memory_id if isinstance(memory_id, str) else None
 
 
+def _count(value: object) -> int:
+    return max(0, int(value)) if isinstance(value, (int, float)) else 0
+
+
 def _pre_llm_call(**kwargs: object) -> dict[str, str] | None:
     session_id = kwargs.get("session_id")
     context = _RUNTIME.startup_brief(session_id if isinstance(session_id, str) else "")
     return {"context": context} if context else None
 
 
+def _post_api_request(**kwargs: object) -> None:
+    session_id = kwargs.get("session_id")
+    if isinstance(session_id, str) and session_id:
+        _RUNTIME.host_llm_call(session_id, kwargs)
+
+
 def register(ctx: RegistrationContext) -> None:
     ctx.register_memory_provider(SnoMemoryProvider())
     ctx.register_hook("pre_llm_call", _pre_llm_call)
+    ctx.register_hook("post_api_request", _post_api_request)
     if getattr(ctx, "llm", None) is not None:
         _RUNTIME.activate(ctx)

@@ -45,7 +45,7 @@ export class ObservableEmbedder extends Embedder {
 				return await operation();
 			} catch (error) {
 				await bestEffort("embedding error", () =>
-					this.observability.emitError("embedder_throw", error, this.sessionUuidProvider()),
+					this.observability.emitError("embedding:throw", error, this.sessionUuidProvider()),
 				);
 				throw error;
 			}

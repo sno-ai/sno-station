@@ -8,28 +8,28 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { installRemSchema } from "../../../../packages/sno-station-mem/src/engine/rem/index.ts";
-import { splitExactClauses } from "../../../../packages/sno-station-mem/src/engine/rem/clause-splitter.ts";
+import { installRemSchema } from "../../../../packages/memory/src/engine/rem/index.ts";
+import { splitExactClauses } from "../../../../packages/memory/src/engine/rem/clause-splitter.ts";
 import {
 	AUTO_RECALL_INJECTION_TOP_K,
 	DEFAULT_MIN_SCORE,
 	DEFAULT_TOP_K,
-} from "../../../../packages/sno-station-mem/config/index.ts";
+} from "../../../../packages/memory/config/index.ts";
 import {
 	DEFAULT_RETRIEVAL_CONFIG,
 	createRetriever,
-} from "../../../../packages/sno-station-mem/src/engine/retrieval/retriever.ts";
+} from "../../../../packages/memory/src/engine/retrieval/retriever.ts";
 import {
 	retrieveForAutoRecall,
 	retrieveForMemoryRecallOrEval,
-} from "../../../../packages/sno-station-mem/src/engine/retrieval/rem-consumer-retrieval.ts";
+} from "../../../../packages/memory/src/engine/retrieval/rem-consumer-retrieval.ts";
 import {
 	createSnoStationMemRemMutationExecutor,
 	createSnoStationMemRemRecovery,
 	createRemReplaceCarrierPort,
-} from "../../../../packages/sno-station-mem/src/store/rem-sqlite-adapter.ts";
-import { openSqliteDatabaseReadonly } from "../../../../packages/sno-station-mem/src/store/sqlite-runtime.ts";
-import { MemoryStore } from "../../../../packages/sno-station-mem/src/store/store.ts";
+} from "../../../../packages/memory/src/store/rem-sqlite-adapter.ts";
+import { openSqliteDatabaseReadonly } from "../../../../packages/memory/src/store/sqlite-runtime.ts";
+import { MemoryStore } from "../../../../packages/memory/src/store/store.ts";
 import { prepareRemEntryArtifactFixture } from "../../../apps/mem-claw/helpers/rem-entry-artifact-fixture.ts";
 import {
 	createRemOwnerDecidedOperationalConfiguration,
@@ -356,7 +356,7 @@ describe("REM ordered wave", () => {
 		try {
 			const before = readFileSync(fixture.dbPath);
 			const run = await loadBoundary<(input: Record<string, unknown>) => Promise<Decision>>(
-				"../../../../packages/sno-station-mem/src/sidecar/rem-batch-executor.ts",
+				"../../../../packages/memory/src/sidecar/rem-batch-executor.ts",
 				"runRemOrderedWave",
 			);
 			const result = await run({
@@ -382,7 +382,7 @@ describe("REM ordered wave", () => {
 			const run = await loadBoundary<
 				(input: Record<string, unknown>) => Promise<OrderedWaveResult>
 			>(
-				"../../../../packages/sno-station-mem/src/sidecar/rem-batch-executor.ts",
+				"../../../../packages/memory/src/sidecar/rem-batch-executor.ts",
 				"runRemProductionOrderedWave",
 			);
 
@@ -416,7 +416,7 @@ describe("REM ordered wave", () => {
 			const run = await loadBoundary<
 				(input: Record<string, unknown>) => Promise<OrderedWaveResult>
 			>(
-				"../../../../packages/sno-station-mem/src/sidecar/rem-batch-executor.ts",
+				"../../../../packages/memory/src/sidecar/rem-batch-executor.ts",
 				"runRemProductionOrderedWave",
 			);
 
@@ -488,7 +488,7 @@ describe("REM ordered wave", () => {
 				if (seeded === undefined) throw new Error("owner-decided wave rows were not seeded");
 				const readProductionCandidates = await loadBoundary<
 					(database: TestDb["runtime"]["db"], scope: string) => Array<{ id: string }>
-				>("../../../../packages/sno-station-mem/src/sidecar/rem-batch-executor.ts", "readCandidates");
+				>("../../../../packages/memory/src/sidecar/rem-batch-executor.ts", "readCandidates");
 				expect(
 					readProductionCandidates(fixture.runtime.db, acc6Scope)
 						.map((row) => row.id)
@@ -662,7 +662,7 @@ describe("REM ordered wave", () => {
 				)
 				.run();
 			const validate = await loadBoundary<(input: Record<string, unknown>) => Decision>(
-				"../../../../packages/sno-station-mem/src/engine/rem/index.ts",
+				"../../../../packages/memory/src/engine/rem/index.ts",
 				"validateRemSubstantiveWaveEffects",
 			);
 			expect(validate({ database: fixture.runtime.db, waveId: "wave-journal-only" })).toEqual({ decision: "refuse", reasonCode: "journal_only" });
@@ -705,17 +705,17 @@ describe("REM independently enumerated guard census", () => {
 				? {
 						root: repoRoot(),
 						input: {
-							manifestPath: join(repoRoot(), "packages/sno-station-mem/config/rem/guard-manifest.json"),
-							requiredGuardsPath: join(repoRoot(), "packages/sno-station-mem/config/rem/required-guards.json"),
-							sourceRoots: [join(repoRoot(), "packages/sno-station-mem/src/engine/rem"), join(repoRoot(), "packages/sno-station-mem/src/sidecar")],
-							productionRoots: [join(repoRoot(), "packages/sno-station-mem/src/sidecar/main.ts")],
+							manifestPath: join(repoRoot(), "packages/memory/config/rem/guard-manifest.json"),
+							requiredGuardsPath: join(repoRoot(), "packages/memory/config/rem/required-guards.json"),
+							sourceRoots: [join(repoRoot(), "packages/memory/src/engine/rem"), join(repoRoot(), "packages/memory/src/sidecar")],
+							productionRoots: [join(repoRoot(), "packages/memory/src/sidecar/main.ts")],
 						},
 						cleanup: () => undefined,
 					}
 				: guardFixture(kind);
 		try {
 			const validate = await loadBoundary<(input: Record<string, unknown>) => Decision>(
-				"../../../../packages/sno-station-mem/src/engine/rem/index.ts",
+				"../../../../packages/memory/src/engine/rem/index.ts",
 				"validateRemGuardCensus",
 			);
 			expect(validate(fixture.input)).toEqual({ decision: reason === null ? "allow" : "refuse", reasonCode: reason });
@@ -823,7 +823,7 @@ describe("REM two-facet persistence", () => {
 	it("migrates a previous encrypted store into the declared facet schema", async () => {
 		const fixture = createTestDb();
 		try {
-			const migrate = await loadBoundary<(input: Record<string, unknown>) => void>("../../../../packages/sno-station-mem/src/store/migrations.ts", "applyRemTwoFacetMigration");
+			const migrate = await loadBoundary<(input: Record<string, unknown>) => void>("../../../../packages/memory/src/store/migrations.ts", "applyRemTwoFacetMigration");
 			migrate({ database: fixture.runtime.db });
 			expect(fixture.runtime.raw.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='nodix_rem_memory_facets'").get()).toBeDefined();
 		} finally { fixture.cleanup(); }
@@ -834,7 +834,7 @@ describe("REM two-facet persistence", () => {
 		try {
 			const before = sha256DurabilityUnit(fixture);
 			fixture.runtime.raw.exec("CREATE TRIGGER rem_foundation_abort BEFORE UPDATE ON nodix_memories BEGIN SELECT RAISE(ABORT,'abort'); END");
-			const write = await loadBoundary<(input: Record<string, unknown>) => Promise<void>>("../../../../packages/sno-station-mem/src/engine/rem/index.ts", "writeRemTwoFacetTransaction");
+			const write = await loadBoundary<(input: Record<string, unknown>) => Promise<void>>("../../../../packages/memory/src/engine/rem/index.ts", "writeRemTwoFacetTransaction");
 			await expect(write({ database: fixture.runtime.db, memoryId: "clremupdate", current: "coffee", history: "tea" })).rejects.toThrow();
 			expect(sha256DurabilityUnit(fixture)).toBe(before);
 		} finally { fixture.cleanup(); }
@@ -845,7 +845,7 @@ describe("REM two-facet persistence", () => {
 		installRemSchema(fixture.runtime.db);
 		try {
 			const build = await loadBoundary<(input: { facet: "current" }) => { sql: string; parameters: unknown[] }>(
-				"../../../../packages/sno-station-mem/src/engine/retrieval/retriever-search-modes.ts",
+				"../../../../packages/memory/src/engine/retrieval/retriever-search-modes.ts",
 				"buildRemFacetRecallStatement",
 			);
 			const statement = build({ facet: "current" });
@@ -857,7 +857,7 @@ describe("REM two-facet persistence", () => {
 	});
 
 	it("exports one shared facet resolver for recall and eval answer assembly", async () => {
-		const core = (await import("../../../../packages/sno-station-mem/src/engine/rem/index.ts")) as ProductExports;
+		const core = (await import("../../../../packages/memory/src/engine/rem/index.ts")) as ProductExports;
 		expect(core["resolveRecallFacetPolicy"]).toBeUndefined();
 		expect(core["resolveEvalFacetPolicy"]).toBeUndefined();
 	});
@@ -890,8 +890,8 @@ describe("REM two-facet persistence", () => {
 		const fixture = createTestDb();
 		try {
 			const before = readFileSync(fixture.dbPath);
-			const migrate = await loadBoundary<(input: Record<string, unknown>) => void>("../../../../packages/sno-station-mem/src/store/migrations.ts", "applyRemTwoFacetMigration");
-			const rollback = await loadBoundary<(input: Record<string, unknown>) => Decision>("../../../../packages/sno-station-mem/src/store/migrations.ts", "rollbackRemTwoFacetMigration");
+			const migrate = await loadBoundary<(input: Record<string, unknown>) => void>("../../../../packages/memory/src/store/migrations.ts", "applyRemTwoFacetMigration");
+			const rollback = await loadBoundary<(input: Record<string, unknown>) => Decision>("../../../../packages/memory/src/store/migrations.ts", "rollbackRemTwoFacetMigration");
 			migrate({ database: fixture.runtime.db });
 			expect(rollback({ database: fixture.runtime.db })).toEqual({ decision: "allow", reasonCode: null });
 			expect(readFileSync(fixture.dbPath)).toEqual(before);
@@ -902,8 +902,8 @@ describe("REM two-facet persistence", () => {
 		const fixture = createTestDb();
 		seedWaveRows(fixture);
 		try {
-			const migrate = await loadBoundary<(input: Record<string, unknown>) => void>("../../../../packages/sno-station-mem/src/store/migrations.ts", "applyRemTwoFacetMigration");
-			const rollback = await loadBoundary<(input: Record<string, unknown>) => Decision>("../../../../packages/sno-station-mem/src/store/migrations.ts", "rollbackRemTwoFacetMigration");
+			const migrate = await loadBoundary<(input: Record<string, unknown>) => void>("../../../../packages/memory/src/store/migrations.ts", "applyRemTwoFacetMigration");
+			const rollback = await loadBoundary<(input: Record<string, unknown>) => Decision>("../../../../packages/memory/src/store/migrations.ts", "rollbackRemTwoFacetMigration");
 			migrate({ database: fixture.runtime.db });
 			installRemSchema(fixture.runtime.db);
 			const evidenceId = "evidence-post-migration-write";

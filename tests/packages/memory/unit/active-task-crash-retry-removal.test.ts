@@ -4,13 +4,13 @@
  */
 
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
-import type { Embedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client.ts";
-import { routeTaskLifecycleAssertion } from "../../../../packages/sno-station-mem/src/engine/extraction/task-lifecycle-route.ts";
+import type { Embedder } from "../../../../packages/memory/src/engine/extraction/embedding-provider-client.ts";
+import { routeTaskLifecycleAssertion } from "../../../../packages/memory/src/engine/extraction/task-lifecycle-route.ts";
 import {
 	buildTaskLifecycleCandidateSet,
 	taskLifecycleCandidateSetVersion,
-} from "../../../../packages/sno-station-mem/src/engine/extraction/task-lifecycle-resolver.ts";
-import { MemoryStore } from "../../../../packages/sno-station-mem/src/store/store.ts";
+} from "../../../../packages/memory/src/engine/extraction/task-lifecycle-resolver.ts";
+import { MemoryStore } from "../../../../packages/memory/src/store/store.ts";
 import { createTestDb, createTestEmbedder, type TestDb } from "../../../apps/mem-claw/helpers/test-db.ts";
 
 const scope = "active-task-crash-retry-removal";

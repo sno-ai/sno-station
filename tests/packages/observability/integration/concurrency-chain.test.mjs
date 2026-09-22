@@ -8,10 +8,10 @@ import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { join, resolve } from "node:path";
 import { describe, it } from "node:test";
-import { BufferStore } from "../../../../packages/sno-observe/dist/internal/buffer-store.js";
-import { bootstrapIdentity } from "../../../../packages/sno-observe/dist/internal/identity.js";
-import { SnoObserveRuntime } from "../../../../packages/sno-observe/dist/internal/runtime.js";
-import { parseEventInput } from "../../../../packages/sno-observe/dist/internal/schemas.js";
+import { BufferStore } from "../../../../packages/observability/dist/internal/buffer-store.js";
+import { bootstrapIdentity } from "../../../../packages/observability/dist/internal/identity.js";
+import { SnoObserveRuntime } from "../../../../packages/observability/dist/internal/runtime.js";
+import { parseEventInput } from "../../../../packages/observability/dist/internal/schemas.js";
 import { validPayloads, scope } from "../fixtures/temp-env.mjs";
 
 function testHash(index) {

@@ -1,16 +1,16 @@
 import { Temporal } from "@js-temporal/polyfill";
-import { calendarInstructionSchema, type CalendarInstruction } from "../../../../packages/sno-station-mem/src/engine/extraction/calendar-instruction";
-import { readModelReplyJson } from "../../../../packages/sno-station-mem/src/engine/shared/model-reply-text";
-import { resolveLlmEndpoint } from "../../../../packages/sno-station-mem/src/model/llm-endpoint-resolution";
+import { calendarInstructionSchema, type CalendarInstruction } from "../../../../packages/memory/src/engine/extraction/calendar-instruction";
+import { readModelReplyJson } from "../../../../packages/memory/src/engine/shared/model-reply-text";
+import { resolveLlmEndpoint } from "../../../../packages/memory/src/model/llm-endpoint-resolution";
 /** Real LlmClient routing; the AgentLlmPort seam injects malformed external replies only. */
 import { describe, expect, it } from "vitest";
 import { hostname } from "node:os";
-import { resolveMemoryDate, unresolvedMemoryDate } from "../../../../packages/sno-station-mem/src/engine/extraction/date-resolution";
-import type { Locale } from "../../../../packages/sno-station-mem/src/engine/i18n/locales";
-import type { AgentLlmCompletion, AgentLlmPort, AgentLlmRequest } from "../../../../packages/sno-station-mem/src/model/agent-llm-port";
-import { createLlmClient } from "../../../../packages/sno-station-mem/src/model/llm-client";
-import type { LlmClient } from "../../../../packages/sno-station-mem/src/model/llm-client-types";
-import type { LlmRoutingConfig } from "../../../../packages/sno-station-mem/src/model/llm-mode-routing";
+import { resolveMemoryDate, unresolvedMemoryDate } from "../../../../packages/memory/src/engine/extraction/date-resolution";
+import type { Locale } from "../../../../packages/memory/src/engine/i18n/locales";
+import type { AgentLlmCompletion, AgentLlmPort, AgentLlmRequest } from "../../../../packages/memory/src/model/agent-llm-port";
+import { createLlmClient } from "../../../../packages/memory/src/model/llm-client";
+import type { LlmClient } from "../../../../packages/memory/src/model/llm-client-types";
+import type { LlmRoutingConfig } from "../../../../packages/memory/src/model/llm-mode-routing";
 /** Observe the actual transport reply without supplying or changing any model output. */
 function observeTimeInstructions(llm: LlmClient, instructions: CalendarInstruction[]): LlmClient {
 	return { ...llm, async completeText(request) {
@@ -142,10 +142,10 @@ it("updates an old event date without rewriting the memory's statement timestamp
 	if (!apiKey) throw new Error("SNO_MEM_CLAW_LLM_INTERNAL_KEY is required");
 	const { dirname } = await import("node:path");
 	const { createTestDb, createTestEmbedder } = await import("../../../apps/mem-claw/helpers/test-db");
-	const { MemoryStore } = await import("../../../../packages/sno-station-mem/src/store/store");
-	const { createRetriever } = await import("../../../../packages/sno-station-mem/src/engine/retrieval/retriever");
-	const { createScopePolicy } = await import("../../../../packages/sno-station-mem/src/engine/security/scopes");
-	const { executeMemoryUpdateTool } = await import("../../../../packages/sno-station-mem/src/engine/bindings/memory-update-tool");
+	const { MemoryStore } = await import("../../../../packages/memory/src/store/store");
+	const { createRetriever } = await import("../../../../packages/memory/src/engine/retrieval/retriever");
+	const { createScopePolicy } = await import("../../../../packages/memory/src/engine/security/scopes");
+	const { executeMemoryUpdateTool } = await import("../../../../packages/memory/src/engine/bindings/memory-update-tool");
 	const fixture = createTestDb();
 	const embedder = await createTestEmbedder();
 	const store = new MemoryStore({ dbPath: fixture.dbPath, embedder });
@@ -217,8 +217,8 @@ it.each([
 
 it("protects an undated row written by the same session from retirement", async () => {
 	const { createTestDb, createTestEmbedder } = await import("../../../apps/mem-claw/helpers/test-db");
-	const { MemoryStore } = await import("../../../../packages/sno-station-mem/src/store/store");
-	const { retireRowsByName } = await import("../../../../packages/sno-station-mem/src/engine/extraction/retire-by-name");
+	const { MemoryStore } = await import("../../../../packages/memory/src/store/store");
+	const { retireRowsByName } = await import("../../../../packages/memory/src/engine/extraction/retire-by-name");
 	const fixture = createTestDb();
 	const store = new MemoryStore({ dbPath: fixture.dbPath, embedder: await createTestEmbedder() });
 	try {
@@ -257,10 +257,10 @@ it("uses a source timezone that differs from the session timezone", async () => 
 async function storeWithDateClient(llm: LlmClient) {
 	const { dirname } = await import("node:path");
 	const { createTestDb, createTestEmbedder } = await import("../../../apps/mem-claw/helpers/test-db");
-	const { MemoryStore } = await import("../../../../packages/sno-station-mem/src/store/store");
-	const { createRetriever } = await import("../../../../packages/sno-station-mem/src/engine/retrieval/retriever");
-	const { createScopePolicy } = await import("../../../../packages/sno-station-mem/src/engine/security/scopes");
-	const { executeMemoryStoreTool } = await import("../../../../packages/sno-station-mem/src/engine/bindings/memory-store-tool");
+	const { MemoryStore } = await import("../../../../packages/memory/src/store/store");
+	const { createRetriever } = await import("../../../../packages/memory/src/engine/retrieval/retriever");
+	const { createScopePolicy } = await import("../../../../packages/memory/src/engine/security/scopes");
+	const { executeMemoryStoreTool } = await import("../../../../packages/memory/src/engine/bindings/memory-store-tool");
 	const fixture = createTestDb();
 	const embedder = await createTestEmbedder();
 	const store = new MemoryStore({ dbPath: fixture.dbPath, embedder });

@@ -1,9 +1,9 @@
 import { createServer } from "node:http";
 import { afterEach, describe, expect, it } from "vitest";
-import { createLlmClient } from "../../../../packages/sno-station-mem/src/model/llm-client.ts";
-import type { DispatchContext } from "../../../../packages/sno-station-mem/src/model/llm-client-types.ts";
-import { callProvider } from "../../../../packages/sno-station-mem/src/model/llm-provider-transport.ts";
-import { SNO_STATION_MEM_RELEASE_ANCHOR_URL } from "../../../../packages/sno-station-mem/src/model/llmix-registry.ts";
+import { createLlmClient } from "../../../../packages/memory/src/model/llm-client.ts";
+import type { DispatchContext } from "../../../../packages/memory/src/model/llm-client-types.ts";
+import { callProvider } from "../../../../packages/memory/src/model/llm-provider-transport.ts";
+import { SNO_STATION_MEM_RELEASE_ANCHOR_URL } from "../../../../packages/memory/src/model/llmix-registry.ts";
 
 const originalFetch = globalThis.fetch;
 const didDocument = {

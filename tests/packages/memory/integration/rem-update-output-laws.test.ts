@@ -4,8 +4,8 @@ import { createHash } from "node:crypto";
 import { readFileSync, symlinkSync, unlinkSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { installRemSchema } from "../../../../packages/sno-station-mem/src/engine/rem/index.ts";
-import { openSqliteDatabase } from "../../../../packages/sno-station-mem/src/store/sqlite-runtime.ts";
+import { installRemSchema } from "../../../../packages/memory/src/engine/rem/index.ts";
+import { openSqliteDatabase } from "../../../../packages/memory/src/store/sqlite-runtime.ts";
 import { seedRemRecoveryState } from "../../../apps/mem-claw/helpers/rem-recovery-state-fixture.ts";
 import { seedRemWriteVerdict } from "../../../apps/mem-claw/helpers/rem-write-verdict-fixture.ts";
 import { startRemScriptedModelFixture } from "../../../apps/mem-claw/helpers/rem-scripted-model-fixture.ts";
@@ -134,7 +134,7 @@ describe("REM retired-section marker (coverage only; direct mutation lifecycle)"
 		});
 		try {
 			const before = readWriterState(fixture, rowId);
-			const create = await boundary<CreateOutputExecutor>("../../../../packages/sno-station-mem/src/store/rem-sqlite-adapter.ts", "createMemClawRemMutationExecutor");
+			const create = await boundary<CreateOutputExecutor>("../../../../packages/memory/src/store/rem-sqlite-adapter.ts", "createMemClawRemMutationExecutor");
 			const executor = create({ database: fixture.runtime.db, configurationSha256: "c".repeat(64), liveContentionRetries: 0 });
 			const handle = await executor.openAttempt({ jobId: `marked-${writer}`, stage: "rem-update", rowId, writer, authorization: authorization(writer, rowId) });
 			const resolution = await executor.mutateAttempt(handle, operation(writer, rowId));
@@ -153,7 +153,7 @@ describe("REM retired-section marker (coverage only; direct mutation lifecycle)"
 		seedRemWriteVerdict(fixture, { rowId, evidenceId: `evidence-${rowId}` });
 		try {
 			const before = readWriterState(fixture, rowId);
-			const create = await boundary<CreateOutputExecutor>("../../../../packages/sno-station-mem/src/store/rem-sqlite-adapter.ts", "createMemClawRemMutationExecutor");
+			const create = await boundary<CreateOutputExecutor>("../../../../packages/memory/src/store/rem-sqlite-adapter.ts", "createMemClawRemMutationExecutor");
 			const executor = create({ database: fixture.runtime.db, configurationSha256: "c".repeat(64), liveContentionRetries: 0 });
 			const handle = await executor.openAttempt({ jobId: `raced-${writer}`, stage: "rem-update", rowId, writer, authorization: authorization(writer, rowId) });
 			const contender = openSqliteDatabase(fixture.dbPath, { fileMustExist: true });
@@ -181,7 +181,7 @@ describe("REM retired-section marker (coverage only; direct mutation lifecycle)"
 		seedRemRecoveryState(fixture, writer, rowId);
 		try {
 			const before = readWriterState(fixture, rowId);
-			const create = await boundary<CreateOutputExecutor>("../../../../packages/sno-station-mem/src/store/rem-sqlite-adapter.ts", "createMemClawRemMutationExecutor");
+			const create = await boundary<CreateOutputExecutor>("../../../../packages/memory/src/store/rem-sqlite-adapter.ts", "createMemClawRemMutationExecutor");
 			const executor = create({ database: fixture.runtime.db, configurationSha256: "c".repeat(64), liveContentionRetries: 0 });
 			const handle = await executor.openAttempt({ jobId: `open-${writer}`, stage: "rem-update", rowId, writer, authorization: authorization(writer, rowId) });
 			const resolution = await executor.mutateAttempt(handle, operation(writer, rowId));
@@ -206,7 +206,7 @@ describe("REM retired-section marker (coverage only; direct mutation lifecycle)"
 			try {
 				const received: Array<Record<string, unknown>> = [];
 				const create = await boundary<CreateOutputExecutor>(
-					"../../../../packages/sno-station-mem/src/store/rem-sqlite-adapter.ts",
+					"../../../../packages/memory/src/store/rem-sqlite-adapter.ts",
 					"createMemClawRemMutationExecutor",
 				);
 				const executor = create({
@@ -250,9 +250,9 @@ describe("REM retired-section marker (coverage only; direct mutation lifecycle)"
 	);
 
 	it("derives the writer set from the production call graph", async () => {
-		const discover = await boundary<(input: { entryPoints: string[] }) => { writers: Array<{ writer: string }> }>("../../../../packages/sno-station-mem/src/engine/rem/index.ts", "discoverRemWritersFromCallGraph");
+		const discover = await boundary<(input: { entryPoints: string[] }) => { writers: Array<{ writer: string }> }>("../../../../packages/memory/src/engine/rem/index.ts", "discoverRemWritersFromCallGraph");
 		const discovered = discover({
-			entryPoints: [resolve(import.meta.dirname, "../../../../packages/sno-station-mem/src/sidecar/main.ts")],
+			entryPoints: [resolve(import.meta.dirname, "../../../../packages/memory/src/sidecar/main.ts")],
 		}).writers.map(({ writer }) => writer);
 		expect(discovered).toEqual([...writers]);
 	});
@@ -272,18 +272,18 @@ describe("REM negated-current output (coverage only; direct composer calls)", ()
 		retractionText: "The user no longer likes tea.",
 	};
 	it("selects the named shape and preserves the retracted topic", async () => {
-		const compose = await boundary<(value: typeof input) => Retraction>("../../../../packages/sno-station-mem/src/engine/rem/index.ts", "composeRemNegatedCurrent");
+		const compose = await boundary<(value: typeof input) => Retraction>("../../../../packages/memory/src/engine/rem/index.ts", "composeRemNegatedCurrent");
 		const result = compose(input);
 		expect(result).toMatchObject({ shape: "negated-current", topic: "tea preference" });
 	});
 	it("emits only the user's negative assertion provenance", async () => {
-		const compose = await boundary<(value: typeof input) => Retraction>("../../../../packages/sno-station-mem/src/engine/rem/index.ts", "composeRemNegatedCurrent");
+		const compose = await boundary<(value: typeof input) => Retraction>("../../../../packages/memory/src/engine/rem/index.ts", "composeRemNegatedCurrent");
 		const result = compose(input);
 		expect(result.assertions).toEqual([{ polarity: "negative", provenance: input.retractionText }]);
 		expect(result.assertions.some(({ polarity }) => polarity === "affirmative")).toBe(false);
 	});
 	it("does not consume the generated negation row as retired input", async () => {
-		const compose = await boundary<(value: typeof input) => Retraction>("../../../../packages/sno-station-mem/src/engine/rem/index.ts", "composeRemNegatedCurrent");
+		const compose = await boundary<(value: typeof input) => Retraction>("../../../../packages/memory/src/engine/rem/index.ts", "composeRemNegatedCurrent");
 		const result = compose(input);
 		expect(result.consumedRowIds).toContain(input.priorRowId);
 		expect(result.consumedRowIds).not.toContain(result.generatedRowId);
@@ -291,8 +291,8 @@ describe("REM negated-current output (coverage only; direct composer calls)", ()
 });
 
 describe("REM update routing (coverage only; production acceptance follows)", () => {
-	const source = readFileSync(resolve(import.meta.dirname, "../../../../packages/sno-station-mem/src/store/memory-store-rem-api.ts"), "utf8");
-	const batchSource = readFileSync(resolve(import.meta.dirname, "../../../../packages/sno-station-mem/src/sidecar/rem-batch-executor.ts"), "utf8");
+	const source = readFileSync(resolve(import.meta.dirname, "../../../../packages/memory/src/store/memory-store-rem-api.ts"), "utf8");
+	const batchSource = readFileSync(resolve(import.meta.dirname, "../../../../packages/memory/src/sidecar/rem-batch-executor.ts"), "utf8");
 	it("emits update audit through runWithMemoryAudit", () => {
 		expect(source).toMatch(/runWithMemoryAudit\s*\(/u);
 		expect(source).toMatch(/rem[_-]update/iu);
@@ -319,7 +319,7 @@ describe("REM update routing (coverage only; production acceptance follows)", ()
 				canonicalStorePath: string,
 				action: () => Promise<void>,
 			) => Promise<void>>(
-				"../../../../packages/sno-station-mem/src/sidecar/rem-batch-executor.ts",
+				"../../../../packages/memory/src/sidecar/rem-batch-executor.ts",
 				"runWithCanonicalStoreWriteMutex",
 			);
 			let active = 0;

@@ -12,9 +12,9 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
 	createRemModelStageResponsePort,
 	runRemBatchJob,
-} from "../../../../packages/sno-station-mem/src/sidecar/rem-batch-executor.ts";
-import { REM_UPDATE_JUDGMENT_SKILL } from "../../../../packages/sno-station-mem/src/sidecar/rem-update-judgment-skill.ts";
-import { parseRemOperationalConfiguration } from "../../../../packages/sno-station-mem/src/engine/rem/index.ts";
+} from "../../../../packages/memory/src/sidecar/rem-batch-executor.ts";
+import { REM_UPDATE_JUDGMENT_SKILL } from "../../../../packages/memory/src/sidecar/rem-update-judgment-skill.ts";
+import { parseRemOperationalConfiguration } from "../../../../packages/memory/src/engine/rem/index.ts";
 import { createRemOwnerDecidedOperationalConfiguration } from "../../../apps/mem-claw/helpers/rem-entry-config-fixture.ts";
 import { seedProductionMemory } from "../../../apps/mem-claw/helpers/rem-production-entry-fixture.ts";
 import { createTestDb, type TestDb } from "../../../apps/mem-claw/helpers/test-db.ts";
@@ -129,13 +129,13 @@ describe("a retirement sentence nominates the row it retires", () => {
 			const engineSources = [
 				readFileSync(
 					new URL(
-						"../../../../packages/sno-station-mem/src/sidecar/rem-batch-executor.ts",
+						"../../../../packages/memory/src/sidecar/rem-batch-executor.ts",
 						import.meta.url,
 					),
 					"utf8",
 				),
 				readFileSync(
-					new URL("../../../../packages/sno-station-mem/src/engine/rem/rem-update-judgment.ts", import.meta.url),
+					new URL("../../../../packages/memory/src/engine/rem/rem-update-judgment.ts", import.meta.url),
 					"utf8",
 				),
 			].join("\n");
@@ -348,7 +348,7 @@ describe("a retirement sentence nominates the row it retires", () => {
 		// The router keeps its coarse patterns and gains nothing about targets: it may nominate a row
 		// for judgement, and it may not name what that row retires.
 		const classifier = readFileSync(
-			new URL("../../../../packages/sno-station-mem/src/engine/rem/classifier.ts", import.meta.url),
+			new URL("../../../../packages/memory/src/engine/rem/classifier.ts", import.meta.url),
 			"utf8",
 		);
 		for (const targetVocabulary of ["target_row_id", "retirementTarget", "retirement-target"]) {

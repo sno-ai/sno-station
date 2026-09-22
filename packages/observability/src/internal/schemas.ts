@@ -47,6 +47,8 @@ const tokenMethodSchema = z.enum([
 	"char_approximation",
 ]);
 const tokenSourceSchema = z.enum(["host_agent_paid", "plugin_internal_paid"]);
+/** The server takes whole milliseconds; a timer's fraction must not cost the event. */
+const wholeMsSchema = z.number().nonnegative().transform((value) => Math.round(value));
 const memoryTelemetryEventSchema = z.object({
 	event_id: z.number().int().positive(),
 	event_type: z.enum([
@@ -101,7 +103,7 @@ const payloadSchemas: Record<EventType, z.ZodType<unknown>> = {
 			k: z.number().int().nonnegative(),
 			hit_count: z.number().int().nonnegative(),
 			result_tokens: z.number().int().nonnegative(),
-			latency_ms: z.number().nonnegative(),
+			latency_ms: wholeMsSchema,
 			tokens_method: tokenMethodSchema,
 		})
 		.strict(),
@@ -199,7 +201,7 @@ const payloadSchemas: Record<EventType, z.ZodType<unknown>> = {
 			model: z.string().min(1),
 			prompt_tokens: z.number().int().nonnegative(),
 			completion_tokens: z.number().int().nonnegative(),
-			latency_ms: z.number().nonnegative(),
+			latency_ms: wholeMsSchema,
 			cache_read_tokens: z.number().int().nonnegative(),
 			cache_write_tokens: z.number().int().nonnegative(),
 			token_source: tokenSourceSchema,
@@ -211,19 +213,19 @@ const payloadSchemas: Record<EventType, z.ZodType<unknown>> = {
 			decision: z.enum(["allow", "deny", "sample"]),
 			input_hash: z.string().min(1),
 			output_hash: z.string().min(1),
-			latency_ms: z.number().nonnegative(),
+			latency_ms: wholeMsSchema,
 		})
 		.strict(),
 	"session.start": z
 		.object({
 			session_uuid: uuidV7Schema,
-			duration_ms: z.number().nonnegative().optional(),
+			duration_ms: wholeMsSchema.optional(),
 		})
 		.strict(),
 	"session.end": z
 		.object({
 			session_uuid: uuidV7Schema,
-			duration_ms: z.number().nonnegative().optional(),
+			duration_ms: wholeMsSchema.optional(),
 		})
 		.strict(),
 	"prompt.submit": z

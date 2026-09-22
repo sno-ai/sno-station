@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import {
 	resolveReflectionSessionSearchDirs,
 	stripResetSuffix,
-} from "../../../../packages/sno-station-mem/src/engine/operations/session-summary-storage.ts";
+} from "../../../../packages/memory/src/engine/operations/session-summary-storage.ts";
 
 /**
  * Session recovery path utilities — integration tests.

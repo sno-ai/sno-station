@@ -321,7 +321,7 @@ Object.assign(MemoryStore.prototype, {
 				attemptCap,
 			}, {
 				event_name: "sno_station_mem.memory-store-atomic-extraction-ledger-api.atomic.extraction.chunk.stuck.at.reprocess.attempt.cap",
-				file: "packages/sno-station-mem/src/store/memory-store-atomic-extraction-ledger-api.ts",
+				file: "packages/memory/src/store/memory-store-atomic-extraction-ledger-api.ts",
 				function: "reopenAtomicExtractionChunk",
 				site_id: "memory-store-atomic-extraction-ledger-api.reopenAtomicExtractionChunk.e05258e34b",
 			});

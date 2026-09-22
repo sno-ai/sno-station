@@ -3,7 +3,7 @@
  * @boundary Runtime audits fail closed; process telemetry never affects retrieval.
  */
 
-import type { JsonObject } from "@snoai/sno-observe";
+import type { JsonObject } from "@snoai/observability";
 import type { Embedder, EmbeddingConfig } from "../extraction/embedding-provider-client";
 import { getSnoStationMemStateDir, runWithMemoryAudit } from "../operations/runtime-audit-log";
 import {
@@ -14,7 +14,7 @@ import {
 } from "../retrieval/retriever";
 import type { RetrievalResult } from "../shared/types";
 import type { MemoryStore } from "../../store/store";
-import { observeBackgroundCooldownKey, type PluginObservability } from "./adapter";
+import type { PluginObservability } from "./adapter";
 import { countEmbeddingTokens, countManyEmbeddingTokens } from "./token-counter";
 
 type SessionUuidProvider = () => string | undefined;
@@ -47,13 +47,10 @@ export class ObservableMemoryRetriever extends MemoryRetriever {
 			this.observability.trackBestEffort(
 				"memory.read",
 				() => this.emitRead(context, result.results, started, sessionUuid),
-				{
-					cooldownKey: observeBackgroundCooldownKey("memory.read", sessionUuid),
-				},
 			);
 			return result;
 		} catch (error) {
-			await this.observability.emitError("retriever_throw", error, this.sessionUuidProvider());
+			await this.observability.emitError("memory.read:throw", error, this.sessionUuidProvider());
 			throw error;
 		}
 	}
@@ -70,13 +67,10 @@ export class ObservableMemoryRetriever extends MemoryRetriever {
 			this.observability.trackBestEffort(
 				"memory.read",
 				() => this.emitRead(context, results, started, sessionUuid),
-				{
-					cooldownKey: observeBackgroundCooldownKey("memory.read", sessionUuid),
-				},
 			);
 			return results;
 		} catch (error) {
-			await this.observability.emitError("retriever_throw", error, this.sessionUuidProvider());
+			await this.observability.emitError("memory.read:throw", error, this.sessionUuidProvider());
 			throw error;
 		}
 	}
@@ -103,7 +97,7 @@ export class ObservableMemoryRetriever extends MemoryRetriever {
 				k: context.limit,
 				hit_count: results.length,
 				result_tokens: resultTokens.count,
-				latency_ms: Date.now() - started,
+				latency_ms: Math.max(0, Math.round(Date.now() - started)),
 				tokens_method: queryTokens.method,
 			} satisfies JsonObject,
 		});

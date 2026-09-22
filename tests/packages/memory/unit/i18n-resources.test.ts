@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { SUPPORTED_LOCALES } from "../../../../packages/sno-station-mem/src/engine/i18n/locales.ts";
-import { t } from "../../../../packages/sno-station-mem/src/engine/i18n/registry.ts";
+import { SUPPORTED_LOCALES } from "../../../../packages/memory/src/engine/i18n/locales.ts";
+import { t } from "../../../../packages/memory/src/engine/i18n/registry.ts";
 
 describe("i18n resources — toolDescriptions across all 9 locales", () => {
 	const REQUIRED_KEYS = [
