@@ -44,6 +44,21 @@ describe("inherited init registration", () => {
 		expect(registration.model).toBeUndefined();
 	});
 
+	it("fills the local ranker for a keyless install that named no reranker", () => {
+		const registration = createCodingSkinRegistration({
+			skinId: "codex",
+			installed: {
+				storePath: "/tmp/memory.sqlite",
+				embedding: { provider: "local-onnx" },
+				extractionKeyRef: "SNO_STATION_MEM_LLM_INTERNAL_KEY",
+				mode: "local-first",
+				retrieval: {},
+			},
+		});
+
+		expect(registration.settings.retrieval.rerank).toBe("lightweight");
+	});
+
 	const installed = {
 		storePath: "/tmp/memory.sqlite",
 		embedding: { provider: "local-onnx" as const },
