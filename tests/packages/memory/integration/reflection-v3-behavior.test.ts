@@ -15,17 +15,17 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { loadAgentReflectionSlicesFromEntries } from "../../../../packages/sno-station-mem/src/engine/reflection/memory-entry-projector.ts";
+import { loadAgentReflectionSlicesFromEntries } from "../../../../packages/memory/src/engine/reflection/memory-entry-projector.ts";
 import {
 	runWithSerialGuard,
 	SERIAL_WINDOW_MS,
-} from "../../../../packages/sno-station-mem/src/engine/reflection/session-serial-guard.ts";
+} from "../../../../packages/memory/src/engine/reflection/session-serial-guard.ts";
 import type {
 	AgentLlmPort,
 	AgentLlmRequest,
-} from "../../../../packages/sno-station-mem/src/model/agent-llm-port.ts";
-import type { MemoryEntry } from "../../../../packages/sno-station-mem/src/engine/shared/types.ts";
-import { getSnoStationMemDataDir } from "../../../../packages/sno-station-mem/src/store/data-paths.ts";
+} from "../../../../packages/memory/src/model/agent-llm-port.ts";
+import type { MemoryEntry } from "../../../../packages/memory/src/engine/shared/types.ts";
+import { getSnoStationMemDataDir } from "../../../../packages/memory/src/store/data-paths.ts";
 import {
 	createReflectionHarness,
 	installEmbeddedRunnerStub,
@@ -507,7 +507,7 @@ describe("reflection v3 — Group 3 (mapped-memory routing)", () => {
 		await h.fireCommandNew({ sessionKey: tk("g3-host-second"), agentId: "main" });
 
 		// The real opening of the profile-section writer's prompt, from
-		// `packages/sno-station-mem/src/engine/extraction/profile-section-writer.ts`. The sentence asserted here
+		// `packages/memory/src/engine/extraction/profile-section-writer.ts`. The sentence asserted here
 		// before was "You update one current-state profile section.", which the product has never
 		// emitted, so this case had not passed since it was written on 2026-07-18.
 		expect(

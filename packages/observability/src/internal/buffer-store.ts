@@ -753,7 +753,7 @@ export class BufferStore {
 		};
 		logger.debug("sno observe buffer maintenance", { ...report }, {
 			event_name: "sno.observe.internal.buffer.store.pruneretention",
-			file: "packages/sno-observe/src/internal/buffer-store.ts",
+			file: "packages/observability/src/internal/buffer-store.ts",
 			function: "pruneRetention",
 			site_id: "sno.observe.internal.buffer.store.pruneretention.1",
 		});
@@ -1589,7 +1589,7 @@ export class BufferStore {
 			attempt_started_at_ms: attemptStartedAtMs,
 		}, {
 			event_name: "sno.observe.internal.buffer.store.logcompactionphase",
-			file: "packages/sno-observe/src/internal/buffer-store.ts",
+			file: "packages/observability/src/internal/buffer-store.ts",
 			function: "logCompactionPhase",
 			site_id: "sno.observe.internal.buffer.store.logcompactionphase.2",
 		});
@@ -1735,7 +1735,7 @@ export class BufferStore {
 			if (!isCheckpointRow(row) || row.busy > 0 || row.checkpointed < row.log) {
 				logger.warnRateLimited("buffer-maintenance:checkpoint", "sno observe buffer checkpoint deferred", checkpointWarningContext(this.path, row), {
 					event_name: "sno.observe.internal.buffer.store.checkpointwal",
-					file: "packages/sno-observe/src/internal/buffer-store.ts",
+					file: "packages/observability/src/internal/buffer-store.ts",
 					function: "checkpointWal",
 					site_id: "sno.observe.internal.buffer.store.checkpointwal.3",
 				});
@@ -1745,7 +1745,7 @@ export class BufferStore {
 		} catch (error) {
 			logger.warnRateLimited("buffer-maintenance:checkpoint", "sno observe buffer checkpoint deferred", { path: this.path, error }, {
 				event_name: "sno.observe.internal.buffer.store.checkpointwal",
-				file: "packages/sno-observe/src/internal/buffer-store.ts",
+				file: "packages/observability/src/internal/buffer-store.ts",
 				function: "checkpointWal",
 				site_id: "sno.observe.internal.buffer.store.checkpointwal.4",
 			});

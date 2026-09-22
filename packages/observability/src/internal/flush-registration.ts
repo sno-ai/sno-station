@@ -68,7 +68,7 @@ export async function registerBeforeFlush(
 				terminal,
 			}, {
 				event_name: "sno.observe.internal.flush.registration.registerbeforeflush",
-				file: "packages/sno-observe/src/internal/flush-registration.ts",
+				file: "packages/observability/src/internal/flush-registration.ts",
 				function: "registerBeforeFlush",
 				site_id: "sno.observe.internal.flush.registration.registerbeforeflush.1",
 			});
@@ -82,7 +82,7 @@ export async function registerBeforeFlush(
 			error,
 		}, {
 			event_name: "sno.observe.internal.flush.registration.registerbeforeflush",
-			file: "packages/sno-observe/src/internal/flush-registration.ts",
+			file: "packages/observability/src/internal/flush-registration.ts",
 			function: "registerBeforeFlush",
 			site_id: "sno.observe.internal.flush.registration.registerbeforeflush.2",
 		});

@@ -5,10 +5,10 @@
 
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { parseInsightMetadata } from "../../../../packages/sno-station-mem/src/engine/extraction/memory-metadata-codec.ts";
-import { runProfileSectionUpdate } from "../../../../packages/sno-station-mem/src/engine/extraction/profile-section-writer.ts";
-import { createLlmClient } from "../../../../packages/sno-station-mem/src/model/llm-client.ts";
-import { MemoryStore } from "../../../../packages/sno-station-mem/src/store/store.ts";
+import { parseInsightMetadata } from "../../../../packages/memory/src/engine/extraction/memory-metadata-codec.ts";
+import { runProfileSectionUpdate } from "../../../../packages/memory/src/engine/extraction/profile-section-writer.ts";
+import { createLlmClient } from "../../../../packages/memory/src/model/llm-client.ts";
+import { MemoryStore } from "../../../../packages/memory/src/store/store.ts";
 import { requireEnv } from "../../../apps/mem-claw/helpers/env.ts";
 import { createTestDb, createTestEmbedder } from "../../../apps/mem-claw/helpers/test-db.ts";
 

@@ -25,9 +25,9 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { RESOURCES_BY_LOCALE } from "../../../../packages/sno-station-mem/src/engine/i18n/all-resources";
-import { SUPPORTED_LOCALES } from "../../../../packages/sno-station-mem/src/engine/i18n/locales";
-import { PARSER_HEADINGS } from "../../../../packages/sno-station-mem/src/engine/reflection/markdown-slice-parser";
+import { RESOURCES_BY_LOCALE } from "../../../../packages/memory/src/engine/i18n/all-resources";
+import { SUPPORTED_LOCALES } from "../../../../packages/memory/src/engine/i18n/locales";
+import { PARSER_HEADINGS } from "../../../../packages/memory/src/engine/reflection/markdown-slice-parser";
 
 const EXPECTED_PARSER_HEADINGS = {
 	context: "Context",

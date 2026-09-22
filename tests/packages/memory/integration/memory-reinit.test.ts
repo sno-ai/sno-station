@@ -3,12 +3,12 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { makeTestEnv, type TestEnv } from "../../sno-station-core-crypto/_helpers";
+import { makeTestEnv, type TestEnv } from "../../sqlite-crypto/_helpers";
 import { LocalEmbedProvider } from "../../../../packages/embedder/src/local-provider";
-import { MemoryRuntimePool } from "../../../../packages/sno-station-mem/src/sidecar/memory-runtime";
-import { serveMemoryRoute } from "../../../../packages/sno-station-mem/src/sidecar/memory-routes";
-import { bindStore } from "../../../../packages/sno-station-mem/src/engine/shared/paths";
-import { pluginConfigSchema } from "../../../../packages/sno-station-mem/config/plugin-config-schema";
+import { MemoryRuntimePool } from "../../../../packages/memory/src/sidecar/memory-runtime";
+import { serveMemoryRoute } from "../../../../packages/memory/src/sidecar/memory-routes";
+import { bindStore } from "../../../../packages/memory/src/engine/shared/paths";
+import { pluginConfigSchema } from "../../../../packages/memory/config/plugin-config-schema";
 
 // Resolve the package to current source, not a possibly stale dist artifact.
 vi.mock("@snoai/embedder", async () => import("../../../../packages/embedder/src/index"));
@@ -136,7 +136,7 @@ it("journals unexpected route errors at ERROR without exposing the cause in HTTP
 	const records = lines.flatMap(line => line.trim().split("\n")).map(line => JSON.parse(line));
 	expect(records).toContainEqual(expect.objectContaining({
 		severity_text: "ERROR",
-		source: expect.objectContaining({ file: "packages/sno-station-mem/src/sidecar/memory-routes.ts", function: "serveMemoryRoute" }),
+		source: expect.objectContaining({ file: "packages/memory/src/sidecar/memory-routes.ts", function: "serveMemoryRoute" }),
 		attributes: expect.objectContaining({
 			method: "capture", skinId: expect.objectContaining({ length: 11 }),
 			error_message: expect.objectContaining({ length: 21 }),

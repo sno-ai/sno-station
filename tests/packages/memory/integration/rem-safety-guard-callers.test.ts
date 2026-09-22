@@ -27,7 +27,7 @@ interface GuardDefinition {
 
 const zeroCallerAllowlist = new Map<string, string>([
 	[
-		"packages/sno-station-mem/src/engine/rem/operational-config.ts:129:requireRemCoverageAccuracyFloor",
+		"packages/memory/src/engine/rem/operational-config.ts:129:requireRemCoverageAccuracyFloor",
 		"Frozen unwired guard retained by the REM obligations contract.",
 	],
 	[

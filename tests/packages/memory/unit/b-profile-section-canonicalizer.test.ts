@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canonicalizeProfileSectionName } from "../../../../packages/sno-station-mem/src/engine/extraction/b-profile-section-canonicalizer";
+import { canonicalizeProfileSectionName } from "../../../../packages/memory/src/engine/extraction/b-profile-section-canonicalizer";
 
 const SEPARATOR_PAIRS = [
 	["reading-interests", "reading_interests"],

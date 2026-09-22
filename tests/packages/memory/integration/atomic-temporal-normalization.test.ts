@@ -1,8 +1,8 @@
 /** Model instructions determine meaning; normalization never reads source-language tokens. */
 import { describe, expect, it } from "vitest";
-import { parseAtomicExtractionReply } from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-extraction-reply";
-import { runAtomicExtractionGauntlet } from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-extraction-gauntlet";
-import type { CalendarInstruction } from "../../../../packages/sno-station-mem/src/engine/extraction/calendar-instruction";
+import { parseAtomicExtractionReply } from "../../../../packages/memory/src/engine/extraction/atomic-extraction-reply";
+import { runAtomicExtractionGauntlet } from "../../../../packages/memory/src/engine/extraction/atomic-extraction-gauntlet";
+import type { CalendarInstruction } from "../../../../packages/memory/src/engine/extraction/calendar-instruction";
 
 function reply(time: unknown, endedTime: unknown = { kind: "none" }, endsCurrent = false) {
 	return { records: [{

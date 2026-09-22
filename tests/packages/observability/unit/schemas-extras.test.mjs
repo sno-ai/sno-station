@@ -5,12 +5,12 @@ import { describe, it } from "node:test";
 import {
 	InvalidEventPayloadError,
 	InvalidEventTypeError,
-} from "../../../../packages/sno-observe/dist/internal/errors.js";
-import { parseEventInput } from "../../../../packages/sno-observe/dist/internal/schemas.js";
+} from "../../../../packages/observability/dist/internal/errors.js";
+import { parseEventInput } from "../../../../packages/observability/dist/internal/schemas.js";
 import {
 	AGENT_IDS,
 	EVENT_TYPES,
-} from "../../../../packages/sno-observe/dist/internal/types.js";
+} from "../../../../packages/observability/dist/internal/types.js";
 
 const hashA = "a".repeat(64);
 

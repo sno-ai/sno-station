@@ -6,7 +6,7 @@ import { PERSISTED_CONTENT_HASH_V1 } from "../model/signed-registry-constants";
 
 import { existsSync, mkdirSync, rmSync, writeFileSync, renameSync } from "node:fs";
 import { resolve as resolvePath } from "node:path";
-import { readManifestIfPresent, resolveConfigPaths } from "@snoai/sno-station-core-crypto";
+import { readManifestIfPresent, resolveConfigPaths } from "@snoai/sqlite-crypto";
 import { buildInsightMetadata, parseInsightMetadata, stringifyInsightMetadata } from "../engine/extraction/memory-metadata-codec";
 import type { InsightMetadataPatch } from "../engine/extraction/memory-metadata-types";
 import {

@@ -4,8 +4,8 @@ import { describe, expect, it } from "vitest";
 import {
 	applyMultiAgentScopes,
 	parseMultiAgentScopes,
-} from "../../../../packages/sno-station-mem/src/engine/security/multi-agent-scope.ts";
-import { createScopePolicy } from "../../../../packages/sno-station-mem/src/engine/security/scopes.ts";
+} from "../../../../packages/memory/src/engine/security/multi-agent-scope.ts";
+import { createScopePolicy } from "../../../../packages/memory/src/engine/security/scopes.ts";
 
 // ============================================================================
 // parseMultiAgentScopes — env var parsing

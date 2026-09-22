@@ -56,7 +56,7 @@ function resolveSourceImport(importer: string, specifier: string): string | unde
 	if (specifier.startsWith("./") || specifier.startsWith("../")) {
 		candidate = resolve(dirname(importer), specifier);
 	} else if (specifier.startsWith("@/")) {
-		const marker = "/packages/sno-station-mem/src/";
+		const marker = "/packages/memory/src/";
 		const markerIndex = importer.indexOf(marker);
 		if (markerIndex < 0) return undefined;
 		candidate = resolve(importer.slice(0, markerIndex + marker.length), specifier.slice(2));

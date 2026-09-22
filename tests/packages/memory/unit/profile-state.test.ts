@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from "vitest";
-import { getStateDir } from "../../../../packages/sno-station-mem/src/contract/profile";
+import { getStateDir } from "../../../../packages/memory/src/contract/profile";
 
 afterEach(() => vi.unstubAllEnvs());
 

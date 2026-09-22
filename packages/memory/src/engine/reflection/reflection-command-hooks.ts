@@ -131,7 +131,7 @@ export function createRunMemoryReflection(params: ReflectionCommandParams): (eve
 				reflection_event_reference: diagnostics.eventId ?? "unavailable",
 				mapped_persisted_count: "unavailable", mapped_persisted_reason: "mapped_writer_does_not_return_durable_count",
 				store_reference: privateLogReference(params.deps.store.dbPath),
-			}, { event_name: "memory.reflection.completed", file: "packages/sno-station-mem/src/engine/reflection/reflection-command-hooks.ts", function: "createRunMemoryReflection", site_id: "memory.reflection.command.completed" });
+			}, { event_name: "memory.reflection.completed", file: "packages/memory/src/engine/reflection/reflection-command-hooks.ts", function: "createRunMemoryReflection", site_id: "memory.reflection.command.completed" });
 		}
 		});
 	};
@@ -209,7 +209,7 @@ async function runMemoryReflectionBody(
 		});
 
 		if (reflectionResult.usedFallback) {
-			diagnosticLog.warn("Reflection generation used fallback", { outcome: "partial", error: reflectionResult.error, session_reference: privateLogReference(currentSessionId) }, { event_name: "memory.reflection_command_hooks.reflection.generation.used.fallback", file: "packages/sno-station-mem/src/engine/reflection/reflection-command-hooks.ts", function: "runMemoryReflectionBody", site_id: "reflection.reflection-command-hooks.runMemoryReflectionBody.be803e8310" });
+			diagnosticLog.warn("Reflection generation used fallback", { outcome: "partial", error: reflectionResult.error, session_reference: privateLogReference(currentSessionId) }, { event_name: "memory.reflection_command_hooks.reflection.generation.used.fallback", file: "packages/memory/src/engine/reflection/reflection-command-hooks.ts", function: "runMemoryReflectionBody", site_id: "reflection.reflection-command-hooks.runMemoryReflectionBody.be803e8310" });
 		}
 
 		checkMemoryOperation();
@@ -239,12 +239,12 @@ async function runMemoryReflectionBody(
 		reflectionCompleted = true;
 		diagnostics.outcome = reflectionResult.usedFallback ? "partial" : "success";
 		diagnostics.reason = reflectionResult.usedFallback ? "generation_fallback" : "completed";
-		diagnosticLog.info("Reflection file written", { artifact_reference: privateLogReference(relPath), session_reference: privateLogReference(currentSessionId) }, { event_name: "memory.reflection_command_hooks.reflection.file.written", file: "packages/sno-station-mem/src/engine/reflection/reflection-command-hooks.ts", function: "runMemoryReflectionBody", site_id: "reflection.reflection-command-hooks.runMemoryReflectionBody.2a047c8826" });
+		diagnosticLog.info("Reflection file written", { artifact_reference: privateLogReference(relPath), session_reference: privateLogReference(currentSessionId) }, { event_name: "memory.reflection_command_hooks.reflection.file.written", file: "packages/memory/src/engine/reflection/reflection-command-hooks.ts", function: "runMemoryReflectionBody", site_id: "reflection.reflection-command-hooks.runMemoryReflectionBody.2a047c8826" });
 	} catch (err) {
 		checkMemoryOperation();
 		diagnostics.outcome = diagnostics.fileWritten || diagnostics.persisted > 0 ? "partial" : "failed";
 		diagnostics.reason = "reflection_failed";
-		diagnosticLog.warn("Reflection command failed", { error: err }, { event_name: "memory.reflection_command_hooks.reflection.command.failed", file: "packages/sno-station-mem/src/engine/reflection/reflection-command-hooks.ts", function: "runMemoryReflectionBody", site_id: "reflection.reflection-command-hooks.runMemoryReflectionBody.55c5adf2a5" });
+		diagnosticLog.warn("Reflection command failed", { error: err }, { event_name: "memory.reflection_command_hooks.reflection.command.failed", file: "packages/memory/src/engine/reflection/reflection-command-hooks.ts", function: "runMemoryReflectionBody", site_id: "reflection.reflection-command-hooks.runMemoryReflectionBody.55c5adf2a5" });
 	} finally {
 		if (sessionKey && reflectionCompleted) {
 			params.errorTracker.clearSession(sessionKey);
@@ -391,7 +391,7 @@ async function appendGovernanceEntries(
 			});
 		} catch (err) {
 		checkMemoryOperation();
-			diagnosticLog.warn("Reflection learning append failed", { error: err }, { event_name: "memory.reflection_command_hooks.reflection.learning.append.failed", file: "packages/sno-station-mem/src/engine/reflection/reflection-command-hooks.ts", function: "appendGovernanceEntries", site_id: "reflection.reflection-command-hooks.appendGovernanceEntries.805fa046d0" });
+			diagnosticLog.warn("Reflection learning append failed", { error: err }, { event_name: "memory.reflection_command_hooks.reflection.learning.append.failed", file: "packages/memory/src/engine/reflection/reflection-command-hooks.ts", function: "appendGovernanceEntries", site_id: "reflection.reflection-command-hooks.appendGovernanceEntries.805fa046d0" });
 		}
 	}
 }

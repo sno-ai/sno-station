@@ -21,7 +21,7 @@ import {
 	safelyStringify,
 	UnsupportedExportVersion,
 	WrongKeyError,
-} from "@snoai/sno-station-core-crypto";
+} from "@snoai/sqlite-crypto";
 import { describe, expect, it } from "vitest";
 
 const HEX_LEAK = /[0-9a-fA-F]{32,}/;

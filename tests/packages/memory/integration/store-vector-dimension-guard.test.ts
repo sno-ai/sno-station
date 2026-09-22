@@ -1,6 +1,6 @@
 import { describe, expect, it, beforeAll } from "vitest";
-import type { Embedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client.ts";
-import { MemoryStore } from "../../../../packages/sno-station-mem/src/store/store.ts";
+import type { Embedder } from "../../../../packages/memory/src/engine/extraction/embedding-provider-client.ts";
+import { MemoryStore } from "../../../../packages/memory/src/store/store.ts";
 import { createTestDb, createTestEmbedder } from "../../../apps/mem-claw/helpers/test-db.ts";
 
 let testEmbedder: Embedder;

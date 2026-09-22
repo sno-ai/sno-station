@@ -205,7 +205,7 @@ export class SnoStationMemProviderSearchManager implements MemorySearchManager {
 				canonical_available: this.options.workspaceDir !== undefined,
 				served_ids: served.flatMap((row) => { const id = ROW_PATH_RE.exec(row.path)?.[1]; return id ? [id] : []; }).slice(0, 128),
 				store_reference: privateLogReference(this.options.store.dbPath),
-			}, { event_name: "memory.provider.search.completed", file: "packages/sno-station-mem/src/engine/provider/provider-search-manager.ts", function: "SnoStationMemProviderSearchManager.search", site_id: "memory.provider.search.completed" });
+			}, { event_name: "memory.provider.search.completed", file: "packages/memory/src/engine/provider/provider-search-manager.ts", function: "SnoStationMemProviderSearchManager.search", site_id: "memory.provider.search.completed" });
 		}
 		});
 	}
@@ -259,7 +259,7 @@ export class SnoStationMemProviderSearchManager implements MemorySearchManager {
 			diagnosticLog[outcome === "failed" ? "error" : "info"]("Provider memory read completed", {
 				outcome, reason_code: reason, error: failure, duration_ms: performance.now() - started,
 				artifact_reference: privateLogReference(params.relPath),
-			}, { event_name: "memory.provider.read.completed", file: "packages/sno-station-mem/src/engine/provider/provider-search-manager.ts", function: "SnoStationMemProviderSearchManager.readFile", site_id: "memory.provider.read.completed" });
+			}, { event_name: "memory.provider.read.completed", file: "packages/memory/src/engine/provider/provider-search-manager.ts", function: "SnoStationMemProviderSearchManager.readFile", site_id: "memory.provider.read.completed" });
 		}
 		});
 	}
@@ -286,7 +286,7 @@ export class SnoStationMemProviderSearchManager implements MemorySearchManager {
 		diagnosticLog.debug("Provider memory status read", { outcome: "success", memory_count: memoryCount,
 			chunk_count: chunkCount, vector_available: vectorStoreAvailable, embedding_available: embeddingAvailable,
 			duration_ms: performance.now() - started },
-			{ event_name: "memory.provider.status.completed", file: "packages/sno-station-mem/src/engine/provider/provider-search-manager.ts", function: "SnoStationMemProviderSearchManager.status", site_id: "memory.provider.status.completed" });
+			{ event_name: "memory.provider.status.completed", file: "packages/memory/src/engine/provider/provider-search-manager.ts", function: "SnoStationMemProviderSearchManager.status", site_id: "memory.provider.status.completed" });
 		return {
 			backend: "qmd",
 			provider: FIXED_PROTOCOL_VALUE_74,
@@ -316,7 +316,7 @@ export class SnoStationMemProviderSearchManager implements MemorySearchManager {
 		};
 		} catch (error) {
 			diagnosticLog.error("Provider memory status failed", { outcome: "failed", error, duration_ms: performance.now() - started },
-				{ event_name: "memory.provider.status.completed", file: "packages/sno-station-mem/src/engine/provider/provider-search-manager.ts", function: "SnoStationMemProviderSearchManager.status", site_id: "memory.provider.status.failed" });
+				{ event_name: "memory.provider.status.completed", file: "packages/memory/src/engine/provider/provider-search-manager.ts", function: "SnoStationMemProviderSearchManager.status", site_id: "memory.provider.status.failed" });
 			throw error;
 		}
 	}
@@ -387,7 +387,7 @@ export class SnoStationMemProviderSearchManager implements MemorySearchManager {
 		const alreadyClosed = this.closed;
 		this.closed = true;
 		diagnosticLog.debug("Provider memory manager closed", { outcome: "success", already_closed: alreadyClosed },
-			{ event_name: "memory.provider.manager.closed", file: "packages/sno-station-mem/src/engine/provider/provider-search-manager.ts", function: "SnoStationMemProviderSearchManager.close", site_id: "memory.provider.manager.closed" });
+			{ event_name: "memory.provider.manager.closed", file: "packages/memory/src/engine/provider/provider-search-manager.ts", function: "SnoStationMemProviderSearchManager.close", site_id: "memory.provider.manager.closed" });
 	}
 
 	private hasVectorStore(): boolean {

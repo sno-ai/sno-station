@@ -2,13 +2,13 @@ import { describe, expect, it } from "vitest";
 import {
 	formatRelevantMemoriesContext,
 	shouldCapture,
-} from "../../../../packages/sno-station-mem/src/engine/extraction/capture-policy-detector";
+} from "../../../../packages/memory/src/engine/extraction/capture-policy-detector";
 import {
 	RELEVANT_MEMORIES_CLOSE_TAG,
 	RELEVANT_MEMORIES_INSTRUCTION_LINE,
 	RELEVANT_MEMORIES_OPEN_TAG,
 	RELEVANT_MEMORY_RECORD_PREFIX,
-} from "../../../../packages/sno-station-mem/src/engine/retrieval/relevant-memories-context";
+} from "../../../../packages/memory/src/engine/retrieval/relevant-memories-context";
 
 describe("surviving capture safety policy", () => {
 	it("admits explicit facts, recall questions, and long content for the model", () => {

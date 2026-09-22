@@ -19,12 +19,12 @@ import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 import { afterEach, describe, expect, it } from "vitest";
 import { getLoadablePath } from "sqlite-vec";
-import { resolveSqliteVecPath } from "../../../../packages/sno-station-mem/src/store/sqlite-vec-path";
+import { resolveSqliteVecPath } from "../../../../packages/memory/src/store/sqlite-vec-path";
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../../..");
 const BUNDLED_VEC = resolve(
 	REPO_ROOT,
-	"packages/sno-station-mem/sqlite-extensions/linux-x64/vec0.so",
+	"packages/memory/sqlite-extensions/linux-x64/vec0.so",
 );
 const SQLITE_VEC_PACKAGE_IMPORT =
 	/(?:from\s+|import\s*\(\s*|require\s*\(\s*)["']sqlite-vec(?:["'/-])/u;
@@ -52,7 +52,7 @@ describe("sqlite-vec symbol isolation", () => {
 	});
 
 	it("allows the sqlite-vec package import only inside the bundled extension loader", () => {
-		const sqliteVecImports = globSync("packages/sno-station-mem/src/**/*.ts", { cwd: REPO_ROOT }).flatMap(
+		const sqliteVecImports = globSync("packages/memory/src/**/*.ts", { cwd: REPO_ROOT }).flatMap(
 			(file) => {
 				const source = readFileSync(resolve(REPO_ROOT, file), "utf8");
 				return SQLITE_VEC_PACKAGE_IMPORT.test(source)
@@ -60,7 +60,7 @@ describe("sqlite-vec symbol isolation", () => {
 					: [];
 			},
 		);
-		expect(sqliteVecImports).toEqual(["packages/sno-station-mem/src/store/sqlite-vec-path.ts"]);
+		expect(sqliteVecImports).toEqual(["packages/memory/src/store/sqlite-vec-path.ts"]);
 	});
 
 	it("exports only sqlite3_vec_init", () => {

@@ -26,11 +26,11 @@ import {
 	evaluateRemAutomaticTriggers,
 	remAutomaticCorrelationId,
 	readRemAutomaticOperations,
-} from "../../../../packages/sno-station-mem/src/sidecar/rem-trigger.ts";
+} from "../../../../packages/memory/src/sidecar/rem-trigger.ts";
 import {
 	loadRemTriggerState,
 	writeRemTriggerStateAtomic,
-} from "../../../../packages/sno-station-mem/src/sidecar/rem-trigger-state.ts";
+} from "../../../../packages/memory/src/sidecar/rem-trigger-state.ts";
 import { createTestDb, type TestDb } from "../../../apps/mem-claw/helpers/test-db.ts";
 
 type AuditRow = {

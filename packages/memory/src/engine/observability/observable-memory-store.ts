@@ -3,7 +3,7 @@
  * @boundary Runtime audits fail closed; process telemetry never affects storage.
  */
 
-import type { JsonObject } from "@snoai/sno-observe";
+import type { JsonObject } from "@snoai/observability";
 import type { EmbeddingConfig } from "../extraction/embedding-provider-client";
 import {
 	getSnoStationMemStateDir,

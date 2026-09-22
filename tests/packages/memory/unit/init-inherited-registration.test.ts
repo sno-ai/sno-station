@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { createCodingSkinRegistration } from "../../../../packages/sno-station-mem/config/coding-skin";
-import { parseInput } from "../../../../packages/sno-station-mem/src/contract";
+import { createCodingSkinRegistration } from "../../../../packages/memory/config/coding-skin";
+import { parseInput } from "../../../../packages/memory/src/contract";
 
 const scope = { principal: "test", project: "/workspace", session: "session-1" };
 

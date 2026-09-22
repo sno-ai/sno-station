@@ -111,7 +111,7 @@ function shapeAlarm(operation: string, reason: string): never {
 		operation, reason_code: reason.replace(/[^a-z0-9]+/gi, "_").toLowerCase(),
 	}, {
 		event_name: "sno_station_mem.memory-store-write-validation.active.task.shape.alarm",
-		file: "packages/sno-station-mem/src/store/memory-store-write-validation.ts",
+		file: "packages/memory/src/store/memory-store-write-validation.ts",
 		function: "shapeAlarm",
 		site_id: "memory-store-write-validation.shapeAlarm.3383666e9c",
 	});

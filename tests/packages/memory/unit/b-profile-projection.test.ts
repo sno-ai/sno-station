@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { projectProfileCandidates } from "../../../../packages/sno-station-mem/src/engine/extraction/b-profile-projection.ts";
-import { normalizeTopicToSectionName } from "../../../../packages/sno-station-mem/src/engine/extraction/b-profile-section-registry.ts";
+import { projectProfileCandidates } from "../../../../packages/memory/src/engine/extraction/b-profile-projection.ts";
+import { normalizeTopicToSectionName } from "../../../../packages/memory/src/engine/extraction/b-profile-section-registry.ts";
 import {
 	buildInsightMetadata,
 	parseInsightMetadata,
-} from "../../../../packages/sno-station-mem/src/engine/extraction/memory-metadata-codec.ts";
+} from "../../../../packages/memory/src/engine/extraction/memory-metadata-codec.ts";
 
 
 function totalDrops(dropped: Record<string, number>): number {

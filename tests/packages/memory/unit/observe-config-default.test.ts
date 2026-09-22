@@ -12,7 +12,7 @@ async function parseObserveEnabledWithEnv(
 		process.env.SNO_OBSERVE_ENABLED = value;
 	}
 	const { pluginConfigSchema } = await import(
-		"../../../../packages/sno-station-mem/src/engine/shared/types.ts"
+		"../../../../packages/memory/src/engine/shared/types.ts"
 	);
 	return pluginConfigSchema.parse({
 		embedding: { provider: "local-onnx" },

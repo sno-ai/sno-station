@@ -13,13 +13,13 @@ import { describe, expect, it } from "vitest";
 import {
 	installRemSchema,
 	parseRemOperationalConfiguration,
-} from "../../../../packages/sno-station-mem/src/engine/rem/index.ts";
+} from "../../../../packages/memory/src/engine/rem/index.ts";
 import {
 	createRemModelStageResponsePort,
 	runRemBatchJob,
-} from "../../../../packages/sno-station-mem/src/sidecar/rem-batch-executor.ts";
-import { createSnoStationMemRemPorts } from "../../../../packages/sno-station-mem/src/store/rem-sqlite-adapter.ts";
-import { createLlmClient } from "../../../../packages/sno-station-mem/src/model/llm-client.ts";
+} from "../../../../packages/memory/src/sidecar/rem-batch-executor.ts";
+import { createSnoStationMemRemPorts } from "../../../../packages/memory/src/store/rem-sqlite-adapter.ts";
+import { createLlmClient } from "../../../../packages/memory/src/model/llm-client.ts";
 import { createRemOwnerDecidedOperationalConfiguration } from "../../../apps/mem-claw/helpers/rem-entry-config-fixture.ts";
 import { seedProductionMemory } from "../../../apps/mem-claw/helpers/rem-production-entry-fixture.ts";
 import { createTestDb, type TestDb } from "../../../apps/mem-claw/helpers/test-db.ts";

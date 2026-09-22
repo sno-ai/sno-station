@@ -192,7 +192,7 @@ Object.assign(MemoryStore.prototype, {
 				error: e,
 			}, {
 				event_name: "sno_station_mem.memory-store-read-api.malformed.metadata.json",
-				file: "packages/sno-station-mem/src/store/memory-store-read-api.ts",
+				file: "packages/memory/src/store/memory-store-read-api.ts",
 				function: "getMemoryMetadata",
 				site_id: "memory-store-read-api.getMemoryMetadata.35e63c5534",
 			});

@@ -9,12 +9,12 @@ import {
 	renderReplaceClauseVerdictPrompt,
 	type ReplaceClauseVerdict,
 	type UsableReplaceClauseVerdict,
-} from "../../../../packages/sno-station-mem/src/engine/rem/index.ts";
+} from "../../../../packages/memory/src/engine/rem/index.ts";
 
 const repoRoot = resolve(import.meta.dirname, "../../../..");
 const fixturePath = join(
 	repoRoot,
-	"packages/sno-station-mem/fixtures/replace-clause-verdict-gold/corpus.json",
+	"packages/memory/fixtures/replace-clause-verdict-gold/corpus.json",
 );
 
 interface GoldCase {

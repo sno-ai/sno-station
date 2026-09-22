@@ -3,18 +3,18 @@
 import {
 	getDekSync,
 	openEncryptedDbReadonly,
-} from "@snoai/sno-station-core-crypto";
+} from "@snoai/sqlite-crypto";
 import { closeLogger } from "@snoai/utils/logger";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import type { Embedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client.ts";
+import type { Embedder } from "../../../../packages/memory/src/engine/extraction/embedding-provider-client.ts";
 import {
 	buildInsightMetadata,
 	stringifyInsightMetadata,
-} from "../../../../packages/sno-station-mem/src/engine/extraction/memory-metadata-codec.ts";
-import { runProfileSectionUpdate } from "../../../../packages/sno-station-mem/src/engine/extraction/profile-section-writer.ts";
-import { createLlmClient } from "../../../../packages/sno-station-mem/src/model/llm-client.ts";
-import { pluginConfigSchema } from "../../../../packages/sno-station-mem/src/engine/shared/types.ts";
-import { MemoryStore } from "../../../../packages/sno-station-mem/src/store/store.ts";
+} from "../../../../packages/memory/src/engine/extraction/memory-metadata-codec.ts";
+import { runProfileSectionUpdate } from "../../../../packages/memory/src/engine/extraction/profile-section-writer.ts";
+import { createLlmClient } from "../../../../packages/memory/src/model/llm-client.ts";
+import { pluginConfigSchema } from "../../../../packages/memory/src/engine/shared/types.ts";
+import { MemoryStore } from "../../../../packages/memory/src/store/store.ts";
 import { createTestDb, createTestEmbedder } from "../../../apps/mem-claw/helpers/test-db.ts";
 
 const SCOPE = "profile-conflict-quarantine";

@@ -21,26 +21,26 @@
 
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
 
-import type { AtomicKeyedRecord } from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-profile-keying";
-import { buildAtomicWriteCards } from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-write-projection";
-import type { Embedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client";
+import type { AtomicKeyedRecord } from "../../../../packages/memory/src/engine/extraction/atomic-profile-keying";
+import { buildAtomicWriteCards } from "../../../../packages/memory/src/engine/extraction/atomic-write-projection";
+import type { Embedder } from "../../../../packages/memory/src/engine/extraction/embedding-provider-client";
 import {
 	retrieveForAutoRecall,
 	retrieveForMemoryRecallOrEval,
-} from "../../../../packages/sno-station-mem/src/engine/retrieval/rem-consumer-retrieval";
-import { createRetriever, DEFAULT_RETRIEVAL_CONFIG } from "../../../../packages/sno-station-mem/src/engine/retrieval/retriever";
-import type { MemoryRetriever } from "../../../../packages/sno-station-mem/src/engine/retrieval/retriever";
-import type { RetrievalResult } from "../../../../packages/sno-station-mem/src/engine/shared/types";
+} from "../../../../packages/memory/src/engine/retrieval/rem-consumer-retrieval";
+import { createRetriever, DEFAULT_RETRIEVAL_CONFIG } from "../../../../packages/memory/src/engine/retrieval/retriever";
+import type { MemoryRetriever } from "../../../../packages/memory/src/engine/retrieval/retriever";
+import type { RetrievalResult } from "../../../../packages/memory/src/engine/shared/types";
 import {
 	closeMemoryRow,
 	readMemorySourceOrderOrOldest,
-} from "../../../../packages/sno-station-mem/src/store/memory-source-order";
-import { applyStateCategoryMigration } from "../../../../packages/sno-station-mem/src/store/state-category-migration";
+} from "../../../../packages/memory/src/store/memory-source-order";
+import { applyStateCategoryMigration } from "../../../../packages/memory/src/store/state-category-migration";
 import {
 	type AtomicExtractionLedgerKey,
 	type AtomicExtractionRunParameters,
 	MemoryStore,
-} from "../../../../packages/sno-station-mem/src/store/store";
+} from "../../../../packages/memory/src/store/store";
 import { createTestDb, createTestEmbedder, type TestDb } from "../../../apps/mem-claw/helpers/test-db.ts";
 
 const EXTRACTOR_VERSION = "group-crud-review-recall";

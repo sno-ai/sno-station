@@ -9,9 +9,9 @@ import DatabaseConstructor from "better-sqlite3";
 import {
 	BufferStore,
 	CHAIN_RETENTION_SCAN_SQL,
-} from "../../../../packages/sno-observe/dist/internal/buffer-store.js";
-import { SnoObserveRuntime } from "../../../../packages/sno-observe/dist/internal/runtime.js";
-import { parseEventInput } from "../../../../packages/sno-observe/dist/internal/schemas.js";
+} from "../../../../packages/observability/dist/internal/buffer-store.js";
+import { SnoObserveRuntime } from "../../../../packages/observability/dist/internal/runtime.js";
+import { parseEventInput } from "../../../../packages/observability/dist/internal/schemas.js";
 import { scope, validPayloads } from "../fixtures/temp-env.mjs";
 
 function makeStore() {

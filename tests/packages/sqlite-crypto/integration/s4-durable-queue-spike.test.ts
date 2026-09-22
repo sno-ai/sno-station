@@ -1,7 +1,7 @@
 /**
  * §4 Execution Model Spike — validates the durable mutation queue design
  * (universal-memory-adapter-design.md §4) against real SQLCipher + WAL via
- * @snoai/sno-station-core-crypto.
+ * @snoai/sqlite-crypto.
  *
  * Tests: upsert receipt discrimination, claim/release drain, lost-update
  * guard (payload_version), orphan reclaim, idempotency-on-done, failure
@@ -14,7 +14,7 @@ import {
 	getDek,
 	openEncryptedDb,
 	openEncryptedDbReadonly,
-} from "@snoai/sno-station-core-crypto";
+} from "@snoai/sqlite-crypto";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { makeTestEnv, uniqueDbPath, type TestEnv } from "../_helpers.ts";
 

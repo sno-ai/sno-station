@@ -15,7 +15,7 @@ import { describe, expect, it } from "vitest";
 import {
 	compareMemorySourceOrder,
 	type MemorySourceOrder,
-} from "../../../../packages/sno-station-mem/src/store/memory-source-order";
+} from "../../../../packages/memory/src/store/memory-source-order";
 
 const sign = (n: number): -1 | 0 | 1 => (n < 0 ? -1 : n > 0 ? 1 : 0);
 const flip = (n: -1 | 0 | 1): -1 | 0 | 1 => (n === 0 ? 0 : ((-n) as -1 | 1));

@@ -153,7 +153,7 @@ export function createMemoryRuntime(params: {
 			} finally {
 				diagnosticLog[outcome === "failed" ? "error" : "debug"]("Provider memory manager resolved", { outcome, error: failure,
 					duration_ms: performance.now() - started },
-					{ event_name: "memory.provider.manager.resolved", file: "packages/sno-station-mem/src/engine/provider/provider-registration.ts", function: "createMemoryRuntime.getMemorySearchManager", site_id: "memory.provider.manager.resolved" });
+					{ event_name: "memory.provider.manager.resolved", file: "packages/memory/src/engine/provider/provider-registration.ts", function: "createMemoryRuntime.getMemorySearchManager", site_id: "memory.provider.manager.resolved" });
 			}
 		},
 		resolveMemoryBackendConfig() {
@@ -170,7 +170,7 @@ export function createMemoryRuntime(params: {
 				});
 			} catch (error) {
 				diagnosticLog.warn("Provider manager close lacks identity", { outcome: "skipped", error },
-					{ event_name: "memory.provider.manager.close.skipped", file: "packages/sno-station-mem/src/engine/provider/provider-registration.ts", function: "createMemoryRuntime.closeMemorySearchManager", site_id: "memory.provider.manager.close.skipped" });
+					{ event_name: "memory.provider.manager.close.skipped", file: "packages/memory/src/engine/provider/provider-registration.ts", function: "createMemoryRuntime.closeMemorySearchManager", site_id: "memory.provider.manager.close.skipped" });
 				// Close paths must not create a second failure after a failed identity resolution.
 				return;
 			}
@@ -188,7 +188,7 @@ export function createMemoryRuntime(params: {
 					managers.set(key, manager);
 				}
 				diagnosticLog.warn("Provider manager close retained for retry", { outcome: "failed", error },
-					{ event_name: "memory.provider.manager.close.failed", file: "packages/sno-station-mem/src/engine/provider/provider-registration.ts", function: "createMemoryRuntime.closeMemorySearchManager", site_id: "memory.provider.manager.close.failed" });
+					{ event_name: "memory.provider.manager.close.failed", file: "packages/memory/src/engine/provider/provider-registration.ts", function: "createMemoryRuntime.closeMemorySearchManager", site_id: "memory.provider.manager.close.failed" });
 				throw error;
 			}
 		},
@@ -218,7 +218,7 @@ export function createMemoryRuntime(params: {
 				diagnosticLog[failed ? "warn" : "debug"]("Provider managers shutdown completed", {
 					outcome: failed ? "partial" : "success", closed_count: closedCount,
 					error: failure, duration_ms: performance.now() - started },
-					{ event_name: "memory.provider.managers.shutdown.completed", file: "packages/sno-station-mem/src/engine/provider/provider-registration.ts", function: "createMemoryRuntime.closeAllMemorySearchManagers", site_id: "memory.provider.managers.shutdown.completed" });
+					{ event_name: "memory.provider.managers.shutdown.completed", file: "packages/memory/src/engine/provider/provider-registration.ts", function: "createMemoryRuntime.closeAllMemorySearchManagers", site_id: "memory.provider.managers.shutdown.completed" });
 			}
 		},
 	};

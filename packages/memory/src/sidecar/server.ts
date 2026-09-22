@@ -144,7 +144,7 @@ async function bindSidecarSocket(): Promise<SocketServer> {
 				if (await socketIsLive(socketPath)) {
 					const discovery = await readDiscovery().catch(() => undefined);
 					emitDiagnostic("info", "sidecar.duplicate.exit", { pid: discovery?.pid }, {
-						event_name: "sidecar.duplicate.exit", file: "packages/sno-station-mem/src/sidecar/server.ts",
+						event_name: "sidecar.duplicate.exit", file: "packages/memory/src/sidecar/server.ts",
 						function: "bindSidecarSocket", site_id: "sidecar.duplicate.exit",
 					});
 					throw new DuplicateSidecarError();
@@ -207,7 +207,7 @@ async function startOwnedRemSidecar(): Promise<{ port: number; stop(): Promise<{
 			durable: true,
 		}, {
 			event_name: "sno_station_mem.server.job.transition.durable",
-			file: "packages/sno-station-mem/src/sidecar/server.ts",
+			file: "packages/memory/src/sidecar/server.ts",
 			function: "<anonymous callback>",
 			site_id: "server.<anonymous callback>.5eb5a60e6b",
 		});
@@ -243,7 +243,7 @@ async function startOwnedRemSidecar(): Promise<{ port: number; stop(): Promise<{
 				...context,
 			}, {
 				event_name: "sno_station_mem.server.http.request",
-				file: "packages/sno-station-mem/src/sidecar/server.ts",
+				file: "packages/memory/src/sidecar/server.ts",
 				function: "recordRequest",
 				site_id: "server.<anonymous callback>.47c4662916",
 			});
@@ -269,7 +269,7 @@ async function startOwnedRemSidecar(): Promise<{ port: number; stop(): Promise<{
 				context.error_code = httpError.code;
 				log.error("request_failed", { error }, {
 						event_name: "sno_station_mem.server.request.failed",
-						file: "packages/sno-station-mem/src/sidecar/server.ts",
+						file: "packages/memory/src/sidecar/server.ts",
 						function: "<anonymous callback>",
 						site_id: "server.<anonymous callback>.a7a2656a08",
 				});
@@ -298,12 +298,12 @@ async function startOwnedRemSidecar(): Promise<{ port: number; stop(): Promise<{
 		try {
 			await writeDiscovery(discoveryPath, discovery);
 			if (discoveryAttempt > 1) log.info("sidecar.discovery.published", { attempt: discoveryAttempt }, {
-				event_name: "sidecar.discovery.published", file: "packages/sno-station-mem/src/sidecar/server.ts",
+				event_name: "sidecar.discovery.published", file: "packages/memory/src/sidecar/server.ts",
 				function: "publishDiscovery", site_id: "sidecar.discovery.published",
 			});
 		} catch (error) {
 			log.error("sidecar.discovery.failed", { attempt: discoveryAttempt, error }, {
-				event_name: "sidecar.discovery.failed", file: "packages/sno-station-mem/src/sidecar/server.ts",
+				event_name: "sidecar.discovery.failed", file: "packages/memory/src/sidecar/server.ts",
 				function: "publishDiscovery", site_id: "sidecar.discovery.failed",
 			});
 			if (!stopping) discoveryTimer = setTimeout(() => { discoveryPublication = publishDiscovery(); }, 5_000);
@@ -324,7 +324,7 @@ async function startOwnedRemSidecar(): Promise<{ port: number; stop(): Promise<{
 
 	log.info("started", { host: REM_SIDECAR_HOST, port: address.port, pid: process.pid }, {
 		event_name: "sno_station_mem.server.started",
-		file: "packages/sno-station-mem/src/sidecar/server.ts",
+		file: "packages/memory/src/sidecar/server.ts",
 		function: "startLockedRemSidecar",
 		site_id: "server.startLockedRemSidecar.96a92b085b",
 	});
@@ -361,12 +361,12 @@ async function startOwnedRemSidecar(): Promise<{ port: number; stop(): Promise<{
 							phase, active_tasks: activeTasks.size, pending_requests: [...pendingRequests],
 							running_tasks: [...activeTasks].map(task => task.label ?? "rem"),
 						}, {
-							event_name: "sidecar.shutdown.timeout", file: "packages/sno-station-mem/src/sidecar/server.ts",
+							event_name: "sidecar.shutdown.timeout", file: "packages/memory/src/sidecar/server.ts",
 							function: "startRemSidecar.stop", site_id: "sidecar.shutdown.timeout",
 						});
 						for (const task of activeTasks) withLogContext({ operation_id: task.label }, () => {
 							log.error("sidecar.shutdown.task.running", { method: task.method ?? "rem" }, {
-								event_name: "sidecar.shutdown.task.running", file: "packages/sno-station-mem/src/sidecar/server.ts",
+								event_name: "sidecar.shutdown.task.running", file: "packages/memory/src/sidecar/server.ts",
 								function: "startRemSidecar.stop", site_id: "sidecar.shutdown.task.running",
 							});
 						});
@@ -384,7 +384,7 @@ async function startOwnedRemSidecar(): Promise<{ port: number; stop(): Promise<{
 					outcome: cleanedUp ? "success" : "failed",
 					duration_ms: performance.now() - started, active_tasks: activeTasks.size,
 				}, {
-					event_name: "sidecar.shutdown.completed", file: "packages/sno-station-mem/src/sidecar/server.ts",
+					event_name: "sidecar.shutdown.completed", file: "packages/memory/src/sidecar/server.ts",
 					function: "startRemSidecar.stop", site_id: "sidecar.shutdown.completed",
 				});
 			}
@@ -453,7 +453,7 @@ async function routeRequest(
 			correlation_id: job.correlation_id,
 		}, {
 			event_name: "sno_station_mem.server.job.allocated",
-			file: "packages/sno-station-mem/src/sidecar/server.ts",
+			file: "packages/memory/src/sidecar/server.ts",
 			function: "routeRequest",
 			site_id: "server.routeRequest.0ea180a77c",
 		});
@@ -648,7 +648,7 @@ async function runChassisJob(
 						correlation_id: running.correlation_id,
 					}, {
 						event_name: "sno_station_mem.server.job.completion.journal.failed",
-						file: "packages/sno-station-mem/src/sidecar/server.ts",
+						file: "packages/memory/src/sidecar/server.ts",
 						function: "runChassisJob",
 						site_id: "server.runChassisJob.e7639bd8fc",
 					});
@@ -676,7 +676,7 @@ async function runChassisJob(
 				...(failure === undefined ? {} : { error: failure }),
 			}, {
 				event_name: "sidecar.job.completed",
-				file: "packages/sno-station-mem/src/sidecar/server.ts",
+				file: "packages/memory/src/sidecar/server.ts",
 				function: "runChassisJob",
 				site_id: "sidecar.job.completed",
 			});
@@ -737,7 +737,7 @@ async function failNonTerminalJob(
 	} catch (error) {
 		log.error("job_failure_audit_failed", { error, job_id: jobId }, {
 			event_name: "sno_station_mem.server.job.failure.audit.failed",
-			file: "packages/sno-station-mem/src/sidecar/server.ts",
+			file: "packages/memory/src/sidecar/server.ts",
 			function: "failNonTerminalJob",
 			site_id: "server.failNonTerminalJob.cf84e07c6d",
 		});
@@ -768,7 +768,7 @@ async function recoverInterruptedJobs(
 				reason: "completion_receipt_missing_replay_same_wave",
 			}, {
 				event_name: "sno_station_mem.server.job.recovery.resuming",
-				file: "packages/sno-station-mem/src/sidecar/server.ts",
+				file: "packages/memory/src/sidecar/server.ts",
 				function: "recoverInterruptedJobs",
 				site_id: "server.recoverInterruptedJobs.15309ea841",
 			});
@@ -938,7 +938,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function reportSidecarFailure(step: string, error: unknown): void {
 	log.error("sidecar.operation.failed", { step, error }, {
-		event_name: "sidecar.operation.failed", file: "packages/sno-station-mem/src/sidecar/server.ts",
+		event_name: "sidecar.operation.failed", file: "packages/memory/src/sidecar/server.ts",
 		function: "reportSidecarFailure", site_id: "sidecar.operation.failed",
 	});
 }

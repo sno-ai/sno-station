@@ -7,12 +7,12 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import type { Embedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client";
+import type { Embedder } from "../../../../packages/memory/src/engine/extraction/embedding-provider-client";
 import {
 	ATOMIC_EXTRACTION_RESPONSE_JSON_SCHEMA,
 	type AtomicExtractionTurn,
 	parseAtomicExtractionReply,
-} from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-extraction-reply";
+} from "../../../../packages/memory/src/engine/extraction/atomic-extraction-reply";
 import {
 	buildAtomicExtractionWindows,
 	buildAtomicGenericExtractionPrompt,
@@ -22,37 +22,37 @@ import {
 	type AtomicGenericExtractionRequest,
 	type AtomicGenericExtractionTransport,
 	runAtomicGenericExtractionPass,
-} from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-generic-extractor";
+} from "../../../../packages/memory/src/engine/extraction/atomic-generic-extractor";
 import {
 	ATOMIC_DATA_INSTRUCTION,
 	numberAtomicTurns,
-} from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-replacement-sanitizer";
+} from "../../../../packages/memory/src/engine/extraction/atomic-replacement-sanitizer";
 import type {
 	LlmClient,
 	MemoryLlmRequest,
 	ResolvedLlmConfig,
 	TokenUsage,
-} from "../../../../packages/sno-station-mem/src/model/llm-client-types";
+} from "../../../../packages/memory/src/model/llm-client-types";
 import {
 	type AtomicExtractionLedgerKey,
 	type AtomicExtractionRunParameters,
 	MemoryStore,
-} from "../../../../packages/sno-station-mem/src/store/store";
+} from "../../../../packages/memory/src/store/store";
 import { createTestDb, createTestEmbedder, type TestDb } from "../../../apps/mem-claw/helpers/test-db";
 
 const ATTRIBUTE_DICTIONARY_PATH = fileURLToPath(
-	new URL("../../../../packages/sno-station-mem/config/attribute-dictionary.json", import.meta.url),
+	new URL("../../../../packages/memory/config/attribute-dictionary.json", import.meta.url),
 );
 const RELATION_DICTIONARY_PATH = fileURLToPath(
-	new URL("../../../../packages/sno-station-mem/config/relation-dictionary.json", import.meta.url),
+	new URL("../../../../packages/memory/config/relation-dictionary.json", import.meta.url),
 );
 const RESPONSE_SCHEMA_PATH = fileURLToPath(
-	new URL("../../../../packages/sno-station-mem/config/atomic-extraction-response.schema.json", import.meta.url),
+	new URL("../../../../packages/memory/config/atomic-extraction-response.schema.json", import.meta.url),
 );
 const RESPONSE_SCHEMA_HASH_PATH = `${RESPONSE_SCHEMA_PATH}.sha256`;
 const ATTRIBUTE_DICTIONARY_HASH_PATH = `${ATTRIBUTE_DICTIONARY_PATH}.sha256`;
 const STATE_VOCABULARY_PATH = fileURLToPath(
-	new URL("../../../../packages/sno-station-mem/config/state-vocabulary.json", import.meta.url),
+	new URL("../../../../packages/memory/config/state-vocabulary.json", import.meta.url),
 );
 
 const RUN_PARAMETERS: AtomicExtractionRunParameters = {
@@ -468,7 +468,7 @@ describe("atomic generic extractor", () => {
 		});
 		expect(client.request).toEqual({
 			prompt: "exact prompt",
-			extractionSkillHash: createHash("sha256").update(readFileSync(new URL("../../../../packages/sno-station-mem/skills/extract-atomic-memory/SKILL.md", import.meta.url))).update(readFileSync(new URL("../../../../packages/sno-station-mem/skills/extract-atomic-memory/references/calendar-meaning.md", import.meta.url))).update(readFileSync(new URL("../../../../packages/sno-station-mem/skills/extract-atomic-memory/references/capture.md", import.meta.url), "utf8").trim()).update(readFileSync(new URL("../../../../packages/sno-station-mem/skills/extract-atomic-memory/references/enrichment.md", import.meta.url), "utf8").trim()).digest("hex"),
+			extractionSkillHash: createHash("sha256").update(readFileSync(new URL("../../../../packages/memory/skills/extract-atomic-memory/SKILL.md", import.meta.url))).update(readFileSync(new URL("../../../../packages/memory/skills/extract-atomic-memory/references/calendar-meaning.md", import.meta.url))).update(readFileSync(new URL("../../../../packages/memory/skills/extract-atomic-memory/references/capture.md", import.meta.url), "utf8").trim()).update(readFileSync(new URL("../../../../packages/memory/skills/extract-atomic-memory/references/enrichment.md", import.meta.url), "utf8").trim()).digest("hex"),
 			callLabel: "memory-extract-atomic-generic",
 			adapterSlot: "memory-extract",
 			maxTokens: 128,
