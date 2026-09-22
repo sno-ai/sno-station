@@ -47,8 +47,21 @@ export class ObservableLlmClient implements LlmClient {
 				callLabel: request.callLabel,
 				config: this.config.routing,
 			});
-			if ("off" in route || route.transport === "agent-host-seam") {
+			if ("off" in route) {
 				return this.usageMutex.runExclusive(call);
+			}
+			if (route.transport === "agent-host-seam") {
+				// The host pays for and reports the call itself; a host that returned nothing is
+				// still our failure to report.
+				const result = await this.usageMutex.runExclusive(call);
+				if (result === null) {
+					await this.observability.emitError(
+						"llm.call:host_failed",
+						this.inner.getLastError() ?? "host model returned nothing",
+						this.sessionUuidProvider(),
+					);
+				}
+				return result;
 			}
 		}
 		// Resolve config before the call so no await sits between the call
