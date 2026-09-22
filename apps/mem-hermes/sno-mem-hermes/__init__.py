@@ -138,6 +138,18 @@ class PluginRuntime:
         if provider is not None:
             provider.report_host_llm_call(session_id, call)
 
+    def host_tool_call(self, session_id: str, call: dict[str, object]) -> None:
+        with self._state_lock:
+            provider = self._providers.get(session_id)
+        if provider is not None:
+            provider.report_host_tool_call(session_id, call)
+
+    def host_approval(self, session_id: str, approval: dict[str, object]) -> None:
+        with self._state_lock:
+            provider = self._providers.get(session_id)
+        if provider is not None:
+            provider.report_host_approval(session_id, approval)
+
     def run_sidecar(self, call: object) -> dict[str, object]:
         if not callable(call):
             raise TypeError("sidecar call must be callable")
@@ -578,6 +590,38 @@ class SnoMemoryProvider(MemoryProvider):
                 "cacheReadTokens": _count(usage.get("cache_read_tokens")),
                 "cacheWriteTokens": _count(usage.get("cache_write_tokens")),
                 "latencyMs": round(duration * 1000) if isinstance(duration, (int, float)) else 0,
+            },
+        )
+
+    def report_host_tool_call(self, session_id: str, call: dict[str, object]) -> None:
+        """One host tool call finished: forward its name, hashed I/O and duration."""
+        tool_name = call.get("tool_name")
+        if not isinstance(tool_name, str) or not tool_name:
+            return
+        duration = call.get("duration_ms")
+        self._report_host_event(
+            session_id,
+            {
+                "kind": "tool",
+                "toolName": tool_name,
+                "decision": "allow",
+                "input": json.dumps(call.get("args"), sort_keys=True, default=str),
+                "output": json.dumps(call.get("result"), sort_keys=True, default=str),
+                "latencyMs": round(duration) if isinstance(duration, (int, float)) else 0,
+            },
+        )
+
+    def report_host_approval(self, session_id: str, approval: dict[str, object]) -> None:
+        """One approval prompt was answered: forward the decision with the hashed command."""
+        choice = approval.get("choice")
+        denied = choice in ("deny", "timeout", "smart_deny", "notify_failed")
+        self._report_host_event(
+            session_id,
+            {
+                "kind": "permission",
+                "permissionKind": "approval",
+                "decision": "deny" if denied else "allow",
+                "target": str(approval.get("command", "")),
             },
         )
 
@@ -1042,9 +1086,23 @@ def _post_api_request(**kwargs: object) -> None:
         _RUNTIME.host_llm_call(session_id, kwargs)
 
 
+def _post_tool_call(**kwargs: object) -> None:
+    session_id = kwargs.get("session_id")
+    if isinstance(session_id, str) and session_id:
+        _RUNTIME.host_tool_call(session_id, kwargs)
+
+
+def _post_approval_response(**kwargs: object) -> None:
+    session_id = kwargs.get("session_id")
+    if isinstance(session_id, str) and session_id:
+        _RUNTIME.host_approval(session_id, kwargs)
+
+
 def register(ctx: RegistrationContext) -> None:
     ctx.register_memory_provider(SnoMemoryProvider())
     ctx.register_hook("pre_llm_call", _pre_llm_call)
     ctx.register_hook("post_api_request", _post_api_request)
+    ctx.register_hook("post_tool_call", _post_tool_call)
+    ctx.register_hook("post_approval_response", _post_approval_response)
     if getattr(ctx, "llm", None) is not None:
         _RUNTIME.activate(ctx)
