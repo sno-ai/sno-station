@@ -9,3 +9,5 @@ platforms:
 hooks:
   - pre_llm_call
   - post_api_request
+  - post_tool_call
+  - post_approval_response
