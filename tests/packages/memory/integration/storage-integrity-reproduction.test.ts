@@ -6,7 +6,7 @@ import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
-import { resolveSimpleTokenizerPath } from "../../../../packages/sno-station-mem/src/store/simple-tokenizer-path.ts";
+import { resolveSimpleTokenizerPath } from "../../../../packages/memory/src/store/simple-tokenizer-path.ts";
 
 const require = createRequire(import.meta.url);
 const DRIVER_PATH = require.resolve("better-sqlite3-multiple-ciphers");

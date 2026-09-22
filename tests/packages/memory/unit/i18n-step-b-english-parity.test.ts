@@ -1,8 +1,8 @@
 /** Keeps the surviving deterministic category mapping inside the canonical category set. */
 
 import { describe, expect, it } from "vitest";
-import { detectCategory } from "../../../../packages/sno-station-mem/src/engine/extraction/capture-policy-detector";
-import { MEMORY_CATEGORIES } from "../../../../packages/sno-station-mem/src/engine/shared/types";
+import { detectCategory } from "../../../../packages/memory/src/engine/extraction/capture-policy-detector";
+import { MEMORY_CATEGORIES } from "../../../../packages/memory/src/engine/shared/types";
 
 const ENGLISH_FIXTURES = [
 	"my name is alice",

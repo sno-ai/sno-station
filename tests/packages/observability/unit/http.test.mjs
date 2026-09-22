@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { postEvent } from "../../../../packages/sno-observe/dist/internal/http.js";
+import { postEvent } from "../../../../packages/observability/dist/internal/http.js";
 
 describe("postEvent", () => {
 	it("uses a caller-supplied abort signal", async () => {

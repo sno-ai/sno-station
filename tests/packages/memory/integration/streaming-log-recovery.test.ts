@@ -3,8 +3,8 @@ import fsp from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, expect, it, vi } from "vitest";
-import { RemJobStore } from "../../../../packages/sno-station-mem/src/sidecar/rem-job-store";
-import { recoverInterruptedMutationAttempts } from "../../../../packages/sno-station-mem/src/engine/operations/runtime-audit-log";
+import { RemJobStore } from "../../../../packages/memory/src/sidecar/rem-job-store";
+import { recoverInterruptedMutationAttempts } from "../../../../packages/memory/src/engine/operations/runtime-audit-log";
 
 const roots: string[] = [];
 afterEach(async () => {

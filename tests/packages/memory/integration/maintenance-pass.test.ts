@@ -14,14 +14,14 @@ import { existsSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import type { Embedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client.ts";
+import type { Embedder } from "../../../../packages/memory/src/engine/extraction/embedding-provider-client.ts";
 import {
 	MEMORY_EVENTS_USAGE_RETENTION_MS,
 	runMaintenancePass,
 	type MaintenanceDeps,
-} from "../../../../packages/sno-station-mem/src/store/maintenance.ts";
-import { MemoryStore } from "../../../../packages/sno-station-mem/src/store/store.ts";
-import { MemoryTelemetryUsageOutbox } from "../../../../packages/sno-station-mem/src/engine/telemetry/memory-telemetry-outbox.ts";
+} from "../../../../packages/memory/src/store/maintenance.ts";
+import { MemoryStore } from "../../../../packages/memory/src/store/store.ts";
+import { MemoryTelemetryUsageOutbox } from "../../../../packages/memory/src/engine/telemetry/memory-telemetry-outbox.ts";
 import { createTestDb, createTestEmbedder } from "../../../apps/mem-claw/helpers/test-db.ts";
 
 let testEmbedder: Embedder;

@@ -10,13 +10,13 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
 	DEFAULT_MAX_CONTEXT_TOKENS,
 	RERANK_PROMPT_TEMPLATE_TOKENS,
-} from "../../../../packages/sno-station-mem/config/index.ts";
+} from "../../../../packages/memory/config/index.ts";
 import {
 	createRetriever,
 	DEFAULT_RETRIEVAL_CONFIG,
 	type MemoryRetrieverInternals,
-} from "../../../../packages/sno-station-mem/src/engine/retrieval/retriever.ts";
-import type { RetrievalResult } from "../../../../packages/sno-station-mem/src/engine/shared/types.ts";
+} from "../../../../packages/memory/src/engine/retrieval/retriever.ts";
+import type { RetrievalResult } from "../../../../packages/memory/src/engine/shared/types.ts";
 
 const noopStore = {
 	getVectorsByIds: () => new Map<string, Float32Array>(),

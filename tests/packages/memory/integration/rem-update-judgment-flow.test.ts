@@ -21,24 +21,24 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
 	createRemModelStageResponsePort,
 	runRemBatchJob,
-} from "../../../../packages/sno-station-mem/src/sidecar/rem-batch-executor.ts";
+} from "../../../../packages/memory/src/sidecar/rem-batch-executor.ts";
 import {
 	createCoverageGatedConflictPort,
 	createSnoStationMemRemMutationExecutor,
 	createSnoStationMemRemPorts,
 	createRemReplaceCarrierPort,
 	issueReplaceCoverageAllow,
-} from "../../../../packages/sno-station-mem/src/store/rem-sqlite-adapter.ts";
+} from "../../../../packages/memory/src/store/rem-sqlite-adapter.ts";
 import {
 	installRemSchema,
 	getRemUpdateLocaleResource,
 	parseRemOperationalConfiguration,
 	type RemMutationResult,
 	type WriteTextVersionInput,
-} from "../../../../packages/sno-station-mem/src/engine/rem/index.ts";
+} from "../../../../packages/memory/src/engine/rem/index.ts";
 import { createRemOwnerDecidedOperationalConfiguration } from "../../../apps/mem-claw/helpers/rem-entry-config-fixture.ts";
 import { createTestLlmClient } from "../../../apps/mem-claw/helpers/llm-client.ts";
-import { deriveRemUpdateStamp } from "../../../../packages/sno-station-mem/src/store/rem-update-stamp-migration.ts";
+import { deriveRemUpdateStamp } from "../../../../packages/memory/src/store/rem-update-stamp-migration.ts";
 import { seedProductionMemory } from "../../../apps/mem-claw/helpers/rem-production-entry-fixture.ts";
 import { createTestDb } from "../../../apps/mem-claw/helpers/test-db.ts";
 

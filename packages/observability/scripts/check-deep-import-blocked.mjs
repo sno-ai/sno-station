@@ -19,19 +19,19 @@ import { fileURLToPath } from "node:url";
 const pkgRoot = fileURLToPath(new URL("..", import.meta.url));
 
 const FORBIDDEN_SPECIFIERS = [
-	"@snoai/sno-observe/internal/canonical-hash",
-	"@snoai/sno-observe/internal/buffer-store",
-	"@snoai/sno-observe/internal/runtime",
-	"@snoai/sno-observe/internal/redact",
-	"@snoai/sno-observe/internal/identity",
-	"@snoai/sno-observe/dist/internal/canonical-hash.js",
-	"@snoai/sno-observe/src/internal/canonical-hash",
+	"@snoai/observability/internal/canonical-hash",
+	"@snoai/observability/internal/buffer-store",
+	"@snoai/observability/internal/runtime",
+	"@snoai/observability/internal/redact",
+	"@snoai/observability/internal/identity",
+	"@snoai/observability/dist/internal/canonical-hash.js",
+	"@snoai/observability/src/internal/canonical-hash",
 ];
 
 const dir = mkdtempSync(join(tmpdir(), "sno-observe-deep-import-"));
 try {
 	mkdirSync(join(dir, "node_modules", "@snoai"), { recursive: true });
-	const linkPath = join(dir, "node_modules", "@snoai", "sno-observe");
+	const linkPath = join(dir, "node_modules", "@snoai", "observability");
 	// Use junction on Windows where symlinks need elevated privileges; "dir"
 	// elsewhere. fs.symlinkSync handles cross-platform; "junction" is silently
 	// downgraded on POSIX.

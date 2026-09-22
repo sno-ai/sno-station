@@ -1,9 +1,9 @@
 import { dirname, join } from "node:path";
-import { runMaintenancePass } from "../../../../packages/sno-station-mem/src/store/maintenance";
-import { createLlmClient } from "../../../../packages/sno-station-mem/src/model/llm-client";
+import { runMaintenancePass } from "../../../../packages/memory/src/store/maintenance";
+import { createLlmClient } from "../../../../packages/memory/src/model/llm-client";
 import { expect, it } from "vitest";
-import { MemoryStore } from "../../../../packages/sno-station-mem/src/store/store";
-import { createSnoStationMemRemPorts, createSnoStationMemRemRecovery } from "../../../../packages/sno-station-mem/src/store/rem-sqlite-adapter";
+import { MemoryStore } from "../../../../packages/memory/src/store/store";
+import { createSnoStationMemRemPorts, createSnoStationMemRemRecovery } from "../../../../packages/memory/src/store/rem-sqlite-adapter";
 import { createTestDb, createTestEmbedder } from "../../../apps/mem-claw/helpers/test-db";
 
 it("keeps FTS consistent through repeated REM facet writes, metadata updates, merges and recovery", async () => {

@@ -9,7 +9,7 @@ import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { createEmbedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client.ts";
+import { createEmbedder } from "../../../../packages/memory/src/engine/extraction/embedding-provider-client.ts";
 import {
 	buildReflectionFallbackText,
 	buildReflectionPrompt,
@@ -20,8 +20,8 @@ import {
 	readSessionConversationWithResetFallback,
 	shouldSkipReflectionMessage,
 	writeReflectionToFilesystem,
-} from "../../../../packages/sno-station-mem/src/engine/reflection/daily-log-generator.ts";
-import { extractReflectionSlices } from "../../../../packages/sno-station-mem/src/engine/reflection/markdown-slice-parser.ts";
+} from "../../../../packages/memory/src/engine/reflection/daily-log-generator.ts";
+import { extractReflectionSlices } from "../../../../packages/memory/src/engine/reflection/markdown-slice-parser.ts";
 
 function requireValue<T>(value: T | null | undefined, message: string): T {
 	if (value === null || value === undefined) {

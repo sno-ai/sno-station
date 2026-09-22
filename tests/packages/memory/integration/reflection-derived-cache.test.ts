@@ -4,9 +4,9 @@ import {
 	pruneReflectionDerivedCache,
 	type ReflectionDerivedCache,
 	setReflectionDerivedCacheEntry,
-} from "../../../../packages/sno-station-mem/src/engine/reflection/derived-line-cache.ts";
-import { storeReflectionEntries } from "../../../../packages/sno-station-mem/src/engine/reflection/reflection-store-writer.ts";
-import type { MemorySearchResult } from "../../../../packages/sno-station-mem/src/engine/shared/types.ts";
+} from "../../../../packages/memory/src/engine/reflection/derived-line-cache.ts";
+import { storeReflectionEntries } from "../../../../packages/memory/src/engine/reflection/reflection-store-writer.ts";
+import type { MemorySearchResult } from "../../../../packages/memory/src/engine/shared/types.ts";
 
 describe("reflection derived cache", () => {
 	it("refreshes recency and updatedAt on cache hits", () => {

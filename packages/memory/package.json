@@ -1,12 +1,12 @@
 {
-  "name": "@snoai/sno-station-mem",
+  "name": "@snoai/memory",
   "version": "1.0.0-rc.1",
   "license": "Apache-2.0",
   "publishConfig": { "access": "public" },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/sno-ai/sno-station.git",
-    "directory": "packages/sno-station-mem"
+    "directory": "packages/memory"
   },
   "type": "module",
   "description": "Shared memory engine, store, model routing and sidecar",
@@ -82,8 +82,8 @@
     "test:e2e:all": "vitest run --config vitest.config.ts ../../tests/apps/mem-claw/e2e-minus/",
     "test:integration": "npm run test:integration:critical",
     "test:integration:critical": "vitest run --config vitest.config.ts ../../tests/apps/mem-claw/integration/memory-connection-retry.test.ts",
-    "test:integration:all": "vitest run --config vitest.config.ts ../../tests/packages/sno-station-mem/integration/",
-    "test:unit": "vitest run --config vitest.config.ts ../../tests/packages/sno-station-mem/unit/",
+    "test:integration:all": "vitest run --config vitest.config.ts ../../tests/packages/memory/integration/",
+    "test:unit": "vitest run --config vitest.config.ts ../../tests/packages/memory/unit/",
     "test:eval": "vitest run --config vitest.config.ts ../../tests/apps/mem-claw/eval/",
     "query-manifest:capture": "tsx src/engine/retrieval/query-manifest-capture-cli.ts",
     "maintenance:group-crud": "tsx src/engine/maintenance/run-group-crud-maintenance.ts",
@@ -106,8 +106,8 @@
     "@snoai/embedder": "^0.8.0",
     "@snoai/llmix": "2.2.0",
     "@snoai/mda-config": "^1.1.2",
-    "@snoai/sno-observe": "^0.1.0",
-    "@snoai/sno-station-core-crypto": "^0.2.0",
+    "@snoai/observability": "^0.1.0",
+    "@snoai/sqlite-crypto": "^0.2.0",
     "@snoai/utils": "^0.8.0",
     "argon2": "^0.45.1",
     "async-mutex": "^0.5.0",

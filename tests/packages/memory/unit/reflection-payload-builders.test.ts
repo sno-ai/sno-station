@@ -1,7 +1,7 @@
 import { appendFileSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { ensureDailyLogFile } from "../../../../packages/sno-station-mem/src/engine/reflection/daily-log-generator";
+import { ensureDailyLogFile } from "../../../../packages/memory/src/engine/reflection/daily-log-generator";
 import { createHash } from "node:crypto";
 
 import { describe, expect, it } from "vitest";
@@ -10,22 +10,22 @@ import {
 	buildReflectionEventPayload,
 	createReflectionEventId,
 	REFLECTION_SCHEMA_VERSION,
-} from "../../../../packages/sno-station-mem/src/engine/reflection/event-payload-builder";
+} from "../../../../packages/memory/src/engine/reflection/event-payload-builder";
 import {
 	computeReflectionLogistic,
 	computeReflectionScore,
 	normalizeReflectionLineForAggregation,
 	REFLECTION_FALLBACK_SCORE_FACTOR,
-} from "../../../../packages/sno-station-mem/src/engine/reflection/line-quality-ranker";
+} from "../../../../packages/memory/src/engine/reflection/line-quality-ranker";
 import {
 	buildReflectionMappedMetadata,
 	getReflectionMappedDecayDefaults,
 	type ReflectionMappedKind,
-} from "../../../../packages/sno-station-mem/src/engine/reflection/mapped-memory-metadata-builder";
+} from "../../../../packages/memory/src/engine/reflection/mapped-memory-metadata-builder";
 import type {
 	ReflectionMappedMemoryItem,
 	ReflectionSliceItem,
-} from "../../../../packages/sno-station-mem/src/engine/reflection/markdown-slice-parser";
+} from "../../../../packages/memory/src/engine/reflection/markdown-slice-parser";
 import {
 	buildReflectionItemPayloads,
 	getReflectionItemDecayDefaults,
@@ -38,7 +38,7 @@ import {
 	REFLECTION_INVARIANT_DECAY_MIDPOINT_DAYS,
 	REFLECTION_INVARIANT_QUALITY,
 	type ReflectionItemKind,
-} from "../../../../packages/sno-station-mem/src/engine/reflection/slice-item-payload-builder";
+} from "../../../../packages/memory/src/engine/reflection/slice-item-payload-builder";
 
 const runAt = Date.UTC(2026, 4, 7, 12, 34, 56);
 const errorSignals = [{ signatureHash: "sig-b" }, { signatureHash: "sig-a" }];

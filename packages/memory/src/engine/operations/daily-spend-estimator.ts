@@ -37,7 +37,7 @@ export async function readEstimatedSpendToday(stateDir: string): Promise<number>
 	} catch (error) {
 		if (!(error instanceof Error && "code" in error && error.code === "ENOENT")) {
 			diagnosticLog.warn("Recorded spend file unavailable", { error, outcome: "partial" },
-				{ event_name: "memory.spend.read.failed", file: "packages/sno-station-mem/src/engine/operations/daily-spend-estimator.ts", function: "readEstimatedSpendToday", site_id: "memory.spend.stat.failed" });
+				{ event_name: "memory.spend.read.failed", file: "packages/memory/src/engine/operations/daily-spend-estimator.ts", function: "readEstimatedSpendToday", site_id: "memory.spend.stat.failed" });
 		}
 		// Missing cost file means no spend has been recorded yet.
 		return 0;
@@ -101,13 +101,13 @@ export async function readEstimatedSpendToday(stateDir: string): Promise<number>
 		}
 	} catch (error) {
 		diagnosticLog.warn("Recorded spend read failed", { error, outcome: "partial" },
-			{ event_name: "memory.spend.read.failed", file: "packages/sno-station-mem/src/engine/operations/daily-spend-estimator.ts", function: "readEstimatedSpendToday", site_id: "memory.spend.stream.failed" });
+			{ event_name: "memory.spend.read.failed", file: "packages/memory/src/engine/operations/daily-spend-estimator.ts", function: "readEstimatedSpendToday", site_id: "memory.spend.stream.failed" });
 		// Stream read failed (file removed mid-read, permission error) — treat as zero spend
 		return 0;
 	}
 
 	if (malformedCount > 0) diagnosticLog.warn("Recorded spend contains invalid rows", { malformed_count: malformedCount, outcome: "partial" },
-		{ event_name: "memory.spend.rows.invalid", file: "packages/sno-station-mem/src/engine/operations/daily-spend-estimator.ts", function: "readEstimatedSpendToday", site_id: "memory.spend.rows.invalid" });
+		{ event_name: "memory.spend.rows.invalid", file: "packages/memory/src/engine/operations/daily-spend-estimator.ts", function: "readEstimatedSpendToday", site_id: "memory.spend.rows.invalid" });
 	spendCache.set(filePath, {
 		day: today,
 		size: fileStat.size,

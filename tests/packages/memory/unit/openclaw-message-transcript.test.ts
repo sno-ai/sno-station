@@ -2,13 +2,13 @@ import { describe, expect, it } from "vitest";
 import {
 	parseBProfileMessages,
 	renderBProfilePrompt,
-} from "../../../../packages/sno-station-mem/src/engine/extraction/b-profile-extraction.ts";
+} from "../../../../packages/memory/src/engine/extraction/b-profile-extraction.ts";
 import {
 	buildConversationText,
 	deriveSessionDateTime,
 	normalizeMessageTimestampMs,
 	transcriptSessionDateTime,
-} from "../../../../packages/sno-station-mem/src/engine/bindings/sno-station-mem-message-transcript.ts";
+} from "../../../../packages/memory/src/engine/bindings/sno-station-mem-message-transcript.ts";
 
 describe("openclaw message transcript timestamps", () => {
 	it("takes the session date a transcript states about itself over the message timestamps", () => {

@@ -4,9 +4,9 @@
  */
 
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { runMigrations } from "../../../../packages/sno-station-mem/src/store/migrations.ts";
-import { openSqliteDatabase } from "../../../../packages/sno-station-mem/src/store/sqlite-runtime.ts";
-import { MemoryStore } from "../../../../packages/sno-station-mem/src/store/store.ts";
+import { runMigrations } from "../../../../packages/memory/src/store/migrations.ts";
+import { openSqliteDatabase } from "../../../../packages/memory/src/store/sqlite-runtime.ts";
+import { MemoryStore } from "../../../../packages/memory/src/store/store.ts";
 import { createTestDb, createTestEmbedder, type TestDb } from "../../../apps/mem-claw/helpers/test-db.ts";
 
 let embedder: Awaited<ReturnType<typeof createTestEmbedder>> | undefined;

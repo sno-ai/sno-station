@@ -29,7 +29,7 @@ export function parseProgressTurns(
 			ignored_decisions: parsed.data.decisions.filter((decision) => !expected.has(decision.turn_index)).length,
 			missing_turns: [...expected].filter((index) => !indexes.has(index)).length,
 			duplicate_decisions: parsed.data.decisions.length - indexes.size,
-		}, { event_name: "memory.atomic_progress_boundary.diagnostic", file: "packages/sno-station-mem/src/engine/extraction/atomic-progress-boundary.ts", function: "parseProgressTurns", site_id: "extraction.atomic-progress-boundary.salvage_decisions" });
+		}, { event_name: "memory.atomic_progress_boundary.diagnostic", file: "packages/memory/src/engine/extraction/atomic-progress-boundary.ts", function: "parseProgressTurns", site_id: "extraction.atomic-progress-boundary.salvage_decisions" });
 	}
 	// A conflicting duplicate must not turn a durable fact into excluded progress.
 	const notProgress = new Set(parsed.data.decisions.filter((decision) => !decision.progress_only)

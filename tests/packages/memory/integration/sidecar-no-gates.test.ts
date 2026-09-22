@@ -5,24 +5,24 @@ import { createConnection } from "node:net";
 import { execFileSync, spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
-import { runMaintenancePass } from "../../../../packages/sno-station-mem/src/store/maintenance";
+import { runMaintenancePass } from "../../../../packages/memory/src/store/maintenance";
 import { setTimeout as delay } from "node:timers/promises";
 import { tmpdir, userInfo } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { pluginConfigSchema } from "../../../../packages/sno-station-mem/config/plugin-config-schema";
-import { startSidecar } from "../../../../packages/sno-station-mem/src/contract/start";
-import { bindStore } from "../../../../packages/sno-station-mem/src/engine/shared/paths";
-import { startRemSidecar } from "../../../../packages/sno-station-mem/src/sidecar/server";
-import { MemoryRuntimePool } from "../../../../packages/sno-station-mem/src/sidecar/memory-runtime";
-import { readRemAutomaticOperations } from "../../../../packages/sno-station-mem/src/sidecar/rem-trigger";
-import { MemoryContractRuntime } from "../../../../packages/sno-station-mem/src/engine/contract-runtime";
-import { MemoryRetriever } from "../../../../packages/sno-station-mem/src/engine/retrieval/retriever";
-import { AccessTracker } from "../../../../packages/sno-station-mem/src/engine/retrieval/access-tracker";
-import { PluginObservability } from "../../../../packages/sno-station-mem/src/engine/observability/adapter";
-import { RegisteredAgentPort } from "../../../../packages/sno-station-mem/src/model/registered-agent-port";
-import { Embedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client";
-import { MemoryStore } from "../../../../packages/sno-station-mem/src/store/store";
+import { pluginConfigSchema } from "../../../../packages/memory/config/plugin-config-schema";
+import { startSidecar } from "../../../../packages/memory/src/contract/start";
+import { bindStore } from "../../../../packages/memory/src/engine/shared/paths";
+import { startRemSidecar } from "../../../../packages/memory/src/sidecar/server";
+import { MemoryRuntimePool } from "../../../../packages/memory/src/sidecar/memory-runtime";
+import { readRemAutomaticOperations } from "../../../../packages/memory/src/sidecar/rem-trigger";
+import { MemoryContractRuntime } from "../../../../packages/memory/src/engine/contract-runtime";
+import { MemoryRetriever } from "../../../../packages/memory/src/engine/retrieval/retriever";
+import { AccessTracker } from "../../../../packages/memory/src/engine/retrieval/access-tracker";
+import { PluginObservability } from "../../../../packages/memory/src/engine/observability/adapter";
+import { RegisteredAgentPort } from "../../../../packages/memory/src/model/registered-agent-port";
+import { Embedder } from "../../../../packages/memory/src/engine/extraction/embedding-provider-client";
+import { MemoryStore } from "../../../../packages/memory/src/store/store";
 import { createTestDb, createTestEmbedder } from "../../../apps/mem-claw/helpers/test-db";
 
 let root: string;
@@ -70,7 +70,7 @@ function registration(mode: "local-first" | "agent-native", model?: { baseUrl: s
 }
 
 function runCli(args: string[], entry = "cli.js"): Promise<{ code: number | null; stdout: string; stderr: string }> {
-	const cli = fileURLToPath(new URL(`../../../../packages/sno-station-mem/dist/${entry}`, import.meta.url));
+	const cli = fileURLToPath(new URL(`../../../../packages/memory/dist/${entry}`, import.meta.url));
 	return new Promise((resolve, reject) => {
 		const child = spawn(process.execPath, [cli, ...args], { env: process.env, stdio: ["ignore", "pipe", "pipe"] });
 		let stdout = "", stderr = "";
@@ -1112,7 +1112,7 @@ describe("sidecar keeps serving", () => {
 it("holds the socket through a discovery publication after the shutdown bound", async () => {
 	const filesystem = (await import("node:fs/promises")).default;
 	const { syncBuiltinESMExports } = await import("node:module");
-	const { DuplicateSidecarError } = await import("../../../../packages/sno-station-mem/src/sidecar/server");
+	const { DuplicateSidecarError } = await import("../../../../packages/memory/src/sidecar/server");
 	const discoveryPath = join(root, "station", "sidecar.json");
 	const socketPath = join(root, "station", "sidecar.sock");
 	const entered = Promise.withResolvers<void>();

@@ -13,7 +13,7 @@ import {
 	KEYCHAIN_ACCOUNT,
 	KEYCHAIN_SERVICE_DEFAULT,
 	MANIFEST_SCHEMA_VERSION,
-} from "@snoai/sno-station-core-crypto";
+} from "@snoai/sqlite-crypto";
 import { describe, expect, it } from "vitest";
 
 describe("exported constants match PRD locked values", () => {

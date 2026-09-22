@@ -273,7 +273,7 @@ Object.assign(MemoryStore.prototype, {
 			memoryCount: results.length,
 		}, {
 			event_name: "sno_station_mem.memory-store-search-api.semantic.search.memory.level.wrapper",
-			file: "packages/sno-station-mem/src/store/memory-store-search-api.ts",
+			file: "packages/memory/src/store/memory-store-search-api.ts",
 			function: "searchSemantic",
 			site_id: "memory-store-search-api.searchSemantic.a8cee42447",
 		});
@@ -327,7 +327,7 @@ Object.assign(MemoryStore.prototype, {
 			memoryCount: results.length,
 		}, {
 			event_name: "sno_station_mem.memory-store-search-api.keyword.search.memory.level.wrapper",
-			file: "packages/sno-station-mem/src/store/memory-store-search-api.ts",
+			file: "packages/memory/src/store/memory-store-search-api.ts",
 			function: "searchKeyword",
 			site_id: "memory-store-search-api.searchKeyword.f4293a3f14",
 		});
@@ -379,7 +379,7 @@ Object.assign(MemoryStore.prototype, {
 					error: err,
 				}, {
 					event_name: "sno_station_mem.memory-store-search-api.snippet.expand.window.failed.falling.back.to.entry.text",
-					file: "packages/sno-station-mem/src/store/memory-store-search-api.ts",
+					file: "packages/memory/src/store/memory-store-search-api.ts",
 					function: "attachSnippets",
 					site_id: "memory-store-search-api.attachSnippets.896a3e960a",
 				});

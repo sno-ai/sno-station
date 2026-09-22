@@ -8,20 +8,20 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { MemoryStore, normalizeMemoryRelationPredicate } from "../../../../packages/sno-station-mem/src/store/store";
+import { MemoryStore, normalizeMemoryRelationPredicate } from "../../../../packages/memory/src/store/store";
 import {
 	initSqliteRuntimeSync,
 	openSqliteDatabase,
 	type SqliteDatabaseLike,
 	type SqliteRuntimeHandle,
-} from "../../../../packages/sno-station-mem/src/store/sqlite-runtime";
+} from "../../../../packages/memory/src/store/sqlite-runtime";
 import { createTestDb, createTestEmbedder } from "../../../apps/mem-claw/helpers/test-db";
 
 const MIGRATION_PATH = fileURLToPath(
-	new URL("../../../../packages/sno-station-mem/drizzle/0030_atomic_memory_additive.sql", import.meta.url),
+	new URL("../../../../packages/memory/drizzle/0030_atomic_memory_additive.sql", import.meta.url),
 );
 const RELATION_DICTIONARY_PATH = fileURLToPath(
-	new URL("../../../../packages/sno-station-mem/config/relation-dictionary.json", import.meta.url),
+	new URL("../../../../packages/memory/config/relation-dictionary.json", import.meta.url),
 );
 
 const ADDITIVE_COLUMNS = [

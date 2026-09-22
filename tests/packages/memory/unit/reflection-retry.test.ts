@@ -8,7 +8,7 @@ import {
 	type RetryClassifierResult,
 	type RetryRunnerParams,
 	runWithReflectionTransientRetryOnce,
-} from "../../../../packages/sno-station-mem/src/engine/reflection/transient-generation-retry.ts";
+} from "../../../../packages/memory/src/engine/reflection/transient-generation-retry.ts";
 
 describe("reflection transient retry golden parity", () => {
 	it("classifies retry precedence cases with stable reasons", () => {

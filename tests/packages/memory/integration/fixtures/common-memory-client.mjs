@@ -1,4 +1,4 @@
-import { connect } from '@snoai/sno-station-mem/client';
+import { connect } from '@snoai/memory/client';
 let client;
 process.on('message', async ({ method, args }) => {
   try {

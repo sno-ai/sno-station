@@ -35,7 +35,7 @@ export function isSystemBypassId(agentId?: string): boolean {
 		warnedLegacyStringBypassIds.add(agentId);
 		log.warn("legacy string agentId bypass detected", { reason_code: "legacy_undefined_string" }, {
 			event_name: "sno_station_mem.scope-identity.legacy.string.agentid.bypass.detected",
-			file: "packages/sno-station-mem/src/engine/security/scope-identity.ts",
+			file: "packages/memory/src/engine/security/scope-identity.ts",
 			function: "isSystemBypassId",
 			site_id: "scope-identity.isSystemBypassId.1d89371f35",
 		});

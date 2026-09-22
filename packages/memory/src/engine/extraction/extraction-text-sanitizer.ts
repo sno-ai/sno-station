@@ -49,7 +49,7 @@ export function boundSectionContent(
 		droppedClauses: first,
 		keptClauses: clauses.length - first,
 		maxTokens: DEFAULT_MAX_CONTEXT_TOKENS,
-	}, { event_name: "memory.extraction_text_sanitizer.diagnostic", file: "packages/sno-station-mem/src/engine/extraction/extraction-text-sanitizer.ts", function: "boundSectionContent", site_id: "extraction.extraction-text-sanitizer.boundSectionContent.ceiling" });
+	}, { event_name: "memory.extraction_text_sanitizer.diagnostic", file: "packages/memory/src/engine/extraction/extraction-text-sanitizer.ts", function: "boundSectionContent", site_id: "extraction.extraction-text-sanitizer.boundSectionContent.ceiling" });
 	return kept;
 }
 

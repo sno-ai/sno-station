@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
 	buildRemUpdateReferenceSet,
 	installRemSchema,
-} from "../../../../packages/sno-station-mem/src/engine/rem/index.ts";
+} from "../../../../packages/memory/src/engine/rem/index.ts";
 import { createTestDb } from "../../../apps/mem-claw/helpers/test-db.ts";
 import {
 	startQcg17ScriptedInvalidResponseFixture,
@@ -82,7 +82,7 @@ describe("REM coverage API atoms", () => {
 
 describe("REM measured clause gate (coverage only; frozen function)", () => {
 	it.each(clauseGateCases)("$id validates its independent arm but the owner-null gate refuses", async ({ artifact, expectedArm, expectedStatus }) => {
-		const product = (await import("../../../../packages/sno-station-mem/src/engine/rem/index.ts")) as ProductExports;
+		const product = (await import("../../../../packages/memory/src/engine/rem/index.ts")) as ProductExports;
 		const candidate = product["validateRemClauseCoverageArtifacts"];
 		expect(candidate, "missing production clause artifact validator validateRemClauseCoverageArtifacts").toBeTypeOf(
 			"function",
@@ -106,7 +106,7 @@ describe("REM measured clause gate (coverage only; frozen function)", () => {
 	});
 
 	it("refuses measured accuracy below the configured floor", async () => {
-		const product = (await import("../../../../packages/sno-station-mem/src/engine/rem/index.ts")) as ProductExports;
+		const product = (await import("../../../../packages/memory/src/engine/rem/index.ts")) as ProductExports;
 		const candidate = product["validateRemClauseCoverageArtifacts"];
 		expect(candidate).toBeTypeOf("function");
 		const evaluate = candidate as (input: Record<string, unknown>) => Promise<ClauseGateResult>;
@@ -130,7 +130,7 @@ describe("REM measured clause gate (coverage only; frozen function)", () => {
 	});
 
 	it("allows measured accuracy equal to the configured floor", async () => {
-		const product = (await import("../../../../packages/sno-station-mem/src/engine/rem/index.ts")) as ProductExports;
+		const product = (await import("../../../../packages/memory/src/engine/rem/index.ts")) as ProductExports;
 		const candidate = product["validateRemClauseCoverageArtifacts"];
 		expect(candidate).toBeTypeOf("function");
 		const evaluate = candidate as (input: Record<string, unknown>) => Promise<ClauseGateResult>;
@@ -154,7 +154,7 @@ describe("REM measured clause gate (coverage only; frozen function)", () => {
 	});
 
 	it("refuses a missing measured accuracy when the floor is configured", async () => {
-		const product = (await import("../../../../packages/sno-station-mem/src/engine/rem/index.ts")) as ProductExports;
+		const product = (await import("../../../../packages/memory/src/engine/rem/index.ts")) as ProductExports;
 		const candidate = product["validateRemClauseCoverageArtifacts"];
 		expect(candidate).toBeTypeOf("function");
 		const evaluate = candidate as (input: Record<string, unknown>) => Promise<ClauseGateResult>;
@@ -182,7 +182,7 @@ describe("REM structured reference units (coverage only; frozen function)", () =
 		{ id: "three-array-members", source: '["quiet desk","window seat","tea"]', format: "structured", expected: 3 },
 		{ id: "duplicate-anchor-occurrences", source: 'The user chose "quiet desk", then reaffirmed "quiet desk".', format: "prose", expected: 2 },
 	] as const)("$id preserves unit identity", async ({ source, format, expected }) => {
-		const product = (await import("../../../../packages/sno-station-mem/src/engine/rem/index.ts")) as ProductExports;
+		const product = (await import("../../../../packages/memory/src/engine/rem/index.ts")) as ProductExports;
 		const candidate = product["buildRemCoverageAtoms"];
 		expect(candidate, "missing production coverage atom builder buildRemCoverageAtoms").toBeTypeOf(
 			"function",
@@ -195,7 +195,7 @@ describe("REM structured reference units (coverage only; frozen function)", () =
 	});
 
 	it("refuses a flattened clause list without recoverable unit identity", async () => {
-		const product = (await import("../../../../packages/sno-station-mem/src/engine/rem/index.ts")) as ProductExports;
+		const product = (await import("../../../../packages/memory/src/engine/rem/index.ts")) as ProductExports;
 		const candidate = product["buildRemCoverageAtoms"];
 		expect(candidate, "missing production coverage atom builder buildRemCoverageAtoms").toBeTypeOf(
 			"function",
@@ -220,7 +220,7 @@ describe("REM non-refusePair refusal journal (logic coverage; production proof f
 		const fixture = createTestDb();
 		installRemSchema(fixture.runtime.db);
 		try {
-			const product = (await import("../../../../packages/sno-station-mem/src/engine/rem/index.ts")) as ProductExports;
+			const product = (await import("../../../../packages/memory/src/engine/rem/index.ts")) as ProductExports;
 			const candidate = product["recordNonRefusePairDecision"];
 			expect(
 				candidate,
@@ -250,7 +250,7 @@ describe("REM non-refusePair refusal journal (logic coverage; production proof f
 		const fixture = createTestDb();
 		installRemSchema(fixture.runtime.db);
 		try {
-			const product = (await import("../../../../packages/sno-station-mem/src/engine/rem/index.ts")) as ProductExports;
+			const product = (await import("../../../../packages/memory/src/engine/rem/index.ts")) as ProductExports;
 			const record = product["recordNonRefusePairDecision"] as (
 				input: Record<string, unknown>,
 			) => Promise<void>;

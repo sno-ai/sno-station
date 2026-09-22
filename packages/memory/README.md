@@ -1,4 +1,4 @@
-# @snoai/sno-station-mem
+# @snoai/memory
 
 The shared local memory engine used by the OpenClaw, Claude Code, and Codex integrations in Sno
 Station.

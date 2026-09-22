@@ -5,9 +5,9 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
-import { verifyAuditEvent } from "../../../../packages/sno-observe/dist/internal/audit-verify.js";
-import { bootstrapIdentity } from "../../../../packages/sno-observe/dist/internal/identity.js";
-import { registerMachine } from "../../../../packages/sno-observe/dist/internal/machine-registration.js";
+import { verifyAuditEvent } from "../../../../packages/observability/dist/internal/audit-verify.js";
+import { bootstrapIdentity } from "../../../../packages/observability/dist/internal/identity.js";
+import { registerMachine } from "../../../../packages/observability/dist/internal/machine-registration.js";
 import { skipIfNoLiveEndpoint } from "../fixtures/live-endpoint.mjs";
 
 describe("audit.verify live-endpoint smoke (26.1, gated)", () => {

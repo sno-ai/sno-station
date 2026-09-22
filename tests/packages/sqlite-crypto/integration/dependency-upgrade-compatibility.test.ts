@@ -10,14 +10,14 @@ import {
 import {
 	openEncryptedDb,
 	runIntegrityCheck,
-} from "../../../../packages/sno-station-core-crypto/src/db.ts";
-import { WrongKeyError } from "../../../../packages/sno-station-core-crypto/src/errors.ts";
-import { liveKeychain } from "../../../../packages/sno-station-core-crypto/src/keychain.ts";
-import type { Dek } from "../../../../packages/sno-station-core-crypto/src/types.ts";
+} from "../../../../packages/sqlite-crypto/src/db.ts";
+import { WrongKeyError } from "../../../../packages/sqlite-crypto/src/errors.ts";
+import { liveKeychain } from "../../../../packages/sqlite-crypto/src/keychain.ts";
+import type { Dek } from "../../../../packages/sqlite-crypto/src/types.ts";
 import {
 	unwrapDek,
 	type WrappedDek,
-} from "../../../../packages/sno-station-core-crypto/src/wrap.ts";
+} from "../../../../packages/sqlite-crypto/src/wrap.ts";
 import { makeTestEnv, type TestEnv } from "../_helpers.ts";
 
 // Frozen before upgrading: regenerating this with new libraries loses the old-file proof.

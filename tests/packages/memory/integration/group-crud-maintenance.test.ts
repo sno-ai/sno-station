@@ -23,13 +23,13 @@ import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
 
-import type { AtomicExtractionRecord } from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-extraction-reply";
+import type { AtomicExtractionRecord } from "../../../../packages/memory/src/engine/extraction/atomic-extraction-reply";
 import type {
 	AtomicKeyedRecord,
 	AtomicProfileKeyingTransport,
-} from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-profile-keying";
-import { buildAtomicWriteCards } from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-write-projection";
-import type { Embedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client";
+} from "../../../../packages/memory/src/engine/extraction/atomic-profile-keying";
+import { buildAtomicWriteCards } from "../../../../packages/memory/src/engine/extraction/atomic-write-projection";
+import type { Embedder } from "../../../../packages/memory/src/engine/extraction/embedding-provider-client";
 import {
 	createGroupCrudEntityIdentityJudgementPort,
 	createGroupCrudStateKeyingJudgementPort,
@@ -37,14 +37,14 @@ import {
 	type GroupCrudMaintenanceReport,
 	type GroupCrudStateKeyingJudgementPort,
 	runGroupCrudMaintenancePass,
-} from "../../../../packages/sno-station-mem/src/engine/maintenance/group-crud-maintenance";
-import { readMemorySourceOrder } from "../../../../packages/sno-station-mem/src/store/memory-source-order";
-import { ENTITY_IDENTITY_CANDIDATE_LIMIT } from "../../../../packages/sno-station-mem/src/store/memory-store-atomic-entity-api";
+} from "../../../../packages/memory/src/engine/maintenance/group-crud-maintenance";
+import { readMemorySourceOrder } from "../../../../packages/memory/src/store/memory-source-order";
+import { ENTITY_IDENTITY_CANDIDATE_LIMIT } from "../../../../packages/memory/src/store/memory-store-atomic-entity-api";
 import {
 	type AtomicExtractionLedgerKey,
 	type AtomicExtractionRunParameters,
 	MemoryStore,
-} from "../../../../packages/sno-station-mem/src/store/store";
+} from "../../../../packages/memory/src/store/store";
 import { createTestDb, createTestEmbedder, type TestDb } from "../../../apps/mem-claw/helpers/test-db";
 
 const PROJECT_ID = "academic_researcher_weekly";
@@ -65,7 +65,7 @@ const STATE_SLUGS: string[] = (
 		readFileSync(
 			join(
 				resolve(import.meta.dirname, "../../../.."),
-				"packages/sno-station-mem/config/state-vocabulary.json",
+				"packages/memory/config/state-vocabulary.json",
 			),
 			"utf8",
 		),
@@ -362,7 +362,7 @@ function seedByLabel(label: string): Seed {
 
 /**
  * The one state slug each recategorized entity row belongs under, read off the shipped
- * vocabulary (`packages/sno-station-mem/config/state-vocabulary.json`), keyed by the row's stored text:
+ * vocabulary (`packages/memory/config/state-vocabulary.json`), keyed by the row's stored text:
  * the aim of the proposal is a `Project.description-scoped goal` (`project.objective`), and the
  * project lead is a `Project.funder / participant` (`project.stakeholder`). Any other text has no
  * row here, so the double answers null for it — a product that keys the wrong row, or keys a row

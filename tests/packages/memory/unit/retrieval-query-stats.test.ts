@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { RetrievalStatsCollector } from "../../../../packages/sno-station-mem/src/engine/retrieval/retrieval-stats.ts";
-import type { RetrievalTrace } from "../../../../packages/sno-station-mem/src/engine/retrieval/retrieval-trace.ts";
+import { RetrievalStatsCollector } from "../../../../packages/memory/src/engine/retrieval/retrieval-stats.ts";
+import type { RetrievalTrace } from "../../../../packages/memory/src/engine/retrieval/retrieval-trace.ts";
 
 function trace(
 	totalMs: number,

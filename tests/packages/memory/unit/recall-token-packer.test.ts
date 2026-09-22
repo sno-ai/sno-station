@@ -6,7 +6,7 @@ import {
 	estimateRecallRowTokens,
 	MIN_RECALL_TOKEN_BUDGET,
 	packRecallRows,
-} from "../../../../packages/sno-station-mem/src/engine/retrieval/recall-token-packer";
+} from "../../../../packages/memory/src/engine/retrieval/recall-token-packer";
 
 /** A row the size real recall serves: one atomic claim, a sentence or two. */
 function memoryRow(id: string, chars: number): { id: string; text: string } {

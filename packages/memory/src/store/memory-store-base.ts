@@ -982,7 +982,7 @@ export class MemoryStore {
 			hasFtsSupport: this.hasFtsSupport,
 		}, {
 			event_name: "sno_station_mem.memory-store-base.memory.store.initialized",
-			file: "packages/sno-station-mem/src/store/memory-store-base.ts",
+			file: "packages/memory/src/store/memory-store-base.ts",
 			function: "<anonymous callback>",
 			site_id: "memory-store-base.<anonymous callback>.3dd5e75e4f",
 		});

@@ -8,7 +8,7 @@ import {
 	SNO_STATION_MEM_RELEASE_ANCHOR_URL,
 	SNO_STATION_MEM_RELEASE_KEY_ID,
 	openBundledLlmixRegistry,
-} from "../../../../packages/sno-station-mem/src/model/llmix-registry.ts";
+} from "../../../../packages/memory/src/model/llmix-registry.ts";
 
 const repoRoot = resolve(import.meta.dirname, "../../../..");
 const didDocument = {
@@ -81,7 +81,7 @@ describe("mem-claw signed LLMIx registry", () => {
 	it("rejects tampered generated registry output", async () => {
 		const tempRoot = mkdtempSync(join(tmpdir(), "mem-claw-llmix-"));
 		tempRoots.push(tempRoot);
-		cpSync(resolve(repoRoot, "packages/sno-station-mem/config"), join(tempRoot, "config"), {
+		cpSync(resolve(repoRoot, "packages/memory/config"), join(tempRoot, "config"), {
 			recursive: true,
 		});
 		const current = JSON.parse(

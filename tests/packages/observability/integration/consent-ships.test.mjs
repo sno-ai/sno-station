@@ -4,8 +4,8 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
-import { BufferStore } from "../../../../packages/sno-observe/dist/internal/buffer-store.js";
-import { SnoObserveRuntime } from "../../../../packages/sno-observe/dist/internal/runtime.js";
+import { BufferStore } from "../../../../packages/observability/dist/internal/buffer-store.js";
+import { SnoObserveRuntime } from "../../../../packages/observability/dist/internal/runtime.js";
 import { createFetchRecorder } from "../fixtures/temp-env.mjs";
 
 function tempEnv() {

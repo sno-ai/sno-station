@@ -93,7 +93,7 @@ export class SnoObserveRuntime {
 					database_size_bytes: stats.databaseSizeBytes,
 				}, {
 					event_name: "sno.observe.internal.runtime.emitparsed",
-					file: "packages/sno-observe/src/internal/runtime.ts",
+					file: "packages/observability/src/internal/runtime.ts",
 					function: "emitParsed",
 					site_id: "sno.observe.internal.runtime.emitparsed.1",
 				});
@@ -464,7 +464,7 @@ export class SnoObserveRuntime {
 					result.lastError = errorMessage(error);
 					logger.error("sno observe shutdown flush failed", { error: result.lastError }, {
 						event_name: "sno.observe.internal.runtime.shutdown",
-						file: "packages/sno-observe/src/internal/runtime.ts",
+						file: "packages/observability/src/internal/runtime.ts",
 						function: "shutdown",
 						site_id: "sno.observe.internal.runtime.shutdown.2",
 					});
@@ -541,7 +541,7 @@ export class SnoObserveRuntime {
 					terminal: result.terminal,
 				}, {
 					event_name: "sno.observe.internal.runtime.flushconsenttransition",
-					file: "packages/sno-observe/src/internal/runtime.ts",
+					file: "packages/observability/src/internal/runtime.ts",
 					function: "flushConsentTransition",
 					site_id: "sno.observe.internal.runtime.flushconsenttransition.3",
 				});
@@ -549,7 +549,7 @@ export class SnoObserveRuntime {
 		} catch (error) {
 			logger.error("sno observe consent transition flush failed", { error }, {
 				event_name: "sno.observe.internal.runtime.flushconsenttransition",
-				file: "packages/sno-observe/src/internal/runtime.ts",
+				file: "packages/observability/src/internal/runtime.ts",
 				function: "flushConsentTransition",
 				site_id: "sno.observe.internal.runtime.flushconsenttransition.4",
 			});
@@ -560,7 +560,7 @@ export class SnoObserveRuntime {
 		void this.flush(false).catch((error) => {
 			logger.error("sno observe background flush failed", { error }, {
 				event_name: "sno.observe.internal.runtime.flushinbackground",
-				file: "packages/sno-observe/src/internal/runtime.ts",
+				file: "packages/observability/src/internal/runtime.ts",
 				function: "flushInBackground",
 				site_id: "sno.observe.internal.runtime.flushinbackground.5",
 			});
@@ -626,7 +626,7 @@ export class SnoObserveRuntime {
 					event_type: eventType,
 				}, {
 					event_name: "sno.observe.internal.runtime.notify",
-					file: "packages/sno-observe/src/internal/runtime.ts",
+					file: "packages/observability/src/internal/runtime.ts",
 					function: "notify",
 					site_id: "sno.observe.internal.runtime.notify.6",
 				});

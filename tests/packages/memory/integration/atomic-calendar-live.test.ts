@@ -1,18 +1,18 @@
-import { resolveLlmEndpoint } from "../../../../packages/sno-station-mem/src/model/llm-endpoint-resolution";
+import { resolveLlmEndpoint } from "../../../../packages/memory/src/model/llm-endpoint-resolution";
 /** Real shipping extraction prompt and signed transport; no substitute model. */
 import { randomUUID } from "node:crypto";
 import { createTestDb, createTestEmbedder } from "../../../apps/mem-claw/helpers/test-db";
-import { MemoryStore } from "../../../../packages/sno-station-mem/src/store/store";
-import { runAtomicMemoryExtraction, createSignedAtomicMemoryExtractionTransports } from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-memory-extraction";
-import { llmRoutingConfigSchema } from "../../../../packages/sno-station-mem/config/plugin-config-mode-schema";
-import { episodicEventDate } from "../../../../packages/sno-station-mem/src/engine/bindings/memory-tool-formatting";
+import { MemoryStore } from "../../../../packages/memory/src/store/store";
+import { runAtomicMemoryExtraction, createSignedAtomicMemoryExtractionTransports } from "../../../../packages/memory/src/engine/extraction/atomic-memory-extraction";
+import { llmRoutingConfigSchema } from "../../../../packages/memory/config/plugin-config-mode-schema";
+import { episodicEventDate } from "../../../../packages/memory/src/engine/bindings/memory-tool-formatting";
 import { hostname } from "node:os";
 import { describe, expect, it } from "vitest";
-import { buildAtomicGenericExtractionPrompt, createAtomicGenericExtractionTransport } from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-generic-extractor";
-import { parseAtomicExtractionReply } from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-extraction-reply";
-import { runAtomicExtractionGauntlet } from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-extraction-gauntlet";
-import { createLlmClient } from "../../../../packages/sno-station-mem/src/model/llm-client";
-import { ATOMIC_EXTRACTION_SKILL_HASH } from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-extraction-skill";
+import { buildAtomicGenericExtractionPrompt, createAtomicGenericExtractionTransport } from "../../../../packages/memory/src/engine/extraction/atomic-generic-extractor";
+import { parseAtomicExtractionReply } from "../../../../packages/memory/src/engine/extraction/atomic-extraction-reply";
+import { runAtomicExtractionGauntlet } from "../../../../packages/memory/src/engine/extraction/atomic-extraction-gauntlet";
+import { createLlmClient } from "../../../../packages/memory/src/model/llm-client";
+import { ATOMIC_EXTRACTION_SKILL_HASH } from "../../../../packages/memory/src/engine/extraction/atomic-extraction-skill";
 
 // Undated generic extraction sometimes returns no records; that is completeness issue #219.
 // Its raw failures are retained in /tmp/calendar-undated-fixed.log and

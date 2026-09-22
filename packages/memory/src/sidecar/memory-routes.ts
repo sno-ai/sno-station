@@ -46,7 +46,7 @@ export async function serveMemoryRoute(request: IncomingMessage, response: Serve
 				error_message: error instanceof Error ? error.message : String(error),
 				error_stack: error instanceof Error ? error.stack : undefined,
 			}, {
-				event_name: "memory.sidecar.request.failed", file: "packages/sno-station-mem/src/sidecar/memory-routes.ts",
+				event_name: "memory.sidecar.request.failed", file: "packages/memory/src/sidecar/memory-routes.ts",
 				function: "serveMemoryRoute", site_id: "memory.sidecar.request.failed",
 			});
 		if (error instanceof PayloadTooLargeError) {

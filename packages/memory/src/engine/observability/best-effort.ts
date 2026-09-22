@@ -21,7 +21,7 @@ export async function bestEffort(
 	} catch (error) {
 		if (logger) log.warn("Background observability action failed", { action: label, error }, {
 			event_name: "observability.action.failed",
-			file: "packages/sno-station-mem/src/engine/observability/best-effort.ts",
+			file: "packages/memory/src/engine/observability/best-effort.ts",
 			function: "bestEffort",
 			site_id: "observability.bestEffort.failed",
 		});
@@ -38,7 +38,7 @@ export function bestEffortSync<T>(
 	} catch (error) {
 		if (logger) log.warn("Synchronous observability action failed", { action: label, error }, {
 			event_name: "observability.action.failed",
-			file: "packages/sno-station-mem/src/engine/observability/best-effort.ts",
+			file: "packages/memory/src/engine/observability/best-effort.ts",
 			function: "bestEffortSync",
 			site_id: "observability.bestEffortSync.failed",
 		});

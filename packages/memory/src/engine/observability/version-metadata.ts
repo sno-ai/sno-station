@@ -9,7 +9,7 @@ import { fileURLToPath } from "node:url";
 
 const VERSION_ENV_KEYS = ["SNO_STATION_MEM_VERSION", "SNO_STATION_MEM_VERSION"] as const;
 const VERSION_LINE_RE = /^version:\s*["']?([^"'\s]+)["']?\s*$/m;
-const SNO_STATION_MEM_PACKAGE_NAME = "@snoai/sno-station-mem";
+const SNO_STATION_MEM_PACKAGE_NAME = "@snoai/memory";
 
 export function readSnoStationCoreWorkspaceVersion(
 	env: NodeJS.ProcessEnv = process.env,

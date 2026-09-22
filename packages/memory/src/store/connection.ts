@@ -165,7 +165,7 @@ function ensureChunkVecTable(db: SqliteDB, vectorDim: number): number | undefine
 	if (existing && (existing.dimension !== vectorDim || !existing.hasPartitionKey)) {
 		if (existing.rowCount > 0) {
 			log.error("storage.vector.configuration.mismatch", { vectorDim, existing }, {
-				event_name: "storage.vector.configuration.mismatch", file: "packages/sno-station-mem/src/store/connection.ts",
+				event_name: "storage.vector.configuration.mismatch", file: "packages/memory/src/store/connection.ts",
 				function: "ensureChunkVecTable", site_id: "storage.vector.configuration.mismatch",
 			});
 			return undefined;
@@ -220,7 +220,7 @@ function loadSimpleTokenizer(db: SqliteDatabaseLike): void {
 	);
 	log.info("simple-tokenizer loaded", { platform, extensionPath }, {
 		event_name: "sno_station_mem.connection.simple.tokenizer.loaded",
-		file: "packages/sno-station-mem/src/store/connection.ts",
+		file: "packages/memory/src/store/connection.ts",
 		function: "loadSimpleTokenizer",
 		site_id: "connection.loadSimpleTokenizer.778ee7da6c",
 	});
@@ -285,7 +285,7 @@ const MIGRATIONS_DIR = resolveMigrationsDir();
 export function initDb(dbPath: string, vectorDim: number): DrizzleDB {
 	log.info("initializing database", { dbPath, vectorDim }, {
 		event_name: "sno_station_mem.connection.initializing.database",
-		file: "packages/sno-station-mem/src/store/connection.ts",
+		file: "packages/memory/src/store/connection.ts",
 		function: "initDb",
 		site_id: "connection.initDb.ee37a0a971",
 	});
@@ -304,7 +304,7 @@ export function initDb(dbPath: string, vectorDim: number): DrizzleDB {
 				if (!incomplete) firstSetupError = error;
 				incomplete = true;
 				log.error("storage.setup.failed", { step, error }, {
-					event_name: "storage.setup.failed", file: "packages/sno-station-mem/src/store/connection.ts",
+					event_name: "storage.setup.failed", file: "packages/memory/src/store/connection.ts",
 					function: "retrySetup", site_id: "storage.setup.failed",
 				});
 			}

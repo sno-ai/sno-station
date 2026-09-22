@@ -13,7 +13,7 @@ export async function* readJsonlLines(file: string): AsyncGenerator<string> {
 	} catch (error) {
 		if (error instanceof Error && "code" in error && error.code === "ENOENT") return;
 		log.error("jsonl.read.failed", { file, error }, {
-			event_name: "memory.jsonl.read.failed", file: "packages/sno-station-mem/src/engine/operations/jsonl-lines.ts",
+			event_name: "memory.jsonl.read.failed", file: "packages/memory/src/engine/operations/jsonl-lines.ts",
 			function: "readJsonlLines", site_id: "memory.jsonl.read.failed",
 		});
 	} finally {

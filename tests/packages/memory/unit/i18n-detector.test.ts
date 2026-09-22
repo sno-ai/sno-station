@@ -5,8 +5,8 @@ import {
 	detectLocale,
 	detectorFallbackLocale,
 	detectorHealth,
-} from "../../../../packages/sno-station-mem/src/engine/i18n/detector.ts";
-import { SUPPORTED_LOCALES } from "../../../../packages/sno-station-mem/src/engine/i18n/locales.ts";
+} from "../../../../packages/memory/src/engine/i18n/detector.ts";
+import { SUPPORTED_LOCALES } from "../../../../packages/memory/src/engine/i18n/locales.ts";
 
 const FIXTURE_DIR = fileURLToPath(new URL("../../../apps/mem-claw/i18n/fixtures/", import.meta.url));
 

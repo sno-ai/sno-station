@@ -3,11 +3,11 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
-import { createSnoObserve } from "../../../../packages/sno-observe/dist/index.js";
-import { verifyAuditEvent } from "../../../../packages/sno-observe/dist/internal/audit-verify.js";
-import { BufferStore } from "../../../../packages/sno-observe/dist/internal/buffer-store.js";
-import { exportEvents } from "../../../../packages/sno-observe/dist/internal/export.js";
-import { getSnoProfileDir } from "../../../../packages/sno-observe/dist/internal/paths.js";
+import { createSnoObserve } from "../../../../packages/observability/dist/index.js";
+import { verifyAuditEvent } from "../../../../packages/observability/dist/internal/audit-verify.js";
+import { BufferStore } from "../../../../packages/observability/dist/internal/buffer-store.js";
+import { exportEvents } from "../../../../packages/observability/dist/internal/export.js";
+import { getSnoProfileDir } from "../../../../packages/observability/dist/internal/paths.js";
 import { scope, validPayloads } from "../fixtures/temp-env.mjs";
 
 function tempEnv() {

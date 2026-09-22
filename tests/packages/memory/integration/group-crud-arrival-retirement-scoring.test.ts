@@ -15,16 +15,16 @@
 
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
 
-import type { AtomicKeyedRecord } from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-profile-keying";
-import { buildAtomicWriteCards } from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-write-projection";
-import type { Embedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client";
-import { readAtomicArrivalRetirementCandidateSet } from "../../../../packages/sno-station-mem/src/store/memory-store-atomic-extraction-write-api";
-import { applyStateCategoryMigration } from "../../../../packages/sno-station-mem/src/store/state-category-migration";
+import type { AtomicKeyedRecord } from "../../../../packages/memory/src/engine/extraction/atomic-profile-keying";
+import { buildAtomicWriteCards } from "../../../../packages/memory/src/engine/extraction/atomic-write-projection";
+import type { Embedder } from "../../../../packages/memory/src/engine/extraction/embedding-provider-client";
+import { readAtomicArrivalRetirementCandidateSet } from "../../../../packages/memory/src/store/memory-store-atomic-extraction-write-api";
+import { applyStateCategoryMigration } from "../../../../packages/memory/src/store/state-category-migration";
 import {
 	type AtomicExtractionLedgerKey,
 	type AtomicExtractionRunParameters,
 	MemoryStore,
-} from "../../../../packages/sno-station-mem/src/store/store";
+} from "../../../../packages/memory/src/store/store";
 import { createTestDb, createTestEmbedder } from "../../../apps/mem-claw/helpers/test-db.ts";
 
 const EXTRACTOR_VERSION = "arrival-retirement-scoring";

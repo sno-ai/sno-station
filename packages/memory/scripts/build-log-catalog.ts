@@ -5,7 +5,7 @@ import { buildLogCatalog, collectLogSources } from "../../../packages/utils/scri
 import type { LogSiteCatalog } from "../../../packages/utils/src/log-site-catalog.ts";
 
 const ROOT = resolve(import.meta.dirname, "../../..");
-const PACKAGE = "packages/sno-station-mem";
+const PACKAGE = "packages/memory";
 const GENERATED = "src/engine/observability/log-site-catalog.generated.ts";
 
 export function generateLogCatalog(artifactOnly = false): LogSiteCatalog {

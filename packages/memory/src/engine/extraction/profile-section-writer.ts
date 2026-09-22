@@ -378,7 +378,7 @@ function deferLifecycleRetirement(
 			failure,
 		}, {
 			event_name: "sno_station_mem.profile-section-writer.lifecycle.retirement.dropped.after.repeated.unusable.answers",
-			file: "packages/sno-station-mem/src/engine/extraction/profile-section-writer.ts",
+			file: "packages/memory/src/engine/extraction/profile-section-writer.ts",
 			function: "deferLifecycleRetirement",
 			site_id: "profile-section-writer.deferLifecycleRetirement.f94b354ff4",
 		});
@@ -514,7 +514,7 @@ export async function runProfileSectionUpdate(
 			outcome: result.outcome, memory_id: result.rowId, duration_ms: performance.now() - started,
 			committed_count: "unavailable", committed_count_reason: "task_route_returns_outcome_not_count",
 		}, {
-			event_name: "memory.profile.completed", file: "packages/sno-station-mem/src/engine/extraction/profile-section-writer.ts",
+			event_name: "memory.profile.completed", file: "packages/memory/src/engine/extraction/profile-section-writer.ts",
 			function: "runProfileSectionUpdate", site_id: "memory.profile.task.completed",
 		});
 		return result;
@@ -546,7 +546,7 @@ export async function runProfileSectionUpdate(
 		reason_code: result.refusalReason ?? "not_refused",
 		committed_count: "unavailable", committed_count_reason: "writer_returns_outcome_not_count",
 	}, {
-		event_name: "memory.profile.completed", file: "packages/sno-station-mem/src/engine/extraction/profile-section-writer.ts",
+		event_name: "memory.profile.completed", file: "packages/memory/src/engine/extraction/profile-section-writer.ts",
 		function: "runProfileSectionUpdate", site_id: "memory.profile.section.completed",
 	});
 	return { outcome: result.outcome, rowId: result.rowId };
@@ -555,7 +555,7 @@ export async function runProfileSectionUpdate(
 			outcome: "failed", error, duration_ms: performance.now() - started,
 			committed_count: "unavailable", committed_count_reason: "multi_step_write_failed",
 		}, {
-			event_name: "memory.profile.failed", file: "packages/sno-station-mem/src/engine/extraction/profile-section-writer.ts",
+			event_name: "memory.profile.failed", file: "packages/memory/src/engine/extraction/profile-section-writer.ts",
 			function: "runProfileSectionUpdate", site_id: "memory.profile.failed",
 		});
 		throw error;
@@ -742,7 +742,7 @@ async function runProfileSectionUpdateOnce(
 				verdict: merged.kind,
 			}, {
 				event_name: "sno_station_mem.profile-section-writer.retired.profile.section.tombstone.reaffirmed",
-				file: "packages/sno-station-mem/src/engine/extraction/profile-section-writer.ts",
+				file: "packages/memory/src/engine/extraction/profile-section-writer.ts",
 				function: "runProfileSectionUpdateOnce",
 				site_id: "profile-section-writer.runProfileSectionUpdateOnce.28936dcd3c",
 			});
@@ -816,7 +816,7 @@ async function runProfileSectionUpdateOnce(
 			verdict: merged.kind,
 		}, {
 			event_name: "sno_station_mem.profile-section-writer.profile.section.tombstoned.incoming.assertion.preserved",
-			file: "packages/sno-station-mem/src/engine/extraction/profile-section-writer.ts",
+			file: "packages/memory/src/engine/extraction/profile-section-writer.ts",
 			function: "runProfileSectionUpdateOnce",
 			site_id: "profile-section-writer.runProfileSectionUpdateOnce.e3afdfb6d8",
 		});
@@ -870,7 +870,7 @@ async function runProfileSectionUpdateOnce(
 			reason_code: "text_repair_required", reason_detail: merged.textRepair.reason,
 		}, {
 			event_name: "sno_station_mem.profile-section-writer.profile.text.step.not.used.row.written.from.the.judged.clauses",
-			file: "packages/sno-station-mem/src/engine/extraction/profile-section-writer.ts",
+			file: "packages/memory/src/engine/extraction/profile-section-writer.ts",
 			function: "runProfileSectionUpdateOnce",
 			site_id: "profile-section-writer.runProfileSectionUpdateOnce.80241da6d8",
 		});
@@ -1043,7 +1043,7 @@ async function recheckProfileRetirements(input: {
 			error,
 		}, {
 			event_name: "sno_station_mem.profile-section-writer.profile.retirement.recheck.could.not.resolve.the.model.for.its.receipt",
-			file: "packages/sno-station-mem/src/engine/extraction/profile-section-writer.ts",
+			file: "packages/memory/src/engine/extraction/profile-section-writer.ts",
 			function: "recheckProfileRetirements",
 			site_id: "profile-section-writer.recheckProfileRetirements.613c569527",
 		});
@@ -1150,7 +1150,7 @@ async function mergeProfileSection(
 			reason,
 		}, {
 			event_name: "sno_station_mem.profile-section-writer.profile.judgment.unusable.deterministic.preservation.selected",
-			file: "packages/sno-station-mem/src/engine/extraction/profile-section-writer.ts",
+			file: "packages/memory/src/engine/extraction/profile-section-writer.ts",
 			function: "mergeProfileSection",
 			site_id: "profile-section-writer.mergeProfileSection.c707285ef3",
 		});
@@ -1448,7 +1448,7 @@ async function writeEpisodicSafetyNet(
 		rowId: stored.id,
 	}, {
 		event_name: "sno_station_mem.profile-section-writer.profile.candidate.routed.to.episodic.safety.net",
-		file: "packages/sno-station-mem/src/engine/extraction/profile-section-writer.ts",
+		file: "packages/memory/src/engine/extraction/profile-section-writer.ts",
 		function: "writeEpisodicSafetyNet",
 		site_id: "profile-section-writer.writeEpisodicSafetyNet.ae69446388",
 	});
@@ -1691,7 +1691,7 @@ function capRetireByNameWorkItems(
 			attempts: item.lifecycleClassification?.attempts,
 		}, {
 			event_name: "sno_station_mem.profile-section-writer.retire.by.name.work.dropped.at.the.pending.cap",
-			file: "packages/sno-station-mem/src/engine/extraction/profile-section-writer.ts",
+			file: "packages/memory/src/engine/extraction/profile-section-writer.ts",
 			function: "capRetireByNameWorkItems",
 			site_id: "profile-section-writer.capRetireByNameWorkItems.3c47653418",
 		});
@@ -1727,7 +1727,7 @@ async function writeProfileRow(args: {
 			verdict: "replacement",
 		}, {
 			event_name: "sno_station_mem.profile-section-writer.profile.conflict.blocked.candidate.routed.to.episodic",
-			file: "packages/sno-station-mem/src/engine/extraction/profile-section-writer.ts",
+			file: "packages/memory/src/engine/extraction/profile-section-writer.ts",
 			function: "writeProfileRow",
 			site_id: "profile-section-writer.writeProfileRow.3e3e26a255",
 		});
@@ -2194,7 +2194,7 @@ async function planProfileConflicts(
 			mode: params.routing?.mode,
 		}, {
 			event_name: "sno_station_mem.profile-section-writer.profile.conflict.scan.routed.off.conflicting.rows.both.persist",
-			file: "packages/sno-station-mem/src/engine/extraction/profile-section-writer.ts",
+			file: "packages/memory/src/engine/extraction/profile-section-writer.ts",
 			function: "planProfileConflicts",
 			site_id: "profile-section-writer.planProfileConflicts.e5bcea94ce",
 		});
@@ -2261,7 +2261,7 @@ async function planProfileConflicts(
 					candidate_size: content.length,
 				}, {
 					event_name: "sno_station_mem.profile-section-writer.profile.conflict.adjudication.uncertain.keeping.both.rows",
-					file: "packages/sno-station-mem/src/engine/extraction/profile-section-writer.ts",
+					file: "packages/memory/src/engine/extraction/profile-section-writer.ts",
 					function: "planProfileConflicts",
 					site_id: "profile-section-writer.planProfileConflicts.97b6a2e824",
 				});
@@ -2281,7 +2281,7 @@ async function planProfileConflicts(
 			candidate_size: content.length,
 		}, {
 			event_name: "sno_station_mem.profile-section-writer.profile.conflict.scan.failed.proceeding.without.adjudication",
-			file: "packages/sno-station-mem/src/engine/extraction/profile-section-writer.ts",
+			file: "packages/memory/src/engine/extraction/profile-section-writer.ts",
 			function: "planProfileConflicts",
 			site_id: "profile-section-writer.planProfileConflicts.b4962bc7f0",
 		});
@@ -2313,7 +2313,7 @@ function logProfileConflictFenceRejection(
 		...(details.error ? { error: details.error } : {}),
 	}, {
 		event_name: "sno_station_mem.profile-section-writer.profile.conflict.candidate.rejected.by.section.fence",
-		file: "packages/sno-station-mem/src/engine/extraction/profile-section-writer.ts",
+		file: "packages/memory/src/engine/extraction/profile-section-writer.ts",
 		function: "logProfileConflictFenceRejection",
 		site_id: "profile-section-writer.logProfileConflictFenceRejection.b0669b40b3",
 	});
@@ -2352,7 +2352,7 @@ async function adjudicateSafely(
 			error,
 		}, {
 			event_name: "sno_station_mem.profile-section-writer.conflict.adjudicator.unavailable.keeping.both.rows",
-			file: "packages/sno-station-mem/src/engine/extraction/profile-section-writer.ts",
+			file: "packages/memory/src/engine/extraction/profile-section-writer.ts",
 			function: "adjudicateSafely",
 			site_id: "profile-section-writer.adjudicateSafely.d3f7ab0ac5",
 		});

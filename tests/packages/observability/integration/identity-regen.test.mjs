@@ -6,9 +6,9 @@ import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
 import { describe, it } from "node:test";
-import { BufferStore } from "../../../../packages/sno-observe/dist/internal/buffer-store.js";
-import { bootstrapIdentity } from "../../../../packages/sno-observe/dist/internal/identity.js";
-import { detectProjectId } from "../../../../packages/sno-observe/dist/internal/project-id.js";
+import { BufferStore } from "../../../../packages/observability/dist/internal/buffer-store.js";
+import { bootstrapIdentity } from "../../../../packages/observability/dist/internal/identity.js";
+import { detectProjectId } from "../../../../packages/observability/dist/internal/project-id.js";
 import { validPayloads, scope } from "../fixtures/temp-env.mjs";
 
 const workerPath = fileURLToPath(new URL("../fixtures/fork-emit-worker.mjs", import.meta.url));

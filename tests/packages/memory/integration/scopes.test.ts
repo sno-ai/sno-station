@@ -11,7 +11,7 @@ import {
 	resolveScopeFilter,
 	SCOPE_PATTERNS,
 	type ScopePolicy,
-} from "../../../../packages/sno-station-mem/src/engine/security/scopes.ts";
+} from "../../../../packages/memory/src/engine/security/scopes.ts";
 
 afterEach(() => {
 	_resetLegacyFallbackWarningState();

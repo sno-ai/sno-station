@@ -70,7 +70,7 @@ export class Embedder {
 			maxContextTokens: DEFAULT_MAX_CONTEXT_TOKENS,
 		}, {
 			event_name: "sno_station_mem.embedding-provider-client.embedder.initialized",
-			file: "packages/sno-station-mem/src/engine/extraction/embedding-provider-client.ts",
+			file: "packages/memory/src/engine/extraction/embedding-provider-client.ts",
 			function: "<anonymous callback>",
 			site_id: "embedding-provider-client.<anonymous callback>.3c8d5ee192",
 		});
@@ -169,7 +169,7 @@ export class Embedder {
 			maxTokens: DEFAULT_MAX_CONTEXT_TOKENS,
 		}, {
 			event_name: "sno_station_mem.embedding-provider-client.legacy.chunker.invoked.embedding.api.safety.net",
-			file: "packages/sno-station-mem/src/engine/extraction/embedding-provider-client.ts",
+			file: "packages/memory/src/engine/extraction/embedding-provider-client.ts",
 			function: "embed",
 			site_id: "embedding-provider-client.embed.ab60111378",
 		});
@@ -201,7 +201,7 @@ export class Embedder {
 				error,
 			}, {
 				event_name: "sno_station_mem.embedding-provider-client.passage.embedding.failed",
-				file: "packages/sno-station-mem/src/engine/extraction/embedding-provider-client.ts",
+				file: "packages/memory/src/engine/extraction/embedding-provider-client.ts",
 				function: "embedDirect",
 				site_id: "embedding-provider-client.embedDirect.c6998ac2fb",
 			});
@@ -216,7 +216,7 @@ export class Embedder {
 		// Log operational context for embedding without changing control flow.
 		log.debug("batch embedding", { count: values.length }, {
 			event_name: "sno_station_mem.embedding-provider-client.batch.embedding",
-			file: "packages/sno-station-mem/src/engine/extraction/embedding-provider-client.ts",
+			file: "packages/memory/src/engine/extraction/embedding-provider-client.ts",
 			function: "embedMany",
 			site_id: "embedding-provider-client.embedMany.8ffe2fb365",
 		});
@@ -238,7 +238,7 @@ export class Embedder {
 				error,
 			}, {
 				event_name: "sno_station_mem.embedding-provider-client.batch.embedding.failed",
-				file: "packages/sno-station-mem/src/engine/extraction/embedding-provider-client.ts",
+				file: "packages/memory/src/engine/extraction/embedding-provider-client.ts",
 				function: "embedMany",
 				site_id: "embedding-provider-client.embedMany.71b35eadaf",
 			});
@@ -285,14 +285,14 @@ export class Embedder {
 				}
 				log.info("embedder warmup ok", { dimensions: this.dimensions }, {
 					event_name: "sno_station_mem.embedding-provider-client.embedder.warmup.ok",
-					file: "packages/sno-station-mem/src/engine/extraction/embedding-provider-client.ts",
+					file: "packages/memory/src/engine/extraction/embedding-provider-client.ts",
 					function: "<anonymous callback>",
 					site_id: "embedding-provider-client.<anonymous callback>.32cc9ec43e",
 				});
 			} catch (error) {
 				log.error("embedder warmup failed", { error }, {
 					event_name: "sno_station_mem.embedding-provider-client.embedder.warmup.failed",
-					file: "packages/sno-station-mem/src/engine/extraction/embedding-provider-client.ts",
+					file: "packages/memory/src/engine/extraction/embedding-provider-client.ts",
 					function: "<anonymous callback>",
 					site_id: "embedding-provider-client.<anonymous callback>.d7a3f8337c",
 				});

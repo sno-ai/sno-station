@@ -140,7 +140,7 @@ function emitFallbackWarning(): void {
 	const { keyFile } = resolveConfigPaths();
 	writeEmergencyDiagnostic({ level: "warn", body: "OS keychain unavailable. Encryption uses file permissions. Run sno-station-core lock --set-passphrase for passphrase protection.", attributes: { file: keyFile, reason_code: "keychain_unavailable", file_mode: 0o600 }, source: {
 		event_name: "crypto.file_fallback",
-		file: "packages/sno-station-core-crypto/src/dek.ts",
+		file: "packages/sqlite-crypto/src/dek.ts",
 		function: "emitFallbackWarning",
 		site_id: "crypto.file_fallback",
 	} });
@@ -151,7 +151,7 @@ function emitRemovePassphraseCrashWarning(): void {
 	warnedRemoveCrash = true;
 	writeEmergencyDiagnostic({ level: "warn", body: "Interrupted passphrase removal detected. Run sno-station-core lock --remove-passphrase to complete it.", attributes: { reason_code: "interrupted_passphrase_removal" }, source: {
 		event_name: "crypto.interrupted_removal",
-		file: "packages/sno-station-core-crypto/src/dek.ts",
+		file: "packages/sqlite-crypto/src/dek.ts",
 		function: "emitRemovePassphraseCrashWarning",
 		site_id: "crypto.interrupted_removal",
 	} });

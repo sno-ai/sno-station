@@ -213,8 +213,8 @@ export async function generateReflectionText(params: {
 	/** Implements on retry log as the local reflection capture policy operation. */
 	const onRetryLog = (level: "info" | "warn", message: string) => {
 		// Guard this branch early so the remaining reflection capture path works with normalized inputs.
-		if (level === "warn") diagnosticLog.warn("Reflection generation retry reported", { error: message }, { event_name: "memory.daily_log_generator.reflection.generation.retry.reported", file: "packages/sno-station-mem/src/engine/reflection/daily-log-generator.ts", function: "onRetryLog", site_id: "reflection.daily-log-generator.onRetryLog.b52810f5af" });
-		else diagnosticLog.info("Reflection generation retry reported", { error: message }, { event_name: "memory.daily_log_generator.reflection.generation.retry.reported", file: "packages/sno-station-mem/src/engine/reflection/daily-log-generator.ts", function: "onRetryLog", site_id: "reflection.daily-log-generator.onRetryLog.977c99d43c" });
+		if (level === "warn") diagnosticLog.warn("Reflection generation retry reported", { error: message }, { event_name: "memory.daily_log_generator.reflection.generation.retry.reported", file: "packages/memory/src/engine/reflection/daily-log-generator.ts", function: "onRetryLog", site_id: "reflection.daily-log-generator.onRetryLog.b52810f5af" });
+		else diagnosticLog.info("Reflection generation retry reported", { error: message }, { event_name: "memory.daily_log_generator.reflection.generation.retry.reported", file: "packages/memory/src/engine/reflection/daily-log-generator.ts", function: "onRetryLog", site_id: "reflection.daily-log-generator.onRetryLog.977c99d43c" });
 	};
 
 	for (const promptInput of promptInputs) {
@@ -244,7 +244,7 @@ export async function generateReflectionText(params: {
 		} catch (err) {
 			const errMsg = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
 			// This reflection capture step establishes state that later reads and cleanup paths depend on.
-			diagnosticLog.warn("Reflection generation failed", { error: err }, { event_name: "memory.daily_log_generator.reflection.generation.failed", file: "packages/sno-station-mem/src/engine/reflection/daily-log-generator.ts", function: "generateReflectionText", site_id: "reflection.daily-log-generator.generateReflectionText.c0c554e65c" });
+			diagnosticLog.warn("Reflection generation failed", { error: err }, { event_name: "memory.daily_log_generator.reflection.generation.failed", file: "packages/memory/src/engine/reflection/daily-log-generator.ts", function: "generateReflectionText", site_id: "reflection.daily-log-generator.generateReflectionText.c0c554e65c" });
 			return {
 				text: buildReflectionFallbackText(params.conversation),
 				usedFallback: true,

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { InvalidEventPayloadError } from "../../../../packages/sno-observe/dist/internal/errors.js";
-import { parseEventInput } from "../../../../packages/sno-observe/dist/internal/schemas.js";
+import { InvalidEventPayloadError } from "../../../../packages/observability/dist/internal/errors.js";
+import { parseEventInput } from "../../../../packages/observability/dist/internal/schemas.js";
 
 const uuidV7 = "018f7d0c-fd8b-7ccf-9b9b-0a2ea938ad0d";
 const uppercaseUuidV7 = uuidV7.toUpperCase();

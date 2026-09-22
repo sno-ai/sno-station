@@ -2,14 +2,14 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
 	createRetriever,
 	DEFAULT_RETRIEVAL_CONFIG,
-} from "../../../../packages/sno-station-mem/src/engine/retrieval/retriever.ts";
-import { RetrievalError } from "../../../../packages/sno-station-mem/src/engine/shared/errors.ts";
-import type { MemoryRetrieverInternals } from "../../../../packages/sno-station-mem/src/engine/retrieval/retriever-core.ts";
-import { truncateToTokens } from "../../../../packages/sno-station-mem/src/engine/shared/token-bound.ts";
+} from "../../../../packages/memory/src/engine/retrieval/retriever.ts";
+import { RetrievalError } from "../../../../packages/memory/src/engine/shared/errors.ts";
+import type { MemoryRetrieverInternals } from "../../../../packages/memory/src/engine/retrieval/retriever-core.ts";
+import { truncateToTokens } from "../../../../packages/memory/src/engine/shared/token-bound.ts";
 import {
 	DEFAULT_MAX_CONTEXT_TOKENS,
 	RERANK_PROMPT_TEMPLATE_TOKENS,
-} from "../../../../packages/sno-station-mem/config/index.ts";
+} from "../../../../packages/memory/config/index.ts";
 
 const ORIGINAL_FETCH = globalThis.fetch;
 

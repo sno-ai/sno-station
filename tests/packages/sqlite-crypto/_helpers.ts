@@ -4,9 +4,9 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { _resetDekCache } from "@snoai/sno-station-core-crypto";
-import { KEY_FILE_ENV } from "../../../packages/sno-station-core-crypto/src/config.ts";
-import { _provisionKey } from "../../../packages/sno-station-core-crypto/src/dek.ts";
+import { _resetDekCache } from "@snoai/sqlite-crypto";
+import { KEY_FILE_ENV } from "../../../packages/sqlite-crypto/src/config.ts";
+import { _provisionKey } from "../../../packages/sqlite-crypto/src/dek.ts";
 
 const RECOVERY_FIXTURE_DIR = join(
 	dirname(fileURLToPath(import.meta.url)),
@@ -122,7 +122,7 @@ export function uniqueDbPath(env: TestEnv, name = "test"): string {
 
 /**
  * Build node CLI args for spawning a child that imports the workspace package
- * `@snoai/sno-station-core-crypto`. The package's `exports.import` points at `./src/index.ts`,
+ * `@snoai/sqlite-crypto`. The package's `exports.import` points at `./src/index.ts`,
  * so children must be launched with the `tsx` loader to strip types on import.
  */
 export function childNodeArgs(fixturePath: string): string[] {
@@ -137,7 +137,7 @@ export const CLI_SRC_PATH = join(
 	"..",
 	"..",
 	"packages",
-	"sno-station-core-crypto",
+	"sqlite-crypto",
 	"src",
 	"cli",
 	"sno-station-core.ts",
@@ -171,7 +171,7 @@ export function recoverDek(env: TestEnv, passphrase?: string): Buffer {
 	writeFileSync(
 		fixture,
 		`
-		import { getDek } from "@snoai/sno-station-core-crypto";
+		import { getDek } from "@snoai/sqlite-crypto";
 		const dek = await getDek();
 		process.stdout.write("DEK_HEX:" + Buffer.from(dek).toString("hex") + "\\n");
 		`,

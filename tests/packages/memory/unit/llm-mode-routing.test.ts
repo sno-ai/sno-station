@@ -4,9 +4,9 @@ import { describe, expect, it } from "vitest";
 import {
 	DEFAULT_MODEL_MODE,
 	llmRoutingConfigSchema,
-} from "../../../../packages/sno-station-mem/config/plugin-config-mode-schema";
-import { pickLlmRoutingConfig, resolveLlmRoute } from "../../../../packages/sno-station-mem/src/model/llm-mode-routing";
-import { pluginConfigSchema } from "../../../../packages/sno-station-mem/src/engine/shared/types";
+} from "../../../../packages/memory/config/plugin-config-mode-schema";
+import { pickLlmRoutingConfig, resolveLlmRoute } from "../../../../packages/memory/src/model/llm-mode-routing";
+import { pluginConfigSchema } from "../../../../packages/memory/src/engine/shared/types";
 
 const LOCAL_RERANK = { retrieval: { rerank: "lightweight" } } as const;
 
