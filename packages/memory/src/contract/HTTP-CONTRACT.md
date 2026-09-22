@@ -40,6 +40,7 @@ The server serves exactly these paths. The health path is `/healthz`.
 | POST | /rem/run |
 | GET | /rem/jobs/<id> |
 | POST | /v1/init |
+| POST | /v1/host-event |
 | POST | /v1/get-recall |
 | POST | /v1/capture |
 | POST | /v1/mutate |
@@ -56,6 +57,7 @@ All listed methods use POST. Deadlines are server request ceilings, not latency 
 | Contract method | Method | Path | Deadline ms |
 | --- | --- | --- | --- |
 | init | POST | /v1/init | 30000 |
+| hostEvent | POST | /v1/host-event | 30000 |
 | getRecall | POST | /v1/get-recall | 120000 |
 | capture | POST | /v1/capture | 900000 |
 | mutate | POST | /v1/mutate | 900000 |
@@ -474,6 +476,132 @@ Response status: `200 OK`; `Content-Type: application/json`.
   "degraded": false,
   "principal": "lh",
   "skinId": "codex"
+}
+```
+
+## hostEvent
+
+### Method, path and headers
+
+`POST /v1/host-event`. Deadline: 30000 ms.
+
+| Header | Required | If omitted or blank |
+| --- | --- | --- |
+| Content-Type: application/json | Recommended, not enforced | Server still parses the body as JSON |
+| x-sno-station-mem-skin | Optional | Missing/blank uses `default`; a nonblank value is used verbatim |
+| Authorization / x-sidecar-token | No | No authentication check; values do not grant admission |
+
+### Request body
+
+Reports one host-side fact for the skin's observe session: `prompt` is the user's prompt text (the sidecar hashes it after redaction and reports its byte length; the text is never stored or forwarded), `llm` is one host model call with its token counts and wall time in milliseconds. The sidecar names the observe session for the host session (`scope.host.sessionId`, else `scope.session`) the first time it sees it and emits `session.start`; a caller that names its own `scope.host.observeSessionUuid` keeps that session. `accepted` is false only when the prompt could not be hashed.
+
+Scope requires nonblank `principal`, `project`, `session`; each supplied `readable` item must also be nonblank. `host.observeSessionUuid`, if supplied, must be a UUID. Host `at` is nonnegative epoch milliseconds. Other host strings may be empty.
+
+<!-- table:request:hostEvent -->
+| Field | Type | Required | Enum | Default | Constraints |
+| --- | --- | --- | --- | --- | --- |
+| $ | object | yes | - | - | - |
+| scope | object | yes | - | - | - |
+| scope.principal | string | yes | - | - | {"minLength":1} |
+| scope.project | string | yes | - | - | {"minLength":1} |
+| scope.session | string | yes | - | - | {"minLength":1} |
+| scope.readable | array | no | - | - | - |
+| scope.readable[] | string | yes | - | - | {"minLength":1} |
+| scope.host | object | no | - | - | - |
+| scope.host.observeSessionUuid | string | no | - | - | {"format":"uuid","pattern":"^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}&#124;00000000-0000-0000-0000-000000000000&#124;ffffffff-ffff-ffff-ffff-ffffffffffff)$"} |
+| scope.host.agentId | string | no | - | - | - |
+| scope.host.sessionKey | string | no | - | - | - |
+| scope.host.sessionId | string | no | - | - | - |
+| scope.host.sessionTimezone | string | no | - | - | - |
+| scope.host.workspace | string | no | - | - | - |
+| scope.host.sessionFile | string | no | - | - | - |
+| scope.host.boundary | string | no | ["new","reset","session-end"] | - | - |
+| scope.host.at | number | no | - | - | {"minimum":0} |
+| scope.host.systemCaller | boolean | no | - | - | - |
+| event | union | yes | - | - | - |
+| event<0> | object | yes | - | - | - |
+| event<0>.kind | string | yes | ["prompt"] | - | - |
+| event<0>.prompt | string | yes | - | - | - |
+| event<1> | object | yes | - | - | - |
+| event<1>.kind | string | yes | ["llm"] | - | - |
+| event<1>.model | string | yes | - | - | {"minLength":1} |
+| event<1>.promptTokens | integer | yes | - | - | {"minimum":0,"maximum":9007199254740991} |
+| event<1>.completionTokens | integer | yes | - | - | {"minimum":0,"maximum":9007199254740991} |
+| event<1>.cacheReadTokens | integer | no | - | - | {"minimum":0,"maximum":9007199254740991} |
+| event<1>.cacheWriteTokens | integer | no | - | - | {"minimum":0,"maximum":9007199254740991} |
+| event<1>.latencyMs | number | yes | - | - | {"minimum":0} |
+
+### Response body
+
+HTTP 200, JSON. The complete successful body is below. The schema also permits the same payload with `degraded:true` and a required closed `reason`; it forbids a reason on success. HTTP exception bodies are smaller and described next.
+
+<!-- table:response:hostEvent -->
+| Field | Type | Required | Enum | Default | Constraints |
+| --- | --- | --- | --- | --- | --- |
+| $ | object | yes | - | - | {"additionalProperties":false} |
+| accepted | boolean | yes | - | - | - |
+| degraded | boolean | yes | [false] | - | - |
+
+### Errors
+
+Each mapped exception has exactly `{"degraded":true,"reason":"<reason>"}` and the status below.
+This is the complete shared mapping, not a claim that every reason is emitted by this route.
+
+<!-- table:errors:hostEvent -->
+| Reason | HTTP status |
+| --- | --- |
+| sidecar-unreachable | 503 |
+| sidecar-unresponsive | 503 |
+| principal-mismatch | 403 |
+| store-mismatch | 409 |
+| no-agent-endpoint | 503 |
+| invalid-input | 400 |
+| timeout | 504 |
+| storage-unavailable | 503 |
+| engine-failed | 500 |
+
+Additional transport errors: 413 `{"error":"payload_too_large"}` for a body over
+8 MiB; wrong method or unmatched path returns 404 `{"error":"not_found"}`.
+504 is the mapped `timeout` response, not a commit or cancellation guarantee.
+An outer-server failure can return 500 `{"error":"internal_error"}`.
+
+### Complete request and response example
+
+```http
+POST /v1/host-event HTTP/1.1
+Host: 127.0.0.1:43127
+Content-Type: application/json
+x-sno-station-mem-skin: codex
+```
+
+<!-- example:hostEvent:request -->
+```json
+{
+  "scope": {
+    "principal": "lh",
+    "project": "release-notes",
+    "session": "session-2026-09-17",
+    "host": {
+      "sessionId": "session-2026-09-17"
+    }
+  },
+  "event": {
+    "kind": "llm",
+    "model": "openai:gpt-5.6-codex",
+    "promptTokens": 6402,
+    "completionTokens": 241,
+    "latencyMs": 8420
+  }
+}
+```
+
+Response status: `200 OK`; `Content-Type: application/json`.
+
+<!-- example:hostEvent:response -->
+```json
+{
+  "degraded": false,
+  "accepted": true
 }
 ```
 
@@ -2037,7 +2165,7 @@ reference names the external extraction secret; raw key material is not accepted
 | SNO_STATION_MEM_REM_CLOCK_OVERRIDE | Clock override parsed as Date; use an ISO instant |
 | SNO_STATION_MEM_REM_VOLUME_THRESHOLD | Positive integer volume threshold override |
 | SNO_STATION_MEM_NODE_ENV | Package test mode; enables observation loopback validation exception |
-| SNO_OBSERVE_ENABLED | External observation default; trimmed true/1 enables it |
+| SNO_OBSERVE_ENABLED | External observation default; on unless trimmed false/0 turns it off |
 | SNO_OBSERVE_BASE_URL | External observation base URL default |
 | GPU_BASE_URL | Existing GPU transport endpoint setting |
 | XDG_CONFIG_HOME | External crypto package configuration root |

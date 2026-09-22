@@ -3,6 +3,7 @@ import type { ContractMethod } from "./index";
 
 export const MEMORY_ROUTES: Readonly<Record<ContractMethod, { path: string; timeoutMs: number }>> = {
 	init: { path: "/v1/init", timeoutMs: 30_000 },
+	hostEvent: { path: "/v1/host-event", timeoutMs: 30_000 },
 	getRecall: { path: "/v1/get-recall", timeoutMs: 120_000 },
 	capture: { path: "/v1/capture", timeoutMs: 900_000 },
 	mutate: { path: "/v1/mutate", timeoutMs: 900_000 },

@@ -42,7 +42,6 @@ Consent values are `off`, `metadata-only`, and `full`. `off` keeps emitted event
 - `snoObserve.register()`
 - `snoObserve.audit.verify(eventId)`
 - `snoObserve.doctor()`
-- `snoObserve.shouldSampleTool(eventId, toolName, rate)`
 - `snoObserve.subscribe(handler)`
 - `snoObserve.shutdown()`
 

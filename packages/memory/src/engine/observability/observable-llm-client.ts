@@ -7,7 +7,7 @@ import { Mutex } from "async-mutex";
 import type { JsonObject } from "@snoai/observability";
 import type { LlmClient, LlmClientConfig, MemoryLlmRequest } from "../../model/llm-client";
 import { resolveLlmRoute } from "../../model/llm-mode-routing";
-import { observeBackgroundCooldownKey, type PluginObservability } from "./adapter";
+import type { PluginObservability } from "./adapter";
 import { countTextTokens } from "./token-counter";
 
 type SessionUuidProvider = () => string | undefined;
@@ -57,7 +57,7 @@ export class ObservableLlmClient implements LlmClient {
 		// overlapping completeJson overwrite it and misattribute token cost.
 		const resolved = await this.inner.getResolvedConfig().catch(async (error: unknown) => {
 			await this.observability.emitError(
-				"llm_client_resolve_config",
+				"llm.call:resolve_config",
 				error,
 				this.sessionUuidProvider(),
 			);
@@ -76,6 +76,15 @@ export class ObservableLlmClient implements LlmClient {
 			const sessionUuid = this.sessionUuidProvider();
 			const hasProviderUsage =
 				providerUsage !== null && providerUsage.inputTokens + providerUsage.outputTokens > 0;
+			if (result === null && !hasProviderUsage) {
+				// Nothing came back and the provider reported nothing: that is an error, not a zero-token call.
+				await this.observability.emitError(
+					"llm.call:usage_missing",
+					this.inner.getLastError() ?? "no result and no usage",
+					sessionUuid,
+				);
+				return result;
+			}
 			const promptCount = hasProviderUsage
 				? providerUsage.inputTokens
 				: countTextTokens(request.prompt, resolved.model).count;
@@ -92,18 +101,17 @@ export class ObservableLlmClient implements LlmClient {
 							model: `${resolved.provider}:${resolved.model}`,
 							prompt_tokens: promptCount,
 							completion_tokens: completionCount,
-							latency_ms: Date.now() - started,
+							latency_ms: Math.max(0, Math.round(Date.now() - started)),
 							cache_read_tokens: 0,
 							cache_write_tokens: 0,
 							token_source: "plugin_internal_paid",
 						} satisfies JsonObject,
 					});
 				},
-				{ cooldownKey: observeBackgroundCooldownKey("llm.call", sessionUuid) },
 			);
 			return result;
 		} catch (error) {
-			await this.observability.emitError("llm_client_throw", error, this.sessionUuidProvider());
+			await this.observability.emitError("llm.call:provider_throw", error, this.sessionUuidProvider());
 			throw error;
 		}
 	}

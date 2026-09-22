@@ -163,107 +163,50 @@ describe("observability timeout bounds", () => {
 			2,
 			expect.objectContaining({ event_type: "memory.write", lane: "memory" }),
 		);
+		await observability.emit({
+			eventType: "permission.request",
+			sessionUuid: "session-1",
+			payload: {
+				kind: "shell",
+				decision: "deny",
+				target_hash:
+					"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+			},
+		});
+
 		expect(runtime.emit).toHaveBeenNthCalledWith(
 			3,
 			expect.objectContaining({ event_type: "tool.call", lane: "skill" }),
 		);
+		expect(runtime.emit).toHaveBeenNthCalledWith(
+			4,
+			expect.objectContaining({ event_type: "permission.request", lane: "security" }),
+		);
 	});
 
-	it("times out background observe work and cools down matching new tasks", async () => {
+	it("keeps emitting after a background task hangs: no cooldown, no queue cap, no circuit", async () => {
 		vi.useFakeTimers();
-		const logger = { warn: vi.fn() };
 		const observability = new PluginObservability(
 			pluginConfigSchema.parse({
 				embedding: { provider: "local-onnx" },
 				observe: { enabled: false },
 			}),
-			makeTempDir("mem-claw-observe-background-timeout-"),
-			logger,
+			makeTempDir("mem-claw-observe-no-block-"),
+			{ warn: vi.fn() },
 		);
 		const completed = vi.fn();
 
-		observability.trackBestEffort("hung", () => new Promise(() => undefined));
+		for (let i = 0; i < 60; i++) {
+			observability.trackBestEffort("hung", () => new Promise(() => undefined));
+		}
 		await vi.advanceTimersByTimeAsync(5_000);
 		observability.trackBestEffort("hung", completed);
-		observability.trackBestEffort("hung", completed, {
-			cooldownKey: "hung:next-session",
-		});
 		observability.trackBestEffort("other", completed);
 		await Promise.resolve();
 
 		expect(hasDiagnostic("observability.background.timed_out", { action: "hung" })).toBe(true);
-		expect(hasDiagnostic("observability.background.rejected", { action: "hung", reason: "timeout_cooldown" })).toBe(true);
+		expect(hasDiagnostic("observability.background.rejected")).toBe(false);
+		expect(hasDiagnostic("observability.background.paused")).toBe(false);
 		expect(completed).toHaveBeenCalledTimes(2);
-
-		await vi.advanceTimersByTimeAsync(60_000);
-		observability.trackBestEffort("hung", completed);
-		await Promise.resolve();
-
-		expect(completed).toHaveBeenCalledTimes(3);
-	});
-
-	it("evicts timed-out background observe work from the queue cap", async () => {
-		vi.useFakeTimers();
-		const logger = { warn: vi.fn() };
-		const observability = new PluginObservability(
-			pluginConfigSchema.parse({
-				embedding: { provider: "local-onnx" },
-				observe: { enabled: false },
-			}),
-			makeTempDir("mem-claw-observe-background-cap-"),
-			logger,
-		);
-		const completed = vi.fn();
-
-		// 20 stuck tasks: enough to prove the queue-cap slot is freed on timeout
-		// (not on the never-settling raw promise), but comfortably under the
-		// separate orphan-circuit ceiling (50, see the dedicated test below) so
-		// this test isolates just the cap-eviction mechanism.
-		for (let i = 0; i < 20; i++) {
-			observability.trackBestEffort(
-				`hung-${i}`,
-				() => new Promise(() => undefined),
-			);
-		}
-		await vi.advanceTimersByTimeAsync(5_000);
-		observability.trackBestEffort("after-timeout", completed);
-		await Promise.resolve();
-
-		expect(hasDiagnostic("observability.background.timed_out", { action: "hung-0" })).toBe(true);
-		expect(hasDiagnostic("observability.background.rejected", { action: "after-timeout", reason: "queue_full" })).toBe(false);
-		expect(completed).toHaveBeenCalledTimes(1);
-	});
-
-	it("opens a global circuit once too many timed-out emits are still stuck in the SDK", async () => {
-		vi.useFakeTimers();
-		const logger = { warn: vi.fn() };
-		const observability = new PluginObservability(
-			pluginConfigSchema.parse({
-				embedding: { provider: "local-onnx" },
-				observe: { enabled: false },
-			}),
-			makeTempDir("mem-claw-observe-orphan-circuit-"),
-			logger,
-		);
-		const completed = vi.fn();
-
-		// The queue-cap eviction alone only bounds the *slot count*, not the
-		// underlying uncancellable promises still live inside the SDK. Past 50
-		// simultaneously-stuck emits (a genuinely wedged SDK, not transient
-		// slowness), new background work must stop being admitted instead of
-		// growing that orphan count without bound.
-		for (let i = 0; i < 50; i++) {
-			observability.trackBestEffort(
-				`hung-${i}`,
-				() => new Promise(() => undefined),
-			);
-		}
-		await vi.advanceTimersByTimeAsync(5_000);
-		observability.trackBestEffort("after-circuit-trip", completed);
-		await Promise.resolve();
-
-		expect(hasDiagnostic("observability.background.paused", { outstanding_count: 50 })).toBe(true);
-		expect(hasDiagnostic("observability.background.rejected", { action: "after-circuit-trip", reason: "orphan_limit" })).toBe(true);
-		expect(completed).not.toHaveBeenCalled();
 	});
 });

@@ -8,3 +8,4 @@ platforms:
   - macos
 hooks:
   - pre_llm_call
+  - post_api_request

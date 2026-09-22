@@ -38,3 +38,7 @@ export function getPausePath(env: PathEnv = process.env): string {
 export function getRedactionRulesPath(env: PathEnv = process.env): string {
 	return join(getSnoProfileDir(env), "redaction-rules.txt");
 }
+
+export function getLogPath(env: PathEnv = process.env): string {
+	return join(getSnoProfileDir(env), "observe.log");
+}
