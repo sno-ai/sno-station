@@ -4,11 +4,11 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
-import { BufferStore, decodeEnvelope } from "../../../../packages/sno-observe/dist/internal/buffer-store.js";
+import { BufferStore, decodeEnvelope } from "../../../../packages/observability/dist/internal/buffer-store.js";
 import {
 	canonicalPreimage,
 	computeSelfHash,
-} from "../../../../packages/sno-observe/dist/internal/canonical-hash.js";
+} from "../../../../packages/observability/dist/internal/canonical-hash.js";
 import { scope, validPayloads } from "../fixtures/temp-env.mjs";
 
 const vector = JSON.parse(

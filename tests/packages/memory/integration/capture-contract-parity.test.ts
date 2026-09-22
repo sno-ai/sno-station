@@ -2,7 +2,7 @@ import { userInfo } from "node:os";
 import { dirname } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createLogger } from "@snoai/utils/logger";
-import { getDekSync } from "@snoai/sno-station-core-crypto";
+import { getDekSync } from "@snoai/sqlite-crypto";
 import { createTestEnv } from "../../../apps/mem-claw/helpers/test-db";
 import { MemoryStore } from "../../../../packages/sno-station-mem/src/store/store";
 import { createRetriever } from "../../../../packages/sno-station-mem/src/engine/retrieval/retriever";

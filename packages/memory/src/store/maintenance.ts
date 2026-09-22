@@ -7,7 +7,7 @@
 
 import { createHash, type Hash } from "node:crypto";
 import { createLogger } from "@snoai/utils/logger";
-import { runIntegrityCheck } from "@snoai/sno-station-core-crypto";
+import { runIntegrityCheck } from "@snoai/sqlite-crypto";
 import {
 	BACKUP_INTERVAL_MS,
 	FTS_MERGE_INTERVAL_MS,
@@ -98,7 +98,7 @@ export interface MaintenanceDeps {
 	/** sno-station-mem state directory for maintenance records. */
 	stateDir: string;
 	/**
-	 * Integrity sweep implementation; defaults to sno-station-core-crypto's runIntegrityCheck.
+	 * Integrity sweep implementation; defaults to sqlite-crypto's runIntegrityCheck.
 	 * Injectable so the integrity integration test can drive the failure path
 	 * (pre-declared in the DB-optimization plan's test design).
 	 */

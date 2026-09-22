@@ -16,53 +16,53 @@ import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 import DatabaseConstructor from "better-sqlite3";
 import { createCuid2 } from "../../../../packages/common-core/dist/index.js";
-import * as publicModule from "../../../../packages/sno-observe/dist/index.js";
-import { snoObserve } from "../../../../packages/sno-observe/dist/index.js";
-import { verifyAuditEvent } from "../../../../packages/sno-observe/dist/internal/audit-verify.js";
+import * as publicModule from "../../../../packages/observability/dist/index.js";
+import { snoObserve } from "../../../../packages/observability/dist/index.js";
+import { verifyAuditEvent } from "../../../../packages/observability/dist/internal/audit-verify.js";
 import {
 	BufferStore,
 	decodeEnvelope,
-} from "../../../../packages/sno-observe/dist/internal/buffer-store.js";
+} from "../../../../packages/observability/dist/internal/buffer-store.js";
 import {
 	canonicalPreimage,
 	computeSelfHash,
-} from "../../../../packages/sno-observe/dist/internal/canonical-hash.js";
-import { ConsentStore } from "../../../../packages/sno-observe/dist/internal/consent.js";
+} from "../../../../packages/observability/dist/internal/canonical-hash.js";
+import { ConsentStore } from "../../../../packages/observability/dist/internal/consent.js";
 import {
 	ChainSeedError,
 	InvalidAgentIdError,
 	InvalidConsentError,
 	InvalidEventPayloadError,
 	InvalidEventTypeError,
-} from "../../../../packages/sno-observe/dist/internal/errors.js";
-import { exportEvents } from "../../../../packages/sno-observe/dist/internal/export.js";
-import { sha256Hex } from "../../../../packages/sno-observe/dist/internal/hash.js";
-import { bootstrapIdentity } from "../../../../packages/sno-observe/dist/internal/identity.js";
+} from "../../../../packages/observability/dist/internal/errors.js";
+import { exportEvents } from "../../../../packages/observability/dist/internal/export.js";
+import { sha256Hex } from "../../../../packages/observability/dist/internal/hash.js";
+import { bootstrapIdentity } from "../../../../packages/observability/dist/internal/identity.js";
 import {
 	machineSecretHash,
 	registerMachine,
-} from "../../../../packages/sno-observe/dist/internal/machine-registration.js";
-import { getIdentityLockPath } from "../../../../packages/sno-observe/dist/internal/paths.js";
+} from "../../../../packages/observability/dist/internal/machine-registration.js";
+import { getIdentityLockPath } from "../../../../packages/observability/dist/internal/paths.js";
 import {
 	detectProjectId,
 	normalizeGitRemote,
-} from "../../../../packages/sno-observe/dist/internal/project-id.js";
-import { redactEventPayload } from "../../../../packages/sno-observe/dist/internal/redact.js";
-import { SnoObserveRuntime } from "../../../../packages/sno-observe/dist/internal/runtime.js";
-import { shouldSampleTool } from "../../../../packages/sno-observe/dist/internal/sampling.js";
+} from "../../../../packages/observability/dist/internal/project-id.js";
+import { redactEventPayload } from "../../../../packages/observability/dist/internal/redact.js";
+import { SnoObserveRuntime } from "../../../../packages/observability/dist/internal/runtime.js";
+import { shouldSampleTool } from "../../../../packages/observability/dist/internal/sampling.js";
 import {
 	parseConsentValue,
 	parseEventInput,
-} from "../../../../packages/sno-observe/dist/internal/schemas.js";
+} from "../../../../packages/observability/dist/internal/schemas.js";
 import {
 	countTokens,
 	countTokensFast,
-} from "../../../../packages/sno-observe/dist/internal/tokens.js";
-import { AGENT_IDS, EVENT_TYPES } from "../../../../packages/sno-observe/dist/internal/types.js";
+} from "../../../../packages/observability/dist/internal/tokens.js";
+import { AGENT_IDS, EVENT_TYPES } from "../../../../packages/observability/dist/internal/types.js";
 import {
 	createEnvelope,
 	serializeEnvelope,
-} from "../../../../packages/sno-observe/dist/internal/wire-envelope.js";
+} from "../../../../packages/observability/dist/internal/wire-envelope.js";
 
 const expectedEventTypes = [
 	"agent.identify",

@@ -8,7 +8,7 @@
 
 import { existsSync, mkdirSync, readdirSync } from "node:fs";
 import { basename, isAbsolute } from "node:path";
-import { KEYCHAIN_ACCOUNT, KEYCHAIN_SERVICE_DEFAULT } from "@snoai/sno-station-core-crypto";
+import { KEYCHAIN_ACCOUNT, KEYCHAIN_SERVICE_DEFAULT } from "@snoai/sqlite-crypto";
 import { createLogger } from "@snoai/utils/logger";
 import {
 	assertLocalFilesystem,

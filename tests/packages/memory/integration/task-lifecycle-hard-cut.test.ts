@@ -26,7 +26,7 @@ import {
 } from "../../../../packages/sno-station-mem/src/engine/extraction/task-lifecycle-resolver";
 import type { LlmClient } from "../../../../packages/sno-station-mem/src/model/llm-client";
 import { MemoryStore, TaskLifecycleStaleResolutionError } from "../../../../packages/sno-station-mem/src/store/store";
-import { _provisionKey } from "../../../../packages/sno-station-core-crypto/src/dek.ts";
+import { _provisionKey } from "../../../../packages/sqlite-crypto/src/dek.ts";
 import { createTestDb, createTestEmbedder, type TestDb } from "../../../apps/mem-claw/helpers/test-db";
 import { createTestLlmClient } from "../../../apps/mem-claw/helpers/llm-client";
 

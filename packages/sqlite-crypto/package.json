@@ -1,12 +1,12 @@
 {
-	"name": "@snoai/sno-station-core-crypto",
+	"name": "@snoai/sqlite-crypto",
 	"version": "0.2.0",
 	"license": "Apache-2.0",
 	"publishConfig": { "access": "public" },
 	"repository": {
 		"type": "git",
 		"url": "git+https://github.com/sno-ai/sno-station.git",
-		"directory": "packages/sno-station-core-crypto"
+		"directory": "packages/sqlite-crypto"
 	},
 	"description": "Local AES-256 encryption for SNO Station Core SQLite databases. Single audit surface for DEK lifecycle, encrypted DB open, manifest, canary, file-fallback, passphrase wrap, and .sno-station-core export.",
 	"type": "module",
@@ -37,9 +37,9 @@
 		"typecheck": "tsc --noEmit",
 		"lint": "biome check src/",
 		"lint:fix": "biome check --write src/",
-		"test:unit": "vitest run --config vitest.config.ts ../../tests/packages/sno-station-core-crypto/unit",
-		"test:integration": "vitest run --config vitest.config.ts ../../tests/packages/sno-station-core-crypto/integration",
-		"test:e2e": "vitest run --config vitest.config.ts ../../tests/packages/sno-station-core-crypto/e2e --passWithNoTests",
+		"test:unit": "vitest run --config vitest.config.ts ../../tests/packages/sqlite-crypto/unit",
+		"test:integration": "vitest run --config vitest.config.ts ../../tests/packages/sqlite-crypto/integration",
+		"test:e2e": "vitest run --config vitest.config.ts ../../tests/packages/sqlite-crypto/e2e --passWithNoTests",
 		"clean": "rm -rf dist"
 	},
 	"dependencies": {

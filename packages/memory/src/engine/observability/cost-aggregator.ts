@@ -3,7 +3,7 @@
  * @boundary Cloud observability accounting; not used by local memory behavior.
  */
 
-import type { EventType, JsonObject } from "@snoai/sno-observe";
+import type { EventType, JsonObject } from "@snoai/observability";
 
 export type CostSummaryPayload = JsonObject & {
 	session_uuid: string;

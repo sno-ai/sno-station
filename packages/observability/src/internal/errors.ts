@@ -25,7 +25,7 @@ export class InvalidConsentError extends SnoObserveError {
 
 export class InvalidEventTypeError extends SnoObserveError {
 	constructor(eventType: string) {
-		super("invalid_event_type", `event_type is not supported by sno-observe: ${eventType}`);
+		super("invalid_event_type", `event_type is not supported by observability: ${eventType}`);
 	}
 }
 

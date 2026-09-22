@@ -1,6 +1,6 @@
 /** @file sqlite-runtime.ts
  * @purpose Single chokepoint for opening encrypted SQLite databases used by
- *   the plugin. Routes all opens through `@snoai/sno-station-core-crypto`, which applies
+ *   the plugin. Routes all opens through `@snoai/sqlite-crypto`, which applies
  *   the SQLCipher PRAGMA recipe, manifest registration, and canary-row
  *   verification. There is no direct `better-sqlite3` access in this file —
  *   the import-restriction lint rule in `biome.json` enforces this for the
@@ -18,11 +18,11 @@ import {
 	getDekSync,
 	openEncryptedDb,
 	openEncryptedDbReadonly,
-} from "@snoai/sno-station-core-crypto";
+} from "@snoai/sqlite-crypto";
 import { LRUCache } from "lru-cache";
 
 // The runtime returns a `Database` from better-sqlite3-multiple-ciphers via
-// the sno-station-core-crypto package. We surface only the subset the plugin uses, so
+// the sqlite-crypto package. We surface only the subset the plugin uses, so
 // callers stay decoupled from the underlying driver.
 type ChokepointDb = ReturnType<typeof openEncryptedDb>;
 

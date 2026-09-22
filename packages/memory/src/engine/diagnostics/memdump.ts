@@ -8,7 +8,7 @@ import { tmpdir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
-import { resolveConfigPaths } from "@snoai/sno-station-core-crypto";
+import { resolveConfigPaths } from "@snoai/sqlite-crypto";
 import { writeEmergencyDiagnostic } from "../observability/early-diagnostics";
 import { initSqliteRuntime, openSqliteDatabaseReadonly } from "../../store/sqlite-runtime";
 

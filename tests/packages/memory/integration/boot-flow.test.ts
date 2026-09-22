@@ -19,7 +19,7 @@ import {
 	_resetDekCache,
 	KEYCHAIN_ACCOUNT,
 	KEYCHAIN_SERVICE_DEFAULT,
-} from "@snoai/sno-station-core-crypto";
+} from "@snoai/sqlite-crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { bootstrapDataLayout } from "../../../../packages/sno-station-mem/src/store/data-bootstrap.ts";
 import {

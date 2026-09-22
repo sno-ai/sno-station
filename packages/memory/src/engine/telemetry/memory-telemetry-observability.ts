@@ -1,9 +1,9 @@
-/** @file memory-telemetry-sno-observe.ts
- * @purpose Forwards local memory telemetry summaries to sno-observe without making cloud state authoritative.
+/** @file memory-telemetry-observability.ts
+ * @purpose Forwards local memory telemetry summaries to observability without making cloud state authoritative.
  * @boundary Reads local append-only telemetry rows and advances only the local sync watermark.
  */
 
-import type { JsonObject } from "@snoai/sno-observe";
+import type { JsonObject } from "@snoai/observability";
 import type { SqliteDatabaseLike } from "../../store/sqlite-runtime";
 import {
 	isMemoryTelemetryEventType,

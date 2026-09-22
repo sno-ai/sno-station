@@ -1,5 +1,5 @@
 /** @file adapter.ts
- * @purpose Adapts plugin events to the public @snoai/sno-observe SDK.
+ * @purpose Adapts plugin events to the public @snoai/observability SDK.
  * @boundary Plugin emits only public SDK events; the SDK owns buffering and HTTP delivery.
  */
 
@@ -12,7 +12,7 @@ import {
 	type EventLane,
 	type EventType,
 	type JsonObject,
-} from "@snoai/sno-observe";
+} from "@snoai/observability";
 import type { PluginConfig } from "../shared/types";
 import { bestEffort, bestEffortSync, type ObserveLogger } from "./best-effort";
 import { CostAggregator } from "./cost-aggregator";
