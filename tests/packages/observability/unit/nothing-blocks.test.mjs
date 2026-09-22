@@ -135,7 +135,7 @@ describe("nothing blocks an observe upload", () => {
 		}
 	});
 
-	it("server consent lower than local: rows are re-sent at metadata-only and local consent follows", async () => {
+	it("server consent lower than local: each refused row is re-sent at metadata-only, the setting stays", async () => {
 		const temp = createTempSnoEnv("sno-observe-suppressed-");
 		const server = fakeServer((envelope) =>
 			envelope.consent_level === "full"
@@ -154,11 +154,10 @@ describe("nothing blocks an observe upload", () => {
 			})).eventId;
 			const result = await observe.flush({ force: true });
 			assert.equal(result.retryable, 0);
-			// the epoch's identify was refused at "full"; the run behind it travelled once, lowered
-			assert.equal(server.posted.some((envelope) => envelope.consent_level === "full"), true);
+			// every "full" row is refused once and re-sent lowered; the local setting is the user's
 			const sent = server.posted.filter((envelope) => envelope.event_id === id);
-			assert.deepEqual(sent.map((envelope) => envelope.consent_level), ["metadata-only"]);
-			assert.equal(observe.consent.get(), "metadata-only");
+			assert.deepEqual(sent.map((envelope) => envelope.consent_level), ["full", "metadata-only"]);
+			assert.equal(observe.consent.get(), "full");
 			const db = new DatabaseConstructor(temp.env.SNO_BUFFER_PATH, { readonly: true });
 			try {
 				assert.equal(db.prepare("SELECT COUNT(*) AS n FROM events WHERE shipped = 0").get().n, 0);
@@ -171,25 +170,80 @@ describe("nothing blocks an observe upload", () => {
 		}
 	});
 
-	it("server consent off: the run is kept locally, the chain stays put, no tight loop", async () => {
+	it("server consent off for one row: only that row is kept locally, the rows behind it still ship", async () => {
 		const temp = createTempSnoEnv("sno-observe-consent-off-");
+		let refusedId;
 		const server = fakeServer((envelope) =>
-			envelope.event_type === "agent.identify"
-				? undefined
-				: json({ error: "consent_suppressed", reason: "chain_reset_required" }, 409),
+			envelope.event_id === refusedId
+				? json({ error: "consent_suppressed", reason: "chain_reset_required" }, 409)
+				: undefined,
+		);
+		const observe = createSnoObserve({ env: temp.env, cwd: temp.dir, fetch: server.fetch });
+		try {
+			refusedId = (await observe.emit(memoryWrite())).eventId;
+			const laterId = (await observe.emit(memoryWrite())).eventId;
+			const result = await observe.flush({ force: true });
+			assert.deepEqual({ terminal: result.terminal, retryable: result.retryable }, { terminal: 1, retryable: 0 });
+			assert.equal(server.posted.filter((envelope) => envelope.event_id === refusedId).length, 1);
+			assert.equal(server.posted.filter((envelope) => envelope.event_id === laterId).length, 1);
+			const db = new DatabaseConstructor(temp.env.SNO_BUFFER_PATH, { readonly: true });
+			try {
+				assert.equal(db.prepare("SELECT COUNT(*) AS n FROM events WHERE shipped = 0").get().n, 0);
+				assert.equal(db.prepare("SELECT event_id FROM quarantine").get().event_id, refusedId);
+			} finally {
+				db.close();
+			}
+		} finally {
+			await observe.shutdown();
+			cleanupTempSnoEnv(temp);
+		}
+	});
+
+	it("an identify the server refuses for good does not breed new identifies", async () => {
+		const temp = createTempSnoEnv("sno-observe-identify-refused-");
+		const server = fakeServer((envelope) =>
+			envelope.event_type === "agent.identify" ? json({ error: "invalid_envelope" }, 400) : undefined,
 		);
 		const observe = createSnoObserve({ env: temp.env, cwd: temp.dir, fetch: server.fetch });
 		try {
 			await observe.emit(memoryWrite());
 			await observe.emit(memoryWrite());
 			const result = await observe.flush({ force: true });
-			assert.deepEqual({ shipped: result.shipped, terminal: result.terminal, retryable: result.retryable }, { shipped: 1, terminal: 2, retryable: 0 });
-			assert.equal(server.posted.length, 2);
+			assert.deepEqual({ shipped: result.shipped, terminal: result.terminal, retryable: result.retryable }, { shipped: 0, terminal: 3, retryable: 0 });
+			assert.equal(server.posted.length, 1);
 			const db = new DatabaseConstructor(temp.env.SNO_BUFFER_PATH, { readonly: true });
 			try {
 				assert.equal(db.prepare("SELECT COUNT(*) AS n FROM events WHERE shipped = 0").get().n, 0);
-				assert.equal(db.prepare("SELECT COUNT(*) AS n FROM quarantine WHERE reason = 'consent_suppressed'").get().n, 2);
+				assert.equal(db.prepare("SELECT COUNT(*) AS n FROM quarantine").get().n, 3);
 				assert.equal(db.prepare("SELECT MAX(chain_epoch) AS e FROM chain_tail").get().e, 0);
+			} finally {
+				db.close();
+			}
+		} finally {
+			await observe.shutdown();
+			cleanupTempSnoEnv(temp);
+		}
+	});
+
+	it("server consent off on the memory lane: the chain waits for it, nothing is dropped", async () => {
+		const temp = createTempSnoEnv("sno-observe-lane-off-");
+		const server = fakeServer((envelope) =>
+			envelope.event_type === "agent.identify"
+				? json({ error: "consent_suppressed", reason: "chain_reset_required" }, 409)
+				: undefined,
+		);
+		const observe = createSnoObserve({ env: temp.env, cwd: temp.dir, fetch: server.fetch });
+		try {
+			await observe.emit(memoryWrite());
+			await observe.emit(memoryWrite());
+			const result = await observe.flush({ force: true });
+			assert.deepEqual({ shipped: result.shipped, terminal: result.terminal, retryable: result.retryable }, { shipped: 0, terminal: 0, retryable: 1 });
+			assert.equal(result.retryAfterMs >= 3_600_000, true);
+			assert.equal(server.posted.length, 1);
+			const db = new DatabaseConstructor(temp.env.SNO_BUFFER_PATH, { readonly: true });
+			try {
+				assert.equal(db.prepare("SELECT COUNT(*) AS n FROM events WHERE shipped = 0 AND terminal = 0").get().n, 3);
+				assert.equal(db.prepare("SELECT COUNT(*) AS n FROM quarantine").get().n, 0);
 			} finally {
 				db.close();
 			}
