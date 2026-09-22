@@ -218,26 +218,29 @@ export async function importEncrypted(sourcePath: string): Promise<void> {
 		entry: e,
 		manifestEntry: restoreEntryForArchiveEntry(e.name, restoreEntries),
 	}));
-	// A sidecar holding a store open would keep serving the old inode and lose
-	// every later write, so every target is checked before any file is replaced;
-	// a refusal must leave all stores as they were.
-	for (const { manifestEntry } of targets) {
-		assertStoreNotOpen(manifestEntry.path, dek);
-	}
-	for (const { entry: e, manifestEntry } of targets) {
-		const restorePath = manifestEntry.path;
-		const tmpPath = `${restorePath}.import-${process.pid}-${Date.now().toString(36)}`;
-		mkdirSync(dirname(restorePath), { recursive: true });
-		try {
+	// Every target is checked, written to a temp file and verified before any
+	// store is replaced: a sidecar holding a store open would keep serving the
+	// old inode and lose every later write, and a refusal or a verification
+	// failure must leave all stores as they were.
+	const staged: Array<{ tmpPath: string; restorePath: string }> = [];
+	try {
+		for (const { entry: e, manifestEntry } of targets) {
+			const restorePath = manifestEntry.path;
+			assertStoreNotOpen(restorePath, dek);
+			const tmpPath = `${restorePath}.import-${process.pid}-${Date.now().toString(36)}`;
+			mkdirSync(dirname(restorePath), { recursive: true });
 			writeFileSync(tmpPath, e.data, { mode: 0o600 });
+			staged.push({ tmpPath, restorePath });
 			verifyRestoredDb(tmpPath, manifestEntry, dek);
-			renameSync(tmpPath, restorePath);
-			// The previous store's WAL and shm must not be replayed onto the restored file.
-			rmSync(`${restorePath}-wal`, { force: true });
-			rmSync(`${restorePath}-shm`, { force: true });
-		} catch (err) {
-			rmSync(tmpPath, { force: true });
-			throw err;
 		}
+	} catch (err) {
+		for (const { tmpPath } of staged) rmSync(tmpPath, { force: true });
+		throw err;
+	}
+	for (const { tmpPath, restorePath } of staged) {
+		renameSync(tmpPath, restorePath);
+		// The previous store's WAL and shm must not be replayed onto the restored file.
+		rmSync(`${restorePath}-wal`, { force: true });
+		rmSync(`${restorePath}-shm`, { force: true });
 	}
 }
