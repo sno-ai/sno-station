@@ -15,7 +15,7 @@ import {
 import { dirname, posix } from "node:path";
 import { gunzipSync } from "node:zlib";
 import { extract } from "tar-stream";
-import { _readCanaryForRecovery } from "./db.js";
+import { _readCanaryForRecovery, assertStoreNotOpen } from "./db.js";
 import { getDek } from "./dek.js";
 import {
 	ForeignDekError,
@@ -214,8 +214,17 @@ export async function importEncrypted(sourcePath: string): Promise<void> {
 
 	const entries = await extractTarball(plaintext);
 	const restoreEntries = restoreEntriesByArchiveEntry();
-	for (const e of entries) {
-		const manifestEntry = restoreEntryForArchiveEntry(e.name, restoreEntries);
+	const targets = entries.map((e) => ({
+		entry: e,
+		manifestEntry: restoreEntryForArchiveEntry(e.name, restoreEntries),
+	}));
+	// A sidecar holding a store open would keep serving the old inode and lose
+	// every later write, so every target is checked before any file is replaced;
+	// a refusal must leave all stores as they were.
+	for (const { manifestEntry } of targets) {
+		assertStoreNotOpen(manifestEntry.path, dek);
+	}
+	for (const { entry: e, manifestEntry } of targets) {
 		const restorePath = manifestEntry.path;
 		const tmpPath = `${restorePath}.import-${process.pid}-${Date.now().toString(36)}`;
 		mkdirSync(dirname(restorePath), { recursive: true });
@@ -223,6 +232,9 @@ export async function importEncrypted(sourcePath: string): Promise<void> {
 			writeFileSync(tmpPath, e.data, { mode: 0o600 });
 			verifyRestoredDb(tmpPath, manifestEntry, dek);
 			renameSync(tmpPath, restorePath);
+			// The previous store's WAL and shm must not be replayed onto the restored file.
+			rmSync(`${restorePath}-wal`, { force: true });
+			rmSync(`${restorePath}-shm`, { force: true });
 		} catch (err) {
 			rmSync(tmpPath, { force: true });
 			throw err;

@@ -112,6 +112,16 @@ export class MissingDekError extends SnoStationCoreCryptoError {
 	}
 }
 
+export class StoreInUseError extends SnoStationCoreCryptoError {
+	constructor(
+		message = "database is open in another process",
+		options?: ErrorOptions,
+	) {
+		super("STORE_IN_USE", message, options);
+		this.name = "StoreInUseError";
+	}
+}
+
 export class ForeignDekError extends SnoStationCoreCryptoError {
 	constructor(
 		message = "export was made under a different DEK; cross-machine import requires `sno-station-core lock --import-dek` (v1.1)",
