@@ -2,13 +2,13 @@ import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
-import type { Embedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client.ts";
+import type { Embedder } from "../../../../packages/memory/src/engine/extraction/embedding-provider-client.ts";
 import { createTestEmbedder } from "../../../apps/mem-claw/helpers/test-db.ts";
 import {
 	createRetriever,
 	DEFAULT_RETRIEVAL_CONFIG,
-} from "../../../../packages/sno-station-mem/src/engine/retrieval/retriever.ts";
-import type { MemoryEntry, MemorySearchResult } from "../../../../packages/sno-station-mem/src/engine/shared/types.ts";
+} from "../../../../packages/memory/src/engine/retrieval/retriever.ts";
+import type { MemoryEntry, MemorySearchResult } from "../../../../packages/memory/src/engine/shared/types.ts";
 
 // Real integration test: the Sno cross-encoder reranker is hit over HTTP. No
 // mock of the reranker — the whole point is to prove the mem-claw retriever's

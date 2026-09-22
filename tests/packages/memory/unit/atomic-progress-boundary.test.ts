@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseProgressTurns, excludeProgressRecords } from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-progress-boundary";
+import { parseProgressTurns, excludeProgressRecords } from "../../../../packages/memory/src/engine/extraction/atomic-progress-boundary";
 
 const turns = [
 	{ role: "user" as const, content: "The draft is halfway done." },

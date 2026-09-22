@@ -142,7 +142,7 @@ export function appendQaTrace(trace: QaTrace, traceDirOverride?: string): void {
 			error: err,
 		}, {
 			event_name: "sno_station_mem.trace.failed.to.append.qa.trace",
-			file: "packages/sno-station-mem/src/engine/eval/trace.ts",
+			file: "packages/memory/src/engine/eval/trace.ts",
 			function: "appendQaTrace",
 			site_id: "trace.appendQaTrace.164bcaddd4",
 		});
@@ -228,7 +228,7 @@ export function writeConfigSnapshot(traceDir: string): string {
 				duration_ms: performance.now() - started,
 			}, {
 				event_name: "memory.config.snapshot.completed",
-				file: "packages/sno-station-mem/src/engine/eval/trace.ts",
+				file: "packages/memory/src/engine/eval/trace.ts",
 				function: "writeConfigSnapshot",
 				site_id: "trace.writeConfigSnapshot.completed",
 			});

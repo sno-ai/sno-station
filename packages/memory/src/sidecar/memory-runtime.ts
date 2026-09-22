@@ -39,7 +39,7 @@ const observeSessionUuid = (): string | undefined => observeSession.getStore();
 const log = createLogger("sno-station-mem:runtime");
 function engineLog(level: "info" | "warn" | "error" | "debug", message: string): void {
 	log[level]("Memory engine message", { message }, {
-		event_name: "memory.sidecar.engine.message", file: "packages/sno-station-mem/src/sidecar/memory-runtime.ts",
+		event_name: "memory.sidecar.engine.message", file: "packages/memory/src/sidecar/memory-runtime.ts",
 		function: "engineLog", site_id: "memory.sidecar.engine.message",
 	});
 }
@@ -236,7 +236,7 @@ export class MemoryRuntimePool {
 			if (this.usageFlush) return;
 			this.usageFlush = this.usageOutbox.flushPendingAsync().catch((error: unknown) => {
 				log.warn("Memory usage delivery failed", { error }, {
-					event_name: "memory.sidecar.usage.failed", file: "packages/sno-station-mem/src/sidecar/memory-runtime.ts",
+					event_name: "memory.sidecar.usage.failed", file: "packages/memory/src/sidecar/memory-runtime.ts",
 					function: "<anonymous callback>", site_id: "memory.sidecar.usage.failed",
 				});
 			}).finally(() => { this.usageFlush = undefined; });

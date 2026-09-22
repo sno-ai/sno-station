@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { decideReplaceCoverage } from "../../../../packages/sno-station-mem/src/engine/rem/index.ts";
+import { decideReplaceCoverage } from "../../../../packages/memory/src/engine/rem/index.ts";
 
 describe("REM replace coverage", () => {
 	it.each([

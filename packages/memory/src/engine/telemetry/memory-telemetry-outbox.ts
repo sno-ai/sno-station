@@ -117,7 +117,7 @@ export class MemoryTelemetryUsageOutbox {
 				store_reference: privateLogReference(this.dbPath),
 			}, {
 				event_name: "memory.usage.accept.failed",
-				file: "packages/sno-station-mem/src/engine/telemetry/memory-telemetry-outbox.ts",
+				file: "packages/memory/src/engine/telemetry/memory-telemetry-outbox.ts",
 				function: "MemoryTelemetryUsageOutbox.tryAcceptUsage",
 				site_id: "memory.usage.accept.failed",
 			});
@@ -150,7 +150,7 @@ export class MemoryTelemetryUsageOutbox {
 				store_reference: privateLogReference(this.dbPath),
 			}, {
 				event_name: "memory.usage.flush.failed",
-				file: "packages/sno-station-mem/src/engine/telemetry/memory-telemetry-outbox.ts",
+				file: "packages/memory/src/engine/telemetry/memory-telemetry-outbox.ts",
 				function: "MemoryTelemetryUsageOutbox.flushPending",
 				site_id: "memory.usage.flush.claim_failed",
 			});
@@ -162,7 +162,7 @@ export class MemoryTelemetryUsageOutbox {
 				duration_ms: performance.now() - started,
 			}, {
 				event_name: "memory.usage.flush.completed",
-				file: "packages/sno-station-mem/src/engine/telemetry/memory-telemetry-outbox.ts",
+				file: "packages/memory/src/engine/telemetry/memory-telemetry-outbox.ts",
 				function: "MemoryTelemetryUsageOutbox.flushPending", site_id: "memory.usage.flush.empty",
 			});
 			return { selected: 0, inserted: 0, deleted: 0, failed: 0 };
@@ -218,7 +218,7 @@ export class MemoryTelemetryUsageOutbox {
 				store_reference: privateLogReference(this.dbPath),
 			}, {
 				event_name: "memory.usage.flush.failed",
-				file: "packages/sno-station-mem/src/engine/telemetry/memory-telemetry-outbox.ts",
+				file: "packages/memory/src/engine/telemetry/memory-telemetry-outbox.ts",
 				function: "MemoryTelemetryUsageOutbox.flushPending",
 				site_id: "memory.usage.flush.rollback",
 			});
@@ -236,7 +236,7 @@ export class MemoryTelemetryUsageOutbox {
 			duration_ms: performance.now() - started, store_reference: privateLogReference(this.dbPath),
 		}, {
 			event_name: "memory.usage.flush.completed",
-			file: "packages/sno-station-mem/src/engine/telemetry/memory-telemetry-outbox.ts",
+			file: "packages/memory/src/engine/telemetry/memory-telemetry-outbox.ts",
 			function: "MemoryTelemetryUsageOutbox.flushPending",
 			site_id: "memory.usage.flush.completed",
 		});

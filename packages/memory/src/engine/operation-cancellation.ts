@@ -23,7 +23,7 @@ export async function withMemoryOperation<T>(method: string, signal: AbortSignal
 		} finally {
 			if (signal.aborted) log.error("memory.operation.aborted", {
 				method, outcome: "aborted", writes: operation.writes,
-			}, { event_name: "memory.operation.aborted", file: "packages/sno-station-mem/src/engine/operation-cancellation.ts",
+			}, { event_name: "memory.operation.aborted", file: "packages/memory/src/engine/operation-cancellation.ts",
 				function: "withMemoryOperation", site_id: "memory.operation.aborted" });
 		}
 	});

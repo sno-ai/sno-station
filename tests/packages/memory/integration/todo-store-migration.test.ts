@@ -4,8 +4,8 @@
  */
 
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
-import type { Embedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client";
-import { MemoryStore } from "../../../../packages/sno-station-mem/src/store/store";
+import type { Embedder } from "../../../../packages/memory/src/engine/extraction/embedding-provider-client";
+import { MemoryStore } from "../../../../packages/memory/src/store/store";
 import { createTestDb, createTestEmbedder, type TestDb } from "../../../apps/mem-claw/helpers/test-db";
 import { routeTestTask } from "../../../apps/mem-claw/integration/task-lifecycle-test-route";
 

@@ -17,16 +17,16 @@ import { describe, expect, it } from "vitest";
 import type { z } from "zod";
 import {
 	contractJsonSchemas, inputSchemas, outputSchemas, MEMORY_ROUTES, MEMORY_ERROR_STATUS, DEGRADED_REASONS,
-} from "../../../../packages/sno-station-mem/src/contract/index";
-import { SNO_OBSERVE_DEFAULT_BASE_URL } from "../../../../packages/sno-station-mem/config/index";
-import { HEALTH_PATH, REM_RUN_PATH, REM_JOBS_PATH_PREFIX } from "../../../../packages/sno-station-mem/src/sidecar/config";
-import { startRemSidecar } from "../../../../packages/sno-station-mem/src/sidecar/server";
-import { bindStore } from "../../../../packages/sno-station-mem/src/engine/shared/paths";
+} from "../../../../packages/memory/src/contract/index";
+import { SNO_OBSERVE_DEFAULT_BASE_URL } from "../../../../packages/memory/config/index";
+import { HEALTH_PATH, REM_RUN_PATH, REM_JOBS_PATH_PREFIX } from "../../../../packages/memory/src/sidecar/config";
+import { startRemSidecar } from "../../../../packages/memory/src/sidecar/server";
+import { bindStore } from "../../../../packages/memory/src/engine/shared/paths";
 import { createTestDb } from "../../../apps/mem-claw/helpers/test-db";
 
 type Schema = z.core.JSONSchema.JSONSchema;
 type Row = string[];
-const document = readFileSync(new URL("../../../../packages/sno-station-mem/src/contract/HTTP-CONTRACT.md", import.meta.url), "utf8");
+const document = readFileSync(new URL("../../../../packages/memory/src/contract/HTTP-CONTRACT.md", import.meta.url), "utf8");
 const methods = Object.keys(MEMORY_ROUTES) as Array<keyof typeof MEMORY_ROUTES>;
 
 function table(name: string): Row[] {

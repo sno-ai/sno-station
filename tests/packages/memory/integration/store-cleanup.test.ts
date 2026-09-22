@@ -10,9 +10,9 @@
  */
 
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import type { Embedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client";
-import { cleanStore } from "../../../../packages/sno-station-mem/src/store/store-cleanup-cli";
-import { MemoryStore } from "../../../../packages/sno-station-mem/src/store/store";
+import type { Embedder } from "../../../../packages/memory/src/engine/extraction/embedding-provider-client";
+import { cleanStore } from "../../../../packages/memory/src/store/store-cleanup-cli";
+import { MemoryStore } from "../../../../packages/memory/src/store/store";
 import { createTestDb, createTestEmbedder } from "../../../apps/mem-claw/helpers/test-db.ts";
 
 let testEmbedder: Embedder;

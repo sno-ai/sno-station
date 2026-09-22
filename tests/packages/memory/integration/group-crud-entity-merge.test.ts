@@ -23,30 +23,30 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
 
-import type { AtomicResplitTransport } from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-extraction-gauntlet";
-import type { AtomicExtractionTurn } from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-extraction-reply";
+import type { AtomicResplitTransport } from "../../../../packages/memory/src/engine/extraction/atomic-extraction-gauntlet";
+import type { AtomicExtractionTurn } from "../../../../packages/memory/src/engine/extraction/atomic-extraction-reply";
 import type {
 	AtomicGenericExtractionRequest,
 	AtomicGenericExtractionTransport,
-} from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-generic-extractor";
+} from "../../../../packages/memory/src/engine/extraction/atomic-generic-extractor";
 import {
 	type AtomicMemoryExtractionTransports,
 	runAtomicMemoryExtraction,
-} from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-memory-extraction";
-import type { AtomicProfileKeyingTransport } from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-profile-keying";
-import type { AtomicSubjectGuardTransport } from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-subject-guard";
-import type { Embedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client";
-import { applyEntityNameKeyMigration } from "../../../../packages/sno-station-mem/src/store/entity-name-key-migration";
-import { applyStateCategoryMigration } from "../../../../packages/sno-station-mem/src/store/state-category-migration";
+} from "../../../../packages/memory/src/engine/extraction/atomic-memory-extraction";
+import type { AtomicProfileKeyingTransport } from "../../../../packages/memory/src/engine/extraction/atomic-profile-keying";
+import type { AtomicSubjectGuardTransport } from "../../../../packages/memory/src/engine/extraction/atomic-subject-guard";
+import type { Embedder } from "../../../../packages/memory/src/engine/extraction/embedding-provider-client";
+import { applyEntityNameKeyMigration } from "../../../../packages/memory/src/store/entity-name-key-migration";
+import { applyStateCategoryMigration } from "../../../../packages/memory/src/store/state-category-migration";
 import {
 	type AtomicExtractionRunParameters,
 	MemoryStore,
-} from "../../../../packages/sno-station-mem/src/store/store";
+} from "../../../../packages/memory/src/store/store";
 import {
 	createRemModelStageResponsePort,
 	runRemBatchJob,
-} from "../../../../packages/sno-station-mem/src/sidecar/rem-batch-executor.ts";
-import { parseRemOperationalConfiguration } from "../../../../packages/sno-station-mem/src/engine/rem/index.ts";
+} from "../../../../packages/memory/src/sidecar/rem-batch-executor.ts";
+import { parseRemOperationalConfiguration } from "../../../../packages/memory/src/engine/rem/index.ts";
 import { createRemOwnerDecidedOperationalConfiguration } from "../../../apps/mem-claw/helpers/rem-entry-config-fixture.ts";
 import { createTestDb, createTestEmbedder, type TestDb } from "../../../apps/mem-claw/helpers/test-db.ts";
 

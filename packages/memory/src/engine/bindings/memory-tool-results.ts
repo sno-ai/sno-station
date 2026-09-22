@@ -20,7 +20,7 @@ export function makeResult(
 	isError = false,
 ): ToolResult {
 	if (isError) log.error("Memory operation failed; later requests remain available", { cause: text }, {
-		event_name: "memory.tool.operation.failed", file: "packages/sno-station-mem/src/engine/bindings/memory-tool-results.ts",
+		event_name: "memory.tool.operation.failed", file: "packages/memory/src/engine/bindings/memory-tool-results.ts",
 		function: "makeResult", site_id: "memory.tool.operation.failed",
 	});
 	// Return the normalized tool execution payload expected by callers.

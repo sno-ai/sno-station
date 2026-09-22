@@ -131,7 +131,7 @@ export async function onBeforeAgentStart(
 	// Guard recall query.length here so the remaining module behavior path works with normalized inputs.
 	if (recallQuery.length > maxQueryLen) {
 		log.info("Auto recall query length limited", { input_length: recallQuery.length, limit: maxQueryLen },
-			{ event_name: "memory.auto_recall.query.limited", file: "packages/sno-station-mem/src/engine/bindings/sno-station-mem-auto-recall-hook.ts", function: "onBeforeAgentStart", site_id: "memory.auto_recall.query.limited" });
+			{ event_name: "memory.auto_recall.query.limited", file: "packages/memory/src/engine/bindings/sno-station-mem-auto-recall-hook.ts", function: "onBeforeAgentStart", site_id: "memory.auto_recall.query.limited" });
 		recallQuery = recallQuery.slice(0, maxQueryLen);
 	}
 
@@ -297,7 +297,7 @@ export async function onBeforeAgentStart(
 			outcome = "cancelled";
 		} else {
 			outcome = "failed";
-			log.warn("Auto recall failed", { error }, { event_name: "memory.auto_recall.failed", file: "packages/sno-station-mem/src/engine/bindings/sno-station-mem-auto-recall-hook.ts", function: "onBeforeAgentStart", site_id: "memory.auto_recall.failed" });
+			log.warn("Auto recall failed", { error }, { event_name: "memory.auto_recall.failed", file: "packages/memory/src/engine/bindings/sno-station-mem-auto-recall-hook.ts", function: "onBeforeAgentStart", site_id: "memory.auto_recall.failed" });
 		}
 	} finally {
 		// Guard guard condition here so the remaining module behavior path works with normalized inputs.
@@ -311,7 +311,7 @@ export async function onBeforeAgentStart(
 			repeat_removed_count: repeatRemoved, token_budget_removed_count: 0,
 			retired_closed_removed_count: retrievalDiagnostics.retired_closed_removed_count ?? "unavailable",
 			sql_excluded_count: "unavailable", sql_excluded_reason: "query_does_not_report_excluded_rows",
-		}, { event_name: "memory.auto_recall.completed", file: "packages/sno-station-mem/src/engine/bindings/sno-station-mem-auto-recall-hook.ts", function: "onBeforeAgentStart", site_id: "memory.auto_recall.completed" });
+		}, { event_name: "memory.auto_recall.completed", file: "packages/memory/src/engine/bindings/sno-station-mem-auto-recall-hook.ts", function: "onBeforeAgentStart", site_id: "memory.auto_recall.completed" });
 	}
 	});
 }
@@ -329,7 +329,7 @@ function recordAutoRecallUsage(params: {
 		const factId = result.entry.factId;
 		if (!factId) {
 			log.warn("Recall telemetry lacks fact identity", { memory_id: result.entry.id },
-				{ event_name: "memory.auto_recall.telemetry.skipped", file: "packages/sno-station-mem/src/engine/bindings/sno-station-mem-auto-recall-hook.ts", function: "recordAutoRecallUsage", site_id: "memory.auto_recall.telemetry.skipped" });
+				{ event_name: "memory.auto_recall.telemetry.skipped", file: "packages/memory/src/engine/bindings/sno-station-mem-auto-recall-hook.ts", function: "recordAutoRecallUsage", site_id: "memory.auto_recall.telemetry.skipped" });
 			continue;
 		}
 		const retrievalRank = index + 1;
@@ -360,7 +360,7 @@ function recordAutoRecallUsage(params: {
 		});
 		if (!recallAccepted || !injectAccepted) {
 			log.warn("Recall telemetry admission failed", { fact_id: factId, recall_accepted: recallAccepted, inject_accepted: injectAccepted },
-				{ event_name: "memory.auto_recall.telemetry.failed", file: "packages/sno-station-mem/src/engine/bindings/sno-station-mem-auto-recall-hook.ts", function: "recordAutoRecallUsage", site_id: "memory.auto_recall.telemetry.failed" });
+				{ event_name: "memory.auto_recall.telemetry.failed", file: "packages/memory/src/engine/bindings/sno-station-mem-auto-recall-hook.ts", function: "recordAutoRecallUsage", site_id: "memory.auto_recall.telemetry.failed" });
 		}
 	}
 }

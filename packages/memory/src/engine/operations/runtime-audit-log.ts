@@ -296,7 +296,7 @@ function enqueueAuditWrite(auditPath: string, line: string): Promise<boolean> {
 	const next = write.catch((error) => {
 			createLogger("sno-station-mem:audit").error("Audit entry append failed", { error }, {
 				event_name: "memory.audit.append.failed",
-				file: "packages/sno-station-mem/src/engine/operations/runtime-audit-log.ts",
+				file: "packages/memory/src/engine/operations/runtime-audit-log.ts",
 				function: "enqueueAuditWrite", site_id: "memory.audit.append.failed",
 			});
 			return false;
@@ -354,7 +354,7 @@ function prepareAuditEntry(
 		if (allowed.has(key)) details[key] = value;
 		else {
 			createLogger("sno-station-mem:audit").error("memory.audit.detail.unknown", { event: entry.event, key }, {
-				event_name: "memory.audit.detail.unknown", file: "packages/sno-station-mem/src/engine/operations/runtime-audit-log.ts",
+				event_name: "memory.audit.detail.unknown", file: "packages/memory/src/engine/operations/runtime-audit-log.ts",
 				function: "prepareAuditEntry", site_id: "memory.audit.detail.unknown",
 			});
 		}
@@ -404,7 +404,7 @@ export function appendAuditEntrySync(
 		appendFileSync(auditPath, `${JSON.stringify({ ...prepared, timestamp: new Date().toISOString() })}\n`);
 	} catch (error) {
 		createLogger("sno-station-mem:audit").error("memory.audit.append.failed", { error }, {
-			event_name: "memory.audit.append.failed", file: "packages/sno-station-mem/src/engine/operations/runtime-audit-log.ts",
+			event_name: "memory.audit.append.failed", file: "packages/memory/src/engine/operations/runtime-audit-log.ts",
 			function: "appendAuditEntrySync", site_id: "memory.audit.sync.failed",
 		});
 	}

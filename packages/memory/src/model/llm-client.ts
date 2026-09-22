@@ -363,13 +363,13 @@ export function createLlmClient(config: LlmClientConfig): LlmClient {
 			config: config.routing,
 		});
 		if ("off" in decision) {
-			log.debug("Model client request diagnostic", { adapter_slot: request.adapterSlot, call_label: request.callLabel, error: `sno-station-mem: llm-client [${request.callLabel}] routed off (${decision.reason}); deterministic fallback applies` }, { event_name: "memory.llm_client.diagnostic", file: "packages/sno-station-mem/src/model/llm-client.ts", function: "resolveRequestTransport", site_id: "shared.llm-client.resolveRequestTransport.8f631601af" });
+			log.debug("Model client request diagnostic", { adapter_slot: request.adapterSlot, call_label: request.callLabel, error: `sno-station-mem: llm-client [${request.callLabel}] routed off (${decision.reason}); deterministic fallback applies` }, { event_name: "memory.llm_client.diagnostic", file: "packages/memory/src/model/llm-client.ts", function: "resolveRequestTransport", site_id: "shared.llm-client.resolveRequestTransport.8f631601af" });
 			return null;
 		}
 		if (decision.transport === "agent-host-seam") {
 			if (config.agentPort) return "agent-host-seam";
 			lastError = `sno-station-mem: llm-client [${request.callLabel}] routed to agent-host-seam but AgentLlmPort is unavailable`;
-			log.warn("Model client request diagnostic", { adapter_slot: request.adapterSlot, call_label: request.callLabel, error: lastError }, { event_name: "memory.llm_client.diagnostic", file: "packages/sno-station-mem/src/model/llm-client.ts", function: "resolveRequestTransport", site_id: "shared.llm-client.resolveRequestTransport.ffa933b519" });
+			log.warn("Model client request diagnostic", { adapter_slot: request.adapterSlot, call_label: request.callLabel, error: lastError }, { event_name: "memory.llm_client.diagnostic", file: "packages/memory/src/model/llm-client.ts", function: "resolveRequestTransport", site_id: "shared.llm-client.resolveRequestTransport.ffa933b519" });
 			throw new LlmClientTerminalError("transport", lastError);
 		}
 		return decision.transport;
@@ -428,12 +428,12 @@ export function createLlmClient(config: LlmClientConfig): LlmClient {
 						sampling: { source: "unknown" }, finish_reason: "unavailable", route: "agent-host-seam",
 						dispatch_to_headers_ms: "unavailable", headers_to_body_ms: "unavailable", first_token_ms: "unavailable",
 						provider_unavailable_reason: "host_port_does_not_report_provider_fields",
-					}, { event_name: "llm.request.completed", file: "packages/sno-station-mem/src/model/llm-client.ts", function: "requestContent", site_id: "llm.host.request.completed" });
+					}, { event_name: "llm.request.completed", file: "packages/memory/src/model/llm-client.ts", function: "requestContent", site_id: "llm.host.request.completed" });
 				}
 			});
 			if (result.kind === "cancelled") {
 				lastError = `[${request.callLabel}] agent-llm cancelled (${result.reason})`;
-				log.warn("Host model request cancelled", { adapter_slot: request.adapterSlot, call_label: request.callLabel, error: lastError }, { event_name: "memory.llm_client.diagnostic", file: "packages/sno-station-mem/src/model/llm-client.ts", function: "requestContent", site_id: "llm.client.host_cancelled" });
+				log.warn("Host model request cancelled", { adapter_slot: request.adapterSlot, call_label: request.callLabel, error: lastError }, { event_name: "memory.llm_client.diagnostic", file: "packages/memory/src/model/llm-client.ts", function: "requestContent", site_id: "llm.client.host_cancelled" });
 				throw new LlmClientTerminalError(
 					"cancelled",
 					lastError,
@@ -444,7 +444,7 @@ export function createLlmClient(config: LlmClientConfig): LlmClient {
 				lastError = `[${request.callLabel}] agent-llm ${result.category}: ${result.message}`;
 				// The category is its own attribute: joined into `error` it is hashed with the message,
 				// and a run where every host call failed (471 of 471, 2026-09-19) could not be read.
-				log.warn("Host model request failed", { adapter_slot: request.adapterSlot, call_label: request.callLabel, failure_category: result.category, error: lastError }, { event_name: "memory.llm_client.diagnostic", file: "packages/sno-station-mem/src/model/llm-client.ts", function: "requestContent", site_id: "llm.client.host_error" });
+				log.warn("Host model request failed", { adapter_slot: request.adapterSlot, call_label: request.callLabel, failure_category: result.category, error: lastError }, { event_name: "memory.llm_client.diagnostic", file: "packages/memory/src/model/llm-client.ts", function: "requestContent", site_id: "llm.client.host_error" });
 				if (isCredentialFailure(result.category)) {
 					throw new LlmClientTerminalError("auth", lastError);
 				}
@@ -481,7 +481,7 @@ export function createLlmClient(config: LlmClientConfig): LlmClient {
 			// makes it temporary. Without any cap the serving side truncates at 16 output tokens,
 			// measured 2026-08-18, which cuts the JSON mid-string and loses the whole chunk.
 			if (occasion !== "conflictAdjudication" && !request.maxTokens) {
-				log.error("Model client request diagnostic", { adapter_slot: request.adapterSlot, call_label: request.callLabel, error: `sno-station-mem llm-client: raw completion [${request.callLabel}] set no maxTokens; sending ${RAW_COMPLETION_FALLBACK_MAX_TOKENS} so the call still runs. Fix the caller — without a cap the serving side truncates at 16 tokens.` }, { event_name: "memory.llm_client.diagnostic", file: "packages/sno-station-mem/src/model/llm-client.ts", function: "requestContent", site_id: "shared.llm-client.requestContent.ff17976562" });
+				log.error("Model client request diagnostic", { adapter_slot: request.adapterSlot, call_label: request.callLabel, error: `sno-station-mem llm-client: raw completion [${request.callLabel}] set no maxTokens; sending ${RAW_COMPLETION_FALLBACK_MAX_TOKENS} so the call still runs. Fix the caller — without a cap the serving side truncates at 16 tokens.` }, { event_name: "memory.llm_client.diagnostic", file: "packages/memory/src/model/llm-client.ts", function: "requestContent", site_id: "shared.llm-client.requestContent.ff17976562" });
 			}
 			const pipelineConfig = {
 				...buildPipelineConfig(preset, config, endpoint, request),
@@ -504,7 +504,7 @@ export function createLlmClient(config: LlmClientConfig): LlmClient {
 			const response = await pipeline.call({ config: pipelineConfig, messages: [prompt] });
 			if (!response.success) {
 				lastError = `sno-station-mem: llm-client [${request.callLabel}] pipeline error: ${response.error}`;
-				log.warn("Raw model request failed", { adapter_slot: request.adapterSlot, call_label: request.callLabel, error: lastError }, { event_name: "memory.llm_client.diagnostic", file: "packages/sno-station-mem/src/model/llm-client.ts", function: "requestContent", site_id: "llm.client.raw_pipeline_failed" });
+				log.warn("Raw model request failed", { adapter_slot: request.adapterSlot, call_label: request.callLabel, error: lastError }, { event_name: "memory.llm_client.diagnostic", file: "packages/memory/src/model/llm-client.ts", function: "requestContent", site_id: "llm.client.raw_pipeline_failed" });
 				const category = getProviderTerminalCategory(response.error);
 				if (category) throw new LlmClientTerminalError(category, lastError);
 				return null;
@@ -532,7 +532,7 @@ export function createLlmClient(config: LlmClientConfig): LlmClient {
 
 		if (!response.success) {
 			lastError = `sno-station-mem: llm-client [${request.callLabel}] pipeline error: ${response.error}`;
-			log.warn("Chat model request failed", { adapter_slot: request.adapterSlot, call_label: request.callLabel, error: lastError }, { event_name: "memory.llm_client.diagnostic", file: "packages/sno-station-mem/src/model/llm-client.ts", function: "requestContent", site_id: "llm.client.chat_pipeline_failed" });
+			log.warn("Chat model request failed", { adapter_slot: request.adapterSlot, call_label: request.callLabel, error: lastError }, { event_name: "memory.llm_client.diagnostic", file: "packages/memory/src/model/llm-client.ts", function: "requestContent", site_id: "llm.client.chat_pipeline_failed" });
 			const category = getProviderTerminalCategory(response.error);
 			if (category) throw new LlmClientTerminalError(category, lastError);
 			return null;
@@ -545,7 +545,7 @@ export function createLlmClient(config: LlmClientConfig): LlmClient {
 			// silently cost a third of one benchmark persona's memories (measured 2026-08-17 — 45
 			// failed extractions, exactly one warn line in the whole run).
 			lastError = `sno-station-mem: llm-client [${request.callLabel}] empty response from preset ${config.preset}`;
-			log.warn("Model reply empty", { adapter_slot: request.adapterSlot, call_label: request.callLabel, error: lastError }, { event_name: "memory.llm_client.diagnostic", file: "packages/sno-station-mem/src/model/llm-client.ts", function: "requestContent", site_id: "llm.client.empty_reply" });
+			log.warn("Model reply empty", { adapter_slot: request.adapterSlot, call_label: request.callLabel, error: lastError }, { event_name: "memory.llm_client.diagnostic", file: "packages/memory/src/model/llm-client.ts", function: "requestContent", site_id: "llm.client.empty_reply" });
 			// Empty text, not `null`: the call reached the endpoint and came back with nothing, which
 			// is the one failure worth asking about again. `null` is reserved for "no call happened"
 			// — routed off, or a pipeline error already classified above — and retrying those would
@@ -572,7 +572,7 @@ export function createLlmClient(config: LlmClientConfig): LlmClient {
 			if (content === null || content.raw.trim().length > 0) return content;
 			const remainingMs = deadlineMs - performance.now();
 			if (remainingMs <= 0) break;
-			log.debug("Retrying empty model reply", { adapter_slot: request.adapterSlot, call_label: request.callLabel, attempt, attempt_limit: attemptLimit }, { event_name: "memory.llm_client.diagnostic", file: "packages/sno-station-mem/src/model/llm-client.ts", function: "requestContentRetryingEmpty", site_id: "shared.llm-client.requestContentRetryingEmpty.cd874fefff" });
+			log.debug("Retrying empty model reply", { adapter_slot: request.adapterSlot, call_label: request.callLabel, attempt, attempt_limit: attemptLimit }, { event_name: "memory.llm_client.diagnostic", file: "packages/memory/src/model/llm-client.ts", function: "requestContentRetryingEmpty", site_id: "shared.llm-client.requestContentRetryingEmpty.cd874fefff" });
 			// The retry gets the time the deadline has left, not another full request timeout:
 			// at the old wording a 300s capture call could spend 600s and still report success.
 			content = await requestContent({ ...request, timeoutMs: remainingMs }, systemContent, prompt);
@@ -598,7 +598,7 @@ export function createLlmClient(config: LlmClientConfig): LlmClient {
 					const remainingTimeoutMs = Math.floor(deadlineMs - performance.now());
 					if (remainingTimeoutMs <= 0) {
 						lastError = `sno-station-mem: llm-client [${request.callLabel}] deadline exhausted before JSON repair`;
-						log.warn("Model repair deadline exhausted", { adapter_slot: request.adapterSlot, call_label: request.callLabel, error: lastError }, { event_name: "memory.llm_client.diagnostic", file: "packages/sno-station-mem/src/model/llm-client.ts", function: "completeJson", site_id: "llm.client.json.deadline_exhausted" });
+						log.warn("Model repair deadline exhausted", { adapter_slot: request.adapterSlot, call_label: request.callLabel, error: lastError }, { event_name: "memory.llm_client.diagnostic", file: "packages/memory/src/model/llm-client.ts", function: "completeJson", site_id: "llm.client.json.deadline_exhausted" });
 						throw new LlmClientTerminalError("cancelled", lastError, true);
 					}
 					content = await requestContentRetryingEmpty(
@@ -613,13 +613,13 @@ export function createLlmClient(config: LlmClientConfig): LlmClient {
 				}
 
 				lastError = `sno-station-mem: llm-client [${request.callLabel}] ${parsed.error}`;
-				log.debug("Model client request diagnostic", { adapter_slot: request.adapterSlot, call_label: request.callLabel, error: lastError }, { event_name: "memory.llm_client.diagnostic", file: "packages/sno-station-mem/src/model/llm-client.ts", function: "completeJson", site_id: "shared.llm-client.completeJson.e04c8e7e82" });
+				log.debug("Model client request diagnostic", { adapter_slot: request.adapterSlot, call_label: request.callLabel, error: lastError }, { event_name: "memory.llm_client.diagnostic", file: "packages/memory/src/model/llm-client.ts", function: "completeJson", site_id: "shared.llm-client.completeJson.e04c8e7e82" });
 				return null;
 			} catch (err) {
 				checkMemoryOperation();
 				if (err instanceof LlmClientTerminalError) throw err;
 				lastError = `sno-station-mem: llm-client [${request.callLabel}] request failed for preset ${config.preset}: ${err instanceof Error ? err.message : String(err)}`;
-				log.warn("Model request failed", { adapter_slot: request.adapterSlot, call_label: request.callLabel, error: lastError }, { event_name: "memory.llm_client.diagnostic", file: "packages/sno-station-mem/src/model/llm-client.ts", function: "completeJson", site_id: "llm.client.json.request_failed" });
+				log.warn("Model request failed", { adapter_slot: request.adapterSlot, call_label: request.callLabel, error: lastError }, { event_name: "memory.llm_client.diagnostic", file: "packages/memory/src/model/llm-client.ts", function: "completeJson", site_id: "llm.client.json.request_failed" });
 				return null;
 			}
 		},
@@ -640,7 +640,7 @@ export function createLlmClient(config: LlmClientConfig): LlmClient {
 				checkMemoryOperation();
 				if (err instanceof LlmClientTerminalError) throw err;
 				lastError = `sno-station-mem: llm-client [${request.callLabel}] request failed for preset ${config.preset}: ${err instanceof Error ? err.message : String(err)}`;
-				log.warn("Model client request diagnostic", { adapter_slot: request.adapterSlot, call_label: request.callLabel, error: lastError }, { event_name: "memory.llm_client.diagnostic", file: "packages/sno-station-mem/src/model/llm-client.ts", function: "completeText", site_id: "shared.llm-client.completeText.ffa933b519" });
+				log.warn("Model client request diagnostic", { adapter_slot: request.adapterSlot, call_label: request.callLabel, error: lastError }, { event_name: "memory.llm_client.diagnostic", file: "packages/memory/src/model/llm-client.ts", function: "completeText", site_id: "shared.llm-client.completeText.ffa933b519" });
 				return null;
 			}
 		},

@@ -6,10 +6,10 @@ import { join, resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { afterEach, beforeEach, expect, it } from "vitest";
 import { makeTestEnv, type TestEnv } from "../../sqlite-crypto/_helpers";
-import { pluginConfigSchema } from "../../../../packages/sno-station-mem/config/plugin-config-schema";
+import { pluginConfigSchema } from "../../../../packages/memory/config/plugin-config-schema";
 
 const repo = resolve(import.meta.dirname, "../../../..");
-const original = join(repo, "packages/sno-station-mem");
+const original = join(repo, "packages/memory");
 const scope = { principal: userInfo().username, project: "agent:http-acceptance", session: "agent:http-acceptance:release", host: { agentId: "http-acceptance", sessionTimezone: "America/Los_Angeles" } };
 const config = pluginConfigSchema.parse({ mode: "local-first", ambientLearning: true, autoRecall: true, captureAssistant: true, observe: { enabled: false }, memoryTelemetry: { enabled: false } });
 const { mode, remEnhanced, agentNative, language, ...settings } = config;
@@ -119,7 +119,7 @@ beforeEach(async () => {
   }
   await symlink(join(repo, "node_modules"), join(core, "node_modules"));
   await mkdir(join(root, "node_modules/@snoai"), { recursive: true });
-  await symlink(core, join(root, "node_modules/@snoai/sno-station-mem"));
+  await symlink(core, join(root, "node_modules/@snoai/memory"));
   await cp(join(import.meta.dirname, "fixtures/common-memory-client.mjs"), join(root, "client.mjs"));
   const plant = process.env.ZEBRA_D7_PLANT;
   if (plant) {

@@ -51,20 +51,20 @@ export function buildInsightDistiller(
 		config: routing,
 	});
 	if ("off" in extractRoute) {
-		diagnosticLog.info("Memory extraction disabled", { outcome: "skipped", reason_code: extractRoute.reason }, { event_name: "memory.sno-station-mem_insight_distill_factory.memory.extraction.disabled", file: "packages/sno-station-mem/src/engine/bindings/sno-station-mem-insight-distill-factory.ts", function: "buildInsightDistiller", site_id: "plugin.sno-station-mem-insight-distill-factory.buildInsightDistiller.8b084be5ca" });
+		diagnosticLog.info("Memory extraction disabled", { outcome: "skipped", reason_code: extractRoute.reason }, { event_name: "memory.sno-station-mem_insight_distill_factory.memory.extraction.disabled", file: "packages/memory/src/engine/bindings/sno-station-mem-insight-distill-factory.ts", function: "buildInsightDistiller", site_id: "plugin.sno-station-mem-insight-distill-factory.buildInsightDistiller.8b084be5ca" });
 		return undefined;
 	}
 	if (
 		extractRoute.transport !== "chat-completions" &&
 		extractRoute.transport !== "agent-host-seam"
 	) {
-		diagnosticLog.info("Memory extraction transport unavailable", { outcome: "skipped", transport: extractRoute.transport }, { event_name: "memory.sno-station-mem_insight_distill_factory.memory.extraction.transport.unavailable", file: "packages/sno-station-mem/src/engine/bindings/sno-station-mem-insight-distill-factory.ts", function: "buildInsightDistiller", site_id: "plugin.sno-station-mem-insight-distill-factory.buildInsightDistiller.6cdc733c64" });
+		diagnosticLog.info("Memory extraction transport unavailable", { outcome: "skipped", transport: extractRoute.transport }, { event_name: "memory.sno-station-mem_insight_distill_factory.memory.extraction.transport.unavailable", file: "packages/memory/src/engine/bindings/sno-station-mem-insight-distill-factory.ts", function: "buildInsightDistiller", site_id: "plugin.sno-station-mem-insight-distill-factory.buildInsightDistiller.6cdc733c64" });
 		return undefined;
 	}
 	if (extractRoute.transport === "agent-host-seam" && !agentPort) {
 		diagnosticLog.info("sno-station-mem insight-distill disabled (host agent binding unavailable)", undefined, {
 			event_name: "sno_station_mem.sno-station-mem-insight-distill-factory.sno.station.mem.insight.distill.disabled.host.agent.binding.unavailable",
-			file: "packages/sno-station-mem/src/engine/bindings/sno-station-mem-insight-distill-factory.ts",
+			file: "packages/memory/src/engine/bindings/sno-station-mem-insight-distill-factory.ts",
 			function: "buildInsightDistiller",
 			site_id: "sno-station-mem-insight-distill-factory.buildInsightDistiller.847c5ab779",
 		});
@@ -114,7 +114,7 @@ export function buildInsightDistiller(
 				});
 			},
 		});
-		diagnosticLog.info("Memory extraction enabled", { outcome: "success", model: llmCfg.preset }, { event_name: "memory.sno-station-mem_insight_distill_factory.memory.extraction.enabled", file: "packages/sno-station-mem/src/engine/bindings/sno-station-mem-insight-distill-factory.ts", function: "buildInsightDistiller", site_id: "plugin.sno-station-mem-insight-distill-factory.buildInsightDistiller.888f96bfef" });
+		diagnosticLog.info("Memory extraction enabled", { outcome: "success", model: llmCfg.preset }, { event_name: "memory.sno-station-mem_insight_distill_factory.memory.extraction.enabled", file: "packages/memory/src/engine/bindings/sno-station-mem-insight-distill-factory.ts", function: "buildInsightDistiller", site_id: "plugin.sno-station-mem-insight-distill-factory.buildInsightDistiller.888f96bfef" });
 		return new AtomicInsightDistiller(store, transports, {
 			defaultScope: config.scopes.default,
 			locale: config.language,

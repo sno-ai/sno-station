@@ -7,9 +7,9 @@ import {
 	it,
 } from "vitest";
 import { randomUUID } from "node:crypto";
-import type { Embedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client.ts";
-import { stableHash } from "../../../../packages/sno-station-mem/src/engine/shared/utils.ts";
-import { MemoryStore } from "../../../../packages/sno-station-mem/src/store/store.ts";
+import type { Embedder } from "../../../../packages/memory/src/engine/extraction/embedding-provider-client.ts";
+import { stableHash } from "../../../../packages/memory/src/engine/shared/utils.ts";
+import { MemoryStore } from "../../../../packages/memory/src/store/store.ts";
 import { createTestDb, createTestEmbedder } from "../../../apps/mem-claw/helpers/test-db.ts";
 
 let testEmbedder: Embedder;

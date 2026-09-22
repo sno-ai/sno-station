@@ -227,7 +227,7 @@ export async function backfillActiveTaskCarriers(
 		})),
 	}, {
 		event_name: "sno_station_mem.active-task-carrier-backfill.active.task.carrier.backfill.complete",
-		file: "packages/sno-station-mem/src/store/active-task-carrier-backfill.ts",
+		file: "packages/memory/src/store/active-task-carrier-backfill.ts",
 		function: "backfillActiveTaskCarriers",
 		site_id: "active-task-carrier-backfill.backfillActiveTaskCarriers.facdae917f",
 	});
@@ -246,7 +246,7 @@ export function scheduleActiveTaskCarrierBackfill(target: MemoryStore): void {
 			error,
 		}, {
 			event_name: "sno_station_mem.active-task-carrier-backfill.detached.active.task.carrier.backfill.failed",
-			file: "packages/sno-station-mem/src/store/active-task-carrier-backfill.ts",
+			file: "packages/memory/src/store/active-task-carrier-backfill.ts",
 			function: "<anonymous callback>",
 			site_id: "active-task-carrier-backfill.<anonymous callback>.0bf95b1f61",
 		});

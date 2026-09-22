@@ -5,11 +5,11 @@
 
 import { dirname } from "node:path";
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { executeMemoryUpdateTool } from "../../../../packages/sno-station-mem/src/engine/bindings/memory-update-tool.ts";
-import type { Embedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client.ts";
-import { createRetriever } from "../../../../packages/sno-station-mem/src/engine/retrieval/retriever.ts";
-import { createScopePolicy } from "../../../../packages/sno-station-mem/src/engine/security/scopes.ts";
-import { MemoryStore } from "../../../../packages/sno-station-mem/src/store/store.ts";
+import { executeMemoryUpdateTool } from "../../../../packages/memory/src/engine/bindings/memory-update-tool.ts";
+import type { Embedder } from "../../../../packages/memory/src/engine/extraction/embedding-provider-client.ts";
+import { createRetriever } from "../../../../packages/memory/src/engine/retrieval/retriever.ts";
+import { createScopePolicy } from "../../../../packages/memory/src/engine/security/scopes.ts";
+import { MemoryStore } from "../../../../packages/memory/src/store/store.ts";
 import { createTestDb, createTestEmbedder } from "../../../apps/mem-claw/helpers/test-db.ts";
 
 let embedder: Embedder;

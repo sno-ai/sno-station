@@ -2,9 +2,9 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir, hostname } from "node:os";
 import { join } from "node:path";
 import { afterEach, expect, it, vi } from "vitest";
-import { runAtomicGenericExtractionPass, createSignedAtomicGenericExtractionTransport, type AtomicGenericExtractionInput } from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-generic-extractor";
-import { flushAuditWrites } from "../../../../packages/sno-station-mem/src/engine/operations/runtime-audit-log";
-import { parseAtomicCaptureReply } from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-extraction-reply";
+import { runAtomicGenericExtractionPass, createSignedAtomicGenericExtractionTransport, type AtomicGenericExtractionInput } from "../../../../packages/memory/src/engine/extraction/atomic-generic-extractor";
+import { flushAuditWrites } from "../../../../packages/memory/src/engine/operations/runtime-audit-log";
+import { parseAtomicCaptureReply } from "../../../../packages/memory/src/engine/extraction/atomic-extraction-reply";
 
 const roots: string[] = [];
 afterEach(async () => {

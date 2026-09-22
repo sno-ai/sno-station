@@ -313,7 +313,7 @@ export async function main(args: string[]): Promise<void> {
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
 	main(process.argv.slice(2)).catch((error) => {
-		writeEmergencyDiagnostic({ level: "error", body: "Memory dump failed", attributes: { error, exit_code: 1 }, source: { event_name: "memdump.main.failed", file: "packages/sno-station-mem/src/engine/diagnostics/memdump.ts", function: "<module>", site_id: "memdump.main.failed" } });
+		writeEmergencyDiagnostic({ level: "error", body: "Memory dump failed", attributes: { error, exit_code: 1 }, source: { event_name: "memdump.main.failed", file: "packages/memory/src/engine/diagnostics/memdump.ts", function: "<module>", site_id: "memdump.main.failed" } });
 		process.exitCode = 1;
 	});
 }

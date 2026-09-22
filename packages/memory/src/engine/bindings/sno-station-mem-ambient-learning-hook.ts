@@ -100,7 +100,7 @@ async function runLocalFirstCapture(input: {
 		} catch (error) {
 		checkMemoryOperation();
 			failures += 1;
-			log.warn("Local capture write failed", { error }, { event_name: "memory.capture.write.failed", file: "packages/sno-station-mem/src/engine/bindings/sno-station-mem-ambient-learning-hook.ts", function: "runLocalFirstCapture", site_id: "memory.capture.local.write.failed" });
+			log.warn("Local capture write failed", { error }, { event_name: "memory.capture.write.failed", file: "packages/memory/src/engine/bindings/sno-station-mem-ambient-learning-hook.ts", function: "runLocalFirstCapture", site_id: "memory.capture.local.write.failed" });
 		}
 	}
 	appendAuditEntry(stateDir, {
@@ -113,7 +113,7 @@ async function runLocalFirstCapture(input: {
 	if (failures > 0) outcome = stored > 0 ? "partial" : "failed";
 	log.info("Local memory capture completed", { outcome,
 		persisted_count: stored, failed_count: failures, input_count: entries.length },
-		{ event_name: "memory.capture.completed", file: "packages/sno-station-mem/src/engine/bindings/sno-station-mem-ambient-learning-hook.ts", function: "runLocalFirstCapture", site_id: "memory.capture.local.completed" });
+		{ event_name: "memory.capture.completed", file: "packages/memory/src/engine/bindings/sno-station-mem-ambient-learning-hook.ts", function: "runLocalFirstCapture", site_id: "memory.capture.local.completed" });
 	return { stored, failures };
 }
 
@@ -229,7 +229,7 @@ export async function onAgentEnd(
 		const safeMessage = redactSecrets(rawMessage).slice(0, 200);
 		outcome = "failed";
 		reason = "extraction_failed";
-		log.warn("Ambient extraction failed", { error }, { event_name: "memory.capture.hook.failed", file: "packages/sno-station-mem/src/engine/bindings/sno-station-mem-ambient-learning-hook.ts", function: "onAgentEnd", site_id: "memory.capture.hook.failed" });
+		log.warn("Ambient extraction failed", { error }, { event_name: "memory.capture.hook.failed", file: "packages/memory/src/engine/bindings/sno-station-mem-ambient-learning-hook.ts", function: "onAgentEnd", site_id: "memory.capture.hook.failed" });
 		appendAuditEntry(stateDir, {
 			event: "ambient_learning",
 			hook: "agent_end",
@@ -240,7 +240,7 @@ export async function onAgentEnd(
 	}
 	} finally {
 		log.info("Ambient capture hook completed", { outcome, reason_code: reason, duration_ms: performance.now() - started },
-			{ event_name: "memory.capture.hook.completed", file: "packages/sno-station-mem/src/engine/bindings/sno-station-mem-ambient-learning-hook.ts", function: "onAgentEnd", site_id: "memory.capture.hook.completed" });
+			{ event_name: "memory.capture.hook.completed", file: "packages/memory/src/engine/bindings/sno-station-mem-ambient-learning-hook.ts", function: "onAgentEnd", site_id: "memory.capture.hook.completed" });
 	}
 	return outcome;
 	});

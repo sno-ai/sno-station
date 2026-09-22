@@ -4,7 +4,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { EmbeddingError, RetrievalError } from "../../../../packages/sno-station-mem/src/engine/shared/errors";
+import { EmbeddingError, RetrievalError } from "../../../../packages/memory/src/engine/shared/errors";
 
 describe("RetrievalError", () => {
 	it("says what actually failed, not only that retrieval failed", () => {

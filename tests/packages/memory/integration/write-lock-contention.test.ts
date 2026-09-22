@@ -17,8 +17,8 @@
 import { spawn } from "node:child_process";
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { getDekSync } from "@snoai/sqlite-crypto";
-import type { Embedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client.ts";
-import { MemoryStore } from "../../../../packages/sno-station-mem/src/store/store.ts";
+import type { Embedder } from "../../../../packages/memory/src/engine/extraction/embedding-provider-client.ts";
+import { MemoryStore } from "../../../../packages/memory/src/store/store.ts";
 import { createTestDb, createTestEmbedder } from "../../../apps/mem-claw/helpers/test-db.ts";
 
 let testEmbedder: Embedder;

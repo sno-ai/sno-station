@@ -7,7 +7,7 @@ import { appendFileSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFi
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { RemJobStore } from "../../../../packages/sno-station-mem/src/sidecar/rem-job-store.ts";
+import { RemJobStore } from "../../../../packages/memory/src/sidecar/rem-job-store.ts";
 
 const cleanupPaths: string[] = [];
 

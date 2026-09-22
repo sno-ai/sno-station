@@ -5,14 +5,14 @@
 
 import { randomUUID } from "node:crypto";
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import type { Embedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client";
-import { calculateCalendarTime } from "../../../../packages/sno-station-mem/src/engine/extraction/calendar-instruction";
+import type { Embedder } from "../../../../packages/memory/src/engine/extraction/embedding-provider-client";
+import { calculateCalendarTime } from "../../../../packages/memory/src/engine/extraction/calendar-instruction";
 import {
 	buildInsightMetadata,
 	stringifyInsightMetadata,
-} from "../../../../packages/sno-station-mem/src/engine/extraction/memory-metadata-codec";
-import type { MemoryEntry } from "../../../../packages/sno-station-mem/src/engine/shared/types";
-import { MemoryStore } from "../../../../packages/sno-station-mem/src/store/store";
+} from "../../../../packages/memory/src/engine/extraction/memory-metadata-codec";
+import type { MemoryEntry } from "../../../../packages/memory/src/engine/shared/types";
+import { MemoryStore } from "../../../../packages/memory/src/store/store";
 import { createTestDb, createTestEmbedder, type TestDb } from "../../../apps/mem-claw/helpers/test-db.ts";
 
 const PROJECT_ID = "timezone-persistence-integration";

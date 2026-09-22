@@ -355,7 +355,7 @@ export async function runRemProductionOrderedWave(input: {
 						stage,
 					}, {
 						event_name: "sno_station_mem.rem-batch-executor.ordered.wave.stage.failed",
-						file: "packages/sno-station-mem/src/sidecar/rem-batch-executor.ts",
+						file: "packages/memory/src/sidecar/rem-batch-executor.ts",
 						function: "onStageError",
 						site_id: "rem-batch-executor.onStageError.d5f24d50d3",
 					});
@@ -487,7 +487,7 @@ async function runRemBatchJobUnlocked(input: {
 					candidates: candidates.length,
 				}, {
 					event_name: "sno_station_mem.rem-batch-executor.scan.started",
-					file: "packages/sno-station-mem/src/sidecar/rem-batch-executor.ts",
+					file: "packages/memory/src/sidecar/rem-batch-executor.ts",
 					function: "runRemBatchJobUnlocked",
 					site_id: "rem-batch-executor.runRemBatchJobUnlocked.55c52b91cf",
 				});
@@ -565,7 +565,7 @@ async function runRemBatchJobUnlocked(input: {
 				...(failure === undefined ? {} : { error: failure }),
 			}, {
 				event_name: "sidecar.batch.completed",
-				file: "packages/sno-station-mem/src/sidecar/rem-batch-executor.ts",
+				file: "packages/memory/src/sidecar/rem-batch-executor.ts",
 				function: "runRemBatchJobUnlocked",
 				site_id: "sidecar.batch.completed",
 			});
@@ -627,7 +627,7 @@ async function openBatchRuntime(input: {
 			database_path: realpathSync(dbPath),
 		}, {
 			event_name: "sno_station_mem.rem-batch-executor.database.opened",
-			file: "packages/sno-station-mem/src/sidecar/rem-batch-executor.ts",
+			file: "packages/memory/src/sidecar/rem-batch-executor.ts",
 			function: "openBatchRuntime",
 			site_id: "rem-batch-executor.openBatchRuntime.86fa720e8f",
 		});
@@ -660,7 +660,7 @@ async function openBatchRuntime(input: {
 					usage: usage ? { ...usage, source: "provider-returned" } : null,
 				}, {
 					event_name: "sno_station_mem.rem-batch-executor.llm.provider.response",
-					file: "packages/sno-station-mem/src/sidecar/rem-batch-executor.ts",
+					file: "packages/memory/src/sidecar/rem-batch-executor.ts",
 					function: "onProviderResponse",
 					site_id: "rem-batch-executor.onProviderResponse.df4f2d4fa1",
 				});
@@ -917,7 +917,7 @@ async function runUpdate(input: {
 			row_id: candidate.id,
 		}, {
 			event_name: "sno_station_mem.rem-batch-executor.update.progress",
-			file: "packages/sno-station-mem/src/sidecar/rem-batch-executor.ts",
+			file: "packages/memory/src/sidecar/rem-batch-executor.ts",
 			function: "runUpdate",
 			site_id: "rem-batch-executor.runUpdate.dbf2a836db",
 		});
@@ -992,7 +992,7 @@ async function runUpdate(input: {
 					: { retired_value_count: decision.retiredValues.length }),
 			}, {
 				event_name: "sno_station_mem.rem-batch-executor.update.decision.evaluated",
-				file: "packages/sno-station-mem/src/sidecar/rem-batch-executor.ts",
+				file: "packages/memory/src/sidecar/rem-batch-executor.ts",
 				function: "runUpdate",
 				site_id: "rem-batch-executor.runUpdate.7dfc387204",
 			});
@@ -1032,7 +1032,7 @@ async function runUpdate(input: {
 				...(verification.outcome === "refuse" ? { reason: verification.reason } : {}),
 			}, {
 				event_name: "sno_station_mem.rem-batch-executor.update.verification.evaluated",
-				file: "packages/sno-station-mem/src/sidecar/rem-batch-executor.ts",
+				file: "packages/memory/src/sidecar/rem-batch-executor.ts",
 				function: "runUpdate",
 				site_id: "rem-batch-executor.runUpdate.7ffc737c24",
 			});
@@ -2344,7 +2344,7 @@ async function runReplace(input: {
 			pair_id: pairClaim.pairId,
 		}, {
 			event_name: "sno_station_mem.rem-batch-executor.replace.progress",
-			file: "packages/sno-station-mem/src/sidecar/rem-batch-executor.ts",
+			file: "packages/memory/src/sidecar/rem-batch-executor.ts",
 			function: "runReplace",
 			site_id: "rem-batch-executor.runReplace.e1e35e40e9",
 		});
@@ -2544,7 +2544,7 @@ async function runReplace(input: {
 				...(coverage.detail === undefined ? {} : { detail: coverage.detail }),
 			}, {
 				event_name: "sno_station_mem.rem-batch-executor.replace.coverage.refused",
-				file: "packages/sno-station-mem/src/sidecar/rem-batch-executor.ts",
+				file: "packages/memory/src/sidecar/rem-batch-executor.ts",
 				function: "runReplace",
 				site_id: "rem-batch-executor.runReplace.de3a5f3ce3",
 			});
@@ -2784,7 +2784,7 @@ async function runReplace(input: {
 				resolved: retiredFactAtoms.length,
 			}, {
 				event_name: "sno_station_mem.rem-batch-executor.replace.retiring.index.unresolved",
-				file: "packages/sno-station-mem/src/sidecar/rem-batch-executor.ts",
+				file: "packages/memory/src/sidecar/rem-batch-executor.ts",
 				function: "runReplace",
 				site_id: "rem-batch-executor.runReplace.e4be8cfe8f",
 			});
@@ -3086,7 +3086,7 @@ export async function buildRemReplaceCandidateQueue(input: {
 			row_id: candidate.id,
 		}, {
 			event_name: "sno_station_mem.rem-batch-executor.replace.candidate.progress",
-			file: "packages/sno-station-mem/src/sidecar/rem-batch-executor.ts",
+			file: "packages/memory/src/sidecar/rem-batch-executor.ts",
 			function: "buildRemReplaceCandidateQueue",
 			site_id: "rem-batch-executor.buildRemReplaceCandidateQueue.25aa1a67a6",
 		});
@@ -3530,7 +3530,7 @@ function reserveReplaceStage(
 		reason: reservation.reason,
 	}, {
 		event_name: "sno_station_mem.rem-batch-executor.replace.stage.unmeasured",
-		file: "packages/sno-station-mem/src/sidecar/rem-batch-executor.ts",
+		file: "packages/memory/src/sidecar/rem-batch-executor.ts",
 		function: "reserveReplaceStage",
 		site_id: "rem-batch-executor.reserveReplaceStage.4e67e45fd5",
 	});

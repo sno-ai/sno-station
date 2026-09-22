@@ -4,7 +4,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { shouldSkipRetrieval } from "../../../../packages/sno-station-mem/src/engine/retrieval/retrieval-gate.ts";
+import { shouldSkipRetrieval } from "../../../../packages/memory/src/engine/retrieval/retrieval-gate.ts";
 
 describe("retrieval gate", () => {
 	it("searches on every turn that carries something to search for", () => {

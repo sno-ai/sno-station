@@ -1,12 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
-import { DEFAULT_RECALL_LIFECYCLE } from "../../../../packages/sno-station-mem/config/index.ts";
+import { DEFAULT_RECALL_LIFECYCLE } from "../../../../packages/memory/config/index.ts";
 import {
 	createRetriever,
 	DEFAULT_RETRIEVAL_CONFIG,
 	type MemoryRetrieverInternals,
-} from "../../../../packages/sno-station-mem/src/engine/retrieval/retriever.ts";
-import { TraceCollector } from "../../../../packages/sno-station-mem/src/engine/retrieval/retrieval-trace.ts";
-import type { RetrievalResult } from "../../../../packages/sno-station-mem/src/engine/shared/types.ts";
+} from "../../../../packages/memory/src/engine/retrieval/retriever.ts";
+import { TraceCollector } from "../../../../packages/memory/src/engine/retrieval/retrieval-trace.ts";
+import type { RetrievalResult } from "../../../../packages/memory/src/engine/shared/types.ts";
 
 // Pure-function pipeline tests. `applyScoringPipeline` does not touch the store
 // or embedder; MMR is the only stage that would, and it is short-circuited
