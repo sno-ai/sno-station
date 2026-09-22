@@ -22,7 +22,7 @@ The plugin does not carry the sidecar. It starts the `sno-station-mem` command f
 so install the sidecar first:
 
 ```bash
-npm install -g @snoai/sno-station-mem
+npm install -g @snoai/sno-station-mem@next
 echo '{"mode":"local-first"}' | sno-station-mem bind ~/.sno/sno-station-mem/$USER/memory.sqlite
 hermes plugins install sno-ai/sno-station/apps/mem-hermes/sno-mem-hermes --enable
 hermes config set memory.provider sno-mem-hermes
@@ -41,7 +41,7 @@ stored memory.
 ## Update and remove
 
 ```bash
-npm install -g @snoai/sno-station-mem@latest
+npm install -g @snoai/sno-station-mem@next
 hermes plugins update sno-mem-hermes
 ```
 

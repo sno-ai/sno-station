@@ -16,7 +16,7 @@ Requirements:
 Run the guided installer:
 
 ```bash
-npx @snoai/mem-claw
+npx @snoai/mem-claw@next
 ```
 
 The wizard asks for the memory profile, the embedder, and the memory mode, then collects only the
@@ -44,8 +44,8 @@ Check that memory was created:
 OpenClaw's native installer is also supported:
 
 ```bash
-openclaw plugins install @snoai/mem-claw
-npx @snoai/mem-claw --configure
+openclaw plugins install @snoai/mem-claw@next
+npx @snoai/mem-claw@next --configure
 ```
 
 The package published to npm is the supported public install source. A source checkout, private
@@ -76,7 +76,7 @@ Memory processing remains local. The default local embedder may be downloaded on
 it is cached, Local First does not need a network service.
 
 ```bash
-npx @snoai/mem-claw --configure --mode local-first
+npx @snoai/mem-claw@next --configure --mode local-first
 ```
 
 ### Agent Native
@@ -91,7 +91,7 @@ reflection summary (LLM mode `extraction+reflection`) is available with your own
 Enhanced. Memory calls run inline.
 
 ```bash
-npx @snoai/mem-claw --configure --mode agent-native
+npx @snoai/mem-claw@next --configure --mode agent-native
 ```
 
 ### REM Enhanced
@@ -107,7 +107,7 @@ falls back to the corresponding Local First behavior; it does not silently switc
 tier.
 
 ```bash
-npx @snoai/mem-claw --configure --mode rem-enhanced
+npx @snoai/mem-claw@next --configure --mode rem-enhanced
 ```
 
 ## Per-mode defaults
@@ -152,13 +152,13 @@ The guided installer uses these defaults unless you change them:
 Run setup again at any time:
 
 ```bash
-npx @snoai/mem-claw --configure
+npx @snoai/mem-claw@next --configure
 ```
 
 View the current setup without changing it:
 
 ```bash
-npx @snoai/mem-claw --status
+npx @snoai/mem-claw@next --status
 ```
 
 See the full [onboarding walkthrough](https://github.com/sno-ai/sno-station/blob/main/docs/mem-claw/onboarding.md) and
@@ -185,7 +185,7 @@ The agent can use `memory_recall`, `memory_store`, `memory_update`, and `memory_
 To stop automatic capture without uninstalling, switch the memory profile:
 
 ```bash
-npx @snoai/mem-claw --configure --memory-profile manual-only
+npx @snoai/mem-claw@next --configure --memory-profile manual-only
 ```
 
 ## Read a memory store
@@ -194,7 +194,7 @@ The package ships `sno-memdump`. It prints memory rows as JSON Lines without cha
 encrypted source store:
 
 ```bash
-npx --package @snoai/mem-claw sno-memdump --db ~/.openclaw/mem-claw/mem-claw.sqlite [--scope <scope>] [--id <id>] [--grep <text>] [--limit <n>] [--metadata]
+npx --package @snoai/mem-claw@next sno-memdump --db ~/.openclaw/mem-claw/mem-claw.sqlite [--scope <scope>] [--id <id>] [--grep <text>] [--limit <n>] [--metadata]
 ```
 
 ## Privacy and network behavior
@@ -216,7 +216,7 @@ Normal plugin uninstall or reinstall does not erase the memory library. To reins
 
 ```bash
 openclaw plugins uninstall sno-mem-claw
-openclaw plugins install @snoai/mem-claw
+openclaw plugins install @snoai/mem-claw@next
 ```
 
 Changing the embedding model or vector dimensions is different: existing vectors cannot be mixed

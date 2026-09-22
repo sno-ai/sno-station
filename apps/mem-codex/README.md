@@ -21,8 +21,8 @@ Requirements:
 The one-command `Sno onboarding` install in the repository README is not shipped yet. Until then:
 
 ```bash
-npm install -g @snoai/mem-codex
-npx --package @snoai/sno-station-mem sno-station-mem bind ~/.sno/sno-station-mem/$USER/memory.sqlite
+npm install -g @snoai/mem-codex@next
+npx --package @snoai/sno-station-mem@next sno-station-mem bind ~/.sno/sno-station-mem/$USER/memory.sqlite
 sno-mem-codex install --codex-home ~/.codex
 ```
 
@@ -75,7 +75,7 @@ Memory processing remains local. The default local embedder may be downloaded on
 it is cached, Local First does not need a network service.
 
 ```bash
-echo '{"mode":"local-first"}' | npx --package @snoai/sno-station-mem sno-station-mem bind ~/.sno/sno-station-mem/$USER/memory.sqlite
+echo '{"mode":"local-first"}' | npx --package @snoai/sno-station-mem@next sno-station-mem bind ~/.sno/sno-station-mem/$USER/memory.sqlite
 ```
 
 ### Agent Native
@@ -85,7 +85,7 @@ model call: ephemeral, read-only sandbox, hooks disabled, no session persisted. 
 collected, and there is no bring-your-own-key transport in this client.
 
 ```bash
-echo '{"mode":"agent-native"}' | npx --package @snoai/sno-station-mem sno-station-mem bind ~/.sno/sno-station-mem/$USER/memory.sqlite
+echo '{"mode":"agent-native"}' | npx --package @snoai/sno-station-mem@next sno-station-mem bind ~/.sno/sno-station-mem/$USER/memory.sqlite
 ```
 
 ### REM Enhanced
@@ -101,7 +101,7 @@ Local First behavior; it does not silently switch to another model tier. REM Enh
 access in the sidecar's environment; the bind JSON records only the key's name.
 
 ```bash
-echo '{"mode":"rem-enhanced"}' | npx --package @snoai/sno-station-mem sno-station-mem bind ~/.sno/sno-station-mem/$USER/memory.sqlite
+echo '{"mode":"rem-enhanced"}' | npx --package @snoai/sno-station-mem@next sno-station-mem bind ~/.sno/sno-station-mem/$USER/memory.sqlite
 ```
 
 ## Per-mode defaults
@@ -190,7 +190,7 @@ through `npx` fetches that package into the npx cache and installs nothing into 
 memory rows as JSON Lines without changing the encrypted source store:
 
 ```bash
-npx --package @snoai/mem-claw sno-memdump --db ~/.sno/sno-station-mem/$USER/memory.sqlite [--scope <scope>] [--id <id>] [--grep <text>] [--limit <n>] [--metadata]
+npx --package @snoai/mem-claw@next sno-memdump --db ~/.sno/sno-station-mem/$USER/memory.sqlite [--scope <scope>] [--id <id>] [--grep <text>] [--limit <n>] [--metadata]
 ```
 
 ## Privacy and network behavior
@@ -210,7 +210,7 @@ Running `install` again refreshes the owned entries in `hooks.json`, `config.tom
 package does not remove the store. To reinstall:
 
 ```bash
-npm install -g @snoai/mem-codex
+npm install -g @snoai/mem-codex@next
 sno-mem-codex install --codex-home ~/.codex
 ```
 
