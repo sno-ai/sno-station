@@ -31,10 +31,11 @@ import { MEMORY_USAGE_FLUSH_INTERVAL_MS } from "./config";
 import { SNO_OBSERVE_FLUSH_TIMEOUT_MS } from "../../config/index";
 import { clearRegisteredRemTicks, setRegisteredRemTick } from "./rem-trigger";
 import { createCodingSkinRegistration } from "../../config/coding-skin";
+import { isObserveAgentId } from "../../config/plugin-config-observe-schema";
 import { installationSettingsSchema, type InstallationSettings } from "../../config/installation-settings";
 
 /** The skin and observe session of the request in flight; store, embedder and retriever events carry both. */
-const observeSession = new AsyncLocalStorage<{ uuid: string | undefined; entry: SkinRuntime }>();
+const observeSession = new AsyncLocalStorage<{ uuid: string; entry: SkinRuntime }>();
 const observeSessionUuid = (): string | undefined => observeSession.getStore()?.uuid;
 
 /**
@@ -184,7 +185,7 @@ export class MemoryRuntimePool {
 		let entry = this.skins.get(skinId);
 		if (!entry) {
 			// A coding-skin hook can arrive before its worker's init; register it as that skin, never as the default.
-			if (this.installed) await this.register(input.scope, createCodingSkinRegistration({ skinId, installed: this.installed }));
+			if (this.installed && isObserveAgentId(skinId)) await this.register(input.scope, createCodingSkinRegistration({ skinId, installed: this.installed }));
 			else {
 				const { mode, remEnhanced, agentNative, language, ...settings } = this.config;
 				await this.register(input.scope, { skinId, settings, routing: { mode, remEnhanced, agentNative, language: language ?? DEFAULT_LOCALE } });
@@ -198,8 +199,8 @@ export class MemoryRuntimePool {
 		this.counters.storeAccesses++;
 		const responses: ProviderResponseTrace[] = [];
 		const uuid = await this.observeSessionFor(entry, input.scope);
-		const scope: ScopeCtx = uuid ? { ...input.scope, host: { ...input.scope.host, observeSessionUuid: uuid } } : input.scope;
-		const body = uuid ? { ...(raw as object), scope } : raw;
+		const scope: ScopeCtx = { ...input.scope, host: { ...input.scope.host, observeSessionUuid: uuid } };
+		const body = { ...(raw as object), scope };
 		try {
 			const call = () => observeSession.run({ uuid, entry }, () => withProviderResponses(responses, () => this.call(entry, method, body, signal)));
 			const result = parseOutput(method, await (entry.agentPort ? entry.agentPort.run(call) : call()));
@@ -219,7 +220,7 @@ export class MemoryRuntimePool {
 	}
 
 	/** The observe session of this call: the host's, or the one this sidecar named for the host session (emitting session.start once). */
-	private async observeSessionFor(entry: SkinRuntime, scope: ScopeCtx): Promise<string | undefined> {
+	private async observeSessionFor(entry: SkinRuntime, scope: ScopeCtx): Promise<string> {
 		if (scope.host?.observeSessionUuid) return scope.host.observeSessionUuid;
 		const hostSessionId = scope.host?.sessionId ?? scope.session;
 		const known = entry.hostSessions.get(hostSessionId);
