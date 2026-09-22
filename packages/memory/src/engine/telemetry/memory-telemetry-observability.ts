@@ -121,7 +121,7 @@ function buildPayload(
 		return sanitizeEvent(row, eventType);
 	});
 	return {
-		sync_kind: "nodix_memory_events",
+		sync_kind: "memory_events",
 		first_event_id: firstEventId,
 		last_event_id: lastEventId,
 		event_count: events.length,

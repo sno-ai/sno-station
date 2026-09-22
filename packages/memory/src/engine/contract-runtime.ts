@@ -111,20 +111,39 @@ export class MemoryContractRuntime implements MemoryContract {
 	}
 
 	/** Host-side facts the skin reports for its observe session: a user prompt, or one host model call. */
-	async hostEvent(event: HostEvent, scope: ScopeCtx): Promise<ContractOutputs["hostEvent"]> {
-		const input = parseInput("hostEvent", { scope, event });
+	async hostEvent(hostEvent: HostEvent, scope: ScopeCtx): Promise<ContractOutputs["hostEvent"]> {
+		const input = parseInput("hostEvent", { scope, event: hostEvent });
 		const sessionUuid = input.scope.host?.observeSessionUuid;
-		if (input.event.kind === "prompt") {
-			const promptHash = this.services.observability.hashText(input.event.prompt);
+		const event = input.event;
+		if (event.kind === "prompt") {
+			const promptHash = this.services.observability.hashText(event.prompt);
 			if (promptHash === undefined) return { degraded: false, accepted: false };
 			await this.services.observability.emit({ eventType: "prompt.submit", sessionUuid,
-				payload: { prompt_hash: promptHash, byte_len: Buffer.byteLength(input.event.prompt, "utf8") } });
+				payload: { prompt_hash: promptHash, byte_len: Buffer.byteLength(event.prompt, "utf8") } });
 			return { degraded: false, accepted: true };
 		}
-		await this.services.observability.emit({ eventType: "llm.call", sessionUuid, payload: {
-			model: input.event.model, prompt_tokens: input.event.promptTokens, completion_tokens: input.event.completionTokens,
-			cache_read_tokens: input.event.cacheReadTokens ?? 0, cache_write_tokens: input.event.cacheWriteTokens ?? 0,
-			latency_ms: Math.round(input.event.latencyMs), token_source: "host_agent_paid" } });
+		if (event.kind === "llm") {
+			await this.services.observability.emit({ eventType: "llm.call", sessionUuid, payload: {
+				model: event.model, prompt_tokens: event.promptTokens, completion_tokens: event.completionTokens,
+				cache_read_tokens: event.cacheReadTokens ?? 0, cache_write_tokens: event.cacheWriteTokens ?? 0,
+				latency_ms: Math.round(event.latencyMs), token_source: "host_agent_paid" } });
+			return { degraded: false, accepted: true };
+		}
+		if (event.kind === "tool") {
+			const inputHash = this.services.observability.hashText(event.input);
+			const outputHash = this.services.observability.hashText(event.output);
+			if (inputHash === undefined || outputHash === undefined) return { degraded: false, accepted: false };
+			const payload = { tool_name: event.toolName, decision: event.decision, input_hash: inputHash, output_hash: outputHash,
+				latency_ms: Math.round(event.latencyMs) };
+			// The adapter leaves the tool_calls tally to the caller (OpenClaw's tool wrapper owns its own).
+			this.services.observability.aggregator.record("tool.call", sessionUuid, payload);
+			await this.services.observability.emit({ eventType: "tool.call", sessionUuid, payload });
+			return { degraded: false, accepted: true };
+		}
+		const targetHash = this.services.observability.hashText(event.target);
+		if (targetHash === undefined) return { degraded: false, accepted: false };
+		await this.services.observability.emit({ eventType: "permission.request", sessionUuid, payload: {
+			kind: event.permissionKind, decision: event.decision, target_hash: targetHash } });
 		return { degraded: false, accepted: true };
 	}
 

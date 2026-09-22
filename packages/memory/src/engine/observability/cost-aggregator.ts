@@ -63,6 +63,13 @@ export class CostAggregator {
 		}
 	}
 
+	/** Takes over another aggregator's open sessions, so a re-registration keeps their tallies. */
+	adopt(other: CostAggregator): void {
+		for (const [sessionUuid, counters] of other.sessions) {
+			if (!this.sessions.has(sessionUuid)) this.sessions.set(sessionUuid, counters);
+		}
+	}
+
 	record(eventType: EventType, sessionUuid: string | undefined, payload: JsonObject): void {
 		if (!sessionUuid) return;
 		const counters = this.sessions.get(sessionUuid) ?? emptyCounters();

@@ -120,7 +120,7 @@ describe("memory telemetry sno-observe forwarding", () => {
 			expect.objectContaining({
 				eventType: "memory.telemetry",
 				payload: expect.objectContaining({
-					sync_kind: "nodix_memory_events",
+					sync_kind: "memory_events",
 					first_event_id: 1,
 					last_event_id: 2,
 					event_count: 2,
