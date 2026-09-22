@@ -6,7 +6,6 @@ import {
 	type PendingChain,
 	type PendingRow,
 } from "./buffer-store.js";
-import { ConsentStore } from "./consent.js";
 import { type MachineRegistrationCache, registerBeforeFlush } from "./flush-registration.js";
 import { type EventPostResult, postEvent } from "./http.js";
 import { logger } from "./log.js";
@@ -527,7 +526,6 @@ async function flushRow(
 			row,
 			response,
 			options.identifyPayloadFor ?? minimalIdentifyPayload,
-			options.env ?? process.env,
 			rechainedAgents,
 		);
 	} catch (error) {
@@ -577,7 +575,6 @@ function handlePostResult(
 	row: PendingRow,
 	response: EventPostResult,
 	identifyPayloadFor: IdentifyPayloadFor,
-	env: PathEnv,
 	rechainedAgents: Set<string>,
 ): RowFlushResult {
 	const route = routeResponse(response, row);
@@ -586,10 +583,13 @@ function handlePostResult(
 			store.markShipped(row.rowid);
 			return { shipped: 1, terminal: 0, retryable: 0 };
 		case "suppressed":
-			return handleConsentSuppressed(store, row, response, identifyPayloadFor, env);
+			return handleConsentSuppressed(store, row, response, identifyPayloadFor);
 		case "rejected": {
+			// A refused identify would be refused again on every fresh epoch: keep the whole run
+			// as evidence and open nothing. Any other row is evidence alone; the rest travels.
+			const identifyRefused = decodeEnvelope(row.payload).event_type === "agent.identify";
 			const moved = store.carryForward(row, identifyPayloadFor, {
-				quarantine: "head",
+				quarantine: identifyRefused ? "all" : "head",
 				detail: { status: response.status, reason: route.reason, body: response.body },
 			});
 			logger.error("sno observe event rejected by server; kept as evidence, later rows moved on", {
@@ -640,15 +640,15 @@ function handlePostResult(
 /**
  * The server's consent for this machine and lane is lower than what the row claims. A row
  * sent as `full` is re-sent as `metadata-only` (every schema is closed, so the payload
- * carries no text either way) and the local consent is lowered to match; a row already at `metadata-only` means consent is off on the website,
- * so the whole run is kept as local evidence and the chain moves on.
+ * carries no text either way); a row already at `metadata-only` means consent is off on the
+ * website for that lane: an identify waits for the lane to reopen, any other row is kept as
+ * local evidence and the rows behind it are still tried.
  */
 function handleConsentSuppressed(
 	store: BufferStore,
 	row: PendingRow,
 	response: EventPostResult,
 	identifyPayloadFor: IdentifyPayloadFor,
-	env: PathEnv,
 ): RowFlushResult {
 	const envelope = decodeEnvelope(row.payload);
 	const source = {
@@ -659,24 +659,42 @@ function handleConsentSuppressed(
 	};
 	if (envelope.consent_level === "full") {
 		const moved = store.carryForward(row, identifyPayloadFor, {
-			rewrite: (entry: WireEnvelope) => ({ consent_level: "metadata-only", payload: entry.payload }),
+			rewrite: (entry: WireEnvelope) =>
+				entry.event_id === row.event_id
+					? { consent_level: "metadata-only", payload: entry.payload }
+					: { consent_level: entry.consent_level, payload: entry.payload },
 		});
-		new ConsentStore(env).write("metadata-only");
-		logger.warn("sno observe server allows metadata-only; rows re-sent at that level and local consent lowered", {
+		logger.warn("sno observe server allows metadata-only on this lane; event re-sent at that level", {
 			event_id: row.event_id,
-			carried: moved.carried,
+			event_type: envelope.event_type,
+			lane: envelope.lane,
 			chain_epoch: moved.chainEpoch,
 		}, source);
 		return { shipped: 0, terminal: 0, retryable: 0, requery: true };
 	}
+	if (envelope.event_type === "agent.identify") {
+		// Consent for the memory lane is off on the website: no chain can be seeded until it is
+		// turned back on. Everything waits; nothing is dropped.
+		logger.errorRateLimited(`consent-off:${row.machine_id}:${row.agent_id}`, "sno observe server consent is off for the memory lane; waiting, nothing sent", {
+			event_id: row.event_id,
+			pending: store.countPending(),
+		}, source);
+		return retryRow(store, row, response, {
+			kind: "wait",
+			message: "server consent off",
+			retryAfterMs: response.retryAfterMs ?? 3_600_000,
+			retryScope: "chain",
+		});
+	}
+	// Consent is per lane: only the refused row is evidence; rows behind it get their own answer.
 	const moved = store.carryForward(row, identifyPayloadFor, {
-		quarantine: "all",
+		quarantine: "head",
 		detail: { status: response.status, reason: "consent_suppressed", body: response.body },
 	});
-	logger.error("sno observe server consent is off for this machine; events kept locally, not sent", {
+	logger.error("sno observe server consent is off for this lane; event kept locally, not sent", {
 		event_id: row.event_id,
+		event_type: envelope.event_type,
 		lane: envelope.lane,
-		kept: moved.quarantined,
 		chain_epoch: moved.chainEpoch,
 	}, source);
 	return { shipped: 0, terminal: moved.quarantined, retryable: 0, requery: true };

@@ -135,7 +135,7 @@ type RequestAbort = {
 };
 
 function requestAbortSignal(timeoutMs: number, callerSignal: unknown): RequestAbort {
-	const timeoutSignal = AbortSignal.timeout(timeoutMs);
+	const timeoutSignal = AbortSignal.timeout(Math.floor(timeoutMs));
 	if (!hasAbortSignalShape(callerSignal)) return { signal: timeoutSignal, timeoutSignal };
 	return {
 		signal: callerSignal.aborted
@@ -256,6 +256,11 @@ function notifyProviderResponse(
 ): void {
 	providerResponses.getStore()?.push(response);
 	callback?.(response);
+}
+
+/** A call that ended without an answer is still a trace for the request in flight. */
+export function recordProviderFailure(response: ProviderResponseTrace): void {
+	providerResponses.getStore()?.push(response);
 }
 
 /**
@@ -381,7 +386,7 @@ export async function callSnoProfileCompletion(
 	diagnostic.finishReason = body.choices?.[0]?.finish_reason;
 	diagnostic.usage = normalizeProviderUsage(body.usage, [request.prompt], content);
 	const requestId = readProviderRequestId(body.id, response.headers);
-	if (request.onProviderResponse && request.adapterSlot && request.callLabel) {
+	if (request.adapterSlot && request.callLabel) {
 		notifyProviderResponse(request.onProviderResponse, {
 			durationMs: performance.now() - diagnostic.started,
 			adapterSlot: request.adapterSlot,
@@ -552,20 +557,21 @@ async function snoStationMemDispatch(ctx: LlmixDispatchContext): Promise<Provide
 	diagnostic.usage = normalizeProviderUsage(body.usage, ctx.messages, content);
 	const requestId = readProviderRequestId(body.id, response.headers);
 	const onProviderResponse = cfgExt.onProviderResponse;
-	if (
-		typeof onProviderResponse === "function" &&
-		cfgExt.adapterSlot &&
-		cfgExt.callLabel
-	) {
-		notifyProviderResponse(onProviderResponse as (response: ProviderResponseTrace) => void, {
-			durationMs: performance.now() - diagnostic.started,
-			adapterSlot: cfgExt.adapterSlot,
-			callLabel: cfgExt.callLabel,
-			provider,
-			...(requestId ? { requestId } : {}),
-			...(model ? { model } : {}),
-			...(usage ? { usage } : {}),
-		});
+	if (cfgExt.adapterSlot && cfgExt.callLabel) {
+		notifyProviderResponse(
+			typeof onProviderResponse === "function"
+				? (onProviderResponse as (response: ProviderResponseTrace) => void)
+				: undefined,
+			{
+				durationMs: performance.now() - diagnostic.started,
+				adapterSlot: cfgExt.adapterSlot,
+				callLabel: cfgExt.callLabel,
+				provider,
+				...(requestId ? { requestId } : {}),
+				...(model ? { model } : {}),
+				...(usage ? { usage } : {}),
+			},
+		);
 	}
 	return {
 		content,
