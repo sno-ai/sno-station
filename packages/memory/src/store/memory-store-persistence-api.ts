@@ -118,7 +118,7 @@ Object.assign(MemoryStore.prototype, {
 			projectId: safeEntry.projectId,
 		}, {
 			event_name: "sno_station_mem.memory-store-persistence-api.storing.memory",
-			file: "packages/sno-station-mem/src/store/memory-store-persistence-api.ts",
+			file: "packages/memory/src/store/memory-store-persistence-api.ts",
 			function: "store",
 			site_id: "memory-store-persistence-api.store.8fd6a993e7",
 		});
@@ -195,7 +195,7 @@ Object.assign(MemoryStore.prototype, {
 					memory_id: alreadyWritten.id,
 				}, {
 					event_name: "sno_station_mem.memory-store-persistence-api.idempotency.key.match.skipping.store",
-					file: "packages/sno-station-mem/src/store/memory-store-persistence-api.ts",
+					file: "packages/memory/src/store/memory-store-persistence-api.ts",
 					function: "store",
 					site_id: "memory-store-persistence-api.store.2f479e68bf",
 				});
@@ -213,7 +213,7 @@ Object.assign(MemoryStore.prototype, {
 				memory_id: earlyDup.id,
 			}, {
 				event_name: "sno_station_mem.memory-store-persistence-api.content.hash.match.skipping.store",
-				file: "packages/sno-station-mem/src/store/memory-store-persistence-api.ts",
+				file: "packages/memory/src/store/memory-store-persistence-api.ts",
 				function: "store",
 				site_id: "memory-store-persistence-api.store.14bfc8e321",
 			});
@@ -235,7 +235,7 @@ Object.assign(MemoryStore.prototype, {
 						memory_id: alreadyWritten.id,
 					}, {
 						event_name: "sno_station_mem.memory-store-persistence-api.idempotency.key.match.skipping.store",
-						file: "packages/sno-station-mem/src/store/memory-store-persistence-api.ts",
+						file: "packages/memory/src/store/memory-store-persistence-api.ts",
 						function: "<anonymous callback>",
 						site_id: "memory-store-persistence-api.<anonymous callback>.b07cd1be28",
 					});
@@ -249,7 +249,7 @@ Object.assign(MemoryStore.prototype, {
 					memory_id: existing.id,
 				}, {
 					event_name: "sno_station_mem.memory-store-persistence-api.content.hash.match.skipping.store",
-					file: "packages/sno-station-mem/src/store/memory-store-persistence-api.ts",
+					file: "packages/memory/src/store/memory-store-persistence-api.ts",
 					function: "<anonymous callback>",
 					site_id: "memory-store-persistence-api.<anonymous callback>.087a18a049",
 				});
@@ -768,7 +768,7 @@ Object.assign(MemoryStore.prototype, {
 			closes: closes.length,
 		}, {
 			event_name: "sno_station_mem.memory-store-persistence-api.supersede.write",
-			file: "packages/sno-station-mem/src/store/memory-store-persistence-api.ts",
+			file: "packages/memory/src/store/memory-store-persistence-api.ts",
 			function: "supersede",
 			site_id: "memory-store-persistence-api.supersede.77de7ddab1",
 		});

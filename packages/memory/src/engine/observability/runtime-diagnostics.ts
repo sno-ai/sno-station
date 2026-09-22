@@ -91,7 +91,7 @@ export function emitRuntimeStartSnapshot(input: RuntimeDiagnosticSnapshot): void
 		attribute_dictionary_hash: contentHash(attributeDictionary),
 		config_hash: contentHash({ routing, preset: input.preset, endpoint, hostModel }),
 	}, {
-		event_name: "memory.process.started", file: "packages/sno-station-mem/src/engine/observability/runtime-diagnostics.ts",
+		event_name: "memory.process.started", file: "packages/memory/src/engine/observability/runtime-diagnostics.ts",
 		function: "emitRuntimeStartSnapshot", site_id: "runtime.process.started",
 	});
 }

@@ -209,4 +209,4 @@ export const scope = {
 	project_id: "p_test",
 };
 
-export const distRoot = "../../../../packages/sno-observe/dist";
+export const distRoot = "../../../../packages/observability/dist";

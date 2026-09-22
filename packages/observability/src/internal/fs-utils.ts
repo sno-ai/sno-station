@@ -23,7 +23,7 @@ export function readJsonFile<T>(path: string): T | null {
 		if (!(typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT")) {
 			logger.warnRateLimited(`read-json:${path}`, "Sno Observe optional JSON file is unreadable", { path, error }, {
 				event_name: "observe.optional_file.unreadable",
-				file: "packages/sno-observe/src/internal/fs-utils.ts",
+				file: "packages/observability/src/internal/fs-utils.ts",
 				function: "readJsonFile",
 				site_id: "observe.fs_utils.read_json.failed",
 			});

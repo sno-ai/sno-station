@@ -4,17 +4,17 @@
  */
 
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import type { Embedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client";
+import type { Embedder } from "../../../../packages/memory/src/engine/extraction/embedding-provider-client";
 import {
 	type AtomicGauntletRecord,
 	type AtomicResplitTransport,
 	runAtomicExtractionGauntlet,
-} from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-extraction-gauntlet";
+} from "../../../../packages/memory/src/engine/extraction/atomic-extraction-gauntlet";
 import type {
 	AtomicExtractionRecord,
 	AtomicExtractionTurn,
-} from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-extraction-reply";
-import { MemoryStore } from "../../../../packages/sno-station-mem/src/store/store";
+} from "../../../../packages/memory/src/engine/extraction/atomic-extraction-reply";
+import { MemoryStore } from "../../../../packages/memory/src/store/store";
 import { createTestDb, createTestEmbedder, type TestDb } from "../../../apps/mem-claw/helpers/test-db";
 
 const TURNS: AtomicExtractionTurn[] = [

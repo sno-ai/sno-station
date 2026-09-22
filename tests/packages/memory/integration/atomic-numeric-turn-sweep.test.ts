@@ -7,13 +7,13 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type {
 	AtomicExtractionRecord,
 	AtomicExtractionTurn,
-} from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-extraction-reply";
+} from "../../../../packages/memory/src/engine/extraction/atomic-extraction-reply";
 import {
 	type AtomicGenericExtractionRequest,
 	type AtomicGenericExtractionTransport,
 	runAtomicNumericTurnSweep,
-} from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-generic-extractor";
-import type { AtomicExtractionLedgerKey, MemoryStore } from "../../../../packages/sno-station-mem/src/store/store";
+} from "../../../../packages/memory/src/engine/extraction/atomic-generic-extractor";
+import type { AtomicExtractionLedgerKey, MemoryStore } from "../../../../packages/memory/src/store/store";
 
 /**
  * Cut down from Memora session 92, whose extraction returned nothing at all on two replays out of
@@ -211,7 +211,7 @@ describe("atomic numeric turn sweep", () => {
 		// "warn", so the sweep module is re-imported under "info" to observe the success line.
 		vi.stubEnv("LOG_LEVEL", "info");
 		vi.resetModules();
-		const fresh = await import("../../../../packages/sno-station-mem/src/engine/extraction/atomic-generic-extractor");
+		const fresh = await import("../../../../packages/memory/src/engine/extraction/atomic-generic-extractor");
 		const lines = captureStderr();
 		const { store } = callCountingStore();
 		const { transport } = transportReturning(

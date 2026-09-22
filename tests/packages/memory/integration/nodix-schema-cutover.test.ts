@@ -7,8 +7,8 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { closeDb, initDb } from "../../../../packages/sno-station-mem/src/store/connection";
-import { initSqliteRuntimeSync, type SqliteDatabaseLike } from "../../../../packages/sno-station-mem/src/store/sqlite-runtime";
+import { closeDb, initDb } from "../../../../packages/memory/src/store/connection";
+import { initSqliteRuntimeSync, type SqliteDatabaseLike } from "../../../../packages/memory/src/store/sqlite-runtime";
 
 const VECTOR_DIM = 3;
 

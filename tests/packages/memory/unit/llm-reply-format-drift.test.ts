@@ -1,7 +1,7 @@
 /** Proves the surviving generic JSON reader recovers real provider wrapper drift. */
 
 import { describe, expect, it } from "vitest";
-import { extractJsonFromResponse } from "../../../../packages/sno-station-mem/src/model/llm-json-utils";
+import { extractJsonFromResponse } from "../../../../packages/memory/src/model/llm-json-utils";
 
 describe("extractJsonFromResponse", () => {
 	it("returns a top-level array after optional prose", () => {

@@ -5,7 +5,7 @@
 
 export { AsyncLocalStorage } from "node:async_hooks";
 export { default as path } from "node:path";
-export { SnoStationCoreCryptoError } from "@snoai/sno-station-core-crypto";
+export { SnoStationCoreCryptoError } from "@snoai/sqlite-crypto";
 
 export {
 	BACKUP_INTERVAL_MS,

@@ -3,7 +3,7 @@ import {
 	B_PROFILE_DISPOSITION_BY_REASON,
 	B_PROFILE_DROP_REASONS,
 	projectProfileCandidates,
-} from "../../../../packages/sno-station-mem/src/engine/extraction/b-profile-projection.ts";
+} from "../../../../packages/memory/src/engine/extraction/b-profile-projection.ts";
 
 describe("B-profile disposition table", () => {
 	it("maps every projection drop reason to exactly one closed disposition", () => {

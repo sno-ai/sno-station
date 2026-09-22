@@ -8,9 +8,9 @@ import { afterEach, expect, it } from "vitest";
 import {
 	createRemModelStageResponsePort,
 	runRemBatchJob,
-} from "../../../../packages/sno-station-mem/src/sidecar/rem-batch-executor";
-import { MemoryStore } from "../../../../packages/sno-station-mem/src/store/store";
-import { parseRemOperationalConfiguration } from "../../../../packages/sno-station-mem/src/engine/rem/index.ts";
+} from "../../../../packages/memory/src/sidecar/rem-batch-executor";
+import { MemoryStore } from "../../../../packages/memory/src/store/store";
+import { parseRemOperationalConfiguration } from "../../../../packages/memory/src/engine/rem/index.ts";
 import { createRemOwnerDecidedOperationalConfiguration } from "../../../apps/mem-claw/helpers/rem-entry-config-fixture.ts";
 import { createTestDb, createTestEmbedder, type TestDb } from "../../../apps/mem-claw/helpers/test-db.ts";
 

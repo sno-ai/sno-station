@@ -4,10 +4,10 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import type { Embedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client";
+import type { Embedder } from "../../../../packages/memory/src/engine/extraction/embedding-provider-client";
 import { InsightDistiller } from "@/extraction/memory-extraction-pipeline";
-import type { LlmClient } from "../../../../packages/sno-station-mem/src/model/llm-client";
-import { MemoryStore } from "../../../../packages/sno-station-mem/src/store/store";
+import type { LlmClient } from "../../../../packages/memory/src/model/llm-client";
+import { MemoryStore } from "../../../../packages/memory/src/store/store";
 import { createTestDb, createTestEmbedder, type TestDb } from "../../../apps/mem-claw/helpers/test-db.ts";
 import { createTestLlmClient } from "../../../apps/mem-claw/helpers/llm-client.ts";
 

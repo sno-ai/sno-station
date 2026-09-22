@@ -11,11 +11,11 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { parseRemOperationalConfiguration } from "../../../../packages/sno-station-mem/src/engine/rem/index.ts";
+import { parseRemOperationalConfiguration } from "../../../../packages/memory/src/engine/rem/index.ts";
 import {
 	createRemModelStageResponsePort,
 	runRemBatchJob,
-} from "../../../../packages/sno-station-mem/src/sidecar/rem-batch-executor.ts";
+} from "../../../../packages/memory/src/sidecar/rem-batch-executor.ts";
 import { createRemOwnerDecidedOperationalConfiguration } from "../../../apps/mem-claw/helpers/rem-entry-config-fixture.ts";
 import {
 	startRemProductionEntryFixture,

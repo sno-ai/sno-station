@@ -96,7 +96,7 @@ function removeBackups(stateDir: string, names: string[], reason: string): void 
 	if (names.length > 0) {
 		log.debug("pruned old backups", { removed: names.length, reason }, {
 			event_name: "sno_station_mem.backup.pruned.old.backups",
-			file: "packages/sno-station-mem/src/store/backup.ts",
+			file: "packages/memory/src/store/backup.ts",
 			function: "removeBackups",
 			site_id: "backup.pruneOldBackups.1dca69b51b",
 		});
@@ -185,7 +185,7 @@ export function runBackup(dbPath: string, stateDir: string, options: BackupOptio
 	freeSpaceForBackup(resolvedStateDir, 0, readDiskSpace);
 	log.info("backup created", { backupPath: safeBackupPath }, {
 		event_name: "sno_station_mem.backup.backup.created",
-		file: "packages/sno-station-mem/src/store/backup.ts",
+		file: "packages/memory/src/store/backup.ts",
 		function: "runBackup",
 		site_id: "backup.runBackup.ca114973f1",
 	});

@@ -4,11 +4,11 @@
  * stored without the piano question it answered. */
 import { hostname } from "node:os";
 import { describe, expect, it } from "vitest";
-import { resolveLlmEndpoint } from "../../../../packages/sno-station-mem/src/model/llm-endpoint-resolution";
-import { buildAtomicGenericExtractionPrompt, createAtomicGenericExtractionTransport } from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-generic-extractor";
-import { parseAtomicExtractionReply } from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-extraction-reply";
-import { createLlmClient } from "../../../../packages/sno-station-mem/src/model/llm-client";
-import { ATOMIC_EXTRACTION_SKILL_HASH } from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-extraction-skill";
+import { resolveLlmEndpoint } from "../../../../packages/memory/src/model/llm-endpoint-resolution";
+import { buildAtomicGenericExtractionPrompt, createAtomicGenericExtractionTransport } from "../../../../packages/memory/src/engine/extraction/atomic-generic-extractor";
+import { parseAtomicExtractionReply } from "../../../../packages/memory/src/engine/extraction/atomic-extraction-reply";
+import { createLlmClient } from "../../../../packages/memory/src/model/llm-client";
+import { ATOMIC_EXTRACTION_SKILL_HASH } from "../../../../packages/memory/src/engine/extraction/atomic-extraction-skill";
 
 const cases = [
 	{

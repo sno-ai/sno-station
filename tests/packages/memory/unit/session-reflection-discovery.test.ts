@@ -2,7 +2,7 @@ import { dirname, join } from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import { resolveReflectionSessionSearchDirs } from "../../../../packages/sno-station-mem/src/engine/operations/session-reflection-discovery";
+import { resolveReflectionSessionSearchDirs } from "../../../../packages/memory/src/engine/operations/session-reflection-discovery";
 
 const originalOpenClawHome = process.env.SNO_STATION_MEM_HOME;
 

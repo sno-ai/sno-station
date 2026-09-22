@@ -82,7 +82,7 @@ Object.assign(MemoryStore.prototype, {
 				if (completedMutation === undefined) throw error;
 				log.error("rem_write_completion_audit_failed", { error, row_id: input.rowId }, {
 					event_name: "sno_station_mem.memory-store-rem-api.rem.write.completion.audit.failed",
-					file: "packages/sno-station-mem/src/store/memory-store-rem-api.ts",
+					file: "packages/memory/src/store/memory-store-rem-api.ts",
 					function: "applyRemTextVersion",
 					site_id: "memory-store-rem-api.applyRemTextVersion.6422a9ebd1",
 				});
@@ -203,7 +203,7 @@ async function applyTransaction(
 	} catch (error) {
 		log.error("rem_write_receipt_failed", { error, row_id: existing.id }, {
 			event_name: "sno_station_mem.memory-store-rem-api.rem.write.receipt.failed",
-			file: "packages/sno-station-mem/src/store/memory-store-rem-api.ts",
+			file: "packages/memory/src/store/memory-store-rem-api.ts",
 			function: "applyTransaction",
 			site_id: "memory-store-rem-api.applyTransaction.47fe85179a",
 		});

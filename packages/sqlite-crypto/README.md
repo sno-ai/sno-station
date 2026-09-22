@@ -1,4 +1,4 @@
-# `@snoai/sno-station-core-crypto`
+# `@snoai/sqlite-crypto`
 
 Local AES-256 encryption layer for SNO Station Core SQLite databases. Thin first-party wrapper over vetted libraries: `better-sqlite3-multiple-ciphers` (SQLCipher v4 mode), `@napi-rs/keyring`, `argon2`, and Node's built-in `crypto`.
 
@@ -9,7 +9,7 @@ The full threat model, explicit provisioning rules, and key-custody caveats live
 ## Install
 
 ```sh
-npm install @snoai/sno-station-core-crypto
+npm install @snoai/sqlite-crypto
 ```
 
 Node 22+ required (production AND development).
@@ -21,7 +21,7 @@ Node 22+ required (production AND development).
 ### Database
 
 ```ts
-import { getDek, getDekSync, openEncryptedDb } from "@snoai/sno-station-core-crypto";
+import { getDek, getDekSync, openEncryptedDb } from "@snoai/sqlite-crypto";
 
 // async — supports passphrase mode (interactive prompt) and keychain
 const dek = await getDek();
@@ -37,7 +37,7 @@ const dekSync = getDekSync();
 ### Passphrase mode (opt-in)
 
 ```ts
-import { setPassphrase, removePassphrase } from "@snoai/sno-station-core-crypto";
+import { setPassphrase, removePassphrase } from "@snoai/sqlite-crypto";
 
 await setPassphrase(Buffer.from("your-passphrase", "utf8"));
 // later — revert to keychain / file-fallback
@@ -49,7 +49,7 @@ Both functions take `Buffer` (not `string`) so callers can zero-fill the buffer 
 ### `.sno-station-core` export / import
 
 ```ts
-import { exportEncrypted, importEncrypted } from "@snoai/sno-station-core-crypto";
+import { exportEncrypted, importEncrypted } from "@snoai/sqlite-crypto";
 
 await exportEncrypted("backup.sno-station-core");          // gzip-tar all manifest DBs + AES-256-GCM
 await importEncrypted("backup.sno-station-core");           // verify header + decrypt + restore

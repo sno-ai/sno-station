@@ -2,14 +2,16 @@ import { createUUIDv7 } from "@snoai/common-core";
 import {
 	type BufferStore,
 	decodeEnvelope,
+	type IdentifyPayloadFor,
 	type PendingChain,
 	type PendingRow,
 } from "./buffer-store.js";
+import { ConsentStore } from "./consent.js";
 import { type MachineRegistrationCache, registerBeforeFlush } from "./flush-registration.js";
 import { type EventPostResult, postEvent } from "./http.js";
 import { logger } from "./log.js";
 import type { PathEnv } from "./paths.js";
-import { type Identity, SDK_VERSION } from "./types.js";
+import { type Identity, SDK_VERSION, type WireEnvelope } from "./types.js";
 
 export const SCHEDULE_FLUSH_DELAY_MS = 5_000;
 
@@ -19,6 +21,7 @@ export interface FlushOptions {
 	fetch?: typeof fetch;
 	force?: boolean;
 	identity: Identity;
+	identifyPayloadFor?: IdentifyPayloadFor;
 	machineRegistrationCache?: MachineRegistrationCache;
 	signal?: AbortSignal;
 }
@@ -32,7 +35,7 @@ export interface FlushResult {
 
 interface RowFlushResult extends FlushResult {
 	retryScope?: "chain";
-	stopBatch?: boolean;
+	requery?: boolean;
 }
 
 export interface DrainResult {
@@ -42,9 +45,14 @@ export interface DrainResult {
 }
 
 const MAX_STAGNANT_DRAIN_STEPS = 100;
+
+const minimalIdentifyPayload: IdentifyPayloadFor = (agentId, machineId) => ({
+	agent_id: agentId,
+	machine_id: machineId,
+	sdk_version: SDK_VERSION,
+});
 const PERMANENT_PREDECESSOR_GAP_MS = 5 * 60 * 1_000;
 const MAX_RETRY_BACKOFF_MS = 30_000;
-const SAFEGUARD_RETRY_DELAY_MS = 15 * 60 * 1_000;
 
 export class FlushEngine {
 	private state: "idle" | "scheduled" | "flushing" = "idle";
@@ -65,6 +73,7 @@ export class FlushEngine {
 		private readonly baseUrlProvider: () => string,
 		private readonly envProvider: () => PathEnv = () => process.env,
 		private readonly fetchProvider: () => typeof fetch | undefined = () => undefined,
+		private readonly identifyPayloadFor: IdentifyPayloadFor = minimalIdentifyPayload,
 	) {}
 
 	schedule(delayMs: number, preemptible = false): void {
@@ -100,10 +109,10 @@ export class FlushEngine {
 			this.state = "idle";
 			void this.flush(this.flushOptions(false)).catch((error: unknown) => {
 				logger.errorRateLimited("scheduled-flush", "sno observe scheduled flush failed", {
-					error: errorName(error),
+					error,
 				}, {
 					event_name: "sno.observe.internal.flush.schedule",
-					file: "packages/sno-observe/src/internal/flush.ts",
+					file: "packages/observability/src/internal/flush.ts",
 					function: "schedule",
 					site_id: "sno.observe.internal.flush.schedule.1",
 				});
@@ -136,7 +145,7 @@ export class FlushEngine {
 			this.schedule(retryDelayMs);
 			return { shipped: 0, terminal: 0, retryable: 1, retryAfterMs: retryDelayMs };
 		}
-		const activeFlush = this.runFlush(options);
+		const activeFlush = this.runFlush({ identifyPayloadFor: this.identifyPayloadFor, ...options });
 		this.activeFlush = activeFlush;
 		try {
 			return await activeFlush;
@@ -176,7 +185,7 @@ export class FlushEngine {
 				if (globalRetry) {
 					this.store.deferRetriesUntil(this.retryNotBeforeMs);
 				}
-				this.backoffMs = Math.min(this.backoffMs * 2, 30_000);
+				this.backoffMs = Math.min(this.backoffMs * 2, MAX_RETRY_BACKOFF_MS);
 				const wakeDelayMs = !globalRetry && this.store.getReadyPending(1).length > 0
 					? SCHEDULE_FLUSH_DELAY_MS
 					: delayMs;
@@ -219,9 +228,9 @@ export class FlushEngine {
 				}
 			} catch (error) {
 				lastError = error instanceof Error ? error.message : String(error);
-				logger.error("sno observe drain failed", { error: lastError }, {
+				logger.error("sno observe drain failed", { error }, {
 					event_name: "sno.observe.internal.flush.drain",
-					file: "packages/sno-observe/src/internal/flush.ts",
+					file: "packages/observability/src/internal/flush.ts",
 					function: "drain",
 					site_id: "sno.observe.internal.flush.drain.2",
 				});
@@ -240,7 +249,7 @@ export class FlushEngine {
 				pending_count: pendingCount,
 			}, {
 				event_name: "sno.observe.internal.flush.drain",
-				file: "packages/sno-observe/src/internal/flush.ts",
+				file: "packages/observability/src/internal/flush.ts",
 				function: "drain",
 				site_id: "sno.observe.internal.flush.drain.3",
 			});
@@ -278,10 +287,10 @@ export class FlushEngine {
 			}
 			void this.flush(this.flushOptions(true)).catch((error: unknown) => {
 				logger.errorRateLimited("before-exit-flush", "sno observe before-exit flush failed", {
-					error: errorName(error),
+					error,
 				}, {
 					event_name: "sno.observe.internal.flush.installbeforeexit",
-					file: "packages/sno-observe/src/internal/flush.ts",
+					file: "packages/observability/src/internal/flush.ts",
 					function: "installBeforeExit",
 					site_id: "sno.observe.internal.flush.installbeforeexit.4",
 				});
@@ -369,7 +378,7 @@ export async function flushPending(
 		} catch (error) {
 			logger.warn("Sno Observe flush lease release failed", { error }, {
 				event_name: "observe.flush.lease_release_failed",
-				file: "packages/sno-observe/src/internal/flush.ts",
+				file: "packages/observability/src/internal/flush.ts",
 				function: "flushPending",
 				site_id: "observe.flush.lease_release_failed",
 			});
@@ -392,13 +401,13 @@ async function flushPendingWithLease(
 				retryAfterMs: store.getNextChainRetryDelay() || 5_000,
 			};
 		}
-		await maintainAfterRetention(store);
+		pruneLoudly(store);
 		store.clearElapsedRetryDeadline();
 		return { shipped: 0, terminal: 0, retryable: 0 };
 	}
 	const registrationFailure = await registerBeforeFlush(store, firstRows, options);
 	if (registrationFailure !== null) {
-		store.pruneRetention();
+		pruneLoudly(store);
 		return persistRetryDeadline(store, registrationFailure);
 	}
 
@@ -430,13 +439,8 @@ async function flushPendingWithLease(
 			shipped += result.shipped;
 			terminal += result.terminal;
 			retryable += result.retryable;
-			if (result.retryScope !== "chain") {
-				globalRetryable += result.retryable;
-				globalRetryAfterMs = minDefined(globalRetryAfterMs, result.retryAfterMs);
-			} else {
-				chainRetryAfterMs = minDefined(chainRetryAfterMs, result.retryAfterMs);
-			}
 			if (result.retryScope === "chain") {
+				chainRetryAfterMs = minDefined(chainRetryAfterMs, result.retryAfterMs);
 				blockedChains.push({
 					machineId: row.machine_id,
 					agentId: row.agent_id,
@@ -445,8 +449,14 @@ async function flushPendingWithLease(
 				requery = true;
 				break;
 			}
-			if (result.retryable > 0 || result.stopBatch === true) {
+			if (result.retryable > 0) {
+				globalRetryable += result.retryable;
+				globalRetryAfterMs = minDefined(globalRetryAfterMs, result.retryAfterMs);
 				stopBatch = true;
+				break;
+			}
+			if (result.requery === true) {
+				requery = true;
 				break;
 			}
 		}
@@ -454,7 +464,7 @@ async function flushPendingWithLease(
 			break;
 		}
 	}
-	await maintainAfterRetention(store);
+	pruneLoudly(store);
 	const retryAfterMs = globalRetryable > 0 ? globalRetryAfterMs : chainRetryAfterMs;
 	return persistRetryDeadline(
 		store,
@@ -463,16 +473,17 @@ async function flushPendingWithLease(
 	);
 }
 
-async function maintainAfterRetention(store: BufferStore): Promise<void> {
+function pruneLoudly(store: BufferStore): void {
 	const report = store.pruneRetention();
-	if (
-		report.deletedEvents === 0 &&
-		report.deletedChainTail === 0 &&
-		report.deletedChainState === 0 &&
-		report.deletedChainRetry === 0 &&
-		store.countPending() === 0
-	) {
-		await store.compactIfNeeded();
+	if (report.overflowDeleted > 0) {
+		logger.error("sno observe buffer over capacity; oldest events dropped unshipped", {
+			dropped: report.overflowDeleted,
+		}, {
+			event_name: "sno.observe.internal.flush.pruneloudly",
+			file: "packages/observability/src/internal/flush.ts",
+			function: "pruneLoudly",
+			site_id: "sno.observe.internal.flush.pruneloudly.1",
+		});
 	}
 }
 
@@ -507,16 +518,22 @@ async function flushRow(
 				options.machineRegistrationCache.registered = false;
 			}
 		}
-		return handlePostResult(store, row, response);
+		return handlePostResult(
+			store,
+			row,
+			response,
+			options.identifyPayloadFor ?? minimalIdentifyPayload,
+			options.env ?? process.env,
+		);
 	} catch (error) {
 		store.incrementAttempts(row.rowid);
-		const retryAfterMs = retryDelay(store, row, undefined);
+		const retryAfterMs = retryDelay(row, undefined);
 		logger.warnRateLimited(`network:${row.event_id}:${errorName(error)}`, "sno observe network error", {
 			event_id: row.event_id,
 			error,
 		}, {
 			event_name: "sno.observe.internal.flush.flushrow",
-			file: "packages/sno-observe/src/internal/flush.ts",
+			file: "packages/observability/src/internal/flush.ts",
 			function: "flushRow",
 			site_id: "sno.observe.internal.flush.flushrow.5",
 		});
@@ -524,17 +541,21 @@ async function flushRow(
 	}
 }
 
+/**
+ * What a server answer means for the row:
+ * - shipped: accepted (or already known).
+ * - rejected: the server will never take these bytes; the head becomes local evidence and
+ *   every later row of the epoch moves to a fresh epoch.
+ * - rechain: the bytes are fine but the chain position is not; head and suffix move to a
+ *   fresh epoch.
+ * - wait: try again later (chain-scoped when only this chain must wait).
+ */
 type ResponseRoute =
 	| { kind: "shipped" }
-	| { kind: "invalid"; reason: string }
-	| { kind: "chain"; reason: string }
-	| {
-			kind: "retry";
-			message: string;
-			retryAfterMs?: number;
-			error?: boolean;
-			retryScope?: "chain";
-	  };
+	| { kind: "suppressed" }
+	| { kind: "rejected"; reason: string }
+	| { kind: "rechain"; reason: string }
+	| { kind: "wait"; message: string; retryAfterMs?: number; retryScope?: "chain" };
 
 const ACCEPTED_DUPLICATE_CODES = new Set([
 	"duplicate_event",
@@ -544,90 +565,107 @@ const ACCEPTED_DUPLICATE_CODES = new Set([
 	"idempotent_replay",
 ]);
 
-const CHAIN_REJECTION_CODES = new Set([
-	"chain_gap",
-	"payload_conflict",
-	"chain_seed_required",
-	"prev_hash_mismatch",
-	"self_hash_mismatch",
-]);
-
-const INVALID_EVENT_CODES = new Set([
-	"agent_id_not_in_enum",
-	"batch_wrapper_rejected",
-	"consent_level_not_in_enum",
-	"invalid_envelope",
-	"invalid_json",
-	"legacy_flat_shape_rejected",
-	"schema_invalid",
-	"single_envelope_required",
-	"tokens_method_required",
-]);
-
-const FORBIDDEN_EVENT_CODES = new Set([
-	"identity_mismatch",
-	"machine_scope_forbidden",
-	"ownership_denied",
-	"scope_user_mismatch",
-]);
+const RECHAIN_CODES = new Set(["chain_gap", "prev_hash_mismatch", "chain_seed_required"]);
 
 function handlePostResult(
 	store: BufferStore,
 	row: PendingRow,
 	response: EventPostResult,
+	identifyPayloadFor: IdentifyPayloadFor,
+	env: PathEnv,
 ): RowFlushResult {
 	const route = routeResponse(response, row);
 	switch (route.kind) {
 		case "shipped":
 			store.markShipped(row.rowid);
 			return { shipped: 1, terminal: 0, retryable: 0 };
-		case "invalid": {
-			const recoveryState = recoveryStateFor(row);
-			const terminal = store.quarantineEpochSuffix(
-				row,
-				response.status,
-				route.reason,
-				response.body,
-				recoveryState,
-			);
-			reseedRejectedSuffix(store, row);
-			logger.error("sno observe event rejected as invalid", {
+		case "suppressed":
+			return handleConsentSuppressed(store, row, response, identifyPayloadFor, env);
+		case "rejected": {
+			const moved = store.carryForward(row, identifyPayloadFor, {
+				quarantine: "head",
+				detail: { status: response.status, reason: route.reason, body: response.body },
+			});
+			logger.error("sno observe event rejected by server; kept as evidence, later rows moved on", {
 				event_id: row.event_id,
+				event_type: decodeEnvelope(row.payload).event_type,
 				status: response.status,
 				reason: route.reason,
+				body: response.body.slice(0, 512),
+				carried: moved.carried,
+				chain_epoch: moved.chainEpoch,
 			}, {
 				event_name: "sno.observe.internal.flush.handlepostresult",
-				file: "packages/sno-observe/src/internal/flush.ts",
+				file: "packages/observability/src/internal/flush.ts",
 				function: "handlePostResult",
 				site_id: "sno.observe.internal.flush.handlepostresult.6",
 			});
-			return { shipped: 0, terminal, retryable: 0, stopBatch: true };
+			return { shipped: 0, terminal: moved.quarantined, retryable: 0, requery: true };
 		}
-		case "chain": {
-			const recoveryState = recoveryStateFor(row);
-			const terminal = store.quarantineEpochSuffix(
-				row,
-				response.status,
-				route.reason,
-				response.body,
-				recoveryState,
-			);
-			reseedRejectedSuffix(store, row);
-			logChainRejection(row, response.status, route.reason);
-			return { shipped: 0, terminal, retryable: 0, stopBatch: true };
+		case "rechain": {
+			const moved = store.carryForward(row, identifyPayloadFor);
+			logger.warn("sno observe chain reset; rows moved to a fresh epoch", {
+				event_id: row.event_id,
+				status: response.status,
+				reason: route.reason,
+				carried: moved.carried,
+				chain_epoch: moved.chainEpoch,
+			}, {
+				event_name: "sno.observe.internal.flush.handlepostresult",
+				file: "packages/observability/src/internal/flush.ts",
+				function: "handlePostResult",
+				site_id: "sno.observe.internal.flush.handlepostresult.7",
+			});
+			return { shipped: 0, terminal: 0, retryable: 0, requery: true };
 		}
-		case "retry":
-			return retryRow(
-				store,
-				row,
-				response.status,
-				response.body,
-				route.message,
-				route.retryAfterMs,
-				route.error,
-				route.retryScope,
-			);
+		case "wait":
+			return retryRow(store, row, response, route);
 	}
+}
+
+/**
+ * The server's consent for this machine and lane is lower than what the row claims. A row
+ * sent as `full` is re-sent as `metadata-only` (every schema is closed, so the payload
+ * carries no text either way) and the local consent is lowered to match; a row already at `metadata-only` means consent is off on the website,
+ * so the whole run is kept as local evidence and the chain moves on.
+ */
+function handleConsentSuppressed(
+	store: BufferStore,
+	row: PendingRow,
+	response: EventPostResult,
+	identifyPayloadFor: IdentifyPayloadFor,
+	env: PathEnv,
+): RowFlushResult {
+	const envelope = decodeEnvelope(row.payload);
+	const source = {
+		event_name: "sno.observe.internal.flush.handleconsentsuppressed",
+		file: "packages/observability/src/internal/flush.ts",
+		function: "handleConsentSuppressed",
+		site_id: "sno.observe.internal.flush.handleconsentsuppressed.1",
+	};
+	if (envelope.consent_level === "full") {
+		const moved = store.carryForward(row, identifyPayloadFor, {
+			rewrite: (entry: WireEnvelope) => ({ consent_level: "metadata-only", payload: entry.payload }),
+		});
+		new ConsentStore(env).write("metadata-only");
+		logger.warn("sno observe server allows metadata-only; rows re-sent at that level and local consent lowered", {
+			event_id: row.event_id,
+			carried: moved.carried,
+			chain_epoch: moved.chainEpoch,
+		}, source);
+		return { shipped: 0, terminal: 0, retryable: 0, requery: true };
+	}
+	const moved = store.carryForward(row, identifyPayloadFor, {
+		quarantine: "all",
+		detail: { status: response.status, reason: "consent_suppressed", body: response.body },
+	});
+	logger.error("sno observe server consent is off for this machine; events kept locally, not sent", {
+		event_id: row.event_id,
+		lane: envelope.lane,
+		kept: moved.quarantined,
+		chain_epoch: moved.chainEpoch,
+	}, source);
+	return { shipped: 0, terminal: moved.quarantined, retryable: 0, requery: true };
 }
 
 function routeResponse(response: EventPostResult, row: PendingRow): ResponseRoute {
@@ -635,105 +673,84 @@ function routeResponse(response: EventPostResult, row: PendingRow): ResponseRout
 	switch (response.status) {
 		case 202:
 			return { kind: "shipped" };
-		case 200:
-			return {
-				kind: "retry",
-				message: "sno observe returned unexpected event-ingest status; will retry",
-				retryAfterMs: response.retryAfterMs ?? 5_000,
-			};
 		case 400:
-			return code !== undefined && INVALID_EVENT_CODES.has(code)
-				? { kind: "invalid", reason: code }
-				: retryRoute(response.retryAfterMs ?? 5_000, "chain");
+		case 403:
+		case 413:
+			return { kind: "rejected", reason: code ?? `http_${response.status}` };
 		case 409:
 		case 422:
-			return routeConflict(response, row);
+			return routeConflict(response, row, code);
 		case 401:
-			return { kind: "retry", message: "sno observe unauthorized; will retry" };
-		case 403:
-			return code !== undefined && FORBIDDEN_EVENT_CODES.has(code)
-				? { kind: "invalid", reason: code }
-				: retryRoute(response.retryAfterMs ?? 5_000, "chain");
+			return { kind: "wait", message: "sno observe unauthorized; will re-register and retry" };
 		case 429:
-			return retryRoute(response.retryAfterMs ?? 3_600_000);
-		case 503:
-			return retryRoute(response.retryAfterMs ?? 5_000);
+			return { kind: "wait", message: "sno observe rate limited", retryAfterMs: response.retryAfterMs ?? 3_600_000 };
 		default:
-			return response.status >= 400 && response.status < 500
-				? retryRoute(response.retryAfterMs ?? undefined, "chain")
-				: retryRoute(response.retryAfterMs ?? undefined);
+			return {
+				kind: "wait",
+				message: "sno observe transport will retry",
+				...(typeof response.retryAfterMs === "number" ? { retryAfterMs: response.retryAfterMs } : {}),
+			};
 	}
 }
 
-function routeConflict(response: EventPostResult, row: PendingRow): ResponseRoute {
-	const code = responseErrorCode(response.body);
+function routeConflict(
+	response: EventPostResult,
+	row: PendingRow,
+	code: string | undefined,
+): ResponseRoute {
 	if (code !== undefined && ACCEPTED_DUPLICATE_CODES.has(code)) {
 		return { kind: "shipped" };
 	}
+	if (code === "consent_suppressed") {
+		return { kind: "suppressed" };
+	}
 	if (code === "chain_predecessor_not_ready") {
-		if (isPermanentPredecessorGap(response.body, row)) {
-			return { kind: "chain", reason: "permanent_predecessor_gap" };
-		}
-		return retryRoute(response.retryAfterMs ?? 5_000, "chain");
+		return isKnownPredecessorWait(response.body, row)
+			? {
+					kind: "wait",
+					message: "sno observe predecessor not ready",
+					retryAfterMs: response.retryAfterMs ?? 5_000,
+					retryScope: "chain",
+				}
+			: { kind: "rechain", reason: "predecessor_unknown" };
 	}
-	if (code !== undefined && CHAIN_REJECTION_CODES.has(code)) {
-		return { kind: "chain", reason: code };
+	if (code === undefined || RECHAIN_CODES.has(code)) {
+		return { kind: "rechain", reason: code ?? `http_${response.status}` };
 	}
-	return {
-		kind: "retry",
-		message: "sno observe conflict response is not terminal; will retry",
-		retryAfterMs: response.retryAfterMs ?? 5_000,
-		retryScope: "chain",
-	};
+	return { kind: "rejected", reason: code };
 }
 
-function isPermanentPredecessorGap(body: string, row: PendingRow): boolean {
+/**
+ * The server knows this epoch and is still waiting for the previous row from another
+ * process: wait. An epoch it has no record of, or a predecessor it has waited on for
+ * longer than the gap window, is never coming: rechain.
+ */
+function isKnownPredecessorWait(body: string, row: PendingRow): boolean {
 	const parsed = parseResponseBody(body);
-	if (parsed === null || parsed.code !== "chain_predecessor_not_ready") {
+	if (parsed === null) {
 		return false;
 	}
-	const details = gapDetails(parsed.root, parsed.nestedError);
-	if (details === null) {
+	const details = { ...parsed.root, ...(parsed.nestedError ?? {}) };
+	if (details["latest_state"] === null || details["latest_state"] === undefined) {
 		return false;
 	}
-	const expectedSeq = integerDetail(details["expected_seq"]);
-	const receivedSeq = integerDetail(details["received_seq"]);
-	const lastCommittedSeq = committedSequenceDetail(details["last_committed_seq"]);
-	const stallMs = integerDetail(details["chain_stall_ms"]);
-	return (
-		details["machine_uuid"] === row.machine_id &&
-		details["agent_id"] === row.agent_id &&
-		integerDetail(details["chain_epoch"]) === row.chain_epoch &&
-		details["latest_state"] === "committed" &&
-		stallMs !== undefined &&
-		stallMs >= PERMANENT_PREDECESSOR_GAP_MS &&
-		expectedSeq !== undefined &&
-		receivedSeq === row.seq &&
-		receivedSeq === expectedSeq + 1 &&
-		lastCommittedSeq === expectedSeq - 1
-	);
+	const stallMs = details["chain_stall_ms"];
+	if (typeof stallMs === "number" && stallMs >= PERMANENT_PREDECESSOR_GAP_MS) {
+		return false;
+	}
+	return details["chain_epoch"] === row.chain_epoch;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null;
 }
 
-function integerDetail(value: unknown): number | undefined {
-	return typeof value === "number" && Number.isSafeInteger(value) && value >= 0
-		? value
-		: undefined;
-}
-
-function committedSequenceDetail(value: unknown): number | undefined {
-	return typeof value === "number" && Number.isSafeInteger(value) && value >= -1
-		? value
-		: undefined;
-}
-
 function responseErrorCode(body: string): string | undefined {
 	return parseResponseBody(body)?.code;
 }
 
+/** The server's code lives in `error` (string) or `error.code`; `reason` is only a sub-reason. */
+/** The server's code lives in `error` (string) or `error.code`; `reason` is only a sub-reason. */
 function parseResponseBody(body: string): {
 	root: Record<string, unknown>;
 	nestedError: Record<string, unknown> | null;
@@ -745,148 +762,54 @@ function parseResponseBody(body: string): {
 			return null;
 		}
 		const nestedError = isRecord(parsed["error"]) ? parsed["error"] : null;
-		const candidates = new Set<string>();
-		for (const key of ["reason", "code", "error_code", "error"]) {
-			const value = parsed[key];
-			if (typeof value === "string" && value.length > 0) {
-				candidates.add(value);
-			}
-		}
-		if (nestedError !== null) {
-			const code = nestedError["code"];
-			if (typeof code === "string" && code.length > 0) {
-				candidates.add(code);
-			}
-		}
-		return {
-			root: parsed,
-			nestedError,
-			code: candidates.size === 1 ? candidates.values().next().value : undefined,
-		};
+		const candidates = [nestedError?.["code"], parsed["error"], parsed["code"], parsed["error_code"], parsed["reason"]];
+		const code = candidates.find((value) => typeof value === "string" && value.length > 0);
+		return { root: parsed, nestedError, code: typeof code === "string" ? code : undefined };
 	} catch {
 		return null;
 	}
 }
 
-const GAP_DETAIL_KEYS = [
-	"machine_uuid",
-	"agent_id",
-	"chain_epoch",
-	"expected_seq",
-	"received_seq",
-	"latest_state",
-	"last_committed_seq",
-	"chain_stall_ms",
-];
-
-function gapDetails(
-	root: Record<string, unknown>,
-	nested: Record<string, unknown> | null,
-): Record<string, unknown> | null {
-	const details: Record<string, unknown> = {};
-	for (const key of GAP_DETAIL_KEYS) {
-		const rootHas = Object.hasOwn(root, key);
-		const nestedHas = nested !== null && Object.hasOwn(nested, key);
-		if (rootHas && nestedHas && root[key] !== nested[key]) {
-			return null;
-		}
-		if (nestedHas && nested !== null) {
-			details[key] = nested[key];
-		} else if (rootHas) {
-			details[key] = root[key];
-		}
-	}
-	return details;
-}
-
-function retryRoute(retryAfterMs?: number, retryScope?: "chain"): ResponseRoute {
-	return withRetryAfter(
-		{
-			kind: "retry",
-			message: "sno observe transport will retry",
-			...(retryScope === undefined ? {} : { retryScope }),
-		},
-		retryAfterMs,
-	);
-}
-
-function logChainRejection(row: PendingRow, status: number, reason: string): void {
-	const envelope = decodeEnvelope(row.payload);
-	logger.error("sno observe chain rejected", {
-		event_id: envelope.event_id,
-		status,
-		agent_id: envelope.scope.agent_id,
-		reason,
-	}, {
-		event_name: "sno.observe.internal.flush.logchainrejection",
-		file: "packages/sno-observe/src/internal/flush.ts",
-		function: "logChainRejection",
-		site_id: "sno.observe.internal.flush.logchainrejection.7",
-	});
-}
-
 function retryRow(
 	store: BufferStore,
 	row: PendingRow,
-	status: number,
-	body: string,
-	message: string,
-	retryAfterMs?: number,
-	error = false,
-	retryScope?: "chain",
+	response: EventPostResult,
+	route: Extract<ResponseRoute, { kind: "wait" }>,
 ): RowFlushResult {
 	store.incrementAttempts(row.rowid);
-	const effectiveRetryAfterMs = retryDelay(store, row, retryAfterMs, retryScope === "chain");
-	if (retryScope === "chain") {
+	const effectiveRetryAfterMs = retryDelay(row, route.retryAfterMs);
+	if (route.retryScope === "chain") {
 		store.deferChainRetriesUntil(
 			{ machineId: row.machine_id, agentId: row.agent_id, chainEpoch: row.chain_epoch },
 			Date.now() + effectiveRetryAfterMs,
 		);
 	}
-	const code = responseErrorCode(body);
-	const context = {
+	const code = responseErrorCode(response.body);
+	logger.warnRateLimited(`http:${row.event_id}:${response.status}:${code ?? route.message}`, "Sno Observe delivery deferred", {
 		event_id: row.event_id,
-		status,
+		status: response.status,
 		failure_code: code,
 		retry_after_ms: effectiveRetryAfterMs,
-	};
-	const failureKey = `http:${row.event_id}:${status}:${code ?? message}`;
-	if (error) {
-		logger.errorRateLimited(failureKey, "Sno Observe delivery deferred", context, {
-			event_name: "sno.observe.internal.flush.retryrow",
-			file: "packages/sno-observe/src/internal/flush.ts",
-			function: "retryRow",
-			site_id: "sno.observe.internal.flush.retryrow.8",
-		});
-	} else {
-		logger.warnRateLimited(failureKey, "Sno Observe delivery deferred", context, {
-			event_name: "sno.observe.internal.flush.retryrow",
-			file: "packages/sno-observe/src/internal/flush.ts",
-			function: "retryRow",
-			site_id: "sno.observe.internal.flush.retryrow.9",
-		});
-	}
+	}, {
+		event_name: "sno.observe.internal.flush.retryrow",
+		file: "packages/observability/src/internal/flush.ts",
+		function: "retryRow",
+		site_id: "sno.observe.internal.flush.retryrow.9",
+	});
 	return {
-		...withOptionalRetryAfter(
-		{ shipped: 0, terminal: 0, retryable: 1 },
-		effectiveRetryAfterMs,
-		),
-		...(retryScope === undefined ? {} : { retryScope }),
+		shipped: 0,
+		terminal: 0,
+		retryable: 1,
+		retryAfterMs: effectiveRetryAfterMs,
+		...(route.retryScope === undefined ? {} : { retryScope: route.retryScope }),
 	};
 }
 
-function retryDelay(
-	store: BufferStore,
-	row: PendingRow,
-	requested: number | undefined,
-	chainScoped = false,
-): number {
+function retryDelay(row: PendingRow, requested: number | undefined): number {
 	const attempt = row.attempts + 1;
 	const exponent = Math.min(Math.max(0, attempt - 1), 3);
 	const attemptDelay = Math.min(5_000 * 2 ** exponent, MAX_RETRY_BACKOFF_MS);
-	const safeguardDelay =
-		chainScoped || store.getQueueSafeguard() === null ? 0 : SAFEGUARD_RETRY_DELAY_MS;
-	return Math.max(requested ?? attemptDelay, attemptDelay, safeguardDelay);
+	return Math.max(requested ?? attemptDelay, attemptDelay);
 }
 
 function jitterDelay(delayMs: number): number {
@@ -898,35 +821,6 @@ function errorName(error: unknown): string {
 	return error instanceof Error ? error.name : typeof error;
 }
 
-function reseedRejectedSuffix(store: BufferStore, row: PendingRow): void {
-	const envelope = decodeEnvelope(row.payload);
-	if (envelope.event_type === "agent.identify") {
-		return;
-	}
-	store.append({
-		eventId: createUUIDv7(),
-		eventType: "agent.identify",
-		lane: envelope.lane,
-		tsEdgeMs: Date.now(),
-		consentLevel: envelope.consent_level,
-		redacted: false,
-		scope: envelope.scope,
-		payload: {
-			agent_id: envelope.scope.agent_id,
-			machine_id: envelope.scope.machine_id,
-			sdk_version: SDK_VERSION,
-		},
-		terminal: false,
-		chainEpoch: store.nextEpoch(row.machine_id, row.agent_id),
-	});
-}
-
-function recoveryStateFor(row: PendingRow): "reseed_required" | "retired" {
-	return decodeEnvelope(row.payload).event_type === "agent.identify"
-		? "retired"
-		: "reseed_required";
-}
-
 function minDefined(left: number | undefined, right: number | undefined): number | undefined {
 	return left === undefined ? right : right === undefined ? left : Math.min(left, right);
 }
@@ -935,12 +829,5 @@ function withOptionalRetryAfter(
 	result: FlushResult,
 	retryAfterMs: number | undefined,
 ): FlushResult {
-	return retryAfterMs === undefined ? result : { ...result, retryAfterMs };
-}
-
-function withRetryAfter(
-	result: Extract<ResponseRoute, { kind: "retry" }>,
-	retryAfterMs: number | undefined,
-): Extract<ResponseRoute, { kind: "retry" }> {
 	return retryAfterMs === undefined ? result : { ...result, retryAfterMs };
 }

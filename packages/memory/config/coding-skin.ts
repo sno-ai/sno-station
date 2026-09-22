@@ -2,6 +2,7 @@ import type { Registration } from "../src/contract/inputs";
 import { engineSettingsSchema } from "../src/contract/settings";
 import { installationSettingsSchema, type InstallationSettings } from "./installation-settings";
 import { llmRoutingConfigSchema } from "./plugin-config-mode-schema";
+import { observeAgentId } from "./plugin-config-observe-schema";
 export { HOST_MODEL_CALLBACK_HOST, HOST_MODEL_CALLBACK_PATH } from "./skin-defaults";
 
 export const CODING_SKIN_CHILD_DEADLINE_MS = 110_000;
@@ -31,6 +32,7 @@ export const CODING_SKIN_HOOKS = {
 	SessionStart: { eventName: "session_start", subcommand: "session-start", timeout: 15 },
 	UserPromptSubmit: { eventName: "user_prompt_submit", subcommand: "user-prompt-submit", timeout: 8 },
 	Stop: { eventName: "stop", subcommand: "stop", timeout: 5 },
+	SessionEnd: { eventName: "session_end", subcommand: "session-end", timeout: 8 },
 } as const;
 
 export type CodingSkinHookName = keyof typeof CODING_SKIN_HOOKS;
@@ -53,7 +55,7 @@ export function createCodingSkinRegistration(input: {
 	});
 	const settings = engineSettingsSchema.parse({
 		embedding: input.installed.embedding,
-		observe: { enabled: false },
+		observe: { agentId: observeAgentId(input.skinId) },
 		dbPath: input.installed.storePath,
 		provider: {},
 		ambientLearning: true,

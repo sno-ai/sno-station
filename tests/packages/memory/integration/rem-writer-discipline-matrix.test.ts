@@ -7,8 +7,8 @@ import {
 	installRemSchema,
 	REM_ROW_HASH_VERSION,
 	writeRemTwoFacetTransaction,
-} from "../../../../packages/sno-station-mem/src/engine/rem/index.ts";
-import { openSqliteDatabase } from "../../../../packages/sno-station-mem/src/store/sqlite-runtime.ts";
+} from "../../../../packages/memory/src/engine/rem/index.ts";
+import { openSqliteDatabase } from "../../../../packages/memory/src/store/sqlite-runtime.ts";
 import { seedRemRecoveryState } from "../../../apps/mem-claw/helpers/rem-recovery-state-fixture.ts";
 import { seedRemWriteVerdict } from "../../../apps/mem-claw/helpers/rem-write-verdict-fixture.ts";
 import { createTestDb, type TestDb } from "../../../apps/mem-claw/helpers/test-db.ts";
@@ -141,7 +141,7 @@ describe("REM writer discipline census matrix (coverage only; direct lifecycle c
 		const beforeMutation = readMutationState(fixture, rowId);
 		try {
 			const product = await import(
-				"../../../../packages/sno-station-mem/src/store/rem-sqlite-adapter.ts"
+				"../../../../packages/memory/src/store/rem-sqlite-adapter.ts"
 			);
 			const candidate = (product as Record<string, unknown>)[
 				"createMemClawRemMutationExecutor"
@@ -214,7 +214,7 @@ describe("REM writer discipline census matrix (coverage only; direct lifecycle c
 		seedRemWriteVerdict(fixture, { rowId, evidenceId: `evidence-${rowId}` });
 		try {
 			const product = await import(
-				"../../../../packages/sno-station-mem/src/store/rem-sqlite-adapter.ts"
+				"../../../../packages/memory/src/store/rem-sqlite-adapter.ts"
 			);
 			const candidate = (product as Record<string, unknown>)[
 				"createMemClawRemMutationExecutor"
@@ -550,7 +550,7 @@ describe("REM verified-write hash symmetry", () => {
 		seedRemWriteVerdict(fixture, { rowId, evidenceId: `evidence-${rowId}` });
 		try {
 			const product = await import(
-				"../../../../packages/sno-station-mem/src/store/rem-sqlite-adapter.ts"
+				"../../../../packages/memory/src/store/rem-sqlite-adapter.ts"
 			);
 			const createExecutor = (product as Record<string, unknown>)[
 				"createMemClawRemMutationExecutor"
@@ -621,7 +621,7 @@ describe("REM verified-write hash symmetry", () => {
 		seedRemWriteVerdict(fixture, { rowId, evidenceId: `evidence-${rowId}` });
 		try {
 			const product = await import(
-				"../../../../packages/sno-station-mem/src/store/rem-sqlite-adapter.ts"
+				"../../../../packages/memory/src/store/rem-sqlite-adapter.ts"
 			);
 			const createExecutor = (product as Record<string, unknown>)[
 				"createMemClawRemMutationExecutor"

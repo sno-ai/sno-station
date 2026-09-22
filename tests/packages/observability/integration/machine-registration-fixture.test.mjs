@@ -7,8 +7,8 @@ import { createCuid2, createUUIDv7 } from "../../../../packages/common-core/dist
 import {
 	machineSecretHash,
 	registerMachine,
-} from "../../../../packages/sno-observe/dist/internal/machine-registration.js";
-import { bootstrapIdentity } from "../../../../packages/sno-observe/dist/internal/identity.js";
+} from "../../../../packages/observability/dist/internal/machine-registration.js";
+import { bootstrapIdentity } from "../../../../packages/observability/dist/internal/identity.js";
 import { skipIfNoLiveEndpoint } from "../fixtures/live-endpoint.mjs";
 
 function tempEnv() {

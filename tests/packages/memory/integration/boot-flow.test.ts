@@ -19,16 +19,16 @@ import {
 	_resetDekCache,
 	KEYCHAIN_ACCOUNT,
 	KEYCHAIN_SERVICE_DEFAULT,
-} from "@snoai/sno-station-core-crypto";
+} from "@snoai/sqlite-crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { bootstrapDataLayout } from "../../../../packages/sno-station-mem/src/store/data-bootstrap.ts";
+import { bootstrapDataLayout } from "../../../../packages/memory/src/store/data-bootstrap.ts";
 import {
 	assertLocalFilesystem,
 	getInstallManifestPath,
 	NonLocalFilesystemError,
-} from "../../../../packages/sno-station-mem/src/store/data-paths.ts";
-import { ManifestMissingButDataPresentError } from "../../../../packages/sno-station-mem/src/store/install-manifest.ts";
-import { _resetSqliteRuntimeForTest } from "../../../../packages/sno-station-mem/src/store/sqlite-runtime.ts";
+} from "../../../../packages/memory/src/store/data-paths.ts";
+import { ManifestMissingButDataPresentError } from "../../../../packages/memory/src/store/install-manifest.ts";
+import { _resetSqliteRuntimeForTest } from "../../../../packages/memory/src/store/sqlite-runtime.ts";
 
 const priorEnv = new Map<string, string | undefined>();
 let tempRoot: string;

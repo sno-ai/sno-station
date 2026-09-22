@@ -3,7 +3,7 @@
  * @boundary Runtime audits fail closed; process telemetry never affects storage.
  */
 
-import type { JsonObject } from "@snoai/sno-observe";
+import type { JsonObject } from "@snoai/observability";
 import type { EmbeddingConfig } from "../extraction/embedding-provider-client";
 import {
 	getSnoStationMemStateDir,
@@ -34,7 +34,7 @@ import {
 	type SupersedePreserveExisting,
 	type UpdateChanges,
 } from "../../store/store";
-import { observeBackgroundCooldownKey, type PluginObservability } from "./adapter";
+import type { PluginObservability } from "./adapter";
 import { countEmbeddingTokens } from "./token-counter";
 
 type SessionUuidProvider = () => string | undefined;
@@ -84,15 +84,12 @@ export class ObservableMemoryStore extends MemoryStore {
 				this.observability.trackBestEffort(
 					"memory.write",
 					() => this.emitWrite(result, sessionUuid),
-					{
-						cooldownKey: observeBackgroundCooldownKey("memory.write", sessionUuid),
-					},
 				);
 			}
 			return result;
 		} catch (error) {
-			this.observability.trackBestEffort("memory_store_throw", () =>
-				this.observability.emitError("memory_store_throw", error, this.sessionUuidProvider()),
+			this.observability.trackBestEffort("memory.write:throw", () =>
+				this.observability.emitError("memory.write:throw", error, this.sessionUuidProvider()),
 			);
 			throw error;
 		}
@@ -119,15 +116,12 @@ export class ObservableMemoryStore extends MemoryStore {
 				this.observability.trackBestEffort(
 					"memory.write",
 					() => this.emitWrite(result, sessionUuid),
-					{
-						cooldownKey: observeBackgroundCooldownKey("memory.write", sessionUuid),
-					},
 				);
 			}
 			return result;
 		} catch (error) {
-			this.observability.trackBestEffort("memory_store_throw", () =>
-				this.observability.emitError("memory_store_throw", error, this.sessionUuidProvider()),
+			this.observability.trackBestEffort("memory.write:throw", () =>
+				this.observability.emitError("memory.write:throw", error, this.sessionUuidProvider()),
 			);
 			throw error;
 		}
@@ -171,16 +165,13 @@ export class ObservableMemoryStore extends MemoryStore {
 					this.observability.trackBestEffort(
 						"memory.write",
 						() => this.emitWrite(entry, sessionUuid),
-						{
-							cooldownKey: observeBackgroundCooldownKey("memory.write", sessionUuid),
-						},
 					);
 				}
 			}
 			return results;
 		} catch (error) {
-			this.observability.trackBestEffort("memory_store_throw", () =>
-				this.observability.emitError("memory_store_throw", error, this.sessionUuidProvider()),
+			this.observability.trackBestEffort("memory.write:throw", () =>
+				this.observability.emitError("memory.write:throw", error, this.sessionUuidProvider()),
 			);
 			throw error;
 		}

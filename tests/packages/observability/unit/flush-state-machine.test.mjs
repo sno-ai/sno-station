@@ -1,7 +1,7 @@
 // Flush 3-state machine + tiktoken token-init fallback per tasks §23.1, §23.2, §23.3, §23.5,
 // §23.6, §25.3. Uses real BufferStore + real FlushEngine; only the network is the fake.
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it, mock } from "node:test";
@@ -9,15 +9,15 @@ import { setTimeout as delay } from "node:timers/promises";
 import {
 	BufferStore,
 	decodeEnvelope,
-} from "../../../../packages/sno-observe/dist/internal/buffer-store.js";
+} from "../../../../packages/observability/dist/internal/buffer-store.js";
 import {
 	FlushEngine,
 	flushPending,
-} from "../../../../packages/sno-observe/dist/internal/flush.js";
-import { bootstrapIdentity } from "../../../../packages/sno-observe/dist/internal/identity.js";
-import { SnoObserveRuntime } from "../../../../packages/sno-observe/dist/internal/runtime.js";
-import { parseEventInput } from "../../../../packages/sno-observe/dist/internal/schemas.js";
-import { countTokens } from "../../../../packages/sno-observe/dist/internal/tokens.js";
+} from "../../../../packages/observability/dist/internal/flush.js";
+import { bootstrapIdentity } from "../../../../packages/observability/dist/internal/identity.js";
+import { SnoObserveRuntime } from "../../../../packages/observability/dist/internal/runtime.js";
+import { parseEventInput } from "../../../../packages/observability/dist/internal/schemas.js";
+import { countTokens } from "../../../../packages/observability/dist/internal/tokens.js";
 import { scope, validPayloads } from "../fixtures/temp-env.mjs";
 
 function testHash(index) {
@@ -758,9 +758,15 @@ describe("flush 3-state machine", () => {
 			const envelope = JSON.parse(String(init?.body));
 			submittedAgents.push(envelope.scope.agent_id);
 			if (envelope.scope.agent_id === "codex") {
-				return new Response(JSON.stringify({ code: "chain_predecessor_not_ready" }), {
-					status: 409,
-				});
+				return new Response(
+					JSON.stringify({
+						code: "chain_predecessor_not_ready",
+						chain_epoch: envelope.chain_epoch,
+						latest_state: "pending",
+						chain_stall_ms: 0,
+					}),
+					{ status: 409 },
+				);
 			}
 			return new Response(JSON.stringify({ receipt_id: envelope.event_id }), { status: 202 });
 		};
@@ -778,46 +784,36 @@ describe("flush 3-state machine", () => {
 		}
 	});
 
-	it("an unknown client rejection blocks only its submitted chain", async () => {
+	it("a 400 keeps the rejected row as evidence and ships the rest in a fresh epoch", async () => {
 		const t = tempEnv();
 		const store = new BufferStore(t.env.SNO_BUFFER_PATH);
 		const identity = bootstrapIdentity(t.env);
 		seedIdentify(store);
-		const openclawScope = { ...scope, agent_id: "openclaw" };
-		store.append({
-			eventId: "openclaw-id",
-			eventType: "agent.identify",
-			lane: "memory",
-			tsEdgeMs: 2_000,
-			consentLevel: "metadata-only",
-			redacted: false,
-			scope: openclawScope,
-			payload: { ...validPayloads["agent.identify"], agent_id: "openclaw" },
-			terminal: false,
-		});
-		let codexCalls = 0;
-		let openclawCalls = 0;
+		appendMemoryWrite(store, 1);
+		appendMemoryWrite(store, 2);
+		const posted = [];
 		const fakeFetch = async (url, init) => {
 			if (String(url).endsWith("/api/v1/identity/register-machine")) {
 				return registerMachineResponse(init);
 			}
 			const envelope = JSON.parse(String(init.body));
-			if (envelope.scope.agent_id === "codex") {
-				codexCalls += 1;
+			posted.push(`${envelope.event_id}@${envelope.chain_epoch}`);
+			if (envelope.event_id === "mw-1") {
 				return new Response(JSON.stringify({ error: "future_client_contract" }), { status: 400 });
 			}
-			openclawCalls += 1;
 			return new Response(JSON.stringify({ receipt_id: "r" }), { status: 202 });
 		};
 		const engine = new FlushEngine(store, () => identity, () => "https://sno.test", () => t.env);
 		try {
 			const result = await engine.flush({ identity, env: t.env, fetch: fakeFetch });
-			assert.equal(result.retryable, 1);
-			assert.equal(result.shipped, 1);
-			assert.equal(codexCalls, 1);
-			assert.equal(openclawCalls, 1);
+			assert.equal(result.retryable, 0);
+			assert.equal(result.terminal, 1);
+			assert.equal(store.countPending(), 0);
+			assert.equal(posted.filter((entry) => entry.startsWith("mw-1@")).length, 1);
+			assert.equal(posted.includes("mw-2@1"), true);
 			assert.equal(store.getRetryDelay(), 0);
-			assert.equal(store.getPending().every((row) => row.agent_id === "codex"), true);
+			assert.equal(store.countQuarantined(), 1);
+			assert.equal(store.getByEventId("mw-2").chain_epoch, 1);
 		} finally {
 			engine.dispose();
 			store.close();
@@ -852,7 +848,15 @@ describe("flush 3-state machine", () => {
 					}
 					const envelope = JSON.parse(String(init.body));
 					return envelope.scope.agent_id === "codex"
-						? new Response(JSON.stringify({ error: "future_client_contract" }), { status: 400 })
+						? new Response(
+								JSON.stringify({
+									code: "chain_predecessor_not_ready",
+									chain_epoch: envelope.chain_epoch,
+									latest_state: "pending",
+									chain_stall_ms: 0,
+								}),
+								{ status: 409 },
+							)
 						: new Response(JSON.stringify({ error: "rate_limited" }), {
 								status: 429,
 								headers: { "Retry-After": "3600" },
@@ -882,10 +886,15 @@ describe("flush 3-state machine", () => {
 			}
 			const envelope = JSON.parse(String(init.body));
 			if (envelope.scope.agent_id === "codex") {
-				return new Response(JSON.stringify({ error: "future_client_contract" }), {
-					status: 409,
-					headers: { "Retry-After": "3600" },
-				});
+				return new Response(
+					JSON.stringify({
+						code: "chain_predecessor_not_ready",
+						chain_epoch: envelope.chain_epoch,
+						latest_state: "pending",
+						chain_stall_ms: 0,
+					}),
+					{ status: 409, headers: { "Retry-After": "3600" } },
+				);
 			}
 			openclawCalls += 1;
 			return new Response(JSON.stringify({ receipt_id: "r" }), { status: 202 });
@@ -955,10 +964,15 @@ describe("flush 3-state machine", () => {
 			}
 			const envelope = JSON.parse(String(init.body));
 			if (envelope.scope.agent_id === "codex") {
-				return new Response(JSON.stringify({ error: "future_client_contract" }), {
-					status: 409,
-					headers: { "Retry-After": "3600" },
-				});
+				return new Response(
+					JSON.stringify({
+						code: "chain_predecessor_not_ready",
+						chain_epoch: envelope.chain_epoch,
+						latest_state: "pending",
+						chain_stall_ms: 0,
+					}),
+					{ status: 409, headers: { "Retry-After": "3600" } },
+				);
 			}
 			openclawCalls += 1;
 			return new Response(JSON.stringify({ receipt_id: "r" }), { status: 202 });
@@ -1257,19 +1271,25 @@ describe("flush 3-state machine", () => {
 		const store = new BufferStore(t.env.SNO_BUFFER_PATH);
 		const identity = bootstrapIdentity(t.env);
 		const engine = new FlushEngine(store, () => identity, () => "https://sno.test", () => t.env);
-		const writes = [];
+		const previousProfile = process.env.SNO_PROFILE_DIR;
+		process.env.SNO_PROFILE_DIR = t.dir;
+		const stderrWrites = [];
 		const write = mock.method(process.stderr, "write", (chunk) => {
-			writes.push(String(chunk));
+			stderrWrites.push(String(chunk));
 			return true;
 		});
 		try {
 			store.close();
 			engine.schedule(0);
 			await delay(20);
-			assert.equal(writes.join("").includes("sno observe scheduled flush failed"), true);
+			const log = readFileSync(join(t.dir, "observe.log"), "utf8");
+			assert.equal(log.includes("sno observe scheduled flush failed"), true);
+			assert.equal(stderrWrites.join(""), "");
 		} finally {
 			engine.dispose();
 			write.mock.restore();
+			if (previousProfile === undefined) delete process.env.SNO_PROFILE_DIR;
+			else process.env.SNO_PROFILE_DIR = previousProfile;
 			rmSync(t.dir, { recursive: true, force: true });
 		}
 	});

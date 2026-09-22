@@ -12,8 +12,8 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
 	createRemModelStageResponsePort,
 	runRemBatchJob,
-} from "../../../../packages/sno-station-mem/src/sidecar/rem-batch-executor.ts";
-import { parseRemOperationalConfiguration } from "../../../../packages/sno-station-mem/src/engine/rem/index.ts";
+} from "../../../../packages/memory/src/sidecar/rem-batch-executor.ts";
+import { parseRemOperationalConfiguration } from "../../../../packages/memory/src/engine/rem/index.ts";
 import { createRemOwnerDecidedOperationalConfiguration } from "../../../apps/mem-claw/helpers/rem-entry-config-fixture.ts";
 import { seedProductionMemory } from "../../../apps/mem-claw/helpers/rem-production-entry-fixture.ts";
 import { createTestDb, type TestDb } from "../../../apps/mem-claw/helpers/test-db.ts";

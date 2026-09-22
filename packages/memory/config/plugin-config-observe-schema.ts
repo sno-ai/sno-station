@@ -5,9 +5,24 @@ import { SNO_OBSERVE_DEFAULT_AGENT_ID, SNO_OBSERVE_DEFAULT_BASE_URL } from "./in
 
 const AGENT_IDS = [PERSISTED_PROVIDER_SYSTEM as typeof PERSISTED_PROVIDER_SYSTEM, FIXED_PROTOCOL_VALUE_70 as typeof FIXED_PROTOCOL_VALUE_70, FIXED_PROTOCOL_VALUE_71 as typeof FIXED_PROTOCOL_VALUE_71, FIXED_PROTOCOL_VALUE_72 as typeof FIXED_PROTOCOL_VALUE_72] as const;
 
+/** Observe is on unless the operator says `SNO_OBSERVE_ENABLED=false` (or `0`). */
 function parseObserveEnabled(value: string | undefined): boolean {
 	const normalized = value?.trim().toLowerCase();
-	return normalized === "true" || normalized === "1";
+	return normalized !== "false" && normalized !== "0";
+}
+
+export type ObserveAgentId = (typeof AGENT_IDS)[number];
+const observeAgentIdSchema: z.ZodType<ObserveAgentId, unknown> = z.enum(AGENT_IDS, {
+	error: () => `observe.agentId must be one of ${AGENT_IDS.join(", ")}`,
+});
+
+/** The observe agent id a skin reports under; a skin id outside the SDK's set is a hard error. */
+export function observeAgentId(skinId: string): ObserveAgentId {
+	return observeAgentIdSchema.parse(skinId);
+}
+
+export function isObserveAgentId(skinId: string): skinId is ObserveAgentId {
+	return observeAgentIdSchema.safeParse(skinId).success;
 }
 
 function isLoopbackUrl(url: URL): boolean {
@@ -56,13 +71,9 @@ export const observeConfigSchema: z.ZodType<
 	unknown
 > = z
 	.object({
-		enabled: z.boolean().default(parseObserveEnabled(process.env.SNO_OBSERVE_ENABLED)),
-		baseUrl: z.string().default(process.env.SNO_OBSERVE_BASE_URL ?? SNO_OBSERVE_DEFAULT_BASE_URL),
-		agentId: z
-			.enum(AGENT_IDS, {
-				error: () => `observe.agentId must be one of ${AGENT_IDS.join(", ")}`,
-			})
-			.default(SNO_OBSERVE_DEFAULT_AGENT_ID as (typeof AGENT_IDS)[number]),
+		enabled: z.boolean().default(() => parseObserveEnabled(process.env.SNO_OBSERVE_ENABLED)),
+		baseUrl: z.string().default(() => process.env.SNO_OBSERVE_BASE_URL ?? SNO_OBSERVE_DEFAULT_BASE_URL),
+		agentId: observeAgentIdSchema.default(SNO_OBSERVE_DEFAULT_AGENT_ID as ObserveAgentId),
 	})
 	.prefault({})
 	.superRefine((value, ctx) => {

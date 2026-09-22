@@ -11,7 +11,7 @@ import {
 } from "../engine/rem/index.js";
 
 const repoRoot = path.resolve(import.meta.dirname, "../../../..");
-const appRoot = path.join(repoRoot, "packages/sno-station-mem");
+const appRoot = path.join(repoRoot, "packages/memory");
 const sourceEntry = path.join(appRoot, "src/sidecar/server.ts");
 const writers = discoverRemWritersFromCallGraph({ entryPoints: [sourceEntry] });
 if (writers.writers.length !== 7) {

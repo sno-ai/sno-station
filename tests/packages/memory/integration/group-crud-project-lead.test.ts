@@ -5,15 +5,15 @@
  */
 
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
-import type { AtomicExtractionTurn } from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-extraction-reply";
+import type { AtomicExtractionTurn } from "../../../../packages/memory/src/engine/extraction/atomic-extraction-reply";
 import {
 	createSignedAtomicMemoryExtractionTransports,
 	runAtomicMemoryExtraction,
-} from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-memory-extraction";
-import type { Embedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client";
-import { llmRoutingConfigSchema } from "../../../../packages/sno-station-mem/config/plugin-config-mode-schema";
-import { type AtomicExtractionRunParameters, MemoryStore } from "../../../../packages/sno-station-mem/src/store/store";
-import { applyStateCategoryMigration } from "../../../../packages/sno-station-mem/src/store/state-category-migration";
+} from "../../../../packages/memory/src/engine/extraction/atomic-memory-extraction";
+import type { Embedder } from "../../../../packages/memory/src/engine/extraction/embedding-provider-client";
+import { llmRoutingConfigSchema } from "../../../../packages/memory/config/plugin-config-mode-schema";
+import { type AtomicExtractionRunParameters, MemoryStore } from "../../../../packages/memory/src/store/store";
+import { applyStateCategoryMigration } from "../../../../packages/memory/src/store/state-category-migration";
 import { createTestDb, createTestEmbedder, type TestDb } from "../../../apps/mem-claw/helpers/test-db";
 
 const PROJECT_ID = "group-crud-project-lead";

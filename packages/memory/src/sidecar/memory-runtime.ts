@@ -2,7 +2,7 @@ import { isDeepStrictEqual } from "node:util";
 import { DEFAULT_LOCALE } from "../engine/i18n/locales";
 import { readMaintenanceOverrides } from "./config";
 import { AsyncLocalStorage } from "node:async_hooks";
-import { randomUUID } from "node:crypto";
+import { createUUIDv7 } from "@snoai/common-core";
 import { readMemorySnapshotPayload, type SnapshotReason } from "../engine/observability/memory-snapshot";
 import { existsSync, readFileSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
@@ -28,18 +28,34 @@ import { RegisteredAgentPort } from "../model/registered-agent-port";
 import { withProviderResponses } from "../model/llm-provider-transport";
 import type { ProviderResponseTrace } from "../model/llm-client-types";
 import { MEMORY_USAGE_FLUSH_INTERVAL_MS } from "./config";
+import { SNO_OBSERVE_FLUSH_TIMEOUT_MS } from "../../config/index";
 import { clearRegisteredRemTicks, setRegisteredRemTick } from "./rem-trigger";
 import { createCodingSkinRegistration } from "../../config/coding-skin";
+import { isObserveAgentId } from "../../config/plugin-config-observe-schema";
 import { installationSettingsSchema, type InstallationSettings } from "../../config/installation-settings";
 
-/** The skin's observe session for the request in flight; store, embedder and retriever events carry it. */
-const observeSession = new AsyncLocalStorage<string | undefined>();
-const observeSessionUuid = (): string | undefined => observeSession.getStore();
+/** The skin and observe session of the request in flight; store, embedder and retriever events carry both. */
+const observeSession = new AsyncLocalStorage<{ uuid: string; entry: SkinRuntime }>();
+const observeSessionUuid = (): string | undefined => observeSession.getStore()?.uuid;
+
+/**
+ * The store and embedder are shared by every skin, so their events go to the skin in flight;
+ * outside a request (maintenance) they fall back to the sidecar's own observability.
+ */
+function routedObservability(fallback: PluginObservability): PluginObservability {
+	return new Proxy(fallback, {
+		get(target, property) {
+			const current = observeSession.getStore()?.entry.observability ?? target;
+			const value = Reflect.get(current, property, current) as unknown;
+			return typeof value === "function" ? value.bind(current) : value;
+		},
+	});
+}
 
 const log = createLogger("sno-station-mem:runtime");
 function engineLog(level: "info" | "warn" | "error" | "debug", message: string): void {
 	log[level]("Memory engine message", { message }, {
-		event_name: "memory.sidecar.engine.message", file: "packages/sno-station-mem/src/sidecar/memory-runtime.ts",
+		event_name: "memory.sidecar.engine.message", file: "packages/memory/src/sidecar/memory-runtime.ts",
 		function: "engineLog", site_id: "memory.sidecar.engine.message",
 	});
 }
@@ -57,6 +73,8 @@ interface SkinRuntime {
 	retired: boolean;
 	embedder: ObservableEmbedder;
 	agentPort?: RegisteredAgentPort;
+	/** Observe sessions this sidecar named for the skin (the coding skins name none), by host session id. */
+	hostSessions: Map<string, { uuid: string; startedAt: number }>;
 }
 
 export class MemoryRuntimePool {
@@ -95,8 +113,9 @@ export class MemoryRuntimePool {
 		await mkdir(dirname(storePath), { recursive: true, mode: 0o700 });
 		const stateDir = getSnoStationMemStateDir();
 		const observability = new PluginObservability(config, stateDir, engineLogger);
-		const embedder = new ObservableEmbedder(config.embedding, stateDir, observability, observeSessionUuid);
-		const store = new ObservableMemoryStore({ dbPath: storePath, vectorDim: embedder.dimensions, embedder, memoryTelemetry: config.memoryTelemetry }, observability, observeSessionUuid, config.embedding);
+		const routed = routedObservability(observability);
+		const embedder = new ObservableEmbedder(config.embedding, stateDir, routed, observeSessionUuid);
+		const store = new ObservableMemoryStore({ dbPath: storePath, vectorDim: embedder.dimensions, embedder, memoryTelemetry: config.memoryTelemetry }, routed, observeSessionUuid, config.embedding);
 		const pool = new MemoryRuntimePool(storePath, store, config, installed, observability, embedder);
 		const maintenance = readMaintenanceOverrides();
 		pool.maintenance = startMaintenanceTimer({ store, dbPath: storePath, stateDir, remClock: maintenance.now, remVolumeThreshold: maintenance.volumeThreshold,
@@ -127,14 +146,15 @@ export class MemoryRuntimePool {
 		retriever.setTierPromoter(createTierPromoter());
 		const runtime = new MemoryContractRuntime({ store: this.store, embedder, retriever, accessTracker: tracker, observability,
 			stateDir: this.stateDir, agentPort, logger: engineLogger, telemetryUsage: this.usageOutbox });
-		const entry: SkinRuntime = { runtime, tracker, observability, embedder, agentPort, active: 0, retired: false };
+		const entry: SkinRuntime = { runtime, tracker, observability, embedder, agentPort, active: 0, retired: false, hostSessions: new Map() };
 		this.owned.add(entry);
 		try {
 			const result = await runtime.init(scope, registration);
 			// Keep the serving entry until the successor can use the shared model.
 			const previous = this.skins.get(registration.skinId);
 			this.skins.set(registration.skinId, entry);
-			await this.snapshot(entry, "startup");
+			if (previous) entry.hostSessions = previous.hostSessions;
+			await this.snapshot(entry, "startup", scope.host?.observeSessionUuid);
 			if (previous) { previous.retired = true; if (previous.active === 0) await this.dispose(previous); }
 			setRegisteredRemTick(registration.skinId, config.remEnhanced.trigger?.tick);
 			return result;
@@ -164,8 +184,12 @@ export class MemoryRuntimePool {
 		}
 		let entry = this.skins.get(skinId);
 		if (!entry) {
-			const { mode, remEnhanced, agentNative, language, ...settings } = this.config;
-			await this.register(input.scope, { skinId, settings, routing: { mode, remEnhanced, agentNative, language: language ?? DEFAULT_LOCALE } });
+			// A coding-skin hook can arrive before its worker's init; register it as that skin, never as the default.
+			if (this.installed && isObserveAgentId(skinId)) await this.register(input.scope, createCodingSkinRegistration({ skinId, installed: this.installed }));
+			else {
+				const { mode, remEnhanced, agentNative, language, ...settings } = this.config;
+				await this.register(input.scope, { skinId, settings, routing: { mode, remEnhanced, agentNative, language: language ?? DEFAULT_LOCALE } });
+			}
 			entry = this.skins.get(skinId);
 		}
 		if (!entry) throw new Error("memory.skin.registration.failed");
@@ -174,24 +198,57 @@ export class MemoryRuntimePool {
 		this.counters.engineAccesses++;
 		this.counters.storeAccesses++;
 		const responses: ProviderResponseTrace[] = [];
+		const uuid = await this.observeSessionFor(entry, input.scope);
+		const scope: ScopeCtx = { ...input.scope, host: { ...input.scope.host, observeSessionUuid: uuid } };
+		const body = { ...(raw as object), scope };
 		try {
-			const call = () => observeSession.run(input.scope.host?.observeSessionUuid, () => withProviderResponses(responses, () => this.call(entry.runtime, method, raw, signal)));
+			const call = () => observeSession.run({ uuid, entry }, () => withProviderResponses(responses, () => this.call(entry, method, body, signal)));
 			const result = parseOutput(method, await (entry.agentPort ? entry.agentPort.run(call) : call()));
-			if (method === "onSessionEnd") await this.snapshot(entry, "session_end");
+			if (method === "onSessionEnd") {
+				await this.snapshot(entry, "session_end", uuid);
+				await this.endOwnedSession(entry, scope);
+			}
 			return result;
 		}
 		finally {
-			await this.emitProviderUsage(entry, input.scope, responses);
-			// The skin owns cost.summary; the sidecar's tallies are never read, so drop them per call.
+			await this.emitProviderUsage(entry, scope, responses);
+			// A host-named session's skin owns cost.summary; the sidecar's tallies for it are never read.
 			const session = input.scope.host?.observeSessionUuid;
 			if (session) { this.observability.aggregator.delete(session); entry.observability.aggregator.delete(session); }
 			entry.active--; if (entry.retired && entry.active === 0) await this.dispose(entry);
 		}
 	}
 
-	private async call(runtime: MemoryContractRuntime, method: Exclude<ContractMethod, "init">, raw: unknown, signal?: AbortSignal): Promise<ContractOutputs[ContractMethod]> {
+	/** The observe session of this call: the host's, or the one this sidecar named for the host session (emitting session.start once). */
+	private async observeSessionFor(entry: SkinRuntime, scope: ScopeCtx): Promise<string> {
+		if (scope.host?.observeSessionUuid) return scope.host.observeSessionUuid;
+		const hostSessionId = scope.host?.sessionId ?? scope.session;
+		const known = entry.hostSessions.get(hostSessionId);
+		if (known) return known.uuid;
+		const started = { uuid: createUUIDv7(), startedAt: Date.now() };
+		entry.hostSessions.set(hostSessionId, started);
+		entry.observability.aggregator.start(started.uuid);
+		await entry.observability.emit({ eventType: "session.start", sessionUuid: started.uuid, payload: { session_uuid: started.uuid } });
+		return started.uuid;
+	}
+
+	private async endOwnedSession(entry: SkinRuntime, scope: ScopeCtx): Promise<void> {
+		const hostSessionId = scope.host?.sessionId ?? scope.session;
+		const owned = entry.hostSessions.get(hostSessionId);
+		if (!owned) return;
+		entry.hostSessions.delete(hostSessionId);
+		await entry.observability.emit({ eventType: "session.end", sessionUuid: owned.uuid,
+			payload: { session_uuid: owned.uuid, duration_ms: Date.now() - owned.startedAt } });
+		await entry.observability.emit({ eventType: "cost.summary", sessionUuid: owned.uuid,
+			payload: entry.observability.aggregator.summaryAndDelete(owned.uuid) });
+		await entry.observability.flush({ force: true, timeoutMs: SNO_OBSERVE_FLUSH_TIMEOUT_MS });
+	}
+
+	private async call(entry: SkinRuntime, method: Exclude<ContractMethod, "init">, raw: unknown, signal?: AbortSignal): Promise<ContractOutputs[ContractMethod]> {
 		signal?.throwIfAborted();
+		const runtime = entry.runtime;
 		switch (method) {
+			case "hostEvent": { const p = parseInput(method, raw); return runtime.hostEvent(p.event, p.scope); }
 			case "capture": { const p = parseInput(method, raw); return runtime.capture(p.turn, p.scope, signal); }
 			case "getRecall": { const p = parseInput(method, raw); return runtime.getRecall(p.query, p.scope, p.options, signal); }
 			case "mutate": { const p = parseInput(method, raw); return runtime.mutate(p.op, p.scope, signal); }
@@ -206,21 +263,23 @@ export class MemoryRuntimePool {
 		if (!scope.host?.observeSessionUuid) return;
 		await entry.observability.trackBestEffort("provider usage", async () => {
 			for (const response of responses) {
-				if (!response.usage || !response.model || response.durationMs === undefined) continue;
+				// A response without a model or usage is an error, never a zero-token call.
+				if (!response.usage || !response.model) {
+					await entry.observability.emitError("llm.call:usage_missing", `${response.provider} ${response.callLabel}`, scope.host?.observeSessionUuid);
+					continue;
+				}
 				await entry.observability.emit({ eventType: "llm.call", sessionUuid: scope.host?.observeSessionUuid,
 					payload: { model: `${response.provider}:${response.model}`, prompt_tokens: response.usage.inputTokens,
 						completion_tokens: response.usage.outputTokens, token_source: "plugin_internal_paid",
-						latency_ms: Math.round(response.durationMs), cache_read_tokens: 0, cache_write_tokens: 0 } });
+						latency_ms: Math.max(0, Math.round(response.durationMs ?? 0)), cache_read_tokens: 0, cache_write_tokens: 0 } });
 			}
 			if (responses.length) await entry.observability.flush({ force: true, timeoutMs: 5_000 });
 		});
 	}
 
-	private async snapshot(entry: SkinRuntime, reason: SnapshotReason): Promise<void> {
-		await entry.observability.trackBestEffort("memory snapshot", async () => {
-			const payload = await readMemorySnapshotPayload(this.storePath, this.config, randomUUID(), reason, this.store.sqlite);
-			await entry.observability.emit({ eventType: "memory.snapshot", payload });
-		});
+	private async snapshot(entry: SkinRuntime, reason: SnapshotReason, sessionUuid: string | undefined): Promise<void> {
+		const payload = await readMemorySnapshotPayload(this.storePath, this.config, sessionUuid ?? createUUIDv7(), reason, this.store.sqlite);
+		await entry.observability.emit({ eventType: "memory.snapshot", sessionUuid, payload });
 	}
 
 	private async dispose(entry: SkinRuntime): Promise<void> {
@@ -236,7 +295,7 @@ export class MemoryRuntimePool {
 			if (this.usageFlush) return;
 			this.usageFlush = this.usageOutbox.flushPendingAsync().catch((error: unknown) => {
 				log.warn("Memory usage delivery failed", { error }, {
-					event_name: "memory.sidecar.usage.failed", file: "packages/sno-station-mem/src/sidecar/memory-runtime.ts",
+					event_name: "memory.sidecar.usage.failed", file: "packages/memory/src/sidecar/memory-runtime.ts",
 					function: "<anonymous callback>", site_id: "memory.sidecar.usage.failed",
 				});
 			}).finally(() => { this.usageFlush = undefined; });

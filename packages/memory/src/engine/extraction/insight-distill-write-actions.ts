@@ -414,7 +414,7 @@ export function sessionTimestampField(sessionDateTime: string | undefined): {
 			sessionDateTime,
 		}, {
 			event_name: "sno_station_mem.insight-distill-write-actions.session.date.could.not.be.parsed.memory.will.be.stamped.with.the.write",
-			file: "packages/sno-station-mem/src/engine/extraction/insight-distill-write-actions.ts",
+			file: "packages/memory/src/engine/extraction/insight-distill-write-actions.ts",
 			function: "sessionTimestampField",
 			site_id: "insight-distill-write-actions.sessionTimestampField.29d4b22da7",
 		});
@@ -507,7 +507,7 @@ export async function storeCandidate(params: {
 			abstract_length: candidate.abstract.length,
 		}, {
 			event_name: "sno_station_mem.insight-distill-write-actions.created.memory",
-			file: "packages/sno-station-mem/src/engine/extraction/insight-distill-write-actions.ts",
+			file: "packages/memory/src/engine/extraction/insight-distill-write-actions.ts",
 			function: "storeCandidate",
 			site_id: "insight-distill-write-actions.storeCandidate.138415ce64",
 		});
@@ -517,7 +517,7 @@ export async function storeCandidate(params: {
 			memory_id: entry.id,
 		}, {
 			event_name: "sno_station_mem.insight-distill-write-actions.skipping.already.persisted.extraction.candidate.after.store",
-			file: "packages/sno-station-mem/src/engine/extraction/insight-distill-write-actions.ts",
+			file: "packages/memory/src/engine/extraction/insight-distill-write-actions.ts",
 			function: "storeCandidate",
 			site_id: "insight-distill-write-actions.storeCandidate.6754f6ee4b",
 		});
@@ -554,7 +554,7 @@ export async function handleSupport(params: {
 		outcome: "success",
 	}, {
 		event_name: "sno_station_mem.insight-distill-write-actions.support.recorded",
-		file: "packages/sno-station-mem/src/engine/extraction/insight-distill-write-actions.ts",
+		file: "packages/memory/src/engine/extraction/insight-distill-write-actions.ts",
 		function: "handleSupport",
 		site_id: "insight-distill-write-actions.handleSupport.c98c47eeb9",
 	});
@@ -613,7 +613,7 @@ export async function handleContextualize(params: {
 		outcome: "success",
 	}, {
 		event_name: "sno_station_mem.insight-distill-write-actions.contextualize.created",
-		file: "packages/sno-station-mem/src/engine/extraction/insight-distill-write-actions.ts",
+		file: "packages/memory/src/engine/extraction/insight-distill-write-actions.ts",
 		function: "handleContextualize",
 		site_id: "insight-distill-write-actions.handleContextualize.bd66df2159",
 	});
@@ -690,7 +690,7 @@ export async function handleContradict(params: {
 		outcome: "success",
 	}, {
 		event_name: "sno_station_mem.insight-distill-write-actions.contradict.recorded",
-		file: "packages/sno-station-mem/src/engine/extraction/insight-distill-write-actions.ts",
+		file: "packages/memory/src/engine/extraction/insight-distill-write-actions.ts",
 		function: "handleContradict",
 		site_id: "insight-distill-write-actions.handleContradict.c6164031da",
 	});

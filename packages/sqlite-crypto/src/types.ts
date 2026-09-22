@@ -1,4 +1,4 @@
-// Branded primitive types for sno-station-core-crypto. Branding prevents accidental cross-mixing
+// Branded primitive types for sqlite-crypto. Branding prevents accidental cross-mixing
 // (e.g. passing a raw string where a fingerprint is expected) without runtime cost.
 
 declare const __dekBrand: unique symbol;

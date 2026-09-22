@@ -4,18 +4,18 @@
  */
 
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import type { Embedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client";
+import type { Embedder } from "../../../../packages/memory/src/engine/extraction/embedding-provider-client";
 import {
 	ATOMIC_MEMORY_TEXT_IMMUTABILITY_TRIGGER,
 	installAtomicMemoryTextImmutabilityTrigger,
-} from "../../../../packages/sno-station-mem/src/store/atomic-memory-cutover-sql";
+} from "../../../../packages/memory/src/store/atomic-memory-cutover-sql";
 import {
 	type AtomicExtractionLedgerKey,
 	type AtomicExtractionRunParameters,
 	type AtomicExtractionWriteCard,
 	MemoryStore,
-} from "../../../../packages/sno-station-mem/src/store/store";
-import type { SqliteDatabaseLike } from "../../../../packages/sno-station-mem/src/store/sqlite-runtime";
+} from "../../../../packages/memory/src/store/store";
+import type { SqliteDatabaseLike } from "../../../../packages/memory/src/store/sqlite-runtime";
 import { createTestDb, createTestEmbedder, type TestDb } from "../../../apps/mem-claw/helpers/test-db";
 
 const RUN_PARAMETERS: AtomicExtractionRunParameters = {

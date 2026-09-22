@@ -5,7 +5,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, expect, it } from "vitest";
-import { RemJobStore } from "../../../../packages/sno-station-mem/src/sidecar/rem-job-store";
+import { RemJobStore } from "../../../../packages/memory/src/sidecar/rem-job-store";
 
 let root: string | undefined;
 afterEach(() => {

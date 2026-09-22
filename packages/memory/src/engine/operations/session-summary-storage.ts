@@ -31,7 +31,7 @@ export async function sortFileNamesByMtimeDesc(
 			} catch (error) {
 				if (!(error instanceof Error && "code" in error && error.code === "ENOENT")) {
 					diagnosticLog.warn("Session file metadata unavailable", { error },
-						{ event_name: "memory.session.file.stat.failed", file: "packages/sno-station-mem/src/engine/operations/session-summary-storage.ts", function: "sortFileNamesByMtimeDesc", site_id: "memory.session.file.stat.failed" });
+						{ event_name: "memory.session.file.stat.failed", file: "packages/memory/src/engine/operations/session-summary-storage.ts", function: "sortFileNamesByMtimeDesc", site_id: "memory.session.file.stat.failed" });
 				}
 				// Exclude files that disappear between listing and stat.
 				return null;
@@ -133,13 +133,13 @@ export async function readSessionMessages(
 	} catch (error) {
 		if (!(error instanceof Error && "code" in error && error.code === "ENOENT")) {
 			diagnosticLog.warn("Session summary input unavailable", { error, outcome: "partial" },
-				{ event_name: "memory.session.read.failed", file: "packages/sno-station-mem/src/engine/operations/session-summary-storage.ts", function: "readSessionMessages", site_id: "memory.session.read.failed" });
+				{ event_name: "memory.session.read.failed", file: "packages/memory/src/engine/operations/session-summary-storage.ts", function: "readSessionMessages", site_id: "memory.session.read.failed" });
 		}
 		// Missing or unreadable session file means no session summary input.
 		return null;
 	} finally {
 		if (diagnostics.malformed_count > 0) diagnosticLog.warn("Session summary input contains invalid rows", diagnostics,
-			{ event_name: "memory.session.rows.invalid", file: "packages/sno-station-mem/src/engine/operations/session-summary-storage.ts", function: "readSessionMessages", site_id: "memory.session.rows.invalid" });
+			{ event_name: "memory.session.rows.invalid", file: "packages/memory/src/engine/operations/session-summary-storage.ts", function: "readSessionMessages", site_id: "memory.session.rows.invalid" });
 		lines.close();
 		stream.destroy();
 	}
@@ -177,7 +177,7 @@ export async function readSessionContentWithResetFallback(
 	} catch (error) {
 		if (!(error instanceof Error && "code" in error && error.code === "ENOENT")) {
 			diagnosticLog.warn("Session reset fallback unavailable", { error },
-				{ event_name: "memory.session.reset.discovery.failed", file: "packages/sno-station-mem/src/engine/operations/session-summary-storage.ts", function: "readSessionContentWithResetFallback", site_id: "memory.session.reset.discovery.failed" });
+				{ event_name: "memory.session.reset.discovery.failed", file: "packages/memory/src/engine/operations/session-summary-storage.ts", function: "readSessionContentWithResetFallback", site_id: "memory.session.reset.discovery.failed" });
 		}
 		// Inaccessible reset directory means no fallback session is available.
 		return null;
@@ -236,7 +236,7 @@ export async function findPreviousSessionFile(
 	} catch (error) {
 		if (!(error instanceof Error && "code" in error && error.code === "ENOENT")) {
 			diagnosticLog.warn("Previous session discovery failed", { error },
-				{ event_name: "memory.session.previous.discovery.failed", file: "packages/sno-station-mem/src/engine/operations/session-summary-storage.ts", function: "findPreviousSessionFile", site_id: "memory.session.previous.discovery.failed" });
+				{ event_name: "memory.session.previous.discovery.failed", file: "packages/memory/src/engine/operations/session-summary-storage.ts", function: "findPreviousSessionFile", site_id: "memory.session.previous.discovery.failed" });
 		}
 		// Missing or inaccessible session directory means no previous session.
 		return undefined;

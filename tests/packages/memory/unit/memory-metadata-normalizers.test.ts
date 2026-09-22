@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { deriveDefaultLayer } from "../../../../packages/sno-station-mem/src/engine/extraction/memory-metadata-normalizers.ts";
+import { deriveDefaultLayer } from "../../../../packages/memory/src/engine/extraction/memory-metadata-normalizers.ts";
 
 describe("memory metadata normalizers", () => {
 	it("defaults confirmed summary memories to the reflection layer", () => {

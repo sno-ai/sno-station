@@ -22,7 +22,7 @@ import {
 	openEncryptedDb,
 	openEncryptedDbReadonly,
 	WrongKeyError,
-} from "@snoai/sno-station-core-crypto";
+} from "@snoai/sqlite-crypto";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { makeTestEnv, type TestEnv, uniqueDbPath } from "../_helpers.ts";
 

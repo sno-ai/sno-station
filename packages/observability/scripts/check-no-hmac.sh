@@ -8,8 +8,8 @@ cd "$(dirname "$0")/.."
 
 PATTERN='createHmac|Hmac|X-Sno-Signature|HELICONE_INTERNAL_INGEST_HMAC'
 if grep -rE "$PATTERN" src/ 2>/dev/null; then
-	echo "FAIL: HMAC primitive detected in packages/sno-observe/src/" >&2
+	echo "FAIL: HMAC primitive detected in packages/observability/src/" >&2
 	echo "       (Decision 0: SDK does NOT sign HMAC; Vercel does.)" >&2
 	exit 1
 fi
-echo "OK: no HMAC primitives in packages/sno-observe/src/"
+echo "OK: no HMAC primitives in packages/observability/src/"

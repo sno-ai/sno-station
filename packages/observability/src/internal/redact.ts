@@ -151,7 +151,7 @@ function loadUserRules(path?: string): RegExp[] {
 				reason: unsafeReason,
 			}, {
 				event_name: "sno.observe.internal.redact.loaduserrules",
-				file: "packages/sno-observe/src/internal/redact.ts",
+				file: "packages/observability/src/internal/redact.ts",
 				function: "loadUserRules",
 				site_id: "sno.observe.internal.redact.loaduserrules.1",
 			});
@@ -166,7 +166,7 @@ function loadUserRules(path?: string): RegExp[] {
 				error,
 			}, {
 				event_name: "sno.observe.internal.redact.loaduserrules",
-				file: "packages/sno-observe/src/internal/redact.ts",
+				file: "packages/observability/src/internal/redact.ts",
 				function: "loadUserRules",
 				site_id: "sno.observe.internal.redact.loaduserrules.2",
 			});

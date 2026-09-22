@@ -9,10 +9,10 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { closeDb, initDb } from "../../../../packages/sno-station-mem/src/store/connection";
-import { resolveSimpleTokenizerPath } from "../../../../packages/sno-station-mem/src/store/simple-tokenizer-path";
-import { initSqliteRuntimeSync } from "../../../../packages/sno-station-mem/src/store/sqlite-runtime";
-import type { SqliteDatabaseLike } from "../../../../packages/sno-station-mem/src/store/sqlite-runtime";
+import { closeDb, initDb } from "../../../../packages/memory/src/store/connection";
+import { resolveSimpleTokenizerPath } from "../../../../packages/memory/src/store/simple-tokenizer-path";
+import { initSqliteRuntimeSync } from "../../../../packages/memory/src/store/sqlite-runtime";
+import type { SqliteDatabaseLike } from "../../../../packages/memory/src/store/sqlite-runtime";
 
 const VECTOR_DIM = 1024;
 

@@ -1,9 +1,9 @@
-# @snoai/sno-observe
+# @snoai/observability
 
 Host-side observability SDK for SNO agent events. It validates a closed event schema, redacts sensitive fields before hashing, writes an append-only SQLite buffer under `~/.sno`, and flushes Compact JSON v1 envelopes to `sno.ai`.
 
 ```ts
-import { snoObserve } from "@snoai/sno-observe";
+import { snoObserve } from "@snoai/observability";
 
 await snoObserve.emit({
 	event_type: "memory.write",
@@ -42,7 +42,6 @@ Consent values are `off`, `metadata-only`, and `full`. `off` keeps emitted event
 - `snoObserve.register()`
 - `snoObserve.audit.verify(eventId)`
 - `snoObserve.doctor()`
-- `snoObserve.shouldSampleTool(eventId, toolName, rate)`
 - `snoObserve.subscribe(handler)`
 - `snoObserve.shutdown()`
 

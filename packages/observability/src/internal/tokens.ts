@@ -48,7 +48,7 @@ async function loadEncoder(): Promise<Encoder | null> {
 				error,
 			}, {
 				event_name: "sno.observe.internal.tokens.loadencoder",
-				file: "packages/sno-observe/src/internal/tokens.ts",
+				file: "packages/observability/src/internal/tokens.ts",
 				function: "loadEncoder",
 				site_id: "sno.observe.internal.tokens.loadencoder.1",
 			});

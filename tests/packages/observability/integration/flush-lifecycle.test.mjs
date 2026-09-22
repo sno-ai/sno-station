@@ -4,9 +4,9 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
-import { BufferStore } from "../../../../packages/sno-observe/dist/internal/buffer-store.js";
-import { FlushEngine } from "../../../../packages/sno-observe/dist/internal/flush.js";
-import { bootstrapIdentity } from "../../../../packages/sno-observe/dist/internal/identity.js";
+import { BufferStore } from "../../../../packages/observability/dist/internal/buffer-store.js";
+import { FlushEngine } from "../../../../packages/observability/dist/internal/flush.js";
+import { bootstrapIdentity } from "../../../../packages/observability/dist/internal/identity.js";
 import { validPayloads, scope } from "../fixtures/temp-env.mjs";
 
 function tempEnv() {

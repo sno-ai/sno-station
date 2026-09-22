@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Fixture for task 2.7. Calls into @snoai/sno-station-core-crypto using the production
+ * Fixture for task 2.7. Calls into @snoai/sqlite-crypto using the production
  * env hooks (XDG_CONFIG_HOME, SNO_STATION_CORE_KEYCHAIN_SERVICE, SNO_STATION_CORE_CRASH_AFTER, SNO_STATION_CORE_DB_PATH)
  * and lets the production code's SNO_STATION_CORE_CRASH_AFTER fault-injector terminate
  * the process at the named transition point.
@@ -21,7 +21,7 @@ if (!dbPath) {
 
 mkdirSync(dirname(dbPath), { recursive: true });
 
-const { getDek, openEncryptedDb } = await import("@snoai/sno-station-core-crypto");
+const { getDek, openEncryptedDb } = await import("@snoai/sqlite-crypto");
 
 const dek = await getDek();
 const db = openEncryptedDb(dbPath, dek);

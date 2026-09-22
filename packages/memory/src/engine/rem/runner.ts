@@ -39,7 +39,7 @@ export async function runRemStages(input: {
 		try { await input.repository.appendJournal(input.jobId, input.jobType, entry); }
 		catch (error) {
 			createLogger("sno-station-mem:rem-runner").error("rem.stage.journal.failed", { error, stage: stage.name }, {
-				event_name: "rem.stage.journal.failed", file: "packages/sno-station-mem/src/engine/rem/runner.ts",
+				event_name: "rem.stage.journal.failed", file: "packages/memory/src/engine/rem/runner.ts",
 				function: "runRemStages", site_id: "rem.stage.journal.failed",
 			});
 		}

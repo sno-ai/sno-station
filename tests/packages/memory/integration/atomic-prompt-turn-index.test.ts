@@ -4,12 +4,12 @@
  */
 
 import { describe, expect, it } from "vitest";
-import type { AtomicExtractionTurn } from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-extraction-reply";
-import { buildAtomicGenericExtractionPrompt } from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-generic-extractor";
-import type { AtomicKeyedRecord } from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-profile-keying";
-import { numberAtomicTurns } from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-replacement-sanitizer";
-import { createAtomicSubjectGuardTransport } from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-subject-guard";
-import type { LlmClient, MemoryLlmRequest } from "../../../../packages/sno-station-mem/src/model/llm-client-types";
+import type { AtomicExtractionTurn } from "../../../../packages/memory/src/engine/extraction/atomic-extraction-reply";
+import { buildAtomicGenericExtractionPrompt } from "../../../../packages/memory/src/engine/extraction/atomic-generic-extractor";
+import type { AtomicKeyedRecord } from "../../../../packages/memory/src/engine/extraction/atomic-profile-keying";
+import { numberAtomicTurns } from "../../../../packages/memory/src/engine/extraction/atomic-replacement-sanitizer";
+import { createAtomicSubjectGuardTransport } from "../../../../packages/memory/src/engine/extraction/atomic-subject-guard";
+import type { LlmClient, MemoryLlmRequest } from "../../../../packages/memory/src/model/llm-client-types";
 
 /**
  * The exact shape that broke, cut down from Memora session 24: a dictated email with TWO

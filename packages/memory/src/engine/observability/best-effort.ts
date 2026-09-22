@@ -11,17 +11,18 @@ export type ObserveLogger = {
 	warn(message: string): void;
 };
 
+/** Failures never reach the caller, but every one is logged at error level. */
 export async function bestEffort(
 	label: string,
 	fn: () => void | Promise<void>,
-	logger?: ObserveLogger,
+	_logger?: ObserveLogger,
 ): Promise<void> {
 	try {
 		await fn();
 	} catch (error) {
-		if (logger) log.warn("Background observability action failed", { action: label, error }, {
+		log.error("Background observability action failed", { action: label, error }, {
 			event_name: "observability.action.failed",
-			file: "packages/sno-station-mem/src/engine/observability/best-effort.ts",
+			file: "packages/memory/src/engine/observability/best-effort.ts",
 			function: "bestEffort",
 			site_id: "observability.bestEffort.failed",
 		});
@@ -31,14 +32,14 @@ export async function bestEffort(
 export function bestEffortSync<T>(
 	label: string,
 	fn: () => T,
-	logger?: ObserveLogger,
+	_logger?: ObserveLogger,
 ): T | undefined {
 	try {
 		return fn();
 	} catch (error) {
-		if (logger) log.warn("Synchronous observability action failed", { action: label, error }, {
+		log.error("Synchronous observability action failed", { action: label, error }, {
 			event_name: "observability.action.failed",
-			file: "packages/sno-station-mem/src/engine/observability/best-effort.ts",
+			file: "packages/memory/src/engine/observability/best-effort.ts",
 			function: "bestEffortSync",
 			site_id: "observability.bestEffortSync.failed",
 		});

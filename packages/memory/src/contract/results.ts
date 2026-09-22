@@ -19,6 +19,7 @@ export type InspectData =
 	| { op: "get"; entry: MemoryEntry | null; file?: { text: string; path: string; truncated?: boolean; from?: number; lines?: number; nextFrom?: number } };
 export interface ContractOutputs {
 	init: Result<{ principal: string; skinId: string }>;
+	hostEvent: Result<{ accepted: boolean }>;
 	getRecall: Result<{ recallId: string; contextText: string; hits?: RetrievalResult[]; memoryIds?: string[]; toolResult?: ToolResponse; nativeHits?: SnoStationMemMemorySearchResult[]; unavailable?: string }>;
 	capture: Result<{ turnId: string; committed: boolean }>;
 	mutate: Result<{ result: ToolResponse }>;
@@ -79,6 +80,7 @@ function resultSchema<T extends z.ZodRawShape>(shape: T) {
 
 export const outputSchemas: { [K in keyof ContractOutputs]: z.ZodType<ContractOutputs[K], unknown> } = {
 	init: resultSchema({ principal: z.string().min(1), skinId: z.string().min(1) }),
+	hostEvent: resultSchema({ accepted: z.boolean() }),
 	getRecall: resultSchema({ recallId: z.string(), contextText: z.string(), hits: z.array(retrievalResultSchema).optional(), memoryIds: z.array(z.string().min(1)).optional(), toolResult: toolResponseSchema.optional(), nativeHits: z.array(nativeHitSchema).optional(), unavailable: z.string().optional() }),
 	capture: resultSchema({ turnId: z.string().min(1), committed: z.boolean() }),
 	mutate: resultSchema({ result: toolResponseSchema }),

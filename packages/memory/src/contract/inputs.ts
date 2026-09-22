@@ -75,8 +75,13 @@ export type UsageSignal = {
 	result?: JsonValue;
 	at: number;
 };
+/** What the host agent did, for the skin's observe session: a user prompt, or one host model call. */
+export type HostEvent =
+	| { kind: "prompt"; prompt: string }
+	| { kind: "llm"; model: string; promptTokens: number; completionTokens: number; cacheReadTokens?: number; cacheWriteTokens?: number; latencyMs: number };
 export interface ContractInputs {
 	init: { scope: ScopeCtx; registration: InitRegistration };
+	hostEvent: { scope: ScopeCtx; event: HostEvent };
 	getRecall: { query: string; scope: ScopeCtx; options: RecallOptions };
 	capture: { turn: Turn; scope: ScopeCtx };
 	mutate: { op: Mutation; scope: ScopeCtx };
@@ -180,8 +185,15 @@ export const usageSignalSchema: z.ZodType<UsageSignal, unknown> = z.object({
 	event: z.enum(["inject", "used", "rejected", "tool-error"]), memoryIds: z.array(nonempty),
 	toolName: nonempty.optional(), text: z.string().optional(), error: z.json().optional(), result: z.json().optional(), at: timestamp,
 });
+const count = z.number().int().nonnegative();
+export const hostEventSchema: z.ZodType<HostEvent, unknown> = z.discriminatedUnion("kind", [
+	z.object({ kind: z.literal("prompt"), prompt: z.string() }),
+	z.object({ kind: z.literal("llm"), model: nonempty, promptTokens: count, completionTokens: count,
+		cacheReadTokens: count.optional(), cacheWriteTokens: count.optional(), latencyMs: timestamp }),
+]);
 export const inputSchemas: { [K in keyof ContractInputs]: z.ZodType<ContractInputs[K], unknown> } = {
 	init: z.object({ scope: scopeSchema, registration: initRegistrationSchema }),
+	hostEvent: z.object({ scope: scopeSchema, event: hostEventSchema }),
 	getRecall: z.object({ query: nonempty, scope: scopeSchema, options: recallOptionsSchema }),
 	capture: z.object({ turn: turnSchema, scope: scopeSchema }),
 	mutate: z.object({ op: mutationSchema, scope: scopeSchema }),

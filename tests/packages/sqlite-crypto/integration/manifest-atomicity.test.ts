@@ -13,7 +13,7 @@
 
 import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, statSync } from "node:fs";
-import { ManifestMissing } from "@snoai/sno-station-core-crypto";
+import { ManifestMissing } from "@snoai/sqlite-crypto";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
 	childNodeArgs,
@@ -93,7 +93,7 @@ describe("manifest atomicity (task 2.7)", () => {
 		expect(existsSync(env.manifestFile)).toBe(false);
 
 		// Now use the public API to confirm halt-no-rebuild behavior.
-		const { getDek } = await import("@snoai/sno-station-core-crypto");
+		const { getDek } = await import("@snoai/sqlite-crypto");
 		await expect(getDek()).rejects.toBeInstanceOf(ManifestMissing);
 	});
 

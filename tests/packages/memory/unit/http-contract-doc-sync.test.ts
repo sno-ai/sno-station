@@ -17,16 +17,16 @@ import { describe, expect, it } from "vitest";
 import type { z } from "zod";
 import {
 	contractJsonSchemas, inputSchemas, outputSchemas, MEMORY_ROUTES, MEMORY_ERROR_STATUS, DEGRADED_REASONS,
-} from "../../../../packages/sno-station-mem/src/contract/index";
-import { SNO_OBSERVE_DEFAULT_BASE_URL } from "../../../../packages/sno-station-mem/config/index";
-import { HEALTH_PATH, REM_RUN_PATH, REM_JOBS_PATH_PREFIX } from "../../../../packages/sno-station-mem/src/sidecar/config";
-import { startRemSidecar } from "../../../../packages/sno-station-mem/src/sidecar/server";
-import { bindStore } from "../../../../packages/sno-station-mem/src/engine/shared/paths";
+} from "../../../../packages/memory/src/contract/index";
+import { SNO_OBSERVE_DEFAULT_BASE_URL } from "../../../../packages/memory/config/index";
+import { HEALTH_PATH, REM_RUN_PATH, REM_JOBS_PATH_PREFIX } from "../../../../packages/memory/src/sidecar/config";
+import { startRemSidecar } from "../../../../packages/memory/src/sidecar/server";
+import { bindStore } from "../../../../packages/memory/src/engine/shared/paths";
 import { createTestDb } from "../../../apps/mem-claw/helpers/test-db";
 
 type Schema = z.core.JSONSchema.JSONSchema;
 type Row = string[];
-const document = readFileSync(new URL("../../../../packages/sno-station-mem/src/contract/HTTP-CONTRACT.md", import.meta.url), "utf8");
+const document = readFileSync(new URL("../../../../packages/memory/src/contract/HTTP-CONTRACT.md", import.meta.url), "utf8");
 const methods = Object.keys(MEMORY_ROUTES) as Array<keyof typeof MEMORY_ROUTES>;
 
 function table(name: string): Row[] {
@@ -62,7 +62,7 @@ function schemaRows(schema: Schema, field = "$", required = true): Row[] {
 	if (schema.additionalProperties === false) constraints.additionalProperties = false;
 	const values = schema.enum ?? ("const" in schema ? [schema.const] : undefined);
 	let defaultValue = "default" in schema ? JSON.stringify(schema.default) : "-";
-	if (field === "registration.settings.observe.enabled") defaultValue = "SNO_OBSERVE_ENABLED (true/1; otherwise false)";
+	if (field === "registration.settings.observe.enabled") defaultValue = "true unless SNO_OBSERVE_ENABLED is false/0";
 	if (field === "registration.settings.observe.baseUrl") defaultValue = `SNO_OBSERVE_BASE_URL or ${SNO_OBSERVE_DEFAULT_BASE_URL}`;
 	const rows: Row[] = [[field, schema.$ref ? "JSON" : Array.isArray(schema.type)
 		? schema.type.join(" or ") : schema.type ?? (variants ? "union" : "unknown"),
@@ -100,8 +100,8 @@ describe("sidecar API reference stays in sync", () => {
 		expect(section).toBeDefined();
 		const paths = section?.split("\n").slice(2).map(line => line.split("|")[2]?.trim()).sort();
 		const served = [...Object.values(MEMORY_ROUTES).map(route => route.path), HEALTH_PATH, REM_RUN_PATH, `${REM_JOBS_PATH_PREFIX}<id>`].sort();
-		expect(served).toEqual(["/healthz", "/rem/jobs/<id>", "/rem/run", "/v1/capture", "/v1/get-recall", "/v1/init",
-			"/v1/inspect", "/v1/mutate", "/v1/on-session-end", "/v1/record-usage", "/v1/static-block"]);
+		expect(served).toEqual(["/healthz", "/rem/jobs/<id>", "/rem/run", "/v1/capture", "/v1/get-recall", "/v1/host-event",
+			"/v1/init", "/v1/inspect", "/v1/mutate", "/v1/on-session-end", "/v1/record-usage", "/v1/static-block"]);
 		expect(paths).toEqual(served);
 		const previousProfile = process.env.SNO_PROFILE_DIR;
 		const database = createTestDb();

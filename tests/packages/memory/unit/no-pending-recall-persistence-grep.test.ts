@@ -2,7 +2,7 @@
  * Phase 0 §20.8 preservation test.
  *
  * `pendingRecall` is a transient in-session-memory artifact, not a persisted
- * field. Asserts that no `.ts` file under `packages/sno-station-mem/src/store/` and no
+ * field. Asserts that no `.ts` file under `packages/memory/src/store/` and no
  * Drizzle schema declaration mentions `pendingRecall` or its snake_case
  * equivalent.
  *
@@ -21,7 +21,7 @@ import { describe, expect, it } from "vitest";
 
 const STORAGE_ROOT = path.resolve(
 	import.meta.dirname,
-	"../../../../packages/sno-station-mem/src/store",
+	"../../../../packages/memory/src/store",
 );
 const SCHEMA_FILE = path.join(STORAGE_ROOT, "schema.ts");
 

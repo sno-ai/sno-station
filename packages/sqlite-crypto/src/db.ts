@@ -5,8 +5,10 @@ import {
 	fsyncSync,
 	mkdirSync,
 	openSync,
+	readFileSync,
 	readSync,
 	renameSync,
+	rmSync,
 	statSync,
 	writeSync,
 } from "node:fs";
@@ -19,6 +21,7 @@ import {
 	DbIdMismatch,
 	IntegrityCheckFailed,
 	ManifestMissing,
+	StoreInUseError,
 	WrongKeyError,
 } from "./errors.js";
 import { crashAfter } from "./fault-injection.js";
@@ -408,6 +411,65 @@ export function _readCanaryForRecovery(
 	} finally {
 		try {
 			pre.db.close();
+		} catch {
+			// ignore
+		}
+	}
+}
+
+/**
+ * Consistent single-file snapshot of a registered store, taken through SQLite
+ * (`VACUUM INTO`) so WAL frames not yet checkpointed are included and SQLCipher
+ * writes the copy encrypted with the same DEK. Returns the snapshot bytes; the
+ * temporary file is removed before returning.
+ */
+export function snapshotEncryptedDb(path: string, dek: Dek): Buffer {
+	const dbPath = normalizeDbPath(path);
+	const snapshot = `${dbPath}.snapshot-${process.pid}-${Date.now().toString(36)}`;
+	const pre = preflight(dbPath, dek, true);
+	try {
+		pre.db.exec(`VACUUM INTO '${snapshot.replace(/'/g, "''")}'`);
+	} finally {
+		try {
+			pre.db.close();
+		} catch {
+			// ignore
+		}
+	}
+	try {
+		return readFileSync(snapshot);
+	} finally {
+		rmSync(snapshot, { force: true });
+	}
+}
+
+/**
+ * Refuse to touch a store that another process holds open. In WAL mode every
+ * open connection keeps a SHARED lock on the main file, so an EXCLUSIVE lock
+ * attempt with no busy wait answers the question without a race on `-shm`.
+ */
+export function assertStoreNotOpen(path: string, dek: Dek): void {
+	const dbPath = normalizeDbPath(path);
+	if (!existsSync(dbPath)) return;
+	const db = new Database(dbPath, { timeout: 1 });
+	try {
+		applyPragmaRecipe(db, dek);
+		db.pragma("locking_mode = EXCLUSIVE");
+		try {
+			db.exec("BEGIN EXCLUSIVE");
+			db.exec("COMMIT");
+		} catch (err) {
+			if (err instanceof Error && /SQLITE_BUSY|database is locked/i.test(err.message)) {
+				throw new StoreInUseError(
+					`StoreInUseError: ${dbPath} is open in another process; stop the sidecar before restoring`,
+					{ cause: err },
+				);
+			}
+			throw err;
+		}
+	} finally {
+		try {
+			db.close();
 		} catch {
 			// ignore
 		}

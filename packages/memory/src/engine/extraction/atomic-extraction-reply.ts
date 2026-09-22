@@ -88,7 +88,7 @@ const relationSchema = z
 
 const wireTimeSchema = calendarInstructionSchema.catch(() => {
 	log.warn("atomic extraction kept a record with an invalid time judgment", {}, {
-		event_name: "memory.atomic_extraction_reply.diagnostic", file: "packages/sno-station-mem/src/engine/extraction/atomic-extraction-reply.ts",
+		event_name: "memory.atomic_extraction_reply.diagnostic", file: "packages/memory/src/engine/extraction/atomic-extraction-reply.ts",
 		function: "wireTimeSchema", site_id: "extraction.atomic-extraction-reply.invalid_time",
 	});
 	return { kind: "unresolved" } as const;
@@ -145,18 +145,18 @@ function projectRecord(record: z.infer<typeof wireRecordSchema>): AtomicExtracti
 		log.warn("atomic extraction attribute stored unkeyed", {
 			attribute_length: offeredAttribute.length,
 			subjectKind: record.subject_kind,
-		}, { event_name: "memory.atomic_extraction_reply.diagnostic", file: "packages/sno-station-mem/src/engine/extraction/atomic-extraction-reply.ts", function: "projectRecord", site_id: "extraction.atomic-extraction-reply.projectRecord.327508ac5f" });
+		}, { event_name: "memory.atomic_extraction_reply.diagnostic", file: "packages/memory/src/engine/extraction/atomic-extraction-reply.ts", function: "projectRecord", site_id: "extraction.atomic-extraction-reply.projectRecord.327508ac5f" });
 	}
 	const endedAtPhrase = record.ends_current ? (record.ended_at_phrase ?? null) : null;
 	if (record.time === undefined || (record.ends_current && record.ended_time === undefined)) {
 		log.warn("atomic extraction kept a record with an omitted time judgment", {
 			time_missing: record.time === undefined, ending_time_missing: record.ends_current && record.ended_time === undefined,
-		}, { event_name: "memory.atomic_extraction_reply.diagnostic", file: "packages/sno-station-mem/src/engine/extraction/atomic-extraction-reply.ts", function: "projectRecord", site_id: "extraction.atomic-extraction-reply.omitted_time" });
+		}, { event_name: "memory.atomic_extraction_reply.diagnostic", file: "packages/memory/src/engine/extraction/atomic-extraction-reply.ts", function: "projectRecord", site_id: "extraction.atomic-extraction-reply.omitted_time" });
 	}
 	if (!record.ends_current && (record.ended_at_phrase ?? null) !== null) {
 		log.warn("atomic extraction dropped an ending time on a claim that does not end", {
 			claim_length: record.claim_text.length,
-		}, { event_name: "memory.atomic_extraction_reply.diagnostic", file: "packages/sno-station-mem/src/engine/extraction/atomic-extraction-reply.ts", function: "projectRecord", site_id: "extraction.atomic-extraction-reply.projectRecord.aac5440fc2" });
+		}, { event_name: "memory.atomic_extraction_reply.diagnostic", file: "packages/memory/src/engine/extraction/atomic-extraction-reply.ts", function: "projectRecord", site_id: "extraction.atomic-extraction-reply.projectRecord.aac5440fc2" });
 	}
 	const terminalTodo = record.todo === "done" || record.todo === "removed";
 	const closeReason = terminalTodo ? record.close_reason : null;
@@ -164,7 +164,7 @@ function projectRecord(record: z.infer<typeof wireRecordSchema>): AtomicExtracti
 		log.warn("atomic extraction kept the first relations only", {
 			offered: record.relations.length,
 			kept: MAX_RELATIONS,
-		}, { event_name: "memory.atomic_extraction_reply.diagnostic", file: "packages/sno-station-mem/src/engine/extraction/atomic-extraction-reply.ts", function: "projectRecord", site_id: "extraction.atomic-extraction-reply.projectRecord.b92c90f285" });
+		}, { event_name: "memory.atomic_extraction_reply.diagnostic", file: "packages/memory/src/engine/extraction/atomic-extraction-reply.ts", function: "projectRecord", site_id: "extraction.atomic-extraction-reply.projectRecord.b92c90f285" });
 	}
 	return {
 		kind: record.kind,
@@ -316,12 +316,12 @@ export function parseAtomicCaptureReply(
 		}
 		if (wrongIds > 0) {
 			log.warn("atomic capture salvaged fact ids", { gate: 5, affected_facts: wrongIds }, {
-				event_name: "memory.atomic_extraction_reply.diagnostic", file: "packages/sno-station-mem/src/engine/extraction/atomic-extraction-reply.ts", function: "parseAtomicCaptureReply", site_id: "extraction.atomic-extraction-reply.salvage_ids",
+				event_name: "memory.atomic_extraction_reply.diagnostic", file: "packages/memory/src/engine/extraction/atomic-extraction-reply.ts", function: "parseAtomicCaptureReply", site_id: "extraction.atomic-extraction-reply.salvage_ids",
 			});
 		}
 		if (invalidSpans > 0) {
 			log.warn("atomic capture dropped facts with invalid source turns", { gate: 6, affected_facts: invalidSpans }, {
-				event_name: "memory.atomic_extraction_reply.diagnostic", file: "packages/sno-station-mem/src/engine/extraction/atomic-extraction-reply.ts", function: "parseAtomicCaptureReply", site_id: "extraction.atomic-extraction-reply.salvage_spans",
+				event_name: "memory.atomic_extraction_reply.diagnostic", file: "packages/memory/src/engine/extraction/atomic-extraction-reply.ts", function: "parseAtomicCaptureReply", site_id: "extraction.atomic-extraction-reply.salvage_spans",
 			});
 		}
 		return { facts: kept, progressTurns };
@@ -350,7 +350,7 @@ function warnUnresolvedEnrichmentTime(
 			fact_id: enrichment.id, field: { name: field }, kind: instruction.kind,
 			precision: { unit: instruction.precision },
 			missing_components: missingComponents.map((name) => ({ name })),
-		}, { event_name: "memory.atomic_extraction_reply.diagnostic", file: "packages/sno-station-mem/src/engine/extraction/atomic-extraction-reply.ts", function: "warnUnresolvedEnrichmentTime", site_id: "extraction.atomic-extraction-reply.unresolved_enrichment_time" });
+		}, { event_name: "memory.atomic_extraction_reply.diagnostic", file: "packages/memory/src/engine/extraction/atomic-extraction-reply.ts", function: "warnUnresolvedEnrichmentTime", site_id: "extraction.atomic-extraction-reply.unresolved_enrichment_time" });
 	}
 }
 

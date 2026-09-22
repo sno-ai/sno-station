@@ -2,14 +2,14 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import DatabaseConstructor from "better-sqlite3";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
-import type { Embedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client.ts";
-import { formatRelevantMemoriesContext } from "../../../../packages/sno-station-mem/src/engine/extraction/capture-policy-detector.ts";
+import type { Embedder } from "../../../../packages/memory/src/engine/extraction/embedding-provider-client.ts";
+import { formatRelevantMemoriesContext } from "../../../../packages/memory/src/engine/extraction/capture-policy-detector.ts";
 import {
 	buildInsightMetadata,
 	stringifyInsightMetadata,
-} from "../../../../packages/sno-station-mem/src/engine/extraction/memory-metadata-codec.ts";
-import { MemoryStore } from "../../../../packages/sno-station-mem/src/store/store.ts";
-import { f32ToBytes } from "../../../../packages/sno-station-mem/src/engine/shared/utils.ts";
+} from "../../../../packages/memory/src/engine/extraction/memory-metadata-codec.ts";
+import { MemoryStore } from "../../../../packages/memory/src/store/store.ts";
+import { f32ToBytes } from "../../../../packages/memory/src/engine/shared/utils.ts";
 import { createTestDb, createTestEmbedder, type TestDb } from "../../../apps/mem-claw/helpers/test-db.ts";
 
 function runMigration(sqlite: DatabaseConstructor.Database, sql: string): void {

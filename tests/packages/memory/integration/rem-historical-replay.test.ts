@@ -5,7 +5,7 @@ import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const repoRoot = resolve(import.meta.dirname, "../../../..");
-const replayDir = resolve(repoRoot, "packages/sno-station-mem/fixtures/historical-replay");
+const replayDir = resolve(repoRoot, "packages/memory/fixtures/historical-replay");
 const fourArmHarnessPath = resolve(replayDir, "four-arm-harness.mjs");
 
 describe("REM historical replay and four-arm harness", () => {

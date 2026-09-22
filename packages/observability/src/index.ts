@@ -1,6 +1,5 @@
 import type { ClaimCode, ClaimResult } from "./internal/device-claim.js";
 import { type RuntimeOptions, SnoObserveRuntime } from "./internal/runtime.js";
-import { shouldSampleTool as shouldSampleToolInternal } from "./internal/sampling.js";
 import { parseEventInput } from "./internal/schemas.js";
 import type {
 	AgentId,
@@ -80,10 +79,6 @@ function createApi(runtime: SnoObserveRuntime) {
 		return runtime.doctor();
 	}
 
-	function shouldSampleTool(eventId: string, toolName?: string, rate?: number): boolean {
-		return shouldSampleToolInternal(eventId, toolName, rate);
-	}
-
 	function hashRedactedText(input: string): string {
 		return runtime.hashRedactedText(input);
 	}
@@ -110,7 +105,6 @@ function createApi(runtime: SnoObserveRuntime) {
 		claim,
 		audit,
 		doctor,
-		shouldSampleTool,
 		hashRedactedText,
 		subscribe,
 		shutdown,
@@ -133,7 +127,6 @@ const SNO_OBSERVE_KEYS = [
 	"claim",
 	"audit",
 	"doctor",
-	"shouldSampleTool",
 	"hashRedactedText",
 	"subscribe",
 	"shutdown",

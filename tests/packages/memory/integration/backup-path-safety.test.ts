@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readdirSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { runBackup } from "../../../../packages/sno-station-mem/src/store/backup.ts";
+import { runBackup } from "../../../../packages/memory/src/store/backup.ts";
 import { createTestDb } from "../../../apps/mem-claw/helpers/test-db.ts";
 
 describe("runBackup path safety", () => {

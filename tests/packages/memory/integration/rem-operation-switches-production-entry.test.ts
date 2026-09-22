@@ -21,7 +21,7 @@ function requireQcg26(condition: boolean, marker: string, detail: string): void 
 
 describe("REM operation switches through production entry", () => {
 	it("rem-operation-identifiers-production-entry exposes exactly the four current operations", async () => {
-		const product = await import("../../../../packages/sno-station-mem/src/engine/rem/index.ts");
+		const product = await import("../../../../packages/memory/src/engine/rem/index.ts");
 		const retired = JSON.parse(
 			readFileSync(
 				resolve(repoRoot, "tests/apps/mem-claw/fixtures/rem-retired-vocabulary.negative.json"),
@@ -59,20 +59,20 @@ describe("REM operation switches through production entry", () => {
 	});
 
 	it("rem-operation-switch-refuses-before-scan reads execution configuration first", () => {
-		const server = source("packages/sno-station-mem/src/sidecar/server.ts");
+		const server = source("packages/memory/src/sidecar/server.ts");
 		expectInOrder(server, "readRemOperationalConfig()", "runRemProductionOrderedWave({");
 		expectInOrder(server, "switched-off", "runRemProductionOrderedWave({");
 	});
 
 	it("rem-unbuilt-operation-distinct-reason distinguishes switched-off from not-built", () => {
-		const server = source("packages/sno-station-mem/src/sidecar/server.ts");
+		const server = source("packages/memory/src/sidecar/server.ts");
 		expect(server).toContain("switched-off");
 		expect(server).toContain("not-built");
 		expect(server.indexOf("switched-off")).not.toBe(server.indexOf("not-built"));
 	});
 
 	it("rem-low-yield-ends-done keeps persona judging after zero applied operations", () => {
-		const executor = source("packages/sno-station-mem/src/sidecar/rem-batch-executor.ts");
+		const executor = source("packages/memory/src/sidecar/rem-batch-executor.ts");
 		const runner = source("evals/memora/evals/agent_eval/run_memora_mem_claw.sh");
 		expect(executor).not.toMatch(/terminalState:\s*[^\n]*"degraded"/u);
 		requireQcg26(
@@ -92,7 +92,7 @@ describe("REM operation switches through production entry", () => {
 	});
 
 	it("rem-job-stats-five-fields publishes quality without a zero-actionable perfect score", () => {
-		const jobStore = source("packages/sno-station-mem/src/sidecar/rem-job-store.ts");
+		const jobStore = source("packages/memory/src/sidecar/rem-job-store.ts");
 		for (const field of [
 			"applied_count",
 			"actionable_candidate_count",
@@ -102,24 +102,24 @@ describe("REM operation switches through production entry", () => {
 		]) {
 			expect(jobStore, field).toContain(field);
 		}
-		const executor = source("packages/sno-station-mem/src/sidecar/rem-batch-executor.ts");
+		const executor = source("packages/memory/src/sidecar/rem-batch-executor.ts");
 		expect(executor).toMatch(/actionableCandidateCount\s*===\s*0\s*\?\s*null/u);
 	});
 
 	it("rem-all-call-outage-still-fails preserves the real failure gate", () => {
-		const executor = source("packages/sno-station-mem/src/sidecar/rem-batch-executor.ts");
+		const executor = source("packages/memory/src/sidecar/rem-batch-executor.ts");
 		requireQcg26(
 			executor.split("if (llmCalls > 0 && successfulLlmCalls === 0)").length - 1 === 2 &&
 				executor.split("throw new Error(").filter((block) => block.includes("REM LLM calls all failed:")).length >= 2,
 			"QCG26_ASSERT_QCG14_ALL_CALL_OUTAGE",
 			"one built operation lost its all-call-outage failure",
 		);
-		const server = source("packages/sno-station-mem/src/sidecar/server.ts");
+		const server = source("packages/memory/src/sidecar/server.ts");
 		expect(server).toContain('state: "failed"');
 	});
 
 	it("rem-operation-switch-single-source has no environment flag or request override", () => {
-		const server = source("packages/sno-station-mem/src/sidecar/server.ts");
+		const server = source("packages/memory/src/sidecar/server.ts");
 		requireQcg26(
 			!server.match(/SNO_EDGE_REM_(UPDATE|REPLACE|DISTILL|RETIRE)/u),
 			"QCG26_ASSERT_QCG16_SINGLE_SOURCE",
@@ -130,15 +130,15 @@ describe("REM operation switches through production entry", () => {
 	});
 
 	it("rem-invalid-model-response refuses without a write mark", () => {
-		const adapter = source("packages/sno-station-mem/src/store/rem-sqlite-adapter.ts");
+		const adapter = source("packages/memory/src/store/rem-sqlite-adapter.ts");
 		expect(adapter).not.toContain('return "degraded"');
 		expect(adapter).toContain('reasonCode: "model_response_invalid"');
-		const jobStore = source("packages/sno-station-mem/src/sidecar/rem-job-store.ts");
+		const jobStore = source("packages/memory/src/sidecar/rem-job-store.ts");
 		expect(jobStore).not.toMatch(/RemJobState[^\n]*degraded/u);
 	});
 
 	it("rem-switch-read-at-execution-time does not retain startup or enqueue configuration", () => {
-		const server = source("packages/sno-station-mem/src/sidecar/server.ts");
+		const server = source("packages/memory/src/sidecar/server.ts");
 		const execution = server.indexOf("async function runChassisJob");
 		const read = server.indexOf("readRemOperationalConfig()", execution);
 		expect(read, "execution-time configuration read is absent").toBeGreaterThan(execution);
@@ -158,14 +158,14 @@ describe("REM operation switches through production entry", () => {
 	});
 
 	it("rem-erase-has-no-operation-path keeps erase outside the dispatcher and deletion path", async () => {
-		const product = await import("../../../../packages/sno-station-mem/src/engine/rem/index.ts");
+		const product = await import("../../../../packages/memory/src/engine/rem/index.ts");
 		requireQcg26(
 			product.parseRemOperationType("erase") === undefined,
 			"QCG26_ASSERT_QCG24_ERASE_DISPATCH",
 			"erase entered the REM operation dispatcher",
 		);
 		expect(product.parseRemOperationType("erase")).toBeUndefined();
-		const server = source("packages/sno-station-mem/src/sidecar/server.ts");
+		const server = source("packages/memory/src/sidecar/server.ts");
 		expect(server).not.toMatch(/case\s+["']erase["']/u);
 		expect(server).not.toMatch(/erase|deleteMemory|DELETE FROM nodix_memories/u);
 	});

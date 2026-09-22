@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import { readFileSync, writeFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import { createCuid2 } from "../../../../packages/common-core/dist/index.js";
-import { claimMachine } from "../../../../packages/sno-observe/dist/internal/device-claim.js";
-import { bootstrapIdentity } from "../../../../packages/sno-observe/dist/internal/identity.js";
+import { claimMachine } from "../../../../packages/observability/dist/internal/device-claim.js";
+import { bootstrapIdentity } from "../../../../packages/observability/dist/internal/identity.js";
 import { cleanupTempSnoEnv, createTempSnoEnv } from "../fixtures/temp-env.mjs";
 
 const accountCuid = createCuid2();

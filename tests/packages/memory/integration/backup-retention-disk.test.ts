@@ -15,13 +15,13 @@ import {
 	BACKUP_INTERVAL_MS,
 	BACKUP_MIN_FREE_DISK_RATIO,
 	BACKUP_RETENTION_COUNT,
-} from "../../../../packages/sno-station-mem/config/index.ts";
+} from "../../../../packages/memory/config/index.ts";
 import {
 	BackupSkippedLowDiskError,
 	isBackupDue,
 	runBackup,
 	type DiskSpace,
-} from "../../../../packages/sno-station-mem/src/store/backup.ts";
+} from "../../../../packages/memory/src/store/backup.ts";
 import { createTestDb } from "../../../apps/mem-claw/helpers/test-db.ts";
 
 const MB = 1024 * 1024;

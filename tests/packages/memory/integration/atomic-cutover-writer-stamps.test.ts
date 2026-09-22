@@ -7,9 +7,9 @@ import { globSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
-import type { Embedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client";
-import { applyAtomicMemoryCutoverMigration } from "../../../../packages/sno-station-mem/src/store/atomic-memory-cutover-sql";
-import { MemoryStore } from "../../../../packages/sno-station-mem/src/store/store";
+import type { Embedder } from "../../../../packages/memory/src/engine/extraction/embedding-provider-client";
+import { applyAtomicMemoryCutoverMigration } from "../../../../packages/memory/src/store/atomic-memory-cutover-sql";
+import { MemoryStore } from "../../../../packages/memory/src/store/store";
 import { createTestDb, createTestEmbedder, type TestDb } from "../../../apps/mem-claw/helpers/test-db";
 
 interface AtomicStampRow {
@@ -90,7 +90,7 @@ describe("atomic cutover writer stamps", () => {
 	});
 
 	it("requires every production INSERT to name all atomic stamp columns", () => {
-		const inserts = globSync("packages/sno-station-mem/src/**/*.ts", { cwd: REPO_ROOT }).flatMap(
+		const inserts = globSync("packages/memory/src/**/*.ts", { cwd: REPO_ROOT }).flatMap(
 			(file): MemoryInsert[] => {
 				const source = readFileSync(resolve(REPO_ROOT, file), "utf8");
 				return Array.from(
