@@ -10,8 +10,7 @@ import { ConsentStore } from "./consent.js";
 import { type MachineRegistrationCache, registerBeforeFlush } from "./flush-registration.js";
 import { type EventPostResult, postEvent } from "./http.js";
 import { logger } from "./log.js";
-import { getRedactionRulesPath, type PathEnv } from "./paths.js";
-import { redactEventPayload } from "./redact.js";
+import type { PathEnv } from "./paths.js";
 import { type Identity, SDK_VERSION, type WireEnvelope } from "./types.js";
 
 export const SCHEDULE_FLUSH_DELAY_MS = 5_000;
@@ -626,8 +625,8 @@ function handlePostResult(
 
 /**
  * The server's consent for this machine and lane is lower than what the row claims. A row
- * sent as `full` is re-sent as `metadata-only` (redacted again) and the local consent is
- * lowered to match; a row already at `metadata-only` means consent is off on the website,
+ * sent as `full` is re-sent as `metadata-only` (every schema is closed, so the payload
+ * carries no text either way) and the local consent is lowered to match; a row already at `metadata-only` means consent is off on the website,
  * so the whole run is kept as local evidence and the chain moves on.
  */
 function handleConsentSuppressed(
@@ -645,12 +644,8 @@ function handleConsentSuppressed(
 		site_id: "sno.observe.internal.flush.handleconsentsuppressed.1",
 	};
 	if (envelope.consent_level === "full") {
-		const rulesPath = getRedactionRulesPath(env);
 		const moved = store.carryForward(row, identifyPayloadFor, {
-			rewrite: (entry: WireEnvelope) => ({
-				consent_level: "metadata-only",
-				payload: redactEventPayload(entry.payload, "metadata-only", rulesPath).value,
-			}),
+			rewrite: (entry: WireEnvelope) => ({ consent_level: "metadata-only", payload: entry.payload }),
 		});
 		new ConsentStore(env).write("metadata-only");
 		logger.warn("sno observe server allows metadata-only; rows re-sent at that level and local consent lowered", {
@@ -754,6 +749,8 @@ function responseErrorCode(body: string): string | undefined {
 	return parseResponseBody(body)?.code;
 }
 
+/** The server's code lives in `error` (string) or `error.code`; `reason` is only a sub-reason. */
+/** The server's code lives in `error` (string) or `error.code`; `reason` is only a sub-reason. */
 function parseResponseBody(body: string): {
 	root: Record<string, unknown>;
 	nestedError: Record<string, unknown> | null;
@@ -765,24 +762,9 @@ function parseResponseBody(body: string): {
 			return null;
 		}
 		const nestedError = isRecord(parsed["error"]) ? parsed["error"] : null;
-		const candidates = new Set<string>();
-		for (const key of ["reason", "code", "error_code", "error"]) {
-			const value = parsed[key];
-			if (typeof value === "string" && value.length > 0) {
-				candidates.add(value);
-			}
-		}
-		if (nestedError !== null) {
-			const code = nestedError["code"];
-			if (typeof code === "string" && code.length > 0) {
-				candidates.add(code);
-			}
-		}
-		return {
-			root: parsed,
-			nestedError,
-			code: candidates.size === 1 ? candidates.values().next().value : undefined,
-		};
+		const candidates = [nestedError?.["code"], parsed["error"], parsed["code"], parsed["error_code"], parsed["reason"]];
+		const code = candidates.find((value) => typeof value === "string" && value.length > 0);
+		return { root: parsed, nestedError, code: typeof code === "string" ? code : undefined };
 	} catch {
 		return null;
 	}

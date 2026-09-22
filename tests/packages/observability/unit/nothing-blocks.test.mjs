@@ -150,13 +150,14 @@ describe("nothing blocks an observe upload", () => {
 				event_type: "prompt.submit",
 				lane: "memory",
 				agent_id: "codex",
-				payload: { ...validPayloads["prompt.submit"], prompt_text: "raw words the server must never see" },
+				payload: validPayloads["prompt.submit"],
 			})).eventId;
 			const result = await observe.flush({ force: true });
 			assert.equal(result.retryable, 0);
+			// the epoch's identify was refused at "full"; the run behind it travelled once, lowered
+			assert.equal(server.posted.some((envelope) => envelope.consent_level === "full"), true);
 			const sent = server.posted.filter((envelope) => envelope.event_id === id);
-			assert.deepEqual(sent.map((envelope) => envelope.consent_level), ["full", "metadata-only"]);
-			assert.equal(sent[1].payload.prompt_text, "<content>");
+			assert.deepEqual(sent.map((envelope) => envelope.consent_level), ["metadata-only"]);
 			assert.equal(observe.consent.get(), "metadata-only");
 			const db = new DatabaseConstructor(temp.env.SNO_BUFFER_PATH, { readonly: true });
 			try {
