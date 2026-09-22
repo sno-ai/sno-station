@@ -253,6 +253,33 @@ describe("nothing blocks an observe upload", () => {
 		}
 	});
 
+	it("with consent off, day-old local rows are still pruned even though nothing is ever flushed", async () => {
+		const temp = createTempSnoEnv("sno-observe-off-prune-");
+		const observe = createSnoObserve({ env: temp.env, cwd: temp.dir, fetch: fakeServer().fetch });
+		try {
+			await observe.emit(memoryWrite());
+			await observe.consent.set("off", "test");
+			await observe.emit(memoryWrite());
+			const db = new DatabaseConstructor(temp.env.SNO_BUFFER_PATH);
+			try {
+				db.prepare("UPDATE events SET created_at = ?").run(Date.now() - 3 * DAY_MS);
+			} finally {
+				db.close();
+			}
+			const later = await observe.emit(memoryWrite());
+			assert.equal(later.reason, "consent_off");
+			const check = new DatabaseConstructor(temp.env.SNO_BUFFER_PATH, { readonly: true });
+			try {
+				assert.deepEqual(check.prepare("SELECT event_id FROM events").all().map((row) => row.event_id), [later.eventId]);
+			} finally {
+				check.close();
+			}
+		} finally {
+			await observe.shutdown();
+			cleanupTempSnoEnv(temp);
+		}
+	});
+
 	it("a day-old stuck row with a hundred failed attempts does not stop new events from being recorded", async () => {
 		const temp = createTempSnoEnv("sno-observe-old-queue-");
 		const server = fakeServer();

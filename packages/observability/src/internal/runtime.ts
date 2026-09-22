@@ -95,6 +95,8 @@ export class SnoObserveRuntime {
 			};
 			if (terminal) {
 				result.reason = "consent_off";
+				// Off-period rows never reach the flush loop, so their retention is pruned here.
+				store.pruneRetention();
 			}
 			this.notify(parsed.eventType, result);
 			if (!terminal) {
