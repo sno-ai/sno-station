@@ -36,7 +36,6 @@ export interface FlushResult {
 interface RowFlushResult extends FlushResult {
 	retryScope?: "chain";
 	requery?: boolean;
-	rechained?: boolean;
 }
 
 export interface DrainResult {
@@ -438,7 +437,7 @@ async function flushPendingWithLease(
 				stopBatch = true;
 				break;
 			}
-			const result = await flushRow(store, row, options);
+			const result = await flushRow(store, row, options, rechainedAgents);
 			submitted += 1;
 			shipped += result.shipped;
 			terminal += result.terminal;
@@ -460,17 +459,6 @@ async function flushPendingWithLease(
 				break;
 			}
 			if (result.requery === true) {
-				if (result.rechained === true) {
-					const agentKey = `${row.machine_id}:${row.agent_id}`;
-					if (rechainedAgents.has(agentKey)) {
-						retryable += 1;
-						globalRetryable += 1;
-						globalRetryAfterMs = minDefined(globalRetryAfterMs, retryDelay(row, undefined));
-						stopBatch = true;
-						break;
-					}
-					rechainedAgents.add(agentKey);
-				}
 				requery = true;
 				break;
 			}
@@ -519,6 +507,7 @@ async function flushRow(
 	store: BufferStore,
 	row: PendingRow,
 	options: FlushOptions,
+	rechainedAgents: Set<string>,
 ): Promise<RowFlushResult> {
 	try {
 		const response = await postEvent(
@@ -539,6 +528,7 @@ async function flushRow(
 			response,
 			options.identifyPayloadFor ?? minimalIdentifyPayload,
 			options.env ?? process.env,
+			rechainedAgents,
 		);
 	} catch (error) {
 		store.incrementAttempts(row.rowid);
@@ -588,6 +578,7 @@ function handlePostResult(
 	response: EventPostResult,
 	identifyPayloadFor: IdentifyPayloadFor,
 	env: PathEnv,
+	rechainedAgents: Set<string>,
 ): RowFlushResult {
 	const route = routeResponse(response, row);
 	switch (route.kind) {
@@ -618,6 +609,14 @@ function handlePostResult(
 			return { shipped: 0, terminal: moved.quarantined, retryable: 0, requery: true };
 		}
 		case "rechain": {
+			const agentKey = `${row.machine_id}:${row.agent_id}`;
+			if (rechainedAgents.has(agentKey)) {
+				return retryRow(store, row, response, {
+					kind: "wait",
+					message: `sno observe conflict repeated after rechain (${route.reason})`,
+				});
+			}
+			rechainedAgents.add(agentKey);
 			const moved = store.carryForward(row, identifyPayloadFor);
 			logger.warn("sno observe chain reset; rows moved to a fresh epoch", {
 				event_id: row.event_id,
@@ -631,7 +630,7 @@ function handlePostResult(
 				function: "handlePostResult",
 				site_id: "sno.observe.internal.flush.handlepostresult.7",
 			});
-			return { shipped: 0, terminal: 0, retryable: 0, requery: true, rechained: true };
+			return { shipped: 0, terminal: 0, retryable: 0, requery: true };
 		}
 		case "wait":
 			return retryRow(store, row, response, route);
