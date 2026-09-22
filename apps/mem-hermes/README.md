@@ -23,6 +23,7 @@ so install the sidecar first:
 
 ```bash
 npm install -g @snoai/memory@next
+npx --package @snoai/sqlite-crypto@next sno-station-core lock --provision-key
 echo '{"mode":"local-first"}' | sno-station-mem bind ~/.sno/sno-station-mem/$USER/memory.sqlite
 hermes plugins install sno-ai/sno-station/apps/mem-hermes/sno-mem-hermes --enable
 hermes config set memory.provider sno-mem-hermes
