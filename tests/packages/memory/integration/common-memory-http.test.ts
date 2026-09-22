@@ -5,7 +5,7 @@ import { tmpdir, userInfo } from "node:os";
 import { join, resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { afterEach, beforeEach, expect, it } from "vitest";
-import { makeTestEnv, type TestEnv } from "../../sno-station-core-crypto/_helpers";
+import { makeTestEnv, type TestEnv } from "../../sqlite-crypto/_helpers";
 import { pluginConfigSchema } from "../../../../packages/sno-station-mem/config/plugin-config-schema";
 
 const repo = resolve(import.meta.dirname, "../../../..");
@@ -248,7 +248,7 @@ it("QCG-6: a killed sidecar holds no turn, a stale discovery file is replaced by
   expect(await exchange(existing, "capture", [{ turnId: "down", rewindEpoch: 0, messages: [{ role: "user", content: "lost turn", at: Date.now() }] }, scope])).toEqual({ thrown: true, reason: "sidecar-unreachable" });
   if (process.env.QCG6_PLANT === "direct-store") {
     // Acceptance defect plant: a client built with a direct store import writes during the outage.
-    const { getDek, openEncryptedDb } = await import("@snoai/sno-station-core-crypto");
+    const { getDek, openEncryptedDb } = await import("@snoai/sqlite-crypto");
     const direct = openEncryptedDb(dbPath, await getDek());
     direct.exec("CREATE TABLE qcg6_plant (held TEXT)");
     direct.close();

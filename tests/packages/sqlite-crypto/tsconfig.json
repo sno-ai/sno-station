@@ -1,5 +1,5 @@
 {
-	"extends": "../../../packages/sno-station-core-crypto/tsconfig.json",
+	"extends": "../../../packages/sqlite-crypto/tsconfig.json",
 	"compilerOptions": {
 		"allowImportingTsExtensions": true,
 		"noEmit": true,
@@ -9,9 +9,9 @@
 		"noUnusedParameters": false,
 		"rootDir": "../../..",
 		"paths": {
-			"@snoai/sno-station-core-crypto": ["../../../packages/sno-station-core-crypto/src/index.ts"]
+			"@snoai/sqlite-crypto": ["../../../packages/sqlite-crypto/src/index.ts"]
 		}
 	},
-	"include": ["**/*.ts", "../../../packages/sno-station-core-crypto/src/**/*.ts"],
+	"include": ["**/*.ts", "../../../packages/sqlite-crypto/src/**/*.ts"],
 	"exclude": ["node_modules"]
 }

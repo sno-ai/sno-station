@@ -8,8 +8,8 @@
 // the actual event then appends at seq>=1 with prev = winning identify's self_hash.
 
 import { createHash } from "node:crypto";
-import { BufferStore } from "../../../../packages/sno-observe/dist/internal/buffer-store.js";
-import { bootstrapIdentity } from "../../../../packages/sno-observe/dist/internal/identity.js";
+import { BufferStore } from "../../../../packages/observability/dist/internal/buffer-store.js";
+import { bootstrapIdentity } from "../../../../packages/observability/dist/internal/identity.js";
 
 function testHash(label, index) {
 	return createHash("sha256").update(`${label}:${index}`).digest("hex");

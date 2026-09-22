@@ -8,7 +8,7 @@ import {
 import {
 	forwardMemoryTelemetryToObserve,
 	type MemoryTelemetryObserveEmitInput,
-} from "../../../../packages/sno-station-mem/src/engine/telemetry/memory-telemetry-sno-observe.ts";
+} from "../../../../packages/sno-station-mem/src/engine/telemetry/memory-telemetry-observability.ts";
 import { MemoryTelemetryUsageOutbox } from "../../../../packages/sno-station-mem/src/engine/telemetry/memory-telemetry-outbox.ts";
 import { createTestDb, createTestEmbedder } from "../../../apps/mem-claw/helpers/test-db.ts";
 

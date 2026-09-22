@@ -12,7 +12,7 @@ found=0
 if grep -rE "$PATTERN" src/ 2>/dev/null; then
 	found=1
 fi
-if grep -rE "$PATTERN" ../../tests/packages/sno-observe/ 2>/dev/null; then
+if grep -rE "$PATTERN" ../../tests/packages/observability/ 2>/dev/null; then
 	found=1
 fi
 if [ "$found" -ne 0 ]; then

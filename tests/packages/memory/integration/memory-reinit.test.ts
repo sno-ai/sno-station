@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { makeTestEnv, type TestEnv } from "../../sno-station-core-crypto/_helpers";
+import { makeTestEnv, type TestEnv } from "../../sqlite-crypto/_helpers";
 import { LocalEmbedProvider } from "../../../../packages/embedder/src/local-provider";
 import { MemoryRuntimePool } from "../../../../packages/sno-station-mem/src/sidecar/memory-runtime";
 import { serveMemoryRoute } from "../../../../packages/sno-station-mem/src/sidecar/memory-routes";

@@ -1,7 +1,7 @@
 # Live-endpoint smoke (manual)
 
 CI runs every test against the in-process `node:http` fixture server
-(`tests/packages/sno-observe/fixtures/sno-ai-mock-server.mjs`) — the full
+(`tests/packages/observability/fixtures/sno-ai-mock-server.mjs`) — the full
 status-code matrix, retry/backoff, redact, chain, and consent paths are all
 covered there with zero external dependencies.
 

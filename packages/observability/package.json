@@ -1,12 +1,12 @@
 {
-	"name": "@snoai/sno-observe",
+	"name": "@snoai/observability",
 	"version": "0.1.0",
 	"license": "Apache-2.0",
 	"publishConfig": { "access": "public" },
 	"repository": {
 		"type": "git",
 		"url": "git+https://github.com/sno-ai/sno-station.git",
-		"directory": "packages/sno-observe"
+		"directory": "packages/observability"
 	},
 	"type": "module",
 	"main": "./dist/index.js",
@@ -34,9 +34,9 @@
 		"lint:no-bun-apis": "bash scripts/check-no-bun-apis.sh",
 		"lint:deep-import-blocked": "node scripts/check-deep-import-blocked.mjs",
 		"lint:guards": "npm run lint:no-hmac && npm run lint:no-bun-apis && npm run lint:deep-import-blocked",
-		"test:unit": "npm run build && node --test ../../tests/packages/sno-observe/unit/*.test.mjs",
-		"test:integration": "npm run build && node --test ../../tests/packages/sno-observe/integration/*.test.mjs",
-		"test:all": "npm run build && node --test ../../tests/packages/sno-observe/**/*.test.mjs"
+		"test:unit": "npm run build && node --test ../../tests/packages/observability/unit/*.test.mjs",
+		"test:integration": "npm run build && node --test ../../tests/packages/observability/integration/*.test.mjs",
+		"test:all": "npm run build && node --test ../../tests/packages/observability/**/*.test.mjs"
 	},
 	"dependencies": {
 		"@snoai/utils": "^0.8.0",

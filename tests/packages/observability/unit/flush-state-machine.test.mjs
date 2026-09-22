@@ -9,15 +9,15 @@ import { setTimeout as delay } from "node:timers/promises";
 import {
 	BufferStore,
 	decodeEnvelope,
-} from "../../../../packages/sno-observe/dist/internal/buffer-store.js";
+} from "../../../../packages/observability/dist/internal/buffer-store.js";
 import {
 	FlushEngine,
 	flushPending,
-} from "../../../../packages/sno-observe/dist/internal/flush.js";
-import { bootstrapIdentity } from "../../../../packages/sno-observe/dist/internal/identity.js";
-import { SnoObserveRuntime } from "../../../../packages/sno-observe/dist/internal/runtime.js";
-import { parseEventInput } from "../../../../packages/sno-observe/dist/internal/schemas.js";
-import { countTokens } from "../../../../packages/sno-observe/dist/internal/tokens.js";
+} from "../../../../packages/observability/dist/internal/flush.js";
+import { bootstrapIdentity } from "../../../../packages/observability/dist/internal/identity.js";
+import { SnoObserveRuntime } from "../../../../packages/observability/dist/internal/runtime.js";
+import { parseEventInput } from "../../../../packages/observability/dist/internal/schemas.js";
+import { countTokens } from "../../../../packages/observability/dist/internal/tokens.js";
 import { scope, validPayloads } from "../fixtures/temp-env.mjs";
 
 function testHash(index) {

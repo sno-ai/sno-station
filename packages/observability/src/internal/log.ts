@@ -62,7 +62,7 @@ export class ObserveLogger {
 		if (this.suppressedCount === 0) return;
 		this.write("warn", "Sno Observe log messages were suppressed", { scope: "observe_logger" }, {
 			event_name: "observe.logging.suppressed",
-			file: "packages/sno-observe/src/internal/log.ts",
+			file: "packages/observability/src/internal/log.ts",
 			function: "flushSuppressed",
 			site_id: "observe.logging.suppressed",
 		});

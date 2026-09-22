@@ -121,7 +121,7 @@ export default defineConfig([
   "internal/engine/shared/utils": "src/engine/shared/utils.ts",
   "internal/engine/telemetry/memory-telemetry-api": "src/engine/telemetry/memory-telemetry-api.ts",
   "internal/engine/telemetry/memory-telemetry-outbox": "src/engine/telemetry/memory-telemetry-outbox.ts",
-  "internal/engine/telemetry/memory-telemetry-sno-observe": "src/engine/telemetry/memory-telemetry-sno-observe.ts",
+  "internal/engine/telemetry/memory-telemetry-observability": "src/engine/telemetry/memory-telemetry-observability.ts",
   "internal/engine/telemetry/memory-telemetry-types": "src/engine/telemetry/memory-telemetry-types.ts",
   "internal/model/agent-llm-port": "src/model/agent-llm-port.ts",
   "internal/model/llm-client": "src/model/llm-client.ts",

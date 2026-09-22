@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { createSnoObserve, snoObserve } from "../../../../packages/sno-observe/dist/index.js";
-import { sha256Hex } from "../../../../packages/sno-observe/dist/internal/hash.js";
+import { createSnoObserve, snoObserve } from "../../../../packages/observability/dist/index.js";
+import { sha256Hex } from "../../../../packages/observability/dist/internal/hash.js";
 
 describe("hashRedactedText", () => {
 	it("is publicly exported on default and instance APIs", () => {

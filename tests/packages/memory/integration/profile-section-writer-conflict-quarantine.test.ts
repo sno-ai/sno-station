@@ -3,7 +3,7 @@
 import {
 	getDekSync,
 	openEncryptedDbReadonly,
-} from "@snoai/sno-station-core-crypto";
+} from "@snoai/sqlite-crypto";
 import { closeLogger } from "@snoai/utils/logger";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { Embedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client.ts";
