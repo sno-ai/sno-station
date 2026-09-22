@@ -21,6 +21,10 @@ export function observeAgentId(skinId: string): ObserveAgentId {
 	return observeAgentIdSchema.parse(skinId);
 }
 
+export function isObserveAgentId(skinId: string): skinId is ObserveAgentId {
+	return observeAgentIdSchema.safeParse(skinId).success;
+}
+
 function isLoopbackUrl(url: URL): boolean {
 	return (
 		url.hostname === "localhost" ||
@@ -67,8 +71,8 @@ export const observeConfigSchema: z.ZodType<
 	unknown
 > = z
 	.object({
-		enabled: z.boolean().default(parseObserveEnabled(process.env.SNO_OBSERVE_ENABLED)),
-		baseUrl: z.string().default(process.env.SNO_OBSERVE_BASE_URL ?? SNO_OBSERVE_DEFAULT_BASE_URL),
+		enabled: z.boolean().default(() => parseObserveEnabled(process.env.SNO_OBSERVE_ENABLED)),
+		baseUrl: z.string().default(() => process.env.SNO_OBSERVE_BASE_URL ?? SNO_OBSERVE_DEFAULT_BASE_URL),
 		agentId: observeAgentIdSchema.default(SNO_OBSERVE_DEFAULT_AGENT_ID as ObserveAgentId),
 	})
 	.prefault({})
