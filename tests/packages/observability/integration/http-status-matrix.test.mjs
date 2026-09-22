@@ -110,6 +110,7 @@ describe("HTTP status matrix (fixture server, node:http)", () => {
 		["403 identity_mismatch", { status: 403, body: { error: "identity_mismatch" } }],
 		["409 payload_conflict", { status: 409, body: { error: "payload_conflict" } }],
 		["422 self_hash_mismatch", { status: 422, body: { error: "self_hash_mismatch" } }],
+		["409 with an unknown code beside a sub-reason", { status: 409, body: { error: "future_code", reason: "chain_reset_required" } }],
 		["413 body too large", { status: 413, body: { error: "event_body_too_large" } }],
 	]) {
 		it(`${label}: the row is evidence, the next row ships in a fresh epoch, nothing is re-sent`, async () => {
@@ -134,7 +135,6 @@ describe("HTTP status matrix (fixture server, node:http)", () => {
 		["422 chain_seed_required", { status: 422, body: { error: "chain_seed_required" } }],
 		["409 chain_gap", { status: 409, body: { error: "chain_gap" } }],
 		["409 with no code", { status: 409, body: "" }],
-		["409 with two contradicting codes", { status: 409, body: { reason: "one", error: { code: "two" } } }],
 		[
 			"409 predecessor the server has no record of",
 			{
