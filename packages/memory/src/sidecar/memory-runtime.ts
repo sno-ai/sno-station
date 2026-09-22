@@ -152,11 +152,12 @@ export class MemoryRuntimePool {
 		this.owned.add(entry);
 		try {
 			const result = await runtime.init(scope, registration);
-			// Keep the serving entry until the successor can use the shared model.
+			// The successor is published only once it has proven it can read the store; the
+			// sessions and cost tallies opened under the previous entry carry over.
 			const previous = this.skins.get(registration.skinId);
-			this.skins.set(registration.skinId, entry);
-			if (previous) entry.hostSessions = previous.hostSessions;
 			await this.snapshot(entry, "startup", scope.host?.observeSessionUuid);
+			if (previous) { entry.hostSessions = previous.hostSessions; entry.observability.aggregator.adopt(previous.observability.aggregator); }
+			this.skins.set(registration.skinId, entry);
 			if (previous) { previous.retired = true; if (previous.active === 0) await this.dispose(previous); }
 			setRegisteredRemTick(registration.skinId, config.remEnhanced.trigger?.tick);
 			return result;
