@@ -111,6 +111,7 @@
     "@snoai/utils": "^0.8.0",
     "argon2": "^0.45.1",
     "async-mutex": "^0.5.0",
+    "better-sqlite3": "^13.0.3",
     "chrono-node": "2.10.1",
     "commander": "^14.0.1",
     "drizzle-orm": "^0.45.2",
