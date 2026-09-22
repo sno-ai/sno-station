@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { inputSchemas, type ContractInputs, type ScopeCtx, type Registration, type RecallOptions,
-	type Turn, type Mutation, type Inspection, type UsageSignal, type Message } from "./inputs";
+	type Turn, type Mutation, type Inspection, type UsageSignal, type Message, type HostEvent } from "./inputs";
 import { outputSchemas, type ContractOutputs } from "./results";
 import { ContractError } from "./error";
 
@@ -13,6 +13,7 @@ export * from "./routes";
 export type ContractMethod = keyof ContractInputs;
 export interface MemoryContract {
 	init(scope: ScopeCtx, registration: Registration): Promise<ContractOutputs["init"]>;
+	hostEvent(event: HostEvent, scope: ScopeCtx): Promise<ContractOutputs["hostEvent"]>;
 	getRecall(query: string, scope: ScopeCtx, options: RecallOptions): Promise<ContractOutputs["getRecall"]>;
 	capture(turn: Turn, scope: ScopeCtx): Promise<ContractOutputs["capture"]>;
 	mutate(op: Mutation, scope: ScopeCtx): Promise<ContractOutputs["mutate"]>;

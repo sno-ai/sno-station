@@ -4,12 +4,7 @@ import { BufferStore } from "./buffer-store.js";
 import { ConsentStore } from "./consent.js";
 import { type ClaimOptions, type ClaimResult, claimMachine } from "./device-claim.js";
 import { createDoctorReport } from "./doctor.js";
-import {
-	BufferCapacityError,
-	ChainSeedError,
-	ChainUnavailableError,
-	InvalidEventPayloadError,
-} from "./errors.js";
+import { ChainSeedError, InvalidEventPayloadError } from "./errors.js";
 import { type ExportOptions, exportEvents } from "./export.js";
 import { type DrainResult, FlushEngine, type FlushResult, SCHEDULE_FLUSH_DELAY_MS } from "./flush.js";
 import { sha256Hex } from "./hash.js";
@@ -24,7 +19,6 @@ import {
 import { AsyncMutex } from "./mutex.js";
 import { getBufferPath, getRedactionRulesPath, type PathEnv } from "./paths.js";
 import { redactEventPayload, redactScope } from "./redact.js";
-import { shouldSampleTool } from "./sampling.js";
 import { parseConsentValue } from "./schemas.js";
 import {
 	type AgentId,
@@ -67,65 +61,16 @@ export class SnoObserveRuntime {
 
 	emitParsed(parsed: ParsedEvent): Promise<EmitResult> {
 		const eventId = parsed.eventId ?? createUUIDv7();
-		if (parsed.eventType === "tool.call") {
-			const payload = parsed.payload as JsonObject & { tool_name?: unknown };
-			const toolName = String(payload.tool_name);
-			if (!shouldSampleTool(eventId, toolName, 20, this.env())) {
-				const result: EmitResult = { accepted: false, eventId, reason: "tool_unsampled" };
-				this.notify(parsed.eventType, result);
-				return Promise.resolve(result);
-			}
-		}
 		return this.mutex.runExclusive(async () => {
 			const identity = bootstrapIdentity(this.env());
 			const consent = this.consentStore().get();
 			const store = this.getStore();
-			store.pruneRetention();
-			const safeguard = store.getAdmissionSafeguard(identity.machine_uuid, parsed.agentId);
-			if (safeguard !== null) {
-				const stats = store.getQueueStats();
-				logger.errorRateLimited(`buffer-safeguard:${safeguard}`, "sno observe buffer safeguard active", {
-					safeguard,
-					queue_depth: stats.pendingCount,
-					oldest_age_ms: stats.oldestPendingAgeMs,
-					retry_count: stats.maxAttempts,
-					quarantined_count: stats.quarantinedCount,
-					database_size_bytes: stats.databaseSizeBytes,
-				}, {
-					event_name: "sno.observe.internal.runtime.emitparsed",
-					file: "packages/observability/src/internal/runtime.ts",
-					function: "emitParsed",
-					site_id: "sno.observe.internal.runtime.emitparsed.1",
-				});
-				const result: EmitResult = { accepted: false, eventId, reason: "buffer_safeguard" };
-				this.notify(parsed.eventType, result);
-				this.getFlushEngine().schedule(SCHEDULE_FLUSH_DELAY_MS);
-				return result;
-			}
-			let chainEpoch = store.getCurrentEpoch(identity.machine_uuid, parsed.agentId);
-			const recoveryState = store.getChainRecoveryState(
-				identity.machine_uuid,
-				parsed.agentId,
-				chainEpoch,
-			);
-			if (recoveryState === "retired") {
-				const result: EmitResult = { accepted: false, eventId, reason: "chain_retired" };
-				this.notify(parsed.eventType, result);
-				return result;
-			}
-			if (recoveryState === "reseed_required") {
-				chainEpoch = store.nextEpoch(identity.machine_uuid, parsed.agentId);
-				if (parsed.eventType !== "agent.identify") {
-					this.ensureAgentIdentify(identity, parsed.agentId, parsed.lane, consent, chainEpoch);
-					chainEpoch = store.getCurrentEpoch(identity.machine_uuid, parsed.agentId);
-				}
-			}
+			const chainEpoch = store.getCurrentEpoch(identity.machine_uuid, parsed.agentId);
 			if (
-				recoveryState === null &&
 				parsed.eventType !== "agent.identify" &&
 				!store.hasTail(identity.machine_uuid, parsed.agentId, chainEpoch)
 			) {
-				this.ensureAgentIdentify(identity, parsed.agentId, parsed.lane, consent, chainEpoch);
+				this.ensureAgentIdentify(identity, parsed.agentId, consent, chainEpoch);
 			}
 			const terminal = consent === "off" && parsed.eventType !== "consent.change";
 			const appended = this.appendPrepared({
@@ -156,25 +101,12 @@ export class SnoObserveRuntime {
 				this.scheduleFlush();
 			}
 			return result;
-		}).catch((error: unknown) => {
-			if (error instanceof BufferCapacityError) {
-				const result: EmitResult = { accepted: false, eventId, reason: "buffer_safeguard" };
-				this.notify(parsed.eventType, result);
-				return result;
-			}
-			if (error instanceof ChainUnavailableError) {
-				const result: EmitResult = { accepted: false, eventId, reason: "chain_retired" };
-				this.notify(parsed.eventType, result);
-				return result;
-			}
-			throw error;
 		});
 	}
 
 	private ensureAgentIdentify(
 		identity: Identity,
 		agentId: AgentId,
-		lane: EventLane,
 		consent: ConsentValue,
 		chainEpoch: number,
 	): void {
@@ -184,7 +116,7 @@ export class SnoObserveRuntime {
 				agentId,
 				eventId: createUUIDv7(),
 				eventType: "agent.identify",
-				lane,
+				lane: "memory",
 				tsEdgeMs: Date.now(),
 				consent,
 				payload: agentIdentifyPayload(identity, agentId, {}, this.options),
@@ -255,8 +187,7 @@ export class SnoObserveRuntime {
 	}
 
 	private agentsForConsentTransition(store: BufferStore): AgentId[] {
-		const agents = uniqueAgents(store.listAgents());
-		return agents.length === 0 ? ["codex"] : agents;
+		return uniqueAgents(store.listAgents());
 	}
 
 	private persistConsent(consentStore: ConsentStore, next: ConsentValue): void {
@@ -345,7 +276,7 @@ export class SnoObserveRuntime {
 			agentId,
 			eventId: createUUIDv7(),
 			eventType: "consent.change",
-			lane: "memory",
+			lane: "security",
 			tsEdgeMs: Date.now(),
 			consent,
 			payload: { from, to, reason },
@@ -575,6 +506,8 @@ export class SnoObserveRuntime {
 				() => this.baseUrl(),
 				() => this.env(),
 				() => this.options.fetch,
+				(agentId, machineId) =>
+					agentIdentifyPayload({ machine_uuid: machineId }, agentId, {}, this.options),
 			);
 		}
 		return this.flushEngine;
@@ -672,7 +605,7 @@ function normalizeSystemPayload(input: {
 }
 
 function agentIdentifyPayload(
-	identity: Identity,
+	identity: Pick<Identity, "machine_uuid">,
 	agentId: AgentId,
 	payload: JsonObject = {},
 	options: RuntimeOptions = {},

@@ -1,5 +1,6 @@
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { BufferStore } from "./buffer-store.js";
+import { getLogPath } from "./paths.js";
 import { normalizeBaseUrl } from "./http.js";
 import { isValidIdentity } from "./identity.js";
 import {
@@ -135,23 +136,16 @@ function checkBuffer(path: string): BufferCheckResult {
 		store = new BufferStore(path);
 		const stats = store.getQueueStats();
 		const totalEvents = store.countAll();
-		const shippedCount = store.countShipped();
-		const walStatus = existsSync(`${path}-wal`) ? "wal sidecar present" : "wal sidecar absent";
-		const safeguard = store.getQueueSafeguard();
-		const quarantineReason =
-			stats.latestQuarantineReason === null
-				? "none"
-				: stats.latestQuarantineReason;
+		const quarantineReason = stats.latestQuarantineReason ?? "none";
 		return {
 			check: {
 				name: "buffer",
-				status:
-					safeguard === null && stats.activeChainRecoveryCount === 0 ? "ok" : "warn",
-				detail: `buffer reachable (queue_depth=${stats.pendingCount}/${totalEvents}; oldest_age_ms=${stats.oldestPendingAgeMs}; retry_count=${stats.maxAttempts}; quarantined_count=${stats.quarantinedCount}; latest_quarantine_reason=${quarantineReason}; active_chain_recovery_count=${stats.activeChainRecoveryCount}; active_chain_recovery_reason=${stats.activeChainRecoveryReason ?? "none"}; database_size_bytes=${stats.databaseSizeBytes}; logical_bytes=${stats.logicalBytes}; physical_bytes=${stats.physicalBytes}; wal_bytes=${stats.walBytes}; freelist_pages=${stats.freelistPages}; freelist_bytes=${stats.freelistBytes}; freelist_ratio=${stats.freelistRatio}; remaining_epochs=${stats.remainingEpochs}; last_compaction_at_ms=${stats.lastCompactionAtMs ?? "none"}; compaction_reason=${stats.compactionReason}; safeguard=${safeguard ?? "none"}; ${walStatus})`,
+				status: stats.pendingCount === 0 ? "ok" : "warn",
+				detail: `buffer reachable (queue_depth=${stats.pendingCount}/${totalEvents}; oldest_age_ms=${stats.oldestPendingAgeMs}; retry_count=${stats.maxAttempts}; shipped_total=${stats.shippedTotal}; quarantined_count=${stats.quarantinedCount}; latest_quarantine_reason=${quarantineReason}; database_size_bytes=${stats.databaseSizeBytes}; log=${getLogPath()})`,
 				path,
 			},
 			pendingCount: stats.pendingCount,
-			shippedCount,
+			shippedCount: stats.shippedTotal,
 		};
 	} catch (error) {
 		return {
@@ -210,7 +204,7 @@ function checkLastShip(baseUrl: string, shippedCount: number, pendingCount: numb
 		status = "warn";
 		detail = `${pendingCount} event(s) pending for ${baseUrl}; ${shippedCount} previously shipped`;
 	} else if (shippedCount > 0) {
-		detail = "local buffer contains shipped events; endpoint and timestamp are not tracked";
+		detail = `${shippedCount} event(s) shipped to ${baseUrl} so far; nothing pending`;
 	}
 	return {
 		name: "last_ship",

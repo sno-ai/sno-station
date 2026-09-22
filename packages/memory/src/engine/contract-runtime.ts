@@ -7,7 +7,7 @@ import { resolve } from "node:path";
 import {
 	ContractError, parseInput, parseOutput, type ContractOutputs, type MemoryContract,
 	type ScopeCtx, type Registration, type RecallOptions, type Turn, type Mutation,
-	type Inspection, type UsageSignal, type Message,
+	type Inspection, type UsageSignal, type Message, type HostEvent,
 } from "../contract/index";
 import type { StatsResult } from "../store/memory-store-shared";
 import type { MemoryStore } from "../store/store";
@@ -108,6 +108,24 @@ export class MemoryContractRuntime implements MemoryContract {
 		this.reflectionStates.clear();
 		await this.project(input.scope);
 		return { degraded: false, principal: scope.principal, skinId: registration.skinId };
+	}
+
+	/** Host-side facts the skin reports for its observe session: a user prompt, or one host model call. */
+	async hostEvent(event: HostEvent, scope: ScopeCtx): Promise<ContractOutputs["hostEvent"]> {
+		const input = parseInput("hostEvent", { scope, event });
+		const sessionUuid = input.scope.host?.observeSessionUuid;
+		if (input.event.kind === "prompt") {
+			const promptHash = this.services.observability.hashText(input.event.prompt);
+			if (promptHash === undefined) return { degraded: false, accepted: false };
+			await this.services.observability.emit({ eventType: "prompt.submit", sessionUuid,
+				payload: { prompt_hash: promptHash, byte_len: Buffer.byteLength(input.event.prompt, "utf8") } });
+			return { degraded: false, accepted: true };
+		}
+		await this.services.observability.emit({ eventType: "llm.call", sessionUuid, payload: {
+			model: input.event.model, prompt_tokens: input.event.promptTokens, completion_tokens: input.event.completionTokens,
+			cache_read_tokens: input.event.cacheReadTokens ?? 0, cache_write_tokens: input.event.cacheWriteTokens ?? 0,
+			latency_ms: Math.round(input.event.latencyMs), token_source: "host_agent_paid" } });
+		return { degraded: false, accepted: true };
 	}
 
 	private configured(): { registration: Registration; config: PluginConfig } {

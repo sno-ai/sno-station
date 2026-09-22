@@ -150,7 +150,7 @@ describe("documented HTTP runtime claims", () => {
 		await health();
 		const response = await contractPost("/v1/inspect", {
 			scope: { principal: "caller", project: "global", session: "before-init" }, op: { op: "list" },
-		}, "never-initialized");
+		}, "codex");
 		expect(response.status).toBe(200);
 		expect(await response.json()).toEqual({ degraded: false, result: { op: "list", project: "global", entries: [] } });
 	});

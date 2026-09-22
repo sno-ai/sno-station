@@ -25,14 +25,6 @@ interface RegisterBeforeFlushResult {
 	retryAfterMs?: number;
 }
 
-const TERMINAL_REGISTRATION_CODES = new Set([
-	"claimed_user_requires_auth",
-	"invalid_request",
-	"machine_registration_identity_mismatch",
-	"machine_secret_conflict",
-	"machine_secret_mismatch",
-]);
-
 export async function registerBeforeFlush(
 	store: BufferStore,
 	rows: PendingRow[],
@@ -59,26 +51,11 @@ export async function registerBeforeFlush(
 			}
 			return null;
 		}
-		const terminalCode = terminalRegistrationCode(error);
-		if (terminalCode !== undefined) {
-			const terminal = quarantineRows(store, rows, terminalCode, error);
-			logger.error("sno observe machine registration failed permanently", {
-				error,
-				code: terminalCode,
-				terminal,
-			}, {
-				event_name: "sno.observe.internal.flush.registration.registerbeforeflush",
-				file: "packages/observability/src/internal/flush-registration.ts",
-				function: "registerBeforeFlush",
-				site_id: "sno.observe.internal.flush.registration.registerbeforeflush.1",
-			});
-			return { shipped: 0, terminal, retryable: 0 };
-		}
 		const firstRow = rows[0];
 		if (firstRow !== undefined) {
 			store.incrementAttempts(firstRow.rowid);
 		}
-		logger.warnRateLimited(`registration:${errorMessage(error)}`, "sno observe machine registration failed; will retry", {
+		logger.errorRateLimited(`registration:${errorMessage(error)}`, "sno observe machine registration failed; will retry", {
 			error,
 		}, {
 			event_name: "sno.observe.internal.flush.registration.registerbeforeflush",
@@ -99,31 +76,7 @@ function isAlreadyRegistered(error: unknown): boolean {
 	return error instanceof SnoObserveError && error.code === "machine_already_registered";
 }
 
-function terminalRegistrationCode(error: unknown): string | undefined {
-	if (!(error instanceof SnoObserveError)) {
-		return undefined;
-	}
-	return TERMINAL_REGISTRATION_CODES.has(error.code) ? error.code : undefined;
-}
-
-function quarantineRows(
-	store: BufferStore,
-	rows: PendingRow[],
-	code: string,
-	error: unknown,
-): number {
-	const body = JSON.stringify({ error: code, message: errorMessage(error) });
-	let terminal = 0;
-	for (const row of rows) {
-		terminal += store.quarantineEpochSuffix(row, 409, code, body, "retired");
-	}
-	return terminal;
-}
-
 function registrationRetryDelay(attempt: number): number {
-	if (attempt >= 100) {
-		return 15 * 60 * 1_000;
-	}
 	return Math.min(5_000 * 2 ** Math.min(Math.max(0, attempt - 1), 3), 30_000);
 }
 

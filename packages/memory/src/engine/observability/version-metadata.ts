@@ -9,7 +9,6 @@ import { fileURLToPath } from "node:url";
 
 const VERSION_ENV_KEYS = ["SNO_STATION_MEM_VERSION", "SNO_STATION_MEM_VERSION"] as const;
 const VERSION_LINE_RE = /^version:\s*["']?([^"'\s]+)["']?\s*$/m;
-const SNO_STATION_MEM_PACKAGE_NAME = "@snoai/memory";
 
 export function readSnoStationCoreWorkspaceVersion(
 	env: NodeJS.ProcessEnv = process.env,
@@ -25,12 +24,14 @@ export function readSnoStationCoreWorkspaceVersion(
 	return undefined;
 }
 
-export function readSnoStationMemPackageVersion(): string | undefined {
-	for (const startDir of versionSearchRoots()) {
-		const version = readPackageVersionUpward(startDir, SNO_STATION_MEM_PACKAGE_NAME);
-		if (version) return version;
-	}
-	return undefined;
+/** The nearest manifest above this module: the installed plugin's own package.json. */
+export function readInstalledPackageVersion(): string | undefined {
+	return readPackageVersionUpward(dirname(fileURLToPath(import.meta.url)));
+}
+
+/** The manifest named `expectedName` above `startDir`; a host reads its own version from its entry file. */
+export function readNamedPackageVersion(startDir: string, expectedName: string): string | undefined {
+	return readPackageVersionUpward(startDir, expectedName);
 }
 
 function versionSearchRoots(): string[] {
@@ -53,7 +54,7 @@ function readVersionYamlUpward(startDir: string): string | undefined {
 	return undefined;
 }
 
-function readPackageVersionUpward(startDir: string, expectedName: string): string | undefined {
+function readPackageVersionUpward(startDir: string, expectedName?: string): string | undefined {
 	let dir = startDir;
 	for (let depth = 0; depth < 10; depth += 1) {
 		const candidate = join(dir, "package.json");
@@ -64,7 +65,7 @@ function readPackageVersionUpward(startDir: string, expectedName: string): strin
 					version?: unknown;
 				};
 				if (
-					parsed.name === expectedName &&
+					(expectedName === undefined || parsed.name === expectedName) &&
 					typeof parsed.version === "string" &&
 					parsed.version.trim()
 				) {

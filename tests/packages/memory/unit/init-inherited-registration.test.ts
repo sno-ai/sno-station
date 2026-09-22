@@ -43,4 +43,22 @@ describe("inherited init registration", () => {
 		});
 		expect(registration.model).toBeUndefined();
 	});
+
+	const installed = {
+		storePath: "/tmp/memory.sqlite",
+		embedding: { provider: "local-onnx" as const },
+		extractionKeyRef: "SNO_STATION_MEM_LLM_INTERNAL_KEY",
+		mode: "local-first" as const,
+		retrieval: { rerank: "none" as const },
+	};
+
+	it.each(["hermes", "claude-code", "codex"])("reports observe events as the %s agent", skinId => {
+		const registration = createCodingSkinRegistration({ skinId, installed });
+		expect(registration.settings.observe.agentId).toBe(skinId);
+		expect(registration.settings.observe.enabled).toBe(process.env.SNO_OBSERVE_ENABLED !== "false");
+	});
+
+	it("refuses a skin id the observe SDK does not know instead of counting it as openclaw", () => {
+		expect(() => createCodingSkinRegistration({ skinId: "default", installed })).toThrow(/observe.agentId/);
+	});
 });
