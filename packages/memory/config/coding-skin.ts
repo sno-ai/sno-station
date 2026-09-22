@@ -33,6 +33,9 @@ export const CODING_SKIN_HOOKS = {
 	UserPromptSubmit: { eventName: "user_prompt_submit", subcommand: "user-prompt-submit", timeout: 8 },
 	Stop: { eventName: "stop", subcommand: "stop", timeout: 5 },
 	SessionEnd: { eventName: "session_end", subcommand: "session-end", timeout: 8 },
+	PreToolUse: { eventName: "pre_tool_use", subcommand: "pre-tool-use", timeout: 5 },
+	PostToolUse: { eventName: "post_tool_use", subcommand: "post-tool-use", timeout: 8 },
+	PermissionRequest: { eventName: "permission_request", subcommand: "permission-request", timeout: 8 },
 } as const;
 
 export type CodingSkinHookName = keyof typeof CODING_SKIN_HOOKS;
