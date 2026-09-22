@@ -4,6 +4,7 @@ import { readMaintenanceOverrides } from "./config";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { createUUIDv7 } from "@snoai/common-core";
 import { readMemorySnapshotPayload, type SnapshotReason } from "../engine/observability/memory-snapshot";
+import { forwardMemoryTelemetryToObserve } from "../engine/telemetry/memory-telemetry-observability";
 import { existsSync, readFileSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
@@ -206,6 +207,7 @@ export class MemoryRuntimePool {
 			const result = parseOutput(method, await (entry.agentPort ? entry.agentPort.run(call) : call()));
 			if (method === "onSessionEnd") {
 				await this.snapshot(entry, "session_end", uuid);
+				await this.forwardTelemetry(entry, uuid);
 				await this.endOwnedSession(entry, scope);
 			}
 			return result;
@@ -274,6 +276,17 @@ export class MemoryRuntimePool {
 						latency_ms: Math.max(0, Math.round(response.durationMs ?? 0)), cache_read_tokens: 0, cache_write_tokens: 0 } });
 			}
 			if (responses.length) await entry.observability.flush({ force: true, timeoutMs: 5_000 });
+		});
+	}
+
+	/** The local memory event rows written since the last sync go up as `memory.telemetry` batches. */
+	private async forwardTelemetry(entry: SkinRuntime, sessionUuid: string): Promise<void> {
+		await entry.observability.trackBestEffort("memory telemetry", async () => {
+			const result = await forwardMemoryTelemetryToObserve({
+				sqlite: this.store.sqlite,
+				observe: { tryEmit: (input) => entry.observability.tryEmit({ ...input, sessionUuid }) },
+			});
+			if (result.status === "failed") throw new Error("memory telemetry forward failed");
 		});
 	}
 
