@@ -18,6 +18,7 @@ import { ObservableEmbedder } from "../engine/observability/observable-embedder"
 import { ObservableMemoryStore } from "../engine/observability/observable-memory-store";
 import { ObservableMemoryRetriever } from "../engine/observability/observable-retriever";
 import { PluginObservability } from "../engine/observability/adapter";
+import { bestEffort } from "../engine/observability/best-effort";
 import { AccessTracker } from "../engine/retrieval/access-tracker";
 import { DEFAULT_RETRIEVAL_CONFIG } from "../engine/retrieval/retriever";
 import { createTierPromoter } from "../engine/operations/memory-tier-promoter";
@@ -151,11 +152,12 @@ export class MemoryRuntimePool {
 		this.owned.add(entry);
 		try {
 			const result = await runtime.init(scope, registration);
-			// Keep the serving entry until the successor can use the shared model.
+			// The successor is published only once it has proven it can read the store; the
+			// sessions and cost tallies opened under the previous entry carry over.
 			const previous = this.skins.get(registration.skinId);
-			this.skins.set(registration.skinId, entry);
-			if (previous) entry.hostSessions = previous.hostSessions;
 			await this.snapshot(entry, "startup", scope.host?.observeSessionUuid);
+			if (previous) { entry.hostSessions = previous.hostSessions; entry.observability.aggregator.adopt(previous.observability.aggregator); }
+			this.skins.set(registration.skinId, entry);
 			if (previous) { previous.retired = true; if (previous.active === 0) await this.dispose(previous); }
 			setRegisteredRemTick(registration.skinId, config.remEnhanced.trigger?.tick);
 			return result;
@@ -206,6 +208,8 @@ export class MemoryRuntimePool {
 			const call = () => observeSession.run({ uuid, entry }, () => withProviderResponses(responses, () => this.call(entry, method, body, signal)));
 			const result = parseOutput(method, await (entry.agentPort ? entry.agentPort.run(call) : call()));
 			if (method === "onSessionEnd") {
+				// Usage from the closing call must be tallied before the session's cost is summed.
+				await this.emitProviderUsage(entry, scope, responses.splice(0));
 				await this.snapshot(entry, "session_end", uuid);
 				await this.forwardTelemetry(entry, uuid);
 				await this.endOwnedSession(entry, scope);
@@ -262,9 +266,13 @@ export class MemoryRuntimePool {
 	}
 
 	private async emitProviderUsage(entry: SkinRuntime, scope: ScopeCtx, responses: ProviderResponseTrace[]): Promise<void> {
-		if (!scope.host?.observeSessionUuid) return;
-		await entry.observability.trackBestEffort("provider usage", async () => {
+		if (!scope.host?.observeSessionUuid || responses.length === 0) return;
+		await bestEffort("provider usage", async () => {
 			for (const response of responses) {
+				if (response.failure) {
+					await entry.observability.emitError(`llm.call:${response.failure}`, `${response.provider} ${response.callLabel}`, scope.host?.observeSessionUuid);
+					continue;
+				}
 				// A response without a model or usage is an error, never a zero-token call.
 				if (!response.usage || !response.model) {
 					await entry.observability.emitError("llm.call:usage_missing", `${response.provider} ${response.callLabel}`, scope.host?.observeSessionUuid);

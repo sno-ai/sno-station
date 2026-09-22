@@ -304,10 +304,9 @@ export class PluginObservability {
 	async flush(options: FlushOptions = {}): Promise<void> {
 		if (!this.runtime) return;
 		const force = options.force ?? true;
-		const controller = options.timeoutMs ? new AbortController() : undefined;
-		const run = this.runtime
-			.flush(controller === undefined ? { force } : { force, signal: controller.signal })
-			.then(() => undefined);
+		// The timeout bounds how long the caller waits, never the request: cutting a slow POST
+		// turns an accepted event into a retry with backoff (measured against www.sno.ai 2026-09-22).
+		const run = this.runtime.flush({ force }).then(() => undefined);
 		run.catch(() => undefined);
 		if (!options.timeoutMs) {
 			await bestEffort("flush", () => run, this.logger);
@@ -322,7 +321,6 @@ export class PluginObservability {
 						run,
 						new Promise<void>((resolve) => {
 							timeoutHandle = setTimeout(() => {
-								controller?.abort();
 								diagnosticLog.warn("sno observe flush timed out", undefined, {
 									event_name: "sno_station_mem.adapter.sno.observe.flush.timed.out",
 									file: "packages/memory/src/engine/observability/adapter.ts",

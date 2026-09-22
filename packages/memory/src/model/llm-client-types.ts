@@ -128,6 +128,8 @@ export type ProviderResponseTrace = {
 	requestId?: string;
 	model?: string;
 	usage?: Omit<TokenUsage, "estimated">;
+	/** Set when the call produced no answer; the value is the failure category. */
+	failure?: string;
 };
 
 export type DispatchContext = {

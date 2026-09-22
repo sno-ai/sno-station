@@ -51,17 +51,22 @@ export class ObservableLlmClient implements LlmClient {
 				return this.usageMutex.runExclusive(call);
 			}
 			if (route.transport === "agent-host-seam") {
-				// The host pays for and reports the call itself; a host that returned nothing is
-				// still our failure to report.
-				const result = await this.usageMutex.runExclusive(call);
-				if (result === null) {
-					await this.observability.emitError(
-						"llm.call:host_failed",
-						this.inner.getLastError() ?? "host model returned nothing",
-						this.sessionUuidProvider(),
-					);
+				// The host pays for and reports the call itself; a host that returned nothing, or
+				// threw (deadline, cancel, auth), is still our failure to report.
+				try {
+					const result = await this.usageMutex.runExclusive(call);
+					if (result === null) {
+						await this.observability.emitError(
+							"llm.call:host_failed",
+							this.inner.getLastError() ?? "host model returned nothing",
+							this.sessionUuidProvider(),
+						);
+					}
+					return result;
+				} catch (error) {
+					await this.observability.emitError("llm.call:host_throw", error, this.sessionUuidProvider());
+					throw error;
 				}
-				return result;
 			}
 		}
 		// Resolve config before the call so no await sits between the call
@@ -89,14 +94,15 @@ export class ObservableLlmClient implements LlmClient {
 			const sessionUuid = this.sessionUuidProvider();
 			const hasProviderUsage =
 				providerUsage !== null && providerUsage.inputTokens + providerUsage.outputTokens > 0;
-			if (result === null && !hasProviderUsage) {
-				// Nothing came back and the provider reported nothing: that is an error, not a zero-token call.
+			if (result === null) {
+				// No usable answer is an error whether or not tokens were spent; spent tokens are
+				// still billed below.
 				await this.observability.emitError(
-					"llm.call:usage_missing",
-					this.inner.getLastError() ?? "no result and no usage",
+					hasProviderUsage ? "llm.call:empty_result" : "llm.call:usage_missing",
+					this.inner.getLastError() ?? "no result",
 					sessionUuid,
 				);
-				return result;
+				if (!hasProviderUsage) return result;
 			}
 			const promptCount = hasProviderUsage
 				? providerUsage.inputTokens
