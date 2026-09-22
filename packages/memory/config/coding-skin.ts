@@ -2,6 +2,7 @@ import type { Registration } from "../src/contract/inputs";
 import { engineSettingsSchema } from "../src/contract/settings";
 import { installationSettingsSchema, type InstallationSettings } from "./installation-settings";
 import { llmRoutingConfigSchema } from "./plugin-config-mode-schema";
+import { withModeRerank } from "./plugin-config-schema";
 import { observeAgentId } from "./plugin-config-observe-schema";
 export { HOST_MODEL_CALLBACK_HOST, HOST_MODEL_CALLBACK_PATH } from "./skin-defaults";
 
@@ -55,7 +56,10 @@ export function createCodingSkinRegistration(input: {
 		agentNative: { flavor: "subscription" },
 		language: "en",
 	});
-	const settings = engineSettingsSchema.parse({
+	// The same mode-to-reranker rule the plugin config schema applies; this registration
+	// never passes through that schema, and a keyless install must not reach the retriever
+	// asking for a cross-encoder it cannot run.
+	const settings = engineSettingsSchema.parse(withModeRerank({
 		embedding: input.installed.embedding,
 		observe: { agentId: observeAgentId(input.skinId) },
 		dbPath: input.installed.storePath,
@@ -97,6 +101,6 @@ export function createCodingSkinRegistration(input: {
 			currentKeyVersion: 1,
 		},
 		remOperations: input.installed.remOperations ?? ["rem-replace", "rem-update"],
-	});
+	}, routing.mode));
 	return { skinId: input.skinId, routing, settings, model: input.model };
 }
