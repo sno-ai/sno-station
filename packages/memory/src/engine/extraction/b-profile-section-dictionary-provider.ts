@@ -253,7 +253,7 @@ export async function restoreCachedSectionDictionary(args: {
 			error,
 		}, {
 			event_name: "sno_station_mem.b-profile-section-dictionary-provider.section.dictionary.cache.rejected.using.bundled.snapshot",
-			file: "packages/sno-station-mem/src/engine/extraction/b-profile-section-dictionary-provider.ts",
+			file: "packages/memory/src/engine/extraction/b-profile-section-dictionary-provider.ts",
 			function: "restoreCachedSectionDictionary",
 			site_id: "b-profile-section-dictionary-provider.restoreCachedSectionDictionary.a4518aedd5",
 		});
@@ -293,7 +293,7 @@ async function loadRemoteSectionDictionary(args: {
 			error,
 		}, {
 			event_name: "sno_station_mem.b-profile-section-dictionary-provider.section.dictionary.cache.rejected.using.bundled.snapshot",
-			file: "packages/sno-station-mem/src/engine/extraction/b-profile-section-dictionary-provider.ts",
+			file: "packages/memory/src/engine/extraction/b-profile-section-dictionary-provider.ts",
 			function: "loadRemoteSectionDictionary",
 			site_id: "b-profile-section-dictionary-provider.loadRemoteSectionDictionary.ac5ddcab10",
 		});
@@ -324,7 +324,7 @@ async function loadRemoteSectionDictionary(args: {
 			error,
 		}, {
 			event_name: "sno_station_mem.b-profile-section-dictionary-provider.section.dictionary.fetch.marker.could.not.be.persisted.fetch.skipped",
-			file: "packages/sno-station-mem/src/engine/extraction/b-profile-section-dictionary-provider.ts",
+			file: "packages/memory/src/engine/extraction/b-profile-section-dictionary-provider.ts",
 			function: "loadRemoteSectionDictionary",
 			site_id: "b-profile-section-dictionary-provider.loadRemoteSectionDictionary.a8ecb1a4f2",
 		});
@@ -347,7 +347,7 @@ async function loadRemoteSectionDictionary(args: {
 			error,
 		}, {
 			event_name: "sno_station_mem.b-profile-section-dictionary-provider.section.dictionary.fetch.rejected.keeping.last.good.registry",
-			file: "packages/sno-station-mem/src/engine/extraction/b-profile-section-dictionary-provider.ts",
+			file: "packages/memory/src/engine/extraction/b-profile-section-dictionary-provider.ts",
 			function: "loadRemoteSectionDictionary",
 			site_id: "b-profile-section-dictionary-provider.loadRemoteSectionDictionary.15ee874f33",
 		});

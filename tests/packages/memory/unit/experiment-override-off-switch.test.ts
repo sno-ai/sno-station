@@ -12,7 +12,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
 	experimentCandidatePoolOverride,
 	experimentMmrDisabled,
-} from "../../../../packages/sno-station-mem/config/index.ts";
+} from "../../../../packages/memory/config/index.ts";
 
 const POOL = "MEM_CLAW_EXPERIMENT_CANDIDATE_POOL_SIZE";
 const MMR = "MEM_CLAW_EXPERIMENT_DISABLE_MMR";

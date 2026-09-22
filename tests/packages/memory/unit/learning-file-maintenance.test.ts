@@ -10,7 +10,7 @@ import {
 	DEFAULT_FEATURE_REQUESTS_TEMPLATE,
 	DEFAULT_LEARNINGS_TEMPLATE,
 	ensureSelfImprovementLearningFiles,
-} from "../../../../packages/sno-station-mem/src/engine/operations/learning-file-maintenance";
+} from "../../../../packages/memory/src/engine/operations/learning-file-maintenance";
 
 const tempDirs: string[] = [];
 

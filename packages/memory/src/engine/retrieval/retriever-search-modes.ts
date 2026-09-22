@@ -75,7 +75,7 @@ Object.assign(MemoryRetriever.prototype, {
 			bounded: true,
 			scopes: context.scopeFilter?.length ?? 0,
 			...(context.category ? { category: context.category } : {}),
-		}, { event_name: "memory.retriever_search_modes.diagnostic", file: "packages/sno-station-mem/src/engine/retrieval/retriever-search-modes.ts", function: "aggregationComplete", site_id: "retrieval.retriever-search-modes.aggregationComplete.5a3b7f9337" });
+		}, { event_name: "memory.retriever_search_modes.diagnostic", file: "packages/memory/src/engine/retrieval/retriever-search-modes.ts", function: "aggregationComplete", site_id: "retrieval.retriever-search-modes.aggregationComplete.5a3b7f9337" });
 		return mapped;
 	},
 
@@ -244,7 +244,7 @@ Object.assign(MemoryRetriever.prototype, {
 			// Log operational context for retrieval ranking without changing control flow.
 			log.warn("vector search branch failed, using keyword-only", {
 				error: vectorError,
-			}, { event_name: "memory.retriever_search_modes.diagnostic", file: "packages/sno-station-mem/src/engine/retrieval/retriever-search-modes.ts", function: "precisionRecall", site_id: "retrieval.retriever-search-modes.precisionRecall.97b8770f50" });
+			}, { event_name: "memory.retriever_search_modes.diagnostic", file: "packages/memory/src/engine/retrieval/retriever-search-modes.ts", function: "precisionRecall", site_id: "retrieval.retriever-search-modes.precisionRecall.97b8770f50" });
 		}
 		let keywordResults = keywordSettled.status === "fulfilled" ? keywordSettled.value : [];
 		// Route failure states into a deterministic recovery or reporting branch.
@@ -252,7 +252,7 @@ Object.assign(MemoryRetriever.prototype, {
 			// Log operational context for retrieval ranking without changing control flow.
 			log.warn("keyword search branch failed, using vector-only", {
 				error: keywordError,
-			}, { event_name: "memory.retriever_search_modes.diagnostic", file: "packages/sno-station-mem/src/engine/retrieval/retriever-search-modes.ts", function: "precisionRecall", site_id: "retrieval.retriever-search-modes.precisionRecall.c20ade60c4" });
+			}, { event_name: "memory.retriever_search_modes.diagnostic", file: "packages/memory/src/engine/retrieval/retriever-search-modes.ts", function: "precisionRecall", site_id: "retrieval.retriever-search-modes.precisionRecall.c20ade60c4" });
 		}
 
 		// Close `parallel_search` on what the two branches actually returned, BEFORE any other
@@ -307,7 +307,7 @@ Object.assign(MemoryRetriever.prototype, {
 			keywordCount: keywordResults.length,
 			fusedCount: fused.length,
 			queryExpanded: bm25Query !== context.query,
-		}, { event_name: "memory.retriever_search_modes.diagnostic", file: "packages/sno-station-mem/src/engine/retrieval/retriever-search-modes.ts", function: "precisionRecall", site_id: "retrieval.retriever-search-modes.precisionRecall.aaf0b2eb17" });
+		}, { event_name: "memory.retriever_search_modes.diagnostic", file: "packages/memory/src/engine/retrieval/retriever-search-modes.ts", function: "precisionRecall", site_id: "retrieval.retriever-search-modes.precisionRecall.aaf0b2eb17" });
 
 		trace?.startStage(
 			"rerank",

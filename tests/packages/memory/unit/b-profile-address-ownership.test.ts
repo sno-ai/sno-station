@@ -1,7 +1,7 @@
 /** Proves code, not the model, owns surviving B-profile addresses. */
 
 import { describe, expect, it } from "vitest";
-import { projectProfileCandidates } from "../../../../packages/sno-station-mem/src/engine/extraction/b-profile-projection";
+import { projectProfileCandidates } from "../../../../packages/memory/src/engine/extraction/b-profile-projection";
 
 describe("B-profile address ownership", () => {
 	it("addresses all candidates from the dictionary", () => {

@@ -4,24 +4,24 @@
  */
 
 import { describe, expect, it } from "vitest";
-import type { AtomicKeyedRecord } from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-profile-keying";
+import type { AtomicKeyedRecord } from "../../../../packages/memory/src/engine/extraction/atomic-profile-keying";
 import type {
 	AtomicExtractionRecord,
 	AtomicExtractionTurn,
-} from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-extraction-reply";
+} from "../../../../packages/memory/src/engine/extraction/atomic-extraction-reply";
 import {
 	createAtomicSubjectGuardTransport,
 	type AtomicSubjectGuardTransport,
 	runAtomicSubjectGuard,
-} from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-subject-guard";
-import { LlmClientTerminalError } from "../../../../packages/sno-station-mem/src/model/llm-client";
+} from "../../../../packages/memory/src/engine/extraction/atomic-subject-guard";
+import { LlmClientTerminalError } from "../../../../packages/memory/src/model/llm-client";
 import type {
 	LlmClient,
 	MemoryLlmRequest,
 	ResolvedLlmConfig,
 	TokenUsage,
-} from "../../../../packages/sno-station-mem/src/model/llm-client-types";
-import { resolveLlmOccasion } from "../../../../packages/sno-station-mem/src/model/llm-mode-routing";
+} from "../../../../packages/memory/src/model/llm-client-types";
+import { resolveLlmOccasion } from "../../../../packages/memory/src/model/llm-mode-routing";
 
 const TURNS: AtomicExtractionTurn[] = [
 	{ role: "user", content: "I moved to Kyoto and now prefer tea." },

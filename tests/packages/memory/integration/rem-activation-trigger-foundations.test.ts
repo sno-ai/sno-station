@@ -10,7 +10,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
 	enumerateRemCandidateScopes,
 	readCandidates,
-} from "../../../../packages/sno-station-mem/src/sidecar/rem-batch-executor.ts";
+} from "../../../../packages/memory/src/sidecar/rem-batch-executor.ts";
 import { createTestDb, type TestDb } from "../../../apps/mem-claw/helpers/test-db.ts";
 
 describe("REM automatic trigger foundations", () => {

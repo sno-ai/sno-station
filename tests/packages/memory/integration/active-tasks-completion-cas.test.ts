@@ -4,10 +4,10 @@
  */
 
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
-import type { Embedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client.ts";
-import { parseInsightMetadata } from "../../../../packages/sno-station-mem/src/engine/extraction/memory-metadata-codec.ts";
-import type { MemoryEntry } from "../../../../packages/sno-station-mem/src/engine/shared/types.ts";
-import { MemoryStore } from "../../../../packages/sno-station-mem/src/store/store.ts";
+import type { Embedder } from "../../../../packages/memory/src/engine/extraction/embedding-provider-client.ts";
+import { parseInsightMetadata } from "../../../../packages/memory/src/engine/extraction/memory-metadata-codec.ts";
+import type { MemoryEntry } from "../../../../packages/memory/src/engine/shared/types.ts";
+import { MemoryStore } from "../../../../packages/memory/src/store/store.ts";
 import { createTestDb, createTestEmbedder, type TestDb } from "../../../apps/mem-claw/helpers/test-db.ts";
 import { routeTestTask } from "../../../apps/mem-claw/integration/task-lifecycle-test-route.ts";
 

@@ -103,11 +103,11 @@ export async function runMappedMemoryLoop(params: RunMappedMemoryLoopParams): Pr
 	}
 	const deduped = [...seen.values()];
 	if (deduped.length < allMapped.length) {
-		diagnosticLog.info("Reflection duplicate input removed", { input_count: allMapped.length, output_count: deduped.length }, { event_name: "memory.reflection_mapped_memory_loop.reflection.duplicate.input.removed", file: "packages/sno-station-mem/src/engine/reflection/reflection-mapped-memory-loop.ts", function: "runMappedMemoryLoop", site_id: "reflection.reflection-mapped-memory-loop.runMappedMemoryLoop.d4cb1a8408" });
+		diagnosticLog.info("Reflection duplicate input removed", { input_count: allMapped.length, output_count: deduped.length }, { event_name: "memory.reflection_mapped_memory_loop.reflection.duplicate.input.removed", file: "packages/memory/src/engine/reflection/reflection-mapped-memory-loop.ts", function: "runMappedMemoryLoop", site_id: "reflection.reflection-mapped-memory-loop.runMappedMemoryLoop.d4cb1a8408" });
 	}
 
 	if (deduped.length > MAX_MAPPED_ENTRIES) {
-		diagnosticLog.warn("Reflection input count limited", { input_count: deduped.length, limit: MAX_MAPPED_ENTRIES }, { event_name: "memory.reflection_mapped_memory_loop.reflection.input.count.limited", file: "packages/sno-station-mem/src/engine/reflection/reflection-mapped-memory-loop.ts", function: "runMappedMemoryLoop", site_id: "reflection.reflection-mapped-memory-loop.runMappedMemoryLoop.4f891b1d21" });
+		diagnosticLog.warn("Reflection input count limited", { input_count: deduped.length, limit: MAX_MAPPED_ENTRIES }, { event_name: "memory.reflection_mapped_memory_loop.reflection.input.count.limited", file: "packages/memory/src/engine/reflection/reflection-mapped-memory-loop.ts", function: "runMappedMemoryLoop", site_id: "reflection.reflection-mapped-memory-loop.runMappedMemoryLoop.4f891b1d21" });
 	}
 	const mapped = deduped.slice(0, MAX_MAPPED_ENTRIES);
 	if (mapped.length === 0) return;
@@ -160,7 +160,7 @@ export async function runMappedMemoryLoop(params: RunMappedMemoryLoopParams): Pr
 				if (cosine >= MAPPED_DEDUP_THRESHOLD) {
 					// Reflection bullets are user content; do not surface raw text
 					// (even truncated) in logs. Emit only non-reversible diagnostics.
-					diagnosticLog.debug("Reflection duplicate candidate skipped", { cosine, category: m.category, mapped_kind: m.mappedKind, input_size: m.text.length }, { event_name: "memory.reflection_mapped_memory_loop.reflection.duplicate.candidate.skipped", file: "packages/sno-station-mem/src/engine/reflection/reflection-mapped-memory-loop.ts", function: "runMappedMemoryLoop", site_id: "reflection.reflection-mapped-memory-loop.runMappedMemoryLoop.78a7536d17" });
+					diagnosticLog.debug("Reflection duplicate candidate skipped", { cosine, category: m.category, mapped_kind: m.mappedKind, input_size: m.text.length }, { event_name: "memory.reflection_mapped_memory_loop.reflection.duplicate.candidate.skipped", file: "packages/memory/src/engine/reflection/reflection-mapped-memory-loop.ts", function: "runMappedMemoryLoop", site_id: "reflection.reflection-mapped-memory-loop.runMappedMemoryLoop.78a7536d17" });
 					skipped = true;
 					break;
 				}
@@ -243,7 +243,7 @@ export async function runMappedMemoryLoop(params: RunMappedMemoryLoopParams): Pr
 				mappedKind: m.mappedKind,
 			});
 		} catch (err) {
-			diagnosticLog.warn("Reflection candidate failed", { error: err }, { event_name: "memory.reflection_mapped_memory_loop.reflection.candidate.failed", file: "packages/sno-station-mem/src/engine/reflection/reflection-mapped-memory-loop.ts", function: "runMappedMemoryLoop", site_id: "reflection.reflection-mapped-memory-loop.runMappedMemoryLoop.38fe983443" });
+			diagnosticLog.warn("Reflection candidate failed", { error: err }, { event_name: "memory.reflection_mapped_memory_loop.reflection.candidate.failed", file: "packages/memory/src/engine/reflection/reflection-mapped-memory-loop.ts", function: "runMappedMemoryLoop", site_id: "reflection.reflection-mapped-memory-loop.runMappedMemoryLoop.38fe983443" });
 		}
 	}
 
@@ -252,7 +252,7 @@ export async function runMappedMemoryLoop(params: RunMappedMemoryLoopParams): Pr
 	try {
 		await params.store.bulkStore(entries);
 	} catch (err) {
-		diagnosticLog.warn("Reflection batch write failed", { error: err, input_count: entries.length, committed_count: 0 }, { event_name: "memory.reflection_mapped_memory_loop.reflection.batch.write.failed", file: "packages/sno-station-mem/src/engine/reflection/reflection-mapped-memory-loop.ts", function: "runMappedMemoryLoop", site_id: "reflection.reflection-mapped-memory-loop.runMappedMemoryLoop.b692a46de7" });
+		diagnosticLog.warn("Reflection batch write failed", { error: err, input_count: entries.length, committed_count: 0 }, { event_name: "memory.reflection_mapped_memory_loop.reflection.batch.write.failed", file: "packages/memory/src/engine/reflection/reflection-mapped-memory-loop.ts", function: "runMappedMemoryLoop", site_id: "reflection.reflection-mapped-memory-loop.runMappedMemoryLoop.b692a46de7" });
 	}
 }
 

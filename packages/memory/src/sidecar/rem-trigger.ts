@@ -92,7 +92,7 @@ export function readRemAutomaticOperations(
 		const hostConfig = readSnoStationMemConfig(configPath);
 		config = pluginConfigSchema.parse(hostConfig.plugins?.entries?.[PLUGIN_ENTRY_KEY]?.config ?? {});
 	} catch (error) {
-		log.error("REM configuration unavailable; using installed defaults", { cause: errorMessage(error) }, { event_name: "memory.rem.trigger.configuration.unavailable", file: "packages/sno-station-mem/src/sidecar/rem-trigger.ts", function: "evaluateRemAutomaticTriggers", site_id: "memory.rem.trigger.configuration.unavailable" });
+		log.error("REM configuration unavailable; using installed defaults", { cause: errorMessage(error) }, { event_name: "memory.rem.trigger.configuration.unavailable", file: "packages/memory/src/sidecar/rem-trigger.ts", function: "evaluateRemAutomaticTriggers", site_id: "memory.rem.trigger.configuration.unavailable" });
 		config = pluginConfigSchema.parse({});
 	}
 	const ticks = [...registeredTicks.values()];
@@ -144,7 +144,7 @@ export async function evaluateRemAutomaticTriggers(
 				consecutive_idle: consecutiveIdle,
 			});
 		}
-		log.error("REM trigger state unavailable; continuing with due work", { cause: errorMessage(error) }, { event_name: "memory.rem.trigger.state.unavailable", file: "packages/sno-station-mem/src/sidecar/rem-trigger.ts", function: "evaluateRemAutomaticTriggers", site_id: "memory.rem.trigger.state.unavailable" });
+		log.error("REM trigger state unavailable; continuing with due work", { cause: errorMessage(error) }, { event_name: "memory.rem.trigger.state.unavailable", file: "packages/memory/src/sidecar/rem-trigger.ts", function: "evaluateRemAutomaticTriggers", site_id: "memory.rem.trigger.state.unavailable" });
 		state = { version: 1, scopes: {} };
 		lostState = true;
 	}
@@ -174,7 +174,7 @@ export async function evaluateRemAutomaticTriggers(
 		} catch (error) {
 			log.error("REM automatic scope evaluation failed", { scope, error }, {
 				event_name: "sno_station_mem.rem-trigger.rem.automatic.scope.evaluation.failed",
-				file: "packages/sno-station-mem/src/sidecar/rem-trigger.ts",
+				file: "packages/memory/src/sidecar/rem-trigger.ts",
 				function: "evaluateRemAutomaticTriggers",
 				site_id: "rem-trigger.evaluateRemAutomaticTriggers.1d59077a5c",
 			});
@@ -186,7 +186,7 @@ export async function evaluateRemAutomaticTriggers(
 			} catch (auditError) {
 				log.warn("REM automatic scope failure audit failed", { scope, error: auditError }, {
 					event_name: "sno_station_mem.rem-trigger.rem.automatic.scope.failure.audit.failed",
-					file: "packages/sno-station-mem/src/sidecar/rem-trigger.ts",
+					file: "packages/memory/src/sidecar/rem-trigger.ts",
 					function: "evaluateRemAutomaticTriggers",
 					site_id: "rem-trigger.evaluateRemAutomaticTriggers.ebe1cdd204",
 				});
@@ -196,7 +196,7 @@ export async function evaluateRemAutomaticTriggers(
 			} catch (stateError) {
 				log.warn("REM automatic trigger state reload failed", { scope, error: stateError }, {
 					event_name: "sno_station_mem.rem-trigger.rem.automatic.trigger.state.reload.failed",
-					file: "packages/sno-station-mem/src/sidecar/rem-trigger.ts",
+					file: "packages/memory/src/sidecar/rem-trigger.ts",
 					function: "evaluateRemAutomaticTriggers",
 					site_id: "rem-trigger.evaluateRemAutomaticTriggers.46669e66ff",
 				});
@@ -215,7 +215,7 @@ function previousDay(now: Date): Date {
 
 async function writeRemTriggerStateAtomic(stateDir: string, state: RemTriggerStateDocument): Promise<void> {
 	try { await persistTriggerState(stateDir, state); }
-	catch (error) { log.error("REM trigger state write failed; continuing dispatch", { cause: errorMessage(error) }, { event_name: "memory.rem.trigger.state.write.failed", file: "packages/sno-station-mem/src/sidecar/rem-trigger.ts", function: "evaluateRemAutomaticTriggers", site_id: "memory.rem.trigger.state.write.failed" }); }
+	catch (error) { log.error("REM trigger state write failed; continuing dispatch", { cause: errorMessage(error) }, { event_name: "memory.rem.trigger.state.write.failed", file: "packages/memory/src/sidecar/rem-trigger.ts", function: "evaluateRemAutomaticTriggers", site_id: "memory.rem.trigger.state.write.failed" }); }
 }
 
 async function evaluateScope(
@@ -344,7 +344,7 @@ async function dispatchRemWave(
 	withLogContext({ operation_id: body.job_id, job_id: body.job_id, session_reference: scope, external_reference: correlationId }, () => {
 		log.info("REM dispatch accepted", { outcome: "success", job_id: body.job_id, status: response.status, duration_ms: performance.now() - started }, {
 			event_name: "sidecar.trigger.dispatch.accepted",
-			file: "packages/sno-station-mem/src/sidecar/rem-trigger.ts",
+			file: "packages/memory/src/sidecar/rem-trigger.ts",
 			function: "dispatchRemWave",
 			site_id: "sidecar.trigger.dispatch.accepted",
 		});
@@ -363,7 +363,7 @@ async function applyCompletedBaselines(
 		if (isNodeError(error) && error.code === "ENOENT") return state;
 		log.warn("REM completion audit could not be read", { error, outcome: "skipped", reason_code: "audit_read_failed" }, {
 			event_name: "sidecar.trigger.audit_read.failed",
-			file: "packages/sno-station-mem/src/sidecar/rem-trigger.ts",
+			file: "packages/memory/src/sidecar/rem-trigger.ts",
 			function: "applyCompletedBaselines",
 			site_id: "sidecar.trigger.audit_read.failed",
 		});
@@ -447,7 +447,7 @@ async function applyCompletedBaselines(
 	if (malformedCount > 0) {
 		log.warn("Malformed REM audit records skipped", { malformed_count: malformedCount, outcome: "partial" }, {
 			event_name: "sidecar.trigger.audit_records.skipped",
-			file: "packages/sno-station-mem/src/sidecar/rem-trigger.ts",
+			file: "packages/memory/src/sidecar/rem-trigger.ts",
 			function: "applyCompletedBaselines",
 			site_id: "sidecar.trigger.audit_records.skipped",
 		});

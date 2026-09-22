@@ -1,9 +1,9 @@
 /** Real LLM API required. No mocking. Missing keys = FAIL. */
 
 import { afterEach, beforeEach, describe, expect, it, beforeAll } from "vitest";
-import { createEmbedder, type Embedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client.ts";
-import { MemoryStore } from "../../../../packages/sno-station-mem/src/store/store.ts";
-import { createScopePolicy } from "../../../../packages/sno-station-mem/src/engine/security/scopes.ts";
+import { createEmbedder, type Embedder } from "../../../../packages/memory/src/engine/extraction/embedding-provider-client.ts";
+import { MemoryStore } from "../../../../packages/memory/src/store/store.ts";
+import { createScopePolicy } from "../../../../packages/memory/src/engine/security/scopes.ts";
 import { createTestDb, createTestEmbedder } from "../../../apps/mem-claw/helpers/test-db.ts";
 
 let testEmbedder: Embedder;

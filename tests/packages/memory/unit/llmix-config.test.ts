@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
-import { pluginConfigSchema } from "../../../../packages/sno-station-mem/src/engine/shared/types.ts";
+import { pluginConfigSchema } from "../../../../packages/memory/src/engine/shared/types.ts";
 
 /**
  * The local ranker, stated explicitly. Nothing in this file exercises the remote

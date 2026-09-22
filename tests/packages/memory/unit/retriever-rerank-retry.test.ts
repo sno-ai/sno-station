@@ -1,11 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { RetrievalError } from "../../../../packages/sno-station-mem/src/engine/retrieval/retriever-dependencies.ts";
+import { RetrievalError } from "../../../../packages/memory/src/engine/retrieval/retriever-dependencies.ts";
 import {
 	createRetriever,
 	DEFAULT_RETRIEVAL_CONFIG,
 	type MemoryRetrieverInternals,
-} from "../../../../packages/sno-station-mem/src/engine/retrieval/retriever.ts";
-import type { RetrievalResult } from "../../../../packages/sno-station-mem/src/engine/shared/types.ts";
+} from "../../../../packages/memory/src/engine/retrieval/retriever.ts";
+import type { RetrievalResult } from "../../../../packages/memory/src/engine/shared/types.ts";
 
 // Issue #222: a transient rerank transport failure (socket reset, per-call timeout, 502-504)
 // fell back to the un-reranked order on the first miss. `fetch` is the only external boundary

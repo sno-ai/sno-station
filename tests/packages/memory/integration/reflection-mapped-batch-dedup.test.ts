@@ -14,9 +14,9 @@
  */
 
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import type { Embedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client.ts";
-import { runMappedMemoryLoop } from "../../../../packages/sno-station-mem/src/engine/reflection/reflection-mapped-memory-loop.ts";
-import { MemoryStore } from "../../../../packages/sno-station-mem/src/store/store.ts";
+import type { Embedder } from "../../../../packages/memory/src/engine/extraction/embedding-provider-client.ts";
+import { runMappedMemoryLoop } from "../../../../packages/memory/src/engine/reflection/reflection-mapped-memory-loop.ts";
+import { MemoryStore } from "../../../../packages/memory/src/store/store.ts";
 import { createTestLlmClient } from "../../../apps/mem-claw/helpers/llm-client.ts";
 import { createTestDb, createTestEmbedder } from "../../../apps/mem-claw/helpers/test-db.ts";
 

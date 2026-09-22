@@ -12,7 +12,7 @@ const SOURCE_ROOTS = [
 	"engine/i18n", "engine/maintenance", "engine/observability", "engine/operations",
 	"engine/provider", "engine/reflection", "engine/retrieval", "engine/security",
 	"engine/shared", "engine/telemetry",
-].map((directory) => join(REPO_ROOT, "packages/sno-station-mem/src", directory));
+].map((directory) => join(REPO_ROOT, "packages/memory/src", directory));
 SOURCE_ROOTS.push(join(REPO_ROOT, "apps/mem-claw/src"));
 const temporaryDirectories: string[] = [];
 

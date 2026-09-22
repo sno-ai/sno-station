@@ -4,29 +4,29 @@ import { beforeAll, describe, expect, it } from "vitest";
 import {
 	createBProfileKeyingTransport,
 	type AtomicKeyedRecord,
-} from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-profile-keying";
-import { ATOMIC_EXTRACTION_SKILL } from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-extraction-skill";
-import type { AtomicExtractionTurn } from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-extraction-reply";
+} from "../../../../packages/memory/src/engine/extraction/atomic-profile-keying";
+import { ATOMIC_EXTRACTION_SKILL } from "../../../../packages/memory/src/engine/extraction/atomic-extraction-skill";
+import type { AtomicExtractionTurn } from "../../../../packages/memory/src/engine/extraction/atomic-extraction-reply";
 import {
 	buildAtomicGenericExtractionPrompt,
 	createAtomicGenericExtractionTransport,
 	runAtomicGenericExtractionPass,
-} from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-generic-extractor";
-import { createAtomicResplitTransport } from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-memory-extraction";
-import { createAtomicSubjectGuardTransport } from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-subject-guard";
-import type { Embedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client";
-import { DEFAULT_LOCALE, SUPPORTED_LOCALES } from "../../../../packages/sno-station-mem/src/engine/i18n/locales";
+} from "../../../../packages/memory/src/engine/extraction/atomic-generic-extractor";
+import { createAtomicResplitTransport } from "../../../../packages/memory/src/engine/extraction/atomic-memory-extraction";
+import { createAtomicSubjectGuardTransport } from "../../../../packages/memory/src/engine/extraction/atomic-subject-guard";
+import type { Embedder } from "../../../../packages/memory/src/engine/extraction/embedding-provider-client";
+import { DEFAULT_LOCALE, SUPPORTED_LOCALES } from "../../../../packages/memory/src/engine/i18n/locales";
 import type {
 	LlmClient,
 	MemoryLlmRequest,
 	ResolvedLlmConfig,
 	TokenUsage,
-} from "../../../../packages/sno-station-mem/src/model/llm-client-types";
+} from "../../../../packages/memory/src/model/llm-client-types";
 import {
 	type AtomicExtractionLedgerKey,
 	type AtomicExtractionRunParameters,
 	MemoryStore,
-} from "../../../../packages/sno-station-mem/src/store/store";
+} from "../../../../packages/memory/src/store/store";
 import { createTestDb, createTestEmbedder } from "../../../apps/mem-claw/helpers/test-db";
 
 const SAFE_TURNS: AtomicExtractionTurn[] = [

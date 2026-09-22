@@ -84,7 +84,7 @@ async function observeRequest<T>(
 				server_queue_ms: "unavailable", server_service_ms: "unavailable",
 				finish_reason: diagnostic.finishReason ?? "unavailable",
 				usage: diagnostic.usage ? { source: diagnostic.usage.estimated ? "estimated" : "provider_reported", ...diagnostic.usage } : { source: "unavailable" },
-			}, { event_name: "llm.request.completed", file: "packages/sno-station-mem/src/model/llm-provider-transport.ts", function: "observeRequest", site_id: "llm.transport.request.completed" });
+			}, { event_name: "llm.request.completed", file: "packages/memory/src/model/llm-provider-transport.ts", function: "observeRequest", site_id: "llm.transport.request.completed" });
 		}
 	});
 }

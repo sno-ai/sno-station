@@ -103,12 +103,12 @@ async function withAppendLock<T>(filePath: string, action: () => Promise<T>): Pr
 				// Await the learning-file writes dependency before deriving downstream state.
 				await handle.close().catch((error: unknown) => {
 					diagnosticLog.warn("Learning lock handle close failed", { error },
-						{ event_name: "memory.learning.lock.close.failed", file: "packages/sno-station-mem/src/engine/operations/learning-file-maintenance.ts", function: "withAppendLock", site_id: "memory.learning.lock.close.failed" });
+						{ event_name: "memory.learning.lock.close.failed", file: "packages/memory/src/engine/operations/learning-file-maintenance.ts", function: "withAppendLock", site_id: "memory.learning.lock.close.failed" });
 				});
 				// Await the learning-file writes dependency before deriving downstream state.
 				await rm(lockPath, { force: true }).catch((error: unknown) => {
 					diagnosticLog.warn("Learning lock cleanup failed", { error },
-						{ event_name: "memory.learning.lock.cleanup.failed", file: "packages/sno-station-mem/src/engine/operations/learning-file-maintenance.ts", function: "withAppendLock", site_id: "memory.learning.lock.cleanup.failed" });
+						{ event_name: "memory.learning.lock.cleanup.failed", file: "packages/memory/src/engine/operations/learning-file-maintenance.ts", function: "withAppendLock", site_id: "memory.learning.lock.cleanup.failed" });
 				});
 			}
 		} catch (error) {
@@ -122,7 +122,7 @@ async function withAppendLock<T>(filePath: string, action: () => Promise<T>): Pr
 			const lockStats = await stat(lockPath).catch((error: unknown) => {
 				if (!(error instanceof Error && "code" in error && error.code === "ENOENT")) {
 					diagnosticLog.warn("Learning lock metadata unavailable", { error },
-						{ event_name: "memory.learning.lock.stat.failed", file: "packages/sno-station-mem/src/engine/operations/learning-file-maintenance.ts", function: "withAppendLock", site_id: "memory.learning.lock.stat.failed" });
+						{ event_name: "memory.learning.lock.stat.failed", file: "packages/memory/src/engine/operations/learning-file-maintenance.ts", function: "withAppendLock", site_id: "memory.learning.lock.stat.failed" });
 				}
 				return null;
 			});
@@ -131,7 +131,7 @@ async function withAppendLock<T>(filePath: string, action: () => Promise<T>): Pr
 				// Await the learning-file writes dependency before deriving downstream state.
 				await rm(lockPath, { force: true }).catch((error: unknown) => {
 					diagnosticLog.warn("Stale learning lock removal failed", { error },
-						{ event_name: "memory.learning.lock.stale.cleanup.failed", file: "packages/sno-station-mem/src/engine/operations/learning-file-maintenance.ts", function: "withAppendLock", site_id: "memory.learning.lock.stale.cleanup.failed" });
+						{ event_name: "memory.learning.lock.stale.cleanup.failed", file: "packages/memory/src/engine/operations/learning-file-maintenance.ts", function: "withAppendLock", site_id: "memory.learning.lock.stale.cleanup.failed" });
 				});
 				continue;
 			}
@@ -153,7 +153,7 @@ async function nextLearningId(filePath: string, prefix: LearningIdPrefix): Promi
 	} catch (error) {
 		if (!(error instanceof Error && "code" in error && error.code === "ENOENT")) {
 			diagnosticLog.warn("Learning identifier history unavailable", { error },
-				{ event_name: "memory.learning.history.read.failed", file: "packages/sno-station-mem/src/engine/operations/learning-file-maintenance.ts", function: "nextLearningId", site_id: "memory.learning.history.read.failed" });
+				{ event_name: "memory.learning.history.read.failed", file: "packages/memory/src/engine/operations/learning-file-maintenance.ts", function: "nextLearningId", site_id: "memory.learning.history.read.failed" });
 		}
 		// Missing file means this is the first entry for the day.
 	}
@@ -173,7 +173,7 @@ async function ensureLearningFile(filePath: string, content: string): Promise<vo
 	} catch (error) {
 		if (!(error instanceof Error && "code" in error && error.code === "ENOENT")) {
 			diagnosticLog.warn("Learning file read failed before creation", { error },
-				{ event_name: "memory.learning.ensure.read.failed", file: "packages/sno-station-mem/src/engine/operations/learning-file-maintenance.ts", function: "ensureLearningFile", site_id: "memory.learning.ensure.read.failed" });
+				{ event_name: "memory.learning.ensure.read.failed", file: "packages/memory/src/engine/operations/learning-file-maintenance.ts", function: "ensureLearningFile", site_id: "memory.learning.ensure.read.failed" });
 		}
 		// Missing files are created with the default template below.
 	}
@@ -304,7 +304,7 @@ export async function appendSelfImprovementEntry(
 			const prev = await readFile(filePath, { encoding: "utf8", signal: memoryOperationSignal() }).catch((error: unknown) => {
 				if (!(error instanceof Error && "code" in error && error.code === "ENOENT")) {
 					diagnosticLog.warn("Learning file read failed before append", { error },
-						{ event_name: "memory.learning.append.read.failed", file: "packages/sno-station-mem/src/engine/operations/learning-file-maintenance.ts", function: "appendSelfImprovementEntry", site_id: "memory.learning.append.read.failed" });
+						{ event_name: "memory.learning.append.read.failed", file: "packages/memory/src/engine/operations/learning-file-maintenance.ts", function: "appendSelfImprovementEntry", site_id: "memory.learning.append.read.failed" });
 				}
 				return "";
 			});

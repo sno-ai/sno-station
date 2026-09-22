@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 describe("token counter", () => {
 	it("uses the production tiktoken encoding for Qwen text prompts", async () => {
 		const { countTextTokens } = await import(
-			"../../../../packages/sno-station-mem/src/engine/observability/token-counter.ts"
+			"../../../../packages/memory/src/engine/observability/token-counter.ts"
 		);
 
 		const result = countTextTokens("user preference classification", "Qwen3-32B");
@@ -19,7 +19,7 @@ describe("token counter", () => {
 		}));
 		const { countEmbeddingTokens, setQwenTokenizerLoaderForTests } =
 			await import(
-				"../../../../packages/sno-station-mem/src/engine/observability/token-counter.ts"
+				"../../../../packages/memory/src/engine/observability/token-counter.ts"
 			);
 		setQwenTokenizerLoaderForTests(loadTokenizer);
 
@@ -56,7 +56,7 @@ describe("token counter", () => {
 			.mockResolvedValueOnce({ encode: () => [1, 2, 3] });
 		const { countEmbeddingTokens, setQwenTokenizerLoaderForTests } =
 			await import(
-				"../../../../packages/sno-station-mem/src/engine/observability/token-counter.ts"
+				"../../../../packages/memory/src/engine/observability/token-counter.ts"
 			);
 		setQwenTokenizerLoaderForTests(loadTokenizer);
 

@@ -2,10 +2,10 @@ import { hostname } from "node:os";
 import { randomUUID } from "node:crypto";
 import { it, expect } from "vitest";
 import { createTestDb, createTestEmbedder } from "../../../apps/mem-claw/helpers/test-db";
-import { MemoryStore } from "../../../../packages/sno-station-mem/src/store/store";
-import { AtomicInsightDistiller, createSignedAtomicMemoryExtractionTransports } from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-memory-extraction";
-import { llmRoutingConfigSchema } from "../../../../packages/sno-station-mem/config/plugin-config-mode-schema";
-import { resolveLlmEndpoint } from "../../../../packages/sno-station-mem/src/model/llm-endpoint-resolution";
+import { MemoryStore } from "../../../../packages/memory/src/store/store";
+import { AtomicInsightDistiller, createSignedAtomicMemoryExtractionTransports } from "../../../../packages/memory/src/engine/extraction/atomic-memory-extraction";
+import { llmRoutingConfigSchema } from "../../../../packages/memory/config/plugin-config-mode-schema";
+import { resolveLlmEndpoint } from "../../../../packages/memory/src/model/llm-endpoint-resolution";
 
 const cases = [
 	...Array.from({ length: 3 }, (_, repeat) => ({

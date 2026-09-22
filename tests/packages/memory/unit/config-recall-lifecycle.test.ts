@@ -8,12 +8,12 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { retrievalConfigSchema } from "../../../../packages/sno-station-mem/config/plugin-config-retrieval-schema";
+import { retrievalConfigSchema } from "../../../../packages/memory/config/plugin-config-retrieval-schema";
 import {
 	DEFAULT_RECALL_LIFECYCLE,
 	type RecallLifecycleConfig,
 	recallLifecycleSchema,
-} from "../../../../packages/sno-station-mem/config/index";
+} from "../../../../packages/memory/config/index";
 
 // PRD §6.1 pinned values. Changing any entry here SHALL require a new
 // openspec change proposal — defaults SHALL NOT drift through casual edits.

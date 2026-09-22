@@ -7,14 +7,14 @@ import {
 	initDb,
 	loadStorageExtensions,
 	readChunkVecTableState,
-} from "../../../../packages/sno-station-mem/src/store/connection";
-import { migrateLegacyDatabaseNamespace } from "../../../../packages/sno-station-mem/src/store/legacy-database-namespace-migration";
-import { runMigrations } from "../../../../packages/sno-station-mem/src/store/migrations";
+} from "../../../../packages/memory/src/store/connection";
+import { migrateLegacyDatabaseNamespace } from "../../../../packages/memory/src/store/legacy-database-namespace-migration";
+import { runMigrations } from "../../../../packages/memory/src/store/migrations";
 import {
 	initSqliteRuntimeSync,
 	openSqliteDatabase,
 	type SqliteDatabaseLike,
-} from "../../../../packages/sno-station-mem/src/store/sqlite-runtime";
+} from "../../../../packages/memory/src/store/sqlite-runtime";
 
 const VECTOR_DIMENSION = 3;
 

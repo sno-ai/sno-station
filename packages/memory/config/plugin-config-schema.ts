@@ -116,7 +116,7 @@ function normalizeProductMode(raw: unknown): unknown {
 		delete cfg.llmGates;
 		log.debug("sno-station-mem: stripped retired llmGates config key", undefined, {
 			event_name: "sno_station_mem.plugin-config-schema.sno.station.mem.stripped.retired.llmgates.config.key",
-			file: "packages/sno-station-mem/config/plugin-config-schema.ts",
+			file: "packages/memory/config/plugin-config-schema.ts",
 			function: "normalizeProductMode",
 			site_id: "plugin-config-schema.normalizeProductMode.834ccfc110",
 		});
@@ -281,7 +281,7 @@ function requireRerankKey(
 ): PluginConfigOutput {
 	if (cfg.retrieval.rerank === "cross-encoder" && !cfg.retrieval.rerankApiKey?.trim()) {
 		log.error("memory.rerank.key.missing", { cause: "missing-rerank-key" }, {
-			event_name: "memory.rerank.key.missing", file: "packages/sno-station-mem/config/plugin-config-schema.ts",
+			event_name: "memory.rerank.key.missing", file: "packages/memory/config/plugin-config-schema.ts",
 			function: "requireRerankKey", site_id: "memory.rerank.key.missing",
 		});
 		ctx.addIssue({

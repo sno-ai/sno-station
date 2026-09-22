@@ -18,7 +18,7 @@ while (!sidecar) {
 	catch (error) {
 		if (error instanceof DuplicateSidecarError) { await closeLogger(); process.exit(0); }
 		createLogger("sno-station-mem:sidecar").error("Memory sidecar startup failed; retrying", { error }, {
-			event_name: "memory.sidecar.startup.failed", file: "packages/sno-station-mem/src/sidecar/main.ts",
+			event_name: "memory.sidecar.startup.failed", file: "packages/memory/src/sidecar/main.ts",
 			function: "<module>", site_id: "sidecar.main.startup.failed",
 		});
 		await delay(MEMORY_RECONNECT_INTERVAL_MS);

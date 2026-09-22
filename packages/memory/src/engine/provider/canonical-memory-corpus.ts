@@ -243,7 +243,7 @@ export async function listCanonicalMemoryFiles(workspaceDir: string, diagnostics
 	if (diagnostics.io_failure_count > 0) diagnosticLog.warn("Canonical memory discovery degraded", {
 		outcome: "partial", io_failure_count: diagnostics.io_failure_count,
 		unavailable_file_count: diagnostics.unavailable_file_count, file_count: files.length },
-		{ event_name: "memory.provider.canonical.discovery.degraded", file: "packages/sno-station-mem/src/engine/provider/canonical-memory-corpus.ts", function: "listCanonicalMemoryFiles", site_id: "memory.provider.canonical.discovery.degraded" });
+		{ event_name: "memory.provider.canonical.discovery.degraded", file: "packages/memory/src/engine/provider/canonical-memory-corpus.ts", function: "listCanonicalMemoryFiles", site_id: "memory.provider.canonical.discovery.degraded" });
 	return files.sort((left, right) => left.path.localeCompare(right.path));
 }
 

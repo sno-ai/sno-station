@@ -12,18 +12,18 @@
  */
 
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import type { Embedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client.ts";
+import type { Embedder } from "../../../../packages/memory/src/engine/extraction/embedding-provider-client.ts";
 import {
 	handleContextualize,
 	handleContradict,
 	storeCandidate,
-} from "../../../../packages/sno-station-mem/src/engine/extraction/insight-distill-write-actions.ts";
+} from "../../../../packages/memory/src/engine/extraction/insight-distill-write-actions.ts";
 import {
 	buildInsightMetadata,
 	stringifyInsightMetadata,
-} from "../../../../packages/sno-station-mem/src/engine/extraction/memory-metadata-codec.ts";
-import type { CandidateMemory } from "../../../../packages/sno-station-mem/src/engine/shared/types.ts";
-import { MemoryStore } from "../../../../packages/sno-station-mem/src/store/store.ts";
+} from "../../../../packages/memory/src/engine/extraction/memory-metadata-codec.ts";
+import type { CandidateMemory } from "../../../../packages/memory/src/engine/shared/types.ts";
+import { MemoryStore } from "../../../../packages/memory/src/store/store.ts";
 import { createTestDb, createTestEmbedder } from "../../../apps/mem-claw/helpers/test-db.ts";
 
 let testEmbedder: Embedder;

@@ -361,7 +361,7 @@ export class RemJobStore {
 
 	private reportFailure(error: unknown): void {
 		log.error("rem.journal.failed", { error, path: this.journalPath }, {
-			event_name: "rem.journal.failed", file: "packages/sno-station-mem/src/sidecar/rem-job-store.ts",
+			event_name: "rem.journal.failed", file: "packages/memory/src/sidecar/rem-job-store.ts",
 			function: "reportFailure", site_id: "rem.journal.failed",
 		});
 	}

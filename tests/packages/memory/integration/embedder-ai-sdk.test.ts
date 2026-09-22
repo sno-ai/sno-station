@@ -6,8 +6,8 @@ import { chunk } from "@snoai/chunking";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Embedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client.ts";
-import { VECTOR_DIMENSION_DEFAULT } from "../../../../packages/sno-station-mem/config/index.ts";
+import { Embedder } from "../../../../packages/memory/src/engine/extraction/embedding-provider-client.ts";
+import { VECTOR_DIMENSION_DEFAULT } from "../../../../packages/memory/config/index.ts";
 
 const STATE_DIR = mkdtempSync(join(tmpdir(), "mem-claw-embedder-state-"));
 

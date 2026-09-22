@@ -51,7 +51,7 @@ export async function runObserveLifecycleTask(
 			run,
 			new Promise<void>((resolve) => {
 				timeoutHandle = setTimeout(() => {
-					diagnosticLog.warn("Memory observation task timed out", { operation: label, timeout_ms: timeoutMs }, { event_name: "memory.sno-station-mem_runtime_mode.memory.observation.task.timed.out", file: "packages/sno-station-mem/src/engine/bindings/sno-station-mem-runtime-mode.ts", function: "runObserveLifecycleTask", site_id: "plugin.sno-station-mem-runtime-mode.runObserveLifecycleTask.d1856ccb13" });
+					diagnosticLog.warn("Memory observation task timed out", { operation: label, timeout_ms: timeoutMs }, { event_name: "memory.sno-station-mem_runtime_mode.memory.observation.task.timed.out", file: "packages/memory/src/engine/bindings/sno-station-mem-runtime-mode.ts", function: "runObserveLifecycleTask", site_id: "plugin.sno-station-mem-runtime-mode.runObserveLifecycleTask.d1856ccb13" });
 					resolve();
 				}, timeoutMs);
 				const nodeTimeout = timeoutHandle as typeof timeoutHandle & {
@@ -119,7 +119,7 @@ export function auditMissingHookAgentIdentity(
 	stateDir: string,
 	event: "ambient_learning" | "auto_recall" | "session_summary",
 ): void {
-	diagnosticLog.warn("Memory hook lacks agent identity", { operation: hookName, reason_code: "missing_agent_identity" }, { event_name: "memory.sno-station-mem_runtime_mode.memory.hook.lacks.agent.identity", file: "packages/sno-station-mem/src/engine/bindings/sno-station-mem-runtime-mode.ts", function: "auditMissingHookAgentIdentity", site_id: "plugin.sno-station-mem-runtime-mode.auditMissingHookAgentIdentity.f06795892a" });
+	diagnosticLog.warn("Memory hook lacks agent identity", { operation: hookName, reason_code: "missing_agent_identity" }, { event_name: "memory.sno-station-mem_runtime_mode.memory.hook.lacks.agent.identity", file: "packages/memory/src/engine/bindings/sno-station-mem-runtime-mode.ts", function: "auditMissingHookAgentIdentity", site_id: "plugin.sno-station-mem-runtime-mode.auditMissingHookAgentIdentity.f06795892a" });
 	appendAuditEntry(stateDir, {
 		event,
 		hook: hookName,

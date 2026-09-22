@@ -81,7 +81,7 @@ export function bootstrapDataLayout(options: BootstrapOptions = {}): BootstrapRe
 			dbPath,
 		}, {
 			event_name: "sno_station_mem.data-bootstrap.manifest.loaded",
-			file: "packages/sno-station-mem/src/store/data-bootstrap.ts",
+			file: "packages/memory/src/store/data-bootstrap.ts",
 			function: "bootstrapDataLayout",
 			site_id: "data-bootstrap.bootstrapDataLayout.4fc42585ae",
 		});
@@ -111,7 +111,7 @@ export function bootstrapDataLayout(options: BootstrapOptions = {}): BootstrapRe
 		dbPath: resolved,
 	}, {
 		event_name: "sno_station_mem.data-bootstrap.fresh.install.bootstrapped",
-		file: "packages/sno-station-mem/src/store/data-bootstrap.ts",
+		file: "packages/memory/src/store/data-bootstrap.ts",
 		function: "bootstrapDataLayout",
 		site_id: "data-bootstrap.bootstrapDataLayout.4af3189946",
 	});

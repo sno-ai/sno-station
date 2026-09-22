@@ -213,7 +213,7 @@ export async function runAtomicExtractionGauntlet(
 		}
 	} catch (error) {
 		const failure = error instanceof Error ? error.message : String(error);
-		log.warn("atomic extraction re-split failed", { error, suspectCount: suspects.length }, { event_name: "memory.atomic_extraction_gauntlet.diagnostic", file: "packages/sno-station-mem/src/engine/extraction/atomic-extraction-gauntlet.ts", function: "runAtomicExtractionGauntlet", site_id: "extraction.atomic-extraction-gauntlet.runAtomicExtractionGauntlet.365701f979" });
+		log.warn("atomic extraction re-split failed", { error, suspectCount: suspects.length }, { event_name: "memory.atomic_extraction_gauntlet.diagnostic", file: "packages/memory/src/engine/extraction/atomic-extraction-gauntlet.ts", function: "runAtomicExtractionGauntlet", site_id: "extraction.atomic-extraction-gauntlet.runAtomicExtractionGauntlet.365701f979" });
 		return keepSuspects(failure);
 	}
 	if (splitRecords === null) {

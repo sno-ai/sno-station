@@ -23,7 +23,7 @@ export async function readBoundStorePath(requestedPath?: string): Promise<string
 	} catch (error) {
 		if (!(error instanceof Error && "code" in error && error.code === "ENOENT")) {
 			createLogger("sno-station-mem:profile").error("memory.binding.read.failed", { error }, {
-				event_name: "memory.binding.read.failed", file: "packages/sno-station-mem/src/contract/profile.ts",
+				event_name: "memory.binding.read.failed", file: "packages/memory/src/contract/profile.ts",
 				function: "readBoundStorePath", site_id: "memory.binding.read.failed",
 			});
 		}

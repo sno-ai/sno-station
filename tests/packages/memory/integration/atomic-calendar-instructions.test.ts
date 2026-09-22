@@ -1,10 +1,10 @@
-import { buildInsightMetadata } from "../../../../packages/sno-station-mem/src/engine/extraction/memory-metadata-codec";
-import { episodicEventDate } from "../../../../packages/sno-station-mem/src/engine/bindings/memory-tool-formatting";
-import { serializeIntervalMetadata } from "../../../../packages/sno-station-mem/src/engine/extraction/memory-temporality-classifier";
+import { buildInsightMetadata } from "../../../../packages/memory/src/engine/extraction/memory-metadata-codec";
+import { episodicEventDate } from "../../../../packages/memory/src/engine/bindings/memory-tool-formatting";
+import { serializeIntervalMetadata } from "../../../../packages/memory/src/engine/extraction/memory-temporality-classifier";
 import { describe, expect, it } from "vitest";
-import { parseAtomicExtractionReply } from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-extraction-reply";
-import { runAtomicExtractionGauntlet } from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-extraction-gauntlet";
-import { buildAtomicWriteCards } from "../../../../packages/sno-station-mem/src/engine/extraction/atomic-write-projection";
+import { parseAtomicExtractionReply } from "../../../../packages/memory/src/engine/extraction/atomic-extraction-reply";
+import { runAtomicExtractionGauntlet } from "../../../../packages/memory/src/engine/extraction/atomic-extraction-gauntlet";
+import { buildAtomicWriteCards } from "../../../../packages/memory/src/engine/extraction/atomic-write-projection";
 
 async function project(text: string, phrase: string | null, time: unknown, anchor: string, ending?: unknown) {
 	const parsed = parseAtomicExtractionReply(JSON.stringify({ records: [{

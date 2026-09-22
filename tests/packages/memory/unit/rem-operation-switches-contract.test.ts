@@ -12,7 +12,7 @@ const harnessPath = join(
 type ProductExports = Record<string, unknown>;
 
 async function productBoundary<T>(name: string): Promise<T> {
-	const product = (await import("../../../../packages/sno-station-mem/src/engine/rem/index.ts")) as ProductExports;
+	const product = (await import("../../../../packages/memory/src/engine/rem/index.ts")) as ProductExports;
 	const candidate = product[name];
 	expect(candidate, `missing production boundary ${name}`).toBeTypeOf("function");
 	return candidate as T;

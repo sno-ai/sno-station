@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatAtDepth } from "../../../../packages/sno-station-mem/src/engine/retrieval/intent-analyzer";
+import { formatAtDepth } from "../../../../packages/memory/src/engine/retrieval/intent-analyzer";
 
 describe("formatAtDepth", () => {
 	it("renders the category without the project UUID", () => {

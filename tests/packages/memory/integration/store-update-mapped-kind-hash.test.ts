@@ -3,7 +3,7 @@
 /**
  * MemoryStore.update — mappedKind discriminator must flow into content_hash.
  *
- * Recent fix (packages/sno-station-mem/src/store/store.ts:1928):
+ * Recent fix (packages/memory/src/store/store.ts:1928):
  *   nextHash = stableHash(hashInputForEntry(nextText, nextMetadata));
  *
  * Before the fix, update() recomputed the hash from text alone, which
@@ -25,11 +25,11 @@
 
 import { randomUUID } from "node:crypto";
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import type { Embedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client";
-import { sanitizeMemoryMetadataString } from "../../../../packages/sno-station-mem/src/store/content-sanitizer-bridge";
-import { MemoryStore } from "../../../../packages/sno-station-mem/src/store/store";
-import type { MemoryMetadata } from "../../../../packages/sno-station-mem/src/engine/shared/types";
-import { stableHash } from "../../../../packages/sno-station-mem/src/engine/shared/utils";
+import type { Embedder } from "../../../../packages/memory/src/engine/extraction/embedding-provider-client";
+import { sanitizeMemoryMetadataString } from "../../../../packages/memory/src/store/content-sanitizer-bridge";
+import { MemoryStore } from "../../../../packages/memory/src/store/store";
+import type { MemoryMetadata } from "../../../../packages/memory/src/engine/shared/types";
+import { stableHash } from "../../../../packages/memory/src/engine/shared/utils";
 import { createTestDb, createTestEmbedder } from "../../../apps/mem-claw/helpers/test-db.ts";
 
 let testEmbedder: Embedder;

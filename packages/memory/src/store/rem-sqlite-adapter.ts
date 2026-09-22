@@ -490,7 +490,7 @@ export function createSnoStationMemRemMutationExecutor(input: {
 						writer: attempt.writer,
 					}, {
 						event_name: "sno_station_mem.rem-sqlite-adapter.rem.mutation.failed",
-						file: "packages/sno-station-mem/src/store/rem-sqlite-adapter.ts",
+						file: "packages/memory/src/store/rem-sqlite-adapter.ts",
 						function: "mutateAttempt",
 						site_id: "rem-sqlite-adapter.mutateAttempt.4c4b5764ca",
 					});

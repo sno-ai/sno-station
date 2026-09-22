@@ -156,7 +156,7 @@ Object.assign(MemoryStore.prototype, {
 	): Promise<ChunkSearchResult[]> {
 		if (!this.db.vectorSearchAvailable) {
 			log.error("storage.vector.search.unavailable", { dbPath: this.dbPath }, {
-				event_name: "storage.vector.search.unavailable", file: "packages/sno-station-mem/src/store/memory-store-chunk-search.ts",
+				event_name: "storage.vector.search.unavailable", file: "packages/memory/src/store/memory-store-chunk-search.ts",
 				function: "searchChunksSemantic", site_id: "storage.vector.search.unavailable",
 			});
 			return [];
@@ -215,7 +215,7 @@ Object.assign(MemoryStore.prototype, {
 						resultCount: results.length,
 					}, {
 						event_name: "sno_station_mem.memory-store-chunk-search.chunk.semantic.search",
-						file: "packages/sno-station-mem/src/store/memory-store-chunk-search.ts",
+						file: "packages/memory/src/store/memory-store-chunk-search.ts",
 						function: "searchChunksSemantic",
 						site_id: "memory-store-chunk-search.searchChunksSemantic.7d889feb61",
 					});
@@ -237,7 +237,7 @@ Object.assign(MemoryStore.prototype, {
 				category: opts.category,
 			}, {
 				event_name: "sno_station_mem.memory-store-chunk-search.chunk.semantic.search.failed",
-				file: "packages/sno-station-mem/src/store/memory-store-chunk-search.ts",
+				file: "packages/memory/src/store/memory-store-chunk-search.ts",
 				function: "searchChunksSemantic",
 				site_id: "memory-store-chunk-search.searchChunksSemantic.fa074292e0",
 			});
@@ -345,7 +345,7 @@ Object.assign(MemoryStore.prototype, {
 				resultCount: results.length,
 			}, {
 				event_name: "sno_station_mem.memory-store-chunk-search.chunk.keyword.search",
-				file: "packages/sno-station-mem/src/store/memory-store-chunk-search.ts",
+				file: "packages/memory/src/store/memory-store-chunk-search.ts",
 				function: "searchChunksKeyword",
 				site_id: "memory-store-chunk-search.searchChunksKeyword.26628a27c1",
 			});
@@ -359,7 +359,7 @@ Object.assign(MemoryStore.prototype, {
 				category: opts.category,
 			}, {
 				event_name: "sno_station_mem.memory-store-chunk-search.chunk.keyword.search.failed",
-				file: "packages/sno-station-mem/src/store/memory-store-chunk-search.ts",
+				file: "packages/memory/src/store/memory-store-chunk-search.ts",
 				function: "searchChunksKeyword",
 				site_id: "memory-store-chunk-search.searchChunksKeyword.36ca2cc1d7",
 			});

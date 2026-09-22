@@ -101,7 +101,7 @@ export class MemoryTelemetryEventWriter {
 				error,
 			}, {
 				event_name: "sno_station_mem.memory-telemetry-events.memory.telemetry.disabled.receipt.key.unavailable",
-				file: "packages/sno-station-mem/src/engine/telemetry/memory-telemetry-events.ts",
+				file: "packages/memory/src/engine/telemetry/memory-telemetry-events.ts",
 				function: "<anonymous callback>",
 				site_id: "memory-telemetry-events.<anonymous callback>.23cfef2d08",
 			});

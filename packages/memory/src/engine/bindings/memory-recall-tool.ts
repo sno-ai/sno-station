@@ -376,7 +376,7 @@ export async function executeMemoryRecallTool(ctx: ToolContext, access: ReturnTy
 							budget: MAX_AGGREGATION_RESULT_TOKENS,
 							over_budget: over,
 						},
-						{ event_name: "memory.recall.budget.checked", file: "packages/sno-station-mem/src/engine/bindings/memory-recall-tool.ts", function: "execute", site_id: "memory.recall.budget.checked" },
+						{ event_name: "memory.recall.budget.checked", file: "packages/memory/src/engine/bindings/memory-recall-tool.ts", function: "execute", site_id: "memory.recall.budget.checked" },
 					);
 				}
 				if (readsWholePopulation && consumerTokens(result) > MAX_AGGREGATION_RESULT_TOKENS) {
@@ -426,7 +426,7 @@ export async function executeMemoryRecallTool(ctx: ToolContext, access: ReturnTy
 					served_ids: served.slice(0, 128), served_count: served.length, ids_truncated: served.length > 128,
 					token_budget_removed_count: budgetRemoved, retired_closed_removed_count: retrievalDiagnostics.retired_closed_removed_count ?? "unavailable",
 					sql_excluded_count: "unavailable", sql_excluded_reason: "query_does_not_report_excluded_rows", external_reference: currentLogContext().external_reference,
-				}, { event_name: "memory.recall.completed", file: "packages/sno-station-mem/src/engine/bindings/memory-recall-tool.ts", function: "execute", site_id: "memory.recall.completed" });
+				}, { event_name: "memory.recall.completed", file: "packages/memory/src/engine/bindings/memory-recall-tool.ts", function: "execute", site_id: "memory.recall.completed" });
 			}
 			});
 		}
