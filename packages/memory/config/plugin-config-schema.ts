@@ -86,7 +86,7 @@ function isProductMode(value: unknown): value is ProductMode {
  * is the same rule the mode itself follows — a defaulted value is never an
  * explicit choice.
  */
-function withModeRerank(
+export function withModeRerank(
 	cfg: Record<string, unknown>,
 	mode: ProductMode,
 ): Record<string, unknown> {
