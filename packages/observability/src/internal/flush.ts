@@ -36,6 +36,7 @@ export interface FlushResult {
 interface RowFlushResult extends FlushResult {
 	retryScope?: "chain";
 	requery?: boolean;
+	rechained?: boolean;
 }
 
 export interface DrainResult {
@@ -419,6 +420,9 @@ async function flushPendingWithLease(
 	let globalRetryAfterMs: number | undefined;
 	let submitted = 0;
 	const blockedChains: PendingChain[] = [];
+	// One rechain per agent per flush: a server that answers the fresh epoch with
+	// the same conflict gets the ordinary retry backoff, not another epoch.
+	const rechainedAgents = new Set<string>();
 	let stopBatch = false;
 	while (submitted < 100 && !stopBatch) {
 		const rows = store.getPendingExcludingChains(blockedChains, 100 - submitted);
@@ -456,6 +460,17 @@ async function flushPendingWithLease(
 				break;
 			}
 			if (result.requery === true) {
+				if (result.rechained === true) {
+					const agentKey = `${row.machine_id}:${row.agent_id}`;
+					if (rechainedAgents.has(agentKey)) {
+						retryable += 1;
+						globalRetryable += 1;
+						globalRetryAfterMs = minDefined(globalRetryAfterMs, retryDelay(row, undefined));
+						stopBatch = true;
+						break;
+					}
+					rechainedAgents.add(agentKey);
+				}
 				requery = true;
 				break;
 			}
@@ -616,7 +631,7 @@ function handlePostResult(
 				function: "handlePostResult",
 				site_id: "sno.observe.internal.flush.handlepostresult.7",
 			});
-			return { shipped: 0, terminal: 0, retryable: 0, requery: true };
+			return { shipped: 0, terminal: 0, retryable: 0, requery: true, rechained: true };
 		}
 		case "wait":
 			return retryRow(store, row, response, route);
