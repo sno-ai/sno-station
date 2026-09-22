@@ -30,6 +30,7 @@ import { extractJsonFromResponse, previewText, repairCommonJson } from "./llm-js
 import { readModelReplyJson } from "../engine/shared/model-reply-text";
 import { resolveLlmOccasion, resolveLlmRoute } from "./llm-mode-routing";
 import {
+	recordProviderFailure,
 	callProvider,
 	getProviderTerminalCategory,
 	resolveProviderApiKey,
@@ -442,6 +443,9 @@ export function createLlmClient(config: LlmClientConfig): LlmClient {
 			}
 			if (result.kind === "error") {
 				lastError = `[${request.callLabel}] agent-llm ${result.category}: ${result.message}`;
+				recordProviderFailure({ adapterSlot: request.adapterSlot, callLabel: request.callLabel,
+					provider: "agent-host-seam" as LlmProvider, failure: `host_${result.category}`,
+					durationMs: performance.now() - hostStarted });
 				// The category is its own attribute: joined into `error` it is hashed with the message,
 				// and a run where every host call failed (471 of 471, 2026-09-19) could not be read.
 				log.warn("Host model request failed", { adapter_slot: request.adapterSlot, call_label: request.callLabel, failure_category: result.category, error: lastError }, { event_name: "memory.llm_client.diagnostic", file: "packages/memory/src/model/llm-client.ts", function: "requestContent", site_id: "llm.client.host_error" });

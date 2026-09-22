@@ -493,7 +493,7 @@ Response status: `200 OK`; `Content-Type: application/json`.
 
 ### Request body
 
-Reports one host-side fact for the skin's observe session: `prompt` is the user's prompt text (the sidecar hashes it after redaction and reports its byte length; the text is never stored or forwarded), `llm` is one host model call with its token counts and wall time in milliseconds. The sidecar names the observe session for the host session (`scope.host.sessionId`, else `scope.session`) the first time it sees it and emits `session.start`; a caller that names its own `scope.host.observeSessionUuid` keeps that session. `accepted` is false only when the prompt could not be hashed.
+Reports one host-side fact for the skin's observe session: `prompt` is the user's prompt text (the sidecar hashes it after redaction and reports its byte length; the text is never stored or forwarded), `llm` is one host model call with its token counts and wall time in milliseconds, `tool` is one host tool call (its serialized input and output are hashed after redaction, never stored; `latencyMs` is 0 when the host did not measure it), `permission` is one permission decision the host made (the target is hashed after redaction). The sidecar names the observe session for the host session (`scope.host.sessionId`, else `scope.session`) the first time it sees it and emits `session.start`; a caller that names its own `scope.host.observeSessionUuid` keeps that session. `accepted` is false only when the prompt could not be hashed.
 
 Scope requires nonblank `principal`, `project`, `session`; each supplied `readable` item must also be nonblank. `host.observeSessionUuid`, if supplied, must be a UUID. Host `at` is nonnegative epoch milliseconds. Other host strings may be empty.
 
@@ -530,6 +530,18 @@ Scope requires nonblank `principal`, `project`, `session`; each supplied `readab
 | event<1>.cacheReadTokens | integer | no | - | - | {"minimum":0,"maximum":9007199254740991} |
 | event<1>.cacheWriteTokens | integer | no | - | - | {"minimum":0,"maximum":9007199254740991} |
 | event<1>.latencyMs | number | yes | - | - | {"minimum":0} |
+| event<2> | object | yes | - | - | - |
+| event<2>.kind | string | yes | ["tool"] | - | - |
+| event<2>.toolName | string | yes | - | - | {"minLength":1} |
+| event<2>.decision | string | yes | ["allow","deny"] | - | - |
+| event<2>.input | string | yes | - | - | - |
+| event<2>.output | string | yes | - | - | - |
+| event<2>.latencyMs | number | yes | - | - | {"minimum":0} |
+| event<3> | object | yes | - | - | - |
+| event<3>.kind | string | yes | ["permission"] | - | - |
+| event<3>.permissionKind | string | yes | - | - | {"minLength":1} |
+| event<3>.decision | string | yes | ["allow","deny"] | - | - |
+| event<3>.target | string | yes | - | - | - |
 
 ### Response body
 
