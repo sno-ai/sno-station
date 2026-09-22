@@ -75,10 +75,13 @@ export type UsageSignal = {
 	result?: JsonValue;
 	at: number;
 };
-/** What the host agent did, for the skin's observe session: a user prompt, or one host model call. */
+/** What the host agent did, for the skin's observe session: a prompt, a host model call, a tool call, or a permission decision. */
+export type HostDecision = "allow" | "deny";
 export type HostEvent =
 	| { kind: "prompt"; prompt: string }
-	| { kind: "llm"; model: string; promptTokens: number; completionTokens: number; cacheReadTokens?: number; cacheWriteTokens?: number; latencyMs: number };
+	| { kind: "llm"; model: string; promptTokens: number; completionTokens: number; cacheReadTokens?: number; cacheWriteTokens?: number; latencyMs: number }
+	| { kind: "tool"; toolName: string; decision: HostDecision; input: string; output: string; latencyMs: number }
+	| { kind: "permission"; permissionKind: string; decision: HostDecision; target: string };
 export interface ContractInputs {
 	init: { scope: ScopeCtx; registration: InitRegistration };
 	hostEvent: { scope: ScopeCtx; event: HostEvent };
@@ -190,6 +193,9 @@ export const hostEventSchema: z.ZodType<HostEvent, unknown> = z.discriminatedUni
 	z.object({ kind: z.literal("prompt"), prompt: z.string() }),
 	z.object({ kind: z.literal("llm"), model: nonempty, promptTokens: count, completionTokens: count,
 		cacheReadTokens: count.optional(), cacheWriteTokens: count.optional(), latencyMs: timestamp }),
+	z.object({ kind: z.literal("tool"), toolName: nonempty, decision: z.enum(["allow", "deny"]),
+		input: z.string(), output: z.string(), latencyMs: timestamp }),
+	z.object({ kind: z.literal("permission"), permissionKind: nonempty, decision: z.enum(["allow", "deny"]), target: z.string() }),
 ]);
 export const inputSchemas: { [K in keyof ContractInputs]: z.ZodType<ContractInputs[K], unknown> } = {
 	init: z.object({ scope: scopeSchema, registration: initRegistrationSchema }),
