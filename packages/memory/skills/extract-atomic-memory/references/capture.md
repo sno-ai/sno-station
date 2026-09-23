@@ -18,6 +18,9 @@ Before you return: re-read every turn once and confirm each stated who / what / 
 `subject` is who or what the claim is about, and `subject_kind` says what kind of name that is:
 `user`, `agent`, `named_entity`, or `unresolved`.
 
+A task the user says they will do, are doing, or have finished is about the user: its subject is
+`user`, and the task itself goes in the fact, not in the subject.
+
 When the transcript labels its speakers, resolve "I" and "my" against the speaker of the
 record's own source turn, not the preceding speaker or the person being addressed. In
 "Alex: Thanks, Sam. I finished it", Alex finished it. Check that attribution separately for
