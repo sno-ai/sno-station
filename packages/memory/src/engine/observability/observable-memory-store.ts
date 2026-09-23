@@ -19,6 +19,8 @@ import type {
 } from "../shared/types";
 import {
 	MemoryStore,
+	type AtomicExtractionWriteInput,
+	type AtomicExtractionWriteResult,
 	type ChunkSearchResult,
 	type ListOptions,
 	type MemoryRow,
@@ -32,6 +34,8 @@ import {
 	type SupersedeActiveFactGuard,
 	type SupersedeClose,
 	type SupersedePreserveExisting,
+	type TaskLifecycleBatchWriteInput,
+	type TaskLifecycleBatchWriteResult,
 	type UpdateChanges,
 } from "../../store/store";
 import type { PluginObservability } from "./adapter";
@@ -92,6 +96,33 @@ export class ObservableMemoryStore extends MemoryStore {
 				this.observability.emitError("memory.write:throw", error, this.sessionUuidProvider()),
 			);
 			throw error;
+		}
+	}
+
+	// Atomic extraction writes rows through these doors, not store(); each created row is a memory.write.
+	override async storeAtomicExtractionChunk(
+		input: AtomicExtractionWriteInput,
+	): Promise<AtomicExtractionWriteResult> {
+		const result = await super.storeAtomicExtractionChunk(input);
+		this.emitCreatedWrites(result.cardIds);
+		return result;
+	}
+
+	override async applyTaskLifecycleBatchWithAtomicWrite(
+		input: TaskLifecycleBatchWriteInput,
+	): Promise<TaskLifecycleBatchWriteResult> {
+		const result = await super.applyTaskLifecycleBatchWithAtomicWrite(input);
+		this.emitCreatedWrites(result.atomicFactWrite.cardIds);
+		return result;
+	}
+
+	private emitCreatedWrites(ids: string[]): void {
+		if (!this.observability.enabled) return;
+		const sessionUuid = this.sessionUuidProvider();
+		for (const id of ids) {
+			const entry = super.getById(id);
+			if (!entry) continue;
+			this.observability.trackBestEffort("memory.write", () => this.emitWrite(entry, sessionUuid));
 		}
 	}
 

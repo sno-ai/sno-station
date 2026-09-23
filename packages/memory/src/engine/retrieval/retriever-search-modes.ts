@@ -343,6 +343,14 @@ Object.assign(MemoryRetriever.prototype, {
 			fused.map((result) => result.entry.id),
 			fused.map((result) => result.score),
 		);
+		// A query naming an identifier (6+ characters with a digit) asks for the memory that carries
+		// it; ranking scores near-identical rows alike, so that memory is served first.
+		const identifiers =
+			context.query.match(/[\w./-]*\d[\w./-]*/g)?.filter((token) => token.length >= 6) ?? [];
+		const exact = fused.filter((result) =>
+			identifiers.some((token) => result.entry.text.includes(token)),
+		);
+		if (exact.length > 0) fused = [...exact, ...fused.filter((result) => !exact.includes(result))];
 		trace?.startStage(
 			"limit_slice",
 			fused.map((result) => result.entry.id),
