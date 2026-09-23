@@ -29,9 +29,41 @@ describe("schemas — extras", () => {
 		);
 	});
 
-	it("EVENT_TYPES is exactly the 14 SDK-emittable event types", () => {
-		// Per plugin-integration-spec.md §5 plus memory telemetry extension: audit.anchor excluded.
-		assert.equal(EVENT_TYPES.length, 14);
+	it("EVENT_TYPES is exactly the 31 SDK-emittable event types", () => {
+		// Per plugin-integration-spec.md §5, memory telemetry, and observe v2: audit.anchor excluded.
+		assert.deepEqual([...EVENT_TYPES], [
+			"agent.identify",
+			"memory.write",
+			"memory.read",
+			"memory.snapshot",
+			"memory.telemetry",
+			"llm.call",
+			"tool.call",
+			"session.start",
+			"session.end",
+			"prompt.submit",
+			"permission.request",
+			"consent.change",
+			"error",
+			"cost.summary",
+			"reach.register",
+			"reach.message",
+			"handoff.trigger",
+			"handoff.brief",
+			"handoff.release",
+			"handoff.pause",
+			"handoff.complete",
+			"handoff.quota",
+			"review.run",
+			"review.fix",
+			"rsi.run",
+			"rsi.proposal",
+			"rsi.verdict",
+			"rsi.impact",
+			"rsi.lesson",
+			"skill.run",
+			"skill.install",
+		]);
 		assert.equal(EVENT_TYPES.includes("memory.telemetry"), true);
 		assert.equal(EVENT_TYPES.includes("audit.anchor"), false);
 	});

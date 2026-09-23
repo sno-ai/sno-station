@@ -538,7 +538,7 @@ function expectedOrdinal(scenario: WriterScenario): number {
 
 /**
  * Both cases below are regressions for defects that shipped together on 2026-08-27 and were only
- * caught by a full e2e-minus run two days later. They are here, at the lowest boundary that can
+ * caught by a full e2e run two days later. They are here, at the lowest boundary that can
  * see them, so the next change to the write path fails in seconds instead of in a live REM job.
  */
 describe("REM verified-write hash symmetry", () => {
