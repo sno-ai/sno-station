@@ -1,3 +1,6 @@
+export { appendObserveLedgerRows, type ObserveLedgerRow }
+	from "../src/engine/telemetry/observe-ledger";
+export { SKILL_CATEGORIES, skillVersionFor } from "./skill-categories";
 import type { Registration } from "../src/contract/inputs";
 import { engineSettingsSchema } from "../src/contract/settings";
 import { installationSettingsSchema, type InstallationSettings } from "./installation-settings";

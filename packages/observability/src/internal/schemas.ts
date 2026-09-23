@@ -75,6 +75,12 @@ const memoryTelemetryEventSchema = z.object({
 	status: z.string().min(1).optional(),
 });
 
+const harnessSchema = z.enum(["openclaw", "hermes", "claude-code", "codex", "pi", "cursor"]);
+const countSchema = z.number().int().nonnegative();
+const percentageSchema = countSchema.max(100);
+const nameSchema = z.string().min(1).max(128);
+const hex64Schema = z.string().regex(/^[a-f0-9]{64}$/);
+
 const payloadSchemas: Record<EventType, z.ZodType<unknown>> = {
 	"agent.identify": z
 		.object({
@@ -84,6 +90,14 @@ const payloadSchemas: Record<EventType, z.ZodType<unknown>> = {
 			cli_version: z.string().min(1).optional(),
 			plugin_version: z.string().min(1).optional(),
 			sdk_version: z.string().min(1),
+			locale: z.string().min(1).max(32).optional(),
+			os: z.string().min(1).max(32).optional(),
+			person_hints: z.array(z.object({
+				kind: z.enum([
+					"claude_account", "codex_account", "git_email", "github_login", "tailscale_user",
+				]),
+				hash: hex64Schema,
+			}).strict()).min(1).max(16).optional(),
 		})
 		.strict(),
 	"memory.write": z
@@ -254,6 +268,11 @@ const payloadSchemas: Record<EventType, z.ZodType<unknown>> = {
 			kind: z.string().min(1),
 			message_hash: z.string().min(1),
 			recoverable: z.boolean(),
+			component: z.enum([
+				"cli-setup", "cli-update", "cli-remove", "cli-doctor", "cli-rem", "cli-claim",
+				"mem-claude", "mem-codex", "mem-claw", "mem-hermes", "reach", "handoff", "review", "rsi",
+			]),
+			context: z.string().min(1).max(64),
 		})
 		.strict(),
 	"cost.summary": z
@@ -273,6 +292,134 @@ const payloadSchemas: Record<EventType, z.ZodType<unknown>> = {
 			local_memory_output_tokens: z.number().int().nonnegative(),
 			cost_usd: z.number().nonnegative().optional(),
 			event_count: z.number().int().nonnegative().optional(),
+		})
+		.strict(),
+	"reach.register": z
+		.object({
+			harness: harnessSchema,
+			action: z.enum(["register", "unregister"]),
+		})
+		.strict(),
+	"reach.message": z
+		.object({
+			kind: z.enum(["card", "reply", "ring", "remind", "call", "spawn", "dismiss"]),
+			from_harness: harnessSchema,
+			to_harness: z.union([harnessSchema, z.literal("unknown")]),
+			outcome: z.enum(["ok", "timeout", "refused"]),
+			latency_ms: countSchema,
+		})
+		.strict(),
+	"handoff.trigger": z
+		.object({
+			from_harness: harnessSchema,
+			to_harness: harnessSchema,
+			remaining_pct: percentageSchema,
+			threshold_pct: percentageSchema,
+		})
+		.strict(),
+	"handoff.brief": z
+		.object({
+			byte_len: countSchema,
+			brief_hash: hex64Schema,
+			tasks_done: countSchema,
+			tasks_total: countSchema,
+		})
+		.strict(),
+	"handoff.release": z
+		.object({
+			attempt: countSchema.min(1),
+			seconds_since_trigger: countSchema,
+		})
+		.strict(),
+	"handoff.pause": z
+		.object({
+			reason: z.enum(["early_write", "other"]),
+		})
+		.strict(),
+	"handoff.complete": z
+		.object({
+			total_seconds: countSchema,
+			sender_remaining_pct: percentageSchema,
+			commits_before: countSchema,
+			commits_after: countSchema,
+		})
+		.strict(),
+	"handoff.quota": z
+		.object({
+			harness: harnessSchema,
+			remaining_pct: percentageSchema,
+			reset_in_s: countSchema,
+		})
+		.strict(),
+	"review.run": z
+		.object({
+			author_harness: harnessSchema,
+			reviewer_harness: harnessSchema,
+			findings_p1: countSchema,
+			findings_p2: countSchema,
+			findings_p3: countSchema,
+			empty: z.boolean(),
+			duration_ms: countSchema,
+		})
+		.strict(),
+	"review.fix": z
+		.object({
+			fixed: countSchema,
+			dismissed: countSchema,
+		})
+		.strict(),
+	"rsi.run": z
+		.object({
+			sessions_read: countSchema,
+			duration_ms: countSchema,
+			trigger: z.enum(["timer", "manual"]),
+			outcome: z.enum(["ok", "fail"]),
+		})
+		.strict(),
+	"rsi.proposal": z
+		.object({
+			proposal_count: countSchema,
+			skills_touched: countSchema,
+		})
+		.strict(),
+	"rsi.verdict": z
+		.object({
+			accepted: countSchema,
+			rejected: countSchema,
+			tbd: countSchema,
+		})
+		.strict(),
+	"rsi.impact": z
+		.object({
+			skill_name: nameSchema,
+			before_sessions: countSchema,
+			before_failures: countSchema,
+			after_sessions: countSchema,
+			after_failures: countSchema,
+		})
+		.strict(),
+	"rsi.lesson": z
+		.object({
+			count: countSchema,
+		})
+		.strict(),
+	"skill.run": z
+		.object({
+			harness: harnessSchema,
+			skill_name: nameSchema,
+			skill_version: nameSchema,
+			category: z.enum(["J", "M", "S", "H", "T", "R", "other"]),
+			duration_ms: countSchema,
+			outcome: z.enum(["ok", "fail"]),
+			input_hash: hex64Schema.optional(),
+			output_hash: hex64Schema.optional(),
+		})
+		.strict(),
+	"skill.install": z
+		.object({
+			skill_name: nameSchema,
+			skill_version: nameSchema,
+			action: z.enum(["install", "update", "rollback"]),
 		})
 		.strict(),
 };
@@ -328,6 +475,12 @@ export function parseEventInput(input: unknown): ParsedEvent {
 	const eventType = eventTypeSchema.safeParse(base.data.event_type);
 	if (!eventType.success) {
 		throw new InvalidEventTypeError(base.data.event_type);
+	}
+	if (
+		(lane.data === "squad" && !/^(reach|handoff|review)\./.test(eventType.data)) ||
+		(lane.data === "rsi" && !eventType.data.startsWith("rsi."))
+	) {
+		throw new InvalidEventPayloadError(`lane: ${lane.data} does not match ${eventType.data}`);
 	}
 
 	const payload = payloadSchemas[eventType.data].safeParse(base.data.payload);
