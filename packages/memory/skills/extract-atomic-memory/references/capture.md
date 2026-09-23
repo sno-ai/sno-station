@@ -20,7 +20,8 @@ Before you return: re-read every turn once and confirm each stated who / what / 
 
 A task the user says they will do, are doing, or have finished, and a preference the user states,
 including a correction that replaces an earlier one, is about the user: its subject is `user`, and
-the task or the preferred thing goes in the fact, not in the subject.
+the task or the preferred thing goes in the fact, not in the subject. This holds when the preference is
+limited to a place, a project or a run ("for run X I prefer Y"): the limit goes in the fact too.
 
 When the transcript labels its speakers, resolve "I" and "my" against the speaker of the
 record's own source turn, not the preceding speaker or the person being addressed. In
