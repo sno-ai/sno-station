@@ -18,6 +18,7 @@ import {
 } from "./machine-registration.js";
 import { AsyncMutex } from "./mutex.js";
 import { getBufferPath, getRedactionRulesPath, type PathEnv } from "./paths.js";
+import { collectPersonHints } from "./person-hints.js";
 import { redactEventPayload, redactScope } from "./redact.js";
 import { parseConsentValue } from "./schemas.js";
 import {
@@ -121,7 +122,7 @@ export class SnoObserveRuntime {
 				lane: "memory",
 				tsEdgeMs: Date.now(),
 				consent,
-				payload: agentIdentifyPayload(identity, agentId, {}, this.options),
+				payload: {},
 				scope: {},
 				chainEpoch,
 				terminal: consent === "off",
@@ -257,7 +258,7 @@ export class SnoObserveRuntime {
 			lane: "memory",
 			tsEdgeMs: Date.now(),
 			consent,
-			payload: agentIdentifyPayload(identity, agentId, {}, this.options),
+			payload: {},
 			scope: {},
 			chainEpoch,
 			terminal,
@@ -617,6 +618,9 @@ function agentIdentifyPayload(
 	const cliVersion = optionalString(payload["cli_version"]) ?? optionalString(options.cliVersion);
 	const pluginVersion =
 		optionalString(payload["plugin_version"]) ?? optionalString(options.pluginVersion);
+	const locale = Intl.DateTimeFormat().resolvedOptions().locale;
+	const os = process.platform;
+	const personHints = collectPersonHints(options.env);
 	return {
 		agent_id: agentId,
 		machine_id: identity.machine_uuid,
@@ -624,6 +628,9 @@ function agentIdentifyPayload(
 		...(cliVersion ? { cli_version: cliVersion } : {}),
 		...(pluginVersion ? { plugin_version: pluginVersion } : {}),
 		sdk_version: SDK_VERSION,
+		...(locale.length > 0 && locale.length <= 32 ? { locale } : {}),
+		...(os.length > 0 && os.length <= 32 ? { os } : {}),
+		...(personHints.length > 0 ? { person_hints: personHints } : {}),
 	};
 }
 
