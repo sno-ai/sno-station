@@ -21,10 +21,27 @@ export const EVENT_TYPES = [
 	"consent.change",
 	"error",
 	"cost.summary",
+	"reach.register",
+	"reach.message",
+	"handoff.trigger",
+	"handoff.brief",
+	"handoff.release",
+	"handoff.pause",
+	"handoff.complete",
+	"handoff.quota",
+	"review.run",
+	"review.fix",
+	"rsi.run",
+	"rsi.proposal",
+	"rsi.verdict",
+	"rsi.impact",
+	"rsi.lesson",
+	"skill.run",
+	"skill.install",
 ] as const;
 export type EventType = (typeof EVENT_TYPES)[number];
 
-export const EVENT_LANES = ["memory", "llm", "skill", "security"] as const;
+export const EVENT_LANES = ["memory", "llm", "skill", "security", "squad", "rsi"] as const;
 export type EventLane = (typeof EVENT_LANES)[number];
 
 export type ExportFormat = "tarball" | "jsonl" | "csv";
