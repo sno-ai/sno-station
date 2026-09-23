@@ -599,6 +599,42 @@ class SnoMemoryProvider(MemoryProvider):
         if not isinstance(tool_name, str) or not tool_name:
             return
         duration = call.get("duration_ms")
+        args = call.get("args")
+        name = args.get("name") if isinstance(args, dict) else None
+        if (tool_name == "skill_view" and isinstance(args, dict)
+                and isinstance(name, str) and name and not args.get("file_path")):
+            name = name.rsplit("/", 1)[-1].rsplit(":", 1)[-1]
+            try:
+                categories = json.loads(Path(__file__).with_name("skill_categories.json").read_text())
+                row = {
+                    "ts_ms": int(time.time() * 1000),
+                    "event_type": "skill.run",
+                    "lane": "skill",
+                    "payload": {
+                        "harness": "hermes",
+                        "skill_name": name,
+                        "skill_version": "local",
+                        "category": categories.get(name, "other"),
+                        "duration_ms": (
+                            int(round(duration)) if isinstance(duration, (int, float)) else 0
+                        ),
+                        "outcome": "fail" if call.get("error_type") or call.get("status")
+                        not in (None, "ok", "success") else "ok",
+                    },
+                }
+                profile = Path(
+                    os.environ.get("SNO_PROFILE_DIR")
+                    or os.environ.get("SNO_HOME") or Path.home() / ".sno"
+                )
+                directory = profile / "observe"
+                directory.mkdir(mode=0o700, parents=True, exist_ok=True)
+                fd = os.open(directory / "ledger.jsonl", os.O_APPEND | os.O_CREAT | os.O_WRONLY, 0o600)
+                try:
+                    os.write(fd, (json.dumps(row) + "\n").encode())
+                finally:
+                    os.close(fd)
+            except (OSError, ValueError, OverflowError) as error:
+                _LOG.error("skill run not recorded", extra={"error": str(error)})
         self._report_host_event(
             session_id,
             {
