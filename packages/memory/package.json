@@ -118,7 +118,6 @@
     "eld": "^2.0.3",
     "js-tiktoken": "^1.0.21",
     "lru-cache": "^11.3.5",
-    "onnxruntime-node": "1.21.1",
     "semver": "^7.6.3",
     "sqlite-vec": "^0.1.6",
     "tar": "^7.4.3",
