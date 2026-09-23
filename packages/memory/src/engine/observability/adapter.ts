@@ -20,9 +20,10 @@ import { readInstalledPackageVersion, readSnoStationCoreWorkspaceVersion } from 
 
 type ObserveRuntime = ReturnType<typeof createSnoObserve>;
 
-type EmitInput = {
+export type EmitInput = {
 	eventType: EventType;
 	eventId?: string;
+	tsEdgeMs?: number;
 	scope?: JsonObject;
 	payload: JsonObject;
 	sessionUuid?: string;
@@ -37,7 +38,10 @@ const OBSERVE_EMIT_TIMEOUT_MS = 5_000;
 const OBSERVE_BACKGROUND_TIMEOUT_MS = 5_000;
 
 /** Mirrors the server's event-type → lane registry; a mismatch is a 400 on ingest. */
-function laneForEventType(eventType: EventType): EventLane {
+export function laneForEventType(eventType: EventType): EventLane {
+	if (/^(reach|handoff|review)\./.test(eventType)) return "squad";
+	if (eventType.startsWith("rsi.")) return "rsi";
+	if (eventType.startsWith("skill.")) return "skill";
 	if (eventType === "llm.call") return "llm";
 	if (eventType === "tool.call") return "skill";
 	if (eventType === "consent.change" || eventType === "permission.request") return "security";
@@ -59,7 +63,7 @@ function formatErrorMessage(error: unknown): string {
 
 export class PluginObservability {
 	private readonly runtime: ObserveRuntime | undefined;
-	private readonly logger: ObserveLogger | undefined;
+	readonly logger: ObserveLogger | undefined;
 	private readonly pending = new Set<Promise<void>>();
 	readonly agentId: AgentId;
 	readonly enabled: boolean;
@@ -109,6 +113,7 @@ export class PluginObservability {
 			: input.scope;
 		const event: Event = {
 			event_type: input.eventType,
+			...(input.tsEdgeMs !== undefined ? { ts_edge_ms: input.tsEdgeMs } : {}),
 			...(input.eventId ? { event_id: input.eventId } : {}),
 			agent_id: this.agentId,
 			lane: laneForEventType(input.eventType),
@@ -181,6 +186,11 @@ export class PluginObservability {
 			sessionUuid,
 			payload: {
 				kind,
+				component: {
+					"claude-code": "mem-claude", codex: "mem-codex",
+					openclaw: "mem-claw", hermes: "mem-hermes",
+				}[this.agentId],
+				context: kind.split(":", 1)[0] ?? kind,
 				message_hash: messageHash,
 				recoverable: false,
 			},
