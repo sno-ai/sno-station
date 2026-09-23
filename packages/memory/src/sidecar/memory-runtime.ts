@@ -1,3 +1,5 @@
+import { getSnoProfileDir } from "@snoai/observability";
+import { forwardObserveLedger } from "../engine/telemetry/observe-ledger";
 import { isDeepStrictEqual } from "node:util";
 import { DEFAULT_LOCALE } from "../engine/i18n/locales";
 import { readMaintenanceOverrides } from "./config";
@@ -156,6 +158,11 @@ export class MemoryRuntimePool {
 			// sessions and cost tallies opened under the previous entry carry over.
 			const previous = this.skins.get(registration.skinId);
 			await this.snapshot(entry, "startup", scope.host?.observeSessionUuid);
+			entry.observability.trackBestEffort("observe ledger", async () => {
+				await forwardObserveLedger({
+					profileDir: getSnoProfileDir(), observe: entry.observability,
+				});
+			});
 			if (previous) { entry.hostSessions = previous.hostSessions; entry.observability.aggregator.adopt(previous.observability.aggregator); }
 			this.skins.set(registration.skinId, entry);
 			if (previous) { previous.retired = true; if (previous.active === 0) await this.dispose(previous); }
@@ -212,6 +219,11 @@ export class MemoryRuntimePool {
 				await this.emitProviderUsage(entry, scope, responses.splice(0));
 				await this.snapshot(entry, "session_end", uuid);
 				await this.forwardTelemetry(entry, uuid);
+				entry.observability.trackBestEffort("observe ledger", async () => {
+					await forwardObserveLedger({
+						profileDir: getSnoProfileDir(), observe: entry.observability,
+					});
+				});
 				await this.endOwnedSession(entry, scope);
 			}
 			return result;

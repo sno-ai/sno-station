@@ -24,10 +24,31 @@ function memoryWrite(tokens_method) {
 
 describe("schema alignment", () => {
 	it("requires a valid envelope lane and accepts all M1 lanes", () => {
-		for (const lane of EVENT_LANES) {
+		for (const lane of ["memory", "llm", "skill", "security"]) {
 			const parsed = parseEventInput({ ...memoryWrite("qwen_tokenizer"), lane });
 			assert.equal(parsed.lane, lane);
 		}
+		for (const lane of ["squad", "rsi"]) {
+			assert.equal(EVENT_LANES.includes(lane), true);
+			assert.throws(
+				() => parseEventInput({ ...memoryWrite("qwen_tokenizer"), lane }),
+				InvalidEventPayloadError,
+			);
+		}
+		assert.equal(
+			parseEventInput({
+				event_type: "handoff.release",
+				lane: "squad",
+				agent_id: "codex",
+				payload: { attempt: 1, seconds_since_trigger: 42 },
+			}).lane,
+			"squad",
+		);
+		assert.equal(
+			parseEventInput({ event_type: "rsi.lesson", lane: "rsi", agent_id: "codex", payload: { count: 1 } })
+				.lane,
+			"rsi",
+		);
 
 		assert.throws(
 			() => parseEventInput({ event_type: "memory.write", agent_id: "codex", payload: {} }),
@@ -43,7 +64,39 @@ describe("schema alignment", () => {
 		assert.equal(EVENT_TYPES.includes("memory.snapshot"), true);
 		assert.equal(EVENT_TYPES.includes("memory.telemetry"), true);
 		assert.equal(EVENT_TYPES.includes("audit.anchor"), false);
-		assert.equal(EVENT_TYPES.length, 14);
+		assert.deepEqual([...EVENT_TYPES], [
+			"agent.identify",
+			"memory.write",
+			"memory.read",
+			"memory.snapshot",
+			"memory.telemetry",
+			"llm.call",
+			"tool.call",
+			"session.start",
+			"session.end",
+			"prompt.submit",
+			"permission.request",
+			"consent.change",
+			"error",
+			"cost.summary",
+			"reach.register",
+			"reach.message",
+			"handoff.trigger",
+			"handoff.brief",
+			"handoff.release",
+			"handoff.pause",
+			"handoff.complete",
+			"handoff.quota",
+			"review.run",
+			"review.fix",
+			"rsi.run",
+			"rsi.proposal",
+			"rsi.verdict",
+			"rsi.impact",
+			"rsi.lesson",
+			"skill.run",
+			"skill.install",
+		]);
 	});
 
 	it("accepts only the four locked token methods", () => {

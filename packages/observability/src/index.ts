@@ -1,3 +1,4 @@
+export { getSnoProfileDir } from "./internal/paths.js";
 import type { ClaimCode, ClaimResult } from "./internal/device-claim.js";
 import { type RuntimeOptions, SnoObserveRuntime } from "./internal/runtime.js";
 import { parseEventInput } from "./internal/schemas.js";
