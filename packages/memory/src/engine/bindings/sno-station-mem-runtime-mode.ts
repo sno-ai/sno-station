@@ -6,7 +6,8 @@ const diagnosticLog = createDiagnosticLogger("sno-station-mem:sno-station-mem-ru
  */
 
 import type { SnoStationMemPluginApi } from "./sno-station-mem-runtime-dependencies";
-import { appendAuditEntry, isSystemBypassId } from "./sno-station-mem-runtime-dependencies";
+import { appendAuditEntry } from "../operations/runtime-audit-log";
+import { isSystemBypassId } from "../security/scopes";
 
 /** Detects completion bootstrap mode so plugin startup can expose only completion wiring. */
 export function isCompletionMode(): boolean {
