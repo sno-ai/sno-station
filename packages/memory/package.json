@@ -55,6 +55,7 @@
     "drizzle",
     "scripts/download-simple-tokenizer.mjs",
     "skills",
+    "!skills/CLAUDE.md",
     "sqlite-extensions",
     "config/llm",
     "config/llm.trust.json",
@@ -62,7 +63,6 @@
     "package.json",
     "LICENSE",
     "README.md",
-    "fixtures",
     "generated"
   ],
   "scripts": {
