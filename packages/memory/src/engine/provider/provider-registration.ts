@@ -2,6 +2,7 @@ import { PERSISTED_PROVIDER_SYSTEM } from "../../model/signed-registry-constants
 import { resolve } from "node:path";
 import { createLogger } from "@snoai/utils/logger";
 import { isLowercaseCanonicalUUIDv7 } from "@snoai/common-core";
+import { bootstrapIdentity } from "@snoai/observability";
 import type { ProviderHostConfig as SnoStationMemConfig } from "../../contract/provider-runtime-types";
 
 
@@ -22,12 +23,12 @@ type AgentEntry = {
 	id?: unknown;
 	workspace?: unknown;
 };
+/** The configured provider.userId, else this machine's identity (the same id every skin sees). */
 export function readTrustedUserId(config: PluginConfig): string {
-	const userId = config.provider.userId;
-	if (typeof userId !== "string" || userId.trim().length === 0) {
-		throw new Error("sno-station-mem provider requires provider.userId");
-	}
-	const trimmed = userId.trim();
+	const configured = config.provider.userId;
+	const trimmed = typeof configured === "string" && configured.trim().length > 0
+		? configured.trim()
+		: bootstrapIdentity().machine_uuid;
 	if (!isLowercaseCanonicalUUIDv7(trimmed)) {
 		throw new Error("sno-station-mem provider userId must be a lowercase UUID-v7");
 	}

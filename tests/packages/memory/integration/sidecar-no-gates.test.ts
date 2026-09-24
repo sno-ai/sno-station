@@ -1595,3 +1595,37 @@ describe("manual recall turn account over HTTP", () => {
 		}
 	});
 });
+
+describe("one workspace is one shared memory", () => {
+	it("lets every skin read what another wrote in the same workspace, with no configured userId", async () => {
+		await health();
+		const workspace = join(root, "workspace");
+		mkdirSync(workspace);
+		const scopeFor = (session: string, project = workspace) => ({
+			principal: "caller", project, session,
+			...(project === "global" ? {} : { host: { sessionId: session, workspace } }),
+		});
+		const skins = ["codex", "claude-code", "hermes", "mem-claw"];
+		for (const skin of skins) {
+			const response = await contractPost("/v1/init", { scope: scopeFor(`${skin}-init`), registration: {
+				...registration("local-first"), skinId: skin } }, skin);
+			expect(response.status).toBe(200);
+		}
+		const written = await contractPost("/v1/mutate", { scope: scopeFor("codex-turn"),
+			op: { op: "store", content: "The deploy target for this workspace is the harbor cluster.", category: "episodic" } }, "codex");
+		expect(written.status).toBe(200);
+		expect((await written.json()).result.isError).not.toBe(true);
+		const shared = await contractPost("/v1/mutate", { scope: scopeFor("hermes-turn", "global"),
+			op: { op: "store", content: "The owner prefers tabs for indentation everywhere.", category: "episodic" } }, "hermes");
+		expect(shared.status).toBe(200);
+		for (const skin of skins) {
+			const response = await contractPost("/v1/get-recall", { scope: scopeFor(`${skin}-read`),
+				query: "Which deploy target and indentation are used?", options: { source: "manual", minScore: 0 } }, skin);
+			expect(response.status).toBe(200);
+			const texts = (await response.json()).toolResult.details.memories.map((row: { text: string }) => row.text).join("\n");
+			expect(texts).toContain("harbor cluster");
+			expect(texts).toContain("tabs for indentation");
+		}
+		expect(JSON.parse(readFileSync(join(root, "identity.json"), "utf8")).machine_uuid).toMatch(/^[0-9a-f-]{36}$/);
+	});
+});

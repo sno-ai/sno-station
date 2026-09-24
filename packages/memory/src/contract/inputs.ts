@@ -19,8 +19,8 @@ export type HostContext = {
 	systemCaller?: boolean;
 	at?: number;
 };
-/** `readable` lists the scopes this call may read beside `project`; omitted means the project alone. */
-export type ScopeCtx = { principal: string; project: string; session: string; readable?: string[]; host?: HostContext };
+/** Every call reads `project` plus the shared global memory; writes land on `project`. */
+export type ScopeCtx = { principal: string; project: string; session: string; host?: HostContext };
 export type Message = {
 	role: "system" | "developer" | "user" | "assistant" | "tool";
 	content: JsonValue;
@@ -100,7 +100,6 @@ const category = z.enum(MEMORY_CATEGORIES);
 const metadata = z.record(z.string(), z.json());
 export const scopeSchema: z.ZodType<ScopeCtx, unknown> = z.object({
 	principal: nonempty, project: nonempty, session: nonempty,
-	readable: z.array(nonempty).optional(),
 	host: z.object({
 		observeSessionUuid: z.uuid().optional(),
 		agentId: z.string().optional(), sessionKey: z.string().optional(),
