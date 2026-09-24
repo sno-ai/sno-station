@@ -9,6 +9,7 @@ export type AdapterAVerdict = "replacement" | "keep" | "uncertain";
 
 export interface AdapterAMemoryView {
 	text: string;
+	subject?: string | null;
 	kind: "profile" | "episodic" | "state";
 	validFrom: string;
 	assertedAt: string;
@@ -17,6 +18,7 @@ export interface AdapterAMemoryView {
 
 export interface AdapterAMemoryRecord {
 	text: string;
+	subject?: string | null;
 	kind: string;
 	validFrom: number;
 	assertedAt: number;
@@ -35,6 +37,7 @@ export function adapterAViewFromRecord(record: AdapterAMemoryRecord): AdapterAMe
 	}
 	return {
 		text: record.text,
+		...(record.subject !== undefined ? { subject: record.subject } : {}),
 		kind: record.kind,
 		validFrom: isoUtcSeconds(record.validFrom),
 		assertedAt: isoUtcSeconds(record.assertedAt),
@@ -71,12 +74,14 @@ export function renderAdapterAPrompt(
 		"Judge the relationship of the newer memory to the older memory.",
 		"",
 		"Older:",
+		...(older.subject !== undefined ? [`subject: ${older.subject}`] : []),
 		`kind: ${older.kind}`,
 		`validFrom: ${older.validFrom}`,
 		`assertedAt: ${older.assertedAt}`,
 		`text: ${older.text}`,
 		"",
 		"Newer:",
+		...(newer.subject !== undefined ? [`subject: ${newer.subject}`] : []),
 		`kind: ${newer.kind}`,
 		`validFrom: ${newer.validFrom}`,
 		`assertedAt: ${newer.assertedAt}`,
