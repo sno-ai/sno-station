@@ -1,3 +1,4 @@
+import { parseReflectionMetadata } from "../reflection/entry-metadata-parser";
 import { SNO_OBSERVE_DEFAULT_AGENT_ID } from "../../../config/index";
 /** @file sno-station-mem-auto-recall-hook.ts
  * @purpose Handles before-agent auto-recall, filtering, timeout, and context injection.
@@ -349,11 +350,15 @@ function recordAutoRecallUsage(params: {
 			...base,
 			metadata: buildRecallUsageMetadata(result, retrievalRank, retrievalScore),
 		});
+		const writerAgentId = parseReflectionMetadata(result.entry.metadata).writer_agent_id;
 		const injectAccepted = params.telemetryUsage.tryAcceptUsage({
 			eventType: "inject",
 			...base,
 			metadata: {
 				injection_surface: "auto_recall_prepend_context",
+				...(typeof writerAgentId === "string" && writerAgentId.trim() &&
+					writerAgentId !== params.resolvedAgentId
+					? { source_agent_id: writerAgentId } : {}),
 				retrieval_rank: retrievalRank,
 				...(retrievalScore !== undefined && { retrieval_score: retrievalScore }),
 			},
