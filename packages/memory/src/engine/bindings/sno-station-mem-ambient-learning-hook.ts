@@ -46,6 +46,7 @@ async function runLocalFirstCapture(input: {
 	sessionKey: string;
 }): Promise<{ stored: number; failures: number }> {
 	const { api, config, store, event, ctx, stateDir, scope, sessionKey } = input;
+	const writerAgentId = resolveHookAgentId(ctx.agentId, sessionKey).agentId;
 	const entries = event.messages.flatMap((message) => {
 		if (!isAmbientLearningMessage(message)) return [];
 		if (message.role === "assistant" && !config.captureAssistant) return [];
@@ -91,6 +92,7 @@ async function runLocalFirstCapture(input: {
 				metadata: JSON.stringify({
 					memory_category: "episodic",
 					capture_mode: "local-first",
+					...(writerAgentId ? { writer_agent_id: writerAgentId } : {}),
 					role: entry.role,
 					...(sessionKey ? { session_key: sessionKey } : {}),
 					...serializeIntervalMetadata("episodic", date.interval),
@@ -192,6 +194,7 @@ export async function onAgentEnd(
 	try {
 		const stats = await insightDistiller.extractAndPersist(conversationText, sessionKey, {
 			scope,
+			writerAgentId: resolvedAgentId,
 			sessionDateTime,
 			sessionTimezone: ctx.sessionTimezone,
 		});

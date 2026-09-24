@@ -169,6 +169,7 @@ async function executeMemoryStore(
 			source: {
 				source: "manual",
 				messageId: `manual:${hash}`,
+				agentId: access.agentId,
 			},
 			...(callerValidFrom === undefined
 				? {}
@@ -213,7 +214,10 @@ async function executeMemoryStore(
 		category,
 		projectId: scope,
 		importance,
-		metadata: JSON.stringify(buildStoreMetadata(parsed, category, dateResolution)),
+		metadata: JSON.stringify({
+			...buildStoreMetadata(parsed, category, dateResolution),
+			writer_agent_id: access.agentId,
+		}),
 		...(dateResolution.timestamp === undefined ? {} : { timestamp: dateResolution.timestamp }),
 		timezone: dateResolution.timezone,
 	});
