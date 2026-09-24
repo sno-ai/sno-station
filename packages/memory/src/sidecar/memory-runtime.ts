@@ -155,7 +155,7 @@ export class MemoryRuntimePool {
 		try {
 			const result = await runtime.init(scope, registration);
 			// The successor is published only once it has proven it can read the store; the
-			// sessions and cost tallies opened under the previous entry carry over.
+			// sessions, cost tallies and per-turn recall state of the previous entry carry over.
 			const previous = this.skins.get(registration.skinId);
 			await this.snapshot(entry, "startup", scope.host?.observeSessionUuid);
 			entry.observability.trackBestEffort("observe ledger", async () => {
@@ -163,7 +163,11 @@ export class MemoryRuntimePool {
 					profileDir: getSnoProfileDir(), observe: entry.observability,
 				});
 			});
-			if (previous) { entry.hostSessions = previous.hostSessions; entry.observability.aggregator.adopt(previous.observability.aggregator); }
+			if (previous) {
+				entry.hostSessions = previous.hostSessions;
+				entry.observability.aggregator.adopt(previous.observability.aggregator);
+				entry.runtime.adoptRecall(previous.runtime);
+			}
 			this.skins.set(registration.skinId, entry);
 			if (previous) { previous.retired = true; if (previous.active === 0) await this.dispose(previous); }
 			setRegisteredRemTick(registration.skinId, config.remEnhanced.trigger?.tick);

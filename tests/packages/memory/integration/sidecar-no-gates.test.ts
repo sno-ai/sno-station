@@ -906,6 +906,27 @@ describe("sidecar keeps serving", () => {
 			await pool.close();
 		}
 	});
+	it("keeps same-turn recall omission across a re-registration mid-turn (issue #231)", async () => {
+		const pool = await MemoryRuntimePool.open();
+		const registered = registration("local-first");
+		const scope = { principal: "caller", project: "global", session: "reregister-mid-turn" };
+		const init = () => pool.invoke("init", { scope, registration: { ...registered, skinId: "reregister",
+			settings: { ...registered.settings, autoRecall: true, ambientLearning: false } } }, "reregister");
+		try {
+			await init();
+			await pool.invoke("mutate", { scope, op: { op: "store", content: "I keep a violet notebook for field notes.", category: "episodic" } }, "reregister");
+			const auto = await pool.invoke("getRecall", { scope, query: "Which notebook do I keep?", options: { source: "auto" } }, "reregister");
+			expect(auto).toMatchObject({ degraded: false });
+			expect((auto as { memoryIds: string[] }).memoryIds.length).toBeGreaterThan(0);
+			// The skin re-registers before its next memory call, inside the same agent turn.
+			await init();
+			const manual = await pool.invoke("getRecall", { scope, query: "Which notebook do I keep?", options: { source: "manual" } }, "reregister");
+			const details = (manual as { toolResult: { details: Record<string, unknown> } }).toolResult.details;
+			expect(details.already_served_count).toBeGreaterThan(0);
+		} finally {
+			await pool.close();
+		}
+	});
 	it("skips automatic recall when disabled by registration", async () => {
 		const pool = await MemoryRuntimePool.open();
 		const registered = registration("local-first");
