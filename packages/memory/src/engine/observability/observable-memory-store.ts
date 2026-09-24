@@ -3,7 +3,8 @@
  * @boundary Runtime audits fail closed; process telemetry never affects storage.
  */
 
-import type { JsonObject } from "@snoai/observability";
+import { isAbsolute } from "node:path";
+import { detectProjectId, type JsonObject } from "@snoai/observability";
 import type { EmbeddingConfig } from "../extraction/embedding-provider-client";
 import {
 	getSnoStationMemStateDir,
@@ -844,7 +845,9 @@ export class ObservableMemoryStore extends MemoryStore {
 		await this.observability.emit({
 			eventType: "memory.write",
 			sessionUuid,
-			scope: { project_id: entry.projectId },
+			...(isAbsolute(entry.projectId)
+				? { scope: { project_id: detectProjectId(entry.projectId) } }
+				: {}),
 			payload: {
 				key_hash: keyHash,
 				byte_len: Buffer.byteLength(entry.text, "utf8"),
