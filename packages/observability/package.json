@@ -1,6 +1,7 @@
 {
 	"name": "@snoai/observability",
 	"version": "0.1.0",
+	"description": "Host-side observability SDK for Sno agent events: validates, redacts and buffers events locally before delivery.",
 	"license": "Apache-2.0",
 	"publishConfig": { "access": "public" },
 	"repository": {
