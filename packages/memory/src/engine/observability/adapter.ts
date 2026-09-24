@@ -9,9 +9,9 @@ import {
 	type AgentId,
 	createSnoObserve,
 	type Event,
-	type EventLane,
 	type EventType,
 	type JsonObject,
+	laneForEventType,
 } from "@snoai/observability";
 import type { PluginConfig } from "../shared/types";
 import { bestEffort, bestEffortSync, type ObserveLogger } from "./best-effort";
@@ -36,17 +36,6 @@ type FlushOptions = {
 
 const OBSERVE_EMIT_TIMEOUT_MS = 5_000;
 const OBSERVE_BACKGROUND_TIMEOUT_MS = 5_000;
-
-/** Mirrors the server's event-type → lane registry; a mismatch is a 400 on ingest. */
-export function laneForEventType(eventType: EventType): EventLane {
-	if (/^(reach|handoff|review)\./.test(eventType)) return "squad";
-	if (eventType.startsWith("rsi.")) return "rsi";
-	if (eventType.startsWith("skill.")) return "skill";
-	if (eventType === "llm.call") return "llm";
-	if (eventType === "tool.call") return "skill";
-	if (eventType === "consent.change" || eventType === "permission.request") return "security";
-	return "memory";
-}
 
 function formatErrorMessage(error: unknown): string {
 	if (error instanceof Error) return error.message;
