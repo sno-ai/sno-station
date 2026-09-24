@@ -677,15 +677,6 @@ export class MemoryStore {
 		throw new StorageError("MemoryStore implementation modules were not loaded");
 	}
 
-	hasLiveEndedRowInGroup(
-		_projectId: string,
-		_category: string,
-		_subject: string,
-		_attribute: string | null,
-	): boolean {
-		throw new StorageError("MemoryStore implementation modules were not loaded");
-	}
-
 	createMemorySuppression(_input: MemorySuppressionInput): Promise<MemorySuppressionResult> {
 		throw new StorageError("MemoryStore implementation modules were not loaded");
 	}
@@ -1083,12 +1074,6 @@ export interface MemoryStoreInternals {
 		write: (database: SqliteDatabaseLike) => void,
 	): AtomicExtractionLedgerEntry;
 	storeAtomicExtractionChunk(input: AtomicExtractionWriteInput): Promise<AtomicExtractionWriteResult>;
-	hasLiveEndedRowInGroup(
-		projectId: string,
-		category: string,
-		subject: string,
-		attribute: string | null,
-	): boolean;
 	createMemorySuppression(input: MemorySuppressionInput): Promise<MemorySuppressionResult>;
 	store(entry: StoreInput): Promise<StoreResult>;
 	storeQuarantinedCandidate(entry: QuarantinedStoreInput): Promise<StoreResult>;
