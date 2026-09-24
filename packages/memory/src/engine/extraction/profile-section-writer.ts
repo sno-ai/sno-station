@@ -1,3 +1,4 @@
+import { resolveHookAgentId } from "../bindings/sno-station-mem-runtime-mode";
 import { FIXED_MEMORY_SNO_AI_EXTRACT } from "../../model/signed-registry-constants";
 /** @file profile-section-writer.ts
  * @purpose Mutation-native profile section writer for current-state memory.
@@ -110,6 +111,7 @@ function adapterAViewFromEntry(entry: MemoryEntry): AdapterAMemoryView {
 }
 
 export interface ProfileSectionSource {
+	agentId?: string;
 	sessionKey?: string;
 	messageId?: string;
 	source?: "ambient-learning" | "manual" | "reflection";
@@ -1364,6 +1366,7 @@ function profileStoreInput(args: {
 	overview?: string;
 	countRecordTokens: (text: string) => number;
 }): StoreInput {
+	const writerAgentId = resolveHookAgentId(args.source.agentId, args.source.sessionKey).agentId;
 	const rawText = args.content.trim();
 	const abstract = args.abstract?.trim() || firstSentence(rawText);
 	const text = boundSectionContent(rawText, abstract, args.countRecordTokens);
@@ -1387,6 +1390,7 @@ function profileStoreInput(args: {
 			bad_recall_count: 0,
 			suppressed_until_turn: 0,
 			...args.metadataPatch,
+			...(writerAgentId ? { writer_agent_id: writerAgentId } : {}),
 			section_name: args.sectionName,
 			...(args.supersedes ? { supersedes: args.supersedes } : {}),
 			...(args.topic ? { topic: args.topic } : {}),
@@ -1411,6 +1415,7 @@ async function writeEpisodicSafetyNet(
 	params: RunProfileSectionUpdateParams,
 	reason: string,
 ): Promise<{ rowId: string; replayed: boolean }> {
+	const writerAgentId = resolveHookAgentId(params.source.agentId, params.source.sessionKey).agentId;
 	const assertion = params.newAssertion.trim();
 	const idempotencyKey = profileSafetyNetIdempotencyKey(params);
 	const metadata = buildInsightMetadata(
@@ -1426,6 +1431,7 @@ async function writeEpisodicSafetyNet(
 			asserted_at: params.at,
 			valid_from: params.at,
 			...(params.source.sessionKey ? { source_session: params.source.sessionKey } : {}),
+			...(writerAgentId ? { writer_agent_id: writerAgentId } : {}),
 			...(params.source.messageId ? { source_message_id: params.source.messageId } : {}),
 			state: "confirmed",
 			source: params.source.source ?? "ambient-learning",
@@ -1469,6 +1475,7 @@ function tombstoneEventStoreInput(
 	params: RunProfileSectionUpdateParams,
 	closedProfileRowId: string,
 ): StoreInput {
+	const writerAgentId = resolveHookAgentId(params.source.agentId, params.source.sessionKey).agentId;
 	const assertion = params.newAssertion.trim();
 	const metadata = buildInsightMetadata(
 		{ text: assertion, category: "episodic", timestamp: params.at },
@@ -1483,6 +1490,7 @@ function tombstoneEventStoreInput(
 			asserted_at: params.at,
 			valid_from: params.at,
 			...(params.source.sessionKey ? { source_session: params.source.sessionKey } : {}),
+			...(writerAgentId ? { writer_agent_id: writerAgentId } : {}),
 			...(params.source.messageId ? { source_message_id: params.source.messageId } : {}),
 			state: "confirmed",
 			source: params.source.source ?? "ambient-learning",
