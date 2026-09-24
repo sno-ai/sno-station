@@ -186,6 +186,8 @@ export interface RemRepository {
 		pairingConfigHash: string;
 	}): VerdictGenerationRef | undefined;
 	listVerdictPairs(generationId: string): VerdictPairQueueItem[];
+	/** The given pairs already closed with a recorded verdict in any generation (PRD 140 REQ-9). */
+	readClosedVerdictPairIds(pairIds: readonly string[]): Set<string>;
 	claimNextPair(input: {
 		generationId: string;
 		invocationId: string;
@@ -269,6 +271,7 @@ export function createRemRepository(database: RemDatabaseLike): RemRepository {
 		createVerdictGeneration: (input) => createVerdictGeneration(database, input),
 		findOpenVerdictGeneration: (input) => findOpenVerdictGeneration(database, input),
 		listVerdictPairs: (generationId) => listVerdictPairs(database, generationId),
+		readClosedVerdictPairIds: (pairIds) => readClosedVerdictPairIds(database, pairIds),
 		claimNextPair: (input) => claimNextPair(database, input),
 		completePair: (input) => completePair(database, input),
 		refusePair: (input) => refusePair(database, input),
@@ -716,6 +719,19 @@ function listVerdictPairs(
 		claimState: row.claim_state,
 		invocationId: row.invocation_id,
 	}));
+}
+
+function readClosedVerdictPairIds(
+	database: RemDatabaseLike,
+	pairIds: readonly string[],
+): Set<string> {
+	const rows = database
+		.prepare(
+			`SELECT DISTINCT pair_id FROM nodix_rem_scan_pairs
+			WHERE progress_state = 'closed' AND pair_id IN (SELECT value FROM json_each(?))`,
+		)
+		.all(JSON.stringify(pairIds)) as Array<{ pair_id: string }>;
+	return new Set(rows.map((row) => row.pair_id));
 }
 
 function claimNextPair(
