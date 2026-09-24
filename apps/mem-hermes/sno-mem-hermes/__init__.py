@@ -344,6 +344,7 @@ class SnoMemoryProvider(MemoryProvider):
     def __init__(self) -> None:
         self._client: SidecarClient | None = None
         self._project = ""
+        self._cwd: str | None = None
         self._session_id = ""
         self._primary = False
         self._rewind_epoch = 0
@@ -372,11 +373,8 @@ class SnoMemoryProvider(MemoryProvider):
         client = SidecarClient(profile_dir)
         client.connect()
         cwd = kwargs.get("cwd")
-        self._project = (
-            str(Path(cwd).resolve())
-            if isinstance(cwd, str) and cwd
-            else f"hermes:{Path(str(kwargs['hermes_home'])).resolve()}"
-        )
+        self._cwd = str(Path(cwd).resolve()) if isinstance(cwd, str) and cwd else None
+        self._project = self._cwd or f"hermes:{Path(str(kwargs['hermes_home'])).resolve()}"
         self._session_id = session_id
         self._primary = kwargs.get("agent_context", "primary") == "primary"
         self._client = client
@@ -606,33 +604,29 @@ class SnoMemoryProvider(MemoryProvider):
             name = name.rsplit("/", 1)[-1].rsplit(":", 1)[-1]
             try:
                 categories = json.loads(Path(__file__).with_name("skill_categories.json").read_text())
-                row = {
-                    "ts_ms": int(time.time() * 1000),
-                    "event_type": "skill.run",
-                    "lane": "skill",
-                    "payload": {
-                        "harness": "hermes",
-                        "skill_name": name,
-                        "skill_version": "local",
-                        "category": categories.get(name, "other"),
-                        "duration_ms": (
-                            int(round(duration)) if isinstance(duration, (int, float)) else 0
-                        ),
-                        "outcome": "fail" if call.get("error_type") or call.get("status")
-                        not in (None, "ok", "success") else "ok",
-                    },
-                }
-                profile = Path(
-                    os.environ.get("SNO_PROFILE_DIR")
-                    or os.environ.get("SNO_HOME") or Path.home() / ".sno"
+                duration_ms = int(round(duration)) if isinstance(duration, (int, float)) else 0
+                outcome = "fail" if call.get("error_type") or call.get("status") not in (
+                    None, "ok", "success"
+                ) else "ok"
+                process = subprocess.Popen(
+                    [
+                        "sno-observe", "append", "skill.run", "--agent=hermes",
+                        "--harness=hermes", f"--skill_name={name}", "--skill_version=local",
+                        f"--category={categories.get(name, 'other')}",
+                        f"--duration_ms={duration_ms}", f"--outcome={outcome}",
+                    ],
+                    cwd=self._cwd,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
                 )
-                directory = profile / "observe"
-                directory.mkdir(mode=0o700, parents=True, exist_ok=True)
-                fd = os.open(directory / "ledger.jsonl", os.O_APPEND | os.O_CREAT | os.O_WRONLY, 0o600)
-                try:
-                    os.write(fd, (json.dumps(row) + "\n").encode())
-                finally:
-                    os.close(fd)
+
+                def wait_for_skill_run() -> None:
+                    with process:
+                        exit_code = process.wait()
+                    if exit_code:
+                        _LOG.error("skill run not recorded", extra={"exit_code": exit_code})
+
+                threading.Thread(target=wait_for_skill_run, daemon=True).start()
             except (OSError, ValueError, OverflowError) as error:
                 _LOG.error("skill run not recorded", extra={"error": str(error)})
         self._report_host_event(
