@@ -3311,6 +3311,7 @@ function orderCandidates(left: ClaimedCandidate, right: ClaimedCandidate): {
 			left.id.localeCompare(right.id) < 0);
 	const leftView = adapterAViewFromRecord({
 		text: left.text,
+		subject: left.subject,
 		kind: left.category,
 		validFrom: left.validFrom,
 		assertedAt: left.timestamp,
@@ -3318,6 +3319,7 @@ function orderCandidates(left: ClaimedCandidate, right: ClaimedCandidate): {
 	});
 	const rightView = adapterAViewFromRecord({
 		text: right.text,
+		subject: right.subject,
 		kind: right.category,
 		validFrom: right.validFrom,
 		assertedAt: right.timestamp,
