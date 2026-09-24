@@ -164,15 +164,10 @@ export class MemoryContractRuntime implements MemoryContract {
 		return parseAgentIdFromSessionKey(scope.session) ?? this.configured().registration.skinId;
 	}
 
-	/** Resolve the requested write project and read projects for this call. */
+	/** Every call writes to its project and reads that project plus the shared global memory. */
 	private async scopePolicy(scope: ScopeCtx): Promise<CallScopePolicy> {
 		const project = await this.project(scope);
-		const readable = [project];
-		for (const requested of scope.readable ?? []) {
-			if (requested === scope.project) continue;
-			if (!readable.includes(requested)) readable.push(requested);
-		}
-		return new CallScopePolicy(project, readable);
+		return new CallScopePolicy(project, project === "global" ? [project] : [project, "global"]);
 	}
 
 	private async project(scope: ScopeCtx): Promise<string> {

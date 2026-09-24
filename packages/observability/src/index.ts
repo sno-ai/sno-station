@@ -1,4 +1,5 @@
 export { getSnoProfileDir } from "./internal/paths.js";
+export { bootstrapIdentity } from "./internal/identity.js";
 export { detectProjectId, normalizeGitRemote } from "./internal/project-id.js";
 import type { ClaimCode, ClaimResult } from "./internal/device-claim.js";
 import { type RuntimeOptions, SnoObserveRuntime } from "./internal/runtime.js";
