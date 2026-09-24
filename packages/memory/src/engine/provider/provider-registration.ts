@@ -23,12 +23,14 @@ type AgentEntry = {
 	id?: unknown;
 	workspace?: unknown;
 };
+// Read once per process: the identity file sits behind a lock the hook processes also take.
+let machineUserId: string | undefined;
 /** The configured provider.userId, else this machine's identity (the same id every skin sees). */
 export function readTrustedUserId(config: PluginConfig): string {
 	const configured = config.provider.userId;
 	const trimmed = typeof configured === "string" && configured.trim().length > 0
 		? configured.trim()
-		: bootstrapIdentity().machine_uuid;
+		: (machineUserId ??= bootstrapIdentity().machine_uuid);
 	if (!isLowercaseCanonicalUUIDv7(trimmed)) {
 		throw new Error("sno-station-mem provider userId must be a lowercase UUID-v7");
 	}
