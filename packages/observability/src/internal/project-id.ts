@@ -28,7 +28,9 @@ export function detectProjectId(cwd = process.cwd(), env: PathEnv = process.env)
 		return projectId;
 	}
 
-	return getOrCreateDefaultProjectId(env);
+	const projectId = getOrCreateDefaultProjectId(env);
+	projectIdCache.set(absCwd, projectId);
+	return projectId;
 }
 
 export function normalizeGitRemote(remote: string): string {

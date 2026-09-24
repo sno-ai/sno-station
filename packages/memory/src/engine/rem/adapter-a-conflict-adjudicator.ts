@@ -9,6 +9,7 @@ export type AdapterAVerdict = "replacement" | "keep" | "uncertain";
 
 export interface AdapterAMemoryView {
 	text: string;
+	subject?: string | null;
 	kind: "profile" | "episodic" | "state";
 	validFrom: string;
 	assertedAt: string;
@@ -17,6 +18,7 @@ export interface AdapterAMemoryView {
 
 export interface AdapterAMemoryRecord {
 	text: string;
+	subject?: string | null;
 	kind: string;
 	validFrom: number;
 	assertedAt: number;
@@ -35,6 +37,7 @@ export function adapterAViewFromRecord(record: AdapterAMemoryRecord): AdapterAMe
 	}
 	return {
 		text: record.text,
+		...(record.subject !== undefined ? { subject: record.subject } : {}),
 		kind: record.kind,
 		validFrom: isoUtcSeconds(record.validFrom),
 		assertedAt: isoUtcSeconds(record.assertedAt),
@@ -117,6 +120,25 @@ export function parseAdapterAChatVerdict(raw: string): AdapterAVerdict {
 			: "uncertain";
 	} catch {
 		return "uncertain";
+	}
+}
+
+/**
+ * Whether a reply is a verdict at all: a bare verdict token, or a JSON object carrying one, read
+ * the way `parseAdapterAChatVerdict` reads it (a fenced object counts).
+ */
+export function isAdapterAVerdictReply(value: string): boolean {
+	const trimmed = value.trim();
+	if (trimmed === "replacement" || trimmed === "keep" || trimmed === "uncertain") return true;
+	const json = extractJsonFromResponse(trimmed);
+	if (json === null) return false;
+	try {
+		const parsed: unknown = JSON.parse(json);
+		if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return false;
+		const verdict = (parsed as Record<string, unknown>)["verdict"];
+		return verdict === "replacement" || verdict === "keep" || verdict === "uncertain";
+	} catch {
+		return false;
 	}
 }
 

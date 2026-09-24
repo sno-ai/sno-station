@@ -9,10 +9,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import Database from "better-sqlite3";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import {
-	laneForEventType,
-	PluginObservability,
-} from "../../../../packages/memory/src/engine/observability/adapter.ts";
+import { laneForEventType } from "../../../../packages/observability/src/index.ts";
+import { PluginObservability } from "../../../../packages/memory/src/engine/observability/adapter.ts";
 import { pluginConfigSchema } from "../../../../packages/memory/src/engine/shared/types.ts";
 
 type Envelope = {

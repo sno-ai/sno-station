@@ -85,6 +85,7 @@ export interface RunMappedMemoryLoopParams {
 	routing?: LlmRoutingConfig;
 	targetScope: string;
 	sourceAgentId: string;
+	writerAgentId?: string;
 	sessionKey: string;
 	sessionId: string;
 	runAt: number;
@@ -95,6 +96,7 @@ export interface RunMappedMemoryLoopParams {
 }
 
 export async function runMappedMemoryLoop(params: RunMappedMemoryLoopParams): Promise<void> {
+	const { writerAgentId } = params;
 	const allMapped = extractInjectableReflectionMappedMemoryItems(params.reflectionText);
 	const seen = new Map<string, (typeof allMapped)[number]>();
 	for (const m of allMapped) {
@@ -180,6 +182,7 @@ export async function runMappedMemoryLoop(params: RunMappedMemoryLoopParams): Pr
 			});
 			const metadataPatch = {
 				...baseMetadata,
+				...(writerAgentId ? { writer_agent_id: writerAgentId } : {}),
 				_reflectionHeading: m.heading,
 			};
 			if (m.category === "profile") {
@@ -191,6 +194,7 @@ export async function runMappedMemoryLoop(params: RunMappedMemoryLoopParams): Pr
 					source: {
 						sessionKey: params.sessionKey,
 						source: "reflection",
+						agentId: writerAgentId,
 					},
 					metadataPatch,
 					store: params.store,

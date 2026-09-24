@@ -67,6 +67,7 @@ const memoryTelemetryEventSchema = z.object({
 	session_uuid: z.string().min(1).optional(),
 	turn_id: z.string().min(1).optional(),
 	agent_id: z.string().min(1),
+	source_agent_id: z.string().min(1).optional(),
 	project_id: z.string().min(1).optional(),
 	content_hash: z.string().min(1).optional(),
 	retrieval_rank: z.number().int().nonnegative().optional(),
@@ -81,7 +82,7 @@ const percentageSchema = countSchema.max(100);
 const nameSchema = z.string().min(1).max(128);
 const hex64Schema = z.string().regex(/^[a-f0-9]{64}$/);
 
-const payloadSchemas: Record<EventType, z.ZodType<unknown>> = {
+export const payloadSchemas: Record<EventType, z.ZodType<unknown>> = {
 	"agent.identify": z
 		.object({
 			agent_id: agentIdSchema,
@@ -305,7 +306,8 @@ const payloadSchemas: Record<EventType, z.ZodType<unknown>> = {
 			kind: z.enum(["card", "reply", "ring", "remind", "call", "spawn", "dismiss"]),
 			from_harness: harnessSchema,
 			to_harness: z.union([harnessSchema, z.literal("unknown")]),
-			outcome: z.enum(["ok", "timeout", "refused"]),
+			outcome: z.enum(["ok", "timeout", "refused", "unacked"]),
+			receipt: z.enum(["handoff_snapshot", "handoff_released", "handoff_paused"]).optional(),
 			latency_ms: countSchema,
 		})
 		.strict(),
@@ -378,12 +380,14 @@ const payloadSchemas: Record<EventType, z.ZodType<unknown>> = {
 		.strict(),
 	"rsi.proposal": z
 		.object({
+			level: z.enum(["user", "project"]),
 			proposal_count: countSchema,
 			skills_touched: countSchema,
 		})
 		.strict(),
 	"rsi.verdict": z
 		.object({
+			level: z.enum(["user", "project"]),
 			accepted: countSchema,
 			rejected: countSchema,
 			tbd: countSchema,
@@ -391,6 +395,7 @@ const payloadSchemas: Record<EventType, z.ZodType<unknown>> = {
 		.strict(),
 	"rsi.impact": z
 		.object({
+			level: z.enum(["user", "project"]),
 			skill_name: nameSchema,
 			before_sessions: countSchema,
 			before_failures: countSchema,
@@ -400,6 +405,7 @@ const payloadSchemas: Record<EventType, z.ZodType<unknown>> = {
 		.strict(),
 	"rsi.lesson": z
 		.object({
+			level: z.enum(["user", "project"]),
 			count: countSchema,
 		})
 		.strict(),
@@ -417,6 +423,7 @@ const payloadSchemas: Record<EventType, z.ZodType<unknown>> = {
 		.strict(),
 	"skill.install": z
 		.object({
+			package: nameSchema,
 			skill_name: nameSchema,
 			skill_version: nameSchema,
 			action: z.enum(["install", "update", "rollback"]),

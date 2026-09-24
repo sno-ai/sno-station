@@ -5,7 +5,7 @@ import { FIXED_PROTOCOL_VALUE_73 } from "../model/signed-registry-constants";
  */
 
 import { deriveRemWriteIdentity } from "../engine/rem/index.js";
-import { ARRIVAL_RETIREMENT_CANDIDATE_CAP } from "../../config/index";
+import { ARRIVAL_RETIREMENT_JUDGED_CANDIDATE_CAP } from "../../config/index";
 import {
 	type AtomicExtractionWriteCard,
 	type AtomicExtractionWriteInput,
@@ -25,7 +25,6 @@ import {
 	readMemorySourceOrderOrOldest,
 } from "./memory-source-order";
 import {
-	atomicAttributeFamily,
 	isKnownAtomicAttribute,
 	isOneCardinalityAttribute,
 } from "./atomic-attribute-cardinality";
@@ -487,11 +486,36 @@ interface ArrivalRetirementRow {
 	attribute: string | null;
 	metadata: string;
 	validFrom: number | null;
+	timestamp: number;
+	contentHash: string;
+}
+
+/** A row as the conflict-adjudication adapter reads it (`adapterAViewFromRecord`). */
+export interface AtomicArrivalRetirementJudgedRow {
+	id: string;
+	text: string;
+	subject: string | null;
+	kind: string;
+	validFrom: number;
+	assertedAt: number;
+	contentHash: string;
 }
 
 export interface AtomicArrivalRetirementCandidateSet {
-	nominatedRow: { id: string; text: string };
-	candidateRows: Array<{ id: string; text: string }>;
+	nominatedRow: AtomicArrivalRetirementJudgedRow;
+	candidateRows: AtomicArrivalRetirementJudgedRow[];
+}
+
+function judgedRow(row: ArrivalRetirementRow): AtomicArrivalRetirementJudgedRow {
+	return {
+		id: row.id,
+		text: row.text,
+		subject: row.subject,
+		kind: row.category,
+		validFrom: row.validFrom ?? row.timestamp,
+		assertedAt: row.timestamp,
+		contentHash: row.contentHash,
+	};
 }
 
 type AtomicArrivalRetirementStore = Pick<
@@ -516,17 +540,6 @@ function isSelfClosedRow(row: ArrivalRetirementRow): boolean {
 		"superseded_by" in metadata &&
 		metadata.superseded_by === row.id
 	);
-}
-
-function arrivalRetirementAttributeRank(
-	nominatedRow: ArrivalRetirementRow,
-	candidate: ArrivalRetirementRow,
-): number {
-	if (nominatedRow.attribute !== null && nominatedRow.attribute === candidate.attribute) return 0;
-	const nominatedFamily = atomicAttributeFamily(nominatedRow.attribute);
-	const candidateFamily = atomicAttributeFamily(candidate.attribute);
-	if (nominatedFamily !== undefined && nominatedFamily === candidateFamily) return 1;
-	return candidate.attribute === null ? 2 : 3;
 }
 
 function appendArrivalRetirementJournal(
@@ -567,36 +580,55 @@ function euclideanDistance(a: Float32Array, b: Float32Array): number {
 	return Math.sqrt(sum);
 }
 
-/**
- * The similarity of each candidate to the nominated text, scored over the candidate's OWN chunk
- * vectors — never a project-wide search that other subjects can crowd out. A memory takes its best
- * (nearest) chunk, and the score is the `1 / (1 + distance)` the semantic search reports, so the
- * ranking below is unchanged for a candidate the search would have scored. A candidate with no
- * stored vector is left unscored and falls to the bottom of its attribute-rank group, as before.
- */
-export function scoreCandidatesBySimilarity(
+/** Each memory's own chunk vectors, keyed by memory id; a memory with no stored vector is absent. */
+export function readMemoryChunkVectors(
 	store: Pick<MemoryStoreInternals, "sqlite" | "getVectorsByIds">,
-	nominatedVector: Float32Array,
-	candidateIds: readonly string[],
-): Map<string, number> {
+	memoryIds: readonly string[],
+): Map<string, Float32Array[]> {
 	const chunkRows = store.sqlite
 		.prepare(
 			`SELECT chunk_id AS chunkId, memory_id AS memoryId
 			 FROM nodix_memory_chunks
 			 WHERE memory_id IN (SELECT value FROM json_each(?))`,
 		)
-		.all(JSON.stringify(candidateIds)) as Array<{
+		.all(JSON.stringify(memoryIds)) as Array<{
 		chunkId: string;
 		memoryId: string;
 	}>;
 	const vectors = store.getVectorsByIds(chunkRows.map((row) => row.chunkId));
-	const scoreById = new Map<string, number>();
+	const byMemory = new Map<string, Float32Array[]>();
 	for (const { chunkId, memoryId } of chunkRows) {
 		const vector = vectors.get(chunkId);
 		if (!vector) continue;
-		const score = 1 / (1 + euclideanDistance(nominatedVector, vector));
-		const previous = scoreById.get(memoryId);
-		if (previous === undefined || score > previous) scoreById.set(memoryId, score);
+		byMemory.set(memoryId, [...(byMemory.get(memoryId) ?? []), vector]);
+	}
+	return byMemory;
+}
+
+/**
+ * A memory's similarity to a text vector: its best (nearest) chunk, scored `1 / (1 + distance)`
+ * as the semantic search reports it.
+ */
+export function chunkVectorSimilarity(
+	vector: Float32Array,
+	chunkVectors: readonly Float32Array[],
+): number {
+	return Math.max(...chunkVectors.map((chunk) => 1 / (1 + euclideanDistance(vector, chunk))));
+}
+
+/**
+ * The similarity of each candidate to the nominated text, scored over the candidate's OWN chunk
+ * vectors — never a project-wide search that other subjects can crowd out. A candidate with no
+ * stored vector is left unscored and ranks last.
+ */
+export function scoreCandidatesBySimilarity(
+	store: Pick<MemoryStoreInternals, "sqlite" | "getVectorsByIds">,
+	nominatedVector: Float32Array,
+	candidateIds: readonly string[],
+): Map<string, number> {
+	const scoreById = new Map<string, number>();
+	for (const [memoryId, chunkVectors] of readMemoryChunkVectors(store, candidateIds)) {
+		scoreById.set(memoryId, chunkVectorSimilarity(nominatedVector, chunkVectors));
 	}
 	return scoreById;
 }
@@ -607,38 +639,30 @@ export async function readAtomicArrivalRetirementCandidateSet(
 ): Promise<AtomicArrivalRetirementCandidateSet | undefined> {
 	const nominatedRow = store.sqlite
 		.prepare(
-			`SELECT id, text, category, subject, attribute, metadata, valid_from AS validFrom
+			`SELECT id, text, category, subject, attribute, metadata, valid_from AS validFrom,
+				timestamp, content_hash AS contentHash
 			 FROM nodix_memories
 			 WHERE project_id = ? AND id = ? AND lane = 'active'`,
 		)
 		.get(input.projectId, input.nominatedRowId) as ArrivalRetirementRow | undefined;
-	if (
-		!nominatedRow ||
-		nominatedRow.subject === null ||
-		!(isSelfClosedRow(nominatedRow) || isOpenRow(nominatedRow))
-	) {
+	if (!nominatedRow || !(isSelfClosedRow(nominatedRow) || isOpenRow(nominatedRow))) {
 		return undefined;
 	}
 	const metadata = JSON.parse(nominatedRow.metadata) as Record<string, unknown>;
 	if (metadata.entity_identity_new === true) {
-		return { nominatedRow, candidateRows: [] };
+		return { nominatedRow: judgedRow(nominatedRow), candidateRows: [] };
 	}
 	const nominatedOrder = readMemorySourceOrder(nominatedRow.metadata);
 	const candidates = (
 		store.sqlite
 			.prepare(
 				`SELECT id, text, category, subject, attribute, metadata,
-					valid_from AS validFrom
+					valid_from AS validFrom, timestamp, content_hash AS contentHash
 				 FROM nodix_memories
-				 WHERE project_id = ? AND category = ? AND subject = ? AND id != ?
+				 WHERE project_id = ? AND category IN ('profile', 'state') AND id != ?
 					AND lane = 'active' AND json_valid(metadata)`,
 			)
-			.all(
-				input.projectId,
-				nominatedRow.category,
-				nominatedRow.subject,
-				nominatedRow.id,
-			) as ArrivalRetirementRow[]
+			.all(input.projectId, nominatedRow.id) as ArrivalRetirementRow[]
 	).filter((candidate) => {
 		// A row from the ending's own turn is its companion (the replacement it states), never a
 		// state it ends.
@@ -649,7 +673,7 @@ export async function readAtomicArrivalRetirementCandidateSet(
 			compareMemorySourceOrder(candidateOrder, nominatedOrder) < 0
 		);
 	});
-	if (candidates.length === 0) return { nominatedRow, candidateRows: [] };
+	if (candidates.length === 0) return { nominatedRow: judgedRow(nominatedRow), candidateRows: [] };
 	// Score the candidates DIRECTLY, not through a whole-project semantic search. The vector search
 	// takes the project's top-k chunks by distance and only then joins back to a memory, so when the
 	// project holds same-category rows under OTHER subjects that are closer to the nominated text,
@@ -662,15 +686,15 @@ export async function readAtomicArrivalRetirementCandidateSet(
 		nominatedVector,
 		candidates.map(({ id }) => id),
 	);
+	// Similarity alone ranks: extraction files one fact under different attributes run to run, so
+	// an attribute rank let the filing decide which rows reach the cap (PRD 140).
 	const ranked = candidates.sort(
 		(left, right) =>
-			arrivalRetirementAttributeRank(nominatedRow, left) -
-				arrivalRetirementAttributeRank(nominatedRow, right) ||
 			(scoreById.get(right.id) ?? Number.NEGATIVE_INFINITY) -
 				(scoreById.get(left.id) ?? Number.NEGATIVE_INFINITY) ||
 			left.id.localeCompare(right.id),
 	);
-	if (ranked.length > ARRIVAL_RETIREMENT_CANDIDATE_CAP) {
+	if (ranked.length > ARRIVAL_RETIREMENT_JUDGED_CANDIDATE_CAP) {
 		appendArrivalRetirementJournal(store, {
 			jobId: input.jobId,
 			nominatedRowId: nominatedRow.id,
@@ -679,15 +703,13 @@ export async function readAtomicArrivalRetirementCandidateSet(
 			actionsApplied: 0,
 			detail: {
 				nominatedRowId: nominatedRow.id,
-				omittedCount: ranked.length - ARRIVAL_RETIREMENT_CANDIDATE_CAP,
+				omittedCount: ranked.length - ARRIVAL_RETIREMENT_JUDGED_CANDIDATE_CAP,
 			},
 		});
 	}
 	return {
-		nominatedRow,
-		candidateRows: ranked
-			.slice(0, ARRIVAL_RETIREMENT_CANDIDATE_CAP)
-			.map(({ id, text }) => ({ id, text })),
+		nominatedRow: judgedRow(nominatedRow),
+		candidateRows: ranked.slice(0, ARRIVAL_RETIREMENT_JUDGED_CANDIDATE_CAP).map(judgedRow),
 	};
 }
 
@@ -698,15 +720,19 @@ export function journalAtomicArrivalRetirementRefusal(
 		nominatedRowId: string;
 		reason: string;
 		candidateSetSize: number;
+		candidateRowId?: string;
 	},
 ): void {
 	appendArrivalRetirementJournal(store, {
-		...input,
+		jobId: input.jobId,
+		nominatedRowId: input.nominatedRowId,
+		reason: input.reason,
 		outcome: "refused",
 		actionsApplied: 0,
 		detail: {
 			nominatedRowId: input.nominatedRowId,
 			candidateSetSize: input.candidateSetSize,
+			...(input.candidateRowId === undefined ? {} : { candidateRowId: input.candidateRowId }),
 		},
 	});
 }
@@ -724,7 +750,7 @@ export async function closeAtomicArrivalRetirementTargets(
 		const nominatedRow = store.sqlite
 			.prepare(
 				`SELECT id, text, category, subject, attribute, metadata,
-					valid_from AS validFrom
+					valid_from AS validFrom, timestamp, content_hash AS contentHash
 				 FROM nodix_memories WHERE id = ?`,
 			)
 			.get(input.nominatedRowId) as ArrivalRetirementRow | undefined;
@@ -959,26 +985,6 @@ export function commitPreparedAtomicExtractionWrite(
 }
 
 Object.assign(MemoryStore.prototype, {
-	hasLiveEndedRowInGroup(
-		this: MemoryStoreInternals,
-		projectId: string,
-		category: string,
-		subject: string,
-		attribute: string | null,
-	): boolean {
-		const row = this.sqlite
-			.prepare(
-				`SELECT 1 FROM nodix_memories
-				 WHERE project_id = ? AND category = ? AND subject = ? AND lane = 'active'
-					AND ((attribute IS NULL AND ? IS NULL) OR attribute = ?)
-					AND json_valid(metadata)
-					AND json_extract(metadata, '$.ends_current') = 1
-					AND json_extract(metadata, '$.superseded_by') IS NULL
-				 LIMIT 1`,
-			)
-			.get(projectId, category, subject, attribute, attribute);
-		return row !== undefined;
-	},
 	async storeAtomicExtractionChunk(
 		this: MemoryStoreInternals,
 		input: AtomicExtractionWriteInput,

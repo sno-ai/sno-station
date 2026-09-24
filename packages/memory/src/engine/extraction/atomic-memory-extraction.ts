@@ -12,8 +12,12 @@ import { createLogger, privateLogReference, currentLogContext, withLogContext } 
 import { z } from "zod";
 import { countTokens } from "@snoai/chunking";
 import {
-	decideRemRetirementTargetFromReply,
-	renderRemRetirementTargetPrompt,
+	type AdapterAMemoryView,
+	adapterAViewFromRecord,
+	isAdapterAVerdictReply,
+	parseAdapterAChatVerdict,
+	renderAdapterAChatPrompt,
+	renderAdapterAPrompt,
 } from "../rem/index.js";
 import attributeDictionary from "../../../config/attribute-dictionary.json" with { type: "json" };
 import stateVocabulary from "../../../config/state-vocabulary.json" with { type: "json" };
@@ -65,8 +69,9 @@ import { createLlmClient, type LlmClient, type LlmClientConfig } from "../../mod
 import { resolveLlmRoute } from "../../model/llm-mode-routing";
 import { readModelReplyJson } from "../shared/model-reply-text";
 import type { LlmRoutingConfig } from "../../../config/plugin-config-mode-schema";
-import { REM_UPDATE_JUDGMENT_SKILL } from "../../sidecar/rem-update-judgment-skill";
 import {
+	type AtomicArrivalRetirementCandidateSet,
+	type AtomicArrivalRetirementJudgedRow,
 	closeAtomicArrivalRetirementTargets,
 	journalAtomicArrivalRetirementRefusal,
 	readAtomicArrivalRetirementCandidateSet,
@@ -86,15 +91,22 @@ import type {
 } from "../../store/store";
 import { countTodoTransitionsWithoutSource } from "../../store/todo-store";
 
+/** One (older, newer) pair put to the conflict-adjudication adapter; its raw reply, or null. */
+export interface AtomicRetirementVerdictTransport {
+	judge(pair: { older: AdapterAMemoryView; newer: AdapterAMemoryView }): Promise<string | null>;
+}
+
 export interface AtomicMemoryExtractionTransports {
 	generic: AtomicGenericExtractionTransport;
 	profileKeying: AtomicProfileKeyingTransport;
 	resplit: AtomicResplitTransport;
 	subjectGuard: AtomicSubjectGuardTransport;
+	retirementVerdict: AtomicRetirementVerdictTransport;
 }
 
 export interface RunAtomicMemoryExtractionInput {
 	diagnostics?: WindowDiagnostics;
+	writerAgentId?: string;
 	store: MemoryStore;
 	projectId: string;
 	ledgerKey: AtomicExtractionLedgerKey;
@@ -166,6 +178,7 @@ export type AtomicMemoryExtractionResult =
 
 export interface AtomicExtractPersistOptions {
 	scope?: string;
+	writerAgentId?: string;
 	sessionDateTime?: string;
 	sessionTimezone?: string;
 }
@@ -207,7 +220,8 @@ function windowDiagnostics(): WindowDiagnostics {
 }
 const ATOMIC_PIPELINE_VERSION = "atomic-v3";
 const ATOMIC_LLM_CONCURRENCY = 1;
-const ARRIVAL_RETIREMENT_JUDGMENT_BATCH_SIZE = 16;
+/** Arrival verdict calls in flight at once; the Sno GPU admits three sequences (PRD 140 REQ-3). */
+const ARRIVAL_RETIREMENT_PAIRS_IN_FLIGHT = 3;
 const STANDING_SUBJECT_CANDIDATE_LIMIT = 64;
 const THING_ATTRIBUTE_SLUGS = new Set(stateVocabulary.slugs.map(({ slug }) => slug));
 /** The one field of a document that IS its name: the value of `email.purpose` names the e-mail. */
@@ -584,6 +598,8 @@ function limitAtomicLlmConcurrency(
 			repairMissingHalf: (input) => gate.run(() => transports.subjectGuard.repairMissingHalf(input)),
 			guardUserSubjects: (input) => gate.run(() => transports.subjectGuard.guardUserSubjects(input)),
 		},
+		// Not gated: the arrival judgement runs after the window's write and fans out on its own.
+		retirementVerdict: transports.retirementVerdict,
 	};
 }
 
@@ -632,11 +648,28 @@ export function createSignedAtomicMemoryExtractionTransports(
 		...config,
 		preset: usesAgentTier ? config.preset : FIXED_MEMORY_SNO_EXTRACT_PROFILE,
 	});
+	const verdictRoute = resolveLlmRoute({
+		slot: "conflict-adjudication",
+		callLabel: "conflict-adjudication",
+		config: config.routing,
+	});
+	// The a-verdict adapter reads its trained completion prompt; a host model reads the chat one.
+	const adapterPrompt = !("off" in verdictRoute) && verdictRoute.tier === "snoRemMem";
 	return {
 		generic: createAtomicGenericExtractionTransport(chat),
 		profileKeying: createBProfileKeyingTransport(profile),
 		resplit: createAtomicResplitTransport(chat, locale),
 		subjectGuard: createAtomicSubjectGuardTransport(chat),
+		retirementVerdict: {
+			judge: (pair) =>
+				chat.completeText({
+					prompt: adapterPrompt
+						? renderAdapterAPrompt(pair.older, pair.newer)
+						: renderAdapterAChatPrompt(pair),
+					callLabel: "arrival-retirement-pair",
+					adapterSlot: "conflict-adjudication",
+				}),
+		},
 	};
 }
 
@@ -741,6 +774,7 @@ export class AtomicInsightDistiller {
 					try {
 						return await windowDiagnosticContext.run(diagnostic, () => runAtomicMemoryExtraction({
 							diagnostics: diagnostic,
+							writerAgentId: options.writerAgentId,
 							store: this.store,
 							projectId: scope,
 							ledgerKey: {
@@ -1508,6 +1542,7 @@ export async function runAtomicMemoryExtraction(
 	const sourceFactKeys = admitted.map(factKeyOf);
 	const projectedCards = buildAtomicWriteCards({
 		records: resolved.records,
+		writerAgentId: input.writerAgentId,
 		idempotencyKeys: resolved.records.map((_record, recordIndex) =>
 			hashText(
 				`${input.ledgerKey.conversationId}\u0000${input.ledgerKey.chunkHash}\u0000${input.ledgerKey.pipelineVersion}\u0000${recordIndex}`,
@@ -1606,23 +1641,11 @@ export async function runAtomicMemoryExtraction(
 	diagnostic.outcome = write.createdCount > 0 ? "success" : "empty_success";
 	publishClaims();
 	// Nominated for the arrival judgement, decided AFTER the write so a card can see the rows of
-	// its own batch: every ended card, and every profile or state card whose group holds a live
-	// ended claim — "I like A again" has to be able to retire "no longer likes A", which stays
-	// live since 2026-09-06 (see closeEndedCardAtCreate), including when both arrive in one window.
-	const newEndedCards = cards.filter(
-		(card) =>
-			card.endsCurrent ||
-			((card.category === "profile" || card.category === "state") &&
-				card.subject !== null &&
-				card.lane === "active" &&
-				input.store.hasLiveEndedRowInGroup(
-					input.projectId,
-					card.category,
-					card.subject,
-					card.attribute,
-				)),
-	);
-	for (const card of newEndedCards) {
+	// its own batch: every active card. Category, subject, attribute and the ended flag differ run
+	// to run for the same correction (one Codex run of three stored the corrected value as
+	// episodic, 2026-09-24), so none of them decides (PRD 140 REQ-1).
+	const nominatedCards = cards.filter((card) => card.lane === "active");
+	for (const card of nominatedCards) {
 		const stored = input.store.findByExtractionIdempotencyKey(
 			input.projectId,
 			card.idempotencyKey,
@@ -1635,9 +1658,7 @@ export async function runAtomicMemoryExtraction(
 				jobId: input.ledgerKey.conversationId,
 				nominatedRowId: stored.id,
 				nowMs: atomicFactWrite.nowMs,
-				transport: input.transports.generic,
-				maxTokens: input.runParameters.outputTokenBudget,
-				...(input.requestId ? { requestId: input.requestId } : {}),
+				transport: input.transports.retirementVerdict,
 			});
 		} catch (error) {
 			// The chunk is already committed and its ledger row complete, so a retry never comes back
@@ -1679,40 +1700,47 @@ export async function runAtomicMemoryExtraction(
 	}
 }
 
-const ARRIVAL_RETIREMENT_JUDGMENT_ATTEMPTS = 3;
-
 /**
- * One batch of the arrival judgement, asked again on a failed or invalid reply: a refusal after a
- * single bad answer left the old and the new fact both current, with no second chance.
+ * One pair of the arrival judgement: the candidate as the older memory, the nominated row as the
+ * newer. A failed call or an unreadable reply is logged and journaled as this pair's refusal and
+ * decides nothing; the REM replace wave judges the pair again later (PRD 140 REQ-6).
  */
-async function judgeRetirementBatch(
-	input: { transport: AtomicGenericExtractionTransport; maxTokens: number; requestId?: string },
-	prompt: string,
-	batch: readonly { id: string }[],
-): Promise<ReturnType<typeof decideRemRetirementTargetFromReply>> {
-	const offered = new Set(batch.map((candidate) => candidate.id));
-	let decision = decideRemRetirementTargetFromReply("", offered);
-	for (let attempt = 1; attempt <= ARRIVAL_RETIREMENT_JUDGMENT_ATTEMPTS; attempt += 1) {
-		let reply = "";
-		try {
-			reply =
-				(
-					await input.transport.complete({
-						prompt,
-						maxTokens: input.maxTokens,
-						...(input.requestId ? { requestId: input.requestId } : {}),
-					})
-				)?.text ?? "";
-		} catch (error) {
-			log.warn("atomic arrival retirement judgement call failed", {
-				attempt,
-				error,
-			}, { event_name: "memory.atomic_memory_extraction.diagnostic", file: "packages/memory/src/engine/extraction/atomic-memory-extraction.ts", function: "judgeRetirementBatch", site_id: "extraction.atomic-memory-extraction.judgeRetirementBatch.64b641b407" });
-		}
-		decision = decideRemRetirementTargetFromReply(reply, offered);
-		if (decision.outcome !== "refuse" || decision.reason !== "model_response_invalid") break;
+async function judgeArrivalRetirementPair(
+	input: { store: MemoryStore; jobId: string; transport: AtomicRetirementVerdictTransport },
+	candidateSet: AtomicArrivalRetirementCandidateSet,
+	candidate: AtomicArrivalRetirementJudgedRow,
+): Promise<"replacement" | "keep" | "uncertain" | undefined> {
+	const nominatedRowId = candidateSet.nominatedRow.id;
+	let reply: string | null;
+	try {
+		reply = await input.transport.judge({
+			older: adapterAViewFromRecord(candidate),
+			newer: adapterAViewFromRecord(candidateSet.nominatedRow),
+		});
+	} catch (error) {
+		reply = null;
+		log.error("atomic arrival retirement pair judgement failed; the older fact stays current", {
+			nominatedRowId,
+			candidateRowId: candidate.id,
+			error,
+		}, { event_name: "memory.atomic_memory_extraction.diagnostic", file: "packages/memory/src/engine/extraction/atomic-memory-extraction.ts", function: "judgeArrivalRetirementPair", site_id: "extraction.atomic-memory-extraction.judgeArrivalRetirementPair.call_failed" });
 	}
-	return decision;
+	if (reply !== null && isAdapterAVerdictReply(reply)) return parseAdapterAChatVerdict(reply);
+	if (reply !== null) {
+		log.error("atomic arrival retirement pair reply unreadable; the older fact stays current", {
+			nominatedRowId,
+			candidateRowId: candidate.id,
+			reply_length: reply.length,
+		}, { event_name: "memory.atomic_memory_extraction.diagnostic", file: "packages/memory/src/engine/extraction/atomic-memory-extraction.ts", function: "judgeArrivalRetirementPair", site_id: "extraction.atomic-memory-extraction.judgeArrivalRetirementPair.reply_invalid" });
+	}
+	journalAtomicArrivalRetirementRefusal(input.store, {
+		jobId: input.jobId,
+		nominatedRowId,
+		candidateRowId: candidate.id,
+		reason: reply === null ? "judgment_failed" : "model_response_invalid",
+		candidateSetSize: candidateSet.candidateRows.length,
+	});
+	return undefined;
 }
 
 async function runAtomicArrivalRetirementJudgment(input: {
@@ -1721,45 +1749,25 @@ async function runAtomicArrivalRetirementJudgment(input: {
 	jobId: string;
 	nominatedRowId: string;
 	nowMs: number;
-	transport: AtomicGenericExtractionTransport;
-	maxTokens: number;
-	requestId?: string;
+	transport: AtomicRetirementVerdictTransport;
 }): Promise<void> {
 	const candidateSet = await readAtomicArrivalRetirementCandidateSet(input.store, input);
 	if (candidateSet === undefined || candidateSet.candidateRows.length === 0) return;
-	const targetRowIds = new Set<string>();
-	for (
-		let start = 0;
-		start < candidateSet.candidateRows.length;
-		start += ARRIVAL_RETIREMENT_JUDGMENT_BATCH_SIZE
-	) {
-		const batch = candidateSet.candidateRows.slice(
-			start,
-			start + ARRIVAL_RETIREMENT_JUDGMENT_BATCH_SIZE,
-		);
-		const prompt = renderRemRetirementTargetPrompt({
-			judgmentSkill: REM_UPDATE_JUDGMENT_SKILL.retirementTarget,
-			nominatedRow: candidateSet.nominatedRow,
-			candidateRows: batch,
-		});
-		const decision = await judgeRetirementBatch(input, prompt, batch);
-		if (decision.outcome === "refuse") {
-			journalAtomicArrivalRetirementRefusal(input.store, {
-				jobId: input.jobId,
-				nominatedRowId: input.nominatedRowId,
-				reason: decision.reason,
-				candidateSetSize: candidateSet.candidateRows.length,
-			});
-			// Only THIS batch is left unjudged. Stopping here let one unreadable answer about the
-			// first sixteen candidates leave the row that should have closed open in a later batch.
-			continue;
+	const replaced = new Set<string>();
+	const queue = [...candidateSet.candidateRows];
+	const judgeQueued = async (): Promise<void> => {
+		for (let candidate = queue.shift(); candidate !== undefined; candidate = queue.shift()) {
+			const verdict = await judgeArrivalRetirementPair(input, candidateSet, candidate);
+			if (verdict === "replacement") replaced.add(candidate.id);
 		}
-		for (const rowId of decision.targetRowIds) targetRowIds.add(rowId);
-	}
+	};
+	await Promise.all(Array.from({ length: ARRIVAL_RETIREMENT_PAIRS_IN_FLIGHT }, judgeQueued));
 	await closeAtomicArrivalRetirementTargets(input.store, {
 		jobId: input.jobId,
 		nominatedRowId: input.nominatedRowId,
-		targetRowIds: [...targetRowIds],
+		targetRowIds: candidateSet.candidateRows
+			.filter((candidate) => replaced.has(candidate.id))
+			.map((candidate) => candidate.id),
 		supersededAt: input.nowMs,
 	});
 }

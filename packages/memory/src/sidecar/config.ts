@@ -74,7 +74,7 @@ export function readRemConfigSource(): string | undefined {
 
 const DEFAULT_REM_CONFIGURATION: RemOperationalConfiguration = {
 	profileId: "default", operations: { "rem-replace": true, "rem-update": true, "rem-distill": true, "rem-retire": true },
-	budgets: { maxPairs: 10 }, retrieval: { neighborLimit: 10, similarityThreshold: 0.8 },
+	budgets: { maxPairs: 200 }, retrieval: { neighborLimit: 10, similarityThreshold: 0.8 },
 	coverage: { accuracyFloor: null }, retries: { liveContentionRetries: 1 },
 	modelRoute: "http://localhost:8070/codex/v1/chat/completions",
 	facetPolicy: { aggregationGrammar: "current-first-v1", historyGrammar: "history-evidence-v1" },

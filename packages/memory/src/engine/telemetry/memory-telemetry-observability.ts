@@ -149,17 +149,20 @@ function sanitizeEvent(
 	addNumber(event, "retrieval_rank", row.retrieval_rank);
 	addNumber(event, "retrieval_score", row.retrieval_score);
 	addString(event, "consolidation_epoch_id", row.consolidation_epoch_id);
-	addString(event, "status", readStatus(row.metadata_json));
+	addString(event, "status", readMetadataString(row.metadata_json, "status"));
+	if (eventType === "inject") {
+		addString(event, "source_agent_id", readMetadataString(row.metadata_json, "source_agent_id"));
+	}
 	return event;
 }
 
-function readStatus(metadataJson: string | null): string | null {
+function readMetadataString(metadataJson: string | null, key: string): string | null {
 	if (!metadataJson) return null;
 	try {
 		const parsed = JSON.parse(metadataJson) as unknown;
 		if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return null;
-		const status = (parsed as Record<string, unknown>).status;
-		return typeof status === "string" && status.trim().length > 0 ? status.trim() : null;
+		const value = (parsed as Record<string, unknown>)[key];
+		return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
 	} catch {
 		return null;
 	}

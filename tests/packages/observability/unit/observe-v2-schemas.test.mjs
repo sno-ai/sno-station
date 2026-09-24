@@ -1,6 +1,7 @@
 // Observe v2 (QCG-3): the seventeen squad/rsi/skill types validate against strict schemas that
 // mirror the server's kinds, and `error` gains mandatory `component` and `context`.
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import { InvalidEventPayloadError } from "../../../../packages/observability/dist/internal/errors.js";
 import { parseEventInput } from "../../../../packages/observability/dist/internal/schemas.js";
@@ -41,13 +42,20 @@ const conforming = {
 	],
 	"review.fix": ["squad", { fixed: 1, dismissed: 0 }],
 	"rsi.run": ["rsi", { sessions_read: 12, duration_ms: 4400, trigger: "timer", outcome: "ok" }],
-	"rsi.proposal": ["rsi", { proposal_count: 2, skills_touched: 1 }],
-	"rsi.verdict": ["rsi", { accepted: 1, rejected: 0, tbd: 0 }],
+	"rsi.proposal": ["rsi", { proposal_count: 2, skills_touched: 1, level: "user" }],
+	"rsi.verdict": ["rsi", { accepted: 1, rejected: 0, tbd: 0, level: "project" }],
 	"rsi.impact": [
 		"rsi",
-		{ skill_name: "peer-review", before_sessions: 10, before_failures: 2, after_sessions: 8, after_failures: 0 },
+		{
+			skill_name: "peer-review",
+			before_sessions: 10,
+			before_failures: 2,
+			after_sessions: 8,
+			after_failures: 0,
+			level: "user",
+		},
 	],
-	"rsi.lesson": ["rsi", { count: 1 }],
+	"rsi.lesson": ["rsi", { count: 1, level: "user" }],
 	"skill.run": [
 		"skill",
 		{
@@ -59,7 +67,10 @@ const conforming = {
 			outcome: "ok",
 		},
 	],
-	"skill.install": ["skill", { skill_name: "peer-review", skill_version: "0123abc", action: "install" }],
+	"skill.install": [
+		"skill",
+		{ skill_name: "peer-review", skill_version: "0123abc", action: "install", package: "@snoai/mem-claude" },
+	],
 };
 
 function event(event_type, payload, lane = conforming[event_type][0]) {
@@ -127,6 +138,75 @@ describe("observe v2 event schemas", () => {
 		assert.equal(harness, "claude-code");
 		rejectsPayload(event("skill.run", withoutHarness), "harness");
 		rejectsPayload(event("skill.run", { ...withoutHarness, harness: "sno-cli" }), "harness");
+	});
+
+	it("requires level user|project on the four counted rsi types", () => {
+		for (const type of ["rsi.proposal", "rsi.verdict", "rsi.lesson", "rsi.impact"]) {
+			const { level, ...withoutLevel } = conforming[type][1];
+			assert.notEqual(level, undefined);
+			for (const value of ["user", "project"]) {
+				assert.equal(parseEventInput(event(type, { ...withoutLevel, level: value })).payload.level, value);
+			}
+			rejectsPayload(event(type, withoutLevel), "level");
+			rejectsPayload(event(type, { ...withoutLevel, level: "agent" }), "level");
+		}
+	});
+
+	it("accepts reach.message unacked and the three handoff receipts, nothing else", () => {
+		const message = conforming["reach.message"][1];
+		assert.equal(parseEventInput(event("reach.message", { ...message, outcome: "unacked" })).payload.outcome, "unacked");
+		rejectsPayload(event("reach.message", { ...message, outcome: "unconfirmed" }), "outcome");
+		for (const receipt of ["handoff_snapshot", "handoff_released", "handoff_paused"]) {
+			assert.equal(parseEventInput(event("reach.message", { ...message, receipt })).payload.receipt, receipt);
+		}
+		assert.equal(Object.hasOwn(parseEventInput(event("reach.message", message)).payload, "receipt"), false);
+		rejectsPayload(event("reach.message", { ...message, receipt: "handoff_done" }), "receipt");
+	});
+
+	it("requires skill.install package and refuses a skills list", () => {
+		const { package: pkg, ...withoutPackage } = conforming["skill.install"][1];
+		assert.equal(pkg, "@snoai/mem-claude");
+		rejectsPayload(event("skill.install", withoutPackage), "package");
+		rejectsPayload(event("skill.install", { ...withoutPackage, package: pkg, skills: ["a"] }), "skills");
+	});
+
+	it("keeps source_agent_id on a memory.telemetry inject row", () => {
+		const inject = {
+			event_id: 7,
+			event_type: "inject",
+			fact_id: "fact-1",
+			timestamp_ms: 1730000000000,
+			agent_id: "claude-code",
+			status: "ok",
+		};
+		const input = (row) => ({
+			event_type: "memory.telemetry",
+			lane: "memory",
+			agent_id: "claude-code",
+			payload: {
+				sync_kind: "memory_events",
+				first_event_id: 7,
+				last_event_id: 7,
+				event_count: 1,
+				event_types: { inject: 1 },
+				events: [row],
+			},
+		});
+		assert.equal(parseEventInput(input({ ...inject, source_agent_id: "codex" })).payload.events[0].source_agent_id, "codex");
+		assert.equal(Object.hasOwn(parseEventInput(input(inject)).payload.events[0], "source_agent_id"), false);
+	});
+
+	it("exports detectProjectId and laneForEventType from the package root, one lane rule", async () => {
+		const root = await import("../../../../packages/observability/dist/index.js");
+		assert.equal(typeof root.detectProjectId, "function");
+		assert.equal(root.laneForEventType("rsi.lesson"), "rsi");
+		assert.equal(root.laneForEventType("review.run"), "squad");
+		const adapter = readFileSync(
+			new URL("../../../../packages/memory/src/engine/observability/adapter.ts", import.meta.url),
+			"utf8",
+		);
+		assert.equal(/function laneForEventType/.test(adapter), false);
+		assert.match(adapter, /import\s*\{[^}]*\blaneForEventType\b[^}]*\}\s*from\s*"@snoai\/observability"/);
 	});
 
 	it("rejects a squad lane on memory.write", () => {
