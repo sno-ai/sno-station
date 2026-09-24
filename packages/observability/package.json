@@ -10,6 +10,7 @@
 	},
 	"type": "module",
 	"main": "./dist/index.js",
+	"bin": { "sno-observe": "./dist/bin/sno-observe.js" },
 	"types": "./dist/index.d.ts",
 	"exports": {
 		".": {
