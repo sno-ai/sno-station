@@ -6,7 +6,7 @@
 
 /** Local ONNX embedding with an LRU cache and oversized-text chunking. */
 
-import { CachedEmbeddingProvider, LOCAL_EMBEDDING_MODEL } from "@snoai/embedder";
+import { CachedEmbeddingProvider, ensureModelDownloaded, LOCAL_EMBEDDING_MODEL, LOCAL_EMBEDDING_MODEL_REVISION } from "@snoai/embedder";
 import { chunk, type ChunkConfig } from "@snoai/chunking";
 import { createLogger } from "@snoai/utils/logger";
 import {
@@ -17,6 +17,7 @@ import {
 } from "../../../config/index";
 import {
 	buildProvider,
+	resolveEmbeddingCacheDir,
 	type EmbeddingConfig,
 	type EmbeddingProviderKind,
 } from "./embedding-provider-factory";
@@ -40,6 +41,7 @@ export class Embedder {
 	// without this gate the first capture/recall could hit the provider before
 	// the local ONNX model loaded.
 	private warmupPromise: Promise<void> | null = null;
+	private readonly modelDownload: Parameters<typeof ensureModelDownloaded>[0];
 
 	/**
 	 * Initializes embedding generation collaborators while keeping runtime work in explicit
@@ -51,6 +53,11 @@ export class Embedder {
 
 		const providerKind: EmbeddingProviderKind = config.provider ?? "local-onnx";
 		const inner = buildProvider(config);
+		// The bundled model at its pinned revision downloads through the locked, marker-checked path;
+		// a custom model or revision loads directly.
+		this.modelDownload = (config.model && config.model !== LOCAL_EMBEDDING_MODEL) ||
+			(config.revision && config.revision !== LOCAL_EMBEDDING_MODEL_REVISION)
+			? undefined : { cacheDir: resolveEmbeddingCacheDir(config), ...(config.dtype ? { dtype: config.dtype as NonNullable<Parameters<typeof ensureModelDownloaded>[0]>["dtype"] } : {}) };
 		this.dimensions = inner.dimension;
 		this.providerKind = providerKind;
 		// Default model is the bundled PPLX INT8 id.
@@ -276,6 +283,7 @@ export class Embedder {
 		if (this.warmupPromise) return this.warmupPromise;
 		const probe = (async () => {
 			try {
+				if (this.modelDownload) await ensureModelDownloaded(this.modelDownload);
 				const vector = await this.provider.embed("warmup");
 				if (vector.length !== this.dimensions) {
 					// Surface this invalid embedding state as an explicit typed failure.
