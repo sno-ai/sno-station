@@ -57,6 +57,7 @@ export interface AppendInput {
 	payload: JsonObject;
 	terminal: boolean;
 	chainEpoch?: number;
+	reidentify?: true;
 }
 
 export interface AppendResult {
@@ -599,7 +600,10 @@ export class BufferStore {
 		const prev = tail === undefined ? GENESIS : tail.last_self_hash;
 		// agent.identify is seq 0 of every epoch and nothing else may sit there; a second
 		// identify that lost the bootstrap race is skipped by the caller, never blocked.
-		if ((seq === 0) !== (input.eventType === "agent.identify")) {
+		if (
+			(seq === 0 && input.eventType !== "agent.identify") ||
+			(seq > 0 && input.eventType === "agent.identify" && input.reidentify !== true)
+		) {
 			throw new ChainSeedError();
 		}
 		const selfHash = computeSelfHash({
