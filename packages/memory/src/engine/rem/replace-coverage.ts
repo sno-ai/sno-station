@@ -100,8 +100,12 @@ export function renderReplaceCoveragePrompt(input: {
 		"Classify whether every older-memory clause remains covered after replacement.",
 		'Return JSON only: {"atoms":[{"clause_index":0,"class":"current-fact|retired-fact|event-fact","status":"covered|uncovered|undetermined"}]}.',
 		"Return exactly one atom for each older clause. Prefer undetermined over guessing.",
-		"Covered means the newer memory carries the older clause's information, including an updated value for the same fact, so closing the older row loses nothing.",
-		"Uncovered means closing the older row would lose information that the newer memory does not carry.",
+		// A retiring clause states the old value, which the newer memory cannot carry. Read as
+		// information loss it refused 6 of 10 "lives in Seattle" -> "moved to Portland" closes on
+		// a-clean-test-vm (2026-09-24); worded this way, 70 of 70 correct replacements close and every
+		// clause with a separate still-true fact is still refused (issue #248).
+		"Covered means the newer memory carries the older clause's information. A newer value for the same fact counts as covered: the older value was replaced, not lost.",
+		"Uncovered means the older clause also holds a separate fact that the newer memory neither updates nor restates, so closing the older row would lose it.",
 		"Class describes what kind of assertion the older clause makes, independently of Retiring older-clause indices. Those indices do not determine class or status and do not excuse information loss; evaluate every older clause.",
 		`Older clauses: ${JSON.stringify(olderClauses)}`,
 		`Newer memory: ${JSON.stringify(input.newer)}`,
