@@ -97,7 +97,7 @@ settings (proved by: `tests/packages/memory/integration/sidecar-no-gates.test.ts
 
 Additional refinements: `registration.model.baseUrl` must use HTTP or HTTPS. `registration.model.model` and `registration.skinId` must contain non-whitespace text; credential may be empty. Model credentials remain in memory. When observation is enabled, its base URL must have the configured production origin; test mode permits HTTP(S) loopback. Unless reranking is `none`, retrieval endpoint/model/key `${ENV}` placeholders are resolved, a supplied endpoint requires `rerankProvider`, and the resolved endpoint must be a URL. Missing variables fail parsing. Omitted prefault objects are parsed as `{}` and receive their child defaults. Observation defaults come from process environment, as marked in the table.
 
-Scope requires nonblank `principal`, `project`, `session`; each supplied `readable` item must also be nonblank. `host.observeSessionUuid`, if supplied, must be a UUID. Host `at` is nonnegative epoch milliseconds. Other host strings may be empty.
+Scope requires nonblank `principal`, `project`, `session`. `host.observeSessionUuid`, if supplied, must be a UUID. Host `at` is nonnegative epoch milliseconds. Other host strings may be empty.
 
 <!-- table:request:init -->
 | Field | Type | Required | Enum | Default | Constraints |
@@ -107,8 +107,6 @@ Scope requires nonblank `principal`, `project`, `session`; each supplied `readab
 | scope.principal | string | yes | - | - | {"minLength":1} |
 | scope.project | string | yes | - | - | {"minLength":1} |
 | scope.session | string | yes | - | - | {"minLength":1} |
-| scope.readable | array | no | - | - | - |
-| scope.readable[] | string | yes | - | - | {"minLength":1} |
 | scope.host | object | no | - | - | - |
 | scope.host.observeSessionUuid | string | no | - | - | {"format":"uuid","pattern":"^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}&#124;00000000-0000-0000-0000-000000000000&#124;ffffffff-ffff-ffff-ffff-ffffffffffff)$"} |
 | scope.host.agentId | string | no | - | - | - |
@@ -495,7 +493,7 @@ Response status: `200 OK`; `Content-Type: application/json`.
 
 Reports one host-side fact for the skin's observe session: `prompt` is the user's prompt text (the sidecar hashes it after redaction and reports its byte length; the text is never stored or forwarded), `llm` is one host model call with its token counts and wall time in milliseconds, `tool` is one host tool call (its serialized input and output are hashed after redaction, never stored; `latencyMs` is 0 when the host did not measure it), `permission` is one permission decision the host made (the target is hashed after redaction). The sidecar names the observe session for the host session (`scope.host.sessionId`, else `scope.session`) the first time it sees it and emits `session.start`; a caller that names its own `scope.host.observeSessionUuid` keeps that session. `accepted` is false only when the prompt could not be hashed.
 
-Scope requires nonblank `principal`, `project`, `session`; each supplied `readable` item must also be nonblank. `host.observeSessionUuid`, if supplied, must be a UUID. Host `at` is nonnegative epoch milliseconds. Other host strings may be empty.
+Scope requires nonblank `principal`, `project`, `session`. `host.observeSessionUuid`, if supplied, must be a UUID. Host `at` is nonnegative epoch milliseconds. Other host strings may be empty.
 
 <!-- table:request:hostEvent -->
 | Field | Type | Required | Enum | Default | Constraints |
@@ -505,8 +503,6 @@ Scope requires nonblank `principal`, `project`, `session`; each supplied `readab
 | scope.principal | string | yes | - | - | {"minLength":1} |
 | scope.project | string | yes | - | - | {"minLength":1} |
 | scope.session | string | yes | - | - | {"minLength":1} |
-| scope.readable | array | no | - | - | - |
-| scope.readable[] | string | yes | - | - | {"minLength":1} |
 | scope.host | object | no | - | - | - |
 | scope.host.observeSessionUuid | string | no | - | - | {"format":"uuid","pattern":"^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}&#124;00000000-0000-0000-0000-000000000000&#124;ffffffff-ffff-ffff-ffff-ffffffffffff)$"} |
 | scope.host.agentId | string | no | - | - | - |
@@ -631,11 +627,11 @@ Response status: `200 OK`; `Content-Type: application/json`.
 
 ### Request body
 
-Retrieves context for a query. `query` must contain non-whitespace text. `options` is required even when empty; only `corpus` has a request-schema default. Other omitted fields use the runtime/retriever behavior; a dash does not promise a fixed engine default. `aggregation.terms` are trimmed, each is 1–128 characters, and there are 1–8 terms. `scope.readable` omitted means project-only reads. Native database recall does not require a workspace; native file reads do.
+Retrieves context for a query. `query` must contain non-whitespace text. `options` is required even when empty; only `corpus` has a request-schema default. Other omitted fields use the runtime/retriever behavior; a dash does not promise a fixed engine default. `aggregation.terms` are trimmed, each is 1–128 characters, and there are 1–8 terms. Every call reads its project plus the shared `global` memory. Native database recall does not require a workspace; native file reads do.
 
 Automatic, manual and native recall can populate different optional response fields. Inspect `degraded` and `unavailable`; empty context alone is not proof that the service succeeded.
 
-Scope requires nonblank `principal`, `project`, `session`; each supplied `readable` item must also be nonblank. `host.observeSessionUuid`, if supplied, must be a UUID. Host `at` is nonnegative epoch milliseconds. Other host strings may be empty.
+Scope requires nonblank `principal`, `project`, `session`. `host.observeSessionUuid`, if supplied, must be a UUID. Host `at` is nonnegative epoch milliseconds. Other host strings may be empty.
 
 <!-- table:request:getRecall -->
 | Field | Type | Required | Enum | Default | Constraints |
@@ -646,8 +642,6 @@ Scope requires nonblank `principal`, `project`, `session`; each supplied `readab
 | scope.principal | string | yes | - | - | {"minLength":1} |
 | scope.project | string | yes | - | - | {"minLength":1} |
 | scope.session | string | yes | - | - | {"minLength":1} |
-| scope.readable | array | no | - | - | - |
-| scope.readable[] | string | yes | - | - | {"minLength":1} |
 | scope.host | object | no | - | - | - |
 | scope.host.observeSessionUuid | string | no | - | - | {"format":"uuid","pattern":"^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}&#124;00000000-0000-0000-0000-000000000000&#124;ffffffff-ffff-ffff-ffff-ffffffffffff)$"} |
 | scope.host.agentId | string | no | - | - | - |
@@ -843,7 +837,7 @@ Response status: `200 OK`; `Content-Type: application/json`.
 
 Captures one completed turn. `turnId` must contain non-whitespace text; `rewindEpoch` is a nonnegative integer. Message times are nonnegative finite epoch milliseconds. JSON content can be structured or plain text. No minimum message-array length is imposed by this schema. `committed:true` acknowledges completed synchronous extraction/persistence, not a queued write. A deadline is not a durable commit receipt.
 
-Scope requires nonblank `principal`, `project`, `session`; each supplied `readable` item must also be nonblank. `host.observeSessionUuid`, if supplied, must be a UUID. Host `at` is nonnegative epoch milliseconds. Other host strings may be empty.
+Scope requires nonblank `principal`, `project`, `session`. `host.observeSessionUuid`, if supplied, must be a UUID. Host `at` is nonnegative epoch milliseconds. Other host strings may be empty.
 
 <!-- table:request:capture -->
 | Field | Type | Required | Enum | Default | Constraints |
@@ -861,8 +855,6 @@ Scope requires nonblank `principal`, `project`, `session`; each supplied `readab
 | scope.principal | string | yes | - | - | {"minLength":1} |
 | scope.project | string | yes | - | - | {"minLength":1} |
 | scope.session | string | yes | - | - | {"minLength":1} |
-| scope.readable | array | no | - | - | - |
-| scope.readable[] | string | yes | - | - | {"minLength":1} |
 | scope.host | object | no | - | - | - |
 | scope.host.observeSessionUuid | string | no | - | - | {"format":"uuid","pattern":"^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}&#124;00000000-0000-0000-0000-000000000000&#124;ffffffff-ffff-ffff-ffff-ffffffffffff)$"} |
 | scope.host.agentId | string | no | - | - | - |
@@ -980,7 +972,7 @@ Cross-field constraints (Zod refinements, not expressible in the generated field
 
 Finite importance/minScore values have no range constraint at this wire boundary; the writer may clamp them. A tool-level refusal can be HTTP 200 with `result.isError:true`; always read the tool result.
 
-Scope requires nonblank `principal`, `project`, `session`; each supplied `readable` item must also be nonblank. `host.observeSessionUuid`, if supplied, must be a UUID. Host `at` is nonnegative epoch milliseconds. Other host strings may be empty.
+Scope requires nonblank `principal`, `project`, `session`. `host.observeSessionUuid`, if supplied, must be a UUID. Host `at` is nonnegative epoch milliseconds. Other host strings may be empty.
 
 <!-- table:request:mutate -->
 | Field | Type | Required | Enum | Default | Constraints |
@@ -1029,8 +1021,6 @@ Scope requires nonblank `principal`, `project`, `session`; each supplied `readab
 | scope.principal | string | yes | - | - | {"minLength":1} |
 | scope.project | string | yes | - | - | {"minLength":1} |
 | scope.session | string | yes | - | - | {"minLength":1} |
-| scope.readable | array | no | - | - | - |
-| scope.readable[] | string | yes | - | - | {"minLength":1} |
 | scope.host | object | no | - | - | - |
 | scope.host.observeSessionUuid | string | no | - | - | {"format":"uuid","pattern":"^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}&#124;00000000-0000-0000-0000-000000000000&#124;ffffffff-ffff-ffff-ffff-ffffffffffff)$"} |
 | scope.host.agentId | string | no | - | - | - |
@@ -1154,7 +1144,7 @@ Read-only inspection does not enter the recall cache. Branches: 0 `storage`, 1 `
 
 The response `result` branches are storage, stats, list/listReflection, and get. Memory entry metadata is a serialized JSON **string**, while mutation metadata is a JSON object.
 
-Scope requires nonblank `principal`, `project`, `session`; each supplied `readable` item must also be nonblank. `host.observeSessionUuid`, if supplied, must be a UUID. Host `at` is nonnegative epoch milliseconds. Other host strings may be empty.
+Scope requires nonblank `principal`, `project`, `session`. `host.observeSessionUuid`, if supplied, must be a UUID. Host `at` is nonnegative epoch milliseconds. Other host strings may be empty.
 
 <!-- table:request:inspect -->
 | Field | Type | Required | Enum | Default | Constraints |
@@ -1186,8 +1176,6 @@ Scope requires nonblank `principal`, `project`, `session`; each supplied `readab
 | scope.principal | string | yes | - | - | {"minLength":1} |
 | scope.project | string | yes | - | - | {"minLength":1} |
 | scope.session | string | yes | - | - | {"minLength":1} |
-| scope.readable | array | no | - | - | - |
-| scope.readable[] | string | yes | - | - | {"minLength":1} |
 | scope.host | object | no | - | - | - |
 | scope.host.observeSessionUuid | string | no | - | - | {"format":"uuid","pattern":"^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}&#124;00000000-0000-0000-0000-000000000000&#124;ffffffff-ffff-ffff-ffff-ffffffffffff)$"} |
 | scope.host.agentId | string | no | - | - | - |
@@ -1350,7 +1338,7 @@ Response status: `200 OK`; `Content-Type: application/json`.
 
 Records usage of an explicit nonblank `recallId`. Each memory ID and supplied toolName must be nonblank. `at` is a nonnegative finite epoch-millisecond timestamp. `error` and `result` accept arbitrary JSON; supply the original tool event so error-signal handling can distinguish errors from successful result text. `accepted` reports acceptance; it is not an acknowledgement of remote telemetry delivery.
 
-Scope requires nonblank `principal`, `project`, `session`; each supplied `readable` item must also be nonblank. `host.observeSessionUuid`, if supplied, must be a UUID. Host `at` is nonnegative epoch milliseconds. Other host strings may be empty.
+Scope requires nonblank `principal`, `project`, `session`. `host.observeSessionUuid`, if supplied, must be a UUID. Host `at` is nonnegative epoch milliseconds. Other host strings may be empty.
 
 <!-- table:request:recordUsage -->
 | Field | Type | Required | Enum | Default | Constraints |
@@ -1370,8 +1358,6 @@ Scope requires nonblank `principal`, `project`, `session`; each supplied `readab
 | scope.principal | string | yes | - | - | {"minLength":1} |
 | scope.project | string | yes | - | - | {"minLength":1} |
 | scope.session | string | yes | - | - | {"minLength":1} |
-| scope.readable | array | no | - | - | - |
-| scope.readable[] | string | yes | - | - | {"minLength":1} |
 | scope.host | object | no | - | - | - |
 | scope.host.observeSessionUuid | string | no | - | - | {"format":"uuid","pattern":"^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}&#124;00000000-0000-0000-0000-000000000000&#124;ffffffff-ffff-ffff-ffff-ffffffffffff)$"} |
 | scope.host.agentId | string | no | - | - | - |
@@ -1474,7 +1460,7 @@ Response status: `200 OK`; `Content-Type: application/json`.
 
 Runs session-end work using the message schema shared with capture. Host cleanup must not repeat capture. Optional `scope.host.boundary` carries new/reset/session-end; no boundary default is assigned by the input schema. `completed` reports completed session-end handling.
 
-Scope requires nonblank `principal`, `project`, `session`; each supplied `readable` item must also be nonblank. `host.observeSessionUuid`, if supplied, must be a UUID. Host `at` is nonnegative epoch milliseconds. Other host strings may be empty.
+Scope requires nonblank `principal`, `project`, `session`. `host.observeSessionUuid`, if supplied, must be a UUID. Host `at` is nonnegative epoch milliseconds. Other host strings may be empty.
 
 <!-- table:request:onSessionEnd -->
 | Field | Type | Required | Enum | Default | Constraints |
@@ -1489,8 +1475,6 @@ Scope requires nonblank `principal`, `project`, `session`; each supplied `readab
 | scope.principal | string | yes | - | - | {"minLength":1} |
 | scope.project | string | yes | - | - | {"minLength":1} |
 | scope.session | string | yes | - | - | {"minLength":1} |
-| scope.readable | array | no | - | - | - |
-| scope.readable[] | string | yes | - | - | {"minLength":1} |
 | scope.host | object | no | - | - | - |
 | scope.host.observeSessionUuid | string | no | - | - | {"format":"uuid","pattern":"^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}&#124;00000000-0000-0000-0000-000000000000&#124;ffffffff-ffff-ffff-ffff-ffffffffffff)$"} |
 | scope.host.agentId | string | no | - | - | - |
@@ -1592,7 +1576,7 @@ Response status: `200 OK`; `Content-Type: application/json`.
 
 Returns the current static context text for the selected skin and scope. An empty string is a valid successful response. There are no body fields beyond scope.
 
-Scope requires nonblank `principal`, `project`, `session`; each supplied `readable` item must also be nonblank. `host.observeSessionUuid`, if supplied, must be a UUID. Host `at` is nonnegative epoch milliseconds. Other host strings may be empty.
+Scope requires nonblank `principal`, `project`, `session`. `host.observeSessionUuid`, if supplied, must be a UUID. Host `at` is nonnegative epoch milliseconds. Other host strings may be empty.
 
 <!-- table:request:staticBlock -->
 | Field | Type | Required | Enum | Default | Constraints |
@@ -1602,8 +1586,6 @@ Scope requires nonblank `principal`, `project`, `session`; each supplied `readab
 | scope.principal | string | yes | - | - | {"minLength":1} |
 | scope.project | string | yes | - | - | {"minLength":1} |
 | scope.session | string | yes | - | - | {"minLength":1} |
-| scope.readable | array | no | - | - | - |
-| scope.readable[] | string | yes | - | - | {"minLength":1} |
 | scope.host | object | no | - | - | - |
 | scope.host.observeSessionUuid | string | no | - | - | {"format":"uuid","pattern":"^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}&#124;00000000-0000-0000-0000-000000000000&#124;ffffffff-ffff-ffff-ffff-ffffffffffff)$"} |
 | scope.host.agentId | string | no | - | - | - |
