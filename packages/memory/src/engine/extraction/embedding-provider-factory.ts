@@ -1,3 +1,5 @@
+import { homedir } from "node:os";
+import { join } from "node:path";
 import {
 	type EmbeddingProvider,
 	LocalEmbedProvider,
@@ -37,7 +39,9 @@ export interface EmbeddingConfig {
 /** Assembles provider from validated inputs for deterministic embedding generation. */
 export function buildProvider(config: EmbeddingConfig): EmbeddingProvider {
 	return new LocalEmbedProvider({
-		cacheDir: config.cacheDir,
+		// One per-user model folder: the embedder's own default sits beside whichever bundled copy
+		// runs, so `bind` and the sidecar each downloaded the model separately.
+		cacheDir: config.cacheDir ?? join(process.env["XDG_CACHE_HOME"] || join(homedir(), ".cache"), "sno-station", "models"),
 		dtype: config.dtype,
 		sessionOptions: config.sessionOptions,
 		...(config.model !== undefined ? { model: config.model } : {}),
