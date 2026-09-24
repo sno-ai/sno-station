@@ -91,8 +91,13 @@ export class MemoryContractRuntime implements MemoryContract {
 	private registration: Registration | undefined;
 	private readonly providers = new Map<string, SnoStationMemProviderSearchManager>();
 	private readonly reflectionStates = new Map<string, ReflectionStrategyState>();
-	private readonly recall: RecallState = { history: new Map(), turns: new Map() };
+	private recall: RecallState = { history: new Map(), turns: new Map() };
 	constructor(private readonly services: MemoryRuntimeServices) {}
+
+	/** Takes over a replaced runtime's per-session recall turns, so a mid-turn re-registration keeps same-turn omission. */
+	adoptRecall(previous: MemoryContractRuntime): void {
+		this.recall = previous.recall;
+	}
 
 	async close(): Promise<void> {
 		for (const provider of this.providers.values()) await provider.close();
