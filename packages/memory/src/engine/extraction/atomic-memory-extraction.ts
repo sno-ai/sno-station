@@ -95,6 +95,7 @@ export interface AtomicMemoryExtractionTransports {
 
 export interface RunAtomicMemoryExtractionInput {
 	diagnostics?: WindowDiagnostics;
+	writerAgentId?: string;
 	store: MemoryStore;
 	projectId: string;
 	ledgerKey: AtomicExtractionLedgerKey;
@@ -166,6 +167,7 @@ export type AtomicMemoryExtractionResult =
 
 export interface AtomicExtractPersistOptions {
 	scope?: string;
+	writerAgentId?: string;
 	sessionDateTime?: string;
 	sessionTimezone?: string;
 }
@@ -741,6 +743,7 @@ export class AtomicInsightDistiller {
 					try {
 						return await windowDiagnosticContext.run(diagnostic, () => runAtomicMemoryExtraction({
 							diagnostics: diagnostic,
+							writerAgentId: options.writerAgentId,
 							store: this.store,
 							projectId: scope,
 							ledgerKey: {
@@ -1508,6 +1511,7 @@ export async function runAtomicMemoryExtraction(
 	const sourceFactKeys = admitted.map(factKeyOf);
 	const projectedCards = buildAtomicWriteCards({
 		records: resolved.records,
+		writerAgentId: input.writerAgentId,
 		idempotencyKeys: resolved.records.map((_record, recordIndex) =>
 			hashText(
 				`${input.ledgerKey.conversationId}\u0000${input.ledgerKey.chunkHash}\u0000${input.ledgerKey.pipelineVersion}\u0000${recordIndex}`,

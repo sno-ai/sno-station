@@ -31,6 +31,7 @@ export const ATOMIC_MEMORY_WRITE_CONFIG: AtomicMemoryWriteConfig =
 
 export interface BuildAtomicWriteCardsInput {
 	records: readonly AtomicKeyedRecord[];
+	writerAgentId?: string;
 	idempotencyKeys: readonly string[];
 	sourceTurnOffset: number;
 	sessionTimestampMs: number;
@@ -182,7 +183,10 @@ export function buildAtomicWriteCards(
 			timezone: input.timezone,
 			lane: sanitizedRecord.lane,
 			dispositionReason: sanitizedRecord.dispositionReason,
-			metadata: metadataForRecord(sanitizedRecord, sanitizerMatches, when.validFrom),
+			metadata: {
+				...metadataForRecord(sanitizedRecord, sanitizerMatches, when.validFrom),
+				...(input.writerAgentId ? { writer_agent_id: input.writerAgentId } : {}),
+			},
 			relations: sanitizedRecord.relations,
 		};
 	});
