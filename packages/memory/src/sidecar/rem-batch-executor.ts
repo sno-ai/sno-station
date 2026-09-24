@@ -84,7 +84,10 @@ import {
 	readMemoryChunkVectors,
 	scoreCandidatesBySimilarity,
 } from "../store/memory-store-atomic-extraction-write-api";
-import { ARRIVAL_RETIREMENT_CANDIDATE_CAP } from "../../config/index";
+import {
+	ARRIVAL_RETIREMENT_CANDIDATE_CAP,
+	ARRIVAL_RETIREMENT_JUDGED_CANDIDATE_CAP,
+} from "../../config/index";
 import {
 	initSqliteRuntime,
 	openSqliteDatabase,
@@ -3082,6 +3085,13 @@ export async function buildRemReplaceCandidateQueue(input: {
 		(candidate) => `${candidate.project_id}\u0000${candidate.subject}`,
 	);
 	const subjectVectors = new Map<string, Map<string, Float32Array[]>>();
+	// An episodic row is also paired with its project's nearest profile and state rows, as at write
+	// time: a correction stored as episodic must reach the value it corrects (PRD 140 §5).
+	const currentRows = Map.groupBy(
+		candidates.filter((candidate) => candidate.category !== "episodic"),
+		(candidate) => candidate.project_id,
+	);
+	const currentVectors = new Map<string, Map<string, Float32Array[]>>();
 	for (const rows of Map.groupBy(candidates, (candidate) => candidate.canonicalAddress).values()) {
 		const ordered = [...rows].sort((left, right) => left.id.localeCompare(right.id));
 		for (let leftIndex = 0; leftIndex < ordered.length; leftIndex += 1) {
@@ -3124,7 +3134,18 @@ export async function buildRemReplaceCandidateQueue(input: {
 					groupVectors = lookup.readVectors(subjectGroup.map((row) => row.id));
 					subjectVectors.set(subjectKey, groupVectors);
 				}
-				found = pairWithNearestOfSubject(pairs, candidate, subjectGroup, vector, groupVectors);
+				const cap = ARRIVAL_RETIREMENT_CANDIDATE_CAP;
+				found = pairWithNearest(pairs, candidate, subjectGroup, vector, groupVectors, cap);
+			}
+			const projectCurrent = currentRows.get(candidate.project_id);
+			if (candidate.category === "episodic" && projectCurrent !== undefined) {
+				let vectors = currentVectors.get(candidate.project_id);
+				if (vectors === undefined) {
+					vectors = lookup.readVectors(projectCurrent.map((row) => row.id));
+					currentVectors.set(candidate.project_id, vectors);
+				}
+				const cap = ARRIVAL_RETIREMENT_JUDGED_CANDIDATE_CAP;
+				found = pairWithNearest(pairs, candidate, projectCurrent, vector, vectors, cap) || found;
 			}
 			matches = await lookup.searchSemantic(vector, {
 				category: candidate.category,
@@ -3198,13 +3219,14 @@ function pairsBySubject(candidate: RemReplacePairCandidate): boolean {
 	);
 }
 
-/** Pairs a subject row with its subject's nearest rows; whether any pair was added. */
-function pairWithNearestOfSubject(
+/** Pairs a row with the `cap` nearest rows of a group; whether any pair was added. */
+function pairWithNearest(
 	pairs: Map<string, RemReplaceCandidatePair>,
 	candidate: RemReplacePairCandidate,
 	group: readonly RemReplacePairCandidate[],
 	vector: Float32Array,
 	groupVectors: Map<string, Float32Array[]>,
+	cap: number,
 ): boolean {
 	const nearest = group
 		.filter((peer) => peer.id !== candidate.id)
@@ -3220,7 +3242,7 @@ function pairWithNearestOfSubject(
 				(right.score ?? Number.NEGATIVE_INFINITY) - (left.score ?? Number.NEGATIVE_INFINITY) ||
 				left.peer.id.localeCompare(right.peer.id),
 		)
-		.slice(0, ARRIVAL_RETIREMENT_CANDIDATE_CAP);
+		.slice(0, cap);
 	for (const { peer, score } of nearest) addCandidatePair(pairs, candidate, peer, score, "semantic");
 	return nearest.length > 0;
 }
