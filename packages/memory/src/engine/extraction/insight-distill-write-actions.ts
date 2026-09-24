@@ -3,6 +3,7 @@
  * @boundary Store mutations for create/support/contextualize/contradict only.
  */
 
+import { resolveHookAgentId } from "../bindings/sno-station-mem-runtime-mode";
 import { validateExtractedContentForStorage } from "@snoai/content-sanitizer";
 import { createLogger } from "@snoai/utils/logger";
 import { buildIndexedText } from "./extraction-text-sanitizer";
@@ -340,12 +341,14 @@ export function newWorkingMemoryFields(params: {
 	access_count: 0;
 	confidence: 0.7;
 	source_session: string;
+	writer_agent_id?: string;
 	source: "ambient-learning";
 	state: "confirmed";
 	injected_count: 0;
 	bad_recall_count: 0;
 	suppressed_until_turn: 0;
 } {
+	const writerAgentId = resolveHookAgentId(undefined, params.sessionKey).agentId;
 	// `asserted_at` is deliberately NOT set here: it must anchor to the session
 	// time, which the codec supplies as the default from the entry timestamp
 	// (threaded via `sessionTimestampField` at every write site). Setting it to a
@@ -359,6 +362,7 @@ export function newWorkingMemoryFields(params: {
 		access_count: 0,
 		confidence: 0.7,
 		source_session: params.sessionKey,
+		...(writerAgentId ? { writer_agent_id: writerAgentId } : {}),
 		source: "ambient-learning",
 		state: "confirmed",
 		injected_count: 0,
