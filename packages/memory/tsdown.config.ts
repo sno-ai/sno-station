@@ -36,6 +36,8 @@ export default defineConfig([
   "internal/config/plugin-config-schema": "config/plugin-config-schema.ts",
   "internal/config/product-mode": "config/plugin-config-mode-schema.ts",
   "internal/config/skin-defaults": "config/skin-defaults.ts",
+  "internal/config/skill-categories": "config/skill-categories.ts",
+  "internal/engine/telemetry/observe-ledger": "src/engine/telemetry/observe-ledger.ts",
   "coding-skin": "config/coding-skin.ts",
   "internal/contract/discovery": "src/contract/discovery.ts",
   "internal/contract/routes": "src/contract/routes.ts",
