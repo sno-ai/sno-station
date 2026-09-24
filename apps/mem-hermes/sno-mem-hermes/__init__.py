@@ -374,7 +374,7 @@ class SnoMemoryProvider(MemoryProvider):
         client.connect()
         cwd = kwargs.get("cwd")
         self._cwd = str(Path(cwd).resolve()) if isinstance(cwd, str) and cwd else None
-        self._project = self._cwd or f"hermes:{Path(str(kwargs['hermes_home'])).resolve()}"
+        self._project = self._cwd or str(Path.cwd().resolve())
         self._session_id = session_id
         self._primary = kwargs.get("agent_context", "primary") == "primary"
         self._client = client
@@ -760,13 +760,11 @@ class SnoMemoryProvider(MemoryProvider):
         query = args.get("query")
         if not isinstance(query, str) or not query.strip():
             return _tool_error("invalid-input")
-        scope = self._scope(self._session_id)
-        scope["readable"] = [self._project, "global"]
         result = self._require_client().post(
             "get-recall",
             {
                 "query": query,
-                "scope": scope,
+                "scope": self._scope(self._session_id),
                 "options": {
                     "source": "manual",
                     "limit": _TOOL_RECALL_LIMIT,
@@ -976,7 +974,7 @@ class SnoMemoryProvider(MemoryProvider):
             "principal": getpass.getuser(),
             "project": self._project,
             "session": session_id,
-            "host": {"sessionId": session_id},
+            "host": {"sessionId": session_id, "workspace": self._project},
         }
 
     def _require_client(self) -> SidecarClient:

@@ -169,11 +169,8 @@ export async function resolveProviderAuthority(
 			.transaction(() => {
 				const project = ensureProjectMapping(store, userId, projectKey);
 				const agentId = ensureAgentMapping(store, userId, agentKey);
-				if (project.created) {
-					insertMembership(store, userId, project.projectId, agentId);
-				} else if (!hasMembership(store, userId, project.projectId, agentId)) {
-					throw new StorageError("Provider project-agent membership is required");
-				}
+				// One workspace is one shared memory: every agent that uses it joins its project.
+				insertMembership(store, userId, project.projectId, agentId);
 				resolved = { userId, projectId: project.projectId, agentId };
 			})
 			.immediate();
