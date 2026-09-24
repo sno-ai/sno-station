@@ -21,7 +21,9 @@ import type {
 import type { ReflectionLineSource } from "./reflection-line-loader";
 import { buildReflectionStorePayloads } from "./reflection-store-payload-builder";
 
-export async function storeReflectionEntries(params: StoreReflectionParams): Promise<{
+export async function storeReflectionEntries(
+	params: StoreReflectionParams & { writerAgentId?: string },
+): Promise<{
 	stored: boolean;
 	eventId: string;
 	slices: ReflectionSlices;
@@ -58,7 +60,7 @@ export async function storeReflectionEntries(params: StoreReflectionParams): Pro
 			category: categoryForPayload(payload.kind),
 			projectId: params.scope,
 			importance: resolveReflectionImportance(payload.kind),
-			metadata: metadataForPayload(payload, params.runAt),
+			metadata: metadataForPayload(payload, params.runAt, params.writerAgentId),
 			// Anchor every reflection row to the run time captured once at the
 			// start of this reflection pass. Without it persistence falls back to
 			// a per-row `Date.now()`, scattering sibling rows across ms-level
@@ -93,10 +95,15 @@ function categoryForPayload(kind: ReflectionStoreKind): MemoryCategory {
 	return kind === "episodic-reflection" ? "episodic" : "lesson";
 }
 
-function metadataForPayload(payload: ReflectionStorePayload, runAt: number): string {
+function metadataForPayload(
+	payload: ReflectionStorePayload,
+	runAt: number,
+	writerAgentId: string | undefined,
+): string {
 	const category = categoryForPayload(payload.kind);
 	const metadataPatch = {
 		...payload.metadata,
+		...(writerAgentId ? { writer_agent_id: writerAgentId } : {}),
 		...(category === "lesson"
 			? {
 					anti_pattern_signature: buildReflectionAntiPatternSignature(

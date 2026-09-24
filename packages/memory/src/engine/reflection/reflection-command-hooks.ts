@@ -1,3 +1,4 @@
+import { resolveHookAgentId } from "../bindings/sno-station-mem-runtime-mode";
 import { checkMemoryOperation } from "../operation-cancellation";
 import { FIXED_PROTOCOL_VALUE_78 } from "../../model/signed-registry-constants";
 import { createLogger as createDiagnosticLogger, privateLogReference, currentLogContext, withLogContext } from "@snoai/utils/logger";
@@ -180,6 +181,7 @@ async function runMemoryReflectionBody(
 					? event.timestamp.getTime()
 					: Date.now();
 		const sourceAgentId = params.deps.parseAgentIdFromSessionKey(sessionKey) || "main";
+		const writerAgentId = resolveHookAgentId(event.context.agentId, sessionKey).agentId;
 		const command = String(event.action ?? "unknown");
 		// Terminal per-session read: the daily-log reflection wants the full recent error set,
 		// not just signals since the last prompt-injection marker. getPendingSignals drains that
@@ -230,6 +232,7 @@ async function runMemoryReflectionBody(
 			reflectionText: reflectionResult.text,
 			usedFallback: reflectionResult.usedFallback,
 			sourceAgentId,
+			writerAgentId,
 			sessionKey,
 			sessionId: currentSessionId,
 			command,
@@ -258,6 +261,7 @@ async function maybeStoreReflection(
 		reflectionText: string;
 		usedFallback: boolean;
 		sourceAgentId: string;
+		writerAgentId?: string;
 		sessionKey: string;
 		sessionId: string;
 		command: string;
@@ -297,6 +301,7 @@ async function maybeStoreReflection(
 			sessionKey: params.sessionKey,
 			sessionId: params.sessionId,
 			agentId: params.sourceAgentId,
+			writerAgentId: params.writerAgentId,
 			command: params.command,
 			scope: targetScope,
 			toolErrorSignals: params.toolErrorSignals,
@@ -339,6 +344,7 @@ async function maybeStoreReflection(
 			routing: pickLlmRoutingConfig(params.config),
 			targetScope,
 			sourceAgentId: params.sourceAgentId,
+			writerAgentId: params.writerAgentId,
 			sessionKey: params.sessionKey,
 			sessionId: params.sessionId,
 			runAt: params.nowTs,
