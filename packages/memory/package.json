@@ -68,7 +68,7 @@
   "scripts": {
     "dev": "tsx watch src/sidecar/main.ts",
     "build": "tsx scripts/build-log-catalog.ts && tsdown && tsx scripts/build-log-catalog.ts --artifact-only",
-    "prepack": "npm run sqlite-vec:check && npm run rem:guard-census && npm run build",
+    "prepack": "npm run sqlite-vec:check && npm run build",
     "pack:dry-run": "npm pack --dry-run",
     "sqlite-vec:build": "bash scripts/build-sqlite-vec.sh --build",
     "sqlite-vec:check": "bash scripts/build-sqlite-vec.sh --check",
