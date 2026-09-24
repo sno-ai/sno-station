@@ -10,6 +10,7 @@ export interface ObserveLedgerRow {
 	ts_ms: number;
 	event_type: EventType;
 	lane: EventLane;
+	project_id?: string;
 	payload: JsonObject;
 }
 
@@ -30,6 +31,7 @@ const rowSchema = z.object({
 	ts_ms: z.number().int().nonnegative(),
 	event_type: z.string(),
 	lane: z.string(),
+	project_id: z.string().min(1).optional(),
 	payload: z.record(z.string(), z.json()),
 });
 
@@ -124,6 +126,7 @@ export async function forwardObserveLedger(options: {
 				eventType: row.event_type as EventType,
 				payload: row.payload,
 				tsEdgeMs: row.ts_ms,
+				...(row.project_id ? { scope: { project_id: row.project_id } } : {}),
 			});
 			if (accepted) forwarded++;
 			else await reportRowFailure(observe, "rejected", line, "tryEmit returned false");

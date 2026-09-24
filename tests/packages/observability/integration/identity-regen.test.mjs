@@ -6,10 +6,12 @@ import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
 import { describe, it } from "node:test";
+import DatabaseConstructor from "better-sqlite3";
+import { createSnoObserve } from "../../../../packages/observability/dist/index.js";
 import { BufferStore } from "../../../../packages/observability/dist/internal/buffer-store.js";
 import { bootstrapIdentity } from "../../../../packages/observability/dist/internal/identity.js";
 import { detectProjectId } from "../../../../packages/observability/dist/internal/project-id.js";
-import { validPayloads, scope } from "../fixtures/temp-env.mjs";
+import { createFetchRecorder, validPayloads, scope } from "../fixtures/temp-env.mjs";
 
 const workerPath = fileURLToPath(new URL("../fixtures/fork-emit-worker.mjs", import.meta.url));
 
@@ -166,6 +168,82 @@ describe("identity bootstrap / regeneration", () => {
 			const idBefore = detectProjectId(beforeDir, t.env);
 			const idAfter = detectProjectId(afterDir, t.env);
 			assert.notEqual(idBefore, idAfter, "different cwds yield different project_ids");
+		} finally {
+			rmSync(t.dir, { recursive: true, force: true });
+		}
+	});
+});
+
+describe("agent.identify at each runtime start (REQ-6)", () => {
+	async function start(t, pluginVersion, emits) {
+		const observe = createSnoObserve({
+			env: t.env,
+			cwd: t.dir,
+			fetch: createFetchRecorder().fetch,
+			...(pluginVersion === undefined ? {} : { pluginVersion }),
+		});
+		try {
+			for (let i = 0; i < emits; i += 1) {
+				await observe.emit({
+					event_type: "memory.write",
+					lane: "memory",
+					agent_id: "codex",
+					payload: validPayloads["memory.write"],
+				});
+			}
+		} finally {
+			await observe.shutdown();
+		}
+	}
+
+	function rows(t) {
+		const db = new DatabaseConstructor(t.env.SNO_BUFFER_PATH, { readonly: true });
+		try {
+			return db
+				.prepare("SELECT chain_epoch, seq, payload FROM events WHERE agent_id = 'codex' ORDER BY chain_epoch, seq")
+				.all()
+				.map((row) => ({ epoch: row.chain_epoch, seq: row.seq, envelope: JSON.parse(String(row.payload)) }));
+		} finally {
+			db.close();
+		}
+	}
+
+	it("re-sends one identify on the current epoch when version B starts on version A's chain", async () => {
+		const t = tempEnv();
+		t.env.LANG = "zh_CN.UTF-8";
+		try {
+			await start(t, "A", 1);
+			await start(t, "B", 2);
+			const all = rows(t);
+			assert.deepEqual(
+				all.map((r) => r.envelope.event_type),
+				["agent.identify", "memory.write", "agent.identify", "memory.write", "memory.write"],
+			);
+			assert.deepEqual([...new Set(all.map((r) => r.epoch))], [0]);
+			assert.deepEqual(all.map((r) => r.seq), [0, 1, 2, 3, 4]);
+			assert.equal(all[0].envelope.payload.plugin_version, "A");
+			const reIdentify = all[2].envelope.payload;
+			assert.equal(reIdentify.plugin_version, "B");
+			assert.equal(reIdentify.locale, "zh-CN");
+			assert.equal(reIdentify.os, process.platform);
+		} finally {
+			rmSync(t.dir, { recursive: true, force: true });
+		}
+	});
+
+	it("adds no extra identify on a fresh chain or for a runtime without a plugin version", async () => {
+		const t = tempEnv();
+		try {
+			await start(t, "B", 2);
+			assert.deepEqual(
+				rows(t).map((r) => r.envelope.event_type),
+				["agent.identify", "memory.write", "memory.write"],
+			);
+			await start(t, undefined, 1);
+			assert.deepEqual(
+				rows(t).map((r) => r.envelope.event_type),
+				["agent.identify", "memory.write", "memory.write", "memory.write"],
+			);
 		} finally {
 			rmSync(t.dir, { recursive: true, force: true });
 		}

@@ -39,6 +39,7 @@ import {
 	deriveRemConfigurationSha256,
 	enumerateRemUpdateMembers,
 	installRemSchema,
+	isAdapterAVerdictReply,
 	parseAdapterAChatVerdict,
 	parseReplaceClauseVerdict,
 	parseReplaceCoverageAtoms,
@@ -78,7 +79,15 @@ import { pluginConfigSchema } from "../engine/shared/types";
 import { loadStorageExtensions } from "../store/connection";
 import { getSnoStationMemStateDir } from "../engine/operations/runtime-audit-log";
 import { MemoryStore } from "../store/store";
-import { scoreCandidatesBySimilarity } from "../store/memory-store-atomic-extraction-write-api";
+import {
+	chunkVectorSimilarity,
+	readMemoryChunkVectors,
+	scoreCandidatesBySimilarity,
+} from "../store/memory-store-atomic-extraction-write-api";
+import {
+	ARRIVAL_RETIREMENT_CANDIDATE_CAP,
+	ARRIVAL_RETIREMENT_JUDGED_CANDIDATE_CAP,
+} from "../../config/index";
 import {
 	initSqliteRuntime,
 	openSqliteDatabase,
@@ -174,12 +183,15 @@ export interface RemReplacePairCandidate {
 	text: string;
 	category: "profile" | "episodic" | "state";
 	project_id: string;
+	subject: string | null;
 	canonicalAddress: string;
 	factKey?: string;
 }
 
 export interface RemReplaceCandidateLookupPort {
 	embed(text: string): Promise<Float32Array>;
+	/** Each row's own stored chunk vectors; a row with none is absent. */
+	readVectors(ids: readonly string[]): Map<string, Float32Array[]>;
 	searchSemantic(
 		vector: Float32Array,
 		options: {
@@ -2365,7 +2377,7 @@ async function runReplace(input: {
 			llmCalls += 1;
 			const pairText = await completeTextStage(input.runtime, "rem-replace-pair", pairPrompt);
 			pairVerdict = pairText === null ? "uncertain" : parseAdapterAChatVerdict(pairText);
-			const validPairResponse = pairText !== null && isValidPairVerdictResponse(pairText);
+			const validPairResponse = pairText !== null && isAdapterAVerdictReply(pairText);
 			if (validPairResponse) successfulLlmCalls += 1;
 			if (pairText !== null && !validPairResponse) {
 				lastRefusalReason = "model_response_invalid";
@@ -3039,6 +3051,7 @@ async function buildIndexedPairs(
 		snapshotWatermark,
 		lookup: {
 			embed: (text) => runtime.embedder.embed(text),
+			readVectors: (ids) => readMemoryChunkVectors(runtime.store, ids),
 			searchSemantic: async (vector, options) => {
 				const matches = await runtime.store.searchSemantic(vector, options);
 				return matches.map((match) => ({ id: match.entry.id, score: match.score }));
@@ -3050,7 +3063,7 @@ async function buildIndexedPairs(
 function derivePairingConfigHash(configuration: RemOperationalConfiguration | undefined): string {
 	return sha256(
 		JSON.stringify({
-			version: "rem-pairing-v4-semantic",
+			version: "rem-pairing-v5-subject",
 			retrieval: configuration?.retrieval ?? null,
 		}),
 	);
@@ -3067,13 +3080,31 @@ export async function buildRemReplaceCandidateQueue(input: {
 	const { candidates, configuration, repository, jobId, snapshotWatermark, lookup } = input;
 	const byId = new Map(candidates.map((candidate) => [candidate.id, candidate]));
 	const pairs = new Map<string, RemReplaceCandidatePair>();
+	const subjectGroups = Map.groupBy(
+		candidates.filter(pairsBySubject),
+		(candidate) => `${candidate.project_id}\u0000${candidate.subject}`,
+	);
+	const subjectVectors = new Map<string, Map<string, Float32Array[]>>();
+	// An episodic row is also paired with its project's nearest profile and state rows, as at write
+	// time: a correction stored as episodic must reach the value it corrects (PRD 140 §5).
+	const currentRows = Map.groupBy(
+		candidates.filter((candidate) => candidate.category !== "episodic"),
+		(candidate) => candidate.project_id,
+	);
+	const currentVectors = new Map<string, Map<string, Float32Array[]>>();
 	for (const rows of Map.groupBy(candidates, (candidate) => candidate.canonicalAddress).values()) {
 		const ordered = [...rows].sort((left, right) => left.id.localeCompare(right.id));
 		for (let leftIndex = 0; leftIndex < ordered.length; leftIndex += 1) {
 			for (let rightIndex = leftIndex + 1; rightIndex < ordered.length; rightIndex += 1) {
 				const left = ordered[leftIndex];
 				const right = ordered[rightIndex];
-				if (left && right && left.category === right.category) {
+				// Two subject rows are paired by their subject's nearest rows below instead.
+				if (
+					left &&
+					right &&
+					left.category === right.category &&
+					!(pairsBySubject(left) && pairsBySubject(right))
+				) {
 					addCandidatePair(pairs, left, right, undefined, "address");
 				}
 			}
@@ -3090,9 +3121,32 @@ export async function buildRemReplaceCandidateQueue(input: {
 			function: "buildRemReplaceCandidateQueue",
 			site_id: "rem-batch-executor.buildRemReplaceCandidateQueue.25aa1a67a6",
 		});
+		const subjectKey = `${candidate.project_id}\u0000${candidate.subject}`;
+		const subjectGroup = pairsBySubject(candidate) ? subjectGroups.get(subjectKey) : undefined;
+		let found = false;
 		let matches: ReadonlyArray<{ id: string; score: number }>;
 		try {
 			const vector = await lookup.embed(candidate.text);
+			if (subjectGroup !== undefined) {
+				// One read of a subject's vectors serves every row of it.
+				let groupVectors = subjectVectors.get(subjectKey);
+				if (groupVectors === undefined) {
+					groupVectors = lookup.readVectors(subjectGroup.map((row) => row.id));
+					subjectVectors.set(subjectKey, groupVectors);
+				}
+				const cap = ARRIVAL_RETIREMENT_CANDIDATE_CAP;
+				found = pairWithNearest(pairs, candidate, subjectGroup, vector, groupVectors, cap);
+			}
+			const projectCurrent = currentRows.get(candidate.project_id);
+			if (candidate.category === "episodic" && projectCurrent !== undefined) {
+				let vectors = currentVectors.get(candidate.project_id);
+				if (vectors === undefined) {
+					vectors = lookup.readVectors(projectCurrent.map((row) => row.id));
+					currentVectors.set(candidate.project_id, vectors);
+				}
+				const cap = ARRIVAL_RETIREMENT_JUDGED_CANDIDATE_CAP;
+				found = pairWithNearest(pairs, candidate, projectCurrent, vector, vectors, cap) || found;
+			}
 			matches = await lookup.searchSemantic(vector, {
 				category: candidate.category,
 				limit: Math.min(configuration.retrieval.neighborLimit, candidates.length),
@@ -3108,10 +3162,14 @@ export async function buildRemReplaceCandidateQueue(input: {
 			});
 			continue;
 		}
-		let found = false;
 		for (const match of matches) {
 			const peer = byId.get(match.id);
-			if (!peer || peer.id === candidate.id || peer.category !== candidate.category) {
+			if (
+				!peer ||
+				peer.id === candidate.id ||
+				peer.category !== candidate.category ||
+				(pairsBySubject(candidate) && pairsBySubject(peer))
+			) {
 				continue;
 			}
 			found = true;
@@ -3123,7 +3181,7 @@ export async function buildRemReplaceCandidateQueue(input: {
 			recordedAt: new Date().toISOString(),
 		});
 	}
-	// A scored pair came from the neighbour search and cleared the configured floor; an unscored
+	// A scored pair came from the neighbour search, or from a subject's nearest rows; an unscored
 	// one was proposed only because two rows share an address, and on the measured corpus that
 	// branch produced 66 pairs and not one replacement verdict while the scored branch produced
 	// every one. Scored pairs therefore rank first, most similar first, and sortKey breaks ties so
@@ -3136,11 +3194,57 @@ export async function buildRemReplaceCandidateQueue(input: {
 			}
 			return left.sortKey.localeCompare(right.sortKey);
 		});
+	// A pair already closed with a verdict is not judged again when the corpus moves on (PRD 140
+	// REQ-9); its identity carries both texts, so an edited row is a new pair.
+	const judged = repository.readClosedVerdictPairIds(ordered.map((pair) => pair.pairId));
+	const unjudged = ordered.filter((pair) => !judged.has(pair.pairId));
 	return {
 		// Every pair is persisted; the per-run cap is applied when pairs are claimed (PRD 40 REQ-1).
-		pairs: ordered,
-		pairCapBinding: ordered.length > configuration.budgets.maxPairs,
+		pairs: unjudged,
+		pairCapBinding: unjudged.length > configuration.budgets.maxPairs,
 	};
+}
+
+/**
+ * A profile or state row about a subject is paired with that subject's live profile and state rows
+ * by similarity alone, no floor: extraction files one fact under different categories, sections
+ * and attributes run to run, and a real correction pair scored 0.571 to 0.688, below any floor
+ * that keeps unrelated rows out (PRD 140 REQ-8). Such a row still runs the threshold search, so a
+ * pair with a row outside that set keeps address and threshold pairing.
+ */
+function pairsBySubject(candidate: RemReplacePairCandidate): boolean {
+	return (
+		(candidate.category === "profile" || candidate.category === "state") &&
+		typeof candidate.subject === "string"
+	);
+}
+
+/** Pairs a row with the `cap` nearest rows of a group; whether any pair was added. */
+function pairWithNearest(
+	pairs: Map<string, RemReplaceCandidatePair>,
+	candidate: RemReplacePairCandidate,
+	group: readonly RemReplacePairCandidate[],
+	vector: Float32Array,
+	groupVectors: Map<string, Float32Array[]>,
+	cap: number,
+): boolean {
+	const nearest = group
+		.filter((peer) => peer.id !== candidate.id)
+		.map((peer) => {
+			const chunkVectors = groupVectors.get(peer.id);
+			return {
+				peer,
+				score: chunkVectors === undefined ? undefined : chunkVectorSimilarity(vector, chunkVectors),
+			};
+		})
+		.sort(
+			(left, right) =>
+				(right.score ?? Number.NEGATIVE_INFINITY) - (left.score ?? Number.NEGATIVE_INFINITY) ||
+				left.peer.id.localeCompare(right.peer.id),
+		)
+		.slice(0, cap);
+	for (const { peer, score } of nearest) addCandidatePair(pairs, candidate, peer, score, "semantic");
+	return nearest.length > 0;
 }
 
 function recordCandidateLookup(
@@ -3188,7 +3292,7 @@ function addCandidatePair<T extends RemReplacePairCandidate>(
 				: Math.max(existing.score, score);
 	const selectedSortKey = existing && existing.sortKey < sortKey ? existing.sortKey : sortKey;
 	pairs.set(pairKey, {
-		pairId: `rem-pair-${sha256(pairKey).slice(0, 24)}`,
+		pairId: `rem-pair-${sha256([left.id, left.text, right.id, right.text].join("\u0000")).slice(0, 24)}`,
 		sortKey: selectedSortKey,
 		left,
 		right,
@@ -3207,6 +3311,7 @@ function orderCandidates(left: ClaimedCandidate, right: ClaimedCandidate): {
 			left.id.localeCompare(right.id) < 0);
 	const leftView = adapterAViewFromRecord({
 		text: left.text,
+		subject: left.subject,
 		kind: left.category,
 		validFrom: left.validFrom,
 		assertedAt: left.timestamp,
@@ -3214,6 +3319,7 @@ function orderCandidates(left: ClaimedCandidate, right: ClaimedCandidate): {
 	});
 	const rightView = adapterAViewFromRecord({
 		text: right.text,
+		subject: right.subject,
 		kind: right.category,
 		validFrom: right.validFrom,
 		assertedAt: right.timestamp,
@@ -3480,19 +3586,6 @@ async function completeJsonStage(
 function parseStageJson(response: string): unknown {
 	return readModelReplyJson(response, (value) => (value === undefined ? undefined : { value }))
 		?.value;
-}
-
-function isValidPairVerdictResponse(value: string): boolean {
-	const trimmed = value.trim();
-	if (trimmed === "replacement" || trimmed === "keep" || trimmed === "uncertain") return true;
-	try {
-		const parsed: unknown = JSON.parse(trimmed);
-		if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return false;
-		const verdict = (parsed as Record<string, unknown>)["verdict"];
-		return verdict === "replacement" || verdict === "keep" || verdict === "uncertain";
-	} catch {
-		return false;
-	}
 }
 
 function reserveReplaceStage(

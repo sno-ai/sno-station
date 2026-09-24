@@ -19,8 +19,9 @@ import {
 const sha256 = (text) => createHash("sha256").update(text, "utf8").digest("hex");
 
 /** Emits one memory.write under a HOME prepared by `prepareHome`; returns the seeded identify payload. */
-async function seededIdentify(prepareHome) {
+async function seededIdentify(prepareHome, localeEnv = {}) {
 	const temp = createTempSnoEnv("sno-observe-identify-");
+	Object.assign(temp.env, localeEnv);
 	prepareHome(temp.dir);
 	const previous = { HOME: process.env.HOME, XDG_CONFIG_HOME: process.env.XDG_CONFIG_HOME };
 	process.env.HOME = temp.dir;
@@ -70,12 +71,21 @@ describe("observe v2 agent.identify fields", () => {
 			writeFileSync(join(home, ".claude.json"), JSON.stringify({ oauthAccount: { accountUuid: "ACCT-A" } }));
 			writeFileSync(join(home, ".gitconfig"), "[user]\n\tname = A\n\temail = A@Example.org\n");
 		});
-		assert.equal(payload.locale, Intl.DateTimeFormat().resolvedOptions().locale);
+		assert.equal(Object.hasOwn(payload, "locale"), false);
 		assert.equal(payload.os, process.platform);
 		assert.deepEqual(payload.person_hints, [
 			{ kind: "claude_account", hash: sha256("acct-a") },
 			{ kind: "git_email", hash: sha256("a@example.org") },
 		]);
+	});
+
+	it("takes locale from LC_ALL, else LANG, as BCP-47, and omits C, POSIX and empty", async () => {
+		const locale = async (env) => (await seededIdentify(() => {}, env)).locale;
+		assert.equal(await locale({ LANG: "zh_CN.UTF-8" }), "zh-CN");
+		assert.equal(await locale({ LC_ALL: "de_DE@euro", LANG: "en_US.UTF-8" }), "de-DE");
+		assert.equal(await locale({ LANG: "C" }), undefined);
+		assert.equal(await locale({ LANG: "POSIX" }), undefined);
+		assert.equal(await locale({ LANG: "" }), undefined);
 	});
 
 	it("omits person_hints under an empty HOME", async () => {

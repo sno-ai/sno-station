@@ -57,6 +57,7 @@ export class SnoObserveRuntime {
 	private consentStoreEnv: PathEnv | null = null;
 	private readonly mutex = new AsyncMutex();
 	private readonly listeners = new Set<Subscription>();
+	private readonly identifiedAgents = new Set<AgentId>();
 
 	constructor(private readonly options: RuntimeOptions = {}) {}
 
@@ -131,6 +132,7 @@ export class SnoObserveRuntime {
 			if (!(error instanceof ChainSeedError)) {
 				throw error;
 			}
+			this.identifiedAgents.add(agentId);
 		}
 	}
 
@@ -249,6 +251,7 @@ export class SnoObserveRuntime {
 		chainEpoch: number,
 		consent: ConsentValue,
 		terminal: boolean,
+		reidentify?: true,
 	): void {
 		this.appendPrepared({
 			identity,
@@ -262,6 +265,7 @@ export class SnoObserveRuntime {
 			scope: {},
 			chainEpoch,
 			terminal,
+			...(reidentify === true ? { reidentify } : {}),
 		});
 	}
 
@@ -425,8 +429,19 @@ export class SnoObserveRuntime {
 		scope: JsonObject;
 		chainEpoch: number;
 		terminal: boolean;
+		reidentify?: true;
 	}) {
 		rejectRawContent(input.eventType, input.payload, input.consent);
+		if (
+			this.options.pluginVersion &&
+			input.eventType !== "agent.identify" &&
+			!this.identifiedAgents.has(input.agentId)
+		) {
+			this.appendAgentIdentify(
+				input.identity, input.agentId, input.chainEpoch, input.consent, input.consent === "off",
+				true,
+			);
+		}
 		const payload = normalizeSystemPayload({ ...input, options: this.options });
 		const callerScope = stripCallerAccountScope(input.scope);
 		const accountScope =
@@ -443,7 +458,7 @@ export class SnoObserveRuntime {
 		const redactionRulesPath = getRedactionRulesPath(this.env());
 		const redactedScope = redactScope(scope, redactionRulesPath);
 		const redactedPayload = redactEventPayload(payload, input.consent, redactionRulesPath);
-		return this.getStore().append({
+		const appended = this.getStore().append({
 			eventId: input.eventId,
 			eventType: input.eventType,
 			lane: input.lane,
@@ -454,7 +469,12 @@ export class SnoObserveRuntime {
 			payload: redactedPayload.value,
 			terminal: input.terminal,
 			chainEpoch: input.chainEpoch,
+			...(input.reidentify === true ? { reidentify: true } : {}),
 		});
+		if (input.eventType === "agent.identify") {
+			this.identifiedAgents.add(input.agentId);
+		}
+		return appended;
 	}
 
 	private scheduleFlush(): void {
@@ -618,7 +638,8 @@ function agentIdentifyPayload(
 	const cliVersion = optionalString(payload["cli_version"]) ?? optionalString(options.cliVersion);
 	const pluginVersion =
 		optionalString(payload["plugin_version"]) ?? optionalString(options.pluginVersion);
-	const locale = Intl.DateTimeFormat().resolvedOptions().locale;
+	const env = options.env ?? process.env;
+	const locale = (env["LC_ALL"] || env["LANG"] || "").split(/[.@]/u)[0]?.replace(/_/gu, "-") ?? "";
 	const os = process.platform;
 	const personHints = collectPersonHints(options.env);
 	return {
@@ -628,7 +649,8 @@ function agentIdentifyPayload(
 		...(cliVersion ? { cli_version: cliVersion } : {}),
 		...(pluginVersion ? { plugin_version: pluginVersion } : {}),
 		sdk_version: SDK_VERSION,
-		...(locale.length > 0 && locale.length <= 32 ? { locale } : {}),
+		...(locale.length > 0 && locale.length <= 32 && locale !== "C" && locale !== "POSIX"
+			? { locale } : {}),
 		...(os.length > 0 && os.length <= 32 ? { os } : {}),
 		...(personHints.length > 0 ? { person_hints: personHints } : {}),
 	};

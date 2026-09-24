@@ -1,4 +1,5 @@
 export { getSnoProfileDir } from "./internal/paths.js";
+export { detectProjectId, normalizeGitRemote } from "./internal/project-id.js";
 import type { ClaimCode, ClaimResult } from "./internal/device-claim.js";
 import { type RuntimeOptions, SnoObserveRuntime } from "./internal/runtime.js";
 import { parseEventInput } from "./internal/schemas.js";
@@ -18,6 +19,17 @@ import type {
 	ShutdownResult,
 	Subscription,
 } from "./internal/types.js";
+
+/** Mirrors the server's event-type → lane registry; a mismatch is a 400 on ingest. */
+export function laneForEventType(eventType: EventType): EventLane {
+	if (/^(reach|handoff|review)\./.test(eventType)) return "squad";
+	if (eventType.startsWith("rsi.")) return "rsi";
+	if (eventType.startsWith("skill.")) return "skill";
+	if (eventType === "llm.call") return "llm";
+	if (eventType === "tool.call") return "skill";
+	if (eventType === "consent.change" || eventType === "permission.request") return "security";
+	return "memory";
+}
 
 function createApi(runtime: SnoObserveRuntime) {
 	function emit(event: Event): Promise<EmitResult> {
