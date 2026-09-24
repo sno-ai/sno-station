@@ -494,6 +494,7 @@ interface ArrivalRetirementRow {
 export interface AtomicArrivalRetirementJudgedRow {
 	id: string;
 	text: string;
+	subject: string | null;
 	kind: string;
 	validFrom: number;
 	assertedAt: number;
@@ -509,6 +510,7 @@ function judgedRow(row: ArrivalRetirementRow): AtomicArrivalRetirementJudgedRow 
 	return {
 		id: row.id,
 		text: row.text,
+		subject: row.subject,
 		kind: row.category,
 		validFrom: row.validFrom ?? row.timestamp,
 		assertedAt: row.timestamp,
