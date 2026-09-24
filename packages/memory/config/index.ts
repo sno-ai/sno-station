@@ -106,14 +106,20 @@ export const MAX_CANDIDATE_POOL_SIZE = 2_048;
 export const MAX_RECALL_TOOL_CANDIDATES = 512;
 
 /**
- * How many live rows of the same subject the arrival retirement judgement is shown for one
- * ending, ranked own-attribute first and then by similarity, in batches of sixteen. Was a
- * hard-coded 64 inside the write door; raised to 128 on 2026-09-07 (owner order): a persona's
- * live profile holds 72–107 rows, so at 64 every other-attribute candidate was cut and an ending
- * filed under one attribute could not retire the state filed under another (129 truncations in
- * one six-persona run, against 50 the day before).
+ * How many of a subject's live profile and state rows, most similar first, the REM replace wave
+ * pairs each such row with (PRD 140 REQ-8). A persona's live profile holds 72–107 rows (measured
+ * 2026-09-07), so 128 reaches every row of one subject; it catches what the write-time cap below
+ * leaves out.
  */
 export const ARRIVAL_RETIREMENT_CANDIDATE_CAP = 128;
+
+/**
+ * How many older live profile and state rows of the project, most similar first, a newly
+ * written row is judged against at write time, one conflict-adjudication call per pair (PRD 140
+ * REQ-2). A measured correction pair was its subject's most similar pair (0.688 against 0.495–0.618
+ * for the others, 2026-09-23); a target outside this cap is left to the REM replace wave.
+ */
+export const ARRIVAL_RETIREMENT_JUDGED_CANDIDATE_CAP = 10;
 
 /**
  * Measurement-only overrides for the block 210 retrieval-breadth experiment.

@@ -120,6 +120,25 @@ export function parseAdapterAChatVerdict(raw: string): AdapterAVerdict {
 	}
 }
 
+/**
+ * Whether a reply is a verdict at all: a bare verdict token, or a JSON object carrying one, read
+ * the way `parseAdapterAChatVerdict` reads it (a fenced object counts).
+ */
+export function isAdapterAVerdictReply(value: string): boolean {
+	const trimmed = value.trim();
+	if (trimmed === "replacement" || trimmed === "keep" || trimmed === "uncertain") return true;
+	const json = extractJsonFromResponse(trimmed);
+	if (json === null) return false;
+	try {
+		const parsed: unknown = JSON.parse(json);
+		if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return false;
+		const verdict = (parsed as Record<string, unknown>)["verdict"];
+		return verdict === "replacement" || verdict === "keep" || verdict === "uncertain";
+	} catch {
+		return false;
+	}
+}
+
 function compareViews(a: AdapterAMemoryView, b: AdapterAMemoryView): number {
 	const validFrom = Date.parse(a.validFrom) - Date.parse(b.validFrom);
 	if (validFrom !== 0) return validFrom;
