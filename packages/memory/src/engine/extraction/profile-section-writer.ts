@@ -423,6 +423,8 @@ async function lifecycleRetireByNamePositions(
 	}
 	let response: unknown;
 	try {
+		// Model call P2: lifecycle retirement.
+		// Mode routing table: [IMP]-single-settings-file/settings-inventory.md
 		response = await params.llm?.completeJson<unknown>({
 			prompt: [
 				"Separate lifecycle retirement from profile ownership cleanup.",
@@ -1011,6 +1013,8 @@ async function recheckProfileRetirements(input: {
 					const clause = input.clauses[index];
 					if (!clause) return undefined;
 					try {
+						// Model call P3: retirement recheck.
+						// Mode routing table: [IMP]-single-settings-file/settings-inventory.md
 						const response = await llm.completeJson<unknown>({
 							prompt: renderRetirementRecheckPrompt({
 								sectionName: input.params.sectionName,
@@ -1120,6 +1124,8 @@ async function mergeProfileSection(
 	let transportFailure: string | undefined;
 	if (params.llm) {
 		try {
+			// Model call P4: profile section judgment.
+			// Mode routing table: [IMP]-single-settings-file/settings-inventory.md
 			response = await params.llm.completeJson<unknown>({
 				prompt: judgmentPrompt,
 				callLabel: PROFILE_SECTION_JUDGMENT_CALL_LABEL,
@@ -1197,6 +1203,8 @@ async function mergeProfileSection(
 	);
 	let textResponse: unknown;
 	try {
+		// Model call P5: profile section text.
+		// Mode routing table: [IMP]-single-settings-file/settings-inventory.md
 		textResponse = await params.llm?.completeJson<unknown>({
 			prompt: renderProfileSectionTextPrompt({
 				sectionName: params.sectionName,
@@ -2345,6 +2353,8 @@ async function adjudicateSafely(
 			route && !("off" in route) && route.tier === "snoRemMem"
 				? renderAdapterAPrompt(pair.older, pair.newer)
 				: renderAdapterAChatPrompt(pair);
+		// Model call P1: profile section conflict check.
+		// Mode routing table: [IMP]-single-settings-file/settings-inventory.md
 		const response = await params.llm.completeText({
 			prompt,
 			callLabel: "conflict-adjudication",

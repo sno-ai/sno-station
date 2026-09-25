@@ -173,6 +173,8 @@ async function requestTaskLifecycleJson(input: {
 	timeoutMs?: number;
 	signal?: AbortSignal;
 }): Promise<unknown> {
+	// Model call T1: active task classification.
+	// Mode routing table: [IMP]-single-settings-file/settings-inventory.md
 	return input.llm.completeJson<unknown>({
 		prompt: input.prompt,
 		callLabel: "profile-active-task-classify",

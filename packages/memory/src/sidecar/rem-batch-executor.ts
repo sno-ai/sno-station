@@ -988,6 +988,8 @@ async function runUpdate(input: {
 			});
 			recordRemUpdateModelCall(budget, prompt);
 			llmCalls += 1;
+			// Model call REM5: REM update: judgment.
+			// Mode routing table: [IMP]-single-settings-file/settings-inventory.md
 			const reply = await completeJsonStage(
 				input.runtime,
 				"rem-update-judgment",
@@ -1027,6 +1029,8 @@ async function runUpdate(input: {
 			});
 			recordRemUpdateModelCall(budget, verificationPrompt);
 			llmCalls += 1;
+			// Model call REM6: REM verification.
+			// Mode routing table: [IMP]-single-settings-file/settings-inventory.md
 			const verificationReply = await completeJsonStage(
 				input.runtime,
 				"rem-update-verification",
@@ -1342,6 +1346,8 @@ async function runProductionUpdateRelations(input: {
 		});
 		recordRemUpdateModelCall(input.budget, prompt);
 		llmCalls += 1;
+		// Model call REM7: REM update: relation.
+		// Mode routing table: [IMP]-single-settings-file/settings-inventory.md
 		const reply = await completeTextStage(
 			input.runtime,
 			"rem-update-relation-judgment",
@@ -1404,6 +1410,8 @@ async function runProductionUpdateRelations(input: {
 			});
 			recordRemUpdateModelCall(input.budget, rewritePrompt);
 			llmCalls += 1;
+			// Model call REM5: REM update: judgment.
+			// Mode routing table: [IMP]-single-settings-file/settings-inventory.md
 			const rewriteReply = await completeJsonStage(
 				input.runtime,
 				"rem-update-judgment",
@@ -1439,6 +1447,8 @@ async function runProductionUpdateRelations(input: {
 			});
 			recordRemUpdateModelCall(input.budget, verificationPrompt);
 			llmCalls += 1;
+			// Model call REM6: REM verification.
+			// Mode routing table: [IMP]-single-settings-file/settings-inventory.md
 			const verificationReply = await completeJsonStage(
 				input.runtime,
 				"rem-update-verification",
@@ -1487,6 +1497,8 @@ async function runProductionUpdateRelations(input: {
 			});
 			recordRemUpdateModelCall(input.budget, verificationPrompt);
 			llmCalls += 1;
+			// Model call REM6: REM verification.
+			// Mode routing table: [IMP]-single-settings-file/settings-inventory.md
 			const verificationReply = await completeJsonStage(
 				input.runtime,
 				"rem-update-verification",
@@ -1881,6 +1893,8 @@ async function runRemRetirementTargetGate(input: {
 		llmCalls += 1;
 		let reply: string | null = null;
 		try {
+			// Model call REM8: REM update: retirement target.
+			// Mode routing table: [IMP]-single-settings-file/settings-inventory.md
 			reply = await completeTextStage(input.runtime, "rem-update-retirement-target", prompt);
 		} catch {
 			// A target-stage transport failure follows the same fail-closed path as an invalid reply.
@@ -2375,6 +2389,8 @@ async function runReplace(input: {
 			const pairPrompt = renderAdapterAPrompt(ordered.views.older, ordered.views.newer);
 			modelTokens += reserveReplaceStage(input.repository, generationId, pairClaim.pairId, invocationId, "rem-replace-pair", pairPrompt, input.jobId);
 			llmCalls += 1;
+			// Model call REM1: REM replace: conflict pair.
+			// Mode routing table: [IMP]-single-settings-file/settings-inventory.md
 			const pairText = await completeTextStage(input.runtime, "rem-replace-pair", pairPrompt);
 			pairVerdict = pairText === null ? "uncertain" : parseAdapterAChatVerdict(pairText);
 			const validPairResponse = pairText !== null && isAdapterAVerdictReply(pairText);
@@ -2428,6 +2444,8 @@ async function runReplace(input: {
 		const clausePrompt = renderReplaceClauseVerdictPrompt(clauses);
 		modelTokens += reserveReplaceStage(input.repository, generationId, pairClaim.pairId, invocationId, "rem-replace-clauses", clausePrompt, input.jobId);
 		llmCalls += 1;
+		// Model call REM2: REM replace: clauses.
+		// Mode routing table: [IMP]-single-settings-file/settings-inventory.md
 		const clauseValue = await completeJsonStage(
 			input.runtime,
 			"rem-replace-clauses",
@@ -2477,6 +2495,8 @@ async function runReplace(input: {
 		});
 		modelTokens += reserveReplaceStage(input.repository, generationId, pairClaim.pairId, invocationId, "rem-replace-coverage", coveragePrompt, input.jobId);
 		llmCalls += 1;
+		// Model call REM3: REM replace: coverage.
+		// Mode routing table: [IMP]-single-settings-file/settings-inventory.md
 		const coverageValue = await completeJsonStage(
 			input.runtime,
 			"rem-replace-coverage",
@@ -2597,6 +2617,8 @@ async function runReplace(input: {
 				input.jobId,
 			);
 			llmCalls += 1;
+			// Model call REM4: REM replace: clause carry.
+			// Mode routing table: [IMP]-single-settings-file/settings-inventory.md
 			const carryReply = await completeJsonStage(
 				input.runtime,
 				"rem-replace-clause-carry",
@@ -2655,6 +2677,8 @@ async function runReplace(input: {
 					input.jobId,
 				);
 				llmCalls += 1;
+				// Model call REM6: REM verification.
+				// Mode routing table: [IMP]-single-settings-file/settings-inventory.md
 				const verificationReply = await completeJsonStage(
 					input.runtime,
 					"rem-update-verification",

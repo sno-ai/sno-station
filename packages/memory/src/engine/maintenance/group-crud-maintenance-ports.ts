@@ -37,6 +37,8 @@ export function createModelGroupCrudEntityIdentityJudgementPort(
 ): GroupCrudEntityIdentityJudgementPort {
 	return {
 		async respond({ displayName, existingDisplayNames }) {
+			// Model call E8: same-entity judgment (background caller).
+			// Mode routing table: [IMP]-single-settings-file/settings-inventory.md
 			const completion = await transport.complete({
 				prompt: renderAtomicEntityIdentityPrompt({
 					displayName,
@@ -74,6 +76,8 @@ export function createModelGroupCrudStateKeyingJudgementPort(
 				readStateKeyingSkill(),
 				JSON.stringify({ row_text: text, offered_slugs: offeredSlugs }),
 			].join("\n\n");
+			// Model call E12: state keying (background).
+			// Mode routing table: [IMP]-single-settings-file/settings-inventory.md
 			const reply = await client.completeText({
 				prompt,
 				callLabel: "memory-extract-atomic-generic",
