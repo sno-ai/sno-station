@@ -9,6 +9,7 @@ import { FIXED_MEMORY_SNO_EXTRACT_CHAT } from "../model/signed-registry-constant
 import { addLogFileTarget, closeLogger, createLogger } from "@snoai/utils/logger";
 import { emitRuntimeStartSnapshot, initializeRuntimeDiagnostics } from "../engine/observability/runtime-diagnostics";
 import { getRemTraceLogPath, isRemTraceEnabled } from "./config";
+import { readRemAutomaticOperations } from "./rem-trigger";
 import type { RunningRemSidecar } from "./server";
 
 const { startRemSidecar, DuplicateSidecarError } = await import("./server");
@@ -26,10 +27,16 @@ while (!sidecar) {
 }
 initializeRuntimeDiagnostics();
 if (isRemTraceEnabled()) addLogFileTarget(getRemTraceLogPath());
-emitRuntimeStartSnapshot({ runtimeMode: "sidecar", preset: FIXED_MEMORY_SNO_EXTRACT_CHAT,
-	routing: { mode: "rem-enhanced", remEnhanced: { occasions: {
-		memoryExtract: "snoRemMem", conflictAdjudication: "snoRemMem",
-	} } } });
+try {
+	emitRuntimeStartSnapshot({ runtimeMode: "sidecar", preset: FIXED_MEMORY_SNO_EXTRACT_CHAT,
+		routing: { mode: readRemAutomaticOperations().mode, language: "en" } });
+} catch (error) {
+	// The start snapshot is a diagnostic; an unreadable installation file must not stop a serving sidecar.
+	createLogger("sno-station-mem:sidecar").error("Runtime start snapshot skipped", { error }, {
+		event_name: "memory.sidecar.start_snapshot.skipped", file: "packages/memory/src/sidecar/main.ts",
+		function: "<module>", site_id: "sidecar.main.start_snapshot.skipped",
+	});
+}
 
 let stopping = false;
 
