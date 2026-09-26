@@ -838,10 +838,16 @@ function releasePairClaim(database: RemDatabaseLike,
 		if (released.changes !== 1) throw new Error("pair claim is not owned by invocation");
 		const pair = asRunResult(database.prepare(
 			`UPDATE nodix_rem_scan_pairs SET claim_state = 'unvisited', invocation_id = NULL,
-				claimed_at = NULL, attempt_count = MAX(0, attempt_count - 1)
+				claimed_at = NULL, checkpoint = NULL, verdict = NULL,
+				budget_reserved = 0, budget_invocation_id = NULL, reserved_tokens = 0,
+				attempt_count = MAX(0, attempt_count - 1)
 			WHERE generation_id = ? AND pair_id = ? AND claim_state = 'claimed' AND invocation_id = ?`,
 		).run(input.generationId, input.pairId, input.invocationId));
 		if (pair.changes !== 1) throw new Error("pair claim has inconsistent durable state");
+		// The next job reserves and counts its own calls under a fresh idempotency key.
+		database.prepare(
+			"DELETE FROM nodix_rem_pair_stage_budgets WHERE generation_id = ? AND pair_id = ?",
+		).run(input.generationId, input.pairId);
 	}).immediate();
 }
 
