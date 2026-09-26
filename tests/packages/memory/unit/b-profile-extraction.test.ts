@@ -33,21 +33,7 @@ const didDocument = {
 	assertionMethod: ["did:web:www.sno.ai#sno-mem-openclaw-release"],
 };
 
-const REM_ROUTING: LlmRoutingConfig = {
-	mode: "rem-enhanced",
-	remEnhanced: {
-		occasions: {
-			memoryExtract: "snoRemMem",
-			profileSectionMerge: "agent",
-			profileActiveTaskClassify: "agent",
-			conflictAdjudication: "snoRemMem",
-			summaryBuild: "agent",
-			dateResolution: "agent",
-		},
-	},
-	agentNative: { flavor: "subscription" },
-	language: "en",
-};
+const REM_ROUTING: LlmRoutingConfig = { mode: "rem-enhanced", language: "en" };
 
 function profilePayload(slug = "preference.accommodation"): string {
 	return JSON.stringify({
