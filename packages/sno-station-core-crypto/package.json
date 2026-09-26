@@ -47,7 +47,7 @@
 		"@napi-rs/keyring": "^2.0.0",
 		"argon2": "^0.45.1",
 		"better-sqlite3-multiple-ciphers": "^13.0.3",
-		"tar-stream": "3.2.0"
+		"tar-stream": "3.2.1"
 	},
 	"devDependencies": {
 		"@types/node": "^22.19.17",
