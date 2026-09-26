@@ -53,7 +53,7 @@ it("uses one default mode and preserves every explicit model mode for coding ski
 	for (const mode of ["local-first", "agent-native", "rem-enhanced"] as const) {
 		const installed = codingSkinInstallationSchema.parse({ storePath, mode });
 		const registration = createCodingSkinRegistration({
-			skinId: "test-skin",
+			skinId: "codex",
 			installed,
 			model: { baseUrl: "http://127.0.0.1:1/v1", credential: "test", model: "test" },
 		});
@@ -67,7 +67,7 @@ it("keeps the REM Enhanced model split in the shared routing config", () => {
 		mode: "rem-enhanced",
 	});
 	const registration = createCodingSkinRegistration({
-		skinId: "test-skin",
+		skinId: "codex",
 		installed,
 		model: { baseUrl: "http://127.0.0.1:1/v1", credential: "test", model: "test" },
 	});

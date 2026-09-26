@@ -61,6 +61,8 @@ export async function resolveMemoryDate(input: DateInput & {
 	].join("\n\n");
 	let raw: string | null = null;
 	try {
+		// Model call E11: date resolution.
+		// Mode routing table: [IMP]-single-settings-file/settings-inventory.md
 		raw = await input.llm.completeText({
 			adapterSlot: "date-resolution", callLabel: "date-resolution", prompt, enableThinking: true,
 		});

@@ -176,6 +176,8 @@ async function extractOneTurn(
 	for (let attempt = 0; attempt < PROFILE_TURN_ATTEMPTS; attempt++) {
 		let raw: string | null;
 		try {
+			// Model call E9: profile keying.
+			// Mode routing table: [IMP]-single-settings-file/settings-inventory.md
 			raw = await llm.completeText({
 				prompt,
 				callLabel: "memory-extract-profile",

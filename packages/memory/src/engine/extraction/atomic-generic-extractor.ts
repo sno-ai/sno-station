@@ -226,6 +226,8 @@ async function enrichAtomicBatch(
 ): Promise<AtomicExtractionRecord[]> {
 	const prompt = buildAtomicEnrichmentPrompt(input, facts);
 	for (let attempt = 1; attempt <= 2; attempt += 1) {
+		// Model call E2: enrich extracted facts.
+		// Mode routing table: [IMP]-single-settings-file/settings-inventory.md
 		const completion = await input.transport.complete({
 			prompt, maxTokens: outputTokenBudget,
 			...(input.requestId ? { requestId: input.requestId } : {}),
@@ -441,6 +443,8 @@ export async function runAtomicNumericTurnSweep(
 	const sanitizedInput = sanitizeAtomicPromptValue(input.turns, input.locale);
 	let completion: Awaited<ReturnType<AtomicGenericExtractionTransport["complete"]>>;
 	try {
+		// Model call E3: re-ask for missed figures.
+		// Mode routing table: [IMP]-single-settings-file/settings-inventory.md
 		completion = await input.transport.complete({
 			prompt: buildAtomicGenericExtractionPrompt(
 				input.turns,
@@ -784,6 +788,8 @@ async function captureAtomicWindow(
 	let lastReply = "";
 	for (let attempt = 1; attempt <= ATOMIC_CAPTURE_ATTEMPTS; attempt += 1) {
 		attempts.count += 1;
+		// Model call E1: extract memories from a conversation window.
+		// Mode routing table: [IMP]-single-settings-file/settings-inventory.md
 		const completion = await input.transport.complete({
 			prompt, maxTokens: outputTokenBudget,
 			...(input.requestId ? { requestId: input.requestId } : {}),
