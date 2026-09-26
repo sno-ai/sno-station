@@ -15,9 +15,6 @@ import {
 	sessionMemoryConfigSchema,
 } from "./plugin-config-feature-schema";
 import {
-	type AgentNativeFlavor,
-	agentNativeConfigSchema,
-	type LlmOccasionTiers,
 	DEFAULT_MODEL_MODE,
 	PRODUCT_MODES,
 	remEnhancedConfigSchema,
@@ -122,8 +119,7 @@ type PluginConfigOutput = {
 		memoryTelemetry: { enabled: boolean; currentKeyVersion: number };
 		mode: (typeof PRODUCT_MODES)[number];
 		remOperations: (typeof REM_OPERATIONS)[number][];
-		remEnhanced: { occasions: LlmOccasionTiers; trigger?: { tick: boolean } };
-		agentNative: { flavor: AgentNativeFlavor };
+		remEnhanced?: { trigger: { tick: boolean } };
 		onboarding?:
 			| { version: number; completedAt: string; profile: (typeof ONBOARDING_PROFILES)[number] }
 			| undefined;
@@ -208,7 +204,6 @@ const pluginConfigBaseSchema = z
 		mode: z.enum(PRODUCT_MODES).default(DEFAULT_MODEL_MODE),
 		remOperations: z.array(z.enum(REM_OPERATIONS)).min(1).max(2).default([...REM_OPERATIONS]),
 		remEnhanced: remEnhancedConfigSchema,
-		agentNative: agentNativeConfigSchema,
 		/**
 		 * Installer completion marker (bin/_onboarding-core.js writes it into
 		 * this same config block). The runtime never reads it, but the strict
