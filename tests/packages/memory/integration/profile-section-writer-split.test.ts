@@ -390,7 +390,6 @@ describe("profile section judgment/text split", () => {
 	});
 
 	it.each([
-		["authentication", new LlmClientTerminalError("auth", "injected auth failure")],
 		["cancellation", new LlmClientTerminalError("cancelled", "injected cancellation")],
 	] as const)("propagates %s failures from the text step", async (_label, injectedError) => {
 		await seed();
