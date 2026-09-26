@@ -1106,7 +1106,10 @@ def _memories(result: dict[str, object]) -> tuple[list[dict[str, str]], str]:
         if (
             isinstance(memory_id, str)
             and isinstance(text, str)
+            # `supersededBy` is written by this plugin's correct tool, `superseded_by` by the
+            # memory service's own closes.
             and not isinstance(_metadata(raw.get("metadata")).get("supersededBy"), str)
+            and not isinstance(_metadata(raw.get("metadata")).get("superseded_by"), str)
         ):
             memories.append({"id": memory_id, "text": text})
     return memories, ""
