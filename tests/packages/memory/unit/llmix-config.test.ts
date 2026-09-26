@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import Ajv from "ajv";
 import { describe, expect, it } from "vitest";
 
 import { pluginConfigSchema } from "../../../../packages/memory/src/engine/shared/types.ts";
@@ -32,11 +33,7 @@ const syncScript = readFileSync(
 
 describe("mem-claw LLMIx user config", () => {
 	it("accepts only the signed LLMIx presets and preserves user transport controls", () => {
-		for (const preset of [
-			"mem_claw/openai_gpt_5_nano",
-			"mem_claw/openrouter_auto",
-			"mem_claw/sno_ai_extract",
-		] as const) {
+		for (const preset of ["mem_claw/sno_ai_extract"] as const) {
 			const parsed = pluginConfigSchema.parse({
 				...LOCAL_RERANK,
 				mode: "rem-enhanced",
@@ -60,7 +57,12 @@ describe("mem-claw LLMIx user config", () => {
 		}
 	});
 
-	it("rejects unknown presets and old provider/model/gpuPath routing", () => {
+	it("reads the removed presets as the Sno preset and rejects unknown presets and old provider/model/gpuPath routing", () => {
+		for (const preset of ["mem_claw/openai_gpt_5_nano", "mem_claw/openrouter_auto"]) {
+			expect(pluginConfigSchema.parse({
+				...LOCAL_RERANK, mode: "rem-enhanced", extraction: { llm: { preset, apiKey: "test-key" } },
+			}).extraction.llm).toEqual({ preset: "mem_claw/sno_ai_extract", timeoutMs: 30_000 });
+		}
 		expect(() =>
 			pluginConfigSchema.parse({
 				...LOCAL_RERANK,
@@ -69,7 +71,7 @@ describe("mem-claw LLMIx user config", () => {
 					llm: { preset: "mem_claw/other", apiKey: "test-key" },
 				},
 			}),
-		).toThrow();
+		).toThrow(/preset/);
 		expect(() =>
 			pluginConfigSchema.parse({
 				...LOCAL_RERANK,
@@ -86,17 +88,11 @@ describe("mem-claw LLMIx user config", () => {
 		).toThrow();
 	});
 
-	it("exposes exactly the LLMIx preset control in the OpenClaw manifest", () => {
+	it("exposes exactly the LLMIx preset control in the OpenClaw manifest, still loading the removed presets", () => {
 		const llmProperties = manifest.configSchema.properties.extraction.properties.llm.properties;
-		expect(llmProperties.preset).toEqual({
-			type: "string",
-			enum: [
-				"mem_claw/openai_gpt_5_nano",
-				"mem_claw/openrouter_auto",
-				"mem_claw/sno_ai_extract",
-			],
-			default: "mem_claw/openai_gpt_5_nano",
-		});
+		expect(llmProperties.preset).toMatchObject({ type: "string", default: "mem_claw/sno_ai_extract" });
+		expect(new Set((llmProperties.preset as { enum: string[] }).enum))
+			.toEqual(new Set(["mem_claw/sno_ai_extract", "mem_claw/openai_gpt_5_nano", "mem_claw/openrouter_auto"]));
 		expect(llmProperties.provider).toBeUndefined();
 		expect(llmProperties.model).toBeUndefined();
 		expect(llmProperties.gpuPath).toBeUndefined();
@@ -111,8 +107,9 @@ describe("mem-claw LLMIx user config", () => {
 		const extractionProperties =
 			manifest.configSchema.properties.extraction.properties as Record<string, unknown>;
 		expect(rootProperties.mode).toBeDefined();
+		// agentNative and remEnhanced.occasions stay declared only so an older installation still loads (owner, 2026-09-26).
 		expect(rootProperties.agentNative).toBeDefined();
-		expect(rootProperties.remEnhanced).toBeDefined();
+		expect(Object.keys((rootProperties.remEnhanced as { properties: object }).properties).sort()).toEqual(["occasions", "trigger"]);
 		expect(rootProperties.onboarding).toBeDefined();
 		expect(extractionProperties.mode).toBeUndefined();
 
@@ -121,5 +118,31 @@ describe("mem-claw LLMIx user config", () => {
 		expect(syncScript).toContain('.extraction | has("mode")');
 		expect(syncScript).toContain('.config.mode = \\$mode |');
 		expect(syncScript).not.toContain(["--ensure", "llm", "distill"].join("-"));
+	});
+
+	// OpenClaw validates the plugin entry against this manifest schema before it loads the plugin; a config written by
+	// the previous release must pass that check and the runtime parse, and a key that never existed must still fail.
+	it("loads an OpenClaw config written by the previous release through the manifest schema and the runtime parse", () => {
+		const ajv = new Ajv({ allErrors: true, strict: false });
+		const validate = ajv.compile(manifest.configSchema);
+		const previousRelease = {
+			mode: "agent-native",
+			agentNative: { flavor: "byok" },
+			extraction: { llm: { preset: "mem_claw/openai_gpt_5_nano" } },
+		};
+		const withOccasions = { mode: "rem-enhanced", remEnhanced: { trigger: { tick: true }, occasions: { memoryExtract: "snoRemMem" } } };
+		const verdict = (config: unknown) => validate(config) ? "valid" : ajv.errorsText(validate.errors);
+		expect({
+			previousRelease: verdict(previousRelease),
+			withOccasions: verdict(withOccasions),
+			neverAKey: verdict({ mode: "agent-native", agentNativ: { flavor: "byok" } }),
+			neverAPreset: verdict({ extraction: { llm: { preset: "mem_claw/other" } } }),
+		}).toEqual({
+			previousRelease: "valid", withOccasions: "valid",
+			neverAKey: expect.stringContaining("additional properties"), neverAPreset: expect.stringContaining("allowed values"),
+		});
+		const parsed = pluginConfigSchema.parse(previousRelease);
+		expect({ mode: parsed.mode, preset: parsed.extraction.llm.preset, agentNative: "agentNative" in parsed })
+			.toEqual({ mode: "agent-native", preset: "mem_claw/sno_ai_extract", agentNative: false });
 	});
 });

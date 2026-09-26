@@ -22,7 +22,7 @@ vi.mock("@huggingface/transformers", () => ({
 			if (disposed) throw new Error("ONNX session disposed");
 			if (model.fail) throw new Error("ONNX inference failed");
 			return { dims: [1, 3], data: new Float32Array([1, 0, 0]) };
-		}, { dispose: async () => { disposed = true; model.releases++; } });
+		}, { tokenizer: { encode: (text: string) => text.split(/\s+/) }, dispose: async () => { disposed = true; model.releases++; } });
 	},
 }));
 
@@ -37,8 +37,8 @@ const config = pluginConfigSchema.parse({
 	embedding: { nativeDim: 3, dimensions: 3, chunking: false },
 	observe: { enabled: false }, memoryTelemetry: { enabled: false },
 });
-const { mode, remEnhanced, agentNative, language, ...settings } = config;
-const registration = { skinId: "reinit-test", settings, routing: { mode, remEnhanced, agentNative, language } };
+const { mode, remEnhanced: _remEnhanced, language, ...settings } = config;
+const registration = { skinId: "reinit-test", settings, routing: { mode, language } };
 
 beforeEach(async () => {
 	model.loads = 0; model.releases = 0; model.fail = false;

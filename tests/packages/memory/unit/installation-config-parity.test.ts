@@ -10,6 +10,7 @@ import {
 	createCodingSkinRegistration,
 } from "../../../../packages/memory/config/coding-skin";
 import { DEFAULT_MODEL_MODE } from "../../../../packages/memory/config/plugin-config-mode-schema";
+import { resolveLlmRoute } from "../../../../packages/memory/src/model/llm-mode-routing";
 
 const roots: string[] = [];
 afterEach(() => { vi.unstubAllEnvs(); for (const root of roots.splice(0)) rmSync(root, { recursive: true }); });
@@ -61,7 +62,7 @@ it("uses one default mode and preserves every explicit model mode for coding ski
 	}
 });
 
-it("keeps the REM Enhanced model split in the shared routing config", () => {
+it("keeps the REM Enhanced model split in the call table, not in the registration", () => {
 	const installed = codingSkinInstallationSchema.parse({
 		storePath: join(tmpdir(), "coding-skin-rem.sqlite"),
 		mode: "rem-enhanced",
@@ -71,12 +72,23 @@ it("keeps the REM Enhanced model split in the shared routing config", () => {
 		installed,
 		model: { baseUrl: "http://127.0.0.1:1/v1", credential: "test", model: "test" },
 	});
-	expect(registration.routing.remEnhanced.occasions).toEqual({
-		memoryExtract: "snoRemMem",
-		profileSectionMerge: "agent",
-		profileActiveTaskClassify: "agent",
-		conflictAdjudication: "snoRemMem",
-		summaryBuild: "agent",
-		dateResolution: "agent",
+	expect(registration.routing).toEqual({ mode: "rem-enhanced", language: "en" });
+	const destination = (callId: "E1" | "REM1" | "REM2" | "P2") => {
+		const route = resolveLlmRoute({ callId, config: registration.routing });
+		return "off" in route ? "off" : route.destination;
+	};
+	expect([destination("E1"), destination("REM1"), destination("REM2"), destination("P2")])
+		.toEqual(["sno-gpu", "sno-gpu", "host", "host"]);
+	// A previous release's installed file carried the per-occasion switches; they load and change no destination.
+	const upgraded = codingSkinInstallationSchema.parse({
+		storePath: join(tmpdir(), "coding-skin-rem.sqlite"),
+		mode: "rem-enhanced",
+		remEnhanced: { trigger: { tick: true }, occasions: { memoryExtract: "agent", conflictAdjudication: "agent" } },
 	});
+	expect(upgraded.remEnhanced).toEqual({ trigger: { tick: true } });
+	expect(createCodingSkinRegistration({
+		skinId: "codex",
+		installed: upgraded,
+		model: { baseUrl: "http://127.0.0.1:1/v1", credential: "test", model: "test" },
+	}).routing).toEqual({ mode: "rem-enhanced", language: "en" });
 });

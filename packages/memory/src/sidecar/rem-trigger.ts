@@ -5,6 +5,7 @@
 
 import { createHash } from "node:crypto";
 import { open, readFile } from "node:fs/promises";
+import { readFileSync } from "node:fs";
 import { createLogger } from "@snoai/utils/logger";
 import { withLogContext } from "@snoai/utils/log-context";
 import { z } from "zod";
@@ -13,11 +14,8 @@ import {
 	getAuditPath,
 	type AuditStatus,
 } from "../engine/operations/runtime-audit-log";
-import {
-	PLUGIN_ENTRY_KEY,
-	readSnoStationMemConfig,
-	resolveSnoStationMemConfigPath,
-} from "../engine/bindings/embedder-config-files";
+import { getInstallationConfigPath } from "../contract/profile";
+import { installationSettingsSchema } from "../../config/installation-settings";
 import {
 	REM_CORRELATION_ID_HEADER,
 	REM_RUN_PATH,
@@ -34,9 +32,8 @@ import {
 	writeRemTriggerStateAtomic as persistTriggerState,
 } from "./rem-trigger-state";
 import type { SqliteDatabaseLike } from "../store/sqlite-runtime";
-import { pluginConfigSchema } from "../engine/shared/types";
 import { MODEL_CALLS } from "../model/model-call-table";
-import type { ProductMode } from "../../config/plugin-config-mode-schema";
+import { DEFAULT_MODEL_MODE, type ProductMode } from "../../config/plugin-config-mode-schema";
 
 export const REM_DAILY_SCHEDULE_HOUR = 3;
 export const REM_VOLUME_THRESHOLD = 100;
@@ -83,30 +80,22 @@ const discoverySchema = z
 	.strict();
 
 const idleEvaluations = new Map<string, number>();
-const registeredTicks = new Map<string, boolean | undefined>();
-
-export function setRegisteredRemTick(skinId: string, tick: boolean | undefined): void {
-	registeredTicks.set(skinId, tick);
-}
-
-export function clearRegisteredRemTicks(): void {
-	registeredTicks.clear();
-}
-
 export function readRemAutomaticOperations(
-	configPath: string = resolveSnoStationMemConfigPath(),
-): { requestedOperations: RemAutomaticOperation[]; tickEnabled: boolean } {
-	let config: ReturnType<typeof pluginConfigSchema.parse>;
+	configPath: string = getInstallationConfigPath(),
+): { mode: ProductMode; requestedOperations: RemAutomaticOperation[]; tickEnabled: boolean } {
+	let installed: ReturnType<typeof installationSettingsSchema.parse>;
 	try {
-		const hostConfig = readSnoStationMemConfig(configPath);
-		config = pluginConfigSchema.parse(hostConfig.plugins?.entries?.[PLUGIN_ENTRY_KEY]?.config ?? {});
+		installed = installationSettingsSchema.parse(JSON.parse(readFileSync(configPath, "utf8")));
 	} catch (error) {
-		log.error("REM configuration unavailable; using installed defaults", { cause: errorMessage(error) }, { event_name: "memory.rem.trigger.configuration.unavailable", file: "packages/memory/src/sidecar/rem-trigger.ts", function: "evaluateRemAutomaticTriggers", site_id: "memory.rem.trigger.configuration.unavailable" });
-		config = pluginConfigSchema.parse({});
+		// The memory runtime serves on defaults when this file is unreadable; REM follows the same defaults.
+		log.error("REM configuration unavailable; using installed defaults", { cause: errorMessage(error) }, { event_name: "memory.rem.trigger.configuration.unavailable", file: "packages/memory/src/sidecar/rem-trigger.ts", function: "readRemAutomaticOperations", site_id: "memory.rem.trigger.configuration.unavailable" });
+		return { mode: DEFAULT_MODEL_MODE, requestedOperations: ["rem-replace", "rem-update"], tickEnabled: true };
 	}
-	const ticks = [...registeredTicks.values()];
-	const registeredTick = ticks.includes(false) ? false : ticks.find(tick => tick !== undefined);
-	return { requestedOperations: config.remOperations, tickEnabled: registeredTick ?? config.remEnhanced.trigger?.tick ?? true };
+	return {
+		mode: installed.mode,
+		requestedOperations: installed.remOperations ?? ["rem-replace", "rem-update"],
+		tickEnabled: installed.remEnhanced?.trigger.tick ?? true,
+	};
 }
 
 export async function evaluateRemAutomaticTriggers(

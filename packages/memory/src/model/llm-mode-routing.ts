@@ -23,8 +23,6 @@ export type LlmRouteDecision = LlmRouteTarget | LlmRouteOff;
 export function pickLlmRoutingConfig(config: LlmRoutingConfigInput): LlmRoutingConfig {
 	return llmRoutingConfigSchema.parse({
 		mode: config.mode,
-		remEnhanced: config.remEnhanced,
-		agentNative: config.agentNative,
 		language: config.language,
 	});
 }
@@ -35,15 +33,13 @@ export function resolveLlmRoute(input: {
 }): LlmRouteDecision {
 	const routing = pickLlmRoutingConfig(input.config);
 	const call = MODEL_CALLS[input.callId];
-	const destination = routing.mode === "rem-enhanced"
-		? routing.remEnhanced.occasions[call.occasion] === "snoRemMem" ? "sno-gpu" : "host"
-		: modelCallDestination(input.callId, routing.mode);
+	const destination = modelCallDestination(input.callId, routing.mode);
 	if (destination === "off") return { off: true, reason: "mode-local-first" };
 	if (destination === "host") {
 		return {
 			tier: "agent",
 			destination,
-			transport: routing.agentNative.flavor === "byok" ? "chat-completions" : call.transport.host,
+			transport: call.transport.host,
 			parser: call.replyParser.host,
 		};
 	}
