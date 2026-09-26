@@ -2961,14 +2961,24 @@ async function runReplace(input: {
 	}
 	} catch (error) {
 		if (error instanceof ModelCallRefusedError) {
+			// Every claim is attempted and the refusal is always the error that leaves, so the job still
+			// ends rem_skipped; a release that fails is logged with its target.
+			const release = (target: string, run: () => void): void => {
+				try { run(); } catch (releaseError) {
+					log.error("REM claim release failed after a host refusal", { target, error: releaseError }, {
+						event_name: "memory.rem.refusal.release_failed", file: "packages/memory/src/sidecar/rem-batch-executor.ts",
+						function: "runReplace", site_id: "memory.rem.refusal.release_failed",
+					});
+				}
+			};
 			for (const pair of input.repository.listVerdictPairs(generationId)) {
 				if (pair.claimState === "claimed" && pair.invocationId === invocationId) {
-					input.repository.releasePairClaim({ generationId, pairId: pair.pairId, invocationId });
+					release(`pair:${pair.pairId}`, () => input.repository.releasePairClaim({ generationId, pairId: pair.pairId, invocationId }));
 				}
 			}
 			for (const candidate of participatingClaimed) {
-				input.repository.releaseRowClaim({ rowId: candidate.id, contentHash: candidate.content_hash,
-					owner: "verdict", claimToken: candidate.claimToken });
+				release(`row:${candidate.id}`, () => input.repository.releaseRowClaim({ rowId: candidate.id, contentHash: candidate.content_hash,
+					owner: "verdict", claimToken: candidate.claimToken }));
 			}
 		}
 		throw error;
