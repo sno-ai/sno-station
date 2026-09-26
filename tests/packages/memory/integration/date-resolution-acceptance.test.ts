@@ -32,17 +32,6 @@ const SESSION_TIMEZONE = "America/Los_Angeles";
 function routing(locale: Locale = "en", mode: LlmRoutingConfig["mode"] = "rem-enhanced") {
 	return {
 		mode,
-		remEnhanced: {
-			occasions: {
-				memoryExtract: "snoRemMem",
-				profileSectionMerge: "agent",
-				profileActiveTaskClassify: "agent",
-				conflictAdjudication: "snoRemMem",
-				summaryBuild: "agent",
-				dateResolution: "agent",
-			},
-		},
-		agentNative: { flavor: "subscription" },
 		language: locale,
 	} satisfies LlmRoutingConfig;
 }
