@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { createLogger } from "@snoai/utils/logger";
 
 import {
 	AUTO_RECALL_INJECTION_TOP_K,
@@ -17,6 +18,8 @@ import {
 	TIME_DECAY_HALF_LIFE_DAYS,
 } from "./index";
 import { resolveEnvVars } from "../src/engine/shared/utils";
+
+const log = createLogger("sno-station-mem:config:retrieval");
 
 export const retrievalConfigSchema: z.ZodType<
 	{
@@ -78,7 +81,7 @@ export const retrievalConfigSchema: z.ZodType<
 		vectorWeight: z.number().min(0).max(1).default(DEFAULT_VECTOR_WEIGHT),
 		bm25Weight: z.number().min(0).max(1).default(DEFAULT_BM25_WEIGHT),
 		minScore: z.number().min(0).max(1).default(DEFAULT_MIN_SCORE),
-		rerank: z.enum(["cross-encoder", "lightweight", "none"]).default("cross-encoder"),
+		rerank: z.enum(["cross-encoder", "lightweight", "none"]).default("lightweight"),
 		candidatePoolSize: z.number().int().min(10).max(2000).default(CANDIDATE_POOL_SIZE),
 		rerankApiKey: z.string().optional(),
 		rerankModel: z.string().default(DEFAULT_RERANK_MODEL),
@@ -139,18 +142,19 @@ export const retrievalConfigSchema: z.ZodType<
 			}
 		};
 		const resolvedEndpoint = resolve(ret.rerankEndpoint, "rerankEndpoint");
-		// A custom endpoint must say which wire protocol it speaks. Left unset the retriever
-		// falls back to "voyage", which sends a voyage-shaped body AND drops the per-request
-		// batch cap that only "tei" carries — so a deployment pointing at the self-hosted
-		// reranker without naming it would send every candidate in one request. The VM's deploy
-		// script pins the pair today; this is the same guarantee, made by the config instead.
-		if (resolvedEndpoint !== undefined && ret.rerankProvider === undefined) {
+		// A remote ranker runs only when the operator names it: the provider decides the request
+		// shape and the per-request batch limit, and nothing defaults to one on their behalf.
+		if (
+			(ret.rerank === "cross-encoder" || resolvedEndpoint !== undefined) &&
+			ret.rerankProvider === undefined
+		) {
 			ctx.addIssue({
 				code: z.ZodIssueCode.custom,
 				path: ["rerankProvider"],
 				message:
-					"retrieval.rerankProvider is required when retrieval.rerankEndpoint is set: " +
-					"the provider decides the request shape and the per-request batch limit",
+					"retrieval.rerankProvider is required when retrieval.rerank is \"cross-encoder\" or " +
+					"retrieval.rerankEndpoint is set: the provider decides the request shape and the " +
+					"per-request batch limit",
 			});
 		}
 		if (resolvedEndpoint !== undefined) {
@@ -164,9 +168,23 @@ export const retrievalConfigSchema: z.ZodType<
 				});
 			}
 		}
+		const rerankApiKey = resolve(ret.rerankApiKey, "rerankApiKey");
+		// Every plugin's settings pass through here, so all four refuse a remote ranker with no key
+		// at the same moment, before any recall runs.
+		if (ret.rerank === "cross-encoder" && !rerankApiKey?.trim()) {
+			log.error("memory.rerank.key.missing", { cause: "missing-rerank-key" }, {
+				event_name: "memory.rerank.key.missing", file: "packages/memory/config/plugin-config-retrieval-schema.ts",
+				function: "retrievalConfigSchema", site_id: "memory.rerank.key.missing",
+			});
+			ctx.addIssue({
+				code: z.ZodIssueCode.custom,
+				path: ["rerankApiKey"],
+				message: "retrieval.rerankApiKey is required for cross-encoder reranking",
+			});
+		}
 		return {
 			...ret,
-			rerankApiKey: resolve(ret.rerankApiKey, "rerankApiKey"),
+			rerankApiKey,
 			rerankEndpoint: resolvedEndpoint,
 			rerankModel: resolve(ret.rerankModel, "rerankModel") ?? ret.rerankModel,
 		};

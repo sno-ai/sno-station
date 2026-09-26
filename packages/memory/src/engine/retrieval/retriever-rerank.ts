@@ -160,8 +160,9 @@ Object.assign(MemoryRetriever.prototype, {
 		}
 		// Compute the provider name even on the lightweight/skip paths so the
 		// telemetry attribution stays consistent with the cross-encoder branch
-		// (consumers slice by provider, not by which fallback fired).
-		const provider = this.config.rerankProvider ?? "voyage";
+		// (consumers slice by provider, not by which fallback fired). No provider named
+		// means no remote ranker was chosen; the label never names one nobody picked.
+		const provider = this.config.rerankProvider ?? "none";
 		// Branch on configuration before selecting the runtime strategy.
 		// This used to warn once per process and rank with the local cosine blend instead. A
 		// deployment then ran a ranker nobody had chosen, and the single warning line was the
