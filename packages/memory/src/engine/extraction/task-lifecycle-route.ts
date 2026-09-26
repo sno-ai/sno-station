@@ -27,7 +27,7 @@ import {
 	type TaskLifecycleResolution,
 } from "./task-lifecycle-resolver";
 import { TASK_LIFECYCLE_JUDGMENT_SKILL } from "./task-lifecycle-judgment-skill";
-import type { LlmClient } from "../../model/llm-client";
+import { type LlmClient, LlmClientTerminalError } from "../../model/llm-client";
 import {
 	type MutationAttemptCompletion,
 	runWithMutationAttempt,
@@ -213,6 +213,9 @@ async function requestModelJudgment(input: {
 			...(input.signal === undefined ? {} : { signal: input.signal }),
 		});
 	} catch (error) {
+		if (error instanceof LlmClientTerminalError && error.category === "cancelled" && !error.requestTimedOut) {
+			throw error;
+		}
 		throw new TaskLifecycleJudgmentUnavailableError(
 			`task lifecycle judgment failed: ${error instanceof Error ? error.message : String(error)}`,
 		);
@@ -314,7 +317,11 @@ async function routeTaskLifecycleCandidateOnce(
 				...(input.timeoutMs === undefined ? {} : { timeoutMs: input.timeoutMs }),
 				...(input.signal === undefined ? {} : { signal: input.signal }),
 			});
-		} catch {
+		} catch (error) {
+			// The caller cancelled the operation: open nothing. A model failure still takes the local verdict.
+			if (error instanceof LlmClientTerminalError && error.category === "cancelled" && !error.requestTimedOut) {
+				throw error;
+			}
 			modelUnavailable = true;
 			verdict = { action: input.confirmedTaskCandidate ? "open_or_refine" : "none", taskId: null };
 		}
