@@ -124,6 +124,8 @@ export function createAtomicSubjectGuardTransport(llm: LlmClient): AtomicSubject
 	return {
 		async repairMissingHalf({ episode, turn, turns, locale }) {
 			const built = buildMissingHalfPrompt(episode, turn, turns, locale ?? DEFAULT_LOCALE);
+			// Model call E5: recover the missing half.
+			// Mode routing table: [IMP]-single-settings-file/settings-inventory.md
 			const text = await llm.completeText({
 				prompt: built.prompt,
 				callLabel: "memory-extract-atomic-missing-half",
@@ -139,6 +141,8 @@ export function createAtomicSubjectGuardTransport(llm: LlmClient): AtomicSubject
 		},
 		async guardUserSubjects({ records, locale }) {
 			const built = buildSubjectGuardPrompt(records, locale ?? DEFAULT_LOCALE);
+			// Model call E6: subject check.
+			// Mode routing table: [IMP]-single-settings-file/settings-inventory.md
 			const raw = await llm.completeJson<unknown>({
 				prompt: built.prompt,
 				callLabel: "memory-extract-atomic-subject-guard",

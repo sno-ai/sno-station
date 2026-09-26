@@ -190,6 +190,8 @@ export async function retireRowsByName(params: {
 							params.deadlineMs === undefined
 								? undefined
 								: Math.max(1, params.deadlineMs - Date.now());
+						// Model call P6: forget by name.
+						// Mode routing table: [IMP]-single-settings-file/settings-inventory.md
 						const response = await llm.completeJson<unknown>({
 							prompt: judgmentPrompt(params.retiredPosition, candidate),
 							callLabel: RETIRE_BY_NAME_CALL_LABEL,

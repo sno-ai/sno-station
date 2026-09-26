@@ -610,6 +610,8 @@ export function createAtomicResplitTransport(llm: LlmClient, locale: Locale): At
 				{ ...input, turns: numberAtomicTurns(input.turns) },
 				locale,
 			);
+			// Model call E4: split compound records.
+			// Mode routing table: [IMP]-single-settings-file/settings-inventory.md
 			const text = await llm.completeText({
 				prompt: [
 					ATOMIC_EXTRACTION_SKILL,
@@ -662,6 +664,8 @@ export function createSignedAtomicMemoryExtractionTransports(
 		subjectGuard: createAtomicSubjectGuardTransport(chat),
 		retirementVerdict: {
 			judge: (pair) =>
+				// Model call E10: arrival retirement check.
+				// Mode routing table: [IMP]-single-settings-file/settings-inventory.md
 				chat.completeText({
 					prompt: adapterPrompt
 						? renderAdapterAPrompt(pair.older, pair.newer)
@@ -1198,6 +1202,8 @@ async function reaskStandingSubjects(
 	// can replace. After the last attempt the chunk goes pending instead.
 	for (let attempt = 1; attempt <= STANDING_SUBJECT_ATTEMPTS; attempt += 1) {
 		try {
+			// Model call E7: re-ask the subject of unresolved records.
+			// Mode routing table: [IMP]-single-settings-file/settings-inventory.md
 			const completion = await input.transports.generic.complete({
 				prompt,
 				maxTokens: input.runParameters.outputTokenBudget,

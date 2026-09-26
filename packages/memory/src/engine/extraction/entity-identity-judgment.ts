@@ -93,6 +93,8 @@ export async function resolveAtomicEntityIdentity(input: {
 			fallback.displayName,
 		);
 		offeredEntityIds = [...new Set(candidates.map((candidate) => candidate.entityId))];
+		// Model call E8: same-entity judgment.
+		// Mode routing table: [IMP]-single-settings-file/settings-inventory.md
 		completion = await input.transport.complete({
 			prompt: renderAtomicEntityIdentityPrompt({
 				displayName: fallback.displayName,

@@ -48,6 +48,8 @@ export function createReflectionGenerator(
 			...(routing ? { routing } : {}),
 			...(agentPort ? { agentPort } : {}),
 		});
+		// Model call R1: session reflection.
+		// Mode routing table: [IMP]-single-settings-file/settings-inventory.md
 		return client.completeText({
 			prompt,
 			callLabel: "memory-reflection",
