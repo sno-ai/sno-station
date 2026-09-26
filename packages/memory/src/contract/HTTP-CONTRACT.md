@@ -95,7 +95,7 @@ settings (proved by: `tests/packages/memory/integration/sidecar-no-gates.test.ts
 
 `routing` is the routing authority. Settings are the existing normalized engine settings, not a second raw plugin configuration. Installed embedding, telemetry and store path override conflicting registration values with an error log. All nested fields are enumerated below. Objects with `additionalProperties:false` reject unknown keys; ordinary input objects strip them.
 
-Additional refinements: `registration.model.baseUrl` must use HTTP or HTTPS. `registration.model.model` and `registration.skinId` must contain non-whitespace text; credential may be empty. Model credentials remain in memory. When observation is enabled, its base URL must have the configured production origin; test mode permits HTTP(S) loopback. Unless reranking is `none`, retrieval endpoint/model/key `${ENV}` placeholders are resolved, a supplied endpoint requires `rerankProvider`, and the resolved endpoint must be a URL. Missing variables fail parsing. Omitted prefault objects are parsed as `{}` and receive their child defaults. Observation defaults come from process environment, as marked in the table.
+Additional refinements: `registration.model.baseUrl` must use HTTP or HTTPS. `registration.model.model` and `registration.skinId` must contain non-whitespace text; credential may be empty. Model credentials remain in memory. When observation is enabled, its base URL must have the configured production origin; test mode permits HTTP(S) loopback. Unless reranking is `none`, retrieval endpoint/model/key `${ENV}` placeholders are resolved, `rerank: "cross-encoder"` or a supplied endpoint requires `rerankProvider`, and the resolved endpoint must be a URL. Missing variables fail parsing. Omitted prefault objects are parsed as `{}` and receive their child defaults. Observation defaults come from process environment, as marked in the table.
 
 Scope requires nonblank `principal`, `project`, `session`. `host.observeSessionUuid`, if supplied, must be a UUID. Host `at` is nonnegative epoch milliseconds. Other host strings may be empty.
 
@@ -189,7 +189,7 @@ Scope requires nonblank `principal`, `project`, `session`. `host.observeSessionU
 | registration<1>.settings.retrieval.vectorWeight | number | no | - | 0.7 | {"minimum":0,"maximum":1} |
 | registration<1>.settings.retrieval.bm25Weight | number | no | - | 0.3 | {"minimum":0,"maximum":1} |
 | registration<1>.settings.retrieval.minScore | number | no | - | 0 | {"minimum":0,"maximum":1} |
-| registration<1>.settings.retrieval.rerank | string | no | ["cross-encoder","lightweight","none"] | "cross-encoder" | - |
+| registration<1>.settings.retrieval.rerank | string | no | ["cross-encoder","lightweight","none"] | "lightweight" | - |
 | registration<1>.settings.retrieval.candidatePoolSize | integer | no | - | 64 | {"minimum":10,"maximum":2000} |
 | registration<1>.settings.retrieval.rerankApiKey | string | no | - | - | - |
 | registration<1>.settings.retrieval.rerankModel | string | no | - | "rerank-2" | - |

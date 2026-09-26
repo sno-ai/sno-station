@@ -36,19 +36,52 @@ describe("plugin config current schema", () => {
 	it("refuses an explicitly chosen remote ranker when no reranker key is supplied", () => {
 		const result = pluginConfigSchema.safeParse({
 			mode: "rem-enhanced",
-			retrieval: { rerank: "cross-encoder" },
+			retrieval: {
+				rerank: "cross-encoder",
+				rerankProvider: "tei",
+				rerankEndpoint: "http://127.0.0.1:19213/rerank",
+			},
 		});
 		expect(result.success).toBe(false);
 		const paths = result.success ? [] : result.error.issues.map((issue) => issue.path);
 		expect(paths).toContainEqual(["retrieval", "rerankApiKey"]);
 	});
 
-	it("loads that same mode once a reranker key is supplied", () => {
-		const parsed = pluginConfigSchema.parse({
+	it("keeps the local ranker in every mode when only a reranker key is supplied", () => {
+		for (const mode of ["local-first", "agent-native", "rem-enhanced"] as const) {
+			const parsed = pluginConfigSchema.parse({
+				mode,
+				retrieval: { rerankApiKey: "test-rerank-key" },
+			});
+			expect(parsed.retrieval.rerank).toBe("lightweight");
+		}
+	});
+
+	it("refuses a remote ranker that names no provider instead of calling one by default", () => {
+		const result = pluginConfigSchema.safeParse({
 			mode: "rem-enhanced",
-			retrieval: { rerankApiKey: "test-rerank-key" },
+			retrieval: { rerank: "cross-encoder", rerankApiKey: "test-rerank-key" },
 		});
-		expect(parsed.retrieval.rerank).toBe("cross-encoder");
+		expect(result.success).toBe(false);
+		const paths = result.success ? [] : result.error.issues.map((issue) => issue.path);
+		expect(paths).toContainEqual(["retrieval", "rerankProvider"]);
+	});
+
+	it("loads a remote ranker once provider, endpoint and key are all named", () => {
+		const parsed = pluginConfigSchema.parse({
+			mode: "agent-native",
+			retrieval: {
+				rerank: "cross-encoder",
+				rerankProvider: "tei",
+				rerankEndpoint: "http://127.0.0.1:19213/rerank",
+				rerankApiKey: "test-rerank-key",
+			},
+		});
+		expect(parsed.retrieval).toMatchObject({
+			rerank: "cross-encoder",
+			rerankProvider: "tei",
+			rerankEndpoint: "http://127.0.0.1:19213/rerank",
+		});
 	});
 
 	it("keeps an explicitly chosen ranker in a mode whose default is the other one", () => {

@@ -20,7 +20,6 @@ import {
 	type LlmOccasionTiers,
 	DEFAULT_MODEL_MODE,
 	PRODUCT_MODES,
-	type ProductMode,
 	remEnhancedConfigSchema,
 } from "./plugin-config-mode-schema";
 import { observeConfigSchema } from "./plugin-config-observe-schema";
@@ -63,43 +62,6 @@ function asPlainObject(value: unknown): Record<string, unknown> | undefined {
 }
 
 /**
- * Which reranker a mode gets when the operator did not name one. Keyed on every
- * product mode, so a mode added later cannot silently inherit another's ranker.
- *
- * `cross-encoder` needs `retrieval.rerankApiKey` and a reachable endpoint. A
- * keyless config keeps the local cosine blend so self-upgrade can load configs
- * written before reranker selection became explicit.
- */
-const MODE_RERANK = {
-	"local-first": "lightweight",
-	"agent-native": "cross-encoder",
-	"rem-enhanced": "cross-encoder",
-} as const satisfies Record<ProductMode, "cross-encoder" | "lightweight">;
-
-function isProductMode(value: unknown): value is ProductMode {
-	return typeof value === "string" && (PRODUCT_MODES as readonly string[]).includes(value);
-}
-
-/**
- * Applies the mode's reranker to the RAW config. An operator who wrote
- * `retrieval.rerank` keeps it in every mode; only an absent value is filled, which
- * is the same rule the mode itself follows — a defaulted value is never an
- * explicit choice.
- */
-export function withModeRerank(
-	cfg: Record<string, unknown>,
-	mode: ProductMode,
-): Record<string, unknown> {
-	const retrieval = asPlainObject(cfg.retrieval);
-	// A present-but-unusable `retrieval` is left exactly as written so the schema
-	// reports it, rather than being replaced by a synthesized object.
-	if (cfg.retrieval !== undefined && retrieval === undefined) return cfg;
-	if (retrieval?.rerank !== undefined) return cfg;
-	const rerank = retrieval?.rerankApiKey === undefined ? "lightweight" : MODE_RERANK[mode];
-	return { ...cfg, retrieval: { ...retrieval, rerank } };
-}
-
-/**
  * Product-mode normalization over the RAW config, before Zod defaults fill
  * in (defaulted values must never count as explicit route configuration).
  *
@@ -121,12 +83,8 @@ function normalizeProductMode(raw: unknown): unknown {
 			site_id: "plugin-config-schema.normalizeProductMode.834ccfc110",
 		});
 	}
-	if (cfg.mode !== undefined) {
-		// An unrecognized mode is left for the enum to reject; filling a reranker for
-		// it would be inventing a route for a mode that does not exist.
-		return isProductMode(cfg.mode) ? withModeRerank(cfg, cfg.mode) : cfg;
-	}
-	return withModeRerank({ ...cfg, mode: DEFAULT_MODEL_MODE }, DEFAULT_MODEL_MODE);
+	if (cfg.mode !== undefined) return cfg;
+	return { ...cfg, mode: DEFAULT_MODEL_MODE };
 }
 
 type PluginConfigOutput = {
@@ -275,28 +233,9 @@ const pluginConfigBaseSchema = z
 		return cfg;
 	});
 
-function requireRerankKey(
-	cfg: PluginConfigOutput,
-	ctx: z.RefinementCtx,
-): PluginConfigOutput {
-	if (cfg.retrieval.rerank === "cross-encoder" && !cfg.retrieval.rerankApiKey?.trim()) {
-		log.error("memory.rerank.key.missing", { cause: "missing-rerank-key" }, {
-			event_name: "memory.rerank.key.missing", file: "packages/memory/config/plugin-config-schema.ts",
-			function: "requireRerankKey", site_id: "memory.rerank.key.missing",
-		});
-		ctx.addIssue({
-			code: z.ZodIssueCode.custom,
-			path: ["retrieval", "rerankApiKey"],
-			message: "retrieval.rerankApiKey is required for cross-encoder reranking",
-		});
-	}
-	return cfg;
-}
-
 export const pluginConfigSchema: z.ZodType<PluginConfigOutput, unknown> = z
 	.unknown()
 	.transform(normalizeProductMode)
-	.pipe(pluginConfigBaseSchema)
-	.transform(requireRerankKey);
+	.pipe(pluginConfigBaseSchema);
 
 export type PluginConfig = z.output<typeof pluginConfigSchema>;
