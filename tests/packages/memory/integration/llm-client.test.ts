@@ -271,7 +271,7 @@ describe("mem-claw llm-client", () => {
 		const controller = new AbortController();
 		const client = createLlmClient({
 			apiKey: "test-key",
-			preset: "mem_claw/openai_gpt_5_nano",
+			preset: "mem_claw/sno_ai_extract",
 			baseURL: `http://127.0.0.1:${address.port}/v1`,
 		});
 		const update = client.completeJson<{ status: string }>(
@@ -362,7 +362,7 @@ describe("mem-claw llm-client", () => {
 
 			const client = createLlmClient({
 				apiKey: "rejected-provider-key",
-				preset: "mem_claw/openai_gpt_5_nano",
+				preset: "mem_claw/sno_ai_extract",
 				baseURL: "https://llm.example.test/v1",
 			});
 
@@ -429,7 +429,7 @@ describe("mem-claw llm-client", () => {
 
 		const client = createLlmClient({
 			apiKey: "test-key",
-			preset: "mem_claw/openai_gpt_5_nano",
+			preset: "mem_claw/sno_ai_extract",
 			baseURL: "https://llm.example.test/v1",
 		});
 
@@ -456,7 +456,7 @@ describe("mem-claw llm-client", () => {
 					headers: { "Content-Type": "application/json" },
 				});
 			}
-			authorizationHeaders.push(new Headers(init?.headers).get("Authorization"));
+			authorizationHeaders.push(new Headers(init?.headers).get("X-Internal-Token"));
 			if (authorizationHeaders.length < 3) {
 				return new Response(JSON.stringify({ error: "rate limited" }), {
 					status: 429,
@@ -468,7 +468,7 @@ describe("mem-claw llm-client", () => {
 
 		const client = createLlmClient({
 			apiKey: "first-provider-key,second-provider-key",
-			preset: "mem_claw/openai_gpt_5_nano",
+			preset: "mem_claw/sno_ai_extract",
 			baseURL: "https://llm.example.test/v1",
 		});
 
@@ -479,9 +479,9 @@ describe("mem-claw llm-client", () => {
 
 		expect(result).toEqual({ status: "ok", attempt: 3 });
 		expect(authorizationHeaders).toEqual([
-			"Bearer first-provider-key",
-			"Bearer second-provider-key",
-			"Bearer first-provider-key",
+			"first-provider-key",
+			"second-provider-key",
+			"first-provider-key",
 		]);
 	});
 
@@ -503,7 +503,7 @@ describe("mem-claw llm-client", () => {
 
 		const client = createLlmClient({
 			apiKey: "test-key",
-			preset: "mem_claw/openai_gpt_5_nano",
+			preset: "mem_claw/sno_ai_extract",
 			baseURL: "https://llm.example.test/v1",
 		});
 
@@ -537,7 +537,7 @@ describe("mem-claw llm-client", () => {
 
 		const client = createLlmClient({
 			apiKey: "test-key",
-			preset: "mem_claw/openai_gpt_5_nano",
+			preset: "mem_claw/sno_ai_extract",
 			baseURL: "https://llm.example.test/v1",
 		});
 
@@ -570,7 +570,7 @@ describe("mem-claw llm-client", () => {
 
 		const client = createLlmClient({
 			apiKey: "test-key",
-			preset: "mem_claw/openai_gpt_5_nano",
+			preset: "mem_claw/sno_ai_extract",
 			baseURL: "https://llm.example.test/v1",
 		});
 
@@ -582,64 +582,6 @@ describe("mem-claw llm-client", () => {
 
 		expect(anchorFetchCount).toBe(1);
 		expect(providerFetchCount).toBe(2);
-	});
-
-	it("defaults OpenAI extraction to zero-billing ccproxy and keeps localhost overrides possible", async () => {
-		const originalHeliconeApiKey = process.env.HELICONE_API_KEY;
-		const originalHeliconeOpenaiBaseUrl = process.env.HELICONE_OPENAI_BASE_URL;
-		delete process.env.HELICONE_API_KEY;
-		delete process.env.HELICONE_OPENAI_BASE_URL;
-
-		const requests: Array<{ url: string; headers: Headers }> = [];
-		globalThis.fetch = (async (input, init) => {
-			if (String(input) === SNO_STATION_MEM_RELEASE_ANCHOR_URL) {
-				return new Response(JSON.stringify(didDocument), {
-					status: 200,
-					headers: { "Content-Type": "application/json" },
-				});
-			}
-			requests.push({
-				url: String(input),
-				headers: new Headers(init?.headers),
-			});
-			return okChat('{"status":"ok"}');
-		}) as typeof fetch;
-
-		try {
-			const defaultClient = createLlmClient({
-				apiKey: "ignored-by-ccproxy",
-				preset: "mem_claw/openai_gpt_5_nano",
-			});
-			await defaultClient.completeJson<{ status: string }>(
-				memoryExtractRequest("Return JSON"),
-			);
-
-			const customClient = createLlmClient({
-				apiKey: "ignored-by-local-test-server",
-				preset: "mem_claw/openai_gpt_5_nano",
-				baseURL: "http://127.0.0.1:43210/v1",
-			});
-			await customClient.completeJson<{ status: string }>(
-				memoryExtractRequest("Return JSON"),
-			);
-		} finally {
-			if (originalHeliconeApiKey === undefined) {
-				delete process.env.HELICONE_API_KEY;
-			} else {
-				process.env.HELICONE_API_KEY = originalHeliconeApiKey;
-			}
-			if (originalHeliconeOpenaiBaseUrl === undefined) {
-				delete process.env.HELICONE_OPENAI_BASE_URL;
-			} else {
-				process.env.HELICONE_OPENAI_BASE_URL = originalHeliconeOpenaiBaseUrl;
-			}
-		}
-
-		expect(requests[0]?.url).toBe("http://localhost:8070/codex/v1/chat/completions");
-		expect(requests[0]?.headers.get("Authorization")).toBe("Bearer ignored-by-ccproxy");
-		expect(requests[0]?.headers.get("Helicone-Auth")).toBeNull();
-		expect(requests[1]?.url).toBe("http://127.0.0.1:43210/v1/chat/completions");
-		expect(requests[1]?.headers.get("Helicone-Auth")).toBeNull();
 	});
 
 	it("rejects direct public OpenAI billing before provider dispatch", async () => {
@@ -657,7 +599,7 @@ describe("mem-claw llm-client", () => {
 
 		const client = createLlmClient({
 			apiKey: "must-not-be-spent",
-			preset: "mem_claw/openai_gpt_5_nano",
+			preset: "mem_claw/sno_ai_extract",
 			baseURL: "https://api.openai.com/v1",
 		});
 
