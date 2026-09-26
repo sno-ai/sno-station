@@ -40,13 +40,14 @@ export function createModelGroupCrudEntityIdentityJudgementPort(
 			// Model call E8: same-entity judgment (background caller).
 			// Mode routing table: [IMP]-single-settings-file/settings-inventory.md
 			const completion = await transport.complete({
+			callId: "E8",
 				prompt: renderAtomicEntityIdentityPrompt({
 					displayName,
 					existingEntities: existingDisplayNames,
 				}),
 				maxTokens: 64,
 			});
-			if (completion === null) throw new Error("Entity identity judgement returned no response");
+			if (completion === null) return { decision: "undecided" };
 			if (completion.truncated) return { decision: "undecided" };
 			const answer = decodeAtomicEntityIdentityReply(completion.text);
 			if (answer === "new") return { decision: "new" };
@@ -80,8 +81,7 @@ export function createModelGroupCrudStateKeyingJudgementPort(
 			// Mode routing table: [IMP]-single-settings-file/settings-inventory.md
 			const reply = await client.completeText({
 				prompt,
-				callLabel: "memory-extract-atomic-generic",
-				adapterSlot: "memory-extract",
+				callId: "E12",
 				maxTokens: 64,
 				emptyReplyAttempts: 1,
 				enableThinking: false,

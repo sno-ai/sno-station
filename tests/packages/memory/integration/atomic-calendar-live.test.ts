@@ -36,11 +36,11 @@ describe("real model understands time; code calculates", () => {
 		if (!apiKey) throw new Error("SNO_MEM_CLAW_LLM_INTERNAL_KEY is required");
 		const client = createLlmClient({ preset: "mem_claw/sno_extract_chat", apiKey, timeoutMs: 90_000 });
 		const config = await client.getResolvedConfig();
-		const endpoint = await resolveLlmEndpoint({ configuredPreset: "mem_claw/sno_extract_chat", occasion: "memoryExtract", transport: "chat-completions" });
+		const endpoint = await resolveLlmEndpoint({ configuredPreset: "mem_claw/sno_extract_chat", callId: "E1", transport: "chat-completions" });
 		const transport = createAtomicGenericExtractionTransport(client);
 		const turns = [{ role: "user" as const, content: text }];
 		for (let repeat = 0; repeat < 3; repeat += 1) {
-			const completion = await transport.complete({ prompt: buildAtomicGenericExtractionPrompt(turns, anchor), maxTokens: 4096 });
+			const completion = await transport.complete({ callId: "E1", prompt: buildAtomicGenericExtractionPrompt(turns, anchor), maxTokens: 4096 });
 			if (!completion || completion.truncated) throw new Error("Missing or truncated real model reply");
 			const parsed = parseAtomicExtractionReply(completion.text, turns.length);
 			process.stdout.write(JSON.stringify({ host: hostname(), model: config.model, endpoint: endpoint.url, name, repeat, raw: completion.text }) + "\n");
@@ -61,10 +61,10 @@ it("keeps independently stated event dates separate", async () => {
 	const apiKey = process.env.SNO_MEM_CLAW_LLM_INTERNAL_KEY;
 	if (!apiKey) throw new Error("SNO_MEM_CLAW_LLM_INTERNAL_KEY is required");
 	const client = createLlmClient({ preset: "mem_claw/sno_extract_chat", apiKey, timeoutMs: 90_000 });
-	const endpoint = await resolveLlmEndpoint({ configuredPreset: "mem_claw/sno_extract_chat", occasion: "memoryExtract", transport: "chat-completions" });
+	const endpoint = await resolveLlmEndpoint({ configuredPreset: "mem_claw/sno_extract_chat", callId: "E1", transport: "chat-completions" });
 	const text = "I met Ada on March 15, 2019. I moved to Kyoto on April 20, 2022.";
 	const turns = [{ role: "user" as const, content: text }];
-	const reply = await createAtomicGenericExtractionTransport(client).complete({ prompt: buildAtomicGenericExtractionPrompt(turns, "2023-06-09T19:55:00Z"), maxTokens: 4096 });
+	const reply = await createAtomicGenericExtractionTransport(client).complete({ callId: "E1", prompt: buildAtomicGenericExtractionPrompt(turns, "2023-06-09T19:55:00Z"), maxTokens: 4096 });
 	if (!reply || reply.truncated) throw new Error("Missing or truncated model reply");
 	const parsed = parseAtomicExtractionReply(reply.text, 1);
 	if (!parsed.ok) throw new Error(`Invalid model reply: ${reply.text}`);
@@ -84,7 +84,7 @@ it("keeps a real standing claim open through production classification and durab
 	if (!apiKey) throw new Error("SNO_MEM_CLAW_LLM_INTERNAL_KEY is required");
 	const routing = llmRoutingConfigSchema.parse({ mode: "rem-enhanced" });
 	const transports = createSignedAtomicMemoryExtractionTransports({ preset: "mem_claw/sno_extract_chat", apiKey, timeoutMs: 90_000, routing });
-	const endpoint = await resolveLlmEndpoint({ configuredPreset: "mem_claw/sno_extract_chat", occasion: "memoryExtract", transport: "chat-completions" });
+	const endpoint = await resolveLlmEndpoint({ configuredPreset: "mem_claw/sno_extract_chat", callId: "E1", transport: "chat-completions" });
 	const fixture = createTestDb();
 	const store = new MemoryStore({ dbPath: fixture.dbPath, embedder: await createTestEmbedder() });
 	const text = "I have lived in Kyoto for four years.";

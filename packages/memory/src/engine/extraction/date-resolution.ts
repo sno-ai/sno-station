@@ -8,6 +8,7 @@ import type { TemporalInterval } from "./memory-temporality-classifier";
 import type { Locale } from "../i18n/locales";
 import { isTerminalLlmFailure, type LlmClient } from "../../model/llm-client";
 import type { LlmRoutingConfig } from "../../../config/plugin-config-mode-schema";
+import { modelCallDestination } from "../../model/model-call-table";
 import { readModelReplyJson } from "../shared/model-reply-text";
 
 export { sessionZoneCarriedBy } from "./calendar-instruction";
@@ -50,7 +51,7 @@ export async function resolveMemoryDate(input: DateInput & {
 	routing?: LlmRoutingConfig;
 }): Promise<DateResolutionResult> {
 	const unresolved = unresolvedMemoryDate(input);
-	if (!input.llm || input.routing?.mode === "local-first") return unresolved;
+	if (!input.llm || (input.routing && modelCallDestination("E11", input.routing.mode) === "off")) return unresolved;
 	const anchor = input.sessionDateTime ?? (input.sessionTimestamp === undefined
 		? undefined : new Date(input.sessionTimestamp).toISOString());
 	const prompt = [
@@ -64,7 +65,7 @@ export async function resolveMemoryDate(input: DateInput & {
 		// Model call E11: date resolution.
 		// Mode routing table: [IMP]-single-settings-file/settings-inventory.md
 		raw = await input.llm.completeText({
-			adapterSlot: "date-resolution", callLabel: "date-resolution", prompt, enableThinking: true,
+			callId: "E11", prompt, enableThinking: true,
 		});
 	} catch (error) {
 		if (isTerminalLlmFailure(error)) throw error;

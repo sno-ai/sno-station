@@ -75,6 +75,7 @@ class PluginRuntime:
         self._server: ThreadingHTTPServer | None = None
         self._thread: threading.Thread | None = None
         self._providers: dict[str, SnoMemoryProvider] = {}
+        self._ended: dict[str, tuple[SidecarClient, str, list[dict[str, object]]]] = {}
 
     def activate(self, ctx: RegistrationContext) -> None:
         self._llm = ctx.llm
@@ -126,6 +127,17 @@ class PluginRuntime:
             for session_id, current in list(self._providers.items()):
                 if current is provider:
                     self._providers.pop(session_id)
+
+    def keep_ended(
+        self, session_id: str, client: SidecarClient, project: str,
+        messages: list[dict[str, object]],
+    ) -> None:
+        with self._state_lock:
+            self._ended[session_id] = (client, project, messages)
+
+    def take_ended(self, session_id: str) -> tuple[SidecarClient, str, list[dict[str, object]]] | None:
+        with self._state_lock:
+            return self._ended.pop(session_id, None)
 
     def startup_brief(self, session_id: str) -> str:
         with self._state_lock:
@@ -181,6 +193,7 @@ class PluginRuntime:
         self._llm = None
         with self._state_lock:
             self._providers.clear()
+            self._ended.clear()
         if server is not None:
             server.shutdown()
             server.server_close()
@@ -208,18 +221,24 @@ class PluginRuntime:
                 binding = self._binding
                 generation = self._generation
                 llm = self._llm
-            if binding is None or binding.generation != generation or llm is None:
+            if llm is None or (
+                binding is not None and binding.generation != generation
+            ):
                 self._reply_error(handler, "cancelled", "stale-binding", 503)
                 return
-            result = binding.context.copy().run(
-                llm.complete,
-                messages=messages,
-                max_tokens=body.get("max_tokens"),
-                timeout=_CALLBACK_TIMEOUT_SECONDS,
-                purpose="sno-mem-hermes",
+            kwargs = {
+                "messages": messages,
+                "max_tokens": body.get("max_tokens"),
+                "timeout": _CALLBACK_TIMEOUT_SECONDS,
+                "purpose": "sno-mem-hermes",
+            }
+            result = (
+                binding.context.copy().run(llm.complete, **kwargs)
+                if binding is not None
+                else llm.complete(**kwargs)
             )
             with self._state_lock:
-                valid = binding.generation == self._generation
+                valid = generation == self._generation
             text = getattr(result, "text", None)
             if not valid or not isinstance(text, str):
                 self._reply_error(handler, "cancelled", "stale-binding", 503)
@@ -664,7 +683,11 @@ class SnoMemoryProvider(MemoryProvider):
         **_kwargs: object,
     ) -> None:
         old_session_id = self._session_id
-        self._end_session(old_session_id)
+        if reset:
+            self._end_session(old_session_id, boundary="reset")
+        else:
+            _RUNTIME.take_ended(old_session_id)
+            self._end_session(old_session_id)
         self._session_id = new_session_id
         _RUNTIME.move_provider(old_session_id, new_session_id, self)
         self._seen_ids.clear()
@@ -691,12 +714,27 @@ class SnoMemoryProvider(MemoryProvider):
                 extra={"kind": event.get("kind"), "error": str(error)},
             )
 
-    def _end_session(self, session_id: str) -> None:
+    def on_session_end(self, messages: list[dict[str, object]]) -> None:
+        if self._client is not None:
+            _RUNTIME.keep_ended(self._session_id, self._client, self._project, [
+                {"role": message.get("role"), "content": message.get("content"), "at": time.time() * 1000}
+                for message in messages if isinstance(message, dict)
+                and message.get("role") in ("system", "developer", "user", "assistant", "tool")
+            ])
+
+    def _end_session(self, session_id: str, boundary: str | None = None) -> None:
         if not session_id or self._client is None:
             return
+        ended = _RUNTIME.take_ended(session_id)
+        messages = ended[2] if ended else []
+        scope = self._scope(session_id)
+        if boundary:
+            host = scope["host"]
+            if isinstance(host, dict):
+                host.update({"boundary": boundary, "at": time.time() * 1000})
         try:
             self._client.post(
-                "on-session-end", {"messages": [], "scope": self._scope(session_id)}
+                "on-session-end", {"messages": messages, "scope": scope}
             )
         except (OSError, RuntimeError, ValueError) as error:
             _LOG.error("session end not reported", extra={"error": str(error)})
@@ -1126,11 +1164,30 @@ def _post_approval_response(**kwargs: object) -> None:
         _RUNTIME.host_approval(session_id, kwargs)
 
 
+def _on_session_reset(**kwargs: object) -> None:
+    old_session_id = kwargs.get("old_session_id")
+    if not isinstance(old_session_id, str):
+        return
+    ended = _RUNTIME.take_ended(old_session_id)
+    if ended is None:
+        return
+    client, project, messages = ended
+    try:
+        client.post("on-session-end", {"messages": messages, "scope": {
+            "principal": getpass.getuser(), "project": project, "session": old_session_id,
+            "host": {"sessionId": old_session_id, "workspace": project,
+                     "boundary": "reset", "at": time.time() * 1000},
+        }})
+    except (OSError, RuntimeError, ValueError) as error:
+        _LOG.error("session reset not reported", extra={"error": str(error)})
+
+
 def register(ctx: RegistrationContext) -> None:
     ctx.register_memory_provider(SnoMemoryProvider())
     ctx.register_hook("pre_llm_call", _pre_llm_call)
     ctx.register_hook("post_api_request", _post_api_request)
     ctx.register_hook("post_tool_call", _post_tool_call)
     ctx.register_hook("post_approval_response", _post_approval_response)
+    ctx.register_hook("on_session_reset", _on_session_reset)
     if getattr(ctx, "llm", None) is not None:
         _RUNTIME.activate(ctx)

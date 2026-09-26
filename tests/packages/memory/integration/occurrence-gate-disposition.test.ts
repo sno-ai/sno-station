@@ -149,10 +149,10 @@ describe("occurrence gate durable disposition", () => {
 				embedder,
 				llm: createTestLlmClient({
 					async completeJson<T>(request): Promise<T | null> {
-						labels.push(request.callLabel);
+						labels.push(request.callId);
 						// The classifier refuses an unusable answer, so it has to be given a real
 						// one; "none" changes nothing and keeps the case about the call itself.
-						if (request.callLabel === "profile-active-task-classify") {
+						if (request.callId === "T1") {
 							return { action: "none", taskId: null } as T;
 						}
 						return null;
@@ -160,7 +160,7 @@ describe("occurrence gate durable disposition", () => {
 				}),
 				sessionDateTime: SESSION_DATE_TIME,
 			});
-			return labels.filter((label) => label === "profile-active-task-classify");
+			return labels.filter((label) => label === "T1");
 		}
 
 		expect(await classifyCallsFor(undefined, 2)).not.toHaveLength(0);

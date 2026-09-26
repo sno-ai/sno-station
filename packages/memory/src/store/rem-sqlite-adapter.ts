@@ -8,8 +8,6 @@ import { createHash, randomUUID } from "node:crypto";
 import { createLogger } from "@snoai/utils/logger";
 import type {
 	MoveLaneInput,
-	RemLlmRequest,
-	RemLlmResponse,
 	RemMutationResult,
 	RemOperationType,
 	RemPorts,
@@ -29,7 +27,6 @@ import type {
 	RawSqliteDatabase,
 	SqliteDatabaseLike,
 } from "./sqlite-runtime";
-import type { LlmClient } from "../model/llm-client";
 import { stableHash } from "../engine/shared/utils";
 import { hashInputForEntry } from "./memory-store-shared";
 import type { MemoryStore } from "./store";
@@ -92,7 +89,6 @@ interface FacetRecoveryRow {
 
 export interface SnoStationMemRemPortOptions {
 	database: SqliteDatabaseLike;
-	llmClient: LlmClient;
 	memoryStore?: MemoryStore;
 }
 
@@ -287,9 +283,6 @@ export function createSnoStationMemRemPorts(options: SnoStationMemRemPortOptions
 		},
 		forget: {
 			moveLane: async (input) => moveLane(options.database, input),
-		},
-		llm: {
-			complete: (request) => completeWithClient(options.llmClient, request),
 		},
 	};
 }
@@ -1348,26 +1341,4 @@ function hashMemoryRow(row: MemoryRow): string {
 	// One definition, shared with the producer in `packages/rem-core`. When these were two
 	// definitions they drifted, and a write that had already committed was reported as failed.
 	return hashRemMemoryRow(row as unknown as Record<string, unknown>);
-}
-
-async function completeWithClient(
-	client: LlmClient,
-	request: RemLlmRequest,
-): Promise<RemLlmResponse> {
-	const text = await client.completeText({
-		prompt: request.prompt,
-		callLabel: "rem-batch",
-		adapterSlot: "conflict-adjudication",
-		...(request.signal === undefined ? {} : { signal: request.signal }),
-	});
-	if (text === null) throw new Error("REM LLM request returned no text");
-	const usage = client.getLastUsage();
-	if (!usage) return { text };
-	return {
-		text,
-		usage: {
-			inputTokens: usage.inputTokens,
-			outputTokens: usage.outputTokens,
-		},
-	};
 }

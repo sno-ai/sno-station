@@ -1,6 +1,5 @@
 import { dirname, join } from "node:path";
 import { runMaintenancePass } from "../../../../packages/memory/src/store/maintenance";
-import { createLlmClient } from "../../../../packages/memory/src/model/llm-client";
 import { expect, it } from "vitest";
 import { MemoryStore } from "../../../../packages/memory/src/store/store";
 import { createSnoStationMemRemPorts, createSnoStationMemRemRecovery } from "../../../../packages/memory/src/store/rem-sqlite-adapter";
@@ -42,8 +41,7 @@ it("keeps FTS consistent through repeated REM facet writes, metadata updates, me
 		const matches = await store.searchKeyword("notebook", { projectIdFilter: ["fts-write-probe"] });
 		expect(matches.map(match => match.entry.text)).toEqual(["The user keeps a blue notebook with 16 pages."]);
 		const successor = await store.store({ text: "The user now keeps a green notebook.", category: "episodic", projectId: "fts-write-probe" });
-		const ports = createSnoStationMemRemPorts({ database: store.sqlite, memoryStore: store,
-			llmClient: createLlmClient({ preset: "mem_claw/sno_conflict_verdict", baseURL: "http://localhost:8070/codex/v1" }) });
+		const ports = createSnoStationMemRemPorts({ database: store.sqlite, memoryStore: store });
 		const prior = store.sqlite.prepare("SELECT content_hash FROM nodix_memories WHERE id = ?").get(entry.id) as { content_hash: string };
 		const next = store.sqlite.prepare("SELECT content_hash FROM nodix_memories WHERE id = ?").get(successor.id) as { content_hash: string };
 		const closed = await ports.conflict.softClose({ rowId: entry.id, successorId: successor.id,

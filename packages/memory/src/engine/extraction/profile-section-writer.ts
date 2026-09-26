@@ -1,5 +1,4 @@
 import { resolveHookAgentId } from "../bindings/sno-station-mem-runtime-mode";
-import { FIXED_MEMORY_SNO_AI_EXTRACT } from "../../model/signed-registry-constants";
 /** @file profile-section-writer.ts
  * @purpose Mutation-native profile section writer for current-state memory.
  * @boundary Owns profile rows only; no retrieval injection or conflict scan.
@@ -20,19 +19,9 @@ import {
 	type AdapterAMemoryView,
 	type AdapterAVerdict,
 } from "../rem/index.js";
-import liveClauseVerdictAttestation from "../../../fixtures/live-clause-verdict-gold/attestation.json" with {
-	type: "json",
-};
-import liveClauseVerdictCorpus from "../../../fixtures/live-clause-verdict-gold/corpus.json" with {
-	type: "json",
-};
 import { canonicalizeProfileSectionName } from "./b-profile-section-canonicalizer";
 import { boundSectionContent, buildIndexedText } from "./extraction-text-sanitizer";
 import { recordTokenCounter } from "../../store/memory-store-write-validation";
-import {
-	registerLiveClauseVerdictArtifacts,
-	type LiveClauseVerdictRegistration,
-} from "./live-clause-verdict-gate";
 import {
 	buildInsightMetadata,
 	deriveFactKey,
@@ -245,49 +234,6 @@ export const PROFILE_SECTION_JUDGMENT_INSTRUCTIONS = [
 	"Never retire every incoming clause.",
 	"For preferences.general, ownership is an independent retirement reason and does not require the incoming clause to contradict or replace the stored clause. Each listed sibling suffix names the topic it owns. Retire a stored general clause when its meaning belongs to that topic; for example, when preferences.films is listed, retire a stored general clause saying the user likes James Stewart movies. Keep a general clause when no listed sibling owns its topic. One fact family has one owner.",
 ] as const;
-export const PROFILE_SECTION_JUDGMENT_MODEL_CONFIG = {
-	preset: FIXED_MEMORY_SNO_AI_EXTRACT as typeof FIXED_MEMORY_SNO_AI_EXTRACT,
-	provider: "sno-gpu",
-	model: "qwen3.8-27b-extract",
-} as const;
-export const PROFILE_SECTION_JUDGE_IMPLEMENTATION_CONTRACT = {
-	schemaVersion: 1,
-	responseFields: ["verdict", "retired_clause_indices"],
-	strictResponse: true,
-	zeroBasedIndices: true,
-	uniqueIndices: true,
-	inRangeIndices: true,
-	tombstoneAndNoOpRequireEmptyIndices: true,
-	allIncomingRetiredIsUnusable: true,
-} as const;
-
-function stableSha256(value: unknown): string {
-	return createHash("sha256").update(JSON.stringify(value)).digest("hex");
-}
-
-export const PROFILE_SECTION_JUDGMENT_BINDINGS: {
-	readonly promptSha256: string;
-	readonly modelConfigSha256: string;
-	readonly judgeImplementationSha256: string;
-} = {
-	promptSha256: stableSha256(PROFILE_SECTION_JUDGMENT_INSTRUCTIONS),
-	modelConfigSha256: stableSha256(PROFILE_SECTION_JUDGMENT_MODEL_CONFIG),
-	judgeImplementationSha256: stableSha256(PROFILE_SECTION_JUDGE_IMPLEMENTATION_CONTRACT),
-};
-
-const LIVE_CLAUSE_VERDICT_REGISTRATION: LiveClauseVerdictRegistration =
-	registerLiveClauseVerdictArtifacts({
-		corpus: liveClauseVerdictCorpus,
-		attestation: liveClauseVerdictAttestation,
-		expectedPromptSha256: PROFILE_SECTION_JUDGMENT_BINDINGS.promptSha256,
-		expectedModelConfigSha256: PROFILE_SECTION_JUDGMENT_BINDINGS.modelConfigSha256,
-		expectedJudgeImplementationSha256:
-			PROFILE_SECTION_JUDGMENT_BINDINGS.judgeImplementationSha256,
-	});
-
-export const PROFILE_SECTION_JUDGMENT_REGISTRATION_ENABLED: boolean =
-	LIVE_CLAUSE_VERDICT_REGISTRATION.enabled;
-
 export function renderProfileSectionJudgmentPrompt(input: {
 	sectionName: string;
 	topic?: string;
@@ -418,7 +364,7 @@ async function lifecycleRetireByNamePositions(
 	// or null and the deferred branch queues the work with its classification context; the queue
 	// then re-defers on every later write and the marker never clears. Nothing to classify here,
 	// so nothing is queued. A live route that answers badly still defers, and is bounded below.
-	if (profileMergeCallHasNoModel(params, PROFILE_SECTION_LIFECYCLE_RETIREMENT_CALL_LABEL)) {
+	if (profileMergeCallHasNoModel(params, "P2")) {
 		return { kind: "classified", positions: [] };
 	}
 	let response: unknown;
@@ -436,13 +382,11 @@ async function lifecycleRetireByNamePositions(
 				`Removed clauses: ${JSON.stringify(retiredClauses)}`,
 				`Live specific sibling sections: ${JSON.stringify(liveSiblingSectionNames)}`,
 			].join("\n\n"),
-			callLabel: PROFILE_SECTION_LIFECYCLE_RETIREMENT_CALL_LABEL,
-			adapterSlot: "profile-merge",
+			callId: "P2",
 			...(params.timeoutMs ? { timeoutMs: params.timeoutMs } : {}),
 			...(params.signal ? { signal: params.signal } : {}),
 		});
-	} catch (error) {
-		if (!isDeterministicFallbackError(error)) throw error;
+	} catch {
 		return deferLifecycleRetirement(
 			retiredClauses,
 			incomingAssertion,
@@ -476,24 +420,6 @@ async function lifecycleRetireByNamePositions(
 		kind: "classified",
 		positions: indices.map((index) => retiredClauses[index] ?? "").filter(Boolean),
 	};
-}
-
-function isDeterministicFallbackError(error: unknown): error is LlmClientTerminalError {
-	return (
-		error instanceof LlmClientTerminalError &&
-		(error.category === "timeout" ||
-			error.category === "transport" ||
-			(error.category === "cancelled" && error.requestTimedOut))
-	);
-}
-
-function rethrowConflictCancellation(error: unknown): void {
-	if (
-		error instanceof LlmClientTerminalError &&
-		(error.category === "auth" || (error.category === "cancelled" && !error.requestTimedOut))
-	) {
-		throw error;
-	}
 }
 
 export async function runProfileSectionUpdate(
@@ -757,7 +683,7 @@ async function runProfileSectionUpdateOnce(
 		// and re-created repeatedly in local-first would otherwise append work on every deletion.
 		const tombstonePending = appendRetireByNameWork(
 			readRetireByNamePending(existing),
-			profileMergeCallHasNoModel(params, PROFILE_SECTION_JUDGMENT_CALL_LABEL)
+			profileMergeCallHasNoModel(params, "P6")
 				? []
 				: splitExactClauses(existingContent ?? existing.text),
 			params,
@@ -926,6 +852,8 @@ export const PROFILE_RETIREMENT_RECHECK_SAMPLING: {
 
 /** What the second key over one retirement decided, written into the merged row's metadata. */
 export interface ProfileRetirementRecheckReceipt {
+	call_id: "P3";
+	destination: import("../../model/model-call-table").ModelDestination;
 	prompt_sha256: string;
 	model: string;
 	preset: string;
@@ -1022,16 +950,14 @@ async function recheckProfileRetirements(input: {
 								incomingAssertion: input.params.newAssertion,
 								siblingContents: input.siblingContents,
 							}),
-							callLabel: PROFILE_RETIREMENT_RECHECK_CALL_LABEL,
-							adapterSlot: "profile-merge",
+							callId: "P3",
 							maxTokens: PROFILE_RETIREMENT_RECHECK_MAX_TOKENS,
 							enableThinking: false,
 							timeoutMs: Math.min(input.params.timeoutMs ?? remainingMs, remainingMs),
 							...(input.params.signal ? { signal: input.params.signal } : {}),
 						});
 						return parseRecheckVerdict(response);
-					} catch (error) {
-						if (!isDeterministicFallbackError(error)) throw error;
+					} catch {
 						return undefined;
 					}
 				}),
@@ -1068,12 +994,16 @@ async function recheckProfileRetirements(input: {
 		}
 	});
 	const unchecked = input.retiredClauseIndices.length - checked.length;
+	const route = input.params.routing ? resolveLlmRoute({ callId: "P3", config: input.params.routing }) : null;
+	const destination = route === null ? "host" : "off" in route ? "off" : route.destination;
 	return {
 		retiredClauseIndices,
 		receipt: {
+			call_id: "P3",
+			destination,
 			prompt_sha256: PROFILE_RETIREMENT_RECHECK_PROMPT_SHA256,
-			model: resolved.model,
-			preset: resolved.preset,
+			model: destination === "host" ? "host" : resolved.model,
+			preset: destination === "host" ? "host" : resolved.preset,
 			sampling: PROFILE_RETIREMENT_RECHECK_SAMPLING,
 			retired,
 			kept,
@@ -1113,13 +1043,6 @@ async function mergeProfileSection(
 		evidence: params.evidence,
 		liveSiblingSectionNames,
 	});
-	if (!LIVE_CLAUSE_VERDICT_REGISTRATION.enabled) {
-		return {
-			kind: "preserved-without-adjudication",
-			content: fallbackProfileMerge(mergeBase, params.newAssertion),
-			reason: `activation-${LIVE_CLAUSE_VERDICT_REGISTRATION.reason}`,
-		};
-	}
 	let response: unknown;
 	let transportFailure: string | undefined;
 	if (params.llm) {
@@ -1128,8 +1051,7 @@ async function mergeProfileSection(
 			// Mode routing table: [IMP]-single-settings-file/settings-inventory.md
 			response = await params.llm.completeJson<unknown>({
 				prompt: judgmentPrompt,
-				callLabel: PROFILE_SECTION_JUDGMENT_CALL_LABEL,
-				adapterSlot: "profile-merge",
+				callId: "P4",
 				...(params.timeoutMs ? { timeoutMs: params.timeoutMs } : {}),
 				...(params.signal ? { signal: params.signal } : {}),
 				// Walk every candidate against this reply's own shape; without it the first valid
@@ -1137,8 +1059,7 @@ async function mergeProfileSection(
 				accept: (value) => parseProfileSectionJudgment(value, clauses) !== undefined,
 			});
 		} catch (error) {
-			if (!isDeterministicFallbackError(error)) throw error;
-			transportFailure = error.category;
+			transportFailure = error instanceof LlmClientTerminalError ? error.category : "unknown";
 		}
 	}
 
@@ -1213,17 +1134,15 @@ async function mergeProfileSection(
 				retiredClauses,
 				evidence: params.evidence,
 			}),
-			callLabel: PROFILE_SECTION_TEXT_CALL_LABEL,
-			adapterSlot: "profile-merge",
+			callId: "P5",
 			...(params.timeoutMs ? { timeoutMs: params.timeoutMs } : {}),
 			...(params.signal ? { signal: params.signal } : {}),
 		});
 	} catch (error) {
-		if (!isDeterministicFallbackError(error)) throw error;
 		return judgedClauseMerge(
 			retainedClauses,
 			retireByNamePositions,
-			`text-step-${error.category}`,
+			`text-step-${error instanceof LlmClientTerminalError ? error.category : "unknown"}`,
 			deferredLifecycleRetirement,
 			recheck.receipt,
 		);
@@ -1778,17 +1697,17 @@ async function writeProfileRow(args: {
 	// forward untouched, because `readRetireByNamePending` still reads it.
 	//
 	// Each kind of work is gated by the label that will actually run it. A position that is
-	// ALREADY classified only needs `retireRowsByName`, which judges under the section-judgment
+	// ALREADY classified only needs `retireRowsByName`, which judges under the retire-by-name
 	// label — gating it on the lifecycle label would throw away executable work whenever that one
 	// route alone is off, and the stale rows it names would stay live with no way to rebuild it.
 	// A position still needing classification needs both, so it is gated on both.
 	const judgmentHasNoModel = profileMergeCallHasNoModel(
 		args.params,
-		PROFILE_SECTION_JUDGMENT_CALL_LABEL,
+		"P6",
 	);
 	const lifecycleHasNoModel = profileMergeCallHasNoModel(
 		args.params,
-		PROFILE_SECTION_LIFECYCLE_RETIREMENT_CALL_LABEL,
+		"P2",
 	);
 	const modelOnlyPositions = judgmentHasNoModel
 		? []
@@ -1906,10 +1825,10 @@ async function completeRetireByNamePending(
 	// executable positions whenever the other label alone is off, and gating creation on only one
 	// of them would queue work the consumer can never run. A work item still carrying a
 	// classification needs the lifecycle label; `retireRowsByName` needs the judgment label.
-	if (profileMergeCallHasNoModel(params, PROFILE_SECTION_JUDGMENT_CALL_LABEL)) return;
+	if (profileMergeCallHasNoModel(params, "P6")) return;
 	const lifecycleHasNoModel = profileMergeCallHasNoModel(
 		params,
-		PROFILE_SECTION_LIFECYCLE_RETIREMENT_CALL_LABEL,
+		"P2",
 	);
 	const judgmentBudget =
 		params.retireByNameBudget ?? createRetireByNameRunBudget(params.timeoutMs);
@@ -1976,6 +1895,7 @@ async function completeRetireByNamePending(
 			const result = await retireRowsByName({
 				store: params.store,
 				llm: params.llm,
+				routing: params.routing,
 				scope: params.scope,
 				retiredPosition,
 				currentPositionId: current.id,
@@ -2179,11 +2099,11 @@ async function listLiveSpecificSiblings(
  */
 function profileMergeCallHasNoModel(
 	params: RunProfileSectionUpdateParams,
-	callLabel: string,
+	callId: import("../../model/model-call-table").ModelCallId,
 ): boolean {
 	if (!params.llm) return true;
 	if (!params.routing) return false;
-	return "off" in resolveLlmRoute({ slot: "profile-merge", callLabel, config: params.routing });
+	return "off" in resolveLlmRoute({ callId, config: params.routing });
 }
 
 /**
@@ -2193,8 +2113,7 @@ function profileMergeCallHasNoModel(
 function conflictAdjudicationRoutedOff(params: RunProfileSectionUpdateParams): boolean {
 	if (!params.routing) return false;
 	const route = resolveLlmRoute({
-		slot: "conflict-adjudication",
-		callLabel: "conflict-adjudication",
+		callId: "P1",
 		config: params.routing,
 	});
 	return "off" in route;
@@ -2291,7 +2210,6 @@ async function planProfileConflicts(
 		}
 		return { closes };
 	} catch (error) {
-		rethrowConflictCancellation(error);
 		log.error("profile conflict scan failed; proceeding without adjudication", {
 			error,
 			candidate_size: content.length,
@@ -2343,8 +2261,7 @@ async function adjudicateSafely(
 	try {
 		const route = params.routing
 			? resolveLlmRoute({
-					slot: "conflict-adjudication",
-					callLabel: "conflict-adjudication",
+					callId: "P1",
 					config: params.routing,
 				})
 			: undefined;
@@ -2357,14 +2274,12 @@ async function adjudicateSafely(
 		// Mode routing table: [IMP]-single-settings-file/settings-inventory.md
 		const response = await params.llm.completeText({
 			prompt,
-			callLabel: "conflict-adjudication",
-			adapterSlot: "conflict-adjudication",
+			callId: "P1",
 			...(params.timeoutMs ? { timeoutMs: params.timeoutMs } : {}),
 			...(params.signal ? { signal: params.signal } : {}),
 		});
 		return response ? parseAdapterAChatVerdict(response) : "uncertain";
 	} catch (error) {
-		rethrowConflictCancellation(error);
 		log.error("Conflict adjudicator unavailable; keeping both rows", {
 			...context,
 			error,

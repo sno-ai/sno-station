@@ -5,8 +5,6 @@ import type { Embedder } from "../../../../packages/memory/src/engine/extraction
 import { parseInsightMetadata } from "../../../../packages/memory/src/engine/extraction/memory-metadata-codec.ts";
 import {
 	parseProfileSectionJudgment,
-	PROFILE_SECTION_JUDGMENT_CALL_LABEL,
-	PROFILE_SECTION_TEXT_CALL_LABEL,
 	retiredProfileSectionMarker,
 	runProfileSectionUpdate,
 } from "../../../../packages/memory/src/engine/extraction/profile-section-writer.ts";
@@ -82,17 +80,17 @@ describe("profile section judgment/text split", () => {
 			async completeJson<T>(
 				request: Parameters<LlmClient["completeJson"]>[0],
 			): Promise<T> {
-				input.calls?.push(request.callLabel);
+				input.calls?.push(request.callId);
 				input.requests?.push(request);
-				if (request.callLabel === "profile-retirement-recheck") return { retire: true } as T;
-				if (request.callLabel === PROFILE_SECTION_JUDGMENT_CALL_LABEL) {
+				if (request.callId === "P3") return { retire: true } as T;
+				if (request.callId === "P4") {
 					return input.judgment as T;
 				}
-				if (request.callLabel === PROFILE_SECTION_TEXT_CALL_LABEL) {
+				if (request.callId === "P5") {
 					if (input.text instanceof Error) throw input.text;
 					return input.text as T;
 				}
-				throw new Error(`unexpected call label ${request.callLabel}`);
+				throw new Error(`unexpected call id ${request.callId}`);
 			},
 		});
 	}
@@ -175,8 +173,8 @@ describe("profile section judgment/text split", () => {
 		});
 
 		expect(calls).toEqual([
-			PROFILE_SECTION_JUDGMENT_CALL_LABEL,
-			PROFILE_SECTION_TEXT_CALL_LABEL,
+			"P4",
+			"P5",
 		]);
 		expect(result).toMatchObject({ outcome: "merged" });
 		expect(result.rowId).not.toBe(existingId);
@@ -187,7 +185,7 @@ describe("profile section judgment/text split", () => {
 		expect(terminalAudit().details?.mutation_outcome).toBe("committed");
 	});
 
-	it("propagates the adapter slot, timeout, and signal to both split calls", async () => {
+	it("propagates the call ids, timeout, and signal to both split calls", async () => {
 		await seed();
 		const requests: Parameters<LlmClient["completeJson"]>[0][] = [];
 		const controller = new AbortController();
@@ -208,17 +206,16 @@ describe("profile section judgment/text split", () => {
 		});
 
 		expect(requests).toHaveLength(2);
-		expect(requests.map(({ callLabel }) => callLabel)).toEqual([
-			PROFILE_SECTION_JUDGMENT_CALL_LABEL,
-			PROFILE_SECTION_TEXT_CALL_LABEL,
+		expect(requests.map(({ callId }) => callId)).toEqual([
+			"P4",
+			"P5",
 		]);
 		for (const request of requests) {
-			expect(request.adapterSlot).toBe("profile-merge");
 			expect(request.timeoutMs).toBe(4_321);
 			expect(request.signal).toBe(controller.signal);
 		}
 		const textRequest = requests.find(
-			(request) => request.callLabel === PROFILE_SECTION_TEXT_CALL_LABEL,
+			(request) => request.callId === "P5",
 		);
 		expect(textRequest?.prompt).toContain("Do not add connective text or any other clause");
 		expect(textRequest?.prompt).not.toContain("You may add connective text");
@@ -459,7 +456,7 @@ describe("profile section judgment/text split", () => {
 			at: STARTED_AT + 1_000,
 		});
 
-		expect(calls).toEqual([PROFILE_SECTION_JUDGMENT_CALL_LABEL]);
+		expect(calls).toEqual(["P4"]);
 		expect(result.outcome).toBe("tombstoned");
 		expect(current()?.text).toBe(retiredProfileSectionMarker(SECTION));
 	});

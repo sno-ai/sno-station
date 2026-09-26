@@ -460,7 +460,8 @@ describe("atomic generic extractor", () => {
 		});
 		const transport = createAtomicGenericExtractionTransport(client);
 
-		await expect(transport.complete({ prompt: "exact prompt", maxTokens: 128 })).resolves.toEqual({
+		// E3 rather than E1: the transport must forward the caller's call id, not pin one.
+		await expect(transport.complete({ callId: "E3", prompt: "exact prompt", maxTokens: 128 })).resolves.toEqual({
 			text: "provider reply",
 			truncated: true,
 			// The transport now reports the batch's output-token usage, used by lane-2 budget diagnostics.
@@ -469,8 +470,7 @@ describe("atomic generic extractor", () => {
 		expect(client.request).toEqual({
 			prompt: "exact prompt",
 			extractionSkillHash: createHash("sha256").update(readFileSync(new URL("../../../../packages/memory/skills/extract-atomic-memory/SKILL.md", import.meta.url))).update(readFileSync(new URL("../../../../packages/memory/skills/extract-atomic-memory/references/calendar-meaning.md", import.meta.url))).update(readFileSync(new URL("../../../../packages/memory/skills/extract-atomic-memory/references/capture.md", import.meta.url), "utf8").trim()).update(readFileSync(new URL("../../../../packages/memory/skills/extract-atomic-memory/references/enrichment.md", import.meta.url), "utf8").trim()).digest("hex"),
-			callLabel: "memory-extract-atomic-generic",
-			adapterSlot: "memory-extract",
+			callId: "E3",
 			maxTokens: 128,
 			// The capture call carries its own wall time. Inheriting the installation's generic
 			// client timeout (30s by default, 60s on the LoCoMo VM) made a full-length reply

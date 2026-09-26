@@ -3,6 +3,9 @@ import { checkMemoryOperation } from "../operation-cancellation";
 import { FIXED_PROTOCOL_VALUE_78 } from "../../model/signed-registry-constants";
 import { createLogger as createDiagnosticLogger, privateLogReference, currentLogContext, withLogContext } from "@snoai/utils/logger";
 import { randomUUID } from "node:crypto";
+import { createHash } from "node:crypto";
+import { basename, join } from "node:path";
+import { getSnoProfileDir } from "@snoai/observability";
 const diagnosticLog = createDiagnosticLogger("sno-station-mem:reflection-command-hooks");
 /** @file reflection-command-hooks.ts
  * @purpose Registers command hooks that write reflection logs and memories.
@@ -13,8 +16,11 @@ import { appendSelfImprovementEntry } from "../operations/learning-file-maintena
 import {
 	generateReflectionText,
 	readSessionConversationWithResetFallback,
+	shouldSkipReflectionMessage,
 	writeReflectionToFilesystem,
 } from "./daily-log-generator";
+import { extractTextContent } from "../operations/session-summary-storage";
+import { redactSecrets } from "../security/redact";
 import {
 	type ReflectionDerivedCache,
 	setReflectionDerivedCacheEntry,
@@ -93,12 +99,16 @@ export function createRunMemoryReflection(params: ReflectionCommandParams): (eve
 					>;
 					const currentSessionFile =
 						typeof sessionEntry.sessionFile === "string" ? sessionEntry.sessionFile : undefined;
-					if (!currentSessionFile) return;
-
-					const conversation = await readSessionConversationWithResetFallback(
-						currentSessionFile,
-						params.reflectionCfg.messageCount,
-					);
+					const conversation = currentSessionFile
+						? await readSessionConversationWithResetFallback(currentSessionFile, params.reflectionCfg.messageCount)
+						: Array.isArray(context.messages) ? context.messages.flatMap((message: unknown) => {
+							if (!message || typeof message !== "object") return [];
+							const record = message as Record<string, unknown>;
+							const role = record.role;
+							const text = extractTextContent(record.content);
+							return (role === "user" || role === "assistant") && text && !shouldSkipReflectionMessage(role, text)
+								? [`${role}: ${redactSecrets(text)}`] : [];
+						}).join("\n") : null;
 					if (!conversation) return;
 
 					diagnostics.inputSize = conversation.length;
@@ -215,8 +225,12 @@ async function runMemoryReflectionBody(
 		}
 
 		checkMemoryOperation();
+		const skinId = event.context.reflectionSkinId;
+		const reflectionDir = skinId === "codex" || skinId === "claude-code" || skinId === "hermes"
+			? join(getSnoProfileDir(), "memory", "projects", `${basename(workspaceDir)}-${createHash("sha256").update(workspaceDir).digest("hex").slice(0, 12)}`)
+			: workspaceDir;
 		const relPath = await writeReflectionToFilesystem({
-			workspaceDir,
+			workspaceDir: reflectionDir,
 			reflectionText: reflectionResult.text,
 			sessionKey,
 			sessionId: currentSessionId,

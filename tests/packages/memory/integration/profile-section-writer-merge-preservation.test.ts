@@ -841,7 +841,7 @@ describe("profile merge preservation", () => {
 			async completeJson<T>(
 				request: Parameters<LlmClient["completeJson"]>[0],
 			): Promise<T> {
-				calls.push(request.callLabel);
+				calls.push(request.callId);
 				return { action: "no-op", content: existingContent, superseded: [] } as T;
 			},
 		});
@@ -858,7 +858,7 @@ describe("profile merge preservation", () => {
 
 		expect(result.outcome).toBe("no-op");
 		const current = fixture?.store.getByFactKey(SCOPE, `profile:${section}`);
-		expect(calls).toEqual(["profile-section-judgment"]);
+		expect(calls).toEqual(["P4"]);
 		expect(current?.text).toBe(before.text);
 		expect(current).toEqual(before);
 	});

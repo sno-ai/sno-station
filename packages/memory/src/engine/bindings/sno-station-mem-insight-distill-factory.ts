@@ -46,8 +46,7 @@ export function buildInsightDistiller(
 	// The product mode gates LLM extraction: local-first never distills, while
 	// both supported extraction transports share the routed client below.
 	const extractRoute = resolveLlmRoute({
-		slot: "memory-extract",
-		callLabel: "memory-extract-atomic-generic",
+		callId: "E1",
 		config: routing,
 	});
 	if ("off" in extractRoute) {
@@ -71,7 +70,7 @@ export function buildInsightDistiller(
 		return undefined;
 	}
 	// Branch on configuration before selecting the runtime strategy.
-	if (config.mode === "local-first") return undefined;
+	if ("off" in extractRoute) return undefined;
 	const llmCfg = config.extraction.llm;
 	// Guard llm cfg here so the remaining module behavior path works with normalized inputs.
 	if (!llmCfg) {
@@ -87,16 +86,16 @@ export function buildInsightDistiller(
 			timeoutMs: llmCfg.timeoutMs,
 			routing,
 			...(agentPort ? { agentPort } : {}),
-			onTransportAttempt: ({ adapterSlot, callLabel, transport }) => {
+			onTransportAttempt: ({ callId, destination, transport }) => {
 				appendAuditEntry(stateDir, {
 					event: "ambient_learning",
 					hook: "agent_end",
 					resultStatus: "ok",
 					decision: "llm_distill_attempted",
-					details: { mode: config.mode, adapterSlot, callLabel, transport },
+					details: { mode: config.mode, callId, destination, transport },
 				});
 			},
-			onProviderResponse: ({ adapterSlot, callLabel, provider, requestId, model, usage }) => {
+			onProviderResponse: ({ callId, destination, provider, requestId, model, usage }) => {
 				appendAuditEntry(stateDir, {
 					event: "ambient_learning",
 					hook: "agent_end",
@@ -104,8 +103,8 @@ export function buildInsightDistiller(
 					decision: "llm_distill_response",
 					details: {
 						mode: config.mode,
-						adapterSlot,
-						callLabel,
+						callId,
+						destination,
 						requestId: requestId ?? null,
 						provider,
 						model: model ?? null,

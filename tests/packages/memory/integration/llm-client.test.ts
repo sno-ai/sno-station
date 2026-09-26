@@ -59,12 +59,8 @@ function clientRequest(value: Record<string, unknown>): ClientRequest {
 	return value as ClientRequest;
 }
 
-function memoryExtractRequest(prompt: string, callLabel: string): ClientRequest {
-	return {
-		prompt,
-		callLabel,
-		adapterSlot: "memory-extract",
-	};
+function memoryExtractRequest(prompt: string, callId: ClientRequest["callId"] = "E1"): ClientRequest {
+	return { prompt, callId };
 }
 
 describe("mem-claw llm-client", () => {
@@ -77,7 +73,7 @@ describe("mem-claw llm-client", () => {
 			return okChat(reply);
 		};
 		const client = createLlmClient({ apiKey: "test-key", preset: "mem_claw/sno_ai_extract", baseURL: "https://llm.example.test/v1" });
-		const request = { ...memoryExtractRequest("Return JSON", "memory-extract-episodic"),
+		const request = { ...memoryExtractRequest("Return JSON"),
 			accept: (value: unknown) => typeof value === "object" && value !== null && "status" in value && value.status === "accepted" };
 		for (const content of ['{"status":"rejected"}', '{"status":"rejected",}']) {
 			reply = content;
@@ -92,13 +88,9 @@ describe("mem-claw llm-client", () => {
 		globalThis.fetch = originalFetch;
 	});
 
-	it.each([
-		"memory-extract-episodic",
-		"memory-extract-fallback-projection-gate",
-		"memory-extract-profile-gate",
-	])(
-		"leaves Qwen sampling unset for %s so the Sno GPU wrapper owns mode defaults",
-		async (callLabel) => {
+	it.each(["E1", "E2", "E6"] as const)(
+		"leaves Qwen sampling unset for call %s so the Sno GPU wrapper owns mode defaults",
+		async (callId) => {
 		let providerBody: Record<string, unknown> | null = null;
 		globalThis.fetch = (async (input, init) => {
 			if (String(input) === SNO_STATION_MEM_RELEASE_ANCHOR_URL) {
@@ -118,7 +110,7 @@ describe("mem-claw llm-client", () => {
 		});
 
 		await client.completeJson<{ status: string }>(
-			memoryExtractRequest("Return JSON", callLabel),
+			memoryExtractRequest("Return JSON", callId),
 		);
 
 		expect(providerBody).not.toBeNull();
@@ -136,7 +128,7 @@ describe("mem-claw llm-client", () => {
 		},
 	);
 
-	it("rejects missing callLabel or adapterSlot before provider dispatch", async () => {
+	it("rejects a missing call id before provider dispatch", async () => {
 		let fetchCallCount = 0;
 		globalThis.fetch = (async () => {
 			fetchCallCount++;
@@ -153,23 +145,14 @@ describe("mem-claw llm-client", () => {
 			client.completeJson<{ status: string }>(
 				clientRequest({
 					prompt: "Return JSON",
-					adapterSlot: "memory-extract",
 				}),
 			),
-		).rejects.toThrow(/callLabel/);
-		await expect(
-			client.completeJson<{ status: string }>(
-				clientRequest({
-					prompt: "Return JSON",
-					callLabel: "memory-extract-episodic",
-				}),
-			),
-		).rejects.toThrow(/adapterSlot/);
+		).rejects.toThrow(/callId is required/);
 
 		expect(fetchCallCount).toBe(0);
 	});
 
-	it("rejects unknown adapter slots before provider dispatch", async () => {
+	it("rejects unknown call ids before provider dispatch", async () => {
 		let fetchCallCount = 0;
 		globalThis.fetch = (async () => {
 			fetchCallCount++;
@@ -186,11 +169,10 @@ describe("mem-claw llm-client", () => {
 			client.completeJson<{ status: string }>(
 				clientRequest({
 					prompt: "Return JSON",
-					callLabel: "custom",
-					adapterSlot: "my-custom-slot",
+					callId: "E99",
 				}),
 			),
-		).rejects.toThrow(/adapterSlot/);
+		).rejects.toThrow(/Unknown model call id E99/);
 
 		expect(fetchCallCount).toBe(0);
 	});
@@ -214,13 +196,13 @@ describe("mem-claw llm-client", () => {
 		});
 
 		await client.completeJson<{ status: string }>({
-			...memoryExtractRequest("Return JSON", "memory-extract-episodic"),
+			...memoryExtractRequest("Return JSON"),
 			requestId: "dingo-client-correlation-1",
 		});
 		expect(requestId).toBe("dingo-client-correlation-1");
 		await expect(
 			client.completeJson({
-				...memoryExtractRequest("Return JSON", "memory-extract-episodic"),
+				...memoryExtractRequest("Return JSON"),
 				requestId: "contains user text",
 			}),
 		).rejects.toThrow(/content-free correlation token/);
@@ -259,8 +241,7 @@ describe("mem-claw llm-client", () => {
 		await expect(
 			client.completeJson<{ status: string }>(clientRequest({
 				prompt: "Return JSON",
-				callLabel: "memory-extract-episodic",
-				adapterSlot: "memory-extract",
+				callId: "E1",
 				timeoutMs: 5_000,
 				signal: controller.signal,
 			})),
@@ -296,8 +277,7 @@ describe("mem-claw llm-client", () => {
 		const update = client.completeJson<{ status: string }>(
 			clientRequest({
 				prompt: "Return JSON",
-				callLabel: "memory-extract-episodic",
-				adapterSlot: "memory-extract",
+				callId: "E1",
 				timeoutMs: 5_000,
 				signal: controller.signal,
 			}),
@@ -353,8 +333,7 @@ describe("mem-claw llm-client", () => {
 		await expect(
 			client.completeJson<{ status: string }>(clientRequest({
 				prompt: "Return JSON",
-				callLabel: "memory-extract-episodic",
-				adapterSlot: "memory-extract",
+				callId: "E1",
 				timeoutMs: 25,
 			})),
 		).rejects.toMatchObject({ category: "timeout" });
@@ -389,7 +368,7 @@ describe("mem-claw llm-client", () => {
 
 			await expect(
 				client.completeJson<{ status: string }>(
-					memoryExtractRequest("Return JSON", "memory-extract-episodic"),
+					memoryExtractRequest("Return JSON"),
 				),
 			).rejects.toMatchObject({ category: "auth" });
 			expect(providerFetchCount).toBe(1);
@@ -417,8 +396,7 @@ describe("mem-claw llm-client", () => {
 			client.completeJson<{ status: string }>(
 				clientRequest({
 					prompt: "Return JSON",
-					callLabel: "memory-extract-episodic",
-					adapterSlot: "memory-extract",
+					callId: "E1",
 				}),
 			),
 		).resolves.toEqual({ status: "ok" });
@@ -458,11 +436,11 @@ describe("mem-claw llm-client", () => {
 		const first = await client.completeJson<{
 			status: string;
 			attempt: number;
-		}>(memoryExtractRequest("Return JSON", "memory-extract-episodic"));
+		}>(memoryExtractRequest("Return JSON"));
 		const second = await client.completeJson<{
 			status: string;
 			attempt: number;
-		}>(memoryExtractRequest("Return JSON", "memory-extract-episodic"));
+		}>(memoryExtractRequest("Return JSON"));
 
 		expect(first).toBeNull();
 		expect(second).toEqual({ status: "ok", attempt: 2 });
@@ -497,7 +475,7 @@ describe("mem-claw llm-client", () => {
 		const result = await client.completeJson<{
 			status: string;
 			attempt: number;
-		}>(memoryExtractRequest("Return JSON", "memory-extract-episodic"));
+		}>(memoryExtractRequest("Return JSON"));
 
 		expect(result).toEqual({ status: "ok", attempt: 3 });
 		expect(authorizationHeaders).toEqual([
@@ -530,7 +508,7 @@ describe("mem-claw llm-client", () => {
 		});
 
 		const result = await client.completeJson<{ status: string }>(
-			memoryExtractRequest("Return JSON", "memory-extract-episodic"),
+			memoryExtractRequest("Return JSON"),
 		);
 
 		expect(result).toBeNull();
@@ -565,7 +543,7 @@ describe("mem-claw llm-client", () => {
 
 		await expect(
 			client.completeJson<{ status: string }>(
-				memoryExtractRequest("Return JSON", "memory-extract-episodic"),
+				memoryExtractRequest("Return JSON"),
 			),
 		).resolves.toEqual({
 			status: "ok",
@@ -596,9 +574,9 @@ describe("mem-claw llm-client", () => {
 			baseURL: "https://llm.example.test/v1",
 		});
 
-		for (const callLabel of ["memory-extract-episodic", "memory-extract-episodic"]) {
+		for (const callId of ["E1", "E1"] as const) {
 			await expect(
-				client.completeJson<{ status: string }>(memoryExtractRequest("Return JSON", callLabel)),
+				client.completeJson<{ status: string }>(memoryExtractRequest("Return JSON", callId)),
 			).resolves.toEqual({ status: "ok" });
 		}
 
@@ -633,7 +611,7 @@ describe("mem-claw llm-client", () => {
 				preset: "mem_claw/openai_gpt_5_nano",
 			});
 			await defaultClient.completeJson<{ status: string }>(
-				memoryExtractRequest("Return JSON", "memory-extract-episodic"),
+				memoryExtractRequest("Return JSON"),
 			);
 
 			const customClient = createLlmClient({
@@ -642,7 +620,7 @@ describe("mem-claw llm-client", () => {
 				baseURL: "http://127.0.0.1:43210/v1",
 			});
 			await customClient.completeJson<{ status: string }>(
-				memoryExtractRequest("Return JSON", "memory-extract-episodic"),
+				memoryExtractRequest("Return JSON"),
 			);
 		} finally {
 			if (originalHeliconeApiKey === undefined) {
@@ -685,7 +663,7 @@ describe("mem-claw llm-client", () => {
 
 		await expect(
 			client.completeJson<{ status: string }>(
-				memoryExtractRequest("Return JSON", "memory-extract-episodic"),
+				memoryExtractRequest("Return JSON"),
 			),
 		).resolves.toBeNull();
 		expect(client.getLastError()).toMatch(/api\.openai\.com.*forbidden|forbidden.*api\.openai\.com/i);
@@ -720,7 +698,7 @@ describe("mem-claw llm-client", () => {
 				preset: "mem_claw/sno_ai_extract",
 			});
 			await defaultClient.completeJson<{ status: string }>(
-				memoryExtractRequest("Return JSON", "memory-extract-episodic"),
+				memoryExtractRequest("Return JSON"),
 			);
 
 			const overrideClient = createLlmClient({
@@ -729,7 +707,7 @@ describe("mem-claw llm-client", () => {
 				apiKey: "override-key",
 			});
 			await overrideClient.completeJson<{ status: string }>(
-				memoryExtractRequest("Return JSON", "memory-extract-episodic"),
+				memoryExtractRequest("Return JSON"),
 			);
 		} finally {
 			if (originalGpuBaseUrl === undefined) delete process.env.GPU_BASE_URL;

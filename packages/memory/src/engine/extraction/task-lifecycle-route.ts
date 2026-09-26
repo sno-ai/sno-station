@@ -19,6 +19,7 @@ import {
 import {
 	buildTaskLifecycleCandidateSet,
 	findUniqueActiveTaskByDescription,
+	acceptsTaskLifecycleJudgment,
 	resolveTaskLifecycle,
 	taskLifecycleCandidateSetVersion,
 	type TaskLifecycleInstanceSnapshot,
@@ -26,7 +27,7 @@ import {
 	type TaskLifecycleResolution,
 } from "./task-lifecycle-resolver";
 import { TASK_LIFECYCLE_JUDGMENT_SKILL } from "./task-lifecycle-judgment-skill";
-import { type LlmClient, LlmClientTerminalError } from "../../model/llm-client";
+import type { LlmClient } from "../../model/llm-client";
 import {
 	type MutationAttemptCompletion,
 	runWithMutationAttempt,
@@ -160,16 +161,10 @@ interface TaskLifecycleModelVerdict {
 	taskId: string | null;
 }
 
-function isTerminalTaskLifecycleLlmError(error: unknown): error is LlmClientTerminalError {
-	return (
-		error instanceof LlmClientTerminalError &&
-		((error.category === "cancelled" && !error.requestTimedOut) || error.category === "auth")
-	);
-}
-
 async function requestTaskLifecycleJson(input: {
 	prompt: string;
 	llm: LlmClient;
+	accept: (value: unknown) => boolean;
 	timeoutMs?: number;
 	signal?: AbortSignal;
 }): Promise<unknown> {
@@ -177,13 +172,12 @@ async function requestTaskLifecycleJson(input: {
 	// Mode routing table: [IMP]-single-settings-file/settings-inventory.md
 	return input.llm.completeJson<unknown>({
 		prompt: input.prompt,
-		callLabel: "profile-active-task-classify",
-		adapterSlot: "profile-merge",
+		callId: "T1",
 		...(input.timeoutMs === undefined ? {} : { timeoutMs: input.timeoutMs }),
 		...(input.signal === undefined ? {} : { signal: input.signal }),
 		// Walk every candidate against this reply's own shape; without it the first valid object
 		// wins and the correct payload behind it is never seen.
-		accept: (value) => taskLifecycleModelVerdictSchema.safeParse(value).success,
+		accept: input.accept,
 	});
 }
 
@@ -204,6 +198,7 @@ async function requestModelJudgment(input: {
 	try {
 		value = await requestTaskLifecycleJson({
 			llm: input.llm,
+			accept: (value) => taskLifecycleModelVerdictSchema.safeParse(value).success,
 			prompt: [
 				TASK_LIFECYCLE_JUDGMENT_SKILL.activeTaskState,
 				'Return exactly one JSON object: {"action":"open_or_refine|complete|remove|none","taskId":"presented-id-or-null"}.',
@@ -218,7 +213,6 @@ async function requestModelJudgment(input: {
 			...(input.signal === undefined ? {} : { signal: input.signal }),
 		});
 	} catch (error) {
-		if (isTerminalTaskLifecycleLlmError(error)) throw error;
 		throw new TaskLifecycleJudgmentUnavailableError(
 			`task lifecycle judgment failed: ${error instanceof Error ? error.message : String(error)}`,
 		);
@@ -309,14 +303,21 @@ async function routeTaskLifecycleCandidateOnce(
 	let conflictRetries = 0;
 	for (let attempt = 0; attempt < 3; attempt += 1) {
 		const judgedCandidateSetVersion = taskLifecycleCandidateSetVersion(candidates);
-		const verdict = await requestModelJudgment({
-			candidateText,
-			allowedActions,
-			candidates,
-			...(input.llm === undefined ? {} : { llm: input.llm }),
-			...(input.timeoutMs === undefined ? {} : { timeoutMs: input.timeoutMs }),
-			...(input.signal === undefined ? {} : { signal: input.signal }),
-		});
+		let verdict: TaskLifecycleModelVerdict;
+		let modelUnavailable = false;
+		try {
+			verdict = await requestModelJudgment({
+				candidateText,
+				allowedActions,
+				candidates,
+				...(input.llm === undefined ? {} : { llm: input.llm }),
+				...(input.timeoutMs === undefined ? {} : { timeoutMs: input.timeoutMs }),
+				...(input.signal === undefined ? {} : { signal: input.signal }),
+			});
+		} catch {
+			modelUnavailable = true;
+			verdict = { action: input.confirmedTaskCandidate ? "open_or_refine" : "none", taskId: null };
+		}
 
 		const currentInstances = readCurrentOpenTaskInstances(input.store, input.projectId);
 		const currentCandidates = buildTaskLifecycleCandidateSet(provisional, currentInstances);
@@ -379,10 +380,10 @@ async function routeTaskLifecycleCandidateOnce(
 				sessionTime: input.sessionTime,
 				firstResolutionNowMs: input.firstResolutionNowMs,
 				store: input.store,
-				...(input.llm === undefined ? {} : { llm: input.llm }),
+				...(modelUnavailable || input.llm === undefined ? {} : { llm: input.llm }),
 				...(input.timeoutMs === undefined ? {} : { timeoutMs: input.timeoutMs }),
 				...(input.signal === undefined ? {} : { signal: input.signal }),
-				precomputedJudgment,
+				...(modelUnavailable ? {} : { precomputedJudgment }),
 				precomputedInstances: candidateInstances,
 			});
 			return { status: "routed", result: { ...result, conflictRetries } };
@@ -448,6 +449,7 @@ async function requestJudgment(
 	try {
 		const value = await requestTaskLifecycleJson({
 			llm: input.llm,
+			accept: acceptsTaskLifecycleJudgment,
 			prompt: [
 				TASK_LIFECYCLE_JUDGMENT_SKILL.existingTaskRelation,
 				'Return exactly one JSON object: {"result":"same_instance","activeTaskId":"..."} or {"result":"distinct_instance"} or {"result":"none"} or {"result":"uncertain"}.',
@@ -465,14 +467,8 @@ async function requestJudgment(
 					value,
 					candidateSetVersion: taskLifecycleCandidateSetVersion(candidates),
 				};
-	} catch (error) {
-		if (
-			error instanceof LlmClientTerminalError &&
-			(error.category === "timeout" || error.requestTimedOut)
-		) {
-			return { status: "timeout" };
-		}
-		throw error;
+	} catch {
+		return { status: "absent" };
 	}
 }
 

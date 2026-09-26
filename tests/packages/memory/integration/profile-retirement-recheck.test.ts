@@ -2,10 +2,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import type { Embedder } from "../../../../packages/memory/src/engine/extraction/embedding-provider-client.ts";
 import { parseInsightMetadata } from "../../../../packages/memory/src/engine/extraction/memory-metadata-codec.ts";
 import {
-	PROFILE_RETIREMENT_RECHECK_CALL_LABEL,
 	PROFILE_RETIREMENT_RECHECK_PROMPT_SHA256,
-	PROFILE_SECTION_JUDGMENT_CALL_LABEL,
-	PROFILE_SECTION_TEXT_CALL_LABEL,
 	type RetireByNameRunBudget,
 	runProfileSectionUpdate,
 } from "../../../../packages/memory/src/engine/extraction/profile-section-writer.ts";
@@ -54,13 +51,13 @@ describe("profile retirement recheck", () => {
 		return createTestLlmClient({
 			async completeJson<T>(request: MemoryLlmRequest): Promise<T | null> {
 				seen.push(request);
-				if (request.callLabel === PROFILE_SECTION_JUDGMENT_CALL_LABEL) {
+				if (request.callId === "P4") {
 					return { verdict: "merge", retired_clause_indices: [0, 1] } as T;
 				}
-				if (request.callLabel === PROFILE_RETIREMENT_RECHECK_CALL_LABEL) {
+				if (request.callId === "P3") {
 					return (await recheck(request)) as T;
 				}
-				if (request.callLabel === PROFILE_SECTION_TEXT_CALL_LABEL) {
+				if (request.callId === "P5") {
 					// Malformed on purpose: the row is then written from the judged clause set.
 					return { content: 42 } as T;
 				}
@@ -115,7 +112,7 @@ describe("profile retirement recheck", () => {
 			unchecked: 0,
 		});
 		const rechecks = seen.filter(
-			(request) => request.callLabel === PROFILE_RETIREMENT_RECHECK_CALL_LABEL,
+			(request) => request.callId === "P3",
 		);
 		expect(rechecks).toHaveLength(2);
 		for (const request of rechecks) {
@@ -170,10 +167,10 @@ describe("profile retirement recheck", () => {
 		let recheckPrompt = "";
 		const llm = createTestLlmClient({
 			async completeJson<T>(request: MemoryLlmRequest): Promise<T | null> {
-				if (request.callLabel === PROFILE_SECTION_JUDGMENT_CALL_LABEL) {
+				if (request.callId === "P4") {
 					return { verdict: "merge", retired_clause_indices: [0] } as T;
 				}
-				if (request.callLabel === PROFILE_RETIREMENT_RECHECK_CALL_LABEL) {
+				if (request.callId === "P3") {
 					recheckPrompt = request.prompt;
 					// Answer the DEC-10 question: retire only when a sibling ALREADY STATES the
 					// fact. Read the sibling block alone — the stored clause is elsewhere in the
@@ -183,10 +180,10 @@ describe("profile retirement recheck", () => {
 					);
 					return { retire: siblings.includes("James Stewart") } as T;
 				}
-				if (request.callLabel === "profile-section-lifecycle-retirement") {
+				if (request.callId === "P2") {
 					return { lifecycle_retired_clause_indices: [] } as T;
 				}
-				if (request.callLabel === PROFILE_SECTION_TEXT_CALL_LABEL) {
+				if (request.callId === "P5") {
 					return { content: 42 } as T;
 				}
 				return null;
@@ -221,7 +218,7 @@ describe("profile retirement recheck", () => {
 		const metadata = parseInsightMetadata(row?.metadata, row);
 
 		expect(
-			seen.filter((request) => request.callLabel === PROFILE_RETIREMENT_RECHECK_CALL_LABEL),
+			seen.filter((request) => request.callId === "P3"),
 		).toHaveLength(2);
 		expect(budget.remaining).toBe(0);
 		expect(metadata.l2_content).toBe(COFFEE);
@@ -237,7 +234,7 @@ describe("profile retirement recheck", () => {
 		const metadata = parseInsightMetadata(row?.metadata, row);
 
 		expect(
-			seen.filter((request) => request.callLabel === PROFILE_RETIREMENT_RECHECK_CALL_LABEL),
+			seen.filter((request) => request.callId === "P3"),
 		).toHaveLength(2);
 		expect(budget.remaining).toBe(2);
 		expect(metadata.l2_content).toBe(COFFEE);

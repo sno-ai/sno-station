@@ -338,7 +338,7 @@ describe("ACC-37 production edge: mutation lifecycle", () => {
 				new Set(["/extract/v1/chat/completions"]),
 			);
 			expect(fixture.stderr()).toContain('"event":"llm_provider_response"');
-			expect(fixture.stderr()).toContain('"call_label":"rem-update-relation-judgment"');
+			expect(fixture.stderr()).toContain('"call_id":"REM7"');
 			expect(fixture.stderr()).toContain("REM LLM calls all failed: model_response_invalid");
 			process.stdout.write(
 				"ACC-37 scripted response integration; static data-contract proof: dev-scripts/tests/rem-per-write-degraded-contract.sh; paired real E2E: tests/apps/mem-claw/e2e-agent/rem-write-path-reachable.e2e.sh\n",

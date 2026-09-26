@@ -48,23 +48,6 @@ export interface RemClockPort {
 	now(): string;
 }
 
-export interface RemLlmRequest {
-	prompt: string;
-	signal?: AbortSignal;
-}
-
-export interface RemLlmResponse {
-	text: string;
-	usage?: {
-		inputTokens: number;
-		outputTokens: number;
-	};
-}
-
-export interface RemLlmPort {
-	complete(request: RemLlmRequest): Promise<RemLlmResponse>;
-}
-
 export interface MoveLaneInput {
 	rowId: string;
 	plannedContentHash: string;
@@ -148,7 +131,6 @@ export interface RemPorts {
 	clock: RemClockPort;
 	conflict: RemConflictPort;
 	forget: RemForgetPort;
-	llm: RemLlmPort;
 }
 
 export interface RemEnableGateArtifact {

@@ -1,9 +1,5 @@
 import { describe, expect, it } from "vitest";
 import { shortlistRetireByNameCandidates } from "../../../../packages/memory/src/engine/extraction/retire-by-name.ts";
-import {
-	PROFILE_SECTION_JUDGMENT_BINDINGS,
-	PROFILE_SECTION_JUDGMENT_REGISTRATION_ENABLED,
-} from "../../../../packages/memory/src/engine/extraction/profile-section-writer.ts";
 import type { MemoryEntry } from "../../../../packages/memory/src/engine/shared/types.ts";
 
 function entry(id: string, text: string): MemoryEntry {
@@ -22,11 +18,6 @@ function entry(id: string, text: string): MemoryEntry {
 }
 
 describe("retire-by-name shortlist", () => {
-	it("loads the re-sealed profile judgment registration", () => {
-		expect(PROFILE_SECTION_JUDGMENT_REGISTRATION_ENABLED).toBe(true);
-		expect(PROFILE_SECTION_JUDGMENT_BINDINGS.promptSha256).toMatch(/^[0-9a-f]{64}$/u);
-	});
-
 	it("normalizes overlap by row length, excludes zero overlap, and caps at eight", () => {
 		const retiredPosition = "The user prefers tea in morning meetings";
 		const candidates = [
