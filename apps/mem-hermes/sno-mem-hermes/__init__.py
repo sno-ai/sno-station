@@ -76,6 +76,8 @@ class PluginRuntime:
         self._thread: threading.Thread | None = None
         self._providers: dict[str, SnoMemoryProvider] = {}
         self._ended: dict[str, tuple[SidecarClient, str, list[dict[str, object]]]] = {}
+        # The last shut-down session's messages: gateway /new fires on_session_reset after shutdown.
+        self._shut_down: tuple[str, tuple[SidecarClient, str, list[dict[str, object]]]] | None = None
 
     def activate(self, ctx: RegistrationContext) -> None:
         self._llm = ctx.llm
@@ -139,6 +141,20 @@ class PluginRuntime:
         with self._state_lock:
             return self._ended.pop(session_id, None)
 
+    def keep_shut_down(
+        self, session_id: str, ended: tuple[SidecarClient, str, list[dict[str, object]]],
+    ) -> None:
+        with self._state_lock:
+            self._shut_down = (session_id, ended)
+
+    def take_shut_down(self, session_id: str) -> tuple[SidecarClient, str, list[dict[str, object]]] | None:
+        with self._state_lock:
+            if self._shut_down is None or self._shut_down[0] != session_id:
+                return None
+            ended = self._shut_down[1]
+            self._shut_down = None
+            return ended
+
     def startup_brief(self, session_id: str) -> str:
         with self._state_lock:
             provider = self._providers.get(session_id)
@@ -194,6 +210,7 @@ class PluginRuntime:
         with self._state_lock:
             self._providers.clear()
             self._ended.clear()
+            self._shut_down = None
         if server is not None:
             server.shutdown()
             server.server_close()
@@ -699,7 +716,9 @@ class SnoMemoryProvider(MemoryProvider):
             _RUNTIME.invalidate()
 
     def shutdown(self) -> None:
-        self._end_session(self._session_id)
+        ended = self._end_session(self._session_id)
+        if ended is not None:
+            _RUNTIME.keep_shut_down(self._session_id, ended)
         _RUNTIME.unbind_provider(self)
         self._client = None
 
@@ -722,9 +741,11 @@ class SnoMemoryProvider(MemoryProvider):
                 and message.get("role") in ("system", "developer", "user", "assistant", "tool")
             ])
 
-    def _end_session(self, session_id: str, boundary: str | None = None) -> None:
+    def _end_session(
+        self, session_id: str, boundary: str | None = None,
+    ) -> tuple[SidecarClient, str, list[dict[str, object]]] | None:
         if not session_id or self._client is None:
-            return
+            return None
         ended = _RUNTIME.take_ended(session_id)
         messages = ended[2] if ended else []
         scope = self._scope(session_id)
@@ -738,6 +759,7 @@ class SnoMemoryProvider(MemoryProvider):
             )
         except (OSError, RuntimeError, ValueError) as error:
             _LOG.error("session end not reported", extra={"error": str(error)})
+        return ended
 
     def _capture(
         self, normalized: list[dict[str, str]], session_id: str
@@ -1168,7 +1190,7 @@ def _on_session_reset(**kwargs: object) -> None:
     old_session_id = kwargs.get("old_session_id")
     if not isinstance(old_session_id, str):
         return
-    ended = _RUNTIME.take_ended(old_session_id)
+    ended = _RUNTIME.take_ended(old_session_id) or _RUNTIME.take_shut_down(old_session_id)
     if ended is None:
         return
     client, project, messages = ended
