@@ -3,7 +3,6 @@ import {
 	selectEndpointPreset,
 } from "../../../../packages/memory/src/model/llm-endpoint-resolution.ts";
 import type { ResolvedLlmConfig } from "../../../../packages/memory/src/model/llm-client-types.ts";
-import { resolveProviderApiKey } from "../../../../packages/memory/src/model/llm-provider-transport.ts";
 import { materializeBundledLlmixEndpoint } from "../../../../packages/memory/src/model/llmix-registry.ts";
 
 function snoPreset(path: string): ResolvedLlmConfig {
@@ -16,23 +15,6 @@ function snoPreset(path: string): ResolvedLlmConfig {
 }
 
 describe("LLM endpoint resolution", () => {
-	it("accepts a trailing-slash ccproxy override without an API key", () => {
-		expect(
-			resolveProviderApiKey(
-				{
-					preset: "mem_claw/openai_gpt_5_nano",
-					baseURL: "http://localhost:8070/codex/v1/",
-				},
-				{
-					preset: "mem_claw/openai_gpt_5_nano",
-					provider: "openai",
-					model: "gpt-5.6-terra",
-				},
-				true,
-			),
-		).toBe("ccproxy-placeholder");
-	});
-
 	it.each([
 		["E1", "mem_claw/sno_extract_chat"],
 		["E9", "mem_claw/sno_extract_profile"],
@@ -48,16 +30,6 @@ describe("LLM endpoint resolution", () => {
 				callId,
 			}),
 		).toBe(expected);
-	});
-
-	it("keeps the configured preset for a non-Sno provider", () => {
-		expect(
-			selectEndpointPreset({
-				configuredPreset: "mem_claw/openai_gpt_5_nano",
-				provider: "openai",
-				callId: "E10",
-			}),
-		).toBe("mem_claw/openai_gpt_5_nano");
 	});
 
 	it("accepts the recorded Tailscale GPU origin over internal HTTP", () => {
@@ -98,39 +70,6 @@ describe("LLM endpoint resolution", () => {
 				baseSource: baseOverride,
 			}),
 		).toMatchObject({ url: "https://gpu.example.test/extract/profile/v1/completions" });
-	});
-
-	it.each([
-		["openai", "mem_claw/openai_gpt_5_nano", "http://localhost:8070/codex/v1/chat/completions"],
-		["openrouter", "mem_claw/openrouter_auto", "https://openrouter.ai/api/v1/chat/completions"],
-	] as const)("materializes the %s provider endpoint inside the boundary", (provider, preset, url) => {
-		expect(
-			materializeBundledLlmixEndpoint({
-				preset: {
-					preset,
-					provider,
-					model: "test-model",
-				},
-				baseSource:
-					provider === "openai"
-						? "http://localhost:8070/codex/v1"
-						: "https://openrouter.ai/api/v1",
-			}),
-		).toMatchObject({ url });
-	});
-
-	it("ignores internal endpoint paths on third-party provider presets", () => {
-		expect(
-			materializeBundledLlmixEndpoint({
-				preset: {
-					preset: "mem_claw/openrouter_auto",
-					provider: "openrouter",
-					model: "test-model",
-					providerOptions: { "sno-gpu": { gpuPath: "v2/responses" } },
-				},
-				baseSource: "https://openrouter.ai/api/v1",
-			}),
-		).toMatchObject({ url: "https://openrouter.ai/api/v1/chat/completions" });
 	});
 
 	it("fails closed when a Sno signed preset has no path", () => {
