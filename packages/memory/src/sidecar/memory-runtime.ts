@@ -34,7 +34,6 @@ import { withProviderResponses } from "../model/llm-provider-transport";
 import type { ProviderResponseTrace } from "../model/llm-client-types";
 import { MEMORY_USAGE_FLUSH_INTERVAL_MS } from "./config";
 import { SNO_OBSERVE_FLUSH_TIMEOUT_MS } from "../../config/index";
-import { clearRegisteredRemTicks, setRegisteredRemTick } from "./rem-trigger";
 import { createCodingSkinRegistration } from "../../config/coding-skin";
 import { isObserveAgentId } from "../../config/plugin-config-observe-schema";
 import { installationSettingsSchema, type InstallationSettings } from "../../config/installation-settings";
@@ -174,12 +173,12 @@ export class MemoryRuntimePool {
 			this.skins.delete(registration.skinId);
 			this.skins.set(registration.skinId, entry);
 			if (previous) { previous.retired = true; if (previous.active === 0) await this.dispose(previous); }
-			setRegisteredRemTick(registration.skinId, config.remEnhanced.trigger?.tick);
-			if (registration.model) void evaluateRemAutomaticTriggers({
+			// An unreadable installation file skips this REM check and never fails the registration.
+			if (registration.model) void Promise.resolve().then(() => evaluateRemAutomaticTriggers({
 				database: this.store.sqlite, stateDir: this.stateDir,
 				...readRemAutomaticOperations(), mode: this.config.mode,
 				hasConnectedHost: () => this.connectedRemPort() !== undefined,
-			}).catch(error => engineLogger.error(String(error)));
+			})).catch(error => engineLogger.error(String(error)));
 			return result;
 		} catch (error) { await this.dispose(entry); throw error; }
 	}
@@ -214,8 +213,8 @@ export class MemoryRuntimePool {
 			// A coding-skin hook can arrive before its worker's init; register it as that skin, never as the default.
 			if (this.installed && isObserveAgentId(skinId)) await this.register(input.scope, createCodingSkinRegistration({ skinId, installed: this.installed }));
 			else {
-				const { mode, remEnhanced, agentNative, language, ...settings } = this.config;
-				await this.register(input.scope, { skinId, settings, routing: { mode, remEnhanced, agentNative, language: language ?? DEFAULT_LOCALE } });
+				const { mode, language, remEnhanced: _remEnhanced, ...settings } = this.config;
+				await this.register(input.scope, { skinId, settings, routing: { mode, language: language ?? DEFAULT_LOCALE } });
 			}
 			entry = this.skins.get(skinId);
 		}
@@ -360,7 +359,6 @@ export class MemoryRuntimePool {
 
 	async close(): Promise<void> {
 		this.stopTimers();
-		clearRegisteredRemTicks();
 		for (const entry of this.owned) await this.dispose(entry);
 		this.skins.clear();
 		await this.usageFlush;
