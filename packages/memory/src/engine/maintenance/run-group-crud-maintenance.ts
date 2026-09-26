@@ -5,6 +5,7 @@ import { FIXED_MEMORY_SNO_EXTRACT_CHAT, FIXED_MEMORY_SNO_EXTRACT_PROFILE, FIXED_
  */
 
 import { pathToFileURL } from "node:url";
+import { createLogger } from "@snoai/utils/logger";
 import { createAtomicGenericExtractionTransport } from "../extraction/atomic-generic-extractor";
 import { createBProfileKeyingTransport } from "../extraction/atomic-profile-keying";
 import { createEmbedder, type Embedder } from "../extraction/embedding-provider-client";
@@ -41,21 +42,31 @@ async function main(): Promise<void> {
 		);
 		embedder = createEmbedder(pluginConfig.embedding, getSnoStationMemStateDir());
 		const routing = pickLlmRoutingConfig(pluginConfig);
-		const chatClient = ["E8", "E12"].some(id => MODEL_CALLS[id as "E8" | "E12"].destinations[pluginConfig.mode] !== "off") ? createLlmClient({
+		// This command runs outside the memory service, so no plugin's host model is reachable from it:
+		// a call runs here only when the table sends it to the Sno GPU; a host call is skipped like `off`.
+		const runs = (id: "E8" | "E9" | "E12"): boolean => MODEL_CALLS[id].destinations[pluginConfig.mode] === "sno-gpu";
+		const skipped = (["E8", "E9", "E12"] as const).filter(id => MODEL_CALLS[id].destinations[pluginConfig.mode] === "host");
+		if (skipped.length > 0) {
+			createLogger("sno-station-mem:group-crud-maintenance").warn("Host model calls skipped: no host is reachable from this command", { mode: pluginConfig.mode, call_ids: skipped }, {
+				event_name: "memory.group_crud.host_calls_skipped", file: "packages/memory/src/engine/maintenance/run-group-crud-maintenance.ts",
+				function: "main", site_id: "memory.group_crud.host_calls_skipped",
+			});
+		}
+		const chatClient = runs("E8") || runs("E12") ? createLlmClient({
 			preset: FIXED_MEMORY_SNO_EXTRACT_CHAT,
 			timeoutMs: 60_000,
 			routing,
 		}) : undefined;
-		const profileClient = MODEL_CALLS.E9.destinations[pluginConfig.mode] !== "off" ? createLlmClient({
+		const profileClient = runs("E9") ? createLlmClient({
 			preset: FIXED_MEMORY_SNO_EXTRACT_PROFILE,
 			timeoutMs: 60_000,
 			routing,
 		}) : undefined;
 		const ports = {
-			...(chatClient && MODEL_CALLS.E8.destinations[pluginConfig.mode] !== "off" ? { identityJudgement: createModelGroupCrudEntityIdentityJudgementPort(
+			...(chatClient && runs("E8") ? { identityJudgement: createModelGroupCrudEntityIdentityJudgementPort(
 				createAtomicGenericExtractionTransport(chatClient),
 			) } : {}),
-			...(chatClient && MODEL_CALLS.E12.destinations[pluginConfig.mode] !== "off" ? { stateKeying: createModelGroupCrudStateKeyingJudgementPort(chatClient) } : {}),
+			...(chatClient && runs("E12") ? { stateKeying: createModelGroupCrudStateKeyingJudgementPort(chatClient) } : {}),
 			...(profileClient ? { profileKeying: createBProfileKeyingTransport(profileClient) } : {}),
 		};
 		console.log(
