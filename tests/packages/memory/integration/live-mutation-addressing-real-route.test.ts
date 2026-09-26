@@ -39,8 +39,7 @@ describe("live mutation canonical addressing", () => {
 						`Return exactly {"sectionName":${JSON.stringify(MODEL_ALIAS)}}.`,
 						"Do not normalize, explain, or add fields.",
 					].join("\n"),
-					callLabel: "memory-extract-profile",
-					adapterSlot: "memory-extract",
+					callId: "E9",
 					requestId: `dingo-j-e6f0b9e9-address-extraction-${REPEAT}`,
 				}));
 				expect(modelAddress).toEqual({ sectionName: MODEL_ALIAS });

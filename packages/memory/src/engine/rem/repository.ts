@@ -200,6 +200,7 @@ export interface RemRepository {
 				rightRowId: string;
 		  }
 		| undefined;
+	releasePairClaim(input: { generationId: string; pairId: string; invocationId: string }): void;
 	completePair(input: {
 		generationId: string;
 		pairId: string;
@@ -273,6 +274,7 @@ export function createRemRepository(database: RemDatabaseLike): RemRepository {
 		listVerdictPairs: (generationId) => listVerdictPairs(database, generationId),
 		readClosedVerdictPairIds: (pairIds) => readClosedVerdictPairIds(database, pairIds),
 		claimNextPair: (input) => claimNextPair(database, input),
+		releasePairClaim: (input) => releasePairClaim(database, input),
 		completePair: (input) => completePair(database, input),
 		refusePair: (input) => refusePair(database, input),
 		reserveLlmBudget: (input) => reserveLlmBudget(database, input),
@@ -823,6 +825,23 @@ function completePair(
 				.run(input.generationId, input.pairId, input.invocationId),
 		);
 		if (lifecycle.changes !== 1) throw new Error("pair claim has inconsistent durable state");
+	}).immediate();
+}
+
+function releasePairClaim(database: RemDatabaseLike,
+	input: { generationId: string; pairId: string; invocationId: string }): void {
+	database.transaction(() => {
+		const released = asRunResult(database.prepare(
+			`DELETE FROM nodix_rem_pair_claims WHERE generation_id = ? AND pair_id = ?
+				AND claim_token = ? AND state = 'active'`,
+		).run(input.generationId, input.pairId, input.invocationId));
+		if (released.changes !== 1) throw new Error("pair claim is not owned by invocation");
+		const pair = asRunResult(database.prepare(
+			`UPDATE nodix_rem_scan_pairs SET claim_state = 'unvisited', invocation_id = NULL,
+				claimed_at = NULL, attempt_count = MAX(0, attempt_count - 1)
+			WHERE generation_id = ? AND pair_id = ? AND claim_state = 'claimed' AND invocation_id = ?`,
+		).run(input.generationId, input.pairId, input.invocationId));
+		if (pair.changes !== 1) throw new Error("pair claim has inconsistent durable state");
 	}).immediate();
 }
 

@@ -2,7 +2,8 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir, hostname } from "node:os";
 import { join } from "node:path";
 import { afterEach, expect, it, vi } from "vitest";
-import { runAtomicGenericExtractionPass, createSignedAtomicGenericExtractionTransport, type AtomicGenericExtractionInput } from "../../../../packages/memory/src/engine/extraction/atomic-generic-extractor";
+import { runAtomicGenericExtractionPass, createAtomicGenericExtractionTransport, type AtomicGenericExtractionInput } from "../../../../packages/memory/src/engine/extraction/atomic-generic-extractor";
+import { createLlmClient } from "../../../../packages/memory/src/model/llm-client";
 import { flushAuditWrites } from "../../../../packages/memory/src/engine/operations/runtime-audit-log";
 import { parseAtomicCaptureReply } from "../../../../packages/memory/src/engine/extraction/atomic-extraction-reply";
 
@@ -157,9 +158,9 @@ it("forwards both budgets through the signed client into the HTTP body without a
 		budgets.push(body.max_tokens ?? body.max_completion_tokens);
 		return new Response(JSON.stringify({ choices: [{ message: { content: "{}" }, finish_reason: "stop" }], usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 } }));
 	});
-	const transport = createSignedAtomicGenericExtractionTransport({ apiKey: "test-key", baseURL: "https://llm.example.test/v1" });
-	await transport.complete({ prompt: "test", maxTokens: 4096 });
-	await transport.complete({ prompt: "test", maxTokens: 8192 });
+	const transport = createAtomicGenericExtractionTransport(createLlmClient({ preset: "mem_claw/sno_extract_chat", apiKey: "test-key", baseURL: "https://llm.example.test/v1" }));
+	await transport.complete({ callId: "E1", prompt: "test", maxTokens: 4096 });
+	await transport.complete({ callId: "E1", prompt: "test", maxTokens: 8192 });
 	console.info("local signed transport probe", { host: hostname(), budgets });
 	expect(budgets).toEqual([4096, 8192]);
 });

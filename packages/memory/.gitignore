@@ -8,6 +8,9 @@ sqlite-extensions/*
 !sqlite-extensions/linux-x64/
 sqlite-extensions/linux-x64/*
 !sqlite-extensions/linux-x64/vec0.so
+!sqlite-extensions/linux-arm64/
+sqlite-extensions/linux-arm64/*
+!sqlite-extensions/linux-arm64/vec0.so
 
 # Bundler-probe scratch dir — written + cleaned by the i18n integration test
 # (tests/apps/mem-claw/integration/i18n-bundler-probe.test.ts).

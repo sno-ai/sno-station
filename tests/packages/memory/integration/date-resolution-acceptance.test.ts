@@ -35,13 +35,10 @@ function routing(locale: Locale = "en", mode: LlmRoutingConfig["mode"] = "rem-en
 		remEnhanced: {
 			occasions: {
 				memoryExtract: "snoRemMem",
-				dedupDecision: "agent",
 				profileSectionMerge: "agent",
 				profileActiveTaskClassify: "agent",
-				profileActiveTaskMatch: "agent",
 				conflictAdjudication: "snoRemMem",
 				summaryBuild: "agent",
-				intentClassifier: "agent",
 				dateResolution: "agent",
 			},
 		},
@@ -127,7 +124,7 @@ describe("date-resolution semantic contract", () => {
 		const timeInstructions: CalendarInstruction[] = [];
 	const llm = observeTimeInstructions(createLlmClient({ preset: "mem_claw/sno_extract_chat", apiKey, timeoutMs: 90_000 }), timeInstructions);
 		const config = await llm.getResolvedConfig();
-		const endpoint = await resolveLlmEndpoint({ configuredPreset: "mem_claw/sno_extract_chat", occasion: "dateResolution", transport: "chat-completions" });
+		const endpoint = await resolveLlmEndpoint({ configuredPreset: "mem_claw/sno_extract_chat", callId: "E11", transport: "chat-completions" });
 		const result = await resolveMemoryDate({ text: "I've known these friends for 4 years, since I moved from my home country.", expression: "for 4 years", sessionDateTime: "2023-06-09T19:55:00Z", sessionTimezone: "UTC", llm });
 		process.stdout.write(JSON.stringify({ host: hostname(), model: config.model, endpoint: endpoint.url, result, timeInstructions }) + "\n");
 		expect(result.stage.modelCalled).toBe(true);
@@ -180,7 +177,7 @@ it("gets a real unresolved judgment for an undated claim without inventing an ev
 	if (!apiKey) throw new Error("SNO_MEM_CLAW_LLM_INTERNAL_KEY is required");
 	const timeInstructions: CalendarInstruction[] = [];
 	const llm = observeTimeInstructions(createLlmClient({ preset: "mem_claw/sno_extract_chat", apiKey, timeoutMs: 90_000 }), timeInstructions);
-	const endpoint = await resolveLlmEndpoint({ configuredPreset: "mem_claw/sno_extract_chat", occasion: "dateResolution", transport: "chat-completions" });
+	const endpoint = await resolveLlmEndpoint({ configuredPreset: "mem_claw/sno_extract_chat", callId: "E11", transport: "chat-completions" });
 	const text = "I moved from my home country, but I have not said when.";
 	for (let repeat = 0; repeat < 3; repeat += 1) {
 		const result = await resolveMemoryDate({ text, sessionDateTime: "2023-06-09T19:55:00Z", sessionTimezone: "UTC", llm });
@@ -206,7 +203,7 @@ it.each([
 	if (!apiKey) throw new Error("SNO_MEM_CLAW_LLM_INTERNAL_KEY is required");
 	const timeInstructions: CalendarInstruction[] = [];
 	const llm = observeTimeInstructions(createLlmClient({ preset: "mem_claw/sno_extract_chat", apiKey, timeoutMs: 90_000 }), timeInstructions);
-	const endpoint = await resolveLlmEndpoint({ configuredPreset: "mem_claw/sno_extract_chat", occasion: "dateResolution", transport: "chat-completions" });
+	const endpoint = await resolveLlmEndpoint({ configuredPreset: "mem_claw/sno_extract_chat", callId: "E11", transport: "chat-completions" });
 	const result = await resolveMemoryDate({ text, locale, sessionDateTime: "2023-06-09T19:55:00Z", sessionTimezone: "UTC", llm });
 	process.stdout.write(JSON.stringify({ host: hostname(), model: endpoint.preset.model, endpoint: endpoint.url, locale, text, result, timeInstructions }) + "\n");
 	expect(result.stage.modelCalled).toBe(true);
@@ -240,7 +237,7 @@ it("uses a source timezone that differs from the session timezone", async () => 
 	if (!apiKey) throw new Error("SNO_MEM_CLAW_LLM_INTERNAL_KEY is required");
 	const timeInstructions: CalendarInstruction[] = [];
 	const llm = observeTimeInstructions(createLlmClient({ preset: "mem_claw/sno_extract_chat", apiKey, timeoutMs: 90_000 }), timeInstructions);
-	const endpoint = await resolveLlmEndpoint({ configuredPreset: "mem_claw/sno_extract_chat", occasion: "dateResolution", transport: "chat-completions" });
+	const endpoint = await resolveLlmEndpoint({ configuredPreset: "mem_claw/sno_extract_chat", callId: "E11", transport: "chat-completions" });
 	const result = await resolveMemoryDate({ text: "The deployment happened on June 4, 2026 at 15:00 PDT.", sessionDateTime: SESSION_DATE_TIME, sessionTimezone: "Asia/Tokyo", llm });
 	process.stdout.write(JSON.stringify({ host: hostname(), model: endpoint.preset.model, endpoint: endpoint.url, name: "source timezone differs from session", timeInstructions, result }) + "\n");
 	expect(timeInstructions).toEqual([expect.objectContaining({ kind: "absolute", year: 2026, month: 6, day: 4, hour: 15, minute: 0, precision: "minute" })]);

@@ -44,6 +44,8 @@ const RUN_PARAMETERS: AtomicExtractionRunParameters = {
 	subchunkCount: 1,
 };
 
+const GENERIC_TRANSPORT_CALL_IDS = new Set<MemoryLlmRequest["callId"]>(["E1", "E2", "E3", "E7", "E8", "E12"]);
+
 class RecordingAtomicClient implements LlmClient {
 	readonly requests: MemoryLlmRequest[] = [];
 
@@ -56,12 +58,13 @@ class RecordingAtomicClient implements LlmClient {
 
 	async completeText(request: MemoryLlmRequest): Promise<string> {
 		this.requests.push(request);
-		if (request.callLabel === "memory-extract-profile") return '{"profile_candidates":[]}';
-		// The generic transport now drives two lanes under one call label. An enrichment prompt
+		if (request.callId === "E9") return '{"profile_candidates":[]}';
+		// The generic transport carries capture (E1), enrichment (E2), missed-figure (E3), subject
+		// re-ask (E7), same-entity (E8) and state keying (E12) calls. An enrichment prompt
 		// (a `facts:` block) gets an empty enrichment reply; a capture prompt (a transcript, no facts
 		// block) gets an empty capture reply whose decisions cover its user turns; anything else keeps
 		// the legacy records shape. Other transports (resplit, guard, missing-half) are unchanged.
-		if (request.callLabel === "memory-extract-atomic-generic") {
+		if (GENERIC_TRANSPORT_CALL_IDS.has(request.callId)) {
 			if (request.prompt.includes("facts:\n")) return '{"enrichments":[]}';
 			if (request.prompt.includes("<take>")) {
 				const block = request.prompt.split("<take>\n").at(-1)?.split("\n</take>")[0] ?? "[]";
@@ -195,6 +198,7 @@ describe("atomic extraction prompt contract", () => {
 		const record = guardedRecord(turn);
 
 		await createAtomicGenericExtractionTransport(client).complete({
+			callId: "E1",
 			prompt: "generic prompt",
 			maxTokens: 256,
 		});
@@ -211,14 +215,8 @@ describe("atomic extraction prompt contract", () => {
 		});
 		await subjectTransport.guardUserSubjects({ records: [record] });
 
-		expect(new Set(client.requests.map(({ callLabel }) => callLabel))).toEqual(
-			new Set([
-				"memory-extract-atomic-generic",
-				"memory-extract-profile",
-				"memory-extract-atomic-resplit",
-				"memory-extract-atomic-missing-half",
-				"memory-extract-atomic-subject-guard",
-			]),
+		expect(new Set(client.requests.map(({ callId }) => callId))).toEqual(
+			new Set(["E1", "E9", "E4", "E5", "E6"]),
 		);
 		for (const request of client.requests) {
 			expect(request).not.toHaveProperty("temperature", 0);

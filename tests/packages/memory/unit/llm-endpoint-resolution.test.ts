@@ -34,18 +34,30 @@ describe("LLM endpoint resolution", () => {
 	});
 
 	it.each([
-		["memoryExtract", "chat-completions", "mem_claw/sno_extract_chat"],
-		["memoryExtract", "raw-completions", "mem_claw/sno_extract_profile"],
-		["conflictAdjudication", "raw-completions", "mem_claw/sno_conflict_verdict"],
-	] as const)("selects %s %s from the signed preset map", (occasion, transport, expected) => {
+		["E1", "mem_claw/sno_extract_chat"],
+		["E9", "mem_claw/sno_extract_profile"],
+		["E10", "mem_claw/sno_conflict_verdict"],
+		["P1", "mem_claw/sno_conflict_verdict"],
+		["REM1", "mem_claw/sno_conflict_verdict"],
+		["REM2", "mem_claw/sno_extract_chat"],
+	] as const)("selects call %s's signed Sno GPU preset", (callId, expected) => {
 		expect(
 			selectEndpointPreset({
 				configuredPreset: "mem_claw/sno_ai_extract",
 				provider: "sno-gpu",
-				occasion,
-				transport,
+				callId,
 			}),
 		).toBe(expected);
+	});
+
+	it("keeps the configured preset for a non-Sno provider", () => {
+		expect(
+			selectEndpointPreset({
+				configuredPreset: "mem_claw/openai_gpt_5_nano",
+				provider: "openai",
+				callId: "E10",
+			}),
+		).toBe("mem_claw/openai_gpt_5_nano");
 	});
 
 	it("accepts the recorded Tailscale GPU origin over internal HTTP", () => {

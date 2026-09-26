@@ -5,6 +5,7 @@ import { ContractError, type DegradedReason } from "../contract/error";
 import type { Registration } from "../contract/inputs";
 import type { AgentLlmCompletion, AgentLlmPort, AgentLlmRequest } from "./agent-llm-port";
 import { classifyLlmFailure, isTerminalLlmFailure } from "./llm-failure";
+import { createLogger } from "@snoai/utils/logger";
 
 const CALLBACK_TIMEOUT_MS = 120_000;
 const CATEGORIES = ["auth", "credential-expired", "credential-revoked", "exhausted", "throttle", "transport", "unknown"] as const;
@@ -15,23 +16,26 @@ const relayedFailureSchema = z.object({ error: z.discriminatedUnion("kind", [
 
 export class RegisteredAgentPort implements AgentLlmPort {
 	private readonly failures = new AsyncLocalStorage<Map<string, DegradedReason>>();
-	constructor(private readonly model: Registration["model"]) {}
+	constructor(private readonly model: Registration["model"], private readonly onRefused?: () => void) {}
 
-	async run<T>(operation: () => Promise<T>): Promise<T> {
+	async run<T>(operation: () => Promise<T>, failOnRefusal = false): Promise<T> {
 		const failures = new Map<string, DegradedReason>();
 		return this.failures.run(failures, async () => {
+			let result: T;
 			try {
-				const result = await operation();
-				// A completed call only surfaces a refusal the engine cannot degrade past; throttle,
-				// transient transport errors and deadlines were already handled by the llm-client.
-				const failure = failures.values().next().value;
-				if (failure === "no-agent-endpoint") throw new ContractError(failure);
-				return result;
+				result = await operation();
 			} catch (error) {
 				const failure = failures.values().next().value;
 				if (failure) throw new ContractError(failure);
 				throw error;
 			}
+			const failure = failures.values().next().value;
+			if (failOnRefusal && [...failures.values()].includes("no-agent-endpoint")) throw new ContractError("no-agent-endpoint");
+			if (failure) createLogger("sno-station-mem:registered-agent-port").warn("Host model failed after operation completed", { failure }, {
+				event_name: "memory.host.degraded", file: "packages/memory/src/model/registered-agent-port.ts",
+				function: "run", site_id: "memory.host.degraded",
+			});
+			return result;
 		});
 	}
 
@@ -39,11 +43,13 @@ export class RegisteredAgentPort implements AgentLlmPort {
 		const identity = createHash("sha256").update(request.system ?? "").update("\0").update(request.prompt).digest("hex");
 		const failures = this.failures.getStore();
 		if (!this.model) {
+			this.onRefused?.();
 			failures?.set(identity, "no-agent-endpoint");
 			return { kind: "error", category: "transport", message: "no-agent-endpoint" };
 		}
 		const deadline = AbortSignal.timeout(request.timeoutMs ?? CALLBACK_TIMEOUT_MS);
 		const signal = request.signal ? AbortSignal.any([request.signal, deadline]) : deadline;
+		let fetchCompleted = false;
 		try {
 			const url = this.model.baseUrl.endsWith("/chat/completions") ? this.model.baseUrl : `${this.model.baseUrl.replace(/\/$/, "")}/chat/completions`;
 			const response = await fetch(url, {
@@ -55,10 +61,13 @@ export class RegisteredAgentPort implements AgentLlmPort {
 					...(request.enableThinking === undefined ? {} : { chat_template_kwargs: { enable_thinking: request.enableThinking } }),
 				}),
 			});
+			fetchCompleted = true;
 			if (!response.ok) {
 				const relayed = await relayedFailure(response);
 				if (relayed) {
 					failures?.set(identity, relayed.kind === "cancelled" ? "timeout" : isTerminalLlmFailure(relayed.category) ? "no-agent-endpoint" : "engine-failed");
+					// A worker whose host child failed answers a typed 503; keep the status so REM counts it as a refusal.
+					if (relayed.kind === "error" && response.status === 503) return { ...relayed, message: `registered model HTTP 503: ${relayed.message}` };
 					return relayed;
 				}
 				const failure = classifyLlmFailure({ status: response.status });
@@ -75,6 +84,7 @@ export class RegisteredAgentPort implements AgentLlmPort {
 			failures?.delete(identity);
 			return { kind: "ok", text };
 		} catch {
+			if (!signal.aborted && !fetchCompleted) this.onRefused?.();
 			failures?.set(identity, signal.aborted ? "timeout" : "engine-failed");
 			return signal.aborted ? { kind: "cancelled", reason: "deadline" }
 				: { kind: "error", category: "transport", message: "no-agent-endpoint" };

@@ -7,6 +7,7 @@ import { FIXED_MEMORY_OPENAI_GPT_5_NANO, FIXED_MEMORY_OPENROUTER_AUTO, FIXED_MEM
 import type { LLMConfig } from "@snoai/llmix";
 
 import type { AgentLlmPort } from "./agent-llm-port";
+import type { ModelCallId } from "./model-call-table";
 import type { LlmRoutingConfig } from "../../config/plugin-config-mode-schema";
 
 export const LLM_PRESETS = [
@@ -22,23 +23,9 @@ export type LlmPreset = (typeof LLM_PRESETS)[number];
 
 export type LlmProvider = "openai" | "openrouter" | "sno-gpu";
 
-export const MEMORY_LLM_ADAPTER_SLOTS = [
-	"memory-extract",
-	"dedup-decision",
-	"profile-merge",
-	"intent-classifier",
-	"compaction-merge",
-	"conflict-adjudication",
-	"summary-build",
-	"date-resolution",
-] as const;
-
-export type MemoryLlmAdapterSlot = (typeof MEMORY_LLM_ADAPTER_SLOTS)[number];
-
 export type MemoryLlmRequest = {
 	prompt: string;
-	callLabel: string;
-	adapterSlot: MemoryLlmAdapterSlot;
+	callId: ModelCallId;
 	/** Content-free correlation token forwarded as X-Request-ID when present. */
 	requestId?: string;
 	/** Hash of the static prompt asset, never the rendered user prompt. */
@@ -72,8 +59,8 @@ export interface LlmClientConfig {
 	timeoutMs?: number;
 	agentPort?: AgentLlmPort;
 	onTransportAttempt?: (attempt: {
-		adapterSlot: MemoryLlmAdapterSlot;
-		callLabel: string;
+		callId: ModelCallId;
+		destination: "host" | "sno-gpu";
 		transport: "chat-completions" | "raw-completions" | "agent-host-seam";
 	}) => void;
 	onProviderResponse?: (response: ProviderResponseTrace) => void;
@@ -122,8 +109,8 @@ export type TokenUsage = {
 
 export type ProviderResponseTrace = {
 	durationMs?: number;
-	adapterSlot: MemoryLlmAdapterSlot;
-	callLabel: string;
+	callId: ModelCallId;
+	destination: "host" | "sno-gpu";
 	provider: LlmProvider;
 	requestId?: string;
 	model?: string;
@@ -139,8 +126,8 @@ export type DispatchContext = {
 	messages: unknown[];
 	kwargs: Record<string, unknown>;
 	config: LLMConfig & {
-		adapterSlot?: MemoryLlmAdapterSlot;
-		callLabel?: string;
+		callId?: ModelCallId;
+		destination?: "host" | "sno-gpu";
 		baseUrl?: string;
 		endpointUrl?: string;
 		heliconeApiKey?: string;

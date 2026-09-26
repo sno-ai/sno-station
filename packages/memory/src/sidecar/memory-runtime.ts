@@ -29,6 +29,7 @@ import { readChunkVecTableState } from "../store/connection";
 import { initSqliteRuntime } from "../store/sqlite-runtime";
 import { startMaintenanceTimer, uniformMaintenanceIntervals, type MaintenanceTimerHandle } from "../store/maintenance";
 import { RegisteredAgentPort } from "../model/registered-agent-port";
+import { evaluateRemAutomaticTriggers, readRemAutomaticOperations } from "./rem-trigger";
 import { withProviderResponses } from "../model/llm-provider-transport";
 import type { ProviderResponseTrace } from "../model/llm-client-types";
 import { MEMORY_USAGE_FLUSH_INTERVAL_MS } from "./config";
@@ -76,7 +77,8 @@ interface SkinRuntime {
 	active: number;
 	retired: boolean;
 	embedder: ObservableEmbedder;
-	agentPort?: RegisteredAgentPort;
+	agentPort: RegisteredAgentPort;
+	connected: boolean;
 	/** Observe sessions this sidecar named for the skin (the coding skins name none), by host session id. */
 	hostSessions: Map<string, { uuid: string; startedAt: number }>;
 }
@@ -123,6 +125,7 @@ export class MemoryRuntimePool {
 		const pool = new MemoryRuntimePool(storePath, store, config, installed, observability, embedder);
 		const maintenance = readMaintenanceOverrides();
 		pool.maintenance = startMaintenanceTimer({ store, dbPath: storePath, stateDir, remClock: maintenance.now, remVolumeThreshold: maintenance.volumeThreshold,
+			mode: config.mode, hasConnectedHost: () => pool.connectedRemPort() !== undefined,
 			backupDir: join(stateDir, "backups"), usageOutbox: pool.usageOutbox }, maintenance.intervalMs, maintenance.intervalMs,
 			maintenance.intervalMs === undefined ? undefined : uniformMaintenanceIntervals(maintenance.intervalMs));
 		pool.startUsageTimer();
@@ -139,8 +142,8 @@ export class MemoryRuntimePool {
 			embedding: this.config.embedding, memoryTelemetry: this.config.memoryTelemetry, dbPath: this.storePath };
 		registration = { ...registration, settings: { ...registration.settings,
 			embedding: config.embedding, memoryTelemetry: config.memoryTelemetry, dbPath: this.storePath } };
-		// Without an endpoint, rem-enhanced keeps the existing GPU fallback. Agent-native must expose refusal.
-		const agentPort = registration.model || config.mode === "agent-native" ? new RegisteredAgentPort(registration.model) : undefined;
+		let entry: SkinRuntime;
+		const agentPort = new RegisteredAgentPort(registration.model, () => { entry.connected = false; });
 		const observability = new PluginObservability(config, this.stateDir, engineLogger);
 		const embedder = new ObservableEmbedder(config.embedding, this.stateDir, observability, observeSessionUuid);
 		const retriever = new ObservableMemoryRetriever(this.store, embedder, engineLogger, { ...DEFAULT_RETRIEVAL_CONFIG, ...config.retrieval }, observability, observeSessionUuid, config.embedding);
@@ -150,7 +153,7 @@ export class MemoryRuntimePool {
 		retriever.setTierPromoter(createTierPromoter());
 		const runtime = new MemoryContractRuntime({ store: this.store, embedder, retriever, accessTracker: tracker, observability,
 			stateDir: this.stateDir, agentPort, logger: engineLogger, telemetryUsage: this.usageOutbox });
-		const entry: SkinRuntime = { runtime, tracker, observability, embedder, agentPort, active: 0, retired: false, hostSessions: new Map() };
+		entry = { runtime, tracker, observability, embedder, agentPort, connected: !!registration.model, active: 0, retired: false, hostSessions: new Map() };
 		this.owned.add(entry);
 		try {
 			const result = await runtime.init(scope, registration);
@@ -168,11 +171,21 @@ export class MemoryRuntimePool {
 				entry.observability.aggregator.adopt(previous.observability.aggregator);
 				entry.runtime.adoptRecall(previous.runtime);
 			}
+			this.skins.delete(registration.skinId);
 			this.skins.set(registration.skinId, entry);
 			if (previous) { previous.retired = true; if (previous.active === 0) await this.dispose(previous); }
 			setRegisteredRemTick(registration.skinId, config.remEnhanced.trigger?.tick);
+			if (registration.model) void evaluateRemAutomaticTriggers({
+				database: this.store.sqlite, stateDir: this.stateDir,
+				...readRemAutomaticOperations(), mode: this.config.mode,
+				hasConnectedHost: () => this.connectedRemPort() !== undefined,
+			}).catch(error => engineLogger.error(String(error)));
 			return result;
 		} catch (error) { await this.dispose(entry); throw error; }
+	}
+
+	connectedRemPort(): RegisteredAgentPort | undefined {
+		return [...this.skins.values()].reverse().find(entry => entry.connected)?.agentPort;
 	}
 
 	async invoke(method: ContractMethod, raw: unknown, skinId: string, signal?: AbortSignal): Promise<ContractOutputs[ContractMethod]> {
@@ -217,7 +230,7 @@ export class MemoryRuntimePool {
 		const body = { ...(raw as object), scope };
 		try {
 			const call = () => observeSession.run({ uuid, entry }, () => withProviderResponses(responses, () => this.call(entry, method, body, signal)));
-			const result = parseOutput(method, await (entry.agentPort ? entry.agentPort.run(call) : call()));
+			const result = parseOutput(method, await entry.agentPort.run(call, method === "capture"));
 			if (method === "onSessionEnd") {
 				// Usage from the closing call must be tallied before the session's cost is summed.
 				await this.emitProviderUsage(entry, scope, responses.splice(0));
@@ -286,16 +299,16 @@ export class MemoryRuntimePool {
 		await bestEffort("provider usage", async () => {
 			for (const response of responses) {
 				if (response.failure) {
-					await entry.observability.emitError(`llm.call:${response.failure}`, `${response.provider} ${response.callLabel}`, scope.host?.observeSessionUuid);
+					await entry.observability.emitError(`llm.call:${response.failure}`, `${response.provider} ${response.callId}`, scope.host?.observeSessionUuid);
 					continue;
 				}
 				// A response without a model or usage is an error, never a zero-token call.
 				if (!response.usage || !response.model) {
-					await entry.observability.emitError("llm.call:usage_missing", `${response.provider} ${response.callLabel}`, scope.host?.observeSessionUuid);
+					await entry.observability.emitError("llm.call:usage_missing", `${response.provider} ${response.callId}`, scope.host?.observeSessionUuid);
 					continue;
 				}
 				await entry.observability.emit({ eventType: "llm.call", sessionUuid: scope.host?.observeSessionUuid,
-					payload: { model: `${response.provider}:${response.model}`, prompt_tokens: response.usage.inputTokens,
+					payload: { call_id: response.callId, destination: response.destination, model: `${response.provider}:${response.model}`, prompt_tokens: response.usage.inputTokens,
 						completion_tokens: response.usage.outputTokens, token_source: "plugin_internal_paid",
 						latency_ms: Math.max(0, Math.round(response.durationMs ?? 0)), cache_read_tokens: 0, cache_write_tokens: 0 } });
 			}

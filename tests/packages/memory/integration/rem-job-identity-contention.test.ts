@@ -19,7 +19,6 @@ import {
 	runRemBatchJob,
 } from "../../../../packages/memory/src/sidecar/rem-batch-executor.ts";
 import { createSnoStationMemRemPorts } from "../../../../packages/memory/src/store/rem-sqlite-adapter.ts";
-import { createLlmClient } from "../../../../packages/memory/src/model/llm-client.ts";
 import { createRemOwnerDecidedOperationalConfiguration } from "../../../apps/mem-claw/helpers/rem-entry-config-fixture.ts";
 import { seedProductionMemory } from "../../../apps/mem-claw/helpers/rem-production-entry-fixture.ts";
 import { createTestDb, type TestDb } from "../../../apps/mem-claw/helpers/test-db.ts";
@@ -288,15 +287,8 @@ describe("F-B job identity under contention", () => {
 						.prepare("SELECT content_hash FROM nodix_memories WHERE id = ?")
 						.get(id) as { content_hash: string }
 				).content_hash;
-			// A real client, constructed lazily and never called: `conflict.softClose` touches only
-			// SQLite, but the port factory requires the field. Substituting a fake here would be a
-			// fake in the one place this test does not exercise, which is worse than pointless.
 			const ports = createSnoStationMemRemPorts({
 				database: fixture.runtime.db,
-				llmClient: createLlmClient({
-					preset: "mem_claw/sno_conflict_verdict",
-					baseURL: "http://localhost:8070/codex/v1",
-				}),
 			});
 
 			expect(

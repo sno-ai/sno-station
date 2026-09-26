@@ -2,7 +2,7 @@ import { z } from "zod";
 import { DEFAULT_LOCALE, SUPPORTED_LOCALES, type Locale } from "../src/engine/i18n/locales";
 
 /**
- * Product LLM modes, tier-ordered: Local First (no LLM anywhere) → Agent
+ * Product LLM modes, tier-ordered: Local First (selected calls on host) → Agent
  * Native (every call borrows the host agent's model) → REM Enhanced (top
  * tier: SNO-REM-MEM serves the LoRA-covered occasions, the host model covers
  * the rest, adjustable per occasion).
@@ -18,19 +18,15 @@ export const LLM_TIERS = ["snoRemMem", "agent"] as const;
 export type LlmTier = (typeof LLM_TIERS)[number];
 
 /**
- * The eight live LLM occasions. One occasion per adapter slot, except
- * profile-merge, whose section-update occasion is a two-call judgment/text
- * pipeline and whose task occasions are mutually exclusive branches.
+ * The six live LLM occasions retained for existing REM Enhanced configuration.
+ * Call ids identify individual requests; the occasion only preserves current overrides.
  */
 export const LLM_OCCASIONS = [
 	"memoryExtract",
-	"dedupDecision",
 	"profileSectionMerge",
 	"profileActiveTaskClassify",
-	"profileActiveTaskMatch",
 	"conflictAdjudication",
 	"summaryBuild",
-	"intentClassifier",
 	"dateResolution",
 ] as const;
 

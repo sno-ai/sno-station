@@ -41,12 +41,10 @@ export class ObservableLlmClient implements LlmClient {
 		request: MemoryLlmRequest,
 		call: () => Promise<T | null>,
 	): Promise<T | null> {
-		if (this.config.routing) {
-			const route = resolveLlmRoute({
-				slot: request.adapterSlot,
-				callLabel: request.callLabel,
-				config: this.config.routing,
-			});
+		const route = this.config.routing
+			? resolveLlmRoute({ callId: request.callId, config: this.config.routing })
+			: undefined;
+		if (route) {
 			if ("off" in route) {
 				return this.usageMutex.runExclusive(call);
 			}
@@ -117,6 +115,8 @@ export class ObservableLlmClient implements LlmClient {
 						eventType: "llm.call",
 						sessionUuid,
 						payload: {
+							call_id: request.callId,
+							destination: route && "destination" in route ? route.destination : "host",
 							model: `${resolved.provider}:${resolved.model}`,
 							prompt_tokens: promptCount,
 							completion_tokens: completionCount,

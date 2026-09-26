@@ -360,8 +360,7 @@ describe("atomic profileKeying behavior", () => {
 		expect(client.requests).toHaveLength(1);
 		expect(client.requests[0]).toMatchObject({
 			prompt: `user: ${turn.content}`,
-			callLabel: "memory-extract-profile",
-			adapterSlot: "memory-extract",
+			callId: "E9",
 			maxTokens: 4_096,
 		});
 		expect(client.requests[0]?.prompt).not.toContain("<take>");

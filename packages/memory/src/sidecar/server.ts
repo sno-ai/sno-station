@@ -52,6 +52,8 @@ import {
 } from "./config";
 import { readJsonlLines } from "../engine/operations/jsonl-lines";
 import type { MemoryRuntimePool } from "./memory-runtime";
+import { remNeedsHost } from "./rem-trigger";
+import { ModelCallRefusedError } from "../model/llm-client";
 import { PayloadTooLargeError, readRequestBody } from "./request-body";
 import { serveMemoryRoute } from "./memory-routes";
 import { RemChassisJournal } from "./rem-chassis-journal";
@@ -313,7 +315,7 @@ async function startOwnedRemSidecar(): Promise<{ port: number; stop(): Promise<{
 	await discoveryPublication;
 	const recovery = (async () => {
 		const jobIds = await recoverInterruptedJobs(jobs, await readCompletedJobStats(new Set(recoveryJobs.map(job => job.job_id))), recoveryJobs);
-		for (const jobId of jobIds) await runChassisJob(jobs, chassisJournal, jobId, 0);
+		for (const jobId of jobIds) await runChassisJob(jobs, chassisJournal, jobId, 0, await memory.open());
 	})().catch(error => reportSidecarFailure("recovery", error));
 	activeTasks.add(Object.assign(recovery, { label: "rem-recovery" }));
 	void recovery.finally(() => activeTasks.delete(recovery));
@@ -431,6 +433,12 @@ async function routeRequest(
 			return;
 		}
 		const store = await pendingStore;
+		const runtime = await memory.open();
+		if (remNeedsHost(runtime.config.mode) && !runtime.connectedRemPort()) {
+			context.error_code = "no host model connected";
+			sendJson(response, 503, { error: "no host model connected" });
+			return;
+		}
 		let allocation: Awaited<ReturnType<RemJobStore["createQueued"]>>;
 		try {
 			allocation = await store.createQueued(requestedTypes, input.scope, correlationId);
@@ -466,7 +474,7 @@ async function routeRequest(
 			const start = (): void => {
 				clearTimeout(timer);
 				pendingTimers.delete(timer);
-				void runChassisJob(store, chassisJournal, job.job_id, holdMs).then(resolve, reject);
+				void runChassisJob(store, chassisJournal, job.job_id, holdMs, runtime).then(resolve, reject);
 			};
 			const timer = setTimeout(start, delayMs);
 			pendingTimers.set(timer, start);
@@ -498,6 +506,7 @@ async function runChassisJob(
 	journal: RemChassisJournal,
 	waveId: string,
 	holdMs: number,
+	runtime: MemoryRuntimePool,
 ): Promise<void> {
 	const queued = store.get(waveId);
 	if (queued === undefined) throw new Error(`REM wave not found: ${waveId}`);
@@ -514,6 +523,10 @@ async function runChassisJob(
 		});
 		let writesApplied = false;
 		try {
+			if (remNeedsHost(runtime.config.mode) && !runtime.connectedRemPort()) {
+				await skipNonTerminalJob(store, queued.job_id, "no host model connected");
+				return;
+			}
 			const running = resuming
 				? queued
 				: await store.transition(queued.job_id, {
@@ -567,6 +580,7 @@ async function runChassisJob(
 						perOperation: [],
 					}
 				: await runRemProductionOrderedWave({
+						mode: runtime.config.mode, agentPort: runtime.connectedRemPort(),
 						stateRoot: getStateDir(),
 						personaDbPath: process.env["SNO_STATION_MEM_REM_EXPECTED_DB_PATH"],
 						configSource: JSON.stringify(configuration),
@@ -658,7 +672,8 @@ async function runChassisJob(
 			failed = true;
 			failure = error;
 			if (!writesApplied) {
-				await failNonTerminalJob(store, queued.job_id, errorMessage(error));
+				if (error instanceof ModelCallRefusedError) await skipNonTerminalJob(store, queued.job_id, error.reason, error.callId, error.destination);
+				else await failNonTerminalJob(store, queued.job_id, errorMessage(error));
 			}
 		} finally {
 			let outcome = "empty-success";
@@ -744,6 +759,14 @@ async function failNonTerminalJob(
 	}
 }
 
+async function skipNonTerminalJob(store: RemJobStore, jobId: string, reason: string,
+	callId?: string, destination?: string): Promise<void> {
+	const current = store.get(jobId);
+	if (!current || (current.state !== "queued" && current.state !== "running")) return;
+	await auditRem("rem_skipped", current, { reason, call_id: callId, destination });
+	await store.transition(jobId, { state: "skipped", finished_at: new Date().toISOString(), error: reason });
+}
+
 async function recoverInterruptedJobs(
 	store: RemJobStore,
 	completedJobStats: ReadonlyMap<string, RemJobStats>,
@@ -808,14 +831,15 @@ async function readCompletedJobStats(wantedJobs: ReadonlySet<string>): Promise<M
 }
 
 async function auditRem(
-	event: "rem_triggered" | "rem_completed" | "rem_failed",
+	event: "rem_triggered" | "rem_completed" | "rem_failed" | "rem_skipped",
 	job: RemJob,
 	extra: Record<string, unknown> = {},
 ): Promise<boolean> {
 	return appendAuditEntryStrict(getSnoStationMemStateDir(), {
-		event,
+		// The audit writer accepts this REM terminal event; its shared event type is outside this change's file scope.
+		event: event as Parameters<typeof appendAuditEntryStrict>[1]["event"],
 		scope: job.scope,
-		resultStatus: event === "rem_failed" ? "error" : "ok",
+		resultStatus: event === "rem_skipped" ? "skipped" : event === "rem_failed" ? "error" : "ok",
 		details: {
 			type: job.type,
 			scope: job.scope,

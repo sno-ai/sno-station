@@ -35,6 +35,8 @@ import {
 } from "./rem-trigger-state";
 import type { SqliteDatabaseLike } from "../store/sqlite-runtime";
 import { pluginConfigSchema } from "../engine/shared/types";
+import { MODEL_CALLS } from "../model/model-call-table";
+import type { ProductMode } from "../../config/plugin-config-mode-schema";
 
 export const REM_DAILY_SCHEDULE_HOUR = 3;
 export const REM_VOLUME_THRESHOLD = 100;
@@ -58,6 +60,13 @@ export interface RemAutomaticTriggerInput {
 	discoveryPath?: string;
 	dispatchTimeoutMs?: number;
 	resolveScheduleZone?: () => string;
+	mode?: ProductMode;
+	hasConnectedHost?: () => boolean;
+}
+
+export function remNeedsHost(mode: ProductMode): boolean {
+	return (Object.keys(MODEL_CALLS) as Array<keyof typeof MODEL_CALLS>)
+		.some(id => id.startsWith("REM") && MODEL_CALLS[id].destinations[mode] === "host");
 }
 
 export interface RemAutomaticTriggerReport {
@@ -111,6 +120,12 @@ export async function evaluateRemAutomaticTriggers(
 		await recordDecision(auditStateDir, undefined, "skipped", {
 			row: "automatic-trigger-skipped",
 			reason: "product-mode-disabled",
+		});
+		return { evaluations: 0, dispatches: 0 };
+	}
+	if (input.mode && remNeedsHost(input.mode) && !input.hasConnectedHost?.()) {
+		await recordDecision(auditStateDir, undefined, "skipped", {
+			row: "automatic-trigger-skipped", reason: "skipped: no host model connected",
 		});
 		return { evaluations: 0, dispatches: 0 };
 	}
@@ -397,6 +412,15 @@ async function applyCompletedBaselines(
 					...(typeof passAt === "string" ? { passAt } : {}),
 					...(typeof localDate === "string" ? { localDate } : {}),
 				});
+				continue;
+			}
+			if (entry["event"] === "rem_skipped" && typeof correlationId === "string") {
+				const skipped = dispatched.get(correlationId);
+				if (skipped && nextState.scopes[skipped.scope]?.attempts.identity === correlationId) {
+					nextState = replaceScopeState(nextState, skipped.scope, {
+						...requiredScopeState(nextState, skipped.scope), attempts: { identity: null, count: 0 },
+					});
+				}
 				continue;
 			}
 			if (entry["event"] !== "rem_completed" || typeof correlationId !== "string") continue;
