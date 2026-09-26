@@ -85,7 +85,7 @@
     "postinstall": "node scripts/download-simple-tokenizer.mjs"
   },
   "dependencies": {
-    "@huggingface/transformers": "^3.8.1",
+    "@huggingface/transformers": "^4.3.0",
     "@js-temporal/polyfill": "0.5.1",
     "@napi-rs/keyring": "^2.0.0",
     "@sinclair/typebox": "^0.34.49",
