@@ -18,12 +18,12 @@
     "lint": "biome check src/",
     "lint:fix": "biome check --write src/"
   },
-  "devDependencies": { "tsdown": "0.22.5" },
+  "devDependencies": { "tsdown": "0.23.0" },
   "dependencies": {
     "@huggingface/transformers": "^3.8.1",
     "@snoai/utils": "file:../utils",
     "async-mutex": "^0.5.0",
     "lru-cache": "^11.0.0",
-    "onnxruntime-node": "1.21.1"
+    "onnxruntime-node": "1.30.0"
   }
 }

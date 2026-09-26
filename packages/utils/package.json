@@ -17,7 +17,7 @@
   },
   "files": ["dist", "LICENSE", "README.md"],
   "dependencies": { "fs-ext": "^2.1.1" },
-  "devDependencies": { "@babel/parser": "^7.29.8", "tsx": "^4.22.4" },
+  "devDependencies": { "@babel/parser": "^7.29.8", "tsx": "^4.23.15" },
   "scripts": {
     "build": "tsc -p tsconfig.json && tsx scripts/build-log-catalog.ts",
     "typecheck": "tsc --noEmit",
