@@ -54,8 +54,6 @@ export function createCodingSkinRegistration(input: {
 }): Registration {
 	const routing = llmRoutingConfigSchema.parse({
 		mode: input.installed.mode,
-		remEnhanced: input.installed.remEnhanced,
-		agentNative: { flavor: "subscription" },
 		language: "en",
 	});
 	const settings = engineSettingsSchema.parse({
