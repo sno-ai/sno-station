@@ -21,20 +21,21 @@ export class RegisteredAgentPort implements AgentLlmPort {
 	async run<T>(operation: () => Promise<T>, failOnRefusal = false): Promise<T> {
 		const failures = new Map<string, DegradedReason>();
 		return this.failures.run(failures, async () => {
+			let result: T;
 			try {
-				const result = await operation();
-				const failure = failures.values().next().value;
-				if (failOnRefusal && failure === "no-agent-endpoint") throw new ContractError(failure);
-				if (failure) createLogger("sno-station-mem:registered-agent-port").warn("Host model failed after operation completed", { failure }, {
-					event_name: "memory.host.degraded", file: "packages/memory/src/model/registered-agent-port.ts",
-					function: "run", site_id: "memory.host.degraded",
-				});
-				return result;
+				result = await operation();
 			} catch (error) {
 				const failure = failures.values().next().value;
 				if (failure) throw new ContractError(failure);
 				throw error;
 			}
+			const failure = failures.values().next().value;
+			if (failOnRefusal && [...failures.values()].includes("no-agent-endpoint")) throw new ContractError("no-agent-endpoint");
+			if (failure) createLogger("sno-station-mem:registered-agent-port").warn("Host model failed after operation completed", { failure }, {
+				event_name: "memory.host.degraded", file: "packages/memory/src/model/registered-agent-port.ts",
+				function: "run", site_id: "memory.host.degraded",
+			});
+			return result;
 		});
 	}
 
@@ -65,6 +66,8 @@ export class RegisteredAgentPort implements AgentLlmPort {
 				const relayed = await relayedFailure(response);
 				if (relayed) {
 					failures?.set(identity, relayed.kind === "cancelled" ? "timeout" : isTerminalLlmFailure(relayed.category) ? "no-agent-endpoint" : "engine-failed");
+					// A worker whose host child failed answers a typed 503; keep the status so REM counts it as a refusal.
+					if (relayed.kind === "error" && response.status === 503) return { ...relayed, message: `registered model HTTP 503: ${relayed.message}` };
 					return relayed;
 				}
 				const failure = classifyLlmFailure({ status: response.status });
