@@ -704,20 +704,20 @@ describe("REM automatic trigger", () => {
 					},
 				},
 			});
-		expect(readRemAutomaticOperations(configPath)).toEqual({ requestedOperations: ["rem-update"], tickEnabled: true });
+		expect(readRemAutomaticOperations(configPath)).toEqual({ mode: "rem-enhanced", requestedOperations: ["rem-update"], tickEnabled: true });
 		const settings = JSON.parse(readFileSync(configPath, "utf8"));
 		writeFileSync(configPath, JSON.stringify({ ...settings, remEnhanced: { trigger: { tick: false } } }));
-		expect(readRemAutomaticOperations(configPath)).toEqual({ requestedOperations: ["rem-update"], tickEnabled: false });
+		expect(readRemAutomaticOperations(configPath)).toEqual({ mode: "rem-enhanced", requestedOperations: ["rem-update"], tickEnabled: false });
 		writeFileSync(configPath, JSON.stringify({ ...settings, remEnhanced: { trigger: { tick: true } } }));
-		expect(readRemAutomaticOperations(configPath)).toEqual({ requestedOperations: ["rem-update"], tickEnabled: true });
+		expect(readRemAutomaticOperations(configPath)).toEqual({ mode: "rem-enhanced", requestedOperations: ["rem-update"], tickEnabled: true });
 
 		const defaultDir = temporaryDirectory("rem-trigger-default-config-");
 		writeTestInstallationConfig(defaultDir, { plugins: { entries: { "sno-mem-claw": { config: { mode: "rem-enhanced" } } } } });
-		expect(readRemAutomaticOperations(testInstallationConfigPath(defaultDir))).toEqual({ requestedOperations: ["rem-replace", "rem-update"], tickEnabled: true });
+		expect(readRemAutomaticOperations(testInstallationConfigPath(defaultDir))).toEqual({ mode: "rem-enhanced", requestedOperations: ["rem-replace", "rem-update"], tickEnabled: true });
 
 		const localDir = temporaryDirectory("rem-trigger-local-config-");
 		writeTestInstallationConfig(localDir, { plugins: { entries: { "sno-mem-claw": { config: {} } } } });
-		expect(readRemAutomaticOperations(testInstallationConfigPath(localDir))).toEqual({ requestedOperations: ["rem-replace", "rem-update"], tickEnabled: true });
+		expect(readRemAutomaticOperations(testInstallationConfigPath(localDir))).toEqual({ mode: "local-first", requestedOperations: ["rem-replace", "rem-update"], tickEnabled: true });
 	});
 
 	function createFixture(candidateCount: number): { database: TestDb; stateDir: string; scope: string } {
