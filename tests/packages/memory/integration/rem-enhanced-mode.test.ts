@@ -16,7 +16,9 @@ import type { ProductMode } from "../../../../packages/memory/config/plugin-conf
 import { pluginConfigSchema } from "../../../../packages/memory/config/plugin-config-schema";
 import { atomicExtractionSkillReference } from "../../../../packages/memory/src/engine/extraction/atomic-extraction-skill";
 import { renderRemUpdateVerificationPrompt } from "../../../../packages/memory/src/engine/rem/rem-update-judgment";
-import { bindStore } from "../../../../packages/memory/src/engine/shared/paths";
+import { bindStore, getInstallationConfigPath } from "../../../../packages/memory/src/engine/shared/paths";
+import { readSnoStationMemConfig, PLUGIN_ENTRY_KEY } from "../../../../packages/memory/src/engine/bindings/embedder-config-files";
+import { readRemAutomaticOperations } from "../../../../packages/memory/src/sidecar/rem-trigger";
 import { MODEL_CALLS, type ModelCallId } from "../../../../packages/memory/src/model/model-call-table";
 import { REM_UPDATE_JUDGMENT_SKILL } from "../../../../packages/memory/src/sidecar/rem-update-judgment-skill";
 import { startRemSidecar } from "../../../../packages/memory/src/sidecar/server";
@@ -372,5 +374,74 @@ describe.each(["rem-enhanced", "agent-native"] as const)("%s: the other twenty c
 		expect({ exitCode: run.code, misrouted: labels.filter(label => tableDestination(label, mode) !== "sno-gpu"),
 			reachedSno: labels.length > 0 }, run.stderr.slice(-2000))
 			.toEqual({ exitCode: 0, misrouted: [], reachedSno: mode === "rem-enhanced" });
+	});
+});
+
+/**
+ * Owner rule 2026-09-26: an installation upgraded from the previous release keeps working with the files it has.
+ * That release wrote all nine per-occasion switches into the installed settings file, and its plugin sent them,
+ * plus the Agent Native flavor, in the registration routing. Both are ignored; nothing falls back to a default.
+ */
+describe("an installation upgraded from the previous release stays REM Enhanced", () => {
+	const PREVIOUS_OCCASIONS = {
+		memoryExtract: "snoRemMem", dedupDecision: "agent", profileSectionMerge: "agent", profileActiveTaskClassify: "agent",
+		profileActiveTaskMatch: "agent", conflictAdjudication: "snoRemMem", summaryBuild: "agent", intentClassifier: "agent",
+		dateResolution: "agent",
+	};
+	// Non-default values a silent fall back to defaults would lose: chunking off, seven recall hits, no reranker.
+	const EMBEDDING = { provider: "local-onnx", dimensions: 1024, chunking: false };
+	const RETRIEVAL = { recallTopK: 7, rerank: "none" };
+	const SENTENCE = "I keep a blue notebook for meeting notes.";
+	const FACT = "The user keeps a blue notebook for meeting notes";
+
+	it("loads the old installed file and old routing, captures through the Sno GPU, and recalls the capture", { timeout: 180_000 }, async () => {
+		vi.stubEnv("SNO_PROFILE_DIR", join(root, "mode"));
+		await bindStore(database.dbPath, { mode: "rem-enhanced", embedding: EMBEDDING, retrieval: RETRIEVAL });
+		const configPath = getInstallationConfigPath();
+		const bound = JSON.parse(readFileSync(configPath, "utf8")) as Record<string, unknown>;
+		// The previous release's bytes: the bound file plus the switches it always wrote (mode 0600 is kept).
+		writeFileSync(configPath, `${JSON.stringify({ ...bound, remEnhanced: { trigger: { tick: true }, occasions: PREVIOUS_OCCASIONS } })}\n`);
+		const loaded = readSnoStationMemConfig(configPath).plugins?.entries?.[PLUGIN_ENTRY_KEY]?.config;
+		expect({ mode: loaded?.mode, embedding: loaded?.embedding, retrieval: loaded?.retrieval, rem: readRemAutomaticOperations(configPath) })
+			.toMatchObject({ mode: "rem-enhanced", embedding: EMBEDDING, retrieval: RETRIEVAL, rem: { mode: "rem-enhanced", tickEnabled: true } });
+
+		const extractionReply = (content: string) => {
+			// The capture prompt lists the turns the reply must account for; this window holds the one user turn.
+			const index = (jsonAfter(content, "turn_indexes_to_account_for: ") as number[] | undefined)?.[0] ?? 0;
+			return JSON.stringify({ claims_found: [FACT], decisions: [{ turn_index: index, progress_only: false }], facts: [{
+				id: 0, fact: FACT, subject: "the user", subject_kind: "user", temporal_phrase: null, ended_at_phrase: null,
+				source_span: { turn_index: index, quote: "keep a blue notebook for meeting notes" } }] });
+		};
+		const sno = await startRecorder(closers, ({ content, raw }) => modelReply(
+			content.startsWith(atomicExtractionSkillReference("capture")) ? extractionReply(content) : raw ? "keep" : "{}", raw));
+		const host = await startRecorder(closers, () => modelReply("{}", false));
+		vi.stubEnv("GPU_BASE_URL", sno.url);
+		sidecar = await startRemSidecar();
+
+		const skinId = "previous-release-plugin";
+		const scope = { ...SEED_SCOPE, session: skinId };
+		const { remEnhanced: _remEnhanced, agentNative: _agentNative, language: _language, mode: _mode, ...settings } = pluginConfigSchema.parse({
+			mode: "rem-enhanced", embedding: EMBEDDING, retrieval: RETRIEVAL, observe: { enabled: false },
+		}) as Record<string, unknown>;
+		const init = await contractPost("/v1/init", { scope, registration: { skinId, settings,
+			routing: { mode: "rem-enhanced", remEnhanced: { occasions: PREVIOUS_OCCASIONS, trigger: { tick: true } },
+				agentNative: { flavor: "subscription" }, language: "en" },
+			model: { baseUrl: `${host.url}/host/v1/`, credential: "loopback-credential", model: "loopback-model" },
+		} }, skinId);
+		expect(init.status, await init.clone().text()).toBe(200);
+
+		const capture = await contractPost("/v1/capture", { scope, turn: { turnId: "upgrade-capture", rewindEpoch: 0,
+			messages: [{ role: "user", content: SENTENCE, at: 1789606800000 }] } }, skinId);
+		expect(capture.status, await capture.clone().text()).toBe(200);
+		const e1 = (recorder: Recorder) => recorder.received.filter(call => nonRemCall(call.content) === "E1").length;
+		const stored = database.sqlite.prepare("SELECT text FROM nodix_memories WHERE text LIKE '%blue notebook%'").all() as Array<{ text: string }>;
+		expect({ e1OnSno: e1(sno), e1OnHost: e1(host), stored: stored.length > 0 }, JSON.stringify(sno.received.map(call => call.content.slice(0, 4000))))
+			.toEqual({ e1OnSno: 1, e1OnHost: 0, stored: true });
+
+		const recall = await contractPost("/v1/get-recall", { scope, query: "Which notebook do I keep for meeting notes?",
+			options: { source: "manual" } }, skinId);
+		const recalled = await recall.text();
+		expect(recall.status, recalled).toBe(200);
+		expect(recalled).toContain(stored[0]?.text);
 	});
 });

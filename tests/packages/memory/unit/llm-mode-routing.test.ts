@@ -172,12 +172,18 @@ describe("model call transport", () => {
 		});
 	});
 
-	it("uses the call's host transport on every host route and refuses the removed flavor key", () => {
+	it("uses the call's host transport on every host route and ignores the removed routing keys", () => {
 		const host = { tier: "agent", destination: "host", transport: "agent-host-seam", parser: "json" };
 		expect(resolveLlmRoute({ callId: "E1", config: llmRoutingConfigSchema.parse({ mode: "agent-native" }) })).toEqual(host);
 		expect(resolveLlmRoute({ callId: "REM2", config: llmRoutingConfigSchema.parse({ mode: "rem-enhanced" }) })).toEqual(host);
-		expect(() => llmRoutingConfigSchema.parse({ mode: "agent-native", agentNative: { flavor: "byok" } })).toThrow(/agentNative/);
-		expect(() => llmRoutingConfigSchema.parse({ mode: "rem-enhanced", remEnhanced: { occasions: { memoryExtract: "agent" } } }))
-			.toThrow(/remEnhanced/);
+		// An older plugin still sends these; they parse away and the table alone picks the destination.
+		const byok = llmRoutingConfigSchema.parse({ mode: "agent-native", agentNative: { flavor: "byok" } });
+		const occasions = llmRoutingConfigSchema.parse({ mode: "rem-enhanced",
+			remEnhanced: { trigger: { tick: true }, occasions: { memoryExtract: "agent", conflictAdjudication: "agent" } } });
+		expect({ byok, occasions }).toEqual({ byok: { mode: "agent-native", language: "en" }, occasions: { mode: "rem-enhanced", language: "en" } });
+		expect(resolveLlmRoute({ callId: "E1", config: byok })).toEqual(host);
+		expect([resolveLlmRoute({ callId: "E1", config: occasions }), resolveLlmRoute({ callId: "REM1", config: occasions })]
+			.map(route => "off" in route ? "off" : route.destination)).toEqual(["sno-gpu", "sno-gpu"]);
+		expect(() => llmRoutingConfigSchema.parse({ mode: "rem-enhanced", remEnhancedd: {} })).toThrow(/remEnhancedd/);
 	});
 });
