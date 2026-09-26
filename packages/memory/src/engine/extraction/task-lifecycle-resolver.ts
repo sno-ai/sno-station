@@ -127,6 +127,10 @@ const judgmentSchema = z.discriminatedUnion("result", [
 
 type TaskLifecycleJudgment = z.infer<typeof judgmentSchema>;
 
+export function acceptsTaskLifecycleJudgment(value: unknown): boolean {
+	return judgmentSchema.safeParse(value).success;
+}
+
 function cloneAnchors(
 	anchors: TaskLifecycleOccurrenceAnchors,
 ): TaskLifecycleOccurrenceAnchors {

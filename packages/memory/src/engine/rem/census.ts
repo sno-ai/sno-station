@@ -39,43 +39,6 @@ export function deriveRemWriteIdentity(input: {
 }
 
 // Frozen, unwired, and kept in place by 60-rem-unbuilt-obligations-prd.md REQ-44; unfreezing is governed by REQ-45.
-export async function adjudicateRemCandidateSet(input: {
-	database: RemDatabaseLike;
-	orderedCandidateIds: readonly string[];
-	generationId: string;
-	baseUrl: string;
-	model: string;
-}): Promise<Decision> {
-	const candidateSetSha256 = sha256(JSON.stringify(input.orderedCandidateIds));
-	const upsert = input.database.prepare(
-		`INSERT INTO nodix_rem_census_rows(row_id, candidate_set_sha256, generation_id)
-		VALUES (?, ?, ?)
-		ON CONFLICT(row_id) DO UPDATE SET
-			candidate_set_sha256 = excluded.candidate_set_sha256,
-			generation_id = excluded.generation_id`,
-	);
-	input.database.transaction(() => {
-		for (const rowId of input.orderedCandidateIds) {
-			upsert.run(rowId, candidateSetSha256, input.generationId);
-		}
-	}).immediate();
-	const response = await fetch(`${input.baseUrl.replace(/\/$/u, "")}/chat/completions`, {
-		method: "POST",
-		headers: { "content-type": "application/json" },
-		body: JSON.stringify({ model: input.model, messages: [] }),
-	});
-	if (!response.ok) return { decision: "refuse", reasonCode: "model_request_failed" };
-	try {
-		const body: unknown = await response.json();
-		const content = readModelContent(body);
-		JSON.parse(content);
-		return { decision: "allow", reasonCode: null };
-	} catch {
-		return { decision: "refuse", reasonCode: "model_response_invalid" };
-	}
-}
-
-// Frozen, unwired, and kept in place by 60-rem-unbuilt-obligations-prd.md REQ-44; unfreezing is governed by REQ-45.
 export function deriveRemReplayArtifactIdentity(input: {
 	corpusPath: string;
 	embedderPath: string;
@@ -339,15 +302,4 @@ export function validateRemCalibrationCrossCheck(input: { independent: unknown }
 
 function isSha256(value: string): boolean {
 	return /^[0-9a-f]{64}$/u.test(value);
-}
-
-function readModelContent(body: unknown): string {
-	if (typeof body !== "object" || body === null) throw new Error("model response is invalid");
-	const choices = (body as { choices?: unknown }).choices;
-	if (!Array.isArray(choices) || choices.length === 0) throw new Error("model response is invalid");
-	const message = (choices[0] as { message?: unknown }).message;
-	if (typeof message !== "object" || message === null) throw new Error("model response is invalid");
-	const content = (message as { content?: unknown }).content;
-	if (typeof content !== "string") throw new Error("model response is invalid");
-	return content;
 }

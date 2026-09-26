@@ -48,7 +48,7 @@ const judgePromptHash = createHash("sha256").update(judgePrompt).digest("hex");
 it.each(fixtureData.cases)("$id: $question", async (testCase) => {
 	const apiKey = process.env.SNO_MEM_CLAW_LLM_INTERNAL_KEY;
 	if (!apiKey) throw new Error("SNO_MEM_CLAW_LLM_INTERNAL_KEY is required");
-	const endpoint = await resolveLlmEndpoint({ configuredPreset: "mem_claw/sno_extract_chat", occasion: "memoryExtract", transport: "chat-completions" });
+	const endpoint = await resolveLlmEndpoint({ configuredPreset: "mem_claw/sno_extract_chat", callId: "E1", transport: "chat-completions" });
 	const fixture = createTestDb();
 	const store = new MemoryStore({ dbPath: fixture.dbPath, embedder: await createTestEmbedder() });
 	const runId = randomUUID();

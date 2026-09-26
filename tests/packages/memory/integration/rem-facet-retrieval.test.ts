@@ -1,7 +1,6 @@
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
 
 import type { Embedder } from "../../../../packages/memory/src/engine/extraction/embedding-provider-client.ts";
-import { createLlmClient } from "../../../../packages/memory/src/model/llm-client.ts";
 import {
 	createRetriever,
 	DEFAULT_RETRIEVAL_CONFIG,
@@ -45,10 +44,6 @@ describe("REM facet retrieval", () => {
 		});
 		const ports = createSnoStationMemRemPorts({
 			database: testDb.runtime.db,
-			llmClient: createLlmClient({
-				preset: "mem_claw/sno_conflict_verdict",
-				baseURL: "http://localhost:8070/codex/v1",
-			}),
 		});
 		const closed = await ports.conflict.softClose({
 			rowId: retired.id,

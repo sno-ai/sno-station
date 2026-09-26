@@ -1,4 +1,4 @@
-import { FIXED_MEMORY_SNO_CONFLICT_VERDICT, FIXED_MEMORY_SNO_EXTRACT_CHAT, FIXED_MEMORY_SNO_EXTRACT_PROFILE, FIXED_PROTOCOL_VALUE_69 } from "./signed-registry-constants";
+import { FIXED_PROTOCOL_VALUE_69 } from "./signed-registry-constants";
 /** @file llm-endpoint-resolution.ts
  * @purpose Resolves signed LLMIx presets into complete sno-station-mem-owned inference endpoints.
  * @boundary The only place an inference origin and path are composed.
@@ -6,7 +6,7 @@ import { FIXED_MEMORY_SNO_CONFLICT_VERDICT, FIXED_MEMORY_SNO_EXTRACT_CHAT, FIXED
 
 import type { LlmPreset, LlmProvider, ResolvedLlmConfig } from "./llm-client-types";
 import type { LlmTransport } from "./llm-mode-routing";
-import type { LlmOccasion } from "../../config/plugin-config-mode-schema";
+import { MODEL_CALLS, type ModelCallId } from "./model-call-table";
 import {
 	resolveBundledLlmixPreset,
 	resolveConfiguredBundledLlmixEndpoint,
@@ -33,20 +33,14 @@ export async function resolveSignedPreset(presetId: LlmPreset): Promise<Resolved
 export function selectEndpointPreset(input: {
 	configuredPreset: LlmPreset;
 	provider: LlmProvider;
-	occasion: LlmOccasion;
-	transport: EndpointTransport;
+	callId: ModelCallId;
 }): LlmPreset {
-	if (input.provider !== "sno-gpu") return input.configuredPreset;
-	if (input.occasion === "conflictAdjudication") return FIXED_MEMORY_SNO_CONFLICT_VERDICT;
-	if (input.occasion === "memoryExtract" && input.transport === "raw-completions") {
-		return FIXED_MEMORY_SNO_EXTRACT_PROFILE;
-	}
-	return FIXED_MEMORY_SNO_EXTRACT_CHAT;
+	return input.provider === "sno-gpu" ? MODEL_CALLS[input.callId].snoPreset : input.configuredPreset;
 }
 
 export async function resolveLlmEndpoint(input: {
 	configuredPreset: LlmPreset;
-	occasion: LlmOccasion;
+	callId: ModelCallId;
 	transport: EndpointTransport;
 	baseOverride?: string;
 }): Promise<ResolvedLlmEndpoint> {
@@ -59,8 +53,7 @@ export async function resolveLlmEndpoint(input: {
 			return selectEndpointPreset({
 				configuredPreset: input.configuredPreset,
 				provider,
-				occasion: input.occasion,
-				transport: input.transport,
+				callId: input.callId,
 			});
 		},
 		selectBaseSource: (provider) =>

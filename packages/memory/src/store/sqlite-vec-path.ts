@@ -1,6 +1,6 @@
 /** @file sqlite-vec-path.ts
  * @purpose Resolves and loads the symbol-isolated sqlite-vec extension shipped with sno-station-mem.
- * @boundary Path selection only; Linux x64 must use the bundled binary.
+ * @boundary Path selection only; Linux x64 and arm64 must use the bundled binary.
  */
 
 import { existsSync } from "node:fs";
@@ -11,13 +11,14 @@ import { getLoadablePath } from "sqlite-vec";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const PLATFORM_KEY = `${platform}-${arch}`;
+const BUNDLED_PLATFORMS = new Set(["linux-x64", "linux-arm64"]);
 
 interface SqliteExtensionLoader {
 	loadExtension(path: string): void;
 }
 
 export function resolveSqliteVecPath(): string {
-	if (PLATFORM_KEY !== "linux-x64") return resolve(getLoadablePath());
+	if (!BUNDLED_PLATFORMS.has(PLATFORM_KEY)) return resolve(getLoadablePath());
 	const candidates = [
 		join(HERE, "..", "..", "sqlite-extensions", PLATFORM_KEY, "vec0.so"),
 		join(HERE, "..", "sqlite-extensions", PLATFORM_KEY, "vec0.so"),

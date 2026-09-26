@@ -49,11 +49,11 @@ describe("real model keeps each claim readable on its own", () => {
 		const apiKey = process.env.SNO_MEM_CLAW_LLM_INTERNAL_KEY;
 		if (!apiKey) throw new Error("SNO_MEM_CLAW_LLM_INTERNAL_KEY is required");
 		const client = createLlmClient({ preset: "mem_claw/sno_extract_chat", apiKey, timeoutMs: 120_000 });
-		const endpoint = await resolveLlmEndpoint({ configuredPreset: "mem_claw/sno_extract_chat", occasion: "memoryExtract", transport: "chat-completions" });
+		const endpoint = await resolveLlmEndpoint({ configuredPreset: "mem_claw/sno_extract_chat", callId: "E1", transport: "chat-completions" });
 		const transport = createAtomicGenericExtractionTransport(client);
 		const promptTurns = turns.map((content) => ({ role: "user" as const, content }));
 		for (let repeat = 0; repeat < 3; repeat += 1) {
-			const completion = await transport.complete({ prompt: buildAtomicGenericExtractionPrompt(promptTurns, anchor), maxTokens: 4096 });
+			const completion = await transport.complete({ callId: "E1", prompt: buildAtomicGenericExtractionPrompt(promptTurns, anchor), maxTokens: 4096 });
 			if (!completion || completion.truncated) throw new Error("Missing or truncated real model reply");
 			const parsed = parseAtomicExtractionReply(completion.text, promptTurns.length);
 			if (!parsed.ok) throw new Error(`Invalid reply: ${completion.text}`);

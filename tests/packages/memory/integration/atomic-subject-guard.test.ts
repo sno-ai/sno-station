@@ -21,7 +21,7 @@ import type {
 	ResolvedLlmConfig,
 	TokenUsage,
 } from "../../../../packages/memory/src/model/llm-client-types";
-import { resolveLlmOccasion } from "../../../../packages/memory/src/model/llm-mode-routing";
+import { resolveLlmRoute } from "../../../../packages/memory/src/model/llm-mode-routing";
 
 const TURNS: AtomicExtractionTurn[] = [
 	{ role: "user", content: "I moved to Kyoto and now prefer tea." },
@@ -413,23 +413,20 @@ describe("atomic subject guard failure behavior", () => {
 		expect(validClient.textRequests).toHaveLength(1);
 		expect(validClient.jsonRequests).toHaveLength(1);
 		expect(validClient.textRequests[0]).toMatchObject({
-			callLabel: "memory-extract-atomic-missing-half",
-			adapterSlot: "memory-extract",
+			callId: "E5",
 			emptyReplyAttempts: 1,
 			enableThinking: false,
 		});
 		expect(validClient.jsonRequests[0]).toMatchObject({
-			callLabel: "memory-extract-atomic-subject-guard",
-			adapterSlot: "memory-extract",
+			callId: "E6",
 			emptyReplyAttempts: 1,
 			enableThinking: false,
 		});
-		expect(resolveLlmOccasion("memory-extract", "memory-extract-atomic-missing-half")).toBe(
-			"memoryExtract",
-		);
-		expect(resolveLlmOccasion("memory-extract", "memory-extract-atomic-subject-guard")).toBe(
-			"memoryExtract",
-		);
+		for (const callId of ["E5", "E6"] as const) {
+			expect(resolveLlmRoute({ callId, config: { mode: "rem-enhanced" } })).toMatchObject({
+				destination: "sno-gpu",
+			});
+		}
 
 		const malformed = createAtomicSubjectGuardTransport(
 			new RecordingClient(

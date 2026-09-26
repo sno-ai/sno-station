@@ -192,11 +192,10 @@ describe("task lifecycle hard cut", () => {
 		expect(profileWriter).not.toContain(
 			"export async function routeExtractedTaskCompletion",
 		);
-		expect(taskLifecycleRoute).toContain('callLabel: "profile-active-task-classify"');
+		expect(taskLifecycleRoute).toContain('callId: "T1"');
 		expect(taskLifecycleRoute.match(/\.completeJson</gu)).toHaveLength(1);
 		expect(taskLifecycleRoute).not.toContain("parseTaskLifecycleAssertionDraft");
-		expect(taskLifecycleRoute).not.toContain('callLabel: "profile-active-task-match"');
-		expect(taskLifecycleRoute).not.toContain('callLabel: "task-lifecycle-relation"');
+		expect(taskLifecycleRoute.match(/callId: "/gu)).toHaveLength(1);
 		expect(taskLifecycleRoute).toContain("TASK_LIFECYCLE_JUDGMENT_SKILL");
 		expect(taskLifecycleRoute).not.toContain(
 			"A candidate that reports a task as finished, cancelled, or already handled never opens one.",
@@ -543,25 +542,7 @@ describe("task lifecycle hard cut", () => {
 		let taskJudgments = 0;
 		const llm = createTestLlmClient({
 			completeJson: async <T>(request: Parameters<LlmClient["completeJson"]>[0]) => {
-				if (request.callLabel === "memory-extract-episodic") {
-					return {
-						memories: [
-							{
-								category: "episodic",
-								abstract: "Deployment review started",
-								overview: "- Deployment review started",
-								content: "The deployment review started.",
-							},
-							{
-								category: "episodic",
-								abstract: "Deployment notes shared",
-								overview: "- Deployment notes shared",
-								content: "The deployment notes were shared.",
-							},
-						],
-					} as T;
-				}
-				if (request.callLabel === "profile-active-task-classify") {
+				if (request.callId === "T1") {
 					taskJudgments += 1;
 					return (taskJudgments === 1
 						? { malformed: true }

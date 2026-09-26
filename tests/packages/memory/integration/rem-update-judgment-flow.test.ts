@@ -37,7 +37,6 @@ import {
 	type WriteTextVersionInput,
 } from "../../../../packages/memory/src/engine/rem/index.ts";
 import { createRemOwnerDecidedOperationalConfiguration } from "../../../apps/mem-claw/helpers/rem-entry-config-fixture.ts";
-import { createTestLlmClient } from "../../../apps/mem-claw/helpers/llm-client.ts";
 import { deriveRemUpdateStamp } from "../../../../packages/memory/src/store/rem-update-stamp-migration.ts";
 import { seedProductionMemory } from "../../../apps/mem-claw/helpers/rem-production-entry-fixture.ts";
 import { createTestDb } from "../../../apps/mem-claw/helpers/test-db.ts";
@@ -395,7 +394,6 @@ describe("REM storage authorization boundaries", () => {
 				.get(rowId);
 			const ports = createSnoStationMemRemPorts({
 				database: database.runtime.db,
-				llmClient: createTestLlmClient(),
 			});
 			const callWithoutVerification = ports.conflict.writeTextVersion as unknown as (
 				input: WriteTextVersionInput,

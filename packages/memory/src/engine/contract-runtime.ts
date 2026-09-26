@@ -397,7 +397,8 @@ export class MemoryContractRuntime implements MemoryContract {
 			if (scope.host?.boundary === "new" || scope.host?.boundary === "reset") {
 				await createRunMemoryReflection({ ...state.command, logger: this.services.logger })({
 					sessionKey: scope.host.sessionKey ?? scope.session, action: scope.host.boundary, timestamp: scope.host.at,
-					context: { agentId: this.agentId(scope), workspaceDir: scope.host.workspace, previousSessionEntry: {
+					context: { agentId: this.agentId(scope), workspaceDir: scope.host.workspace,
+						reflectionSkinId: this.configured().registration.skinId, messages, previousSessionEntry: {
 						sessionId: scope.host.sessionId, sessionFile: scope.host.sessionFile,
 					} },
 				});
