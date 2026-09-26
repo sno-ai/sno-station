@@ -386,7 +386,8 @@ async function lifecycleRetireByNamePositions(
 			...(params.timeoutMs ? { timeoutMs: params.timeoutMs } : {}),
 			...(params.signal ? { signal: params.signal } : {}),
 		});
-	} catch {
+	} catch (error) {
+		rethrowCallerCancellation(error);
 		return deferLifecycleRetirement(
 			retiredClauses,
 			incomingAssertion,
@@ -420,6 +421,13 @@ async function lifecycleRetireByNamePositions(
 		kind: "classified",
 		positions: indices.map((index) => retiredClauses[index] ?? "").filter(Boolean),
 	};
+}
+
+/** The caller cancelled the whole operation; a model failure or a request timeout still degrades. */
+function rethrowCallerCancellation(error: unknown): void {
+	if (error instanceof LlmClientTerminalError && error.category === "cancelled" && !error.requestTimedOut) {
+		throw error;
+	}
 }
 
 export async function runProfileSectionUpdate(
@@ -957,7 +965,8 @@ async function recheckProfileRetirements(input: {
 							...(input.params.signal ? { signal: input.params.signal } : {}),
 						});
 						return parseRecheckVerdict(response);
-					} catch {
+					} catch (error) {
+						rethrowCallerCancellation(error);
 						return undefined;
 					}
 				}),
@@ -1059,6 +1068,7 @@ async function mergeProfileSection(
 				accept: (value) => parseProfileSectionJudgment(value, clauses) !== undefined,
 			});
 		} catch (error) {
+			rethrowCallerCancellation(error);
 			transportFailure = error instanceof LlmClientTerminalError ? error.category : "unknown";
 		}
 	}
@@ -1139,6 +1149,7 @@ async function mergeProfileSection(
 			...(params.signal ? { signal: params.signal } : {}),
 		});
 	} catch (error) {
+		rethrowCallerCancellation(error);
 		return judgedClauseMerge(
 			retainedClauses,
 			retireByNamePositions,
@@ -2210,6 +2221,7 @@ async function planProfileConflicts(
 		}
 		return { closes };
 	} catch (error) {
+		rethrowCallerCancellation(error);
 		log.error("profile conflict scan failed; proceeding without adjudication", {
 			error,
 			candidate_size: content.length,
@@ -2280,6 +2292,7 @@ async function adjudicateSafely(
 		});
 		return response ? parseAdapterAChatVerdict(response) : "uncertain";
 	} catch (error) {
+		rethrowCallerCancellation(error);
 		log.error("Conflict adjudicator unavailable; keeping both rows", {
 			...context,
 			error,
