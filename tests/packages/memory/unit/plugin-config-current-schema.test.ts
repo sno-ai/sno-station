@@ -150,6 +150,19 @@ describe("plugin config current schema", () => {
 		},
 	);
 
+	it("drops the old provider's key and endpoint with its removed preset, so neither reaches the Sno endpoint", () => {
+		const { parsed } = parseWithWarnings(() => pluginConfigSchema.parse({
+			mode: "rem-enhanced",
+			extraction: { llm: { preset: "mem_claw/openai_gpt_5_nano", apiKey: "sk-old-openai-key", baseURL: "https://api.openai.com/v1", timeoutMs: 12_000 } },
+		}));
+		expect(parsed.extraction.llm).toEqual({ preset: "mem_claw/sno_ai_extract", timeoutMs: 12_000 });
+		const kept = pluginConfigSchema.parse({
+			mode: "rem-enhanced",
+			extraction: { llm: { preset: "mem_claw/sno_ai_extract", apiKey: "sno-key", baseURL: "https://gpu.example/v1" } },
+		});
+		expect(kept.extraction.llm).toMatchObject({ apiKey: "sno-key", baseURL: "https://gpu.example/v1" });
+	});
+
 	it("still refuses keys and presets that were never product settings", () => {
 		expect({
 			preset: refusal(() => pluginConfigSchema.parse({ extraction: { llm: { preset: "mem_claw/other" } } })),

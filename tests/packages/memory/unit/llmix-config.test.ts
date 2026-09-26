@@ -61,7 +61,7 @@ describe("mem-claw LLMIx user config", () => {
 		for (const preset of ["mem_claw/openai_gpt_5_nano", "mem_claw/openrouter_auto"]) {
 			expect(pluginConfigSchema.parse({
 				...LOCAL_RERANK, mode: "rem-enhanced", extraction: { llm: { preset, apiKey: "test-key" } },
-			}).extraction.llm).toMatchObject({ preset: "mem_claw/sno_ai_extract", apiKey: "test-key" });
+			}).extraction.llm).toEqual({ preset: "mem_claw/sno_ai_extract", timeoutMs: 30_000 });
 		}
 		expect(() =>
 			pluginConfigSchema.parse({
