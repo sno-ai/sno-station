@@ -669,15 +669,7 @@ async function openBatchRuntime(input: {
 			timeoutMs: Math.max(120_000, CODING_SKIN_CHILD_DEADLINE_MS),
 			agentPort: input.agentPort,
 			refuseOnUnavailable: true,
-			routing: pickLlmRoutingConfig({
-				mode: input.mode ?? pluginConfig.mode,
-				remEnhanced: {
-					occasions: {
-						memoryExtract: "snoRemMem",
-						conflictAdjudication: "snoRemMem",
-					},
-				},
-			}),
+			routing: pickLlmRoutingConfig({ mode: input.mode ?? pluginConfig.mode }),
 			onProviderResponse: ({ callId, destination, provider, requestId, model, usage }) => {
 				log.info("llm_provider_response", {
 					event: "llm_provider_response",
