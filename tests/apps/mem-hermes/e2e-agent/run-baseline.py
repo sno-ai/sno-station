@@ -50,7 +50,8 @@ def recall(session_id: str) -> dict[str, object]:
             "principal": getpass.getuser(),
             "project": str(WORKSPACE),
             "session": session_id,
-            "host": {"sessionId": session_id},
+            # The plugin maps a workspace to its project; the readback carries it the same way.
+            "host": {"sessionId": session_id, "workspace": str(WORKSPACE)},
         },
         "query": f"launch color project decision {DECISION}",
         "options": {"source": "manual", "limit": 5, "includeMetadata": True},
