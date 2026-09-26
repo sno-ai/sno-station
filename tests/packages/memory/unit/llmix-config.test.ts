@@ -32,11 +32,7 @@ const syncScript = readFileSync(
 
 describe("mem-claw LLMIx user config", () => {
 	it("accepts only the signed LLMIx presets and preserves user transport controls", () => {
-		for (const preset of [
-			"mem_claw/openai_gpt_5_nano",
-			"mem_claw/openrouter_auto",
-			"mem_claw/sno_ai_extract",
-		] as const) {
+		for (const preset of ["mem_claw/sno_ai_extract"] as const) {
 			const parsed = pluginConfigSchema.parse({
 				...LOCAL_RERANK,
 				mode: "rem-enhanced",
@@ -60,16 +56,18 @@ describe("mem-claw LLMIx user config", () => {
 		}
 	});
 
-	it("rejects unknown presets and old provider/model/gpuPath routing", () => {
-		expect(() =>
-			pluginConfigSchema.parse({
-				...LOCAL_RERANK,
-				mode: "rem-enhanced",
-				extraction: {
-					llm: { preset: "mem_claw/other", apiKey: "test-key" },
-				},
-			}),
-		).toThrow();
+	it("rejects unknown and removed presets and old provider/model/gpuPath routing", () => {
+		for (const preset of ["mem_claw/other", "mem_claw/openai_gpt_5_nano", "mem_claw/openrouter_auto"]) {
+			expect(() =>
+				pluginConfigSchema.parse({
+					...LOCAL_RERANK,
+					mode: "rem-enhanced",
+					extraction: {
+						llm: { preset, apiKey: "test-key" },
+					},
+				}),
+			).toThrow(/preset/);
+		}
 		expect(() =>
 			pluginConfigSchema.parse({
 				...LOCAL_RERANK,
@@ -90,12 +88,8 @@ describe("mem-claw LLMIx user config", () => {
 		const llmProperties = manifest.configSchema.properties.extraction.properties.llm.properties;
 		expect(llmProperties.preset).toEqual({
 			type: "string",
-			enum: [
-				"mem_claw/openai_gpt_5_nano",
-				"mem_claw/openrouter_auto",
-				"mem_claw/sno_ai_extract",
-			],
-			default: "mem_claw/openai_gpt_5_nano",
+			enum: ["mem_claw/sno_ai_extract"],
+			default: "mem_claw/sno_ai_extract",
 		});
 		expect(llmProperties.provider).toBeUndefined();
 		expect(llmProperties.model).toBeUndefined();
@@ -111,8 +105,8 @@ describe("mem-claw LLMIx user config", () => {
 		const extractionProperties =
 			manifest.configSchema.properties.extraction.properties as Record<string, unknown>;
 		expect(rootProperties.mode).toBeDefined();
-		expect(rootProperties.agentNative).toBeDefined();
-		expect(rootProperties.remEnhanced).toBeDefined();
+		expect(rootProperties.agentNative).toBeUndefined();
+		expect(Object.keys((rootProperties.remEnhanced as { properties: object }).properties)).toEqual(["trigger"]);
 		expect(rootProperties.onboarding).toBeDefined();
 		expect(extractionProperties.mode).toBeUndefined();
 

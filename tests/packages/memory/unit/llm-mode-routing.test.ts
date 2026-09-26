@@ -23,7 +23,7 @@ describe("plugin config product mode", () => {
 		const defaults = pluginConfigSchema.parse({});
 		expect(DEFAULT_MODEL_MODE).toBe("agent-native");
 		expect(defaults.mode).toBe(DEFAULT_MODEL_MODE);
-		expect(defaults.agentNative.flavor).toBe("subscription");
+		expect(defaults).not.toHaveProperty("agentNative");
 		expect(pickLlmRoutingConfig(defaults).language).toBe("en");
 
 		const parsed = pluginConfigSchema.parse({
@@ -80,14 +80,14 @@ const EXPECTED: Record<string, Record<Mode, "off" | "host" | "sno-gpu">> = {
 	P6: { "local-first": "host", "agent-native": "host", "rem-enhanced": "host" },
 	T1: { "local-first": "off", "agent-native": "host", "rem-enhanced": "host" },
 	R1: { "local-first": "off", "agent-native": "host", "rem-enhanced": "host" },
-	REM1: { "local-first": "host", "agent-native": "sno-gpu", "rem-enhanced": "sno-gpu" },
-	REM2: { "local-first": "host", "agent-native": "sno-gpu", "rem-enhanced": "sno-gpu" },
-	REM3: { "local-first": "host", "agent-native": "sno-gpu", "rem-enhanced": "sno-gpu" },
-	REM4: { "local-first": "host", "agent-native": "sno-gpu", "rem-enhanced": "sno-gpu" },
-	REM5: { "local-first": "host", "agent-native": "sno-gpu", "rem-enhanced": "sno-gpu" },
-	REM6: { "local-first": "host", "agent-native": "sno-gpu", "rem-enhanced": "sno-gpu" },
-	REM7: { "local-first": "host", "agent-native": "sno-gpu", "rem-enhanced": "sno-gpu" },
-	REM8: { "local-first": "host", "agent-native": "sno-gpu", "rem-enhanced": "sno-gpu" },
+	REM1: { "local-first": "host", "agent-native": "host", "rem-enhanced": "sno-gpu" },
+	REM2: { "local-first": "host", "agent-native": "host", "rem-enhanced": "host" },
+	REM3: { "local-first": "host", "agent-native": "host", "rem-enhanced": "sno-gpu" },
+	REM4: { "local-first": "host", "agent-native": "host", "rem-enhanced": "sno-gpu" },
+	REM5: { "local-first": "host", "agent-native": "host", "rem-enhanced": "sno-gpu" },
+	REM6: { "local-first": "host", "agent-native": "host", "rem-enhanced": "host" },
+	REM7: { "local-first": "host", "agent-native": "host", "rem-enhanced": "host" },
+	REM8: { "local-first": "host", "agent-native": "host", "rem-enhanced": "host" },
 };
 
 function column(read: (id: ModelCallId) => string): Record<string, string> {
@@ -172,18 +172,12 @@ describe("model call transport", () => {
 		});
 	});
 
-	it("uses the host seam for subscription agent-native and chat for BYOK", () => {
-		for (const [flavor, transport] of [
-			["subscription", "agent-host-seam"],
-			["byok", "chat-completions"],
-		] as const) {
-			const config = llmRoutingConfigSchema.parse({ mode: "agent-native", agentNative: { flavor } });
-			expect(resolveLlmRoute({ callId: "E1", config })).toEqual({
-				tier: "agent",
-				destination: "host",
-				transport,
-				parser: "json",
-			});
-		}
+	it("uses the call's host transport on every host route and refuses the removed flavor key", () => {
+		const host = { tier: "agent", destination: "host", transport: "agent-host-seam", parser: "json" };
+		expect(resolveLlmRoute({ callId: "E1", config: llmRoutingConfigSchema.parse({ mode: "agent-native" }) })).toEqual(host);
+		expect(resolveLlmRoute({ callId: "REM2", config: llmRoutingConfigSchema.parse({ mode: "rem-enhanced" }) })).toEqual(host);
+		expect(() => llmRoutingConfigSchema.parse({ mode: "agent-native", agentNative: { flavor: "byok" } })).toThrow(/agentNative/);
+		expect(() => llmRoutingConfigSchema.parse({ mode: "rem-enhanced", remEnhanced: { occasions: { memoryExtract: "agent" } } }))
+			.toThrow(/remEnhanced/);
 	});
 });
