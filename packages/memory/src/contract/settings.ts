@@ -13,7 +13,7 @@ import { retrievalConfigSchema } from "../../config/plugin-config-retrieval-sche
 import type { PluginConfig } from "../../config/plugin-config-schema";
 import { SESSION_STRATEGIES } from "../../config/session-strategy";
 
-export type EngineSettings = Omit<PluginConfig, keyof LlmRoutingConfig>;
+export type EngineSettings = Omit<PluginConfig, keyof LlmRoutingConfig | "remEnhanced">;
 
 export const engineSettingsSchema: z.ZodType<EngineSettings, unknown> = z.object({
 	embedding: embeddingConfigSchema,

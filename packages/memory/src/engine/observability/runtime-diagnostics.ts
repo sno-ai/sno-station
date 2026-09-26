@@ -56,7 +56,6 @@ export function emitRuntimeStartSnapshot(input: RuntimeDiagnosticSnapshot): void
 	snapshotEmitted = true;
 	const hostModel = configuredHostModel(input.hostModel);
 	const configuredRouting = pickLlmRoutingConfig(input.routing);
-	const directAgent = configuredRouting.agentNative.flavor === "byok";
 	const endpoint = endpointWithoutCredentials(input.baseURL);
 	const routing = Object.keys(MODEL_CALLS).map((id) => {
 		const callId = id as keyof typeof MODEL_CALLS;
@@ -68,10 +67,8 @@ export function emitRuntimeStartSnapshot(input: RuntimeDiagnosticSnapshot): void
 		tiers: {
 			snoRemMem: { preset: input.preset, model: "unavailable", model_reason: "resolved_at_request",
 				...(endpoint ? { endpoint } : { route_reason: "resolved_at_request" }) },
-			agent: directAgent
-				? { model: "unavailable", model_reason: "resolved_at_request", preset: input.preset, transport: "chat-completions" }
-				: { model: hostModel ?? "unavailable", model_reason: hostModel ? "host_configuration" : "host_owned_per_request",
-					transport: "agent-host-seam" },
+			agent: { model: hostModel ?? "unavailable", model_reason: hostModel ? "host_configuration" : "host_owned_per_request",
+				transport: "agent-host-seam" },
 		},
 		effective_level: effectiveLogLevel(), file_sink: loggerFileStatus(),
 		extraction_skill_hash: ATOMIC_EXTRACTION_SKILL_HASH,

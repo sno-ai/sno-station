@@ -15,9 +15,6 @@ import {
 	sessionMemoryConfigSchema,
 } from "./plugin-config-feature-schema";
 import {
-	type AgentNativeFlavor,
-	agentNativeConfigSchema,
-	type LlmOccasionTiers,
 	DEFAULT_MODEL_MODE,
 	PRODUCT_MODES,
 	remEnhancedConfigSchema,
@@ -74,6 +71,22 @@ function normalizeProductMode(raw: unknown): unknown {
 	const rawConfig = asPlainObject(raw);
 	if (rawConfig === undefined) return raw;
 	const cfg = { ...rawConfig };
+	if ("agentNative" in cfg) {
+		delete cfg.agentNative;
+		log.warn("Ignored agentNative from plugin config", undefined, {
+			event_name: "memory.plugin_config.agent_native_ignored", file: "packages/memory/config/plugin-config-schema.ts",
+			function: "normalizeProductMode", site_id: "plugin-config-schema.normalizeProductMode.agentNative",
+		});
+	}
+	const remEnhanced = asPlainObject(cfg.remEnhanced);
+	if (remEnhanced && "occasions" in remEnhanced) {
+		const { occasions: _occasions, ...current } = remEnhanced;
+		cfg.remEnhanced = current;
+		log.warn("Ignored remEnhanced.occasions from plugin config", undefined, {
+			event_name: "memory.plugin_config.rem_occasions_ignored", file: "packages/memory/config/plugin-config-schema.ts",
+			function: "normalizeProductMode", site_id: "plugin-config-schema.normalizeProductMode.occasions",
+		});
+	}
 	if ("llmGates" in cfg) {
 		delete cfg.llmGates;
 		log.debug("sno-station-mem: stripped retired llmGates config key", undefined, {
@@ -122,8 +135,7 @@ type PluginConfigOutput = {
 		memoryTelemetry: { enabled: boolean; currentKeyVersion: number };
 		mode: (typeof PRODUCT_MODES)[number];
 		remOperations: (typeof REM_OPERATIONS)[number][];
-		remEnhanced: { occasions: LlmOccasionTiers; trigger?: { tick: boolean } };
-		agentNative: { flavor: AgentNativeFlavor };
+		remEnhanced?: { trigger: { tick: boolean } };
 		onboarding?:
 			| { version: number; completedAt: string; profile: (typeof ONBOARDING_PROFILES)[number] }
 			| undefined;
@@ -208,7 +220,6 @@ const pluginConfigBaseSchema = z
 		mode: z.enum(PRODUCT_MODES).default(DEFAULT_MODEL_MODE),
 		remOperations: z.array(z.enum(REM_OPERATIONS)).min(1).max(2).default([...REM_OPERATIONS]),
 		remEnhanced: remEnhancedConfigSchema,
-		agentNative: agentNativeConfigSchema,
 		/**
 		 * Installer completion marker (bin/_onboarding-core.js writes it into
 		 * this same config block). The runtime never reads it, but the strict

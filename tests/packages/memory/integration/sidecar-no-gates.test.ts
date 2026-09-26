@@ -24,10 +24,12 @@ import { RegisteredAgentPort } from "../../../../packages/memory/src/model/regis
 import { Embedder } from "../../../../packages/memory/src/engine/extraction/embedding-provider-client";
 import { MemoryStore } from "../../../../packages/memory/src/store/store";
 import { createTestDb, createTestEmbedder } from "../../../apps/mem-claw/helpers/test-db";
+import { modelReply, startRecorder } from "./fixtures/model-recorders";
 
 let root: string;
 let database: ReturnType<typeof createTestDb>;
 let sidecar: Awaited<ReturnType<typeof startRemSidecar>> | undefined;
+const closers: Array<() => Promise<void>> = [];
 const previousProfile = process.env.SNO_PROFILE_DIR;
 
 beforeEach(async () => {
@@ -40,6 +42,7 @@ beforeEach(async () => {
 afterEach(async () => {
 	await sidecar?.stop();
 	sidecar = undefined;
+	for (const close of closers.splice(0)) await close();
 	database.cleanup();
 	rmSync(root, { recursive: true, force: true });
 	if (previousProfile === undefined) delete process.env.SNO_PROFILE_DIR;
@@ -63,16 +66,27 @@ async function contractPost(path: string, body: unknown, skin?: string): Promise
 }
 
 function registration(mode: "local-first" | "agent-native", model?: { baseUrl: string; credential: string; model: string }) {
-	const { remEnhanced, agentNative, language: _language, mode: _mode, ...settings } = pluginConfigSchema.parse({
+	const { remEnhanced: _remEnhanced, language: _language, mode: _mode, ...settings } = pluginConfigSchema.parse({
 		mode, retrieval: { rerank: "none" }, observe: { enabled: false },
 	});
-	return { skinId: "body-skin", settings, routing: { mode, remEnhanced, agentNative, language: "en" }, ...(model ? { model } : {}) };
+	return { skinId: "body-skin", settings, routing: { mode, language: "en" }, ...(model ? { model } : {}) };
 }
 
-// REM Enhanced sends every REM call to the Sno GPU, so REM runs without a connected host model.
 function installRemEnhancedMode(): void {
 	const configPath = join(root, "station", `sno-station-mem-${userInfo().username}.config.json`);
 	writeFileSync(configPath, JSON.stringify({ ...JSON.parse(readFileSync(configPath, "utf8")), mode: "rem-enhanced" }));
+}
+
+// REM Enhanced sends REM2, REM6, REM7 and REM8 to the host model, so a REM run needs a skin with a model callback.
+async function connectHost(port: number): Promise<void> {
+	const host = await startRecorder(closers, ({ raw }) => modelReply("{}", raw));
+	const response = await fetch(`http://127.0.0.1:${port}/v1/init`, {
+		method: "POST", headers: { "x-sno-station-mem-skin": "rem-host" }, signal: AbortSignal.timeout(30_000),
+		body: JSON.stringify({ scope: { principal: "caller", project: "global", session: "rem-host" }, registration: {
+			...registration("local-first", { baseUrl: `${host.url}/v1`, credential: "loopback-credential", model: "loopback-model" }),
+			skinId: "rem-host" } }),
+	});
+	expect(response.status).toBe(200);
 }
 
 function runCli(args: string[], entry = "cli.js"): Promise<{ code: number | null; stdout: string; stderr: string }> {
@@ -454,26 +468,6 @@ describe("documented HTTP runtime claims", () => {
 });
 
 describe("sidecar keeps serving", () => {
-	it("restores the installed REM tick default after the pool closes", async () => {
-		const configPath = join(root, "station", `sno-station-mem-${userInfo().username}.config.json`);
-		const installed = JSON.parse(readFileSync(configPath, "utf8"));
-		delete installed.remEnhanced;
-		writeFileSync(configPath, JSON.stringify(installed));
-		const pool = await MemoryRuntimePool.open();
-		const { mode, remEnhanced, agentNative, language: _language, ...settings } = pool.config;
-		try {
-			const result = await pool.invoke("init", {
-				scope: { principal: userInfo().username, project: "global", session: "tick-close" },
-				registration: { skinId: "tick-close", settings, routing: { mode, agentNative, language: "en",
-					remEnhanced: { occasions: remEnhanced.occasions, trigger: { tick: false } } } },
-			}, "tick-close");
-			expect(result).toMatchObject({ degraded: false });
-			expect(readRemAutomaticOperations(configPath).tickEnabled).toBe(false);
-		} finally {
-			await pool.close();
-		}
-		expect(readRemAutomaticOperations(configPath).tickEnabled).toBe(true);
-	});
 	it("rejects inherited registration when the installation config cannot be read", async () => {
 		const configPath = join(root, "station", `sno-station-mem-${userInfo().username}.config.json`);
 		const original = readFileSync(configPath);
@@ -503,30 +497,36 @@ describe("sidecar keeps serving", () => {
 			chmodSync(configPath, 0o600);
 		}
 	});
-	it("reads the REM tick switch across HTTP skin registrations", async () => {
+	it("reads the REM tick switch from the installed settings only and ignores it on a registration", async () => {
 		await health();
 		if (!sidecar) throw new Error("missing test sidecar");
 		const url = `http://127.0.0.1:${sidecar.port}/v1/init`;
 		const configPath = join(root, "station", `sno-station-mem-${userInfo().username}.config.json`);
 		const installed = JSON.parse(readFileSync(configPath, "utf8"));
-		delete installed.remEnhanced;
+		// A previous release's installed file also carries the per-occasion switches; the tick still reads false.
+		writeFileSync(configPath, JSON.stringify({ ...installed,
+			remEnhanced: { trigger: { tick: false }, occasions: { memoryExtract: "snoRemMem", summaryBuild: "agent" } } }));
+		const { mode, remEnhanced: _remEnhanced, language: _language, ...settings } = pluginConfigSchema.parse({ mode: "local-first", retrieval: { rerank: "none" } });
+		const register = (skinId: string, routing: Record<string, unknown>) => fetch(url, {
+			method: "POST", headers: { "x-sno-station-mem-skin": skinId },
+			body: JSON.stringify({ scope: { principal: userInfo().username, project: "global", session: "tick-switch" },
+				registration: { skinId, settings, routing } }),
+		});
+		// An older plugin sends these routing keys; the registration is accepted and they change nothing.
+		for (const routing of [
+			{ mode, language: "en", remEnhanced: { trigger: { tick: true } } },
+			{ mode, language: "en", agentNative: { flavor: "subscription" } },
+		]) {
+			const older = await register("a", routing);
+			expect(older.status).toBe(200);
+			expect(readRemAutomaticOperations(configPath).tickEnabled).toBe(false);
+		}
+		expect((await register("a", { mode, language: "en", flavor: "subscription" })).status).toBe(400);
+		const accepted = await register("b", { mode, language: "en" });
+		expect(accepted.status).toBe(200);
+		expect(await accepted.json()).toMatchObject({ degraded: false });
+		expect(readRemAutomaticOperations(configPath).tickEnabled).toBe(false);
 		writeFileSync(configPath, JSON.stringify(installed));
-		const { mode, remEnhanced, agentNative, language: _language, ...settings } = pluginConfigSchema.parse({ mode: "local-first", retrieval: { rerank: "none" } });
-		const register = async (skinId: string, tick?: boolean): Promise<void> => {
-			const response = await fetch(url, {
-				method: "POST", headers: { "x-sno-station-mem-skin": skinId },
-				body: JSON.stringify({ scope: { principal: userInfo().username, project: "global", session: "tick-switch" },
-					registration: { skinId, settings, routing: { mode, agentNative, language: "en",
-						remEnhanced: { occasions: remEnhanced.occasions, ...(tick === undefined ? {} : { trigger: { tick } }) } } } }),
-			});
-			expect(response.status).toBe(200);
-			expect(await response.json()).toMatchObject({ degraded: false });
-		};
-		await register("a", false);
-		expect(readRemAutomaticOperations(configPath).tickEnabled).toBe(false);
-		await register("b");
-		expect(readRemAutomaticOperations(configPath).tickEnabled).toBe(false);
-		await register("a", true);
 		expect(readRemAutomaticOperations(configPath).tickEnabled).toBe(true);
 	});
 	it("runs accepted delayed REM starts when shutdown overlaps body reading", async () => {
@@ -535,6 +535,7 @@ describe("sidecar keeps serving", () => {
 		try {
 			await health();
 			if (!sidecar) throw new Error("missing test sidecar");
+			await connectHost(sidecar.port);
 			const url = `http://127.0.0.1:${sidecar.port}/rem/run`;
 			const accepted = await fetch(url, { method: "POST", headers: { Connection: "close" }, body: JSON.stringify({ type: "rem-update", scope: "queued" }) });
 			expect(accepted.status).toBe(202);
@@ -681,11 +682,11 @@ describe("sidecar keeps serving", () => {
 		const scope = { principal: "caller", project: "global", session: "agent:probe:session",
 			host: { workspace: root, boundary: "new", sessionFile, sessionId: "session-end" } };
 		const config = pluginConfigSchema.parse({ ...pool.config, mode: "agent-native", sessionStrategy: "memoryReflection" });
-		const { mode, remEnhanced, agentNative, language: _language, ...settings } = config;
+		const { mode, remEnhanced: _remEnhanced, language: _language, ...settings } = config;
 		let result: Promise<unknown> | undefined;
 		try {
 			await pool.invoke("init", { scope, registration: { skinId: "session-end", settings,
-				routing: { mode, remEnhanced, agentNative, language: "en" } } }, "session-end");
+				routing: { mode, language: "en" } } }, "session-end");
 			result = pool.invoke("onSessionEnd", { scope, messages: [] }, "session-end", controller.signal).catch(error => error);
 			await entered.promise;
 			controller.abort(new Error("session cancelled"));
@@ -1054,11 +1055,11 @@ describe("sidecar keeps serving", () => {
 	});
 	it("uses installed embedding settings when a registration names another model and store", async () => {
 		const config = pluginConfigSchema.parse({ mode: "local-first", retrieval: { rerank: "none" }, dbPath: "/unused/requested.sqlite", embedding: { model: "not-installed", dimensions: 3 } });
-		const { mode, remEnhanced, agentNative, language: _language, ...settings } = config;
+		const { mode, remEnhanced: _remEnhanced, language: _language, ...settings } = config;
 		const pool = await MemoryRuntimePool.open();
 		try {
 			expect(await pool.invoke("init", { scope: { principal: userInfo().username, project: "global", session: "probe" },
-				registration: { skinId: "header-skin", settings, routing: { mode, remEnhanced, agentNative, language: "en" } } }, "header-skin"))
+				registration: { skinId: "header-skin", settings, routing: { mode, language: "en" } } }, "header-skin"))
 				.toMatchObject({ degraded: false, skinId: "header-skin" });
 			expect(await pool.invoke("inspect", { scope: { principal: userInfo().username, project: "global", session: "probe" }, op: { op: "list" } }, "header-skin"))
 				.toEqual({ degraded: false, result: { op: "list", project: "global", entries: [] } });
@@ -1127,9 +1128,9 @@ describe("sidecar keeps serving", () => {
 	it("serves native recall without host workspace registration", async () => {
 		const pool = await MemoryRuntimePool.open();
 		try {
-			const { mode, remEnhanced, agentNative, language: _language, ...settings } = pool.config;
+			const { mode, remEnhanced: _remEnhanced, language: _language, ...settings } = pool.config;
 			const scope = { principal: userInfo().username, project: "global", session: "native-probe" };
-			await pool.invoke("init", { scope, registration: { skinId: "native-probe", settings, routing: { mode, remEnhanced, agentNative, language: "en" } } }, "native-probe");
+			await pool.invoke("init", { scope, registration: { skinId: "native-probe", settings, routing: { mode, language: "en" } } }, "native-probe");
 			await pool.store.store({ text: "Native notebook marker.", category: "episodic", projectId: "global" });
 			expect(await pool.invoke("getRecall", { scope, query: "Native notebook marker.", options: { source: "native", limit: 5, minScore: 0 } }, "native-probe"))
 				.toMatchObject({ degraded: false, nativeHits: [{ snippet: "Native notebook marker." }] });
@@ -1139,9 +1140,9 @@ describe("sidecar keeps serving", () => {
 		writeFileSync(join(root, "sno-station-mem", "killswitch"), JSON.stringify({ reason: "integrity failure", activatedBy: "maintenance", activated: "2026-09-17T01:37:54Z" }));
 		const pool = await MemoryRuntimePool.open();
 		try {
-			const { mode, remEnhanced, agentNative, language: _language, ...settings } = pool.config;
+			const { mode, remEnhanced: _remEnhanced, language: _language, ...settings } = pool.config;
 			const scope = { principal: userInfo().username, project: "global", session: "agent:probe:session" };
-			await pool.invoke("init", { scope, registration: { skinId: "capture-probe", settings, routing: { mode, remEnhanced, agentNative, language: "en" } } }, "capture-probe");
+			await pool.invoke("init", { scope, registration: { skinId: "capture-probe", settings, routing: { mode, language: "en" } } }, "capture-probe");
 			const result = await pool.invoke("capture", { scope,
 				turn: { turnId: "capture-probe", rewindEpoch: 0, messages: [{ role: "user", content: "I keep a blue notebook.", at: 1789606800000 }] },
 			}, "capture-probe");
@@ -1238,6 +1239,7 @@ it("excludes jobs accepted before recovery finishes from the startup snapshot", 
 	const publication = vi.spyOn(filesystem, "rename").mockImplementation(async (source, destination) => {
 		if (destination === discoveryPath) {
 			const discovery = JSON.parse(readFileSync(source, "utf8"));
+			await connectHost(discovery.port);
 			const response = await fetch(`http://127.0.0.1:${discovery.port}/rem/run`, {
 				method: "POST", body: JSON.stringify({ type: "rem-update", scope: "global" }),
 				signal: AbortSignal.timeout(5_000),

@@ -1,11 +1,14 @@
 import { z } from "zod";
+import { createLogger } from "@snoai/utils/logger";
 import { DEFAULT_LOCALE, SUPPORTED_LOCALES, type Locale } from "../src/engine/i18n/locales";
+
+const log = createLogger("sno-station-mem:registration-routing");
 
 /**
  * Product LLM modes, tier-ordered: Local First (selected calls on host) → Agent
  * Native (every call borrows the host agent's model) → REM Enhanced (top
- * tier: SNO-REM-MEM serves the LoRA-covered occasions, the host model covers
- * the rest, adjustable per occasion).
+ * tier: SNO-REM-MEM serves the LoRA-covered calls, the host model covers
+ * the rest).
  */
 export const PRODUCT_MODES = ["local-first", "agent-native", "rem-enhanced"] as const;
 
@@ -13,14 +16,7 @@ export type ProductMode = (typeof PRODUCT_MODES)[number];
 
 export const DEFAULT_MODEL_MODE: ProductMode = "agent-native";
 
-export const LLM_TIERS = ["snoRemMem", "agent"] as const;
-
-export type LlmTier = (typeof LLM_TIERS)[number];
-
-/**
- * The six live LLM occasions retained for existing REM Enhanced configuration.
- * Call ids identify individual requests; the occasion only preserves current overrides.
- */
+/** Occasions select system messages; call ids select destinations. */
 export const LLM_OCCASIONS = [
 	"memoryExtract",
 	"profileSectionMerge",
@@ -32,56 +28,9 @@ export const LLM_OCCASIONS = [
 
 export type LlmOccasion = (typeof LLM_OCCASIONS)[number];
 
-export type LlmOccasionTiers = Record<LlmOccasion, LlmTier>;
-
-export const AGENT_NATIVE_FLAVORS = ["subscription", "byok"] as const;
-
-export type AgentNativeFlavor = (typeof AGENT_NATIVE_FLAVORS)[number];
-
-const tierSchema = z.enum(LLM_TIERS);
-
-/**
- * REM Enhanced per-occasion tier switches. Defaults are the v1 release
- * targets: only the LoRA-covered occasions (extraction, conflict
- * adjudication) ride SNO-REM-MEM; everything else rides the host agent's
- * model. Changing a default is a release decision — the switch exists so
- * that change is config, not code.
- */
-export const remEnhancedConfigSchema: z.ZodType<
-	{ occasions: LlmOccasionTiers; trigger?: { tick: boolean } },
-	unknown
-> = z
+export const remEnhancedConfigSchema: z.ZodType<{ trigger: { tick: boolean } }, unknown> = z
 	.object({
 		trigger: z.object({ tick: z.boolean().default(true) }).strict().prefault({}),
-		occasions: z
-			.object({
-				memoryExtract: tierSchema.default("snoRemMem"),
-				dedupDecision: tierSchema.default("agent"),
-				profileSectionMerge: tierSchema.default("agent"),
-				profileActiveTaskClassify: tierSchema.default("agent"),
-				profileActiveTaskMatch: tierSchema.default("agent"),
-				conflictAdjudication: tierSchema.default("snoRemMem"),
-				summaryBuild: tierSchema.default("agent"),
-				intentClassifier: tierSchema.default("agent"),
-				dateResolution: tierSchema.default("agent"),
-			})
-			.strict()
-			.prefault({}),
-	})
-	.strict()
-	.prefault({});
-
-/**
- * Agent Native flavor selects transport only. Subscription borrows the host
- * model over the in-process seam; BYOK uses the user's API-key preset over the
- * ordinary chat transport. Both carry identical occasion-to-tier routing.
- */
-export const agentNativeConfigSchema: z.ZodType<
-	{ flavor: AgentNativeFlavor },
-	unknown
-> = z
-	.object({
-		flavor: z.enum(AGENT_NATIVE_FLAVORS).default("subscription"),
 	})
 	.strict()
 	.prefault({});
@@ -89,26 +38,38 @@ export const agentNativeConfigSchema: z.ZodType<
 /** The schema-defaulted config slice the request-time route resolver consumes. */
 export type LlmRoutingConfig = {
 	mode: ProductMode;
-	remEnhanced: { occasions: LlmOccasionTiers; trigger?: { tick: boolean } };
-	agentNative: { flavor: AgentNativeFlavor };
 	language: Locale;
 };
 
 export const llmRoutingConfigSchema: z.ZodType<
 	LlmRoutingConfig,
 	unknown
-> = z
+> = z.preprocess((value) => {
+	if (!value || typeof value !== "object" || Array.isArray(value)) return value;
+	const routing = { ...value };
+	if ("agentNative" in routing) {
+		delete routing.agentNative;
+		log.warn("Ignored agentNative from registration", undefined, {
+			event_name: "memory.registration.agent_native_ignored", file: "packages/memory/config/plugin-config-mode-schema.ts",
+			function: "llmRoutingConfigSchema", site_id: "plugin-config-mode-schema.routing.agentNative",
+		});
+	}
+	if ("remEnhanced" in routing) {
+		delete routing.remEnhanced;
+		log.warn("Ignored remEnhanced from registration", undefined, {
+			event_name: "memory.registration.rem_enhanced_ignored", file: "packages/memory/config/plugin-config-mode-schema.ts",
+			function: "llmRoutingConfigSchema", site_id: "plugin-config-mode-schema.routing.remEnhanced",
+		});
+	}
+	return routing;
+}, z
 	.object({
 		mode: z.enum(PRODUCT_MODES),
-		remEnhanced: remEnhancedConfigSchema,
-		agentNative: agentNativeConfigSchema,
 		language: z.enum(SUPPORTED_LOCALES).default(DEFAULT_LOCALE),
 	})
-	.strict();
+	.strict());
 
 export type LlmRoutingConfigInput = {
 	mode: ProductMode;
-	remEnhanced?: unknown;
-	agentNative?: unknown;
 	language?: unknown;
 };

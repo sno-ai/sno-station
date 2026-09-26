@@ -13,19 +13,7 @@ import { MemoryStore } from "../../../../packages/memory/src/store/store";
 import { requireEnv } from "../../../apps/mem-claw/helpers/env.ts";
 import { createTestDb, createTestEmbedder, type TestDb } from "../../../apps/mem-claw/helpers/test-db.ts";
 
-const ROUTING: LlmRoutingConfig = {
-	mode: "rem-enhanced",
-	remEnhanced: {
-		occasions: {
-			memoryExtract: "snoRemMem",
-			profileSectionMerge: "snoRemMem",
-			profileActiveTaskClassify: "snoRemMem",
-			conflictAdjudication: "snoRemMem",
-			summaryBuild: "agent",
-		},
-	},
-	agentNative: { flavor: "subscription" },
-};
+const ROUTING: LlmRoutingConfig = { mode: "rem-enhanced", language: "en" };
 const SCOPE = "candidate-disposition-lane-rejection";
 const SESSION_DATE_TIME = "2026-07-31T00:00:00.000Z";
 

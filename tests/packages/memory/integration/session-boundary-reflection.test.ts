@@ -41,9 +41,9 @@ beforeEach(async () => {
 	mkdirSync(join(root, "sno-station-mem"), { recursive: true });
 	pool = await MemoryRuntimePool.open();
 	const config = pluginConfigSchema.parse({ ...pool.config, mode: "local-first", sessionStrategy: "memoryReflection" });
-	const { mode, remEnhanced, agentNative, language: _language, ...settings } = config;
+	const { mode, remEnhanced: _remEnhanced, language: _language, ...settings } = config;
 	await pool.invoke("init", { scope: scope("init-session"), registration: { skinId: "session-boundary",
-		settings, routing: { mode, remEnhanced, agentNative, language: "en" } } }, "session-boundary");
+		settings, routing: { mode, language: "en" } } }, "session-boundary");
 });
 
 afterEach(async () => {
@@ -120,9 +120,9 @@ describe("reflection of the previous session on a reset boundary (local-first, e
 
 	it("(d) Hermes skin: the reset reflection goes under the profile root's project folder, never the workspace", async () => {
 		const config = pluginConfigSchema.parse({ ...pool?.config, mode: "local-first", sessionStrategy: "memoryReflection" });
-		const { mode, remEnhanced, agentNative, language: _language, ...settings } = config;
+		const { mode, remEnhanced: _remEnhanced, language: _language, ...settings } = config;
 		await pool?.invoke("init", { scope: scope("hermes-init"), registration: { skinId: "hermes",
-			settings, routing: { mode, remEnhanced, agentNative, language: "en" } } }, "hermes");
+			settings, routing: { mode, language: "en" } } }, "hermes");
 		// Exactly what sno-mem-hermes keeps on on_session_end and posts on the reset path: role, content, at (ms, float),
 		// every role in system|developer|user|assistant|tool, with no session file on the boundary.
 		await resetBoundary("hermes-profile-old-session", undefined, [
@@ -171,9 +171,9 @@ describe("the reflection prompt carries the previous session's own conversation 
 	beforeEach(async () => {
 		host = await hostRecorder();
 		const config = pluginConfigSchema.parse({ ...pool?.config, mode: "agent-native", sessionStrategy: "memoryReflection" });
-		const { mode, remEnhanced, agentNative, language: _language, ...settings } = config;
+		const { mode, remEnhanced: _remEnhanced, language: _language, ...settings } = config;
 		await pool?.invoke("init", { scope: scope("reflection-host-init"), registration: { skinId: "reflection-host", settings,
-			routing: { mode, remEnhanced, agentNative, language: "en" },
+			routing: { mode, language: "en" },
 			model: { baseUrl: `${host.url}/host/v1/`, credential: "loopback-credential", model: "loopback-model" } } }, "reflection-host");
 	});
 	afterEach(async () => { await host.close(); });

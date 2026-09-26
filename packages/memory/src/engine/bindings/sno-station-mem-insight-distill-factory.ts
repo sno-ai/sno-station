@@ -22,9 +22,6 @@ import { pickLlmRoutingConfig, resolveLlmRoute } from "../../model/llm-mode-rout
 
 // Insight Distill factory.
 
-type InsightDistillFactoryConfig = Omit<PluginConfig, "remEnhanced" | "agentNative"> &
-	Partial<Pick<PluginConfig, "remEnhanced" | "agentNative">>;
-
 /**
  * Assembles Insight Distill from validated inputs for deterministic plugin lifecycle
  * orchestration.
@@ -34,7 +31,7 @@ type InsightDistillFactoryConfig = Omit<PluginConfig, "remEnhanced" | "agentNati
 // LH: This guard is the main product switch between deterministic capture and LLM-assisted memory formation.
 export function buildInsightDistiller(
 	api: SnoStationMemPluginApi,
-	config: InsightDistillFactoryConfig,
+	config: PluginConfig,
 	store: MemoryStore,
 	_embedder: Embedder,
 	_observability: PluginObservability,

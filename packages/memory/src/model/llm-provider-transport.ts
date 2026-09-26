@@ -652,7 +652,6 @@ function resolveEnvApiKey(
 			? process.env.SNO_MEM_CLAW_LLM_API_KEY
 			: (process.env.SNO_MEM_CLAW_LLM_API_KEY ?? process.env[FIXED_EXTRACTION_KEY_NAME]);
 	}
-	if (provider === "openrouter") return process.env.OPENROUTER_API_KEY;
 	return undefined;
 }
 

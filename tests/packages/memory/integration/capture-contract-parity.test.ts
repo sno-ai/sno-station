@@ -28,8 +28,8 @@ async function fixture() {
 		retriever: createRetriever(store, env.embedder, undefined, config.retrieval), stateDir: dirname(env.dbPath),
 		observability: new PluginObservability(config, dirname(env.dbPath), logger) };
 	cleanups.push(async () => { await accessTracker.destroy(); await store.close(); env.cleanup(); });
-	const { mode, remEnhanced, agentNative, language, ...settings } = config;
-	const registration: Registration = { skinId: "parity", settings, routing: { mode, remEnhanced, agentNative, language } };
+	const { mode, remEnhanced: _remEnhanced, language, ...settings } = config;
+	const registration: Registration = { skinId: "parity", settings, routing: { mode, language } };
 	return { services, config, registration, sameKey: Buffer.from(getDekSync()) };
 }
 function rows(store: MemoryStore) {

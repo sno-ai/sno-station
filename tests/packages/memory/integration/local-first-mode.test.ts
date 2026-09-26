@@ -6,7 +6,6 @@
 
 import { spawn } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
@@ -17,24 +16,10 @@ import { bindStore } from "../../../../packages/memory/src/engine/shared/paths";
 import { MODEL_CALLS } from "../../../../packages/memory/src/model/model-call-table";
 import { startRemSidecar } from "../../../../packages/memory/src/sidecar/server";
 import { createTestDb } from "../../../apps/mem-claw/helpers/test-db";
+import { modelReply, type RecorderReply, startRecorder } from "./fixtures/model-recorders";
 
 const repoRoot = resolve(import.meta.dirname, "../../../..");
 const SEED_SCOPE = { principal: "caller", project: "global", session: "local-first-seed" };
-/** A fixed line inside each prompt template, and the call id of the model-call table it belongs to. */
-const PROMPT_LINES: Array<[string, string]> = [
-	["Task: REM source rewrite.", "REM5"],
-	["Task: REM rewrite verification.", "REM6"],
-	["Task: REM relation judgment.", "REM7"],
-	["Task: REM retirement target judgment.", "REM8"],
-	["Task: REM clause carry judgment.", "REM4"],
-	["Adjudicate whether the newer memory replaces the older memory.", "REM1"],
-	["Judge one current-state profile update.", "P4"],
-	["Separate lifecycle retirement from profile ownership cleanup.", "P2"],
-	["Stored clause (retired): ", "P3"],
-	["Write one current-state profile section after a separate judgment has already finished.", "P5"],
-	["Retired position: ", "P6"],
-];
-
 let root: string;
 let database: ReturnType<typeof createTestDb>;
 let sidecar: Awaited<ReturnType<typeof startRemSidecar>> | undefined;
@@ -61,50 +46,28 @@ afterEach(async () => {
 	else process.env.SNO_PROFILE_DIR = previousProfile;
 });
 
-function callId(content: string): string {
-	return PROMPT_LINES.find(([line]) => content.includes(line))?.[1] ?? content.split("\n")[0]?.slice(0, 80) ?? "";
-}
-
 type HostMode = "answer" | "auth" | "exhausted" | "answer-first-rem-then-refuse" | "p4-then-auth" | "p4-then-exhausted" | "p4-p3-then-auth";
 
 /** One loopback endpoint; records the call id of every prompt it receives. */
 async function recorder(kind: "sno" | "host", initialMode: HostMode = "answer") {
-	const state = { mode: initialMode, calls: [] as string[], received: [] as Array<{ id: string; content: string; answered: boolean }> };
-	const server = createServer(async (request, response) => {
-		let raw = "";
-		for await (const chunk of request) raw += chunk;
-		let body: { prompt?: unknown; messages?: Array<{ content?: unknown }> } = {};
-		try { body = JSON.parse(raw); } catch { /* recorded as an empty prompt */ }
-		const content = String(body.messages?.at(-1)?.content ?? body.prompt ?? "");
-		const id = callId(content);
-		state.calls.push(id);
-		const send = (status: number, payload: unknown): void => {
-			state.received.push({ id, content, answered: status === 200 });
-			response.writeHead(status, { "content-type": "application/json" });
-			response.end(JSON.stringify(payload));
-		};
-		if (kind === "sno") return send(503, { error: "loopback Sno recorder" });
-		if (state.mode === "auth") return send(401, { error: { kind: "error", category: "auth", message: "loopback auth refusal" } });
-		if (state.mode === "exhausted") return send(503, { error: { kind: "error", category: "exhausted", message: "loopback quota refusal" } });
+	const state = { mode: initialMode };
+	const refuse = (status: number, error: unknown): RecorderReply => ({ status, body: { error } });
+	const endpoint = await startRecorder(closers, ({ id, content }, seen) => {
+		if (kind === "sno") return refuse(503, "loopback Sno recorder");
+		if (state.mode === "auth") return refuse(401, { kind: "error", category: "auth", message: "loopback auth refusal" });
+		if (state.mode === "exhausted") return refuse(503, { kind: "error", category: "exhausted", message: "loopback quota refusal" });
 		const afterP4 = state.mode === "p4-then-exhausted" ? "exhausted" : state.mode.startsWith("p4-") ? "auth" : undefined;
 		if (afterP4 && ["P2", "P3", "P5", "P6"].includes(id) && !(state.mode === "p4-p3-then-auth" && id === "P3")) {
-			return send(afterP4 === "auth" ? 401 : 503, { error: { kind: "error", category: afterP4, message: `loopback ${afterP4} refusal` } });
+			return refuse(afterP4 === "auth" ? 401 : 503, { kind: "error", category: afterP4, message: `loopback ${afterP4} refusal` });
 		}
 		if (state.mode === "answer-first-rem-then-refuse" && id.startsWith("REM")
-			&& state.calls.filter(call => call.startsWith("REM")).length > 1) {
-			return send(503, { error: "worker-not-ready" });
+			&& seen.calls.filter(call => call.startsWith("REM")).length > 1) {
+			return refuse(503, "worker-not-ready");
 		}
-		send(200, { model: "loopback-model", choices: [{ message: { role: "assistant", content: hostAnswer(id, content) } }],
-			usage: { prompt_tokens: 1, completion_tokens: 1 } });
+		return modelReply(hostAnswer(id, content), false);
 	});
-	await new Promise<void>(done => server.listen(0, "127.0.0.1", done));
-	const address = server.address();
-	if (!address || typeof address === "string") throw new Error("missing recorder port");
-	closers.push(async () => {
-		server.closeAllConnections();
-		await new Promise<void>(done => server.close(() => done()));
-	});
-	return Object.assign(state, { url: `http://127.0.0.1:${address.port}` });
+	// The same arrays the recorder fills; `mode` stays switchable mid-test.
+	return Object.assign(state, endpoint);
 }
 
 function jsonAfter(content: string, prefix: string): unknown[] {
@@ -143,11 +106,12 @@ async function contractPost(path: string, body: unknown, skin: string): Promise<
 }
 
 async function registerHost(skinId: string, hostUrl: string, routingMode: "local-first" | "agent-native" = "local-first"): Promise<void> {
-	const { remEnhanced, agentNative, language: _language, mode, ...settings } = pluginConfigSchema.parse({
+	// Routing is the mode and the language only; every routing key beyond them is removed (rem-enhanced PRD REQ-3).
+	const { remEnhanced: _remEnhanced, agentNative: _agentNative, language: _language, mode: _mode, ...settings } = pluginConfigSchema.parse({
 		mode: routingMode, retrieval: { rerank: "none" }, observe: { enabled: false },
-	});
+	}) as Record<string, unknown>;
 	const response = await contractPost("/v1/init", { scope: { ...SEED_SCOPE, session: skinId }, registration: {
-		skinId, settings, routing: { mode, remEnhanced, agentNative, language: "en" },
+		skinId, settings, routing: { mode: routingMode, language: "en" },
 		model: { baseUrl: `${hostUrl}/host/v1/`, credential: "loopback-credential", model: "loopback-model" },
 	} }, skinId);
 	expect(response.status).toBe(200);

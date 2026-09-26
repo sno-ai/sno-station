@@ -21,7 +21,8 @@ type ModelCall = {
 const extract = { "local-first": "off", "agent-native": "host", "rem-enhanced": "sno-gpu" } as const;
 const host = { "local-first": "off", "agent-native": "host", "rem-enhanced": "host" } as const;
 const profile = { "local-first": "host", "agent-native": "host", "rem-enhanced": "host" } as const;
-const rem = { "local-first": "host", "agent-native": "sno-gpu", "rem-enhanced": "sno-gpu" } as const;
+const rem = { "local-first": "host", "agent-native": "host", "rem-enhanced": "sno-gpu" } as const;
+const remHost = { "local-first": "host", "agent-native": "host", "rem-enhanced": "host" } as const;
 const chat = FIXED_MEMORY_SNO_EXTRACT_CHAT;
 const verdict = FIXED_MEMORY_SNO_CONFLICT_VERDICT;
 
@@ -47,13 +48,13 @@ export const MODEL_CALLS: Record<ModelCallId, ModelCall> = {
 	T1: { description: "active task classification and match", occasion: "profileActiveTaskClassify", destinations: host, snoPreset: chat, transport: { host: "agent-host-seam", snoGpu: "chat-completions" }, promptVariant: { host: "standard", snoGpu: "standard" }, replyParser: { host: "json", snoGpu: "json" } },
 	R1: { description: "session reflection", occasion: "summaryBuild", destinations: host, snoPreset: chat, transport: { host: "agent-host-seam", snoGpu: "chat-completions" }, promptVariant: { host: "standard", snoGpu: "standard" }, replyParser: { host: "text", snoGpu: "text" } },
 	REM1: { description: "replace conflict pair", occasion: "conflictAdjudication", destinations: rem, snoPreset: verdict, transport: { host: "agent-host-seam", snoGpu: "raw-completions" }, promptVariant: { host: "adapter-a-chat", snoGpu: "adapter-a-raw" }, replyParser: { host: "json-or-single-token-verdict", snoGpu: "single-token-verdict" } },
-	REM2: { description: "replace clauses", occasion: "memoryExtract", destinations: rem, snoPreset: chat, transport: { host: "agent-host-seam", snoGpu: "chat-completions" }, promptVariant: { host: "standard", snoGpu: "standard" }, replyParser: { host: "json", snoGpu: "json" } },
+	REM2: { description: "replace clauses", occasion: "memoryExtract", destinations: remHost, snoPreset: chat, transport: { host: "agent-host-seam", snoGpu: "chat-completions" }, promptVariant: { host: "standard", snoGpu: "standard" }, replyParser: { host: "json", snoGpu: "json" } },
 	REM3: { description: "replace coverage", occasion: "memoryExtract", destinations: rem, snoPreset: chat, transport: { host: "agent-host-seam", snoGpu: "chat-completions" }, promptVariant: { host: "standard", snoGpu: "standard" }, replyParser: { host: "json", snoGpu: "json" } },
 	REM4: { description: "replace clause carry", occasion: "memoryExtract", destinations: rem, snoPreset: chat, transport: { host: "agent-host-seam", snoGpu: "chat-completions" }, promptVariant: { host: "standard", snoGpu: "standard" }, replyParser: { host: "json", snoGpu: "json" } },
 	REM5: { description: "update judgment", occasion: "memoryExtract", destinations: rem, snoPreset: chat, transport: { host: "agent-host-seam", snoGpu: "chat-completions" }, promptVariant: { host: "standard", snoGpu: "standard" }, replyParser: { host: "json", snoGpu: "json" } },
-	REM6: { description: "update verification", occasion: "memoryExtract", destinations: rem, snoPreset: chat, transport: { host: "agent-host-seam", snoGpu: "chat-completions" }, promptVariant: { host: "standard", snoGpu: "standard" }, replyParser: { host: "json", snoGpu: "json" } },
-	REM7: { description: "update relation", occasion: "memoryExtract", destinations: rem, snoPreset: chat, transport: { host: "agent-host-seam", snoGpu: "chat-completions" }, promptVariant: { host: "standard", snoGpu: "standard" }, replyParser: { host: "json", snoGpu: "json" } },
-	REM8: { description: "update retirement target", occasion: "memoryExtract", destinations: rem, snoPreset: chat, transport: { host: "agent-host-seam", snoGpu: "chat-completions" }, promptVariant: { host: "standard", snoGpu: "standard" }, replyParser: { host: "json", snoGpu: "json" } },
+	REM6: { description: "update verification", occasion: "memoryExtract", destinations: remHost, snoPreset: chat, transport: { host: "agent-host-seam", snoGpu: "chat-completions" }, promptVariant: { host: "standard", snoGpu: "standard" }, replyParser: { host: "json", snoGpu: "json" } },
+	REM7: { description: "update relation", occasion: "memoryExtract", destinations: remHost, snoPreset: chat, transport: { host: "agent-host-seam", snoGpu: "chat-completions" }, promptVariant: { host: "standard", snoGpu: "standard" }, replyParser: { host: "json", snoGpu: "json" } },
+	REM8: { description: "update retirement target", occasion: "memoryExtract", destinations: remHost, snoPreset: chat, transport: { host: "agent-host-seam", snoGpu: "chat-completions" }, promptVariant: { host: "standard", snoGpu: "standard" }, replyParser: { host: "json", snoGpu: "json" } },
 };
 
 export function modelCallDestination(callId: ModelCallId, mode: ProductMode): ModelDestination {

@@ -486,7 +486,6 @@ describe("reflection v3 — Group 3 (mapped-memory routing)", () => {
 			agentPort,
 			pluginConfigOverrides: {
 				mode: "agent-native",
-				agentNative: { flavor: "subscription" },
 				llmGates: { agentWriteCapture: true },
 			},
 		});
