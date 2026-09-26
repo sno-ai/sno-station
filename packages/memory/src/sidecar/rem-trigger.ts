@@ -33,7 +33,7 @@ import {
 } from "./rem-trigger-state";
 import type { SqliteDatabaseLike } from "../store/sqlite-runtime";
 import { MODEL_CALLS } from "../model/model-call-table";
-import type { ProductMode } from "../../config/plugin-config-mode-schema";
+import { DEFAULT_MODEL_MODE, type ProductMode } from "../../config/plugin-config-mode-schema";
 
 export const REM_DAILY_SCHEDULE_HOUR = 3;
 export const REM_VOLUME_THRESHOLD = 100;
@@ -83,7 +83,14 @@ const idleEvaluations = new Map<string, number>();
 export function readRemAutomaticOperations(
 	configPath: string = getInstallationConfigPath(),
 ): { mode: ProductMode; requestedOperations: RemAutomaticOperation[]; tickEnabled: boolean } {
-	const installed = installationSettingsSchema.parse(JSON.parse(readFileSync(configPath, "utf8")));
+	let installed: ReturnType<typeof installationSettingsSchema.parse>;
+	try {
+		installed = installationSettingsSchema.parse(JSON.parse(readFileSync(configPath, "utf8")));
+	} catch (error) {
+		// The memory runtime serves on defaults when this file is unreadable; REM follows the same defaults.
+		log.error("REM configuration unavailable; using installed defaults", { cause: errorMessage(error) }, { event_name: "memory.rem.trigger.configuration.unavailable", file: "packages/memory/src/sidecar/rem-trigger.ts", function: "readRemAutomaticOperations", site_id: "memory.rem.trigger.configuration.unavailable" });
+		return { mode: DEFAULT_MODEL_MODE, requestedOperations: ["rem-replace", "rem-update"], tickEnabled: true };
+	}
 	return {
 		mode: installed.mode,
 		requestedOperations: installed.remOperations ?? ["rem-replace", "rem-update"],
