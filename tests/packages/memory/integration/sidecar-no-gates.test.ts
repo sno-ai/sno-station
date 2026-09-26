@@ -497,27 +497,31 @@ describe("sidecar keeps serving", () => {
 			chmodSync(configPath, 0o600);
 		}
 	});
-	it("reads the REM tick switch from the installed settings only and refuses it on a registration", async () => {
+	it("reads the REM tick switch from the installed settings only and ignores it on a registration", async () => {
 		await health();
 		if (!sidecar) throw new Error("missing test sidecar");
 		const url = `http://127.0.0.1:${sidecar.port}/v1/init`;
 		const configPath = join(root, "station", `sno-station-mem-${userInfo().username}.config.json`);
 		const installed = JSON.parse(readFileSync(configPath, "utf8"));
-		writeFileSync(configPath, JSON.stringify({ ...installed, remEnhanced: { trigger: { tick: false } } }));
+		// A previous release's installed file also carries the per-occasion switches; the tick still reads false.
+		writeFileSync(configPath, JSON.stringify({ ...installed,
+			remEnhanced: { trigger: { tick: false }, occasions: { memoryExtract: "snoRemMem", summaryBuild: "agent" } } }));
 		const { mode, remEnhanced: _remEnhanced, language: _language, ...settings } = pluginConfigSchema.parse({ mode: "local-first", retrieval: { rerank: "none" } });
 		const register = (skinId: string, routing: Record<string, unknown>) => fetch(url, {
 			method: "POST", headers: { "x-sno-station-mem-skin": skinId },
 			body: JSON.stringify({ scope: { principal: userInfo().username, project: "global", session: "tick-switch" },
 				registration: { skinId, settings, routing } }),
 		});
+		// An older plugin sends these routing keys; the registration is accepted and they change nothing.
 		for (const routing of [
 			{ mode, language: "en", remEnhanced: { trigger: { tick: true } } },
 			{ mode, language: "en", agentNative: { flavor: "subscription" } },
 		]) {
-			const refused = await register("a", routing);
-			expect(refused.status).toBe(400);
+			const older = await register("a", routing);
+			expect(older.status).toBe(200);
 			expect(readRemAutomaticOperations(configPath).tickEnabled).toBe(false);
 		}
+		expect((await register("a", { mode, language: "en", flavor: "subscription" })).status).toBe(400);
 		const accepted = await register("b", { mode, language: "en" });
 		expect(accepted.status).toBe(200);
 		expect(await accepted.json()).toMatchObject({ degraded: false });

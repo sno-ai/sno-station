@@ -22,6 +22,7 @@ import {
 import { observeConfigSchema } from "./plugin-config-observe-schema";
 import { retrievalConfigSchema } from "./plugin-config-retrieval-schema";
 import { SESSION_STRATEGIES } from "./session-strategy";
+import { FIXED_MEMORY_SNO_AI_EXTRACT } from "../src/model/signed-registry-constants";
 
 const log = createLogger("sno-station-mem:plugin-config");
 
@@ -71,6 +72,31 @@ function normalizeProductMode(raw: unknown): unknown {
 	const rawConfig = asPlainObject(raw);
 	if (rawConfig === undefined) return raw;
 	const cfg = { ...rawConfig };
+	if ("agentNative" in cfg) {
+		delete cfg.agentNative;
+		log.warn("Ignored agentNative from plugin config", undefined, {
+			event_name: "memory.plugin_config.agent_native_ignored", file: "packages/memory/config/plugin-config-schema.ts",
+			function: "normalizeProductMode", site_id: "plugin-config-schema.normalizeProductMode.agentNative",
+		});
+	}
+	const remEnhanced = asPlainObject(cfg.remEnhanced);
+	if (remEnhanced && "occasions" in remEnhanced) {
+		const { occasions: _occasions, ...current } = remEnhanced;
+		cfg.remEnhanced = current;
+		log.warn("Ignored remEnhanced.occasions from plugin config", undefined, {
+			event_name: "memory.plugin_config.rem_occasions_ignored", file: "packages/memory/config/plugin-config-schema.ts",
+			function: "normalizeProductMode", site_id: "plugin-config-schema.normalizeProductMode.occasions",
+		});
+	}
+	const extraction = asPlainObject(cfg.extraction);
+	const llm = asPlainObject(extraction?.llm);
+	if (llm && (llm.preset === "mem_claw/openai_gpt_5_nano" || llm.preset === "mem_claw/openrouter_auto")) {
+		cfg.extraction = { ...extraction, llm: { ...llm, preset: FIXED_MEMORY_SNO_AI_EXTRACT } };
+		log.warn("Replaced removed extraction.llm.preset from plugin config", { preset: llm.preset }, {
+			event_name: "memory.plugin_config.old_preset_replaced", file: "packages/memory/config/plugin-config-schema.ts",
+			function: "normalizeProductMode", site_id: "plugin-config-schema.normalizeProductMode.preset",
+		});
+	}
 	if ("llmGates" in cfg) {
 		delete cfg.llmGates;
 		log.debug("sno-station-mem: stripped retired llmGates config key", undefined, {

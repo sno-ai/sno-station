@@ -79,9 +79,16 @@ it("keeps the REM Enhanced model split in the call table, not in the registratio
 	};
 	expect([destination("E1"), destination("REM1"), destination("REM2"), destination("P2")])
 		.toEqual(["sno-gpu", "sno-gpu", "host", "host"]);
-	expect(() => codingSkinInstallationSchema.parse({
+	// A previous release's installed file carried the per-occasion switches; they load and change no destination.
+	const upgraded = codingSkinInstallationSchema.parse({
 		storePath: join(tmpdir(), "coding-skin-rem.sqlite"),
 		mode: "rem-enhanced",
-		remEnhanced: { occasions: { memoryExtract: "agent" } },
-	})).toThrow(/occasions/);
+		remEnhanced: { trigger: { tick: true }, occasions: { memoryExtract: "agent", conflictAdjudication: "agent" } },
+	});
+	expect(upgraded.remEnhanced).toEqual({ trigger: { tick: true } });
+	expect(createCodingSkinRegistration({
+		skinId: "codex",
+		installed: upgraded,
+		model: { baseUrl: "http://127.0.0.1:1/v1", credential: "test", model: "test" },
+	}).routing).toEqual({ mode: "rem-enhanced", language: "en" });
 });
