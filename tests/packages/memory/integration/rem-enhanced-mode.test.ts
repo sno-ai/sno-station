@@ -423,7 +423,9 @@ describe("an installation upgraded from the previous release stays REM Enhanced"
 		const { remEnhanced: _remEnhanced, agentNative: _agentNative, language: _language, mode: _mode, ...settings } = pluginConfigSchema.parse({
 			mode: "rem-enhanced", embedding: EMBEDDING, retrieval: RETRIEVAL, observe: { enabled: false },
 		}) as Record<string, unknown>;
-		const init = await contractPost("/v1/init", { scope, registration: { skinId, settings,
+		// The previous release's OpenClaw plugin forwards a bring-your-own-key preset in settings.
+		const previousSettings = { ...settings, extraction: { llm: { preset: "mem_claw/openai_gpt_5_nano", timeoutMs: 30_000 } } };
+		const init = await contractPost("/v1/init", { scope, registration: { skinId, settings: previousSettings,
 			routing: { mode: "rem-enhanced", remEnhanced: { occasions: PREVIOUS_OCCASIONS, trigger: { tick: true } },
 				agentNative: { flavor: "subscription" }, language: "en" },
 			model: { baseUrl: `${host.url}/host/v1/`, credential: "loopback-credential", model: "loopback-model" },
