@@ -24,7 +24,7 @@ import { resolveSqliteVecPath } from "../../../../packages/memory/src/store/sqli
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../../..");
 const BUNDLED_VEC = resolve(
 	REPO_ROOT,
-	"packages/memory/sqlite-extensions/linux-x64/vec0.so",
+	`packages/memory/sqlite-extensions/linux-${process.arch}/vec0.so`,
 );
 const SQLITE_VEC_PACKAGE_IMPORT =
 	/(?:from\s+|import\s*\(\s*|require\s*\(\s*)["']sqlite-vec(?:["'/-])/u;
@@ -47,7 +47,7 @@ describe("sqlite-vec symbol isolation", () => {
 		}
 	});
 
-	it("resolves the bundled Linux x64 extension by absolute path", () => {
+	it("resolves the bundled Linux extension by absolute path", () => {
 		expect(resolveSqliteVecPath()).toBe(BUNDLED_VEC);
 	});
 
