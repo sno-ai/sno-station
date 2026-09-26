@@ -128,8 +128,7 @@ export function createAtomicSubjectGuardTransport(llm: LlmClient): AtomicSubject
 			// Mode routing table: [IMP]-single-settings-file/settings-inventory.md
 			const text = await llm.completeText({
 				prompt: built.prompt,
-				callLabel: "memory-extract-atomic-missing-half",
-				adapterSlot: "memory-extract",
+				callId: "E5",
 				emptyReplyAttempts: 1,
 				enableThinking: false,
 			});
@@ -145,8 +144,7 @@ export function createAtomicSubjectGuardTransport(llm: LlmClient): AtomicSubject
 			// Mode routing table: [IMP]-single-settings-file/settings-inventory.md
 			const raw = await llm.completeJson<unknown>({
 				prompt: built.prompt,
-				callLabel: "memory-extract-atomic-subject-guard",
-				adapterSlot: "memory-extract",
+				callId: "E6",
 				emptyReplyAttempts: 1,
 				enableThinking: false,
 				accept: (value) => guardReplySchema.safeParse(value).success,

@@ -15,6 +15,7 @@ import {
 } from "./group-crud-maintenance-ports";
 import { readSnoStationMemConfig, resolveSnoStationMemConfigPath } from "../bindings/embedder-config-files";
 import { createLlmClient } from "../../model/llm-client";
+import { MODEL_CALLS } from "../../model/model-call-table";
 import { pickLlmRoutingConfig } from "../../model/llm-mode-routing";
 import { getSnoStationMemStateDir } from "../shared/paths";
 import { pluginConfigSchema } from "../shared/types";
@@ -39,28 +40,23 @@ async function main(): Promise<void> {
 			hostConfig?.plugins?.entries?.[FIXED_PROTOCOL_VALUE_74]?.config ?? {},
 		);
 		embedder = createEmbedder(pluginConfig.embedding, getSnoStationMemStateDir());
-		const routing = pickLlmRoutingConfig({
-			mode: "rem-enhanced",
-			remEnhanced: {
-				occasions: { memoryExtract: "snoRemMem", conflictAdjudication: "snoRemMem" },
-			},
-		});
-		const chatClient = createLlmClient({
+		const routing = pickLlmRoutingConfig(pluginConfig);
+		const chatClient = ["E8", "E12"].some(id => MODEL_CALLS[id as "E8" | "E12"].destinations[pluginConfig.mode] !== "off") ? createLlmClient({
 			preset: FIXED_MEMORY_SNO_EXTRACT_CHAT,
 			timeoutMs: 60_000,
 			routing,
-		});
-		const profileClient = createLlmClient({
+		}) : undefined;
+		const profileClient = MODEL_CALLS.E9.destinations[pluginConfig.mode] !== "off" ? createLlmClient({
 			preset: FIXED_MEMORY_SNO_EXTRACT_PROFILE,
 			timeoutMs: 60_000,
 			routing,
-		});
+		}) : undefined;
 		const ports = {
-			identityJudgement: createModelGroupCrudEntityIdentityJudgementPort(
+			...(chatClient && MODEL_CALLS.E8.destinations[pluginConfig.mode] !== "off" ? { identityJudgement: createModelGroupCrudEntityIdentityJudgementPort(
 				createAtomicGenericExtractionTransport(chatClient),
-			),
-			stateKeying: createModelGroupCrudStateKeyingJudgementPort(chatClient),
-			profileKeying: createBProfileKeyingTransport(profileClient),
+			) } : {}),
+			...(chatClient && MODEL_CALLS.E12.destinations[pluginConfig.mode] !== "off" ? { stateKeying: createModelGroupCrudStateKeyingJudgementPort(chatClient) } : {}),
+			...(profileClient ? { profileKeying: createBProfileKeyingTransport(profileClient) } : {}),
 		};
 		console.log(
 			JSON.stringify(await runGroupCrudMaintenancePass({ database: sqlite.db, embedder, ...ports })),

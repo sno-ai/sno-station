@@ -19,13 +19,10 @@ const ROUTING: LlmRoutingConfig = {
 	remEnhanced: {
 		occasions: {
 			memoryExtract: "snoRemMem",
-			dedupDecision: "agent",
 			profileSectionMerge: "snoRemMem",
 			profileActiveTaskClassify: "snoRemMem",
-			profileActiveTaskMatch: "snoRemMem",
 			conflictAdjudication: "snoRemMem",
 			summaryBuild: "agent",
-			intentClassifier: "agent",
 		},
 	},
 	agentNative: { flavor: "subscription" },

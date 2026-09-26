@@ -6,7 +6,9 @@
 import { createHash } from "node:crypto";
 import { parseInsightMetadata } from "./memory-metadata-codec";
 import { RETIRED_POSITION_JUDGMENT_SKILL } from "./retired-position-judgment-skill";
-import { isTerminalLlmFailure, type LlmClient } from "../../model/llm-client";
+import { resolveLlmRoute } from "../../model/llm-mode-routing";
+import type { LlmRoutingConfig } from "../../../config/plugin-config-mode-schema";
+import type { LlmClient } from "../../model/llm-client";
 import { canExtractorWrite } from "../shared/memory-kind-policy";
 import type { MemoryEntry, MemoryMetadata } from "../shared/types";
 import type { MemoryStore } from "../../store/store";
@@ -87,6 +89,7 @@ function judgmentPrompt(retiredPosition: string, candidate: MemoryEntry): string
 export async function retireRowsByName(params: {
 	store: MemoryStore;
 	llm?: LlmClient;
+	routing?: LlmRoutingConfig;
 	scope: string;
 	retiredPosition: string;
 	currentPositionId: string;
@@ -166,6 +169,8 @@ export async function retireRowsByName(params: {
 	} catch {
 		return { retiredIds: [], completed: false };
 	}
+	const route = params.routing ? resolveLlmRoute({ callId: "P6", config: params.routing }) : null;
+	const destination = route === null ? "host" : "off" in route ? "off" : route.destination;
 	if (params.judgmentBudget) params.judgmentBudget.remaining -= shortlist.length;
 	const judgments: Array<{
 		candidate: MemoryEntry;
@@ -194,8 +199,7 @@ export async function retireRowsByName(params: {
 						// Mode routing table: [IMP]-single-settings-file/settings-inventory.md
 						const response = await llm.completeJson<unknown>({
 							prompt: judgmentPrompt(params.retiredPosition, candidate),
-							callLabel: RETIRE_BY_NAME_CALL_LABEL,
-							adapterSlot: "profile-merge",
+							callId: "P6",
 							maxTokens: JUDGMENT_MAX_TOKENS,
 							enableThinking: false,
 							...(remainingMs === undefined && params.timeoutMs === undefined
@@ -212,8 +216,7 @@ export async function retireRowsByName(params: {
 							accept: (value) => parseRetireVerdict(value) !== undefined,
 						});
 						return { candidate, verdict: parseRetireVerdict(response) };
-					} catch (error) {
-						if (isTerminalLlmFailure(error)) throw error;
+					} catch {
 						return { candidate, verdict: undefined };
 					}
 				}),
@@ -234,9 +237,11 @@ export async function retireRowsByName(params: {
 			invalidated_at: params.eventTime,
 			superseded_by: params.currentPositionId,
 			retire_by_name_receipt: {
+				call_id: "P6",
+				destination,
 				prompt_sha256: RETIRE_BY_NAME_PROMPT_SHA256,
-				model: resolved.model,
-				preset: resolved.preset,
+				model: destination === "host" ? "host" : resolved.model,
+				preset: destination === "host" ? "host" : resolved.preset,
 				sampling: RETIRE_BY_NAME_SAMPLING,
 				triggering_event_identity: params.triggeringEventIdentity,
 			},

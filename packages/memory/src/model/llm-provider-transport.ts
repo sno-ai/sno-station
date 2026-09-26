@@ -66,8 +66,8 @@ async function observeRequest<T>(
 			if (remaining === 0) routeInFlight.delete(route);
 			else routeInFlight.set(route, remaining);
 			log.info("Model request completed", {
-				outcome, error: failure, adapter_slot: input.slot ?? "unavailable",
-				call_label: input.label ?? "unavailable", route_hash: route,
+				outcome, error: failure, call_id: input.slot ?? "unavailable",
+				destination: input.label ?? "unavailable", route_hash: route,
 				transport: input.transport, requested_model: input.model,
 				returned_model: diagnostic.returnedModel ?? "unavailable",
 				prompt_template_hash: input.promptTemplateHash ?? "unavailable",
@@ -299,8 +299,8 @@ export interface SnoProfileCompletionRequest {
 	maxTokens?: number;
 	singleTokenVerdict?: boolean;
 	signal?: AbortSignal;
-	adapterSlot?: ProviderResponseTrace["adapterSlot"];
-	callLabel?: string;
+	callId?: ProviderResponseTrace["callId"];
+	destination?: ProviderResponseTrace["destination"];
 	onProviderResponse?: (response: ProviderResponseTrace) => void;
 }
 
@@ -309,7 +309,7 @@ export async function callSnoProfileCompletion(
 	request: SnoProfileCompletionRequest,
 ): Promise<ProviderResult> {
 	return observeRequest({ endpoint: request.endpointUrl, model: request.model,
-		transport: "raw-completions", slot: request.adapterSlot, label: request.callLabel,
+		transport: "raw-completions", slot: request.callId, label: request.destination,
 		timeout: request.timeoutMs, cap: request.singleTokenVerdict ? 1 : request.maxTokens,
 		sampling: {}, promptTemplateHash: request.promptTemplateHash, extractionSkillHash: request.extractionSkillHash }, async (diagnostic) => {
 	const requestAbort = requestAbortSignal(request.timeoutMs, request.signal);
@@ -386,11 +386,11 @@ export async function callSnoProfileCompletion(
 	diagnostic.finishReason = body.choices?.[0]?.finish_reason;
 	diagnostic.usage = normalizeProviderUsage(body.usage, [request.prompt], content);
 	const requestId = readProviderRequestId(body.id, response.headers);
-	if (request.adapterSlot && request.callLabel) {
+	if (request.callId && request.destination) {
 		notifyProviderResponse(request.onProviderResponse, {
 			durationMs: performance.now() - diagnostic.started,
-			adapterSlot: request.adapterSlot,
-			callLabel: request.callLabel,
+			callId: request.callId,
+			destination: request.destination,
 			provider: "sno-gpu",
 			...(requestId ? { requestId } : {}),
 			...(model ? { model } : {}),
@@ -446,7 +446,7 @@ async function snoStationMemDispatch(ctx: LlmixDispatchContext): Promise<Provide
 	const callBody = buildCallBody(ctx.kwargs, provider);
 	const sampling = Object.fromEntries(["temperature", "top_p", "seed"].flatMap((key) => callBody[key] === undefined ? [] : [[key, callBody[key]]]));
 	return observeRequest({ endpoint: endpointUrl, model: ctx.model, transport: "chat-completions",
-		slot: cfgExt.adapterSlot, label: cfgExt.callLabel, timeout: timeoutMs,
+		slot: cfgExt.callId, label: cfgExt.destination, timeout: timeoutMs,
 		cap: typeof callBody.max_tokens === "number" ? callBody.max_tokens : typeof callBody.max_completion_tokens === "number" ? callBody.max_completion_tokens : undefined,
 		sampling, promptTemplateHash: cfgExt.promptTemplateHash, extractionSkillHash: cfgExt.extractionSkillHash,
 		forwardedConfigHash: createHash("sha256").update(JSON.stringify({
@@ -557,15 +557,15 @@ async function snoStationMemDispatch(ctx: LlmixDispatchContext): Promise<Provide
 	diagnostic.usage = normalizeProviderUsage(body.usage, ctx.messages, content);
 	const requestId = readProviderRequestId(body.id, response.headers);
 	const onProviderResponse = cfgExt.onProviderResponse;
-	if (cfgExt.adapterSlot && cfgExt.callLabel) {
+	if (cfgExt.callId && cfgExt.destination) {
 		notifyProviderResponse(
 			typeof onProviderResponse === "function"
 				? (onProviderResponse as (response: ProviderResponseTrace) => void)
 				: undefined,
 			{
 				durationMs: performance.now() - diagnostic.started,
-				adapterSlot: cfgExt.adapterSlot,
-				callLabel: cfgExt.callLabel,
+				callId: cfgExt.callId,
+				destination: cfgExt.destination,
 				provider,
 				...(requestId ? { requestId } : {}),
 				...(model ? { model } : {}),
@@ -623,8 +623,8 @@ export async function callProvider(ctx: LlmixDispatchContext): Promise<LocalCall
 				apiKey: ctx.apiKey,
 				prompt: raw.prompt,
 				timeoutMs: raw.timeoutMs,
-				...(cfgExt.adapterSlot ? { adapterSlot: cfgExt.adapterSlot } : {}),
-				...(cfgExt.callLabel ? { callLabel: cfgExt.callLabel } : {}),
+				...(cfgExt.callId ? { callId: cfgExt.callId } : {}),
+				...(cfgExt.destination ? { destination: cfgExt.destination } : {}),
 				...(cfgExt.onProviderResponse
 					? { onProviderResponse: cfgExt.onProviderResponse }
 					: {}),

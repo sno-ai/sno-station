@@ -73,13 +73,10 @@ it("keeps the REM Enhanced model split in the shared routing config", () => {
 	});
 	expect(registration.routing.remEnhanced.occasions).toEqual({
 		memoryExtract: "snoRemMem",
-		dedupDecision: "agent",
 		profileSectionMerge: "agent",
 		profileActiveTaskClassify: "agent",
-		profileActiveTaskMatch: "agent",
 		conflictAdjudication: "snoRemMem",
 		summaryBuild: "agent",
-		intentClassifier: "agent",
 		dateResolution: "agent",
 	});
 });

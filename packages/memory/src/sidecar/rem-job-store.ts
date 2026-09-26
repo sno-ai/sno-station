@@ -13,7 +13,7 @@ import { z } from "zod";
 
 const log = createLogger("sno-station-mem:rem-jobs");
 
-export type RemJobState = "queued" | "running" | "done" | "failed";
+export type RemJobState = "queued" | "running" | "done" | "failed" | "skipped";
 
 interface RemJobMeasurements {
 	rows_considered: number;
@@ -83,6 +83,7 @@ const remJobStateSchema: z.ZodType<RemJobState> = z.enum([
 	"running",
 	"done",
 	"failed",
+	"skipped",
 ]);
 const remJobMeasurementsSchema: z.ZodType<RemJobMeasurements> = z
 	.object({
@@ -247,7 +248,7 @@ export class RemJobStore {
 				return { created: false, job: toRemJob(updated) };
 			}
 			if (
-				existing !== undefined &&
+				existing !== undefined && existing.state !== "skipped" &&
 				requestedOperations.every((operation) => existing.requestedOperations.includes(operation))
 			) {
 				return { created: false, job: toRemJob(existing) };

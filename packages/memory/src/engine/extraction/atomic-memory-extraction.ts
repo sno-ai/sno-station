@@ -620,8 +620,7 @@ export function createAtomicResplitTransport(llm: LlmClient, locale: Locale): At
 					`thing_attribute_slugs: ${JSON.stringify(stateVocabulary.slugs.map(({ slug }) => slug))}`,
 					data.value,
 				].join("\n\n"),
-				callLabel: "memory-extract-atomic-resplit",
-				adapterSlot: "memory-extract",
+				callId: "E4",
 				emptyReplyAttempts: 1,
 				enableThinking: false,
 			});
@@ -637,8 +636,7 @@ export function createSignedAtomicMemoryExtractionTransports(
 	locale: Locale = DEFAULT_LOCALE,
 ): AtomicMemoryExtractionTransports {
 	const chatRoute = resolveLlmRoute({
-		slot: "memory-extract",
-		callLabel: "memory-extract-atomic-generic",
+		callId: "E1",
 		config: config.routing,
 	});
 	const usesAgentTier = !("off" in chatRoute) && chatRoute.tier === "agent";
@@ -651,8 +649,7 @@ export function createSignedAtomicMemoryExtractionTransports(
 		preset: usesAgentTier ? config.preset : FIXED_MEMORY_SNO_EXTRACT_PROFILE,
 	});
 	const verdictRoute = resolveLlmRoute({
-		slot: "conflict-adjudication",
-		callLabel: "conflict-adjudication",
+		callId: "E10",
 		config: config.routing,
 	});
 	// The a-verdict adapter reads its trained completion prompt; a host model reads the chat one.
@@ -670,8 +667,7 @@ export function createSignedAtomicMemoryExtractionTransports(
 					prompt: adapterPrompt
 						? renderAdapterAPrompt(pair.older, pair.newer)
 						: renderAdapterAChatPrompt(pair),
-					callLabel: "arrival-retirement-pair",
-					adapterSlot: "conflict-adjudication",
+					callId: "E10",
 				}),
 		},
 	};
@@ -1205,6 +1201,7 @@ async function reaskStandingSubjects(
 			// Model call E7: re-ask the subject of unresolved records.
 			// Mode routing table: [IMP]-single-settings-file/settings-inventory.md
 			const completion = await input.transports.generic.complete({
+			callId: "E7",
 				prompt,
 				maxTokens: input.runParameters.outputTokenBudget,
 				...(input.requestId ? { requestId: input.requestId } : {}),

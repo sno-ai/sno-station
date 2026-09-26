@@ -180,8 +180,7 @@ async function extractOneTurn(
 			// Mode routing table: [IMP]-single-settings-file/settings-inventory.md
 			raw = await llm.completeText({
 				prompt,
-				callLabel: "memory-extract-profile",
-				adapterSlot: "memory-extract",
+				callId: "E9",
 				maxTokens: PROFILE_EXTRACTION_MAX_TOKENS,
 			});
 		} catch (error) {

@@ -3,7 +3,6 @@ import { appendAuditEntry } from "../operations/runtime-audit-log";
 import { redactSecrets } from "../security/redact";
 import extractionSchema from "../../../config/atomic-extraction-response.schema.json" with { type: "json" };
 import { ATOMIC_CAPTURE_TIMEOUT_MS, ATOMIC_ENRICHMENT_OUTPUT_TOKEN_BUDGET } from "../../../config/index";
-import { FIXED_MEMORY_SNO_EXTRACT_CHAT } from "../../model/signed-registry-constants";
 /** @file atomic-generic-extractor.ts
  * @purpose Runs the dark generic atomic extraction pass over complete transcript windows.
  * @boundary Capture and serial enrichment batches with retries; no writes or gauntlet stages.
@@ -37,8 +36,7 @@ import {
 	withAtomicSanitizerMatches,
 } from "./atomic-replacement-sanitizer";
 import { DEFAULT_LOCALE, type Locale } from "../i18n/locales";
-import type { LlmClient, LlmClientConfig } from "../../model/llm-client";
-import { createLlmClient } from "../../model/llm-client";
+import type { LlmClient } from "../../model/llm-client";
 import type {
 	AtomicExtractionLedgerKey,
 	AtomicExtractionReprocessReason,
@@ -65,6 +63,7 @@ const GENERIC_RESPONSE_SCHEMA = {
 };
 
 export interface AtomicGenericExtractionRequest {
+	callId: import("../../model/model-call-table").ModelCallId;
 	prompt: string;
 	maxTokens: number;
 	requestId?: string;
@@ -229,7 +228,7 @@ async function enrichAtomicBatch(
 		// Model call E2: enrich extracted facts.
 		// Mode routing table: [IMP]-single-settings-file/settings-inventory.md
 		const completion = await input.transport.complete({
-			prompt, maxTokens: outputTokenBudget,
+			callId: "E2", prompt, maxTokens: outputTokenBudget,
 			...(input.requestId ? { requestId: input.requestId } : {}),
 		});
 		if (completion !== null) input.store.recordAtomicExtractionCalls(input.ledgerKey, input.nowMs());
@@ -446,7 +445,7 @@ export async function runAtomicNumericTurnSweep(
 		// Model call E3: re-ask for missed figures.
 		// Mode routing table: [IMP]-single-settings-file/settings-inventory.md
 		completion = await input.transport.complete({
-			prompt: buildAtomicGenericExtractionPrompt(
+			callId: "E3", prompt: buildAtomicGenericExtractionPrompt(
 				input.turns,
 				input.sessionDateTime,
 				input.locale,
@@ -611,8 +610,7 @@ export function createAtomicGenericExtractionTransport(
 			const text = await client.completeText({
 				prompt: request.prompt,
 				extractionSkillHash: ATOMIC_EXTRACTION_SKILL_HASH,
-				callLabel: "memory-extract-atomic-generic",
-				adapterSlot: "memory-extract",
+				callId: request.callId,
 				maxTokens: request.maxTokens,
 				timeoutMs: ATOMIC_CAPTURE_TIMEOUT_MS,
 				emptyReplyAttempts: 1,
@@ -632,14 +630,6 @@ export function createAtomicGenericExtractionTransport(
 			};
 		},
 	};
-}
-
-export function createSignedAtomicGenericExtractionTransport(
-	config: Omit<LlmClientConfig, "preset">,
-): AtomicGenericExtractionTransport {
-	return createAtomicGenericExtractionTransport(
-		createLlmClient({ ...config, preset: FIXED_MEMORY_SNO_EXTRACT_CHAT }),
-	);
 }
 
 export async function runAtomicGenericExtractionPass(
@@ -791,7 +781,7 @@ async function captureAtomicWindow(
 		// Model call E1: extract memories from a conversation window.
 		// Mode routing table: [IMP]-single-settings-file/settings-inventory.md
 		const completion = await input.transport.complete({
-			prompt, maxTokens: outputTokenBudget,
+			callId: "E1", prompt, maxTokens: outputTokenBudget,
 			...(input.requestId ? { requestId: input.requestId } : {}),
 		});
 		if (completion === null) return { status: "off" };

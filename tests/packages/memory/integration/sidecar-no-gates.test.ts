@@ -69,6 +69,12 @@ function registration(mode: "local-first" | "agent-native", model?: { baseUrl: s
 	return { skinId: "body-skin", settings, routing: { mode, remEnhanced, agentNative, language: "en" }, ...(model ? { model } : {}) };
 }
 
+// REM Enhanced sends every REM call to the Sno GPU, so REM runs without a connected host model.
+function installRemEnhancedMode(): void {
+	const configPath = join(root, "station", `sno-station-mem-${userInfo().username}.config.json`);
+	writeFileSync(configPath, JSON.stringify({ ...JSON.parse(readFileSync(configPath, "utf8")), mode: "rem-enhanced" }));
+}
+
 function runCli(args: string[], entry = "cli.js"): Promise<{ code: number | null; stdout: string; stderr: string }> {
 	const cli = fileURLToPath(new URL(`../../../../packages/memory/dist/${entry}`, import.meta.url));
 	return new Promise((resolve, reject) => {
@@ -525,6 +531,7 @@ describe("sidecar keeps serving", () => {
 	});
 	it("runs accepted delayed REM starts when shutdown overlaps body reading", async () => {
 		vi.stubEnv("SNO_STATION_MEM_REM_TEST_HOLD_MS", "200");
+		installRemEnhancedMode();
 		try {
 			await health();
 			if (!sidecar) throw new Error("missing test sidecar");
@@ -1058,18 +1065,32 @@ describe("sidecar keeps serving", () => {
 		} finally { await pool.close(); }
 	});
 	it("runs REM without enable artifacts or operational configuration", async () => {
-		await health();
-		if (!sidecar) throw new Error("missing test sidecar");
-		const response = await fetch(`http://127.0.0.1:${sidecar.port}/rem/run`, { method: "POST", headers: { Authorization: `Bearer ${JSON.parse(readFileSync(join(root, "station", "sidecar.json"), "utf8")).token}` }, body: JSON.stringify({ type: "rem-update", scope: "global" }) });
-		expect(response.status).toBe(202);
-		const started = await response.json();
-		let job: { state?: string; stats?: { operations: number }; error?: string } = {};
-		for (let attempt = 0; attempt < 100; attempt++) {
-			job = await (await fetch(`http://127.0.0.1:${sidecar.port}/rem/jobs/${started.job_id}`, { headers: { Authorization: `Bearer ${JSON.parse(readFileSync(join(root, "station", "sidecar.json"), "utf8")).token}` } })).json();
-			if (job.state === "done" || job.state === "failed") break;
-			await delay(100);
-		}
-		expect(job).toMatchObject({ state: "done", stats: { operations: 0 } });
+		// Local First sends REM to the host model, so a skin with a model callback must be connected first.
+		const host = createServer((_request, response) => {
+			response.writeHead(200, { "content-type": "application/json" });
+			response.end(JSON.stringify({ id: "recorder", object: "chat.completion", model: "loopback-model",
+				choices: [{ index: 0, message: { role: "assistant", content: "{}" }, finish_reason: "stop" }] }));
+		});
+		await new Promise<void>(resolve => host.listen(0, "127.0.0.1", resolve));
+		try {
+			const address = host.address();
+			if (!address || typeof address === "string") throw new Error("missing host model port");
+			await health();
+			if (!sidecar) throw new Error("missing test sidecar");
+			const connected = await contractPost("/v1/init", { scope: { principal: "caller", project: "global", session: "rem-host" },
+				registration: registration("local-first", { baseUrl: `http://127.0.0.1:${address.port}/v1`, credential: "loopback-credential", model: "loopback-model" }) });
+			expect(connected.status).toBe(200);
+			const response = await fetch(`http://127.0.0.1:${sidecar.port}/rem/run`, { method: "POST", headers: { Authorization: `Bearer ${JSON.parse(readFileSync(join(root, "station", "sidecar.json"), "utf8")).token}` }, body: JSON.stringify({ type: "rem-update", scope: "global" }) });
+			expect(response.status).toBe(202);
+			const started = await response.json();
+			let job: { state?: string; stats?: { operations: number }; error?: string } = {};
+			for (let attempt = 0; attempt < 100; attempt++) {
+				job = await (await fetch(`http://127.0.0.1:${sidecar.port}/rem/jobs/${started.job_id}`, { headers: { Authorization: `Bearer ${JSON.parse(readFileSync(join(root, "station", "sidecar.json"), "utf8")).token}` } })).json();
+				if (job.state === "done" || job.state === "failed") break;
+				await delay(100);
+			}
+			expect(job).toMatchObject({ state: "done", stats: { operations: 0 } });
+		} finally { host.closeAllConnections(); await new Promise<void>((resolve, reject) => host.close(error => error ? reject(error) : resolve())); }
 	});
 	it("serves an unregistered skin with installed settings", async () => {
 		const pool = await MemoryRuntimePool.open();
@@ -1208,6 +1229,7 @@ it("excludes jobs accepted before recovery finishes from the startup snapshot", 
 		scope: "global", requestedOperations: ["rem-update"], state: "queued",
 		startedAt: null, finishedAt: null, stats: { operations: 7 },
 	})}\n`);
+	installRemEnhancedMode();
 	const previousHold = process.env.SNO_STATION_MEM_REM_TEST_HOLD_MS;
 	process.env.SNO_STATION_MEM_REM_TEST_HOLD_MS = "300";
 	const rename = filesystem.rename;

@@ -48,6 +48,7 @@ import {
 	REM_UPDATE_LOCALES,
 	getRemUpdateLocaleResource,
 	renderAdapterAPrompt,
+	renderAdapterAChatPrompt,
 	renderRemClauseCarryPrompt,
 	renderRemRetirementTargetPrompt,
 	renderRemUpdateJudgmentPrompt,
@@ -71,9 +72,12 @@ import {
 	resolveSnoStationMemConfigPath,
 	resolveSqliteDbPath,
 } from "../engine/bindings/embedder-config-files";
-import { createLlmClient, type LlmClient } from "../model/llm-client";
+import { createLlmClient, LlmClientTerminalError, ModelCallRefusedError, type LlmClient } from "../model/llm-client";
+import type { ProductMode } from "../../config/plugin-config-mode-schema";
+import type { AgentLlmPort } from "../model/agent-llm-port";
+import { CODING_SKIN_CHILD_DEADLINE_MS } from "../../config/coding-skin";
 import { readModelReplyJson } from "../engine/shared/model-reply-text";
-import { pickLlmRoutingConfig } from "../model/llm-mode-routing";
+import { pickLlmRoutingConfig, resolveLlmRoute } from "../model/llm-mode-routing";
 import { REM_UPDATE_JUDGMENT_SKILL } from "./rem-update-judgment-skill";
 import { pluginConfigSchema } from "../engine/shared/types";
 import { loadStorageExtensions } from "../store/connection";
@@ -136,7 +140,7 @@ export const REM_MODEL_STAGES = [
 export type RemModelStage = (typeof REM_MODEL_STAGES)[number];
 
 export interface RemModelStageResponsePort {
-	respond(request: { stage: RemModelStage; prompt: string }): Promise<string>;
+	respond(request: { stage: RemModelStage; prompt: string }): Promise<string | null>;
 }
 
 export function createRemModelStageResponsePort(input: RemModelStageResponsePort): RemModelStageResponsePort {
@@ -241,6 +245,7 @@ const RETIREMENT_SIMILARITY_CANDIDATE_CAP = 8;
 const RETIREMENT_JUDGMENT_BATCH_SIZE = 16;
 
 interface BatchRuntime {
+	modelMode?: import("../../config/plugin-config-mode-schema").ProductMode;
 	database: SqliteDatabaseLike;
 	store: MemoryStore;
 	embedder: Embedder;
@@ -308,6 +313,8 @@ interface RemStageErrorLog {
 }
 
 export async function runRemBatchJob(input: {
+	mode?: ProductMode;
+	agentPort?: AgentLlmPort;
 	jobId: string;
 	jobType: RemBuiltOperationType;
 	scope: string;
@@ -322,6 +329,8 @@ export async function runRemBatchJob(input: {
 }
 
 export async function runRemProductionOrderedWave(input: {
+	mode?: ProductMode;
+	agentPort?: AgentLlmPort;
 	stateRoot: string;
 	personaDbPath?: string;
 	configSource: string;
@@ -350,6 +359,7 @@ export async function runRemProductionOrderedWave(input: {
 	const requestedOperations = input.requestedOperations ?? (["rem-replace", "rem-update"] as const);
 	const results: Array<{ operation: RemBuiltOperationType } & RemBatchJobResult> = [];
 	let stageFailed = false;
+	let refusal: ModelCallRefusedError | undefined;
 	const journalDatabase = openSqliteDatabase(configuredPath, { fileMustExist: true });
 	try {
 		const repository = createRemRepository(journalDatabase.db);
@@ -360,6 +370,7 @@ export async function runRemProductionOrderedWave(input: {
 				jobType,
 				config: { stages: resolved.configuration.operations },
 				onStageError: ({ stage, error }) => {
+					if (error instanceof ModelCallRefusedError) refusal = error;
 					log.warn("ordered_wave_stage_failed", {
 						error: describeRemStageError(error),
 						job_id: waveId,
@@ -381,6 +392,7 @@ export async function runRemProductionOrderedWave(input: {
 								jobType,
 								scope: input.scope,
 								configuration: resolved.configuration,
+								mode: input.mode, agentPort: input.agentPort,
 								...(input.implementationVersion === undefined
 									? {}
 									: { implementationVersion: input.implementationVersion }),
@@ -392,6 +404,7 @@ export async function runRemProductionOrderedWave(input: {
 				],
 			});
 			if (stageResults[jobType] === "failed") stageFailed = true;
+			if (refusal) throw refusal;
 		}
 	} finally {
 		journalDatabase.db.close();
@@ -469,6 +482,8 @@ function describeRemStageError(
 }
 
 async function runRemBatchJobUnlocked(input: {
+	mode?: ProductMode;
+	agentPort?: AgentLlmPort;
 	jobId: string;
 	jobType: RemBuiltOperationType;
 	scope: string;
@@ -607,6 +622,8 @@ export async function runWithCanonicalStoreWriteMutex<T>(
 }
 
 async function openBatchRuntime(input: {
+	mode?: ProductMode;
+	agentPort?: AgentLlmPort;
 	jobId: string;
 	jobType: RemBuiltOperationType;
 	modelStageResponses?: RemModelStageResponsePort;
@@ -649,9 +666,11 @@ async function openBatchRuntime(input: {
 			...(pluginConfig.extraction.llm.apiKey
 				? { apiKey: pluginConfig.extraction.llm.apiKey }
 				: {}),
-			timeoutMs: 60_000,
+			timeoutMs: Math.max(120_000, CODING_SKIN_CHILD_DEADLINE_MS),
+			agentPort: input.agentPort,
+			refuseOnUnavailable: true,
 			routing: pickLlmRoutingConfig({
-				mode: "rem-enhanced",
+				mode: input.mode ?? pluginConfig.mode,
 				remEnhanced: {
 					occasions: {
 						memoryExtract: "snoRemMem",
@@ -659,13 +678,13 @@ async function openBatchRuntime(input: {
 					},
 				},
 			}),
-			onProviderResponse: ({ adapterSlot, callLabel, provider, requestId, model, usage }) => {
+			onProviderResponse: ({ callId, destination, provider, requestId, model, usage }) => {
 				log.info("llm_provider_response", {
 					event: "llm_provider_response",
 					job_id: input.jobId,
 					job_type: input.jobType,
-					adapter_slot: adapterSlot,
-					call_label: callLabel,
+					call_id: callId,
+					destination,
 					request_id: requestId ?? null,
 					provider,
 					model: model ?? null,
@@ -681,19 +700,23 @@ async function openBatchRuntime(input: {
 		const modelStageResponses =
 			input.modelStageResponses ??
 			createRemModelStageResponsePort({
-				respond: ({ stage, prompt }) =>
-					llm.completeText({
+				respond: async ({ stage, prompt }) => {
+					try { return await llm.completeText({
 						prompt,
-						callLabel: remModelCallLabel(stage),
-						adapterSlot:
-							stage === "rem-replace-pair" ? "conflict-adjudication" : "memory-extract",
-					}).then((response) => response ?? ""),
+						callId: remModelCallId(stage),
+						}); }
+					catch (error) {
+						if (error instanceof LlmClientTerminalError && error.requestTimedOut) return null;
+						throw error;
+					}
+				},
 			});
 		return {
 			database: database.db,
 			store,
 			embedder,
 			llm,
+			modelMode: input.mode ?? pluginConfig.mode,
 			retriever: createRetriever(store, embedder, undefined, {
 				...DEFAULT_RETRIEVAL_CONFIG,
 				...pluginConfig.retrieval,
@@ -871,7 +894,6 @@ async function runUpdate(input: {
 	const candidates = input.candidates;
 	const ports = createSnoStationMemRemPorts({
 		database: input.runtime.database,
-		llmClient: input.runtime.llm,
 		memoryStore: input.runtime.store,
 	});
 	const configurationSha256 =
@@ -1896,7 +1918,8 @@ async function runRemRetirementTargetGate(input: {
 			// Model call REM8: REM update: retirement target.
 			// Mode routing table: [IMP]-single-settings-file/settings-inventory.md
 			reply = await completeTextStage(input.runtime, "rem-update-retirement-target", prompt);
-		} catch {
+		} catch (error) {
+			if (error instanceof ModelCallRefusedError) throw error;
 			// A target-stage transport failure follows the same fail-closed path as an invalid reply.
 		}
 		const decision = decideRemRetirementTargetFromReply(
@@ -2152,7 +2175,6 @@ async function runReplace(input: {
 	let modelTokens = 0;
 	const ports = createSnoStationMemRemPorts({
 		database: input.runtime.database,
-		llmClient: input.runtime.llm,
 		memoryStore: input.runtime.store,
 	});
 	const configurationSha256 =
@@ -2285,6 +2307,7 @@ async function runReplace(input: {
 	// The update path already prefers its own refusal reason for exactly this.
 	let lastRefusalReason: string | undefined;
 	const maxPairsThisRun = input.configuration?.budgets.maxPairs ?? pairs.length;
+	try {
 	for (let index = 0; index < maxPairsThisRun; index += 1) {
 		let resumedVerdict: string | undefined;
 		let pairClaim:
@@ -2386,7 +2409,10 @@ async function runReplace(input: {
 				checkpoint: "before_llm",
 				recordedAt: new Date().toISOString(),
 			});
-			const pairPrompt = renderAdapterAPrompt(ordered.views.older, ordered.views.newer);
+			const pairRoute = resolveLlmRoute({ callId: "REM1", config: { mode: input.runtime.modelMode ?? "rem-enhanced" } });
+			const pairPrompt = "off" in pairRoute || pairRoute.destination === "host"
+				? renderAdapterAChatPrompt(ordered.views)
+				: renderAdapterAPrompt(ordered.views.older, ordered.views.newer);
 			modelTokens += reserveReplaceStage(input.repository, generationId, pairClaim.pairId, invocationId, "rem-replace-pair", pairPrompt, input.jobId);
 			llmCalls += 1;
 			// Model call REM1: REM replace: conflict pair.
@@ -2932,6 +2958,20 @@ async function runReplace(input: {
 			actionsApplied: 1,
 			pairId: pairClaim.pairId,
 		});
+	}
+	} catch (error) {
+		if (error instanceof ModelCallRefusedError) {
+			for (const pair of input.repository.listVerdictPairs(generationId)) {
+				if (pair.claimState === "claimed" && pair.invocationId === invocationId) {
+					input.repository.releasePairClaim({ generationId, pairId: pair.pairId, invocationId });
+				}
+			}
+			for (const candidate of participatingClaimed) {
+				input.repository.releaseRowClaim({ rowId: candidate.id, contentHash: candidate.content_hash,
+					owner: "verdict", claimToken: candidate.claimToken });
+			}
+		}
+		throw error;
 	}
 	for (const candidate of participatingClaimed) {
 		const modified =
@@ -3548,8 +3588,13 @@ function journal(
 	};
 }
 
-function remModelCallLabel(stage: RemModelStage): RemModelStage {
-	return stage === "rem-update-retirement-target" ? "rem-update-relation-judgment" : stage;
+function remModelCallId(stage: RemModelStage): import("../model/model-call-table").ModelCallId {
+	return {
+		"rem-replace-pair": "REM1", "rem-replace-clauses": "REM2",
+		"rem-replace-coverage": "REM3", "rem-replace-clause-carry": "REM4",
+		"rem-update-judgment": "REM5", "rem-update-verification": "REM6",
+		"rem-update-relation-judgment": "REM7", "rem-update-retirement-target": "REM8",
+	}[stage] as import("../model/model-call-table").ModelCallId;
 }
 
 async function completeTextStage(
@@ -3562,8 +3607,7 @@ async function completeTextStage(
 	}
 	return runtime.llm.completeText({
 		prompt,
-		callLabel: remModelCallLabel(stage),
-		adapterSlot: stage === "rem-replace-pair" ? "conflict-adjudication" : "memory-extract",
+		callId: remModelCallId(stage),
 	});
 }
 
@@ -3575,8 +3619,7 @@ async function completeJsonStage(
 	if (runtime.modelStageResponses === undefined) {
 		return runtime.llm.completeJson<unknown>({
 			prompt,
-			callLabel: stage,
-			adapterSlot: "memory-extract",
+			callId: remModelCallId(stage),
 		});
 	}
 	const response = await runtime.modelStageResponses.respond({ stage, prompt });
@@ -3587,7 +3630,7 @@ async function completeJsonStage(
 	) {
 		return response;
 	}
-	return parseStageJson(response);
+	return response === null ? null : parseStageJson(response);
 }
 
 /**

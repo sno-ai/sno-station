@@ -4,6 +4,7 @@ import { checkMemoryOperation } from "../operation-cancellation";
  * @boundary The agent_end hook path only; registration and service lifecycle are elsewhere.
  */
 
+import { modelCallDestination } from "../../model/model-call-table";
 import { unresolvedMemoryDate } from "../extraction/date-resolution";
 import { randomUUID } from "node:crypto";
 import { createLogger, currentLogContext, withLogContext } from "@snoai/utils/logger";
@@ -156,7 +157,7 @@ export async function onAgentEnd(
 	}
 	const resolvedAgentId = resolveHookAgentId(ctx.agentId, sessionKey).agentId;
 	const scope = scopePolicy.getDefaultScope(resolvedAgentId);
-	if (config.mode === "local-first") {
+	if (modelCallDestination("E1", config.mode) === "off") {
 		const { stored, failures } = await runLocalFirstCapture({ api, config, store, event, ctx, stateDir, scope, sessionKey });
 		outcome = "success";
 		if (failures > 0) outcome = stored > 0 ? "partial" : "failed";

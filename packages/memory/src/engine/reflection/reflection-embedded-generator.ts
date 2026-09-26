@@ -52,8 +52,7 @@ export function createReflectionGenerator(
 		// Mode routing table: [IMP]-single-settings-file/settings-inventory.md
 		return client.completeText({
 			prompt,
-			callLabel: "memory-reflection",
-			adapterSlot: "summary-build",
+			callId: "R1",
 			timeoutMs,
 		});
 	};

@@ -49,7 +49,8 @@ function retirementViolations(units: readonly SourceUnit[]): string[] {
 		}
 		for (const [lineIndex, line] of unit.source.split("\n").entries()) {
 			const location = `${unit.path}:${lineIndex + 1}`;
-			if (/callLabel\s*:\s*["']memory-extract-profile-gate["']/u.test(line)) {
+			// Model calls carry a call id now, so the retired gate can only come back by its name.
+			if (/["']memory-extract-profile-gate["']/u.test(line)) {
 				violations.push(`profile-gate:${location}`);
 			}
 			if (/\bbuildMergePrompt\s*\(/u.test(line)) {
@@ -106,7 +107,7 @@ describe("atomic extraction retirement repository guard", () => {
 		{
 			name: "profile classification gate",
 			rule: "profile-gate",
-			source: 'callLabel: "memory-extract-profile-gate",',
+			source: 'const PROFILE_GATE = "memory-extract-profile-gate";',
 		},
 		{
 			name: "merge prompt",

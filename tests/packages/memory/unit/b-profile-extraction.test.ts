@@ -38,16 +38,15 @@ const REM_ROUTING: LlmRoutingConfig = {
 	remEnhanced: {
 		occasions: {
 			memoryExtract: "snoRemMem",
-			dedupDecision: "agent",
 			profileSectionMerge: "agent",
 			profileActiveTaskClassify: "agent",
-			profileActiveTaskMatch: "agent",
 			conflictAdjudication: "snoRemMem",
 			summaryBuild: "agent",
-			intentClassifier: "agent",
+			dateResolution: "agent",
 		},
 	},
 	agentNative: { flavor: "subscription" },
+	language: "en",
 };
 
 function profilePayload(slug = "preference.accommodation"): string {
@@ -632,8 +631,7 @@ describe("B-profile raw extraction", () => {
 		await expect(
 			client.completeText({
 				prompt,
-				callLabel: "memory-extract-profile",
-				adapterSlot: "memory-extract",
+				callId: "E9",
 				// The caller's own output budget, which this route now requires. It is not a decode
 				// instruction: the caller says how much it is willing to read back, the serving side
 				// still decides how the model produces it.
@@ -695,8 +693,7 @@ describe("B-profile raw extraction", () => {
 		await expect(
 			client.completeText({
 				prompt: "user: Keep updates short.",
-				callLabel: "memory-extract-profile",
-				adapterSlot: "memory-extract",
+				callId: "E9",
 			}),
 		).resolves.toBe(profilePayload());
 		expect(providerBody?.max_tokens).toBe(4096);
@@ -728,8 +725,7 @@ describe("B-profile raw extraction", () => {
 		});
 		await client.completeText({
 			prompt: "user: Keep updates short.",
-			callLabel: "memory-extract-profile",
-			adapterSlot: "memory-extract",
+			callId: "E9",
 			maxTokens: 1536,
 		});
 

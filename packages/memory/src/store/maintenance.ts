@@ -30,6 +30,7 @@ import {
 import { getSnoStationMemStateDir } from "../engine/shared/paths";
 import { recordMemoryTelemetryIncident } from "../engine/telemetry/memory-telemetry-incidents";
 import type { MemoryTelemetryUsageOutbox } from "../engine/telemetry/memory-telemetry-outbox";
+import type { ProductMode } from "../../config/plugin-config-mode-schema";
 
 const log = createLogger("sno-station-mem:maintenance");
 
@@ -89,6 +90,8 @@ const RETENTION_PRUNE_BUDGET_MS = 5_000;
 const FTS_MERGE_MAX_ITERATIONS = 10;
 
 export interface MaintenanceDeps {
+	mode?: ProductMode;
+	hasConnectedHost?: () => boolean;
 	store: MemoryStore;
 	remClock?: Date;
 	remVolumeThreshold?: number;
@@ -526,6 +529,7 @@ export function startMaintenanceTimer(
 					stateDir: deps.stateDir,
 					auditStateDir: getSnoStationMemStateDir(),
 					...readRemAutomaticOperations(),
+					mode: deps.mode, hasConnectedHost: deps.hasConnectedHost,
 					now: deps.remClock, volumeThreshold: deps.remVolumeThreshold,
 				});
 			} catch (error) {

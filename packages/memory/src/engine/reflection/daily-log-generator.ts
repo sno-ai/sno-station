@@ -77,14 +77,23 @@ export async function readSessionConversationForReflection(
 				// Parse serialized metadata inside the narrowest block that can recover from bad JSON.
 				const entry = JSON.parse(line) as Record<string, unknown>;
 				// Isolate the reflection capture operation that can fail because of runtime I/O or input shape.
-				if (entry.type !== "message" || !entry.message) continue;
-				// SDK message object — safe boundary cast
-				const msg = entry.message as Record<string, unknown>;
-				const role = typeof msg.role === "string" ? msg.role : "";
+				const value = entry.type === "message" ? entry.message
+					: entry.type === "response_item" ? entry.payload
+					: entry.type === "user" || entry.type === "assistant" ? entry.message : undefined;
+				if (!value || typeof value !== "object") continue;
+				const msg = value as Record<string, unknown>;
+				if (entry.type === "response_item" && msg.type !== "message") continue;
+				const role = entry.type === "user" || entry.type === "assistant" ? entry.type
+					: typeof msg.role === "string" ? msg.role : "";
 				// Guard this branch early so the remaining reflection capture path works with normalized inputs.
 				if (role !== "user" && role !== "assistant") continue;
 
-				const text = extractTextContent(msg.content);
+				const content = entry.type === "response_item" && Array.isArray(msg.content)
+					? msg.content.map(part => part && typeof part === "object" && "type" in part
+						&& (part.type === "input_text" || part.type === "output_text")
+						? { type: "text", text: "text" in part ? part.text : undefined } : part)
+					: msg.content;
+				const text = extractTextContent(content);
 				// Handle the absent-value case explicitly before the happy path depends on it.
 				if (!text || shouldSkipReflectionMessage(role, text)) continue;
 				// Append only after validation has accepted this value for the current branch.

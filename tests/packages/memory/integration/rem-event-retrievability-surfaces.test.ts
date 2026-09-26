@@ -11,7 +11,6 @@ import {
 	decideRemUpdateVerification,
 	decideReplaceCoverage,
 } from "../../../../packages/memory/src/engine/rem/index.ts";
-import { createLlmClient } from "../../../../packages/memory/src/model/llm-client.ts";
 import {
 	createSnoStationMemRemPorts,
 	createRemReplaceCarrierPort,
@@ -217,9 +216,5 @@ function carrierFor(seeded: {
 function portsFor(seeded: { testDb: TestDb }) {
 	return createSnoStationMemRemPorts({
 		database: seeded.testDb.runtime.db,
-		llmClient: createLlmClient({
-			preset: "mem_claw/sno_conflict_verdict",
-			baseURL: "http://localhost:8070/codex/v1",
-		}),
 	});
 }
