@@ -1830,11 +1830,10 @@ same installed settings. A supplied client store path does not override the runn
 | SNO_STATION_MEM_REM_CLOCK_OVERRIDE | Clock override parsed as Date; use an ISO instant |
 | SNO_STATION_MEM_REM_VOLUME_THRESHOLD | Positive integer volume threshold override |
 | SNO_STATION_MEM_NODE_ENV | Package test mode; enables observation loopback validation exception |
-| GPU_BASE_URL | Existing GPU transport endpoint setting |
-| XDG_CONFIG_HOME | External crypto package configuration root |
+| `snoGpu.baseUrl` in `settings.json` | Sno GPU transport endpoint setting |
 
-Package-owned environment names use `SNO_STATION_MEM_`; profile, GPU and
-external crypto/secret names retain their owners' names. Signed preset/secret identifiers
+Package-owned environment names use `SNO_STATION_MEM_`; the Sno GPU endpoint and key
+come from `settings.json`. Signed preset/secret identifiers
 remain centralized in `model/signed-registry-constants.ts`. This table covers sidecar-facing
 controls, not every environment variable used by model/provider libraries.
 
