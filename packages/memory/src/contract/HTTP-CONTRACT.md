@@ -82,20 +82,17 @@ All listed methods use POST. Deadlines are server request ceilings, not latency 
 
 Initializes or replaces the header-selected skin. `registration.skinId` remains a required nonblank input, but the header overrides its value (including the `default` header fallback). No prior registration is required for other calls: installed settings create the runtime on demand. With installed `local-first` settings and an empty store, an unregistered skin calling `inspect` with `op: "list"` and project `global` receives HTTP 200 and `{"degraded":false,"result":{"op":"list","project":"global","entries":[]}}` (proved by: `tests/packages/memory/integration/sidecar-no-gates.test.ts` — `serves HTTP inspection before any init using installed settings`).
 
-`registration` has two mutually exclusive shapes. The complete shape supplies `routing` and
-`settings` as before. The inherited shape supplies `{ "skinId": "...", "inheritInstalled": true,
-"model": ...? }`; the sidecar derives routing and settings from its loaded installation settings
-through the shared coding-skin factory. The inherited shape is strict and rejects `settings`,
-`routing`, and other unknown fields. Its optional `model` uses the same schema as the complete
-shape. The skin header still overrides the body skin id. When the sidecar could not load its
-installation settings at start (file missing, invalid JSON, or schema failure), the inherited shape
-fails with HTTP 500 `{"degraded":true,"reason":"engine-failed"}` instead of registering default
-settings (proved by: `tests/packages/memory/integration/sidecar-no-gates.test.ts` —
-`rejects inherited registration when the installation config cannot be read`).
+`registration` is exactly `{ "skinId": "...", "model": ...? }`. The optional model
+provides the host model endpoint. Routing, engine settings, embedding, telemetry and store
+path come from the installed `settings.json`; registration rejects extra fields. The client
+starts the service with the installed `settings.memoryPackage.path` and
+`settings.memoryPackage.node`. Its `connect` call reports missing or invalid settings as
+`settings unavailable: <path>: <field>; run sno setup` with reason `storage-unavailable`.
+The sidecar returns HTTP 503 with that error text when opening the installed settings fails.
 
-`routing` is the routing authority. Settings are the existing normalized engine settings, not a second raw plugin configuration. Installed embedding, telemetry and store path override conflicting registration values with an error log. All nested fields are enumerated below. Objects with `additionalProperties:false` reject unknown keys; ordinary input objects strip them.
-
-Additional refinements: `registration.model.baseUrl` must use HTTP or HTTPS. `registration.model.model` and `registration.skinId` must contain non-whitespace text; credential may be empty. Model credentials remain in memory. When observation is enabled, its base URL must have the configured production origin; test mode permits HTTP(S) loopback. Unless reranking is `none`, retrieval endpoint/model/key `${ENV}` placeholders are resolved, `rerank: "cross-encoder"` or a supplied endpoint requires `rerankProvider`, and the resolved endpoint must be a URL. Missing variables fail parsing. Omitted prefault objects are parsed as `{}` and receive their child defaults. Observation defaults come from process environment, as marked in the table.
+Additional refinements: `registration.model.baseUrl` must use HTTP or HTTPS.
+`registration.model.model` and `registration.skinId` must contain non-whitespace text;
+credential may be empty. Model credentials remain in memory.
 
 Scope requires nonblank `principal`, `project`, `session`. `host.observeSessionUuid`, if supplied, must be a UUID. Host `at` is nonnegative epoch milliseconds. Other host strings may be empty.
 
@@ -118,149 +115,12 @@ Scope requires nonblank `principal`, `project`, `session`. `host.observeSessionU
 | scope.host.boundary | string | no | ["new","reset","session-end"] | - | - |
 | scope.host.at | number | no | - | - | {"minimum":0} |
 | scope.host.systemCaller | boolean | no | - | - | - |
-| registration | union | yes | - | - | - |
-| registration<0> | object | yes | - | - | {"additionalProperties":false} |
-| registration<0>.skinId | string | yes | - | - | {"minLength":1} |
-| registration<0>.inheritInstalled | boolean | yes | [true] | - | - |
-| registration<0>.model | object | no | - | - | - |
-| registration<0>.model.baseUrl | string | yes | - | - | {"format":"uri"} |
-| registration<0>.model.credential | string | yes | - | - | - |
-| registration<0>.model.model | string | yes | - | - | {"minLength":1} |
-| registration<1> | object | yes | - | - | - |
-| registration<1>.skinId | string | yes | - | - | {"minLength":1} |
-| registration<1>.routing | object | yes | - | - | {"additionalProperties":false} |
-| registration<1>.routing.mode | string | yes | ["local-first","agent-native","rem-enhanced"] | - | - |
-| registration<1>.routing.language | string | no | ["en","de","es","fr","zh","zh-Hant","ja","ko","ru"] | "en" | - |
-| registration<1>.settings | object | yes | - | - | - |
-| registration<1>.settings.embedding | object | no | - | {} | - |
-| registration<1>.settings.embedding.provider | string | no | ["local-onnx"] | "local-onnx" | - |
-| registration<1>.settings.embedding.model | string | no | - | - | - |
-| registration<1>.settings.embedding.dimensions | integer | no | - | 1024 | {"exclusiveMinimum":0,"maximum":9007199254740991} |
-| registration<1>.settings.embedding.nativeDim | integer | no | - | - | {"exclusiveMinimum":0,"maximum":9007199254740991} |
-| registration<1>.settings.embedding.revision | string | no | - | - | - |
-| registration<1>.settings.embedding.pooling | string | no | ["last_token","mean","cls"] | - | - |
-| registration<1>.settings.embedding.normalized | boolean | no | - | - | - |
-| registration<1>.settings.embedding.cacheDir | string | no | - | - | - |
-| registration<1>.settings.embedding.dtype | string | no | ["q4","q8","fp16","fp32"] | "q8" | - |
-| registration<1>.settings.embedding.sessionOptions | object | no | - | {} | {"additionalProperties":false} |
-| registration<1>.settings.embedding.sessionOptions.graphOptimizationLevel | string | no | ["disabled","basic","extended","all"] | "extended" | - |
-| registration<1>.settings.embedding.sessionOptions.enableMemPattern | boolean | no | - | false | - |
-| registration<1>.settings.embedding.sessionOptions.enableCpuMemArena | boolean | no | - | false | - |
-| registration<1>.settings.embedding.sessionOptions.executionMode | string | no | ["sequential","parallel"] | - | - |
-| registration<1>.settings.embedding.sessionOptions.interOpNumThreads | integer | no | - | - | {"exclusiveMinimum":0,"maximum":9007199254740991} |
-| registration<1>.settings.embedding.sessionOptions.intraOpNumThreads | integer | no | - | - | {"exclusiveMinimum":0,"maximum":9007199254740991} |
-| registration<1>.settings.embedding.chunking | boolean | no | - | true | - |
-| registration<1>.settings.observe | object | no | - | {} | - |
-| registration<1>.settings.observe.enabled | boolean | no | - | false | - |
-| registration<1>.settings.observe.baseUrl | string | no | - | "https://www.sno.ai" | - |
-| registration<1>.settings.observe.agentId | string | no | ["openclaw","hermes","claude-code","codex"] | "openclaw" | - |
-| registration<1>.settings.dbPath | string | no | - | - | - |
-| registration<1>.settings.provider | object | yes | - | - | - |
-| registration<1>.settings.provider.userId | string | no | - | - | - |
-| registration<1>.settings.ambientLearning | boolean | yes | - | - | - |
-| registration<1>.settings.autoRecall | boolean | yes | - | - | - |
-| registration<1>.settings.autoRecallMinLength | integer | yes | - | - | {"minimum":1,"maximum":200} |
-| registration<1>.settings.autoRecallMinRepeated | integer | yes | - | - | {"minimum":0,"maximum":100} |
-| registration<1>.settings.autoRecallMaxQueryLength | integer | yes | - | - | {"minimum":100,"maximum":10000} |
-| registration<1>.settings.autoRecallTimeoutMs | integer | yes | - | - | {"minimum":500,"maximum":60000} |
-| registration<1>.settings.autoRecallIncludeAgents | array | yes | - | - | - |
-| registration<1>.settings.autoRecallIncludeAgents[] | string | yes | - | - | - |
-| registration<1>.settings.autoRecallExcludeAgents | array | yes | - | - | - |
-| registration<1>.settings.autoRecallExcludeAgents[] | string | yes | - | - | - |
-| registration<1>.settings.captureAssistant | boolean | yes | - | - | - |
-| registration<1>.settings.retrieval | object | no | - | {} | - |
-| registration<1>.settings.retrieval.mode | string | no | ["precision-recall","vector"] | "precision-recall" | - |
-| registration<1>.settings.retrieval.recallTopK | integer | no | - | 20 | {"minimum":1,"maximum":2000} |
-| registration<1>.settings.retrieval.vectorWeight | number | no | - | 0.7 | {"minimum":0,"maximum":1} |
-| registration<1>.settings.retrieval.bm25Weight | number | no | - | 0.3 | {"minimum":0,"maximum":1} |
-| registration<1>.settings.retrieval.minScore | number | no | - | 0 | {"minimum":0,"maximum":1} |
-| registration<1>.settings.retrieval.rerank | string | no | ["cross-encoder","lightweight","none"] | "lightweight" | - |
-| registration<1>.settings.retrieval.candidatePoolSize | integer | no | - | 64 | {"minimum":10,"maximum":2000} |
-| registration<1>.settings.retrieval.rerankApiKey | string | no | - | - | - |
-| registration<1>.settings.retrieval.rerankModel | string | no | - | "rerank-2" | - |
-| registration<1>.settings.retrieval.rerankTimeoutMs | integer | no | - | 15000 | {"minimum":1000,"maximum":120000} |
-| registration<1>.settings.retrieval.recencyHalfLifeDays | number | no | - | 14 | {"minimum":0,"maximum":365} |
-| registration<1>.settings.retrieval.recencyWeight | number | no | - | 0.1 | {"minimum":0,"maximum":0.5} |
-| registration<1>.settings.retrieval.temporalWeighting | boolean | no | - | false | - |
-| registration<1>.settings.retrieval.mmrWindowOnly | boolean | no | - | false | - |
-| registration<1>.settings.retrieval.temporalExpiry | boolean | no | - | false | - |
-| registration<1>.settings.retrieval.temporalDecay | boolean | no | - | true | - |
-| registration<1>.settings.retrieval.lengthNormAnchor | integer | no | - | 0 | {"minimum":0,"maximum":5000} |
-| registration<1>.settings.retrieval.hardMinScore | number | no | - | 0 | {"minimum":0,"maximum":1} |
-| registration<1>.settings.retrieval.timeDecayHalfLifeDays | number | no | - | 60 | {"minimum":0,"maximum":365} |
-| registration<1>.settings.retrieval.rerankBlendVector | number | no | - | - | {"minimum":0,"maximum":1} |
-| registration<1>.settings.retrieval.rerankBlendCross | number | no | - | - | {"minimum":0,"maximum":1} |
-| registration<1>.settings.retrieval.lightweightFusionWeight | number | no | - | - | {"minimum":0,"maximum":1} |
-| registration<1>.settings.retrieval.lightweightCosineWeight | number | no | - | - | {"minimum":0,"maximum":1} |
-| registration<1>.settings.retrieval.importanceWeightBase | number | no | - | - | {"minimum":0,"maximum":1} |
-| registration<1>.settings.retrieval.timeDecayFloor | number | no | - | - | {"minimum":0,"maximum":1} |
-| registration<1>.settings.retrieval.mmrLambda | number | no | - | - | {"minimum":0,"maximum":1} |
-| registration<1>.settings.retrieval.rerankEndpoint | string | no | - | - | - |
-| registration<1>.settings.retrieval.rerankProvider | string | no | ["jina","siliconflow","pinecone","voyage","dashscope","tei","custom"] | - | - |
-| registration<1>.settings.retrieval.rerankMaxCandidates | integer | no | - | - | {"minimum":1,"maximum":2000} |
-| registration<1>.settings.retrieval.reinforcementFactor | number | no | - | 0.5 | {"minimum":0,"maximum":5} |
-| registration<1>.settings.retrieval.maxHalfLifeMultiplier | number | no | - | 3 | {"minimum":1,"maximum":10} |
-| registration<1>.settings.scopes | object | yes | - | - | - |
-| registration<1>.settings.scopes.default | string | yes | - | - | - |
-| registration<1>.settings.scopes.definitions | object | yes | - | - | {"propertyNames":{"type":"string"}} |
-| registration<1>.settings.scopes.definitions{} | object | yes | - | - | - |
-| registration<1>.settings.scopes.definitions{}.description | string | no | - | - | - |
-| registration<1>.settings.scopes.definitions{}.metadata | object | no | - | - | {"propertyNames":{"type":"string"}} |
-| registration<1>.settings.scopes.definitions{}.metadata{} | JSON | yes | - | - | - |
-| registration<1>.settings.scopes.agentAccess | object | yes | - | - | {"propertyNames":{"type":"string"}} |
-| registration<1>.settings.scopes.agentAccess{} | array | yes | - | - | - |
-| registration<1>.settings.scopes.agentAccess{}[] | string | yes | - | - | - |
-| registration<1>.settings.enableManagementTools | boolean | yes | - | - | - |
-| registration<1>.settings.sessionStrategy | string | yes | ["memoryReflection","systemSessionMemory","none"] | - | - |
-| registration<1>.settings.sessionMemory | object | no | - | {} | - |
-| registration<1>.settings.sessionMemory.enabled | boolean | no | - | true | - |
-| registration<1>.settings.sessionMemory.messageCount | integer | no | - | 15 | {"minimum":1,"maximum":100} |
-| registration<1>.settings.compression | object | no | - | - | - |
-| registration<1>.settings.compression.enabled | boolean | yes | - | - | - |
-| registration<1>.settings.selfImprovement | object | no | - | {} | - |
-| registration<1>.settings.selfImprovement.enabled | boolean | no | - | true | - |
-| registration<1>.settings.selfImprovement.beforeResetNote | boolean | no | - | true | - |
-| registration<1>.settings.selfImprovement.skipSubagentBootstrap | boolean | no | - | true | - |
-| registration<1>.settings.selfImprovement.ensureLearningFiles | boolean | no | - | true | - |
-| registration<1>.settings.extraction | object | no | - | {} | {"additionalProperties":false} |
-| registration<1>.settings.extraction.llm | object | no | - | {} | {"additionalProperties":false} |
-| registration<1>.settings.extraction.llm.preset | string | no | ["mem_claw/sno_ai_extract","mem_claw/sno_extract_chat","mem_claw/sno_extract_profile","mem_claw/sno_conflict_verdict"] | "mem_claw/sno_ai_extract" | - |
-| registration<1>.settings.extraction.llm.baseURL | string | no | - | - | - |
-| registration<1>.settings.extraction.llm.apiKey | string | no | - | - | - |
-| registration<1>.settings.extraction.llm.heliconeApiKey | string | no | - | - | - |
-| registration<1>.settings.extraction.llm.timeoutMs | integer | no | - | 30000 | {"minimum":1000,"maximum":300000} |
-| registration<1>.settings.memoryReflection | object | no | - | {} | - |
-| registration<1>.settings.memoryReflection.messageCount | integer | no | - | 120 | {"minimum":1,"maximum":500} |
-| registration<1>.settings.memoryReflection.maxInputChars | integer | no | - | 24000 | {"minimum":1000,"maximum":200000} |
-| registration<1>.settings.memoryReflection.timeoutMs | integer | no | - | 20000 | {"minimum":5000,"maximum":300000} |
-| registration<1>.settings.memoryReflection.errorReminderMaxEntries | integer | no | - | 3 | {"minimum":0,"maximum":50} |
-| registration<1>.settings.memoryReflection.dedupeErrorSignals | boolean | no | - | true | - |
-| registration<1>.settings.memoryReflection.injectMode | string | no | ["inheritance+derived","inheritance-only","none"] | "inheritance+derived" | - |
-| registration<1>.settings.memoryReflection.storeToDb | boolean | no | - | true | - |
-| registration<1>.settings.memoryReflection.injectIntoPrompt | boolean | no | - | false | - |
-| registration<1>.settings.memoryReflection.agentId | string | no | - | - | - |
-| registration<1>.settings.recallLifecycle | object | no | - | {} | - |
-| registration<1>.settings.recallLifecycle.retentionScorer | boolean | no | - | true | - |
-| registration<1>.settings.recallLifecycle.tierPromoter | boolean | no | - | true | - |
-| registration<1>.settings.recallLifecycle.autoRecallAccessTracking | boolean | no | - | true | - |
-| registration<1>.settings.recallLifecycle.traceEnabled | boolean | no | - | true | - |
-| registration<1>.settings.recallLifecycle.tierFloorMode | string | no | ["bare","withFloor"] | "bare" | - |
-| registration<1>.settings.recallLifecycle.tierPromotionTopK | integer | no | - | 3 | {"exclusiveMinimum":0,"maximum":9007199254740991} |
-| registration<1>.settings.recallLifecycle.accessRateLimitMs | integer | no | - | 3600000 | {"minimum":0,"maximum":9007199254740991} |
-| registration<1>.settings.recallLifecycle.accessCountCeiling | integer | no | - | 20 | {"exclusiveMinimum":0,"maximum":9007199254740991} |
-| registration<1>.settings.memoryTelemetry | object | yes | - | - | - |
-| registration<1>.settings.memoryTelemetry.enabled | boolean | yes | - | - | - |
-| registration<1>.settings.memoryTelemetry.currentKeyVersion | integer | yes | - | - | {"exclusiveMinimum":0,"maximum":9007199254740991} |
-| registration<1>.settings.remOperations | array | yes | - | - | {"minItems":1,"maxItems":2} |
-| registration<1>.settings.remOperations[] | string | yes | ["rem-replace","rem-update"] | - | - |
-| registration<1>.settings.onboarding | object | no | - | - | - |
-| registration<1>.settings.onboarding.version | integer | yes | - | - | {"exclusiveMinimum":0,"maximum":9007199254740991} |
-| registration<1>.settings.onboarding.completedAt | string | yes | - | - | - |
-| registration<1>.settings.onboarding.profile | string | yes | ["local-active","capture-only","manual-only","custom"] | - | - |
-| registration<1>.model | object | no | - | - | - |
-| registration<1>.model.baseUrl | string | yes | - | - | {"format":"uri"} |
-| registration<1>.model.credential | string | yes | - | - | - |
-| registration<1>.model.model | string | yes | - | - | {"minLength":1} |
+| registration | object | yes | - | - | {"additionalProperties":false} |
+| registration.skinId | string | yes | - | - | {"minLength":1} |
+| registration.model | object | no | - | - | - |
+| registration.model.baseUrl | string | yes | - | - | {"format":"uri"} |
+| registration.model.credential | string | yes | - | - | - |
+| registration.model.model | string | yes | - | - | {"minLength":1} |
 
 ### Response body
 
@@ -299,27 +159,6 @@ Additional transport errors: 413 `{"error":"payload_too_large"}` for a body over
 504 is the mapped `timeout` response, not a commit or cancellation guarantee.
 An outer-server failure can return 500 `{"error":"internal_error"}`.
 
-### Inherited-settings request example
-
-```json
-{
-  "scope": {
-    "principal": "lh",
-    "project": "/workspace/sno-station-core",
-    "session": "hermes-session-1"
-  },
-  "registration": {
-    "skinId": "hermes",
-    "inheritInstalled": true,
-    "model": {
-      "baseUrl": "http://127.0.0.1:43128/v1",
-      "credential": "runtime-only-token",
-      "model": "hermes-host"
-    }
-  }
-}
-```
-
 ### Complete request and response example
 
 ```http
@@ -339,113 +178,10 @@ x-sno-station-mem-skin: codex
   },
   "registration": {
     "skinId": "codex",
-    "routing": {
-      "mode": "local-first"
-    },
-    "settings": {
-      "embedding": {
-        "provider": "local-onnx",
-        "dimensions": 1024,
-        "dtype": "q8",
-        "sessionOptions": {
-          "graphOptimizationLevel": "extended",
-          "enableMemPattern": false,
-          "enableCpuMemArena": false
-        },
-        "chunking": true
-      },
-      "observe": {
-        "enabled": false,
-        "baseUrl": "https://www.sno.ai",
-        "agentId": "openclaw"
-      },
-      "provider": {},
-      "ambientLearning": true,
-      "autoRecall": false,
-      "autoRecallMinLength": 2,
-      "autoRecallMinRepeated": 0,
-      "autoRecallMaxQueryLength": 2000,
-      "autoRecallTimeoutMs": 5000,
-      "autoRecallIncludeAgents": [],
-      "autoRecallExcludeAgents": [],
-      "captureAssistant": false,
-      "retrieval": {
-        "mode": "precision-recall",
-        "recallTopK": 20,
-        "vectorWeight": 0.7,
-        "bm25Weight": 0.3,
-        "minScore": 0,
-        "rerank": "lightweight",
-        "candidatePoolSize": 64,
-        "rerankModel": "rerank-2",
-        "rerankTimeoutMs": 15000,
-        "recencyHalfLifeDays": 14,
-        "recencyWeight": 0.1,
-        "temporalWeighting": false,
-        "mmrWindowOnly": false,
-        "temporalExpiry": false,
-        "temporalDecay": true,
-        "lengthNormAnchor": 0,
-        "hardMinScore": 0,
-        "timeDecayHalfLifeDays": 60,
-        "reinforcementFactor": 0.5,
-        "maxHalfLifeMultiplier": 3
-      },
-      "scopes": {
-        "default": "global",
-        "definitions": {
-          "global": {
-            "description": "Shared knowledge across all agents"
-          }
-        },
-        "agentAccess": {}
-      },
-      "enableManagementTools": false,
-      "sessionStrategy": "systemSessionMemory",
-      "sessionMemory": {
-        "enabled": true,
-        "messageCount": 15
-      },
-      "selfImprovement": {
-        "enabled": true,
-        "beforeResetNote": true,
-        "skipSubagentBootstrap": true,
-        "ensureLearningFiles": true
-      },
-      "extraction": {
-        "llm": {
-          "preset": "mem_claw/sno_ai_extract",
-          "timeoutMs": 30000
-        }
-      },
-      "memoryReflection": {
-        "messageCount": 120,
-        "maxInputChars": 24000,
-        "timeoutMs": 20000,
-        "errorReminderMaxEntries": 3,
-        "dedupeErrorSignals": true,
-        "injectMode": "inheritance+derived",
-        "storeToDb": true,
-        "injectIntoPrompt": false
-      },
-      "recallLifecycle": {
-        "retentionScorer": true,
-        "tierPromoter": true,
-        "autoRecallAccessTracking": true,
-        "traceEnabled": true,
-        "tierFloorMode": "bare",
-        "tierPromotionTopK": 3,
-        "accessRateLimitMs": 3600000,
-        "accessCountCeiling": 20
-      },
-      "memoryTelemetry": {
-        "enabled": true,
-        "currentKeyVersion": 1
-      },
-      "remOperations": [
-        "rem-replace",
-        "rem-update"
-      ]
+    "model": {
+      "baseUrl": "http://127.0.0.1:43128/v1",
+      "credential": "runtime-only-token",
+      "model": "codex-host"
     }
   }
 }
@@ -614,7 +350,7 @@ Response status: `200 OK`; `Content-Type: application/json`.
 
 Retrieves context for a query. `query` must contain non-whitespace text. `options` is required even when empty; only `corpus` has a request-schema default. Other omitted fields use the runtime/retriever behavior; a dash does not promise a fixed engine default. `aggregation.terms` are trimmed, each is 1–128 characters, and there are 1–8 terms. Every call reads its project plus the shared `global` memory. Native database recall does not require a workspace; native file reads do.
 
-Automatic, manual and native recall can populate different optional response fields. Inspect `degraded` and `unavailable`; empty context alone is not proof that the service succeeded.
+Automatic, manual and native recall can populate different optional response fields. Inspect `degraded` and `unavailable`; `unavailable: "model-preparing"` means the embedding model is still preparing, and empty context alone is not proof that the service succeeded.
 
 Scope requires nonblank `principal`, `project`, `session`. `host.observeSessionUuid`, if supplied, must be a UUID. Host `at` is nonnegative epoch milliseconds. Other host strings may be empty.
 
@@ -862,6 +598,7 @@ HTTP 200, JSON. The complete successful body is below. The schema also permits t
 | $ | object | yes | - | - | {"additionalProperties":false} |
 | turnId | string | yes | - | - | {"minLength":1} |
 | committed | boolean | yes | - | - | - |
+| accepted | boolean | no | - | - | - |
 | degraded | boolean | yes | [false] | - | - |
 
 ### Errors
@@ -1828,68 +1565,19 @@ every 250 ms within `MEMORY_START_TIMEOUT_MS`, returning the same discovery on s
 raising `sidecar-unresponsive` when the budget expires. The client rereads discovery on calls.
 Its HTTP transport uses the per-route deadline, avoiding an implicit 300-second fetch cutoff.
 
-## Starting the sidecar from the command line
+## Starting the sidecar
 
-Source: [cli.ts](cli.ts), [start.ts](start.ts), [profile.ts](profile.ts). The package `bin`
-name is `sno-station-mem`.
+Source: [client.ts](client.ts), [start.ts](start.ts), [profile.ts](profile.ts).
+`connect()` reads `<state dir>/settings.json` and takes the child process executable
+and package directory from `memoryPackage.node` and `memoryPackage.path`. A missing or
+invalid settings file returns a degraded connection with reason `storage-unavailable`
+and `settings unavailable: <path>: <field>; run sno setup` in its error text.
 
-```
-sno-station-mem sidecar start
-```
-
-No flags and no stdin. Any extra argument prints `Usage: sno-station-mem bind <path> | sidecar start` followed by a newline to stderr and exits 2 (proved by: `tests/packages/memory/integration/sidecar-no-gates.test.ts` — `rejects an extra CLI argument with usage and exit 2`).
-
-Before opening the store or publishing discovery, the sidecar binds
-`<state dir>/station/sidecar.sock` and keeps that Unix domain socket bound until exit.
-On `EADDRINUSE`, a successful connection means another sidecar owns it: the duplicate logs
-one INFO `sidecar.duplicate.exit` with the discovery pid and exits 0 without changing files.
-`ECONNREFUSED` or `ENOENT` means a stale socket; the sidecar removes it and retries binding.
-A short OS lock on the existing station directory serializes this probe/remove/bind sequence;
-it creates no lock file and the OS releases it on crash. Clean stop removes the socket.
-This only prevents duplicate service instances; it is not configuration or admission validation.
-The client has no pid-file lock: a live discovery pid gets health polling within one startup
-budget, returning that record or `sidecar-unresponsive`; missing discovery or a dead pid
-causes a spawn followed by discovery polling. A spawned duplicate's exit 0 does not end polling,
-so concurrent callers both read the winner's discovery.
-
-What it does, in order:
-
-1. Reads the bound store path from `<state dir>/station/sno-station-mem-<os user>.binding.json`
-   (written by `sno-station-mem bind <path>`); without a binding it falls back to the installed
-   configuration, then to the default store path `<state dir>/sno-station-mem/<os user>/memory.sqlite`.
-2. Reads `<state dir>/station/sidecar.json`. If a discovery record exists and its pid is alive,
-   probes health immediately and retries every 250 ms for up to 30000 ms
-   (`MEMORY_START_TIMEOUT_MS`). Success prints the same pid and port and exits 0; budget
-   expiry raises `sidecar-unresponsive`. This path never spawns or rewrites discovery,
-   even if the existing process remains unhealthy (proved by the live-discovery tests in
-   `tests/packages/memory/integration/sidecar-no-gates.test.ts`).
-3. Only when discovery is absent or its pid is dead, spawns `sidecar/main.js` detached,
-   with the caller's environment, stdout and stderr
-   appended to `<state dir>/sno-station-mem/sidecar-startup.log` (mode 0600), and unrefs it, so
-   the CLI process may exit while the sidecar keeps running.
-4. Polls discovery every 50 ms for up to 30000 ms (`MEMORY_START_TIMEOUT_MS`). The first record
-   whose pid is alive is health-probed and returned.
-
-Output on success (stdout, exit 0; followed by a newline) (proved by: `tests/packages/memory/integration/sidecar-no-gates.test.ts` — `starts the CLI and reuses the live discovery pid`):
-
-```
-Memory sidecar ready: pid=<pid> port=<port>
-```
-
-Output on failure (stderr, exit 1):
-
-```
-Memory sidecar failed to start or open its encrypted store: <reason>. See <startup log path>
-```
-
-`<reason>` is `storage-unavailable` when the child exited or failed to spawn before publishing
-discovery, `sidecar-unreachable` when the 30000 ms budget passed without a live discovery
-record, and `sidecar-unresponsive` when the existing live process does not become healthy
-within the startup budget. Other health failures retain the contract reason. A client never
-needs to invoke this command manually: `connect()` invokes it when discovery is absent or
-fails health, and the command's `startSidecar()` waits for an existing live pid rather than
-duplicating it. The command exists for operators and for hosts that want the sidecar up before the
-first memory call.
+When discovery names a live process, the client probes its health for up to 30000 ms.
+Without live discovery, it spawns `<memoryPackage.path>/dist/sidecar/main.js` using
+`memoryPackage.node`, then waits up to 30000 ms for live discovery. Child output goes
+to `<state dir>/sno-station-mem/sidecar-startup.log`. The service reads its routing and
+store path from the same installed settings when the memory pool opens.
 
 ## Outbound call: the sidecar calling the registered host model
 
@@ -1960,11 +1648,13 @@ owner-calibration, grammar-artifact or kill-switch admission gate. The required 
 still must parse. The client replaces submitted principal with its OS username. Logical scopes
 and explicit readable scopes are served; workspace-based project mapping remains in use.
 
-Missing installed settings, conflicting embedding/telemetry/path settings, recoverable database
+Missing or invalid installed settings fail the current HTTP request with status 503 and
+`{"degraded":true,"error":"settings unavailable: <path>: <field>; run sno setup",
+"reason":"settings unavailable: <path>: <field>; run sno setup"}`. Recoverable database
 setup failures, integrity-check failures, discovery publication failure, journal recovery errors,
 and trigger-state read/write failures produce logs rather than a persistent denial of later calls.
-Installed embedding/telemetry/path win on registration conflict. A failed runtime open is retried
-on a later request. HTTP startup does not wait for memory opening or full integrity checks.
+A failed runtime open is retried on a later request. HTTP startup does not wait for memory
+opening or full integrity checks.
 
 Invalid request JSON/schema, oversized input, unknown REM operations, route deadlines,
 and actual engine/model/I/O errors affect the current request. A parsed JSON memory request
@@ -2026,8 +1716,9 @@ The discovery client gives this call 5000 ms; that is not a server 504 timer.
 
 ### Request body
 
-None. Health does not open the memory store or wait for journal recovery/model warmup.
-It does read the resolved store path and reports process state, not model or database readiness.
+None. Health opens the memory pool and reports the configured store path; it does not
+wait for embedding model preparation. If settings cannot be read, it returns HTTP 503
+with `{"status":"error","error":"settings unavailable: <path>: <field>; run sno setup"}`.
 
 ### Response body
 
@@ -2038,7 +1729,7 @@ HTTP 200, JSON.
 | status | string | yes | Literal ok |
 | log_level | string | yes | Current shared logger level |
 | principal | string | yes | OS username |
-| storePath | string | yes | Resolved binding/installation/default store path |
+| storePath | string | yes | Installed `settings.store.path` |
 | accessCounters | object | yes | In-process counters; both zero before a memory pool opens |
 | accessCounters.engineAccesses | number | yes | Engine entry count |
 | accessCounters.storeAccesses | number | yes | Store entry count; direct storage inspection increments only this counter |
@@ -2072,8 +1763,9 @@ Clients can distinguish these three observed failure shapes:
 - Updating a nonexistent memory returns HTTP 200 with `degraded:false`, `result.isError:true`, `result.details:{}`, and `result.content:[{"type":"text","text":"Memory entry not found: missing-memory"}]` for id `missing-memory` (proved by: `tests/packages/memory/integration/sidecar-no-gates.test.ts` — `returns a tool refusal inside HTTP 200`).
 - An unknown route returns HTTP 404 with `{"error":"not_found"}` (proved by: `tests/packages/memory/integration/sidecar-no-gates.test.ts` — `returns an HTTP error body for an unknown route`).
 
-All mapped HTTP exceptions use `{"degraded":true,"reason":"<reason>"}`. No payload,
-stack or credential field is part of that error body. The complete mapping is:
+Mapped memory-route exceptions use `{"degraded":true,"reason":"<reason>"}`. A settings
+error instead uses the HTTP 503 body shown above, with its text in both `error` and
+`reason`. The complete mapping of closed reasons is:
 
 <!-- table:errors -->
 | Reason | HTTP status |
@@ -2115,9 +1807,7 @@ Principal is the OS username. All paths below are relative to that root unless a
 | State file | Purpose |
 | --- | --- |
 | station/sidecar.json | Shared discovery record described above |
-| station/sno-station-mem-<principal>.binding.json | Principal/storePath binding |
-| station/sno-station-mem-<principal>.config.json | Installation configuration, independent of skin registrations |
-| sno-station-mem/<principal>/memory.sqlite | Default store when no bound/installed/requested path applies |
+| settings.json | Installed service, model routing, and storage settings |
 | sno-station-mem/sidecar-startup.log | Startup output |
 | sno-station-mem/rem-wave-jobs.jsonl | Durable REM wave transitions |
 | sno-station-mem/rem-chassis-journal.jsonl | Per-operation REM execution records |
@@ -2125,13 +1815,9 @@ Principal is the OS username. All paths below are relative to that root unless a
 | sno-station-mem/audit.jsonl | Runtime audit and completion recovery records |
 | sno-station-mem/backups/ | Maintenance backups |
 
-Binding resolution uses the binding first, installation config second, requested client
-path third, default path last. A malformed binding is logged before fallback. A supplied
-client storePath is not proof that the running sidecar uses that path: health exposes the
-actual resolution. `sno-station-mem bind <path>` creates the binding once and refuses an
-existing binding. Optional stdin JSON accepts embedding and extractionKeyRef; the installation
-file is mode 0600, stores an absolute path, and the binding is published last. The secret
-reference names the external extraction secret; raw key material is not accepted there.
+The client reads `settings.json` and starts the service from `settings.memoryPackage.path`
+using `settings.memoryPackage.node`. The sidecar reads its routing and store path from the
+same installed settings. A supplied client store path does not override the running service.
 
 | Environment | Meaning |
 | --- | --- |
@@ -2144,12 +1830,10 @@ reference names the external extraction secret; raw key material is not accepted
 | SNO_STATION_MEM_REM_CLOCK_OVERRIDE | Clock override parsed as Date; use an ISO instant |
 | SNO_STATION_MEM_REM_VOLUME_THRESHOLD | Positive integer volume threshold override |
 | SNO_STATION_MEM_NODE_ENV | Package test mode; enables observation loopback validation exception |
-| SNO_OBSERVE_ENABLED | External observation default; on unless trimmed false/0 turns it off |
-| SNO_OBSERVE_BASE_URL | External observation base URL default |
 | GPU_BASE_URL | Existing GPU transport endpoint setting |
 | XDG_CONFIG_HOME | External crypto package configuration root |
 
-Package-owned environment names use `SNO_STATION_MEM_`; profile, GPU, observation and
+Package-owned environment names use `SNO_STATION_MEM_`; profile, GPU and
 external crypto/secret names retain their owners' names. Signed preset/secret identifiers
 remain centralized in `model/signed-registry-constants.ts`. This table covers sidecar-facing
 controls, not every environment variable used by model/provider libraries.
@@ -2175,9 +1859,7 @@ no runtime effect. Workspace learning tools remain local file operations.
 Retrieval settings `temporalWeighting` and `mmrWindowOnly` default to false. The former
 controls historical timestamp/access-based recency, decay and retention scoring; without
 it those stages skip while explicit validity filters and maintenance remain. The latter
-limits MMR diversification to the first request-limit candidates. These are registration/
-operator settings, not getRecall options. Client configuration boundaries can impose their
-own schema; consult that client's settings before forwarding new operator fields.
+limits MMR diversification to the first request-limit candidates. These are installed settings, not getRecall options. Change them in `settings.json`.
 
 ## Verification and source boundaries
 
