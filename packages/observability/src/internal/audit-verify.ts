@@ -1,7 +1,7 @@
 import { fetchJson, normalizeBaseUrl } from "./http.js";
+import { readStandaloneSettings } from "./paths.js";
 import type { AuditVerifyResult } from "./types.js";
 
-const BASE_URL_ENV = "SNO_OBSERVE_BASE_URL";
 
 interface ErrorResponse {
 	error?: string;
@@ -19,7 +19,7 @@ export async function verifyAuditEvent(
 	options: VerifyAuditOptions = {},
 ): Promise<AuditVerifyResult> {
 	const baseUrl = normalizeBaseUrl(
-		options.baseUrl ?? process.env[BASE_URL_ENV] ?? "https://www.sno.ai",
+		options.baseUrl ?? readStandaloneSettings().baseUrl,
 	);
 	const machineSecret = options.machineSecret?.trim();
 	const headers: Record<string, string> =

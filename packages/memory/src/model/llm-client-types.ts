@@ -48,12 +48,10 @@ export type MemoryLlmRequest = {
 export interface LlmClientConfig {
 	/** Signed LLMIx preset id. */
 	preset: LlmPreset;
-	/** Optional override; provider-native env vars are used when omitted. */
+	/** API key from settings. */
 	apiKey?: string;
 	/** Full base URL including /v1 suffix. */
 	baseURL?: string;
-	/** Helicone API key for OpenAI-compatible request logging. */
-	heliconeApiKey?: string;
 	timeoutMs?: number;
 	agentPort?: AgentLlmPort;
 	onTransportAttempt?: (attempt: {
@@ -76,7 +74,6 @@ export type ResolvedLlmConfig = {
 	model: string;
 	providerOptions?: LLMConfig["providerOptions"];
 	baseURL?: string;
-	heliconeApiKey?: string;
 	timeoutMs?: number;
 };
 
@@ -128,8 +125,6 @@ export type DispatchContext = {
 		destination?: "host" | "sno-gpu";
 		baseUrl?: string;
 		endpointUrl?: string;
-		heliconeApiKey?: string;
-		shouldSendHeliconeAuth?: boolean;
 		signal?: AbortSignal;
 		timeoutMs?: number;
 		userBaseUrlOverride?: boolean;
@@ -167,6 +162,5 @@ export type LocalCallResult =
 
 export type ResolvedBaseUrl = {
 	baseUrl?: string;
-	shouldSendHeliconeAuth: boolean;
 	userBaseUrlOverride: boolean;
 };

@@ -6,13 +6,13 @@ import { checkDiscovery, readDiscovery, type Discovery } from "./discovery";
 import { ContractError, DEGRADED_REASONS, type DegradedReason } from "./error";
 import type { ContractInputs, HostEvent, InitRegistration, Inspection, Message, Mutation, RecallOptions, ScopeCtx, Turn, UsageSignal } from "./inputs";
 import type { ContractMethod, MemoryContract } from "./index";
-import { getPrincipal, readBoundStorePath } from "./profile";
+import { getPrincipal, readSettings } from "./profile";
 import { outputSchemas, type ContractOutputs, type InspectData } from "./results";
 import { MEMORY_ROUTES, MEMORY_SKIN_HEADER, MEMORY_START_TIMEOUT_MS, MEMORY_HEALTH_TIMEOUT_MS } from "./routes";
 
 export type { MemoryContract, ScopeCtx, Registration, InitRegistration, RecallOptions, Turn, Mutation, Inspection, UsageSignal, Message, ContractOutputs, JsonValue, HostEvent } from "./index";
 export { ContractError } from "./error";
-export interface ConnectOptions { skinId: string; storePath?: string }
+export interface ConnectOptions { skinId: string }
 export interface DegradedConnection { degraded: true; reason: DegradedReason }
 
 function failureReason(error: unknown): DegradedReason {
@@ -53,9 +53,9 @@ function responseError(body: unknown): ContractError {
 
 export async function connect(options: ConnectOptions): Promise<MemoryClient | DegradedConnection> {
 	try {
-		const storePath = await readBoundStorePath(options.storePath);
+		const storePath = readSettings().store.path;
 		let discovery = await readDiscovery();
-		if (!discovery || !await checkDiscovery(discovery, storePath).then(() => true, () => false)) {
+		if (!discovery || !await checkDiscovery(discovery).then(() => true, () => false)) {
 			try {
 				await promisify(execFile)(process.execPath, [fileURLToPath(new URL("./cli.js", import.meta.url)), "sidecar", "start"], {
 					timeout: MEMORY_START_TIMEOUT_MS + MEMORY_HEALTH_TIMEOUT_MS, maxBuffer: 64 * 1024,
@@ -64,7 +64,7 @@ export async function connect(options: ConnectOptions): Promise<MemoryClient | D
 			discovery = await readDiscovery();
 		}
 		if (!discovery) throw new ContractError("sidecar-unreachable");
-		await checkDiscovery(discovery, storePath);
+		await checkDiscovery(discovery);
 		return new MemoryClient(options.skinId, storePath, discovery);
 	} catch (error) { return { degraded: true, reason: failureReason(error) }; }
 }
@@ -75,6 +75,8 @@ export class MemoryClient implements MemoryContract {
 	readonly pid: number;
 	readonly port: number;
 	readonly #discovery: Discovery;
+	#registration: { scope: ScopeCtx; registration: InitRegistration } | undefined;
+	#registeredPid: number | undefined;
 
 	constructor(readonly skinId: string, readonly storePath: string, discovery: Discovery) {
 		this.#discovery = discovery;
@@ -86,6 +88,9 @@ export class MemoryClient implements MemoryContract {
 		const route = MEMORY_ROUTES[method];
 		try {
 			const discovery = await readDiscovery() ?? this.#discovery;
+			if (method !== "init" && this.#registration && this.#registeredPid !== discovery.pid) {
+				await this.request("init", this.#registration);
+			}
 			const response = await postJson(discovery.port, route.path,
 				{ "Content-Type": "application/json", [MEMORY_SKIN_HEADER]: this.skinId },
 				JSON.stringify({ ...input, scope: { ...input.scope, principal: this.principal } }),
@@ -95,11 +100,13 @@ export class MemoryClient implements MemoryContract {
 			const parsed = outputSchemas[method].safeParse(body);
 			if (!parsed.success) throw new ContractError("engine-failed");
 			if (parsed.data.degraded) throw new ContractError(parsed.data.reason);
+			if (method === "init") this.#registeredPid = discovery.pid;
 			return parsed.data;
 		} catch (error) { throw new ContractError(failureReason(error)); }
 	}
 
 	init(scope: ScopeCtx, registration: InitRegistration): Promise<ContractOutputs["init"]> {
+		this.#registration = { scope, registration };
 		return this.request("init", { scope, registration });
 	}
 	hostEvent(event: HostEvent, scope: ScopeCtx): Promise<ContractOutputs["hostEvent"]> {

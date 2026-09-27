@@ -184,7 +184,7 @@ export async function onBeforeAgentStart(
 				details: {
 					resolvedAgentId,
 					queryChars: recallQuery.length,
-					queryPreview: debugContentPreview(recallQuery),
+					queryPreview: debugContentPreview(recallQuery, config.debugContent),
 					limit: recallLimit,
 				},
 			});
@@ -215,7 +215,7 @@ export async function onBeforeAgentStart(
 					details: {
 						resolvedAgentId,
 						queryChars: recallQuery.length,
-						queryPreview: debugContentPreview(recallQuery),
+						queryPreview: debugContentPreview(recallQuery, config.debugContent),
 						retrievedCount: results.length,
 						minRepeated,
 						limit: recallLimit,
@@ -243,17 +243,17 @@ export async function onBeforeAgentStart(
 			details: {
 				resolvedAgentId,
 				queryChars: recallQuery.length,
-				queryPreview: debugContentPreview(recallQuery),
+				queryPreview: debugContentPreview(recallQuery, config.debugContent),
 				injectedCount: finalResults.length,
 				limit: recallLimit,
 				topResultIds: finalResults.slice(0, 5).map((r) => r.entry.id),
 				topScores: finalResults.slice(0, 5).map((r) => Number(r.score.toFixed(4))),
 				topResultPreviews:
-					process.env.SNO_STATION_MEM_DEBUG_CONTENT === "1"
+					config.debugContent
 						? finalResults
 								.slice(0, 5)
 								.map((r) =>
-									debugContentPreview(r.snippet && r.snippet.length > 0 ? r.snippet : r.entry.text),
+									debugContentPreview(r.snippet && r.snippet.length > 0 ? r.snippet : r.entry.text, config.debugContent),
 								)
 						: undefined,
 			},

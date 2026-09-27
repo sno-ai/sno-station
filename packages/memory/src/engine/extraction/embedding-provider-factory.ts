@@ -1,8 +1,7 @@
-import { homedir } from "node:os";
-import { join } from "node:path";
 import {
 	type EmbeddingProvider,
 	LocalEmbedProvider,
+	LOCAL_EMBEDDING_CACHE_DIR_DEFAULT,
 	type LocalEmbedDtype,
 	type LocalEmbedSessionOptions,
 } from "@snoai/embedder";
@@ -28,6 +27,8 @@ export interface EmbeddingConfig {
 	normalized?: boolean;
 	/** Local ONNX model cache directory (default: ./embedding/models) */
 	cacheDir?: string;
+	offline?: boolean;
+	mirror?: string;
 	/** Quantization dtype. Default: q8. */
 	dtype?: LocalEmbedDtype;
 	/** ONNX Runtime session options for local low-memory operation. */
@@ -36,18 +37,16 @@ export interface EmbeddingConfig {
 	chunking?: boolean;
 }
 
-/**
- * One per-user model folder: the embedder's own default sits beside whichever bundled copy runs,
- * so `bind` and the sidecar each downloaded the model separately.
- */
 export function resolveEmbeddingCacheDir(config: EmbeddingConfig): string {
-	return config.cacheDir ?? join(process.env["XDG_CACHE_HOME"] || join(homedir(), ".cache"), "sno-station", "models");
+	return config.cacheDir || LOCAL_EMBEDDING_CACHE_DIR_DEFAULT;
 }
 
 /** Assembles provider from validated inputs for deterministic embedding generation. */
 export function buildProvider(config: EmbeddingConfig): EmbeddingProvider {
 	return new LocalEmbedProvider({
-		cacheDir: resolveEmbeddingCacheDir(config),
+		...(config.cacheDir ? { cacheDir: config.cacheDir } : {}),
+		offline: config.offline,
+		mirror: config.mirror,
 		dtype: config.dtype,
 		sessionOptions: config.sessionOptions,
 		...(config.model !== undefined ? { model: config.model } : {}),

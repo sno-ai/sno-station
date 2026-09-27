@@ -3,13 +3,10 @@
  * @boundary External sno-memdump command; it uses the storage runtime's encrypted readonly open.
  */
 
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
-import { resolveConfigPaths } from "@snoai/sqlite-crypto";
 import { writeEmergencyDiagnostic } from "../observability/early-diagnostics";
+import { readSettings } from "../../contract/profile";
 import { initSqliteRuntime, openSqliteDatabaseReadonly } from "../../store/sqlite-runtime";
 
 export interface MemdumpOptions {
@@ -18,20 +15,7 @@ export interface MemdumpOptions {
 	id?: string;
 	grep?: string;
 	limit?: number;
-	manifestPath?: string;
 	metadata?: boolean;
-}
-
-interface RelocationManifestEntry {
-	path: string;
-	dbId: string;
-	dekFingerprint: string;
-}
-
-interface RelocationManifest {
-	schemaVersion: 1;
-	createdAt: string;
-	dbs: RelocationManifestEntry[];
 }
 
 interface MemoryRow {
@@ -76,7 +60,6 @@ export function parseMemdumpOptions(args: string[]): MemdumpOptions {
 		args,
 		options: {
 			db: { type: "string" },
-			manifest: { type: "string" },
 			scope: { type: "string" },
 			id: { type: "string" },
 			grep: { type: "string" },
@@ -89,7 +72,7 @@ export function parseMemdumpOptions(args: string[]): MemdumpOptions {
 	if (!parsed.values.db) throw new Error("--db <path> is required");
 	// A blank value used to be dropped, so an unset shell variable turned a scoped dump into a
 	// dump of every row — silently, and with --metadata that is every receipt too.
-	for (const name of ["db", "manifest", "scope", "id", "grep"] as const) {
+	for (const name of ["db", "scope", "id", "grep"] as const) {
 		const value = parsed.values[name];
 		if (value !== undefined && value.trim() === "") {
 			throw new Error(`--${name} was given an empty value`);
@@ -101,79 +84,11 @@ export function parseMemdumpOptions(args: string[]): MemdumpOptions {
 	}
 	return {
 		dbPath: parsed.values.db,
-		...(parsed.values.manifest ? { manifestPath: parsed.values.manifest } : {}),
 		...(parsed.values.scope ? { scope: parsed.values.scope } : {}),
 		...(parsed.values.id ? { id: parsed.values.id } : {}),
 		...(parsed.values.grep ? { grep: parsed.values.grep } : {}),
 		...(limit === undefined ? {} : { limit }),
 		...(parsed.values.metadata ? { metadata: true } : {}),
-	};
-}
-
-function readRelocationManifest(path: string): RelocationManifest {
-	const parsed: unknown = JSON.parse(readFileSync(path, "utf8"));
-	if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
-		throw new Error(`--manifest ${path} is not a manifest object`);
-	}
-	const source = parsed as Record<string, unknown>;
-	const dbs = source["dbs"];
-	if (source["schemaVersion"] !== 1 || typeof source["createdAt"] !== "string" || !Array.isArray(dbs)) {
-		throw new Error(`--manifest ${path} has an unsupported schema`);
-	}
-	if (dbs.length !== 1) {
-		throw new Error(`--manifest ${path} must register exactly one database`);
-	}
-	const entry = dbs[0];
-	if (typeof entry !== "object" || entry === null || Array.isArray(entry)) {
-		throw new Error(`--manifest ${path} has an invalid database entry`);
-	}
-	const fields = entry as Record<string, unknown>;
-	if (
-		typeof fields["path"] !== "string" ||
-		typeof fields["dbId"] !== "string" ||
-		typeof fields["dekFingerprint"] !== "string"
-	) {
-		throw new Error(`--manifest ${path} has an invalid database entry`);
-	}
-	return {
-		schemaVersion: 1,
-		createdAt: source["createdAt"],
-		dbs: [
-			{
-				path: fields["path"],
-				dbId: fields["dbId"],
-				dekFingerprint: fields["dekFingerprint"],
-			},
-		],
-	};
-}
-
-function installRelocatedManifest(manifestPath: string, dbPath: string): () => void {
-	const manifest = readRelocationManifest(manifestPath);
-	const temporaryConfigHome = mkdtempSync(resolve(tmpdir(), "sno-memdump-config-"));
-	const previousConfigHome = process.env.XDG_CONFIG_HOME;
-	try {
-		process.env.XDG_CONFIG_HOME = temporaryConfigHome;
-		const relocatedManifestPath = resolveConfigPaths().manifestFile;
-		mkdirSync(dirname(relocatedManifestPath), { recursive: true, mode: 0o700 });
-		writeFileSync(
-			relocatedManifestPath,
-			JSON.stringify({
-				...manifest,
-				dbs: [{ ...manifest.dbs[0], path: resolve(dbPath) }],
-			}),
-			{ mode: 0o644 },
-		);
-	} catch (error) {
-		if (previousConfigHome === undefined) delete process.env.XDG_CONFIG_HOME;
-		else process.env.XDG_CONFIG_HOME = previousConfigHome;
-		rmSync(temporaryConfigHome, { recursive: true, force: true });
-		throw error;
-	}
-	return () => {
-		if (previousConfigHome === undefined) delete process.env.XDG_CONFIG_HOME;
-		else process.env.XDG_CONFIG_HOME = previousConfigHome;
-		rmSync(temporaryConfigHome, { recursive: true, force: true });
 	};
 }
 
@@ -289,25 +204,18 @@ export function serializeMemoryRow(row: MemoryRow, includeMetadata = false): Dum
 
 export async function main(args: string[]): Promise<void> {
 	const options = parseMemdumpOptions(args);
-	const cleanupManifest = options.manifestPath
-		? installRelocatedManifest(options.manifestPath, options.dbPath)
-		: undefined;
+	initSqliteRuntime(readSettings().store.encryptionKey);
+	const handle = openSqliteDatabaseReadonly(options.dbPath);
 	try {
-		await initSqliteRuntime();
-		const handle = openSqliteDatabaseReadonly(options.dbPath);
-		try {
-			const query = buildMemdumpQuery(options);
-			const rows = handle.db.prepare(query.sql).all(...query.params) as MemoryRow[];
-			for (const row of rows) {
-				process.stdout.write(
-					`${JSON.stringify(serializeMemoryRow(row, options.metadata === true))}\n`,
-				);
-			}
-		} finally {
-			handle.db.close();
+		const query = buildMemdumpQuery(options);
+		const rows = handle.db.prepare(query.sql).all(...query.params) as MemoryRow[];
+		for (const row of rows) {
+			process.stdout.write(
+				`${JSON.stringify(serializeMemoryRow(row, options.metadata === true))}\n`,
+			);
 		}
 	} finally {
-		cleanupManifest?.();
+		handle.db.close();
 	}
 }
 

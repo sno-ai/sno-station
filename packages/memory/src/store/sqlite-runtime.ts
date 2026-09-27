@@ -15,7 +15,6 @@ import { existsSync } from "node:fs";
 import {
 	type Dek,
 	getDek,
-	getDekSync,
 	openEncryptedDb,
 	openEncryptedDbReadonly,
 } from "@snoai/sqlite-crypto";
@@ -65,7 +64,7 @@ export interface SqliteOpenOptions {
 class RuntimeNotInitialized extends Error {
 	constructor() {
 		super(
-			"sqlite-runtime not yet initialized — await initSqliteRuntime() before opening databases",
+			"sqlite-runtime not yet initialized — call initSqliteRuntime() before opening databases",
 		);
 		this.name = "RuntimeNotInitialized";
 	}
@@ -79,41 +78,15 @@ export class SqliteFileMissingError extends Error {
 }
 
 let resolvedDek: Dek | undefined;
-let initPromise: Promise<void> | undefined;
 
-/**
- * Resolve the DEK once at plugin boot. Idempotent — concurrent callers share
- * the same Promise. After this resolves, the sync factories
- * (`openSqliteDatabase`, `openSqliteDatabaseReadonly`) can be called.
- */
-export async function initSqliteRuntime(): Promise<void> {
-	if (resolvedDek) return;
-	if (!initPromise) {
-		initPromise = (async () => {
-			resolvedDek = await getDek();
-		})().catch((err: unknown) => {
-			initPromise = undefined;
-			throw err;
-		});
-	}
-	await initPromise;
-}
-
-/**
- * Synchronous variant for entry points that cannot await (e.g. SnoStationMem's
- * `register()` contract). Throws when the DEK is in passphrase mode and
- * requires an interactive prompt — those flows must use `initSqliteRuntime()`
- * instead.
- */
-export function initSqliteRuntimeSync(): void {
-	if (resolvedDek) return;
-	resolvedDek = getDekSync();
+/** Set the key supplied by the settings reader before opening a database. */
+export function initSqliteRuntime(hex: string): void {
+	resolvedDek = getDek(hex);
 }
 
 /** Test-only hook: drop the cached DEK so a subsequent test pass re-initializes. */
 export function _resetSqliteRuntimeForTest(): void {
 	resolvedDek = undefined;
-	initPromise = undefined;
 }
 
 function wrapEncryptedDatabase(rawDb: ChokepointDb): { raw: RawSqliteDatabase; db: SqliteDatabaseLike } {
@@ -150,7 +123,7 @@ function wrapEncryptedDatabase(rawDb: ChokepointDb): { raw: RawSqliteDatabase; d
 
 /**
  * Opens an encrypted SQLite database for read-write access. Throws
- * `RuntimeNotInitialized` if `initSqliteRuntime()` has not yet resolved —
+ * `RuntimeNotInitialized` if `initSqliteRuntime()` has not been called —
  * never opens a raw (unencrypted) handle as a fallback.
  */
 export function openSqliteDatabase(
@@ -181,7 +154,7 @@ export function openSqliteDatabase(
  * Opens an encrypted SQLite database for read-only access. Requires that the
  * database was previously registered via the read-write factory (the manifest
  * entry must already exist). Throws `RuntimeNotInitialized` if init has not
- * yet completed.
+ * been called.
  */
 export function openSqliteDatabaseReadonly(dbPath: string): SqliteRuntimeHandle {
 	if (!resolvedDek) throw new RuntimeNotInitialized();

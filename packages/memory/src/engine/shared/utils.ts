@@ -27,19 +27,6 @@ export function clamp01(value: number, fallback: number = DEFAULT_IMPORTANCE): n
 	return Math.min(1, Math.max(0, value));
 }
 
-/** Resolves env vars with the fallback order required by shared utility helpers. */
-export function resolveEnvVars(value: string): string {
-	return value.replace(/\$\{([^}]+)\}/g, (_matched, envVar) => {
-		const envValue = process.env[envVar];
-		// Guard env value here so the remaining module behavior path works with normalized inputs.
-		if (!envValue) {
-			// Surface this invalid utility behavior state as an explicit typed failure.
-			throw new Error(`Environment variable ${envVar} is not set`);
-		}
-		return envValue;
-	});
-}
-
 /** Redacts markup-sensitive characters before memory text is embedded in prompt context. */
 export function sanitizeForContext(text: string, maxChars = 500, newlineReplacement = " "): string {
 	const storageSafe = sanitizeContentIngress({
@@ -138,13 +125,13 @@ export function stableHash(text: string): string {
 
 /**
  * Return a short, secret-redacted, whitespace-collapsed preview of `text` for
- * debug audit logs — but only when `SNO_STATION_MEM_DEBUG_CONTENT=1`. Off-by-default
+ * debug audit logs when explicitly enabled. Off-by-default
  * and passes the text through `redactSecrets` first because previews persist
  * in audit.jsonl on disk. Enable for bench investigations only.
  */
-export function debugContentPreview(text: string | undefined, maxChars = 80): string | undefined {
+export function debugContentPreview(text: string | undefined, enabled: boolean, maxChars = 80): string | undefined {
 	// Guard this branch early so the remaining module behavior path works with normalized inputs.
-	if (process.env.SNO_STATION_MEM_DEBUG_CONTENT !== "1") return undefined;
+	if (!enabled) return undefined;
 	if (!text) return undefined;
 	const collapsed = redactSecrets(text).replace(/\s+/g, " ").trim();
 	if (collapsed.length === 0) return undefined;

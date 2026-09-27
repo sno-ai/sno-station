@@ -6,7 +6,6 @@ import { MEMORY_RECONNECT_INTERVAL_MS } from "../contract/routes";
  */
 
 import { addLogFileTarget, closeLogger, createLogger } from "@snoai/utils/logger";
-import { initializeRuntimeDiagnostics } from "../engine/observability/runtime-diagnostics";
 import { getRemTraceLogPath, isRemTraceEnabled } from "./config";
 import { SettingsUnavailableError } from "../contract/profile";
 import type { RunningRemSidecar } from "./server";
@@ -25,7 +24,6 @@ while (!sidecar) {
 		await delay(MEMORY_RECONNECT_INTERVAL_MS);
 	}
 }
-initializeRuntimeDiagnostics();
 if (isRemTraceEnabled()) addLogFileTarget(getRemTraceLogPath());
 let stopping = false;
 

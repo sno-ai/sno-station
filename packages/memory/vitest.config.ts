@@ -28,11 +28,8 @@ export default defineConfig({
 	},
 	test: {
 		env: {
-			...Object.fromEntries(Object.entries(process.env).filter(([key, value]) => key.startsWith("SNO_MEM_TELEMETRY_HMAC_KEY") && value !== undefined).map(([key, value]) => [key.replace("SNO_MEM_TELEMETRY_HMAC_KEY", "SNO_STATION_MEM_TELEMETRY_HMAC_KEY"), value])),
 			NODE_ENV: "test",
 			SNO_STATION_MEM_NODE_ENV: "test",
-			SNO_OBSERVE_ENABLED: "false",
-			SNO_OBSERVE_ENABLED: "false",
 		},
 		exclude: [
 			...configDefaults.exclude,

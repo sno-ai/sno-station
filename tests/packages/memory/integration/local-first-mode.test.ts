@@ -10,9 +10,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { pluginConfigSchema } from "../../../../packages/memory/config/plugin-config-schema";
 import { atomicExtractionSkillReference } from "../../../../packages/memory/src/engine/extraction/atomic-extraction-skill";
-import { bindStore } from "../../../../packages/memory/src/engine/shared/paths";
 import { startRemSidecar } from "../../../../packages/memory/src/sidecar/server";
 import { createTestDb } from "../../../apps/mem-claw/helpers/test-db";
 import { modelReply, type RecorderReply, startRecorder } from "./fixtures/model-recorders";
@@ -28,25 +26,23 @@ const previousProfile = process.env.SNO_PROFILE_DIR;
 
 /** The service reads `settings.json` once, when its runtime opens: write it before the sidecar starts. */
 function writeSettings(overrides: SettingsDocument = {}): void {
-	writeSettingsFixture(root, { mode: "local-first", store: { path: database.dbPath },
-		rerank: { mode: "none" }, embedding: { cacheDir: "" }, telemetry: { observe: { enabled: false } }, ...overrides });
+	// A Sno GPU key the recorder ignores; without one the Sno client refuses before any request leaves.
+	writeSettingsFixture(root, { mode: "local-first", store: { path: database.dbPath, encryptionKey: database.encryptionKey },
+		snoGpu: { apiKey: "loopback-recorder" }, rerank: { mode: "none" }, embedding: { cacheDir: "" },
+		telemetry: { observe: { enabled: false } }, ...overrides });
 }
 
-/** Points every Sno GPU call at a loopback recorder; the configured base URL wins over the environment. */
+/** Points every Sno GPU call at a loopback recorder. */
 function pointSnoGpuAt(url: string): void {
-	vi.stubEnv("GPU_BASE_URL", url);
-	writeSettings({ snoGpu: { baseUrl: url } });
+	writeSettings({ snoGpu: { baseUrl: url, apiKey: "loopback-recorder" } });
 }
 
 beforeEach(async () => {
 	root = mkdtempSync(join(tmpdir(), "local-first-mode-"));
 	database = createTestDb();
 	process.env.SNO_PROFILE_DIR = root;
-	await bindStore(database.dbPath, { mode: "local-first", retrieval: { rerank: "none" } });
 	writeSettings();
 	mkdirSync(join(root, "sno-station-mem"), { recursive: true });
-	// A key the recorder ignores; without one the Sno client refuses before any request leaves.
-	vi.stubEnv("SNO_MEM_CLAW_LLM_API_KEY", "loopback-recorder");
 });
 afterEach(async () => {
 	await sidecar?.stop();
@@ -118,13 +114,10 @@ async function contractPost(path: string, body: unknown, skin: string): Promise<
 	});
 }
 
-async function registerHost(skinId: string, hostUrl: string, routingMode: "local-first" | "agent-native" = "local-first"): Promise<void> {
-	// Routing is the mode and the language only; every routing key beyond them is removed (rem-enhanced PRD REQ-3).
-	const { remEnhanced: _remEnhanced, agentNative: _agentNative, language: _language, mode: _mode, ...settings } = pluginConfigSchema.parse({
-		mode: routingMode, retrieval: { rerank: "none" }, observe: { enabled: false },
-	}) as Record<string, unknown>;
+/** A registration is the skin and its model only; the mode comes from settings.json (REQ-4). */
+async function registerHost(skinId: string, hostUrl: string): Promise<void> {
 	const response = await contractPost("/v1/init", { scope: { ...SEED_SCOPE, session: skinId }, registration: {
-		skinId, settings, routing: { mode: routingMode, language: "en" },
+		skinId,
 		model: { baseUrl: `${hostUrl}/host/v1/`, credential: "loopback-credential", model: "loopback-model" },
 	} }, skinId);
 	expect(response.status).toBe(200);
@@ -305,7 +298,7 @@ describe("A host refusal answers by operation (REQ-2)", () => {
 		const host = await recorder("host", refusal);
 		writeSettings({ mode: "agent-native" });
 		sidecar = await startRemSidecar();
-		await registerHost("refused-skin", host.url, "agent-native");
+		await registerHost("refused-skin", host.url);
 		const task = await store("refused-skin", "Draft the quarterly budget review for the finance team.", "profile", "active_tasks");
 		const openTasks = database.sqlite.prepare(
 			"SELECT count(*) AS count FROM nodix_active_task_instances WHERE terminal_at_ms IS NULL").get() as { count: number };
@@ -318,7 +311,7 @@ describe("A host refusal answers by operation (REQ-2)", () => {
 		const host = await recorder("host", refusal);
 		writeSettings({ mode: "agent-native" });
 		sidecar = await startRemSidecar();
-		await registerHost("refused-skin", host.url, "agent-native");
+		await registerHost("refused-skin", host.url);
 		const response = await contractPost("/v1/capture", { scope: { ...SEED_SCOPE, session: "refused-skin" },
 			turn: { turnId: `refused-${refusal}`, rewindEpoch: 0, messages: [
 				{ role: "user", content: "I keep a blue notebook for meeting notes.", at: 1789606800000 },

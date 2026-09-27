@@ -1,11 +1,11 @@
 import { execFile, fork, type ChildProcess } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import { cp, mkdir, mkdtemp, readFile, readdir, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { tmpdir, userInfo } from "node:os";
 import { join, resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { afterEach, beforeEach, expect, it } from "vitest";
-import { makeTestEnv, type TestEnv } from "../../sqlite-crypto/_helpers";
 import { pluginConfigSchema } from "../../../../packages/memory/config/plugin-config-schema";
 import { type SettingsDocument, writeSettingsFixture } from "../fixtures/settings-file-fixture";
 
@@ -13,12 +13,12 @@ const repo = resolve(import.meta.dirname, "../../../..");
 const original = join(repo, "packages/memory");
 const scope = { principal: userInfo().username, project: "agent:http-acceptance", session: "agent:http-acceptance:release", host: { agentId: "http-acceptance", sessionTimezone: "America/Los_Angeles" } };
 const config = pluginConfigSchema.parse({ mode: "local-first", ambientLearning: true, autoRecall: true, captureAssistant: true, observe: { enabled: false }, memoryTelemetry: { enabled: false } });
-const { mode, remEnhanced: _remEnhanced, language, ...settings } = config;
-const registration = { skinId: "http-acceptance", settings, routing: { mode, language } };
+// A registration is the skin only; everything else comes from settings.json (REQ-4).
+const registration = { skinId: "http-acceptance" };
 let root: string;
 let core: string;
 let dbPath: string;
-let crypto: TestEnv;
+let storeKey: string;
 let env: NodeJS.ProcessEnv;
 let sidecarPid: number | undefined;
 const children: ChildProcess[] = [];
@@ -110,15 +110,16 @@ async function bindStore(path: string, profileDir?: string): Promise<void> {
 
 /** What the registration and the bind set, written where the sidecar reads it once when its runtime opens. */
 function writeSettings(profileDir: string, storePath: string, overrides: SettingsDocument = {}): void {
-  writeSettingsFixture(profileDir, { mode: "local-first", store: { path: storePath }, embedding: { cacheDir: "" },
+  writeSettingsFixture(profileDir, { mode: "local-first", store: { path: storePath, encryptionKey: storeKey }, embedding: { cacheDir: "" },
     telemetry: { memoryUsage: { enabled: false }, observe: { enabled: false } }, ...overrides });
 }
 
 beforeEach(async () => {
-  crypto = makeTestEnv("common-memory-http");
   root = await mkdtemp(join(tmpdir(), "common-memory-http-"));
   core = join(root, "core"); dbPath = join(root, "data/memory.sqlite");
-  env = { ...process.env, SNO_PROFILE_DIR: join(root, "profile") };
+  // One store key per test; a test home keeps the store manifest out of the operator's.
+  storeKey = randomBytes(32).toString("hex");
+  env = { ...process.env, SNO_PROFILE_DIR: join(root, "profile"), HOME: join(root, "home") };
   await cp(join(original, "dist"), join(core, "dist"), { recursive: true });
   await cp(join(original, "package.json"), join(core, "package.json"));
   for (const entry of ["drizzle", "sqlite-extensions", "config", "scripts", "generated", "skills", "fixtures"]) {
@@ -153,7 +154,6 @@ beforeEach(async () => {
     }
     expect(changed).toBe(1);
   }
-  await bindStore(dbPath);
   writeSettings(join(root, "profile"), dbPath);
 });
 afterEach(async () => {
@@ -167,7 +167,6 @@ afterEach(async () => {
     await rm(extra.root, { recursive: true, force: true });
   }
   if (root) await rm(root, { recursive: true, force: true });
-  crypto?.cleanup();
 });
 
 it("captures in one published client process, recalls in another, forgets and reads back", async () => {
@@ -321,7 +320,6 @@ it("QCG-5: 32 concurrent first connects share one sidecar, one port and one bind
   const secondRoot = await mkdtemp(join(tmpdir(), "common-memory-http-second-"));
   const secondProfile = join(secondRoot, "profile");
   extraRoots.push({ root: secondRoot, pid: undefined });
-  await bindStore(join(secondRoot, "data/memory.sqlite"), secondProfile);
   writeSettings(secondProfile, join(secondRoot, "data/memory.sqlite"));
   const [second] = await Promise.all([client(undefined, secondProfile), client()]);
   expect(second.connected).toMatchObject({ degraded: false, principal: userInfo().username });

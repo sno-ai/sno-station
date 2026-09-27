@@ -398,7 +398,7 @@ function registerFreshDbSync(
 /**
  * Recovery-only: open the DB with the DEK and return the canary row (or
  * undefined if the canary table is absent) WITHOUT consulting the manifest.
- * Internal use by `sno-station-core lock --rebuild-manifest`. The returned db handle is
+ * Internal use for manifest recovery. The returned db handle is
  * already closed.
  */
 export function _readCanaryForRecovery(
@@ -489,7 +489,7 @@ export function openEncryptedDb(path: string, dek: Dek): Db {
 			// "new" — that check is diagnostic, not identity.
 			if (manifest.dbs.some((d) => d.path === dbPath)) {
 				throw new CanaryMismatch(
-					`manifest lists ${dbPath} but no canary row found; recovery: sno-station-core lock --rebuild-manifest`,
+					`manifest lists ${dbPath} but no canary row found`,
 				);
 			}
 			registerFreshDbSync(dbPath, dek, manifest, pre);

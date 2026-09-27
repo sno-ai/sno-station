@@ -28,7 +28,8 @@ function merge(base: SettingsDocument, overrides: SettingsDocument): SettingsDoc
 
 /**
  * Reads the shipped default document, sets a 64-hex `store.encryptionKey`, fills the four machine
- * paths inside `profileRoot`, deep-merges `overrides` (objects merge, everything else replaces),
+ * paths inside `profileRoot`, turns observe off (the shipped default sends to production; a test
+ * that exercises observe turns it on and points `baseUrl` at a loopback), deep-merges `overrides` (objects merge, everything else replaces),
  * and writes `profileRoot/settings.json` at 0600.
  */
 export function writeSettingsFixture(
@@ -44,6 +45,7 @@ export function writeSettingsFixture(
 			},
 			embedding: { cacheDir: join(profileRoot, ".cache", "sno-station", "models") },
 			memoryPackage: { path: MEMORY_PACKAGE_PATH, node: process.execPath },
+			telemetry: { observe: { enabled: false } },
 		}),
 		overrides,
 	);

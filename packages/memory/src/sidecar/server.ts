@@ -32,12 +32,10 @@ import {
 	appendAuditEntryStrict,
 	getAuditPath,
 	getSnoStationMemStateDir,
-	getStateDir,
 } from "../engine/operations/runtime-audit-log";
 import {
 	getRemChassisJournalPath,
 	HEALTH_PATH,
-	readRemConfigSource,
 	readRemOperationalConfig,
 	readRemTestHoldMs,
 	REM_ASYNC_START_DELAY_MS,
@@ -552,10 +550,7 @@ async function runChassisJob(
 			if (holdMs > 0) {
 				await new Promise((resolvePromise) => setTimeout(resolvePromise, holdMs));
 			}
-			const configSource = readRemConfigSource();
-			const configuration = configSource === undefined
-				? readRemOperationalConfig()
-				: readRemOperationalConfig(configSource);
+			const configuration = readRemOperationalConfig();
 			const enabledOperations: RemBuiltOperationType[] = [];
 			const cleanRefusalReasons: string[] = [];
 			for (const operation of requestedOperations) {
@@ -596,9 +591,6 @@ async function runChassisJob(
 					}
 				: await runRemProductionOrderedWave({
 						mode: runtime.config.mode, settings: runtime.settings, agentPort: runtime.connectedRemPort(),
-						stateRoot: getStateDir(),
-						personaDbPath: process.env["SNO_STATION_MEM_REM_EXPECTED_DB_PATH"],
-						configSource: JSON.stringify(configuration),
 						scope: queued.scope,
 						waveId: queued.job_id,
 						requestedOperations: enabledOperations,
