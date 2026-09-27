@@ -7,7 +7,6 @@
  */
 
 import { statfsSync } from "node:fs";
-import { homedir } from "node:os";
 import { join } from "node:path";
 import { getSnoStationMemStateDir } from "../contract/profile";
 
@@ -38,10 +37,6 @@ export class NonLocalFilesystemError extends Error {
 
 export function getSnoStationMemDataDir(): string {
 	return join(getSnoStationMemStateDir(), "data");
-}
-
-export function getSelfUpgradeStageRoot(): string {
-	return join(homedir(), ".snoai", "sno-station-core", "sno-station-mem", "self-upgrade");
 }
 
 export function getInstallManifestPath(): string {

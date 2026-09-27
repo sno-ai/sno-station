@@ -1,16 +1,6 @@
 import { LOCAL_EMBEDDING_MODEL_REVISION } from "@snoai/embedder";
 import { z } from "zod";
 import { CANDIDATE_POOL_SIZE, DEFAULT_SESSION_MESSAGE_COUNT, EMBEDDER_MODEL_DEFAULT } from "./index";
-import {
-	CODING_SKIN_EXPLICIT_RECALL_LIMIT,
-	CODING_SKIN_PROMPT_CONTEXT_MAX_CHARS,
-	CODING_SKIN_PROMPT_MIN_CHARS,
-	CODING_SKIN_PROMPT_RECALL_LIMIT,
-	CODING_SKIN_PROMPT_TIMEOUT_MS,
-	CODING_SKIN_SESSION_CONTEXT_MAX_CHARS,
-	CODING_SKIN_SESSION_RECALL_LIMIT,
-	CODING_SKIN_SESSION_TIMEOUT_MS,
-} from "./coding-skin";
 import { PRODUCT_MODES, type ProductMode } from "./plugin-config-mode-schema";
 import { pluginConfigSchema } from "./plugin-config-schema";
 import { SESSION_STRATEGIES } from "./session-strategy";
@@ -99,10 +89,10 @@ export function defaultSettings(): Settings {
 		embedding: { model: EMBEDDER_MODEL_DEFAULT, revision: LOCAL_EMBEDDING_MODEL_REVISION, dtype: engine.embedding.dtype,
 			threads: 0, cacheDir: "", offline: false, mirror: "" },
 		recall: { auto: true,
-			sessionStart: { limit: CODING_SKIN_SESSION_RECALL_LIMIT, maxChars: CODING_SKIN_SESSION_CONTEXT_MAX_CHARS, timeoutMs: CODING_SKIN_SESSION_TIMEOUT_MS },
-			prompt: { limit: CODING_SKIN_PROMPT_RECALL_LIMIT, maxChars: CODING_SKIN_PROMPT_CONTEXT_MAX_CHARS,
-				timeoutMs: CODING_SKIN_PROMPT_TIMEOUT_MS, minChars: CODING_SKIN_PROMPT_MIN_CHARS, minScore: 0 },
-			explicitLimit: CODING_SKIN_EXPLICIT_RECALL_LIMIT },
+			sessionStart: { limit: 5, maxChars: 3_500, timeoutMs: 8_000 },
+			prompt: { limit: 3, maxChars: 1_500,
+				timeoutMs: 4_000, minChars: 12, minScore: 0 },
+			explicitLimit: 5 },
 		capture: { assistant: true, ambient: true, sessionMemory: { enabled: true, messageCount: DEFAULT_SESSION_MESSAGE_COUNT },
 			sessionStrategy: "systemSessionMemory" },
 		rem: { tick: engine.remEnhanced?.trigger.tick ?? true, operations: engine.remOperations },

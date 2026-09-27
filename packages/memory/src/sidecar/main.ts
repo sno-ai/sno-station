@@ -17,7 +17,7 @@ while (!sidecar) {
 	catch (error) {
 		if (error instanceof DuplicateSidecarError) { await closeLogger(); process.exit(0); }
 		if (error instanceof SettingsUnavailableError) throw error;
-		createLogger("sno-station-mem:sidecar").error("Memory sidecar startup failed; retrying", { error }, {
+		createLogger("sno-station-mem:sidecar").error("Memory service startup failed; retrying", { error }, {
 			event_name: "memory.sidecar.startup.failed", file: "packages/memory/src/sidecar/main.ts",
 			function: "<module>", site_id: "sidecar.main.startup.failed",
 		});
