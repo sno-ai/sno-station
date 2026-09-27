@@ -3,9 +3,7 @@
  * @boundary Real SQLite and public routes; the replay-retention case injects a named target.
  */
 
-import { mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
-import { homedir } from "node:os";
-import { join } from "node:path";
+import { readdirSync, readFileSync } from "node:fs";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import type { Embedder } from "../../../../packages/memory/src/engine/extraction/embedding-provider-client";
 import {
@@ -26,7 +24,6 @@ import {
 } from "../../../../packages/memory/src/engine/extraction/task-lifecycle-resolver";
 import type { LlmClient } from "../../../../packages/memory/src/model/llm-client";
 import { MemoryStore, TaskLifecycleStaleResolutionError } from "../../../../packages/memory/src/store/store";
-import { _provisionKey } from "../../../../packages/sqlite-crypto/src/dek.ts";
 import { createTestDb, createTestEmbedder, type TestDb } from "../../../apps/mem-claw/helpers/test-db";
 import { createTestLlmClient } from "../../../apps/mem-claw/helpers/llm-client";
 
@@ -38,9 +35,6 @@ const firstAt = Date.parse("2039-01-01T00:00:00.000Z");
 let embedder: Embedder;
 let fixture: TestDb | undefined;
 let store: MemoryStore | undefined;
-let cryptoDirectory: string | undefined;
-let priorKeyFile: string | undefined;
-let priorXdgConfigHome: string | undefined;
 
 beforeAll(async () => {
 	embedder = await createTestEmbedder();
@@ -51,23 +45,9 @@ afterEach(() => {
 	fixture?.cleanup();
 	store = undefined;
 	fixture = undefined;
-	if (priorKeyFile === undefined) delete process.env.SNO_STATION_CORE_KEY_FILE;
-	else process.env.SNO_STATION_CORE_KEY_FILE = priorKeyFile;
-	if (priorXdgConfigHome === undefined) delete process.env.XDG_CONFIG_HOME;
-	else process.env.XDG_CONFIG_HOME = priorXdgConfigHome;
-	if (cryptoDirectory) rmSync(cryptoDirectory, { recursive: true, force: true });
-	cryptoDirectory = undefined;
 });
 
 function setup(): { store: MemoryStore; sqlite: TestDb["sqlite"] } {
-	cryptoDirectory = mkdtempSync(
-		join(homedir(), ".local", "state", "mem-claw-lifecycle-test-"),
-	);
-	priorKeyFile = process.env.SNO_STATION_CORE_KEY_FILE;
-	priorXdgConfigHome = process.env.XDG_CONFIG_HOME;
-	process.env.SNO_STATION_CORE_KEY_FILE = join(cryptoDirectory, "key");
-	process.env.XDG_CONFIG_HOME = join(cryptoDirectory, "xdg");
-	_provisionKey();
 	fixture = createTestDb();
 	store = new MemoryStore({ dbPath: fixture.dbPath, embedder });
 	return { store, sqlite: fixture.sqlite };

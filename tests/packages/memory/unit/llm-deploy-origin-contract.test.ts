@@ -44,13 +44,15 @@ describe("LLM deployment origin contract", () => {
 			expect(result.stdout).not.toContain("/extract/v1/extract/v1");
 		});
 
-		it(`${label} rejects a base that already contains the signed route prefix`, () => {
-			const result = checkOrigin(script, "https://rt3-llm.sno.ai/extract/v1");
-
-			expect(result.status).toBe(1);
-			expect(result.stderr).toContain("valid HTTPS origin");
-		});
 	}
+
+	// The sync script takes its origin from the shipped settings document, with no override to reject.
+	it("evaluation deploy rejects a base that already contains the signed route prefix", () => {
+		const result = checkOrigin(DEPLOY_SCRIPT, "https://rt3-llm.sno.ai/extract/v1");
+
+		expect(result.status).toBe(1);
+		expect(result.stderr).toContain("valid HTTPS origin");
+	});
 
 	it("full evaluation deployment rejects a path-bearing origin before preflight", () => {
 		const result = spawnSync("bash", [DEPLOY_SCRIPT, "--skip-build", "--skip-smoke"], {

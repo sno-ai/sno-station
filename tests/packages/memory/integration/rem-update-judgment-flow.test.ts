@@ -1,4 +1,4 @@
-import { writeTestInstallationConfig } from "../../../apps/mem-claw/helpers/module-config-fixture";
+import { writeSettingsFixture } from "../fixtures/settings-file-fixture";
 /** @file rem-update-judgment-flow.test.ts
  * @purpose Drives the rewired one-call rem-update flow end to end over a REAL encrypted
  * SQLite store and the REAL executor, with the model reply supplied through the production
@@ -15,7 +15,7 @@ import { writeTestInstallationConfig } from "../../../apps/mem-claw/helpers/modu
 import { createHash } from "node:crypto";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
@@ -75,7 +75,6 @@ async function runUpdateWave(input: {
 	const database = createTestDb();
 	const stateRoot = mkdtempSync(join(tmpdir(), "rem-judgment-"));
 	const prior = {
-		MEM_CLAW_DATA_DIR_ROOT: process.env["MEM_CLAW_DATA_DIR_ROOT"],
 		SNO_STATION_MEM_REM_EXPECTED_DB_PATH: process.env["SNO_STATION_MEM_REM_EXPECTED_DB_PATH"],
 		SNO_PROFILE_DIR: process.env["SNO_PROFILE_DIR"],
 	};
@@ -87,21 +86,10 @@ async function runUpdateWave(input: {
 		database.cleanup();
 		rmSync(stateRoot, { recursive: true, force: true });
 	});
-	process.env["MEM_CLAW_DATA_DIR_ROOT"] = dirname(database.dbPath);
 	process.env["SNO_STATION_MEM_REM_EXPECTED_DB_PATH"] = database.dbPath;
 	process.env["SNO_PROFILE_DIR"] = stateRoot;
-	writeTestInstallationConfig(stateRoot, {
-			plugins: {
-				entries: {
-					"sno-mem-claw": {
-						config: {
-							dbPath: database.dbPath,
-							embedding: { dimensions: 1024, provider: "local-onnx" },
-						},
-					},
-				},
-			},
-		});
+	writeSettingsFixture(stateRoot, { mode: "local-first", store: { path: database.dbPath, encryptionKey: database.encryptionKey },
+		embedding: { cacheDir: "" } });
 	const scope = `persona:judgment-${input.label}`;
 	const rowId = seedProductionMemory(database.runtime.raw, {
 		scope,

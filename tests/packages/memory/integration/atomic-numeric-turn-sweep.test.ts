@@ -207,24 +207,19 @@ describe("atomic numeric turn sweep", () => {
 	});
 
 	it("logs a completed sweep at info when nothing was dropped", async () => {
-		// The logger fixes its level from LOG_LEVEL when its module loads; the test shell runs at
-		// "warn", so the sweep module is re-imported under "info" to observe the success line.
-		vi.stubEnv("LOG_LEVEL", "info");
-		vi.resetModules();
-		const fresh = await import("../../../../packages/memory/src/engine/extraction/atomic-generic-extractor");
+		// An unconfigured logger runs at "info"; the service sets `settings.logging.level`.
 		const lines = captureStderr();
 		const { store } = callCountingStore();
 		const { transport } = transportReturning(
 			reply([{ turnIndex: STEPS_TURN, claimText: "The user walked 4,471 steps on 2026-06-04." }]),
 		);
-		await fresh.runAtomicNumericTurnSweep({
+		await runAtomicNumericTurnSweep({
 			...BASE,
 			store,
 			records: [],
 			transport,
 			nowMs: () => 1_000,
 		});
-		vi.unstubAllEnvs();
 		const outcome = lines.filter((line) => line.includes("atomic numeric turn sweep"));
 		expect(outcome).toHaveLength(1);
 		expect(outcome[0]).toContain("INFO");

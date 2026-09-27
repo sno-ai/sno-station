@@ -16,7 +16,6 @@
 
 import { spawn } from "node:child_process";
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { getDekSync } from "@snoai/sqlite-crypto";
 import type { Embedder } from "../../../../packages/memory/src/engine/extraction/embedding-provider-client.ts";
 import { MemoryStore } from "../../../../packages/memory/src/store/store.ts";
 import { createTestDb, createTestEmbedder } from "../../../apps/mem-claw/helpers/test-db.ts";
@@ -52,13 +51,13 @@ db.exec("COMMIT");
 db.close();
 `;
 
-function spawnRival(dbPath: string): { locked: Promise<void>; exited: Promise<number> } {
+function spawnRival(dbPath: string, keyHex: string): { locked: Promise<void>; exited: Promise<number> } {
 	const child = spawn(process.execPath, ["-e", RIVAL_SCRIPT], {
 		env: {
 			...process.env,
 			RIVAL_DRIVER_PATH: require.resolve("better-sqlite3-multiple-ciphers"),
 			RIVAL_DB_PATH: dbPath,
-			RIVAL_DEK_HEX: getDekSync().toString("hex"),
+			RIVAL_DEK_HEX: keyHex,
 			RIVAL_HOLD_MS: String(RIVAL_HOLD_MS),
 		},
 		stdio: ["ignore", "pipe", "inherit"],
@@ -80,12 +79,14 @@ function spawnRival(dbPath: string): { locked: Promise<void>; exited: Promise<nu
 
 describe("write-lock contention across two processes", () => {
 	let dbPath: string;
+	let keyHex: string;
 	let cleanup: () => void;
 	let store: MemoryStore;
 
 	beforeEach(() => {
 		const testDb = createTestDb();
 		dbPath = testDb.dbPath;
+		keyHex = testDb.encryptionKey;
 		cleanup = testDb.cleanup;
 		store = new MemoryStore({ dbPath, embedder: testEmbedder });
 	});
@@ -96,7 +97,7 @@ describe("write-lock contention across two processes", () => {
 	});
 
 	it("store() waits for a rival process's write lock instead of failing busy", async () => {
-		const rival = spawnRival(dbPath);
+		const rival = spawnRival(dbPath, keyHex);
 		await rival.locked;
 
 		const startedAt = Date.now();

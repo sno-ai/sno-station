@@ -3,6 +3,7 @@
 import { createHash } from "node:crypto";
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
+import { resolveConfigPaths } from "@snoai/sqlite-crypto";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import type { Embedder } from "../../../../packages/memory/src/engine/extraction/embedding-provider-client.ts";
 import {
@@ -10,6 +11,7 @@ import {
 	flushAuditWrites,
 	getAuditPath} from "../../../../packages/memory/src/engine/operations/runtime-audit-log.ts";
 import { runMaintenancePass } from "../../../../packages/memory/src/store/maintenance.ts";
+import { defaultSettings } from "../../../../packages/memory/config/settings.ts";
 import { MemoryStore } from "../../../../packages/memory/src/store/store.ts";
 import { createTestDb, createTestEmbedder } from "../../../apps/mem-claw/helpers/test-db.ts";
 
@@ -28,6 +30,13 @@ interface Fixture {
 
 let fixture: Fixture | undefined;
 
+// A maintenance pass reads no model-call or REM setting; the dependency type requires them for the tick.
+const SETTINGS = defaultSettings();
+const PASS_SETTINGS = {
+	modelCalls: SETTINGS.modelCalls,
+	remSettings: { mode: SETTINGS.mode, requestedOperations: SETTINGS.rem.operations, tickEnabled: SETTINGS.rem.tick },
+};
+
 afterEach(async () => {
 	await flushAuditWrites();
 	try {
@@ -40,9 +49,8 @@ afterEach(async () => {
 });
 
 function rewriteTestManifestPath(fromPath: string, toPath: string): void {
-	const xdgConfigHome = process.env.XDG_CONFIG_HOME;
-	if (!xdgConfigHome) throw new Error("createTestDb did not install XDG_CONFIG_HOME");
-	const manifestPath = join(xdgConfigHome, "sno-station-core", "dbs.json");
+	// createTestDb points HOME at its temporary directory, so this is the test's own store list.
+	const { manifestFile: manifestPath } = resolveConfigPaths();
 	const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as {
 		dbs: Array<{ path: string }>;
 	};
@@ -151,7 +159,7 @@ describe("storage integrity recovery", () => {
 		corruptFtsBlob(fixture.store);
 		writeFileSync(join(fixture.stateDir, "killswitch"), JSON.stringify({ reason: "db integrity failure retained across gateway restart", activatedBy: "maintenance" }));
 
-		const report = runMaintenancePass({
+		const report = runMaintenancePass({ ...PASS_SETTINGS,
 			store: fixture.store,
 			dbPath: fixture.dbPath,
 			backupDir: join(fixture.stateDir, "backups"),
@@ -190,7 +198,7 @@ describe("storage integrity recovery", () => {
 		await seed(fixture.store, "source");
 		corruptFtsBlob(fixture.store);
 		corruptSourceConstraint(fixture.store);
-		const report = runMaintenancePass({ store: fixture.store, dbPath: fixture.dbPath,
+		const report = runMaintenancePass({ ...PASS_SETTINGS, store: fixture.store, dbPath: fixture.dbPath,
 			backupDir: join(fixture.stateDir, "backups"), stateDir: fixture.stateDir }, new Set(["integrity"]));
 		expect(report).toMatchObject({ aborted: false, integrityRecovery: "retained" });
 		expect(existsSync(join(fixture.stateDir, "killswitch"))).toBe(false);
@@ -203,7 +211,7 @@ describe("storage integrity recovery", () => {
 		fixture = createCopiedFixture();
 		writeFileSync(join(fixture.stateDir, "killswitch"), JSON.stringify({ reason: "Manual pause via /memory pause", activatedBy: "slash-command" }));
 
-		const report = runMaintenancePass({
+		const report = runMaintenancePass({ ...PASS_SETTINGS,
 			store: fixture.store,
 			dbPath: fixture.dbPath,
 			backupDir: join(fixture.stateDir, "backups"),
@@ -220,7 +228,7 @@ describe("storage integrity recovery", () => {
 		corruptFtsBlob(fixture.store);
 		writeFileSync(join(fixture.stateDir, "killswitch"), JSON.stringify({ reason: "Manual pause via /memory pause", activatedBy: "slash-command" }));
 
-		const report = runMaintenancePass({
+		const report = runMaintenancePass({ ...PASS_SETTINGS,
 			store: fixture.store,
 			dbPath: fixture.dbPath,
 			backupDir: join(fixture.stateDir, "backups"),

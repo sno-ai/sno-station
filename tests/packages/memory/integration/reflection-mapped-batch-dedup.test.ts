@@ -15,6 +15,7 @@
 
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Embedder } from "../../../../packages/memory/src/engine/extraction/embedding-provider-client.ts";
+import { initializeRuntimeDiagnostics } from "../../../../packages/memory/src/engine/observability/runtime-diagnostics.ts";
 import { runMappedMemoryLoop } from "../../../../packages/memory/src/engine/reflection/reflection-mapped-memory-loop.ts";
 import { MemoryStore } from "../../../../packages/memory/src/store/store.ts";
 import { createTestLlmClient } from "../../../apps/mem-claw/helpers/llm-client.ts";
@@ -30,6 +31,8 @@ function duplicateDiagnostics(): string[] {
 }
 
 beforeAll(async () => {
+	// The duplicate-skip diagnostic is a debug line; the service sets its level from `settings.logging`.
+	initializeRuntimeDiagnostics({ level: "debug", file: "", debugContent: false });
 	testEmbedder = await createTestEmbedder();
 });
 
@@ -99,7 +102,6 @@ describe("runMappedMemoryLoop — in-batch cosine dedup", () => {
 	let store: MemoryStore;
 
 	beforeEach(() => {
-		vi.stubEnv("LOG_LEVEL", "debug");
 		diagnosticWrites = vi.spyOn(process.stderr, "write");
 		const testDb = createTestDb();
 		dbPath = testDb.dbPath;
@@ -109,7 +111,6 @@ describe("runMappedMemoryLoop — in-batch cosine dedup", () => {
 
 	afterEach(() => {
 		vi.restoreAllMocks();
-		vi.unstubAllEnvs();
 		store.close();
 		cleanup();
 	});

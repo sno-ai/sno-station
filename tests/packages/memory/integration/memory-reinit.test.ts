@@ -7,12 +7,15 @@ import { makeTestEnv, type TestEnv } from "../../sqlite-crypto/_helpers";
 import { LocalEmbedProvider } from "../../../../packages/embedder/src/local-provider";
 import { MemoryRuntimePool } from "../../../../packages/memory/src/sidecar/memory-runtime";
 import { serveMemoryRoute } from "../../../../packages/memory/src/sidecar/memory-routes";
-import { bindStore } from "../../../../packages/memory/src/engine/shared/paths";
-import { pluginConfigSchema } from "../../../../packages/memory/config/plugin-config-schema";
+import { type Settings, settingsToPluginConfig } from "../../../../packages/memory/config/settings";
+import { writeSettingsFixture } from "../fixtures/settings-file-fixture";
+import { untilModelReady } from "./fixtures/model-ready";
 
 // Resolve the package to current source, not a possibly stale dist artifact.
 vi.mock("@snoai/embedder", async () => import("../../../../packages/embedder/src/index"));
-const model = vi.hoisted(() => ({ loads: 0, releases: 0, fail: false }));
+// `dimension` is the vector width the stand-in model returns: 3 for a provider built with nativeDim 3,
+// the shipped model's width for the service, whose embedding settings come from settings.json.
+const model = vi.hoisted(() => ({ loads: 0, releases: 0, fail: false, dimension: 3 }));
 vi.mock("@huggingface/transformers", () => ({
 	env: {},
 	pipeline: async () => {
@@ -21,7 +24,9 @@ vi.mock("@huggingface/transformers", () => ({
 		return Object.assign(async () => {
 			if (disposed) throw new Error("ONNX session disposed");
 			if (model.fail) throw new Error("ONNX inference failed");
-			return { dims: [1, 3], data: new Float32Array([1, 0, 0]) };
+			const data = new Float32Array(model.dimension);
+			data[0] = 1;
+			return { dims: [1, model.dimension], data };
 		}, { tokenizer: { encode: (text: string) => text.split(/\s+/) }, dispose: async () => { disposed = true; model.releases++; } });
 	},
 }));
@@ -32,21 +37,14 @@ let pool: MemoryRuntimePool | undefined;
 let server: Server | undefined;
 let origin: string;
 const tasks = new Set<Promise<void>>();
-const config = pluginConfigSchema.parse({
-	mode: "local-first", ambientLearning: true, captureAssistant: true,
-	embedding: { nativeDim: 3, dimensions: 3, chunking: false },
-	observe: { enabled: false }, memoryTelemetry: { enabled: false },
-});
-const { mode, remEnhanced: _remEnhanced, language, ...settings } = config;
-const registration = { skinId: "reinit-test", settings, routing: { mode, language } };
+const registration = { skinId: "reinit-test" };
 
 beforeEach(async () => {
-	model.loads = 0; model.releases = 0; model.fail = false;
+	model.loads = 0; model.releases = 0; model.fail = false; model.dimension = 3;
 	LocalEmbedProvider.resetStaticState();
 	crypto = makeTestEnv("memory-reinit");
 	root = await mkdtemp(join(tmpdir(), "memory-reinit-"));
 	vi.stubEnv("SNO_PROFILE_DIR", root);
-	vi.stubEnv("SNO_OBSERVE_ENABLED", "false");
 });
 afterEach(async () => {
 	if (server) await new Promise<void>((resolve, reject) => server?.close(error => error ? reject(error) : resolve()));
@@ -60,10 +58,15 @@ afterEach(async () => {
 });
 
 async function openRoutes(): Promise<void> {
-	await bindStore(join(root, "memory.sqlite"), { embedding: config.embedding, mode, memoryTelemetry: config.memoryTelemetry });
+	const { settings } = writeSettingsFixture(root, { mode: "local-first", store: { path: join(root, "memory.sqlite"), encryptionKey: crypto.keyHex },
+		capture: { ambient: true, assistant: true },
+		// The default model cache, as before: an empty cache would run the download, which loads the model too.
+		embedding: { cacheDir: "" } });
+	model.dimension = settingsToPluginConfig(settings as Settings).embedding.dimensions;
 	pool = await MemoryRuntimePool.open();
 	pool.stopTimers();
 	const runtime = pool;
+	await untilModelReady(({ scope, ...recall }) => runtime.invoke("getRecall", { ...recall, scope: { ...scope, principal: runtime.principal } }, "model-ready-probe"));
 	server = createServer((request, response) => { void serveMemoryRoute(request, response, request.url ?? "", async () => runtime, tasks); });
 	await new Promise<void>(resolve => server?.listen(0, "127.0.0.1", resolve));
 	const address = server.address();

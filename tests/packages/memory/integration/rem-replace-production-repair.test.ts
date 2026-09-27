@@ -1,4 +1,4 @@
-import { writeTestInstallationConfig } from "../../../apps/mem-claw/helpers/module-config-fixture";
+import { writeSettingsFixture } from "../fixtures/settings-file-fixture";
 /** @file rem-replace-production-repair.test.ts
  * @purpose Proves the durable REM replace repair through the production batch entry.
  * @boundary Real REM batch code and repository over one real SQLite database.
@@ -6,7 +6,7 @@ import { writeTestInstallationConfig } from "../../../apps/mem-claw/helpers/modu
 
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
@@ -24,7 +24,6 @@ import { seedProductionMemory } from "../../../apps/mem-claw/helpers/rem-product
 import { createTestDb, type TestDb } from "../../../apps/mem-claw/helpers/test-db.ts";
 
 const priorEnvironment = {
-	MEM_CLAW_DATA_DIR_ROOT: process.env["MEM_CLAW_DATA_DIR_ROOT"],
 	SNO_STATION_MEM_REM_EXPECTED_DB_PATH: process.env["SNO_STATION_MEM_REM_EXPECTED_DB_PATH"],
 	SNO_PROFILE_DIR: process.env["SNO_PROFILE_DIR"],
 };
@@ -33,7 +32,6 @@ const cleanups: Array<() => void> = [];
 
 afterEach(() => {
 	for (const cleanup of cleanups.splice(0).reverse()) cleanup();
-	restoreEnvironment("MEM_CLAW_DATA_DIR_ROOT", priorEnvironment.MEM_CLAW_DATA_DIR_ROOT);
 	restoreEnvironment("SNO_STATION_MEM_REM_EXPECTED_DB_PATH", priorEnvironment.SNO_STATION_MEM_REM_EXPECTED_DB_PATH);
 	restoreEnvironment("SNO_PROFILE_DIR", priorEnvironment.SNO_PROFILE_DIR);
 });
@@ -365,19 +363,8 @@ describe("REM replace production repair", () => {
 function prepareFixture(): TestDb {
 	const fixture = createTestDb();
 	const stateRoot = mkdtempSync(join(tmpdir(), "rem-replace-production-repair-"));
-	writeTestInstallationConfig(stateRoot, {
-			plugins: {
-				entries: {
-					"sno-mem-claw": {
-						config: {
-							dbPath: fixture.dbPath,
-							embedding: { dimensions: 1024, provider: "local-onnx" },
-						},
-					},
-				},
-			},
-		});
-	process.env["MEM_CLAW_DATA_DIR_ROOT"] = dirname(fixture.dbPath);
+	writeSettingsFixture(stateRoot, { mode: "local-first", store: { path: fixture.dbPath, encryptionKey: fixture.encryptionKey },
+		embedding: { cacheDir: "" } });
 	process.env["SNO_STATION_MEM_REM_EXPECTED_DB_PATH"] = fixture.dbPath;
 	process.env["SNO_PROFILE_DIR"] = stateRoot;
 	cleanups.push(() => {

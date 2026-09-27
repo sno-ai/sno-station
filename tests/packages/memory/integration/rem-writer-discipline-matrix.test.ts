@@ -268,24 +268,9 @@ describe("ACC-37 production edge: mutation lifecycle", () => {
 			upstreamUrl: "http://localhost:8070/codex/v1/chat/completions",
 		});
 		scriptedFixtures.push(responseFixture);
-		const originalProcessEnv = process.env;
-		const parentGpuBaseUrlMutations: string[] = [];
-		process.env = new Proxy(originalProcessEnv, {
-			deleteProperty(target, property) {
-				if (property === "GPU_BASE_URL") parentGpuBaseUrlMutations.push("delete");
-				return Reflect.deleteProperty(target, property);
-			},
-			set(target, property, value) {
-				if (property === "GPU_BASE_URL") parentGpuBaseUrlMutations.push("set");
-				return Reflect.set(target, property, value);
-			},
-		});
 		let fixture: Awaited<ReturnType<typeof startRemProductionEntryFixture>> | undefined;
 		try {
 			fixture = await startRemProductionEntryFixture({ gpuBaseUrl: responseFixture.url });
-			expect(fixture.configuration["modelRoute"]).toBe(
-				"http://localhost:8070/codex/v1/chat/completions",
-			);
 			const scope = "persona:production-mutation-lifecycle";
 			seedProductionMemory(fixture.database.sqlite, {
 				id: "clremmutationstale000000001",
@@ -345,8 +330,6 @@ describe("ACC-37 production edge: mutation lifecycle", () => {
 			);
 		} finally {
 			if (fixture !== undefined) await fixture.stop();
-			process.env = originalProcessEnv;
-			expect(parentGpuBaseUrlMutations).toEqual([]);
 		}
 	});
 });

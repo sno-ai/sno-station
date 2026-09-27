@@ -6,6 +6,11 @@ import { MemoryStore } from "../../../../packages/memory/src/store/store";
 import { AtomicInsightDistiller, createSignedAtomicMemoryExtractionTransports } from "../../../../packages/memory/src/engine/extraction/atomic-memory-extraction";
 import { llmRoutingConfigSchema } from "../../../../packages/memory/config/plugin-config-mode-schema";
 import { resolveLlmEndpoint } from "../../../../packages/memory/src/model/llm-endpoint-resolution";
+import { readFileSync } from "node:fs";
+import { DEFAULT_SETTINGS_PATH } from "../fixtures/settings-file-fixture";
+
+// The routing table is `settings.modelCalls`; the shipped default document carries the one `sno` writes.
+const MODEL_CALLS = (JSON.parse(readFileSync(DEFAULT_SETTINGS_PATH, "utf8")) as { modelCalls: unknown }).modelCalls;
 
 const cases = [
 	...Array.from({ length: 3 }, (_, repeat) => ({
@@ -29,7 +34,7 @@ it.each(cases)("$name", async ({ name, turns, storesOffer }) => {
 	const fixture = createTestDb();
 	const store = new MemoryStore({ dbPath: fixture.dbPath, embedder: await createTestEmbedder() });
 	try {
-		const transports = createSignedAtomicMemoryExtractionTransports({ preset: "mem_claw/sno_extract_chat", apiKey, timeoutMs: 90_000, routing: llmRoutingConfigSchema.parse({ mode: "rem-enhanced" }) });
+		const transports = createSignedAtomicMemoryExtractionTransports({ preset: "mem_claw/sno_extract_chat", apiKey, timeoutMs: 90_000, routing: llmRoutingConfigSchema.parse({ mode: "rem-enhanced", modelCalls: MODEL_CALLS }) });
 		const complete = transports.generic.complete.bind(transports.generic);
 		transports.generic.complete = async (input) => {
 			const reply = await complete(input);

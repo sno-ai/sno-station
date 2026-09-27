@@ -1,40 +1,17 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { readFileSync } from "node:fs";
+import { describe, expect, it } from "vitest";
+import { type Settings, settingsToPluginConfig } from "../../../../packages/memory/config/settings";
+import { DEFAULT_SETTINGS_PATH } from "../fixtures/settings-file-fixture";
 
-const originalObserveEnabled = process.env.SNO_OBSERVE_ENABLED;
-
-async function parseObserveEnabledWithEnv(
-	value: string | undefined,
-): Promise<boolean> {
-	vi.resetModules();
-	if (value === undefined) {
-		delete process.env.SNO_OBSERVE_ENABLED;
-	} else {
-		process.env.SNO_OBSERVE_ENABLED = value;
-	}
-	const { pluginConfigSchema } = await import(
-		"../../../../packages/memory/src/engine/shared/types.ts"
-	);
-	return pluginConfigSchema.parse({
-		embedding: { provider: "local-onnx" },
-	}).observe.enabled;
+function observeEnabledFrom(enabled: boolean): boolean {
+	const shipped = JSON.parse(readFileSync(DEFAULT_SETTINGS_PATH, "utf8")) as Settings;
+	return settingsToPluginConfig({ ...shipped, telemetry: { ...shipped.telemetry,
+		observe: { ...shipped.telemetry.observe, enabled } } }).observe.enabled;
 }
 
-afterEach(() => {
-	vi.resetModules();
-	if (originalObserveEnabled === undefined) {
-		delete process.env.SNO_OBSERVE_ENABLED;
-	} else {
-		process.env.SNO_OBSERVE_ENABLED = originalObserveEnabled;
-	}
-});
-
-describe("observe config defaults", () => {
-	it("keeps observability disabled unless explicitly enabled", async () => {
-		await expect(parseObserveEnabledWithEnv(undefined)).resolves.toBe(false);
-		await expect(parseObserveEnabledWithEnv("false")).resolves.toBe(false);
-		await expect(parseObserveEnabledWithEnv("0")).resolves.toBe(false);
-		await expect(parseObserveEnabledWithEnv("yes")).resolves.toBe(false);
-		await expect(parseObserveEnabledWithEnv("true")).resolves.toBe(true);
-		await expect(parseObserveEnabledWithEnv("1")).resolves.toBe(true);
+describe("observe config", () => {
+	it("turns observability on or off exactly as settings.telemetry.observe.enabled says", () => {
+		expect(observeEnabledFrom(false)).toBe(false);
+		expect(observeEnabledFrom(true)).toBe(true);
 	});
 });

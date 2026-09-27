@@ -9,9 +9,10 @@ import { tmpdir, userInfo } from "node:os";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { bindStore } from "../../../../packages/memory/src/engine/shared/paths";
 import { startRemSidecar } from "../../../../packages/memory/src/sidecar/server";
 import { createTestDb } from "../../../apps/mem-claw/helpers/test-db";
+import { writeSettingsFixture } from "../fixtures/settings-file-fixture";
+import { untilModelReady } from "./fixtures/model-ready";
 
 type Envelope = {
 	event_type: string;
@@ -46,11 +47,8 @@ const ingest = await vi.hoisted(async () => {
 	await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
 	const address = server.address();
 	if (address === null || typeof address === "string") throw new Error("ingest stand-in did not listen");
-	const previousEnv = { enabled: process.env.SNO_OBSERVE_ENABLED, baseUrl: process.env.SNO_OBSERVE_BASE_URL };
-	process.env.SNO_OBSERVE_ENABLED = "true";
-	process.env.SNO_OBSERVE_BASE_URL = `http://127.0.0.1:${address.port}`;
 	process.env.SNO_STATION_MEM_NODE_ENV = "test";
-	return { events, server, previousEnv };
+	return { events, server, baseUrl: `http://127.0.0.1:${address.port}` };
 });
 
 let root: string;
@@ -62,7 +60,9 @@ beforeEach(async () => {
 	root = mkdtempSync(join(tmpdir(), "sidecar-observe-lifecycle-"));
 	database = createTestDb();
 	process.env.SNO_PROFILE_DIR = root;
-	await bindStore(database.dbPath, { mode: "local-first", retrieval: { rerank: "none" } });
+	writeSettingsFixture(root, { mode: "local-first", rerank: { mode: "none" },
+		store: { path: database.dbPath, encryptionKey: database.encryptionKey },
+		telemetry: { observe: { enabled: true, baseUrl: ingest.baseUrl } } });
 	mkdirSync(join(root, "sno-station-mem"), { recursive: true });
 	ingest.events.length = 0;
 });
@@ -77,8 +77,6 @@ afterEach(async () => {
 });
 
 afterAll(() => {
-	process.env.SNO_OBSERVE_ENABLED = ingest.previousEnv.enabled;
-	process.env.SNO_OBSERVE_BASE_URL = ingest.previousEnv.baseUrl;
 	return new Promise<void>(resolve => ingest.server.close(() => resolve()));
 });
 
@@ -108,6 +106,12 @@ async function shippedTypes(sessionUuid: string, last: string): Promise<string[]
 describe("sidecar-owned observe sessions for coding skins", () => {
 	it("reports the whole session under the skin's agent id with one UUID-v7 session", async () => {
 		sidecar = await startRemSidecar();
+		const port = sidecar.port;
+		// The service prepares its model on start; recall answers `model-preparing` until then.
+		await untilModelReady(async ({ scope: probe, ...recall }) => (await fetch(`http://127.0.0.1:${port}/v1/get-recall`, {
+			method: "POST", headers: { "x-sno-station-mem-skin": "model-ready-probe" },
+			body: JSON.stringify({ ...recall, scope: { ...probe, principal: userInfo().username } }), signal: AbortSignal.timeout(30_000),
+		})).json());
 		const scope = { principal: userInfo().username, project: "global", session: "codex-session-1", host: { sessionId: "codex-session-1" } };
 		const prompt = "What colour did we pick for the launch page?";
 		expect(await post("/v1/host-event", { scope, event: { kind: "prompt", prompt } }, "codex")).toEqual({ degraded: false, accepted: true });
@@ -123,7 +127,8 @@ describe("sidecar-owned observe sessions for coding skins", () => {
 		} }, "codex")).toEqual({ degraded: false, accepted: true });
 		await post("/v1/on-session-end", { scope, messages: [] }, "codex");
 
-		const started = ingest.events.find(event => event.event_type === "session.start");
+		// The model-ready probe runs its own session first; the session under test is the skin's.
+		const started = ingest.events.find(event => event.event_type === "session.start" && event.scope.agent_id === "codex");
 		expect(started, "session.start reached ingest").toBeDefined();
 		const sessionUuid = started?.scope.session_uuid ?? "";
 		expect(sessionUuid).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);

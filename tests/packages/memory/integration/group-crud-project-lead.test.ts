@@ -15,6 +15,11 @@ import { llmRoutingConfigSchema } from "../../../../packages/memory/config/plugi
 import { type AtomicExtractionRunParameters, MemoryStore } from "../../../../packages/memory/src/store/store";
 import { applyStateCategoryMigration } from "../../../../packages/memory/src/store/state-category-migration";
 import { createTestDb, createTestEmbedder, type TestDb } from "../../../apps/mem-claw/helpers/test-db";
+import { readFileSync } from "node:fs";
+import { DEFAULT_SETTINGS_PATH } from "../fixtures/settings-file-fixture";
+
+// The routing table is `settings.modelCalls`; the shipped default document carries the one `sno` writes.
+const MODEL_CALLS = (JSON.parse(readFileSync(DEFAULT_SETTINGS_PATH, "utf8")) as { modelCalls: unknown }).modelCalls;
 
 const PROJECT_ID = "group-crud-project-lead";
 const EXTRACTOR_VERSION = "atomic-v3-project-lead-test";
@@ -105,7 +110,7 @@ describe("project.lead — one lead per project, keyed on the project", () => {
 			{
 				preset: "mem_claw/sno_extract_chat",
 				apiKey,
-				routing: llmRoutingConfigSchema.parse({ mode: "rem-enhanced" }),
+				routing: llmRoutingConfigSchema.parse({ mode: "rem-enhanced", modelCalls: MODEL_CALLS }),
 				timeoutMs: 180_000,
 			},
 			"en",
