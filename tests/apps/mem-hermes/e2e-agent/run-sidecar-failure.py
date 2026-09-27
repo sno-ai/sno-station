@@ -30,13 +30,18 @@ agent = AIAgent(
     platform="cli",
     cwd=str(workspace),
 )
-# The plugin starts the sidecar itself on connect, so the failure is injected only after the
-# provider is live: the turn below then cannot commit, and the required checkpoint must block.
+# The plugin starts the sidecar itself on connect, and restarts it from settings.json on any later
+# call that finds it gone, so the failure is injected only after the provider is live and takes both
+# away: the service is stopped and settings.json is moved aside. The turn below then cannot commit,
+# and the required checkpoint must block.
 profile = Path(os.environ["SNO_PROFILE_DIR"])
+settings = profile / "settings.json"
+settings_aside = profile / f"settings.json.sidecar-down-{uuid.uuid4().hex[:10]}"
 sidecar_pid = json.loads((profile / "station" / "sidecar.json").read_text())["pid"]
 sidecar_unit = Path(f"/proc/{sidecar_pid}/cgroup").read_text().strip().rsplit("/", 1)[-1]
 assert sidecar_unit.startswith("sno-station-mem-") and sidecar_unit.endswith(".service"), sidecar_unit
 subprocess.run(["systemctl", "--user", "stop", sidecar_unit], check=True)
+settings.rename(settings_aside)
 try:
     result = agent.run_conversation("Reply exactly READY.")
     assert result.get("completed"), result
@@ -51,6 +56,7 @@ try:
     else:
         raise AssertionError("required checkpoint did not block")
 finally:
+    settings_aside.rename(settings)
     subprocess.run(["systemctl", "--user", "start", sidecar_unit], check=True)
 
 print(
