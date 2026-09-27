@@ -203,10 +203,11 @@ export async function onAgentEnd(
 			sessionDateTime,
 			sessionTimezone: ctx.sessionTimezone,
 		});
-		const partial = (stats.llmFailures ?? 0) > 0;
-		outcome = partial ? "partial" : "success";
+		const failures = (stats.llmFailures ?? 0) > 0;
+		const partial = failures && stats.created > 0;
+		outcome = failures ? partial ? "partial" : "failed" : "success";
 		reason = "extraction_returned";
-		const details = partial
+		const details = failures
 			? {
 					created: stats.created,
 					merged: stats.merged,
@@ -227,8 +228,8 @@ export async function onAgentEnd(
 		appendAuditEntry(stateDir, {
 			event: "ambient_learning",
 			hook: "agent_end",
-			resultStatus: partial ? "partial" : "ok",
-			decision: partial ? "llm_distill_failed" : "llm_distill_extracted",
+			resultStatus: failures ? partial ? "partial" : "error" : "ok",
+			decision: failures ? "llm_distill_failed" : "llm_distill_extracted",
 			details,
 		});
 	} catch (error) {

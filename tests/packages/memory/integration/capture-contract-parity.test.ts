@@ -111,6 +111,17 @@ describe("capture contract preserves the existing hook path", () => {
 		expect(services.store.sqlite.prepare("SELECT text FROM nodix_memories").all()).toEqual([]);
 	});
 
+	it("reports failed when extraction fails without writing a memory", async () => {
+		const { services, config } = await fixture();
+		const result = await onAgentEnd(services, { ...config, mode: "agent-native" }, services.store,
+			services.embedder, new MemoryScopePolicy({ default: "agent:parity" }),
+			{ async extractAndPersist() { return { created: 0, merged: 0, skipped: 0, llmFailures: 1 }; } } as never,
+			{ success: true, messages: [{ role: "user", content: "I keep a blue notebook." }] },
+			{ agentId: "parity", sessionKey: "agent:parity:failed-extraction" }, services.stateDir);
+		expect(result).toBe("failed");
+		expect(services.store.sqlite.prepare("SELECT text FROM nodix_memories").all()).toEqual([]);
+	});
+
 	it("keeps the statement anchor beside a resolved event date", async () => {
 		const { services, config } = await fixture();
 		await services.store.store({
