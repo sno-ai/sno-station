@@ -157,7 +157,8 @@ export async function onAgentEnd(
 	}
 	const resolvedAgentId = resolveHookAgentId(ctx.agentId, sessionKey).agentId;
 	const scope = scopePolicy.getDefaultScope(resolvedAgentId);
-	if (modelCallDestination("E1", config.mode) === "off") {
+	if (!config.modelCalls) throw new Error("modelCalls unavailable");
+	if (modelCallDestination("E1", config.mode, config.modelCalls) === "off") {
 		const { stored, failures } = await runLocalFirstCapture({ api, config, store, event, ctx, stateDir, scope, sessionKey });
 		outcome = "success";
 		if (failures > 0) outcome = stored > 0 ? "partial" : "failed";

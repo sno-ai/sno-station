@@ -1,4 +1,4 @@
-import { chmodSync, existsSync, closeSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, rmdirSync, rmSync, statSync, watch, writeFileSync, writeSync } from "node:fs";
+import { existsSync, closeSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, rmdirSync, rmSync, statSync, watch, writeFileSync, writeSync } from "node:fs";
 import { once } from "node:events";
 import { createServer, request as httpRequest } from "node:http";
 import { createConnection } from "node:net";
@@ -13,6 +13,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { pluginConfigSchema } from "../../../../packages/memory/config/plugin-config-schema";
 import { startSidecar } from "../../../../packages/memory/src/contract/start";
 import { bindStore } from "../../../../packages/memory/src/engine/shared/paths";
+import { readSettings } from "../../../../packages/memory/src/contract/profile";
 import { startRemSidecar } from "../../../../packages/memory/src/sidecar/server";
 import { MemoryRuntimePool } from "../../../../packages/memory/src/sidecar/memory-runtime";
 import { readRemAutomaticOperations } from "../../../../packages/memory/src/sidecar/rem-trigger";
@@ -25,6 +26,7 @@ import { Embedder } from "../../../../packages/memory/src/engine/extraction/embe
 import { MemoryStore } from "../../../../packages/memory/src/store/store";
 import { createTestDb, createTestEmbedder } from "../../../apps/mem-claw/helpers/test-db";
 import { modelReply, startRecorder } from "./fixtures/model-recorders";
+import { type SettingsDocument, writeSettingsFixture } from "../fixtures/settings-file-fixture";
 
 let root: string;
 let database: ReturnType<typeof createTestDb>;
@@ -32,11 +34,25 @@ let sidecar: Awaited<ReturnType<typeof startRemSidecar>> | undefined;
 const closers: Array<() => Promise<void>> = [];
 const previousProfile = process.env.SNO_PROFILE_DIR;
 
+/** The service reads `settings.json` once, when its runtime opens: write it before the runtime opens. */
+function writeSettings(overrides: SettingsDocument = {}): string {
+	return writeSettingsFixture(root, { mode: "local-first", store: { path: database.dbPath }, rerank: { mode: "none" },
+		embedding: { cacheDir: "" }, telemetry: { observe: { enabled: false } }, ...overrides }).path;
+}
+
+/** The settings-derived maintenance inputs the runtime passes when it opens. */
+function maintenanceSettings() {
+	const settings = readSettings();
+	return { modelCalls: settings.modelCalls,
+		remSettings: { mode: settings.mode, requestedOperations: settings.rem.operations, tickEnabled: settings.rem.tick } };
+}
+
 beforeEach(async () => {
 	root = mkdtempSync(join(tmpdir(), "sidecar-no-gates-"));
 	database = createTestDb();
 	process.env.SNO_PROFILE_DIR = root;
 	await bindStore(database.dbPath, { mode: "local-first", retrieval: { rerank: "none" } });
+	writeSettings();
 	mkdirSync(join(root, "sno-station-mem"), { recursive: true });
 });
 afterEach(async () => {
@@ -73,8 +89,7 @@ function registration(mode: "local-first" | "agent-native", model?: { baseUrl: s
 }
 
 function installRemEnhancedMode(): void {
-	const configPath = join(root, "station", `sno-station-mem-${userInfo().username}.config.json`);
-	writeFileSync(configPath, JSON.stringify({ ...JSON.parse(readFileSync(configPath, "utf8")), mode: "rem-enhanced" }));
+	writeSettings({ mode: "rem-enhanced" });
 }
 
 // REM Enhanced sends REM2, REM6, REM7 and REM8 to the host model, so a REM run needs a skin with a model callback.
@@ -205,6 +220,7 @@ describe("documented HTTP runtime claims", () => {
 		expect(await complete.json()).toMatchObject({ degraded: false, skinId: "existing-client" });
 	});
 	it("returns a degraded reason when the agent model endpoint is absent", async () => {
+		writeSettings({ mode: "agent-native" });
 		await health();
 		const scope = { principal: "caller", project: "global", session: "missing-model" };
 		expect((await contractPost("/v1/init", { scope, registration: registration("agent-native") })).status).toBe(200);
@@ -247,6 +263,7 @@ describe("documented HTTP runtime claims", () => {
 		try {
 			const address = host.address();
 			if (!address || typeof address === "string") throw new Error("missing host model port");
+			writeSettings({ mode: "agent-native" });
 			await health();
 			const scope = { principal: "caller", project: "global", session: "host-model" };
 			const initialized = await contractPost("/v1/init", { scope, registration: registration("agent-native", {
@@ -468,42 +485,26 @@ describe("documented HTTP runtime claims", () => {
 });
 
 describe("sidecar keeps serving", () => {
-	it("rejects inherited registration when the installation config cannot be read", async () => {
-		const configPath = join(root, "station", `sno-station-mem-${userInfo().username}.config.json`);
-		const original = readFileSync(configPath);
-		writeFileSync(configPath, "{");
-		const pool = await MemoryRuntimePool.open();
-		try {
-			await expect(pool.invoke("init", {
-				scope: { principal: userInfo().username, project: "global", session: "inherited-missing-config" },
-				registration: { skinId: "hermes", inheritInstalled: true },
-			}, "hermes")).rejects.toThrow("memory.installation.config.unavailable");
-		} finally {
-			await pool.close();
-			writeFileSync(configPath, original);
+	it("rejects inherited registration when the settings file cannot be read, per call and on /healthz", async () => {
+		const settingsPath = join(root, "settings.json");
+		writeFileSync(settingsPath, "{");
+		sidecar = await startRemSidecar();
+		const init = () => contractPost("/v1/init", {
+			scope: { principal: userInfo().username, project: "global", session: "inherited-missing-config" },
+			registration: { skinId: "hermes", inheritInstalled: true },
+		}, "hermes");
+		const unavailable = expect.stringMatching(new RegExp(`^settings unavailable: ${RegExp.escape(settingsPath)}: JSON: .+; run sno setup$`));
+		for (const response of [await init(), await init()]) {
+			expect({ status: response.status, body: await response.json() }).toEqual({ status: 503, body: { degraded: true, reason: unavailable, error: unavailable } });
 		}
-	});
-	it("rejects inherited registration when the installation config is not mode 0600", async () => {
-		const configPath = join(root, "station", `sno-station-mem-${userInfo().username}.config.json`);
-		chmodSync(configPath, 0o644);
-		const pool = await MemoryRuntimePool.open();
-		try {
-			await expect(pool.invoke("init", {
-				scope: { principal: userInfo().username, project: "global", session: "inherited-open-mode" },
-				registration: { skinId: "hermes", inheritInstalled: true },
-			}, "hermes")).rejects.toThrow("memory.installation.config.unavailable");
-		} finally {
-			await pool.close();
-			chmodSync(configPath, 0o600);
-		}
+		const healthz = await fetch(`http://127.0.0.1:${sidecar.port}/healthz`);
+		expect({ status: healthz.status, body: await healthz.json() }).toEqual({ status: 503, body: { status: "error", error: unavailable } });
 	});
 	it("reads the REM tick switch from the installed settings only and refuses it on a registration", async () => {
 		await health();
 		if (!sidecar) throw new Error("missing test sidecar");
 		const url = `http://127.0.0.1:${sidecar.port}/v1/init`;
-		const configPath = join(root, "station", `sno-station-mem-${userInfo().username}.config.json`);
-		const installed = JSON.parse(readFileSync(configPath, "utf8"));
-		writeFileSync(configPath, JSON.stringify({ ...installed, remEnhanced: { trigger: { tick: false } } }));
+		writeSettings({ rem: { tick: false } });
 		const { mode, remEnhanced: _remEnhanced, language: _language, ...settings } = pluginConfigSchema.parse({ mode: "local-first", retrieval: { rerank: "none" } });
 		const register = (skinId: string, routing: Record<string, unknown>) => fetch(url, {
 			method: "POST", headers: { "x-sno-station-mem-skin": skinId },
@@ -516,14 +517,14 @@ describe("sidecar keeps serving", () => {
 		]) {
 			const refused = await register("a", routing);
 			expect(refused.status).toBe(400);
-			expect(readRemAutomaticOperations(configPath).tickEnabled).toBe(false);
+			expect(readRemAutomaticOperations().tickEnabled).toBe(false);
 		}
 		const accepted = await register("b", { mode, language: "en" });
 		expect(accepted.status).toBe(200);
 		expect(await accepted.json()).toMatchObject({ degraded: false });
-		expect(readRemAutomaticOperations(configPath).tickEnabled).toBe(false);
-		writeFileSync(configPath, JSON.stringify(installed));
-		expect(readRemAutomaticOperations(configPath).tickEnabled).toBe(true);
+		expect(readRemAutomaticOperations().tickEnabled).toBe(false);
+		writeSettings();
+		expect(readRemAutomaticOperations().tickEnabled).toBe(true);
 	});
 	it("runs accepted delayed REM starts when shutdown overlaps body reading", async () => {
 		vi.stubEnv("SNO_STATION_MEM_REM_TEST_HOLD_MS", "200");
@@ -671,6 +672,7 @@ describe("sidecar keeps serving", () => {
 			await release.promise;
 			return { kind: "ok", text: "## Lessons\nKeep clear notebook records." };
 		});
+		writeSettings({ mode: "agent-native", capture: { sessionStrategy: "memoryReflection" } });
 		const pool = await MemoryRuntimePool.open();
 		const controller = new AbortController();
 		const sessionFile = join(root, "session.jsonl");
@@ -932,6 +934,7 @@ describe("sidecar keeps serving", () => {
 		}
 	});
 	it("skips automatic recall when disabled by registration", async () => {
+		writeSettings({ recall: { auto: false }, capture: { ambient: false } });
 		const pool = await MemoryRuntimePool.open();
 		const registered = registration("local-first");
 		const scope = { principal: "caller", project: "global", session: "auto-disabled" };
@@ -972,7 +975,7 @@ describe("sidecar keeps serving", () => {
 	it("retries an outstanding database setup step on maintenance until it succeeds", async () => {
 		database.sqlite.exec("DROP INDEX IF EXISTS nodix_idx_memories_project_fact_key_active; CREATE TABLE nodix_idx_memories_project_fact_key_active (blocked TEXT)");
 		const store = new MemoryStore({ dbPath: database.dbPath, embedder: await createTestEmbedder() });
-		const deps = { store, dbPath: database.dbPath, stateDir: root, backupDir: join(root, "backups") };
+		const deps = { store, dbPath: database.dbPath, stateDir: root, backupDir: join(root, "backups"), ...maintenanceSettings() };
 		try {
 			runMaintenancePass(deps, new Set());
 			expect(store.sqlite.prepare("SELECT type FROM sqlite_master WHERE name = 'nodix_idx_memories_project_fact_key_active'").get()).toEqual({ type: "table" });
@@ -984,7 +987,7 @@ describe("sidecar keeps serving", () => {
 	it("retries a failed migration and serves the missing table after repair", async () => {
 		database.sqlite.exec("DROP TABLE nodix_todos; DELETE FROM __drizzle_migrations WHERE created_at = 1740000000033");
 		const store = new MemoryStore({ dbPath: database.dbPath, embedder: await createTestEmbedder() });
-		const deps = { store, dbPath: database.dbPath, stateDir: root, backupDir: join(root, "backups") };
+		const deps = { store, dbPath: database.dbPath, stateDir: root, backupDir: join(root, "backups"), ...maintenanceSettings() };
 		const query = { projectIdFilter: ["global"], includeHistory: false, limit: 5 };
 		try {
 			expect(() => store.listTodos(query)).toThrow("no such table: nodix_todos");
@@ -1328,7 +1331,7 @@ it("holds the socket after shutdown times out until the runtime task settles", a
 	}
 }, 15_000);
 
-async function startRecallAccount(rows: number, autoRecall = true): Promise<void> {
+async function startRecallAccount(rows: number, autoRecall = true, settings: SettingsDocument = {}): Promise<void> {
 	const store = new MemoryStore({ dbPath: database.dbPath, embedder: await createTestEmbedder() });
 	try {
 		for (let index = 0; index < rows; index++) {
@@ -1339,6 +1342,8 @@ async function startRecallAccount(rows: number, autoRecall = true): Promise<void
 			});
 		}
 	} finally { await store.close(); }
+	// Of the registration below, only these have a settings field; the retrieval knobs are code constants now.
+	writeSettings({ recall: { auto: autoRecall, prompt: { timeoutMs: 30_000 } }, ...settings });
 	await health();
 	const registered = registration("local-first");
 	const response = await contractPost("/v1/init", {
@@ -1443,7 +1448,7 @@ describe("manual recall turn account over HTTP", () => {
 	});
 
 	it("omits auto recall rows when manual recall has no host workspace", async () => {
-		await startRecallAccount(2);
+		await startRecallAccount(2, true, { user: { id: "01900000-0000-7000-8000-000000000001" } });
 		const scope = { principal: "caller", project: root, readable: ["global"], session: "agent:main:recall-account" };
 		const registered = registration("local-first");
 		const initialized = await contractPost("/v1/init", {

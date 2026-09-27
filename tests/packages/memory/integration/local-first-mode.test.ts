@@ -13,10 +13,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { pluginConfigSchema } from "../../../../packages/memory/config/plugin-config-schema";
 import { atomicExtractionSkillReference } from "../../../../packages/memory/src/engine/extraction/atomic-extraction-skill";
 import { bindStore } from "../../../../packages/memory/src/engine/shared/paths";
-import { MODEL_CALLS } from "../../../../packages/memory/src/model/model-call-table";
 import { startRemSidecar } from "../../../../packages/memory/src/sidecar/server";
 import { createTestDb } from "../../../apps/mem-claw/helpers/test-db";
 import { modelReply, type RecorderReply, startRecorder } from "./fixtures/model-recorders";
+import { type SettingsDocument, writeSettingsFixture } from "../fixtures/settings-file-fixture";
 
 const repoRoot = resolve(import.meta.dirname, "../../../..");
 const SEED_SCOPE = { principal: "caller", project: "global", session: "local-first-seed" };
@@ -26,11 +26,24 @@ let sidecar: Awaited<ReturnType<typeof startRemSidecar>> | undefined;
 const closers: Array<() => Promise<void>> = [];
 const previousProfile = process.env.SNO_PROFILE_DIR;
 
+/** The service reads `settings.json` once, when its runtime opens: write it before the sidecar starts. */
+function writeSettings(overrides: SettingsDocument = {}): void {
+	writeSettingsFixture(root, { mode: "local-first", store: { path: database.dbPath },
+		rerank: { mode: "none" }, embedding: { cacheDir: "" }, telemetry: { observe: { enabled: false } }, ...overrides });
+}
+
+/** Points every Sno GPU call at a loopback recorder; the configured base URL wins over the environment. */
+function pointSnoGpuAt(url: string): void {
+	vi.stubEnv("GPU_BASE_URL", url);
+	writeSettings({ snoGpu: { baseUrl: url } });
+}
+
 beforeEach(async () => {
 	root = mkdtempSync(join(tmpdir(), "local-first-mode-"));
 	database = createTestDb();
 	process.env.SNO_PROFILE_DIR = root;
 	await bindStore(database.dbPath, { mode: "local-first", retrieval: { rerank: "none" } });
+	writeSettings();
 	mkdirSync(join(root, "sno-station-mem"), { recursive: true });
 	// A key the recorder ignores; without one the Sno client refuses before any request leaves.
 	vi.stubEnv("SNO_MEM_CLAW_LLM_API_KEY", "loopback-recorder");
@@ -162,7 +175,7 @@ const TRANSITION_ROWS = ["I no longer live in Boston.", "I no longer drink coffe
 describe("Local First background jobs never contact the Sno GPU", () => {
 	it("runs group maintenance without a Sno request", { timeout: 120_000 }, async () => {
 		const sno = await recorder("sno");
-		vi.stubEnv("GPU_BASE_URL", sno.url);
+		pointSnoGpuAt(sno.url);
 		await seedRemRows(["The deployment is waiting on the security review.", "The user prefers dark roast coffee."]);
 		const rekey = database.sqlite.prepare("UPDATE nodix_memories SET category = ?, subject = ?, attribute = NULL WHERE text = ?");
 		rekey.run("state", "entity:deployment", "The deployment is waiting on the security review.");
@@ -183,7 +196,7 @@ describe("Local First background jobs never contact the Sno GPU", () => {
 describe("Local First writes never fail for lack of a model", () => {
 	it("stores active tasks as open tasks, a reworded task as a second one", { timeout: 90_000 }, async () => {
 		const sno = await recorder("sno");
-		vi.stubEnv("GPU_BASE_URL", sno.url);
+		pointSnoGpuAt(sno.url);
 		sidecar = await startRemSidecar();
 		const first = await store("writer", "Draft the quarterly budget review for the finance team.", "profile", "active_tasks");
 		const second = await store("writer", "Prepare the finance team's quarterly budget review draft.", "profile", "active_tasks");
@@ -290,6 +303,7 @@ describe("Local First writes never fail for lack of a model", () => {
 describe("A host refusal answers by operation (REQ-2)", () => {
 	it.each(["exhausted", "auth"] as const)("stores an active task and answers done when the host refuses with %s", { timeout: 90_000 }, async refusal => {
 		const host = await recorder("host", refusal);
+		writeSettings({ mode: "agent-native" });
 		sidecar = await startRemSidecar();
 		await registerHost("refused-skin", host.url, "agent-native");
 		const task = await store("refused-skin", "Draft the quarterly budget review for the finance team.", "profile", "active_tasks");
@@ -302,6 +316,7 @@ describe("A host refusal answers by operation (REQ-2)", () => {
 
 	it.each(["exhausted", "auth"] as const)("answers a capture refused with %s as failed and commits nothing", { timeout: 90_000 }, async refusal => {
 		const host = await recorder("host", refusal);
+		writeSettings({ mode: "agent-native" });
 		sidecar = await startRemSidecar();
 		await registerHost("refused-skin", host.url, "agent-native");
 		const response = await contractPost("/v1/capture", { scope: { ...SEED_SCOPE, session: "refused-skin" },
@@ -332,14 +347,12 @@ describe("The model-call table alone decides whether capture uses a model (PRD V
 		await capture("table-as-shipped", "table-control-shipped");
 		expect({ stored: storedSentences(), hostCalls: host.calls }).toEqual({ stored: 1, hostCalls: [] });
 		database.sqlite.prepare("DELETE FROM nodix_memories").run();
-		const shipped = MODEL_CALLS.E1;
-		MODEL_CALLS.E1 = { ...shipped, destinations: { ...shipped.destinations, "local-first": "host" } };
-		try {
-			await registerHost("table-e1-host", host.url);
-			await capture("table-e1-host", "table-control-e1-host");
-		} finally {
-			MODEL_CALLS.E1 = shipped;
-		}
+		// The table is read from settings.json once per runtime open: change the E1 row, then restart.
+		await sidecar.stop();
+		writeSettings({ modelCalls: { E1: { "local-first": "host" } } });
+		sidecar = await startRemSidecar();
+		await registerHost("table-e1-host", host.url);
+		await capture("table-e1-host", "table-control-e1-host");
 		const extraction = host.received.filter(call => call.content.startsWith(atomicExtractionSkillReference("capture")));
 		expect({ extractionReachedHost: extraction.length > 0, carriesTurn: extraction.every(call => call.content.includes(SENTENCE)),
 			storedAsSentence: storedSentences() }).toEqual({ extractionReachedHost: true, carriesTurn: true, storedAsSentence: 0 });
@@ -350,7 +363,7 @@ describe("Local First REM runs only while a host answers", () => {
 	it("skips the tick with no connected registration, then a connection the same day dispatches", { timeout: 120_000 }, async () => {
 		const sno = await recorder("sno");
 		const host = await recorder("host");
-		vi.stubEnv("GPU_BASE_URL", sno.url);
+		pointSnoGpuAt(sno.url);
 		seedDueTriggerState(await seedRemRows(TRANSITION_ROWS));
 		vi.stubEnv("SNO_STATION_MEM_MAINTENANCE_INTERVAL_MS", "500");
 		sidecar = await startRemSidecar();
@@ -373,7 +386,7 @@ describe("Local First REM runs only while a host answers", () => {
 	it("runs a due pass on the host as soon as a skin registers a model callback", { timeout: 120_000 }, async () => {
 		const sno = await recorder("sno");
 		const host = await recorder("host");
-		vi.stubEnv("GPU_BASE_URL", sno.url);
+		pointSnoGpuAt(sno.url);
 		seedDueTriggerState(await seedRemRows(TRANSITION_ROWS));
 		sidecar = await startRemSidecar();
 		await registerHost("host-skin", host.url);
@@ -399,7 +412,7 @@ describe("Local First REM runs only while a host answers", () => {
 	it("ends a pass whose host refuses mid-pass as rem_skipped and dispatches again on the next connection", { timeout: 120_000 }, async () => {
 		const sno = await recorder("sno");
 		const host = await recorder("host", "answer-first-rem-then-refuse");
-		vi.stubEnv("GPU_BASE_URL", sno.url);
+		pointSnoGpuAt(sno.url);
 		seedDueTriggerState(await seedRemRows(TRANSITION_ROWS));
 		sidecar = await startRemSidecar();
 		await registerHost("host-skin", host.url);
@@ -428,7 +441,7 @@ describe("Local First REM runs only while a host answers", () => {
 
 	it("refuses a manual start with no connected registration and invents no job", { timeout: 60_000 }, async () => {
 		const sno = await recorder("sno");
-		vi.stubEnv("GPU_BASE_URL", sno.url);
+		pointSnoGpuAt(sno.url);
 		sidecar = await startRemSidecar();
 		const response = await fetch(`http://127.0.0.1:${sidecar.port}/rem/run`, {
 			method: "POST", body: JSON.stringify({ type: "rem-update", scope: "global" }), signal: AbortSignal.timeout(10_000),
@@ -441,7 +454,7 @@ describe("Local First REM runs only while a host answers", () => {
 
 	it("ends a job recovered after a restart with no connected registration as rem_skipped", { timeout: 120_000 }, async () => {
 		const sno = await recorder("sno");
-		vi.stubEnv("GPU_BASE_URL", sno.url);
+		pointSnoGpuAt(sno.url);
 		const scope = await seedRemRows(TRANSITION_ROWS);
 		writeFileSync(join(root, "sno-station-mem", "rem-wave-jobs.jsonl"), `${JSON.stringify({
 			payloadVersion: 1, waveId: "recovered-wave", correlationId: "recovered-correlation", scope,

@@ -17,13 +17,14 @@ export type LlmRouteTarget = {
 	transport: LlmTransport;
 	parser: LlmParser;
 };
-export type LlmRouteOff = { off: true; reason: "mode-local-first" };
+export type LlmRouteOff = { off: true; reason: "configured-off" };
 export type LlmRouteDecision = LlmRouteTarget | LlmRouteOff;
 
 export function pickLlmRoutingConfig(config: LlmRoutingConfigInput): LlmRoutingConfig {
 	return llmRoutingConfigSchema.parse({
 		mode: config.mode,
 		language: config.language,
+		modelCalls: config.modelCalls,
 	});
 }
 
@@ -33,8 +34,9 @@ export function resolveLlmRoute(input: {
 }): LlmRouteDecision {
 	const routing = pickLlmRoutingConfig(input.config);
 	const call = MODEL_CALLS[input.callId];
-	const destination = modelCallDestination(input.callId, routing.mode);
-	if (destination === "off") return { off: true, reason: "mode-local-first" };
+	if (!routing.modelCalls) throw new Error("modelCalls unavailable");
+	const destination = modelCallDestination(input.callId, routing.mode, routing.modelCalls);
+	if (destination === "off") return { off: true, reason: "configured-off" };
 	if (destination === "host") {
 		return {
 			tier: "agent",

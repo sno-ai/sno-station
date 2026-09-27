@@ -22,6 +22,7 @@ import { REM_UPDATE_JUDGMENT_SKILL } from "../../../../packages/memory/src/sidec
 import { startRemSidecar } from "../../../../packages/memory/src/sidecar/server";
 import { createTestDb } from "../../../apps/mem-claw/helpers/test-db";
 import { callId, modelReply, type Recorder, type RecorderReply, startRecorder } from "./fixtures/model-recorders";
+import { type SettingsDocument, writeSettingsFixture } from "../fixtures/settings-file-fixture";
 
 const repoRoot = resolve(import.meta.dirname, "../../../..");
 
@@ -119,6 +120,18 @@ async function registerHost(skinId: string, hostUrl: string, mode: ProductMode, 
 	expect(response.status).toBe(200);
 }
 
+/** The service reads `<profile>/settings.json` once, when its runtime opens: write it before the sidecar starts. */
+function writeSettings(profile: "seed" | "mode", mode: ProductMode, overrides: SettingsDocument = {}): void {
+	writeSettingsFixture(join(root, profile), { mode, store: { path: database.dbPath }, rerank: { mode: "none" },
+		embedding: { cacheDir: "" }, telemetry: { observe: { enabled: false } }, ...overrides });
+}
+
+/** Points the mode profile's Sno GPU calls at a loopback recorder; the configured base URL wins over the environment. */
+function pointSnoGpuAt(mode: ProductMode, url: string, overrides: SettingsDocument = {}): void {
+	vi.stubEnv("GPU_BASE_URL", url);
+	writeSettings("mode", mode, { snoGpu: { baseUrl: url }, ...overrides });
+}
+
 const stateDir = () => join(root, "mode", "sno-station-mem");
 function lines(name: string): string[] {
 	const path = join(stateDir(), name);
@@ -142,6 +155,7 @@ async function until(check: () => boolean, ms = 60_000): Promise<void> {
 async function seedStore(mode: ProductMode, episodic: string[], state: Array<[text: string, subject: string]>): Promise<void> {
 	vi.stubEnv("SNO_PROFILE_DIR", join(root, "seed"));
 	await bindStore(database.dbPath, { mode: "local-first", retrieval: { rerank: "none" } });
+	writeSettings("seed", "local-first");
 	sidecar = await startRemSidecar();
 	for (const text of [...state.map(([text]) => text), ...episodic]) {
 		const response = await contractPost("/v1/mutate", { scope: SEED_SCOPE, op: { op: "store", content: text, category: "episodic" } }, "seed");
@@ -180,7 +194,7 @@ describe("one REM pass sends each stage where the table says (REQ-1, REQ-2)", ()
 		await seedStore("rem-enhanced", ...FULL_PASS);
 		const sno = await recorder();
 		const host = await recorder();
-		vi.stubEnv("GPU_BASE_URL", sno.url);
+		pointSnoGpuAt("rem-enhanced", sno.url);
 		sidecar = await startRemSidecar();
 		await registerHost("host-skin", host.url, "rem-enhanced");
 		await until(settled);
@@ -205,7 +219,7 @@ describe("one REM pass sends each stage where the table says (REQ-1, REQ-2)", ()
 		await seedStore("agent-native", ...FULL_PASS);
 		const sno = await recorder();
 		const host = await recorder();
-		vi.stubEnv("GPU_BASE_URL", sno.url);
+		pointSnoGpuAt("agent-native", sno.url);
 		sidecar = await startRemSidecar();
 		await registerHost("host-skin", host.url, "agent-native");
 		await until(settled);
@@ -227,7 +241,7 @@ describe("REM Enhanced stops at the first refused call (REQ-4)", () => {
 		]);
 		const sno = await recorder({ refuse: () => false, keepFirstPair: true });
 		const host = await recorder({ refuse: id => id === "REM2" });
-		vi.stubEnv("GPU_BASE_URL", sno.url);
+		pointSnoGpuAt("rem-enhanced", sno.url);
 		sidecar = await startRemSidecar();
 		await registerHost("host-skin", host.url, "rem-enhanced");
 		await until(settled);
@@ -259,7 +273,7 @@ describe("REM Enhanced stops at the first refused call (REQ-4)", () => {
 		await seedStore("rem-enhanced", [], [[OLDER_DEPLOYMENT, "entity:deployment"], [NEWER_DEPLOYMENT, "entity:deployment"]]);
 		const sno = await recorder({ refuse: id => id === "REM1" });
 		const host = await recorder();
-		vi.stubEnv("GPU_BASE_URL", sno.url);
+		pointSnoGpuAt("rem-enhanced", sno.url);
 		sidecar = await startRemSidecar();
 		await registerHost("host-skin", host.url, "rem-enhanced");
 		await until(settled);
@@ -274,7 +288,7 @@ describe.each(["rem-enhanced", "agent-native"] as const)("%s: no connected plugi
 		await seedStore(mode, [OLDER_HOME, RETRACTION], [[OLDER_DEPLOYMENT, "entity:deployment"], [NEWER_DEPLOYMENT, "entity:deployment"]]);
 		const sno = await recorder();
 		const host = await recorder();
-		vi.stubEnv("GPU_BASE_URL", sno.url);
+		pointSnoGpuAt(mode, sno.url);
 		vi.stubEnv("SNO_STATION_MEM_MAINTENANCE_INTERVAL_MS", "500");
 		sidecar = await startRemSidecar();
 		// Opens the memory runtime, and with it the tick, through a registration without a model callback.
@@ -304,7 +318,7 @@ function tableDestination(label: string, mode: ProductMode): string {
 
 describe.each(["rem-enhanced", "agent-native"] as const)("%s: the other twenty calls follow the table (REQ-1)", mode => {
 	const SKIN = "entry-skin";
-	type Entry = { primary: string[]; run: (host: Recorder) => Promise<void> };
+	type Entry = { primary: string[]; settings?: SettingsDocument; run: (host: Recorder) => Promise<void> };
 	const entries: Record<string, Entry> = {
 		capture: { primary: ["E1"], run: async host => {
 			await registerHost(SKIN, host.url, mode);
@@ -325,7 +339,7 @@ describe.each(["rem-enhanced", "agent-native"] as const)("%s: the other twenty c
 					metadata: { section_name: "active_tasks" } } }, SKIN)).text();
 			}
 		} },
-		reflection: { primary: ["R1"], run: async host => {
+		reflection: { primary: ["R1"], settings: { capture: { sessionStrategy: "memoryReflection" } }, run: async host => {
 			await registerHost(SKIN, host.url, mode, { sessionStrategy: "memoryReflection" });
 			const sessionFile = join(root, "session.jsonl");
 			writeFileSync(sessionFile, `${JSON.stringify({ type: "message", message: { role: "user", content: "Always keep clear notebook records for every meeting." } })}\n`);
@@ -343,7 +357,7 @@ describe.each(["rem-enhanced", "agent-native"] as const)("%s: the other twenty c
 		await bindStore(database.dbPath, { mode, retrieval: { rerank: "none" } });
 		const sno = await startRecorder(closers, ({ raw }) => modelReply(raw ? "keep" : "{}", raw));
 		const host = await startRecorder(closers, () => modelReply("{}", false));
-		vi.stubEnv("GPU_BASE_URL", sno.url);
+		pointSnoGpuAt(mode, sno.url, entry.settings);
 		sidecar = await startRemSidecar();
 		await entry.run(host);
 		const seen = (recorder: Recorder, at: string) => recorder.received.map(call => nonRemCall(call.content))
@@ -358,7 +372,7 @@ describe.each(["rem-enhanced", "agent-native"] as const)("%s: the other twenty c
 	it("group maintenance", { timeout: 120_000 }, async () => {
 		await seedStore(mode, [], [["The deployment is waiting on the security review.", "entity:deployment"]]);
 		const sno = await startRecorder(closers, () => modelReply("{}", false));
-		vi.stubEnv("GPU_BASE_URL", sno.url);
+		pointSnoGpuAt(mode, sno.url);
 		const run = await new Promise<{ code: number | null; stderr: string }>((done, reject) => {
 			const child = spawn(join(repoRoot, "node_modules/.bin/tsx"), ["src/engine/maintenance/run-group-crud-maintenance.ts", database.dbPath],
 				{ cwd: join(repoRoot, "packages/memory"), env: { ...process.env, NODE_ENV: "test" }, stdio: ["ignore", "ignore", "pipe"] });

@@ -5,7 +5,6 @@
 
 import { createHash } from "node:crypto";
 import { open, readFile } from "node:fs/promises";
-import { readFileSync } from "node:fs";
 import { createLogger } from "@snoai/utils/logger";
 import { withLogContext } from "@snoai/utils/log-context";
 import { z } from "zod";
@@ -14,8 +13,8 @@ import {
 	getAuditPath,
 	type AuditStatus,
 } from "../engine/operations/runtime-audit-log";
-import { getInstallationConfigPath } from "../contract/profile";
-import { installationSettingsSchema } from "../../config/installation-settings";
+import { readSettings } from "../contract/profile";
+import type { Settings } from "../../config/settings";
 import {
 	REM_CORRELATION_ID_HEADER,
 	REM_RUN_PATH,
@@ -32,8 +31,7 @@ import {
 	writeRemTriggerStateAtomic as persistTriggerState,
 } from "./rem-trigger-state";
 import type { SqliteDatabaseLike } from "../store/sqlite-runtime";
-import { MODEL_CALLS } from "../model/model-call-table";
-import { DEFAULT_MODEL_MODE, type ProductMode } from "../../config/plugin-config-mode-schema";
+import type { ProductMode } from "../../config/plugin-config-mode-schema";
 
 export const REM_DAILY_SCHEDULE_HOUR = 3;
 export const REM_VOLUME_THRESHOLD = 100;
@@ -58,12 +56,13 @@ export interface RemAutomaticTriggerInput {
 	dispatchTimeoutMs?: number;
 	resolveScheduleZone?: () => string;
 	mode?: ProductMode;
+	modelCalls: Settings["modelCalls"];
 	hasConnectedHost?: () => boolean;
 }
 
-export function remNeedsHost(mode: ProductMode): boolean {
-	return (Object.keys(MODEL_CALLS) as Array<keyof typeof MODEL_CALLS>)
-		.some(id => id.startsWith("REM") && MODEL_CALLS[id].destinations[mode] === "host");
+export function remNeedsHost(mode: ProductMode, modelCalls: Settings["modelCalls"]): boolean {
+	return Object.keys(modelCalls)
+		.some(id => id.startsWith("REM") && modelCalls[id as keyof typeof modelCalls][mode] === "host");
 }
 
 export interface RemAutomaticTriggerReport {
@@ -80,21 +79,12 @@ const discoverySchema = z
 	.strict();
 
 const idleEvaluations = new Map<string, number>();
-export function readRemAutomaticOperations(
-	configPath: string = getInstallationConfigPath(),
-): { mode: ProductMode; requestedOperations: RemAutomaticOperation[]; tickEnabled: boolean } {
-	let installed: ReturnType<typeof installationSettingsSchema.parse>;
-	try {
-		installed = installationSettingsSchema.parse(JSON.parse(readFileSync(configPath, "utf8")));
-	} catch (error) {
-		// The memory runtime serves on defaults when this file is unreadable; REM follows the same defaults.
-		log.error("REM configuration unavailable; using installed defaults", { cause: errorMessage(error) }, { event_name: "memory.rem.trigger.configuration.unavailable", file: "packages/memory/src/sidecar/rem-trigger.ts", function: "readRemAutomaticOperations", site_id: "memory.rem.trigger.configuration.unavailable" });
-		return { mode: DEFAULT_MODEL_MODE, requestedOperations: ["rem-replace", "rem-update"], tickEnabled: true };
-	}
+export function readRemAutomaticOperations(): { mode: ProductMode; requestedOperations: RemAutomaticOperation[]; tickEnabled: boolean } {
+	const installed = readSettings();
 	return {
 		mode: installed.mode,
-		requestedOperations: installed.remOperations ?? ["rem-replace", "rem-update"],
-		tickEnabled: installed.remEnhanced?.trigger.tick ?? true,
+		requestedOperations: installed.rem.operations,
+		tickEnabled: installed.rem.tick,
 	};
 }
 
@@ -112,7 +102,7 @@ export async function evaluateRemAutomaticTriggers(
 		});
 		return { evaluations: 0, dispatches: 0 };
 	}
-	if (input.mode && remNeedsHost(input.mode) && !input.hasConnectedHost?.()) {
+	if (input.mode && remNeedsHost(input.mode, input.modelCalls) && !input.hasConnectedHost?.()) {
 		await recordDecision(auditStateDir, undefined, "skipped", {
 			row: "automatic-trigger-skipped", reason: "skipped: no host model connected",
 		});

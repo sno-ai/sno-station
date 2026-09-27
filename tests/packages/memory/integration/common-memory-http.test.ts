@@ -7,6 +7,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { afterEach, beforeEach, expect, it } from "vitest";
 import { makeTestEnv, type TestEnv } from "../../sqlite-crypto/_helpers";
 import { pluginConfigSchema } from "../../../../packages/memory/config/plugin-config-schema";
+import { type SettingsDocument, writeSettingsFixture } from "../fixtures/settings-file-fixture";
 
 const repo = resolve(import.meta.dirname, "../../../..");
 const original = join(repo, "packages/memory");
@@ -107,6 +108,12 @@ async function bindStore(path: string, profileDir?: string): Promise<void> {
   });
 }
 
+/** What the registration and the bind set, written where the sidecar reads it once when its runtime opens. */
+function writeSettings(profileDir: string, storePath: string, overrides: SettingsDocument = {}): void {
+  writeSettingsFixture(profileDir, { mode: "local-first", store: { path: storePath }, embedding: { cacheDir: "" },
+    telemetry: { memoryUsage: { enabled: false }, observe: { enabled: false } }, ...overrides });
+}
+
 beforeEach(async () => {
   crypto = makeTestEnv("common-memory-http");
   root = await mkdtemp(join(tmpdir(), "common-memory-http-"));
@@ -147,6 +154,7 @@ beforeEach(async () => {
     expect(changed).toBe(1);
   }
   await bindStore(dbPath);
+  writeSettings(join(root, "profile"), dbPath);
 });
 afterEach(async () => {
   for (const child of children.splice(0)) { child.disconnect(); child.kill("SIGTERM"); }
@@ -203,6 +211,7 @@ it("refuses a requested store path different from the installed binding", async 
   expect(await exchange(writer, "capture", [{ turnId: "bound-tea", rewindEpoch: 0, messages: [{ role: "user", content: "My stable personal preference is jasmine tea.", at: Date.parse("2026-09-09T18:00:00Z") }] }, scope])).toMatchObject({ degraded: false, committed: true });
   await stopSidecar();
   env.SNO_PROFILE_DIR = join(root, "default-profile");
+  writeSettings(env.SNO_PROFILE_DIR, join(env.SNO_PROFILE_DIR, "sno-station-mem", scope.principal, "memory.sqlite"));
   const unbound = await client();
   expect(unbound.connected.degraded).toBe(false);
   const defaultBinding = join(env.SNO_PROFILE_DIR, `station/sno-station-mem-${scope.principal}.binding.json`);
@@ -210,6 +219,7 @@ it("refuses a requested store path different from the installed binding", async 
   expect(existsSync(join(env.SNO_PROFILE_DIR, "sno-station-mem", scope.principal, "memory.sqlite"))).toBe(true);
   await stopSidecar();
   await bindStore(dbPath);
+  writeSettings(env.SNO_PROFILE_DIR, dbPath);
   const reader = await initialized();
   const recall = await exchange(reader, "getRecall", ["What is my stable personal preference for tea?", scope, { source: "auto" }]);
   expect(recall.degraded).toBe(false); expect(recall.contextText).toContain("jasmine tea");
@@ -312,6 +322,7 @@ it("QCG-5: 32 concurrent first connects share one sidecar, one port and one bind
   const secondProfile = join(secondRoot, "profile");
   extraRoots.push({ root: secondRoot, pid: undefined });
   await bindStore(join(secondRoot, "data/memory.sqlite"), secondProfile);
+  writeSettings(secondProfile, join(secondRoot, "data/memory.sqlite"));
   const [second] = await Promise.all([client(undefined, secondProfile), client()]);
   expect(second.connected).toMatchObject({ degraded: false, principal: userInfo().username });
   extraRoots[0].pid = second.connected.pid;
@@ -323,7 +334,6 @@ it("QCG-5: 32 concurrent first connects share one sidecar, one port and one bind
 
 it("QCG-19 sidecar tick owns volume, daily and disabled missed-window decisions", async () => {
   const profile = join(root, "profile"), stateDir = join(profile, "sno-station-mem");
-  const installedPath = join(profile, "station", `sno-station-mem-${scope.principal}.config.json`);
   const source = join(original, "config/rem/sno-e2e");
   env.SNO_STATION_MEM_MAINTENANCE_INTERVAL_MS = "1000";
   env.SNO_STATION_MEM_REM_VOLUME_THRESHOLD = "2";
@@ -331,10 +341,8 @@ it("QCG-19 sidecar tick owns volume, daily and disabled missed-window decisions"
   env.SNO_STATION_MEM_REM_CLOCK_OVERRIDE = "2026-09-10T12:00:00.000Z";
   env.SNO_STATION_MEM_REM_CONFIG_JSON = await readFile(join(source, "enable.json"), "utf8");
   env.TZ = "UTC";
-  const installed = JSON.parse(await readFile(installedPath, "utf8"));
-  installed.mode = "rem-enhanced"; installed.remOperations = ["rem-update"];
-  installed.remEnhanced = { trigger: { tick: true } };
-  await writeFile(installedPath, JSON.stringify(installed), { mode: 0o600 });
+  const installed = { mode: "rem-enhanced", rem: { tick: true, operations: ["rem-update"] } };
+  writeSettings(profile, dbPath, installed);
   await mkdir(stateDir, { recursive: true });
   await cp(join(source, "rem-grammar-corpus"), join(stateDir, "rem-grammar-corpus"), { recursive: true });
   await new Promise<void>((resolve, reject) => execFile("bash", [join(repo, "evals/sno-memory-bench/materialize-rem-config.sh"),
@@ -381,8 +389,8 @@ it("QCG-19 sidecar tick owns volume, daily and disabled missed-window decisions"
     expect((await jsonLines(join(stateDir, "audit.jsonl"))).some(row => row.details?.trigger === "daily" && row.details?.row === "dispatch")).toBe(true);
     await stopSidecar();
     const beforeDisabled = new Set((await jsonLines(jobsPath)).map(row => row.waveId));
-    installed.remEnhanced.trigger.tick = process.env.ZEBRA_QCG19_PLANT === "tick-enabled";
-    await writeFile(installedPath, JSON.stringify(installed), { mode: 0o600 });
+    installed.rem.tick = process.env.ZEBRA_QCG19_PLANT === "tick-enabled";
+    writeSettings(profile, dbPath, installed);
     env.SNO_STATION_MEM_REM_CLOCK_OVERRIDE = "2026-09-12T04:00:00.000Z";
     await initialized();
     await eventually(async () => {
@@ -404,7 +412,7 @@ it("QCG-19 sidecar tick owns volume, daily and disabled missed-window decisions"
       }
       await writeFile(join(evidence, "provenance.json"), JSON.stringify({ callsign: "zebra", host: (await import("node:os")).hostname(), sidecarPid,
         profile, principal: scope.principal, clientCallsRemRun: false, intervalMs: 1000, volumeThreshold: 2, clock: env.SNO_STATION_MEM_REM_CLOCK_OVERRIDE,
-        tickEnabledInInstalledConfig: installed.remEnhanced.trigger.tick, corpusMaterialized: true }, null, 2));
+        tickEnabledInInstalledConfig: installed.rem.tick, corpusMaterialized: true }, null, 2));
     }
   }
 }, 600_000);
