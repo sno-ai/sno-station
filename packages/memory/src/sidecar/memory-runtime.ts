@@ -199,8 +199,8 @@ export class MemoryRuntimePool {
 			this.skins.delete(registration.skinId);
 			this.skins.set(registration.skinId, entry);
 			if (previous) { previous.retired = true; if (previous.active === 0) await this.dispose(previous); }
-			if (registration.model && this.modelReady) void this.modelPreparation?.then(() => this.replayPendingCaptures())
-				.catch(error => engineLogger.error(String(error)));
+			if (registration.model) this.modelPreparation = this.modelPreparation?.then(() => this.modelReady
+				? this.replayPendingCaptures() : this.prepareModel()).catch(error => engineLogger.error(String(error)));
 			if (registration.model) void Promise.resolve().then(() => evaluateRemAutomaticTriggers({
 				database: this.store.sqlite, stateDir: this.stateDir,
 				mode: this.settings.mode, requestedOperations: this.settings.rem.operations,
