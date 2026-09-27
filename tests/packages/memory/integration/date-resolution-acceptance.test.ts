@@ -11,6 +11,11 @@ import type { AgentLlmCompletion, AgentLlmPort, AgentLlmRequest } from "../../..
 import { createLlmClient } from "../../../../packages/memory/src/model/llm-client";
 import type { LlmClient } from "../../../../packages/memory/src/model/llm-client-types";
 import type { LlmRoutingConfig } from "../../../../packages/memory/src/model/llm-mode-routing";
+import { readFileSync } from "node:fs";
+import { DEFAULT_SETTINGS_PATH } from "../fixtures/settings-file-fixture";
+
+// The routing table is `settings.modelCalls`; the shipped default document carries the one `sno` writes.
+const MODEL_CALLS = (JSON.parse(readFileSync(DEFAULT_SETTINGS_PATH, "utf8")) as { modelCalls: NonNullable<LlmRoutingConfig["modelCalls"]> }).modelCalls;
 /** Observe the actual transport reply without supplying or changing any model output. */
 function observeTimeInstructions(llm: LlmClient, instructions: CalendarInstruction[]): LlmClient {
 	return { ...llm, async completeText(request) {
@@ -33,6 +38,7 @@ function routing(locale: Locale = "en", mode: LlmRoutingConfig["mode"] = "rem-en
 	return {
 		mode,
 		language: locale,
+		modelCalls: MODEL_CALLS,
 	} satisfies LlmRoutingConfig;
 }
 

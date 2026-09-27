@@ -1,9 +1,9 @@
-import { writeTestInstallationConfig } from "../../../apps/mem-claw/helpers/module-config-fixture";
+import { writeSettingsFixture } from "../fixtures/settings-file-fixture";
 /** REM retirement ranks real stored candidates even when newer rows fill the project search. */
 import { createHash } from "node:crypto";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import { afterEach, expect, it } from "vitest";
 import {
 	createRemModelStageResponsePort,
@@ -21,7 +21,6 @@ const NOMINATED_TEXT = "The user no longer drinks tea in the mornings.";
 const BASE_TIME = Date.UTC(2026, 8, 1);
 const CANDIDATE_COUNT = 65;
 const priorEnvironment = {
-	MEM_CLAW_DATA_DIR_ROOT: process.env["MEM_CLAW_DATA_DIR_ROOT"],
 	SNO_STATION_MEM_REM_EXPECTED_DB_PATH: process.env["SNO_STATION_MEM_REM_EXPECTED_DB_PATH"],
 	SNO_PROFILE_DIR: process.env["SNO_PROFILE_DIR"],
 };
@@ -69,19 +68,8 @@ it("offers and closes the oldest candidate despite newer distractors beyond the 
 	cleanups.push(() => fixture.cleanup());
 	const stateRoot = mkdtempSync(join(tmpdir(), "rem-retirement-scoring-"));
 	cleanups.push(() => rmSync(stateRoot, { recursive: true, force: true }));
-	writeTestInstallationConfig(stateRoot, {
-		plugins: {
-			entries: {
-				"sno-mem-claw": {
-					config: {
-						dbPath: fixture.dbPath,
-						embedding: { dimensions: 1024, provider: "local-onnx" },
-					},
-				},
-			},
-		},
-	});
-	process.env["MEM_CLAW_DATA_DIR_ROOT"] = dirname(fixture.dbPath);
+	writeSettingsFixture(stateRoot, { mode: "local-first", store: { path: fixture.dbPath, encryptionKey: fixture.encryptionKey },
+		embedding: { cacheDir: "" } });
 	process.env["SNO_STATION_MEM_REM_EXPECTED_DB_PATH"] = fixture.dbPath;
 	process.env["SNO_PROFILE_DIR"] = stateRoot;
 

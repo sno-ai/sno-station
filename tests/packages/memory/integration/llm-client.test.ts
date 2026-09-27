@@ -612,14 +612,7 @@ describe("mem-claw llm-client", () => {
 		expect(providerFetchCount).toBe(0);
 	});
 
-	it("uses LLMIx sno_ai_extract routing without sending SNO_MEM_CLAW_LLM_INTERNAL_KEY to overrides", async () => {
-		const originalGpuBaseUrl = process.env.GPU_BASE_URL;
-		const originalSnoKey = process.env.SNO_MEM_CLAW_LLM_API_KEY;
-		const originalInternalSecret = process.env.SNO_MEM_CLAW_LLM_INTERNAL_KEY;
-		process.env.GPU_BASE_URL = "https://gpu.example.test";
-		delete process.env.SNO_MEM_CLAW_LLM_API_KEY;
-		process.env.SNO_MEM_CLAW_LLM_INTERNAL_KEY = "internal-secret";
-
+	it("routes each sno_ai_extract client to its own Sno GPU base with its own key", async () => {
 		const requests: Array<{ url: string; headers: Headers }> = [];
 		globalThis.fetch = (async (input, init) => {
 			if (String(input) === SNO_STATION_MEM_RELEASE_ANCHOR_URL) {
@@ -635,30 +628,24 @@ describe("mem-claw llm-client", () => {
 			return okChat('{"status":"ok"}');
 		}) as typeof fetch;
 
-		try {
-			const defaultClient = createLlmClient({
-				preset: "mem_claw/sno_ai_extract",
-			});
-			await defaultClient.completeJson<{ status: string }>(
-				memoryExtractRequest("Return JSON"),
-			);
+		// The service builds this client from `settings.snoGpu` (`baseUrl`, `apiKey`).
+		const defaultClient = createLlmClient({
+			preset: "mem_claw/sno_ai_extract",
+			baseURL: "https://gpu.example.test",
+			apiKey: "internal-secret",
+		});
+		await defaultClient.completeJson<{ status: string }>(
+			memoryExtractRequest("Return JSON"),
+		);
 
-			const overrideClient = createLlmClient({
-				preset: "mem_claw/sno_ai_extract",
-				baseURL: "https://sno-override.example.test/v1",
-				apiKey: "override-key",
-			});
-			await overrideClient.completeJson<{ status: string }>(
-				memoryExtractRequest("Return JSON"),
-			);
-		} finally {
-			if (originalGpuBaseUrl === undefined) delete process.env.GPU_BASE_URL;
-			else process.env.GPU_BASE_URL = originalGpuBaseUrl;
-			if (originalSnoKey === undefined) delete process.env.SNO_MEM_CLAW_LLM_API_KEY;
-			else process.env.SNO_MEM_CLAW_LLM_API_KEY = originalSnoKey;
-			if (originalInternalSecret === undefined) delete process.env.SNO_MEM_CLAW_LLM_INTERNAL_KEY;
-			else process.env.SNO_MEM_CLAW_LLM_INTERNAL_KEY = originalInternalSecret;
-		}
+		const overrideClient = createLlmClient({
+			preset: "mem_claw/sno_ai_extract",
+			baseURL: "https://sno-override.example.test/v1",
+			apiKey: "override-key",
+		});
+		await overrideClient.completeJson<{ status: string }>(
+			memoryExtractRequest("Return JSON"),
+		);
 
 		expect(requests[0]?.url).toBe("https://gpu.example.test/extract/v1/chat/completions");
 		expect(requests[0]?.headers.get("X-Internal-Token")).toBe("internal-secret");
@@ -668,8 +655,7 @@ describe("mem-claw llm-client", () => {
 		expect(requests[1]?.headers.get("X-Internal-Token")).toBe("override-key");
 	});
 
-	it("routes Sno episodic chat through GPU_BASE_URL with the internal token", async () => {
-		const originalGpuBaseUrl = process.env.GPU_BASE_URL;
+	it("routes Sno episodic chat to the configured endpoint with the internal token", async () => {
 		const requests: Array<{
 			url: string;
 			internalToken: string | undefined;
@@ -717,7 +703,6 @@ describe("mem-claw llm-client", () => {
 				throw new Error("local HTTP server did not expose a TCP port");
 			}
 			gpuBaseUrl = `http://127.0.0.1:${address.port}`;
-			process.env.GPU_BASE_URL = gpuBaseUrl;
 
 			const context: DispatchContext = {
 				provider: "sno-gpu",
@@ -743,8 +728,6 @@ describe("mem-claw llm-client", () => {
 				callError = error;
 			}
 		} finally {
-			if (originalGpuBaseUrl === undefined) delete process.env.GPU_BASE_URL;
-			else process.env.GPU_BASE_URL = originalGpuBaseUrl;
 			await new Promise<void>((resolve, reject) => {
 				server.close((error) => {
 					if (error) reject(error);

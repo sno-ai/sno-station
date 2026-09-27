@@ -12,6 +12,7 @@
  */
 
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { initializeRuntimeDiagnostics } from "../../../../packages/memory/src/engine/observability/runtime-diagnostics.ts";
 import {
 	createReflectionHarness,
 	installEmbeddedRunnerStub,
@@ -19,13 +20,14 @@ import {
 } from "../../../apps/mem-claw/integration/_helpers/reflection-command-new-harness.ts";
 
 beforeAll(() => {
+	// The suppression diagnostics are debug lines; the service sets its level from `settings.logging`.
+	initializeRuntimeDiagnostics({ level: "debug", file: "", debugContent: false });
 	installEmbeddedRunnerStub();
 });
 
 const harnesses: ReflectionHarness[] = [];
 let diagnosticWrites: ReturnType<typeof vi.spyOn>;
 beforeEach(() => {
-	vi.stubEnv("LOG_LEVEL", "debug");
 	diagnosticWrites = vi.spyOn(process.stderr, "write");
 });
 function hasSuppression(reason: string): boolean {
@@ -39,7 +41,6 @@ function hasSuppression(reason: string): boolean {
 }
 afterEach(() => {
 	vi.restoreAllMocks();
-	vi.unstubAllEnvs();
 	while (harnesses.length > 0) {
 		const h = harnesses.pop();
 		try {

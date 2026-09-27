@@ -25,8 +25,7 @@ import { MemoryStore } from "../../../../packages/memory/src/store/store.ts";
 import { OpenClawPluginApiHarness } from "../../../apps/mem-claw/helpers/openclaw-harness.ts";
 import { createTestDb, createTestEmbedder } from "../../../apps/mem-claw/helpers/test-db.ts";
 
-const ENV_KEYS = ["SNO_HOME", "SNO_PROFILE_DIR", "SNO_BUFFER_PATH", "SNO_IDENTITY_PATH",
-	"SNO_CONSENT_PATH", "SNO_STATION_MEM_TELEMETRY_HMAC_KEY"] as const;
+const ENV_KEYS = ["SNO_PROFILE_DIR", "SNO_BUFFER_PATH", "SNO_IDENTITY_PATH", "SNO_CONSENT_PATH"] as const;
 
 let root: string;
 let previous: Record<string, string | undefined>;
@@ -34,12 +33,10 @@ let previous: Record<string, string | undefined>;
 beforeEach(() => {
 	previous = Object.fromEntries(ENV_KEYS.map((key) => [key, process.env[key]]));
 	root = mkdtempSync(join(tmpdir(), "observe-v2-source-agent-"));
-	delete process.env.SNO_HOME;
 	process.env.SNO_PROFILE_DIR = root;
 	process.env.SNO_BUFFER_PATH = join(root, "buffer.db");
 	process.env.SNO_IDENTITY_PATH = join(root, "identity.json");
 	process.env.SNO_CONSENT_PATH = join(root, "state", "consent.json");
-	process.env.SNO_STATION_MEM_TELEMETRY_HMAC_KEY = "observe-v2-source-agent-key";
 });
 
 afterEach(() => {
@@ -71,7 +68,9 @@ describe("the writer of an injected memory reaches the inject row", () => {
 	it("names codex as the source when claude-code is injected with codex's fact, and nothing otherwise", async () => {
 		const fixture = createTestDb();
 		const embedder = await createTestEmbedder();
-		const store = new MemoryStore({ dbPath: fixture.dbPath, embedder });
+		// The receipt key is `telemetry.memoryUsage.key`, handed to the store as its telemetry config.
+		const store = new MemoryStore({ dbPath: fixture.dbPath, embedder,
+			memoryTelemetry: { enabled: true, key: "observe-v2-source-agent-key", historicKeys: [] } });
 		const retriever = createRetriever(store, embedder, undefined, { ...DEFAULT_RETRIEVAL_CONFIG, rerank: "none" });
 		const scopePolicy = createScopePolicy({ default: "global", agentAccess: { codex: ["global"], "claude-code": ["global"] } }, () => {});
 		const stateDir = dirname(fixture.dbPath);

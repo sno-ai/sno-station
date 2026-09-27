@@ -5,6 +5,11 @@ import { createTestDb, createTestEmbedder } from "../../../apps/mem-claw/helpers
 import { MemoryStore } from "../../../../packages/memory/src/store/store";
 import { AtomicInsightDistiller, createSignedAtomicMemoryExtractionTransports } from "../../../../packages/memory/src/engine/extraction/atomic-memory-extraction";
 import { llmRoutingConfigSchema } from "../../../../packages/memory/config/plugin-config-mode-schema";
+import { readFileSync } from "node:fs";
+import { DEFAULT_SETTINGS_PATH } from "../fixtures/settings-file-fixture";
+
+// The routing table is `settings.modelCalls`; the shipped default document carries the one `sno` writes.
+const MODEL_CALLS = (JSON.parse(readFileSync(DEFAULT_SETTINGS_PATH, "utf8")) as { modelCalls: unknown }).modelCalls;
 
 type Row = { text: string; metadata: string };
 type Temporal = { temporal_resolution_status?: string; temporal_date?: string; temporal_phrase?: string | null; source_span?: { turnIndex?: number } };
@@ -17,7 +22,7 @@ async function extract(sessionDateTime: string, turns: string[]): Promise<Array<
 	try {
 		const transports = createSignedAtomicMemoryExtractionTransports({
 			preset: "mem_claw/sno_extract_chat", apiKey, timeoutMs: 90_000,
-			routing: llmRoutingConfigSchema.parse({ mode: "rem-enhanced" }),
+			routing: llmRoutingConfigSchema.parse({ mode: "rem-enhanced", modelCalls: MODEL_CALLS }),
 		});
 		const distiller = new AtomicInsightDistiller(store, transports, { defaultScope: "vague-time", locale: "en" });
 		const result = await distiller.extractAndPersist(turns.map((text) => `user: ${text}`).join("\n\n"), randomUUID(), { sessionDateTime, sessionTimezone: "UTC" });

@@ -11,10 +11,11 @@ import {
 import { migrateLegacyDatabaseNamespace } from "../../../../packages/memory/src/store/legacy-database-namespace-migration";
 import { runMigrations } from "../../../../packages/memory/src/store/migrations";
 import {
-	initSqliteRuntimeSync,
+	initSqliteRuntime,
 	openSqliteDatabase,
 	type SqliteDatabaseLike,
 } from "../../../../packages/memory/src/store/sqlite-runtime";
+import { makeTestEnv, type TestEnv } from "../../sqlite-crypto/_helpers";
 
 const VECTOR_DIMENSION = 3;
 
@@ -176,15 +177,18 @@ function createPrePartitionLegacyDatabase(databasePath: string): void {
 describe("legacy database namespace migration", () => {
 	let temporaryDirectory: string;
 	let databasePath: string;
+	let cryptoEnv: TestEnv;
 
 	beforeEach(() => {
-		initSqliteRuntimeSync();
+		cryptoEnv = makeTestEnv("nodix-legacy-migration");
+		initSqliteRuntime(cryptoEnv.keyHex);
 		temporaryDirectory = mkdtempSync(join(tmpdir(), "nodix-legacy-migration-"));
 		databasePath = join(temporaryDirectory, "memory.sqlite");
 	});
 
 	afterEach(() => {
 		rmSync(temporaryDirectory, { recursive: true, force: true });
+		cryptoEnv.cleanup();
 	});
 
 	it("preserves legacy rows, rebuilds FTS, and keeps vectors searchable", () => {

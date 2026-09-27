@@ -8,7 +8,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { closeDb, initDb } from "../../../../packages/memory/src/store/connection";
-import { initSqliteRuntimeSync, type SqliteDatabaseLike } from "../../../../packages/memory/src/store/sqlite-runtime";
+import { initSqliteRuntime, type SqliteDatabaseLike } from "../../../../packages/memory/src/store/sqlite-runtime";
+import { makeTestEnv, type TestEnv } from "../../sqlite-crypto/_helpers";
 
 const VECTOR_DIM = 3;
 
@@ -74,15 +75,18 @@ function insertMemoryAndChunk(database: SqliteDatabaseLike): void {
 describe("Sno Station SQLite schema cutover", () => {
 	let temporaryDirectory: string;
 	let databasePath: string;
+	let cryptoEnv: TestEnv;
 
 	beforeEach(() => {
-		initSqliteRuntimeSync();
+		cryptoEnv = makeTestEnv("nodix-schema-cutover");
+		initSqliteRuntime(cryptoEnv.keyHex);
 		temporaryDirectory = mkdtempSync(join(tmpdir(), "nodix-schema-cutover-"));
 		databasePath = join(temporaryDirectory, "memory.sqlite");
 	});
 
 	afterEach(() => {
 		rmSync(temporaryDirectory, { recursive: true, force: true });
+		cryptoEnv.cleanup();
 	});
 
 	it("throws the original setup error instead of returning an incomplete connection", () => {

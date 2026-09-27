@@ -1,4 +1,4 @@
-import { writeTestInstallationConfig } from "../../../apps/mem-claw/helpers/module-config-fixture";
+import { writeSettingsFixture } from "../fixtures/settings-file-fixture";
 /** @file rem-activation-measurement-transport.test.ts
  * @purpose Proves every supported automatic operation set persists explicit pair-cap measurements.
  * @boundary Real sidecar HTTP entry, strict job journal, and terminal audit JSONL.
@@ -9,7 +9,7 @@ import { writeTestInstallationConfig } from "../../../apps/mem-claw/helpers/modu
 import { createHash } from "node:crypto";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { parseRemOperationalConfiguration } from "../../../../packages/memory/src/engine/rem/index.ts";
 import {
@@ -81,26 +81,14 @@ describe("REM activation measurement transport", () => {
 		const database = createTestDb();
 		const stateRoot = mkdtempSync(join(tmpdir(), "rem-clause-carry-floor-"));
 		const priorEnvironment = {
-			MEM_CLAW_DATA_DIR_ROOT: process.env["MEM_CLAW_DATA_DIR_ROOT"],
 			SNO_STATION_MEM_REM_EXPECTED_DB_PATH: process.env["SNO_STATION_MEM_REM_EXPECTED_DB_PATH"],
 			SNO_PROFILE_DIR: process.env["SNO_PROFILE_DIR"],
 		};
 		try {
-			process.env["MEM_CLAW_DATA_DIR_ROOT"] = dirname(database.dbPath);
 			process.env["SNO_STATION_MEM_REM_EXPECTED_DB_PATH"] = database.dbPath;
 			process.env["SNO_PROFILE_DIR"] = stateRoot;
-			writeTestInstallationConfig(stateRoot, {
-					plugins: {
-						entries: {
-							"sno-mem-claw": {
-								config: {
-									dbPath: database.dbPath,
-									embedding: { dimensions: 1024, provider: "local-onnx" },
-								},
-							},
-						},
-					},
-				});
+			writeSettingsFixture(stateRoot, { mode: "local-first", store: { path: database.dbPath, encryptionKey: database.encryptionKey },
+				embedding: { cacheDir: "" } });
 			const scope = "persona:clause-carry-floor";
 			const olderText = "The researcher preferred tea. The researcher works late.";
 			const newerText = "The researcher now prefers coffee.";
@@ -156,7 +144,6 @@ describe("REM activation measurement transport", () => {
 			expect(result.actionsApplied).toBe(1);
 			expect(survivor.text).toContain("The researcher works late.");
 		} finally {
-			restoreEnvironment("MEM_CLAW_DATA_DIR_ROOT", priorEnvironment.MEM_CLAW_DATA_DIR_ROOT);
 			restoreEnvironment(
 				"SNO_STATION_MEM_REM_EXPECTED_DB_PATH",
 				priorEnvironment.SNO_STATION_MEM_REM_EXPECTED_DB_PATH,
@@ -175,26 +162,14 @@ async function runMeasuredReplace(candidateCount: number): Promise<{
 	const database = createTestDb();
 	const stateRoot = mkdtempSync(join(tmpdir(), "rem-measurement-"));
 	const priorEnvironment = {
-		MEM_CLAW_DATA_DIR_ROOT: process.env["MEM_CLAW_DATA_DIR_ROOT"],
 		SNO_STATION_MEM_REM_EXPECTED_DB_PATH: process.env["SNO_STATION_MEM_REM_EXPECTED_DB_PATH"],
 		SNO_PROFILE_DIR: process.env["SNO_PROFILE_DIR"],
 	};
 	try {
-		process.env["MEM_CLAW_DATA_DIR_ROOT"] = dirname(database.dbPath);
 		process.env["SNO_STATION_MEM_REM_EXPECTED_DB_PATH"] = database.dbPath;
 		process.env["SNO_PROFILE_DIR"] = stateRoot;
-		writeTestInstallationConfig(stateRoot, {
-				plugins: {
-					entries: {
-						"sno-mem-claw": {
-							config: {
-								dbPath: database.dbPath,
-								embedding: { dimensions: 1024, provider: "local-onnx" },
-							},
-						},
-					},
-				},
-			});
+		writeSettingsFixture(stateRoot, { mode: "local-first", store: { path: database.dbPath, encryptionKey: database.encryptionKey },
+			embedding: { cacheDir: "" } });
 		const scope = `persona:pair-cap-${candidateCount}`;
 		for (let index = 0; index < candidateCount; index++) {
 			seedProductionMemory(database.runtime.raw, {
@@ -232,7 +207,6 @@ async function runMeasuredReplace(candidateCount: number): Promise<{
 			pairCapBinding: result.measurements.pairCapBinding,
 		};
 	} finally {
-		restoreEnvironment("MEM_CLAW_DATA_DIR_ROOT", priorEnvironment.MEM_CLAW_DATA_DIR_ROOT);
 		restoreEnvironment(
 			"SNO_STATION_MEM_REM_EXPECTED_DB_PATH",
 			priorEnvironment.SNO_STATION_MEM_REM_EXPECTED_DB_PATH,

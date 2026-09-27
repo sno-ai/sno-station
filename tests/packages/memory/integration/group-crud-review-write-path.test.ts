@@ -1,4 +1,4 @@
-import { writeTestInstallationConfig } from "../../../apps/mem-claw/helpers/module-config-fixture";
+import { writeSettingsFixture } from "../fixtures/settings-file-fixture";
 /** @file PRD 150 review repairs — the write path: order, legacy rows, entity spelling, negation.
  *
  * @boundary The real chunk write (`MemoryStore.storeAtomicExtractionChunk`), the real extraction
@@ -25,7 +25,7 @@ import { writeTestInstallationConfig } from "../../../apps/mem-claw/helpers/modu
 import { createHash } from "node:crypto";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
 
 import type { AtomicResplitTransport } from "../../../../packages/memory/src/engine/extraction/atomic-extraction-gauntlet";
@@ -78,7 +78,6 @@ const RUN_PARAMETERS: AtomicExtractionRunParameters = {
 };
 
 const priorEnvironment = {
-	MEM_CLAW_DATA_DIR_ROOT: process.env["MEM_CLAW_DATA_DIR_ROOT"],
 	SNO_STATION_MEM_REM_EXPECTED_DB_PATH: process.env["SNO_STATION_MEM_REM_EXPECTED_DB_PATH"],
 	SNO_PROFILE_DIR: process.env["SNO_PROFILE_DIR"],
 };
@@ -883,19 +882,8 @@ describe("PRD 150 review — a pure negation never closes its one-group mechanic
 
 	async function runUpdateWave(fixture: TestDb): Promise<Observation[]> {
 		const stateRoot = mkdtempSync(join(tmpdir(), "group-crud-review-negation-"));
-		writeTestInstallationConfig(stateRoot, {
-				plugins: {
-					entries: {
-						"sno-mem-claw": {
-							config: {
-								dbPath: fixture.dbPath,
-								embedding: { dimensions: 1024, provider: "local-onnx" },
-							},
-						},
-					},
-				},
-			});
-		process.env["MEM_CLAW_DATA_DIR_ROOT"] = dirname(fixture.dbPath);
+		writeSettingsFixture(stateRoot, { mode: "local-first", store: { path: fixture.dbPath, encryptionKey: fixture.encryptionKey },
+			embedding: { cacheDir: "" } });
 		process.env["SNO_STATION_MEM_REM_EXPECTED_DB_PATH"] = fixture.dbPath;
 		process.env["SNO_PROFILE_DIR"] = stateRoot;
 		cleanups.push(() => rmSync(stateRoot, { recursive: true, force: true }));

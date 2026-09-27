@@ -2,7 +2,6 @@ import { userInfo } from "node:os";
 import { dirname } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createLogger } from "@snoai/utils/logger";
-import { getDekSync } from "@snoai/sqlite-crypto";
 import { createTestEnv } from "../../../apps/mem-claw/helpers/test-db";
 import { MemoryStore } from "../../../../packages/memory/src/store/store";
 import { createRetriever } from "../../../../packages/memory/src/engine/retrieval/retriever";
@@ -13,6 +12,7 @@ import { onAgentEnd } from "../../../../packages/memory/src/engine/bindings/sno-
 import { onBeforeAgentStart } from "../../../../packages/memory/src/engine/bindings/sno-station-mem-auto-recall-hook";
 import { MemoryContractRuntime } from "../../../../packages/memory/src/engine/contract-runtime";
 import { pluginConfigSchema } from "../../../../packages/memory/config/plugin-config-schema";
+import { defaultSettings } from "../../../../packages/memory/config/settings";
 import type { Registration, Turn } from "../../../../packages/memory/src/contract/index";
 
 const cleanups: Array<() => Promise<void>> = [];
@@ -20,17 +20,16 @@ afterEach(async () => { for (const cleanup of cleanups.splice(0).reverse()) awai
 
 async function fixture() {
 	const env = await createTestEnv();
-	const config = pluginConfigSchema.parse({ mode: "local-first", ambientLearning: true, autoRecall: true, captureAssistant: true, observe: { enabled: false } });
+	const config = pluginConfigSchema.parse({ mode: "local-first", modelCalls: defaultSettings().modelCalls, ambientLearning: true, autoRecall: true, captureAssistant: true, observe: { enabled: false } });
 	const store = new MemoryStore({ dbPath: env.dbPath, vectorDim: env.embedder.dimensions, embedder: env.embedder, memoryTelemetry: config.memoryTelemetry });
 	const accessTracker = new AccessTracker({ store, recallLifecycle: config.recallLifecycle });
 	const logger = createLogger("zebra:contract-parity");
-	const services = { store, embedder: env.embedder, accessTracker, logger,
+	const services = { config, store, embedder: env.embedder, accessTracker, logger,
 		retriever: createRetriever(store, env.embedder, undefined, config.retrieval), stateDir: dirname(env.dbPath),
 		observability: new PluginObservability(config, dirname(env.dbPath), logger) };
 	cleanups.push(async () => { await accessTracker.destroy(); await store.close(); env.cleanup(); });
-	const { mode, remEnhanced: _remEnhanced, language, ...settings } = config;
-	const registration: Registration = { skinId: "parity", settings, routing: { mode, language } };
-	return { services, config, registration, sameKey: Buffer.from(getDekSync()) };
+	const registration: Registration = { skinId: "parity" };
+	return { services, config, registration };
 }
 function rows(store: MemoryStore) {
 	return (store.sqlite.prepare("SELECT * FROM nodix_memories ORDER BY content_hash").all() as Record<string, unknown>[])
@@ -134,9 +133,6 @@ describe("capture contract preserves the existing hook path", () => {
 	it("commits the same durable row bytes before returning, without widening the supplied project", async () => {
 		const original = await fixture();
 		const contract = await fixture();
-		expect(original.sameKey.equals(contract.sameKey)).toBe(true);
-		original.sameKey.fill(0);
-		contract.sameKey.fill(0);
 		const scope = { principal: userInfo().username, project: "agent:parity", session: "agent:parity:release", host: { agentId: "parity", sessionKey: "agent:parity:release", sessionTimezone: "America/Los_Angeles" } };
 		const turn: Turn = { turnId: "release-turn", rewindEpoch: 0, messages: [
 			// The first real user turn from agent phase 105.
