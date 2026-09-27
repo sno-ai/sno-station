@@ -1,14 +1,13 @@
 /** @file data-bootstrap.ts
  * @purpose Drive the boot flow: ensure data dir exists, probe
  *   filesystem, then resolve or create the install manifest
- *   and return the DB path the rest of the runtime should open.
- * @boundary Called once at plugin register-time, AFTER `initSqliteRuntimeSync()`
+ *   and return the settings-selected DB path the rest of the runtime should open.
+ * @boundary Called once at plugin register-time, AFTER `initSqliteRuntime()`
  *   resolves the DEK. Returns `{ dbPath, manifest, manifestPath }`.
  */
 
 import { existsSync, mkdirSync, readdirSync } from "node:fs";
-import { basename, isAbsolute } from "node:path";
-import { KEYCHAIN_ACCOUNT, KEYCHAIN_SERVICE_DEFAULT } from "@snoai/sqlite-crypto";
+import { basename } from "node:path";
 import { createLogger } from "@snoai/utils/logger";
 import {
 	assertLocalFilesystem,
@@ -21,13 +20,10 @@ import {
 	type InstallManifest,
 	ManifestMissingButDataPresentError,
 	readInstallManifest,
-	resolveDbPath,
 	writeInstallManifestAtomic,
 } from "./install-manifest";
 
 const log = createLogger("sno-station-mem:data-bootstrap");
-
-const DEFAULT_RELATIVE_DB_PATH = "./sno-station-mem.sqlite";
 
 export interface BootstrapResult {
 	dbPath: string;
@@ -48,23 +44,13 @@ function newDirHasUserData(dataDir: string, manifestPath: string): boolean {
 	}
 }
 
-export interface BootstrapOptions {
-	/**
-	 * User-configured DB path from `PluginConfig.dbPath`. When provided AND
-	 * absolute AND no manifest yet exists, this is recorded into the
-	 * fresh manifest verbatim so the plugin honors the user's location.
-	 * Manifest's recorded `dbPath` always wins on subsequent boots.
-	 */
-	configuredDbPath?: string | undefined;
-}
-
 /**
  * PRD §3.3 branches:
- *   1. manifest exists → read + validate, resolve DB path.
+ *   1. manifest exists → read + validate.
  *   2. manifest missing AND data dir contains user data → refuse.
  *   3. manifest missing, dir empty → fresh install.
  */
-export function bootstrapDataLayout(options: BootstrapOptions = {}): BootstrapResult {
+export function bootstrapDataLayout(storePath: string): BootstrapResult {
 	const dataDir = getSnoStationMemDataDir();
 	mkdirSync(dataDir, { recursive: true, mode: 0o700 });
 	assertLocalFilesystem(dataDir);
@@ -74,7 +60,7 @@ export function bootstrapDataLayout(options: BootstrapOptions = {}): BootstrapRe
 	// Branch 1: manifest present.
 	if (existsSync(manifestPath)) {
 		const manifest = readInstallManifest(manifestPath);
-		const dbPath = resolveDbPath(manifest, dataDir);
+		const dbPath = storePath;
 		log.info("manifest loaded", {
 			installationId: manifest.installationId,
 			dataFormatVersion: manifest.dataFormatVersion,
@@ -94,17 +80,12 @@ export function bootstrapDataLayout(options: BootstrapOptions = {}): BootstrapRe
 	}
 
 	// Branch 3: fresh install.
-	const dbPath =
-		options.configuredDbPath !== undefined && isAbsolute(options.configuredDbPath)
-			? options.configuredDbPath
-			: DEFAULT_RELATIVE_DB_PATH;
+	const dbPath = storePath;
 	const manifest = freshInstallManifest({
 		dbPath,
-		keyServiceName: KEYCHAIN_SERVICE_DEFAULT,
-		keyAccount: KEYCHAIN_ACCOUNT,
 	});
 	writeInstallManifestAtomic(manifestPath, manifest);
-	const resolved = resolveDbPath(manifest, dataDir);
+	const resolved = storePath;
 	log.info("fresh install bootstrapped", {
 		installationId: manifest.installationId,
 		dataFormatVersion: manifest.dataFormatVersion,

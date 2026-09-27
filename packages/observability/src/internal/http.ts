@@ -20,7 +20,7 @@ export function normalizeBaseUrl(input: string): string {
 	try {
 		parsed = new URL(trimmed);
 	} catch {
-		throw new TransportError(`invalid SNO_OBSERVE_BASE_URL: ${input}`);
+		throw new TransportError(`invalid telemetry.observe.baseUrl: ${input}`);
 	}
 	if (parsed.protocol === "https:") {
 		return trimmed;
@@ -29,7 +29,7 @@ export function normalizeBaseUrl(input: string): string {
 		return trimmed;
 	}
 	throw new TransportError(
-		`SNO_OBSERVE_BASE_URL must use https:// (got ${parsed.protocol}//${parsed.hostname})`,
+		`telemetry.observe.baseUrl must use https:// (got ${parsed.protocol}//${parsed.hostname})`,
 	);
 }
 

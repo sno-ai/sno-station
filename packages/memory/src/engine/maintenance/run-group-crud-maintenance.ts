@@ -20,7 +20,7 @@ import { createLlmClient } from "../../model/llm-client";
 import { modelCallDestination } from "../../model/model-call-table";
 import { pickLlmRoutingConfig } from "../../model/llm-mode-routing";
 import { getSnoStationMemStateDir } from "../shared/paths";
-import { initSqliteRuntimeSync, openSqliteDatabase } from "../../store/sqlite-runtime";
+import { initSqliteRuntime, openSqliteDatabase } from "../../store/sqlite-runtime";
 
 function readArguments(): { storePath: string } {
 	const [storePath, extra] = process.argv.slice(2);
@@ -32,11 +32,11 @@ function readArguments(): { storePath: string } {
 
 async function main(): Promise<void> {
 	const { storePath } = readArguments();
-	initSqliteRuntimeSync();
+	const settings = readSettings();
+	initSqliteRuntime(settings.store.encryptionKey);
 	const sqlite = openSqliteDatabase(storePath, { fileMustExist: true });
 	let embedder: Embedder | undefined;
 	try {
-		const settings = readSettings();
 		const pluginConfig = settingsToPluginConfig(settings);
 		embedder = createEmbedder(pluginConfig.embedding, getSnoStationMemStateDir());
 		const routing = pickLlmRoutingConfig(pluginConfig);
@@ -52,11 +52,15 @@ async function main(): Promise<void> {
 		}
 		const chatClient = runs("E8") || runs("E12") ? createLlmClient({
 			preset: FIXED_MEMORY_SNO_EXTRACT_CHAT,
+			apiKey: settings.snoGpu.apiKey,
+			baseURL: settings.snoGpu.baseUrl,
 			timeoutMs: 60_000,
 			routing,
 		}) : undefined;
 		const profileClient = runs("E9") ? createLlmClient({
 			preset: FIXED_MEMORY_SNO_EXTRACT_PROFILE,
+			apiKey: settings.snoGpu.apiKey,
+			baseURL: settings.snoGpu.baseUrl,
 			timeoutMs: 60_000,
 			routing,
 		}) : undefined;

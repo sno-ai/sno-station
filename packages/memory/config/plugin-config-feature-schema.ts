@@ -43,7 +43,6 @@ export const extractionConfigSchema: z.ZodType<
 			preset: (typeof LLM_PRESETS)[number];
 			baseURL?: string | undefined;
 			apiKey?: string | undefined;
-			heliconeApiKey?: string | undefined;
 			timeoutMs: number;
 		};
 	},
@@ -57,8 +56,6 @@ export const extractionConfigSchema: z.ZodType<
 				baseURL: z.string().optional(),
 				/** Overrides provider-native env if set. */
 				apiKey: z.string().optional(),
-				/** Enables Helicone request logging for OpenAI-compatible calls. Defaults to HELICONE_API_KEY env if unset. */
-				heliconeApiKey: z.string().optional(),
 				timeoutMs: z.number().int().min(1000).max(300_000).default(30_000),
 		})
 			.strict()

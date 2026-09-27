@@ -79,7 +79,6 @@ export function buildInsightDistiller(
 			preset: llmCfg.preset,
 			...(llmCfg.apiKey ? { apiKey: llmCfg.apiKey } : {}),
 			...(llmCfg.baseURL ? { baseURL: llmCfg.baseURL } : {}),
-			...(llmCfg.heliconeApiKey ? { heliconeApiKey: llmCfg.heliconeApiKey } : {}),
 			timeoutMs: llmCfg.timeoutMs,
 			routing,
 			...(agentPort ? { agentPort } : {}),

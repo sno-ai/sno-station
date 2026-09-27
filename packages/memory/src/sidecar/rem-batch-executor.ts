@@ -330,9 +330,6 @@ export async function runRemProductionOrderedWave(input: {
 	settings?: Settings;
 	mode?: ProductMode;
 	agentPort?: AgentLlmPort;
-	stateRoot: string;
-	personaDbPath?: string;
-	configSource: string;
 	scope: string;
 	waveId?: string;
 	requestedOperations?: readonly RemBuiltOperationType[];
@@ -351,9 +348,9 @@ export async function runRemProductionOrderedWave(input: {
 		| "measurements"
 	> & { perOperation: RemPerOperationResult[] })
 > {
-	const resolved = { configuration: readRemOperationalConfig(input.configSource) };
-	await initSqliteRuntime();
+	const resolved = { configuration: readRemOperationalConfig() };
 	const settings = input.settings ?? readSettings();
+	initSqliteRuntime(settings.store.encryptionKey);
 	const configuredPath = settings.store.path;
 	const waveId = input.waveId ?? `rem-wave-${randomUUID()}`;
 	const requestedOperations = input.requestedOperations ?? (["rem-replace", "rem-update"] as const);
@@ -634,7 +631,7 @@ async function openBatchRuntime(input: {
 	const settings = input.settings;
 	const dbPath = settings.store.path;
 	const pluginConfig = settingsToPluginConfig(settings);
-	await initSqliteRuntime();
+	initSqliteRuntime(settings.store.encryptionKey);
 	const embedder = createEmbedder(pluginConfig.embedding, getSnoStationMemStateDir());
 	let store: MemoryStore | undefined;
 	let database: ReturnType<typeof openSqliteDatabase> | undefined;
@@ -660,9 +657,8 @@ async function openBatchRuntime(input: {
 		loadStorageExtensions(database);
 		const llm = createLlmClient({
 			preset: FIXED_MEMORY_SNO_EXTRACT_CHAT,
-			...(pluginConfig.extraction.llm.apiKey
-				? { apiKey: pluginConfig.extraction.llm.apiKey }
-				: {}),
+			apiKey: settings.snoGpu.apiKey,
+			baseURL: settings.snoGpu.baseUrl,
 			timeoutMs: Math.max(120_000, CODING_SKIN_CHILD_DEADLINE_MS),
 			agentPort: input.agentPort,
 			refuseOnUnavailable: true,
@@ -3633,7 +3629,7 @@ async function completeJsonStage(
  * reply away — `parseReplaceClauseVerdict` saw `undefined`, called it invalid, and the pair was
  * journaled as `clause_parse_failed` and released, so the memory was never updated at all.
  *
- * Measured 2026-08-27 against GPU_BASE_URL on the clause prompt for the `rem-replace-roundtrip-reopen`
+ * Measured 2026-08-27 against the Sno GPU endpoint on the clause prompt for the `rem-replace-roundtrip-reopen`
  * fixture, 30 calls per ordering: with the pair ordered one way the model never fenced its reply;
  * with the pair ordered the other way it fenced 12 of 30, and every one of those 12 carried the
  * correct verdict. That is the whole of the intermittent refusal — not an empty reply, not the

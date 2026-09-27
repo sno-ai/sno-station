@@ -1,7 +1,5 @@
 import { describe, expect, it } from "vitest";
 
-import { createCodingSkinRegistration } from "../../../../packages/memory/config/coding-skin.ts";
-import { installationInputSchema } from "../../../../packages/memory/config/installation-settings.ts";
 import { llmRoutingConfigSchema } from "../../../../packages/memory/config/plugin-config-mode-schema.ts";
 import { pluginConfigSchema } from "../../../../packages/memory/src/engine/shared/types.ts";
 
@@ -115,25 +113,12 @@ describe("plugin config current schema", () => {
 		expect(refusal(() => pluginConfigSchema.parse(config))).toContain(named);
 	});
 
-	it("rejects installed settings carrying remEnhanced.occasions and names it", () => {
-		expect(refusal(() => installationInputSchema.parse({ mode: "rem-enhanced", remEnhanced: { occasions: { memoryExtract: "agent" } } })))
-			.toContain("occasions");
-	});
-
 	it("parses a bare mode, keeps the Sno extraction preset, and routes by mode and language only", () => {
 		expect({
 			bare: refusal(() => pluginConfigSchema.parse({ mode: "rem-enhanced" })),
 			snoPreset: pluginConfigSchema.parse({ extraction: { llm: { preset: "mem_claw/sno_ai_extract" } } }).extraction.llm.preset,
 			routing: llmRoutingConfigSchema.parse({ mode: "rem-enhanced" }),
 		}).toEqual({ bare: "parsed", snoPreset: "mem_claw/sno_ai_extract", routing: { mode: "rem-enhanced", language: "en" } });
-	});
-
-	it("registers Codex, Claude Code and Hermes with routing of mode and language only", () => {
-		const registration = createCodingSkinRegistration({ skinId: "codex", installed: {
-			storePath: "/tmp/memory.sqlite", embedding: { provider: "local-onnx" },
-			extractionKeyRef: "SNO_MEM_CLAW_LLM_INTERNAL_KEY", mode: "rem-enhanced", retrieval: {},
-		} });
-		expect(registration.routing).toEqual({ mode: "rem-enhanced", language: "en" });
 	});
 
 	it("rejects stale unreleased config names and values", () => {

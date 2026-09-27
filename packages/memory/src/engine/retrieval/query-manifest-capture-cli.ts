@@ -8,6 +8,7 @@ import { parseArgs } from "node:util";
 import { readFile, realpath, writeFile } from "node:fs/promises";
 import { z } from "zod";
 import { writeEmergencyDiagnostic } from "../observability/early-diagnostics";
+import { readSettings } from "../../contract/profile";
 import { createEmbedder } from "../extraction/embedding-provider-client";
 import {
 	captureQueryManifest,
@@ -21,7 +22,7 @@ import { parseVecTableDimension } from "../../store/connection";
 import { resolveSimpleTokenizerPath } from "../../store/simple-tokenizer-path";
 import { loadSqliteVecExtension } from "../../store/sqlite-vec-path";
 import {
-	initSqliteRuntimeSync,
+	initSqliteRuntime,
 	openSqliteDatabase,
 	type SqliteRuntimeHandle,
 } from "../../store/sqlite-runtime";
@@ -178,7 +179,7 @@ async function main(): Promise<void> {
 	const storePath = await realpath(resolve(input.storePath));
 	const storeHashBefore = hashQueryManifestStorePath(storePath);
 	const { recallTopK, ...retrievalConfig } = input.retrieval;
-	initSqliteRuntimeSync();
+	initSqliteRuntime(readSettings().store.encryptionKey);
 	const embedder = createEmbedder(input.embedding, dirname(storePath));
 	let storeHandle: ReadonlyStoreHandle | undefined;
 	let serialized: ReturnType<typeof serializeQueryManifestCapture> | undefined;

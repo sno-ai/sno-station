@@ -16,7 +16,6 @@ import { dirname, posix } from "node:path";
 import { gunzipSync } from "node:zlib";
 import { extract } from "tar-stream";
 import { _readCanaryForRecovery, assertStoreNotOpen } from "./db.js";
-import { getDek } from "./dek.js";
 import {
 	ForeignDekError,
 	IntegrityCheckFailed,
@@ -184,19 +183,15 @@ function verifyRestoredDb(
 	}
 }
 
-export async function importEncrypted(sourcePath: string): Promise<void> {
+export async function importEncrypted(sourcePath: string, dek: Dek): Promise<void> {
 	const bytes = readFileSync(sourcePath);
 	const { header, sourceFingerprint, nonce, ciphertext, tag } =
 		parseStructure(bytes);
 
 	// Cross-machine gate: BEFORE any GCM attempt.
-	const dek = await getDek();
 	const localFp = dekFingerprint4(dek);
 	if (!localFp.equals(sourceFingerprint)) {
-		throw new ForeignDekError(
-			"ForeignDekError: this .sno-station-core file was encrypted with a different DEK fingerprint. " +
-				"Cross-machine restore requires the v1.1 `sno-station-core lock --import-dek <hex>` workflow (deferred).",
-		);
+		throw new ForeignDekError("this export was encrypted with a different DEK fingerprint");
 	}
 
 	const decipher = createDecipheriv("aes-256-gcm", dek, nonce);

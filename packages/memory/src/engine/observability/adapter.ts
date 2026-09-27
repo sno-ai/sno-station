@@ -63,6 +63,7 @@ export class PluginObservability {
 		cwd: string,
 		logger?: ObserveLogger,
 		options: { agentVersion?: string } = {},
+		redactionRules: readonly string[] = [],
 	) {
 		this.enabled = config.observe.enabled;
 		this.agentId = config.observe.agentId;
@@ -72,10 +73,8 @@ export class PluginObservability {
 			const pluginVersion = readSnoStationCoreWorkspaceVersion() ?? readInstalledPackageVersion();
 			this.runtime = createSnoObserve({
 				cwd,
-				env: {
-					...process.env,
-					SNO_OBSERVE_BASE_URL: config.observe.baseUrl,
-				},
+				baseUrl: config.observe.baseUrl,
+				redactionRules,
 				...(pluginVersion ? { cliVersion: pluginVersion, pluginVersion } : {}),
 				...(options.agentVersion ? { agentVersion: options.agentVersion } : {}),
 			});

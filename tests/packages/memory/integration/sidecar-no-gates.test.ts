@@ -12,7 +12,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { pluginConfigSchema } from "../../../../packages/memory/config/plugin-config-schema";
 import { startSidecar } from "../../../../packages/memory/src/contract/start";
-import { bindStore } from "../../../../packages/memory/src/engine/shared/paths";
+import { connect } from "../../../../packages/memory/src/contract/client";
 import { readSettings } from "../../../../packages/memory/src/contract/profile";
 import { startRemSidecar } from "../../../../packages/memory/src/sidecar/server";
 import { MemoryRuntimePool } from "../../../../packages/memory/src/sidecar/memory-runtime";
@@ -36,7 +36,7 @@ const previousProfile = process.env.SNO_PROFILE_DIR;
 
 /** The service reads `settings.json` once, when its runtime opens: write it before the runtime opens. */
 function writeSettings(overrides: SettingsDocument = {}): string {
-	return writeSettingsFixture(root, { mode: "local-first", store: { path: database.dbPath }, rerank: { mode: "none" },
+	return writeSettingsFixture(root, { mode: "local-first", store: { path: database.dbPath, encryptionKey: database.encryptionKey }, rerank: { mode: "none" },
 		embedding: { cacheDir: "" }, telemetry: { observe: { enabled: false } }, ...overrides }).path;
 }
 
@@ -51,9 +51,9 @@ beforeEach(async () => {
 	root = mkdtempSync(join(tmpdir(), "sidecar-no-gates-"));
 	database = createTestDb();
 	process.env.SNO_PROFILE_DIR = root;
-	await bindStore(database.dbPath, { mode: "local-first", retrieval: { rerank: "none" } });
 	writeSettings();
 	mkdirSync(join(root, "sno-station-mem"), { recursive: true });
+	mkdirSync(join(root, "station"), { recursive: true });
 });
 afterEach(async () => {
 	await sidecar?.stop();
@@ -81,11 +81,9 @@ async function contractPost(path: string, body: unknown, skin?: string): Promise
 	});
 }
 
-function registration(mode: "local-first" | "agent-native", model?: { baseUrl: string; credential: string; model: string }) {
-	const { remEnhanced: _remEnhanced, language: _language, mode: _mode, ...settings } = pluginConfigSchema.parse({
-		mode, retrieval: { rerank: "none" }, observe: { enabled: false },
-	});
-	return { skinId: "body-skin", settings, routing: { mode, language: "en" }, ...(model ? { model } : {}) };
+/** A registration is the skin and, optionally, its model; everything else comes from settings.json (REQ-4). */
+function registration(model?: { baseUrl: string; credential: string; model: string }) {
+	return { skinId: "body-skin", ...(model ? { model } : {}) };
 }
 
 function installRemEnhancedMode(): void {
@@ -98,7 +96,7 @@ async function connectHost(port: number): Promise<void> {
 	const response = await fetch(`http://127.0.0.1:${port}/v1/init`, {
 		method: "POST", headers: { "x-sno-station-mem-skin": "rem-host" }, signal: AbortSignal.timeout(30_000),
 		body: JSON.stringify({ scope: { principal: "caller", project: "global", session: "rem-host" }, registration: {
-			...registration("local-first", { baseUrl: `${host.url}/v1`, credential: "loopback-credential", model: "loopback-model" }),
+			...registration({ baseUrl: `${host.url}/v1`, credential: "loopback-credential", model: "loopback-model" }),
 			skinId: "rem-host" } }),
 	});
 	expect(response.status).toBe(200);
@@ -176,7 +174,7 @@ describe("documented HTTP runtime claims", () => {
 			});
 			request.setTimeout(5_000, () => request.destroy(new Error("header request timed out")));
 			request.once("error", reject);
-			request.end(JSON.stringify({ scope: { principal: "caller", project: "global", session: "default-skin" }, registration: registration("local-first") }));
+			request.end(JSON.stringify({ scope: { principal: "caller", project: "global", session: "default-skin" }, registration: registration() }));
 		});
 		expect(response.status).toBe(200);
 		expect(response.body).toMatchObject({ degraded: false, skinId: "default" });
@@ -189,11 +187,11 @@ describe("documented HTTP runtime claims", () => {
 		expect(response.status).toBe(200);
 		expect(await response.json()).toEqual({ degraded: false, result: { op: "list", project: "global", entries: [] } });
 	});
-	it("initializes from installed settings without changing complete registration", async () => {
+	it("initializes a registration of only the skin from the settings file, and refuses one that adds settings and routing", async () => {
 		await health();
 		const scope = { principal: "caller", project: "global", session: "inherited-init" };
 		const inherited = await contractPost("/v1/init", {
-			scope, registration: { skinId: "body-skin", inheritInstalled: true },
+			scope, registration: { skinId: "body-skin" },
 		}, "hermes");
 		expect(inherited.status).toBe(200);
 		expect(await inherited.json()).toMatchObject({ degraded: false, skinId: "hermes" });
@@ -208,22 +206,16 @@ describe("documented HTTP runtime claims", () => {
 		expect(await captured.json()).toMatchObject({ degraded: false, committed: true });
 
 		const mixed = await contractPost("/v1/init", {
-			scope, registration: { skinId: "body-skin", inheritInstalled: true, settings: {}, routing: {} },
+			scope, registration: { skinId: "body-skin", settings: {}, routing: {} },
 		}, "hermes");
 		expect(mixed.status).toBe(400);
 		expect(await mixed.json()).toEqual({ degraded: true, reason: "invalid-input" });
-
-		const complete = await contractPost("/v1/init", {
-			scope, registration: registration("local-first"),
-		}, "existing-client");
-		expect(complete.status).toBe(200);
-		expect(await complete.json()).toMatchObject({ degraded: false, skinId: "existing-client" });
 	});
 	it("returns a degraded reason when the agent model endpoint is absent", async () => {
 		writeSettings({ mode: "agent-native" });
 		await health();
 		const scope = { principal: "caller", project: "global", session: "missing-model" };
-		expect((await contractPost("/v1/init", { scope, registration: registration("agent-native") })).status).toBe(200);
+		expect((await contractPost("/v1/init", { scope, registration: registration() })).status).toBe(200);
 		const response = await contractPost("/v1/capture", { scope,
 			turn: { turnId: "missing-model", rewindEpoch: 0, messages: [{ role: "user", content: "I keep a blue notebook.", at: 1789606800000 }] },
 		});
@@ -266,7 +258,7 @@ describe("documented HTTP runtime claims", () => {
 			writeSettings({ mode: "agent-native" });
 			await health();
 			const scope = { principal: "caller", project: "global", session: "host-model" };
-			const initialized = await contractPost("/v1/init", { scope, registration: registration("agent-native", {
+			const initialized = await contractPost("/v1/init", { scope, registration: registration({
 				baseUrl: `http://127.0.0.1:${address.port}/host/v1/`, credential: "loopback-credential", model: "loopback-model",
 			}) });
 			expect(initialized.status).toBe(200);
@@ -479,19 +471,19 @@ describe("documented HTTP runtime claims", () => {
 	});
 	it("rejects an extra CLI argument with usage and exit 2", async () => {
 		expect(await runCli(["sidecar", "start", "extra"])).toEqual({ code: 2, stdout: "",
-			stderr: "Usage: sno-station-mem bind <path> | sidecar start\n" });
+			stderr: "Usage: sno-station-mem sidecar start\n" });
 		expect(existsSync(join(root, "station", "sidecar.json"))).toBe(false);
 	});
 });
 
 describe("sidecar keeps serving", () => {
-	it("rejects inherited registration when the settings file cannot be read, per call and on /healthz", async () => {
+	it("rejects a registration when the settings file cannot be read, per call and on /healthz", async () => {
 		const settingsPath = join(root, "settings.json");
 		writeFileSync(settingsPath, "{");
 		sidecar = await startRemSidecar();
 		const init = () => contractPost("/v1/init", {
 			scope: { principal: userInfo().username, project: "global", session: "inherited-missing-config" },
-			registration: { skinId: "hermes", inheritInstalled: true },
+			registration: { skinId: "hermes" },
 		}, "hermes");
 		const unavailable = expect.stringMatching(new RegExp(`^settings unavailable: ${RegExp.escape(settingsPath)}: JSON: .+; run sno setup$`));
 		for (const response of [await init(), await init()]) {
@@ -505,21 +497,20 @@ describe("sidecar keeps serving", () => {
 		if (!sidecar) throw new Error("missing test sidecar");
 		const url = `http://127.0.0.1:${sidecar.port}/v1/init`;
 		writeSettings({ rem: { tick: false } });
-		const { mode, remEnhanced: _remEnhanced, language: _language, ...settings } = pluginConfigSchema.parse({ mode: "local-first", retrieval: { rerank: "none" } });
-		const register = (skinId: string, routing: Record<string, unknown>) => fetch(url, {
+		const register = (skinId: string, extra: Record<string, unknown> = {}) => fetch(url, {
 			method: "POST", headers: { "x-sno-station-mem-skin": skinId },
 			body: JSON.stringify({ scope: { principal: userInfo().username, project: "global", session: "tick-switch" },
-				registration: { skinId, settings, routing } }),
+				registration: { skinId, ...extra } }),
 		});
-		for (const routing of [
-			{ mode, language: "en", remEnhanced: { trigger: { tick: true } } },
-			{ mode, language: "en", agentNative: { flavor: "subscription" } },
+		for (const extra of [
+			{ routing: { mode: "local-first", language: "en", remEnhanced: { trigger: { tick: true } } } },
+			{ remEnhanced: { trigger: { tick: true } } },
 		]) {
-			const refused = await register("a", routing);
+			const refused = await register("a", extra);
 			expect(refused.status).toBe(400);
 			expect(readRemAutomaticOperations().tickEnabled).toBe(false);
 		}
-		const accepted = await register("b", { mode, language: "en" });
+		const accepted = await register("b");
 		expect(accepted.status).toBe(200);
 		expect(await accepted.json()).toMatchObject({ degraded: false });
 		expect(readRemAutomaticOperations().tickEnabled).toBe(false);
@@ -679,12 +670,9 @@ describe("sidecar keeps serving", () => {
 		writeFileSync(sessionFile, JSON.stringify({ type: "message", message: { role: "user", content: "Keep clear notebook records." } }));
 		const scope = { principal: "caller", project: "global", session: "agent:probe:session",
 			host: { workspace: root, boundary: "new", sessionFile, sessionId: "session-end" } };
-		const config = pluginConfigSchema.parse({ ...pool.config, mode: "agent-native", sessionStrategy: "memoryReflection" });
-		const { mode, remEnhanced: _remEnhanced, language: _language, ...settings } = config;
 		let result: Promise<unknown> | undefined;
 		try {
-			await pool.invoke("init", { scope, registration: { skinId: "session-end", settings,
-				routing: { mode, language: "en" } } }, "session-end");
+			await pool.invoke("init", { scope, registration: { skinId: "session-end" } }, "session-end");
 			result = pool.invoke("onSessionEnd", { scope, messages: [] }, "session-end", controller.signal).catch(error => error);
 			await entered.promise;
 			controller.abort(new Error("session cancelled"));
@@ -880,12 +868,11 @@ describe("sidecar keeps serving", () => {
 		}
 	});
 	it("passes cancellation through automatic recall", async () => {
+		writeSettings({ recall: { auto: true }, capture: { ambient: false } });
 		const pool = await MemoryRuntimePool.open();
-		const registered = registration("local-first");
 		await pool.invoke("init", {
 			scope: { principal: "caller", project: "global", session: "auto-abort" },
-			registration: { ...registered, skinId: "auto-abort",
-				settings: { ...registered.settings, autoRecall: true, ambientLearning: false } },
+			registration: { skinId: "auto-abort" },
 		}, "auto-abort");
 		const entered = Promise.withResolvers<void>();
 		const blocked = Promise.withResolvers<[]>();
@@ -913,11 +900,10 @@ describe("sidecar keeps serving", () => {
 		}
 	});
 	it("keeps same-turn recall omission across a re-registration mid-turn (issue #231)", async () => {
+		writeSettings({ recall: { auto: true }, capture: { ambient: false } });
 		const pool = await MemoryRuntimePool.open();
-		const registered = registration("local-first");
 		const scope = { principal: "caller", project: "global", session: "reregister-mid-turn" };
-		const init = () => pool.invoke("init", { scope, registration: { ...registered, skinId: "reregister",
-			settings: { ...registered.settings, autoRecall: true, ambientLearning: false } } }, "reregister");
+		const init = () => pool.invoke("init", { scope, registration: { skinId: "reregister" } }, "reregister");
 		try {
 			await init();
 			await pool.invoke("mutate", { scope, op: { op: "store", content: "I keep a violet notebook for field notes.", category: "episodic" } }, "reregister");
@@ -933,15 +919,13 @@ describe("sidecar keeps serving", () => {
 			await pool.close();
 		}
 	});
-	it("skips automatic recall when disabled by registration", async () => {
+	it("skips automatic recall when disabled by `recall.auto` in settings", async () => {
 		writeSettings({ recall: { auto: false }, capture: { ambient: false } });
 		const pool = await MemoryRuntimePool.open();
-		const registered = registration("local-first");
 		const scope = { principal: "caller", project: "global", session: "auto-disabled" };
 		const retrieval = vi.spyOn(MemoryRetriever.prototype, "retrieve").mockResolvedValue([]);
 		try {
-			await pool.invoke("init", { scope, registration: { ...registered, skinId: "auto-disabled",
-				settings: { ...registered.settings, autoRecall: false, ambientLearning: false } } }, "auto-disabled");
+			await pool.invoke("init", { scope, registration: { skinId: "auto-disabled" } }, "auto-disabled");
 			const result = await pool.invoke("getRecall", {
 				scope, query: "What notebook records do you remember?", options: { source: "auto" },
 			}, "auto-disabled");
@@ -1044,24 +1028,12 @@ describe("sidecar keeps serving", () => {
 		writeFileSync(join(root, "sno-station-mem", "rem-wave-jobs.jsonl"), "{broken}\n");
 		await health();
 	});
-	it("serves a bound store without the installation config file", async () => {
-		rmSync(join(root, "station", `sno-station-mem-${userInfo().username}.config.json`));
+	it("serves the store named in settings.json with no installation config file", async () => {
+		expect(existsSync(join(root, "station", `sno-station-mem-${userInfo().username}.config.json`))).toBe(false);
 		const pool = await MemoryRuntimePool.open();
 		try {
 			expect(await pool.invoke("inspect", { scope: { principal: "caller", project: "global", session: "probe" }, op: { op: "stats" } }, "new-skin"))
 				.toEqual({ degraded: false, result: { op: "stats", total: 0, projectBreakdown: {}, categoryBreakdown: {} } });
-		} finally { await pool.close(); }
-	});
-	it("uses installed embedding settings when a registration names another model and store", async () => {
-		const config = pluginConfigSchema.parse({ mode: "local-first", retrieval: { rerank: "none" }, dbPath: "/unused/requested.sqlite", embedding: { model: "not-installed", dimensions: 3 } });
-		const { mode, remEnhanced: _remEnhanced, language: _language, ...settings } = config;
-		const pool = await MemoryRuntimePool.open();
-		try {
-			expect(await pool.invoke("init", { scope: { principal: userInfo().username, project: "global", session: "probe" },
-				registration: { skinId: "header-skin", settings, routing: { mode, language: "en" } } }, "header-skin"))
-				.toMatchObject({ degraded: false, skinId: "header-skin" });
-			expect(await pool.invoke("inspect", { scope: { principal: userInfo().username, project: "global", session: "probe" }, op: { op: "list" } }, "header-skin"))
-				.toEqual({ degraded: false, result: { op: "list", project: "global", entries: [] } });
 		} finally { await pool.close(); }
 	});
 	it("runs REM without enable artifacts or operational configuration", async () => {
@@ -1078,7 +1050,7 @@ describe("sidecar keeps serving", () => {
 			await health();
 			if (!sidecar) throw new Error("missing test sidecar");
 			const connected = await contractPost("/v1/init", { scope: { principal: "caller", project: "global", session: "rem-host" },
-				registration: registration("local-first", { baseUrl: `http://127.0.0.1:${address.port}/v1`, credential: "loopback-credential", model: "loopback-model" }) });
+				registration: registration({ baseUrl: `http://127.0.0.1:${address.port}/v1`, credential: "loopback-credential", model: "loopback-model" }) });
 			expect(connected.status).toBe(200);
 			const response = await fetch(`http://127.0.0.1:${sidecar.port}/rem/run`, { method: "POST", headers: { Authorization: `Bearer ${JSON.parse(readFileSync(join(root, "station", "sidecar.json"), "utf8")).token}` }, body: JSON.stringify({ type: "rem-update", scope: "global" }) });
 			expect(response.status).toBe(202);
@@ -1127,9 +1099,8 @@ describe("sidecar keeps serving", () => {
 	it("serves native recall without host workspace registration", async () => {
 		const pool = await MemoryRuntimePool.open();
 		try {
-			const { mode, remEnhanced: _remEnhanced, language: _language, ...settings } = pool.config;
 			const scope = { principal: userInfo().username, project: "global", session: "native-probe" };
-			await pool.invoke("init", { scope, registration: { skinId: "native-probe", settings, routing: { mode, language: "en" } } }, "native-probe");
+			await pool.invoke("init", { scope, registration: { skinId: "native-probe" } }, "native-probe");
 			await pool.store.store({ text: "Native notebook marker.", category: "episodic", projectId: "global" });
 			expect(await pool.invoke("getRecall", { scope, query: "Native notebook marker.", options: { source: "native", limit: 5, minScore: 0 } }, "native-probe"))
 				.toMatchObject({ degraded: false, nativeHits: [{ snippet: "Native notebook marker." }] });
@@ -1139,9 +1110,8 @@ describe("sidecar keeps serving", () => {
 		writeFileSync(join(root, "sno-station-mem", "killswitch"), JSON.stringify({ reason: "integrity failure", activatedBy: "maintenance", activated: "2026-09-17T01:37:54Z" }));
 		const pool = await MemoryRuntimePool.open();
 		try {
-			const { mode, remEnhanced: _remEnhanced, language: _language, ...settings } = pool.config;
 			const scope = { principal: userInfo().username, project: "global", session: "agent:probe:session" };
-			await pool.invoke("init", { scope, registration: { skinId: "capture-probe", settings, routing: { mode, language: "en" } } }, "capture-probe");
+			await pool.invoke("init", { scope, registration: { skinId: "capture-probe" } }, "capture-probe");
 			const result = await pool.invoke("capture", { scope,
 				turn: { turnId: "capture-probe", rewindEpoch: 0, messages: [{ role: "user", content: "I keep a blue notebook.", at: 1789606800000 }] },
 			}, "capture-probe");
@@ -1331,28 +1301,28 @@ it("holds the socket after shutdown times out until the runtime task settles", a
 	}
 }, 15_000);
 
+// Auto recall serves at most `recall.prompt.limit` rows; one row more leaves exactly one for manual recall.
+const AUTO_RECALL_LIMIT = 1;
+const AUTO_ACCOUNT_ROWS = AUTO_RECALL_LIMIT + 1;
+
 async function startRecallAccount(rows: number, autoRecall = true, settings: SettingsDocument = {}): Promise<void> {
 	const store = new MemoryStore({ dbPath: database.dbPath, embedder: await createTestEmbedder() });
 	try {
 		for (let index = 0; index < rows; index++) {
 			await store.store({
 				text: (`Notebook record ${index}: The archive holds the expedition route and supply notes. ` +
-					(rows > 2 ? "The notebook describes the route, water supplies, camp equipment and weather observations. ".repeat(18) : "")),
+					// Long rows only for the token-budget accounts; the auto account must fit the manual budget whole.
+					(rows > AUTO_ACCOUNT_ROWS ? "The notebook describes the route, water supplies, camp equipment and weather observations. ".repeat(18) : "")),
 				category: "episodic", projectId: "global", importance: 0.8,
 			});
 		}
 	} finally { await store.close(); }
-	// Of the registration below, only these have a settings field; the retrieval knobs are code constants now.
-	writeSettings({ recall: { auto: autoRecall, prompt: { timeoutMs: 30_000 } }, ...settings });
+	// Recall is read from settings.json; the registration carries only the skin.
+	writeSettings({ recall: { auto: autoRecall, prompt: { timeoutMs: 30_000, limit: AUTO_RECALL_LIMIT } }, ...settings });
 	await health();
-	const registered = registration("local-first");
 	const response = await contractPost("/v1/init", {
 		scope: { principal: "caller", project: "global", session: "recall-account" },
-		registration: { ...registered, settings: { ...registered.settings,
-			autoRecall, autoRecallMinRepeated: 0, autoRecallTimeoutMs: 30_000,
-			retrieval: { ...registered.settings.retrieval, mode: "vector", rerank: "none",
-				minScore: 0, hardMinScore: 0, recallTopK: 1 },
-		} },
+		registration: { skinId: "body-skin" },
 	});
 	expect(response.status).toBe(200);
 }
@@ -1369,18 +1339,16 @@ async function recallAccount(source: "auto" | "manual", session = "recall-accoun
 describe("manual recall turn account over HTTP", () => {
 	it("preserves same-turn omission when the runtime is initialized again", async () => {
 		await startRecallAccount(2);
-		const registered = registration("local-first");
-		const repeatedRegistration = { ...registered, settings: { ...registered.settings,
+		// The engine configuration is a constructor input here; the registration is the skin only.
+		const repeatedRegistration = registration();
+		const config = pluginConfigSchema.parse({ mode: "local-first", observe: { enabled: false },
 			autoRecall: true, autoRecallMinRepeated: 0, autoRecallTimeoutMs: 30_000,
-			retrieval: { ...registered.settings.retrieval, mode: "vector" as const, rerank: "none" as const,
-				minScore: 0, hardMinScore: 0, recallTopK: 1 },
-		} };
-		const config = { ...repeatedRegistration.settings, ...repeatedRegistration.routing };
+			retrieval: { mode: "vector", rerank: "none", minScore: 0, hardMinScore: 0, recallTopK: 1 } });
 		const embedder = await createTestEmbedder();
 		const store = new MemoryStore({ dbPath: database.dbPath, embedder });
 		const accessTracker = new AccessTracker({ store });
 		const observability = new PluginObservability(config, root);
-		const runtime = new MemoryContractRuntime({ store, embedder, accessTracker, observability,
+		const runtime = new MemoryContractRuntime({ config, store, embedder, accessTracker, observability,
 			retriever: new MemoryRetriever(store, embedder, console, config.retrieval),
 			stateDir: root, logger: console });
 		const scope = { principal: "caller", project: "global", session: "recall-reregistration" };
@@ -1402,9 +1370,7 @@ describe("manual recall turn account over HTTP", () => {
 	});
 
 	it("logs a hashed session reference for manual recall", async () => {
-		await startRecallAccount(1, false);
-		const previousLogLevel = process.env.LOG_LEVEL;
-		process.env.LOG_LEVEL = "info";
+		await startRecallAccount(1, false, { logging: { level: "info" } });
 		const lines: string[] = [];
 		const output = vi.spyOn(process.stderr, "write").mockImplementation(chunk => { lines.push(String(chunk)); return true; });
 		try {
@@ -1422,12 +1388,10 @@ describe("manual recall turn account over HTTP", () => {
 			expect(completed[0].context.session_reference.visibility).toBe("hashed");
 		} finally {
 			output.mockRestore();
-			if (previousLogLevel === undefined) delete process.env.LOG_LEVEL;
-			else process.env.LOG_LEVEL = previousLogLevel;
 		}
 	});
 	it("shares the account when auto recall has a UUID and manual recall has only the session key", async () => {
-		await startRecallAccount(2);
+		await startRecallAccount(AUTO_ACCOUNT_ROWS);
 		const scope = { principal: "caller", project: "global", session: "agent:main:recall-account" };
 		const query = "What route and supplies does the expedition notebook describe?";
 		const automaticResponse = await contractPost("/v1/get-recall", {
@@ -1436,29 +1400,21 @@ describe("manual recall turn account over HTTP", () => {
 		});
 		expect(automaticResponse.status).toBe(200);
 		const automatic = await automaticResponse.json();
-		expect(automatic.memoryIds).toHaveLength(1);
+		expect(automatic.memoryIds).toHaveLength(AUTO_RECALL_LIMIT);
 		const manualResponse = await contractPost("/v1/get-recall", {
 			scope: { ...scope, host: { sessionKey: scope.session } }, query, options: { source: "manual", minScore: 0 },
 		});
 		expect(manualResponse.status).toBe(200);
 		const manual = await manualResponse.json();
-		expect(manual.toolResult.details.already_served_count).toBe(1);
+		expect(manual.toolResult.details.already_served_count).toBe(AUTO_RECALL_LIMIT);
 		expect(manual.toolResult.details.memories).toHaveLength(1);
 		expect(manual.toolResult.details.memories.filter((row: { id: string }) => automatic.memoryIds.includes(row.id))).toEqual([]);
 	});
 
 	it("omits auto recall rows when manual recall has no host workspace", async () => {
-		await startRecallAccount(2, true, { user: { id: "01900000-0000-7000-8000-000000000001" } });
+		await startRecallAccount(AUTO_ACCOUNT_ROWS, true, { user: { id: "01900000-0000-7000-8000-000000000001" } });
 		const scope = { principal: "caller", project: root, readable: ["global"], session: "agent:main:recall-account" };
-		const registered = registration("local-first");
-		const initialized = await contractPost("/v1/init", {
-			scope, registration: { ...registered, settings: { ...registered.settings,
-				provider: { userId: "01900000-0000-7000-8000-000000000001" },
-				autoRecall: true, autoRecallMinRepeated: 0, autoRecallTimeoutMs: 30_000,
-				retrieval: { ...registered.settings.retrieval, mode: "vector", rerank: "none",
-					minScore: 0, hardMinScore: 0, recallTopK: 1 },
-			} },
-		});
+		const initialized = await contractPost("/v1/init", { scope, registration: { skinId: "body-skin" } });
 		expect(initialized.status).toBe(200);
 		const query = "What route and supplies does the expedition notebook describe?";
 		const automaticResponse = await contractPost("/v1/get-recall", {
@@ -1467,19 +1423,19 @@ describe("manual recall turn account over HTTP", () => {
 		});
 		expect(automaticResponse.status).toBe(200);
 		const automatic = await automaticResponse.json();
-		expect(automatic.memoryIds).toHaveLength(1);
+		expect(automatic.memoryIds).toHaveLength(AUTO_RECALL_LIMIT);
 		const manualResponse = await contractPost("/v1/get-recall", {
 			scope: { ...scope, host: { sessionKey: scope.session } }, query, options: { source: "manual", minScore: 0 },
 		});
 		expect(manualResponse.status).toBe(200);
 		const manual = await manualResponse.json();
-		expect(manual.toolResult.details.already_served_count).toBe(1);
+		expect(manual.toolResult.details.already_served_count).toBe(AUTO_RECALL_LIMIT);
 		expect(manual.toolResult.details.memories).toHaveLength(1);
 		expect(manual.toolResult.details.memories.filter((row: { id: string }) => automatic.memoryIds.includes(row.id))).toEqual([]);
 	});
 
 	it("keeps different scope sessions separate when host session keys are blank and UUIDs are absent", async () => {
-		await startRecallAccount(2);
+		await startRecallAccount(AUTO_ACCOUNT_ROWS);
 		const scope = { principal: "caller", project: "global", session: "agent:main:K1",
 			host: { sessionKey: "   " } };
 		const query = "What route and supplies does the expedition notebook describe?";
@@ -1488,14 +1444,14 @@ describe("manual recall turn account over HTTP", () => {
 		});
 		expect(automaticResponse.status).toBe(200);
 		const automatic = await automaticResponse.json();
-		expect(automatic.memoryIds).toHaveLength(1);
+		expect(automatic.memoryIds).toHaveLength(AUTO_RECALL_LIMIT);
 		const manualResponse = await contractPost("/v1/get-recall", {
 			scope: { ...scope, session: "agent:main:K2" }, query, options: { source: "manual", minScore: 0 },
 		});
 		expect(manualResponse.status).toBe(200);
 		const manual = await manualResponse.json();
 		expect(manual.toolResult.details.already_served_count).toBeUndefined();
-		expect(manual.toolResult.details.memories).toHaveLength(2);
+		expect(manual.toolResult.details.memories).toHaveLength(AUTO_ACCOUNT_ROWS);
 		expect(manual.toolResult.details.memories.map((row: { id: string }) => row.id)).toEqual(expect.arrayContaining(automatic.memoryIds));
 	});
 
@@ -1525,26 +1481,26 @@ describe("manual recall turn account over HTTP", () => {
 	});
 
 	it("omits auto and tool rows in the same turn, but serves them in a new session and turn", async () => {
-		await startRecallAccount(2);
+		await startRecallAccount(AUTO_ACCOUNT_ROWS);
 		const automatic = await recallAccount("auto");
-		expect(automatic.memoryIds).toHaveLength(1);
+		expect(automatic.memoryIds).toHaveLength(AUTO_RECALL_LIMIT);
 		const first = await recallAccount("manual");
-		expect(first.toolResult.details.already_served_count).toBe(1);
+		expect(first.toolResult.details.already_served_count).toBe(AUTO_RECALL_LIMIT);
 		expect(first.toolResult.details.memories).toHaveLength(1);
 		expect(first.toolResult.details.memories.filter((row: { id: string }) => automatic.memoryIds.includes(row.id))).toEqual([]);
-		expect(first.contextText).toContain("1 memories already shown in this turn were omitted.");
+		expect(first.contextText).toContain(`${AUTO_RECALL_LIMIT} memories already shown in this turn were omitted.`);
 		const second = await recallAccount("manual", "recall-account", "What observations are recorded in the expedition notebook?");
-		expect(second.toolResult.details.already_served_count).toBe(2);
+		expect(second.toolResult.details.already_served_count).toBe(AUTO_ACCOUNT_ROWS);
 		expect(second.toolResult.details.memories).toEqual([]);
 		expect(second.toolResult.details.budget_used).toBe(0);
-		expect(second.contextText).toContain("2 memories already shown in this turn were omitted.");
+		expect(second.contextText).toContain(`${AUTO_ACCOUNT_ROWS} memories already shown in this turn were omitted.`);
 		const fresh = await recallAccount("manual", "recall-fresh-session");
 		expect(fresh.toolResult.details.already_served_count).toBeUndefined();
-		expect(fresh.toolResult.details.memories).toHaveLength(2);
+		expect(fresh.toolResult.details.memories).toHaveLength(AUTO_ACCOUNT_ROWS);
 		expect(fresh.contextText).not.toContain("memories already shown in this turn were omitted.");
 		await recallAccount("auto");
 		const nextTurn = await recallAccount("manual");
-		expect(nextTurn.toolResult.details.already_served_count).toBe(1);
+		expect(nextTurn.toolResult.details.already_served_count).toBe(AUTO_RECALL_LIMIT);
 		expect(nextTurn.toolResult.details.memories).toHaveLength(1);
 	});
 
@@ -1580,7 +1536,6 @@ describe("manual recall turn account over HTTP", () => {
 		await startRecallAccount(30, false);
 		const pool = await MemoryRuntimePool.open();
 		const scope = { principal: "caller", project: "global", session: "manual-abort" };
-		const registered = registration("local-first");
 		const entered = Promise.withResolvers<void>();
 		const release = Promise.withResolvers<void>();
 		const controller = new AbortController();
@@ -1593,10 +1548,7 @@ describe("manual recall turn account over HTTP", () => {
 		});
 		let cancelled: Promise<unknown> | undefined;
 		try {
-			await pool.invoke("init", { scope, registration: { ...registered, skinId: "manual-abort",
-				settings: { ...registered.settings, autoRecall: false,
-					retrieval: { ...registered.settings.retrieval, mode: "vector", rerank: "none", minScore: 0, hardMinScore: 0 } },
-			} }, "manual-abort");
+			await pool.invoke("init", { scope, registration: { skinId: "manual-abort" } }, "manual-abort");
 			const query = "What route and supplies does the expedition notebook describe?";
 			await pool.invoke("getRecall", { scope, query, options: { source: "auto" } }, "manual-abort");
 			const request = { scope, query, options: { source: "manual", minScore: 0, tokenBudget: 20_000 } };
@@ -1632,8 +1584,7 @@ describe("one workspace is one shared memory", () => {
 		});
 		const skins = ["codex", "claude-code", "hermes", "mem-claw"];
 		for (const skin of skins) {
-			const response = await contractPost("/v1/init", { scope: scopeFor(`${skin}-init`), registration: {
-				...registration("local-first"), skinId: skin } }, skin);
+			const response = await contractPost("/v1/init", { scope: scopeFor(`${skin}-init`), registration: { skinId: skin } }, skin);
 			expect(response.status).toBe(200);
 		}
 		const written = await contractPost("/v1/mutate", { scope: scopeFor("codex-turn"),
@@ -1652,5 +1603,108 @@ describe("one workspace is one shared memory", () => {
 			expect(texts).toContain("tabs for indentation");
 		}
 		expect(JSON.parse(readFileSync(join(root, "identity.json"), "utf8")).machine_uuid).toMatch(/^[0-9a-f-]{36}$/);
+	});
+});
+
+describe("a registration carries only the skin and its model (REQ-4)", () => {
+	const hostModel = (url: string) => ({ baseUrl: `${url}/host/v1/`, credential: "loopback-credential", model: "loopback-model" });
+
+	it("registers Codex, Claude Code, Hermes and OpenClaw with only their id and model, and each captures and recalls", async () => {
+		const host = await startRecorder(closers, ({ raw }) => modelReply("{}", raw));
+		await health();
+		for (const skinId of ["codex", "claude-code", "hermes", "mem-claw"]) {
+			const scope = { principal: "caller", project: "global", session: `${skinId}-registered` };
+			const registered = await contractPost("/v1/init", { scope, registration: { skinId, model: hostModel(host.url) } }, skinId);
+			expect(registered.status).toBe(200);
+			expect(await registered.json()).toMatchObject({ degraded: false, skinId });
+			const sentence = `The ${skinId} team keeps its release checklist in the amber binder.`;
+			const captured = await contractPost("/v1/capture", { scope, turn: { turnId: `${skinId}-turn`, rewindEpoch: 0,
+				messages: [{ role: "user", content: sentence, at: 1789606800000 }] } }, skinId);
+			expect(captured.status).toBe(200);
+			expect(await captured.json()).toMatchObject({ degraded: false, committed: true });
+			const recalled = await contractPost("/v1/get-recall", { scope, query: `Where does the ${skinId} team keep its release checklist?`,
+				options: { source: "manual", minScore: 0 } }, skinId);
+			expect(recalled.status).toBe(200);
+			const texts: string[] = (await recalled.json()).toolResult.details.memories.map((row: { text: string }) => row.text);
+			expect(texts.some(text => text.includes(sentence)), texts.join("\n")).toBe(true);
+		}
+	});
+
+	it.each([
+		["settings", () => {
+			const { mode: _mode, remEnhanced: _remEnhanced, language: _language, ...settings } = pluginConfigSchema.parse({ mode: "local-first", retrieval: { rerank: "none" } });
+			return { settings };
+		}],
+		["routing", () => ({ routing: { mode: "local-first", language: "en" } })],
+		["inheritInstalled", () => ({ inheritInstalled: true })],
+	] as const)("refuses a registration that still carries %s", async (_key, extra) => {
+		await health();
+		const response = await contractPost("/v1/init", { scope: { principal: "caller", project: "global", session: "old-registration" },
+			registration: { skinId: "codex", ...extra() } }, "codex");
+		expect({ status: response.status, body: await response.json() })
+			.toEqual({ status: 400, body: { degraded: true, reason: "invalid-input" } });
+	});
+
+	it("re-registers a running Codex worker's client after the service is stopped by its pid, and its next host call succeeds", { timeout: 180_000 }, async () => {
+		// E1 on the host makes every capture a host call; without the worker's model it answers no-agent-endpoint.
+		writeSettings({ modelCalls: { E1: { "local-first": "host" } } });
+		const host = await startRecorder(closers, ({ raw }) => modelReply("{}", raw));
+		const discoveryPath = join(root, "station", "sidecar.json");
+		const readRecord = () => z.object({ pid: z.number().int().positive(), port: z.number().int(), token: z.string() })
+			.parse(JSON.parse(readFileSync(discoveryPath, "utf8")));
+		const services: Array<ReturnType<typeof spawn>> = [];
+		closers.push(async () => {
+			for (const service of services) if (service.exitCode === null && service.signalCode === null) {
+				service.kill("SIGTERM");
+				await once(service, "exit");
+			}
+		});
+		// The service as its own process, from this checkout's source, with this test's profile root.
+		const startService = async (): Promise<number> => {
+			const service = spawn(process.execPath, ["--import", "tsx", "src/sidecar/main.ts"], {
+				cwd: fileURLToPath(new URL("../../../../packages/memory/", import.meta.url)),
+				env: { ...process.env, SNO_PROFILE_DIR: root }, stdio: ["ignore", "pipe", "pipe"],
+			});
+			let output = "";
+			service.stdout?.on("data", chunk => { output += chunk; });
+			service.stderr?.on("data", chunk => { output += chunk; });
+			services.push(service);
+			await vi.waitFor(async () => {
+				expect(service.exitCode, output).toBeNull();
+				const record = readRecord();
+				expect(record.pid).toBe(service.pid);
+				const healthz = await fetch(`http://127.0.0.1:${record.port}/healthz`, { headers: { Authorization: `Bearer ${record.token}` } });
+				expect(healthz.status).toBe(200);
+			}, { timeout: 60_000, interval: 250 });
+			return readRecord().pid;
+		};
+		// The way sno stops it: the recorded pid, only after /healthz with the recorded token answers; then wait for the exit.
+		const stopService = async (): Promise<void> => {
+			const record = readRecord();
+			const healthz = await fetch(`http://127.0.0.1:${record.port}/healthz`, { headers: { Authorization: `Bearer ${record.token}` } });
+			expect(healthz.status).toBe(200);
+			process.kill(record.pid, "SIGTERM");
+			await vi.waitFor(() => expect(() => process.kill(record.pid, 0)).toThrowError(/ESRCH/), { timeout: 30_000 });
+		};
+		const turn = (turnId: string, content: string) => ({ turnId, rewindEpoch: 0, messages: [{ role: "user" as const, content, at: 1789606800000 }] });
+		const carried = (sentence: string) => host.received.filter(call => call.content.includes(sentence)).length;
+
+		const firstPid = await startService();
+		const client = await connect({ skinId: "codex" });
+		if (client.degraded) throw new Error(`connect: ${client.reason}`);
+		const scope = { principal: client.principal, project: "global", session: "codex-worker", host: { sessionId: "codex-worker" } };
+		await client.init(scope, { skinId: "codex", model: hostModel(host.url) });
+		const before = "The harbor deploy runs every Tuesday morning.";
+		await expect(client.capture(turn("before-stop", before), scope)).resolves.toMatchObject({ degraded: false });
+		expect(carried(before)).toBeGreaterThan(0);
+
+		await stopService();
+		expect(existsSync(discoveryPath)).toBe(false);
+		expect(await startService()).not.toBe(firstPid);
+
+		// No init from the test: the worker's client must re-send its own registration before this call.
+		const after = "The harbor deploy moved to Thursday evenings.";
+		await expect(client.capture(turn("after-restart", after), scope)).resolves.toMatchObject({ degraded: false });
+		expect(carried(after)).toBeGreaterThan(0);
 	});
 });

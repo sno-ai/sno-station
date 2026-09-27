@@ -15,12 +15,13 @@ import {
 	installRemSchema,
 	type RemDatabaseLike,
 } from "../engine/rem/index.js";
+import { readSettings } from "../contract/profile";
 import * as schema from "./schema";
 import { applyEntityNameKeyMigration } from "./entity-name-key-migration";
 import { migrateLegacyDatabaseNamespace } from "./legacy-database-namespace-migration";
 import { resolveSimpleTokenizerPath } from "./simple-tokenizer-path";
 import { loadSqliteVecExtension } from "./sqlite-vec-path";
-import { initSqliteRuntimeSync, openSqliteDatabase } from "./sqlite-runtime";
+import { initSqliteRuntime, openSqliteDatabase } from "./sqlite-runtime";
 import { migrateUnplacedCandidates } from "./unplaced-candidate-migration";
 
 type RemMigrationDecision =
@@ -48,12 +49,11 @@ const MIGRATIONS_DIR = resolveMigrationsDir();
  * new ephemeral database; the plugin runtime opens its configured database
  * through `initDb()` instead.
  *
- * The DEK is resolved synchronously via `initSqliteRuntimeSync()` — passphrase
- * mode is not supported here. Caller is responsible for closing nothing; this
+ * The key comes from settings. Caller is responsible for closing nothing; this
  * function opens its own connection and closes it on exit.
  */
 export function runMigrations(dbPath: string): void {
-	initSqliteRuntimeSync();
+	initSqliteRuntime(readSettings().store.encryptionKey);
 	mkdirSync(dirname(dbPath), { recursive: true });
 	const sqlite = openSqliteDatabase(dbPath);
 	try {

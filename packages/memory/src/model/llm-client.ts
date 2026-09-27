@@ -175,7 +175,6 @@ function buildPipelineConfig(
 	ResolvedLlmConfig & {
 		baseUrl: string;
 		endpointUrl: string;
-		shouldSendHeliconeAuth?: boolean;
 		userBaseUrlOverride?: boolean;
 		callId: ModelCallId;
 		destination: "host" | "sno-gpu";
@@ -202,7 +201,6 @@ function buildPipelineConfig(
 		...(endpoint.userBaseUrlOverride
 			? { userBaseUrlOverride: endpoint.userBaseUrlOverride }
 			: {}),
-		...(config.heliconeApiKey ? { heliconeApiKey: config.heliconeApiKey } : {}),
 		timeoutMs: request.timeoutMs ?? config.timeoutMs ?? preset.timeoutMs ?? 30_000,
 		callId: request.callId,
 		destination,

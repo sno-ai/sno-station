@@ -1,5 +1,4 @@
 /** Fixed signed, persisted, and host protocol values. Change only with their external authority. */
-export const FIXED_EXTRACTION_KEY_NAME = "SNO_MEM_CLAW_LLM_INTERNAL_KEY";
 export const FIXED_EXTERNAL_VALUE_49 = "database contains both mem_claw_memories and nodix_memories";
 export const FIXED_EXTERNAL_VALUE_51 = "PRAGMA table_info(mem_claw_memories)";
 export const FIXED_EXTERNAL_VALUE_52 = "cannot read vec_mem_claw_chunks dimension";

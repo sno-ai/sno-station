@@ -1,7 +1,6 @@
 /** @file install-manifest.ts
  * @purpose Schema, atomic write, and read+validate for `install.json`. The
- *   manifest is the single source of truth that lets a reinstalled plugin
- *   reattach to the user's existing memory library.
+ *   manifest records installation metadata; settings.store.path selects the database.
  * @boundary File I/O on a single JSON file. No SQLite, no DEK access.
  */
 
@@ -15,7 +14,7 @@ import {
 	renameSync,
 	writeFileSync,
 } from "node:fs";
-import { dirname, isAbsolute, join } from "node:path";
+import { dirname } from "node:path";
 import { createUUIDv7, isLowercaseCanonicalUUIDv7 } from "@snoai/common-core";
 import { z } from "zod";
 
@@ -29,8 +28,6 @@ export interface InstallManifestShape {
 	installationId: string;
 	createdAt: string;
 	dbPath: string;
-	keyServiceName: string;
-	keyAccount: string;
 }
 
 /** PRD §3.2 schema. No `lastSeenVersion` / `lastSeenAt`. */
@@ -42,8 +39,6 @@ export const InstallManifestSchema: z.ZodType<InstallManifestShape, unknown> = z
 	}),
 	createdAt: z.string().datetime(),
 	dbPath: z.string().min(1),
-	keyServiceName: z.string().min(1),
-	keyAccount: z.string().min(1),
 });
 
 export type InstallManifest = z.infer<typeof InstallManifestSchema>;
@@ -132,8 +127,6 @@ export function writeInstallManifestAtomic(path: string, manifest: InstallManife
 /** Build a fresh manifest at first-install time. UUIDv7 for time-ordering. */
 export function freshInstallManifest(args: {
 	dbPath: string;
-	keyServiceName: string;
-	keyAccount: string;
 	createdAt?: string;
 }): InstallManifest {
 	return InstallManifestSchema.parse({
@@ -142,16 +135,5 @@ export function freshInstallManifest(args: {
 		installationId: createUUIDv7(),
 		createdAt: args.createdAt ?? new Date().toISOString(),
 		dbPath: args.dbPath,
-		keyServiceName: args.keyServiceName,
-		keyAccount: args.keyAccount,
 	});
-}
-
-/**
- * Resolve `manifest.dbPath` against `dataDir`. Relative paths join with the
- * manifest's data dir; absolute paths are honored verbatim (PRD §3.2 — only
- * when the user explicitly configured a custom `config.dbPath`).
- */
-export function resolveDbPath(manifest: InstallManifest, dataDir: string): string {
-	return isAbsolute(manifest.dbPath) ? manifest.dbPath : join(dataDir, manifest.dbPath);
 }

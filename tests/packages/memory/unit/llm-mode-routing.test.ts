@@ -23,19 +23,18 @@ const LOCAL_RERANK = { retrieval: { rerank: "lightweight" } } as const;
 const SHIPPED_MODEL_CALLS = (JSON.parse(readFileSync(DEFAULT_SETTINGS_PATH, "utf8")) as Settings).modelCalls;
 
 describe("plugin config product mode", () => {
-	it("defaults to the shared agent-native mode and strips the legacy gate key", () => {
+	it("defaults to the shared agent-native mode and refuses the removed gate key", () => {
 		const defaults = pluginConfigSchema.parse({});
 		expect(DEFAULT_MODEL_MODE).toBe("agent-native");
 		expect(defaults.mode).toBe(DEFAULT_MODEL_MODE);
 		expect(defaults).not.toHaveProperty("agentNative");
 		expect(pickLlmRoutingConfig(defaults).language).toBe("en");
 
-		const parsed = pluginConfigSchema.parse({
+		expect(() => pluginConfigSchema.parse({
 			...LOCAL_RERANK,
 			mode: "agent-native",
 			llmGates: { agentWriteCapture: true },
-		});
-		expect("llmGates" in parsed).toBe(false);
+		})).toThrow(/llmGates/);
 	});
 
 	it("rejects the retired extraction selector", () => {

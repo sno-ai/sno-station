@@ -21,6 +21,7 @@ export const engineSettingsSchema: z.ZodType<EngineSettings, unknown> = z.object
 	dbPath: z.string().optional(),
 	provider: z.object({ userId: z.string().trim().optional() }),
 	ambientLearning: z.boolean(),
+	debugContent: z.boolean(),
 	autoRecall: z.boolean(),
 	autoRecallMinLength: z.number().int().min(1).max(200),
 	autoRecallMinRepeated: z.number().int().min(0).max(100),
@@ -46,7 +47,8 @@ export const engineSettingsSchema: z.ZodType<EngineSettings, unknown> = z.object
 	extraction: extractionConfigSchema,
 	memoryReflection: memoryReflectionConfigSchema,
 	recallLifecycle: recallLifecycleSchema,
-	memoryTelemetry: z.object({ enabled: z.boolean(), currentKeyVersion: z.number().int().positive() }),
+	memoryTelemetry: z.object({ enabled: z.boolean(), currentKeyVersion: z.number().int().positive(),
+		key: z.string(), historicKeys: z.array(z.string()) }),
 	remOperations: z.array(z.enum(["rem-replace", "rem-update"])).min(1).max(2),
 	onboarding: z.object({
 		version: z.number().int().positive(),

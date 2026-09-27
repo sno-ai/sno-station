@@ -23,6 +23,8 @@ export interface CreateMemoryTelemetryApiOptions {
 	sqlite: SqliteDatabaseLike;
 	usageOutbox?: MemoryTelemetryUsageOutbox;
 	keySet?: MemoryTelemetryKeySet;
+	key?: string;
+	historicKeys?: readonly string[];
 	receiptService?: MemoryTelemetryReceiptService;
 	agentId?: string;
 }
@@ -171,7 +173,8 @@ export function createMemoryTelemetryApi(options: CreateMemoryTelemetryApiOption
 	const receiptService =
 		options.receiptService ??
 		createMemoryTelemetryReceiptService(
-			options.keySet ?? loadMemoryTelemetryKeySet({ enabled: true }),
+			options.keySet ?? loadMemoryTelemetryKeySet({ enabled: true,
+				key: options.key ?? "", historicKeys: options.historicKeys ?? [] }),
 		);
 	const purgeService = createMemoryTelemetryPurgeService({
 		sqlite: options.sqlite,

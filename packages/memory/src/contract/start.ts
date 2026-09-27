@@ -3,17 +3,16 @@ import { mkdir, open } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { setTimeout as delay } from "node:timers/promises";
 import { ContractError } from "./error";
-import { getSnoStationMemStateDir, getStartupLogPath, readBoundStorePath } from "./profile";
+import { getSnoStationMemStateDir, getStartupLogPath } from "./profile";
 import { checkDiscovery, processAlive, readDiscovery, type Discovery } from "./discovery";
 import { MEMORY_START_TIMEOUT_MS } from "./routes";
 
 export async function startSidecar(): Promise<Discovery> {
-	const storePath = await readBoundStorePath();
 	const current = await readDiscovery();
 	if (current && processAlive(current.pid)) {
 		const deadline = Date.now() + MEMORY_START_TIMEOUT_MS;
 		while (Date.now() < deadline) {
-			if (await checkDiscovery(current, storePath).then(() => true, () => false)) return current;
+			if (await checkDiscovery(current).then(() => true, () => false)) return current;
 			await delay(Math.min(250, Math.max(0, deadline - Date.now())));
 		}
 		throw new ContractError("sidecar-unresponsive");
@@ -31,7 +30,7 @@ export async function startSidecar(): Promise<Discovery> {
 	const deadline = Date.now() + MEMORY_START_TIMEOUT_MS;
 	while (Date.now() < deadline) {
 		const discovery = await readDiscovery();
-		if (discovery && processAlive(discovery.pid)) { await checkDiscovery(discovery, storePath); return discovery; }
+		if (discovery && processAlive(discovery.pid)) { await checkDiscovery(discovery); return discovery; }
 		if (failed) throw new ContractError("storage-unavailable");
 		await delay(50);
 	}

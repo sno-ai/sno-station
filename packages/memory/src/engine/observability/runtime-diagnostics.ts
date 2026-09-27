@@ -9,6 +9,8 @@ import { pickLlmRoutingConfig, resolveLlmRoute } from "../../model/llm-mode-rout
 import { MODEL_CALLS, type ModelCallId } from "../../model/model-call-table";
 import type { LlmRoutingConfigInput } from "../../../config/plugin-config-mode-schema";
 import { logSiteCatalog } from "./log-site-catalog.generated";
+import type { Settings } from "../../../config/settings";
+import { getStateDir } from "../../contract/profile";
 
 const APPLICATION_NAME = "sno-station-mem";
 const log = createLogger("sno-station-mem:runtime");
@@ -19,11 +21,13 @@ export interface RuntimeDiagnosticSnapshot {
 	preset: LlmPreset;
 	baseURL?: string;
 	hostModel?: unknown;
+	logging: Settings["logging"];
 }
 
-export function initializeRuntimeDiagnostics(): void {
+export function initializeRuntimeDiagnostics(logging: Settings["logging"]): void {
 	configureLogger({ app: APPLICATION_NAME, serviceVersion: packageMetadata.version,
-		buildId: logSiteCatalog.build_id, catalog: logSiteCatalog });
+		buildId: logSiteCatalog.build_id, catalog: logSiteCatalog,
+		level: logging.level, file: logging.file, home: getStateDir() });
 }
 
 function contentHash(value: unknown): string {
@@ -51,7 +55,7 @@ function endpointWithoutCredentials(value: string | undefined): string | undefin
 }
 
 export function emitRuntimeStartSnapshot(input: RuntimeDiagnosticSnapshot): void {
-	initializeRuntimeDiagnostics();
+	initializeRuntimeDiagnostics(input.logging);
 	if (snapshotEmitted) return;
 	snapshotEmitted = true;
 	const hostModel = configuredHostModel(input.hostModel);

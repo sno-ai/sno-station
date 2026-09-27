@@ -416,7 +416,6 @@ class SnoMemoryProvider(MemoryProvider):
         self._client = client
         registration: dict[str, object] = {
             "skinId": _SKIN_ID,
-            "inheritInstalled": True,
         }
         model = _RUNTIME.model_registration()
         if model is not None:

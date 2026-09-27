@@ -58,7 +58,7 @@ describe("REM trigger maintenance timer", () => {
 		process.env["SNO_PROFILE_DIR"] = profileRoot;
 		const settings = writeSettingsFixture(profileRoot, {
 			mode: "rem-enhanced",
-			store: { path: database.dbPath },
+			store: { path: database.dbPath, encryptionKey: database.encryptionKey },
 			rem: { tick: true, operations: ["rem-replace", "rem-update"] },
 		}).settings as unknown as Settings;
 		const scope = "persona:maintenance-overlap";

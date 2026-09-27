@@ -5,10 +5,7 @@ import { createLogger } from "@snoai/utils/logger";
  */
 
 import path from "node:path";
-import {
-	parseRemOperationalConfiguration,
-	type RemOperationalConfiguration,
-} from "../engine/rem/index.js";
+import type { RemOperationalConfiguration } from "../engine/rem/index.js";
 import { getSnoStationMemStateDir, getStateDir } from "../engine/shared/paths";
 
 export const REM_SIDECAR_HOST = "127.0.0.1";
@@ -27,7 +24,6 @@ export const MEMORY_USAGE_FLUSH_INTERVAL_MS: number = 5 * 60_000;
 import { getDiscoveryPath } from "../contract/profile";
 const SNO_REM_TEST_HOLD_MS_ENV = "SNO_STATION_MEM_REM_TEST_HOLD_MS";
 const SNO_REM_TRACE_ENV = "SNO_STATION_MEM_REM_TRACE";
-const SNO_REM_CONFIG_JSON_ENV = "SNO_STATION_MEM_REM_CONFIG_JSON";
 const REM_JOB_JOURNAL_NAME = "rem-wave-jobs.jsonl";
 const REM_TRACE_LOG_NAME = "rem-trace.jsonl";
 const REM_CHASSIS_JOURNAL_NAME = "rem-chassis-journal.jsonl";
@@ -68,15 +64,10 @@ export function readRemTestHoldMs(): number {
 	return value;
 }
 
-export function readRemConfigSource(): string | undefined {
-	return process.env[SNO_REM_CONFIG_JSON_ENV];
-}
-
 const DEFAULT_REM_CONFIGURATION: RemOperationalConfiguration = {
 	profileId: "default", operations: { "rem-replace": true, "rem-update": true, "rem-distill": true, "rem-retire": true },
 	budgets: { maxPairs: 200 }, retrieval: { neighborLimit: 10, similarityThreshold: 0.8 },
 	coverage: { accuracyFloor: null }, retries: { liveContentionRetries: 1 },
-	modelRoute: "http://localhost:8070/codex/v1/chat/completions",
 	facetPolicy: { aggregationGrammar: "current-first-v1", historyGrammar: "history-evidence-v1" },
 	calibration: { minimumPublishableScoreEffect: null, minimumTargetCount: null, minimumTargetPercent: null },
 	enableGateDigests: { "p5-production-config": "0".repeat(64), "p6-monthly-non-regression": "0".repeat(64),
@@ -90,10 +81,8 @@ function reportConfigFailure(error: unknown): void {
 	});
 }
 
-export function readRemOperationalConfig(source: string | undefined = readRemConfigSource()): RemOperationalConfiguration {
-	if (source === undefined) return DEFAULT_REM_CONFIGURATION;
-	try { return parseRemOperationalConfiguration(JSON.parse(source)); }
-	catch (error) { reportConfigFailure(error); return DEFAULT_REM_CONFIGURATION; }
+export function readRemOperationalConfig(): RemOperationalConfiguration {
+	return DEFAULT_REM_CONFIGURATION;
 }
 
 export const MAINTENANCE_INTERVAL_ENV = "SNO_STATION_MEM_MAINTENANCE_INTERVAL_MS";

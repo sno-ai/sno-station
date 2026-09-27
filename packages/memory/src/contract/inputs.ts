@@ -1,10 +1,5 @@
 import { z } from "zod";
-import {
-	llmRoutingConfigSchema,
-	type LlmRoutingConfig,
-} from "../../config/plugin-config-mode-schema";
 import { AGGREGATION_OPERATIONS, MEMORY_CATEGORIES, type MemoryCategory } from "../engine/shared/types";
-import { engineSettingsSchema, type EngineSettings } from "./settings";
 
 export type JsonValue = z.infer<ReturnType<typeof z.json>>;
 export type HostContext = {
@@ -30,16 +25,9 @@ export type Turn = { turnId: string; rewindEpoch: number; messages: Message[] };
 export type AgentModelRegistration = { baseUrl: string; credential: string; model: string };
 export type Registration = {
 	skinId: string;
-	routing: LlmRoutingConfig;
-	settings: EngineSettings;
 	model?: AgentModelRegistration;
 };
-export type InheritedRegistration = {
-	skinId: string;
-	inheritInstalled: true;
-	model?: AgentModelRegistration;
-};
-export type InitRegistration = Registration | InheritedRegistration;
+export type InitRegistration = Registration;
 export type RecallOptions = {
 	corpus?: "memory" | "wiki" | "all" | "sessions";
 	source?: "auto" | "manual" | "native";
@@ -116,26 +104,13 @@ export const messageSchema: z.ZodType<Message, unknown> = z.object({
 export const turnSchema: z.ZodType<Turn, unknown> = z.object({
 	turnId: nonempty, rewindEpoch: z.number().int().nonnegative(), messages: z.array(messageSchema),
 });
-export const registrationSchema: z.ZodType<Registration, unknown> = z.object({
+export const registrationSchema: z.ZodType<Registration, unknown> = z.strictObject({
 	skinId: nonempty,
-	routing: llmRoutingConfigSchema,
-	settings: engineSettingsSchema,
 	model: z.object({
 		baseUrl: z.url({ protocol: /^https?$/ }), credential: z.string(), model: nonempty,
 	}).optional(),
 });
-const inheritedRegistrationSchema: z.ZodType<InheritedRegistration, unknown> = z.strictObject({
-	skinId: nonempty,
-	inheritInstalled: z.literal(true),
-	model: z.object({
-		baseUrl: z.url({ protocol: /^https?$/ }), credential: z.string(), model: nonempty,
-	}).optional(),
-});
-export const initRegistrationSchema: z.ZodType<InitRegistration, unknown> = z.preprocess(value => {
-	if (value && typeof value === "object" && "inheritInstalled" in value && value.inheritInstalled === true
-		&& ("settings" in value || "routing" in value)) return null;
-	return value;
-}, z.union([inheritedRegistrationSchema, registrationSchema]));
+export const initRegistrationSchema: z.ZodType<InitRegistration, unknown> = registrationSchema;
 export const recallOptionsSchema: z.ZodType<RecallOptions, unknown> = z.object({
 	corpus: z.enum(["memory", "wiki", "all", "sessions"]).default("memory"),
 	source: z.enum(["auto", "manual", "native"]).optional(),

@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { createLogger } from "@snoai/utils/logger";
 
 import {
 	DEFAULT_AUTO_RECALL_MAX_QUERY_LENGTH,
@@ -24,7 +23,6 @@ import { retrievalConfigSchema } from "./plugin-config-retrieval-schema";
 import { SESSION_STRATEGIES } from "./session-strategy";
 import type { Settings } from "./settings";
 
-const log = createLogger("sno-station-mem:plugin-config");
 
 const scopesConfigSchema = z
 	.object({
@@ -53,37 +51,6 @@ const providerConfigSchema = z
 
 const ONBOARDING_PROFILES = ["local-active", "capture-only", "manual-only", "custom"] as const;
 const REM_OPERATIONS = ["rem-replace", "rem-update"] as const;
-
-function asPlainObject(value: unknown): Record<string, unknown> | undefined {
-	if (typeof value !== "object" || value === null || Array.isArray(value)) return undefined;
-	return value as Record<string, unknown>;
-}
-
-/**
- * Product-mode normalization over the RAW config, before Zod defaults fill
- * in (defaulted values must never count as explicit route configuration).
- *
- * - Explicit `mode` is the sole behavior input.
- * - `local-first` with LLM route config remains an invalid contradiction.
- * - LLM route config without `mode` fails instead of changing behavior silently.
- * - True zero-config defaults to `agent-native`.
- */
-function normalizeProductMode(raw: unknown): unknown {
-	const rawConfig = asPlainObject(raw);
-	if (rawConfig === undefined) return raw;
-	const cfg = { ...rawConfig };
-	if ("llmGates" in cfg) {
-		delete cfg.llmGates;
-		log.debug("sno-station-mem: stripped retired llmGates config key", undefined, {
-			event_name: "sno_station_mem.plugin-config-schema.sno.station.mem.stripped.retired.llmgates.config.key",
-			file: "packages/memory/config/plugin-config-schema.ts",
-			function: "normalizeProductMode",
-			site_id: "plugin-config-schema.normalizeProductMode.834ccfc110",
-		});
-	}
-	if (cfg.mode !== undefined) return cfg;
-	return { ...cfg, mode: DEFAULT_MODEL_MODE };
-}
 
 type PluginConfigOutput = {
 		embedding: z.output<typeof embeddingConfigSchema>;
@@ -117,7 +84,8 @@ type PluginConfigOutput = {
 		extraction: z.output<typeof extractionConfigSchema>;
 		memoryReflection: z.output<typeof memoryReflectionConfigSchema>;
 		recallLifecycle: z.output<typeof recallLifecycleSchema>;
-		memoryTelemetry: { enabled: boolean; currentKeyVersion: number };
+		memoryTelemetry: { enabled: boolean; currentKeyVersion: number; key: string; historicKeys: string[] };
+		debugContent: boolean;
 		mode: (typeof PRODUCT_MODES)[number];
 		modelCalls?: Settings["modelCalls"];
 		remOperations: (typeof REM_OPERATIONS)[number][];
@@ -142,7 +110,7 @@ const pluginConfigBaseSchema = z
 		// while "Lisbon?" searched because of one question mark. Retrieval here is a local SQLite
 		// plus local-embedding search; it is cheap, and relevance scoring is what should decide
 		// whether anything comes back. The knob stays so an operator can raise it deliberately.
-		autoRecallMinLength: z.number().int().min(1).max(200).default(2),
+		autoRecallMinLength: z.number().int().min(0).max(200).default(2),
 		/** Skip re-injecting a memory if it was shown within the last N turns (0 = no dedup) */
 		autoRecallMinRepeated: z.number().int().min(0).max(100).default(0),
 		/** Maximum character length of auto-recall query before truncation */
@@ -196,8 +164,11 @@ const pluginConfigBaseSchema = z
 			.object({
 				enabled: z.boolean().default(true),
 				currentKeyVersion: z.number().int().positive().default(1),
+				key: z.string().default(""),
+				historicKeys: z.array(z.string()).default([]),
 			})
 			.prefault({}),
+		debugContent: z.boolean().default(false),
 		/**
 		 * Product LLM mode, tier-ordered: local-first → agent-native →
 		 * rem-enhanced. A true bare config defaults to agent-native; model route
@@ -222,18 +193,8 @@ const pluginConfigBaseSchema = z
 			.strict()
 			.optional(),
 	})
-	.strict()
-	.transform((cfg) => {
-		if (cfg.sessionStrategy !== "systemSessionMemory") return cfg;
-		if (cfg.sessionMemory.enabled === false) {
-			return { ...cfg, sessionStrategy: "none" as const };
-		}
-		return cfg;
-	});
+	.strict();
 
-export const pluginConfigSchema: z.ZodType<PluginConfigOutput, unknown> = z
-	.unknown()
-	.transform(normalizeProductMode)
-	.pipe(pluginConfigBaseSchema);
+export const pluginConfigSchema: z.ZodType<PluginConfigOutput, unknown> = pluginConfigBaseSchema;
 
 export type PluginConfig = z.output<typeof pluginConfigSchema>;
