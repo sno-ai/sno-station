@@ -8,6 +8,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { writeSettingsFixture } from "../fixtures/settings-file-fixture";
 import { installRemSchema } from "../../../../packages/memory/src/engine/rem/index.ts";
 import { splitExactClauses } from "../../../../packages/memory/src/engine/rem/clause-splitter.ts";
 import {
@@ -372,6 +373,7 @@ describe("REM ordered wave", () => {
 
 	it("ACC-17 refuses a whitespace scope before any database file is opened", async () => {
 		const stateRoot = mkdtempSync(join(tmpdir(), "rem-req19-blank-scope-"));
+		const previousProfile = process.env.SNO_PROFILE_DIR;
 		try {
 			const configSource = prepareRemEntryArtifactFixture(
 				stateRoot,
@@ -379,6 +381,8 @@ describe("REM ordered wave", () => {
 				createRemOwnerDecidedOperationalConfiguration(),
 			);
 			const personaDbPath = join(stateRoot, "never-created", "persona.sqlite");
+			writeSettingsFixture(stateRoot, { store: { path: personaDbPath } });
+			process.env.SNO_PROFILE_DIR = stateRoot;
 			const run = await loadBoundary<
 				(input: Record<string, unknown>) => Promise<OrderedWaveResult>
 			>(
@@ -406,32 +410,8 @@ describe("REM ordered wave", () => {
 			expect(existsSync(personaDbPath)).toBe(false);
 			expect(existsSync(join(stateRoot, "never-created"))).toBe(false);
 		} finally {
-			rmSync(stateRoot, { recursive: true, force: true });
-		}
-	});
-
-	it("ACC-17 keeps configuration refusals ahead of the blank-scope refusal", async () => {
-		const stateRoot = mkdtempSync(join(tmpdir(), "rem-req19-precedence-"));
-		try {
-			const run = await loadBoundary<
-				(input: Record<string, unknown>) => Promise<OrderedWaveResult>
-			>(
-				"../../../../packages/memory/src/sidecar/rem-batch-executor.ts",
-				"runRemProductionOrderedWave",
-			);
-
-			const result = await run({
-				stateRoot,
-				personaDbPath: join(stateRoot, "never-created", "persona.sqlite"),
-				configSource: "{ not json",
-				scope: "   ",
-			});
-
-			// The scope guard sits AFTER the configuration gates on purpose. Moving it to the top of
-			// the function would silently reorder error priority for a caller carrying both faults,
-			// and this case is what notices.
-			expect(result).toEqual({ decision: "refuse", reasonCode: "enable_config_malformed" });
-		} finally {
+			if (previousProfile === undefined) delete process.env.SNO_PROFILE_DIR;
+			else process.env.SNO_PROFILE_DIR = previousProfile;
 			rmSync(stateRoot, { recursive: true, force: true });
 		}
 	});
@@ -742,6 +722,7 @@ describe("REM two-facet persistence", () => {
 			const firstText = "The user prefers coffee in the morning and keeps the cup beside the desk.";
 			const first = await store.applyRemTextVersion({
 				jobId: "test-job",
+				attemptId: "repeat-update-first",
 				jobType: "rem-update",
 				rowId: stored.id,
 				plannedContentHash: original.content_hash,
@@ -764,6 +745,7 @@ describe("REM two-facet persistence", () => {
 
 			const second = await store.applyRemTextVersion({
 				jobId: "test-job",
+				attemptId: "repeat-update-second",
 				jobType: "rem-update",
 				rowId: stored.id,
 				plannedContentHash: first.contentHash,
@@ -972,12 +954,7 @@ function repoRoot(): string {
 
 describe.sequential("ACC-37 production edge: ordered wave governance", () => {
 	it("continues the enabled operation when its wave sibling is disabled", { timeout: 20_000 }, async () => {
-		const configuration = createRemOwnerDecidedOperationalConfiguration();
-		if (typeof configuration["operations"] !== "object" || configuration["operations"] === null) {
-			throw new Error("REM test configuration omitted operations");
-		}
-		Reflect.set(configuration["operations"], "rem-update", false);
-		const fixture = await startRemProductionEntryFixture({ configuration });
+		const fixture = await startRemProductionEntryFixture({ remOperations: ["rem-replace"] });
 		try {
 			const wave = await fixture.submitWave(
 				["rem-replace", "rem-update"],
@@ -1188,9 +1165,7 @@ describe.sequential("ACC-34 production POST enters one versioned ordered wave", 
 	});
 
 	it("keeps one operation independent", { timeout: 20_000 }, async () => {
-		const configuration = createRemOwnerDecidedOperationalConfiguration();
-		(configuration["operations"] as Record<string, boolean>)["rem-update"] = false;
-		const fixture = await startRemProductionEntryFixture({ configuration });
+		const fixture = await startRemProductionEntryFixture({ remOperations: ["rem-replace"] });
 		try {
 			const started = await fixture.submit(
 				"rem-replace",

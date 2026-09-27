@@ -1,4 +1,5 @@
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
 
 import type { Embedder } from "../../../../packages/memory/src/engine/extraction/embedding-provider-client.ts";
 import { parseInsightMetadata } from "../../../../packages/memory/src/engine/extraction/memory-metadata-codec.ts";
@@ -9,16 +10,8 @@ import type {
 	AgentLlmRequest,
 } from "../../../../packages/memory/src/model/agent-llm-port.ts";
 import { createLlmClient } from "../../../../packages/memory/src/model/llm-client.ts";
-import { pluginConfigSchema } from "../../../../packages/memory/src/engine/shared/types.ts";
 import { MemoryStore } from "../../../../packages/memory/src/store/store.ts";
 import { createTestDb, createTestEmbedder } from "../../../apps/mem-claw/helpers/test-db.ts";
-
-/**
- * The local ranker, stated explicitly. Nothing in this file exercises the remote
- * reranker, and a mode that resolves to the cross-encoder is refused without its key
- * (owner ruling 2026-08-30), so the fixture names the ranker it has always used.
- */
-const LOCAL_RERANK = { retrieval: { rerank: "lightweight" } } as const;
 
 const DAY = 24 * 60 * 60 * 1_000;
 
@@ -56,7 +49,8 @@ describe("agent-native conflict adjudication", () => {
 			store.close();
 			testDb.cleanup();
 		};
-		const routing = pluginConfigSchema.parse({ ...LOCAL_RERANK, mode: "agent-native" });
+		const modelCalls = JSON.parse(readFileSync(new URL("../../../../packages/memory/settings.default.json", import.meta.url), "utf8")).modelCalls;
+		const routing = { mode: "agent-native", language: "en", modelCalls } as const;
 		const agentPort = new ScriptedAgentLlmPort({ kind: "ok", text: response });
 		const llm = createLlmClient({
 			preset: "mem_claw/sno_ai_extract",
