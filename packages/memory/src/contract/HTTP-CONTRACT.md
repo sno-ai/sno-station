@@ -350,7 +350,7 @@ Response status: `200 OK`; `Content-Type: application/json`.
 
 Retrieves context for a query. `query` must contain non-whitespace text. `options` is required even when empty; only `corpus` has a request-schema default. Other omitted fields use the runtime/retriever behavior; a dash does not promise a fixed engine default. `aggregation.terms` are trimmed, each is 1–128 characters, and there are 1–8 terms. Every call reads its project plus the shared `global` memory. Native database recall does not require a workspace; native file reads do.
 
-Automatic, manual and native recall can populate different optional response fields. Inspect `degraded` and `unavailable`; `unavailable: "model-preparing"` means the embedding model is still preparing, and empty context alone is not proof that the service succeeded.
+Automatic, manual and native recall can populate different optional response fields. Inspect `degraded` and `unavailable`; `unavailable: "model-preparing"` means the embedding model is still preparing, while `unavailable: "model preparation failed: …"` reports preparation failure. Empty context alone is not proof that the service succeeded.
 
 Scope requires nonblank `principal`, `project`, `session`. `host.observeSessionUuid`, if supplied, must be a UUID. Host `at` is nonnegative epoch milliseconds. Other host strings may be empty.
 
@@ -1728,7 +1728,8 @@ HTTP 200, JSON.
 
 | Field | Type | Required | Meaning |
 | --- | --- | --- | --- |
-| status | string | yes | Literal ok |
+| status | string | yes | `ok` or `degraded`; Codex and Claude `doctor` intentionally report `degraded` as unhealthy |
+| error | string | no | Model preparation error when status is `degraded` |
 | log_level | string | yes | Current shared logger level |
 | principal | string | yes | OS username |
 | storePath | string | yes | Installed `settings.store.path` |
