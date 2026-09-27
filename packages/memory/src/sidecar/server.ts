@@ -554,13 +554,14 @@ async function runChassisJob(
 				await new Promise((resolvePromise) => setTimeout(resolvePromise, holdMs));
 			}
 			const configuration = readRemOperationalConfig();
+			const enabledBySettings = runtime.settings.rem.operations;
 			const enabledOperations: RemBuiltOperationType[] = [];
 			const cleanRefusalReasons: string[] = [];
 			for (const operation of requestedOperations) {
 				let reason: string;
 				if (!isBuiltOperation(operation)) {
 					reason = `not-built:${operation}`;
-				} else if (configuration.operations[operation]) {
+				} else if (configuration.operations[operation] && enabledBySettings.includes(operation)) {
 					enabledOperations.push(operation);
 					continue;
 				} else {

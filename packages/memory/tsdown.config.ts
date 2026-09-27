@@ -33,6 +33,7 @@ export default defineConfig([
   "client": "src/contract/client.ts",
   "release-download": "src/contract/release-download.ts",
   "internal/config/plugin-config-schema": "config/plugin-config-schema.ts",
+  "internal/config/settings": "config/settings.ts",
   "internal/config/product-mode": "config/plugin-config-mode-schema.ts",
   "internal/config/skin-defaults": "config/skin-defaults.ts",
   "internal/config/skill-categories": "config/skill-categories.ts",
