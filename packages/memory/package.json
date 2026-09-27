@@ -47,11 +47,7 @@
     },
     "./settings.default.json": "./settings.default.json"
   },
-  "bin": {
-    "sno-station-mem": "./dist/cli.js"
-  },
   "files": [
-    "bin",
     "dist",
     "drizzle",
     "scripts/download-simple-tokenizer.mjs",

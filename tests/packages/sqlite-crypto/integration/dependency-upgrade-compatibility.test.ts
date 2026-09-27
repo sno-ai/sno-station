@@ -11,13 +11,9 @@ import {
 	openEncryptedDb,
 	runIntegrityCheck,
 } from "../../../../packages/sqlite-crypto/src/db.ts";
+import { getDek } from "../../../../packages/sqlite-crypto/src/dek.ts";
 import { WrongKeyError } from "../../../../packages/sqlite-crypto/src/errors.ts";
-import { liveKeychain } from "../../../../packages/sqlite-crypto/src/keychain.ts";
 import type { Dek } from "../../../../packages/sqlite-crypto/src/types.ts";
-import {
-	unwrapDek,
-	type WrappedDek,
-} from "../../../../packages/sqlite-crypto/src/wrap.ts";
 import { makeTestEnv, type TestEnv } from "../_helpers.ts";
 
 // Frozen before upgrading: regenerating this with new libraries loses the old-file proof.
@@ -28,34 +24,19 @@ const fixture = JSON.parse(
 	),
 ) as {
 	dekHex: string;
-	passphrase: string;
-	wrapped: WrappedDek;
 	rows: Array<{ id: string; text: string; blobHex: string; json: string }>;
 	files: Record<"plain" | "encrypted", { base64: string; sha256: string }>;
 };
 
 let env: TestEnv;
 beforeEach(() => {
-	env = makeTestEnv("dependency-upgrade", { provisionKey: false });
+	env = makeTestEnv("dependency-upgrade");
 });
 afterEach(() => {
 	env.cleanup();
 });
 
 describe("persisted state from dependencies before the upgrade", () => {
-	it("reads a missing native keychain entry and preserves the saved test key", () => {
-		expect(liveKeychain.get()).toBeNull();
-		try {
-			liveKeychain.set(fixture.dekHex);
-			expect(liveKeychain.get()).toBe(fixture.dekHex);
-			liveKeychain.delete();
-			expect(liveKeychain.get()).toBeNull();
-			expect(() => liveKeychain.delete()).not.toThrow();
-		} finally {
-			liveKeychain.delete();
-		}
-	});
-
 	it.each(["plain", "encrypted"] as const)(
 		"reads, updates, and reopens the old %s database",
 		async (kind) => {
@@ -65,15 +46,12 @@ describe("persisted state from dependencies before the upgrade", () => {
 			);
 			const path = join(env.snoStationCoreConfigDir, `${kind}.db`);
 			writeFileSync(path, bytes);
-			const dek = await unwrapDek(
-				fixture.wrapped,
-				Buffer.from(fixture.passphrase),
-			);
+			const dek = getDek(fixture.dekHex);
 			expect(dek.toString("hex")).toBe(fixture.dekHex);
 			const open = () =>
 				kind === "plain"
 					? new Database(path)
-					: openEncryptedDb(path, dek as Dek);
+					: openEncryptedDb(path, dek);
 			const expected = fixture.rows.map((row) => ({
 				id: row.id,
 				text: row.text,
@@ -100,6 +78,7 @@ describe("persisted state from dependencies before the upgrade", () => {
 				).toEqual(expected);
 				for (const row of expected) expect(isCuid2(row.id)).toBe(true);
 				expect(isCuid2(added.id)).toBe(true);
+				expect(isCuid2("invalid old identifier!")).toBe(false);
 				db.transaction(() => {
 					db.prepare("UPDATE saved_records SET text = ? WHERE id = ?").run(
 						"Updated old record",
@@ -146,23 +125,4 @@ describe("persisted state from dependencies before the upgrade", () => {
 			}
 		},
 	);
-
-	it("rejects an incorrect old password and an altered old authentication tag", async () => {
-		await expect(
-			unwrapDek(fixture.wrapped, Buffer.from("incorrect fixture password")),
-		).rejects.toThrow(WrongKeyError);
-		const tag = Buffer.from(fixture.wrapped.tag, "hex");
-		const firstByte = tag[0];
-		if (firstByte === undefined) {
-			throw new Error("Old-state fixture must contain an authentication tag");
-		}
-		tag[0] = firstByte ^ 1;
-		await expect(
-			unwrapDek(
-				{ ...fixture.wrapped, tag: tag.toString("hex") },
-				Buffer.from(fixture.passphrase),
-			),
-		).rejects.toThrow(WrongKeyError);
-		expect(isCuid2("invalid old identifier!")).toBe(false);
-	});
 });

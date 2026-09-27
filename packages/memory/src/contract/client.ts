@@ -1,19 +1,35 @@
-import { execFile } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { request as httpRequest } from "node:http";
-import { fileURLToPath } from "node:url";
-import { promisify } from "node:util";
+import { getSettingsPath } from "./profile";
+import { startSidecar } from "./start";
 import { checkDiscovery, readDiscovery, type Discovery } from "./discovery";
 import { ContractError, DEGRADED_REASONS, type DegradedReason } from "./error";
 import type { ContractInputs, HostEvent, InitRegistration, Inspection, Message, Mutation, RecallOptions, ScopeCtx, Turn, UsageSignal } from "./inputs";
 import type { ContractMethod, MemoryContract } from "./index";
-import { getPrincipal, readSettings } from "./profile";
+import { getPrincipal } from "./profile";
 import { outputSchemas, type ContractOutputs, type InspectData } from "./results";
-import { MEMORY_ROUTES, MEMORY_SKIN_HEADER, MEMORY_START_TIMEOUT_MS, MEMORY_HEALTH_TIMEOUT_MS } from "./routes";
+import { MEMORY_ROUTES, MEMORY_SKIN_HEADER } from "./routes";
 
 export type { MemoryContract, ScopeCtx, Registration, InitRegistration, RecallOptions, Turn, Mutation, Inspection, UsageSignal, Message, ContractOutputs, JsonValue, HostEvent } from "./index";
 export { ContractError } from "./error";
 export interface ConnectOptions { skinId: string }
-export interface DegradedConnection { degraded: true; reason: DegradedReason }
+export interface DegradedConnection { degraded: true; reason: DegradedReason; error?: string }
+
+function clientSettings(): { storePath: string; memoryPackage: { path: string; node: string } } {
+	const path = getSettingsPath();
+	let value: unknown;
+	try { value = JSON.parse(readFileSync(path, "utf8")); }
+	catch { throw new ContractError("storage-unavailable", `settings unavailable: ${path}: file; run sno setup`); }
+	const record = value && typeof value === "object" ? value as Record<string, unknown> : {};
+	const memoryPackage = record.memoryPackage && typeof record.memoryPackage === "object"
+		? record.memoryPackage as Record<string, unknown> : {};
+	for (const field of ["path", "node"] as const) {
+		if (typeof memoryPackage[field] !== "string" || !memoryPackage[field])
+			throw new ContractError("storage-unavailable", `settings unavailable: ${path}: memoryPackage.${field}; run sno setup`);
+	}
+	const store = record.store && typeof record.store === "object" ? record.store as Record<string, unknown> : {};
+	return { storePath: typeof store.path === "string" ? store.path : "", memoryPackage: memoryPackage as { path: string; node: string } };
+}
 
 function failureReason(error: unknown): DegradedReason {
 	if (error instanceof ContractError) return error.reason;
@@ -47,26 +63,29 @@ function responseError(body: unknown): ContractError {
 	if (body && typeof body === "object" && "reason" in body) {
 		const reason = DEGRADED_REASONS.find(value => value === body.reason);
 		if (reason) return new ContractError(reason);
+		if (typeof body.reason === "string") return new ContractError("engine-failed", body.reason);
 	}
 	return new ContractError("engine-failed");
 }
 
 export async function connect(options: ConnectOptions): Promise<MemoryClient | DegradedConnection> {
 	try {
-		const storePath = readSettings().store.path;
+		const { storePath, memoryPackage } = clientSettings();
 		let discovery = await readDiscovery();
-		if (!discovery || !await checkDiscovery(discovery).then(() => true, () => false)) {
-			try {
-				await promisify(execFile)(process.execPath, [fileURLToPath(new URL("./cli.js", import.meta.url)), "sidecar", "start"], {
-					timeout: MEMORY_START_TIMEOUT_MS + MEMORY_HEALTH_TIMEOUT_MS, maxBuffer: 64 * 1024,
-				});
-			} catch { throw new ContractError("storage-unavailable"); }
-			discovery = await readDiscovery();
+		if (discovery) {
+			try { await checkDiscovery(discovery); }
+			catch (error) {
+				if (error instanceof ContractError && error.message.startsWith("settings unavailable:")) throw error;
+				discovery = undefined;
+			}
+		}
+		if (!discovery) {
+			discovery = await startSidecar(memoryPackage);
 		}
 		if (!discovery) throw new ContractError("sidecar-unreachable");
 		await checkDiscovery(discovery);
 		return new MemoryClient(options.skinId, storePath, discovery);
-	} catch (error) { return { degraded: true, reason: failureReason(error) }; }
+	} catch (error) { return { degraded: true, reason: failureReason(error), ...(error instanceof Error && { error: error.message }) }; }
 }
 
 export class MemoryClient implements MemoryContract {
@@ -102,7 +121,7 @@ export class MemoryClient implements MemoryContract {
 			if (parsed.data.degraded) throw new ContractError(parsed.data.reason);
 			if (method === "init") this.#registeredPid = discovery.pid;
 			return parsed.data;
-		} catch (error) { throw new ContractError(failureReason(error)); }
+		} catch (error) { throw error instanceof ContractError ? error : new ContractError(failureReason(error)); }
 	}
 
 	init(scope: ScopeCtx, registration: InitRegistration): Promise<ContractOutputs["init"]> {

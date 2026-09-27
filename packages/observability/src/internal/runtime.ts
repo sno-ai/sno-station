@@ -340,7 +340,7 @@ export class SnoObserveRuntime {
 	}
 
 	doctor(): DoctorReport {
-		return createDoctorReport(this.env(), this.baseUrl());
+		return createDoctorReport(this.env(), this.options.baseUrl ?? readStandaloneSettings(this.env()).baseUrl);
 	}
 
 	register(options: RegisterOptions = {}): Promise<RegisterResult> {

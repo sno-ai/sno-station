@@ -7,10 +7,11 @@ import { describe, it } from "node:test";
 import { BufferStore } from "../../../../packages/observability/dist/internal/buffer-store.js";
 import { SnoObserveRuntime } from "../../../../packages/observability/dist/internal/runtime.js";
 import { parseEventInput } from "../../../../packages/observability/dist/internal/schemas.js";
-import { createFetchRecorder, validPayloads } from "../fixtures/temp-env.mjs";
+import { createFetchRecorder, validPayloads, writeObserveSettings } from "../fixtures/temp-env.mjs";
 
 function tempEnv() {
 	const dir = mkdtempSync(join(tmpdir(), "sno-observe-consent-"));
+	writeObserveSettings(dir, { baseUrl: "https://sno.test" });
 	return {
 		dir,
 		env: {
@@ -18,7 +19,6 @@ function tempEnv() {
 			SNO_IDENTITY_PATH: join(dir, "identity.json"),
 			SNO_BUFFER_PATH: join(dir, "buffer.db"),
 			SNO_CONSENT_PATH: join(dir, "state", "consent.json"),
-			SNO_OBSERVE_BASE_URL: "https://sno.test",
 			HOME: dir,
 		},
 	};

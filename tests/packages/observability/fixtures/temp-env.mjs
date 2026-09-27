@@ -1,13 +1,22 @@
-// Shared test helpers: tmpdir-isolated SNO_PROFILE_DIR, fixture event factories, fetch recorder.
+// Shared test helpers: tmpdir-isolated SNO_PROFILE_DIR with its settings.json, fixture event factories, fetch recorder.
 // Used by both unit/ and integration/ tests; not a test file itself.
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+/** Writes the two fields the standalone SDK reads from `<profile>/settings.json`. */
+export function writeObserveSettings(dir, { baseUrl, level } = {}) {
+	const settings = {};
+	if (baseUrl !== undefined) settings.telemetry = { observe: { enabled: true, baseUrl } };
+	if (level !== undefined) settings.logging = { level };
+	writeFileSync(join(dir, "settings.json"), `${JSON.stringify(settings, null, 2)}\n`);
+}
+
 export function createTempSnoEnv(prefix = "sno-observe-") {
 	const dir = mkdtempSync(join(tmpdir(), prefix));
+	writeObserveSettings(dir, { baseUrl: "https://sno.test" });
 	return {
 		dir,
 		env: {
@@ -15,7 +24,6 @@ export function createTempSnoEnv(prefix = "sno-observe-") {
 			SNO_IDENTITY_PATH: join(dir, "identity.json"),
 			SNO_BUFFER_PATH: join(dir, "buffer.db"),
 			SNO_CONSENT_PATH: join(dir, "state", "consent.json"),
-			SNO_OBSERVE_BASE_URL: "https://sno.test",
 			HOME: dir,
 		},
 	};

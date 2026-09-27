@@ -6,13 +6,12 @@ import { tmpdir, userInfo } from "node:os";
 import { join, resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { afterEach, beforeEach, expect, it } from "vitest";
-import { pluginConfigSchema } from "../../../../packages/memory/config/plugin-config-schema";
 import { type SettingsDocument, writeSettingsFixture } from "../fixtures/settings-file-fixture";
+import { untilModelReady } from "./fixtures/model-ready";
 
 const repo = resolve(import.meta.dirname, "../../../..");
 const original = join(repo, "packages/memory");
 const scope = { principal: userInfo().username, project: "agent:http-acceptance", session: "agent:http-acceptance:release", host: { agentId: "http-acceptance", sessionTimezone: "America/Los_Angeles" } };
-const config = pluginConfigSchema.parse({ mode: "local-first", ambientLearning: true, autoRecall: true, captureAssistant: true, observe: { enabled: false }, memoryTelemetry: { enabled: false } });
 // A registration is the skin only; everything else comes from settings.json (REQ-4).
 const registration = { skinId: "http-acceptance" };
 let root: string;
@@ -51,6 +50,8 @@ async function initialized(storePath?: string) {
   }
   expect(connected).toMatchObject({ degraded: false, principal: scope.principal });
   expect(await exchange(child, "init", [scope, registration])).toMatchObject({ degraded: false });
+  // Before its embedding model is prepared the service only accepts a capture; these tests need it committed.
+  await untilModelReady(({ scope: probe, query, options }) => exchange(child, "getRecall", [query, { ...scope, ...probe }, options]));
   return child;
 }
 async function stopSidecar() {
@@ -100,17 +101,10 @@ async function stateFiles(): Promise<string[]> {
   return files.filter(name => !name.endsWith(".log")).sort();
 }
 
-async function bindStore(path: string, profileDir?: string): Promise<void> {
-  const bindEnv = profileDir ? { ...env, SNO_PROFILE_DIR: profileDir } : env;
-  await new Promise<void>((resolve, reject) => {
-    const bind = execFile(process.execPath, [join(core, "dist/cli.js"), "bind", path], { env: bindEnv, timeout: 20_000 }, error => error ? reject(error) : resolve());
-    bind.stdin?.end(JSON.stringify({ mode: "local-first", embedding: config.embedding, memoryTelemetry: config.memoryTelemetry }));
-  });
-}
-
-/** What the registration and the bind set, written where the sidecar reads it once when its runtime opens. */
+/** The installed settings, written where the sidecar reads them once when its runtime opens; the client starts `core`'s service. */
 function writeSettings(profileDir: string, storePath: string, overrides: SettingsDocument = {}): void {
   writeSettingsFixture(profileDir, { mode: "local-first", store: { path: storePath, encryptionKey: storeKey }, embedding: { cacheDir: "" },
+    memoryPackage: { path: core, node: process.execPath },
     telemetry: { memoryUsage: { enabled: false }, observe: { enabled: false } }, ...overrides });
 }
 
@@ -205,34 +199,6 @@ it("refuses a foreign principal before granting engine or store access", async (
   expect(retained.result.entries.some((row: { text: string }) => row.text.includes("jasmine tea"))).toBe(true);
 });
 
-it("refuses a requested store path different from the installed binding", async () => {
-  const writer = await initialized();
-  expect(await exchange(writer, "capture", [{ turnId: "bound-tea", rewindEpoch: 0, messages: [{ role: "user", content: "My stable personal preference is jasmine tea.", at: Date.parse("2026-09-09T18:00:00Z") }] }, scope])).toMatchObject({ degraded: false, committed: true });
-  await stopSidecar();
-  env.SNO_PROFILE_DIR = join(root, "default-profile");
-  writeSettings(env.SNO_PROFILE_DIR, join(env.SNO_PROFILE_DIR, "sno-station-mem", scope.principal, "memory.sqlite"));
-  const unbound = await client();
-  expect(unbound.connected.degraded).toBe(false);
-  const defaultBinding = join(env.SNO_PROFILE_DIR, `station/sno-station-mem-${scope.principal}.binding.json`);
-  expect(existsSync(defaultBinding)).toBe(false);
-  expect(existsSync(join(env.SNO_PROFILE_DIR, "sno-station-mem", scope.principal, "memory.sqlite"))).toBe(true);
-  await stopSidecar();
-  await bindStore(dbPath);
-  writeSettings(env.SNO_PROFILE_DIR, dbPath);
-  const reader = await initialized();
-  const recall = await exchange(reader, "getRecall", ["What is my stable personal preference for tea?", scope, { source: "auto" }]);
-  expect(recall.degraded).toBe(false); expect(recall.contextText).toContain("jasmine tea");
-  const bindingPath = defaultBinding;
-  const before = await readFile(bindingPath, "utf8");
-  const wrongPath = join(root, "wrong.sqlite");
-  await expect(bindStore(wrongPath)).rejects.toThrow();
-  expect(await readFile(bindingPath, "utf8")).toBe(before);
-  const { connected } = await client(wrongPath);
-  expect(connected).toEqual({ degraded: true, reason: "store-mismatch" });
-  expect(existsSync(wrongPath)).toBe(false);
-  expect(await readFile(bindingPath, "utf8")).toBe(before);
-});
-
 it("reports daemon-down on an existing handle and never receipts a write", async () => {
   const existing = await initialized();
   await stopSidecar();
@@ -276,7 +242,7 @@ it("QCG-6: a killed sidecar holds no turn, a stale discovery file is replaced by
   process.kill(replacement, "SIGSTOP");
   try {
     const paused = await client();
-    expect(paused.connected).toEqual({ degraded: true, reason: "sidecar-unresponsive" });
+    expect(paused.connected).toEqual({ degraded: true, reason: "sidecar-unresponsive", error: "sidecar-unresponsive" });
     expect(await sidecarProcesses()).toEqual([replacement]);
   } finally { process.kill(replacement, "SIGCONT"); }
   const resumed = await client();

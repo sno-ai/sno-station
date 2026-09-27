@@ -62,6 +62,7 @@ import {
 	createEnvelope,
 	serializeEnvelope,
 } from "../../../../packages/observability/dist/internal/wire-envelope.js";
+import { writeObserveSettings } from "../fixtures/temp-env.mjs";
 
 const expectedEventTypes = [
 	"agent.identify",
@@ -577,15 +578,8 @@ describe("sno observe Node package", () => {
 		}
 		assert.equal(serialized.includes("alice@example.com"), false);
 
-		const temp = createTempSnoEnv();
-		try {
-			const rulesPath = join(temp.dir, "redaction-rules.txt");
-			writeFileSync(rulesPath, "CUSTOMSECRET\\d+\n");
-			const custom = redactEventPayload({ note: "value CUSTOMSECRET123" }, "full", rulesPath);
-			assert.equal(JSON.stringify(custom.value).includes("CUSTOMSECRET123"), false);
-		} finally {
-			cleanupTempSnoEnv(temp);
-		}
+		const custom = redactEventPayload({ note: "value CUSTOMSECRET123" }, "full", ["CUSTOMSECRET\\d+"]);
+		assert.equal(JSON.stringify(custom.value).includes("CUSTOMSECRET123"), false);
 
 		const count = await countTokens("x".repeat(100_001));
 		assert.equal(count.method, "char_approximation");
@@ -1244,6 +1238,7 @@ function memoryWriteEvent(keyHash) {
 
 function createTempSnoEnv(prefix = "sno-observe-") {
 	const dir = mkdtempSync(join(tmpdir(), prefix));
+	writeObserveSettings(dir, { baseUrl: "https://sno.test" });
 	return {
 		dir,
 		env: {
@@ -1251,7 +1246,6 @@ function createTempSnoEnv(prefix = "sno-observe-") {
 			SNO_IDENTITY_PATH: join(dir, "identity.json"),
 			SNO_BUFFER_PATH: join(dir, "buffer.db"),
 			SNO_CONSENT_PATH: join(dir, "state", "consent.json"),
-			SNO_OBSERVE_BASE_URL: "https://sno.test",
 			HOME: dir,
 		},
 	};

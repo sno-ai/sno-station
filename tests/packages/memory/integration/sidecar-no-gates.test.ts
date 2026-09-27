@@ -26,7 +26,8 @@ import { Embedder } from "../../../../packages/memory/src/engine/extraction/embe
 import { MemoryStore } from "../../../../packages/memory/src/store/store";
 import { createTestDb, createTestEmbedder } from "../../../apps/mem-claw/helpers/test-db";
 import { modelReply, startRecorder } from "./fixtures/model-recorders";
-import { type SettingsDocument, writeSettingsFixture } from "../fixtures/settings-file-fixture";
+import { untilModelReady } from "./fixtures/model-ready";
+import { MEMORY_PACKAGE_PATH, type SettingsDocument, writeSettingsFixture } from "../fixtures/settings-file-fixture";
 
 let root: string;
 let database: ReturnType<typeof createTestDb>;
@@ -81,6 +82,13 @@ async function contractPost(path: string, body: unknown, skin?: string): Promise
 	});
 }
 
+/** Waits until the service has prepared its embedding model: before that a capture is only accepted and recall answers `model-preparing`. */
+const modelReady = (port = sidecar?.port) => untilModelReady(async ({ scope, ...recall }) =>
+	(await fetch(`http://127.0.0.1:${port}/v1/get-recall`, { method: "POST", headers: { "x-sno-station-mem-skin": "model-ready-probe" },
+		body: JSON.stringify({ ...recall, scope: { ...scope, principal: userInfo().username } }), signal: AbortSignal.timeout(30_000) })).json());
+const poolReady = (pool: MemoryRuntimePool) => untilModelReady(({ scope, ...recall }) =>
+	pool.invoke("getRecall", { ...recall, scope: { ...scope, principal: userInfo().username } }, "model-ready-probe"));
+
 /** A registration is the skin and, optionally, its model; everything else comes from settings.json (REQ-4). */
 function registration(model?: { baseUrl: string; credential: string; model: string }) {
 	return { skinId: "body-skin", ...(model ? { model } : {}) };
@@ -102,10 +110,13 @@ async function connectHost(port: number): Promise<void> {
 	expect(response.status).toBe(200);
 }
 
-function runCli(args: string[], entry = "cli.js"): Promise<{ code: number | null; stdout: string; stderr: string }> {
-	const cli = fileURLToPath(new URL(`../../../../packages/memory/dist/${entry}`, import.meta.url));
+/** The package client's start: `<memoryPackage.node> <memoryPackage.path>/dist/sidecar/main.js`, detached. */
+const memoryPackage = { path: MEMORY_PACKAGE_PATH, node: process.execPath };
+
+function runSidecarEntry(): Promise<{ code: number | null; stdout: string; stderr: string }> {
+	const entry = fileURLToPath(new URL("../../../../packages/memory/dist/sidecar/main.js", import.meta.url));
 	return new Promise((resolve, reject) => {
-		const child = spawn(process.execPath, [cli, ...args], { env: process.env, stdio: ["ignore", "pipe", "pipe"] });
+		const child = spawn(process.execPath, [entry], { env: process.env, stdio: ["ignore", "pipe", "pipe"] });
 		let stdout = "", stderr = "";
 		const timer = setTimeout(() => child.kill("SIGTERM"), 40_000);
 		child.stdout.on("data", chunk => { stdout += chunk; });
@@ -189,6 +200,7 @@ describe("documented HTTP runtime claims", () => {
 	});
 	it("initializes a registration of only the skin from the settings file, and refuses one that adds settings and routing", async () => {
 		await health();
+		await modelReady();
 		const scope = { principal: "caller", project: "global", session: "inherited-init" };
 		const inherited = await contractPost("/v1/init", {
 			scope, registration: { skinId: "body-skin" },
@@ -214,6 +226,7 @@ describe("documented HTTP runtime claims", () => {
 	it("returns a degraded reason when the agent model endpoint is absent", async () => {
 		writeSettings({ mode: "agent-native" });
 		await health();
+		await modelReady();
 		const scope = { principal: "caller", project: "global", session: "missing-model" };
 		expect((await contractPost("/v1/init", { scope, registration: registration() })).status).toBe(200);
 		const response = await contractPost("/v1/capture", { scope,
@@ -257,6 +270,7 @@ describe("documented HTTP runtime claims", () => {
 			if (!address || typeof address === "string") throw new Error("missing host model port");
 			writeSettings({ mode: "agent-native" });
 			await health();
+			await modelReady();
 			const scope = { principal: "caller", project: "global", session: "host-model" };
 			const initialized = await contractPost("/v1/init", { scope, registration: registration({
 				baseUrl: `http://127.0.0.1:${address.port}/host/v1/`, credential: "loopback-credential", model: "loopback-model",
@@ -280,23 +294,22 @@ describe("documented HTTP runtime claims", () => {
 			}
 		} finally { host.closeAllConnections(); await new Promise<void>((resolve, reject) => host.close(error => error ? reject(error) : resolve())); }
 	});
-	it("starts the CLI and reuses the live discovery pid", async () => {
+	it("starts the service from memoryPackage and reuses the live discovery pid", async () => {
 		const discoveryPath = join(root, "station", "sidecar.json");
 		expect(existsSync(discoveryPath)).toBe(false);
 		try {
-			const first = await runCli(["sidecar", "start"]);
-			expect(first.code, first.stderr).toBe(0);
-			expect(first.stdout).toMatch(/^Memory sidecar ready: pid=[1-9]\d* port=[1-9]\d*\n$/);
+			const first = await startSidecar(memoryPackage);
+			expect(first.pid).toBeGreaterThan(0);
+			expect(first.port).toBeGreaterThan(0);
 			const discovery = JSON.parse(readFileSync(discoveryPath, "utf8"));
-			expect(first.stdout).toBe(`Memory sidecar ready: pid=${discovery.pid} port=${discovery.port}\n`);
+			expect(first).toEqual(discovery);
 			const healthResponse = await fetch(`http://127.0.0.1:${discovery.port}/healthz`, {
 				headers: { Authorization: `Bearer ${discovery.token}` }, signal: AbortSignal.timeout(5_000),
 			});
 			expect(healthResponse.status).toBe(200);
 			expect(await healthResponse.json()).toMatchObject({ status: "ok", storePath: database.dbPath });
-			const second = await runCli(["sidecar", "start"]);
-			expect(second.code, second.stderr).toBe(0);
-			expect(second.stdout).toBe(first.stdout);
+			const second = await startSidecar(memoryPackage);
+			expect(second).toEqual(first);
 			expect(JSON.parse(readFileSync(discoveryPath, "utf8")).pid).toBe(discovery.pid);
 		} finally {
 			if (existsSync(discoveryPath)) {
@@ -306,7 +319,7 @@ describe("documented HTTP runtime claims", () => {
 			}
 		}
 	});
-	it.each(["missing", "dead", "stale socket"])("converges concurrent CLI starts with %s discovery", async state => {
+	it.each(["missing", "dead", "stale socket"])("converges concurrent package-client starts with %s discovery", async state => {
 		const discoveryPath = join(root, "station", "sidecar.json");
 		if (state === "dead") {
 			const exited = spawn(process.execPath, ["-e", ""], { stdio: "ignore" });
@@ -329,13 +342,12 @@ describe("documented HTTP runtime claims", () => {
 			expect(statSync(join(root, "station", "sidecar.sock")).isSocket()).toBe(true);
 		}
 		try {
-			const [first, second] = await Promise.all([runCli(["sidecar", "start"]), runCli(["sidecar", "start"])]);
-			expect(first.code, first.stderr).toBe(0);
-			expect(second.code, second.stderr).toBe(0);
-			expect(first.stdout === second.stdout).toBe(true);
-			expect(first.stdout).toMatch(/^Memory sidecar ready: pid=[1-9]\d* port=[1-9]\d*\n$/);
+			const [first, second] = await Promise.all([startSidecar(memoryPackage), startSidecar(memoryPackage)]);
+			expect(first).toEqual(second);
+			expect(first.pid).toBeGreaterThan(0);
+			expect(first.port).toBeGreaterThan(0);
 			const discovery = z.object({ pid: z.number(), port: z.number() }).parse(JSON.parse(readFileSync(discoveryPath, "utf8")));
-			expect(first.stdout === `Memory sidecar ready: pid=${discovery.pid} port=${discovery.port}\n`).toBe(true);
+			expect(first.pid === discovery.pid && first.port === discovery.port).toBe(true);
 			await vi.waitFor(() => expect(isolatedSidecarPids().length).toBe(1), { timeout: 5_000 });
 			const pids = isolatedSidecarPids();
 			expect(pids.length).toBe(1);
@@ -360,13 +372,12 @@ describe("documented HTTP runtime claims", () => {
 	it("exits a duplicate sidecar entry without changing discovery or the store", async () => {
 		const discoveryPath = join(root, "station", "sidecar.json");
 		try {
-			const first = await runCli(["sidecar", "start"]);
-			expect(first.code, first.stderr).toBe(0);
+			await startSidecar(memoryPackage);
 			const original = readFileSync(discoveryPath, "utf8");
 			const discovery = z.object({ pid: z.number(), port: z.number() }).parse(JSON.parse(original));
 			const storeBefore = readFileSync(database.dbPath);
 			const socketBefore = statSync(join(root, "station", "sidecar.sock"));
-			const second = await runCli([], "sidecar/main.js");
+			const second = await runSidecarEntry();
 			expect(second.code, second.stderr).toBe(0);
 			const lines = (second.stdout + second.stderr).split("\n").filter(line => line.includes("sidecar.duplicate.exit"));
 			expect(lines.length).toBe(1);
@@ -418,7 +429,7 @@ describe("documented HTTP runtime claims", () => {
 			watcher = watch(join(root, "station"), (_event, filename) => { if (filename === "sidecar.json") rewrites++; });
 			const started = Date.now();
 			if (readyAfter >= 0) {
-				const discovery = await startSidecar();
+				const discovery = await startSidecar(memoryPackage);
 				expect(discovery.pid).toBe(address.pid);
 				expect(discovery.port).toBe(address.port);
 				expect(discovery.token).toBe("a".repeat(64));
@@ -427,7 +438,7 @@ describe("documented HTTP runtime claims", () => {
 				expect(response.status).toBe(200);
 				expect(await response.json()).toEqual({ status: "ok" });
 			} else {
-				await expect(startSidecar()).rejects.toMatchObject({ reason: "sidecar-unresponsive" });
+				await expect(startSidecar(memoryPackage)).rejects.toMatchObject({ reason: "sidecar-unresponsive" });
 				expect(Date.now() - started).toBeGreaterThanOrEqual(30_000);
 				expect(Date.now() - started).toBeLessThan(35_000);
 			}
@@ -443,7 +454,7 @@ describe("documented HTTP runtime claims", () => {
 			await closed;
 		}
 	}, 45_000);
-	it("exits 0 and removes discovery after SIGTERM to the CLI-started sidecar", async () => {
+	it("exits 0 and removes discovery after SIGTERM to the package-client-started sidecar", async () => {
 		const discoveryPath = join(root, "station", "sidecar.json");
 		const exitProbe = join(root, "record-exit.cjs");
 		// The detached sidecar is not our child; observe its exit without changing shutdown.
@@ -451,8 +462,7 @@ describe("documented HTTP runtime claims", () => {
 		vi.stubEnv("NODE_OPTIONS", `${process.env.NODE_OPTIONS ?? ""} --require=${JSON.stringify(exitProbe)}`);
 		let pid: number | undefined;
 		try {
-			const started = await runCli(["sidecar", "start"]);
-			expect(started.code, started.stderr).toBe(0);
+			await startSidecar(memoryPackage);
 			const discovery = z.object({ pid: z.number().int().positive() }).parse(JSON.parse(readFileSync(discoveryPath, "utf8")));
 			pid = discovery.pid;
 			process.kill(pid, "SIGTERM");
@@ -468,11 +478,6 @@ describe("documented HTTP runtime claims", () => {
 				catch (error) { if (!(error instanceof Error && "code" in error && error.code === "ESRCH")) throw error; }
 			}
 		}
-	});
-	it("rejects an extra CLI argument with usage and exit 2", async () => {
-		expect(await runCli(["sidecar", "start", "extra"])).toEqual({ code: 2, stdout: "",
-			stderr: "Usage: sno-station-mem sidecar start\n" });
-		expect(existsSync(join(root, "station", "sidecar.json"))).toBe(false);
 	});
 });
 
@@ -690,6 +695,7 @@ describe("sidecar keeps serving", () => {
 	});
 	it("keeps a completed capture write and skips the next write after cancellation", async () => {
 		const pool = await MemoryRuntimePool.open();
+		await poolReady(pool);
 		const entered = Promise.withResolvers<void>();
 		const release = Promise.withResolvers<void>();
 		const controller = new AbortController();
@@ -870,6 +876,7 @@ describe("sidecar keeps serving", () => {
 	it("passes cancellation through automatic recall", async () => {
 		writeSettings({ recall: { auto: true }, capture: { ambient: false } });
 		const pool = await MemoryRuntimePool.open();
+		await poolReady(pool);
 		await pool.invoke("init", {
 			scope: { principal: "caller", project: "global", session: "auto-abort" },
 			registration: { skinId: "auto-abort" },
@@ -902,6 +909,7 @@ describe("sidecar keeps serving", () => {
 	it("keeps same-turn recall omission across a re-registration mid-turn (issue #231)", async () => {
 		writeSettings({ recall: { auto: true }, capture: { ambient: false } });
 		const pool = await MemoryRuntimePool.open();
+		await poolReady(pool);
 		const scope = { principal: "caller", project: "global", session: "reregister-mid-turn" };
 		const init = () => pool.invoke("init", { scope, registration: { skinId: "reregister" } }, "reregister");
 		try {
@@ -922,6 +930,7 @@ describe("sidecar keeps serving", () => {
 	it("skips automatic recall when disabled by `recall.auto` in settings", async () => {
 		writeSettings({ recall: { auto: false }, capture: { ambient: false } });
 		const pool = await MemoryRuntimePool.open();
+		await poolReady(pool);
 		const scope = { principal: "caller", project: "global", session: "auto-disabled" };
 		const retrieval = vi.spyOn(MemoryRetriever.prototype, "retrieve").mockResolvedValue([]);
 		try {
@@ -1109,6 +1118,7 @@ describe("sidecar keeps serving", () => {
 	it("ignores a persisted kill switch when capturing a turn", async () => {
 		writeFileSync(join(root, "sno-station-mem", "killswitch"), JSON.stringify({ reason: "integrity failure", activatedBy: "maintenance", activated: "2026-09-17T01:37:54Z" }));
 		const pool = await MemoryRuntimePool.open();
+		await poolReady(pool);
 		try {
 			const scope = { principal: userInfo().username, project: "global", session: "agent:probe:session" };
 			await pool.invoke("init", { scope, registration: { skinId: "capture-probe" } }, "capture-probe");
@@ -1535,6 +1545,7 @@ describe("manual recall turn account over HTTP", () => {
 	it("does not mark rows when manual recall is cancelled during metadata writes", { timeout: 300_000 }, async () => {
 		await startRecallAccount(30, false);
 		const pool = await MemoryRuntimePool.open();
+		await poolReady(pool);
 		const scope = { principal: "caller", project: "global", session: "manual-abort" };
 		const entered = Promise.withResolvers<void>();
 		const release = Promise.withResolvers<void>();
@@ -1612,6 +1623,7 @@ describe("a registration carries only the skin and its model (REQ-4)", () => {
 	it("registers Codex, Claude Code, Hermes and OpenClaw with only their id and model, and each captures and recalls", async () => {
 		const host = await startRecorder(closers, ({ raw }) => modelReply("{}", raw));
 		await health();
+		await modelReady();
 		for (const skinId of ["codex", "claude-code", "hermes", "mem-claw"]) {
 			const scope = { principal: "caller", project: "global", session: `${skinId}-registered` };
 			const registered = await contractPost("/v1/init", { scope, registration: { skinId, model: hostModel(host.url) } }, skinId);
@@ -1676,6 +1688,8 @@ describe("a registration carries only the skin and its model (REQ-4)", () => {
 				const healthz = await fetch(`http://127.0.0.1:${record.port}/healthz`, { headers: { Authorization: `Bearer ${record.token}` } });
 				expect(healthz.status).toBe(200);
 			}, { timeout: 60_000, interval: 250 });
+			// Probed on its own route and skin, so the worker's client makes no call before the capture under test.
+			await modelReady(readRecord().port);
 			return readRecord().pid;
 		};
 		// The way sno stops it: the recorded pid, only after /healthz with the recorded token answers; then wait for the exit.

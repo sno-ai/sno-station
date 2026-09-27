@@ -20,6 +20,7 @@ import { REM_UPDATE_JUDGMENT_SKILL } from "../../../../packages/memory/src/sidec
 import { startRemSidecar } from "../../../../packages/memory/src/sidecar/server";
 import { createTestDb } from "../../../apps/mem-claw/helpers/test-db";
 import { callId, modelReply, type Recorder, type RecorderReply, startRecorder } from "./fixtures/model-recorders";
+import { untilModelReady } from "./fixtures/model-ready";
 import { type SettingsDocument, writeSettingsFixture } from "../fixtures/settings-file-fixture";
 
 const repoRoot = resolve(import.meta.dirname, "../../../..");
@@ -313,6 +314,9 @@ describe.each(["rem-enhanced", "agent-native"] as const)("%s: the other twenty c
 	type Entry = { primary: string[]; settings?: SettingsDocument; run: (host: Recorder) => Promise<void> };
 	const entries: Record<string, Entry> = {
 		capture: { primary: ["E1"], run: async host => {
+			// A capture before the embedding model is prepared is only accepted; E1 runs after preparation.
+			await untilModelReady(async ({ scope, ...recall }) =>
+				(await contractPost("/v1/get-recall", { ...recall, scope: { ...scope, principal: SEED_SCOPE.principal } }, "model-ready-probe")).json());
 			await registerHost(SKIN, host.url);
 			await (await contractPost("/v1/capture", { scope: { ...SEED_SCOPE, session: SKIN }, turn: { turnId: `capture-${mode}`, rewindEpoch: 0,
 				messages: [{ role: "user", content: "I keep a blue notebook for meeting notes.", at: 1789606800000 }] } }, SKIN)).text();

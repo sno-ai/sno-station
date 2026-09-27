@@ -15,7 +15,7 @@ afterEach(() => {
 
 describe("openEncryptedDb — manifest recovery", () => {
 	it("re-registers a readable encrypted DB when only the manifest entry is missing", async () => {
-		const dek = await getDek();
+		const dek = getDek(env.keyHex);
 		const dbPath = uniqueDbPath(env, "recovered");
 
 		const db = openEncryptedDb(dbPath, dek);
@@ -37,7 +37,7 @@ describe("openEncryptedDb — manifest recovery", () => {
 	});
 
 	it("refuses manifest recovery when the canary sentinel is wrong", async () => {
-		const dek = await getDek();
+		const dek = getDek(env.keyHex);
 		const dbPath = uniqueDbPath(env, "bad-canary");
 
 		const db = openEncryptedDb(dbPath, dek);

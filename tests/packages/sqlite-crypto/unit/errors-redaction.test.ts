@@ -13,10 +13,8 @@ import {
 	ForeignDekError,
 	IntegrityCheckFailed,
 	InvalidExportFormat,
-	KeychainUnavailableError,
 	ManifestCorrupted,
 	ManifestMissing,
-	MissingDekError,
 	SnoStationCoreCryptoError,
 	safelyStringify,
 	UnsupportedExportVersion,
@@ -27,14 +25,12 @@ import { describe, expect, it } from "vitest";
 const HEX_LEAK = /[0-9a-fA-F]{32,}/;
 
 const SUBCLASSES: Array<readonly [string, () => SnoStationCoreCryptoError]> = [
-	["KeychainUnavailableError", () => new KeychainUnavailableError()],
 	["WrongKeyError", () => new WrongKeyError()],
 	["IntegrityCheckFailed", () => new IntegrityCheckFailed()],
 	["CanaryMismatch", () => new CanaryMismatch()],
 	["DbIdMismatch", () => new DbIdMismatch()],
 	["ManifestMissing", () => new ManifestMissing()],
 	["ManifestCorrupted", () => new ManifestCorrupted()],
-	["MissingDekError", () => new MissingDekError()],
 	["ForeignDekError", () => new ForeignDekError()],
 	["InvalidExportFormat", () => new InvalidExportFormat()],
 	["UnsupportedExportVersion", () => new UnsupportedExportVersion()],
