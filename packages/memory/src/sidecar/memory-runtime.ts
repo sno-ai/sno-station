@@ -90,6 +90,7 @@ export class MemoryRuntimePool {
 	private usageTimer: NodeJS.Timeout | undefined;
 	private usageFlush: Promise<unknown> | undefined;
 	private modelReady = false;
+	modelPreparationError: string | undefined;
 	private modelPreparation: Promise<void> | undefined;
 	private readonly usageOutbox: MemoryTelemetryUsageOutbox;
 	private constructor(
@@ -108,8 +109,10 @@ export class MemoryRuntimePool {
 		try {
 			await this.embedder.warmup();
 			this.modelReady = true;
+			this.modelPreparationError = undefined;
 			await this.replayPendingCaptures();
 		} catch (error) {
+			if (!this.modelReady) this.modelPreparationError = `model preparation failed: ${this.settings.embedding.model} (cache: ${this.settings.embedding.cacheDir}): ${String(error)}`;
 			log.error("Embedding model preparation failed", { cache_path: this.settings.embedding.cacheDir,
 				settings_file: getSettingsPath(), error }, {
 				event_name: "memory.sidecar.model.prepare.failed", file: "packages/memory/src/sidecar/memory-runtime.ts",
@@ -229,7 +232,7 @@ export class MemoryRuntimePool {
 			return { degraded: false, turnId: capture.turn.turnId, committed: false, accepted: true };
 		}
 		if (method === "getRecall" && !this.modelReady)
-			return { degraded: false, recallId: "", contextText: "", unavailable: "model-preparing" };
+			return { degraded: false, recallId: "", contextText: "", unavailable: this.modelPreparationError ?? "model-preparing" };
 		if (method === "inspect" && parseInput("inspect", raw).op.op === "storage") {
 			this.counters.storeAccesses++;
 			return { degraded: false, result: { op: "storage", dimension: readChunkVecTableState(this.store.sqlite)?.dimension ?? null, failed: false } };
