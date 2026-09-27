@@ -1,6 +1,5 @@
 import { FIXED_MEMORY_SNO_AI_EXTRACT } from "../src/model/signed-registry-constants";
 import { z } from "zod";
-import { createLogger } from "@snoai/utils/logger";
 
 import {
 	DEFAULT_REFLECTION_ERROR_REMINDER_MAX_ENTRIES,
@@ -38,18 +37,6 @@ export const selfImprovementConfigSchema: z.ZodType<
 	})
 	.prefault({});
 
-const log = createLogger("sno-station-mem:plugin-config-feature");
-
-/** Presets removed in 0.23; an older plugin config or registration still carries them. */
-function replaceRemovedPreset(preset: unknown): unknown {
-	if (preset !== "mem_claw/openai_gpt_5_nano" && preset !== "mem_claw/openrouter_auto") return preset;
-	log.warn("Replaced removed extraction.llm.preset", { preset }, {
-		event_name: "memory.plugin_config.old_preset_replaced", file: "packages/memory/config/plugin-config-feature-schema.ts",
-		function: "replaceRemovedPreset", site_id: "plugin-config-feature-schema.replaceRemovedPreset",
-	});
-	return FIXED_MEMORY_SNO_AI_EXTRACT;
-}
-
 export const extractionConfigSchema: z.ZodType<
 	{
 		llm: {
@@ -65,7 +52,7 @@ export const extractionConfigSchema: z.ZodType<
 	.object({
 		llm: z
 			.object({
-				preset: z.preprocess(replaceRemovedPreset, z.enum(LLM_PRESETS).default(FIXED_MEMORY_SNO_AI_EXTRACT)),
+				preset: z.enum(LLM_PRESETS).default(FIXED_MEMORY_SNO_AI_EXTRACT),
 				/** Overrides provider default / env baseURL if set. */
 				baseURL: z.string().optional(),
 				/** Overrides provider-native env if set. */
