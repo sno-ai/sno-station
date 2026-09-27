@@ -892,7 +892,7 @@ class SnoMemoryProvider(MemoryProvider):
                     },
                 )
             )
-            if result.get("committed") is not True and result.get("accepted") is not True:
+            if result.get("degraded") is True:
                 raise RuntimeError(str(result.get("reason") or "capture not committed"))
             with self._capture_lock:
                 self._committed[key] = result
