@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { request as httpRequest } from "node:http";
 import { getSettingsPath } from "./profile";
 import { startSidecar } from "./start";
-import { checkDiscovery, readDiscovery, type Discovery } from "./discovery";
+import { checkDiscovery, processAlive, readDiscovery, type Discovery } from "./discovery";
 import { ContractError, DEGRADED_REASONS, type DegradedReason } from "./error";
 import type { ContractInputs, HostEvent, InitRegistration, Inspection, Message, Mutation, RecallOptions, ScopeCtx, Turn, UsageSignal } from "./inputs";
 import type { ContractMethod, MemoryContract } from "./index";
@@ -93,12 +93,10 @@ export class MemoryClient implements MemoryContract {
 	readonly principal: string = getPrincipal();
 	readonly pid: number;
 	readonly port: number;
-	readonly #discovery: Discovery;
 	#registration: { scope: ScopeCtx; registration: InitRegistration } | undefined;
 	#registeredPid: number | undefined;
 
 	constructor(readonly skinId: string, readonly storePath: string, discovery: Discovery) {
-		this.#discovery = discovery;
 		this.pid = discovery.pid;
 		this.port = discovery.port;
 	}
@@ -106,7 +104,11 @@ export class MemoryClient implements MemoryContract {
 	private async request<K extends ContractMethod>(method: K, input: ContractInputs[K]): Promise<ContractOutputs[K]> {
 		const route = MEMORY_ROUTES[method];
 		try {
-			const discovery = await readDiscovery() ?? this.#discovery;
+			let discovery = await readDiscovery();
+			if (!discovery || !processAlive(discovery.pid)) {
+				const { memoryPackage } = clientSettings();
+				discovery = await startSidecar(memoryPackage);
+			}
 			if (method !== "init" && this.#registration && this.#registeredPid !== discovery.pid) {
 				await this.request("init", this.#registration);
 			}
