@@ -90,6 +90,7 @@ export class MemoryRuntimePool {
 	private usageTimer: NodeJS.Timeout | undefined;
 	private usageFlush: Promise<unknown> | undefined;
 	private modelReady = false;
+	private modelPreparation: Promise<void> | undefined;
 	private readonly usageOutbox: MemoryTelemetryUsageOutbox;
 	private constructor(
 		readonly storePath: string,
@@ -147,7 +148,7 @@ export class MemoryRuntimePool {
 		const embedder = new ObservableEmbedder(config.embedding, stateDir, routed, observeSessionUuid);
 		const store = new ObservableMemoryStore({ dbPath: storePath, vectorDim: embedder.dimensions, embedder, memoryTelemetry: config.memoryTelemetry }, routed, observeSessionUuid, config.embedding);
 		const pool = new MemoryRuntimePool(storePath, store, config, settings, observability, embedder);
-		void pool.prepareModel();
+		pool.modelPreparation = pool.prepareModel();
 		const maintenance = readMaintenanceOverrides();
 		pool.maintenance = startMaintenanceTimer({ store, dbPath: storePath, stateDir, remClock: maintenance.now, remVolumeThreshold: maintenance.volumeThreshold,
 			mode: config.mode, modelCalls: settings.modelCalls,
@@ -380,6 +381,7 @@ export class MemoryRuntimePool {
 
 	async close(): Promise<void> {
 		this.stopTimers();
+		await this.modelPreparation?.catch(() => undefined);
 		for (const entry of this.owned) await this.dispose(entry);
 		this.skins.clear();
 		await this.usageFlush;
