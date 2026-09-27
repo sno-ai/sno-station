@@ -1,4 +1,3 @@
-import { writeTestInstallationConfig } from "../../../apps/mem-claw/helpers/module-config-fixture";
 /** @file rem-trigger-maintenance.test.ts
  * @purpose Proves the existing maintenance timer serializes a slow automatic REM evaluation.
  * @boundary Real encrypted SQLite, timer, filesystem discovery/audit, and local HTTP request.
@@ -18,7 +17,9 @@ import {
 	startMaintenanceTimer,
 } from "../../../../packages/memory/src/store/maintenance.ts";
 import type { MemoryStore } from "../../../../packages/memory/src/store/memory-store-base.ts";
+import type { Settings } from "../../../../packages/memory/config/settings.ts";
 import { createTestDb, type TestDb } from "../../../apps/mem-claw/helpers/test-db.ts";
+import { writeSettingsFixture } from "../fixtures/settings-file-fixture.ts";
 
 describe("REM trigger maintenance timer", () => {
 	let database: TestDb | undefined;
@@ -55,19 +56,11 @@ describe("REM trigger maintenance timer", () => {
 		mkdirSync(stateDir, { recursive: true });
 		mkdirSync(path.join(profileRoot, "station"), { recursive: true });
 		process.env["SNO_PROFILE_DIR"] = profileRoot;
-		writeTestInstallationConfig(profileRoot, {
-				plugins: {
-					entries: {
-						"sno-mem-claw": {
-							config: {
-								dbPath: database.dbPath,
-								mode: "rem-enhanced",
-								remOperations: ["rem-replace", "rem-update"],
-							},
-						},
-					},
-				},
-			});
+		const settings = writeSettingsFixture(profileRoot, {
+			mode: "rem-enhanced",
+			store: { path: database.dbPath, encryptionKey: database.encryptionKey },
+			rem: { tick: true, operations: ["rem-replace", "rem-update"] },
+		}).settings as unknown as Settings;
 		const scope = "persona:maintenance-overlap";
 		const id = "maintenance-overlap-candidate";
 		database.runtime.raw
@@ -123,6 +116,13 @@ describe("REM trigger maintenance timer", () => {
 				backupDir,
 				stateDir,
 				integrityCheck: () => undefined,
+				// The runtime passes these from settings.json, read once when it opens.
+				modelCalls: settings.modelCalls,
+				remSettings: {
+					mode: settings.mode,
+					requestedOperations: settings.rem.operations,
+					tickEnabled: settings.rem.tick,
+				},
 			},
 			5,
 		);

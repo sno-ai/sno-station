@@ -17,7 +17,6 @@ import {
 	RECENCY_WEIGHT_MAX,
 	TIME_DECAY_HALF_LIFE_DAYS,
 } from "./index";
-import { resolveEnvVars } from "../src/engine/shared/utils";
 
 const log = createLogger("sno-station-mem:config:retrieval");
 
@@ -77,7 +76,7 @@ export const retrievalConfigSchema: z.ZodType<
 		// model; it simply capped what an operator could ask for, and on a store of ~650 rows per
 		// conversation it stopped a measurement from ever injecting the whole population. What
 		// actually binds is the answering model's context window, which the caller owns.
-		recallTopK: z.number().int().min(1).max(2000).default(AUTO_RECALL_INJECTION_TOP_K),
+		recallTopK: z.number().int().min(0).max(2000).default(AUTO_RECALL_INJECTION_TOP_K),
 		vectorWeight: z.number().min(0).max(1).default(DEFAULT_VECTOR_WEIGHT),
 		bm25Weight: z.number().min(0).max(1).default(DEFAULT_BM25_WEIGHT),
 		minScore: z.number().min(0).max(1).default(DEFAULT_MIN_SCORE),
@@ -111,7 +110,7 @@ export const retrievalConfigSchema: z.ZodType<
 		timeDecayFloor: z.number().min(0).max(1).optional(),
 		/** Relevance vs diversity tradeoff (default: 0.7) */
 		mmrLambda: z.number().min(0).max(1).optional(),
-		/** Custom rerank API endpoint URL (env var placeholders resolved post-parse) */
+		/** Custom rerank API endpoint URL. */
 		rerankEndpoint: z.string().optional(),
 		/** Rerank provider name */
 		rerankProvider: z
@@ -127,25 +126,10 @@ export const retrievalConfigSchema: z.ZodType<
 	.prefault({})
 	.transform((ret, ctx) => {
 		if (ret.rerank === "none") return ret;
-		const resolve = (v: string | undefined, field: string): string | undefined => {
-			if (!v?.includes("${")) return v;
-			try {
-				return resolveEnvVars(v);
-			} catch (error) {
-				ctx.addIssue({
-					code: z.ZodIssueCode.custom,
-					path: [field],
-					message:
-						error instanceof Error ? error.message : `Failed to resolve env vars in ${field}`,
-				});
-				return undefined;
-			}
-		};
-		const resolvedEndpoint = resolve(ret.rerankEndpoint, "rerankEndpoint");
 		// A remote ranker runs only when the operator names it: the provider decides the request
 		// shape and the per-request batch limit, and nothing defaults to one on their behalf.
 		if (
-			(ret.rerank === "cross-encoder" || resolvedEndpoint !== undefined) &&
+			(ret.rerank === "cross-encoder" || ret.rerankEndpoint !== undefined) &&
 			ret.rerankProvider === undefined
 		) {
 			ctx.addIssue({
@@ -157,18 +141,18 @@ export const retrievalConfigSchema: z.ZodType<
 					"per-request batch limit",
 			});
 		}
-		if (resolvedEndpoint !== undefined) {
+		if (ret.rerankEndpoint !== undefined) {
 			try {
-				new URL(resolvedEndpoint);
+				new URL(ret.rerankEndpoint);
 			} catch {
 				ctx.addIssue({
 					code: z.ZodIssueCode.custom,
 					path: ["rerankEndpoint"],
-					message: `Invalid URL after env var resolution: "${resolvedEndpoint}"`,
+					message: `Invalid rerankEndpoint URL: "${ret.rerankEndpoint}"`,
 				});
 			}
 		}
-		const rerankApiKey = resolve(ret.rerankApiKey, "rerankApiKey");
+		const rerankApiKey = ret.rerankApiKey;
 		// Every plugin's settings pass through here, so all four refuse a remote ranker with no key
 		// at the same moment, before any recall runs.
 		if (ret.rerank === "cross-encoder" && !rerankApiKey?.trim()) {
@@ -182,10 +166,5 @@ export const retrievalConfigSchema: z.ZodType<
 				message: "retrieval.rerankApiKey is required for cross-encoder reranking",
 			});
 		}
-		return {
-			...ret,
-			rerankApiKey,
-			rerankEndpoint: resolvedEndpoint,
-			rerankModel: resolve(ret.rerankModel, "rerankModel") ?? ret.rerankModel,
-		};
+		return ret;
 	});

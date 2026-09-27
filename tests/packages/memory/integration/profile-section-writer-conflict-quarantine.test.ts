@@ -1,7 +1,7 @@
 /** Four unsupplied real-route observations plus conditional real-SQLite invariants. */
 
 import {
-	getDekSync,
+	getDek,
 	openEncryptedDbReadonly,
 } from "@snoai/sqlite-crypto";
 import { closeLogger } from "@snoai/utils/logger";
@@ -15,6 +15,7 @@ import { runProfileSectionUpdate } from "../../../../packages/memory/src/engine/
 import { createLlmClient } from "../../../../packages/memory/src/model/llm-client.ts";
 import { pluginConfigSchema } from "../../../../packages/memory/src/engine/shared/types.ts";
 import { MemoryStore } from "../../../../packages/memory/src/store/store.ts";
+import { defaultSettings } from "../../../../packages/memory/config/settings.ts";
 import { createTestDb, createTestEmbedder } from "../../../apps/mem-claw/helpers/test-db.ts";
 
 const SCOPE = "profile-conflict-quarantine";
@@ -22,9 +23,13 @@ const SECTION = "identity";
 const STARTED_AT = Date.parse("2025-06-01T12:00:00Z");
 const OBSERVATION_COUNT = 4;
 let diagnosticWrites: ReturnType<typeof vi.spyOn>;
-const ROUTING = pluginConfigSchema.parse({ mode: "rem-enhanced" });
+const ROUTING = pluginConfigSchema.parse({ mode: "rem-enhanced", modelCalls: defaultSettings().modelCalls });
+// The service passes `settings.snoGpu.apiKey`; the client no longer reads a key from the environment.
+const SNO_GPU_KEY = process.env.SNO_MEM_CLAW_LLM_INTERNAL_KEY;
+if (!SNO_GPU_KEY) throw new Error("SNO_MEM_CLAW_LLM_INTERNAL_KEY is required; this test is real");
 const LLM = createLlmClient({
 	preset: "mem_claw/sno_ai_extract",
+	apiKey: SNO_GPU_KEY,
 	routing: ROUTING,
 	timeoutMs: 60_000,
 });
@@ -145,7 +150,7 @@ describe("profile conflict quarantine", () => {
 				});
 				expect(quarantinedRow.dispositionedAt).toBe(STARTED_AT);
 
-				const offlineDb = openEncryptedDbReadonly(testDb.dbPath, getDekSync());
+				const offlineDb = openEncryptedDbReadonly(testDb.dbPath, getDek(testDb.encryptionKey));
 				try {
 					const offlineRows = offlineDb
 						.prepare<[string], OfflineDispositionRow>(

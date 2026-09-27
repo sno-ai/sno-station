@@ -175,7 +175,6 @@ function buildPipelineConfig(
 	ResolvedLlmConfig & {
 		baseUrl: string;
 		endpointUrl: string;
-		shouldSendHeliconeAuth?: boolean;
 		userBaseUrlOverride?: boolean;
 		callId: ModelCallId;
 		destination: "host" | "sno-gpu";
@@ -202,7 +201,6 @@ function buildPipelineConfig(
 		...(endpoint.userBaseUrlOverride
 			? { userBaseUrlOverride: endpoint.userBaseUrlOverride }
 			: {}),
-		...(config.heliconeApiKey ? { heliconeApiKey: config.heliconeApiKey } : {}),
 		timeoutMs: request.timeoutMs ?? config.timeoutMs ?? preset.timeoutMs ?? 30_000,
 		callId: request.callId,
 		destination,
@@ -351,7 +349,8 @@ export function createLlmClient(config: LlmClientConfig & { refuseOnUnavailable?
 	const resolveRequestTimeoutMs = (request: MemoryLlmRequest): number =>
 		request.timeoutMs ?? config.timeoutMs ?? 30_000;
 	const destinationFor = (request: MemoryLlmRequest): "off" | "host" | "sno-gpu" => {
-		const route = resolveLlmRoute({ callId: request.callId, config: config.routing ?? { mode: "agent-native" } });
+		if (!config.routing) return "host";
+		const route = resolveLlmRoute({ callId: request.callId, config: config.routing });
 		return "off" in route ? "off" : route.destination;
 	};
 	/**

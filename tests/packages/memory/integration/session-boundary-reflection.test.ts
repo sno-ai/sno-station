@@ -3,7 +3,7 @@
  * write the reflection of the PREVIOUS session, read in that host's own format — the Codex
  * session log, the Claude Code transcript, or the messages sent with the boundary (Hermes).
  * Real contract path (MemoryRuntimePool → MemoryContractRuntime.onSessionEnd), real SQLite,
- * reflection turned on through explicit registration settings, mode local-first so R1 is off
+ * reflection turned on through settings.json (`capture.sessionStrategy`), mode local-first so R1 is off
  * and the template fallback body is written. The OpenClaw session file is the positive control.
  */
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -12,10 +12,9 @@ import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { pluginConfigSchema } from "../../../../packages/memory/config/plugin-config-schema";
-import { bindStore } from "../../../../packages/memory/src/engine/shared/paths";
 import { MemoryRuntimePool } from "../../../../packages/memory/src/sidecar/memory-runtime";
 import { createTestDb } from "../../../apps/mem-claw/helpers/test-db";
+import { writeSettingsFixture } from "../fixtures/settings-file-fixture";
 
 const repoRoot = resolve(import.meta.dirname, "../../../..");
 const CODEX_ROLLOUT = join(repoRoot, "tests/apps/mem-codex/fixtures/rollout-2026-09-22T05-51-48-01a0c7ab-9f72-7380-b1ba-ef29c7756de7.jsonl");
@@ -37,14 +36,18 @@ beforeEach(async () => {
 	mkdirSync(workspace);
 	database = createTestDb();
 	process.env.SNO_PROFILE_DIR = root;
-	await bindStore(database.dbPath, { mode: "local-first", retrieval: { rerank: "none" } });
 	mkdirSync(join(root, "sno-station-mem"), { recursive: true });
-	pool = await MemoryRuntimePool.open();
-	const config = pluginConfigSchema.parse({ ...pool.config, mode: "local-first", sessionStrategy: "memoryReflection" });
-	const { mode, remEnhanced: _remEnhanced, language: _language, ...settings } = config;
-	await pool.invoke("init", { scope: scope("init-session"), registration: { skinId: "session-boundary",
-		settings, routing: { mode, language: "en" } } }, "session-boundary");
+	await openPool("local-first");
+	await pool?.invoke("init", { scope: scope("init-session"), registration: { skinId: "session-boundary" } }, "session-boundary");
 });
+
+/** The service reads settings.json once when it opens: reflection on, the given mode. */
+async function openPool(mode: "local-first" | "agent-native"): Promise<void> {
+	await pool?.close();
+	writeSettingsFixture(root, { mode, rerank: { mode: "none" }, capture: { sessionStrategy: "memoryReflection" },
+		store: { path: database.dbPath, encryptionKey: database.encryptionKey } });
+	pool = await MemoryRuntimePool.open();
+}
 
 afterEach(async () => {
 	await pool?.close();
@@ -119,10 +122,7 @@ describe("reflection of the previous session on a reset boundary (local-first, e
 	});
 
 	it("(d) Hermes skin: the reset reflection goes under the profile root's project folder, never the workspace", async () => {
-		const config = pluginConfigSchema.parse({ ...pool?.config, mode: "local-first", sessionStrategy: "memoryReflection" });
-		const { mode, remEnhanced: _remEnhanced, language: _language, ...settings } = config;
-		await pool?.invoke("init", { scope: scope("hermes-init"), registration: { skinId: "hermes",
-			settings, routing: { mode, language: "en" } } }, "hermes");
+		await pool?.invoke("init", { scope: scope("hermes-init"), registration: { skinId: "hermes" } }, "hermes");
 		// Exactly what sno-mem-hermes keeps on on_session_end and posts on the reset path: role, content, at (ms, float),
 		// every role in system|developer|user|assistant|tool, with no session file on the boundary.
 		await resetBoundary("hermes-profile-old-session", undefined, [
@@ -170,10 +170,8 @@ describe("the reflection prompt carries the previous session's own conversation 
 	let host: Awaited<ReturnType<typeof hostRecorder>>;
 	beforeEach(async () => {
 		host = await hostRecorder();
-		const config = pluginConfigSchema.parse({ ...pool?.config, mode: "agent-native", sessionStrategy: "memoryReflection" });
-		const { mode, remEnhanced: _remEnhanced, language: _language, ...settings } = config;
-		await pool?.invoke("init", { scope: scope("reflection-host-init"), registration: { skinId: "reflection-host", settings,
-			routing: { mode, language: "en" },
+		await openPool("agent-native");
+		await pool?.invoke("init", { scope: scope("reflection-host-init"), registration: { skinId: "reflection-host",
 			model: { baseUrl: `${host.url}/host/v1/`, credential: "loopback-credential", model: "loopback-model" } } }, "reflection-host");
 	});
 	afterEach(async () => { await host.close(); });

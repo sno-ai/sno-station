@@ -18,6 +18,7 @@ import type { PluginObservability } from "./observability/adapter";
 import type { MemoryTelemetryUsageOutbox } from "./telemetry/memory-telemetry-outbox";
 import type { AgentLlmPort } from "../model/agent-llm-port";
 import { createLlmClient } from "../model/llm-client";
+import { pickLlmRoutingConfig } from "../model/llm-mode-routing";
 import type { PluginConfig } from "./shared/types";
 import { createScopePolicy, MemoryScopePolicy } from "./security/memory-scope-policy";
 import { parseAgentIdFromSessionKey } from "./security/scope-identity";
@@ -41,6 +42,7 @@ import { createReflectionInjectionHandler1, createReflectionInjectionHandler2, c
 import type { PluginHookAgentContext } from "./bindings/sno-station-mem-hook-types";
 
 export interface MemoryRuntimeServices {
+	config: PluginConfig;
 	store: MemoryStore;
 	embedder: Embedder;
 	retriever: MemoryRetriever;
@@ -107,7 +109,6 @@ export class MemoryContractRuntime implements MemoryContract {
 
 	async init(scope: ScopeCtx, registration: Registration): Promise<ContractOutputs["init"]> {
 		const input = parseInput("init", { scope, registration });
-		if (!("settings" in input.registration)) throw new ContractError("invalid-input");
 		await this.close();
 		this.registration = input.registration;
 		this.reflectionStates.clear();
@@ -154,7 +155,7 @@ export class MemoryContractRuntime implements MemoryContract {
 
 	private configured(): { registration: Registration; config: PluginConfig } {
 		if (!this.registration) throw new ContractError("invalid-input");
-		return { registration: this.registration, config: { ...this.registration.settings, ...this.registration.routing } };
+		return { registration: this.registration, config: this.services.config };
 	}
 
 	/** Host identities are normalised the way the tools always did: blank or the literal "undefined" is missing. */
@@ -217,7 +218,8 @@ export class MemoryContractRuntime implements MemoryContract {
 	}
 
 	private async toolContext(scope: ScopeCtx): Promise<ToolContext> {
-		const { config, registration } = this.configured();
+		const { config } = this.configured();
+		const routing = pickLlmRoutingConfig(config);
 		return {
 			...this.services,
 			scopePolicy: await this.scopePolicy(scope),
@@ -225,8 +227,8 @@ export class MemoryContractRuntime implements MemoryContract {
 			systemCaller: scope.host?.systemCaller === true,
 			sessionTimezone: scope.host?.sessionTimezone, language: config.language,
 			selfImprovementEnabled: config.selfImprovement.enabled,
-			profileToolLlm: createLlmClient({ ...config.extraction.llm, routing: registration.routing, agentPort: this.services.agentPort }),
-			llmRouting: registration.routing,
+			profileToolLlm: createLlmClient({ ...config.extraction.llm, routing, agentPort: this.services.agentPort }),
+			llmRouting: routing,
 			clearReflectionSliceCache: () => { for (const state of this.reflectionStates.values()) state.command.clearAllSliceCache(); },
 		};
 	}

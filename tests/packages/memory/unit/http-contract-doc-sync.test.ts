@@ -18,11 +18,10 @@ import type { z } from "zod";
 import {
 	contractJsonSchemas, inputSchemas, outputSchemas, MEMORY_ROUTES, MEMORY_ERROR_STATUS, DEGRADED_REASONS,
 } from "../../../../packages/memory/src/contract/index";
-import { SNO_OBSERVE_DEFAULT_BASE_URL } from "../../../../packages/memory/config/index";
 import { HEALTH_PATH, REM_RUN_PATH, REM_JOBS_PATH_PREFIX } from "../../../../packages/memory/src/sidecar/config";
 import { startRemSidecar } from "../../../../packages/memory/src/sidecar/server";
-import { bindStore } from "../../../../packages/memory/src/engine/shared/paths";
 import { createTestDb } from "../../../apps/mem-claw/helpers/test-db";
+import { writeSettingsFixture } from "../fixtures/settings-file-fixture";
 
 type Schema = z.core.JSONSchema.JSONSchema;
 type Row = string[];
@@ -61,9 +60,7 @@ function schemaRows(schema: Schema, field = "$", required = true): Row[] {
 	const constraints = Object.fromEntries(Object.entries(schema).filter(([key]) => !omitted.has(key)));
 	if (schema.additionalProperties === false) constraints.additionalProperties = false;
 	const values = schema.enum ?? ("const" in schema ? [schema.const] : undefined);
-	let defaultValue = "default" in schema ? JSON.stringify(schema.default) : "-";
-	if (field === "registration.settings.observe.enabled") defaultValue = "true unless SNO_OBSERVE_ENABLED is false/0";
-	if (field === "registration.settings.observe.baseUrl") defaultValue = `SNO_OBSERVE_BASE_URL or ${SNO_OBSERVE_DEFAULT_BASE_URL}`;
+	const defaultValue = "default" in schema ? JSON.stringify(schema.default) : "-";
 	const rows: Row[] = [[field, schema.$ref ? "JSON" : Array.isArray(schema.type)
 		? schema.type.join(" or ") : schema.type ?? (variants ? "union" : "unknown"),
 		required ? "yes" : "no", values ? JSON.stringify(values) : "-",
@@ -109,7 +106,8 @@ describe("sidecar API reference stays in sync", () => {
 		let server: Awaited<ReturnType<typeof startRemSidecar>> | undefined;
 		try {
 			process.env.SNO_PROFILE_DIR = stateDir;
-			await bindStore(database.dbPath, { mode: "local-first", retrieval: { rerank: "none" } });
+			writeSettingsFixture(stateDir, { mode: "local-first", rerank: { mode: "none" },
+				store: { path: database.dbPath, encryptionKey: database.encryptionKey } });
 			server = await startRemSidecar();
 			for (const path of served) {
 				const post = path.startsWith("/v1/") || path === "/rem/run";

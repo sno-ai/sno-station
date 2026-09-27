@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { currentLogContext, createLogger } from "@snoai/utils/logger";
 import { ContractError } from "../contract/error";
+import { SettingsUnavailableError } from "../contract/profile";
 import { MEMORY_ROUTES, MEMORY_DEFAULT_SKIN_ID, MEMORY_ERROR_STATUS, MEMORY_SKIN_HEADER, memoryMethod } from "../contract/routes";
 import type { MemoryRuntimePool } from "./memory-runtime";
 
@@ -17,7 +18,7 @@ export async function serveMemoryRoute(request: IncomingMessage, response: Serve
 	const controller = new AbortController();
 	const abort = (): void => controller.abort(new ContractError("timeout"));
 	let rejectDeadline: (() => void) | undefined;
-	response.once("close", abort);
+	if (method !== "capture") response.once("close", abort);
 	try {
 		const deadline = new Promise<never>((_, reject) => {
 			rejectDeadline = () => reject(controller.signal.reason);
@@ -41,6 +42,11 @@ export async function serveMemoryRoute(request: IncomingMessage, response: Serve
 		response.writeHead(200, { "content-type": "application/json" });
 		response.end(JSON.stringify(result));
 	} catch (error) {
+		if (error instanceof SettingsUnavailableError) {
+			response.writeHead(503, { "content-type": "application/json" });
+			response.end(JSON.stringify({ degraded: true, error: error.message, reason: error.message }));
+			return true;
+		}
 			log.error("Memory engine request failed", {
 				method, skinId, error,
 				error_message: error instanceof Error ? error.message : String(error),

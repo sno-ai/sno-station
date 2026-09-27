@@ -1,8 +1,6 @@
 import { z } from "zod";
-import { createLogger } from "@snoai/utils/logger";
 import { DEFAULT_LOCALE, SUPPORTED_LOCALES, type Locale } from "../src/engine/i18n/locales";
-
-const log = createLogger("sno-station-mem:registration-routing");
+import type { Settings } from "./settings";
 
 /**
  * Product LLM modes, tier-ordered: Local First (selected calls on host) → Agent
@@ -39,37 +37,22 @@ export const remEnhancedConfigSchema: z.ZodType<{ trigger: { tick: boolean } }, 
 export type LlmRoutingConfig = {
 	mode: ProductMode;
 	language: Locale;
+	modelCalls?: Settings["modelCalls"];
 };
 
 export const llmRoutingConfigSchema: z.ZodType<
 	LlmRoutingConfig,
 	unknown
-> = z.preprocess((value) => {
-	if (!value || typeof value !== "object" || Array.isArray(value)) return value;
-	const routing = { ...value };
-	if ("agentNative" in routing) {
-		delete routing.agentNative;
-		log.warn("Ignored agentNative from registration", undefined, {
-			event_name: "memory.registration.agent_native_ignored", file: "packages/memory/config/plugin-config-mode-schema.ts",
-			function: "llmRoutingConfigSchema", site_id: "plugin-config-mode-schema.routing.agentNative",
-		});
-	}
-	if ("remEnhanced" in routing) {
-		delete routing.remEnhanced;
-		log.warn("Ignored remEnhanced from registration", undefined, {
-			event_name: "memory.registration.rem_enhanced_ignored", file: "packages/memory/config/plugin-config-mode-schema.ts",
-			function: "llmRoutingConfigSchema", site_id: "plugin-config-mode-schema.routing.remEnhanced",
-		});
-	}
-	return routing;
-}, z
+> = z
 	.object({
 		mode: z.enum(PRODUCT_MODES),
 		language: z.enum(SUPPORTED_LOCALES).default(DEFAULT_LOCALE),
+		modelCalls: z.record(z.string(), z.record(z.enum(PRODUCT_MODES), z.enum(["off", "host", "sno-gpu"]))).optional() as z.ZodType<Settings["modelCalls"] | undefined>,
 	})
-	.strict());
+	.strict();
 
 export type LlmRoutingConfigInput = {
 	mode: ProductMode;
 	language?: unknown;
+	modelCalls?: Settings["modelCalls"];
 };

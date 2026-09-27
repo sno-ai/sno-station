@@ -9,6 +9,7 @@ import {
 	getIdentityLockPath,
 	getIdentityPath,
 	type PathEnv,
+	readStandaloneSettings,
 } from "./paths.js";
 import { CONSENT_VALUES, type DoctorCheck, type DoctorReport } from "./types.js";
 
@@ -33,12 +34,8 @@ interface BufferCheckResult {
 	shippedCount: number;
 }
 
-interface DiagnosticEnv extends PathEnv {
-	SNO_OBSERVE_BASE_URL?: string;
-}
-
-export function createDoctorReport(env: DiagnosticEnv = process.env): DoctorReport {
-	const paths = resolveDiagnosticPaths(env);
+export function createDoctorReport(env: PathEnv = process.env, baseUrl?: string): DoctorReport {
+	const paths = resolveDiagnosticPaths(env, baseUrl);
 	const buffer = safeBufferCheck(paths.bufferPath);
 	return {
 		identity: safeDoctorCheck("identity", paths.identityPath, () =>
@@ -58,9 +55,9 @@ export function createDoctorReport(env: DiagnosticEnv = process.env): DoctorRepo
 	};
 }
 
-function resolveDiagnosticPaths(env: DiagnosticEnv): DiagnosticPaths {
+function resolveDiagnosticPaths(env: PathEnv, baseUrl?: string): DiagnosticPaths {
 	const endpoint = normalizeDiagnosticBaseUrl(
-		env.SNO_OBSERVE_BASE_URL ?? "https://www.sno.ai",
+		baseUrl ?? readStandaloneSettings(env).baseUrl,
 	);
 	return {
 		identityPath: getIdentityPath(env),

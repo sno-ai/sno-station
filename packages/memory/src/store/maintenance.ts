@@ -25,12 +25,12 @@ import { isBackupDue, runBackup } from "./backup";
 import type { MemoryStore } from "./memory-store-base";
 import {
 	evaluateRemAutomaticTriggers,
-	readRemAutomaticOperations,
 } from "../sidecar/rem-trigger";
 import { getSnoStationMemStateDir } from "../engine/shared/paths";
 import { recordMemoryTelemetryIncident } from "../engine/telemetry/memory-telemetry-incidents";
 import type { MemoryTelemetryUsageOutbox } from "../engine/telemetry/memory-telemetry-outbox";
 import type { ProductMode } from "../../config/plugin-config-mode-schema";
+import type { Settings } from "../../config/settings";
 
 const log = createLogger("sno-station-mem:maintenance");
 
@@ -91,6 +91,8 @@ const FTS_MERGE_MAX_ITERATIONS = 10;
 
 export interface MaintenanceDeps {
 	mode?: ProductMode;
+	modelCalls: Settings["modelCalls"];
+	remSettings: { mode: ProductMode; requestedOperations: Settings["rem"]["operations"]; tickEnabled: boolean };
 	hasConnectedHost?: () => boolean;
 	store: MemoryStore;
 	remClock?: Date;
@@ -528,7 +530,8 @@ export function startMaintenanceTimer(
 					database: deps.store.sqlite,
 					stateDir: deps.stateDir,
 					auditStateDir: getSnoStationMemStateDir(),
-					...readRemAutomaticOperations(),
+					requestedOperations: deps.remSettings.requestedOperations,
+					tickEnabled: deps.remSettings.tickEnabled, modelCalls: deps.modelCalls,
 					mode: deps.mode, hasConnectedHost: deps.hasConnectedHost,
 					now: deps.remClock, volumeThreshold: deps.remVolumeThreshold,
 				});

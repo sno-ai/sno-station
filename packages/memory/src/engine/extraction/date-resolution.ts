@@ -51,7 +51,10 @@ export async function resolveMemoryDate(input: DateInput & {
 	routing?: LlmRoutingConfig;
 }): Promise<DateResolutionResult> {
 	const unresolved = unresolvedMemoryDate(input);
-	if (!input.llm || (input.routing && modelCallDestination("E11", input.routing.mode) === "off")) return unresolved;
+	if (!input.llm) return unresolved;
+	const modelCalls = input.routing?.modelCalls;
+	if (input.routing && !modelCalls) throw new Error("modelCalls unavailable");
+	if (input.routing && modelCalls && modelCallDestination("E11", input.routing.mode, modelCalls) === "off") return unresolved;
 	const anchor = input.sessionDateTime ?? (input.sessionTimestamp === undefined
 		? undefined : new Date(input.sessionTimestamp).toISOString());
 	const prompt = [

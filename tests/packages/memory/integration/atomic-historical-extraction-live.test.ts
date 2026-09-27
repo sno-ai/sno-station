@@ -12,6 +12,10 @@ import { AtomicInsightDistiller, createSignedAtomicMemoryExtractionTransports } 
 import { llmRoutingConfigSchema } from "../../../../packages/memory/config/plugin-config-mode-schema";
 import { resolveLlmEndpoint } from "../../../../packages/memory/src/model/llm-endpoint-resolution";
 import fixtureData from "../fixtures/issue-219-historical-extraction.json";
+import { DEFAULT_SETTINGS_PATH } from "../fixtures/settings-file-fixture";
+
+// The routing table is `settings.modelCalls`; the shipped default document carries the one `sno` writes.
+const MODEL_CALLS = (JSON.parse(readFileSync(DEFAULT_SETTINGS_PATH, "utf8")) as { modelCalls: unknown }).modelCalls;
 
 const repoRoot = fileURLToPath(new URL("../../../../", import.meta.url));
 const evidenceDir = "/tmp/issue-219-expanded";
@@ -56,7 +60,7 @@ it.each(fixtureData.cases)("$id: $question", async (testCase) => {
 	record(testCase.id, { runId, phase: "input", host: hostname(), endpoint: endpoint.url, model: endpoint.preset.model, productionHashes, harnessHashes, judgePromptHash, caseInputHash: createHash("sha256").update(JSON.stringify(testCase)).digest("hex"), testCase });
 	try {
 		for (const session of testCase.sessions) {
-			const transports = createSignedAtomicMemoryExtractionTransports({ preset: "mem_claw/sno_extract_chat", apiKey, timeoutMs: 90_000, routing: llmRoutingConfigSchema.parse({ mode: "rem-enhanced" }), onProviderResponse: (trace) => record(testCase.id, { runId, phase: "providerResponse", trace }) });
+			const transports = createSignedAtomicMemoryExtractionTransports({ preset: "mem_claw/sno_extract_chat", apiKey, timeoutMs: 90_000, routing: llmRoutingConfigSchema.parse({ mode: "rem-enhanced", modelCalls: MODEL_CALLS }), onProviderResponse: (trace) => record(testCase.id, { runId, phase: "providerResponse", trace }) });
 			const complete = transports.generic.complete.bind(transports.generic);
 			transports.generic.complete = async (input) => {
 				record(testCase.id, { runId, phase: "request", request: input, requestHash: createHash("sha256").update(JSON.stringify(input)).digest("hex") });

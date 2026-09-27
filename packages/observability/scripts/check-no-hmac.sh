@@ -6,7 +6,7 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-PATTERN='createHmac|Hmac|X-Sno-Signature|HELICONE_INTERNAL_INGEST_HMAC'
+PATTERN='createHmac|Hmac|X-Sno-Signature'
 if grep -rE "$PATTERN" src/ 2>/dev/null; then
 	echo "FAIL: HMAC primitive detected in packages/observability/src/" >&2
 	echo "       (Decision 0: SDK does NOT sign HMAC; Vercel does.)" >&2

@@ -12,12 +12,14 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import { setTimeout as delay } from "node:timers/promises";
 import Database from "better-sqlite3";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { MEMORY_PACKAGE_PATH, writeSettingsFixture } from "../fixtures/settings-file-fixture";
 
 const repoRoot = resolve(import.meta.dirname, "../../../..");
-const memoryCli = join(repoRoot, "packages/memory/dist/cli.js");
+const clientUrl = pathToFileURL(join(MEMORY_PACKAGE_PATH, "dist", "client.js")).href;
 const claudeCli = join(repoRoot, "apps/mem-claude/dist/cli.js");
 const sessionId = "7c1e2f40-5b8a-4d3e-9f21-0a6b3c9d8e71";
 const PROJECT = `p_${createHash("sha256").update("github.com/example/project").digest("hex").slice(0, 16)}`;
@@ -74,19 +76,21 @@ beforeEach(async () => {
 	env = {
 		...process.env,
 		CLAUDE_CONFIG_DIR: configDir,
+		// The store list lives under the home directory; a test home keeps it out of the operator's.
+		HOME: join(root, "home"),
 		SNO_PROFILE_DIR: profile,
-		SNO_OBSERVE_ENABLED: "true",
-		SNO_OBSERVE_BASE_URL: await closedLoopbackUrl(),
 		SNO_STATION_MEM_NODE_ENV: "test",
 	};
-	const bind = spawnSync(process.execPath, [memoryCli, "bind", join(root, "memory.sqlite")], {
-		encoding: "utf8", timeout: 20_000, env: { ...env, SNO_STATION_CORE_TESTING: "1" },
-		input: JSON.stringify({ mode: "local-first", retrieval: { rerank: "none" },
-			embedding: { provider: "local-onnx", dimensions: 1024, dtype: "q8" }, memoryTelemetry: { enabled: false, currentKeyVersion: 1 } }),
-	});
-	expect(bind.status, bind.stderr).toBe(0);
-	// The hook's own cold start of the sidecar can exceed its session-end deadline; start it first.
-	const start = spawnSync(process.execPath, [memoryCli, "sidecar", "start"], { encoding: "utf8", timeout: 90_000, env });
+	writeSettingsFixture(profile, { mode: "local-first", rerank: { mode: "none" },
+		store: { path: join(root, "memory.sqlite") },
+		telemetry: { observe: { enabled: true, baseUrl: await closedLoopbackUrl() } } });
+	// The hook's own cold start of the service can exceed its session-end deadline; start it first
+	// through the package client, which starts the service `settings.memoryPackage` names.
+	const start = spawnSync(process.execPath, ["--input-type=module", "-e", `
+		import { connect } from ${JSON.stringify(clientUrl)};
+		const client = await connect({ skinId: "claude-code" });
+		if (client.degraded) { console.error(JSON.stringify(client)); process.exit(1); }
+		process.exit(0);`], { encoding: "utf8", timeout: 90_000, env });
 	expect(start.status, start.stderr).toBe(0);
 }, 120_000);
 

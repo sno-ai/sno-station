@@ -10,12 +10,13 @@ import { fileURLToPath } from "node:url";
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { MemoryStore, normalizeMemoryRelationPredicate } from "../../../../packages/memory/src/store/store";
 import {
-	initSqliteRuntimeSync,
+	initSqliteRuntime,
 	openSqliteDatabase,
 	type SqliteDatabaseLike,
 	type SqliteRuntimeHandle,
 } from "../../../../packages/memory/src/store/sqlite-runtime";
 import { createTestDb, createTestEmbedder } from "../../../apps/mem-claw/helpers/test-db";
+import { makeTestEnv, type TestEnv } from "../../sqlite-crypto/_helpers";
 
 const MIGRATION_PATH = fileURLToPath(
 	new URL("../../../../packages/memory/drizzle/0030_atomic_memory_additive.sql", import.meta.url),
@@ -178,9 +179,11 @@ function insertMemory(
 describe("atomic memory additive schema", () => {
 	let directory: string;
 	let runtime: SqliteRuntimeHandle;
+	let cryptoEnv: TestEnv;
 
 	beforeEach(() => {
-		initSqliteRuntimeSync();
+		cryptoEnv = makeTestEnv("atomic-memory-additive");
+		initSqliteRuntime(cryptoEnv.keyHex);
 		directory = mkdtempSync(join(tmpdir(), "atomic-memory-additive-"));
 		runtime = openSqliteDatabase(join(directory, "memory.sqlite"));
 		runtime.db.exec("PRAGMA foreign_keys = ON");
@@ -190,6 +193,7 @@ describe("atomic memory additive schema", () => {
 	afterEach(() => {
 		runtime.db.close();
 		rmSync(directory, { recursive: true, force: true });
+		cryptoEnv.cleanup();
 	});
 
 	it("adds only seven nullable card columns and leaves cutover refusals dark", () => {

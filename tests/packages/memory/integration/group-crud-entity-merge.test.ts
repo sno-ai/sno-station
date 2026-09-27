@@ -1,4 +1,4 @@
-import { writeTestInstallationConfig } from "../../../apps/mem-claw/helpers/module-config-fixture";
+import { writeSettingsFixture } from "../fixtures/settings-file-fixture";
 /** @file PRD 150 QCG-9 — entity identity: the merge, the forced split, the tag.
  *
  * @boundary The real extraction pipeline (`runAtomicMemoryExtraction`) writing to a real encrypted
@@ -20,7 +20,7 @@ import { writeTestInstallationConfig } from "../../../apps/mem-claw/helpers/modu
 
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
 
 import type { AtomicResplitTransport } from "../../../../packages/memory/src/engine/extraction/atomic-extraction-gauntlet";
@@ -68,7 +68,6 @@ const VARIANT_NAME =
 const C_NAME = "The staffing update note for the research group";
 
 const priorEnvironment = {
-	MEM_CLAW_DATA_DIR_ROOT: process.env["MEM_CLAW_DATA_DIR_ROOT"],
 	SNO_STATION_MEM_REM_EXPECTED_DB_PATH: process.env["SNO_STATION_MEM_REM_EXPECTED_DB_PATH"],
 	SNO_PROFILE_DIR: process.env["SNO_PROFILE_DIR"],
 };
@@ -409,19 +408,8 @@ async function runUpdateWave(
 ): Promise<Observation[]> {
 	await target.closeStore();
 	const stateRoot = mkdtempSync(join(tmpdir(), "group-crud-entity-merge-"));
-	writeTestInstallationConfig(stateRoot, {
-			plugins: {
-				entries: {
-					"sno-mem-claw": {
-						config: {
-							dbPath: target.fixture.dbPath,
-							embedding: { dimensions: 1024, provider: "local-onnx" },
-						},
-					},
-				},
-			},
-		});
-	process.env["MEM_CLAW_DATA_DIR_ROOT"] = dirname(target.fixture.dbPath);
+	writeSettingsFixture(stateRoot, { mode: "local-first", store: { path: target.fixture.dbPath, encryptionKey: target.fixture.encryptionKey },
+		embedding: { cacheDir: "" } });
 	process.env["SNO_STATION_MEM_REM_EXPECTED_DB_PATH"] = target.fixture.dbPath;
 	process.env["SNO_PROFILE_DIR"] = stateRoot;
 	cleanups.push(() => rmSync(stateRoot, { recursive: true, force: true }));

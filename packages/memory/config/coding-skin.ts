@@ -1,11 +1,6 @@
 export { appendObserveLedgerRows, type ObserveLedgerRow }
 	from "../src/engine/telemetry/observe-ledger";
 export { SKILL_CATEGORIES, skillVersionFor } from "./skill-categories";
-import type { Registration } from "../src/contract/inputs";
-import { engineSettingsSchema } from "../src/contract/settings";
-import { installationSettingsSchema, type InstallationSettings } from "./installation-settings";
-import { llmRoutingConfigSchema } from "./plugin-config-mode-schema";
-import { observeAgentId } from "./plugin-config-observe-schema";
 export { HOST_MODEL_CALLBACK_HOST, HOST_MODEL_CALLBACK_PATH } from "./skin-defaults";
 
 export const CODING_SKIN_CHILD_DEADLINE_MS = 110_000;
@@ -19,15 +14,7 @@ export const CODING_SKIN_CORRECTION_LOCK_STALE_MS: number = 2 * 60_000;
 
 export const CODING_SKIN_SESSION_QUERY =
 	"standing decisions, open tasks, conventions and known pitfalls for this repository";
-export const CODING_SKIN_SESSION_CONTEXT_MAX_CHARS = 3_500;
-export const CODING_SKIN_PROMPT_CONTEXT_MAX_CHARS = 1_500;
 export const CODING_SKIN_LEDGER_MAX_CHARS = 12_000;
-export const CODING_SKIN_SESSION_RECALL_LIMIT = 5;
-export const CODING_SKIN_PROMPT_RECALL_LIMIT = 3;
-export const CODING_SKIN_EXPLICIT_RECALL_LIMIT = 5;
-export const CODING_SKIN_PROMPT_MIN_CHARS = 12;
-export const CODING_SKIN_SESSION_TIMEOUT_MS = 8_000;
-export const CODING_SKIN_PROMPT_TIMEOUT_MS = 4_000;
 export const CODING_SKIN_RECALL_SENTENCE_MAX_CHARS = 200;
 export const CODING_SKIN_RECALL_ITEM_MAX_CHARS = 240;
 
@@ -43,61 +30,3 @@ export const CODING_SKIN_HOOKS = {
 export type CodingSkinHookName = keyof typeof CODING_SKIN_HOOKS;
 
 export const CODING_SKIN_MODEL_COMMANDS = ["recall", "get", "remember", "correct"] as const;
-
-export const codingSkinInstallationSchema: typeof installationSettingsSchema =
-	installationSettingsSchema;
-
-export function createCodingSkinRegistration(input: {
-	skinId: string;
-	installed: InstallationSettings;
-	model?: NonNullable<Registration["model"]>;
-}): Registration {
-	const routing = llmRoutingConfigSchema.parse({
-		mode: input.installed.mode,
-		language: "en",
-	});
-	const settings = engineSettingsSchema.parse({
-		embedding: input.installed.embedding,
-		observe: { agentId: observeAgentId(input.skinId) },
-		dbPath: input.installed.storePath,
-		provider: {},
-		ambientLearning: true,
-		autoRecall: true,
-		autoRecallMinLength: 2,
-		autoRecallMinRepeated: 0,
-		autoRecallMaxQueryLength: 2_000,
-		autoRecallTimeoutMs: input.installed.autoRecallTimeoutMs ?? 5_000,
-		autoRecallIncludeAgents: [],
-		autoRecallExcludeAgents: [],
-		captureAssistant: true,
-		retrieval: {
-			...input.installed.retrieval,
-			...(input.installed.rerankKeyRef
-				? { rerankApiKey: `\${${input.installed.rerankKeyRef}}` }
-				: {}),
-		},
-		scopes: {
-			default: "global",
-			definitions: { global: { description: "Shared knowledge across all agents" } },
-			agentAccess: {},
-		},
-		enableManagementTools: false,
-		sessionStrategy: "systemSessionMemory",
-		sessionMemory: { enabled: true, messageCount: 15 },
-		selfImprovement: {
-			enabled: true,
-			beforeResetNote: true,
-			skipSubagentBootstrap: true,
-			ensureLearningFiles: true,
-		},
-		extraction: {},
-		memoryReflection: {},
-		recallLifecycle: {},
-		memoryTelemetry: input.installed.memoryTelemetry ?? {
-			enabled: false,
-			currentKeyVersion: 1,
-		},
-		remOperations: input.installed.remOperations ?? ["rem-replace", "rem-update"],
-	});
-	return { skinId: input.skinId, routing, settings, model: input.model };
-}

@@ -25,12 +25,17 @@ export function processAlive(pid: number): boolean {
 	catch (error) { return error instanceof Error && "code" in error && error.code === "EPERM"; }
 }
 
-export async function checkDiscovery(discovery: Discovery, _storePath: string): Promise<void> {
+export async function checkDiscovery(discovery: Discovery): Promise<void> {
 	try {
 		const response = await fetch(`http://127.0.0.1:${discovery.port}/healthz`, {
 			headers: { Authorization: `Bearer ${discovery.token}` }, signal: AbortSignal.timeout(MEMORY_HEALTH_TIMEOUT_MS),
 		});
-		if (!response.ok) throw new ContractError("sidecar-unresponsive");
+		if (!response.ok) {
+			const body: unknown = await response.json();
+			if (body && typeof body === "object" && "error" in body && typeof body.error === "string")
+				throw new ContractError("sidecar-unresponsive", body.error);
+			throw new ContractError("sidecar-unresponsive");
+		}
 		const health: unknown = await response.json();
 		if (!health || typeof health !== "object" || !("status" in health) || health.status !== "ok") throw new ContractError("sidecar-unresponsive");
 	} catch (error) {

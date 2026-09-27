@@ -1,4 +1,3 @@
-import { existsSync, readFileSync } from "node:fs";
 import { logger } from "./log.js";
 import type { ConsentValue, JsonObject, JsonValue } from "./types.js";
 
@@ -9,7 +8,6 @@ const REDACTED_KEY = "<api-key>";
 const REDACTED_IP = "<ip>";
 const REDACTED_CONTENT = "<content>";
 const MAX_USER_RULE_LENGTH = 256;
-const USER_RULE_CACHE_TTL_MS = 5_000;
 const NESTED_QUANTIFIER_PATTERN =
 	/\((?:\?:|\?=|\?!|\?<=|\?<!)?(?:[^()\\]|\\.)*(?:[+*]|\{\d+(?:,\d*)?\})(?:[^()\\]|\\.)*\)(?:[+*]|\{\d+(?:,\d*)?\})/u;
 
@@ -30,19 +28,12 @@ export interface RedactionResult {
 	redacted: boolean;
 }
 
-interface UserRuleCacheEntry {
-	loadedAtMs: number;
-	rules: RegExp[];
-}
-
-const userRuleCache = new Map<string, UserRuleCacheEntry>();
-
 export function redactEventPayload(
 	payload: JsonObject,
 	consent: ConsentValue,
-	userRulePath?: string,
+	userRulePatterns: readonly string[] = [],
 ): RedactionResult {
-	const userRules = loadUserRules(userRulePath);
+	const userRules = loadUserRules(userRulePatterns);
 	const result = redactValue(payload, consent, userRules, false);
 	if (typeof result.value !== "object" || result.value === null || Array.isArray(result.value)) {
 		return { value: {}, redacted: result.redacted };
@@ -50,8 +41,8 @@ export function redactEventPayload(
 	return { value: result.value as JsonObject, redacted: result.redacted };
 }
 
-export function redactScope(scope: JsonObject, userRulePath?: string): RedactionResult {
-	const userRules = loadUserRules(userRulePath);
+export function redactScope(scope: JsonObject, userRulePatterns: readonly string[] = []): RedactionResult {
+	const userRules = loadUserRules(userRulePatterns);
 	const result = redactValue(scope, "full", userRules, false);
 	return { value: result.value as JsonObject, redacted: result.redacted };
 }
@@ -123,30 +114,16 @@ function redactString(input: string, userRules: RegExp[]): { value: string; reda
 	return { value, redacted: value !== input };
 }
 
-function loadUserRules(path?: string): RegExp[] {
-	if (path === undefined) {
-		return [];
-	}
-	const now = Date.now();
-	const cached = userRuleCache.get(path);
-	if (cached !== undefined && now - cached.loadedAtMs < USER_RULE_CACHE_TTL_MS) {
-		return cached.rules;
-	}
-	if (!existsSync(path)) {
-		userRuleCache.set(path, { loadedAtMs: now, rules: [] });
-		return [];
-	}
-	const contents = readFileSync(path, "utf8");
+function loadUserRules(patterns: readonly string[]): RegExp[] {
 	const rules: RegExp[] = [];
-	for (const line of contents.split(/\r?\n/u)) {
-		const trimmed = line.trim();
+	for (const pattern of patterns) {
+		const trimmed = pattern.trim();
 		if (trimmed.length === 0 || trimmed.startsWith("#")) {
 			continue;
 		}
 		const unsafeReason = unsafeUserRuleReason(trimmed);
 		if (unsafeReason !== undefined) {
 			logger.warn("unsafe redaction rule ignored", {
-				path,
 				pattern_length: trimmed.length,
 				reason: unsafeReason,
 			}, {
@@ -161,7 +138,6 @@ function loadUserRules(path?: string): RegExp[] {
 			rules.push(new RegExp(trimmed, "gu"));
 		} catch (error) {
 			logger.warn("invalid redaction rule ignored", {
-				path,
 				pattern_length: trimmed.length,
 				error,
 			}, {
@@ -172,7 +148,6 @@ function loadUserRules(path?: string): RegExp[] {
 			});
 		}
 	}
-	userRuleCache.set(path, { loadedAtMs: now, rules });
 	return rules;
 }
 

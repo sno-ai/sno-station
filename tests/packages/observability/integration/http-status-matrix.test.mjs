@@ -11,9 +11,11 @@ import { BufferStore, decodeEnvelope } from "../../../../packages/observability/
 import { SnoObserveRuntime } from "../../../../packages/observability/dist/internal/runtime.js";
 import { parseEventInput } from "../../../../packages/observability/dist/internal/schemas.js";
 import { startMockServer } from "../fixtures/sno-ai-mock-server.mjs";
+import { writeObserveSettings } from "../fixtures/temp-env.mjs";
 
 function tempEnv(baseUrl) {
 	const dir = mkdtempSync(join(tmpdir(), "sno-observe-http-"));
+	writeObserveSettings(dir, { baseUrl });
 	return {
 		dir,
 		env: {
@@ -21,7 +23,6 @@ function tempEnv(baseUrl) {
 			SNO_IDENTITY_PATH: join(dir, "identity.json"),
 			SNO_BUFFER_PATH: join(dir, "buffer.db"),
 			SNO_CONSENT_PATH: join(dir, "state", "consent.json"),
-			SNO_OBSERVE_BASE_URL: baseUrl,
 			HOME: dir,
 		},
 	};

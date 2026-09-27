@@ -1,4 +1,4 @@
-import { testInstallationConfigPath, writeTestInstallationConfig } from "../../../apps/mem-claw/helpers/module-config-fixture";
+import { writeSettingsFixture } from "../fixtures/settings-file-fixture";
 /** @file rem-trigger-evaluator.test.ts
  * @purpose Proves automatic REM decisions, dispatch ordering, retry state, and audit evidence.
  * @boundary Real encrypted SQLite, durable state/audit files, and a real local HTTP boundary.
@@ -19,7 +19,7 @@ import {
 import { createServer, type Server } from "node:http";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
 	computeRemDailyDue,
@@ -40,12 +40,15 @@ type AuditRow = {
 	details?: Record<string, unknown>;
 };
 
+const modelCalls = JSON.parse(readFileSync(new URL("../../../../packages/memory/settings.default.json", import.meta.url), "utf8")).modelCalls;
+
 describe("REM automatic trigger", () => {
 	const databases: TestDb[] = [];
 	const temporaryDirectories: string[] = [];
 	let server: Server | undefined;
 
 	afterEach(async () => {
+		vi.unstubAllEnvs();
 		if (server) await new Promise<void>((resolve) => server?.close(() => resolve()));
 		for (const database of databases.splice(0)) database.cleanup();
 		for (const directory of temporaryDirectories.splice(0)) {
@@ -60,7 +63,7 @@ describe("REM automatic trigger", () => {
 		const discoveryPath = await startSidecar(requests, 500);
 		await seedState(fixture, { last_pass_at: "2026-08-11T12:00:00.000Z", schedule_zone: "UTC",
 			last_covered_count: 1, last_volume_pass_date: null, missed_window: null, attempts: { identity: null, count: 0 } });
-		for (let index = 0; index < 4; index++) await evaluateRemAutomaticTriggers({
+		for (let index = 0; index < 4; index++) await evaluateRemAutomaticTriggers({ modelCalls,
 			database: fixture.database.runtime.db, stateDir: fixture.stateDir, requestedOperations: ["rem-update"],
 			now: new Date("2026-08-12T12:00:00.000Z"), tickEnabled: true, discoveryPath });
 		expect(requests).toHaveLength(4);
@@ -81,7 +84,7 @@ describe("REM automatic trigger", () => {
 			missed_window: null,
 			attempts: { identity: null, count: 0 },
 		});
-		const paused = await evaluateRemAutomaticTriggers({
+		const paused = await evaluateRemAutomaticTriggers({ modelCalls,
 			database: fixture.database.runtime.db,
 			stateDir: fixture.stateDir,
 			requestedOperations: ["rem-update"],
@@ -103,7 +106,7 @@ describe("REM automatic trigger", () => {
 			},
 			attempts: { identity: null, count: 0 },
 		});
-		const resumed = await evaluateRemAutomaticTriggers({
+		const resumed = await evaluateRemAutomaticTriggers({ modelCalls,
 			database: fixture.database.runtime.db,
 			stateDir: fixture.stateDir,
 			requestedOperations: ["rem-update"],
@@ -122,15 +125,15 @@ describe("REM automatic trigger", () => {
 		const requests: Array<{ body: unknown; correlationId: string }> = [];
 		const discoveryPath = await startSidecar(requests, 202);
 		mkdirSync(path.join(fixture.stateDir, "rem-trigger-state.json"));
-		await evaluateRemAutomaticTriggers({ database: fixture.database.runtime.db, stateDir: fixture.stateDir,
+		await evaluateRemAutomaticTriggers({ modelCalls, database: fixture.database.runtime.db, stateDir: fixture.stateDir,
 			requestedOperations: ["rem-update"], now: new Date("2026-08-12T12:00:00.000Z"), discoveryPath });
 		expect(requests).toHaveLength(1);
-		expect((requests[0]?.body as { types: unknown }).types).toEqual(["rem-update"]);
+		expect(requests[0]?.body).toMatchObject({ types: ["rem-update"] });
 	});
 	it("initializes an absent scope and continues into the waiting decision", async () => {
 		const fixture = createFixture(1);
 		const now = new Date("2026-08-12T12:00:00.000Z");
-		const report = await evaluateRemAutomaticTriggers({
+		const report = await evaluateRemAutomaticTriggers({ modelCalls,
 			database: fixture.database.runtime.db,
 			stateDir: fixture.stateDir,
 			requestedOperations: ["rem-replace", "rem-update"],
@@ -172,7 +175,7 @@ describe("REM automatic trigger", () => {
 			attempts: { identity: null, count: 0 },
 		});
 
-		const report = await evaluateRemAutomaticTriggers({
+		const report = await evaluateRemAutomaticTriggers({ modelCalls,
 			database: fixture.database.runtime.db,
 			stateDir: fixture.stateDir,
 			requestedOperations: ["rem-replace", "rem-update"],
@@ -204,7 +207,7 @@ describe("REM automatic trigger", () => {
 		});
 
 		appendTerminalAudit(fixture.stateDir, "rem_completed", fixture.scope, correlationId);
-		const completionReport = await evaluateRemAutomaticTriggers({
+		const completionReport = await evaluateRemAutomaticTriggers({ modelCalls,
 			database: fixture.database.runtime.db,
 			stateDir: fixture.stateDir,
 			requestedOperations: ["rem-replace", "rem-update"],
@@ -233,7 +236,7 @@ describe("REM automatic trigger", () => {
 			attempts: { identity: null, count: 0 },
 		});
 
-		await evaluateRemAutomaticTriggers({
+		await evaluateRemAutomaticTriggers({ modelCalls,
 			database: fixture.database.runtime.db,
 			stateDir: fixture.stateDir,
 			requestedOperations: ["rem-update"],
@@ -247,7 +250,7 @@ describe("REM automatic trigger", () => {
 			requests[0]?.correlationId,
 		);
 
-		await evaluateRemAutomaticTriggers({
+		await evaluateRemAutomaticTriggers({ modelCalls,
 			database: fixture.database.runtime.db,
 			stateDir: fixture.stateDir,
 			requestedOperations: ["rem-update"],
@@ -276,7 +279,7 @@ describe("REM automatic trigger", () => {
 			attempts: { identity: null, count: 0 },
 		});
 
-		await evaluateRemAutomaticTriggers({
+		await evaluateRemAutomaticTriggers({ modelCalls,
 			database: fixture.database.runtime.db,
 			stateDir: fixture.stateDir,
 			requestedOperations: ["rem-update"],
@@ -311,7 +314,7 @@ describe("REM automatic trigger", () => {
 			missed_window: null,
 			attempts: { identity: null, count: 0 },
 		});
-		const evaluate = (now: string) => evaluateRemAutomaticTriggers({
+		const evaluate = (now: string) => evaluateRemAutomaticTriggers({ modelCalls,
 			database: fixture.database.runtime.db,
 			stateDir: fixture.stateDir,
 			requestedOperations: ["rem-update"],
@@ -345,7 +348,7 @@ describe("REM automatic trigger", () => {
 			attempts: { identity: null, count: 0 },
 		});
 		// After the volume pass the threshold is raised, so only the daily trigger is under test.
-		const evaluate = (now: string, volumeThreshold?: number) => evaluateRemAutomaticTriggers({
+		const evaluate = (now: string, volumeThreshold?: number) => evaluateRemAutomaticTriggers({ modelCalls,
 			database: fixture.database.runtime.db,
 			stateDir: fixture.stateDir,
 			requestedOperations: ["rem-update"],
@@ -384,7 +387,7 @@ describe("REM automatic trigger", () => {
 			missed_window: null,
 			attempts: { identity: null, count: 0 },
 		});
-		const evaluate = (now: string) => evaluateRemAutomaticTriggers({
+		const evaluate = (now: string) => evaluateRemAutomaticTriggers({ modelCalls,
 			database: fixture.database.runtime.db,
 			stateDir: fixture.stateDir,
 			requestedOperations: ["rem-update"],
@@ -414,7 +417,7 @@ describe("REM automatic trigger", () => {
 			attempts: { identity: null, count: 0 },
 		});
 
-		await evaluateRemAutomaticTriggers({
+		await evaluateRemAutomaticTriggers({ modelCalls,
 			database: fixture.database.runtime.db,
 			stateDir: fixture.stateDir,
 			requestedOperations: ["rem-replace"],
@@ -448,7 +451,7 @@ describe("REM automatic trigger", () => {
 			attempts: { identity: null, count: 0 },
 		});
 
-		await evaluateRemAutomaticTriggers({
+		await evaluateRemAutomaticTriggers({ modelCalls,
 			database: fixture.database.runtime.db,
 			stateDir: fixture.stateDir,
 			requestedOperations: ["rem-replace"],
@@ -472,7 +475,7 @@ describe("REM automatic trigger", () => {
 		const otherScope = `persona:${randomUUID()}`;
 		seedCandidateRows(fixture.database, otherScope, 1);
 
-		const report = await evaluateRemAutomaticTriggers({
+		const report = await evaluateRemAutomaticTriggers({ modelCalls,
 			database: fixture.database.runtime.db,
 			stateDir: fixture.stateDir,
 			requestedOperations: ["rem-replace"],
@@ -523,7 +526,7 @@ describe("REM automatic trigger", () => {
 			"utf8",
 		);
 
-		await evaluateRemAutomaticTriggers({
+		await evaluateRemAutomaticTriggers({ modelCalls,
 			database: fixture.database.runtime.db,
 			stateDir: fixture.stateDir,
 			requestedOperations: ["rem-replace"],
@@ -533,7 +536,7 @@ describe("REM automatic trigger", () => {
 		expect((await loadRemTriggerState(fixture.stateDir)).scopes[fixture.scope]?.last_covered_count).toBe(
 			101,
 		);
-		await evaluateRemAutomaticTriggers({
+		await evaluateRemAutomaticTriggers({ modelCalls,
 			database: fixture.database.runtime.db,
 			stateDir: fixture.stateDir,
 			requestedOperations: ["rem-replace"],
@@ -559,7 +562,7 @@ describe("REM automatic trigger", () => {
 		const correlationId = remAutomaticCorrelationId("volume", fixture.scope, "2026-08-11");
 		writeCompletionAudit(auditStateDir, fixture.scope, correlationId, 101);
 
-		await evaluateRemAutomaticTriggers({
+		await evaluateRemAutomaticTriggers({ modelCalls,
 			database: fixture.database.runtime.db,
 			stateDir: fixture.stateDir,
 			auditStateDir,
@@ -586,7 +589,7 @@ describe("REM automatic trigger", () => {
 		const correlationId = remAutomaticCorrelationId("volume", fixture.scope, "2026-08-11");
 		writeCompletionAudit(fixture.stateDir, fixture.scope, correlationId, 101, "x".repeat(17 * 1024 * 1024));
 
-		await evaluateRemAutomaticTriggers({
+		await evaluateRemAutomaticTriggers({ modelCalls,
 			database: fixture.database.runtime.db,
 			stateDir: fixture.stateDir,
 			requestedOperations: ["rem-replace"],
@@ -634,7 +637,7 @@ describe("REM automatic trigger", () => {
 			"utf8",
 		);
 
-		await evaluateRemAutomaticTriggers({
+		await evaluateRemAutomaticTriggers({ modelCalls,
 			database: fixture.database.runtime.db,
 			stateDir: fixture.stateDir,
 			requestedOperations: ["rem-replace"],
@@ -663,7 +666,7 @@ describe("REM automatic trigger", () => {
 		writeFileSync(auditPath, "unreadable completion\n", "utf8");
 		chmodSync(auditPath, 0o200);
 
-		await evaluateRemAutomaticTriggers({
+		await evaluateRemAutomaticTriggers({ modelCalls,
 			database: fixture.database.runtime.db,
 			stateDir: fixture.stateDir,
 			requestedOperations: ["rem-replace"],
@@ -692,32 +695,28 @@ describe("REM automatic trigger", () => {
 		);
 	});
 
-	it("reads the dispatched operations through the production plugin schema", () => {
+	it("reads the dispatched operations from settings.json", () => {
 		const configDir = temporaryDirectory("rem-trigger-config-");
-		const configPath = testInstallationConfigPath(configDir);
-		writeTestInstallationConfig(configDir, {
-				plugins: {
-					entries: {
-						"sno-mem-claw": {
-							config: { mode: "rem-enhanced", remOperations: ["rem-update"] },
-						},
-					},
-				},
-			});
-		expect(readRemAutomaticOperations(configPath)).toEqual({ mode: "rem-enhanced", requestedOperations: ["rem-update"], tickEnabled: true });
+		vi.stubEnv("SNO_PROFILE_DIR", configDir);
+		const { path: configPath } = writeSettingsFixture(configDir, {
+			mode: "rem-enhanced", rem: { operations: ["rem-update"] },
+		});
+		expect(readRemAutomaticOperations()).toEqual({ mode: "rem-enhanced", requestedOperations: ["rem-update"], tickEnabled: true });
 		const settings = JSON.parse(readFileSync(configPath, "utf8"));
-		writeFileSync(configPath, JSON.stringify({ ...settings, remEnhanced: { trigger: { tick: false } } }));
-		expect(readRemAutomaticOperations(configPath)).toEqual({ mode: "rem-enhanced", requestedOperations: ["rem-update"], tickEnabled: false });
-		writeFileSync(configPath, JSON.stringify({ ...settings, remEnhanced: { trigger: { tick: true } } }));
-		expect(readRemAutomaticOperations(configPath)).toEqual({ mode: "rem-enhanced", requestedOperations: ["rem-update"], tickEnabled: true });
+		writeFileSync(configPath, JSON.stringify({ ...settings, rem: { ...settings.rem, tick: false } }));
+		expect(readRemAutomaticOperations()).toEqual({ mode: "rem-enhanced", requestedOperations: ["rem-update"], tickEnabled: false });
+		writeFileSync(configPath, JSON.stringify({ ...settings, rem: { ...settings.rem, tick: true } }));
+		expect(readRemAutomaticOperations()).toEqual({ mode: "rem-enhanced", requestedOperations: ["rem-update"], tickEnabled: true });
 
 		const defaultDir = temporaryDirectory("rem-trigger-default-config-");
-		writeTestInstallationConfig(defaultDir, { plugins: { entries: { "sno-mem-claw": { config: { mode: "rem-enhanced" } } } } });
-		expect(readRemAutomaticOperations(testInstallationConfigPath(defaultDir))).toEqual({ mode: "rem-enhanced", requestedOperations: ["rem-replace", "rem-update"], tickEnabled: true });
+		vi.stubEnv("SNO_PROFILE_DIR", defaultDir);
+		writeSettingsFixture(defaultDir, { mode: "rem-enhanced" });
+		expect(readRemAutomaticOperations()).toEqual({ mode: "rem-enhanced", requestedOperations: ["rem-replace", "rem-update"], tickEnabled: true });
 
 		const localDir = temporaryDirectory("rem-trigger-local-config-");
-		writeTestInstallationConfig(localDir, { plugins: { entries: { "sno-mem-claw": { config: {} } } } });
-		expect(readRemAutomaticOperations(testInstallationConfigPath(localDir))).toEqual({ mode: "local-first", requestedOperations: ["rem-replace", "rem-update"], tickEnabled: true });
+		vi.stubEnv("SNO_PROFILE_DIR", localDir);
+		writeSettingsFixture(localDir, { mode: "local-first" });
+		expect(readRemAutomaticOperations()).toEqual({ mode: "local-first", requestedOperations: ["rem-replace", "rem-update"], tickEnabled: true });
 	});
 
 	function createFixture(candidateCount: number): { database: TestDb; stateDir: string; scope: string } {

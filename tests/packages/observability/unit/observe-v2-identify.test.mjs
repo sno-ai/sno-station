@@ -23,9 +23,8 @@ async function seededIdentify(prepareHome, localeEnv = {}) {
 	const temp = createTempSnoEnv("sno-observe-identify-");
 	Object.assign(temp.env, localeEnv);
 	prepareHome(temp.dir);
-	const previous = { HOME: process.env.HOME, XDG_CONFIG_HOME: process.env.XDG_CONFIG_HOME };
+	const previous = { HOME: process.env.HOME };
 	process.env.HOME = temp.dir;
-	delete process.env.XDG_CONFIG_HOME;
 	const observe = createSnoObserve({ env: temp.env, cwd: temp.dir, fetch: createFetchRecorder().fetch });
 	try {
 		await observe.emit({

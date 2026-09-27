@@ -18,10 +18,10 @@ function expectedHmac(key: string, input: MemoryTelemetryReceiptInput): string {
 
 describe("memory telemetry receipt service", () => {
 	it("loads the current key fail-closed and defaults current version to 1", () => {
-		expect(() => loadMemoryTelemetryKeySet({ enabled: true, env: {} })).toThrow(
-			/SNO_STATION_MEM_TELEMETRY_HMAC_KEY/,
+		expect(() => loadMemoryTelemetryKeySet({ enabled: true, key: "", historicKeys: [] })).toThrow(
+			/telemetry\.memoryUsage\.key/,
 		);
-		expect(loadMemoryTelemetryKeySet({ enabled: false, env: {} })).toEqual({
+		expect(loadMemoryTelemetryKeySet({ enabled: false, key: "", historicKeys: [] })).toEqual({
 			enabled: false,
 			current: null,
 			historic: new Map(),
@@ -29,7 +29,8 @@ describe("memory telemetry receipt service", () => {
 
 		const keySet = loadMemoryTelemetryKeySet({
 			enabled: true,
-			env: { SNO_STATION_MEM_TELEMETRY_HMAC_KEY: "current-key" },
+			key: "current-key",
+			historicKeys: [],
 		});
 		expect(keySet.current?.version).toBe(1);
 		expect(keySet.current?.key).toBe("current-key");
@@ -38,7 +39,8 @@ describe("memory telemetry receipt service", () => {
 	it("signs the PRD canonical byte concatenation and verifies the receipt", () => {
 		const keySet = loadMemoryTelemetryKeySet({
 			enabled: true,
-			env: { SNO_STATION_MEM_TELEMETRY_HMAC_KEY: "current-key" },
+			key: "current-key",
+			historicKeys: [],
 		});
 		const service = createMemoryTelemetryReceiptService(keySet);
 		const input: MemoryTelemetryReceiptInput = {
@@ -65,7 +67,8 @@ describe("memory telemetry receipt service", () => {
 	it("rejects ambiguous receipt field shapes before signing or verifying", () => {
 		const keySet = loadMemoryTelemetryKeySet({
 			enabled: true,
-			env: { SNO_STATION_MEM_TELEMETRY_HMAC_KEY: "current-key" },
+			key: "current-key",
+			historicKeys: [],
 		});
 		const service = createMemoryTelemetryReceiptService(keySet);
 
@@ -92,7 +95,8 @@ describe("memory telemetry receipt service", () => {
 	it("reports tampered content as invalid, not valid", () => {
 		const keySet = loadMemoryTelemetryKeySet({
 			enabled: true,
-			env: { SNO_STATION_MEM_TELEMETRY_HMAC_KEY: "current-key" },
+			key: "current-key",
+			historicKeys: [],
 		});
 		const service = createMemoryTelemetryReceiptService(keySet);
 		const receipt = service.sign({
@@ -112,7 +116,8 @@ describe("memory telemetry receipt service", () => {
 	it("uses historic keys for old receipts and reports unavailable keys as expired", () => {
 		const oldKeySet = loadMemoryTelemetryKeySet({
 			enabled: true,
-			env: { SNO_STATION_MEM_TELEMETRY_HMAC_KEY: "old-key" },
+			key: "old-key",
+			historicKeys: [],
 		});
 		const oldReceipt = createMemoryTelemetryReceiptService(oldKeySet).sign({
 			factId: "fact-abc",
@@ -123,17 +128,16 @@ describe("memory telemetry receipt service", () => {
 		const rotatedKeySet = loadMemoryTelemetryKeySet({
 			enabled: true,
 			currentKeyVersion: 2,
-			env: {
-				SNO_STATION_MEM_TELEMETRY_HMAC_KEY: "new-key",
-				SNO_STATION_MEM_TELEMETRY_HMAC_KEY_V1: "old-key",
-			},
+			key: "new-key",
+			historicKeys: ["old-key"],
 		});
 		expect(createMemoryTelemetryReceiptService(rotatedKeySet).verify(oldReceipt).status).toBe("valid");
 
 		const missingOldKeySet = loadMemoryTelemetryKeySet({
 			enabled: true,
 			currentKeyVersion: 2,
-			env: { SNO_STATION_MEM_TELEMETRY_HMAC_KEY: "new-key" },
+			key: "new-key",
+			historicKeys: [],
 		});
 		expect(createMemoryTelemetryReceiptService(missingOldKeySet).verify(oldReceipt)).toEqual({
 			status: "key_expired",
@@ -146,7 +150,8 @@ describe("memory telemetry receipt service", () => {
 	it("propagates runtime signing failures", () => {
 		const keySet = loadMemoryTelemetryKeySet({
 			enabled: true,
-			env: { SNO_STATION_MEM_TELEMETRY_HMAC_KEY: "current-key" },
+			key: "current-key",
+			historicKeys: [],
 		});
 		const service = createMemoryTelemetryReceiptService(keySet, {
 			signHmac: () => {

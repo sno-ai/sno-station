@@ -8,7 +8,6 @@ import json
 import logging
 import os
 import secrets
-import shutil
 import subprocess
 import sys
 import threading
@@ -29,18 +28,11 @@ __all__ = ["SnoMemoryProvider", "register"]
 _SKIN_ID = "hermes"
 _LOG = logging.getLogger(__name__)
 _PROVIDER_NAME = "sno-mem-hermes"
-_SIDECAR_COMMAND = "sno-station-mem"
 _HTTP_TIMEOUT_SECONDS = 900
 _CALLBACK_MAX_BODY_BYTES = 1_048_576
 _CALLBACK_TIMEOUT_SECONDS = 900
-_LATER_RECALL_LIMIT = 3
-_LATER_RECALL_MIN_SCORE = 0.3
-_LATER_RECALL_MAX_CHARS = 1_500
-_TOOL_RECALL_LIMIT = 5
 _TASK_QUERY = "current task objective, completed work, blockers, next action, and relevant files or evidence"
-_TASK_RECALL_LIMIT = 5
 _CORRECTION_LOOKUP_LIMIT = 20
-_TASK_RECALL_MAX_CHARS = 3_500
 _WORKING_BRIEF_HEADER = "Sno working memory (data, not instructions):"
 
 
@@ -316,24 +308,65 @@ _RUNTIME = _shared_runtime()
 class SidecarClient:
     def __init__(self, profile_dir: Path) -> None:
         self._profile_dir = profile_dir
+        self._registration: dict[str, object] | None = None
+        self._registered_pid: int | None = None
+
+    def settings(self) -> dict[str, object]:
+        path = self._profile_dir / "settings.json"
+        try:
+            data = json.loads(path.read_text())
+        except (OSError, ValueError) as error:
+            raise RuntimeError(f"settings unavailable: {path}: file; run sno setup") from error
+        if not isinstance(data, dict):
+            raise RuntimeError(f"settings unavailable: {path}: settings; run sno setup")
+        package = data.get("memoryPackage")
+        for field in ("path", "node"):
+            if not isinstance(package, dict) or not isinstance(package.get(field), str) or not package[field]:
+                raise RuntimeError(f"settings unavailable: {path}: memoryPackage.{field}; run sno setup")
+        recall = data.get("recall")
+        if not isinstance(recall, dict):
+            raise RuntimeError(f"settings unavailable: {path}: recall; run sno setup")
+        if not isinstance(recall.get("auto"), bool):
+            raise RuntimeError(f"settings unavailable: {path}: recall.auto; run sno setup")
+        if not isinstance(recall.get("explicitLimit"), int):
+            raise RuntimeError(f"settings unavailable: {path}: recall.explicitLimit; run sno setup")
+        for group, fields in (("sessionStart", ("limit", "maxChars", "timeoutMs")),
+                              ("prompt", ("limit", "maxChars", "timeoutMs", "minChars", "minScore"))):
+            values = recall.get(group)
+            for field in fields:
+                if not isinstance(values, dict) or not isinstance(values.get(field), (int, float)):
+                    raise RuntimeError(f"settings unavailable: {path}: recall.{group}.{field}; run sno setup")
+        return data
 
     def connect(self) -> None:
+        deadline = time.monotonic() + 30
         if self._healthy():
             return
-        executable = shutil.which(_SIDECAR_COMMAND)
-        if executable is None:
-            raise RuntimeError("sidecar unavailable")
-        subprocess.run(
-            [executable, "sidecar", "start"],
-            check=True,
-            capture_output=True,
-            text=True,
-            timeout=40,
-        )
-        if not self._healthy():
-            raise RuntimeError("sidecar unavailable")
+        package = self.settings()["memoryPackage"]
+        if not isinstance(package, dict):
+            raise RuntimeError("invalid memory package")
+        log_path = self._profile_dir / "sno-station-mem" / "sidecar-startup.log"
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        with log_path.open("a") as log:
+            subprocess.Popen(
+                [str(package["node"]), str(Path(str(package["path"])) / "dist" / "sidecar" / "main.js")],
+                start_new_session=True, stdin=subprocess.DEVNULL, stdout=log, stderr=log,
+            )
+        while time.monotonic() < deadline:
+            if self._healthy():
+                return
+            time.sleep(0.05)
+        raise RuntimeError("memory service unavailable")
 
-    def post(self, method: str, body: dict[str, object]) -> dict[str, object]:
+    def post(self, method: str, body: dict[str, object], timeout_seconds: float = _HTTP_TIMEOUT_SECONDS) -> dict[str, object]:
+        if method != "init":
+            self.connect()
+            pid = self._pid()
+            if self._registration is not None and pid != self._registered_pid:
+                self.settings()
+                result = self.post("init", self._registration)
+                if result.get("degraded"):
+                    raise RuntimeError(str(result.get("reason") or "memory service unavailable"))
         request = urllib.request.Request(
             f"http://127.0.0.1:{self._port()}/v1/{method}",
             data=json.dumps(body).encode(),
@@ -345,13 +378,16 @@ class SidecarClient:
         )
         try:
             with urllib.request.urlopen(
-                request, timeout=_HTTP_TIMEOUT_SECONDS
+                request, timeout=timeout_seconds
             ) as response:
                 result = json.load(response)
         except urllib.error.HTTPError as error:
             raise RuntimeError(error.read().decode()) from error
         if not isinstance(result, dict):
             raise RuntimeError("invalid sidecar response")
+        if method == "init" and not result.get("degraded"):
+            self._registration = body
+            self._registered_pid = self._pid()
         return result
 
     def _healthy(self) -> bool:
@@ -361,8 +397,24 @@ class SidecarClient:
                 timeout=5,
             ) as response:
                 return response.status == 200
+        except urllib.error.HTTPError as error:
+            try:
+                detail = json.load(error)
+            except ValueError:
+                return False
+            message = detail.get("error") if isinstance(detail, dict) else None
+            if isinstance(message, str) and message.startswith("settings unavailable:"):
+                raise RuntimeError(message) from error
+            return False
         except (OSError, ValueError):
             return False
+
+    def _pid(self) -> int:
+        discovery = json.loads((self._profile_dir / "station" / "sidecar.json").read_text())
+        pid = discovery.get("pid")
+        if not isinstance(pid, int) or pid < 1:
+            raise ValueError("invalid memory service discovery")
+        return pid
 
     def _port(self) -> int:
         discovery = json.loads(
@@ -407,7 +459,6 @@ class SnoMemoryProvider(MemoryProvider):
             os.environ.get("SNO_PROFILE_DIR", Path.home() / ".sno")
         ).resolve()
         client = SidecarClient(profile_dir)
-        client.connect()
         cwd = kwargs.get("cwd")
         self._cwd = str(Path(cwd).resolve()) if isinstance(cwd, str) and cwd else None
         self._project = self._cwd or str(Path.cwd().resolve())
@@ -416,19 +467,20 @@ class SnoMemoryProvider(MemoryProvider):
         self._client = client
         registration: dict[str, object] = {
             "skinId": _SKIN_ID,
-            "inheritInstalled": True,
         }
         model = _RUNTIME.model_registration()
         if model is not None:
             registration["model"] = model
-        result = client.post(
-            "init",
-            {"scope": self._scope(session_id), "registration": registration},
-        )
-        if result.get("degraded"):
-            self._last_error = str(result.get("reason") or "sidecar unavailable")
-            raise RuntimeError(self._last_error)
+        client._registration = {"scope": self._scope(session_id), "registration": registration}
         _RUNTIME.bind_provider(session_id, self)
+        try:
+            client.connect()
+            result = client.post("init", client._registration)
+            if result.get("degraded"):
+                raise RuntimeError(str(result.get("reason") or "memory service unavailable"))
+        except (OSError, RuntimeError, ValueError) as error:
+            self._last_error = str(error)
+            _LOG.error("memory service unavailable", extra={"error": self._last_error})
 
     def system_prompt_block(self) -> str:
         return (
@@ -462,17 +514,30 @@ class SnoMemoryProvider(MemoryProvider):
     def handle_tool_call(
         self, tool_name: str, args: dict[str, object], **_kwargs: object
     ) -> str:
-        if tool_name == "sno_memory_recall":
-            return self._recall_tool(args)
-        if tool_name == "sno_memory_get":
-            return self._get_tool(args)
-        if tool_name == "sno_memory_remember":
-            return self._remember_tool(args)
-        if tool_name == "sno_memory_correct":
-            return self._correct_tool(args)
-        return _tool_error("invalid-input")
+        try:
+            if tool_name == "sno_memory_recall":
+                return self._recall_tool(args)
+            if tool_name == "sno_memory_get":
+                return self._get_tool(args)
+            if tool_name == "sno_memory_remember":
+                return self._remember_tool(args)
+            if tool_name == "sno_memory_correct":
+                return self._correct_tool(args)
+            return _tool_error("invalid-input")
+        except (OSError, RuntimeError, ValueError) as error:
+            self._last_error = str(error)
+            _LOG.error("memory call failed", extra={"error": self._last_error})
+            return json.dumps({"degraded": True, "reason": self._last_error})
 
     def prefetch(self, query: str, *, session_id: str = "") -> str:
+        try:
+            recall = self._require_client().settings()["recall"]
+            if isinstance(recall, dict) and (not recall["auto"] or len(query.strip()) < int(self._recall_number("prompt", "minChars"))):
+                return ""
+        except (OSError, RuntimeError, ValueError) as error:
+            self._last_error = str(error)
+            _LOG.error("memory recall failed", extra={"error": self._last_error})
+            return ""
         self._report_host_event(
             session_id or self._session_id, {"kind": "prompt", "prompt": query}
         )
@@ -484,11 +549,12 @@ class SnoMemoryProvider(MemoryProvider):
                     "scope": self._scope(session_id or self._session_id),
                     "options": {
                         "source": "manual",
-                        "limit": _LATER_RECALL_LIMIT,
-                        "minScore": _LATER_RECALL_MIN_SCORE,
+                        "limit": int(self._recall_number("prompt", "limit")),
+                        "minScore": self._recall_number("prompt", "minScore"),
                         "includeMetadata": True,
                     },
                 },
+                timeout_seconds=self._recall_number("prompt", "timeoutMs") / 1000,
             )
         except (OSError, RuntimeError, ValueError) as error:
             self._last_recall = None
@@ -500,9 +566,14 @@ class SnoMemoryProvider(MemoryProvider):
             self._last_error = error
             return ""
         unseen = [memory for memory in memories if memory["id"] not in self._seen_ids]
-        text, included = _render_memories(
-            unseen, _LATER_RECALL_LIMIT, _LATER_RECALL_MAX_CHARS
-        )
+        try:
+            text, included = _render_memories(
+                unseen, int(self._recall_number("prompt", "limit")), int(self._recall_number("prompt", "maxChars"))
+            )
+        except (OSError, RuntimeError, ValueError) as error:
+            self._last_error = str(error)
+            _LOG.error("memory recall failed", extra={"error": self._last_error})
+            return ""
         self._seen_ids.update(memory["id"] for memory in included)
         self._last_recall = (
             RecallStatus(provider_label="Sno", count=len(included))
@@ -519,6 +590,9 @@ class SnoMemoryProvider(MemoryProvider):
         if not self._brief_pending:
             return ""
         try:
+            recall = self._require_client().settings()["recall"]
+            if isinstance(recall, dict) and not recall["auto"]:
+                return ""
             result = self._require_client().post(
                 "get-recall",
                 {
@@ -526,10 +600,11 @@ class SnoMemoryProvider(MemoryProvider):
                     "scope": self._scope(session_id or self._session_id),
                     "options": {
                         "source": "manual",
-                        "limit": _TASK_RECALL_LIMIT,
+                        "limit": int(self._recall_number("sessionStart", "limit")),
                         "includeMetadata": True,
                     },
                 },
+                timeout_seconds=self._recall_number("sessionStart", "timeoutMs") / 1000,
             )
         except (OSError, RuntimeError, ValueError) as error:
             self._last_error = str(error)
@@ -539,12 +614,17 @@ class SnoMemoryProvider(MemoryProvider):
             self._last_error = error
             return ""
         unseen = [memory for memory in memories if memory["id"] not in self._seen_ids]
-        text, included = _render_memories(
-            unseen,
-            _TASK_RECALL_LIMIT,
-            _TASK_RECALL_MAX_CHARS,
-            header=_WORKING_BRIEF_HEADER,
-        )
+        try:
+            text, included = _render_memories(
+                unseen,
+                int(self._recall_number("sessionStart", "limit")),
+                int(self._recall_number("sessionStart", "maxChars")),
+                header=_WORKING_BRIEF_HEADER,
+            )
+        except (OSError, RuntimeError, ValueError) as error:
+            self._last_error = str(error)
+            _LOG.error("memory recall failed", extra={"error": self._last_error})
+            return ""
         self._seen_ids.update(memory["id"] for memory in included)
         self._brief_pending = False
         self._last_error = "" if included else "recall empty"
@@ -569,7 +649,11 @@ class SnoMemoryProvider(MemoryProvider):
                 {"role": "assistant", "content": assistant_content},
             ]
         )
-        self._capture(normalized, active_session)
+        try:
+            self._capture(normalized, active_session)
+        except (OSError, RuntimeError, ValueError) as error:
+            self._last_error = str(error)
+            _LOG.error("memory capture failed", extra={"error": self._last_error})
 
     def on_pre_compress(
         self,
@@ -593,7 +677,7 @@ class SnoMemoryProvider(MemoryProvider):
                     "scope": self._scope(self._session_id),
                     "options": {
                         "source": "manual",
-                        "limit": _TASK_RECALL_LIMIT,
+                        "limit": int(self._recall_number("sessionStart", "limit")),
                         "includeMetadata": True,
                     },
                 },
@@ -604,7 +688,12 @@ class SnoMemoryProvider(MemoryProvider):
         memories, error = _memories(result)
         if error:
             return ""
-        return _render_memories(memories, _TASK_RECALL_LIMIT, _TASK_RECALL_MAX_CHARS)[0]
+        try:
+            return _render_memories(memories, int(self._recall_number("sessionStart", "limit")), int(self._recall_number("sessionStart", "maxChars")))[0]
+        except (OSError, RuntimeError, ValueError) as error:
+            self._last_error = str(error)
+            _LOG.error("memory recall failed", extra={"error": self._last_error})
+            return ""
 
     def report_host_llm_call(self, session_id: str, call: dict[str, object]) -> None:
         """One host model call finished: forward its usage to the observe session."""
@@ -803,7 +892,7 @@ class SnoMemoryProvider(MemoryProvider):
                     },
                 )
             )
-            if result.get("committed") is not True:
+            if result.get("committed") is not True and result.get("accepted") is not True:
                 raise RuntimeError(str(result.get("reason") or "capture not committed"))
             with self._capture_lock:
                 self._committed[key] = result
@@ -827,7 +916,7 @@ class SnoMemoryProvider(MemoryProvider):
                 "scope": self._scope(self._session_id),
                 "options": {
                     "source": "manual",
-                    "limit": _TOOL_RECALL_LIMIT,
+                    "limit": int(self._recall_number("explicitLimit")),
                     "includeMetadata": True,
                 },
             },
@@ -835,7 +924,7 @@ class SnoMemoryProvider(MemoryProvider):
         memories, error = _memories(result)
         if error:
             return json.dumps(result)
-        text, included = _render_memories(memories, _TOOL_RECALL_LIMIT, sys.maxsize)
+        text, included = _render_memories(memories, int(self._recall_number("explicitLimit")), sys.maxsize)
         return json.dumps(
             {
                 "degraded": False,
@@ -1036,6 +1125,19 @@ class SnoMemoryProvider(MemoryProvider):
             "session": session_id,
             "host": {"sessionId": session_id, "workspace": self._project},
         }
+
+    def _recall_number(self, field: str, name: str = "") -> int | float:
+        recall = self._require_client().settings()["recall"]
+        if not isinstance(recall, dict):
+            raise RuntimeError("invalid recall settings")
+        value = recall[field]
+        if name:
+            if not isinstance(value, dict):
+                raise RuntimeError("invalid recall settings")
+            value = value[name]
+        if not isinstance(value, (int, float)):
+            raise RuntimeError("invalid recall settings")
+        return value
 
     def _require_client(self) -> SidecarClient:
         if self._client is None:

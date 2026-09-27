@@ -8,7 +8,7 @@ import { describe, it } from "node:test";
 import { BufferStore } from "../../../../packages/observability/dist/internal/buffer-store.js";
 import { SnoObserveRuntime } from "../../../../packages/observability/dist/internal/runtime.js";
 import { parseEventInput } from "../../../../packages/observability/dist/internal/schemas.js";
-import { validPayloads, scope } from "../fixtures/temp-env.mjs";
+import { validPayloads, scope, writeObserveSettings } from "../fixtures/temp-env.mjs";
 
 const bufferStoreModuleUrl = new URL(
 	"../../../../packages/observability/dist/internal/buffer-store.js",
@@ -21,6 +21,7 @@ function testHash(index) {
 
 function tempEnv() {
 	const dir = mkdtempSync(join(tmpdir(), "sno-observe-idemp-"));
+	writeObserveSettings(dir, { baseUrl: "https://sno.test" });
 	return {
 		dir,
 		env: {
@@ -28,7 +29,6 @@ function tempEnv() {
 			SNO_IDENTITY_PATH: join(dir, "identity.json"),
 			SNO_BUFFER_PATH: join(dir, "buffer.db"),
 			SNO_CONSENT_PATH: join(dir, "state", "consent.json"),
-			SNO_OBSERVE_BASE_URL: "https://sno.test",
 			HOME: dir,
 		},
 	};

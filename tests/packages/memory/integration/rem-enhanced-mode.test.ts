@@ -13,17 +13,15 @@ import { join, resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ProductMode } from "../../../../packages/memory/config/plugin-config-mode-schema";
-import { pluginConfigSchema } from "../../../../packages/memory/config/plugin-config-schema";
 import { atomicExtractionSkillReference } from "../../../../packages/memory/src/engine/extraction/atomic-extraction-skill";
 import { renderRemUpdateVerificationPrompt } from "../../../../packages/memory/src/engine/rem/rem-update-judgment";
-import { bindStore, getInstallationConfigPath } from "../../../../packages/memory/src/engine/shared/paths";
-import { readSnoStationMemConfig, PLUGIN_ENTRY_KEY } from "../../../../packages/memory/src/engine/bindings/embedder-config-files";
-import { readRemAutomaticOperations } from "../../../../packages/memory/src/sidecar/rem-trigger";
 import { MODEL_CALLS, type ModelCallId } from "../../../../packages/memory/src/model/model-call-table";
 import { REM_UPDATE_JUDGMENT_SKILL } from "../../../../packages/memory/src/sidecar/rem-update-judgment-skill";
 import { startRemSidecar } from "../../../../packages/memory/src/sidecar/server";
 import { createTestDb } from "../../../apps/mem-claw/helpers/test-db";
 import { callId, modelReply, type Recorder, type RecorderReply, startRecorder } from "./fixtures/model-recorders";
+import { untilModelReady } from "./fixtures/model-ready";
+import { type SettingsDocument, writeSettingsFixture } from "../fixtures/settings-file-fixture";
 
 const repoRoot = resolve(import.meta.dirname, "../../../..");
 
@@ -47,8 +45,6 @@ const closers: Array<() => Promise<void>> = [];
 beforeEach(() => {
 	root = mkdtempSync(join(tmpdir(), "rem-enhanced-mode-"));
 	database = createTestDb();
-	// A key the recorder ignores; without one the Sno client refuses before any request leaves.
-	vi.stubEnv("SNO_MEM_CLAW_LLM_API_KEY", "loopback-recorder");
 });
 afterEach(async () => {
 	await sidecar?.stop();
@@ -109,16 +105,26 @@ async function contractPost(path: string, body: unknown, skin: string): Promise<
 	});
 }
 
-/** A plugin with a model callback; routing is the mode and the language only (REQ-3). */
-async function registerHost(skinId: string, hostUrl: string, mode: ProductMode, extra: Record<string, unknown> = {}): Promise<void> {
-	const { remEnhanced: _remEnhanced, agentNative: _agentNative, language: _language, mode: _mode, ...settings } = pluginConfigSchema.parse({
-		mode, retrieval: { rerank: "none" }, observe: { enabled: false }, ...extra,
-	}) as Record<string, unknown>;
+/** A plugin with a model callback; a registration is the skin and its model only, the mode comes from settings.json (REQ-4). */
+async function registerHost(skinId: string, hostUrl: string): Promise<void> {
 	const response = await contractPost("/v1/init", { scope: { ...SEED_SCOPE, session: skinId }, registration: {
-		skinId, settings, routing: { mode, language: "en" },
+		skinId,
 		model: { baseUrl: `${hostUrl}/host/v1/`, credential: "loopback-credential", model: "loopback-model" },
 	} }, skinId);
 	expect(response.status).toBe(200);
+}
+
+/** The service reads `<profile>/settings.json` once, when its runtime opens: write it before the sidecar starts. */
+function writeSettings(profile: "seed" | "mode", mode: ProductMode, overrides: SettingsDocument = {}): void {
+	// A Sno GPU key the recorder ignores; without one the Sno client refuses before any request leaves.
+	writeSettingsFixture(join(root, profile), { mode, store: { path: database.dbPath, encryptionKey: database.encryptionKey },
+		snoGpu: { apiKey: "loopback-recorder" }, rerank: { mode: "none" }, embedding: { cacheDir: "" },
+		telemetry: { observe: { enabled: false } }, ...overrides });
+}
+
+/** Points the mode profile's Sno GPU calls at a loopback recorder. */
+function pointSnoGpuAt(mode: ProductMode, url: string, overrides: SettingsDocument = {}): void {
+	writeSettings("mode", mode, { snoGpu: { baseUrl: url, apiKey: "loopback-recorder" }, ...overrides });
 }
 
 const stateDir = () => join(root, "mode", "sno-station-mem");
@@ -138,12 +144,12 @@ async function until(check: () => boolean, ms = 60_000): Promise<void> {
 }
 
 /**
- * Stores the rows under a Local First profile (no model call), files `state` rows under their subject, then binds
- * the same store under the mode being tested with a due daily pass. The REM job reads its mode from this binding.
+ * Stores the rows under a Local First profile (no model call), files `state` rows under their subject, then gives
+ * the mode profile a due daily pass. The REM job reads its mode from that profile's settings.json.
  */
-async function seedStore(mode: ProductMode, episodic: string[], state: Array<[text: string, subject: string]>): Promise<void> {
+async function seedStore(episodic: string[], state: Array<[text: string, subject: string]>): Promise<void> {
 	vi.stubEnv("SNO_PROFILE_DIR", join(root, "seed"));
-	await bindStore(database.dbPath, { mode: "local-first", retrieval: { rerank: "none" } });
+	writeSettings("seed", "local-first");
 	sidecar = await startRemSidecar();
 	for (const text of [...state.map(([text]) => text), ...episodic]) {
 		const response = await contractPost("/v1/mutate", { scope: SEED_SCOPE, op: { op: "store", content: text, category: "episodic" } }, "seed");
@@ -157,7 +163,6 @@ async function seedStore(mode: ProductMode, episodic: string[], state: Array<[te
 	const [only, ...others] = scopes;
 	if (!only || others.length > 0) throw new Error(`expected one REM scope, found ${JSON.stringify(scopes)}`);
 	vi.stubEnv("SNO_PROFILE_DIR", join(root, "mode"));
-	await bindStore(database.dbPath, { mode, retrieval: { rerank: "none" } });
 	mkdirSync(stateDir(), { recursive: true });
 	writeFileSync(join(stateDir(), "rem-trigger-state.json"), JSON.stringify({ version: 1, scopes: { [only.scope]: {
 		last_pass_at: new Date(Date.now() - 2 * 86_400_000).toISOString(), schedule_zone: "UTC", last_covered_count: 0,
@@ -179,12 +184,12 @@ describe("one REM pass sends each stage where the table says (REQ-1, REQ-2)", ()
 	});
 
 	it("REM Enhanced: REM1, REM3, REM4, REM5 on the Sno GPU; REM2, REM6, REM7, REM8 on the host", { timeout: 180_000 }, async () => {
-		await seedStore("rem-enhanced", ...FULL_PASS);
+		await seedStore(...FULL_PASS);
 		const sno = await recorder();
 		const host = await recorder();
-		vi.stubEnv("GPU_BASE_URL", sno.url);
+		pointSnoGpuAt("rem-enhanced", sno.url);
 		sidecar = await startRemSidecar();
-		await registerHost("host-skin", host.url, "rem-enhanced");
+		await registerHost("host-skin", host.url);
 		await until(settled);
 		const all = [...sno.received, ...host.received];
 		expect({ reached: [...new Set(all.map(call => call.id).filter(id => id.startsWith("REM")))].sort(),
@@ -204,12 +209,12 @@ describe("one REM pass sends each stage where the table says (REQ-1, REQ-2)", ()
 	});
 
 	it("Agent Native: all eight REM stages on the host, REM1 as the chat prompt, nothing on the Sno GPU", { timeout: 180_000 }, async () => {
-		await seedStore("agent-native", ...FULL_PASS);
+		await seedStore(...FULL_PASS);
 		const sno = await recorder();
 		const host = await recorder();
-		vi.stubEnv("GPU_BASE_URL", sno.url);
+		pointSnoGpuAt("agent-native", sno.url);
 		sidecar = await startRemSidecar();
-		await registerHost("host-skin", host.url, "agent-native");
+		await registerHost("host-skin", host.url);
 		await until(settled);
 		const rem1OnHost = host.received.filter(call => call.id === "REM1");
 		expect({
@@ -223,15 +228,15 @@ describe("one REM pass sends each stage where the table says (REQ-1, REQ-2)", ()
 
 describe("REM Enhanced stops at the first refused call (REQ-4)", () => {
 	it("host refuses REM2 after REM1 answered on the Sno GPU: rem_skipped, the closed pair stays closed, the next pass runs", { timeout: 180_000 }, async () => {
-		await seedStore("rem-enhanced", [], [
+		await seedStore([], [
 			[OLDER_DEPLOYMENT, "entity:deployment"], [NEWER_DEPLOYMENT, "entity:deployment"],
 			[OLDER_OFFICE, "entity:office"], [NEWER_OFFICE, "entity:office"],
 		]);
 		const sno = await recorder({ refuse: () => false, keepFirstPair: true });
 		const host = await recorder({ refuse: id => id === "REM2" });
-		vi.stubEnv("GPU_BASE_URL", sno.url);
+		pointSnoGpuAt("rem-enhanced", sno.url);
 		sidecar = await startRemSidecar();
-		await registerHost("host-skin", host.url, "rem-enhanced");
+		await registerHost("host-skin", host.url);
 		await until(settled);
 		const judged = [...sno.received, ...host.received].filter(call => call.id === "REM1" && call.answered);
 		const keptPair = judged[0]?.content ?? "";
@@ -247,7 +252,7 @@ describe("REM Enhanced stops at the first refused call (REQ-4)", () => {
 		const firstJobs = jobIds();
 		const before = { sno: sno.received.length, host: host.received.length };
 		host.refuse = () => false;
-		await registerHost("host-skin", host.url, "rem-enhanced");
+		await registerHost("host-skin", host.url);
 		await until(() => jobIds().length > firstJobs.length && (auditEvents("rem_completed").length > 0 || auditEvents("rem_failed").length > 0));
 		const rejudged = [...sno.received.slice(before.sno), ...host.received.slice(before.host)]
 			.filter(call => call.id === "REM1" && [OLDER_DEPLOYMENT, NEWER_DEPLOYMENT, OLDER_OFFICE, NEWER_OFFICE]
@@ -258,12 +263,12 @@ describe("REM Enhanced stops at the first refused call (REQ-4)", () => {
 	});
 
 	it("Sno GPU refuses REM1: rem_skipped and the host receives no REM call", { timeout: 180_000 }, async () => {
-		await seedStore("rem-enhanced", [], [[OLDER_DEPLOYMENT, "entity:deployment"], [NEWER_DEPLOYMENT, "entity:deployment"]]);
+		await seedStore([], [[OLDER_DEPLOYMENT, "entity:deployment"], [NEWER_DEPLOYMENT, "entity:deployment"]]);
 		const sno = await recorder({ refuse: id => id === "REM1" });
 		const host = await recorder();
-		vi.stubEnv("GPU_BASE_URL", sno.url);
+		pointSnoGpuAt("rem-enhanced", sno.url);
 		sidecar = await startRemSidecar();
-		await registerHost("host-skin", host.url, "rem-enhanced");
+		await registerHost("host-skin", host.url);
 		await until(settled);
 		expect({ skipped: skipped(), completed: auditEvents("rem_completed").length,
 			rem1RefusedOnSno: sno.received.some(call => call.id === "REM1" && !call.answered), hostRem: remSet(host) })
@@ -273,10 +278,10 @@ describe("REM Enhanced stops at the first refused call (REQ-4)", () => {
 
 describe.each(["rem-enhanced", "agent-native"] as const)("%s: no connected plugin, no REM pass (REQ-4)", mode => {
 	it("the tick opens no job and neither recorder receives a request", { timeout: 120_000 }, async () => {
-		await seedStore(mode, [OLDER_HOME, RETRACTION], [[OLDER_DEPLOYMENT, "entity:deployment"], [NEWER_DEPLOYMENT, "entity:deployment"]]);
+		await seedStore([OLDER_HOME, RETRACTION], [[OLDER_DEPLOYMENT, "entity:deployment"], [NEWER_DEPLOYMENT, "entity:deployment"]]);
 		const sno = await recorder();
 		const host = await recorder();
-		vi.stubEnv("GPU_BASE_URL", sno.url);
+		pointSnoGpuAt(mode, sno.url);
 		vi.stubEnv("SNO_STATION_MEM_MAINTENANCE_INTERVAL_MS", "500");
 		sidecar = await startRemSidecar();
 		// Opens the memory runtime, and with it the tick, through a registration without a model callback.
@@ -306,29 +311,32 @@ function tableDestination(label: string, mode: ProductMode): string {
 
 describe.each(["rem-enhanced", "agent-native"] as const)("%s: the other twenty calls follow the table (REQ-1)", mode => {
 	const SKIN = "entry-skin";
-	type Entry = { primary: string[]; run: (host: Recorder) => Promise<void> };
+	type Entry = { primary: string[]; settings?: SettingsDocument; run: (host: Recorder) => Promise<void> };
 	const entries: Record<string, Entry> = {
 		capture: { primary: ["E1"], run: async host => {
-			await registerHost(SKIN, host.url, mode);
+			// A capture before the embedding model is prepared is only accepted; E1 runs after preparation.
+			await untilModelReady(async ({ scope, ...recall }) =>
+				(await contractPost("/v1/get-recall", { ...recall, scope: { ...scope, principal: SEED_SCOPE.principal } }, "model-ready-probe")).json());
+			await registerHost(SKIN, host.url);
 			await (await contractPost("/v1/capture", { scope: { ...SEED_SCOPE, session: SKIN }, turn: { turnId: `capture-${mode}`, rewindEpoch: 0,
 				messages: [{ role: "user", content: "I keep a blue notebook for meeting notes.", at: 1789606800000 }] } }, SKIN)).text();
 		} },
 		"profile write": { primary: ["P4"], run: async host => {
-			await registerHost(SKIN, host.url, mode);
+			await registerHost(SKIN, host.url);
 			for (const content of ["My preferred code editor is Vim.", "My preferred code editor is Helix."]) {
 				await (await contractPost("/v1/mutate", { scope: SEED_SCOPE, op: { op: "store", content, category: "profile",
 					metadata: { section_name: "preferences.editor" } } }, SKIN)).text();
 			}
 		} },
 		"task write": { primary: ["T1"], run: async host => {
-			await registerHost(SKIN, host.url, mode);
+			await registerHost(SKIN, host.url);
 			for (const content of ["Draft the quarterly budget review for the finance team.", "Prepare the finance team's quarterly budget review draft."]) {
 				await (await contractPost("/v1/mutate", { scope: SEED_SCOPE, op: { op: "store", content, category: "profile",
 					metadata: { section_name: "active_tasks" } } }, SKIN)).text();
 			}
 		} },
-		reflection: { primary: ["R1"], run: async host => {
-			await registerHost(SKIN, host.url, mode, { sessionStrategy: "memoryReflection" });
+		reflection: { primary: ["R1"], settings: { capture: { sessionStrategy: "memoryReflection" } }, run: async host => {
+			await registerHost(SKIN, host.url);
 			const sessionFile = join(root, "session.jsonl");
 			writeFileSync(sessionFile, `${JSON.stringify({ type: "message", message: { role: "user", content: "Always keep clear notebook records for every meeting." } })}\n`);
 			const response = await contractPost("/v1/on-session-end", { scope: { ...SEED_SCOPE, session: `agent:reflection:${mode}`,
@@ -342,10 +350,9 @@ describe.each(["rem-enhanced", "agent-native"] as const)("%s: the other twenty c
 		const entry = entries[name];
 		if (!entry) throw new Error(`unknown entry ${name}`);
 		vi.stubEnv("SNO_PROFILE_DIR", join(root, "mode"));
-		await bindStore(database.dbPath, { mode, retrieval: { rerank: "none" } });
 		const sno = await startRecorder(closers, ({ raw }) => modelReply(raw ? "keep" : "{}", raw));
 		const host = await startRecorder(closers, () => modelReply("{}", false));
-		vi.stubEnv("GPU_BASE_URL", sno.url);
+		pointSnoGpuAt(mode, sno.url, entry.settings);
 		sidecar = await startRemSidecar();
 		await entry.run(host);
 		const seen = (recorder: Recorder, at: string) => recorder.received.map(call => nonRemCall(call.content))
@@ -358,9 +365,9 @@ describe.each(["rem-enhanced", "agent-native"] as const)("%s: the other twenty c
 	});
 
 	it("group maintenance", { timeout: 120_000 }, async () => {
-		await seedStore(mode, [], [["The deployment is waiting on the security review.", "entity:deployment"]]);
+		await seedStore([], [["The deployment is waiting on the security review.", "entity:deployment"]]);
 		const sno = await startRecorder(closers, () => modelReply("{}", false));
-		vi.stubEnv("GPU_BASE_URL", sno.url);
+		pointSnoGpuAt(mode, sno.url);
 		const run = await new Promise<{ code: number | null; stderr: string }>((done, reject) => {
 			const child = spawn(join(repoRoot, "node_modules/.bin/tsx"), ["src/engine/maintenance/run-group-crud-maintenance.ts", database.dbPath],
 				{ cwd: join(repoRoot, "packages/memory"), env: { ...process.env, NODE_ENV: "test" }, stdio: ["ignore", "ignore", "pipe"] });
@@ -374,76 +381,5 @@ describe.each(["rem-enhanced", "agent-native"] as const)("%s: the other twenty c
 		expect({ exitCode: run.code, misrouted: labels.filter(label => tableDestination(label, mode) !== "sno-gpu"),
 			reachedSno: labels.length > 0 }, run.stderr.slice(-2000))
 			.toEqual({ exitCode: 0, misrouted: [], reachedSno: mode === "rem-enhanced" });
-	});
-});
-
-/**
- * Owner rule 2026-09-26: an installation upgraded from the previous release keeps working with the files it has.
- * That release wrote all nine per-occasion switches into the installed settings file, and its plugin sent them,
- * plus the Agent Native flavor, in the registration routing. Both are ignored; nothing falls back to a default.
- */
-describe("an installation upgraded from the previous release stays REM Enhanced", () => {
-	const PREVIOUS_OCCASIONS = {
-		memoryExtract: "snoRemMem", dedupDecision: "agent", profileSectionMerge: "agent", profileActiveTaskClassify: "agent",
-		profileActiveTaskMatch: "agent", conflictAdjudication: "snoRemMem", summaryBuild: "agent", intentClassifier: "agent",
-		dateResolution: "agent",
-	};
-	// Non-default values a silent fall back to defaults would lose: chunking off, seven recall hits, no reranker.
-	const EMBEDDING = { provider: "local-onnx", dimensions: 1024, chunking: false };
-	const RETRIEVAL = { recallTopK: 7, rerank: "none" };
-	const SENTENCE = "I keep a blue notebook for meeting notes.";
-	const FACT = "The user keeps a blue notebook for meeting notes";
-
-	it("loads the old installed file and old routing, captures through the Sno GPU, and recalls the capture", { timeout: 180_000 }, async () => {
-		vi.stubEnv("SNO_PROFILE_DIR", join(root, "mode"));
-		await bindStore(database.dbPath, { mode: "rem-enhanced", embedding: EMBEDDING, retrieval: RETRIEVAL });
-		const configPath = getInstallationConfigPath();
-		const bound = JSON.parse(readFileSync(configPath, "utf8")) as Record<string, unknown>;
-		// The previous release's bytes: the bound file plus the switches it always wrote (mode 0600 is kept).
-		writeFileSync(configPath, `${JSON.stringify({ ...bound, remEnhanced: { trigger: { tick: true }, occasions: PREVIOUS_OCCASIONS } })}\n`);
-		const loaded = readSnoStationMemConfig(configPath).plugins?.entries?.[PLUGIN_ENTRY_KEY]?.config;
-		expect({ mode: loaded?.mode, embedding: loaded?.embedding, retrieval: loaded?.retrieval, rem: readRemAutomaticOperations(configPath) })
-			.toMatchObject({ mode: "rem-enhanced", embedding: EMBEDDING, retrieval: RETRIEVAL, rem: { mode: "rem-enhanced", tickEnabled: true } });
-
-		const extractionReply = (content: string) => {
-			// The capture prompt lists the turns the reply must account for; this window holds the one user turn.
-			const index = (jsonAfter(content, "turn_indexes_to_account_for: ") as number[] | undefined)?.[0] ?? 0;
-			return JSON.stringify({ claims_found: [FACT], decisions: [{ turn_index: index, progress_only: false }], facts: [{
-				id: 0, fact: FACT, subject: "the user", subject_kind: "user", temporal_phrase: null, ended_at_phrase: null,
-				source_span: { turn_index: index, quote: "keep a blue notebook for meeting notes" } }] });
-		};
-		const sno = await startRecorder(closers, ({ content, raw }) => modelReply(
-			content.startsWith(atomicExtractionSkillReference("capture")) ? extractionReply(content) : raw ? "keep" : "{}", raw));
-		const host = await startRecorder(closers, () => modelReply("{}", false));
-		vi.stubEnv("GPU_BASE_URL", sno.url);
-		sidecar = await startRemSidecar();
-
-		const skinId = "previous-release-plugin";
-		const scope = { ...SEED_SCOPE, session: skinId };
-		const { remEnhanced: _remEnhanced, agentNative: _agentNative, language: _language, mode: _mode, ...settings } = pluginConfigSchema.parse({
-			mode: "rem-enhanced", embedding: EMBEDDING, retrieval: RETRIEVAL, observe: { enabled: false },
-		}) as Record<string, unknown>;
-		// The previous release's OpenClaw plugin forwards a bring-your-own-key preset in settings.
-		const previousSettings = { ...settings, extraction: { llm: { preset: "mem_claw/openai_gpt_5_nano", timeoutMs: 30_000 } } };
-		const init = await contractPost("/v1/init", { scope, registration: { skinId, settings: previousSettings,
-			routing: { mode: "rem-enhanced", remEnhanced: { occasions: PREVIOUS_OCCASIONS, trigger: { tick: true } },
-				agentNative: { flavor: "subscription" }, language: "en" },
-			model: { baseUrl: `${host.url}/host/v1/`, credential: "loopback-credential", model: "loopback-model" },
-		} }, skinId);
-		expect(init.status, await init.clone().text()).toBe(200);
-
-		const capture = await contractPost("/v1/capture", { scope, turn: { turnId: "upgrade-capture", rewindEpoch: 0,
-			messages: [{ role: "user", content: SENTENCE, at: 1789606800000 }] } }, skinId);
-		expect(capture.status, await capture.clone().text()).toBe(200);
-		const e1 = (recorder: Recorder) => recorder.received.filter(call => nonRemCall(call.content) === "E1").length;
-		const stored = database.sqlite.prepare("SELECT text FROM nodix_memories WHERE text LIKE '%blue notebook%'").all() as Array<{ text: string }>;
-		expect({ e1OnSno: e1(sno), e1OnHost: e1(host), stored: stored.length > 0 }, JSON.stringify(sno.received.map(call => call.content.slice(0, 4000))))
-			.toEqual({ e1OnSno: 1, e1OnHost: 0, stored: true });
-
-		const recall = await contractPost("/v1/get-recall", { scope, query: "Which notebook do I keep for meeting notes?",
-			options: { source: "manual" } }, skinId);
-		const recalled = await recall.text();
-		expect(recall.status, recalled).toBe(200);
-		expect(recalled).toContain(stored[0]?.text);
 	});
 });

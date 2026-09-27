@@ -29,25 +29,19 @@ describe("memory telemetry sno-observe forwarding", () => {
 	let cleanup: () => void;
 	let dbPath: string;
 	let store: MemoryStore;
-	let originalTelemetryKey: string | undefined;
 
 	beforeEach(() => {
-		originalTelemetryKey = process.env.SNO_STATION_MEM_TELEMETRY_HMAC_KEY;
-		process.env.SNO_STATION_MEM_TELEMETRY_HMAC_KEY = "memory-telemetry-observe-test-key";
 		const testDb = createTestDb();
 		dbPath = testDb.dbPath;
 		cleanup = testDb.cleanup;
-		store = new MemoryStore({ dbPath, embedder: testEmbedder });
+		// The receipt key is `telemetry.memoryUsage.key`, handed to the store as its telemetry config.
+		store = new MemoryStore({ dbPath, embedder: testEmbedder,
+			memoryTelemetry: { enabled: true, key: "memory-telemetry-observe-test-key", historicKeys: [] } });
 	});
 
 	afterEach(async () => {
 		await store.close();
 		cleanup();
-		if (originalTelemetryKey === undefined) {
-			delete process.env.SNO_STATION_MEM_TELEMETRY_HMAC_KEY;
-		} else {
-			process.env.SNO_STATION_MEM_TELEMETRY_HMAC_KEY = originalTelemetryKey;
-		}
 	});
 
 	it("forwards only after local rows exist and advances the watermark only after success", async () => {
@@ -89,7 +83,7 @@ describe("memory telemetry sno-observe forwarding", () => {
 			metadata: { retrieval_rank: 1, retrieval_score: 0.88 },
 		});
 		outbox.flushPending();
-		const api = createMemoryTelemetryApi({ sqlite: store.sqlite });
+		const api = createMemoryTelemetryApi({ sqlite: store.sqlite, key: "memory-telemetry-observe-test-key", historicKeys: [] });
 		const usageBeforeFailure: MemoryTelemetryUsageSummaryResult = api.usageSummary({ factId });
 
 		const failed = await forwardMemoryTelemetryToObserve({

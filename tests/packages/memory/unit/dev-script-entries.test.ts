@@ -1,12 +1,16 @@
 import { execFileSync } from "node:child_process";
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
 import { expect, it } from "vitest";
 import { createTestDb } from "../../../apps/mem-claw/helpers/test-db";
+import { writeSettingsFixture } from "../fixtures/settings-file-fixture";
 
 it("runs the REM utilities against the published module and an encrypted migrated store", () => {
 	const repo = resolve(import.meta.dirname, "../../../..");
 	const fixture = createTestDb();
 	try {
+		writeSettingsFixture(dirname(fixture.dbPath), {
+			store: { path: fixture.dbPath, encryptionKey: fixture.encryptionKey },
+		});
 		fixture.sqlite.prepare(`INSERT INTO nodix_memories
 			(id, text, category, project_id, importance, timestamp, timezone, metadata, content_hash, fact_id, lane, raw_candidate_json)
 			VALUES ('utility-row', 'I finished the copper folder task.', 'episodic', 'agent:utility', 0.5, 1, 'UTC', '{}', 'utility-hash', 'utility-fact', 'active', '{}')`).run();

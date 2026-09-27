@@ -17,7 +17,7 @@ import {
 	registerMachine,
 } from "./machine-registration.js";
 import { AsyncMutex } from "./mutex.js";
-import { getBufferPath, getRedactionRulesPath, type PathEnv } from "./paths.js";
+import { getBufferPath, readStandaloneSettings, type PathEnv } from "./paths.js";
 import { collectPersonHints } from "./person-hints.js";
 import { redactEventPayload, redactScope } from "./redact.js";
 import { parseConsentValue } from "./schemas.js";
@@ -41,6 +41,8 @@ import {
 } from "./types.js";
 
 export interface RuntimeOptions {
+	baseUrl?: string;
+	redactionRules?: readonly string[];
 	cwd?: string;
 	env?: PathEnv & Record<string, string | undefined>;
 	fetch?: typeof fetch;
@@ -298,7 +300,7 @@ export class SnoObserveRuntime {
 	}
 
 	hashRedactedText(input: string): string {
-		const result = redactEventPayload({ value: input }, "full", getRedactionRulesPath(this.env()));
+		const result = redactEventPayload({ value: input }, "full", this.options.redactionRules);
 		const redacted = (result.value as { value?: unknown }).value;
 		const text = typeof redacted === "string" ? redacted : String(redacted);
 		return sha256Hex(Buffer.from(text, "utf8"));
@@ -338,7 +340,7 @@ export class SnoObserveRuntime {
 	}
 
 	doctor(): DoctorReport {
-		return createDoctorReport(this.env());
+		return createDoctorReport(this.env(), this.options.baseUrl ?? readStandaloneSettings(this.env()).baseUrl);
 	}
 
 	register(options: RegisterOptions = {}): Promise<RegisterResult> {
@@ -455,9 +457,8 @@ export class SnoObserveRuntime {
 			machine_id: input.identity.machine_uuid,
 			agent_id: input.agentId,
 		};
-		const redactionRulesPath = getRedactionRulesPath(this.env());
-		const redactedScope = redactScope(scope, redactionRulesPath);
-		const redactedPayload = redactEventPayload(payload, input.consent, redactionRulesPath);
+		const redactedScope = redactScope(scope, this.options.redactionRules);
+		const redactedPayload = redactEventPayload(payload, input.consent, this.options.redactionRules);
 		const appended = this.getStore().append({
 			eventId: input.eventId,
 			eventType: input.eventType,
@@ -562,8 +563,7 @@ export class SnoObserveRuntime {
 	}
 
 	private baseUrl(): string {
-		const env = this.env();
-		return normalizeBaseUrl(env.SNO_OBSERVE_BASE_URL ?? "https://www.sno.ai");
+		return normalizeBaseUrl(this.options.baseUrl ?? readStandaloneSettings(this.env()).baseUrl);
 	}
 
 	private notify(eventType: EventType, result: EmitResult): void {

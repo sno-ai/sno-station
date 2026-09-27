@@ -4,9 +4,9 @@ import { SnoObserveError } from "./errors.js";
 import { fetchJson, normalizeBaseUrl } from "./http.js";
 import { updateValidIdentity } from "./identity.js";
 import type { PathEnv } from "./paths.js";
+import { readStandaloneSettings } from "./paths.js";
 import type { Identity } from "./types.js";
 
-const BASE_URL_ENV = "SNO_OBSERVE_BASE_URL";
 
 export interface RegisterOptions {
 	baseUrl?: string;
@@ -40,7 +40,7 @@ export async function registerMachine(
 	options: RegisterOptions = {},
 ): Promise<RegisterResult> {
 	const env = options.env ?? process.env;
-	const baseUrl = normalizeBaseUrl(options.baseUrl ?? env[BASE_URL_ENV] ?? "https://www.sno.ai");
+	const baseUrl = normalizeBaseUrl(options.baseUrl ?? readStandaloneSettings(env).baseUrl);
 	const response = await fetchJson<RegisterMachineResponse | ErrorResponse>(
 		`${baseUrl}/api/v1/identity/register-machine`,
 		{

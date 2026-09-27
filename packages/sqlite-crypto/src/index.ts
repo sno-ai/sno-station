@@ -1,19 +1,14 @@
 // @snoai/sqlite-crypto — single audit surface for SNO Station Core SQLite encryption.
 // See openspec/changes/add-local-aes-encryption/specs/sno-station-core-crypto-core/spec.md.
 
-export {
-	assertDurableKeyFilePath,
-	KEY_FILE_ENV,
-	resolveConfigPaths,
-	resolveKeychainService,
-} from "./config.js";
+export { resolveConfigPaths } from "./config.js";
 export {
 	_readCanaryForRecovery,
 	openEncryptedDb,
 	openEncryptedDbReadonly,
 	runIntegrityCheck,
 } from "./db.js";
-export { _resetDekCache, getDek, getDekSync } from "./dek.js";
+export { getDek } from "./dek.js";
 export * from "./errors.js";
 export {
 	exportEncrypted,
@@ -29,6 +24,5 @@ export {
 	isMarkerPresent,
 	readManifestIfPresent,
 } from "./manifest.js";
-export { removePassphrase, setPassphrase } from "./passphrase.js";
 export * from "./types.js";
 export { dekFingerprint } from "./wrap.js";

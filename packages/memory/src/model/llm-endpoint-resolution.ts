@@ -59,7 +59,7 @@ export async function resolveLlmEndpoint(input: {
 		selectBaseSource: (provider) =>
 			input.baseOverride ??
 			(provider === "sno-gpu"
-				? process.env.GPU_BASE_URL?.trim() || SNO_GPU_ORIGIN
+				? SNO_GPU_ORIGIN
 				: PROVIDER_API_BASES[provider]),
 	});
 	return {

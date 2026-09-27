@@ -43,7 +43,6 @@ export function createReflectionGenerator(
 			preset: llmConfig.preset,
 			...(llmConfig.apiKey ? { apiKey: llmConfig.apiKey } : {}),
 			...(llmConfig.baseURL ? { baseURL: llmConfig.baseURL } : {}),
-			...(llmConfig.heliconeApiKey ? { heliconeApiKey: llmConfig.heliconeApiKey } : {}),
 			timeoutMs,
 			...(routing ? { routing } : {}),
 			...(agentPort ? { agentPort } : {}),

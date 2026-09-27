@@ -12,8 +12,13 @@ import type { CandidateMemory, ExtractionStats } from "../../../../packages/memo
 import { MemoryStore } from "../../../../packages/memory/src/store/store";
 import { requireEnv } from "../../../apps/mem-claw/helpers/env.ts";
 import { createTestDb, createTestEmbedder, type TestDb } from "../../../apps/mem-claw/helpers/test-db.ts";
+import { readFileSync } from "node:fs";
+import { DEFAULT_SETTINGS_PATH } from "../fixtures/settings-file-fixture";
 
-const ROUTING: LlmRoutingConfig = { mode: "rem-enhanced", language: "en" };
+// The routing table is `settings.modelCalls`; the shipped default document carries the one `sno` writes.
+const MODEL_CALLS = (JSON.parse(readFileSync(DEFAULT_SETTINGS_PATH, "utf8")) as { modelCalls: NonNullable<LlmRoutingConfig["modelCalls"]> }).modelCalls;
+
+const ROUTING: LlmRoutingConfig = { mode: "rem-enhanced", language: "en", modelCalls: MODEL_CALLS };
 const SCOPE = "candidate-disposition-lane-rejection";
 const SESSION_DATE_TIME = "2026-07-31T00:00:00.000Z";
 

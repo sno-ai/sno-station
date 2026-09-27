@@ -11,7 +11,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { closeDb, initDb } from "../../../../packages/memory/src/store/connection";
 import { resolveSimpleTokenizerPath } from "../../../../packages/memory/src/store/simple-tokenizer-path";
-import { initSqliteRuntimeSync } from "../../../../packages/memory/src/store/sqlite-runtime";
+import { initSqliteRuntime } from "../../../../packages/memory/src/store/sqlite-runtime";
+import { makeTestEnv, type TestEnv } from "../../sqlite-crypto/_helpers";
 import type { SqliteDatabaseLike } from "../../../../packages/memory/src/store/sqlite-runtime";
 
 const VECTOR_DIM = 1024;
@@ -55,15 +56,18 @@ function ftsMatch(db: SqliteDatabaseLike, query: string): string[] {
 describe("FTS5 simple-tokenizer (cjk-other-fix.md §D)", () => {
 	let tmp: string;
 	let dbPath: string;
+	let cryptoEnv: TestEnv;
 
 	beforeEach(() => {
-		initSqliteRuntimeSync();
+		cryptoEnv = makeTestEnv("fts-simple");
+		initSqliteRuntime(cryptoEnv.keyHex);
 		tmp = mkdtempSync(join(tmpdir(), "claw-fts-simple-"));
 		dbPath = join(tmp, "memory.db");
 	});
 
 	afterEach(() => {
 		rmSync(tmp, { recursive: true, force: true });
+		cryptoEnv.cleanup();
 	});
 
 	it("loader resolves to a real .so/.dylib + dict directory", () => {
