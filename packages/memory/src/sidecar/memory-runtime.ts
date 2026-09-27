@@ -214,7 +214,7 @@ export class MemoryRuntimePool {
 		const input = parseInput(method, raw);
 		if (method === "capture" && !this.modelReady) {
 			const capture = parseInput("capture", raw);
-			const id = JSON.stringify([skinId, capture.scope.session, capture.turn.turnId, capture.turn.rewindEpoch]);
+			const id = JSON.stringify([skinId, capture.scope.principal, capture.scope.project, capture.scope.session, capture.turn.turnId, capture.turn.rewindEpoch]);
 			const request = JSON.stringify(capture);
 			const existing = this.store.sqlite.prepare("SELECT request FROM pending_captures WHERE id = ?").get(id) as { request: string } | undefined;
 			if (existing && existing.request !== request) throw new Error("Pending capture identity reused with different content");
