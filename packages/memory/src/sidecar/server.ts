@@ -201,7 +201,7 @@ async function startOwnedRemSidecar(): Promise<{ port: number; stop(): Promise<{
 	const token = randomBytes(32).toString("hex");
 	const holdMs = readRemTestHoldMs();
 	const chassisJournal = new RemChassisJournal(getRemChassisJournalPath());
-	const store = RemJobStore.open(getRemJobJournalPath(), (job) => {
+	const onDurableTransition = (job: RemJob): void => {
 		log.info("job_transition_durable", {
 			event: "job_transition_durable",
 			job_id: job.job_id,
@@ -214,7 +214,8 @@ async function startOwnedRemSidecar(): Promise<{ port: number; stop(): Promise<{
 			function: "<anonymous callback>",
 			site_id: "server.<anonymous callback>.5eb5a60e6b",
 		});
-	});
+	};
+	const store = RemJobStore.open(getRemJobJournalPath(), onDurableTransition);
 	const pendingTimers = new Map<NodeJS.Timeout, () => void>();
 	const startPendingStarts = (): void => {
 		for (const start of pendingTimers.values()) start();

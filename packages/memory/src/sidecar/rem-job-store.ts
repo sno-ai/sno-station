@@ -313,8 +313,10 @@ export class RemJobStore {
 				this.jobs.set(job.waveId, job);
 				this.mergeKeys.set(`${job.correlationId}\0${job.scope}`, job.waveId);
 			} catch (error) {
-				const reason = error instanceof Error ? error.message : String(error);
-				throw new Error(`invalid REM job journal at line ${index + 1}: ${reason}`);
+				log.error("rem.journal.failed", { path: this.journalPath, line: index + 1, error }, {
+					event_name: "rem.journal.failed", file: "packages/memory/src/sidecar/rem-job-store.ts",
+					function: "load", site_id: "rem-job-store.load.invalid-line",
+				});
 			}
 		}
 	}
