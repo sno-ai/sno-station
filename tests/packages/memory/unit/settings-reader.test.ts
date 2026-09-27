@@ -79,6 +79,42 @@ it("refuses an empty store.encryptionKey", async () => {
 	expect(await refusal(path)).toContain("store.encryptionKey");
 });
 
+it("refuses a 63-character store.encryptionKey", async () => {
+	const { path } = writeSettingsFixture(root, { store: { encryptionKey: "a".repeat(63) } });
+	expect(await refusal(path)).toContain("store.encryptionKey");
+});
+
+it("refuses a non-hex store.encryptionKey", async () => {
+	const { path } = writeSettingsFixture(root, { store: { encryptionKey: "g".repeat(64) } });
+	expect(await refusal(path)).toContain("store.encryptionKey");
+});
+
+it("refuses an uppercase store.encryptionKey", async () => {
+	const { path } = writeSettingsFixture(root, { store: { encryptionKey: "A".repeat(64) } });
+	expect(await refusal(path)).toContain("store.encryptionKey");
+});
+
+it("refuses a non-UUID user.id", async () => {
+	const { path } = writeSettingsFixture(root, { user: { id: "not-a-uuid" } });
+	expect(await refusal(path)).toContain("user.id");
+});
+
+it("refuses a UUID-v4 user.id", async () => {
+	const { path } = writeSettingsFixture(root, { user: { id: "e64bc6da-26cf-4e1c-b173-1e7c3c27e52c" } });
+	expect(await refusal(path)).toContain("user.id");
+});
+
+it("refuses an uppercase UUID-v7 user.id", async () => {
+	const { path } = writeSettingsFixture(root, { user: { id: "01997C9B-843F-70FB-8B86-86FC5CE574AE" } });
+	expect(await refusal(path)).toContain("user.id");
+});
+
+it("reads a lowercase UUID-v7 user.id", async () => {
+	const id = "01997c9b-843f-70fb-8b86-86fc5ce574ae";
+	writeSettingsFixture(root, { user: { id } });
+	expect((await readSettings()).user.id).toBe(id);
+});
+
 it("refuses a value outside its allowed values", async () => {
 	const { path } = writeSettingsFixture(root, { mode: "fast" });
 	expect(await refusal(path)).toContain("mode");
@@ -120,6 +156,7 @@ it("parses the shipped default once sno fills the key and the four machine paths
 	const { settings } = writeSettingsFixture(root, { mode: "rem-enhanced" });
 	const read = await readSettings();
 	expect(read.mode).toBe("rem-enhanced");
+	expect(read.user.id).toBe("");
 	expect(read.modelCalls.R3).toEqual({
 		"local-first": "off",
 		"agent-native": "sno-gpu",

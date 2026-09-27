@@ -37,7 +37,8 @@ export async function checkDiscovery(discovery: Discovery): Promise<void> {
 			throw new ContractError("sidecar-unresponsive");
 		}
 		const health: unknown = await response.json();
-		if (!health || typeof health !== "object" || !("status" in health) || health.status !== "ok") throw new ContractError("sidecar-unresponsive");
+		if (!health || typeof health !== "object" || !("status" in health) ||
+			(health.status !== "ok" && health.status !== "degraded")) throw new ContractError("sidecar-unresponsive");
 	} catch (error) {
 		if (error instanceof ContractError) throw error;
 		throw new ContractError("sidecar-unresponsive");

@@ -1,4 +1,5 @@
 import { LOCAL_EMBEDDING_MODEL_REVISION } from "@snoai/embedder";
+import { isLowercaseCanonicalUUIDv7 } from "@snoai/common-core";
 import { z } from "zod";
 import { CANDIDATE_POOL_SIZE, DEFAULT_SESSION_MESSAGE_COUNT, EMBEDDER_MODEL_DEFAULT } from "./index";
 import { PRODUCT_MODES, type ProductMode } from "./plugin-config-mode-schema";
@@ -36,7 +37,7 @@ const modelCalls = z.strictObject(Object.fromEntries(
 const schema: z.ZodType<Settings> = z.strictObject({
 	mode: z.enum(PRODUCT_MODES),
 	modelCalls,
-	user: z.strictObject({ id: z.string(), language: z.enum(SUPPORTED_LOCALES) }),
+	user: z.strictObject({ id: z.string().refine((id) => id === "" || isLowercaseCanonicalUUIDv7(id)), language: z.enum(SUPPORTED_LOCALES) }),
 	snoGpu: z.strictObject({ baseUrl: z.string(), apiKey: z.string() }),
 	rerank: z.strictObject({
 		mode: z.enum(["lightweight", "cross-encoder", "none"]),
@@ -45,7 +46,7 @@ const schema: z.ZodType<Settings> = z.strictObject({
 		timeoutMs: z.number().int().min(1000).max(120000),
 		maxCandidates: z.number().int().min(1).max(2000),
 	}),
-	store: z.strictObject({ path: z.string(), encryptionKey: z.string().min(1) }),
+	store: z.strictObject({ path: z.string(), encryptionKey: z.string().min(1).regex(/^[0-9a-f]{64}$/u) }),
 	embedding: z.strictObject({
 		model: z.string(), revision: z.string(), dtype: z.enum(["q4", "q8", "fp16", "fp32"]),
 		threads: z.number().int().nonnegative(), cacheDir: z.string(),

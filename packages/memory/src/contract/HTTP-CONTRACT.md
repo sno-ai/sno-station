@@ -350,7 +350,7 @@ Response status: `200 OK`; `Content-Type: application/json`.
 
 Retrieves context for a query. `query` must contain non-whitespace text. `options` is required even when empty; only `corpus` has a request-schema default. Other omitted fields use the runtime/retriever behavior; a dash does not promise a fixed engine default. `aggregation.terms` are trimmed, each is 1–128 characters, and there are 1–8 terms. Every call reads its project plus the shared `global` memory. Native database recall does not require a workspace; native file reads do.
 
-Automatic, manual and native recall can populate different optional response fields. Inspect `degraded` and `unavailable`; `unavailable: "model-preparing"` means the embedding model is still preparing, and empty context alone is not proof that the service succeeded.
+Automatic, manual and native recall can populate different optional response fields. Inspect `degraded` and `unavailable`; `unavailable: "model-preparing"` means the embedding model is still preparing, while `unavailable: "model preparation failed: …"` reports preparation failure. Empty context alone is not proof that the service succeeded.
 
 Scope requires nonblank `principal`, `project`, `session`. `host.observeSessionUuid`, if supplied, must be a UUID. Host `at` is nonnegative epoch milliseconds. Other host strings may be empty.
 
@@ -556,7 +556,7 @@ Response status: `200 OK`; `Content-Type: application/json`.
 
 ### Request body
 
-Captures one completed turn. `turnId` must contain non-whitespace text; `rewindEpoch` is a nonnegative integer. Message times are nonnegative finite epoch milliseconds. JSON content can be structured or plain text. No minimum message-array length is imposed by this schema. `committed:true` acknowledges completed synchronous extraction/persistence, not a queued write. A deadline is not a durable commit receipt.
+Captures one completed turn. `turnId` must contain non-whitespace text; `rewindEpoch` is a nonnegative integer. Message times are nonnegative finite epoch milliseconds. JSON content can be structured or plain text. No minimum message-array length is imposed by this schema. `committed:true` acknowledges completed synchronous extraction/persistence, not a queued write. `skipped:true` means capture was deliberately disabled, omitted for a subagent, or given an empty conversation. `partial:true` means extraction stored some facts but did not fully complete. A plain `committed:false` remains retryable. A deadline is not a durable commit receipt.
 
 Scope requires nonblank `principal`, `project`, `session`. `host.observeSessionUuid`, if supplied, must be a UUID. Host `at` is nonnegative epoch milliseconds. Other host strings may be empty.
 
@@ -599,6 +599,8 @@ HTTP 200, JSON. The complete successful body is below. The schema also permits t
 | turnId | string | yes | - | - | {"minLength":1} |
 | committed | boolean | yes | - | - | - |
 | accepted | boolean | no | - | - | - |
+| skipped | boolean | no | [true] | - | - |
+| partial | boolean | no | [true] | - | - |
 | degraded | boolean | yes | [false] | - | - |
 
 ### Errors
@@ -1726,7 +1728,8 @@ HTTP 200, JSON.
 
 | Field | Type | Required | Meaning |
 | --- | --- | --- | --- |
-| status | string | yes | Literal ok |
+| status | string | yes | `ok` or `degraded`; Codex and Claude `doctor` intentionally report `degraded` as unhealthy |
+| error | string | no | Model preparation error when status is `degraded` |
 | log_level | string | yes | Current shared logger level |
 | principal | string | yes | OS username |
 | storePath | string | yes | Installed `settings.store.path` |
@@ -1830,11 +1833,10 @@ same installed settings. A supplied client store path does not override the runn
 | SNO_STATION_MEM_REM_CLOCK_OVERRIDE | Clock override parsed as Date; use an ISO instant |
 | SNO_STATION_MEM_REM_VOLUME_THRESHOLD | Positive integer volume threshold override |
 | SNO_STATION_MEM_NODE_ENV | Package test mode; enables observation loopback validation exception |
-| GPU_BASE_URL | Existing GPU transport endpoint setting |
-| XDG_CONFIG_HOME | External crypto package configuration root |
+| `snoGpu.baseUrl` in `settings.json` | Sno GPU transport endpoint setting |
 
-Package-owned environment names use `SNO_STATION_MEM_`; profile, GPU and
-external crypto/secret names retain their owners' names. Signed preset/secret identifiers
+Package-owned environment names use `SNO_STATION_MEM_`; the Sno GPU endpoint and key
+come from `settings.json`. Signed preset/secret identifiers
 remain centralized in `model/signed-registry-constants.ts`. This table covers sidecar-facing
 controls, not every environment variable used by model/provider libraries.
 

@@ -133,6 +133,7 @@ export async function onAgentEnd(
 	event: PluginHookAgentEndEvent,
 	ctx: PluginHookAgentContext,
 	stateDir: string,
+	reasonOut?: { value?: string },
 ): Promise<AmbientCaptureOutcome> {
 	const sessionKey = typeof ctx.sessionKey === "string" ? ctx.sessionKey : "";
 	return withLogContext({ operation_id: currentLogContext().operation_id ?? randomUUID(), session_reference: sessionKey }, async () => {
@@ -165,6 +166,7 @@ export async function onAgentEnd(
 		return outcome;
 	}
 	if (!insightDistiller) {
+		reason = "atomic_extractor_unavailable";
 		appendAuditEntry(stateDir, {
 			event: "ambient_learning",
 			hook: "agent_end",
@@ -183,6 +185,7 @@ export async function onAgentEnd(
 		transcriptSessionDateTime(event.messages) ??
 		deriveSessionDateTime(event.messages, config.captureAssistant);
 	if (!conversationText.trim()) {
+		reason = "rejected_empty_conversation";
 		appendAuditEntry(stateDir, {
 			event: "ambient_learning",
 			hook: "agent_end",
@@ -200,10 +203,11 @@ export async function onAgentEnd(
 			sessionDateTime,
 			sessionTimezone: ctx.sessionTimezone,
 		});
-		const partial = (stats.llmFailures ?? 0) > 0;
-		outcome = partial ? "partial" : "success";
+		const failures = (stats.llmFailures ?? 0) > 0;
+		const partial = failures && stats.created > 0;
+		outcome = failures ? partial ? "partial" : "failed" : "success";
 		reason = "extraction_returned";
-		const details = partial
+		const details = failures
 			? {
 					created: stats.created,
 					merged: stats.merged,
@@ -224,8 +228,8 @@ export async function onAgentEnd(
 		appendAuditEntry(stateDir, {
 			event: "ambient_learning",
 			hook: "agent_end",
-			resultStatus: partial ? "partial" : "ok",
-			decision: partial ? "llm_distill_failed" : "llm_distill_extracted",
+			resultStatus: failures ? partial ? "partial" : "error" : "ok",
+			decision: failures ? "llm_distill_failed" : "llm_distill_extracted",
 			details,
 		});
 	} catch (error) {
@@ -244,6 +248,7 @@ export async function onAgentEnd(
 		});
 	}
 	} finally {
+		if (reasonOut) reasonOut.value = reason;
 		log.info("Ambient capture hook completed", { outcome, reason_code: reason, duration_ms: performance.now() - started },
 			{ event_name: "memory.capture.hook.completed", file: "packages/memory/src/engine/bindings/sno-station-mem-ambient-learning-hook.ts", function: "onAgentEnd", site_id: "memory.capture.hook.completed" });
 	}
