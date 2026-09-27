@@ -63,6 +63,11 @@ describe("LLM endpoint construction guard", () => {
 		expect(result.stderr).toContain("inference client base URL");
 	});
 
+	it("allows the installed Sno GPU origin on the memory model client", () => {
+		const result = runGuard("createLlmClient({ baseURL: settings.snoGpu.baseUrl });\n");
+		expect(result.status, String(result.stderr)).toBe(0);
+	});
+
 	it("rejects direct fetches to inference routes", () => {
 		const result = runGuard(
 			'const endpoint = "https://example.test/v1/completions";\nawait fetch(endpoint);\n',

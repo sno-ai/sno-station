@@ -282,28 +282,16 @@ describe("REM non-refusePair refusal journal (logic coverage; production proof f
 describe("ACC-37 production edge: live journal outcomes", () => {
 	it("uses the live response port and journals one external refusal", { timeout: 30_000 }, async () => {
 		const marker = "REM_REACHABILITY_SCRIPTED_INVALID_RESPONSE_ONLY";
-		// The real verdict route, not ccproxy: this fixture serves `/verdict/v1/completions`, which
-		// takes a `prompt` and returns `choices[0].text`, and ccproxy has no completions endpoint at
-		// all — it answers 404, and a converted request 400s with `messages Field required`. So every
-		// call this fixture forwarded was guaranteed to fail before it reached a model. Verified
-		// 2026-08-12 against both: ccproxy `/completions` -> 404, the Sno GPU verdict route -> 200
-		// with `choices[0].text`.
+		// Local-first REM calls the registered host model through its chat-completions route.
 		const responseFixture = await startQcg17ScriptedInvalidResponseFixture({
 			invalidPromptMarker: marker,
 			upstreamUrl: "https://rt3-llm.sno.ai/verdict/v1/completions",
-			// Every attempt at the marked prompt, retries included. This route has no upstream that can
-			// answer a forwarded call, so a leaked retry is a guaranteed failure rather than a real
-			// second opinion; `forwardedCalls === 0` below is the assertion that holds it to that.
+			// Every attempt at the marked prompt, retries included, must stay in the scripted fixture.
 			maxInjectedCalls: Number.MAX_SAFE_INTEGER,
 		});
 		scriptedFixtures.push(responseFixture);
 		const fixture = await startRemProductionEntryFixture({ gpuBaseUrl: responseFixture.url });
 		try {
-			// The config's own route, unchanged. It is not what this test exercises: the endpoint the
-			// wave calls is built from gpuBaseUrl, which is the scripted fixture above.
-			expect(fixture.configuration["modelRoute"]).toBe(
-				"http://localhost:8070/codex/v1/chat/completions",
-			);
 			const scope = "persona:production-journal-outcomes";
 			seedProductionMemory(fixture.database.sqlite, {
 				id: "clremjournalstale0000000001",
@@ -342,16 +330,7 @@ describe("ACC-37 production edge: live journal outcomes", () => {
 			expect(observation.injectedCalls).toBeGreaterThanOrEqual(1);
 			expect(observation.forwardedCalls).toBe(0);
 			expect(observation.requestPaths.length).toBeGreaterThan(0);
-			expect(new Set(observation.requestPaths)).toEqual(
-				new Set(["/verdict/v1/completions"]),
-			);
-			// What the wave reports when every call it made returned an unparseable answer. It used to
-			// assert a transport log line, which stopped describing this path once the fixture answered
-			// in the shape the verdict route reads: the call now succeeds at HTTP level and fails on the
-			// content, so the cause is the refusal reason, not a pipeline error. The durable rows below
-			// are the real proof; this line only checks the fatal message names a cause at all, because
-			// it read `unknown` for a cause the loop had already journalled.
-			expect(fixture.stderr()).toContain("REM LLM calls all failed: model_response_invalid");
+			expect(new Set(observation.requestPaths)).toEqual(new Set(["/v1/chat/completions"]));
 			const rows = fixture.database.sqlite
 				.prepare(
 					`SELECT job_id, attempt_id, stage, outcome, reason

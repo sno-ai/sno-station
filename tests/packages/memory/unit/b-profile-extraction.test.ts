@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
 import {
 	cleanUserTurn,
 	extractBProfileCandidatesFromChunk,
@@ -33,7 +34,7 @@ const didDocument = {
 	assertionMethod: ["did:web:www.sno.ai#sno-mem-openclaw-release"],
 };
 
-const REM_ROUTING: LlmRoutingConfig = { mode: "rem-enhanced", language: "en" };
+const REM_ROUTING: LlmRoutingConfig = { mode: "rem-enhanced", language: "en", modelCalls: JSON.parse(readFileSync(new URL("../../../../packages/memory/settings.default.json", import.meta.url), "utf8")).modelCalls };
 
 function profilePayload(slug = "preference.accommodation"): string {
 	return JSON.stringify({
