@@ -14,15 +14,7 @@ export const CODING_SKIN_CORRECTION_LOCK_STALE_MS: number = 2 * 60_000;
 
 export const CODING_SKIN_SESSION_QUERY =
 	"standing decisions, open tasks, conventions and known pitfalls for this repository";
-export const CODING_SKIN_SESSION_CONTEXT_MAX_CHARS = 3_500;
-export const CODING_SKIN_PROMPT_CONTEXT_MAX_CHARS = 1_500;
 export const CODING_SKIN_LEDGER_MAX_CHARS = 12_000;
-export const CODING_SKIN_SESSION_RECALL_LIMIT = 5;
-export const CODING_SKIN_PROMPT_RECALL_LIMIT = 3;
-export const CODING_SKIN_EXPLICIT_RECALL_LIMIT = 5;
-export const CODING_SKIN_PROMPT_MIN_CHARS = 12;
-export const CODING_SKIN_SESSION_TIMEOUT_MS = 8_000;
-export const CODING_SKIN_PROMPT_TIMEOUT_MS = 4_000;
 export const CODING_SKIN_RECALL_SENTENCE_MAX_CHARS = 200;
 export const CODING_SKIN_RECALL_ITEM_MAX_CHARS = 240;
 

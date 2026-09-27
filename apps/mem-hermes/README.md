@@ -1,57 +1,34 @@
 # Sno Memory for Hermes Agent
 
-Long-term memory for [Hermes Agent](https://github.com/NousResearch/hermes-agent) sessions.
+Long-term memory for Hermes Agent sessions. The memory service stores and retrieves project
+memories; this plugin connects Hermes lifecycle hooks and four memory tools.
 
-Sno Memory captures useful facts, preferences, decisions, and lessons so Hermes can carry context
-across sessions and across compression. The same memory store is shared with Sno Memory for Codex
-CLI and Claude Code on the same machine.
+## Install
 
-`sno-mem-hermes` is a thin Hermes memory plugin for the local Sno Station Mem sidecar. The sidecar
-owns storage, extraction, and retrieval. This plugin owns the Hermes lifecycle hooks, the startup
-brief, the compression checkpoint, and four model tools: `sno_memory_recall`, `sno_memory_get`,
-`sno_memory_remember`, and `sno_memory_correct`.
-
-## Quickstart
-
-Requirements:
-
-- Hermes Agent on your PATH (Python 3.11 to 3.13)
-- Node.js 22.22.3 or newer on the 22 line, 24.15.0 or newer on the 24 line, or 25.9.0 or newer
-
-The plugin does not carry the sidecar. It starts the `sno-station-mem` command found on your PATH,
-so install the sidecar first:
+Install Hermes Agent and Node.js 22.22.3+, 24.15.0+, or 25.9.0+. Then run:
 
 ```bash
-npm install -g @snoai/memory@next
-npx --package @snoai/sqlite-crypto@next sno-station-core lock --provision-key
-echo '{"mode":"local-first"}' | sno-station-mem bind ~/.sno/sno-station-mem/$USER/memory.sqlite
+sno setup
 hermes plugins install sno-ai/sno-station/apps/mem-hermes/sno-mem-hermes --enable
 hermes config set memory.provider sno-mem-hermes
 ```
 
-The bind command runs once per machine user and records the memory mode; if you already bound a
-store for Codex CLI or Claude Code, skip it. Replace `local-first` with `agent-native` or
-`rem-enhanced` to choose another mode; the modes are described in the
-[Codex CLI plugin README](https://github.com/sno-ai/sno-station/tree/main/apps/mem-codex#choose-a-memory-mode).
+`sno setup` writes `~/.sno/settings.json` and installs the memory service. The plugin starts it
+when needed, including after it stops during a conversation. Use `SNO_PROFILE_DIR` to select
+another profile root. If the settings file is missing or unreadable, the plugin reports its
+path and asks you to run `sno setup`.
 
-Setting `memory.provider` replaces any memory provider Hermes used before.
-
-Start a new Hermes session. The first turn carries a short working brief when your project has
-stored memory.
+The plugin offers `sno_memory_recall`, `sno_memory_get`, `sno_memory_remember`, and
+`sno_memory_correct`. It also captures direct turns and prepares a short working brief.
 
 ## Update and remove
 
 ```bash
-npm install -g @snoai/memory@next
 hermes plugins update sno-mem-hermes
-```
-
-```bash
 hermes plugins remove sno-mem-hermes
 ```
 
-Removing the plugin does not remove the store. The memory library is the bound store file; back it
-up before any manual change to the store or the binding.
+Removing the plugin does not remove stored memory.
 
 ## License
 
