@@ -13,8 +13,15 @@ export async function untilModelReady(recall: (probe: { scope: { project: string
 	let last: unknown;
 	while (Date.now() < end) {
 		last = await recall(probe);
-		if (!(last && typeof last === "object" && "unavailable" in last && last.unavailable === "model-preparing")) return;
-		await delay(100);
+		if (last && typeof last === "object" && "degraded" in last && last.degraded === false
+			&& "recallId" in last && typeof last.recallId === "string"
+			&& "contextText" in last && typeof last.contextText === "string" && !("unavailable" in last)) return;
+		if (last && typeof last === "object" && "degraded" in last && last.degraded === false
+			&& "unavailable" in last && last.unavailable === "model-preparing") {
+			await delay(100);
+			continue;
+		}
+		throw new Error(`model recall unavailable: ${JSON.stringify(last)}`);
 	}
 	throw new Error(`model still preparing after ${ms} ms: ${JSON.stringify(last)}`);
 }

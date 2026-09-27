@@ -295,12 +295,11 @@ describe("an accepted write survives the model download (REQ-7)", () => {
 			capture: `We named the glacier expedition ${name}; the team leaves from the north hut.` });
 		await vi.waitFor(() => expect(mirror.requested.some(path => path.startsWith(`/${MODEL}/resolve/${REVISION}/`))).toBe(true),
 			{ timeout: 30_000, interval: 200 }).catch(error => { throw new Error(`the service never fetched the model\n${serviceLogs(root)}`, { cause: error }); });
-		await Promise.race([once(sender.child, "exit"), delay(3_000)]);
-		const firstPid = await stopByRecordedPid(root);
 		await Promise.race([sender.done, delay(30_000)]);
 		if (sender.child.exitCode === null) sender.child.kill("SIGKILL");
 		const sent = await sender.done;
-		expect.soft(sent.capture, `the capture reply while the model downloads\n${sent.output}`).toMatchObject({ degraded: false, accepted: true });
+		expect(sent.capture, `the capture reply while the model downloads\n${sent.output}`).toMatchObject({ degraded: false, accepted: true });
+		const firstPid = await stopByRecordedPid(root);
 		expect(mirror.served).toEqual([]);
 
 		const restarted = await session(root, { session: "after-stop" });
