@@ -41,10 +41,6 @@
       "types": "./dist/release-download.d.ts",
       "import": "./dist/release-download.js"
     },
-    "./installation-paths": {
-      "types": "./dist/internal/store/data-paths.d.ts",
-      "import": "./dist/internal/store/data-paths.js"
-    },
     "./settings.default.json": "./settings.default.json"
   },
   "files": [
