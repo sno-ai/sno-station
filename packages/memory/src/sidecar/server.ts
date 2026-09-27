@@ -422,7 +422,9 @@ async function routeRequest(
 	if (request.method === "GET" && url.pathname === HEALTH_PATH) {
 		try {
 			const runtime = await memory.open();
-			sendJson(response, 200, { status: "ok", log_level: effectiveLogLevel(), principal: getPrincipal(),
+			sendJson(response, 200, { status: runtime.modelPreparationError ? "degraded" : "ok",
+				...(runtime.modelPreparationError && { error: runtime.modelPreparationError }),
+				log_level: effectiveLogLevel(), principal: getPrincipal(),
 				storePath: runtime.storePath, accessCounters: runtime.counters });
 		} catch (error) {
 			if (!(error instanceof SettingsUnavailableError)) throw error;
