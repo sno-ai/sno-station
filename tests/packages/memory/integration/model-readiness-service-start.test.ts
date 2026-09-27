@@ -75,6 +75,7 @@ function sessionEnv(profileRoot: string): NodeJS.ProcessEnv {
 
 type SessionPlan = {
 	session: string;
+	model?: { baseUrl: string; credential: string; model: string };
 	capture?: string;
 	/** Exit this long after sending the capture if no reply came; without it the session waits for the reply. */
 	captureWaitMs?: number;
@@ -105,7 +106,7 @@ catch (error) { out.connect = { thrown: shown(error) }; }
 out.connectMs = Math.round(performance.now() - started);
 if (client && !client.degraded) {
 	const scope = { principal: client.principal, project: "global", session: plan.session, host: { sessionId: plan.session } };
-	out.init = await settle(client.init(scope, { skinId: "codex" }));
+	out.init = await settle(client.init(scope, { skinId: "codex", ...(plan.model && { model: plan.model }) }));
 	if (plan.capture) {
 		started = performance.now();
 		out.capture = await settle(client.capture({ turnId: plan.session + "-turn", rewindEpoch: 0,
@@ -199,7 +200,7 @@ function serviceLogs(profileRoot: string): string {
 		.map(path => `--- ${path}\n${tail(path)}`).join("\n");
 }
 
-type ModelMirror = { url: string; requested: string[]; served: string[]; release(): void };
+type ModelMirror = { url: string; requested: string[]; served: string[]; fail(): void; release(): void };
 
 /** A Hugging Face-shaped mirror of the staged model files; every request waits until `release()`. */
 async function startModelMirror(): Promise<ModelMirror> {
@@ -210,12 +211,14 @@ async function startModelMirror(): Promise<ModelMirror> {
 	const held: Array<() => void> = [];
 	const sockets = new Set<Socket>();
 	let released = false;
+	let failing = false;
 	const server: Server = createServer((request, response) => {
 		const path = decodeURIComponent(new URL(request.url ?? "/", "http://mirror").pathname);
 		requested.push(path);
 		const serve = (): void => {
 			if (response.destroyed || request.socket.destroyed) return;
 			response.on("error", () => undefined);
+			if (failing) { response.writeHead(503).end("model mirror unavailable"); return; }
 			const file = path.startsWith(prefix) ? join(STAGED_MODEL, path.slice(prefix.length)) : "";
 			if (!file || !existsSync(file) || !statSync(file).isFile()) { response.writeHead(404).end(); return; }
 			response.writeHead(200, { "content-type": "application/octet-stream", "content-length": statSync(file).size });
@@ -236,7 +239,8 @@ async function startModelMirror(): Promise<ModelMirror> {
 	});
 	return {
 		url: `http://127.0.0.1:${address.port}`, requested, served,
-		release() { released = true; for (const serve of held.splice(0)) serve(); },
+		fail() { failing = true; released = true; for (const serve of held.splice(0)) serve(); },
+		release() { failing = false; released = true; for (const serve of held.splice(0)) serve(); },
 	};
 }
 
@@ -261,6 +265,55 @@ async function expectReadBack(name: string, mirror: ModelMirror): Promise<void> 
 }
 
 describe("an accepted write survives the model download (REQ-7)", () => {
+	it("reports model preparation failure and clears it after a successful retry", { timeout: 180_000 }, async () => {
+		const mirror = await startModelMirror();
+		writeDownloadSettings(mirror);
+		const first = await session(root, { session: "before-failure" });
+		expect(first.connect, first.output).toMatchObject({ degraded: false });
+		const { principal } = first.init as { principal: string };
+		const { port, token } = discovery(root);
+		const request = async (path: string, body: object): Promise<unknown> => {
+			const response = await fetch(`http://127.0.0.1:${port}${path}`, {
+				method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json",
+					"x-sno-station-mem-skin": "codex" }, body: JSON.stringify(body),
+			});
+			expect(response.status).toBe(200);
+			return response.json();
+		};
+		const scope = { principal, project: "global", session: "failed-download" };
+		const name = codename();
+		mirror.fail();
+		await vi.waitFor(async () => {
+			const health = await healthz(root);
+			expect(health.status).toBe(200);
+			expect(health.body).toMatchObject({ status: "degraded", log_level: "debug", principal,
+				accessCounters: { engineAccesses: expect.any(Number), storeAccesses: expect.any(Number) } });
+			expect(health.body).toHaveProperty("storePath");
+			expect(JSON.stringify(health.body)).toContain("model preparation failed");
+			expect(JSON.stringify(health.body)).toContain(MODEL);
+			expect(JSON.stringify(health.body)).toContain(join(root, "model-cache"));
+		}, { timeout: 30_000, interval: 200 });
+		const capture = await request("/v1/capture", { scope, turn: { turnId: "failed-download-turn", rewindEpoch: 0,
+			messages: [{ role: "user", content: `We named the glacier expedition ${name}; the team leaves from the north hut.`, at: Date.now() }] } });
+		expect(capture).toMatchObject({ accepted: true, committed: false });
+		const recall = await request("/v1/get-recall", { scope, query: RECALL_QUESTION,
+			options: { source: "manual", minScore: 0 } });
+		expect(JSON.stringify(recall)).toContain("model preparation failed");
+
+		mirror.release();
+		const retry = await session(root, { session: "retry-after-failure",
+			model: { baseUrl: "http://127.0.0.1:1", credential: "test", model: "test" } }, 10_000);
+		expect(retry.connect, retry.output).toMatchObject({ degraded: false });
+		expect(retry.connectMs).toBeLessThan(5_000);
+		expect(retry.init, retry.output).toMatchObject({ degraded: false });
+		await vi.waitFor(async () => {
+			const health = await healthz(root);
+			expect(health.status).toBe(200);
+			expect(health.body).toMatchObject({ status: "ok" });
+		}, { timeout: 120_000, interval: 500 });
+		await expectReadBack(name, mirror);
+	});
+
 	it("keeps a capture whose sender exits during the download, and recall during the download answers empty at once", { timeout: 300_000 }, async () => {
 		const mirror = await startModelMirror();
 		writeDownloadSettings(mirror);
