@@ -9,6 +9,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { writeSettingsFixture } from "../fixtures/settings-file-fixture";
+import { readTestSnoGpuSettings } from "../../../apps/mem-claw/helpers/settings.ts";
 import { installRemSchema } from "../../../../packages/memory/src/engine/rem/index.ts";
 import { splitExactClauses } from "../../../../packages/memory/src/engine/rem/clause-splitter.ts";
 import {
@@ -193,22 +194,16 @@ async function seedOwnerDecidedWaveRows(
 }
 
 async function runOwnerDecidedWaveChild(input: {
-	configSource: string;
-	dbPath: string;
 	stateRoot: string;
 }): Promise<{ decisionEvents: SafeChildDecisionEvent[]; result: OrderedWaveResult }> {
 	const child = spawn(
-		"doppler",
-		["run", "-p", "sno-station-core", "-c", "dev", "--", tsxBinary, orderedWaveChild],
+		tsxBinary,
+		[orderedWaveChild],
 		{
 		env: {
 			...process.env,
-			SNO_STATION_MEM_REM_EXPECTED_DB_PATH: input.dbPath,
 			SNO_PROFILE_DIR: input.stateRoot,
-			REM_ACC6_CONFIG_SOURCE: input.configSource,
-			REM_ACC6_PERSONA_DB_PATH: input.dbPath,
 			REM_ACC6_SCOPE: acc6Scope,
-			REM_ACC6_STATE_ROOT: input.stateRoot,
 		},
 		stdio: ["ignore", "pipe", "pipe"],
 		},
@@ -375,11 +370,6 @@ describe("REM ordered wave", () => {
 		const stateRoot = mkdtempSync(join(tmpdir(), "rem-req19-blank-scope-"));
 		const previousProfile = process.env.SNO_PROFILE_DIR;
 		try {
-			const configSource = prepareRemEntryArtifactFixture(
-				stateRoot,
-				"valid",
-				createRemOwnerDecidedOperationalConfiguration(),
-			);
 			const personaDbPath = join(stateRoot, "never-created", "persona.sqlite");
 			writeSettingsFixture(stateRoot, { store: { path: personaDbPath } });
 			process.env.SNO_PROFILE_DIR = stateRoot;
@@ -391,9 +381,6 @@ describe("REM ordered wave", () => {
 			);
 
 			const result = await run({
-				stateRoot,
-				personaDbPath,
-				configSource,
 				// Whitespace, not the empty string: the guard trims, and an empty string would pass a
 				// plain length check just as well, so it could not tell the two implementations apart.
 				scope: "   ",
@@ -492,12 +479,16 @@ describe("REM ordered wave", () => {
 					"valid",
 					configuration,
 				);
+				writeSettingsFixture(stateRoot, {
+					mode: "rem-enhanced",
+					store: { path: fixture.dbPath, encryptionKey: fixture.encryptionKey },
+					snoGpu: readTestSnoGpuSettings(),
+					rem: { operations: ["rem-replace", "rem-update"] },
+				});
 				fixture.runtime.raw.exec("PRAGMA wal_checkpoint(TRUNCATE)");
 				fixture.runtime.raw.close();
 
 				const child = await runOwnerDecidedWaveChild({
-					configSource,
-					dbPath: fixture.dbPath,
 					stateRoot,
 				});
 				expect(child.result).toMatchObject({ decision: "allow", reasonCode: null });
@@ -1230,7 +1221,7 @@ describe.sequential("ACC-34 production POST enters one versioned ordered wave", 
 				[
 					"-c",
 					`set -uo pipefail
-REM_STATE_ROOT="$1"
+REM_PROFILE_ROOT="$1"
 ENABLED_REM_TYPES=("rem-replace" "rem-update")
 ${verifierSource}
 verify_rem_correlation "$2" "$3"`,
@@ -1299,7 +1290,7 @@ verify_rem_correlation "$2" "$3"`,
 				[
 					"-c",
 					`set -uo pipefail
-REM_STATE_ROOT="$1"
+REM_PROFILE_ROOT="$1"
 ENABLED_REM_TYPES=("rem-replace" "rem-update")
 ${verifierSource}
 verify_rem_correlation "$2" "$3"`,
