@@ -108,26 +108,30 @@ export class MemoryRuntimePool {
 		try {
 			await this.embedder.warmup();
 			this.modelReady = true;
-			const rows = this.store.sqlite.prepare("SELECT id, skin_id, request FROM pending_captures ORDER BY rowid").all() as Array<{ id: string; skin_id: string; request: string }>;
-			for (const row of rows) {
-				try {
-					const result = await this.invoke("capture", JSON.parse(row.request), row.skin_id);
-					if ("committed" in result && result.committed)
-						this.store.sqlite.prepare("DELETE FROM pending_captures WHERE id = ?").run(row.id);
-					else throw new Error("Pending capture was not committed");
-				} catch (error) {
-					log.error("Pending capture failed", { error }, {
-						event_name: "memory.sidecar.pending_capture.failed", file: "packages/memory/src/sidecar/memory-runtime.ts",
-						function: "prepareModel", site_id: "memory.sidecar.pending_capture.failed",
-					});
-				}
-			}
+			await this.replayPendingCaptures();
 		} catch (error) {
 			log.error("Embedding model preparation failed", { cache_path: this.settings.embedding.cacheDir,
 				settings_file: getSettingsPath(), error }, {
 				event_name: "memory.sidecar.model.prepare.failed", file: "packages/memory/src/sidecar/memory-runtime.ts",
 				function: "prepareModel", site_id: "memory.sidecar.model.prepare.failed",
 			});
+		}
+	}
+
+	private async replayPendingCaptures(): Promise<void> {
+		const rows = this.store.sqlite.prepare("SELECT id, skin_id, request FROM pending_captures ORDER BY rowid").all() as Array<{ id: string; skin_id: string; request: string }>;
+		for (const row of rows) {
+			try {
+				const result = await this.invoke("capture", JSON.parse(row.request), row.skin_id);
+				if ("committed" in result && result.committed)
+					this.store.sqlite.prepare("DELETE FROM pending_captures WHERE id = ?").run(row.id);
+				else throw new Error("Pending capture was not committed");
+			} catch (error) {
+				log.error("Pending capture failed", { error }, {
+					event_name: "memory.sidecar.pending_capture.failed", file: "packages/memory/src/sidecar/memory-runtime.ts",
+					function: "replayPendingCaptures", site_id: "memory.sidecar.pending_capture.failed",
+				});
+			}
 		}
 	}
 
@@ -195,6 +199,8 @@ export class MemoryRuntimePool {
 			this.skins.delete(registration.skinId);
 			this.skins.set(registration.skinId, entry);
 			if (previous) { previous.retired = true; if (previous.active === 0) await this.dispose(previous); }
+			if (registration.model && this.modelReady) void this.modelPreparation?.then(() => this.replayPendingCaptures())
+				.catch(error => engineLogger.error(String(error)));
 			if (registration.model) void Promise.resolve().then(() => evaluateRemAutomaticTriggers({
 				database: this.store.sqlite, stateDir: this.stateDir,
 				mode: this.settings.mode, requestedOperations: this.settings.rem.operations,
