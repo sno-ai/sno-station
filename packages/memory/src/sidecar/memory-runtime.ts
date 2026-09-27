@@ -126,9 +126,9 @@ export class MemoryRuntimePool {
 		for (const row of rows) {
 			try {
 				const result = await this.invoke("capture", JSON.parse(row.request), row.skin_id);
-				if (!result.degraded)
+				if (!result.degraded && "committed" in result && (result.committed || result.skipped || result.partial))
 					this.store.sqlite.prepare("DELETE FROM pending_captures WHERE id = ?").run(row.id);
-				else throw new Error("Pending capture was degraded");
+				else throw new Error("Pending capture was not completed");
 			} catch (error) {
 				log.error("Pending capture failed", { error }, {
 					event_name: "memory.sidecar.pending_capture.failed", file: "packages/memory/src/sidecar/memory-runtime.ts",

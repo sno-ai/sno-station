@@ -556,7 +556,7 @@ Response status: `200 OK`; `Content-Type: application/json`.
 
 ### Request body
 
-Captures one completed turn. `turnId` must contain non-whitespace text; `rewindEpoch` is a nonnegative integer. Message times are nonnegative finite epoch milliseconds. JSON content can be structured or plain text. No minimum message-array length is imposed by this schema. `committed:true` acknowledges completed synchronous extraction/persistence, not a queued write. A deadline is not a durable commit receipt.
+Captures one completed turn. `turnId` must contain non-whitespace text; `rewindEpoch` is a nonnegative integer. Message times are nonnegative finite epoch milliseconds. JSON content can be structured or plain text. No minimum message-array length is imposed by this schema. `committed:true` acknowledges completed synchronous extraction/persistence, not a queued write. `skipped:true` means capture was deliberately disabled, omitted for a subagent, or given an empty conversation. `partial:true` means extraction stored some facts but did not fully complete. A plain `committed:false` remains retryable. A deadline is not a durable commit receipt.
 
 Scope requires nonblank `principal`, `project`, `session`. `host.observeSessionUuid`, if supplied, must be a UUID. Host `at` is nonnegative epoch milliseconds. Other host strings may be empty.
 
@@ -599,6 +599,8 @@ HTTP 200, JSON. The complete successful body is below. The schema also permits t
 | turnId | string | yes | - | - | {"minLength":1} |
 | committed | boolean | yes | - | - | - |
 | accepted | boolean | no | - | - | - |
+| skipped | boolean | no | [true] | - | - |
+| partial | boolean | no | [true] | - | - |
 | degraded | boolean | yes | [false] | - | - |
 
 ### Errors

@@ -133,6 +133,7 @@ export async function onAgentEnd(
 	event: PluginHookAgentEndEvent,
 	ctx: PluginHookAgentContext,
 	stateDir: string,
+	reasonOut?: { value?: string },
 ): Promise<AmbientCaptureOutcome> {
 	const sessionKey = typeof ctx.sessionKey === "string" ? ctx.sessionKey : "";
 	return withLogContext({ operation_id: currentLogContext().operation_id ?? randomUUID(), session_reference: sessionKey }, async () => {
@@ -165,6 +166,7 @@ export async function onAgentEnd(
 		return outcome;
 	}
 	if (!insightDistiller) {
+		reason = "atomic_extractor_unavailable";
 		appendAuditEntry(stateDir, {
 			event: "ambient_learning",
 			hook: "agent_end",
@@ -183,6 +185,7 @@ export async function onAgentEnd(
 		transcriptSessionDateTime(event.messages) ??
 		deriveSessionDateTime(event.messages, config.captureAssistant);
 	if (!conversationText.trim()) {
+		reason = "rejected_empty_conversation";
 		appendAuditEntry(stateDir, {
 			event: "ambient_learning",
 			hook: "agent_end",
@@ -244,6 +247,7 @@ export async function onAgentEnd(
 		});
 	}
 	} finally {
+		if (reasonOut) reasonOut.value = reason;
 		log.info("Ambient capture hook completed", { outcome, reason_code: reason, duration_ms: performance.now() - started },
 			{ event_name: "memory.capture.hook.completed", file: "packages/memory/src/engine/bindings/sno-station-mem-ambient-learning-hook.ts", function: "onAgentEnd", site_id: "memory.capture.hook.completed" });
 	}
