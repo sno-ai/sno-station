@@ -726,7 +726,7 @@ describe("sidecar keeps serving", () => {
 			expect(database.sqlite.prepare("SELECT count(*) AS count FROM nodix_memory_chunks").get()).toEqual({ count: 1 });
 			const records = lines.flatMap(line => line.trim().split("\n")).filter(Boolean).map(line => JSON.parse(line));
 			expect(records.filter(record => record.event_name === "memory.operation.aborted").map(record => record.attributes))
-				.toEqual([{ method: "capture", outcome: "aborted", writes: 5 }]);
+				.toEqual([{ method: "capture", outcome: "aborted", writes: 4 }]);
 		} finally {
 			release.resolve();
 			await result;
@@ -1034,8 +1034,18 @@ describe("sidecar keeps serving", () => {
 		} finally { await store.close(); }
 	});
 	it("starts with an invalid job journal and still serves", async () => {
-		writeFileSync(join(root, "sno-station-mem", "rem-wave-jobs.jsonl"), "{broken}\n");
-		await health();
+		const journal = join(root, "sno-station-mem", "rem-wave-jobs.jsonl");
+		writeFileSync(journal, "{broken}\n");
+		const lines: string[] = [];
+		const output = vi.spyOn(process.stderr, "write").mockImplementation(chunk => { lines.push(String(chunk)); return true; });
+		try {
+			await health();
+			const records = lines.flatMap(line => line.trim().split("\n")).filter(Boolean).map(line => JSON.parse(line));
+			expect(records.filter(record => record.event_name === "rem.journal.failed").map(record => ({
+				file: record.source.file, line: record.attributes.line, error: record.attributes.error.type,
+			}))).toEqual([{ file: "packages/memory/src/sidecar/rem-job-store.ts", line: 1, error: "SyntaxError" }]);
+			expect(readFileSync(journal, "utf8")).toBe("{broken}\n");
+		} finally { output.mockRestore(); }
 	});
 	it("serves the store named in settings.json with no installation config file", async () => {
 		expect(existsSync(join(root, "station", `sno-station-mem-${userInfo().username}.config.json`))).toBe(false);

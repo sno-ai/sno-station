@@ -263,10 +263,19 @@ describe("REM job store", () => {
 		expect(readFileSync(journalPath, "utf8").trim().split("\n")).toHaveLength(1);
 	});
 
-	it("surfaces a malformed complete journal record instead of discarding state", async () => {
+	it("keeps valid jobs around malformed complete records and leaves the journal intact", async () => {
 		const journalPath = createJournalPath();
-		writeFileSync(journalPath, '{"job_id":"malformed"}\n', "utf8");
-
-		await expect(RemJobStore.open(journalPath)).rejects.toThrow(/invalid REM job journal/i);
+		const first = await RemJobStore.open(journalPath);
+		const { job: queued } = await first.createQueued("rem-update", "persona:queued", "corr-queued");
+		const badLine = '{"job_id":"malformed"}\n';
+		appendFileSync(journalPath, badLine, "utf8");
+		const { job: running } = await first.createQueued("rem-replace", "persona:running", "corr-running");
+		await first.transition(running.job_id, { state: "running" });
+		const reopened = await RemJobStore.open(journalPath);
+		expect(reopened.nonTerminalJobs().map(job => job.state)).toEqual(["queued", "running"]);
+		expect(reopened.get(queued.job_id)?.state).toBe("queued");
+		expect(reopened.get(running.job_id)?.state).toBe("running");
+		expect(readFileSync(journalPath, "utf8").trim().split("\n")).toHaveLength(4);
+		expect(readFileSync(journalPath, "utf8").split("\n")[1]).toBe('{"job_id":"malformed"}');
 	});
 });
