@@ -10,7 +10,8 @@ import { fileURLToPath } from "node:url";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 import { describe, expect, it } from "vitest";
-import { initSqliteRuntimeSync, openSqliteDatabase } from "../../../../packages/memory/src/store/sqlite-runtime";
+import { initSqliteRuntime, openSqliteDatabase } from "../../../../packages/memory/src/store/sqlite-runtime";
+import { makeTestEnv } from "../../sqlite-crypto/_helpers";
 
 const MIGRATIONS_DIR = fileURLToPath(
 	new URL("../../../../packages/memory/drizzle", import.meta.url),
@@ -18,7 +19,8 @@ const MIGRATIONS_DIR = fileURLToPath(
 
 describe("memory timezone migration", () => {
 	it("adds and backfills timezone on an existing database exactly once", () => {
-		initSqliteRuntimeSync();
+		const cryptoEnv = makeTestEnv("memory-timezone-migration");
+		initSqliteRuntime(cryptoEnv.keyHex);
 		const directory = mkdtempSync(join(tmpdir(), "memory-timezone-migration-"));
 		const databasePath = join(directory, "memory.sqlite");
 		const runtime = openSqliteDatabase(databasePath);
@@ -123,6 +125,7 @@ describe("memory timezone migration", () => {
 		} finally {
 			runtime.db.close();
 			rmSync(directory, { recursive: true, force: true });
+			cryptoEnv.cleanup();
 		}
 	});
 });

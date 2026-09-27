@@ -5,12 +5,6 @@ import { SNO_OBSERVE_DEFAULT_AGENT_ID, SNO_OBSERVE_DEFAULT_BASE_URL } from "./in
 
 const AGENT_IDS = [PERSISTED_PROVIDER_SYSTEM as typeof PERSISTED_PROVIDER_SYSTEM, FIXED_PROTOCOL_VALUE_70 as typeof FIXED_PROTOCOL_VALUE_70, FIXED_PROTOCOL_VALUE_71 as typeof FIXED_PROTOCOL_VALUE_71, FIXED_PROTOCOL_VALUE_72 as typeof FIXED_PROTOCOL_VALUE_72] as const;
 
-/** Observe is on unless the operator says `SNO_OBSERVE_ENABLED=false` (or `0`). */
-function parseObserveEnabled(value: string | undefined): boolean {
-	const normalized = value?.trim().toLowerCase();
-	return normalized !== "false" && normalized !== "0";
-}
-
 export type ObserveAgentId = (typeof AGENT_IDS)[number];
 const observeAgentIdSchema: z.ZodType<ObserveAgentId, unknown> = z.enum(AGENT_IDS, {
 	error: () => `observe.agentId must be one of ${AGENT_IDS.join(", ")}`,
@@ -42,7 +36,7 @@ function validateObserveBaseUrl(value: string, ctx: z.RefinementCtx): void {
 		ctx.addIssue({
 			code: z.ZodIssueCode.custom,
 			path: ["baseUrl"],
-			message: `Invalid SNO_OBSERVE_BASE_URL: "${value}"`,
+			message: `Invalid observe.baseUrl: "${value}"`,
 		});
 		return;
 	}
@@ -52,7 +46,7 @@ function validateObserveBaseUrl(value: string, ctx: z.RefinementCtx): void {
 			ctx.addIssue({
 				code: z.ZodIssueCode.custom,
 				path: ["baseUrl"],
-				message: "SNO_OBSERVE_BASE_URL test fixture must use http or https",
+				message: "observe.baseUrl test fixture must use http or https",
 			});
 		}
 		return;
@@ -61,7 +55,7 @@ function validateObserveBaseUrl(value: string, ctx: z.RefinementCtx): void {
 		ctx.addIssue({
 			code: z.ZodIssueCode.custom,
 			path: ["baseUrl"],
-			message: `SNO_OBSERVE_BASE_URL must be ${SNO_OBSERVE_DEFAULT_BASE_URL} outside loopback tests`,
+			message: `observe.baseUrl must be ${SNO_OBSERVE_DEFAULT_BASE_URL} outside loopback tests`,
 		});
 	}
 }
@@ -71,8 +65,8 @@ export const observeConfigSchema: z.ZodType<
 	unknown
 > = z
 	.object({
-		enabled: z.boolean().default(() => parseObserveEnabled(process.env.SNO_OBSERVE_ENABLED)),
-		baseUrl: z.string().default(() => process.env.SNO_OBSERVE_BASE_URL ?? SNO_OBSERVE_DEFAULT_BASE_URL),
+		enabled: z.boolean().default(true),
+		baseUrl: z.string().default(SNO_OBSERVE_DEFAULT_BASE_URL),
 		agentId: observeAgentIdSchema.default(SNO_OBSERVE_DEFAULT_AGENT_ID as ObserveAgentId),
 	})
 	.prefault({})

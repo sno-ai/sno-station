@@ -1,4 +1,4 @@
-import { FIXED_PROTOCOL_VALUE_69, FIXED_EXTRACTION_KEY_NAME } from "./signed-registry-constants";
+import { FIXED_PROTOCOL_VALUE_69 } from "./signed-registry-constants";
 import { classifyLlmFailure } from "./llm-failure";
 /** @file llm-provider-transport.ts
  * @purpose Sends OpenAI-compatible chat requests with retries and provider routing.
@@ -91,11 +91,6 @@ async function observeRequest<T>(
 
 const CCPROXY_OPENAI_BASE_URL = FIXED_PROTOCOL_VALUE_69;
 const CCPROXY_PLACEHOLDER_API_KEY = "ccproxy-placeholder";
-const HELICONE_AUTH_HOSTNAMES = new Set([
-	"oai.helicone.ai",
-	"gateway.helicone.ai",
-	"anthropic.helicone.ai",
-]);
 /** Keys from pipeline kwargs that belong in the chat/completions POST body. */
 const FORWARDED_KWARGS = [
 	"temperature",
@@ -405,19 +400,6 @@ export async function callSnoProfileCompletion(
 	});
 }
 
-function isHeliconeBaseUrl(baseUrl: string): boolean {
-	try {
-		const hostname = new URL(baseUrl).hostname.toLowerCase();
-		return HELICONE_AUTH_HOSTNAMES.has(hostname);
-	} catch {
-		return false;
-	}
-}
-
-function resolveHeliconeApiKey(value?: string): string | undefined {
-	return value?.trim() || process.env.HELICONE_API_KEY?.trim() || undefined;
-}
-
 function isCcproxyOpenAiBaseUrl(value: string | undefined): boolean {
 	if (!value) return false;
 	try {
@@ -455,11 +437,6 @@ async function snoStationMemDispatch(ctx: LlmixDispatchContext): Promise<Provide
 			temperature: callBody.temperature, top_p: callBody.top_p,
 		})).digest("hex") }, async (diagnostic) => {
 	const requestAbort = requestAbortSignal(timeoutMs, cfgExt.signal);
-	const heliconeApiKey = resolveHeliconeApiKey(
-		typeof cfgExt.heliconeApiKey === "string" ? cfgExt.heliconeApiKey : undefined,
-	);
-	const shouldSendHeliconeAuth =
-		cfgExt.shouldSendHeliconeAuth === true || isHeliconeBaseUrl(endpointUrl);
 	const headers: Record<string, string> = {
 		"Content-Type": "application/json",
 	};
@@ -468,9 +445,6 @@ async function snoStationMemDispatch(ctx: LlmixDispatchContext): Promise<Provide
 		headers["X-Internal-Token"] = ctx.apiKey;
 	} else {
 		headers.Authorization = `Bearer ${ctx.apiKey}`;
-		if (heliconeApiKey && shouldSendHeliconeAuth) {
-			headers["Helicone-Auth"] = `Bearer ${heliconeApiKey}`;
-		}
 	}
 	let response: Response;
 	try {
@@ -642,19 +616,6 @@ export async function callProvider(ctx: LlmixDispatchContext): Promise<LocalCall
 	};
 }
 
-/** Picks the provider-native environment key for a preset without a configured apiKey. */
-function resolveEnvApiKey(
-	provider: LlmProvider,
-	userBaseUrlOverride: boolean,
-): string | undefined {
-	if (provider === "sno-gpu") {
-		return userBaseUrlOverride
-			? process.env.SNO_MEM_CLAW_LLM_API_KEY
-			: (process.env.SNO_MEM_CLAW_LLM_API_KEY ?? process.env[FIXED_EXTRACTION_KEY_NAME]);
-	}
-	return undefined;
-}
-
 export function resolveProviderApiKey(
 	config: LlmClientConfig,
 	resolved: ResolvedLlmConfig,
@@ -667,11 +628,5 @@ export function resolveProviderApiKey(
 	) {
 		return CCPROXY_PLACEHOLDER_API_KEY;
 	}
-	const envKey = resolveEnvApiKey(resolved.provider, userBaseUrlOverride);
-	if (envKey?.trim()) return envKey;
-	const hint =
-		resolved.provider === "sno-gpu" && userBaseUrlOverride
-			? "set extraction.llm.apiKey or SNO_MEM_CLAW_LLM_API_KEY for overridden Sno AI endpoints"
-			: `set extraction.llm.apiKey or the provider environment key for preset ${config.preset}`;
-	throw new Error(`sno-station-mem llm-client: missing API key; ${hint}`);
+	throw new Error(`sno-station-mem llm-client: missing API key for preset ${config.preset}; set snoGpu.apiKey`);
 }

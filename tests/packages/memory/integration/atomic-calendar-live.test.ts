@@ -13,6 +13,11 @@ import { parseAtomicExtractionReply } from "../../../../packages/memory/src/engi
 import { runAtomicExtractionGauntlet } from "../../../../packages/memory/src/engine/extraction/atomic-extraction-gauntlet";
 import { createLlmClient } from "../../../../packages/memory/src/model/llm-client";
 import { ATOMIC_EXTRACTION_SKILL_HASH } from "../../../../packages/memory/src/engine/extraction/atomic-extraction-skill";
+import { readFileSync } from "node:fs";
+import { DEFAULT_SETTINGS_PATH } from "../fixtures/settings-file-fixture";
+
+// The routing table is `settings.modelCalls`; the shipped default document carries the one `sno` writes.
+const MODEL_CALLS = (JSON.parse(readFileSync(DEFAULT_SETTINGS_PATH, "utf8")) as { modelCalls: unknown }).modelCalls;
 
 // Undated generic extraction sometimes returns no records; that is completeness issue #219.
 // Its raw failures are retained in /tmp/calendar-undated-fixed.log and
@@ -82,7 +87,7 @@ it("keeps independently stated event dates separate", async () => {
 it("keeps a real standing claim open through production classification and durable read-back", async () => {
 	const apiKey = process.env.SNO_MEM_CLAW_LLM_INTERNAL_KEY;
 	if (!apiKey) throw new Error("SNO_MEM_CLAW_LLM_INTERNAL_KEY is required");
-	const routing = llmRoutingConfigSchema.parse({ mode: "rem-enhanced" });
+	const routing = llmRoutingConfigSchema.parse({ mode: "rem-enhanced", modelCalls: MODEL_CALLS });
 	const transports = createSignedAtomicMemoryExtractionTransports({ preset: "mem_claw/sno_extract_chat", apiKey, timeoutMs: 90_000, routing });
 	const endpoint = await resolveLlmEndpoint({ configuredPreset: "mem_claw/sno_extract_chat", callId: "E1", transport: "chat-completions" });
 	const fixture = createTestDb();

@@ -69,7 +69,6 @@ export { createScopePolicy, isSystemBypassId } from "../security/scopes";
 export { ConfigError } from "../shared/errors";
 export { createLlmClient } from "../../model/llm-client";
 export { pruneOldestEntries, setLruEntry, touchLruEntry } from "../shared/lru";
-export { resolveSnoStationMemDbPath } from "../shared/paths";
 export type { PluginConfig } from "../shared/types";
 export { pluginConfigSchema } from "../shared/types";
 export { debugContentPreview, stableHash } from "../shared/utils";
@@ -82,7 +81,7 @@ export {
 	getBackupsDir,
 	getSnoStationMemDataDir,
 } from "../../store/data-paths";
-export { initSqliteRuntimeSync } from "../../store/sqlite-runtime";
+export { initSqliteRuntime } from "../../store/sqlite-runtime";
 export type { MemoryStore } from "../../store/store";
 
 /** Legacy parameters carry only an unused logger slot; no host operations are exposed. */

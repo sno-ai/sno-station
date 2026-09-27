@@ -4,7 +4,6 @@ import { dirname } from "node:path";
 import { resolveConfigPaths } from "./config.js";
 import { ManifestCorrupted } from "./errors.js";
 import { crashAfter } from "./fault-injection.js";
-import { writeNewSecretFile } from "./key-file.js";
 import {
 	type DbId,
 	type DekFingerprint,
@@ -109,7 +108,12 @@ export function ensureMarker(): void {
 	const { markerFile, configDir } = resolveConfigPaths();
 	if (existsSync(markerFile)) return;
 	mkdirSync(configDir, { recursive: true, mode: 0o700 });
-	writeNewSecretFile(markerFile, Buffer.alloc(0));
+	const fd = openSync(markerFile, "wx", 0o600);
+	try {
+		fsyncSync(fd);
+	} finally {
+		closeSync(fd);
+	}
 	// Test fault-injection hook (design D18). Default off.
 	crashAfter("after-marker-before-manifest");
 }

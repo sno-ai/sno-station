@@ -1,5 +1,5 @@
 import { MEMORY_SHUTDOWN_TIMEOUT_MS } from "../../config/index";
-import { getPrincipal, getSidecarSocketPath, readBoundStorePath } from "../contract/profile";
+import { getPrincipal, getSidecarSocketPath, SettingsUnavailableError } from "../contract/profile";
 /** @file server.ts
  * @purpose Runs the loopback HTTP surface and empty asynchronous REM executor.
  * @boundary Sno CLI requests, durable REM job state, and the existing local audit writer.
@@ -32,12 +32,10 @@ import {
 	appendAuditEntryStrict,
 	getAuditPath,
 	getSnoStationMemStateDir,
-	getStateDir,
 } from "../engine/operations/runtime-audit-log";
 import {
 	getRemChassisJournalPath,
 	HEALTH_PATH,
-	readRemConfigSource,
 	readRemOperationalConfig,
 	readRemTestHoldMs,
 	REM_ASYNC_START_DELAY_MS,
@@ -188,11 +186,14 @@ async function startOwnedRemSidecar(): Promise<{ port: number; stop(): Promise<{
 	let stopping = false;
 	let currentMemory: MemoryRuntimePool | undefined;
 	let openingMemory: Promise<MemoryRuntimePool> | undefined;
+	let settingsError: Error | undefined;
 	const memory = {
 		current: (): MemoryRuntimePool | undefined => currentMemory,
 		async open(): Promise<MemoryRuntimePool> {
 			if (currentMemory) return currentMemory;
+			if (settingsError) throw settingsError;
 			openingMemory ??= import("./memory-runtime").then(module => module.MemoryRuntimePool.open()).then(pool => { currentMemory = pool; if (stopping) pool.stopTimers(); return pool; })
+				.catch(error => { if (error instanceof SettingsUnavailableError) settingsError = error; throw error; })
 				.finally(() => { openingMemory = undefined; });
 			return openingMemory;
 		},
@@ -200,7 +201,7 @@ async function startOwnedRemSidecar(): Promise<{ port: number; stop(): Promise<{
 	const token = randomBytes(32).toString("hex");
 	const holdMs = readRemTestHoldMs();
 	const chassisJournal = new RemChassisJournal(getRemChassisJournalPath());
-	const store = RemJobStore.open(getRemJobJournalPath(), (job) => {
+	const onDurableTransition = (job: RemJob): void => {
 		log.info("job_transition_durable", {
 			event: "job_transition_durable",
 			job_id: job.job_id,
@@ -213,7 +214,8 @@ async function startOwnedRemSidecar(): Promise<{ port: number; stop(): Promise<{
 			function: "<anonymous callback>",
 			site_id: "server.<anonymous callback>.5eb5a60e6b",
 		});
-	});
+	};
+	const store = RemJobStore.open(getRemJobJournalPath(), onDurableTransition);
 	const pendingTimers = new Map<NodeJS.Timeout, () => void>();
 	const startPendingStarts = (): void => {
 		for (const start of pendingTimers.values()) start();
@@ -265,6 +267,12 @@ async function startOwnedRemSidecar(): Promise<{ port: number; stop(): Promise<{
 			memory,
 			() => stopping,
 		).catch((error: unknown) => {
+				if (error instanceof SettingsUnavailableError) {
+					context.error_code = error.message;
+					if (!response.headersSent) sendJson(response, 503, { error: error.message });
+					else response.end();
+					return;
+				}
 				let httpError = new HttpError(500, "internal_error");
 				if (error instanceof HttpError) httpError = error;
 				else if (error instanceof PayloadTooLargeError) httpError = new HttpError(413, "payload_too_large");
@@ -313,6 +321,9 @@ async function startOwnedRemSidecar(): Promise<{ port: number; stop(): Promise<{
 	};
 	let discoveryPublication = publishDiscovery();
 	await discoveryPublication;
+	void memory.open().catch(error => {
+		if (!(error instanceof SettingsUnavailableError)) reportSidecarFailure("memory startup", error);
+	});
 	const recovery = (async () => {
 		const jobIds = await recoverInterruptedJobs(jobs, await readCompletedJobStats(new Set(recoveryJobs.map(job => job.job_id))), recoveryJobs);
 		for (const jobId of jobIds) await runChassisJob(jobs, chassisJournal, jobId, 0, await memory.open());
@@ -409,8 +420,14 @@ async function routeRequest(
 ): Promise<void> {
 	const url = new URL(request.url ?? HEALTH_PATH, REM_SIDECAR_ORIGIN);
 	if (request.method === "GET" && url.pathname === HEALTH_PATH) {
-		sendJson(response, 200, { status: "ok", log_level: effectiveLogLevel(), principal: getPrincipal(),
-			storePath: await readBoundStorePath(), accessCounters: memory.current()?.counters ?? { engineAccesses: 0, storeAccesses: 0 } });
+		try {
+			const runtime = await memory.open();
+			sendJson(response, 200, { status: "ok", log_level: effectiveLogLevel(), principal: getPrincipal(),
+				storePath: runtime.storePath, accessCounters: runtime.counters });
+		} catch (error) {
+			if (!(error instanceof SettingsUnavailableError)) throw error;
+			sendJson(response, 503, { status: "error", error: error.message });
+		}
 		return;
 	}
 	if (url.pathname.startsWith("/v1/")) {
@@ -434,7 +451,7 @@ async function routeRequest(
 		}
 		const store = await pendingStore;
 		const runtime = await memory.open();
-		if (remNeedsHost(runtime.config.mode) && !runtime.connectedRemPort()) {
+		if (remNeedsHost(runtime.config.mode, runtime.settings.modelCalls) && !runtime.connectedRemPort()) {
 			context.error_code = "no host model connected";
 			sendJson(response, 503, { error: "no host model connected" });
 			return;
@@ -523,7 +540,7 @@ async function runChassisJob(
 		});
 		let writesApplied = false;
 		try {
-			if (remNeedsHost(runtime.config.mode) && !runtime.connectedRemPort()) {
+			if (remNeedsHost(runtime.config.mode, runtime.settings.modelCalls) && !runtime.connectedRemPort()) {
 				await skipNonTerminalJob(store, queued.job_id, "no host model connected");
 				return;
 			}
@@ -537,17 +554,15 @@ async function runChassisJob(
 			if (holdMs > 0) {
 				await new Promise((resolvePromise) => setTimeout(resolvePromise, holdMs));
 			}
-			const configSource = readRemConfigSource();
-			const configuration = configSource === undefined
-				? readRemOperationalConfig()
-				: readRemOperationalConfig(configSource);
+			const configuration = readRemOperationalConfig();
+			const enabledBySettings = runtime.settings.rem.operations;
 			const enabledOperations: RemBuiltOperationType[] = [];
 			const cleanRefusalReasons: string[] = [];
 			for (const operation of requestedOperations) {
 				let reason: string;
 				if (!isBuiltOperation(operation)) {
 					reason = `not-built:${operation}`;
-				} else if (configuration.operations[operation]) {
+				} else if (configuration.operations[operation] && enabledBySettings.includes(operation)) {
 					enabledOperations.push(operation);
 					continue;
 				} else {
@@ -580,10 +595,7 @@ async function runChassisJob(
 						perOperation: [],
 					}
 				: await runRemProductionOrderedWave({
-						mode: runtime.config.mode, agentPort: runtime.connectedRemPort(),
-						stateRoot: getStateDir(),
-						personaDbPath: process.env["SNO_STATION_MEM_REM_EXPECTED_DB_PATH"],
-						configSource: JSON.stringify(configuration),
+						mode: runtime.config.mode, settings: runtime.settings, agentPort: runtime.connectedRemPort(),
 						scope: queued.scope,
 						waveId: queued.job_id,
 						requestedOperations: enabledOperations,

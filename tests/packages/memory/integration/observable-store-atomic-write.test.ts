@@ -220,7 +220,7 @@ describe("atomic extraction write carries the writer", () => {
 // QCG-3 (REQ-4): with a real PluginObservability writing buffer.db, a write whose project id is an
 // absolute checkout path carries the rule's p_ id; a non-path project id carries none.
 describe("memory.write project scope", () => {
-	const ENV_KEYS = ["SNO_HOME", "SNO_PROFILE_DIR", "SNO_BUFFER_PATH",
+	const ENV_KEYS = ["SNO_PROFILE_DIR", "SNO_BUFFER_PATH",
 		"SNO_IDENTITY_PATH", "SNO_CONSENT_PATH"] as const;
 	let root: string;
 	let previous: Record<string, string | undefined>;
@@ -229,7 +229,6 @@ describe("memory.write project scope", () => {
 	beforeEach(() => {
 		previous = Object.fromEntries(ENV_KEYS.map((key) => [key, process.env[key]]));
 		root = mkdtempSync(join(tmpdir(), "memory-write-project-"));
-		delete process.env.SNO_HOME;
 		process.env.SNO_PROFILE_DIR = root;
 		process.env.SNO_BUFFER_PATH = join(root, "buffer.db");
 		process.env.SNO_IDENTITY_PATH = join(root, "identity.json");

@@ -1,6 +1,6 @@
 import { appendFileSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
-import { getLogPath } from "./paths.js";
+import { getLogPath, readStandaloneSettings } from "./paths.js";
 
 export interface LogContext {
 	[key: string]: unknown;
@@ -27,9 +27,9 @@ export class ObserveLogger {
 	private suppressedCount = 0;
 
 	debug(message: string, context: LogContext, source: LogSource): void {
-		if (process.env["SNO_OBSERVE_LOG"] === "debug") {
-			this.write("debug", message, context, source);
-		}
+		try {
+			if (readStandaloneSettings().loggingLevel === "debug") this.write("debug", message, context, source);
+		} catch { /* Diagnostic logging must not change event delivery. */ }
 	}
 
 	info(message: string, context: LogContext, source: LogSource): void {

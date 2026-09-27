@@ -1,6 +1,5 @@
 import { FIXED_MEMORY_SNO_AI_EXTRACT } from "../src/model/signed-registry-constants";
 import { z } from "zod";
-import { createLogger } from "@snoai/utils/logger";
 
 import {
 	DEFAULT_REFLECTION_ERROR_REMINDER_MAX_ENTRIES,
@@ -38,49 +37,28 @@ export const selfImprovementConfigSchema: z.ZodType<
 	})
 	.prefault({});
 
-const log = createLogger("sno-station-mem:plugin-config-feature");
-
-/**
- * Presets removed in 0.23; an older plugin config or registration still carries them. The old
- * provider's key and endpoint go with the preset, so neither reaches the Sno endpoint.
- */
-function replaceRemovedPreset(llm: unknown): unknown {
-	if (!llm || typeof llm !== "object" || Array.isArray(llm)) return llm;
-	// A plain JSON object at a parse boundary; the strict schema below validates every field.
-	const { preset, apiKey: _apiKey, baseURL: _baseURL, ...rest } = llm as Record<string, unknown>;
-	if (preset !== "mem_claw/openai_gpt_5_nano" && preset !== "mem_claw/openrouter_auto") return llm;
-	log.warn("Replaced removed extraction.llm.preset", { preset }, {
-		event_name: "memory.plugin_config.old_preset_replaced", file: "packages/memory/config/plugin-config-feature-schema.ts",
-		function: "replaceRemovedPreset", site_id: "plugin-config-feature-schema.replaceRemovedPreset",
-	});
-	return { ...rest, preset: FIXED_MEMORY_SNO_AI_EXTRACT };
-}
-
 export const extractionConfigSchema: z.ZodType<
 	{
 		llm: {
 			preset: (typeof LLM_PRESETS)[number];
 			baseURL?: string | undefined;
 			apiKey?: string | undefined;
-			heliconeApiKey?: string | undefined;
 			timeoutMs: number;
 		};
 	},
 	unknown
 > = z
 	.object({
-		llm: z.preprocess(replaceRemovedPreset, z
+		llm: z
 			.object({
 				preset: z.enum(LLM_PRESETS).default(FIXED_MEMORY_SNO_AI_EXTRACT),
 				/** Overrides provider default / env baseURL if set. */
 				baseURL: z.string().optional(),
 				/** Overrides provider-native env if set. */
 				apiKey: z.string().optional(),
-				/** Enables Helicone request logging for OpenAI-compatible calls. Defaults to HELICONE_API_KEY env if unset. */
-				heliconeApiKey: z.string().optional(),
 				timeoutMs: z.number().int().min(1000).max(300_000).default(30_000),
 		})
-			.strict())
+			.strict()
 			.prefault({}),
 	})
 	.strict()

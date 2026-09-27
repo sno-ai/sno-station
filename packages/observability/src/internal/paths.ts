@@ -1,18 +1,44 @@
+import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
+import { z } from "zod";
+
+const standaloneSettingsSchema = z.object({
+	telemetry: z.object({ observe: z.object({ baseUrl: z.string().optional() }).optional() }).optional(),
+	logging: z.object({ level: z.enum(["debug", "info", "warn", "error"]).optional() }).optional(),
+});
 
 export interface PathEnv {
 	[key: string]: string | undefined;
 	SNO_PROFILE_DIR?: string;
-	SNO_HOME?: string;
 	SNO_IDENTITY_PATH?: string;
 	SNO_BUFFER_PATH?: string;
 	SNO_CONSENT_PATH?: string;
-	SNO_OBSERVE_BASE_URL?: string;
 }
 
 export function getSnoProfileDir(env: PathEnv = process.env): string {
-	return env.SNO_PROFILE_DIR ?? env.SNO_HOME ?? join(homedir(), ".sno");
+	return env.SNO_PROFILE_DIR ?? join(homedir(), ".sno");
+}
+
+export function readStandaloneSettings(env: PathEnv = process.env): {
+	baseUrl: string;
+	loggingLevel: string | undefined;
+} {
+	let settings: unknown;
+	const settingsPath = join(getSnoProfileDir(env), "settings.json");
+	try { settings = JSON.parse(readFileSync(settingsPath, "utf8")); }
+	catch (error) {
+		if (error instanceof Error && "code" in error && error.code === "ENOENT") {
+			return { baseUrl: "https://www.sno.ai", loggingLevel: undefined };
+		}
+		throw new Error(`settings unavailable: ${settingsPath}: JSON; run sno setup`, { cause: error });
+	}
+	const parsed = standaloneSettingsSchema.safeParse(settings);
+	if (!parsed.success) {
+		throw new Error(`settings unavailable: ${settingsPath}: ${parsed.error.issues[0]?.path.join(".") || "settings"}; run sno setup`);
+	}
+	return { baseUrl: parsed.data.telemetry?.observe?.baseUrl ?? "https://www.sno.ai",
+		loggingLevel: parsed.data.logging?.level };
 }
 
 export function getIdentityPath(env: PathEnv = process.env): string {
@@ -33,10 +59,6 @@ export function getConsentPath(env: PathEnv = process.env): string {
 
 export function getPausePath(env: PathEnv = process.env): string {
 	return join(getSnoProfileDir(env), "state", "consent-prior.json");
-}
-
-export function getRedactionRulesPath(env: PathEnv = process.env): string {
-	return join(getSnoProfileDir(env), "redaction-rules.txt");
 }
 
 export function getLogPath(env: PathEnv = process.env): string {

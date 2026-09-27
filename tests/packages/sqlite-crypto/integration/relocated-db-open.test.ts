@@ -71,7 +71,7 @@ function moveDb(from: string, to: string): void {
 
 describe("a relocated database still opens", () => {
 	it("opens read-write after the file is moved, and records the new location", async () => {
-		const dek = await getDek();
+		const dek = getDek(env.keyHex);
 		const from = uniqueDbPath(env, "move-rw");
 		const to = uniqueDbPath(env, "move-rw-elsewhere");
 		seed(from, dek);
@@ -85,7 +85,7 @@ describe("a relocated database still opens", () => {
 	});
 
 	it("records a moved path during read-only access before rejecting later copies", async () => {
-		const dek = await getDek();
+		const dek = getDek(env.keyHex);
 		const from = uniqueDbPath(env, "move-ro");
 		const to = uniqueDbPath(env, "move-ro-elsewhere");
 		const secondCopy = uniqueDbPath(env, "move-ro-second-copy");
@@ -105,7 +105,7 @@ describe("a relocated database still opens", () => {
 	});
 
 	it("still refuses a duplicate: the original is left in place", async () => {
-		const dek = await getDek();
+		const dek = getDek(env.keyHex);
 		const original = uniqueDbPath(env, "dup-original");
 		const copy = uniqueDbPath(env, "dup-copy");
 		seed(original, dek);
@@ -124,7 +124,7 @@ describe("a relocated database still opens", () => {
 	] as const)(
 		"fails closed during %s access when the registered database cannot be inspected",
 		async (_mode, open) => {
-			const dek = await getDek();
+			const dek = getDek(env.keyHex);
 			const original = uniqueDbPath(env, "unreadable-original");
 			const copy = uniqueDbPath(env, "unreadable-copy");
 			seed(original, dek);
@@ -145,7 +145,7 @@ describe("a relocated database still opens", () => {
 	);
 
 	it("ignores an empty stub left at the recorded path", async () => {
-		const dek = await getDek();
+		const dek = getDek(env.keyHex);
 		const original = uniqueDbPath(env, "stub-original");
 		const moved = uniqueDbPath(env, "stub-moved");
 		seed(original, dek);
@@ -157,7 +157,7 @@ describe("a relocated database still opens", () => {
 	});
 
 	it("refuses a different database placed at an already-registered path", async () => {
-		const dek = await getDek();
+		const dek = getDek(env.keyHex);
 		const registered = uniqueDbPath(env, "registered");
 		const foreign = uniqueDbPath(env, "foreign");
 		seed(registered, dek);
@@ -173,7 +173,7 @@ describe("a relocated database still opens", () => {
 	});
 
 	it("refuses a known database moved onto another database's registered path", async () => {
-		const dek = await getDek();
+		const dek = getDek(env.keyHex);
 		const databaseA = uniqueDbPath(env, "known-a");
 		const databaseB = uniqueDbPath(env, "known-b");
 		seed(databaseA, dek);

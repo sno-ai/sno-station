@@ -15,7 +15,7 @@ const codexAccountSchema = z.object({
 
 export function collectPersonHints(env: PathEnv = process.env): JsonObject[] {
 	const home = env["HOME"] ?? homedir();
-	const configHome = env["XDG_CONFIG_HOME"] ?? join(home, ".config");
+	const configHome = join(home, ".config");
 	const claude = claudeAccountSchema.safeParse(readJson(join(home, ".claude.json")));
 	const codex = codexAccountSchema.safeParse(readJson(join(home, ".codex", "auth.json")));
 	const email = gitEmail(readText(join(home, ".gitconfig")))

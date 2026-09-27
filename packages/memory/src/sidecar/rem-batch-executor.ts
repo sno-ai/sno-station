@@ -1,13 +1,12 @@
 import { readRemOperationalConfig } from "./config";
-import { FIXED_MEMORY_SNO_EXTRACT_CHAT, FIXED_PROTOCOL_VALUE_74 } from "../model/signed-registry-constants";
+import { FIXED_MEMORY_SNO_EXTRACT_CHAT } from "../model/signed-registry-constants";
 /** @file rem-batch-executor.ts
  * @purpose Runs the production REM scan, judgments, and recoverable mutations for one scope.
  * @boundary One profile's encrypted SQLite database, Sno GPU judgments, and durable REM ledgers.
  */
 
 import { createHash, randomUUID } from "node:crypto";
-import { existsSync, realpathSync } from "node:fs";
-import path from "node:path";
+import { realpathSync } from "node:fs";
 import { createLogger } from "@snoai/utils/logger";
 import { currentLogContext, withLogContext } from "@snoai/utils/log-context";
 import { countTokens } from "@snoai/chunking";
@@ -67,11 +66,8 @@ import {
 	assertJobIdentity,
 } from "../engine/rem/index.js";
 import { createEmbedder, type Embedder } from "../engine/extraction/embedding-provider-client";
-import {
-	readSnoStationMemConfig,
-	resolveSnoStationMemConfigPath,
-	resolveSqliteDbPath,
-} from "../engine/bindings/embedder-config-files";
+import { readSettings } from "../contract/profile";
+import { settingsToPluginConfig, type Settings } from "../../config/settings";
 import { createLlmClient, LlmClientTerminalError, ModelCallRefusedError, type LlmClient } from "../model/llm-client";
 import type { ProductMode } from "../../config/plugin-config-mode-schema";
 import type { AgentLlmPort } from "../model/agent-llm-port";
@@ -79,7 +75,6 @@ import { CODING_SKIN_CHILD_DEADLINE_MS } from "../../config/coding-skin";
 import { readModelReplyJson } from "../engine/shared/model-reply-text";
 import { pickLlmRoutingConfig, resolveLlmRoute } from "../model/llm-mode-routing";
 import { REM_UPDATE_JUDGMENT_SKILL } from "./rem-update-judgment-skill";
-import { pluginConfigSchema } from "../engine/shared/types";
 import { loadStorageExtensions } from "../store/connection";
 import { getSnoStationMemStateDir } from "../engine/operations/runtime-audit-log";
 import { MemoryStore } from "../store/store";
@@ -245,6 +240,7 @@ const RETIREMENT_SIMILARITY_CANDIDATE_CAP = 8;
 const RETIREMENT_JUDGMENT_BATCH_SIZE = 16;
 
 interface BatchRuntime {
+	modelCalls: Settings["modelCalls"];
 	modelMode?: import("../../config/plugin-config-mode-schema").ProductMode;
 	database: SqliteDatabaseLike;
 	store: MemoryStore;
@@ -313,6 +309,7 @@ interface RemStageErrorLog {
 }
 
 export async function runRemBatchJob(input: {
+	settings?: Settings;
 	mode?: ProductMode;
 	agentPort?: AgentLlmPort;
 	jobId: string;
@@ -324,16 +321,15 @@ export async function runRemBatchJob(input: {
 }): Promise<RemBatchJobResult> {
 	assertJobIdentity(input.jobId, input.jobType);
 	if (input.scope.trim().length === 0) throw new Error("REM scope is required");
-	const dbPath = resolveBatchDatabasePath();
-	return runWithCanonicalStoreWriteMutex(dbPath, () => runRemBatchJobUnlocked(input));
+	const settings = input.settings ?? readSettings();
+	return runWithCanonicalStoreWriteMutex(settings.store.path,
+		() => runRemBatchJobUnlocked({ ...input, settings }));
 }
 
 export async function runRemProductionOrderedWave(input: {
+	settings?: Settings;
 	mode?: ProductMode;
 	agentPort?: AgentLlmPort;
-	stateRoot: string;
-	personaDbPath?: string;
-	configSource: string;
 	scope: string;
 	waveId?: string;
 	requestedOperations?: readonly RemBuiltOperationType[];
@@ -352,9 +348,10 @@ export async function runRemProductionOrderedWave(input: {
 		| "measurements"
 	> & { perOperation: RemPerOperationResult[] })
 > {
-	const resolved = { configuration: readRemOperationalConfig(input.configSource) };
-	await initSqliteRuntime();
-	const configuredPath = resolveBatchDatabasePath();
+	const resolved = { configuration: readRemOperationalConfig() };
+	const settings = input.settings ?? readSettings();
+	initSqliteRuntime(settings.store.encryptionKey);
+	const configuredPath = settings.store.path;
 	const waveId = input.waveId ?? `rem-wave-${randomUUID()}`;
 	const requestedOperations = input.requestedOperations ?? (["rem-replace", "rem-update"] as const);
 	const results: Array<{ operation: RemBuiltOperationType } & RemBatchJobResult> = [];
@@ -392,7 +389,7 @@ export async function runRemProductionOrderedWave(input: {
 								jobType,
 								scope: input.scope,
 								configuration: resolved.configuration,
-								mode: input.mode, agentPort: input.agentPort,
+								mode: input.mode, settings, agentPort: input.agentPort,
 								...(input.implementationVersion === undefined
 									? {}
 									: { implementationVersion: input.implementationVersion }),
@@ -482,6 +479,7 @@ function describeRemStageError(
 }
 
 async function runRemBatchJobUnlocked(input: {
+	settings: Settings;
 	mode?: ProductMode;
 	agentPort?: AgentLlmPort;
 	jobId: string;
@@ -622,6 +620,7 @@ export async function runWithCanonicalStoreWriteMutex<T>(
 }
 
 async function openBatchRuntime(input: {
+	settings: Settings;
 	mode?: ProductMode;
 	agentPort?: AgentLlmPort;
 	jobId: string;
@@ -629,15 +628,10 @@ async function openBatchRuntime(input: {
 	modelStageResponses?: RemModelStageResponsePort;
 	configuration?: RemOperationalConfiguration;
 }): Promise<BatchRuntime> {
-	const configPath = resolveSnoStationMemConfigPath();
-	const hostConfig = existsSync(configPath) ? readSnoStationMemConfig(configPath) : undefined;
-	const dbPath = resolveSqliteDbPath(hostConfig, (value) =>
-		path.isAbsolute(value) ? value : path.resolve(path.dirname(configPath), value),
-	);
-	const pluginConfigValue =
-		hostConfig?.plugins?.entries?.[FIXED_PROTOCOL_VALUE_74]?.config ?? {};
-	const pluginConfig = pluginConfigSchema.parse(pluginConfigValue);
-	await initSqliteRuntime();
+	const settings = input.settings;
+	const dbPath = settings.store.path;
+	const pluginConfig = settingsToPluginConfig(settings);
+	initSqliteRuntime(settings.store.encryptionKey);
 	const embedder = createEmbedder(pluginConfig.embedding, getSnoStationMemStateDir());
 	let store: MemoryStore | undefined;
 	let database: ReturnType<typeof openSqliteDatabase> | undefined;
@@ -663,13 +657,12 @@ async function openBatchRuntime(input: {
 		loadStorageExtensions(database);
 		const llm = createLlmClient({
 			preset: FIXED_MEMORY_SNO_EXTRACT_CHAT,
-			...(pluginConfig.extraction.llm.apiKey
-				? { apiKey: pluginConfig.extraction.llm.apiKey }
-				: {}),
+			apiKey: settings.snoGpu.apiKey,
+			baseURL: settings.snoGpu.baseUrl,
 			timeoutMs: Math.max(120_000, CODING_SKIN_CHILD_DEADLINE_MS),
 			agentPort: input.agentPort,
 			refuseOnUnavailable: true,
-			routing: pickLlmRoutingConfig({ mode: input.mode ?? pluginConfig.mode }),
+			routing: pickLlmRoutingConfig({ mode: input.mode ?? pluginConfig.mode, modelCalls: settings.modelCalls }),
 			onProviderResponse: ({ callId, destination, provider, requestId, model, usage }) => {
 				log.info("llm_provider_response", {
 					event: "llm_provider_response",
@@ -709,6 +702,7 @@ async function openBatchRuntime(input: {
 			embedder,
 			llm,
 			modelMode: input.mode ?? pluginConfig.mode,
+			modelCalls: settings.modelCalls,
 			retriever: createRetriever(store, embedder, undefined, {
 				...DEFAULT_RETRIEVAL_CONFIG,
 				...pluginConfig.retrieval,
@@ -728,14 +722,6 @@ async function openBatchRuntime(input: {
 		await embedder.dispose();
 		throw error;
 	}
-}
-
-function resolveBatchDatabasePath(): string {
-	const configPath = resolveSnoStationMemConfigPath();
-	const hostConfig = existsSync(configPath) ? readSnoStationMemConfig(configPath) : undefined;
-	return resolveSqliteDbPath(hostConfig, (value) =>
-		path.isAbsolute(value) ? value : path.resolve(path.dirname(configPath), value),
-	);
 }
 
 const REM_CANDIDATE_PREDICATE_SQL = `lane = 'active'
@@ -2401,7 +2387,7 @@ async function runReplace(input: {
 				checkpoint: "before_llm",
 				recordedAt: new Date().toISOString(),
 			});
-			const pairRoute = resolveLlmRoute({ callId: "REM1", config: { mode: input.runtime.modelMode ?? "rem-enhanced" } });
+			const pairRoute = resolveLlmRoute({ callId: "REM1", config: { mode: input.runtime.modelMode ?? "rem-enhanced", modelCalls: input.runtime.modelCalls } });
 			const pairPrompt = "off" in pairRoute || pairRoute.destination === "host"
 				? renderAdapterAChatPrompt(ordered.views)
 				: renderAdapterAPrompt(ordered.views.older, ordered.views.newer);
@@ -3643,7 +3629,7 @@ async function completeJsonStage(
  * reply away — `parseReplaceClauseVerdict` saw `undefined`, called it invalid, and the pair was
  * journaled as `clause_parse_failed` and released, so the memory was never updated at all.
  *
- * Measured 2026-08-27 against GPU_BASE_URL on the clause prompt for the `rem-replace-roundtrip-reopen`
+ * Measured 2026-08-27 against the Sno GPU endpoint on the clause prompt for the `rem-replace-roundtrip-reopen`
  * fixture, 30 calls per ordering: with the pair ordered one way the model never fenced its reply;
  * with the pair ordered the other way it fenced 12 of 30, and every one of those 12 carried the
  * correct verdict. That is the whole of the intermittent refusal — not an empty reply, not the

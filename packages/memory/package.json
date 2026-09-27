@@ -41,16 +41,9 @@
       "types": "./dist/release-download.d.ts",
       "import": "./dist/release-download.js"
     },
-    "./installation-paths": {
-      "types": "./dist/internal/store/data-paths.d.ts",
-      "import": "./dist/internal/store/data-paths.js"
-    }
-  },
-  "bin": {
-    "sno-station-mem": "./dist/cli.js"
+    "./settings.default.json": "./settings.default.json"
   },
   "files": [
-    "bin",
     "dist",
     "drizzle",
     "scripts/download-simple-tokenizer.mjs",
@@ -63,11 +56,12 @@
     "package.json",
     "LICENSE",
     "README.md",
-    "generated"
+    "generated",
+    "settings.default.json"
   ],
   "scripts": {
     "dev": "tsx watch src/sidecar/main.ts",
-    "build": "tsx scripts/build-log-catalog.ts && tsdown && tsx scripts/build-log-catalog.ts --artifact-only",
+    "build": "tsx scripts/build-settings-default.ts && tsx scripts/build-log-catalog.ts && tsdown && tsx scripts/build-log-catalog.ts --artifact-only",
     "prepack": "npm run sqlite-vec:check && npm run build",
     "pack:dry-run": "npm pack --dry-run",
     "sqlite-vec:build": "bash scripts/build-sqlite-vec.sh --build",

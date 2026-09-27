@@ -15,6 +15,8 @@ export interface MemoryTelemetryStoreConfig {
 	enabled?: boolean;
 	agentId?: string;
 	currentKeyVersion?: number;
+	key?: string;
+	historicKeys?: readonly string[];
 	keySet?: MemoryTelemetryKeySet;
 	receiptService?: MemoryTelemetryReceiptService;
 }
@@ -80,7 +82,7 @@ export class MemoryTelemetryEventWriter {
 			return;
 		}
 		// Receipt signing needs an HMAC key. `loadMemoryTelemetryKeySet` throws
-		// when telemetry is enabled but the key env is absent (a deliberate
+		// when telemetry is enabled but the configured key is absent (a deliberate
 		// fail-closed contract on the loader). Catch it here and degrade to
 		// disabled with a loud warning rather than letting it propagate out of
 		// MemoryStore construction: telemetry receipts are best-effort
@@ -92,6 +94,8 @@ export class MemoryTelemetryEventWriter {
 				options.config?.keySet ??
 				loadMemoryTelemetryKeySet({
 					enabled: true,
+					key: options.config?.key ?? "",
+					historicKeys: options.config?.historicKeys ?? [],
 					currentKeyVersion: options.config?.currentKeyVersion,
 				});
 			this.receiptService =

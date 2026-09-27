@@ -1,15 +1,14 @@
 /** @file data-paths.ts
  * @purpose Resolve the safe-uninstall data directory layout for
  *   `@snoai/memory`: persistent user data under
- *   `~/.snoai/sno-station-core/sno-station-mem/data/`, separate from SnoStationMem's plugin
- *   runtime tree. POSIX only.
+ *   `<profile root>/sno-station-mem/data/`, separate from service state. POSIX only.
  * @boundary Path resolution + filesystem-class assertion. No I/O beyond
  *   a single `statfs` probe in `assertLocalFilesystem`.
  */
 
 import { statfsSync } from "node:fs";
-import { homedir } from "node:os";
 import { join } from "node:path";
+import { getSnoStationMemStateDir } from "../contract/profile";
 
 /** File-system kinds that DO NOT guarantee atomic POSIX rename. */
 const NON_LOCAL_FS_TYPES = new Set<number>([
@@ -30,45 +29,18 @@ export class NonLocalFilesystemError extends Error {
 	) {
 		super(
 			`Refusing to operate on non-local filesystem (type=0x${fsType.toString(16)}) at ${dir}. ` +
-				`Atomic rename is not guaranteed; set MEM_CLAW_DATA_DIR_ROOT to a local path.`,
+				`Atomic rename is not guaranteed at ${dir}.`,
 		);
 		this.name = "NonLocalFilesystemError";
 	}
 }
 
-/**
- * Root of the new data tree. `MEM_CLAW_DATA_DIR_ROOT` env override resolves
- * to `<root>/data/` so the override controls the install root, not the data
- * dir directly (matches §3.3 layout).
- */
 export function getSnoStationMemDataDir(): string {
-	const override = process.env.MEM_CLAW_DATA_DIR_ROOT?.trim();
-	if (override && override.length > 0) return join(override, "data");
-	return join(homedir(), ".snoai", "sno-station-core", "sno-station-mem", "data");
-}
-
-/**
- * `~/.snoai/sno-station-core/sno-station-mem/self-upgrade/` — disposable plugin runtime tree.
- *
- * Two env overrides are honored, in priority order:
- *   1. `MEM_CLAW_DATA_DIR_ROOT` — PRD-canonical root → `<root>/self-upgrade/`.
- *   2. `MEM_CLAW_DATA_DIR` — older override used by self-upgrade tests
- *      → `<that>/self-upgrade/`. Read-only compatibility only.
- */
-export function getSelfUpgradeStageRoot(): string {
-	const newOverride = process.env.MEM_CLAW_DATA_DIR_ROOT?.trim();
-	if (newOverride && newOverride.length > 0) return join(newOverride, "self-upgrade");
-	const directOverride = process.env.MEM_CLAW_DATA_DIR?.trim();
-	if (directOverride && directOverride.length > 0) return join(directOverride, "self-upgrade");
-	return join(homedir(), ".snoai", "sno-station-core", "sno-station-mem", "self-upgrade");
+	return join(getSnoStationMemStateDir(), "data");
 }
 
 export function getInstallManifestPath(): string {
 	return join(getSnoStationMemDataDir(), "install.json");
-}
-
-export function getDefaultDbPath(): string {
-	return join(getSnoStationMemDataDir(), "sno-station-mem.sqlite");
 }
 
 export function getAuditLogPath(): string {

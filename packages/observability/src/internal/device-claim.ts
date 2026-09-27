@@ -4,9 +4,9 @@ import { fetchJson, normalizeBaseUrl } from "./http.js";
 import { updateValidIdentity } from "./identity.js";
 import { type RegisterOptions, registerMachine } from "./machine-registration.js";
 import type { PathEnv } from "./paths.js";
+import { readStandaloneSettings } from "./paths.js";
 import type { Identity } from "./types.js";
 
-const BASE_URL_ENV = "SNO_OBSERVE_BASE_URL";
 const DEVICE_CODE_GRANT_TYPE = "urn:ietf:params:oauth:grant-type:device_code";
 const DEFAULT_TIMEOUT_MS = 30 * 60 * 1000;
 const DEFAULT_POLL_INTERVAL_MS = 5000;
@@ -87,7 +87,7 @@ export async function claimMachine(
 	options: ClaimOptions = {},
 ): Promise<ClaimResult> {
 	const env = options.env ?? process.env;
-	const baseUrl = normalizeBaseUrl(options.baseUrl ?? env[BASE_URL_ENV] ?? "https://www.sno.ai");
+	const baseUrl = normalizeBaseUrl(options.baseUrl ?? readStandaloneSettings(env).baseUrl);
 	const fetchImpl = options.fetch ?? fetch;
 	const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 	const startedAt = Date.now();

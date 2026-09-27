@@ -35,13 +35,6 @@ export class SnoStationCoreCryptoError extends Error {
 	}
 }
 
-export class KeychainUnavailableError extends SnoStationCoreCryptoError {
-	constructor(message = "OS keychain unavailable", options?: ErrorOptions) {
-		super("KEYCHAIN_UNAVAILABLE", message, options);
-		this.name = "KeychainUnavailableError";
-	}
-}
-
 export class WrongKeyError extends SnoStationCoreCryptoError {
 	constructor(
 		message = "DEK does not match this database",
@@ -84,7 +77,7 @@ export class DbIdMismatch extends SnoStationCoreCryptoError {
 
 export class ManifestMissing extends SnoStationCoreCryptoError {
 	constructor(
-		message = "manifest file is missing despite registration marker present; run `sno-station-core lock --rebuild-manifest`",
+		message = "manifest file is missing despite registration marker present",
 		options?: ErrorOptions,
 	) {
 		super("MANIFEST_MISSING", message, options);
@@ -102,16 +95,6 @@ export class ManifestCorrupted extends SnoStationCoreCryptoError {
 	}
 }
 
-export class MissingDekError extends SnoStationCoreCryptoError {
-	constructor(
-		message = "DEK source is missing; refusing implicit key creation. Provision the durable operator key explicitly with `sno-station-core lock --provision-key`",
-		options?: ErrorOptions,
-	) {
-		super("MISSING_DEK", message, options);
-		this.name = "MissingDekError";
-	}
-}
-
 export class StoreInUseError extends SnoStationCoreCryptoError {
 	constructor(
 		message = "database is open in another process",
@@ -124,7 +107,7 @@ export class StoreInUseError extends SnoStationCoreCryptoError {
 
 export class ForeignDekError extends SnoStationCoreCryptoError {
 	constructor(
-		message = "export was made under a different DEK; cross-machine import requires `sno-station-core lock --import-dek` (v1.1)",
+		message = "export was made under a different DEK",
 		options?: ErrorOptions,
 	) {
 		super("FOREIGN_DEK", message, options);

@@ -8,13 +8,10 @@
 		"url": "git+https://github.com/sno-ai/sno-station.git",
 		"directory": "packages/sqlite-crypto"
 	},
-	"description": "Local AES-256 encryption for SNO Station Core SQLite databases. Single audit surface for DEK lifecycle, encrypted DB open, manifest, canary, file-fallback, passphrase wrap, and .sno-station-core export.",
+	"description": "Local AES-256 encryption for SNO Station Core SQLite databases.",
 	"type": "module",
 	"main": "./dist/index.js",
 	"types": "./dist/index.d.ts",
-	"bin": {
-		"sno-station-core": "./dist/cli/sno-station-core.js"
-	},
 	"exports": {
 		".": {
 			"types": "./dist/index.d.ts",
@@ -45,8 +42,6 @@
 	"dependencies": {
 		"@snoai/utils": "^0.8.0",
 		"@types/better-sqlite3": "^9.6.0",
-		"@napi-rs/keyring": "^2.0.0",
-		"argon2": "^0.45.1",
 		"better-sqlite3-multiple-ciphers": "^13.0.3",
 		"tar-stream": "3.2.0"
 	},

@@ -107,7 +107,7 @@ afterEach(() => {
 
 describe("§4 execution model spike — SQLCipher+WAL", () => {
 	it("upsert: fresh insert returns enqueued receipt (version 0)", async () => {
-		const dek = await getDek();
+		const dek = getDek(env.keyHex);
 		const db = openWriter(uniqueDbPath(env, "t1"), dek);
 
 		const r = db.prepare(UPSERT).get("s:u1", "t:1", "capture", Buffer.from("hello")) as Receipt;
@@ -118,7 +118,7 @@ describe("§4 execution model spike — SQLCipher+WAL", () => {
 	});
 
 	it("upsert: re-capture bumps payload_version, updates payload", async () => {
-		const dek = await getDek();
+		const dek = getDek(env.keyHex);
 		const db = openWriter(uniqueDbPath(env, "t2"), dek);
 
 		const r1 = db.prepare(UPSERT).get("s:u1", "t:1", "capture", Buffer.from("partial")) as Receipt;
@@ -135,7 +135,7 @@ describe("§4 execution model spike — SQLCipher+WAL", () => {
 	});
 
 	it("claim + final write: version matches → done", async () => {
-		const dek = await getDek();
+		const dek = getDek(env.keyHex);
 		const db = openWriter(uniqueDbPath(env, "t3"), dek);
 
 		const { id, payload_version } = db.prepare(UPSERT).get(
@@ -156,7 +156,7 @@ describe("§4 execution model spike — SQLCipher+WAL", () => {
 	});
 
 	it("lost-update guard: mid-drain re-capture → drain discards stale result", async () => {
-		const dek = await getDek();
+		const dek = getDek(env.keyHex);
 		const db = openWriter(uniqueDbPath(env, "t4"), dek);
 
 		const { id, payload_version: claimedV } = db.prepare(UPSERT).get(
@@ -184,7 +184,7 @@ describe("§4 execution model spike — SQLCipher+WAL", () => {
 	});
 
 	it("orphan reclaim: crashed processing row resets to pending", async () => {
-		const dek = await getDek();
+		const dek = getDek(env.keyHex);
 		const db = openWriter(uniqueDbPath(env, "t5"), dek);
 
 		const { id } = db.prepare(UPSERT).get("s:u1", "t:1", "capture", Buffer.from("data")) as Receipt;
@@ -205,7 +205,7 @@ describe("§4 execution model spike — SQLCipher+WAL", () => {
 	});
 
 	it("idempotency: re-capture against done row is a no-op", async () => {
-		const dek = await getDek();
+		const dek = getDek(env.keyHex);
 		const db = openWriter(uniqueDbPath(env, "t6"), dek);
 
 		const { id, payload_version } = db.prepare(UPSERT).get(
@@ -226,7 +226,7 @@ describe("§4 execution model spike — SQLCipher+WAL", () => {
 	});
 
 	it("failure path: failed row accepts re-capture (re-enqueue)", async () => {
-		const dek = await getDek();
+		const dek = getDek(env.keyHex);
 		const db = openWriter(uniqueDbPath(env, "t7"), dek);
 
 		const { id } = db.prepare(UPSERT).get("s:u1", "t:1", "capture", Buffer.from("v1")) as Receipt;
@@ -244,7 +244,7 @@ describe("§4 execution model spike — SQLCipher+WAL", () => {
 	});
 
 	it("writer + reader split: read-only conn reads while writer holds WAL", async () => {
-		const dek = await getDek();
+		const dek = getDek(env.keyHex);
 		const dbPath = uniqueDbPath(env, "t8");
 		const writer = openWriter(dbPath, dek);
 
@@ -278,7 +278,7 @@ describe("§4 execution model spike — SQLCipher+WAL", () => {
 	});
 
 	it("concurrent independent drains: no cross-row interference", async () => {
-		const dek = await getDek();
+		const dek = getDek(env.keyHex);
 		const db = openWriter(uniqueDbPath(env, "t9"), dek);
 
 		const claimed: Array<{ id: number; payload_version: number }> = [];
@@ -304,7 +304,7 @@ describe("§4 execution model spike — SQLCipher+WAL", () => {
 	});
 
 	it("retention atomic claim: only one winner when two triggers race", async () => {
-		const dek = await getDek();
+		const dek = getDek(env.keyHex);
 		const db = openWriter(uniqueDbPath(env, "t10"), dek);
 
 		db.exec(`

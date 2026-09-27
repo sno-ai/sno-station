@@ -1,4 +1,4 @@
-import { FIXED_MEMORY_SNO_EXTRACT_CHAT, FIXED_MEMORY_SNO_EXTRACT_PROFILE, FIXED_PROTOCOL_VALUE_74 } from "../../model/signed-registry-constants";
+import { FIXED_MEMORY_SNO_EXTRACT_CHAT, FIXED_MEMORY_SNO_EXTRACT_PROFILE } from "../../model/signed-registry-constants";
 /** @file run-group-crud-maintenance.ts
  * @purpose Runs group CRUD maintenance twice against one encrypted project store.
  * @boundary Explicit command only; reports are written as JSON lines to stdout.
@@ -14,13 +14,13 @@ import {
 	createModelGroupCrudEntityIdentityJudgementPort,
 	createModelGroupCrudStateKeyingJudgementPort,
 } from "./group-crud-maintenance-ports";
-import { readSnoStationMemConfig, resolveSnoStationMemConfigPath } from "../bindings/embedder-config-files";
+import { readSettings } from "../../contract/profile";
+import { settingsToPluginConfig } from "../../../config/settings";
 import { createLlmClient } from "../../model/llm-client";
-import { MODEL_CALLS } from "../../model/model-call-table";
+import { modelCallDestination } from "../../model/model-call-table";
 import { pickLlmRoutingConfig } from "../../model/llm-mode-routing";
 import { getSnoStationMemStateDir } from "../shared/paths";
-import { pluginConfigSchema } from "../shared/types";
-import { initSqliteRuntimeSync, openSqliteDatabase } from "../../store/sqlite-runtime";
+import { initSqliteRuntime, openSqliteDatabase } from "../../store/sqlite-runtime";
 
 function readArguments(): { storePath: string } {
 	const [storePath, extra] = process.argv.slice(2);
@@ -32,20 +32,18 @@ function readArguments(): { storePath: string } {
 
 async function main(): Promise<void> {
 	const { storePath } = readArguments();
-	initSqliteRuntimeSync();
+	const settings = readSettings();
+	initSqliteRuntime(settings.store.encryptionKey);
 	const sqlite = openSqliteDatabase(storePath, { fileMustExist: true });
 	let embedder: Embedder | undefined;
 	try {
-		const hostConfig = readSnoStationMemConfig(resolveSnoStationMemConfigPath());
-		const pluginConfig = pluginConfigSchema.parse(
-			hostConfig?.plugins?.entries?.[FIXED_PROTOCOL_VALUE_74]?.config ?? {},
-		);
+		const pluginConfig = settingsToPluginConfig(settings);
 		embedder = createEmbedder(pluginConfig.embedding, getSnoStationMemStateDir());
 		const routing = pickLlmRoutingConfig(pluginConfig);
 		// This command runs outside the memory service, so no plugin's host model is reachable from it:
 		// a call runs here only when the table sends it to the Sno GPU; a host call is skipped like `off`.
-		const runs = (id: "E8" | "E9" | "E12"): boolean => MODEL_CALLS[id].destinations[pluginConfig.mode] === "sno-gpu";
-		const skipped = (["E8", "E9", "E12"] as const).filter(id => MODEL_CALLS[id].destinations[pluginConfig.mode] === "host");
+		const runs = (id: "E8" | "E9" | "E12"): boolean => modelCallDestination(id, pluginConfig.mode, settings.modelCalls) === "sno-gpu";
+		const skipped = (["E8", "E9", "E12"] as const).filter(id => modelCallDestination(id, pluginConfig.mode, settings.modelCalls) === "host");
 		if (skipped.length > 0) {
 			createLogger("sno-station-mem:group-crud-maintenance").warn("Host model calls skipped: no host is reachable from this command", { mode: pluginConfig.mode, call_ids: skipped }, {
 				event_name: "memory.group_crud.host_calls_skipped", file: "packages/memory/src/engine/maintenance/run-group-crud-maintenance.ts",
@@ -54,11 +52,15 @@ async function main(): Promise<void> {
 		}
 		const chatClient = runs("E8") || runs("E12") ? createLlmClient({
 			preset: FIXED_MEMORY_SNO_EXTRACT_CHAT,
+			apiKey: settings.snoGpu.apiKey,
+			baseURL: settings.snoGpu.baseUrl,
 			timeoutMs: 60_000,
 			routing,
 		}) : undefined;
 		const profileClient = runs("E9") ? createLlmClient({
 			preset: FIXED_MEMORY_SNO_EXTRACT_PROFILE,
+			apiKey: settings.snoGpu.apiKey,
+			baseURL: settings.snoGpu.baseUrl,
 			timeoutMs: 60_000,
 			routing,
 		}) : undefined;

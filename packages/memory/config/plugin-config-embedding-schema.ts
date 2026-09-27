@@ -26,6 +26,8 @@ export const embeddingConfigSchema: z.ZodType<
 		pooling?: "last_token" | "mean" | "cls" | undefined;
 		normalized?: boolean | undefined;
 		cacheDir?: string | undefined;
+		offline?: boolean | undefined;
+		mirror?: string | undefined;
 		dtype: "q4" | "q8" | "fp16" | "fp32";
 		sessionOptions: {
 			graphOptimizationLevel: "disabled" | "basic" | "extended" | "all";
@@ -58,6 +60,8 @@ export const embeddingConfigSchema: z.ZodType<
 		normalized: z.boolean().optional(),
 		/** Local ONNX model cache directory */
 		cacheDir: z.string().optional(),
+		offline: z.boolean().optional(),
+		mirror: z.string().optional(),
 		/** Quantization dtype: q4 | q8 | fp16 | fp32 */
 		dtype: z.enum(["q4", "q8", "fp16", "fp32"]).default("q8"),
 		/** ONNX Runtime session options for local low-memory operation. */

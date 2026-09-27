@@ -57,7 +57,8 @@ export class Embedder {
 		// a custom model or revision loads directly.
 		this.modelDownload = (config.model && config.model !== LOCAL_EMBEDDING_MODEL) ||
 			(config.revision && config.revision !== LOCAL_EMBEDDING_MODEL_REVISION)
-			? undefined : { cacheDir: resolveEmbeddingCacheDir(config), ...(config.dtype ? { dtype: config.dtype as NonNullable<Parameters<typeof ensureModelDownloaded>[0]>["dtype"] } : {}) };
+			? undefined : { cacheDir: resolveEmbeddingCacheDir(config), offline: config.offline,
+				mirror: config.mirror, ...(config.dtype ? { dtype: config.dtype as NonNullable<Parameters<typeof ensureModelDownloaded>[0]>["dtype"] } : {}) };
 		this.dimensions = inner.dimension;
 		this.providerKind = providerKind;
 		// Default model is the bundled PPLX INT8 id.

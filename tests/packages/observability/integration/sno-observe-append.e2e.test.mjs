@@ -10,6 +10,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { after, before, describe, it } from "node:test";
 import DatabaseConstructor from "better-sqlite3";
+import { writeObserveSettings } from "../fixtures/temp-env.mjs";
 
 const repoRoot = resolve(import.meta.dirname, "../../../..");
 const expectedProject = `p_${createHash("sha256").update("github.com/example/project").digest("hex").slice(0, 16)}`;
@@ -57,9 +58,8 @@ function profile() {
 		PATH: `${join(work, "global", "bin")}:${process.env.PATH}`,
 		HOME: dir,
 		SNO_PROFILE_DIR: dir,
-		SNO_OBSERVE_ENABLED: "true",
-		SNO_OBSERVE_BASE_URL: "http://127.0.0.1:9",
 	};
+	writeObserveSettings(dir, { baseUrl: "http://127.0.0.1:9" });
 	return { dir, checkout, env };
 }
 

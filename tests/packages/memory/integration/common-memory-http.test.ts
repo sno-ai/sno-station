@@ -1,23 +1,24 @@
 import { execFile, fork, type ChildProcess } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import { cp, mkdir, mkdtemp, readFile, readdir, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { tmpdir, userInfo } from "node:os";
 import { join, resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { afterEach, beforeEach, expect, it } from "vitest";
-import { makeTestEnv, type TestEnv } from "../../sqlite-crypto/_helpers";
-import { pluginConfigSchema } from "../../../../packages/memory/config/plugin-config-schema";
+import { type SettingsDocument, writeSettingsFixture } from "../fixtures/settings-file-fixture";
+import { untilModelReady } from "./fixtures/model-ready";
+import { modelReply, startRecorder } from "./fixtures/model-recorders";
 
 const repo = resolve(import.meta.dirname, "../../../..");
 const original = join(repo, "packages/memory");
 const scope = { principal: userInfo().username, project: "agent:http-acceptance", session: "agent:http-acceptance:release", host: { agentId: "http-acceptance", sessionTimezone: "America/Los_Angeles" } };
-const config = pluginConfigSchema.parse({ mode: "local-first", ambientLearning: true, autoRecall: true, captureAssistant: true, observe: { enabled: false }, memoryTelemetry: { enabled: false } });
-const { mode, remEnhanced: _remEnhanced, language, ...settings } = config;
-const registration = { skinId: "http-acceptance", settings, routing: { mode, language } };
+// A registration is the skin only; everything else comes from settings.json (REQ-4).
+const registration = { skinId: "http-acceptance" };
 let root: string;
 let core: string;
 let dbPath: string;
-let crypto: TestEnv;
+let storeKey: string;
 let env: NodeJS.ProcessEnv;
 let sidecarPid: number | undefined;
 const children: ChildProcess[] = [];
@@ -42,14 +43,16 @@ async function client(storePath?: string, profileDir?: string) {
   if (!connected.degraded && !profileDir) sidecarPid = connected.pid;
   return { child, connected };
 }
-async function initialized(storePath?: string) {
+async function initialized(storePath?: string, withRegistration: object = registration) {
   const { child, connected } = await client(storePath);
   if (connected.degraded) {
     const startup = await readFile(join(root, "profile/sno-station-mem/sidecar-startup.log"), "utf8").catch(() => "no startup log");
     throw new Error(`connection failed: ${connected.reason}\n${startup.slice(-6000)}`);
   }
   expect(connected).toMatchObject({ degraded: false, principal: scope.principal });
-  expect(await exchange(child, "init", [scope, registration])).toMatchObject({ degraded: false });
+  expect(await exchange(child, "init", [scope, withRegistration])).toMatchObject({ degraded: false });
+  // Before its embedding model is prepared the service only accepts a capture; these tests need it committed.
+  await untilModelReady(({ scope: probe, query, options }) => exchange(child, "getRecall", [query, { ...scope, ...probe }, options]));
   return child;
 }
 async function stopSidecar() {
@@ -99,19 +102,19 @@ async function stateFiles(): Promise<string[]> {
   return files.filter(name => !name.endsWith(".log")).sort();
 }
 
-async function bindStore(path: string, profileDir?: string): Promise<void> {
-  const bindEnv = profileDir ? { ...env, SNO_PROFILE_DIR: profileDir } : env;
-  await new Promise<void>((resolve, reject) => {
-    const bind = execFile(process.execPath, [join(core, "dist/cli.js"), "bind", path], { env: bindEnv, timeout: 20_000 }, error => error ? reject(error) : resolve());
-    bind.stdin?.end(JSON.stringify({ mode: "local-first", embedding: config.embedding, memoryTelemetry: config.memoryTelemetry }));
-  });
+/** The installed settings, written where the sidecar reads them once when its runtime opens; the client starts `core`'s service. */
+function writeSettings(profileDir: string, storePath: string, overrides: SettingsDocument = {}): void {
+  writeSettingsFixture(profileDir, { mode: "local-first", store: { path: storePath, encryptionKey: storeKey }, embedding: { cacheDir: "" },
+    memoryPackage: { path: core, node: process.execPath },
+    telemetry: { memoryUsage: { enabled: false }, observe: { enabled: false } }, ...overrides });
 }
 
 beforeEach(async () => {
-  crypto = makeTestEnv("common-memory-http");
   root = await mkdtemp(join(tmpdir(), "common-memory-http-"));
   core = join(root, "core"); dbPath = join(root, "data/memory.sqlite");
-  env = { ...process.env, SNO_PROFILE_DIR: join(root, "profile") };
+  // One store key per test; a test home keeps the store manifest out of the operator's.
+  storeKey = randomBytes(32).toString("hex");
+  env = { ...process.env, SNO_PROFILE_DIR: join(root, "profile"), HOME: join(root, "home") };
   await cp(join(original, "dist"), join(core, "dist"), { recursive: true });
   await cp(join(original, "package.json"), join(core, "package.json"));
   for (const entry of ["drizzle", "sqlite-extensions", "config", "scripts", "generated", "skills", "fixtures"]) {
@@ -146,7 +149,7 @@ beforeEach(async () => {
     }
     expect(changed).toBe(1);
   }
-  await bindStore(dbPath);
+  writeSettings(join(root, "profile"), dbPath);
 });
 afterEach(async () => {
   for (const child of children.splice(0)) { child.disconnect(); child.kill("SIGTERM"); }
@@ -159,7 +162,6 @@ afterEach(async () => {
     await rm(extra.root, { recursive: true, force: true });
   }
   if (root) await rm(root, { recursive: true, force: true });
-  crypto?.cleanup();
 });
 
 it("captures in one published client process, recalls in another, forgets and reads back", async () => {
@@ -196,32 +198,6 @@ it("refuses a foreign principal before granting engine or store access", async (
   expect((await health()).accessCounters).toEqual(before.accessCounters);
   const retained = await exchange(owner, "inspect", [{ op: "list" }, scope]);
   expect(retained.result.entries.some((row: { text: string }) => row.text.includes("jasmine tea"))).toBe(true);
-});
-
-it("refuses a requested store path different from the installed binding", async () => {
-  const writer = await initialized();
-  expect(await exchange(writer, "capture", [{ turnId: "bound-tea", rewindEpoch: 0, messages: [{ role: "user", content: "My stable personal preference is jasmine tea.", at: Date.parse("2026-09-09T18:00:00Z") }] }, scope])).toMatchObject({ degraded: false, committed: true });
-  await stopSidecar();
-  env.SNO_PROFILE_DIR = join(root, "default-profile");
-  const unbound = await client();
-  expect(unbound.connected.degraded).toBe(false);
-  const defaultBinding = join(env.SNO_PROFILE_DIR, `station/sno-station-mem-${scope.principal}.binding.json`);
-  expect(existsSync(defaultBinding)).toBe(false);
-  expect(existsSync(join(env.SNO_PROFILE_DIR, "sno-station-mem", scope.principal, "memory.sqlite"))).toBe(true);
-  await stopSidecar();
-  await bindStore(dbPath);
-  const reader = await initialized();
-  const recall = await exchange(reader, "getRecall", ["What is my stable personal preference for tea?", scope, { source: "auto" }]);
-  expect(recall.degraded).toBe(false); expect(recall.contextText).toContain("jasmine tea");
-  const bindingPath = defaultBinding;
-  const before = await readFile(bindingPath, "utf8");
-  const wrongPath = join(root, "wrong.sqlite");
-  await expect(bindStore(wrongPath)).rejects.toThrow();
-  expect(await readFile(bindingPath, "utf8")).toBe(before);
-  const { connected } = await client(wrongPath);
-  expect(connected).toEqual({ degraded: true, reason: "store-mismatch" });
-  expect(existsSync(wrongPath)).toBe(false);
-  expect(await readFile(bindingPath, "utf8")).toBe(before);
 });
 
 it("reports daemon-down on an existing handle and never receipts a write", async () => {
@@ -267,7 +243,7 @@ it("QCG-6: a killed sidecar holds no turn, a stale discovery file is replaced by
   process.kill(replacement, "SIGSTOP");
   try {
     const paused = await client();
-    expect(paused.connected).toEqual({ degraded: true, reason: "sidecar-unresponsive" });
+    expect(paused.connected).toEqual({ degraded: true, reason: "sidecar-unresponsive", error: "sidecar-unresponsive" });
     expect(await sidecarProcesses()).toEqual([replacement]);
   } finally { process.kill(replacement, "SIGCONT"); }
   const resumed = await client();
@@ -277,29 +253,26 @@ it("QCG-6: a killed sidecar holds no turn, a stale discovery file is replaced by
 async function connectMany(count: number): Promise<{ pid: number; port: number; principal: string }[]> {
   const results = await Promise.all(Array.from({ length: count }, () => client()));
   return results.map(({ connected }) => {
-    expect(connected).toMatchObject({ degraded: false, principal: userInfo().username });
+    expect(connected, JSON.stringify(connected)).toMatchObject({ degraded: false, principal: userInfo().username });
     return connected;
   });
 }
 
-it("QCG-5: 32 concurrent first connects share one sidecar, one port and one binding; a 2 s startup delay still yields one; a second profile root yields two", async () => {
+it("QCG-5: 32 concurrent first connects share one sidecar and one port; a 2 s startup delay still yields one; a second profile root yields two", async () => {
   const first = await connectMany(32);
   const pid = first[0].pid;
   expect(new Set(first.map(c => c.pid))).toEqual(new Set([pid]));
   expect(new Set(first.map(c => c.port)).size).toBe(1);
   expect(await settledSidecarProcesses()).toEqual([pid]);
   expect(await discoveredPid()).toBe(pid);
-  const bindings = (await readdir(join(root, "profile/station"))).filter(name => name.endsWith(".binding.json"));
-  expect(bindings).toEqual([`sno-station-mem-${userInfo().username}.binding.json`]);
-  expect(JSON.parse(await readFile(join(root, "profile/station", bindings[0]), "utf8")).storePath).toBe(dbPath);
 
   await stopSidecar();
   for (const child of children.splice(0)) { child.disconnect(); child.kill("SIGTERM"); }
   const entry = join(core, "dist/sidecar/main.js");
-  const marker = "//#region package.json";
+  const marker = "//#region src/sidecar/main.ts";
   const text = await readFile(entry, "utf8");
   expect(text.includes(marker)).toBe(true);
-  await writeFile(entry, text.replace(marker, `await new Promise(resolve => setTimeout(resolve, 2000));\n${marker}`));
+  await writeFile(entry, text.replace(marker, `await new Promise(resolve => globalThis.setTimeout(resolve, 2000));\n${marker}`));
   const startedAt = Date.now();
   const delayed = await connectMany(32);
   expect(Date.now() - startedAt).toBeGreaterThanOrEqual(2000);
@@ -311,7 +284,7 @@ it("QCG-5: 32 concurrent first connects share one sidecar, one port and one bind
   const secondRoot = await mkdtemp(join(tmpdir(), "common-memory-http-second-"));
   const secondProfile = join(secondRoot, "profile");
   extraRoots.push({ root: secondRoot, pid: undefined });
-  await bindStore(join(secondRoot, "data/memory.sqlite"), secondProfile);
+  writeSettings(secondProfile, join(secondRoot, "data/memory.sqlite"));
   const [second] = await Promise.all([client(undefined, secondProfile), client()]);
   expect(second.connected).toMatchObject({ degraded: false, principal: userInfo().username });
   extraRoots[0].pid = second.connected.pid;
@@ -323,25 +296,22 @@ it("QCG-5: 32 concurrent first connects share one sidecar, one port and one bind
 
 it("QCG-19 sidecar tick owns volume, daily and disabled missed-window decisions", async () => {
   const profile = join(root, "profile"), stateDir = join(profile, "sno-station-mem");
-  const installedPath = join(profile, "station", `sno-station-mem-${scope.principal}.config.json`);
-  const source = join(original, "config/rem/sno-e2e");
   env.SNO_STATION_MEM_MAINTENANCE_INTERVAL_MS = "1000";
   env.SNO_STATION_MEM_REM_VOLUME_THRESHOLD = "2";
   env.SNO_STATION_MEM_REM_EXPECTED_DB_PATH = dbPath;
-  env.SNO_STATION_MEM_REM_CLOCK_OVERRIDE = "2026-09-10T12:00:00.000Z";
-  env.SNO_STATION_MEM_REM_CONFIG_JSON = await readFile(join(source, "enable.json"), "utf8");
+  // The service's own clock overrides start after today: a registration with a host model evaluates
+  // the triggers on the real clock, and a pass recorded there must lie before every overridden one.
+  const today = new Date();
+  const day = (offset: number) => new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate() + offset)).toISOString().slice(0, 10);
+  env.SNO_STATION_MEM_REM_CLOCK_OVERRIDE = `${day(1)}T12:00:00.000Z`;
   env.TZ = "UTC";
-  const installed = JSON.parse(await readFile(installedPath, "utf8"));
-  installed.mode = "rem-enhanced"; installed.remOperations = ["rem-update"];
-  installed.remEnhanced = { trigger: { tick: true } };
-  await writeFile(installedPath, JSON.stringify(installed), { mode: 0o600 });
-  await mkdir(stateDir, { recursive: true });
-  await cp(join(source, "rem-grammar-corpus"), join(stateDir, "rem-grammar-corpus"), { recursive: true });
-  await new Promise<void>((resolve, reject) => execFile("bash", [join(repo, "evals/sno-memory-bench/materialize-rem-config.sh"),
-    "--source-dir", source, "--state-dir", profile, "--sno-profile-dir", profile,
-    "--service-unit", join(root, "rem.service"), "--service-drop-in", join(root, "rem.service.d/config.conf"),
-    "--node-binary", process.execPath, "--sidecar-entry", join(core, "dist/sidecar/main.js"),
-    "--sidecar-uid", String(process.getuid?.() ?? 0)], { env, timeout: 30_000 }, error => error ? reject(error) : resolve()));
+  // REM runs on the host model in local-first, and a capture needs no extraction model there; the
+  // host is a loopback that names no retirement target, so each wave completes without a change.
+  const closers: Array<() => Promise<void>> = [];
+  const host = await startRecorder(closers, ({ id }) => modelReply(id === "REM8" ? JSON.stringify({ target_row_ids: [] }) : "{}", false));
+  const withHost = { ...registration, model: { baseUrl: `${host.url}/host/v1/`, credential: "loopback-credential", model: "loopback-model" } };
+  const installed = { mode: "local-first", rem: { tick: true, operations: ["rem-update"] } };
+  writeSettings(profile, dbPath, installed);
   const triggerPath = join(stateDir, "rem-trigger-state.json");
   const jobsPath = join(stateDir, "rem-wave-jobs.jsonl");
   const jsonLines = async (path: string) => (await readFile(path, "utf8").catch(() => "")).trim().split("\n").filter(Boolean).map(line => JSON.parse(line));
@@ -360,10 +330,10 @@ it("QCG-19 sidecar tick owns volume, daily and disabled missed-window decisions"
     }, "automatic wave completion");
   };
   try {
-    const writer = await initialized();
+    const writer = await initialized(undefined, withHost);
     const capture = async (n: number) => {
       expect(await exchange(writer, "capture", [{ turnId: `tick-${n}`, rewindEpoch: 0, messages: [
-        { role: "user", content: `My project deadline preference is ${n + 10} September 2026.`, at: Date.parse("2026-09-10T12:00:00Z") + n * 1000 },
+        { role: "user", content: `My project deadline preference is ${n + 10} September 2026.`, at: Date.parse(`${day(1)}T12:00:00Z`) + n * 1000 },
       ] }, scope])).toMatchObject({ degraded: false, committed: true });
     };
     await capture(0);
@@ -375,16 +345,16 @@ it("QCG-19 sidecar tick owns volume, daily and disabled missed-window decisions"
     expect(volumeJobs.some(row => row.state === "done" && row.stats.measured.rows_considered >= 3)).toBe(true);
     expect((await jsonLines(join(stateDir, "audit.jsonl"))).some(row => row.details?.trigger === "volume" && row.details?.row === "dispatch" && row.details?.growth?.delta >= 2 && row.details?.growth?.threshold === 2)).toBe(true);
     await stopSidecar();
-    env.SNO_STATION_MEM_REM_CLOCK_OVERRIDE = "2026-09-11T04:00:00.000Z";
-    await initialized();
+    env.SNO_STATION_MEM_REM_CLOCK_OVERRIDE = `${day(2)}T04:00:00.000Z`;
+    await initialized(undefined, withHost);
     await waitDone(new Set(volumeJobs.map(row => row.waveId)));
     expect((await jsonLines(join(stateDir, "audit.jsonl"))).some(row => row.details?.trigger === "daily" && row.details?.row === "dispatch")).toBe(true);
     await stopSidecar();
     const beforeDisabled = new Set((await jsonLines(jobsPath)).map(row => row.waveId));
-    installed.remEnhanced.trigger.tick = process.env.ZEBRA_QCG19_PLANT === "tick-enabled";
-    await writeFile(installedPath, JSON.stringify(installed), { mode: 0o600 });
-    env.SNO_STATION_MEM_REM_CLOCK_OVERRIDE = "2026-09-12T04:00:00.000Z";
-    await initialized();
+    installed.rem.tick = process.env.ZEBRA_QCG19_PLANT === "tick-enabled";
+    writeSettings(profile, dbPath, installed);
+    env.SNO_STATION_MEM_REM_CLOCK_OVERRIDE = `${day(3)}T04:00:00.000Z`;
+    await initialized(undefined, withHost);
     await eventually(async () => {
       const jobs = await jsonLines(jobsPath);
       expect(jobs.every(row => beforeDisabled.has(row.waveId)), "disabled tick dispatched a wave").toBe(true);
@@ -396,6 +366,7 @@ it("QCG-19 sidecar tick owns volume, daily and disabled missed-window decisions"
     const journal = await jsonLines(join(stateDir, "rem-chassis-journal.jsonl"));
     expect(journal.length).toBeGreaterThan(0);
   } finally {
+    for (const close of closers) await close();
     const evidence = process.env.ZEBRA_QCG19_EVIDENCE;
     if (evidence) {
       await mkdir(evidence, { recursive: true });
@@ -404,7 +375,7 @@ it("QCG-19 sidecar tick owns volume, daily and disabled missed-window decisions"
       }
       await writeFile(join(evidence, "provenance.json"), JSON.stringify({ callsign: "zebra", host: (await import("node:os")).hostname(), sidecarPid,
         profile, principal: scope.principal, clientCallsRemRun: false, intervalMs: 1000, volumeThreshold: 2, clock: env.SNO_STATION_MEM_REM_CLOCK_OVERRIDE,
-        tickEnabledInInstalledConfig: installed.remEnhanced.trigger.tick, corpusMaterialized: true }, null, 2));
+        tickEnabledInInstalledConfig: installed.rem.tick }, null, 2));
     }
   }
 }, 600_000);

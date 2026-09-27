@@ -11,7 +11,6 @@ import { dirname, relative } from "node:path";
 import { gzipSync } from "node:zlib";
 import { pack } from "tar-stream";
 import { snapshotEncryptedDb } from "./db.js";
-import { getDek } from "./dek.js";
 import { readManifestIfPresent } from "./manifest.js";
 import type { Dek } from "./types.js";
 import { dekFingerprint4 } from "./wrap.js";
@@ -61,8 +60,7 @@ async function tarballRegisteredDbs(dek: Dek): Promise<Buffer> {
 	return gzipSync(Buffer.concat(chunks));
 }
 
-export async function exportEncrypted(targetPath: string): Promise<void> {
-	const dek = await getDek();
+export async function exportEncrypted(targetPath: string, dek: Dek): Promise<void> {
 	const fp = dekFingerprint4(dek);
 	const header = buildHeader(fp);
 	const plaintext = await tarballRegisteredDbs(dek);

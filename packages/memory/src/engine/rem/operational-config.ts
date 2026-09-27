@@ -28,7 +28,6 @@ export interface RemOperationalConfiguration {
 	retrieval: { neighborLimit: number; similarityThreshold: number };
 	coverage: { accuracyFloor: number | null };
 	retries: { liveContentionRetries: number };
-	modelRoute: string;
 	facetPolicy: { aggregationGrammar: string; historyGrammar: string };
 	calibration: {
 		minimumPublishableScoreEffect: number | null;
@@ -68,7 +67,6 @@ const remOperationalConfigurationSchema: z.ZodType<RemOperationalConfiguration> 
 		retries: z
 			.object({ liveContentionRetries: z.number().int().safe().nonnegative() })
 			.strict(),
-		modelRoute: z.string().url(),
 		facetPolicy: z
 			.object({
 				aggregationGrammar: z.string().min(1),
@@ -232,4 +230,3 @@ function canonicalJson(value: unknown): string {
 		.map((key) => `${JSON.stringify(key)}:${canonicalJson(record[key])}`)
 		.join(",")}}`;
 }
-

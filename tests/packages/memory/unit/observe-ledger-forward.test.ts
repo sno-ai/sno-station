@@ -23,8 +23,6 @@ type EmitInput = Parameters<PluginObservability["tryEmit"]>[0];
 
 const ENV_KEYS = [
 	"HOME",
-	"XDG_CONFIG_HOME",
-	"SNO_HOME",
 	"SNO_PROFILE_DIR",
 	"SNO_BUFFER_PATH",
 	"SNO_IDENTITY_PATH",
@@ -127,8 +125,6 @@ beforeEach(() => {
 	root = mkdtempSync(join(tmpdir(), "observe-ledger-forward-"));
 	mkdirSync(join(root, "home"));
 	process.env.HOME = join(root, "home");
-	delete process.env.XDG_CONFIG_HOME;
-	delete process.env.SNO_HOME;
 	process.env.SNO_PROFILE_DIR = root;
 	process.env.SNO_BUFFER_PATH = join(root, "buffer.db");
 	process.env.SNO_IDENTITY_PATH = join(root, "identity.json");

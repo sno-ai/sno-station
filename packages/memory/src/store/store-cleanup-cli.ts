@@ -4,6 +4,8 @@
  */
 
 import { createEmbedder } from "../engine/extraction/embedding-provider-client";
+import { readSettings } from "../contract/profile";
+import { settingsToPluginConfig } from "../../config/settings";
 import { getSnoStationMemStateDir } from "../engine/operations/runtime-audit-log";
 import { JSON_SYSTEM_CONTENT } from "../model/llm-client";
 import { stableHash } from "../engine/shared/utils";
@@ -404,7 +406,8 @@ async function main(): Promise<void> {
 		process.exitCode = 2;
 		return;
 	}
-	await initSqliteRuntime();
+	const settings = readSettings();
+	initSqliteRuntime(settings.store.encryptionKey);
 	if (!apply) {
 		const handle = openSqliteDatabase(dbPath, { readonly: true, fileMustExist: true });
 		try {
@@ -414,7 +417,7 @@ async function main(): Promise<void> {
 		}
 		return;
 	}
-	const embedder = createEmbedder({}, getSnoStationMemStateDir());
+	const embedder = createEmbedder(settingsToPluginConfig(settings).embedding, getSnoStationMemStateDir());
 	const store = new MemoryStore({ dbPath, vectorDim: embedder.dimensions, embedder });
 	try {
 		await cleanStore(store, { apply, label: dbPath });
