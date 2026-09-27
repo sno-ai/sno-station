@@ -30,7 +30,6 @@ export default defineConfig([
   "internal/engine/rem/index": "src/engine/rem/index.ts",
   "internal/engine/rem/types": "src/engine/rem/types.ts",
   "internal/engine/rem/classifier": "src/engine/rem/classifier.ts",
-  "cli": "src/contract/cli.ts",
   "client": "src/contract/client.ts",
   "release-download": "src/contract/release-download.ts",
   "internal/config/plugin-config-schema": "config/plugin-config-schema.ts",

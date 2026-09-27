@@ -18,7 +18,7 @@ import { bootstrapIdentity } from "../../../../packages/observability/dist/inter
 import { SnoObserveRuntime } from "../../../../packages/observability/dist/internal/runtime.js";
 import { parseEventInput } from "../../../../packages/observability/dist/internal/schemas.js";
 import { countTokens } from "../../../../packages/observability/dist/internal/tokens.js";
-import { scope, validPayloads } from "../fixtures/temp-env.mjs";
+import { scope, validPayloads, writeObserveSettings } from "../fixtures/temp-env.mjs";
 
 function testHash(index) {
 	return index.toString(16).padStart(64, "0");
@@ -26,6 +26,7 @@ function testHash(index) {
 
 function tempEnv() {
 	const dir = mkdtempSync(join(tmpdir(), "sno-observe-flush-"));
+	writeObserveSettings(dir, { baseUrl: "https://sno.test" });
 	return {
 		dir,
 		env: {
@@ -33,7 +34,6 @@ function tempEnv() {
 			SNO_IDENTITY_PATH: join(dir, "identity.json"),
 			SNO_BUFFER_PATH: join(dir, "buffer.db"),
 			SNO_CONSENT_PATH: join(dir, "state", "consent.json"),
-			SNO_OBSERVE_BASE_URL: "https://sno.test",
 			HOME: dir,
 		},
 	};
@@ -1041,11 +1041,11 @@ describe("flush 3-state machine", () => {
 
 	it("doctor reports inaccessible storage and an invalid endpoint without throwing", () => {
 		const t = tempEnv();
+		writeObserveSettings(t.dir, { baseUrl: "http://remote.example" });
 		const runtime = new SnoObserveRuntime({
 			env: {
 				...t.env,
 				SNO_BUFFER_PATH: t.dir,
-				SNO_OBSERVE_BASE_URL: "http://remote.example",
 			},
 			cwd: t.dir,
 		});

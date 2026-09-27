@@ -320,6 +320,9 @@ async function startOwnedRemSidecar(): Promise<{ port: number; stop(): Promise<{
 	};
 	let discoveryPublication = publishDiscovery();
 	await discoveryPublication;
+	void memory.open().catch(error => {
+		if (!(error instanceof SettingsUnavailableError)) reportSidecarFailure("memory startup", error);
+	});
 	const recovery = (async () => {
 		const jobIds = await recoverInterruptedJobs(jobs, await readCompletedJobStats(new Set(recoveryJobs.map(job => job.job_id))), recoveryJobs);
 		for (const jobId of jobIds) await runChassisJob(jobs, chassisJournal, jobId, 0, await memory.open());

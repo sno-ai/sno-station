@@ -14,7 +14,7 @@ import { parseInput, parseOutput, type ContractMethod, type ContractOutputs, typ
 import type { PluginConfig } from "../../config/plugin-config-schema";
 import { MemoryContractRuntime } from "../engine/contract-runtime";
 import { getPrincipal, getSnoStationMemStateDir } from "../engine/shared/paths";
-import { readSettings } from "../contract/profile";
+import { getSettingsPath, readSettings } from "../contract/profile";
 import { settingsToPluginConfig, type Settings } from "../../config/settings";
 import { ObservableEmbedder } from "../engine/observability/observable-embedder";
 import { ObservableMemoryStore } from "../engine/observability/observable-memory-store";
@@ -89,6 +89,7 @@ export class MemoryRuntimePool {
 	private maintenance: MaintenanceTimerHandle | undefined;
 	private usageTimer: NodeJS.Timeout | undefined;
 	private usageFlush: Promise<unknown> | undefined;
+	private modelReady = false;
 	private readonly usageOutbox: MemoryTelemetryUsageOutbox;
 	private constructor(
 		readonly storePath: string,
@@ -97,7 +98,37 @@ export class MemoryRuntimePool {
 		readonly settings: Settings,
 		private readonly observability: PluginObservability,
 		private readonly embedder: ObservableEmbedder,
-	) { this.usageOutbox = new MemoryTelemetryUsageOutbox({ sqlite: store.sqlite, dbPath: storePath }); }
+	) {
+		this.usageOutbox = new MemoryTelemetryUsageOutbox({ sqlite: store.sqlite, dbPath: storePath });
+		store.sqlite.exec("CREATE TABLE IF NOT EXISTS pending_captures (id TEXT PRIMARY KEY, skin_id TEXT NOT NULL, request TEXT NOT NULL)");
+	}
+
+	private async prepareModel(): Promise<void> {
+		try {
+			await this.embedder.warmup();
+			this.modelReady = true;
+			const rows = this.store.sqlite.prepare("SELECT id, skin_id, request FROM pending_captures ORDER BY rowid").all() as Array<{ id: string; skin_id: string; request: string }>;
+			for (const row of rows) {
+				try {
+					const result = await this.invoke("capture", JSON.parse(row.request), row.skin_id);
+					if ("committed" in result && result.committed)
+						this.store.sqlite.prepare("DELETE FROM pending_captures WHERE id = ?").run(row.id);
+					else throw new Error("Pending capture was not committed");
+				} catch (error) {
+					log.error("Pending capture failed", { error }, {
+						event_name: "memory.sidecar.pending_capture.failed", file: "packages/memory/src/sidecar/memory-runtime.ts",
+						function: "prepareModel", site_id: "memory.sidecar.pending_capture.failed",
+					});
+				}
+			}
+		} catch (error) {
+			log.error("Embedding model preparation failed", { cache_path: this.settings.embedding.cacheDir,
+				settings_file: getSettingsPath(), error }, {
+				event_name: "memory.sidecar.model.prepare.failed", file: "packages/memory/src/sidecar/memory-runtime.ts",
+				function: "prepareModel", site_id: "memory.sidecar.model.prepare.failed",
+			});
+		}
+	}
 
 	static async open(): Promise<MemoryRuntimePool> {
 		const settings = readSettings();
@@ -116,6 +147,7 @@ export class MemoryRuntimePool {
 		const embedder = new ObservableEmbedder(config.embedding, stateDir, routed, observeSessionUuid);
 		const store = new ObservableMemoryStore({ dbPath: storePath, vectorDim: embedder.dimensions, embedder, memoryTelemetry: config.memoryTelemetry }, routed, observeSessionUuid, config.embedding);
 		const pool = new MemoryRuntimePool(storePath, store, config, settings, observability, embedder);
+		void pool.prepareModel();
 		const maintenance = readMaintenanceOverrides();
 		pool.maintenance = startMaintenanceTimer({ store, dbPath: storePath, stateDir, remClock: maintenance.now, remVolumeThreshold: maintenance.volumeThreshold,
 			mode: config.mode, modelCalls: settings.modelCalls,
@@ -179,6 +211,18 @@ export class MemoryRuntimePool {
 	async invoke(method: ContractMethod, raw: unknown, skinId: string, signal?: AbortSignal): Promise<ContractOutputs[ContractMethod]> {
 		signal?.throwIfAborted();
 		const input = parseInput(method, raw);
+		if (method === "capture" && !this.modelReady) {
+			const capture = parseInput("capture", raw);
+			const id = JSON.stringify([skinId, capture.scope.session, capture.turn.turnId, capture.turn.rewindEpoch]);
+			const request = JSON.stringify(capture);
+			const existing = this.store.sqlite.prepare("SELECT request FROM pending_captures WHERE id = ?").get(id) as { request: string } | undefined;
+			if (existing && existing.request !== request) throw new Error("Pending capture identity reused with different content");
+			this.store.sqlite.prepare("INSERT OR IGNORE INTO pending_captures (id, skin_id, request) VALUES (?, ?, ?)")
+				.run(id, skinId, request);
+			return { degraded: false, turnId: capture.turn.turnId, committed: false, accepted: true };
+		}
+		if (method === "getRecall" && !this.modelReady)
+			return { degraded: false, recallId: "", contextText: "", unavailable: "model-preparing" };
 		if (method === "inspect" && parseInput("inspect", raw).op.op === "storage") {
 			this.counters.storeAccesses++;
 			return { degraded: false, result: { op: "storage", dimension: readChunkVecTableState(this.store.sqlite)?.dimension ?? null, failed: false } };

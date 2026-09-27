@@ -14,6 +14,7 @@ import { atomicExtractionSkillReference } from "../../../../packages/memory/src/
 import { startRemSidecar } from "../../../../packages/memory/src/sidecar/server";
 import { createTestDb } from "../../../apps/mem-claw/helpers/test-db";
 import { modelReply, type RecorderReply, startRecorder } from "./fixtures/model-recorders";
+import { untilModelReady } from "./fixtures/model-ready";
 import { type SettingsDocument, writeSettingsFixture } from "../fixtures/settings-file-fixture";
 
 const repoRoot = resolve(import.meta.dirname, "../../../..");
@@ -113,6 +114,10 @@ async function contractPost(path: string, body: unknown, skin: string): Promise<
 		body: JSON.stringify(body), signal: AbortSignal.timeout(60_000),
 	});
 }
+
+/** Waits until the service has prepared its embedding model, so a capture runs instead of only being accepted. */
+const modelReady = () => untilModelReady(async ({ scope, ...recall }) =>
+	(await contractPost("/v1/get-recall", { ...recall, scope: { ...scope, principal: SEED_SCOPE.principal } }, "model-ready-probe")).json());
 
 /** A registration is the skin and its model only; the mode comes from settings.json (REQ-4). */
 async function registerHost(skinId: string, hostUrl: string): Promise<void> {
@@ -311,6 +316,7 @@ describe("A host refusal answers by operation (REQ-2)", () => {
 		const host = await recorder("host", refusal);
 		writeSettings({ mode: "agent-native" });
 		sidecar = await startRemSidecar();
+		await modelReady();
 		await registerHost("refused-skin", host.url);
 		const response = await contractPost("/v1/capture", { scope: { ...SEED_SCOPE, session: "refused-skin" },
 			turn: { turnId: `refused-${refusal}`, rewindEpoch: 0, messages: [
@@ -335,6 +341,7 @@ describe("The model-call table alone decides whether capture uses a model (PRD V
 	it("under Local First, E1 set to host sends the captured conversation to the host instead of storing its sentences", { timeout: 90_000 }, async () => {
 		const host = await recorder("host");
 		sidecar = await startRemSidecar();
+		await modelReady();
 		// Control: the table as shipped (E1 off under Local First) stores the sentence and asks no model.
 		await registerHost("table-as-shipped", host.url);
 		await capture("table-as-shipped", "table-control-shipped");
@@ -344,6 +351,7 @@ describe("The model-call table alone decides whether capture uses a model (PRD V
 		await sidecar.stop();
 		writeSettings({ modelCalls: { E1: { "local-first": "host" } } });
 		sidecar = await startRemSidecar();
+		await modelReady();
 		await registerHost("table-e1-host", host.url);
 		await capture("table-e1-host", "table-control-e1-host");
 		const extraction = host.received.filter(call => call.content.startsWith(atomicExtractionSkillReference("capture")));

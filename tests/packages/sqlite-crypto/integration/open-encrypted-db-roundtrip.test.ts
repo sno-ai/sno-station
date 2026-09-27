@@ -25,7 +25,7 @@ afterEach(() => {
 
 describe("openEncryptedDb — round-trip with mixed payloads", () => {
 	it("100k mixed rows survive close-reopen byte-equal", async () => {
-		const dek = await getDek();
+		const dek = getDek(env.keyHex);
 		const dbPath = uniqueDbPath(env, "rt");
 		mkdirSync(dirname(dbPath), { recursive: true });
 

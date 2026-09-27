@@ -18,7 +18,7 @@ export async function serveMemoryRoute(request: IncomingMessage, response: Serve
 	const controller = new AbortController();
 	const abort = (): void => controller.abort(new ContractError("timeout"));
 	let rejectDeadline: (() => void) | undefined;
-	response.once("close", abort);
+	if (method !== "capture") response.once("close", abort);
 	try {
 		const deadline = new Promise<never>((_, reject) => {
 			rejectDeadline = () => reject(controller.signal.reason);

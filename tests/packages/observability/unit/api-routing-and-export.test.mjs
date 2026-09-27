@@ -7,11 +7,11 @@ import { createSnoObserve } from "../../../../packages/observability/dist/index.
 import { verifyAuditEvent } from "../../../../packages/observability/dist/internal/audit-verify.js";
 import { BufferStore } from "../../../../packages/observability/dist/internal/buffer-store.js";
 import { exportEvents } from "../../../../packages/observability/dist/internal/export.js";
-import { getSnoProfileDir } from "../../../../packages/observability/dist/internal/paths.js";
-import { scope, validPayloads } from "../fixtures/temp-env.mjs";
+import { scope, validPayloads, writeObserveSettings } from "../fixtures/temp-env.mjs";
 
 function tempEnv() {
 	const dir = mkdtempSync(join(tmpdir(), "sno-observe-api-"));
+	writeObserveSettings(dir, { baseUrl: "https://custom.sno.test/base" });
 	return {
 		dir,
 		env: {
@@ -19,28 +19,12 @@ function tempEnv() {
 			SNO_IDENTITY_PATH: join(dir, "identity.json"),
 			SNO_BUFFER_PATH: join(dir, "buffer.db"),
 			SNO_CONSENT_PATH: join(dir, "state", "consent.json"),
-			SNO_OBSERVE_BASE_URL: "https://custom.sno.test/base",
 			HOME: dir,
 		},
 	};
 }
 
 describe("public API routing and export inference", () => {
-	it("falls back to legacy SNO_HOME when SNO_PROFILE_DIR is absent", () => {
-		const dir = mkdtempSync(join(tmpdir(), "sno-observe-home-"));
-		const profileDir = mkdtempSync(join(tmpdir(), "sno-observe-profile-"));
-		try {
-			assert.equal(getSnoProfileDir({ SNO_HOME: dir }), dir);
-			assert.equal(
-				getSnoProfileDir({ SNO_PROFILE_DIR: profileDir, SNO_HOME: dir }),
-				profileDir,
-			);
-		} finally {
-			rmSync(dir, { recursive: true, force: true });
-			rmSync(profileDir, { recursive: true, force: true });
-		}
-	});
-
 	it("routes audit.verify through runtime env and fetch options", async () => {
 		const t = tempEnv();
 		const calls = [];

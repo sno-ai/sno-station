@@ -9,8 +9,8 @@ export type DegradedReason = (typeof DEGRADED_REASONS)[number];
 
 export class ContractError extends Error {
 	readonly degraded = true;
-	constructor(readonly reason: DegradedReason) {
-		super(reason);
+	constructor(readonly reason: DegradedReason, message: string = reason) {
+		super(message);
 		this.name = "ContractError";
 	}
 }

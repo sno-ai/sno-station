@@ -21,7 +21,7 @@ export interface ContractOutputs {
 	init: Result<{ principal: string; skinId: string }>;
 	hostEvent: Result<{ accepted: boolean }>;
 	getRecall: Result<{ recallId: string; contextText: string; hits?: RetrievalResult[]; memoryIds?: string[]; toolResult?: ToolResponse; nativeHits?: SnoStationMemMemorySearchResult[]; unavailable?: string }>;
-	capture: Result<{ turnId: string; committed: boolean }>;
+	capture: Result<{ turnId: string; committed: boolean; accepted?: boolean }>;
 	mutate: Result<{ result: ToolResponse }>;
 	inspect: Result<{ result: InspectData }>;
 	recordUsage: Result<{ accepted: boolean }>;
@@ -82,7 +82,7 @@ export const outputSchemas: { [K in keyof ContractOutputs]: z.ZodType<ContractOu
 	init: resultSchema({ principal: z.string().min(1), skinId: z.string().min(1) }),
 	hostEvent: resultSchema({ accepted: z.boolean() }),
 	getRecall: resultSchema({ recallId: z.string(), contextText: z.string(), hits: z.array(retrievalResultSchema).optional(), memoryIds: z.array(z.string().min(1)).optional(), toolResult: toolResponseSchema.optional(), nativeHits: z.array(nativeHitSchema).optional(), unavailable: z.string().optional() }),
-	capture: resultSchema({ turnId: z.string().min(1), committed: z.boolean() }),
+	capture: resultSchema({ turnId: z.string().min(1), committed: z.boolean(), accepted: z.boolean().optional() }),
 	mutate: resultSchema({ result: toolResponseSchema }),
 	inspect: resultSchema({ result: inspectDataSchema }),
 	recordUsage: resultSchema({ accepted: z.boolean() }),

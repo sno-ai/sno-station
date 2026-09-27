@@ -51,7 +51,7 @@ function flipOneByte(path: string, offset = 4096): void {
 
 describe("openEncryptedDb — plaintext SQLite rejection", () => {
 	it("refuses to open an existing unencrypted SQLite file", async () => {
-		const dek = await getDek();
+		const dek = getDek(env.keyHex);
 		const dbPath = uniqueDbPath(env, "plaintext");
 		mkdirSync(dirname(dbPath), { recursive: true });
 		writeFileSync(
@@ -73,7 +73,7 @@ describe("openEncryptedDb — plaintext SQLite rejection", () => {
 
 describe("openEncryptedDb — wrong DEK", () => {
 	it("rejects with WrongKeyError or CanaryMismatch on a different DEK", async () => {
-		const dek = await getDek();
+		const dek = getDek(env.keyHex);
 		const dbPath = uniqueDbPath(env, "wrong");
 		mkdirSync(dirname(dbPath), { recursive: true });
 		const db = openEncryptedDb(dbPath, dek);
@@ -97,7 +97,7 @@ describe("openEncryptedDb — wrong DEK", () => {
 
 describe("openEncryptedDb — tampered file", () => {
 	it("throws IntegrityCheckFailed on byte flip in the encrypted page area", async () => {
-		const dek = await getDek();
+		const dek = getDek(env.keyHex);
 		const dbPath = uniqueDbPath(env, "tamper");
 		mkdirSync(dirname(dbPath), { recursive: true });
 		const db = openEncryptedDb(dbPath, dek);
@@ -120,7 +120,7 @@ describe("openEncryptedDb — tampered file", () => {
 
 describe("openEncryptedDb — cipher selection enforcement", () => {
 	it("PRAGMA cipher returns 'sqlcipher' (not the chacha20 default)", async () => {
-		const dek = await getDek();
+		const dek = getDek(env.keyHex);
 		const dbPath = uniqueDbPath(env, "cipher");
 		mkdirSync(dirname(dbPath), { recursive: true });
 		const db = openEncryptedDb(dbPath, dek);
@@ -132,7 +132,7 @@ describe("openEncryptedDb — cipher selection enforcement", () => {
 
 describe("openEncryptedDb — path normalization", () => {
 	it("stores normalized manifest paths and reopens equivalent paths", async () => {
-		const dek = await getDek();
+		const dek = getDek(env.keyHex);
 		const dbPath = uniqueDbPath(env, "normalized");
 		const dbsDir = dirname(dbPath);
 		const equivalentPath = join(
@@ -166,7 +166,7 @@ describe("openEncryptedDb — path normalization", () => {
 
 describe("openEncryptedDb — cross-DB path mixup (task 2.6)", () => {
 	it("DB-A bytes copied onto DB-B's path → DbIdMismatch (single shared DEK)", async () => {
-		const dek = await getDek();
+		const dek = getDek(env.keyHex);
 		const pathA = uniqueDbPath(env, "A");
 		const pathB = uniqueDbPath(env, "B");
 		mkdirSync(dirname(pathA), { recursive: true });
