@@ -6,7 +6,7 @@ import { ATOMIC_EXTRACTION_RESPONSE_JSON_SCHEMA } from "../extraction/atomic-ext
 import { ATOMIC_EXTRACTION_SKILL_HASH } from "../extraction/atomic-extraction-skill";
 import type { LlmPreset } from "../../model/llm-client-types";
 import { pickLlmRoutingConfig, resolveLlmRoute } from "../../model/llm-mode-routing";
-import { MODEL_CALLS } from "../../model/model-call-table";
+import { MODEL_CALLS, type ModelCallId } from "../../model/model-call-table";
 import type { LlmRoutingConfigInput } from "../../../config/plugin-config-mode-schema";
 import { logSiteCatalog } from "./log-site-catalog.generated";
 
@@ -57,10 +57,10 @@ export function emitRuntimeStartSnapshot(input: RuntimeDiagnosticSnapshot): void
 	const hostModel = configuredHostModel(input.hostModel);
 	const configuredRouting = pickLlmRoutingConfig(input.routing);
 	const endpoint = endpointWithoutCredentials(input.baseURL);
-	const routing = Object.keys(MODEL_CALLS).map((id) => {
-		const callId = id as keyof typeof MODEL_CALLS;
-		return { call_id: callId, ...resolveLlmRoute({ callId, config: configuredRouting }) };
-	});
+	const isMemoryCall = (id: keyof typeof MODEL_CALLS): id is ModelCallId => !("calledBy" in MODEL_CALLS[id]);
+	const routing = (Object.keys(MODEL_CALLS) as Array<keyof typeof MODEL_CALLS>)
+		.filter(isMemoryCall)
+		.map(callId => ({ call_id: callId, ...resolveLlmRoute({ callId, config: configuredRouting }) }));
 	log.info("Memory process started", {
 		runtime_mode: input.runtimeMode, product_mode: input.routing.mode,
 		occasion_routing: routing,

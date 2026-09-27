@@ -1,10 +1,35 @@
 import { readFile } from "node:fs/promises";
+import { readFileSync } from "node:fs";
 import { homedir, userInfo } from "node:os";
 import path from "node:path";
 import { z } from "zod";
 import { createLogger } from "@snoai/utils/logger";
+import { settingsSchema, type Settings } from "../../config/settings";
 
 export function getStateDir(defaultStateDir?: string): string { return path.resolve(process.env.SNO_PROFILE_DIR ?? defaultStateDir ?? path.join(homedir(), ".sno")); }
+export function getSettingsPath(): string { return path.join(getStateDir(), "settings.json"); }
+
+export class SettingsUnavailableError extends Error {}
+
+export function readSettings(): Settings {
+	const settingsPath = getSettingsPath();
+	let raw: unknown;
+	try {
+		raw = JSON.parse(readFileSync(settingsPath, "utf8"));
+	} catch (error) {
+		const detail = error instanceof Error && "code" in error && error.code === "ENOENT"
+			? "file" : error instanceof SyntaxError ? `JSON: ${error.message}` : "file";
+		throw new SettingsUnavailableError(`settings unavailable: ${settingsPath}: ${detail}; run sno setup`);
+	}
+	const parsed = settingsSchema.safeParse(raw);
+	if (!parsed.success) {
+		const issue = parsed.error.issues[0];
+		const field = issue?.code === "unrecognized_keys"
+			? [...issue.path, issue.keys[0]].join(".") : issue?.path.join(".") || "settings";
+		throw new SettingsUnavailableError(`settings unavailable: ${settingsPath}: ${field}; run sno setup`);
+	}
+	return parsed.data;
+}
 export function getSnoStationMemStateDir(): string { return path.join(getStateDir(), "sno-station-mem"); }
 export function getPrincipal(): string { return userInfo().username; }
 export function getBindingPath(): string { return path.join(getStateDir(), "station", `sno-station-mem-${getPrincipal()}.binding.json`); }

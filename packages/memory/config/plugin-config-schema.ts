@@ -22,6 +22,7 @@ import {
 import { observeConfigSchema } from "./plugin-config-observe-schema";
 import { retrievalConfigSchema } from "./plugin-config-retrieval-schema";
 import { SESSION_STRATEGIES } from "./session-strategy";
+import type { Settings } from "./settings";
 
 const log = createLogger("sno-station-mem:plugin-config");
 
@@ -118,6 +119,7 @@ type PluginConfigOutput = {
 		recallLifecycle: z.output<typeof recallLifecycleSchema>;
 		memoryTelemetry: { enabled: boolean; currentKeyVersion: number };
 		mode: (typeof PRODUCT_MODES)[number];
+		modelCalls?: Settings["modelCalls"];
 		remOperations: (typeof REM_OPERATIONS)[number][];
 		remEnhanced?: { trigger: { tick: boolean } };
 		onboarding?:
@@ -202,6 +204,7 @@ const pluginConfigBaseSchema = z
 		 * config requires an explicit product mode.
 		 */
 		mode: z.enum(PRODUCT_MODES).default(DEFAULT_MODEL_MODE),
+		modelCalls: z.record(z.string(), z.record(z.enum(PRODUCT_MODES), z.enum(["off", "host", "sno-gpu"]))).optional() as z.ZodType<Settings["modelCalls"] | undefined>,
 		remOperations: z.array(z.enum(REM_OPERATIONS)).min(1).max(2).default([...REM_OPERATIONS]),
 		remEnhanced: remEnhancedConfigSchema,
 		/**

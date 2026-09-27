@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { DEFAULT_LOCALE, SUPPORTED_LOCALES, type Locale } from "../src/engine/i18n/locales";
+import type { Settings } from "./settings";
 
 /**
  * Product LLM modes, tier-ordered: Local First (selected calls on host) → Agent
@@ -36,6 +37,7 @@ export const remEnhancedConfigSchema: z.ZodType<{ trigger: { tick: boolean } }, 
 export type LlmRoutingConfig = {
 	mode: ProductMode;
 	language: Locale;
+	modelCalls?: Settings["modelCalls"];
 };
 
 export const llmRoutingConfigSchema: z.ZodType<
@@ -45,10 +47,12 @@ export const llmRoutingConfigSchema: z.ZodType<
 	.object({
 		mode: z.enum(PRODUCT_MODES),
 		language: z.enum(SUPPORTED_LOCALES).default(DEFAULT_LOCALE),
+		modelCalls: z.record(z.string(), z.record(z.enum(PRODUCT_MODES), z.enum(["off", "host", "sno-gpu"]))).optional() as z.ZodType<Settings["modelCalls"] | undefined>,
 	})
 	.strict();
 
 export type LlmRoutingConfigInput = {
 	mode: ProductMode;
 	language?: unknown;
+	modelCalls?: Settings["modelCalls"];
 };

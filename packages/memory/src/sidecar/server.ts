@@ -1,5 +1,5 @@
 import { MEMORY_SHUTDOWN_TIMEOUT_MS } from "../../config/index";
-import { getPrincipal, getSidecarSocketPath, readBoundStorePath } from "../contract/profile";
+import { getPrincipal, getSidecarSocketPath, SettingsUnavailableError } from "../contract/profile";
 /** @file server.ts
  * @purpose Runs the loopback HTTP surface and empty asynchronous REM executor.
  * @boundary Sno CLI requests, durable REM job state, and the existing local audit writer.
@@ -188,11 +188,14 @@ async function startOwnedRemSidecar(): Promise<{ port: number; stop(): Promise<{
 	let stopping = false;
 	let currentMemory: MemoryRuntimePool | undefined;
 	let openingMemory: Promise<MemoryRuntimePool> | undefined;
+	let settingsError: Error | undefined;
 	const memory = {
 		current: (): MemoryRuntimePool | undefined => currentMemory,
 		async open(): Promise<MemoryRuntimePool> {
 			if (currentMemory) return currentMemory;
+			if (settingsError) throw settingsError;
 			openingMemory ??= import("./memory-runtime").then(module => module.MemoryRuntimePool.open()).then(pool => { currentMemory = pool; if (stopping) pool.stopTimers(); return pool; })
+				.catch(error => { if (error instanceof SettingsUnavailableError) settingsError = error; throw error; })
 				.finally(() => { openingMemory = undefined; });
 			return openingMemory;
 		},
@@ -265,6 +268,12 @@ async function startOwnedRemSidecar(): Promise<{ port: number; stop(): Promise<{
 			memory,
 			() => stopping,
 		).catch((error: unknown) => {
+				if (error instanceof SettingsUnavailableError) {
+					context.error_code = error.message;
+					if (!response.headersSent) sendJson(response, 503, { error: error.message });
+					else response.end();
+					return;
+				}
 				let httpError = new HttpError(500, "internal_error");
 				if (error instanceof HttpError) httpError = error;
 				else if (error instanceof PayloadTooLargeError) httpError = new HttpError(413, "payload_too_large");
@@ -409,8 +418,14 @@ async function routeRequest(
 ): Promise<void> {
 	const url = new URL(request.url ?? HEALTH_PATH, REM_SIDECAR_ORIGIN);
 	if (request.method === "GET" && url.pathname === HEALTH_PATH) {
-		sendJson(response, 200, { status: "ok", log_level: effectiveLogLevel(), principal: getPrincipal(),
-			storePath: await readBoundStorePath(), accessCounters: memory.current()?.counters ?? { engineAccesses: 0, storeAccesses: 0 } });
+		try {
+			const runtime = await memory.open();
+			sendJson(response, 200, { status: "ok", log_level: effectiveLogLevel(), principal: getPrincipal(),
+				storePath: runtime.storePath, accessCounters: runtime.counters });
+		} catch (error) {
+			if (!(error instanceof SettingsUnavailableError)) throw error;
+			sendJson(response, 503, { status: "error", error: error.message });
+		}
 		return;
 	}
 	if (url.pathname.startsWith("/v1/")) {
@@ -434,7 +449,7 @@ async function routeRequest(
 		}
 		const store = await pendingStore;
 		const runtime = await memory.open();
-		if (remNeedsHost(runtime.config.mode) && !runtime.connectedRemPort()) {
+		if (remNeedsHost(runtime.config.mode, runtime.settings.modelCalls) && !runtime.connectedRemPort()) {
 			context.error_code = "no host model connected";
 			sendJson(response, 503, { error: "no host model connected" });
 			return;
@@ -523,7 +538,7 @@ async function runChassisJob(
 		});
 		let writesApplied = false;
 		try {
-			if (remNeedsHost(runtime.config.mode) && !runtime.connectedRemPort()) {
+			if (remNeedsHost(runtime.config.mode, runtime.settings.modelCalls) && !runtime.connectedRemPort()) {
 				await skipNonTerminalJob(store, queued.job_id, "no host model connected");
 				return;
 			}
@@ -580,7 +595,7 @@ async function runChassisJob(
 						perOperation: [],
 					}
 				: await runRemProductionOrderedWave({
-						mode: runtime.config.mode, agentPort: runtime.connectedRemPort(),
+						mode: runtime.config.mode, settings: runtime.settings, agentPort: runtime.connectedRemPort(),
 						stateRoot: getStateDir(),
 						personaDbPath: process.env["SNO_STATION_MEM_REM_EXPECTED_DB_PATH"],
 						configSource: JSON.stringify(configuration),

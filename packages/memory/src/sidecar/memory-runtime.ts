@@ -1,21 +1,24 @@
 import { getSnoProfileDir } from "@snoai/observability";
 import { forwardObserveLedger } from "../engine/telemetry/observe-ledger";
 import { isDeepStrictEqual } from "node:util";
-import { DEFAULT_LOCALE } from "../engine/i18n/locales";
 import { readMaintenanceOverrides } from "./config";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { createUUIDv7 } from "@snoai/common-core";
 import { readMemorySnapshotPayload, type SnapshotReason } from "../engine/observability/memory-snapshot";
 import { forwardMemoryTelemetryToObserve } from "../engine/telemetry/memory-telemetry-observability";
-import { existsSync, readFileSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { createLogger } from "@snoai/utils/logger";
+import { emitRuntimeStartSnapshot } from "../engine/observability/runtime-diagnostics";
+import { FIXED_MEMORY_SNO_EXTRACT_CHAT } from "../model/signed-registry-constants";
 import { parseInput, parseOutput, type ContractMethod, type ContractOutputs, type Registration, type ScopeCtx } from "../contract/index";
-import { pluginConfigSchema, type PluginConfig } from "../../config/plugin-config-schema";
+import type { PluginConfig } from "../../config/plugin-config-schema";
 import { MemoryContractRuntime } from "../engine/contract-runtime";
-import { getInstallationConfigPath, getPrincipal, getSnoStationMemStateDir, readBoundStorePath } from "../engine/shared/paths";
-import { readSnoStationMemConfig, PLUGIN_ENTRY_KEY } from "../engine/bindings/embedder-config-files";
+import { getPrincipal, getSnoStationMemStateDir } from "../engine/shared/paths";
+import { readSettings } from "../contract/profile";
+import { settingsToPluginConfig, type Settings } from "../../config/settings";
+import { engineSettingsSchema } from "../contract/settings";
+import { pickLlmRoutingConfig } from "../model/llm-mode-routing";
 import { ObservableEmbedder } from "../engine/observability/observable-embedder";
 import { ObservableMemoryStore } from "../engine/observability/observable-memory-store";
 import { ObservableMemoryRetriever } from "../engine/observability/observable-retriever";
@@ -29,14 +32,12 @@ import { readChunkVecTableState } from "../store/connection";
 import { initSqliteRuntime } from "../store/sqlite-runtime";
 import { startMaintenanceTimer, uniformMaintenanceIntervals, type MaintenanceTimerHandle } from "../store/maintenance";
 import { RegisteredAgentPort } from "../model/registered-agent-port";
-import { evaluateRemAutomaticTriggers, readRemAutomaticOperations } from "./rem-trigger";
+import { evaluateRemAutomaticTriggers } from "./rem-trigger";
 import { withProviderResponses } from "../model/llm-provider-transport";
 import type { ProviderResponseTrace } from "../model/llm-client-types";
 import { MEMORY_USAGE_FLUSH_INTERVAL_MS } from "./config";
 import { SNO_OBSERVE_FLUSH_TIMEOUT_MS } from "../../config/index";
-import { createCodingSkinRegistration } from "../../config/coding-skin";
-import { isObserveAgentId } from "../../config/plugin-config-observe-schema";
-import { installationSettingsSchema, type InstallationSettings } from "../../config/installation-settings";
+import { isObserveAgentId, observeAgentId } from "../../config/plugin-config-observe-schema";
 
 /** The skin and observe session of the request in flight; store, embedder and retriever events carry both. */
 const observeSession = new AsyncLocalStorage<{ uuid: string; entry: SkinRuntime }>();
@@ -96,23 +97,18 @@ export class MemoryRuntimePool {
 		readonly storePath: string,
 		readonly store: ObservableMemoryStore,
 		readonly config: PluginConfig,
-		private readonly installed: InstallationSettings | undefined,
+		readonly settings: Settings,
 		private readonly observability: PluginObservability,
 		private readonly embedder: ObservableEmbedder,
 	) { this.usageOutbox = new MemoryTelemetryUsageOutbox({ sqlite: store.sqlite, dbPath: storePath }); }
 
 	static async open(): Promise<MemoryRuntimePool> {
-		const storePath = await readBoundStorePath();
-		const configPath = getInstallationConfigPath();
-		let config = pluginConfigSchema.parse({ dbPath: storePath });
-		let installed: InstallationSettings | undefined;
+		const settings = readSettings();
+		const storePath = settings.store.path;
+		const config = settingsToPluginConfig(settings);
 		try {
-			if (!existsSync(configPath)) engineLogger.error("memory.installation.config.missing");
-			if (existsSync(configPath)) {
-				const runtimeConfig = readSnoStationMemConfig(configPath).plugins?.entries?.[PLUGIN_ENTRY_KEY]?.config;
-				installed = installationSettingsSchema.parse(JSON.parse(readFileSync(configPath, "utf8")));
-				config = pluginConfigSchema.parse({ ...runtimeConfig, dbPath: storePath });
-			}
+			emitRuntimeStartSnapshot({ runtimeMode: "sidecar", preset: FIXED_MEMORY_SNO_EXTRACT_CHAT,
+				routing: { mode: settings.mode, language: config.language, modelCalls: settings.modelCalls } });
 		} catch (error) { engineLogger.error(String(error)); }
 		await initSqliteRuntime();
 		await mkdir(dirname(storePath), { recursive: true, mode: 0o700 });
@@ -121,10 +117,11 @@ export class MemoryRuntimePool {
 		const routed = routedObservability(observability);
 		const embedder = new ObservableEmbedder(config.embedding, stateDir, routed, observeSessionUuid);
 		const store = new ObservableMemoryStore({ dbPath: storePath, vectorDim: embedder.dimensions, embedder, memoryTelemetry: config.memoryTelemetry }, routed, observeSessionUuid, config.embedding);
-		const pool = new MemoryRuntimePool(storePath, store, config, installed, observability, embedder);
+		const pool = new MemoryRuntimePool(storePath, store, config, settings, observability, embedder);
 		const maintenance = readMaintenanceOverrides();
 		pool.maintenance = startMaintenanceTimer({ store, dbPath: storePath, stateDir, remClock: maintenance.now, remVolumeThreshold: maintenance.volumeThreshold,
-			mode: config.mode, hasConnectedHost: () => pool.connectedRemPort() !== undefined,
+			mode: config.mode, modelCalls: settings.modelCalls,
+			remSettings: { mode: settings.mode, requestedOperations: settings.rem.operations, tickEnabled: settings.rem.tick }, hasConnectedHost: () => pool.connectedRemPort() !== undefined,
 			backupDir: join(stateDir, "backups"), usageOutbox: pool.usageOutbox }, maintenance.intervalMs, maintenance.intervalMs,
 			maintenance.intervalMs === undefined ? undefined : uniformMaintenanceIntervals(maintenance.intervalMs));
 		pool.startUsageTimer();
@@ -137,10 +134,11 @@ export class MemoryRuntimePool {
 			(registration.settings.dbPath && registration.settings.dbPath !== this.storePath)) {
 			engineLogger.error("memory.registration.configuration.mismatch");
 		}
-		const config: PluginConfig = { ...registration.settings, ...registration.routing,
-			embedding: this.config.embedding, memoryTelemetry: this.config.memoryTelemetry, dbPath: this.storePath };
-		registration = { ...registration, settings: { ...registration.settings,
-			embedding: config.embedding, memoryTelemetry: config.memoryTelemetry, dbPath: this.storePath } };
+		const config: PluginConfig = { ...this.config,
+			observe: { ...this.config.observe, agentId: isObserveAgentId(registration.skinId)
+				? observeAgentId(registration.skinId) : this.config.observe.agentId } };
+		registration = { ...registration, settings: engineSettingsSchema.parse(config),
+			routing: pickLlmRoutingConfig(config) };
 		let entry: SkinRuntime;
 		const agentPort = new RegisteredAgentPort(registration.model, () => { entry.connected = false; });
 		const observability = new PluginObservability(config, this.stateDir, engineLogger);
@@ -173,10 +171,10 @@ export class MemoryRuntimePool {
 			this.skins.delete(registration.skinId);
 			this.skins.set(registration.skinId, entry);
 			if (previous) { previous.retired = true; if (previous.active === 0) await this.dispose(previous); }
-			// An unreadable installation file skips this REM check and never fails the registration.
 			if (registration.model) void Promise.resolve().then(() => evaluateRemAutomaticTriggers({
 				database: this.store.sqlite, stateDir: this.stateDir,
-				...readRemAutomaticOperations(), mode: this.config.mode,
+				mode: this.settings.mode, requestedOperations: this.settings.rem.operations,
+				tickEnabled: this.settings.rem.tick, modelCalls: this.settings.modelCalls,
 				hasConnectedHost: () => this.connectedRemPort() !== undefined,
 			})).catch(error => engineLogger.error(String(error)));
 			return result;
@@ -199,23 +197,16 @@ export class MemoryRuntimePool {
 			this.counters.engineAccesses++;
 			this.counters.storeAccesses++;
 			if ("inheritInstalled" in init.registration) {
-				if (!this.installed) throw new Error("memory.installation.config.unavailable");
-				return this.register(init.scope, createCodingSkinRegistration({
-					skinId,
-					installed: this.installed,
-					model: init.registration.model,
-				}));
+				return this.register(init.scope, { skinId, settings: engineSettingsSchema.parse(this.config),
+					routing: pickLlmRoutingConfig(this.config), model: init.registration.model });
 			}
 			return this.register(init.scope, { ...init.registration, skinId });
 		}
 		let entry = this.skins.get(skinId);
 		if (!entry) {
 			// A coding-skin hook can arrive before its worker's init; register it as that skin, never as the default.
-			if (this.installed && isObserveAgentId(skinId)) await this.register(input.scope, createCodingSkinRegistration({ skinId, installed: this.installed }));
-			else {
-				const { mode, language, remEnhanced: _remEnhanced, ...settings } = this.config;
-				await this.register(input.scope, { skinId, settings, routing: { mode, language: language ?? DEFAULT_LOCALE } });
-			}
+			await this.register(input.scope, { skinId, settings: engineSettingsSchema.parse(this.config),
+				routing: pickLlmRoutingConfig(this.config) });
 			entry = this.skins.get(skinId);
 		}
 		if (!entry) throw new Error("memory.skin.registration.failed");

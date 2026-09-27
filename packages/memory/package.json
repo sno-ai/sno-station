@@ -44,7 +44,8 @@
     "./installation-paths": {
       "types": "./dist/internal/store/data-paths.d.ts",
       "import": "./dist/internal/store/data-paths.js"
-    }
+    },
+    "./settings.default.json": "./settings.default.json"
   },
   "bin": {
     "sno-station-mem": "./dist/cli.js"
@@ -63,11 +64,12 @@
     "package.json",
     "LICENSE",
     "README.md",
-    "generated"
+    "generated",
+    "settings.default.json"
   ],
   "scripts": {
     "dev": "tsx watch src/sidecar/main.ts",
-    "build": "tsx scripts/build-log-catalog.ts && tsdown && tsx scripts/build-log-catalog.ts --artifact-only",
+    "build": "tsx scripts/build-settings-default.ts && tsx scripts/build-log-catalog.ts && tsdown && tsx scripts/build-log-catalog.ts --artifact-only",
     "prepack": "npm run sqlite-vec:check && npm run build",
     "pack:dry-run": "npm pack --dry-run",
     "sqlite-vec:build": "bash scripts/build-sqlite-vec.sh --build",
