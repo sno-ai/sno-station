@@ -1000,14 +1000,15 @@ class SnoMemoryProvider(MemoryProvider):
                 }
             content_hash = hashlib.sha256(content.encode()).hexdigest()[:16]
             pending_parts = successor.split(":") if isinstance(successor, str) else []
-            if len(pending_parts) >= 3 and pending_parts[2] == content_hash:
-                nonce = pending_parts[1]
+            if len(pending_parts) >= 3:
                 new_id = self._earlier_successor(
-                    scope, memory_id, nonce, entry.get("category", "episodic")
+                    scope, memory_id, pending_parts[1], entry.get("category", "episodic")
                 )
             else:
-                nonce = secrets.token_hex(16)
                 new_id = None
+            changed_successor = new_id is not None and pending_parts[2] != content_hash
+            if new_id is None:
+                nonce = secrets.token_hex(16)
                 pending = self._require_client().post(
                     "mutate",
                     {
@@ -1045,6 +1046,11 @@ class SnoMemoryProvider(MemoryProvider):
                 return {
                     "degraded": False,
                     "toolError": f"{memory_id} {new_id} update_failed {error}",
+                }
+            if changed_successor:
+                return {
+                    "degraded": False,
+                    "toolError": f"superseded by {new_id}; correct that id",
                 }
             return {
                 "degraded": False,
@@ -1200,6 +1206,15 @@ def _memories(result: dict[str, object]) -> tuple[list[dict[str, str]], str]:
     raw_memories = details.get("memories") if isinstance(details, dict) else None
     if not isinstance(raw_memories, list):
         return [], "recall empty"
+    successors: set[tuple[str, str]] = set()
+    for raw in raw_memories:
+        if not isinstance(raw, dict) or not isinstance(raw.get("id"), str):
+            continue
+        marks = _metadata(raw.get("metadata"))
+        original = marks.get("correctionOf")
+        nonce = marks.get("correctionNonce")
+        if isinstance(original, str) and isinstance(nonce, str):
+            successors.add((original, nonce))
     memories: list[dict[str, str]] = []
     for raw in raw_memories:
         if not isinstance(raw, dict):
@@ -1208,6 +1223,14 @@ def _memories(result: dict[str, object]) -> tuple[list[dict[str, str]], str]:
         text = raw.get("text")
         metadata = _metadata(raw.get("metadata"))
         superseded_by = metadata.get("supersededBy")
+        pending_parts = superseded_by.split(":") if isinstance(superseded_by, str) else []
+        if (
+            isinstance(superseded_by, str)
+            and superseded_by.startswith("pending:")
+            and len(pending_parts) >= 3
+            and (memory_id, pending_parts[1]) in successors
+        ):
+            continue
         if (
             isinstance(memory_id, str)
             and isinstance(text, str)
