@@ -560,7 +560,7 @@ class SnoMemoryProvider(MemoryProvider):
             self._last_recall = None
             self._last_error = str(error)
             return ""
-        memories, error = self._memories(result, self._scope(session_id or self._session_id))
+        memories, error = _memories(result)
         if error:
             self._last_recall = None
             self._last_error = error
@@ -609,7 +609,7 @@ class SnoMemoryProvider(MemoryProvider):
         except (OSError, RuntimeError, ValueError) as error:
             self._last_error = str(error)
             return ""
-        memories, error = self._memories(result, self._scope(session_id or self._session_id))
+        memories, error = _memories(result)
         if error:
             self._last_error = error
             return ""
@@ -685,7 +685,7 @@ class SnoMemoryProvider(MemoryProvider):
         except (OSError, RuntimeError, ValueError) as error:
             self._last_error = str(error)
             return ""
-        memories, error = self._memories(result, self._scope(self._session_id))
+        memories, error = _memories(result)
         if error:
             return ""
         try:
@@ -923,7 +923,7 @@ class SnoMemoryProvider(MemoryProvider):
                 },
             },
         )
-        memories, error = self._memories(result, self._scope(self._session_id))
+        memories, error = _memories(result)
         if error:
             return json.dumps(result)
         text, included = _render_memories(memories, int(self._recall_number("explicitLimit")), sys.maxsize)
@@ -999,16 +999,16 @@ class SnoMemoryProvider(MemoryProvider):
                     "toolError": f"superseded by {successor}; correct that id",
                 }
             content_hash = hashlib.sha256(content.encode()).hexdigest()[:16]
-            pending_parts = successor.split(":") if isinstance(successor, str) else []
-            if len(pending_parts) >= 3:
+            if isinstance(successor, str):
+                _, nonce, marked_hash = (successor.split(":") + ["", ""])[:3]
+                if marked_hash != content_hash:
+                    return {"degraded": False, "toolError": "correction-in-progress"}
                 new_id = self._earlier_successor(
-                    scope, memory_id, pending_parts[1], entry.get("category", "episodic")
+                    scope, memory_id, nonce, entry.get("category", "episodic")
                 )
             else:
-                new_id = None
-            changed_successor = new_id is not None and pending_parts[2] != content_hash
-            if new_id is None:
                 nonce = secrets.token_hex(16)
+                new_id = None
                 pending = self._require_client().post(
                     "mutate",
                     {
@@ -1046,11 +1046,6 @@ class SnoMemoryProvider(MemoryProvider):
                 return {
                     "degraded": False,
                     "toolError": f"{memory_id} {new_id} update_failed {error}",
-                }
-            if changed_successor:
-                return {
-                    "degraded": False,
-                    "toolError": f"superseded by {new_id}; correct that id",
                 }
             return {
                 "degraded": False,
@@ -1098,88 +1093,32 @@ class SnoMemoryProvider(MemoryProvider):
     def _earlier_successor(
         self, scope: dict[str, object], memory_id: str, nonce: str, category: object
     ) -> str | None:
-        offset = 0
-        while True:
-            listed = self._require_client().post(
-                "inspect",
-                {
-                    "scope": scope,
-                    "op": {
-                        "op": "list",
-                        "category": category,
-                        "limit": _CORRECTION_LOOKUP_LIMIT,
-                        "offset": offset,
-                    },
+        listed = self._require_client().post(
+            "inspect",
+            {
+                "scope": scope,
+                "op": {
+                    "op": "list",
+                    "category": category,
+                    "limit": _CORRECTION_LOOKUP_LIMIT,
                 },
-            )
-            if (error := _mutation_error(listed)) is not None:
-                raise RuntimeError(error)
-            result = listed.get("result")
-            entries = result.get("entries") if isinstance(result, dict) else None
-            for entry in entries if isinstance(entries, list) else []:
-                if not isinstance(entry, dict):
-                    continue
-                marks = _metadata(entry.get("metadata"))
-                if (
-                    marks.get("correctionOf") == memory_id
-                    and marks.get("correctionNonce") == nonce
-                ):
-                    found = entry.get("id")
-                    return found if isinstance(found, str) else None
-            if not isinstance(entries, list) or len(entries) < _CORRECTION_LOOKUP_LIMIT:
-                return None
-            offset += _CORRECTION_LOOKUP_LIMIT
-
-    def _memories(
-        self, result: dict[str, object], scope: dict[str, object]
-    ) -> tuple[list[dict[str, str]], str]:
-        memories, error = _memories(result)
-        if error:
-            return memories, error
-        tool_result = result.get("toolResult")
-        details = tool_result.get("details") if isinstance(tool_result, dict) else None
-        raw_memories = details.get("memories") if isinstance(details, dict) else None
-        for raw in raw_memories if isinstance(raw_memories, list) else []:
-            if not isinstance(raw, dict):
+            },
+        )
+        if (error := _mutation_error(listed)) is not None:
+            raise RuntimeError(error)
+        result = listed.get("result")
+        entries = result.get("entries") if isinstance(result, dict) else None
+        for entry in entries if isinstance(entries, list) else []:
+            if not isinstance(entry, dict):
                 continue
-            memory_id = raw.get("id")
-            metadata = _metadata(raw.get("metadata"))
-            pending = metadata.get("supersededBy")
-            if not isinstance(memory_id, str) or not isinstance(pending, str):
-                continue
-            parts = pending.split(":")
-            if len(parts) < 3 or parts[0] != "pending":
-                continue
-            index = next((i for i, memory in enumerate(memories) if memory["id"] == memory_id), None)
-            if index is None:
-                continue
-            try:
-                successor_id = self._earlier_successor(
-                    scope, memory_id, parts[1], raw.get("category", "episodic")
-                )
-                if successor_id is None:
-                    continue
-                updated = self._require_client().post(
-                    "mutate", {"scope": scope, "op": {
-                        "op": "update", "id": memory_id,
-                        "metadata": {**metadata, "supersededBy": successor_id},
-                    }}
-                )
-                if (failure := _mutation_error(updated)) is not None:
-                    raise RuntimeError(failure)
-                inspected = self._require_client().post(
-                    "inspect", {"scope": scope, "op": {"op": "get", "id": successor_id}}
-                )
-                if (failure := _mutation_error(inspected)) is not None:
-                    raise RuntimeError(failure)
-                entry = _inspected_entry(inspected)
-                successor_text = entry.get("text") if entry is not None else None
-                if not isinstance(successor_text, str):
-                    raise RuntimeError("successor inspect returned no text")
-                memories[index] = {"id": successor_id, "text": successor_text}
-            except (OSError, RuntimeError, ValueError) as failure:
-                _LOG.error("memory recall correction recovery failed; keeping original", extra={"error": str(failure)})
-        return memories, ""
+            marks = _metadata(entry.get("metadata"))
+            if (
+                marks.get("correctionOf") == memory_id
+                and marks.get("correctionNonce") == nonce
+            ):
+                found = entry.get("id")
+                return found if isinstance(found, str) else None
+        return None
 
     def _scope(self, session_id: str) -> dict[str, object]:
         return {
@@ -1262,40 +1201,19 @@ def _memories(result: dict[str, object]) -> tuple[list[dict[str, str]], str]:
     raw_memories = details.get("memories") if isinstance(details, dict) else None
     if not isinstance(raw_memories, list):
         return [], "recall empty"
-    successors: set[tuple[str, str]] = set()
-    for raw in raw_memories:
-        if not isinstance(raw, dict) or not isinstance(raw.get("id"), str):
-            continue
-        marks = _metadata(raw.get("metadata"))
-        original = marks.get("correctionOf")
-        nonce = marks.get("correctionNonce")
-        if isinstance(original, str) and isinstance(nonce, str):
-            successors.add((original, nonce))
     memories: list[dict[str, str]] = []
     for raw in raw_memories:
         if not isinstance(raw, dict):
             continue
         memory_id = raw.get("id")
         text = raw.get("text")
-        metadata = _metadata(raw.get("metadata"))
-        superseded_by = metadata.get("supersededBy")
-        pending_parts = superseded_by.split(":") if isinstance(superseded_by, str) else []
-        if (
-            isinstance(superseded_by, str)
-            and superseded_by.startswith("pending:")
-            and len(pending_parts) >= 3
-            and (memory_id, pending_parts[1]) in successors
-        ):
-            continue
         if (
             isinstance(memory_id, str)
             and isinstance(text, str)
             # `supersededBy` is written by this plugin's correct tool, `superseded_by` by the
             # memory service's own closes.
-            and not (
-                isinstance(superseded_by, str) and not superseded_by.startswith("pending:")
-            )
-            and not isinstance(metadata.get("superseded_by"), str)
+            and not isinstance(_metadata(raw.get("metadata")).get("supersededBy"), str)
+            and not isinstance(_metadata(raw.get("metadata")).get("superseded_by"), str)
         ):
             memories.append({"id": memory_id, "text": text})
     return memories, ""
