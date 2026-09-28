@@ -1098,32 +1098,37 @@ class SnoMemoryProvider(MemoryProvider):
     def _earlier_successor(
         self, scope: dict[str, object], memory_id: str, nonce: str, category: object
     ) -> str | None:
-        listed = self._require_client().post(
-            "inspect",
-            {
-                "scope": scope,
-                "op": {
-                    "op": "list",
-                    "category": category,
-                    "limit": _CORRECTION_LOOKUP_LIMIT,
+        offset = 0
+        while True:
+            listed = self._require_client().post(
+                "inspect",
+                {
+                    "scope": scope,
+                    "op": {
+                        "op": "list",
+                        "category": category,
+                        "limit": _CORRECTION_LOOKUP_LIMIT,
+                        "offset": offset,
+                    },
                 },
-            },
-        )
-        if (error := _mutation_error(listed)) is not None:
-            raise RuntimeError(error)
-        result = listed.get("result")
-        entries = result.get("entries") if isinstance(result, dict) else None
-        for entry in entries if isinstance(entries, list) else []:
-            if not isinstance(entry, dict):
-                continue
-            marks = _metadata(entry.get("metadata"))
-            if (
-                marks.get("correctionOf") == memory_id
-                and marks.get("correctionNonce") == nonce
-            ):
-                found = entry.get("id")
-                return found if isinstance(found, str) else None
-        return None
+            )
+            if (error := _mutation_error(listed)) is not None:
+                raise RuntimeError(error)
+            result = listed.get("result")
+            entries = result.get("entries") if isinstance(result, dict) else None
+            for entry in entries if isinstance(entries, list) else []:
+                if not isinstance(entry, dict):
+                    continue
+                marks = _metadata(entry.get("metadata"))
+                if (
+                    marks.get("correctionOf") == memory_id
+                    and marks.get("correctionNonce") == nonce
+                ):
+                    found = entry.get("id")
+                    return found if isinstance(found, str) else None
+            if not isinstance(entries, list) or len(entries) < _CORRECTION_LOOKUP_LIMIT:
+                return None
+            offset += _CORRECTION_LOOKUP_LIMIT
 
     def _scope(self, session_id: str) -> dict[str, object]:
         return {
