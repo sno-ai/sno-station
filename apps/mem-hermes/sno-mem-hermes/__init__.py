@@ -560,7 +560,7 @@ class SnoMemoryProvider(MemoryProvider):
             self._last_recall = None
             self._last_error = str(error)
             return ""
-        memories, error = _memories(result)
+        memories, error = self._memories(result, self._scope(session_id or self._session_id))
         if error:
             self._last_recall = None
             self._last_error = error
@@ -609,7 +609,7 @@ class SnoMemoryProvider(MemoryProvider):
         except (OSError, RuntimeError, ValueError) as error:
             self._last_error = str(error)
             return ""
-        memories, error = _memories(result)
+        memories, error = self._memories(result, self._scope(session_id or self._session_id))
         if error:
             self._last_error = error
             return ""
@@ -685,7 +685,7 @@ class SnoMemoryProvider(MemoryProvider):
         except (OSError, RuntimeError, ValueError) as error:
             self._last_error = str(error)
             return ""
-        memories, error = _memories(result)
+        memories, error = self._memories(result, self._scope(self._session_id))
         if error:
             return ""
         try:
@@ -923,7 +923,7 @@ class SnoMemoryProvider(MemoryProvider):
                 },
             },
         )
-        memories, error = _memories(result)
+        memories, error = self._memories(result, self._scope(self._session_id))
         if error:
             return json.dumps(result)
         text, included = _render_memories(memories, int(self._recall_number("explicitLimit")), sys.maxsize)
@@ -1129,6 +1129,57 @@ class SnoMemoryProvider(MemoryProvider):
             if not isinstance(entries, list) or len(entries) < _CORRECTION_LOOKUP_LIMIT:
                 return None
             offset += _CORRECTION_LOOKUP_LIMIT
+
+    def _memories(
+        self, result: dict[str, object], scope: dict[str, object]
+    ) -> tuple[list[dict[str, str]], str]:
+        memories, error = _memories(result)
+        if error:
+            return memories, error
+        tool_result = result.get("toolResult")
+        details = tool_result.get("details") if isinstance(tool_result, dict) else None
+        raw_memories = details.get("memories") if isinstance(details, dict) else None
+        for raw in raw_memories if isinstance(raw_memories, list) else []:
+            if not isinstance(raw, dict):
+                continue
+            memory_id = raw.get("id")
+            metadata = _metadata(raw.get("metadata"))
+            pending = metadata.get("supersededBy")
+            if not isinstance(memory_id, str) or not isinstance(pending, str):
+                continue
+            parts = pending.split(":")
+            if len(parts) < 3 or parts[0] != "pending":
+                continue
+            index = next((i for i, memory in enumerate(memories) if memory["id"] == memory_id), None)
+            if index is None:
+                continue
+            try:
+                successor_id = self._earlier_successor(
+                    scope, memory_id, parts[1], raw.get("category", "episodic")
+                )
+                if successor_id is None:
+                    continue
+                updated = self._require_client().post(
+                    "mutate", {"scope": scope, "op": {
+                        "op": "update", "id": memory_id,
+                        "metadata": {**metadata, "supersededBy": successor_id},
+                    }}
+                )
+                if (failure := _mutation_error(updated)) is not None:
+                    raise RuntimeError(failure)
+                inspected = self._require_client().post(
+                    "inspect", {"scope": scope, "op": {"op": "get", "id": successor_id}}
+                )
+                if (failure := _mutation_error(inspected)) is not None:
+                    raise RuntimeError(failure)
+                entry = _inspected_entry(inspected)
+                successor_text = entry.get("text") if entry is not None else None
+                if not isinstance(successor_text, str):
+                    raise RuntimeError("successor inspect returned no text")
+                memories[index] = {"id": successor_id, "text": successor_text}
+            except (OSError, RuntimeError, ValueError) as failure:
+                _LOG.error("memory recall correction recovery failed; keeping original", extra={"error": str(failure)})
+        return memories, ""
 
     def _scope(self, session_id: str) -> dict[str, object]:
         return {
