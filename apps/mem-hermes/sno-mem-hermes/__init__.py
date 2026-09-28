@@ -999,10 +999,9 @@ class SnoMemoryProvider(MemoryProvider):
                     "toolError": f"superseded by {successor}; correct that id",
                 }
             content_hash = hashlib.sha256(content.encode()).hexdigest()[:16]
-            if isinstance(successor, str):
-                _, nonce, marked_hash = (successor.split(":") + ["", ""])[:3]
-                if marked_hash != content_hash:
-                    return {"degraded": False, "toolError": "correction-in-progress"}
+            pending_parts = successor.split(":") if isinstance(successor, str) else []
+            if len(pending_parts) >= 3 and pending_parts[2] == content_hash:
+                nonce = pending_parts[1]
                 new_id = self._earlier_successor(
                     scope, memory_id, nonce, entry.get("category", "episodic")
                 )
@@ -1207,13 +1206,17 @@ def _memories(result: dict[str, object]) -> tuple[list[dict[str, str]], str]:
             continue
         memory_id = raw.get("id")
         text = raw.get("text")
+        metadata = _metadata(raw.get("metadata"))
+        superseded_by = metadata.get("supersededBy")
         if (
             isinstance(memory_id, str)
             and isinstance(text, str)
             # `supersededBy` is written by this plugin's correct tool, `superseded_by` by the
             # memory service's own closes.
-            and not isinstance(_metadata(raw.get("metadata")).get("supersededBy"), str)
-            and not isinstance(_metadata(raw.get("metadata")).get("superseded_by"), str)
+            and not (
+                isinstance(superseded_by, str) and not superseded_by.startswith("pending:")
+            )
+            and not isinstance(metadata.get("superseded_by"), str)
         ):
             memories.append({"id": memory_id, "text": text})
     return memories, ""
