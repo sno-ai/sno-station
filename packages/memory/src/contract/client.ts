@@ -62,7 +62,7 @@ function postJson(port: number, path: string, headers: Record<string, string>, b
 function responseError(body: unknown): ContractError {
 	if (body && typeof body === "object" && "reason" in body) {
 		const reason = DEGRADED_REASONS.find(value => value === body.reason);
-		if (reason) return new ContractError(reason);
+		if (reason) return new ContractError(reason, "error" in body && typeof body.error === "string" ? body.error : reason);
 		if (typeof body.reason === "string") return new ContractError("engine-failed", body.reason);
 	}
 	return new ContractError("engine-failed");
@@ -101,26 +101,27 @@ export class MemoryClient implements MemoryContract {
 		this.port = discovery.port;
 	}
 
-	private async request<K extends ContractMethod>(method: K, input: ContractInputs[K]): Promise<ContractOutputs[K]> {
+	private async request<K extends ContractMethod>(method: K, input: ContractInputs[K], signal?: AbortSignal): Promise<ContractOutputs[K]> {
 		const route = MEMORY_ROUTES[method];
 		try {
+			signal?.throwIfAborted();
 			let discovery = await readDiscovery();
 			if (!discovery || !processAlive(discovery.pid)) {
 				const { memoryPackage } = clientSettings();
 				discovery = await startSidecar(memoryPackage);
 			}
 			if (method !== "init" && this.#registration && this.#registeredPid !== discovery.pid) {
-				await this.request("init", this.#registration);
+				await this.request("init", this.#registration, signal);
 			}
 			const response = await postJson(discovery.port, route.path,
 				{ "Content-Type": "application/json", [MEMORY_SKIN_HEADER]: this.skinId },
 				JSON.stringify({ ...input, scope: { ...input.scope, principal: this.principal } }),
-				AbortSignal.timeout(route.timeoutMs));
+				signal ? AbortSignal.any([signal, AbortSignal.timeout(route.timeoutMs)]) : AbortSignal.timeout(route.timeoutMs));
 			const body = response.body;
 			if (!response.ok) throw responseError(body);
 			const parsed = outputSchemas[method].safeParse(body);
 			if (!parsed.success) throw new ContractError("engine-failed");
-			if (parsed.data.degraded) throw new ContractError(parsed.data.reason);
+			if (parsed.data.degraded) throw new ContractError(parsed.data.reason, parsed.data.error ?? parsed.data.reason);
 			if (method === "init") this.#registeredPid = discovery.pid;
 			return parsed.data;
 		} catch (error) { throw error instanceof ContractError ? error : new ContractError(failureReason(error)); }
@@ -133,9 +134,9 @@ export class MemoryClient implements MemoryContract {
 	hostEvent(event: HostEvent, scope: ScopeCtx): Promise<ContractOutputs["hostEvent"]> {
 		return this.request("hostEvent", { scope, event });
 	}
-	async getRecall(query: string, scope: ScopeCtx, options: RecallOptions): Promise<ContractOutputs["getRecall"]> {
-		try { return await this.request("getRecall", { query, scope, options }); }
-		catch (error) { return { degraded: true, reason: failureReason(error), recallId: "", contextText: "" }; }
+	async getRecall(query: string, scope: ScopeCtx, options: RecallOptions, signal?: AbortSignal): Promise<ContractOutputs["getRecall"]> {
+		try { return await this.request("getRecall", { query, scope, options }, signal); }
+		catch (error) { return { degraded: true, reason: failureReason(error), error: error instanceof Error ? error.message : String(error), recallId: "", contextText: "" }; }
 	}
 	capture(turn: Turn, scope: ScopeCtx): Promise<ContractOutputs["capture"]> {
 		return this.request("capture", { turn, scope });
@@ -151,7 +152,7 @@ export class MemoryClient implements MemoryContract {
 			else if (op.op === "stats") result = { op: "stats", total: 0, projectBreakdown: {}, categoryBreakdown: {} };
 			else if (op.op === "get") result = { op: "get", entry: null };
 			else result = { op: op.op, project: scope.project, entries: [] };
-			return { degraded: true, reason: failureReason(error), result };
+			return { degraded: true, reason: failureReason(error), error: error instanceof Error ? error.message : String(error), result };
 		}
 	}
 	recordUsage(recallId: string, signal: UsageSignal, scope: ScopeCtx): Promise<ContractOutputs["recordUsage"]> {
