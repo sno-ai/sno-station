@@ -10,7 +10,6 @@ export const CODING_SKIN_MAX_ATTEMPTS = 3;
 export const CODING_SKIN_IMPORT_INTERVAL_MS = 2_010;
 export const CODING_SKIN_CHILD_MAX_BUFFER_BYTES: number = 8 * 1024 * 1024;
 export const CODING_SKIN_MANUAL_SESSION_ID = "manual";
-export const CODING_SKIN_CORRECTION_LOCK_STALE_MS: number = 2 * 60_000;
 
 export const CODING_SKIN_SESSION_QUERY =
 	"standing decisions, open tasks, conventions and known pitfalls for this repository";
