@@ -25,6 +25,7 @@ export interface MemorySourceOrder {
 	 * which are therefore never same-turn with anything.
 	 */
 	conversation_id?: string;
+	correction?: boolean;
 }
 
 export interface CloseMemoryRowInput {
@@ -71,6 +72,46 @@ export function compareMemorySourceOrder(
 		compareNumber(left.global_turn_index, right.global_turn_index) ||
 		compareNumber(left.rowid, right.rowid)
 	);
+}
+
+/** The latest correction assertion in this row's existing predecessor chain. */
+export function readCorrectionMoment(database: SqliteDatabaseLike, rowId: string): number | undefined {
+	const row = database.prepare(`WITH RECURSIVE predecessors(id, project_id, metadata) AS (
+		SELECT id, project_id, metadata FROM nodix_memories WHERE id = ?
+		UNION
+		SELECT parent.id, parent.project_id, parent.metadata FROM nodix_memories parent
+		JOIN predecessors child ON parent.project_id = child.project_id AND json_valid(parent.metadata)
+			AND json_extract(parent.metadata, '$.superseded_by') = child.id
+	) SELECT MAX(CASE WHEN json_valid(metadata)
+		AND json_extract(metadata, '$.source_order.correction') = 1
+		THEN json_extract(metadata, '$.source_order.session_moment') END) AS moment FROM predecessors`).get(rowId);
+	return typeof row === "object" && row !== null && "moment" in row && typeof row.moment === "number"
+		? row.moment : undefined;
+}
+
+/** Apply correction assertion time at retirement, preserving ordinary event ordering. */
+export function compareMemoryRetirementOrder(
+	database: SqliteDatabaseLike,
+	leftId: string,
+	left: MemorySourceOrder,
+	rightId: string,
+	right: MemorySourceOrder,
+): number {
+	const correctedAt = Math.max(
+		readCorrectionMoment(database, leftId) ?? Number.NEGATIVE_INFINITY,
+		readCorrectionMoment(database, rightId) ?? Number.NEGATIVE_INFINITY,
+	);
+	if (Number.isFinite(correctedAt) && left.session_moment !== undefined
+		&& right.session_moment !== undefined) {
+		const leftPredates = left.session_moment < correctedAt;
+		const rightPredates = right.session_moment < correctedAt;
+		if (leftPredates !== rightPredates) return leftPredates ? -1 : 1;
+		if (left.correction || right.correction) {
+			const assertionOrder = compareNumber(left.session_moment, right.session_moment);
+			if (assertionOrder !== 0) return assertionOrder;
+		}
+	}
+	return compareMemorySourceOrder(left, right);
 }
 
 /**
@@ -153,6 +194,7 @@ export function readMemorySourceOrder(metadata: string): MemorySourceOrder {
 		global_turn_index: globalTurnIndex,
 		rowid,
 		...(conversationId === undefined ? {} : { conversation_id: conversationId }),
+		...("correction" in sourceOrder && sourceOrder.correction === true ? { correction: true } : {}),
 	};
 }
 
@@ -192,7 +234,8 @@ export function closeMemoryRow(
 	}
 	if (
 		input.targetRowId !== input.closingRowId &&
-		compareMemorySourceOrder(input.closingOrder, readMemorySourceOrderOrOldest(row.metadata)) < 0
+		compareMemoryRetirementOrder(database, input.closingRowId, input.closingOrder,
+			input.targetRowId, readMemorySourceOrderOrOldest(row.metadata)) < 0
 	) {
 		throw new Error("Closing row source_order must be strictly greater than target source_order");
 	}
