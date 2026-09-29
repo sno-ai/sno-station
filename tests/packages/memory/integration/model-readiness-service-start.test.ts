@@ -21,6 +21,8 @@ import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MEMORY_PACKAGE_PATH, type SettingsDocument, writeSettingsFixture } from "../fixtures/settings-file-fixture";
+import { MemoryStore } from "../../../../packages/memory/src/store/store";
+import { createTestDb, createTestEmbedder } from "../../../apps/mem-claw/helpers/test-db";
 
 const REPO_ROOT = fileURLToPath(new URL("../../../../", import.meta.url));
 const CLIENT_URL = pathToFileURL(join(MEMORY_PACKAGE_PATH, "dist", "client.js")).href;
@@ -81,10 +83,12 @@ type SessionPlan = {
 	captureWaitMs?: number;
 	recall?: string;
 	recallWaitMs?: number;
+	correct?: { id: string; content: string };
 };
 type SessionOutcome = {
 	connect?: unknown; connectMs?: number; init?: unknown;
 	capture?: unknown; captureMs?: number; recall?: unknown; recallMs?: number;
+	correct?: unknown;
 };
 
 /** One hook-like process: connect, register as Codex with only its id, then capture and/or recall. */
@@ -118,6 +122,7 @@ if (client && !client.degraded) {
 		out.recall = await settle(client.getRecall(plan.recall, scope, { source: "manual", minScore: 0 }), plan.recallWaitMs);
 		out.recallMs = Math.round(performance.now() - started);
 	}
+	if (plan.correct) out.correct = await settle(client.mutate({ op: "correct", ...plan.correct }, scope));
 }
 process.stdout.write("\\nSESSION " + JSON.stringify(out) + "\\n");
 process.exit(0);
@@ -251,6 +256,56 @@ function writeDownloadSettings(mirror: ModelMirror): void {
 
 const codename = (): string => `VELVET-${randomBytes(4).toString("hex").toUpperCase()}`;
 const RECALL_QUESTION = "What codename did we pick for the glacier expedition?";
+
+async function correctionTarget(mirror: ModelMirror) {
+	const database = createTestDb();
+	const store = new MemoryStore({ dbPath: database.dbPath, embedder: await createTestEmbedder() });
+	cleanups.push(async () => { await stopServices(root); await store.close(); database.cleanup(); });
+	const stored = await store.store({ text: "The release owner is Dana.", category: "episodic", projectId: "global" });
+	const target = store.getById(stored.id);
+	if (!target) throw new Error("correction target was not persisted");
+	writeSettings(root, {
+		store: { path: database.dbPath, encryptionKey: database.encryptionKey },
+		embedding: { cacheDir: join(root, "correction-model-cache"), offline: false, mirror: mirror.url },
+		telemetry: { memoryUsage: { enabled: false }, observe: { enabled: false } },
+	});
+	return { database, store, target };
+}
+
+describe("correction while the real model prepares", () => {
+	it("waits for the real model download before committing correction", { timeout: 240_000 }, async () => {
+		const mirror = await startModelMirror();
+		const { store, target } = await correctionTarget(mirror);
+		const writer = startSession(root, { session: "correction-during-download", correct: { id: target.id, content: "The release owner is Jordan." } });
+		await vi.waitFor(() => expect(mirror.requested.length).toBeGreaterThan(0), { timeout: 30_000, interval: 200 });
+		expect(mirror.served).toEqual([]);
+		expect(await Promise.race([writer.done, delay(500).then(() => "pending")])).toBe("pending");
+		expect(store.getById(target.id)).toEqual(target);
+		expect(await store.stats("global")).toMatchObject({ total: 1 });
+		mirror.release();
+		const completed = await writer.done;
+		expect(completed.correct, completed.output).toMatchObject({ degraded: false, result: { isError: false } });
+		const id = (completed.correct as { result: { details: { id: string } } }).result.details.id;
+		expect(store.getById(id)).toMatchObject({ text: "The release owner is Jordan.", projectId: "global" });
+		expect(JSON.parse(store.getById(target.id)?.metadata ?? "{}").superseded_by).toBe(id);
+		expect(await store.stats("global")).toMatchObject({ total: 2 });
+	});
+
+	it("reports real model preparation failure and preserves the target", { timeout: 120_000 }, async () => {
+		const mirror = await startModelMirror();
+		const { store, target } = await correctionTarget(mirror);
+		const writer = startSession(root, { session: "correction-failed-download", correct: { id: target.id, content: "The release owner is Jordan." } });
+		await vi.waitFor(() => expect(mirror.requested.length).toBeGreaterThan(0), { timeout: 30_000, interval: 200 });
+		const manual = await session(root, { session: "manual-during-correction-prepare", recall: "Who is the release owner?" });
+		expect(manual.recall, manual.output).toMatchObject({ degraded: true, error: "model-preparing", contextText: "" });
+		mirror.fail();
+		const failed = await writer.done;
+		expect(failed.correct, failed.output).toMatchObject({ thrown: { reason: "engine-failed", message: expect.stringContaining("model preparation failed:") } });
+		expect(store.getById(target.id)).toEqual(target);
+		expect(await store.stats("global")).toMatchObject({ total: 1 });
+		expect(mirror.served).toEqual([]);
+	});
+});
 
 /** Fresh sessions ask until one reads `name` back; each recall waits at most 15 s. */
 async function expectReadBack(name: string, mirror: ModelMirror): Promise<void> {
