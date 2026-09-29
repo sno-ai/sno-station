@@ -104,6 +104,9 @@ async function applyTransaction(
 	const existing = readMemory(store, input.rowId);
 	if (!existing) return { applied: false, reason: "missing" };
 	const priorMetadata = parseMetadata(existing.metadata);
+	if (typeof priorMetadata["superseded_by"] === "string" || priorMetadata["invalidated_at"] != null) {
+		return { applied: false, reason: "content_changed" };
+	}
 	if (
 		input.idempotencyKey !== undefined &&
 		priorMetadata["rem_update_idempotency_key"] === input.idempotencyKey
