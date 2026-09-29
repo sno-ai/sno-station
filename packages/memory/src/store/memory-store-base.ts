@@ -150,6 +150,21 @@ export interface MemoryRelation {
 	createdAt: number;
 }
 
+export interface CorrectMemoryInput {
+	id: string;
+	content: string;
+	projectIdFilter: readonly string[];
+	session: string;
+	temporalMetadata?: Readonly<Record<string, unknown>>;
+}
+
+export type CorrectMemoryResult =
+	| { corrected: true; id: string }
+	| { corrected: false; errorCode: "not-found" }
+	| { corrected: false; errorCode: "invalid-input";
+		duplicate?: { id: string; state: "unchanged" | "current" | "retired" } }
+	| { corrected: false; errorCode: "already-superseded"; successorId: string };
+
 export interface MemoryRelationWalkInput {
 	projectId: string;
 	node: string;
@@ -685,6 +700,10 @@ export class MemoryStore {
 		throw new StorageError("MemoryStore implementation modules were not loaded");
 	}
 
+	correct(_input: CorrectMemoryInput): Promise<CorrectMemoryResult> {
+		throw new StorageError("MemoryStore implementation modules were not loaded");
+	}
+
 	storeQuarantinedCandidate(_entry: QuarantinedStoreInput): Promise<StoreResult> {
 		throw new StorageError("MemoryStore implementation modules were not loaded");
 	}
@@ -1076,6 +1095,7 @@ export interface MemoryStoreInternals {
 	storeAtomicExtractionChunk(input: AtomicExtractionWriteInput): Promise<AtomicExtractionWriteResult>;
 	createMemorySuppression(input: MemorySuppressionInput): Promise<MemorySuppressionResult>;
 	store(entry: StoreInput): Promise<StoreResult>;
+	correct(input: CorrectMemoryInput): Promise<CorrectMemoryResult>;
 	storeQuarantinedCandidate(entry: QuarantinedStoreInput): Promise<StoreResult>;
 	bulkStore(entries: Array<StoreInput | null | undefined>): Promise<MemoryEntry[]>;
 	supersede(args: {
