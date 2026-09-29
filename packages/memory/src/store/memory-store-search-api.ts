@@ -112,7 +112,7 @@ Object.assign(MemoryStore.prototype, {
 			}
 		}
 		if (opts.excludeInvalidatedBefore !== undefined) {
-			sql += " AND (NOT json_valid(m.metadata) OR json_extract(m.metadata, '$.invalidated_at') IS NULL OR json_extract(m.metadata, '$.invalidated_at') > ?)";
+			sql += ` AND (NOT json_valid(m.metadata) OR json_extract(m.metadata, '$.invalidated_at') IS NULL OR json_extract(m.metadata, '$.invalidated_at') > ?${opts.includeRetired ? " OR json_extract(m.metadata, '$.superseded_by') IS NOT NULL" : ""})`;
 			params.push(opts.excludeInvalidatedBefore);
 		}
 		// A closed row is not part of the population. This has to sit in the CTE the count, the

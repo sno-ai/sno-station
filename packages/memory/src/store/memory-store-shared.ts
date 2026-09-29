@@ -376,6 +376,8 @@ export interface SearchOptions {
 	 * memora-fama OD-3, FAA binary).
 	 */
 	excludeInvalidatedBefore?: number;
+	/** Explicit historical recall retains an invalidated row only when it names a successor. */
+	includeRetired?: boolean;
 	/**
 	 * Drops rows a group-CRUD close retired (`metadata.superseded_by`). Serving callers set it;
 	 * the REM waves and dedup deliberately do not, because reading a retired row is their job.
