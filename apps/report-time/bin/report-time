@@ -1,0 +1,213 @@
+#!/usr/bin/env bash
+# report-time — produce a clock time for the USER. Never compute one by hand.
+#
+# UTC timestamps need conversion to the user's zone before they are reported.
+# Converting in your head can make a wrong hour look right.
+#
+#   report-time                     -> now
+#   report-time --in 3600           -> 3600 seconds from now
+#   report-time --pid 12345         -> when that timeout wrapper FIRES: the instant the
+#                                 job is signalled and stops. With `--kill-after=N`
+#                                 a forced kill follows N seconds later; this is the
+#                                 first instant, not that one, because the first is
+#                                 when the work ends.
+#                                 The limit is READ FROM THE PROCESS, never supplied:
+#                                 a caller-supplied wall is a caller-supplied wrong
+#                                 answer, and a wrong deadline looks exactly like a
+#                                 right one. Refuses unless the pid really is a
+#                                 `timeout` wrapper.
+#   report-time "<UTC timestamp>"  -> that UTC instant, converted
+#   report-time @<epoch>            -> that epoch, converted
+#
+# Output: "09:31 CET (08:31 UTC)"  — with dates when the instant is not today.
+set -euo pipefail
+
+if [[ -n "${REPORT_TIME_USER_TZ:-}" ]]; then
+  export TZ="$REPORT_TIME_USER_TZ"
+fi
+
+die() { printf 'report-time: %s\n' "$*" >&2; exit 2; }
+
+# An agent's failed extraction arrives as "" or as a blank line, never as "no
+# argument". GNU date reads whitespace as midnight today, so an unguarded blank
+# yields a confident wrong instant. Collapse whitespace-only to empty here so the
+# empty-argument refusal below catches both spellings of the same mistake.
+if [ $# -gt 0 ]; then
+  case "$1" in
+    *[![:space:]]*) : ;;
+    *) set -- "" "${@:2}" ;;
+  esac
+fi
+
+case "${1:-}" in
+  -h|--help)
+    # Usage is the header block above, printed verbatim: one text, so it cannot
+    # drift from what the script actually accepts.
+    sed -n '/^# report-time —/,/^# Output:/p' "$0" | sed 's/^# \{0,1\}//'
+    exit 0
+    ;;
+  --in)
+    [ $# -ge 2 ] || die "--in needs seconds"
+    # Strict: an optional minus then digits, nothing else. A loose character class
+    # lets "1-2" through, and shell arithmetic then evaluates it to -1 instead of
+    # refusing — a silently different time, which is the one thing this must not do.
+    [[ "$2" =~ ^-?[0-9]+$ ]] || die "--in takes an integer number of seconds, got '$2'"
+    # Bounded before arithmetic: 64-bit overflow wraps SILENTLY to a plausible
+    # wrong instant, which is the one failure this script exists to prevent.
+    [ ${#2} -le 12 ] || die "--in value is implausibly large: '$2'"
+    # Base 10, explicitly. A zero-padded but perfectly valid "03600" is octal to
+    # bash arithmetic (=1920) and would report a time 28 minutes off, silently.
+    in_sign=1; in_digits=$2
+    case "$in_digits" in -*) in_sign=-1; in_digits=${in_digits#-} ;; esac
+    epoch=$(( $(date +%s) + in_sign * 10#$in_digits ))
+    ;;
+  --pid)
+    # When does a `timeout`-wrapped process get killed?
+    #
+    # FAIL CLOSED. The limit is read from the process's own argv, never from the
+    # caller: a caller-supplied wall is a caller-supplied WRONG ANSWER, and this
+    # mode exists precisely because a wrong deadline is indistinguishable from a
+    # right one. If the pid is not a live `timeout` wrapper with a readable
+    # duration, refuse rather than print something plausible.
+    [ $# -ge 2 ] || die "usage: --pid <pid> [--expect-wall <seconds>]"
+    case "$2" in ''|*[!0-9]*) die "--pid takes a pid";; esac
+    pid=$2
+
+    # Everything after the pid must be exactly `--expect-wall <seconds>`.
+    # Quietly ignoring the rest is how an ordinary caller — one who typed the
+    # `--wall` spelling — gets no cross-check at all while believing one ran.
+    # Parsed here, up front,
+    # so a misspelled guard fails before any deadline is computed.
+    expect_wall=""
+    if [ $# -gt 2 ]; then
+      { [ $# -eq 4 ] && [ "$3" = "--expect-wall" ]; } \
+        || die "usage: --pid <pid> [--expect-wall <seconds>] — got '${*:3}'"
+      case "$4" in ''|*[!0-9]*) die "--expect-wall takes seconds, got '$4'";; esac
+      [ ${#4} -le 12 ] || die "--expect-wall value is implausibly large: '$4'"
+      expect_wall=$(( 10#$4 ))   # base 10: "03600" is a legal wall, not octal
+    fi
+
+    # Anchor on the process's own START, not on "elapsed + now".
+    #
+    # Two separately sampled integer clocks (ps whole seconds, date whole seconds)
+    # can land the answer in the next minute, and between two samples a pid can be
+    # reused — one process's elapsed time married to another's timeout arguments.
+    # The start tick is a stable identity AND the exact anchor: it is re-read after
+    # the command line and must be unchanged, or this refuses.
+    read_start_tick() {  # $1 = pid -> field 22 of /proc/pid/stat, or nothing
+      local line
+      line=$(cat "/proc/$1/stat" 2>/dev/null) || return 1
+      line=${line#*) }                       # comm may contain spaces and parens
+      printf '%s' "$line" | awk '{print $20}'   # state is $1 here, so starttime is $20
+    }
+    start_tick=$(read_start_tick "$pid") || true
+    [ -n "${start_tick:-}" ] || die "pid $pid is not running"
+
+    comm=$(ps -o comm= -p "$pid" 2>/dev/null | tr -d ' ')
+    [ "$comm" = "timeout" ] || die "pid $pid is '$comm', not a timeout wrapper — no deadline exists to report"
+
+    # argv, NUL-separated. The duration is the first non-option argument.
+    mapfile -d '' -t argv < "/proc/$pid/cmdline" 2>/dev/null || die "cannot read argv of pid $pid"
+    # `timeout` has options that take a SEPARATE value — `-k 120s`, `-s TERM`.
+    # Skipping the option and then reading its value as the duration reports a
+    # deadline that is wrong by exactly that value and looks entirely valid.
+    # So: consume known value-taking options WITH their value, allow known
+    # valueless flags, and REFUSE on anything unrecognised rather than guess.
+    dur=""; skip_next=0
+    for a in "${argv[@]:1}"; do
+      if [ "$skip_next" = 1 ]; then skip_next=0; continue; fi
+      case "$a" in
+        --)                                   continue ;;
+        --kill-after=*|--signal=*)            continue ;;   # value attached
+        --kill-after|--signal)                skip_next=1; continue ;;
+        -k|-s)                                skip_next=1; continue ;;
+        -k?*|-s?*)                            continue ;;   # -k120s, -sTERM
+        --foreground|--preserve-status|-v|--verbose) continue ;;
+        -*) die "pid $pid: unrecognised timeout option '$a' — refusing to guess which argument is the duration" ;;
+        *)  dur=$a; break ;;
+      esac
+    done
+    [ -n "$dur" ] || die "pid $pid is a timeout wrapper but its duration argument is unreadable"
+    [ ${#dur} -le 12 ] || die "pid $pid: timeout duration '$dur' is implausibly large"
+
+    # timeout accepts s/m/h/d suffixes; bare means seconds.
+    # 10# on every branch: `timeout 03600s` is legal and its duration is decimal,
+    # but bash arithmetic would read the leading zero as octal and be 28 min early.
+    case "$dur" in
+      *[0-9]s) wall=$(( 10#${dur%s} )) ;;
+      *[0-9]m) wall=$(( 10#${dur%m} * 60 )) ;;
+      *[0-9]h) wall=$(( 10#${dur%h} * 3600 )) ;;
+      *[0-9]d) wall=$(( 10#${dur%d} * 86400 )) ;;
+      *[0-9])  wall=$(( 10#$dur )) ;;
+      *) die "pid $pid: cannot read '$dur' as a timeout duration" ;;
+    esac
+
+    # Optional cross-check. If the caller states a wall and the process disagrees,
+    # REFUSE — do not silently pick one of two answers.
+    if [ -n "$expect_wall" ]; then
+      [ "$expect_wall" = "$wall" ] \
+        || die "pid $pid runs under a ${wall}s wall, not ${expect_wall}s — refusing to report a deadline you did not expect"
+    fi
+
+    # Re-read the start tick AFTER the command line. Same pid, different start =
+    # the pid was reused mid-read; refuse rather than blend two processes.
+    start_tick2=$(read_start_tick "$pid") || true
+    [ "${start_tick2:-}" = "$start_tick" ] \
+      || die "pid $pid changed identity while being read — refusing to report a deadline"
+
+    # A decade is not a deadline, and an absurd wall would push the arithmetic
+    # below past the range where fractions stay exact.
+    [ "$wall" -le 315360000 ] || die "pid $pid: a ${wall}s wall is not a deadline anyone is waiting on"
+
+    hz=$(getconf CLK_TCK 2>/dev/null || echo 100)
+
+    # Anchor the start on /proc/uptime sampled NEXT TO the wall clock, not on
+    # /proc/stat's btime. btime is a whole-second value fixed at boot, and
+    # btime can shift a deadline into the previous minute. uptime carries
+    # hundredths, and the two reads below straddle a single instant, so
+    # the anchor lands within about ten milliseconds. Floor at the end, because
+    # the display floors to the second and then to the minute anyway.
+    uptime_s=$(awk '{print $1}' /proc/uptime 2>/dev/null)
+    now_s=$(date +%s.%N)
+    [ -n "${uptime_s:-}" ] && [ -n "${hz:-}" ] \
+      || die "cannot read uptime or clock ticks — refusing to guess a deadline"
+    epoch=$(awk -v now="$now_s" -v up="$uptime_s" -v st="$start_tick" -v hz="$hz" -v w="$wall" \
+      'BEGIN { printf "%d", int(now - (up - st / hz) + w) }')
+    case "$epoch" in ''|*[!0-9]*) die "deadline arithmetic produced '$epoch' — refusing to print it";; esac
+    ;;
+  "")
+    # THE MAIN-PATH TRAP. "no arguments" and "one argument that happens to be
+    # empty" are completely different questions, and bash's case cannot tell them
+    # apart. An agent that failed to extract a timestamp passes "", and without
+    # this it silently receives NOW as though it were the event's time — a
+    # perfectly plausible, perfectly wrong answer.
+    if [ $# -gt 0 ]; then
+      die "empty time argument — refusing to substitute the current time for a value you failed to obtain"
+    fi
+    epoch=$(date +%s)
+    ;;
+  *)
+    # Any other argument is an instant. Bare strings are read as UTC, because
+    # callers supply source timestamps in UTC.
+    epoch=$(date -u -d "$*" +%s) || die "cannot read '$*' as a time"
+    ;;
+esac
+
+# Last gate. Anything that slipped through arithmetic and landed outside a sane
+# window is refused rather than printed: a wrong year still looks like a time.
+[ "$epoch" -ge 946684800 ] && [ "$epoch" -le 4102444800 ] \
+  || die "computed instant is outside 2000-2100 — refusing to print it"
+
+u_day=$(date -u   -d "@$epoch" '+%Y-%m-%d')
+l_day=$(date -d "@$epoch" '+%Y-%m-%d')
+today=$(date '+%Y-%m-%d')
+
+if [ "$l_day" = "$today" ] && [ "$u_day" = "$l_day" ]; then
+  printf '%s (%s)\n' \
+    "$(date -d "@$epoch" '+%H:%M %Z')" \
+    "$(date -u -d "@$epoch" '+%H:%M UTC')"
+else
+  printf '%s (%s)\n' \
+    "$(date -d "@$epoch" '+%Y-%m-%d %H:%M %Z')" \
+    "$(date -u -d "@$epoch" '+%Y-%m-%d %H:%M UTC')"
+fi
