@@ -1,0 +1,1 @@
+{"program":"report-time","version":"@VERSION@","requirements_contract_sha256":"@CONTRACT_SHA256@","dependencies":["bash","date","sed","cat","awk","ps","tr","getconf"]}
