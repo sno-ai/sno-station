@@ -180,7 +180,7 @@ export class MemoryRuntimePool {
 		retriever.setRecallLifecycle(config.recallLifecycle);
 		retriever.setTierPromoter(createTierPromoter());
 		const runtime = new MemoryContractRuntime({ config, store: this.store, embedder, retriever, accessTracker: tracker, observability,
-			stateDir: this.stateDir, agentPort, logger: engineLogger, telemetryUsage: this.usageOutbox });
+			stateDir: this.stateDir, agentPort, logger: engineLogger, telemetryUsage: this.usageOutbox, recallSettings: this.settings.recall });
 		entry = { runtime, tracker, observability, embedder, agentPort, connected: !!registration.model, active: 0, retired: false, hostSessions: new Map() };
 		this.owned.add(entry);
 		try {
@@ -221,6 +221,24 @@ export class MemoryRuntimePool {
 	async invoke(method: ContractMethod, raw: unknown, skinId: string, signal?: AbortSignal): Promise<ContractOutputs[ContractMethod]> {
 		signal?.throwIfAborted();
 		const input = parseInput(method, raw);
+		if (method === "mutate" && parseInput("mutate", raw).op.op === "correct" && !this.modelReady) {
+			const preparation = this.modelPreparation;
+			if (preparation) {
+				await (signal ? new Promise<void>((resolve, reject) => {
+					const abort = (): void => reject(signal.reason);
+					signal.addEventListener("abort", abort, { once: true });
+					preparation.then(resolve, reject).finally(() => signal.removeEventListener("abort", abort));
+				}) : preparation);
+			}
+			signal?.throwIfAborted();
+			if (!this.modelReady) {
+				const cause = this.modelPreparationError ?? "model-preparing";
+				const op = parseInput("mutate", raw).op;
+				if (op.op === "correct") engineLogger.error(`correct ${op.id}: ${cause}; correction was not applied`);
+				return { degraded: true, reason: "engine-failed", error: cause, result: { isError: true,
+					content: [{ type: "text", text: cause }], details: { errorCode: "engine-failed" } } };
+			}
+		}
 		if (method === "capture" && !this.modelReady) {
 			const capture = parseInput("capture", raw);
 			const id = JSON.stringify([skinId, capture.scope.principal, capture.scope.project, capture.scope.session, capture.turn.turnId, capture.turn.rewindEpoch]);
@@ -231,8 +249,13 @@ export class MemoryRuntimePool {
 				.run(id, skinId, request);
 			return { degraded: false, turnId: capture.turn.turnId, committed: false, accepted: true };
 		}
-		if (method === "getRecall" && !this.modelReady)
-			return { degraded: false, recallId: "", contextText: "", unavailable: this.modelPreparationError ?? "model-preparing" };
+		if (method === "getRecall" && !this.modelReady) {
+			const cause = this.modelPreparationError ?? "model-preparing";
+			if (parseInput("getRecall", raw).options.source === "manual") {
+				return { degraded: true, reason: "engine-failed", error: cause, recallId: "", contextText: "" };
+			}
+			return { degraded: false, recallId: "", contextText: "", memoryIds: [], unavailable: cause };
+		}
 		if (method === "inspect" && parseInput("inspect", raw).op.op === "storage") {
 			this.counters.storeAccesses++;
 			return { degraded: false, result: { op: "storage", dimension: readChunkVecTableState(this.store.sqlite)?.dimension ?? null, failed: false } };
