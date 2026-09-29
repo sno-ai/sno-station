@@ -54,6 +54,76 @@ async function atomic(text: string, overrides: Partial<AtomicExtractionWriteCard
 }
 
 describe("service-owned memory correction", () => {
+	it("explains unchanged correction without writing", async () => {
+		const old = await seed();
+		const rejected = (await correct(old.id, old.text)).body.result;
+		expect(rejected).toMatchObject({ isError: true, details: { errorCode: "invalid-input" },
+			content: [{ type: "text", text: `unchanged: the corrected text equals memory ${old.id}` }] });
+		expect(countRows()).toBe(1);
+		expect(metadata(old.id).superseded_by).toBeUndefined();
+	});
+
+	it("explains another current text collision without writing", async () => {
+		const old = await seed();
+		const peer = await seed("The release owner is Jordan.");
+		const rejected = (await correct(old.id, peer.text)).body.result;
+		expect(rejected).toMatchObject({ isError: true, details: { errorCode: "invalid-input" },
+			content: [{ type: "text", text: `same text already stored as ${peer.id}; reword the correction, or correct ${peer.id} if that is the memory you mean` }] });
+		expect(countRows()).toBe(2);
+		expect(metadata(old.id).superseded_by).toBeUndefined();
+	});
+
+	it("explains a retired text collision without changing either correction row", async () => {
+		const old = await seed();
+		const next = (await correct(old.id, "The release owner is Jordan.")).body.result.details.id;
+		const before = [fixture.store.getById(old.id), fixture.store.getById(next)];
+		const rejected = (await correct(next, old.text)).body.result;
+		expect(rejected).toMatchObject({ isError: true, details: { errorCode: "invalid-input" },
+			content: [{ type: "text", text: `same text is stored as retired memory ${old.id}; reword the correction so it can be stored as new` }] });
+		expect([fixture.store.getById(old.id), fixture.store.getById(next)]).toEqual(before);
+		expect(countRows()).toBe(2);
+	});
+
+	it.each(["episodic", "state"] as const)("refuses remember of retired %s text without reopening the row", async category => {
+		const old = await fixture.store.store({ text: "The release owner is Dana.", category, projectId: PROJECT,
+			...(category === "state" ? { offlineFamily: true } : {}) });
+		const next = (await correct(old.id, "The release owner is Jordan.")).body.result.details.id;
+		const before = [fixture.store.getById(old.id), fixture.store.getById(next)];
+		const rejected = (await fixture.post("/v1/mutate", { scope: fixture.scope,
+			op: { op: "store", content: old.text, category } })).body.result;
+		expect(rejected).toMatchObject({ isError: true, content: [{ type: "text",
+			text: `same text is stored as retired memory ${old.id}; reword the correction so it can be stored as new` }] });
+		expect(rejected.details.id).toBeUndefined();
+		expect([fixture.store.getById(old.id), fixture.store.getById(next)]).toEqual(before);
+		expect(countRows()).toBe(2);
+	});
+
+	it("does not revive a retired profile at the trusted store boundary", async () => {
+		const filing = JSON.stringify({ section_name: "preferences.drinks", state: "confirmed", tier: "core" });
+		const old = await fixture.store.store({ text: "The user prefers jasmine tea.", category: "profile",
+			projectId: PROJECT, trusted: true, metadata: filing });
+		const next = (await correct(old.id, "The user prefers oolong tea.")).body.result.details.id;
+		const before = [fixture.store.getById(old.id), fixture.store.getById(next)];
+		const stored = await fixture.store.store({ text: old.text, category: "profile", projectId: PROJECT,
+			trusted: true, metadata: filing });
+		expect(stored.id).toBe(old.id);
+		expect([fixture.store.getById(old.id), fixture.store.getById(next)]).toEqual(before);
+		expect(countRows()).toBe(2);
+	});
+
+	it("still revives an invalidated profile that was never superseded", async () => {
+		const filing = JSON.stringify({ section_name: "preferences.drinks", state: "confirmed", tier: "core" });
+		const old = await fixture.store.store({ text: "The user prefers jasmine tea.", category: "profile",
+			projectId: PROJECT, trusted: true, metadata: filing });
+		fixture.database.sqlite.prepare("UPDATE nodix_memories SET metadata = json_set(metadata, '$.invalidated_at', ?) WHERE id = ?").run(Date.now(), old.id);
+		expect(metadata(old.id).invalidated_at).toBeDefined();
+		const revived = await fixture.store.store({ text: old.text, category: "profile", projectId: PROJECT, trusted: true, metadata: filing });
+		expect(revived.id).toBe(old.id);
+		expect(metadata(old.id).invalidated_at).toBeUndefined();
+		expect(metadata(old.id).superseded_by).toBeUndefined();
+		expect(countRows()).toBe(1);
+	});
+
 	it("creates a fresh successor and closes the old row in the service transaction", async () => {
 		await fixture.close();
 		fixture = await createMemUpdateFixture(embedder, {
@@ -180,10 +250,11 @@ describe("service-owned memory correction", () => {
 		}
 	});
 
-	it("preserves fact filing and entity relations while replacing summaries, access data, and assertion order", async () => {
+	it("preserves fact filing without copying relations while replacing summaries, access data, and assertion order", async () => {
 		const old = await atomic("The user prefers jasmine tea.", { metadata: {
 			section_name: "preferences.drinks", fact_key: "profile:preferences.drinks", entity_id: "entity:user",
 			l2_content: "The user prefers jasmine tea.", summary: "jasmine tea", access_count: 9,
+			relations: [{ subject: "user", predicate: "PREFERS", object: "jasmine tea" }],
 		}, relations: [{ subject: "user", predicate: "PREFERS", object: "tea" }] });
 		const start = Date.now();
 		const result = await correct(old.id, "The user prefers oolong tea.");
@@ -195,12 +266,15 @@ describe("service-owned memory correction", () => {
 		expect(nextMeta).toMatchObject({ section_name: "preferences.drinks", fact_key: "profile:preferences.drinks", entity_id: "entity:user", source: "manual" });
 		expect(JSON.stringify(nextMeta)).not.toContain("jasmine tea");
 		expect(nextMeta.idempotency_key).toBeUndefined();
+		expect(nextMeta.relations).toBeUndefined();
 		expect(nextMeta.access_count ?? 0).toBe(0);
 		const order = readMemorySourceOrder(next?.metadata ?? "{}");
 		expect(order.valid_from).toBeNull();
 		expect(order.session_moment).toBeGreaterThanOrEqual(start);
 		expect(next?.timestamp).toBeGreaterThanOrEqual(start);
 		expect(fixture.database.sqlite.prepare("SELECT subject, predicate, object FROM nodix_memory_relations WHERE source_card_id = ?").all(next?.id))
+			.toEqual([]);
+		expect(fixture.database.sqlite.prepare("SELECT subject, predicate, object FROM nodix_memory_relations WHERE source_card_id = ?").all(old.id))
 			.toEqual([{ subject: "user", predicate: "PREFERS", object: "tea" }]);
 		expect(metadata(old.id).invalidated_at).toBeDefined();
 	});
