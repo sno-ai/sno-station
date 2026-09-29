@@ -174,6 +174,7 @@ Object.assign(MemoryStore.prototype, {
 			const rowMetadata = this.parseMetadataObject(row.metadata);
 			return (
 				(row.lane ?? "active") === "active" &&
+				typeof rowMetadata.superseded_by !== "string" &&
 				rowMetadata.invalidated_at !== undefined &&
 				rowMetadata.invalidated_at !== null &&
 				row.text === text

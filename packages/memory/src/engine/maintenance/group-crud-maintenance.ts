@@ -4,6 +4,7 @@
  */
 
 import { randomUUID } from "node:crypto";
+import { createLogger } from "@snoai/utils/logger";
 import attributeDictionary from "../../../config/attribute-dictionary.json" with { type: "json" };
 import stateVocabulary from "../../../config/state-vocabulary.json" with { type: "json" };
 import {
@@ -29,6 +30,7 @@ const IDENTITY_DECISION = "group_crud_maintenance_identity";
 const stateSlugList = stateVocabulary.slugs.map(({ slug }) => slug);
 const stateSlugs = new Set(stateSlugList);
 const profileSlugs = new Set(attributeDictionary.slugs.map(({ slug }) => slug));
+const log = createLogger("sno-station-mem:group-maintenance");
 
 interface MemoryRow {
 	rowid: number;
@@ -244,10 +246,21 @@ function markStateKeyingUndecided(
 	changed: Set<string>,
 ): void {
 	metadata[STATE_KEYING_DECISION] = "undecided";
-	database
-		.prepare("UPDATE nodix_memories SET metadata = ? WHERE id = ?")
-		.run(JSON.stringify(metadata), row.id);
-	changed.add(row.id);
+	if (updateKeyedRow(database, row, row.attribute, metadata)) changed.add(row.id);
+}
+
+function updateKeyedRow(database: SqliteDatabaseLike, row: MemoryRow, attribute: string | null, metadata: Record<string, unknown>): boolean {
+	const result = database.prepare(`UPDATE nodix_memories SET attribute = ?, metadata = ?
+		WHERE id = ? AND text = ? AND metadata = ? AND subject IS ? AND attribute IS ?
+			AND category = ? AND timestamp = ? AND lane = 'active'
+			AND (NOT json_valid(metadata) OR json_extract(metadata, '$.superseded_by') IS NULL)`)
+		.run(attribute, JSON.stringify(metadata), row.id, row.text, row.metadata, row.subject,
+			row.attribute, row.category, row.timestamp) as { changes: number };
+	if (!result.changes) log.info("Group keying target changed or closed; planned write was not applied", { id: row.id }, {
+		event_name: "memory.group_maintenance.stale_keying", file: "packages/memory/src/engine/maintenance/group-crud-maintenance.ts",
+		function: "updateKeyedRow", site_id: "group-maintenance.stale-keying",
+	});
+	return result.changes > 0;
 }
 
 async function keyStateRows(
@@ -258,9 +271,6 @@ async function keyStateRows(
 	undecided: Set<string>,
 	finalAttempt: boolean,
 ): Promise<void> {
-	const update = database.prepare(
-		"UPDATE nodix_memories SET attribute = ?, metadata = ? WHERE id = ?",
-	);
 	for (const row of rows) {
 		if (row.category !== "state" || (row.attribute && stateSlugs.has(row.attribute))) continue;
 		const metadata = readObject(row.metadata, `Memory row '${row.id}' metadata`);
@@ -292,8 +302,7 @@ async function keyStateRows(
 		delete metadata["section_name"];
 		delete metadata["keying_note"];
 		delete metadata[STATE_KEYING_DECISION];
-		update.run(attribute, JSON.stringify(metadata), row.id);
-		changed.add(row.id);
+		if (updateKeyedRow(database, row, attribute, metadata)) changed.add(row.id);
 		undecided.delete(row.id);
 	}
 }
@@ -361,9 +370,6 @@ async function keyProfileRows(
 	undecided: Set<string>,
 	finalAttempt: boolean,
 ): Promise<void> {
-	const update = database.prepare(
-		"UPDATE nodix_memories SET attribute = ?, metadata = ? WHERE id = ?",
-	);
 	for (const row of rows) {
 		if (row.category !== "profile" || (row.attribute && profileSlugs.has(row.attribute))) continue;
 		const metadata = readObject(row.metadata, `Memory row '${row.id}' metadata`);
@@ -380,16 +386,14 @@ async function keyProfileRows(
 			undecided.add(row.id);
 			if (finalAttempt) {
 				metadata[KEYING_DECISION] = "undecided";
-				update.run(null, JSON.stringify(metadata), row.id);
-				changed.add(row.id);
+				if (updateKeyedRow(database, row, null, metadata)) changed.add(row.id);
 			}
 			continue;
 		}
 		metadata["section_name"] = attribute;
 		delete metadata["keying_note"];
 		delete metadata[KEYING_DECISION];
-		update.run(attribute, JSON.stringify(metadata), row.id);
-		changed.add(row.id);
+		if (updateKeyedRow(database, row, attribute, metadata)) changed.add(row.id);
 		undecided.delete(row.id);
 	}
 }
@@ -408,12 +412,10 @@ function recordNewIdentityDecision(
 	rows: readonly MemoryRow[],
 	changed: Set<string>,
 ): void {
-	const update = database.prepare("UPDATE nodix_memories SET metadata = ? WHERE id = ?");
 	for (const row of rows) {
 		const metadata = readObject(row.metadata, `Memory row '${row.id}' metadata`);
 		metadata[IDENTITY_DECISION] = "new";
-		update.run(JSON.stringify(metadata), row.id);
-		changed.add(row.id);
+		if (updateKeyedRow(database, row, row.attribute, metadata)) changed.add(row.id);
 	}
 }
 
@@ -517,7 +519,8 @@ async function mergeSplitEntities(
 	const entityKey = (entity: EntityRow): string => `${entity.projectId}\u0000${entity.entityId}`;
 	for (const source of entities) {
 		if (mergedAway.has(entityKey(source)) || mergedInto.has(entityKey(source))) continue;
-		const sourceRows = readRows(database).filter(
+		const observedRows = readRows(database);
+		const sourceRows = observedRows.filter(
 			(row) => row.projectId === source.projectId && row.subject === source.entityId,
 		);
 		if (sourceRows.length === 0) continue;
@@ -558,6 +561,15 @@ async function mergeSplitEntities(
 		if (!target) throw new Error("Entity identity answer named an entity outside the offered set");
 		const mergeId = randomUUID();
 		const apply = database.transaction(() => {
+			const expected = observedRows.filter(row => row.projectId === source.projectId && (row.subject === source.entityId || row.subject === target.entityId));
+			const current = readRows(database).filter(row => row.projectId === source.projectId && (row.subject === source.entityId || row.subject === target.entityId));
+			if (current.length !== expected.length || current.some(row => !expected.some(old => old.id === row.id && old.metadata === row.metadata && old.text === row.text))) {
+				log.info("Entity merge target changed; planned merge was not applied", { entity_id: source.entityId }, {
+					event_name: "memory.group_maintenance.stale_merge", file: "packages/memory/src/engine/maintenance/group-crud-maintenance.ts",
+					function: "mergeSplitEntities", site_id: "group-maintenance.stale-merge",
+				});
+				return false;
+			}
 			mergeRows(database, source, target, mergeId, changed);
 			journalMerge(
 				database,
@@ -566,8 +578,9 @@ async function mergeSplitEntities(
 				target,
 				offered.map(({ entityId }) => entityId),
 			);
+			return true;
 		});
-		apply.immediate();
+		if (!apply.immediate()) continue;
 		mergedAway.add(entityKey(source));
 		mergedInto.add(entityKey(target));
 	}

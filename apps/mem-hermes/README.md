@@ -19,7 +19,9 @@ another profile root. If the settings file is missing or unreadable, the plugin 
 path and asks you to run `sno setup`.
 
 The plugin offers `sno_memory_recall`, `sno_memory_get`, `sno_memory_remember`, and
-`sno_memory_correct`. It also captures direct turns and prepares a short working brief.
+`sno_memory_correct`. Correction returns a fresh successor id; the previous entry remains visible as retired
+history. Primary agents capture direct turns and receive the service memory block at session
+start and before prompts. Child agents can use explicit tools but do not inject or capture memory.
 
 ## Update and remove
 
