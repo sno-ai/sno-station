@@ -98,7 +98,7 @@ function readSemanticMetaRows(
 			// row with malformed metadata is treated as not-invalidated instead of
 			// throwing and aborting the whole batch.
 			conditions.push(
-				"(NOT json_valid(m.metadata) OR json_extract(m.metadata, '$.invalidated_at') IS NULL OR json_extract(m.metadata, '$.invalidated_at') > ?)",
+				`(NOT json_valid(m.metadata) OR json_extract(m.metadata, '$.invalidated_at') IS NULL OR json_extract(m.metadata, '$.invalidated_at') > ?${opts.includeRetired ? " OR json_extract(m.metadata, '$.superseded_by') IS NOT NULL" : ""})`,
 			);
 			params.push(opts.excludeInvalidatedBefore);
 		}
@@ -291,7 +291,7 @@ Object.assign(MemoryStore.prototype, {
 			// Same json_valid guard as the semantic-search branch above: a legacy
 			// row with malformed metadata must not abort the whole keyword query.
 			sql +=
-				" AND (NOT json_valid(m.metadata) OR json_extract(m.metadata, '$.invalidated_at') IS NULL OR json_extract(m.metadata, '$.invalidated_at') > ?)";
+				` AND (NOT json_valid(m.metadata) OR json_extract(m.metadata, '$.invalidated_at') IS NULL OR json_extract(m.metadata, '$.invalidated_at') > ?${opts.includeRetired ? " OR json_extract(m.metadata, '$.superseded_by') IS NOT NULL" : ""})`;
 			params.push(opts.excludeInvalidatedBefore);
 		}
 		sql += " ORDER BY rank ASC LIMIT ?";
