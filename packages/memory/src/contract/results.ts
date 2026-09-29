@@ -5,7 +5,7 @@ import type { JsonValue } from "./inputs";
 
 import { DEGRADED_REASONS, type DegradedReason } from "./error";
 export { DEGRADED_REASONS, type DegradedReason } from "./error";
-export type Result<T> = T & ({ degraded: false } | { degraded: true; reason: DegradedReason });
+export type Result<T> = T & ({ degraded: false } | { degraded: true; reason: DegradedReason; error?: string });
 export type ToolResponse = {
 	isError?: boolean;
 	content: Array<{ type: "text"; text: string }>;
@@ -74,7 +74,7 @@ export const inspectDataSchema: z.ZodType<InspectData, unknown> = z.discriminate
 function resultSchema<T extends z.ZodRawShape>(shape: T) {
 	return z.discriminatedUnion("degraded", [
 		z.strictObject({ ...shape, degraded: z.literal(false) }),
-		z.strictObject({ ...shape, degraded: z.literal(true), reason: z.enum(DEGRADED_REASONS) }),
+		z.strictObject({ ...shape, degraded: z.literal(true), reason: z.enum(DEGRADED_REASONS), error: z.string().optional() }),
 	]);
 }
 

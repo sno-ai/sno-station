@@ -31,6 +31,8 @@ export type InitRegistration = Registration;
 export type RecallOptions = {
 	corpus?: "memory" | "wiki" | "all" | "sessions";
 	source?: "auto" | "manual" | "native";
+	injectionPhase?: "session-start" | "prompt" | "first-prompt";
+	maxChars?: number;
 	limit?: number;
 	minScore?: number;
 	category?: MemoryCategory;
@@ -43,6 +45,7 @@ export type RecallOptions = {
 	aggregation?: { operation: (typeof AGGREGATION_OPERATIONS)[number]; terms: string[] };
 };
 export type Mutation =
+	| { op: "correct"; id: string; content: string }
 	| { op: "store"; content: string; category?: MemoryCategory; importance?: number; metadata?: Record<string, JsonValue> }
 	| { op: "forget"; id?: string; query?: string; suppressKey?: { subject: string; attribute: string }; suppressContent?: string; minScore?: number; maxDelete?: number; confirm?: boolean }
 	| { op: "update"; id: string; text?: string; category?: MemoryCategory; importance?: number; metadata?: Record<string, JsonValue>; timestamp?: number }
@@ -114,6 +117,8 @@ export const initRegistrationSchema: z.ZodType<InitRegistration, unknown> = regi
 export const recallOptionsSchema: z.ZodType<RecallOptions, unknown> = z.object({
 	corpus: z.enum(["memory", "wiki", "all", "sessions"]).default("memory"),
 	source: z.enum(["auto", "manual", "native"]).optional(),
+	injectionPhase: z.enum(["session-start", "prompt", "first-prompt"]).optional(),
+	maxChars: z.number().int().nonnegative().optional(),
 	limit: z.number().int().optional(), minScore: z.number().finite().optional(),
 	category: category.optional(), includeMetadata: z.boolean().optional(),
 	includeHistory: z.boolean().optional(), includeRefused: z.boolean().optional(),
@@ -125,6 +130,7 @@ export const recallOptionsSchema: z.ZodType<RecallOptions, unknown> = z.object({
 	}).optional(),
 });
 export const mutationSchema: z.ZodType<Mutation, unknown> = z.discriminatedUnion("op", [
+	z.strictObject({ op: z.literal("correct"), id: nonempty, content: nonempty }),
 	z.object({ op: z.literal("store"), content: nonempty,
 		category: category.optional(),
 		importance: z.number().finite().optional(), metadata: metadata.optional() }),

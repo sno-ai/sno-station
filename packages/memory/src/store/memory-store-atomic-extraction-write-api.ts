@@ -20,6 +20,8 @@ import {
 	closeMemoryRow,
 	sameSourceTurn,
 	compareMemorySourceOrder,
+	compareMemoryRetirementOrder,
+	readCorrectionMoment,
 	type MemorySourceOrder,
 	readMemorySourceOrder,
 	readMemorySourceOrderOrOldest,
@@ -223,9 +225,9 @@ function insertCard(
 	}
 	const sourceOrder: MemorySourceOrder = {
 		valid_from: card.validFrom,
-		// The row's session moment: `valid_from` when the model resolved a date, else the session's
-		// own time. `card.timestamp` already holds exactly that, and it is the order fallback the
-		// comparator uses when `valid_from` is null.
+		// The row's session moment: the source session's own time. `card.timestamp` holds exactly
+		// that (`atomic-write-projection.ts` `eventTime`); an event date lives in `valid_from`, never
+		// here, and this is the order fallback the comparator uses when `valid_from` is null.
 		session_moment: card.timestamp,
 		session_ordinal: sessionOrdinal,
 		global_turn_index: card.globalTurnIndex,
@@ -439,17 +441,28 @@ function closeOnArrival(
 	prepared: PreparedAtomicCard,
 	order: MemorySourceOrder,
 ): void {
-	if (prepared.card.endsCurrent) return;
 	if (!isOneCardinalityAttribute(prepared.card.attribute)) return;
 	// A sibling from the same turn is neither the newest row that would close this one nor an
 	// older row this one closes: the facets of one statement stay live together.
 	const openRows = openGroupRows(store, input, prepared).filter(
 		(row) => !sameSourceTurn(order, readMemorySourceOrderOrOldest(row.metadata)),
 	);
+	const correction = openRows.find(row => {
+		const correctedAt = readCorrectionMoment(store.sqlite, row.id);
+		return correctedAt !== undefined && order.session_moment !== undefined && order.session_moment < correctedAt;
+	});
+	if (correction) {
+		closeMemoryRow(store.sqlite, { targetRowId: prepared.id, closingRowId: correction.id,
+			closingOrder: readMemorySourceOrderOrOldest(correction.metadata),
+			closingValidFrom: correction.validFrom, supersededAt: input.nowMs, validUntilMode: "clear" });
+		journalCloseOnArrival(store, input, prepared, "done", 1, `closed_on_arrival:${correction.id}`);
+		return;
+	}
+	if (prepared.card.endsCurrent) return;
 	const newest = openRows[0];
 	if (!newest) return;
 	const newestOrder = readMemorySourceOrderOrOldest(newest.metadata);
-	const comparison = compareMemorySourceOrder(order, newestOrder);
+	const comparison = compareMemoryRetirementOrder(store.sqlite, prepared.id, order, newest.id, newestOrder);
 	if (comparison < 0) {
 		closeMemoryRow(store.sqlite, {
 			targetRowId: prepared.id,
@@ -670,7 +683,8 @@ export async function readAtomicArrivalRetirementCandidateSet(
 		return (
 			isOpenRow(candidate) &&
 			!sameSourceTurn(candidateOrder, nominatedOrder) &&
-			compareMemorySourceOrder(candidateOrder, nominatedOrder) < 0
+			compareMemoryRetirementOrder(store.sqlite, candidate.id, candidateOrder,
+				nominatedRow.id, nominatedOrder) < 0
 		);
 	});
 	if (candidates.length === 0) return { nominatedRow: judgedRow(nominatedRow), candidateRows: [] };
@@ -847,6 +861,8 @@ function closeEndedCardAtCreate(
 	prepared: PreparedAtomicCard,
 	order: MemorySourceOrder,
 ): void {
+	const metadata = store.getById(prepared.id)?.metadata;
+	if (metadata && typeof store.parseMetadataObject(metadata).superseded_by === "string") return;
 	const { card } = prepared;
 	if (!card.endsCurrent) return;
 	if (endedCardStaysLive(card)) {

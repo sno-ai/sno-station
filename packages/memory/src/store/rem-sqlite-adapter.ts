@@ -796,6 +796,9 @@ function moveLane(database: SqliteDatabaseLike, input: MoveLaneInput): RemMutati
 	return database.transaction(() => {
 		const row = readMemory(database, input.rowId);
 		if (!row) return { applied: false, reason: "missing" };
+		if (typeof parseMetadata(row.metadata)["superseded_by"] === "string") {
+			return { applied: false, reason: "content_changed" };
+		}
 		if (row.content_hash !== input.plannedContentHash) {
 			return { applied: false, reason: "content_changed" };
 		}
@@ -840,6 +843,9 @@ function writeTextVersion(
 	return database.transaction(() => {
 		const row = readMemory(database, input.rowId);
 		if (!row) return { applied: false, reason: "missing" };
+		if (typeof parseMetadata(row.metadata)["superseded_by"] === "string") {
+			return { applied: false, reason: "content_changed" };
+		}
 		if (row.content_hash !== input.plannedContentHash) {
 			return { applied: false, reason: "content_changed" };
 		}
@@ -880,9 +886,15 @@ function softClose(database: SqliteDatabaseLike, input: SoftCloseInput): RemMuta
 		if (successor.content_hash !== input.plannedSuccessorContentHash) {
 			return { applied: false, reason: "target_changed" };
 		}
+		if (typeof parseMetadata(successor.metadata)["superseded_by"] === "string") {
+			return { applied: false, reason: "target_changed" };
+		}
 		const metadata = parseMetadata(row.metadata);
 		if (metadata["superseded_by"] === input.successorId) {
 			return { applied: false, reason: "already_applied" };
+		}
+		if (typeof metadata["superseded_by"] === "string") {
+			return { applied: false, reason: "content_changed" };
 		}
 		const nextMetadata = JSON.stringify({
 			...metadata,

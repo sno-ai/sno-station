@@ -50,6 +50,7 @@ Object.assign(MemoryRetriever.prototype, {
 			projectIdFilter: context.scopeFilter,
 			category: context.category,
 			includeRefused: context.includeRefused,
+			includeRetired: context.includeRetired,
 			aggregation: context.aggregation,
 			facetPolicy: context.facetPolicy,
 			...(context.excludeInvalidatedBefore !== undefined && { excludeInvalidatedBefore: context.excludeInvalidatedBefore }),
@@ -106,6 +107,7 @@ Object.assign(MemoryRetriever.prototype, {
 			projectIdFilter: context.scopeFilter,
 			category: context.category,
 			includeRefused: context.includeRefused,
+			includeRetired: context.includeRetired,
 			facetPolicy: context.facetPolicy,
 			...(context.excludeInvalidatedBefore !== undefined && {
 				excludeInvalidatedBefore: context.excludeInvalidatedBefore,
@@ -145,7 +147,7 @@ Object.assign(MemoryRetriever.prototype, {
 			"min_score_filter",
 			mapped.map((result) => result.entry.id),
 		);
-		mapped = mapped.filter((result) => result.score >= this.config.minScore);
+		mapped = mapped.filter((result) => result.score >= (context.minScore ?? this.config.minScore));
 		trace?.endStage(
 			mapped.map((result) => result.entry.id),
 			mapped.map((result) => result.score),
@@ -197,6 +199,7 @@ Object.assign(MemoryRetriever.prototype, {
 			projectIdFilter: context.scopeFilter,
 			category: context.category,
 			includeRefused: context.includeRefused,
+			includeRetired: context.includeRetired,
 			facetPolicy: context.facetPolicy,
 			...(context.excludeInvalidatedBefore !== undefined && {
 				excludeInvalidatedBefore: context.excludeInvalidatedBefore,
@@ -338,7 +341,7 @@ Object.assign(MemoryRetriever.prototype, {
 			"min_score_filter",
 			fused.map((result) => result.entry.id),
 		);
-		fused = fused.filter((result) => result.score >= this.config.minScore);
+		fused = fused.filter((result) => result.score >= (context.minScore ?? this.config.minScore));
 		trace?.endStage(
 			fused.map((result) => result.entry.id),
 			fused.map((result) => result.score),

@@ -20,6 +20,7 @@ import "./memory-store-task-lifecycle-api";
 import "./memory-store-todo-api";
 import "./memory-store-task-lifecycle-migration-api";
 import "./memory-store-persistence-api";
+import "./memory-store-correct-api";
 import "./memory-store-update-api";
 import "./memory-store-rem-api";
 import "./memory-store-import-api";

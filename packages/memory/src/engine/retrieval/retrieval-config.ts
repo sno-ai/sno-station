@@ -99,6 +99,7 @@ export interface RetrievalContext {
 	external_reference_visibility?: "public" | "private";
 	query: string;
 	limit: number;
+	minScore?: number;
 	scopeFilter?: string[];
 	category?: MemoryCategory;
 	/**
@@ -127,6 +128,7 @@ export interface RetrievalContext {
 	 * first (PRD 205). Pass `0` for a deliberate history read.
 	 */
 	excludeInvalidatedBefore?: number;
+	includeRetired?: boolean;
 	/**
 	 * Drops rows a group-CRUD close retired. Set by the two serving entries in
 	 * `rem-consumer-retrieval.ts`; it has to reach the store because the candidate list is cut
