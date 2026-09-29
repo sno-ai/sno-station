@@ -250,6 +250,7 @@ export async function retrieveForAutoRecall(
 		diagnostics?: RecallFilterDiagnostics;
 		query: string;
 		limit: number;
+		minScore?: number;
 		scopeFilter: string[];
 		signal?: AbortSignal;
 		sessionId?: string;
@@ -262,6 +263,7 @@ export async function retrieveForAutoRecall(
 	const retrieved = await retriever.retrieve({
 		query: input.query,
 		limit: input.limit,
+		minScore: input.minScore,
 		scopeFilter: input.scopeFilter,
 		...(input.signal === undefined ? {} : { signal: input.signal }),
 		...(input.sessionId === undefined ? {} : { sessionId: input.sessionId }),
@@ -308,6 +310,7 @@ export async function retrieveForMemoryRecallOrEval(
 		...(input.aggregation === undefined ? {} : { aggregation: input.aggregation }),
 		...(input.explicitLocale === undefined ? {} : { explicitLocale: input.explicitLocale }),
 		source: "manual",
+		includeRetired: input.facetPolicy !== "current-only",
 		...(input.facetPolicy === undefined ? {} : { facetPolicy: input.facetPolicy }),
 		allowAggregation: true,
 		excludeInvalidatedBefore: input.nowMs,
