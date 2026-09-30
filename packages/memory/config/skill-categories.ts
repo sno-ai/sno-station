@@ -56,13 +56,13 @@ export const SKILL_CATEGORIES: Record<string, "J" | "M" | "S" | "H" | "T" | "R" 
 	"lh-english-writer": "T",
 };
 
-const promotedSchema = z.object({ source: z.object({ commit: z.string().min(1) }) });
+const publishedSchema = z.object({ source: z.object({ commit: z.string().min(1) }) });
 
 export function skillVersionFor(skillDir: string): string {
 	try {
-		const text = readFileSync(join(skillDir, "PROMOTED.json"), "utf8");
-		const promoted = promotedSchema.parse(JSON.parse(text));
-		return promoted.source.commit.slice(0, 12);
+		const text = readFileSync(join(skillDir, "PUBLISHED.json"), "utf8");
+		const published = publishedSchema.parse(JSON.parse(text));
+		return published.source.commit.slice(0, 12);
 	} catch (error) {
 		if (error instanceof Error && "code" in error && error.code === "ENOENT") return "local";
 		throw error;
