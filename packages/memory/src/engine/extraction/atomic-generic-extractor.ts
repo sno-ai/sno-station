@@ -622,6 +622,7 @@ export function createAtomicGenericExtractionTransport(
 				if (error !== null) throw new Error(error);
 				return null;
 			}
+			// emptyReplyAttempts is 1, so the usage is one reply's; with retries it would be a sum over attempts.
 			const usage = client.getLastUsage();
 			return {
 				text,
