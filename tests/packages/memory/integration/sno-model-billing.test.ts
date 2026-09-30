@@ -3,7 +3,8 @@ import { once } from "node:events";
 import { mkdtempSync, rmSync } from "node:fs";
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import { resolve } from "node:path";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createLlmClient, LlmClientTerminalError, ModelCallRefusedError } from "../../../../packages/memory/src/model/llm-client";
 import { defaultSettings } from "../../../../packages/memory/config/settings";
@@ -277,7 +278,7 @@ describe("Sno model billing Station journeys", () => {
 	for (const hostFails of [false, true]) {
 		it(`runs a real REM pair after Sno refuses and the host ${hostFails ? "fails" : "answers"}`, async () => {
 			const database = createTestDb();
-			const stateRoot = mkdtempSync("/mnt/ramdisk/tmp/daisy-rem-");
+			const stateRoot = mkdtempSync(join(tmpdir(), "daisy-rem-"));
 			const previousProfile = process.env["SNO_PROFILE_DIR"];
 			const previousExpectedPath = process.env["SNO_STATION_MEM_REM_EXPECTED_DB_PATH"];
 			process.env["SNO_PROFILE_DIR"] = stateRoot;
@@ -349,7 +350,7 @@ describe("Sno model billing Station journeys", () => {
 
 	it("keeps one operation id across a group maintenance command", async () => {
 		const database = createTestDb();
-		const stateRoot = mkdtempSync("/mnt/ramdisk/tmp/daisy-group-");
+		const stateRoot = mkdtempSync(join(tmpdir(), "daisy-group-"));
 		const sno = await serve((_request, response) => answer(response, '{"group":"kept"}'));
 		try {
 			const rowId = seedProductionMemory(database.runtime.raw, {
