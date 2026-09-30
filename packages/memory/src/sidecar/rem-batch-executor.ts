@@ -3180,41 +3180,50 @@ export async function buildRemReplaceCandidateQueue(input: {
 		const subjectKey = `${candidate.project_id}\u0000${candidate.subject}`;
 		const subjectGroup = pairsBySubject(candidate) ? subjectGroups.get(subjectKey) : undefined;
 		let found = false;
-		let matches: ReadonlyArray<{ id: string; score: number }>;
-		try {
-			const vector = await lookup.embed(candidate.text);
-			if (subjectGroup !== undefined) {
-				// One read of a subject's vectors serves every row of it.
-				let groupVectors = subjectVectors.get(subjectKey);
-				if (groupVectors === undefined) {
-					groupVectors = lookup.readVectors(subjectGroup.map((row) => row.id));
-					subjectVectors.set(subjectKey, groupVectors);
+		let matches: ReadonlyArray<{ id: string; score: number }> = [];
+		// One inline retry: a single transient failure must not leave the row out of the queue.
+		let lookupError: unknown;
+		for (let attempt = 1; attempt <= 2; attempt += 1) {
+			try {
+				const vector = await lookup.embed(candidate.text);
+				if (subjectGroup !== undefined) {
+					// One read of a subject's vectors serves every row of it.
+					let groupVectors = subjectVectors.get(subjectKey);
+					if (groupVectors === undefined) {
+						groupVectors = lookup.readVectors(subjectGroup.map((row) => row.id));
+						subjectVectors.set(subjectKey, groupVectors);
+					}
+					const cap = ARRIVAL_RETIREMENT_CANDIDATE_CAP;
+					found = pairWithNearest(pairs, candidate, subjectGroup, vector, groupVectors, cap);
 				}
-				const cap = ARRIVAL_RETIREMENT_CANDIDATE_CAP;
-				found = pairWithNearest(pairs, candidate, subjectGroup, vector, groupVectors, cap);
-			}
-			const projectCurrent = currentRows.get(candidate.project_id);
-			if (candidate.category === "episodic" && projectCurrent !== undefined) {
-				let vectors = currentVectors.get(candidate.project_id);
-				if (vectors === undefined) {
-					vectors = lookup.readVectors(projectCurrent.map((row) => row.id));
-					currentVectors.set(candidate.project_id, vectors);
+				const projectCurrent = currentRows.get(candidate.project_id);
+				if (candidate.category === "episodic" && projectCurrent !== undefined) {
+					let vectors = currentVectors.get(candidate.project_id);
+					if (vectors === undefined) {
+						vectors = lookup.readVectors(projectCurrent.map((row) => row.id));
+						currentVectors.set(candidate.project_id, vectors);
+					}
+					const cap = ARRIVAL_RETIREMENT_JUDGED_CANDIDATE_CAP;
+					found = pairWithNearest(pairs, candidate, projectCurrent, vector, vectors, cap) || found;
 				}
-				const cap = ARRIVAL_RETIREMENT_JUDGED_CANDIDATE_CAP;
-				found = pairWithNearest(pairs, candidate, projectCurrent, vector, vectors, cap) || found;
+				matches = await lookup.searchSemantic(vector, {
+					category: candidate.category,
+					limit: Math.min(configuration.retrieval.neighborLimit, candidates.length),
+					minScore: configuration.retrieval.similarityThreshold,
+					projectIdFilter: [candidate.project_id],
+				});
+				lookupError = undefined;
+				break;
+			} catch (error) {
+				lookupError = error;
 			}
-			matches = await lookup.searchSemantic(vector, {
-				category: candidate.category,
-				limit: Math.min(configuration.retrieval.neighborLimit, candidates.length),
-				minScore: configuration.retrieval.similarityThreshold,
-				projectIdFilter: [candidate.project_id],
-			});
-		} catch (error) {
+		}
+		if (lookupError !== undefined) {
 			recordCandidateLookup(repository, jobId, candidate.id, "lookup-failed", {
 				snapshotWatermark,
 				complete: false,
 				recordedAt: new Date().toISOString(),
-				error: error instanceof Error ? error.message : String(error),
+				error: lookupError instanceof Error ? lookupError.message : String(lookupError),
 			});
 			failedLookups += 1;
 			continue;
@@ -3238,16 +3247,14 @@ export async function buildRemReplaceCandidateQueue(input: {
 			recordedAt: new Date().toISOString(),
 		});
 	}
-	// A queue built while a lookup failed is partial, and a stored generation is resumed as it is,
-	// so the failed rows would never be looked up again. Build no queue; the next run starts over.
+	// A row whose lookup failed twice stays unjudged in this generation; the others are still judged.
 	if (failedLookups > 0) {
-		log.warn("replace_candidate_queue_incomplete", { failed_lookups: failedLookups, total: candidates.length }, {
-			event_name: "sno_station_mem.rem-batch-executor.replace.candidate.queue.incomplete",
+		log.warn("replace_candidate_lookup_failed", { failed_lookups: failedLookups, total: candidates.length }, {
+			event_name: "sno_station_mem.rem-batch-executor.replace.candidate.lookup.failed",
 			file: "packages/memory/src/sidecar/rem-batch-executor.ts",
 			function: "buildRemReplaceCandidateQueue",
-			site_id: "rem-batch-executor.buildRemReplaceCandidateQueue.lookup_incomplete",
+			site_id: "rem-batch-executor.buildRemReplaceCandidateQueue.lookup_failed",
 		});
-		return { pairs: [], pairCapBinding: false };
 	}
 	// A scored pair came from the neighbour search, or from a subject's nearest rows; an unscored
 	// one was proposed only because two rows share an address, and on the measured corpus that
