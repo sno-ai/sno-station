@@ -2286,6 +2286,7 @@ async function adjudicateSafely(
 		// Mode routing table: [IMP]-single-settings-file/settings-inventory.md
 		const response = await params.llm.completeText({
 			prompt,
+			hostPrompt: renderAdapterAChatPrompt(pair),
 			callId: "P1",
 			...(params.timeoutMs ? { timeoutMs: params.timeoutMs } : {}),
 			...(params.signal ? { signal: params.signal } : {}),

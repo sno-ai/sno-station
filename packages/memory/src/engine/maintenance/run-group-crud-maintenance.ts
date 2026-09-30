@@ -21,6 +21,7 @@ import { modelCallDestination } from "../../model/model-call-table";
 import { pickLlmRoutingConfig } from "../../model/llm-mode-routing";
 import { getSnoStationMemStateDir } from "../shared/paths";
 import { initSqliteRuntime, openSqliteDatabase } from "../../store/sqlite-runtime";
+import { withMemoryOperation } from "../operation-cancellation";
 
 function readArguments(): { storePath: string } {
 	const [storePath, extra] = process.argv.slice(2);
@@ -71,12 +72,14 @@ async function main(): Promise<void> {
 			...(chatClient && runs("E12") ? { stateKeying: createModelGroupCrudStateKeyingJudgementPort(chatClient) } : {}),
 			...(profileClient ? { profileKeying: createBProfileKeyingTransport(profileClient) } : {}),
 		};
-		console.log(
-			JSON.stringify(await runGroupCrudMaintenancePass({ database: sqlite.db, embedder, ...ports })),
-		);
-		console.log(
-			JSON.stringify(await runGroupCrudMaintenancePass({ database: sqlite.db, embedder, ...ports })),
-		);
+		await withMemoryOperation("group-crud", undefined, async () => {
+			console.log(
+				JSON.stringify(await runGroupCrudMaintenancePass({ database: sqlite.db, embedder, ...ports })),
+			);
+			console.log(
+				JSON.stringify(await runGroupCrudMaintenancePass({ database: sqlite.db, embedder, ...ports })),
+			);
+		});
 	} finally {
 		try {
 			await embedder?.dispose();
