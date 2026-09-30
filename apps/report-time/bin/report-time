@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+if [ "${BASH_VERSINFO[0]}" -lt 5 ]; then
+  printf 'report-time: needs Bash 5 or newer on PATH as bash (this one is %s); install it and run again.\n' "$BASH_VERSION" >&2
+  exit 1
+fi
 # report-time — produce a clock time for the USER. Never compute one by hand.
 #
 # UTC timestamps need conversion to the user's zone before they are reported.
@@ -21,6 +25,28 @@
 #
 # Output: "09:31 CET (08:31 UTC)"  — with dates when the instant is not today.
 set -euo pipefail
+
+check_prerequisites() {
+  local tool use missing=0
+  for tool in date sed cat awk ps tr getconf; do
+    case "$tool" in
+      date) use='convert instants to clock times (GNU date)' ;;
+      sed) use='print the usage text' ;;
+      cat) use='read process files' ;;
+      awk) use='compute deadlines' ;;
+      ps) use='confirm a pid is a timeout wrapper' ;;
+      tr) use='clean the process name' ;;
+      getconf) use='read the clock tick rate' ;;
+    esac
+    if ! command -v "$tool" >/dev/null 2>&1 ||
+      { [ "$tool" = date ] && [[ "$(date --version 2>/dev/null)" != *'GNU coreutils'* ]]; }; then
+      printf 'report-time: needs %s — %s; install it and run again.\n' "$tool" "$use" >&2
+      missing=$((missing + 1))
+    fi
+  done
+  [ "$missing" -eq 0 ] || exit 1
+}
+check_prerequisites
 
 if [[ -n "${REPORT_TIME_USER_TZ:-}" ]]; then
   export TZ="$REPORT_TIME_USER_TZ"
