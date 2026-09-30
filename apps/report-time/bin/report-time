@@ -120,6 +120,9 @@ case "${1:-}" in
     # reused — one process's elapsed time married to another's timeout arguments.
     # The start tick is a stable identity AND the exact anchor: it is re-read after
     # the command line and must be unchanged, or this refuses.
+    # Everything below reads /proc. Without it a live pid would be reported as "not running",
+    # which is false; name the missing prerequisite instead.
+    [ -r /proc/uptime ] || die "--pid needs Linux /proc, which this system does not have; no deadline can be read"
     read_start_tick() {  # $1 = pid -> field 22 of /proc/pid/stat, or nothing
       local line
       line=$(cat "/proc/$1/stat" 2>/dev/null) || return 1

@@ -36,5 +36,6 @@ if "$SCRIPT" --pid "$pid" >"$WORK/out" 2>"$WORK/err"; then
   printf 'FAIL non-timeout process accepted\n' >&2; exit 1
 fi
 [[ ! -s "$WORK/out" ]] || { printf 'FAIL refusal wrote stdout\n' >&2; exit 1; }
-grep -F 'not a timeout wrapper' "$WORK/err" >/dev/null || { cat "$WORK/err" >&2; exit 1; }
+if [[ -r /proc/uptime ]]; then expected_refusal='not a timeout wrapper'; else expected_refusal='needs Linux /proc'; fi
+grep -F "$expected_refusal" "$WORK/err" >/dev/null || { cat "$WORK/err" >&2; exit 1; }
 printf 'ok report-time fixed epoch, zone override, interval, and non-timeout refusal\n'
