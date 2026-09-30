@@ -3165,6 +3165,7 @@ export async function buildRemReplaceCandidateQueue(input: {
 			}
 		}
 	}
+	let failedLookups = 0;
 	for (const [index, candidate] of candidates.entries()) {
 		log.info("replace_candidate_progress", {
 			current: index + 1,
@@ -3215,6 +3216,7 @@ export async function buildRemReplaceCandidateQueue(input: {
 				recordedAt: new Date().toISOString(),
 				error: error instanceof Error ? error.message : String(error),
 			});
+			failedLookups += 1;
 			continue;
 		}
 		for (const match of matches) {
@@ -3235,6 +3237,17 @@ export async function buildRemReplaceCandidateQueue(input: {
 			complete: true,
 			recordedAt: new Date().toISOString(),
 		});
+	}
+	// A queue built while a lookup failed is partial, and a stored generation is resumed as it is,
+	// so the failed rows would never be looked up again. Build no queue; the next run starts over.
+	if (failedLookups > 0) {
+		log.warn("replace_candidate_queue_incomplete", { failed_lookups: failedLookups, total: candidates.length }, {
+			event_name: "sno_station_mem.rem-batch-executor.replace.candidate.queue.incomplete",
+			file: "packages/memory/src/sidecar/rem-batch-executor.ts",
+			function: "buildRemReplaceCandidateQueue",
+			site_id: "rem-batch-executor.buildRemReplaceCandidateQueue.lookup_incomplete",
+		});
+		return { pairs: [], pairCapBinding: false };
 	}
 	// A scored pair came from the neighbour search, or from a subject's nearest rows; an unscored
 	// one was proposed only because two rows share an address, and on the measured corpus that
