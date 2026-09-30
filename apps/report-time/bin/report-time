@@ -88,6 +88,10 @@ case "${1:-}" in
     in_sign=1; in_digits=$2
     case "$in_digits" in -*) in_sign=-1; in_digits=${in_digits#-} ;; esac
     epoch=$(( $(date +%s) + in_sign * 10#$in_digits ))
+    # A relative offset is the one path that can land on an absurd instant (12 digits is over 30,000 years),
+    # so it alone is bounded; an absolute timestamp the caller supplies is converted as given.
+    [ "$epoch" -ge 946684800 ] && [ "$epoch" -le 4102444800 ] \
+      || die "--in $2 puts the instant outside 2000-2100 — refusing to print it"
     ;;
   --pid)
     # When does a `timeout`-wrapped process get killed?
