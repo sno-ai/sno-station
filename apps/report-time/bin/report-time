@@ -20,6 +20,8 @@ fi
 #                                 answer, and a wrong deadline looks exactly like a
 #                                 right one. Refuses unless the pid really is a
 #                                 `timeout` wrapper.
+#   report-time --pid 12345 --expect-wall 3600
+#                                 -> the same, and refuses if the process's own limit is not 3600 seconds
 #   report-time "<UTC timestamp>"  -> that UTC instant, converted
 #   report-time @<epoch>            -> that epoch, converted
 #
