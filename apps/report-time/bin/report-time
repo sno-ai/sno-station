@@ -224,11 +224,6 @@ case "${1:-}" in
     ;;
 esac
 
-# Last gate. Anything that slipped through arithmetic and landed outside a sane
-# window is refused rather than printed: a wrong year still looks like a time.
-[ "$epoch" -ge 946684800 ] && [ "$epoch" -le 4102444800 ] \
-  || die "computed instant is outside 2000-2100 — refusing to print it"
-
 u_day=$(date -u   -d "@$epoch" '+%Y-%m-%d')
 l_day=$(date -d "@$epoch" '+%Y-%m-%d')
 today=$(date '+%Y-%m-%d')
