@@ -271,6 +271,19 @@ describe("Sno model billing Station journeys", () => {
 		} finally { await close(sno.server); }
 	});
 
+	it("keeps the usage of charged empty attempts when a later retry is refused", async () => {
+		let sent = 0;
+		const sno = await serve((_request, response) => {
+			if (++sent === 1) { answer(response, ""); return; }
+			response.writeHead(401); response.end();
+		});
+		try {
+			const { llm } = client(sno.url);
+			await expect(complete(llm, "E1")).rejects.toBeInstanceOf(LlmClientTerminalError);
+			expect(llm.getLastUsage()).toEqual({ inputTokens: 1, outputTokens: 1, totalTokens: 2 });
+		} finally { await close(sno.server); }
+	});
+
 	it("keeps each concurrent call's error and usage together on one client", async () => {
 		const sno = await serve((_request, response, body) =>
 			answer(response, JSON.stringify(body).includes("PROMPT-B") ? '{"from":"sno-b"}' : ""));
