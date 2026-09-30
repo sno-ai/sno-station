@@ -347,6 +347,9 @@ export function createLlmClient(config: LlmClientConfig & { refuseOnUnavailable?
 		},
 	});
 
+	// Each call works on its own CallState and publishes it to these two slots once, when it ends,
+	// so a slower concurrent call cannot restore stale values over a faster one.
+	type CallState = { error: string | null; usage: ReturnType<LlmClient["getLastUsage"]> };
 	let lastError: string | null = null;
 	let lastUsage: ReturnType<LlmClient["getLastUsage"]> = null;
 	const resolveRequestTimeoutMs = (request: MemoryLlmRequest): number =>
@@ -361,7 +364,7 @@ export function createLlmClient(config: LlmClientConfig & { refuseOnUnavailable?
 	 * a graceful no-op (not an error), and an unavailable transport also skips.
 	 * Neither case substitutes another tier.
 	 */
-	const resolveRequestTransport = (request: MemoryLlmRequest): RequestTransport | null => {
+	const resolveRequestTransport = (state: CallState, request: MemoryLlmRequest): RequestTransport | null => {
 		if (!config.routing) return "chat-completions";
 		const decision = resolveLlmRoute({
 			callId: request.callId,
@@ -373,22 +376,23 @@ export function createLlmClient(config: LlmClientConfig & { refuseOnUnavailable?
 		}
 		if (decision.transport === "agent-host-seam") {
 			if (config.agentPort) return "agent-host-seam";
-			lastError = `sno-station-mem: llm-client [${request.callId}] routed to agent-host-seam but AgentLlmPort is unavailable`;
-			log.warn("Model client request diagnostic", { call_id: request.callId, destination: destinationFor(request), error: lastError }, { event_name: "memory.llm_client.diagnostic", file: "packages/memory/src/model/llm-client.ts", function: "resolveRequestTransport", site_id: "shared.llm-client.resolveRequestTransport.ffa933b519" });
+			state.error = `sno-station-mem: llm-client [${request.callId}] routed to agent-host-seam but AgentLlmPort is unavailable`;
+			log.warn("Model client request diagnostic", { call_id: request.callId, destination: destinationFor(request), error: state.error }, { event_name: "memory.llm_client.diagnostic", file: "packages/memory/src/model/llm-client.ts", function: "resolveRequestTransport", site_id: "shared.llm-client.resolveRequestTransport.ffa933b519" });
 			return null;
 		}
 		return decision.transport;
 	};
 	const requestContent = async (
+		state: CallState,
 		request: MemoryLlmRequest,
 		systemContent: string,
 		prompt = request.prompt,
 		forcedDestination?: "host",
 	): Promise<{ raw: string; transport: RequestTransport } | null> => {
 		checkMemoryOperation();
-		lastError = null;
-		lastUsage = null;
-		const transport = forcedDestination === "host" ? "agent-host-seam" : resolveRequestTransport(request);
+		state.error = null;
+		state.usage = null;
+		const transport = forcedDestination === "host" ? "agent-host-seam" : resolveRequestTransport(state, request);
 		if (!transport) return null;
 		const route = config.routing ? resolveLlmRoute({ callId: request.callId, config: config.routing }) : null;
 		const destination = forcedDestination ?? (route && "destination" in route ? route.destination : "host");
@@ -439,27 +443,27 @@ export function createLlmClient(config: LlmClientConfig & { refuseOnUnavailable?
 				}
 			});
 			if (result.kind === "cancelled") {
-				lastError = `[${request.callId}] agent-llm cancelled (${result.reason})`;
-				log.warn("Host model request cancelled", { call_id: request.callId, destination, error: lastError }, { event_name: "memory.llm_client.diagnostic", file: "packages/memory/src/model/llm-client.ts", function: "requestContent", site_id: "llm.client.host_cancelled" });
+				state.error = `[${request.callId}] agent-llm cancelled (${result.reason})`;
+				log.warn("Host model request cancelled", { call_id: request.callId, destination, error: state.error }, { event_name: "memory.llm_client.diagnostic", file: "packages/memory/src/model/llm-client.ts", function: "requestContent", site_id: "llm.client.host_cancelled" });
 				throw new LlmClientTerminalError(
 					"cancelled",
-					lastError,
+					state.error,
 					result.reason === "deadline" && !request.signal?.aborted,
 				);
 			}
 			if (result.kind === "error") {
-				lastError = `[${request.callId}] agent-llm ${result.category}: ${result.message}`;
+				state.error = `[${request.callId}] agent-llm ${result.category}: ${result.message}`;
 				recordProviderFailure({ callId: request.callId, destination: "host",
 					provider: "agent-host-seam" as LlmProvider, failure: `host_${result.category}`,
 					durationMs: performance.now() - hostStarted });
 				// The category is its own attribute: joined into `error` it is hashed with the message,
 				// and a run where every host call failed (471 of 471, 2026-09-19) could not be read.
-				log.warn("Host model request failed", { call_id: request.callId, destination, failure_category: result.category, error: lastError }, { event_name: "memory.llm_client.diagnostic", file: "packages/memory/src/model/llm-client.ts", function: "requestContent", site_id: "llm.client.host_error" });
+				log.warn("Host model request failed", { call_id: request.callId, destination, failure_category: result.category, error: state.error }, { event_name: "memory.llm_client.diagnostic", file: "packages/memory/src/model/llm-client.ts", function: "requestContent", site_id: "llm.client.host_error" });
 				if (config.refuseOnUnavailable && (["auth", "credential-expired", "credential-revoked", "exhausted", "throttle"].includes(result.category) || result.message === "no-agent-endpoint" || result.message.includes("HTTP 503") || result.message.includes("worker-not-ready") || result.message.includes("stale-binding"))) {
 					throw new ModelCallRefusedError(request.callId, "host", result.message);
 				}
 				if (isCredentialFailure(result.category)) {
-					throw new LlmClientTerminalError("auth", lastError);
+					throw new LlmClientTerminalError("auth", state.error);
 				}
 				return null;
 			}
@@ -509,14 +513,14 @@ export function createLlmClient(config: LlmClientConfig & { refuseOnUnavailable?
 			});
 			const response = await pipeline.call({ config: pipelineConfig, messages: [prompt] });
 			if (!response.success) {
-				lastError = `sno-station-mem: llm-client [${request.callId}] pipeline error: ${response.error}`;
-				log.warn("Raw model request failed", { call_id: request.callId, destination, error: lastError }, { event_name: "memory.llm_client.diagnostic", file: "packages/memory/src/model/llm-client.ts", function: "requestContent", site_id: "llm.client.raw_pipeline_failed" });
+				state.error = `sno-station-mem: llm-client [${request.callId}] pipeline error: ${response.error}`;
+				log.warn("Raw model request failed", { call_id: request.callId, destination, error: state.error }, { event_name: "memory.llm_client.diagnostic", file: "packages/memory/src/model/llm-client.ts", function: "requestContent", site_id: "llm.client.raw_pipeline_failed" });
 				const category = getProviderTerminalCategory(response.error);
 				if (config.refuseOnUnavailable && (category === "auth" || classifyLlmFailure({ message: response.error }).category === "auth" || /(?:ECONNREFUSED|\b5\d\d\b)/i.test(response.error ?? ""))) throw new ModelCallRefusedError(request.callId, "sno-gpu", response.error ?? "model unavailable");
-				if (category) throw new LlmClientTerminalError(category, lastError);
+				if (category) throw new LlmClientTerminalError(category, state.error);
 				return null;
 			}
-			lastUsage = response.usage;
+			state.usage = response.usage;
 			return { raw: response.content, transport };
 		}
 		const pipelineConfig = buildPipelineConfig(preset, config, endpoint, request, destination, operationId);
@@ -537,22 +541,22 @@ export function createLlmClient(config: LlmClientConfig & { refuseOnUnavailable?
 		});
 
 		if (!response.success) {
-			lastError = `sno-station-mem: llm-client [${request.callId}] pipeline error: ${response.error}`;
-			log.warn("Chat model request failed", { call_id: request.callId, destination, error: lastError }, { event_name: "memory.llm_client.diagnostic", file: "packages/memory/src/model/llm-client.ts", function: "requestContent", site_id: "llm.client.chat_pipeline_failed" });
+			state.error = `sno-station-mem: llm-client [${request.callId}] pipeline error: ${response.error}`;
+			log.warn("Chat model request failed", { call_id: request.callId, destination, error: state.error }, { event_name: "memory.llm_client.diagnostic", file: "packages/memory/src/model/llm-client.ts", function: "requestContent", site_id: "llm.client.chat_pipeline_failed" });
 			const category = getProviderTerminalCategory(response.error);
 			if (config.refuseOnUnavailable && (category === "auth" || classifyLlmFailure({ message: response.error }).category === "auth" || /(?:ECONNREFUSED|\b5\d\d\b)/i.test(response.error ?? ""))) throw new ModelCallRefusedError(request.callId, "sno-gpu", response.error ?? "model unavailable");
-			if (category) throw new LlmClientTerminalError(category, lastError);
+			if (category) throw new LlmClientTerminalError(category, state.error);
 			return null;
 		}
-		lastUsage = response.usage;
+		state.usage = response.usage;
 
 		const raw = response.content;
 		if (!raw) {
 			// Warn, not debug: the default log level is "info", so this line was invisible while it
 			// silently cost a third of one benchmark persona's memories (measured 2026-08-17 — 45
 			// failed extractions, exactly one warn line in the whole run).
-			lastError = `sno-station-mem: llm-client [${request.callId}] empty response from preset ${config.preset}`;
-			log.warn("Model reply empty", { call_id: request.callId, destination, error: lastError }, { event_name: "memory.llm_client.diagnostic", file: "packages/memory/src/model/llm-client.ts", function: "requestContent", site_id: "llm.client.empty_reply" });
+			state.error = `sno-station-mem: llm-client [${request.callId}] empty response from preset ${config.preset}`;
+			log.warn("Model reply empty", { call_id: request.callId, destination, error: state.error }, { event_name: "memory.llm_client.diagnostic", file: "packages/memory/src/model/llm-client.ts", function: "requestContent", site_id: "llm.client.empty_reply" });
 			// Empty text, not `null`: the call reached the endpoint and came back with nothing, which
 			// is the one failure worth asking about again. `null` is reserved for "no call happened"
 			// — routed off, or a pipeline error already classified above — and retrying those would
@@ -567,35 +571,49 @@ export function createLlmClient(config: LlmClientConfig & { refuseOnUnavailable?
 	 * result is returned untouched — it means no call was made, not that the model said nothing.
 	 */
 	const requestContentRetryingEmpty = async (
+		state: CallState,
 		request: MemoryLlmRequest,
 		systemContent: string,
 		deadlineMs: number,
 		prompt = request.prompt,
 	): Promise<{ raw: string; transport: RequestTransport } | null> => {
-		let content = await requestContent(request, systemContent, prompt);
+		let content = await requestContent(state, request, systemContent, prompt);
 		checkMemoryOperation();
+		let usage = state.usage;
 		const attemptLimit = request.emptyReplyAttempts ?? EMPTY_REPLY_ATTEMPTS;
 		for (let attempt = 2; attempt <= attemptLimit; attempt += 1) {
-			if (content === null || content.raw.trim().length > 0) return content;
+			if (content === null || content.raw.trim().length > 0) break;
 			const remainingMs = deadlineMs - performance.now();
 			if (remainingMs <= 0) break;
 			log.debug("Retrying empty model reply", { call_id: request.callId, destination: destinationFor(request), attempt, attempt_limit: attemptLimit }, { event_name: "memory.llm_client.diagnostic", file: "packages/memory/src/model/llm-client.ts", function: "requestContentRetryingEmpty", site_id: "shared.llm-client.requestContentRetryingEmpty.cd874fefff" });
 			// The retry gets the time the deadline has left, not another full request timeout:
 			// at the old wording a 300s capture call could spend 600s and still report success.
-			content = await requestContent({ ...request, timeoutMs: remainingMs }, systemContent, prompt);
+			content = await requestContent(state, { ...request, timeoutMs: remainingMs }, systemContent, prompt);
 			checkMemoryOperation();
+			if (state.usage) {
+				usage = usage
+					? {
+						inputTokens: usage.inputTokens + state.usage.inputTokens,
+						outputTokens: usage.outputTokens + state.usage.outputTokens,
+						totalTokens: usage.totalTokens + state.usage.totalTokens,
+					}
+					: state.usage;
+			}
 		}
+		// Every attempt was a charged Sno request, so the caller reads the sum, not the last attempt.
+		state.usage = usage;
 		return content;
 	};
 
 	const requestContentWithHostFallback = async (
+		state: CallState,
 		request: MemoryLlmRequest,
 		systemContent: string,
 		deadlineMs: number,
 	): Promise<{ raw: string; transport: RequestTransport } | null> => {
 		let content: { raw: string; transport: RequestTransport } | null = null;
 		let snoError: unknown;
-		try { content = await requestContentRetryingEmpty(request, systemContent, deadlineMs); }
+		try { content = await requestContentRetryingEmpty(state, request, systemContent, deadlineMs); }
 		catch (error) { snoError = error; }
 		if (destinationFor(request) !== "sno-gpu" || content?.raw.trim()) {
 			if (snoError !== undefined) throw snoError;
@@ -606,8 +624,8 @@ export function createLlmClient(config: LlmClientConfig & { refuseOnUnavailable?
 			if (snoError !== undefined) throw snoError;
 			return content;
 		}
-		const originalLastError = lastError;
-		const originalLastUsage = lastUsage;
+		const originalLastError = state.error;
+		const originalLastUsage = state.usage;
 		const source = snoError instanceof Error ? snoError.message : originalLastError ?? "";
 		const status = /\bHTTP ([1-5]\d\d)\b/.exec(source)?.[1];
 		let snoFailure = "transport";
@@ -622,7 +640,7 @@ export function createLlmClient(config: LlmClientConfig & { refuseOnUnavailable?
 			hostFailure = "host_prompt_missing";
 		} else {
 			try {
-				const host = await requestContent(request, systemContent,
+				const host = await requestContent(state, request, systemContent,
 					request.hostPrompt ?? request.prompt, "host");
 				if (host?.raw.trim()) {
 					log.info("Sno model call answered by host", { call_id: request.callId,
@@ -638,8 +656,8 @@ export function createLlmClient(config: LlmClientConfig & { refuseOnUnavailable?
 				hostFailure = error instanceof LlmClientTerminalError ? error.category : "transport";
 			}
 		}
-		lastError = originalLastError;
-		lastUsage = originalLastUsage;
+		state.error = originalLastError;
+		state.usage = originalLastUsage;
 		log.warn("Sno model call and host fallback failed", { call_id: request.callId,
 			operation_id: operationId, sno_failure: snoFailure, host_failure: hostFailure }, {
 			event_name: "memory.llm_client.fallback", file: "packages/memory/src/model/llm-client.ts",
@@ -651,11 +669,12 @@ export function createLlmClient(config: LlmClientConfig & { refuseOnUnavailable?
 	return {
 		/** Implements complete json as the local LLM transport operation. */
 		async completeJson<T>(input: MemoryLlmRequest): Promise<T | null> {
+			const state: CallState = { error: null, usage: null };
 			const request = normalizeMemoryLlmRequest({ ...input, signal: memoryOperationSignal(input.signal) });
 			checkMemoryOperation();
 			const deadlineMs = performance.now() + resolveRequestTimeoutMs(request);
 			try {
-				let content = await requestContentWithHostFallback(request, JSON_SYSTEM_CONTENT, deadlineMs);
+				let content = await requestContentWithHostFallback(state, request, JSON_SYSTEM_CONTENT, deadlineMs);
 				if (content === null) return null;
 
 				let parsed = parseJsonResponse<T>(content.raw, input.accept);
@@ -666,11 +685,12 @@ export function createLlmClient(config: LlmClientConfig & { refuseOnUnavailable?
 				if (content.transport === "agent-host-seam" && destinationFor(request) !== "sno-gpu") {
 					const remainingTimeoutMs = Math.floor(deadlineMs - performance.now());
 					if (remainingTimeoutMs <= 0) {
-						lastError = `sno-station-mem: llm-client [${request.callId}] deadline exhausted before JSON repair`;
-						log.warn("Model repair deadline exhausted", { call_id: request.callId, destination: destinationFor(request), error: lastError }, { event_name: "memory.llm_client.diagnostic", file: "packages/memory/src/model/llm-client.ts", function: "completeJson", site_id: "llm.client.json.deadline_exhausted" });
-						throw new LlmClientTerminalError("cancelled", lastError, true);
+						state.error = `sno-station-mem: llm-client [${request.callId}] deadline exhausted before JSON repair`;
+						log.warn("Model repair deadline exhausted", { call_id: request.callId, destination: destinationFor(request), error: state.error }, { event_name: "memory.llm_client.diagnostic", file: "packages/memory/src/model/llm-client.ts", function: "completeJson", site_id: "llm.client.json.deadline_exhausted" });
+						throw new LlmClientTerminalError("cancelled", state.error, true);
 					}
 					content = await requestContentRetryingEmpty(
+						state,
 						{ ...request, timeoutMs: remainingTimeoutMs },
 						JSON_SYSTEM_CONTENT,
 						deadlineMs,
@@ -681,24 +701,26 @@ export function createLlmClient(config: LlmClientConfig & { refuseOnUnavailable?
 					if (parsed.ok) return parsed.value;
 				}
 
-				lastError = `sno-station-mem: llm-client [${request.callId}] ${parsed.error}`;
-				log.warn("Model client request diagnostic", { operation: "completeJson", call_id: request.callId, destination: destinationFor(request), error: lastError }, { event_name: "memory.llm_client.diagnostic", file: "packages/memory/src/model/llm-client.ts", function: "completeJson", site_id: "shared.llm-client.completeJson.e04c8e7e82" });
+				state.error = `sno-station-mem: llm-client [${request.callId}] ${parsed.error}`;
+				log.warn("Model client request diagnostic", { operation: "completeJson", call_id: request.callId, destination: destinationFor(request), error: state.error }, { event_name: "memory.llm_client.diagnostic", file: "packages/memory/src/model/llm-client.ts", function: "completeJson", site_id: "shared.llm-client.completeJson.e04c8e7e82" });
 				return null;
 			} catch (err) {
 				checkMemoryOperation();
 				if (err instanceof LlmClientTerminalError || err instanceof ModelCallRefusedError) throw err;
-				lastError = `sno-station-mem: llm-client [${request.callId}] request failed for preset ${config.preset}: ${err instanceof Error ? err.message : String(err)}`;
-				log.warn("Model request failed", { call_id: request.callId, destination: destinationFor(request), error: lastError }, { event_name: "memory.llm_client.diagnostic", file: "packages/memory/src/model/llm-client.ts", function: "completeJson", site_id: "llm.client.json.request_failed" });
+				state.error = `sno-station-mem: llm-client [${request.callId}] request failed for preset ${config.preset}: ${err instanceof Error ? err.message : String(err)}`;
+				log.warn("Model request failed", { call_id: request.callId, destination: destinationFor(request), error: state.error }, { event_name: "memory.llm_client.diagnostic", file: "packages/memory/src/model/llm-client.ts", function: "completeJson", site_id: "llm.client.json.request_failed" });
 				return null;
-			}
+			} finally { lastError = state.error; lastUsage = state.usage; }
 		},
 
 		async completeText(input: MemoryLlmRequest): Promise<string | null> {
+			const state: CallState = { error: null, usage: null };
 			const request = normalizeMemoryLlmRequest({ ...input, signal: memoryOperationSignal(input.signal) });
 			checkMemoryOperation();
 			const deadlineMs = performance.now() + resolveRequestTimeoutMs(request);
 			try {
 				const content = await requestContentWithHostFallback(
+					state,
 					request,
 					textSystemContent(request),
 					deadlineMs,
@@ -708,10 +730,10 @@ export function createLlmClient(config: LlmClientConfig & { refuseOnUnavailable?
 			} catch (err) {
 				checkMemoryOperation();
 				if (err instanceof LlmClientTerminalError || err instanceof ModelCallRefusedError) throw err;
-				lastError = `sno-station-mem: llm-client [${request.callId}] request failed for preset ${config.preset}: ${err instanceof Error ? err.message : String(err)}`;
-				log.warn("Model client request diagnostic", { call_id: request.callId, destination: destinationFor(request), error: lastError }, { event_name: "memory.llm_client.diagnostic", file: "packages/memory/src/model/llm-client.ts", function: "completeText", site_id: "shared.llm-client.completeText.ffa933b519" });
+				state.error = `sno-station-mem: llm-client [${request.callId}] request failed for preset ${config.preset}: ${err instanceof Error ? err.message : String(err)}`;
+				log.warn("Model client request diagnostic", { call_id: request.callId, destination: destinationFor(request), error: state.error }, { event_name: "memory.llm_client.diagnostic", file: "packages/memory/src/model/llm-client.ts", function: "completeText", site_id: "shared.llm-client.completeText.ffa933b519" });
 				return null;
-			}
+			} finally { lastError = state.error; lastUsage = state.usage; }
 		},
 
 		getResolvedConfig(): Promise<ResolvedLlmConfig> {
