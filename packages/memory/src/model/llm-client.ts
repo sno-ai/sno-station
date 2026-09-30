@@ -661,6 +661,8 @@ export function createLlmClient(config: LlmClientConfig & { refuseOnUnavailable?
 				let parsed = parseJsonResponse<T>(content.raw, input.accept);
 				if (parsed.ok) return parsed.value;
 
+				// The repair re-ask follows the call's own route. For a sno-gpu call that fell back to the host it would go back
+				// to the Sno model that just failed, so only host-routed calls get a repair pass.
 				if (content.transport === "agent-host-seam" && destinationFor(request) !== "sno-gpu") {
 					const remainingTimeoutMs = Math.floor(deadlineMs - performance.now());
 					if (remainingTimeoutMs <= 0) {
