@@ -239,6 +239,25 @@ describe("Sno model billing Station journeys", () => {
 		} finally { await close(sno.server); }
 	});
 
+	it("retains Sno usage and error when the host redo fails or answers empty", async () => {
+		let hostReply: "error" | "empty" = "error";
+		const sno = await serve((_request, response) => answer(response, ""));
+		const host = await serve((_request, response) => {
+			if (hostReply === "error") { response.writeHead(503); response.end(); }
+			else answer(response, "");
+		});
+		try {
+			for (const reply of ["error", "empty"] as const) {
+				hostReply = reply;
+				const { llm } = client(sno.url, host.url);
+				expect(await complete(llm, "E1")).toBeNull();
+				expect(host.requests).toHaveLength(reply === "error" ? 1 : 2);
+				expect(llm.getLastError()).toBe('sno-station-mem: llm-client [E1] no JSON found (chars=0, preview="")');
+				expect(llm.getLastUsage()).toEqual({ inputTokens: 1, outputTokens: 1, totalTokens: 2 });
+			}
+		} finally { await close(sno.server); await close(host.server); }
+	});
+
 	it("uses one operation id for two calls in a scope and no header outside it", async () => {
 		const sno = await serve((_request, response) => answer(response, '{"from":"sno"}'));
 		try {
