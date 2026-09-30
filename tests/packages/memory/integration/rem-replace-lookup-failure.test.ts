@@ -1,5 +1,5 @@
 /** @file rem-replace-lookup-failure.test.ts
- * @purpose Proves a replace queue is not built while a candidate lookup has failed.
+ * @purpose Proves a failed candidate lookup is retried once and never stops the other rows from being judged.
  * @boundary Real REM repository over one real SQLite database; the lookup port is the only fake.
  */
 
@@ -37,8 +37,10 @@ function candidates() {
 	}));
 }
 
-async function build(failingRow?: string) {
-	return buildRemReplaceCandidateQueue({
+async function build(failingRow?: string, failures = Number.POSITIVE_INFINITY) {
+	const embedCalls: string[] = [];
+	let failed = 0;
+	const queue = await buildRemReplaceCandidateQueue({
 		candidates: candidates(),
 		configuration: parseRemOperationalConfiguration({
 			...createRemOwnerDecidedOperationalConfiguration(),
@@ -50,8 +52,14 @@ async function build(failingRow?: string) {
 		snapshotWatermark: "snapshot",
 		lookup: {
 			embed: async (text) => {
-				if (failingRow !== undefined && text.endsWith(`option ${failingRow.slice(-1)}.`)) {
-					throw new Error("transient embedder failure");
+				embedCalls.push(text);
+				if (
+					failingRow !== undefined &&
+					text.endsWith(`option ${failingRow.slice(-1)}.`) &&
+					failed < failures
+				) {
+					failed += 1;
+					throw new Error("embedder failure");
 				}
 				return new Float32Array([1, 0]);
 			},
@@ -59,14 +67,25 @@ async function build(failingRow?: string) {
 			searchSemantic: async () => [],
 		},
 	});
+	return { queue, embedCalls };
 }
 
 describe("REM replace candidate queue", () => {
 	it("builds every address pair when all lookups finish", async () => {
-		expect((await build()).pairs).toHaveLength(3);
+		const { queue, embedCalls } = await build();
+		expect(queue.pairs).toHaveLength(3);
+		expect(embedCalls).toHaveLength(3);
 	});
 
-	it("builds no queue while one lookup has failed, so the failed row is looked up again next run", async () => {
-		expect((await build("row-b")).pairs).toEqual([]);
+	it("looks a row up again once after a single failure and keeps the queue", async () => {
+		const { queue, embedCalls } = await build("row-b", 1);
+		expect(queue.pairs).toHaveLength(3);
+		expect(embedCalls).toHaveLength(4);
+	});
+
+	it("gives up on a row after two failures and still builds the queue for the others", async () => {
+		const { queue, embedCalls } = await build("row-b");
+		expect(queue.pairs).toHaveLength(3);
+		expect(embedCalls).toHaveLength(4);
 	});
 });
