@@ -667,6 +667,7 @@ export function createSignedAtomicMemoryExtractionTransports(
 					prompt: adapterPrompt
 						? renderAdapterAPrompt(pair.older, pair.newer)
 						: renderAdapterAChatPrompt(pair),
+					hostPrompt: renderAdapterAChatPrompt(pair),
 					callId: "E10",
 				}),
 		},

@@ -291,6 +291,7 @@ export interface SnoProfileCompletionRequest {
 	prompt: string;
 	timeoutMs: number;
 	requestId?: string;
+	operationId?: string;
 	maxTokens?: number;
 	singleTokenVerdict?: boolean;
 	signal?: AbortSignal;
@@ -317,6 +318,7 @@ export async function callSnoProfileCompletion(
 				"Content-Type": "application/json",
 				"X-Internal-Token": request.apiKey,
 				...(request.requestId ? { "X-Request-ID": request.requestId } : {}),
+				...(request.operationId ? { "X-Sno-Operation": request.operationId } : {}),
 			},
 			body: JSON.stringify({
 				model: request.model,
@@ -443,6 +445,7 @@ async function snoStationMemDispatch(ctx: LlmixDispatchContext): Promise<Provide
 	if (typeof cfgExt.requestId === "string") headers["X-Request-ID"] = cfgExt.requestId;
 	if (provider === "sno-gpu") {
 		headers["X-Internal-Token"] = ctx.apiKey;
+		if (typeof cfgExt.operationId === "string") headers["X-Sno-Operation"] = cfgExt.operationId;
 	} else {
 		headers.Authorization = `Bearer ${ctx.apiKey}`;
 	}
@@ -603,6 +606,7 @@ export async function callProvider(ctx: LlmixDispatchContext): Promise<LocalCall
 					? { onProviderResponse: cfgExt.onProviderResponse }
 					: {}),
 				...(typeof raw.requestId === "string" ? { requestId: raw.requestId } : {}),
+				...(typeof raw.operationId === "string" ? { operationId: raw.operationId } : {}),
 				...(typeof raw.maxTokens === "number" ? { maxTokens: raw.maxTokens } : {}),
 				...(raw.singleTokenVerdict === true ? { singleTokenVerdict: true } : {}),
 				...(hasAbortSignalShape(raw.signal) ? { signal: raw.signal } : {}),

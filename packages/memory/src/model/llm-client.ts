@@ -1,4 +1,4 @@
-import { memoryOperationSignal, checkMemoryOperation } from "../engine/operation-cancellation";
+import { memoryOperationId, memoryOperationSignal, checkMemoryOperation } from "../engine/operation-cancellation";
 /** @file llm-client.ts
  * @purpose Creates the provider-neutral LLM client facade.
  * @boundary Public LLM client API; JSON parsing and transport live in focused modules.
@@ -171,6 +171,7 @@ function buildPipelineConfig(
 	endpoint: ResolvedLlmEndpoint,
 	request: MemoryLlmRequest,
 	destination: "host" | "sno-gpu",
+	operationId?: string,
 ): LLMConfig &
 	ResolvedLlmConfig & {
 		baseUrl: string;
@@ -205,6 +206,7 @@ function buildPipelineConfig(
 		callId: request.callId,
 		destination,
 		...(request.requestId ? { requestId: request.requestId } : {}),
+		...(operationId ? { operationId } : {}),
 		...(request.promptTemplateHash ? { promptTemplateHash: request.promptTemplateHash } : {}),
 		...(request.extractionSkillHash ? { extractionSkillHash: request.extractionSkillHash } : {}),
 		...(request.signal ? { signal: request.signal } : {}),
@@ -280,6 +282,7 @@ function normalizeMemoryLlmRequest(value: unknown): MemoryLlmRequest {
 	}
 	return {
 		prompt,
+		...(typeof raw.hostPrompt === "string" ? { hostPrompt: raw.hostPrompt } : {}),
 		callId: callId as ModelCallId,
 		...(timeoutMs !== undefined ? { timeoutMs: Number(timeoutMs) } : {}),
 		...(maxTokens !== undefined ? { maxTokens: Number(maxTokens) } : {}),
@@ -380,14 +383,15 @@ export function createLlmClient(config: LlmClientConfig & { refuseOnUnavailable?
 		request: MemoryLlmRequest,
 		systemContent: string,
 		prompt = request.prompt,
+		forcedDestination?: "host",
 	): Promise<{ raw: string; transport: RequestTransport } | null> => {
 		checkMemoryOperation();
 		lastError = null;
 		lastUsage = null;
-		const transport = resolveRequestTransport(request);
+		const transport = forcedDestination === "host" ? "agent-host-seam" : resolveRequestTransport(request);
 		if (!transport) return null;
 		const route = config.routing ? resolveLlmRoute({ callId: request.callId, config: config.routing }) : null;
-		const destination = route && "destination" in route ? route.destination : "host";
+		const destination = forcedDestination ?? (route && "destination" in route ? route.destination : "host");
 		if (transport === "agent-host-seam") {
 			const agentPort = config.agentPort;
 			if (!agentPort) {
@@ -465,6 +469,7 @@ export function createLlmClient(config: LlmClientConfig & { refuseOnUnavailable?
 		checkMemoryOperation();
 		const preset = endpoint.preset;
 		const apiKey = resolveProviderApiKey(config, preset, endpoint.userBaseUrlOverride);
+		const operationId = config.operationId ?? memoryOperationId();
 		if (transport === "raw-completions") {
 			if (preset.provider !== "sno-gpu") {
 				throw new Error("raw completion requires the sno-gpu provider");
@@ -485,13 +490,14 @@ export function createLlmClient(config: LlmClientConfig & { refuseOnUnavailable?
 				log.error("Model client request diagnostic", { call_id: request.callId, destination, error: `sno-station-mem llm-client: raw completion [${request.callId}] set no maxTokens; sending ${RAW_COMPLETION_FALLBACK_MAX_TOKENS} so the call still runs. Fix the caller — without a cap the serving side truncates at 16 tokens.` }, { event_name: "memory.llm_client.diagnostic", file: "packages/memory/src/model/llm-client.ts", function: "requestContent", site_id: "shared.llm-client.requestContent.ff17976562" });
 			}
 			const pipelineConfig = {
-				...buildPipelineConfig(preset, config, endpoint, request, destination),
+				...buildPipelineConfig(preset, config, endpoint, request, destination, operationId),
 					rawCompletion: {
 					endpointUrl: endpoint.url,
 					prompt,
 						timeoutMs: resolveRequestTimeoutMs(request),
 					maxTokens: request.maxTokens ?? RAW_COMPLETION_FALLBACK_MAX_TOKENS,
 						...(request.requestId ? { requestId: request.requestId } : {}),
+						...(operationId ? { operationId } : {}),
 					...(MODEL_CALLS[request.callId].replyParser.snoGpu === "single-token-verdict" ? { singleTokenVerdict: true } : {}),
 					...(request.signal ? { signal: request.signal } : {}),
 				},
@@ -513,7 +519,7 @@ export function createLlmClient(config: LlmClientConfig & { refuseOnUnavailable?
 			lastUsage = response.usage;
 			return { raw: response.content, transport };
 		}
-		const pipelineConfig = buildPipelineConfig(preset, config, endpoint, request, destination);
+		const pipelineConfig = buildPipelineConfig(preset, config, endpoint, request, destination, operationId);
 		pipeline.setKeyPool(preset.provider, new KeyPool(apiKey.split(",")));
 		config.onTransportAttempt?.({
 			callId: request.callId, destination,
@@ -582,6 +588,66 @@ export function createLlmClient(config: LlmClientConfig & { refuseOnUnavailable?
 		return content;
 	};
 
+	const requestContentWithHostFallback = async (
+		request: MemoryLlmRequest,
+		systemContent: string,
+		deadlineMs: number,
+	): Promise<{ raw: string; transport: RequestTransport } | null> => {
+		let content: { raw: string; transport: RequestTransport } | null = null;
+		let snoError: unknown;
+		try { content = await requestContentRetryingEmpty(request, systemContent, deadlineMs); }
+		catch (error) { snoError = error; }
+		if (destinationFor(request) !== "sno-gpu" || content?.raw.trim()) {
+			if (snoError !== undefined) throw snoError;
+			return content;
+		}
+		if (request.signal?.aborted || (snoError instanceof LlmClientTerminalError &&
+			snoError.category === "cancelled" && !snoError.requestTimedOut)) {
+			if (snoError !== undefined) throw snoError;
+			return content;
+		}
+		const originalLastError = lastError;
+		const originalLastUsage = lastUsage;
+		const source = snoError instanceof Error ? snoError.message : originalLastError ?? "";
+		const status = /\bHTTP ([1-5]\d\d)\b/.exec(source)?.[1];
+		let snoFailure = "transport";
+		if (status) snoFailure = `HTTP ${status}`;
+		else if (content) snoFailure = "empty_reply";
+		else if (snoError instanceof LlmClientTerminalError) snoFailure = snoError.category;
+		else if (!config.apiKey?.trim()) snoFailure = "missing_key";
+		const operationId = config.operationId ?? memoryOperationId();
+		let hostFailure = "empty_reply";
+		if (!config.agentPort) hostFailure = "port_unavailable";
+		else if (["E10", "P1", "REM1"].includes(request.callId) && !request.hostPrompt) {
+			hostFailure = "host_prompt_missing";
+		} else {
+			try {
+				const host = await requestContent(request, systemContent,
+					request.hostPrompt ?? request.prompt, "host");
+				if (host?.raw.trim()) {
+					log.info("Sno model call answered by host", { call_id: request.callId,
+						operation_id: operationId, sno_failure: snoFailure, host_outcome: "answered",
+						timeout_ms: resolveRequestTimeoutMs(request) }, { event_name: "memory.llm_client.fallback",
+						file: "packages/memory/src/model/llm-client.ts", function: "requestContentWithHostFallback",
+						site_id: "llm.client.fallback.answered" });
+					return host;
+				}
+				if (host === null) hostFailure = "host_error";
+			} catch (error) {
+				if (request.signal?.aborted) throw error;
+				hostFailure = error instanceof LlmClientTerminalError ? error.category : "transport";
+			}
+		}
+		lastError = originalLastError;
+		lastUsage = originalLastUsage;
+		log.warn("Sno model call and host fallback failed", { call_id: request.callId,
+			operation_id: operationId, sno_failure: snoFailure, host_failure: hostFailure }, {
+			event_name: "memory.llm_client.fallback", file: "packages/memory/src/model/llm-client.ts",
+			function: "requestContentWithHostFallback", site_id: "llm.client.fallback.failed" });
+		if (snoError !== undefined) throw snoError;
+		return content;
+	};
+
 	return {
 		/** Implements complete json as the local LLM transport operation. */
 		async completeJson<T>(input: MemoryLlmRequest): Promise<T | null> {
@@ -589,13 +655,15 @@ export function createLlmClient(config: LlmClientConfig & { refuseOnUnavailable?
 			checkMemoryOperation();
 			const deadlineMs = performance.now() + resolveRequestTimeoutMs(request);
 			try {
-				let content = await requestContentRetryingEmpty(request, JSON_SYSTEM_CONTENT, deadlineMs);
+				let content = await requestContentWithHostFallback(request, JSON_SYSTEM_CONTENT, deadlineMs);
 				if (content === null) return null;
 
 				let parsed = parseJsonResponse<T>(content.raw, input.accept);
 				if (parsed.ok) return parsed.value;
 
-				if (content.transport === "agent-host-seam") {
+				// The repair re-ask follows the call's own route. For a sno-gpu call that fell back to the host it would go back
+				// to the Sno model that just failed, so only host-routed calls get a repair pass.
+				if (content.transport === "agent-host-seam" && destinationFor(request) !== "sno-gpu") {
 					const remainingTimeoutMs = Math.floor(deadlineMs - performance.now());
 					if (remainingTimeoutMs <= 0) {
 						lastError = `sno-station-mem: llm-client [${request.callId}] deadline exhausted before JSON repair`;
@@ -630,7 +698,7 @@ export function createLlmClient(config: LlmClientConfig & { refuseOnUnavailable?
 			checkMemoryOperation();
 			const deadlineMs = performance.now() + resolveRequestTimeoutMs(request);
 			try {
-				const content = await requestContentRetryingEmpty(
+				const content = await requestContentWithHostFallback(
 					request,
 					textSystemContent(request),
 					deadlineMs,

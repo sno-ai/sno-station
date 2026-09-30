@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+if [ "${BASH_VERSINFO[0]}" -lt 5 ]; then
+  printf 'report-time: needs Bash 5 or newer on PATH as bash (this one is %s); install it and run again.\n' "$BASH_VERSION" >&2
+  exit 1
+fi
 # report-time — produce a clock time for the USER. Never compute one by hand.
 #
 # UTC timestamps need conversion to the user's zone before they are reported.
@@ -16,11 +20,35 @@
 #                                 answer, and a wrong deadline looks exactly like a
 #                                 right one. Refuses unless the pid really is a
 #                                 `timeout` wrapper.
+#   report-time --pid 12345 --expect-wall 3600
+#                                 -> the same, and refuses if the process's own limit is not 3600 seconds
 #   report-time "<UTC timestamp>"  -> that UTC instant, converted
 #   report-time @<epoch>            -> that epoch, converted
 #
 # Output: "09:31 CET (08:31 UTC)"  — with dates when the instant is not today.
 set -euo pipefail
+
+check_prerequisites() {
+  local tool use missing=0
+  for tool in date sed cat awk ps tr getconf; do
+    case "$tool" in
+      date) use='convert instants to clock times (GNU date)' ;;
+      sed) use='print the usage text' ;;
+      cat) use='read process files' ;;
+      awk) use='compute deadlines' ;;
+      ps) use='confirm a pid is a timeout wrapper' ;;
+      tr) use='clean the process name' ;;
+      getconf) use='read the clock tick rate' ;;
+    esac
+    if ! command -v "$tool" >/dev/null 2>&1 ||
+      { [ "$tool" = date ] && [[ "$(date --version 2>/dev/null)" != *'GNU coreutils'* ]]; }; then
+      printf 'report-time: needs %s — %s; install it and run again.\n' "$tool" "$use" >&2
+      missing=$((missing + 1))
+    fi
+  done
+  [ "$missing" -eq 0 ] || exit 1
+}
+check_prerequisites
 
 if [[ -n "${REPORT_TIME_USER_TZ:-}" ]]; then
   export TZ="$REPORT_TIME_USER_TZ"
@@ -60,6 +88,10 @@ case "${1:-}" in
     in_sign=1; in_digits=$2
     case "$in_digits" in -*) in_sign=-1; in_digits=${in_digits#-} ;; esac
     epoch=$(( $(date +%s) + in_sign * 10#$in_digits ))
+    # A relative offset is the one path that can land on an absurd instant (12 digits is over 30,000 years),
+    # so it alone is bounded; an absolute timestamp the caller supplies is converted as given.
+    [ "$epoch" -ge 946684800 ] && [ "$epoch" -le 4102444800 ] \
+      || die "--in $2 puts the instant outside 2000-2100 — refusing to print it"
     ;;
   --pid)
     # When does a `timeout`-wrapped process get killed?
@@ -94,6 +126,9 @@ case "${1:-}" in
     # reused — one process's elapsed time married to another's timeout arguments.
     # The start tick is a stable identity AND the exact anchor: it is re-read after
     # the command line and must be unchanged, or this refuses.
+    # Everything below reads /proc. Without it a live pid would be reported as "not running",
+    # which is false; name the missing prerequisite instead.
+    [ -r /proc/uptime ] || die "--pid needs Linux /proc, which this system does not have; no deadline can be read"
     read_start_tick() {  # $1 = pid -> field 22 of /proc/pid/stat, or nothing
       local line
       line=$(cat "/proc/$1/stat" 2>/dev/null) || return 1
@@ -130,22 +165,24 @@ case "${1:-}" in
     [ -n "$dur" ] || die "pid $pid is a timeout wrapper but its duration argument is unreadable"
     [ ${#dur} -le 12 ] || die "pid $pid: timeout duration '$dur' is implausibly large"
 
-    # timeout accepts s/m/h/d suffixes; bare means seconds.
-    # 10# on every branch: `timeout 03600s` is legal and its duration is decimal,
-    # but bash arithmetic would read the leading zero as octal and be 28 min early.
-    case "$dur" in
-      *[0-9]s) wall=$(( 10#${dur%s} )) ;;
-      *[0-9]m) wall=$(( 10#${dur%m} * 60 )) ;;
-      *[0-9]h) wall=$(( 10#${dur%h} * 3600 )) ;;
-      *[0-9]d) wall=$(( 10#${dur%d} * 86400 )) ;;
-      *[0-9])  wall=$(( 10#$dur )) ;;
-      *) die "pid $pid: cannot read '$dur' as a timeout duration" ;;
-    esac
+    # timeout's DURATION is a floating-point number with an optional s/m/h/d suffix;
+    # bare means seconds. Read it in awk: bash arithmetic is integer-only (and would
+    # take a leading zero as octal), so `timeout 1.5h` would otherwise be a syntax error.
+    dur_re='^([0-9]+\.?[0-9]*|\.[0-9]+)[smhd]?$'
+    [[ "$dur" =~ $dur_re ]] || die "pid $pid: cannot read '$dur' as a timeout duration"
+    wall=$(awk -v d="$dur" 'BEGIN {
+      u = substr(d, length(d)); m = 1
+      if (u ~ /[smhd]/) { d = substr(d, 1, length(d) - 1); m = (u == "m") ? 60 : (u == "h") ? 3600 : (u == "d") ? 86400 : 1 }
+      v = d * m; if (v == int(v)) printf "%d", v; else printf "%.6f", v }')
+
+    # GNU `timeout` reads a duration of 0 as "no time limit": the wrapper never fires,
+    # so there is no deadline to report and its start time must not be printed as one.
+    awk -v w="$wall" 'BEGIN { exit !(w > 0) }' || die "pid $pid: a zero duration disables timeout — no deadline exists to report"
 
     # Optional cross-check. If the caller states a wall and the process disagrees,
     # REFUSE — do not silently pick one of two answers.
     if [ -n "$expect_wall" ]; then
-      [ "$expect_wall" = "$wall" ] \
+      awk -v a="$expect_wall" -v b="$wall" 'BEGIN { exit !(a == b) }' \
         || die "pid $pid runs under a ${wall}s wall, not ${expect_wall}s — refusing to report a deadline you did not expect"
     fi
 
@@ -157,7 +194,7 @@ case "${1:-}" in
 
     # A decade is not a deadline, and an absurd wall would push the arithmetic
     # below past the range where fractions stay exact.
-    [ "$wall" -le 315360000 ] || die "pid $pid: a ${wall}s wall is not a deadline anyone is waiting on"
+    awk -v w="$wall" 'BEGIN { exit !(w <= 315360000) }' || die "pid $pid: a ${wall}s wall is not a deadline anyone is waiting on"
 
     hz=$(getconf CLK_TCK 2>/dev/null || echo 100)
 
@@ -192,11 +229,6 @@ case "${1:-}" in
     epoch=$(date -u -d "$*" +%s) || die "cannot read '$*' as a time"
     ;;
 esac
-
-# Last gate. Anything that slipped through arithmetic and landed outside a sane
-# window is refused rather than printed: a wrong year still looks like a time.
-[ "$epoch" -ge 946684800 ] && [ "$epoch" -le 4102444800 ] \
-  || die "computed instant is outside 2000-2100 — refusing to print it"
 
 u_day=$(date -u   -d "@$epoch" '+%Y-%m-%d')
 l_day=$(date -d "@$epoch" '+%Y-%m-%d')

@@ -23,6 +23,7 @@ export type LlmProvider = "openai" | "openrouter" | "sno-gpu";
 
 export type MemoryLlmRequest = {
 	prompt: string;
+	hostPrompt?: string;
 	callId: ModelCallId;
 	/** Content-free correlation token forwarded as X-Request-ID when present. */
 	requestId?: string;
@@ -54,6 +55,7 @@ export interface LlmClientConfig {
 	baseURL?: string;
 	timeoutMs?: number;
 	agentPort?: AgentLlmPort;
+	operationId?: string;
 	onTransportAttempt?: (attempt: {
 		callId: ModelCallId;
 		destination: "host" | "sno-gpu";
@@ -129,6 +131,7 @@ export type DispatchContext = {
 		timeoutMs?: number;
 		userBaseUrlOverride?: boolean;
 		requestId?: string;
+		operationId?: string;
 		promptTemplateHash?: string;
 		extractionSkillHash?: string;
 		onProviderResponse?: (response: ProviderResponseTrace) => void;
@@ -137,6 +140,7 @@ export type DispatchContext = {
 			prompt: string;
 			timeoutMs: number;
 			requestId?: string;
+			operationId?: string;
 			maxTokens?: number;
 			singleTokenVerdict?: boolean;
 			signal?: AbortSignal;
