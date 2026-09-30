@@ -130,26 +130,24 @@ case "${1:-}" in
     [ -n "$dur" ] || die "pid $pid is a timeout wrapper but its duration argument is unreadable"
     [ ${#dur} -le 12 ] || die "pid $pid: timeout duration '$dur' is implausibly large"
 
-    # timeout accepts s/m/h/d suffixes; bare means seconds.
-    # 10# on every branch: `timeout 03600s` is legal and its duration is decimal,
-    # but bash arithmetic would read the leading zero as octal and be 28 min early.
-    case "$dur" in
-      *[0-9]s) wall=$(( 10#${dur%s} )) ;;
-      *[0-9]m) wall=$(( 10#${dur%m} * 60 )) ;;
-      *[0-9]h) wall=$(( 10#${dur%h} * 3600 )) ;;
-      *[0-9]d) wall=$(( 10#${dur%d} * 86400 )) ;;
-      *[0-9])  wall=$(( 10#$dur )) ;;
-      *) die "pid $pid: cannot read '$dur' as a timeout duration" ;;
-    esac
+    # timeout's DURATION is a floating-point number with an optional s/m/h/d suffix;
+    # bare means seconds. Read it in awk: bash arithmetic is integer-only (and would
+    # take a leading zero as octal), so `timeout 1.5h` would otherwise be a syntax error.
+    dur_re='^([0-9]+\.?[0-9]*|\.[0-9]+)[smhd]?$'
+    [[ "$dur" =~ $dur_re ]] || die "pid $pid: cannot read '$dur' as a timeout duration"
+    wall=$(awk -v d="$dur" 'BEGIN {
+      u = substr(d, length(d)); m = 1
+      if (u ~ /[smhd]/) { d = substr(d, 1, length(d) - 1); m = (u == "m") ? 60 : (u == "h") ? 3600 : (u == "d") ? 86400 : 1 }
+      v = d * m; if (v == int(v)) printf "%d", v; else printf "%.6f", v }')
 
     # GNU `timeout` reads a duration of 0 as "no time limit": the wrapper never fires,
     # so there is no deadline to report and its start time must not be printed as one.
-    [ "$wall" -gt 0 ] || die "pid $pid: a zero duration disables timeout — no deadline exists to report"
+    awk -v w="$wall" 'BEGIN { exit !(w > 0) }' || die "pid $pid: a zero duration disables timeout — no deadline exists to report"
 
     # Optional cross-check. If the caller states a wall and the process disagrees,
     # REFUSE — do not silently pick one of two answers.
     if [ -n "$expect_wall" ]; then
-      [ "$expect_wall" = "$wall" ] \
+      awk -v a="$expect_wall" -v b="$wall" 'BEGIN { exit !(a == b) }' \
         || die "pid $pid runs under a ${wall}s wall, not ${expect_wall}s — refusing to report a deadline you did not expect"
     fi
 
@@ -161,7 +159,7 @@ case "${1:-}" in
 
     # A decade is not a deadline, and an absurd wall would push the arithmetic
     # below past the range where fractions stay exact.
-    [ "$wall" -le 315360000 ] || die "pid $pid: a ${wall}s wall is not a deadline anyone is waiting on"
+    awk -v w="$wall" 'BEGIN { exit !(w <= 315360000) }' || die "pid $pid: a ${wall}s wall is not a deadline anyone is waiting on"
 
     hz=$(getconf CLK_TCK 2>/dev/null || echo 100)
 
