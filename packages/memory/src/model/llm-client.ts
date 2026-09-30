@@ -566,6 +566,17 @@ export function createLlmClient(config: LlmClientConfig & { refuseOnUnavailable?
 		return { raw, transport };
 	};
 
+	const addUsage = (
+		total: ReturnType<LlmClient["getLastUsage"]>,
+		more: ReturnType<LlmClient["getLastUsage"]>,
+	): ReturnType<LlmClient["getLastUsage"]> => total && more
+		? {
+			inputTokens: total.inputTokens + more.inputTokens,
+			outputTokens: total.outputTokens + more.outputTokens,
+			totalTokens: total.totalTokens + more.totalTokens,
+		}
+		: total ?? more;
+
 	/**
 	 * Wraps `requestContent` with the bounded re-ask described on `EMPTY_REPLY_ATTEMPTS`. A `null`
 	 * result is returned untouched — it means no call was made, not that the model said nothing.
@@ -590,15 +601,7 @@ export function createLlmClient(config: LlmClientConfig & { refuseOnUnavailable?
 			// at the old wording a 300s capture call could spend 600s and still report success.
 			content = await requestContent(state, { ...request, timeoutMs: remainingMs }, systemContent, prompt);
 			checkMemoryOperation();
-			if (state.usage) {
-				usage = usage
-					? {
-						inputTokens: usage.inputTokens + state.usage.inputTokens,
-						outputTokens: usage.outputTokens + state.usage.outputTokens,
-						totalTokens: usage.totalTokens + state.usage.totalTokens,
-					}
-					: state.usage;
-			}
+			usage = addUsage(usage, state.usage);
 		}
 		// Every attempt was a charged Sno request, so the caller reads the sum, not the last attempt.
 		state.usage = usage;
@@ -648,6 +651,8 @@ export function createLlmClient(config: LlmClientConfig & { refuseOnUnavailable?
 						timeout_ms: resolveRequestTimeoutMs(request) }, { event_name: "memory.llm_client.fallback",
 						file: "packages/memory/src/model/llm-client.ts", function: "requestContentWithHostFallback",
 						site_id: "llm.client.fallback.answered" });
+					// The Sno attempts before the redo were charged too; the caller reads both.
+					state.usage = addUsage(originalLastUsage, state.usage);
 					return host;
 				}
 				if (host === null) hostFailure = "host_error";
