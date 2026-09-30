@@ -1,8 +1,10 @@
 import { AsyncLocalStorage } from "node:async_hooks";
+import { randomUUID } from "node:crypto";
 import { createLogger } from "@snoai/utils/logger";
 
 interface Operation {
-	signal: AbortSignal;
+	id: string;
+	signal?: AbortSignal;
 	writes: number;
 	transactionDepth: number;
 }
@@ -12,21 +14,24 @@ const log = createLogger("sno-station-mem:cancellation");
 
 /** Carries cancellation through the existing nested extraction and reflection writers. */
 export async function withMemoryOperation<T>(method: string, signal: AbortSignal | undefined, run: () => Promise<T>): Promise<T> {
-	if (!signal) return run();
-	const operation: Operation = { signal, writes: 0, transactionDepth: 0 };
+	const operation: Operation = { id: randomUUID(), signal, writes: 0, transactionDepth: 0 };
 	return operations.run(operation, async () => {
 		try {
-			signal.throwIfAborted();
+			signal?.throwIfAborted();
 			const result = await run();
-			signal.throwIfAborted();
+			signal?.throwIfAborted();
 			return result;
 		} finally {
-			if (signal.aborted) log.error("memory.operation.aborted", {
+			if (signal?.aborted) log.error("memory.operation.aborted", {
 				method, outcome: "aborted", writes: operation.writes,
 			}, { event_name: "memory.operation.aborted", file: "packages/memory/src/engine/operation-cancellation.ts",
 				function: "withMemoryOperation", site_id: "memory.operation.aborted" });
 		}
 	});
+}
+
+export function memoryOperationId(): string | undefined {
+	return operations.getStore()?.id;
 }
 
 export function memoryOperationSignal(signal?: AbortSignal): AbortSignal | undefined {
@@ -38,7 +43,7 @@ export function memoryOperationSignal(signal?: AbortSignal): AbortSignal | undef
 
 export function checkMemoryOperation(): void {
 	const operation = operations.getStore();
-	if (!operation?.transactionDepth) operation?.signal.throwIfAborted();
+	if (!operation?.transactionDepth) operation?.signal?.throwIfAborted();
 }
 
 /** One synchronous SQL statement; failed statements never count as completed writes. */
