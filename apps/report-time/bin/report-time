@@ -142,6 +142,10 @@ case "${1:-}" in
       *) die "pid $pid: cannot read '$dur' as a timeout duration" ;;
     esac
 
+    # GNU `timeout` reads a duration of 0 as "no time limit": the wrapper never fires,
+    # so there is no deadline to report and its start time must not be printed as one.
+    [ "$wall" -gt 0 ] || die "pid $pid: a zero duration disables timeout — no deadline exists to report"
+
     # Optional cross-check. If the caller states a wall and the process disagrees,
     # REFUSE — do not silently pick one of two answers.
     if [ -n "$expect_wall" ]; then
