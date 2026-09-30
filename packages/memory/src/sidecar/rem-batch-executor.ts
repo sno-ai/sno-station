@@ -135,7 +135,7 @@ export const REM_MODEL_STAGES = [
 export type RemModelStage = (typeof REM_MODEL_STAGES)[number];
 
 export interface RemModelStageResponsePort {
-	respond(request: { stage: RemModelStage; prompt: string }): Promise<string | null>;
+	respond(request: { stage: RemModelStage; prompt: string; hostPrompt?: string }): Promise<string | null>;
 }
 
 export function createRemModelStageResponsePort(input: RemModelStageResponsePort): RemModelStageResponsePort {
@@ -657,6 +657,7 @@ async function openBatchRuntime(input: {
 		loadStorageExtensions(database);
 		const llm = createLlmClient({
 			preset: FIXED_MEMORY_SNO_EXTRACT_CHAT,
+			operationId: input.jobId,
 			apiKey: settings.snoGpu.apiKey,
 			baseURL: settings.snoGpu.baseUrl,
 			timeoutMs: Math.max(120_000, CODING_SKIN_CHILD_DEADLINE_MS),
@@ -685,9 +686,10 @@ async function openBatchRuntime(input: {
 		const modelStageResponses =
 			input.modelStageResponses ??
 			createRemModelStageResponsePort({
-				respond: async ({ stage, prompt }) => {
+				respond: async ({ stage, prompt, hostPrompt }) => {
 					try { return await llm.completeText({
 						prompt,
+						...(hostPrompt ? { hostPrompt } : {}),
 						callId: remModelCallId(stage),
 						}); }
 					catch (error) {
@@ -2391,11 +2393,12 @@ async function runReplace(input: {
 			const pairPrompt = "off" in pairRoute || pairRoute.destination === "host"
 				? renderAdapterAChatPrompt(ordered.views)
 				: renderAdapterAPrompt(ordered.views.older, ordered.views.newer);
+			const hostPrompt = renderAdapterAChatPrompt(ordered.views);
 			modelTokens += reserveReplaceStage(input.repository, generationId, pairClaim.pairId, invocationId, "rem-replace-pair", pairPrompt, input.jobId);
 			llmCalls += 1;
 			// Model call REM1: REM replace: conflict pair.
 			// Mode routing table: [IMP]-single-settings-file/settings-inventory.md
-			const pairText = await completeTextStage(input.runtime, "rem-replace-pair", pairPrompt);
+			const pairText = await completeTextStage(input.runtime, "rem-replace-pair", pairPrompt, hostPrompt);
 			pairVerdict = pairText === null ? "uncertain" : parseAdapterAChatVerdict(pairText);
 			const validPairResponse = pairText !== null && isAdapterAVerdictReply(pairText);
 			if (validPairResponse) successfulLlmCalls += 1;
@@ -3589,12 +3592,14 @@ async function completeTextStage(
 	runtime: Pick<BatchRuntime, "llm" | "modelStageResponses">,
 	stage: RemModelStage,
 	prompt: string,
+	hostPrompt?: string,
 ): Promise<string | null> {
 	if (runtime.modelStageResponses !== undefined) {
-		return runtime.modelStageResponses.respond({ stage, prompt });
+		return runtime.modelStageResponses.respond({ stage, prompt, ...(hostPrompt ? { hostPrompt } : {}) });
 	}
 	return runtime.llm.completeText({
 		prompt,
+		...(hostPrompt ? { hostPrompt } : {}),
 		callId: remModelCallId(stage),
 	});
 }
