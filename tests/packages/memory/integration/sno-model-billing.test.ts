@@ -254,8 +254,53 @@ describe("Sno model billing Station journeys", () => {
 				expect(await complete(llm, "E1")).toBeNull();
 				expect(host.requests).toHaveLength(reply === "error" ? 1 : 2);
 				expect(llm.getLastError()).toBe('sno-station-mem: llm-client [E1] no JSON found (chars=0, preview="")');
-				expect(llm.getLastUsage()).toEqual({ inputTokens: 1, outputTokens: 1, totalTokens: 2 });
+				// Three empty Sno attempts were each a charged request, so the caller reads their sum.
+				expect(llm.getLastUsage()).toEqual({ inputTokens: 3, outputTokens: 3, totalTokens: 6 });
 			}
+		} finally { await close(sno.server); await close(host.server); }
+	});
+
+	it("sums usage over empty-reply retries that end in an answer", async () => {
+		let sent = 0;
+		const sno = await serve((_request, response) => answer(response, ++sent <= 2 ? "" : '{"from":"sno"}'));
+		try {
+			const { llm } = client(sno.url);
+			expect(await complete(llm, "E1")).toEqual({ from: "sno" });
+			expect(sno.requests).toHaveLength(3);
+			expect(llm.getLastUsage()).toEqual({ inputTokens: 3, outputTokens: 3, totalTokens: 6 });
+		} finally { await close(sno.server); }
+	});
+
+	it("keeps the usage of charged empty attempts when a later retry is refused", async () => {
+		let sent = 0;
+		const sno = await serve((_request, response) => {
+			if (++sent === 1) { answer(response, ""); return; }
+			response.writeHead(401); response.end();
+		});
+		try {
+			const { llm } = client(sno.url);
+			await expect(complete(llm, "E1")).rejects.toBeInstanceOf(LlmClientTerminalError);
+			expect(llm.getLastUsage()).toEqual({ inputTokens: 1, outputTokens: 1, totalTokens: 2 });
+		} finally { await close(sno.server); }
+	});
+
+	it("keeps each concurrent call's error and usage together on one client", async () => {
+		const sno = await serve((_request, response, body) =>
+			answer(response, JSON.stringify(body).includes("PROMPT-B") ? '{"from":"sno-b"}' : ""));
+		const host = await serve((_request, response) => { setTimeout(() => { response.writeHead(503); response.end(); }, 300); });
+		try {
+			const { llm } = client(sno.url, host.url);
+			const slow = llm.completeJson({ callId: "E1", prompt: "PROMPT-A", hostPrompt: "host A", timeoutMs: 2_000, maxTokens: 32 });
+			await new Promise(resolve => setTimeout(resolve, 50));
+			expect(await llm.completeJson({ callId: "E9", prompt: "PROMPT-B", hostPrompt: "host B", timeoutMs: 2_000, maxTokens: 32 }))
+				.toEqual({ from: "sno-b" });
+			// The fast call published its own pair when it ended.
+			expect(llm.getLastError()).toBeNull();
+			expect(llm.getLastUsage()).toEqual({ inputTokens: 1, outputTokens: 1, totalTokens: 2 });
+			expect(await slow).toBeNull();
+			// The slow call ends last and publishes its own Sno failure and summed usage, never a mix.
+			expect(llm.getLastError()).toBe('sno-station-mem: llm-client [E1] no JSON found (chars=0, preview="")');
+			expect(llm.getLastUsage()).toEqual({ inputTokens: 3, outputTokens: 3, totalTokens: 6 });
 		} finally { await close(sno.server); await close(host.server); }
 	});
 
