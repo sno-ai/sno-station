@@ -348,7 +348,8 @@ export function createLlmClient(config: LlmClientConfig & { refuseOnUnavailable?
 	});
 
 	// Each call works on its own CallState and publishes it to these two slots once, when it ends,
-	// so a slower concurrent call cannot restore stale values over a faster one.
+	// so another call's reset or host redo cannot clobber an in-flight call's values. The call that
+	// ends last still wins the slots; callers that read them after an await must serialize.
 	type CallState = { error: string | null; usage: ReturnType<LlmClient["getLastUsage"]> };
 	let lastError: string | null = null;
 	let lastUsage: ReturnType<LlmClient["getLastUsage"]> = null;
@@ -589,22 +590,26 @@ export function createLlmClient(config: LlmClientConfig & { refuseOnUnavailable?
 		prompt = request.prompt,
 	): Promise<{ raw: string; transport: RequestTransport } | null> => {
 		let content = await requestContent(state, request, systemContent, prompt);
-		checkMemoryOperation();
 		let usage = state.usage;
-		const attemptLimit = request.emptyReplyAttempts ?? EMPTY_REPLY_ATTEMPTS;
-		for (let attempt = 2; attempt <= attemptLimit; attempt += 1) {
-			if (content === null || content.raw.trim().length > 0) break;
-			const remainingMs = deadlineMs - performance.now();
-			if (remainingMs <= 0) break;
-			log.debug("Retrying empty model reply", { call_id: request.callId, destination: destinationFor(request), attempt, attempt_limit: attemptLimit }, { event_name: "memory.llm_client.diagnostic", file: "packages/memory/src/model/llm-client.ts", function: "requestContentRetryingEmpty", site_id: "shared.llm-client.requestContentRetryingEmpty.cd874fefff" });
-			// The retry gets the time the deadline has left, not another full request timeout:
-			// at the old wording a 300s capture call could spend 600s and still report success.
-			content = await requestContent(state, { ...request, timeoutMs: remainingMs }, systemContent, prompt);
+		try {
 			checkMemoryOperation();
-			usage = addUsage(usage, state.usage);
+			const attemptLimit = request.emptyReplyAttempts ?? EMPTY_REPLY_ATTEMPTS;
+			for (let attempt = 2; attempt <= attemptLimit; attempt += 1) {
+				if (content === null || content.raw.trim().length > 0) break;
+				const remainingMs = deadlineMs - performance.now();
+				if (remainingMs <= 0) break;
+				log.debug("Retrying empty model reply", { call_id: request.callId, destination: destinationFor(request), attempt, attempt_limit: attemptLimit }, { event_name: "memory.llm_client.diagnostic", file: "packages/memory/src/model/llm-client.ts", function: "requestContentRetryingEmpty", site_id: "shared.llm-client.requestContentRetryingEmpty.cd874fefff" });
+				// The retry gets the time the deadline has left, not another full request timeout:
+				// at the old wording a 300s capture call could spend 600s and still report success.
+				content = await requestContent(state, { ...request, timeoutMs: remainingMs }, systemContent, prompt);
+				usage = addUsage(usage, state.usage);
+				checkMemoryOperation();
+			}
+		} finally {
+			// Every attempt was a charged Sno request, so the caller reads the sum, not the last
+			// attempt, including when a later attempt throws.
+			state.usage = usage;
 		}
-		// Every attempt was a charged Sno request, so the caller reads the sum, not the last attempt.
-		state.usage = usage;
 		return content;
 	};
 
