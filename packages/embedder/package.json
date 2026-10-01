@@ -21,7 +21,7 @@
     "lint": "biome check src/",
     "lint:fix": "biome check --write src/"
   },
-  "devDependencies": { "tsdown": "0.22.5" },
+  "devDependencies": { "tsdown": "0.23.0" },
   "dependencies": {
     "@huggingface/transformers": "^4.3.0",
     "@snoai/utils": "^1.0.0",
