@@ -372,6 +372,7 @@ class SidecarClient:
             headers={
                 "Content-Type": "application/json",
                 "x-sno-station-mem-skin": _SKIN_ID,
+                "x-sidecar-token": self._token(),
             },
             method="POST",
         )
@@ -420,6 +421,11 @@ class SidecarClient:
         if not isinstance(pid, int) or pid < 1:
             raise ValueError("invalid memory service discovery")
         return pid
+
+    def _token(self) -> str:
+        return str(
+            json.loads((self._profile_dir / "station" / "sidecar.json").read_text())["token"]
+        )
 
     def _port(self) -> int:
         discovery = json.loads(
