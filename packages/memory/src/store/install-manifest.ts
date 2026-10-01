@@ -30,7 +30,7 @@ export interface InstallManifestShape {
 	dbPath: string;
 }
 
-/** PRD §3.2 schema. No `lastSeenVersion` / `lastSeenAt`. */
+/** Schema. No `lastSeenVersion` / `lastSeenAt`. */
 export const InstallManifestSchema: z.ZodType<InstallManifestShape, unknown> = z.object({
 	schemaVersion: z.literal(1),
 	dataFormatVersion: z.literal(CURRENT_DATA_FORMAT_VERSION),
@@ -62,7 +62,7 @@ export class ManifestSchemaError extends Error {
 
 /**
  * Thrown when the data dir contains user data (DB / audit log / cost log) but
- * `install.json` is missing. Per PRD §3.3 we refuse to do anything destructive
+ * `install.json` is missing, so nothing destructive happens
  * here; the user must restore `install.json` from backup or move the data aside.
  */
 export class ManifestMissingButDataPresentError extends Error {

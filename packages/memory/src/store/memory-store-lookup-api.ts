@@ -13,7 +13,7 @@ Object.assign(MemoryStore.prototype, {
 		hash: string,
 		category: MemoryCategory,
 	): MemoryRow | undefined {
-		// PRD §4.2 — dedup is keyed on (projectId, content_hash, category) so the same
+		// Dedup is keyed on (projectId, content_hash, category) so the same
 		// text under different categories (e.g. decision vs lesson, user-model vs
 		// agent-model) coexists as distinct rows. content_hash itself stays
 		// text-only to preserve `findByContentHash` semantics.

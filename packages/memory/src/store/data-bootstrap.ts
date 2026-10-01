@@ -32,7 +32,7 @@ export interface BootstrapResult {
 	dataDir: string;
 }
 
-/** Detect "data exists but manifest missing" — PRD §3.3. */
+/** Detect "data exists but manifest missing". */
 function newDirHasUserData(dataDir: string, manifestPath: string): boolean {
 	const manifestTempPrefix = `${basename(manifestPath)}${INSTALL_MANIFEST_TEMP_SUFFIX}`;
 	try {
@@ -45,7 +45,7 @@ function newDirHasUserData(dataDir: string, manifestPath: string): boolean {
 }
 
 /**
- * PRD §3.3 branches:
+ * Branches:
  *   1. manifest exists → read + validate.
  *   2. manifest missing AND data dir contains user data → refuse.
  *   3. manifest missing, dir empty → fresh install.
