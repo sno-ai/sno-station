@@ -1,0 +1,244 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1740000000000,
+      "tag": "0000_initial",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1740000000001,
+      "tag": "0001_virtual_tables",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1740000000002,
+      "tag": "0002_add_indexes",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1740000000003,
+      "tag": "0003_content_hash_lookup_index",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1740000000004,
+      "tag": "0004_chunk_swap",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1740000000005,
+      "tag": "0005_drop_legacy_vec_fts",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1740000000006,
+      "tag": "0006_fts_simple",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1740000000007,
+      "tag": "0007_restore_simple_fts",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1740000000008,
+      "tag": "0008_widen_memory_hash_unique_index",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1740000000009,
+      "tag": "0009_memory_telemetry",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1740000000010,
+      "tag": "0010_provider_mappings",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1740000000011,
+      "tag": "0011_db_optimization",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1740000000012,
+      "tag": "0012_b_profile_lanes",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "6",
+      "when": 1740000000013,
+      "tag": "0013_extraction_timestamps",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "6",
+      "when": 1740000000014,
+      "tag": "0014_extraction_timestamp_source",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "6",
+      "when": 1740000000015,
+      "tag": "0015_task_lifecycle_state",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "6",
+      "when": 1740000000016,
+      "tag": "0016_task_lifecycle_legacy_migration",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "6",
+      "when": 1740000000017,
+      "tag": "0017_unplaced_candidates",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "6",
+      "when": 1740000000018,
+      "tag": "0018_rem_batch_chassis",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "6",
+      "when": 1740000000019,
+      "tag": "0019_profile_recovery_entries",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "6",
+      "when": 1740000000020,
+      "tag": "0020_rem_scan_retry_progress",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1740000000021,
+      "tag": "0021_rem_two_facet_storage",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1740000000022,
+      "tag": "0022_rem_facet_chunk_versions",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1740000000023,
+      "tag": "0023_rem_defect_ledger",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1740000000024,
+      "tag": "0024_rem_unbuilt_foundations",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1740000000025,
+      "tag": "0025_rem_journal_operation_constraint",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1740000000026,
+      "tag": "0026_rem_journal_detail",
+      "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1740000000027,
+      "tag": "0027_legacy_nodix_namespace",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1740000000028,
+      "tag": "0028_memory_timezone",
+      "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1740000000029,
+      "tag": "0029_rem_write_hash_symmetry",
+      "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1740000000030,
+      "tag": "0030_atomic_memory_additive",
+      "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1740000000031,
+      "tag": "0031_atomic_extraction_ledger",
+      "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1740000000032,
+      "tag": "0032_atomic_memory_entities",
+      "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1740000000033,
+      "tag": "0033_todo_own_store",
+      "breakpoints": true
+    }
+  ]
+}

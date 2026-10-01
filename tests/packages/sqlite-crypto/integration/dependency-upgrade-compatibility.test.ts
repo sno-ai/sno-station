@@ -1,0 +1,128 @@
+import { createHash } from "node:crypto";
+import { readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import Database from "better-sqlite3";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import {
+	createCuid2,
+	isCuid2,
+} from "../../../../packages/common-core/src/id-utils.ts";
+import {
+	openEncryptedDb,
+	runIntegrityCheck,
+} from "../../../../packages/sqlite-crypto/src/db.ts";
+import { getDek } from "../../../../packages/sqlite-crypto/src/dek.ts";
+import { WrongKeyError } from "../../../../packages/sqlite-crypto/src/errors.ts";
+import type { Dek } from "../../../../packages/sqlite-crypto/src/types.ts";
+import { makeTestEnv, type TestEnv } from "../_helpers.ts";
+
+// Frozen before upgrading: regenerating this with new libraries loses the old-file proof.
+const fixture = JSON.parse(
+	readFileSync(
+		new URL("./fixtures/dependency-upgrade/old-state.json", import.meta.url),
+		"utf8",
+	),
+) as {
+	dekHex: string;
+	rows: Array<{ id: string; text: string; blobHex: string; json: string }>;
+	files: Record<"plain" | "encrypted", { base64: string; sha256: string }>;
+};
+
+let env: TestEnv;
+beforeEach(() => {
+	env = makeTestEnv("dependency-upgrade");
+});
+afterEach(() => {
+	env.cleanup();
+});
+
+describe("persisted state from dependencies before the upgrade", () => {
+	it.each(["plain", "encrypted"] as const)(
+		"reads, updates, and reopens the old %s database",
+		async (kind) => {
+			const bytes = Buffer.from(fixture.files[kind].base64, "base64");
+			expect(createHash("sha256").update(bytes).digest("hex")).toBe(
+				fixture.files[kind].sha256,
+			);
+			const path = join(env.snoStationCoreConfigDir, `${kind}.db`);
+			writeFileSync(path, bytes);
+			const dek = getDek(fixture.dekHex);
+			expect(dek.toString("hex")).toBe(fixture.dekHex);
+			const open = () =>
+				kind === "plain"
+					? new Database(path)
+					: openEncryptedDb(path, dek);
+			const expected = fixture.rows.map((row) => ({
+				id: row.id,
+				text: row.text,
+				payload: Buffer.from(row.blobHex, "hex"),
+				metadata: row.json,
+			}));
+			const firstRow = expected[0];
+			const secondRow = expected[1];
+			if (!firstRow || !secondRow || expected.length !== 2) {
+				throw new Error(
+					"Old-state fixture must contain exactly two saved records",
+				);
+			}
+			const added = {
+				id: createCuid2(),
+				text: "Saved after upgrade",
+				payload: Buffer.from([0, 255]),
+				metadata: '{"updated":true}',
+			};
+			let db = open();
+			try {
+				expect(
+					db.prepare("SELECT * FROM saved_records ORDER BY rowid").all(),
+				).toEqual(expected);
+				for (const row of expected) expect(isCuid2(row.id)).toBe(true);
+				expect(isCuid2(added.id)).toBe(true);
+				expect(isCuid2("invalid old identifier!")).toBe(false);
+				db.transaction(() => {
+					db.prepare("UPDATE saved_records SET text = ? WHERE id = ?").run(
+						"Updated old record",
+						firstRow.id,
+					);
+					db.prepare(
+						"INSERT INTO saved_records VALUES (@id, @text, @payload, @metadata)",
+					).run(added);
+				})();
+				expect(() =>
+					db.transaction(() => {
+						db.prepare("DELETE FROM saved_records").run();
+						throw new Error("rollback probe");
+					})(),
+				).toThrow("rollback probe");
+			} finally {
+				db.close();
+			}
+			db = open();
+			try {
+				expect(
+					db.prepare("SELECT * FROM saved_records ORDER BY rowid").all(),
+				).toEqual([
+					{ ...firstRow, text: "Updated old record" },
+					secondRow,
+					added,
+				]);
+				expect(db.pragma("integrity_check", { simple: true })).toBe("ok");
+				if (kind === "encrypted")
+					runIntegrityCheck(db as ReturnType<typeof openEncryptedDb>);
+			} finally {
+				db.close();
+				dek.fill(0);
+			}
+			if (kind === "encrypted") {
+				expect(
+					readFileSync(path).includes(Buffer.from("Updated old record")),
+				).toBe(false);
+				const before = readFileSync(path);
+				expect(() =>
+					openEncryptedDb(path, Buffer.alloc(32, 0xff) as Dek),
+				).toThrow(WrongKeyError);
+				expect(readFileSync(path)).toEqual(before);
+			}
+		},
+	);
+});

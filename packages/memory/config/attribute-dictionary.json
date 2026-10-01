@@ -1,0 +1,6112 @@
+{
+  "schema_version": 1,
+  "name": "attribute-dictionary",
+  "generated_at": "2026-08-16",
+  "locales": [
+    "en",
+    "zh",
+    "de",
+    "es",
+    "fr",
+    "ja",
+    "ko",
+    "ru",
+    "zh-Hant"
+  ],
+  "slug_count": 131,
+  "families": [
+    "Ability",
+    "Contact",
+    "Entity",
+    "Finance",
+    "Goal",
+    "Health",
+    "Identity",
+    "Interest",
+    "Personality",
+    "Possession",
+    "Preference",
+    "Relationship",
+    "Routine",
+    "Trait",
+    "Value"
+  ],
+  "slugs": [
+    {
+      "slug": "ability.awards",
+      "family": "Ability",
+      "anchor": "SCH award",
+      "covers": "awards, honors",
+      "synonyms": {
+        "en": [
+          "award",
+          "honor",
+          "prize won"
+        ],
+        "zh": [
+          "奖项",
+          "荣誉"
+        ],
+        "de": [
+          "Auszeichnung"
+        ],
+        "es": [
+          "premio"
+        ],
+        "fr": [
+          "récompense"
+        ],
+        "ja": [
+          "受賞歴"
+        ],
+        "ko": [
+          "수상 경력"
+        ],
+        "ru": [
+          "награда"
+        ],
+        "zh-Hant": [
+          "獎項"
+        ]
+      },
+      "lookup_keys": [
+        "awards",
+        "honors",
+        "honour",
+        "honours",
+        "prizewons"
+      ]
+    },
+    {
+      "slug": "ability.certifications",
+      "family": "Ability",
+      "anchor": "SCH hasCertification",
+      "covers": "certifications, licenses",
+      "synonyms": {
+        "en": [
+          "certification",
+          "license",
+          "credential"
+        ],
+        "zh": [
+          "证书",
+          "资格证"
+        ],
+        "de": [
+          "Zertifizierung"
+        ],
+        "es": [
+          "certificación"
+        ],
+        "fr": [
+          "certification"
+        ],
+        "ja": [
+          "資格"
+        ],
+        "ko": [
+          "자격증"
+        ],
+        "ru": [
+          "сертификат"
+        ],
+        "zh-Hant": [
+          "證書"
+        ]
+      },
+      "lookup_keys": [
+        "certifications",
+        "credentials",
+        "licence",
+        "licences",
+        "licenses"
+      ]
+    },
+    {
+      "slug": "ability.creative",
+      "family": "Ability",
+      "anchor": "GUMO ability",
+      "covers": "creative skills",
+      "synonyms": {
+        "en": [
+          "creative skills",
+          "plays instrument",
+          "draws",
+          "writes"
+        ],
+        "zh": [
+          "创作技能",
+          "才艺"
+        ],
+        "de": [
+          "kreative Fähigkeiten"
+        ],
+        "es": [
+          "habilidades creativas"
+        ],
+        "fr": [
+          "compétences créatives"
+        ],
+        "ja": [
+          "創作スキル"
+        ],
+        "ko": [
+          "창작 능력"
+        ],
+        "ru": [
+          "творческие навыки"
+        ],
+        "zh-Hant": [
+          "創作技能"
+        ]
+      },
+      "lookup_keys": [
+        "creative",
+        "creatives",
+        "creativeskill",
+        "draw",
+        "playsinstruments",
+        "write"
+      ]
+    },
+    {
+      "slug": "ability.practical",
+      "family": "Ability",
+      "anchor": "GUMO ability (swim/drive)",
+      "covers": "practical abilities: driving, swimming, cooking level",
+      "synonyms": {
+        "en": [
+          "can drive",
+          "can swim",
+          "practical skills",
+          "cooking skill"
+        ],
+        "zh": [
+          "生活技能",
+          "会开车",
+          "会游泳"
+        ],
+        "de": [
+          "praktische Fähigkeiten"
+        ],
+        "es": [
+          "habilidades prácticas"
+        ],
+        "fr": [
+          "compétences pratiques"
+        ],
+        "ja": [
+          "生活スキル"
+        ],
+        "ko": [
+          "실용 기술"
+        ],
+        "ru": [
+          "практические навыки"
+        ],
+        "zh-Hant": [
+          "生活技能"
+        ]
+      },
+      "lookup_keys": [
+        "candrives",
+        "canswims",
+        "cookingskills",
+        "practical",
+        "practicals",
+        "practicalskill"
+      ]
+    },
+    {
+      "slug": "ability.professional",
+      "family": "Ability",
+      "anchor": "SCH skills; EKG HAS_SKILL",
+      "covers": "professional skills",
+      "synonyms": {
+        "en": [
+          "professional skills",
+          "expertise",
+          "domain expertise"
+        ],
+        "zh": [
+          "专业技能",
+          "专长"
+        ],
+        "de": [
+          "berufliche Fähigkeiten"
+        ],
+        "es": [
+          "habilidades profesionales"
+        ],
+        "fr": [
+          "compétences professionnelles"
+        ],
+        "ja": [
+          "専門スキル"
+        ],
+        "ko": [
+          "전문 기술"
+        ],
+        "ru": [
+          "профессиональные навыки"
+        ],
+        "zh-Hant": [
+          "專業技能"
+        ]
+      },
+      "lookup_keys": [
+        "domainexpertises",
+        "professional",
+        "professionals",
+        "professionalskill"
+      ]
+    },
+    {
+      "slug": "ability.technical",
+      "family": "Ability",
+      "anchor": "SCH skills",
+      "covers": "technical skills, stacks mastered, and specific systems or codebases they know deeply",
+      "synonyms": {
+        "en": [
+          "technical skills",
+          "tech stack mastered",
+          "can code in",
+          "knows the codebase",
+          "deep knowledge of the system",
+          "expert in our X"
+        ],
+        "zh": [
+          "技术技能",
+          "技术栈",
+          "熟悉的系统",
+          "对某模块最熟"
+        ],
+        "de": [
+          "technische Fähigkeiten"
+        ],
+        "es": [
+          "habilidades técnicas"
+        ],
+        "fr": [
+          "compétences techniques"
+        ],
+        "ja": [
+          "技術スキル"
+        ],
+        "ko": [
+          "기술 역량"
+        ],
+        "ru": [
+          "технические навыки"
+        ],
+        "zh-Hant": [
+          "技術技能",
+          "熟悉的系統",
+          "對某模組最熟"
+        ]
+      },
+      "lookup_keys": [
+        "cancodeins",
+        "deepknowledgeofthesystems",
+        "expertinourxes",
+        "knowsthecodebases",
+        "technical",
+        "technicals",
+        "technicalskill",
+        "techstackmastereds"
+      ]
+    },
+    {
+      "slug": "contact.address",
+      "family": "Contact",
+      "anchor": "SCH address",
+      "covers": "postal address",
+      "synonyms": {
+        "en": [
+          "postal address",
+          "mailing address",
+          "street address"
+        ],
+        "zh": [
+          "通讯地址",
+          "邮寄地址"
+        ],
+        "de": [
+          "Postanschrift"
+        ],
+        "es": [
+          "dirección postal"
+        ],
+        "fr": [
+          "adresse postale"
+        ],
+        "ja": [
+          "住所"
+        ],
+        "ko": [
+          "우편 주소"
+        ],
+        "ru": [
+          "почтовый адрес"
+        ],
+        "zh-Hant": [
+          "通訊地址"
+        ]
+      },
+      "lookup_keys": [
+        "address",
+        "addresses",
+        "mailingaddresses",
+        "postaladdresses",
+        "streetaddresses"
+      ]
+    },
+    {
+      "slug": "contact.email",
+      "family": "Contact",
+      "anchor": "SCH email; FOAF mbox",
+      "covers": "email addresses",
+      "synonyms": {
+        "en": [
+          "email address",
+          "email"
+        ],
+        "zh": [
+          "电子邮箱",
+          "邮箱"
+        ],
+        "de": [
+          "E-Mail-Adresse"
+        ],
+        "es": [
+          "correo electrónico"
+        ],
+        "fr": [
+          "adresse e-mail"
+        ],
+        "ja": [
+          "メールアドレス"
+        ],
+        "ko": [
+          "이메일"
+        ],
+        "ru": [
+          "электронная почта"
+        ],
+        "zh-Hant": [
+          "電子郵箱"
+        ]
+      },
+      "lookup_keys": [
+        "emailaddresses",
+        "emails"
+      ]
+    },
+    {
+      "slug": "contact.messaging",
+      "family": "Contact",
+      "anchor": "FOAF chat IDs",
+      "covers": "messaging handles",
+      "synonyms": {
+        "en": [
+          "messaging handle",
+          "chat id",
+          "im account"
+        ],
+        "zh": [
+          "即时通讯帐号",
+          "聊天帐号"
+        ],
+        "de": [
+          "Messenger-Konto"
+        ],
+        "es": [
+          "cuenta de mensajería"
+        ],
+        "fr": [
+          "compte de messagerie"
+        ],
+        "ja": [
+          "メッセージングID"
+        ],
+        "ko": [
+          "메신저 계정"
+        ],
+        "ru": [
+          "аккаунт мессенджера"
+        ],
+        "zh-Hant": [
+          "即時通訊帳號"
+        ]
+      },
+      "lookup_keys": [
+        "chatids",
+        "imaccounts",
+        "messaging",
+        "messaginghandles",
+        "messagings"
+      ]
+    },
+    {
+      "slug": "contact.phone",
+      "family": "Contact",
+      "anchor": "SCH telephone; FOAF phone",
+      "covers": "phone numbers",
+      "synonyms": {
+        "en": [
+          "phone number",
+          "mobile number"
+        ],
+        "zh": [
+          "电话号码",
+          "手机号"
+        ],
+        "de": [
+          "Telefonnummer"
+        ],
+        "es": [
+          "número de teléfono"
+        ],
+        "fr": [
+          "numéro de téléphone"
+        ],
+        "ja": [
+          "電話番号"
+        ],
+        "ko": [
+          "전화번호"
+        ],
+        "ru": [
+          "номер телефона"
+        ],
+        "zh-Hant": [
+          "電話號碼"
+        ]
+      },
+      "lookup_keys": [
+        "mobilenumbers",
+        "phone",
+        "phonenumbers",
+        "phones"
+      ]
+    },
+    {
+      "slug": "contact.social",
+      "family": "Contact",
+      "anchor": "FOAF account",
+      "covers": "social accounts",
+      "synonyms": {
+        "en": [
+          "social media account",
+          "social profile"
+        ],
+        "zh": [
+          "社交帐号",
+          "社交媒体帐号"
+        ],
+        "de": [
+          "Social-Media-Konto"
+        ],
+        "es": [
+          "cuenta de redes sociales"
+        ],
+        "fr": [
+          "compte de réseaux sociaux"
+        ],
+        "ja": [
+          "SNSアカウント"
+        ],
+        "ko": [
+          "소셜 계정"
+        ],
+        "ru": [
+          "аккаунт соцсети"
+        ],
+        "zh-Hant": [
+          "社交帳號"
+        ]
+      },
+      "lookup_keys": [
+        "social",
+        "socialmediaaccounts",
+        "socialprofiles",
+        "socials"
+      ]
+    },
+    {
+      "slug": "contact.websites",
+      "family": "Contact",
+      "anchor": "FOAF homepage/weblog",
+      "covers": "personal sites, blogs",
+      "synonyms": {
+        "en": [
+          "personal website",
+          "homepage",
+          "blog url"
+        ],
+        "zh": [
+          "个人网站",
+          "博客"
+        ],
+        "de": [
+          "persönliche Webseite"
+        ],
+        "es": [
+          "sitio web personal"
+        ],
+        "fr": [
+          "site web personnel"
+        ],
+        "ja": [
+          "個人サイト"
+        ],
+        "ko": [
+          "개인 웹사이트"
+        ],
+        "ru": [
+          "личный сайт"
+        ],
+        "zh-Hant": [
+          "個人網站"
+        ]
+      },
+      "lookup_keys": [
+        "blogurls",
+        "homepages",
+        "personalwebsites",
+        "website",
+        "websites"
+      ]
+    },
+    {
+      "slug": "entity.organization",
+      "family": "Entity",
+      "anchor": "EKG Organization (frozen #7)",
+      "covers": "a standing organisation in this person's arrangements that is not the employer or institutional affiliation (bank, gym, insurer, clinic, vendor) - what it IS, never its current state",
+      "synonyms": {
+        "en": [
+          "a company",
+          "an organization",
+          "a vendor",
+          "a business",
+          "entity.team"
+        ],
+        "zh": [
+          "公司",
+          "组织",
+          "商家"
+        ],
+        "de": [
+          "eine Organisation"
+        ],
+        "es": [
+          "una organización"
+        ],
+        "fr": [
+          "une organisation"
+        ],
+        "ja": [
+          "組織"
+        ],
+        "ko": [
+          "조직"
+        ],
+        "ru": [
+          "организация"
+        ],
+        "zh-Hant": [
+          "公司"
+        ]
+      },
+      "lookup_keys": [
+        "abusinesses",
+        "acompanies",
+        "anorganisation",
+        "anorganisations",
+        "anorganizations",
+        "avendors",
+        "entityteams",
+        "organisation",
+        "organisations",
+        "organization",
+        "organizations"
+      ]
+    },
+    {
+      "slug": "entity.person",
+      "family": "Entity",
+      "anchor": "EKG Person (frozen #1)",
+      "covers": "a standing named third party in this person's life not covered by relationship.* (dentist, landlord, accountant, client, mentor) - who they ARE, never what they did",
+      "synonyms": {
+        "en": [
+          "a person they mention",
+          "third party person",
+          "someone they know"
+        ],
+        "zh": [
+          "提到的人",
+          "第三方人物"
+        ],
+        "de": [
+          "erwähnte Person"
+        ],
+        "es": [
+          "persona mencionada"
+        ],
+        "fr": [
+          "personne mentionnée"
+        ],
+        "ja": [
+          "言及された人物"
+        ],
+        "ko": [
+          "언급된 인물"
+        ],
+        "ru": [
+          "упомянутый человек"
+        ],
+        "zh-Hant": [
+          "提到的人"
+        ]
+      },
+      "lookup_keys": [
+        "apersontheymentions",
+        "people",
+        "person",
+        "someonetheyknows",
+        "thirdpartypeople"
+      ]
+    },
+    {
+      "slug": "entity.place",
+      "family": "Entity",
+      "anchor": "EKG Place (frozen #19)",
+      "covers": "a standing place in this person's life beyond identity.* (office building, the branch or clinic they use, a second home, a child's school) - a fixed point in their routine, never where something happened",
+      "synonyms": {
+        "en": [
+          "a place",
+          "a venue",
+          "a location mentioned"
+        ],
+        "zh": [
+          "地点",
+          "场所"
+        ],
+        "de": [
+          "ein Ort"
+        ],
+        "es": [
+          "un lugar"
+        ],
+        "fr": [
+          "un lieu"
+        ],
+        "ja": [
+          "場所"
+        ],
+        "ko": [
+          "장소"
+        ],
+        "ru": [
+          "место"
+        ],
+        "zh-Hant": [
+          "地點"
+        ]
+      },
+      "lookup_keys": [
+        "alocationmentioneds",
+        "aplaces",
+        "avenues",
+        "place",
+        "places"
+      ]
+    },
+    {
+      "slug": "finance.budget_style",
+      "family": "Finance",
+      "anchor": "IAB Personal Finance",
+      "covers": "budgeting, spending style",
+      "synonyms": {
+        "en": [
+          "budgeting style",
+          "spending habits",
+          "frugal or spender"
+        ],
+        "zh": [
+          "消费习惯",
+          "预算习惯"
+        ],
+        "de": [
+          "Budgetstil"
+        ],
+        "es": [
+          "estilo de presupuesto"
+        ],
+        "fr": [
+          "style de budget"
+        ],
+        "ja": [
+          "支出スタイル"
+        ],
+        "ko": [
+          "소비 습관"
+        ],
+        "ru": [
+          "стиль бюджета"
+        ],
+        "zh-Hant": [
+          "消費習慣"
+        ]
+      },
+      "lookup_keys": [
+        "budgetingstyles",
+        "budgetstyle",
+        "budgetstyles",
+        "frugalorspenders",
+        "spendinghabit"
+      ]
+    },
+    {
+      "slug": "finance.investing",
+      "family": "Finance",
+      "anchor": "IAB Personal Finance",
+      "covers": "investing approach",
+      "synonyms": {
+        "en": [
+          "investing approach",
+          "invests in",
+          "portfolio style"
+        ],
+        "zh": [
+          "投资方式",
+          "理财方式"
+        ],
+        "de": [
+          "Anlagestil"
+        ],
+        "es": [
+          "estilo de inversión"
+        ],
+        "fr": [
+          "style d'investissement"
+        ],
+        "ja": [
+          "投資スタイル"
+        ],
+        "ko": [
+          "투자 방식"
+        ],
+        "ru": [
+          "стиль инвестирования"
+        ],
+        "zh-Hant": [
+          "投資方式"
+        ]
+      },
+      "lookup_keys": [
+        "investing",
+        "investingapproaches",
+        "investings",
+        "investsins",
+        "portfoliostyles"
+      ]
+    },
+    {
+      "slug": "finance.obligations",
+      "family": "Finance",
+      "anchor": "IAB Personal Finance",
+      "covers": "loans, standing obligations",
+      "synonyms": {
+        "en": [
+          "loans",
+          "mortgage",
+          "standing obligations"
+        ],
+        "zh": [
+          "贷款",
+          "负债"
+        ],
+        "de": [
+          "Verbindlichkeiten"
+        ],
+        "es": [
+          "obligaciones financieras"
+        ],
+        "fr": [
+          "obligations financières"
+        ],
+        "ja": [
+          "ローン"
+        ],
+        "ko": [
+          "대출"
+        ],
+        "ru": [
+          "финансовые обязательства"
+        ],
+        "zh-Hant": [
+          "貸款"
+        ]
+      },
+      "lookup_keys": [
+        "loan",
+        "mortgages",
+        "obligation",
+        "obligations",
+        "standingobligation"
+      ]
+    },
+    {
+      "slug": "goal.career",
+      "family": "Goal",
+      "anchor": "GUMO hasGoal; EKG Goal",
+      "covers": "career objectives",
+      "synonyms": {
+        "en": [
+          "career goal",
+          "wants promotion",
+          "professional ambition"
+        ],
+        "zh": [
+          "职业目标",
+          "事业目标"
+        ],
+        "de": [
+          "Karriereziel"
+        ],
+        "es": [
+          "meta profesional"
+        ],
+        "fr": [
+          "objectif de carrière"
+        ],
+        "ja": [
+          "キャリア目標"
+        ],
+        "ko": [
+          "커리어 목표"
+        ],
+        "ru": [
+          "карьерная цель"
+        ],
+        "zh-Hant": [
+          "職業目標"
+        ]
+      },
+      "lookup_keys": [
+        "career",
+        "careergoals",
+        "careers",
+        "professionalambitions",
+        "wantspromotions"
+      ]
+    },
+    {
+      "slug": "goal.family",
+      "family": "Goal",
+      "anchor": "GUMO hasGoal",
+      "covers": "family objectives",
+      "synonyms": {
+        "en": [
+          "family goal",
+          "family plans"
+        ],
+        "zh": [
+          "家庭目标",
+          "家庭规划"
+        ],
+        "de": [
+          "Familienziel"
+        ],
+        "es": [
+          "meta familiar"
+        ],
+        "fr": [
+          "objectif familial"
+        ],
+        "ja": [
+          "家族の目標"
+        ],
+        "ko": [
+          "가족 목표"
+        ],
+        "ru": [
+          "семейная цель"
+        ],
+        "zh-Hant": [
+          "家庭目標"
+        ]
+      },
+      "lookup_keys": [
+        "families",
+        "family",
+        "familygoals",
+        "familyplan"
+      ]
+    },
+    {
+      "slug": "goal.financial",
+      "family": "Goal",
+      "anchor": "GUMO hasGoal",
+      "covers": "financial objectives",
+      "synonyms": {
+        "en": [
+          "financial goal",
+          "saving for",
+          "wants to buy"
+        ],
+        "zh": [
+          "财务目标",
+          "攒钱目标"
+        ],
+        "de": [
+          "finanzielles Ziel"
+        ],
+        "es": [
+          "meta financiera"
+        ],
+        "fr": [
+          "objectif financier"
+        ],
+        "ja": [
+          "財務目標"
+        ],
+        "ko": [
+          "재정 목표"
+        ],
+        "ru": [
+          "финансовая цель"
+        ],
+        "zh-Hant": [
+          "財務目標"
+        ]
+      },
+      "lookup_keys": [
+        "financial",
+        "financialgoals",
+        "financials",
+        "savingfors",
+        "wantstobuys"
+      ]
+    },
+    {
+      "slug": "goal.health",
+      "family": "Goal",
+      "anchor": "GUMO hasGoal",
+      "covers": "health/fitness objectives",
+      "synonyms": {
+        "en": [
+          "health goal",
+          "fitness goal",
+          "wants to lose weight"
+        ],
+        "zh": [
+          "健康目标",
+          "健身目标"
+        ],
+        "de": [
+          "Gesundheitsziel"
+        ],
+        "es": [
+          "meta de salud"
+        ],
+        "fr": [
+          "objectif de santé"
+        ],
+        "ja": [
+          "健康目標"
+        ],
+        "ko": [
+          "건강 목표"
+        ],
+        "ru": [
+          "цель по здоровью"
+        ],
+        "zh-Hant": [
+          "健康目標"
+        ]
+      },
+      "lookup_keys": [
+        "fitnessgoals",
+        "health",
+        "healthgoals",
+        "wantstoloseweights"
+      ]
+    },
+    {
+      "slug": "goal.learning",
+      "family": "Goal",
+      "anchor": "GUMO hasGoal",
+      "covers": "learning objectives",
+      "synonyms": {
+        "en": [
+          "learning goal",
+          "wants to learn",
+          "studying towards"
+        ],
+        "zh": [
+          "学习目标"
+        ],
+        "de": [
+          "Lernziel"
+        ],
+        "es": [
+          "meta de aprendizaje"
+        ],
+        "fr": [
+          "objectif d'apprentissage"
+        ],
+        "ja": [
+          "学習目標"
+        ],
+        "ko": [
+          "학습 목표"
+        ],
+        "ru": [
+          "цель обучения"
+        ],
+        "zh-Hant": [
+          "學習目標"
+        ]
+      },
+      "lookup_keys": [
+        "learning",
+        "learninggoals",
+        "learnings",
+        "studyingtoward",
+        "wantstolearns"
+      ]
+    },
+    {
+      "slug": "goal.personal",
+      "family": "Goal",
+      "anchor": "GUMO hasGoal",
+      "covers": "other durable objectives",
+      "synonyms": {
+        "en": [
+          "personal goal",
+          "life goal",
+          "resolution"
+        ],
+        "zh": [
+          "个人目标",
+          "人生目标"
+        ],
+        "de": [
+          "persönliches Ziel"
+        ],
+        "es": [
+          "meta personal"
+        ],
+        "fr": [
+          "objectif personnel"
+        ],
+        "ja": [
+          "個人目標"
+        ],
+        "ko": [
+          "개인 목표"
+        ],
+        "ru": [
+          "личная цель"
+        ],
+        "zh-Hant": [
+          "個人目標"
+        ]
+      },
+      "lookup_keys": [
+        "lifegoals",
+        "personal",
+        "personalgoals",
+        "personals",
+        "resolutions"
+      ]
+    },
+    {
+      "slug": "goal.project",
+      "family": "Goal",
+      "anchor": "GUMO hasPlan; FOAF currentProject",
+      "covers": "personal projects",
+      "synonyms": {
+        "en": [
+          "personal project",
+          "side project",
+          "building something"
+        ],
+        "zh": [
+          "个人项目",
+          "业余项目"
+        ],
+        "de": [
+          "persönliches Projekt"
+        ],
+        "es": [
+          "proyecto personal"
+        ],
+        "fr": [
+          "projet personnel"
+        ],
+        "ja": [
+          "個人プロジェクト"
+        ],
+        "ko": [
+          "개인 프로젝트"
+        ],
+        "ru": [
+          "личный проект"
+        ],
+        "zh-Hant": [
+          "個人項目"
+        ]
+      },
+      "lookup_keys": [
+        "buildingsomethings",
+        "personalprojects",
+        "sideprojects"
+      ]
+    },
+    {
+      "slug": "goal.travel",
+      "family": "Goal",
+      "anchor": "GUMO hasGoal",
+      "covers": "travel wishlist",
+      "synonyms": {
+        "en": [
+          "travel wishlist",
+          "bucket list trip",
+          "wants to visit"
+        ],
+        "zh": [
+          "旅行心愿",
+          "想去清单"
+        ],
+        "de": [
+          "Reisewunsch"
+        ],
+        "es": [
+          "viaje deseado"
+        ],
+        "fr": [
+          "voyage souhaité"
+        ],
+        "ja": [
+          "行きたい場所"
+        ],
+        "ko": [
+          "여행 버킷리스트"
+        ],
+        "ru": [
+          "желаемое путешествие"
+        ],
+        "zh-Hant": [
+          "旅行心願"
+        ]
+      },
+      "lookup_keys": [
+        "bucketlisttrips",
+        "travelwishlists",
+        "wantstovisits"
+      ]
+    },
+    {
+      "slug": "health.accessibility",
+      "family": "Health",
+      "anchor": "GUMO ability",
+      "covers": "disabilities, accessibility needs",
+      "synonyms": {
+        "en": [
+          "disability",
+          "accessibility need"
+        ],
+        "zh": [
+          "残障",
+          "无障碍需求"
+        ],
+        "de": [
+          "Behinderung"
+        ],
+        "es": [
+          "discapacidad"
+        ],
+        "fr": [
+          "handicap"
+        ],
+        "ja": [
+          "障害"
+        ],
+        "ko": [
+          "장애"
+        ],
+        "ru": [
+          "инвалидность"
+        ],
+        "zh-Hant": [
+          "殘障"
+        ]
+      },
+      "lookup_keys": [
+        "accessibilities",
+        "accessibility",
+        "accessibilityneeds",
+        "disabilities"
+      ]
+    },
+    {
+      "slug": "health.allergies",
+      "family": "Health",
+      "anchor": "GUMO physical state (durable)",
+      "covers": "allergies, intolerances",
+      "synonyms": {
+        "en": [
+          "allergy",
+          "allergic to",
+          "intolerance"
+        ],
+        "zh": [
+          "过敏",
+          "不耐受"
+        ],
+        "de": [
+          "Allergie"
+        ],
+        "es": [
+          "alergia"
+        ],
+        "fr": [
+          "allergie"
+        ],
+        "ja": [
+          "アレルギー"
+        ],
+        "ko": [
+          "알레르기"
+        ],
+        "ru": [
+          "аллергия"
+        ],
+        "zh-Hant": [
+          "過敏"
+        ]
+      },
+      "lookup_keys": [
+        "allergictos",
+        "allergies",
+        "intolerances"
+      ]
+    },
+    {
+      "slug": "health.conditions",
+      "family": "Health",
+      "anchor": "GUMO physical state (durable)",
+      "covers": "chronic conditions",
+      "synonyms": {
+        "en": [
+          "chronic condition",
+          "medical condition",
+          "diagnosis"
+        ],
+        "zh": [
+          "慢性病",
+          "病症"
+        ],
+        "de": [
+          "chronische Krankheit"
+        ],
+        "es": [
+          "condición médica"
+        ],
+        "fr": [
+          "maladie chronique"
+        ],
+        "ja": [
+          "持病"
+        ],
+        "ko": [
+          "지병"
+        ],
+        "ru": [
+          "хроническое заболевание"
+        ],
+        "zh-Hant": [
+          "慢性病"
+        ]
+      },
+      "lookup_keys": [
+        "chronicconditions",
+        "condition",
+        "conditions",
+        "diagnoses",
+        "medicalconditions"
+      ]
+    },
+    {
+      "slug": "health.fitness",
+      "family": "Health",
+      "anchor": "GUMO physical state",
+      "covers": "fitness level",
+      "synonyms": {
+        "en": [
+          "fitness level",
+          "physical condition",
+          "athletic level"
+        ],
+        "zh": [
+          "体能水平",
+          "健康状况"
+        ],
+        "de": [
+          "Fitnesslevel"
+        ],
+        "es": [
+          "nivel de forma física"
+        ],
+        "fr": [
+          "niveau de forme"
+        ],
+        "ja": [
+          "体力レベル"
+        ],
+        "ko": [
+          "체력 수준"
+        ],
+        "ru": [
+          "уровень физической формы"
+        ],
+        "zh-Hant": [
+          "體能水平"
+        ]
+      },
+      "lookup_keys": [
+        "athleticlevels",
+        "fitness",
+        "fitnesses",
+        "fitnesslevels",
+        "physicalconditions"
+      ]
+    },
+    {
+      "slug": "health.medications",
+      "family": "Health",
+      "anchor": "GUMO physical state (durable)",
+      "covers": "standing medications",
+      "synonyms": {
+        "en": [
+          "medication",
+          "prescription",
+          "takes medicine"
+        ],
+        "zh": [
+          "用药",
+          "处方药"
+        ],
+        "de": [
+          "Medikamente"
+        ],
+        "es": [
+          "medicación"
+        ],
+        "fr": [
+          "médicaments"
+        ],
+        "ja": [
+          "服薬"
+        ],
+        "ko": [
+          "복용 약"
+        ],
+        "ru": [
+          "лекарства"
+        ],
+        "zh-Hant": [
+          "用藥"
+        ]
+      },
+      "lookup_keys": [
+        "medications",
+        "prescriptions",
+        "takesmedicines"
+      ]
+    },
+    {
+      "slug": "health.mental",
+      "family": "Health",
+      "anchor": "GUMO mental state (durable)",
+      "covers": "durable mental-health facts",
+      "synonyms": {
+        "en": [
+          "mental health",
+          "therapy",
+          "anxiety condition"
+        ],
+        "zh": [
+          "心理健康",
+          "精神健康"
+        ],
+        "de": [
+          "psychische Gesundheit"
+        ],
+        "es": [
+          "salud mental"
+        ],
+        "fr": [
+          "santé mentale"
+        ],
+        "ja": [
+          "メンタルヘルス"
+        ],
+        "ko": [
+          "정신 건강"
+        ],
+        "ru": [
+          "психическое здоровье"
+        ],
+        "zh-Hant": [
+          "心理健康"
+        ]
+      },
+      "lookup_keys": [
+        "anxietyconditions",
+        "mental",
+        "mentalhealths",
+        "mentals",
+        "therapies"
+      ]
+    },
+    {
+      "slug": "health.sleep",
+      "family": "Health",
+      "anchor": "GUMO regularity",
+      "covers": "sleep pattern",
+      "synonyms": {
+        "en": [
+          "sleep schedule",
+          "sleep pattern",
+          "bedtime"
+        ],
+        "zh": [
+          "睡眠习惯",
+          "作息睡眠"
+        ],
+        "de": [
+          "Schlafrhythmus"
+        ],
+        "es": [
+          "patrón de sueño"
+        ],
+        "fr": [
+          "rythme de sommeil"
+        ],
+        "ja": [
+          "睡眠習慣"
+        ],
+        "ko": [
+          "수면 패턴"
+        ],
+        "ru": [
+          "режим сна"
+        ],
+        "zh-Hant": [
+          "睡眠習慣"
+        ]
+      },
+      "lookup_keys": [
+        "bedtimes",
+        "sleep",
+        "sleeppatterns",
+        "sleeps",
+        "sleepschedules"
+      ]
+    },
+    {
+      "slug": "identity.aka",
+      "family": "Identity",
+      "anchor": "FOAF nick; SCH additionalName",
+      "covers": "nicknames, handles",
+      "synonyms": {
+        "en": [
+          "nickname",
+          "alias",
+          "handle",
+          "goes by"
+        ],
+        "zh": [
+          "昵称",
+          "别名",
+          "网名"
+        ],
+        "de": [
+          "Spitzname"
+        ],
+        "es": [
+          "apodo"
+        ],
+        "fr": [
+          "surnom"
+        ],
+        "ja": [
+          "ニックネーム"
+        ],
+        "ko": [
+          "별명"
+        ],
+        "ru": [
+          "прозвище"
+        ],
+        "zh-Hant": [
+          "暱稱"
+        ]
+      },
+      "lookup_keys": [
+        "aka",
+        "akas",
+        "aliases",
+        "goesbies",
+        "handles",
+        "nicknames"
+      ]
+    },
+    {
+      "slug": "identity.birth_date",
+      "cardinality": "one",
+      "family": "Identity",
+      "anchor": "SCH birthDate; FOAF birthday",
+      "covers": "birth date / age",
+      "synonyms": {
+        "en": [
+          "birth date",
+          "birthday",
+          "date of birth",
+          "age"
+        ],
+        "zh": [
+          "出生日期",
+          "生日",
+          "年龄"
+        ],
+        "de": [
+          "Geburtsdatum"
+        ],
+        "es": [
+          "fecha de nacimiento"
+        ],
+        "fr": [
+          "date de naissance"
+        ],
+        "ja": [
+          "生年月日"
+        ],
+        "ko": [
+          "생년월일"
+        ],
+        "ru": [
+          "дата рождения"
+        ],
+        "zh-Hant": [
+          "出生日期"
+        ]
+      },
+      "lookup_keys": [
+        "ages",
+        "birthdates",
+        "birthdays",
+        "dateofbirths"
+      ]
+    },
+    {
+      "slug": "identity.birth_place",
+      "cardinality": "one",
+      "family": "Identity",
+      "anchor": "SCH birthPlace; GUMO demographics.birthplace",
+      "covers": "birth place",
+      "synonyms": {
+        "en": [
+          "birthplace",
+          "place of birth",
+          "born in"
+        ],
+        "zh": [
+          "出生地"
+        ],
+        "de": [
+          "Geburtsort"
+        ],
+        "es": [
+          "lugar de nacimiento"
+        ],
+        "fr": [
+          "lieu de naissance"
+        ],
+        "ja": [
+          "出生地"
+        ],
+        "ko": [
+          "출생지"
+        ],
+        "ru": [
+          "место рождения"
+        ],
+        "zh-Hant": [
+          "出生地"
+        ]
+      },
+      "lookup_keys": [
+        "birthplaces",
+        "bornins",
+        "placeofbirths"
+      ]
+    },
+    {
+      "slug": "identity.career_history",
+      "family": "Identity",
+      "anchor": "EKG Person",
+      "covers": "years of experience, seniority stage, and career transitions (not the current title)",
+      "synonyms": {
+        "en": [
+          "years of experience",
+          "career stage",
+          "seniority",
+          "career change",
+          "how long they have done this"
+        ],
+        "zh": [
+          "年资",
+          "从业年数",
+          "职涯阶段",
+          "转行"
+        ],
+        "de": [
+          "Berufserfahrung",
+          "Karrierestufe"
+        ],
+        "es": [
+          "años de experiencia",
+          "etapa profesional"
+        ],
+        "fr": [
+          "années d'expérience",
+          "étape de carrière"
+        ],
+        "ja": [
+          "経験年数",
+          "キャリア段階"
+        ],
+        "ko": [
+          "경력 연차",
+          "커리어 단계"
+        ],
+        "ru": [
+          "стаж",
+          "этап карьеры"
+        ],
+        "zh-Hant": [
+          "年資",
+          "職涯階段",
+          "轉職"
+        ]
+      },
+      "lookup_keys": [
+        "careerchanges",
+        "careerhistories",
+        "careerhistory",
+        "careerstages",
+        "howlongtheyhavedonethi",
+        "seniorities",
+        "yearsofexperiences"
+      ]
+    },
+    {
+      "slug": "identity.education",
+      "family": "Identity",
+      "anchor": "SCH alumniOf/hasCredential",
+      "covers": "education: current or planned enrolment (institution, level or year, major or field, courses being taken) AND completed history and degrees",
+      "synonyms": {
+        "en": [
+          "education",
+          "degrees",
+          "alma mater",
+          "studied at",
+          "student",
+          "studying at",
+          "enrolled at",
+          "in year N",
+          "majoring in",
+          "course",
+          "graduating in"
+        ],
+        "zh": [
+          "学历",
+          "教育背景",
+          "毕业院校",
+          "在读",
+          "就读于",
+          "主修",
+          "年级",
+          "这学期的课"
+        ],
+        "de": [
+          "Ausbildung",
+          "Studium",
+          "eingeschrieben",
+          "Hauptfach"
+        ],
+        "es": [
+          "educación",
+          "estudiando",
+          "matriculado",
+          "carrera"
+        ],
+        "fr": [
+          "formation",
+          "étudiant",
+          "inscrit",
+          "spécialité"
+        ],
+        "ja": [
+          "学歴",
+          "在学",
+          "専攻",
+          "履修"
+        ],
+        "ko": [
+          "학력",
+          "재학",
+          "전공",
+          "수강"
+        ],
+        "ru": [
+          "образование",
+          "учится",
+          "специальность"
+        ],
+        "zh-Hant": [
+          "學歷",
+          "在學",
+          "就讀於",
+          "主修",
+          "年級",
+          "這學期的課"
+        ]
+      },
+      "lookup_keys": [
+        "almamaters",
+        "courses",
+        "degree",
+        "enrolledats",
+        "graduatingins",
+        "inyearns",
+        "majoringins",
+        "students",
+        "studiedats",
+        "studyingats"
+      ]
+    },
+    {
+      "slug": "identity.employer",
+      "family": "Identity",
+      "anchor": "SCH worksFor; EKG WORKS_AT",
+      "covers": "employer",
+      "synonyms": {
+        "en": [
+          "employer",
+          "works for",
+          "company they work at"
+        ],
+        "zh": [
+          "雇主",
+          "任职公司"
+        ],
+        "de": [
+          "Arbeitgeber"
+        ],
+        "es": [
+          "empleador"
+        ],
+        "fr": [
+          "employeur"
+        ],
+        "ja": [
+          "勤務先"
+        ],
+        "ko": [
+          "고용주"
+        ],
+        "ru": [
+          "работодатель"
+        ],
+        "zh-Hant": [
+          "雇主"
+        ]
+      },
+      "lookup_keys": [
+        "companytheyworkats",
+        "employers",
+        "worksfors"
+      ]
+    },
+    {
+      "slug": "identity.employment_status",
+      "family": "Identity",
+      "anchor": "EKG Person",
+      "covers": "employment arrangement: employed, freelance, contractor, founder, between roles, retired, studying full time",
+      "synonyms": {
+        "en": [
+          "employment status",
+          "freelance",
+          "contractor",
+          "self-employed",
+          "between jobs",
+          "unemployed",
+          "retired"
+        ],
+        "zh": [
+          "雇用状态",
+          "接案",
+          "自由职业",
+          "待业",
+          "退休"
+        ],
+        "de": [
+          "Beschäftigungsstatus",
+          "freiberuflich"
+        ],
+        "es": [
+          "situación laboral",
+          "autónomo"
+        ],
+        "fr": [
+          "statut d'emploi",
+          "indépendant"
+        ],
+        "ja": [
+          "雇用形態",
+          "フリーランス"
+        ],
+        "ko": [
+          "고용 형태",
+          "프리랜서"
+        ],
+        "ru": [
+          "статус занятости",
+          "фриланс"
+        ],
+        "zh-Hant": [
+          "僱用狀態",
+          "接案",
+          "自由工作者"
+        ]
+      },
+      "lookup_keys": [
+        "betweenjob",
+        "contractors",
+        "employmentstatuses",
+        "freelances",
+        "retireds",
+        "selfemployeds",
+        "unemployeds"
+      ]
+    },
+    {
+      "slug": "identity.gender",
+      "cardinality": "one",
+      "family": "Identity",
+      "anchor": "SCH gender; FOAF gender",
+      "covers": "gender",
+      "synonyms": {
+        "en": [
+          "gender",
+          "gender identity"
+        ],
+        "zh": [
+          "性别"
+        ],
+        "de": [
+          "Geschlecht"
+        ],
+        "es": [
+          "género"
+        ],
+        "fr": [
+          "genre"
+        ],
+        "ja": [
+          "性別"
+        ],
+        "ko": [
+          "성별"
+        ],
+        "ru": [
+          "пол"
+        ],
+        "zh-Hant": [
+          "性別"
+        ]
+      },
+      "lookup_keys": [
+        "genderidentities",
+        "genders"
+      ]
+    },
+    {
+      "slug": "identity.hometown",
+      "cardinality": "one",
+      "family": "Identity",
+      "anchor": "GUMO demographics",
+      "covers": "hometown / where raised",
+      "synonyms": {
+        "en": [
+          "hometown",
+          "where they grew up",
+          "raised in"
+        ],
+        "zh": [
+          "家乡",
+          "老家"
+        ],
+        "de": [
+          "Heimatstadt"
+        ],
+        "es": [
+          "ciudad natal"
+        ],
+        "fr": [
+          "ville natale"
+        ],
+        "ja": [
+          "故郷"
+        ],
+        "ko": [
+          "고향"
+        ],
+        "ru": [
+          "родной город"
+        ],
+        "zh-Hant": [
+          "家鄉"
+        ]
+      },
+      "lookup_keys": [
+        "hometowns",
+        "raisedins",
+        "wheretheygrewups"
+      ]
+    },
+    {
+      "slug": "identity.industry",
+      "family": "Identity",
+      "anchor": "EKG Person",
+      "covers": "industry or sector worked in (not the job title, not the named employer)",
+      "synonyms": {
+        "en": [
+          "industry",
+          "sector",
+          "works in the X industry",
+          "field of work"
+        ],
+        "zh": [
+          "行业",
+          "所属产业",
+          "从事的领域"
+        ],
+        "de": [
+          "Branche",
+          "Wirtschaftszweig"
+        ],
+        "es": [
+          "sector",
+          "industria"
+        ],
+        "fr": [
+          "secteur",
+          "industrie"
+        ],
+        "ja": [
+          "業界",
+          "業種"
+        ],
+        "ko": [
+          "업계",
+          "산업 분야"
+        ],
+        "ru": [
+          "отрасль",
+          "сфера деятельности"
+        ],
+        "zh-Hant": [
+          "產業",
+          "所屬行業"
+        ]
+      },
+      "lookup_keys": [
+        "fieldofworks",
+        "industries",
+        "sectors",
+        "worksinthexindustries"
+      ]
+    },
+    {
+      "slug": "identity.institutional_affiliation",
+      "family": "Identity",
+      "anchor": "EKG Person",
+      "covers": "standing affiliation with an institution that is not the employer: lab, university, open-source org, professional body",
+      "synonyms": {
+        "en": [
+          "affiliation",
+          "affiliated with",
+          "research affiliate",
+          "visiting",
+          "contributor to"
+        ],
+        "zh": [
+          "机构关系",
+          "挂靠单位",
+          "研究员身份",
+          "外部贡献者"
+        ],
+        "de": [
+          "Zugehörigkeit",
+          "Affiliation"
+        ],
+        "es": [
+          "afiliación",
+          "vinculación institucional"
+        ],
+        "fr": [
+          "affiliation",
+          "rattachement"
+        ],
+        "ja": [
+          "所属機関",
+          "アフィリエーション"
+        ],
+        "ko": [
+          "소속 기관",
+          "제휴"
+        ],
+        "ru": [
+          "аффилиация",
+          "принадлежность к организации"
+        ],
+        "zh-Hant": [
+          "機構關係",
+          "掛靠單位",
+          "外部貢獻者"
+        ]
+      },
+      "lookup_keys": [
+        "affiliatedwiths",
+        "affiliations",
+        "contributortos",
+        "institutionalaffiliation",
+        "institutionalaffiliations",
+        "researchaffiliates",
+        "visitings"
+      ]
+    },
+    {
+      "slug": "identity.languages",
+      "family": "Identity",
+      "anchor": "SCH knowsLanguage",
+      "covers": "languages spoken/written",
+      "synonyms": {
+        "en": [
+          "spoken languages",
+          "languages they speak",
+          "written languages"
+        ],
+        "zh": [
+          "会的语言",
+          "掌握语言"
+        ],
+        "de": [
+          "gesprochene Sprachen"
+        ],
+        "es": [
+          "idiomas hablados"
+        ],
+        "fr": [
+          "langues parlées"
+        ],
+        "ja": [
+          "話せる言語"
+        ],
+        "ko": [
+          "구사 언어"
+        ],
+        "ru": [
+          "владение языками"
+        ],
+        "zh-Hant": [
+          "會的語言"
+        ]
+      },
+      "lookup_keys": [
+        "language",
+        "languages",
+        "languagestheyspeaks",
+        "spokenlanguage",
+        "writtenlanguage"
+      ]
+    },
+    {
+      "slug": "identity.location",
+      "family": "Identity",
+      "anchor": "SCH homeLocation",
+      "covers": "current city / home base",
+      "synonyms": {
+        "en": [
+          "current location",
+          "home base",
+          "lives in",
+          "current city"
+        ],
+        "zh": [
+          "居住地",
+          "常住地",
+          "住在"
+        ],
+        "de": [
+          "Wohnort"
+        ],
+        "es": [
+          "residencia actual"
+        ],
+        "fr": [
+          "lieu de résidence"
+        ],
+        "ja": [
+          "居住地"
+        ],
+        "ko": [
+          "거주지"
+        ],
+        "ru": [
+          "место жительства"
+        ],
+        "zh-Hant": [
+          "居住地"
+        ]
+      },
+      "lookup_keys": [
+        "currentcities",
+        "currentlocations",
+        "homebases",
+        "livesins",
+        "location",
+        "locations"
+      ]
+    },
+    {
+      "slug": "identity.marital_status",
+      "cardinality": "one",
+      "family": "Identity",
+      "anchor": "GUMO demographics",
+      "covers": "marital status",
+      "synonyms": {
+        "en": [
+          "marital status",
+          "married or single"
+        ],
+        "zh": [
+          "婚姻状况"
+        ],
+        "de": [
+          "Familienstand"
+        ],
+        "es": [
+          "estado civil"
+        ],
+        "fr": [
+          "état civil"
+        ],
+        "ja": [
+          "婚姻状況"
+        ],
+        "ko": [
+          "혼인 상태"
+        ],
+        "ru": [
+          "семейное положение"
+        ],
+        "zh-Hant": [
+          "婚姻狀況"
+        ]
+      },
+      "lookup_keys": [
+        "maritalstatuses",
+        "marriedorsingles"
+      ]
+    },
+    {
+      "slug": "identity.name",
+      "cardinality": "one",
+      "family": "Identity",
+      "anchor": "SCH givenName/familyName; FOAF name",
+      "covers": "name",
+      "synonyms": {
+        "en": [
+          "name",
+          "full name",
+          "what they are called"
+        ],
+        "zh": [
+          "姓名",
+          "名字"
+        ],
+        "de": [
+          "Name"
+        ],
+        "es": [
+          "nombre"
+        ],
+        "fr": [
+          "nom"
+        ],
+        "ja": [
+          "名前"
+        ],
+        "ko": [
+          "이름"
+        ],
+        "ru": [
+          "имя"
+        ],
+        "zh-Hant": [
+          "姓名"
+        ]
+      },
+      "lookup_keys": [
+        "fullnames",
+        "names",
+        "whattheyarecalleds"
+      ]
+    },
+    {
+      "slug": "identity.nationality",
+      "family": "Identity",
+      "anchor": "SCH nationality",
+      "covers": "nationality / citizenship",
+      "synonyms": {
+        "en": [
+          "nationality",
+          "citizenship"
+        ],
+        "zh": [
+          "国籍"
+        ],
+        "de": [
+          "Nationalität"
+        ],
+        "es": [
+          "nacionalidad"
+        ],
+        "fr": [
+          "nationalité"
+        ],
+        "ja": [
+          "国籍"
+        ],
+        "ko": [
+          "국적"
+        ],
+        "ru": [
+          "гражданство"
+        ],
+        "zh-Hant": [
+          "國籍"
+        ]
+      },
+      "lookup_keys": [
+        "citizenships",
+        "nationalities"
+      ]
+    },
+    {
+      "slug": "identity.occupation",
+      "family": "Identity",
+      "anchor": "SCH hasOccupation/jobTitle; EKG Occupation",
+      "covers": "profession / job title",
+      "synonyms": {
+        "en": [
+          "occupation",
+          "profession",
+          "job title"
+        ],
+        "zh": [
+          "职业",
+          "职称"
+        ],
+        "de": [
+          "Beruf"
+        ],
+        "es": [
+          "ocupación"
+        ],
+        "fr": [
+          "profession"
+        ],
+        "ja": [
+          "職業"
+        ],
+        "ko": [
+          "직업"
+        ],
+        "ru": [
+          "профессия"
+        ],
+        "zh-Hant": [
+          "職業"
+        ]
+      },
+      "lookup_keys": [
+        "jobtitles",
+        "occupations",
+        "professions"
+      ]
+    },
+    {
+      "slug": "identity.project_role",
+      "family": "Identity",
+      "anchor": "EKG Person",
+      "covers": "the person's standing role on or ownership of a project, service or system",
+      "synonyms": {
+        "en": [
+          "role on the project",
+          "owns the service",
+          "maintains",
+          "tech lead on",
+          "responsible for"
+        ],
+        "zh": [
+          "项目角色",
+          "负责的系统",
+          "维护者",
+          "技术负责人"
+        ],
+        "de": [
+          "Projektrolle",
+          "verantwortlich für"
+        ],
+        "es": [
+          "rol en el proyecto",
+          "responsable de"
+        ],
+        "fr": [
+          "rôle sur le projet",
+          "responsable de"
+        ],
+        "ja": [
+          "プロジェクトでの役割",
+          "担当システム"
+        ],
+        "ko": [
+          "프로젝트 역할",
+          "담당 시스템"
+        ],
+        "ru": [
+          "роль в проекте",
+          "отвечает за"
+        ],
+        "zh-Hant": [
+          "專案角色",
+          "負責的系統",
+          "維護者"
+        ]
+      },
+      "lookup_keys": [
+        "maintain",
+        "ownstheservices",
+        "projectrole",
+        "projectroles",
+        "responsiblefors",
+        "roleontheprojects",
+        "techleadons"
+      ]
+    },
+    {
+      "slug": "identity.pronouns",
+      "family": "Identity",
+      "anchor": "SCH pronouns",
+      "covers": "pronouns",
+      "synonyms": {
+        "en": [
+          "pronouns",
+          "preferred pronouns"
+        ],
+        "zh": [
+          "人称代词",
+          "代称"
+        ],
+        "de": [
+          "Pronomen"
+        ],
+        "es": [
+          "pronombres"
+        ],
+        "fr": [
+          "pronoms"
+        ],
+        "ja": [
+          "代名詞"
+        ],
+        "ko": [
+          "대명사"
+        ],
+        "ru": [
+          "местоимения"
+        ],
+        "zh-Hant": [
+          "人稱代詞"
+        ]
+      },
+      "lookup_keys": [
+        "preferredpronoun",
+        "pronoun"
+      ]
+    },
+    {
+      "slug": "identity.team_membership",
+      "family": "Identity",
+      "anchor": "EKG Person",
+      "covers": "the team or group the person belongs to (the person's membership, not the team as an entity)",
+      "synonyms": {
+        "en": [
+          "team",
+          "which team they are on",
+          "team membership",
+          "squad",
+          "group they belong to"
+        ],
+        "zh": [
+          "所属团队",
+          "在哪个组",
+          "团队归属"
+        ],
+        "de": [
+          "Team",
+          "Teamzugehörigkeit"
+        ],
+        "es": [
+          "equipo",
+          "pertenencia al equipo"
+        ],
+        "fr": [
+          "équipe",
+          "appartenance à l'équipe"
+        ],
+        "ja": [
+          "所属チーム",
+          "チーム所属"
+        ],
+        "ko": [
+          "소속 팀",
+          "팀 소속"
+        ],
+        "ru": [
+          "команда",
+          "принадлежность к команде"
+        ],
+        "zh-Hant": [
+          "所屬團隊",
+          "團隊歸屬"
+        ]
+      },
+      "lookup_keys": [
+        "grouptheybelongtos",
+        "squads",
+        "teammemberships",
+        "teams",
+        "whichteamtheyareons"
+      ]
+    },
+    {
+      "slug": "identity.timezone",
+      "cardinality": "one",
+      "family": "Identity",
+      "anchor": "EKG Person",
+      "covers": "the timezone the person operates in",
+      "synonyms": {
+        "en": [
+          "timezone",
+          "time zone",
+          "UTC offset",
+          "what time zone they are in"
+        ],
+        "zh": [
+          "时区",
+          "所在时区"
+        ],
+        "de": [
+          "Zeitzone"
+        ],
+        "es": [
+          "zona horaria"
+        ],
+        "fr": [
+          "fuseau horaire"
+        ],
+        "ja": [
+          "タイムゾーン"
+        ],
+        "ko": [
+          "시간대"
+        ],
+        "ru": [
+          "часовой пояс"
+        ],
+        "zh-Hant": [
+          "時區",
+          "所在時區"
+        ]
+      },
+      "lookup_keys": [
+        "timezones",
+        "utcoffsets",
+        "whattimezonetheyareins"
+      ]
+    },
+    {
+      "slug": "identity.work_location",
+      "family": "Identity",
+      "anchor": "SCH workLocation",
+      "covers": "work site / remote base",
+      "synonyms": {
+        "en": [
+          "work location",
+          "office location",
+          "works remotely from"
+        ],
+        "zh": [
+          "工作地点"
+        ],
+        "de": [
+          "Arbeitsort"
+        ],
+        "es": [
+          "lugar de trabajo"
+        ],
+        "fr": [
+          "lieu de travail"
+        ],
+        "ja": [
+          "勤務地"
+        ],
+        "ko": [
+          "근무지"
+        ],
+        "ru": [
+          "место работы"
+        ],
+        "zh-Hant": [
+          "工作地點"
+        ]
+      },
+      "lookup_keys": [
+        "officelocations",
+        "worklocations",
+        "worksremotelyfroms"
+      ]
+    },
+    {
+      "slug": "interest.arts_culture",
+      "family": "Interest",
+      "anchor": "IAB Fine Art / Pop Culture",
+      "covers": "arts and culture",
+      "synonyms": {
+        "en": [
+          "arts and culture interest",
+          "museum lover",
+          "cultural interests"
+        ],
+        "zh": [
+          "文艺兴趣",
+          "艺文兴趣"
+        ],
+        "de": [
+          "Kunst- und Kulturinteresse"
+        ],
+        "es": [
+          "interés artístico y cultural"
+        ],
+        "fr": [
+          "intérêt artistique et culturel"
+        ],
+        "ja": [
+          "芸術文化への関心"
+        ],
+        "ko": [
+          "예술 문화 관심사"
+        ],
+        "ru": [
+          "интерес к искусству и культуре"
+        ],
+        "zh-Hant": [
+          "文藝興趣"
+        ]
+      },
+      "lookup_keys": [
+        "artsandcultureinterests",
+        "artsculture",
+        "artscultures",
+        "culturalinterest",
+        "museumlovers"
+      ]
+    },
+    {
+      "slug": "interest.business",
+      "family": "Interest",
+      "anchor": "IAB Business & Finance",
+      "covers": "business, startups, markets",
+      "synonyms": {
+        "en": [
+          "business interest",
+          "follows startups",
+          "markets interest"
+        ],
+        "zh": [
+          "商业兴趣",
+          "创投兴趣"
+        ],
+        "de": [
+          "Geschäftsinteressen"
+        ],
+        "es": [
+          "interés empresarial"
+        ],
+        "fr": [
+          "intérêt pour les affaires"
+        ],
+        "ja": [
+          "ビジネスへの関心"
+        ],
+        "ko": [
+          "비즈니스 관심사"
+        ],
+        "ru": [
+          "интерес к бизнесу"
+        ],
+        "zh-Hant": [
+          "商業興趣"
+        ]
+      },
+      "lookup_keys": [
+        "business",
+        "businesses",
+        "businessinterests",
+        "followsstartup",
+        "marketsinterests"
+      ]
+    },
+    {
+      "slug": "interest.education",
+      "family": "Interest",
+      "anchor": "IAB Education",
+      "covers": "learning topics",
+      "synonyms": {
+        "en": [
+          "learning topics",
+          "courses interest",
+          "self study topics"
+        ],
+        "zh": [
+          "学习兴趣",
+          "进修话题"
+        ],
+        "de": [
+          "Lerninteressen"
+        ],
+        "es": [
+          "intereses de aprendizaje"
+        ],
+        "fr": [
+          "intérêts d'apprentissage"
+        ],
+        "ja": [
+          "学びへの関心"
+        ],
+        "ko": [
+          "학습 관심사"
+        ],
+        "ru": [
+          "интерес к обучению"
+        ],
+        "zh-Hant": [
+          "學習興趣"
+        ]
+      },
+      "lookup_keys": [
+        "coursesinterests",
+        "learningtopic",
+        "selfstudytopic"
+      ]
+    },
+    {
+      "slug": "interest.health_wellness",
+      "family": "Interest",
+      "anchor": "IAB Healthy Living",
+      "covers": "wellness topics",
+      "synonyms": {
+        "en": [
+          "wellness topics",
+          "health topics followed"
+        ],
+        "zh": [
+          "健康养生兴趣"
+        ],
+        "de": [
+          "Wellness-Interesse"
+        ],
+        "es": [
+          "interés por el bienestar"
+        ],
+        "fr": [
+          "intérêt pour le bien-être"
+        ],
+        "ja": [
+          "健康への関心"
+        ],
+        "ko": [
+          "웰니스 관심사"
+        ],
+        "ru": [
+          "интерес к здоровью"
+        ],
+        "zh-Hant": [
+          "健康養生興趣"
+        ]
+      },
+      "lookup_keys": [
+        "healthtopicsfolloweds",
+        "healthwellness",
+        "healthwellnesses",
+        "wellnesstopic"
+      ]
+    },
+    {
+      "slug": "interest.history",
+      "family": "Interest",
+      "anchor": "IAB (Hobbies tier)",
+      "covers": "history",
+      "synonyms": {
+        "en": [
+          "history interest",
+          "interested in history"
+        ],
+        "zh": [
+          "历史兴趣"
+        ],
+        "de": [
+          "Geschichtsinteresse"
+        ],
+        "es": [
+          "interés por la historia"
+        ],
+        "fr": [
+          "intérêt pour l'histoire"
+        ],
+        "ja": [
+          "歴史への関心"
+        ],
+        "ko": [
+          "역사 관심사"
+        ],
+        "ru": [
+          "интерес к истории"
+        ],
+        "zh-Hant": [
+          "歷史興趣"
+        ]
+      },
+      "lookup_keys": [
+        "histories",
+        "history",
+        "historyinterests",
+        "interestedinhistories"
+      ]
+    },
+    {
+      "slug": "interest.hobbies",
+      "family": "Interest",
+      "anchor": "FOAF interest; IAB Hobbies & Interests",
+      "covers": "hands-on hobbies, collections",
+      "synonyms": {
+        "en": [
+          "hobby",
+          "pastime",
+          "collects things",
+          "hands-on hobby"
+        ],
+        "zh": [
+          "爱好",
+          "业余爱好",
+          "收藏"
+        ],
+        "de": [
+          "Hobby"
+        ],
+        "es": [
+          "pasatiempo"
+        ],
+        "fr": [
+          "passe-temps"
+        ],
+        "ja": [
+          "趣味"
+        ],
+        "ko": [
+          "취미"
+        ],
+        "ru": [
+          "хобби"
+        ],
+        "zh-Hant": [
+          "愛好"
+        ]
+      },
+      "lookup_keys": [
+        "collectsthing",
+        "handsonhobbies",
+        "hobbies",
+        "pastimes"
+      ]
+    },
+    {
+      "slug": "interest.local",
+      "family": "Interest",
+      "anchor": "IAB Events",
+      "covers": "local community",
+      "synonyms": {
+        "en": [
+          "local community interest",
+          "neighborhood events"
+        ],
+        "zh": [
+          "本地社区兴趣"
+        ],
+        "de": [
+          "lokales Interesse"
+        ],
+        "es": [
+          "interés local"
+        ],
+        "fr": [
+          "intérêt local"
+        ],
+        "ja": [
+          "地域への関心"
+        ],
+        "ko": [
+          "지역 관심사"
+        ],
+        "ru": [
+          "интерес к местным событиям"
+        ],
+        "zh-Hant": [
+          "本地社區興趣"
+        ]
+      },
+      "lookup_keys": [
+        "local",
+        "localcommunityinterests",
+        "locals",
+        "neighborhoodevent",
+        "neighbourhoodevent",
+        "neighbourhoodevents"
+      ]
+    },
+    {
+      "slug": "interest.nature",
+      "family": "Interest",
+      "anchor": "IAB (Hobbies/Science)",
+      "covers": "nature, outdoors, environment",
+      "synonyms": {
+        "en": [
+          "outdoors interest",
+          "nature lover",
+          "environment topics"
+        ],
+        "zh": [
+          "自然户外兴趣",
+          "环保话题"
+        ],
+        "de": [
+          "Naturinteresse"
+        ],
+        "es": [
+          "interés por la naturaleza"
+        ],
+        "fr": [
+          "intérêt pour la nature"
+        ],
+        "ja": [
+          "自然への関心"
+        ],
+        "ko": [
+          "자연 관심사"
+        ],
+        "ru": [
+          "интерес к природе"
+        ],
+        "zh-Hant": [
+          "自然戶外興趣"
+        ]
+      },
+      "lookup_keys": [
+        "environmenttopic",
+        "nature",
+        "naturelovers",
+        "natures",
+        "outdoorsinterests"
+      ]
+    },
+    {
+      "slug": "interest.philosophy",
+      "family": "Interest",
+      "anchor": "IAB Religion & Spirituality",
+      "covers": "philosophy, big questions",
+      "synonyms": {
+        "en": [
+          "philosophy interest",
+          "big questions",
+          "consciousness topics"
+        ],
+        "zh": [
+          "哲学兴趣",
+          "思辨话题"
+        ],
+        "de": [
+          "Philosophie-Interesse"
+        ],
+        "es": [
+          "interés filosófico"
+        ],
+        "fr": [
+          "intérêt philosophique"
+        ],
+        "ja": [
+          "哲学への関心"
+        ],
+        "ko": [
+          "철학 관심사"
+        ],
+        "ru": [
+          "интерес к философии"
+        ],
+        "zh-Hant": [
+          "哲學興趣"
+        ]
+      },
+      "lookup_keys": [
+        "bigquestion",
+        "consciousnesstopic",
+        "philosophies",
+        "philosophy",
+        "philosophyinterests"
+      ]
+    },
+    {
+      "slug": "interest.politics",
+      "family": "Interest",
+      "anchor": "IAB News & Politics",
+      "covers": "political topics followed",
+      "synonyms": {
+        "en": [
+          "political topics followed",
+          "follows politics",
+          "current affairs interest"
+        ],
+        "zh": [
+          "时政兴趣",
+          "关注政治议题"
+        ],
+        "de": [
+          "politische Interessen"
+        ],
+        "es": [
+          "interés político"
+        ],
+        "fr": [
+          "intérêt politique"
+        ],
+        "ja": [
+          "政治への関心"
+        ],
+        "ko": [
+          "정치 관심사"
+        ],
+        "ru": [
+          "интерес к политике"
+        ],
+        "zh-Hant": [
+          "時政興趣"
+        ]
+      },
+      "lookup_keys": [
+        "currentaffairsinterests",
+        "followspolitic",
+        "politic",
+        "politicaltopicsfolloweds",
+        "politics"
+      ]
+    },
+    {
+      "slug": "interest.science",
+      "family": "Interest",
+      "anchor": "IAB Science",
+      "covers": "science topics",
+      "synonyms": {
+        "en": [
+          "science topics",
+          "interested in physics",
+          "follows research"
+        ],
+        "zh": [
+          "科学兴趣"
+        ],
+        "de": [
+          "Wissenschaftsinteressen"
+        ],
+        "es": [
+          "intereses científicos"
+        ],
+        "fr": [
+          "intérêts scientifiques"
+        ],
+        "ja": [
+          "科学への関心"
+        ],
+        "ko": [
+          "과학 관심사"
+        ],
+        "ru": [
+          "интерес к науке"
+        ],
+        "zh-Hant": [
+          "科學興趣"
+        ]
+      },
+      "lookup_keys": [
+        "followsresearches",
+        "interestedinphysic",
+        "science",
+        "sciences",
+        "sciencetopic"
+      ]
+    },
+    {
+      "slug": "interest.sports",
+      "family": "Interest",
+      "anchor": "IAB Sports",
+      "covers": "teams and sports followed",
+      "synonyms": {
+        "en": [
+          "teams they follow",
+          "sports fan of",
+          "follows league"
+        ],
+        "zh": [
+          "关注的球队",
+          "体育兴趣"
+        ],
+        "de": [
+          "Sportinteresse"
+        ],
+        "es": [
+          "interés deportivo"
+        ],
+        "fr": [
+          "intérêt sportif"
+        ],
+        "ja": [
+          "スポーツへの関心"
+        ],
+        "ko": [
+          "스포츠 관심사"
+        ],
+        "ru": [
+          "интерес к спорту"
+        ],
+        "zh-Hant": [
+          "體育興趣"
+        ]
+      },
+      "lookup_keys": [
+        "followsleagues",
+        "sport",
+        "sports",
+        "sportsfanofs",
+        "teamstheyfollows"
+      ]
+    },
+    {
+      "slug": "interest.technology",
+      "family": "Interest",
+      "anchor": "IAB Technology & Computing",
+      "covers": "tech topics followed",
+      "synonyms": {
+        "en": [
+          "tech topics followed",
+          "interested in ai",
+          "follows computing"
+        ],
+        "zh": [
+          "科技兴趣",
+          "关注的技术话题"
+        ],
+        "de": [
+          "Technikinteressen"
+        ],
+        "es": [
+          "intereses tecnológicos"
+        ],
+        "fr": [
+          "intérêts technologiques"
+        ],
+        "ja": [
+          "テクノロジーへの関心"
+        ],
+        "ko": [
+          "기술 관심사"
+        ],
+        "ru": [
+          "интерес к технологиям"
+        ],
+        "zh-Hant": [
+          "科技興趣"
+        ]
+      },
+      "lookup_keys": [
+        "followscomputings",
+        "interestedinais",
+        "technologies",
+        "technology",
+        "techtopicsfolloweds"
+      ]
+    },
+    {
+      "slug": "personality.self_view",
+      "family": "Personality",
+      "anchor": "GUMO characteristics",
+      "covers": "how they describe themselves",
+      "synonyms": {
+        "en": [
+          "self description",
+          "how they see themselves"
+        ],
+        "zh": [
+          "自我描述",
+          "自我认知"
+        ],
+        "de": [
+          "Selbstbild"
+        ],
+        "es": [
+          "autodescripción"
+        ],
+        "fr": [
+          "image de soi"
+        ],
+        "ja": [
+          "自己認識"
+        ],
+        "ko": [
+          "자기 인식"
+        ],
+        "ru": [
+          "самооценка"
+        ],
+        "zh-Hant": [
+          "自我描述"
+        ]
+      },
+      "lookup_keys": [
+        "howtheyseethemself",
+        "selfdescriptions",
+        "selfview",
+        "selfviews"
+      ]
+    },
+    {
+      "slug": "personality.social_energy",
+      "family": "Personality",
+      "anchor": "GUMO personality (introvert/extrovert)",
+      "covers": "introvert / extrovert",
+      "synonyms": {
+        "en": [
+          "introvert",
+          "extrovert",
+          "social energy"
+        ],
+        "zh": [
+          "内向外向",
+          "社交能量"
+        ],
+        "de": [
+          "introvertiert oder extrovertiert"
+        ],
+        "es": [
+          "introvertido o extrovertido"
+        ],
+        "fr": [
+          "introverti ou extraverti"
+        ],
+        "ja": [
+          "内向外向"
+        ],
+        "ko": [
+          "내향 외향"
+        ],
+        "ru": [
+          "интроверт или экстраверт"
+        ],
+        "zh-Hant": [
+          "內向外向"
+        ]
+      },
+      "lookup_keys": [
+        "extroverts",
+        "introverts",
+        "socialenergies"
+      ]
+    },
+    {
+      "slug": "personality.temperament",
+      "family": "Personality",
+      "anchor": "GUMO personality (optimistic/tempered...)",
+      "covers": "temperament",
+      "synonyms": {
+        "en": [
+          "temperament",
+          "optimistic",
+          "calm nature"
+        ],
+        "zh": [
+          "性情",
+          "脾气"
+        ],
+        "de": [
+          "Temperament"
+        ],
+        "es": [
+          "temperamento"
+        ],
+        "fr": [
+          "tempérament"
+        ],
+        "ja": [
+          "気質"
+        ],
+        "ko": [
+          "기질"
+        ],
+        "ru": [
+          "темперамент"
+        ],
+        "zh-Hant": [
+          "性情"
+        ]
+      },
+      "lookup_keys": [
+        "calmnatures",
+        "optimistics",
+        "temperaments"
+      ]
+    },
+    {
+      "slug": "personality.type",
+      "family": "Personality",
+      "anchor": "GUMO personality (MBTI/Five Factor)",
+      "covers": "stated personality type",
+      "synonyms": {
+        "en": [
+          "personality type",
+          "mbti",
+          "big five profile"
+        ],
+        "zh": [
+          "性格类型",
+          "人格类型"
+        ],
+        "de": [
+          "Persönlichkeitstyp"
+        ],
+        "es": [
+          "tipo de personalidad"
+        ],
+        "fr": [
+          "type de personnalité"
+        ],
+        "ja": [
+          "性格タイプ"
+        ],
+        "ko": [
+          "성격 유형"
+        ],
+        "ru": [
+          "тип личности"
+        ],
+        "zh-Hant": [
+          "性格類型"
+        ]
+      },
+      "lookup_keys": [
+        "bigfiveprofiles",
+        "mbtis",
+        "personalitytypes",
+        "type",
+        "types"
+      ]
+    },
+    {
+      "slug": "possession.collections",
+      "family": "Possession",
+      "anchor": "SCH owns",
+      "covers": "collections, notable items",
+      "synonyms": {
+        "en": [
+          "collection owned",
+          "notable possessions"
+        ],
+        "zh": [
+          "收藏品",
+          "值钱物件"
+        ],
+        "de": [
+          "Sammlung"
+        ],
+        "es": [
+          "colección"
+        ],
+        "fr": [
+          "collection"
+        ],
+        "ja": [
+          "コレクション"
+        ],
+        "ko": [
+          "소장품"
+        ],
+        "ru": [
+          "коллекция"
+        ],
+        "zh-Hant": [
+          "收藏品"
+        ]
+      },
+      "lookup_keys": [
+        "collectionowneds",
+        "collections",
+        "notablepossession"
+      ]
+    },
+    {
+      "slug": "possession.devices",
+      "family": "Possession",
+      "anchor": "SCH owns",
+      "covers": "devices owned",
+      "synonyms": {
+        "en": [
+          "devices they own",
+          "owns a laptop",
+          "hardware owned"
+        ],
+        "zh": [
+          "拥有的设备"
+        ],
+        "de": [
+          "eigene Geräte"
+        ],
+        "es": [
+          "dispositivos propios"
+        ],
+        "fr": [
+          "appareils possédés"
+        ],
+        "ja": [
+          "所有デバイス"
+        ],
+        "ko": [
+          "보유 기기"
+        ],
+        "ru": [
+          "личные устройства"
+        ],
+        "zh-Hant": [
+          "擁有的設備"
+        ]
+      },
+      "lookup_keys": [
+        "devicestheyowns",
+        "hardwareowneds",
+        "ownsalaptops"
+      ]
+    },
+    {
+      "slug": "possession.home",
+      "family": "Possession",
+      "anchor": "SCH owns; IAB Real Estate",
+      "covers": "home owned/rented",
+      "synonyms": {
+        "en": [
+          "owns home",
+          "rents apartment",
+          "housing situation"
+        ],
+        "zh": [
+          "住房情况",
+          "房产"
+        ],
+        "de": [
+          "Wohneigentum"
+        ],
+        "es": [
+          "vivienda propia"
+        ],
+        "fr": [
+          "logement possédé"
+        ],
+        "ja": [
+          "住居の所有"
+        ],
+        "ko": [
+          "주거 소유"
+        ],
+        "ru": [
+          "жильё"
+        ],
+        "zh-Hant": [
+          "住房情況"
+        ]
+      },
+      "lookup_keys": [
+        "housingsituations",
+        "ownshomes",
+        "rentsapartments"
+      ]
+    },
+    {
+      "slug": "possession.subscriptions",
+      "family": "Possession",
+      "anchor": "SCH owns",
+      "covers": "subscriptions, memberships",
+      "synonyms": {
+        "en": [
+          "subscriptions",
+          "memberships",
+          "services subscribed"
+        ],
+        "zh": [
+          "订阅服务",
+          "会员"
+        ],
+        "de": [
+          "Abonnements"
+        ],
+        "es": [
+          "suscripciones"
+        ],
+        "fr": [
+          "abonnements"
+        ],
+        "ja": [
+          "サブスク"
+        ],
+        "ko": [
+          "구독 서비스"
+        ],
+        "ru": [
+          "подписки"
+        ],
+        "zh-Hant": [
+          "訂閱服務"
+        ]
+      },
+      "lookup_keys": [
+        "membership",
+        "servicessubscribeds",
+        "subscription"
+      ]
+    },
+    {
+      "slug": "possession.vehicle",
+      "family": "Possession",
+      "anchor": "SCH owns; IAB Automotive",
+      "covers": "vehicles",
+      "synonyms": {
+        "en": [
+          "car they own",
+          "vehicle owned",
+          "their motorcycle"
+        ],
+        "zh": [
+          "拥有的车",
+          "座驾"
+        ],
+        "de": [
+          "eigenes Fahrzeug"
+        ],
+        "es": [
+          "vehículo propio"
+        ],
+        "fr": [
+          "véhicule possédé"
+        ],
+        "ja": [
+          "所有する車"
+        ],
+        "ko": [
+          "보유 차량"
+        ],
+        "ru": [
+          "личный автомобиль"
+        ],
+        "zh-Hant": [
+          "擁有的車"
+        ]
+      },
+      "lookup_keys": [
+        "cartheyowns",
+        "theirmotorcycles",
+        "vehicle",
+        "vehicleowneds",
+        "vehicles"
+      ]
+    },
+    {
+      "slug": "preference.accommodation",
+      "family": "Preference",
+      "anchor": "IAB Travel",
+      "covers": "lodging",
+      "synonyms": {
+        "en": [
+          "lodging preference",
+          "hotel taste",
+          "airbnb or hotel"
+        ],
+        "zh": [
+          "住宿偏好"
+        ],
+        "de": [
+          "Unterkunfts-Vorliebe"
+        ],
+        "es": [
+          "preferencia de alojamiento"
+        ],
+        "fr": [
+          "préférence d'hébergement"
+        ],
+        "ja": [
+          "宿泊の好み"
+        ],
+        "ko": [
+          "숙소 선호"
+        ],
+        "ru": [
+          "предпочтения жилья"
+        ],
+        "zh-Hant": [
+          "住宿偏好"
+        ]
+      },
+      "lookup_keys": [
+        "accommodation",
+        "accommodations",
+        "airbnborhotels",
+        "hoteltastes",
+        "lodgingpreferences"
+      ]
+    },
+    {
+      "slug": "preference.art",
+      "family": "Preference",
+      "anchor": "IAB Fine Art",
+      "covers": "art taste",
+      "synonyms": {
+        "en": [
+          "art taste",
+          "favorite artist",
+          "art style liked"
+        ],
+        "zh": [
+          "艺术口味"
+        ],
+        "de": [
+          "Kunstgeschmack"
+        ],
+        "es": [
+          "gusto artístico"
+        ],
+        "fr": [
+          "goûts artistiques"
+        ],
+        "ja": [
+          "アートの好み"
+        ],
+        "ko": [
+          "예술 취향"
+        ],
+        "ru": [
+          "художественные вкусы"
+        ],
+        "zh-Hant": [
+          "藝術口味"
+        ]
+      },
+      "lookup_keys": [
+        "art",
+        "arts",
+        "artstylelikeds",
+        "arttastes",
+        "favoriteartists",
+        "favouriteartist",
+        "favouriteartists"
+      ]
+    },
+    {
+      "slug": "preference.audio",
+      "family": "Preference",
+      "anchor": "IAB Music & Audio",
+      "covers": "podcasts, radio",
+      "synonyms": {
+        "en": [
+          "podcasts they follow",
+          "radio taste",
+          "audio shows"
+        ],
+        "zh": [
+          "播客偏好",
+          "电台偏好"
+        ],
+        "de": [
+          "Podcast-Vorliebe"
+        ],
+        "es": [
+          "preferencia de pódcast"
+        ],
+        "fr": [
+          "préférence de podcasts"
+        ],
+        "ja": [
+          "ポッドキャストの好み"
+        ],
+        "ko": [
+          "팟캐스트 선호"
+        ],
+        "ru": [
+          "предпочтения подкастов"
+        ],
+        "zh-Hant": [
+          "播客偏好"
+        ]
+      },
+      "lookup_keys": [
+        "audio",
+        "audioshow",
+        "podcaststheyfollows",
+        "radiotastes"
+      ]
+    },
+    {
+      "slug": "preference.cooking",
+      "family": "Preference",
+      "anchor": "IAB Food & Drink",
+      "covers": "home cooking",
+      "synonyms": {
+        "en": [
+          "cooking style",
+          "likes to cook",
+          "home cooking"
+        ],
+        "zh": [
+          "下厨偏好",
+          "做饭习惯"
+        ],
+        "de": [
+          "Kochgewohnheiten"
+        ],
+        "es": [
+          "preferencia de cocina"
+        ],
+        "fr": [
+          "préférence de cuisine"
+        ],
+        "ja": [
+          "料理の好み"
+        ],
+        "ko": [
+          "요리 선호"
+        ],
+        "ru": [
+          "кулинарные привычки"
+        ],
+        "zh-Hant": [
+          "下廚偏好"
+        ]
+      },
+      "lookup_keys": [
+        "cooking",
+        "cookings",
+        "cookingstyles",
+        "homecookings",
+        "likestocooks"
+      ]
+    },
+    {
+      "slug": "preference.devices",
+      "family": "Preference",
+      "anchor": "OURS; IAB Technology",
+      "covers": "OS, hardware, devices",
+      "synonyms": {
+        "en": [
+          "platform preference",
+          "operating system preference",
+          "device taste"
+        ],
+        "zh": [
+          "平台偏好",
+          "系统偏好"
+        ],
+        "de": [
+          "Plattform-Vorliebe"
+        ],
+        "es": [
+          "preferencia de plataforma"
+        ],
+        "fr": [
+          "préférence de plateforme"
+        ],
+        "ja": [
+          "プラットフォームの好み"
+        ],
+        "ko": [
+          "플랫폼 선호"
+        ],
+        "ru": [
+          "предпочтения платформ"
+        ],
+        "zh-Hant": [
+          "平台偏好"
+        ]
+      },
+      "lookup_keys": [
+        "devicetastes",
+        "operatingsystempreferences",
+        "platformpreferences"
+      ]
+    },
+    {
+      "slug": "preference.diet",
+      "family": "Preference",
+      "anchor": "IAB Healthy Living",
+      "covers": "dietary pattern/restriction",
+      "synonyms": {
+        "en": [
+          "diet",
+          "vegetarian",
+          "vegan",
+          "eating pattern chosen"
+        ],
+        "zh": [
+          "饮食方式",
+          "吃素"
+        ],
+        "de": [
+          "Ernährungsweise"
+        ],
+        "es": [
+          "dieta"
+        ],
+        "fr": [
+          "régime alimentaire"
+        ],
+        "ja": [
+          "食事スタイル"
+        ],
+        "ko": [
+          "식단 방식"
+        ],
+        "ru": [
+          "тип питания"
+        ],
+        "zh-Hant": [
+          "飲食方式"
+        ]
+      },
+      "lookup_keys": [
+        "diets",
+        "eatingpatternchosens",
+        "vegans",
+        "vegetarians"
+      ]
+    },
+    {
+      "slug": "preference.dining",
+      "family": "Preference",
+      "anchor": "IAB Food & Drink",
+      "covers": "restaurants, dining out",
+      "synonyms": {
+        "en": [
+          "favorite restaurant",
+          "dining out preference"
+        ],
+        "zh": [
+          "外食偏好",
+          "餐厅偏好"
+        ],
+        "de": [
+          "Restaurant-Vorliebe"
+        ],
+        "es": [
+          "preferencia de restaurantes"
+        ],
+        "fr": [
+          "préférence de restaurants"
+        ],
+        "ja": [
+          "外食の好み"
+        ],
+        "ko": [
+          "외식 선호"
+        ],
+        "ru": [
+          "предпочтения ресторанов"
+        ],
+        "zh-Hant": [
+          "外食偏好"
+        ]
+      },
+      "lookup_keys": [
+        "dining",
+        "diningoutpreferences",
+        "dinings",
+        "favoriterestaurants",
+        "favouriterestaurant",
+        "favouriterestaurants"
+      ]
+    },
+    {
+      "slug": "preference.drinks",
+      "family": "Preference",
+      "anchor": "IAB Food & Drink",
+      "covers": "drinks incl. coffee/tea/alcohol",
+      "synonyms": {
+        "en": [
+          "favorite drink",
+          "coffee preference",
+          "tea preference",
+          "alcohol preference"
+        ],
+        "zh": [
+          "饮品偏好",
+          "咖啡偏好"
+        ],
+        "de": [
+          "Getränke-Vorliebe"
+        ],
+        "es": [
+          "preferencia de bebidas"
+        ],
+        "fr": [
+          "préférence de boissons"
+        ],
+        "ja": [
+          "飲み物の好み"
+        ],
+        "ko": [
+          "음료 선호"
+        ],
+        "ru": [
+          "предпочтения в напитках"
+        ],
+        "zh-Hant": [
+          "飲品偏好"
+        ]
+      },
+      "lookup_keys": [
+        "alcoholpreferences",
+        "coffeepreferences",
+        "drink",
+        "drinks",
+        "favoritedrinks",
+        "favouritedrink",
+        "favouritedrinks",
+        "teapreferences"
+      ]
+    },
+    {
+      "slug": "preference.entertainment_going_out",
+      "family": "Preference",
+      "anchor": "IAB Events & Attractions",
+      "covers": "events, nightlife, attractions",
+      "synonyms": {
+        "en": [
+          "nightlife preference",
+          "events they attend",
+          "going out style"
+        ],
+        "zh": [
+          "外出娱乐偏好",
+          "夜生活偏好"
+        ],
+        "de": [
+          "Ausgeh-Vorliebe"
+        ],
+        "es": [
+          "preferencia de salidas"
+        ],
+        "fr": [
+          "préférence de sorties"
+        ],
+        "ja": [
+          "外出の好み"
+        ],
+        "ko": [
+          "외출 선호"
+        ],
+        "ru": [
+          "предпочтения досуга"
+        ],
+        "zh-Hant": [
+          "外出娛樂偏好"
+        ]
+      },
+      "lookup_keys": [
+        "entertainmentgoingout",
+        "entertainmentgoingouts",
+        "eventstheyattends",
+        "goingoutstyles",
+        "nightlifepreferences"
+      ]
+    },
+    {
+      "slug": "preference.exercise",
+      "family": "Preference",
+      "anchor": "IAB Sports",
+      "covers": "workout style, sports played",
+      "synonyms": {
+        "en": [
+          "workout style",
+          "sports they play",
+          "exercise preference"
+        ],
+        "zh": [
+          "运动偏好",
+          "健身方式"
+        ],
+        "de": [
+          "Trainingsstil"
+        ],
+        "es": [
+          "estilo de ejercicio"
+        ],
+        "fr": [
+          "style d'exercice"
+        ],
+        "ja": [
+          "運動の好み"
+        ],
+        "ko": [
+          "운동 선호"
+        ],
+        "ru": [
+          "стиль тренировок"
+        ],
+        "zh-Hant": [
+          "運動偏好"
+        ]
+      },
+      "lookup_keys": [
+        "exercise",
+        "exercisepreferences",
+        "exercises",
+        "sportstheyplays",
+        "workoutstyles"
+      ]
+    },
+    {
+      "slug": "preference.fashion",
+      "family": "Preference",
+      "anchor": "IAB Style & Fashion",
+      "covers": "clothing style",
+      "synonyms": {
+        "en": [
+          "clothing style",
+          "fashion taste",
+          "what they wear"
+        ],
+        "zh": [
+          "穿衣风格",
+          "时尚偏好"
+        ],
+        "de": [
+          "Kleidungsstil"
+        ],
+        "es": [
+          "estilo de ropa"
+        ],
+        "fr": [
+          "style vestimentaire"
+        ],
+        "ja": [
+          "服装の好み"
+        ],
+        "ko": [
+          "패션 취향"
+        ],
+        "ru": [
+          "стиль одежды"
+        ],
+        "zh-Hant": [
+          "穿衣風格"
+        ]
+      },
+      "lookup_keys": [
+        "clothingstyles",
+        "fashion",
+        "fashions",
+        "fashiontastes",
+        "whattheywears"
+      ]
+    },
+    {
+      "slug": "preference.food",
+      "family": "Preference",
+      "anchor": "IAB Food & Drink",
+      "covers": "cuisine, dishes",
+      "synonyms": {
+        "en": [
+          "favorite cuisine",
+          "favorite dish",
+          "food taste"
+        ],
+        "zh": [
+          "饮食口味",
+          "爱吃的菜"
+        ],
+        "de": [
+          "Essensgeschmack"
+        ],
+        "es": [
+          "gusto culinario"
+        ],
+        "fr": [
+          "goûts culinaires"
+        ],
+        "ja": [
+          "食の好み"
+        ],
+        "ko": [
+          "음식 취향"
+        ],
+        "ru": [
+          "кулинарные вкусы"
+        ],
+        "zh-Hant": [
+          "飲食口味"
+        ]
+      },
+      "lookup_keys": [
+        "favoritecuisines",
+        "favoritedishes",
+        "favouritecuisine",
+        "favouritecuisines",
+        "favouritedish",
+        "favouritedishes",
+        "food",
+        "foods",
+        "foodtastes"
+      ]
+    },
+    {
+      "slug": "preference.games",
+      "family": "Preference",
+      "anchor": "IAB Video Gaming",
+      "covers": "gaming taste",
+      "synonyms": {
+        "en": [
+          "gaming taste",
+          "favorite game",
+          "video games they play"
+        ],
+        "zh": [
+          "游戏口味",
+          "喜欢的游戏"
+        ],
+        "de": [
+          "Spielegeschmack"
+        ],
+        "es": [
+          "gusto de videojuegos"
+        ],
+        "fr": [
+          "goûts de jeux vidéo"
+        ],
+        "ja": [
+          "ゲームの好み"
+        ],
+        "ko": [
+          "게임 취향"
+        ],
+        "ru": [
+          "игровые вкусы"
+        ],
+        "zh-Hant": [
+          "遊戲口味"
+        ]
+      },
+      "lookup_keys": [
+        "favoritegames",
+        "favouritegame",
+        "favouritegames",
+        "game",
+        "games",
+        "gamingtastes",
+        "videogamestheyplays"
+      ]
+    },
+    {
+      "slug": "preference.home",
+      "family": "Preference",
+      "anchor": "IAB Home & Garden",
+      "covers": "living space, decor",
+      "synonyms": {
+        "en": [
+          "home decor taste",
+          "living space preference"
+        ],
+        "zh": [
+          "家居偏好",
+          "居住风格"
+        ],
+        "de": [
+          "Wohnstil"
+        ],
+        "es": [
+          "estilo de hogar"
+        ],
+        "fr": [
+          "style d'intérieur"
+        ],
+        "ja": [
+          "住まいの好み"
+        ],
+        "ko": [
+          "주거 취향"
+        ],
+        "ru": [
+          "стиль жилья"
+        ],
+        "zh-Hant": [
+          "家居偏好"
+        ]
+      },
+      "lookup_keys": [
+        "homedecortastes",
+        "livingspacepreferences"
+      ]
+    },
+    {
+      "slug": "preference.media_sources",
+      "family": "Preference",
+      "anchor": "IAB News",
+      "covers": "news sources, media habits",
+      "synonyms": {
+        "en": [
+          "news sources",
+          "media they read",
+          "where they get news"
+        ],
+        "zh": [
+          "新闻来源",
+          "资讯来源"
+        ],
+        "de": [
+          "Nachrichtenquellen"
+        ],
+        "es": [
+          "fuentes de noticias"
+        ],
+        "fr": [
+          "sources d'information"
+        ],
+        "ja": [
+          "ニュースソース"
+        ],
+        "ko": [
+          "뉴스 소스"
+        ],
+        "ru": [
+          "источники новостей"
+        ],
+        "zh-Hant": [
+          "新聞來源"
+        ]
+      },
+      "lookup_keys": [
+        "mediasource",
+        "mediasources",
+        "mediatheyreads",
+        "newssource",
+        "wheretheygetnew"
+      ]
+    },
+    {
+      "slug": "preference.music",
+      "family": "Preference",
+      "anchor": "IAB Music & Audio",
+      "covers": "music taste",
+      "synonyms": {
+        "en": [
+          "music taste",
+          "favorite music",
+          "favorite band"
+        ],
+        "zh": [
+          "音乐口味",
+          "喜欢的音乐"
+        ],
+        "de": [
+          "Musikgeschmack"
+        ],
+        "es": [
+          "gusto musical"
+        ],
+        "fr": [
+          "goûts musicaux"
+        ],
+        "ja": [
+          "音楽の好み"
+        ],
+        "ko": [
+          "음악 취향"
+        ],
+        "ru": [
+          "музыкальные вкусы"
+        ],
+        "zh-Hant": [
+          "音樂口味"
+        ]
+      },
+      "lookup_keys": [
+        "favoritebands",
+        "favoritemusics",
+        "favouriteband",
+        "favouritebands",
+        "favouritemusic",
+        "favouritemusics",
+        "music",
+        "musictastes"
+      ]
+    },
+    {
+      "slug": "preference.programming",
+      "family": "Preference",
+      "anchor": "OURS",
+      "covers": "languages and frameworks",
+      "synonyms": {
+        "en": [
+          "programming language preference",
+          "favorite framework",
+          "coding language"
+        ],
+        "zh": [
+          "编程语言偏好",
+          "框架偏好"
+        ],
+        "de": [
+          "Programmiersprachen-Vorliebe"
+        ],
+        "es": [
+          "preferencia de lenguaje de programación"
+        ],
+        "fr": [
+          "préférence de langage de programmation"
+        ],
+        "ja": [
+          "プログラミング言語の好み"
+        ],
+        "ko": [
+          "프로그래밍 언어 선호"
+        ],
+        "ru": [
+          "предпочтения в языках программирования"
+        ],
+        "zh-Hant": [
+          "編程語言偏好"
+        ]
+      },
+      "lookup_keys": [
+        "codinglanguages",
+        "favoriteframeworks",
+        "favouriteframework",
+        "favouriteframeworks",
+        "programming",
+        "programminglanguagepreferences",
+        "programmings"
+      ]
+    },
+    {
+      "slug": "preference.reading",
+      "family": "Preference",
+      "anchor": "IAB Books & Literature",
+      "covers": "books/reading taste",
+      "synonyms": {
+        "en": [
+          "reading taste",
+          "favorite books",
+          "favorite author"
+        ],
+        "zh": [
+          "阅读口味",
+          "喜欢的书"
+        ],
+        "de": [
+          "Lesegeschmack"
+        ],
+        "es": [
+          "gusto de lectura"
+        ],
+        "fr": [
+          "goûts de lecture"
+        ],
+        "ja": [
+          "読書の好み"
+        ],
+        "ko": [
+          "독서 취향"
+        ],
+        "ru": [
+          "читательские вкусы"
+        ],
+        "zh-Hant": [
+          "閱讀口味"
+        ]
+      },
+      "lookup_keys": [
+        "favoriteauthors",
+        "favoritebook",
+        "favouriteauthor",
+        "favouriteauthors",
+        "favouritebook",
+        "favouritebooks",
+        "reading",
+        "readings",
+        "readingtastes"
+      ]
+    },
+    {
+      "slug": "preference.screen",
+      "family": "Preference",
+      "anchor": "IAB Movies/Television",
+      "covers": "film & TV taste",
+      "synonyms": {
+        "en": [
+          "movie taste",
+          "tv shows",
+          "favorite film",
+          "favorite series",
+          "favorite director",
+          "favorite actor"
+        ],
+        "zh": [
+          "影视口味",
+          "喜欢的电影",
+          "喜欢的剧"
+        ],
+        "de": [
+          "Film- und Seriengeschmack"
+        ],
+        "es": [
+          "gusto de cine y series"
+        ],
+        "fr": [
+          "goûts cinéma et séries"
+        ],
+        "ja": [
+          "映画ドラマの好み"
+        ],
+        "ko": [
+          "영화 드라마 취향"
+        ],
+        "ru": [
+          "вкусы в кино и сериалах"
+        ],
+        "zh-Hant": [
+          "影視口味"
+        ]
+      },
+      "lookup_keys": [
+        "favoriteactors",
+        "favoritedirectors",
+        "favoritefilms",
+        "favoritesery",
+        "favouriteactor",
+        "favouriteactors",
+        "favouritedirector",
+        "favouritedirectors",
+        "favouritefilm",
+        "favouritefilms",
+        "favouriteseries",
+        "favouritesery",
+        "movietastes",
+        "screen",
+        "screens",
+        "tvshow"
+      ]
+    },
+    {
+      "slug": "preference.shopping",
+      "family": "Preference",
+      "anchor": "IAB Shopping",
+      "covers": "shopping style, brands",
+      "synonyms": {
+        "en": [
+          "shopping style",
+          "favorite brands",
+          "brand loyalty"
+        ],
+        "zh": [
+          "购物偏好",
+          "品牌偏好"
+        ],
+        "de": [
+          "Einkaufsstil"
+        ],
+        "es": [
+          "estilo de compras"
+        ],
+        "fr": [
+          "style d'achat"
+        ],
+        "ja": [
+          "買い物の好み"
+        ],
+        "ko": [
+          "쇼핑 스타일"
+        ],
+        "ru": [
+          "стиль покупок"
+        ],
+        "zh-Hant": [
+          "購物偏好"
+        ]
+      },
+      "lookup_keys": [
+        "brandloyalties",
+        "favoritebrand",
+        "favouritebrand",
+        "favouritebrands",
+        "shopping",
+        "shoppings",
+        "shoppingstyles"
+      ]
+    },
+    {
+      "slug": "preference.social_media",
+      "family": "Preference",
+      "anchor": "IAB Pop Culture",
+      "covers": "platform habits",
+      "synonyms": {
+        "en": [
+          "platform habits",
+          "social media they use"
+        ],
+        "zh": [
+          "社交平台习惯",
+          "常用平台"
+        ],
+        "de": [
+          "Social-Media-Gewohnheiten"
+        ],
+        "es": [
+          "hábitos de redes sociales"
+        ],
+        "fr": [
+          "habitudes de réseaux sociaux"
+        ],
+        "ja": [
+          "SNS利用習慣"
+        ],
+        "ko": [
+          "소셜 미디어 습관"
+        ],
+        "ru": [
+          "привычки в соцсетях"
+        ],
+        "zh-Hant": [
+          "社交平台習慣"
+        ]
+      },
+      "lookup_keys": [
+        "platformhabit",
+        "socialmedia",
+        "socialmedias",
+        "socialmediatheyuses"
+      ]
+    },
+    {
+      "slug": "preference.tools",
+      "family": "Preference",
+      "anchor": "OURS",
+      "covers": "editors, AI/dev tools",
+      "synonyms": {
+        "en": [
+          "editor preference",
+          "ai tools",
+          "dev tools preference"
+        ],
+        "zh": [
+          "工具偏好",
+          "编辑器偏好"
+        ],
+        "de": [
+          "Werkzeug-Vorliebe"
+        ],
+        "es": [
+          "preferencia de herramientas"
+        ],
+        "fr": [
+          "préférence d'outils"
+        ],
+        "ja": [
+          "ツールの好み"
+        ],
+        "ko": [
+          "도구 선호"
+        ],
+        "ru": [
+          "предпочтения в инструментах"
+        ],
+        "zh-Hant": [
+          "工具偏好"
+        ]
+      },
+      "lookup_keys": [
+        "aitool",
+        "devtoolspreferences",
+        "editorpreferences",
+        "tool",
+        "tools"
+      ]
+    },
+    {
+      "slug": "preference.transport",
+      "family": "Preference",
+      "anchor": "IAB Automotive/Travel",
+      "covers": "transport modes",
+      "synonyms": {
+        "en": [
+          "transport preference",
+          "how they get around",
+          "drives or transit"
+        ],
+        "zh": [
+          "出行方式",
+          "交通偏好"
+        ],
+        "de": [
+          "Verkehrsmittel-Vorliebe"
+        ],
+        "es": [
+          "preferencia de transporte"
+        ],
+        "fr": [
+          "préférence de transport"
+        ],
+        "ja": [
+          "移動手段の好み"
+        ],
+        "ko": [
+          "이동 수단 선호"
+        ],
+        "ru": [
+          "предпочтения транспорта"
+        ],
+        "zh-Hant": [
+          "出行方式"
+        ]
+      },
+      "lookup_keys": [
+        "drivesortransits",
+        "howtheygetarounds",
+        "transport",
+        "transportpreferences",
+        "transports"
+      ]
+    },
+    {
+      "slug": "preference.travel_destinations",
+      "family": "Preference",
+      "anchor": "IAB Travel",
+      "covers": "destinations",
+      "synonyms": {
+        "en": [
+          "favorite destination",
+          "places they want to visit",
+          "travel destination taste",
+          "preferred climate for travel"
+        ],
+        "zh": [
+          "旅行目的地偏好",
+          "想去的地方"
+        ],
+        "de": [
+          "Reiseziel-Vorliebe"
+        ],
+        "es": [
+          "preferencia de destinos"
+        ],
+        "fr": [
+          "préférence de destinations"
+        ],
+        "ja": [
+          "旅行先の好み"
+        ],
+        "ko": [
+          "여행지 선호"
+        ],
+        "ru": [
+          "предпочтения направлений"
+        ],
+        "zh-Hant": [
+          "旅行目的地偏好"
+        ]
+      },
+      "lookup_keys": [
+        "favoritedestinations",
+        "favouritedestination",
+        "favouritedestinations",
+        "placestheywanttovisits",
+        "preferredclimatefortravels",
+        "traveldestination",
+        "traveldestinations",
+        "traveldestinationtastes"
+      ]
+    },
+    {
+      "slug": "preference.travel_style",
+      "family": "Preference",
+      "anchor": "IAB Travel",
+      "covers": "pace, company, planning style",
+      "synonyms": {
+        "en": [
+          "travel pace",
+          "solo or group travel",
+          "trip planning style"
+        ],
+        "zh": [
+          "旅行方式",
+          "旅行节奏"
+        ],
+        "de": [
+          "Reisestil"
+        ],
+        "es": [
+          "estilo de viaje"
+        ],
+        "fr": [
+          "style de voyage"
+        ],
+        "ja": [
+          "旅行スタイル"
+        ],
+        "ko": [
+          "여행 스타일"
+        ],
+        "ru": [
+          "стиль путешествий"
+        ],
+        "zh-Hant": [
+          "旅行方式"
+        ]
+      },
+      "lookup_keys": [
+        "soloorgrouptravels",
+        "travelpaces",
+        "travelstyle",
+        "travelstyles",
+        "tripplanningstyles"
+      ]
+    },
+    {
+      "slug": "preference.travel",
+      "family": "Preference",
+      "anchor": "IAB (Travel); durable travel taste",
+      "covers": "travel taste — destinations, styles and modes of travel the user likes or dislikes; a wished-for trip is goal.travel",
+      "synonyms": {
+        "en": [
+          "travel preference",
+          "travel taste",
+          "how they like to travel"
+        ],
+        "zh": [
+          "旅行偏好",
+          "旅游偏好"
+        ],
+        "de": [
+          "Reisevorliebe"
+        ],
+        "es": [
+          "preferencia de viaje"
+        ],
+        "fr": [
+          "préférence de voyage"
+        ],
+        "ja": [
+          "旅行の好み"
+        ],
+        "ko": [
+          "여행 취향"
+        ],
+        "ru": [
+          "предпочтения в путешествиях"
+        ],
+        "zh-Hant": [
+          "旅行偏好",
+          "旅遊偏好"
+        ]
+      },
+      "lookup_keys": [
+        "howtheyliketotravels",
+        "travelpreferences",
+        "traveltastes"
+      ]
+    },
+    {
+      "slug": "preference.weather",
+      "family": "Preference",
+      "anchor": "IAB (Style & Fashion/Weather); durable climate taste",
+      "covers": "climate and weather taste",
+      "synonyms": {
+        "en": [
+          "weather preference",
+          "climate preference",
+          "kind of weather they like"
+        ],
+        "zh": [
+          "天气偏好",
+          "气候偏好"
+        ],
+        "de": [
+          "Wettervorliebe",
+          "Klimavorliebe"
+        ],
+        "es": [
+          "preferencia de clima"
+        ],
+        "fr": [
+          "préférence météo",
+          "préférence de climat"
+        ],
+        "ja": [
+          "天候の好み",
+          "気候の好み"
+        ],
+        "ko": [
+          "날씨 취향",
+          "기후 취향"
+        ],
+        "ru": [
+          "предпочтения по погоде",
+          "предпочтения по климату"
+        ],
+        "zh-Hant": [
+          "天氣偏好",
+          "氣候偏好"
+        ]
+      },
+      "lookup_keys": [
+        "climatepreferences",
+        "kindofweathertheylikes",
+        "weather",
+        "weatherpreferences",
+        "weathers"
+      ]
+    },
+    {
+      "slug": "relationship.children",
+      "family": "Relationship",
+      "anchor": "SCH children",
+      "covers": "children",
+      "synonyms": {
+        "en": [
+          "children",
+          "kids",
+          "son",
+          "daughter"
+        ],
+        "zh": [
+          "子女",
+          "孩子"
+        ],
+        "de": [
+          "Kinder"
+        ],
+        "es": [
+          "hijos"
+        ],
+        "fr": [
+          "enfants"
+        ],
+        "ja": [
+          "子供"
+        ],
+        "ko": [
+          "자녀"
+        ],
+        "ru": [
+          "дети"
+        ],
+        "zh-Hant": [
+          "子女"
+        ]
+      },
+      "lookup_keys": [
+        "child",
+        "daughters",
+        "kid",
+        "sons"
+      ]
+    },
+    {
+      "slug": "relationship.colleagues",
+      "family": "Relationship",
+      "anchor": "SCH colleague",
+      "covers": "colleagues, manager",
+      "synonyms": {
+        "en": [
+          "colleagues",
+          "coworkers",
+          "manager",
+          "teammates at work"
+        ],
+        "zh": [
+          "同事",
+          "上司"
+        ],
+        "de": [
+          "Kollegen"
+        ],
+        "es": [
+          "colegas"
+        ],
+        "fr": [
+          "collègues"
+        ],
+        "ja": [
+          "同僚"
+        ],
+        "ko": [
+          "동료"
+        ],
+        "ru": [
+          "коллеги"
+        ],
+        "zh-Hant": [
+          "同事"
+        ]
+      },
+      "lookup_keys": [
+        "colleague",
+        "coworker",
+        "managers",
+        "teammatesatworks"
+      ]
+    },
+    {
+      "slug": "relationship.friends",
+      "family": "Relationship",
+      "anchor": "FOAF knows",
+      "covers": "friends",
+      "synonyms": {
+        "en": [
+          "friends",
+          "close friends",
+          "best friend"
+        ],
+        "zh": [
+          "朋友",
+          "好友"
+        ],
+        "de": [
+          "Freunde"
+        ],
+        "es": [
+          "amigos"
+        ],
+        "fr": [
+          "amis"
+        ],
+        "ja": [
+          "友人"
+        ],
+        "ko": [
+          "친구"
+        ],
+        "ru": [
+          "друзья"
+        ],
+        "zh-Hant": [
+          "朋友"
+        ]
+      },
+      "lookup_keys": [
+        "bestfriends",
+        "closefriend",
+        "friend"
+      ]
+    },
+    {
+      "slug": "relationship.parents",
+      "family": "Relationship",
+      "anchor": "SCH parent",
+      "covers": "parents",
+      "synonyms": {
+        "en": [
+          "parents",
+          "mother",
+          "father"
+        ],
+        "zh": [
+          "父母"
+        ],
+        "de": [
+          "Eltern"
+        ],
+        "es": [
+          "padres"
+        ],
+        "fr": [
+          "parents"
+        ],
+        "ja": [
+          "両親"
+        ],
+        "ko": [
+          "부모"
+        ],
+        "ru": [
+          "родители"
+        ],
+        "zh-Hant": [
+          "父母"
+        ]
+      },
+      "lookup_keys": [
+        "fathers",
+        "mothers",
+        "parent"
+      ]
+    },
+    {
+      "slug": "relationship.partner",
+      "family": "Relationship",
+      "anchor": "SCH spouse",
+      "covers": "partner / spouse",
+      "synonyms": {
+        "en": [
+          "partner",
+          "spouse",
+          "wife",
+          "husband",
+          "significant other"
+        ],
+        "zh": [
+          "伴侣",
+          "配偶",
+          "对象"
+        ],
+        "de": [
+          "Partner"
+        ],
+        "es": [
+          "pareja"
+        ],
+        "fr": [
+          "conjoint"
+        ],
+        "ja": [
+          "配偶者"
+        ],
+        "ko": [
+          "배우자"
+        ],
+        "ru": [
+          "супруг"
+        ],
+        "zh-Hant": [
+          "伴侶"
+        ]
+      },
+      "lookup_keys": [
+        "husbands",
+        "partners",
+        "significantothers",
+        "spouses",
+        "wives"
+      ]
+    },
+    {
+      "slug": "relationship.pets",
+      "family": "Relationship",
+      "anchor": "IAB Pets",
+      "covers": "pets they have",
+      "synonyms": {
+        "en": [
+          "their pets",
+          "pet they have",
+          "dog they own",
+          "cat they own"
+        ],
+        "zh": [
+          "养的宠物"
+        ],
+        "de": [
+          "ihre Haustiere"
+        ],
+        "es": [
+          "sus mascotas"
+        ],
+        "fr": [
+          "leurs animaux"
+        ],
+        "ja": [
+          "飼っているペット"
+        ],
+        "ko": [
+          "기르는 반려동물"
+        ],
+        "ru": [
+          "их питомцы"
+        ],
+        "zh-Hant": [
+          "養的寵物"
+        ]
+      },
+      "lookup_keys": [
+        "cattheyowns",
+        "dogtheyowns",
+        "pet",
+        "pets",
+        "pettheyhaves",
+        "theirpet"
+      ]
+    },
+    {
+      "slug": "relationship.relatives",
+      "family": "Relationship",
+      "anchor": "SCH relatedTo",
+      "covers": "extended family",
+      "synonyms": {
+        "en": [
+          "relatives",
+          "extended family"
+        ],
+        "zh": [
+          "亲戚"
+        ],
+        "de": [
+          "Verwandte"
+        ],
+        "es": [
+          "parientes"
+        ],
+        "fr": [
+          "famille élargie"
+        ],
+        "ja": [
+          "親戚"
+        ],
+        "ko": [
+          "친척"
+        ],
+        "ru": [
+          "родственники"
+        ],
+        "zh-Hant": [
+          "親戚"
+        ]
+      },
+      "lookup_keys": [
+        "extendedfamilies",
+        "relative"
+      ]
+    },
+    {
+      "slug": "relationship.siblings",
+      "family": "Relationship",
+      "anchor": "SCH sibling",
+      "covers": "siblings",
+      "synonyms": {
+        "en": [
+          "siblings",
+          "brother",
+          "sister"
+        ],
+        "zh": [
+          "兄弟姐妹"
+        ],
+        "de": [
+          "Geschwister"
+        ],
+        "es": [
+          "hermanos"
+        ],
+        "fr": [
+          "frères et sœurs"
+        ],
+        "ja": [
+          "兄弟姉妹"
+        ],
+        "ko": [
+          "형제자매"
+        ],
+        "ru": [
+          "братья и сёстры"
+        ],
+        "zh-Hant": [
+          "兄弟姊妹"
+        ]
+      },
+      "lookup_keys": [
+        "brothers",
+        "sibling",
+        "sisters"
+      ]
+    },
+    {
+      "slug": "routine.commute",
+      "family": "Routine",
+      "anchor": "GUMO hasRegularity",
+      "covers": "commute pattern",
+      "synonyms": {
+        "en": [
+          "commute pattern",
+          "commute route"
+        ],
+        "zh": [
+          "通勤习惯",
+          "通勤方式"
+        ],
+        "de": [
+          "Pendelgewohnheit"
+        ],
+        "es": [
+          "patrón de traslado"
+        ],
+        "fr": [
+          "habitude de trajet"
+        ],
+        "ja": [
+          "通勤パターン"
+        ],
+        "ko": [
+          "통근 패턴"
+        ],
+        "ru": [
+          "режим поездок на работу"
+        ],
+        "zh-Hant": [
+          "通勤習慣"
+        ]
+      },
+      "lookup_keys": [
+        "commute",
+        "commutepatterns",
+        "commuteroutes",
+        "commutes"
+      ]
+    },
+    {
+      "slug": "routine.daily",
+      "family": "Routine",
+      "anchor": "GUMO hasRegularity",
+      "covers": "daily routine",
+      "synonyms": {
+        "en": [
+          "daily routine",
+          "morning routine",
+          "evening routine"
+        ],
+        "zh": [
+          "日常作息",
+          "每日例行"
+        ],
+        "de": [
+          "Tagesablauf"
+        ],
+        "es": [
+          "rutina diaria"
+        ],
+        "fr": [
+          "routine quotidienne"
+        ],
+        "ja": [
+          "毎日のルーティン"
+        ],
+        "ko": [
+          "일과"
+        ],
+        "ru": [
+          "распорядок дня"
+        ],
+        "zh-Hant": [
+          "日常作息"
+        ]
+      },
+      "lookup_keys": [
+        "dailies",
+        "daily",
+        "dailyroutines",
+        "eveningroutines",
+        "morningroutines"
+      ]
+    },
+    {
+      "slug": "routine.habits",
+      "family": "Routine",
+      "anchor": "GUMO hasRegularity",
+      "covers": "standing habits (caffeine, smoking, etc.)",
+      "synonyms": {
+        "en": [
+          "standing habit",
+          "caffeine habit",
+          "smoking",
+          "daily habit"
+        ],
+        "zh": [
+          "日常习惯",
+          "习惯"
+        ],
+        "de": [
+          "feste Gewohnheit"
+        ],
+        "es": [
+          "hábito"
+        ],
+        "fr": [
+          "habitude"
+        ],
+        "ja": [
+          "習慣"
+        ],
+        "ko": [
+          "습관"
+        ],
+        "ru": [
+          "привычка"
+        ],
+        "zh-Hant": [
+          "日常習慣"
+        ]
+      },
+      "lookup_keys": [
+        "caffeinehabits",
+        "dailyhabits",
+        "habit",
+        "habits",
+        "smokings",
+        "standinghabits"
+      ]
+    },
+    {
+      "slug": "routine.weekly",
+      "family": "Routine",
+      "anchor": "GUMO hasRegularity",
+      "covers": "weekly rituals",
+      "synonyms": {
+        "en": [
+          "weekly ritual",
+          "weekend routine"
+        ],
+        "zh": [
+          "每周惯例",
+          "周末习惯"
+        ],
+        "de": [
+          "wöchentliches Ritual"
+        ],
+        "es": [
+          "rutina semanal"
+        ],
+        "fr": [
+          "routine hebdomadaire"
+        ],
+        "ja": [
+          "週間ルーティン"
+        ],
+        "ko": [
+          "주간 루틴"
+        ],
+        "ru": [
+          "еженедельный ритуал"
+        ],
+        "zh-Hant": [
+          "每週慣例"
+        ]
+      },
+      "lookup_keys": [
+        "weekendroutines",
+        "weeklies",
+        "weekly",
+        "weeklyrituals"
+      ]
+    },
+    {
+      "slug": "trait.collaboration",
+      "family": "Trait",
+      "anchor": "OURS",
+      "covers": "how they work WITH OTHERS: meetings, code and design review, delegation, conflict, mentoring. Not one-to-one message style",
+      "synonyms": {
+        "en": [
+          "collaboration style",
+          "meeting style",
+          "delegation style",
+          "conflict style",
+          "mentoring style"
+        ],
+        "zh": [
+          "协作风格",
+          "会议风格"
+        ],
+        "de": [
+          "Zusammenarbeitsstil"
+        ],
+        "es": [
+          "estilo de colaboración"
+        ],
+        "fr": [
+          "style de collaboration"
+        ],
+        "ja": [
+          "協働スタイル"
+        ],
+        "ko": [
+          "협업 스타일"
+        ],
+        "ru": [
+          "стиль совместной работы"
+        ],
+        "zh-Hant": [
+          "協作風格"
+        ]
+      },
+      "lookup_keys": [
+        "collaboration",
+        "collaborations",
+        "collaborationstyles",
+        "conflictstyles",
+        "delegationstyles",
+        "meetingstyles",
+        "mentoringstyles"
+      ]
+    },
+    {
+      "slug": "trait.communication",
+      "family": "Trait",
+      "anchor": "OURS + GUMO characteristics",
+      "covers": "how to talk to THEM: answer length, tone, formality, channel, and how they want feedback delivered. Not the subject matter, not how work is organised",
+      "synonyms": {
+        "en": [
+          "communication style",
+          "answer length",
+          "reply tone",
+          "feedback style",
+          "preferred channel",
+          "documentation style",
+          "documentation",
+          "how they want things written down",
+          "trait.documentation"
+        ],
+        "zh": [
+          "沟通风格",
+          "回复偏好",
+          "答复长度",
+          "文件风格",
+          "书面记录方式"
+        ],
+        "de": [
+          "Kommunikationsstil",
+          "Dokumentationsstil"
+        ],
+        "es": [
+          "estilo de comunicación",
+          "estilo de documentación"
+        ],
+        "fr": [
+          "style de communication",
+          "style de documentation"
+        ],
+        "ja": [
+          "コミュニケーションスタイル",
+          "ドキュメントの書き方"
+        ],
+        "ko": [
+          "소통 스타일",
+          "문서화 방식"
+        ],
+        "ru": [
+          "стиль общения",
+          "стиль документации"
+        ],
+        "zh-Hant": [
+          "溝通風格",
+          "文件風格",
+          "書面記錄方式"
+        ]
+      },
+      "lookup_keys": [
+        "answerlengths",
+        "communication",
+        "communications",
+        "communicationstyles",
+        "documentations",
+        "documentationstyles",
+        "feedbackstyles",
+        "howtheywantthingswrittendowns",
+        "preferredchannels",
+        "replytones",
+        "traitdocumentations"
+      ]
+    },
+    {
+      "slug": "trait.constraint",
+      "family": "Trait",
+      "anchor": "EKG Person",
+      "covers": "a hard limit the person states that bounds what can be recommended: hardware ceiling, compliance rule, pinned version, available effort. NOT a preference — a preference can be argued with, a constraint cannot",
+      "synonyms": {
+        "en": [
+          "constraint",
+          "hard limit",
+          "cannot use",
+          "not allowed to",
+          "stuck on",
+          "only has",
+          "blocked by"
+        ],
+        "zh": [
+          "硬性约束",
+          "限制条件",
+          "不能用",
+          "只能有",
+          "卡在"
+        ],
+        "de": [
+          "Einschränkung",
+          "harte Grenze"
+        ],
+        "es": [
+          "restricción",
+          "límite duro"
+        ],
+        "fr": [
+          "contrainte",
+          "limite stricte"
+        ],
+        "ja": [
+          "制約",
+          "使えない条件"
+        ],
+        "ko": [
+          "제약",
+          "사용 불가 조건"
+        ],
+        "ru": [
+          "ограничение",
+          "жёсткий предел"
+        ],
+        "zh-Hant": [
+          "硬性約束",
+          "限制條件",
+          "不能用",
+          "卡在"
+        ]
+      },
+      "lookup_keys": [
+        "blockedbies",
+        "cannotuses",
+        "constraints",
+        "hardlimits",
+        "notallowedtos",
+        "onlyha",
+        "stuckons"
+      ]
+    },
+    {
+      "slug": "trait.environment",
+      "family": "Trait",
+      "anchor": "OURS",
+      "covers": "remote/office, workspace setup",
+      "synonyms": {
+        "en": [
+          "work environment",
+          "remote work",
+          "office setup"
+        ],
+        "zh": [
+          "工作环境",
+          "远程办公"
+        ],
+        "de": [
+          "Arbeitsumgebung"
+        ],
+        "es": [
+          "entorno de trabajo"
+        ],
+        "fr": [
+          "environnement de travail"
+        ],
+        "ja": [
+          "作業環境"
+        ],
+        "ko": [
+          "업무 환경"
+        ],
+        "ru": [
+          "рабочая среда"
+        ],
+        "zh-Hant": [
+          "工作環境"
+        ]
+      },
+      "lookup_keys": [
+        "environment",
+        "environments",
+        "officesetups",
+        "remoteworks",
+        "workenvironments"
+      ]
+    },
+    {
+      "slug": "trait.planning",
+      "family": "Trait",
+      "anchor": "OURS",
+      "covers": "prioritization, task systems, deadlines",
+      "synonyms": {
+        "en": [
+          "planning style",
+          "prioritization",
+          "task system",
+          "deadline habits"
+        ],
+        "zh": [
+          "规划风格",
+          "任务管理习惯"
+        ],
+        "de": [
+          "Planungsstil"
+        ],
+        "es": [
+          "estilo de planificación"
+        ],
+        "fr": [
+          "style de planification"
+        ],
+        "ja": [
+          "計画スタイル"
+        ],
+        "ko": [
+          "계획 스타일"
+        ],
+        "ru": [
+          "стиль планирования"
+        ],
+        "zh-Hant": [
+          "規劃風格"
+        ]
+      },
+      "lookup_keys": [
+        "deadlinehabit",
+        "planning",
+        "plannings",
+        "planningstyles",
+        "prioritisation",
+        "prioritizations",
+        "tasksystems"
+      ]
+    },
+    {
+      "slug": "trait.practice",
+      "family": "Trait",
+      "anchor": "EKG Person",
+      "covers": "standing craft practices and stances on how work is done: testing discipline, review habits, what they read first",
+      "synonyms": {
+        "en": [
+          "work practice",
+          "engineering practice",
+          "how they work",
+          "methodology",
+          "always does",
+          "refuses to"
+        ],
+        "zh": [
+          "工作实践",
+          "做事方法",
+          "工程习惯",
+          "一贯做法"
+        ],
+        "de": [
+          "Arbeitspraxis",
+          "Vorgehensweise"
+        ],
+        "es": [
+          "práctica de trabajo",
+          "metodología"
+        ],
+        "fr": [
+          "pratique de travail",
+          "méthode"
+        ],
+        "ja": [
+          "仕事の進め方",
+          "実践方針"
+        ],
+        "ko": [
+          "작업 방식",
+          "실천 원칙"
+        ],
+        "ru": [
+          "рабочая практика",
+          "подход к работе"
+        ],
+        "zh-Hant": [
+          "工作實踐",
+          "做事方法",
+          "一貫做法"
+        ]
+      },
+      "lookup_keys": [
+        "alwaysdoe",
+        "engineeringpractices",
+        "engineeringpractise",
+        "engineeringpractises",
+        "howtheyworks",
+        "methodologies",
+        "practice",
+        "practices",
+        "practise",
+        "practises",
+        "refusestos",
+        "workpractices",
+        "workpractise",
+        "workpractises"
+      ]
+    },
+    {
+      "slug": "trait.privacy",
+      "family": "Trait",
+      "anchor": "OURS",
+      "covers": "privacy stance",
+      "synonyms": {
+        "en": [
+          "privacy stance",
+          "data privacy preference"
+        ],
+        "zh": [
+          "隐私立场",
+          "隐私偏好"
+        ],
+        "de": [
+          "Datenschutzhaltung"
+        ],
+        "es": [
+          "postura de privacidad"
+        ],
+        "fr": [
+          "position sur la vie privée"
+        ],
+        "ja": [
+          "プライバシー方針"
+        ],
+        "ko": [
+          "프라이버시 성향"
+        ],
+        "ru": [
+          "отношение к приватности"
+        ],
+        "zh-Hant": [
+          "隱私立場"
+        ]
+      },
+      "lookup_keys": [
+        "dataprivacypreferences",
+        "privacies",
+        "privacy",
+        "privacystances"
+      ]
+    },
+    {
+      "slug": "trait.risk",
+      "family": "Trait",
+      "anchor": "OURS",
+      "covers": "risk tolerance",
+      "synonyms": {
+        "en": [
+          "risk tolerance",
+          "risk appetite"
+        ],
+        "zh": [
+          "风险偏好",
+          "风险承受度"
+        ],
+        "de": [
+          "Risikobereitschaft"
+        ],
+        "es": [
+          "tolerancia al riesgo"
+        ],
+        "fr": [
+          "tolérance au risque"
+        ],
+        "ja": [
+          "リスク許容度"
+        ],
+        "ko": [
+          "위험 감수 성향"
+        ],
+        "ru": [
+          "отношение к риску"
+        ],
+        "zh-Hant": [
+          "風險偏好"
+        ]
+      },
+      "lookup_keys": [
+        "risk",
+        "riskappetites",
+        "risks",
+        "risktolerances"
+      ]
+    },
+    {
+      "slug": "trait.schedule",
+      "family": "Trait",
+      "anchor": "OURS + GUMO regularity",
+      "covers": "working hours, focus blocks, breaks",
+      "synonyms": {
+        "en": [
+          "working hours",
+          "focus time",
+          "break pattern"
+        ],
+        "zh": [
+          "工作时段",
+          "专注时段"
+        ],
+        "de": [
+          "Arbeitszeiten"
+        ],
+        "es": [
+          "horario de trabajo"
+        ],
+        "fr": [
+          "horaires de travail"
+        ],
+        "ja": [
+          "勤務時間帯"
+        ],
+        "ko": [
+          "근무 시간대"
+        ],
+        "ru": [
+          "график работы"
+        ],
+        "zh-Hant": [
+          "工作時段"
+        ]
+      },
+      "lookup_keys": [
+        "breakpatterns",
+        "focustimes",
+        "schedule",
+        "schedules",
+        "workinghour"
+      ]
+    },
+    {
+      "slug": "trait.tooling_habits",
+      "family": "Trait",
+      "anchor": "OURS",
+      "covers": "standing tool/notification habits",
+      "synonyms": {
+        "en": [
+          "notification habits",
+          "workflow tools habit",
+          "productivity method"
+        ],
+        "zh": [
+          "工具习惯",
+          "通知习惯"
+        ],
+        "de": [
+          "Werkzeuggewohnheiten"
+        ],
+        "es": [
+          "hábitos de herramientas"
+        ],
+        "fr": [
+          "habitudes d'outils"
+        ],
+        "ja": [
+          "ツール習慣"
+        ],
+        "ko": [
+          "도구 습관"
+        ],
+        "ru": [
+          "привычки в инструментах"
+        ],
+        "zh-Hant": [
+          "工具習慣"
+        ]
+      },
+      "lookup_keys": [
+        "notificationhabit",
+        "productivitymethods",
+        "toolinghabit",
+        "toolinghabits",
+        "workflowtoolshabits"
+      ]
+    },
+    {
+      "slug": "value.causes",
+      "family": "Value",
+      "anchor": "SCH sponsor/funder",
+      "covers": "causes, charity, activism",
+      "synonyms": {
+        "en": [
+          "causes supported",
+          "charity",
+          "activism",
+          "volunteers for"
+        ],
+        "zh": [
+          "公益立场",
+          "支持的事业"
+        ],
+        "de": [
+          "unterstützte Anliegen"
+        ],
+        "es": [
+          "causas apoyadas"
+        ],
+        "fr": [
+          "causes soutenues"
+        ],
+        "ja": [
+          "支援する活動"
+        ],
+        "ko": [
+          "지지하는 대의"
+        ],
+        "ru": [
+          "поддерживаемые инициативы"
+        ],
+        "zh-Hant": [
+          "公益立場"
+        ]
+      },
+      "lookup_keys": [
+        "activisms",
+        "cause",
+        "causes",
+        "causessupporteds",
+        "charities",
+        "volunteersfors"
+      ]
+    },
+    {
+      "slug": "value.ethics",
+      "family": "Value",
+      "anchor": "GUMO characteristics",
+      "covers": "ethical stances (e.g. sustainability)",
+      "synonyms": {
+        "en": [
+          "ethical stance",
+          "sustainability stance",
+          "moral position"
+        ],
+        "zh": [
+          "伦理立场",
+          "环保立场"
+        ],
+        "de": [
+          "ethische Haltung"
+        ],
+        "es": [
+          "postura ética"
+        ],
+        "fr": [
+          "position éthique"
+        ],
+        "ja": [
+          "倫理的立場"
+        ],
+        "ko": [
+          "윤리적 입장"
+        ],
+        "ru": [
+          "этическая позиция"
+        ],
+        "zh-Hant": [
+          "倫理立場"
+        ]
+      },
+      "lookup_keys": [
+        "ethic",
+        "ethicalstances",
+        "ethics",
+        "moralpositions",
+        "sustainabilitystances"
+      ]
+    },
+    {
+      "slug": "value.political",
+      "family": "Value",
+      "anchor": "GUMO (durable belief)",
+      "covers": "political stance",
+      "synonyms": {
+        "en": [
+          "political stance",
+          "political views"
+        ],
+        "zh": [
+          "政治立场",
+          "政治观点"
+        ],
+        "de": [
+          "politische Haltung"
+        ],
+        "es": [
+          "postura política"
+        ],
+        "fr": [
+          "position politique"
+        ],
+        "ja": [
+          "政治的立場"
+        ],
+        "ko": [
+          "정치 성향"
+        ],
+        "ru": [
+          "политическая позиция"
+        ],
+        "zh-Hant": [
+          "政治立場"
+        ]
+      },
+      "lookup_keys": [
+        "political",
+        "politicals",
+        "politicalstances",
+        "politicalview"
+      ]
+    },
+    {
+      "slug": "value.priorities",
+      "family": "Value",
+      "anchor": "GUMO characteristics",
+      "covers": "standing priorities and values",
+      "synonyms": {
+        "en": [
+          "personal values",
+          "what matters to them",
+          "life priorities"
+        ],
+        "zh": [
+          "价值观",
+          "人生优先级"
+        ],
+        "de": [
+          "Werte"
+        ],
+        "es": [
+          "valores"
+        ],
+        "fr": [
+          "valeurs"
+        ],
+        "ja": [
+          "価値観"
+        ],
+        "ko": [
+          "가치관"
+        ],
+        "ru": [
+          "ценности"
+        ],
+        "zh-Hant": [
+          "價值觀"
+        ]
+      },
+      "lookup_keys": [
+        "lifepriority",
+        "personalvalue",
+        "priorities",
+        "priority",
+        "whatmatterstothems"
+      ]
+    },
+    {
+      "slug": "value.spiritual",
+      "family": "Value",
+      "anchor": "GUMO (durable belief)",
+      "covers": "spiritual/religious affiliation and stance",
+      "synonyms": {
+        "en": [
+          "religion",
+          "faith",
+          "spiritual views",
+          "religious affiliation"
+        ],
+        "zh": [
+          "宗教信仰",
+          "信仰立场"
+        ],
+        "de": [
+          "Religion"
+        ],
+        "es": [
+          "religión"
+        ],
+        "fr": [
+          "religion"
+        ],
+        "ja": [
+          "宗教"
+        ],
+        "ko": [
+          "종교"
+        ],
+        "ru": [
+          "религия"
+        ],
+        "zh-Hant": [
+          "宗教信仰"
+        ]
+      },
+      "lookup_keys": [
+        "faiths",
+        "religions",
+        "religiousaffiliations",
+        "spiritual",
+        "spirituals",
+        "spiritualview"
+      ]
+    }
+  ],
+  "revision_note": "2026-08-18 revision, owner ruling: removed 8 slugs that hold a value which changes or that describe something other than the person - finance.income, finance.net_worth, health.body (body metrics is a reading), identity (bare catch-all), entity.event, entity.pet (duplicate of relationship.pets), entity.product, entity.project (the slot a moving project budget entered through). Added preference.weather. Narrowed entity.person / entity.organization / entity.place to identity only, never current state. 2026-08-16 revision: +9 slugs (industry, career_history, employment_status, team_membership, project_role, institutional_affiliation, timezone, trait.practice, trait.constraint), widened identity.education and ability.technical, removed trait.documentation / preference.general / entity.team, tightened trait.communication and trait.collaboration. Merged names carried as synonyms so the normalizing matcher resolves them: documentation -> trait.communication, team -> entity.organization. preference.general is DELIBERATELY unmapped — an unmappable preference must store WITHOUT a key, which is the correct behaviour and the reason the slot was removed. Merge synonyms are the OLD FULL SLUG NAMES (entity.team, trait.documentation), not bare words: a bare 'team' is legitimately owned by identity.team_membership, and an ambiguous key must resolve to nothing rather than to whichever entry was indexed first.",
+  "variants_generated_by": "apps/mem-claw/scripts/generate-attribute-dictionary-variants.mjs",
+  "lookup_keys_generated_by": "apps/mem-claw/scripts/generate-attribute-dictionary-variants.mjs",
+  "reserved_derived_keys": [
+    "device",
+    "devices",
+    "education",
+    "educations",
+    "home",
+    "homes",
+    "travel",
+    "travels"
+  ]
+}

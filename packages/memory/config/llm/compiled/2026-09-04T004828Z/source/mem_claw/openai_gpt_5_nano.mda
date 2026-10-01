@@ -1,0 +1,24 @@
+---
+name: llmix-mem-claw-openai-ccproxy
+description: LLMix preset mem_claw/openai_gpt_5_nano
+metadata:
+  snoai-llmix:
+    module: mem_claw
+    preset: openai_gpt_5_nano
+    common:
+      provider: openai
+      model: gpt-5.6-terra
+integrity:
+  algorithm: sha256
+  digest: sha256:9d3cfdb121fd33ac10eec62fe287103d5c39fb3d9d50fa1c93a9689d8eb08982
+signatures:
+  - signer: did-web:www.sno.ai
+    key-id: did:web:www.sno.ai#sno-mem-openclaw-release
+    payload-digest: sha256:9d3cfdb121fd33ac10eec62fe287103d5c39fb3d9d50fa1c93a9689d8eb08982
+    algorithm: ed25519
+    signature: f3qniIVrpo805aFXvejOPHOk461eUCapUkGJ0SmWT77MJ9EFozz7rE3jUont7D5/ADwTLMj52OlbWZxEx0+HBQ==
+    payload-type: application/vnd.mda.integrity+json
+---
+# mem_claw/openai_gpt_5_nano
+
+Subscription-backed ccproxy preset for Sno Memory for OpenClaw generative LLM calls.

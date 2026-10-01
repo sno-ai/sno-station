@@ -1,0 +1,10 @@
+{
+  "description": "Signed Sno profile extraction endpoint for mem_claw",
+  "model": "qwen3.8-27b-extract",
+  "provider": "sno-gpu",
+  "providerOptions": {
+    "sno-gpu": {
+      "gpuPath": "/extract/profile/v1/completions"
+    }
+  }
+}

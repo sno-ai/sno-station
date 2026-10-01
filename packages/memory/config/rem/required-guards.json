@@ -1,0 +1,7 @@
+[
+	{
+		"requirementId": "REQ-6",
+		"protection": "ordered wave entry refuses unresolved owner configuration",
+		"guardId": "guard.rem.ordered-wave-entry"
+	}
+]

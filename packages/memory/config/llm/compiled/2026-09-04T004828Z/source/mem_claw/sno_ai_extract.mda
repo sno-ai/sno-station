@@ -1,0 +1,24 @@
+---
+name: llmix-mem-claw-sno-ai-extract
+description: LLMix preset mem_claw/sno_ai_extract
+metadata:
+  snoai-llmix:
+    module: mem_claw
+    preset: sno_ai_extract
+    common:
+      provider: sno-gpu
+      model: qwen3.8-27b-extract
+integrity:
+  algorithm: sha256
+  digest: sha256:c1a5befc7daea399e21d58e9d3ad06ac13935ee543949d07b9a768ba608e2b71
+signatures:
+  - signer: did-web:www.sno.ai
+    key-id: did:web:www.sno.ai#sno-mem-openclaw-release
+    payload-digest: sha256:c1a5befc7daea399e21d58e9d3ad06ac13935ee543949d07b9a768ba608e2b71
+    algorithm: ed25519
+    signature: 6e5ItBAd9Q1fJU1iAur75EXG9RP8neYY9J8n75h4joFV+8Q1qN+oFceMEPDMUJDbnYWUBIour72zSBqt1O3kBg==
+    payload-type: application/vnd.mda.integrity+json
+---
+# mem_claw/sno_ai_extract
+
+Sno AI extract preset for Sno Memory for OpenClaw generative LLM calls.

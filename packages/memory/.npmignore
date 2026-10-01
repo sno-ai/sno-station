@@ -1,0 +1,116 @@
+# NPM publish boundary for @snoai/mem-claw.
+#
+# package.json "files" is the primary allowlist. This file is a defensive
+# denylist so accidental source, workspace, private, test, cache, and local
+# artifacts do not enter the tarball if the package shape changes.
+
+# Dependency installs and package-manager state
+node_modules/
+.pnp/
+.pnp.*
+package-lock.json
+pnpm-lock.yaml
+yarn.lock
+yarn-error.log
+
+# VCS, editor, OS, and workspace metadata
+.git/
+.github/
+.gitignore
+.gitattributes
+.vscode/
+.idea/
+.editorconfig
+.DS_Store
+Thumbs.db
+
+# Private/local agent and planning material
+CLAUDE.md
+AGENTS.md
+.claude/
+.codex/
+.agents/
+internal/
+docs/internal-note.md
+openspec/
+dev-scripts/
+
+# Environment, credentials, local runtime data, and logs
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.cert
+*.crt
+*.p12
+*.pfx
+data/
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+*.sqlite
+*.sqlite3
+*.db
+*.db-*
+
+# Workspace-only development inputs
+config/
+scripts/
+tests/
+test/
+__tests__/
+__fixtures__/
+fixtures/
+coverage/
+.nyc_output/
+*.test.ts
+*.spec.ts
+*.bench.ts
+*.snap
+drizzle.config.ts
+tsconfig.json
+tsconfig.*.json
+biome.json
+biome.jsonc
+eslint.config.*
+prettier.config.*
+vitest.config.*
+jest.config.*
+
+# Non-publish build outputs and compiler caches
+dist-e2e/
+.turbo/
+.cache/
+.parcel-cache/
+.rollup.cache/
+*.tsbuildinfo
+*.map
+*.d.ts.map
+
+# Python/tooling artifacts used by local maintenance scripts
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.venv/
+venv/
+
+# Temporary files and archives
+tmp/
+temp/
+.tmp/
+*.tmp
+*.temp
+*.bak
+*.backup
+*.orig
+*.rej
+*.tgz
+*.tar
+*.tar.gz
+*.zip

@@ -1,0 +1,27 @@
+{
+  "envelope": {
+    "schema_version": "v1",
+    "event_id": "11111111-1111-1111-1111-111111111111",
+    "event_type": "agent.identify",
+    "ts_edge_ms": 1730000000000,
+    "consent_level": "metadata-only",
+    "redacted": false,
+    "chain_epoch": 0,
+    "seq": 0,
+    "scope": {
+      "user_id": "u_abc",
+      "machine_id": "22222222-2222-2222-2222-222222222222",
+      "agent_id": "claude-code",
+      "project_id": "p_test"
+    },
+    "hash_chain": {
+      "self": "<computed>",
+      "prev": "GENESIS"
+    },
+    "payload": {
+      "hello": "world"
+    }
+  },
+  "preimage": "v1\n11111111-1111-1111-1111-111111111111\nagent.identify\n1730000000000\n{\"agent_id\":\"claude-code\",\"machine_id\":\"22222222-2222-2222-2222-222222222222\",\"project_id\":\"p_test\",\"user_id\":\"u_abc\"}\n0\n0\nmetadata-only\n0\n{\"hello\":\"world\"}\nGENESIS",
+  "expected_self_hash": "baaffb773da9529676f69c0993315c2dfad907713b7368ab88dee30d53f80411"
+}
