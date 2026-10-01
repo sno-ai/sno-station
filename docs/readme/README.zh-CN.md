@@ -35,8 +35,23 @@ Sno Station 是你的 agent 的工作站：一款开源软件，它把你已经�
 
 ## Install
 
-*最后更新于 2026-09-19。* 还没有。一条命令完成安装会随 onboarding 技能一起上线；
-在那之前，请持续关注本仓库。上线后它会是这样的：
+*最后更新于 2026-10-01。* **共享记忆今天就能安装。** 它让 Claude Code、Codex、OpenClaw 和 Hermes Agent 共用一份存放在你自己机器上的加密记忆，不需要账号，也不需要 API key。先运行一次[共享记忆设置](../memory-setup.md)（几分钟），再添加你的 agent：
+
+```bash
+# Codex CLI
+npm install -g @snoai/mem-codex@1.0.1 && sno-mem-codex install --codex-home ~/.codex
+# Claude Code
+npm install -g @snoai/mem-claude@1.0.1 && sno-mem-claude install --config-dir ~/.claude
+# OpenClaw
+openclaw plugins install @snoai/mem-claw@1.0.1
+# Hermes Agent
+hermes plugins install sno-ai/sno-station/apps/mem-hermes/sno-mem-hermes --enable
+hermes config set memory.provider sno-mem-hermes
+```
+
+分步说明： [Codex](../mem-codex/onboarding.md) · [Claude Code](../mem-claude/onboarding.md) · [OpenClaw](../mem-claw/onboarding.md) · [Hermes](../mem-hermes/onboarding.md)
+
+Sno Reach、Duo 技能和夜间循环还不在这些包里。一条命令装好全部内容的安装方式还没有，它会随 onboarding 技能一起上线；在那之前，请持续关注本仓库。上线后它会是这样的：
 
 ```bash
 # inside any Claude Code, Codex or OpenClaw conversation:
