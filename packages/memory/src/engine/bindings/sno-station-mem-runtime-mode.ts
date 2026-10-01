@@ -70,8 +70,7 @@ export async function runObserveLifecycleTask(
  * Detects pure-digit agentIds that almost always come from a chat_id / user-id
  * extraction (e.g. Discord snowflake `657229412030480397`, Telegram numeric
  * user_id `5108601505`). Treating these as agent identities triggers spurious
- * recall lookups against ids that have no memory rows. Issue #492 / PR #516
- * Layer 2.
+ * recall lookups against ids that have no memory rows.
  *
  * Returns true only for non-empty strings that are exclusively ASCII digits.
  * Empty/whitespace inputs are handled separately by `resolveHookAgentId`.

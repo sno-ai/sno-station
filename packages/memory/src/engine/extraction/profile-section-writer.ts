@@ -309,7 +309,7 @@ const LIFECYCLE_RETIREMENT_MAX_DEFERRALS = 3;
  * the route can ever answer, and three timeouts is an ordinary afternoon on a busy GPU — counting
  * them would throw away a retirement and leave the stale row it named live for good. A malformed
  * or empty answer from a route that resolved ON is the failure that repeats, so it is the one
- * that counts. Owner ruling via CTS, 2026-09-02, resolving the DEC-12 conflict.
+ * that counts.
  */
 function deferLifecycleRetirement(
 	retiredClauses: readonly string[],
@@ -909,7 +909,7 @@ function renderRetirementRecheckPrompt(input: {
 
 /**
  * The second key on every clause the profile judgement retired from `preferences.general`.
- * Measured 2026-09-01 on the PRD 130 Memora store: 753 clauses were retired across 1,149
+ * Measured 2026-09-01 on the Memora store: 753 clauses were retired across 1,149
  * rewrites, 317 of them shared no content word with the incoming assertion, and 238 of those in
  * the general section had no live sibling carrying them; replayed one by one, 39 of 40 such
  * retirements were judged wrong, while 14 of 20 genuine replacements were still retired. A
