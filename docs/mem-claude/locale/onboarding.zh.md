@@ -13,7 +13,7 @@
 先按[共用记忆服务安装说明](../../memory-setup.md)完成设置，再安装 Claude Code 插件：
 
 ```bash
-npm install -g @snoai/mem-claude@1.0.0
+npm install -g @snoai/mem-claude@1.0.1
 sno-mem-claude install --config-dir ~/.claude
 ```
 
@@ -113,7 +113,7 @@ sno-mem-claude doctor
 
 ```text
 sidecar: healthy
-hooks: SessionStart=present UserPromptSubmit=present Stop=present
+hooks: SessionStart=present UserPromptSubmit=present Stop=present SessionEnd=present PreToolUse=present PostToolUse=present
 permission rule: present
 import receipts: "/absolute/path/to/repository"=present
 ```
@@ -182,6 +182,6 @@ Linux 命令行安装和 hook 失败路径有真实的验收记录。macOS 命�
 - Agent Native 跑在已有的 Claude Code subscription 上，不收任何 key；
 - REM Enhanced 用公开语言说明 Sno 与 Claude 各自负责的工作；
 - install 命令只写自己的条目，`--dry-run` 什么都不改；
-- 新会话之后 `doctor` 打印 `healthy`、三个 `present` 的 hook 和 `present` 的 permission 规则；
+- 新会话之后 `doctor` 打印 `healthy`、六个 `present` 的 hook 和 `present` 的 permission 规则；
 - 用户能创建并验证第一条 memory；
 - 输出中没有 secret、私有 hostname、内部路径或部署说明。

@@ -13,7 +13,7 @@ Requirements:
 Complete the [shared memory setup](../memory-setup.md), then install the Claude Code integration:
 
 ```bash
-npm install -g @snoai/mem-claude@1.0.0
+npm install -g @snoai/mem-claude@1.0.1
 sno-mem-claude install --config-dir ~/.claude
 ```
 
@@ -121,7 +121,7 @@ The output has four lines:
 
 ```text
 sidecar: healthy
-hooks: SessionStart=present UserPromptSubmit=present Stop=present
+hooks: SessionStart=present UserPromptSubmit=present Stop=present SessionEnd=present PreToolUse=present PostToolUse=present
 permission rule: present
 import receipts: "/absolute/path/to/repository"=present
 ```
@@ -193,7 +193,7 @@ Onboarding is complete when:
 - Agent Native runs on the existing Claude Code subscription and collects no key;
 - REM Enhanced explains the Sno-covered and Claude-covered work in public terms;
 - the install command writes only its own entries and `--dry-run` changes nothing;
-- `doctor` prints `healthy`, three `present` hooks, and a `present` permission rule after a new
+- `doctor` prints `healthy`, six `present` hooks, and a `present` permission rule after a new
   session;
 - the user can create and verify a first memory;
 - no secret, private hostname, internal path, or deployment instruction appears in the output.

@@ -16,7 +16,7 @@ Requirements:
 Complete the [shared memory setup](../memory-setup.md), then run:
 
 ```bash
-npm install -g @snoai/mem-claude@1.0.0
+npm install -g @snoai/mem-claude@1.0.1
 sno-mem-claude install --config-dir ~/.claude
 ```
 
@@ -140,7 +140,7 @@ wipe-db`).
 
 ### Hooks
 
-The install command registers three Claude Code hooks. Each one is scoped to the git repository
+The install command registers six Claude Code hooks. Each one is scoped to the git repository
 that contains the session's working directory; outside a repository, and in subagents, hooks
 inject and capture nothing.
 
@@ -149,6 +149,9 @@ inject and capture nothing.
 | `SessionStart` | 15 s | Injects up to 5 memories (at most 3,500 characters) about standing decisions, open tasks, conventions, and pitfalls for the repository; imports the repository's Claude Code memory notes on first start |
 | `UserPromptSubmit` | 8 s | Injects up to 3 memories (at most 1,500 characters) relevant to the prompt; prompts shorter than 12 characters are skipped |
 | `Stop` | 5 s | Spools the completed turn and starts the capture worker |
+| `SessionEnd` | 8 s | Tells the memory service the session has ended |
+| `PreToolUse` | 5 s | Notes when a tool call starts, so its duration can be measured |
+| `PostToolUse` | 8 s | Reports each finished tool call to the memory service |
 
 A session receives at most 12,000 characters of injected memory in total, and a memory already
 shown in the session is not shown again. The injected block is labelled as data, not
