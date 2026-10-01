@@ -28,9 +28,13 @@ let machineUserId: string | undefined;
 /** The configured provider.userId, else this machine's identity (the same id every skin sees). */
 export function readTrustedUserId(config: PluginConfig): string {
 	const configured = config.provider.userId;
-	const trimmed = typeof configured === "string" && configured.trim().length > 0
-		? configured.trim()
-		: (machineUserId ??= bootstrapIdentity().machine_uuid);
+	let trimmed: string;
+	if (typeof configured === "string" && configured.trim().length > 0) {
+		trimmed = configured.trim();
+	} else {
+		machineUserId ??= bootstrapIdentity().machine_uuid;
+		trimmed = machineUserId;
+	}
 	if (!isLowercaseCanonicalUUIDv7(trimmed)) {
 		throw new Error("sno-station-mem provider userId must be a lowercase UUID-v7");
 	}

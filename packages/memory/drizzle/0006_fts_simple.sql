@@ -1,5 +1,4 @@
 -- Hand-rolled migration; do NOT run `npm run db:generate` against this file.
--- Per PRD `docs/internal-note.md` §D.
 -- Swap nodix_memory_chunks_fts tokenizer from `porter unicode61` (char-level on CJK)
 -- to `simple 0` (jieba word-level via wangfenjin/simple extension).
 -- Schema, triggers, and downstream MATCH queries stay identical — only the

@@ -597,7 +597,7 @@ export const AUTO_RECALL_INJECTION_TOP_K = 20;
  *
  * This constant is the source of truth for the "Lean N" token in
  * `openclaw.plugin.json` uiHints and the Path A install nudge.
- * AC5 drift test (`tests/apps/mem-claw/unit/config-drift.test.ts`)
+ * The plugin configuration test
  * pins all four surfaces to this constant.
  */
 export const AUTO_RECALL_LEAN_TOP_K = 15;
