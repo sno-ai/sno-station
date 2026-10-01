@@ -578,7 +578,7 @@ Object.assign(MemoryStore.prototype, {
 				rawCandidateJson: undefined,
 				dispositionReason: undefined,
 				dispositionedAt: undefined,
-				// PRD §4.2 — include category so identical text under distinct
+				// Include category so identical text under distinct
 				// categories (e.g. decision vs lesson) is NOT collapsed.
 				dedupKey: `${projectId}:${validated.category}:${hash}`,
 				importance: clamp01(entry.importance ?? DEFAULT_IMPORTANCE, DEFAULT_IMPORTANCE),

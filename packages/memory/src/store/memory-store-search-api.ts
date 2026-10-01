@@ -395,7 +395,7 @@ Object.assign(MemoryStore.prototype, {
 			// is entirely current stays unlabelled, so ordinary recall reads as before.
 			const mixedFacets = sorted.some((c) => c.facet === "history");
 			const parts = sorted.map((c) => (mixedFacets ? `[${c.facet}] ${c.chunkText}` : c.chunkText));
-			// PRD §8.1: when the snippet window does not include chunk[0], prepend
+			// When the snippet window does not include chunk[0], prepend
 			// the parent's metadata header (markdown title + key:value frontmatter
 			// such as `session_date_time`) so the LLM can resolve relative
 			// references like "this month" / "last week" in non-first chunks.
