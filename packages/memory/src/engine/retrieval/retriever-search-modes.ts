@@ -410,7 +410,7 @@ Object.assign(MemoryRetriever.prototype, {
 				vectorScore * this.config.vectorWeight + keywordScore * this.config.bm25Weight;
 			const score = vectorHit ? clamp01(weightedFusion, 0.1) : clamp01(keywordScore, 0.1);
 
-			// Anchor rule (PRD §4): when both branches surface the same parent
+			// Anchor rule: when both branches surface the same parent
 			// with different best chunks, pick the branch whose `bestChunkScore`
 			// is higher; ties resolve to the semantic branch. The chosen branch
 			// supplies chunkId / chunkIndex / bestChunkScore on the fused result.

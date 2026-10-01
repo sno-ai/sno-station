@@ -61,22 +61,22 @@ export interface MemorySearchResult {
 	 * Per-branch winning chunk id (the chunk that produced the highest score
 	 * within the branch that emitted this result), populated by chunk-aware
 	 * search wrappers (`searchSemantic` / `searchKeyword`). Required by the
-	 * chunk-level reranker (PRD §6.0.1) to fetch `bestChunkVector` and by
-	 * snippet expansion (PRD §6.M2) to anchor the neighbor window.
+	 * chunk-level reranker to fetch `bestChunkVector` and by
+	 * snippet expansion to anchor the neighbor window.
 	 */
 	chunkId?: string;
 	/** Chunk index of the winning chunk within its parent memory. */
 	chunkIndex?: number;
 	/**
 	 * Chunk-level score of the winning chunk before any fusion or rerank
-	 * blending. Survives RRF fusion so the snippet anchor rule (PRD §4) can
+	 * blending. Survives RRF fusion so the snippet anchor rule can
 	 * pick a deterministic winner when both branches surface the same parent
 	 * with different best chunks.
 	 */
 	bestChunkScore?: number;
 	/**
-	 * Winning-chunk + neighbor snippet assembled by snippet expansion
-	 * (PRD §M2). Empty string is treated as no-snippet; consumers must fall
+	 * Winning-chunk + neighbor snippet assembled by snippet expansion.
+	 * Empty string is treated as no-snippet; consumers must fall
 	 * back to `entry.text` when undefined or empty.
 	 */
 	snippet?: string;
@@ -316,7 +316,7 @@ export interface RetrievalResult {
 	/** Per-branch winning chunk metadata, propagated from `MemorySearchResult`. */
 	chunkId?: string;
 	chunkIndex?: number;
-	/** Survives RRF fusion via the anchor rule (PRD §4): higher branch wins, semantic tie-break. */
+	/** Survives RRF fusion via the anchor rule: higher branch wins, semantic tie-break. */
 	bestChunkScore?: number;
 	/** Winning-chunk + neighbor snippet from M2 snippet expansion. */
 	snippet?: string;
@@ -326,7 +326,7 @@ export interface RetrievalResult {
 	 * it rather than serving an older sibling alone.
 	 */
 	recallGroupKey?: string;
-	/** Per-stage scores (PRD §5.2). Each pipeline stage populates the field it owns. */
+	/** Per-stage scores. Each pipeline stage populates the field it owns. */
 	denseScore?: number;
 	bm25Score?: number;
 	fusedScore?: number;

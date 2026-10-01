@@ -32,7 +32,7 @@ export const SNO_STATION_MEM_RELEASE_KEY_ID: typeof FIXED_EXTERNAL_VALUE_9 =
 export const SNO_STATION_MEM_RELEASE_ANCHOR_TIMEOUT_MS = 5_000;
 const SNO_STATION_MEM_RELEASE_ANCHOR_ATTEMPTS = 2;
 const SNO_STATION_MEM_RELEASE_ANCHOR_RETRY_DELAY_MS = 50;
-const ALLOWED_HTTP_ENDPOINT_HOSTS = new Set(["localhost", "127.0.0.1", "100.100.200.71"]);
+const ALLOWED_HTTP_ENDPOINT_HOSTS = new Set(["localhost", "127.0.0.1"]);
 
 type RegistryManager = Awaited<ReturnType<typeof ConfigRegistryManager.open>>;
 

@@ -24,7 +24,7 @@ import {
 } from "./retriever-dependencies";
 import { DEFAULT_MEMORY_TIER, type DecayableMemory, type DecayScore, type MemoryTier } from "../shared/types";
 
-// Pinned per openspec/changes/mem-lifecycle PRD §6.1 — single source of truth
+// Single source of truth
 // is `DEFAULT_DECAY_CONFIG.searchBoostMin`. Re-exporting via const here would
 // fork the constant; importing keeps D86 arm-comparison math drift-free.
 const SEARCH_BOOST_MIN = DEFAULT_DECAY_CONFIG.searchBoostMin;
@@ -44,7 +44,7 @@ function getTierFloor(tier: MemoryTier): number {
 }
 
 /**
- * Multiplier formula from openspec/changes/mem-lifecycle PRD §4.1 + retention-
+ * Multiplier formula + retention-
  * scoring spec §62. Bounded to `[SEARCH_BOOST_MIN, 1.0]`; never amplifies,
  * only suppresses, so existing scores are an upper bound after the stage.
  *
@@ -179,7 +179,7 @@ Object.assign(MemoryRetriever.prototype, {
 			(input) => temporalOff ? input : this.applyTimeDecay(input),
 			scored,
 		);
-		// Retention Scorer multiplier (openspec/changes/mem-lifecycle PRD §4.1).
+		// Retention Scorer multiplier.
 		// Slot picked per §4.1: after time-decay so the retention recency
 		// component layers on top of the time-decay multiplier, and before
 		// hardMinScore so retention-suppressed entries can drop out before
