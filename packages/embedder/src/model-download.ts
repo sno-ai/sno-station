@@ -142,8 +142,9 @@ export function isModelCached(
 		// triggering a re-download on next startup.
 		const markerPath = join(cacheDir, DOWNLOAD_COMPLETE_MARKER);
 		if (!existsSync(markerPath)) return false;
-		const entries = readdirSync(cacheDir, { recursive: true });
-		if (!entries.some((e) => typeof e === "string" && e.endsWith(".onnx"))) {
+		// Files live at <cacheDir>/<model>/; a cache in the older <model>/<revision>/ layout re-downloads.
+		const onnxDir = join(cacheDir, LOCAL_EMBEDDING_MODEL, "onnx");
+		if (!existsSync(onnxDir) || !readdirSync(onnxDir).some((e) => e.endsWith(".onnx"))) {
 			return false;
 		}
 
@@ -434,7 +435,7 @@ export async function ensureModelDownloaded(
 			rmSync(join(cacheDir, DOWNLOAD_COMPLETE_MARKER), { force: true });
 			rmSync(modelDir, { recursive: true, force: true });
 		} else if (!existsSync(join(cacheDir, DOWNLOAD_COMPLETE_MARKER)) && existsSync(modelDir) &&
-			readdirSync(modelDir, { recursive: true }).some((e) => typeof e === "string" && e.endsWith(".onnx"))) {
+			existsSync(join(modelDir, "onnx")) && readdirSync(join(modelDir, "onnx")).some((e) => e.endsWith(".onnx"))) {
 			// A cache the loader or a deploy script filled has no marker; adopt it rather than refetch.
 			writeFileSync(join(cacheDir, DOWNLOAD_COMPLETE_MARKER), JSON.stringify({
 				model: LOCAL_EMBEDDING_MODEL, revision: LOCAL_EMBEDDING_MODEL_REVISION, dtype,
@@ -480,11 +481,14 @@ export async function ensureModelDownloaded(
 		const prevAllowRemote = env.allowRemoteModels;
 		const prevLocalModelPath = env.localModelPath;
 		const prevRemoteHost = env.remoteHost;
+		const prevRemotePathTemplate = env.remotePathTemplate;
 
 		// Allow remote models ONLY for this download
 		env.cacheDir = cacheDir;
 		env.allowRemoteModels = true;
 		env.localModelPath = cacheDir;
+		// Same pinning as LocalEmbedProvider: transformers 4.3.0 drops `revision` when listing files.
+		env.remotePathTemplate = `{model}/resolve/${LOCAL_EMBEDDING_MODEL_REVISION}/`;
 		if (opts?.mirror) env.remoteHost = opts.mirror.endsWith("/") ? opts.mirror : `${opts.mirror}/`;
 
 		let lastProgress = 0;
@@ -492,7 +496,6 @@ export async function ensureModelDownloaded(
 
 		try {
 			await pipeline("feature-extraction", LOCAL_EMBEDDING_MODEL, {
-				revision: LOCAL_EMBEDDING_MODEL_REVISION,
 				dtype,
 				device: "cpu",
 				progress_callback: (progress: {
@@ -522,6 +525,7 @@ export async function ensureModelDownloaded(
 			env.allowRemoteModels = prevAllowRemote;
 			env.localModelPath = prevLocalModelPath;
 			env.remoteHost = prevRemoteHost;
+			env.remotePathTemplate = prevRemotePathTemplate;
 		}
 
 		// Write completion marker so isModelCached() can distinguish a complete
