@@ -73,7 +73,7 @@
     "eld": "^2.0.3",
     "js-tiktoken": "^1.0.21",
     "lru-cache": "^11.3.5",
-    "openclaw": "2026.9.6",
+    "openclaw": "2026.9.2",
     "sqlite-vec": "^0.1.6",
     "uuid": "^14.0.0",
     "zod": "^4.5.4",
