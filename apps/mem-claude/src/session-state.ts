@@ -1,9 +1,28 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { mkdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { z } from "zod";
 import { writeJsonAtomic } from "./files.js";
-import { sessionPath, spoolDirectory } from "./paths.js";
+import { appStateRoot, sessionPath, spoolDirectory } from "./paths.js";
+
+const lastSessionSchema = z.object({ sessionId: z.string().min(1), transcriptPath: z.string().min(1) });
+
+function lastSessionPath(project: string): string {
+	return join(appStateRoot(), "last-session", `${createHash("sha256").update(project).digest("hex")}.json`);
+}
+
+export async function readLastSession(project: string): Promise<z.infer<typeof lastSessionSchema> | undefined> {
+	try {
+		return lastSessionSchema.parse(JSON.parse(await readFile(lastSessionPath(project), "utf8")));
+	} catch (error) {
+		if (error instanceof Error && "code" in error && error.code === "ENOENT") return undefined;
+		throw error;
+	}
+}
+
+export async function writeLastSession(project: string, sessionId: string, transcriptPath: string): Promise<void> {
+	await writeJsonAtomic(lastSessionPath(project), { sessionId, transcriptPath });
+}
 
 const receiptEventSchema = z.object({
 	invocations: z.number().int().nonnegative().default(0),
@@ -18,15 +37,11 @@ const receiptEventSchema = z.object({
 
 const sessionStateSchema = z.object({
 	sessionId: z.string().min(1),
+	skillRunsReported: z.number().int().nonnegative().default(0),
 	prompts: z.record(z.string(), z.object({ prompt: z.string(), at: z.number() })).default({}),
-	ledger: z.array(z.object({
-		id: z.string(),
-		chars: z.number().int().nonnegative(),
-		hookEvent: z.string(),
-		turnId: z.string().optional(),
-	})).default([]),
-	ledgerChars: z.number().int().nonnegative().default(0),
 	receipt: z.record(z.string(), receiptEventSchema).default({}),
+	/** PreToolUse arrival time by tool_use_id, consumed by PostToolUse to measure the call. */
+	toolStarts: z.record(z.string(), z.number()).default({}),
 });
 
 export type SessionState = z.infer<typeof sessionStateSchema>;
@@ -75,12 +90,6 @@ export function recordInjection(state: SessionState, event: string, items: numbe
 	const receipt = state.receipt[event] ?? receiptEventSchema.parse({});
 	receipt.itemsInjected += items;
 	receipt.charsInjected += chars;
-	state.receipt[event] = receipt;
-}
-
-export function recordLedgerReset(state: SessionState, event: string): void {
-	const receipt = state.receipt[event] ?? receiptEventSchema.parse({});
-	receipt.resets += 1;
 	state.receipt[event] = receipt;
 }
 

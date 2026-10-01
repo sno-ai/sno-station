@@ -22,14 +22,14 @@
               "level": "error",
               "options": {
                 "paths": {
-                  "@snoai/sno-station-mem": "Use the published sidecar client only.",
+                  "@snoai/memory": "Use the published sidecar client only.",
                   "better-sqlite3": "Storage is sidecar-owned.",
                   "better-sqlite3-multiple-ciphers": "Storage is sidecar-owned."
                 },
                 "patterns": [
                   {
                     "group": [
-                      "@snoai/sno-station-mem/internal/**"
+                      "@snoai/memory/internal/**"
                     ],
                     "message": "Use the published sidecar client only."
                   }
