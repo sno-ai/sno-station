@@ -56,6 +56,8 @@ export interface LocalEmbedSessionOptions {
 /** Config for the local ONNX provider */
 export interface LocalEmbedConfig {
 	cacheDir?: string;
+	offline?: boolean;
+	mirror?: string;
 	dtype?: LocalEmbedDtype;
 	/**
 	 * Hugging Face model id. Defaults to the bundled PPLX 1024-d INT8 model.
