@@ -126,7 +126,7 @@ export interface JournalEntry {
 	actionsApplied: number;
 	reason?: string;
 	/**
-	 * Which condition produced this row, as its own value rather than folded into `reason`. PRD 50
+	 * Which condition produced this row, as its own value rather than folded into `reason`.
 	 * ACC-27 requires the persisted refusal to carry the failing condition as a FIELD: a reader
 	 * asking "which condition" must not have to parse a string, and `reason` must stay groupable —
 	 * `topRefusalReasons` counts distinct `reason` values, so a detail concatenated into it would
@@ -186,7 +186,7 @@ export interface RemRepository {
 		pairingConfigHash: string;
 	}): VerdictGenerationRef | undefined;
 	listVerdictPairs(generationId: string): VerdictPairQueueItem[];
-	/** The given pairs already closed with a recorded verdict in any generation (PRD 140 REQ-9). */
+	/** The given pairs already closed with a recorded verdict in any generation. */
 	readClosedVerdictPairIds(pairIds: readonly string[]): Set<string>;
 	claimNextPair(input: {
 		generationId: string;
@@ -533,7 +533,7 @@ function completeRowClaim(
 			expectedMemoryContentHash: input.currentContentHash,
 		});
 		if (refusal) {
-			// The reason filter stays: REQ-23 names the stale-hash refusal, and `content_changed` is
+			// The reason filter stays: the stale-hash refusal is named, and `content_changed` is
 			// it. `missing`, `inconsistent_state` and `claim_changed` are ownership and ledger
 			// failures — still loud, since the caller throws on any refusal, and still not durable.
 			// That gap is recorded rather than widened here.

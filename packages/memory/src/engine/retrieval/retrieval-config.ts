@@ -86,7 +86,7 @@ export interface RetrievalConfig {
 	/** Hard cap: effective half-life <= baseHalfLife * maxHalfLifeMultiplier (default: 3) */
 	maxHalfLifeMultiplier?: number;
 	/**
-	 * Phase 0 retention-loop knobs (openspec/changes/mem-lifecycle PRD §6.1).
+	 * Phase 0 retention-loop knobs.
 	 * Optional so legacy `RetrievalConfig` literals keep parsing; resolved
 	 * default in `DEFAULT_RETRIEVAL_CONFIG` is `DEFAULT_RECALL_LIFECYCLE`
 	 * (all booleans `false`), making the new wire sites pass-through.
@@ -105,7 +105,7 @@ export interface RetrievalContext {
 	/**
 	 * Refused fallback rows carry the user's own words and are served by default; product
 	 * entrypoints pass true, and only an explicit false hides them (owner ruling 2026-09-01,
-	 * reversing PRD 130 DEC-2). Omitted low-level/internal reads preserve all rows.
+	 * reversing an earlier default). Omitted low-level/internal reads preserve all rows.
 	 */
 	includeRefused?: boolean;
 	signal?: AbortSignal;
@@ -120,12 +120,12 @@ export interface RetrievalContext {
 	/** Selects current chunks only unless a non-user consumer explicitly requests history. */
 	facetPolicy?: RemFacetPolicy;
 	/**
-	 * Tombstone exclusion (PRD memora-fama W1.3). When set, the store search
+	 * Tombstone exclusion. When set, the store search
 	 * drops candidates whose `metadata.invalidated_at <= excludeInvalidatedBefore`.
 	 * A superseded fact is obsolete regardless of recall mode (OD-3, FAA binary),
 	 * so omitting it on a serving path does not mean "serve everything": both
 	 * retriever entrypoints run the context through `withServingValidityDefault`
-	 * first (PRD 205). Pass `0` for a deliberate history read.
+	 * first. Pass `0` for a deliberate history read.
 	 */
 	excludeInvalidatedBefore?: number;
 	includeRetired?: boolean;
@@ -138,7 +138,7 @@ export interface RetrievalContext {
 }
 
 /**
- * The serving-path validity default (PRD 205, REQ-1). This is the one named code
+ * The serving-path validity default. This is the one named code
  * point that supplies it: reading the default here is what makes the
  * invalidated-row filter a property of the serving path rather than a parameter
  * every caller has to remember, and the omission is no longer silent.
@@ -148,7 +148,7 @@ export interface RetrievalContext {
  *
  * Scope is the retriever, never the store layer: six write-side consumers (dedup,
  * reflection loops, observability, the REM batch executor) call the store search
- * APIs directly and legitimately read invalidated rows. DEC-1 — do not move this
+ * APIs directly and legitimately read invalidated rows. Do not move this
  * down a layer.
  */
 export function withServingValidityDefault(context: RetrievalContext): RetrievalContext {
