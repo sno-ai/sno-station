@@ -31,11 +31,11 @@ export function readStandaloneSettings(env: PathEnv = process.env): {
 		if (error instanceof Error && "code" in error && error.code === "ENOENT") {
 			return { baseUrl: "https://www.sno.ai", loggingLevel: undefined };
 		}
-		throw new Error(`settings unavailable: ${settingsPath}: JSON; run sno setup`, { cause: error });
+		throw new Error(`settings unavailable: ${settingsPath}: JSON; see https://github.com/sno-ai/sno-station/blob/main/docs/memory-setup.md`, { cause: error });
 	}
 	const parsed = standaloneSettingsSchema.safeParse(settings);
 	if (!parsed.success) {
-		throw new Error(`settings unavailable: ${settingsPath}: ${parsed.error.issues[0]?.path.join(".") || "settings"}; run sno setup`);
+		throw new Error(`settings unavailable: ${settingsPath}: ${parsed.error.issues[0]?.path.join(".") || "settings"}; see https://github.com/sno-ai/sno-station/blob/main/docs/memory-setup.md`);
 	}
 	return { baseUrl: parsed.data.telemetry?.observe?.baseUrl ?? "https://www.sno.ai",
 		loggingLevel: parsed.data.logging?.level };
