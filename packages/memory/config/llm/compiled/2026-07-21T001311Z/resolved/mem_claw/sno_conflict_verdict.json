@@ -1,0 +1,10 @@
+{
+  "description": "Signed Sno conflict verdict endpoint for mem_claw",
+  "model": "a-verdict",
+  "provider": "sno-gpu",
+  "providerOptions": {
+    "sno-gpu": {
+      "gpuPath": "/verdict/v1/completions"
+    }
+  }
+}

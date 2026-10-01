@@ -1,0 +1,136 @@
+{
+  "name": "@snoai/memory",
+  "version": "1.0.0-rc.1",
+  "license": "Apache-2.0",
+  "publishConfig": { "access": "public" },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sno-ai/sno-station.git",
+    "directory": "packages/memory"
+  },
+  "type": "module",
+  "description": "Shared memory engine, store, model routing and sidecar",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./internal/*": {
+      "types": "./dist/internal/*.d.ts",
+      "import": "./dist/internal/*.js"
+    },
+    "./memdump": {
+      "types": "./dist/memdump.d.ts",
+      "import": "./dist/memdump.js"
+    },
+    "./diagnostic-encoder": {
+      "types": "./dist/diagnostic-encoder.d.ts",
+      "import": "./dist/diagnostic-encoder.js"
+    },
+    "./client": {
+      "types": "./dist/client.d.ts",
+      "import": "./dist/client.js"
+    },
+    "./coding-skin": {
+      "types": "./dist/coding-skin.d.ts",
+      "import": "./dist/coding-skin.js"
+    },
+    "./release-download": {
+      "types": "./dist/release-download.d.ts",
+      "import": "./dist/release-download.js"
+    },
+    "./settings.default.json": "./settings.default.json"
+  },
+  "files": [
+    "dist",
+    "drizzle",
+    "scripts/download-simple-tokenizer.mjs",
+    "skills",
+    "!skills/CLAUDE.md",
+    "sqlite-extensions",
+    "config/llm",
+    "config/llm.trust.json",
+    "config/b-profile-section-registry.json",
+    "package.json",
+    "LICENSE",
+    "README.md",
+    "generated",
+    "settings.default.json"
+  ],
+  "scripts": {
+    "dev": "tsx watch src/sidecar/main.ts",
+    "build": "tsx scripts/build-settings-default.ts && tsx scripts/build-log-catalog.ts && tsdown && tsx scripts/build-log-catalog.ts --artifact-only",
+    "prepack": "npm run sqlite-vec:check && npm run build",
+    "pack:dry-run": "npm pack --dry-run",
+    "sqlite-vec:build": "bash scripts/build-sqlite-vec.sh --build",
+    "sqlite-vec:check": "bash scripts/build-sqlite-vec.sh --check",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check src/",
+    "lint:fix": "biome check --write src/",
+    "test": "npm run test:e2e:critical",
+    "test:e2e:critical": "vitest run --config vitest.config.ts ../../tests/apps/mem-claw/e2e/store-crud-full.test.ts ../../tests/apps/mem-claw/e2e/recall-snippet-hook.test.ts",
+    "test:e2e": "npm run test:e2e:critical",
+    "test:e2e:agent": "env SNO_AGENT_E2E=1 bash ../../tests/apps/mem-claw/e2e-agent/run-agent-e2e.sh",
+    "test:e2e:all": "vitest run --config vitest.config.ts ../../tests/apps/mem-claw/e2e/",
+    "test:integration": "npm run test:integration:critical",
+    "test:integration:critical": "vitest run --config vitest.config.ts ../../tests/apps/mem-claw/integration/memory-connection-retry.test.ts",
+    "test:integration:all": "vitest run --config vitest.config.ts ../../tests/packages/memory/integration/",
+    "test:unit": "vitest run --config vitest.config.ts ../../tests/packages/memory/unit/",
+    "test:eval": "vitest run --config vitest.config.ts ../../tests/apps/mem-claw/eval/",
+    "query-manifest:capture": "tsx src/engine/retrieval/query-manifest-capture-cli.ts",
+    "maintenance:group-crud": "tsx src/engine/maintenance/run-group-crud-maintenance.ts",
+    "store:clean": "tsx src/store/store-cleanup-cli.ts",
+    "rem:guard-census": "tsx src/sidecar/rem-guard-census-cli.ts && bash ../../dev-scripts/tests/rem-frozen-functions-stay-frozen.sh",
+    "llmix:check-registry": "tmp=$(mktemp) && trap 'rm -f \"$tmp\"' EXIT && curl -fsS https://www.sno.ai/.well-known/sno-mem-openclaw-release.json > \"$tmp\" && llmix check-registry --root config/llm --trust config/llm.trust.json --did-document \"$tmp\" --preset mem_claw/sno_ai_extract --tamper-proof && llmix check-registry --root config/llm --trust config/llm.trust.json --did-document \"$tmp\" --preset mem_claw/sno_extract_chat --tamper-proof && llmix check-registry --root config/llm --trust config/llm.trust.json --did-document \"$tmp\" --preset mem_claw/sno_extract_profile --tamper-proof && llmix check-registry --root config/llm --trust config/llm.trust.json --did-document \"$tmp\" --preset mem_claw/sno_conflict_verdict --tamper-proof",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:studio": "drizzle-kit studio",
+    "postinstall": "node scripts/download-simple-tokenizer.mjs"
+  },
+  "dependencies": {
+    "@huggingface/transformers": "^3.8.1",
+    "@js-temporal/polyfill": "0.5.1",
+    "@napi-rs/keyring": "^2.0.0",
+    "@sinclair/typebox": "^0.34.49",
+    "@snoai/chunking": "1.0.1",
+    "@snoai/common-core": "^0.1.0",
+    "@snoai/content-sanitizer": "^0.99.3",
+    "@snoai/embedder": "^0.8.0",
+    "@snoai/llmix": "2.2.0",
+    "@snoai/mda-config": "^1.1.2",
+    "@snoai/observability": "^0.1.0",
+    "@snoai/sqlite-crypto": "^0.2.0",
+    "@snoai/utils": "^0.8.0",
+    "argon2": "^0.45.1",
+    "async-mutex": "^0.5.0",
+    "better-sqlite3": "^13.0.3",
+    "chrono-node": "2.10.1",
+    "commander": "^14.0.1",
+    "drizzle-orm": "^0.45.2",
+    "eld": "^2.0.3",
+    "js-tiktoken": "^1.0.21",
+    "lru-cache": "^11.3.5",
+    "semver": "^7.6.3",
+    "sqlite-vec": "^0.1.6",
+    "tar": "^7.4.3",
+    "uuid": "^14.0.0",
+    "zod": "^4.5.4",
+    "fs-ext": "^2.1.1"
+  },
+  "devDependencies": {
+    "@babel/parser": "^7.29.8",
+    "@hono/node-server": "^2.0.6",
+    "@types/node": "^22.15.0",
+    "@types/semver": "^7.5.8",
+    "american-british-english-translator": "^0.2.1",
+    "pluralize": "^8.0.0",
+    "tsdown": "0.22.5",
+    "tsx": "^4.20.0",
+    "vitest": "^4.1.5"
+  },
+  "engines": {
+    "node": ">=22.22.3 <23 || >=24.15.0 <25 || >=25.9.0"
+  }
+}

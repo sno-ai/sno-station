@@ -1,0 +1,17 @@
+{
+	"extends": "../../../packages/sqlite-crypto/tsconfig.json",
+	"compilerOptions": {
+		"allowImportingTsExtensions": true,
+		"noEmit": true,
+		"declaration": false,
+		"declarationMap": false,
+		"noUnusedLocals": false,
+		"noUnusedParameters": false,
+		"rootDir": "../../..",
+		"paths": {
+			"@snoai/sqlite-crypto": ["../../../packages/sqlite-crypto/src/index.ts"]
+		}
+	},
+	"include": ["**/*.ts", "../../../packages/sqlite-crypto/src/**/*.ts"],
+	"exclude": ["node_modules"]
+}

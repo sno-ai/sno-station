@@ -1,0 +1,243 @@
+{
+  "mode": "agent-native",
+  "modelCalls": {
+    "E1": {
+      "local-first": "off",
+      "agent-native": "host",
+      "rem-enhanced": "sno-gpu"
+    },
+    "E2": {
+      "local-first": "off",
+      "agent-native": "host",
+      "rem-enhanced": "sno-gpu"
+    },
+    "E3": {
+      "local-first": "off",
+      "agent-native": "host",
+      "rem-enhanced": "sno-gpu"
+    },
+    "E4": {
+      "local-first": "off",
+      "agent-native": "host",
+      "rem-enhanced": "sno-gpu"
+    },
+    "E5": {
+      "local-first": "off",
+      "agent-native": "host",
+      "rem-enhanced": "sno-gpu"
+    },
+    "E6": {
+      "local-first": "off",
+      "agent-native": "host",
+      "rem-enhanced": "sno-gpu"
+    },
+    "E7": {
+      "local-first": "off",
+      "agent-native": "host",
+      "rem-enhanced": "sno-gpu"
+    },
+    "E8": {
+      "local-first": "off",
+      "agent-native": "host",
+      "rem-enhanced": "sno-gpu"
+    },
+    "E9": {
+      "local-first": "off",
+      "agent-native": "host",
+      "rem-enhanced": "sno-gpu"
+    },
+    "E10": {
+      "local-first": "off",
+      "agent-native": "host",
+      "rem-enhanced": "sno-gpu"
+    },
+    "E11": {
+      "local-first": "off",
+      "agent-native": "host",
+      "rem-enhanced": "host"
+    },
+    "E12": {
+      "local-first": "off",
+      "agent-native": "host",
+      "rem-enhanced": "sno-gpu"
+    },
+    "P1": {
+      "local-first": "off",
+      "agent-native": "host",
+      "rem-enhanced": "sno-gpu"
+    },
+    "P2": {
+      "local-first": "host",
+      "agent-native": "host",
+      "rem-enhanced": "host"
+    },
+    "P3": {
+      "local-first": "host",
+      "agent-native": "host",
+      "rem-enhanced": "host"
+    },
+    "P4": {
+      "local-first": "host",
+      "agent-native": "host",
+      "rem-enhanced": "host"
+    },
+    "P5": {
+      "local-first": "host",
+      "agent-native": "host",
+      "rem-enhanced": "host"
+    },
+    "P6": {
+      "local-first": "host",
+      "agent-native": "host",
+      "rem-enhanced": "host"
+    },
+    "T1": {
+      "local-first": "off",
+      "agent-native": "host",
+      "rem-enhanced": "host"
+    },
+    "R1": {
+      "local-first": "off",
+      "agent-native": "host",
+      "rem-enhanced": "host"
+    },
+    "R2": {
+      "local-first": "off",
+      "agent-native": "host",
+      "rem-enhanced": "host"
+    },
+    "R3": {
+      "local-first": "off",
+      "agent-native": "sno-gpu",
+      "rem-enhanced": "sno-gpu"
+    },
+    "R4": {
+      "local-first": "off",
+      "agent-native": "sno-gpu",
+      "rem-enhanced": "sno-gpu"
+    },
+    "REM1": {
+      "local-first": "host",
+      "agent-native": "host",
+      "rem-enhanced": "sno-gpu"
+    },
+    "REM2": {
+      "local-first": "host",
+      "agent-native": "host",
+      "rem-enhanced": "host"
+    },
+    "REM3": {
+      "local-first": "host",
+      "agent-native": "host",
+      "rem-enhanced": "sno-gpu"
+    },
+    "REM4": {
+      "local-first": "host",
+      "agent-native": "host",
+      "rem-enhanced": "sno-gpu"
+    },
+    "REM5": {
+      "local-first": "host",
+      "agent-native": "host",
+      "rem-enhanced": "sno-gpu"
+    },
+    "REM6": {
+      "local-first": "host",
+      "agent-native": "host",
+      "rem-enhanced": "host"
+    },
+    "REM7": {
+      "local-first": "host",
+      "agent-native": "host",
+      "rem-enhanced": "host"
+    },
+    "REM8": {
+      "local-first": "host",
+      "agent-native": "host",
+      "rem-enhanced": "host"
+    }
+  },
+  "user": {
+    "id": "",
+    "language": "en"
+  },
+  "snoGpu": {
+    "baseUrl": "https://rt3-llm.sno.ai",
+    "apiKey": ""
+  },
+  "rerank": {
+    "mode": "lightweight",
+    "provider": "voyage",
+    "endpoint": "",
+    "model": "rerank-2",
+    "apiKey": "",
+    "timeoutMs": 15000,
+    "maxCandidates": 64
+  },
+  "store": {
+    "path": "",
+    "encryptionKey": ""
+  },
+  "embedding": {
+    "model": "tss-deposium/pplx-embed-v1-0.6b-onnx-int8-standard",
+    "revision": "a18fdffe7480e6ea5643acb7757142b33838817a",
+    "dtype": "q8",
+    "threads": 0,
+    "cacheDir": "",
+    "offline": false,
+    "mirror": ""
+  },
+  "recall": {
+    "auto": true,
+    "sessionStart": {
+      "limit": 5,
+      "maxChars": 3500,
+      "timeoutMs": 8000
+    },
+    "prompt": {
+      "limit": 3,
+      "maxChars": 1500,
+      "timeoutMs": 4000,
+      "minChars": 12,
+      "minScore": 0
+    },
+    "explicitLimit": 5
+  },
+  "capture": {
+    "assistant": true,
+    "ambient": true,
+    "sessionMemory": {
+      "enabled": true,
+      "messageCount": 15
+    },
+    "sessionStrategy": "systemSessionMemory"
+  },
+  "rem": {
+    "tick": true,
+    "operations": [
+      "rem-replace",
+      "rem-update"
+    ]
+  },
+  "telemetry": {
+    "memoryUsage": {
+      "enabled": false,
+      "key": "",
+      "historicKeys": []
+    },
+    "observe": {
+      "enabled": true,
+      "baseUrl": "https://www.sno.ai"
+    },
+    "redactionRules": []
+  },
+  "logging": {
+    "level": "info",
+    "file": "",
+    "debugContent": false
+  },
+  "memoryPackage": {
+    "path": "",
+    "node": ""
+  }
+}

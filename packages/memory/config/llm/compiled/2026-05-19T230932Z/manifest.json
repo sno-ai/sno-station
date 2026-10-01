@@ -1,0 +1,25 @@
+{
+  "presets": {
+    "mem_claw/openai_gpt_5_nano": {
+      "resolved_path": "resolved/mem_claw/openai_gpt_5_nano.json",
+      "resolved_sha256": "74cb05670996e3b6f52abd76f394977840c28ce1e7c96a5103113a6c953da44c",
+      "source_path": "source/mem_claw/openai_gpt_5_nano.mda",
+      "source_sha256": "2dacdcc23465e9f50e49303bd6a6e5b94b08ab36ee85ecba9635f5a02612a31a"
+    },
+    "mem_claw/openrouter_auto": {
+      "resolved_path": "resolved/mem_claw/openrouter_auto.json",
+      "resolved_sha256": "1eb89d1bc0bf69e0b7828d4d4dec4a09e570772ad764d6f4e7d9781a68614b78",
+      "source_path": "source/mem_claw/openrouter_auto.mda",
+      "source_sha256": "99a919a214cf1d36b40bafb5b71ed9c8a836dc2644c160f04e8d9d2f098baad4"
+    },
+    "mem_claw/sno_ai_extract": {
+      "resolved_path": "resolved/mem_claw/sno_ai_extract.json",
+      "resolved_sha256": "939d6d8ffd1131430538ebff5e3b5610716ef3fcf9264feae742d899420b2b5b",
+      "source_path": "source/mem_claw/sno_ai_extract.mda",
+      "source_sha256": "51838958a73c23ef7ed465dab875b9afc62fc507d37f8bcef96815f304504ecf"
+    }
+  },
+  "published_at": "2026-05-19T23:09:32.589Z",
+  "revision": "2026-05-19T230932Z",
+  "schema_version": 1
+}
