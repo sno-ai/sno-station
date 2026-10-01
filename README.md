@@ -38,8 +38,23 @@ whatever language you use with your agent, and this README ships in nine.
 
 ## Install
 
-*Last updated 2026-09-19.* Not yet. The one-command install lands with the onboarding skill;
-until then, watch this repository. When it lands it will look like this:
+*Last updated 2026-10-01.* **Shared memory installs today.** It gives Claude Code, Codex, OpenClaw and Hermes Agent one encrypted memory on your machine, with no account and no API key. Run the [shared memory setup](docs/memory-setup.md) once (a few minutes), then add your agent:
+
+```bash
+# Codex CLI
+npm install -g @snoai/mem-codex@1.0.1 && sno-mem-codex install --codex-home ~/.codex
+# Claude Code
+npm install -g @snoai/mem-claude@1.0.1 && sno-mem-claude install --config-dir ~/.claude
+# OpenClaw
+openclaw plugins install @snoai/mem-claw@1.0.1
+# Hermes Agent
+hermes plugins install sno-ai/sno-station/apps/mem-hermes/sno-mem-hermes --enable
+hermes config set memory.provider sno-mem-hermes
+```
+
+Walkthroughs: [Codex](docs/mem-codex/onboarding.md) · [Claude Code](docs/mem-claude/onboarding.md) · [OpenClaw](docs/mem-claw/onboarding.md) · [Hermes](docs/mem-hermes/onboarding.md)
+
+Sno Reach, the Duo skills and the nightly loop are not in these packages. The one-command install for everything is still to come: it lands with the onboarding skill, and until then, watch this repository. When it lands it will look like this:
 
 ```bash
 # inside any Claude Code, Codex or OpenClaw conversation:
@@ -128,13 +143,13 @@ else is touched.
 
 ## What runs today
 
-*Last updated 2026-09-20.*
+*Last updated 2026-10-01.*
 
 | Piece | Status |
 |---|---|
-| `packages/chunking` | In this repository, tested, published on npm |
-| Shared packages (`common-core`, `utils`, `embedder`, `observability`, `sqlite-crypto`, `content-sanitizer`) | In this repository |
-| Shared memory across Claude Code, Codex and OpenClaw | Engine and all three skins in this repository; clean-machine proof pending |
+| Shared memory across Claude Code, Codex, OpenClaw and Hermes Agent | On npm and GitHub since 2026-10-01; installed from the registry on a clean machine and proven end to end |
+| `packages/chunking`, `packages/content-sanitizer` | In this repository, tested, published on npm |
+| Shared packages (`common-core`, `utils`, `embedder`, `observability`, `sqlite-crypto`) | In this repository, published on npm |
 | Sno Reach — agents talking to each other, no daemon | Source in this repository; release archives pending |
 | The RSI loop (skill) | This week |
 | One-command install (`sno assemble`, or say "Sno onboarding" inside your agent) | Not yet claimed |
