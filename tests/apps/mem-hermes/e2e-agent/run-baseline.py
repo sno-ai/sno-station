@@ -62,6 +62,7 @@ def recall(session_id: str) -> dict[str, object]:
         headers={
             "Content-Type": "application/json",
             "x-sno-station-mem-skin": "hermes",
+            "x-sidecar-token": discovery["token"],
         },
         method="POST",
     )

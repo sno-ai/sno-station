@@ -19,6 +19,7 @@ import {
 	contractJsonSchemas, inputSchemas, outputSchemas, MEMORY_ROUTES, MEMORY_ERROR_STATUS, DEGRADED_REASONS,
 } from "../../../../packages/memory/src/contract/index";
 import { HEALTH_PATH, REM_RUN_PATH, REM_JOBS_PATH_PREFIX } from "../../../../packages/memory/src/sidecar/config";
+import { REM_SIDECAR_TOKEN_HEADER } from "../../../../packages/memory/src/contract/routes";
 import { startRemSidecar } from "../../../../packages/memory/src/sidecar/server";
 import { createTestDb } from "../../../apps/mem-claw/helpers/test-db";
 import { writeSettingsFixture } from "../fixtures/settings-file-fixture";
@@ -109,10 +110,11 @@ describe("sidecar API reference stays in sync", () => {
 			writeSettingsFixture(stateDir, { mode: "local-first", rerank: { mode: "none" },
 				store: { path: database.dbPath, encryptionKey: database.encryptionKey } });
 			server = await startRemSidecar();
+			const token = JSON.parse(readFileSync(join(stateDir, "station", "sidecar.json"), "utf8")).token;
 			for (const path of served) {
 				const post = path.startsWith("/v1/") || path === "/rem/run";
 				const response = await fetch(`http://127.0.0.1:${server.port}${path.replace("<id>", "missing-job")}`, {
-					method: post ? "POST" : "GET", ...(post ? { body: "{}" } : {}), signal: AbortSignal.timeout(5_000),
+					method: post ? "POST" : "GET", headers: { [REM_SIDECAR_TOKEN_HEADER]: token }, ...(post ? { body: "{}" } : {}), signal: AbortSignal.timeout(5_000),
 				});
 				if (path === "/healthz") {
 					expect(response.status).toBe(200);

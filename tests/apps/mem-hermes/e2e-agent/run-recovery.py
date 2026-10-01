@@ -49,6 +49,7 @@ def inspect_count(project: Path, session_id: str) -> int:
         headers={
             "Content-Type": "application/json",
             "x-sno-station-mem-skin": "hermes",
+            "x-sidecar-token": discovery["token"],
         },
         method="POST",
     )

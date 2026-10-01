@@ -140,7 +140,7 @@ export async function startRemProductionEntryFixture(input: {
 			);
 			const registered = await fetch(`http://127.0.0.1:${discovery.port}/v1/init`, {
 				method: "POST",
-				headers: { "x-sno-station-mem-skin": "rem-fixture-host" },
+				headers: { "x-sno-station-mem-skin": "rem-fixture-host", "x-sidecar-token": discovery.token },
 				body: JSON.stringify({
 					scope: { principal: "caller", project: "global", session: "rem-fixture-host" },
 					registration: { skinId: "rem-fixture-host", model: hostModel },

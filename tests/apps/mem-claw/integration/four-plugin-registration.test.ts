@@ -4,7 +4,7 @@
  * @boundary Real in-process sidecar, SQLite store and embeddings; each plugin's own registration writer.
  */
 
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir, userInfo } from "node:os";
 import { join } from "node:path";
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk/core";
@@ -45,8 +45,9 @@ it("registers and captures once from each of the four plugins", { timeout: 180_0
 	sidecar = await startRemSidecar();
 	const post = async (path: string, skin: string, body: unknown) => {
 		if (!sidecar) throw new Error("missing test sidecar");
+		const { token } = JSON.parse(readFileSync(join(root, "station", "sidecar.json"), "utf8")) as { token: string };
 		const response = await fetch(`http://127.0.0.1:${sidecar.port}${path}`, {
-			method: "POST", headers: { "x-sno-station-mem-skin": skin }, body: JSON.stringify(body), signal: AbortSignal.timeout(60_000),
+			method: "POST", headers: { "x-sno-station-mem-skin": skin, "x-sidecar-token": token }, body: JSON.stringify(body), signal: AbortSignal.timeout(60_000),
 		});
 		return { status: response.status, body: await response.json() as { degraded?: boolean; toolResult?: { details?: { memories?: Array<{ text: string }> } } } };
 	};

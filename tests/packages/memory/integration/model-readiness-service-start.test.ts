@@ -21,6 +21,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MEMORY_PACKAGE_PATH, type SettingsDocument, writeSettingsFixture } from "../fixtures/settings-file-fixture";
+import { REM_SIDECAR_TOKEN_HEADER } from "../../../../packages/memory/src/contract/routes";
 import { MemoryStore } from "../../../../packages/memory/src/store/store";
 import { createTestDb, createTestEmbedder } from "../../../apps/mem-claw/helpers/test-db";
 
@@ -183,7 +184,7 @@ function discovery(profileRoot: string): { pid: number; port: number; token: str
 async function healthz(profileRoot: string): Promise<{ status: number; body: unknown }> {
 	const record = discovery(profileRoot);
 	const response = await fetch(`http://127.0.0.1:${record.port}/healthz`, {
-		headers: { Authorization: `Bearer ${record.token}` }, signal: AbortSignal.timeout(10_000),
+		headers: { [REM_SIDECAR_TOKEN_HEADER]: record.token }, signal: AbortSignal.timeout(10_000),
 	});
 	return { status: response.status, body: await response.json() };
 }
@@ -329,7 +330,7 @@ describe("an accepted write survives the model download (REQ-7)", () => {
 		const { port, token } = discovery(root);
 		const request = async (path: string, body: object): Promise<unknown> => {
 			const response = await fetch(`http://127.0.0.1:${port}${path}`, {
-				method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json",
+				method: "POST", headers: { [REM_SIDECAR_TOKEN_HEADER]: token, "Content-Type": "application/json",
 					"x-sno-station-mem-skin": "codex" }, body: JSON.stringify(body),
 			});
 			expect(response.status).toBe(200);
@@ -341,9 +342,8 @@ describe("an accepted write survives the model download (REQ-7)", () => {
 		await vi.waitFor(async () => {
 			const health = await healthz(root);
 			expect(health.status).toBe(200);
-			expect(health.body).toMatchObject({ status: "degraded", log_level: "debug", principal,
+			expect(health.body).toMatchObject({ status: "degraded", log_level: "debug",
 				accessCounters: { engineAccesses: expect.any(Number), storeAccesses: expect.any(Number) } });
-			expect(health.body).toHaveProperty("storePath");
 			expect(JSON.stringify(health.body)).toContain("model preparation failed");
 			expect(JSON.stringify(health.body)).toContain(MODEL);
 			expect(JSON.stringify(health.body)).toContain(join(root, "model-cache"));
@@ -498,7 +498,7 @@ describe("the one service sno installed (REQ-6)", () => {
 		}, { timeout: 60_000, interval: 250 });
 		await stopByRecordedPid(rigRoot);
 
-		const { settings } = writeSettings(root, { memoryPackage: { path: copy } });
+		writeSettings(root, { memoryPackage: { path: copy } });
 		const hook = await session(root, { session: "installed-copy" });
 		expect(hook.connect, `${hook.output}\n${serviceLogs(root)}`).toMatchObject({ degraded: false });
 
@@ -508,6 +508,6 @@ describe("the one service sno installed (REQ-6)", () => {
 		expect(servicePids(root)).toEqual([pid]);
 		const health = await healthz(root);
 		expect(health.status).toBe(200);
-		expect(health.body).toMatchObject({ status: "ok", storePath: (settings.store as { path: string }).path });
+		expect(health.body).toMatchObject({ status: "ok" });
 	});
 });

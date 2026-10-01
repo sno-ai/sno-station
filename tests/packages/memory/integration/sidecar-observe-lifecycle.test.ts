@@ -4,11 +4,12 @@
  * The ingest endpoint is a local stand-in for www.sno.ai; everything before it is real.
  */
 import { createHash } from "node:crypto";
-import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir, userInfo } from "node:os";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { REM_SIDECAR_TOKEN_HEADER } from "../../../../packages/memory/src/contract/routes";
 import { startRemSidecar } from "../../../../packages/memory/src/sidecar/server";
 import { createTestDb } from "../../../apps/mem-claw/helpers/test-db";
 import { writeSettingsFixture } from "../fixtures/settings-file-fixture";
@@ -80,6 +81,8 @@ afterAll(() => {
 	return new Promise<void>(resolve => ingest.server.close(() => resolve()));
 });
 
+const tokenOf = (): string => JSON.parse(readFileSync(join(root, "station", "sidecar.json"), "utf8")).token;
+
 function sha256(text: string): string {
 	return createHash("sha256").update(text, "utf8").digest("hex");
 }
@@ -87,7 +90,7 @@ function sha256(text: string): string {
 async function post(path: string, body: unknown, skin: string): Promise<unknown> {
 	if (!sidecar) throw new Error("missing test sidecar");
 	const response = await fetch(`http://127.0.0.1:${sidecar.port}${path}`, {
-		method: "POST", headers: { "x-sno-station-mem-skin": skin },
+		method: "POST", headers: { [REM_SIDECAR_TOKEN_HEADER]: tokenOf(), "x-sno-station-mem-skin": skin },
 		body: JSON.stringify(body), signal: AbortSignal.timeout(30_000),
 	});
 	expect(response.status, path).toBe(200);
@@ -109,7 +112,7 @@ describe("sidecar-owned observe sessions for coding skins", () => {
 		const port = sidecar.port;
 		// The service prepares its model on start; recall answers `model-preparing` until then.
 		await untilModelReady(async ({ scope: probe, ...recall }) => (await fetch(`http://127.0.0.1:${port}/v1/get-recall`, {
-			method: "POST", headers: { "x-sno-station-mem-skin": "model-ready-probe" },
+			method: "POST", headers: { [REM_SIDECAR_TOKEN_HEADER]: tokenOf(), "x-sno-station-mem-skin": "model-ready-probe" },
 			body: JSON.stringify({ ...recall, scope: { ...probe, principal: userInfo().username } }), signal: AbortSignal.timeout(30_000),
 		})).json());
 		const scope = { principal: userInfo().username, project: "global", session: "codex-session-1", host: { sessionId: "codex-session-1" } };

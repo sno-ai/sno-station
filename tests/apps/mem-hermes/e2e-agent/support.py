@@ -78,6 +78,7 @@ def post(method: str, body: dict[str, object]) -> dict[str, object]:
         headers={
             "Content-Type": "application/json",
             "x-sno-station-mem-skin": "hermes",
+            "x-sidecar-token": discovery["token"],
         },
         method="POST",
     )

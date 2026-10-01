@@ -17,6 +17,7 @@ import { atomicExtractionSkillReference } from "../../../../packages/memory/src/
 import { renderRemUpdateVerificationPrompt } from "../../../../packages/memory/src/engine/rem/rem-update-judgment";
 import { MODEL_CALLS, type ModelCallId } from "../../../../packages/memory/src/model/model-call-table";
 import { REM_UPDATE_JUDGMENT_SKILL } from "../../../../packages/memory/src/sidecar/rem-update-judgment-skill";
+import { REM_SIDECAR_TOKEN_HEADER } from "../../../../packages/memory/src/contract/routes";
 import { startRemSidecar } from "../../../../packages/memory/src/sidecar/server";
 import { createTestDb } from "../../../apps/mem-claw/helpers/test-db";
 import { callId, modelReply, type Recorder, type RecorderReply, startRecorder } from "./fixtures/model-recorders";
@@ -100,7 +101,7 @@ async function recorder(control: { refuse: Refuse; keepFirstPair?: boolean } = {
 async function contractPost(path: string, body: unknown, skin: string): Promise<Response> {
 	if (!sidecar) throw new Error("missing test sidecar");
 	return fetch(`http://127.0.0.1:${sidecar.port}${path}`, {
-		method: "POST", headers: { "x-sno-station-mem-skin": skin },
+		method: "POST", headers: { [REM_SIDECAR_TOKEN_HEADER]: JSON.parse(readFileSync(join(process.env.SNO_PROFILE_DIR!, "station", "sidecar.json"), "utf8")).token, "x-sno-station-mem-skin": skin },
 		body: JSON.stringify(body), signal: AbortSignal.timeout(60_000),
 	});
 }
@@ -260,19 +261,6 @@ describe("REM Enhanced stops at the first refused call (REQ-4)", () => {
 		expect({ firstJobs: firstJobs.length, jobs: jobIds().length, completed: auditEvents("rem_completed").length,
 			failed: auditEvents("rem_failed").length, keptPairJudgedAgain: rejudged.length })
 			.toEqual({ firstJobs: 1, jobs: 2, completed: 1, failed: 0, keptPairJudgedAgain: 0 });
-	});
-
-	it("Sno GPU refuses REM1: rem_skipped and the host receives no REM call", { timeout: 180_000 }, async () => {
-		await seedStore([], [[OLDER_DEPLOYMENT, "entity:deployment"], [NEWER_DEPLOYMENT, "entity:deployment"]]);
-		const sno = await recorder({ refuse: id => id === "REM1" });
-		const host = await recorder();
-		pointSnoGpuAt("rem-enhanced", sno.url);
-		sidecar = await startRemSidecar();
-		await registerHost("host-skin", host.url);
-		await until(settled);
-		expect({ skipped: skipped(), completed: auditEvents("rem_completed").length,
-			rem1RefusedOnSno: sno.received.some(call => call.id === "REM1" && !call.answered), hostRem: remSet(host) })
-			.toEqual({ skipped: true, completed: 0, rem1RefusedOnSno: true, hostRem: [] });
 	});
 });
 

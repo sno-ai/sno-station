@@ -21,7 +21,8 @@ manifest="$candidate_dir/manifest.json"
 
 package_dirs=(
   packages/utils packages/common-core packages/embedder packages/observability
-  packages/sqlite-crypto packages/memory apps/mem-codex apps/mem-claude apps/mem-claw
+  packages/sqlite-crypto packages/chunking packages/content-sanitizer packages/memory
+  apps/mem-codex apps/mem-claude apps/mem-claw
 )
 
 package_row() {
@@ -31,7 +32,7 @@ package_row() {
 verify_manifest() {
   jq -e --arg sha "$source_sha" --arg run "$run_id" '
     .source_sha == $sha and .run_id == $run and
-    (.packages | length) == 9 and
+    (.packages | length) == 11 and
     all(.packages[]; (.name | startswith("@snoai/")) and
       (.version | type == "string") and (.tag == "latest" or .tag == "next") and
       (.file | endswith(".tgz")) and (.integrity | startswith("sha512-")))

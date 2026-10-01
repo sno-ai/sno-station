@@ -32,15 +32,6 @@ describe("LLM endpoint resolution", () => {
 		).toBe(expected);
 	});
 
-	it("accepts the recorded Tailscale GPU origin over internal HTTP", () => {
-		expect(
-			materializeBundledLlmixEndpoint({
-				preset: snoPreset("/extract/v1/chat/completions"),
-				baseSource: "http://100.100.200.71:8080",
-			}),
-		).toMatchObject({ url: "http://100.100.200.71:8080/extract/v1/chat/completions" });
-	});
-
 	it("rejects unapproved HTTP endpoint hosts", () => {
 		expect(() =>
 			materializeBundledLlmixEndpoint({

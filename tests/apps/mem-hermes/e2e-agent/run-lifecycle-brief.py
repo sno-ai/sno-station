@@ -91,6 +91,7 @@ request = urllib.request.Request(
     headers={
         "Content-Type": "application/json",
         "x-sno-station-mem-skin": "hermes",
+        "x-sidecar-token": discovery["token"],
     },
     method="POST",
 )
