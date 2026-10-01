@@ -647,8 +647,8 @@ export async function runGroupCrudMaintenancePass(
 		true,
 	);
 	// The final state-keying attempt of the pass: a row that failed keying the first time gets one
-	// more try, and only now is a genuine failure persisted so a later pass skips it (REQ-11's
-	// "a second full run reports zero changes").
+	// more try, and only now is a genuine failure persisted so a later pass skips it
+	// ("a second full run reports zero changes").
 	await keyStateRows(
 		input.database,
 		readRows(input.database),

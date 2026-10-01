@@ -412,7 +412,7 @@ export class SnoStationMemProviderSearchManager implements MemorySearchManager {
 
 	private isAuthorizedEntry(entry: MemoryEntry | undefined): entry is MemoryEntry {
 		// A refusal mark says the row was not profile material; it is still the user's own
-		// sentence and is served by default (owner ruling 2026-09-01, PRD 130 DEC-9).
+		// sentence and is served by default.
 		if (entry?.projectId !== this.options.identity.projectId) {
 			return false;
 		}

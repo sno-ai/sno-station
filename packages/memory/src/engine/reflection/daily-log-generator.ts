@@ -277,7 +277,7 @@ export async function generateReflectionText(params: {
 	};
 }
 
-// PRD §3 / Step 2.5: v2 storeReflection + extractReflectionSlices removed.
+// v2 storeReflection + extractReflectionSlices removed.
 // Production reflections now flow through memory-entry-projector.ts:storeReflectionEntries
 // (layered v3) + the §4.2 mapped-memory loop in strategy-hook-runner.ts. v2 helpers
 // are deleted, not deprecated — typecheck on this file is the oracle that proves
@@ -383,6 +383,6 @@ export async function writeReflectionToFilesystem(
 	throw new Error(`Failed to allocate unique reflection file for ${dateStr} ${timeCompact}`);
 }
 
-// PRD §3 / Step 2.5: v2 parseSectionBullets + extractReflectionSlices removed
+// v2 parseSectionBullets + extractReflectionSlices removed
 // from this module. The slice/section helpers live in markdown-slice-parser.ts and
 // are used by the layered v3 store + the §4.2 mapped-memory loop.

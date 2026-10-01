@@ -11,7 +11,7 @@ const HAS_HAN = /[一-鿿]/u;
 // for frequency-based simplified-vs-traditional disambiguation. Keep paired
 // with HANS_DISTINCT_RE — every entry here should have a 1:1 Hans counterpart
 // in HANS_DISTINCT_RE for fair counting. Exported so an HANS ∩ HANT = ∅ unit
-// test can guard against accidental overlap (PRD §9 line 778).
+// test can guard against accidental overlap.
 export const HANT_DISTINCT_CHARS = "說講識讀譯長寫關類體聖貝謊議證讓訊為";
 export const HANS_DISTINCT_CHARS = "说讲识读译长写关类体圣贝谎议证让讯为";
 const HANT_DISTINCT_RE = new RegExp(`[${HANT_DISTINCT_CHARS}]`, "gu");
