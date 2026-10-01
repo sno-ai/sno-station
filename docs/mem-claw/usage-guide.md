@@ -10,26 +10,21 @@ Requirements:
 - OpenClaw on your PATH
 - Node.js 22.22.3 or newer on the 22 line, 24.15.0 or newer on the 24 line, or 25.9.0 or newer
 
-### Guided install
+### Install
+
+Complete the [shared memory setup](../memory-setup.md) once, then install the plugin:
 
 ```bash
-npx @snoai/mem-claw
+openclaw plugins install @snoai/mem-claw@1.0.0
 ```
 
-The wizard installs the plugin if needed, asks for the memory profile, the embedder, and the memory
-mode, collects only the credentials required by that mode, and writes the OpenClaw configuration.
-
-### OpenClaw-native install
-
-```bash
-openclaw plugins install @snoai/mem-claw
-npx @snoai/mem-claw --configure
-```
+`npx @snoai/mem-claw` runs the same install; its only option is `--profile <name>`, forwarded to
+OpenClaw. The plugin starts the memory service from the path recorded by the shared setup.
 
 Use the published npm package for public installs. Do not build from a private monorepo, copy a
 local build to another machine, or configure a private service address.
 
-Restart the OpenClaw gateway when the installer asks, then run:
+Restart the OpenClaw gateway, then run:
 
 ```text
 /memory status
@@ -68,7 +63,7 @@ does not depend on a network service.
 Agent Native is the default. It sends every model-assisted memory-writing call to the OpenClaw
 agent's configured model.
 
-The guided wizard collects no key for Agent Native: it always borrows the host agent's model.
+Agent Native collects no key: it always borrows the host agent's model.
 Agent Native runs extraction only. The reflection summary (LLM mode `extraction+reflection`) is
 available in REM Enhanced.
 
@@ -110,70 +105,17 @@ mode:
 - `rem-update` rewrites transition narratives into current-state memories and keeps the history;
 - `rem-replace` adjudicates contradictions across the store and soft-closes the loser reversibly.
 
-The installer requests both by default (`--rem-operations`), and `remEnhanced.trigger.tick: false`
-turns the trigger off. The trigger setting is read once, when the memory store is first set up.
+Both run by default, and setting `rem.tick` to `false` in `~/.sno/settings.json` turns the trigger
+off.
 
 Mode selection governs memory writing. It does not make final claims about retrieval or reranker
 routing.
 
 ## Change modes
 
-Open the wizard again:
-
-```bash
-npx @snoai/mem-claw --configure
-```
-
-Or select a mode directly:
-
-```bash
-npx @snoai/mem-claw --configure --mode local-first
-npx @snoai/mem-claw --configure --mode agent-native
-npx @snoai/mem-claw --configure --mode rem-enhanced
-```
-
-Use direct flags only when the needed host access or credential is already available. Interactive
-setup is recommended when choosing a mode for the first time because it explains each mode before
-writing the configuration.
-
-Other installer flags:
-
-| Flag | Effect |
-| --- | --- |
-| `--memory-profile <p>` | `local-active`, `capture-only`, `manual-only`, or `custom` |
-| `--embedder <preset>` | Embedding preset |
-| `--llm-mode <m>` | `off`, `extraction`, or `extraction+reflection` |
-| `--rem-operations <v>` | `both` (default), `rem-update`, or `rem-replace` |
-| `--default` / `--lean` | Recall depth without prompting |
-| `--no-slot` | Do not assign the plugin to OpenClaw's memory slot |
-| `--non-interactive` | No prompts; same end state as a plain `openclaw plugins install` |
-| `--profile <name>` | Forwarded to every `openclaw` call |
-
-Check the result without changing configuration:
-
-```bash
-npx @snoai/mem-claw --status
-```
-
-Restart OpenClaw after a mode change.
-
-## Common defaults
-
-The guided installer starts with:
-
-| Setting | Default |
-| --- | --- |
-| Memory mode | Agent Native |
-| Memory profile | `local-active` (active capture and recall) |
-| Embedder | Local |
-| Reranking | Local lightweight processing |
-| Recall depth | Default |
-| Session handling | Local system session memory |
-| Management tools | Off |
-| Cloud observability | Off unless explicitly enabled |
-
-Keep these defaults until you have a specific reason to change them. In particular, changing the
-embedding model or vector dimensions requires rebuilding the stored vectors.
+The mode is the `mode` value in `~/.sno/settings.json` (`local-first`, `agent-native` or
+`rem-enhanced`), shared by every plugin. Edit it, keep the existing `store.encryptionKey`, and
+restart OpenClaw. The installer has no flags for this.
 
 ## Daily operation
 
@@ -227,29 +169,17 @@ encrypted store:
 npx --package @snoai/mem-claw sno-memdump --db ~/.openclaw/mem-claw/mem-claw.sqlite [--scope <scope>] [--id <id>] [--grep <text>] [--limit <n>] [--metadata]
 ```
 
-## Capture profiles and reinstall
+## Capture and reinstall
 
-To stop automatic capture without uninstalling, switch the memory profile:
-
-```bash
-npx @snoai/mem-claw --configure --memory-profile manual-only
-```
-
-`manual-only` turns off ambient capture and auto-recall; explicit `memory_store` calls and
-`/memory` commands keep working. `capture-only` keeps ambient capture on and turns off auto-recall.
-`local-active` has both on. Restart the gateway after the change.
+To stop automatic capture without uninstalling, turn off ambient capture in the `capture` group of
+`~/.sno/settings.json` and limit automatic recall in the `recall` group, then restart the gateway.
+Explicit `memory_store` calls and `/memory` commands are separate and keep working.
 
 Normal uninstall and reinstall preserve the memory library:
 
 ```bash
 openclaw plugins uninstall sno-mem-claw
 openclaw plugins install @snoai/mem-claw
-```
-
-Run setup again only when you want to change the selected mode or other onboarding choices:
-
-```bash
-npx @snoai/mem-claw --configure
 ```
 
 ## Embedding changes
@@ -271,24 +201,16 @@ The wipe command deletes memory data. It is not part of normal mode switching or
 - Local First sends no memory text to an LLM service.
 - Agent Native uses the host agent's model; no key is collected.
 - REM Enhanced uses Sno only for the memory-specialized calls listed above.
-- Keys entered in the wizard are stored in the plugin's onboarding env file (mode 0600) and a
-  systemd user drop-in for the gateway, never in the committed OpenClaw configuration.
-- The installer names a missing credential without printing its value.
+- Settings and the encryption key live in `~/.sno/settings.json` (mode 0600); keep a private backup.
 - Public setup never requires a private hostname, virtual-machine name, local repository path, or
   internal service token.
 
 ## Troubleshooting
 
-### The wizard cannot finish Agent Native setup
+### Agent Native cannot reach a model
 
-Run the interactive wizard instead of a non-interactive install:
-
-```bash
-npx @snoai/mem-claw --configure
-```
-
-Agent Native needs the OpenClaw agent's own model to be configured and working; the wizard does not
-ask for a key.
+Agent Native needs the OpenClaw agent's own model to be configured and working; it needs no key in
+`settings.json`.
 
 ### Capture produces Local First output in a model-assisted mode
 
@@ -306,12 +228,7 @@ retry with a new statement. Do not add a private endpoint from an internal troub
 
 ### A first memory is not stored
 
-1. Run `npx @snoai/mem-claw --status` and confirm the memory profile is not `manual-only`.
+1. Confirm capture is not turned off in the `capture` group of `~/.sno/settings.json`.
 2. Use a concrete preference or fact rather than a greeting.
 3. Run `/memory stats` after the agent replies.
 4. Check the OpenClaw logs for capture or embedder errors.
-
-### Setup is already complete
-
-The default installer invocation prints status instead of rewriting a completed configuration.
-Use `--configure` when you intentionally want to change it.
