@@ -1,6 +1,28 @@
 # @snoai/observability
 
-Host-side observability SDK for SNO agent events. It validates a closed event schema, redacts sensitive fields before hashing, writes an append-only SQLite buffer under `~/.sno`, and flushes Compact JSON v1 envelopes to `sno.ai`.
+Local, redacted usage events for Sno Station, buffered on your machine and delivered only if you
+turn delivery on.
+
+Agent plugins can record what happened (a memory was written, a tool was called) as events in a
+closed schema. This package validates each event, redacts sensitive fields before hashing,
+appends it to a local SQLite buffer under `~/.sno`, and, when delivery is enabled, flushes
+Compact JSON v1 envelopes to `sno.ai`. The shared memory setup turns delivery off
+(`telemetry.observe.enabled` is `false`), so a default install keeps every event on your machine.
+
+Who it is for: the Sno Station packages and anyone integrating a host agent. If you only want
+shared agent memory, follow the
+[shared memory setup](https://github.com/sno-ai/sno-station/blob/main/docs/memory-setup.md) and
+install the plugin for your agent ([Codex](https://www.npmjs.com/package/@snoai/mem-codex),
+[Claude Code](https://www.npmjs.com/package/@snoai/mem-claude),
+[OpenClaw](https://www.npmjs.com/package/@snoai/mem-claw)).
+
+```bash
+npm install @snoai/observability@1.0.1
+```
+
+Needs Node.js 22.14 or newer. The package also installs a `sno-observe` command
+(`sno-observe append <event_type> --agent=<harness> --field=value`) for appending an event from
+a shell.
 
 ```ts
 import { snoObserve } from "@snoai/observability";
