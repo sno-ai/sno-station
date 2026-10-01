@@ -65,23 +65,19 @@ does not depend on a network service.
 
 ### Agent Native
 
-Agent Native is the default. It sends every model-assisted memory-writing occasion to the OpenClaw
+Agent Native is the default. It sends every model-assisted memory-writing call to the OpenClaw
 agent's configured model.
 
-The guided wizard first looks for usable host subscription access. If it is available, no new key
-is needed. Otherwise, the wizard asks for a key provider (OpenAI or OpenRouter) and the key.
-Subscription and bring-your-own-key are transport details, not different modes, and they produce
-identical routing.
-
-The subscription transport runs extraction only. The reflection summary (LLM mode
-`extraction+reflection`) is available with your own key or in REM Enhanced.
+The guided wizard collects no key for Agent Native: it always borrows the host agent's model.
+Agent Native runs extraction only. The reflection summary (LLM mode `extraction+reflection`) is
+available in REM Enhanced.
 
 Calls run inline.
 
 ### REM Enhanced
 
 REM Enhanced splits model-assisted memory work by capability. The Sno GPU handles the
-LoRA-covered occasions; the host model handles the rest:
+LoRA-covered calls; the host model handles the rest:
 
 - Sno handles memory extraction.
 - Sno handles conflict adjudication.
@@ -100,23 +96,22 @@ silently reroute it to another model tier.
 | Profile-section merge | Deterministic merge | Host model | Host model |
 | Completed-task match | Token overlap | Host model | Host model |
 | Conflict adjudication | Keep both memories | Host model | Sno conflict model |
-| Reflection summary | No model reflection; local session memory remains | Host model, key transport only | Host model |
+| Reflection summary | No model reflection; local session memory remains | Same as Local First | Host model |
 | Relative-date resolution | No model call | Host model | Host model |
 
-No occasion is off in Agent Native or REM Enhanced. Model-assisted writes happen inline and fall
+No call is off in Agent Native or REM Enhanced. Model-assisted writes happen inline and fall
 back per request to the matching Local First behavior when necessary.
 
-In REM Enhanced, every occasion's tier is a switch under `remEnhanced.occasions` in the plugin
-configuration (`snoRemMem` or `agent`). The table shows the defaults.
+In REM Enhanced, the selected mode fixes each model call's destination as shown above.
 
-Two REM operations run over the store on a periodic trigger and use the Sno models in every
+Two REM operations run over the store on a periodic trigger and route model calls by the selected
 mode:
 
 - `rem-update` rewrites transition narratives into current-state memories and keeps the history;
 - `rem-replace` adjudicates contradictions across the store and soft-closes the loser reversibly.
 
 The installer requests both by default (`--rem-operations`), and `remEnhanced.trigger.tick: false`
-turns the trigger off.
+turns the trigger off. The trigger setting is read once, when the memory store is first set up.
 
 Mode selection governs memory writing. It does not make final claims about retrieval or reranker
 routing.
@@ -138,8 +133,8 @@ npx @snoai/mem-claw --configure --mode rem-enhanced
 ```
 
 Use direct flags only when the needed host access or credential is already available. Interactive
-setup is recommended when choosing Agent Native for the first time because it can detect a host
-subscription and request a key only when needed.
+setup is recommended when choosing a mode for the first time because it explains each mode before
+writing the configuration.
 
 Other installer flags:
 
@@ -148,7 +143,6 @@ Other installer flags:
 | `--memory-profile <p>` | `local-active`, `capture-only`, `manual-only`, or `custom` |
 | `--embedder <preset>` | Embedding preset |
 | `--llm-mode <m>` | `off`, `extraction`, or `extraction+reflection` |
-| `--rerank <mode>` | `lightweight`, `none`, or `cross-encoder` |
 | `--rem-operations <v>` | `both` (default), `rem-update`, or `rem-replace` |
 | `--default` / `--lean` | Recall depth without prompting |
 | `--no-slot` | Do not assign the plugin to OpenClaw's memory slot |
@@ -275,8 +269,8 @@ The wipe command deletes memory data. It is not part of normal mode switching or
 
 - Memory data is stored in encrypted local SQLite storage.
 - Local First sends no memory text to an LLM service.
-- Agent Native uses either the host subscription or a user-provided key, with identical routing.
-- REM Enhanced uses Sno only for the memory-specialized occasions listed above.
+- Agent Native uses the host agent's model; no key is collected.
+- REM Enhanced uses Sno only for the memory-specialized calls listed above.
 - Keys entered in the wizard are stored in the plugin's onboarding env file (mode 0600) and a
   systemd user drop-in for the gateway, never in the committed OpenClaw configuration.
 - The installer names a missing credential without printing its value.
@@ -293,7 +287,8 @@ Run the interactive wizard instead of a non-interactive install:
 npx @snoai/mem-claw --configure
 ```
 
-If the host subscription cannot be used, the wizard asks for a key provider and a key.
+Agent Native needs the OpenClaw agent's own model to be configured and working; the wizard does not
+ask for a key.
 
 ### Capture produces Local First output in a model-assisted mode
 

@@ -7,7 +7,7 @@
 ![runs on your laptop, no daemon](https://img.shields.io/badge/runs%20on-your%20laptop%2C%20no%20daemon-3b82f6.svg?labelColor=3b3b3b)
 ![harnesses Claude Code, Codex, OpenClaw](https://img.shields.io/badge/harnesses-Claude%20Code%20%C2%B7%20Codex%20%C2%B7%20OpenClaw-f0a04b.svg?labelColor=3b3b3b)
 
-**他の言語で読む:** [English](../../README.md) · [中文](README.zh-CN.md) · [Deutsch](README.de.md) · [Español](README.es.md) · [Français](README.fr.md) · [Русский](README.ru.md) · [한국어](README.ko.md) · **日本語** · [繁體中文](README.zh-TW.md)
+**Read in other languages:** [English](../../README.md) · [中文](README.zh-CN.md) · [Deutsch](README.de.md) · [Español](README.es.md) · [Français](README.fr.md) · [Русский](README.ru.md) · [한국어](README.ko.md) · **日本語** · [繁體中文](README.zh-TW.md)
 
 Sno Station は、あなたのエージェントたちのワークステーションです。オープンソースソフトウェア
 であり、あなたがすでに使っている AI エージェントたち——コーディングエージェントも、
@@ -141,7 +141,7 @@ Codex に Claude Code の作業をレビューさせてきました。空振り�
 | Piece | Status |
 |---|---|
 | `packages/chunking` | In this repository, tested, published on npm |
-| Shared packages (`common-core`, `utils`, `embedder`, `sno-observe`, `sno-station-core-crypto`, `content-sanitizer`) | このリポジトリ内にあります |
+| Shared packages (`common-core`, `utils`, `embedder`, `observability`, `sqlite-crypto`, `content-sanitizer`) | このリポジトリ内にあります |
 | Shared memory across Claude Code, Codex and OpenClaw | エンジンと3つのスキンすべてがこのリポジトリ内にあります。クリーンなマシンでの証明は未了です |
 | Sno Reach — agents talking to each other, no daemon | ソースはこのリポジトリ内にあります。リリースアーカイブは未了です |
 | The RSI loop (skill) | This week |

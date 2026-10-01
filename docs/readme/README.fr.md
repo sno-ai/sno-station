@@ -138,7 +138,7 @@ de session sont caviardés ; rien d'autre n'est touché.
 | Élément | Statut |
 |---|---|
 | `packages/chunking` | Dans ce dépôt, testé, publié sur npm |
-| Paquets partagés (`common-core`, `utils`, `embedder`, `sno-observe`, `sno-station-core-crypto`, `content-sanitizer`) | Dans ce dépôt |
+| Paquets partagés (`common-core`, `utils`, `embedder`, `observability`, `sqlite-crypto`, `content-sanitizer`) | Dans ce dépôt |
 | Mémoire partagée entre Claude Code, Codex et OpenClaw | Moteur et les trois habillages dans ce dépôt ; preuve sur machine vierge en attente |
 | Sno Reach — les agents qui se parlent, sans démon | Source dans ce dépôt ; archives de version en attente |
 | La boucle RSI (compétence) | Cette semaine |
