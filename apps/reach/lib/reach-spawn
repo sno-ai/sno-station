@@ -3,6 +3,11 @@
 set -Eeuo pipefail
 release="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 kind="${1:?agent required}"
+register_env=(-u SNO_REACH_HARNESS)
+case "$kind" in
+    claude) register_env+=(SNO_REACH_HARNESS=claude-code) ;;
+    codex|hermes|openclaw) register_env+=("SNO_REACH_HARNESS=$kind") ;;
+esac
 address="${2:?address required}"
 cwd="${3:?cwd required}"
 window="${4:?window selection required}"
@@ -50,7 +55,7 @@ if [[ "$window" == no && -n "$adapter" ]]; then
     metadata="$(timeout -k 2 10 acpx 9>&- --cwd "$cwd" --format json "$adapter" sessions show "$session")"
     session_id="$(jq -er --arg name "$session" --arg cwd "$cwd" 'select(.name == $name and .cwd == $cwd and .closed == false) | .acpxRecordId | strings | select(length > 0)' <<<"$metadata")"
     handle="acp-$adapter:$cwd:$session"
-    "$release/lib/reach-reachability" register --root "$root" --as "$address" --channel acp --handle "$handle" --identity-kind acp-session --identity "$session" >&2
+    SNO_REACH_SKIP_WAKE_ADOPTION=1 env "${register_env[@]}" "$release/bin/sno-reach" register --as "$address" --channel acp --handle "$handle" 9>&- >&2
     queued="$(printf '%s\n' "$context" | timeout -k 2 20 acpx 9>&- --cwd "$cwd" --approve-all --format json --timeout 15 "$adapter" prompt -s "$session" --no-wait --file -)"
     jq -se --arg id "$session_id" 'length == 1 and .[0].action == "prompt_queued" and .[0].acpxRecordId == $id and (. [0].requestId | type == "string" and length > 0)' <<<"$queued" >/dev/null
 else
@@ -63,7 +68,7 @@ else
         "$release/lib/reach-agent" "$kind" "$context")"
     created=yes
     [[ "$handle" =~ ^%[0-9]+$ ]] || { printf 'reach: tmux returned invalid pane\n' >&2; exit 65; }
-    SNO_REACH_SKIP_WAKE_ADOPTION=1 "$release/bin/sno-reach" register --as "$address" --channel tmux --handle "$handle" >&2
+    SNO_REACH_SKIP_WAKE_ADOPTION=1 env "${register_env[@]}" "$release/bin/sno-reach" register --as "$address" --channel tmux --handle "$handle" 9>&- >&2
 fi
 temporary="$(mktemp "$root/$address/.seat-runtime.XXXXXX")"
 # The transcript is the seat's own record of what it said; call verifies against it,

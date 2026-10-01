@@ -25,8 +25,8 @@ while IFS=$'\t' read -r archive digest source_ref contract_ref extra || [[ -n "$
   expected["$archive"]="$digest"
   rows=$((rows + 1))
 done < "$record"
-[[ "$rows" == 2 ]] || { printf 'release: expected two accepted archives\n' >&2; exit 2; }
-for program in heartbeat subscription-quota-check; do
+[[ "$rows" == 3 ]] || { printf 'release: expected three accepted archives\n' >&2; exit 2; }
+for program in heartbeat report-time subscription-quota-check; do
   version="$(<"$root/apps/$program/VERSION")"
   archive="$program-$version.tar.gz"
   [[ -n "${expected[$archive]:-}" ]] || { printf 'release: missing accepted archive: %s\n' "$archive" >&2; exit 2; }

@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+`wait --reply-to` records the answer it returns in the caller's seen list, so the same answer no
+longer rings the caller again after `wait` already handed it over.
+
+## 2.0.5
+
+`export` retries its mailbox snapshot once when a selected message moves between Maildir
+`new` and `cur` during acknowledgment. A second move or any content change still refuses the
+export and asks the caller to retry after mailbox activity stops.
+
 ## 2.0.4
 
 A seat spawned by Reach records its agent's own transcript (Claude: a fixed session id; Codex: its rollout file), and `call` verifies a send against new assistant text there instead of the terminal screen; the screen path remains only for raw pane handles. Text already sitting in a composer is cleared before a send instead of refusing it.
