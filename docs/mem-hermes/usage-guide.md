@@ -59,10 +59,13 @@ that a memory was saved.
 ## Update or remove
 
 ```bash
-hermes plugins update sno-mem-hermes
+hermes plugins install sno-ai/sno-station/apps/mem-hermes/sno-mem-hermes --force --enable
+hermes gateway restart
 hermes plugins remove sno-mem-hermes
 ```
 
-Removing the plugin does not remove the Sno memory store. The plugin manifest declares Linux
-and macOS support; the clean-host memory journey for this release was run on Linux. A public
-Git-based installation is not claimed as tested until the source is available on GitHub.
+The plugin is installed from a Git subdirectory, so an update is a forced reinstall of that
+subdirectory; restart a running Hermes gateway after installing or replacing it. Removing the
+plugin does not remove the Sno memory store. The plugin manifest declares Linux
+and macOS support; the clean-host memory journey for this release was run on Linux. Installing from the
+public GitHub repository, replacing it with `--force`, and removing it were run on a clean Linux host.
