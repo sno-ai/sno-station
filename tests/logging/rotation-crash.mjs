@@ -1,0 +1,48 @@
+import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import { mkdtemp, readFile, writeFile, symlink, utimes, readdir } from "node:fs/promises";
+import { join, resolve } from "node:path";
+import { tmpdir, hostname } from "node:os";
+import { createHash } from "node:crypto";
+
+const root=resolve(import.meta.dirname,"../..");
+const directory=await mkdtemp(join(tmpdir(),"logging-rotation-crash-"));
+await symlink(resolve(root,"node_modules"),join(directory,"node_modules"));
+const original=await readFile(resolve(root,"packages/utils/dist/log-file-sink.js"),"utf8");
+const phases=[];
+for(const seam of ["intent-persisted","dated-link-created","current-switched","ownership-saved"]){
+	const marker=`// rotation-crash-seam: ${seam}`;
+	assert.equal(original.split(marker).length,2,`one real filesystem crash seam: ${seam}`);
+	const module=join(directory,`${seam}.mjs`);
+	const tear=seam==="ownership-saved"?'(await import("node:fs")).writeFileSync(this.lockPath,"{");':"";
+	await writeFile(module,original.replace(new RegExp(`${marker}[^\\n]*`),line=>`${line}\n${tear}\nprocess.exit(97);`));
+	const destination=join(directory,`${seam}.log`);
+	const yesterday=new Date(Date.now()-86400000);
+	await writeFile(destination,JSON.stringify({before:seam})+"\n");
+	await utimes(destination,yesterday,yesterday);
+	const runner=join(directory,`${seam}-runner.mjs`);
+	await writeFile(runner,`import {LogFileSink} from ${JSON.stringify(module)};const sink=new LogFileSink(${JSON.stringify(destination)},(reason,fields)=>JSON.stringify({reason,fields}));sink.enqueue(JSON.stringify({after:process.argv[2]}),"info");await sink.close();`);
+	const crashed=spawnSync(process.execPath,[runner,"crashed"],{encoding:"utf8",timeout:10000});
+	assert.equal(crashed.status,97,`${seam}: real process stopped at requested boundary ${crashed.stderr}`);
+	await writeFile(module,original);
+	const restored=spawnSync(process.execPath,[runner,"recovered"],{encoding:"utf8",timeout:10000});
+	assert.equal(restored.status,0,restored.stderr);
+	const names=(await readdir(directory)).filter(name=>name===`${seam}.log`||new RegExp(`^${seam}\\.log\\.\\d{4}-\\d{2}-\\d{2}(?:\\.\\d+)?$`).test(name));
+	const rows=(await Promise.all(names.map(name=>readFile(join(directory,name),"utf8")))).flatMap(bytes=>bytes.trim().split("\n").filter(Boolean).map(JSON.parse));
+	assert.equal(rows.filter(row=>row.before===seam).length,1,"durable pre-crash record survives exactly once");
+	assert.equal(rows.filter(row=>row.after==="recovered").length,1,"new current receives post-recovery record exactly once");
+	assert.ok((await readFile(destination,"utf8")).includes('"after":"recovered"'));
+	assert.ok(!(await readdir(directory)).includes(`${seam}.log.rotation`),"completed recovery clears its pending intent");
+	const ownership=JSON.parse(await readFile(`${destination}.lock`,"utf8"));
+	assert.equal(ownership.rotated.length,1,"old file remains owned for later retention");
+	const tomorrow=new Date(Date.now()+86400000).toISOString();
+	const nextRunner=join(directory,`${seam}-next.mjs`);
+	await writeFile(nextRunner,`const OriginalDate=Date;globalThis.Date=class extends OriginalDate{constructor(...args){super(...(args.length?args:[${JSON.stringify(tomorrow)}]));}static now(){return OriginalDate.parse(${JSON.stringify(tomorrow)});}};await import(${JSON.stringify(runner)});`);
+	const next=spawnSync(process.execPath,[nextRunner,"next-day"],{encoding:"utf8",timeout:10000});
+	assert.equal(next.status,0,next.stderr);
+	const later=JSON.parse(await readFile(`${destination}.lock`,"utf8"));
+	assert.equal(later.rotated.length,2,"next daily rotation still works after interruption recovery");
+	assert.ok((await readFile(destination,"utf8")).includes('"after":"next-day"'));
+	phases.push({seam,crash_exit:crashed.status,recovery_exit:restored.status,next_rotation_exit:next.status});
+}
+console.log(JSON.stringify({passed:true,host:hostname(),directory,artifact_sha256:createHash("sha256").update(original).digest("hex"),phases}));

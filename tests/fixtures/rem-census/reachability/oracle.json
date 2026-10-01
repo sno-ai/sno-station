@@ -1,0 +1,5 @@
+[
+  { "input": { "neighborEmitted": true, "similarityMet": true }, "expected": "reachable" },
+  { "input": { "neighborEmitted": false, "similarityMet": true }, "expected": "unreachable" },
+  { "input": { "neighborEmitted": true, "similarityMet": null }, "expected": "unknown" }
+]
