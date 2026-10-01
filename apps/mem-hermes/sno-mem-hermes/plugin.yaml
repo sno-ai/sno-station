@@ -6,8 +6,9 @@ kind: standalone
 platforms:
   - linux
   - macos
-hooks:
+provides_hooks:
   - pre_llm_call
   - post_api_request
   - post_tool_call
   - post_approval_response
+  - on_session_reset
