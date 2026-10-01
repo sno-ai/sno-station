@@ -3,9 +3,9 @@ import { createInterface } from "node:readline";
 import { finished } from "node:stream/promises";
 import { format } from "node:util";
 import type { Command } from "commander";
-import { ContractError, type JsonValue } from "@snoai/sno-station-mem/client";
-import { DEFAULT_LIST_LIMIT, DEFAULT_SCOPE, DEFAULT_TOP_K, MAX_LIST_LIMIT } from "@snoai/sno-station-mem/internal/config/index";
-import { confirmDestructiveAction, parseCategory, serializeEntry } from "@snoai/sno-station-mem/internal/engine/bindings/memory-cli-shared";
+import { ContractError, type JsonValue } from "@snoai/memory/client";
+import { DEFAULT_LIST_LIMIT, DEFAULT_SCOPE, DEFAULT_TOP_K, MAX_LIST_LIMIT } from "@snoai/memory/internal/config/index";
+import { confirmDestructiveAction, parseCategory, serializeEntry } from "@snoai/memory/internal/engine/bindings/memory-cli-shared";
 import type { MemoryConnection } from "../install/memory-connection";
 import cliMessages from "../i18n/en.json" with { type: "json" };
 export interface CliContext { connection: MemoryConnection; stateDir: string }
@@ -40,19 +40,19 @@ export function registerCommands(program: Command, ctx: CliContext): Command {
     });
   memory.command("search <query>").option("--scope <scope>", "Scope filter").option("--limit <limit>", "Limit", String(DEFAULT_TOP_K))
     .action(async (query: string, options: Record<string, string>) => {
-      const result = await (await ctx.connection.ready()).getRecall(query, await ctx.connection.scope(operator, options.scope), { source: "manual", limit: Math.max(1, Math.min(20, Number(options.limit))) });
+      const result = await (await ctx.connection.ready()).getRecall(query, await ctx.connection.scope(operator, options.scope ?? DEFAULT_SCOPE), { source: "manual", limit: Math.max(1, Math.min(20, Number(options.limit))) });
       if (result.degraded) throw new ContractError(result.reason);
       console.log(result.contextText || "No relevant memories found.");
     });
   memory.command("stats").option("--scope <scope>", "Scope filter").action(async (options: Record<string, string>) => {
-    const result = await (await ctx.connection.ready()).inspect({ op: "stats", scope: options.scope }, await ctx.connection.scope(operator, options.scope));
+    const result = await (await ctx.connection.ready()).inspect({ op: "stats", scope: options.scope }, await ctx.connection.scope(operator, options.scope ?? DEFAULT_SCOPE));
     if (result.degraded) throw new ContractError(result.reason);
     console.log(JSON.stringify(result.result, null, 2));
   });
   memory.command("delete").option("--id <id>", "Delete by memory id").option("--query <query>", "Delete by search query")
     .option("--scope <scope>", "Scope filter for query mode").option("--yes", "Bypass confirmation")
     .action(async (options: { id?: string; query?: string; scope?: string; yes?: boolean }) => {
-      const client = await ctx.connection.ready(), scope = await ctx.connection.scope(operator, options.scope);
+      const client = await ctx.connection.ready(), scope = await ctx.connection.scope(operator, options.scope ?? DEFAULT_SCOPE);
       if (!options.id && !options.query) throw new ContractError("invalid-input");
       if (!options.yes && options.id) {
         const preview = await client.inspect({ op: "get", id: options.id }, scope);
@@ -69,7 +69,7 @@ export function registerCommands(program: Command, ctx: CliContext): Command {
     });
   memory.command("export").requiredOption("--scope <scope>", "Project whose memories to export").option("--output <file>", "Output file path")
     .action(async (options: Record<string, string>) => {
-      const client = await ctx.connection.ready(), scope = await ctx.connection.scope(operator, options.scope);
+      const client = await ctx.connection.ready(), scope = await ctx.connection.scope(operator, options.scope ?? DEFAULT_SCOPE);
       const file = options.output ? createWriteStream(options.output) : undefined;
       try {
         for (let offset = 0; ; offset += MAX_LIST_LIMIT) {
@@ -94,7 +94,7 @@ export function registerCommands(program: Command, ctx: CliContext): Command {
         if (!row) { counts.skipped += 1; continue; }
         try {
           const result = await client.mutate({ op: "store", content: row.text, category: row.category, importance: row.importance, metadata: row.metadata },
-            await ctx.connection.scope(operator, row.scope ?? options.scope));
+            await ctx.connection.scope(operator, row.scope ?? options.scope ?? DEFAULT_SCOPE));
           if (result.result.isError) counts.errors += 1; else counts.imported += 1;
         } catch { counts.errors += 1; }
       }

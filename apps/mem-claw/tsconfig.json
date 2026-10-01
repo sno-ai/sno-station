@@ -9,16 +9,16 @@
     "noUnusedLocals": false,
     "noUnusedParameters": false,
     "paths": {
-      "@snoai/sno-station-mem/client": ["../../packages/sno-station-mem/src/contract/client.ts"],
+      "@snoai/memory/client": ["../../packages/memory/src/contract/client.ts"],
       "@/*": [
         "./src/*"
       ],
       "@/config": [
-        "../../packages/sno-station-mem/config/index.ts"
+        "../../packages/memory/config/index.ts"
       ],
-      "@snoai/sno-station-mem/internal/*": [
-        "../../packages/sno-station-mem/src/*",
-        "../../packages/sno-station-mem/*"
+      "@snoai/memory/internal/*": [
+        "../../packages/memory/src/*",
+        "../../packages/memory/*"
       ]
     }
   },

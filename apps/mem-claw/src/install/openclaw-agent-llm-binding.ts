@@ -4,13 +4,13 @@
  */
 
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk/core";
-import { classifyLlmFailure, readErrorMessage, readErrorStatus } from "@snoai/sno-station-mem/internal/model/llm-failure";
+import { classifyLlmFailure, readErrorMessage, readErrorStatus } from "@snoai/memory/internal/model/llm-failure";
 
 import type {
 	AgentLlmCompletion,
 	AgentLlmPort,
 	AgentLlmRequest,
-} from "@snoai/sno-station-mem/internal/model/agent-llm-port";
+} from "@snoai/memory/internal/model/agent-llm-port";
 
 function awaitWithAbort<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
 	if (signal.aborted) {

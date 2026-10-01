@@ -9,11 +9,11 @@ export default defineConfig({
 	root: repoRoot,
 	resolve: {
 		alias: [
-			{ find: /^@snoai\/sno-station-mem\/client$/, replacement: resolve(repoRoot, "packages/sno-station-mem/src/contract/client.ts") },
-			{ find: /^@snoai\/sno-station-mem\/coding-skin$/, replacement: resolve(repoRoot, "packages/sno-station-mem/config/coding-skin.ts") },
-			{ find: /^@snoai\/sno-station-mem\/internal\/config\//, replacement: `${resolve(repoRoot, "packages/sno-station-mem/config")}/` },
-			{ find: /^@snoai\/sno-station-mem\/internal\//, replacement: `${resolve(repoRoot, "packages/sno-station-mem/src")}/` },
-			{ find: /^@snoai\/sno-station-mem$/, replacement: resolve(repoRoot, "packages/sno-station-mem/src/index.ts") },
+			{ find: /^@snoai\/memory\/client$/, replacement: resolve(repoRoot, "packages/memory/dist/client.js") },
+			{ find: /^@snoai\/memory\/coding-skin$/, replacement: resolve(repoRoot, "packages/memory/config/coding-skin.ts") },
+			{ find: /^@snoai\/memory\/internal\/config\//, replacement: `${resolve(repoRoot, "packages/memory/config")}/` },
+			{ find: /^@snoai\/memory\/internal\//, replacement: `${resolve(repoRoot, "packages/memory/src")}/` },
+			{ find: /^@snoai\/memory$/, replacement: resolve(repoRoot, "packages/memory/src/index.ts") },
 			{ find: /^@\/config$/, replacement: resolve(appRoot, "config/index.ts") },
 			{ find: /^@\//, replacement: `${resolve(appRoot, "src")}/` },
 			{
@@ -28,10 +28,8 @@ export default defineConfig({
 	},
 	test: {
 			env: {
-			...Object.fromEntries(Object.entries(process.env).filter(([key, value]) => key.startsWith("SNO_MEM_TELEMETRY_HMAC_KEY") && value !== undefined).map(([key, value]) => [key.replace("SNO_MEM_TELEMETRY_HMAC_KEY", "SNO_STATION_MEM_TELEMETRY_HMAC_KEY"), value])),
 			NODE_ENV: "test",
 			SNO_STATION_MEM_NODE_ENV: "test",
-			SNO_OBSERVE_ENABLED: "false",
 		},
 		exclude: [
 			...configDefaults.exclude,

@@ -1,20 +1,21 @@
 {
   "name": "@snoai/mem-claw",
-  "version": "1.0.0-rc.1",
+  "version": "1.0.0",
   "license": "Apache-2.0",
+  "publishConfig": { "access": "public" },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/sno-ai/sno-station.git",
     "directory": "apps/mem-claw"
   },
   "type": "module",
-  "description": "Sno Memory for OpenClaw: local-first long-term memory for OpenClaw agents.",
-  "main": "./dist/self-upgrade/entry-shim.js",
-  "types": "./dist/self-upgrade/entry-shim.d.ts",
+  "description": "Long-term memory service for OpenClaw agents.",
+  "main": "./dist/plugin/openclaw-plugin-runtime.js",
+  "types": "./dist/plugin/openclaw-plugin-runtime.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/self-upgrade/entry-shim.d.ts",
-      "import": "./dist/self-upgrade/entry-shim.js"
+      "types": "./dist/plugin/openclaw-plugin-runtime.d.ts",
+      "import": "./dist/plugin/openclaw-plugin-runtime.js"
     },
     "./openclaw.plugin.json": "./openclaw.plugin.json"
   },
@@ -29,28 +30,26 @@
     "openclaw.plugin.json",
     "package.json",
     "LICENSE",
-    "README.md",
-    "scripts/observe-postinstall.mjs"
+    "README.md"
   ],
   "scripts": {
     "dev": "tsx watch src/install/openclaw-plugin-runtime.ts",
     "build": "tsdown",
-    "prepack": "npm run build",
+    "prepack": "npm run sqlite-vec:check && npm run build",
     "pack:dry-run": "npm pack --dry-run",
-    "sqlite-vec:build": "npm run sqlite-vec:build --workspace @snoai/sno-station-mem",
-    "sqlite-vec:check": "npm run sqlite-vec:check --workspace @snoai/sno-station-mem",
+    "sqlite-vec:build": "npm run sqlite-vec:build --workspace @snoai/memory",
+    "sqlite-vec:check": "npm run sqlite-vec:check --workspace @snoai/memory",
     "typecheck": "tsc --noEmit",
     "lint": "biome check src/",
     "lint:fix": "biome check --write src/",
-    "query-manifest:capture": "npm run query-manifest:capture --workspace @snoai/sno-station-mem",
-    "maintenance:group-crud": "npm run maintenance:group-crud --workspace @snoai/sno-station-mem",
-    "store:clean": "npm run store:clean --workspace @snoai/sno-station-mem",
-    "rem:guard-census": "npm run rem:guard-census --workspace @snoai/sno-station-mem",
-    "llmix:check-registry": "npm run llmix:check-registry --workspace @snoai/sno-station-mem",
-    "db:generate": "npm run db:generate --workspace @snoai/sno-station-mem",
-    "db:migrate": "npm run db:migrate --workspace @snoai/sno-station-mem",
-    "db:studio": "npm run db:studio --workspace @snoai/sno-station-mem",
-    "postinstall": "node scripts/observe-postinstall.mjs"
+    "query-manifest:capture": "npm run query-manifest:capture --workspace @snoai/memory",
+    "maintenance:group-crud": "npm run maintenance:group-crud --workspace @snoai/memory",
+    "store:clean": "npm run store:clean --workspace @snoai/memory",
+    "rem:guard-census": "npm run rem:guard-census --workspace @snoai/memory",
+    "llmix:check-registry": "npm run llmix:check-registry --workspace @snoai/memory",
+    "db:generate": "npm run db:generate --workspace @snoai/memory",
+    "db:migrate": "npm run db:migrate --workspace @snoai/memory",
+    "db:studio": "npm run db:studio --workspace @snoai/memory"
   },
   "dependencies": {
     "@huggingface/transformers": "^3.8.1",
@@ -58,14 +57,14 @@
     "@napi-rs/keyring": "^2.0.0",
     "@sinclair/typebox": "^0.34.49",
     "@snoai/chunking": "1.0.1",
-    "@snoai/common-core": "^0.1.0",
+    "@snoai/common-core": "^1.0.0",
     "@snoai/content-sanitizer": "^0.99.3",
-    "@snoai/embedder": "^0.8.0",
+    "@snoai/embedder": "^1.0.0",
     "@snoai/llmix": "2.2.0",
     "@snoai/mda-config": "^1.1.2",
-    "@snoai/sno-observe": "^0.1.0",
-    "@snoai/sno-station-core-crypto": "^0.2.0",
-    "@snoai/utils": "^0.8.0",
+    "@snoai/observability": "^1.0.0",
+    "@snoai/sqlite-crypto": "^1.0.0",
+    "@snoai/utils": "^1.0.0",
     "argon2": "^0.45.1",
     "async-mutex": "^0.5.0",
     "chrono-node": "2.10.1",
@@ -74,14 +73,11 @@
     "eld": "^2.0.3",
     "js-tiktoken": "^1.0.21",
     "lru-cache": "^11.3.5",
-    "onnxruntime-node": "1.21.1",
     "openclaw": "2026.9.2",
-    "semver": "^7.6.3",
     "sqlite-vec": "^0.1.6",
-    "tar": "^7.4.3",
     "uuid": "^14.0.0",
     "zod": "^4.5.4",
-    "@snoai/sno-station-mem": "1.0.0-rc.1"
+    "@snoai/memory": "1.0.0"
   },
   "devDependencies": {
     "@babel/parser": "^7.29.8",
@@ -99,7 +95,7 @@
   },
   "openclaw": {
     "extensions": [
-      "./dist/self-upgrade/entry-shim.js"
+      "./dist/plugin/openclaw-plugin-runtime.js"
     ]
   }
 }
