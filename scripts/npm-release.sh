@@ -95,7 +95,7 @@ case $operation in
       file=${output##*$'\n'}
       [[ $file == *.tgz && -f "$candidate_dir/tarballs/$file" ]] || { printf 'Pack did not produce a tarball for %s\n' "$name" >&2; exit 1; }
       npm publish --dry-run --json --access public --tag "$tag" "$candidate_dir/tarballs/$file" > "$candidate_dir/pack/$slug.json"
-      integrity=$(jq -er --arg name "$name" --arg version "$version" '.[$name] | select(.version == $version) | .integrity' "$candidate_dir/pack/$slug.json")
+      integrity=$(jq -er --arg name "$name" --arg version "$version" 'select(.name == $name and .version == $version) | .integrity' "$candidate_dir/pack/$slug.json")
       jq -n --arg name "$name" --arg version "$version" --arg tag "$tag" --arg file "$file" --arg integrity "$integrity" \
         '{name:$name,version:$version,tag:$tag,file:$file,integrity:$integrity}' > "$candidate_dir/records/$slug.json"
       rows+=("$candidate_dir/records/$slug.json")
