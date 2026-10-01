@@ -23,7 +23,23 @@ Sno Station — это рабочее место ваших агентов: open
 
 ## Установка
 
-*Обновлено 2026-09-19.* Пока нет. Установка одной командой появится вместе с навыком онбординга; до тех пор следите за этим репозиторием. Когда она появится, это будет выглядеть так:
+*Обновлено 2026-10-01.* **Общая память устанавливается уже сегодня.** Она даёт Claude Code, Codex, OpenClaw и Hermes Agent одну зашифрованную память на вашем компьютере, без аккаунта и без API-ключа. Один раз выполните [настройку общей памяти](../memory-setup.md) (несколько минут), затем добавьте своего агента:
+
+```bash
+# Codex CLI
+npm install -g @snoai/mem-codex@1.0.1 && sno-mem-codex install --codex-home ~/.codex
+# Claude Code
+npm install -g @snoai/mem-claude@1.0.1 && sno-mem-claude install --config-dir ~/.claude
+# OpenClaw
+openclaw plugins install @snoai/mem-claw@1.0.1
+# Hermes Agent
+hermes plugins install sno-ai/sno-station/apps/mem-hermes/sno-mem-hermes --enable
+hermes config set memory.provider sno-mem-hermes
+```
+
+Пошаговые руководства: [Codex](../mem-codex/onboarding.md) · [Claude Code](../mem-claude/onboarding.md) · [OpenClaw](../mem-claw/onboarding.md) · [Hermes](../mem-hermes/onboarding.md)
+
+Sno Reach, навыки Duo и ночной цикл пока не входят в эти пакеты. Установка всего одной командой ещё впереди: она появится вместе с навыком онбординга; до тех пор следите за этим репозиторием. Когда она появится, это будет выглядеть так:
 
 ```bash
 # inside any Claude Code, Codex or OpenClaw conversation:

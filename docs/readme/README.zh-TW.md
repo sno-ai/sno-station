@@ -36,8 +36,23 @@ Sno Station 是您代理人的工作站：這款開源軟體能把您已經在�
 
 ## Install
 
-*最後更新於 2026-09-19。* 目前還沒有。單一指令安裝功能會隨 onboarding 技能一起推出；
-在那之前，請持續關注這個儲存庫。上線後，操作方式會像這樣：
+*最後更新於 2026-10-01。* **共用記憶今天就能安裝。** 它讓 Claude Code、Codex、OpenClaw 和 Hermes Agent 共用一份放在你自己機器上的加密記憶，不需要帳號，也不需要 API key。先執行一次[共用記憶設定](../memory-setup.md)（幾分鐘），再加入你的代理人：
+
+```bash
+# Codex CLI
+npm install -g @snoai/mem-codex@1.0.1 && sno-mem-codex install --codex-home ~/.codex
+# Claude Code
+npm install -g @snoai/mem-claude@1.0.1 && sno-mem-claude install --config-dir ~/.claude
+# OpenClaw
+openclaw plugins install @snoai/mem-claw@1.0.1
+# Hermes Agent
+hermes plugins install sno-ai/sno-station/apps/mem-hermes/sno-mem-hermes --enable
+hermes config set memory.provider sno-mem-hermes
+```
+
+逐步說明： [Codex](../mem-codex/onboarding.md) · [Claude Code](../mem-claude/onboarding.md) · [OpenClaw](../mem-claw/onboarding.md) · [Hermes](../mem-hermes/onboarding.md)
+
+Sno Reach、Duo 技能和夜間循環還不在這些套件裡。單一指令安裝全部內容的方式還沒有，它會隨 onboarding 技能一起推出；在那之前，請持續關注這個儲存庫。上線後，操作方式會像這樣：
 
 ```bash
 # inside any Claude Code, Codex or OpenClaw conversation:
