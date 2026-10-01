@@ -1,47 +1,42 @@
 import { performance } from "node:perf_hooks";
 import {
-	CODING_SKIN_LEDGER_MAX_CHARS,
-	CODING_SKIN_PROMPT_CONTEXT_MAX_CHARS,
-	CODING_SKIN_PROMPT_MIN_CHARS,
-	CODING_SKIN_PROMPT_RECALL_LIMIT,
-	CODING_SKIN_PROMPT_TIMEOUT_MS,
-	CODING_SKIN_SESSION_CONTEXT_MAX_CHARS,
 	CODING_SKIN_SESSION_QUERY,
-	CODING_SKIN_SESSION_RECALL_LIMIT,
-	CODING_SKIN_SESSION_TIMEOUT_MS,
-} from "@snoai/sno-station-mem/coding-skin";
+} from "@snoai/memory/coding-skin";
 import { z } from "zod";
-import { sidecarStatus } from "./doctor.js";
+import { readCaptureSettings, readRecallSettings } from "./settings.js";
+import { ContractError } from "@snoai/memory/client";
 import { importReceiptExists, importRepository } from "./import.js";
+import type { HostEvent, MemoryClient, ScopeCtx } from "@snoai/memory/client";
 import { connectMemory, isDegradedConnection } from "./memory-client.js";
 import {
-	applyInjectedMemories,
-	buildMemoryBlock,
-	recallMemories,
-	resetLedgerForSource,
-	selectUnseenMemories,
 	withinDeadline,
 } from "./recall.js";
-import { hookScope, repositoryRoot } from "./scope.js";
+import { hookScope, workspaceRoot } from "./scope.js";
 import { startWorkerDetached } from "./worker.js";
+import { reportSkillRuns } from "./skill-runs.js";
 import {
 	appendSpool,
+	readLastSession,
 	readSession,
 	recordDegraded,
 	recordInjection,
 	recordInvocation,
-	recordLedgerReset,
 	recordLookup,
 	recordSkip,
 	writeSession,
+	writeLastSession,
 } from "./session-state.js";
 
 const baseHookSchema = z.object({
 	session_id: z.string().min(1),
 	cwd: z.string().min(1),
+	agent_id: z.string().optional(),
 });
-const sessionStartSchema = baseHookSchema.extend({ source: z.enum(["startup", "resume", "clear", "compact"]) });
+const sessionStartSchema = baseHookSchema.extend({ source: z.enum(["startup", "resume", "clear", "compact", "fork"]), transcript_path: z.string().min(1) });
 const promptSchema = baseHookSchema.extend({ turn_id: z.string().min(1), prompt: z.string() });
+const sessionEndSchema = baseHookSchema;
+const toolSchema = baseHookSchema.extend({ tool_use_id: z.string().min(1), tool_name: z.string().min(1), tool_input: z.unknown() });
+const postToolSchema = toolSchema.extend({ tool_response: z.unknown() });
 const stopSchema = baseHookSchema.extend({ turn_id: z.string().min(1), last_assistant_message: z.string() });
 
 function emptyEnvelope(event: "SessionStart" | "UserPromptSubmit"): string {
@@ -50,63 +45,79 @@ function emptyEnvelope(event: "SessionStart" | "UserPromptSubmit"): string {
 
 function closedReason(error: unknown): string {
 	if (error instanceof z.ZodError) return "invalid-input";
+	if (error instanceof ContractError || error instanceof Error && error.message.startsWith("settings unavailable:")) return error.message;
 	if (error instanceof Error && error.name === "TimeoutError") return "timeout";
 	return "engine-failed";
 }
 
-async function persistSkip(sessionId: string, event: string, reason: string, started: number): Promise<void> {
-	const state = await readSession(sessionId);
-	recordSkip(state, event, reason);
-	recordInvocation(state, event, performance.now() - started);
-	await writeSession(state);
+/** Every user prompt is reported, even one the recall path skips; a failed report is logged, never hidden. */
+async function reportPrompt(client: MemoryClient, scope: ScopeCtx, prompt: string): Promise<void> {
+	try {
+		await client.hostEvent({ kind: "prompt", prompt }, scope);
+	} catch (error) {
+		console.error(JSON.stringify({ event: "prompt-submit-observe", reason: closedReason(error) }));
+	}
 }
 
 export async function sessionStart(raw: unknown): Promise<string> {
 	const started = performance.now();
 	try {
+		const recall = readRecallSettings();
 		const input = sessionStartSchema.parse(raw);
-		const project = await repositoryRoot(input.cwd);
-		if (!project) {
-			await persistSkip(input.session_id, "SessionStart", "no-repository-root", started);
-			return emptyEnvelope("SessionStart");
-		}
-		const state = await readSession(input.session_id);
-		if (resetLedgerForSource(state, input.source)) recordLedgerReset(state, "SessionStart");
-		if (!await importReceiptExists(project)) await importRepository(project);
-		if (state.ledgerChars >= CODING_SKIN_LEDGER_MAX_CHARS) {
-			recordSkip(state, "SessionStart", "session-cap");
-			recordInvocation(state, "SessionStart", performance.now() - started);
-			await writeSession(state);
-			return emptyEnvelope("SessionStart");
-		}
-		if (await sidecarStatus() !== "healthy") {
-			recordDegraded(state, "SessionStart", "sidecar-unreachable");
-			recordInvocation(state, "SessionStart", performance.now() - started);
-			await writeSession(state);
-			return emptyEnvelope("SessionStart");
-		}
-		const client = await connectMemory();
+		if (input.agent_id !== undefined) return emptyEnvelope("SessionStart");
+		const { project, state } = await withinDeadline((async () => {
+			const project = await workspaceRoot(input.cwd);
+			const previous = await readLastSession(project);
+			// A fresh session after another one in this workspace ends it as "new"; /clear ends it as "reset".
+			const boundary = input.source === "startup" ? "new" as const : input.source === "clear" ? "reset" as const : undefined;
+			if (boundary && previous && previous.sessionId !== input.session_id) {
+				try {
+					const boundaryClient = await withinDeadline(connectMemory(), Math.max(1, recall.sessionStart.timeoutMs - (performance.now() - started)));
+					if (!isDegradedConnection(boundaryClient)) {
+						const ended = await withinDeadline(boundaryClient.onSessionEnd([], {
+							...hookScope(project, previous.sessionId),
+							host: { sessionId: previous.sessionId, workspace: project,
+								sessionFile: previous.transcriptPath, boundary, at: Date.now() },
+						}), Math.max(1, recall.sessionStart.timeoutMs - (performance.now() - started)));
+						if (ended.degraded) console.error(JSON.stringify({ event: "session-boundary", reason: ended.error ?? ended.reason }));
+					} else console.error(JSON.stringify({ event: "session-boundary", reason: boundaryClient.error ?? boundaryClient.reason }));
+				} catch (error) {
+					console.error(JSON.stringify({ event: "session-boundary", reason: closedReason(error) }));
+				}
+			}
+			await writeLastSession(project, input.session_id, input.transcript_path);
+			const state = await readSession(input.session_id);
+			if (!await importReceiptExists(project)) await importRepository(project);
+			return { project, state };
+		})(), Math.max(1, recall.sessionStart.timeoutMs - (performance.now() - started)));
+		const client = await withinDeadline(connectMemory(), Math.max(1, recall.sessionStart.timeoutMs - (performance.now() - started)));
 		if (isDegradedConnection(client)) {
-			recordDegraded(state, "SessionStart", client.reason);
+			recordDegraded(state, "SessionStart", client.error ?? client.reason);
 			recordInvocation(state, "SessionStart", performance.now() - started);
 			await writeSession(state);
 			return emptyEnvelope("SessionStart");
 		}
+		const currentBoundary = input.source === "clear" || input.source === "compact" ? "reset" as const : undefined;
+		if (currentBoundary) {
+			const ended = await withinDeadline(client.onSessionEnd([], {
+				...hookScope(project, input.session_id),
+				host: { sessionId: input.session_id, workspace: project, boundary: currentBoundary, at: Date.now() },
+			}), Math.max(1, recall.sessionStart.timeoutMs - (performance.now() - started)));
+			if (ended.degraded) recordDegraded(state, "SessionStart", ended.error ?? ended.reason);
+		}
+		if (!recall.auto) return emptyEnvelope("SessionStart");
 		recordLookup(state, "SessionStart");
 		const recalled = await withinDeadline(
-			client.getRecall(CODING_SKIN_SESSION_QUERY, hookScope(project, input.session_id), { source: "manual", limit: CODING_SKIN_SESSION_RECALL_LIMIT, includeMetadata: true }),
-			CODING_SKIN_SESSION_TIMEOUT_MS,
+			client.getRecall(CODING_SKIN_SESSION_QUERY, hookScope(project, input.session_id), { source: "auto", injectionPhase: "session-start", limit: recall.sessionStart.limit, maxChars: recall.sessionStart.maxChars }),
+			Math.max(1, recall.sessionStart.timeoutMs - (performance.now() - started)),
 		);
-		if (recalled.degraded) recordDegraded(state, "SessionStart", recalled.reason);
-		const remainingCap = Math.min(CODING_SKIN_SESSION_CONTEXT_MAX_CHARS, CODING_SKIN_LEDGER_MAX_CHARS - state.ledgerChars);
-		const block = recalled.degraded
-			? { text: "", memories: [] }
-			: buildMemoryBlock(selectUnseenMemories(recallMemories(recalled), state), remainingCap, CODING_SKIN_SESSION_RECALL_LIMIT);
-		applyInjectedMemories(state, block.memories, "SessionStart", block.text.length);
-		recordInjection(state, "SessionStart", block.memories.length, block.text.length);
+		if (recalled.degraded) recordDegraded(state, "SessionStart", recalled.error ?? recalled.reason);
+		else if (recalled.unavailable) recordDegraded(state, "SessionStart", recalled.unavailable);
+		const text = recalled.degraded ? "" : recalled.contextText;
+		recordInjection(state, "SessionStart", recalled.degraded ? 0 : recalled.memoryIds?.length ?? 0, text.length);
 		recordInvocation(state, "SessionStart", performance.now() - started);
 		await writeSession(state);
-		return block.text ? JSON.stringify({ hookSpecificOutput: { hookEventName: "SessionStart", additionalContext: block.text } }) : emptyEnvelope("SessionStart");
+		return text ? JSON.stringify({ hookSpecificOutput: { hookEventName: "SessionStart", additionalContext: text } }) : emptyEnvelope("SessionStart");
 	} catch (error) {
 		console.error(JSON.stringify({ event: "session-start", reason: closedReason(error) }));
 		return emptyEnvelope("SessionStart");
@@ -116,55 +127,35 @@ export async function sessionStart(raw: unknown): Promise<string> {
 export async function userPromptSubmit(raw: unknown): Promise<string> {
 	const started = performance.now();
 	try {
+		const recall = readRecallSettings();
 		const input = promptSchema.parse(raw);
-		const project = await repositoryRoot(input.cwd);
-		if (!project) {
-			await persistSkip(input.session_id, "UserPromptSubmit", "no-repository-root", started);
-			return emptyEnvelope("UserPromptSubmit");
-		}
+		if (input.agent_id !== undefined) return emptyEnvelope("UserPromptSubmit");
+		const project = await workspaceRoot(input.cwd);
 		const state = await readSession(input.session_id);
 		state.prompts[input.turn_id] = { prompt: input.prompt, at: Date.now() };
 		await writeSession(state);
-		if (input.prompt.trim().length < CODING_SKIN_PROMPT_MIN_CHARS) {
-			recordSkip(state, "UserPromptSubmit", "short-prompt");
-			recordInvocation(state, "UserPromptSubmit", performance.now() - started);
-			await writeSession(state);
-			return emptyEnvelope("UserPromptSubmit");
-		}
-		if (state.ledgerChars >= CODING_SKIN_LEDGER_MAX_CHARS) {
-			recordSkip(state, "UserPromptSubmit", "session-cap");
-			recordInvocation(state, "UserPromptSubmit", performance.now() - started);
-			await writeSession(state);
-			return emptyEnvelope("UserPromptSubmit");
-		}
-		if (await sidecarStatus() !== "healthy") {
-			recordDegraded(state, "UserPromptSubmit", "sidecar-unreachable");
-			recordInvocation(state, "UserPromptSubmit", performance.now() - started);
-			await writeSession(state);
-			return emptyEnvelope("UserPromptSubmit");
-		}
-		const client = await connectMemory();
+		const client = await withinDeadline(connectMemory(), Math.max(1, recall.prompt.timeoutMs - (performance.now() - started)));
 		if (isDegradedConnection(client)) {
-			recordDegraded(state, "UserPromptSubmit", client.reason);
+			recordDegraded(state, "UserPromptSubmit", client.error ?? client.reason);
 			recordInvocation(state, "UserPromptSubmit", performance.now() - started);
 			await writeSession(state);
 			return emptyEnvelope("UserPromptSubmit");
 		}
+		await withinDeadline(reportPrompt(client, hookScope(project, input.session_id), input.prompt),
+			Math.max(1, recall.prompt.timeoutMs - (performance.now() - started)));
+		if (!recall.auto) return emptyEnvelope("UserPromptSubmit");
 		recordLookup(state, "UserPromptSubmit");
 		const recalled = await withinDeadline(
-			client.getRecall(input.prompt, hookScope(project, input.session_id), { source: "manual", limit: CODING_SKIN_PROMPT_RECALL_LIMIT, includeMetadata: true }),
-			CODING_SKIN_PROMPT_TIMEOUT_MS,
+			client.getRecall(input.prompt, hookScope(project, input.session_id), { source: "auto", injectionPhase: "prompt", limit: recall.prompt.limit, minScore: recall.prompt.minScore, maxChars: recall.prompt.maxChars }),
+			Math.max(1, recall.prompt.timeoutMs - (performance.now() - started)),
 		);
-		if (recalled.degraded) recordDegraded(state, "UserPromptSubmit", recalled.reason);
-		const remainingCap = Math.min(CODING_SKIN_PROMPT_CONTEXT_MAX_CHARS, CODING_SKIN_LEDGER_MAX_CHARS - state.ledgerChars);
-		const block = recalled.degraded
-			? { text: "", memories: [] }
-			: buildMemoryBlock(selectUnseenMemories(recallMemories(recalled), state), remainingCap, CODING_SKIN_PROMPT_RECALL_LIMIT);
-		applyInjectedMemories(state, block.memories, "UserPromptSubmit", block.text.length, input.turn_id);
-		recordInjection(state, "UserPromptSubmit", block.memories.length, block.text.length);
+		if (recalled.degraded) recordDegraded(state, "UserPromptSubmit", recalled.error ?? recalled.reason);
+		else if (recalled.unavailable) recordDegraded(state, "UserPromptSubmit", recalled.unavailable);
+		const text = recalled.degraded ? "" : recalled.contextText;
+		recordInjection(state, "UserPromptSubmit", recalled.degraded ? 0 : recalled.memoryIds?.length ?? 0, text.length);
 		recordInvocation(state, "UserPromptSubmit", performance.now() - started);
 		await writeSession(state);
-		return block.text ? JSON.stringify({ hookSpecificOutput: { hookEventName: "UserPromptSubmit", additionalContext: block.text } }) : emptyEnvelope("UserPromptSubmit");
+		return text ? JSON.stringify({ hookSpecificOutput: { hookEventName: "UserPromptSubmit", additionalContext: text } }) : emptyEnvelope("UserPromptSubmit");
 	} catch (error) {
 		console.error(JSON.stringify({ event: "user-prompt-submit", reason: closedReason(error) }));
 		return emptyEnvelope("UserPromptSubmit");
@@ -175,13 +166,12 @@ export async function stop(raw: unknown): Promise<void> {
 	const started = performance.now();
 	let sessionId: string | undefined;
 	try {
+		readRecallSettings();
 		const input = stopSchema.parse(raw);
+		if (input.agent_id !== undefined) return;
+		if (!readCaptureSettings().ambient) return;
 		sessionId = input.session_id;
-		const project = await repositoryRoot(input.cwd);
-		if (!project) {
-			await persistSkip(input.session_id, "Stop", "no-repository-root", started);
-			return;
-		}
+		const project = await workspaceRoot(input.cwd);
 		const state = await readSession(input.session_id);
 		const prompt = state.prompts[input.turn_id]?.prompt.trim() ?? "";
 		const assistant = input.last_assistant_message.trim();
@@ -209,6 +199,132 @@ export async function stop(raw: unknown): Promise<void> {
 				const state = await readSession(sessionId);
 				recordDegraded(state, "Stop", reason);
 				recordInvocation(state, "Stop", performance.now() - started);
+				await writeSession(state);
+			} catch {
+				// The hook still exits successfully when even its receipt cannot be written.
+			}
+		}
+	}
+}
+
+function stable(value: unknown): string {
+	return value === undefined ? "" : JSON.stringify(value);
+}
+
+/** Reports one host fact to the sidecar; the hook exits successfully either way, and a failed report is logged. */
+async function reportHostEvent(input: { session_id: string; cwd: string }, hook: string, event: HostEvent): Promise<void> {
+	const started = performance.now();
+	let sessionId: string | undefined;
+	try {
+		const recall = readRecallSettings();
+		sessionId = input.session_id;
+		const project = await workspaceRoot(input.cwd);
+		const state = await readSession(input.session_id);
+		const client = await withinDeadline(connectMemory(), Math.max(1, recall.prompt.timeoutMs - (performance.now() - started)));
+		if (isDegradedConnection(client)) {
+			recordDegraded(state, hook, client.error ?? client.reason);
+			recordInvocation(state, hook, performance.now() - started);
+			await writeSession(state);
+			return;
+		}
+		await withinDeadline(client.hostEvent(event, hookScope(project, input.session_id)), Math.max(1, recall.prompt.timeoutMs - (performance.now() - started)));
+		recordInvocation(state, hook, performance.now() - started);
+		await writeSession(state);
+	} catch (error) {
+		const reason = closedReason(error);
+		console.error(JSON.stringify({ event: hook, reason }));
+		if (sessionId) {
+			try {
+				const state = await readSession(sessionId);
+				recordDegraded(state, hook, reason);
+				recordInvocation(state, hook, performance.now() - started);
+				await writeSession(state);
+			} catch {
+				// The hook still exits successfully when even its receipt cannot be written.
+			}
+		}
+	}
+}
+
+export async function preToolUse(raw: unknown): Promise<void> {
+	try {
+		readRecallSettings();
+		const input = toolSchema.parse(raw);
+		if (input.agent_id !== undefined) return;
+		const state = await readSession(input.session_id);
+		state.toolStarts[input.tool_use_id] = Date.now();
+		await writeSession(state);
+	} catch (error) {
+		console.error(JSON.stringify({ event: "pre-tool-use", reason: closedReason(error) }));
+	}
+}
+
+/** One tool.call per PostToolUse; latency is measured from the matching PreToolUse, 0 when none was recorded. */
+export async function postToolUse(raw: unknown): Promise<void> {
+	let input: z.infer<typeof postToolSchema>;
+	try {
+		readRecallSettings();
+		input = postToolSchema.parse(raw);
+		if (input.agent_id !== undefined) return;
+	} catch (error) {
+		console.error(JSON.stringify({ event: "post-tool-use", reason: closedReason(error) }));
+		return;
+	}
+	let latencyMs = 0;
+	try {
+		const state = await readSession(input.session_id);
+		const startedAt = state.toolStarts[input.tool_use_id];
+		if (startedAt === undefined) console.error(JSON.stringify({ event: "post-tool-use", reason: "no-pre-tool-use", tool_use_id: input.tool_use_id }));
+		else { latencyMs = Math.max(0, Date.now() - startedAt); delete state.toolStarts[input.tool_use_id]; await writeSession(state); }
+	} catch (error) {
+		console.error(JSON.stringify({ event: "post-tool-use", reason: closedReason(error) }));
+	}
+	await reportHostEvent(input, "PostToolUse", {
+		kind: "tool", toolName: input.tool_name, decision: "allow", input: stable(input.tool_input), output: stable(input.tool_response), latencyMs,
+	});
+}
+
+export async function sessionEnd(raw: unknown): Promise<void> {
+	const started = performance.now();
+	let sessionId: string | undefined;
+	try {
+		const recall = readRecallSettings();
+		const input = sessionEndSchema.parse(raw);
+		if (input.agent_id !== undefined) return;
+		sessionId = input.session_id;
+		const state = await readSession(input.session_id);
+		try {
+			await reportSkillRuns(state, input.cwd);
+			await writeSession(state);
+		} catch (error) {
+			console.error(JSON.stringify({
+				event: "skill-runs",
+				error: error instanceof Error ? error.message : String(error),
+			}));
+		}
+		const project = await workspaceRoot(input.cwd);
+		const client = await withinDeadline(connectMemory(), Math.max(1, recall.sessionStart.timeoutMs - (performance.now() - started)));
+		if (isDegradedConnection(client)) {
+			recordDegraded(state, "SessionEnd", client.error ?? client.reason);
+			recordInvocation(state, "SessionEnd", performance.now() - started);
+			await writeSession(state);
+			return;
+		}
+		const ended = await withinDeadline(
+			client.onSessionEnd([], hookScope(project, input.session_id)),
+			Math.max(1, recall.sessionStart.timeoutMs - (performance.now() - started)),
+		);
+		if (ended.degraded) recordDegraded(state, "SessionEnd", ended.error ?? ended.reason);
+		recordInvocation(state, "SessionEnd", performance.now() - started);
+		await writeSession(state);
+	} catch (error) {
+		const reason = closedReason(error);
+		console.error(JSON.stringify({ event: "session-end", reason }));
+		if (sessionId) {
+			try {
+				const state = await readSession(sessionId);
+				recordDegraded(state, "SessionEnd", reason);
+				recordInvocation(state, "SessionEnd", performance.now() - started);
 				await writeSession(state);
 			} catch {
 				// The hook still exits successfully when even its receipt cannot be written.

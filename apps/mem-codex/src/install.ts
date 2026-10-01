@@ -5,7 +5,7 @@ import {
 	CODING_SKIN_HOOKS,
 	CODING_SKIN_MODEL_COMMANDS,
 	type CodingSkinHookName,
-} from "@snoai/sno-station-mem/coding-skin";
+} from "@snoai/memory/coding-skin";
 import { APP_NAME } from "./constants.js";
 import { MESSAGES } from "./messages.js";
 

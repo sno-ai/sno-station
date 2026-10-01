@@ -2,7 +2,7 @@ import {
 	connect,
 	type DegradedConnection,
 	type MemoryClient,
-} from "@snoai/sno-station-mem/client";
+} from "@snoai/memory/client";
 import { SKIN_ID } from "./constants.js";
 
 export async function connectMemory(): Promise<MemoryClient | DegradedConnection> {

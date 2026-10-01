@@ -4,5 +4,6 @@ export const MESSAGES = {
 	installComplete: "sno-mem-codex install complete",
 	invalidHooksReplaced: "invalid hooks.json replaced during install",
 	installImportDeferred: "Codex memory import deferred; installation is active",
+	importCaptureDisabled: "Automatic capture is off in settings.json (capture.ambient); imported notes will be skipped.",
 	doctorUnavailable: "doctor: unavailable",
 } as const;

@@ -3,7 +3,7 @@ import { join } from "node:path";
 import {
 	CODING_SKIN_HOOKS,
 	type CodingSkinHookName,
-} from "@snoai/sno-station-mem/coding-skin";
+} from "@snoai/memory/coding-skin";
 import { z } from "zod";
 import { computeTrustHash, isOwnedHookCommand } from "./install.js";
 import { importDirectory, sidecarDiscoveryPath } from "./paths.js";
