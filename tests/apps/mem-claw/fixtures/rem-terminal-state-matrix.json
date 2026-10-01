@@ -1,0 +1,10 @@
+[
+	{"case":"configuration invalid or unreadable","terminal":"failed","persona":"failed","operator":"configuration"},
+	{"case":"entry-gate refusal","terminal":"failed","persona":"failed","operator":"entry gate"},
+	{"case":"operation-gate refusal","terminal":"failed","persona":"failed","operator":"operation gate"},
+	{"case":"operation switched off","terminal":"done","persona":"continues","operator":"switched-off"},
+	{"case":"operation not built","terminal":"done","persona":"continues","operator":"not-built"},
+	{"case":"master switch off","terminal":"no-job","persona":"continues","operator":"master off"},
+	{"case":"low applied fraction","terminal":"done","persona":"continues","operator":"applied fraction"},
+	{"case":"all model calls unavailable","terminal":"failed","persona":"failed","operator":"model outage"}
+]

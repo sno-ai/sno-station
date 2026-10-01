@@ -5,23 +5,23 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { AnyAgentTool, OpenClawPluginApi } from "openclaw/plugin-sdk/core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { Embedder } from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client.ts";
-import { PluginObservability } from "../../../../packages/sno-station-mem/src/engine/observability/adapter.ts";
-import { readMemorySnapshotPayload } from "../../../../packages/sno-station-mem/src/engine/observability/memory-snapshot.ts";
-import { ObservableLlmClient } from "../../../../packages/sno-station-mem/src/engine/observability/observable-llm-client.ts";
-import { ObservableMemoryStore } from "../../../../packages/sno-station-mem/src/engine/observability/observable-memory-store.ts";
+import type { Embedder } from "../../../../packages/memory/src/engine/extraction/embedding-provider-client.ts";
+import { PluginObservability } from "../../../../packages/memory/src/engine/observability/adapter.ts";
+import { readMemorySnapshotPayload } from "../../../../packages/memory/src/engine/observability/memory-snapshot.ts";
+import { ObservableLlmClient } from "../../../../packages/memory/src/engine/observability/observable-llm-client.ts";
+import { ObservableMemoryStore } from "../../../../packages/memory/src/engine/observability/observable-memory-store.ts";
 import type {
 	LlmClient,
 	MemoryLlmRequest,
 	ResolvedLlmConfig,
-} from "../../../../packages/sno-station-mem/src/model/llm-client-types.ts";
-import { ObserveSessionRegistry } from "../../../../packages/sno-station-mem/src/engine/observability/session-registry.ts";
+} from "../../../../packages/memory/src/model/llm-client-types.ts";
+import { ObserveSessionRegistry } from "../../../../packages/memory/src/engine/observability/session-registry.ts";
 import { withToolObservabilityApi } from "../../../../apps/mem-claw/src/tools/with-tool-observability.ts";
-import { pluginConfigSchema } from "../../../../packages/sno-station-mem/src/engine/shared/types.ts";
+import { pluginConfigSchema } from "../../../../packages/memory/src/engine/shared/types.ts";
 import {
-	initSqliteRuntimeSync,
+	initSqliteRuntime,
 	openSqliteDatabase,
-} from "../../../../packages/sno-station-mem/src/store/sqlite-runtime.ts";
+} from "../../../../packages/memory/src/store/sqlite-runtime.ts";
 
 const { countEmbeddingTokens, countManyEmbeddingTokens } = vi.hoisted(() => ({
 	countEmbeddingTokens: vi.fn(async (text: string) => ({
@@ -34,12 +34,13 @@ const { countEmbeddingTokens, countManyEmbeddingTokens } = vi.hoisted(() => ({
 	})),
 }));
 
-vi.mock("../../../../packages/sno-station-mem/src/engine/observability/token-counter", () => ({
+vi.mock("../../../../packages/memory/src/engine/observability/token-counter", () => ({
 	countEmbeddingTokens,
 	countManyEmbeddingTokens,
 }));
 
 const tempDirs: string[] = [];
+let previousHome: string | undefined;
 
 type TestAgentToolResult<T> = {
 	content: Array<{ type: "text"; text: string }>;
@@ -78,13 +79,17 @@ function testHash(input: string): string {
 }
 
 beforeEach(() => {
-	initSqliteRuntimeSync();
+	previousHome = process.env.HOME;
+	process.env.HOME = makeTempDir("mem-claw-observability-home-");
+	initSqliteRuntime("a".repeat(64));
 	countEmbeddingTokens.mockClear();
 	countManyEmbeddingTokens.mockClear();
 });
 
 afterEach(() => {
 	vi.useRealTimers();
+	if (previousHome === undefined) delete process.env.HOME;
+	else process.env.HOME = previousHome;
 	for (const dir of tempDirs.splice(0)) {
 		rmSync(dir, { recursive: true, force: true });
 	}
@@ -143,7 +148,6 @@ describe("observability regressions", () => {
 		} satisfies TestAgentToolResult<{ value: bigint }>;
 		let registeredTool: AnyAgentTool | undefined;
 		const observability = {
-			shouldSampleTool: () => true,
 			hashText: testHash,
 			emit: vi.fn(async () => undefined),
 			emitError: vi.fn(async () => undefined),
@@ -208,7 +212,6 @@ describe("observability regressions", () => {
 		});
 		const tracked: Promise<void>[] = [];
 		const observability = {
-			shouldSampleTool: () => true,
 			hashText: testHash,
 			emit: vi.fn(async () => {
 				await telemetryReady;
@@ -262,15 +265,14 @@ describe("observability regressions", () => {
 		);
 	});
 
-	it("preserves tool execute this binding when wrapping tools", async () => {
+	it("preserves tool execute this binding and emits every tool.call unsampled", async () => {
 		const stateDir = makeTempDir("mem-claw-tool-observe-binding-");
 		let registeredTool: AnyAgentTool | undefined;
 		const observability = {
-			shouldSampleTool: () => false,
 			hashText: () => undefined,
 			emit: vi.fn(async () => undefined),
 			emitError: vi.fn(async () => undefined),
-			trackBestEffort: vi.fn(),
+			trackBestEffort: (_label: string, task: () => void | Promise<void>) => { void task(); },
 		} as unknown as PluginObservability;
 		const api = {
 			registerTool(tool: AnyAgentTool) {
@@ -310,6 +312,10 @@ describe("observability regressions", () => {
 		const firstContent = result?.content[0];
 		expect(firstContent?.type === "text" ? firstContent.text : undefined).toBe(
 			"bound-tool:state",
+		);
+		await flushAsyncWork();
+		expect(observability.emit).toHaveBeenCalledWith(
+			expect.objectContaining({ eventType: "tool.call", payload: expect.objectContaining({ tool_name: "bound-tool" }) }),
 		);
 	});
 
@@ -375,7 +381,7 @@ describe("observability regressions", () => {
 
 	it("does not emit paid LLM usage for local embeddings", async () => {
 		const { ObservableEmbedder } = await import(
-			"../../../../packages/sno-station-mem/src/engine/observability/observable-embedding-provider-client.ts"
+			"../../../../packages/memory/src/engine/observability/observable-embedding-provider-client.ts"
 		);
 		const stateDir = makeTempDir("mem-claw-embed-observe-");
 		const observability = {
@@ -430,7 +436,7 @@ describe("observability regressions", () => {
 
 	it("does not count embedding tokens when observability is disabled", async () => {
 		const { ObservableEmbedder } = await import(
-			"../../../../packages/sno-station-mem/src/engine/observability/observable-embedding-provider-client.ts"
+			"../../../../packages/memory/src/engine/observability/observable-embedding-provider-client.ts"
 		);
 		const stateDir = makeTempDir("mem-claw-embed-observe-disabled-");
 		const observability = {
@@ -642,8 +648,7 @@ describe("observability regressions", () => {
 
 		const pending = wrapper.completeJson({
 			prompt: "hi",
-			callLabel: "memory-extract",
-			adapterSlot: "memory-extract",
+			callId: "E1",
 		});
 		await flushAsyncWork();
 		expect(innerCallCount).toBe(0);

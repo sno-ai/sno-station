@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# Only controls scheduling; the system mv performs the actual filesystem operation.
+set -Eeuo pipefail
+target="${!#}"
+if [[ "$target" == */releases/[0-9]* ]]; then
+  printf 'ready\n' >"${UTILITY_MOVE_BARRIER:?}/$$"
+  started="$SECONDS"
+  while [[ "$(find "$UTILITY_MOVE_BARRIER" -type f | wc -l)" -lt 2 ]]; do
+    ((SECONDS - started < 10)) || { printf 'move barrier timed out\n' >&2; exit 1; }
+    sleep 0.02
+  done
+fi
+exec "${UTILITY_REAL_MV:?}" "$@"

@@ -1,0 +1,4 @@
+{
+	"extends": "../tsconfig.json",
+	"include": ["acc-6-retrievability-port.ts"]
+}

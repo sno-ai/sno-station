@@ -8,11 +8,11 @@ import {
 	installRemSchema,
 	type RemOwner,
 	type RemVerdictCheckpoint,
-} from "../../../../packages/sno-station-mem/src/engine/rem/index.ts";
+} from "../../../../packages/memory/src/engine/rem/index.ts";
 import {
 	initSqliteRuntimeSync,
 	openSqliteDatabase,
-} from "../../../../packages/sno-station-mem/src/store/sqlite-runtime.ts";
+} from "../../../../packages/memory/src/store/sqlite-runtime.ts";
 
 const [, , command, dbPath, ...args] = process.argv;
 if (!command || !dbPath) {

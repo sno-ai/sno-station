@@ -21,23 +21,18 @@ import { drizzle } from "drizzle-orm/better-sqlite3";
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 import * as sqliteVec from "sqlite-vec";
 import {
-	_resetDekCache,
-	KEY_FILE_ENV,
-	resolveConfigPaths,
-} from "@snoai/sno-station-core-crypto";
-import {
 	createEmbedder,
 	type Embedder,
-} from "../../../../packages/sno-station-mem/src/engine/extraction/embedding-provider-client.ts";
-import * as schema from "../../../../packages/sno-station-mem/src/store/schema.ts";
-import { resolveSimpleTokenizerPath } from "../../../../packages/sno-station-mem/src/store/simple-tokenizer-path.ts";
+} from "../../../../packages/memory/src/engine/extraction/embedding-provider-client.ts";
+import * as schema from "../../../../packages/memory/src/store/schema.ts";
+import { resolveSimpleTokenizerPath } from "../../../../packages/memory/src/store/simple-tokenizer-path.ts";
 import {
 	_resetSqliteRuntimeForTest,
-	initSqliteRuntimeSync,
+	initSqliteRuntime,
 	openSqliteDatabase,
 	type RawSqliteDatabase,
 	type SqliteRuntimeHandle,
-} from "../../../../packages/sno-station-mem/src/store/sqlite-runtime.ts";
+} from "../../../../packages/memory/src/store/sqlite-runtime.ts";
 import {
 	registerOwnedTemporaryRoot,
 	releaseOwnedTemporaryRoot,
@@ -306,53 +301,32 @@ export interface TestDb {
 	sqlite: TestSqliteDatabase;
 	runtime: SqliteRuntimeHandle;
 	dbPath: string;
+	/** The 64-hex key the database was created with; a settings file for this database carries it. */
+	encryptionKey: string;
 	cleanup: () => void;
 }
 
 interface EnvSnapshot {
 	SNO_PROFILE_DIR?: string;
-	MEM_CLAW_DATA_DIR_ROOT?: string;
-	SNO_STATION_CORE_KEY_FILE?: string;
-	XDG_CONFIG_HOME?: string;
-	SNO_STATION_CORE_KEYCHAIN_SERVICE?: string;
+	HOME?: string;
 	SNO_STATION_CORE_TESTING?: string;
 }
 
+const CRYPTO_TEST_ENV_KEYS = ["SNO_PROFILE_DIR", "HOME", "SNO_STATION_CORE_TESTING"] as const;
+
+// The store manifest lives under the home directory's `.config/sno-station-core`; a test home keeps
+// every temporary database out of the operator's manifest.
 function installCryptoTestEnv(dbDir: string): EnvSnapshot {
-	const prior: EnvSnapshot = {
-		SNO_PROFILE_DIR: process.env.SNO_PROFILE_DIR,
-		MEM_CLAW_DATA_DIR_ROOT: process.env.MEM_CLAW_DATA_DIR_ROOT,
-		SNO_STATION_CORE_KEY_FILE: process.env[KEY_FILE_ENV],
-		XDG_CONFIG_HOME: process.env.XDG_CONFIG_HOME,
-		SNO_STATION_CORE_KEYCHAIN_SERVICE: process.env.SNO_STATION_CORE_KEYCHAIN_SERVICE,
-		SNO_STATION_CORE_TESTING: process.env.SNO_STATION_CORE_TESTING,
-	};
-	const operatorKeyFile = resolveConfigPaths().keyFile;
-	try {
-		process.env.SNO_PROFILE_DIR = dbDir;
-		process.env.MEM_CLAW_DATA_DIR_ROOT = join(dbDir, "mem-claw-root");
-		process.env.XDG_CONFIG_HOME = join(dbDir, "xdg-config");
-		process.env[KEY_FILE_ENV] = operatorKeyFile;
-		process.env.SNO_STATION_CORE_KEYCHAIN_SERVICE = `ai.sno.sno-station-core.e2e-minus-${process.pid}-${Date.now().toString(36)}-${randomBytes(3).toString("hex")}`;
-		process.env.SNO_STATION_CORE_TESTING = "1";
-		_resetDekCache();
-		_resetSqliteRuntimeForTest();
-		return prior;
-	} catch (error) {
-		restoreCryptoTestEnv(prior);
-		throw error;
-	}
+	const prior: EnvSnapshot = Object.fromEntries(CRYPTO_TEST_ENV_KEYS.map(key => [key, process.env[key]]));
+	process.env.SNO_PROFILE_DIR = dbDir;
+	process.env.HOME = join(dbDir, "home");
+	process.env.SNO_STATION_CORE_TESTING = "1";
+	_resetSqliteRuntimeForTest();
+	return prior;
 }
 
 function restoreCryptoTestEnv(prior: EnvSnapshot): void {
-	for (const key of [
-		"SNO_PROFILE_DIR",
-		"MEM_CLAW_DATA_DIR_ROOT",
-		KEY_FILE_ENV,
-		"XDG_CONFIG_HOME",
-		"SNO_STATION_CORE_KEYCHAIN_SERVICE",
-		"SNO_STATION_CORE_TESTING",
-	] as const) {
+	for (const key of CRYPTO_TEST_ENV_KEYS) {
 		const value = prior[key];
 		if (value === undefined) {
 			delete process.env[key];
@@ -360,7 +334,6 @@ function restoreCryptoTestEnv(prior: EnvSnapshot): void {
 			process.env[key] = value;
 		}
 	}
-	_resetDekCache();
 	_resetSqliteRuntimeForTest();
 }
 
@@ -387,7 +360,7 @@ function cleanupTestDb(
 
 const MIGRATIONS_DIR = join(
 	dirname(fileURLToPath(import.meta.url)),
-	"../../../../packages/sno-station-mem/drizzle",
+	"../../../../packages/memory/drizzle",
 );
 
 export function createTestDb(): TestDb {
@@ -395,10 +368,11 @@ export function createTestDb(): TestDb {
 	registerOwnedTemporaryRoot(dbDir);
 	const dbPath = join(dbDir, "test.sqlite");
 	const cryptoEnv = installCryptoTestEnv(dbDir);
+	const encryptionKey = randomBytes(32).toString("hex");
 
 	let sqlite: TestSqliteDatabase | undefined;
 	try {
-		initSqliteRuntimeSync();
+		initSqliteRuntime(encryptionKey);
 		const runtime = openSqliteDatabase(dbPath);
 		sqlite = runtime.raw as TestSqliteDatabase;
 		sqliteVec.load(sqlite);
@@ -455,7 +429,7 @@ export function createTestDb(): TestDb {
 			cleanupTestDb(sqlite, dbDir, cryptoEnv);
 		}
 
-		return { db, sqlite, runtime, dbPath, cleanup };
+		return { db, sqlite, runtime, dbPath, encryptionKey, cleanup };
 	} catch (error) {
 		cleanupTestDb(sqlite, dbDir, cryptoEnv);
 		throw error;

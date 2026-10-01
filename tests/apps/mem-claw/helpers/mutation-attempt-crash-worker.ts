@@ -1,8 +1,8 @@
 import { dirname } from "node:path";
-import { buildInsightMetadata, stringifyInsightMetadata } from "../../../../packages/sno-station-mem/src/engine/extraction/memory-metadata-codec.ts";
-import { runWithMutationAttempt } from "../../../../packages/sno-station-mem/src/engine/operations/runtime-audit-log.ts";
-import { initSqliteRuntimeSync } from "../../../../packages/sno-station-mem/src/store/sqlite-runtime.ts";
-import { MemoryStore } from "../../../../packages/sno-station-mem/src/store/store.ts";
+import { buildInsightMetadata, stringifyInsightMetadata } from "../../../../packages/memory/src/engine/extraction/memory-metadata-codec.ts";
+import { runWithMutationAttempt } from "../../../../packages/memory/src/engine/operations/runtime-audit-log.ts";
+import { initSqliteRuntimeSync } from "../../../../packages/memory/src/store/sqlite-runtime.ts";
+import { MemoryStore } from "../../../../packages/memory/src/store/store.ts";
 import { createTestEmbedder } from "./test-db.ts";
 
 const dbPath = process.argv[2];

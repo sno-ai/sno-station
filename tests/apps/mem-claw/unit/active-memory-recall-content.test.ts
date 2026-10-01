@@ -1,12 +1,17 @@
-import { dirname, resolve } from "node:path";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { memClawPlugin } from "../../../../apps/mem-claw/src/install/openclaw-plugin-runtime.ts";
-import { MemoryStore } from "../../../../packages/sno-station-mem/src/store/store.ts";
-import { OpenClawPluginApiHarness } from "../helpers/openclaw-harness.ts";
+import { executeMemoryRecallTool } from "../../../../packages/memory/src/engine/bindings/memory-recall-tool.ts";
+import type { ToolContext } from "../../../../packages/memory/src/engine/bindings/memory-tool-schemas.ts";
+import { createRetriever, DEFAULT_RETRIEVAL_CONFIG } from "../../../../packages/memory/src/engine/retrieval/retriever.ts";
+import { createScopePolicy } from "../../../../packages/memory/src/engine/security/scopes.ts";
+import { MemoryStore } from "../../../../packages/memory/src/store/store.ts";
 import { createTestDb, createTestEmbedder, type TestDb } from "../helpers/test-db.ts";
 import { asClawResult, type ClawToolResult } from "../helpers/tool-result.ts";
+import { writeSettingsFixture } from "../../../packages/memory/fixtures/settings-file-fixture.ts";
 
 type ActiveMemoryReaders = {
 	readStructuredMemoryEvidenceFromContent(content: unknown): boolean | undefined;
@@ -48,69 +53,66 @@ function insertRecallRow(store: MemoryStore): void {
 }
 
 async function executeRecall(
-	harness: OpenClawPluginApiHarness,
+	context: ToolContext,
 	callId: string,
 	params: Record<string, unknown>,
+	agentId?: string,
 ): Promise<ClawToolResult> {
-	const recall = harness.getRegisteredTool("memory_recall");
-	if (!recall) throw new Error("memory_recall was not registered");
-	return asClawResult(await recall.execute(callId, params));
+	return asClawResult(await executeMemoryRecallTool(context, { agentId }, callId, params, { name: "memory_recall", label: "Memory Recall", description: "" }));
 }
 
 describe("Active Memory memory_recall content contract", () => {
 	let fixture: TestDb;
-	let rowHarness: OpenClawPluginApiHarness;
-	let outOfScopeHarness: OpenClawPluginApiHarness;
+	let context: ToolContext;
 	let readers: ActiveMemoryReaders;
 	let rowResult: ClawToolResult;
 	let aggregationZeroResult: ClawToolResult;
 	let outOfScopeResult: ClawToolResult;
+	let profileRoot: string;
+	let previousProfile: string | undefined;
 
 	beforeAll(async () => {
 		readers = (await import(pathToFileURL(hostPromptPath).href)) as ActiveMemoryReaders;
 		fixture = createTestDb();
+		profileRoot = mkdtempSync(join(tmpdir(), "active-memory-recall-"));
+		previousProfile = process.env.SNO_PROFILE_DIR;
+		process.env.SNO_PROFILE_DIR = profileRoot;
+		writeSettingsFixture(profileRoot, { mode: "local-first", store: { path: fixture.dbPath, encryptionKey: fixture.encryptionKey }, embedding: { cacheDir: "" }, recall: { auto: false }, capture: { ambient: false } });
 		const embedder = await createTestEmbedder();
 		const store = new MemoryStore({ dbPath: fixture.dbPath, embedder });
 		insertRecallRow(store);
-		store.close();
 
-		rowHarness = new OpenClawPluginApiHarness(
-			{
-				dbPath: fixture.dbPath,
-				embedding: { provider: "local-onnx", dimensions: 1024 },
-				ambientLearning: false,
-				autoRecall: false,
-			},
-			{ runtimeAgentId: "active-memory-agent" },
-		);
-		await memClawPlugin.register(rowHarness);
-		rowResult = await executeRecall(rowHarness, "active-memory-row", {
+		context = {
+			store, embedder, stateDir: profileRoot, scopePolicy: createScopePolicy(),
+			retriever: createRetriever(store, embedder, { warn: () => {} }, {
+				...DEFAULT_RETRIEVAL_CONFIG, rerank: "none",
+			}),
+		};
+		rowResult = await executeRecall(context, "active-memory-row", {
 			query: "cedar launch checklist",
 			aggregation: { operation: "evidence", terms: ["ACTIVE_MEMORY_ROW"] },
 			min_score: 0,
-		});
-		aggregationZeroResult = await executeRecall(rowHarness, "active-memory-aggregation-zero", {
+		}, "active-memory-agent");
+		aggregationZeroResult = await executeRecall(context, "active-memory-aggregation-zero", {
 			query: "missing launch checklist",
 			aggregation: { operation: "evidence", terms: ["NO_SUCH_MEMORY_ROW"] },
 			min_score: 0,
-		});
+		}, "active-memory-agent");
 
-		outOfScopeHarness = new OpenClawPluginApiHarness({
-			dbPath: fixture.dbPath,
-			embedding: { provider: "local-onnx", dimensions: 1024 },
-			ambientLearning: false,
-			autoRecall: false,
-		});
-		await memClawPlugin.register(outOfScopeHarness);
-		outOfScopeResult = await executeRecall(outOfScopeHarness, "active-memory-out-of-scope", {
+		outOfScopeResult = await executeRecall(context, "active-memory-out-of-scope", {
 			query: "cedar launch checklist",
 		});
 	}, 120_000);
 
 	afterAll(async () => {
-		await outOfScopeHarness.stopServices();
-		await rowHarness.stopServices();
-		fixture.cleanup();
+		try {
+			await context?.store.close();
+		} finally {
+			fixture?.cleanup();
+			if (previousProfile === undefined) delete process.env.SNO_PROFILE_DIR;
+			else process.env.SNO_PROFILE_DIR = previousProfile;
+			if (profileRoot) rmSync(profileRoot, { recursive: true, force: true });
+		}
 	});
 
 	it("lets OpenClaw distinguish rows from every successful zero-result path", () => {
@@ -148,7 +150,7 @@ describe("Active Memory memory_recall content contract", () => {
 
 	it("preserves the model text and details while adding structured content", () => {
 		expect(rowResult.content[0]?.text).toBe(
-			'<relevant-memories>\n<recall-result scope-row-count="1" returned-count="1" population-complete="true" truncated="false" />\nFound 1 memories:\n\n- [episodic:global] [current] ACTIVE_MEMORY_ROW remembers the cedar launch checklist. (100%)\n</relevant-memories>',
+			'<relevant-memories>\n<recall-result scope-row-count="1" returned-count="1" population-complete="true" truncated="false" />\nFound 1 memories:\n\n- [episodic] [current] ACTIVE_MEMORY_ROW remembers the cedar launch checklist. (100%)\n</relevant-memories>',
 		);
 		expect(JSON.stringify(rowResult.details)).toBe(
 			'{"count":1,"scope":"global","memories":[{"id":"active-memory-row","text":"[current] ACTIVE_MEMORY_ROW remembers the cedar launch checklist.","category":"episodic:global","rawCategory":"episodic","scope":"global","importance":0.7,"timestamp":"2026-09-02T12:00:00.000Z"}],"scopeRowCount":1,"populationComplete":true,"truncated":false}',

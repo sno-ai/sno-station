@@ -7,7 +7,6 @@
 		retrieval: { neighborLimit: 10, similarityThreshold: 0.8 },
 		coverage: { accuracyFloor: null },
 		retries: { liveContentionRetries: 1 },
-		modelRoute: "http://localhost:8070/codex/v1/chat/completions",
 		facetPolicy: {
 			aggregationGrammar: "current-first-v1",
 			historyGrammar: "history-evidence-v1",
