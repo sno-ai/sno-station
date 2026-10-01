@@ -28,11 +28,14 @@ start and before prompts. Child agents can use explicit tools but do not inject 
 ## Update and remove
 
 ```bash
-hermes plugins update sno-mem-hermes
+hermes plugins install sno-ai/sno-station/apps/mem-hermes/sno-mem-hermes --force --enable
+hermes gateway restart
 hermes plugins remove sno-mem-hermes
 ```
 
-Removing the plugin does not remove stored memory.
+The plugin is installed from a Git subdirectory, so an update is a forced reinstall of that
+subdirectory. Restart a running Hermes gateway after installing or replacing it. Removing the
+plugin does not remove stored memory.
 
 ## License
 
