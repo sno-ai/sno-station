@@ -429,14 +429,14 @@ describe("the plugin reads the file before it starts anything (REQ-1)", () => {
 		expect(hook.connectMs ?? Number.POSITIVE_INFINITY, said).toBeLessThan(5_000);
 		expect(hook.exitMs, "the hook process is not held past its deadline").toBeLessThan(10_000);
 		expect(said).toContain(`settings unavailable: ${settingsPath}: `);
-		expect(said).toContain("; run sno setup");
+		expect(said).toContain("; see https://github.com/sno-ai/sno-station/blob/main/docs/memory-setup.md");
 		expect(existsSync(join(root, "station", "sidecar.json"))).toBe(false);
 		expect(servicePids(root)).toEqual([]);
 	});
 
 	it("answers the service's refusal of the file by name, reports it on /healthz, and keeps one service", { timeout: 120_000 }, async () => {
 		const { path } = writeSettings(root, { store: { encryptionKey: "" } });
-		const refusal = `settings unavailable: ${path}: store.encryptionKey; run sno setup`;
+		const refusal = `settings unavailable: ${path}: store.encryptionKey; see https://github.com/sno-ai/sno-station/blob/main/docs/memory-setup.md`;
 
 		const first = await session(root, { session: "refused-1", capture: "The harbor deploy runs every Tuesday morning." }, 60_000);
 		const second = await session(root, { session: "refused-2", capture: "The harbor deploy runs every Tuesday morning." }, 60_000);

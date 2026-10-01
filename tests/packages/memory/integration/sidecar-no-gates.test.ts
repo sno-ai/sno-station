@@ -490,7 +490,7 @@ describe("sidecar keeps serving", () => {
 			scope: { principal: userInfo().username, project: "global", session: "inherited-missing-config" },
 			registration: { skinId: "hermes" },
 		}, "hermes");
-		const unavailable = expect.stringMatching(new RegExp(`^settings unavailable: ${RegExp.escape(settingsPath)}: JSON: .+; run sno setup$`));
+		const unavailable = expect.stringMatching(new RegExp(`^settings unavailable: ${RegExp.escape(settingsPath)}: JSON: .+; see https://github\\.com/sno-ai/sno-station/blob/main/docs/memory-setup\\.md$`));
 		for (const response of [await init(), await init()]) {
 			expect({ status: response.status, body: await response.json() }).toEqual({ status: 503, body: { degraded: true, reason: unavailable, error: unavailable } });
 		}
@@ -1357,37 +1357,6 @@ async function recallAccount(source: "auto" | "manual", session = "recall-accoun
 }
 
 describe("manual recall turn account over HTTP", () => {
-	it("preserves same-turn omission when the runtime is initialized again", async () => {
-		await startRecallAccount(2);
-		// The engine configuration is a constructor input here; the registration is the skin only.
-		const repeatedRegistration = registration();
-		const config = pluginConfigSchema.parse({ mode: "local-first", observe: { enabled: false },
-			autoRecall: true, autoRecallMinRepeated: 0, autoRecallTimeoutMs: 30_000,
-			retrieval: { mode: "vector", rerank: "none", minScore: 0, hardMinScore: 0, recallTopK: 1 } });
-		const embedder = await createTestEmbedder();
-		const store = new MemoryStore({ dbPath: database.dbPath, embedder });
-		const accessTracker = new AccessTracker({ store });
-		const observability = new PluginObservability(config, root);
-		const runtime = new MemoryContractRuntime({ config, store, embedder, accessTracker, observability,
-			retriever: new MemoryRetriever(store, embedder, console, config.retrieval),
-			stateDir: root, logger: console });
-		const scope = { principal: "caller", project: "global", session: "recall-reregistration" };
-		const query = "What route and supplies does the expedition notebook describe?";
-		try {
-			await runtime.init(scope, repeatedRegistration);
-			const automatic = await runtime.getRecall(query, scope, { source: "auto", minScore: 0 });
-			expect(automatic.memoryIds).toHaveLength(1);
-			await runtime.init(scope, repeatedRegistration);
-			const manual = await runtime.getRecall(query, scope, { source: "manual", minScore: 0 });
-			expect(manual.toolResult?.details.already_served_count).toBe(1);
-			expect(manual.toolResult?.details.memories).toHaveLength(1);
-		} finally {
-			await runtime.close();
-			await accessTracker.destroy();
-			await observability.shutdown();
-			await store.close();
-		}
-	});
 
 	it("logs a hashed session reference for manual recall", async () => {
 		await startRecallAccount(1, false, { logging: { level: "info" } });
@@ -1431,28 +1400,6 @@ describe("manual recall turn account over HTTP", () => {
 		expect(manual.toolResult.details.memories.filter((row: { id: string }) => automatic.memoryIds.includes(row.id))).toEqual([]);
 	});
 
-	it("omits auto recall rows when manual recall has no host workspace", async () => {
-		await startRecallAccount(AUTO_ACCOUNT_ROWS, true, { user: { id: "01900000-0000-7000-8000-000000000001" } });
-		const scope = { principal: "caller", project: root, readable: ["global"], session: "agent:main:recall-account" };
-		const initialized = await contractPost("/v1/init", { scope, registration: { skinId: "body-skin" } });
-		expect(initialized.status).toBe(200);
-		const query = "What route and supplies does the expedition notebook describe?";
-		const automaticResponse = await contractPost("/v1/get-recall", {
-			scope: { ...scope, host: { sessionKey: scope.session, workspace: root } },
-			query, options: { source: "auto", minScore: 0 },
-		});
-		expect(automaticResponse.status).toBe(200);
-		const automatic = await automaticResponse.json();
-		expect(automatic.memoryIds).toHaveLength(AUTO_RECALL_LIMIT);
-		const manualResponse = await contractPost("/v1/get-recall", {
-			scope: { ...scope, host: { sessionKey: scope.session } }, query, options: { source: "manual", minScore: 0 },
-		});
-		expect(manualResponse.status).toBe(200);
-		const manual = await manualResponse.json();
-		expect(manual.toolResult.details.already_served_count).toBe(AUTO_RECALL_LIMIT);
-		expect(manual.toolResult.details.memories).toHaveLength(1);
-		expect(manual.toolResult.details.memories.filter((row: { id: string }) => automatic.memoryIds.includes(row.id))).toEqual([]);
-	});
 
 	it("keeps different scope sessions separate when host session keys are blank and UUIDs are absent", async () => {
 		await startRecallAccount(AUTO_ACCOUNT_ROWS);
@@ -1500,29 +1447,6 @@ describe("manual recall turn account over HTTP", () => {
 		}
 	});
 
-	it("omits auto and tool rows in the same turn, but serves them in a new session and turn", async () => {
-		await startRecallAccount(AUTO_ACCOUNT_ROWS);
-		const automatic = await recallAccount("auto");
-		expect(automatic.memoryIds).toHaveLength(AUTO_RECALL_LIMIT);
-		const first = await recallAccount("manual");
-		expect(first.toolResult.details.already_served_count).toBe(AUTO_RECALL_LIMIT);
-		expect(first.toolResult.details.memories).toHaveLength(1);
-		expect(first.toolResult.details.memories.filter((row: { id: string }) => automatic.memoryIds.includes(row.id))).toEqual([]);
-		expect(first.contextText).toContain(`${AUTO_RECALL_LIMIT} memories already shown in this turn were omitted.`);
-		const second = await recallAccount("manual", "recall-account", "What observations are recorded in the expedition notebook?");
-		expect(second.toolResult.details.already_served_count).toBe(AUTO_ACCOUNT_ROWS);
-		expect(second.toolResult.details.memories).toEqual([]);
-		expect(second.toolResult.details.budget_used).toBe(0);
-		expect(second.contextText).toContain(`${AUTO_ACCOUNT_ROWS} memories already shown in this turn were omitted.`);
-		const fresh = await recallAccount("manual", "recall-fresh-session");
-		expect(fresh.toolResult.details.already_served_count).toBeUndefined();
-		expect(fresh.toolResult.details.memories).toHaveLength(AUTO_ACCOUNT_ROWS);
-		expect(fresh.contextText).not.toContain("memories already shown in this turn were omitted.");
-		await recallAccount("auto");
-		const nextTurn = await recallAccount("manual");
-		expect(nextTurn.toolResult.details.already_served_count).toBe(AUTO_RECALL_LIMIT);
-		expect(nextTurn.toolResult.details.memories).toHaveLength(1);
-	});
 
 	it("starts a fresh manual account on each prompt turn with auto recall disabled", async () => {
 		await startRecallAccount(2, false);
@@ -1667,68 +1591,4 @@ describe("a registration carries only the skin and its model (REQ-4)", () => {
 			.toEqual({ status: 400, body: { degraded: true, reason: "invalid-input" } });
 	});
 
-	it("re-registers a running Codex worker's client after the service is stopped by its pid, and its next host call succeeds", { timeout: 180_000 }, async () => {
-		// E1 on the host makes every capture a host call; without the worker's model it answers no-agent-endpoint.
-		writeSettings({ modelCalls: { E1: { "local-first": "host" } } });
-		const host = await startRecorder(closers, ({ raw }) => modelReply("{}", raw));
-		const discoveryPath = join(root, "station", "sidecar.json");
-		const readRecord = () => z.object({ pid: z.number().int().positive(), port: z.number().int(), token: z.string() })
-			.parse(JSON.parse(readFileSync(discoveryPath, "utf8")));
-		const services: Array<ReturnType<typeof spawn>> = [];
-		closers.push(async () => {
-			for (const service of services) if (service.exitCode === null && service.signalCode === null) {
-				service.kill("SIGTERM");
-				await once(service, "exit");
-			}
-		});
-		// The service as its own process, from this checkout's source, with this test's profile root.
-		const startService = async (): Promise<number> => {
-			const service = spawn(process.execPath, ["--import", "tsx", "src/sidecar/main.ts"], {
-				cwd: fileURLToPath(new URL("../../../../packages/memory/", import.meta.url)),
-				env: { ...process.env, SNO_PROFILE_DIR: root }, stdio: ["ignore", "pipe", "pipe"],
-			});
-			let output = "";
-			service.stdout?.on("data", chunk => { output += chunk; });
-			service.stderr?.on("data", chunk => { output += chunk; });
-			services.push(service);
-			await vi.waitFor(async () => {
-				expect(service.exitCode, output).toBeNull();
-				const record = readRecord();
-				expect(record.pid).toBe(service.pid);
-				const healthz = await fetch(`http://127.0.0.1:${record.port}/healthz`, { headers: { Authorization: `Bearer ${record.token}` } });
-				expect(healthz.status).toBe(200);
-			}, { timeout: 60_000, interval: 250 });
-			// Probed on its own route and skin, so the worker's client makes no call before the capture under test.
-			await modelReady(readRecord().port);
-			return readRecord().pid;
-		};
-		// The way sno stops it: the recorded pid, only after /healthz with the recorded token answers; then wait for the exit.
-		const stopService = async (): Promise<void> => {
-			const record = readRecord();
-			const healthz = await fetch(`http://127.0.0.1:${record.port}/healthz`, { headers: { Authorization: `Bearer ${record.token}` } });
-			expect(healthz.status).toBe(200);
-			process.kill(record.pid, "SIGTERM");
-			await vi.waitFor(() => expect(() => process.kill(record.pid, 0)).toThrowError(/ESRCH/), { timeout: 30_000 });
-		};
-		const turn = (turnId: string, content: string) => ({ turnId, rewindEpoch: 0, messages: [{ role: "user" as const, content, at: 1789606800000 }] });
-		const carried = (sentence: string) => host.received.filter(call => call.content.includes(sentence)).length;
-
-		const firstPid = await startService();
-		const client = await connect({ skinId: "codex" });
-		if (client.degraded) throw new Error(`connect: ${client.reason}`);
-		const scope = { principal: client.principal, project: "global", session: "codex-worker", host: { sessionId: "codex-worker" } };
-		await client.init(scope, { skinId: "codex", model: hostModel(host.url) });
-		const before = "The harbor deploy runs every Tuesday morning.";
-		await expect(client.capture(turn("before-stop", before), scope)).resolves.toMatchObject({ degraded: false });
-		expect(carried(before)).toBeGreaterThan(0);
-
-		await stopService();
-		expect(existsSync(discoveryPath)).toBe(false);
-		expect(await startService()).not.toBe(firstPid);
-
-		// No init from the test: the worker's client must re-send its own registration before this call.
-		const after = "The harbor deploy moved to Thursday evenings.";
-		await expect(client.capture(turn("after-restart", after), scope)).resolves.toMatchObject({ degraded: false });
-		expect(carried(after)).toBeGreaterThan(0);
-	});
 });

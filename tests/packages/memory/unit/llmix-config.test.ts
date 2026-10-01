@@ -27,7 +27,7 @@ describe("Sno GPU settings", () => {
 
 	it("rejects old per-provider routing fields", () => {
 		for (const field of ["provider", "model", "gpuPath", "heliconeApiKey"]) {
-			expect(() => gpuSettings({ [field]: "removed" })).toThrow(/run sno setup/);
+			expect(() => gpuSettings({ [field]: "removed" })).toThrow(/docs\/memory-setup\.md/);
 		}
 	});
 });
