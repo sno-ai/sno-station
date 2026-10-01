@@ -8,7 +8,7 @@ import type { ContractInputs, HostEvent, InitRegistration, Inspection, Message, 
 import type { ContractMethod, MemoryContract } from "./index";
 import { getPrincipal } from "./profile";
 import { outputSchemas, type ContractOutputs, type InspectData } from "./results";
-import { MEMORY_ROUTES, MEMORY_SKIN_HEADER } from "./routes";
+import { MEMORY_ROUTES, MEMORY_SKIN_HEADER, REM_SIDECAR_TOKEN_HEADER } from "./routes";
 
 export type { MemoryContract, ScopeCtx, Registration, InitRegistration, RecallOptions, Turn, Mutation, Inspection, UsageSignal, Message, ContractOutputs, JsonValue, HostEvent } from "./index";
 export { ContractError } from "./error";
@@ -114,7 +114,7 @@ export class MemoryClient implements MemoryContract {
 				await this.request("init", this.#registration, signal);
 			}
 			const response = await postJson(discovery.port, route.path,
-				{ "Content-Type": "application/json", [MEMORY_SKIN_HEADER]: this.skinId },
+				{ "Content-Type": "application/json", [MEMORY_SKIN_HEADER]: this.skinId, [REM_SIDECAR_TOKEN_HEADER]: discovery.token },
 				JSON.stringify({ ...input, scope: { ...input.scope, principal: this.principal } }),
 				signal ? AbortSignal.any([signal, AbortSignal.timeout(route.timeoutMs)]) : AbortSignal.timeout(route.timeoutMs));
 			const body = response.body;

@@ -215,7 +215,7 @@ export async function executeMemoryRecallTool(ctx: ToolContext, access: ReturnTy
 						? boosted.slice(0, 1)
 						: boosted
 					: boosted;
-				// An explicitly requested row count is still a request, not the default cut REQ-1
+				// An explicitly requested row count is still a request, not the default cut
 				// removes: the caller asked for that many, and the budget only narrows it further.
 				// Neither applies to a whole-population read. It has its own ceiling
 				// (`MAX_AGGREGATION_RESULT_TOKENS`, applied further down), and letting the manual

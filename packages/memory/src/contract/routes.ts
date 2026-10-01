@@ -14,6 +14,7 @@ export const MEMORY_ROUTES: Readonly<Record<ContractMethod, { path: string; time
 };
 export const MEMORY_BODY_LIMIT_BYTES: number = 8 * 1024 * 1024;
 export const MEMORY_SKIN_HEADER = "x-sno-station-mem-skin";
+export const REM_SIDECAR_TOKEN_HEADER = "x-sidecar-token";
 export const MEMORY_HEALTH_TIMEOUT_MS = 5_000;
 export const MEMORY_START_TIMEOUT_MS = 30_000;
 
