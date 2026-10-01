@@ -1,0 +1,93 @@
+name: pr-review
+
+# The formal pull request review, Claude side. The contract is REVIEW.md in this
+# repository — this file only says when to run and who may trigger it. The Codex GitHub app
+# reviews the same PR independently and reads the same contract through AGENTS.md.
+# `cancel-in-progress` collapses rapid pushes into one run. `/pr-review` in a PR comment
+# re-runs it on demand.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+  pull_request_review:
+    types: [submitted]
+  issues:
+    types: [opened, assigned]
+
+jobs:
+  pr-review:
+    if: |
+      (github.event_name == 'pull_request' && github.event.pull_request.draft == false) ||
+      (github.event_name == 'issue_comment' && github.event.issue.pull_request &&
+       startsWith(github.event.comment.body, '/pr-review') &&
+       contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association))
+    runs-on: ubuntu-latest
+    concurrency:
+      group: pr-review-${{ github.event.pull_request.number || github.event.issue.number || github.run_id }}
+      cancel-in-progress: true
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: read
+      id-token: write
+
+    steps:
+      - name: Skip review for external pull requests
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
+        run: echo "External pull requests are reviewed without shared-runner credentials."
+
+      - name: Skip review for Dependabot
+        if: github.event_name == 'pull_request' && github.event.pull_request.user.login == 'dependabot[bot]'
+        run: echo "Dependabot upgrades are gated by the repository test suite."
+
+      - name: Resolve PR head ref (for /pr-review comments)
+        id: resolve-ref
+        if: github.event_name == 'issue_comment'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PR_JSON=$(gh api "repos/${{ github.repository }}/pulls/${{ github.event.issue.number }}")
+          echo "ref=$(jq -r '.head.sha' <<<"$PR_JSON")" >> "$GITHUB_OUTPUT"
+          echo "head_repo=$(jq -r '.head.repo.full_name' <<<"$PR_JSON")" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout repository
+        if: |
+          !(github.event_name == 'pull_request' &&
+            (github.event.pull_request.head.repo.full_name != github.repository ||
+             github.event.pull_request.user.login == 'dependabot[bot]')) &&
+          !(github.event_name == 'issue_comment' &&
+            steps.resolve-ref.outputs.head_repo != github.repository)
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
+          ref: ${{ steps.resolve-ref.outputs.ref || github.event.pull_request.head.sha || github.sha }}
+
+      - name: Run pr-review
+        if: |
+          !(github.event_name == 'pull_request' &&
+            (github.event.pull_request.head.repo.full_name != github.repository ||
+             github.event.pull_request.user.login == 'dependabot[bot]')) &&
+          !(github.event_name == 'issue_comment' &&
+            steps.resolve-ref.outputs.head_repo != github.repository)
+        uses: anthropics/claude-code-action@be7b93b1907a4abad570368f3c74b6fe3807510b # v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          prompt: |
+            REPO: ${{ github.repository }}
+            PR: #${{ github.event.pull_request.number || github.event.issue.number }}
+
+            The PR branch is checked out. Read REVIEW.md at the repository root: it is the
+            whole review contract — passes, what counts, severity, what not to report, output.
+            Apply it as written. Read CLAUDE.md, AGENTS.md, and the root README first for the
+            codebase's conventions. Diffs alone are not enough; read the full files around them.
+
+            Post the review with `gh pr comment`. End every comment you post, including the
+            "no issues" comment, with this exact line by itself as the very last line:
+            `<!-- review-run: ${{ github.run_id }} -->`
+            It is a machine-readable marker; do not mention or explain it in the body.
+
+          claude_args: "--model opus --allowed-tools \"Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Read,Grep,Glob\""
