@@ -100,7 +100,7 @@
     "better-sqlite3": "^13.0.3",
     "chrono-node": "2.10.1",
     "commander": "^14.0.1",
-    "drizzle-orm": "^0.45.2",
+    "drizzle-orm": "^0.45.3",
     "eld": "^2.0.3",
     "js-tiktoken": "^1.0.21",
     "lru-cache": "^11.3.5",
@@ -118,8 +118,8 @@
     "@types/semver": "^7.5.8",
     "american-british-english-translator": "^0.2.1",
     "pluralize": "^8.0.0",
-    "tsdown": "0.22.5",
-    "tsx": "^4.20.0",
+    "tsdown": "0.23.0",
+    "tsx": "^4.23.15",
     "vitest": "^4.1.5"
   },
   "engines": {
