@@ -30,7 +30,7 @@ No real credentials are included. Use the discovery port in place of `43127`.
 
 ## Complete sidecar route index
 
-The server serves exactly these paths. The health path is `/healthz`.
+The server serves exactly these paths. The health path is `/healthz`; every other path requires the `x-sidecar-token` header to equal the `token` in the discovery file, and a missing or wrong token gets HTTP 401 with body `{}` before any routing.
 (proved by: `tests/packages/memory/unit/http-contract-doc-sync.test.ts` — `lists exactly all served memory, health and REM route paths`)
 
 <!-- table:all-routes -->
@@ -76,7 +76,7 @@ All listed methods use POST. Deadlines are server request ceilings, not latency 
 | --- | --- | --- |
 | Content-Type: application/json | Recommended, not enforced | Server still parses the body as JSON |
 | x-sno-station-mem-skin | Optional | Missing/blank uses `default` (proved by: `tests/packages/memory/integration/sidecar-no-gates.test.ts` — `selects the default skin for header undefined`; `selects the default skin for header "   "`); a nonblank value is used verbatim |
-| Authorization / x-sidecar-token | No | No authentication check; values do not grant admission |
+| x-sidecar-token | Yes | Must equal the `token` in the discovery file; otherwise HTTP 401 with body `{}` |
 
 ### Request body
 
@@ -208,7 +208,7 @@ Response status: `200 OK`; `Content-Type: application/json`.
 | --- | --- | --- |
 | Content-Type: application/json | Recommended, not enforced | Server still parses the body as JSON |
 | x-sno-station-mem-skin | Optional | Missing/blank uses `default`; a nonblank value is used verbatim |
-| Authorization / x-sidecar-token | No | No authentication check; values do not grant admission |
+| x-sidecar-token | Yes | Must equal the `token` in the discovery file; otherwise HTTP 401 with body `{}` |
 
 ### Request body
 
@@ -344,7 +344,7 @@ Response status: `200 OK`; `Content-Type: application/json`.
 | --- | --- | --- |
 | Content-Type: application/json | Recommended, not enforced | Server still parses the body as JSON |
 | x-sno-station-mem-skin | Optional | Missing/blank uses `default` (proved by: `tests/packages/memory/integration/sidecar-no-gates.test.ts` — `selects the default skin for header undefined`; `selects the default skin for header "   "`); a nonblank value is used verbatim |
-| Authorization / x-sidecar-token | No | No authentication check; values do not grant admission |
+| x-sidecar-token | Yes | Must equal the `token` in the discovery file; otherwise HTTP 401 with body `{}` |
 
 ### Request body
 
@@ -569,7 +569,7 @@ Response status: `200 OK`; `Content-Type: application/json`.
 | --- | --- | --- |
 | Content-Type: application/json | Recommended, not enforced | Server still parses the body as JSON |
 | x-sno-station-mem-skin | Optional | Missing/blank uses `default` (proved by: `tests/packages/memory/integration/sidecar-no-gates.test.ts` — `selects the default skin for header undefined`; `selects the default skin for header "   "`); a nonblank value is used verbatim |
-| Authorization / x-sidecar-token | No | No authentication check; values do not grant admission |
+| x-sidecar-token | Yes | Must equal the `token` in the discovery file; otherwise HTTP 401 with body `{}` |
 
 ### Request body
 
@@ -697,7 +697,7 @@ Response status: `200 OK`; `Content-Type: application/json`.
 | --- | --- | --- |
 | Content-Type: application/json | Recommended, not enforced | Server still parses the body as JSON |
 | x-sno-station-mem-skin | Optional | Missing/blank uses `default` (proved by: `tests/packages/memory/integration/sidecar-no-gates.test.ts` — `selects the default skin for header undefined`; `selects the default skin for header "   "`); a nonblank value is used verbatim |
-| Authorization / x-sidecar-token | No | No authentication check; values do not grant admission |
+| x-sidecar-token | Yes | Must equal the `token` in the discovery file; otherwise HTTP 401 with body `{}` |
 
 ### Request body
 
@@ -900,7 +900,7 @@ Response status: `200 OK`; `Content-Type: application/json`.
 | --- | --- | --- |
 | Content-Type: application/json | Recommended, not enforced | Server still parses the body as JSON |
 | x-sno-station-mem-skin | Optional | Missing/blank uses `default` (proved by: `tests/packages/memory/integration/sidecar-no-gates.test.ts` — `selects the default skin for header undefined`; `selects the default skin for header "   "`); a nonblank value is used verbatim |
-| Authorization / x-sidecar-token | No | No authentication check; values do not grant admission |
+| x-sidecar-token | Yes | Must equal the `token` in the discovery file; otherwise HTTP 401 with body `{}` |
 
 ### Request body
 
@@ -1098,7 +1098,7 @@ Response status: `200 OK`; `Content-Type: application/json`.
 | --- | --- | --- |
 | Content-Type: application/json | Recommended, not enforced | Server still parses the body as JSON |
 | x-sno-station-mem-skin | Optional | Missing/blank uses `default` (proved by: `tests/packages/memory/integration/sidecar-no-gates.test.ts` — `selects the default skin for header undefined`; `selects the default skin for header "   "`); a nonblank value is used verbatim |
-| Authorization / x-sidecar-token | No | No authentication check; values do not grant admission |
+| x-sidecar-token | Yes | Must equal the `token` in the discovery file; otherwise HTTP 401 with body `{}` |
 
 ### Request body
 
@@ -1220,7 +1220,7 @@ Response status: `200 OK`; `Content-Type: application/json`.
 | --- | --- | --- |
 | Content-Type: application/json | Recommended, not enforced | Server still parses the body as JSON |
 | x-sno-station-mem-skin | Optional | Missing/blank uses `default` (proved by: `tests/packages/memory/integration/sidecar-no-gates.test.ts` — `selects the default skin for header undefined`; `selects the default skin for header "   "`); a nonblank value is used verbatim |
-| Authorization / x-sidecar-token | No | No authentication check; values do not grant admission |
+| x-sidecar-token | Yes | Must equal the `token` in the discovery file; otherwise HTTP 401 with body `{}` |
 
 ### Request body
 
@@ -1336,7 +1336,7 @@ Response status: `200 OK`; `Content-Type: application/json`.
 | --- | --- | --- |
 | Content-Type: application/json | Recommended, not enforced | Server still parses the body as JSON |
 | x-sno-station-mem-skin | Optional | Missing/blank uses `default` (proved by: `tests/packages/memory/integration/sidecar-no-gates.test.ts` — `selects the default skin for header undefined`; `selects the default skin for header "   "`); a nonblank value is used verbatim |
-| Authorization / x-sidecar-token | No | No authentication check; values do not grant admission |
+| x-sidecar-token | Yes | Must equal the `token` in the discovery file; otherwise HTTP 401 with body `{}` |
 
 ### Request body
 
@@ -1441,7 +1441,7 @@ is separate; the server may still accept or run the job after that client discon
 | --- | --- | --- |
 | Content-Type: application/json | Recommended, not enforced | Body is still parsed as JSON |
 | x-rem-correlation-id | Optional | Generates `rem-corr-<UUID>`; supplied strings are trimmed |
-| Authorization / x-sidecar-token | No | No authentication check |
+| x-sidecar-token | Yes | Must equal the `token` in the discovery file; otherwise HTTP 401 with body `{}` |
 | x-sno-station-mem-skin | No | Not used on REM routes |
 
 ### Request body
@@ -1509,7 +1509,7 @@ Content-Type: application/json
 
 ### Method, path and headers
 
-`GET /rem/jobs/<id>`. Replace `<id>` with the exact job_id. No authentication or skin
+`GET /rem/jobs/<id>`. Replace `<id>` with the exact job_id. The `x-sidecar-token` header is required; no skin
 header is required. Optional `x-rem-correlation-id` affects the request log; when absent,
 the job's stored correlation ID is used. It does not replace the ID in the response.
 No explicit server route deadline is configured.
@@ -1760,7 +1760,7 @@ The discovery client gives this call 5000 ms; that is not a server 504 timer.
 
 ### Request body
 
-None. Health opens the memory pool and reports the configured store path; it does not
+None. Health opens the memory pool; it does not
 wait for embedding model preparation. If settings cannot be read, it returns HTTP 503
 with `{"status":"error","error":"settings unavailable: <path>: <field>; see https://github.com/sno-ai/sno-station/blob/main/docs/memory-setup.md"}`.
 
@@ -1773,8 +1773,6 @@ HTTP 200, JSON.
 | status | string | yes | `ok` or `degraded`; Codex and Claude `doctor` intentionally report `degraded` as unhealthy |
 | error | string | no | Model preparation error when status is `degraded` |
 | log_level | string | yes | Current shared logger level |
-| principal | string | yes | OS username |
-| storePath | string | yes | Installed `settings.store.path` |
 | accessCounters | object | yes | In-process counters; both zero before a memory pool opens |
 | accessCounters.engineAccesses | number | yes | Engine entry count |
 | accessCounters.storeAccesses | number | yes | Store entry count; direct storage inspection increments only this counter |
@@ -1797,7 +1795,7 @@ Host: 127.0.0.1:43127
 HTTP/1.1 200 OK
 Content-Type: application/json
 
-{"status":"ok","log_level":"info","principal":"alice","storePath":"/home/alice/.sno/sno-station-mem/alice/memory.sqlite","accessCounters":{"engineAccesses":0,"storeAccesses":0}}
+{"status":"ok","log_level":"info","accessCounters":{"engineAccesses":0,"storeAccesses":0}}
 ```
 
 ## General error and client semantics

@@ -93,7 +93,7 @@ export async function executeMemoryForgetTool(ctx: ToolContext, access: ReturnTy
 							...(ctx.language ? { explicitLocale: ctx.language } : {}),
 							// Removal is not serving: a retracted row is exactly the kind of row a
 							// user asks to forget, so this path opts out of the serving validity
-							// default (PRD 205). `0` makes the store predicate `invalidated_at > 0`,
+							// default. `0` makes the store predicate `invalidated_at > 0`,
 							// which drops nothing.
 							excludeInvalidatedBefore: 0,
 						});
