@@ -82,10 +82,10 @@ export const RETRIEVAL_CHUNK_PROFILE = {
 } as const satisfies ChunkSizeProfile;
 
 /**
- * `GRAPH_EXTRACTION_CHUNK_PROFILE` — knowledge-graph extraction input (nexus EKG).
+ * `GRAPH_EXTRACTION_CHUNK_PROFILE` — knowledge-graph extraction input.
  * Larger target so each chunk keeps enough cross-sentence context to identify
  * entity relationships, within Microsoft GraphRAG's 300–1200-token sweet spot
- * (its default is 1200). NOTE: adopt this in place of EKG's legacy 3000 only
+ * (its default is 1200). NOTE: adopt this in place of a larger legacy target only
  * after a graph-extraction eval confirms the target on the real corpus — smaller
  * chunks yield a denser graph (more entities/relations) but can sever
  * cross-sentence relations, so the target is corpus-dependent.
