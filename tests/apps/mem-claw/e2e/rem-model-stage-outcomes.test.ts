@@ -269,5 +269,3 @@ function validResponse(stage: RemModelStage, prompt: string): string {
 		atoms: [{ clause_index: 0, class: "retired-fact", status: "covered" }],
 	});
 }
-
-

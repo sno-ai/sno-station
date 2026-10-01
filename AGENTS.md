@@ -28,4 +28,3 @@ or release scripts, or secret handling goes to the owner before you rewrite it.
 a grouped source synchronization into one commit.
 - **Publish only on the owner's instruction.** A version tag does not publish npm. The owner
 authorizes the exact package batch; create its GitHub Release after installation from npm succeeds.
-

@@ -74,4 +74,3 @@ function insertLegacyRow(
 			`legacy-fact-${input.id}`,
 		);
 }
-
