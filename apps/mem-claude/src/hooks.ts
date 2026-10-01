@@ -26,6 +26,7 @@ import {
 	recordLookup,
 	recordSkip,
 	writeLastSession,
+	updateSession,
 	writeSession,
 } from "./session-state.js";
 
@@ -259,26 +260,25 @@ async function reportHostEvent(input: { session_id: string; cwd: string }, hook:
 		const recall = readRecallSettings();
 		sessionId = input.session_id;
 		const project = await workspaceRoot(input.cwd);
-		const state = await readSession(input.session_id);
 		const client = await withinDeadline(connectMemory(), Math.max(1, recall.prompt.timeoutMs - (performance.now() - started)));
 		if (isDegradedConnection(client)) {
-			recordDegraded(state, hook, client.error ?? client.reason);
-			recordInvocation(state, hook, performance.now() - started);
-			await writeSession(state);
+			await updateSession(input.session_id, (state) => {
+				recordDegraded(state, hook, client.error ?? client.reason);
+				recordInvocation(state, hook, performance.now() - started);
+			});
 			return;
 		}
 		await withinDeadline(client.hostEvent(event, hookScope(project, input.session_id)), Math.max(1, recall.prompt.timeoutMs - (performance.now() - started)));
-		recordInvocation(state, hook, performance.now() - started);
-		await writeSession(state);
+		await updateSession(input.session_id, (state) => recordInvocation(state, hook, performance.now() - started));
 	} catch (error) {
 		const reason = closedReason(error);
 		console.error(JSON.stringify({ event: hook, reason }));
 		if (sessionId) {
 			try {
-				const state = await readSession(sessionId);
-				recordDegraded(state, hook, reason);
-				recordInvocation(state, hook, performance.now() - started);
-				await writeSession(state);
+				await updateSession(sessionId, (state) => {
+					recordDegraded(state, hook, reason);
+					recordInvocation(state, hook, performance.now() - started);
+				});
 			} catch {
 				// The hook still exits successfully when even its receipt cannot be written.
 			}
@@ -291,9 +291,9 @@ export async function preToolUse(raw: unknown): Promise<void> {
 		readRecallSettings();
 		const input = toolSchema.parse(raw);
 		if (input.agent_id !== undefined) return;
-		const state = await readSession(input.session_id);
-		state.toolStarts[input.tool_use_id] = Date.now();
-		await writeSession(state);
+		await updateSession(input.session_id, (state) => {
+			state.toolStarts[input.tool_use_id] = Date.now();
+		});
 	} catch (error) {
 		console.error(JSON.stringify({ event: "pre-tool-use", reason: closedReason(error) }));
 	}
@@ -312,10 +312,11 @@ export async function postToolUse(raw: unknown): Promise<void> {
 	}
 	let latencyMs = 0;
 	try {
-		const state = await readSession(input.session_id);
-		const startedAt = state.toolStarts[input.tool_use_id];
-		if (startedAt === undefined) console.error(JSON.stringify({ event: "post-tool-use", reason: "no-pre-tool-use", tool_use_id: input.tool_use_id }));
-		else { latencyMs = Math.max(0, Date.now() - startedAt); delete state.toolStarts[input.tool_use_id]; await writeSession(state); }
+		await updateSession(input.session_id, (state) => {
+			const startedAt = state.toolStarts[input.tool_use_id];
+			if (startedAt === undefined) console.error(JSON.stringify({ event: "post-tool-use", reason: "no-pre-tool-use", tool_use_id: input.tool_use_id }));
+			else { latencyMs = Math.max(0, Date.now() - startedAt); delete state.toolStarts[input.tool_use_id]; }
+		});
 	} catch (error) {
 		console.error(JSON.stringify({ event: "post-tool-use", reason: closedReason(error) }));
 	}

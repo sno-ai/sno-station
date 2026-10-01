@@ -1,8 +1,9 @@
 import { createHash, randomUUID } from "node:crypto";
 import { mkdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
+import { setTimeout as sleep } from "node:timers/promises";
 import { z } from "zod";
-import { writeJsonAtomic } from "./files.js";
+import { acquirePidFileLock, writeJsonAtomic } from "./files.js";
 import { appStateRoot, sessionPath, spoolDirectory } from "./paths.js";
 
 const lastSessionSchema = z.object({ sessionId: z.string().min(1), transcriptPath: z.string().min(1) });
@@ -59,6 +60,27 @@ export async function readSession(sessionId: string): Promise<SessionState> {
 
 export async function writeSession(state: SessionState): Promise<void> {
 	await writeJsonAtomic(sessionPath(state.sessionId), state);
+}
+
+const SESSION_LOCK_WAIT_MS = 2000;
+
+/** Applies `change` to the newest session file under a lock: tool hooks run as parallel processes, and a plain read-then-write lets the last one erase the others. */
+export async function updateSession(sessionId: string, change: (state: SessionState) => void): Promise<void> {
+	const lockPath = `${sessionPath(sessionId)}.lock`;
+	const deadline = Date.now() + SESSION_LOCK_WAIT_MS;
+	let lock = await acquirePidFileLock(lockPath, SESSION_LOCK_WAIT_MS);
+	while (!lock) {
+		if (Date.now() >= deadline) throw new Error("session-state-busy");
+		await sleep(10);
+		lock = await acquirePidFileLock(lockPath, SESSION_LOCK_WAIT_MS);
+	}
+	try {
+		const state = await readSession(sessionId);
+		change(state);
+		await writeSession(state);
+	} finally {
+		await lock.release();
+	}
 }
 
 export function recordInvocation(state: SessionState, event: string, latencyMs: number): void {
