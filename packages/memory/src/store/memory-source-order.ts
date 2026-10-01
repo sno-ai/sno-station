@@ -140,7 +140,7 @@ function isSafeInteger(value: unknown): value is number {
 /**
  * The order key a row carries, or the one a row written before this change is treated as having.
  *
- * A row from before REQ-2 has no `source_order` until the maintenance pass backfills it, and an
+ * A row from before source order was persisted has no `source_order` until the maintenance pass backfills it, and an
  * ordinary wave must keep running over such a store rather than throwing. Those rows are older
  * than everything written since — that is what "written before" means — so they read as the
  * lowest possible key: anything may close them, and they may close nothing.

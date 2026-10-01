@@ -483,7 +483,7 @@ function closeOnArrival(
 		return;
 	}
 	if (comparison === 0) return;
-	// REQ-9: a row written under an entity minted in this same batch closes nothing mechanically.
+	// A row written under an entity minted in this same batch closes nothing mechanically.
 	if (isFreshEntityCard(prepared)) return;
 	const closedCount = closeOlderOpenGroupRows(store, input, prepared, order, openRows);
 	if (closedCount > 0) {
@@ -701,7 +701,7 @@ export async function readAtomicArrivalRetirementCandidateSet(
 		candidates.map(({ id }) => id),
 	);
 	// Similarity alone ranks: extraction files one fact under different attributes run to run, so
-	// an attribute rank let the filing decide which rows reach the cap (PRD 140).
+	// an attribute rank let the filing decide which rows reach the cap.
 	const ranked = candidates.sort(
 		(left, right) =>
 			(scoreById.get(right.id) ?? Number.NEGATIVE_INFINITY) -
