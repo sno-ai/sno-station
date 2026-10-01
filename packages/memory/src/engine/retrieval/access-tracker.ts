@@ -37,7 +37,7 @@ const MIN_ACCESS_COUNT = 0;
 // Legacy hard cap retained for parseAccessMetadata normalization of historical
 // rows when the autoRecallAccessTracking flag is OFF (preserves pre-Phase-0
 // observable behavior). The Phase 0 §3 hard ceiling is sourced per-instance
-// from `recallLifecycle.accessCountCeiling` (PRD §6.1, default 20).
+// from `recallLifecycle.accessCountCeiling`.
 const LEGACY_MAX_ACCESS_COUNT = 10_000;
 
 /** Default debounce interval before flushing pending writes (5 seconds) */
@@ -413,7 +413,7 @@ export class AccessTracker {
 		const prevLast = Number.isFinite(prevLastRaw) && prevLastRaw >= 0 ? prevLastRaw : 0;
 		const now = Date.now();
 
-		// PRD §6.1 hard caps engage only when the autoRecallAccessTracking flag is
+		// Hard caps engage only when the autoRecallAccessTracking flag is
 		// on (Phase 0 lands the gate, Phase 1+ flips it). With the flag off, the
 		// legacy 10_000 ceiling and lack of rate-limit are preserved bit-for-bit.
 		let ceiling = LEGACY_MAX_ACCESS_COUNT;

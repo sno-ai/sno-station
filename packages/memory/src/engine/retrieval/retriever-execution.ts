@@ -35,7 +35,7 @@ Object.assign(MemoryRetriever.prototype, {
 			...(input.external_reference !== undefined ? { external_reference: input.external_reference,
 				external_reference_visibility: input.external_reference_visibility } : {}) }, async () => {
 		const started = performance.now();
-		// PRD 205 REQ-1: a serving recall that passes no validity parameter is
+		// A serving recall that passes no validity parameter is
 		// filtered exactly as one that passes the current time.
 		const context = withServingValidityDefault({ ...input, signal: memoryOperationSignal(input.signal) });
 		log.info("retrieval started", {
@@ -107,9 +107,9 @@ Object.assign(MemoryRetriever.prototype, {
 				this._statsCollector.recordQuery(finalTrace, context.source ?? "unknown");
 			}
 
-			// Eval-trace emission (PRD §11.2.2). OPT-IN — skipped unless the eval
+			// Eval-trace emission. OPT-IN — skipped unless the eval
 			// harness flips EVAL_TRACE_ENABLED=true and points EVAL_TRACE_DIR at
-			// the run dir. Now (PRD §M1) carries chunk ids + per-stage score
+			// the run dir. Now carries chunk ids + per-stage score
 			// arrays parallel to retrievedChunkIds. Stages that are partially
 			// populated emit no array; missing-result chunk ids land in
 			// traceMetadata.omittedScoreArrays so debugging is not silent.
@@ -199,7 +199,7 @@ Object.assign(MemoryRetriever.prototype, {
 				external_reference_visibility: input.external_reference_visibility } : {}) }, async () => {
 		const started = performance.now();
 		// Same default as `retrieve()` above: both entrypoints are serving paths,
-		// so neither can be reached with the filter silently absent (PRD 205).
+		// so neither can be reached with the filter silently absent.
 		const context = withServingValidityDefault({ ...input, signal: memoryOperationSignal(input.signal) });
 		// Isolate the retrieval ranking operation that can fail because of runtime I/O or input shape.
 		try {

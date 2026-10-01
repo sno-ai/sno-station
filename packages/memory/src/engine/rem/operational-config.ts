@@ -123,7 +123,7 @@ export function validateRemEnableGateDigestKeys(input: {
 	return { decision: "allow", reasonCode: null };
 }
 
-// Frozen, unwired, and kept in place by 60-rem-unbuilt-obligations-prd.md REQ-44; unfreezing is governed by REQ-45.
+// Frozen and unwired; kept in place on purpose.
 export function requireRemCoverageAccuracyFloor(input: {
 	configuration: RemOperationalConfiguration;
 }): RemConfigurationDecision {
@@ -152,7 +152,7 @@ export function requireRemOwnerDecisions(input: {
 	return { decision: "allow", reasonCode: null };
 }
 
-// Frozen, unwired, and kept in place by 60-rem-unbuilt-obligations-prd.md REQ-44; unfreezing is governed by REQ-45.
+// Frozen and unwired; kept in place on purpose.
 export function declareRemCalibrationThreshold(input: {
 	configuration: RemOperationalConfiguration;
 	derivationStatement?: string;
