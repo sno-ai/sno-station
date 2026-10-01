@@ -40,3 +40,11 @@ The model download is part of setup, so the first agent session does not have to
 Do not rerun the settings block for an existing store: it replaces the encryption key and the
 old memories become unreadable. Keep a private backup of `settings.json` with your memory store.
 The memory service starts when a plugin needs it; there is no separate start command.
+
+## Upgrading
+
+Upgrade the memory service and the agent plugin you use to the same version. From 1.0.1 the
+memory service rejects requests that do not carry its access token, and a 1.0.0 plugin does not
+send one. Run `npm install --prefix "$HOME/.sno" @snoai/memory@1.0.1 @snoai/embedder@1.0.1`, then
+reinstall your plugin at 1.0.1 (for example `npm install -g @snoai/mem-codex@1.0.1`) and restart
+any running agent session. Do not rerun the settings block; your store and key stay as they are.
