@@ -14,3 +14,14 @@ CLAUDE.md
 .claude/
 .codex/
 error.log
+ai-doc/
+dev-scripts/
+.agents/
+.npmrc
+*.pem
+*.key
+*.p12
+*.pfx
+__pycache__/
+*.pyc
+*.log
