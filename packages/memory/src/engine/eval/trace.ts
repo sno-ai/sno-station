@@ -3,7 +3,7 @@
  * @boundary Filesystem (JSONL/JSON write) and config constants surface.
  * @see ../retrieval/retriever.ts, ../../config/index.ts.
  *
- * Minimum-viable trace emission per PRD §11.2.2. Off by default; enabled by the
+ * Minimum-viable trace emission. Off by default; enabled by the
  * eval harness via `EVAL_TRACE_ENABLED=true` (env or build constant) and a
  * run-dir provided via `EVAL_TRACE_DIR` (env). Phase 0 instrumentation
  * (MRR/Recall, gold-rank, miss classification) remains explicitly waived.
@@ -71,7 +71,7 @@ export interface QaTrace {
 	timestampMs: number;
 	latencyMs?: number | undefined;
 	/**
-	 * Diagnostic side-channel for partial-population stages (PRD §4 trace
+	 * Diagnostic side-channel for partial-population stages (trace
 	 * population rule + F4 host finding). When a per-stage score array is
 	 * incomplete (some results have the value, others don't), the array is
 	 * omitted from the top-level fields and the missing-result chunk ids are
@@ -198,7 +198,7 @@ export function buildConfigSnapshot(): Record<string, unknown> {
  * Writes `config-snapshot.json` to `traceDir` and returns the SHA-256 hex
  * digest of its content for join with `config_hash` in `qa_traces.jsonl`.
  * Idempotent; overwrites on each call. Throws on filesystem failure because
- * a missing snapshot invalidates the eval run per PRD §11.2.1.
+ * a missing snapshot invalidates the eval run.
  */
 export function writeConfigSnapshot(traceDir: string): string {
 	return withLogContext({ operation_id: currentLogContext().operation_id ?? randomUUID() }, () => {

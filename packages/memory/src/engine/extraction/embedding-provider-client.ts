@@ -166,10 +166,10 @@ export class Embedder {
 			return this.embedDirect(chunks[0] ?? text);
 		}
 
-		// Per PRD §14 step 17: this warning is an embedding-API safety net
+		// This warning is an embedding-API safety net
 		// only. Steady-state ingest now chunks via `@snoai/chunking` upstream of this
 		// path, so any invocation here means a single retrieval-unit chunk exceeded
-		// the embedder's context window — drift signal that PRD §16 acceptance check
+		// the embedder's context window — drift signal that the acceptance check
 		// asserts must fire zero times during smoke ingest.
 		log.warn("legacy chunker invoked (embedding-API safety net)", {
 			chunks: chunks.length,

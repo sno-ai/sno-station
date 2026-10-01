@@ -220,7 +220,7 @@ function windowDiagnostics(): WindowDiagnostics {
 }
 const ATOMIC_PIPELINE_VERSION = "atomic-v3";
 const ATOMIC_LLM_CONCURRENCY = 1;
-/** Arrival verdict calls in flight at once; the Sno GPU admits three sequences (PRD 140 REQ-3). */
+/** Arrival verdict calls in flight at once; the Sno GPU admits three sequences. */
 const ARRIVAL_RETIREMENT_PAIRS_IN_FLIGHT = 3;
 const STANDING_SUBJECT_CANDIDATE_LIMIT = 64;
 const THING_ATTRIBUTE_SLUGS = new Set(stateVocabulary.slugs.map(({ slug }) => slug));
@@ -1647,7 +1647,7 @@ export async function runAtomicMemoryExtraction(
 	// Nominated for the arrival judgement, decided AFTER the write so a card can see the rows of
 	// its own batch: every active card. Category, subject, attribute and the ended flag differ run
 	// to run for the same correction (one Codex run of three stored the corrected value as
-	// episodic, 2026-09-24), so none of them decides (PRD 140 REQ-1).
+	// episodic, 2026-09-24), so none of them decides.
 	const nominatedCards = cards.filter((card) => card.lane === "active");
 	for (const card of nominatedCards) {
 		const stored = input.store.findByExtractionIdempotencyKey(
@@ -1707,7 +1707,7 @@ export async function runAtomicMemoryExtraction(
 /**
  * One pair of the arrival judgement: the candidate as the older memory, the nominated row as the
  * newer. A failed call or an unreadable reply is logged and journaled as this pair's refusal and
- * decides nothing; the REM replace wave judges the pair again later (PRD 140 REQ-6).
+ * decides nothing; the REM replace wave judges the pair again later.
  */
 async function judgeArrivalRetirementPair(
 	input: { store: MemoryStore; jobId: string; transport: AtomicRetirementVerdictTransport },
