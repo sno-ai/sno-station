@@ -14,6 +14,7 @@ import {
 	openSync,
 	readdirSync,
 	readFileSync,
+	rmSync,
 	statSync,
 	unlinkSync,
 	utimesSync,
@@ -21,7 +22,6 @@ import {
 } from "node:fs";
 import { totalmem } from "node:os";
 import { join } from "node:path";
-import { env, pipeline } from "@huggingface/transformers";
 import { createLogger } from "@snoai/utils/logger";
 import {
 	LOCAL_EMBEDDING_CACHE_DIR_DEFAULT,
@@ -107,6 +107,8 @@ const DTYPE_SIZES: Record<Dtype, string> = {
 export interface EnsureModelDownloadedOptions {
 	cacheDir?: string;
 	dtype?: Dtype;
+	offline?: boolean;
+	mirror?: string;
 }
 
 // ─── Helpers (exported for reuse by CLI) ────────────────────────────────────
@@ -282,7 +284,13 @@ function isLockStale(cacheDir: string): boolean {
 	const lockPath = join(cacheDir, DOWNLOAD_LOCK_FILE);
 	try {
 		const stat = statSync(lockPath);
-		return Date.now() - stat.mtimeMs > LOCK_STALE_MS;
+		if (Date.now() - stat.mtimeMs > LOCK_STALE_MS) return true;
+		// A holder that was interrupted (Ctrl-C during install) is gone; do not wait out the stale window.
+		const pid = Number.parseInt(readFileSync(lockPath, "utf8").split("\n")[0] ?? "", 10);
+		if (!Number.isInteger(pid) || pid <= 0) return false;
+		try { process.kill(pid, 0); return false; } catch (error) {
+			return error instanceof Error && "code" in error && error.code === "ESRCH";
+		}
 	} catch {
 		return true; // File gone → treat as stale so caller can proceed
 	}
@@ -376,6 +384,11 @@ export async function ensureModelDownloaded(
 		return;
 	}
 
+	// Offline hosts load (or fail on) the staged cache exactly as the provider does; never fetch here.
+	if (opts?.offline) return;
+	// A lock left behind with no marker is the only evidence of an interrupted download.
+	const lockWasPresent = existsSync(join(cacheDir, DOWNLOAD_LOCK_FILE));
+
 	// Cross-process serialization: if another process is already downloading,
 	// wait for it instead of racing to write the same files.
 	if (!tryAcquireLock(cacheDir)) {
@@ -406,12 +419,31 @@ export async function ensureModelDownloaded(
 
 	// Outer try/finally: ensures lock is ALWAYS released, even if banner/log/env
 	// setup throws (defensive — these are non-throwing in practice).
+	const modelDir = join(cacheDir, LOCAL_EMBEDDING_MODEL);
+	let completed = false;
+	let startedEmpty = false;
 	const lockHeartbeat = setInterval(
 		() => heartbeatLock(cacheDir),
 		LOCK_HEARTBEAT_INTERVAL_MS,
 	);
 	try {
 		heartbeatLock(cacheDir);
+		if (lockWasPresent) {
+			// An earlier holder died mid-download: its partial model would load truncated and fail on
+			// every later run.
+			rmSync(join(cacheDir, DOWNLOAD_COMPLETE_MARKER), { force: true });
+			rmSync(modelDir, { recursive: true, force: true });
+		} else if (!existsSync(join(cacheDir, DOWNLOAD_COMPLETE_MARKER)) && existsSync(modelDir) &&
+			readdirSync(modelDir, { recursive: true }).some((e) => typeof e === "string" && e.endsWith(".onnx"))) {
+			// A cache the loader or a deploy script filled has no marker; adopt it rather than refetch.
+			writeFileSync(join(cacheDir, DOWNLOAD_COMPLETE_MARKER), JSON.stringify({
+				model: LOCAL_EMBEDDING_MODEL, revision: LOCAL_EMBEDDING_MODEL_REVISION, dtype,
+				completedAt: new Date().toISOString(),
+			}));
+			completed = true;
+			return;
+		}
+		startedEmpty = !existsSync(modelDir);
 		// User-facing banner to stderr
 		const banner = [
 			"",
@@ -440,17 +472,20 @@ export async function ensureModelDownloaded(
 			site_id: "embedder.model.download.ensuremodeldownloaded.10",
 		});
 
+		const { env, pipeline } = await import("@huggingface/transformers");
 		// Save current transformer env state so we can restore it after download.
 		// Only allowRemoteModels is security-critical, but cacheDir and localModelPath
 		// should also be restored to avoid side effects in shared runtime contexts.
 		const prevCacheDir = env.cacheDir;
 		const prevAllowRemote = env.allowRemoteModels;
 		const prevLocalModelPath = env.localModelPath;
+		const prevRemoteHost = env.remoteHost;
 
 		// Allow remote models ONLY for this download
 		env.cacheDir = cacheDir;
 		env.allowRemoteModels = true;
 		env.localModelPath = cacheDir;
+		if (opts?.mirror) env.remoteHost = opts.mirror.endsWith("/") ? opts.mirror : `${opts.mirror}/`;
 
 		let lastProgress = 0;
 		const startTime = performance.now();
@@ -486,6 +521,7 @@ export async function ensureModelDownloaded(
 			env.cacheDir = prevCacheDir;
 			env.allowRemoteModels = prevAllowRemote;
 			env.localModelPath = prevLocalModelPath;
+			env.remoteHost = prevRemoteHost;
 		}
 
 		// Write completion marker so isModelCached() can distinguish a complete
@@ -499,6 +535,7 @@ export async function ensureModelDownloaded(
 				completedAt: new Date().toISOString(),
 			}),
 		);
+		completed = true;
 
 		const elapsedSec = Math.round((performance.now() - startTime) / 1000);
 		const finalSizeMB = getDirSizeMB(cacheDir);
@@ -529,6 +566,9 @@ export async function ensureModelDownloaded(
 		// Always release the lock — on success (after marker is written) or
 		// failure (so future processes can retry without waiting for stale lock).
 		clearInterval(lockHeartbeat);
+		// A failed fetch into an empty folder leaves a partial model with no lock; remove it so the
+		// next run downloads again instead of adopting it.
+		if (!completed && startedEmpty) rmSync(modelDir, { recursive: true, force: true });
 		releaseLock(cacheDir);
 	}
 }

@@ -9,6 +9,7 @@ const SALT_FILE = "diagnostic-reference.salt";
 const MAX_REFERENCE_LENGTH = 128;
 const contextStorage = new AsyncLocalStorage<Readonly<LogContext>>();
 const isolatedSalt = randomBytes(32);
+let configuredHome: string | undefined;
 
 export interface LogReference {
 	value: string | null;
@@ -39,7 +40,11 @@ export interface LogContext {
 }
 
 export function logStateRoot(): string {
-	return process.env["SNO_STATION_HOME"] || join(homedir(), STATE_DIRECTORY);
+	return configuredHome ?? join(homedir(), STATE_DIRECTORY);
+}
+
+export function configureLogStateRoot(home: string | undefined): void {
+	configuredHome = home;
 }
 
 function referenceSalt(): Buffer {

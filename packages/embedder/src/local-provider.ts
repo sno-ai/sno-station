@@ -5,11 +5,7 @@
  */
 
 import { resolve } from "node:path";
-import {
-	env,
-	type FeatureExtractionPipeline,
-	pipeline,
-} from "@huggingface/transformers";
+import type { FeatureExtractionPipeline } from "@huggingface/transformers";
 import { createLogger } from "@snoai/utils/logger";
 import {
 	EMBEDDING_DIMENSION,
@@ -28,8 +24,6 @@ import type {
 } from "./types";
 
 const log = createLogger("embedder:local");
-const EMBEDDER_OFFLINE_ENV_KEY = "SNOAI_EMBEDDER_OFFLINE";
-const HF_ENDPOINT_ENV_KEY = "HF_ENDPOINT";
 
 // Process-global singleton for the ONNX pipeline. All LocalEmbedProvider instances
 // share one FeatureExtractionPipeline because (a) @huggingface/transformers env is
@@ -152,6 +146,8 @@ export class LocalEmbedProvider implements DisposableProvider {
 	private readonly pooling: LocalEmbedPooling;
 	private readonly sessionOptions: LocalEmbedSessionOptions;
 	private readonly pipelineKey: string;
+	private readonly offline: boolean;
+	private readonly mirror: string | undefined;
 
 	/**
 	 * Guard: transformers `env` is process-global — only one cacheDir is allowed per process.
@@ -196,6 +192,8 @@ export class LocalEmbedProvider implements DisposableProvider {
 		}
 		this.pooling = config?.pooling ?? "mean";
 		this.sessionOptions = config?.sessionOptions ?? {};
+		this.offline = config?.offline ?? false;
+		this.mirror = config?.mirror;
 		this.pipelineKey = buildPipelineKey({
 			cacheDir: this.cacheDir,
 			modelId: this.modelId,
@@ -270,19 +268,20 @@ export class LocalEmbedProvider implements DisposableProvider {
 			);
 		}
 		LocalEmbedProvider.configuredCacheDir = this.cacheDir;
+		// Loaded here, not at module top: transformers pulls in sharp's native binding, and a host
+		// that stages dependencies apart (OpenClaw 2026.9.5) fails the whole plugin load on it.
+		const { env, pipeline } = await import("@huggingface/transformers");
 
 		// Environment hardening -- set BEFORE pipeline creation.
 		// Remote downloads from Hugging Face Hub are enabled by default so that
 		// end users get a friction-free first run (no manual model:pull step,
 		// no HF account/token — the canonical model is a public anonymous
 		// download). Dev/CI environments that must fail-fast on a missing
-		// cache can opt out via SNOAI_EMBEDDER_OFFLINE=1. HF_ENDPOINT, when
-		// set, overrides the hub host (useful for region mirrors like
-		// https://hf-mirror.com behind GFW).
+		// cache can opt out through caller config. A mirror overrides the hub host.
 		env.cacheDir = this.cacheDir;
-		env.allowRemoteModels = process.env[EMBEDDER_OFFLINE_ENV_KEY] !== "1";
+		env.allowRemoteModels = !this.offline;
 		env.localModelPath = this.cacheDir;
-		const hfEndpoint = process.env[HF_ENDPOINT_ENV_KEY]?.trim();
+		const hfEndpoint = this.mirror?.trim();
 		if (hfEndpoint) {
 			env.remoteHost = hfEndpoint.endsWith("/") ? hfEndpoint : `${hfEndpoint}/`;
 		}

@@ -1,6 +1,6 @@
 import { closeSync, constants, fstatSync, mkdirSync, openSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import { currentLogContext, logStateRoot } from "./log-context.js";
+import { configureLogStateRoot, currentLogContext, logStateRoot } from "./log-context.js";
 import { configureDiagnosticMetadata, diagnosticProcessInstanceId, encodeDiagnostic, LOG_SEVERITY, type LogLevel, type LogResource } from "./log-encoder.js";
 import { LogFileSink } from "./log-file-sink.js";
 import { resolveLogSite, validateLogCatalog, type LogSiteCatalog, type LogSource } from "./log-site-catalog.js";
@@ -10,6 +10,9 @@ export interface LoggerConfiguration {
 	serviceVersion: string;
 	buildId: string;
 	catalog: LogSiteCatalog;
+	level?: LogLevel;
+	file?: string;
+	home?: string;
 }
 
 export interface Logger {
@@ -31,8 +34,7 @@ let fileStatus: { destination: string | null; reason: string | null } = {
 const reported = new Set<string>();
 
 export function effectiveLogLevel(): LogLevel {
-	const raw = process.env["LOG_LEVEL"];
-	return raw !== undefined && Object.hasOwn(LOG_SEVERITY, raw) ? raw as LogLevel : DEFAULT_LEVEL;
+	return configuration?.level ?? DEFAULT_LEVEL;
 }
 
 function resource(): LogResource {
@@ -95,11 +97,12 @@ export function configureLogger(next: LoggerConfiguration): void {
 	try { validateLogCatalog(catalog, next.buildId); }
 	catch { catalog = { build_id: next.buildId, sites: {} }; reportOnce("source_catalog_invalid"); }
 	configuration = { ...next, catalog };
+	configureLogStateRoot(next.home);
 	try { configureDiagnosticMetadata(resource(), catalog); }
 	catch { reportOnce("source_catalog_invalid"); }
 	if (testIsolation()) { fileStatus = { destination: null, reason: "test_isolation" }; return; }
 	const defaultPath = join(logStateRoot(), LOG_DIRECTORY, `${next.app}.log`);
-	const override = process.env["LOG_FILE"];
+	const override = next.file;
 	const nullDevice = override && (resolve(override) === "/dev/null" || /^nul(?::)?$/i.test(override));
 	if (nullDevice) reportOnce("null_destination_refused");
 	const destination = override && !nullDevice ? resolve(override) : defaultPath;
@@ -109,7 +112,7 @@ export function configureLogger(next: LoggerConfiguration): void {
 	}
 	ordinarySink = new LogFileSink(destination, sinkNotice);
 	fileStatus = { destination, reason: null };
-	const rawLevel = process.env["LOG_LEVEL"];
+	const rawLevel = next.level;
 	if (rawLevel !== undefined && !Object.hasOwn(LOG_SEVERITY, rawLevel)) reportOnce("invalid_log_level");
 }
 
