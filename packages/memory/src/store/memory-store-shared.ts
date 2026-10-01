@@ -104,7 +104,7 @@ export {
 export const log: ReturnType<typeof createLogger> = createLogger("sno-station-mem:store");
 
 /**
- * PRD §4.2 reflection v3: discriminator added to content-hash input when the
+ * Reflection v3: discriminator added to content-hash input when the
  * row carries a `metadata.mappedKind`. Two rows with same projectId + same store
  * category + same text but distinct mappedKinds (e.g. user-model vs
  * agent-model both → category=preference) must coexist as distinct rows. The
@@ -156,7 +156,7 @@ export function hashInputForEntry(text: string, metadata: string | undefined): s
 	}
 	const mappedKind = parsed.mappedKind;
 	if (typeof mappedKind !== "string" || mappedKind.length === 0) return text;
-	// Structured encoding (PRD §4.2): a plain `${text} mappedKind:${kind}`
+	// Structured encoding: a plain `${text} mappedKind:${kind}`
 	// concat would let a normal memory whose body literally ends in
 	// ` mappedKind:user-model` collide with a mapped reflection row carrying
 	// `metadata.mappedKind = "user-model"`. JSON-tuple form is unambiguous —
@@ -372,8 +372,7 @@ export interface SearchOptions {
 	/**
 	 * When set, search excludes memories whose metadata.invalidated_at is <= this
 	 * timestamp. Fires on EVERY recall path — manual + auto + slash commands —
-	 * because a superseded fact is obsolete regardless of recall mode (PRD
-	 * memora-fama OD-3, FAA binary).
+	 * because a superseded fact is obsolete regardless of recall mode.
 	 */
 	excludeInvalidatedBefore?: number;
 	/** Explicit historical recall retains an invalidated row only when it names a successor. */

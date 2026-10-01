@@ -298,7 +298,7 @@ Object.assign(MemoryStore.prototype, {
 				assertStorageAxesUnchanged(currentAxes, nextMetadataObject, "update");
 			}
 			assertActiveTaskUpdate(existing.text, nextText, currentMetadata, nextMetadataObject);
-			// PRD §4.2 reflection v3: include mappedKind discriminator from metadata
+			// Reflection v3: include mappedKind discriminator from metadata
 			// in hash input so update() preserves the (projectId, content_hash, category)
 			// dedup invariant established by store() / bulkStore(). Without this an
 			// updated row could collide with rows of a different mappedKind that
@@ -324,7 +324,7 @@ Object.assign(MemoryStore.prototype, {
 			const factId = existing.fact_id ?? existing.id;
 
 			// Guard against creating a duplicate (projectId, content_hash, category)
-			// triple. PRD §4.2 — store/bulkStore intentionally allow the same
+			// triple. store/bulkStore intentionally allow the same
 			// text-hash to coexist across distinct categories, so a category-
 			// only update can collide with a sibling row even when nextHash
 			// equals the stored hash. The collision check therefore runs when

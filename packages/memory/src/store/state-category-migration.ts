@@ -80,7 +80,7 @@ const REQUIRED_COLUMNS = [
  * Measured 2026-09-05 over 40 real persona stores: 21 predate the atomic columns — the August
  * runs have no `timezone`, the 2026-09-02 run no `subject` — and without this check the copy
  * dies mid-migration on a raw `no such column: subject`, which says nothing about what to do.
- * Such a store is out of scope (PRD 150 §6); it has to be told so.
+ * Such a store is out of scope; it has to be told so.
  */
 function assertAtomicSchema(database: SqliteDatabaseLike): void {
 	const columns = new Set(
