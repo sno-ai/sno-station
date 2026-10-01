@@ -124,7 +124,7 @@ export interface RemClassifierPersistence {
 	claimTs: string;
 }
 
-// Frozen, unwired, and kept in place by 60-rem-unbuilt-obligations-prd.md REQ-44; unfreezing is governed by REQ-45.
+// Frozen and unwired; kept in place on purpose.
 export function runVerdictClassifierEntry(
 	populationValue: unknown,
 	persistence?: RemClassifierPersistence,
@@ -132,7 +132,7 @@ export function runVerdictClassifierEntry(
 	return runClassifierEntry(populationValue, "verdict", persistence);
 }
 
-// Frozen, unwired, and kept in place by 60-rem-unbuilt-obligations-prd.md REQ-44; unfreezing is governed by REQ-45.
+// Frozen and unwired; kept in place on purpose.
 export function runRestateClassifierEntry(
 	populationValue: unknown,
 	persistence?: RemClassifierPersistence,

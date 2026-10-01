@@ -41,9 +41,9 @@ export interface ReflectionMappedMetadata {
 	quality: number;
 	sourceReflectionPath?: string;
 	/**
-	 * Issue #680 mdMirror heading recovery hook (PRD §3, §4.2). Set to the source
+	 * mdMirror heading recovery hook. Set to the source
 	 * reflection-markdown heading (e.g. "User model deltas (about the human)")
-	 * when the row is built by the §4.2 mapped-memory loop. A future mdMirror
+	 * when the row is built by the mapped-memory loop. A future mdMirror
 	 * walker can reconstruct the source section without re-parsing the markdown.
 	 */
 	_reflectionHeading?: string;
