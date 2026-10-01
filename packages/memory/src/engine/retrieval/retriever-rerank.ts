@@ -35,7 +35,7 @@ import {
 	RetrievalError,
 } from "./retriever-dependencies";
 
-// Issue #222. A rerank request that fails on the transport is asked again before the
+// A rerank request that fails on the transport is asked again before the
 // pre-rerank order is served: the per-call timeout (Node's fetch rejects an
 // `AbortSignal.timeout()` with a DOMException named "TimeoutError", measured on Node 24 —
 // the earlier "AbortError" check never matched a real timeout, so timeouts were filed as
@@ -554,7 +554,7 @@ Object.assign(MemoryRetriever.prototype, {
 			if (!chunkVector) {
 				return { ...candidate, rerankScore: fusedScore };
 			}
-			// Embedder-dimension invariant (PRD §6.0.1): block silent NaN
+			// Embedder-dimension invariant: block silent NaN
 			// propagation when DB has rows from a different embedder dim.
 			if (chunkVector.length !== queryVector.length) {
 				dimMismatchCount += 1;
