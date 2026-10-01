@@ -199,7 +199,7 @@ function ensureChunkVecTable(db: SqliteDB, vectorDim: number): number | undefine
 }
 
 /**
- * Per PRD `cjk-other-fix.md` §D.3.4. Loads the wangfenjin/simple SQLite
+ * Loads the wangfenjin/simple SQLite
  * tokenizer extension and registers its jieba dictionary path. Called once
  * per connection, BEFORE migrations run, so 0006 can create the
  * `nodix_memory_chunks_fts` virtual table with `tokenize='simple 0'`.
@@ -232,7 +232,7 @@ export function loadStorageExtensions(sqlite: SqliteRuntimeHandle): void {
 }
 
 /**
- * Per PRD `cjk-other-fix.md` §D.3.6. Startup invariant: the persisted DDL
+ * Startup invariant: the persisted DDL
  * for `nodix_memory_chunks_fts` must declare `tokenize='simple ...'`. Catches DBs
  * created against an older plugin build (still on `unicode61`) so a stale
  * DB plus a fresh plugin doesn't silently degrade CJK recall to char-level.

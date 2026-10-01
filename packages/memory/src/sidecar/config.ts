@@ -10,7 +10,6 @@ import { getSnoStationMemStateDir, getStateDir } from "../engine/shared/paths";
 
 export const REM_SIDECAR_HOST = "127.0.0.1";
 export const REM_SIDECAR_ORIGIN = "http://127.0.0.1";
-export const REM_SIDECAR_TOKEN_HEADER = "x-sidecar-token";
 export const REM_CORRELATION_ID_HEADER = "x-rem-correlation-id";
 export const REM_RUN_PATH = "/rem/run";
 export const REM_JOBS_PATH_PREFIX = "/rem/jobs/";

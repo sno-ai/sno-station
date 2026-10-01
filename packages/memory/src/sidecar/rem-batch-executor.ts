@@ -1788,10 +1788,10 @@ async function buildRemRetirementCandidateSet(input: {
 			: eligible.filter((candidate) => candidate.subject === input.nominatedRow.subject);
 	if (input.nominatedRow.subject === null) {
 		// No subject, so there is no group to read: every older row in the scope is a candidate,
-		// ranked by similarity and capped. REQ-4 calls this "the similarity candidates only" and
+		// ranked by similarity and capped. This is "the similarity candidates only" and
 		// it is today's path — which offers every older row, not a score-filtered slice. Gating it
 		// on the similarity threshold here would offer NOTHING for a row the store cannot key, and
-		// a retirement sentence that reaches no judgement is exactly the failure PRD 110 closed.
+		// a retirement sentence that reaches no judgement is exactly the failure this rule closes.
 		const scoresForAll = await readRetirementSimilarityScores({
 			runtime: input.runtime,
 			nominatedRow: input.nominatedRow,
@@ -2112,7 +2112,7 @@ function invalidWriterOperation(
 /**
  * The order key a row carries, or the order it can still be given from what it has.
  *
- * REQ-2 persists `metadata.source_order` on every row extraction writes, and the maintenance pass
+ * Extraction persists `metadata.source_order` on every row extraction writes, and the maintenance pass
  * backfills the rows written before it. Until that pass has run on a store, its rows have no key,
  * and the wave still has to order them: a row's own content time is what it has, and that is what
  * the executor compared before this change. Falling back to it keeps an unmigrated store working
@@ -3141,7 +3141,7 @@ export async function buildRemReplaceCandidateQueue(input: {
 	);
 	const subjectVectors = new Map<string, Map<string, Float32Array[]>>();
 	// An episodic row is also paired with its project's nearest profile and state rows, as at write
-	// time: a correction stored as episodic must reach the value it corrects (PRD 140 §5).
+	// time: a correction stored as episodic must reach the value it corrects.
 	const currentRows = Map.groupBy(
 		candidates.filter((candidate) => candidate.category !== "episodic"),
 		(candidate) => candidate.project_id,
@@ -3269,12 +3269,12 @@ export async function buildRemReplaceCandidateQueue(input: {
 			}
 			return left.sortKey.localeCompare(right.sortKey);
 		});
-	// A pair already closed with a verdict is not judged again when the corpus moves on (PRD 140
-	// REQ-9); its identity carries both texts, so an edited row is a new pair.
+	// A pair already closed with a verdict is not judged again when the corpus moves on;
+	// its identity carries both texts, so an edited row is a new pair.
 	const judged = repository.readClosedVerdictPairIds(ordered.map((pair) => pair.pairId));
 	const unjudged = ordered.filter((pair) => !judged.has(pair.pairId));
 	return {
-		// Every pair is persisted; the per-run cap is applied when pairs are claimed (PRD 40 REQ-1).
+		// Every pair is persisted; the per-run cap is applied when pairs are claimed.
 		pairs: unjudged,
 		pairCapBinding: unjudged.length > configuration.budgets.maxPairs,
 	};
@@ -3284,7 +3284,7 @@ export async function buildRemReplaceCandidateQueue(input: {
  * A profile or state row about a subject is paired with that subject's live profile and state rows
  * by similarity alone, no floor: extraction files one fact under different categories, sections
  * and attributes run to run, and a real correction pair scored 0.571 to 0.688, below any floor
- * that keeps unrelated rows out (PRD 140 REQ-8). Such a row still runs the threshold search, so a
+ * that keeps unrelated rows out. Such a row still runs the threshold search, so a
  * pair with a row outside that set keeps address and threshold pairing.
  */
 function pairsBySubject(candidate: RemReplacePairCandidate): boolean {
@@ -3535,7 +3535,7 @@ function readLatestGeneration(database: SqliteDatabaseLike): string | undefined 
 // `fact_key` is deliberately not in this list. `70-rem-offline-processing-prd.md` states that
 // pairing is by semantic similarity and NOT by `fact_key` equality — that is Module 4's mechanism —
 // while this resolver used to consult it anyway. Measured 2026-08-12 across two persona stores
-// (`dev-scripts/census-canonical-address.mts`): `fact_key` supplied ZERO addresses in
+// (a one-off census script): `fact_key` supplied ZERO addresses in
 // either — 37/27/0/92 and 34/26/0/76 across topic, section_name, fact_key, idempotency_key — and
 // every address shared by two or more rows came from `topic` or `section_name`. So the forbidden
 // mechanism was unreachable rather than live, and removing it changes no behaviour; it buys only
