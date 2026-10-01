@@ -41,9 +41,23 @@ verwenden, und dieses README erscheint in neun Sprachen.
 
 ## Install
 
-*Zuletzt aktualisiert am 2026-09-19.* Noch nicht. Die Ein-Befehl-Installation kommt mit dem
-Onboarding-Skill; bis dahin behalten Sie dieses Repository im Auge. Wenn sie da ist, wird sie
-so aussehen:
+*Zuletzt aktualisiert am 2026-10-01.* **Das gemeinsame Gedächtnis lässt sich heute installieren.** Es gibt Claude Code, Codex, OpenClaw und Hermes Agent ein verschlüsseltes Gedächtnis auf Ihrem Rechner, ohne Konto und ohne API-Schlüssel. Führen Sie die [Einrichtung des gemeinsamen Gedächtnisses](../memory-setup.md) einmal aus (ein paar Minuten) und fügen Sie dann Ihren Agenten hinzu:
+
+```bash
+# Codex CLI
+npm install -g @snoai/mem-codex@1.0.1 && sno-mem-codex install --codex-home ~/.codex
+# Claude Code
+npm install -g @snoai/mem-claude@1.0.1 && sno-mem-claude install --config-dir ~/.claude
+# OpenClaw
+openclaw plugins install @snoai/mem-claw@1.0.1
+# Hermes Agent
+hermes plugins install sno-ai/sno-station/apps/mem-hermes/sno-mem-hermes --enable
+hermes config set memory.provider sno-mem-hermes
+```
+
+Anleitungen: [Codex](../mem-codex/onboarding.md) · [Claude Code](../mem-claude/onboarding.md) · [OpenClaw](../mem-claw/onboarding.md) · [Hermes](../mem-hermes/onboarding.md)
+
+Sno Reach, die Duo-Skills und die nächtliche Schleife sind noch nicht in diesen Paketen. Die Ein-Befehl-Installation für alles kommt noch: Sie kommt mit dem Onboarding-Skill; bis dahin behalten Sie dieses Repository im Auge. Wenn sie da ist, wird sie so aussehen:
 
 ```bash
 # inside any Claude Code, Codex or OpenClaw conversation:

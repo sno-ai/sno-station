@@ -23,7 +23,23 @@ Sno Station은 여러분의 에이전트를 위한 워크스테이션입니다: 
 
 ## 설치
 
-*마지막 업데이트: 2026-09-19.* 아직입니다. 원커맨드 설치는 온보딩 스킬과 함께 제공될 예정입니다. 그때까지는 이 저장소를 지켜봐 주세요. 도입되면 다음과 같은 모습일 것입니다:
+*마지막 업데이트: 2026-10-01.* **공유 메모리는 오늘 설치할 수 있습니다.** Claude Code, Codex, OpenClaw, Hermes Agent에 계정도 API 키도 없이, 내 컴퓨터에 있는 암호화된 메모리 하나를 줍니다. [공유 메모리 설정](../memory-setup.md)을 한 번만 실행하고(몇 분), 에이전트를 추가하세요:
+
+```bash
+# Codex CLI
+npm install -g @snoai/mem-codex@1.0.1 && sno-mem-codex install --codex-home ~/.codex
+# Claude Code
+npm install -g @snoai/mem-claude@1.0.1 && sno-mem-claude install --config-dir ~/.claude
+# OpenClaw
+openclaw plugins install @snoai/mem-claw@1.0.1
+# Hermes Agent
+hermes plugins install sno-ai/sno-station/apps/mem-hermes/sno-mem-hermes --enable
+hermes config set memory.provider sno-mem-hermes
+```
+
+단계별 안내: [Codex](../mem-codex/onboarding.md) · [Claude Code](../mem-claude/onboarding.md) · [OpenClaw](../mem-claw/onboarding.md) · [Hermes](../mem-hermes/onboarding.md)
+
+Sno Reach, Duo 스킬, 야간 루프는 아직 이 패키지에 들어 있지 않습니다. 모든 것을 한 번에 설치하는 원커맨드 설치는 아직 준비 중이며 온보딩 스킬과 함께 제공될 예정입니다. 그때까지는 이 저장소를 지켜봐 주세요. 도입되면 다음과 같은 모습일 것입니다:
 
 ```bash
 # inside any Claude Code, Codex or OpenClaw conversation:
