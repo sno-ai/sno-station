@@ -1,6 +1,5 @@
 /** @file export.ts
- * @purpose `.sno-station-core` AES-256-GCM export bundle producer. Spec:
- *   `openspec/changes/add-local-aes-encryption/specs/sno-station-core-export-format/spec.md`.
+ * @purpose `.sno-station-core` AES-256-GCM export bundle producer.
  *   Layout: `magic(18) ‖ version(1) ‖ source_dek_fingerprint(4) ‖ nonce(12) ‖
  *   ciphertext(N) ‖ tag(16)` where AAD is the complete header.
  */

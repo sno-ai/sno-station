@@ -44,7 +44,7 @@ interface ParsedHeader {
 function parseStructure(bytes: Buffer): ParsedHeader {
 	// Structural gate: magic + version. These are the only checks before any
 	// fingerprint comparison or GCM attempt. They MUST raise distinct error
-	// classes from authentication failures (per sno-station-core-export-format spec).
+	// classes from authentication failures.
 	if (bytes.length < SNO_STATION_CORE_HEADER_LEN + SNO_STATION_CORE_NONCE_LEN + SNO_STATION_CORE_TAG_LEN) {
 		throw new InvalidExportFormat(
 			`InvalidExportFormat: file is too short to be a .sno-station-core export (got ${bytes.length} bytes)`,
