@@ -1,0 +1,143 @@
+name: npm release
+
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: Prepare retained packages, publish approved packages, or finish the Release
+        required: true
+        type: choice
+        options: [prepare, publish, finalize]
+      source_sha:
+        description: Reviewed public main commit containing the package source
+        required: true
+        type: string
+      candidate_run_id:
+        description: Successful prepare run ID; required for publish and finalize
+        required: false
+        type: string
+
+jobs:
+  prepare:
+    if: inputs.operation == 'prepare'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.source_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Require the selected public main commit
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+        run: |
+          [[ "$(git rev-parse HEAD)" == "$SOURCE_SHA" ]]
+          [[ "$(git ls-remote origin refs/heads/main | cut -f1)" == "$SOURCE_SHA" ]]
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+      - run: npm install --global npm@11.9.0
+      - run: npm ci --ignore-scripts
+      - run: npm run build
+      - name: Pack and dry-run the release graph
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+        run: bash scripts/npm-release.sh prepare "$SOURCE_SHA" "$GITHUB_WORKSPACE/npm-candidate" "$GITHUB_RUN_ID"
+      - uses: actions/upload-artifact@v4
+        id: candidate
+        with:
+          name: npm-candidate
+          path: npm-candidate/
+          if-no-files-found: error
+      - name: Record candidate identity
+        run: |
+          printf 'Source: %s\nPrepare run: %s\nArtifact: %s\n' \
+            '${{ inputs.source_sha }}' "$GITHUB_RUN_ID" '${{ steps.candidate.outputs.artifact-id }}' >> "$GITHUB_STEP_SUMMARY"
+
+  publish:
+    if: inputs.operation == 'publish'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.source_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify candidate run and source ancestry
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
+        run: |
+          [[ "$CANDIDATE_RUN_ID" =~ ^[0-9]+$ ]]
+          [[ "$(git rev-parse HEAD)" == "$SOURCE_SHA" ]]
+          git fetch --quiet origin main
+          git merge-base --is-ancestor "$SOURCE_SHA" origin/main
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$CANDIDATE_RUN_ID" |
+            jq -e '.conclusion == "success" and (.path | startswith(".github/workflows/release-npm.yml"))' >/dev/null
+      - uses: actions/download-artifact@v4
+        with:
+          name: npm-candidate
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.candidate_run_id }}
+          path: npm-candidate
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+      - run: npm install --global npm@11.9.0
+      - name: Publish retained files only
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_BOOTSTRAP_TOKEN }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
+        run: bash scripts/npm-release.sh publish "$SOURCE_SHA" "$GITHUB_WORKSPACE/npm-candidate" "$CANDIDATE_RUN_ID"
+
+  finalize:
+    if: inputs.operation == 'finalize'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.source_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify candidate run and source ancestry
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
+        run: |
+          [[ "$CANDIDATE_RUN_ID" =~ ^[0-9]+$ ]]
+          [[ "$(git rev-parse HEAD)" == "$SOURCE_SHA" ]]
+          git fetch --quiet origin main
+          git merge-base --is-ancestor "$SOURCE_SHA" origin/main
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$CANDIDATE_RUN_ID" |
+            jq -e '.conclusion == "success" and (.path | startswith(".github/workflows/release-npm.yml"))' >/dev/null
+      - uses: actions/download-artifact@v4
+        with:
+          name: npm-candidate
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.candidate_run_id }}
+          path: npm-candidate
+      - name: Publish the draft Release after anonymous installation proof
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
+        run: bash scripts/npm-release.sh finalize "$SOURCE_SHA" "$GITHUB_WORKSPACE/npm-candidate" "$CANDIDATE_RUN_ID"
