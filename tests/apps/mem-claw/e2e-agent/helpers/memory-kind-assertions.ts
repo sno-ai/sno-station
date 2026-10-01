@@ -46,4 +46,3 @@ export function expectActiveMemoryRow(row: JsonObject): void {
 	expect(metadata.invalidated_at).toBeUndefined();
 	expect(metadata.superseded_by).toBeUndefined();
 }
-
