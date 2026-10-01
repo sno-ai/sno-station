@@ -314,26 +314,26 @@ class SidecarClient:
         try:
             data = json.loads(path.read_text())
         except (OSError, ValueError) as error:
-            raise RuntimeError(f"settings unavailable: {path}: file; run sno setup") from error
+            raise RuntimeError(f"settings unavailable: {path}: file; see https://github.com/sno-ai/sno-station/blob/main/docs/memory-setup.md") from error
         if not isinstance(data, dict):
-            raise RuntimeError(f"settings unavailable: {path}: settings; run sno setup")
+            raise RuntimeError(f"settings unavailable: {path}: settings; see https://github.com/sno-ai/sno-station/blob/main/docs/memory-setup.md")
         package = data.get("memoryPackage")
         for field in ("path", "node"):
             if not isinstance(package, dict) or not isinstance(package.get(field), str) or not package[field]:
-                raise RuntimeError(f"settings unavailable: {path}: memoryPackage.{field}; run sno setup")
+                raise RuntimeError(f"settings unavailable: {path}: memoryPackage.{field}; see https://github.com/sno-ai/sno-station/blob/main/docs/memory-setup.md")
         recall = data.get("recall")
         if not isinstance(recall, dict):
-            raise RuntimeError(f"settings unavailable: {path}: recall; run sno setup")
+            raise RuntimeError(f"settings unavailable: {path}: recall; see https://github.com/sno-ai/sno-station/blob/main/docs/memory-setup.md")
         if not isinstance(recall.get("auto"), bool):
-            raise RuntimeError(f"settings unavailable: {path}: recall.auto; run sno setup")
+            raise RuntimeError(f"settings unavailable: {path}: recall.auto; see https://github.com/sno-ai/sno-station/blob/main/docs/memory-setup.md")
         if not isinstance(recall.get("explicitLimit"), int):
-            raise RuntimeError(f"settings unavailable: {path}: recall.explicitLimit; run sno setup")
+            raise RuntimeError(f"settings unavailable: {path}: recall.explicitLimit; see https://github.com/sno-ai/sno-station/blob/main/docs/memory-setup.md")
         for group, fields in (("sessionStart", ("limit", "maxChars", "timeoutMs")),
                               ("prompt", ("limit", "maxChars", "timeoutMs", "minChars", "minScore"))):
             values = recall.get(group)
             for field in fields:
                 if not isinstance(values, dict) or not isinstance(values.get(field), (int, float)):
-                    raise RuntimeError(f"settings unavailable: {path}: recall.{group}.{field}; run sno setup")
+                    raise RuntimeError(f"settings unavailable: {path}: recall.{group}.{field}; see https://github.com/sno-ai/sno-station/blob/main/docs/memory-setup.md")
         return data
 
     def connect(self, timeout_seconds: float = 30) -> None:
