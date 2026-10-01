@@ -1,5 +1,5 @@
 /**
- * @snoai/embedder — Unified embedding package for all sno-station-core apps.
+ * @snoai/embedder — Unified embedding package for all Sno Station apps.
  *
  * Provides local ONNX (PPLX 0.6B INT8, 1024-d) embeddings with LRU caching.
  */
