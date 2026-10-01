@@ -11,6 +11,7 @@ import { join, resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { atomicExtractionSkillReference } from "../../../../packages/memory/src/engine/extraction/atomic-extraction-skill";
+import { REM_SIDECAR_TOKEN_HEADER } from "../../../../packages/memory/src/contract/routes";
 import { startRemSidecar } from "../../../../packages/memory/src/sidecar/server";
 import { createTestDb } from "../../../apps/mem-claw/helpers/test-db";
 import { modelReply, type RecorderReply, startRecorder } from "./fixtures/model-recorders";
@@ -110,7 +111,7 @@ function hostAnswer(id: string, content: string): string {
 async function contractPost(path: string, body: unknown, skin: string): Promise<Response> {
 	if (!sidecar) throw new Error("missing test sidecar");
 	return fetch(`http://127.0.0.1:${sidecar.port}${path}`, {
-		method: "POST", headers: { "x-sno-station-mem-skin": skin },
+		method: "POST", headers: { [REM_SIDECAR_TOKEN_HEADER]: JSON.parse(readFileSync(join(process.env.SNO_PROFILE_DIR!, "station", "sidecar.json"), "utf8")).token, "x-sno-station-mem-skin": skin },
 		body: JSON.stringify(body), signal: AbortSignal.timeout(60_000),
 	});
 }
@@ -445,7 +446,8 @@ describe("Local First REM runs only while a host answers", () => {
 		pointSnoGpuAt(sno.url);
 		sidecar = await startRemSidecar();
 		const response = await fetch(`http://127.0.0.1:${sidecar.port}/rem/run`, {
-			method: "POST", body: JSON.stringify({ type: "rem-update", scope: "global" }), signal: AbortSignal.timeout(10_000),
+			method: "POST", headers: { [REM_SIDECAR_TOKEN_HEADER]: JSON.parse(readFileSync(join(process.env.SNO_PROFILE_DIR!, "station", "sidecar.json"), "utf8")).token },
+			body: JSON.stringify({ type: "rem-update", scope: "global" }), signal: AbortSignal.timeout(10_000),
 		});
 		const text = await response.text();
 		await delay(500);

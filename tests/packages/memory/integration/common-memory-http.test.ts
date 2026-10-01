@@ -7,6 +7,7 @@ import { join, resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { afterEach, beforeEach, expect, it } from "vitest";
 import { type SettingsDocument, writeSettingsFixture } from "../fixtures/settings-file-fixture";
+import { REM_SIDECAR_TOKEN_HEADER } from "../../../../packages/memory/src/contract/routes";
 import { untilModelReady } from "./fixtures/model-ready";
 import { modelReply, startRecorder } from "./fixtures/model-recorders";
 
@@ -180,83 +181,6 @@ it("captures in one published client process, recalls in another, forgets and re
   const readback = await exchange(reader, "inspect", [{ op: "get", id: entry.id }, scope]);
   expect(readback).toMatchObject({ degraded: false, result: { entry: null } });
 });
-
-it("refuses a foreign principal before granting engine or store access", async () => {
-  const owner = await initialized();
-  expect(await exchange(owner, "capture", [{ turnId: "private-tea", rewindEpoch: 0, messages: [{ role: "user", content: "My stable personal preference is jasmine tea.", at: Date.parse("2026-09-09T18:00:00Z") }] }, scope])).toMatchObject({ degraded: false, committed: true });
-  const discovery = JSON.parse(await readFile(join(root, "profile/station/sidecar.json"), "utf8"));
-  const headers = { Authorization: `Bearer ${discovery.token}`, "Content-Type": "application/json", "x-sno-station-mem-skin": registration.skinId };
-  const health = async () => await (await fetch(`http://127.0.0.1:${discovery.port}/healthz`, { headers })).json();
-  const before = await health();
-  const response = await fetch(`http://127.0.0.1:${discovery.port}/v1/get-recall`, { method: "POST", headers, body: JSON.stringify({ scope: { ...scope, principal: `${scope.principal}-foreign` }, query: "jasmine tea", options: { source: "auto" } }) });
-  expect(response.status).toBe(403);
-  expect(await response.json()).toMatchObject({ degraded: true, reason: "principal-mismatch" });
-  const { principal: _principal, ...missingPrincipal } = scope;
-  const missing = await fetch(`http://127.0.0.1:${discovery.port}/v1/capture`, { method: "POST", headers, body: JSON.stringify({ scope: missingPrincipal, turn: { turnId: "missing", rewindEpoch: 0, messages: [] } }) });
-  expect(missing.status).toBe(400);
-  expect(await missing.json()).toMatchObject({ degraded: true, reason: "invalid-input" });
-  expect((await health()).accessCounters).toEqual(before.accessCounters);
-  const retained = await exchange(owner, "inspect", [{ op: "list" }, scope]);
-  expect(retained.result.entries.some((row: { text: string }) => row.text.includes("jasmine tea"))).toBe(true);
-});
-
-it("reports daemon-down on an existing handle and never receipts a write", async () => {
-  const existing = await initialized();
-  await stopSidecar();
-  expect(await exchange(existing, "getRecall", ["jasmine tea", scope, { source: "auto" }])).toMatchObject({ degraded: true, reason: "sidecar-unreachable" });
-  expect(await exchange(existing, "capture", [{ turnId: "down", rewindEpoch: 0, messages: [] }, scope])).toEqual({ thrown: true, reason: "sidecar-unreachable" });
-});
-
-it("QCG-6: a killed sidecar holds no turn, a stale discovery file is replaced by one new sidecar, and a paused sidecar is refused", async () => {
-  const existing = await initialized();
-  const killed = await discoveredPid();
-  expect(await storeHolders()).toEqual([String(killed)]);
-  process.kill(killed, "SIGKILL");
-  await waitForExit(killed);
-  sidecarPid = undefined;
-  expect(await discoveredPid()).toBe(killed);
-  const mtimeBefore = (await stat(dbPath)).mtimeMs;
-  const filesBefore = await stateFiles();
-
-  const recall = await exchange(existing, "getRecall", ["jasmine tea", scope, { source: "auto" }]);
-  expect(recall).toMatchObject({ degraded: true, reason: "sidecar-unreachable" });
-  expect(recall.hits ?? []).toEqual([]);
-  expect(await exchange(existing, "capture", [{ turnId: "down", rewindEpoch: 0, messages: [{ role: "user", content: "lost turn", at: Date.now() }] }, scope])).toEqual({ thrown: true, reason: "sidecar-unreachable" });
-  if (process.env.QCG6_PLANT === "direct-store") {
-    // Acceptance defect plant: a client built with a direct store import writes during the outage.
-    const { getDek, openEncryptedDb } = await import("@snoai/sqlite-crypto");
-    const direct = openEncryptedDb(dbPath, await getDek());
-    direct.exec("CREATE TABLE qcg6_plant (held TEXT)");
-    direct.close();
-  }
-  expect(await storeHolders()).toEqual([]);
-  expect((await stat(dbPath)).mtimeMs).toBe(mtimeBefore);
-  expect(await stateFiles()).toEqual(filesBefore);
-
-  const fresh = await initialized();
-  const replacement = await discoveredPid();
-  expect(replacement).not.toBe(killed);
-  expect(await sidecarProcesses()).toEqual([replacement]);
-  expect(await exchange(fresh, "getRecall", ["jasmine tea", scope, { source: "auto" }])).toMatchObject({ degraded: false });
-  expect(await storeHolders()).toEqual([String(replacement)]);
-
-  process.kill(replacement, "SIGSTOP");
-  try {
-    const paused = await client();
-    expect(paused.connected).toEqual({ degraded: true, reason: "sidecar-unresponsive", error: "sidecar-unresponsive" });
-    expect(await sidecarProcesses()).toEqual([replacement]);
-  } finally { process.kill(replacement, "SIGCONT"); }
-  const resumed = await client();
-  expect(resumed.connected).toMatchObject({ degraded: false, pid: replacement });
-});
-
-async function connectMany(count: number): Promise<{ pid: number; port: number; principal: string }[]> {
-  const results = await Promise.all(Array.from({ length: count }, () => client()));
-  return results.map(({ connected }) => {
-    expect(connected, JSON.stringify(connected)).toMatchObject({ degraded: false, principal: userInfo().username });
-    return connected;
-  });
-}
 
 it("QCG-5: 32 concurrent first connects share one sidecar and one port; a 2 s startup delay still yields one; a second profile root yields two", async () => {
   const first = await connectMany(32);

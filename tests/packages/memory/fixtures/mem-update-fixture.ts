@@ -1,8 +1,10 @@
 /** Shared real HTTP service and encrypted store for correction acceptance journeys. */
 
-import { dirname } from "node:path";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { userInfo } from "node:os";
 import type { Embedder } from "../../../../packages/memory/src/engine/extraction/embedding-provider-client";
+import { REM_SIDECAR_TOKEN_HEADER } from "../../../../packages/memory/src/contract/routes";
 import { startRemSidecar } from "../../../../packages/memory/src/sidecar/server";
 import { MemoryStore } from "../../../../packages/memory/src/store/store";
 import { createTestDb } from "../../../apps/mem-claw/helpers/test-db";
@@ -43,7 +45,8 @@ export async function createMemUpdateFixture(embedder: Embedder, overrides: Sett
 	async function post(path: string, body: unknown, skin = "mem-update-test") {
 		const response = await fetch(`http://127.0.0.1:${sidecar.port}${path}`, {
 			method: "POST",
-			headers: { "content-type": "application/json", "x-sno-station-mem-skin": skin },
+			headers: { "content-type": "application/json", "x-sno-station-mem-skin": skin,
+				[REM_SIDECAR_TOKEN_HEADER]: JSON.parse(readFileSync(join(profile, "station", "sidecar.json"), "utf8")).token },
 			body: JSON.stringify(body),
 		});
 		return { status: response.status, body: await response.json() as FixtureHttpBody };

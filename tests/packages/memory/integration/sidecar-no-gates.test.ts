@@ -14,6 +14,7 @@ import { pluginConfigSchema } from "../../../../packages/memory/config/plugin-co
 import { startSidecar } from "../../../../packages/memory/src/contract/start";
 import { connect } from "../../../../packages/memory/src/contract/client";
 import { readSettings } from "../../../../packages/memory/src/contract/profile";
+import { REM_SIDECAR_TOKEN_HEADER } from "../../../../packages/memory/src/contract/routes";
 import { startRemSidecar } from "../../../../packages/memory/src/sidecar/server";
 import { MemoryRuntimePool } from "../../../../packages/memory/src/sidecar/memory-runtime";
 import { readRemAutomaticOperations } from "../../../../packages/memory/src/sidecar/rem-trigger";
@@ -34,6 +35,9 @@ let database: ReturnType<typeof createTestDb>;
 let sidecar: Awaited<ReturnType<typeof startRemSidecar>> | undefined;
 const closers: Array<() => Promise<void>> = [];
 const previousProfile = process.env.SNO_PROFILE_DIR;
+
+/** The discovery token the service requires in the sidecar token header on every route except /healthz. */
+const tokenHeader = (token = JSON.parse(readFileSync(join(root, "station", "sidecar.json"), "utf8")).token) => ({ [REM_SIDECAR_TOKEN_HEADER]: token });
 
 /** The service reads `settings.json` once, when its runtime opens: write it before the runtime opens. */
 function writeSettings(overrides: SettingsDocument = {}): string {
@@ -68,8 +72,7 @@ afterEach(async () => {
 
 async function health(authenticated = true): Promise<void> {
 	sidecar = await startRemSidecar();
-	const token = JSON.parse(readFileSync(join(root, "station", "sidecar.json"), "utf8")).token;
-	const response = await fetch(`http://127.0.0.1:${sidecar.port}/healthz`, { headers: authenticated ? { Authorization: `Bearer ${token}` } : {} });
+	const response = await fetch(`http://127.0.0.1:${sidecar.port}/healthz`, { headers: authenticated ? tokenHeader() : {} });
 	expect(response.status).toBe(200);
 	expect((await response.json()).status).toBe("ok");
 }
@@ -77,14 +80,14 @@ async function health(authenticated = true): Promise<void> {
 async function contractPost(path: string, body: unknown, skin?: string): Promise<Response> {
 	if (!sidecar) throw new Error("missing test sidecar");
 	return fetch(`http://127.0.0.1:${sidecar.port}${path}`, {
-		method: "POST", headers: skin === undefined ? {} : { "x-sno-station-mem-skin": skin },
+		method: "POST", headers: { ...tokenHeader(), ...(skin === undefined ? {} : { "x-sno-station-mem-skin": skin }) },
 		body: JSON.stringify(body), signal: AbortSignal.timeout(30_000),
 	});
 }
 
 /** Waits until the service has prepared its embedding model: before that a capture is only accepted and recall answers `model-preparing`. */
 const modelReady = (port = sidecar?.port) => untilModelReady(async ({ scope, ...recall }) =>
-	(await fetch(`http://127.0.0.1:${port}/v1/get-recall`, { method: "POST", headers: { "x-sno-station-mem-skin": "model-ready-probe" },
+	(await fetch(`http://127.0.0.1:${port}/v1/get-recall`, { method: "POST", headers: { ...tokenHeader(), "x-sno-station-mem-skin": "model-ready-probe" },
 		body: JSON.stringify({ ...recall, scope: { ...scope, principal: userInfo().username } }), signal: AbortSignal.timeout(30_000) })).json());
 const poolReady = (pool: MemoryRuntimePool) => untilModelReady(({ scope, ...recall }) =>
 	pool.invoke("getRecall", { ...recall, scope: { ...scope, principal: userInfo().username } }, "model-ready-probe"));
@@ -99,10 +102,10 @@ function installRemEnhancedMode(): void {
 }
 
 // REM Enhanced sends REM2, REM6, REM7 and REM8 to the host model, so a REM run needs a skin with a model callback.
-async function connectHost(port: number): Promise<void> {
+async function connectHost(port: number, token?: string): Promise<void> {
 	const host = await startRecorder(closers, ({ raw }) => modelReply("{}", raw));
 	const response = await fetch(`http://127.0.0.1:${port}/v1/init`, {
-		method: "POST", headers: { "x-sno-station-mem-skin": "rem-host" }, signal: AbortSignal.timeout(30_000),
+		method: "POST", headers: { ...tokenHeader(token), "x-sno-station-mem-skin": "rem-host" }, signal: AbortSignal.timeout(30_000),
 		body: JSON.stringify({ scope: { principal: "caller", project: "global", session: "rem-host" }, registration: {
 			...registration({ baseUrl: `${host.url}/v1`, credential: "loopback-credential", model: "loopback-model" }),
 			skinId: "rem-host" } }),
@@ -176,7 +179,7 @@ describe("documented HTTP runtime claims", () => {
 		// fetch trims header values before sending; use node:http to send actual spaces.
 		const response = await new Promise<{ status: number | undefined; body: unknown }>((resolve, reject) => {
 			const request = httpRequest(url, {
-				method: "POST", headers: skin === undefined ? {} : { "x-sno-station-mem-skin": skin },
+				method: "POST", headers: { ...tokenHeader(), ...(skin === undefined ? {} : { "x-sno-station-mem-skin": skin }) },
 			}, incoming => {
 				let body = "";
 				incoming.on("data", chunk => { body += chunk; });
@@ -304,10 +307,10 @@ describe("documented HTTP runtime claims", () => {
 			const discovery = JSON.parse(readFileSync(discoveryPath, "utf8"));
 			expect(first).toEqual(discovery);
 			const healthResponse = await fetch(`http://127.0.0.1:${discovery.port}/healthz`, {
-				headers: { Authorization: `Bearer ${discovery.token}` }, signal: AbortSignal.timeout(5_000),
+				headers: tokenHeader(discovery.token), signal: AbortSignal.timeout(5_000),
 			});
 			expect(healthResponse.status).toBe(200);
-			expect(await healthResponse.json()).toMatchObject({ status: "ok", storePath: database.dbPath });
+			expect(await healthResponse.json()).toMatchObject({ status: "ok" });
 			const second = await startSidecar(memoryPackage);
 			expect(second).toEqual(first);
 			expect(JSON.parse(readFileSync(discoveryPath, "utf8")).pid).toBe(discovery.pid);
@@ -503,7 +506,7 @@ describe("sidecar keeps serving", () => {
 		const url = `http://127.0.0.1:${sidecar.port}/v1/init`;
 		writeSettings({ rem: { tick: false } });
 		const register = (skinId: string, extra: Record<string, unknown> = {}) => fetch(url, {
-			method: "POST", headers: { "x-sno-station-mem-skin": skinId },
+			method: "POST", headers: { ...tokenHeader(), "x-sno-station-mem-skin": skinId },
 			body: JSON.stringify({ scope: { principal: userInfo().username, project: "global", session: "tick-switch" },
 				registration: { skinId, ...extra } }),
 		});
@@ -530,10 +533,10 @@ describe("sidecar keeps serving", () => {
 			if (!sidecar) throw new Error("missing test sidecar");
 			await connectHost(sidecar.port);
 			const url = `http://127.0.0.1:${sidecar.port}/rem/run`;
-			const accepted = await fetch(url, { method: "POST", headers: { Connection: "close" }, body: JSON.stringify({ type: "rem-update", scope: "queued" }) });
+			const accepted = await fetch(url, { method: "POST", headers: { ...tokenHeader(), Connection: "close" }, body: JSON.stringify({ type: "rem-update", scope: "queued" }) });
 			expect(accepted.status).toBe(202);
 			await accepted.json();
-			const request = httpRequest(url, { method: "POST", headers: { Connection: "close" } });
+			const request = httpRequest(url, { method: "POST", headers: { ...tokenHeader(), Connection: "close" } });
 			const response = new Promise<number>((resolve, reject) => {
 				request.on("error", reject);
 				request.on("response", incoming => { incoming.resume(); incoming.on("end", () => resolve(incoming.statusCode ?? 0)); });
@@ -561,7 +564,7 @@ describe("sidecar keeps serving", () => {
 	it.each(["/v1/inspect", "/rem/run"])("rejects oversized request bodies at %s", async (route) => {
 		await health();
 		if (!sidecar) throw new Error("missing test sidecar");
-		const response = await fetch(`http://127.0.0.1:${sidecar.port}${route}`, { method: "POST",
+		const response = await fetch(`http://127.0.0.1:${sidecar.port}${route}`, { method: "POST", headers: tokenHeader(),
 			body: JSON.stringify({ scope: { principal: userInfo().username, project: "global", session: "x".repeat(8 * 1024 * 1024) }, op: { op: "list" } }),
 		});
 		expect(response.status).toBe(413);
@@ -573,7 +576,7 @@ describe("sidecar keeps serving", () => {
 		await health();
 		if (!sidecar) throw new Error("missing test sidecar");
 		const body = JSON.stringify({ scope: { principal: userInfo().username, project: "global", session: "limit" }, op: { op: "list" } });
-		const response = await fetch(`http://127.0.0.1:${sidecar.port}/v1/inspect`, { method: "POST", body: body.padEnd(8 * 1024 * 1024, " ") });
+		const response = await fetch(`http://127.0.0.1:${sidecar.port}/v1/inspect`, { method: "POST", headers: tokenHeader(), body: body.padEnd(8 * 1024 * 1024, " ") });
 		expect(response.status).toBe(200);
 		expect(await response.json()).toEqual({ degraded: false, result: { op: "list", project: "global", entries: [] } });
 	});
@@ -585,7 +588,7 @@ describe("sidecar keeps serving", () => {
 			[{ types: [], scope: "global" }, "invalid_request"],
 			[{ type: "typo", scope: "global" }, "unsupported_rem_type"],
 		] as const) {
-			const response = await fetch(`http://127.0.0.1:${sidecar.port}/rem/run`, { method: "POST", body: JSON.stringify(body) });
+			const response = await fetch(`http://127.0.0.1:${sidecar.port}/rem/run`, { method: "POST", headers: tokenHeader(), body: JSON.stringify(body) });
 			expect(response.status).toBe(400);
 			expect(await response.json()).toEqual(error === "unsupported_rem_type" ? { error, unknownTypes: ["typo"] } : { error });
 		}
@@ -595,7 +598,7 @@ describe("sidecar keeps serving", () => {
 	it("rejects mixed REM types without allocating jobs", async () => {
 		await health();
 		if (!sidecar) throw new Error("missing test sidecar");
-		const response = await fetch(`http://127.0.0.1:${sidecar.port}/rem/run`, { method: "POST",
+		const response = await fetch(`http://127.0.0.1:${sidecar.port}/rem/run`, { method: "POST", headers: tokenHeader(),
 			body: JSON.stringify({ types: ["typo", "rem-update", "old-operation"], scope: "global" }),
 		});
 		expect(response.status).toBe(400);
@@ -625,12 +628,12 @@ describe("sidecar keeps serving", () => {
 			await health();
 			if (!sidecar) throw new Error("missing test sidecar");
 			const scope = { principal: "caller", project: "global", session: "paused-write" };
-			await fetch(`http://127.0.0.1:${sidecar.port}/v1/inspect`, { method: "POST", body: JSON.stringify({ scope, op: { op: "list" } }) });
+			await fetch(`http://127.0.0.1:${sidecar.port}/v1/inspect`, { method: "POST", headers: tokenHeader(), body: JSON.stringify({ scope, op: { op: "list" } }) });
 			vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
 			const body = method === "capture"
 				? { scope, turn: { turnId: "paused-write", rewindEpoch: 0, messages: [{ role: "user", content: "I keep a violet notebook.", at: 1789606800000 }] } }
 				: { scope, op: { op: "store", content: "I keep a violet notebook.", category: "episodic" } };
-			const request = fetch(`http://127.0.0.1:${sidecar.port}/v1/${method}`, { method: "POST", body: JSON.stringify(body) });
+			const request = fetch(`http://127.0.0.1:${sidecar.port}/v1/${method}`, { method: "POST", headers: tokenHeader(), body: JSON.stringify(body) });
 			await entered.promise;
 			await vi.advanceTimersByTimeAsync(900_000);
 			vi.useRealTimers();
@@ -781,10 +784,10 @@ describe("sidecar keeps serving", () => {
 			await health();
 			if (!sidecar) throw new Error("missing test sidecar");
 			const body = JSON.stringify({ scope: { principal: "caller", project: "global", session: "deadline" }, op: { op: "list" } });
-			const response = await fetch(`http://127.0.0.1:${sidecar.port}/v1/inspect`, { method: "POST", body });
+			const response = await fetch(`http://127.0.0.1:${sidecar.port}/v1/inspect`, { method: "POST", headers: tokenHeader(), body });
 			expect(response.status).toBe(504);
 			expect(await response.json()).toEqual({ degraded: true, reason: "timeout" });
-			const later = await fetch(`http://127.0.0.1:${sidecar.port}/v1/inspect`, { method: "POST", body });
+			const later = await fetch(`http://127.0.0.1:${sidecar.port}/v1/inspect`, { method: "POST", headers: tokenHeader(), body });
 			expect(later.status).toBe(200);
 			expect(await later.json()).toEqual({ degraded: false, result: { op: "list", project: "global", entries: [] } });
 			const stopping = sidecar.stop();
@@ -818,7 +821,7 @@ describe("sidecar keeps serving", () => {
 		try {
 			await health();
 			if (!sidecar) throw new Error("missing test sidecar");
-			const request = fetch(`http://127.0.0.1:${sidecar.port}/v1/inspect`, { method: "POST", signal: controller.signal,
+			const request = fetch(`http://127.0.0.1:${sidecar.port}/v1/inspect`, { method: "POST", headers: tokenHeader(), signal: controller.signal,
 				body: JSON.stringify({ scope: { principal: "caller", project: "global", session: "shutdown" }, op: { op: "list" } }),
 			}).catch(() => undefined);
 			await entered.promise;
@@ -855,9 +858,9 @@ describe("sidecar keeps serving", () => {
 			await health();
 			if (!sidecar) throw new Error("missing test sidecar");
 			const scope = { principal: "caller", project: "global", session: "abort" };
-			await fetch(`http://127.0.0.1:${sidecar.port}/v1/inspect`, { method: "POST", body: JSON.stringify({ scope, op: { op: "list" } }) });
+			await fetch(`http://127.0.0.1:${sidecar.port}/v1/inspect`, { method: "POST", headers: tokenHeader(), body: JSON.stringify({ scope, op: { op: "list" } }) });
 			vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
-			const request = fetch(`http://127.0.0.1:${sidecar.port}/v1/get-recall`, { method: "POST",
+			const request = fetch(`http://127.0.0.1:${sidecar.port}/v1/get-recall`, { method: "POST", headers: tokenHeader(),
 				body: JSON.stringify({ scope, query: "What notebook records do you remember?", options }),
 			});
 			await entered.promise;
@@ -948,7 +951,7 @@ describe("sidecar keeps serving", () => {
 	it("answers an unfinished memory request at its route deadline and keeps serving", async () => {
 		await health();
 		if (!sidecar) throw new Error("missing test sidecar");
-		const request = httpRequest(`http://127.0.0.1:${sidecar.port}/v1/inspect`, { method: "POST" });
+		const request = httpRequest(`http://127.0.0.1:${sidecar.port}/v1/inspect`, { method: "POST", headers: tokenHeader() });
 		let timer: ReturnType<typeof setTimeout> | undefined;
 		const result = new Promise<{ status: number; body: unknown }>((resolve) => {
 			request.on("response", response => {
@@ -1071,12 +1074,12 @@ describe("sidecar keeps serving", () => {
 			const connected = await contractPost("/v1/init", { scope: { principal: "caller", project: "global", session: "rem-host" },
 				registration: registration({ baseUrl: `http://127.0.0.1:${address.port}/v1`, credential: "loopback-credential", model: "loopback-model" }) });
 			expect(connected.status).toBe(200);
-			const response = await fetch(`http://127.0.0.1:${sidecar.port}/rem/run`, { method: "POST", headers: { Authorization: `Bearer ${JSON.parse(readFileSync(join(root, "station", "sidecar.json"), "utf8")).token}` }, body: JSON.stringify({ type: "rem-update", scope: "global" }) });
+			const response = await fetch(`http://127.0.0.1:${sidecar.port}/rem/run`, { method: "POST", headers: tokenHeader(), body: JSON.stringify({ type: "rem-update", scope: "global" }) });
 			expect(response.status).toBe(202);
 			const started = await response.json();
 			let job: { state?: string; stats?: { operations: number }; error?: string } = {};
 			for (let attempt = 0; attempt < 100; attempt++) {
-				job = await (await fetch(`http://127.0.0.1:${sidecar.port}/rem/jobs/${started.job_id}`, { headers: { Authorization: `Bearer ${JSON.parse(readFileSync(join(root, "station", "sidecar.json"), "utf8")).token}` } })).json();
+				job = await (await fetch(`http://127.0.0.1:${sidecar.port}/rem/jobs/${started.job_id}`, { headers: tokenHeader() })).json();
 				if (job.state === "done" || job.state === "failed") break;
 				await delay(100);
 			}
@@ -1228,9 +1231,9 @@ it("excludes jobs accepted before recovery finishes from the startup snapshot", 
 	const publication = vi.spyOn(filesystem, "rename").mockImplementation(async (source, destination) => {
 		if (destination === discoveryPath) {
 			const discovery = JSON.parse(readFileSync(source, "utf8"));
-			await connectHost(discovery.port);
+			await connectHost(discovery.port, discovery.token);
 			const response = await fetch(`http://127.0.0.1:${discovery.port}/rem/run`, {
-				method: "POST", body: JSON.stringify({ type: "rem-update", scope: "global" }),
+				method: "POST", headers: tokenHeader(discovery.token), body: JSON.stringify({ type: "rem-update", scope: "global" }),
 				signal: AbortSignal.timeout(5_000),
 			});
 			accepted = { status: response.status, job_id: (await response.json()).job_id };
@@ -1284,7 +1287,7 @@ it("holds the socket after shutdown times out until the runtime task settles", a
 	try {
 		await health();
 		if (!sidecar) throw new Error("missing test sidecar");
-		request = fetch(`http://127.0.0.1:${sidecar.port}/v1/inspect`, { method: "POST", signal: controller.signal,
+		request = fetch(`http://127.0.0.1:${sidecar.port}/v1/inspect`, { method: "POST", headers: tokenHeader(), signal: controller.signal,
 			body: JSON.stringify({ scope: { principal: "caller", project: "global", session: "shutdown-guard" }, op: { op: "list" } }),
 		}).catch(() => undefined);
 		await entered.promise;
