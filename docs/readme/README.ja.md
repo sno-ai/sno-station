@@ -43,8 +43,23 @@ Apache-2.0、隅々まで。メモリストアは最初の使用時からあな�
 
 ## Install
 
-*最終更新 2026-09-19。* まだです。ワンコマンドインストールはオンボーディングスキルとともに
-到着します。それまではこのリポジトリを見守ってください。到着すると、次のようになります。
+*最終更新 2026-10-01。* **共有メモリは今日からインストールできます。** Claude Code、Codex、OpenClaw、Hermes Agent に、アカウントも API キーも不要の、あなたのマシン上の暗号化されたメモリをひとつ持たせます。[共有メモリのセットアップ](../memory-setup.md)を一度だけ実行し（数分）、そのあとエージェントを追加します。
+
+```bash
+# Codex CLI
+npm install -g @snoai/mem-codex@1.0.1 && sno-mem-codex install --codex-home ~/.codex
+# Claude Code
+npm install -g @snoai/mem-claude@1.0.1 && sno-mem-claude install --config-dir ~/.claude
+# OpenClaw
+openclaw plugins install @snoai/mem-claw@1.0.1
+# Hermes Agent
+hermes plugins install sno-ai/sno-station/apps/mem-hermes/sno-mem-hermes --enable
+hermes config set memory.provider sno-mem-hermes
+```
+
+ウォークスルー： [Codex](../mem-codex/onboarding.md) · [Claude Code](../mem-claude/onboarding.md) · [OpenClaw](../mem-claw/onboarding.md) · [Hermes](../mem-hermes/onboarding.md)
+
+Sno Reach、Duo のスキル、夜間ループはまだこれらのパッケージに含まれていません。すべてをまとめたワンコマンドインストールはこれからで、オンボーディングスキルとともに到着します。それまではこのリポジトリを見守ってください。到着すると、次のようになります。
 
 ```bash
 # inside any Claude Code, Codex or OpenClaw conversation:

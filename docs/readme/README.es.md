@@ -40,9 +40,23 @@ uses con tu agente, y este README se publica en nueve.
 
 ## Install
 
-*Última actualización 2026-09-19.* Todavía no. La instalación de un solo comando llega con la
-habilidad de incorporación; hasta entonces, sigue este repositorio. Cuando llegue, se verá
-así:
+*Última actualización 2026-10-01.* **La memoria compartida se instala hoy.** Da a Claude Code, Codex, OpenClaw y Hermes Agent una memoria cifrada en tu máquina, sin cuenta y sin clave de API. Ejecuta una vez la [configuración de la memoria compartida](../memory-setup.md) (unos minutos) y luego añade tu agente:
+
+```bash
+# Codex CLI
+npm install -g @snoai/mem-codex@1.0.1 && sno-mem-codex install --codex-home ~/.codex
+# Claude Code
+npm install -g @snoai/mem-claude@1.0.1 && sno-mem-claude install --config-dir ~/.claude
+# OpenClaw
+openclaw plugins install @snoai/mem-claw@1.0.1
+# Hermes Agent
+hermes plugins install sno-ai/sno-station/apps/mem-hermes/sno-mem-hermes --enable
+hermes config set memory.provider sno-mem-hermes
+```
+
+Guías: [Codex](../mem-codex/onboarding.md) · [Claude Code](../mem-claude/onboarding.md) · [OpenClaw](../mem-claw/onboarding.md) · [Hermes](../mem-hermes/onboarding.md)
+
+Sno Reach, las habilidades del Duo y el ciclo nocturno todavía no están en estos paquetes. La instalación de un solo comando para todo aún está por llegar: llega con la habilidad de incorporación y, hasta entonces, sigue este repositorio. Cuando llegue, se verá así:
 
 ```bash
 # dentro de cualquier conversación de Claude Code, Codex u OpenClaw:

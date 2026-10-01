@@ -41,8 +41,23 @@ dans chaque clé et recherche. Les compétences Duo sont écrites pour
 
 ## Installation
 
-*Dernière mise à jour le 2026-09-19.* Pas encore. L'installation en une commande arrive avec la compétence
-d'accueil ; d'ici là, surveillez ce dépôt. Quand elle arrivera, cela ressemblera à ceci :
+*Dernière mise à jour le 2026-10-01.* **La mémoire partagée s'installe dès aujourd'hui.** Elle donne à Claude Code, Codex, OpenClaw et Hermes Agent une mémoire chiffrée sur votre machine, sans compte et sans clé d'API. Lancez une fois la [configuration de la mémoire partagée](../memory-setup.md) (quelques minutes), puis ajoutez votre agent :
+
+```bash
+# Codex CLI
+npm install -g @snoai/mem-codex@1.0.1 && sno-mem-codex install --codex-home ~/.codex
+# Claude Code
+npm install -g @snoai/mem-claude@1.0.1 && sno-mem-claude install --config-dir ~/.claude
+# OpenClaw
+openclaw plugins install @snoai/mem-claw@1.0.1
+# Hermes Agent
+hermes plugins install sno-ai/sno-station/apps/mem-hermes/sno-mem-hermes --enable
+hermes config set memory.provider sno-mem-hermes
+```
+
+Parcours : [Codex](../mem-codex/onboarding.md) · [Claude Code](../mem-claude/onboarding.md) · [OpenClaw](../mem-claw/onboarding.md) · [Hermes](../mem-hermes/onboarding.md)
+
+Sno Reach, les compétences Duo et la boucle nocturne ne sont pas encore dans ces paquets. L'installation en une commande pour l'ensemble reste à venir : elle arrive avec la compétence d'accueil ; d'ici là, surveillez ce dépôt. Quand elle arrivera, cela ressemblera à ceci :
 
 ```bash
 # inside any Claude Code, Codex or OpenClaw conversation:
