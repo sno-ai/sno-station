@@ -3,10 +3,11 @@ import { homedir } from "node:os";
 import { isAbsolute, join, resolve } from "node:path";
 import { doctor } from "./doctor.js";
 import { correctCommand, getCommand, recallCommand, rememberCommand } from "./explicit.js";
-import { sessionStart, stop, userPromptSubmit } from "./hooks.js";
+import { postToolUse, preToolUse, sessionEnd, sessionStart, stop, userPromptSubmit } from "./hooks.js";
 import { installCodex } from "./install.js";
 import { importRepository, importUser } from "./import.js";
 import { MESSAGES } from "./messages.js";
+import { workspaceRoot } from "./scope.js";
 import { runWorker } from "./worker.js";
 
 async function readStdin(): Promise<unknown> {
@@ -35,6 +36,18 @@ async function main(): Promise<number> {
 		await stop(await readStdin());
 		return 0;
 	}
+	if (command === "session-end") {
+		await sessionEnd(await readStdin());
+		return 0;
+	}
+	if (command === "pre-tool-use") {
+		await preToolUse(await readStdin());
+		return 0;
+	}
+	if (command === "post-tool-use") {
+		await postToolUse(await readStdin());
+		return 0;
+	}
 	if (command === "worker") {
 		await runWorker();
 		return 0;
@@ -57,9 +70,10 @@ async function main(): Promise<number> {
 	if (command === "import") {
 		const codexHome = process.env["CODEX_HOME"] ?? join(homedir(), ".codex");
 		const repo = option(args, "--repo");
+		if (!args.includes("--user") && (!repo || !isAbsolute(repo))) throw new Error("import requires --user or --repo <absolute-root>");
 		const result = args.includes("--user")
 			? await importUser(codexHome)
-			: repo && isAbsolute(repo) ? await importRepository(repo) : undefined;
+			: repo && isAbsolute(repo) ? await importRepository(await workspaceRoot(repo)) : undefined;
 		if (!result) throw new Error("import requires --user or --repo <absolute-root>");
 		process.stdout.write(`blocks fed: ${result.blocksFed}\nreceipt: ${result.receiptPath}\n`);
 		return 0;
@@ -96,6 +110,9 @@ async function main(): Promise<number> {
 
 main().then(code => {
 	process.exitCode = code;
+	if (process.argv[2] === "session-start") {
+		process.stdout.write("", () => process.exit(code));
+	}
 }, error => {
 	const reason = error instanceof Error ? error.message : "engine-failed";
 	process.stderr.write(`${reason}\n`);
