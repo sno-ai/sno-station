@@ -6,9 +6,9 @@
 import { createUUIDv7 } from "@snoai/common-core";
 import { createLogger, currentLogContext, withLogContext } from "@snoai/utils/logger";
 import type { AnyAgentTool, OpenClawPluginApi } from "openclaw/plugin-sdk/core";
-import { appendAuditEntry } from "@snoai/sno-station-mem/internal/engine/operations/runtime-audit-log";
-import type { PluginObservability } from "@snoai/sno-station-mem/internal/engine/observability/adapter";
-import { bestEffortSync } from "@snoai/sno-station-mem/internal/engine/observability/best-effort";
+import { appendAuditEntry } from "@snoai/memory/internal/engine/operations/runtime-audit-log";
+import type { PluginObservability } from "@snoai/memory/internal/engine/observability/adapter";
+import { bestEffortSync } from "@snoai/memory/internal/engine/observability/best-effort";
 
 type SessionUuidProvider = () => string | undefined;
 type ToolRegistration = Parameters<OpenClawPluginApi["registerTool"]>[0];
@@ -55,7 +55,7 @@ async function emitToolCall(
 			decision: "allow",
 			input_hash: observability.hashText(stablePayload(params)) ?? eventId,
 			output_hash: observability.hashText(stablePayload(result)) ?? eventId,
-			latency_ms: Date.now() - started,
+			latency_ms: Math.max(0, Math.round(Date.now() - started)),
 		},
 	});
 }
@@ -84,34 +84,28 @@ function wrapTool(
 			const started = Date.now();
 			const diagnosticStarted = performance.now();
 			const eventId = createUUIDv7();
-			const sampled = observability.shouldSampleTool(eventId, tool.name);
 			let resultStatus: "ok" | "error" = "ok";
 			try {
 				const result = await executeWithToolThis.call(tool, toolCallId, params, signal, onUpdate);
 				if (toolResultIsError(result)) {
 					resultStatus = "error";
 					const sessionUuid = sessionUuidProvider();
-					observability.trackBestEffort("tool_throw", () =>
-						observability.emitError("tool_throw", result, sessionUuid),
+					observability.trackBestEffort("tool.call:throw", () =>
+						observability.emitError("tool.call:throw", result, sessionUuid),
 					);
 				}
-				if (sampled) {
-					const sessionUuid = sessionUuidProvider();
-					observability.trackBestEffort("tool.call", () =>
-						emitToolCall(observability, sessionUuid, tool.name, params, result, eventId, started),
-					);
-				}
+				observability.trackBestEffort("tool.call", () =>
+					emitToolCall(observability, sessionUuidProvider(), tool.name, params, result, eventId, started),
+				);
 				return result;
 			} catch (error) {
 				resultStatus = "error";
 				const sessionUuid = sessionUuidProvider();
-				if (sampled) {
-					observability.trackBestEffort("tool.call", () =>
-						emitToolCall(observability, sessionUuid, tool.name, params, error, eventId, started),
-					);
-				}
-				observability.trackBestEffort("tool_throw", () =>
-					observability.emitError("tool_throw", error, sessionUuid),
+				observability.trackBestEffort("tool.call", () =>
+					emitToolCall(observability, sessionUuid, tool.name, params, error, eventId, started),
+				);
+				observability.trackBestEffort("tool.call:throw", () =>
+					observability.emitError("tool.call:throw", error, sessionUuid),
 				);
 				throw error;
 			} finally {

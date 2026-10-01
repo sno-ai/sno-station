@@ -6,17 +6,17 @@
 import { mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, join, relative as relativePath, resolve } from "node:path";
 import type { MemoryPluginPublicArtifact } from "openclaw/plugin-sdk/memory-host-core";
-import { MAX_LIST_LIMIT } from "@snoai/sno-station-mem/internal/config/index";
-import { listCanonicalMemoryFiles } from "@snoai/sno-station-mem/internal/engine/provider/canonical-memory-corpus";
+import { MAX_LIST_LIMIT } from "@snoai/memory/internal/config/index";
+import { listCanonicalMemoryFiles } from "@snoai/memory/internal/engine/provider/canonical-memory-corpus";
 import {
 	isProviderRowArtifactFileName,
 	isProviderRowId,
 	providerRowPath,
 	renderProviderRowMemory,
-} from "@snoai/sno-station-mem/internal/engine/provider/provider-row-renderer";
-import { ContractError } from "@snoai/sno-station-mem/client";
+} from "@snoai/memory/internal/engine/provider/provider-row-renderer";
+import { ContractError } from "@snoai/memory/client";
 import type { MemoryConnection, HostMemoryContext } from "../install/memory-connection";
-import type { MemoryEntry } from "@snoai/sno-station-mem/internal/engine/shared/types";
+import type { MemoryEntry } from "@snoai/memory/internal/engine/shared/types";
 
 const PROVIDER_PROJECT_ID_RE =
 	/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;

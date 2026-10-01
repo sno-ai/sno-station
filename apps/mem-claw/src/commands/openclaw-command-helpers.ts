@@ -1,8 +1,8 @@
 import { open, stat } from "node:fs/promises";
 
-import { LAST_JSON_LINE_CHUNK_BYTES } from "@snoai/sno-station-mem/internal/config/index";
-import { parseAgentIdFromSessionKey } from "@snoai/sno-station-mem/internal/engine/security/scopes";
-import { ConfigError } from "@snoai/sno-station-mem/internal/engine/shared/errors";
+import { LAST_JSON_LINE_CHUNK_BYTES } from "@snoai/memory/internal/config/index";
+import { parseAgentIdFromSessionKey } from "@snoai/memory/internal/engine/security/scopes";
+import { ConfigError } from "@snoai/memory/internal/engine/shared/errors";
 
 type PluginCommandContext = {
 	args?: string;

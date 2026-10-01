@@ -6,7 +6,7 @@
 
 import { createLogger as createDiagnosticLogger } from "@snoai/utils/logger";
 const diagnosticLog = createDiagnosticLogger("mem-claw:conversation-access-policy");
-import { isGatewayMode } from "@snoai/sno-station-mem/internal/engine/bindings/sno-station-mem-runtime-mode";
+import { isGatewayMode } from "@snoai/memory/internal/engine/bindings/sno-station-mem-runtime-mode";
 import type { SnoStationMemPluginApi } from "../tools/memory-tool-dependencies";
 import { APP_NAME, MINIMUM_CONVERSATION_GATE_VERSION } from "../constants";
 

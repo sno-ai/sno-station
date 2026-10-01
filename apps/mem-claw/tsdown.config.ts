@@ -24,4 +24,4 @@ const sharedConfig = {
 	},
 };
 
-export default defineConfig({ ...sharedConfig, entry: { "memdump": "src/commands/memdump.ts", "diagnostic-encoder": "src/install/diagnostic-encoder.ts", "plugin/openclaw-plugin-runtime": "src/install/openclaw-plugin-runtime.ts", "self-upgrade/entry-shim": "src/install/entry-shim.ts" }, clean: true });
+export default defineConfig({ ...sharedConfig, entry: { "memdump": "src/commands/memdump.ts", "diagnostic-encoder": "src/install/diagnostic-encoder.ts", "plugin/openclaw-plugin-runtime": "src/install/openclaw-plugin-runtime.ts" }, clean: true });
