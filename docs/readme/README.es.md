@@ -141,7 +141,7 @@ direcciones y los ids de sesión están redactados; nada más se toca.
 | Pieza | Estado |
 |---|---|
 | `packages/chunking` | En este repositorio, probado, publicado en npm |
-| Paquetes compartidos (`common-core`, `utils`, `embedder`, `sno-observe`, `sno-station-core-crypto`, `content-sanitizer`) | En este repositorio |
+| Paquetes compartidos (`common-core`, `utils`, `embedder`, `observability`, `sqlite-crypto`, `content-sanitizer`) | En este repositorio |
 | Memoria compartida entre Claude Code, Codex y OpenClaw | Motor y las tres pieles en este repositorio; prueba en máquina limpia pendiente |
 | Sno Reach — agentes hablando entre sí, sin daemon | Código fuente en este repositorio; archivos de lanzamiento pendientes |
 | El bucle RSI (habilidad) | Esta semana |

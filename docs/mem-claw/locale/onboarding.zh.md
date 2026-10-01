@@ -51,29 +51,20 @@ Local First 适合完全本地运行：
 
 Agent Native 使用 OpenClaw agent 自己的 model，内联处理 memory write。
 
-设置顺序固定：
-
-1. 检测 host 是否已经有可用的 model subscription。
-2. 如果有，直接使用并完成设置。
-3. 如果没有，先问 key provider（OpenAI 或 OpenRouter），再收 API key 完成设置。
-
-subscription 和自带 key 只是同一个 Agent Native 模式里的 transport 差异。两条路径的
-memory routing 与用户看到的行为完全相同。
-
-功能上有一处差别：subscription transport 只跑 extraction。模型撰写的 reflection summary
-（LLM mode `extraction+reflection`）在自带 key 或 REM Enhanced 下提供。
+设置时不收任何 key：Agent Native 一律借用 host agent 自己的模型。它只跑 extraction；
+模型撰写的 reflection summary（LLM mode `extraction+reflection`）只在 REM Enhanced 下提供。
 
 找到可用的 model access 后 Agent Native 立即启用，模型调用内联执行。
 
 ### REM Enhanced
 
-REM Enhanced 让 Sno GPU 负责 LoRA 覆盖的 extraction 与 conflict occasion，其余需要模型
+REM Enhanced 让 Sno GPU 负责 LoRA 覆盖的 extraction 与 conflict call，其余需要模型
 判断的 memory write 由 host agent model 处理。向导会问一个可选的 Sno base URL（留空用默认）
 和必需的 Sno key；host model 调用沿用 agent 自己的 model 配置。
 
 ## 第二步：确认其他默认值
 
-向导接着问 rerank、recall 深度（Default 或 Lean），以及在 OpenClaw memory slot 为空时是否
+向导接着问 recall 深度（Default 或 Lean），以及在 OpenClaw memory slot 为空时是否
 把本 plugin 放进去。
 
 标准默认值如下：
@@ -91,29 +82,28 @@ REM Enhanced 让 Sno GPU 负责 LoRA 覆盖的 extraction 与 conflict occasion�
 
 每个模式的默认 routing 如下：
 
-| Memory-writing occasion | Local First | Agent Native | REM Enhanced |
+| Memory-writing call | Local First | Agent Native | REM Enhanced |
 | --- | --- | --- | --- |
 | Capture memories | 规则式、原文式 | Host model | Sno extraction model |
 | Classify active tasks | Keyword rules | Host model | Host model |
 | Merge profile sections | Deterministic merge | Host model | Host model |
 | Match completed tasks | Token overlap | Host model | Host model |
 | Resolve conflicts | 两条都保留 | Host model | Sno conflict model |
-| Build reflection summary | 不生成 model reflection；仍保留 local session memory | Host model，仅 key transport | Host model |
+| Build reflection summary | 不生成 model reflection；仍保留 local session memory | 同 Local First | Host model |
 | Resolve relative dates | 不调用模型 | Host model | Host model |
 
-Agent Native 与 REM Enhanced 不会把任何 memory-writing occasion 永久关掉。单次 model
+Agent Native 与 REM Enhanced 不会把任何 memory-writing call 永久关掉。单次 model
 request 失败时，只对该次请求使用对应的 Local First 行为，不会偷偷切到另一个 model tier。
 
-REM Enhanced 下每个 occasion 走哪一层是 `remEnhanced.occasions` 里的配置开关，上表是发布
-默认值；改动是配置决定，不是改代码。
+REM Enhanced 的模型调用目标由所选模式决定，不能按用途单独修改。
 
-两个 REM operation 会按周期触发在整个 store 上运行，任何 mode 下都走 Sno 模型：
+两个 REM operation 会按周期触发在整个 store 上运行，模型调用目标由所选模式决定：
 
 - `rem-update`：把过程叙述改写成干净的当前态 memory，同时保留历史；
 - `rem-replace`：在整个 store 上裁决矛盾，把落败的 memory 可逆地软关闭。
 
 安装器默认两个都请求；只要其中一个时用 `--rem-operations rem-update` 或
-`--rem-operations rem-replace`，把 `remEnhanced.trigger.tick` 设为 `false` 可关掉触发。
+`--rem-operations rem-replace`，把 `remEnhanced.trigger.tick` 设为 `false` 可关掉触发。这个设置只在第一次建立记忆存储时读取一次。
 
 Mode selection 不承诺最终 retrieval 或 reranker 行为。
 
@@ -121,7 +111,7 @@ Mode selection 不承诺最终 retrieval 或 reranker 行为。
 
 完成信息会写明：
 
-- 选中的 memory profile、embedder、LLM mode、rerank；
+- 选中的 memory profile、embedder、LLM mode；
 - plugin 是否已分配到 OpenClaw memory slot；
 - 该 mode 需要的环境变量，没有则写 `none`；
 - 重启 OpenClaw gateway 的确切命令；
@@ -198,8 +188,7 @@ npx @snoai/mem-claw --configure
 
 - 先选 mode，再问 provider 细节；
 - Local First 无需 LLM credential 即可完成；
-- Agent Native 优先使用 host subscription，没有时询问 key provider 和 key；
-- subscription 与 key-based Agent Native 的 routing 完全相同；
+- Agent Native 借用 host agent 的模型，不询问任何 key；
 - REM Enhanced 用公开语言说明 Sno 与 host model 各自负责的工作；
 - 完成信息写明重启命令和所需环境变量；
 - 重启后 `/memory status` 可用，安装器 status 能读到保存的 setup；

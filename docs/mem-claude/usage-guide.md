@@ -1,6 +1,6 @@
 # Sno Memory for Claude Code — Usage Guide
 
-This guide covers the public npm installation, three memory modes, common commands, and safe
+This guide covers the public npm installation, memory modes, common commands, and safe
 configuration changes for `@snoai/mem-claude`.
 
 ## Install and first run
@@ -13,18 +13,16 @@ Requirements:
 
 ### Install
 
+Complete the [shared memory setup](../memory-setup.md), then run:
+
 ```bash
-npm install -g @snoai/mem-claude
-npx --package @snoai/sno-station-mem sno-station-mem bind ~/.sno/sno-station-mem/$USER/memory.sqlite
+npm install -g @snoai/mem-claude@1.0.0
 sno-mem-claude install --config-dir ~/.claude
 ```
 
-The first command installs the client. The second binds the memory store once per machine user
-and records the memory mode. The third writes the three hook groups and one permission rule into
-`settings.json` and the skill into the Claude configuration directory.
-
-Use the published npm package for public installs. Do not build from a private monorepo, copy a
-local build to another machine, or configure a private service address.
+`SNO_PROFILE_DIR` selects the profile root (default `~/.sno`). The shared setup
+writes `<profile root>/settings.json` with the memory mode, store path, and key.
+Keep a private backup of that file for store recovery.
 
 Open a new Claude Code session inside a git repository, then check the installation:
 
@@ -61,7 +59,7 @@ does not depend on a network service.
 
 ### Agent Native
 
-Agent Native is the default. It sends every model-assisted memory-writing occasion to your own
+When selected, Agent Native sends every model-assisted memory-writing call to your own
 Claude Code.
 
 The capture worker starts `claude -p` for each model call: one turn, hooks disabled, no tools, no
@@ -72,7 +70,7 @@ collected, and this client has no bring-your-own-key transport.
 ### REM Enhanced
 
 REM Enhanced splits model-assisted memory work by capability. The Sno GPU handles the
-LoRA-covered occasions; your Claude Code handles the rest:
+LoRA-covered calls; your Claude Code handles the rest:
 
 - Sno handles memory extraction.
 - Sno handles conflict adjudication.
@@ -94,48 +92,29 @@ silently reroute it to another model tier.
 | Reflection summary | No model reflection; local session memory remains | Same | Same |
 | Relative-date resolution | No model call | Your Claude Code | Your Claude Code |
 
-No occasion is off in Agent Native or REM Enhanced. Model-assisted writes run in the background
+No call is off in Agent Native or REM Enhanced. Model-assisted writes run in the background
 capture worker and fall back per request to the matching Local First behavior when necessary.
 
-In REM Enhanced, every occasion's tier is a switch under `remEnhanced.occasions` in the bind JSON
-(`snoRemMem` or `agent`). The table shows the defaults.
+In REM Enhanced, the selected mode fixes each model call's destination as shown above.
 
-Two REM operations run over the store on a periodic trigger and use the Sno models in every
+Two REM operations run over the store on a periodic trigger and route model calls by the selected
 mode:
 
 - `rem-update` rewrites transition narratives into current-state memories and keeps the history;
 - `rem-replace` adjudicates contradictions across the store and soft-closes the loser reversibly.
 
-Both are requested by default. `remOperations` in the bind JSON requests one, and
-`remEnhanced.trigger.tick: false` turns the trigger off.
+Both are requested by default. Change `rem.operations` in `settings.json` to request one, or
+set `rem.tick` to `false` to turn the trigger off.
 
 Mode selection governs memory writing. It does not make final claims about retrieval or reranker
 routing.
 
 ## Change modes
 
-The mode lives in the store binding, and the bind command refuses to overwrite one. To change it,
-remove the two binding files for your user and bind again with the new mode:
-
-```bash
-rm ~/.sno/station/sno-station-mem-$USER.binding.json ~/.sno/station/sno-station-mem-$USER.config.json
-echo '{"mode":"local-first"}' | npx --package @snoai/sno-station-mem sno-station-mem bind ~/.sno/sno-station-mem/$USER/memory.sqlite
-```
-
-Bind the same store path as before; the memory library is untouched. The next capture worker
-registers with the new mode.
-
-Other bind settings, all optional and all in the same JSON:
-
-| Key | Effect |
-| --- | --- |
-| `mode` | `local-first`, `agent-native`, or `rem-enhanced` |
-| `embedding` | Local embedder settings; never a credential |
-| `retrieval` | Retrieval settings such as recall depth; never a credential |
-| `rerankKeyRef` | The name of the environment variable holding a rerank key |
-| `remOperations` | `["rem-update"]`, `["rem-replace"]`, or both |
-| `remEnhanced` | Per-occasion tiers and the REM trigger switch |
-| `autoRecallTimeoutMs` | Auto-recall deadline in milliseconds |
+The mode lives in `<profile root>/settings.json`. Edit it to change the mode.
+Keep the same `store.path` and `store.encryptionKey` for an existing store;
+a replacement key cannot open it. The file also holds `embedding`, `rerank`,
+`recall`, and `rem` settings.
 
 ## Common defaults
 
@@ -220,7 +199,7 @@ npx --package @snoai/mem-claw sno-memdump --db ~/.sno/sno-station-mem/$USER/memo
 | Variable | Default | Meaning |
 | --- | --- | --- |
 | `CLAUDE_CONFIG_DIR` | `~/.claude` | The Claude configuration directory that `doctor` and `import` read; `install` takes it as `--config-dir` |
-| `SNO_PROFILE_DIR` | `~/.sno` | The Sno profile that holds the store binding, the sidecar, and this client's state |
+| `SNO_PROFILE_DIR` | `~/.sno` | The Sno profile that holds `settings.json`, the memory service, and this client's state |
 
 The install command writes into the Claude configuration directory:
 
@@ -251,17 +230,17 @@ npm install -g @snoai/mem-claude
 sno-mem-claude install --config-dir ~/.claude
 ```
 
-The memory library is the bound store file. It is encrypted, and normal reinstall preserves it.
-Back it up before any manual change to the store or the binding.
+The memory library is the encrypted file at `store.path`. Normal reinstall preserves it.
+Back up that file and `settings.json` together; the file holds the only encryption key.
 
 ## Privacy and credentials
 
 - Memory data is stored in encrypted local SQLite storage.
 - Local First sends no memory text to an LLM service.
 - Agent Native sends model-assisted memory work to your own Claude Code on your subscription.
-- REM Enhanced uses Sno only for the memory-specialized occasions listed above.
+- REM Enhanced uses Sno only for the memory-specialized calls listed above.
 - Injected memory blocks are labelled as data, not instructions.
-- The bind JSON records key names, never key values; a credential in it is refused.
+- `settings.json` holds the store key and Sno GPU key; keep the file private and backed up.
 - Public setup never requires a private hostname, virtual-machine name, local repository path, or
   internal service token.
 
@@ -273,16 +252,16 @@ and the VS Code extension are not claimed.
 
 ## Troubleshooting
 
-### `doctor` says the sidecar is unavailable
+### `doctor` says the memory service is unavailable
 
-The sidecar starts on demand. Run any memory command inside a repository, then run `doctor` again.
-If it stays unavailable, read `~/.sno/sno-station-mem/sidecar-startup.log`.
+The memory service starts on demand. For a new profile, follow the [shared memory setup](../memory-setup.md);
+for an existing store, preserve its key while correcting the settings. Then run a memory command
+and `doctor` again. If it stays unavailable, read `<profile root>/sno-station-mem/sidecar-startup.log`.
 
 ### `doctor` shows `absent`, `disabled`, or `unparsable` for a hook
 
-`absent` means the hook group is missing: run `install` again. `disabled` means `settings.json`
-sets `disableAllHooks`: remove that setting. `unparsable` means `settings.json` is not valid JSON:
-fix the file by hand, then run `install` again.
+`absent` means the hook group is missing: run `install` again. For invalid memory settings,
+check `<profile root>/settings.json` and preserve the existing key.
 
 ### A memory command prints `no-repository-root`
 
@@ -301,7 +280,7 @@ was interrupted.
 4. Read `~/.sno/sno-mem-claude/worker.log` for the capture worker's result.
 5. Confirm `claude` is on the PATH of the shell that started Claude Code; the worker runs it.
 
-### The bind command says the binding already exists
+### Memory settings are unavailable
 
-The store is already bound for this user. Change the mode as described above, or leave the binding
-as it is.
+Check `<profile root>/settings.json` and its backup. Follow the shared setup only for a
+new profile; never generate a replacement key for an existing store.

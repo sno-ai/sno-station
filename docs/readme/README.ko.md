@@ -95,7 +95,7 @@ Sno onboarding
 | 구성 요소 | 상태 |
 |---|---|
 | `packages/chunking` | 이 저장소에 있으며, 테스트를 거쳤고, npm에 게시됨 |
-| 공유 패키지 (`common-core`, `utils`, `embedder`, `sno-observe`, `sno-station-core-crypto`, `content-sanitizer`) | 이 저장소에 있음 |
+| 공유 패키지 (`common-core`, `utils`, `embedder`, `observability`, `sqlite-crypto`, `content-sanitizer`) | 이 저장소에 있음 |
 | Claude Code, Codex, OpenClaw 간 공유 메모리 | 엔진과 세 가지 스킨 모두 이 저장소에 있음; 클린 머신 검증 대기 중 |
 | Sno Reach — 데몬 없이 에이전트끼리 대화하기 | 소스는 이 저장소에 있음; 릴리스 아카이브 대기 중 |
 | RSI 루프 (스킬) | 이번 주 |

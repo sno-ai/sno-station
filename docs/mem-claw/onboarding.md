@@ -53,33 +53,23 @@ local cache.
 
 Choose Agent Native to use the OpenClaw agent's own model inline.
 
-Setup follows this order:
-
-1. Detect whether the host already has a usable model subscription.
-2. If a subscription is available, use it and complete setup.
-3. If no subscription is available, ask for a key provider (OpenAI or OpenRouter), then collect the
-   API key and complete setup with it.
-
-These are transport choices inside one Agent Native mode. Subscription and bring-your-own-key
-setups use the same memory routing and user-visible behavior.
-
-One difference in features: the subscription transport runs extraction only. The model-written
-reflection summary (LLM mode `extraction+reflection`) is offered when you bring your own key or
-choose REM Enhanced.
+Setup collects no key: Agent Native always borrows the host agent's model. It runs extraction
+only; the model-written reflection summary (LLM mode `extraction+reflection`) is offered in REM
+Enhanced.
 
 Agent Native is enabled immediately after valid model access is found. Model calls run inline.
 
 ### REM Enhanced
 
-Choose REM Enhanced to use the Sno GPU for the LoRA-covered extraction and conflict occasions,
+Choose REM Enhanced to use the Sno GPU for the LoRA-covered extraction and conflict calls,
 with the host agent's model covering the other model-assisted memory decisions. The wizard asks for
 an optional Sno base URL (leave it blank for the default) and the required Sno key; host-model
 calls use the agent's normal model configuration.
 
 ## Step 2: accept or change the remaining defaults
 
-The wizard then asks for reranking, recall depth (Default or Lean), and, when OpenClaw's memory
-slot is empty, whether to assign this plugin to it.
+The wizard then asks for recall depth (Default or Lean) and, when OpenClaw's memory slot is
+empty, whether to assign this plugin to it.
 
 The standard defaults are:
 
@@ -96,24 +86,22 @@ The standard defaults are:
 
 Mode-specific defaults are:
 
-| Memory-writing occasion | Local First | Agent Native | REM Enhanced |
+| Memory-writing call | Local First | Agent Native | REM Enhanced |
 | --- | --- | --- | --- |
 | Capture memories | Deterministic, verbatim | Host model | Sno extraction model |
 | Classify active tasks | Keyword rules | Host model | Host model |
 | Merge profile sections | Deterministic merge | Host model | Host model |
 | Match completed tasks | Token overlap | Host model | Host model |
 | Resolve conflicts | Keep both | Host model | Sno conflict model |
-| Build reflection summary | No model reflection; local session memory remains | Host model, key transport only | Host model |
+| Build reflection summary | No model reflection; local session memory remains | Same as Local First | Host model |
 | Resolve relative dates | No model call | Host model | Host model |
 
-No memory-writing occasion is disabled in Agent Native or REM Enhanced. A failed model request
+No memory-writing call is disabled in Agent Native or REM Enhanced. A failed model request
 uses the corresponding Local First behavior for that request instead of switching model tiers.
 
-In REM Enhanced, each occasion's tier is a configuration switch under `remEnhanced.occasions`.
-The defaults above are the release targets; changing one is a configuration decision, not a code
-change.
+In REM Enhanced, the selected mode fixes each model call's destination as shown above.
 
-Two REM operations run over the store on a periodic trigger and use the Sno models in every
+Two REM operations run over the store on a periodic trigger and route model calls by the selected
 mode:
 
 - `rem-update` rewrites transition narratives into clean current-state memories while keeping the
@@ -123,7 +111,7 @@ mode:
 
 The installer requests both by default. Use `--rem-operations rem-update` or
 `--rem-operations rem-replace` to request one, and set `remEnhanced.trigger.tick` to `false` to
-turn the trigger off.
+turn the trigger off. The trigger setting is read once, when the memory store is first set up.
 
 The mode choice does not finalize retrieval or reranker behavior.
 
@@ -131,7 +119,7 @@ The mode choice does not finalize retrieval or reranker behavior.
 
 The completion message states:
 
-- the selected memory profile, embedder, LLM mode, and reranking;
+- the selected memory profile, embedder, and LLM mode;
 - whether the plugin was assigned to OpenClaw's memory slot;
 - the environment variables the selected mode requires, or `none`;
 - the exact restart command for the OpenClaw gateway;
@@ -211,9 +199,7 @@ Onboarding is complete when:
 
 - mode selection happens before provider details;
 - Local First completes without an LLM credential;
-- Agent Native uses an existing host subscription or asks for a key provider and key when none is
-  available;
-- subscription and key-based Agent Native have identical routing;
+- Agent Native borrows the host agent's model and asks for no key;
 - REM Enhanced explains the Sno-covered and host-covered work in public terms;
 - the completion message names the restart command and the required environment variables;
 - `/memory status` works after restart and installer status can read the saved setup;

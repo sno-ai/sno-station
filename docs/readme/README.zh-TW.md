@@ -7,7 +7,7 @@
 ![runs on your laptop, no daemon](https://img.shields.io/badge/runs%20on-your%20laptop%2C%20no%20daemon-3b82f6.svg?labelColor=3b3b3b)
 ![harnesses Claude Code, Codex, OpenClaw](https://img.shields.io/badge/harnesses-Claude%20Code%20%C2%B7%20Codex%20%C2%B7%20OpenClaw-f0a04b.svg?labelColor=3b3b3b)
 
-**其他語言版本：** [English](../../README.md) · [中文](README.zh-CN.md) · [Deutsch](README.de.md) · [Español](README.es.md) · [Français](README.fr.md) · [Русский](README.ru.md) · [한국어](README.ko.md) · [日本語](README.ja.md) · **繁體中文**
+**Read in other languages:** [English](../../README.md) · [中文](README.zh-CN.md) · [Deutsch](README.de.md) · [Español](README.es.md) · [Français](README.fr.md) · [Русский](README.ru.md) · [한국어](README.ko.md) · [日本語](README.ja.md) · **繁體中文**
 
 Sno Station 是您代理人的工作站：這款開源軟體能把您已經在使用的 AI 代理人——不論是
 寫程式的代理人，還是通用型的工作代理人——整合成在您自己機器上運作的同一支團隊。
@@ -127,7 +127,7 @@ harness 所需的 hook。不需要記住任何套件名稱。
 | 項目 | 狀態 |
 |---|---|
 | `packages/chunking` | 已在此儲存庫中，經過測試，並發布至 npm |
-| 共用套件（`common-core`、`utils`、`embedder`、`sno-observe`、`sno-station-core-crypto`、`content-sanitizer`） | 已在此儲存庫中 |
+| 共用套件（`common-core`、`utils`、`embedder`、`observability`、`sqlite-crypto`、`content-sanitizer`） | 已在此儲存庫中 |
 | 跨 Claude Code、Codex 與 OpenClaw 的共用記憶 | 引擎與三種介面皆已在此儲存庫中；尚待乾淨機器驗證 |
 | Sno Reach——代理人之間互相溝通，不需要 daemon | 原始碼已在此儲存庫中；發布封存檔尚待推出 |
 | RSI loop（技能） | 本週 |

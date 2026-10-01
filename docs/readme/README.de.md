@@ -146,7 +146,7 @@ Session-IDs sind geschwärzt; sonst ist nichts angerührt.
 | Teil | Status |
 |---|---|
 | `packages/chunking` | In diesem Repository, getestet, auf npm veröffentlicht |
-| Gemeinsame Pakete (`common-core`, `utils`, `embedder`, `sno-observe`, `sno-station-core-crypto`, `content-sanitizer`) | In diesem Repository |
+| Gemeinsame Pakete (`common-core`, `utils`, `embedder`, `observability`, `sqlite-crypto`, `content-sanitizer`) | In diesem Repository |
 | Gemeinsames Gedächtnis über Claude Code, Codex und OpenClaw hinweg | Engine und alle drei Skins in diesem Repository; Beweis auf sauberer Maschine steht noch aus |
 | Sno Reach — Agenten sprechen miteinander, kein Daemon | Quelle in diesem Repository; Release-Archive stehen noch aus |
 | Die RSI-Schleife (Skill) | Diese Woche |

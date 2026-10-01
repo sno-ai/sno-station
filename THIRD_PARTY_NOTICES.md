@@ -18,7 +18,7 @@ consumed unmodified through `package.json` under its own license.
 - License: MIT (model card).
 - The model is downloaded at first use; it is not committed to this repository.
 
-## SQLite3MultipleCiphers — via `better-sqlite3-multiple-ciphers`, `packages/sno-station-core-crypto`
+## SQLite3MultipleCiphers — via `better-sqlite3-multiple-ciphers`, `packages/sqlite-crypto`
 
 - Upstream: https://github.com/utelle/SQLite3MultipleCiphers
 - License: MIT. Used unmodified through the npm package.

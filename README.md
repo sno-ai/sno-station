@@ -133,7 +133,7 @@ else is touched.
 | Piece | Status |
 |---|---|
 | `packages/chunking` | In this repository, tested, published on npm |
-| Shared packages (`common-core`, `utils`, `embedder`, `sno-observe`, `sno-station-core-crypto`, `content-sanitizer`) | In this repository |
+| Shared packages (`common-core`, `utils`, `embedder`, `observability`, `sqlite-crypto`, `content-sanitizer`) | In this repository |
 | Shared memory across Claude Code, Codex and OpenClaw | Engine and all three skins in this repository; clean-machine proof pending |
 | Sno Reach — agents talking to each other, no daemon | Source in this repository; release archives pending |
 | The RSI loop (skill) | This week |
