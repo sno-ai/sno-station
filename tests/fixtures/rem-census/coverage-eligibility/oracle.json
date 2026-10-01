@@ -1,0 +1,5 @@
+[
+  { "input": { "referenceSetNonEmpty": true, "retiringAtomsMatched": true, "retrievabilityComputed": true }, "expected": "eligible" },
+  { "input": { "referenceSetNonEmpty": false, "retiringAtomsMatched": true, "retrievabilityComputed": true }, "expected": "ineligible" },
+  { "input": { "referenceSetNonEmpty": true, "retiringAtomsMatched": true, "retrievabilityComputed": false }, "expected": "undetermined" }
+]
