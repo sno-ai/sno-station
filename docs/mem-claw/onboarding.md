@@ -1,144 +1,29 @@
 # Sno Memory for OpenClaw — Onboarding
 
-This walkthrough describes the public first-run experience for `@snoai/mem-claw`.
+First-run steps for `@snoai/mem-claw`.
 
-## Start setup
+## Step 1: set up the shared memory service
 
 Requirements:
 
 - OpenClaw on your PATH
 - Node.js 22.22.3 or newer on the 22 line, 24.15.0 or newer on the 24 line, or 25.9.0 or newer
 
-Use the guided installer:
+Complete the [shared memory setup](../memory-setup.md) once. It writes `~/.sno/settings.json` in
+Local First mode and downloads the embedding model. Do not rerun its settings block for an
+existing store: it replaces the encryption key and the old memories become unreadable.
+
+## Step 2: install the plugin
 
 ```bash
-npx @snoai/mem-claw
+openclaw plugins install @snoai/mem-claw@1.0.0
 ```
 
-Or install through OpenClaw first, then open the same wizard:
+`npx @snoai/mem-claw` runs the same install. Its only option is `--profile <name>`, which is
+forwarded to OpenClaw. The plugin starts the memory service from the path recorded by the shared
+setup; there is no separate start command.
 
-```bash
-openclaw plugins install @snoai/mem-claw
-npx @snoai/mem-claw --configure
-```
-
-The npm package is the public install source. You do not need a source checkout, a private server,
-or a manually copied plugin directory.
-
-The installer is additive over `openclaw plugins install`. It runs that command as a subprocess
-when the plugin is not installed yet, then writes only the settings you selected into the OpenClaw
-configuration.
-
-## Step 1: choose the memory mode
-
-The wizard asks for the memory profile and the embedder preset, then for the memory mode. Provider
-and key questions come only after the mode, and only when that mode needs them.
-
-The default mode is Agent Native.
-
-### Local First
-
-Choose Local First for fully local memory behavior:
-
-- deterministic, verbatim capture;
-- content-hash deduplication;
-- deterministic profile and task handling;
-- no model-written reflection summary;
-- no LLM credentials.
-
-The default embedder is local. It may download its model once on first use, then runs from the
-local cache.
-
-### Agent Native
-
-Choose Agent Native to use the OpenClaw agent's own model inline.
-
-Setup follows this order:
-
-1. Detect whether the host already has a usable model subscription.
-2. If a subscription is available, use it and complete setup.
-3. If no subscription is available, ask for a key provider (OpenAI or OpenRouter), then collect the
-   API key and complete setup with it.
-
-These are transport choices inside one Agent Native mode. Subscription and bring-your-own-key
-setups use the same memory routing and user-visible behavior.
-
-One difference in features: the subscription transport runs extraction only. The model-written
-reflection summary (LLM mode `extraction+reflection`) is offered when you bring your own key or
-choose REM Enhanced.
-
-Agent Native is enabled immediately after valid model access is found. Model calls run inline.
-
-### REM Enhanced
-
-Choose REM Enhanced to use the Sno GPU for the LoRA-covered extraction and conflict occasions,
-with the host agent's model covering the other model-assisted memory decisions. The wizard asks for
-an optional Sno base URL (leave it blank for the default) and the required Sno key; host-model
-calls use the agent's normal model configuration.
-
-## Step 2: accept or change the remaining defaults
-
-The wizard then asks for reranking, recall depth (Default or Lean), and, when OpenClaw's memory
-slot is empty, whether to assign this plugin to it.
-
-The standard defaults are:
-
-| Setting | Default |
-| --- | --- |
-| Memory mode | Agent Native |
-| Memory profile | `local-active` (active capture and recall) |
-| Embedder | Local |
-| Reranking | Local lightweight processing |
-| Recall depth | Default (Lean is about 25% cheaper and scores a few points lower) |
-| Session handling | Local system session memory |
-| Management tools | Off |
-| Cloud observability | Off unless explicitly enabled |
-
-Mode-specific defaults are:
-
-| Memory-writing occasion | Local First | Agent Native | REM Enhanced |
-| --- | --- | --- | --- |
-| Capture memories | Deterministic, verbatim | Host model | Sno extraction model |
-| Classify active tasks | Keyword rules | Host model | Host model |
-| Merge profile sections | Deterministic merge | Host model | Host model |
-| Match completed tasks | Token overlap | Host model | Host model |
-| Resolve conflicts | Keep both | Host model | Sno conflict model |
-| Build reflection summary | No model reflection; local session memory remains | Host model, key transport only | Host model |
-| Resolve relative dates | No model call | Host model | Host model |
-
-No memory-writing occasion is disabled in Agent Native or REM Enhanced. A failed model request
-uses the corresponding Local First behavior for that request instead of switching model tiers.
-
-In REM Enhanced, each occasion's tier is a configuration switch under `remEnhanced.occasions`.
-The defaults above are the release targets; changing one is a configuration decision, not a code
-change.
-
-Two REM operations run over the store on a periodic trigger and use the Sno models in every
-mode:
-
-- `rem-update` rewrites transition narratives into clean current-state memories while keeping the
-  history;
-- `rem-replace` adjudicates contradictions across the store and soft-closes the losing memory
-  reversibly.
-
-The installer requests both by default. Use `--rem-operations rem-update` or
-`--rem-operations rem-replace` to request one, and set `remEnhanced.trigger.tick` to `false` to
-turn the trigger off.
-
-The mode choice does not finalize retrieval or reranker behavior.
-
-## Step 3: complete setup and restart
-
-The completion message states:
-
-- the selected memory profile, embedder, LLM mode, and reranking;
-- whether the plugin was assigned to OpenClaw's memory slot;
-- the environment variables the selected mode requires, or `none`;
-- the exact restart command for the OpenClaw gateway;
-- how to run setup again.
-
-Keys collected by the wizard are written to the plugin's onboarding env file with mode 0600 and to
-a systemd user drop-in for the gateway. The typed characters are never echoed.
+## Step 3: restart OpenClaw and check
 
 After restarting OpenClaw, run:
 
@@ -146,12 +31,7 @@ After restarting OpenClaw, run:
 /memory status
 ```
 
-The status shows the memory counts, the store path, and the sidecar process id. Use the installer
-status command to review the saved setup:
-
-```bash
-npx @snoai/mem-claw --status
-```
+The status shows the memory counts, the store path, and the sidecar process id.
 
 ## Step 4: create the first useful memory
 
@@ -178,44 +58,8 @@ Then verify:
 
 Do not use temporary debug state, test output, or private infrastructure details as first memories.
 
-## Non-interactive installs
+## Change settings later
 
-Package managers and automated OpenClaw installs may not have an interactive terminal. A
-non-interactive install finishes with the public defaults and prints a short handoff. The end state
-is identical to a plain `openclaw plugins install` followed by a restart. It tells the user to run
-the guided setup later:
-
-```bash
-npx @snoai/mem-claw --configure
-```
-
-It never guesses a credential, prints a secret, or exposes a private endpoint.
-
-## Already installed
-
-Running the installer again does not overwrite a completed setup. It prints status unless you ask
-to reconfigure:
-
-```bash
-npx @snoai/mem-claw --status
-npx @snoai/mem-claw --configure
-```
-
-Re-running `--configure` does not ask again for a key that an earlier run already saved.
-
-Normal reinstall preserves the memory library.
-
-## Onboarding acceptance checklist
-
-Onboarding is complete when:
-
-- mode selection happens before provider details;
-- Local First completes without an LLM credential;
-- Agent Native uses an existing host subscription or asks for a key provider and key when none is
-  available;
-- subscription and key-based Agent Native have identical routing;
-- REM Enhanced explains the Sno-covered and host-covered work in public terms;
-- the completion message names the restart command and the required environment variables;
-- `/memory status` works after restart and installer status can read the saved setup;
-- the user can create and verify a first memory;
-- no secret, private hostname, internal path, or deployment instruction appears in the handoff.
+Every plugin reads the same `~/.sno/settings.json`. Edit it, keep the existing
+`store.encryptionKey`, and restart OpenClaw. Installing the plugin again preserves the memory
+library.

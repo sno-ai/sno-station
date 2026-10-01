@@ -1,0 +1,57 @@
+{
+	"name": "@snoai/observability",
+	"version": "1.0.0",
+	"description": "Host-side observability SDK for Sno agent events: validates, redacts and buffers events locally before delivery.",
+	"license": "Apache-2.0",
+	"publishConfig": { "access": "public" },
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/sno-ai/sno-station.git",
+		"directory": "packages/observability"
+	},
+	"type": "module",
+	"main": "./dist/index.js",
+	"bin": { "sno-observe": "./dist/bin/sno-observe.js" },
+	"types": "./dist/index.d.ts",
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js"
+		}
+	},
+	"files": [
+		"dist",
+		"src",
+		"LICENSE",
+		"README.md",
+		"package.json"
+	],
+	"scripts": {
+		"build": "npm run build --workspace @snoai/common-core && tsc -p tsconfig.json",
+		"prepack": "npm run build",
+		"typecheck": "tsc --noEmit",
+		"lint": "biome check src/",
+		"lint:fix": "biome check --write src/",
+		"lint:no-hmac": "bash scripts/check-no-hmac.sh",
+		"lint:no-bun-apis": "bash scripts/check-no-bun-apis.sh",
+		"lint:deep-import-blocked": "node scripts/check-deep-import-blocked.mjs",
+		"lint:guards": "npm run lint:no-hmac && npm run lint:no-bun-apis && npm run lint:deep-import-blocked",
+		"test:unit": "npm run build && node --test ../../tests/packages/observability/unit/*.test.mjs",
+		"test:integration": "npm run build && node --test ../../tests/packages/observability/integration/*.test.mjs",
+		"test:all": "npm run build && node --test ../../tests/packages/observability/**/*.test.mjs"
+	},
+	"dependencies": {
+		"@snoai/utils": "^1.0.0",
+		"@snoai/common-core": "^1.0.0",
+		"better-sqlite3": "^13.0.3",
+		"js-tiktoken": "^1.0.0",
+		"zod": "^4.5.4"
+	},
+	"devDependencies": {
+		"@types/better-sqlite3": "^9.6.0",
+		"@types/node": "^22.0.0"
+	},
+	"engines": {
+		"node": ">=22.14.0"
+	}
+}

@@ -1,0 +1,14 @@
+name: sno-mem-hermes
+version: 0.1.0
+description: "Thin Hermes lifecycle adapter for the Sno memory sidecar."
+author: Sno AI
+kind: standalone
+platforms:
+  - linux
+  - macos
+provides_hooks:
+  - pre_llm_call
+  - post_api_request
+  - post_tool_call
+  - post_approval_response
+  - on_session_reset

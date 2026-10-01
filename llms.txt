@@ -17,13 +17,13 @@ This repository is being assembled in public from 2026-09-18. Blocks in the READ
 
 ## Directory map
 
-- packages/ — shared libraries (chunking, common-core, utils, embedder, sno-observe,
-  sno-station-core-crypto, content-sanitizer, sno-station-mem = the memory engine + sidecar)
-- apps/ — per-harness memory skins (mem-claude, mem-codex, mem-claw), Sno Reach (agent messaging),
-  heartbeat, subscription-quota-check
+- packages/ — shared libraries (chunking, common-core, utils, embedder, observability,
+  sqlite-crypto, content-sanitizer, memory = the memory engine + sidecar)
+- apps/ — per-harness memory integrations (mem-claude, mem-codex, mem-claw, mem-hermes), Sno Reach (agent messaging),
+  heartbeat, report-time, subscription-quota-check
 - evals/ — one README + one formal result per benchmark (LoCoMo, Memora, R@5, Sno Memory Bench);
   no datasets, no raw runs
-- docs/ — images, evidence, translations, security page
+- docs/ — setup guides for the four memory integrations, images, evidence, translations, security page
 - tests/apps/ — public-contract tests only
 
 ## Contributing

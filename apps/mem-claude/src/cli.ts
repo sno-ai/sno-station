@@ -3,10 +3,11 @@ import { homedir } from "node:os";
 import { isAbsolute, join, resolve } from "node:path";
 import { doctor } from "./doctor.js";
 import { correctCommand, getCommand, recallCommand, rememberCommand } from "./explicit.js";
-import { sessionStart, stop, userPromptSubmit } from "./hooks.js";
+import { postToolUse, preToolUse, sessionEnd, sessionStart, stop, userPromptSubmit } from "./hooks.js";
 import { installClaude } from "./install.js";
 import { importRepository } from "./import.js";
 import { MESSAGES } from "./messages.js";
+import { workspaceRoot } from "./scope.js";
 import { runWorker } from "./worker.js";
 
 async function readStdin(): Promise<unknown> {
@@ -35,6 +36,18 @@ async function main(): Promise<number> {
 		await stop(await readStdin());
 		return 0;
 	}
+	if (command === "session-end") {
+		await sessionEnd(await readStdin());
+		return 0;
+	}
+	if (command === "pre-tool-use") {
+		await preToolUse(await readStdin());
+		return 0;
+	}
+	if (command === "post-tool-use") {
+		await postToolUse(await readStdin());
+		return 0;
+	}
 	if (command === "worker") {
 		await runWorker();
 		return 0;
@@ -54,7 +67,7 @@ async function main(): Promise<number> {
 	if (command === "import") {
 		const repo = option(args, "--repo");
 		if (args.includes("--user") || !repo || !isAbsolute(repo)) throw new Error("import requires --repo <absolute-root>");
-		const result = await importRepository(repo);
+		const result = await importRepository(await workspaceRoot(repo));
 		process.stdout.write(`blocks fed: ${result.blocksFed}\nreceipt: ${result.receiptPath}\n`);
 		return 0;
 	}
@@ -90,15 +103,16 @@ async function main(): Promise<number> {
 
 main().then(code => {
 	process.exitCode = code;
-	if (["session-start", "user-prompt-submit", "stop", "worker"].includes(process.argv[2] ?? "")) {
+	if (["session-start", "user-prompt-submit", "stop", "session-end", "pre-tool-use", "post-tool-use", "worker"].includes(process.argv[2] ?? "")) {
 		process.stdout.write("", () => process.exit(code));
 	}
 }, error => {
 	const reason = error instanceof Error ? error.message : "engine-failed";
 	const command = process.argv[2];
-	if (command === "session-start" || command === "user-prompt-submit" || command === "stop") {
+	const silentHooks = ["stop", "session-end", "pre-tool-use", "post-tool-use"];
+	if (command === "session-start" || command === "user-prompt-submit" || (command !== undefined && silentHooks.includes(command))) {
 		process.stderr.write(`${JSON.stringify({ event: command, reason: "invalid-input" })}\n`);
-		if (command !== "stop") {
+		if (command === "session-start" || command === "user-prompt-submit") {
 			const hookEventName = command === "session-start" ? "SessionStart" : "UserPromptSubmit";
 			process.stdout.write(`${JSON.stringify({ hookSpecificOutput: { hookEventName, additionalContext: "" } })}\n`);
 		}

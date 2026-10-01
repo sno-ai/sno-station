@@ -10,37 +10,23 @@ Requirements:
 - Node.js 22.22.3 or newer on the 22 line, 24.15.0 or newer on the 24 line, or 25.9.0 or newer
 - `git` on your PATH (memory is scoped to the repository you work in)
 
-The one-command `Sno onboarding` install described in the repository README is not shipped yet.
-Until it lands, run the three steps yourself:
+Complete the [shared memory setup](../memory-setup.md), then install the Claude Code integration:
 
 ```bash
-npm install -g @snoai/mem-claude
-npx --package @snoai/sno-station-mem sno-station-mem bind ~/.sno/sno-station-mem/$USER/memory.sqlite
+npm install -g @snoai/mem-claude@1.0.0
 sno-mem-claude install --config-dir ~/.claude
 ```
 
-The npm package is the public install source. You do not need a source checkout, a private server,
-or a manually copied program.
-
-The install command is additive over your Claude Code configuration. It updates only its own hook
-groups, its one permission rule, and its skill, and leaves everything else in the Claude
-configuration directory as it was. There is no client configuration file.
+The shared setup writes `<profile root>/settings.json`; the install command configures Claude Code.
+The profile root is `SNO_PROFILE_DIR` or `~/.sno`. Keep a private backup of the
+settings file because it holds the only key for the encrypted store.
 
 ## Step 1: choose the memory mode
 
-The memory mode is recorded once, when the store is bound. JSON piped into the bind command
-carries it; with nothing piped in, the default applies.
-
-The default mode is Agent Native.
-
-```bash
-STORE=~/.sno/sno-station-mem/$USER/memory.sqlite
-echo '{"mode":"local-first"}'  | npx --package @snoai/sno-station-mem sno-station-mem bind "$STORE"
-echo '{"mode":"agent-native"}' | npx --package @snoai/sno-station-mem sno-station-mem bind "$STORE"
-echo '{"mode":"rem-enhanced"}' | npx --package @snoai/sno-station-mem sno-station-mem bind "$STORE"
-```
-
-The bind command runs once per machine user and refuses when a binding already exists.
+The first-release setup selects Local First in `<profile root>/settings.json`
+(the profile root is `SNO_PROFILE_DIR` or `~/.sno`). If you change the mode manually,
+keep the existing `store.path` and `store.encryptionKey`; replacing the key makes existing
+memories unreadable. Keep a private backup of `settings.json`.
 
 ### Local First
 
@@ -65,14 +51,12 @@ process.
 
 ### REM Enhanced
 
-Choose REM Enhanced to use the Sno GPU for the LoRA-covered extraction and conflict occasions,
-with your Claude Code covering the other model-assisted memory decisions. REM Enhanced needs Sno
-access in the sidecar's environment; the bind command records only the name of the key, never its
-value.
+Choose REM Enhanced to use the Sno GPU for the LoRA-covered extraction and conflict calls,
+with your Claude Code covering the other model-assisted memory decisions. REM Enhanced needs a Sno GPU key in `snoGpu.apiKey` in `settings.json`.
 
 ## Step 2: accept or change the remaining defaults
 
-The install command has no prompts. The standard defaults are:
+The memory client uses these standard defaults:
 
 | Setting | Default |
 | --- | --- |
@@ -87,7 +71,7 @@ The install command has no prompts. The standard defaults are:
 
 Mode-specific defaults are:
 
-| Memory-writing occasion | Local First | Agent Native | REM Enhanced |
+| Memory-writing call | Local First | Agent Native | REM Enhanced |
 | --- | --- | --- | --- |
 | Capture memories | Deterministic, verbatim | Your Claude Code | Sno extraction model |
 | Classify active tasks | Keyword rules | Your Claude Code | Your Claude Code |
@@ -97,14 +81,12 @@ Mode-specific defaults are:
 | Build reflection summary | No model reflection; local session memory remains | Same | Same |
 | Resolve relative dates | No model call | Your Claude Code | Your Claude Code |
 
-No memory-writing occasion is disabled in Agent Native or REM Enhanced. A failed model request
+No memory-writing call is disabled in Agent Native or REM Enhanced. A failed model request
 uses the corresponding Local First behavior for that request instead of switching model tiers.
 
-In REM Enhanced, each occasion's tier is a switch under `remEnhanced.occasions` in the bind JSON.
-The defaults above are the release targets; changing one is a configuration decision, not a code
-change.
+In REM Enhanced, the selected mode fixes each model call's destination as shown above.
 
-Two REM operations run over the store on a periodic trigger and use the Sno models in every
+Two REM operations run over the store on a periodic trigger and route model calls by the selected
 mode:
 
 - `rem-update` rewrites transition narratives into clean current-state memories while keeping the
@@ -112,20 +94,18 @@ mode:
 - `rem-replace` adjudicates contradictions across the store and soft-closes the losing memory
   reversibly.
 
-Both are requested by default. Set `remOperations` in the bind JSON to request one, and set
-`remEnhanced.trigger.tick` to `false` to turn the trigger off.
+Both are requested by default. Change `rem.operations` in `settings.json` to request one, or set
+`rem.tick` to `false` to turn the trigger off.
 
 The mode choice does not finalize retrieval or reranker behavior.
 
 ## Step 3: complete setup and verify
 
-The install command prints one `would write` line per planned file with `--dry-run`, and
-`sno-mem-claude install complete` when it has written them. When `settings.json` cannot be parsed,
-it leaves that file byte-for-byte as it was, still installs the skill, and prints one line saying
-the settings were preserved.
+The `sno-mem-claude install` integration refresh command prints one `would write` line per planned file with `--dry-run`, and
+`sno-mem-claude install complete` when it has written them. If the memory settings cannot be read, keep the existing file and its backup for key recovery; follow the shared setup only for a new profile.
 
-The sidecar starts on demand. The first hook or memory command after install starts it and waits
-for it to be healthy.
+The memory service starts on demand. The first hook or memory command after install
+starts it and waits for it to be healthy.
 
 Subagents and sessions outside a git repository inject and capture nothing. A session with
 `sandbox.enabled: true` is unsupported: its memory commands cannot reach the local sidecar, so
@@ -179,7 +159,7 @@ Do not use temporary debug state, test output, or private infrastructure details
 
 ## Non-interactive installs
 
-The install command never prompts, so it is safe in scripts. `--dry-run` prints every planned
+The `sno-mem-claude install` integration refresh command never prompts, so it is safe in scripts. `--dry-run` prints every planned
 write and changes nothing:
 
 ```bash
@@ -190,12 +170,11 @@ It never guesses a credential, prints a secret, or exposes a private endpoint.
 
 ## Already installed
 
-Running the install command again is idempotent. It updates its own hook groups in place, keeps
+Running `sno-mem-claude install` again to refresh the integration is idempotent. It updates its own hook groups in place, keeps
 foreign hook groups at their original position, keeps exactly one permission rule of its own,
 rewrites its skill, and touches nothing else.
 
-The bind command is the opposite: it refuses when a binding exists. To change the memory mode,
-see the usage guide.
+To change the memory mode, edit `settings.json` and keep the same store and encryption key.
 
 Normal reinstall preserves the memory library.
 
@@ -209,7 +188,7 @@ and the VS Code extension are not claimed.
 
 Onboarding is complete when:
 
-- the memory mode is recorded at bind time and Agent Native is the default;
+- the memory mode is recorded in `settings.json` and Local First is selected by the first-release setup;
 - Local First completes without an LLM credential;
 - Agent Native runs on the existing Claude Code subscription and collects no key;
 - REM Enhanced explains the Sno-covered and Claude-covered work in public terms;

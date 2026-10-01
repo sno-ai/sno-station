@@ -1,44 +1,52 @@
-import { spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { chmod, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { tmpdir, userInfo } from "node:os";
 import { dirname, join, resolve } from "node:path";
-import { connect, type MemoryClient, type Registration } from "@snoai/sno-station-mem/client";
+import { connect, type InitRegistration, type MemoryClient } from "@snoai/memory/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { acquirePidFileLock } from "../../../apps/mem-claude/src/files.js";
-import { spoolDirectory, workerLockPath } from "../../../apps/mem-claude/src/paths.js";
+import { importDirectory, spoolDirectory, workerLockPath } from "../../../apps/mem-claude/src/paths.js";
 import { runWorker, type WorkerDependencies } from "../../../apps/mem-claude/src/worker.js";
+import { writeSettingsFixture } from "../../packages/memory/fixtures/settings-file-fixture";
+import { untilModelReady } from "../../packages/memory/integration/fixtures/model-ready";
 
 const repoRoot = resolve(import.meta.dirname, "../../..");
 const extraction = '{"claims_found":[],"decisions":[{"turn_index":0,"progress_only":false}],"facts":[]}';
 let root: string;
 let client: MemoryClient;
-let previousProfile: string | undefined;
+let previousEnv: Record<string, string | undefined>;
+// The machine's own model cache (read from the account, not HOME): no per-test model download.
+const MODEL_CACHE = join(userInfo().homedir, ".cache", "sno-station", "models");
 
-beforeEach(async () => {
+beforeEach(async ({ task }) => {
 	root = await mkdtemp(join(tmpdir(), "mem-claude-worker-"));
-	previousProfile = process.env.SNO_PROFILE_DIR;
+	previousEnv = { SNO_PROFILE_DIR: process.env.SNO_PROFILE_DIR, HOME: process.env.HOME };
 	process.env.SNO_PROFILE_DIR = root;
-	const bind = spawnSync(process.execPath, [join(repoRoot, "packages/sno-station-mem/dist/cli.js"), "bind", join(root, "memory.sqlite")], {
-		encoding: "utf8", timeout: 20_000,
-		env: { ...process.env, SNO_STATION_CORE_TESTING: "1" },
-		input: JSON.stringify({ mode: "agent-native", retrieval: { rerank: "none", recallTopK: 7 },
-			embedding: { provider: "local-onnx", dimensions: 1024, dtype: "q8" },
-			memoryTelemetry: { enabled: false, currentKeyVersion: 1 } }),
-	});
-	expect(bind.status, bind.stderr).toBe(0);
+	// The store list lives under HOME; the service started below inherits this environment.
+	process.env.HOME = join(root, "home");
+	writeSettingsFixture(root, { mode: "agent-native", capture: { ambient: task.name !== "finishes an import when ambient capture is disabled" }, rerank: { mode: "none" }, embedding: { cacheDir: MODEL_CACHE } });
 	const connected = await connect({ skinId: "claude-code" });
-	if (connected.degraded) throw new Error(connected.reason);
+	if (connected.degraded) throw new Error(connected.error ?? connected.reason);
 	client = connected;
-}, 30_000);
+	// Every case below expects committed captures, which need the prepared embedding model.
+	await untilModelReady(({ scope, query, options }) => client.getRecall(query, { principal: client.principal, ...scope }, options));
+}, 150_000);
 
 afterEach(async () => {
 	if (client) {
 		try { process.kill(client.pid, "SIGTERM"); }
 		catch (error) { if (!(error instanceof Error && "code" in error && error.code === "ESRCH")) throw error; }
+		// The sidecar writes into the profile until it exits; removing the root earlier races it.
+		for (let attempt = 0; attempt < 200; attempt += 1) {
+			try { process.kill(client.pid, 0); } catch { break; }
+			await new Promise(resolve => setTimeout(resolve, 50));
+		}
 	}
-	if (previousProfile === undefined) delete process.env.SNO_PROFILE_DIR;
-	else process.env.SNO_PROFILE_DIR = previousProfile;
+	for (const [key, value] of Object.entries(previousEnv)) {
+		if (value === undefined) delete process.env[key];
+		else process.env[key] = value;
+	}
 	await rm(root, { recursive: true, force: true });
 });
 
@@ -51,9 +59,12 @@ async function spool(name: string, turnId: string, at = Date.now()): Promise<str
 	return path;
 }
 
+// Worker time runs on an injected clock: retry waits and the two idle minutes a drained worker
+// stays up advance it instantly, so no case waits in real time for the worker's own sleeps.
 function observeClient() {
+	let clock = Date.now();
 	const captures: Array<{ turnId: string; at: number; committed?: boolean }> = [];
-	let registration: Registration | undefined;
+	let registration: InitRegistration | undefined;
 	const originalInit = client.init.bind(client);
 	const originalCapture = client.capture.bind(client);
 	client.init = async (scope, value) => {
@@ -61,7 +72,7 @@ function observeClient() {
 		return originalInit(scope, value);
 	};
 	client.capture = async (turn, scope) => {
-		const record: (typeof captures)[number] = { turnId: turn.turnId, at: Date.now() };
+		const record: (typeof captures)[number] = { turnId: turn.turnId, at: clock };
 		captures.push(record);
 		const result = await originalCapture(turn, scope);
 		record.committed = !result.degraded && result.committed;
@@ -69,6 +80,8 @@ function observeClient() {
 	};
 	const deps: WorkerDependencies = {
 		async connect() { return client; },
+		now: () => clock,
+		async sleep(delayMs) { clock += delayMs; },
 		async runChild(_prompt, cwd) {
 			expect(cwd).toBe(join(root, "sno-mem-claude", "child"));
 			return { kind: "ok", text: extraction };
@@ -78,7 +91,23 @@ function observeClient() {
 }
 
 describe("Claude worker with a real sidecar", () => {
-	it("admits one concurrent worker, registers installed routing, and drains three files in order", async () => {
+	it("finishes an import when ambient capture is disabled", async () => {
+		const path = await spool("0001.json", "capture-disabled");
+		await mkdir(importDirectory(), { recursive: true });
+		const receiptPath = join(importDirectory(), "receipt.json");
+		await writeFile(receiptPath, JSON.stringify({ files: { "/note.md": { committed: 0, failures: 0 } } }));
+		const record = JSON.parse(await readFile(path, "utf8"));
+		record.kind = "import";
+		record.importReceipt = { path: receiptPath, file: "/note.md" };
+		await writeFile(path, JSON.stringify(record));
+		const fixture = observeClient();
+		expect(await runWorker(fixture.deps)).toBe("drained");
+		expect(fixture.captures).toEqual([{ turnId: "capture-disabled", at: expect.any(Number), committed: false }]);
+		expect(await readdir(spoolDirectory())).toEqual([]);
+		expect(JSON.parse(await readFile(receiptPath, "utf8")).files["/note.md"]).toEqual({ committed: 0, failures: 0, skipped: 1 });
+	}, 30_000);
+
+	it("admits one concurrent worker, registers with only its skin and model, and drains three files in order", async () => {
 		await spool("0002.json", "two");
 		await spool("0001.json", "one");
 		await spool("0003.json", "three");
@@ -99,9 +128,11 @@ describe("Claude worker with a real sidecar", () => {
 		expect(fixture.captures.map(item => item.turnId)).toEqual(["one", "two", "three"]);
 		expect(fixture.captures.every(item => item.committed === true)).toBe(true);
 		expect(await readdir(spoolDirectory())).toEqual([]);
-		expect(fixture.registration).toMatchObject({
-			skinId: "claude-code", routing: { mode: "agent-native" },
-			settings: { retrieval: { rerank: "none", recallTopK: 7 } }, model: { model: "claude-exec" },
+		// The service reads routing and settings from settings.json; the worker sends only the skin
+		// and its model callback.
+		expect(fixture.registration).toEqual({
+			skinId: "claude-code",
+			model: { baseUrl: expect.stringMatching(/^http:\/\/127\.0\.0\.1:\d+\/v1$/), credential: expect.any(String), model: "claude-exec" },
 		});
 		const health = await fetch(`http://127.0.0.1:${client.port}/healthz`);
 		expect(health.status).toBe(200);
@@ -192,13 +223,113 @@ describe("Claude worker with a real sidecar", () => {
 			? "process.exit(1);"
 			: 'console.log(JSON.stringify({is_error:true,result:"refused",usage:{cache_creation_input_tokens:0}}));'}\n`);
 		await chmod(claude, 0o700);
-		const run = spawnSync(process.execPath, ["--import", "tsx", "apps/mem-claude/src/cli.ts", "worker"], {
-			cwd: repoRoot, env: { ...process.env, PATH: `${bin}:${process.env.PATH}` },
-			encoding: "utf8", timeout: 90_000,
+		const worker = spawn(process.execPath, ["--import", "tsx", "apps/mem-claude/src/cli.ts", "worker"], {
+			cwd: repoRoot, env: { ...process.env, PATH: `${bin}:${process.env.PATH}` }, stdio: ["ignore", "pipe", "pipe"],
 		});
-		expect(run.status, run.stderr).toBe(0);
-		expect(run.stdout).toMatch(/"event":"model-callback","model":"claude-exec","status":503/);
+		let stdout = "";
+		let stderr = "";
+		worker.stdout.on("data", chunk => { stdout += chunk; });
+		worker.stderr.on("data", chunk => { stderr += chunk; });
+		const closed = new Promise<void>(resolve => worker.once("close", () => resolve()));
+		// The production worker stays up two real idle minutes after draining, so the case stops it
+		// once the relayed failure is on its output instead of waiting for it to exit.
+		const relayed = /"event":"model-callback","model":"claude-exec","status":503/;
+		const deadline = Date.now() + 80_000;
+		while (!relayed.test(stdout) && worker.exitCode === null && Date.now() < deadline) {
+			await new Promise(resolve => setTimeout(resolve, 100));
+		}
+		worker.kill("SIGTERM");
+		await closed;
+		expect(stdout, stderr).toMatch(relayed);
 	}, 100_000);
+});
+
+// Local First PRD REQ-3: the callback answers while the worker lives, not only during spool work,
+// and a drained worker stays up while its callback served a call in the last 2 minutes (9-minute cap).
+describe("Claude worker callback with an empty spool", () => {
+	const answer = { choices: [{ message: { role: "assistant", content: "child answer" } }] };
+
+	async function postCallback(model: { baseUrl: string; credential: string }, text: string) {
+		const response = await fetch(`${model.baseUrl}/chat/completions`, {
+			method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${model.credential}` },
+			body: JSON.stringify({ model: "claude-exec", messages: [{ role: "system", content: "system" }, { role: "user", content: text }] }),
+		});
+		const raw = await response.text();
+		let body: unknown = raw;
+		try { body = JSON.parse(raw); } catch { /* keep the raw text in the failure diff */ }
+		return { status: response.status, body };
+	}
+
+	// Registers through the real sidecar. Worker time is the injected clock; each callback request
+	// arrives at its scheduled offset (ms after start) while the worker sleeps, as a service call does.
+	function callbackWorker(callsAt: number[], probeAtRegistration = true) {
+		const startedAt = Date.now();
+		let clock = startedAt;
+		let sleeps = 0;
+		let model: { baseUrl: string; credential: string } | undefined;
+		const prompts: string[] = [];
+		const served: Array<{ at: number; status: number; body: unknown }> = [];
+		const init = client.init.bind(client);
+		client.init = async (scope, value) => {
+			const result = await init(scope, value);
+			model = value.model;
+			if (!model) throw new Error("worker registration missing model");
+			if (probeAtRegistration) served.push({ at: 0, ...await postCallback(model, "REGISTRATION_PROBE") });
+			return result;
+		};
+		const deps: WorkerDependencies = {
+			async connect() { return client; },
+			now: () => clock,
+			async sleep(delayMs) {
+				sleeps += 1;
+				if (sleeps > 10_000 || clock - startedAt > 60 * 60_000) throw new Error(`worker still sleeping at +${clock - startedAt} ms`);
+				const wakeAt = clock + delayMs;
+				for (const offset of callsAt) {
+					if (!model || startedAt + offset <= clock || startedAt + offset > wakeAt) continue;
+					clock = startedAt + offset;
+					served.push({ at: offset, ...await postCallback(model, `CALL_AT_${offset}`) });
+				}
+				clock = wakeAt;
+			},
+			async runChild(prompt, cwd) {
+				expect(cwd).toBe(join(root, "sno-mem-claude", "child"));
+				prompts.push(prompt.split("\n").at(-1) ?? "");
+				return { kind: "ok", text: "child answer" };
+			},
+		};
+		return { deps, served, prompts, startedAt, get exitedAfter() { return clock - startedAt; } };
+	}
+
+	// Calls at 0 (registration), 30 s, 150 s and 200 s: the worker exits exactly 2 minutes after the
+	// last one (320 s). A fixed lifetime or a timer counted from the drain alone exits elsewhere.
+	it("answers model calls with an empty spool and exits exactly two minutes after the last call", async () => {
+		const fixture = callbackWorker([30_000, 150_000, 200_000]);
+		expect(await runWorker(fixture.deps)).toBe("drained");
+		expect(fixture.served).toEqual([0, 30_000, 150_000, 200_000].map(at => ({ at, status: 200, body: answer })));
+		expect(fixture.prompts).toEqual(["user: REGISTRATION_PROBE", "user: CALL_AT_30000", "user: CALL_AT_150000", "user: CALL_AT_200000"]);
+		expect(fixture.exitedAfter).toBe(200_000 + 2 * 60_000);
+		expect(existsSync(workerLockPath())).toBe(false);
+	}, 60_000);
+
+	// The service dispatches REM after registration returns, so its first call can arrive only once
+	// the worker has drained its spool (Done test: the pass reaches its end with the spool empty).
+	it("waits after registration for a first call that arrives once the spool is empty", async () => {
+		const fixture = callbackWorker([90_000], false);
+		await runWorker(fixture.deps);
+		expect(fixture.served.map(({ at, status }) => ({ at, status }))).toEqual([{ at: 90_000, status: 200 }]);
+		expect(fixture.exitedAfter).toBe(90_000 + 2 * 60_000);
+	}, 60_000);
+
+	// A call every minute keeps the worker alive; it answers every call up to the cap and exits at
+	// exactly nine minutes, never earlier and never later.
+	it("keeps answering while called and exits exactly at the nine-minute cap", async () => {
+		const everyMinute = Array.from({ length: 10 }, (_, index) => (index + 1) * 60_000);
+		const fixture = callbackWorker(everyMinute);
+		await runWorker(fixture.deps);
+		expect(fixture.served.map(({ at, status }) => ({ at, status }))).toEqual(
+			[0, ...everyMinute.filter(offset => offset <= 9 * 60_000)].map(at => ({ at, status: 200 })));
+		expect(fixture.exitedAfter).toBe(9 * 60_000);
+	}, 60_000);
 });
 
 describe("worker lock files", () => {

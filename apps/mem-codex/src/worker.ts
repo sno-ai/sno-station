@@ -5,7 +5,7 @@ import { createServer, type Server } from "node:http";
 import { userInfo } from "node:os";
 import { readFile, readdir, unlink } from "node:fs/promises";
 import { join } from "node:path";
-import type { MemoryClient } from "@snoai/sno-station-mem/client";
+import type { MemoryClient } from "@snoai/memory/client";
 import {
 	CODING_SKIN_CHILD_DEADLINE_MS,
 	CODING_SKIN_CHILD_MAX_BUFFER_BYTES,
@@ -15,9 +15,7 @@ import {
 	CODING_SKIN_WORKER_LIFETIME_MS,
 	HOST_MODEL_CALLBACK_HOST,
 	HOST_MODEL_CALLBACK_PATH,
-	codingSkinInstallationSchema,
-	createCodingSkinRegistration,
-} from "@snoai/sno-station-mem/coding-skin";
+} from "@snoai/memory/coding-skin";
 import { z } from "zod";
 import { MODEL_ID, SKIN_ID } from "./constants.js";
 import { acquirePidFileLock, writeJsonAtomic } from "./files.js";
@@ -41,7 +39,7 @@ const spoolSchema = z.object({
 
 export interface WorkerDependencies {
 	connect(): Promise<MemoryClient>;
-	runChild(prompt: string, cwd: string): Promise<{ kind: "ok"; text: string } | { kind: "cancelled"; reason: string } | { kind: "error"; category: "transport"; message: string }>;
+	runChild(prompt: string, cwd: string, timeoutMs?: number): Promise<{ kind: "ok"; text: string } | { kind: "cancelled"; reason: string } | { kind: "error"; category: "transport"; message: string }>;
 	now?(): number;
 	sleep?(delayMs: number): Promise<void>;
 	beforeLockRelease?(): Promise<void>;
@@ -52,7 +50,7 @@ function productionDependencies(): WorkerDependencies {
 	return {
 		async connect() {
 			const client = await connectMemory();
-			if (isDegradedConnection(client)) throw new Error(client.reason);
+			if (isDegradedConnection(client)) throw new Error(client.error ?? client.reason);
 			return client;
 		},
 		runChild: runCodexChild,
@@ -76,10 +74,11 @@ export function startWorkerDetached(): void {
 	}
 }
 
-async function runCodexChild(prompt: string, cwd: string): Promise<{ kind: "ok"; text: string } | { kind: "cancelled"; reason: string } | { kind: "error"; category: "transport"; message: string }> {
+async function runCodexChild(prompt: string, cwd: string, timeoutMs = CODING_SKIN_CHILD_DEADLINE_MS): Promise<{ kind: "ok"; text: string } | { kind: "cancelled"; reason: string } | { kind: "error"; category: "transport"; message: string }> {
+	if (timeoutMs <= 0) return { kind: "cancelled", reason: "deadline" };
 	const result = spawnSync("codex", ["exec", "--ephemeral", "--disable", "hooks", "-s", "read-only", "--skip-git-repo-check", "-C", cwd, prompt], {
 		encoding: "utf8",
-		timeout: CODING_SKIN_CHILD_DEADLINE_MS,
+		timeout: timeoutMs,
 		maxBuffer: CODING_SKIN_CHILD_MAX_BUFFER_BYTES,
 	});
 	if (result.error && "code" in result.error && result.error.code === "ETIMEDOUT") return { kind: "cancelled", reason: "deadline" };
@@ -94,7 +93,7 @@ function promptFromMessages(value: unknown): { model: string; prompt: string } |
 	return { model: parsed.data.model, prompt: parsed.data.messages.map(message => `${message.role}: ${message.content}`).join("\n\n") };
 }
 
-async function callbackServer(credential: string, activeCwd: () => string | undefined, isImport: () => boolean, runChild: WorkerDependencies["runChild"]): Promise<{ server: Server; baseUrl: string }> {
+async function callbackServer(credential: string, activeCwd: () => string, isImport: () => boolean, onCall: () => void, runChild: WorkerDependencies["runChild"]): Promise<{ server: Server; baseUrl: string }> {
 	let serial = Promise.resolve();
 	let lastImportChildAt = 0;
 	const server = createServer((request, response) => {
@@ -107,7 +106,8 @@ async function callbackServer(credential: string, activeCwd: () => string | unde
 			try { body = JSON.parse(Buffer.concat(chunks).toString("utf8")); } catch { response.writeHead(400).end(); return; }
 			const requestBody = promptFromMessages(body);
 			const cwd = activeCwd();
-			if (!requestBody || !cwd) { response.writeHead(503, { "content-type": "application/json" }).end(JSON.stringify({ error: { kind: "error", category: "transport", message: "worker-not-ready" } })); return; }
+			if (!requestBody) { response.writeHead(400).end(); return; }
+			onCall();
 			if (isImport() && lastImportChildAt > 0) {
 				const remaining = CODING_SKIN_IMPORT_INTERVAL_MS - (Date.now() - lastImportChildAt);
 				if (remaining > 0) await new Promise(resolve => setTimeout(resolve, remaining));
@@ -130,26 +130,20 @@ async function callbackServer(credential: string, activeCwd: () => string | unde
 	return { server, baseUrl: `http://${HOST_MODEL_CALLBACK_HOST}:${address.port}/v1` };
 }
 
-async function updateImportReceipt(reference: { path: string; file: string } | undefined, field: "committed" | "failures"): Promise<void> {
+async function updateImportReceipt(reference: { path: string; file: string } | undefined, field: "committed" | "skipped" | "failures"): Promise<void> {
 	if (!reference) return;
-	const receipt = JSON.parse(await readFile(reference.path, "utf8")) as { files?: Record<string, { committed?: number; failures?: number }> };
-	const file = receipt.files?.[reference.file];
-	if (!file) return;
-	file[field] = (file[field] ?? 0) + 1;
-	await writeJsonAtomic(reference.path, receipt);
+	try {
+		const receipt = JSON.parse(await readFile(reference.path, "utf8")) as { files?: Record<string, { committed?: number; skipped?: number; failures?: number }> };
+		const file = receipt.files?.[reference.file];
+		if (!file) return;
+		file[field] = (file[field] ?? 0) + 1;
+		await writeJsonAtomic(reference.path, receipt);
+	} catch (error) {
+		console.log(JSON.stringify({ event: "import-receipt-failed", path: reference.path, file: reference.file, field, error: String(error) }));
+	}
 }
 
-async function installedRegistration(principal: string, baseUrl: string, credential: string) {
-	const path = join(profileRoot(), "station", `sno-station-mem-${principal}.config.json`);
-	const installed = codingSkinInstallationSchema.parse(JSON.parse(await readFile(path, "utf8")));
-	return createCodingSkinRegistration({
-		skinId: SKIN_ID,
-		installed,
-		model: { baseUrl, credential, model: MODEL_ID },
-	});
-}
-
-async function hasActionableSpool(): Promise<boolean> {
+export async function hasActionableSpool(): Promise<boolean> {
 	const names = (await readdir(spoolDirectory()).catch(() => [])).filter(name => name.endsWith(".json"));
 	for (const name of names) {
 		const contents = await readFile(join(spoolDirectory(), name), "utf8").catch(error => {
@@ -169,19 +163,24 @@ export async function runWorker(dependencies: WorkerDependencies = productionDep
 	const now = dependencies.now ?? Date.now;
 	const sleep = dependencies.sleep ?? (async (delayMs: number) => new Promise<void>(resolve => setTimeout(resolve, delayMs)));
 	const workerStartedAt = now();
+	const childCwd = join(appStateRoot(), "child");
 	const credential = randomUUID();
 	let currentCwd: string | undefined;
+	let lastCallbackAt = workerStartedAt;
+	let drainedAt: number | undefined;
 	let currentImport = false;
 	let server: Server | undefined;
 	let handoff = false;
 	try {
-		const callback = await callbackServer(credential, () => currentCwd, () => currentImport, dependencies.runChild);
+		mkdirSync(childCwd, { recursive: true, mode: 0o700 });
+		const callback = await callbackServer(credential, () => currentCwd ?? childCwd, () => currentImport, () => { lastCallbackAt = now(); }, (prompt, cwd) => dependencies.runChild(prompt, cwd, Math.min(CODING_SKIN_CHILD_DEADLINE_MS, CODING_SKIN_WORKER_LIFETIME_MS - (now() - workerStartedAt))));
 		server = callback.server;
 		const client = await dependencies.connect();
 		const principal = client.principal || userInfo().username;
-		const registration = await installedRegistration(principal, callback.baseUrl, credential);
-		await client.init({ principal, project: "global", session: "codex-worker", host: { sessionId: "codex-worker" } }, registration);
-		console.log(JSON.stringify({ event: "worker-registered", mode: registration.routing.mode, retrieval: registration.settings.retrieval }));
+		await client.init({ principal, project: "global", session: "codex-worker", host: { sessionId: "codex-worker" } }, {
+			skinId: SKIN_ID, model: { baseUrl: callback.baseUrl, credential, model: MODEL_ID },
+		});
+		console.log(JSON.stringify({ event: "worker-registered" }));
 		while (true) {
 			const spoolNames = (await readdir(spoolDirectory()).catch(() => [])).filter(name => name.endsWith(".json")).sort();
 			console.log(JSON.stringify({ event: "spool-scan", count: spoolNames.length }));
@@ -191,7 +190,9 @@ export async function runWorker(dependencies: WorkerDependencies = productionDep
 				let record = spoolSchema.parse(JSON.parse(await readFile(path, "utf8")));
 				if (record.attempts >= CODING_SKIN_MAX_ATTEMPTS) continue;
 				actionable += 1;
+				drainedAt = undefined;
 				while (record.attempts < CODING_SKIN_MAX_ATTEMPTS) {
+					if (now() - workerStartedAt >= CODING_SKIN_WORKER_LIFETIME_MS) { handoff = true; return "drained"; }
 					if (record.retryAt && record.retryAt > now()) {
 						const remainingLifetime = CODING_SKIN_WORKER_LIFETIME_MS - (now() - workerStartedAt);
 						if (remainingLifetime <= 0) { handoff = true; return "drained"; }
@@ -207,10 +208,11 @@ export async function runWorker(dependencies: WorkerDependencies = productionDep
 								{ role: "user" as const, content: record.user, at: record.at },
 								{ role: "assistant" as const, content: record.assistant ?? "", at: record.at },
 							];
-						const result = await client.capture({ turnId: record.turnId, rewindEpoch: 0, messages }, { principal, project: record.project, session: record.sessionId, host: { sessionId: record.sessionId } });
-						if (result.degraded || !result.committed) throw new Error(result.degraded ? result.reason : "not-committed");
-						await updateImportReceipt(record.importReceipt, "committed");
-						console.log(JSON.stringify({ event: "capture-committed", turnId: record.turnId, committed: true }));
+						const result = await client.capture({ turnId: record.turnId, rewindEpoch: 0, messages }, { principal, project: record.project, session: record.sessionId, host: record.project === "global" ? { sessionId: record.sessionId } : { sessionId: record.sessionId, workspace: record.project } });
+						if (result.degraded) throw new Error(result.reason);
+						if (!result.committed && !result.accepted && !result.skipped && !result.partial) throw new Error("capture not committed");
+						await updateImportReceipt(record.importReceipt, result.committed || result.accepted || result.partial ? "committed" : "skipped");
+						console.log(JSON.stringify({ event: result.partial ? "capture-partial" : result.committed ? "capture-committed" : result.accepted ? "capture-accepted" : "capture-skipped", turnId: record.turnId, committed: result.committed }));
 						await unlink(path);
 						break;
 					} catch {
@@ -225,10 +227,20 @@ export async function runWorker(dependencies: WorkerDependencies = productionDep
 						};
 						await writeJsonAtomic(path, record);
 						if (record.attempts >= CODING_SKIN_MAX_ATTEMPTS) break;
+					} finally {
+						currentCwd = undefined;
+						currentImport = false;
 					}
 				}
 			}
-			if (actionable === 0) { handoff = true; return "drained"; }
+			if (actionable === 0) {
+				drainedAt ??= now();
+				const remainingLifetime = CODING_SKIN_WORKER_LIFETIME_MS - (now() - workerStartedAt);
+				const remainingIdle = 2 * 60_000 - (now() - Math.max(drainedAt, lastCallbackAt));
+				if (remainingLifetime <= 0 || remainingIdle <= 0) { handoff = true; return "drained"; }
+				// Short slices, so a turn spooled while idle is captured within seconds instead of after the window.
+				await sleep(Math.min(remainingLifetime, remainingIdle, 5_000));
+			}
 		}
 	} finally {
 		if (server) {

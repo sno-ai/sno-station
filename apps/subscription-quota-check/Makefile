@@ -20,7 +20,7 @@ package:
 	for rule in \
 		'keys|. == ["need_values","program_ids","schema_version","slot_ids","version_pattern"]' \
 		'.schema_version == 1' \
-		'(.program_ids|sort) == ["heartbeat","reach","subscription-quota-check"]' \
+		'(.program_ids|sort) == ["heartbeat","reach","report-time","subscription-quota-check"]' \
 		'(.need_values|sort) == ["optional","preferred","required"]' \
 		'(.slot_ids|sort) == ["2.pre-turn-context-injection","3.reader-to-agent-delivery","4.background-processes","4.file-read-write","4.shell"]' \
 		'.version_pattern == "^[0-9]+[.][0-9]+([.][0-9]+)?$$"'; do

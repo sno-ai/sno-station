@@ -1,6 +1,6 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join } from "node:path";
-import { CODING_SKIN_HOOKS, type CodingSkinHookName } from "@snoai/sno-station-mem/coding-skin";
+import { CODING_SKIN_HOOKS, type CodingSkinHookName } from "@snoai/memory/coding-skin";
 import { z } from "zod";
 import { APP_NAME } from "./constants.js";
 import { MESSAGES } from "./messages.js";

@@ -1,1 +1,1 @@
-export { encodeDiagnostic, writeEmergencyDiagnostic } from "@snoai/sno-station-mem/diagnostic-encoder";
+export { encodeDiagnostic, writeEmergencyDiagnostic } from "@snoai/memory/diagnostic-encoder";

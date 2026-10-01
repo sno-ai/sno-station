@@ -10,6 +10,9 @@ const events = [
 	["SessionStart", "session-start", 15],
 	["UserPromptSubmit", "user-prompt-submit", 8],
 	["Stop", "stop", 5],
+	["SessionEnd", "session-end", 8],
+	["PreToolUse", "pre-tool-use", 5],
+	["PostToolUse", "post-tool-use", 8],
 ] as const;
 const programPath = "/opt/sno/bin/sno-mem-claude";
 let configDir: string;
@@ -36,7 +39,7 @@ async function settings() {
 }
 
 describe("Claude settings installation and diagnosis", () => {
-	it("creates only the three hook groups, absolute permission and skill", async () => {
+	it("creates only the six hook groups, absolute permission and skill", async () => {
 		await install();
 		const installed = await settings();
 		expect(Object.keys(installed).sort()).toEqual(["hooks", "permissions"]);

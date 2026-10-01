@@ -4,11 +4,12 @@ import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { CostAggregator } from "../../../../packages/sno-station-mem/src/engine/observability/cost-aggregator.ts";
+import { CostAggregator } from "../../../../packages/memory/src/engine/observability/cost-aggregator.ts";
 import { createRuntimeObservabilityController } from "../../../../apps/mem-claw/src/hooks/openclaw-observe-controller.ts";
 import { memClawPlugin } from "../../../../apps/mem-claw/src/install/openclaw-plugin-runtime.ts";
 import { OpenClawPluginApiHarness } from "../helpers/openclaw-harness.ts";
 import { createTestDb } from "../helpers/test-db.ts";
+import { writeSettingsFixture } from "../../../packages/memory/fixtures/settings-file-fixture.ts";
 
 type ObserveEnvelope = {
 	event_type?: unknown;
@@ -61,6 +62,7 @@ describe("observe session lifecycle", () => {
 		const testDb = createTestDb();
 		dbPath = testDb.dbPath;
 		dbCleanup = testDb.cleanup;
+		process.env.SNO_PROFILE_DIR = join(stateDir, "sno");
 
 		observeServer = createServer(async (req, res) => {
 			if (req.method === "POST" && req.url === "/api/v1/identity/register-machine") {
@@ -90,10 +92,11 @@ describe("observe session lifecycle", () => {
 		await listen(observeServer);
 		const address = observeServer.address() as AddressInfo;
 		observeBaseUrl = `http://127.0.0.1:${address.port}`;
+		writeSettingsFixture(join(stateDir, "sno"), { mode: "local-first", store: { path: dbPath, encryptionKey: testDb.encryptionKey }, embedding: { cacheDir: "" }, capture: { ambient: false, sessionStrategy: "none" }, recall: { auto: false }, telemetry: { observe: { enabled: true, baseUrl: observeBaseUrl } } });
 	});
 
 	afterEach(async () => {
-		for (const harness of runtimeHarnesses) await harness.stopServices();
+		for (const harness of runtimeHarnesses) await harness.stopServices?.();
 		runtimeHarnesses.length = 0;
 		await close(observeServer);
 		dbCleanup();
@@ -126,7 +129,7 @@ describe("observe session lifecycle", () => {
 			{ runtimeAgentId: "parsed-agent" },
 		);
 		runtimeHarnesses.push(harness);
-		await memClawPlugin.register(harness);
+		await memClawPlugin.register?.(harness);
 
 		const agentEnd = harness.getOnHookHandler("agent_end");
 		expect(agentEnd).toBeDefined();
@@ -193,7 +196,7 @@ describe("observe session lifecycle", () => {
 			{ runtimeAgentId: "parsed-agent" },
 		);
 		runtimeHarnesses.push(harness);
-		await memClawPlugin.register(harness);
+		await memClawPlugin.register?.(harness);
 
 		const beforeAgentStart = harness.getOnHookHandler("before_prompt_build");
 		expect(beforeAgentStart).toBeDefined();
@@ -264,7 +267,7 @@ describe("observe session lifecycle", () => {
 			{ runtimeAgentId: "parsed-agent" },
 		);
 		runtimeHarnesses.push(harness);
-		await memClawPlugin.register(harness);
+		await memClawPlugin.register?.(harness);
 
 		const agentEnd = harness.getOnHookHandler("agent_end");
 		expect(agentEnd).toBeDefined();
@@ -339,7 +342,6 @@ describe("observe session lifecycle", () => {
 				embedding: { dimensions: 1024 },
 				sessionStrategy: "none",
 			} as never,
-			dbPath,
 			stateDir,
 			observability: observability as never,
 		});
@@ -407,7 +409,6 @@ describe("observe session lifecycle", () => {
 				embedding: { dimensions: 1024 },
 				sessionStrategy: "none",
 			} as never,
-			dbPath,
 			stateDir,
 			observability: observability as never,
 		});

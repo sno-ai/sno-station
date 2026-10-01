@@ -1,0 +1,2 @@
+import { getDek } from "@snoai/sqlite-crypto";
+export const forbiddenHostKey = getDek;

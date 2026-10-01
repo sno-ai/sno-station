@@ -1,1 +1,1 @@
-export { main } from "@snoai/sno-station-mem/memdump";
+export { main } from "@snoai/memory/memdump";

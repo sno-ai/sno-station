@@ -3,16 +3,23 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { chdir, cwd } from "node:process";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { CostAggregator } from "../../../../packages/sno-station-mem/src/engine/observability/cost-aggregator.ts";
-import { ObservableLlmClient } from "../../../../packages/sno-station-mem/src/engine/observability/observable-llm-client.ts";
-import { readSnoStationCoreWorkspaceVersion } from "../../../../packages/sno-station-mem/src/engine/observability/version-metadata.ts";
+import { CostAggregator } from "../../../../packages/memory/src/engine/observability/cost-aggregator.ts";
+import { ObservableLlmClient } from "../../../../packages/memory/src/engine/observability/observable-llm-client.ts";
+import {
+	readInstalledPackageVersion,
+	readNamedPackageVersion,
+	readSnoStationCoreWorkspaceVersion,
+} from "../../../../packages/memory/src/engine/observability/version-metadata.ts";
+import { createRequire } from "node:module";
+import { readFileSync } from "node:fs";
+import { dirname } from "node:path";
 import { registerRuntimeHooks } from "../../../../apps/mem-claw/src/hooks/openclaw-runtime-hooks.ts";
 import {
 	createLlmClient,
 	type LlmClient,
-} from "../../../../packages/sno-station-mem/src/model/llm-client.ts";
-import { pickLlmRoutingConfig } from "../../../../packages/sno-station-mem/src/model/llm-mode-routing.ts";
-import { pluginConfigSchema } from "../../../../packages/sno-station-mem/src/engine/shared/types.ts";
+} from "../../../../packages/memory/src/model/llm-client.ts";
+import { pickLlmRoutingConfig } from "../../../../packages/memory/src/model/llm-mode-routing.ts";
+import { pluginConfigSchema } from "../../../../packages/memory/src/engine/shared/types.ts";
 
 /**
  * The local ranker, stated explicitly. Nothing in this file exercises the remote
@@ -20,6 +27,7 @@ import { pluginConfigSchema } from "../../../../packages/sno-station-mem/src/eng
  * (owner ruling 2026-08-30), so the fixture names the ranker it has always used.
  */
 const LOCAL_RERANK = { retrieval: { rerank: "lightweight" } } as const;
+const modelCalls = JSON.parse(readFileSync(new URL("../../../../packages/memory/settings.default.json", import.meta.url), "utf8")).modelCalls;
 
 type HookHandler = (...args: unknown[]) => unknown;
 
@@ -102,8 +110,7 @@ describe("observe token sources and version metadata", () => {
 
 		await client.completeJson({
 			prompt: "extract memory",
-			callLabel: "test",
-			adapterSlot: "memory-extract",
+			callId: "E1",
 		});
 		await Promise.all(tasks);
 
@@ -143,8 +150,7 @@ describe("observe token sources and version metadata", () => {
 
 		await client.completeJson({
 			prompt: "extract memory",
-			callLabel: "test",
-			adapterSlot: "memory-extract",
+			callId: "E1",
 		});
 		await Promise.all(tasks);
 
@@ -169,7 +175,7 @@ describe("observe token sources and version metadata", () => {
 				tasks.push(task());
 			},
 		};
-		const routing = pickLlmRoutingConfig(pluginConfigSchema.parse({ mode: "local-first" }));
+		const routing = pickLlmRoutingConfig({ ...pluginConfigSchema.parse({ mode: "local-first" }), modelCalls });
 		const inner = createLlmClient({ preset: "mem_claw/sno_ai_extract", routing });
 		const client = new ObservableLlmClient(
 			inner,
@@ -181,8 +187,7 @@ describe("observe token sources and version metadata", () => {
 		await expect(
 			client.completeJson({
 				prompt: "extract memory",
-				callLabel: "memory-extract-episodic",
-				adapterSlot: "memory-extract",
+				callId: "E1",
 			}),
 		).resolves.toBeNull();
 		await Promise.all(tasks);
@@ -201,11 +206,10 @@ describe("observe token sources and version metadata", () => {
 			},
 		};
 		const routing = pickLlmRoutingConfig(
-			pluginConfigSchema.parse({
+			{ ...pluginConfigSchema.parse({
 				...LOCAL_RERANK,
 				mode: "agent-native",
-				llmGates: { agentWriteCapture: true },
-			}),
+			}), modelCalls },
 		);
 		const inner = createLlmClient({
 			preset: "mem_claw/sno_ai_extract",
@@ -226,8 +230,7 @@ describe("observe token sources and version metadata", () => {
 		await expect(
 			client.completeText({
 				prompt: "summarize session",
-				callLabel: "memory-reflection",
-				adapterSlot: "summary-build",
+				callId: "R1",
 			}),
 		).resolves.toBe("host reflection");
 		await Promise.all(tasks);
@@ -263,8 +266,7 @@ describe("observe token sources and version metadata", () => {
 
 		await client.completeJson({
 			prompt: "extract memory",
-			callLabel: "test",
-			adapterSlot: "memory-extract",
+			callId: "E1",
 		});
 		await Promise.all(tasks);
 
@@ -296,6 +298,112 @@ describe("observe token sources and version metadata", () => {
 		chdir(nested);
 
 		expect(readSnoStationCoreWorkspaceVersion({})).toBe("0.9.82");
+	});
+
+	it("reads the plugin's own manifest and the host's manifest for agent.identify versions", () => {
+		const memoryManifest = JSON.parse(readFileSync(
+			join(cwd(), "..", "..", "packages", "memory", "package.json"), "utf8",
+		)) as { version: string };
+		expect(readInstalledPackageVersion()).toBe(memoryManifest.version);
+
+		// The gateway's entry file lives under node_modules/openclaw/dist; resolve a real file there.
+		const hostEntry = createRequire(import.meta.url).resolve("openclaw/plugin-sdk/core");
+		const hostRoot = hostEntry.slice(0, hostEntry.indexOf("/node_modules/openclaw/") + "/node_modules/openclaw".length);
+		const hostManifest = JSON.parse(readFileSync(join(hostRoot, "package.json"), "utf8")) as { version: string };
+		expect(readNamedPackageVersion(dirname(hostEntry), "openclaw")).toBe(hostManifest.version);
+		expect(readNamedPackageVersion(dirname(hostEntry), "not-a-package")).toBeUndefined();
+	});
+
+	it("emits an error instead of an empty llm.call when the inner client returns nothing", async () => {
+		const tasks: Promise<unknown>[] = [];
+		const emit = vi.fn(async () => undefined);
+		const emitError = vi.fn(async () => undefined);
+		const observability = {
+			emit,
+			emitError,
+			trackBestEffort: (_label: string, task: () => Promise<void>) => {
+				tasks.push(task());
+			},
+		};
+		const inner = makeLlmClient(null);
+		inner.completeJson = async <T>(): Promise<T | null> => null;
+		const client = new ObservableLlmClient(
+			inner,
+			{ preset: "mem_claw/sno_ai_extract" },
+			observability as never,
+			() => "019df6f3-eccc-73b5-a182-58c23cf121ea",
+		);
+
+		await client.completeJson({ prompt: "extract memory", callId: "E1" });
+		await Promise.all(tasks);
+
+		expect(emit).not.toHaveBeenCalled();
+		expect(emitError).toHaveBeenCalledWith(
+			"llm.call:usage_missing",
+			expect.anything(),
+			"019df6f3-eccc-73b5-a182-58c23cf121ea",
+		);
+	});
+
+	it("measures host llm.call latency from llm_input and passes cache tokens through", async () => {
+		vi.useFakeTimers();
+		const tasks: Promise<unknown>[] = [];
+		const emit = vi.fn(async () => undefined);
+		const handlers = registerRuntimeHookTest({
+			observability: {
+				emit,
+				emitError: vi.fn(async () => undefined),
+				trackBestEffort: (_label: string, task: () => Promise<void>) => { tasks.push(task()); },
+			},
+			lookupActiveObserveSession: () => "019df6f3-eccc-73b5-a182-58c23cf121ea",
+		});
+		const llmInput = handlers.get("llm_input");
+		const llmOutput = handlers.get("llm_output");
+		if (!llmInput || !llmOutput) throw new Error("llm hooks were not registered");
+
+		await llmInput({ runId: "run-1", provider: "openai", model: "gpt-4o", prompt: "hi", historyMessages: [], imagesCount: 0 }, { sessionId: "s" });
+		vi.advanceTimersByTime(1_235);
+		await llmOutput(
+			{ runId: "run-1", provider: "openai", model: "gpt-4o", usage: { input: 6402, output: 241, cacheRead: 5000, cacheWrite: 12 } },
+			{ sessionId: "s" },
+		);
+		await Promise.all(tasks);
+
+		expect(emit).toHaveBeenCalledWith(expect.objectContaining({
+			eventType: "llm.call",
+			payload: expect.objectContaining({
+				latency_ms: 1_235,
+				cache_read_tokens: 5000,
+				cache_write_tokens: 12,
+			}),
+		}));
+		const emitted = emit.mock.calls.at(0) as unknown as [{ payload: { latency_ms: number } }] | undefined;
+		const latency = emitted?.[0].payload.latency_ms;
+		expect(Number.isInteger(latency)).toBe(true);
+	});
+
+	it("emits an error instead of an empty host llm.call when the host reports no usage or model", async () => {
+		const tasks: Promise<unknown>[] = [];
+		const emit = vi.fn(async () => undefined);
+		const emitError = vi.fn(async () => undefined);
+		const handlers = registerRuntimeHookTest({
+			observability: {
+				emit,
+				emitError,
+				trackBestEffort: (_label: string, task: () => Promise<void>) => { tasks.push(task()); },
+			},
+			lookupActiveObserveSession: () => "019df6f3-eccc-73b5-a182-58c23cf121ea",
+		});
+		const llmOutput = handlers.get("llm_output");
+		if (!llmOutput) throw new Error("llm_output hook was not registered");
+
+		await llmOutput({ runId: "run-2", provider: "", model: "", usage: { input: 0, output: 0 } }, { sessionId: "s" });
+		await llmOutput({ runId: "run-3", provider: "openai", model: "gpt-4o" }, { sessionId: "s" });
+		await Promise.all(tasks);
+
+		expect(emit).not.toHaveBeenCalled();
+		expect(emitError).toHaveBeenCalledTimes(2);
+		expect(emitError).toHaveBeenCalledWith("llm.call:usage_missing", expect.stringContaining("run-2"), "019df6f3-eccc-73b5-a182-58c23cf121ea");
 	});
 
 	it("emits host-agent llm_output usage without taking over the hook result", async () => {

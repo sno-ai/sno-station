@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-import { type RemUpdateLocale } from "../../../../packages/sno-station-mem/src/engine/rem/index.ts";
+import { type RemUpdateLocale } from "../../../../packages/memory/src/engine/rem/index.ts";
 
 const source = "Lives in San Diego. Moved from San Francisco in 2024.";
 

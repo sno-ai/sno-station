@@ -1,9 +1,29 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { mkdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
+import { setTimeout as sleep } from "node:timers/promises";
 import { z } from "zod";
-import { writeJsonAtomic } from "./files.js";
-import { sessionPath, spoolDirectory } from "./paths.js";
+import { acquirePidFileLock, writeJsonAtomic } from "./files.js";
+import { appStateRoot, sessionPath, spoolDirectory } from "./paths.js";
+
+const lastSessionSchema = z.object({ sessionId: z.string().min(1), transcriptPath: z.string().min(1) });
+
+function lastSessionPath(project: string): string {
+	return join(appStateRoot(), "last-session", `${createHash("sha256").update(project).digest("hex")}.json`);
+}
+
+export async function readLastSession(project: string): Promise<z.infer<typeof lastSessionSchema> | undefined> {
+	try {
+		return lastSessionSchema.parse(JSON.parse(await readFile(lastSessionPath(project), "utf8")));
+	} catch (error) {
+		if (error instanceof Error && "code" in error && error.code === "ENOENT") return undefined;
+		throw error;
+	}
+}
+
+export async function writeLastSession(project: string, sessionId: string, transcriptPath: string): Promise<void> {
+	await writeJsonAtomic(lastSessionPath(project), { sessionId, transcriptPath });
+}
 
 const receiptEventSchema = z.object({
 	invocations: z.number().int().nonnegative().default(0),
@@ -18,15 +38,11 @@ const receiptEventSchema = z.object({
 
 const sessionStateSchema = z.object({
 	sessionId: z.string().min(1),
+	skillRunsReported: z.number().int().nonnegative().default(0),
 	prompts: z.record(z.string(), z.object({ prompt: z.string(), at: z.number() })).default({}),
-	ledger: z.array(z.object({
-		id: z.string(),
-		chars: z.number().int().nonnegative(),
-		hookEvent: z.string(),
-		turnId: z.string().optional(),
-	})).default([]),
-	ledgerChars: z.number().int().nonnegative().default(0),
 	receipt: z.record(z.string(), receiptEventSchema).default({}),
+	/** PreToolUse arrival time by tool_use_id, consumed by PostToolUse to measure the call. */
+	toolStarts: z.record(z.string(), z.number()).default({}),
 });
 
 export type SessionState = z.infer<typeof sessionStateSchema>;
@@ -44,6 +60,27 @@ export async function readSession(sessionId: string): Promise<SessionState> {
 
 export async function writeSession(state: SessionState): Promise<void> {
 	await writeJsonAtomic(sessionPath(state.sessionId), state);
+}
+
+const SESSION_LOCK_WAIT_MS = 2000;
+
+/** Applies `change` to the newest session file under a lock: tool hooks run as parallel processes, and a plain read-then-write lets the last one erase the others. */
+export async function updateSession(sessionId: string, change: (state: SessionState) => void): Promise<void> {
+	const lockPath = `${sessionPath(sessionId)}.lock`;
+	const deadline = Date.now() + SESSION_LOCK_WAIT_MS;
+	let lock = await acquirePidFileLock(lockPath, SESSION_LOCK_WAIT_MS);
+	while (!lock) {
+		if (Date.now() >= deadline) throw new Error("session-state-busy");
+		await sleep(10);
+		lock = await acquirePidFileLock(lockPath, SESSION_LOCK_WAIT_MS);
+	}
+	try {
+		const state = await readSession(sessionId);
+		change(state);
+		await writeSession(state);
+	} finally {
+		await lock.release();
+	}
 }
 
 export function recordInvocation(state: SessionState, event: string, latencyMs: number): void {
@@ -75,12 +112,6 @@ export function recordInjection(state: SessionState, event: string, items: numbe
 	const receipt = state.receipt[event] ?? receiptEventSchema.parse({});
 	receipt.itemsInjected += items;
 	receipt.charsInjected += chars;
-	state.receipt[event] = receipt;
-}
-
-export function recordLedgerReset(state: SessionState, event: string): void {
-	const receipt = state.receipt[event] ?? receiptEventSchema.parse({});
-	receipt.resets += 1;
 	state.receipt[event] = receipt;
 }
 

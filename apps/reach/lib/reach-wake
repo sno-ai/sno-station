@@ -777,6 +777,7 @@ parse_start() {
     JOURNEY=''
     MECHANISM=''
     OUTBOX_ENTRY=''
+    ONCE=no
     while (($# > 0)); do
         case "$1" in
             --root) ROOT="${2:-}"; shift 2 ;;
@@ -786,6 +787,7 @@ parse_start() {
             --work) JOURNEY="${2:-}"; shift 2 ;;
             --mechanism) MECHANISM="${2:-}"; shift 2 ;;
             --outbox-entry) OUTBOX_ENTRY="${2:-}"; shift 2 ;;
+            --once) ONCE=yes; shift ;;
             *) die 64 "unsupported start option: $1" ;;
         esac
     done
@@ -915,6 +917,19 @@ run_start() {
             "$RECIPIENT" >&2
         return 0
     fi
+    if [[ "$ONCE" == yes ]]; then
+        mark_terminal "$state_file" not-applicable "$outcome" "$now"
+        case "$outcome" in
+            rang | rang-unverified | busy)
+                printf 'reach: delivery succeeded; wake %s reached %s once. Do not resend.\n' \
+                    "$outcome" "$RECIPIENT" >&2
+                return 0
+                ;;
+        esac
+        printf 'reach: delivery succeeded; wake %s for %s failed; no retry is scheduled. Do not resend.\n' \
+            "$outcome" "$RECIPIENT" >&2
+        return 6
+    fi
     if [[ "$outcome" == rang ]] && message_effect "$state_file"; then
         mark_terminal "$state_file" confirmed rang "$now"
         printf 'wake confirmed recipient=%s message=%s\n' "$RECIPIENT" "$MESSAGE_ID" >&2
@@ -931,7 +946,8 @@ run_start() {
     fi
     # The doorbell reached a live channel: rang and rang-unverified put the
     # keystroke into the recipient's window, and busy is a recipient proven
-    # awake mid-turn, which is not a failure class. None of the three is confirmed yet -- the effect
+    # awake mid-turn, so it is not a failure class. None of the three is
+    # confirmed yet -- the effect
     # at the destination is only observable once the recipient acts, which the
     # detached retry above watches for -- so the attempt stays pending and is
     # never marked terminal here.  Reporting these as a failed wake made the

@@ -5,18 +5,18 @@ const diagnosticLog = createDiagnosticLogger("mem-claw:openclaw-observe-controll
  * @boundary Observability correlation only; memory hooks and service lifecycle live elsewhere.
  */
 
-import type { PluginHookAgentContext } from "@snoai/sno-station-mem/internal/engine/bindings/sno-station-mem-hook-types";
+import type { PluginHookAgentContext } from "@snoai/memory/internal/engine/bindings/sno-station-mem-hook-types";
 import { AsyncLocalStorage } from "node:async_hooks";
-import { ObserveSessionRegistry } from "@snoai/sno-station-mem/internal/engine/observability/session-registry";
+import { ObserveSessionRegistry } from "@snoai/memory/internal/engine/observability/session-registry";
 import type { OpenClawPluginApi as SnoStationMemPluginApi } from "openclaw/plugin-sdk/core";
-import type { PluginConfig } from "@snoai/sno-station-mem/internal/config/plugin-config-schema";
-import type { PluginObservability } from "@snoai/sno-station-mem/internal/engine/observability/adapter";
-import { SNO_OBSERVE_FLUSH_TIMEOUT_MS } from "@snoai/sno-station-mem/internal/config/index";
+import type { PluginConfig } from "@snoai/memory/internal/config/plugin-config-schema";
+import type { PluginObservability } from "@snoai/memory/internal/engine/observability/adapter";
+import { SNO_OBSERVE_FLUSH_TIMEOUT_MS } from "@snoai/memory/internal/config/index";
 import { withToolObservabilityApi } from "../tools/with-tool-observability";
 import {
 	resolveObserveRuntimeSessionId,
 	resolveObserveRuntimeSessionIds,
-} from "@snoai/sno-station-mem/internal/engine/bindings/sno-station-mem-session-state";
+} from "@snoai/memory/internal/engine/bindings/sno-station-mem-session-state";
 
 type RuntimeObserveControllerArgs = {
 	api: SnoStationMemPluginApi;
@@ -138,7 +138,7 @@ export function createRuntimeObservabilityController({
 					sessionUuid,
 					payload: {
 						session_uuid: sessionUuid,
-						...(durationMs !== undefined ? { duration_ms: durationMs } : {}),
+						...(durationMs !== undefined ? { duration_ms: Math.max(0, Math.round(durationMs)) } : {}),
 					},
 				});
 				progress.sessionEndEmitted = true;
@@ -167,7 +167,7 @@ export function createRuntimeObservabilityController({
 			startedObserveSessions.delete(sessionUuid);
 			finalizedObserveSessions.delete(sessionUuid);
 		} catch (error) {
-			diagnosticLog.warn("Memory session finalization failed", { error, session_reference: privateLogReference(sessionUuid) }, { event_name: "memory.openclaw_observe_controller.memory.session.finalization.failed", file: "apps/mem-claw/src/hooks/openclaw-observe-controller.ts", function: "finalizeObserveSession", site_id: "plugin.openclaw-observe-controller.finalizeObserveSession.8cc8e6a683" });
+			diagnosticLog.error("Memory session finalization failed", { error, session_reference: privateLogReference(sessionUuid) }, { event_name: "memory.openclaw_observe_controller.memory.session.finalization.failed", file: "apps/mem-claw/src/hooks/openclaw-observe-controller.ts", function: "finalizeObserveSession", site_id: "plugin.openclaw-observe-controller.finalizeObserveSession.8cc8e6a683" });
 		}
 	};
 

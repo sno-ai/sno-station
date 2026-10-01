@@ -270,8 +270,7 @@ export function configureDiagnosticMetadata(resource: LogResource, catalog: LogS
 	configuredMetadata = { resource: { ...resource }, catalog };
 }
 
-export function writeEmergencyDiagnostic(input: DiagnosticInput): void {
-	const requested = process.env["LOG_LEVEL"];
+export function writeEmergencyDiagnostic(input: DiagnosticInput, requested?: LogLevel): void {
 	const effective = requested && Object.hasOwn(LOG_SEVERITY, requested)
 		? LOG_SEVERITY[requested as LogLevel] : LOG_SEVERITY.info;
 	if (LOG_SEVERITY[input.level] < effective) return;

@@ -1,0 +1,65 @@
+{
+  "qcg11": {
+    "caseCount": 2,
+    "estimatedSeconds": 900,
+    "maxModelCalls": 30,
+    "modelCallsByCase": { "all-off": 0, "built-on": 30 },
+    "cases": ["all-off", "built-on"]
+  },
+  "qcg12": {
+    "caseCount": 1,
+    "estimatedSeconds": 300,
+    "maxModelCalls": 56,
+    "source": "2026-08-08 measured persona corpus: 114 scanned, 38 admitted, 18 verdicts, 0 applied",
+    "expected": { "terminal": "done", "appliedFraction": 0, "persona": "fully-judged" }
+  },
+  "qcg14": {
+    "caseCount": 1,
+    "estimatedSeconds": 120,
+    "maxRealModelResponses": 0,
+    "maxUnavailableModelAttempts": 18,
+    "source": "2026-08-07 measured unreachable-route outage",
+    "expected": { "terminal": "failed", "persona": "failed", "operator": "model outage" }
+  },
+  "qcg25": {
+    "configurationCount": 4,
+    "negativeControlCount": 2,
+    "jobCount": 10,
+    "estimatedSeconds": 240,
+    "maxModelCalls": 15,
+    "cases": [
+      { "name": "both-on-real", "kind": "real", "jobTypes": ["rem-update", "rem-replace"], "operations": { "rem-update": true, "rem-replace": true, "rem-distill": false, "rem-retire": false } },
+      { "name": "update-only-real", "kind": "real", "jobTypes": ["rem-update", "rem-replace"], "operations": { "rem-update": true, "rem-replace": false, "rem-distill": false, "rem-retire": false } },
+      { "name": "replace-only-real", "kind": "real", "jobTypes": ["rem-update", "rem-replace"], "operations": { "rem-update": false, "rem-replace": true, "rem-distill": false, "rem-retire": false } },
+      { "name": "all-off-real", "kind": "real", "jobTypes": ["rem-update", "rem-replace"], "operations": { "rem-update": false, "rem-replace": false, "rem-distill": false, "rem-retire": false } },
+      { "name": "coupled-negative-update", "kind": "coupled-negative", "jobTypes": ["rem-update"], "operations": { "rem-update": true, "rem-replace": false, "rem-distill": false, "rem-retire": false } },
+      { "name": "coupled-negative-replace", "kind": "coupled-negative", "jobTypes": ["rem-replace"], "operations": { "rem-update": false, "rem-replace": true, "rem-distill": false, "rem-retire": false } }
+    ]
+  },
+  "qcg29": {
+    "caseCount": 8,
+    "estimatedSeconds": 480,
+    "maxAdditionalRealModelResponses": 0,
+    "reuses": {
+      "low applied fraction": "the single QCG-12 real run",
+      "all model calls unavailable": "the single QCG-14 real run"
+    },
+    "cases": [
+      "configuration invalid or unreadable",
+      "entry-gate refusal",
+      "operation-gate refusal",
+      "operation switched off",
+      "operation not built",
+      "master switch off",
+      "low applied fraction",
+      "all model calls unavailable"
+    ]
+  },
+  "uniqueWaveTotals": {
+    "estimatedSeconds": 1620,
+    "maxRealModelResponsesIncludingChapter0": 102,
+    "remainingRealModelResponses": 18,
+    "maxUnavailableModelAttempts": 18,
+    "accounting": "Chapter0 used 1 real response; QCG-25 is capped at 15, QCG-12 measured 56, QCG-11 is capped at 30, QCG-14 has zero real responses and at most 18 unavailable attempts, QCG-17 is scripted, and QCG-29 reuses QCG-12/QCG-14 without additional model work"
+  }
+}

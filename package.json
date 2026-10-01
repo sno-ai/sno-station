@@ -1,39 +1,48 @@
 {
-	"name": "sno-station",
-	"private": true,
-	"license": "Apache-2.0",
-	"packageManager": "npm@11.9.0",
-	"workspaces": [
-		"apps/*",
-		"packages/*",
-		"!packages/chunking",
-		"!packages/content-sanitizer"
-	],
-	"engines": {
-		"node": ">=24.15.0 <25"
-	},
-	"scripts": {
-		"build": "npm run build --workspace @snoai/common-core && npm run build --workspace @snoai/utils && npm run build --workspace @snoai/embedder && npm run build --workspace @snoai/sno-observe && npm run build --workspace @snoai/sno-station-core-crypto && npm run build --workspace @snoai/sno-station-mem && npm run build --workspace @snoai/mem-claw && npm run build --workspace @snoai/mem-claude && npm run build --workspace @snoai/mem-codex",
-		"typecheck": "npm run typecheck --workspaces --if-present",
-		"lint": "npm run lint --workspaces --if-present"
-	},
-	"devDependencies": {
-		"@biomejs/biome": "^2.0.0",
-		"@types/node": "^22.19.17",
-		"better-sqlite3": "^13.0.3",
-		"drizzle-kit": "^0.31.10",
-		"drizzle-orm": "^0.45.2",
-		"esbuild": "^0.28.1",
-		"hono": "^4.12.18",
-		"tar-stream": "3.2.0",
-		"tsx": "^4.22.4",
-		"typescript": "^7.0.2",
-		"vitest": "^4.1.11"
-	},
+  "name": "sno-station",
+  "private": true,
+  "license": "Apache-2.0",
+  "description": "Sno Station - shared memory and tools for AI agents",
+  "workspaces": [
+    "apps/*",
+    "packages/*",
+    "!packages/chunking",
+    "!packages/content-sanitizer"
+  ],
+  "packageManager": "npm@11.9.0",
+  "scripts": {
+    "build": "npm run build --workspace @snoai/common-core && npm run build --workspace @snoai/utils && npm run build --workspace @snoai/embedder && npm run build --workspace @snoai/observability && npm run build --workspace @snoai/sqlite-crypto && npm run build --workspace @snoai/memory && npm run build --workspace @snoai/mem-claw && npm run build --workspace @snoai/mem-claude && npm run build --workspace @snoai/mem-codex",
+    "dev": "npm run dev --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "lint:fix": "npm run lint:fix --workspaces --if-present",
+    "gate:extraction-p1": "npm --workspace @snoai/mem-claw run gate:extraction-p1",
+    "clean": "npm run clean --workspaces --if-present",
+    "test:integration": "npm run test:integration --workspaces --if-present",
+    "test:e2e": "npm run test:e2e --workspaces --if-present"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.0.0",
+    "@types/node": "^22.19.17",
+    "better-sqlite3": "^13.0.3",
+    "drizzle-kit": "^0.31.10",
+    "drizzle-orm": "^0.45.2",
+    "esbuild": "^0.28.1",
+    "hono": "^4.12.18",
+    "tar-stream": "3.2.0",
+    "tsx": "^4.22.4",
+    "typescript": "^7.0.2"
+  },
+  "engines": {
+    "node": ">=22.22.3 <23 || >=24.15.0 <25 || >=25.9.0"
+  },
+  "type": "module",
 	"overrides": {
 		"@esbuild-kit/core-utils": {
 			"esbuild": "0.25.12"
 		},
-		"sharp": "0.35.4"
-	}
+    "@mariozechner/pi-ai": {
+      "@anthropic-ai/sdk": "^0.92.0"
+    }
+  }
 }

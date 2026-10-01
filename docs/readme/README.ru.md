@@ -97,7 +97,7 @@ Sno onboarding
 | Часть | Статус |
 |---|---|
 | `packages/chunking` | В этом репозитории, протестирован, опубликован на npm |
-| Общие пакеты (`common-core`, `utils`, `embedder`, `sno-observe`, `sno-station-core-crypto`, `content-sanitizer`) | В этом репозитории |
+| Общие пакеты (`common-core`, `utils`, `embedder`, `observability`, `sqlite-crypto`, `content-sanitizer`) | В этом репозитории |
 | Общая память между Claude Code, Codex и OpenClaw | Движок и все три скина в этом репозитории; доказательство на чистой машине ожидается |
 | Sno Reach — агенты общаются друг с другом, без демона | Исходный код в этом репозитории; релизные архивы ожидаются |
 | Цикл RSI (навык) | На этой неделе |

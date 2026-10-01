@@ -1,0 +1,31 @@
+{
+	"extends": "../tsconfig.json",
+	"compilerOptions": {
+		"allowImportingTsExtensions": true,
+		"noEmit": true,
+		"declaration": false,
+		"declarationMap": false,
+		"noUnusedLocals": false,
+		"noUnusedParameters": false,
+		// Two rules from the root config are off for tests, and only these two. Measured
+		// 2026-08-13 over the whole tree: noPropertyAccessFromIndexSignature alone produced
+		// 1349 diagnostics and exactOptionalPropertyTypes 188, none of which describe a test
+		// that would pass while the product is broken. Leaving them on is what made this
+		// config unrunnable, and an unrunnable check is the same as no check.
+		"noPropertyAccessFromIndexSignature": false,
+		"exactOptionalPropertyTypes": false,
+		// Must mirror apps/mem-claw/tsconfig.json. Without the two `@/` entries the mem-claw
+		// tests report 44 phantom "cannot find module" errors that are this file's fault.
+		"paths": {
+			"@config/*": ["../config/*"],
+			"@/config": ["../apps/mem-claw/config/index.ts"],
+			"@/*": ["../apps/mem-claw/src/*"]
+		}
+	},
+	"include": ["**/*.ts"],
+	// `apps/mem-claw` was excluded here until 2026-08-13. That exclusion, plus the fact that
+	// nothing ever ran this config, is why 20 of the 40 cases in
+	// apps/mem-claw/integration/rem-update-rewrite.test.ts could call the composer without a
+	// required argument for weeks and report as an ordinary red.
+	"exclude": ["node_modules"]
+}

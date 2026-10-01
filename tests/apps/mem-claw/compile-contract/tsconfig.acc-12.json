@@ -1,0 +1,4 @@
+{
+	"extends": "../tsconfig.json",
+	"include": ["acc-12-stage-response-port.ts"]
+}
