@@ -9,7 +9,7 @@ const diagnosticLog = createDiagnosticLogger("sno-station-mem:session-serial-gua
 import { setLruEntry } from "../shared/lru";
 
 /**
- * Serial guard for reflection - see PRD section 4.3.
+ * Serial guard for reflection.
  *
  * Two distinct protections:
  *   (1) In-flight lock - boolean, no time bound, blocks parallel re-entry.

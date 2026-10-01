@@ -15,7 +15,7 @@ function sha256(value: string | Uint8Array): string {
 	return createHash("sha256").update(value).digest("hex");
 }
 
-// Frozen, unwired, and kept in place by 60-rem-unbuilt-obligations-prd.md REQ-44; unfreezing is governed by REQ-45.
+// Frozen and unwired; kept in place on purpose.
 export function validateRemProspectiveIdentity(input: {
 	writeIdentitySha256: string;
 	candidateSetSha256: string;
@@ -38,7 +38,7 @@ export function deriveRemWriteIdentity(input: {
 	return sha256(JSON.stringify([input.rowId, input.text, input.contentHash, input.timestamp]));
 }
 
-// Frozen, unwired, and kept in place by 60-rem-unbuilt-obligations-prd.md REQ-44; unfreezing is governed by REQ-45.
+// Frozen and unwired; kept in place on purpose.
 export function deriveRemReplayArtifactIdentity(input: {
 	corpusPath: string;
 	embedderPath: string;
@@ -67,7 +67,7 @@ export function deriveRemReplayArtifactIdentity(input: {
 	};
 }
 
-// Frozen, unwired, and kept in place by 60-rem-unbuilt-obligations-prd.md REQ-44; unfreezing is governed by REQ-45.
+// Frozen and unwired; kept in place on purpose.
 export function validateRemReplayIdentityTuple(input: {
 	corpusSha256: string;
 	embedderSha256: string;
@@ -101,7 +101,7 @@ export function classifyRemCensusLabel(input: {
 	throw new Error(`unknown REM census label: ${input.label}`);
 }
 
-// Frozen, unwired, and kept in place by 60-rem-unbuilt-obligations-prd.md REQ-44; unfreezing is governed by REQ-45.
+// Frozen and unwired; kept in place on purpose.
 export function classifyAllRemCensusLabels(input: {
 	reachability: Record<string, unknown>;
 	contradiction: Record<string, unknown>;
@@ -117,14 +117,14 @@ export function classifyAllRemCensusLabels(input: {
 	};
 }
 
-// Frozen, unwired, and kept in place by 60-rem-unbuilt-obligations-prd.md REQ-44; unfreezing is governed by REQ-45.
+// Frozen and unwired; kept in place on purpose.
 export function validateRemCensusOracleProvenance(input: { authoredBy?: string }): Decision {
 	return input.authoredBy === "product-classifier"
 		? { decision: "refuse", reasonCode: "self_authored_oracle" }
 		: { decision: "allow", reasonCode: null };
 }
 
-// Frozen, unwired, and kept in place by 60-rem-unbuilt-obligations-prd.md REQ-44; unfreezing is governed by REQ-45.
+// Frozen and unwired; kept in place on purpose.
 export function validateRemCensusLabelTuple(input: {
 	reachability: string;
 	contradiction: string;
@@ -139,7 +139,7 @@ export function validateRemCensusLabelTuple(input: {
 		: { decision: "refuse", reasonCode: "label_enum_mismatch" };
 }
 
-// Frozen, unwired, and kept in place by 60-rem-unbuilt-obligations-prd.md REQ-44; unfreezing is governed by REQ-45.
+// Frozen and unwired; kept in place on purpose.
 export function readRetainedRemCensusArtifact(input: {
 	artifactPath: string;
 	generationId: string;
@@ -154,7 +154,7 @@ export function readRetainedRemCensusArtifact(input: {
 	return { decision: "allow", reasonCode: null, artifactSha256: sha256(bytes) };
 }
 
-// Frozen, unwired, and kept in place by 60-rem-unbuilt-obligations-prd.md REQ-44; unfreezing is governed by REQ-45.
+// Frozen and unwired; kept in place on purpose.
 export function produceRemCensusArtifact(input: {
 	producer: string;
 	outputPath: string;
@@ -165,7 +165,7 @@ export function produceRemCensusArtifact(input: {
 	writeFileSync(input.outputPath, `${JSON.stringify({ route: input.producer })}\n`);
 }
 
-// Frozen, unwired, and kept in place by 60-rem-unbuilt-obligations-prd.md REQ-44; unfreezing is governed by REQ-45.
+// Frozen and unwired; kept in place on purpose.
 export function validateRemCensusRouteCoverage(input: readonly { route: string }[]): Decision {
 	const routes = new Set(input.map(({ route }) => route));
 	return routes.has("capture") && routes.has("replay")
@@ -173,7 +173,7 @@ export function validateRemCensusRouteCoverage(input: readonly { route: string }
 		: { decision: "refuse", reasonCode: "route_coverage_incomplete" };
 }
 
-// Frozen, unwired, and kept in place by 60-rem-unbuilt-obligations-prd.md REQ-44; unfreezing is governed by REQ-45.
+// Frozen and unwired; kept in place on purpose.
 export function journalRemGenerationTransition(input: {
 	database: RemDatabaseLike;
 	outgoingGenerationId: string;
@@ -200,7 +200,7 @@ interface BatchEvent {
 	refusal?: string | null;
 }
 
-// Frozen, unwired, and kept in place by 60-rem-unbuilt-obligations-prd.md REQ-44; unfreezing is governed by REQ-45.
+// Frozen and unwired; kept in place on purpose.
 export function summarizeRemBatchEvents(input: {
 	database: RemDatabaseLike;
 	batchId: string;
@@ -238,7 +238,7 @@ export function summarizeRemBatchEvents(input: {
 		);
 }
 
-// Frozen, unwired, and kept in place by 60-rem-unbuilt-obligations-prd.md REQ-44; unfreezing is governed by REQ-45.
+// Frozen and unwired; kept in place on purpose.
 export function recordRemObservedVerdict(input: {
 	database: RemDatabaseLike;
 	pairId: string;
@@ -255,7 +255,7 @@ export function recordRemObservedVerdict(input: {
 		.run(input.pairId, isVerdict ? "VERDICT" : "SAMPLE", isVerdict ? input.observed : null, input.observed);
 }
 
-// Frozen, unwired, and kept in place by 60-rem-unbuilt-obligations-prd.md REQ-44; unfreezing is governed by REQ-45.
+// Frozen and unwired; kept in place on purpose.
 export function recordRemCandidateCapCounts(input: {
 	database: RemDatabaseLike;
 	generationId: string;
@@ -271,7 +271,7 @@ export function recordRemCandidateCapCounts(input: {
 		.run(`candidate-cap:${input.generationId}`, input.generationId, input.total, Math.min(input.total, input.cap));
 }
 
-// Frozen, unwired, and kept in place by 60-rem-unbuilt-obligations-prd.md REQ-44; unfreezing is governed by REQ-45.
+// Frozen and unwired; kept in place on purpose.
 export function reportRemSimilarityCalibration(input: {
 	retainedArtifactPath: string;
 	emittedPairIds: readonly string[];
@@ -293,7 +293,7 @@ export function reportRemSimilarityCalibration(input: {
 	};
 }
 
-// Frozen, unwired, and kept in place by 60-rem-unbuilt-obligations-prd.md REQ-44; unfreezing is governed by REQ-45.
+// Frozen and unwired; kept in place on purpose.
 export function validateRemCalibrationCrossCheck(input: { independent: unknown }): Decision {
 	return input.independent === null || input.independent === undefined
 		? { decision: "refuse", reasonCode: "independent_count_missing" }

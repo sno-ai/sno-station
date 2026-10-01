@@ -11,7 +11,7 @@ export type RemCoverageBuildResult =
 	| { outcome: "accept"; atoms: RemCoverageAtom[] }
 	| { outcome: "refuse"; reason: "empty_reference_set" | "unsegmentable_reference_set" };
 
-// Frozen, unwired, and kept in place by 60-rem-unbuilt-obligations-prd.md REQ-44; unfreezing is governed by REQ-45.
+// Frozen and unwired; kept in place on purpose.
 export function buildRemCoverageAtoms(input: {
 	source: string;
 	format: "structured" | "prose" | "flattened-clauses";
@@ -35,7 +35,7 @@ export interface RemClauseCoverageGateResult {
 	arms: Record<string, "pass" | "fail" | "owner-unset">;
 }
 
-// Frozen, unwired, and kept in place by 60-rem-unbuilt-obligations-prd.md REQ-44; unfreezing is governed by REQ-45.
+// Frozen and unwired; kept in place on purpose.
 export async function validateRemClauseCoverageArtifacts(input: {
 	accuracyFloor: number | null;
 	measuredAccuracy: number | null;
