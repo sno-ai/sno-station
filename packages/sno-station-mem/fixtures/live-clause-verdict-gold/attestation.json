@@ -1,9 +1,0 @@
-{
-  "schema_version": 1,
-  "result": "pass",
-  "artifact_sha256": "fe3e943dfb74741df6ef69c8de2a3500b94b5ec3b4781ca4e25cb4da19a2d882",
-  "prompt_sha256": "c94c6682e8b6f8e101b032250afa3fcb50844a161b7b40401d2d62a0497b178d",
-  "model_config_sha256": "aab260f809035a804e07519f96a9cf6df1b10f55e04a6f26d62c0df12794e95d",
-  "judge_implementation_sha256": "6373580aab7c8f3233656270e65be22ac086f8e33d61f216d37108156ec461b1",
-  "evaluated_at": "2026-09-05T23:15:18.564Z"
-}

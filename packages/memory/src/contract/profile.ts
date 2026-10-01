@@ -16,14 +16,14 @@ export function readSettings(): Settings {
 	} catch (error) {
 		const detail = error instanceof Error && "code" in error && error.code === "ENOENT"
 			? "file" : error instanceof SyntaxError ? `JSON: ${error.message}` : "file";
-		throw new SettingsUnavailableError(`settings unavailable: ${settingsPath}: ${detail}; run sno setup`);
+		throw new SettingsUnavailableError(`settings unavailable: ${settingsPath}: ${detail}; see https://github.com/sno-ai/sno-station/blob/main/docs/memory-setup.md`);
 	}
 	const parsed = settingsSchema.safeParse(raw);
 	if (!parsed.success) {
 		const issue = parsed.error.issues[0];
 		const field = issue?.code === "unrecognized_keys"
 			? [...issue.path, issue.keys[0]].join(".") : issue?.path.join(".") || "settings";
-		throw new SettingsUnavailableError(`settings unavailable: ${settingsPath}: ${field}; run sno setup`);
+		throw new SettingsUnavailableError(`settings unavailable: ${settingsPath}: ${field}; see https://github.com/sno-ai/sno-station/blob/main/docs/memory-setup.md`);
 	}
 	return parsed.data;
 }

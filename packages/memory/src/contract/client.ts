@@ -19,13 +19,13 @@ function clientSettings(): { storePath: string; memoryPackage: { path: string; n
 	const path = getSettingsPath();
 	let value: unknown;
 	try { value = JSON.parse(readFileSync(path, "utf8")); }
-	catch { throw new ContractError("storage-unavailable", `settings unavailable: ${path}: file; run sno setup`); }
+	catch { throw new ContractError("storage-unavailable", `settings unavailable: ${path}: file; see https://github.com/sno-ai/sno-station/blob/main/docs/memory-setup.md`); }
 	const record = value && typeof value === "object" ? value as Record<string, unknown> : {};
 	const memoryPackage = record.memoryPackage && typeof record.memoryPackage === "object"
 		? record.memoryPackage as Record<string, unknown> : {};
 	for (const field of ["path", "node"] as const) {
 		if (typeof memoryPackage[field] !== "string" || !memoryPackage[field])
-			throw new ContractError("storage-unavailable", `settings unavailable: ${path}: memoryPackage.${field}; run sno setup`);
+			throw new ContractError("storage-unavailable", `settings unavailable: ${path}: memoryPackage.${field}; see https://github.com/sno-ai/sno-station/blob/main/docs/memory-setup.md`);
 	}
 	const store = record.store && typeof record.store === "object" ? record.store as Record<string, unknown> : {};
 	return { storePath: typeof store.path === "string" ? store.path : "", memoryPackage: memoryPackage as { path: string; node: string } };

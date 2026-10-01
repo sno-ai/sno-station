@@ -31,7 +31,7 @@ AGENTS.md
 .codex/
 .agents/
 internal/
-docs/internal-note.md
+ai-doc/
 openspec/
 dev-scripts/
 

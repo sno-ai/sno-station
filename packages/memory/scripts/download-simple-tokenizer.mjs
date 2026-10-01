@@ -115,7 +115,7 @@ function sha256Hex(bytes) {
 }
 
 function unzipInto(zipPath, destDir) {
-	// Pure Node: a fresh machine has no `unzip` (a-clean-test-vm install proof, 2026-09-22).
+	// Pure Node: a fresh machine may not have `unzip`.
 	// Walk the central directory; entries are stored (0) or deflated (8).
 	const buf = readFileSync(zipPath);
 	let eocd = -1;

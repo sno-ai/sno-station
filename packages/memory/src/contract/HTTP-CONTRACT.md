@@ -87,7 +87,7 @@ provides the host model endpoint. Routing, engine settings, embedding, telemetry
 path come from the installed `settings.json`; registration rejects extra fields. The client
 starts the service with the installed `settings.memoryPackage.path` and
 `settings.memoryPackage.node`. Its `connect` call reports missing or invalid settings as
-`settings unavailable: <path>: <field>; run sno setup` with reason `storage-unavailable`.
+`settings unavailable: <path>: <field>; see https://github.com/sno-ai/sno-station/blob/main/docs/memory-setup.md` with reason `storage-unavailable`.
 The sidecar returns HTTP 503 with that error text when opening the installed settings fails.
 
 Additional refinements: `registration.model.baseUrl` must use HTTP or HTTPS.
@@ -1615,7 +1615,7 @@ Source: [client.ts](client.ts), [start.ts](start.ts), [profile.ts](profile.ts).
 `connect()` reads `<state dir>/settings.json` and takes the child process executable
 and package directory from `memoryPackage.node` and `memoryPackage.path`. A missing or
 invalid settings file returns a degraded connection with reason `storage-unavailable`
-and `settings unavailable: <path>: <field>; run sno setup` in its error text.
+and `settings unavailable: <path>: <field>; see https://github.com/sno-ai/sno-station/blob/main/docs/memory-setup.md` in its error text.
 
 When discovery names a live process, the client probes its health for up to 30000 ms.
 Without live discovery, it spawns `<memoryPackage.path>/dist/sidecar/main.js` using
@@ -1693,8 +1693,8 @@ still must parse. The client replaces submitted principal with its OS username. 
 and explicit readable scopes are served; workspace-based project mapping remains in use.
 
 Missing or invalid installed settings fail the current HTTP request with status 503 and
-`{"degraded":true,"error":"settings unavailable: <path>: <field>; run sno setup",
-"reason":"settings unavailable: <path>: <field>; run sno setup"}`. Recoverable database
+`{"degraded":true,"error":"settings unavailable: <path>: <field>; see https://github.com/sno-ai/sno-station/blob/main/docs/memory-setup.md",
+"reason":"settings unavailable: <path>: <field>; see https://github.com/sno-ai/sno-station/blob/main/docs/memory-setup.md"}`. Recoverable database
 setup failures, integrity-check failures, discovery publication failure, journal recovery errors,
 and trigger-state read/write failures produce logs rather than a persistent denial of later calls.
 A failed runtime open is retried on a later request. HTTP startup does not wait for memory
@@ -1762,7 +1762,7 @@ The discovery client gives this call 5000 ms; that is not a server 504 timer.
 
 None. Health opens the memory pool and reports the configured store path; it does not
 wait for embedding model preparation. If settings cannot be read, it returns HTTP 503
-with `{"status":"error","error":"settings unavailable: <path>: <field>; run sno setup"}`.
+with `{"status":"error","error":"settings unavailable: <path>: <field>; see https://github.com/sno-ai/sno-station/blob/main/docs/memory-setup.md"}`.
 
 ### Response body
 
