@@ -32,7 +32,8 @@ const dek = getDek(settings.store.encryptionKey);
 const db = openEncryptedDb(settings.store.path, dek);
 ```
 
-`sno setup` generates the 64-hex key once and writes it to `settings.json` (mode `0600`).
+The [shared memory setup](https://github.com/sno-ai/sno-station/blob/main/docs/memory-setup.md)
+generates the 64-hex key once and writes it to `settings.json` (mode `0600`).
 `getDek` accepts that explicit key; it does not find or create one. `openEncryptedDb`
 returns a `better-sqlite3-multiple-ciphers` handle configured for SQLCipher v4.
 Wrong-key reads throw `WrongKeyError`. The store list remains at
@@ -41,8 +42,9 @@ Wrong-key reads throw `WrongKeyError`. The store list remains at
 Keep a recoverable copy of `settings.json` with the encrypted store. If the file is
 lost, restore its original `store.encryptionKey` from that copy before running the
 memory service. Never generate a new key while the store exists: it cannot open
-the existing data. If settings are missing or invalid, run `sno setup` after
-preserving any existing file and key backup.
+the existing data. If settings are missing or invalid, follow the
+[shared memory setup](https://github.com/sno-ai/sno-station/blob/main/docs/memory-setup.md)
+only for a new profile; preserve any existing file and key backup.
 
 ### `.sno-station-core` export / import
 
@@ -65,7 +67,7 @@ Layered import error contract:
 
 The memory service uses `store.path` and `store.encryptionKey` from
 `<profile root>/settings.json`, where the profile root is `SNO_PROFILE_DIR` or `~/.sno`.
-The library has no key-management command. `sno setup` writes the settings file;
+The library has no key-management command. The shared memory setup writes the settings file;
 plugins start the memory service through `memoryPackage` in that file.
 The encrypted-store list stays at `~/.config/sno-station-core/dbs.json`.
 
