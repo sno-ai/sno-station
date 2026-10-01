@@ -56,11 +56,11 @@ validate_record() {
     [[ -f "$record" && ! -L "$record" ]] ||
         die 65 "reachability record is unsafe: $record"
     jq -e --arg address "$ADDRESS" '
-        ((keys == ["address", "by", "channel", "claimed_at", "handle", "identity", "refreshed_at"] and
+        ((del(.harness) | keys) == ["address", "by", "channel", "claimed_at", "handle", "identity", "refreshed_at"] and
           (.identity | keys == ["kind", "value"]) and
           (.identity.kind | type == "string" and length > 0) and
-          (.identity.value | type == "string" and length > 0)) or
-         keys == ["address", "by", "channel", "claimed_at", "handle", "refreshed_at"]) and
+          (.identity.value | type == "string" and length > 0) or
+         (del(.harness) | keys) == ["address", "by", "channel", "claimed_at", "handle", "refreshed_at"]) and
         .address == $address and
         (if .channel == "acp" then
             .identity.kind == "acp-session" and
@@ -98,6 +98,7 @@ publish_record() {
         --arg handle "$HANDLE" \
         --arg identity_kind "$IDENTITY_KIND" \
         --arg identity "$IDENTITY" \
+        --arg harness "$HARNESS" \
         --arg host "$BY_HOST" \
         --argjson claimed_at "$claimed_at" \
         --argjson refreshed_at "$refreshed_at" \
@@ -105,7 +106,8 @@ publish_record() {
         '{address:$address, channel:$channel, handle:$handle,
           identity:{kind:$identity_kind, value:$identity},
           claimed_at:$claimed_at, refreshed_at:$refreshed_at,
-          by:{pid:$pid, host:$host}}' >"$temporary" ||
+          by:{pid:$pid, host:$host}} +
+          (if $harness == "" then {} else {harness:$harness} end)' >"$temporary" ||
         die 74 'could not render the reachability record'
     chmod 0600 "$temporary" || die 74 'could not protect the reachability record'
     validate_record "$temporary"
@@ -126,6 +128,7 @@ parse_common() {
     HANDLE=''
     IDENTITY_KIND=''
     IDENTITY=''
+    HARNESS=''
     EXPECTED_SHA256=''
     CURRENT_IDENTITY_KIND=''
     CURRENT_IDENTITY=''
@@ -161,6 +164,11 @@ parse_common() {
                 (($# >= 2)) || die 64 '--identity-kind needs a value'
                 [[ -z "$IDENTITY_KIND" ]] || die 64 '--identity-kind appears more than once'
                 IDENTITY_KIND="$2"
+                shift 2
+                ;;
+            --harness)
+                (($# >= 2)) || die 64 '--harness needs a value'
+                HARNESS="$2"
                 shift 2
                 ;;
             --identity)
@@ -280,6 +288,7 @@ run_register() {
     if [[ -e "$RECORD" || -L "$RECORD" ]]; then
         validate_record "$RECORD"
         claimed_at="$(jq -r '.claimed_at' "$RECORD")"
+        [[ -n "$HARNESS" ]] || HARNESS="$(jq -r '.harness // empty' "$RECORD")"
         event=refreshed
     else
         claimed_at="$now"

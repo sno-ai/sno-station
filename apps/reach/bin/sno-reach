@@ -620,6 +620,22 @@ case "$operation" in
         fi
         printf 'DOCTOR-OK\n'
         ;;
+    RING)
+        read_frame root 1 4096
+        root_value=$(frame_text root)
+        read_frame address 1 255
+        address_value=$(frame_text address)
+        read_frame sender 1 255
+        sender_value=$(frame_text sender)
+        require_eof
+        prepare_target "$root_value" "$address_value"
+        valid_address "$sender_value" || remote_error 64 INVALID-ADDRESS
+        reach_program=${HOME-}/.local/bin/sno-reach
+        [ -x "$reach_program" ] || remote_error 69 TOOL-UNAVAILABLE
+        ring_outcome=$(SNO_REACH_ROOT=$root_value SNO_REACH_ADDR=$sender_value \
+            "$reach_program" ring "$address_value" 2>/dev/null) || remote_error 75 RING-FAILED
+        printf '%s\n' "$ring_outcome"
+        ;;
     *)
         remote_error 64 PROTOCOL
         ;;
@@ -1020,8 +1036,53 @@ run_doctor() {
     printf 'prerequisites: ok\nDOCTOR-OK\n'
 }
 
+observe_append() {
+    local root="$1" status detail
+    shift
+    (
+        trap - EXIT
+        if sno-observe append "$@"; then
+            exit 0
+        else
+            status=$?
+        fi
+        detail="sno-observe append $1 failed (exit $status); event not recorded"
+        ((status != 127)) || detail="sno-observe: not found; $1 event not recorded"
+        { printf '%s\n' "$detail" >>"$root/reach.log"; } 2>/dev/null || true
+    ) </dev/null >/dev/null 2>&1 &
+}
+
+observe_harness() {
+    local root="$1" address="$2" default="$3"
+    if [[ -f "$root/$address/reachable.json" ]]; then
+        jq -r --arg default "$default" '.harness // $default' "$root/$address/reachable.json" 2>/dev/null
+    else
+        printf '%s\n' "$default"
+    fi
+}
+
+observe_message() {
+    local root="$1" kind="$2" caller="$3" callee="$4" status="$5" started="$6"
+    local ended="$EPOCHREALTIME" from=codex to outcome="${7:-}" receipt="${8:-}" elapsed
+    local -a fields=()
+    [[ ! -v CLAUDECODE ]] || from=claude-code
+    if ! from="$(observe_harness "$root" "$caller" "$from")" ||
+       ! to="$(observe_harness "$root" "$callee" unknown)"; then
+        { printf 'reach.message %s: cannot read harness; event not recorded\n' "$kind" >>"$root/reach.log"; } 2>/dev/null || true
+        return 0
+    fi
+    if [[ -z "$outcome" ]]; then
+        case "$status" in 0) outcome=ok ;; 4|124|137) outcome=timeout ;; *) outcome=refused ;; esac
+    fi
+    [[ -z "$receipt" ]] || fields+=("--receipt=$receipt")
+    elapsed=$(( (${ended/./} - ${started/./}) / 1000 ))
+    observe_append "$root" reach.message "--agent=$from" "--kind=$kind" "--from_harness=$from" \
+        "--to_harness=$to" "--outcome=$outcome" "--latency_ms=$elapsed" "${fields[@]}"
+}
+
 run_register() {
-    local root channel='' handle='' pane session server identity kind
+    local root channel='' handle='' pane session server identity kind harness=codex recorded
+    [[ ! -v CLAUDECODE ]] || harness=claude-code
     CALLER=''
     while (($#)); do
         case "$1" in
@@ -1036,6 +1097,11 @@ run_register() {
     preflight_wake_adoption
     root="$(mailbox_root)"
     require_safe_caller_dir "$root" "$CALLER" >/dev/null
+    if [[ -n "${SNO_REACH_HARNESS:-}" ]]; then
+        harness="$SNO_REACH_HARNESS"
+    elif recorded="$(observe_harness "$root" "$CALLER" "$harness")"; then
+        harness="$recorded"
+    fi
     case "$channel" in
         tmux)
             pane="$(timeout 5 tmux display-message -pt "$handle" '#{pane_id}')" || die 65 "tmux handle is unavailable: $handle"
@@ -1061,17 +1127,21 @@ run_register() {
             kind='orca-tab' ;;
         *) die 64 '--channel must be acp, tmux or orca' ;;
     esac
-    "$REACHABILITY" register --root "$root" --as "$CALLER" --channel "$channel" --handle "$handle" --identity-kind "$kind" --identity "$identity"
+    "$REACHABILITY" register --root "$root" --as "$CALLER" --channel "$channel" --handle "$handle" --identity-kind "$kind" --identity "$identity" --harness "$harness"
+    observe_append "$root" reach.register "--agent=$harness" "--harness=$harness" --action=register
     adopt_orphaned_wakes
 }
 
 run_unregister() {
-    local root
+    local root harness=codex
     parse_as_only "$@"
     preflight_wake_adoption
     root="$(mailbox_root)"
     require_safe_caller_dir "$root" "$CALLER" >/dev/null
+    [[ ! -v CLAUDECODE ]] || harness=claude-code
+    harness="$(observe_harness "$root" "$CALLER" "$harness")" || true
     "$REACHABILITY" unregister --root "$root" --as "$CALLER"
+    observe_append "$root" reach.register "--agent=$harness" "--harness=$harness" --action=unregister
     adopt_orphaned_wakes
 }
 
@@ -1551,7 +1621,7 @@ deliver_remote_copy() {
 
 record_remote_delivery() {
     local root="$1" caller="$2" recipient="$3" body_file="$4"
-    local message_id digest key receipt_dir receipt temporary
+    local message_id digest key receipt_dir receipt temporary sent_dir
 
     message_id="$(mhdr -h message-id "$body_file")"
     [[ "$message_id" =~ $MESSAGE_ID_RE ]] ||
@@ -1572,6 +1642,15 @@ record_remote_delivery() {
         die 74 'could not render delivery receipt'
     chmod 0600 "$temporary" || die 74 'could not protect delivery receipt'
     mv -- "$temporary" "$receipt" || die 74 'could not publish delivery receipt'
+
+    # The recipient's store lives on another machine; keep the copy here so this
+    # machine can derive the work's progress (progress_load reads sent/).
+    sent_dir="$root/$caller/sent"
+    mkdir -p -- "$sent_dir" || die 74 'could not create sent directory'
+    [[ -d "$sent_dir" && ! -L "$sent_dir" ]] || die 65 'sent directory is unsafe'
+    temporary="$(mktemp "$sent_dir/.sent.XXXXXXXXXX")" || die 74 'could not create sent copy'
+    cp -- "$body_file" "$temporary" || die 74 'could not write sent copy'
+    mv -- "$temporary" "$sent_dir/$key" || die 74 'could not publish sent copy'
 }
 
 rewrite_entry_recipients() {
@@ -2072,7 +2151,7 @@ progress_load() {
     declare -gA P_DATE=() P_EPOCH=() P_EXPIRY=() P_SUPER=() P_ITEMS=() P_FLAGS=()
     declare -gA P_ANOMALY=() P_HELD=()
     [[ -d "$root" && ! -L "$root" ]] || die 73 "state root is unavailable: $root"
-    for path in "$root"/*/new/* "$root"/*/cur/*; do
+    for path in "$root"/*/new/* "$root"/*/cur/* "$root"/*/sent/*; do
         [[ -e "$path" ]] || continue
         [[ -f "$path" && ! -L "$path" && -r "$path" ]] ||
             die 74 "state cannot read message: $path"
@@ -2105,7 +2184,7 @@ progress_load() {
             P_SUPER["$id"]="${values[supersedes]:-}"
         fi
         recipient="${values[delivered-to]:-}"
-        [[ "$recipient" =~ $ADDRESS_RE && "${path%/*/*}" == "$root/$recipient" ]] || continue
+        [[ "$recipient" =~ $ADDRESS_RE && ( "${path%/*/*}" == "$root/$recipient" || "${path%/*}" == */sent ) ]] || continue
         maddr -a -h to: "$path" | grep -Fqx -- "$recipient" || continue
         P_HELD["$id|$recipient"]="$path"
         [[ -z "${P_STATE[$id]}" && "${P_TYPE[$id]}" != cancel ]] || continue
@@ -2595,14 +2674,36 @@ preflight_reply_destination() {
     done <"$TEMP_DIR/resolved-reply"
 }
 
+ring_remote() {
+    local root="$1" sender="$2" recipient="$3" wire="$TEMP_DIR/ring-remote"
+    printf 'SNO-REACH-REMOTE/1\nRING\n' >"$wire"
+    append_text_frame "$wire" root "$root"
+    append_text_frame "$wire" address "$recipient"
+    append_text_frame "$wire" sender "$sender"
+    execute_fixed_request "$wire" "$recipient" '^(rang|rang-unverified|busy)$'
+}
+
 ring_delivered() {
-    local root="$1" sender="$2" message="$3" recipient id work rc result=0
+    local root="$1" sender="$2" message="$3" recipient id work rc outcome result=0 type
+    local -a wake_options=()
     [[ "$(progress_header "$message" x-no-reply)" != true ]] || return 0
     id="$(mhdr -h message-id "$message")"
     work="$(mhdr -h x-work "$message")"
+    type="$(mhdr -h x-type "$message")"
+    if [[ "$type" == status || "$type" == info ]]; then
+        wake_options=(--once)
+    fi
     maddr -a -h to: "$message" | sort -u >"$TEMP_DIR/ring-recipients"
     while IFS= read -r recipient; do
-        if "$WAKE" start --root "$root" --sender "$sender" --recipient "$recipient" --message-id "$id" --work "$work" --mechanism "$REPO_ROOT/lib/reach-ring"; then rc=0; else rc=$?; fi
+        if [[ "${recipient##*@}" != "$(hostname)" ]]; then
+            # The wake supervisor only knows this machine's store; ring the remote seat on its own machine.
+            if outcome="$(ring_remote "$root" "$sender" "$recipient")"; then
+                printf 'reach: delivery succeeded; wake %s reached %s. Do not resend.\n' "$outcome" "$recipient" >&2
+                rc=0
+            else
+                rc=6
+            fi
+        elif "$WAKE" start --root "$root" --sender "$sender" --recipient "$recipient" --message-id "$id" --work "$work" --mechanism "$REPO_ROOT/lib/reach-ring" "${wake_options[@]}"; then rc=0; else rc=$?; fi
         case "$rc" in 0) ;; 5) ((result == 6)) || result=5 ;; *) result=6 ;; esac
     done <"$TEMP_DIR/ring-recipients"
     if ((result == 6)); then printf 'reach: delivery succeeded; wake could not start. Do not resend; repair the wake path.\n' >&2; fi
@@ -2611,6 +2712,7 @@ ring_delivered() {
 
 run_send() {
     local input_file message_type root status no_ring=no argument
+    local started recipient
     local -a args=() authors=()
     for argument in "$@"; do
         if [[ "$argument" == --no-ring ]]; then [[ "$no_ring" == no ]] || die 64 'duplicate --no-ring'; no_ring=yes
@@ -2636,7 +2738,13 @@ run_send() {
     preflight_reply_destination "$input_file" "$root"
     preflight_send_rate_limit "$root" "$input_file" "$message_type"
     [[ "$no_ring" == yes ]] || adopt_orphaned_wakes
-    queue_and_attempt_message "$root" "$CALLER" "$input_file" || die 74 'one or more copies remain queued; do not resend'
+    started="$EPOCHREALTIME"
+    status=0
+    queue_and_attempt_message "$root" "$CALLER" "$input_file" || status=$?
+    while IFS= read -r recipient; do
+        observe_message "$root" card "$CALLER" "$recipient" "$status" "$started"
+    done <"$TEMP_DIR/validated-recipients"
+    ((status == 0)) || die 74 'one or more copies remain queued; do not resend'
     [[ "$no_ring" == yes ]] || ring_delivered "$root" "$CALLER" "$input_file"
 }
 
@@ -2683,6 +2791,8 @@ run_wait() {
         if [[ -n "$REPLY_TO" ]]; then
             scan_maildir_paths "$maildir" "$TEMP_DIR/wait.paths" || die 74 'cannot scan mailbox'
             if match="$(find_wait_match "$TEMP_DIR/wait.paths" "$CALLER" "$REPLY_TO" "$EXPECTED_FROM")"; then
+                printf '%s\n' "$match" >"$TEMP_DIR/selected"
+                record_seen_actions "$maildir" "$CALLER" "$TEMP_DIR/selected"
                 printf '%s\n' "$match"; return 0
             else rc=$?; ((rc == 1)) || die "$rc" 'cannot inspect answer'; fi
         else
@@ -2976,6 +3086,7 @@ append_dismissal_record() {
 }
 
 run_dismiss() {
+    local started recipient
     local root
     local maildir
     local source
@@ -3036,8 +3147,13 @@ run_dismiss() {
         die 73 "caller new directory is unavailable: $maildir/new"
     cur_dir="$(realpath -e -- "$maildir/cur")" ||
         die 73 "caller cur directory is unavailable: $maildir/cur"
+    recipient="$(maddr -a -h from: "$source")"
+    started="$EPOCHREALTIME"
     source="$(move_reply_source_to_cur "$source" "$new_dir" "$cur_dir")"
-    source="$(mark_dismissed_source "$source" "$cur_dir")"
+    status=0
+    source="$(mark_dismissed_source "$source" "$cur_dir")" || status=$?
+    observe_message "$root" dismiss "$CALLER" "$recipient" "$status" "$started"
+    ((status == 0)) || return "$status"
     dismissed_at="$(utc_now)"
     append_dismissal_record \
         "$maildir" "$message_id" "$source" "$dismissed_at"
@@ -3045,6 +3161,7 @@ run_dismiss() {
 }
 
 run_reply() {
+    local started recipient
     local root
     local maildir
     local source
@@ -3209,7 +3326,13 @@ run_reply() {
     if ((status != 0)); then
         die 74 "reply is queued but source flag could not be verified: $entry"
     fi
-    if ! attempt_outbox_entry "$root" "$CALLER" "$entry"; then
+    started="$EPOCHREALTIME"
+    status=0
+    attempt_outbox_entry "$root" "$CALLER" "$entry" || status=$?
+    while IFS= read -r recipient; do
+        observe_message "$root" reply "$CALLER" "$recipient" "$status" "$started"
+    done <"$TEMP_DIR/validated-recipients"
+    if ((status != 0)); then
         die 74 "reply is queued for automatic retry after delivery failure: $entry"
     fi
     flock -u "$reply_fd"
@@ -3288,6 +3411,7 @@ run_export() {
     local digest
     local before_identity
     local before_digest
+    local snapshot_attempt
 
     while (($# > 0)); do
         case "$1" in
@@ -3350,11 +3474,19 @@ run_export() {
     selected_before="$TEMP_DIR/export-selected-before.tsv"
     selected_after="$TEMP_DIR/export-selected-after.tsv"
     paths_before="$TEMP_DIR/export-paths-before"
-    : >"$metadata"
-    : >"$selected_before"
-    collect_export_paths "$root" "$paths_before"
+    for snapshot_attempt in 1 2; do
+        count=0
+        : >"$metadata"
+        : >"$selected_before"
+        find "$TEMP_DIR/messages" -mindepth 1 -maxdepth 1 -type f -delete ||
+            die 74 'could not reset export message snapshots'
+        collect_export_paths "$root" "$paths_before"
 
-    while IFS= read -r -d '' path; do
+        while IFS= read -r -d '' path; do
+                if [[ ! -e "$path" && ! -L "$path" ]]; then
+                    ((snapshot_attempt == 1)) && continue 2
+                    die 65 'mailbox changed twice during export; retry after mailbox activity stops'
+                fi
                 [[ -f "$path" && ! -L "$path" ]] ||
                     die 65 "Maildir message path is unsafe: $path"
                 [[ "$path" != *$'\t'* && "$path" != *$'\n'* &&
@@ -3366,6 +3498,10 @@ run_export() {
                 status=$?
                 set -e
                 if ((status != 0)); then
+                    if [[ ! -e "$path" && ! -L "$path" ]]; then
+                        ((snapshot_attempt == 1)) && continue 2
+                        die 65 'mailbox changed twice during export; retry after mailbox activity stops'
+                    fi
                     continue
                 fi
                 [[ ! -s "$error_file" ]] || {
@@ -3429,12 +3565,12 @@ run_export() {
                 printf '%s\t%s\t%s\t%s\n' \
                     "$epoch" "$message_id" "$path" "$normalized" >>"$metadata" ||
                     die 74 'could not write export sort metadata'
-    done <"$paths_before"
+        done <"$paths_before"
 
-    sort -t $'\t' -k1,1n -k2,2 -k3,3 "$metadata" >"$sorted_metadata" ||
-        die 74 'could not sort selected export messages'
-    : >"$candidate"
-    while IFS=$'\t' read -r epoch message_id path normalized; do
+        sort -t $'\t' -k1,1n -k2,2 -k3,3 "$metadata" >"$sorted_metadata" ||
+            die 74 'could not sort selected export messages'
+        : >"$candidate"
+        while IFS=$'\t' read -r epoch message_id path normalized; do
         [[ -n "$normalized" ]] || continue
         separator_date="$(date -u -d "@$epoch" '+%a %b %e %H:%M:%S %Y')" ||
             die 74 "could not format selected export Date: $path"
@@ -3458,21 +3594,27 @@ run_export() {
             ' "$normalized"
         } >>"$candidate" ||
             die 65 "could not render selected export message: $path"
-    done <"$sorted_metadata"
+        done <"$sorted_metadata"
 
-    : >"$selected_after"
-    while IFS=$'\t' read -r path before_identity before_digest; do
+        : >"$selected_after"
+        while IFS=$'\t' read -r path before_identity before_digest; do
+        if [[ ! -e "$path" && ! -L "$path" ]]; then
+            ((snapshot_attempt == 1)) && continue 2
+            die 65 'mailbox changed twice during export; retry after mailbox activity stops'
+        fi
         [[ -f "$path" && ! -L "$path" ]] ||
-            die 65 "selected export message moved or disappeared; retry export: $path"
+            die 65 "selected export message path became unsafe: $path"
         identity="$(stat -c '%d:%i:%s:%Y:%Z' "$path")" ||
             die 74 "could not recheck selected export message: $path"
         digest="$(sha256sum "$path" | cut -d ' ' -f 1)" ||
             die 74 "could not rehash selected export message: $path"
         printf '%s\t%s\t%s\n' "$path" "$identity" "$digest" >>"$selected_after" ||
             die 74 'could not recheck selected export messages'
-    done <"$selected_before"
-    cmp -s -- "$selected_before" "$selected_after" ||
-        die 65 'selected export message changed; retry export after mailbox activity stops'
+        done <"$selected_before"
+        cmp -s -- "$selected_before" "$selected_after" ||
+            die 65 'selected export message changed; retry export after mailbox activity stops'
+        break
+    done
 
     if [[ -e "$output" || -L "$output" ]]; then
         [[ -f "$output" && ! -L "$output" ]] ||
@@ -3587,6 +3729,7 @@ run_log() {
 run_spawn() {
     (($# >= 1)) || usage
     local kind="$1" cwd="$PWD" window=no adapter root
+    local started rc=0
     CALLER=''
     shift
     [[ "$kind" =~ ^[a-z][a-z0-9-]*$ ]] || die 64 'spawn requires one agent kind'
@@ -3610,7 +3753,10 @@ run_spawn() {
     if [[ "$window" == no && -n "$adapter" ]]; then
         require_tools acpx timeout flock
     else require_tools tmux "$kind"; fi
-    exec "$REPO_ROOT/lib/reach-spawn" "$kind" "$CALLER" "$cwd" "$window" "$adapter"
+    started="$EPOCHREALTIME"
+    "$REPO_ROOT/lib/reach-spawn" "$kind" "$CALLER" "$cwd" "$window" "$adapter" || rc=$?
+    observe_message "$root" spawn "${SNO_REACH_ADDR:-}" "$CALLER" "$rc" "$started"
+    return "$rc"
 }
 
 validate_live_record() {
@@ -3630,6 +3776,7 @@ validate_live_record() {
 run_call() {
     (($# >= 2)) || usage
     local address="$1" text="$2" limit=180 every=2 expect='' root channel output rc=0
+    local started receipt=''
     shift 2
     validate_address "$address"
     [[ "$text" =~ [^[:space:]] ]] || die 64 'call text is blank'
@@ -3649,7 +3796,16 @@ run_call() {
     [[ "$channel" != orca ]] || die 3 'channel orca does not support call'
     local -a args=(--terminal "$address" --text "$text" --timeout "$limit" --every "$every")
     [[ -z "$expect" ]] || args+=(--expect "$expect")
+    started="$EPOCHREALTIME"
     output="$("$REPO_ROOT/lib/reach-call" "${args[@]}")" || rc=$?
+    if ((rc == 0)); then
+        case "$expect" in
+            *HANDOFF_SNAPSHOT_UNCHANGED*) receipt=handoff_snapshot ;;
+            *HANDOFF_RELEASED*) receipt=handoff_released ;;
+            *HANDOFF_PAUSED*) receipt=handoff_paused ;;
+        esac
+    fi
+    observe_message "$root" call "${SNO_REACH_ADDR:-}" "$address" "$rc" "$started" '' "$receipt"
     if [[ -n "$output" ]]; then
         jq -e 'has("output") and (.output | type == "string")' <<<"$output" >/dev/null || die 5 'call output could not be read'
         jq -r .output <<<"$output"
@@ -3694,23 +3850,32 @@ run_seats() {
 run_ring() {
     [[ "$#" == 1 ]] || usage
     local recipient="$1" root output outcome rc=0 sender
+    local started status
     validate_address "$recipient"
     root="$(mailbox_root)"
     [[ -f "$root/$recipient/reachable.json" && ! -L "$root/$recipient/reachable.json" ]] || { printf 'unregistered\n'; return 1; }
     sender="${SNO_REACH_ADDR:-$recipient}"
     validate_address "$sender"
+    started="$EPOCHREALTIME"
     output="$("$REPO_ROOT/lib/reach-ring" doorbell --to "$recipient" --from "$sender" --msg-id "<ring-$$-$RANDOM@localhost>")" || rc=$?
     outcome="${output%%$'\n'*}"; outcome="${outcome#outcome=}"
+    case "$rc" in
+        124|137) status=timeout ;;
+        *) case "$outcome" in rang) status=ok ;; rang-unverified) status=unacked ;; *) status=refused ;; esac ;;
+    esac
     ((rc == 0)) || outcome=failed
+    observe_message "$root" ring "${SNO_REACH_ADDR:-}" "$recipient" "$rc" "$started" "$status"
     case "$outcome" in rang|rang-unverified|busy) printf '%s\n' "$outcome" ;; unregistered) printf 'unregistered\n'; return 1 ;; *) printf 'failed\n'; return 1 ;; esac
 }
 
 run_remind() {
     parse_as_only "$@"
     require_local_reader_address "$(mailbox_root)" "$CALLER"
-    local rc=0 remaining
+    local rc=0 remaining started
     remaining="$(awk -v start="$REACH_STARTED" -v now="$EPOCHREALTIME" 'BEGIN {left=4.9-(now-start); if(left<=0) exit 1; printf "%.3f",left}')" || die 75 'remind whole-command deadline exceeded before read'
+    started="$EPOCHREALTIME"
     timeout --signal=KILL "$remaining" "$REPO_ROOT/lib/reach-remind" "$CALLER" || rc=$?
+    observe_message "$(mailbox_root)" remind "$CALLER" "$CALLER" "$rc" "$started"
     if ((rc)); then printf 'reach: remind could not read work state within its whole-command deadline\n' >&2; return "$rc"; fi
 }
 
