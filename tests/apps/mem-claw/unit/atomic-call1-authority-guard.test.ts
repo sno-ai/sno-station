@@ -5,39 +5,38 @@ import { basename, join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const REPO_ROOT = resolve(import.meta.dirname, "../../../..");
-const EXTRACTION_DIR = join(REPO_ROOT, "packages/sno-station-mem/src/engine/extraction");
-const STORAGE_DIR = join(REPO_ROOT, "packages/sno-station-mem/src/store");
-const WRITE_DOOR = "packages/sno-station-mem/src/store/memory-store-atomic-extraction-write-api.ts";
+const EXTRACTION_DIR = join(REPO_ROOT, "packages/memory/src/engine/extraction");
+const STORAGE_DIR = join(REPO_ROOT, "packages/memory/src/store");
+const WRITE_DOOR = "packages/memory/src/store/memory-store-atomic-extraction-write-api.ts";
 const ATOMIC_ENTRYPOINT_FILES = [
 	"apps/mem-claw/src/hooks/openclaw-runtime-hooks.ts",
-	"packages/sno-station-mem/src/engine/bindings/sno-station-mem-ambient-learning-hook.ts",
-	"packages/sno-station-mem/src/engine/bindings/sno-station-mem-insight-distill-factory.ts",
+	"packages/memory/src/engine/bindings/sno-station-mem-ambient-learning-hook.ts",
+	"packages/memory/src/engine/bindings/sno-station-mem-insight-distill-factory.ts",
 ] as const;
 const ATOMIC_REACHED_FILES = [
-	"packages/sno-station-mem/src/engine/extraction/b-profile-extraction.ts",
-	"packages/sno-station-mem/src/engine/extraction/task-lifecycle-route.ts",
+	"packages/memory/src/engine/extraction/b-profile-extraction.ts",
+	"packages/memory/src/engine/extraction/task-lifecycle-route.ts",
 ] as const;
 
 const ATOMIC_FLOW_FILES = [
-	"packages/sno-station-mem/src/engine/extraction/atomic-profile-keying.ts",
-	"packages/sno-station-mem/src/engine/extraction/atomic-extraction-gauntlet.ts",
-	"packages/sno-station-mem/src/engine/extraction/atomic-extraction-reply.ts",
-	"packages/sno-station-mem/src/engine/extraction/atomic-extraction-skill.ts",
-	"packages/sno-station-mem/src/engine/extraction/atomic-generic-extractor.ts",
-	"packages/sno-station-mem/src/engine/extraction/atomic-memory-extraction.ts",
-	"packages/sno-station-mem/src/engine/extraction/atomic-replacement-sanitizer.ts",
-	"packages/sno-station-mem/src/engine/extraction/atomic-subject-guard.ts",
-	"packages/sno-station-mem/src/engine/extraction/atomic-temporal-normalization.ts",
-	"packages/sno-station-mem/src/engine/extraction/atomic-write-projection.ts",
+	"packages/memory/src/engine/extraction/atomic-profile-keying.ts",
+	"packages/memory/src/engine/extraction/atomic-progress-boundary.ts",
+	"packages/memory/src/engine/extraction/atomic-extraction-gauntlet.ts",
+	"packages/memory/src/engine/extraction/atomic-extraction-reply.ts",
+	"packages/memory/src/engine/extraction/atomic-extraction-skill.ts",
+	"packages/memory/src/engine/extraction/atomic-generic-extractor.ts",
+	"packages/memory/src/engine/extraction/atomic-memory-extraction.ts",
+	"packages/memory/src/engine/extraction/atomic-replacement-sanitizer.ts",
+	"packages/memory/src/engine/extraction/atomic-subject-guard.ts",
+	"packages/memory/src/engine/extraction/atomic-temporal-normalization.ts",
+	"packages/memory/src/engine/extraction/atomic-write-projection.ts",
 	WRITE_DOOR,
 ] as const;
 
-const ALLOWED_MODEL_CALL_LABELS = new Set([
-	"memory-extract-atomic-generic",
-	"memory-extract-atomic-missing-half",
-	"memory-extract-atomic-resplit",
-	"memory-extract-atomic-subject-guard",
-]);
+// Model call ids from packages/memory/src/model/model-call-table.ts: extraction (E1), its
+// enrichment and figure re-ask (E2, E3), compound split (E4), missing half (E5), subject check
+// (E6), unresolved-subject re-ask (E7) and the arrival retirement judgement (E10, PRD 150).
+const ALLOWED_MODEL_CALL_IDS = new Set(["E1", "E2", "E3", "E4", "E5", "E6", "E7", "E10"]);
 
 type SourceUnit = { path: string; source: string };
 
@@ -60,7 +59,7 @@ const PHASE_FENCE_PATTERNS = [
 	{
 		rule: "keyword-classification",
 		pattern:
-			/\b(?:shouldSkipCapture|decideCapture|detectCategoryVote|extractEpisodicLane|extractProfileLane)\s*\(|callLabel\s*:\s*["']memory-extract-profile-gate["']/iu,
+			/\b(?:shouldSkipCapture|decideCapture|detectCategoryVote|extractEpisodicLane|extractProfileLane)\s*\(/iu,
 	},
 ] as const;
 
@@ -70,16 +69,16 @@ function executableSource(source: string): string {
 
 function findAuthorityViolations(units: readonly SourceUnit[]): string[] {
 	const violations: string[] = [];
-	const labelCounts = new Map<string, number>();
+	const callIdCounts = new Map<string, number>();
 	for (const unit of units) {
 		const flat = unit.source.replace(/\s+/gu, " ");
-		// A route lookup names the label to find its tier; it is not a second model call.
+		// A route lookup names the call id to find its destination; it is not a second model call.
 		const callSites = unit.source.replace(/resolveLlmRoute\s*\(\s*\{[^}]*\}\s*\)/gu, "");
-		for (const match of callSites.matchAll(/callLabel:\s*["']([^"']+)["']/gu)) {
-			const label = match[1];
-			if (label) labelCounts.set(label, (labelCounts.get(label) ?? 0) + 1);
-			if (label && !ALLOWED_MODEL_CALL_LABELS.has(label)) {
-				violations.push(`worth-model-call:${unit.path}:${label}`);
+		for (const match of callSites.matchAll(/callId:\s*["']([^"']+)["']/gu)) {
+			const callId = match[1];
+			if (callId) callIdCounts.set(callId, (callIdCounts.get(callId) ?? 0) + 1);
+			if (callId && !ALLOWED_MODEL_CALL_IDS.has(callId)) {
+				violations.push(`worth-model-call:${unit.path}:${callId}`);
 			}
 		}
 		if (
@@ -109,9 +108,9 @@ function findAuthorityViolations(units: readonly SourceUnit[]): string[] {
 			violations.push(`worth-drop-predicate:${unit.path}`);
 		}
 	}
-	for (const label of ALLOWED_MODEL_CALL_LABELS) {
-		const count = labelCounts.get(label) ?? 0;
-		if (count !== 1) violations.push(`model-call-count:${label}:${count}`);
+	for (const callId of ALLOWED_MODEL_CALL_IDS) {
+		const count = callIdCounts.get(callId) ?? 0;
+		if (count !== 1) violations.push(`model-call-count:${callId}:${count}`);
 	}
 	return violations;
 }
@@ -131,10 +130,10 @@ function readAtomicFlow(): SourceUnit[] {
 function readAtomicPhaseFiles(): SourceUnit[] {
 	const extractionFiles = readdirSync(EXTRACTION_DIR)
 		.filter((name) => name.startsWith("atomic-") && name.endsWith(".ts"))
-		.map((name) => `packages/sno-station-mem/src/engine/extraction/${name}`);
+		.map((name) => `packages/memory/src/engine/extraction/${name}`);
 	const storageFiles = readdirSync(STORAGE_DIR)
 		.filter((name) => name.includes("atomic") && name.endsWith(".ts"))
-		.map((name) => `packages/sno-station-mem/src/store/${name}`);
+		.map((name) => `packages/memory/src/store/${name}`);
 	return [
 		...new Set([
 			...extractionFiles,
@@ -221,7 +220,7 @@ describe("atomic call-1 authority repository guard", () => {
 			name: "a worth-keeping model call",
 			rule: "worth-model-call",
 			source: `await llm.completeJson({
-				callLabel: "memory-extract-worth-keeping",
+				callId: "E13",
 				prompt: candidate.claimText,
 			});`,
 		},
@@ -239,14 +238,20 @@ describe("atomic call-1 authority repository guard", () => {
 		expect(() => assertNoAuthorityViolations([{ path: "planted.ts", source }])).toThrow(rule);
 	});
 
-	it("turns red when a second model judgment reuses an allowed call label", () => {
+	it("turns red when a second model judgment reuses an allowed call id", () => {
 		const flow = readAtomicFlow();
 		flow.push({
 			path: "planted-duplicate.ts",
-			source: 'client.completeText({ callLabel: "memory-extract-atomic-generic" });',
+			source: 'client.completeText({ callId: "E1" });',
 		});
-		expect(() => assertNoAuthorityViolations(flow)).toThrow(
-			"model-call-count:memory-extract-atomic-generic:2",
-		);
+		expect(() => assertNoAuthorityViolations(flow)).toThrow("model-call-count:E1:2");
+	});
+
+	it("turns red when the real flow loses an allowed model call site", () => {
+		const flow = readAtomicFlow().map((unit) => ({
+			...unit,
+			source: unit.source.replace(/callId:\s*["']E5["']/gu, ""),
+		}));
+		expect(() => assertNoAuthorityViolations(flow)).toThrow("model-call-count:E5:0");
 	});
 });

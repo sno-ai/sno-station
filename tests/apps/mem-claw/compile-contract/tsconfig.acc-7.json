@@ -1,0 +1,4 @@
+{
+	"extends": "../tsconfig.json",
+	"include": ["acc-7-coverage-token.ts"]
+}

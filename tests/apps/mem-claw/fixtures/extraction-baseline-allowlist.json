@@ -1,0 +1,7 @@
+{
+	"version": 1,
+	"notes": [
+		"Allowed Golden baseline drift entries must follow PRD section 5.2.6 exactly."
+	],
+	"entries": []
+}

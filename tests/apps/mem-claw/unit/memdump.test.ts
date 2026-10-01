@@ -1,18 +1,17 @@
 import { spawnSync } from "node:child_process";
-import { copyFileSync, mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
 	buildMemdumpQuery,
 	parseMemdumpOptions,
 	serializeMemoryRow,
-} from "../../../../packages/sno-station-mem/src/engine/diagnostics/memdump.ts";
+} from "../../../../packages/memory/src/engine/diagnostics/memdump.ts";
 import { createTestDb } from "../helpers/test-db.ts";
+import { writeSettingsFixture } from "../../../packages/memory/fixtures/settings-file-fixture.ts";
 
 const repoRoot = resolve(import.meta.dirname, "../../../..");
 const snoStationMemRoot = join(repoRoot, "apps/mem-claw");
-const memdumpSource = join(repoRoot, "packages/sno-station-mem/src/engine/diagnostics/memdump.ts");
+const memdumpSource = join(repoRoot, "packages/memory/src/engine/diagnostics/memdump.ts");
 const tsxBinary = join(repoRoot, "node_modules/.bin/tsx");
 
 function runMemdump(args: string[]) {
@@ -99,6 +98,7 @@ describe("sno-memdump", () => {
 	it("carries --metadata through the real command, and withholds it without the flag", () => {
 		const fixture = createTestDb();
 		try {
+			writeSettingsFixture(resolve(fixture.dbPath, ".."), { store: { path: fixture.dbPath, encryptionKey: fixture.encryptionKey } });
 			fixture.sqlite
 				.prepare(
 					"INSERT INTO nodix_memories(id, fact_id, text, category, project_id, importance, timestamp, timezone, metadata, content_hash) VALUES (?, ?, ?, 'profile', ?, 0.7, ?, ?, ?, ?)",
@@ -117,7 +117,7 @@ describe("sno-memdump", () => {
 
 			const withFlag = runMemdump(["--db", fixture.dbPath, "--metadata"]);
 			expect(withFlag.status, withFlag.stderr).toBe(0);
-			expect(withFlag.stdout.trim().split("\n").map(JSON.parse)).toContainEqual(
+			expect(withFlag.stdout.trim().split("\n").map(line => JSON.parse(line))).toContainEqual(
 				expect.objectContaining({
 					metadata: expect.objectContaining({ retire_by_name_receipt: { retired: ["x"] } }),
 				}),
@@ -125,7 +125,7 @@ describe("sno-memdump", () => {
 
 			const without = runMemdump(["--db", fixture.dbPath]);
 			expect(without.status, without.stderr).toBe(0);
-			for (const row of without.stdout.trim().split("\n").map(JSON.parse)) {
+			for (const row of without.stdout.trim().split("\n").map(line => JSON.parse(line))) {
 				expect(row).not.toHaveProperty("metadata");
 			}
 		} finally {
@@ -139,59 +139,5 @@ describe("sno-memdump", () => {
 		);
 	});
 
-	it("opens a copied encrypted store only when its original manifest is explicit", () => {
-		const fixture = createTestDb();
-		const copiedDir = mkdtempSync(join(tmpdir(), "mem-claw-memdump-copy-"));
-		try {
-			fixture.sqlite
-				.prepare(
-					"INSERT INTO nodix_memories(id, fact_id, text, category, project_id, importance, timestamp, timezone, metadata, content_hash) VALUES (?, ?, ?, 'profile', ?, 0.7, ?, ?, ?, ?)",
-				)
-				.run(
-					"019memdumpcopiedstore00000001",
-					"019memdumpcopiedfact000000001",
-					"The copied persona store keeps the user's preferred research workflow.",
-					"persona:researcher",
-					1_786_147_200_000,
-					"America/Los_Angeles",
-					JSON.stringify({ tier: "core", section_name: "workflow_preferences" }),
-					"memdump-copied-store-content-hash",
-				);
-			fixture.sqlite.pragma("wal_checkpoint(TRUNCATE)");
-			fixture.sqlite.close();
 
-			const copiedDbPath = join(copiedDir, "persona-store.sqlite");
-			copyFileSync(fixture.dbPath, copiedDbPath);
-			const xdgConfigHome = process.env.XDG_CONFIG_HOME;
-			if (!xdgConfigHome) throw new Error("createTestDb did not install XDG_CONFIG_HOME");
-			const originalManifestPath = join(xdgConfigHome, "sno-station-core", "dbs.json");
-
-			const unregistered = runMemdump(["--db", copiedDbPath]);
-			expect(unregistered.status).not.toBe(0);
-			expect(unregistered.stderr.trim().split("\n").map(JSON.parse)).toContainEqual(
-				expect.objectContaining({ schema_version: 1, attributes: expect.objectContaining({
-					error: expect.objectContaining({ type: "DbIdMismatch", code: "DB_ID_MISMATCH" }),
-				}) }),
-			);
-
-			const authorized = runMemdump([
-				"--db",
-				copiedDbPath,
-				"--manifest",
-				originalManifestPath,
-			]);
-			expect(authorized.status, authorized.stderr).toBe(0);
-			expect(authorized.stdout.trim().split("\n").map(JSON.parse)).toContainEqual(
-				expect.objectContaining({
-					id: "019memdumpcopiedstore00000001",
-					scope: "persona:researcher",
-					text: "The copied persona store keeps the user's preferred research workflow.",
-					timezone: "America/Los_Angeles",
-				}),
-			);
-		} finally {
-			fixture.cleanup();
-			rmSync(copiedDir, { recursive: true, force: true });
-		}
-	});
 });

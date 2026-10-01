@@ -1,0 +1,59 @@
+{
+  "driver": "better-sqlite3 (unencrypted)",
+  "driverVersion": "12.9.0",
+  "nodeVersion": "v24.14.0",
+  "platform": "linux-x64",
+  "rows": 100000,
+  "runs": 5,
+  "seed": 3223190222,
+  "capturedAt": "2026-05-05T02:57:48.020Z",
+  "commitSha": "b6834dfee3afcc34de9fb9d232b56ec832eef06c",
+  "insertMs": {
+    "p50": 301.031066,
+    "p95": 440.708401
+  },
+  "selectMs": {
+    "p50": 353.0737820000004,
+    "p95": 355.276519
+  },
+  "insertRowsPerSec": {
+    "p50": 332191.6283550615,
+    "p95": 340589.45892585965
+  },
+  "selectRowsPerSec": {
+    "p50": 283226.9205420636,
+    "p95": 289425.8681628471
+  },
+  "runs_raw": [
+    {
+      "insertMs": 440.708401,
+      "selectMs": 345.95899499999996,
+      "insertRowsPerSec": 226907.4058336365,
+      "selectRowsPerSec": 289051.5969963435
+    },
+    {
+      "insertMs": 296.70175600000005,
+      "selectMs": 354.64492800000016,
+      "insertRowsPerSec": 337038.7871920785,
+      "selectRowsPerSec": 281972.1702039961
+    },
+    {
+      "insertMs": 293.6086170000001,
+      "selectMs": 355.276519,
+      "insertRowsPerSec": 340589.45892585965,
+      "selectRowsPerSec": 281470.8956321428
+    },
+    {
+      "insertMs": 304.3902939999998,
+      "selectMs": 353.0737820000004,
+      "insertRowsPerSec": 328525.5869558051,
+      "selectRowsPerSec": 283226.9205420636
+    },
+    {
+      "insertMs": 301.031066,
+      "selectMs": 345.511618,
+      "insertRowsPerSec": 332191.6283550615,
+      "selectRowsPerSec": 289425.8681628471
+    }
+  ]
+}

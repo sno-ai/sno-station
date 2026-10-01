@@ -1,0 +1,34 @@
+#!/usr/bin/env python3
+"""Filesystem substitute for GitHub assets; the workflow script remains real."""
+import os
+from pathlib import Path
+import shutil
+import sys
+
+args = sys.argv[1:]
+store = Path(os.environ["UTILITY_TEST_RELEASE_STORE"])
+operation = args[1]
+assert args[0] == "release"
+if operation == "view":
+    if not store.is_dir():
+        sys.exit(1)
+    if "--json" in args:
+        print("\n".join(sorted(path.name for path in store.iterdir())))
+elif operation == "create":
+    store.mkdir()
+elif operation == "upload":
+    source = Path(args[3])
+    destination = store / source.name
+    if destination.exists():
+        print("asset already exists", file=sys.stderr)
+        sys.exit(1)
+    shutil.copyfile(source, destination)
+    with Path(os.environ["UTILITY_TEST_UPLOAD_LOG"]).open("a") as log:
+        log.write(source.name + "\n")
+elif operation == "download":
+    destination = Path(args[args.index("--dir") + 1])
+    for index, arg in enumerate(args):
+        if arg == "--pattern":
+            shutil.copyfile(store / args[index + 1], destination / args[index + 1])
+else:
+    raise AssertionError(f"unexpected gh operation: {args}")

@@ -1,0 +1,5 @@
+{
+	"masterSwitch": "SNO_MEMORA_REM",
+	"operations": ["rem-restate", "rem-verdict"],
+	"provenanceField": "sno_memora_rem"
+}

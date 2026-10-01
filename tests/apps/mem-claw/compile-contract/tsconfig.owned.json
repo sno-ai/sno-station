@@ -1,0 +1,14 @@
+{
+	"extends": "../tsconfig.json",
+	"include": [
+		"../integration/rem-defect-repair.test.ts",
+		"../integration/rem-event-retrievability-surfaces.test.ts",
+		"../integration/rem-replace-coverage.test.ts",
+		"../integration/rem-update-stamp.test.ts",
+		"../e2e/rem-model-stage-outcomes.test.ts",
+		"../e2e/rem-update-rerun-is-noop.test.ts",
+		"../e2e/rem-roundtrip-harness.ts",
+		"../e2e/chapter0/*.ts",
+		"*.ts"
+	]
+}

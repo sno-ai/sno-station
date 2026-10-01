@@ -46,7 +46,7 @@ describe("sno-mem-codex install", () => {
 		try {
 			const lines = await doctor(codexHome);
 			expect(lines).toHaveLength(4);
-			expect(lines[1]).toBe("hook trust: SessionStart=stale-hash UserPromptSubmit=trusted-current Stop=trusted-current");
+			expect(lines[1]).toBe("hook trust: SessionStart=stale-hash UserPromptSubmit=trusted-current Stop=trusted-current SessionEnd=trusted-current PreToolUse=trusted-current PostToolUse=trusted-current");
 		} finally {
 			if (previousProfile === undefined) delete process.env.SNO_PROFILE_DIR;
 			else process.env.SNO_PROFILE_DIR = previousProfile;
@@ -207,6 +207,9 @@ describe("sno-mem-codex install", () => {
 			["SessionStart", "session-start"],
 			["UserPromptSubmit", "user-prompt-submit"],
 			["Stop", "stop"],
+			["SessionEnd", "session-end"],
+			["PreToolUse", "pre-tool-use"],
+			["PostToolUse", "post-tool-use"],
 		] as const) {
 			const owned = parsed.hooks[event]?.filter(group =>
 				group.hooks.some(hook => hook.command === `'/opt/sno/bin/sno-mem-codex' ${subcommand}`));
@@ -235,6 +238,9 @@ describe("sno-mem-codex install", () => {
 			["SessionStart", "session-start"],
 			["UserPromptSubmit", "user-prompt-submit"],
 			["Stop", "stop"],
+			["SessionEnd", "session-end"],
+			["PreToolUse", "pre-tool-use"],
+			["PostToolUse", "post-tool-use"],
 		] as const) {
 			const command = installed.hooks[event][0].hooks[0].command as string;
 			expect(command).toBe(`'${programPath}' ${subcommand}`);
@@ -243,7 +249,7 @@ describe("sno-mem-codex install", () => {
 			expect(executed.stdout).toBe(subcommand);
 		}
 		const lines = await doctor(codexHome);
-		expect(lines[1]).toBe("hook trust: SessionStart=trusted-current UserPromptSubmit=trusted-current Stop=trusted-current");
+		expect(lines[1]).toBe("hook trust: SessionStart=trusted-current UserPromptSubmit=trusted-current Stop=trusted-current SessionEnd=trusted-current PreToolUse=trusted-current PostToolUse=trusted-current");
 	});
 
 	it("replaces an owned group in place without moving a later trusted foreign group", async () => {

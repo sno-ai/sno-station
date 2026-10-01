@@ -1,38 +1,28 @@
 import { existsSync } from "node:fs";
-import { spawnSync } from "node:child_process";
 import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
-import { connect, type MemoryClient } from "@snoai/sno-station-mem/client";
+import { tmpdir, userInfo } from "node:os";
+import { join } from "node:path";
+import { connect, type InitRegistration, type MemoryClient } from "@snoai/memory/client";
 import { afterEach, describe, expect, it } from "vitest";
 import { acquirePidFileLock } from "../../../apps/mem-codex/src/files.js";
-import { importDirectory, spoolDirectory, workerLockPath } from "../../../apps/mem-codex/src/paths.js";
+import { appStateRoot, importDirectory, spoolDirectory, workerLockPath } from "../../../apps/mem-codex/src/paths.js";
 import { runWorker, type WorkerDependencies } from "../../../apps/mem-codex/src/worker.js";
+import { writeSettingsFixture } from "../../packages/memory/fixtures/settings-file-fixture";
+import { untilModelReady } from "../../packages/memory/integration/fixtures/model-ready";
 
-const previousProfile = process.env.SNO_PROFILE_DIR;
+const previousEnv = { SNO_PROFILE_DIR: process.env.SNO_PROFILE_DIR, HOME: process.env.HOME };
 const roots: string[] = [];
 const sidecarPids: number[] = [];
-const repoRoot = resolve(import.meta.dirname, "../../..");
+// The machine's own model cache (read from the account, not HOME): no per-test model download.
+const MODEL_CACHE = join(userInfo().homedir, ".cache", "sno-station", "models");
 
-const remEnhancedInstallation = {
-	mode: "rem-enhanced",
-	retrieval: { rerank: "none", recallTopK: 7 },
-	remEnhanced: { trigger: { tick: false } },
-	remOperations: ["rem-replace"],
-	memoryTelemetry: { enabled: false, currentKeyVersion: 1 },
-	rerankKeyRef: "SNO_STATION_MEM_RERANK_API_KEY",
-	embedding: { provider: "local-onnx", dimensions: 1024, dtype: "q8" },
-};
-
-async function profile(installation: Record<string, unknown> = remEnhancedInstallation): Promise<string> {
+/** A temporary profile with its own settings.json and home (the store list lives under HOME). */
+async function profile(mode: "agent-native" | "local-first" = "agent-native"): Promise<string> {
 	const root = await mkdtemp(join(tmpdir(), "mem-codex-worker-"));
 	roots.push(root);
 	process.env.SNO_PROFILE_DIR = root;
-	await mkdir(join(root, "station"), { recursive: true });
-	await writeFile(join(root, "station/sno-station-mem-tester.config.json"), JSON.stringify({
-		storePath: join(root, "memory.sqlite"),
-		...installation,
-	}));
+	process.env.HOME = join(root, "home");
+	writeSettingsFixture(root, { mode, rerank: { mode: "none" }, embedding: { cacheDir: MODEL_CACHE } });
 	return root;
 }
 
@@ -47,18 +37,19 @@ function dependencies(options: {
 	failCapture?: boolean;
 	failuresBeforeSuccess?: number;
 	childFailure?: boolean;
+	captureCommitted?: boolean;
 	onCapture?: (turnId: string) => Promise<void>;
 } = {}) {
 	const captures: string[] = [];
 	let captureFailures = 0;
 	let now = 1_000;
 	const waits: number[] = [];
-	let registration: Record<string, any> | undefined;
+	let registration: InitRegistration | undefined;
 	let callbackStatus = 0;
 	let callbackBody: unknown;
 	const client = {
 		principal: "tester",
-		async init(_scope: unknown, value: Record<string, any>) { registration = value; return { degraded: false }; },
+		async init(_scope: unknown, value: InitRegistration) { registration = value; return { degraded: false }; },
 		async capture(turn: { turnId: string }) {
 			captures.push(turn.turnId);
 			await options.onCapture?.(turn.turnId);
@@ -73,7 +64,7 @@ function dependencies(options: {
 			});
 			callbackStatus = response.status;
 			callbackBody = await response.json();
-			return { degraded: false, committed: response.ok, turnId: turn.turnId };
+			return { degraded: false, committed: options.captureCommitted ?? response.ok, turnId: turn.turnId };
 		},
 	} as unknown as MemoryClient;
 	const deps: WorkerDependencies = {
@@ -101,30 +92,22 @@ function dependencies(options: {
 
 afterEach(async () => {
 	for (const pid of sidecarPids.splice(0)) {
-		try { process.kill(pid, "SIGTERM"); } catch { /* already stopped */ }
+		try { process.kill(pid, "SIGTERM"); } catch { continue; /* already stopped */ }
+		// The sidecar writes into the profile until it exits; removing the root earlier races it.
+		for (let attempt = 0; attempt < 200; attempt += 1) {
+			try { process.kill(pid, 0); } catch { break; }
+			await new Promise(resolve => setTimeout(resolve, 50));
+		}
 	}
-	if (previousProfile === undefined) delete process.env.SNO_PROFILE_DIR;
-	else process.env.SNO_PROFILE_DIR = previousProfile;
+	for (const [key, value] of Object.entries(previousEnv)) {
+		if (value === undefined) delete process.env[key];
+		else process.env[key] = value;
+	}
 	for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true });
 });
 
 describe("mem-codex worker", () => {
-	it.each([
-		[{}, "agent-native"],
-		[{ mode: "local-first" }, "local-first"],
-	] as const)("registers installation %j with mode %s", async (installation, mode) => {
-		await profile(installation);
-		await spool("0001.json", mode);
-		const fixture = dependencies();
-
-		expect(await runWorker(fixture.deps)).toBe("drained");
-		expect(fixture.registration).toMatchObject({
-			routing: { mode },
-			model: { model: "codex-exec" },
-		});
-	});
-
-	it("holds one lock, drains in filename order, registers installed routing, and deletes only after commit", async () => {
+	it("holds one lock, drains in filename order, registers with only its skin and model, and deletes only after commit", async () => {
 		await profile();
 		const first = await spool("0002.json", "two");
 		const second = await spool("0001.json", "one");
@@ -135,10 +118,10 @@ describe("mem-codex worker", () => {
 		expect(existsSync(first)).toBe(false);
 		expect(existsSync(second)).toBe(false);
 		expect(existsSync(third)).toBe(false);
-			expect(fixture.registration).toMatchObject({
-			routing: { mode: "rem-enhanced", remEnhanced: { trigger: { tick: false } } },
-			settings: { retrieval: { rerank: "none", recallTopK: 7, rerankApiKey: "${SNO_STATION_MEM_RERANK_API_KEY}" }, ambientLearning: true, autoRecall: true, captureAssistant: true, observe: { enabled: false }, scopes: { default: "global" } },
-			model: { model: "codex-exec" },
+		// The worker never holds routing, settings, or the reranker key; the service reads settings.json.
+		expect(fixture.registration).toEqual({
+			skinId: "codex",
+			model: { baseUrl: expect.any(String), credential: expect.any(String), model: "codex-exec" },
 		});
 		expect(fixture.callbackBody).toMatchObject({ choices: [{ message: { role: "assistant", content: "child:user: three" } }] });
 		expect(await readdir(spoolDirectory())).toEqual([]);
@@ -271,8 +254,10 @@ describe("mem-codex worker", () => {
 		let now = 1_000;
 		fixture.deps.now = () => now;
 		fixture.deps.sleep = async delayMs => {
-			const record = JSON.parse(await readFile(path, "utf8"));
-			observed.push({ attempts: record.attempts, retryAt: record.retryAt });
+			if (existsSync(path)) {
+				const record = JSON.parse(await readFile(path, "utf8"));
+				observed.push({ attempts: record.attempts, retryAt: record.retryAt });
+			}
 			fixture.waits.push(delayMs);
 			now += delayMs;
 		};
@@ -282,7 +267,11 @@ describe("mem-codex worker", () => {
 			{ attempts: 1, retryAt: 3_000 },
 			{ attempts: 2, retryAt: 13_000 },
 		]);
-		expect(fixture.waits.slice(-2)).toEqual([2_000, 10_000]);
+		// Two retry waits, then the two idle minutes a drained worker stays up before it exits.
+		// Retry waits, then the two idle minutes taken in rescanning slices of at most five seconds.
+		expect(fixture.waits.slice(0, 2)).toEqual([2_000, 10_000]);
+		expect(fixture.waits.slice(2).every(wait => wait <= 5_000)).toBe(true);
+		expect(fixture.waits.slice(2).reduce((total, wait) => total + wait, 0)).toBe(120_000);
 		expect(fixture.captures).toEqual(["one", "one", "one"]);
 		expect(existsSync(path)).toBe(false);
 	});
@@ -294,6 +283,15 @@ describe("mem-codex worker", () => {
 		expect(await runWorker(fixture.deps)).toBe("drained");
 		expect(fixture.callbackStatus).toBe(503);
 		expect(fixture.callbackBody).toEqual({ error: { kind: "error", category: "transport", message: "codex-exit-9" } });
+		expect(JSON.parse(await readFile(path, "utf8"))).toMatchObject({ attempts: 3, state: "failed" });
+	});
+
+	it("keeps a capture that completed without committing or deliberately skipping", async () => {
+		await profile();
+		const path = await spool("0001.json", "unavailable");
+		const fixture = dependencies({ captureCommitted: false });
+		expect(await runWorker(fixture.deps)).toBe("drained");
+		expect(fixture.captures).toEqual(["unavailable", "unavailable", "unavailable"]);
 		expect(JSON.parse(await readFile(path, "utf8"))).toMatchObject({ attempts: 3, state: "failed" });
 	});
 
@@ -320,17 +318,15 @@ describe("mem-codex worker", () => {
 	}, 10_000);
 
 	it("registers and captures through a real sidecar in a temporary profile", async () => {
-		const root = await profile();
-		const bind = spawnSync(process.execPath, [join(repoRoot, "packages/sno-station-mem/dist/cli.js"), "bind", join(root, "memory.sqlite")], {
-			encoding: "utf8",
-			env: { ...process.env, SNO_PROFILE_DIR: root, SNO_STATION_CORE_TESTING: "1" },
-			input: JSON.stringify({ mode: "agent-native", retrieval: { rerank: "none" }, embedding: { provider: "local-onnx", dimensions: 1024, dtype: "q8" }, memoryTelemetry: { enabled: false, currentKeyVersion: 1 } }),
-			timeout: 20_000,
-		});
-		expect(bind.status, bind.stderr).toBe(0);
+		const root = await profile("agent-native");
 		await spool("0001.json", "real-sidecar");
 		const prompts: string[] = [];
+		// The drained worker idles two minutes; the injected clock makes that wait instant.
+		let clock = Date.now();
+		const idleWaits: number[] = [];
 		const deps: WorkerDependencies = {
+			now: () => clock,
+			async sleep(delayMs) { idleWaits.push(delayMs); clock += delayMs; },
 			async connect() {
 				const client = await connect({ skinId: "codex" });
 				if (client.degraded) throw new Error(client.reason);
@@ -344,8 +340,156 @@ describe("mem-codex worker", () => {
 		};
 		expect(await runWorker(deps), prompts.join("\n---\n")).toBe("drained");
 		expect(await readdir(spoolDirectory())).toEqual([]);
+		expect(idleWaits.reduce((total, delayMs) => total + delayMs, 0)).toBeGreaterThanOrEqual(2 * 60_000);
 		const discovery = JSON.parse(await readFile(join(root, "station/sidecar.json"), "utf8"));
 		expect(discovery.pid).toBe(sidecarPids.at(-1));
 		expect((await fetch(`http://127.0.0.1:${discovery.port}/healthz`)).status).toBe(200);
 	}, 30_000);
+
+	it("finishes an import without a failed receipt when ambient capture is disabled", async () => {
+		const root = await profile();
+		writeSettingsFixture(root, { mode: "agent-native", capture: { ambient: false }, rerank: { mode: "none" }, embedding: { cacheDir: MODEL_CACHE } });
+		const path = await spool("0001.json", "capture-disabled");
+		await mkdir(importDirectory(), { recursive: true });
+		const receiptPath = join(importDirectory(), "receipt.json");
+		await writeFile(receiptPath, JSON.stringify({ files: { "/note.md": { committed: 0, failures: 0 } } }));
+		const record = JSON.parse(await readFile(path, "utf8"));
+		record.kind = "import";
+		record.importReceipt = { path: receiptPath, file: "/note.md" };
+		await writeFile(path, JSON.stringify(record));
+		let clock = Date.now();
+		const deps: WorkerDependencies = {
+			now: () => clock,
+			async sleep(delayMs) { clock += delayMs; },
+			async connect() {
+				const client = await connect({ skinId: "codex" });
+				if (client.degraded) throw new Error(client.reason);
+				sidecarPids.push(client.pid);
+				await untilModelReady(({ scope, query, options }) => client.getRecall(query, { principal: client.principal, ...scope }, options));
+				return client;
+			},
+			async runChild() { throw new Error("capture should be skipped"); },
+		};
+		expect(await runWorker(deps)).toBe("drained");
+		expect(await readdir(spoolDirectory())).toEqual([]);
+		expect(JSON.parse(await readFile(receiptPath, "utf8")).files["/note.md"]).toEqual({ committed: 0, failures: 0, skipped: 1 });
+	}, 150_000);
+});
+
+// Local First PRD REQ-3: the callback answers while the worker lives, not only during spool work,
+// and a drained worker stays up while its callback served a call in the last 2 minutes (9-minute cap).
+describe("mem-codex worker callback with an empty spool", () => {
+	const answer = (text: string) => ({ choices: [{ message: { role: "assistant", content: `child:user: ${text}` } }] });
+
+	async function postCallback(model: { baseUrl: string; credential: string }, text: string) {
+		const response = await fetch(`${model.baseUrl}/chat/completions`, {
+			method: "POST",
+			headers: { authorization: `Bearer ${model.credential}`, "content-type": "application/json" },
+			body: JSON.stringify({ model: "codex-exec", messages: [{ role: "system", content: "system" }, { role: "user", content: text }] }),
+		});
+		const raw = await response.text();
+		let body: unknown = raw;
+		try { body = JSON.parse(raw); } catch { /* keep the raw text in the failure diff */ }
+		return { status: response.status, body };
+	}
+
+	// A real local-first sidecar in a temporary profile; the worker registers its callback there.
+	// Worker time is the injected clock; each callback request arrives at its scheduled offset
+	// (ms after start) while the worker sleeps, exactly as a service call lands mid-wait.
+	async function callbackWorker(callsAt: number[], probeAtRegistration = true) {
+		await profile("local-first");
+		const startedAt = Date.now();
+		let clock = startedAt;
+		let sleeps = 0;
+		let model: { baseUrl: string; credential: string } | undefined;
+		const children: Array<{ prompt: string; cwd: string }> = [];
+		const served: Array<{ at: number; status: number; body: unknown }> = [];
+		const deps: WorkerDependencies = {
+			async connect() {
+				const client = await connect({ skinId: "codex" });
+				if (client.degraded) throw new Error(client.reason);
+				sidecarPids.push(client.pid);
+				const init = client.init.bind(client);
+				client.init = async (scope, value) => {
+					const result = await init(scope, value);
+					model = value.model;
+					if (!model) throw new Error("worker registration missing model");
+					if (probeAtRegistration) served.push({ at: 0, ...await postCallback(model, "REGISTRATION_PROBE") });
+					return result;
+				};
+				return client;
+			},
+			now: () => clock,
+			async sleep(delayMs) {
+				sleeps += 1;
+				if (sleeps > 10_000 || clock - startedAt > 60 * 60_000) throw new Error(`worker still sleeping at +${clock - startedAt} ms`);
+				const wakeAt = clock + delayMs;
+				for (const offset of callsAt) {
+					if (!model || startedAt + offset <= clock || startedAt + offset > wakeAt) continue;
+					clock = startedAt + offset;
+					served.push({ at: offset, ...await postCallback(model, `CALL_AT_${offset}`) });
+				}
+				clock = wakeAt;
+			},
+			async runChild(prompt, cwd) {
+				children.push({ prompt: prompt.split("\n").at(-1) ?? "", cwd });
+				return { kind: "ok", text: `child:${prompt.split("\n").at(-1)}` };
+			},
+		};
+		return { deps, served, children, startedAt, get exitedAfter() { return clock - startedAt; } };
+	}
+
+	// Calls at 0 (registration), 30 s, 150 s and 200 s: the worker exits exactly 2 minutes after the
+	// last one (320 s). A fixed lifetime or a timer counted from the drain alone exits elsewhere.
+	it("answers model calls with an empty spool and exits exactly two minutes after the last call", async () => {
+		const fixture = await callbackWorker([30_000, 150_000, 200_000]);
+		expect(await runWorker(fixture.deps)).toBe("drained");
+		expect(fixture.served).toEqual([
+			{ at: 0, status: 200, body: answer("REGISTRATION_PROBE") },
+			{ at: 30_000, status: 200, body: answer("CALL_AT_30000") },
+			{ at: 150_000, status: 200, body: answer("CALL_AT_150000") },
+			{ at: 200_000, status: 200, body: answer("CALL_AT_200000") },
+		]);
+		// With no spool record the child runs in the worker's own directory, never a user project.
+		for (const child of fixture.children) {
+			expect(child.cwd.startsWith(`${appStateRoot()}/`)).toBe(true);
+			expect(existsSync(child.cwd)).toBe(true);
+		}
+		expect(fixture.exitedAfter).toBe(200_000 + 2 * 60_000);
+		expect(existsSync(workerLockPath())).toBe(false);
+	}, 60_000);
+
+	// The service dispatches REM after registration returns, so its first call can arrive only once
+	// the worker has drained its spool (Done test: the pass reaches its end with the spool empty).
+	it("waits after registration for a first call that arrives once the spool is empty", async () => {
+		const fixture = await callbackWorker([90_000], false);
+		await runWorker(fixture.deps);
+		expect(fixture.served.map(({ at, status }) => ({ at, status }))).toEqual([{ at: 90_000, status: 200 }]);
+		expect(fixture.exitedAfter).toBe(90_000 + 2 * 60_000);
+	}, 60_000);
+
+	// A record due at 60 s drains the spool after the last call (30 s): the two minutes count from
+	// the drain, so the worker exits at 180 s, not 150 s.
+	it("counts the two idle minutes from the drain when it is later than the last call", async () => {
+		const fixture = await callbackWorker([30_000], false);
+		await mkdir(spoolDirectory(), { recursive: true });
+		await writeFile(join(spoolDirectory(), "0001.json"), JSON.stringify({ sessionId: "session-late-drain", turnId: "late-drain",
+			project: "/repo", childCwd: "/repo", user: "The staging database is refreshed every Monday.", assistant: "Noted.",
+			at: 1, attempts: 0, state: "pending", retryAt: fixture.startedAt + 60_000 }));
+		expect(await runWorker(fixture.deps)).toBe("drained");
+		expect(await readdir(spoolDirectory())).toEqual([]);
+		expect(fixture.served.map(({ at, status }) => ({ at, status }))).toEqual([{ at: 30_000, status: 200 }]);
+		expect(fixture.exitedAfter).toBe(60_000 + 2 * 60_000);
+	}, 60_000);
+
+	// A call every minute keeps the worker alive; it answers every call up to the cap and exits at
+	// exactly nine minutes, never earlier and never later.
+	it("keeps answering while called and exits exactly at the nine-minute cap", async () => {
+		const everyMinute = Array.from({ length: 10 }, (_, index) => (index + 1) * 60_000);
+		const fixture = await callbackWorker(everyMinute);
+		await runWorker(fixture.deps);
+		expect(fixture.served.map(({ at, status }) => ({ at, status }))).toEqual(
+			[0, ...everyMinute.filter(offset => offset <= 9 * 60_000)].map(at => ({ at, status: 200 })));
+		expect(fixture.exitedAfter).toBe(9 * 60_000);
+	}, 60_000);
 });

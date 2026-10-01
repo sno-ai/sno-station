@@ -3,7 +3,7 @@
 import {
 	hashRemMemoryRow,
 	REM_ROW_HASH_VERSION,
-} from "../../../../packages/sno-station-mem/src/engine/rem/index.ts";
+} from "../../../../packages/memory/src/engine/rem/index.ts";
 import type { TestDb } from "./test-db.ts";
 
 type RestoreWriter = "restoreLane" | "restoreTextVersion" | "restoreMark";

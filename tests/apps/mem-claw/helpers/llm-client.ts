@@ -1,7 +1,7 @@
 import type {
 	LlmClient,
 	MemoryLlmRequest,
-} from "../../../../packages/sno-station-mem/src/model/llm-client.ts";
+} from "../../../../packages/memory/src/model/llm-client.ts";
 
 type JsonCompletion = <T>(request: MemoryLlmRequest) => Promise<T | null>;
 
@@ -33,9 +33,9 @@ function adaptProfileSplitFixtures(completeJson: JsonCompletion): JsonCompletion
 	const pendingTextResponses: Record<string, unknown>[] = [];
 	return async <T>(request: MemoryLlmRequest): Promise<T | null> => {
 		// Legacy fixtures assume every retirement the judge named goes through; the second key
-		// (profile-retirement-recheck) did not exist when they were written, so it agrees here.
-		if (request.callLabel === "profile-retirement-recheck") return { retire: true } as T;
-		if (request.callLabel === "profile-section-text") {
+		// (model call P3, retirement recheck) did not exist when they were written, so it agrees here.
+		if (request.callId === "P3") return { retire: true } as T;
+		if (request.callId === "P5") {
 			const fused = pendingTextResponses.shift();
 			if (fused) {
 				return {
@@ -48,7 +48,7 @@ function adaptProfileSplitFixtures(completeJson: JsonCompletion): JsonCompletion
 		}
 		const response = await completeJson<unknown>(request);
 		if (
-			request.callLabel !== "profile-section-judgment" ||
+			request.callId !== "P4" ||
 			!isRecord(response) ||
 			typeof response["action"] !== "string"
 		) {

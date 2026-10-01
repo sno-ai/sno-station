@@ -1,49 +1,49 @@
-import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
-import { userInfo } from "node:os";
 import { join, resolve } from "node:path";
 import { z } from "zod";
-import { pluginConfigSchema } from "../../../../packages/sno-station-mem/config/plugin-config-schema.ts";
+import { pluginConfigSchema } from "../../../../packages/memory/config/plugin-config-schema.ts";
+import { writeSettingsFixture } from "../../../packages/memory/fixtures/settings-file-fixture.ts";
 
-const cli = resolve(import.meta.dirname, "../../../../packages/sno-station-mem/dist/cli.js");
 const ownedProfiles = new Map<string, string>();
 const discoverySchema = z.object({ pid: z.number().int().positive() });
-const bindingSchema = z.object({ principal: z.string(), storePath: z.string() });
+const settingsStoreSchema = z.object({ store: z.object({ path: z.string() }) });
 
-/** Use the same installation command and immutable store binding as a real host. */
-export function bindTestMemory(profileRoot: string, dbPath: string, input: unknown): void {
-	const bindingPath = join(profileRoot, "station", `sno-station-mem-${userInfo().username}.binding.json`);
-	if (existsSync(bindingPath)) {
-		const binding = bindingSchema.parse(JSON.parse(readFileSync(bindingPath, "utf8")));
-		if (binding.principal !== userInfo().username || binding.storePath !== resolve(dbPath)) {
-			throw new Error(`test profile is already bound to another store: ${profileRoot}`);
+/**
+ * Writes `<profileRoot>/settings.json` the way `sno` does, with the store at `dbPath`; a profile whose
+ * file already names this store keeps it, and one that names another store refuses. `encryptionKey`
+ * is the key the store was created with; without one the file carries a fresh key, which suits only
+ * a store the service creates.
+ */
+export function bindTestMemory(profileRoot: string, dbPath: string, input: unknown, encryptionKey?: string): void {
+	const settingsPath = join(profileRoot, "settings.json");
+	if (existsSync(settingsPath)) {
+		const settings = settingsStoreSchema.parse(JSON.parse(readFileSync(settingsPath, "utf8")));
+		if (resolve(settings.store.path) !== resolve(dbPath)) {
+			throw new Error(`test profile already names another store: ${profileRoot}`);
 		}
 	} else {
 		const config = pluginConfigSchema.parse(input);
-		execFileSync(process.execPath, [cli, "bind", dbPath], {
-			env: { ...process.env, SNO_PROFILE_DIR: profileRoot },
-			input: JSON.stringify({
-				mode: config.mode,
-				embedding: config.embedding,
-				retrieval: config.retrieval,
-				memoryTelemetry: config.memoryTelemetry,
-				autoRecallTimeoutMs: config.autoRecallTimeoutMs,
-				remOperations: config.remOperations,
-				remEnhanced: config.remEnhanced,
-			}),
-			stdio: ["pipe", "pipe", "pipe"],
-			timeout: 20_000,
+		writeSettingsFixture(profileRoot, {
+			mode: config.mode,
+			store: { path: resolve(dbPath), ...(encryptionKey === undefined ? {} : { encryptionKey }) },
+			embedding: { cacheDir: "" },
+			rerank: { mode: config.retrieval.rerank },
+			recall: { prompt: { timeoutMs: config.autoRecallTimeoutMs } },
+			rem: { operations: config.remOperations, tick: config.remEnhanced?.trigger.tick ?? true },
 		});
 	}
 	ownedProfiles.set(profileRoot, resolve(dbPath));
 }
 
 function alive(pid: number): boolean {
-	try { process.kill(pid, 0); return true; }
+	try { process.kill(pid, 0); }
 	catch (error) {
 		if (error instanceof Error && "code" in error && error.code === "ESRCH") return false;
 		throw error;
 	}
+	// A service this process started stays a zombie while the synchronous wait below blocks the event
+	// loop that would reap it; an exited zombie is stopped.
+	return readFileSync(`/proc/${pid}/stat`, "utf8").split(") ").at(-1)?.[0] !== "Z";
 }
 
 /** Synchronous fixture cleanup must stop the daemon before its SQLite files are removed. */
