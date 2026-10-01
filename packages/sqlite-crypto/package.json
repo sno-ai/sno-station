@@ -1,6 +1,6 @@
 {
 	"name": "@snoai/sqlite-crypto",
-	"version": "0.2.0",
+	"version": "1.0.0",
 	"license": "Apache-2.0",
 	"publishConfig": { "access": "public" },
 	"repository": {
@@ -40,7 +40,7 @@
 		"clean": "rm -rf dist"
 	},
 	"dependencies": {
-		"@snoai/utils": "^0.8.0",
+		"@snoai/utils": "^1.0.0",
 		"@types/better-sqlite3": "^9.6.0",
 		"better-sqlite3-multiple-ciphers": "^13.0.3",
 		"tar-stream": "3.2.0"
