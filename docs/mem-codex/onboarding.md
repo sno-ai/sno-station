@@ -13,7 +13,7 @@ Requirements:
 Complete the [shared memory setup](../memory-setup.md), then install the Codex integration:
 
 ```bash
-npm install -g @snoai/mem-codex@1.0.0
+npm install -g @snoai/mem-codex@1.0.1
 sno-mem-codex install --codex-home ~/.codex
 ```
 
@@ -118,12 +118,12 @@ The output has four lines:
 
 ```text
 sidecar: healthy
-hook trust: SessionStart=trusted-current UserPromptSubmit=trusted-current Stop=trusted-current
+hook trust: SessionStart=trusted-current UserPromptSubmit=trusted-current Stop=trusted-current SessionEnd=trusted-current PreToolUse=trusted-current PostToolUse=trusted-current
 rules: present
 import receipts: 2
 ```
 
-The two import receipts are your user-level Codex notes and the repository you just opened.
+`import receipts` counts the import records on disk. The first is written by `install` for your user-level Codex notes, so right after install it shows `1`. The second appears when the first session starts in a repository (one more for each further repository), so after you open your first repository it shows `2`.
 
 ## Step 4: create the first useful memory
 
@@ -183,6 +183,6 @@ Onboarding is complete when:
 - Agent Native runs on the existing Codex subscription and collects no key;
 - REM Enhanced explains the Sno-covered and Codex-covered work in public terms;
 - the install command writes only its own entries and `--dry-run` changes nothing;
-- `doctor` prints `healthy`, three `trusted-current` hooks, and `present` rules after a new session;
+- `doctor` prints `healthy`, six `trusted-current` hooks, and `present` rules after a new session;
 - the user can create and verify a first memory;
 - no secret, private hostname, internal path, or deployment instruction appears in the output.

@@ -13,7 +13,7 @@
 先按[共用记忆服务安装说明](../../memory-setup.md)完成设置，再安装 Codex 插件：
 
 ```bash
-npm install -g @snoai/mem-codex@1.0.0
+npm install -g @snoai/mem-codex@1.0.1
 sno-mem-codex install --codex-home ~/.codex
 ```
 
@@ -110,12 +110,12 @@ sno-mem-codex doctor
 
 ```text
 sidecar: healthy
-hook trust: SessionStart=trusted-current UserPromptSubmit=trusted-current Stop=trusted-current
+hook trust: SessionStart=trusted-current UserPromptSubmit=trusted-current Stop=trusted-current SessionEnd=trusted-current PreToolUse=trusted-current PostToolUse=trusted-current
 rules: present
 import receipts: 2
 ```
 
-两条 import receipt 分别是你的用户级 Codex 笔记和刚打开的那个 repository。
+`import receipts` 统计磁盘上的导入记录。第一条由 `install` 为你的用户级 Codex 笔记写下，所以刚装完时显示 `1`；第二条在某个 repository 里第一次启动会话时出现（之后每多一个 repository 再加一条），所以打开第一个 repository 之后显示 `2`。
 
 ## 第四步：建立第一条有用 memory
 
@@ -173,6 +173,6 @@ sno-mem-codex install --codex-home /absolute/path/to/codex-home --dry-run
 - Agent Native 跑在已有的 Codex subscription 上，不收任何 key；
 - REM Enhanced 用公开语言说明 Sno 与 Codex 各自负责的工作；
 - install 命令只写自己的条目，`--dry-run` 什么都不改；
-- 新会话之后 `doctor` 打印 `healthy`、三个 `trusted-current` hook 和 `present` 的 rules；
+- 新会话之后 `doctor` 打印 `healthy`、六个 `trusted-current` hook 和 `present` 的 rules；
 - 用户能创建并验证第一条 memory；
 - 输出中没有 secret、私有 hostname、内部路径或部署说明。
