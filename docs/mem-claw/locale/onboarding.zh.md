@@ -14,7 +14,7 @@
 ## 第二步：安装插件
 
 ```bash
-openclaw plugins install @snoai/mem-claw@1.0.0
+openclaw plugins install @snoai/mem-claw@1.0.1
 ```
 
 `npx @snoai/mem-claw` 做的是同一次安装，它只有一个选项 `--profile <name>`，会原样传给 OpenClaw。插件会按共享设置记录的路径启动 memory 服务，没有单独的启动命令。
