@@ -1,5 +1,4 @@
-// @snoai/sqlite-crypto — single audit surface for SNO Station Core SQLite encryption.
-// See openspec/changes/add-local-aes-encryption/specs/sno-station-core-crypto-core/spec.md.
+// @snoai/sqlite-crypto — single audit surface for Sno Station SQLite encryption.
 
 export { resolveConfigPaths } from "./config.js";
 export {
