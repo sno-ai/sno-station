@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { APP_NAME } from "./constants.js";
@@ -26,18 +25,6 @@ export function workerLockPath(): string {
 
 export function workerLogPath(): string {
 	return join(appStateRoot(), "worker.log");
-}
-
-function correctionKey(id: string): string {
-	return createHash("sha256").update(id).digest("hex");
-}
-
-export function correctionLockPath(id: string): string {
-	return join(appStateRoot(), "corrections", `${correctionKey(id)}.lock`);
-}
-
-export function correctionStatePath(id: string): string {
-	return join(appStateRoot(), "corrections", `${correctionKey(id)}.json`);
 }
 
 export function importDirectory(): string {

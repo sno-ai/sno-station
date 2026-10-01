@@ -1,6 +1,6 @@
 import { readFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
-import { CODING_SKIN_HOOKS, type CodingSkinHookName } from "@snoai/sno-station-mem/coding-skin";
+import { CODING_SKIN_HOOKS, type CodingSkinHookName } from "@snoai/memory/coding-skin";
 import { z } from "zod";
 import { isOwnedHookCommand, isOwnedPermissionRule, readSettings } from "./install.js";
 import { importDirectory, sidecarDiscoveryPath } from "./paths.js";

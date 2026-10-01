@@ -5,7 +5,9 @@ import { join, resolve } from "node:path";
 import { appendSpool } from "./session-state.js";
 import { importDirectory } from "./paths.js";
 import { writeJsonAtomic } from "./files.js";
-import { startWorkerDetached } from "./worker.js";
+import { MESSAGES } from "./messages.js";
+import { readCaptureSettings } from "./settings.js";
+import { hasActionableSpool, startWorkerDetached } from "./worker.js";
 
 interface ImportBlock {
 	heading: string;
@@ -16,6 +18,7 @@ interface FileReceipt {
 	hash: string;
 	blocksFed: number;
 	committed: number;
+	skipped: number;
 	failures: number;
 }
 
@@ -84,6 +87,10 @@ async function queueFiles(input: {
 	startWorker: () => void;
 }): Promise<ImportResult> {
 	const path = receiptPath(input.root);
+	if (!readCaptureSettings().ambient) {
+		process.stderr.write(`${MESSAGES.importCaptureDisabled}\n`);
+		return { receiptPath: path, blocksFed: 0 };
+	}
 	const receipt = await readReceipt(path, input.root, input.project);
 	let blocksFed = 0;
 	for (const file of input.files) {
@@ -91,7 +98,7 @@ async function queueFiles(input: {
 		const hash = createHash("sha256").update(content).digest("hex");
 		if (receipt.files[file]?.hash === hash) continue;
 		const blocks = splitMarkdown(content);
-		receipt.files[file] = { hash, blocksFed: blocks.length, committed: 0, failures: 0 };
+		receipt.files[file] = { hash, blocksFed: blocks.length, committed: 0, skipped: 0, failures: 0 };
 		for (const block of blocks) {
 			await appendSpool({
 				sessionId: `import-${createHash("sha256").update(input.root).digest("hex").slice(0, 16)}`,
@@ -107,7 +114,7 @@ async function queueFiles(input: {
 		}
 	}
 	await writeJsonAtomic(path, receipt);
-	if (blocksFed > 0) input.startWorker();
+	if (blocksFed > 0 || await hasActionableSpool()) input.startWorker();
 	return { receiptPath: path, blocksFed };
 }
 
