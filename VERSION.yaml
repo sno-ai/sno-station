@@ -1,0 +1,23 @@
+# Sno Station Version Configuration
+# Single source of truth for workspace-facing versions and release metadata
+#
+# Versioning Rules (SemVer):
+#   - MAJOR: Breaking changes (manual, e.g., 0.x → 1.x)
+#   - MINOR: New features (manual, e.g., 0.1 → 0.2)
+#   - PATCH: Bug fixes (e.g., 1.0.0 → 1.0.1)
+
+# The only field used for version display across all services
+version: "1.0.0"
+
+# Metadata for tracking
+last_updated: "2026-09-30T22:29:48Z"
+updated_by: "first public release"
+
+# Change log (most recent first)
+changelog:
+  - version: "0.9.0"
+    date: "2026-03-18"
+    note: "LLMix, Chunking integration"
+  - version: "0.8.0"
+    date: "2026-02-17"
+    notes: "Initial version - sno-station-legacy-core build"
