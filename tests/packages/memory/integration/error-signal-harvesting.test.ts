@@ -167,7 +167,7 @@ describe("summarizeErrorText", () => {
 		expect(custom).toMatch(/\.\.\.$/);
 
 		// Secret redaction
-		const withSecret = "Error: key=sk-proj-<REDACTED>";
+		const withSecret = `Error: key=sk-proj-${"abc123def456ghi789jkl012mno345pqr678"}`;
 		const summarized = summarizeErrorText(withSecret);
 		expect(summarized).not.toContain("sk-proj-");
 		expect(summarized).toContain("[REDACTED_SECRET]");

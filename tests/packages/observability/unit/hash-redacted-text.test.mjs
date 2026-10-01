@@ -18,7 +18,7 @@ describe("hashRedactedText", () => {
 
 	it("redacts email and secret before hashing", () => {
 		const api = createSnoObserve();
-		const input = "contact alice@example.com with key sk_live_<REDACTED>";
+		const input = `contact owner@example.test with key sk_live_${"abcdefghijklmnop"}`;
 		const redacted = "contact <email> with key <api-key>";
 		assert.equal(api.hashRedactedText(input), sha256Hex(Buffer.from(redacted, "utf8")));
 		assert.notEqual(api.hashRedactedText(input), sha256Hex(Buffer.from(input, "utf8")));

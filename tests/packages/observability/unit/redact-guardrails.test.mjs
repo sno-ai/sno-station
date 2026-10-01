@@ -45,14 +45,14 @@ describe("redact — false-positive guardrails", () => {
 		const result = redactEventPayload(
 			{
 				note:
-					"AKIA1234567890ABCDEF and sk_live_<REDACTED> and ghp_<REDACTED>",
+					`AKIA1234567890ABCDEF and sk_live_${"1234567890abcdefghij"} and ghp_1234567890abcdefghij`,
 			},
 			"metadata-only",
 		);
 		const serialized = JSON.stringify(result.value);
 		assert.equal(serialized.includes("AKIA1234567890ABCDEF"), false);
-		assert.equal(serialized.includes("sk_live_<REDACTED>"), false);
-		assert.equal(serialized.includes("ghp_<REDACTED>"), false);
+		assert.equal(serialized.includes(`sk_live_${"1234567890abcdefghij"}`), false);
+		assert.equal(serialized.includes("ghp_1234567890abcdefghij"), false);
 		assert.equal((serialized.match(/<api-key>/gu) ?? []).length, 3);
 	});
 
@@ -60,7 +60,7 @@ describe("redact — false-positive guardrails", () => {
 		const result = redactEventPayload(
 			{
 				note:
-					'{"private_key":"-----BEGIN RSA PRIVATE KEY (redacted)-----abc123-----END RSA PRIVATE KEY (redacted)-----"}',
+					'{"private_key":"-----BEGIN RSA PRIVATE KEY-----abc123-----END RSA PRIVATE KEY-----"}',
 			},
 			"metadata-only",
 		);

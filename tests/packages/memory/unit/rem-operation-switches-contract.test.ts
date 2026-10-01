@@ -30,8 +30,8 @@ describe("REM settings", () => {
 	});
 
 	it("rejects removed operations and an unknown switch", () => {
-		expect(() => remSettings({ operations: ["rem-distill"] })).toThrow(/run sno setup/);
-		expect(() => remSettings({ operations: ["rem-update", "rem-retire"] })).toThrow(/run sno setup/);
-		expect(() => remSettings({ enabled: true })).toThrow(/run sno setup/);
+		expect(() => remSettings({ operations: ["rem-distill"] })).toThrow(/docs\/memory-setup\.md/);
+		expect(() => remSettings({ operations: ["rem-update", "rem-retire"] })).toThrow(/docs\/memory-setup\.md/);
+		expect(() => remSettings({ enabled: true })).toThrow(/docs\/memory-setup\.md/);
 	});
 });

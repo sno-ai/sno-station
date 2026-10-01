@@ -120,7 +120,7 @@ describe("sidecar-owned observe sessions for coding skins", () => {
 			kind: "llm", model: "openai:gpt-5.6-codex", promptTokens: 6402, completionTokens: 241, latencyMs: 8420.6,
 		} }, "codex")).toEqual({ degraded: false, accepted: true });
 		expect(await post("/v1/host-event", { scope, event: {
-			kind: "tool", toolName: "Bash", decision: "allow", input: '{"command":"git status"}', output: "On branch dev, mail alice@example.com", latencyMs: 312.4,
+			kind: "tool", toolName: "Bash", decision: "allow", input: '{"command":"git status"}', output: "On branch dev, mail owner@example.test", latencyMs: 312.4,
 		} }, "codex")).toEqual({ degraded: false, accepted: true });
 		expect(await post("/v1/host-event", { scope, event: {
 			kind: "permission", permissionKind: "Bash", decision: "deny", target: '{"command":"rm -rf /"}',
@@ -150,7 +150,7 @@ describe("sidecar-owned observe sessions for coding skins", () => {
 		expect(byType["tool.call"]?.payload).toMatchObject({ tool_name: "Bash", decision: "allow", latency_ms: 312 });
 		expect(byType["tool.call"]?.payload.input_hash).toMatch(/^[0-9a-f]{64}$/);
 		expect(byType["tool.call"]?.payload.output_hash).toMatch(/^[0-9a-f]{64}$/);
-		expect(byType["tool.call"]?.payload.output_hash).not.toBe(sha256("On branch dev, mail alice@example.com"));
+		expect(byType["tool.call"]?.payload.output_hash).not.toBe(sha256("On branch dev, mail owner@example.test"));
 		expect(byType["tool.call"]?.payload.output_hash).toBe(sha256("On branch dev, mail <email>"));
 		expect(byType["permission.request"]?.lane).toBe("security");
 		expect(byType["permission.request"]?.payload).toEqual({ kind: "Bash", decision: "deny", target_hash: sha256('{"command":"rm -rf /"}') });

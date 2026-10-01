@@ -34,7 +34,7 @@ function rewrite(path: string, doc: SettingsDocument): void {
 	writeFileSync(path, JSON.stringify(doc));
 }
 
-/** Returns the part of the refusal between `<path>: ` and `; run sno setup`, after checking both ends. */
+/** Returns the part of the refusal between `<path>: ` and the setup link, after checking both ends. */
 async function refusal(path: string): Promise<string> {
 	let failure: unknown;
 	try {
@@ -45,7 +45,7 @@ async function refusal(path: string): Promise<string> {
 	expect(failure, "readSettings accepted the file").toBeInstanceOf(Error);
 	const message = (failure as Error).message;
 	const head = `settings unavailable: ${path}: `;
-	const tail = "; run sno setup";
+	const tail = "; see https://github.com/sno-ai/sno-station/blob/main/docs/memory-setup.md";
 	expect(message.startsWith(head), message).toBe(true);
 	expect(message.endsWith(tail), message).toBe(true);
 	return message.slice(head.length, message.length - tail.length);
