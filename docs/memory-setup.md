@@ -10,7 +10,7 @@ Install Node.js 22.22.3+, 24.15.0+, or 25.9.0+, then run the commands below. Wit
 before the settings step.
 
 ```bash
-npm install --prefix "$HOME/.sno" @snoai/memory@1.0.0 @snoai/embedder@1.0.0
+npm install --prefix "$HOME/.sno" @snoai/memory@1.0.1 @snoai/embedder@1.0.1
 node --input-type=module <<'NODE'
 import { randomBytes } from 'node:crypto';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
