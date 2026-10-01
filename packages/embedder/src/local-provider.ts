@@ -281,6 +281,9 @@ export class LocalEmbedProvider implements DisposableProvider {
 		env.cacheDir = this.cacheDir;
 		env.allowRemoteModels = !this.offline;
 		env.localModelPath = this.cacheDir;
+		// transformers 4.3.0 drops `revision` when it lists model files, so the revision lives in the
+		// download path and files stay at <cacheDir>/<model>/, where the offline lookup finds them.
+		env.remotePathTemplate = `{model}/resolve/${this.revision ?? "main"}/`;
 		const hfEndpoint = this.mirror?.trim();
 		if (hfEndpoint) {
 			env.remoteHost = hfEndpoint.endsWith("/") ? hfEndpoint : `${hfEndpoint}/`;
@@ -304,7 +307,6 @@ export class LocalEmbedProvider implements DisposableProvider {
 		try {
 			const sessionOptions = buildSessionOptions(this.sessionOptions);
 			const extractor = await pipeline("feature-extraction", this.modelId, {
-				...(this.revision !== undefined ? { revision: this.revision } : {}),
 				dtype: this.dtype,
 				device: "cpu",
 				session_options: sessionOptions,
