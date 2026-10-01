@@ -1,5 +1,5 @@
 import { MEMORY_SHUTDOWN_TIMEOUT_MS } from "../../config/index";
-import { getPrincipal, getSidecarSocketPath, SettingsUnavailableError } from "../contract/profile";
+import { getSidecarSocketPath, SettingsUnavailableError } from "../contract/profile";
 /** @file server.ts
  * @purpose Runs the loopback HTTP surface and empty asynchronous REM executor.
  * @boundary Sno CLI requests, durable REM job state, and the existing local audit writer.
@@ -54,6 +54,7 @@ import { remNeedsHost } from "./rem-trigger";
 import { ModelCallRefusedError } from "../model/llm-client";
 import { PayloadTooLargeError, readRequestBody } from "./request-body";
 import { serveMemoryRoute } from "./memory-routes";
+import { REM_SIDECAR_TOKEN_HEADER } from "../contract/routes";
 import { RemChassisJournal } from "./rem-chassis-journal";
 import {
 	parseRemJobStats,
@@ -266,6 +267,7 @@ async function startOwnedRemSidecar(): Promise<{ port: number; stop(): Promise<{
 			context,
 			memory,
 			() => stopping,
+			token,
 		).catch((error: unknown) => {
 				if (error instanceof SettingsUnavailableError) {
 					context.error_code = error.message;
@@ -417,6 +419,7 @@ async function routeRequest(
 	context: RequestLogContext,
 	memory: { current(): MemoryRuntimePool | undefined; open(): Promise<MemoryRuntimePool> },
 	isStopping: () => boolean,
+	token: string,
 ): Promise<void> {
 	const url = new URL(request.url ?? HEALTH_PATH, REM_SIDECAR_ORIGIN);
 	if (request.method === "GET" && url.pathname === HEALTH_PATH) {
@@ -424,12 +427,15 @@ async function routeRequest(
 			const runtime = await memory.open();
 			sendJson(response, 200, { status: runtime.modelPreparationError ? "degraded" : "ok",
 				...(runtime.modelPreparationError && { error: runtime.modelPreparationError }),
-				log_level: effectiveLogLevel(), principal: getPrincipal(),
-				storePath: runtime.storePath, accessCounters: runtime.counters });
+				log_level: effectiveLogLevel(), accessCounters: runtime.counters });
 		} catch (error) {
 			if (!(error instanceof SettingsUnavailableError)) throw error;
 			sendJson(response, 503, { status: "error", error: error.message });
 		}
+		return;
+	}
+	if (request.headers[REM_SIDECAR_TOKEN_HEADER] !== token) {
+		sendJson(response, 401, {});
 		return;
 	}
 	if (url.pathname.startsWith("/v1/")) {

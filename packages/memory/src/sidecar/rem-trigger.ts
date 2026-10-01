@@ -19,9 +19,9 @@ import {
 	REM_CORRELATION_ID_HEADER,
 	REM_RUN_PATH,
 	REM_SIDECAR_HOST,
-	REM_SIDECAR_TOKEN_HEADER,
 	getRemDiscoveryPath,
 } from "./config";
+import { REM_SIDECAR_TOKEN_HEADER } from "../contract/routes";
 import { enumerateRemCandidateScopes } from "./rem-batch-executor";
 import {
 	ensureRemTriggerScope,
