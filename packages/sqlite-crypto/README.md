@@ -1,6 +1,6 @@
 # `@snoai/sqlite-crypto`
 
-Local AES-256 encryption layer for SNO Station Core SQLite databases. Thin first-party wrapper over `better-sqlite3-multiple-ciphers` (SQLCipher v4 mode) and Node's built-in `crypto`.
+The encryption layer under Sno Station memory: your SQLite database is encrypted on disk with a key that never leaves your machine. It is a thin wrapper over `better-sqlite3-multiple-ciphers` (SQLCipher v4 mode) and Node's built-in `crypto`.
 
 The full threat model, settings-file key rules, and recovery steps live in [`docs/security.md`](https://github.com/sno-ai/sno-station/blob/main/docs/security.md).
 
@@ -9,10 +9,12 @@ The full threat model, settings-file key rules, and recovery steps live in [`doc
 ## Install
 
 ```sh
-npm install @snoai/sqlite-crypto
+npm install @snoai/sqlite-crypto@1.0.1
 ```
 
-Node 22+ required (production AND development).
+Needs Node.js 22.14 or newer.
+
+Who it is for: the memory engine, and anyone who wants the same encrypted-database layer. If you only want shared agent memory, you do not use it directly: the [shared memory setup](https://github.com/sno-ai/sno-station/blob/main/docs/memory-setup.md) creates the key and the plugins for [Codex](https://www.npmjs.com/package/@snoai/mem-codex), [Claude Code](https://www.npmjs.com/package/@snoai/mem-claude) and [OpenClaw](https://www.npmjs.com/package/@snoai/mem-claw) do the rest.
 
 ---
 
@@ -70,10 +72,6 @@ The memory service uses `store.path` and `store.encryptionKey` from
 The library has no key-management command. The shared memory setup writes the settings file;
 plugins start the memory service through `memoryPackage` in that file.
 The encrypted-store list stays at `~/.config/sno-station-core/dbs.json`.
-
-## Version pins
-
-`better-sqlite3-multiple-ciphers@^12.9.0` is pinned because earlier versions ship Node 22 prebuilt binaries that miss `wrap` API symbols on Linux.
 
 ---
 

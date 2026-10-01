@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 import {
+	chmodSync,
 	closeSync,
 	existsSync,
 	fsyncSync,
@@ -201,6 +202,12 @@ function preflight(path: string, dek: Dek, readonly = false): PreflightedDb {
 			path,
 			readonly ? { readonly: true, fileMustExist: true } : {},
 		);
+		// New -wal and -shm files take the mode of the main file; files left by an earlier version keep theirs, so set all three.
+		if (!readonly) {
+			for (const file of [path, `${path}-wal`, `${path}-shm`]) {
+				if (existsSync(file)) chmodSync(file, 0o600);
+			}
+		}
 	} catch (err) {
 		// In readonly mode `fileMustExist` will throw on a missing file → surface
 		// as CanaryMismatch (read-only consumer cannot create).
