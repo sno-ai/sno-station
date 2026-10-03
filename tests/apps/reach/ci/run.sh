@@ -35,8 +35,8 @@ make -C apps/reach deps
 bash tests/apps/reach/seats/call-echo-receipt.t
 for command in \
     'agent-mailbox-commands.t test_direct_answer_send_satisfies_wait' \
-    'reachability-wake.t outbox-recovery' \
-    'reachability-wake.t outbox-stalled-flush'; do
+    'notification-once.t' \
+    'seats/call-no-background.t'; do
     read -r script mode <<<"$command"
     timeout --kill-after=5 120 bash "tests/apps/reach/$script" "$mode"
 done

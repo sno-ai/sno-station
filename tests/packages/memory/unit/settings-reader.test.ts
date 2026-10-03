@@ -5,6 +5,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { getSettingsPath, readSettings } from "../../../../packages/memory/src/contract/profile";
+import { pluginConfigSchema } from "../../../../packages/memory/config/plugin-config-schema";
+import { settingsToPluginConfig } from "../../../../packages/memory/config/settings";
 import {
 	DEFAULT_SETTINGS_PATH,
 	type SettingsDocument,
@@ -138,6 +140,42 @@ it("refuses a modelCalls table with an extra id", async () => {
 	const field = await refusal(path);
 	expect(field).toContain("modelCalls");
 	expect(field).toContain("R9");
+});
+
+it("reads the local lesson generation destination from shipped settings", async () => {
+	writeSettingsFixture(root);
+
+	expect((await readSettings()).modelCalls.R5).toEqual({
+		"local-first": "host", "agent-native": "off", "rem-enhanced": "off",
+	});
+});
+
+it("reads published settings without the local lesson row and preserves supplied destinations", async () => {
+	const { path, settings } = writeSettingsFixture(root, {
+		modelCalls: { R2: { "agent-native": "off" } },
+	});
+	const calls = group(settings, "modelCalls");
+	delete calls.R5;
+	rewrite(path, settings);
+	expect(Object.keys(calls)).toHaveLength(31);
+	const read = await readSettings();
+	expect(read.modelCalls.R5).toEqual({
+		"local-first": "host", "agent-native": "off", "rem-enhanced": "off",
+	});
+	const { R5, ...supplied } = read.modelCalls;
+	expect(supplied).toEqual(calls);
+	const plugin = settingsToPluginConfig(read);
+	expect(plugin.modelCalls).toEqual(read.modelCalls);
+});
+
+it("honors an explicit disabled local lesson row in settings and plugin configuration", async () => {
+	writeSettingsFixture(root, {
+		modelCalls: { R5: { "local-first": "off", "agent-native": "off", "rem-enhanced": "off" } },
+	});
+	const read = await readSettings();
+	expect(read.modelCalls.R5["local-first"]).toBe("off");
+	expect(pluginConfigSchema.parse({ mode: "local-first", modelCalls: read.modelCalls }).modelCalls)
+		.toEqual(read.modelCalls);
 });
 
 it("reads a 0644 file with valid content", async () => {

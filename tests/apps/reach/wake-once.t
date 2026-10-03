@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Cc copies do not ring; To status rings once and To action retries until pickup.
+# Historical 2.0.x worker regression, excluded from the current test inventory.
+# Current notification behavior is covered by notification-once.t.
 set -Eeuo pipefail
 # shellcheck source=test-lib.sh
 source "$(dirname -- "${BASH_SOURCE[0]}")/test-lib.sh"

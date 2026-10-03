@@ -68,10 +68,9 @@ plain="$(tmux new-window -d -P -F '#{pane_id}' 'bash --norc')"
 sleep 0.3
 bash "$target" --terminal "$plain" --text "printf 'BYTE-%s\\n' CAPTURE-ANSWER" \
     --expect '^BYTE-CAPTURE-ANSWER$' --timeout 3 --every 1 >"$scratch/byte.json"
-jq -e '.verified and (.cursorAfter | test("^[^:]+:[0-9]+$"))' "$scratch/byte.json"
-token="$(jq -r '.cursorAfter | split(":")[0]' "$scratch/byte.json")"
-grep -q '^BYTE-CAPTURE-ANSWER' "$SNO_REACH_ROOT/.channels/tmux/$token/capture.log"
-printf 'PASS: foreign transcript preserved; screen reads and byte capture verified\n'
+jq -e '.verified and .mode == "screen-fallback" and (.cursorAfter | test("^[^:]+:screen:[0-9]+$"))' "$scratch/byte.json"
+[[ "$(tmux display-message -pt "$plain" '#{pane_pipe}')" == 0 ]]
+printf 'PASS: foreign transcript preserved; screen reads verified without creating a pipe\n'
 
 # Set the server default before creating the pane: history-limit is inherited
 # at pane creation, so changing an existing pane alone does not prove scrolling.

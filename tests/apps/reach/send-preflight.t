@@ -6,11 +6,20 @@ source "$(dirname -- "${BASH_SOURCE[0]}")/test-lib.sh"
 participants
 unregistered="worker.unregistered@$HOST"
 initialize "$unregistered" Unregistered
-SNO_REACH_ROOT="$STATE" SNO_REACH_WAKE_NO_DETACH=1 \
-  SNO_REACH_WAKE_STANDIN="$TEST_DIR/fixtures/wake-standin.sh" SNO_REACH_WAKE_OUTCOME=busy \
-  "$APP/lib/reach-wake" start --root "$STATE" --sender "$OTHER" --recipient "$RECEIVER" \
-  --message-id "<unrelated-preflight-$$@$HOST>" --work unrelated --mechanism /missing >/dev/null 2>"$WORK/wake.err"
-pending="$(find "$STATE" -path '*/wake-attempts/*.json' -type f -print -quit)"
+mkdir -p "$STATE/$RECEIVER/wake-attempts"
+pending="$STATE/$RECEIVER/wake-attempts/00000000000000000000000000000001.json"
+jq -n --arg root "$STATE" --arg sender "$OTHER" --arg recipient "$RECEIVER" \
+  --arg id "<unrelated-preflight-$$@$HOST>" --arg journey "unrelated" --arg mechanism "$APP/lib/reach-ring" \
+  '{version:1,attempt_id:"00000000000000000000000000000001",root:$root,
+    sender:$sender,recipient:$recipient,supervisor:$recipient,message_id:$id,
+    journey:$journey,mechanism:$mechanism,mode:"wake",state_owner:$recipient,
+    outbox_entry:"",standin:"",outcome_hint:"",started_at:0,last_at:0,attempt:0,
+    max_attempts:45,spacing_seconds:120,bound_seconds:5400,child_pid:0,
+    child_start_ticks:0,state:"pending",phase:"retry",last_outcome:"busy",
+    reachability_state:"registered",escalation_sent:false,escalation_delivered:[],
+    outbox_recipients:[],removed_recipients:[]}' >"$pending"
+printf '%s\n' '{"event":"historical-pending","attempt_id":"00000000000000000000000000000001"}' \
+  >"$STATE/$RECEIVER/wake.log"
 [[ -f "$pending" ]] || fail 'unrelated pending fixture is missing'
 jq -e '.state == "pending"' "$pending" >/dev/null
 sha256sum "$pending" "$STATE/$RECEIVER/wake.log" >"$WORK/pending-before"

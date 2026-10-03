@@ -3,7 +3,6 @@ set -Eeuo pipefail
 HERE="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 case "${1:-}" in
 ''|local)
-  bash "$HERE/cleanup.t"
   exec python3 "$HERE/local-suite.py"
   ;;
 archive)
@@ -12,7 +11,14 @@ archive)
   ;;
 startup)
   shift
-  exec bash "$HERE/startup.t" "$@"
+  installed="${1:?installed candidate command required}"
+  proof="${2:?new proof directory required}"
+  mkdir -- "$proof"
+  status=0
+  REACH_UNDER_TEST="$installed" REACH_KEEP_TEST_ROOT=1 \
+    bash "$HERE/notification-once.t" >"$proof/notification-once.log" 2>&1 || status=$?
+  cat "$proof/notification-once.log"
+  exit "$status"
   ;;
 public)
   for mode in surface init lint inbox wait reply; do

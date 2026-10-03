@@ -121,7 +121,7 @@ restart_rc=$?
 set -e
 restart_result=fail
 if [[ "$old_pane" == %0 && "$new_pane" == %0 && "$restart_rc" -eq 5 ]] &&
-	grep -q 'another pane incarnation' "$test_root/restart.stderr"; then
+	grep -q 'cursor mode or pane incarnation changed' "$test_root/restart.stderr"; then
 	restart_result=pass
 fi
 check 'cursor rejects a reused pane handle after tmux server restart' "$restart_result" \
