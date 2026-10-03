@@ -12,6 +12,8 @@ import time
 
 HERE = Path(__file__).resolve().parent
 CASES = []
+# Historical worker tests (wake-once, wake-adopt-scale, cleanup, startup) are excluded.
+# notification-once.t covers the current notification contract and installed startup.
 
 
 def cases(script, modes):
@@ -25,7 +27,7 @@ cases("progress-eligibility.t", "expiry supersede reverse unheld")
 for script in ("transport.t", "progress-reporting-lint.t",
                "local-delivery.t", "empty-body-refusal.t", "seat-ownership.t",
                "read-only.t", "send-preflight.t", "requires-action.t",
-               "reply-routing.t"):
+               "reply-routing.t", "notification-once.t"):
     CASES.append((script, ["bash", str(HERE / script)]))
 cases("terminal-states.t", "completed-after failed-after cancelled-before cancelled-after refused-before refused-after")
 cases("agent-mailbox-commands.t", """
@@ -40,16 +42,9 @@ test_sender_declared_no_reply_stops_at_delivery test_send_enforces_informational
 test_send_rate_limits_non_questions_per_pair
 """)
 cases("progress-reporting.t", "reply state reminder")
-cases("reachability-wake.t", """
-lifecycle wake-log-lock-held-unregister-bounds-out wake-child-descriptor-closure publication
-outcomes reached-outcomes wake-start-failure doorbell-deadline executor-wake doorbell-measurement
-confirmation retry-bound supervisor incident outbox-recovery outbox-partial-delivery
-outbox-elapsed-only outbox-count-only outbox-mixed-supervisors outbox-stalled-flush
-outbox-status-delivery-failure outbox-escalation-restart outbox-adopt-race outbox-sender-owned-state
-outbox-late-delivery outbox-removed-mixed outbox-empty-entry outbox-final-boundaries
-""")
+cases("reachability-wake.t", "lifecycle doorbell-measurement")
 CASES.append(("ACP integration", ["bash", str(HERE / "seats/acp-communication.t")]))
-for script in ("default-environment.t", "wake-adopt-scale.t", "remote-protocol.t", "seats/call-tmux.t",
+for script in ("default-environment.t", "remote-protocol.t", "seats/call-no-background.t", "seats/call-tmux.t",
                "seats/call-real-tmux.t", "seats/call-foreign-pipe.t", "seats/call-short-popup.t", "seats/call-echo-receipt.t", "seats/registered-tmux.t",
                "seats/ring-reregistration.t", "seats/ring-real-tmux.t", "seats/ring-channel.t"):
     CASES.append((script, ["bash", str(HERE / script)]))
@@ -104,9 +99,9 @@ def main():
         return row
 
     timed = [item for item in enumerate(CASES)
-             if item[1][0] in {"ACP integration", "reachability-wake.t:outbox-stalled-flush"}]
+             if item[1][0] == "ACP integration"]
     assert [item[1][0] for item in timed] == [
-        "ACP integration", "reachability-wake.t:outbox-stalled-flush"], "each isolated deadline group must occur exactly once"
+        "ACP integration"], "each isolated deadline group must occur exactly once"
     timed_indices = {item[0] for item in timed}
     parallel = [item for item in enumerate(CASES) if item[0] not in timed_indices]
     cpus = len(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else (os.cpu_count() or 1)

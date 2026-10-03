@@ -121,13 +121,14 @@ describe("model call table", () => {
 		expect([...sourceCallIds()].sort()).toEqual(Object.keys(EXPECTED).sort());
 	});
 
-	it("ships a default settings document with the service's rows plus the RSI skill's R2, R3, R4", () => {
+	it("ships a default settings document with the service's rows plus the RSI skill's R2, R3, R4, R5", () => {
 		const shipped = JSON.parse(readFileSync(DEFAULT_SETTINGS_PATH, "utf8")) as { modelCalls: unknown };
 		expect(shipped.modelCalls).toEqual({
 			...EXPECTED,
 			R2: { "local-first": "off", "agent-native": "host", "rem-enhanced": "host" },
 			R3: { "local-first": "off", "agent-native": "sno-gpu", "rem-enhanced": "sno-gpu" },
 			R4: { "local-first": "off", "agent-native": "sno-gpu", "rem-enhanced": "sno-gpu" },
+			R5: { "local-first": "host", "agent-native": "off", "rem-enhanced": "off" },
 		});
 	});
 

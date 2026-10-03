@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Read operations must not adopt even an existing actionable wake attempt.
+# Read operations leave historical pending wake records and mailbox state untouched.
 set -Eeuo pipefail
 # shellcheck source=test-lib.sh
 source "$(dirname -- "${BASH_SOURCE[0]}")/test-lib.sh"
@@ -11,13 +11,20 @@ invoke inbox --as "$RECEIVER"; expect_rc 0
 card "read-only-second-$$@$HOST" "$SENDER" "$RECEIVER" question "$work-second" >"$WORK/second-card"
 invoke send --as "$SENDER" --no-ring <"$WORK/second-card"; expect_rc 0
 invoke inbox --as "$RECEIVER"; expect_rc 0
-rc=0
-SNO_REACH_ROOT="$STATE" SNO_REACH_WAKE_NO_DETACH=1 \
-  SNO_REACH_WAKE_STANDIN="$TEST_DIR/fixtures/wake-standin.sh" SNO_REACH_WAKE_OUTCOME=busy \
-  "$APP/lib/reach-wake" start --root "$STATE" --sender "$SENDER" --recipient "$RECEIVER" \
-  --message-id "<$id>" --work "$work" --mechanism /missing >"$WORK/wake.out" 2>"$WORK/wake.err" || rc=$?
-[[ "$rc" == 0 || "$rc" == 5 ]] || { cat "$WORK/wake.err"; fail 'could not create real pending wake fixture'; }
-[[ -n "$(find "$STATE" -path '*/wake-attempts/*.json' -print -quit)" ]] || fail 'wake fixture produced no state'
+mkdir -p "$STATE/$RECEIVER/wake-attempts"
+pending="$STATE/$RECEIVER/wake-attempts/00000000000000000000000000000001.json"
+jq -n --arg root "$STATE" --arg sender "$SENDER" --arg recipient "$RECEIVER" \
+  --arg id "<$id>" --arg journey "$work" --arg mechanism "$APP/lib/reach-ring" \
+  '{version:1,attempt_id:"00000000000000000000000000000001",root:$root,
+    sender:$sender,recipient:$recipient,supervisor:$recipient,message_id:$id,
+    journey:$journey,mechanism:$mechanism,mode:"wake",state_owner:$recipient,
+    outbox_entry:"",standin:"",outcome_hint:"",started_at:0,last_at:0,attempt:0,
+    max_attempts:45,spacing_seconds:120,bound_seconds:5400,child_pid:0,
+    child_start_ticks:0,state:"pending",phase:"retry",last_outcome:"busy",
+    reachability_state:"registered",escalation_sent:false,escalation_delivered:[],
+    outbox_recipients:[],removed_recipients:[]}' >"$pending"
+printf '%s\n' '{"event":"historical-pending","attempt_id":"00000000000000000000000000000001"}' \
+  >"$STATE/$RECEIVER/wake.log"
 for operation in remind state seats log doctor lint export watch; do
   snapshot >"$WORK/before"
   case "$operation" in

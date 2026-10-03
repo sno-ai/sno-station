@@ -4,7 +4,6 @@ export HOST="$(hostname)"
 
 # shellcheck source=test-lib.sh
 source "$(dirname -- "${BASH_SOURCE[0]}")/test-lib.sh"
-repo_root="$APP"
 mbox="$REACH"
 lint="$APP/lib/reach-lint"
 deliver="$APP/lib/reach-deliver"
@@ -2122,7 +2121,6 @@ test_sender_declared_no_reply_stops_at_delivery() {
     local decision="$root/decision.eml"
     local question="$root/question.eml"
     local delivered
-    local wake_state
 
     mkdir -p "$root"
     make_maildirs "$mail_root" "$sender" "$recipient"
@@ -2147,35 +2145,6 @@ test_sender_declared_no_reply_stops_at_delivery() {
     assert_eq 0 "$LAST_STATUS" "no-reply informed status"
     assert_contains "$(<"$root/informed.out")" "$delivered" \
         "no-reply Cc copy remains readable"
-    cat >"$root/wake-standin" <<'EOF'
-#!/usr/bin/env bash
-set -Eeuo pipefail
-while (($# > 0)); do
-    case "$1" in
-        --outcome) printf 'outcome=%s\n' "$2"; exit 0 ;;
-        *) shift ;;
-    esac
-done
-exit 64
-EOF
-    chmod 0755 "$root/wake-standin"
-    run_command "$root/wake.out" "$root/wake.err" env \
-        SNO_REACH_WAKE_STANDIN="$root/wake-standin" \
-        SNO_REACH_WAKE_OUTCOME=rang SNO_REACH_WAKE_NO_DETACH=1 \
-        "$repo_root/lib/reach-wake" start --root "$mail_root" \
-        --sender "$sender" --recipient "$recipient" \
-        --message-id '<send-gate-no-reply-info@'"${HOST}"'>' \
-        --work j-send-gates --mechanism ''
-    assert_eq 0 "$LAST_STATUS" "no-reply wake confirmation status"
-    wake_state="$(find "$mail_root/$recipient/wake-attempts" \
-        -maxdepth 1 -type f -name '*.json' -print -quit)"
-    assert_file "$wake_state" "no-reply wake state"
-    assert_eq confirmed "$(jq -r .state "$wake_state")" \
-        "no-reply wake terminal state"
-    assert_eq 0 "$(jq -r .attempt "$wake_state")" \
-        "no-reply wake retry count"
-
-    rm -r -- "$mail_root/$recipient/wake-attempts"
     write_message "$decision" Sender "$sender" "$recipient" '' '' \
         '[DECISION] Delivery-stopped action' \
         'Wed, 05 Aug 2026 00:00:01 +0000' \
