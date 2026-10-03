@@ -51,7 +51,7 @@ jobs:
         env:
           SOURCE_SHA: ${{ inputs.source_sha }}
         run: bash scripts/npm-release.sh prepare "$SOURCE_SHA" "$GITHUB_WORKSPACE/npm-candidate" "$GITHUB_RUN_ID"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         id: candidate
         with:
           name: npm-candidate
