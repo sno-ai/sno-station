@@ -28,8 +28,8 @@
     "drizzle-kit": "^0.31.11",
     "drizzle-orm": "^0.45.3",
     "esbuild": "^0.28.1",
-    "hono": "^4.13.9",
-    "tar-stream": "3.2.0",
+    "hono": "^4.13.11",
+    "tar-stream": "3.2.1",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2"
   },
