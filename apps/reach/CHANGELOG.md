@@ -5,6 +5,17 @@
 `wait --reply-to` records the answer it returns in the caller's seen list, so the same answer no
 longer rings the caller again after `wait` already handed it over.
 
+## 2.1.1
+
+Local candidate; this entry does not assert public publication.
+
+Submit a tmux notification once while retaining the existing confirmation wait.
+Terminal repaint observation appends changed lines instead of repeating unchanged
+scrollback. Codex calls select the transcript carrying their own delivery receipt
+rather than the newest same-directory session. Reminder parsing failures return
+nonzero instead of silently succeeding. Rebind reasons retain quotes and literal
+backslashes without awk interpreting them twice.
+
 ## 2.1.0
 
 Local candidate; publication and installed-host verification are not yet complete.
