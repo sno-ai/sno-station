@@ -16,7 +16,7 @@ sno reach --version
 sno reach --help
 ```
 
-Packaging writes `dist/reach-2.1.0-<platform>.tar.gz` and its exact-basename `.sha256` file. The payload is directly at archive root, with VERSION, LICENSE, NOTICE, bin, lib, vendor, spec and guide. Local install verifies the checksum and places the immutable release at `~/.local/lib/sno-reach/releases/2.1.0`, with `current` and the command symlink. It refuses a different already-installed version 2.1.0 payload rather than overwriting it.
+Packaging writes `dist/reach-2.1.1-<platform>.tar.gz` and its exact-basename `.sha256` file. The payload is directly at archive root, with VERSION, LICENSE, NOTICE, bin, lib, vendor, spec and guide. Local install verifies the checksum and places the immutable release at `~/.local/lib/sno-reach/releases/2.1.1`, with `current` and the command symlink. It refuses a different already-installed version 2.1.1 payload rather than overwriting it.
 
 Publication and real-agent acceptance remain separate gates. Do not use a source overlay to repair an archive under test. The installer must consume the accepted archive and checksum, not this checkout.
 
