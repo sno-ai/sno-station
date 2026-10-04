@@ -12,21 +12,8 @@ readonly EXIT_UNVERIFIED=4
 readonly EXIT_UNRELIABLE=5
 readonly TMUX_CAPTURE_LIMIT=$((1024 * 1024))
 readonly TMUX_SETTLE_SECONDS=0.3
-REACH="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)/bin/sno-reach"
+REACH="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)/lib/reach-main"
 readonly REACH
-
-# Internal pipe-pane writer. The lifetime lock, PID, process start time, and
-# capture inode let the parent prove that tmux still owns this exact writer.
-if [[ "${1:-}" == --capture-writer ]]; then
-	[[ $# -eq 4 ]] || exit 2
-	lease_lock="$2" pid_file="$3" capture_file="$4"
-	exec 8>"$lease_lock"
-	flock -n 8 || exit 73
-	pid_tmp="${pid_file}.tmp.$$"
-	printf '%s\n' "$$" >"$pid_tmp"
-	mv -f -- "$pid_tmp" "$pid_file"
-	exec cat >>"$capture_file"
-fi
 
 usage() {
 	cat >&2 <<'USAGE'
@@ -41,7 +28,7 @@ Options:
   --terminal <handle>    required; mailbox address or tmux pane id (%n)
   --expect <regex>       extended regex the NEW output must match to count as verified
   --since <cursor>       start from this cursor instead of the current position
-  --timeout <n>     how long to wait or watch (default 180; --follow default 600)
+  --timeout <n>     how long to wait or watch (default 180; --follow default 280)
   --every <n>        seconds between reads (default 5; --follow default 2)
   --idle <n>        in --follow, stop after this long with no new output (default: never)
   --ring <address>       with --follow, post mailbox cards when this is a mailbox address
@@ -81,7 +68,7 @@ done
 	exit "$EXIT_USAGE"
 }
 if [[ "$follow" == true ]]; then
-	timeout_secs="${timeout_secs:-600}"; poll_secs="${poll_secs:-2}"
+	timeout_secs="${timeout_secs:-280}"; poll_secs="${poll_secs:-2}"
 else
 	timeout_secs="${timeout_secs:-180}"; poll_secs="${poll_secs:-5}"
 fi
@@ -108,28 +95,22 @@ emit_watch_event() {
 }
 
 ring_watch_event() {
-	local state="$1" detail="$2" message_id journey attempt
+	local state="$1" detail="$2" message_id journey
 	[[ -n "$ring_address" ]] || return 0
 	message_id="<agent-window-$(printf '%s' "$terminal" | tr -cd 'a-zA-Z0-9')-${state}-$(date -u '+%s%N')@localhost>"
 	journey="agent-window-$(printf '%s' "$terminal" | tr -cd 'a-zA-Z0-9')"
-	for attempt in 1 2; do
-		if printf 'From: AGENT WINDOW <%s>\nTo: watcher <%s>\nSubject: [DECISION] agent window %s: %s\nDate: %s\nMessage-ID: %s\nX-Work: %s\nX-Type: decision\nX-Name: agent-window\n\nWindow %s entered the %s state. %s\n' \
-			"$ring_address" "$ring_address" "$state" "$terminal" \
-			"$(date -u '+%a, %d %b %Y %H:%M:%S +0000')" "$message_id" "$journey" \
-			"$terminal" "$state" "$detail" \
-			| timeout 90 "$REACH" send --as "$ring_address" >/dev/null 2>&1; then
-			return 0
-		fi
-		[[ "$attempt" -eq 2 ]] || sleep 1
-	done
-	return 1
+	printf 'From: AGENT WINDOW <%s>\nTo: watcher <%s>\nSubject: [DECISION] agent window %s: %s\nDate: %s\nMessage-ID: %s\nAuto-Submitted: auto-generated\nX-Work: %s\nX-Type: decision\nX-Name: agent-window\n\nWindow %s entered the %s state. %s\n' \
+		"$ring_address" "$ring_address" "$state" "$terminal" \
+		"$(date -u '+%a, %d %b %Y %H:%M:%S +0000')" "$message_id" "$journey" \
+		"$terminal" "$state" "$detail" \
+		| timeout --foreground --signal=TERM --kill-after=5 90 "$REACH" send --as "$ring_address" >/dev/null
 }
 
 ring_or_fail() {
 	local state="$1" detail="$2"
 	if ! ring_watch_event "$state" "$detail"; then
 		emit_watch_event ring-failed "state=$state"
-		printf 'mailbox ring failed twice for %s while reporting %s\n' "$ring_address" "$state" >&2
+		printf 'mailbox ring failed for %s while reporting %s\n' "$ring_address" "$state" >&2
 		exit "$EXIT_UNRELIABLE"
 	fi
 }
@@ -150,14 +131,11 @@ if [[ "$terminal" != %* ]]; then
     esac
 fi
 
-for tool in jq perl tmux flock stat readlink; do
+for tool in jq perl tmux flock stat diff; do
 	command -v "$tool" >/dev/null || { printf 'required tool is missing: %s\n' "$tool" >&2; exit "$EXIT_UNRELIABLE"; }
 done
 
 # ── tmux state ────────────────────────────────────────────────────────────────
-SCRIPT_PATH="$(readlink -f -- "${BASH_SOURCE[0]}")"
-readonly SCRIPT_PATH
-
 tmux has-session 2>/dev/null || {
 	printf 'no tmux server is running; window %s cannot be read\n' "$terminal" >&2
 	exit "$EXIT_UNRELIABLE"
@@ -187,133 +165,11 @@ state_root="${SNO_REACH_ROOT:-$HOME/.local/state/sno-reach}/.channels/tmux"
 state_dir="$state_root/$pane_token"
 mkdir -p -- "$state_dir"
 chmod 0700 -- "$state_root" "$state_dir" 2>/dev/null || true
-capture_file="$state_dir/capture.log"
-base_file="$state_dir/capture.base"
 capture_lock="$state_dir/capture.lock"
-setup_lock="$state_dir/setup.lock"
 send_lock="$state_dir/send.lock"
-lease_lock="$state_dir/lease.lock"
-pid_file="$state_dir/writer.pid"
-owner_file="$state_dir/owner.tsv"
-: >>"$capture_file"
-[[ -s "$base_file" ]] || printf '0\n' >"$base_file"
-
-process_start_ticks() {
-	local pid="$1"
-	if [[ -d /proc ]]; then
-		awk '{print $22}' "/proc/$pid/stat" 2>/dev/null
-	else
-		ps -o lstart= -p "$pid" 2>/dev/null
-	fi
-}
-
-capture_owner_valid() {
-	local token lease pid start inode current_start current_inode fd_inode lock_rc=0
-	local fd_fields field device='' file_inode=''
-	[[ -s "$owner_file" ]] || return 1
-	IFS=$'\t' read -r token lease pid start inode <"$owner_file" || return 1
-	[[ "$token" == "$pane_token" && "$lease" =~ ^[A-Za-z0-9._-]+$ && "$pid" =~ ^[0-9]+$ ]] || return 1
-	[[ "$(tmux display-message -pt "$terminal" '#{pane_pipe}' 2>/dev/null || echo 0)" == 1 ]] || return 1
-	kill -0 "$pid" 2>/dev/null || return 1
-	current_start="$(process_start_ticks "$pid")"
-	[[ -n "$current_start" && "$current_start" == "$start" ]] || return 1
-	current_inode="$(stat -Lc '%d:%i' "$capture_file" 2>/dev/null || true)"
-	if [[ -d /proc ]]; then
-		fd_inode="$(stat -Lc '%d:%i' "/proc/$pid/fd/1" 2>/dev/null || true)"
-	else
-		fd_fields="$(/usr/sbin/lsof -p "$pid" -a -d 1 -F Din 2>/dev/null)" || return 1
-		while IFS= read -r field; do
-			case "$field" in D0x*) device="${field#D0x}" ;; i*) file_inode="${field#i}" ;; esac
-		done <<<"$fd_fields"
-		[[ "$device" =~ ^[0-9a-fA-F]+$ && "$file_inode" =~ ^[0-9]+$ ]] || return 1
-		printf -v fd_inode '%d:%s' "$((16#$device))" "$file_inode"
-	fi
-	[[ -n "$current_inode" && "$current_inode" == "$inode" && "$fd_inode" == "$inode" ]] || return 1
-	flock -n -E 75 "$lease_lock" true 2>/dev/null || lock_rc=$?
-	[[ "$lock_rc" -eq 75 ]]
-}
-
-arm_capture_pipe() (
-	local lease writer pid start inode owner_tmp
-	exec 6>"$setup_lock"
-	flock -w 5 6 || return 1
-	if [[ "$(tmux display-message -pt "$terminal" '#{pane_pipe}' 2>/dev/null || echo 0)" == 1 ]]; then
-		capture_owner_valid
-		return
-	fi
-	flock -n "$lease_lock" true 2>/dev/null || return 1
-	lease="lease-$(date +%s%N)-$$-$RANDOM"
-	: >"$pid_file"
-	: >"$owner_file"
-	printf -v writer '%q --capture-writer %q %q %q' \
-		"$SCRIPT_PATH" "$lease_lock" "$pid_file" "$capture_file"
-	tmux pipe-pane -o -t "$terminal" "$writer" 2>/dev/null || return 1
-	for _ in {1..40}; do
-		[[ -s "$pid_file" ]] && break
-		sleep 0.05
-	done
-	[[ -s "$pid_file" ]] || return 1
-	pid="$(<"$pid_file")"
-	[[ "$pid" =~ ^[0-9]+$ ]] || return 1
-	start="$(process_start_ticks "$pid")"
-	inode="$(stat -Lc '%d:%i' "$capture_file" 2>/dev/null || true)"
-	[[ -n "$start" && -n "$inode" ]] || return 1
-	owner_tmp="${owner_file}.tmp.$$"
-	printf '%s\t%s\t%s\t%s\t%s\n' "$pane_token" "$lease" "$pid" "$start" "$inode" >"$owner_tmp"
-	mv -f -- "$owner_tmp" "$owner_file"
-	capture_owner_valid
-)
-
-tmux_rotate_capture() {
-	local size drop base tmp tmp_base lock_rc
-	exec 9>"$capture_lock"
-	flock 9
-	size="$(wc -c <"$capture_file" 2>/dev/null || echo 0)"
-	if [[ "$size" -le "$TMUX_CAPTURE_LIMIT" ]]; then
-		flock -u 9; exec 9>&-; return 0
-	fi
-	capture_owner_valid || { flock -u 9; exec 9>&-; return 1; }
-	tmux pipe-pane -t "$terminal" 2>/dev/null || { flock -u 9; exec 9>&-; return 1; }
-	for _ in {1..40}; do
-		lock_rc=0
-		flock -n "$lease_lock" true 2>/dev/null || lock_rc=$?
-		[[ "$lock_rc" -eq 0 ]] && break
-		sleep 0.05
-	done
-	[[ "$lock_rc" -eq 0 ]] || { flock -u 9; exec 9>&-; return 1; }
-	size="$(wc -c <"$capture_file" 2>/dev/null || echo 0)"
-	drop=$(( size - TMUX_CAPTURE_LIMIT ))
-	base="$(<"$base_file")"
-	tmp="$(mktemp "${capture_file}.rotate.XXXXXX")"
-	tmp_base="$(mktemp "${base_file}.rotate.XXXXXX")"
-	tail -c "$TMUX_CAPTURE_LIMIT" "$capture_file" >"$tmp"
-	printf '%s\n' "$(( base + drop ))" >"$tmp_base"
-	mv -f -- "$tmp" "$capture_file"
-	mv -f -- "$tmp_base" "$base_file"
-	: >"$owner_file"; : >"$pid_file"
-	arm_capture_pipe || { flock -u 9; exec 9>&-; return 1; }
-	flock -u 9
-	exec 9>&-
-}
-
-tmux_ensure_pipe() {
-	local piped
-	piped="$(tmux display-message -pt "$terminal" '#{pane_pipe}' 2>/dev/null || echo 0)"
-	if [[ "$piped" == 1 ]]; then
-		if ! capture_owner_valid; then
-			capture_mode="screen-fallback"
-			return 0
-		fi
-	else
-		arm_capture_pipe || return 1
-	fi
-	tmux_rotate_capture
-}
-
-format_cursor() { printf '%s:%s' "$pane_token" "$1"; }
 
 tmux_screen_snapshot() (
-	local cursor="$1" offset=0 pane_status cursor_row full='' next='' state="$state_dir/screen.json"
+	local cursor="$1" offset=0 pane_status cursor_row full='' next='' old='' delta='' added='' diff_status=0 history_size cursor_y old_history state="$state_dir/screen.json"
 	if [[ -n "$cursor" ]]; then
 		[[ "$cursor" == "$pane_token:screen:${cursor##*:}" && "${cursor##*:}" =~ ^[0-9]+$ ]] || {
 			printf 'cursor mode or pane incarnation changed; read without --since to start screen-fallback\n' >&2
@@ -322,29 +178,45 @@ tmux_screen_snapshot() (
 		offset="${cursor##*:}"
 	fi
 	exec 9>"$capture_lock"
-	flock 9 || return 1
+	flock -w 5 9 || { printf 'tmux screen read lock timed out for %s\n' "$terminal" >&2; return 1; }
 	if [[ -n "$cursor" && ! -f "$state" ]]; then
 		printf 'screen cursor has no retained anchor; read without --since\n' >&2
 		return 1
 	fi
-	trap 'rm -f -- "$full" "$next"' EXIT
+	trap 'rm -f -- "$full" "$next" "$old" "$delta" "$added"' EXIT
 	full="$(mktemp "$state_dir/screen-full.XXXXXX")" || return 1
 	next="$(mktemp "$state_dir/screen-next.XXXXXX")" || return 1
+	old="$(mktemp "$state_dir/screen-old.XXXXXX")" || return 1
+	delta="$(mktemp "$state_dir/screen-delta.XXXXXX")" || return 1
+	added="$(mktemp "$state_dir/screen-added.XXXXXX")" || return 1
 	tmux capture-pane -p -S - -t "$terminal" >"$full" || return 1
 	pane_status="$(tmux display-message -pt "$terminal" '#{pane_dead}')" || return 1
-	cursor_row="$(tmux display-message -pt "$terminal" '#{e|+:#{history_size},#{cursor_y}}')" || return 1
-	# Compare screen contents, not screen height. Journal observed deltas so old
-	# cursors stay cumulative across other readers, further scrolling and repaint.
-	jq -s --rawfile screen "$full" --argjson limit "$TMUX_CAPTURE_LIMIT" --argjson cursorRow "$cursor_row" '
-		($screen | split("\n") | until(length == 0 or (.[-1] | test("^\\s*$") | not); .[:-1]) |
-		 # The final cursor row is still being composed, not a completed output line.
-		 if length == $cursorRow + 1 then .[:-1] else . end) as $rows |
+	read -r history_size cursor_y < <(tmux display-message -pt "$terminal" '#{history_size} #{cursor_y}') || return 1
+	cursor_row=$((history_size + cursor_y))
+	# Compare archived history and the visible screen separately: repaint can archive old visible rows.
+	jq -Rrs --argjson cursorRow "$cursor_row" '
+		split("\n") | until(length == 0 or (.[-1] | test("^\\s*$") | not); .[:-1]) |
+		if length == $cursorRow + 1 then .[:-1] else . end | .[]
+	' "$full" >"$next" || return 1
+	mv -f -- "$next" "$full" || return 1
+	if [[ -f "$state" ]] && old_history="$(jq -er '.historySize' "$state")"; then
+		jq -r '.anchor[]' "$state" >"$old" || return 1
+	else
+		cp -- "$full" "$old" || return 1
+		old_history="$history_size"
+	fi
+	diff -U0 "$old" <(head -n "$history_size" "$full") >"$delta" || diff_status=$?
+	((diff_status <= 1)) || return 1
+	sed '1,2d; /^+/!d; s/^+//' "$delta" >"$added"
+	diff_status=0
+	diff -U0 <(tail -n "+$((old_history + 1))" "$old") <(tail -n "+$((history_size + 1))" "$full") >"$delta" || diff_status=$?
+	((diff_status <= 1)) || return 1
+	sed '1,2d; /^+/!d; s/^+//' "$delta" >>"$added"
+	jq -s --rawfile screen "$full" --rawfile added "$added" --argjson historySize "$history_size" --argjson limit "$TMUX_CAPTURE_LIMIT" '
+		($screen | split("\n") | if .[-1] == "" then .[:-1] else . end) as $rows |
+		($added | split("\n") | if .[-1] == "" then .[:-1] else . end) as $new |
 		(.[0] // {anchor: $rows, lines: [], base: 0}) |
-		.anchor as $old |
-		first(range(0; ($old|length) + 1) as $shift |
-			$old[$shift:] as $suffix |
-			select($suffix == $rows[:($suffix|length)]) | ($suffix|length)) as $overlap |
-		.lines += $rows[$overlap:] | .anchor = $rows |
+		.lines += $new | .anchor = $rows | .historySize = $historySize |
 		(.lines|length) as $count |
 		.lines = ([foreach (.lines | reverse[]) as $row
 			(0; . + ($row|utf8bytelength) + 1; if . <= $limit then $row else empty end)] | reverse) |
@@ -366,59 +238,8 @@ tmux_screen_snapshot() (
 )
 
 tmux_snapshot() {
-	local cursor="$1" base size latest offset local_cursor read_length pane_status chunk screen_chunk
-	local cursor_token capture_mode=byte-capture
 	tmux display-message -pt "$terminal" '#{pane_id}' >/dev/null 2>&1 || return 1
-	# A screen cursor stays a screen cursor even if the foreign pipe later exits.
-	if [[ "$cursor" == "$pane_token":screen:* ]]; then
-		tmux_screen_snapshot "$cursor"
-		return
-	fi
-	tmux_ensure_pipe || return 1
-	if [[ "$capture_mode" == screen-fallback ]]; then
-		tmux_screen_snapshot "$cursor"
-		return
-	fi
-	exec 9>"$capture_lock"
-	flock 9
-	base="$(<"$base_file")"
-	size="$(wc -c <"$capture_file" 2>/dev/null || echo 0)"
-	latest=$(( base + size ))
-	pane_status="$( [[ "$(tmux display-message -pt "$terminal" '#{pane_dead}' 2>/dev/null || echo 1)" == 1 ]] && echo exited || echo running )"
-	chunk="$(mktemp "${TMPDIR:-/tmp}/agent-window-chunk.XXXXXX")"
-	screen_chunk="$(mktemp "${TMPDIR:-/tmp}/agent-window-screen.XXXXXX")"
-	: >"$chunk"; : >"$screen_chunk"
-	if [[ -n "$cursor" ]]; then
-		[[ "$cursor" == *:* ]] || { printf 'cursor must have the form <pane-token>:<offset>: %s\n' "$cursor" >&2; rm -f -- "$chunk" "$screen_chunk"; flock -u 9; exec 9>&-; return 1; }
-		cursor_token="${cursor%%:*}"
-		offset="${cursor##*:}"
-		[[ "$cursor" == "$pane_token:$offset" && "$cursor_token" == "$pane_token" && "$offset" =~ ^[0-9]+$ ]] || { printf 'cursor belongs to another pane incarnation or mode: %s\n' "$cursor" >&2; rm -f -- "$chunk" "$screen_chunk"; flock -u 9; exec 9>&-; return 1; }
-		if [[ "$offset" -lt "$base" ]]; then
-			printf 'cursor is older than retained output (cursor=%s oldestCursor=%s)\n' "$cursor" "$(format_cursor "$base")" >&2
-			rm -f -- "$chunk" "$screen_chunk"; flock -u 9; exec 9>&-; return 1
-		fi
-		if [[ "$offset" -gt "$latest" ]]; then
-			printf 'cursor is newer than captured output (cursor=%s latestCursor=%s)\n' "$cursor" "$(format_cursor "$latest")" >&2
-			rm -f -- "$chunk" "$screen_chunk"; flock -u 9; exec 9>&-; return 1
-		fi
-		local_cursor=$(( offset - base ))
-		read_length=$(( size - local_cursor ))
-		if [[ "$read_length" -gt 0 ]]; then
-			tail -c "+$(( local_cursor + 1 ))" "$capture_file" 2>/dev/null \
-				| head -c "$read_length" >"$chunk" 2>/dev/null || true
-		fi
-	else
-		tmux capture-pane -p -S - -t "$terminal" >"$screen_chunk" 2>/dev/null || true
-	fi
-	jq -n --arg cursor "$(format_cursor "$latest")" --arg oldest "$(format_cursor "$base")" \
-		--arg status "$pane_status" --rawfile text "$chunk" --rawfile screen "$screen_chunk" \
-		'{cursor: $cursor, oldestCursor: $oldest, status: $status, screen: $screen,
-		  lines: ($text | if . == "" then [] else (sub("\n$"; "") | split("\n")) end),
-		  newLineCount: ($text | if . == "" then 0 else (sub("\n$"; "") | split("\n") | length) end),
-		  endedWithNewline: ($text | endswith("\n"))}'
-	rm -f -- "$chunk" "$screen_chunk"
-	flock -u 9
-	exec 9>&-
+	tmux_screen_snapshot "$1"
 }
 
 completion_popup_present() {
@@ -503,7 +324,7 @@ cursor_before="${since:-$(printf '%s' "$baseline" | jq -r '.cursor')}"
 status_before="$(printf '%s' "$baseline" | jq -r '.status')"
 baseline_screen="$(printf '%s' "$baseline" | jq -r '.screen // ""')"
 if [[ "$(printf '%s' "$baseline" | jq -r '.mode // ""')" == screen-fallback || "$cursor_before" == *:screen:* ]]; then
-	printf 'tmux pane %s: screen-fallback; foreign output pipe is untouched; scrollback may drop old lines\n' "$terminal" >&2
+	printf 'tmux pane %s: screen-fallback; output pipes are untouched; scrollback may drop old lines\n' "$terminal" >&2
 fi
 if [[ -n "$since" ]]; then
 	snapshot "$since" >/dev/null || exit "$EXIT_UNRELIABLE"
@@ -611,15 +432,16 @@ if [[ -n "$seat_json" && -f "$seat_json" ]]; then
 	transcript_path="$(jq -r '.transcript // empty' "$seat_json")"
 	transcript_since="$(jq -r '.spawned_at // 0' "$seat_json")"
 fi
-transcript_file() {
-	# Codex names its rollout itself: the newest one for this cwd started after the spawn.
+transcript_files() {
+	# A shared cwd can have multiple live sessions; only this call's receipt selects one.
 	if [[ "$transcript_path" == codex-rollout ]]; then
-		local cwd
+		local cwd file
 		cwd="$(jq -r '.cwd // empty' "$seat_json")"
-		find "${CODEX_HOME:-$HOME/.codex}/sessions" -name 'rollout-*.jsonl' -newermt "@$transcript_since" -print0 2>/dev/null |
-			xargs -0 -r ls -t 2>/dev/null | while IFS= read -r f; do
-				jq -e --arg cwd "$cwd" 'select(.type == "session_meta" and .payload.cwd == $cwd)' <<<"$(head -1 -- "$f")" >/dev/null 2>&1 && { printf '%s\n' "$f"; break; }
-			done
+		while IFS= read -r -d '' file; do
+			if jq -e --arg cwd "$cwd" 'select(.type == "session_meta" and .payload.cwd == $cwd)' <<<"$(head -1 -- "$file")" >/dev/null 2>&1; then
+				printf '%s\n' "$file"
+			fi
+		done < <(find "${CODEX_HOME:-$HOME/.codex}/sessions" -name 'rollout-*.jsonl' -newermt "@$transcript_since" -print0 2>/dev/null)
 	else
 		printf '%s\n' "$transcript_path"
 	fi
@@ -630,31 +452,41 @@ transcript_text() { # <file> <byte offset>: assistant text appended after the of
 		codex) jq -r 'select(.type == "response_item" and .payload.type == "message" and .payload.role == "assistant") | .payload.content[]? | .text // empty' 2>/dev/null ;;
 	esac
 }
+# Capture each existing file's read position before sending, including fast replies.
+declare -A transcript_offsets=()
+if [[ "$have_text" == true && -n "$transcript_path" && -n "$transcript_kind" ]]; then
+	while IFS= read -r file; do
+		[[ -n "$file" && -f "$file" ]] || continue
+		transcript_offsets["$file"]="$(stat -c %s -- "$file")"
+	done < <(transcript_files)
+fi
+
 transcript_wait() {
-	local file offset=0 started text after nudge_at
-	file="$(transcript_file)"
-	[[ -z "$file" || ! -f "$file" ]] || offset="$(stat -c %s -- "$file")"
+	local file='' offset=0 started text='' after nudge_at receipt_seen=false
 	started="$(date +%s)"
 	nudge_at=$(( started + poll_secs * 2 ))
 	while :; do
-		[[ -n "$file" && -f "$file" ]] || file="$(transcript_file)"
-		if [[ -n "$file" && -f "$file" ]]; then
+		while IFS= read -r file; do
+			[[ -n "$file" && -f "$file" ]] || continue
+			offset="${transcript_offsets[$file]:-0}"
 			text="$(transcript_text "$file" "$offset")"
 			if [[ "$text" == *"$delivery_receipt"* ]]; then
+				receipt_seen=true
 				after="${text#*"$delivery_receipt"}"
 				if [[ -z "$expect" ]] || printf '%s' "$after" | grep -Eq -- "$expect"; then
 					report true "transcript-matched" "transcript:$(stat -c %s -- "$file")" 0 "$after"
 					exit 0
 				fi
-			elif [[ "$nudged" == false && "$(date +%s)" -ge "$nudge_at" ]] && submit_again; then
-				nudged=true
 			fi
+		done < <(transcript_files)
+		if [[ "$nudged" == false && "$receipt_seen" == false && "$(date +%s)" -ge "$nudge_at" ]] && submit_again; then
+			nudged=true
 		fi
 		(( $(date +%s) - started < timeout_secs )) || break
 		sleep "$poll_secs"
 	done
-	printf 'the transcript %s showed no reply to this send within %ss\n' "${file:-(not found)}" "$timeout_secs" >&2
-	report false "expected-output-absent" "transcript:${offset}" 0 "${text:-}" >&2
+	printf 'the transcripts showed no reply to this send within %ss\n' "$timeout_secs" >&2
+	report false "expected-output-absent" "transcript:${offset}" 0 "$text" >&2
 	exit "$EXIT_UNVERIFIED"
 }
 
@@ -684,8 +516,7 @@ fi
 
 report() {
 	local verified="$1" reason="$2" cursor_after="$3" lines="$4" out="$5"
-	local out_file screen_file screen="" mode=byte-capture
-	[[ "$cursor_after" != *:screen:* ]] || mode="screen-fallback"
+	local out_file screen_file screen="" mode=screen-fallback
 	if [[ "$have_text" == false && -z "$since" ]]; then
 		screen="$baseline_screen"
 	fi
