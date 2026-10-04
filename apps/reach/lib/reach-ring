@@ -39,7 +39,7 @@ orca_json() {
     local output
 
     output="$(env -u ORCA_RELAY_DIR -u ORCA_RELAY_SOCKET_PATH \
-        timeout 20 "$ORCA" "$@" --json 2>/dev/null)" || return 1
+        timeout --foreground 20 "$ORCA" "$@" --json 2>/dev/null)" || return 1
     jq -e 'select(.ok == true) | .result' <<<"$output" 2>/dev/null
 }
 
@@ -179,7 +179,7 @@ ring_acp() {
         emit "$root" "$recipient" "$sender" "$message_id" failed "acpx is missing; session $name cannot be rung"
         return
     fi
-    if ! inventory="$(timeout -k 2 10 acpx --cwd "$cwd" --format json "$agent" sessions list --local 2>/dev/null)" ||
+    if ! inventory="$(timeout --foreground -k 2 10 acpx --cwd "$cwd" --format json "$agent" sessions list --local 2>/dev/null)" ||
        ! jq -e 'type == "array"' <<<"$inventory" >/dev/null 2>&1; then
         emit "$root" "$recipient" "$sender" "$message_id" failed "cannot inspect ACP session $name"
         return
@@ -195,7 +195,7 @@ ring_acp() {
     printf -v read_command 'SNO_REACH_ROOT=%q %q inbox --as %q' \
         "$root" "$REACH" "$recipient"
     line="$DOORBELL_TOKEN Guide: $REPOSITORY/guide/agent-reach.md. State: $root. Seat: $recipient. You have unanswered local agent mail as '$recipient'. Read Message-ID $message_id using: $read_command . Read the exact file that command returns."
-    if ! output="$(printf '%s\n' "$line" | timeout -k 2 20 acpx --cwd "$cwd" --approve-all \
+    if ! output="$(printf '%s\n' "$line" | timeout --foreground -k 2 20 acpx --cwd "$cwd" --approve-all \
         --format json --timeout 15 "$agent" prompt -s "$name" --no-wait --file - 2>/dev/null)" ||
        ! jq -se --arg id "$session_id" 'length == 1 and .[0].action == "prompt_queued" and
            .[0].acpxRecordId == $id and (.[0].requestId | type == "string" and length > 0)' \
@@ -457,7 +457,6 @@ ring_orca() {
 # smallest value observed working — under-waiting is the failure mode and over-waiting
 # costs a fifth of a second.
 readonly TMUX_SETTLE_SECONDS=0.3
-readonly TMUX_SUBMIT_ATTEMPTS=3
 # The slowest real delivery measured on this fleet took 32 seconds. A deadline shorter
 # than that reports a genuine success as unconfirmed, which is worse than waiting.
 readonly TMUX_CONFIRM_SECONDS=90
@@ -530,7 +529,7 @@ tmux_executor_runtime_live() { # pane-id
 
 ring_tmux() {
     local root="$1" recipient="$2" sender="$3" message_id="$4" record="$5"
-    local target line nonce attempt deadline lock_fd expect_ack
+    local target line nonce deadline lock_fd expect_ack
 
     target="$(jq -er '
         .identity.value |
@@ -579,81 +578,72 @@ ring_tmux() {
         line="$DOORBELL_TOKEN Guide: $REPOSITORY/guide/agent-reach.md. State: $root. Seat: $recipient. $nonce typed by the mail transport, not by the owner. You have unanswered mail as '$recipient'. Read Message-ID $message_id now. Then, so the transport knows you saw this, print one line consisting of the three letters ACK, a hyphen, and then $nonce — nothing else on that line."
     fi
 
-    # The deadline is shared across the attempts rather than restarted by each one, so
-    # three attempts cannot quietly become three times the wait an operator was promised.
+    # Submit once; confirmation polling never retypes the notification.
     deadline=$((SECONDS + TMUX_CONFIRM_SECONDS))
-    local attempt_window=$((TMUX_CONFIRM_SECONDS / TMUX_SUBMIT_ATTEMPTS))
-    local attempt_deadline
-    for ((attempt = 1; attempt <= TMUX_SUBMIT_ATTEMPTS; attempt++)); do
-        attempt_deadline=$((SECONDS + attempt_window))
-        ((attempt_deadline < deadline)) || attempt_deadline="$deadline"
+    # The body and the submit key are ONE indivisible act. Two doorbells ringing the
+    # same pane at once would otherwise interleave: both bodies land in the composer
+    # before either Enter, one malformed prompt is submitted and the other submission
+    # is blank. The lock is per pane, so rings to different agents never wait on each
+    # other, and it is held only across the send — never across the 90s wait.
+    exec {lock_fd}>"$root/.doorbell-tmux-$(printf '%s' "$target" | tr -c 'A-Za-z0-9' '_').lock" || {
+        emit "$root" "$recipient" "$sender" "$message_id" failed \
+            "could not open the tmux submission lock for $recipient"
+        return
+    }
+    if ! flock -w 30 "$lock_fd"; then
+        exec {lock_fd}>&-
+        emit "$root" "$recipient" "$sender" "$message_id" busy \
+            "another doorbell held the tmux submission lock for $recipient"
+        return
+    fi
+    # Re-read the record inside the lock: the seat may have moved or retired while we
+    # queued, and sending to the identity we read a minute ago would reach a stranger.
+    if ! tmux_target_current "$record" "$target"; then
+        flock -u "$lock_fd"; exec {lock_fd}>&-
+        emit "$root" "$recipient" "$sender" "$message_id" unresolved \
+            "reachability changed before the wake reached $recipient: identity=$target"
+        return
+    fi
+    # A stale, unsubmitted composer line must never hitch a ride on the
+    # doorbell's Enter.  C-u carries no instruction content; it only clears
+    # the current input before the neutral cue is typed.
+    if ! tmux send-keys -t "$target" C-u 2>/dev/null ||
+       ! tmux send-keys -t "$target" -- "$line" 2>/dev/null; then
+        flock -u "$lock_fd"; exec {lock_fd}>&-
+        emit "$root" "$recipient" "$sender" "$message_id" failed \
+            "tmux rejected the wake text for $recipient"
+        return
+    fi
+    sleep "$TMUX_SETTLE_SECONDS"
+    if ! tmux send-keys -t "$target" Enter 2>/dev/null; then
+        flock -u "$lock_fd"; exec {lock_fd}>&-
+        emit "$root" "$recipient" "$sender" "$message_id" failed \
+            "tmux rejected the wake submission for $recipient"
+        return
+    fi
+    flock -u "$lock_fd"
+    exec {lock_fd}>&-
 
-        # The body and the submit key are ONE indivisible act. Two doorbells ringing the
-        # same pane at once would otherwise interleave: both bodies land in the composer
-        # before either Enter, one malformed prompt is submitted and the other submission
-        # is blank. The lock is per pane, so rings to different agents never wait on each
-        # other, and it is held only across the send — never across the 90s wait.
-        exec {lock_fd}>"$root/.doorbell-tmux-$(printf '%s' "$target" | tr -c 'A-Za-z0-9' '_').lock" || {
-            emit "$root" "$recipient" "$sender" "$message_id" failed \
-                "could not open the tmux submission lock for $recipient"
+    if [[ "$expect_ack" == no ]]; then
+        emit "$root" "$recipient" "$sender" "$message_id" rang-unverified \
+            "nudged executor $recipient; mailbox processing is not yet confirmed"
+        return
+    fi
+
+    while ((SECONDS < deadline)); do
+        if tmux_agent_confirmed "$target" "$nonce"; then
+            emit "$root" "$recipient" "$sender" "$message_id" rang \
+                "submitted Message-ID $message_id to $recipient and the agent acknowledged $nonce"
+            return
+        fi
+        # A pane that dies, or a seat that re-registers, mid-wait is not an
+        # unconfirmed ring — it is a seat that is no longer where we sent the mail.
+        tmux_target_current "$record" "$target" || {
+            emit "$root" "$recipient" "$sender" "$message_id" unresolved \
+                "the registered tmux pane for $recipient went away during the wake: identity=$target"
             return
         }
-        if ! flock -w 30 "$lock_fd"; then
-            exec {lock_fd}>&-
-            emit "$root" "$recipient" "$sender" "$message_id" busy \
-                "another doorbell held the tmux submission lock for $recipient"
-            return
-        fi
-        # Re-read the record inside the lock: the seat may have moved or retired while we
-        # queued, and sending to the identity we read a minute ago would reach a stranger.
-        if ! tmux_target_current "$record" "$target"; then
-            flock -u "$lock_fd"; exec {lock_fd}>&-
-            emit "$root" "$recipient" "$sender" "$message_id" unresolved \
-                "reachability changed before the wake reached $recipient: identity=$target"
-            return
-        fi
-        # A stale, unsubmitted composer line must never hitch a ride on the
-        # doorbell's Enter.  C-u carries no instruction content; it only clears
-        # the current input before the neutral cue is typed.
-        if ! tmux send-keys -t "$target" C-u 2>/dev/null ||
-           ! tmux send-keys -t "$target" -- "$line" 2>/dev/null; then
-            flock -u "$lock_fd"; exec {lock_fd}>&-
-            emit "$root" "$recipient" "$sender" "$message_id" failed \
-                "tmux rejected the wake text for $recipient"
-            return
-        fi
-        sleep "$TMUX_SETTLE_SECONDS"
-        if ! tmux send-keys -t "$target" Enter 2>/dev/null; then
-            flock -u "$lock_fd"; exec {lock_fd}>&-
-            emit "$root" "$recipient" "$sender" "$message_id" failed \
-                "tmux rejected the wake submission for $recipient"
-            return
-        fi
-        flock -u "$lock_fd"
-        exec {lock_fd}>&-
-
-        if [[ "$expect_ack" == no ]]; then
-            emit "$root" "$recipient" "$sender" "$message_id" rang-unverified \
-                "nudged executor $recipient; mailbox processing is not yet confirmed"
-            return
-        fi
-
-        while ((SECONDS < attempt_deadline)); do
-            if tmux_agent_confirmed "$target" "$nonce"; then
-                emit "$root" "$recipient" "$sender" "$message_id" rang \
-                    "submitted Message-ID $message_id to $recipient and the agent acknowledged $nonce"
-                return
-            fi
-            # A pane that dies, or a seat that re-registers, mid-wait is not an
-            # unconfirmed ring — it is a seat that is no longer where we sent the mail.
-            tmux_target_current "$record" "$target" || {
-                emit "$root" "$recipient" "$sender" "$message_id" unresolved \
-                    "the registered tmux pane for $recipient went away during the wake: identity=$target"
-                return
-            }
-            sleep 2
-        done
-        ((SECONDS < deadline)) || break
+        sleep 2
     done
     emit "$root" "$recipient" "$sender" "$message_id" rang-unverified \
         "submitted Message-ID $message_id to $recipient without an agent acknowledgement within ${TMUX_CONFIRM_SECONDS}s"
