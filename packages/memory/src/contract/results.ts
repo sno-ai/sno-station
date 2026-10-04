@@ -11,12 +11,20 @@ export type ToolResponse = {
 	content: Array<{ type: "text"; text: string }>;
 	details: Record<string, JsonValue>;
 };
+export type ProjectSummary = {
+	projectId: string;
+	workspace: string | null;
+	memoryCount: number;
+	kind: "general" | "project";
+};
 export type InspectData =
 	| { op: "storage"; dimension: number | null; failed: boolean; reason?: string }
 	| { op: "stats"; total: number; projectBreakdown: Record<string, number>; categoryBreakdown: Record<string, number> }
 	/** `project` is the call's resolved write project, so a caller can address it even when no entry exists. */
 	| { op: "list" | "listReflection"; project: string; entries: MemoryEntry[] }
-	| { op: "get"; entry: MemoryEntry | null; file?: { text: string; path: string; truncated?: boolean; from?: number; lines?: number; nextFrom?: number } };
+	| { op: "get"; entry: MemoryEntry | null; file?: { text: string; path: string; truncated?: boolean; from?: number; lines?: number; nextFrom?: number } }
+	| { op: "projects"; projects: ProjectSummary[] }
+	| { op: "currentProject"; workspace: string; status: "known" | "unknown"; project: ProjectSummary | null };
 export interface ContractOutputs {
 	init: Result<{ principal: string; skinId: string }>;
 	hostEvent: Result<{ accepted: boolean }>;
@@ -59,6 +67,10 @@ export const toolResponseSchema: z.ZodType<ToolResponse, unknown> = z.strictObje
 	content: z.array(z.strictObject({ type: z.literal("text"), text: z.string() })),
 	details: z.record(z.string(), z.json()),
 });
+const projectSummarySchema: z.ZodType<ProjectSummary, unknown> = z.strictObject({
+	projectId: z.string().min(1), workspace: z.string().nullable(),
+	memoryCount: z.number().int().nonnegative(), kind: z.enum(["general", "project"]),
+});
 export const inspectDataSchema: z.ZodType<InspectData, unknown> = z.discriminatedUnion("op", [
 	z.strictObject({ op: z.literal("storage"), dimension: z.number().int().positive().nullable(), failed: z.boolean(), reason: z.string().optional() }),
 	z.strictObject({ op: z.literal("stats"), total: z.number().int().nonnegative(),
@@ -69,6 +81,9 @@ export const inspectDataSchema: z.ZodType<InspectData, unknown> = z.discriminate
 		file: z.strictObject({ text: z.string(), path: z.string(), truncated: z.boolean().optional(),
 			from: z.number().int().optional(), lines: z.number().int().optional(),
 			nextFrom: z.number().int().optional() }).optional() }),
+	z.strictObject({ op: z.literal("projects"), projects: z.array(projectSummarySchema) }),
+	z.strictObject({ op: z.literal("currentProject"), workspace: z.string(), status: z.enum(["known", "unknown"]),
+		project: projectSummarySchema.nullable() }),
 ]);
 
 function resultSchema<T extends z.ZodRawShape>(shape: T) {
