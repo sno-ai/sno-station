@@ -116,6 +116,11 @@
       "agent-native": "sno-gpu",
       "rem-enhanced": "sno-gpu"
     },
+    "R5": {
+      "local-first": "host",
+      "agent-native": "off",
+      "rem-enhanced": "off"
+    },
     "REM1": {
       "local-first": "host",
       "agent-native": "host",
