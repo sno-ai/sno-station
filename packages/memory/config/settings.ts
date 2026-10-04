@@ -32,7 +32,8 @@ const destinations = z.strictObject({
 });
 const modelCalls = z.strictObject(Object.fromEntries(
 	Object.keys(MODEL_CALLS).map((id) => [id, destinations]),
-) as Record<keyof typeof MODEL_CALLS, typeof destinations>);
+) as Record<keyof typeof MODEL_CALLS, typeof destinations>)
+	.extend({ R5: destinations.default(MODEL_CALLS.R5.destinations) });
 
 const schema: z.ZodType<Settings> = z.strictObject({
 	mode: z.enum(PRODUCT_MODES),
