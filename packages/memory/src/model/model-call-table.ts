@@ -8,7 +8,7 @@ import type { ProductMode, LlmOccasion } from "../../config/plugin-config-mode-s
 
 export type ModelDestination = "off" | "host" | "sno-gpu";
 export type ModelCallId = "E1" | "E2" | "E3" | "E4" | "E5" | "E6" | "E7" | "E8" | "E9" | "E10" | "E11" | "E12" | "P1" | "P2" | "P3" | "P4" | "P5" | "P6" | "T1" | "R1" | "REM1" | "REM2" | "REM3" | "REM4" | "REM5" | "REM6" | "REM7" | "REM8";
-export type RsiModelCallId = "R2" | "R3" | "R4";
+export type RsiModelCallId = "R2" | "R3" | "R4" | "R5";
 type ModelCall = {
 	description: string;
 	occasion: LlmOccasion;
@@ -55,6 +55,7 @@ export const MODEL_CALLS: Record<ModelCallId, ModelCall> & Record<RsiModelCallId
 	R2: { description: "label local sessions before the nightly cloud upload", calledBy: "RSI skill", destinations: host },
 	R3: { description: "upload sessions nightly for cloud experience and skill review", calledBy: "RSI skill", destinations: { "local-first": "off", "agent-native": "sno-gpu", "rem-enhanced": "sno-gpu" } },
 	R4: { description: "recall one relevant cloud experience on a session's first prompt", calledBy: "RSI skill", destinations: { "local-first": "off", "agent-native": "sno-gpu", "rem-enhanced": "sno-gpu" } },
+	R5: { description: "generate local lessons and skill reminders nightly", calledBy: "RSI skill", destinations: { "local-first": "host", "agent-native": "off", "rem-enhanced": "off" } },
 	REM1: { description: "replace conflict pair", occasion: "conflictAdjudication", destinations: rem, snoPreset: verdict, transport: { host: "agent-host-seam", snoGpu: "raw-completions" }, promptVariant: { host: "adapter-a-chat", snoGpu: "adapter-a-raw" }, replyParser: { host: "json-or-single-token-verdict", snoGpu: "single-token-verdict" } },
 	REM2: { description: "replace clauses", occasion: "memoryExtract", destinations: remHost, snoPreset: chat, transport: { host: "agent-host-seam", snoGpu: "chat-completions" }, promptVariant: { host: "standard", snoGpu: "standard" }, replyParser: { host: "json", snoGpu: "json" } },
 	REM3: { description: "replace coverage", occasion: "memoryExtract", destinations: rem, snoPreset: chat, transport: { host: "agent-host-seam", snoGpu: "chat-completions" }, promptVariant: { host: "standard", snoGpu: "standard" }, replyParser: { host: "json", snoGpu: "json" } },
