@@ -552,6 +552,7 @@ async function runChassisJob(
 				await skipNonTerminalJob(store, queued.job_id, "no host model connected");
 				return;
 			}
+			runtime.startWork();
 			const running = resuming
 				? queued
 				: await store.transition(queued.job_id, {
