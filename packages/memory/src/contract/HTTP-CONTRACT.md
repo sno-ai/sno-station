@@ -904,11 +904,19 @@ Response status: `200 OK`; `Content-Type: application/json`.
 
 ### Request body
 
-Read-only inspection does not enter the recall cache. Branches: 0 `storage`, 1 `stats`, 2 `list`, 3 `get`, 4 `listReflection`.
+Read-only inspection does not enter the recall cache. Branches: 0 `storage`, 1 `stats`, 2 `list`, 3 `get`, 4 `listReflection`, 5 `projects`, 6 `currentProject`.
 
 `stats.scope`, when present, is nonblank; omission requests principal-wide statistics. `get` requires exactly one nonblank `id` or `path`. `from` and `lines` are positive integers. File paths remain subject to native file boundaries. `storage` needs neither registration nor operator admission; a successful result has `failed:false` and the current vector dimension or null. An actual storage read failure is a request error. List responses include the resolved write `project`, even when no entries exist.
 
-The response `result` branches are storage, stats, list/listReflection, and get. Memory entry metadata is a serialized JSON **string**, while mutation metadata is a JSON object.
+The response `result` branches are storage, stats, list/listReflection, get, projects, and currentProject. Memory entry metadata is a serialized JSON **string**, while mutation metadata is a JSON object.
+
+`projects`, `currentProject`, and unscoped `stats` bypass skin initialization, provider provisioning and recall. Call them without `init`; no project, agent or membership is created. Previously initialized clients also skip re-registration for these operations after a service restart. The existing sidecar may independently run its normal startup and maintenance work; these queries do not schedule or trigger it.
+
+`projects` returns existing mappings for the engine's trusted provider user, including mappings with zero memories, plus memory scopes with no mapping. Each item has `projectId`, `workspace` (an absolute stored path or null), `memoryCount`, and `kind` (`general` for `global`, otherwise `project`). Paths without evidence stay null. Registered mappings belonging to a different provider user are not included. Counts include every stored memory row, including historical, parked and quarantined rows, matching `stats`; global memory is a separate item and is never added to a project's count. Items are ordered by `projectId`.
+
+`currentProject.workspace` is a required nonblank path. The engine resolves it to an absolute path using the same lexical normalization as provider registration, then looks up the existing workspace mapping. This is an exact workspace lookup, not a parent-directory or Git repository search. A known empty project returns `status:"known"` and its zero count; an unseen directory returns `status:"unknown",project:null`. Missing paths are not created and no basename, Git remote or project ID is guessed.
+
+These memory operations do not supply nightly self-improvement status. That producer's existing `rem-reflect status` command and stored records remain the source for those reports; memory REM jobs do not establish per-project nightly success.
 
 Scope requires nonblank `principal`, `project`, `session`. `host.observeSessionUuid`, if supplied, must be a UUID. Host `at` is nonnegative epoch milliseconds. Other host strings may be empty.
 
@@ -938,6 +946,11 @@ Scope requires nonblank `principal`, `project`, `session`. `host.observeSessionU
 | op<4>.op | string | yes | ["listReflection"] | - | - |
 | op<4>.limit | integer | no | - | - | {"minimum":-9007199254740991,"maximum":9007199254740991} |
 | op<4>.unresolvedOnly | boolean | no | - | - | - |
+| op<5> | object | yes | - | - | - |
+| op<5>.op | string | yes | ["projects"] | - | - |
+| op<6> | object | yes | - | - | - |
+| op<6>.op | string | yes | ["currentProject"] | - | - |
+| op<6>.workspace | string | yes | - | - | {"minLength":1} |
 | scope | object | yes | - | - | - |
 | scope.principal | string | yes | - | - | {"minLength":1} |
 | scope.project | string | yes | - | - | {"minLength":1} |
@@ -1022,6 +1035,25 @@ HTTP 200, JSON. The complete successful body is below. The schema also permits t
 | result<3>.file.from | integer | no | - | - | {"minimum":-9007199254740991,"maximum":9007199254740991} |
 | result<3>.file.lines | integer | no | - | - | {"minimum":-9007199254740991,"maximum":9007199254740991} |
 | result<3>.file.nextFrom | integer | no | - | - | {"minimum":-9007199254740991,"maximum":9007199254740991} |
+| result<4> | object | yes | - | - | {"additionalProperties":false} |
+| result<4>.op | string | yes | ["projects"] | - | - |
+| result<4>.projects | array | yes | - | - | - |
+| result<4>.projects[] | object | yes | - | - | {"additionalProperties":false} |
+| result<4>.projects[].projectId | string | yes | - | - | {"minLength":1} |
+| result<4>.projects[].workspace | string or null | yes | - | - | - |
+| result<4>.projects[].memoryCount | integer | yes | - | - | {"minimum":0,"maximum":9007199254740991} |
+| result<4>.projects[].kind | string | yes | ["general","project"] | - | - |
+| result<5> | object | yes | - | - | {"additionalProperties":false} |
+| result<5>.op | string | yes | ["currentProject"] | - | - |
+| result<5>.workspace | string | yes | - | - | - |
+| result<5>.status | string | yes | ["known","unknown"] | - | - |
+| result<5>.project | union | yes | - | - | - |
+| result<5>.project<0> | object | yes | - | - | {"additionalProperties":false} |
+| result<5>.project<0>.projectId | string | yes | - | - | {"minLength":1} |
+| result<5>.project<0>.workspace | string or null | yes | - | - | - |
+| result<5>.project<0>.memoryCount | integer | yes | - | - | {"minimum":0,"maximum":9007199254740991} |
+| result<5>.project<0>.kind | string | yes | ["general","project"] | - | - |
+| result<5>.project<1> | null | yes | - | - | - |
 | degraded | boolean | yes | [false] | - | - |
 
 ### Errors
