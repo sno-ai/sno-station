@@ -20,9 +20,10 @@ for card in "$root/$address/new/"* "$root/$address/cur/"*; do
 done
 while IFS= read -r work; do
     [[ -n "$work" ]] || continue
-    rows="$("$release/bin/sno-reach" state --work "$work" --json)"
+    rows="$("$release/lib/reach-main" state --work "$work" --json)"
+    ids="$(jq -r --arg address "$address" 'select(.recipient == $address and .state == "seen") | .message_id' <<<"$rows")"
     while IFS= read -r id; do
-        [[ -n "${work_items[$id]:-}" ]] || continue
+        [[ -n "$id" && -n "${work_items[$id]:-}" ]] || continue
         printf 'Reach: %s is seen but not accepted; use reply --state accepted on its original card.\n' "$id"
-    done < <(jq -r --arg address "$address" 'select(.recipient == $address and .state == "seen") | .message_id' <<<"$rows")
+    done <<<"$ids"
 done < <(printf '%s\n' "${!works[@]}" | sort)
