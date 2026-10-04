@@ -15,7 +15,7 @@ jq -e --arg name "$name" '.identity == {kind:"acp-session",value:$name}' "$recor
 for tool in acpx jq timeout; do
     command -v "$tool" >/dev/null || { printf 'required tool is missing: %s\n' "$tool" >&2; exit "$EXIT_UNRELIABLE"; }
 done
-metadata="$(timeout -k 2 10 acpx --cwd "$cwd" --format json "$agent" sessions show "$name")" || {
+metadata="$(timeout --foreground -k 2 10 acpx --cwd "$cwd" --format json "$agent" sessions show "$name")" || {
     printf 'cannot read ACP session %s\n' "$name" >&2; exit "$EXIT_UNRELIABLE";
 }
 session_id="$(jq -er --arg name "$name" --arg cwd "$cwd" '
@@ -27,7 +27,7 @@ if [[ "$have_text" == true ]]; then
     payload="First output exactly $delivery_receipt to confirm receipt. Then do this: $text"
     flags=()
     [[ "$no_wait" == false ]] || flags+=(--no-wait)
-    response="$(printf '%s\n' "$payload" | timeout -k 2 "$((timeout_secs + 2))" acpx \
+    response="$(printf '%s\n' "$payload" | timeout --foreground -k 2 "$((timeout_secs + 2))" acpx \
         --cwd "$cwd" --approve-all --format json --timeout "$timeout_secs" \
         "$agent" prompt -s "$name" "${flags[@]}" --file -)" || {
         prompt_status=$?

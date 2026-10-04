@@ -31,7 +31,7 @@ cleanup() {
     trap - EXIT
     if [[ "$created" == yes && "$rc" != 0 ]]; then
         if [[ "$channel" == acp ]]; then
-            timeout -k 2 10 acpx 9>&- --cwd "$cwd" --format json "$adapter" sessions close "$session" >&2 ||
+            timeout --foreground -k 2 10 acpx 9>&- --cwd "$cwd" --format json "$adapter" sessions close "$session" >&2 ||
                 printf 'reach: close failed; inspect this created session: %s\n' "$session" >&2
         else
             tmux kill-session -t "$session" || printf 'reach: close failed for created tmux session: %s\n' "$session" >&2
@@ -46,29 +46,29 @@ cleanup() {
 trap cleanup EXIT
 if [[ "$window" == no && -n "$adapter" ]]; then
     channel=acp
-    inventory="$(timeout -k 2 10 acpx 9>&- --cwd "$cwd" --format json "$adapter" sessions list --local)"
+    inventory="$(timeout --foreground -k 2 10 acpx 9>&- --cwd "$cwd" --format json "$adapter" sessions list --local)"
     jq -e --arg cwd "$cwd" --arg name "$session" 'type == "array" and all(.[]; .cwd != $cwd or .name != $name or .closed == true)' <<<"$inventory" >/dev/null || {
         printf 'reach: ACP session already exists or its index is invalid: %s\n' "$session" >&2; exit 65;
     }
     created=yes
-    timeout -k 2 45 acpx 9>&- --cwd "$cwd" --approve-all --format json --timeout 40 "$adapter" sessions new --name "$session" >/dev/null
-    metadata="$(timeout -k 2 10 acpx 9>&- --cwd "$cwd" --format json "$adapter" sessions show "$session")"
+    timeout --foreground -k 2 45 acpx 9>&- --cwd "$cwd" --approve-all --format json --timeout 40 "$adapter" sessions new --name "$session" >/dev/null
+    metadata="$(timeout --foreground -k 2 10 acpx 9>&- --cwd "$cwd" --format json "$adapter" sessions show "$session")"
     session_id="$(jq -er --arg name "$session" --arg cwd "$cwd" 'select(.name == $name and .cwd == $cwd and .closed == false) | .acpxRecordId | strings | select(length > 0)' <<<"$metadata")"
     handle="acp-$adapter:$cwd:$session"
-    SNO_REACH_SKIP_WAKE_ADOPTION=1 env "${register_env[@]}" "$release/bin/sno-reach" register --as "$address" --channel acp --handle "$handle" 9>&- >&2
-    queued="$(printf '%s\n' "$context" | timeout -k 2 20 acpx 9>&- --cwd "$cwd" --approve-all --format json --timeout 15 "$adapter" prompt -s "$session" --no-wait --file -)"
+    env "${register_env[@]}" "$release/lib/reach-main" register --as "$address" --channel acp --handle "$handle" 9>&- >&2
+    queued="$(printf '%s\n' "$context" | timeout --foreground -k 2 20 acpx 9>&- --cwd "$cwd" --approve-all --format json --timeout 15 "$adapter" prompt -s "$session" --no-wait --file -)"
     jq -se --arg id "$session_id" 'length == 1 and .[0].action == "prompt_queued" and .[0].acpxRecordId == $id and (. [0].requestId | type == "string" and length > 0)' <<<"$queued" >/dev/null
 else
     [[ "$window" == yes ]] || printf 'reach: %s is not ACP-capable; creating a tmux seat\n' "$kind" >&2
     session_id="$(uuidgen 2>/dev/null || cat /proc/sys/kernel/random/uuid)"
     spawned_at="$(date +%s)"
-    handle="$(timeout 10 tmux 9>&- new-session -d -P -F '#{pane_id}' -s "$session" -c "$cwd" \
+    handle="$(timeout --foreground 10 tmux 9>&- new-session -d -P -F '#{pane_id}' -s "$session" -c "$cwd" \
         -e "SNO_REACH_ROOT=$root" -e "SNO_REACH_ADDR=$address" -e "SNO_REACH_GUIDE=$guide" \
         -e "SNO_REACH_SESSION_ID=$session_id" \
         "$release/lib/reach-agent" "$kind" "$context")"
     created=yes
     [[ "$handle" =~ ^%[0-9]+$ ]] || { printf 'reach: tmux returned invalid pane\n' >&2; exit 65; }
-    SNO_REACH_SKIP_WAKE_ADOPTION=1 env "${register_env[@]}" "$release/bin/sno-reach" register --as "$address" --channel tmux --handle "$handle" 9>&- >&2
+    env "${register_env[@]}" "$release/lib/reach-main" register --as "$address" --channel tmux --handle "$handle" 9>&- >&2
 fi
 temporary="$(mktemp "$root/$address/.seat-runtime.XXXXXX")"
 # The transcript is the seat's own record of what it said; call verifies against it,
