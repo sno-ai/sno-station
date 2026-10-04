@@ -5,6 +5,14 @@
 `wait --reply-to` records the answer it returns in the caller's seen list, so the same answer no
 longer rings the caller again after `wait` already handed it over.
 
+## 2.1.2
+
+Local candidate; public publication is not asserted.
+
+After a call observes its assistant delivery receipt, keep waiting for the expected
+result without issuing the second-Enter fallback. Calls whose receipt is still
+missing retain the existing submission fallback.
+
 ## 2.1.1
 
 Local candidate; this entry does not assert public publication.
