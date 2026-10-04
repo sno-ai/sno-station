@@ -732,9 +732,9 @@ parse_poll_options() {
                 [[ "$value" =~ ^[0-9]{1,8}$ ]] || die 64 "$option requires integer seconds"
                 value="$((10#$value))"
                 case "$option" in
-                    --timeout) TIMEOUT_SECS="$value" ;;
+                    --timeout) ((value <= 280)) || die 64 '--timeout must not exceed 280 seconds'; TIMEOUT_SECS="$value" ;;
                     --every) ((value > 0)) || die 64 '--every must be positive'; INTERVAL_SECS="$value" ;;
-                    --idle) IDLE_SECS="$value" ;;
+                    --idle) ((value <= 280)) || die 64 '--idle must not exceed 280 seconds'; IDLE_SECS="$value" ;;
                 esac ;;
             *) die 64 "unknown wait option: $option" ;;
         esac
@@ -3744,6 +3744,7 @@ run_call() {
         shift 2
     done
     [[ "$limit" =~ ^[0-9]{1,8}$ && "$every" =~ ^[1-9][0-9]{0,7}$ ]] || die 64 'call times must be integer seconds'
+    ((10#$limit <= 280)) || die 64 '--timeout must not exceed 280 seconds'
     root="$(mailbox_root)"
     channel="$(validate_live_record "$address" "$root/$address/reachable.json")"
     [[ "$channel" != orca ]] || die 3 'channel orca does not support call'
@@ -3777,6 +3778,8 @@ run_watch() {
         shift 2
     done
     [[ "$limit" =~ ^[0-9]{1,8}$ && ( -z "$idle" || "$idle" =~ ^[0-9]{1,8}$ ) ]] || die 64 'watch times must be integer seconds'
+    ((10#$limit <= 280)) || die 64 '--timeout must not exceed 280 seconds'
+    [[ -z "$idle" ]] || ((10#$idle <= 280)) || die 64 '--idle must not exceed 280 seconds'
     root="$(mailbox_root)"
     channel="$(validate_live_record "$address" "$root/$address/reachable.json")"
     "$REPO_ROOT/lib/reach-watch" "$root/$address/reachable.json" "$channel" "$limit" "$idle"

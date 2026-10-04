@@ -88,7 +88,7 @@ Normal send/reply save and deliver first, release their delivery locks, then att
 
 Undelivered copies stay unchanged in the sender outbox; transport failure remains nonzero. Only an explicit `flush --as` retries them once. Flush notifies only non-automatic To copies newly delivered by that invocation, never old already-delivered copies or automatic cards. There is no detached wake worker, automatic retry, failure-report card, supervisor escalation or automatic outbox recovery. Historical wake records are retained but never read to resume work. Notification never spawns an agent; `spawn` runs only when explicitly requested.
 
-Notifications share one 150-second budget for the whole command. The whole send/reply/flush invocation has a 300-second deadline, including child termination; it does not wait that long again for each recipient. An exhausted notification budget is reported directly without launching a retry. Register, unregister, inbox and wait do not scan or revive historical wake attempts.
+Notifications share one 150-second budget for the whole command. Every command, including wait/call/watch, has a 290-second deadline, followed by at most 5 seconds for child termination. `--timeout` and `--idle` accept at most 280 seconds; larger values are rejected with exit 64 before waiting or contacting a seat. Deadline termination returns 124. The deadline is shared by all recipients. An exhausted notification budget is reported directly without launching a retry. Register, unregister, inbox and wait do not scan or revive historical wake attempts.
 
 ## Wait and inspect
 

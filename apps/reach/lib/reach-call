@@ -76,6 +76,10 @@ fi
 	printf 'timeout and poll must be whole seconds, poll at least 1\n' >&2; exit "$EXIT_USAGE"; }
 [[ -z "$idle_secs" || "$idle_secs" =~ ^[0-9]+$ ]] || {
 	printf 'idle must be whole seconds\n' >&2; exit "$EXIT_USAGE"; }
+[[ "$timeout_secs" =~ ^[0-9]{1,8}$ ]] && ((10#$timeout_secs <= 280)) || {
+	printf 'timeout must not exceed 280 seconds\n' >&2; exit "$EXIT_USAGE"; }
+[[ -z "$idle_secs" ]] || { [[ "$idle_secs" =~ ^[0-9]{1,8}$ ]] && ((10#$idle_secs <= 280)); } || {
+	printf 'idle must not exceed 280 seconds\n' >&2; exit "$EXIT_USAGE"; }
 [[ -z "$ring_address" || "$follow" == true ]] || {
 	printf -- '--ring is valid only with --follow\n' >&2; exit "$EXIT_USAGE"; }
 [[ -z "$ring_address" || "$ring_address" =~ ^[a-z][a-z0-9-]{0,31}\.[a-z0-9][a-z0-9-]{0,63}@[a-z0-9][a-z0-9.-]{0,252}$ ]] || {
