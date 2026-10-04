@@ -6,6 +6,9 @@ import { FIXED_PROTOCOL_VALUE_65, FIXED_PROTOCOL_VALUE_66, FIXED_PROTOCOL_VALUE_
 
 import { createUUIDv7, isLowercaseCanonicalUUIDv7 } from "@snoai/common-core";
 import { StorageError } from "../shared/errors";
+import { isAbsolute, resolve } from "node:path";
+import type { Inspection } from "../../contract/inputs";
+import type { InspectData, ProjectSummary } from "../../contract/results";
 import type { MemoryStore } from "../../store/store";
 import type {
 	ProviderAuthorityInput,
@@ -19,6 +22,32 @@ interface ProjectMappingRow {
 
 interface AgentMappingRow {
 	agent_id: string;
+}
+
+export function inspectProviderProjects(
+	store: MemoryStore,
+	userId: string,
+	op: Extract<Inspection, { op: "projects" | "currentProject" }>,
+): InspectData {
+	const rows = store.sqlite.prepare(`
+		WITH counts AS (SELECT project_id, COUNT(*) AS memory_count FROM nodix_memories GROUP BY project_id)
+		SELECT mapping.project_id AS projectId, mapping.external_project_key AS workspace,
+			COALESCE(counts.memory_count, 0) AS memoryCount
+		FROM nodix_provider_project_mappings AS mapping
+		LEFT JOIN counts ON counts.project_id = mapping.project_id
+		WHERE mapping.user_id = ? AND mapping.external_system = ?
+		UNION ALL
+		SELECT counts.project_id, NULL, counts.memory_count FROM counts
+		WHERE NOT EXISTS (SELECT 1 FROM nodix_provider_project_mappings AS mapping WHERE mapping.project_id = counts.project_id)
+		ORDER BY projectId
+	`).all(userId, PERSISTED_PROVIDER_SYSTEM) as Array<Omit<ProjectSummary, "kind">>;
+	const projects: ProjectSummary[] = rows.map(row => ({ ...row,
+		workspace: row.workspace && isAbsolute(row.workspace) ? row.workspace : null,
+		kind: row.projectId === "global" ? "general" : "project" }));
+	if (op.op === "projects") return { op: "projects", projects };
+	const workspace = resolve(op.workspace);
+	const project = projects.find(row => row.workspace === workspace) ?? null;
+	return { op: "currentProject", workspace, status: project ? "known" : "unknown", project };
 }
 
 function validateAuthorityInput(input: ProviderAuthorityInput): {

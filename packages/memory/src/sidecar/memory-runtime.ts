@@ -13,6 +13,8 @@ import { FIXED_MEMORY_SNO_EXTRACT_CHAT } from "../model/signed-registry-constant
 import { parseInput, parseOutput, type ContractMethod, type ContractOutputs, type Registration, type ScopeCtx } from "../contract/index";
 import type { PluginConfig } from "../../config/plugin-config-schema";
 import { MemoryContractRuntime } from "../engine/contract-runtime";
+import { inspectProviderProjects } from "../engine/provider/provider-authority";
+import { readTrustedUserId } from "../engine/provider/provider-registration";
 import { getPrincipal, getSnoStationMemStateDir } from "../engine/shared/paths";
 import { getSettingsPath, readSettings } from "../contract/profile";
 import { settingsToPluginConfig, type Settings } from "../../config/settings";
@@ -154,16 +156,22 @@ export class MemoryRuntimePool {
 		const routed = routedObservability(observability);
 		const embedder = new ObservableEmbedder(config.embedding, stateDir, routed, observeSessionUuid);
 		const store = new ObservableMemoryStore({ dbPath: storePath, vectorDim: embedder.dimensions, embedder, memoryTelemetry: config.memoryTelemetry }, routed, observeSessionUuid, config.embedding);
+		store.cancelScheduledLegacyChunkBackfill();
 		const pool = new MemoryRuntimePool(storePath, store, config, settings, observability, embedder);
-		pool.modelPreparation = pool.prepareModel();
-		const maintenance = readMaintenanceOverrides();
-		pool.maintenance = startMaintenanceTimer({ store, dbPath: storePath, stateDir, remClock: maintenance.now, remVolumeThreshold: maintenance.volumeThreshold,
-			mode: config.mode, modelCalls: settings.modelCalls,
-			remSettings: { mode: settings.mode, requestedOperations: settings.rem.operations, tickEnabled: settings.rem.tick }, hasConnectedHost: () => pool.connectedRemPort() !== undefined,
-			backupDir: join(stateDir, "backups"), usageOutbox: pool.usageOutbox }, maintenance.intervalMs, maintenance.intervalMs,
-			maintenance.intervalMs === undefined ? undefined : uniformMaintenanceIntervals(maintenance.intervalMs));
-		pool.startUsageTimer();
 		return pool;
+	}
+
+	startWork(): void {
+		if (this.modelPreparation) return;
+		this.modelPreparation = this.prepareModel();
+		this.store.scheduleLegacyChunkBackfill();
+		const maintenance = readMaintenanceOverrides();
+		this.maintenance = startMaintenanceTimer({ store: this.store, dbPath: this.storePath, stateDir: this.stateDir, remClock: maintenance.now, remVolumeThreshold: maintenance.volumeThreshold,
+			mode: this.config.mode, modelCalls: this.settings.modelCalls,
+			remSettings: { mode: this.settings.mode, requestedOperations: this.settings.rem.operations, tickEnabled: this.settings.rem.tick }, hasConnectedHost: () => this.connectedRemPort() !== undefined,
+			backupDir: join(this.stateDir, "backups"), usageOutbox: this.usageOutbox }, maintenance.intervalMs, maintenance.intervalMs,
+			maintenance.intervalMs === undefined ? undefined : uniformMaintenanceIntervals(maintenance.intervalMs));
+		this.startUsageTimer();
 	}
 
 	private async register(scope: ScopeCtx, registration: Registration): Promise<ContractOutputs["init"]> {
@@ -221,6 +229,18 @@ export class MemoryRuntimePool {
 	async invoke(method: ContractMethod, raw: unknown, skinId: string, signal?: AbortSignal): Promise<ContractOutputs[ContractMethod]> {
 		signal?.throwIfAborted();
 		const input = parseInput(method, raw);
+		if (method === "inspect") {
+			const { op } = parseInput("inspect", raw);
+			if (op.op === "projects" || op.op === "currentProject") {
+				this.counters.storeAccesses++;
+				return parseOutput("inspect", { degraded: false, result: inspectProviderProjects(this.store, readTrustedUserId(this.config), op) });
+			}
+			if (op.op === "stats" && !op.scope) {
+				this.counters.storeAccesses++;
+				return parseOutput("inspect", { degraded: false, result: { op: "stats", ...await this.store.stats() } });
+			}
+		}
+		this.startWork();
 		if (method === "mutate" && parseInput("mutate", raw).op.op === "correct" && !this.modelReady) {
 			const preparation = this.modelPreparation;
 			if (preparation) {

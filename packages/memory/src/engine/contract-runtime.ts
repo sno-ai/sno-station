@@ -24,7 +24,8 @@ import { pickLlmRoutingConfig } from "../model/llm-mode-routing";
 import type { PluginConfig, MemoryEntry, RetrievalResult } from "./shared/types";
 import { createScopePolicy, MemoryScopePolicy } from "./security/memory-scope-policy";
 import { parseAgentIdFromSessionKey } from "./security/scope-identity";
-import { resolveProviderIdentity } from "./provider/provider-registration";
+import { readTrustedUserId, resolveProviderIdentity } from "./provider/provider-registration";
+import { inspectProviderProjects } from "./provider/provider-authority";
 import { executeMemoryRecallTool } from "./bindings/memory-recall-tool";
 import { isOpenRecallMetadata, retrieveForAutoRecall } from "./retrieval/rem-consumer-retrieval";
 import { resolveMemoryDate } from "./extraction/date-resolution";
@@ -493,6 +494,9 @@ export class MemoryContractRuntime implements MemoryContract {
 
 	async inspect(op: Inspection, scope: ScopeCtx): Promise<ContractOutputs["inspect"]> {
 		parseInput("inspect", { op, scope });
+		if (op.op === "projects" || op.op === "currentProject") {
+			return { degraded: false, result: inspectProviderProjects(this.services.store, readTrustedUserId(this.services.config), op) };
+		}
 		if (op.op === "stats" && !op.scope) {
 			return { degraded: false, result: { op: "stats", ...await this.services.store.stats() } };
 		}
