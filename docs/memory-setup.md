@@ -10,7 +10,7 @@ Install Node.js 22.22.3+, 24.15.0+, or 25.9.0+, then run the commands below. Wit
 before the settings step.
 
 ```bash
-npm install --prefix "$HOME/.sno" @snoai/memory@1.0.1 @snoai/embedder@1.0.1
+npm install --prefix "$HOME/.sno" @snoai/memory@1.1.0 @snoai/embedder@1.0.1
 node --input-type=module <<'NODE'
 import { randomBytes } from 'node:crypto';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -45,8 +45,8 @@ The memory service starts when a plugin needs it; there is no separate start com
 
 Upgrade the memory service and the agent plugin you use to the same version. From 1.0.1 the
 memory service rejects requests that do not carry its access token, and a 1.0.0 plugin does not
-send one. Run `npm install --prefix "$HOME/.sno" @snoai/memory@1.0.1 @snoai/embedder@1.0.1`, then
-reinstall your plugin at 1.0.1 (for example `npm install -g @snoai/mem-codex@1.0.1`) and restart
+send one. Run `npm install --prefix "$HOME/.sno" @snoai/memory@1.1.0 @snoai/embedder@1.0.1`, then
+reinstall your plugin at 1.1.0 (for example `npm install -g @snoai/mem-codex@1.1.0`) and restart
 any running agent session. Do not rerun the settings block; your store and key stay as they are.
 
 The nightly improvement skill uses `modelCalls.R5` for local lesson and skill-reminder
