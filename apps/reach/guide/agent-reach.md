@@ -1,14 +1,12 @@
 # Reach agent guide
 
-Reach-Version: 2.0
+Reach-Version: 2.1.2
 
 This guide belongs to the release containing `bin/sno-reach`. Use that installed release, not a workshop script. Put the install home's `.local/bin` on PATH. `sno reach` dispatches to `sno-reach`; both run the same program.
 
 ## Prerequisites
 
-Use Bash 5 or newer and `realpath`, `find`, `stat`, `sed`, `sha256sum`, `timeout`, `flock` and `jq`; the first six need the GNU tools. The tmux channel also needs `tmux`. On macOS these are Homebrew's `bash`, `coreutils`, `findutils`, `gnu-sed`, `flock`, `tmux`, `jq`, on PATH under their plain names. The GNU formulae provide `libexec/gnubin` directories for the plain command names; put those directories before the system tools on PATH. The agent running the program installs missing prerequisites; Reach only reports what is missing. Windows: run inside WSL; the Windows side is not supported.
-
-Background delivery recovery also uses `setsid` (Homebrew's keg-only `util-linux/bin` on macOS). The macOS tmux capture check uses the system `/usr/sbin/lsof` to verify the writer's open file.
+Use Bash 5 or newer, Perl with its standard POSIX module, and `realpath`, `find`, `stat`, `sed`, `sha256sum`, `timeout`, `readlink`, `flock` and `jq`; the first seven commands need the GNU tools. The tmux channel also needs `tmux`. On macOS the GNU and channel tools are Homebrew's `bash`, `coreutils`, `findutils`, `gnu-sed`, `flock`, `tmux`, `jq`, on PATH under their plain names. Perl must also be available on PATH with its standard POSIX module; do not assume every macOS version preinstalls it. The GNU formulae provide `libexec/gnubin` directories for the plain command names; put those directories before the system tools on PATH. The agent running the program installs missing prerequisites; Reach only reports what is missing. Windows: run inside WSL; the Windows side is not supported.
 
 ## Your identity and first run
 
@@ -80,27 +78,29 @@ A question carrying `X-State: requires-action` is different: it asks you for inf
 
 To means action; Cc means informed only; Bcc receives a private copy. Info cards have no To. X-No-Reply:true puts copies directly in handled state and is invalid for questions. From must equal the caller. All destinations must be initialized; actionable To destinations must be registered before any delivery.
 
-Replies resolve recipients from the ORIGINAL work card's Reply-To when present, otherwise From. A blank/invalid Reply-To refuses rather than falling back. Acceptance and terminal replies both deliver and ring that same destination. The original author may leave when a different Reply-To recipient continues.
+Replies resolve recipients from the ORIGINAL work card's Reply-To when present, otherwise From. A blank/invalid Reply-To refuses rather than falling back. Acceptance and terminal replies deliver to that same destination; the non-automatic notification rule below applies. The original author may leave when a different Reply-To recipient continues.
 
 ```sh
 sno reach send --as "$SNO_REACH_ADDR" < card.eml
 ```
 
-Normal send/reply deliver first and then ring actionable To seats. Exit5 means delivery succeeded but wake retry is running. Exit6 means delivery succeeded but wake could not start. **Do not resend a delivered card to repair its wake.** Repair the channel or inspect recipient state. Exit0 can mean the channel was reached with pickup still unconfirmed; only recipient effects establish pickup. `send --no-ring` is a tooling-only operation that does not ring or adopt old wakes.
+Normal send/reply save and deliver first, release their delivery locks, then attempt one synchronous notification for each non-automatic To copy. If every addressed copy is delivered, the command returns 0 even when notification fails; stderr names the failed notification and states that the message remains saved/delivered. **Do not resend a delivered card to repair its notification.** Cc copies never notify. Any card with `Auto-Submitted` other than `no` is saved/delivered but never notifies. This includes automatic call/watch reports and old queued automatic cards. Non-automatic status/answer/done cards follow the same To rule as other non-automatic cards. Channel contact does not prove receipt or completion; only recipient effects do. `send --no-ring` is a tooling-only operation that skips notification.
 
-Undelivered copies stay in the sender outbox for the existing bounded retry. `flush --as` retries that outbox. Wake retry preserves the existing attempt policy and sends an automated failure notice to the sender and the attempt owner's recorded supervisor. A standalone seat supervises itself. Never infer completion from a retry process ending.
+Undelivered copies stay unchanged in the sender outbox; transport failure remains nonzero. Only an explicit `flush --as` retries them once. Flush notifies only non-automatic To copies newly delivered by that invocation, never old already-delivered copies or automatic cards. There is no detached wake worker, automatic retry, failure-report card, supervisor escalation or automatic outbox recovery. Historical wake records are retained but never read to resume work. Notification never spawns an agent; `spawn` runs only when explicitly requested.
+
+Notifications share one 150-second budget for the whole command. The whole send/reply/flush invocation has a 300-second deadline, including child termination; it does not wait that long again for each recipient. An exhausted notification budget is reported directly without launching a retry. Register, unregister, inbox and wait do not scan or revive historical wake attempts.
 
 ## Wait and inspect
 
 ```sh
-sno reach wait --as "$SNO_REACH_ADDR" --reply-to "$question_id" --timeout 300
+sno reach wait --as "$SNO_REACH_ADDR" --reply-to "$question_id" --timeout 280
 sno reach state --work "$work_id" --json
 sno reach export --work "$work_id" --output "$transcript_outside_store"
 ```
 
 Filtered wait returns one matching answer path, not acceptance statuses. It includes handled answers and does not consume its result; repeated calls can return the same path. Inspect acceptance through export and state. Without reply-to, wait selects actionable inbox cards. From is optional and restricts either mode when supplied. Every defaults to5 seconds; timeout and idle are seconds; timeout returns4. Existing candidates are checked before sleeping.
 
-`log --as [--work]` prints chronological history, not complete card headers. Export preserves full thread bytes outside the state root and refuses conflicting output. `state`, `log`, `export`, `doctor`, `lint`, `seats`, `watch` and `remind` never adopt wakes. Remind reports seen unaccepted work under one whole-command deadline and fails loudly if it cannot read the store.
+`log --as [--work]` prints chronological history, not complete card headers. Export preserves full thread bytes outside the state root and refuses conflicting output. No command adopts historical wake attempts; `state`, `log`, `export`, `doctor`, `lint`, `seats`, `watch` and `remind` do not start background recovery. Remind reports seen unaccepted work under one whole-command deadline and fails loudly if it cannot read the store.
 
 ## Live seats
 
@@ -125,11 +125,10 @@ Expired or future cursors fail explicitly. Scrollback already discarded between
 reads cannot be recovered. This mode is not a byte-exact transcript.
 A byte cursor cannot be reused after switching to a foreign pipe; read without
 `--since` to establish a screen cursor. Screen cursors remain screen reads if the
-foreign writer later exits. A pane with no pipe, or this reader's verified pipe,
-keeps byte capture and `<pane-token>:<byte-offset>` cursors. Text submission keeps
+foreign writer later exits. New calls use screen snapshots without installing a persistent terminal output pipe or writer. Text submission keeps
 the 0.3-second pause between literal text and the carriage return.
 
-`watch <seat> [--idle <seconds>] [--timeout <seconds>]` only reads output. It never creates a session, takes a lock or sends a prompt.
+`watch <seat> [--idle <seconds>] [--timeout <seconds>]` only reads output. It never creates a session, takes a lock or sends a prompt. Automatic call/watch reports carry `Auto-Submitted: auto-generated` and cannot trigger another notification.
 
 ## Public cut
 
