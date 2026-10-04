@@ -16,6 +16,7 @@ import {
 import {
 	DEFAULT_MODEL_MODE,
 	PRODUCT_MODES,
+	modelCallsConfigSchema,
 	remEnhancedConfigSchema,
 } from "./plugin-config-mode-schema";
 import { observeConfigSchema } from "./plugin-config-observe-schema";
@@ -175,7 +176,7 @@ const pluginConfigBaseSchema = z
 		 * config requires an explicit product mode.
 		 */
 		mode: z.enum(PRODUCT_MODES).default(DEFAULT_MODEL_MODE),
-		modelCalls: z.record(z.string(), z.record(z.enum(PRODUCT_MODES), z.enum(["off", "host", "sno-gpu"]))).optional() as z.ZodType<Settings["modelCalls"] | undefined>,
+		modelCalls: modelCallsConfigSchema,
 		remOperations: z.array(z.enum(REM_OPERATIONS)).min(1).max(2).default([...REM_OPERATIONS]),
 		remEnhanced: remEnhancedConfigSchema,
 		/**

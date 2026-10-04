@@ -48,3 +48,8 @@ memory service rejects requests that do not carry its access token, and a 1.0.0 
 send one. Run `npm install --prefix "$HOME/.sno" @snoai/memory@1.0.1 @snoai/embedder@1.0.1`, then
 reinstall your plugin at 1.0.1 (for example `npm install -g @snoai/mem-codex@1.0.1`) and restart
 any running agent session. Do not rerun the settings block; your store and key stay as they are.
+
+The nightly improvement skill uses `modelCalls.R5` for local lesson and skill-reminder
+generation. Its destinations are `host` in Local First and `off` in Agent Native and REM
+Enhanced. Existing settings without this row use those defaults; supplied values are
+preserved. Set `modelCalls.R5["local-first"]` to `off` to disable this model call.
