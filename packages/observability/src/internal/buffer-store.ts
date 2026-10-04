@@ -16,7 +16,7 @@ import { createEnvelope, serializeEnvelope } from "./wire-envelope.js";
 
 const GENESIS = "GENESIS";
 const MAX_CHAIN_RETRIES = 3;
-const RETENTION_MAX_BYTES = 100 * 1024 * 1024;
+const RETENTION_MAX_BYTES = 256 * 1024 * 1024;
 const RETENTION_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 const QUARANTINE_MAX_ROWS = 1_000;
 const QUARANTINE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
@@ -58,6 +58,7 @@ export interface AppendInput {
 	terminal: boolean;
 	chainEpoch?: number;
 	reidentify?: true;
+	attempts?: number;
 }
 
 export interface AppendResult {
@@ -299,13 +300,16 @@ export class BufferStore {
 	 * Moves every pending row of `row`'s chain from `row.seq` onward into a fresh epoch,
 	 * seeded by a new `agent.identify`. `quarantine: "head"` records the head row as evidence
 	 * and drops it; `"all"` records the whole run as evidence and opens no new epoch (the
-	 * server will not take any of it right now); `rewrite` lets the caller change what travels.
+	 * server will not take any of it right now); `rewrite` lets the caller change what travels;
+	 * `headLast` sends the head row after the rows behind it, and does nothing when no row is
+	 * behind it.
 	 */
 	carryForward(
 		row: PendingRow,
 		identifyPayloadFor: IdentifyPayloadFor,
 		options: {
 			quarantine?: "head" | "all";
+			headLast?: boolean;
 			detail?: QuarantineDetail;
 			rewrite?: (envelope: WireEnvelope) => Pick<WireEnvelope, "consent_level" | "payload">;
 		} = {},
@@ -320,6 +324,12 @@ export class BufferStore {
 					ORDER BY seq ASC`,
 				)
 				.all(row.machine_id, row.agent_id, row.chain_epoch, row.seq) as PendingRow[];
+			// Moving a refused head behind rows that were refused before only swaps refused rows
+			// around forever; it moves only while some row behind it has not been refused yet.
+			if (options.headLast === true && suffix.slice(1).every((behind) => behind.attempts > 0)) {
+				return;
+			}
+			const attemptsById = new Map(suffix.map((old) => [old.event_id, old.attempts] as const));
 			const now = Date.now();
 			const deleteRow = this.db.prepare("DELETE FROM events WHERE rowid = ?");
 			for (const old of suffix) {
@@ -340,7 +350,8 @@ export class BufferStore {
 				this.pruneQuarantineInsideTx(now);
 				return;
 			}
-			const envelopes = suffix.slice(evidenceCount).map((old) => decodeEnvelope(old.payload));
+			const carried = suffix.slice(evidenceCount).map((old) => decodeEnvelope(old.payload));
+			const envelopes = options.headLast === true ? [...carried.slice(1), ...carried.slice(0, 1)] : carried;
 			const chainEpoch = this.getCurrentEpochInsideTx(row.machine_id, row.agent_id) + 1;
 			const head = decodeEnvelope(row.payload);
 			const headRewrite = options.rewrite?.(head);
@@ -368,6 +379,9 @@ export class BufferStore {
 					payload: rewritten?.payload ?? envelope.payload,
 					terminal: false,
 					chainEpoch,
+					...(options.headLast === true
+						? { attempts: (attemptsById.get(envelope.event_id) ?? 0) + (envelope.event_id === row.event_id ? 1 : 0) }
+						: {}),
 				});
 				result.carried += 1;
 			}
@@ -444,8 +458,9 @@ export class BufferStore {
 
 	/**
 	 * Deletes shipped and consent-off rows older than a day, closed epochs with no rows left,
-	 * and stale quarantine evidence. Over the byte cap the oldest rows go regardless of state;
-	 * the count comes back so the caller can say so loudly.
+	 * and stale quarantine evidence. Over the byte cap only the oldest already-shipped (or
+	 * consent-off) rows go; an unsent event is never deleted. The count comes back so the caller
+	 * can say so loudly.
 	 */
 	pruneRetention(
 		maxBytes = RETENTION_MAX_BYTES,
@@ -485,7 +500,7 @@ export class BufferStore {
 				.run();
 			this.pruneQuarantineInsideTx(now);
 			const oldest = this.db.prepare(
-				"DELETE FROM events WHERE rowid IN (SELECT rowid FROM events ORDER BY rowid ASC LIMIT ?)",
+				"DELETE FROM events WHERE rowid IN (SELECT rowid FROM events WHERE shipped = 1 OR terminal = 1 ORDER BY rowid ASC LIMIT ?)",
 			);
 			while (this.logicalDataSizeBytes() > maxBytes) {
 				const deleted = oldest.run(OVERFLOW_DELETE_BATCH).changes;
@@ -638,7 +653,7 @@ export class BufferStore {
 				`INSERT INTO events (
 					event_id, machine_id, agent_id, chain_epoch, seq, self_hash, prev,
 					payload, shipped, terminal, created_at, attempts
-				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, 0)`,
+				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)`,
 			)
 			.run(
 				input.eventId,
@@ -651,6 +666,7 @@ export class BufferStore {
 				Buffer.from(serialized, "utf8"),
 				input.terminal ? 1 : 0,
 				createdAt,
+				input.attempts ?? 0,
 			);
 		this.db
 			.prepare(

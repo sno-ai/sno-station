@@ -1,7 +1,7 @@
 // What each server answer does to the buffer, against a real node:http fixture server.
-// Contract: 202 ships; any 4xx the server will never accept turns the row into local
-// evidence and moves later rows to a fresh epoch; a chain-position complaint moves the row
-// itself to a fresh epoch; everything else waits with backoff. Nothing is ever stranded.
+// Contract: 202 ships; a refusal (400, 403, 413, an unknown 409/422) never parks or deletes the row: the rows
+// behind it travel first and it is sent last; a chain-position complaint moves the row itself to a fresh
+// epoch; everything else waits with backoff. Nothing is ever stranded.
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -114,20 +114,22 @@ describe("HTTP status matrix (fixture server, node:http)", () => {
 		["409 with an unknown code beside a sub-reason", { status: 409, body: { error: "future_code", reason: "chain_reset_required" } }],
 		["413 body too large", { status: 413, body: { error: "event_body_too_large" } }],
 	]) {
-		it(`${label}: the row is evidence, the next row ships in a fresh epoch, nothing is re-sent`, async () => {
+		it(`${label}: the row is sent again after the row behind it, nothing is parked`, async () => {
 			const outcome = await flushTwoWithSecondAnswered(answer);
 			assert.deepEqual(
 				{ shipped: outcome.result.shipped, terminal: outcome.result.terminal, retryable: outcome.result.retryable },
-				{ shipped: 3, terminal: 1, retryable: 0 },
+				{ shipped: 4, terminal: 0, retryable: 0 },
 			);
+			// The refused row moves behind the row that was queued after it, in a fresh epoch.
 			assert.deepEqual(outcome.posted, [
 				"agent.identify@0.0",
 				"memory.write@0.1",
 				"agent.identify@1.0",
 				"memory.write@1.1",
+				"memory.write@1.2",
 			]);
 			assert.equal(outcome.pending, 0);
-			assert.equal(outcome.quarantined, 1);
+			assert.equal(outcome.quarantined, 0);
 		});
 	}
 

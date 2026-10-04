@@ -124,7 +124,10 @@ export async function startMockServer({ script = [] } = {}) {
 				if (path === "/api/v1/identity/register-machine") {
 					entry = defaultRegisterMachineResponse(body);
 				} else if (path === "/api/v1/device/code") {
-					entry = defaultDeviceCodeResponse(body);
+					// The website authenticates this call with the machine bearer; a call without one is a 401.
+					entry = /^Bearer [0-9a-f]{64}$/.test(String(req.headers.authorization ?? ""))
+						? defaultDeviceCodeResponse(body)
+						: { status: 401, body: { error: "machine_unknown" } };
 				} else if (path === "/api/v1/device/token") {
 					entry = defaultDeviceTokenResponse(body);
 				} else if (path === "/api/v1/events") {
