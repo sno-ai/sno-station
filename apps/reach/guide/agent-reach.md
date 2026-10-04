@@ -112,19 +112,19 @@ On tmux, an existing output pipe owned by another program is never replaced or
 closed. Calls still send and verify through `tmux capture-pane -p -S -` in
 `screen-fallback` mode, announced on stderr. The internal JSON result has
 `mode: "screen-fallback"` and cursors shaped as `<pane-token>:screen:<line-count>`.
-The count tracks observed output, not the screen's height. Each read compares the
-saved normalized screen with the current capture: find the longest old suffix
-that matches the new prefix, then emit the remaining new rows. With no overlap,
-emit the entire normalized screen, so a repaint may repeat text rather than hide
-changes. Normalization removes trailing blank rows and the unfinished final
-cursor row; that row becomes output when completed by a newline.
+The count tracks observed output, not the screen's height. Each read compares
+archived history and visible rows in separate line-diff passes and emits only
+added lines. A repaint does not re-emit the entire normalized screen; repeated
+identical text may produce no new lines. Normalization removes trailing blank
+rows and the unfinished final cursor row; that row becomes output when completed
+by a newline.
 A locked, atomic per-pane state retains the last screen and up to 1 MiB of
 observed complete lines. Repeated reads from one cursor are cumulative and
 idempotent until the screen changes; another reader does not reset that cursor.
 Expired or future cursors fail explicitly. Scrollback already discarded between
 reads cannot be recovered. This mode is not a byte-exact transcript.
-A byte cursor cannot be reused after switching to a foreign pipe; read without
-`--since` to establish a screen cursor. Screen cursors remain screen reads if the
+Use only returned screen cursors with `--since`; read without `--since` to
+establish a new screen cursor. Screen cursors remain screen reads if the
 foreign writer later exits. New calls use screen snapshots without installing a persistent terminal output pipe or writer. Text submission keeps
 the 0.3-second pause between literal text and the carriage return.
 
