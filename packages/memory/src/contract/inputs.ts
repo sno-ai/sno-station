@@ -56,7 +56,9 @@ export type Inspection =
 	| { op: "stats"; scope?: string }
 	| { op: "list"; category?: MemoryCategory; limit?: number; offset?: number; importanceMin?: number }
 	| { op: "get"; id?: string; path?: string; from?: number; lines?: number }
-	| { op: "listReflection"; limit?: number; unresolvedOnly?: boolean };
+	| { op: "listReflection"; limit?: number; unresolvedOnly?: boolean }
+	| { op: "projects" }
+	| { op: "currentProject"; workspace: string };
 export type UsageSignal = {
 	event: "inject" | "used" | "rejected" | "tool-error";
 	memoryIds: string[];
@@ -163,6 +165,8 @@ export const inspectionSchema: z.ZodType<Inspection, unknown> = z.discriminatedU
 	}).refine((value) => (value.id !== undefined) !== (value.path !== undefined)),
 	z.object({ op: z.literal("listReflection"), limit: z.number().int().optional(),
 		unresolvedOnly: z.boolean().optional() }),
+	z.object({ op: z.literal("projects") }),
+	z.object({ op: z.literal("currentProject"), workspace: nonempty }),
 ]);
 export const usageSignalSchema: z.ZodType<UsageSignal, unknown> = z.object({
 	event: z.enum(["inject", "used", "rejected", "tool-error"]), memoryIds: z.array(nonempty),

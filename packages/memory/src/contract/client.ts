@@ -14,6 +14,10 @@ export type { MemoryContract, ScopeCtx, Registration, InitRegistration, RecallOp
 export { ContractError } from "./error";
 export interface ConnectOptions { skinId: string }
 export interface DegradedConnection { degraded: true; reason: DegradedReason; error?: string }
+export type ReportingInspection = Extract<Inspection, { op: "projects" | "currentProject" }> | { op: "stats" };
+export type ReportingClient = Pick<MemoryClient, "degraded" | "principal"> & {
+	inspect(op: ReportingInspection, scope: ScopeCtx): Promise<ContractOutputs["inspect"]>;
+};
 
 function clientSettings(): { storePath: string; memoryPackage: { path: string; node: string } } {
 	const path = getSettingsPath();
@@ -88,6 +92,17 @@ export async function connect(options: ConnectOptions): Promise<MemoryClient | D
 	} catch (error) { return { degraded: true, reason: failureReason(error), ...(error instanceof Error && { error: error.message }) }; }
 }
 
+/** Connect to an already running service without starting it or registering a skin. */
+export async function connectReporting(options: ConnectOptions): Promise<ReportingClient | DegradedConnection> {
+	try {
+		const { storePath } = clientSettings();
+		const discovery = await readDiscovery();
+		if (!discovery) throw new ContractError("sidecar-unreachable");
+		await checkDiscovery(discovery);
+		return new MemoryClient(options.skinId, storePath, discovery);
+	} catch (error) { return { degraded: true, reason: failureReason(error), ...(error instanceof Error && { error: error.message }) }; }
+}
+
 export class MemoryClient implements MemoryContract {
 	readonly degraded = false;
 	readonly principal: string = getPrincipal();
@@ -105,12 +120,16 @@ export class MemoryClient implements MemoryContract {
 		const route = MEMORY_ROUTES[method];
 		try {
 			signal?.throwIfAborted();
+			const inspection = method === "inspect" && "op" in input ? input.op : undefined;
+			const reporting = inspection?.op === "projects" || inspection?.op === "currentProject"
+				|| (inspection?.op === "stats" && !inspection.scope);
 			let discovery = await readDiscovery();
 			if (!discovery || !processAlive(discovery.pid)) {
+				if (reporting) throw new ContractError("sidecar-unreachable");
 				const { memoryPackage } = clientSettings();
 				discovery = await startSidecar(memoryPackage);
 			}
-			if (method !== "init" && this.#registration && this.#registeredPid !== discovery.pid) {
+			if (method !== "init" && !reporting && this.#registration && this.#registeredPid !== discovery.pid) {
 				await this.request("init", this.#registration, signal);
 			}
 			const response = await postJson(discovery.port, route.path,
@@ -151,6 +170,8 @@ export class MemoryClient implements MemoryContract {
 			if (op.op === "storage") result = { op: "storage", dimension: null, failed: true };
 			else if (op.op === "stats") result = { op: "stats", total: 0, projectBreakdown: {}, categoryBreakdown: {} };
 			else if (op.op === "get") result = { op: "get", entry: null };
+			else if (op.op === "projects") result = { op: "projects", projects: [] };
+			else if (op.op === "currentProject") result = { op: "currentProject", workspace: op.workspace, status: "unknown", project: null };
 			else result = { op: op.op, project: scope.project, entries: [] };
 			return { degraded: true, reason: failureReason(error), error: error instanceof Error ? error.message : String(error), result };
 		}
