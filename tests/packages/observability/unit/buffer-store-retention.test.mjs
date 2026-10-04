@@ -1,4 +1,4 @@
-// Retention keeps every unshipped row until the byte cap, and only then drops the oldest.
+// Retention never deletes an unsent row; over the byte cap only the oldest already-shipped rows go.
 // Real better-sqlite3 against tmpdir; zero mocks.
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
@@ -60,15 +60,34 @@ describe("buffer-store retention", () => {
 		}
 	});
 
-	it("over the byte cap drops the oldest rows first and reports how many", () => {
+	it("over the byte cap never deletes an unsent row", () => {
 		const { dir, store } = makeStore();
 		try {
 			appendRows(store, 300);
 			const report = store.pruneRetention(64 * 1024, DAY_MS);
+			assert.equal(report.overflowDeleted, 0);
+			assert.equal(store.getAllRows().length, 301);
+			assert.equal(store.countPending(), 301);
+		} finally {
+			store.close();
+			rmSync(dir, { recursive: true, force: true });
+		}
+	});
+
+	it("over the byte cap drops the oldest already-shipped rows first and keeps every unsent one", () => {
+		const { dir, store } = makeStore();
+		try {
+			appendRows(store, 300);
+			const all = store.getAllRows();
+			for (const row of all.slice(0, 200)) {
+				store.markShipped(row.rowid);
+			}
+			const report = store.pruneRetention(64 * 1024, DAY_MS);
 			assert.equal(report.overflowDeleted > 0, true);
+			assert.equal(report.overflowDeleted <= 200, true);
+			assert.equal(store.countPending(), 101);
 			const remaining = store.getAllRows();
 			assert.equal(remaining.length + report.overflowDeleted, 301);
-			assert.equal(remaining[0].event_id !== "id-0", true);
 			assert.equal(remaining.at(-1).event_id, "mw-300");
 		} finally {
 			store.close();

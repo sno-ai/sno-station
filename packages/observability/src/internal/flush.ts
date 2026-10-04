@@ -404,11 +404,7 @@ async function flushPendingWithLease(
 		store.clearElapsedRetryDeadline();
 		return { shipped: 0, terminal: 0, retryable: 0 };
 	}
-	const registrationFailure = await registerBeforeFlush(store, firstRows, options);
-	if (registrationFailure !== null) {
-		pruneLoudly(store);
-		return persistRetryDeadline(store, registrationFailure);
-	}
+	await registerBeforeFlush(options);
 
 	let shipped = 0;
 	let terminal = 0;
@@ -478,7 +474,7 @@ async function flushPendingWithLease(
 function pruneLoudly(store: BufferStore): void {
 	const report = store.pruneRetention();
 	if (report.overflowDeleted > 0) {
-		logger.error("sno observe buffer over capacity; oldest events dropped unshipped", {
+		logger.error("sno observe buffer over capacity; oldest already-sent events removed (unsent events are kept)", {
 			dropped: report.overflowDeleted,
 		}, {
 			event_name: "sno.observe.internal.flush.pruneloudly",
@@ -556,7 +552,7 @@ async function flushRow(
 type ResponseRoute =
 	| { kind: "shipped" }
 	| { kind: "suppressed" }
-	| { kind: "rejected"; reason: string }
+	| { kind: "refused"; reason: string }
 	| { kind: "rechain"; reason: string }
 	| { kind: "wait"; message: string; retryAfterMs?: number; retryScope?: "chain" };
 
@@ -584,29 +580,27 @@ function handlePostResult(
 			return { shipped: 1, terminal: 0, retryable: 0 };
 		case "suppressed":
 			return handleConsentSuppressed(store, row, response, identifyPayloadFor);
-		case "rejected": {
-			// A refused identify would be refused again on every fresh epoch: keep the whole run
-			// as evidence and open nothing. Any other row is evidence alone; the rest travels.
-			const identifyRefused = decodeEnvelope(row.payload).event_type === "agent.identify";
-			const moved = store.carryForward(row, identifyPayloadFor, {
-				quarantine: identifyRefused ? "all" : "head",
-				detail: { status: response.status, reason: route.reason, body: response.body },
-			});
-			logger.error("sno observe event rejected by server; kept as evidence, later rows moved on", {
+		case "refused": {
+			// Never parked, never deleted. The rows behind it travel first and it is sent last;
+			// alone, or an identify (which seeds the chain), it waits and is sent again.
+			const isIdentify = decodeEnvelope(row.payload).event_type === "agent.identify";
+			const moved = isIdentify ? undefined : store.carryForward(row, identifyPayloadFor, { headLast: true });
+			logger.error("sno observe event refused by server; kept and will be sent again", {
 				event_id: row.event_id,
 				event_type: decodeEnvelope(row.payload).event_type,
 				status: response.status,
 				reason: route.reason,
 				body: response.body.slice(0, 512),
-				carried: moved.carried,
-				chain_epoch: moved.chainEpoch,
 			}, {
 				event_name: "sno.observe.internal.flush.handlepostresult",
 				file: "packages/observability/src/internal/flush.ts",
 				function: "handlePostResult",
 				site_id: "sno.observe.internal.flush.handlepostresult.6",
 			});
-			return { shipped: 0, terminal: moved.quarantined, retryable: 0, requery: true };
+			if (moved === undefined || moved.carried === 0) {
+				return retryRow(store, row, response, { kind: "wait", message: `refused (${route.reason})`, retryScope: "chain" });
+			}
+			return { shipped: 0, terminal: 0, retryable: 0, requery: true };
 		}
 		case "rechain": {
 			const agentKey = `${row.machine_id}:${row.agent_id}`;
@@ -708,7 +702,7 @@ function routeResponse(response: EventPostResult, row: PendingRow): ResponseRout
 		case 400:
 		case 403:
 		case 413:
-			return { kind: "rejected", reason: code ?? `http_${response.status}` };
+			return { kind: "refused", reason: code ?? `http_${response.status}` };
 		case 409:
 		case 422:
 			return routeConflict(response, row, code);
@@ -749,7 +743,7 @@ function routeConflict(
 	if (code === undefined || RECHAIN_CODES.has(code)) {
 		return { kind: "rechain", reason: code ?? `http_${response.status}` };
 	}
-	return { kind: "rejected", reason: code };
+	return { kind: "refused", reason: code };
 }
 
 /**

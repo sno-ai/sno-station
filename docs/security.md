@@ -145,7 +145,7 @@ We do not hide these boundaries:
 | Pathway | Carries memory content? | Notes |
 |---|---|---|
 | Sno-operated memory cloud | **No** | No such v1 service exists. |
-| Sno telemetry | **No by default** | Telemetry is disabled by default. Future telemetry must not include memory content. |
+| Sno telemetry | **No memory content** | Telemetry is on by default. Events carry hashes, counts and identifiers, never memory content. |
 | Crash reports | **No by default** | Production crash reporting must not upload memory content. |
 | Update checks | **No** | Version metadata only. |
 | User-configured LLM provider | **Yes, when needed for an answer** | The provider is selected by the user and accessed with the user's own API key. Sno is not the intermediary. |

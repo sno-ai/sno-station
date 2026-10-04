@@ -154,6 +154,7 @@ async function requestDeviceCode(
 			method: "POST",
 			headers: {
 				"Content-Type": "application/json",
+				Authorization: `Bearer ${identity.machine_secret}`,
 			},
 			body: JSON.stringify({
 				user_cuid: identity.user_cuid,

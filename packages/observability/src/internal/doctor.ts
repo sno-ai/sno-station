@@ -76,7 +76,7 @@ function checkIdentity(path: string): DoctorCheck {
 			name: "identity",
 			status: "warn",
 			detail:
-				"identity not bootstrapped - first SDK use or `sno register` will create it automatically",
+				"identity not bootstrapped - first SDK use or `sno account machine register` will create it automatically",
 			path,
 		};
 	}

@@ -784,36 +784,35 @@ describe("flush 3-state machine", () => {
 		}
 	});
 
-	it("a 400 keeps the rejected row as evidence and ships the rest in a fresh epoch", async () => {
+	it("a 400 parks nothing: the row behind the refused row ships first, the refused row ships last", async () => {
 		const t = tempEnv();
 		const store = new BufferStore(t.env.SNO_BUFFER_PATH);
 		const identity = bootstrapIdentity(t.env);
 		seedIdentify(store);
 		appendMemoryWrite(store, 1);
 		appendMemoryWrite(store, 2);
-		const posted = [];
+		let refusals = 1;
+		const accepted = [];
 		const fakeFetch = async (url, init) => {
 			if (String(url).endsWith("/api/v1/identity/register-machine")) {
 				return registerMachineResponse(init);
 			}
 			const envelope = JSON.parse(String(init.body));
-			posted.push(`${envelope.event_id}@${envelope.chain_epoch}`);
-			if (envelope.event_id === "mw-1") {
+			if (envelope.event_id === "mw-1" && refusals-- > 0) {
 				return new Response(JSON.stringify({ error: "future_client_contract" }), { status: 400 });
 			}
+			accepted.push(envelope.event_id);
 			return new Response(JSON.stringify({ receipt_id: "r" }), { status: 202 });
 		};
 		const engine = new FlushEngine(store, () => identity, () => "https://sno.test", () => t.env);
 		try {
 			const result = await engine.flush({ identity, env: t.env, fetch: fakeFetch });
+			assert.equal(result.terminal, 0);
 			assert.equal(result.retryable, 0);
-			assert.equal(result.terminal, 1);
 			assert.equal(store.countPending(), 0);
-			assert.equal(posted.filter((entry) => entry.startsWith("mw-1@")).length, 1);
-			assert.equal(posted.includes("mw-2@1"), true);
-			assert.equal(store.getRetryDelay(), 0);
-			assert.equal(store.countQuarantined(), 1);
-			assert.equal(store.getByEventId("mw-2").chain_epoch, 1);
+			assert.equal(store.countQuarantined(), 0);
+			assert.equal(accepted.indexOf("mw-2") < accepted.indexOf("mw-1"), true);
+			assert.equal(accepted.includes("mw-1"), true);
 		} finally {
 			engine.dispose();
 			store.close();

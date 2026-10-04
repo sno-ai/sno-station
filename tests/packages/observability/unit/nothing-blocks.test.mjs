@@ -36,7 +36,43 @@ function memoryWrite(agentId = "codex") {
 	return { event_type: "memory.write", lane: "memory", agent_id: agentId, payload: validPayloads["memory.write"] };
 }
 
+function unsentCounts(temp) {
+	const db = new DatabaseConstructor(temp.env.SNO_BUFFER_PATH, { readonly: true });
+	try {
+		return {
+			unshipped: db.prepare("SELECT COUNT(*) AS n FROM events WHERE shipped = 0").get().n,
+			parked: db.prepare("SELECT COUNT(*) AS n FROM quarantine").get().n,
+		};
+	} finally {
+		db.close();
+	}
+}
+
 describe("nothing blocks an observe upload", () => {
+	it("a refused machine registration does not stop events from being sent", async () => {
+		const temp = createTempSnoEnv("sno-observe-registration-");
+		const posted = [];
+		const fetch = async (url, init) => {
+			const body = JSON.parse(String(init.body));
+			if (String(url).endsWith("/api/v1/identity/register-machine")) {
+				return json({ error: "claimed_user_requires_auth" }, 409);
+			}
+			posted.push(body);
+			return json({ receipt_id: body.event_id }, 202);
+		};
+		const observe = createSnoObserve({ env: temp.env, cwd: temp.dir, fetch });
+		try {
+			await observe.emit(memoryWrite());
+			await observe.flush({ force: true });
+			const types = posted.map((envelope) => envelope.event_type);
+			assert.equal(types.includes("memory.write"), true);
+			assert.equal(types.includes("agent.identify"), true);
+		} finally {
+			await observe.shutdown();
+			cleanupTempSnoEnv(temp);
+		}
+	});
+
 	it("consent changes ship on the security lane and an llm.call-first epoch still identifies on memory", async () => {
 		const temp = createTempSnoEnv("sno-observe-lanes-");
 		const server = fakeServer();
@@ -57,35 +93,62 @@ describe("nothing blocks an observe upload", () => {
 		}
 	});
 
-	it("a rejected row becomes evidence and every later row ships in a fresh epoch on the same flush", async () => {
+	it("a refused row is sent last and the rows behind it are not held up", async () => {
 		const temp = createTempSnoEnv("sno-observe-reject-");
 		const previousProfile = process.env.SNO_PROFILE_DIR;
 		process.env.SNO_PROFILE_DIR = temp.dir;
 		let badId;
+		let refusals = 1;
 		const server = fakeServer((envelope) =>
-			envelope.event_id === badId ? json({ error: "lane_event_type_mismatch" }, 400) : undefined,
+			envelope.event_id === badId && refusals-- > 0 ? json({ error: "lane_event_type_mismatch" }, 400) : undefined,
 		);
 		const observe = createSnoObserve({ env: temp.env, cwd: temp.dir, fetch: server.fetch });
 		try {
-			await observe.emit(memoryWrite());
+			const first = (await observe.emit(memoryWrite())).eventId;
 			badId = (await observe.emit(memoryWrite())).eventId;
-			const after = [(await observe.emit(memoryWrite())).eventId, (await observe.emit(memoryWrite())).eventId];
+			const behind = (await observe.emit(memoryWrite())).eventId;
 			const result = await observe.flush({ force: true });
+			assert.equal(result.terminal, 0);
 			assert.equal(result.retryable, 0);
-			assert.equal(result.terminal, 1);
-			assert.equal(server.posted.filter((envelope) => envelope.event_id === badId).length, 1);
-			const carried = server.posted.filter((envelope) => after.includes(envelope.event_id));
-			assert.deepEqual(carried.map((envelope) => [envelope.chain_epoch, envelope.seq]), [[1, 1], [1, 2]]);
-			assert.equal(carried.every((envelope) => envelope.hash_chain.prev !== "GENESIS"), true);
-			const db = new DatabaseConstructor(temp.env.SNO_BUFFER_PATH, { readonly: true });
-			try {
-				assert.equal(db.prepare("SELECT COUNT(*) AS n FROM events WHERE shipped = 0").get().n, 0);
-				assert.equal(db.prepare("SELECT reason FROM quarantine").get().reason, "lane_event_type_mismatch");
-			} finally {
-				db.close();
-			}
+			assert.deepEqual(unsentCounts(temp), { unshipped: 0, parked: 0 });
+			const accepted = server.posted.map((envelope) => envelope.event_id);
+			assert.equal(accepted.lastIndexOf(behind) < accepted.lastIndexOf(badId), true);
+			assert.equal(accepted.includes(first), true);
 			const log = readFileSync(join(temp.dir, "observe.log"), "utf8");
 			assert.equal(log.includes("lane_event_type_mismatch"), true);
+		} finally {
+			await observe.shutdown();
+			if (previousProfile === undefined) delete process.env.SNO_PROFILE_DIR;
+			else process.env.SNO_PROFILE_DIR = previousProfile;
+			cleanupTempSnoEnv(temp);
+		}
+	});
+
+	it("an event the server refuses every time never stops the events behind it or after it", async () => {
+		const temp = createTempSnoEnv("sno-observe-reject-forever-");
+		const previousProfile = process.env.SNO_PROFILE_DIR;
+		process.env.SNO_PROFILE_DIR = temp.dir;
+		let badId;
+		const server = fakeServer((envelope) =>
+			envelope.event_id === badId ? json({ error: "event_body_too_large" }, 413) : undefined,
+		);
+		const observe = createSnoObserve({ env: temp.env, cwd: temp.dir, fetch: server.fetch });
+		try {
+			badId = (await observe.emit(memoryWrite())).eventId;
+			const behind = (await observe.emit(memoryWrite())).eventId;
+			await observe.flush({ force: true });
+			const after = (await observe.emit(memoryWrite())).eventId;
+			// Skip the usual few seconds of wait on the refused row's chain; the wait itself is production behaviour.
+			const db = new DatabaseConstructor(temp.env.SNO_BUFFER_PATH);
+			db.prepare("UPDATE chain_retry SET retry_not_before = 0").run();
+			db.close();
+			await observe.flush({ force: true });
+			const accepted = server.posted
+				.filter((envelope) => envelope.event_id !== badId)
+				.map((envelope) => envelope.event_id);
+			assert.equal(accepted.includes(behind), true);
+			assert.equal(accepted.includes(after), true);
+			assert.deepEqual(unsentCounts(temp), { unshipped: 1, parked: 0 });
 		} finally {
 			await observe.shutdown();
 			if (previousProfile === undefined) delete process.env.SNO_PROFILE_DIR;
@@ -199,7 +262,7 @@ describe("nothing blocks an observe upload", () => {
 		}
 	});
 
-	it("an identify the server refuses for good does not breed new identifies", async () => {
+	it("an identify the server refuses stays queued and does not breed new identifies", async () => {
 		const temp = createTempSnoEnv("sno-observe-identify-refused-");
 		const server = fakeServer((envelope) =>
 			envelope.event_type === "agent.identify" ? json({ error: "invalid_envelope" }, 400) : undefined,
@@ -209,12 +272,12 @@ describe("nothing blocks an observe upload", () => {
 			await observe.emit(memoryWrite());
 			await observe.emit(memoryWrite());
 			const result = await observe.flush({ force: true });
-			assert.deepEqual({ shipped: result.shipped, terminal: result.terminal, retryable: result.retryable }, { shipped: 0, terminal: 3, retryable: 0 });
+			assert.deepEqual({ shipped: result.shipped, terminal: result.terminal, retryable: result.retryable > 0 }, { shipped: 0, terminal: 0, retryable: true });
 			assert.equal(server.posted.length, 1);
 			const db = new DatabaseConstructor(temp.env.SNO_BUFFER_PATH, { readonly: true });
 			try {
-				assert.equal(db.prepare("SELECT COUNT(*) AS n FROM events WHERE shipped = 0").get().n, 0);
-				assert.equal(db.prepare("SELECT COUNT(*) AS n FROM quarantine").get().n, 3);
+				assert.equal(db.prepare("SELECT COUNT(*) AS n FROM events WHERE shipped = 0").get().n, 3);
+				assert.equal(db.prepare("SELECT COUNT(*) AS n FROM quarantine").get().n, 0);
 				assert.equal(db.prepare("SELECT MAX(chain_epoch) AS e FROM chain_tail").get().e, 0);
 			} finally {
 				db.close();
@@ -224,7 +287,6 @@ describe("nothing blocks an observe upload", () => {
 			cleanupTempSnoEnv(temp);
 		}
 	});
-
 	it("server consent off on the memory lane: the chain waits for it, nothing is dropped", async () => {
 		const temp = createTempSnoEnv("sno-observe-lane-off-");
 		const server = fakeServer((envelope) =>

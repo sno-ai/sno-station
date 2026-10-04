@@ -71,6 +71,22 @@ describe("device claim", () => {
 		}
 	});
 
+	it("asks for the device code with the machine secret, as the website requires", async () => {
+		const temp = createTempSnoEnv("sno-observe-claim-bearer-");
+		const identity = bootstrapIdentity(temp.env);
+		try {
+			const result = await claimMachine(identity, {
+				env: temp.env,
+				fetch: createClaimFetch({ requireBearer: identity.machine_secret }),
+				pollIntervalMs: 1,
+				timeoutMs: 5000,
+			});
+			assert.equal(result.userAccountId, accountCuid);
+		} finally {
+			cleanupTempSnoEnv(temp);
+		}
+	});
+
 	it("retries a transient token polling network error", async () => {
 		const temp = createTempSnoEnv("sno-observe-claim-network-");
 		const identity = bootstrapIdentity(temp.env);
@@ -215,7 +231,7 @@ describe("device claim", () => {
 	});
 });
 
-function createClaimFetch({ deviceCodeBody, onToken } = {}) {
+function createClaimFetch({ deviceCodeBody, onToken, requireBearer } = {}) {
 	return async (url, init) => {
 		const path = new URL(String(url)).pathname;
 		const body = typeof init?.body === "string" ? JSON.parse(init.body) : {};
@@ -230,6 +246,9 @@ function createClaimFetch({ deviceCodeBody, onToken } = {}) {
 			);
 		}
 		if (path === "/api/v1/device/code") {
+			if (requireBearer !== undefined && new Headers(init?.headers).get("authorization") !== `Bearer ${requireBearer}`) {
+				return jsonResponse({ error: "machine_unknown" }, 401);
+			}
 			return jsonResponse(
 				{
 					device_code: "dev_code",

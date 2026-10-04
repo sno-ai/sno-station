@@ -777,9 +777,10 @@ describe("sno observe Node package", () => {
 		try {
 			await chainRuntime.emitParsed(memoryWriteEvent("h_conflict"));
 			assert.deepEqual(await chainRuntime.flush(), {
-				shipped: 2,
-				terminal: 1,
-				retryable: 0,
+				shipped: 1,
+				terminal: 0,
+				retryable: 1,
+				retryAfterMs: 5_000,
 			});
 			const chainStore = new BufferStore(chainTemp.env.SNO_BUFFER_PATH);
 			try {
@@ -787,12 +788,10 @@ describe("sno observe Node package", () => {
 				const envelopes = rows.map((row) => decodeEnvelope(row.payload));
 				assert.deepEqual(
 					envelopes.map((envelope) => envelope.event_type),
-					["agent.identify", "agent.identify"],
+					["agent.identify", "memory.write"],
 				);
-				assert.deepEqual(rows.map((row) => row.shipped), [1, 1]);
-				assert.deepEqual(envelopes.map((envelope) => envelope.chain_epoch), [0, 1]);
-				assert.equal(envelopes[1].hash_chain.prev, "GENESIS");
-				assert.equal(chainStore.countQuarantined(), 1);
+				assert.deepEqual(rows.map((row) => row.shipped), [1, 0]);
+				assert.equal(chainStore.countQuarantined(), 0);
 			} finally {
 				chainStore.close();
 			}
