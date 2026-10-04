@@ -40,6 +40,9 @@ export type LlmRoutingConfig = {
 	modelCalls?: Settings["modelCalls"];
 };
 
+export const modelCallsConfigSchema: z.ZodType<Settings["modelCalls"] | undefined> = z.record(z.string(), z.record(z.enum(PRODUCT_MODES), z.enum(["off", "host", "sno-gpu"])))
+	.optional() as z.ZodType<Settings["modelCalls"] | undefined>;
+
 export const llmRoutingConfigSchema: z.ZodType<
 	LlmRoutingConfig,
 	unknown
@@ -47,7 +50,7 @@ export const llmRoutingConfigSchema: z.ZodType<
 	.object({
 		mode: z.enum(PRODUCT_MODES),
 		language: z.enum(SUPPORTED_LOCALES).default(DEFAULT_LOCALE),
-		modelCalls: z.record(z.string(), z.record(z.enum(PRODUCT_MODES), z.enum(["off", "host", "sno-gpu"]))).optional() as z.ZodType<Settings["modelCalls"] | undefined>,
+		modelCalls: modelCallsConfigSchema,
 	})
 	.strict();
 
