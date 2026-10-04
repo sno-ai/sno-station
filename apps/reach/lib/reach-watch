@@ -12,7 +12,7 @@ if [[ "$channel" == acp ]]; then
     [[ "$handle" =~ ^acp-([a-zA-Z0-9][a-zA-Z0-9_-]*):(/[^:[:cntrl:]]*):([^:[:space:]]+)$ ]] || exit 5
     agent="${BASH_REMATCH[1]}" cwd="${BASH_REMATCH[2]}" name="${BASH_REMATCH[3]}"
     jq -e --arg name "$name" '.identity == {kind:"acp-session",value:$name}' "$record" >/dev/null || exit 5
-    metadata="$(timeout -k 1 5 acpx --cwd "$cwd" --format json "$agent" sessions show "$name")" || exit 5
+    metadata="$(timeout --foreground -k 1 5 acpx --cwd "$cwd" --format json "$agent" sessions show "$name")" || exit 5
     stream="$(jq -er --arg name "$name" --arg cwd "$cwd" 'select(.name == $name and .cwd == $cwd and .closed == false) | .eventLog.active_path | strings | select(startswith("/"))' <<<"$metadata")" || exit 5
     [[ -f "$stream" && -r "$stream" && ! -L "$stream" ]] || { printf 'reach: watch stream unavailable\n' >&2; exit 5; }
     offset="$(stat -c %s "$stream")"
@@ -31,11 +31,21 @@ if [[ "$channel" == acp ]]; then
     done
 elif [[ "$channel" == tmux ]]; then
     pane="$(jq -er 'select(.identity.kind == "tmux-pane") | .identity.value' "$record")" || exit 5
-    previous="$(timeout 5 tmux capture-pane -p -t "$pane" -S -)" || exit 5
+    previous="$(timeout --foreground 5 tmux capture-pane -p -t "$pane" -S -)" || exit 5
     while :; do
-        screen="$(timeout 5 tmux capture-pane -p -t "$pane" -S -)" || exit 5
+        screen="$(timeout --foreground 5 tmux capture-pane -p -t "$pane" -S -)" || exit 5
         if [[ "$screen" != "$previous" ]]; then
-            if [[ "$screen" == "$previous"* ]]; then printf '%s\n' "${screen#"$previous"}"; else printf '%s\n' "$screen"; fi
+            if [[ "$screen" == "$previous"* ]]; then
+                printf '%s\n' "${screen#"$previous"}"
+            else
+                diff_status=0
+                changes="$(diff -U0 <(printf '%s\n' "$previous") <(printf '%s\n' "$screen"))" || diff_status=$?
+                if ((diff_status > 1)); then
+                    printf 'reach: watch could not compare terminal output (diff exit %s)\n' "$diff_status" >&2
+                    exit 5
+                fi
+                printf '%s\n' "$changes" | sed -n '1,2d;s/^+//p'
+            fi
             previous="$screen"
             last_new=$SECONDS
         fi
