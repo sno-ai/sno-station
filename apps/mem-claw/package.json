@@ -19,11 +19,6 @@
     },
     "./openclaw.plugin.json": "./openclaw.plugin.json"
   },
-  "bin": {
-    "mem-claw": "./bin/mem-claw-install.js",
-    "mem-claw-install": "./bin/mem-claw-install.js",
-    "sno-memdump": "./bin/sno-memdump.js"
-  },
   "files": [
     "bin",
     "dist",

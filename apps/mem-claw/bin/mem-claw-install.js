@@ -13,7 +13,7 @@ for (let i = 0; i < args.length; i++) {
 			process.exit(2);
 		}
 	} else if (args[i] === "--help" || args[i] === "-h") {
-		console.log("Usage: mem-claw-install [--profile <name>]\nInstall the OpenClaw plugin. Complete shared memory setup first.");
+		console.log("This script installs the OpenClaw plugin and is run by sno.\nRun sno setup --harness openclaw.");
 		process.exit(0);
 	} else {
 		console.error(`Unknown option: ${args[i]}`);
