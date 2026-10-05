@@ -698,7 +698,7 @@ class SnoMemoryProvider(MemoryProvider):
                 ) else "ok"
                 process = subprocess.Popen(
                     [
-                        "sno-observe", "append", "skill.run", "--agent=hermes",
+                        "sno", "observe", "append", "skill.run", "--agent=hermes",
                         "--harness=hermes", f"--skill_name={name}", "--skill_version=local",
                         f"--category={categories.get(name, 'other')}",
                         f"--duration_ms={duration_ms}", f"--outcome={outcome}",
