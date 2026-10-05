@@ -36,7 +36,7 @@ describe("Codex hook trust", () => {
 describe("sno-mem-codex install", () => {
 	it("reports one edited hook as stale and prints exactly four items", async () => {
 		const codexHome = await temporaryHome();
-		await installCodex({ codexHome, programPath: "/opt/sno/bin/sno-mem-codex", writeOutput: () => undefined });
+		await installCodex({ codexHome, programPath: "/opt/sno/bin/sno", writeOutput: () => undefined });
 		const hooksPath = join(codexHome, "hooks.json");
 		const hooks = JSON.parse(await readFile(hooksPath, "utf8"));
 		hooks.hooks.SessionStart[0].hooks[0].command = "/opt/sno/edited/sno-mem-codex session-start";
@@ -60,7 +60,7 @@ describe("sno-mem-codex install", () => {
 
 		await installCodex({
 			codexHome,
-			programPath: "/opt/sno/bin/sno-mem-codex",
+			programPath: "/opt/sno/bin/sno",
 			dryRun: true,
 			writeOutput: line => output.push(line),
 		});
@@ -81,7 +81,7 @@ describe("sno-mem-codex install", () => {
 
 		await expect(installCodex({
 			codexHome,
-			programPath: "/opt/sno/bin/sno-mem-codex",
+			programPath: "/opt/sno/bin/sno",
 			writeOutput: line => output.push(line),
 		})).rejects.toThrow();
 		expect(await readFile(join(codexHome, "hooks.json"), "utf8")).toBe("{not-json");
@@ -97,7 +97,7 @@ describe("sno-mem-codex install", () => {
 
 		await expect(installCodex({
 			codexHome,
-			programPath: "/opt/sno/bin/sno-mem-codex",
+			programPath: "/opt/sno/bin/sno",
 			writeOutput: line => output.push(line),
 		})).rejects.toThrow();
 
@@ -123,17 +123,17 @@ describe("sno-mem-codex install", () => {
 			] },
 		}));
 
-		await installCodex({ codexHome, programPath: "/opt/sno/bin/sno-mem-codex", writeOutput: () => undefined });
+		await installCodex({ codexHome, programPath: "/opt/sno/bin/sno", writeOutput: () => undefined });
 
 		const installed = JSON.parse(await readFile(hooksPath, "utf8"));
 		expect(installed.hooks.SessionStart).toEqual([
 			{ matcher: "startup", enabled: true, hooks: [
 				{ type: "command", command: "/opt/foreign/before", timeout: 7 },
-				{ type: "command", command: "'/opt/sno/bin/sno-mem-codex' session-start", timeout: 15 },
+				{ type: "command", command: "'/opt/sno/bin/sno' memory hook session-start --harness codex", timeout: 15 },
 				{ type: "command", command: "/opt/foreign/after", timeout: 8 },
 			] },
 			{ matcher: "duplicate", hooks: [
-				{ type: "command", command: "'/opt/sno/bin/sno-mem-codex' session-start", timeout: 15 },
+				{ type: "command", command: "'/opt/sno/bin/sno' memory hook session-start --harness codex", timeout: 15 },
 				{ type: "command", command: "/opt/foreign/duplicate", timeout: 6 },
 			] },
 		]);
@@ -152,7 +152,7 @@ describe("sno-mem-codex install", () => {
 			] }] },
 		}));
 
-		await installCodex({ codexHome, programPath: "/opt/sno/bin/sno-mem-codex", writeOutput: () => undefined });
+		await installCodex({ codexHome, programPath: "/opt/sno/bin/sno", writeOutput: () => undefined });
 
 		const installed = JSON.parse(await readFile(hooksPath, "utf8"));
 		expect(installed.hooks.SessionStart[0].hooks[2]?.command).toBe("/opt/foreign/hook");
@@ -165,7 +165,7 @@ describe("sno-mem-codex install", () => {
 
 		await expect.soft(installCodex({
 			codexHome,
-			programPath: "/opt/sno/bin/sno-mem-codex",
+			programPath: "/opt/sno/bin/sno",
 			writeOutput: () => undefined,
 		})).rejects.toThrow();
 		expect(await readFile(hooksPath)).toEqual(Buffer.from('{\r\n  "hooks": {"SessionStart": ['));
@@ -186,7 +186,7 @@ describe("sno-mem-codex install", () => {
 
 		const options = {
 			codexHome,
-			programPath: "/opt/sno/bin/sno-mem-codex",
+			programPath: "/opt/sno/bin/sno",
 			writeOutput: () => undefined,
 		};
 		await installCodex(options);
@@ -212,24 +212,33 @@ describe("sno-mem-codex install", () => {
 			["PostToolUse", "post-tool-use"],
 		] as const) {
 			const owned = parsed.hooks[event]?.filter(group =>
-				group.hooks.some(hook => hook.command === `'/opt/sno/bin/sno-mem-codex' ${subcommand}`));
+				group.hooks.some(hook => hook.command === `'/opt/sno/bin/sno' memory hook ${subcommand} --harness codex`));
 			expect(owned).toHaveLength(1);
 		}
 		const rules = await readFile(join(codexHome, "rules/sno-mem-codex.rules"), "utf8");
 		expect(rules.trim().split("\n")).toEqual([
-			'prefix_rule(pattern=["/opt/sno/bin/sno-mem-codex", "recall"], decision="allow")',
-			'prefix_rule(pattern=["/opt/sno/bin/sno-mem-codex", "get"], decision="allow")',
-			'prefix_rule(pattern=["/opt/sno/bin/sno-mem-codex", "remember"], decision="allow")',
-			'prefix_rule(pattern=["/opt/sno/bin/sno-mem-codex", "correct"], decision="allow")',
+			'prefix_rule(pattern=["/opt/sno/bin/sno", "memory", "recall"], decision="allow")',
+			'prefix_rule(pattern=["/opt/sno/bin/sno", "memory", "get"], decision="allow")',
+			'prefix_rule(pattern=["/opt/sno/bin/sno", "memory", "remember"], decision="allow")',
+			'prefix_rule(pattern=["/opt/sno/bin/sno", "memory", "correct"], decision="allow")',
 		]);
 		expect(rules).not.toMatch(/forget|clear/);
 	});
 
+	it("rewrites its hooks when sno is at another path, never hooking an event twice", async () => {
+		const codexHome = await temporaryHome();
+		await installCodex({ codexHome, programPath: "/opt/sno/bin/sno", writeOutput: () => undefined });
+		await installCodex({ codexHome, programPath: "/other/place/sno", writeOutput: () => undefined });
+		const installed = JSON.parse(await readFile(join(codexHome, "hooks.json"), "utf8"));
+		expect(installed.hooks.SessionStart).toHaveLength(1);
+		expect(installed.hooks.SessionStart[0].hooks[0].command).toBe("'/other/place/sno' memory hook session-start --harness codex");
+	});
+
 	it("quotes a program path with spaces before hashing and running each hook", async () => {
 		const codexHome = await temporaryHome();
-		const programPath = join(codexHome, "Application Support", "sno-mem-codex");
+		const programPath = join(codexHome, "Application Support", "sno");
 		await mkdir(dirname(programPath), { recursive: true });
-		await writeFile(programPath, "#!/bin/sh\nprintf '%s' \"$1\"\n");
+		await writeFile(programPath, "#!/bin/sh\nprintf '%s' \"$3\"\n");
 		await chmod(programPath, 0o700);
 
 		await installCodex({ codexHome, programPath, writeOutput: () => undefined });
@@ -243,7 +252,7 @@ describe("sno-mem-codex install", () => {
 			["PostToolUse", "post-tool-use"],
 		] as const) {
 			const command = installed.hooks[event][0].hooks[0].command as string;
-			expect(command).toBe(`'${programPath}' ${subcommand}`);
+			expect(command).toBe(`'${programPath}' memory hook ${subcommand} --harness codex`);
 			const executed = spawnSync("zsh", ["-c", command], { encoding: "utf8" });
 			expect(executed.status, executed.stderr).toBe(0);
 			expect(executed.stdout).toBe(subcommand);
@@ -263,10 +272,10 @@ describe("sno-mem-codex install", () => {
 		const foreignTrust = `[hooks.state.${JSON.stringify(foreignKey)}]\nenabled = false\ntrusted_hash = "foreign-hash"`;
 		await writeFile(join(codexHome, "config.toml"), `[hooks.state.${JSON.stringify(ownKey)}]\nenabled = true\ntrusted_hash = "old"\n\n${foreignTrust}\n`);
 
-		await installCodex({ codexHome, programPath: "/opt/sno/bin/sno-mem-codex", writeOutput: () => undefined });
+		await installCodex({ codexHome, programPath: "/opt/sno/bin/sno", writeOutput: () => undefined });
 
 		const installed = JSON.parse(await readFile(hooksPath, "utf8"));
-		expect(installed.hooks.SessionStart[0].hooks[0].command).toBe("'/opt/sno/bin/sno-mem-codex' session-start");
+		expect(installed.hooks.SessionStart[0].hooks[0].command).toBe("'/opt/sno/bin/sno' memory hook session-start --harness codex");
 		expect(installed.hooks.SessionStart[1]).toEqual(foreign);
 		const config = await readFile(join(codexHome, "config.toml"), "utf8");
 		expect(config).toContain(foreignTrust);
