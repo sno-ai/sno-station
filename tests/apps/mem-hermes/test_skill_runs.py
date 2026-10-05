@@ -1,7 +1,7 @@
 """Observe v2 (QCG-9, Hermes half): a finished skill_view call through the real post_tool_call
-hook runs `sno-observe append skill.run --agent=hermes ...` from the session's cwd (or, when the
+hook runs `sno observe append skill.run --agent=hermes ...` from the session's cwd (or, when the
 session has none, from the Hermes process's directory) and writes no ledger line; other tools run
-nothing. A `sno-observe` stand-in first on PATH records its argv and working directory. The
+nothing. A `sno` stand-in first on PATH records its argv and working directory. The
 Hermes loader, plugin copy, and sidecar stand-in come from the baseline suite's setUp."""
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ class SkillRunAppendTest(unittest.TestCase):
         bin_dir = self.root / "observe-bin"
         bin_dir.mkdir()
         self.capture = self.root / "observe-capture.log"
-        stand_in = bin_dir / "sno-observe"
+        stand_in = bin_dir / "sno"
         stand_in.write_text('#!/bin/sh\nprintf \'%s\\t%s\\n\' "$PWD" "$*" >> "$SNO_OBSERVE_CAPTURE"\n')
         stand_in.chmod(stand_in.stat().st_mode | stat.S_IXUSR)
         self.previous = {key: os.environ.get(key) for key in ("PATH", "SNO_OBSERVE_CAPTURE")}
@@ -70,7 +70,7 @@ class SkillRunAppendTest(unittest.TestCase):
             calls,
             [(
                 str(workdir.resolve()),
-                "append skill.run --agent=hermes --harness=hermes --skill_name=rem-reflect "
+                "observe append skill.run --agent=hermes --harness=hermes --skill_name=rem-reflect "
                 "--skill_version=local --category=R --duration_ms=1234 --outcome=ok",
             )],
         )
