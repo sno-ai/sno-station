@@ -1,7 +1,7 @@
 export const MESSAGES = {
-	usage: "Usage: sno-mem-claude <session-start|user-prompt-submit|stop|install|doctor|import|recall|get|remember|correct>",
+	usage: "Run through sno: sno memory <recall|get|remember|correct|import|doctor> --harness claude, or sno memory hook <event> --harness claude",
 	dryRunPrefix: "would write",
-	installComplete: "sno-mem-claude install complete",
+	installComplete: "Sno memory for Claude Code installed",
 	settingsUnparsable: "settings.json parse error; settings preserved",
 	importCaptureDisabled: "Automatic capture is off in settings.json (capture.ambient); imported notes will be skipped.",
 	doctorUnavailable: "doctor: unavailable",
