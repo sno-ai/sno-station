@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { writeSettingsFixture } from "../../../packages/memory/fixtures/settings-file-fixture.ts";
+import { globalPrefixWith, realSno } from "../../support/real-sno.mjs";
 
 const repo = fileURLToPath(new URL("../../../../", import.meta.url));
 const installedPrefix = process.env.SNO_INSTALLED_PREFIX;
@@ -46,13 +47,12 @@ export async function createClaudeNative(label) {
 		capture: { ambient: false }, recall: { auto: true, explicitLimit: 20, prompt: { minChars: 0, minScore: 0 } },
 	});
 	const project = join(profile, "repo");
-	const binDir = join(profile, "bin");
-	const binary = join(binDir, "sno-mem-claude");
-	mkdirSync(binDir, { recursive: true });
-	symlinkSync(entry, binary);
+	// The real sno finds the package under `npm root -g` and runs its entry script by path.
+	const sno = realSno();
+	const prefix = globalPrefixWith({ "@snoai/mem-claude": dirname(dirname(entry)) });
 	const config = join(project, ".claude");
 	mkdirSync(config, { recursive: true });
-	const env = { ...process.env, SNO_PROFILE_DIR: profile, PATH: `${binDir}:${process.env.PATH}` };
+	const env = { ...process.env, SNO_PROFILE_DIR: profile, npm_config_prefix: prefix };
 	delete env.CLAUDECODE;
 	delete env.CLAUDE_CONFIG_DIR;
 	delete env.CLAUDE_CODE_SIMPLE;
@@ -72,22 +72,24 @@ export async function createClaudeNative(label) {
 		assert.equal(result.degraded, false, result.error ?? result.reason);
 		return result.result.entries;
 	};
-	const installed = await processRun(process.execPath, [binary, "install", "--config-dir", config], { cwd: project, env });
+	// What `sno setup` does: run the package installer by path, with the path of the sno that ran it.
+	const installed = await processRun(process.execPath, [entry, "install", "--config-dir", config], { cwd: project, env: { ...env, SNO_EXECUTABLE: sno } });
 	assert.equal(installed.code, 0, installed.stderr);
 	const observations = join(profile, "claude-hooks.jsonl");
 	const wrapper = join(profile, "observe-hook.mjs");
 	writeFileSync(wrapper, `import {readFileSync,appendFileSync} from 'node:fs';
 import {spawnSync} from 'node:child_process';
 const raw=readFileSync(0,'utf8'); const input=JSON.parse(raw);
-const output=spawnSync(process.execPath,[${JSON.stringify(binary)},process.argv[2]],{input:raw,encoding:'utf8',timeout:30000});
+const output=spawnSync(${JSON.stringify(sno)},['memory','hook',process.argv[2],'--harness','claude'],{input:raw,encoding:'utf8',timeout:30000});
 appendFileSync(${JSON.stringify(observations)},JSON.stringify({command:process.argv[2],input,code:output.status,stdout:output.stdout,stderr:output.stderr})+'\\n');
 process.stdout.write(output.stdout||''); process.stderr.write(output.stderr||''); process.exit(output.status??1);
 `, { mode: 0o600 });
 	const settingsPath = join(config, "settings.json");
 	const settings = JSON.parse(readFileSync(settingsPath, "utf8"));
 	for (const groups of Object.values(settings.hooks)) for (const group of groups) for (const hook of group.hooks) {
-		const command = hook.command.trim().split(" ").at(-1);
-		hook.command = `${shellQuote(process.execPath)} ${shellQuote(wrapper)} ${command}`;
+		const event = /memory hook (\S+) --harness claude$/.exec(hook.command.trim())?.[1];
+		assert.ok(event, `installed hook is not a sno memory hook: ${hook.command}`);
+		hook.command = `${shellQuote(process.execPath)} ${shellQuote(wrapper)} ${event}`;
 	}
 	settings.permissions.allow.push("Bash(printf *)", "Agent");
 	settings.autoMemoryEnabled = false;
@@ -102,7 +104,8 @@ process.stdout.write(output.stdout||''); process.stderr.write(output.stderr||'')
 		try { return readFileSync(observations, "utf8").trim().split("\n").filter(Boolean).map(line => JSON.parse(line)); }
 		catch (error) { if (error.code === "ENOENT") return []; throw error; }
 	};
-	const cli = async (...args) => processRun(process.execPath, [binary, ...args], { cwd: project, env, timeoutMs: 60_000 });
+	const cli = async (action, ...args) => processRun(sno, ["memory", action, "--harness", "claude", ...args], { cwd: project, env, timeoutMs: 60_000 });
+	const memory = action => `${shellQuote(sno)} memory ${action} --harness claude`;
 	const model = async (prompt, tools = "Bash", session = randomUUID(), resume = false) => {
 		console.log(JSON.stringify({ event: "claude-native-start", label, session, project, profile }));
 		const run = await processRun(claude, ["-p", resume ? "--resume" : "--session-id", session,
@@ -120,9 +123,11 @@ process.stdout.write(output.stdout||''); process.stderr.write(output.stderr||'')
 		return run;
 	};
 	const outputs = (run, action) => {
+		const [verb, ...rest] = action.split(" ");
+		const head = `${sno} memory ${verb} --harness claude`;
 		const uses = run.events.filter(event => event.type === "assistant").flatMap(event => event.message?.content ?? []);
 		const matches = uses.filter(item => item.type === "tool_use" && item.name === "Bash"
-			&& String(item.input?.command).replace(/'([^']*)'|"([^"]*)"/g, (_, single, double) => single ?? double).includes(`${binary} ${action}`));
+			&& String(item.input?.command).replace(/'([^']*)'|"([^"]*)"/g, (_, single, double) => single ?? double).includes(head) && rest.every(part => String(item.input?.command).includes(part)));
 		assert.ok(matches.length, `No actual Bash dispatch for ${action}`);
 		return matches.map(use => {
 			const result = run.events.filter(event => event.type === "user").flatMap(event => event.message?.content ?? [])
@@ -144,7 +149,7 @@ process.stdout.write(output.stdout||''); process.stderr.write(output.stderr||'')
 		else process.env.SNO_PROFILE_DIR = previousProfile;
 		console.log(JSON.stringify({ label, passed: proof.passed, failure: proof.failure, checks: proof.checks, evidence }));
 	};
-	return { rows, binary, project, env, proof, cli, model, output, outputs, hooks, finish };
+	return { rows, sno, memory, project, env, proof, cli, model, output, outputs, hooks, finish };
 }
 
 async function rememberJourney() {
@@ -153,12 +158,12 @@ async function rememberJourney() {
 	try {
 		const nonce = randomUUID();
 		const text = `The native Claude orchid release label is ${nonce}.`;
-		const remembered = await test.model(`Run exactly one Bash command: ${shellQuote(test.binary)} remember ${shellQuote(text)}. Return its output. Do not replace this with capture or another command.`);
+		const remembered = await test.model(`Run exactly one Bash command: ${test.memory("remember")} ${shellQuote(text)}. Return its output. Do not replace this with capture or another command.`);
 		const id = test.output(remembered, "remember").text;
 		assert.match(id, /^[0-9a-f-]{36}$/i);
 		assert.equal((await test.rows()).find(row => row.id === id)?.text, text);
 		test.proof.checks.modelRemember = true;
-		const recalled = await test.model(`Run Bash ${shellQuote(test.binary)} recall ${shellQuote("native Claude orchid release label")}, then use Agent to ask one child to run Bash "printf claude-native-child" once and report its result. Return the actual recall text and the child result.`, "Bash,Agent");
+		const recalled = await test.model(`Run Bash ${test.memory("recall")} ${shellQuote("native Claude orchid release label")}, then use Agent to ask one child to run Bash "printf claude-native-child" once and report its result. Return the actual recall text and the child result.`, "Bash,Agent");
 		assert.equal(test.output(recalled, "recall").text, `${id}\t${text} [id:${id}]\n${text}`);
 		test.proof.checks.canonicalRecall = true;
 		const hooks = test.hooks().filter(item => item.input.session_id === recalled.session);
@@ -182,7 +187,7 @@ async function rememberJourney() {
 		test.proof.observedChildHookEvents = [...new Set(children.map(item => item.command))];
 		test.proof.checks.childSkipped = true;
 		const beforeResume = test.hooks().length;
-		const resumed = await test.model(`Run exactly one Bash command: ${shellQuote(test.binary)} get ${id}. Return its actual full output.`, "Bash", recalled.session, true);
+		const resumed = await test.model(`Run exactly one Bash command: ${test.memory("get")} ${id}. Return its actual full output.`, "Bash", recalled.session, true);
 		assert.equal(test.output(resumed, `get ${id}`).text, `${id}\n${text}`);
 		const resumedHooks = test.hooks().slice(beforeResume).filter(item => item.input.session_id === recalled.session
 			&& ["session-start", "user-prompt-submit"].includes(item.command));

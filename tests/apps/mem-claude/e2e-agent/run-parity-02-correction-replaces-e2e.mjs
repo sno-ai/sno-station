@@ -8,7 +8,7 @@ try {
 	const nonce = randomUUID();
 	const oldText = `The native Claude cedar release owner for ${nonce} is Dana.`;
 	const newText = `The native Claude cedar release owner for ${nonce} is Jordan.`;
-	const run = await test.model(`Use Bash only and run each memory command separately, waiting for each result. Use ${shellQuote(test.binary)} exactly.
+	const run = await test.model(`Use Bash only and run each memory command separately, waiting for each result. Use ${shellQuote(test.sno)} exactly, in the form ${shellQuote(test.sno)} memory <action> --harness claude <arguments>.
 1. remember ${shellQuote(oldText)}.
 2. get the id returned by remember.
 3. correct that original id with ${shellQuote(newText)}.
@@ -54,7 +54,7 @@ Return the actual tool outputs. Do not use in-place update, pending metadata, or
 		assert.equal(remaining.find(row => row.id === newId)?.text, newText);
 	}
 	test.proof.checks.sameAndDifferentRetry = true;
-	const fresh = await test.model(`Run Bash ${shellQuote(test.binary)} get ${newId} once and return the full entry. The old ${oldId} is retired. Do not remember or correct anything.`);
+	const fresh = await test.model(`Run Bash ${test.memory("get")} ${newId} once and return the full entry. The old ${oldId} is retired. Do not remember or correct anything.`);
 	assert.equal(test.output(fresh, `get ${newId}`).text, `${newId}\n${newText}`);
 	const contexts = test.hooks().filter(item => item.input.session_id === fresh.session && !item.input.agent_id
 		&& ["session-start", "user-prompt-submit"].includes(item.command));
