@@ -1,3 +1,5 @@
+import { basename } from "node:path";
+
 export { appendObserveLedgerRows, type ObserveLedgerRow }
 	from "../src/engine/telemetry/observe-ledger";
 export { SKILL_CATEGORIES, skillVersionFor } from "./skill-categories";
@@ -29,3 +31,25 @@ export const CODING_SKIN_HOOKS = {
 export type CodingSkinHookName = keyof typeof CODING_SKIN_HOOKS;
 
 export const CODING_SKIN_MODEL_COMMANDS = ["recall", "get", "remember", "correct"] as const;
+
+export type CodingSkinHarness = "claude" | "codex";
+
+export function shellQuote(value: string): string {
+	return `'${value.replaceAll("'", "'\\''")}'`;
+}
+
+/** The command an agent hook runs: the `sno` binary that ran setup, then `memory hook <event> --harness <name>`. */
+export function codingSkinHookCommand(snoPath: string, subcommand: string, harness: CodingSkinHarness): string {
+	return `${shellQuote(snoPath)} memory hook ${subcommand} --harness ${harness}`;
+}
+
+/** True for a hook command of that shape, whatever the path to `sno` is. */
+export function isCodingSkinHookCommand(command: string, subcommand: string, harness: CodingSkinHarness): boolean {
+	const suffix = ` memory hook ${subcommand} --harness ${harness}`;
+	const trimmed = command.trim();
+	if (!trimmed.endsWith(suffix)) return false;
+	const encoded = trimmed.slice(0, -suffix.length);
+	const program = encoded.startsWith("'") && encoded.endsWith("'")
+		? encoded.slice(1, -1).replaceAll("'\\''", "'") : encoded;
+	return basename(program) === "sno";
+}
