@@ -22,10 +22,11 @@ describe("OpenClaw installer", () => {
 		encoding: "utf8",
 	});
 
-	it("exposes the installer entry points", () => {
+	it("is run by sno by path and declares no command of its own", () => {
 		const pkg = JSON.parse(readFileSync(join(pluginDir, "package.json"), "utf8"));
-		expect(pkg.bin["mem-claw"]).toBe("./bin/mem-claw-install.js");
-		expect(pkg.bin["mem-claw-install"]).toBe("./bin/mem-claw-install.js");
+		expect(pkg.bin).toBeUndefined();
+		expect(existsSync(bin)).toBe(true);
+		expect(existsSync(join(pluginDir, "bin", "sno-memdump.js"))).toBe(true);
 	});
 	it("installs the plugin without writing memory settings to OpenClaw", () => {
 		const result = run([]);
