@@ -1,7 +1,7 @@
 export const MESSAGES = {
-	usage: "Usage: sno-mem-codex <session-start|user-prompt-submit|stop|install|doctor|import|recall|get|remember|correct>",
+	usage: "Run through sno: sno memory <recall|get|remember|correct|import|doctor> --harness codex, or sno memory hook <event> --harness codex",
 	dryRunPrefix: "would write",
-	installComplete: "sno-mem-codex install complete",
+	installComplete: "Sno memory for Codex installed",
 	invalidHooksReplaced: "invalid hooks.json replaced during install",
 	installImportDeferred: "Codex memory import deferred; installation is active",
 	importCaptureDisabled: "Automatic capture is off in settings.json (capture.ambient); imported notes will be skipped.",
