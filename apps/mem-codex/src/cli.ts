@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { homedir } from "node:os";
-import { isAbsolute, join, resolve } from "node:path";
+import { isAbsolute, join } from "node:path";
 import { doctor } from "./doctor.js";
 import { correctCommand, getCommand, recallCommand, rememberCommand } from "./explicit.js";
 import { postToolUse, preToolUse, sessionEnd, sessionStart, stop, userPromptSubmit } from "./hooks.js";
@@ -55,7 +55,8 @@ async function main(): Promise<number> {
 	if (command === "install") {
 		const codexHome = option(args, "--codex-home");
 		if (!codexHome || !isAbsolute(codexHome)) throw new Error("--codex-home must be absolute");
-		const programPath = resolve(process.argv[1] ?? "sno-mem-codex");
+		const programPath = process.env["SNO_EXECUTABLE"];
+		if (!programPath || !isAbsolute(programPath)) throw new Error("SNO_EXECUTABLE must be the absolute path of sno; run sno setup");
 		await installCodex({
 			codexHome,
 			programPath,
