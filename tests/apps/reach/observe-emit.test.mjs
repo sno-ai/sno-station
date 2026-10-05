@@ -1,9 +1,9 @@
 // QCG-13 (REQ-15, REQ-16, REQ-17): Reach appends usage-statistics rows through
-// `sno-observe append`, started in the background. The public `sno-reach` executable runs against
-// a private tmux server and a temporary SNO_REACH_ROOT. A stand-in `sno-observe` first on PATH
+// `sno observe append`, started in the background. The public `sno-reach` executable runs against
+// a private tmux server and a temporary SNO_REACH_ROOT. A stand-in `sno` first on PATH
 // validates nothing: it sleeps SNO_STANDIN_SLEEP seconds, appends its argv as one line to
 // SNO_CAPTURE and exits with SNO_STANDIN_EXIT, so each case reads the exact command line Reach
-// ran. The real `sno-observe append` contract is proven by its own installed E2E test.
+// ran. The real `sno observe append` contract is proven by its own installed E2E test.
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import {
@@ -34,10 +34,10 @@ before(() => {
 	mkdirSync(home, { recursive: true });
 	mkdirSync(bin, { recursive: true });
 	writeFileSync(
-		join(bin, "sno-observe"),
+		join(bin, "sno"),
 		'#!/usr/bin/env bash\nsleep "${SNO_STANDIN_SLEEP:-0}"\nprintf \'%s\\n\' "$*" >> "$SNO_CAPTURE"\nexit "$SNO_STANDIN_EXIT"\n',
 	);
-	chmodSync(join(bin, "sno-observe"), 0o755);
+	chmodSync(join(bin, "sno"), 0o755);
 	// A fake `codex`: its process name stays `codex` and it idles reading the pane's input.
 	writeFileSync(join(bin, "codex"), "#!/bin/bash\nwhile read -r _; do :; done\n");
 	chmodSync(join(bin, "codex"), 0o755);
@@ -79,7 +79,7 @@ function reach(args, { claudeCode = false, snoExit = 0, snoSleep = 0, capture, a
 	return { code: result.status, wallMs, out: `${result.stdout}${result.stderr}` };
 }
 
-// The background `sno-observe` writes after Reach returns; wait until `count` lines landed.
+// The background `sno observe` writes after Reach returns; wait until `count` lines landed.
 function waitFor(capture, count, ms = 10_000) {
 	const until = Date.now() + ms;
 	while (Date.now() < until) {
@@ -89,13 +89,13 @@ function waitFor(capture, count, ms = 10_000) {
 	}
 }
 
-// The `sno-observe` lines captured in one file, as { line, event, fields }.
+// The `sno observe` lines captured in one file, as { line, event, fields }.
 function captured(capture, count = 0) {
 	if (count > 0) waitFor(capture, count);
 	if (!existsSync(capture)) return [];
 	return readFileSync(capture, "utf8").split("\n").filter(Boolean).map(line => {
-		const [sub, event, ...args] = line.split(" ");
-		assert.equal(sub, "append", `unexpected sno-observe call: ${line}`);
+		const [group, sub, event, ...args] = line.split(" ");
+		assert.equal(`${group} ${sub}`, "observe append", `unexpected sno call: ${line}`);
 		const fields = Object.fromEntries(args.map(arg => {
 			const match = /^--([a-z_]+)=(.*)$/.exec(arg);
 			assert.ok(match, `argument is not --field=value: ${arg} in ${line}`);
@@ -169,7 +169,7 @@ test("under CLAUDECODE a seat registers as claude-code; a codex caller's row nam
 	messageRow(callCapture, call, "ok", "codex", "claude-code", 0);
 });
 
-test("a sno-observe that exits 2 leaves exit codes unchanged and only logs a line", t => {
+test("a sno observe that exits 2 leaves exit codes unchanged and only logs a line", t => {
 	t.after(() => { failed ||= !t.passed; });
 	const capture = join(work, "failing.log");
 	const failing = { snoExit: 2, capture };
@@ -184,8 +184,8 @@ test("a sno-observe that exits 2 leaves exit codes unchanged and only logs a lin
 		["reach.register", "reach.message", "reach.message"]);
 	spawnSync("sleep", ["0.5"]);
 	const log = readFileSync(join(root, "reach.log"), "utf8");
-	assert.equal(log.split("\n").filter(line => line.includes("sno-observe")).length, 3,
-		`reach.log has one sno-observe line per failed append:\n${log}`);
+	assert.equal(log.split("\n").filter(line => line.includes("sno observe")).length, 3,
+		`reach.log has one sno observe line per failed append:\n${log}`);
 	assert.equal(captured(capture).some(row => row.event === "error"), false,
 		"Reach sends no error event of its own");
 });
@@ -242,7 +242,7 @@ test("an unacknowledged ring records unacked and an acknowledged ring records ok
 	assert.equal(okRow.fields.outcome, "ok", okRow.line);
 });
 
-test("a slow sno-observe never delays a Reach call", t => {
+test("a slow sno observe never delays a Reach call", t => {
 	t.after(() => { failed ||= !t.passed; });
 	const setup = join(work, "slow-setup.log");
 	const { address, register } = seat("slowseat", { capture: setup });
@@ -252,5 +252,5 @@ test("a slow sno-observe never delays a Reach call", t => {
 	assert.equal(sent.code, 0, sent.out);
 	assert.ok(sent.wallMs < 5000, `send returned in ${sent.wallMs} ms`);
 	assert.ok(captured(capture, 1).some(row => row.event === "reach.message"),
-		"the background sno-observe still ran");
+		"the background sno observe still ran");
 });
