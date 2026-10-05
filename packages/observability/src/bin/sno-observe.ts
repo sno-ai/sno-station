@@ -32,7 +32,7 @@ function fieldValue(schema: unknown, value: string): string | number | boolean {
 }
 
 function parseAppend(args: string[], flags: Record<string, string>): ParsedEvent {
-	if (args[0] !== "append") throw new Error("expected: sno-observe append <event_type> --agent=<harness> --field=value");
+	if (args[0] !== "append") throw new Error("expected: sno observe append <event_type> --agent=<harness> --field=value");
 	const eventType = eventTypeSchema.parse(args[1]);
 	const schema = payloadSchemas[eventType];
 	const { agent, project, project_id: projectId, ...fields } = flags;
