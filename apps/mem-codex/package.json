@@ -10,9 +10,6 @@
   },
   "type": "module",
   "description": "Thin Codex CLI client for Sno Station Mem.",
-  "bin": {
-    "sno-mem-codex": "./dist/cli.js"
-  },
   "files": [
     "dist",
     "skills",

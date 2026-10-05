@@ -30,19 +30,19 @@ session.
 
    ```bash
    npm install -g @snoai/mem-codex@1.0.1
-   sno-mem-codex install --codex-home ~/.codex
+   sno setup --harness codex
    ```
 
 3. Open a new Codex session inside a git repository, then try it:
 
    ```bash
-   sno-mem-codex doctor
-   sno-mem-codex remember "Prefer tabs in this repository"
-   sno-mem-codex recall "indentation"
+   sno memory doctor --harness codex
+   sno memory remember --harness codex "Prefer tabs in this repository"
+   sno memory recall --harness codex "indentation"
    ```
 
    `doctor` should report `sidecar: healthy`. To fix a wrong entry:
-   `sno-mem-codex correct <id> "correct text"`. Child agents do not read or write memory.
+   `sno memory correct --harness codex <id> "correct text"`. Child agents do not read or write memory.
 
 Walkthrough: [Codex onboarding](https://github.com/sno-ai/sno-station/blob/main/docs/mem-codex/onboarding.md).
 Daily use and troubleshooting: [usage guide](https://github.com/sno-ai/sno-station/blob/main/docs/mem-codex/usage-guide.md).
