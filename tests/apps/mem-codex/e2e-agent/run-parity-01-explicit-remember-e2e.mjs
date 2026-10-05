@@ -7,6 +7,7 @@ import { randomUUID } from "node:crypto";
 import { homedir } from "node:os";
 import { createServer, request } from "node:http";
 import { pathToFileURL } from "node:url";
+import { globalPrefixWith, realSno } from "../../support/real-sno.mjs";
 
 // Session plumbing copied from run-stp7-e2e.mjs; no deployment or planted product edits.
 export function remote(script, timeout = 300_000) {
@@ -21,8 +22,11 @@ export const quote = value => `'${String(value).replaceAll("'", "'\\''")}'`;
 export const profile = process.env.SNO_TEST_PROFILE;
 export const root = process.env.SNO_TEST_ROOT;
 export const unit = "sno-station-mem-mem-codex-e2e.service";
+// The real sno on the test host (absolute path); the plugin package is installed globally there.
+const remoteSno = process.env.SNO_TEST_SNO;
 
 export async function runCase(journey) {
+	if (!remoteSno) throw new Error("SNO_TEST_SNO must be the absolute path of the real sno on the test host");
 	const runId = randomUUID().replaceAll("-", "");
 	const cwd = `${root}/repos/parity-${runId}`;
 	const home = `${root}/tmp/parity-${runId}`;
@@ -82,7 +86,7 @@ base_url = "http://localhost:8070/codex/v1"
 wire_api = "responses"
 requires_openai_auth = false
 CONFIG
-SNO_PROFILE_DIR=${profile} ${root}/bin/sno-mem-codex install --codex-home ${quote(home)} >/dev/null
+SNO_PROFILE_DIR=${profile} SNO_EXECUTABLE=${quote(remoteSno)} node "$(npm root -g)/@snoai/mem-codex/dist/cli.js" install --codex-home ${quote(home)} >/dev/null
 systemctl --user is-active ${unit}`);
 		await journey({ runId, cwd, home, turn, rows, waitRows, db });
 		finished = true;
@@ -129,6 +133,8 @@ export async function runNativeCase(journey) {
 	const { installCodex } = await import(installedCodex
 		? pathToFileURL(join(installedCodex, "dist/install.js")).href
 		: "../../../../apps/mem-codex/src/install.ts");
+	const sno = realSno();
+	const globalPrefix = globalPrefixWith({ "@snoai/mem-codex": installedCodex || join(repository, "apps/mem-codex") });
 	const sourceHome = process.env.CODEX_HOME || join(homedir(), ".codex");
 	const nativeProfile = mkdtempSync("/tmp/mem-update-codex-native-profile-");
 	process.env.SNO_PROFILE_DIR = nativeProfile;
@@ -182,7 +188,7 @@ export async function runNativeCase(journey) {
 	await new Promise(resolveReady => recorder.listen(0, "127.0.0.1", resolveReady));
 	const modelEndpoint = `http://127.0.0.1:${recorder.address().port}/codex/v1`;
 	const home = join(fixture.profile, "codex-home"), cwd = join(fixture.profile, "workspace");
-	const hookLog = join(fixture.profile, "native-hooks.jsonl"), wrapper = join(home, "sno-mem-codex");
+	const hookLog = join(fixture.profile, "native-hooks.jsonl"), wrapper = join(home, "sno");
 	mkdirSync(home); mkdirSync(cwd);
 	writeFileSync(join(home, "config.toml"), [
 		'model = "gpt-6-sol"', 'model_reasoning_effort = "low"', 'model_provider = "ccproxy"',
@@ -196,9 +202,8 @@ export async function runNativeCase(journey) {
 	chmodSync(wrapper, 0o700);
 	await installCodex({ codexHome: home, programPath: wrapper, writeOutput() {} });
 	const env = { ...process.env, CODEX_HOME: home, SNO_MEM_UPDATE_CAPTURE_FILE: hookLog,
-		...(!installedCodex && { SNO_MEM_UPDATE_TSX: join(repository, "node_modules/tsx/dist/loader.mjs") }),
-		SNO_MEM_UPDATE_CLI: installedCodex ? join(installedCodex, "dist/cli.js") : join(repository, "apps/mem-codex/src/cli.ts") };
-	const cli = installedCodex ? join(installedCodex, "dist/cli.js") : join(repository, "apps/mem-codex/dist/cli.js");
+		SNO_BINARY: sno, npm_config_prefix: globalPrefix };
+	const memoryCommand = verb => `${quote(sno)} memory ${verb} --harness codex`;
 	const scope = { principal: client.principal, project: cwd, session: "manual", host: { workspace: cwd, sessionId: "manual" } };
 	await client.init(scope, { skinId: "codex" });
 	async function readRow(id) {
@@ -223,7 +228,7 @@ export async function runNativeCase(journey) {
 		});
 	}
 	async function action(name, ...args) {
-		const run = await execute(process.execPath, [cli, name, ...args]);
+		const run = await execute(sno, ["memory", name, "--harness", "codex", ...args]);
 		actions.push({ action: name, args, ...run });
 		console.log(JSON.stringify({ action: name, code: run.code, text: run.output.trim(), error: run.error }));
 		return { ok: run.code === 0, text: run.output.trim() };
@@ -257,11 +262,11 @@ export async function runNativeCase(journey) {
 		settings.capture.ambient = enabled;
 		writeFileSync(path, JSON.stringify(settings));
 	}
-	console.log(JSON.stringify({ nativeSetup: { home, cwd, profile: fixture.profile, cli,
+	console.log(JSON.stringify({ nativeSetup: { home, cwd, profile: fixture.profile, sno,
 		model: "gpt-6-sol", endpoint: modelEndpoint, upstreamEndpoint: "http://localhost:8070/codex/v1", sandbox: "danger-full-access", approval: "never" } }));
 	let passed = false;
 	try {
-		await journey({ runId, fixture, home, cwd, cli, turn, action, hooks, spools, setCapture, readRow, rowCount });
+		await journey({ runId, fixture, home, cwd, memoryCommand, turn, action, hooks, spools, setCapture, readRow, rowCount });
 		passed = true;
 	} finally {
 		const evidence = { passed, runId, home, cwd, profile: fixture.profile, modelEndpoint, upstreamEndpoint: "http://localhost:8070/codex/v1", wire, runs, actions, hooks: hooks(), spools: spools() };
@@ -281,20 +286,21 @@ export async function runNativeCase(journey) {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-	await runNativeCase(async ({ runId, cli, turn, action, hooks, spools, setCapture, readRow }) => {
-		const text = `The native Codex release convention for ${runId} is Indigo.`, command = `${quote(process.execPath)} ${quote(cli)}`;
-		const stored = await turn(`Run exactly this memory command: ${command} remember ${quote(text)}. Return only the resulting memory id. Do not write or edit files.`);
+	await runNativeCase(async ({ runId, memoryCommand, turn, action, hooks, spools, setCapture, readRow }) => {
+		const text = `The native Codex release convention for ${runId} is Indigo.`;
+		const stored = await turn(`Run exactly this memory command: ${memoryCommand("remember")} ${quote(text)}. Return only the resulting memory id. Do not write or edit files.`);
 		assert.match(stored.response, /^[0-9a-f-]{36}$/);
 		assert.equal((await readRow(stored.response))?.text, text);
 		assert.deepEqual(await action("get", stored.response), { ok: true, text: `${stored.response}\n${text}` });
 		setCapture(true);
 		const child = await turn(`This is an installed hook observation test. Our native primary project capture marker is Parent-${runId}. Use spawn_agent exactly once to create a child. Give it this task: Run the shell command printf installed-child-probe, then answer CHILD_COMPLETE. Do not spawn another agent. Wait for CHILD_COMPLETE. Then use send_input once to send that same child: Run printf installed-child-followup, then answer CHILD_FOLLOWUP. Wait for the follow-up result and reply CHILD_FOLLOWUP. You must create the child and send the follow-up; do not perform its tasks yourself. Do not write, edit, or delete files and do not use explicit memory actions.`);
 		const { verifyInstalledChildHooks } = await import("../e2e/verify-installed-child-hooks.mjs");
-		const observed = verifyInstalledChildHooks({ output: child.output, hooks: hooks(), spools: spools(), runExitCode: child.code });
+		const seenSpools = () => [...spools(), ...hooks().flatMap(hook => hook.spoolAfter ?? [])];
+		const observed = verifyInstalledChildHooks({ output: child.output, hooks: hooks(), spools: seenSpools(), runExitCode: child.code });
 		const primaryStop = hooks().find(hook => hook.command === "stop" && hook.input.session_id === child.session && !hook.input.agent_id);
 		assert.ok(primaryStop, "the real main session must run Stop");
 		assert.equal(primaryStop.code, 0, primaryStop.error);
-		const captured = spools().filter(row => row.sessionId === child.session);
+		const captured = seenSpools().filter(row => row.sessionId === child.session);
 		assert.ok(captured.length > 0, "positive control: the real main Stop must append a capture spool");
 		assert.ok(captured.some(row => row.user.includes(`Parent-${runId}`)), "the spool must retain the actual main prompt");
 		const blocks = hooks().filter(hook => hook.input.session_id === child.session && ["session-start", "user-prompt-submit"].includes(hook.command))

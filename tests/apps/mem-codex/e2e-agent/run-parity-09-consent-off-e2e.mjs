@@ -9,7 +9,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
 	await runCase(async ({ turn, waitRows }) => {
 		const consentOffNonce = randomUUID();
 		// Match setObserveConsent: an external consent response is advisory.
-		// Read the profile identity and the observe address (settings.json, as sno-observe does)
+		// Read the profile identity and the observe address (settings.json, as `sno observe` does)
 		// remotely so the machine secret stays on its host.
 		const consent = JSON.parse(remote(`node --input-type=module <<'JS'
 import { readFileSync } from "node:fs";

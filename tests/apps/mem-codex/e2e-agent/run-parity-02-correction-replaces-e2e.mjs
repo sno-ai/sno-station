@@ -2,16 +2,15 @@ import assert from "node:assert/strict";
 import { runNativeCase, quote } from "./run-parity-01-explicit-remember-e2e.mjs";
 
 // Real Codex tools perform correction; the fixture only reads the encrypted destination.
-await runNativeCase(async ({ runId, cli, turn, action, hooks, rowCount, readRow }) => {
+await runNativeCase(async ({ runId, memoryCommand, turn, action, hooks, rowCount, readRow }) => {
 	const oldText = `The native Codex release owner for ${runId} is Dana.`;
 	const newText = `The native Codex release owner for ${runId} is Jordan.`;
 	const changedText = `The native Codex release owner for ${runId} is Avery.`;
-	const command = `${quote(process.execPath)} ${quote(cli)}`;
-	const remembered = await turn(`Run exactly: ${command} remember ${quote(oldText)}. Reply only with the stored memory id. Do not write or edit files.`);
+	const remembered = await turn(`Run exactly: ${memoryCommand("remember")} ${quote(oldText)}. Reply only with the stored memory id. Do not write or edit files.`);
 	assert.match(remembered.response, /^[0-9a-f-]{36}$/);
 	const oldId = remembered.response;
 	assert.equal((await readRow(oldId))?.text, oldText);
-	const corrected = await turn(`Run exactly: ${command} correct ${quote(oldId)} ${quote(newText)}. Reply only with the new memory id. Do not write or edit files.`, remembered.session);
+	const corrected = await turn(`Run exactly: ${memoryCommand("correct")} ${quote(oldId)} ${quote(newText)}. Reply only with the new memory id. Do not write or edit files.`, remembered.session);
 	assert.match(corrected.response, /^[0-9a-f-]{36}$/);
 	const newId = corrected.response;
 	assert.notEqual(newId, oldId);
