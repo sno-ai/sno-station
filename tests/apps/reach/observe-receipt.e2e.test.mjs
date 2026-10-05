@@ -1,15 +1,16 @@
 // QCG-17 (REQ-1, REQ-24): a `sno reach call` whose `--expect` names a handoff token and matches
 // ends as a `reach.message` envelope with that receipt in a real buffer.db. The real `sno-reach`
-// runs against a private tmux server; `sno-observe` is the SDK packed and installed with
-// `npm install -g --prefix`, first on PATH; the server is a closed loopback port, so events stay
+// runs against a private tmux server and records through the real `sno observe append` (SNO_BINARY),
+// which runs the SDK packed and installed with `npm install -g --prefix`; the server is a closed loopback port, so events stay
 // in buffer.db. Seat B is a plain shell pane: the call types a printf, the pane prints the line.
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync } from "node:fs";
 import { hostname, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { after, before, test } from "node:test";
 import DatabaseConstructor from "better-sqlite3";
+import { realSno } from "../support/real-sno.mjs";
 
 const repoRoot = resolve(import.meta.dirname, "../../..");
 const REACH = join(repoRoot, "apps/reach/bin/sno-reach");
@@ -19,6 +20,7 @@ const home = join(work, "home");
 const root = join(work, "state");
 const profile = join(work, "profile");
 let globalBin;
+let globalPrefix;
 let tmuxEnv = "";
 
 function run(cmd, args, options = {}) {
@@ -41,8 +43,11 @@ before(() => {
 		}).trim().split("\n").at(-1)));
 	const prefix = join(work, "global");
 	run("npm", ["install", "-g", "--prefix", prefix, "--no-audit", "--no-fund", ...tarballs]);
-	globalBin = join(prefix, "bin");
-	assert.equal(existsSync(join(globalBin, "sno-observe")), true);
+	globalPrefix = prefix;
+	globalBin = join(work, "sno-bin");
+	mkdirSync(globalBin);
+	symlinkSync(realSno(), join(globalBin, "sno"));
+	assert.equal(existsSync(join(prefix, "lib", "node_modules", "@snoai", "observability", "dist", "bin", "sno-observe.js")), true);
 	tmux("-f", "/dev/null", "new-session", "-d", "-s", "proof", "-x", "160", "-y", "30", "bash --norc");
 	tmuxEnv = tmux("display-message", "-p", "#{socket_path},#{pid},0");
 });
@@ -59,12 +64,13 @@ function reach(args) {
 		PATH: `${globalBin}:${process.env.PATH}`, HOME: home, XDG_CONFIG_HOME: join(home, ".config"),
 		XDG_STATE_HOME: join(home, ".local/state"), SNO_REACH_ROOT: root, TMUX: tmuxEnv,
 		SNO_PROFILE_DIR: profile, SNO_OBSERVE_ENABLED: "true", SNO_OBSERVE_BASE_URL: "http://127.0.0.1:9",
+		npm_config_prefix: globalPrefix,
 	});
 	const result = spawnSync(REACH, args, { env, encoding: "utf8", timeout: 60_000 });
 	return { code: result.status, out: `${result.stdout}${result.stderr}` };
 }
 
-// reach.message envelopes in buffer.db, waiting for the background sno-observe to land `count`.
+// reach.message envelopes in buffer.db, waiting for the background sno observe to land `count`.
 function messages(count) {
 	const path = join(profile, "buffer.db");
 	const until = Date.now() + 20_000;
