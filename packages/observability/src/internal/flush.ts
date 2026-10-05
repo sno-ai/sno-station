@@ -685,7 +685,7 @@ function handleConsentSuppressed(
 		quarantine: "head",
 		detail: { status: response.status, reason: "consent_suppressed", body: response.body },
 	});
-	logger.error("sno observe server consent is off for this lane; event kept locally, not sent", {
+	logger.error("sno observe server consent is off for this lane; event not sent and not kept (only its id and the server answer are recorded)", {
 		event_id: row.event_id,
 		event_type: envelope.event_type,
 		lane: envelope.lane,
