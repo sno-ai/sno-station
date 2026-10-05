@@ -10,9 +10,6 @@
   },
   "type": "module",
   "description": "Thin Claude CLI client for Sno Station Mem.",
-  "bin": {
-    "sno-mem-claude": "./dist/cli.js"
-  },
   "files": [
     "dist",
     "skills",
