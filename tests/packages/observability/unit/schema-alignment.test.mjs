@@ -45,7 +45,7 @@ describe("schema alignment", () => {
 			"squad",
 		);
 		assert.equal(
-			parseEventInput({ event_type: "rsi.lesson", lane: "rsi", agent_id: "codex", payload: { count: 1 } })
+			parseEventInput({ event_type: "rsi.lesson", lane: "rsi", agent_id: "codex", payload: { count: 1, level: "user" } })
 				.lane,
 			"rsi",
 		);

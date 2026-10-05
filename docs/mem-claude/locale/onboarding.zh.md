@@ -14,7 +14,7 @@
 
 ```bash
 npm install -g @snoai/mem-claude@1.0.1
-sno-mem-claude install --config-dir ~/.claude
+sno setup --harness claude
 ```
 
 共用安装步骤写入 `<配置根目录>/settings.json`，插件安装命令配置 Claude Code。配置根目录是
@@ -95,8 +95,7 @@ Mode selection 不承诺最终 retrieval 或 reranker 行为。
 
 ## 第三步：完成设置并验证
 
-单独维护插件配置时，`sno-mem-claude install` 带 `--dry-run` 时对每个计划写入的文件打印一行 `would write`；真正写完后打印
-`sno-mem-claude install complete`。记忆设置无法读取时，保留原文件和备份以便恢复密钥；只有新配置才照共用安装说明重新设置。
+`sno setup --harness claude` 安装 hook 组、permission 规则和 skill，每一步打印一行结果。记忆设置无法读取时，保留原文件和备份以便恢复密钥；只有新配置才照共用安装说明重新设置。
 
 记忆服务按需启动。安装后第一个 hook 或 memory 命令会把它拉起来并等它健康。
 
@@ -106,7 +105,7 @@ subagent 和 git repository 之外的会话既不注入也不 capture。开了 `
 在一个 git repository 里开一个新的 Claude Code 会话，然后运行：
 
 ```bash
-sno-mem-claude doctor
+sno memory doctor --harness claude
 ```
 
 输出四行：
@@ -135,13 +134,13 @@ start 时已经导入。
 在 repository 根目录显式存一条：
 
 ```bash
-sno-mem-claude remember "Prefer concise replies and tabs for indentation in this repository."
+sno memory remember --harness claude "Prefer concise replies and tabs for indentation in this repository."
 ```
 
 然后验证：
 
 ```bash
-sno-mem-claude recall "indentation"
+sno memory recall --harness claude "indentation"
 ```
 
 在 Claude Code 会话里完成的每一轮对话会在 `Stop` hook 触发后自动 capture；显式命令用于你想立刻存下
@@ -151,17 +150,17 @@ sno-mem-claude recall "indentation"
 
 ## 非交互式安装
 
-单独维护插件配置时，`sno-mem-claude install` 不提问，可以写进脚本。`--dry-run` 打印每个计划写入，什么都不改：
+`sno setup --harness claude` 不提问，可以写进脚本。`--json` 输出一个 JSON 值，代替逐行结果：
 
 ```bash
-sno-mem-claude install --config-dir /absolute/path/to/claude-config --dry-run
+sno setup --harness claude --json
 ```
 
 它不猜 credential、不打印 secret，也不暴露私有 endpoint。
 
 ## 已经安装
 
-单独重跑 `sno-mem-claude install` 更新插件配置是幂等的：原位更新自己的 hook 组，别人的 hook 组留在原来的位置，只保留
+单独重跑 `sno setup --harness claude` 更新插件配置是幂等的：原位更新自己的 hook 组，别人的 hook 组留在原来的位置，只保留
 自己的一条 permission 规则，重写 skill，其他一概不动。
 
 要改 memory mode，手动修改 `settings.json`，并保留原记忆库和密钥。

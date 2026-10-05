@@ -14,7 +14,7 @@ Complete the [shared memory setup](../memory-setup.md), then install the Claude 
 
 ```bash
 npm install -g @snoai/mem-claude@1.0.1
-sno-mem-claude install --config-dir ~/.claude
+sno setup --harness claude
 ```
 
 The shared setup writes `<profile root>/settings.json`; the install command configures Claude Code.
@@ -101,8 +101,7 @@ The mode choice does not finalize retrieval or reranker behavior.
 
 ## Step 3: complete setup and verify
 
-The `sno-mem-claude install` integration refresh command prints one `would write` line per planned file with `--dry-run`, and
-`sno-mem-claude install complete` when it has written them. If the memory settings cannot be read, keep the existing file and its backup for key recovery; follow the shared setup only for a new profile.
+`sno setup --harness claude` installs the hook groups, the permission rule and the skill and prints one row per step. If the memory settings cannot be read, keep the existing file and its backup for key recovery; follow the shared setup only for a new profile.
 
 The memory service starts on demand. The first hook or memory command after install
 starts it and waits for it to be healthy.
@@ -114,7 +113,7 @@ turn the sandbox off or expect a failure line.
 Open a new Claude Code session inside a git repository, then run:
 
 ```bash
-sno-mem-claude doctor
+sno memory doctor --harness claude
 ```
 
 The output has four lines:
@@ -143,13 +142,13 @@ Start with information that will help every day:
 Store it explicitly from the repository root:
 
 ```bash
-sno-mem-claude remember "Prefer concise replies and tabs for indentation in this repository."
+sno memory remember --harness claude "Prefer concise replies and tabs for indentation in this repository."
 ```
 
 Then verify:
 
 ```bash
-sno-mem-claude recall "indentation"
+sno memory recall --harness claude "indentation"
 ```
 
 Turns you complete inside a Claude Code session are captured on their own after the session's `Stop`
@@ -159,18 +158,17 @@ Do not use temporary debug state, test output, or private infrastructure details
 
 ## Non-interactive installs
 
-The `sno-mem-claude install` integration refresh command never prompts, so it is safe in scripts. `--dry-run` prints every planned
-write and changes nothing:
+`sno setup --harness claude` never prompts, so it is safe in scripts. `--json` prints one JSON value instead of rows:
 
 ```bash
-sno-mem-claude install --config-dir /absolute/path/to/claude-config --dry-run
+sno setup --harness claude --json
 ```
 
 It never guesses a credential, prints a secret, or exposes a private endpoint.
 
 ## Already installed
 
-Running `sno-mem-claude install` again to refresh the integration is idempotent. It updates its own hook groups in place, keeps
+Running `sno setup --harness claude` again to refresh the integration is idempotent. It updates its own hook groups in place, keeps
 foreign hook groups at their original position, keeps exactly one permission rule of its own,
 rewrites its skill, and touches nothing else.
 

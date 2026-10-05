@@ -1,6 +1,6 @@
 /** @file memdump.ts
  * @purpose Read encrypted sno-station-mem memory rows as JSON Lines without changing the source store.
- * @boundary External sno-memdump command; it uses the storage runtime's encrypted readonly open.
+ * @boundary External `sno memory dump` command; it uses the storage runtime's encrypted readonly open.
  */
 
 import { fileURLToPath } from "node:url";

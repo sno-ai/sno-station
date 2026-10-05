@@ -38,18 +38,19 @@ whatever language you use with your agent, and this README ships in nine.
 
 ## Install
 
-*Last updated 2026-10-01.* **Shared memory installs today.** It gives Claude Code, Codex, OpenClaw and Hermes Agent one encrypted memory on your machine, with no account and no API key. Run the [shared memory setup](docs/memory-setup.md) once (a few minutes), then add your agent:
+*Last updated 2026-10-04.* **Shared memory installs today.** It gives Claude Code, Codex, OpenClaw and Hermes Agent one encrypted memory on your machine, with no account and no API key. Install the `sno` command once, then run `sno setup` for each agent:
 
 ```bash
+# Install the sno command once
+sh -c 'sno_installer_body=$(curl -fsSL https://sno.ai/install) && printf "%s\n" "$sno_installer_body" | sh'
 # Codex CLI
-npm install -g @snoai/mem-codex@1.0.1 && sno-mem-codex install --codex-home ~/.codex
+sno setup --harness codex
 # Claude Code
-npm install -g @snoai/mem-claude@1.0.1 && sno-mem-claude install --config-dir ~/.claude
+sno setup --harness claude
 # OpenClaw
-openclaw plugins install @snoai/mem-claw@1.0.1
+sno setup --harness openclaw
 # Hermes Agent
-hermes plugins install sno-ai/sno-station/apps/mem-hermes/sno-mem-hermes --enable
-hermes config set memory.provider sno-mem-hermes
+sno setup --harness hermes
 ```
 
 Walkthroughs: [Codex](docs/mem-codex/onboarding.md) · [Claude Code](docs/mem-claude/onboarding.md) · [OpenClaw](docs/mem-claw/onboarding.md) · [Hermes](docs/mem-hermes/onboarding.md)

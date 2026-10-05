@@ -44,15 +44,16 @@ verwenden, und dieses README erscheint in neun Sprachen.
 *Zuletzt aktualisiert am 2026-10-01.* **Das gemeinsame Gedächtnis lässt sich heute installieren.** Es gibt Claude Code, Codex, OpenClaw und Hermes Agent ein verschlüsseltes Gedächtnis auf Ihrem Rechner, ohne Konto und ohne API-Schlüssel. Führen Sie die [Einrichtung des gemeinsamen Gedächtnisses](../memory-setup.md) einmal aus (ein paar Minuten) und fügen Sie dann Ihren Agenten hinzu:
 
 ```bash
+# Install the sno command once
+sh -c 'sno_installer_body=$(curl -fsSL https://sno.ai/install) && printf "%s\n" "$sno_installer_body" | sh'
 # Codex CLI
-npm install -g @snoai/mem-codex@1.0.1 && sno-mem-codex install --codex-home ~/.codex
+sno setup --harness codex
 # Claude Code
-npm install -g @snoai/mem-claude@1.0.1 && sno-mem-claude install --config-dir ~/.claude
+sno setup --harness claude
 # OpenClaw
-openclaw plugins install @snoai/mem-claw@1.0.1
+sno setup --harness openclaw
 # Hermes Agent
-hermes plugins install sno-ai/sno-station/apps/mem-hermes/sno-mem-hermes --enable
-hermes config set memory.provider sno-mem-hermes
+sno setup --harness hermes
 ```
 
 Anleitungen: [Codex](../mem-codex/onboarding.md) · [Claude Code](../mem-claude/onboarding.md) · [OpenClaw](../mem-claw/onboarding.md) · [Hermes](../mem-hermes/onboarding.md)

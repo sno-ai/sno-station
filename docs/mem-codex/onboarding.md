@@ -14,7 +14,7 @@ Complete the [shared memory setup](../memory-setup.md), then install the Codex i
 
 ```bash
 npm install -g @snoai/mem-codex@1.0.1
-sno-mem-codex install --codex-home ~/.codex
+sno setup --harness codex
 ```
 
 The shared setup writes `<profile root>/settings.json`; the install command configures Codex.
@@ -100,8 +100,7 @@ The mode choice does not finalize retrieval or reranker behavior.
 
 ## Step 3: complete setup and verify
 
-The `sno-mem-codex install` integration refresh command prints one `would write` line per planned file with `--dry-run`, and
-`sno-mem-codex install complete` when it has written them. It then queues your existing Codex
+`sno setup --harness codex` installs the hooks, trust entries, rules file and skill and prints one row per step. It then queues your existing Codex
 memory notes for import; the capture worker feeds them to the store in the background. If the
 notes cannot be queued, it prints that the import is deferred and the installation stays active.
 
@@ -111,7 +110,7 @@ starts it and waits for it to be healthy.
 Open a new Codex session inside a git repository, then run:
 
 ```bash
-sno-mem-codex doctor
+sno memory doctor --harness codex
 ```
 
 The output has four lines:
@@ -139,13 +138,13 @@ Start with information that will help every day:
 Store it explicitly from the repository root:
 
 ```bash
-sno-mem-codex remember "Prefer concise replies and tabs for indentation in this repository."
+sno memory remember --harness codex "Prefer concise replies and tabs for indentation in this repository."
 ```
 
 Then verify:
 
 ```bash
-sno-mem-codex recall "indentation"
+sno memory recall --harness codex "indentation"
 ```
 
 Turns you complete inside a Codex session are captured on their own after the session's `Stop`
@@ -155,18 +154,17 @@ Do not use temporary debug state, test output, or private infrastructure details
 
 ## Non-interactive installs
 
-The `sno-mem-codex install` integration refresh command never prompts, so it is safe in scripts. `--dry-run` prints every planned
-write and changes nothing:
+`sno setup --harness codex` never prompts, so it is safe in scripts. `--json` prints one JSON value instead of rows:
 
 ```bash
-sno-mem-codex install --codex-home /absolute/path/to/codex-home --dry-run
+sno setup --harness codex --json
 ```
 
 It never guesses a credential, prints a secret, or exposes a private endpoint.
 
 ## Already installed
 
-Running `sno-mem-codex install` again to refresh the integration is idempotent. It updates its own hook entries in place, keeps
+Running `sno setup --harness codex` again to refresh the integration is idempotent. It updates its own hook entries in place, keeps
 foreign hook entries at their original position, rewrites its trust entries, rules file, and
 skill, and touches nothing else.
 

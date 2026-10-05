@@ -17,7 +17,7 @@ Complete the [shared memory setup](../memory-setup.md), then run:
 
 ```bash
 npm install -g @snoai/mem-claude@1.0.1
-sno-mem-claude install --config-dir ~/.claude
+sno setup --harness claude
 ```
 
 `SNO_PROFILE_DIR` selects the profile root (default `~/.sno`). The shared setup
@@ -27,19 +27,19 @@ Keep a private backup of that file for store recovery.
 Open a new Claude Code session inside a git repository, then check the installation:
 
 ```bash
-sno-mem-claude doctor
+sno memory doctor --harness claude
 ```
 
 Create a test memory from the repository root:
 
 ```bash
-sno-mem-claude remember "Prefer tabs for indentation in this repository."
+sno memory remember --harness claude "Prefer tabs for indentation in this repository."
 ```
 
 Verify it:
 
 ```bash
-sno-mem-claude recall "indentation"
+sno memory recall --harness claude "indentation"
 ```
 
 ## The three modes
@@ -167,10 +167,10 @@ The skill teaches Claude these four commands. Run them from inside a git reposit
 
 | Command | What it does |
 | --- | --- |
-| `sno-mem-claude recall <query>` | Search repository and global memory (up to 5 results, full text with ids) |
-| `sno-mem-claude get <id>` | Print one full entry and, when it was corrected, the id that supersedes it |
-| `sno-mem-claude remember <text>` | Store a repository memory; prints the new id |
-| `sno-mem-claude correct <id> <text>` | Store a corrected entry and mark the old one superseded; prints the new id |
+| `sno memory recall --harness claude <query>` | Search repository and global memory (up to 5 results, full text with ids) |
+| `sno memory get --harness claude <id>` | Print one full entry and, when it was corrected, the id that supersedes it |
+| `sno memory remember --harness claude <text>` | Store a repository memory; prints the new id |
+| `sno memory correct --harness claude <id> <text>` | Store a corrected entry and mark the old one superseded; prints the new id |
 
 There is no deletion command in this client. With `sandbox.enabled: true`, the commands cannot
 reach the local sidecar and print a failure line.
@@ -179,9 +179,9 @@ reach the local sidecar and print a failure line.
 
 | Command | What it does |
 | --- | --- |
-| `sno-mem-claude doctor [--config-dir <dir>]` | Print sidecar health, hook state per event, permission rule state, and import receipts |
-| `sno-mem-claude import --repo <absolute-root>` | Queue a repository's Claude Code memory notes for import into that repository's memory |
-| `sno-mem-claude install --config-dir <dir> [--dry-run]` | Install or refresh the hook groups, permission rule, and skill |
+| `sno memory doctor --harness claude [--config-dir <dir>]` | Print sidecar health, hook state per event, permission rule state, and import receipts |
+| `sno memory import --harness claude --repo <absolute-root>` | Queue a repository's Claude Code memory notes for import into that repository's memory |
+| `sno setup --harness claude` | Install or refresh the hook groups, permission rule, and skill |
 
 Import reads the `.md` files in Claude Code's memory directory for the project, under
 `projects/` in the Claude configuration directory. A file is imported once per content hash; a
@@ -190,11 +190,11 @@ transcripts are never imported.
 
 ### Read a memory store offline
 
-`sno-memdump` ships with the OpenClaw plugin package and reads the same store format. Running it
+`sno memory dump` runs the dump tool shipped with the OpenClaw plugin package and reads the same store format. Running it
 through `npx` fetches that package into the npx cache and installs nothing into OpenClaw:
 
 ```bash
-npx --package @snoai/mem-claw sno-memdump --db ~/.sno/sno-station-mem/$USER/memory.sqlite [--scope <scope>] [--id <id>] [--grep <text>] [--limit <n>] [--metadata]
+sno memory dump --db ~/.sno/sno-station-mem/$USER/memory.sqlite [--scope <scope>] [--id <id>] [--grep <text>] [--limit <n>] [--metadata]
 ```
 
 ## Files and environment
@@ -230,7 +230,7 @@ To reinstall:
 
 ```bash
 npm install -g @snoai/mem-claude
-sno-mem-claude install --config-dir ~/.claude
+sno setup --harness claude
 ```
 
 The memory library is the encrypted file at `store.path`. Normal reinstall preserves it.

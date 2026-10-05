@@ -162,11 +162,11 @@ configuration.
 
 ### Read a memory store offline
 
-The package ships `sno-memdump`. It prints memory rows as JSON Lines without changing the
+`sno memory dump` runs the dump tool this package ships. It prints memory rows as JSON Lines without changing the
 encrypted store:
 
 ```bash
-npx --package @snoai/mem-claw sno-memdump --db ~/.openclaw/mem-claw/mem-claw.sqlite [--scope <scope>] [--id <id>] [--grep <text>] [--limit <n>] [--metadata]
+sno memory dump --db ~/.openclaw/mem-claw/mem-claw.sqlite [--scope <scope>] [--id <id>] [--grep <text>] [--limit <n>] [--metadata]
 ```
 
 ## Capture and reinstall
