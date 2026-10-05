@@ -30,19 +30,19 @@ start of every session.
 
    ```bash
    npm install -g @snoai/mem-claude@1.0.1
-   sno-mem-claude install --config-dir ~/.claude
+   sno setup --harness claude
    ```
 
 3. Open a new Claude Code session inside a git repository, then try it:
 
    ```bash
-   sno-mem-claude doctor
-   sno-mem-claude remember "Prefer tabs in this repository"
-   sno-mem-claude recall "indentation"
+   sno memory doctor --harness claude
+   sno memory remember --harness claude "Prefer tabs in this repository"
+   sno memory recall --harness claude "indentation"
    ```
 
    `doctor` should report `sidecar: healthy`. To fix a wrong entry:
-   `sno-mem-claude correct <id> "correct text"`. Subagents and sessions outside a git
+   `sno memory correct --harness claude <id> "correct text"`. Subagents and sessions outside a git
    repository read and write nothing.
 
 Walkthrough: [Claude Code onboarding](https://github.com/sno-ai/sno-station/blob/main/docs/mem-claude/onboarding.md).
