@@ -1019,13 +1019,13 @@ observe_append() {
     shift
     (
         trap - EXIT
-        if timeout --foreground --signal=TERM --kill-after=1 5 sno-observe append "$@"; then
+        if timeout --foreground --signal=TERM --kill-after=1 5 sno observe append "$@"; then
             exit 0
         else
             status=$?
         fi
-        detail="sno-observe append $1 failed (exit $status); event not recorded"
-        ((status != 127)) || detail="sno-observe: not found; $1 event not recorded"
+        detail="sno observe append $1 failed (exit $status); event not recorded"
+        ((status != 127)) || detail="sno: not found; $1 event not recorded"
         { printf '%s\n' "$detail" >>"$root/reach.log"; } 2>/dev/null || true
     ) </dev/null >/dev/null 2>&1
 }
