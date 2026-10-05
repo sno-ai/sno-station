@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { installCodex } from "../../../../apps/mem-codex/src/install";
 import { createTestEmbedder } from "../../mem-claw/helpers/test-db";
 import { createMemUpdateFixture } from "../../../packages/memory/fixtures/mem-update-fixture";
+import { globalPrefixWith, realSno } from "../../support/real-sno.mjs";
 import { verifyInstalledChildHooks } from "./verify-installed-child-hooks.mjs";
 
 const repo = resolve(import.meta.dirname, "../../../..");
@@ -51,7 +52,7 @@ describe("installed Codex child hook boundary", () => {
 		});
 		ownedFixture = fixture;
 		const home = join(fixture.profile, "codex-home"), workspace = join(fixture.profile, "workspace");
-		const capture = join(fixture.profile, "installed-hooks.jsonl"), wrapper = join(home, "sno-mem-codex");
+		const capture = join(fixture.profile, "installed-hooks.jsonl"), wrapper = join(home, "sno");
 		mkdirSync(home); mkdirSync(workspace);
 		writeFileSync(join(home, "config.toml"), [
 			'model = "gpt-6-sol"', 'model_reasoning_effort = "low"', 'model_provider = "ccproxy"',
@@ -62,10 +63,11 @@ describe("installed Codex child hook boundary", () => {
 		].join("\n"));
 		copyFileSync(join(repo, "tests/apps/mem-codex/fixtures/capture-installed-hook.mjs"), wrapper);
 		chmodSync(wrapper, 0o700);
+		// The hook program is a recording tee that runs the real `sno` with the same arguments.
 		await installCodex({ codexHome: home, programPath: wrapper, writeOutput() {} });
 		const env = { ...process.env, CODEX_HOME: home, SNO_MEM_UPDATE_CAPTURE_FILE: capture,
-			SNO_MEM_UPDATE_TSX: join(repo, "node_modules/tsx/dist/loader.mjs"),
-			SNO_MEM_UPDATE_CLI: join(repo, "apps/mem-codex/src/cli.ts") };
+			SNO_BINARY: realSno(),
+			npm_config_prefix: globalPrefixWith({ "@snoai/mem-codex": join(repo, "apps/mem-codex") }) };
 		{
 			const live = await codex(["exec", "--json", "--ephemeral", "--disable", "hooks",
 				"--skip-git-repo-check", "-C", workspace, "Reply exactly LIVE_SEED_OK."], env);
