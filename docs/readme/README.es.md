@@ -43,15 +43,16 @@ uses con tu agente, y este README se publica en nueve.
 *Última actualización 2026-10-01.* **La memoria compartida se instala hoy.** Da a Claude Code, Codex, OpenClaw y Hermes Agent una memoria cifrada en tu máquina, sin cuenta y sin clave de API. Ejecuta una vez la [configuración de la memoria compartida](../memory-setup.md) (unos minutos) y luego añade tu agente:
 
 ```bash
+# Install the sno command once
+sh -c 'sno_installer_body=$(curl -fsSL https://sno.ai/install) && printf "%s\n" "$sno_installer_body" | sh'
 # Codex CLI
-npm install -g @snoai/mem-codex@1.0.1 && sno-mem-codex install --codex-home ~/.codex
+sno setup --harness codex
 # Claude Code
-npm install -g @snoai/mem-claude@1.0.1 && sno-mem-claude install --config-dir ~/.claude
+sno setup --harness claude
 # OpenClaw
-openclaw plugins install @snoai/mem-claw@1.0.1
+sno setup --harness openclaw
 # Hermes Agent
-hermes plugins install sno-ai/sno-station/apps/mem-hermes/sno-mem-hermes --enable
-hermes config set memory.provider sno-mem-hermes
+sno setup --harness hermes
 ```
 
 Guías: [Codex](../mem-codex/onboarding.md) · [Claude Code](../mem-claude/onboarding.md) · [OpenClaw](../mem-claw/onboarding.md) · [Hermes](../mem-hermes/onboarding.md)

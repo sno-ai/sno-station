@@ -17,7 +17,7 @@ Complete the [shared memory setup](../memory-setup.md), then run:
 
 ```bash
 npm install -g @snoai/mem-codex@1.0.1
-sno-mem-codex install --codex-home ~/.codex
+sno setup --harness codex
 ```
 
 `SNO_PROFILE_DIR` selects the profile root (default `~/.sno`). The shared setup
@@ -27,19 +27,19 @@ Keep a private backup of that file for store recovery.
 Open a new Codex session inside a git repository, then check the installation:
 
 ```bash
-sno-mem-codex doctor
+sno memory doctor --harness codex
 ```
 
 Create a test memory from the repository root:
 
 ```bash
-sno-mem-codex remember "Prefer tabs for indentation in this repository."
+sno memory remember --harness codex "Prefer tabs for indentation in this repository."
 ```
 
 Verify it:
 
 ```bash
-sno-mem-codex recall "indentation"
+sno memory recall --harness codex "indentation"
 ```
 
 ## The three modes
@@ -165,10 +165,10 @@ The skill teaches Codex these four commands. Run them from inside a git reposito
 
 | Command | What it does |
 | --- | --- |
-| `sno-mem-codex recall <query>` | Search repository and global memory (up to 5 results, full text with ids) |
-| `sno-mem-codex get <id>` | Print one full entry and, when it was corrected, the id that supersedes it |
-| `sno-mem-codex remember <text>` | Store a repository memory; prints the new id |
-| `sno-mem-codex correct <id> <text>` | Store a corrected entry and mark the old one superseded; prints the new id |
+| `sno memory recall --harness codex <query>` | Search repository and global memory (up to 5 results, full text with ids) |
+| `sno memory get --harness codex <id>` | Print one full entry and, when it was corrected, the id that supersedes it |
+| `sno memory remember --harness codex <text>` | Store a repository memory; prints the new id |
+| `sno memory correct --harness codex <id> <text>` | Store a corrected entry and mark the old one superseded; prints the new id |
 
 There is no deletion command in this client.
 
@@ -176,10 +176,10 @@ There is no deletion command in this client.
 
 | Command | What it does |
 | --- | --- |
-| `sno-mem-codex doctor [--codex-home <dir>]` | Print sidecar health, hook trust state, rules state, and import receipt count |
-| `sno-mem-codex import --user` | Queue your user-level Codex notes for import into global memory |
-| `sno-mem-codex import --repo <absolute-root>` | Queue a repository's Codex notes for import into that repository's memory |
-| `sno-mem-codex install --codex-home <dir> [--dry-run]` | Install or refresh the hooks, trust entries, rules, and skill |
+| `sno memory doctor --harness codex [--codex-home <dir>]` | Print sidecar health, hook trust state, rules state, and import receipt count |
+| `sno memory import --harness codex --user` | Queue your user-level Codex notes for import into global memory |
+| `sno memory import --harness codex --repo <absolute-root>` | Queue a repository's Codex notes for import into that repository's memory |
+| `sno setup --harness codex` | Install or refresh the hooks, trust entries, rules, and skill |
 
 Import reads `memories/memory_summary.md` and `memories/extensions/*/notes/*.md` under your Codex
 home for `--user`, and `.codex/memories/*.md` at the repository root for `--repo`. A file is
@@ -188,11 +188,11 @@ are never imported.
 
 ### Read a memory store offline
 
-`sno-memdump` ships with the OpenClaw plugin package and reads the same store format. Running it
+`sno memory dump` runs the dump tool shipped with the OpenClaw plugin package and reads the same store format. Running it
 through `npx` fetches that package into the npx cache and installs nothing into OpenClaw:
 
 ```bash
-npx --package @snoai/mem-claw sno-memdump --db ~/.sno/sno-station-mem/$USER/memory.sqlite [--scope <scope>] [--id <id>] [--grep <text>] [--limit <n>] [--metadata]
+sno memory dump --db ~/.sno/sno-station-mem/$USER/memory.sqlite [--scope <scope>] [--id <id>] [--grep <text>] [--limit <n>] [--metadata]
 ```
 
 ## Files and environment
@@ -225,7 +225,7 @@ To reinstall:
 
 ```bash
 npm install -g @snoai/mem-codex
-sno-mem-codex install --codex-home ~/.codex
+sno setup --harness codex
 ```
 
 The memory library is the encrypted file at `store.path`. Normal reinstall preserves it.

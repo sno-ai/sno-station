@@ -1,6 +1,6 @@
-// QCG-16: the installed `sno-observe append` types argv by the SDK schema, sets agent and project,
+// QCG-16: the installed `sno observe append` script types argv by the SDK schema, sets agent and project,
 // sends through the real SDK runtime into buffer.db, and turns bad input into exit 2 plus one
-// `error` event. The bin comes from `npm pack` + one `npm install -g --prefix` of the SDK and its
+// `error` event. The script comes from `npm pack` + one `npm install -g --prefix` of the SDK and its
 // two @snoai dependencies, exactly as a user machine gets it; the server is a closed loopback port.
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
@@ -11,6 +11,7 @@ import { join, resolve } from "node:path";
 import { after, before, describe, it } from "node:test";
 import DatabaseConstructor from "better-sqlite3";
 import { writeObserveSettings } from "../fixtures/temp-env.mjs";
+import { realSno } from "../../../apps/support/real-sno.mjs";
 
 const repoRoot = resolve(import.meta.dirname, "../../../..");
 const expectedProject = `p_${createHash("sha256").update("github.com/example/project").digest("hex").slice(0, 16)}`;
@@ -40,8 +41,10 @@ before(() => {
 	});
 	const prefix = join(work, "global");
 	run("npm", ["install", "-g", "--prefix", prefix, "--no-audit", "--no-fund", ...tarballs]);
-	bin = join(prefix, "bin", "sno-observe");
-	assert.equal(existsSync(bin), true, "npm linked the sno-observe bin");
+	// The package declares no command: the real sno runs its script by path (`sno observe append`).
+	const script = join(prefix, "lib", "node_modules", "@snoai", "observability", "dist", "bin", "sno-observe.js");
+	assert.equal(existsSync(script), true, "the installed package ships the append script");
+	bin = realSno();
 });
 
 after(() => {
@@ -55,7 +58,8 @@ function profile() {
 	run("git", ["init", "-q"], { cwd: checkout });
 	run("git", ["remote", "add", "origin", "git@github.com:example/project.git"], { cwd: checkout });
 	const env = {
-		PATH: `${join(work, "global", "bin")}:${process.env.PATH}`,
+		PATH: process.env.PATH,
+		npm_config_prefix: join(work, "global"),
 		HOME: dir,
 		SNO_PROFILE_DIR: dir,
 	};
@@ -64,7 +68,7 @@ function profile() {
 }
 
 function append(p, args) {
-	return spawnSync("sno-observe", ["append", ...args], {
+	return spawnSync(bin, ["observe", "append", ...args], {
 		cwd: p.checkout,
 		env: p.env,
 		encoding: "utf8",

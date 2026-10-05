@@ -20,9 +20,8 @@ install the plugin for your agent ([Codex](https://www.npmjs.com/package/@snoai/
 npm install @snoai/observability@1.0.1
 ```
 
-Needs Node.js 22.14 or newer. The package also installs a `sno-observe` command
-(`sno-observe append <event_type> --agent=<harness> --field=value`) for appending an event from
-a shell.
+Needs Node.js 22.14 or newer. The `sno` command can also append an event from a shell:
+`sno observe append <event_type> --agent=<harness> --field=value`.
 
 ```ts
 import { snoObserve } from "@snoai/observability";
