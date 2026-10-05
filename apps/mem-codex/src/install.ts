@@ -5,6 +5,8 @@ import {
 	CODING_SKIN_HOOKS,
 	CODING_SKIN_MODEL_COMMANDS,
 	type CodingSkinHookName,
+	codingSkinHookCommand,
+	isCodingSkinHookCommand,
 } from "@snoai/memory/coding-skin";
 import { APP_NAME } from "./constants.js";
 import { MESSAGES } from "./messages.js";
@@ -44,7 +46,10 @@ export function computeTrustHash(value: unknown): string {
 	return `sha256:${createHash("sha256").update(canonical(value)).digest("hex")}`;
 }
 
+// A hook written by this installer, or by the earlier one that ran `<mem-codex program> <event>`
+// (replaced in place so the event is never hooked twice).
 export function isOwnedHookCommand(command: string, subcommand: string): boolean {
+	if (isCodingSkinHookCommand(command, subcommand, "codex")) return true;
 	const suffix = ` ${subcommand}`;
 	const trimmed = command.trim();
 	if (!trimmed.endsWith(suffix)) return false;
@@ -109,13 +114,9 @@ function stripTrustSections(text: string, keys: string[]): string {
 	return stripped.trimEnd();
 }
 
-function shellQuote(value: string): string {
-	return `'${value.replaceAll("'", "'\\''")}'`;
-}
-
 function rules(programPath: string): string {
 	return CODING_SKIN_MODEL_COMMANDS.map(command =>
-		`prefix_rule(pattern=[${JSON.stringify(programPath)}, ${JSON.stringify(command)}], decision="allow")`)
+		`prefix_rule(pattern=[${JSON.stringify(programPath)}, "memory", ${JSON.stringify(command)}], decision="allow")`)
 		.join("\n") + "\n";
 }
 
@@ -139,7 +140,7 @@ export async function installCodex(options: InstallOptions): Promise<void> {
 		const currentGroups = hooks.hooks[event] ?? [];
 		const hook: HookCommand = {
 			type: "command",
-			command: `${shellQuote(options.programPath)} ${details.subcommand}`,
+			command: codingSkinHookCommand(options.programPath, details.subcommand, "codex"),
 			timeout: details.timeout,
 		};
 		let installed = false;

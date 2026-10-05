@@ -1,6 +1,12 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join } from "node:path";
-import { CODING_SKIN_HOOKS, type CodingSkinHookName } from "@snoai/memory/coding-skin";
+import {
+	CODING_SKIN_HOOKS,
+	type CodingSkinHookName,
+	codingSkinHookCommand,
+	isCodingSkinHookCommand,
+	shellQuote,
+} from "@snoai/memory/coding-skin";
 import { z } from "zod";
 import { APP_NAME } from "./constants.js";
 import { MESSAGES } from "./messages.js";
@@ -21,15 +27,14 @@ export interface InstallOptions {
 	writeOutput: (line: string) => void;
 }
 
-function shellQuote(value: string): string {
-	return `'${value.replaceAll("'", "'\\''")}'`;
-}
-
 function isOwnedProgram(program: string): boolean {
 	return basename(program) === APP_NAME || /\/mem-claude\/(?:dist|src)\/cli\.(?:js|ts)$/.test(program);
 }
 
+// A hook written by this installer, or by the earlier one that ran `<mem-claude program> <event>`
+// (replaced in place so the event is never hooked twice).
 export function isOwnedHookCommand(command: string, subcommand: string): boolean {
+	if (isCodingSkinHookCommand(command, subcommand, "claude")) return true;
 	const suffix = ` ${subcommand}`;
 	const trimmed = command.trim();
 	if (!trimmed.endsWith(suffix)) return false;
@@ -41,8 +46,10 @@ export function isOwnedHookCommand(command: string, subcommand: string): boolean
 }
 
 export function isOwnedPermissionRule(rule: string): boolean {
-	return rule.startsWith("Bash(") && rule.endsWith(" *)")
-		&& isAbsolute(rule.slice(5, -3)) && isOwnedProgram(rule.slice(5, -3));
+	if (!rule.startsWith("Bash(") || !rule.endsWith(" *)")) return false;
+	const body = rule.slice(5, -3);
+	if (body.endsWith(" memory")) return basename(body.slice(0, -" memory".length)) === "sno";
+	return isAbsolute(body) && isOwnedProgram(body);
 }
 
 export async function readSettings(configDir: string): Promise<Settings | undefined> {
@@ -71,7 +78,7 @@ function updateSettings(settings: Settings, programPath: string): void {
 		const groups = settings.hooks[event] ?? [];
 		let installed = false;
 		const hook = {
-			type: "command", command: `${shellQuote(programPath)} ${details.subcommand}`,
+			type: "command", command: codingSkinHookCommand(programPath, details.subcommand, "claude"),
 			timeout: details.timeout,
 		};
 		for (const group of groups) {
@@ -86,7 +93,7 @@ function updateSettings(settings: Settings, programPath: string): void {
 	}
 	settings.permissions ??= {};
 	const allow = settings.permissions.allow ?? [];
-	const rule = `Bash(${programPath} *)`;
+	const rule = `Bash(${programPath} memory *)`;
 	const index = allow.findIndex(isOwnedPermissionRule);
 	if (index < 0) allow.push(rule);
 	else allow[index] = rule;
