@@ -14,7 +14,8 @@ const events = [
 	["PreToolUse", "pre-tool-use", 5],
 	["PostToolUse", "post-tool-use", 8],
 ] as const;
-const programPath = "/opt/sno/bin/sno-mem-claude";
+const programPath = "/opt/sno/bin/sno";
+const hookCommand = (path: string, subcommand: string) => `'${path}' memory hook ${subcommand} --harness claude`;
 let configDir: string;
 let previousProfile: string | undefined;
 
@@ -47,10 +48,10 @@ describe("Claude settings installation and diagnosis", () => {
 		for (const [event, subcommand, timeout] of events) {
 			expect(installed.hooks[event]).toHaveLength(1);
 			expect(installed.hooks[event][0].hooks).toEqual([
-				{ type: "command", command: `'${programPath}' ${subcommand}`, timeout },
+				{ type: "command", command: hookCommand(programPath, subcommand), timeout },
 			]);
 		}
-		expect(installed.permissions.allow).toEqual([`Bash(${programPath} *)`]);
+		expect(installed.permissions.allow).toEqual([`Bash(${programPath} memory *)`]);
 		expect(await readFile(join(configDir, "skills/sno-mem-claude/SKILL.md"), "utf8"))
 			.toContain("name: sno-mem-claude");
 		expect((await readdir(configDir)).sort()).toEqual(["settings.json", "skills"]);
@@ -95,17 +96,30 @@ describe("Claude settings installation and diagnosis", () => {
 			expect(JSON.stringify(installed.hooks[event][0])).toBe(JSON.stringify(initial.hooks[event][0]));
 			expect(JSON.stringify(installed.hooks[event][2])).toBe(JSON.stringify(initial.hooks[event][2]));
 			expect(installed.hooks[event][1].hooks).toEqual([
-				{ type: "command", command: `'${programPath}' ${subcommand}`, timeout },
+				{ type: "command", command: hookCommand(programPath, subcommand), timeout },
 			]);
 		}
-		expect(installed.permissions.allow).toEqual(["Bash(git status)", `Bash(${programPath} *)`, "Read(/tmp/*)"]);
+		expect(installed.permissions.allow).toEqual(["Bash(git status)", `Bash(${programPath} memory *)`, "Read(/tmp/*)"]);
 		expect(installed.env).toEqual(initial.env);
 	});
 
+	it("rewrites its hooks and rule when sno is at another path, never hooking an event twice", async () => {
+		await install();
+		await installClaude({ configDir, programPath: "/other/place/sno", writeOutput: () => {} });
+		const installed = await settings();
+		for (const [event, subcommand, timeout] of events) {
+			expect(installed.hooks[event]).toHaveLength(1);
+			expect(installed.hooks[event][0].hooks).toEqual([
+				{ type: "command", command: hookCommand("/other/place/sno", subcommand), timeout },
+			]);
+		}
+		expect(installed.permissions.allow).toEqual(["Bash(/other/place/sno memory *)"]);
+	});
+
 	it("runs each installed command through sh even when the absolute program path contains spaces", async () => {
-		const spacedProgram = join(configDir, "Application Support", "sno-mem-claude");
+		const spacedProgram = join(configDir, "Application Support", "sno");
 		await mkdir(dirname(spacedProgram), { recursive: true });
-		await writeFile(spacedProgram, "#!/bin/sh\nprintf '%s' \"$1\"\n");
+		await writeFile(spacedProgram, "#!/bin/sh\nprintf '%s' \"$3\"\n");
 		await chmod(spacedProgram, 0o700);
 		await installClaude({ configDir, programPath: spacedProgram, writeOutput: () => {} });
 		const installed = await settings();
@@ -130,7 +144,7 @@ describe("Claude settings installation and diagnosis", () => {
 		for (const [event] of events) expect(lines[1]).toContain(`${event}=unparsable`);
 		const cli = spawnSync(process.execPath, [
 			"--import", "tsx", "apps/mem-claude/src/cli.ts", "install", "--config-dir", configDir,
-		], { encoding: "utf8", timeout: 10_000 });
+		], { encoding: "utf8", timeout: 10_000, env: { ...process.env, SNO_EXECUTABLE: programPath } });
 		expect(cli.status, cli.stderr).toBe(0);
 		expect(cli.stdout.split("\n").filter(line => /pars|JSON|syntax/i.test(line))).toHaveLength(1);
 		expect(await readFile(join(configDir, "settings.json"), "utf8")).toBe(malformed);
