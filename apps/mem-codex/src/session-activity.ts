@@ -86,10 +86,14 @@ async function findRollout(sessionId: string): Promise<string> {
 	throw new Error("rollout-missing");
 }
 
-/** Appends one session.activity row for the rollout records after the cursor, and returns the advanced cursor. Stop does not end the run still open. */
+/**
+ * Appends one session.activity row for the rollout records after the cursor, and returns the advanced cursor. Stop does not end the run still open.
+ * `persist` saves the advanced cursor before the row is appended, so a failed save repeats the window instead of counting it twice.
+ */
 export async function reportSessionActivity(
 	cursor: ActivityCursor | undefined,
 	input: { session_id: string; cwd: string },
+	persist: (cursor: ActivityCursor) => Promise<void> = async () => {},
 ): Promise<ActivityCursor> {
 	const from = cursor ?? EMPTY_ACTIVITY_CURSOR;
 	const path = from.path ?? await findRollout(input.session_id);
@@ -100,6 +104,7 @@ export async function reportSessionActivity(
 		if (record) records.push(record);
 	});
 	const folded = foldActivity({ ...from, offset: read.offset, path }, records, false);
+	await persist(folded.cursor);
 	if (folded.payload) {
 		const projectId = input.cwd ? detectProjectId(await workspaceRoot(input.cwd)) : undefined;
 		appendObserveLedgerRows(getSnoProfileDir(), [{

@@ -114,6 +114,16 @@ describe("Codex session.activity", () => {
 		expect(ledger()[0]?.payload).toMatchObject({ team_driven_ms: 4 * MIN, human_messages: 0 });
 	});
 
+	it("appends no row when the cursor cannot be saved, so the next send does not count the window twice", async () => {
+		writeFileSync(rollout, meta("cli") + userMessage(1, "hi") + work(5) + work(9));
+		const input = { session_id: SESSION, cwd: join(root, "work") };
+		await expect(reportSessionActivity(undefined, input, async () => { throw new Error("session-state-busy"); })).rejects.toThrow("session-state-busy");
+		expect(ledger()).toHaveLength(0);
+		await reportSessionActivity(undefined, input);
+		expect(ledger()).toHaveLength(1);
+		expect(ledger()[0]?.payload).toMatchObject({ active_ms: 9 * MIN, human_messages: 1 });
+	});
+
 	it("treats every prompt of a codex exec session as another agent's, and its time as team-driven", async () => {
 		writeFileSync(rollout, meta("exec") + userMessage(1, "Use the user-level Codex skill $ts-coder.") + work(5) + work(9));
 		await stop();

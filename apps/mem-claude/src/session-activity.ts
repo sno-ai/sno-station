@@ -66,11 +66,15 @@ export function claudeRecord(line: string): ActivityRecord | undefined {
 	return incoming === undefined ? { ts } : { ts, incoming };
 }
 
-/** Appends one session.activity row for the transcript records after the cursor, and returns the advanced cursor. Stop leaves the run open; SessionEnd closes it. */
+/**
+ * Appends one session.activity row for the transcript records after the cursor, and returns the advanced cursor. Stop leaves the run open; SessionEnd closes it.
+ * `persist` saves the advanced cursor before the row is appended, so a failed save repeats the window instead of counting it twice.
+ */
 export async function reportSessionActivity(
 	cursor: ActivityCursor | undefined,
 	input: { session_id: string; cwd: string; transcript_path?: string | undefined },
 	hook: "Stop" | "SessionEnd",
+	persist: (cursor: ActivityCursor) => Promise<void> = async () => {},
 ): Promise<ActivityCursor> {
 	const from = cursor ?? EMPTY_ACTIVITY_CURSOR;
 	const transcriptPath = input.transcript_path ?? join(
@@ -86,6 +90,7 @@ export async function reportSessionActivity(
 	});
 	// A backlog left unread means the session is not over as far as this send can tell.
 	const folded = foldActivity({ ...from, offset: read.offset }, records, hook === "SessionEnd" && read.done);
+	await persist(folded.cursor);
 	if (folded.payload) {
 		const projectId = input.cwd ? detectProjectId(await workspaceRoot(input.cwd)) : undefined;
 		appendObserveLedgerRows(getSnoProfileDir(), [{

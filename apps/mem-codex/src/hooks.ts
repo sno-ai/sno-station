@@ -172,8 +172,8 @@ export async function stop(raw: unknown): Promise<void> {
 		const input = stopSchema.parse(raw);
 		if (input.agent_id !== undefined) return;
 		try {
-			const activity = await reportSessionActivity((await readSession(input.session_id)).activity, input);
-			await updateSession(input.session_id, (state) => { state.activity = activity; });
+			await reportSessionActivity((await readSession(input.session_id)).activity, input,
+				(activity) => updateSession(input.session_id, (state) => { state.activity = activity; }));
 		} catch (error) {
 			console.error(JSON.stringify({
 				event: "session-activity",
