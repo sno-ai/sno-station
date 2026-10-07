@@ -16,7 +16,7 @@ finish() {
     jq -n --arg source_commit "$source_commit" --arg host "$(hostname)" \
         --arg os "$(uname -s)" --arg arch "$(uname -m)" --argjson exit_code "$status" \
         '{source_commit:$source_commit,host:$host,os:$os,arch:$arch,exit_code:$exit_code,
-          boundary:"local source tests and archive installation; no GitHub or live model calls"}' \
+          boundary:"local source tests and archive unpacking; no GitHub or live model calls"}' \
         >"$proof/result.json"
     exit "$status"
 }
@@ -50,7 +50,7 @@ arch="$(uname -m)"
 case "$os" in Linux) os=linux ;; Darwin) os=macos ;; *) exit 2 ;; esac
 [[ "$arch" != arm64 ]] || arch=aarch64
 archive="$root/apps/reach/dist/reach-$(<apps/reach/VERSION)-$os-$arch.tar.gz"
-bash tests/apps/reach/archive.t --direct "$archive" "$proof/archive"
+bash tests/apps/reach/archive.t "$archive" "$proof/archive"
 mkdir "$proof/artifacts"
 cp "$archive" "$archive.sha256" "$proof/artifacts/"
 for program in heartbeat report-time subscription-quota-check; do
@@ -59,4 +59,4 @@ for program in heartbeat report-time subscription-quota-check; do
     cp "$archive" "$archive.sha256" "$proof/artifacts/"
 done
 git diff --exit-code HEAD -- apps/reach apps/heartbeat apps/report-time apps/subscription-quota-check tests/apps/reach
-printf 'PASS local CI tests, native archive installation, and four artifact pairs\n'
+printf 'PASS local CI tests, native archive unpacking, and four artifact pairs\n'
