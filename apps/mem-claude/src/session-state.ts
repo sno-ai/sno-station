@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { mkdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
+import { activityCursorSchema } from "@snoai/memory/coding-skin";
 import { z } from "zod";
 import { acquirePidFileLock, writeJsonAtomic } from "./files.js";
 import { appStateRoot, sessionPath, spoolDirectory } from "./paths.js";
@@ -39,6 +40,8 @@ const receiptEventSchema = z.object({
 const sessionStateSchema = z.object({
 	sessionId: z.string().min(1),
 	skillRunsReported: z.number().int().nonnegative().default(0),
+	/** Where the previous session.activity send stopped in the transcript. */
+	activity: activityCursorSchema.optional(),
 	prompts: z.record(z.string(), z.object({ prompt: z.string(), at: z.number() })).default({}),
 	receipt: z.record(z.string(), receiptEventSchema).default({}),
 	/** PreToolUse arrival time by tool_use_id, consumed by PostToolUse to measure the call. */
