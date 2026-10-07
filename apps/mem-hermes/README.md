@@ -13,9 +13,12 @@ Install Hermes Agent and complete the [shared memory setup](https://github.com/s
 once. Then run:
 
 ```bash
-hermes plugins install sno-ai/sno-station/apps/mem-hermes/sno-mem-hermes --enable
-hermes config set memory.provider sno-mem-hermes
+sh -c 'sno_installer_body=$(curl -fsSL https://sno.ai/install) && printf "%s\n" "$sno_installer_body" | sh'
+sno setup --harness hermes
 ```
+
+Setup installs and enables the plugin and selects it as the memory provider unless you already
+chose another one (then run `hermes config set memory.provider sno-mem-hermes` yourself).
 
 The plugin starts the memory service when needed, including after it stops during a
 conversation. Use `SNO_PROFILE_DIR` to select another profile root.
@@ -28,14 +31,13 @@ start and before prompts. Child agents can use explicit tools but do not inject 
 ## Update and remove
 
 ```bash
-hermes plugins install sno-ai/sno-station/apps/mem-hermes/sno-mem-hermes --force --enable
-hermes gateway restart
-hermes plugins remove sno-mem-hermes
+sno update
+sno uninstall
 ```
 
-The plugin is installed from a Git subdirectory, so an update is a forced reinstall of that
-subdirectory. Restart a running Hermes gateway after installing or replacing it. Removing the
-plugin does not remove stored memory.
+`sno update` reinstalls the plugin when this repository has a newer version and restarts a
+running Hermes gateway. `sno uninstall` lists what is installed; name the Hermes memory entry to
+remove it. Removing the plugin does not remove stored memory.
 
 ## License
 

@@ -6,8 +6,8 @@ Python plugin connects Hermes sessions to that service and exposes four tools to
 ## First use
 
 Complete the [onboarding steps](onboarding.md) before opening Hermes. The first-release setup
-uses Local First mode and prepares the local embedding model. No Sno CLI or separate Python
-package is needed.
+uses Local First mode and prepares the local embedding model. `sno setup --harness hermes`
+installs the plugin; no separate Python package is needed.
 
 From a project directory, you can say:
 
@@ -45,27 +45,26 @@ Do not replace `store.path` or `store.encryptionKey` when changing a setting for
 store. Keep a private backup of the settings file and database. The [shared setup](../memory-setup.md)
 is for a new profile, not an existing one.
 
-Hermes selects this provider with:
+`sno setup --harness hermes` selects this provider when you have not chosen another one. To
+select it yourself:
 
 ```bash
 hermes config set memory.provider sno-mem-hermes
 ```
 
 If recall stops working, check the selected provider with `hermes config get memory.provider`,
-run `hermes plugins doctor sno-mem-hermes --ci`, and confirm that the configured npm memory
+run `sno doctor`, and confirm that the configured npm memory
 package still exists. The service starts on demand and reports a failure instead of pretending
 that a memory was saved.
 
 ## Update or remove
 
 ```bash
-hermes plugins install sno-ai/sno-station/apps/mem-hermes/sno-mem-hermes --force --enable
-hermes gateway restart
-hermes plugins remove sno-mem-hermes
+sno update
+sno uninstall
 ```
 
-The plugin is installed from a Git subdirectory, so an update is a forced reinstall of that
-subdirectory; restart a running Hermes gateway after installing or replacing it. Removing the
-plugin does not remove the Sno memory store. The plugin manifest declares Linux
-and macOS support; the clean-host memory journey for this release was run on Linux. Installing from the
-public GitHub repository, replacing it with `--force`, and removing it were run on a clean Linux host.
+`sno update` reinstalls the plugin when this repository has a newer version and restarts a
+running Hermes gateway. `sno uninstall` lists what is installed; name the Hermes memory entry
+to remove it. Removing the plugin does not remove the Sno memory store. The plugin manifest
+declares Linux and macOS support.
