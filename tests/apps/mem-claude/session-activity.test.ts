@@ -146,6 +146,16 @@ describe("Claude Code session.activity", () => {
 		expect(rows.reduce((sum, row) => sum + Number(row.active_ms), 0)).toBe(13 * HOUR);
 	});
 
+	it("appends no row when the cursor cannot be saved, so the next send does not count the window twice", async () => {
+		writeFileSync(transcript, typed(0, "first") + assistant(5) + assistant(9));
+		const input = { session_id: "s", cwd: root, transcript_path: transcript };
+		await expect(reportSessionActivity(undefined, input, "Stop", async () => { throw new Error("session-state-busy"); })).rejects.toThrow("session-state-busy");
+		expect(ledger()).toHaveLength(0);
+		await reportSessionActivity(undefined, input, "Stop", async () => {});
+		expect(ledger()).toHaveLength(1);
+		expect(ledger()[0]?.payload).toMatchObject({ active_ms: 9 * MIN, human_messages: 1 });
+	});
+
 	it("covers only new records on the next session end, and a compaction does not count anything twice", async () => {
 		writeFileSync(transcript, typed(0, "first") + assistant(5) + typed(8, "second") + assistant(10));
 		const cursor = await send();

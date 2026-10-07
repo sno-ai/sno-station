@@ -208,8 +208,10 @@ async function sendSessionActivity(
 ): Promise<void> {
 	try {
 		const state = await readSession(input.session_id);
-		state.activity = await reportSessionActivity(state.activity, input, hook);
-		await writeSession(state);
+		await reportSessionActivity(state.activity, input, hook, async (activity) => {
+			state.activity = activity;
+			await writeSession(state);
+		});
 	} catch (error) {
 		console.error(JSON.stringify({
 			event: "session-activity",
