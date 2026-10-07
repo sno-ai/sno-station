@@ -46,7 +46,9 @@ function ledger(): { event_type: string; lane: string; ts_ms: number; payload: R
 	return existsSync(path) ? readFileSync(path, "utf8").split("\n").filter(Boolean).map(row => JSON.parse(row)) : [];
 }
 const send = (cursor?: ActivityCursor): Promise<ActivityCursor> =>
-	reportSessionActivity(cursor, { session_id: "s", cwd: root, transcript_path: transcript });
+	reportSessionActivity(cursor, { session_id: "s", cwd: root, transcript_path: transcript }, "SessionEnd");
+const stopSend = (cursor?: ActivityCursor): Promise<ActivityCursor> =>
+	reportSessionActivity(cursor, { session_id: "s", cwd: root, transcript_path: transcript }, "Stop");
 
 beforeEach(() => {
 	root = mkdtempSync(join(tmpdir(), "mem-claude-activity-"));
@@ -94,11 +96,11 @@ describe("Claude Code session.activity", () => {
 		expect(rows).toHaveLength(1);
 		expect(rows[0]).toMatchObject({ event_type: "session.activity", lane: "memory", ts_ms: T0 + 35 * MIN, payload: {
 			harness: "claude-code", window_start_ms: T0, window_end_ms: T0 + 35 * MIN,
-			// Gaps of 1+1+1+1+6+1+1+1+4+1 minutes; the 17-minute gap before minute 34 ends the first run (0..17, under 12 hours, so longest_run_ms stays 0).
+			// Gaps of 1+1+1+1+6+1+1+1+4+1 minutes; the 17-minute gap before minute 34 ends the first run (0..17, the longest run seen).
 			active_ms: 18 * MIN,
 			// Minutes 4 to 13 follow the ring and the heartbeat tick, until the person types at 13.
 			team_driven_ms: 9 * MIN,
-			runs_over_12h: 0, longest_run_ms: 0,
+			runs_over_12h: 0, longest_run_ms: 17 * MIN,
 			// Typed at 0 and 13 only: skill text, ring, tick, summary, command output, shell input and teammate message are not the person's.
 			human_messages: 2,
 		} });
@@ -121,6 +123,27 @@ describe("Claude Code session.activity", () => {
 		writeFileSync(transcript, text);
 		await send();
 		expect(ledger()[0]?.payload).toMatchObject({ active_ms: 13 * HOUR, runs_over_12h: 1, longest_run_ms: 13 * HOUR, human_messages: 1 });
+	});
+
+	it("reports a 13-hour session turn by turn at Stop with the run left open, and the session end closes it without counting it again", async () => {
+		let text = typed(0, "overnight build");
+		for (let minute = 10; minute <= 13 * 60; minute += 10) text += assistant(minute);
+		const whole = Buffer.from(text);
+		// The same transcript arrives in 20 pieces cut at line ends, one Stop send after each.
+		const lines = text.split("\n").filter(Boolean).map(row => `${row}\n`);
+		const size = Math.ceil(lines.length / 20);
+		let cursor: ActivityCursor | undefined;
+		for (let at = 0; at < lines.length; at += size) {
+			appendFileSync(transcript, lines.slice(at, at + size).join(""));
+			cursor = await stopSend(cursor);
+		}
+		expect(cursor).toMatchObject({ offset: whole.length, runStart: T0, counted: true });
+		cursor = await send(cursor);
+		expect(cursor).toMatchObject({ runStart: 0, counted: false });
+		const rows = ledger().map(row => row.payload);
+		expect(rows.reduce((sum, row) => sum + Number(row.runs_over_12h), 0)).toBe(1);
+		expect(Math.max(...rows.map(row => Number(row.longest_run_ms)))).toBe(13 * HOUR);
+		expect(rows.reduce((sum, row) => sum + Number(row.active_ms), 0)).toBe(13 * HOUR);
 	});
 
 	it("covers only new records on the next session end, and a compaction does not count anything twice", async () => {
