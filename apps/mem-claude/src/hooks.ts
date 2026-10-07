@@ -14,6 +14,7 @@ import {
 	withinDeadline,
 } from "./recall.js";
 import { hookScope, workspaceRoot } from "./scope.js";
+import { reportSessionActivity } from "./session-activity.js";
 import { readSkillRuns } from "./skill-runs.js";
 import { startWorkerDetached } from "./worker.js";
 import {
@@ -346,6 +347,16 @@ export async function sessionEnd(raw: unknown): Promise<void> {
 			console.error(JSON.stringify({
 				event: "skill-runs",
 				reason: error instanceof Error ? error.message : String(error),
+			}));
+		}
+		try {
+			state.activity = await reportSessionActivity(state.activity, input);
+			await writeSession(state);
+		} catch (error) {
+			console.error(JSON.stringify({
+				event: "session-activity",
+				reason: error instanceof Error ? error.message : String(error),
+				impact: "no session.activity row for this session end; the next send covers the same records",
 			}));
 		}
 		const project = await workspaceRoot(input.cwd);
