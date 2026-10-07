@@ -40,7 +40,7 @@ uses con tu agente, y este README se publica en nueve.
 
 ## Install
 
-*Última actualización 2026-10-01.* **La memoria compartida se instala hoy.** Da a Claude Code, Codex, OpenClaw y Hermes Agent una memoria cifrada en tu máquina, sin cuenta y sin clave de API. Ejecuta una vez la [configuración de la memoria compartida](../memory-setup.md) (unos minutos) y luego añade tu agente:
+*Última actualización 2026-10-07.* **La memoria compartida se instala hoy.** Da a Claude Code, Codex, OpenClaw y Hermes Agent una memoria cifrada en tu máquina, sin cuenta y sin clave de API. Ejecuta una vez la [configuración de la memoria compartida](../memory-setup.md) (unos minutos) y luego añade tu agente:
 
 ```bash
 # Install the sno command once
@@ -57,7 +57,7 @@ sno setup --harness hermes
 
 Guías: [Codex](../mem-codex/onboarding.md) · [Claude Code](../mem-claude/onboarding.md) · [OpenClaw](../mem-claw/onboarding.md) · [Hermes](../mem-hermes/onboarding.md)
 
-Sno Reach, las habilidades del Duo y el ciclo nocturno todavía no están en estos paquetes. La instalación de un solo comando para todo aún está por llegar: llega con la habilidad de incorporación y, hasta entonces, sigue este repositorio. Cuando llegue, se verá así:
+`sno setup` también instala Sno Reach, los programas auxiliares pequeños, las skills y el bucle nocturno, y todos los comandos son `sno <nombre>`: la lista completa está en [docs/sno-commands.md](../sno-commands.md). Decir «Sno onboarding» dentro de tu agente, que te guía por la misma configuración en conversación, aún está por llegar. Cuando llegue, se verá así:
 
 ```bash
 # dentro de cualquier conversación de Claude Code, Codex u OpenClaw:
@@ -151,16 +151,17 @@ direcciones y los ids de sesión están redactados; nada más se toca.
 
 ## What runs today
 
-*Última actualización 2026-09-20.*
+*Última actualización 2026-10-07.*
 
 | Pieza | Estado |
 |---|---|
 | `packages/chunking` | En este repositorio, probado, publicado en npm |
 | Paquetes compartidos (`common-core`, `utils`, `embedder`, `observability`, `sqlite-crypto`, `content-sanitizer`) | En este repositorio |
 | Memoria compartida entre Claude Code, Codex y OpenClaw | Motor y las tres pieles en este repositorio; prueba en máquina limpia pendiente |
-| Sno Reach — agentes hablando entre sí, sin daemon | Código fuente en este repositorio; archivos de lanzamiento pendientes |
-| El bucle RSI (habilidad) | Esta semana |
-| Instalación de un solo comando (`sno assemble`, o di "Sno onboarding" dentro de tu agente) | Aún no reclamado |
+| Sno Reach — agentes hablando entre sí, sin daemon | Instalado por `sno setup`; los archivos de versión para Linux y macOS están publicados; probado de extremo a extremo en una máquina Linux limpia |
+| El bucle nocturno y las skills del equipo | Instalado por `sno setup`; el trabajo nocturno se ejecutó en una máquina Linux limpia |
+| Instalación de un solo comando (`sno setup`) | Instala todo lo anterior; probada en una máquina Linux limpia |
+| «Sno onboarding» dentro de tu agente | Aún no reclamado |
 
 Una fila dice "probada" solo una vez que se ha ejecutado en una máquina limpia; hasta entonces dice lo que hay aquí.
 

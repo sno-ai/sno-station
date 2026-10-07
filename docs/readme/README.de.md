@@ -41,7 +41,7 @@ verwenden, und dieses README erscheint in neun Sprachen.
 
 ## Install
 
-*Zuletzt aktualisiert am 2026-10-01.* **Das gemeinsame Gedächtnis lässt sich heute installieren.** Es gibt Claude Code, Codex, OpenClaw und Hermes Agent ein verschlüsseltes Gedächtnis auf Ihrem Rechner, ohne Konto und ohne API-Schlüssel. Führen Sie die [Einrichtung des gemeinsamen Gedächtnisses](../memory-setup.md) einmal aus (ein paar Minuten) und fügen Sie dann Ihren Agenten hinzu:
+*Zuletzt aktualisiert am 2026-10-07.* **Das gemeinsame Gedächtnis lässt sich heute installieren.** Es gibt Claude Code, Codex, OpenClaw und Hermes Agent ein verschlüsseltes Gedächtnis auf Ihrem Rechner, ohne Konto und ohne API-Schlüssel. Führen Sie die [Einrichtung des gemeinsamen Gedächtnisses](../memory-setup.md) einmal aus (ein paar Minuten) und fügen Sie dann Ihren Agenten hinzu:
 
 ```bash
 # Install the sno command once
@@ -58,7 +58,7 @@ sno setup --harness hermes
 
 Anleitungen: [Codex](../mem-codex/onboarding.md) · [Claude Code](../mem-claude/onboarding.md) · [OpenClaw](../mem-claw/onboarding.md) · [Hermes](../mem-hermes/onboarding.md)
 
-Sno Reach, die Duo-Skills und die nächtliche Schleife sind noch nicht in diesen Paketen. Die Ein-Befehl-Installation für alles kommt noch: Sie kommt mit dem Onboarding-Skill; bis dahin behalten Sie dieses Repository im Auge. Wenn sie da ist, wird sie so aussehen:
+`sno setup` installiert außerdem Sno Reach, die kleinen Hilfsprogramme, die Skills und die nächtliche Schleife, und jeder Befehl lautet `sno <name>`: die vollständige Liste steht in [docs/sno-commands.md](../sno-commands.md). „Sno onboarding" in Ihrem Agenten zu sagen, was dieselbe Einrichtung im Gespräch begleitet, kommt noch. Wenn es so weit ist, sieht es so aus:
 
 ```bash
 # inside any Claude Code, Codex or OpenClaw conversation:
@@ -156,16 +156,17 @@ Session-IDs sind geschwärzt; sonst ist nichts angerührt.
 
 ## What runs today
 
-*Zuletzt aktualisiert am 2026-09-20.*
+*Zuletzt aktualisiert am 2026-10-07.*
 
 | Teil | Status |
 |---|---|
 | `packages/chunking` | In diesem Repository, getestet, auf npm veröffentlicht |
 | Gemeinsame Pakete (`common-core`, `utils`, `embedder`, `observability`, `sqlite-crypto`, `content-sanitizer`) | In diesem Repository |
 | Gemeinsames Gedächtnis über Claude Code, Codex und OpenClaw hinweg | Engine und alle drei Skins in diesem Repository; Beweis auf sauberer Maschine steht noch aus |
-| Sno Reach — Agenten sprechen miteinander, kein Daemon | Quelle in diesem Repository; Release-Archive stehen noch aus |
-| Die RSI-Schleife (Skill) | Diese Woche |
-| Ein-Befehl-Installation (`sno assemble`, oder sagen Sie "Sno onboarding" in Ihrem Agenten) | Noch nicht behauptet |
+| Sno Reach — Agenten sprechen miteinander, kein Daemon | Von `sno setup` installiert; Release-Archive für Linux und macOS sind veröffentlicht; auf einer sauberen Linux-Maschine von Anfang bis Ende bewiesen |
+| Die nächtliche Schleife und die Squad-Skills | Von `sno setup` installiert; der nächtliche Job lief auf einer sauberen Linux-Maschine |
+| Ein-Befehl-Installation (`sno setup`) | Installiert alles oben Genannte; auf einer sauberen Linux-Maschine bewiesen |
+| „Sno onboarding" in Ihrem Agenten | Noch nicht behauptet |
 
 Eine Zeile sagt „bewiesen" erst, wenn sie auf einer sauberen Maschine gelaufen ist; bis dahin sagt sie, was vorhanden ist.
 

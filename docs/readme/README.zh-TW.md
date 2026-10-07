@@ -36,7 +36,7 @@ Sno Station 是您代理人的工作站：這款開源軟體能把您已經在�
 
 ## Install
 
-*最後更新於 2026-10-01。* **共用記憶今天就能安裝。** 它讓 Claude Code、Codex、OpenClaw 和 Hermes Agent 共用一份放在你自己機器上的加密記憶，不需要帳號，也不需要 API key。先執行一次[共用記憶設定](../memory-setup.md)（幾分鐘），再加入你的代理人：
+*最後更新於 2026-10-07。* **共用記憶今天就能安裝。** 它讓 Claude Code、Codex、OpenClaw 和 Hermes Agent 共用一份放在你自己機器上的加密記憶，不需要帳號，也不需要 API key。先執行一次[共用記憶設定](../memory-setup.md)（幾分鐘），再加入你的代理人：
 
 ```bash
 # Install the sno command once
@@ -53,7 +53,7 @@ sno setup --harness hermes
 
 逐步說明： [Codex](../mem-codex/onboarding.md) · [Claude Code](../mem-claude/onboarding.md) · [OpenClaw](../mem-claw/onboarding.md) · [Hermes](../mem-hermes/onboarding.md)
 
-Sno Reach、Duo 技能和夜間循環還不在這些套件裡。單一指令安裝全部內容的方式還沒有，它會隨 onboarding 技能一起推出；在那之前，請持續關注這個儲存庫。上線後，操作方式會像這樣：
+`sno setup` 也會安裝 Sno Reach、小型輔助程式、技能和夜間循環，所有指令都是 `sno <名稱>` 的形式，完整清單見 [docs/sno-commands.md](../sno-commands.md)。在您的代理人裡輸入 "Sno onboarding"、用對話帶您完成同樣的設定，這個方式還在後面。上線後會是這樣：
 
 ```bash
 # inside any Claude Code, Codex or OpenClaw conversation:
@@ -138,16 +138,17 @@ harness 所需的 hook。不需要記住任何套件名稱。
 
 ## What runs today
 
-*最後更新於 2026-09-20。*
+*最後更新於 2026-10-07。*
 
 | 項目 | 狀態 |
 |---|---|
 | `packages/chunking` | 已在此儲存庫中，經過測試，並發布至 npm |
 | 共用套件（`common-core`、`utils`、`embedder`、`observability`、`sqlite-crypto`、`content-sanitizer`） | 已在此儲存庫中 |
 | 跨 Claude Code、Codex 與 OpenClaw 的共用記憶 | 引擎與三種介面皆已在此儲存庫中；尚待乾淨機器驗證 |
-| Sno Reach——代理人之間互相溝通，不需要 daemon | 原始碼已在此儲存庫中；發布封存檔尚待推出 |
-| RSI loop（技能） | 本週 |
-| 單一指令安裝（執行 `sno assemble`，或在您的代理人裡輸入 "Sno onboarding"） | 尚未宣稱完成 |
+| Sno Reach——代理人之間互相溝通，不需要 daemon | 由 `sno setup` 安裝；Linux 與 macOS 的發布封存檔已公開；已在乾淨的 Linux 機器上端對端驗證 |
+| 夜間循環與小隊技能 | 由 `sno setup` 安裝；夜間任務已在乾淨的 Linux 機器上執行 |
+| 單一指令安裝（`sno setup`） | 裝好以上全部內容；已在乾淨的 Linux 機器上驗證 |
+| 在您的代理人裡輸入 "Sno onboarding" | 尚未宣稱完成 |
 
 只有在乾淨的機器上運作過之後，該項目才會標示為「已證實」；在那之前，這裡只會說明目前已具備的內容。
 

@@ -43,7 +43,7 @@ Apache-2.0、隅々まで。メモリストアは最初の使用時からあな�
 
 ## Install
 
-*最終更新 2026-10-01。* **共有メモリは今日からインストールできます。** Claude Code、Codex、OpenClaw、Hermes Agent に、アカウントも API キーも不要の、あなたのマシン上の暗号化されたメモリをひとつ持たせます。[共有メモリのセットアップ](../memory-setup.md)を一度だけ実行し（数分）、そのあとエージェントを追加します。
+*最終更新 2026-10-07。* **共有メモリは今日からインストールできます。** Claude Code、Codex、OpenClaw、Hermes Agent に、アカウントも API キーも不要の、あなたのマシン上の暗号化されたメモリをひとつ持たせます。[共有メモリのセットアップ](../memory-setup.md)を一度だけ実行し（数分）、そのあとエージェントを追加します。
 
 ```bash
 # Install the sno command once
@@ -60,7 +60,7 @@ sno setup --harness hermes
 
 ウォークスルー： [Codex](../mem-codex/onboarding.md) · [Claude Code](../mem-claude/onboarding.md) · [OpenClaw](../mem-claw/onboarding.md) · [Hermes](../mem-hermes/onboarding.md)
 
-Sno Reach、Duo のスキル、夜間ループはまだこれらのパッケージに含まれていません。すべてをまとめたワンコマンドインストールはこれからで、オンボーディングスキルとともに到着します。それまではこのリポジトリを見守ってください。到着すると、次のようになります。
+`sno setup` は Sno Reach、小さな補助プログラム、スキル、夜間ループもインストールします。すべてのコマンドは `sno <name>` の形です。一覧は [docs/sno-commands.md](../sno-commands.md) にあります。エージェントの中で「Sno onboarding」と話しかけ、同じセットアップを会話で進める方法はこれからです。登場すると次のようになります：
 
 ```bash
 # inside any Claude Code, Codex or OpenClaw conversation:
@@ -152,16 +152,17 @@ Codex に Claude Code の作業をレビューさせてきました。空振り�
 
 ## What runs today
 
-*最終更新 2026-09-20。*
+*最終更新 2026-10-07。*
 
 | Piece | Status |
 |---|---|
 | `packages/chunking` | In this repository, tested, published on npm |
 | Shared packages (`common-core`, `utils`, `embedder`, `observability`, `sqlite-crypto`, `content-sanitizer`) | このリポジトリ内にあります |
 | Shared memory across Claude Code, Codex and OpenClaw | エンジンと3つのスキンすべてがこのリポジトリ内にあります。クリーンなマシンでの証明は未了です |
-| Sno Reach — agents talking to each other, no daemon | ソースはこのリポジトリ内にあります。リリースアーカイブは未了です |
-| The RSI loop (skill) | This week |
-| One-command install (`sno assemble`, or say "Sno onboarding" inside your agent) | Not yet claimed |
+| Sno Reach — agents talking to each other, no daemon | `sno setup` でインストールされます。Linux と macOS 向けのリリースアーカイブを公開済みで、クリーンな Linux マシンでエンドツーエンドで確認済みです |
+| 夜間ループとスクォードのスキル | `sno setup` でインストールされます。夜間ジョブはクリーンな Linux マシンで動作済みです |
+| ワンコマンドインストール（`sno setup`） | 上記すべてをインストールします。クリーンな Linux マシンで確認済みです |
+| エージェントの中での「Sno onboarding」 | まだ表明していません |
 
 ある行が「実証済み」と言えるのは、クリーンなマシンで動作した後だけです。それまでは、ここに何があるかを述べます。
 
