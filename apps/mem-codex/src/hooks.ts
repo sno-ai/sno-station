@@ -13,6 +13,7 @@ import {
 } from "./recall.js";
 import { hookScope, workspaceRoot } from "./scope.js";
 import { startWorkerDetached } from "./worker.js";
+import { reportSessionActivity } from "./session-activity.js";
 import { reportSkillRuns } from "./skill-runs.js";
 import {
 	appendSpool,
@@ -170,6 +171,16 @@ export async function stop(raw: unknown): Promise<void> {
 		readRecallSettings();
 		const input = stopSchema.parse(raw);
 		if (input.agent_id !== undefined) return;
+		try {
+			const activity = await reportSessionActivity((await readSession(input.session_id)).activity, input);
+			await updateSession(input.session_id, (state) => { state.activity = activity; });
+		} catch (error) {
+			console.error(JSON.stringify({
+				event: "session-activity",
+				reason: error instanceof Error ? error.message : String(error),
+				impact: "no session.activity row for this turn; the next send covers the same records",
+			}));
+		}
 		if (!readCaptureSettings().ambient) return;
 		sessionId = input.session_id;
 		const project = await workspaceRoot(input.cwd);
