@@ -1,0 +1,105 @@
+name: release archives
+
+# Builds the Reach archive for every platform and the three small-program archives that `sno setup`
+# downloads, and attaches them to the GitHub Release. Everything is built from this repository.
+# On a pull request it only builds, so the build is proven before a release needs it.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: GitHub Release tag to attach the archives to (the draft created by the npm publish)
+        required: true
+        type: string
+      source_sha:
+        description: Reviewed public main commit the archives are built from
+        required: true
+        type: string
+  pull_request:
+    paths:
+      - apps/reach/**
+      - apps/heartbeat/**
+      - apps/report-time/**
+      - apps/subscription-quota-check/**
+      - apps/requirements-contract.json
+      - .github/workflows/release-archives.yml
+
+jobs:
+  reach:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: linux-x86_64, os: ubuntu-22.04, make: make, extra: "" }
+          - { name: linux-aarch64, os: ubuntu-22.04-arm, make: make, extra: "" }
+          - { name: macos-aarch64, os: macos-14, make: gmake, extra: "" }
+          - { name: macos-x86_64, os: macos-14, make: gmake, extra: 'CC="cc -arch x86_64" PLATFORM=macos-x86_64' }
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.source_sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Tools for macOS (GNU make, tar and coreutils)
+        if: runner.os == 'macOS'
+        run: |
+          brew install make gnu-tar coreutils jq
+          echo "$(brew --prefix coreutils)/libexec/gnubin" >> "$GITHUB_PATH"
+      - name: Tools for Linux
+        if: runner.os == 'Linux'
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq build-essential perl jq
+      - name: Build the Reach archive
+        run: |
+          cd apps/reach
+          ${{ matrix.make }} package ${{ matrix.extra }}
+          ls -l dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: archives-reach-${{ matrix.name }}
+          path: apps/reach/dist/*.tar.gz
+          if-no-files-found: error
+
+  programs:
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.source_sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Build heartbeat, report-time and subscription-quota-check
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq jq
+          for program in heartbeat report-time subscription-quota-check; do
+            make -C "apps/$program" package CONTRACT="$PWD/apps/requirements-contract.json"
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: archives-programs
+          path: apps/*/dist/*.tar.gz
+          if-no-files-found: error
+
+  attach:
+    if: github.event_name == 'workflow_dispatch'
+    needs: [reach, programs]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: archives-*
+          merge-multiple: true
+          path: archives
+      - name: Attach the archives to the Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          ls -l archives
+          gh release upload "$TAG" archives/*.tar.gz --clobber --repo "$GITHUB_REPOSITORY"
