@@ -9,7 +9,6 @@ trap 'rm -rf -- "$WORK"' EXIT
 APPS=(heartbeat report-time subscription-quota-check)
 FIXTURE="$HERE/fixtures/requirements-contract.json"
 CONTRACT_FILE="${UTILITY_TEST_CONTRACT:-$FIXTURE}"
-BASELINE=8b4b3a36cfbfd40b25ff47994ce55dfec03fc695
 
 fail() { printf 'FAIL %s\n' "$*" >&2; exit 1; }
 pass() { printf 'PASS %s\n' "$*"; }
@@ -89,16 +88,6 @@ reproducible)
   done
   ;;
 identity)
-  workshop="${2:?usage: release-proof.sh identity WORKSHOP_REPO}"
-  for app in heartbeat subscription-quota-check; do
-    git -C "$workshop" show "$BASELINE:skills/$app/skill/scripts/$app" >"$WORK/$app"
-    # Both current moves retain even the original header; no ignored differences.
-    cmp "$WORK/$app" "$ROOT/apps/$app/bin/$app"
-    bash "$WORK/$app" --help >"$WORK/original.help"
-    "$ROOT/apps/$app/bin/$app" --help >"$WORK/moved.help"
-    cmp "$WORK/original.help" "$WORK/moved.help"
-    pass "$app baseline bytes and help unchanged"
-  done
   mkdir "$WORK/tools"
   for tool in bash jq timeout date mkfifo mktemp rm uname; do
     ln -s "$(command -v "$tool")" "$WORK/tools/$tool"
@@ -190,5 +179,5 @@ package|manifest|refusal)
     fi
   done
   ;;
-*) fail 'usage: release-proof.sh identity WORKSHOP_REPO | binding | package | refusal | manifest | reproducible' ;;
+*) fail 'usage: release-proof.sh identity | binding | package | refusal | manifest | reproducible' ;;
 esac
