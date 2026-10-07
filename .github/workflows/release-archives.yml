@@ -101,5 +101,14 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ inputs.tag }}
         run: |
-          find archives -name '*.tar.gz' -print0 | xargs -0 ls -l
-          find archives -name '*.tar.gz' -print0 | xargs -0 gh release upload "$TAG" --clobber --repo "$GITHUB_REPOSITORY"
+          # A program version lives in exactly one release. sno setup refuses to choose between two releases that carry
+          # the same archive ("ambiguous release asset"), so an archive that an earlier release already has is not attached again.
+          existing=$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" --jq '.[].assets[].name')
+          find archives -name '*.tar.gz' | while read -r file; do
+            name=$(basename "$file")
+            if grep -qxF "$name" <<< "$existing"; then
+              echo "skip $name: a release already carries it"
+            else
+              gh release upload "$TAG" "$file" --repo "$GITHUB_REPOSITORY"
+            fi
+          done
