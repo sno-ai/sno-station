@@ -106,7 +106,11 @@ try:
         assert reply["X-Type"] == "answer" and reply["X-State"] == "completed"
         assert reply.get_all("Delivered-To") == [addresses[0]] and reply["Bcc"] is None
         assert message_id in reply["References"] and nonce in reply.get_payload()
-        heart_env = dict(env, PLATFORM_HEARTBEAT_LABEL="platform-e2e")
+        # The reader drives one program; this wrapper makes it drive the installed release through `sno heartbeat`.
+        wrapper = attempt / "heartbeat-via-sno.sh"
+        wrapper.write_text(f'#!/bin/sh\nexec {shlex.quote(sno)} heartbeat "$@"\n')
+        wrapper.chmod(0o755)
+        heart_env = dict(env, PLATFORM_HEARTBEAT_LABEL="platform-e2e", HEARTBEAT=str(wrapper))
         run(["python3", str(here.parent / "heartbeat/platform-macos-reader.py")], context=heart_env, bound=110)
         reading = run([*quota, "--vendor", "codex"], expected=(0, 1, 3, 4), bound=60)
         assert reading.stdout.strip() or reading.stderr.strip(), "quota read produced no diagnostic"
@@ -116,6 +120,11 @@ try:
     guard_home, guard_tmp = attempt / "guard-home", attempt / "guard-tmp"
     guard_home.mkdir()
     guard_tmp.mkdir()
+    # sno finds the installed programs through its install record under HOME: give the empty guard home a copy of the real one.
+    (guard_home / ".config/sno").mkdir(parents=True)
+    (guard_home / ".config/sno/assemble.json").write_bytes((Path.home() / ".config/sno/assemble.json").read_bytes())
+    (guard_home / ".config/sno/cli.json").write_text('{"auto":{"enabled":false}}\n')
+    guard_before = sorted(guard_home.rglob("*"))
     guard_env = dict(env, PATH="/usr/bin:/bin:/usr/sbin:/sbin", HOME=str(guard_home),
                      TMPDIR=str(guard_tmp), XDG_STATE_HOME=str(guard_home / "state"),
                      SNO_REACH_ROOT=str(guard_home / "mail"))
@@ -134,7 +143,7 @@ try:
         result = run(argv, context=guard_env, expected=(code,), body="Refused input.\n")
         assert not result.stdout and len(result.stderr.splitlines()) == 1
         assert "needs Bash 5" in result.stderr and "3.2" in result.stderr
-        assert not list(guard_home.rglob("*")) and not list(guard_tmp.rglob("*"))
+        assert sorted(guard_home.rglob("*")) == guard_before and not list(guard_tmp.rglob("*"))
     for address, context in zip(addresses, contexts):
         run([*reach, "init", "--as", address, "--name", address[0]], context=context)
         run([*reach, "register", "--as", address, "--channel", "tmux", "--handle", context["TMUX_PANE"]], context=context)
