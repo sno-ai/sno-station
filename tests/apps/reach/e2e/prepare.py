@@ -79,8 +79,6 @@ release.mkdir(parents=True)
 subprocess.run(["tar", "-xzf", str(archive), "-C", str(release)], check=True)
 assert (release / "VERSION").read_text().strip() == version
 (home / ".local/lib/sno-reach/current").symlink_to(release)
-(home / ".local/bin").mkdir()
-(home / ".local/bin/sno-reach").symlink_to(home / ".local/lib/sno-reach/current/bin/sno-reach")
 (home / ".config/sno-reach").mkdir(parents=True)
 (home / ".config/sno-reach/agents.json").write_text('{"codex":{"acpx_agent":"codex"},"claude":{"acpx_agent":"claude"}}\n')
 (home / ".acpx").mkdir()

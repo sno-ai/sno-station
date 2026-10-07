@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Installed public commands, stock-PATH refusal, restored exchange; one shared wall."""
+"""Public sno commands, stock-PATH refusal, restored exchange; one shared wall."""
 import email
 from email.utils import formatdate
 import hashlib
@@ -35,9 +35,11 @@ attempt = root / ("attempt-" + uuid.uuid4().hex[:8])
 attempt.mkdir()
 print(f"Journey evidence: {attempt}; original wall start={wall['started']}", flush=True)
 here = Path(__file__).resolve().parent
-reach = str(Path.home() / ".local/bin/sno-reach")
-heartbeat = str(Path.home() / ".local/bin/heartbeat")
-quota = str(Path.home() / ".local/bin/subscription-quota-check")
+sno = os.environ.get("SNO_BINARY")
+assert sno and Path(sno).is_absolute(), "SNO_BINARY must be the absolute path of a built sno binary"
+reach = [sno, "reach"]
+heartbeat = [sno, "heartbeat"]
+quota = [sno, "subscription-quota-check"]
 env = dict(os.environ, SNO_REACH_ROOT=str(attempt / "state"))
 for key in ("SNO_MBOX_ROOT", "SNO_EXECUTOR_ADDR", "SNO_REACH_ADDR", "SNO_TPM_REGISTRY", "TPM_REGISTRY"):
     env.pop(key, None)
@@ -69,9 +71,9 @@ try:
     tmux_env = run(["tmux", "-L", server, "display-message", "-p", "#{socket_path},#{pid},0"]).stdout.strip()
     contexts = [dict(env, TMUX=tmux_env, TMUX_PANE=pane) for pane in (pane_a, pane_b)]
     for address, context in zip(addresses, contexts):
-        run([reach, "init", "--as", address, "--name", address[0]], context=context)
-        run([reach, "register", "--as", address, "--channel", "tmux", "--handle", context["TMUX_PANE"]], context=context)
-        doctor = run([reach, "doctor", "--as", address], context=context)
+        run([*reach, "init", "--as", address, "--name", address[0]], context=context)
+        run([*reach, "register", "--as", address, "--channel", "tmux", "--handle", context["TMUX_PANE"]], context=context)
+        doctor = run([*reach, "doctor", "--as", address], context=context)
         assert "prerequisites: ok\n" in doctor.stdout and "DOCTOR-OK\n" in doctor.stdout
     identity = run([str(Path.home() / ".local/lib/sno-reach/current/lib/reach-machine-id")]).stdout.strip()
     assert len(identity) == 32 and all(c in "0123456789abcdef" for c in identity)
@@ -83,8 +85,8 @@ try:
                 f"Subject: [QUESTION] platform {wave}\nDate: {formatdate(localtime=False)}\n"
                 f"Message-ID: {message_id}\nX-Work: platform-{nonce}\nX-Type: question\n\n"
                 f"Return this nonce: {nonce}\n")
-        run([reach, "send", "--as", addresses[0]], context=contexts[0], body=card)
-        inbox = run([reach, "inbox", "--as", addresses[1]], context=contexts[1])
+        run([*reach, "send", "--as", addresses[0]], context=contexts[0], body=card)
+        inbox = run([*reach, "inbox", "--as", addresses[1]], context=contexts[1])
         candidates = [Path(line.split()[0]) for line in inbox.stdout.splitlines() if "platform " + wave in line]
         assert len(candidates) == 1, inbox.stdout
         original = candidates[0]
@@ -93,20 +95,20 @@ try:
         assert received.get_all("Delivered-To") == [addresses[1]] and received["Bcc"] is None
         received_nonce = received.get_payload().removeprefix("Return this nonce: ").strip()
         assert received.get_payload() == f"Return this nonce: {nonce}\n", "delivered question body changed"
-        run([reach, "reply", "--as", addresses[1], "--card", str(original), "--state", "accepted"],
+        run([*reach, "reply", "--as", addresses[1], "--card", str(original), "--state", "accepted"],
             context=contexts[1], body="Accepted.\n")
-        run([reach, "reply", "--as", addresses[1], "--card", str(original), "--state", "completed"],
+        run([*reach, "reply", "--as", addresses[1], "--card", str(original), "--state", "completed"],
             context=contexts[1], body=f"Returned nonce: {received_nonce}\n")
-        waited = run([reach, "wait", "--as", addresses[0], "--from", addresses[1],
+        waited = run([*reach, "wait", "--as", addresses[0], "--from", addresses[1],
                       "--reply-to", message_id, "--timeout", "5", "--every", "1"], context=contexts[0])
         reply_path = Path(waited.stdout.strip())
         reply = email.message_from_string(reply_path.read_text())
         assert reply["X-Type"] == "answer" and reply["X-State"] == "completed"
         assert reply.get_all("Delivered-To") == [addresses[0]] and reply["Bcc"] is None
         assert message_id in reply["References"] and nonce in reply.get_payload()
-        heart_env = dict(env, HEARTBEAT=heartbeat, PLATFORM_HEARTBEAT_LABEL="platform-e2e")
+        heart_env = dict(env, PLATFORM_HEARTBEAT_LABEL="platform-e2e")
         run(["python3", str(here.parent / "heartbeat/platform-macos-reader.py")], context=heart_env, bound=110)
-        reading = run([quota, "--vendor", "codex"], expected=(0, 1, 3, 4), bound=60)
+        reading = run([*quota, "--vendor", "codex"], expected=(0, 1, 3, 4), bound=60)
         assert reading.stdout.strip() or reading.stderr.strip(), "quota read produced no diagnostic"
         return original
 
@@ -117,15 +119,15 @@ try:
     guard_env = dict(env, PATH="/usr/bin:/bin:/usr/sbin:/sbin", HOME=str(guard_home),
                      TMPDIR=str(guard_tmp), XDG_STATE_HOME=str(guard_home / "state"),
                      SNO_REACH_ROOT=str(guard_home / "mail"))
-    refusals = [([reach, *args], 69) for args in (
+    refusals = [([*reach, *args], 69) for args in (
         ["init", "--as", addresses[0], "--name", "a"],
         ["register", "--as", addresses[0], "--channel", "tmux", "--handle", pane_a],
         ["doctor", "--as", addresses[0]], ["send", "--as", addresses[0]],
         ["inbox", "--as", addresses[1]],
         ["reply", "--as", addresses[1], "--card", str(original), "--state", "completed"],
         ["wait", "--as", addresses[0], "--timeout", "0"])]
-    refusals += [([heartbeat, "--interval", "1m", "--label", "platform-e2e", "--", "true"], 1),
-                 ([heartbeat, "--stop", "platform-e2e"], 1), ([quota, "--vendor", "codex"], 2)]
+    refusals += [([*heartbeat, "--interval", "1m", "--label", "platform-e2e", "--", "true"], 1),
+                 ([*heartbeat, "--stop", "platform-e2e"], 1), ([*quota, "--vendor", "codex"], 2)]
     # The stock macOS Bash 3.2 plant has no Linux counterpart. Linux still runs
     # both complete installed exchanges; its missing-tool cases are separate.
     for argv, code in (refusals if macos else []):
@@ -134,9 +136,9 @@ try:
         assert "needs Bash 5" in result.stderr and "3.2" in result.stderr
         assert not list(guard_home.rglob("*")) and not list(guard_tmp.rglob("*"))
     for address, context in zip(addresses, contexts):
-        run([reach, "init", "--as", address, "--name", address[0]], context=context)
-        run([reach, "register", "--as", address, "--channel", "tmux", "--handle", context["TMUX_PANE"]], context=context)
-        doctor = run([reach, "doctor", "--as", address], context=context)
+        run([*reach, "init", "--as", address, "--name", address[0]], context=context)
+        run([*reach, "register", "--as", address, "--channel", "tmux", "--handle", context["TMUX_PANE"]], context=context)
+        doctor = run([*reach, "doctor", "--as", address], context=context)
         assert "prerequisites: ok\n" in doctor.stdout and "DOCTOR-OK\n" in doctor.stdout
     exchange("after-restore")
     passed = True
