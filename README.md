@@ -38,7 +38,7 @@ whatever language you use with your agent, and this README ships in nine.
 
 ## Install
 
-*Last updated 2026-10-04.* **Shared memory installs today.** It gives Claude Code, Codex, OpenClaw and Hermes Agent one encrypted memory on your machine, with no account and no API key. Install the `sno` command once, then run `sno setup` for each agent:
+*Last updated 2026-10-07.* **Shared memory installs today.** It gives Claude Code, Codex, OpenClaw and Hermes Agent one encrypted memory on your machine, with no account and no API key. Install the `sno` command once, then run `sno setup` for each agent:
 
 ```bash
 # Install the sno command once
@@ -55,7 +55,7 @@ sno setup --harness hermes
 
 Walkthroughs: [Codex](docs/mem-codex/onboarding.md) · [Claude Code](docs/mem-claude/onboarding.md) · [OpenClaw](docs/mem-claw/onboarding.md) · [Hermes](docs/mem-hermes/onboarding.md)
 
-Sno Reach, the Duo skills and the nightly loop are not in these packages. The one-command install for everything is still to come: it lands with the onboarding skill, and until then, watch this repository. When it lands it will look like this:
+`sno setup` also installs Sno Reach, the small helper programs, the skills and the nightly loop, and every command is `sno <name>`: the full list is in [docs/sno-commands.md](docs/sno-commands.md). Saying "Sno onboarding" inside your agent, which walks you through the same setup in conversation, is still to come. When it lands it will look like this:
 
 ```bash
 # inside any Claude Code, Codex or OpenClaw conversation:
@@ -144,16 +144,17 @@ else is touched.
 
 ## What runs today
 
-*Last updated 2026-10-01.*
+*Last updated 2026-10-07.*
 
 | Piece | Status |
 |---|---|
 | Shared memory across Claude Code, Codex, OpenClaw and Hermes Agent | On npm and GitHub since 2026-10-01; installed from the registry on a clean machine and proven end to end |
 | `packages/chunking`, `packages/content-sanitizer` | In this repository, tested, published on npm |
 | Shared packages (`common-core`, `utils`, `embedder`, `observability`, `sqlite-crypto`) | In this repository, published on npm |
-| Sno Reach — agents talking to each other, no daemon | Source in this repository; release archives pending |
-| The RSI loop (skill) | This week |
-| One-command install (`sno assemble`, or say "Sno onboarding" inside your agent) | Not yet claimed |
+| Sno Reach — agents talking to each other, no daemon | Installed by `sno setup`; release archives for Linux and macOS are published; proven end to end on a clean Linux machine |
+| The nightly loop and the squad skills | Installed by `sno setup`; the nightly job ran on a clean Linux machine |
+| One-command install (`sno setup`) | Installs everything above; proven on a clean Linux machine |
+| "Sno onboarding" inside your agent | Not yet claimed |
 
 A row says "proven" only once it has run on a clean machine; until then it says what is here.
 
