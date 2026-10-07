@@ -81,7 +81,7 @@ class Communication(unittest.TestCase):
         self.assertIn(f"<literal-message@{HOST}>", got["text"])
         self.assertIn(f"tpm.probe@{HOST}", got["text"])
         self.assertIn(str(self.mail), got["text"])
-        self.assertIn(f"sno-reach inbox --as tpm.probe@{HOST}", got["text"])
+        self.assertIn(f"sno reach inbox --as tpm.probe@{HOST}", got["text"])
         self.assertIn(str(APP / "guide/agent-reach.md"), got["text"])
         self.assertNotIn("ACK-", got["text"])
         self.assertTrue(got["no_wait"])
