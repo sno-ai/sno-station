@@ -47,7 +47,7 @@ if macos:
 check("codex-version", ["codex", "--version"], lambda code, out: code == 0 and "codex-cli" in out, "hiding codex produces the named missing-CLI refusal")
 check("codex-login", ["codex", "login", "status"], lambda code, out: code == 0 and "ChatGPT" in out,
       "revocation is not planted in a shared login; the journey performs an actual quota read")
-check("installed-version", [os.environ["SNO_BINARY"], "reach", "--version"], lambda code, out: code == 0 and out.strip() == "2.0", "missing VERSION is covered in the independent archive proof")
+check("installed-version", [os.environ.get("SNO_BINARY", "sno"), "reach", "--version"], lambda code, out: code == 0 and out.strip() == "2.0", "missing VERSION is covered in the independent archive proof")
 actual_digest = hashlib.sha256(archive.read_bytes()).hexdigest()
 rows.append(dict(name="archive", command=["sha256sum", str(archive)], output=actual_digest,
                  passed=actual_digest == expected_digest, calibration="archive corruption is actually refused by archive.t", owner="platform executor"))
