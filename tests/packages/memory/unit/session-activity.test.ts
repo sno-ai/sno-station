@@ -28,13 +28,13 @@ describe("foldActivity", () => {
 		const { payload, cursor } = foldActivity(EMPTY_ACTIVITY_CURSOR, [rec(0), rec(5), rec(20), rec(36)], false);
 		expect(payload).toEqual({
 			window_start_ms: T0, window_end_ms: T0 + 36 * MIN,
-			active_ms: 20 * MIN, team_driven_ms: 0, runs_over_12h: 0, longest_run_ms: 0, human_messages: 0,
+			active_ms: 20 * MIN, team_driven_ms: 0, runs_over_12h: 0, longest_run_ms: 20 * MIN, human_messages: 0,
 		});
 		// The run that began at minute 36 is still open.
 		expect(cursor).toMatchObject({ lastTs: T0 + 36 * MIN, runStart: T0 + 36 * MIN });
 	});
 
-	it("counts a 13-hour run once, and a 12-hour one, but not 5h or 11h59m (longest_run_ms is 0 then)", () => {
+	it("counts a run that reaches 12 hours once; longest_run_ms is the longest run of any length", () => {
 		const run = (hours: number, minutes = 0): ActivityRecord[] => {
 			const end = hours * 60 + minutes;
 			return Array.from({ length: Math.floor(end / 10) + 1 }, (_, i) => rec(i * 10)).concat(end % 10 ? [rec(end)] : []);
@@ -42,19 +42,52 @@ describe("foldActivity", () => {
 		const thirteen = foldActivity(EMPTY_ACTIVITY_CURSOR, run(13), true).payload;
 		expect(thirteen).toMatchObject({ runs_over_12h: 1, longest_run_ms: 13 * HOUR, active_ms: 13 * HOUR });
 		expect(foldActivity(EMPTY_ACTIVITY_CURSOR, run(12), true).payload).toMatchObject({ runs_over_12h: 1, longest_run_ms: 12 * HOUR });
-		expect(foldActivity(EMPTY_ACTIVITY_CURSOR, run(11, 59), true).payload).toMatchObject({ runs_over_12h: 0, longest_run_ms: 0 });
-		expect(foldActivity(EMPTY_ACTIVITY_CURSOR, run(5), true).payload).toMatchObject({ runs_over_12h: 0, longest_run_ms: 0, active_ms: 5 * HOUR });
+		expect(foldActivity(EMPTY_ACTIVITY_CURSOR, run(11, 59), true).payload).toMatchObject({ runs_over_12h: 0, longest_run_ms: 11 * HOUR + 59 * MIN });
+		expect(foldActivity(EMPTY_ACTIVITY_CURSOR, run(5), true).payload).toMatchObject({ runs_over_12h: 0, longest_run_ms: 5 * HOUR, active_ms: 5 * HOUR });
 	});
 
-	it("keeps an open run in the cursor and counts it once across two sends", () => {
+	it("keeps an open run in the cursor and counts it once, in the send where it passes 12 hours", () => {
 		const records = Array.from({ length: 80 }, (_, i) => rec(i * 10)); // 0 .. 13h10m
 		const first = foldActivity(EMPTY_ACTIVITY_CURSOR, records.slice(0, 40), false);
-		expect(first.payload).toMatchObject({ runs_over_12h: 0, longest_run_ms: 0 });
+		expect(first.payload).toMatchObject({ runs_over_12h: 0, longest_run_ms: 39 * 10 * MIN });
 		const second = foldActivity(first.cursor, records.slice(40), true);
 		expect(second.payload).toMatchObject({
 			window_start_ms: records[39]?.ts, runs_over_12h: 1, longest_run_ms: 79 * 10 * MIN,
 		});
 		expect((first.payload?.active_ms ?? 0) + (second.payload?.active_ms ?? 0)).toBe(79 * 10 * MIN);
+	});
+
+	it("gives the same runs_over_12h and longest_run_ms whether a transcript is sent once or in 200 pieces", () => {
+		// A 14-hour run, a 30-minute pause, then a 5-hour run that never reaches 12 hours.
+		const records = [
+			...Array.from({ length: 85 }, (_, i) => rec(i * 10)), // 0 .. 14h
+			...Array.from({ length: 31 }, (_, i) => rec(14 * 60 + 30 + i * 10)), // 14h30 .. 19h30
+		];
+		const once = foldActivity(EMPTY_ACTIVITY_CURSOR, records, true).payload;
+		expect(once).toMatchObject({ runs_over_12h: 1, longest_run_ms: 14 * HOUR });
+		for (const closeLast of [true, false]) {
+			let cursor = EMPTY_ACTIVITY_CURSOR;
+			let runs = 0, longest = 0;
+			const size = Math.ceil(records.length / 200);
+			for (let at = 0; at < records.length; at += size) {
+				const last = at + size >= records.length;
+				const sent = foldActivity(cursor, records.slice(at, at + size), closeLast && last);
+				cursor = sent.cursor;
+				runs += sent.payload?.runs_over_12h ?? 0;
+				longest = Math.max(longest, sent.payload?.longest_run_ms ?? 0);
+			}
+			expect({ runs, longest }).toEqual({ runs: 1, longest: 14 * HOUR });
+		}
+		// One record per piece is the worst case: every send leaves the run open.
+		let cursor = EMPTY_ACTIVITY_CURSOR;
+		let runs = 0, longest = 0;
+		for (const record of records) {
+			const sent = foldActivity(cursor, [record], false);
+			cursor = sent.cursor;
+			runs += sent.payload?.runs_over_12h ?? 0;
+			longest = Math.max(longest, sent.payload?.longest_run_ms ?? 0);
+		}
+		expect({ runs, longest }).toEqual({ runs: 1, longest: 14 * HOUR });
 	});
 
 	it("attributes time to the agent until the person types, and counts only the person's messages", () => {
