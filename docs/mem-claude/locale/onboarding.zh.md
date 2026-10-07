@@ -13,7 +13,7 @@
 先按[共用记忆服务安装说明](../../memory-setup.md)完成设置，再安装 Claude Code 插件：
 
 ```bash
-npm install -g @snoai/mem-claude@1.0.1
+npm install -g @snoai/mem-claude@1.1.0
 sno setup --harness claude
 ```
 

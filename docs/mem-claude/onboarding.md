@@ -13,7 +13,7 @@ Requirements:
 Complete the [shared memory setup](../memory-setup.md), then install the Claude Code integration:
 
 ```bash
-npm install -g @snoai/mem-claude@1.0.1
+npm install -g @snoai/mem-claude@1.1.0
 sno setup --harness claude
 ```
 
