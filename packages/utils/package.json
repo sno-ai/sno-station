@@ -1,7 +1,7 @@
 {
   "name": "@snoai/utils",
   "version": "1.1.0",
-  "description": "Shared logging and filesystem utilities used by Sno Station packages.",
+  "description": "Logs you can actually read. When something goes wrong in Sno Station, this is how you find out why.",
   "license": "Apache-2.0",
   "publishConfig": { "access": "public" },
   "repository": {

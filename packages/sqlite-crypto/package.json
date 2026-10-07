@@ -8,7 +8,7 @@
 		"url": "git+https://github.com/sno-ai/sno-station.git",
 		"directory": "packages/sqlite-crypto"
 	},
-	"description": "Local AES-256 encryption for SNO Station Core SQLite databases.",
+	"description": "Your memory database, encrypted on your own disk. The key never leaves your machine.",
 	"type": "module",
 	"main": "./dist/index.js",
 	"types": "./dist/index.d.ts",
