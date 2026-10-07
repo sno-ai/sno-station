@@ -1,7 +1,7 @@
 {
   "name": "@snoai/embedder",
   "version": "1.1.0",
-  "description": "Local on-device text embeddings with a pinned model, used by Sno Station.",
+  "description": "Finds your memories by meaning, right on your machine. No API key, no cloud.",
   "license": "Apache-2.0",
   "publishConfig": { "access": "public" },
   "repository": {
