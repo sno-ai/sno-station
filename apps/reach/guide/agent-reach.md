@@ -2,7 +2,7 @@
 
 Reach-Version: 2.1.2
 
-This guide belongs to the release containing `bin/sno-reach`. Use that installed release, not a workshop script. Put the install home's `.local/bin` on PATH. `sno reach` dispatches to `sno-reach`; both run the same program.
+This guide belongs to the Reach release that `sno reach` runs. Use that installed release, not a workshop script.
 
 ## Prerequisites
 

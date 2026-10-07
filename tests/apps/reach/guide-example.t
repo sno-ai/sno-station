@@ -4,6 +4,8 @@
 set -Eeuo pipefail
 export REACH_UNDER_TEST="${1:?installed candidate command required}" REACH_KEEP_TEST_ROOT=1
 proof="${2:?new evidence directory required}"
+# The guide example types `sno reach`; the real sno must run it (absolute path of a built sno binary).
+SNO_BINARY="${SNO_BINARY:?SNO_BINARY must be the absolute path of a built sno binary}"
 [[ ! -e "$proof" ]] || exit 2
 mkdir -p "$proof"
 # shellcheck source=test-lib.sh
@@ -26,7 +28,7 @@ assert len(matches) == 1, "installed guide must contain one complete original-ca
 assert "spawn" not in matches[0], "guide reply example must not start a runtime"
 pathlib.Path(sys.argv[2]).write_text("set -Eeuo pipefail\n" + matches[0] + "\n")
 PY
-env HOME="$TEST_HOME" PATH="$(dirname -- "$REACH"):$PATH" SNO_REACH_ROOT="$STATE" \
+env HOME="$TEST_HOME" PATH="$(dirname -- "$SNO_BINARY"):$PATH" SNO_REACH_ROOT="$STATE" \
   SNO_REACH_ADDR="$RECEIVER" original_card="$original" TMUX="$TEST_TMUX" TMUX_PANE="$TEST_PANE" \
   bash "$proof/example.sh" >"$proof/example.out" 2>"$proof/example.err"
 reach state --work guide-example --json >"$proof/state.jsonl"
