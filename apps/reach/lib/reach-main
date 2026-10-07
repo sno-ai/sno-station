@@ -1016,17 +1016,22 @@ run_doctor() {
 }
 
 observe_append() {
-    local root="$1" status detail
+    local root="$1" status stored detail
     shift
     (
         trap - EXIT
-        if timeout --foreground --signal=TERM --kill-after=1 5 sno observe append "$@"; then
+        if stored="$(timeout --foreground --signal=TERM --kill-after=1 5 sno observe append "$@" </dev/null 2>/dev/null)"; then
             exit 0
         else
             status=$?
         fi
-        detail="sno observe append $1 failed (exit $status); event not recorded"
-        ((status != 127)) || detail="sno: not found; $1 event not recorded"
+        if ((status == 127)); then
+            detail="sno: not found; $1 event not stored"
+        elif [[ "$stored" == stored ]]; then
+            detail="sno observe append $1 failed (exit $status); event stored locally, delivery pending"
+        else
+            detail="sno observe append $1 failed (exit $status); event not stored"
+        fi
         { printf '%s\n' "$detail" >>"$root/reach.log"; } 2>/dev/null || true
     ) </dev/null >/dev/null 2>&1
 }
@@ -1040,9 +1045,18 @@ observe_harness() {
     fi
 }
 
+# The role is the address prefix before the first dot: cos.<project>@host is cos.
+observe_role() {
+    case "${1%%.*}" in
+        cos|pl|executor|monitor) printf '%s\n' "${1%%.*}" ;;
+        *) printf 'other\n' ;;
+    esac
+}
+
 observe_message() {
     local root="$1" kind="$2" caller="$3" callee="$4" status="$5" started="$6"
-    local ended="$EPOCHREALTIME" from=codex to outcome="${7:-}" receipt="${8:-}" elapsed
+    local ended="$EPOCHREALTIME" from=codex to outcome="${7:-}" receipt="${8:-}" message="${9:-}" elapsed
+    local from_role to_role card_type=none state=none value
     local -a fields=()
     [[ ! -v CLAUDECODE ]] || from=claude-code
     if ! from="$(observe_harness "$root" "$caller" "$from")" ||
@@ -1053,10 +1067,21 @@ observe_message() {
     if [[ -z "$outcome" ]]; then
         case "$status" in 0) outcome=ok ;; 4|124|137) outcome=timeout ;; *) outcome=refused ;; esac
     fi
+    from_role="$(observe_role "$caller")"
+    to_role="$(observe_role "$callee")"
+    if [[ -n "$message" ]]; then
+        value="$(progress_header "$message" auto-submitted || true)"
+        [[ -z "$value" || "${value,,}" == no ]] || from_role=system
+        value="$(progress_header "$message" x-type || true)"
+        case "$value" in question|decision|answer|info|status|done|cancel) card_type="$value" ;; esac
+        value="$(progress_header "$message" x-state || true)"
+        case "$value" in accepted|running|requires-action|completed|failed|cancelled|refused) state="$value" ;; esac
+    fi
     [[ -z "$receipt" ]] || fields+=("--receipt=$receipt")
     elapsed=$(( (${ended/./} - ${started/./}) / 1000 ))
     observe_append "$root" reach.message "--agent=$from" "--kind=$kind" "--from_harness=$from" \
-        "--to_harness=$to" "--outcome=$outcome" "--latency_ms=$elapsed" "${fields[@]}"
+        "--to_harness=$to" "--outcome=$outcome" "--latency_ms=$elapsed" "--from_role=$from_role" \
+        "--to_role=$to_role" "--card_type=$card_type" "--state=$state" "${fields[@]}"
 }
 
 run_register() {
@@ -2701,7 +2726,7 @@ run_send() {
     status=0
     queue_and_attempt_message "$root" "$CALLER" "$input_file" || status=$?
     while IFS= read -r recipient; do
-        observe_message "$root" card "$CALLER" "$recipient" "$status" "$started"
+        observe_message "$root" card "$CALLER" "$recipient" "$status" "$started" '' '' "$input_file"
     done <"$TEMP_DIR/validated-recipients"
     [[ "$no_ring" == yes ]] || ring_delivered "$root" "$CALLER" "$input_file" "$TEMP_DIR/delivered-recipients"
     ((status == 0)) || die 74 'one or more copies remain queued; do not resend'
@@ -3285,7 +3310,7 @@ run_reply() {
     flock -u "$reply_fd"
     exec {reply_fd}<&-
     while IFS= read -r recipient; do
-        observe_message "$root" reply "$CALLER" "$recipient" "$status" "$started"
+        observe_message "$root" reply "$CALLER" "$recipient" "$status" "$started" '' '' "$reply_input"
     done <"$TEMP_DIR/validated-recipients"
     if ((status == 0)) && [[ "${SNO_REACH_REPLY_RECEIPT:-0}" == 1 ]]; then
         read_required_header "$reply_input" message-id "$header_file" ||
