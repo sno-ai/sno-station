@@ -29,7 +29,7 @@ function processRun(command, args, options = {}) {
 		}, options.timeoutMs ?? 240_000);
 		child.on("error", error => { clearTimeout(timeout); resolveRun({ code: null, stdout, stderr: `${stderr}\n${error.message}` }); });
 		child.on("close", code => { clearTimeout(timeout); resolveRun({ code, stdout, stderr }); });
-		child.stdin.end(options.input ?? "");
+		child.stdin.on("error", () => {}); child.stdin.end(options.input ?? "");
 	});
 }
 
