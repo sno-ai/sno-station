@@ -1,6 +1,6 @@
 {
   "name": "@snoai/mem-claw",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "license": "Apache-2.0",
   "publishConfig": { "access": "public" },
   "repository": {
@@ -58,7 +58,7 @@
     "@snoai/llmix": "2.2.0",
     "@snoai/mda-config": "^1.1.2",
     "@snoai/observability": "^1.2.0",
-    "@snoai/sqlite-crypto": "^1.1.0",
+    "@snoai/sqlite-crypto": "^1.1.2",
     "@snoai/utils": "^1.1.0",
     "argon2": "^0.45.1",
     "async-mutex": "^0.5.0",
