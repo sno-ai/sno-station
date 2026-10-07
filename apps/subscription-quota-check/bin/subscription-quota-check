@@ -35,11 +35,11 @@ readonly SHORT_ONLY_REMAINING_PCT=20
 
 usage() {
 	cat <<'EOF'
-subscription-quota-check — read Codex / Claude Code subscription quota without
+sno subscription-quota-check — read Codex / Claude Code subscription quota without
 spending anything. Reports whether work can start now.
 
 Usage:
-  subscription-quota-check [--vendor codex|claude|both] [--json|--human] [--quiet]
+  sno subscription-quota-check [--vendor codex|claude|both] [--json|--human] [--quiet]
 
 Options:
   --vendor <v>   Which vendor to read. Default: both.

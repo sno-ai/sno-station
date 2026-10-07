@@ -3,14 +3,14 @@ if [ "${BASH_VERSINFO[0]}" -lt 5 ]; then
   printf 'report-time: needs Bash 5 or newer on PATH as bash (this one is %s); install it and run again.\n' "$BASH_VERSION" >&2
   exit 1
 fi
-# report-time — produce a clock time for the USER. Never compute one by hand.
+# sno report-time — produce a clock time for the USER. Never compute one by hand.
 #
 # UTC timestamps need conversion to the user's zone before they are reported.
 # Converting in your head can make a wrong hour look right.
 #
-#   report-time                     -> now
-#   report-time --in 3600           -> 3600 seconds from now
-#   report-time --pid 12345         -> when that timeout wrapper FIRES: the instant the
+#   sno report-time                 -> now
+#   sno report-time --in 3600       -> 3600 seconds from now
+#   sno report-time --pid 12345     -> when that timeout wrapper FIRES: the instant the
 #                                 job is signalled and stops. With `--kill-after=N`
 #                                 a forced kill follows N seconds later; this is the
 #                                 first instant, not that one, because the first is
@@ -20,10 +20,10 @@ fi
 #                                 answer, and a wrong deadline looks exactly like a
 #                                 right one. Refuses unless the pid really is a
 #                                 `timeout` wrapper.
-#   report-time --pid 12345 --expect-wall 3600
+#   sno report-time --pid 12345 --expect-wall 3600
 #                                 -> the same, and refuses if the process's own limit is not 3600 seconds
-#   report-time "<UTC timestamp>"  -> that UTC instant, converted
-#   report-time @<epoch>            -> that epoch, converted
+#   sno report-time "<UTC timestamp>"  -> that UTC instant, converted
+#   sno report-time @<epoch>        -> that epoch, converted
 #
 # Output: "09:31 CET (08:31 UTC)"  — with dates when the instant is not today.
 set -euo pipefail
@@ -71,7 +71,7 @@ case "${1:-}" in
   -h|--help)
     # Usage is the header block above, printed verbatim: one text, so it cannot
     # drift from what the script actually accepts.
-    sed -n '/^# report-time —/,/^# Output:/p' "$0" | sed 's/^# \{0,1\}//'
+    sed -n '/^# sno report-time —/,/^# Output:/p' "$0" | sed 's/^# \{0,1\}//'
     exit 0
     ;;
   --in)

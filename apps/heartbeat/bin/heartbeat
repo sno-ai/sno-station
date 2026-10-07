@@ -22,10 +22,10 @@ fi
 # rather than passed on the command line. Two agents may both run `card-B` and never see each
 # other; one agent may not run `card-B` twice. Stopping reaches only your own.
 #
-#   heartbeat --interval 20 --label train-1500 --log /path/beat.log -- \
+#   sno heartbeat --interval 20 --label train-1500 --log /path/beat.log -- \
 #       tail -1 outputs/.../metrics.jsonl
-#   heartbeat --stop train-1500          # stop the one you started
-#   heartbeat --list                     # everything running, yours marked
+#   sno heartbeat --stop train-1500      # stop the one you started
+#   sno heartbeat --list                 # everything running, yours marked
 #
 # Exit: 0 success, including a watch that ended · 2 bad arguments · 3 no such heartbeat of
 #       yours · 4 you already run one under that label.
@@ -69,15 +69,15 @@ readonly RUN_ROOT="$STATE_ROOT/run"
 
 usage() {
   cat <<'USAGE'
-usage: heartbeat --label NAME [--interval MINUTES] [--log PATH] [--until-file PATH]
-                 [--max-ticks N] [--max-hours H] [-- COMMAND [ARG ...]]
-       heartbeat --stop NAME
-       heartbeat --list
+usage: sno heartbeat --label NAME [--interval MINUTES] [--log PATH] [--until-file PATH]
+                     [--max-ticks N] [--max-hours H] [-- COMMAND [ARG ...]]
+       sno heartbeat --stop NAME
+       sno heartbeat --list
 
 Two shapes, and nothing else should ever be hand-written:
 
-  report every so often   heartbeat --interval 30 --label train --log L -- <hook command>
-  wait until it is done   heartbeat --label build --until-file out/result.json
+  report every so often   sno heartbeat --interval 30 --label train --log L -- <hook command>
+  wait until it is done   sno heartbeat --label build --until-file out/result.json
 
   --label       name for this heartbeat, written on every line (required)
                 (--name is accepted as the same flag)
@@ -237,7 +237,7 @@ do_stop() {
     other="$(grep -l -x -F "label=$label" "$RUN_ROOT"/*/*/info 2>/dev/null | head -1 || true)"
     [[ -n $other ]] &&
       printf 'heartbeat: another owner runs that label; it is not yours to stop\n' >&2
-    printf 'heartbeat: run heartbeat --list to see what is running\n' >&2
+    printf 'heartbeat: run sno heartbeat --list to see what is running\n' >&2
     exit 3
   fi
 
@@ -451,7 +451,7 @@ if ! mv -T -- "$stage_dir" "$claim_dir" 2>/dev/null; then
   if [[ -n $existing_pid ]] && pid_is_heartbeat "$existing_pid"; then
     printf 'heartbeat: you already run a heartbeat labelled %s (pid %s)\n' \
       "$label" "$existing_pid" >&2
-    printf 'heartbeat: stop it with heartbeat --stop %s, or choose another --label\n' \
+    printf 'heartbeat: stop it with sno heartbeat --stop %s, or choose another --label\n' \
       "$label" >&2
     exit 4
   fi
