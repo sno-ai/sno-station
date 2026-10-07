@@ -49,6 +49,8 @@ export interface RuntimeOptions {
 	agentVersion?: string;
 	cliVersion?: string;
 	pluginVersion?: string;
+	/** Store only; the caller delivers later. No in-process flush starts, so none can leave the flush lease held on exit. */
+	deferDelivery?: boolean;
 }
 
 export class SnoObserveRuntime {
@@ -103,7 +105,7 @@ export class SnoObserveRuntime {
 				store.pruneRetention();
 			}
 			this.notify(parsed.eventType, result);
-			if (!terminal) {
+			if (!terminal && this.options.deferDelivery !== true) {
 				this.scheduleFlush();
 			}
 			return result;
