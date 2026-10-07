@@ -161,6 +161,15 @@ case $operation in
     tag=$(release_tag)
     [[ $(git ls-remote origin refs/heads/main | cut -f1) == "$source_sha" ]] || { printf 'Public main changed before release finalization\n' >&2; exit 2; }
     [[ $(gh release view "$tag" --json isDraft --jq '.isDraft') == true ]] || { printf 'Expected draft GitHub Release %s\n' "$tag" >&2; exit 2; }
+    # `sno setup` downloads these from the Release; v1.0.1 shipped without them and every fresh setup failed five rows.
+    attached=$(gh release view "$tag" --json assets --jq '.assets[].name')
+    reach_version=$(<apps/reach/VERSION)
+    expected=(heartbeat-"$(<apps/heartbeat/VERSION)".tar.gz report-time-"$(<apps/report-time/VERSION)".tar.gz
+      subscription-quota-check-"$(<apps/subscription-quota-check/VERSION)".tar.gz)
+    for platform in linux-x86_64 linux-aarch64 macos-x86_64 macos-aarch64; do expected+=("reach-$reach_version-$platform.tar.gz"); done
+    for name in "${expected[@]}"; do
+      grep -qxF "$name" <<< "$attached" || { printf 'Release %s lacks %s; run the release archives workflow for this tag first\n' "$tag" "$name" >&2; exit 2; }
+    done
     gh release edit "$tag" --draft=false
     printf 'GitHub Release %s published after external installation proof\n' "$tag"
     ;;
