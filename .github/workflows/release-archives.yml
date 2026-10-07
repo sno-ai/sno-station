@@ -101,5 +101,5 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ inputs.tag }}
         run: |
-          ls -l archives
-          gh release upload "$TAG" archives/*.tar.gz --clobber --repo "$GITHUB_REPOSITORY"
+          find archives -name '*.tar.gz' -print0 | xargs -0 ls -l
+          find archives -name '*.tar.gz' -print0 | xargs -0 gh release upload "$TAG" --clobber --repo "$GITHUB_REPOSITORY"
