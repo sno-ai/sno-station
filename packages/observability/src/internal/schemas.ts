@@ -309,6 +309,23 @@ export const payloadSchemas: Record<EventType, z.ZodType<unknown>> = {
 			outcome: z.enum(["ok", "timeout", "refused", "unacked"]),
 			receipt: z.enum(["handoff_snapshot", "handoff_released", "handoff_paused"]).optional(),
 			latency_ms: countSchema,
+			from_role: z.enum(["cos", "pl", "executor", "monitor", "system", "other"]).optional(),
+			to_role: z.enum(["cos", "pl", "executor", "monitor", "system", "other"]).optional(),
+			card_type: z
+				.enum(["question", "decision", "answer", "info", "status", "done", "cancel", "none"])
+				.optional(),
+			state: z
+				.enum([
+					"accepted",
+					"running",
+					"requires-action",
+					"completed",
+					"failed",
+					"cancelled",
+					"refused",
+					"none",
+				])
+				.optional(),
 		})
 		.strict(),
 	"handoff.trigger": z
