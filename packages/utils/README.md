@@ -6,7 +6,7 @@ When something goes wrong in a Sno Station package, you want to know where and w
 
 - Every line comes from a known spot in the code.
 - Context follows an async call (`withLogContext`, `currentLogContext`).
-- Secrets are cleaned out before anything is written (`sanitizeLogAttributes`).
+- Secrets are cleaned out of log attributes before anything is written (`sanitizeLogAttributes`). Keep them out of the message text yourself: it is written as is.
 - Several Sno processes can share one log folder without stepping on each other.
 
 ```ts
