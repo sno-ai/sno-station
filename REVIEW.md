@@ -52,6 +52,7 @@ review, as one grouped comment, and never as blocking.
 - Speculative hardening or theoretical edge cases with no reachable failure path.
 - Backward-compatibility work the current contract does not require.
 - Generated files and vendored code.
+- Commit sign-off (`Signed-off-by`) and other commit-message conventions.
 
 ## Output
 

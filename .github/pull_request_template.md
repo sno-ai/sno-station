@@ -8,7 +8,6 @@
 
 ## Checklist
 
-- [ ] Every commit is signed off (`git commit -s`, DCO)
 - [ ] `npm run build && npm run typecheck && npm run lint` pass
 - [ ] Unit tests of the touched package pass
 - [ ] No private host names, absolute home paths, credentials, or links to private documents
