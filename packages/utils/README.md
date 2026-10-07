@@ -22,7 +22,7 @@ and install the plugin for your agent ([Codex](https://www.npmjs.com/package/@sn
 [OpenClaw](https://www.npmjs.com/package/@snoai/mem-claw)).
 
 ```bash
-npm install @snoai/utils@1.0.1
+npm install @snoai/utils@1.1.0
 ```
 
 Licensed under Apache-2.0.
