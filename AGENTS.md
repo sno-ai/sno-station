@@ -8,7 +8,7 @@ improvement loop for Claude Code, Codex and OpenClaw. Read `llms.txt` for the ma
 or docs at any other repository.
 - **Checks before you hand back work.** `npm run build --workspaces && npm run typecheck && npm run lint`,
 plus the unit tests of the package you touched. An empty test run is a failure, not a pass.
-- **Sign off.** Every commit carries `Signed-off-by` (DCO). No CLA.
+- **Reviews do not check commit sign-off.** Never report a missing `Signed-off-by` as a finding.
 - **Never add** benchmark numbers or vendor comparisons to docs; numbers live in `evals/` with a
 receipt. Never name one model vendor as the careful one and the other as the fast one.
 - **Never commit** credentials, private host names, absolute home paths, or links to private
