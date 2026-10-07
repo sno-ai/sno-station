@@ -47,15 +47,7 @@ if macos:
 check("codex-version", ["codex", "--version"], lambda code, out: code == 0 and "codex-cli" in out, "hiding codex produces the named missing-CLI refusal")
 check("codex-login", ["codex", "login", "status"], lambda code, out: code == 0 and "ChatGPT" in out,
       "revocation is not planted in a shared login; the journey performs an actual quota read")
-for program, release in (("sno-reach", "sno-reach/releases/2.0/bin/sno-reach"),
-                         ("heartbeat", "sno-heartbeat/releases/1.0/bin/heartbeat"),
-                         ("report-time", "sno-report-time/releases/1.0/bin/report-time"),
-                         ("subscription-quota-check", "sno-subscription-quota-check/releases/1.0/bin/subscription-quota-check")):
-    expected = str(Path.home() / ".local/lib" / release)
-    check(program + "-link", ["readlink", "-f", str(Path.home() / ".local/bin" / program)],
-          lambda code, out, expected=expected: code == 0 and out.strip() == expected,
-          "temp-HOME archive install tests reject corruption; real user links are not broken in preflight")
-check("installed-version", [str(Path.home() / ".local/bin/sno-reach"), "--version"], lambda code, out: code == 0 and out.strip() == "2.0", "missing VERSION is covered in the independent archive proof")
+check("installed-version", [os.environ["SNO_BINARY"], "reach", "--version"], lambda code, out: code == 0 and out.strip() == "2.0", "missing VERSION is covered in the independent archive proof")
 actual_digest = hashlib.sha256(archive.read_bytes()).hexdigest()
 rows.append(dict(name="archive", command=["sha256sum", str(archive)], output=actual_digest,
                  passed=actual_digest == expected_digest, calibration="archive corruption is actually refused by archive.t", owner="platform executor"))
@@ -84,7 +76,7 @@ digest = hashlib.sha256(artifact.read_bytes()).hexdigest()
 report = root / "platform-e2e-preflight-2026-09-14.md"
 report.write_text("# Platform Chapter 0\n\n" + f"Host: `{payload['host']}`. Baseline SHA-256: `{digest}`.\n\n"
                   + f"Archive: `{archive}` (`{actual_digest}`).\n\nPATH: `{payload['path']}`.\n\n"
-                  + "Onboarding: agent-installed prerequisites, archive installed by make install, then public init/register.\n"
+                  + "Onboarding: agent-installed prerequisites, archive installed by sno setup, then public init/register.\n"
                   + "Budget: one 30-minute wall; no model generation, no paid API, no host destruction.\n"
                   + "Declared mutations: two disposable shell seats and state; heartbeat children; stock PATH in child environments only.\n"
                   + "A dependency, login, installed candidate, or host change voids the baseline.\n\n"

@@ -60,7 +60,7 @@ def reach_version():
     version = run.checked("--version").strip()
     if version != run.context["version"]:
         raise RuntimeError("installed Reach version does not match candidate")
-    return dict(version=version, executable=str((run.home / ".local/bin/sno-reach").resolve()))
+    return dict(version=version, executable=str((run.home / ".local/lib/sno-reach/current/bin/sno-reach").resolve()))
 check("reach-version", "actual sno reach --version under private PATH", "version from retained release executable",
       "missing VERSION refused in installed archive proof", reach_version)
 for name, tool in run.context["tools"].items():
@@ -165,7 +165,7 @@ if static_green:
             if any(word in observed for word in ("quota", "usage limit", "rate limit")):
                 blocked_vendors.add(actor["kind"])
                 checks[-1]["vendor_stop"] = actor["kind"]
-                checks[-1]["next_action"] = "Report actual refusal; run subscription-quota-check once. No automatic product retry."
+                checks[-1]["next_action"] = "Report actual refusal; run sno subscription-quota-check once. No automatic product retry."
             elif "capacity" in observed:
                 blocked_vendors.add(actor["kind"])
                 checks[-1]["vendor_stop"] = actor["kind"]
