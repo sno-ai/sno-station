@@ -41,7 +41,7 @@ dans chaque clé et recherche. Les compétences Duo sont écrites pour
 
 ## Installation
 
-*Dernière mise à jour le 2026-10-01.* **La mémoire partagée s'installe dès aujourd'hui.** Elle donne à Claude Code, Codex, OpenClaw et Hermes Agent une mémoire chiffrée sur votre machine, sans compte et sans clé d'API. Lancez une fois la [configuration de la mémoire partagée](../memory-setup.md) (quelques minutes), puis ajoutez votre agent :
+*Dernière mise à jour le 2026-10-07.* **La mémoire partagée s'installe dès aujourd'hui.** Elle donne à Claude Code, Codex, OpenClaw et Hermes Agent une mémoire chiffrée sur votre machine, sans compte et sans clé d'API. Lancez une fois la [configuration de la mémoire partagée](../memory-setup.md) (quelques minutes), puis ajoutez votre agent :
 
 ```bash
 # Install the sno command once
@@ -58,7 +58,7 @@ sno setup --harness hermes
 
 Parcours : [Codex](../mem-codex/onboarding.md) · [Claude Code](../mem-claude/onboarding.md) · [OpenClaw](../mem-claw/onboarding.md) · [Hermes](../mem-hermes/onboarding.md)
 
-Sno Reach, les compétences Duo et la boucle nocturne ne sont pas encore dans ces paquets. L'installation en une commande pour l'ensemble reste à venir : elle arrive avec la compétence d'accueil ; d'ici là, surveillez ce dépôt. Quand elle arrivera, cela ressemblera à ceci :
+`sno setup` installe aussi Sno Reach, les petits programmes auxiliaires, les skills et la boucle nocturne, et chaque commande s'écrit `sno <nom>` : la liste complète est dans [docs/sno-commands.md](../sno-commands.md). Dire « Sno onboarding » dans votre agent, qui vous guide dans la même installation en conversation, reste à venir. Quand il arrivera, il ressemblera à ceci :
 
 ```bash
 # inside any Claude Code, Codex or OpenClaw conversation:
@@ -149,16 +149,17 @@ de session sont caviardés ; rien d'autre n'est touché.
 
 ## Ce qui fonctionne aujourd'hui
 
-*Dernière mise à jour le 2026-09-20.*
+*Dernière mise à jour le 2026-10-07.*
 
 | Élément | Statut |
 |---|---|
 | `packages/chunking` | Dans ce dépôt, testé, publié sur npm |
 | Paquets partagés (`common-core`, `utils`, `embedder`, `observability`, `sqlite-crypto`, `content-sanitizer`) | Dans ce dépôt |
 | Mémoire partagée entre Claude Code, Codex et OpenClaw | Moteur et les trois habillages dans ce dépôt ; preuve sur machine vierge en attente |
-| Sno Reach — les agents qui se parlent, sans démon | Source dans ce dépôt ; archives de version en attente |
-| La boucle RSI (compétence) | Cette semaine |
-| Installation en une commande (`sno assemble`, ou dites « Sno onboarding » dans votre agent) | Pas encore revendiquée |
+| Sno Reach — les agents qui se parlent, sans démon | Installé par `sno setup` ; les archives de version pour Linux et macOS sont publiées ; prouvé de bout en bout sur une machine Linux propre |
+| La boucle nocturne et les skills de l'équipe | Installée par `sno setup` ; la tâche nocturne a tourné sur une machine Linux propre |
+| Installation en une commande (`sno setup`) | Installe tout ce qui précède ; prouvée sur une machine Linux propre |
+| « Sno onboarding » dans votre agent | Pas encore revendiqué |
 
 Une ligne indique « prouvé » seulement une fois qu'elle a tourné sur une machine vierge ; d'ici là, elle indique ce qui est présent.
 

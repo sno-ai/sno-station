@@ -23,7 +23,7 @@ Sno Station은 여러분의 에이전트를 위한 워크스테이션입니다: 
 
 ## 설치
 
-*마지막 업데이트: 2026-10-01.* **공유 메모리는 오늘 설치할 수 있습니다.** Claude Code, Codex, OpenClaw, Hermes Agent에 계정도 API 키도 없이, 내 컴퓨터에 있는 암호화된 메모리 하나를 줍니다. [공유 메모리 설정](../memory-setup.md)을 한 번만 실행하고(몇 분), 에이전트를 추가하세요:
+*마지막 업데이트: 2026-10-07.* **공유 메모리는 오늘 설치할 수 있습니다.** Claude Code, Codex, OpenClaw, Hermes Agent에 계정도 API 키도 없이, 내 컴퓨터에 있는 암호화된 메모리 하나를 줍니다. [공유 메모리 설정](../memory-setup.md)을 한 번만 실행하고(몇 분), 에이전트를 추가하세요:
 
 ```bash
 # Install the sno command once
@@ -40,7 +40,7 @@ sno setup --harness hermes
 
 단계별 안내: [Codex](../mem-codex/onboarding.md) · [Claude Code](../mem-claude/onboarding.md) · [OpenClaw](../mem-claw/onboarding.md) · [Hermes](../mem-hermes/onboarding.md)
 
-Sno Reach, Duo 스킬, 야간 루프는 아직 이 패키지에 들어 있지 않습니다. 모든 것을 한 번에 설치하는 원커맨드 설치는 아직 준비 중이며 온보딩 스킬과 함께 제공될 예정입니다. 그때까지는 이 저장소를 지켜봐 주세요. 도입되면 다음과 같은 모습일 것입니다:
+`sno setup`은 Sno Reach, 작은 보조 프로그램, 스킬, 야간 루프도 함께 설치하며, 모든 명령은 `sno <이름>` 형태입니다. 전체 목록은 [docs/sno-commands.md](../sno-commands.md)에 있습니다. 에이전트 안에서 "Sno onboarding"이라고 말해 같은 설정을 대화로 진행하는 방식은 아직 준비 중입니다. 공개되면 다음과 같이 보입니다:
 
 ```bash
 # inside any Claude Code, Codex or OpenClaw conversation:
@@ -107,16 +107,17 @@ Sno onboarding
 
 ## 오늘 작동하는 것
 
-*마지막 업데이트: 2026-09-20.*
+*마지막 업데이트: 2026-10-07.*
 
 | 구성 요소 | 상태 |
 |---|---|
 | `packages/chunking` | 이 저장소에 있으며, 테스트를 거쳤고, npm에 게시됨 |
 | 공유 패키지 (`common-core`, `utils`, `embedder`, `observability`, `sqlite-crypto`, `content-sanitizer`) | 이 저장소에 있음 |
 | Claude Code, Codex, OpenClaw 간 공유 메모리 | 엔진과 세 가지 스킨 모두 이 저장소에 있음; 클린 머신 검증 대기 중 |
-| Sno Reach — 데몬 없이 에이전트끼리 대화하기 | 소스는 이 저장소에 있음; 릴리스 아카이브 대기 중 |
-| RSI 루프 (스킬) | 이번 주 |
-| 원커맨드 설치 (`sno assemble`, 또는 에이전트 안에서 "Sno onboarding"이라고 말하기) | 아직 공개되지 않음 |
+| Sno Reach — 데몬 없이 에이전트끼리 대화하기 | `sno setup`으로 설치; Linux와 macOS용 릴리스 아카이브 공개됨; 깨끗한 Linux 머신에서 처음부터 끝까지 검증됨 |
+| 야간 루프와 팀 스킬 | `sno setup`으로 설치; 야간 작업이 깨끗한 Linux 머신에서 실행됨 |
+| 원커맨드 설치 (`sno setup`) | 위의 모든 것을 설치; 깨끗한 Linux 머신에서 검증됨 |
+| 에이전트 안에서 "Sno onboarding" 말하기 | 아직 공개되지 않음 |
 
 행은 깨끗한 컴퓨터에서 실행된 경우에만 "검증됨"이라고 표시됩니다; 그때까지는 지금 무엇이 있는지를 말합니다.
 

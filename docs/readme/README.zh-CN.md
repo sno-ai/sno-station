@@ -35,7 +35,7 @@ Sno Station 是你的 agent 的工作站：一款开源软件，它把你已经�
 
 ## Install
 
-*最后更新于 2026-10-01。* **共享记忆今天就能安装。** 它让 Claude Code、Codex、OpenClaw 和 Hermes Agent 共用一份存放在你自己机器上的加密记忆，不需要账号，也不需要 API key。先运行一次[共享记忆设置](../memory-setup.md)（几分钟），再添加你的 agent：
+*最后更新于 2026-10-07。* **共享记忆今天就能安装。** 它让 Claude Code、Codex、OpenClaw 和 Hermes Agent 共用一份存放在你自己机器上的加密记忆，不需要账号，也不需要 API key。先运行一次[共享记忆设置](../memory-setup.md)（几分钟），再添加你的 agent：
 
 ```bash
 # Install the sno command once
@@ -52,7 +52,7 @@ sno setup --harness hermes
 
 分步说明： [Codex](../mem-codex/onboarding.md) · [Claude Code](../mem-claude/onboarding.md) · [OpenClaw](../mem-claw/onboarding.md) · [Hermes](../mem-hermes/onboarding.md)
 
-Sno Reach、Duo 技能和夜间循环还不在这些包里。一条命令装好全部内容的安装方式还没有，它会随 onboarding 技能一起上线；在那之前，请持续关注本仓库。上线后它会是这样的：
+`sno setup` 还会安装 Sno Reach、小型辅助程序、技能和夜间循环，所有命令都是 `sno <名称>` 的形式，完整清单见 [docs/sno-commands.md](../sno-commands.md)。在你的 agent 里说 "Sno onboarding"、用对话带你完成同样的设置，这一方式还在后面。上线后它会是这样：
 
 ```bash
 # inside any Claude Code, Codex or OpenClaw conversation:
@@ -135,16 +135,17 @@ agent 已经在工作，第一个带着 1% 的余量签退。交接之前的每�
 
 ## What runs today
 
-*最后更新于 2026-09-20。*
+*最后更新于 2026-10-07。*
 
 | 部分 | 状态 |
 |---|---|
 | `packages/chunking` | 在本仓库中，已测试，已发布到 npm |
 | 共享包（`common-core`、`utils`、`embedder`、`observability`、`sqlite-crypto`、`content-sanitizer`） | 在本仓库中 |
 | Claude Code、Codex 与 OpenClaw 之间的共享记忆 | 引擎与全部三种皮肤均已在本仓库中；干净机器验证待完成 |
-| Sno Reach —— agent 之间互相通信，无需守护进程 | 源码在本仓库中；发布归档待完成 |
-| RSI 循环（技能） | 本周 |
-| 一条命令完成安装（`sno assemble`，或在你的 agent 里说 "Sno onboarding"） | 尚未声明 |
+| Sno Reach —— agent 之间互相通信，无需守护进程 | 由 `sno setup` 安装；Linux 和 macOS 的发布归档已公开；已在干净的 Linux 机器上端到端验证 |
+| 夜间循环和小队技能 | 由 `sno setup` 安装；夜间任务已在干净的 Linux 机器上运行 |
+| 一条命令完成安装（`sno setup`） | 装好上面全部内容；已在干净的 Linux 机器上验证 |
+| 在你的 agent 里说 "Sno onboarding" | 尚未声明 |
 
 只有在一台干净的机器上运行过之后，一行才会写“proven”；在那之前，它写的是这里已经有什么。
 
