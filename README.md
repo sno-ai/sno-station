@@ -74,7 +74,7 @@ agent you like. Three things change:
    task from the shared memory and the mailbox, context intact.
 2. **You want a second pair of eyes.** Ask either agent to `peer-review` the other's work.
    The reviewer is always from the other harness.
-3. **Every night the RSI loop runs.** In the morning, `rem-reflect accept <id>` for the proposals
+3. **Every night the RSI loop runs.** In the morning, `sno rem-reflect accept <id>` for the proposals
    you like. Nothing changes without that accept.
 
 ## "I yelled at my agent last night. It took notes."

@@ -20,7 +20,7 @@ This repository is being assembled in public from 2026-09-18. Blocks in the READ
 - packages/ — shared libraries (chunking, common-core, utils, embedder, observability,
   sqlite-crypto, content-sanitizer, memory = the memory engine + sidecar)
 - apps/ — per-harness memory integrations (mem-claude, mem-codex, mem-claw, mem-hermes), Sno Reach (agent messaging),
-  heartbeat, report-time, subscription-quota-check
+  `sno heartbeat`, `sno report-time`, `sno subscription-quota-check` (programs run through `sno`)
 - evals/ — one README + one formal result per benchmark (LoCoMo, Memora, R@5, Sno Memory Bench);
   no datasets, no raw runs
 - docs/ — setup guides for the four memory integrations, images, evidence, translations, security page
@@ -37,6 +37,6 @@ This repository is being assembled in public from 2026-09-18. Blocks in the READ
 - squad — the category word: your agents working as one team (always lower-case)
 - Duo — the smallest squad, two agents from two vendors
 - Sno Reach — the messaging program, always written as two words (`sno reach <verb>`)
-- the RSI loop — the nightly self-improvement loop (`rem-reflect`)
+- the RSI loop — the nightly self-improvement loop (`sno rem-reflect`)
 - Sno Station — this product; the human command is `sno`, the agent entry is saying
   "Sno onboarding" inside any supported agent

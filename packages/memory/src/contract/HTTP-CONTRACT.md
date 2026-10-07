@@ -916,7 +916,7 @@ The response `result` branches are storage, stats, list/listReflection, get, pro
 
 `currentProject.workspace` is a required nonblank path. The engine resolves it to an absolute path using the same lexical normalization as provider registration, then looks up the existing workspace mapping. This is an exact workspace lookup, not a parent-directory or Git repository search. A known empty project returns `status:"known"` and its zero count; an unseen directory returns `status:"unknown",project:null`. Missing paths are not created and no basename, Git remote or project ID is guessed.
 
-These memory operations do not supply nightly self-improvement status. That producer's existing `rem-reflect status` command and stored records remain the source for those reports; memory REM jobs do not establish per-project nightly success.
+These memory operations do not supply nightly self-improvement status. That producer's existing `sno rem-reflect status` command and stored records remain the source for those reports; memory REM jobs do not establish per-project nightly success.
 
 Scope requires nonblank `principal`, `project`, `session`. `host.observeSessionUuid`, if supplied, must be a UUID. Host `at` is nonnegative epoch milliseconds. Other host strings may be empty.
 
