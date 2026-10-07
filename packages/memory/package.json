@@ -9,7 +9,7 @@
     "directory": "packages/memory"
   },
   "type": "module",
-  "description": "Shared memory engine, store, model routing and sidecar",
+  "description": "One encrypted memory on your machine, shared by every agent you run. The engine behind Sno Station.",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
