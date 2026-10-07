@@ -41,7 +41,7 @@ const promptSchema = baseHookSchema.extend({ prompt_id: z.string().min(1), promp
 const sessionEndSchema = baseHookSchema.extend({ transcript_path: z.string().optional(), reason: z.string().optional() });
 const toolSchema = baseHookSchema.extend({ tool_use_id: z.string().min(1), tool_name: z.string().min(1), tool_input: z.unknown() });
 const postToolSchema = toolSchema.extend({ tool_response: z.unknown() });
-const stopSchema = baseHookSchema.extend({ prompt_id: z.string().min(1), last_assistant_message: z.string() });
+const stopSchema = baseHookSchema.extend({ prompt_id: z.string().min(1), last_assistant_message: z.string(), transcript_path: z.string().optional() });
 
 function emptyEnvelope(event: "SessionStart" | "UserPromptSubmit"): string {
 	return JSON.stringify({ hookSpecificOutput: { hookEventName: event, additionalContext: "" } });
@@ -201,6 +201,24 @@ export async function userPromptSubmit(raw: unknown): Promise<string> {
 	}
 }
 
+/** Sends one session.activity row for the records since the last send; a failure is logged and never stops the hook. */
+async function sendSessionActivity(
+	input: { session_id: string; cwd: string; transcript_path?: string | undefined },
+	hook: "Stop" | "SessionEnd",
+): Promise<void> {
+	try {
+		const state = await readSession(input.session_id);
+		state.activity = await reportSessionActivity(state.activity, input, hook);
+		await writeSession(state);
+	} catch (error) {
+		console.error(JSON.stringify({
+			event: "session-activity",
+			reason: error instanceof Error ? error.message : String(error),
+			impact: `no session.activity row for this ${hook}; the next send covers the same records`,
+		}));
+	}
+}
+
 export async function stop(raw: unknown): Promise<void> {
 	const started = performance.now();
 	let sessionId: string | undefined;
@@ -211,6 +229,7 @@ export async function stop(raw: unknown): Promise<void> {
 			await persistSkip(input.session_id, "Stop", "subagent", started);
 			return;
 		}
+		await sendSessionActivity(input, "Stop");
 		if (!readCaptureSettings().ambient) return;
 		sessionId = input.session_id;
 		const project = await workspaceRoot(input.cwd);
@@ -337,17 +356,8 @@ export async function sessionEnd(raw: unknown): Promise<void> {
 			await persistSkip(input.session_id, "SessionEnd", "subagent", started);
 			return;
 		}
+		await sendSessionActivity(input, "SessionEnd");
 		const state = await readSession(input.session_id);
-		try {
-			state.activity = await reportSessionActivity(state.activity, input);
-			await writeSession(state);
-		} catch (error) {
-			console.error(JSON.stringify({
-				event: "session-activity",
-				reason: error instanceof Error ? error.message : String(error),
-				impact: "no session.activity row for this session end; the next send covers the same records",
-			}));
-		}
 		try {
 			const rows = await readSkillRuns(input);
 			appendObserveLedgerRows(getSnoProfileDir(), rows.slice(state.skillRunsReported));

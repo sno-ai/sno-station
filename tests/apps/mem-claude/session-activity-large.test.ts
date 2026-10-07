@@ -40,7 +40,7 @@ afterAll(() => {
 	rmSync(root, { recursive: true, force: true });
 });
 
-const send = (cursor?: ActivityCursor) => reportSessionActivity(cursor, { session_id: "s", cwd: join(root, "work"), transcript_path: transcript });
+const send = (cursor?: ActivityCursor) => reportSessionActivity(cursor, { session_id: "s", cwd: join(root, "work"), transcript_path: transcript }, "SessionEnd");
 function rows(): Record<string, number>[] {
 	const path = join(root, "observe", "ledger.jsonl");
 	return existsSync(path) ? readFileSync(path, "utf8").split("\n").filter(Boolean).map(row => JSON.parse(row).payload) : [];
@@ -58,7 +58,7 @@ describe("Claude Code session.activity on a large transcript", () => {
 
 	it("reads only the records after a cursor near the end, in well under a second", async () => {
 		const tail = RECORDS - 50;
-		const cursor: ActivityCursor = { offset: tailOffset, lastTs: T0 + (tail - 1) * 1000, runStart: T0, agentDriven: false };
+		const cursor: ActivityCursor = { offset: tailOffset, lastTs: T0 + (tail - 1) * 1000, runStart: T0, agentDriven: false, counted: false };
 		const started = performance.now();
 		const next = await send(cursor);
 		const elapsed = performance.now() - started;

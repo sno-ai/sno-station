@@ -6,7 +6,7 @@
  * port, so nothing leaves the machine.
  */
 import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
 import { tmpdir, userInfo } from "node:os";
 import { join, resolve } from "node:path";
@@ -132,10 +132,10 @@ describe("Claude Code session.activity through the SessionEnd hook", () => {
 		end();
 		await settleAfterSessionEnd(1);
 		const expected = { harness: "claude-code", window_start_ms: T0, window_end_ms: T0 + 40 * MIN,
-			// 0-4, 4-10, 10-12 and 32-40 minutes count; the 20-minute gap does not.
+			// 0-4, 4-10, 10-12 and 32-40 minutes count; the 20-minute gap does not and ends the first run (12 minutes, the longest).
 			active_ms: 20 * MIN,
 			// Everything after the ring: 10-12 and 32-40 minutes.
-			team_driven_ms: 10 * MIN, runs_over_12h: 0, longest_run_ms: 0, human_messages: 1 };
+			team_driven_ms: 10 * MIN, runs_over_12h: 0, longest_run_ms: 12 * MIN, human_messages: 1 };
 		const stored = buffered().filter(row => row.event_type === "session.activity");
 		expect(stored).toHaveLength(1);
 		expect(stored[0]?.lane).toBe("memory");
@@ -147,4 +147,35 @@ describe("Claude Code session.activity through the SessionEnd hook", () => {
 		expect(buffered().filter(row => row.event_type === "session.activity")).toHaveLength(1);
 		expect(ledgerRows().filter(row => row.event_type === "session.activity")).toHaveLength(1);
 	}, 240_000);
+
+	it("reports at each Stop with the run left open, and sends nothing for a Stop with no new records", () => {
+		const repository = join(root, "repo-stop");
+		mkdirSync(repository);
+		execFileSync("git", ["init", "-q", repository]);
+		const transcriptPath = join(root, `${sessionId}-stop.jsonl`);
+		writeFileSync(transcriptPath, entry("user", 0, "first") + entry("assistant", 4, "ok") + entry("assistant", 9, "ok"));
+		const stop = (): void => {
+			const run = spawnSync(process.execPath, [claudeCli, "stop"], {
+				encoding: "utf8", timeout: 60_000, env,
+				input: JSON.stringify({
+					session_id: `${sessionId}-stop`, cwd: repository, transcript_path: transcriptPath,
+					prompt_id: "p1", last_assistant_message: "done",
+				}),
+			});
+			expect(run.status, `stop: ${run.stderr}`).toBe(0);
+		};
+		const rows = (): Record<string, unknown>[] => ledgerRows()
+			.filter(row => row.event_type === "session.activity" && (row.payload as Record<string, unknown>).window_start_ms === T0)
+			.map(row => row.payload as Record<string, unknown>);
+
+		stop();
+		expect(rows()).toHaveLength(1);
+		// The run is still open: its 9 minutes so far are the longest, and the next Stop continues it.
+		expect(rows()[0]).toMatchObject({ harness: "claude-code", active_ms: 9 * MIN, longest_run_ms: 9 * MIN, runs_over_12h: 0, human_messages: 1 });
+		stop();
+		expect(rows()).toHaveLength(1);
+		appendFileSync(transcriptPath, entry("assistant", 14, "ok"));
+		stop();
+		expect(ledgerRows().filter(row => row.event_type === "session.activity")).toHaveLength(2);
+	}, 120_000);
 });
