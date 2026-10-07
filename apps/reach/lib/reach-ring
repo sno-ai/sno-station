@@ -3,7 +3,6 @@ set -Eeuo pipefail
 
 REPOSITORY="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 readonly REPOSITORY
-readonly REACH="$REPOSITORY/bin/sno-reach"
 readonly DOORBELL_TOKEN=REACH-RING
 # An unbounded flock inside the send path is a hang with no signal: the sender
 # blocks forever and never learns the wake outcome. bin/mbox-wake already
@@ -192,8 +191,8 @@ ring_acp() {
         emit "$root" "$recipient" "$sender" "$message_id" unresolved "no open ACP session $name at $cwd"
         return
     fi
-    printf -v read_command 'SNO_REACH_ROOT=%q %q inbox --as %q' \
-        "$root" "$REACH" "$recipient"
+    printf -v read_command 'SNO_REACH_ROOT=%q sno reach inbox --as %q' \
+        "$root" "$recipient"
     line="$DOORBELL_TOKEN Guide: $REPOSITORY/guide/agent-reach.md. State: $root. Seat: $recipient. You have unanswered local agent mail as '$recipient'. Read Message-ID $message_id using: $read_command . Read the exact file that command returns."
     if ! output="$(printf '%s\n' "$line" | timeout --foreground -k 2 20 acpx --cwd "$cwd" --approve-all \
         --format json --timeout 15 "$agent" prompt -s "$name" --no-wait --file - 2>/dev/null)" ||
