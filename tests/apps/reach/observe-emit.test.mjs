@@ -7,7 +7,7 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import {
-	chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync,
+	chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync,
 } from "node:fs";
 import { hostname, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -35,7 +35,7 @@ before(() => {
 	mkdirSync(bin, { recursive: true });
 	writeFileSync(
 		join(bin, "sno"),
-		'#!/usr/bin/env bash\nsleep "${SNO_STANDIN_SLEEP:-0}"\nprintf \'%s\\n\' "$*" >> "$SNO_CAPTURE"\nexit "$SNO_STANDIN_EXIT"\n',
+		'#!/usr/bin/env bash\nsleep "${SNO_STANDIN_SLEEP:-0}"\nprintf \'%s\\n\' "$*" >> "$SNO_CAPTURE"\n[[ -z "${SNO_STANDIN_STORED:-}" ]] || echo stored\nexit "$SNO_STANDIN_EXIT"\n',
 	);
 	chmodSync(join(bin, "sno"), 0o755);
 	// A fake `codex`: its process name stays `codex` and it idles reading the pane's input.
@@ -62,7 +62,7 @@ after(() => {
 
 // Run the public executable with an explicit harness marker: CLAUDECODE is set in this very
 // process when the suite runs inside Claude Code, so it is never inherited.
-function reach(args, { claudeCode = false, snoExit = 0, snoSleep = 0, capture, as }) {
+function reach(args, { claudeCode = false, snoExit = 0, snoSleep = 0, snoStored = false, capture, as, input }) {
 	const env = { ...process.env };
 	for (const key of ["CLAUDECODE", "SNO_REACH_ADDR", "SNO_TPM_REGISTRY", "TPM_REGISTRY",
 		"MAILBOX_TERMINAL_REGISTRY", "TMUX_PANE"]) delete env[key];
@@ -70,11 +70,12 @@ function reach(args, { claudeCode = false, snoExit = 0, snoSleep = 0, capture, a
 		PATH: `${bin}:${process.env.PATH}`, HOME: home, XDG_CONFIG_HOME: join(home, ".config"),
 		XDG_STATE_HOME: join(home, ".local/state"), SNO_REACH_ROOT: root, TMUX: tmuxEnv,
 		SNO_CAPTURE: capture, SNO_STANDIN_EXIT: String(snoExit), SNO_STANDIN_SLEEP: String(snoSleep),
+		SNO_STANDIN_STORED: snoStored ? "1" : "",
 	});
 	if (as) env.SNO_REACH_ADDR = as;
 	if (claudeCode) env.CLAUDECODE = "1";
 	const started = process.hrtime.bigint();
-	const result = spawnSync(REACH, args, { env, encoding: "utf8", timeout: 60_000 });
+	const result = spawnSync(REACH, args, { env, encoding: "utf8", timeout: 60_000, input });
 	const wallMs = Number((process.hrtime.bigint() - started) / 1_000_000n);
 	return { code: result.status, wallMs, out: `${result.stdout}${result.stderr}` };
 }
@@ -127,8 +128,10 @@ function messageRow(capture, result, outcome, from, to, minimumMs) {
 	assert.equal(messages.length, 1,
 		`one reach.message row, captured: ${JSON.stringify(rows.map(row => row.line))}`);
 	const { latency_ms: latency, ...rest } = messages[0].fields;
-	assert.deepEqual(rest, { agent: from, kind: "call", from_harness: from, to_harness: to, outcome },
-		messages[0].line);
+	assert.deepEqual(rest, {
+		agent: from, kind: "call", from_harness: from, to_harness: to, outcome,
+		from_role: "other", to_role: "other", card_type: "none", state: "none",
+	}, messages[0].line);
 	assert.match(latency, /^[0-9]+$/, messages[0].line);
 	assert.ok(Number(latency) >= minimumMs && Number(latency) <= result.wallMs,
 		`latency_ms ${latency} within [${minimumMs}, measured wall ${result.wallMs}]`);
@@ -240,6 +243,86 @@ test("an unacknowledged ring records unacked and an acknowledged ring records ok
 	assert.equal(ok.code, 0, ok.out);
 	const [okRow] = captured(okCapture, 1).filter(row => row.event === "reach.message");
 	assert.equal(okRow.fields.outcome, "ok", okRow.line);
+});
+
+// A work card from `from` to `to`, as Reach's lint wants it.
+const workCard = (id, from, to, type, extra = "") => [
+	`From: Fixture <${from}>`, `To: Fixture <${to}>`, `Date: ${new Date().toUTCString()}`,
+	`Subject: [${type.toUpperCase()}] ${id}`, `Message-ID: <${id}>`, `X-Type: ${type}`,
+	`X-Work: work-${id}`, ...(extra ? [extra] : []), "", "Please handle this.", "",
+].join("\n");
+
+test("a question card and its accepted and completed replies carry roles, card_type and state", t => {
+	t.after(() => { failed ||= !t.passed; });
+	const setup = join(work, "cards-setup.log");
+	// The cos seat acknowledges the doorbell a reply rings, so the reply does not wait for one.
+	const pane = tmux("new-window", "-d", "-P", "-F", "#{pane_id}", "-t", "proof", join(bin, "ack-agent"));
+	const cos = `cos.observe@${hostname()}`;
+	assert.equal(reach(["init", "--as", cos, "--name", "cos"], { capture: setup }).code, 0);
+	assert.equal(reach(["register", "--as", cos, "--channel", "tmux", "--handle", pane], { capture: setup }).code, 0);
+	const executor = seat("executor", { capture: setup }).address;
+	const capture = join(work, "cards.log");
+	const messages = () => captured(capture).filter(row => row.event === "reach.message");
+	const next = count => { waitFor(capture, count); return messages().at(-1).fields; };
+
+	const id = `question-${process.pid}@${hostname()}`;
+	const sent = reach(["send", "--as", cos, "--no-ring"], {
+		capture, input: workCard(id, cos, executor, "question") });
+	assert.equal(sent.code, 0, sent.out);
+	assert.deepEqual(
+		(({ from_role, to_role, card_type, state, kind }) => ({ from_role, to_role, card_type, state, kind }))(next(1)),
+		{ from_role: "cos", to_role: "executor", card_type: "question", state: "none", kind: "card" });
+
+	const inbox = join(root, executor, "new");
+	const card = join(inbox, readdirSync(inbox).find(name => name.length > 0));
+	for (const [state, cardType] of [["accepted", "status"], ["completed", "answer"]]) {
+		const before = messages().length;
+		const replied = reach(["reply", "--as", executor, "--card", card, "--state", state],
+			{ capture, input: `${state}\n` });
+		assert.equal(replied.code, 0, replied.out);
+		waitFor(capture, before + 1);
+		const fields = messages().at(-1).fields;
+		assert.deepEqual(
+			(({ kind, from_role, to_role, card_type, state }) => ({ kind, from_role, to_role, card_type, state }))(fields),
+			{ kind: "reply", from_role: "executor", to_role: "cos", card_type: cardType, state });
+	}
+});
+
+test("an automatic Reach notice is sent from the system role", t => {
+	t.after(() => { failed ||= !t.passed; });
+	const setup = join(work, "auto-setup.log");
+	const monitor = seat("monitor", { capture: setup }).address;
+	const pl = seat("pl", { capture: setup }).address;
+	const capture = join(work, "auto.log");
+	const id = `auto-${process.pid}@${hostname()}`;
+	const sent = reach(["send", "--as", monitor, "--no-ring"], {
+		capture, input: workCard(id, monitor, pl, "decision", "Auto-Submitted: auto-generated") });
+	assert.equal(sent.code, 0, sent.out);
+	const [row] = captured(capture, 1).filter(entry => entry.event === "reach.message");
+	assert.equal(row.fields.from_role, "system", row.line);
+	assert.equal(row.fields.to_role, "pl", row.line);
+	assert.equal(row.fields.card_type, "decision", row.line);
+});
+
+test("the log says whether a killed or failed append had stored the event", t => {
+	t.after(() => { failed ||= !t.passed; });
+	const lines = () => readFileSync(join(root, "reach.log"), "utf8").split("\n").filter(line => line.includes("reach.message"));
+	const capture = join(work, "stored.log");
+	const { address } = seat("logseat", { capture: join(work, "stored-setup.log") });
+	// Exit 124 after the stand-in printed its stored marker: the event is in the local buffer.
+	const stored = reach(okCall(address), { snoExit: 124, snoStored: true, capture });
+	assert.equal(stored.code, 0, stored.out);
+	waitFor(capture, 1);
+	spawnSync("sleep", ["0.5"]);
+	assert.ok(lines().some(line => line.includes("exit 124") && line.includes("event stored locally, delivery pending")),
+		`stored line in:\n${lines().join("\n")}`);
+	// Exit 124 without the marker: nothing is known to be stored.
+	const notStoredBefore = lines().filter(line => line.includes("exit 124") && line.includes("event not stored")).length;
+	const missing = reach(okCall(address), { snoExit: 124, capture });
+	assert.equal(missing.code, 0, missing.out);
+	spawnSync("sleep", ["0.5"]);
+	assert.equal(lines().filter(line => line.includes("exit 124") && line.includes("event not stored")).length,
+		notStoredBefore + 1, `not stored line in:\n${lines().join("\n")}`);
 });
 
 test("a slow sno observe never delays a Reach call", t => {
