@@ -79,7 +79,7 @@ in welchem Agenten auch immer Sie möchten. Drei Dinge ändern sich:
 2. **Sie wollen ein zweites Augenpaar.** Bitten Sie einen der beiden Agenten, per
    `peer-review` die Arbeit des anderen zu prüfen. Der Reviewer stammt immer aus der
    jeweils anderen Harness.
-3. **Jede Nacht läuft die RSI-Schleife.** Am Morgen: `rem-reflect accept <id>` für die
+3. **Jede Nacht läuft die RSI-Schleife.** Am Morgen: `sno rem-reflect accept <id>` für die
    Vorschläge, die Ihnen gefallen. Ohne dieses Accept ändert sich nichts.
 
 ## "Ich habe meinen Agenten letzte Nacht angeschrien. Er hat sich Notizen gemacht."
