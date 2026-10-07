@@ -163,6 +163,28 @@ describe("observe v2 event schemas", () => {
 		rejectsPayload(event("reach.message", { ...message, receipt: "handoff_done" }), "receipt");
 	});
 
+	it("accepts optional reach.message roles, card_type and state and rejects any other value", () => {
+		const message = conforming["reach.message"][1];
+		for (const role of ["cos", "pl", "executor", "monitor", "system", "other"]) {
+			const payload = parseEventInput(event("reach.message", { ...message, from_role: role, to_role: role })).payload;
+			assert.equal(payload.from_role, role);
+			assert.equal(payload.to_role, role);
+		}
+		for (const card_type of ["question", "decision", "answer", "info", "status", "done", "cancel", "none"]) {
+			assert.equal(parseEventInput(event("reach.message", { ...message, card_type })).payload.card_type, card_type);
+		}
+		for (const state of ["accepted", "running", "requires-action", "completed", "failed", "cancelled", "refused", "none"]) {
+			assert.equal(parseEventInput(event("reach.message", { ...message, state })).payload.state, state);
+		}
+		for (const field of ["from_role", "to_role", "card_type", "state"]) {
+			assert.equal(Object.hasOwn(parseEventInput(event("reach.message", message)).payload, field), false);
+		}
+		rejectsPayload(event("reach.message", { ...message, from_role: "boss" }), "from_role");
+		rejectsPayload(event("reach.message", { ...message, to_role: "hand" }), "to_role");
+		rejectsPayload(event("reach.message", { ...message, card_type: "FYI" }), "card_type");
+		rejectsPayload(event("reach.message", { ...message, state: "done" }), "state");
+	});
+
 	it("requires skill.install package and refuses a skills list", () => {
 		const { package: pkg, ...withoutPackage } = conforming["skill.install"][1];
 		assert.equal(pkg, "@snoai/mem-claude");
