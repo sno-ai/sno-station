@@ -13,6 +13,7 @@ This repository is being assembled in public from 2026-09-18. Blocks in the READ
 - README.md — what it is, install status, how to use, the two hooks, benchmarks (below the fold)
 - VISION.md — why it exists, the three reasons for two agents, "the workspace learns"
 - docs/security.md — what is encrypted, where the key lives, what is and is not protected
+- docs/sno-commands.md — every sno command, what it does and who runs it (the only command is sno)
 - docs/readme/ — the README in 中文, 繁體中文, Deutsch, Español, Français, Русский, 한국어, 日本語
 
 ## Directory map
