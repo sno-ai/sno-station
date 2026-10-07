@@ -1,11 +1,8 @@
 # @snoai/common-core
 
-Identifier helpers shared by Sno Station packages.
+Small ID helpers that every Sno Station package uses.
 
-It creates and checks the two kinds of id Sno uses: CUID2 (`createCuid2`, `isCuid2`) for
-short, URL-safe record ids, and UUID v7 (`createUUIDv7`, `isLowercaseCanonicalUUIDv7`,
-`canonicalizeUUIDv7Input`) for ids that sort by creation time. Everything runs locally and has
-no state.
+It makes and checks two kinds of ids. Short, URL-safe ones for records (`createCuid2`, `isCuid2`). And ones that sort by creation time, for things that should line up in the order they were made (`createUUIDv7`, `isLowercaseCanonicalUUIDv7`, `canonicalizeUUIDv7Input`). Everything runs on your machine and keeps no state.
 
 ```ts
 import { createCuid2, createUUIDv7 } from "@snoai/common-core";
