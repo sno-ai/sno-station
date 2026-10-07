@@ -9,7 +9,7 @@
     "directory": "apps/mem-claude"
   },
   "type": "module",
-  "description": "Thin Claude CLI client for Sno Station Mem.",
+  "description": "Give Claude Code a memory. It remembers what you worked on and brings it back next session.",
   "files": [
     "dist",
     "skills",

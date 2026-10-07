@@ -9,7 +9,7 @@
     "directory": "apps/mem-codex"
   },
   "type": "module",
-  "description": "Thin Codex CLI client for Sno Station Mem.",
+  "description": "Give Codex a memory. It remembers what you worked on and brings it back next session.",
   "files": [
     "dist",
     "skills",
