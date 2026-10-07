@@ -22,6 +22,7 @@ npm install @snoai/observability@1.1.0
 
 Needs Node.js 22.14 or newer. The `sno` command can also append an event from a shell:
 `sno observe append <event_type> --agent=<harness> --field=value`.
+It returns as soon as the event is stored on your machine and prints `stored`; sending to sno.ai continues in a short background process, so a slow network never delays or loses the event.
 
 ```ts
 import { snoObserve } from "@snoai/observability";
