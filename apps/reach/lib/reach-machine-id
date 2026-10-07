@@ -8,7 +8,7 @@ reach_id_file=$reach_id_dir/machine-id
 reach_id_tmp=''
 
 reach_id_error() {
-    printf 'sno-reach: cannot read or persist valid machine identity: %s\n' "$reach_id_file" >&2
+    printf 'reach: cannot read or persist valid machine identity: %s\n' "$reach_id_file" >&2
     exit 74
 }
 

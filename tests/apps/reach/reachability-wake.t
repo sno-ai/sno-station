@@ -1402,7 +1402,7 @@ case_outbox_recovery() {
     assert_contains "$(<"$root/reply.err")" 'queued copies remaining: 2' \
         'failed reply queued-copy count'
     assert_contains "$(<"$root/reply.err")" \
-        "flush exactly: SNO_REACH_ROOT=$root $failed_release/bin/sno-reach flush --as $worker" \
+        "flush exactly: SNO_REACH_ROOT=$root sno reach flush --as $worker" \
         'failed reply exact flush command'
     entry="$(find "$root/$worker/outbox" -mindepth 1 -maxdepth 1 -type d -print -quit)"
     state="$(find "$root" -path '*/wake-attempts/*.json' -type f -print -quit)"

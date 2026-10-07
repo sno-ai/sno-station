@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 if [ "${BASH_VERSINFO[0]}" -lt 5 ]; then
-    printf 'sno-reach: needs Bash 5 or newer on PATH as bash (this one is %s); install it and run again.\n' "$BASH_VERSION" >&2
+    printf 'reach: needs Bash 5 or newer on PATH as bash (this one is %s); install it and run again.\n' "$BASH_VERSION" >&2
     exit 69
 fi
 set -Eeuo pipefail
@@ -39,7 +39,7 @@ check_prerequisites() {
             esac
         fi
         if [[ "$available" == no ]]; then
-            printf 'sno-reach: needs %s — %s; install it and run again.\n' "$tool" "$use" >&2
+            printf 'reach: needs %s — %s; install it and run again.\n' "$tool" "$use" >&2
             missing=$((missing + 1))
         fi
     done
@@ -113,7 +113,7 @@ require_tools() {
 
     for tool in "$@"; do
         if ! command -v "$tool" >/dev/null 2>&1; then
-            printf 'sno-reach: needs %s — run this operation; install it and run again.\n' "$tool" >&2
+            printf 'reach: needs %s — run this operation; install it and run again.\n' "$tool" >&2
             missing=$((missing + 1))
         fi
     done
@@ -631,10 +631,11 @@ case "$operation" in
         require_eof
         prepare_target "$root_value" "$address_value"
         valid_address "$sender_value" || remote_error 64 INVALID-ADDRESS
-        reach_program=${HOME-}/.local/bin/sno-reach
-        [ -x "$reach_program" ] || remote_error 69 TOOL-UNAVAILABLE
+        PATH=${HOME-}/.local/bin:$PATH
+        sno_program=${SNO_EXECUTABLE:-sno}
+        command -v "$sno_program" >/dev/null 2>&1 || remote_error 69 TOOL-UNAVAILABLE
         ring_outcome=$(SNO_REACH_ROOT=$root_value SNO_REACH_ADDR=$sender_value \
-            "$reach_program" ring "$address_value" 2>/dev/null) || remote_error 75 RING-FAILED
+            "$sno_program" reach ring "$address_value" 2>/dev/null) || remote_error 75 RING-FAILED
         printf '%s\n' "$ring_outcome"
         ;;
     *)
@@ -1151,12 +1152,11 @@ print_corrected_send_command() {
     local window="${4:-}"
 
     if ((delay_seconds > 0)); then
-        printf 'reach: corrected command: sleep %q; SNO_REACH_RATE_LIMIT_MAX=%q SNO_REACH_RATE_LIMIT_WINDOW_SECONDS=%q %q send --as %q < message.eml\n' \
-            "$delay_seconds" "$maximum" "$window" "$REPO_ROOT/bin/sno-reach" \
-            "$CALLER" >&2
+        printf 'reach: corrected command: sleep %q; SNO_REACH_RATE_LIMIT_MAX=%q SNO_REACH_RATE_LIMIT_WINDOW_SECONDS=%q sno reach send --as %q < message.eml\n' \
+            "$delay_seconds" "$maximum" "$window" "$CALLER" >&2
     else
-        printf 'reach: corrected command: %s, then run: %q send --as %q < corrected-message.eml\n' \
-            "$correction" "$REPO_ROOT/bin/sno-reach" "$CALLER" >&2
+        printf 'reach: corrected command: %s, then run: sno reach send --as %q < corrected-message.eml\n' \
+            "$correction" "$CALLER" >&2
     fi
 }
 
@@ -1836,8 +1836,8 @@ print_outbox_recovery() {
         printf 'reach: %s outbox entry/entries carry no deliverable recipient; the flush below retires them.\n' \
             "$entries" >&2
     fi
-    printf 'reach: flush exactly: SNO_REACH_ROOT=%q %q flush --as %q\n' \
-        "$root" "$REPO_ROOT/bin/sno-reach" "$caller" >&2
+    printf 'reach: flush exactly: SNO_REACH_ROOT=%q sno reach flush --as %q\n' \
+        "$root" "$caller" >&2
 }
 
 

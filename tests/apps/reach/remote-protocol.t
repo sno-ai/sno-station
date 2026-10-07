@@ -53,13 +53,14 @@ jq -e --arg machine "$(env HOME="$TEST_HOME" XDG_STATE_HOME="$TEST_HOME/.local/s
 sent=("$STATE/$SENDER"/sent/*)
 [[ -f "${sent[0]}" && "$(header delivered-to "${sent[0]}")" == "$REMOTE" ]] || fail 'remote delivery left no sent copy'
 
-# A remote recipient is rung on its own machine, through the fixed receiver.
+# A remote recipient is rung on its own machine, through the fixed receiver. The recorder stands at
+# the process boundary only to capture the argv the receiver hands to `sno`; it is not sno.
 mkdir -p "$TEST_HOME/.local/bin"
-printf '#!/bin/sh\necho "$SNO_REACH_ADDR $*" >>"%s"\necho rang\n' "$WORK/ring-log" >"$TEST_HOME/.local/bin/sno-reach"
-chmod +x "$TEST_HOME/.local/bin/sno-reach"
+printf '#!/bin/sh\necho "$SNO_REACH_ADDR $*" >>"%s"\necho rang\n' "$WORK/ring-log" >"$TEST_HOME/.local/bin/sno"
+chmod +x "$TEST_HOME/.local/bin/sno"
 card "remote-ring@$HOST" "$SENDER" "$REMOTE" question ring >"$WORK/card-ring"
 invoke send --as "$SENDER" <"$WORK/card-ring"
 expect_rc 0
 has "$WORK/err" 'wake rang reached'
-has "$WORK/ring-log" "$SENDER ring $REMOTE"
+has "$WORK/ring-log" "$SENDER reach ring $REMOTE"
 pass 'isolated SSH argv, framed actual receiver, remote init/delivery/sent copy/ring/refusal/rebind'
