@@ -4,6 +4,16 @@ export { appendObserveLedgerRows, type ObserveLedgerRow }
 	from "../src/engine/telemetry/observe-ledger";
 export { SKILL_CATEGORIES, skillVersionFor } from "./skill-categories";
 export { HOST_MODEL_CALLBACK_HOST, HOST_MODEL_CALLBACK_PATH } from "./skin-defaults";
+export {
+	activityCursorSchema,
+	EMPTY_ACTIVITY_CURSOR,
+	foldActivity,
+	isAgentText,
+	readNewLines,
+	type ActivityCursor,
+	type ActivityRecord,
+	type SessionActivityPayload,
+} from "./session-activity";
 
 export const CODING_SKIN_CHILD_DEADLINE_MS = 110_000;
 export const CODING_SKIN_WORKER_LIFETIME_MS: number = 9 * 60_000;
