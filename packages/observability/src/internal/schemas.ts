@@ -243,6 +243,19 @@ export const payloadSchemas: Record<EventType, z.ZodType<unknown>> = {
 			duration_ms: wholeMsSchema.optional(),
 		})
 		.strict(),
+	/** Working time in one window of a session's transcript; counts only, no text and no session id. */
+	"session.activity": z
+		.object({
+			harness: harnessSchema,
+			window_start_ms: countSchema,
+			window_end_ms: countSchema,
+			active_ms: countSchema,
+			team_driven_ms: countSchema,
+			runs_over_12h: countSchema,
+			longest_run_ms: countSchema,
+			human_messages: countSchema,
+		})
+		.strict(),
 	"prompt.submit": z
 		.object({
 			prompt_hash: z.string().min(1),

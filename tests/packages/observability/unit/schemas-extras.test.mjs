@@ -29,7 +29,7 @@ describe("schemas — extras", () => {
 		);
 	});
 
-	it("EVENT_TYPES is exactly the 31 SDK-emittable event types", () => {
+	it("EVENT_TYPES is exactly the 32 SDK-emittable event types", () => {
 		// Per plugin-integration-spec.md §5, memory telemetry, and observe v2: audit.anchor excluded.
 		assert.deepEqual([...EVENT_TYPES], [
 			"agent.identify",
@@ -41,6 +41,7 @@ describe("schemas — extras", () => {
 			"tool.call",
 			"session.start",
 			"session.end",
+			"session.activity",
 			"prompt.submit",
 			"permission.request",
 			"consent.change",

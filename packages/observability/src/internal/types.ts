@@ -16,6 +16,7 @@ export const EVENT_TYPES = [
 	"tool.call",
 	"session.start",
 	"session.end",
+	"session.activity",
 	"prompt.submit",
 	"permission.request",
 	"consent.change",
