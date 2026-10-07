@@ -16,7 +16,7 @@ existing store: it replaces the encryption key and the old memories become unrea
 ## Step 2: install the plugin
 
 ```bash
-openclaw plugins install @snoai/mem-claw@1.2.0
+openclaw plugins install @snoai/mem-claw@1.2.1
 ```
 
 `npx @snoai/mem-claw` runs the same install. Its only option is `--profile <name>`, which is
