@@ -1,6 +1,7 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
 import {
+	CODING_SKIN_HOOKS,
 	type ActivityCursor,
 	type ActivityRecord,
 	appendObserveLedgerRows,
@@ -13,8 +14,8 @@ import { detectProjectId, getSnoProfileDir } from "@snoai/observability";
 import { z } from "zod";
 import { workspaceRoot } from "./scope.js";
 
-/** A hook has seconds; a backlog the budget cannot finish is read by the next send. */
-const ACTIVITY_READ_BUDGET_MS = 4_000;
+/** A quarter of the SessionEnd hook's timeout, so reading, the ledger write and the rest of the step stay within half of it; a backlog the budget cannot finish is read by the next send. */
+const ACTIVITY_READ_BUDGET_MS = CODING_SKIN_HOOKS.SessionEnd.timeout * 1000 / 4;
 
 const entrySchema = z.object({
 	type: z.string(),

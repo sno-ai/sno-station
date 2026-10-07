@@ -2,6 +2,7 @@ import { glob, open } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import {
+	CODING_SKIN_HOOKS,
 	type ActivityCursor,
 	type ActivityRecord,
 	appendObserveLedgerRows,
@@ -14,8 +15,8 @@ import { detectProjectId, getSnoProfileDir } from "@snoai/observability";
 import { z } from "zod";
 import { workspaceRoot } from "./scope.js";
 
-/** A hook has seconds; a backlog the budget cannot finish is read by the next send. */
-const ACTIVITY_READ_BUDGET_MS = 2_500;
+/** A quarter of the Stop hook's timeout, so reading, the ledger write and the rest of the step stay within half of it; a backlog the budget cannot finish is read by the next send. */
+const ACTIVITY_READ_BUDGET_MS = CODING_SKIN_HOOKS.Stop.timeout * 1000 / 4;
 /** The first line of a rollout holds the session metadata plus the base instructions text. */
 const META_LINE_MAX_BYTES = 1_000_000;
 
