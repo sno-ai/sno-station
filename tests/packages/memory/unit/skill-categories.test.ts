@@ -18,7 +18,7 @@ const MEMBERS: Record<string, string> = {
 	"prd-creator-mid": "T", "prd-creator-small": "T",
 	"tpm-audit": "T", "tpm-dispatch": "T", "tpm-env": "T", "tpm-watch": "T",
 	"cts-review": "T", "cts-watch": "T",
-	"e2e-environment-preflight": "J", "e2e-red-triage": "J",
+	"e2e-environment-preflight": "M", "e2e-red-triage": "J",
 };
 
 function committed(path: string): Record<string, string> {
