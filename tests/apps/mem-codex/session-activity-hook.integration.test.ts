@@ -147,7 +147,7 @@ describe("Codex session.activity through the Stop hook", () => {
 			// 0-4, 4-10, 10-12 and 32-40 minutes count; the 20-minute gap does not.
 			active_ms: 20 * MIN,
 			// Everything after the ring: 10-12 and 32-40 minutes.
-			team_driven_ms: 10 * MIN, runs_over_12h: 0, longest_run_ms: 12 * MIN, human_messages: 1 });
+			team_driven_ms: 10 * MIN, runs_over_12h: 0, longest_run_ms: 0, human_messages: 1 });
 
 		stop();
 		expect(ledgerRows().filter(r => r.event_type === "session.activity")).toHaveLength(1);

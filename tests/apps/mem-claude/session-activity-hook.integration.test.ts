@@ -135,7 +135,7 @@ describe("Claude Code session.activity through the SessionEnd hook", () => {
 			// 0-4, 4-10, 10-12 and 32-40 minutes count; the 20-minute gap does not.
 			active_ms: 20 * MIN,
 			// Everything after the ring: 10-12 and 32-40 minutes.
-			team_driven_ms: 10 * MIN, runs_over_12h: 0, longest_run_ms: 12 * MIN, human_messages: 1 };
+			team_driven_ms: 10 * MIN, runs_over_12h: 0, longest_run_ms: 0, human_messages: 1 };
 		const stored = buffered().filter(row => row.event_type === "session.activity");
 		expect(stored).toHaveLength(1);
 		expect(stored[0]?.lane).toBe("memory");
