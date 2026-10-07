@@ -1,4 +1,4 @@
-// Generated from sno-skills/registry.yaml at c5398166355ab21e10ac6035657dd6c2181413be.
+// Generated from sno-station-skills-core/registry.yaml at 52c902964b0173406f9328b9322b1a79df43dbcd; entries for skills outside that registry are kept as they were.
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { z } from "zod";
@@ -10,7 +10,7 @@ export const SKILL_CATEGORIES: Record<string, "J" | "M" | "S" | "H" | "T" | "R" 
 	"pr-review": "J",
 	"first-principles-review": "J",
 	"e2e": "J",
-	"e2e-environment-preflight": "J",
+	"e2e-environment-preflight": "M",
 	"e2e-red-triage": "J",
 	"heartbeat": "S",
 	"subscription-quota-check": "S",
@@ -54,6 +54,23 @@ export const SKILL_CATEGORIES: Record<string, "J" | "M" | "S" | "H" | "T" | "R" 
 	"bro": "T",
 	"managed-worktree": "T",
 	"lh-english-writer": "T",
+	"less-is-more": "J",
+	"medic": "M",
+	"sno-cli": "M",
+	"pl": "T",
+	"pl-analyze": "R",
+	"pl-audit": "T",
+	"pl-dispatch": "T",
+	"pl-env": "T",
+	"pl-watch": "T",
+	"cos": "T",
+	"cos-evolve": "R",
+	"cos-review": "T",
+	"cos-watch": "T",
+	"away-brief": "H",
+	"catch-report": "H",
+	"charter": "T",
+	"deliver": "T",
 };
 
 const publishedSchema = z.object({ source: z.object({ commit: z.string().min(1) }) });
