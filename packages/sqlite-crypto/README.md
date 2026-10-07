@@ -9,7 +9,7 @@ The full threat model, settings-file key rules, and recovery steps live in [`doc
 ## Install
 
 ```sh
-npm install @snoai/sqlite-crypto@1.1.0
+npm install @snoai/sqlite-crypto@1.2.0
 ```
 
 Needs Node.js 22.14 or newer.
