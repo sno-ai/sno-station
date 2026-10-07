@@ -4,7 +4,7 @@ SHELL := /bin/bash
 PROGRAM := heartbeat
 REPO_ROOT := $(abspath ../..)
 
-.PHONY: test package install
+.PHONY: test package
 
 test:
 	bash "$(REPO_ROOT)/tests/apps/$(PROGRAM)/run.sh"
@@ -52,41 +52,3 @@ package:
 	mv -- "$$temporary" "dist/$$archive"
 	(cd dist && sha256sum "$$archive") > "dist/$$archive.sha256"
 	printf 'packaged %s\n' "dist/$$archive"
-
-install:
-	@version="$$(<VERSION)"
-	[[ "$$version" =~ ^[0-9]+[.][0-9]+([.][0-9]+)?$$ ]] || { printf '%s\n' 'install: invalid VERSION' >&2; exit 2; }
-	archive="$(PROGRAM)-$$version.tar.gz"
-	[[ -f "dist/$$archive" && -f "dist/$$archive.sha256" ]] || { printf 'install: missing dist/%s; run make package CONTRACT=<file>\n' "$$archive" >&2; exit 2; }
-	(cd dist && sha256sum -c "$$archive.sha256")
-	root="$(HOME)/.local/lib/sno-$(PROGRAM)"
-	destination="$$root/releases/$$version"
-	command_path="$(HOME)/.local/bin/$(PROGRAM)"
-	[[ ! -e "$$command_path" || -L "$$command_path" ]] || { printf 'install: existing non-link command must be preserved before install: %s\n' "$$command_path" >&2; exit 2; }
-	mkdir -p -- "$$root/releases" "$(HOME)/.local/bin"
-	stage="$$(mktemp -d "$$root/releases/.install.XXXXXX")"
-	trap 'rm -r -- "$$stage"' EXIT
-	tar -xzf "dist/$$archive" -C "$$stage"
-	[[ "$$(<"$$stage/VERSION")" == "$$version" && -x "$$stage/bin/$(PROGRAM)" ]] || { printf '%s\n' 'install: archive VERSION or executable is invalid' >&2; exit 2; }
-	if [[ -e "$$destination" || -L "$$destination" ]]; then
-		if [[ ! -d "$$destination" || -L "$$destination" ]] || ! diff -qr "$$stage" "$$destination" >/dev/null; then
-			printf 'install: existing release differs: %s\n' "$$destination" >&2
-			exit 2
-		fi
-	else
-		if mv -T -- "$$stage" "$$destination" 2>/dev/null; then
-			trap - EXIT
-		elif [[ -d "$$destination" && ! -L "$$destination" ]] && diff -qr "$$stage" "$$destination" >/dev/null; then
-			: # A concurrent installer published the identical release.
-		else
-			printf 'install: could not publish release: %s\n' "$$destination" >&2
-			exit 2
-		fi
-	fi
-	if [[ ! -L "$$root/current" || "$$(readlink "$$root/current")" != "$$destination" ]]; then
-		ln -sfnT -- "$$destination" "$$root/current"
-	fi
-	if [[ ! -L "$$command_path" || "$$(readlink "$$command_path")" != "$$root/current/bin/$(PROGRAM)" ]]; then
-		ln -sfnT -- "$$root/current/bin/$(PROGRAM)" "$$command_path"
-	fi
-	printf 'installed %s %s\n' "$(PROGRAM)" "$$version"
