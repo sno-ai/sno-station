@@ -137,3 +137,14 @@ export async function forwardObserveLedger(options: {
 	return { status: rows.length === 0 ? "idle" : forwarded ? "forwarded" : "failed",
 		forwarded, offset };
 }
+
+/** Forwards batch after batch until the ledger is read to its end, so a session that wrote many rows (one session.activity row per turn) leaves no backlog for the next one. A batch that forwards nothing ends the loop. */
+export async function forwardObserveLedgerUntilIdle(options: {
+	profileDir: string;
+	observe: LedgerObserve;
+}): Promise<void> {
+	for (;;) {
+		const result = await forwardObserveLedger(options);
+		if (result.status !== "forwarded") return;
+	}
+}

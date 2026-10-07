@@ -1,5 +1,5 @@
 import { getSnoProfileDir } from "@snoai/observability";
-import { forwardObserveLedger } from "../engine/telemetry/observe-ledger";
+import { forwardObserveLedgerUntilIdle } from "../engine/telemetry/observe-ledger";
 import { readMaintenanceOverrides } from "./config";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { createUUIDv7 } from "@snoai/common-core";
@@ -198,7 +198,7 @@ export class MemoryRuntimePool {
 			const previous = this.skins.get(registration.skinId);
 			await this.snapshot(entry, "startup", scope.host?.observeSessionUuid);
 			entry.observability.trackBestEffort("observe ledger", async () => {
-				await forwardObserveLedger({
+				await forwardObserveLedgerUntilIdle({
 					profileDir: getSnoProfileDir(), observe: entry.observability,
 				});
 			});
@@ -310,7 +310,7 @@ export class MemoryRuntimePool {
 				await this.snapshot(entry, "session_end", uuid);
 				await this.forwardTelemetry(entry, uuid);
 				entry.observability.trackBestEffort("observe ledger", async () => {
-					await forwardObserveLedger({
+					await forwardObserveLedgerUntilIdle({
 						profileDir: getSnoProfileDir(), observe: entry.observability,
 					});
 				});

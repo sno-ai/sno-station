@@ -241,6 +241,16 @@ describe("forwardObserveLedger", () => {
 		expect(envelopes().filter((row) => row.event_type === "error")).toHaveLength(1);
 	});
 
+	it("forwards a ledger of 130 rows in one call, batch after batch, until it is read to its end", async () => {
+		const lines = range(1, 130).map(ledgerLine);
+		writeLedger(lines);
+		const observe = observability();
+		await ledger.forwardObserveLedgerUntilIdle({ profileDir: root, observe });
+		expect(ledgerEnvelopes()).toHaveLength(130);
+		expect(synced()).toBe(String(bytes(lines)));
+		expect(await ledger.forwardObserveLedger({ profileDir: root, observe })).toMatchObject({ status: "idle" });
+	});
+
 	it("stops the offset before a last line that has no trailing newline", async () => {
 		const lines = [ledgerLine(1), ledgerLine(2), ledgerLine(3).trimEnd()];
 		writeLedger(lines);
