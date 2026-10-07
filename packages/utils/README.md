@@ -1,14 +1,13 @@
 # @snoai/utils
 
-Structured logging for Sno Station packages, in one small library.
+Logs you can actually read.
 
-It gives each package a logger that writes JSON diagnostic records to a daily-rotating log file
-under the Sno profile directory, and keeps those records safe to keep:
+When something goes wrong in a Sno Station package, you want to know where and why. This library gives each package a logger that writes plain JSON lines to a daily log file in your Sno folder.
 
-- a log-site catalog, so every log line comes from a known place in the code;
-- log context that follows an async call (`withLogContext`, `currentLogContext`);
-- attribute sanitizing before anything is written (`sanitizeLogAttributes`);
-- a file sink that takes file locks, so several Sno processes can share one log directory.
+- Every line comes from a known spot in the code.
+- Context follows an async call (`withLogContext`, `currentLogContext`).
+- Secrets are cleaned out before anything is written (`sanitizeLogAttributes`).
+- Several Sno processes can share one log folder without stepping on each other.
 
 ```ts
 import { createLogger, configureLogger } from "@snoai/utils";

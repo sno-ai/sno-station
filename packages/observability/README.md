@@ -1,16 +1,10 @@
 # @snoai/observability
 
-Local, redacted usage events for Sno Station, buffered on your machine and delivered only if you
-turn delivery on.
+A private record of what your agents did, kept on your machine.
 
-Agent plugins can record what happened (a memory was written, a tool was called) as events in a
-closed schema. This package validates each event, redacts sensitive fields before hashing,
-appends it to a local SQLite buffer under `~/.sno`, and, when delivery is enabled, flushes
-Compact JSON v1 envelopes to `sno.ai`. The shared memory setup turns delivery off
-(`telemetry.observe.enabled` is `false`), so a default install keeps every event on your machine.
+When a plugin saves a memory or an agent runs a tool, this package writes it down. It scrubs secrets first and keeps the notes in a small local database under `~/.sno`. You decide how much leaves your machine: nothing, only counts, or the full event details. Change it any time with `sno station telemetry consent set off`, `metadata-only` or `full`.
 
-Who it is for: the Sno Station packages and anyone integrating a host agent. If you only want
-shared agent memory, follow the
+Most people never use this package directly. It comes with the Sno Station plugins. If you just want shared memory for your agents, start with the
 [shared memory setup](https://github.com/sno-ai/sno-station/blob/main/docs/memory-setup.md) and
 install the plugin for your agent ([Codex](https://www.npmjs.com/package/@snoai/mem-codex),
 [Claude Code](https://www.npmjs.com/package/@snoai/mem-claude),

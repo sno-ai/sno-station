@@ -9,7 +9,7 @@
     "directory": "apps/mem-claw"
   },
   "type": "module",
-  "description": "Long-term memory service for OpenClaw agents.",
+  "description": "Give your OpenClaw agents a memory that lasts from one conversation to the next.",
   "main": "./dist/plugin/openclaw-plugin-runtime.js",
   "types": "./dist/plugin/openclaw-plugin-runtime.d.ts",
   "exports": {
