@@ -12,7 +12,7 @@ for splitting; it has no chunker of its own and needs no hosted service.
 ## Install
 
 ```bash
-npm install @snoai/content-sanitizer@1.1.0
+npm install @snoai/content-sanitizer@1.2.0
 ```
 
 ## Public APIs

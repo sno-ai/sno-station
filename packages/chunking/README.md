@@ -11,7 +11,7 @@ treated as one long word. The same input always gives the same chunks and the sa
 ## Install
 
 ```bash
-npm install @snoai/chunking@1.1.0
+npm install @snoai/chunking@1.2.0
 ```
 
 ## Usage
