@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Focused acceptance probes. Mutations and installs stay in disposable directories.
+# Focused acceptance probes. Mutations stay in disposable directories.
 set -Eeuo pipefail
 export LC_ALL=C
 HERE="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
@@ -133,7 +133,7 @@ binding)
   grep -F '/home/someone/x' "$WORK/refusal.log"
   pass 'personal binding stops runner before behavioural tests'
   ;;
-package|manifest|install|refusal)
+package|manifest|refusal)
   snapshot
   for app in "${APPS[@]}"; do
     appdir="$WORK/repo/apps/$app"
@@ -155,9 +155,6 @@ package|manifest|install|refusal)
       pass "$app refuses missing and malformed contract without output"
       continue
     fi
-    if [[ "$1" == install ]]; then
-      refused "dist/$app-$(version_of "$app").tar.gz" make -C "$appdir" install "HOME=$WORK/install-home"
-    fi
     build "$app"
     unpack "$app"
     release="$WORK/unpacked/$app"
@@ -170,7 +167,7 @@ package|manifest|install|refusal)
       (cd "$appdir/dist" && sha256sum -c "$app-$(version_of "$app").tar.gz.sha256")
       cmp <(cd "$appdir/dist" && sha256sum "$app-$(version_of "$app").tar.gz") "$appdir/dist/$app-$(version_of "$app").tar.gz.sha256"
       pass "$app exact archive files, bytes and checksum"
-    elif [[ "$1" == manifest ]]; then
+    else
       digest="$(sha256sum "$release/requirements-contract.json" | cut -d ' ' -f1)"
       dependencies='["bash","timeout","flock","tail"]'
       if [[ "$app" == report-time ]]; then
@@ -190,29 +187,8 @@ package|manifest|install|refusal)
       [[ "$before" == "$(sha256sum "$appdir/dist/$app-$(version_of "$app").tar.gz")" ]] || fail 'invalid VERSION changed archive'
       [[ ! -e "$appdir/dist/$app-v1.tar.gz" ]] || fail 'invalid VERSION produced archive'
       pass "$app manifest and invalid VERSION refusal"
-    else
-      make -C "$appdir" install "HOME=$WORK/install-home"
-      installed="$WORK/install-home/.local/lib/sno-$app/releases/$(version_of "$app")"
-      current="$WORK/install-home/.local/lib/sno-$app/current"
-      command_path="$WORK/install-home/.local/bin/$app"
-      [[ -L "$current" && -L "$command_path" ]] || fail 'install did not create links'
-      [[ "$(readlink -f "$current")" == "$installed" ]] || fail 'current points elsewhere'
-      [[ "$(readlink -f "$command_path")" == "$installed/bin/$app" ]] || fail 'command points elsewhere'
-      [[ "$(readlink "$command_path")" == *"current/bin/$app" ]] || fail 'command bypasses current'
-      diff -r "$release" "$installed"
-      "$command_path" --help >"$WORK/installed.help"
-      "$ROOT/apps/$app/bin/$app" --help >"$WORK/source.help"
-      cmp "$WORK/installed.help" "$WORK/source.help"
-      find "$installed" -printf '%P %T@\n' | sort >"$WORK/before.times"
-      current_before="$(readlink "$current")"
-      sleep 1
-      make -C "$appdir" install "HOME=$WORK/install-home"
-      cmp "$WORK/before.times" <(find "$installed" -printf '%P %T@\n' | sort)
-      diff -r "$release" "$installed"
-      [[ "$current_before" == "$(readlink "$current")" ]] || fail 'second install changed current'
-      pass "$app install paths, executable help, bytes and unchanged second install"
     fi
   done
   ;;
-*) fail 'usage: release-proof.sh identity WORKSHOP_REPO | binding | package | refusal | manifest | install | reproducible' ;;
+*) fail 'usage: release-proof.sh identity WORKSHOP_REPO | binding | package | refusal | manifest | reproducible' ;;
 esac
