@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { spawn } from "node:child_process";
 import { writeSync } from "node:fs";
 import { isAbsolute } from "node:path";
 import { z } from "zod";
@@ -62,10 +63,16 @@ function parseAppend(args: string[], flags: Record<string, string>): ParsedEvent
 	return parsed;
 }
 
-async function send(parsed: ParsedEvent): Promise<void> {
-	const runtime = new SnoObserveRuntime();
-	await runtime.emitParsed(parsed);
-	await runtime.flush();
+// Store the event, say so on stdout when it is the event the caller asked for, and leave delivery to a one-shot detached `flush` child.
+// The network is never on the path of this process, so a caller's timeout cannot lose an event.
+async function store(parsed: ParsedEvent, announce: boolean): Promise<void> {
+	await new SnoObserveRuntime({ deferDelivery: true }).emitParsed(parsed);
+	if (announce) writeSync(1, "stored\n");
+	const script = process.argv[1];
+	if (script === undefined) return;
+	spawn(process.execPath, [script, "flush"], { detached: true, stdio: "ignore" })
+		.on("error", () => {})
+		.unref();
 }
 
 function errorLine(error: unknown): string {
@@ -74,6 +81,15 @@ function errorLine(error: unknown): string {
 
 async function main(): Promise<number> {
 	const args = process.argv.slice(2);
+	if (args[0] === "flush" && args.length === 1) {
+		try {
+			await new SnoObserveRuntime().drain();
+			return 0;
+		} catch (error) {
+			writeSync(2, `${errorLine(error)}\n`);
+			return 1;
+		}
+	}
 	let parsed: ParsedEvent;
 	try {
 		parsed = parseAppend(args, parseFlags(args.slice(2)));
@@ -85,14 +101,14 @@ async function main(): Promise<number> {
 		if (agent.success && eventType.success &&
 			(component === "reach" || component === "handoff" || component === "review" || component === "rsi")) {
 			try {
-				await send(parseEventInput({
+				await store(parseEventInput({
 					event_type: "error", lane: laneForEventType("error"), agent_id: agent.data,
 					scope: { project_id: detectProjectId() },
 					payload: {
 						kind: `${component}:observe_append_failed`, message_hash: sha256Hex(line),
 						recoverable: true, component, context: eventType.data,
 					},
-				}));
+				}), false);
 			} catch (sendError) {
 				writeSync(2, `${errorLine(sendError)}\n`);
 				return 1;
@@ -102,7 +118,7 @@ async function main(): Promise<number> {
 		return 2;
 	}
 	try {
-		await send(parsed);
+		await store(parsed, true);
 		return 0;
 	} catch (error) {
 		writeSync(2, `${errorLine(error)}\n`);
@@ -110,5 +126,5 @@ async function main(): Promise<number> {
 	}
 }
 
-// A short-lived append flushes once; do not run the SDK's beforeExit drain.
+// A short-lived process delivers once at most; do not run the SDK's beforeExit drain.
 process.exit(await main());
