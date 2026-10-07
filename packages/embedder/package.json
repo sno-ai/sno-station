@@ -1,6 +1,6 @@
 {
   "name": "@snoai/embedder",
-  "version": "1.2.0",
+  "version": "1.1.1",
   "description": "Finds your memories by meaning, right on your machine. No API key, no cloud.",
   "license": "Apache-2.0",
   "publishConfig": { "access": "public" },
