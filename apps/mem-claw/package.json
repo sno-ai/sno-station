@@ -57,7 +57,7 @@
     "@snoai/embedder": "^1.1.0",
     "@snoai/llmix": "2.2.0",
     "@snoai/mda-config": "^1.1.2",
-    "@snoai/observability": "^1.1.0",
+    "@snoai/observability": "^1.2.0",
     "@snoai/sqlite-crypto": "^1.1.0",
     "@snoai/utils": "^1.1.0",
     "argon2": "^0.45.1",
