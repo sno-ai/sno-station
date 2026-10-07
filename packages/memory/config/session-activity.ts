@@ -3,7 +3,7 @@ import { z } from "zod";
 
 /** A gap between two records of at most this long is working time; a longer one ends the run. */
 const ACTIVITY_GAP_MS = 15 * 60_000;
-/** A run this long or longer counts in runs_over_12h. */
+/** A run counts in runs_over_12h once, in the send where it reaches this length, ended or not. */
 const ACTIVITY_LONG_RUN_MS = 12 * 3_600_000;
 
 /**
@@ -37,6 +37,8 @@ export interface ActivityCursor {
 	runStart: number;
 	/** The latest incoming message came from another agent. */
 	agentDriven: boolean;
+	/** The run still open was already counted in runs_over_12h. */
+	counted: boolean;
 	/** Codex only: the rollout file found by its first send. */
 	path?: string;
 }
@@ -45,6 +47,7 @@ export const activityCursorSchema: z.ZodType<ActivityCursor> = z.object({
 	lastTs: z.number().int().nonnegative(),
 	runStart: z.number().int().nonnegative(),
 	agentDriven: z.boolean(),
+	counted: z.boolean(),
 	path: z.string().min(1).optional(),
 });
 
@@ -58,26 +61,31 @@ export interface SessionActivityPayload {
 	human_messages: number;
 }
 
-export const EMPTY_ACTIVITY_CURSOR: ActivityCursor = { offset: 0, lastTs: 0, runStart: 0, agentDriven: false };
+export const EMPTY_ACTIVITY_CURSOR: ActivityCursor = { offset: 0, lastTs: 0, runStart: 0, agentDriven: false, counted: false };
 
 /**
  * Folds the records after the cursor into one window. A gap belongs to the window of the record
- * that ends it, so splitting a transcript at any line gives the same sums. `closeRun` ends the run
- * still open at the last record (the session is over); otherwise it stays open in the cursor.
+ * that ends it, so splitting a transcript at any line gives the same sums. A run is counted in
+ * runs_over_12h once, in the send where it reaches 12 hours, whether or not it has ended. longest_run_ms
+ * is the longest run of any length seen in the window, including the length so far of the run still
+ * open. `closeRun` ends the run still open at the last record (the session is over); otherwise it
+ * stays open in the cursor.
  */
 export function foldActivity(
 	cursor: ActivityCursor,
 	records: readonly ActivityRecord[],
 	closeRun: boolean,
 ): { payload: SessionActivityPayload | undefined; cursor: ActivityCursor } {
-	let { lastTs, runStart, agentDriven } = cursor;
+	let { lastTs, runStart, agentDriven, counted } = cursor;
 	let windowStart = runStart > 0 ? lastTs : 0;
 	let active = 0, team = 0, human = 0, runs = 0, longest = 0;
-	const endRun = (end: number): void => {
+	const seeRun = (end: number): void => {
 		const length = end - runStart;
-		if (length < ACTIVITY_LONG_RUN_MS) return;
-		runs++;
 		longest = Math.max(longest, length);
+		if (!counted && length >= ACTIVITY_LONG_RUN_MS) {
+			runs++;
+			counted = true;
+		}
 	};
 	for (const record of records) {
 		if (windowStart === 0) windowStart = record.ts;
@@ -88,17 +96,19 @@ export function foldActivity(
 				active += gap;
 				if (agentDriven) team += gap;
 			} else {
-				endRun(lastTs);
+				seeRun(lastTs);
 				runStart = record.ts;
+				counted = false;
 			}
 		}
 		lastTs = Math.max(lastTs, record.ts);
+		if (runStart > 0) seeRun(lastTs);
 		if (record.incoming === "human") { human++; agentDriven = false; }
 		else if (record.incoming === "agent") agentDriven = true;
 	}
 	const closing = closeRun && runStart > 0;
-	if (closing) { endRun(lastTs); runStart = 0; }
-	const next = { ...cursor, lastTs, runStart, agentDriven };
+	if (closing) { runStart = 0; counted = false; }
+	const next = { ...cursor, lastTs, runStart, agentDriven, counted };
 	if (records.length === 0 && !closing) return { payload: undefined, cursor: next };
 	return {
 		payload: {
