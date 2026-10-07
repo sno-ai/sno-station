@@ -2,7 +2,8 @@
 
 Codex, Claude Code, OpenClaw, and Hermes use the same npm memory service and the same
 `~/.sno/settings.json`. Complete this setup once before installing an agent plugin. The first
-release uses Local First mode and does not require Sno CLI.
+release uses Local First mode. This service setup does not need the Sno CLI; installing an agent
+plugin does: install `sno` (see the README), then run `sno setup --harness <agent>`.
 
 Install Node.js 22.22.3+, 24.15.0+, or 25.9.0+, then run the commands below. With npm 12 or newer
 (check with `npm --version`), npm blocks install scripts by default and the memory service cannot start. Run
@@ -46,7 +47,7 @@ The memory service starts when a plugin needs it; there is no separate start com
 Upgrade the memory service and the agent plugin you use to the same version. From 1.0.1 the
 memory service rejects requests that do not carry its access token, and a 1.0.0 plugin does not
 send one. Run `npm install --prefix "$HOME/.sno" @snoai/memory@1.1.0 @snoai/embedder@1.1.0`, then
-reinstall your plugin at 1.1.0 (for example `npm install -g @snoai/mem-codex@1.1.0`) and restart
+reinstall your plugin at 1.1.0 (for example `sno setup --harness codex`) and restart
 any running agent session. Do not rerun the settings block; your store and key stay as they are.
 
 The nightly improvement skill uses `modelCalls.R5` for local lesson and skill-reminder
