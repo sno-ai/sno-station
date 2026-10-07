@@ -75,7 +75,8 @@ export function foldActivity(
 	let active = 0, team = 0, human = 0, runs = 0, longest = 0;
 	const endRun = (end: number): void => {
 		const length = end - runStart;
-		if (length >= ACTIVITY_LONG_RUN_MS) runs++;
+		if (length < ACTIVITY_LONG_RUN_MS) return;
+		runs++;
 		longest = Math.max(longest, length);
 	};
 	for (const record of records) {
