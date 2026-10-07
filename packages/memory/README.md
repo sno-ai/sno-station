@@ -28,7 +28,7 @@ Who it is for: you do not use this package directly. Follow the
 plugins use to reach the service.
 
 ```bash
-npm install @snoai/memory@1.2.0
+npm install @snoai/memory@1.2.1
 ```
 
 Needs Node.js 22.22.3+, 24.15.0+ or 25.9.0+. Licensed under Apache-2.0.
