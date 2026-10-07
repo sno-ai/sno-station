@@ -28,6 +28,7 @@ assert len(matches) == 1, "installed guide must contain one complete original-ca
 assert "spawn" not in matches[0], "guide reply example must not start a runtime"
 pathlib.Path(sys.argv[2]).write_text("set -Eeuo pipefail\n" + matches[0] + "\n")
 PY
+sno_record_programs "reach=$APP/bin/sno-reach"
 env HOME="$TEST_HOME" PATH="$(dirname -- "$SNO_BINARY"):$PATH" SNO_REACH_ROOT="$STATE" \
   SNO_REACH_ADDR="$RECEIVER" original_card="$original" TMUX="$TEST_TMUX" TMUX_PANE="$TEST_PANE" \
   bash "$proof/example.sh" >"$proof/example.out" 2>"$proof/example.err"
