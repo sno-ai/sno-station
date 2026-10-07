@@ -97,8 +97,8 @@ describe("Codex session.activity", () => {
 			// The ring at minute 4 until the person types at 13.
 			team_driven_ms: 9 * MIN,
 			runs_over_12h: 0,
-			// Stop does not end the run still open: the second run (33 to 34) is carried, the first (0 to 16) counted.
-			longest_run_ms: 16 * MIN,
+			// Neither run (0 to 16, and 33 to 34 still open) reaches 12 hours.
+			longest_run_ms: 0,
 			human_messages: 2,
 		} });
 		expect(cursor).toMatchObject({ lastTs: T0 + 34 * MIN, runStart: T0 + 33 * MIN, path: rollout, offset: readFileSync(rollout).length });

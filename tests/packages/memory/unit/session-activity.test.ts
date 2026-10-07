@@ -28,13 +28,13 @@ describe("foldActivity", () => {
 		const { payload, cursor } = foldActivity(EMPTY_ACTIVITY_CURSOR, [rec(0), rec(5), rec(20), rec(36)], false);
 		expect(payload).toEqual({
 			window_start_ms: T0, window_end_ms: T0 + 36 * MIN,
-			active_ms: 20 * MIN, team_driven_ms: 0, runs_over_12h: 0, longest_run_ms: 20 * MIN, human_messages: 0,
+			active_ms: 20 * MIN, team_driven_ms: 0, runs_over_12h: 0, longest_run_ms: 0, human_messages: 0,
 		});
 		// The run that began at minute 36 is still open.
 		expect(cursor).toMatchObject({ lastTs: T0 + 36 * MIN, runStart: T0 + 36 * MIN });
 	});
 
-	it("counts a 13-hour run once, and a 12-hour one, but not 11h59m", () => {
+	it("counts a 13-hour run once, and a 12-hour one, but not 5h or 11h59m (longest_run_ms is 0 then)", () => {
 		const run = (hours: number, minutes = 0): ActivityRecord[] => {
 			const end = hours * 60 + minutes;
 			return Array.from({ length: Math.floor(end / 10) + 1 }, (_, i) => rec(i * 10)).concat(end % 10 ? [rec(end)] : []);
@@ -42,7 +42,8 @@ describe("foldActivity", () => {
 		const thirteen = foldActivity(EMPTY_ACTIVITY_CURSOR, run(13), true).payload;
 		expect(thirteen).toMatchObject({ runs_over_12h: 1, longest_run_ms: 13 * HOUR, active_ms: 13 * HOUR });
 		expect(foldActivity(EMPTY_ACTIVITY_CURSOR, run(12), true).payload).toMatchObject({ runs_over_12h: 1, longest_run_ms: 12 * HOUR });
-		expect(foldActivity(EMPTY_ACTIVITY_CURSOR, run(11, 59), true).payload).toMatchObject({ runs_over_12h: 0, longest_run_ms: 11 * HOUR + 59 * MIN });
+		expect(foldActivity(EMPTY_ACTIVITY_CURSOR, run(11, 59), true).payload).toMatchObject({ runs_over_12h: 0, longest_run_ms: 0 });
+		expect(foldActivity(EMPTY_ACTIVITY_CURSOR, run(5), true).payload).toMatchObject({ runs_over_12h: 0, longest_run_ms: 0, active_ms: 5 * HOUR });
 	});
 
 	it("keeps an open run in the cursor and counts it once across two sends", () => {

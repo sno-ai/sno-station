@@ -94,11 +94,11 @@ describe("Claude Code session.activity", () => {
 		expect(rows).toHaveLength(1);
 		expect(rows[0]).toMatchObject({ event_type: "session.activity", lane: "memory", ts_ms: T0 + 35 * MIN, payload: {
 			harness: "claude-code", window_start_ms: T0, window_end_ms: T0 + 35 * MIN,
-			// Gaps of 1+1+1+1+6+1+1+1+4+1 minutes; the 17-minute gap before minute 34 ends the first run (0..17).
+			// Gaps of 1+1+1+1+6+1+1+1+4+1 minutes; the 17-minute gap before minute 34 ends the first run (0..17, under 12 hours, so longest_run_ms stays 0).
 			active_ms: 18 * MIN,
 			// Minutes 4 to 13 follow the ring and the heartbeat tick, until the person types at 13.
 			team_driven_ms: 9 * MIN,
-			runs_over_12h: 0, longest_run_ms: 17 * MIN,
+			runs_over_12h: 0, longest_run_ms: 0,
 			// Typed at 0 and 13 only: skill text, ring, tick, summary, command output, shell input and teammate message are not the person's.
 			human_messages: 2,
 		} });
