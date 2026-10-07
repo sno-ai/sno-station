@@ -103,7 +103,8 @@ jobs:
         run: |
           # A program version lives in exactly one release. sno setup refuses to choose between two releases that carry
           # the same archive ("ambiguous release asset"), so an archive that an earlier release already has is not attached again.
-          existing=$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" --jq '.[].assets[].name')
+          # Only published releases count (plus this draft): anonymous users never see another draft's files.
+          existing=$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" --jq ".[] | select(.draft == false or .tag_name == \"$TAG\") | .assets[].name")
           find archives -name '*.tar.gz' | while read -r file; do
             name=$(basename "$file")
             if grep -qxF "$name" <<< "$existing"; then
