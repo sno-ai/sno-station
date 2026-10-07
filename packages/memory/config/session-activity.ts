@@ -126,7 +126,7 @@ export function foldActivity(
 
 /**
  * Calls `onLine` for each complete line from `offset` on and returns the offset after the last
- * complete line, and whether the end of the file was reached. Stops reading once `budgetMs` has passed: real transcripts reach 1.65 GB while a
+ * complete line, and whether the end of the file was reached on a line boundary. Stops reading once `budgetMs` has passed: real transcripts reach 1.65 GB while a
  * hook has seconds, so a long backlog is taken over several sends instead of failing every time.
  */
 export async function readNewLines(
@@ -154,6 +154,17 @@ export async function readNewLines(
 		}
 	} finally {
 		stream.destroy();
+	}
+	// Bytes after the last newline are either a line still being written (not done: the next send reads it) or a whole record that lacks only its newline (read it now).
+	if (done && pending.length > 0) {
+		const tail = pending.toString("utf8");
+		try {
+			JSON.parse(tail);
+			onLine(tail);
+			consumed += pending.length;
+		} catch {
+			done = false;
+		}
 	}
 	return { offset: consumed, done };
 }

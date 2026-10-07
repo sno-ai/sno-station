@@ -149,11 +149,20 @@ describe("readNewLines", () => {
 		writeFileSync(path, '{"a":1}\n{"a":2}\n{"a":');
 		const lines: string[] = [];
 		const first = await readNewLines(path, 0, 1000, line => lines.push(line));
-		expect(first).toEqual({ offset: 16, done: true });
+		expect(first).toEqual({ offset: 16, done: false });
 		appendFileSync(path, "3}\n");
 		const second = await readNewLines(path, first.offset, 1000, line => lines.push(line));
 		expect(lines).toEqual(['{"a":1}', '{"a":2}', '{"a":3}']);
 		expect(second).toEqual({ offset: 24, done: true });
+	});
+
+	it("reads a last record that lacks only its newline, and reports the end as reached", async () => {
+		const path = join(directory, "t.jsonl");
+		writeFileSync(path, '{"a":1}\n{"a":2}');
+		const lines: string[] = [];
+		const read = await readNewLines(path, 0, 1000, line => lines.push(line));
+		expect(lines).toEqual(['{"a":1}', '{"a":2}']);
+		expect(read).toEqual({ offset: 15, done: true });
 	});
 
 	it("reads a backlog larger than its budget over several calls without losing or repeating a line", async () => {
