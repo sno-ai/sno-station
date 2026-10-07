@@ -99,8 +99,9 @@ describe("Codex session.activity on a large transcript", () => {
 		const sum = (key: string): number => sent.reduce((total, row) => total + (row[key] ?? 0), 0);
 		expect(sum("active_ms")).toBe((RECORDS - 1) * 1000);
 		expect(sum("human_messages")).toBe(RECORDS / 1000);
-		// Stop never closes the 35-day run: it is still open in the cursor, counted by nobody yet.
-		expect(sum("runs_over_12h")).toBe(0);
+		// Stop never closes the 35-day run: it stays open in the cursor, counted once where it passed 12 hours, and its length has no ceiling.
+		expect(sum("runs_over_12h")).toBe(1);
+		expect(Math.max(...sent.map(row => row.longest_run_ms ?? 0))).toBe((RECORDS - 1) * 1000);
 		expect(cursor.runStart).toBe(T0);
 		expect(sent[0]?.window_start_ms).toBe(T0);
 		expect(sent.at(-1)?.window_end_ms).toBe(T0 + (RECORDS - 1) * 1000);

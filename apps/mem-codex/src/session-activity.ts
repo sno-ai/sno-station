@@ -17,8 +17,6 @@ import { workspaceRoot } from "./scope.js";
 
 /** A quarter of the Stop hook's timeout, so reading, the ledger write and the rest of the step stay within half of it; a backlog the budget cannot finish is read by the next send. */
 const ACTIVITY_READ_BUDGET_MS = CODING_SKIN_HOOKS.Stop.timeout * 1000 / 4;
-/** The first line of a rollout holds the session metadata plus the base instructions text. */
-const META_LINE_MAX_BYTES = 1_000_000;
 
 const metaSchema = z.object({
 	type: z.literal("session_meta"),
@@ -42,10 +40,18 @@ const textBlockSchema = z.object({ type: z.literal("text"), text: z.string() });
 async function startedByAgent(path: string): Promise<boolean> {
 	const file = await open(path, "r");
 	try {
-		const buffer = Buffer.alloc(META_LINE_MAX_BYTES);
-		const { bytesRead } = await file.read(buffer, 0, META_LINE_MAX_BYTES, 0);
-		const end = buffer.indexOf(10);
-		const meta = metaSchema.parse(JSON.parse(buffer.toString("utf8", 0, end === -1 ? bytesRead : end)));
+		// The first line holds the session metadata plus the base instructions text; read it whole, however long.
+		const parts: Buffer[] = [];
+		for (let position = 0; ;) {
+			const chunk = Buffer.alloc(65_536);
+			const { bytesRead } = await file.read(chunk, 0, chunk.length, position);
+			if (bytesRead === 0) break;
+			position += bytesRead;
+			const end = chunk.subarray(0, bytesRead).indexOf(10);
+			parts.push(chunk.subarray(0, end === -1 ? bytesRead : end));
+			if (end !== -1) break;
+		}
+		const meta = metaSchema.parse(JSON.parse(Buffer.concat(parts).toString("utf8")));
 		return meta.payload.source !== "cli" && meta.payload.source !== "vscode";
 	} finally {
 		await file.close();

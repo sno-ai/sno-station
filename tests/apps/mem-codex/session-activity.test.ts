@@ -97,11 +97,21 @@ describe("Codex session.activity", () => {
 			// The ring at minute 4 until the person types at 13.
 			team_driven_ms: 9 * MIN,
 			runs_over_12h: 0,
-			// Neither run (0 to 16, and 33 to 34 still open) reaches 12 hours.
-			longest_run_ms: 0,
+			// The run from 0 to 16 is the longest; the one from 33 to 34 is still open.
+			longest_run_ms: 16 * MIN,
 			human_messages: 2,
 		} });
 		expect(cursor).toMatchObject({ lastTs: T0 + 34 * MIN, runStart: T0 + 33 * MIN, path: rollout, offset: readFileSync(rollout).length });
+	});
+
+	it("reads a session whose first line is far longer than any fixed buffer", async () => {
+		const huge = line({
+			timestamp: stamp(0), type: "session_meta",
+			payload: { id: SESSION, source: "exec", originator: "codex_exec", base_instructions: { text: "x".repeat(3_000_000) } },
+		});
+		writeFileSync(rollout, huge + userMessage(1, "Use the user-level Codex skill $ts-coder.") + work(5));
+		await stop();
+		expect(ledger()[0]?.payload).toMatchObject({ team_driven_ms: 4 * MIN, human_messages: 0 });
 	});
 
 	it("treats every prompt of a codex exec session as another agent's, and its time as team-driven", async () => {
@@ -115,26 +125,26 @@ describe("Codex session.activity", () => {
 		expect(ledger()[0]?.payload).toMatchObject({ team_driven_ms: 4 * MIN, human_messages: 0 });
 	});
 
-	it("measures a 13-hour run split over two Stop hooks as one run, counted once when it ends", async () => {
+	it("counts a 13-hour run split over Stop hooks once, in the send where it passes 12 hours", async () => {
 		let first = meta("cli") + userMessage(0, "overnight job");
 		for (let minute = 10; minute <= 7 * 60; minute += 10) first += work(minute);
 		writeFileSync(rollout, first);
 		const cursor = await stop();
-		expect(ledger()[0]?.payload).toMatchObject({ runs_over_12h: 0, longest_run_ms: 0, active_ms: 7 * HOUR });
+		expect(ledger()[0]?.payload).toMatchObject({ runs_over_12h: 0, longest_run_ms: 7 * HOUR, active_ms: 7 * HOUR });
 
 		let second = "";
 		for (let minute = 7 * 60 + 10; minute <= 13 * 60; minute += 10) second += work(minute);
 		appendFileSync(rollout, second);
 		const middle = await stop(cursor);
-		// Still open at 13 hours: not counted yet.
-		expect(ledger()[1]?.payload).toMatchObject({ runs_over_12h: 0, window_start_ms: T0 + 7 * HOUR, active_ms: 6 * HOUR });
+		// Still open at 13 hours, and counted now: it passed 12 hours inside this send.
+		expect(ledger()[1]?.payload).toMatchObject({ runs_over_12h: 1, longest_run_ms: 13 * HOUR, window_start_ms: T0 + 7 * HOUR, active_ms: 6 * HOUR });
 
 		// The next turn comes an hour later; the 13-hour run ended before it.
 		appendFileSync(rollout, userMessage(13 * 60 + 60, "next day") + work(13 * 60 + 65));
 		await stop(middle);
 		const rows = ledger();
 		expect(rows).toHaveLength(3);
-		expect(rows[2]?.payload).toMatchObject({ runs_over_12h: 1, longest_run_ms: 13 * HOUR, active_ms: 5 * MIN, human_messages: 1 });
+		expect(rows[2]?.payload).toMatchObject({ runs_over_12h: 0, longest_run_ms: 13 * HOUR, active_ms: 5 * MIN, human_messages: 1 });
 		expect(rows.reduce((sum, row) => sum + Number(row.payload.runs_over_12h), 0)).toBe(1);
 		expect(rows.reduce((sum, row) => sum + Number(row.payload.active_ms), 0)).toBe(13 * HOUR + 5 * MIN);
 	});
