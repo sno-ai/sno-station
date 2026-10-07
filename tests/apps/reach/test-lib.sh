@@ -36,6 +36,16 @@ cleanup() {
   return "$status"
 }
 trap cleanup EXIT
+# Tells the real sno where the programs under test are, in the record a `sno setup` writes (isolated home only):
+# sno_record_programs reach=/abs/bin/sno-reach heartbeat=/abs/bin/heartbeat ... Then `sno <name>` runs that file.
+sno_record_programs() {
+  mkdir -p "$TEST_HOME/.config/sno"
+  printf '{"auto":{"enabled":false}}\n' >"$TEST_HOME/.config/sno/cli.json"
+  jq -n '{generation: "test", files: {}, directories: [], skills_version: "", skill_destinations: {},
+    contract_sha256: "", requirements_fixture_sha256: "", hooks: [], timer: false,
+    programs: (reduce ($ARGS.positional[] | split("=")) as $p ({}; .[$p[0]] = {version: "1.0", sha256: "", entry: $p[1], dependencies: []}))}' \
+    --args "$@" >"$TEST_HOME/.config/sno/assemble.json"
+}
 fail() { printf 'FAIL %s\n' "$*" >&2; exit 1; }
 pass() { printf 'PASS %s\n' "$*"; }
 reach() {
