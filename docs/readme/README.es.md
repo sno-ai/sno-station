@@ -77,7 +77,7 @@ antes, en el agente que prefieras. Tres cosas cambian:
    desde la memoria compartida y el buzón, con el contexto intacto.
 2. **Quieres un segundo par de ojos.** Pide a cualquiera de los agentes que haga
    `peer-review` del trabajo del otro. El revisor siempre es del otro harness.
-3. **Cada noche corre el bucle RSI.** Por la mañana, `rem-reflect accept <id>` para las
+3. **Cada noche corre el bucle RSI.** Por la mañana, `sno rem-reflect accept <id>` para las
    propuestas que te gusten. Nada cambia sin ese accept.
 
 ## "Le grité a mi agente anoche. Tomó notas."

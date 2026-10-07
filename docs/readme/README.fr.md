@@ -77,7 +77,7 @@ avant, dans l'agent de votre choix. Trois choses changent :
    tâche depuis la mémoire partagée et la boîte aux lettres, contexte intact.
 2. **Vous voulez un second regard.** Demandez à l'un ou l'autre agent de faire un `peer-review` du
    travail de l'autre. Le réviseur vient toujours de l'autre harness.
-3. **Chaque nuit, la boucle RSI tourne.** Le matin, `rem-reflect accept <id>` pour les propositions
+3. **Chaque nuit, la boucle RSI tourne.** Le matin, `sno rem-reflect accept <id>` pour les propositions
    que vous aimez. Rien ne change sans cet accord.
 
 ## « J'ai crié sur mon agent hier soir. Il a pris des notes. »
