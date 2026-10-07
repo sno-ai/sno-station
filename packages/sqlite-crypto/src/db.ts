@@ -494,12 +494,20 @@ export function openEncryptedDb(path: string, dek: Dek): Db {
 			// canary table is gone. Re-registering the second would mint a second id
 			// for one database, so the recorded location is checked before trusting
 			// "new" — that check is diagnostic, not identity.
+			let known = manifest;
 			if (manifest.dbs.some((d) => d.path === dbPath)) {
-				throw new CanaryMismatch(
-					`manifest lists ${dbPath} but no canary row found`,
-				);
+				// A file with other tables lost its canary: damage. A file with no tables at all holds
+				// nothing the entry could describe: the database listed here was moved aside, and this is
+				// a new one. Drop the stale entry; the moved store is adopted again if it is ever opened.
+				const tables = pre.db.prepare("SELECT count(*) AS n FROM sqlite_master").get() as { n: number };
+				if (tables.n > 0) {
+					throw new CanaryMismatch(
+						`manifest lists ${dbPath} but no canary row found`,
+					);
+				}
+				known = { ...manifest, dbs: manifest.dbs.filter((d) => d.path !== dbPath) };
 			}
-			registerFreshDbSync(dbPath, dek, manifest, pre);
+			registerFreshDbSync(dbPath, dek, known, pre);
 			return pre.db;
 		}
 		assertSentinel(canaryRow, dbPath);
