@@ -311,4 +311,30 @@ describe("sno-mem-codex install", () => {
 		});
 		expect(parsed.status, parsed.stderr).toBe(0);
 	});
+
+	it("leaves one trust table per key and a parseable file when two of its own entries from earlier installs are already present", async () => {
+		const codexHome = await temporaryHome();
+		const hooksPath = join(codexHome, "hooks.json");
+		const events = [["SessionStart", "session_start", "session-start"], ["Stop", "stop", "stop"]] as const;
+		const seeded: Record<string, unknown[]> = {};
+		let trust = "";
+		for (const [event, eventName, subcommand] of events) {
+			seeded[event] = [
+				{ hooks: [{ type: "command", command: `'/old/release/sno-mem-codex' ${subcommand}`, timeout: 1 }] },
+				{ hooks: [{ type: "command", command: `'/older/release/sno-mem-codex' ${subcommand}`, timeout: 1 }] },
+			];
+			for (const index of [0, 1]) trust += `[hooks.state.${JSON.stringify(`${hooksPath}:${eventName}:${index}:0`)}]\nenabled = true\ntrusted_hash = "stale-${index}"\n\n`;
+		}
+		await writeFile(hooksPath, `${JSON.stringify({ hooks: seeded }, null, 2)}\n`);
+		await writeFile(join(codexHome, "config.toml"), trust);
+
+		await installCodex({ codexHome, programPath: "/opt/sno/bin/sno", writeOutput: () => undefined });
+
+		const config = await readFile(join(codexHome, "config.toml"), "utf8");
+		expect(config).not.toContain("stale-");
+		const headers = [...config.matchAll(/^\[hooks\.state\..+\]$/gm)].map(match => match[0]);
+		expect(new Set(headers).size).toBe(headers.length);
+		const parsed = spawnSync("python3", ["-c", "import sys, tomllib; tomllib.loads(sys.stdin.read())"], { encoding: "utf8", input: config });
+		expect(parsed.status, parsed.stderr).toBe(0);
+	});
 });
