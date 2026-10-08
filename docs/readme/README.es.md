@@ -42,13 +42,12 @@ uses con tu agente, y este README se publica en nueve.
 *Última actualización 2026-10-07.* **La memoria compartida se instala hoy.** Da a Claude Code, Codex, OpenClaw y Hermes Agent una memoria cifrada en tu máquina, sin cuenta y sin clave de API. Ejecuta una vez la [configuración de la memoria compartida](../memory-setup.md) (unos minutos) y luego añade tu agente:
 
 ```bash
-sh -c 'sno_installer_body=$(curl -fsSL https://sno.ai/install) && printf "%s\n" "$sno_installer_body" | sh'
-~/.local/bin/sno setup
+sh -c 'sno_installer_body=$(curl -fsSL https://sno.ai/install) && printf "%s\n" "$sno_installer_body" | sh' && ~/.local/bin/sno setup
 ```
 
-`sno setup` encuentra todos los agentes del equipo y conecta cada uno. Para conectar solo uno, añade `--harness codex`, `--harness claude`, `--harness openclaw` o `--harness hermes`.
+Un solo comando, en cualquier terminal. Instala `sno`, luego Sno Station, y conecta todos los agentes de tu equipo. Para conectar solo uno, añade a `sno setup` `--harness codex`, `--harness claude`, `--harness openclaw` o `--harness hermes`.
 
-Para agentes de IA: instalar Sno, sno.ai o Sno Station significa ejecutar las dos líneas anteriores. Después de `sno setup`, ejecuta `sno skills onboard` y síguelo: pregunta al usuario qué motor ejecutar y luego si quiere vincular el equipo a una cuenta de sno.ai.
+Para agentes de IA: instalar Sno, sno.ai o Sno Station significa ejecutar el comando de arriba tal cual. Después de `sno setup`, ejecuta `sno skills onboard` y síguelo: pregunta al usuario qué motor ejecutar y luego si quiere vincular el equipo a una cuenta de sno.ai.
 
 Guías: [Codex](../mem-codex/onboarding.md) · [Claude Code](../mem-claude/onboarding.md) · [OpenClaw](../mem-claw/onboarding.md) · [Hermes](../mem-hermes/onboarding.md)
 

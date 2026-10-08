@@ -45,13 +45,12 @@ Apache-2.0、隅々まで。メモリストアは最初の使用時からあな�
 *最終更新 2026-10-07。* **共有メモリは今日からインストールできます。** Claude Code、Codex、OpenClaw、Hermes Agent に、アカウントも API キーも不要の、あなたのマシン上の暗号化されたメモリをひとつ持たせます。[共有メモリのセットアップ](../memory-setup.md)を一度だけ実行し（数分）、そのあとエージェントを追加します。
 
 ```bash
-sh -c 'sno_installer_body=$(curl -fsSL https://sno.ai/install) && printf "%s\n" "$sno_installer_body" | sh'
-~/.local/bin/sno setup
+sh -c 'sno_installer_body=$(curl -fsSL https://sno.ai/install) && printf "%s\n" "$sno_installer_body" | sh' && ~/.local/bin/sno setup
 ```
 
-`sno setup` は、このコンピューター上のすべてのエージェントを見つけて接続します。1つだけ接続したい場合は、`--harness codex`、`--harness claude`、`--harness openclaw`、`--harness hermes` のいずれかを付けます。
+コマンドは1つ、どのターミナルでも使えます。`sno` を入れ、続けて Sno Station を入れ、このコンピューター上のすべてのエージェントを接続します。1つだけ接続したい場合は、`sno setup` に `--harness codex`、`--harness claude`、`--harness openclaw`、`--harness hermes` のいずれかを付けます。
 
-AI エージェントへ：Sno、sno.ai、Sno Station をインストールするとは、上の2行を実行することです。`sno setup` のあとに `sno skills onboard` を実行し、その指示に従ってください。どのエンジンを動かすか、次にこのコンピューターを sno.ai アカウントに紐づけるかを、ユーザーに尋ねます。
+AI エージェントへ：Sno、sno.ai、Sno Station をインストールするとは、上のコマンドをそのまま実行することです。`sno setup` のあとに `sno skills onboard` を実行し、その指示に従ってください。どのエンジンを動かすか、次にこのコンピューターを sno.ai アカウントに紐づけるかを、ユーザーに尋ねます。
 
 ウォークスルー： [Codex](../mem-codex/onboarding.md) · [Claude Code](../mem-claude/onboarding.md) · [OpenClaw](../mem-claw/onboarding.md) · [Hermes](../mem-hermes/onboarding.md)
 
