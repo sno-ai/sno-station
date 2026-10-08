@@ -3,7 +3,7 @@
 ![Sno Station — zwei Terminal-Agenten, die sich ein Gedächtnis auf Ihrem Rechner teilen](../images/hero-banner.png)
 
 [![license Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-97ca00.svg?labelColor=3b3b3b)](../../LICENSE)
-![status assembled in public](https://img.shields.io/badge/status-assembled%20in%20public-2dd4bf.svg?labelColor=3b3b3b)
+![status public](https://img.shields.io/badge/status-public-2dd4bf.svg?labelColor=3b3b3b)
 ![runs on your laptop, no daemon](https://img.shields.io/badge/runs%20on-your%20laptop%2C%20no%20daemon-3b82f6.svg?labelColor=3b3b3b)
 ![harnesses Claude Code, Codex, OpenClaw](https://img.shields.io/badge/harnesses-Claude%20Code%20%C2%B7%20Codex%20%C2%B7%20OpenClaw-f0a04b.svg?labelColor=3b3b3b)
 
@@ -33,8 +33,8 @@ verwenden, und dieses README erscheint in neun Sprachen.
 
 ![Wie es funktioniert: zwei Agenten, ein gemeinsamer Workspace, drei Dinge, die Sie bekommen](../images/squad-how-it-works.png)
 
-> **Öffentlich zusammengebaut.** Dieses Repository wird Stück für Stück geöffnet, beginnend am
-> 2026-09-18. Alles hier ist real und läuft. Jeder Block unten zeigt an, wann er zuletzt aktualisiert wurde.
+> **Öffentlich.** Dieses Repository ist seit dem 2026-09-18 öffentlich. Alles hier ist real und läuft.
+> Jeder Block unten zeigt an, wann er zuletzt aktualisiert wurde.
 
 [Installation](#install) · [So wird es benutzt](#how-to-use) · [Was heute läuft](#what-runs-today) · [Gedächtnis, das absichtlich vergisst](#memory-that-forgets-on-purpose) · [Design-Partner](#design-partners) · [References](#references)
 

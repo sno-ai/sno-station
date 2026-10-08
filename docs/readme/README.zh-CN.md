@@ -3,7 +3,7 @@
 ![Sno Station — 两个终端 agent 共享同一份记忆，运行在你自己的机器上](../images/hero-banner.png)
 
 [![license Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-97ca00.svg?labelColor=3b3b3b)](../../LICENSE)
-![status assembled in public](https://img.shields.io/badge/status-assembled%20in%20public-2dd4bf.svg?labelColor=3b3b3b)
+![status public](https://img.shields.io/badge/status-public-2dd4bf.svg?labelColor=3b3b3b)
 ![runs on your laptop, no daemon](https://img.shields.io/badge/runs%20on-your%20laptop%2C%20no%20daemon-3b82f6.svg?labelColor=3b3b3b)
 ![harnesses Claude Code, Codex, OpenClaw](https://img.shields.io/badge/harnesses-Claude%20Code%20%C2%B7%20Codex%20%C2%B7%20OpenClaw-f0a04b.svg?labelColor=3b3b3b)
 
@@ -28,8 +28,8 @@ Sno Station 是你的 agent 的工作站：一款开源软件，它把你已经�
 
 ![工作原理：两个 agent，一个共享工作区，你能获得的三件事](../images/squad-how-it-works.png)
 
-> **公开组装中。** 本仓库正在被一块一块地开放，从 2026-09-18 开始。这里的内容
-> 都是真实可用的。下面每个板块都会标注最后更新时间。
+> **已公开。** 本仓库从 2026-09-18 起公开。这里的内容都是真实可用的。
+> 下面每个板块都会标注最后更新时间。
 
 [安装](#install) · [如何使用](#how-to-use) · [今天可运行的功能](#what-runs-today) · [有意遗忘的记忆](#memory-that-forgets-on-purpose) · [设计合作伙伴](#design-partners) · [参考文献](#references)
 

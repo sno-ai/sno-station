@@ -5,8 +5,7 @@
 > messaging (Sno Reach), Duo skills for handoff and cross-harness review, and a nightly loop that
 > rewrites the agents' own skills with human approval. No daemon, no cloud required. Apache-2.0.
 
-This repository is being assembled in public from 2026-09-18. Blocks in the README carry a
-"Last updated" date; anything without one is not yet claimed.
+This repository has been public since 2026-09-18. Blocks in the README carry a "Last updated" date.
 
 ## Read first
 

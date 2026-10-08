@@ -250,8 +250,8 @@ Back up that file and `settings.json` together; the file holds the only encrypti
 ## Supported surfaces
 
 Linux CLI installation and hook failure paths have real receipts. macOS CLI and Desktop
-local-session support are unverified until their receipts exist. Cloud, web, SSH-hosted sessions,
-and the VS Code extension are not claimed.
+local-session support are untested. Cloud, web, SSH-hosted sessions, and the VS Code extension
+are not covered.
 
 ## Troubleshooting
 

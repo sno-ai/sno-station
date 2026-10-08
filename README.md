@@ -3,7 +3,7 @@
 ![Sno Station — Agents, assemble. Two heads are better than one, and smarter by morning.](docs/images/hero-banner.png)
 
 [![license Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-97ca00.svg?labelColor=3b3b3b)](LICENSE)
-![status assembled in public](https://img.shields.io/badge/status-assembled%20in%20public-2dd4bf.svg?labelColor=3b3b3b)
+![status public](https://img.shields.io/badge/status-public-2dd4bf.svg?labelColor=3b3b3b)
 ![runs on your laptop, no daemon](https://img.shields.io/badge/runs%20on-your%20laptop%2C%20no%20daemon-3b82f6.svg?labelColor=3b3b3b)
 ![harnesses Claude Code, Codex, OpenClaw](https://img.shields.io/badge/harnesses-Claude%20Code%20%C2%B7%20Codex%20%C2%B7%20OpenClaw-f0a04b.svg?labelColor=3b3b3b)
 
@@ -30,11 +30,10 @@ whatever language you use with your agent, and this README ships in nine.
 
 ![How it works: two agents, one shared workspace, three things you get](docs/images/squad-how-it-works.png)
 
-> **Assembled in public.** This repository is being opened one piece at a time, starting
-> 2026-09-18. Everything here is real and runs.
+> **Open in public.** This repository has been public since 2026-09-18. Everything here is real and runs.
 > Every block below says when it was last updated.
 
-[Install](#install) · [How to use](#how-to-use) · [What runs today](#what-runs-today) · [Memory that forgets on purpose](#memory-that-forgets-on-purpose) · [Design partners](#design-partners) · [References](#references)
+[Install](#install) · [Connect your account](#connect-your-snoai-account) · [How to use](#how-to-use) · [What runs today](#what-runs-today) · [Memory that forgets on purpose](#memory-that-forgets-on-purpose) · [Design partners](#design-partners) · [References](#references)
 
 ## Install
 
@@ -64,6 +63,22 @@ Sno onboarding
 
 The agent runs the setup itself through the `sno` CLI: shared memory, Sno Reach, the
 Duo skills, and the hooks each harness needs. No package names to remember.
+
+## Connect your sno.ai account
+
+*Last updated 2026-10-08.* Optional: everything works without an account. Connect to see on your [sno.ai dashboard](https://www.sno.ai/dashboard) what your agents did for you: problems their reviews caught, what the nightly loop taught them, skills that got better, how long they kept working, and what they remembered.
+
+Connecting never creates an account for you. `sno setup` gives each computer an anonymous identity; connecting attaches it to your account, so everything the computer sent before and after counts as yours.
+
+**No account yet (computer first).** Onboarding shows a link made for this computer only (a one-time code that expires). Open it, sign up, and you land back on the approval page; click Approve. Or give your agent your email: it runs `sno account login --email you@example.com` and you sign in once.
+
+**Already have an account (account first).** On the computer, run one command:
+
+```bash
+sno account claim
+```
+
+Open the link it prints while signed in to sno.ai and click Approve. The computer shows up on [your computers page](https://www.sno.ai/dashboard/computers) by itself. There is no separate update step: `sno` updates itself when it finds a newer release.
 
 ## How to use
 
