@@ -2,10 +2,10 @@
 
 ## 2.1.4
 
-`spawn openclaw` refuses when the openclaw entry in `~/.acpx/config.json` sets `--session` or
-`--session-label`. That option makes every ACP session join one fixed conversation, so each seat
-would land in the main conversation and mix its context with it. The refusal names the file and
-says to remove the option.
+`spawn openclaw` refuses when the acpx route it would use sets `--session` or `--session-label`,
+in `~/.acpx/config.json` or in the project's `.acpxrc.json` (the project file wins for the same
+adapter). That option makes every ACP session join one fixed conversation, so each seat would land
+in the main conversation and mix its context with it. The refusal names the adapter and both files.
 
 ## 2.1.3
 
