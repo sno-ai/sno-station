@@ -75,6 +75,7 @@ async function transcriptSkillRuns(text: string, codexHome: string): Promise<Obs
 				.pipe(z.number().int().nonnegative()).parse(entry.timestamp);
 			counted.add(name);
 			rows.push({
+				agent_id: "codex",
 				ts_ms: timestamp,
 				event_type: "skill.run",
 				lane: "skill",

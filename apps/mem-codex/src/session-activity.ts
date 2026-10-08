@@ -108,6 +108,7 @@ export async function reportSessionActivity(
 	if (folded.payload) {
 		const projectId = input.cwd ? detectProjectId(await workspaceRoot(input.cwd)) : undefined;
 		appendObserveLedgerRows(getSnoProfileDir(), [{
+			agent_id: "codex",
 			ts_ms: folded.payload.window_end_ms,
 			...(projectId === undefined ? {} : { project_id: projectId }),
 			event_type: "session.activity",

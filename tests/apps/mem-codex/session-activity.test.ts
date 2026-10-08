@@ -90,7 +90,7 @@ describe("Codex session.activity", () => {
 		const cursor = await stop();
 		const rows = ledger();
 		expect(rows).toHaveLength(1);
-		expect(rows[0]).toMatchObject({ event_type: "session.activity", lane: "memory", payload: {
+		expect(rows[0]).toMatchObject({ agent_id: "codex", event_type: "session.activity", lane: "memory", payload: {
 			harness: "codex", window_start_ms: T0, window_end_ms: T0 + 34 * MIN,
 			// Gaps of 1 (0-1) + 2 + 1 + 6 + 1 + 1 + 1 + 3 minutes; the 17-minute gap before minute 33 ends the run.
 			active_ms: 16 * MIN + 1 * MIN,

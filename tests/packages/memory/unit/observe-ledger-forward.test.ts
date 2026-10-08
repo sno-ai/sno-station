@@ -95,6 +95,20 @@ function envelopes(): Envelope[] {
 	}
 }
 
+/** [event_type, buffer.db agent_id column, envelope scope.agent_id] of each ledger envelope. */
+function ledgerAgents(): [string, string, unknown][] {
+	const db = new Database(join(root, "buffer.db"), { readonly: true });
+	try {
+		const rows = db.prepare("SELECT agent_id, payload FROM events ORDER BY rowid").all() as { agent_id: string; payload: Buffer }[];
+		return rows
+			.map((row) => ({ agentId: row.agent_id, envelope: JSON.parse(row.payload.toString("utf8")) as Envelope & { scope: Record<string, unknown> } }))
+			.filter(({ envelope }) => envelope.event_type !== "agent.identify" && envelope.event_type !== "error")
+			.map(({ agentId, envelope }) => [envelope.event_type, agentId, envelope.scope.agent_id]);
+	} finally {
+		db.close();
+	}
+}
+
 /** Envelopes that came from the ledger (everything but the chain seed and error reports). */
 function ledgerEnvelopes(): Envelope[] {
 	return envelopes().filter((row) => row.event_type !== "agent.identify" && row.event_type !== "error");
@@ -271,6 +285,28 @@ describe("forwardObserveLedger", () => {
 		expect(synced()).toBe(beyond);
 		expect(ledgerEnvelopes()).toHaveLength(0);
 		expect(logs.some((line) => line.includes("offset beyond ledger"))).toBe(true);
+	});
+
+	it("uploads a row under the agent that wrote it, and a row with no agent under the forwarder's own", async () => {
+		// The ledger is shared: the Codex plugin wrote the first row, the second predates agent_id.
+		const codexRow = {
+			agent_id: "codex",
+			ts_ms: T0 + 1000,
+			event_type: "session.activity",
+			lane: "memory",
+			payload: {
+				harness: "codex", window_start_ms: T0, window_end_ms: T0 + 1000, active_ms: 1000,
+				team_driven_ms: 0, runs_over_12h: 0, longest_run_ms: 1000, human_messages: 1,
+			},
+		};
+		writeLedger([`${JSON.stringify(codexRow)}\n`, ledgerLine(2)]);
+		// observability() is the Claude plugin's runtime: agentId "claude-code".
+		const result = await ledger.forwardObserveLedger({ profileDir: root, observe: observability() });
+		expect(result).toMatchObject({ status: "forwarded", forwarded: 2 });
+		expect(ledgerAgents()).toEqual([
+			["session.activity", "codex", "codex"],
+			["skill.run", "claude-code", "claude-code"],
+		]);
 	});
 
 	it("two forwards started in the same tick upload 50 then 10 rows with no duplicate", async () => {

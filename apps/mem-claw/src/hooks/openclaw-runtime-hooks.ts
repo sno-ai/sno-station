@@ -181,6 +181,7 @@ export function registerRuntimeHooks(api: OpenClawPluginApi, config: PluginConfi
 				const agentId = resolveAgentId(context.agentId, context.sessionKey?.match(/^agent:([^:]+):/)?.[1]) ?? "main";
 				const workspace = resolveAgentWorkspaceDir(api.config, agentId);
 				appendObserveLedgerRows(getSnoProfileDir(), [{
+					agent_id: "openclaw",
 					ts_ms: Date.now(),
 					event_type: "skill.run",
 					project_id: detectProjectId(workspace),
