@@ -34,8 +34,7 @@ verwenden, und dieses README erscheint in neun Sprachen.
 ![Wie es funktioniert: zwei Agenten, ein gemeinsamer Workspace, drei Dinge, die Sie bekommen](../images/squad-how-it-works.png)
 
 > **Öffentlich zusammengebaut.** Dieses Repository wird Stück für Stück geöffnet, beginnend am
-> 2026-09-18. Was heute hier ist, ist real und läuft; was noch nicht hier ist, wird nicht
-> behauptet. Jeder Block unten zeigt an, wann er zuletzt aktualisiert wurde.
+> 2026-09-18. Alles hier ist real und läuft. Jeder Block unten zeigt an, wann er zuletzt aktualisiert wurde.
 
 [Installation](#install) · [So wird es benutzt](#how-to-use) · [Was heute läuft](#what-runs-today) · [Gedächtnis, das absichtlich vergisst](#memory-that-forgets-on-purpose) · [Design-Partner](#design-partners) · [References](#references)
 
@@ -58,7 +57,7 @@ sno setup --harness hermes
 
 Anleitungen: [Codex](../mem-codex/onboarding.md) · [Claude Code](../mem-claude/onboarding.md) · [OpenClaw](../mem-claw/onboarding.md) · [Hermes](../mem-hermes/onboarding.md)
 
-`sno setup` installiert außerdem Sno Reach, die kleinen Hilfsprogramme, die Skills und die nächtliche Schleife, und jeder Befehl lautet `sno <name>`: die vollständige Liste steht in [docs/sno-commands.md](../sno-commands.md). „Sno onboarding" in Ihrem Agenten zu sagen, was dieselbe Einrichtung im Gespräch begleitet, kommt noch. Wenn es so weit ist, sieht es so aus:
+`sno setup` installiert außerdem Sno Reach, die kleinen Hilfsprogramme, die Skills und die nächtliche Schleife, und jeder Befehl lautet `sno <name>`: die vollständige Liste steht in [docs/sno-commands.md](../sno-commands.md). „Sno onboarding" in Ihrem Agenten zu sagen führt Sie im Gespräch durch dieselbe Einrichtung. Es startet auch von selbst direkt nach der Installation.
 
 ```bash
 # inside any Claude Code, Codex or OpenClaw conversation:
@@ -107,10 +106,7 @@ er am Tag zuvor geändert hatte. Die Fehlerquote in allen dreien fiel auf null. 
 außerdem einen echten Bug in unserem Release-Skript, den zsh vor bash versteckt hatte.
 Niemand hatte ihn gebeten, danach zu suchen.
 
-**Tag drei — Sie installieren sie.** Die RSI-Schleife erscheint diese Woche als Skill in
-diesem Repository; dieser Block wird dann zur Installationszeile. Bis dahin aktualisiert sich
-dieser Abschnitt, während die Schleife läuft: jede Woche ein neuer Bericht, nichts
-nachträglich retuschiert.
+**Tag drei — Sie installieren sie.** Die RSI-Schleife ist ein Skill in diesem Repository, und `sno setup` installiert ihn zusammen mit dem Rest. Dieser Abschnitt wird aktualisiert, während die Schleife läuft: jede Woche ein neuer Bericht, nichts nachgebessert.
 
 Sie ist von zwei Arbeiten inspiriert, zu denen wir immer wieder zurückkehren: Andrej Karpathys
 *"LLM Wiki"* — die Idee, dass ein Agent ein dauerhaftes, editierbares Wiki dessen führen
@@ -166,9 +162,9 @@ Session-IDs sind geschwärzt; sonst ist nichts angerührt.
 | Sno Reach — Agenten sprechen miteinander, kein Daemon | Von `sno setup` installiert; Release-Archive für Linux und macOS sind veröffentlicht; auf einer sauberen Linux-Maschine von Anfang bis Ende bewiesen |
 | Die nächtliche Schleife und die Squad-Skills | Von `sno setup` installiert; der nächtliche Job lief auf einer sauberen Linux-Maschine |
 | Ein-Befehl-Installation (`sno setup`) | Installiert alles oben Genannte; auf einer sauberen Linux-Maschine bewiesen |
-| „Sno onboarding" in Ihrem Agenten | Noch nicht behauptet |
+| „Sno onboarding" in Ihrem Agenten | Verfügbar; startet nach der Installation oder wenn Sie es sagen |
 
-Eine Zeile sagt „bewiesen" erst, wenn sie auf einer sauberen Maschine gelaufen ist; bis dahin sagt sie, was vorhanden ist.
+Eine Zeile sagt „bewiesen" erst, wenn sie auf einer sauberen Maschine gelaufen ist.
 
 ## Memory that forgets on purpose
 
