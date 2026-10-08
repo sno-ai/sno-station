@@ -315,6 +315,25 @@ function assertDestinationNotRegistered(
 	}
 }
 
+/**
+ * Recovery-only: after a backup was restored over `path`, make the manifest entry for that path carry the
+ * database id the restored file holds. The file's own canary id is the identity; a different store may
+ * have taken the path since the backup was made.
+ */
+export function _repointManifestEntryForRecovery(path: string, dbId: string): void {
+	const dbPath = normalizeDbPath(path);
+	const manifest = readManifestIfPresent() ?? emptyManifest();
+	const entry = manifest.dbs.find((d) => d.path === dbPath);
+	if (!entry || entry.dbId === dbId) return;
+	ensureMarker();
+	syncAtomicWriteManifest({
+		...manifest,
+		dbs: manifest.dbs
+			.filter((d) => d.dbId !== dbId)
+			.map((d) => (d.path === dbPath ? { ...d, dbId: dbId as DbId } : d)),
+	});
+}
+
 function syncAtomicWriteManifest(next: ManifestFile): void {
 	const { manifestFile, configDir } = resolveConfigPaths();
 	const tmp = `${manifestFile}.tmp-${process.pid}-${Date.now().toString(36)}`;
