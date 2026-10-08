@@ -18,7 +18,7 @@ Sitzungen, schlägt Änderungen an ihren eigenen Skills vor und wartet darauf, d
 
 **Ihres, und es bleibt Ihres.** Gedächtnis, Nachrichten und Skills liegen in einem einzigen
 Workspace auf Ihrem Laptop. Kein Daemon, kein Server, keine Cloud erforderlich; die
-Cloud-Seite, wenn sie kommt, ist optional, und das Produkt ist auch ohne sie vollständig.
+Cloud-Seite ist optional, und das Produkt ist auch ohne sie vollständig.
 Apache-2.0, durch und durch. Der Memory Store ist ab der ersten Nutzung auf Ihrem Rechner
 verschlüsselt, mit einem Schlüssel, der einmalig bereitgestellt wird und ihn nie verlässt; Sno
 erhält niemals Ihre Datenbank oder Ihren Schlüssel. Die vollständige Grenze, wogegen sie
@@ -27,7 +27,7 @@ schützt und wogegen nicht, steht in [docs/security.md](../security.md).
 **Funktioniert in Ihrer Sprache.** Sprechen Sie mit Ihren Agenten auf Englisch, Chinesisch
 (vereinfacht oder traditionell), Japanisch, Koreanisch, Deutsch, Französisch, Spanisch oder
 Russisch; die Memory-Engine speichert jede Erinnerung mit ihrer Sprache, klassifiziert nach
-Gebietsschema und hält CJK-Text in jedem Schlüssel und jeder Suche intakt. Die Duo-Skills sind
+Gebietsschema und hält CJK-Text in jedem Schlüssel und jeder Suche intakt. Die Skills für die Zusammenarbeit zwischen Agenten sind
 so geschrieben, dass sie in jeder Sprache befolgt werden können, die Sie mit Ihrem Agenten
 verwenden, und dieses README erscheint in neun Sprachen.
 
@@ -57,15 +57,15 @@ sno setup --harness hermes
 
 Anleitungen: [Codex](../mem-codex/onboarding.md) · [Claude Code](../mem-claude/onboarding.md) · [OpenClaw](../mem-claw/onboarding.md) · [Hermes](../mem-hermes/onboarding.md)
 
-`sno setup` installiert außerdem Sno Reach, die kleinen Hilfsprogramme, die Skills und die nächtliche Schleife, und jeder Befehl lautet `sno <name>`: die vollständige Liste steht in [docs/sno-commands.md](../sno-commands.md). „Sno onboarding" in Ihrem Agenten zu sagen führt Sie im Gespräch durch dieselbe Einrichtung. Es startet auch von selbst direkt nach der Installation.
+`sno setup` installiert außerdem Sno Reach, die kleinen Hilfsprogramme, die Skills und die nächtliche Schleife, und jeder Befehl lautet `sno <name>`: die vollständige Liste steht in [docs/sno-commands.md](../sno-commands.md). „Sno onboard" in Ihrem Agenten zu sagen führt Sie im Gespräch durch dieselbe Einrichtung. Es startet auch von selbst direkt nach der Installation.
 
 ```bash
 # inside any Claude Code, Codex or OpenClaw conversation:
-Sno onboarding
+Sno onboard
 ```
 
 Der Agent führt das Setup selbst über die `sno` CLI aus: gemeinsames Gedächtnis, Sno Reach,
-die Duo-Skills und die Hooks, die jede Harness benötigt. Keine Paketnamen zum Merken.
+die Skills für die Zusammenarbeit zwischen Agenten und die Hooks, die jede Harness benötigt. Keine Paketnamen zum Merken.
 
 ## How to use
 
@@ -121,9 +121,11 @@ Codex die von Claude Code. Kein einziges Review kam leer zurück. Kein einziges.
 dachten wir, das bedeute, die Arbeit sei schlecht. Es bedeutet, dass ein Reviewer von einer
 Harness nie genug ist.
 
-Wir nennen das Paar ein Duo: das kleinste Team. Wir sagen nie, welcher der sorgfältige und
-welcher der schnelle ist. Das wechselt von Monat zu Monat und von Aufgabe zu Aufgabe. Der
-Punkt ist, dass sie sich unterscheiden.
+Wir nennen diese Zusammenarbeit Dual Brain. Zwei Agenten übernehmen verschiedene Rollen
+bei einer gemeinsamen Aufgabe: Einer setzt um, der andere prüft. Beide können beide Rollen
+übernehmen. Mit weiteren Rollen entsteht ein Agent Squad. Wir sagen nie, welcher der
+sorgfältige und welcher der schnelle ist. Das wechselt von Monat zu Monat und von Aufgabe
+zu Aufgabe. Der Punkt ist, dass sie sich unterscheiden.
 
 ## "Ich bin ins Bett gegangen. Es hat die Schicht gewechselt."
 
@@ -152,7 +154,7 @@ Session-IDs sind geschwärzt; sonst ist nichts angerührt.
 
 ## What runs today
 
-*Zuletzt aktualisiert am 2026-10-07.*
+*Zuletzt aktualisiert am 2026-10-08.*
 
 | Teil | Status |
 |---|---|
@@ -162,7 +164,7 @@ Session-IDs sind geschwärzt; sonst ist nichts angerührt.
 | Sno Reach — Agenten sprechen miteinander, kein Daemon | Von `sno setup` installiert; Release-Archive für Linux und macOS sind veröffentlicht; auf einer sauberen Linux-Maschine von Anfang bis Ende bewiesen |
 | Die nächtliche Schleife und die Squad-Skills | Von `sno setup` installiert; der nächtliche Job lief auf einer sauberen Linux-Maschine |
 | Ein-Befehl-Installation (`sno setup`) | Installiert alles oben Genannte; auf einer sauberen Linux-Maschine bewiesen |
-| „Sno onboarding" in Ihrem Agenten | Verfügbar; startet nach der Installation oder wenn Sie es sagen |
+| „Sno onboard" in Ihrem Agenten | Verfügbar; startet nach der Installation oder wenn Sie es sagen |
 
 Eine Zeile sagt „bewiesen" erst, wenn sie auf einer sauberen Maschine gelaufen ist.
 
