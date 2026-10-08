@@ -47,7 +47,7 @@ The memory service starts when a plugin needs it; there is no separate start com
 Upgrade the memory service and the agent plugin you use to the same version. From 1.0.1 the
 memory service rejects requests that do not carry its access token, and a 1.0.0 plugin does not
 send one. Run `npm install --prefix "$HOME/.sno" @snoai/memory@1.2.2 @snoai/embedder@1.1.1`, then
-reinstall your plugin at 1.2.1 (for example `sno setup --harness codex`) and restart
+reinstall your plugin at 1.2.2 (for example `sno setup --harness codex`) and restart
 any running agent session. Do not rerun the settings block; your store and key stay as they are.
 
 The nightly improvement skill uses `modelCalls.R5` for local lesson and skill-reminder
