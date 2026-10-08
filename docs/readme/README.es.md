@@ -33,7 +33,7 @@ uses con tu agente, y este README se publica en nueve.
 ![Cómo funciona: dos agentes, un espacio de trabajo compartido, tres cosas que obtienes](../images/squad-how-it-works.png)
 
 > **Ensamblado en público.** Este repositorio se está abriendo pieza por pieza, comenzando el
-> 2026-09-18. Lo que está aquí hoy es real y funciona; lo que aún no está aquí no se reclama.
+> 2026-09-18. Todo lo que hay aquí es real y funciona.
 > Cada bloque a continuación dice cuándo se actualizó por última vez.
 
 [Instalación](#install) · [Cómo usarlo](#how-to-use) · [Qué funciona hoy](#what-runs-today) · [Memoria que olvida a propósito](#memory-that-forgets-on-purpose) · [Socios de diseño](#design-partners) · [Referencias](#references)
@@ -57,7 +57,7 @@ sno setup --harness hermes
 
 Guías: [Codex](../mem-codex/onboarding.md) · [Claude Code](../mem-claude/onboarding.md) · [OpenClaw](../mem-claw/onboarding.md) · [Hermes](../mem-hermes/onboarding.md)
 
-`sno setup` también instala Sno Reach, los programas auxiliares pequeños, las skills y el bucle nocturno, y todos los comandos son `sno <nombre>`: la lista completa está en [docs/sno-commands.md](../sno-commands.md). Decir «Sno onboarding» dentro de tu agente, que te guía por la misma configuración en conversación, aún está por llegar. Cuando llegue, se verá así:
+`sno setup` también instala Sno Reach, los programas auxiliares pequeños, las skills y el bucle nocturno, y todos los comandos son `sno <nombre>`: la lista completa está en [docs/sno-commands.md](../sno-commands.md). Decir «Sno onboarding» dentro de tu agente te guía por la misma configuración en conversación. También arranca solo justo después de la instalación.
 
 ```bash
 # dentro de cualquier conversación de Claude Code, Codex u OpenClaw:
@@ -104,10 +104,7 @@ habilidades que había cambiado el día anterior. Los fallos en las tres cayeron
 encontró un bug real en nuestro script de release que zsh le había estado ocultando a bash.
 Nadie le dijo que buscara.
 
-**Día tres — lo instalas.** El bucle RSI se publica como una habilidad en este repositorio esta
-semana; este bloque se convierte en la línea de instalación cuando eso pase. Hasta entonces,
-esta sección se actualiza a medida que corre el bucle: un reporte nuevo cada semana, nada
-retocado.
+**Día tres — lo instalas.** El bucle RSI es una habilidad de este repositorio, y `sno setup` la instala junto con el resto. Esta sección se actualiza mientras el bucle corre: un informe nuevo cada semana, nada retocado.
 
 Está inspirado en dos trabajos a los que volvemos una y otra vez: *"LLM Wiki"* de Andrej
 Karpathy — la idea de que un agente debería mantener una wiki persistente y editable de lo que
@@ -161,9 +158,9 @@ direcciones y los ids de sesión están redactados; nada más se toca.
 | Sno Reach — agentes hablando entre sí, sin daemon | Instalado por `sno setup`; los archivos de versión para Linux y macOS están publicados; probado de extremo a extremo en una máquina Linux limpia |
 | El bucle nocturno y las skills del equipo | Instalado por `sno setup`; el trabajo nocturno se ejecutó en una máquina Linux limpia |
 | Instalación de un solo comando (`sno setup`) | Instala todo lo anterior; probada en una máquina Linux limpia |
-| «Sno onboarding» dentro de tu agente | Aún no reclamado |
+| «Sno onboarding» dentro de tu agente | Disponible; arranca tras la instalación o cuando lo dices |
 
-Una fila dice "probada" solo una vez que se ha ejecutado en una máquina limpia; hasta entonces dice lo que hay aquí.
+Una fila dice "probada" solo una vez que se ha ejecutado en una máquina limpia.
 
 ## Memory that forgets on purpose
 

@@ -36,7 +36,7 @@ Apache-2.0、隅々まで。メモリストアは最初の使用時からあな�
 ![How it works: two agents, one shared workspace, three things you get](../images/squad-how-it-works.png)
 
 > **公開の場で組み立てる。** このリポジトリは2026-09-18から、一つずつ部品を公開しています。
-> 今日ここにあるものは本物であり、実際に動きます。まだここにないものは、あるとは主張していません。
+> ここにあるものはすべて本物で、実際に動きます。
 > 以下の各ブロックには最終更新日が記されています。
 
 [インストール](#install) · [使い方](#how-to-use) · [現在動いているもの](#what-runs-today) · [わざと忘れるメモリ](#memory-that-forgets-on-purpose) · [デザインパートナー](#design-partners) · [参考文献](#references)
@@ -60,7 +60,7 @@ sno setup --harness hermes
 
 ウォークスルー： [Codex](../mem-codex/onboarding.md) · [Claude Code](../mem-claude/onboarding.md) · [OpenClaw](../mem-claw/onboarding.md) · [Hermes](../mem-hermes/onboarding.md)
 
-`sno setup` は Sno Reach、小さな補助プログラム、スキル、夜間ループもインストールします。すべてのコマンドは `sno <name>` の形です。一覧は [docs/sno-commands.md](../sno-commands.md) にあります。エージェントの中で「Sno onboarding」と話しかけ、同じセットアップを会話で進める方法はこれからです。登場すると次のようになります：
+`sno setup` は Sno Reach、小さな補助プログラム、スキル、夜間ループもインストールします。すべてのコマンドは `sno <name>` の形です。一覧は [docs/sno-commands.md](../sno-commands.md) にあります。エージェントの中で「Sno onboarding」と話しかけると、同じセットアップを会話で進めてくれます。インストールの直後には自動で始まります。
 
 ```bash
 # inside any Claude Code, Codex or OpenClaw conversation:
@@ -105,9 +105,7 @@ Duo のスキル、各ハーネスが必要とするフックまで。覚えて�
 測定しました。3つすべてで失敗はゼロになりました。それは、zsh が bash から隠していた
 リリーススクリプトの実際のバグも見つけました。誰もそれを探せとは言っていません。
 
-**Day three — あなたがそれを導入する。** RSI ループは今週、このリポジトリのスキルとして
-公開されます。それが実現したら、このブロックはインストール手順になります。それまでは、
-このセクションはループが走るたびに更新されます。毎週新しいレポートが1件、手を加えずに。
+**Day three — あなたがそれを導入する。** RSI ループはこのリポジトリのスキルで、`sno setup` が他のものと一緒にインストールします。このセクションはループが動くたびに更新されます。毎週新しいレポートが加わり、何も手を加えません。
 
 これは、私たちが何度も立ち返る2つの仕事に着想を得ています。Andrej Karpathy の *"LLM Wiki"*
 ——エージェントは毎セッション知識を再導出するのではなく、学んだことの永続的で編集可能な
@@ -162,9 +160,9 @@ Codex に Claude Code の作業をレビューさせてきました。空振り�
 | Sno Reach — agents talking to each other, no daemon | `sno setup` でインストールされます。Linux と macOS 向けのリリースアーカイブを公開済みで、クリーンな Linux マシンでエンドツーエンドで確認済みです |
 | 夜間ループとスクォードのスキル | `sno setup` でインストールされます。夜間ジョブはクリーンな Linux マシンで動作済みです |
 | ワンコマンドインストール（`sno setup`） | 上記すべてをインストールします。クリーンな Linux マシンで確認済みです |
-| エージェントの中での「Sno onboarding」 | まだ表明していません |
+| エージェントの中での「Sno onboarding」 | 利用可能。インストール後に始まり、話しかけても始まります |
 
-ある行が「実証済み」と言えるのは、クリーンなマシンで動作した後だけです。それまでは、ここに何があるかを述べます。
+ある行が「実証済み」と言えるのは、クリーンなマシンで動作した後だけです。
 
 ## Memory that forgets on purpose
 

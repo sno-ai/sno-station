@@ -28,8 +28,8 @@ Sno Station 是您代理人的工作站：這款開源軟體能把您已經在�
 
 ![How it works: two agents, one shared workspace, three things you get](../images/squad-how-it-works.png)
 
-> **公開組裝中。** 這個儲存庫從 2026-09-18 起，正一件一件地公開釋出。今天已經放在這
-> 裡的內容都是真實且可運作的；尚未放上來的內容則不會被宣稱已完成。下方每個區塊都會
+> **公開組裝中。** 這個儲存庫從 2026-09-18 起，正一件一件地公開釋出。這裡的內容
+> 都是真實且可運作的。下方每個區塊都會
 > 標示最後更新時間。
 
 [安裝](#install) · [使用方式](#how-to-use) · [今天已可運作的功能](#what-runs-today) · [刻意會遺忘的記憶](#memory-that-forgets-on-purpose) · [設計夥伴](#design-partners) · [參考資料](#references)
@@ -53,7 +53,7 @@ sno setup --harness hermes
 
 逐步說明： [Codex](../mem-codex/onboarding.md) · [Claude Code](../mem-claude/onboarding.md) · [OpenClaw](../mem-claw/onboarding.md) · [Hermes](../mem-hermes/onboarding.md)
 
-`sno setup` 也會安裝 Sno Reach、小型輔助程式、技能和夜間循環，所有指令都是 `sno <名稱>` 的形式，完整清單見 [docs/sno-commands.md](../sno-commands.md)。在您的代理人裡輸入 "Sno onboarding"、用對話帶您完成同樣的設定，這個方式還在後面。上線後會是這樣：
+`sno setup` 也會安裝 Sno Reach、小型輔助程式、技能和夜間循環，所有指令都是 `sno <名稱>` 的形式，完整清單見 [docs/sno-commands.md](../sno-commands.md)。在您的代理人裡輸入 "Sno onboarding"，它會用對話帶您完成同樣的設定。安裝完成後也會自動開始。
 
 ```bash
 # inside any Claude Code, Codex or OpenClaw conversation:
@@ -97,9 +97,7 @@ harness 所需的 hook。不需要記住任何套件名稱。
 技能。三項技能的失敗率都降到了零。它還發現了我們發布腳本裡一個真正的錯誤，那個錯誤
 先前一直被 zsh 從 bash 眼皮底下藏了起來。沒有人叫它去找這個錯誤。
 
-**第三天——換您安裝它。** RSI loop 這週會以技能的形式，在這個儲存庫中發布；到那時，
-這個區塊就會變成安裝指令。在那之前，這個段落會隨著 RSI loop 的執行持續更新：每週一
-份新報告，不會回頭修改舊的。
+**第三天——換您安裝它。** RSI loop 是這個儲存庫中的一項技能，`sno setup` 會連同其他內容一起安裝。這個段落會隨著 RSI loop 的執行持續更新：每週一份新的報告，不做任何修飾。
 
 它的靈感來自我們一再回頭參考的兩份研究：Andrej Karpathy 的 *"LLM Wiki"*——主張代
 理人應該維護一份持續存在、可編輯的 wiki 來記錄自己學到的東西，而不是每次工作階段
@@ -148,9 +146,9 @@ harness 所需的 hook。不需要記住任何套件名稱。
 | Sno Reach——代理人之間互相溝通，不需要 daemon | 由 `sno setup` 安裝；Linux 與 macOS 的發布封存檔已公開；已在乾淨的 Linux 機器上端對端驗證 |
 | 夜間循環與小隊技能 | 由 `sno setup` 安裝；夜間任務已在乾淨的 Linux 機器上執行 |
 | 單一指令安裝（`sno setup`） | 裝好以上全部內容；已在乾淨的 Linux 機器上驗證 |
-| 在您的代理人裡輸入 "Sno onboarding" | 尚未宣稱完成 |
+| 在您的代理人裡輸入 "Sno onboarding" | 已可使用；安裝後自動開始，也可以隨時輸入 |
 
-只有在乾淨的機器上運作過之後，該項目才會標示為「已證實」；在那之前，這裡只會說明目前已具備的內容。
+只有在乾淨的機器上執行過之後，一行才會寫「proven」。
 
 ## Memory that forgets on purpose
 

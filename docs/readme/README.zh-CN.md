@@ -28,8 +28,8 @@ Sno Station 是你的 agent 的工作站：一款开源软件，它把你已经�
 
 ![工作原理：两个 agent，一个共享工作区，你能获得的三件事](../images/squad-how-it-works.png)
 
-> **公开组装中。** 本仓库正在被一块一块地开放，从 2026-09-18 开始。今天在这里的内容
-> 是真实可用的；还没在这里的内容则不做任何声明。下面每个板块都会标注最后更新时间。
+> **公开组装中。** 本仓库正在被一块一块地开放，从 2026-09-18 开始。这里的内容
+> 都是真实可用的。下面每个板块都会标注最后更新时间。
 
 [安装](#install) · [如何使用](#how-to-use) · [今天可运行的功能](#what-runs-today) · [有意遗忘的记忆](#memory-that-forgets-on-purpose) · [设计合作伙伴](#design-partners) · [参考文献](#references)
 
@@ -52,7 +52,7 @@ sno setup --harness hermes
 
 分步说明： [Codex](../mem-codex/onboarding.md) · [Claude Code](../mem-claude/onboarding.md) · [OpenClaw](../mem-claw/onboarding.md) · [Hermes](../mem-hermes/onboarding.md)
 
-`sno setup` 还会安装 Sno Reach、小型辅助程序、技能和夜间循环，所有命令都是 `sno <名称>` 的形式，完整清单见 [docs/sno-commands.md](../sno-commands.md)。在你的 agent 里说 "Sno onboarding"、用对话带你完成同样的设置，这一方式还在后面。上线后它会是这样：
+`sno setup` 还会安装 Sno Reach、小型辅助程序、技能和夜间循环，所有命令都是 `sno <名称>` 的形式，完整清单见 [docs/sno-commands.md](../sno-commands.md)。在你的 agent 里说 "Sno onboarding"，它会用对话带你完成同样的设置。安装完成后它也会自动开始。
 
 ```bash
 # inside any Claude Code, Codex or OpenClaw conversation:
@@ -95,9 +95,7 @@ agent。有三件事会改变：
 三个技能的失败率都降到了零。它还在我们的发布脚本里发现了一个真实的 bug——zsh 一直
 把它藏在 bash 的视线之外。没有人让它去找。
 
-**第三天——你安装它。** 这个 RSI 循环这周会作为本仓库中的一个技能发布；到那时，这个板块
-就会变成安装命令。在那之前，这个板块会随着循环的运行而更新：每周一份新的报告，
-不做任何修饰。
+**第三天——你安装它。** 这个 RSI 循环是本仓库中的一个技能，`sno setup` 会把它和其余内容一起装上。这个板块会随着循环的运行而更新：每周一份新的报告，不做任何修饰。
 
 这个循环受两项我们一直反复回味的工作启发：Andrej Karpathy 的 *"LLM Wiki"*——agent
 应该保留一份持久的、可编辑的 wiki 来记录自己学到的东西，而不是每次会话都重新推导
@@ -145,9 +143,9 @@ agent 已经在工作，第一个带着 1% 的余量签退。交接之前的每�
 | Sno Reach —— agent 之间互相通信，无需守护进程 | 由 `sno setup` 安装；Linux 和 macOS 的发布归档已公开；已在干净的 Linux 机器上端到端验证 |
 | 夜间循环和小队技能 | 由 `sno setup` 安装；夜间任务已在干净的 Linux 机器上运行 |
 | 一条命令完成安装（`sno setup`） | 装好上面全部内容；已在干净的 Linux 机器上验证 |
-| 在你的 agent 里说 "Sno onboarding" | 尚未声明 |
+| 在你的 agent 里说 "Sno onboarding" | 已可用；安装后自动开始，也可以随时说出口 |
 
-只有在一台干净的机器上运行过之后，一行才会写“proven”；在那之前，它写的是这里已经有什么。
+只有在一台干净的机器上运行过之后，一行才会写“proven”。
 
 ## Memory that forgets on purpose
 

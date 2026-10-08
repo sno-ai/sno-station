@@ -34,7 +34,7 @@ dans chaque clé et recherche. Les compétences Duo sont écrites pour
 ![How it works: two agents, one shared workspace, three things you get](../images/squad-how-it-works.png)
 
 > **Assemblé en public.** Ce dépôt s'ouvre un morceau à la fois, à partir du
-> 2026-09-18. Ce qui est là aujourd'hui est réel et fonctionne ; ce qui n'y est pas encore n'est pas revendiqué.
+> 2026-09-18. Tout ce qui est là est réel et fonctionne.
 > Chaque bloc ci-dessous indique quand il a été mis à jour pour la dernière fois.
 
 [Installation](#install) · [Comment l'utiliser](#how-to-use) · [Ce qui fonctionne aujourd'hui](#what-runs-today) · [Une mémoire qui oublie exprès](#memory-that-forgets-on-purpose) · [Partenaires de conception](#design-partners) · [Références](#references)
@@ -58,7 +58,7 @@ sno setup --harness hermes
 
 Parcours : [Codex](../mem-codex/onboarding.md) · [Claude Code](../mem-claude/onboarding.md) · [OpenClaw](../mem-claw/onboarding.md) · [Hermes](../mem-hermes/onboarding.md)
 
-`sno setup` installe aussi Sno Reach, les petits programmes auxiliaires, les skills et la boucle nocturne, et chaque commande s'écrit `sno <nom>` : la liste complète est dans [docs/sno-commands.md](../sno-commands.md). Dire « Sno onboarding » dans votre agent, qui vous guide dans la même installation en conversation, reste à venir. Quand il arrivera, il ressemblera à ceci :
+`sno setup` installe aussi Sno Reach, les petits programmes auxiliaires, les skills et la boucle nocturne, et chaque commande s'écrit `sno <nom>` : la liste complète est dans [docs/sno-commands.md](../sno-commands.md). Dire « Sno onboarding » dans votre agent vous guide dans la même installation en conversation. Il démarre aussi tout seul juste après l'installation.
 
 ```bash
 # inside any Claude Code, Codex or OpenClaw conversation:
@@ -103,9 +103,7 @@ compétences qu'elle avait changées la veille. Les échecs sont tombés à zér
 aussi trouvé un vrai bug dans notre script de release que zsh cachait à bash. Personne ne lui a
 demandé de chercher.
 
-**Jour trois — vous l'installez.** La boucle RSI sera livrée sous forme de compétence dans ce dépôt
-cette semaine ; ce bloc deviendra la ligne d'installation à ce moment-là. D'ici là, cette section
-se met à jour au fil des exécutions de la boucle : un nouveau rapport chaque semaine, rien retouché.
+**Jour trois — vous l'installez.** La boucle RSI est une compétence de ce dépôt, et `sno setup` l'installe avec le reste. Cette section se met à jour au fil des exécutions de la boucle : un nouveau rapport chaque semaine, rien de retouché.
 
 Elle s'inspire de deux travaux auxquels nous revenons sans cesse : le *« LLM Wiki »* d'Andrej
 Karpathy — l'idée qu'un agent devrait tenir un wiki persistant et modifiable de ce qu'il a appris
@@ -159,9 +157,9 @@ de session sont caviardés ; rien d'autre n'est touché.
 | Sno Reach — les agents qui se parlent, sans démon | Installé par `sno setup` ; les archives de version pour Linux et macOS sont publiées ; prouvé de bout en bout sur une machine Linux propre |
 | La boucle nocturne et les skills de l'équipe | Installée par `sno setup` ; la tâche nocturne a tourné sur une machine Linux propre |
 | Installation en une commande (`sno setup`) | Installe tout ce qui précède ; prouvée sur une machine Linux propre |
-| « Sno onboarding » dans votre agent | Pas encore revendiqué |
+| « Sno onboarding » dans votre agent | Disponible ; il démarre après l'installation, ou quand vous le dites |
 
-Une ligne indique « prouvé » seulement une fois qu'elle a tourné sur une machine vierge ; d'ici là, elle indique ce qui est présent.
+Une ligne indique « prouvé » seulement une fois qu'elle a tourné sur une machine vierge.
 
 ## Une mémoire qui oublie exprès
 

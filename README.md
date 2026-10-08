@@ -31,7 +31,7 @@ whatever language you use with your agent, and this README ships in nine.
 ![How it works: two agents, one shared workspace, three things you get](docs/images/squad-how-it-works.png)
 
 > **Assembled in public.** This repository is being opened one piece at a time, starting
-> 2026-09-18. What is here today is real and runs; what is not here yet is not claimed.
+> 2026-09-18. Everything here is real and runs.
 > Every block below says when it was last updated.
 
 [Install](#install) · [How to use](#how-to-use) · [What runs today](#what-runs-today) · [Memory that forgets on purpose](#memory-that-forgets-on-purpose) · [Design partners](#design-partners) · [References](#references)
@@ -55,7 +55,7 @@ sno setup --harness hermes
 
 Walkthroughs: [Codex](docs/mem-codex/onboarding.md) · [Claude Code](docs/mem-claude/onboarding.md) · [OpenClaw](docs/mem-claw/onboarding.md) · [Hermes](docs/mem-hermes/onboarding.md)
 
-`sno setup` also installs Sno Reach, the small helper programs, the skills and the nightly loop, and every command is `sno <name>`: the full list is in [docs/sno-commands.md](docs/sno-commands.md). Saying "Sno onboarding" inside your agent, which walks you through the same setup in conversation, is still to come. When it lands it will look like this:
+`sno setup` also installs Sno Reach, the small helper programs, the skills and the nightly loop, and every command is `sno <name>`: the full list is in [docs/sno-commands.md](docs/sno-commands.md). Say "Sno onboarding" inside your agent and it walks you through the same setup in conversation. It also starts by itself right after the install.
 
 ```bash
 # inside any Claude Code, Codex or OpenClaw conversation:
@@ -99,9 +99,8 @@ The next run fired on its own at 00:58, read 113 sessions, and measured the thre
 had changed the day before. Failures in all three dropped to zero. It also found a real bug in
 our release script that zsh had been hiding from bash. Nobody told it to look.
 
-**Day three — you install it.** The RSI loop ships as a skill in this repository this week; this
-block becomes the install line when it does. Until then, this section updates as the loop
-runs: a new report each week, nothing retouched.
+**Day three — you install it.** The RSI loop is a skill in this repository, and `sno setup` installs
+it with the rest. This section updates as the loop runs: a new report each week, nothing retouched.
 
 It is inspired by two pieces of work we keep coming back to: Andrej Karpathy's *"LLM Wiki"*
 — the idea that an agent should keep a persistent, editable wiki of what it has learned
@@ -154,9 +153,9 @@ else is touched.
 | Sno Reach — agents talking to each other, no daemon | Installed by `sno setup`; release archives for Linux and macOS are published; proven end to end on a clean Linux machine |
 | The nightly loop and the squad skills | Installed by `sno setup`; the nightly job ran on a clean Linux machine |
 | One-command install (`sno setup`) | Installs everything above; proven on a clean Linux machine |
-| "Sno onboarding" inside your agent | Not yet claimed |
+| "Sno onboarding" inside your agent | Available; it starts after the install, or when you say it |
 
-A row says "proven" only once it has run on a clean machine; until then it says what is here.
+A row says "proven" only once it has run on a clean machine.
 
 ## Memory that forgets on purpose
 
