@@ -22,7 +22,9 @@ for (let i = 0; i < args.length; i++) {
 }
 
 const pluginDir = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const command = [...(profile ? ["--profile", profile] : []), "plugins", "install", pluginDir];
+// sno setup runs this with nobody to answer a prompt. OpenClaw stops to ask before it installs a plugin from a local path
+// (--force) and before it accepts the capabilities the plugin declares (--accept-capabilities).
+const command = [...(profile ? ["--profile", profile] : []), "plugins", "install", pluginDir, "--force", "--accept-capabilities"];
 const result = spawnSync("openclaw", command, { stdio: "inherit" });
 if (result.error) {
 	console.error(`OpenClaw installation failed: ${result.error.message}`);
