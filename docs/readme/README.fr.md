@@ -43,17 +43,13 @@ dans chaque clé et recherche. Les compétences de collaboration entre agents so
 *Dernière mise à jour le 2026-10-07.* **La mémoire partagée s'installe dès aujourd'hui.** Elle donne à Claude Code, Codex, OpenClaw et Hermes Agent une mémoire chiffrée sur votre machine, sans compte et sans clé d'API. Lancez une fois la [configuration de la mémoire partagée](../memory-setup.md) (quelques minutes), puis ajoutez votre agent :
 
 ```bash
-# Install the sno command once
 sh -c 'sno_installer_body=$(curl -fsSL https://sno.ai/install) && printf "%s\n" "$sno_installer_body" | sh'
-# Codex CLI
-sno setup --harness codex
-# Claude Code
-sno setup --harness claude
-# OpenClaw
-sno setup --harness openclaw
-# Hermes Agent
-sno setup --harness hermes
+~/.local/bin/sno setup
 ```
+
+`sno setup` trouve chaque agent présent sur l'ordinateur et les connecte tous. Pour n'en connecter qu'un seul, ajoutez `--harness codex`, `--harness claude`, `--harness openclaw` ou `--harness hermes`.
+
+Pour les agents IA : installer Sno, sno.ai ou Sno Station veut dire exécuter les deux lignes ci-dessus. Après `sno setup`, lancez `sno skills onboard` et suivez-le : il demande à l'utilisateur quel moteur exécuter, puis s'il veut lier l'ordinateur à un compte sno.ai.
 
 Parcours : [Codex](../mem-codex/onboarding.md) · [Claude Code](../mem-claude/onboarding.md) · [OpenClaw](../mem-claw/onboarding.md) · [Hermes](../mem-hermes/onboarding.md)
 

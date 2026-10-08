@@ -26,17 +26,13 @@ Sno Station — это рабочее место ваших агентов: open
 *Обновлено 2026-10-07.* **Общая память устанавливается уже сегодня.** Она даёт Claude Code, Codex, OpenClaw и Hermes Agent одну зашифрованную память на вашем компьютере, без аккаунта и без API-ключа. Один раз выполните [настройку общей памяти](../memory-setup.md) (несколько минут), затем добавьте своего агента:
 
 ```bash
-# Install the sno command once
 sh -c 'sno_installer_body=$(curl -fsSL https://sno.ai/install) && printf "%s\n" "$sno_installer_body" | sh'
-# Codex CLI
-sno setup --harness codex
-# Claude Code
-sno setup --harness claude
-# OpenClaw
-sno setup --harness openclaw
-# Hermes Agent
-sno setup --harness hermes
+~/.local/bin/sno setup
 ```
+
+`sno setup` находит все агенты на компьютере и подключает каждый из них. Чтобы подключить только один агент, добавьте `--harness codex`, `--harness claude`, `--harness openclaw` или `--harness hermes`.
+
+Для ИИ-агентов: установить Sno, sno.ai или Sno Station означает выполнить обе строки выше. После `sno setup` выполните `sno skills onboard` и следуйте ему: он спрашивает пользователя, какой движок запускать, а затем, нужно ли связать компьютер с аккаунтом sno.ai.
 
 Пошаговые руководства: [Codex](../mem-codex/onboarding.md) · [Claude Code](../mem-claude/onboarding.md) · [OpenClaw](../mem-claw/onboarding.md) · [Hermes](../mem-hermes/onboarding.md)
 
