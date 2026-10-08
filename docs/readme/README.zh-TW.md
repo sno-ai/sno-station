@@ -3,7 +3,7 @@
 ![Sno Station — 兩個終端機代理人共用一個記憶，在您自己的機器上執行](../images/hero-banner.png)
 
 [![license Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-97ca00.svg?labelColor=3b3b3b)](../../LICENSE)
-![status assembled in public](https://img.shields.io/badge/status-assembled%20in%20public-2dd4bf.svg?labelColor=3b3b3b)
+![status public](https://img.shields.io/badge/status-public-2dd4bf.svg?labelColor=3b3b3b)
 ![runs on your laptop, no daemon](https://img.shields.io/badge/runs%20on-your%20laptop%2C%20no%20daemon-3b82f6.svg?labelColor=3b3b3b)
 ![harnesses Claude Code, Codex, OpenClaw](https://img.shields.io/badge/harnesses-Claude%20Code%20%C2%B7%20Codex%20%C2%B7%20OpenClaw-f0a04b.svg?labelColor=3b3b3b)
 
@@ -28,9 +28,8 @@ Sno Station 是您代理人的工作站：這款開源軟體能把您已經在�
 
 ![How it works: two agents, one shared workspace, three things you get](../images/squad-how-it-works.png)
 
-> **公開組裝中。** 這個儲存庫從 2026-09-18 起，正一件一件地公開釋出。這裡的內容
-> 都是真實且可運作的。下方每個區塊都會
-> 標示最後更新時間。
+> **已公開。** 這個儲存庫從 2026-09-18 起公開。這裡的內容都是真實且可運作的。
+> 下方每個區塊都會標示最後更新時間。
 
 [安裝](#install) · [使用方式](#how-to-use) · [今天已可運作的功能](#what-runs-today) · [刻意會遺忘的記憶](#memory-that-forgets-on-purpose) · [設計夥伴](#design-partners) · [參考資料](#references)
 

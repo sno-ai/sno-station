@@ -3,7 +3,7 @@
 ![Sno Station — 하나의 메모리를 공유하는 두 터미널 에이전트, 당신의 컴퓨터에서](../images/hero-banner.png)
 
 [![라이선스 Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-97ca00.svg?labelColor=3b3b3b)](../../LICENSE)
-![상태: 공개적으로 조립 중](https://img.shields.io/badge/status-assembled%20in%20public-2dd4bf.svg?labelColor=3b3b3b)
+![상태: 공개](https://img.shields.io/badge/status-public-2dd4bf.svg?labelColor=3b3b3b)
 ![실행 위치: 여러분의 노트북, 데몬 없음](https://img.shields.io/badge/runs%20on-your%20laptop%2C%20no%20daemon-3b82f6.svg?labelColor=3b3b3b)
 ![지원 하네스: Claude Code · Codex · OpenClaw](https://img.shields.io/badge/harnesses-Claude%20Code%20%C2%B7%20Codex%20%C2%B7%20OpenClaw-f0a04b.svg?labelColor=3b3b3b)
 
@@ -17,7 +17,7 @@ Sno Station은 여러분의 에이전트를 위한 워크스테이션입니다: 
 
 ![작동 방식: 두 에이전트, 하나의 공유 워크스페이스, 여러분이 얻는 세 가지](../images/squad-how-it-works.png)
 
-> **공개적으로 조립 중.** 이 저장소는 2026-09-18부터 한 조각씩 공개되고 있습니다. 여기 있는 것은 모두 실제로 존재하고 작동합니다. 아래의 각 블록은 마지막으로 업데이트된 시점을 표시합니다.
+> **공개되어 있습니다.** 이 저장소는 2026-09-18부터 공개되어 있습니다. 여기 있는 것은 모두 실제로 존재하고 작동합니다. 아래의 각 블록은 마지막으로 업데이트된 시점을 표시합니다.
 
 [설치](#install) · [사용 방법](#how-to-use) · [오늘 작동하는 것](#what-runs-today) · [일부러 잊어버리는 메모리](#memory-that-forgets-on-purpose) · [디자인 파트너](#design-partners) · [참고 자료](#references)
 

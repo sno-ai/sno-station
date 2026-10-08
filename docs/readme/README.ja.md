@@ -3,7 +3,7 @@
 ![Sno Station — two terminal agents sharing one memory on your machine](../images/hero-banner.png)
 
 [![license Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-97ca00.svg?labelColor=3b3b3b)](../../LICENSE)
-![status assembled in public](https://img.shields.io/badge/status-assembled%20in%20public-2dd4bf.svg?labelColor=3b3b3b)
+![status public](https://img.shields.io/badge/status-public-2dd4bf.svg?labelColor=3b3b3b)
 ![runs on your laptop, no daemon](https://img.shields.io/badge/runs%20on-your%20laptop%2C%20no%20daemon-3b82f6.svg?labelColor=3b3b3b)
 ![harnesses Claude Code, Codex, OpenClaw](https://img.shields.io/badge/harnesses-Claude%20Code%20%C2%B7%20Codex%20%C2%B7%20OpenClaw-f0a04b.svg?labelColor=3b3b3b)
 
@@ -35,8 +35,7 @@ Apache-2.0、隅々まで。メモリストアは最初の使用時からあな�
 
 ![How it works: two agents, one shared workspace, three things you get](../images/squad-how-it-works.png)
 
-> **公開の場で組み立てる。** このリポジトリは2026-09-18から、一つずつ部品を公開しています。
-> ここにあるものはすべて本物で、実際に動きます。
+> **公開されています。** このリポジトリは2026-09-18から公開されています。ここにあるものはすべて本物で、実際に動きます。
 > 以下の各ブロックには最終更新日が記されています。
 
 [インストール](#install) · [使い方](#how-to-use) · [現在動いているもの](#what-runs-today) · [わざと忘れるメモリ](#memory-that-forgets-on-purpose) · [デザインパートナー](#design-partners) · [参考文献](#references)

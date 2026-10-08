@@ -3,7 +3,7 @@
 ![Sno Station — two terminal agents sharing one memory on your machine](../images/hero-banner.png)
 
 [![license Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-97ca00.svg?labelColor=3b3b3b)](../../LICENSE)
-![status assembled in public](https://img.shields.io/badge/status-assembled%20in%20public-2dd4bf.svg?labelColor=3b3b3b)
+![status public](https://img.shields.io/badge/status-public-2dd4bf.svg?labelColor=3b3b3b)
 ![runs on your laptop, no daemon](https://img.shields.io/badge/runs%20on-your%20laptop%2C%20no%20daemon-3b82f6.svg?labelColor=3b3b3b)
 ![harnesses Claude Code, Codex, OpenClaw](https://img.shields.io/badge/harnesses-Claude%20Code%20%C2%B7%20Codex%20%C2%B7%20OpenClaw-f0a04b.svg?labelColor=3b3b3b)
 
@@ -33,8 +33,7 @@ dans chaque clé et recherche. Les compétences Duo sont écrites pour
 
 ![How it works: two agents, one shared workspace, three things you get](../images/squad-how-it-works.png)
 
-> **Assemblé en public.** Ce dépôt s'ouvre un morceau à la fois, à partir du
-> 2026-09-18. Tout ce qui est là est réel et fonctionne.
+> **Public.** Ce dépôt est public depuis le 2026-09-18. Tout ce qui est là est réel et fonctionne.
 > Chaque bloc ci-dessous indique quand il a été mis à jour pour la dernière fois.
 
 [Installation](#install) · [Comment l'utiliser](#how-to-use) · [Ce qui fonctionne aujourd'hui](#what-runs-today) · [Une mémoire qui oublie exprès](#memory-that-forgets-on-purpose) · [Partenaires de conception](#design-partners) · [Références](#references)
