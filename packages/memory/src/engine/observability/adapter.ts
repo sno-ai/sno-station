@@ -22,6 +22,7 @@ type ObserveRuntime = ReturnType<typeof createSnoObserve>;
 
 export type EmitInput = {
 	eventType: EventType;
+	agentId?: AgentId;
 	eventId?: string;
 	tsEdgeMs?: number;
 	scope?: JsonObject;
@@ -103,7 +104,7 @@ export class PluginObservability {
 			event_type: input.eventType,
 			...(input.tsEdgeMs !== undefined ? { ts_edge_ms: input.tsEdgeMs } : {}),
 			...(input.eventId ? { event_id: input.eventId } : {}),
-			agent_id: this.agentId,
+			agent_id: input.agentId ?? this.agentId,
 			lane: laneForEventType(input.eventType),
 			...(scope ? { scope } : {}),
 			payload: input.payload,

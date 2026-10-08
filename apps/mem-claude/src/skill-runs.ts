@@ -105,6 +105,7 @@ export async function readSkillRuns(input: {
 	const { skills, failed, last } = await scanTranscript(await readFile(transcriptPath, "utf8"), configDir);
 	const projectId = input.cwd ? detectProjectId(await workspaceRoot(input.cwd)) : undefined;
 	return skills.map((skill, index) => ({
+		agent_id: "claude-code",
 		ts_ms: skill.ts,
 		...(projectId === undefined ? {} : { project_id: projectId }),
 		event_type: "skill.run",

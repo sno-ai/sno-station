@@ -1,13 +1,15 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import type { EventLane, EventType, JsonObject } from "@snoai/observability";
+import type { AgentId, EventLane, EventType, JsonObject } from "@snoai/observability";
 import { createLogger } from "@snoai/utils/logger";
 import { z } from "zod";
+import { observeAgentId } from "../../../config/plugin-config-observe-schema";
 import type { EmitInput } from "../observability/adapter";
 import type { ObserveLogger } from "../observability/best-effort";
 
 export interface ObserveLedgerRow {
 	ts_ms: number;
+	agent_id?: AgentId;
 	event_type: EventType;
 	lane: EventLane;
 	project_id?: string;
@@ -29,6 +31,7 @@ interface ForwardResult {
 const log = createLogger("sno-station-mem:observe-ledger");
 const rowSchema = z.object({
 	ts_ms: z.number().int().nonnegative(),
+	agent_id: z.string().transform(observeAgentId).optional(),
 	event_type: z.string(),
 	lane: z.string(),
 	project_id: z.string().min(1).optional(),
@@ -124,6 +127,7 @@ export async function forwardObserveLedger(options: {
 			const accepted = await observe.tryEmit({
 				// The SDK validates event membership; unknown names must be reported as rejected.
 				eventType: row.event_type as EventType,
+				agentId: row.agent_id,
 				payload: row.payload,
 				tsEdgeMs: row.ts_ms,
 				...(row.project_id ? { scope: { project_id: row.project_id } } : {}),
