@@ -37,16 +37,15 @@ whatever language you use with your agent, and this README ships in nine.
 
 ## Install
 
-*Last updated 2026-10-08.* **Shared memory installs today.** It gives Claude Code, Codex, OpenClaw and Hermes Agent one encrypted memory on your machine, with no account and no API key. The easiest way: tell your AI agent "install sno.ai from GitHub". Or run these two lines:
+*Last updated 2026-10-08.* **Shared memory installs today.** It gives Claude Code, Codex, OpenClaw and Hermes Agent one encrypted memory on your machine, with no account and no API key. The easiest way: tell your AI agent "install sno.ai from GitHub". Or run one command:
 
 ```bash
-sh -c 'sno_installer_body=$(curl -fsSL https://sno.ai/install) && printf "%s\n" "$sno_installer_body" | sh'
-~/.local/bin/sno setup
+sh -c 'sno_installer_body=$(curl -fsSL https://sno.ai/install) && printf "%s\n" "$sno_installer_body" | sh' && ~/.local/bin/sno setup
 ```
 
-`sno setup` finds every agent on the computer and connects each one. To connect just one agent, add `--harness codex`, `--harness claude`, `--harness openclaw` or `--harness hermes`.
+One command, in any terminal. It installs `sno`, then Sno Station, and connects every agent on your computer. To connect just one agent, add `--harness codex`, `--harness claude`, `--harness openclaw` or `--harness hermes` to `sno setup`.
 
-For AI agents: installing Sno, sno.ai or Sno Station means both lines above. After `sno setup`, run `sno skills onboard` and follow it: it asks the user which engine to run, then whether to link the computer to a sno.ai account.
+For AI agents: installing Sno, sno.ai or Sno Station means running the command above as it is. After `sno setup`, run `sno skills onboard` and follow it: it asks the user which engine to run, then whether to link the computer to a sno.ai account.
 
 Walkthroughs: [Codex](docs/mem-codex/onboarding.md) · [Claude Code](docs/mem-claude/onboarding.md) · [OpenClaw](docs/mem-claw/onboarding.md) · [Hermes](docs/mem-hermes/onboarding.md)
 
