@@ -262,11 +262,16 @@ class PluginRuntime:
         handler: BaseHTTPRequestHandler, body: dict[str, object], status: int = 200
     ) -> None:
         payload = json.dumps(body).encode()
-        handler.send_response(status)
-        handler.send_header("Content-Type", "application/json")
-        handler.send_header("Content-Length", str(len(payload)))
-        handler.end_headers()
-        handler.wfile.write(payload)
+        try:
+            handler.send_response(status)
+            handler.send_header("Content-Type", "application/json")
+            handler.send_header("Content-Length", str(len(payload)))
+            handler.end_headers()
+            handler.wfile.write(payload)
+        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
+            # The memory service hung up before its answer was ready. Nothing is left to tell it, and letting this escape
+            # makes the HTTP server print a traceback into the chat window.
+            _LOG.debug("callback client hung up before the reply was written")
 
     def _reply_error(
         self,
