@@ -154,6 +154,7 @@ export async function installCodex(options: InstallOptions): Promise<void> {
 			});
 		}
 		if (!installed) {
+			ownedTrustKeys.push(trustKey(hooksPath, event, currentGroups.length, 0));
 			trust.push(trustSection(hooksPath, event, currentGroups.length, 0, hook));
 			currentGroups.push({ hooks: [hook] });
 		}

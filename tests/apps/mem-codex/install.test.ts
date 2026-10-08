@@ -287,4 +287,28 @@ describe("sno-mem-codex install", () => {
 		});
 		expect(parsed.status, parsed.stderr).toBe(0);
 	});
+
+	it("replaces a stale trust table under the key of a hook it newly appends, leaving one table for that key", async () => {
+		const codexHome = await temporaryHome();
+		const hooksPath = join(codexHome, "hooks.json");
+		const foreign = { matcher: "foreign", hooks: [{ type: "command", command: "/opt/foreign/hook", timeout: 7 }] };
+		await writeFile(hooksPath, `${JSON.stringify({ hooks: { PreToolUse: [foreign] } }, null, 2)}\n`);
+		const newKey = `${hooksPath}:pre_tool_use:1:0`;
+		await writeFile(join(codexHome, "config.toml"), `[hooks.state.${JSON.stringify(newKey)}]\nenabled = true\ntrusted_hash = "stale-hash"\n`);
+
+		await installCodex({ codexHome, programPath: "/opt/sno/bin/sno", writeOutput: () => undefined });
+
+		const installed = JSON.parse(await readFile(hooksPath, "utf8"));
+		expect(installed.hooks.PreToolUse[0]).toEqual(foreign);
+		expect(installed.hooks.PreToolUse[1].hooks[0].command).toBe("'/opt/sno/bin/sno' memory hook pre-tool-use --harness codex");
+		const config = await readFile(join(codexHome, "config.toml"), "utf8");
+		const header = `[hooks.state.${JSON.stringify(newKey)}]`;
+		expect(config.split(header).length - 1).toBe(1);
+		expect(config).not.toContain("stale-hash");
+		const parsed = spawnSync("python3", ["-c", "import sys, tomllib; tomllib.loads(sys.stdin.read())"], {
+			encoding: "utf8",
+			input: config,
+		});
+		expect(parsed.status, parsed.stderr).toBe(0);
+	});
 });
