@@ -32,3 +32,19 @@ if (result.error) {
 }
 if (result.status !== 0) process.exit(result.status ?? 1);
 console.log("OpenClaw plugin installed. Run sno setup to configure the memory service.");
+
+// With several agents and none marked default, OpenClaw refuses a new session that names no agent, which is how Sno Reach
+// seats start. The install itself worked; say how to fix this now.
+const agentList = spawnSync("openclaw", [...(profile ? ["--profile", profile] : []), "agents", "list", "--json"], { encoding: "utf8" });
+if (agentList.status !== 0) {
+	console.error(`Could not check OpenClaw's agents (exit ${agentList.status ?? agentList.error?.message}); if it has several agents, make one the default so Sno Reach seats can start.`);
+} else {
+	try {
+		const agents = JSON.parse(agentList.stdout.slice(agentList.stdout.indexOf("[")));
+		if (Array.isArray(agents) && agents.length > 1 && !agents.some(agent => agent.isDefault === true)) {
+			console.log(`OpenClaw has several agents (${agents.map(agent => agent.id).join(", ")}) and none is the default, so Sno Reach seats cannot start.\nChoose one with: openclaw config set agents.defaults.systemAgent.agentId <id>`);
+		}
+	} catch (error) {
+		console.error(`Could not read OpenClaw's agent list: ${error instanceof Error ? error.message : String(error)}`);
+	}
+}
