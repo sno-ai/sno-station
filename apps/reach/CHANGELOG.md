@@ -1,9 +1,13 @@
 # Changelog
 
-## Unreleased
+## 2.1.3
 
 `wait --reply-to` records the answer it returns in the caller's seen list, so the same answer no
 longer rings the caller again after `wait` already handed it over.
+
+`spawn openclaw` now refuses when OpenClaw has several agents and none is the default. OpenClaw
+turns down the first message of a seat in that setup, so a seat that `spawn` reported as created
+could never answer. The refusal names the agents and the command that makes one the default.
 
 ## 2.1.2
 

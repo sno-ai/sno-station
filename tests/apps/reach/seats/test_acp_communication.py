@@ -382,6 +382,41 @@ class Communication(unittest.TestCase):
                     self.assertFalse((self.root / "created").exists())
                     self.no_tmux()
 
+    def fake_openclaw_agents(self, agents):
+        """A stand-in `openclaw` that answers `agents list --json` the way the real one does."""
+        listing = json.dumps([{"id": name, "isDefault": default} for name, default in agents])
+        (self.bin / "openclaw").write_text(f"#!/bin/sh\n[ \"$*\" = 'agents list --json' ] && {{ cat <<'JSON'\n{listing}\nJSON\nexit 0; }}\nexit 2\n")
+        (self.bin / "openclaw").chmod(0o755)
+
+    def prepare_openclaw_spawn(self):
+        self.prepare_spawn("absent-new")
+        (self.home / ".config/sno-reach/agents.json").write_text('{"openclaw":{"acpx_agent":"openclaw"}}')
+
+    def test_openclaw_spawn_is_refused_when_several_agents_and_none_is_default(self):
+        # OpenClaw refuses the seat's first message in this setup ("Multiple agents are configured, but session ... has no
+        # explicit owner"), so a seat that spawn reported as created could never answer.
+        self.prepare_openclaw_spawn()
+        self.fake_openclaw_agents([("alpha", False), ("beta", False)])
+        result = self.run_cli(SPAWN, "spawn", "openclaw", "--cwd", str(self.cwd), "--as", self.address)
+        self.assertNotEqual(result.returncode, 0, result.stdout)
+        self.assertIn("alpha, beta", result.stderr)
+        self.assertIn("openclaw config set agents.defaults.systemAgent.agentId", result.stderr)
+        self.assertFalse((self.root / "created").exists())
+        self.assertFalse((self.root / "acpx.calls").exists())
+        self.assertFalse(self.record.exists())
+        self.no_tmux()
+
+    def test_openclaw_spawn_goes_ahead_with_a_default_agent_or_a_single_agent(self):
+        for agents in ([("alpha", True), ("beta", False)], [("only", False)]):
+            with self.subTest(agents=agents):
+                self.prepare_openclaw_spawn()
+                self.fake_openclaw_agents(agents)
+                for leftover in ("created", "closed", "acpx.calls"):
+                    (self.root / leftover).unlink(missing_ok=True)
+                result = self.run_cli(SPAWN, "spawn", "openclaw", "--cwd", str(self.cwd), "--as", self.address)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertTrue((self.root / "created").exists())
+
     def prepare_spawn(self, mode):
         self.record.unlink(missing_ok=True)
         config = self.home / ".config/sno-reach/agents.json"
