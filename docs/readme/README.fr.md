@@ -19,7 +19,7 @@ attend que vous disiez oui.
 
 **À vous, et ça le reste.** La mémoire, les messages et les compétences vivent dans un seul
 espace de travail sur votre ordinateur portable. Pas de démon, pas de serveur, pas de cloud
-requis ; le volet cloud, quand il arrivera, sera optionnel et le produit sera complet sans lui.
+requis ; le volet cloud est optionnel et le produit est complet sans lui.
 Apache-2.0, de bout en bout. Le magasin de mémoire est chiffré sur votre machine dès la première
 utilisation, avec une clé provisionnée une seule fois et qui ne le quitte jamais ; Sno ne reçoit
 jamais votre base de données ni votre clé. Le périmètre complet, ce qu'il protège et ce qu'il ne
@@ -28,7 +28,7 @@ protège pas, se trouve dans [docs/security.md](../security.md).
 **Fonctionne dans votre langue.** Parlez à vos agents en anglais, chinois (simplifié ou
 traditionnel), japonais, coréen, allemand, français, espagnol ou russe ; le moteur de mémoire
 enregistre chaque souvenir avec sa langue, le classe par locale, et préserve le texte CJK intact
-dans chaque clé et recherche. Les compétences Duo sont écrites pour
+dans chaque clé et recherche. Les compétences de collaboration entre agents sont écrites pour
 être suivies dans la langue que vous utilisez avec votre agent, et ce README est livré en neuf langues.
 
 ![How it works: two agents, one shared workspace, three things you get](../images/squad-how-it-works.png)
@@ -57,15 +57,15 @@ sno setup --harness hermes
 
 Parcours : [Codex](../mem-codex/onboarding.md) · [Claude Code](../mem-claude/onboarding.md) · [OpenClaw](../mem-claw/onboarding.md) · [Hermes](../mem-hermes/onboarding.md)
 
-`sno setup` installe aussi Sno Reach, les petits programmes auxiliaires, les skills et la boucle nocturne, et chaque commande s'écrit `sno <nom>` : la liste complète est dans [docs/sno-commands.md](../sno-commands.md). Dire « Sno onboarding » dans votre agent vous guide dans la même installation en conversation. Il démarre aussi tout seul juste après l'installation.
+`sno setup` installe aussi Sno Reach, les petits programmes auxiliaires, les skills et la boucle nocturne, et chaque commande s'écrit `sno <nom>` : la liste complète est dans [docs/sno-commands.md](../sno-commands.md). Dire « Sno onboard » dans votre agent vous guide dans la même installation en conversation. Il démarre aussi tout seul juste après l'installation.
 
 ```bash
 # inside any Claude Code, Codex or OpenClaw conversation:
-Sno onboarding
+Sno onboard
 ```
 
 L'agent exécute lui-même la configuration via le CLI `sno` : la mémoire partagée, Sno Reach, les
-compétences Duo, et les hooks dont chaque harness a besoin. Aucun nom de paquet à retenir.
+compétences de collaboration entre agents, et les hooks dont chaque harness a besoin. Aucun nom de paquet à retenir.
 
 ## Comment l'utiliser
 
@@ -117,7 +117,9 @@ dépôt depuis des mois. Pas une seule révision n'est revenue vide. Pas une seu
 cela signifiait que le travail était mauvais. Cela signifie qu'un seul réviseur d'un seul harness
 n'est jamais suffisant.
 
-Nous appelons la paire un Duo : la plus petite équipe. Nous ne disons jamais lequel est le prudent
+Nous appelons cette collaboration Dual Brain. Deux agents tiennent des rôles distincts sur
+une tâche commune : l’un réalise, l’autre relit. Chacun peut tenir l’un ou l’autre rôle.
+Ajoutez des rôles et vous avez un Agent Squad. Nous ne disons jamais lequel est le prudent
 et lequel est le rapide. Cela change selon le mois et selon la tâche. L'important, c'est qu'ils diffèrent.
 
 ## « Je suis allé me coucher. La relève s'est faite. »
@@ -146,7 +148,7 @@ de session sont caviardés ; rien d'autre n'est touché.
 
 ## Ce qui fonctionne aujourd'hui
 
-*Dernière mise à jour le 2026-10-07.*
+*Dernière mise à jour le 2026-10-08.*
 
 | Élément | Statut |
 |---|---|
@@ -156,7 +158,7 @@ de session sont caviardés ; rien d'autre n'est touché.
 | Sno Reach — les agents qui se parlent, sans démon | Installé par `sno setup` ; les archives de version pour Linux et macOS sont publiées ; prouvé de bout en bout sur une machine Linux propre |
 | La boucle nocturne et les skills de l'équipe | Installée par `sno setup` ; la tâche nocturne a tourné sur une machine Linux propre |
 | Installation en une commande (`sno setup`) | Installe tout ce qui précède ; prouvée sur une machine Linux propre |
-| « Sno onboarding » dans votre agent | Disponible ; il démarre après l'installation, ou quand vous le dites |
+| « Sno onboard » dans votre agent | Disponible ; il démarre après l'installation, ou quand vous le dites |
 
 Une ligne indique « prouvé » seulement une fois qu'elle a tourné sur une machine vierge.
 

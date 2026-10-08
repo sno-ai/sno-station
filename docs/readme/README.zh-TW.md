@@ -16,14 +16,14 @@ Sno Station 是您代理人的工作站：這款開源軟體能把您已經在�
 取代理人的工作階段紀錄，對代理人自己的技能提出修改建議，並等待您說「可以」。
 
 **屬於您，而且永遠屬於您。** 記憶、訊息與技能都存放在您筆電上的同一個工作區裡。
-不需要 daemon、不需要伺服器、不需要雲端；未來若推出雲端功能，也僅是選配，沒有它產品
+不需要 daemon、不需要伺服器、不需要雲端；雲端功能僅是選配，沒有它產品
 本身依然完整。Apache-2.0，從頭到尾開源。您的記憶儲存從第一次使用起，就會在您的機器
 上加密，加密金鑰只會佈署一次，且永遠不會離開您的機器；Sno 永遠不會取得您的資料庫或
 金鑰。完整的邊界說明——它能防護什麼、不能防護什麼——請見 [docs/security.md](../security.md)。
 
 **支援您慣用的語言。** 您可以用英語、中文（簡體或繁體）、日語、韓語、德語、法語、西班
 牙語或俄語與您的代理人對話；記憶引擎會為每筆記憶記錄其語言、依語系分類，並在每個索
-引鍵與搜尋中完整保留 CJK 文字。Duo 技能的撰寫方式，能配合您與代理人溝通時所使用的任
+引鍵與搜尋中完整保留 CJK 文字。智能體協作技能的撰寫方式，能配合您與代理人溝通時所使用的任
 何語言來執行，而這份 README 也提供九種語言版本。
 
 ![How it works: two agents, one shared workspace, three things you get](../images/squad-how-it-works.png)
@@ -52,14 +52,14 @@ sno setup --harness hermes
 
 逐步說明： [Codex](../mem-codex/onboarding.md) · [Claude Code](../mem-claude/onboarding.md) · [OpenClaw](../mem-claw/onboarding.md) · [Hermes](../mem-hermes/onboarding.md)
 
-`sno setup` 也會安裝 Sno Reach、小型輔助程式、技能和夜間循環，所有指令都是 `sno <名稱>` 的形式，完整清單見 [docs/sno-commands.md](../sno-commands.md)。在您的代理人裡輸入 "Sno onboarding"，它會用對話帶您完成同樣的設定。安裝完成後也會自動開始。
+`sno setup` 也會安裝 Sno Reach、小型輔助程式、技能和夜間循環，所有指令都是 `sno <名稱>` 的形式，完整清單見 [docs/sno-commands.md](../sno-commands.md)。在您的代理人裡輸入 "Sno onboard"，它會用對話帶您完成同樣的設定。安裝完成後也會自動開始。
 
 ```bash
 # inside any Claude Code, Codex or OpenClaw conversation:
-Sno onboarding
+Sno onboard
 ```
 
-代理人會透過 `sno` CLI 自行完成設定：共用記憶、Sno Reach、Duo 技能，以及各個
+代理人會透過 `sno` CLI 自行完成設定：共用記憶、Sno Reach、智能體協作技能，以及各個
 harness 所需的 hook。不需要記住任何套件名稱。
 
 ## How to use
@@ -110,8 +110,8 @@ harness 所需的 hook。不需要記住任何套件名稱。
 的成果，就在這個儲存庫裡進行。沒有一次審查是空手而回的。一次都沒有。我們曾經以為這
 代表程式碼寫得不好。但其實它代表的是：只靠一個 harness 的一個審查者，永遠不夠。
 
-我們把這一對稱為 Duo：最小的一支小隊。我們從不會說哪一個比較細心、哪一個比較快。這
-件事每個月、每項工作都可能不一樣。重點在於，它們彼此不同。
+這就是 Dual Brain 雙腦：兩個 AI Agent 合作完成一項任務，各自承擔不同職責。一個負責實作，
+另一個負責審查。角色隨任務交換，兩者都能實作，也都能審查。加入更多角色，就組成 Agent Squad。
 
 ## "我睡了一覺。它換了班。"
 
@@ -135,7 +135,7 @@ harness 所需的 hook。不需要記住任何套件名稱。
 
 ## What runs today
 
-*最後更新於 2026-10-07。*
+*最後更新於 2026-10-08。*
 
 | 項目 | 狀態 |
 |---|---|
@@ -145,7 +145,7 @@ harness 所需的 hook。不需要記住任何套件名稱。
 | Sno Reach——代理人之間互相溝通，不需要 daemon | 由 `sno setup` 安裝；Linux 與 macOS 的發布封存檔已公開；已在乾淨的 Linux 機器上端對端驗證 |
 | 夜間循環與小隊技能 | 由 `sno setup` 安裝；夜間任務已在乾淨的 Linux 機器上執行 |
 | 單一指令安裝（`sno setup`） | 裝好以上全部內容；已在乾淨的 Linux 機器上驗證 |
-| 在您的代理人裡輸入 "Sno onboarding" | 已可使用；安裝後自動開始，也可以隨時輸入 |
+| 在您的代理人裡輸入 "Sno onboard" | 已可使用；安裝後自動開始，也可以隨時輸入 |
 
 只有在乾淨的機器上執行過之後，一行才會寫「proven」。
 

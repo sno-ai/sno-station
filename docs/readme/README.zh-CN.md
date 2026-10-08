@@ -16,14 +16,14 @@ Sno Station 是你的 agent 的工作站：一款开源软件，它把你已经�
 并等待你点头。
 
 **属于你，而且始终属于你。** 记忆、消息和技能都存放在你笔记本电脑上的同一个工作区里。
-不需要守护进程，不需要服务器，也不需要云；云端功能到来之时是可选的，产品在没有它的
+不需要守护进程，不需要服务器，也不需要云；云端功能是可选的，产品在没有它的
 情况下也是完整的。Apache-2.0，从头到尾开源。记忆存储从第一次使用起就在你的机器上加密，
 密钥只配置一次，且永远不会离开你的机器；Sno 永远不会收到你的数据库或你的密钥。完整的
 边界说明——它保护什么、不保护什么——见 [docs/security.md](../security.md)。
 
 **支持你的语言。** 用英语、中文（简体或繁体）、日语、韩语、德语、法语、西班牙语或俄语和你的 agent 对话；
 记忆引擎会为每条记忆存储其语言，按地区分类，并在每个 key 和搜索中保持中日韩文字完整
-无损。Duo 技能
+无损。智能体协作技能
 的写法可以用你和 agent 交流时使用的任何语言来遵循，本 README 提供九种语言版本。
 
 ![工作原理：两个 agent，一个共享工作区，你能获得的三件事](../images/squad-how-it-works.png)
@@ -52,14 +52,14 @@ sno setup --harness hermes
 
 分步说明： [Codex](../mem-codex/onboarding.md) · [Claude Code](../mem-claude/onboarding.md) · [OpenClaw](../mem-claw/onboarding.md) · [Hermes](../mem-hermes/onboarding.md)
 
-`sno setup` 还会安装 Sno Reach、小型辅助程序、技能和夜间循环，所有命令都是 `sno <名称>` 的形式，完整清单见 [docs/sno-commands.md](../sno-commands.md)。在你的 agent 里说 "Sno onboarding"，它会用对话带你完成同样的设置。安装完成后它也会自动开始。
+`sno setup` 还会安装 Sno Reach、小型辅助程序、技能和夜间循环，所有命令都是 `sno <名称>` 的形式，完整清单见 [docs/sno-commands.md](../sno-commands.md)。在你的 agent 里说 "Sno onboard"，它会用对话带你完成同样的设置。安装完成后它也会自动开始。
 
 ```bash
 # inside any Claude Code, Codex or OpenClaw conversation:
-Sno onboarding
+Sno onboard
 ```
 
-Agent 会通过 `sno` CLI 自行完成设置：共享记忆、Sno Reach、Duo 技能，以及每种 harness
+Agent 会通过 `sno` CLI 自行完成设置：共享记忆、Sno Reach、智能体协作技能，以及每种 harness
 所需要的 hook。不需要记住任何包名。
 
 ## How to use
@@ -108,8 +108,8 @@ agent。有三件事会改变：
 工作，就在这个仓库上。没有一次审查是空手而归的。一次都没有。我们曾经以为这说明这项
 工作做得不好。其实它说明的是：只靠一个 harness 的一个审查者永远不够。
 
-我们把这一对称为 Duo：最小的小队。我们从不说哪一个更细心、哪一个更快。这个角色每个月、
-每项工作都会互换。重点在于它们彼此不同。
+这就是 Dual Brain 双脑：两个智能体合作完成一项任务，各自承担不同职责。一个负责实现，
+另一个负责审查。角色随任务交换，两者都能实现，也都能审查。加入更多角色，就组成 Agent Squad。
 
 ## "我睡了一觉，它换了班。"
 
@@ -133,7 +133,7 @@ agent 已经在工作，第一个带着 1% 的余量签退。交接之前的每�
 
 ## What runs today
 
-*最后更新于 2026-10-07。*
+*最后更新于 2026-10-08。*
 
 | 部分 | 状态 |
 |---|---|
@@ -143,7 +143,7 @@ agent 已经在工作，第一个带着 1% 的余量签退。交接之前的每�
 | Sno Reach —— agent 之间互相通信，无需守护进程 | 由 `sno setup` 安装；Linux 和 macOS 的发布归档已公开；已在干净的 Linux 机器上端到端验证 |
 | 夜间循环和小队技能 | 由 `sno setup` 安装；夜间任务已在干净的 Linux 机器上运行 |
 | 一条命令完成安装（`sno setup`） | 装好上面全部内容；已在干净的 Linux 机器上验证 |
-| 在你的 agent 里说 "Sno onboarding" | 已可用；安装后自动开始，也可以随时说出口 |
+| 在你的 agent 里说 "Sno onboard" | 已可用；安装后自动开始，也可以随时说出口 |
 
 只有在一台干净的机器上运行过之后，一行才会写“proven”。
 
