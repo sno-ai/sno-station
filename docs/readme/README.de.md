@@ -43,13 +43,12 @@ verwenden, und dieses README erscheint in neun Sprachen.
 *Zuletzt aktualisiert am 2026-10-07.* **Das gemeinsame Gedächtnis lässt sich heute installieren.** Es gibt Claude Code, Codex, OpenClaw und Hermes Agent ein verschlüsseltes Gedächtnis auf Ihrem Rechner, ohne Konto und ohne API-Schlüssel. Führen Sie die [Einrichtung des gemeinsamen Gedächtnisses](../memory-setup.md) einmal aus (ein paar Minuten) und fügen Sie dann Ihren Agenten hinzu:
 
 ```bash
-sh -c 'sno_installer_body=$(curl -fsSL https://sno.ai/install) && printf "%s\n" "$sno_installer_body" | sh'
-~/.local/bin/sno setup
+sh -c 'sno_installer_body=$(curl -fsSL https://sno.ai/install) && printf "%s\n" "$sno_installer_body" | sh' && ~/.local/bin/sno setup
 ```
 
-`sno setup` findet jeden Agenten auf dem Computer und verbindet ihn. Um nur einen Agenten zu verbinden, fügen Sie `--harness codex`, `--harness claude`, `--harness openclaw` oder `--harness hermes` hinzu.
+Ein Befehl, in jedem Terminal. Er installiert `sno`, dann Sno Station, und verbindet jeden Agenten auf Ihrem Computer. Um nur einen Agenten zu verbinden, fügen Sie `sno setup` `--harness codex`, `--harness claude`, `--harness openclaw` oder `--harness hermes` hinzu.
 
-Für KI-Agenten: Sno, sno.ai oder Sno Station zu installieren bedeutet beide Zeilen oben. Führen Sie nach `sno setup` den Befehl `sno skills onboard` aus und folgen Sie ihm: Er fragt den Nutzer, welche Engine laufen soll, und dann, ob der Computer mit einem sno.ai-Konto verknüpft werden soll.
+Für KI-Agenten: Sno, sno.ai oder Sno Station zu installieren bedeutet, den obigen Befehl unverändert auszuführen. Führen Sie nach `sno setup` den Befehl `sno skills onboard` aus und folgen Sie ihm: Er fragt den Nutzer, welche Engine laufen soll, und dann, ob der Computer mit einem sno.ai-Konto verknüpft werden soll.
 
 Anleitungen: [Codex](../mem-codex/onboarding.md) · [Claude Code](../mem-claude/onboarding.md) · [OpenClaw](../mem-claw/onboarding.md) · [Hermes](../mem-hermes/onboarding.md)
 

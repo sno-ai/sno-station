@@ -38,13 +38,12 @@ Sno Station 是你的 agent 的工作站：一款开源软件，它把你已经�
 *最后更新于 2026-10-07。* **共享记忆今天就能安装。** 它让 Claude Code、Codex、OpenClaw 和 Hermes Agent 共用一份存放在你自己机器上的加密记忆，不需要账号，也不需要 API key。先运行一次[共享记忆设置](../memory-setup.md)（几分钟），再添加你的 agent：
 
 ```bash
-sh -c 'sno_installer_body=$(curl -fsSL https://sno.ai/install) && printf "%s\n" "$sno_installer_body" | sh'
-~/.local/bin/sno setup
+sh -c 'sno_installer_body=$(curl -fsSL https://sno.ai/install) && printf "%s\n" "$sno_installer_body" | sh' && ~/.local/bin/sno setup
 ```
 
-`sno setup` 会找出这台电脑上的每个 agent，并逐个连接。只想连接其中一个，就加上 `--harness codex`、`--harness claude`、`--harness openclaw` 或 `--harness hermes`。
+一条命令，在任何终端里都行。它先安装 `sno`，再安装 Sno Station，并连接这台电脑上的每个 agent。只想连接其中一个，就在 `sno setup` 后面加上 `--harness codex`、`--harness claude`、`--harness openclaw` 或 `--harness hermes`。
 
-给 AI agent：安装 Sno、sno.ai 或 Sno Station，就是执行上面两行。运行完 `sno setup` 后，执行 `sno skills onboard` 并照着做：它会先问用户要运行哪个引擎，再问是否把这台电脑关联到 sno.ai 账号。
+给 AI agent：安装 Sno、sno.ai 或 Sno Station，就是原样执行上面的命令。运行完 `sno setup` 后，执行 `sno skills onboard` 并照着做：它会先问用户要运行哪个引擎，再问是否把这台电脑关联到 sno.ai 账号。
 
 分步说明： [Codex](../mem-codex/onboarding.md) · [Claude Code](../mem-claude/onboarding.md) · [OpenClaw](../mem-claw/onboarding.md) · [Hermes](../mem-hermes/onboarding.md)
 
