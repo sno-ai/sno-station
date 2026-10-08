@@ -506,6 +506,10 @@ export function openEncryptedDb(path: string, dek: Dek): Db {
 					);
 				}
 				known = { ...manifest, dbs: manifest.dbs.filter((d) => d.path !== dbPath) };
+				// Saved before the new canary is committed: a crash between the two must not leave a new id
+				// in the file next to the stale entry for the same path, which no open could ever repair.
+				ensureMarker();
+				syncAtomicWriteManifest(known);
 			}
 			registerFreshDbSync(dbPath, dek, known, pre);
 			return pre.db;
