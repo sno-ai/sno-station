@@ -17,7 +17,7 @@ the workspace they share gets smarter every night: it reads their sessions, prop
 their own skills, and waits for you to say yes.
 
 **Yours, and it stays yours.** Memory, messages and skills live in one workspace on your laptop.
-No daemon, no server, no cloud required; the cloud side, when it comes, is optional and the
+No daemon, no server, no cloud required; the cloud side is optional and the
 product is complete without it. Apache-2.0, edge to edge. The memory store is encrypted on
 your machine from first use, with a key that is provisioned once and never leaves it; Sno never
 receives your database or your key. The full boundary, what it protects against and what it
@@ -25,7 +25,7 @@ does not, is in [docs/security.md](docs/security.md).
 
 **Works in your language.** Talk to your agents in English, Chinese (Simplified or Traditional),
 Japanese, Korean, German, French, Spanish or Russian; the memory engine stores each memory with
-its language, classifies by locale, and keeps CJK text intact in every key and search. The Duo skills are written to be followed in
+its language, classifies by locale, and keeps CJK text intact in every key and search. The agent collaboration skills are written to be followed in
 whatever language you use with your agent, and this README ships in nine.
 
 ![How it works: two agents, one shared workspace, three things you get](docs/images/squad-how-it-works.png)
@@ -37,7 +37,7 @@ whatever language you use with your agent, and this README ships in nine.
 
 ## Install
 
-*Last updated 2026-10-07.* **Shared memory installs today.** It gives Claude Code, Codex, OpenClaw and Hermes Agent one encrypted memory on your machine, with no account and no API key. The easiest way: tell your AI agent "install sno.ai from GitHub". Or install the `sno` command once, then run `sno setup` for each agent:
+*Last updated 2026-10-08.* **Shared memory installs today.** It gives Claude Code, Codex, OpenClaw and Hermes Agent one encrypted memory on your machine, with no account and no API key. The easiest way: tell your AI agent "install sno.ai from GitHub". Or install the `sno` command once, then run `sno setup` for each agent:
 
 ```bash
 # Install the sno command once
@@ -54,15 +54,15 @@ sno setup --harness hermes
 
 Walkthroughs: [Codex](docs/mem-codex/onboarding.md) · [Claude Code](docs/mem-claude/onboarding.md) · [OpenClaw](docs/mem-claw/onboarding.md) · [Hermes](docs/mem-hermes/onboarding.md)
 
-`sno setup` also installs Sno Reach, the small helper programs, the skills and the nightly loop, and every command is `sno <name>`: the full list is in [docs/sno-commands.md](docs/sno-commands.md). Say "Sno onboarding" inside your agent and it walks you through the same setup in conversation. It also starts by itself right after the install.
+`sno setup` also installs Sno Reach, the small helper programs, the skills and the nightly loop, and every command is `sno <name>`: the full list is in [docs/sno-commands.md](docs/sno-commands.md). Say "Sno onboard" inside your agent and it walks you through the same setup in conversation. It also starts by itself right after the install.
 
 ```bash
 # inside any Claude Code, Codex or OpenClaw conversation:
-Sno onboarding
+Sno onboard
 ```
 
 The agent runs the setup itself through the `sno` CLI: shared memory, Sno Reach, the
-Duo skills, and the hooks each harness needs. No package names to remember.
+agent collaboration skills, and the hooks each harness needs. No package names to remember.
 
 ## Connect your sno.ai account
 
@@ -129,8 +129,9 @@ We have had Claude Code review Codex's work and Codex review Claude Code's on th
 repository for months. Not one review has come back empty. Not one. We used to think
 that meant the work was bad. It means one reviewer from one harness is never enough.
 
-We call the pair a Duo: the smallest squad. We never say which one is the careful one and
-which one is the fast one. It flips by month and by job. The point is that they differ.
+We call this Dual Brain. Two agents take different roles on a shared task: one implements,
+the other reviews. Either can take either role. The task decides who builds and who checks.
+Add more roles, and you have an Agent Squad.
 
 ## "I went to bed. It changed shifts."
 
@@ -158,7 +159,7 @@ else is touched.
 
 ## What runs today
 
-*Last updated 2026-10-07.*
+*Last updated 2026-10-08.*
 
 | Piece | Status |
 |---|---|
@@ -168,7 +169,7 @@ else is touched.
 | Sno Reach — agents talking to each other, no daemon | Installed by `sno setup`; release archives for Linux and macOS are published; proven end to end on a clean Linux machine |
 | The nightly loop and the squad skills | Installed by `sno setup`; the nightly job ran on a clean Linux machine |
 | One-command install (`sno setup`) | Installs everything above; proven on a clean Linux machine |
-| "Sno onboarding" inside your agent | Available; it starts after the install, or when you say it |
+| "Sno onboard" inside your agent | Available; it starts after the install, or when you say it |
 
 A row says "proven" only once it has run on a clean machine.
 
