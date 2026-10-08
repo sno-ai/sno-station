@@ -32,7 +32,7 @@ package_row() {
 verify_manifest() {
   jq -e --arg sha "$source_sha" --arg run "$run_id" '
     .source_sha == $sha and .run_id == $run and
-    (.packages | length) == 11 and
+    (.packages | length) >= 1 and
     all(.packages[]; (.name | startswith("@snoai/")) and
       (.version | type == "string") and (.tag == "latest" or .tag == "next") and
       (.file | endswith(".tgz")) and (.integrity | startswith("sha512-")))
@@ -91,6 +91,15 @@ case $operation in
       slug=${name##*/}
       tag=latest
       [[ $version == *-* ]] && tag=next
+      if registry_integrity "$name" "$version" > /dev/null; then
+        # Not part of this release. Its tarball differs from the published one anyway: the diagnostic catalog hashes
+        # every source file in the workspace, so any change anywhere changes the bytes of every package.
+        printf '%s@%s is already on npm; not part of this release\n' "$name" "$version" >&2
+        continue
+      else
+        result=$?
+        [[ $result == 4 ]] || exit "$result"
+      fi
       printf 'Packing %s@%s\n' "$name" "$version" >&2
       output=$(cd "$package_dir" && npm pack --silent --pack-destination "$candidate_dir/tarballs")
       file=${output##*$'\n'}
