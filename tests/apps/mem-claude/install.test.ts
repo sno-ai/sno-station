@@ -103,6 +103,29 @@ describe("Claude settings installation and diagnosis", () => {
 		expect(installed.env).toEqual(initial.env);
 	});
 
+	it("leaves one hook per event when two of its own entries from earlier installs are already present", async () => {
+		await install();
+		const initial = await settings();
+		const foreign = { matcher: "startup", hooks: [{ type: "command", command: "/opt/foreign/hook", timeout: 7 }] };
+		for (const [event, subcommand] of events) {
+			initial.hooks[event] = [
+				{ hooks: [{ type: "command", command: `'/old/release/sno-mem-claude' ${subcommand}`, timeout: 1 }] },
+				foreign,
+				{ hooks: [{ type: "command", command: `'/older/release/sno-mem-claude' ${subcommand}`, timeout: 1 }] },
+			];
+		}
+		await writeFile(join(configDir, "settings.json"), JSON.stringify(initial));
+
+		await install();
+
+		const installed = await settings();
+		for (const [event, subcommand] of events) {
+			const own = JSON.stringify(installed.hooks[event]).split(`memory hook ${subcommand} --harness claude`).length - 1;
+			expect(own, `${event} must run its hook once`).toBe(1);
+			expect(JSON.stringify(installed.hooks[event])).toContain("/opt/foreign/hook");
+		}
+	});
+
 	it("rewrites its hooks and rule when sno is at another path, never hooking an event twice", async () => {
 		await install();
 		await installClaude({ configDir, programPath: "/other/place/sno", writeOutput: () => {} });

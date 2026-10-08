@@ -81,15 +81,18 @@ function updateSettings(settings: Settings, programPath: string): void {
 			type: "command", command: codingSkinHookCommand(programPath, details.subcommand, "claude"),
 			timeout: details.timeout,
 		};
+		const emptiedByDuplicate = new Set<(typeof groups)[number]>();
 		for (const group of groups) {
-			group.hooks = group.hooks.map(current => {
-				if (!current.command || !isOwnedHookCommand(current.command, details.subcommand)) return current;
+			group.hooks = group.hooks.flatMap(current => {
+				if (!current.command || !isOwnedHookCommand(current.command, details.subcommand)) return [current];
+				if (installed) return [];
 				installed = true;
-				return hook;
+				return [hook];
 			});
+			if (installed && group.hooks.length === 0) emptiedByDuplicate.add(group);
 		}
 		if (!installed) groups.push({ hooks: [hook] });
-		settings.hooks[event] = groups;
+		settings.hooks[event] = groups.filter(group => !emptiedByDuplicate.has(group));
 	}
 	settings.permissions ??= {};
 	const allow = settings.permissions.allow ?? [];
