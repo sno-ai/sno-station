@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.1.4
+
+`spawn openclaw` refuses when the openclaw entry in `~/.acpx/config.json` sets `--session` or
+`--session-label`. That option makes every ACP session join one fixed conversation, so each seat
+would land in the main conversation and mix its context with it. The refusal names the file and
+says to remove the option.
+
 ## 2.1.3
 
 `wait --reply-to` records the answer it returns in the caller's seen list, so the same answer no

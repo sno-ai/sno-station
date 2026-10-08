@@ -417,6 +417,35 @@ class Communication(unittest.TestCase):
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertTrue((self.root / "created").exists())
 
+    def test_openclaw_spawn_is_refused_when_its_acpx_route_pins_a_conversation(self):
+        # `--session <key>` on the openclaw route makes every ACP session join that one conversation: with
+        # `--session agent:main:main` each seat would land in the main conversation and mix its context with it.
+        route = self.home / ".acpx/config.json"
+        route.parent.mkdir(parents=True)
+        for command in ("openclaw acp --session agent:main:main", "openclaw acp --session-label main", "openclaw acp --session=agent:main:main"):
+            with self.subTest(command=command):
+                self.prepare_openclaw_spawn()
+                self.fake_openclaw_agents([("main", True)])
+                for leftover in ("created", "closed", "acpx.calls"):
+                    (self.root / leftover).unlink(missing_ok=True)
+                route.write_text(json.dumps({"agents": {"openclaw": {"command": command}}}))
+                result = self.run_cli(SPAWN, "spawn", "openclaw", "--cwd", str(self.cwd), "--as", self.address)
+                self.assertNotEqual(result.returncode, 0, result.stdout)
+                self.assertIn("--session", result.stderr)
+                self.assertIn(str(route), result.stderr)
+                self.assertFalse((self.root / "created").exists())
+                self.assertFalse(self.record.exists())
+
+    def test_openclaw_spawn_goes_ahead_when_its_acpx_route_pins_nothing(self):
+        route = self.home / ".acpx/config.json"
+        route.parent.mkdir(parents=True)
+        route.write_text(json.dumps({"agents": {"openclaw": {"command": "openclaw acp"}}}))
+        self.prepare_openclaw_spawn()
+        self.fake_openclaw_agents([("main", True)])
+        result = self.run_cli(SPAWN, "spawn", "openclaw", "--cwd", str(self.cwd), "--as", self.address)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue((self.root / "created").exists())
+
     def prepare_spawn(self, mode):
         self.record.unlink(missing_ok=True)
         config = self.home / ".config/sno-reach/agents.json"

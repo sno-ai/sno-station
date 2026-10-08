@@ -48,6 +48,13 @@ if [[ "$window" == no && -n "$adapter" ]]; then
     if [[ "$kind" == openclaw ]] && command -v openclaw >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; then
         # With several agents and none marked default, OpenClaw refuses the seat's first message ("Multiple agents are
         # configured, but session ... has no explicit owner"). Say so now instead of reporting a seat that cannot answer.
+        # A `--session` on the openclaw route in acpx's config pins every ACP session to that one conversation, so a
+        # seat would join the main conversation instead of keeping its own.
+        acpx_config="$HOME/.acpx/config.json"
+        if [[ -f "$acpx_config" ]] && jq -e '(.agents.openclaw // empty) | tostring | test("--session(-label)?([ =\"]|$)")' "$acpx_config" >/dev/null 2>&1; then
+            printf 'reach: the openclaw entry in %s sets --session, which would put every seat into that one conversation.\nreach: remove --session from it and spawn again.\n' "$acpx_config" >&2
+            exit 78
+        fi
         agents="$(timeout --foreground -k 2 20 openclaw agents list --json 2>/dev/null | sed -n '/^\[/,$p' || true)"
         if jq -e 'type == "array" and length > 1 and all(.[]; .isDefault != true)' <<<"$agents" >/dev/null 2>&1; then
             printf 'reach: OpenClaw has several agents (%s) and none is the default, so it will not take a seat that names no agent.\nreach: choose one with: openclaw config set agents.defaults.systemAgent.agentId <id>\n' "$(jq -r 'map(.id) | join(", ")' <<<"$agents")" >&2
