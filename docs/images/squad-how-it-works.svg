@@ -49,7 +49,7 @@
     <g transform="translate(580,440)">
       <rect width="440" height="82" rx="12" fill="#0d1b2b" fill-opacity="0.94" stroke="#21394c"/>
       <circle cx="28" cy="41" r="7" fill="#2dd4bf"/>
-      <text x="52" y="34" fill="#f8fafc" font-size="20" font-weight="700">Duo skills</text>
+      <text x="52" y="34" fill="#f8fafc" font-size="20" font-weight="700">Agent collaboration skills</text>
       <text x="52" y="60" fill="#aebccc" font-size="16">handoff · peer review · work orders</text>
     </g>
     <g transform="translate(580,536)">
