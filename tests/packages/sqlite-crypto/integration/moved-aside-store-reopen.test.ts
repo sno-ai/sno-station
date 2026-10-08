@@ -12,7 +12,7 @@
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
-import { dekFingerprint, openEncryptedDb } from "@snoai/sqlite-crypto";
+import { dekFingerprint, exportEncrypted, importEncrypted, openEncryptedDb } from "@snoai/sqlite-crypto";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { childNodeArgs, makeTestEnv, type TestEnv, uniqueDbPath } from "../_helpers.ts";
 
@@ -82,6 +82,30 @@ describe("a store moved aside, then a fresh one at the same path", () => {
 
 		// The next open must work: the committed new canary is adopted, not refused as another database's.
 		expect(() => openEncryptedDb(path, env.dek).close()).not.toThrow();
+	});
+
+	it("restores a backup of the old store over the new one that replaced it", async () => {
+		// A backup taken before the incident carries the old store's id; the manifest now holds the new store's.
+		const path = uniqueDbPath(env, "memory");
+		mkdirSync(dirname(path), { recursive: true });
+		const old = openEncryptedDb(path, env.dek);
+		old.exec("CREATE TABLE t (v TEXT)");
+		old.prepare("INSERT INTO t (v) VALUES (?)").run("old");
+		old.close();
+		const bundle = `${env.root}/backup.sno-station-core`;
+		await exportEncrypted(bundle, env.dek);
+		renameSync(path, `${path}.unreadable`);
+
+		const fresh = openEncryptedDb(path, env.dek);
+		fresh.exec("CREATE TABLE t (v TEXT)");
+		fresh.prepare("INSERT INTO t (v) VALUES (?)").run("new");
+		fresh.close();
+
+		await importEncrypted(bundle, env.dek);
+
+		const restored = openEncryptedDb(path, env.dek);
+		expect((restored.prepare("SELECT v FROM t").get() as { v: string }).v).toBe("old");
+		restored.close();
 	});
 
 	it("still refuses a registered store whose canary was removed in place", () => {

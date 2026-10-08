@@ -15,7 +15,7 @@ import {
 import { dirname, posix } from "node:path";
 import { gunzipSync } from "node:zlib";
 import { extract } from "tar-stream";
-import { _readCanaryForRecovery, assertStoreNotOpen } from "./db.js";
+import { _readCanaryForRecovery, _repointManifestEntryForRecovery, assertStoreNotOpen } from "./db.js";
 import {
 	ForeignDekError,
 	IntegrityCheckFailed,
@@ -152,11 +152,12 @@ async function extractTarball(plaintext: Buffer): Promise<TarEntry[]> {
 	});
 }
 
+/** Returns the database id the restored file holds: the file's own canary is its identity, not the entry the path is listed under. */
 function verifyRestoredDb(
 	dbPath: string,
 	entry: ManifestEntry,
 	dek: Dek,
-): void {
+): string {
 	let row: { sentinel: string; db_id: string } | undefined;
 	try {
 		row = _readCanaryForRecovery(dbPath, dek);
@@ -176,11 +177,7 @@ function verifyRestoredDb(
 			`InvalidExportFormat: restored archive entry '${entry.path}' has an invalid canary sentinel`,
 		);
 	}
-	if (row.db_id !== entry.dbId) {
-		throw new InvalidExportFormat(
-			`InvalidExportFormat: restored archive entry '${entry.path}' has db_id ${row.db_id}, expected ${entry.dbId}`,
-		);
-	}
+	return row.db_id;
 }
 
 export async function importEncrypted(sourcePath: string, dek: Dek): Promise<void> {
@@ -217,7 +214,7 @@ export async function importEncrypted(sourcePath: string, dek: Dek): Promise<voi
 	// store is replaced: a sidecar holding a store open would keep serving the
 	// old inode and lose every later write, and a refusal or a verification
 	// failure must leave all stores as they were.
-	const staged: Array<{ tmpPath: string; restorePath: string }> = [];
+	const staged: Array<{ tmpPath: string; restorePath: string; dbId: string }> = [];
 	try {
 		for (const { entry: e, manifestEntry } of targets) {
 			const restorePath = manifestEntry.path;
@@ -225,15 +222,16 @@ export async function importEncrypted(sourcePath: string, dek: Dek): Promise<voi
 			const tmpPath = `${restorePath}.import-${process.pid}-${Date.now().toString(36)}`;
 			mkdirSync(dirname(restorePath), { recursive: true });
 			writeFileSync(tmpPath, e.data, { mode: 0o600 });
-			staged.push({ tmpPath, restorePath });
-			verifyRestoredDb(tmpPath, manifestEntry, dek);
+			const dbId = verifyRestoredDb(tmpPath, manifestEntry, dek);
+			staged.push({ tmpPath, restorePath, dbId });
 		}
 	} catch (err) {
 		for (const { tmpPath } of staged) rmSync(tmpPath, { force: true });
 		throw err;
 	}
-	for (const { tmpPath, restorePath } of staged) {
+	for (const { tmpPath, restorePath, dbId } of staged) {
 		renameSync(tmpPath, restorePath);
+		_repointManifestEntryForRecovery(restorePath, dbId);
 		// The previous store's WAL and shm must not be replayed onto the restored file.
 		rmSync(`${restorePath}-wal`, { force: true });
 		rmSync(`${restorePath}-shm`, { force: true });
