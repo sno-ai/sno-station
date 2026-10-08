@@ -37,7 +37,7 @@ whatever language you use with your agent, and this README ships in nine.
 
 ## Install
 
-*Last updated 2026-10-07.* **Shared memory installs today.** It gives Claude Code, Codex, OpenClaw and Hermes Agent one encrypted memory on your machine, with no account and no API key. Install the `sno` command once, then run `sno setup` for each agent:
+*Last updated 2026-10-07.* **Shared memory installs today.** It gives Claude Code, Codex, OpenClaw and Hermes Agent one encrypted memory on your machine, with no account and no API key. The easiest way: tell your AI agent "install sno.ai from GitHub". Or install the `sno` command once, then run `sno setup` for each agent:
 
 ```bash
 # Install the sno command once
