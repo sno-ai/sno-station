@@ -9,11 +9,12 @@
  * id; the empty path is simply a new store, opened with the same key.
  */
 
+import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
-import { openEncryptedDb } from "@snoai/sqlite-crypto";
+import { dekFingerprint, openEncryptedDb } from "@snoai/sqlite-crypto";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { makeTestEnv, type TestEnv, uniqueDbPath } from "../_helpers.ts";
+import { childNodeArgs, makeTestEnv, type TestEnv, uniqueDbPath } from "../_helpers.ts";
 
 let env: TestEnv;
 
@@ -57,6 +58,31 @@ describe("a store moved aside, then a fresh one at the same path", () => {
 			expect(readFileSync(aside).equals(asideBefore)).toBe(true);
 		});
 	}
+
+	it("survives a crash between the new store's commit and the manifest write", () => {
+		// The manifest lists a store that is gone from this path. A new store is registered here and the process
+		// dies after the new canary is committed but before the manifest is written.
+		const path = `${env.snoStationCoreConfigDir}/dbs/killer.db`;
+		mkdirSync(dirname(path), { recursive: true });
+		writeFileSync(
+			env.manifestFile,
+			JSON.stringify({
+				schemaVersion: 1,
+				createdAt: new Date().toISOString(),
+				dbs: [{ path, dbId: "aaaaaaaaaaaaaaaa", dekFingerprint: dekFingerprint(env.dek) }],
+			}),
+		);
+		const killer = new URL("./fixtures/manifest-write-killer.mjs", import.meta.url).pathname;
+		const run = spawnSync(process.execPath, [...childNodeArgs(killer), env.keyHex], {
+			env: { ...process.env, SNO_STATION_CORE_CRASH_AFTER: "after-commit-before-manifest", SNO_STATION_CORE_DB_PATH: path },
+			timeout: 30_000,
+			encoding: "utf8",
+		});
+		expect(run.status !== 0 || run.signal !== null).toBe(true);
+
+		// The next open must work: the committed new canary is adopted, not refused as another database's.
+		expect(() => openEncryptedDb(path, env.dek).close()).not.toThrow();
+	});
 
 	it("still refuses a registered store whose canary was removed in place", () => {
 		// The path was not moved: the same file lost its canary table. That is damage, not a new store.
