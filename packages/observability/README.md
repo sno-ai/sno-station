@@ -2,7 +2,7 @@
 
 A private record of what your agents did, kept on your machine.
 
-When a plugin saves a memory or an agent runs a tool, this package writes it down. It scrubs secrets first and keeps the notes in a small local database under `~/.sno`. You decide how much leaves your machine: nothing, metadata only (what happened and when, which tool, never the text itself), or the full event details. Change it any time with `sno station telemetry consent set off`, `metadata-only` or `full`.
+When a plugin saves a memory or an agent runs a tool, this package writes it down. It scrubs secrets first and keeps the notes in a small local database under `~/.sno`. You decide how much leaves your machine: nothing, metadata only (what happened and when, which tool, never the text itself), or the full event details. Change it any time with `sno station consent off`, `metadata-only` or `full`.
 
 Most people never use this package directly. It comes with the Sno Station plugins. If you just want shared memory for your agents, start with the
 [shared memory setup](https://github.com/sno-ai/sno-station/blob/main/docs/memory-setup.md) and
