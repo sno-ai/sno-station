@@ -16,8 +16,8 @@ Global options on every command: `--json` (machine-readable output), `-h` / `--h
 | `sno uninstall [PRODUCT] [--yes] [--purge-state]` | Removes one product or all; without a name it lists what is installed | you |
 | `sno doctor` | Checks CLI version, installed products, skills, Station state | you or an agent |
 | `sno onboarding status` / `apply` / `verify` | Shows, configures, and proves the Station setup (writes and reads a test memory, delivers a test Reach message) | an agent |
-| `sno skills list` / `sno skills get [NAME]` | Lists or prints the agent instructions the CLI ships (core, onboard, rem-reflect-local-writer, cli) | an agent |
-| `sno products answer [PRODUCT] [yes\|no\|later]` | Records the user's actual answer to an optional-product offer; no answer lists pending offers | an agent |
+| `sno skills` / `sno skills [NAME]` | Lists the instructions your agent can read, or prints one | an agent |
+| `sno products [PRODUCT] [yes\|no\|later]` | Records your answer to an offer of an optional product; with no answer, lists the offers waiting | an agent |
 | `sno usage` | Shows remaining model allowance and purchased balance | you |
 
 ## 2. Account and computer
@@ -25,8 +25,8 @@ Global options on every command: `--json` (machine-readable output), `-h` / `--h
 | Command | What it does | Who |
 | --- | --- | --- |
 | `sno account login --email EMAIL` | Signs up or in and attaches this computer to the account | you |
-| `sno account machine register` | Registers this computer anonymously | an agent or a timer |
-| `sno account machine claim` | Prints a short code and link to attach this computer to an account | you |
+| `sno account register` | Registers this computer without an account | an agent or a timer |
+| `sno account claim` | Prints a short code and a link to attach this computer to your account | you |
 
 ## 3. Memory and events
 
@@ -48,10 +48,10 @@ Global options on every command: `--json` (machine-readable output), `-h` / `--h
 | Command | What it does | Who |
 | --- | --- | --- |
 | `sno station doctor` | Checks identity, telemetry, buffer and configuration | you or an agent |
-| `sno station telemetry consent get` / `consent set [off\|metadata-only\|full]` | Reads or sets what leaves this computer | you |
-| `sno station telemetry pause` / `resume` | Pauses or resumes cloud telemetry | you |
-| `sno station telemetry export [PATH]` | Exports local audit events | you |
-| `sno station audit verify [EVENT_ID]` | Verifies a stored event | you |
+| `sno station consent` / `sno station consent [off\|metadata-only\|full]` | Shows or changes what leaves this computer: nothing, metadata only, or full details | you |
+| `sno station pause` / `resume` | Stops or restarts sending data to Sno | you |
+| `sno station export [PATH]` | Saves the local record of events to a file | you |
+| `sno station audit [EVENT_ID]` | Checks one stored event | you |
 | `sno station rem-start --scope S` / `sno station rem-status [JOB_ID]` | Starts and reads a local nightly-improvement job | an agent or a timer |
 | `sno rem judge` / `recall` / `verdict JUDGMENT_ID VERDICT` | Sends a REM run, ranks lessons for a first message, sends a human verdict | an agent or a timer |
 | `sno rem-reflect run [--now TS] [--trigger timer\|manual]` / `accept` / `reject` / `tbd` / `recall [--first-message]` / `lesson` / `status` / `install-hooks` | The nightly self-reflection program and its lesson commands | an agent or a timer |
