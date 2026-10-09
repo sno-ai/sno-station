@@ -12,8 +12,7 @@ Hermes 使用 Python 插件连接 Sno 的共用记忆服务；记忆服务本身
 然后安装 Hermes 插件：
 
 ```bash
-sh -c 'sno_installer_body=$(curl -fsSL https://sno.ai/install) && printf "%s\n" "$sno_installer_body" | sh'
-sno setup --harness hermes
+sh -c 'sno_installer_body=$(curl -fsSL https://sno.ai/install) && printf "%s\n" "$sno_installer_body" | sh' && ~/.local/bin/sno setup --harness hermes
 ```
 
 `sno setup` 会从本仓库安装并启用插件（不需要另发一个 Python 包）；你没选过别的记忆提供者时，
