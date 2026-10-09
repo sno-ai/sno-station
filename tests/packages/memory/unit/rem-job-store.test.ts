@@ -84,6 +84,21 @@ describe("REM job store", () => {
 		expect(readFileSync(journalPath, "utf8").trim().split("\n").filter(Boolean)).toHaveLength(3);
 	});
 
+	it("never runs a failed automatic job again for the same pass, even after the service restarts", async () => {
+		// Only a skipped job is started again. A pass that failed keeps its job, so the next dispatches of that pass
+		// spend nothing; the automatic trigger therefore counts only refused passes toward the day's tries.
+		const journalPath = createJournalPath();
+		const store = await RemJobStore.open(journalPath);
+		const first = await store.createQueued(["rem-replace"], "persona:failed-repeat", "rem-auto-daily-failed");
+		await store.transition(first.job.job_id, { state: "running" });
+		await store.transition(first.job.job_id, { state: "failed", error: "REM LLM calls all failed" });
+		for (const opened of [store, await RemJobStore.open(journalPath)]) {
+			const again = await opened.createQueued(["rem-replace"], "persona:failed-repeat", "rem-auto-daily-failed");
+			expect({ created: again.created, job: again.job.job_id, waiting: opened.nonTerminalJobs().length })
+				.toEqual({ created: false, job: first.job.job_id, waiting: 0 });
+		}
+	});
+
 	it("rejects create and state updates when journal append or sync fails", async () => {
 		const results: PromiseSettledResult<unknown>[] = [];
 		for (const device of ["/dev/full", "/dev/null"]) {
