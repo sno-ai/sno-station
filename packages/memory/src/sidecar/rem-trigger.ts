@@ -367,6 +367,7 @@ async function applyCompletedBaselines(
 		string,
 		{ scope: string; trigger?: RemAutomaticTrigger; passAt?: string; localDate?: string }
 	>();
+	const skipsByCorrelation = new Map<string, number>();
 	let nextState = state;
 	let malformedCount = 0;
 	for (const line of content.split("\n")) {
@@ -395,9 +396,21 @@ async function applyCompletedBaselines(
 			}
 			if (entry["event"] === "rem_skipped" && typeof correlationId === "string") {
 				const skipped = dispatched.get(correlationId);
-				if (skipped && nextState.scopes[skipped.scope]?.attempts.identity === correlationId) {
+				const skips = (skipsByCorrelation.get(correlationId) ?? 0) + 1;
+				skipsByCorrelation.set(correlationId, skips);
+				const skippedScopeState = skipped ? nextState.scopes[skipped.scope] : undefined;
+				if (
+					skipped && skippedScopeState && skips >= REM_TRIGGER_ATTEMPT_LIMIT && isLocalDate(skipped.localDate)
+					&& (skippedScopeState.last_volume_pass_date ?? "") < skipped.localDate
+				) {
+					// Every registration re-runs the due check, so a pass its host keeps refusing would be dispatched
+					// again and again, each run re-embedding every row. After the third refusal the day is used up.
 					nextState = replaceScopeState(nextState, skipped.scope, {
-						...requiredScopeState(nextState, skipped.scope), attempts: { identity: null, count: 0 },
+						...skippedScopeState, last_volume_pass_date: skipped.localDate, attempts: { identity: null, count: 0 },
+					});
+				} else if (skipped && skippedScopeState?.attempts.identity === correlationId) {
+					nextState = replaceScopeState(nextState, skipped.scope, {
+						...skippedScopeState, attempts: { identity: null, count: 0 },
 					});
 				}
 				continue;
