@@ -225,7 +225,8 @@ export class MemoryRuntimePool {
 
 	connectedRemPort(): AgentLlmPort | undefined {
 		// Coding-agent workers leave after a few idle minutes and new ones register; a pass outlives several. Each
-		// call goes to the newest registration still there, and a host that has gone hands the call to the next.
+		// call goes to the newest registration still there; a host that has gone, or answers with an error such as
+		// worker-not-ready, hands the call to the next.
 		const hosts = () => [...this.skins.values()].reverse().filter(entry => entry.connected);
 		if (hosts().length === 0) return undefined;
 		return {
@@ -233,7 +234,7 @@ export class MemoryRuntimePool {
 				let result: AgentLlmCompletion = { kind: "error", category: "transport", message: "no-agent-endpoint" };
 				for (const entry of hosts()) {
 					result = await entry.agentPort.complete(request);
-					if (entry.connected) return result;
+					if (entry.connected && result.kind !== "error") return result;
 				}
 				return result;
 			},
