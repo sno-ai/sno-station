@@ -697,9 +697,11 @@ async function runChassisJob(
 			failure = error;
 			if (!writesApplied) {
 				if (error instanceof ModelCallRefusedError) await skipNonTerminalJob(store, queued.job_id, error.reason, error.callId, error.destination);
-				else await failNonTerminalJob(store, queued.job_id, errorMessage(error));
+				else await failNonTerminalJob(store, queued.job_id, errorMessage(error),
+					(await import("./rem-batch-executor")).takeRemJobModelCalls(queued.job_id));
 			}
 		} finally {
+			if (!failed || writesApplied) (await import("./rem-batch-executor")).takeRemJobModelCalls(queued.job_id);
 			let outcome = "empty-success";
 			if (failed) outcome = writesApplied ? "partial" : "failed";
 			else if (persistence === "unavailable") outcome = "partial";
@@ -763,11 +765,12 @@ async function failNonTerminalJob(
 	store: RemJobStore,
 	jobId: string,
 	reason: string,
+	modelCalls = 0,
 ): Promise<void> {
 	const current = store.get(jobId);
 	if (!current || (current.state !== "queued" && current.state !== "running")) return;
 	try {
-		await auditRem("rem_failed", current, { error: reason });
+		await auditRem("rem_failed", current, { error: reason, model_calls: modelCalls });
 		await store.transition(jobId, {
 			state: "failed",
 			finished_at: new Date().toISOString(),

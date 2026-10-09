@@ -398,11 +398,11 @@ async function applyCompletedBaselines(
 			const failed = entry["event"] === "rem_failed";
 			if ((entry["event"] === "rem_skipped" || failed) && typeof correlationId === "string") {
 				const stopped = dispatched.get(correlationId);
-				// A try counts when the pass ran and spent model calls: refused mid-run (only that skip names the model
-				// destination) or failed while running. A pass with no host connected, a restart recovery, and a
-				// dispatch that never reached the sidecar did no work and do not count.
+				// A try counts when the pass spent model calls: refused mid-run (only that skip names the model
+				// destination) or failed after at least one model call. A pass with no host connected, a restart
+				// recovery, a failure before any model call and a dispatch that never reached the sidecar do not count.
 				const spent = failed
-					? details?.["source"] === "sidecar" && details["error"] !== "sidecar_restart"
+					? details?.["source"] === "sidecar" && typeof details["model_calls"] === "number" && details["model_calls"] > 0
 					: typeof details?.["destination"] === "string";
 				const tries = (triesByCorrelation.get(correlationId) ?? 0) + (spent ? 1 : 0);
 				triesByCorrelation.set(correlationId, tries);
