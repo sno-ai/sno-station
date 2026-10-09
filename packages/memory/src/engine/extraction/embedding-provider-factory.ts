@@ -1,3 +1,4 @@
+import { availableParallelism } from "node:os";
 import {
 	type EmbeddingProvider,
 	LocalEmbedProvider,
@@ -48,7 +49,10 @@ export function buildProvider(config: EmbeddingConfig): EmbeddingProvider {
 		offline: config.offline,
 		mirror: config.mirror,
 		dtype: config.dtype,
-		sessionOptions: config.sessionOptions,
+		// No thread count means automatic. ONNX alone would take every core, so a background pass would pin the whole
+		// machine; and every provider in a process must agree, because they share one pipeline.
+		sessionOptions: { ...config.sessionOptions,
+			intraOpNumThreads: config.sessionOptions?.intraOpNumThreads ?? Math.max(1, Math.min(4, Math.floor(availableParallelism() / 2))) },
 		...(config.model !== undefined ? { model: config.model } : {}),
 		...(config.revision !== undefined ? { revision: config.revision } : {}),
 		...(config.nativeDim !== undefined ? { nativeDim: config.nativeDim } : {}),

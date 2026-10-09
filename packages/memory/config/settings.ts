@@ -1,6 +1,5 @@
 import { LOCAL_EMBEDDING_MODEL_REVISION } from "@snoai/embedder";
 import { isLowercaseCanonicalUUIDv7 } from "@snoai/common-core";
-import { availableParallelism } from "node:os";
 import { z } from "zod";
 import { CANDIDATE_POOL_SIZE, DEFAULT_SESSION_MESSAGE_COUNT, EMBEDDER_MODEL_DEFAULT } from "./index";
 import { PRODUCT_MODES, type ProductMode } from "./plugin-config-mode-schema";
@@ -114,8 +113,7 @@ export function settingsToPluginConfig(settings: Settings): import("./plugin-con
 		embedding: { model: settings.embedding.model, revision: settings.embedding.revision || undefined,
 			dtype: settings.embedding.dtype, cacheDir: settings.embedding.cacheDir || undefined,
 			offline: settings.embedding.offline, mirror: settings.embedding.mirror,
-			// 0 means automatic: ONNX alone would take every core, so a background pass would pin the whole machine.
-			sessionOptions: { intraOpNumThreads: settings.embedding.threads || Math.max(1, Math.min(4, Math.floor(availableParallelism() / 2))) } },
+			sessionOptions: { intraOpNumThreads: settings.embedding.threads || undefined } },
 		retrieval: { rerank: settings.rerank.mode, rerankProvider: settings.rerank.provider,
 			recallTopK: settings.recall.prompt.limit, minScore: settings.recall.prompt.minScore,
 			rerankEndpoint: settings.rerank.endpoint || undefined, rerankModel: settings.rerank.model,

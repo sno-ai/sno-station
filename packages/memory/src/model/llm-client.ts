@@ -306,7 +306,7 @@ function textSystemContent(request: MemoryLlmRequest): string {
 }
 
 /** Creates the LLM client facade with provider routing, key rotation, and JSON parsing. */
-export function createLlmClient(config: LlmClientConfig & { refuseOnUnavailable?: boolean }): LlmClient {
+export function createLlmClient(config: LlmClientConfig & { refuseOnUnavailable?: boolean; hostRequired?: boolean }): LlmClient {
 	let presetPromise: Promise<ResolvedLlmConfig> | null = null;
 	const getPreset = () => {
 		presetPromise ??= resolveSignedPreset(config.preset).catch((error: unknown) => {
@@ -469,6 +469,11 @@ export function createLlmClient(config: LlmClientConfig & { refuseOnUnavailable?
 				return null;
 			}
 			return { raw: result.text, transport };
+		}
+		// A REM pass whose later stages need the host gains nothing from a GPU verdict once no host is left to
+		// answer them: it ends rem_skipped at the next host call, and every verdict in between is wasted.
+		if (config.hostRequired && config.agentPort?.reachable && !(await config.agentPort.reachable())) {
+			throw new ModelCallRefusedError(request.callId, "host", "no-agent-endpoint");
 		}
 		const endpoint = await getEndpoint(request.callId, transport);
 		checkMemoryOperation();
