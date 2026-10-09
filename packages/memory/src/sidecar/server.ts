@@ -701,7 +701,8 @@ async function runChassisJob(
 					(await import("./rem-batch-executor")).takeRemJobModelCalls(queued.job_id));
 			}
 		} finally {
-			if (!failed || writesApplied) (await import("./rem-batch-executor")).takeRemJobModelCalls(queued.job_id);
+			// Every job's count is dropped here, whichever way it ended; a failure already read it above.
+			(await import("./rem-batch-executor")).takeRemJobModelCalls(queued.job_id);
 			let outcome = "empty-success";
 			if (failed) outcome = writesApplied ? "partial" : "failed";
 			else if (persistence === "unavailable") outcome = "partial";
