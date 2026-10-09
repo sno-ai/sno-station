@@ -396,7 +396,9 @@ async function applyCompletedBaselines(
 			}
 			if (entry["event"] === "rem_skipped" && typeof correlationId === "string") {
 				const skipped = dispatched.get(correlationId);
-				const skips = (skipsByCorrelation.get(correlationId) ?? 0) + 1;
+				// Only a pass refused mid-run names the model destination; a restart recovery or a pass with no host
+				// connected skips before any work and does not count toward the day's tries.
+				const skips = (skipsByCorrelation.get(correlationId) ?? 0) + (typeof details?.["destination"] === "string" ? 1 : 0);
 				skipsByCorrelation.set(correlationId, skips);
 				const skippedScopeState = skipped ? nextState.scopes[skipped.scope] : undefined;
 				if (
