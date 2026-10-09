@@ -35,7 +35,7 @@ Sno Station 是你的 agent 的工作站：一款开源软件，它把你已经�
 
 ## Install
 
-*最后更新于 2026-10-07。* **共享记忆今天就能安装。** 它让 Claude Code、Codex、OpenClaw 和 Hermes Agent 共用一份存放在你自己机器上的加密记忆，不需要账号，也不需要 API key。先运行一次[共享记忆设置](../memory-setup.md)（几分钟），再添加你的 agent：
+*最后更新于 2026-10-09。* **共享记忆今天就能安装。** 它让 Claude Code、Codex、OpenClaw 和 Hermes Agent 共用一份存放在你自己机器上的加密记忆，不需要账号，也不需要 API key。先运行一次[共享记忆设置](../memory-setup.md)（几分钟），再添加你的 agent：
 
 ```bash
 sh -c 'sno_installer_body=$(curl -fsSL https://sno.ai/install) && printf "%s\n" "$sno_installer_body" | sh' && ~/.local/bin/sno setup
@@ -144,7 +144,7 @@ agent 已经在工作，第一个带着 1% 的余量签退。交接之前的每�
 
 ## Memory that forgets on purpose
 
-*最后更新于 2026-09-19。*
+*最后更新于 2026-10-09。*
 
 记忆是这个产品的地基，而不是它的头条。但地基恰恰是大多数 agent 记忆系统失败的地方，
 而且失败得悄无声息，有两种方式：它忘记了本该留下的东西，也留下了本该衰减的东西。
