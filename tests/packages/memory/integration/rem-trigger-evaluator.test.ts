@@ -295,6 +295,30 @@ describe("REM automatic trigger", () => {
 		}
 	});
 
+	it("after a pass fails in the sidecar, waits for the next day and then dispatches a new pass", async () => {
+		// The sidecar never starts a failed job again for the same pass. Before, the same daily pass identity was
+		// dispatched forever and nothing ran: one failure stopped that scope's nightly pass for good.
+		const fixture = createFixture(1);
+		const requests: Array<{ body: unknown; correlationId: string }> = [];
+		const discoveryPath = await startSidecar(requests, 202);
+		await seedState(fixture, {
+			last_pass_at: "2026-08-11T12:00:00.000Z", schedule_zone: "UTC", last_covered_count: 1,
+			last_volume_pass_date: null, missed_window: null, attempts: { identity: null, count: 0 },
+		});
+		const evaluate = (now: string) => evaluateRemAutomaticTriggers({ modelCalls, database: fixture.database.runtime.db,
+			stateDir: fixture.stateDir, requestedOperations: ["rem-update"], now: new Date(now), discoveryPath });
+		await evaluate("2026-08-12T12:00:00.000Z");
+		appendFileSync(path.join(fixture.stateDir, "audit.jsonl"), `${JSON.stringify({
+			timestamp: "2026-08-12T12:10:00.000Z", event: "rem_failed", resultStatus: "error", scope: fixture.scope,
+			details: { correlation_id: requests[0]?.correlationId, source: "sidecar", error: "REM LLM calls all failed: transport" },
+		})}\n`, "utf8");
+		await evaluate("2026-08-12T13:00:00.000Z");
+		const sameDay = requests.length;
+		await evaluate("2026-08-13T04:00:00.000Z");
+		expect({ sameDay, nextDay: requests.length, newPass: requests[1]?.correlationId !== requests[0]?.correlationId })
+			.toEqual({ sameDay: 1, nextDay: 2, newPass: true });
+	});
+
 	it("uses a separate volume identity without moving the daily clock", async () => {
 		const fixture = createFixture(101);
 		const requests: Array<{ body: unknown; correlationId: string }> = [];

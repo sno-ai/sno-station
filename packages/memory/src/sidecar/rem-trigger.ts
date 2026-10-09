@@ -224,7 +224,7 @@ async function evaluateScope(
 	const zone = scopeState.schedule_zone;
 	// At most one automatic pass per local day, whichever trigger comes first (owner ruling
 	// 2026-09-16). `last_volume_pass_date` is the local day whose pass is used up: a completed
-	// volume pass sets it, so does a completed daily pass, and so does a third pass refused mid-run
+	// volume pass sets it, so does a completed daily pass, a failed pass, and a third pass refused mid-run
 	// (all in applyCompletedBaselines). A used-up
 	// day closes the volume trigger and moves the daily pass to the next day's schedule.
 	const nextDue = nextDailyDue(scopeState);
@@ -398,8 +398,8 @@ async function applyCompletedBaselines(
 			if (entry["event"] === "rem_skipped" && typeof correlationId === "string") {
 				const skipped = dispatched.get(correlationId);
 				// Only a pass refused mid-run names the model destination; a restart recovery or a pass with no host
-				// connected skips before any work and does not count toward the day's tries. A failed pass needs no
-				// count: its job is never started again for the same pass.
+				// connected skips before any work and does not count toward the day's tries. A failed pass is handled
+				// below.
 				const tries = (triesByCorrelation.get(correlationId) ?? 0) + (typeof details?.["destination"] === "string" ? 1 : 0);
 				triesByCorrelation.set(correlationId, tries);
 				const skippedScopeState = skipped ? nextState.scopes[skipped.scope] : undefined;
@@ -415,6 +415,20 @@ async function applyCompletedBaselines(
 				} else if (skipped && skippedScopeState?.attempts.identity === correlationId) {
 					nextState = replaceScopeState(nextState, skipped.scope, {
 						...skippedScopeState, attempts: { identity: null, count: 0 },
+					});
+				}
+				continue;
+			}
+			if (entry["event"] === "rem_failed" && details?.["source"] === "sidecar" && typeof correlationId === "string") {
+				// The sidecar never starts a failed job again for the same pass, so dispatching that pass again runs
+				// nothing and the scope's nightly pass would stop for good. A failed pass uses up its day; the next
+				// day's schedule is a new pass.
+				const failed = dispatched.get(correlationId);
+				const failedScopeState = failed ? nextState.scopes[failed.scope] : undefined;
+				if (failed && failedScopeState && isLocalDate(failed.localDate)
+					&& (failedScopeState.last_volume_pass_date ?? "") < failed.localDate) {
+					nextState = replaceScopeState(nextState, failed.scope, {
+						...failedScopeState, last_volume_pass_date: failed.localDate, attempts: { identity: null, count: 0 },
 					});
 				}
 				continue;
