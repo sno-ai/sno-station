@@ -441,6 +441,31 @@ describe("Local First REM runs only while a host answers", () => {
 			.toEqual({ firstJobs: 1, jobsAfterReconnect: 2, completed: 1, rejudged: refusedRows, held: [] });
 	});
 
+	it("stops dispatching a pass its host keeps refusing after three tries, however often hosts connect", { timeout: 240_000 }, async () => {
+		// Every hook that registers a model re-runs the due check. Before the fix each refused pass ended rem_skipped,
+		// the skip cleared the attempt, and the next registration dispatched the same pass again: on a busy machine the
+		// same daily pass ran fifty times in a day, each run re-embedding every row on every core.
+		const sno = await recorder("sno");
+		const host = await recorder("host", "exhausted");
+		pointSnoGpuAt(sno.url);
+		const scope = await seedRemRows(TRANSITION_ROWS);
+		seedDueTriggerState(scope);
+		sidecar = await startRemSidecar();
+		const settled = () => lines("rem-wave-jobs.jsonl").map(line => JSON.parse(line) as { waveId: string; state: string })
+			.reduce((latest, job) => latest.set(job.waveId, job.state), new Map<string, string>());
+		for (let connection = 0; connection < 6; connection += 1) {
+			const before = jobIds().length;
+			await registerHost("host-skin", host.url);
+			await until(() => jobIds().length > before, 5_000);
+			await until(() => [...settled().values()].every(state => state !== "running" && state !== "queued"), 60_000);
+		}
+		const state = JSON.parse(readFileSync(join(root, "sno-station-mem", "rem-trigger-state.json"), "utf8")) as {
+			scopes: Record<string, { last_volume_pass_date: string | null }> };
+		expect({ jobs: jobIds().length, skipped: [...settled().values()].filter(job => job === "skipped").length,
+			dayClosed: state.scopes[scope]?.last_volume_pass_date === new Date().toISOString().slice(0, 10), snoCalls: sno.calls })
+			.toEqual({ jobs: 3, skipped: 3, dayClosed: true, snoCalls: [] });
+	});
+
 	it("refuses a manual start with no connected registration and invents no job", { timeout: 60_000 }, async () => {
 		const sno = await recorder("sno");
 		pointSnoGpuAt(sno.url);
