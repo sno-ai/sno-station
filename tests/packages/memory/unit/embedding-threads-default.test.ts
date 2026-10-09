@@ -14,7 +14,8 @@ describe("embedding threads", () => {
 		// With no thread count ONNX uses every core: a background REM pass held all 32 cores of a workstation.
 		const automatic = threadsFor(0);
 		expect(automatic).toBeGreaterThanOrEqual(1);
-		expect(automatic).toBeLessThanOrEqual(Math.max(1, Math.min(4, Math.floor(availableParallelism() / 2))));
+		expect(automatic).toBeLessThanOrEqual(4);
+		expect(automatic).toBeLessThanOrEqual(Math.max(1, Math.floor(availableParallelism() / 2)));
 	});
 
 	it("uses an explicit thread count as given", () => {

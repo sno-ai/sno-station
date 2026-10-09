@@ -224,7 +224,8 @@ async function evaluateScope(
 	const zone = scopeState.schedule_zone;
 	// At most one automatic pass per local day, whichever trigger comes first (owner ruling
 	// 2026-09-16). `last_volume_pass_date` is the local day whose pass is used up: a completed
-	// volume pass sets it, and so does a completed daily pass (applyCompletedBaselines). A used-up
+	// volume pass sets it, so does a completed daily pass, and so does a third pass refused mid-run
+	// (all in applyCompletedBaselines). A used-up
 	// day closes the volume trigger and moves the daily pass to the next day's schedule.
 	const nextDue = nextDailyDue(scopeState);
 	const localDate = localDateAt(now, zone);
