@@ -369,8 +369,9 @@ describe("Local First REM runs only while a host answers", () => {
 		seedDueTriggerState(await seedRemRows(TRANSITION_ROWS));
 		vi.stubEnv("SNO_STATION_MEM_MAINTENANCE_INTERVAL_MS", "500");
 		sidecar = await startRemSidecar();
-		// Opens the memory runtime, and with it the tick, through a registration without a model callback.
-		expect((await contractPost("/v1/inspect", { scope: SEED_SCOPE, op: { op: "stats" } }, "reader")).status).toBe(200);
+		// Opens the memory runtime, and with it the tick, through a registration without a model callback. A read-only
+		// stats request no longer starts background work, so it cannot stand in for one.
+		expect((await contractPost("/v1/init", { scope: { ...SEED_SCOPE, session: "reader" }, registration: { skinId: "reader" } }, "reader")).status).toBe(200);
 		await until(() => auditEvents("rem_trigger_evaluated").length > 0, 10_000);
 		await delay(1_500);
 		expect({
