@@ -124,3 +124,29 @@ function completionText(body: unknown): string | undefined {
 	const message = first.message;
 	return message && typeof message === "object" && "content" in message && typeof message.content === "string" ? message.content : undefined;
 }
+
+/** Hosts in the order to ask them, newest first; `connected` turns false once a host is known to have gone. */
+type HostEntry = { agentPort: RegisteredAgentPort; connected: boolean };
+
+/** Asks the newest host first; a host that has gone, or answers with an error such as worker-not-ready, hands the
+ * call to the next. */
+export function hostChain(hosts: () => HostEntry[]): AgentLlmPort {
+	return {
+		complete: async request => {
+			// One deadline for the whole call: a later host gets only the time the earlier ones left.
+			const deadline = Date.now() + (request.timeoutMs ?? CALLBACK_TIMEOUT_MS);
+			let result: AgentLlmCompletion = { kind: "error", category: "transport", message: "no-agent-endpoint" };
+			for (const entry of hosts()) {
+				const timeoutMs = deadline - Date.now();
+				if (timeoutMs <= 0) return { kind: "cancelled", reason: "deadline" };
+				result = await entry.agentPort.complete({ ...request, timeoutMs });
+				if (entry.connected && result.kind !== "error") return result;
+			}
+			return result;
+		},
+		reachable: async () => {
+			for (const entry of hosts()) if (await entry.agentPort.reachable()) return true;
+			return false;
+		},
+	};
+}
