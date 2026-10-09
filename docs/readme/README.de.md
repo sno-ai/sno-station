@@ -40,7 +40,7 @@ verwenden, und dieses README erscheint in neun Sprachen.
 
 ## Install
 
-*Zuletzt aktualisiert am 2026-10-07.* **Das gemeinsame Gedächtnis lässt sich heute installieren.** Es gibt Claude Code, Codex, OpenClaw und Hermes Agent ein verschlüsseltes Gedächtnis auf Ihrem Rechner, ohne Konto und ohne API-Schlüssel. Führen Sie die [Einrichtung des gemeinsamen Gedächtnisses](../memory-setup.md) einmal aus (ein paar Minuten) und fügen Sie dann Ihren Agenten hinzu:
+*Zuletzt aktualisiert am 2026-10-09.* **Das gemeinsame Gedächtnis lässt sich heute installieren.** Es gibt Claude Code, Codex, OpenClaw und Hermes Agent ein verschlüsseltes Gedächtnis auf Ihrem Rechner, ohne Konto und ohne API-Schlüssel. Führen Sie die [Einrichtung des gemeinsamen Gedächtnisses](../memory-setup.md) einmal aus (ein paar Minuten) und fügen Sie dann Ihren Agenten hinzu:
 
 ```bash
 sh -c 'sno_installer_body=$(curl -fsSL https://sno.ai/install) && printf "%s\n" "$sno_installer_body" | sh' && ~/.local/bin/sno setup
@@ -165,7 +165,7 @@ Eine Zeile sagt „bewiesen" erst, wenn sie auf einer sauberen Maschine gelaufen
 
 ## Memory that forgets on purpose
 
-*Zuletzt aktualisiert am 2026-09-19.*
+*Zuletzt aktualisiert am 2026-10-09.*
 
 Gedächtnis ist das Fundament dieses Produkts, nicht die Schlagzeile. Aber am Fundament
 scheitert das Gedächtnis der meisten Agenten, und zwar auf zwei stille Arten: Es vergisst,
