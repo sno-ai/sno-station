@@ -1,5 +1,6 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { createHash } from "node:crypto";
+import { connect } from "node:net";
 import { z } from "zod";
 import { ContractError, type DegradedReason } from "../contract/error";
 import type { Registration } from "../contract/inputs";
@@ -37,6 +38,20 @@ export class RegisteredAgentPort implements AgentLlmPort {
 			});
 			return result;
 		});
+	}
+
+	async reachable(): Promise<boolean> {
+		if (!this.model) return false;
+		const url = new URL(this.model.baseUrl);
+		const listening = await new Promise<boolean>(resolve => {
+			const socket = connect({ host: url.hostname, port: Number(url.port || (url.protocol === "https:" ? 443 : 80)) });
+			const done = (open: boolean) => { socket.destroy(); resolve(open); };
+			socket.setTimeout(2_000, () => done(false));
+			socket.once("connect", () => done(true));
+			socket.once("error", () => done(false));
+		});
+		if (!listening) this.onRefused?.();
+		return listening;
 	}
 
 	async complete(request: AgentLlmRequest): Promise<AgentLlmCompletion> {

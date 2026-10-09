@@ -224,7 +224,7 @@ async function evaluateScope(
 	const zone = scopeState.schedule_zone;
 	// At most one automatic pass per local day, whichever trigger comes first (owner ruling
 	// 2026-09-16). `last_volume_pass_date` is the local day whose pass is used up: a completed
-	// volume pass sets it, so does a completed daily pass, and so does a third pass refused mid-run
+	// volume pass sets it, so does a completed daily pass, and so does a third pass refused or failed mid-run
 	// (all in applyCompletedBaselines). A used-up
 	// day closes the volume trigger and moves the daily pass to the next day's schedule.
 	const nextDue = nextDailyDue(scopeState);
@@ -368,7 +368,7 @@ async function applyCompletedBaselines(
 		string,
 		{ scope: string; trigger?: RemAutomaticTrigger; passAt?: string; localDate?: string }
 	>();
-	const skipsByCorrelation = new Map<string, number>();
+	const triesByCorrelation = new Map<string, number>();
 	let nextState = state;
 	let malformedCount = 0;
 	for (const line of content.split("\n")) {
@@ -395,25 +395,31 @@ async function applyCompletedBaselines(
 				});
 				continue;
 			}
-			if (entry["event"] === "rem_skipped" && typeof correlationId === "string") {
-				const skipped = dispatched.get(correlationId);
-				// Only a pass refused mid-run names the model destination; a restart recovery or a pass with no host
-				// connected skips before any work and does not count toward the day's tries.
-				const skips = (skipsByCorrelation.get(correlationId) ?? 0) + (typeof details?.["destination"] === "string" ? 1 : 0);
-				skipsByCorrelation.set(correlationId, skips);
-				const skippedScopeState = skipped ? nextState.scopes[skipped.scope] : undefined;
+			const failed = entry["event"] === "rem_failed";
+			if ((entry["event"] === "rem_skipped" || failed) && typeof correlationId === "string") {
+				const stopped = dispatched.get(correlationId);
+				// A try counts when the pass ran and spent model calls: refused mid-run (only that skip names the model
+				// destination) or failed while running. A pass with no host connected, a restart recovery, and a
+				// dispatch that never reached the sidecar did no work and do not count.
+				const spent = failed
+					? details?.["source"] === "sidecar" && details["error"] !== "sidecar_restart"
+					: typeof details?.["destination"] === "string";
+				const tries = (triesByCorrelation.get(correlationId) ?? 0) + (spent ? 1 : 0);
+				triesByCorrelation.set(correlationId, tries);
+				const stoppedScopeState = stopped ? nextState.scopes[stopped.scope] : undefined;
 				if (
-					skipped && skippedScopeState && skips >= REM_TRIGGER_ATTEMPT_LIMIT && isLocalDate(skipped.localDate)
-					&& (skippedScopeState.last_volume_pass_date ?? "") < skipped.localDate
+					stopped && stoppedScopeState && tries >= REM_TRIGGER_ATTEMPT_LIMIT && isLocalDate(stopped.localDate)
+					&& (stoppedScopeState.last_volume_pass_date ?? "") < stopped.localDate
 				) {
-					// Every registration re-runs the due check, so a pass its host keeps refusing would be dispatched
-					// again and again, each run re-embedding every row. After the third refusal the day is used up.
-					nextState = replaceScopeState(nextState, skipped.scope, {
-						...skippedScopeState, last_volume_pass_date: skipped.localDate, attempts: { identity: null, count: 0 },
+					// Every registration re-runs the due check, so a pass that keeps being refused or keeps failing would
+					// be dispatched again and again, sending the same model calls each time. After the third try the day
+					// is used up.
+					nextState = replaceScopeState(nextState, stopped.scope, {
+						...stoppedScopeState, last_volume_pass_date: stopped.localDate, attempts: { identity: null, count: 0 },
 					});
-				} else if (skipped && skippedScopeState?.attempts.identity === correlationId) {
-					nextState = replaceScopeState(nextState, skipped.scope, {
-						...skippedScopeState, attempts: { identity: null, count: 0 },
+				} else if (!failed && stopped && stoppedScopeState?.attempts.identity === correlationId) {
+					nextState = replaceScopeState(nextState, stopped.scope, {
+						...stoppedScopeState, attempts: { identity: null, count: 0 },
 					});
 				}
 				continue;

@@ -295,6 +295,35 @@ describe("REM automatic trigger", () => {
 		}
 	});
 
+	it("closes the day after three passes that ran and failed, but not after restarts", async () => {
+		// A pass that fails on every model call (a Sno GPU that keeps answering errors) was dispatched again at every
+		// registration, without end: each run sent the GPU the same verdict requests again.
+		for (const [error, closed] of [["sidecar_restart", false], ["REM LLM calls all failed: transport", true]] as const) {
+			const fixture = createFixture(1);
+			const requests: Array<{ body: unknown; correlationId: string }> = [];
+			const discoveryPath = await startSidecar(requests, 202);
+			const now = new Date("2026-08-12T12:00:00.000Z");
+			await seedState(fixture, {
+				last_pass_at: "2026-08-11T12:00:00.000Z", schedule_zone: "UTC", last_covered_count: 1,
+				last_volume_pass_date: null, missed_window: null, attempts: { identity: null, count: 0 },
+			});
+			const evaluate = () => evaluateRemAutomaticTriggers({ modelCalls, database: fixture.database.runtime.db,
+				stateDir: fixture.stateDir, requestedOperations: ["rem-update"], now, discoveryPath });
+			for (let attempt = 0; attempt < 3; attempt += 1) {
+				await evaluate();
+				appendFileSync(path.join(fixture.stateDir, "audit.jsonl"), `${JSON.stringify({
+					timestamp: "2026-08-12T12:01:00.000Z", event: "rem_failed", resultStatus: "error", scope: fixture.scope,
+					details: { correlation_id: requests.at(-1)?.correlationId, source: "sidecar", error },
+				})}\n`, "utf8");
+			}
+			await evaluate();
+			expect({ error, dispatched: requests.length, closedDay: (await loadRemTriggerState(fixture.stateDir)).scopes[fixture.scope]?.last_volume_pass_date })
+				.toEqual({ error, dispatched: closed ? 3 : 4, closedDay: closed ? "2026-08-12" : null });
+			await new Promise<void>((resolve) => server?.close(() => resolve()));
+			server = undefined;
+		}
+	});
+
 	it("uses a separate volume identity without moving the daily clock", async () => {
 		const fixture = createFixture(101);
 		const requests: Array<{ body: unknown; correlationId: string }> = [];

@@ -31,6 +31,7 @@ import { readChunkVecTableState } from "../store/connection";
 import { initSqliteRuntime } from "../store/sqlite-runtime";
 import { startMaintenanceTimer, uniformMaintenanceIntervals, type MaintenanceTimerHandle } from "../store/maintenance";
 import { RegisteredAgentPort } from "../model/registered-agent-port";
+import type { AgentLlmCompletion, AgentLlmPort } from "../model/agent-llm-port";
 import { evaluateRemAutomaticTriggers } from "./rem-trigger";
 import { withProviderResponses } from "../model/llm-provider-transport";
 import type { ProviderResponseTrace } from "../model/llm-client-types";
@@ -222,8 +223,25 @@ export class MemoryRuntimePool {
 		} catch (error) { await this.dispose(entry); throw error; }
 	}
 
-	connectedRemPort(): RegisteredAgentPort | undefined {
-		return [...this.skins.values()].reverse().find(entry => entry.connected)?.agentPort;
+	connectedRemPort(): AgentLlmPort | undefined {
+		// Coding-agent workers leave after a few idle minutes and new ones register; a pass outlives several. Each
+		// call goes to the newest registration still there, and a host that has gone hands the call to the next.
+		const hosts = () => [...this.skins.values()].reverse().filter(entry => entry.connected);
+		if (hosts().length === 0) return undefined;
+		return {
+			complete: async request => {
+				let result: AgentLlmCompletion = { kind: "error", category: "transport", message: "no-agent-endpoint" };
+				for (const entry of hosts()) {
+					result = await entry.agentPort.complete(request);
+					if (entry.connected) return result;
+				}
+				return result;
+			},
+			reachable: async () => {
+				for (const entry of hosts()) if (await entry.agentPort.reachable()) return true;
+				return false;
+			},
+		};
 	}
 
 	async invoke(method: ContractMethod, raw: unknown, skinId: string, signal?: AbortSignal): Promise<ContractOutputs[ContractMethod]> {

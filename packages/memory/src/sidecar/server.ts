@@ -548,7 +548,10 @@ async function runChassisJob(
 		});
 		let writesApplied = false;
 		try {
-			if (remNeedsHost(runtime.config.mode, runtime.settings.modelCalls) && !runtime.connectedRemPort()) {
+			// A registration whose worker has since left still counts as connected until a call fails; check that a
+			// host answers before the pass spends anything.
+			const host = runtime.connectedRemPort();
+			if (remNeedsHost(runtime.config.mode, runtime.settings.modelCalls) && !(host && await (host.reachable?.() ?? true))) {
 				await skipNonTerminalJob(store, queued.job_id, "no host model connected");
 				return;
 			}

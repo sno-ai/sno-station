@@ -54,4 +54,6 @@ export type AgentLlmCompletion =
 
 export interface AgentLlmPort {
 	complete(request: AgentLlmRequest): Promise<AgentLlmCompletion>;
+	/** Whether a host is listening to answer the next call; absent means the port cannot tell. */
+	reachable?(): Promise<boolean>;
 }
