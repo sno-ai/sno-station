@@ -1,6 +1,6 @@
 {
   "name": "@snoai/mem-claude",
-  "version": "1.2.4",
+  "version": "1.2.5",
   "license": "Apache-2.0",
   "publishConfig": { "access": "public" },
   "repository": {
