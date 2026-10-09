@@ -195,42 +195,7 @@ That is the exam Sno Station's memory was built to pass, and it is the reason th
 improves itself: what gets kept, what gets retired, and how a later fact supersedes an
 earlier one all change with use, not with a model release.
 
-![Memora weekly track: FAMA and forgetting cost, Sno Station against the paper's six agents](docs/images/memora-forgetting-cost.png)
-
-**Our result on the paper's weekly track** (six personas, ninety questions, one formal run,
-2026-09-06; [all ninety answers, judgments, and traces](evals/memora/formal-run-2026-09-06/)
-are here):
-
-| | Remember | Reason | Recommend | **FAMA** | MPA (recall alone) | Forgetting cost |
-|---|---:|---:|---:|---:|---:|---:|
-| **Sno Station** | 77.4 | 93.3 | 90.9 | **87.2** | 91.0 | **3.76 pts (4.1% of recall)** |
-| LangMem (paper) | 71.2 | 30.0 | 48.9 | 50.0 | 57.7 | 7.70 (13.3%) |
-| Nemori (paper) | 65.1 | 18.7 | 52.8 | 45.5 | 53.1 | 7.60 (14.3%) |
-| MemoryOS (paper) | 51.8 | 20.7 | 62.6 | 45.0 | 51.7 | 6.70 (13.0%) |
-| MemoBase (paper) | 43.6 | 18.0 | 68.9 | 43.5 | 51.5 | 8.00 (15.5%) |
-| A-Mem (paper) | 71.8 | 2.0 | 35.0 | 36.3 | 39.3 | 3.00 (7.6%) |
-| Mem-0 (paper) | 40.4 | 16.0 | 52.6 | 36.3 | 39.8 | 3.50 (8.8%) |
-
-How to read it, honestly:
-
-- **Forgetting cost** is MPA minus FAMA: the points a system loses to stale facts. Read it as
-  a share of the system's own recall, never as raw points. A-Mem and Mem-0 lose fewer raw
-  points only because they recall so little that there is little left to lose.
-- **Reasoning** (combining several memories) is where the published field is weakest, 2 to 30
-  out of 100. Ours is 93.3.
-- The paper's six agents were scored with the paper's judge (GPT-4o-mini); ours with our own
-  judge stack, recomputed with the paper's per-question penalty formula (§4.2). Directional
-  comparison, not a certified one. Our FAA (share of cancelled facts correctly left out) is
-  measured at 0.833; the paper does not publish FAA per agent, so no competitor FAA is shown.
-
-The other three evidence sets follow the same rule: one selected result each, with the underlying
-answers or retrieval records in `evals/`:
-
-| Benchmark | What it measures | Result |
-|---|---|---|
-| **LoCoMo** | Long-conversation QA, 1542 questions | 96.76% (merged answer set: questions still wrong after each fix were re-answered, already-correct ones carried over; the receipt says so) |
-| **R@5** on LongMemEval-S (500 questions) | Retrieval: is the right memory in the top five | 95.4% (R@10 98.6, R@20 99.4) |
-| **Sno Memory Bench** | 23 end-to-end probes of our own, including keep-versus-retire cases the public benchmarks do not cover | 23 of 23 |
+Every result, with all the answers, judgments and traces behind it, is in [`evals/`](evals/).
 
 ## Design partners
 

@@ -194,44 +194,7 @@ Grund, warum sich das Gedächtnis selbst verbessert: Was behalten wird, was ausg
 wird und wie eine spätere Tatsache eine frühere ersetzt, ändert sich mit der Nutzung, nicht
 mit einem Modell-Release.
 
-![Memora Weekly Track: FAMA und Forgetting Cost, Sno Station gegen die sechs Agenten aus dem Paper](../images/memora-forgetting-cost.png)
-
-**Unser Ergebnis auf dem Weekly Track des Papers** (sechs Personas, neunzig Fragen, ein
-formaler Lauf, 2026-09-06; [alle neunzig Antworten, Bewertungen und Traces](../../evals/memora/formal-run-2026-09-06/)
-sind hier):
-
-| | Erinnern | Schlussfolgern | Empfehlen | **FAMA** | MPA (nur Recall) | Forgetting Cost |
-|---|---:|---:|---:|---:|---:|---:|
-| **Sno Station** | 77.4 | 93.3 | 90.9 | **87.2** | 91.0 | **3.76 pts (4.1% of recall)** |
-| LangMem (paper) | 71.2 | 30.0 | 48.9 | 50.0 | 57.7 | 7.70 (13.3%) |
-| Nemori (paper) | 65.1 | 18.7 | 52.8 | 45.5 | 53.1 | 7.60 (14.3%) |
-| MemoryOS (paper) | 51.8 | 20.7 | 62.6 | 45.0 | 51.7 | 6.70 (13.0%) |
-| MemoBase (paper) | 43.6 | 18.0 | 68.9 | 43.5 | 51.5 | 8.00 (15.5%) |
-| A-Mem (paper) | 71.8 | 2.0 | 35.0 | 36.3 | 39.3 | 3.00 (7.6%) |
-| Mem-0 (paper) | 40.4 | 16.0 | 52.6 | 36.3 | 39.8 | 3.50 (8.8%) |
-
-Wie man das ehrlich liest:
-
-- **Forgetting Cost** ist MPA minus FAMA: die Punkte, die ein System durch veraltete Fakten
-  verliert. Lesen Sie das als Anteil am eigenen Recall des Systems, nie als Rohpunkte. A-Mem
-  und Mem-0 verlieren nur deshalb weniger Rohpunkte, weil sie so wenig erinnern, dass wenig
-  übrig bleibt, das verloren gehen könnte.
-- **Reasoning** (das Kombinieren mehrerer Erinnerungen) ist dort, wo das veröffentlichte
-  Feld am schwächsten ist, 2 bis 30 von 100. Unseres liegt bei 93.3.
-- Die sechs Agenten des Papers wurden mit dem Judge des Papers bewertet (GPT-4o-mini);
-  unsere mit unserem eigenen Judge-Stack, neu berechnet mit der Pro-Frage-Strafformel des
-  Papers (§4.2). Ein richtungsweisender Vergleich, kein zertifizierter. Unser FAA (Anteil
-  der stornierten Fakten, die korrekt ausgelassen wurden) liegt gemessen bei 0.833; das
-  Paper veröffentlicht FAA nicht pro Agent, daher wird kein FAA eines Konkurrenten gezeigt.
-
-Die anderen drei Evidenzsätze folgen derselben Regel: je ein ausgewähltes Ergebnis, mit den
-zugrunde liegenden Antworten oder Abrufdaten in `evals/`:
-
-| Benchmark | Was gemessen wird | Ergebnis |
-|---|---|---|
-| **LoCoMo** | Long-Conversation-QA, 1542 Fragen | 96.76% (zusammengeführter Antwortsatz: Fragen, die nach jeder Korrektur noch falsch waren, wurden erneut beantwortet, bereits korrekte übernommen; der Beleg sagt das so) |
-| **R@5** auf LongMemEval-S (500 Fragen) | Retrieval: ist die richtige Erinnerung in den Top 5 | 95.4% (R@10 98.6, R@20 99.4) |
-| **Sno Memory Bench** | 23 eigene End-to-End-Proben, einschließlich Keep-versus-Retire-Fällen, die die öffentlichen Benchmarks nicht abdecken | 23 of 23 |
+Alle Ergebnisse samt der zugrunde liegenden Antworten, Bewertungen und Traces liegen in [`evals/`](../../evals/).
 
 ## Design partners
 

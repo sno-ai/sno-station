@@ -185,44 +185,7 @@ Accuracy) は、再現率から、エージェントがまだ頼っている古�
 理由でもあります。何を保持し、何を引退させ、後の事実がどのように以前の事実に取って
 代わるかは、すべてモデルのリリースではなく、使用とともに変化します。
 
-![Memora weekly track: FAMA and forgetting cost, Sno Station against the paper's six agents](../images/memora-forgetting-cost.png)
-
-**論文のウィークリートラックにおける私たちの結果**(6人のペルソナ、90問、正式実行1回、
-2026-09-06。[90問すべての回答、判定、トレース](../../evals/memora/formal-run-2026-09-06/)
-はこちらです):
-
-| | Remember | Reason | Recommend | **FAMA** | MPA (recall alone) | Forgetting cost |
-|---|---:|---:|---:|---:|---:|---:|
-| **Sno Station** | 77.4 | 93.3 | 90.9 | **87.2** | 91.0 | **3.76 pts (4.1% of recall)** |
-| LangMem (paper) | 71.2 | 30.0 | 48.9 | 50.0 | 57.7 | 7.70 (13.3%) |
-| Nemori (paper) | 65.1 | 18.7 | 52.8 | 45.5 | 53.1 | 7.60 (14.3%) |
-| MemoryOS (paper) | 51.8 | 20.7 | 62.6 | 45.0 | 51.7 | 6.70 (13.0%) |
-| MemoBase (paper) | 43.6 | 18.0 | 68.9 | 43.5 | 51.5 | 8.00 (15.5%) |
-| A-Mem (paper) | 71.8 | 2.0 | 35.0 | 36.3 | 39.3 | 3.00 (7.6%) |
-| Mem-0 (paper) | 40.4 | 16.0 | 52.6 | 36.3 | 39.8 | 3.50 (8.8%) |
-
-これを誠実に読むなら:
-
-- **Forgetting cost** は MPA から FAMA を引いたもの、つまり古い事実によってシステムが
-  失うポイントです。これは生のポイントとしてではなく、そのシステム自身の再現率に対する
-  割合として読んでください。A-Mem と Mem-0 が失う生のポイントが少ないのは、そもそも
-  再現する量が少なく、失うものがほとんどないからにすぎません。
-- **Reasoning**(複数の記憶を組み合わせること)は、公開されているこの分野で最も弱い
-  部分で、100点満点中2から30点です。私たちのものは93.3です。
-- 論文の6つのエージェントは論文のジャッジ(GPT-4o-mini)でスコアされました。私たちの
-  ものは私たち自身のジャッジスタックで、論文の質問ごとのペナルティ計算式(§4.2)を
-  使って再計算しています。方向性としての比較であり、認証されたものではありません。
-  私たちの FAA(正しく除外されたキャンセル済み事実の割合)は0.833と測定されています。
-  論文はエージェントごとの FAA を公開していないため、競合の FAA は表示していません。
-
-残り3つの証拠セットも同じルールです。それぞれ1つの正式な結果を選び、その回答または
-検索記録を `evals/` に収録しています:
-
-| Benchmark | What it measures | Result |
-|---|---|---|
-| **LoCoMo** | Long-conversation QA, 1542 questions | 96.76% (merged answer set: questions still wrong after each fix were re-answered, already-correct ones carried over; the receipt says so) |
-| **R@5** on LongMemEval-S (500 questions) | Retrieval: is the right memory in the top five | 95.4% (R@10 98.6, R@20 99.4) |
-| **Sno Memory Bench** | 23 end-to-end probes of our own, including keep-versus-retire cases the public benchmarks do not cover | 23 of 23 |
+すべての結果と、その元になった回答・評価・トレースは [`evals/`](../../evals/) にあります。
 
 ## Design partners
 
