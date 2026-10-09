@@ -306,6 +306,40 @@ describe("REM Enhanced spends no Sno GPU call without a host that can still answ
 			.toEqual({ skipped: true, rem1OnSno: 1, hostCalls: 0, skip: [["no-agent-endpoint", "host"]] });
 	});
 
+	it("a pass that fails after its model calls records how many it sent", { timeout: 180_000 }, async () => {
+		// The day's three tries count a failed pass only when it spent model calls, so the failure must carry the count.
+		await seedPairs();
+		notDue();
+		const host = await recorder();
+		const sno = await startRecorder(closers, () => modelReply("not a verdict", true));
+		pointSnoGpuAt("rem-enhanced", sno.url);
+		sidecar = await startRemSidecar();
+		await registerHost("host-skin", host.url);
+		await startPass();
+		await until(settled);
+		const failure = auditEvents("rem_failed").map(line => JSON.parse(line).details as { model_calls?: number });
+		expect({ failed: failure.length, modelCalls: (failure[0]?.model_calls ?? 0) > 0, snoCalls: sno.calls.length > 0 })
+			.toEqual({ failed: 1, modelCalls: true, snoCalls: true });
+	});
+
+	it("moves to an older host when the newest one answers that it is not ready", { timeout: 180_000 }, async () => {
+		await seedPairs();
+		notDue();
+		const older = await recorder();
+		// Still listening, but its worker refuses every call with a typed 503 (worker-not-ready).
+		const newest = await recorder({ refuse: () => true });
+		const sno = await recorder({ refuse: () => false, keepFirstPair: true });
+		pointSnoGpuAt("rem-enhanced", sno.url);
+		sidecar = await startRemSidecar();
+		await registerHost("older-skin", older.url);
+		await registerHost("host-skin", newest.url);
+		await startPass();
+		await until(settled);
+		expect({ completed: auditEvents("rem_completed").length, skipped: skipped(), refusedOnNewest: remSet(newest).includes("REM2"),
+			answeredOnOlder: remSet(older).includes("REM2") })
+			.toEqual({ completed: 1, skipped: false, refusedOnNewest: true, answeredOnOlder: true });
+	});
+
 	it("moves to another connected host when the one it started with has gone", { timeout: 180_000 }, async () => {
 		await seedPairs();
 		notDue();

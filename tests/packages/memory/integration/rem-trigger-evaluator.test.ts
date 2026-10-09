@@ -295,10 +295,15 @@ describe("REM automatic trigger", () => {
 		}
 	});
 
-	it("closes the day after three passes that ran and failed, but not after restarts", async () => {
+	it("closes the day after three passes that failed after model calls, but not after failures before any", async () => {
 		// A pass that fails on every model call (a Sno GPU that keeps answering errors) was dispatched again at every
-		// registration, without end: each run sent the GPU the same verdict requests again.
-		for (const [error, closed] of [["sidecar_restart", false], ["REM LLM calls all failed: transport", true]] as const) {
+		// registration, without end: each run sent the GPU the same verdict requests again. A failure before any model
+		// call (the database would not open, a restart) cost nothing and must not use up the day.
+		for (const [error, modelCalls, closed] of [
+			["sidecar_restart", undefined, false],
+			["database_open_failed", 0, false],
+			["REM LLM calls all failed: transport", 12, true],
+		] as const) {
 			const fixture = createFixture(1);
 			const requests: Array<{ body: unknown; correlationId: string }> = [];
 			const discoveryPath = await startSidecar(requests, 202);
@@ -313,7 +318,8 @@ describe("REM automatic trigger", () => {
 				await evaluate();
 				appendFileSync(path.join(fixture.stateDir, "audit.jsonl"), `${JSON.stringify({
 					timestamp: "2026-08-12T12:01:00.000Z", event: "rem_failed", resultStatus: "error", scope: fixture.scope,
-					details: { correlation_id: requests.at(-1)?.correlationId, source: "sidecar", error },
+					details: { correlation_id: requests.at(-1)?.correlationId, source: "sidecar", error,
+						...(modelCalls === undefined ? {} : { model_calls: modelCalls }) },
 				})}\n`, "utf8");
 			}
 			await evaluate();

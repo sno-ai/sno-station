@@ -620,6 +620,14 @@ export async function runWithCanonicalStoreWriteMutex<T>(
 	}
 }
 
+/** Model calls each REM job has sent so far, so a failed job can say whether it spent any. */
+const modelCallsByJob = new Map<string, number>();
+export function takeRemJobModelCalls(jobId: string): number {
+	const calls = modelCallsByJob.get(jobId) ?? 0;
+	modelCallsByJob.delete(jobId);
+	return calls;
+}
+
 async function openBatchRuntime(input: {
 	settings: Settings;
 	mode?: ProductMode;
@@ -665,6 +673,7 @@ async function openBatchRuntime(input: {
 			agentPort: input.agentPort,
 			refuseOnUnavailable: true,
 			hostRequired: remNeedsHost(input.mode ?? pluginConfig.mode, settings.modelCalls),
+			onTransportAttempt: () => { modelCallsByJob.set(input.jobId, (modelCallsByJob.get(input.jobId) ?? 0) + 1); },
 			routing: pickLlmRoutingConfig({ mode: input.mode ?? pluginConfig.mode, modelCalls: settings.modelCalls }),
 			onProviderResponse: ({ callId, destination, provider, requestId, model, usage }) => {
 				log.info("llm_provider_response", {
