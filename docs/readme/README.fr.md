@@ -184,44 +184,7 @@ C'est l'examen que la mémoire de Sno Station a été construite pour réussir, 
 laquelle la mémoire s'améliore elle-même : ce qui est gardé, ce qui est retiré, et comment un fait
 ultérieur en remplace un antérieur, tout cela change avec l'usage, pas avec une sortie de modèle.
 
-![Memora weekly track: FAMA and forgetting cost, Sno Station against the paper's six agents](../images/memora-forgetting-cost.png)
-
-**Notre résultat sur le parcours hebdomadaire de l'article** (six personas, quatre-vingt-dix
-questions, une exécution formelle, le 2026-09-06 ; [les quatre-vingt-dix réponses, jugements et
-traces](../../evals/memora/formal-run-2026-09-06/) sont ici) :
-
-| | Remember | Reason | Recommend | **FAMA** | MPA (rappel seul) | Coût de l'oubli |
-|---|---:|---:|---:|---:|---:|---:|
-| **Sno Station** | 77.4 | 93.3 | 90.9 | **87.2** | 91.0 | **3.76 pts (4.1% du rappel)** |
-| LangMem (paper) | 71.2 | 30.0 | 48.9 | 50.0 | 57.7 | 7.70 (13.3%) |
-| Nemori (paper) | 65.1 | 18.7 | 52.8 | 45.5 | 53.1 | 7.60 (14.3%) |
-| MemoryOS (paper) | 51.8 | 20.7 | 62.6 | 45.0 | 51.7 | 6.70 (13.0%) |
-| MemoBase (paper) | 43.6 | 18.0 | 68.9 | 43.5 | 51.5 | 8.00 (15.5%) |
-| A-Mem (paper) | 71.8 | 2.0 | 35.0 | 36.3 | 39.3 | 3.00 (7.6%) |
-| Mem-0 (paper) | 40.4 | 16.0 | 52.6 | 36.3 | 39.8 | 3.50 (8.8%) |
-
-Comment le lire, honnêtement :
-
-- Le **coût de l'oubli** est MPA moins FAMA : les points qu'un système perd à cause de faits
-  obsolètes. Lisez-le comme une part du rappel propre du système, jamais comme des points bruts.
-  A-Mem et Mem-0 perdent moins de points bruts seulement parce qu'ils rappellent si peu qu'il reste
-  peu de chose à perdre.
-- Le **raisonnement** (combiner plusieurs souvenirs) est le point le plus faible du champ publié, de
-  2 à 30 sur 100. Le nôtre est à 93.3.
-- Les six agents de l'article ont été notés avec le juge de l'article (GPT-4o-mini) ; les nôtres avec
-  notre propre pile de juges, recalculée avec la formule de pénalité par question de l'article (§4.2).
-  Comparaison directionnelle, pas certifiée. Notre FAA (part des faits annulés correctement laissés
-  de côté) est mesurée à 0.833 ; l'article ne publie pas de FAA par agent, donc aucune FAA de
-  concurrent n'est affichée.
-
-Les trois autres ensembles de preuves suivent la même règle : un résultat sélectionné chacun,
-avec les réponses ou les enregistrements de récupération dans `evals/` :
-
-| Benchmark | Ce qu'il mesure | Résultat |
-|---|---|---|
-| **LoCoMo** | QA sur conversation longue, 1542 questions | 96.76% (ensemble de réponses fusionné : les questions encore fausses après chaque correction ont été répondues à nouveau, les déjà correctes ont été reportées ; le reçu le précise) |
-| **R@5** sur LongMemEval-S (500 questions) | Récupération : le bon souvenir est-il dans le top cinq | 95.4% (R@10 98.6, R@20 99.4) |
-| **Sno Memory Bench** | 23 tests de bout en bout maison, y compris des cas garder-contre-retirer que les benchmarks publics ne couvrent pas | 23 sur 23 |
+Tous les résultats, avec les réponses, jugements et traces qui les fondent, sont dans [`evals/`](../../evals/).
 
 ## Partenaires de conception
 
