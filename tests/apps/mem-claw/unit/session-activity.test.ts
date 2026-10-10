@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -13,6 +13,12 @@ const context = { sessionId: "session-a", sessionKey: "agent:main:session-a" };
 beforeEach(() => {
 	root = mkdtempSync(join(tmpdir(), "claw-activity-"));
 	vi.stubEnv("SNO_PROFILE_DIR", root);
+	// A sno on PATH that records its arguments: the hook must send the row through `sno observe append`, not just write a file.
+	const bin = join(root, "bin");
+	mkdirSync(bin);
+	writeFileSync(join(bin, "sno"), `#!/bin/sh\nprintf '%s\\n' "$*" >> "${join(root, "sno-calls.log")}"\n[ -n "$SNO_FAKE_FAIL" ] && { echo "sno is down" >&2; exit 1; }\nexit 0\n`);
+	chmodSync(join(bin, "sno"), 0o755);
+	vi.stubEnv("PATH", `${bin}:${process.env.PATH}`);
 	vi.useFakeTimers();
 	vi.setSystemTime(1_800_000_000_000);
 	writeSettingsFixture(root, { recall: { auto: false } });
@@ -30,8 +36,14 @@ async function turn(prompt: string, session = context): Promise<void> {
 	await handlers.get("agent_end")?.({ success: true, messages: [] }, session);
 }
 function rows(): Record<string, unknown>[] {
-	const path = join(root, "observe", "ledger.jsonl");
-	return existsSync(path) ? readFileSync(path, "utf8").trim().split("\n").map(line => JSON.parse(line)) : [];
+	const path = join(root, "sno-calls.log");
+	const sent = existsSync(path) ? readFileSync(path, "utf8").trim().split("\n").filter(line => line.startsWith("observe append session.activity ")) : [];
+	return sent.map(line => {
+		const flags = Object.fromEntries(line.split(" ").filter(part => part.startsWith("--")).map(part => part.slice(2).split("=") as [string, string]));
+		const { agent, harness, ...numbers } = flags;
+		return { agent_id: agent, event_type: "session.activity", lane: "memory", ts_ms: Number(numbers["window_end_ms"]),
+			payload: { harness, ...Object.fromEntries(Object.entries(numbers).map(([key, value]) => [key, Number(value)])) } };
+	});
 }
 
 it("records a human turn even when memory capture is unavailable", async () => {
@@ -61,11 +73,10 @@ it.each([
 		active_ms: 60_000, team_driven_ms: 60_000, runs_over_12h: 0, longest_run_ms: 60_000, human_messages: 0,
 	}]);
 });
-it("continues the turn after a ledger write fails", async () => {
+it("continues the turn after sending the row fails", async () => {
 	let diagnostic = "";
 	vi.spyOn(process.stderr, "write").mockImplementation(chunk => { diagnostic += String(chunk); return true; });
-	mkdirSync(join(root, "observe", "ledger.jsonl"), { recursive: true });
+	vi.stubEnv("SNO_FAKE_FAIL", "1");
 	await expect(turn("Fix the command")).resolves.toBeUndefined();
 	expect(diagnostic).toContain("session-activity failed; no session.activity row for this window; host turn continues");
-	expect(diagnostic).toContain('"code":"EISDIR"');
 });
