@@ -1,0 +1,101 @@
+#!/usr/bin/env bash
+# sno reach cursor-hook prompt|stop — Reach inside a Cursor conversation, run as a Cursor hook.
+#
+# Reads the hook input JSON on stdin and prints one Cursor answer on stdout: `{}`,
+# `{"additional_context": ...}` (prompt) or `{"followup_message": ...}` (stop). It always exits 0,
+# so a Reach failure never blocks the chat; every failure is logged to stderr and reach.log.
+#
+#   prompt  the Reach reminder for the seat named by SNO_REACH_ADDR (a tmux CLI seat), else for
+#           the IDE seat registered for this conversation_id; `{}` when the chat is not a seat.
+#   stop    `{}` at once unless conversation_id is an IDE seat. For an IDE seat it waits for an
+#           actionable card this seat has not yet seen and returns it as the next user message.
+#           With none it returns a one-word keep-alive, so the next stop waits again: that is
+#           what keeps an idle IDE chat reachable.
+set -Eeuo pipefail
+
+release="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+root="${SNO_REACH_ROOT:-$HOME/.local/state/sno-reach}"
+event="${1-}"
+# CURSOR_STOP_WAIT: the stop hook's timeout that sno setup writes (measured: the IDE honours 3600 s).
+# The wait stops 10 s short of it to answer in time. The variable shortens it only for tests.
+readonly CURSOR_STOP_WAIT="${SNO_REACH_CURSOR_STOP_WAIT:-3600}"
+readonly STOP_WAIT=$((CURSOR_STOP_WAIT - 10))
+readonly POLL_SECONDS=2
+# The first line is fixed: the memory client skips turns that start with it.
+readonly KEEPALIVE=$'[Sno Reach keep-alive]\nNo Reach card arrived for this chat. Answer with the single word idle and end your turn.'
+
+answer='{}'
+log() {
+    printf 'reach cursor-hook %s: %s\n' "$event" "$1" >&2
+    { printf 'reach cursor-hook %s: %s\n' "$event" "$1" >>"$root/reach.log"; } 2>/dev/null || true
+}
+trap 'log "failed at line $LINENO (exit $?); answering {}"; answer="{}"' ERR
+trap 'printf "%s\n" "$answer"; exit 0' EXIT
+
+ide_seat() { # conversation id → the address of the IDE seat registered for it
+    local record
+    for record in "$root"/*/reachable.json; do
+        [[ -f "$record" ]] || continue
+        if jq -e --arg id "$1" '.channel == "cursor-ide" and .identity.value == $id' "$record" >/dev/null 2>&1; then
+            jq -r '.address' "$record"
+            return 0
+        fi
+    done
+    return 1
+}
+
+input="$(cat)"
+id="$(jq -r '.conversation_id // empty' <<<"$input")"
+
+case "$event" in
+    prompt)
+        address="${SNO_REACH_ADDR:-}"
+        if [[ -z "$address" || ! -d "$root/$address" ]]; then
+            address="$(ide_seat "$id")" || exit 0
+        fi
+        if ! reminder="$("$release/lib/reach-main" remind --as "$address")"; then
+            log "remind for $address failed; no reminder this prompt"
+            exit 0
+        fi
+        [[ -z "$reminder" ]] || answer="$(jq -nc --arg text "$reminder" '{additional_context: $text}')"
+        ;;
+    stop)
+        # Only a turn that ended on its own waits. A person who pressed stop (aborted) gets {} at
+        # once, so the chat they stopped is never restarted.
+        case "$(jq -r '.status // empty' <<<"$input")" in completed | error) ;; *) exit 0 ;; esac
+        address="$(ide_seat "$id")" || exit 0
+        maildir="$root/$address"
+        deadline=$((SECONDS + STOP_WAIT))
+        cards=()
+        while :; do
+            seen_before="$(jq -r '.path' "$maildir/seen.jsonl" 2>/dev/null || true)"
+            # Only a file in new/ that the seat has not seen is worth an inbox read.
+            fresh=no
+            for card in "$maildir/new/"*; do
+                [[ -f "$card" ]] && ! grep -Fxq -- "$card" <<<"$seen_before" && fresh=yes && break
+            done
+            if [[ "$fresh" == yes ]]; then
+                # inbox records what it lists as seen, so a card is handed over once.
+                listing="$("$release/lib/reach-main" inbox --as "$address")"
+                while IFS=$'\t' read -r card _; do
+                    [[ -n "$card" ]] || continue
+                    grep -Fxq -- "$card" <<<"$seen_before" || cards+=("$card")
+                done <<<"$listing"
+            fi
+            ((${#cards[@]} == 0 && SECONDS < deadline)) || break
+            sleep "$POLL_SECONDS"
+        done
+        if ((${#cards[@]} == 0)); then
+            answer="$(jq -nc --arg text "$KEEPALIVE" '{followup_message: $text}')"
+            exit 0
+        fi
+        text="REACH-RING Guide: $release/guide/agent-reach.md. State: $root. Seat: $address. Delivered by the mail transport, not typed by the owner. Handle each card below through its original path, as the guide says."
+        for card in "${cards[@]}"; do
+            text+=$'\n\n'"Card: $card"$'\n'"$(cat -- "$card")"
+        done
+        answer="$(jq -nc --arg text "$text" '{followup_message: $text}')"
+        ;;
+    *)
+        log "unknown event '$event'; expected prompt or stop"
+        ;;
+esac

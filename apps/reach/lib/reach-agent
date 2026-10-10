@@ -24,8 +24,9 @@ case "$kind" in
         [[ -z "$model" ]] || model_args=(-m "$model")
         exec hermes chat --yolo "${model_args[@]}" "${provider_args[@]}" --query "$context" ;;
     openclaw) exec openclaw tui --session "$SNO_REACH_SESSION_ID" ;;
-    cursor-agent)
+    # --trust keeps a new checkout's workspace-trust question from holding the seat.
+    cursor)
         [[ -z "$model" ]] || model_args=(--model "$model")
-        exec cursor-agent "${model_args[@]}" "$context" ;;
+        exec cursor-agent --force --trust "${model_args[@]}" "$context" ;;
     *) exec "$kind" "$context" ;;
 esac

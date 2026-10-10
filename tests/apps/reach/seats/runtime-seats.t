@@ -104,7 +104,7 @@ def wait_file(path):
     assert path.exists(),path
 host=subprocess.check_output(['hostname'],text=True).strip()
 seats={}
-for kind in (['hermes'] if sys.argv[2:]==['selection'] else ['openclaw'] if sys.argv[2:] in (['timeout'],['openclaw']) else ['claude','codex','hermes','openclaw','cursor-agent']):
+for kind in (['hermes'] if sys.argv[2:]==['selection'] else ['openclaw'] if sys.argv[2:] in (['timeout'],['openclaw']) else ['claude','codex','hermes','openclaw','cursor']):
     seat='executor.'+kind+'@'+host;seats[kind]=seat
     ok('init','--as',seat,'--name','Fixture')
     flags=['--window']
@@ -132,7 +132,7 @@ for kind in (['hermes'] if sys.argv[2:]==['selection'] else ['openclaw'] if sys.
         assert launch[2][3:]==['--model','chosen/model',context],launch
     elif kind=='codex':assert launch[2]==['--dangerously-bypass-approvals-and-sandbox','-m','chosen/model',context],launch
     elif kind=='hermes':assert launch[2]==['chat','--yolo','-m','chosen/model','--provider','chosen-provider','--query',context],launch
-    elif kind=='cursor-agent':assert launch[2]==['--model','chosen/model',context],launch
+    elif kind=='cursor':assert launch[2]==['--force','--trust','--model','chosen/model',context],launch
     else:
         assert launch[2][:2]==['tui','--session'] and len(launch[2])==3,launch
         assert re.fullmatch(r'agent:research:reach-[0-9a-f]{12}',launch[2][2]),launch
@@ -145,7 +145,7 @@ for kind in (['hermes'] if sys.argv[2:]==['selection'] else ['openclaw'] if sys.
         keys=[json.loads(s) for s in (root/'keys.jsonl').read_text().splitlines()]
         assert ['send-keys','-t',pane,'-l','--','/model anthropic/claude-sonnet-5'] in keys,keys
         assert lines[1].endswith('Then do this: '+context),lines
-    assert json.loads((root/'state'/seat/'seat.json').read_text())['runtime']==kind
+    assert json.loads((root/'state'/seat/'seat.json').read_text())['runtime']==('cursor-agent' if kind=='cursor' else kind)
     print('PASS launch:',kind,flush=True)
 
 if sys.argv[2:]==['openclaw']:
@@ -266,7 +266,7 @@ for kind,expected in [
     ('codex',['--dangerously-bypass-approvals-and-sandbox','literal startup']),
     ('hermes',['chat','--yolo','--query','literal startup']),
     ('openclaw',['tui','--session','reach-fixture']),
-    ('cursor-agent',['literal startup'])]:
+    ('cursor',['--force','--trust','literal startup'])]:
     r=subprocess.run([str(app/'lib/reach-agent'),kind,'literal startup'],
         env=env|{'SNO_REACH_ADDR':seats[kind],'SNO_REACH_SESSION_ID':'reach-fixture'},
         stdin=subprocess.DEVNULL,capture_output=True,text=True,timeout=5)
@@ -392,7 +392,7 @@ for kind,comm,args in [('codex','codex','/bin/runtime'),('claude','worker','/opt
                          ('openclaw','openclaw-tui','openclaw-tui'),
                          ('openclaw','openclaw-tui','/bin/runtime'),
                          ('openclaw','node','node /opt/openclaw-tui'),
-                         ('cursor-agent','node','node /opt/cursor-agent')]:
+                         ('cursor','node','node /opt/cursor-agent')]:
     (root/'tree.json').write_text(json.dumps({'comm':comm,'args':args}))
     r=ok('ring',seats[kind]);assert r.stdout=='rang-unverified\n',(r.stdout,r.stderr)
     if kind=='hermes':

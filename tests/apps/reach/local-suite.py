@@ -46,7 +46,8 @@ cases("reachability-wake.t", "lifecycle doorbell-measurement")
 CASES.append(("ACP integration", ["bash", str(HERE / "seats/acp-communication.t")]))
 for script in ("default-environment.t", "remote-protocol.t", "seats/call-no-background.t", "seats/call-tmux.t",
                "seats/call-real-tmux.t", "seats/call-foreign-pipe.t", "seats/call-short-popup.t", "seats/call-echo-receipt.t", "seats/registered-tmux.t",
-               "seats/ring-reregistration.t", "seats/ring-real-tmux.t", "seats/ring-channel.t"):
+               "seats/ring-reregistration.t", "seats/ring-real-tmux.t", "seats/ring-channel.t",
+               "seats/cursor-spawn.t", "seats/cursor-heartbeat.t", "seats/cursor-ide.t"):
     CASES.append((script, ["bash", str(HERE / script)]))
 # Start the genuinely long, isolated groups first. The result order is stable.
 priority = {"seats/ring-real-tmux.t": 0, "seats/call-tmux.t": 1, "ACP integration": 2}

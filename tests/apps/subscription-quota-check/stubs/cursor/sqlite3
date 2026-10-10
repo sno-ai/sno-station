@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# Boundary fake for sqlite3 reading the Cursor IDE login store; answers only the token query.
+set -Eeuo pipefail
+[[ "$1" == -readonly && "$2" == */Library/Application\ Support/Cursor/User/globalStorage/state.vscdb &&
+   "$3" == "SELECT value FROM ItemTable WHERE key = 'cursorAuth/accessToken'" ]] ||
+	{ printf 'sqlite3 stub: unexpected %s\n' "$*" >&2; exit 2; }
+printf 'ide-store-secret-token\n'

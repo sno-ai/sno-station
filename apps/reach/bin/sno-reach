@@ -2,6 +2,9 @@
 # Keep terminal signals in the caller while timeout owns one private invocation.
 set -Eeuo pipefail
 release="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/.." && pwd)"
+# A Cursor stop hook waits up to an hour for a card, past the 290 s deadline below; Cursor's own
+# hook timeout bounds it instead.
+[[ "${1-}" != cursor-hook ]] || exec "$release/lib/reach-cursor-hook" "${@:2}"
 invocation=''
 finish() {
     local status=$?

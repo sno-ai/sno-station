@@ -162,7 +162,7 @@ package|manifest|refusal)
       if [[ "$app" == report-time ]]; then
         dependencies='["bash","date","sed","cat","awk","ps","tr","getconf"]'
       elif [[ "$app" == subscription-quota-check ]]; then
-        dependencies='["bash","jq","timeout","date","mkfifo","codex","claude","heartbeat"]'
+        dependencies='["bash","jq","timeout","date","mkfifo","heartbeat"]'
       fi
       jq -e --arg app "$app" --arg version "$(<"$release/VERSION")" --arg hash "$digest" \
         --argjson dependencies "$dependencies" '

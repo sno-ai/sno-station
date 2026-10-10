@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Boundary fake for macOS (BSD) sed: `-i` takes the next argument as its backup suffix, so the
+# GNU form `sed -i 'script' file` reads the file name as the script and fails, as on a Mac.
+set -Eeuo pipefail
+[[ "${1:-}" != -i ]] || { printf 'sed: 1: "%s": invalid command code %s\n' "${3:-}" "${3:0:1}" >&2; exit 1; }
+exec /usr/bin/sed "$@"

@@ -471,15 +471,22 @@ transcript_files() {
 				printf '%s\n' "$file"
 			fi
 		done < <(find "${CODEX_HOME:-$HOME/.codex}/sessions" -name 'rollout-*.jsonl' -newermt "@$transcript_since" -print0 2>/dev/null)
+	elif [[ "$transcript_path" == cursor-transcript ]]; then
+		# Cursor records no cwd in its transcripts; every chat written since the spawn is a
+		# candidate and the receipt selects the seat's own.
+		find "$HOME/.cursor/projects" -path '*/agent-transcripts/*' -name '*.jsonl' -newermt "@$transcript_since" 2>/dev/null
 	else
 		printf '%s\n' "$transcript_path"
 	fi
 }
 transcript_text() { # <file> <byte offset>: assistant text appended after the offset
-	tail -c +"$(( $2 + 1 ))" -- "$1" | case "$transcript_kind" in
+	# A runtime still writing its last row leaves it half written; jq then stops there and that
+	# row is read on the next poll, so its parse failure must not end the call.
+	{ tail -c +"$(( $2 + 1 ))" -- "$1" | case "$transcript_kind" in
 		claude) jq -r 'select(.type == "assistant") | .message.content[]? | select(.type == "text") | .text' 2>/dev/null ;;
 		codex) jq -r 'select(.type == "response_item" and .payload.type == "message" and .payload.role == "assistant") | .payload.content[]? | .text // empty' 2>/dev/null ;;
-	esac
+		cursor) jq -r 'select(.role == "assistant") | .message.content[]? | select(.type == "text") | .text' 2>/dev/null ;;
+	esac; } || true
 }
 # Capture each existing file's read position before sending, including fast replies.
 declare -A transcript_offsets=()
@@ -488,6 +495,9 @@ if [[ "$have_text" == true && -n "$transcript_path" && "$transcript_kind" != her
 		[[ -n "$file" && -f "$file" ]] || continue
 		transcript_offsets["$file"]="$(stat -c %s -- "$file")"
 	done < <(transcript_files)
+	# Cursor rewrites earlier rows of its transcript while a turn runs, so a byte offset can land
+	# inside a row; Cursor transcripts are read whole and this call's unique receipt selects the reply.
+	[[ "$transcript_kind" != cursor ]] || transcript_offsets=()
 fi
 
 transcript_export_reply() {

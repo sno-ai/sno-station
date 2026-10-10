@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# Reports Darwin for -s when STUB_DARWIN=1, so the macOS login paths run on Linux.
+if [[ "${1:-}" == -s && "${STUB_DARWIN:-0}" == 1 ]]; then printf 'Darwin\n'; exit 0; fi
+exec /usr/bin/uname "$@"

@@ -1059,6 +1059,7 @@ observe_message() {
     local from_role to_role card_type=none state=none value
     local -a fields=()
     [[ ! -v CLAUDECODE ]] || from=claude-code
+    [[ ! -v CURSOR_AGENT ]] || from=cursor
     if ! from="$(observe_harness "$root" "$caller" "$from")" ||
        ! to="$(observe_harness "$root" "$callee" unknown)"; then
         { printf 'reach.message %s: cannot read harness; event not recorded\n' "$kind" >>"$root/reach.log"; } 2>/dev/null || true
@@ -1087,6 +1088,7 @@ observe_message() {
 run_register() {
     local root channel='' handle='' pane session server identity kind harness=codex recorded
     [[ ! -v CLAUDECODE ]] || harness=claude-code
+    [[ ! -v CURSOR_AGENT ]] || harness=cursor
     CALLER=''
     while (($#)); do
         case "$1" in
@@ -1105,7 +1107,13 @@ run_register() {
     elif recorded="$(observe_harness "$root" "$CALLER" "$harness")"; then
         harness="$recorded"
     fi
+    # A Cursor IDE chat has no pane: its conversation is the seat (CURSOR_INVOKED_AS marks the CLI).
+    [[ -n "$channel" || -z "${CURSOR_CONVERSATION_ID:-}" || -n "${CURSOR_INVOKED_AS:-}" ]] || channel="cursor-ide"
     case "$channel" in
+        cursor-ide)
+            identity="${CURSOR_CONVERSATION_ID:?a cursor-ide seat registers from inside its Cursor IDE chat}"
+            kind=cursor-conversation handle="cursor-ide:$identity"
+            ;;
         tmux)
             pane="$(timeout --foreground 5 tmux display-message -pt "$handle" '#{pane_id}')" || die 65 "tmux handle is unavailable: $handle"
             [[ "$pane" =~ ^%[0-9]+$ ]] || die 65 'tmux pane identity is invalid'
@@ -1128,7 +1136,7 @@ run_register() {
             inventory="$(timeout --foreground 20 "$orca" terminal list --json)" || die 65 'Orca inventory failed'
             identity="$(jq -er --arg handle "$handle" '[.result.terminals[]? | select(.connected == true and .handle == $handle)] | select(length == 1) | .[0].tabId' <<<"$inventory")" || die 65 'Orca handle is not uniquely connected'
             kind='orca-tab' ;;
-        *) die 64 '--channel must be acp, tmux or orca' ;;
+        *) die 64 '--channel must be acp, tmux, orca or cursor-ide' ;;
     esac
     "$REACHABILITY" register --root "$root" --as "$CALLER" --channel "$channel" --handle "$handle" --identity-kind "$kind" --identity "$identity" --harness "$harness"
     observe_append "$root" reach.register "--agent=$harness" "--harness=$harness" --action=register
@@ -1140,6 +1148,7 @@ run_unregister() {
     root="$(mailbox_root)"
     require_safe_caller_dir "$root" "$CALLER" >/dev/null
     [[ ! -v CLAUDECODE ]] || harness=claude-code
+    [[ ! -v CURSOR_AGENT ]] || harness=cursor
     harness="$(observe_harness "$root" "$CALLER" "$harness")" || true
     "$REACHABILITY" unregister --root "$root" --as "$CALLER"
     observe_append "$root" reach.register "--agent=$harness" "--harness=$harness" --action=unregister
@@ -3736,6 +3745,7 @@ run_spawn() {
     [[ -z "$model$provider" ]] || window=yes
     if [[ "$window" == no && -n "$adapter" ]]; then
         require_tools acpx timeout flock
+    elif [[ "$kind" == cursor ]]; then require_tools tmux cursor-agent
     else require_tools tmux "$kind"; fi
     started="$EPOCHREALTIME"
     "$REPO_ROOT/lib/reach-spawn" "$kind" "$CALLER" "$cwd" "$window" "$adapter" "$model" "$provider" || rc=$?
@@ -3782,6 +3792,7 @@ run_call() {
     channel="$(validate_live_record "$address" "$root/$address/reachable.json")"
     [[ "$channel" != orca ]] || die 3 'channel orca does not support call'
     [[ "$raw" == no || "$channel" == tmux ]] || die 3 '--raw requires a tmux seat'
+    [[ "$channel" != cursor-ide ]] || die 3 'channel cursor-ide does not support call; send a card, its stop hook delivers it'
     local -a args=(--terminal "$address" --text "$text" --timeout "$limit" --every "$every")
     [[ -z "$expect" ]] || args+=(--expect "$expect")
     [[ "$raw" == no ]] || args+=(--raw)

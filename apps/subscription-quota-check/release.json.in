@@ -1,1 +1,1 @@
-{"program":"subscription-quota-check","version":"@VERSION@","requirements_contract_sha256":"@CONTRACT_SHA256@","dependencies":["bash","jq","timeout","date","mkfifo","codex","claude","heartbeat"]}
+{"program":"subscription-quota-check","version":"@VERSION@","requirements_contract_sha256":"@CONTRACT_SHA256@","dependencies":["bash","jq","timeout","date","mkfifo","heartbeat"]}

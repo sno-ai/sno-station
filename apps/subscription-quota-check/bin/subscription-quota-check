@@ -42,14 +42,16 @@ Usage:
   sno subscription-quota-check [--vendor codex|claude|both] [--json|--human] [--quiet]
   sno subscription-quota-check --agent <id> [--seat <address>] [--model <model>]
   sno subscription-quota-check --pick handoff|review --from <id> [--seat <address>] [--model <model>] --json
+  sno subscription-quota-check --vendor cursor [--seat <address>] [--json|--human]
 
 Options:
-  --vendor <v>   Which vendor to read. Default: both.
+  --vendor <v>   Which vendor to read. Default: both. cursor is read only when named.
   --agent <id>   Read claude-code, codex, cursor, hermes, or openclaw; always JSON.
-  --seat <addr>  Reach seat whose current session supplies the model and provider.
+  --seat <addr>  Reach seat whose current session supplies the model and provider;
+                 with --vendor cursor, its surface also supplies the login.
   --model <m>    Model to read when no seat is given; locked agents keep their vendor.
   --pick <p>     List different-vendor handoff or review candidates; always JSON.
-  --from <id>    Sender for --pick. With no seat, Hermes/OpenClaw need --model.
+  --from <id>    Sender for --pick. With no seat, Hermes/OpenClaw/Cursor need --model.
   --json         One JSON object on stdout (default when stdout is not a terminal).
   --human        One line per vendor on stdout (default when stdout is a terminal).
   --quiet        Suppress the stderr progress note.
@@ -82,7 +84,7 @@ Notes:
   This reads the credentials the two CLIs own. It does not measure accounts behind
   OPENAI_BASE_URL or on another machine.
   Picker order: [models] handoff_order in ${XDG_CONFIG_HOME:-~/.config}/sno/models.toml,
-  default "claude-code,codex,cursor,hermes,openclaw". Cursor is not integrated yet.
+  default "claude-code,codex,cursor,hermes,openclaw".
 EOF
 	if [[ -n "${OPENAI_BASE_URL:-}" ]]; then
 		printf '%s\n' '  OPENAI_BASE_URL is configured; its account quota is not measured here.'
@@ -448,6 +450,158 @@ claude_probe() {
 		  }'
 }
 
+# --------------------------------------------------------------- Cursor ------
+
+# Vendor of a Cursor model id (build contract, sibling PRD DEC-3). Named apart from any
+# general model-vendor helper so the two never shadow each other.
+cursor_model_vendor() {
+	local model="${1#cursor-}"
+	case "$model" in
+	claude*) printf 'anthropic' ;;
+	gpt* | o[0-9]* | *codex*) printf 'openai' ;;
+	gemini*) printf 'google' ;;
+	grok*) printf 'xai' ;;
+	composer* | default | auto) printf 'cursor' ;;
+	*) printf '%s' "$model" ;;
+	esac
+}
+
+# The conversation record the Sno Cursor hooks keep for a seat, on stdout.
+# IDE seat: the conversation id is the seat's registered identity. CLI seat: the record whose
+# reach_addr is the seat, newest event first.
+cursor_seat_record() {
+	local seat="$1" reach="${SNO_REACH_ROOT:-$HOME/.local/state/sno-reach}/$1/reachable.json"
+	local conversations="${SNO_PROFILE_DIR:-$HOME/.sno}/cursor/conversations" id
+	[[ -f "$reach" ]] || return 1
+	if [[ "$(jq -r '.channel' "$reach")" == cursor-ide ]]; then
+		id="$(jq -r '.identity.value' "$reach")"
+		[[ -f "$conversations/$id.json" ]] && cat -- "$conversations/$id.json"
+		return
+	fi
+	shopt -s nullglob
+	local records=("$conversations"/*.json)
+	shopt -u nullglob
+	((${#records[@]})) || return 1
+	jq -se --arg seat "$seat" 'map(select(.reach_addr == $seat)) | sort_by(.last_event) | last // empty' \
+		"${records[@]}"
+}
+
+# Reads the access token of one login into $SCRATCH/cursor-token; never prints it.
+# Sets CURSOR_LOGIN_REASON on failure. Returns 1 when the login is absent, 2 when unreadable.
+cursor_read_token() {
+	local login="$1" out="$SCRATCH/cursor-token" rc=0
+	case "$login" in
+	cli-file)
+		[[ -f "$HOME/.config/cursor/auth.json" ]] || return 1
+		jq -er '.accessToken | strings | select(length > 0)' "$HOME/.config/cursor/auth.json" >"$out" 2>/dev/null ||
+			{ CURSOR_LOGIN_REASON="Cursor CLI login unreadable: no accessToken in ~/.config/cursor/auth.json"; return 2; }
+		;;
+	cli-keychain)
+		command -v security >/dev/null 2>&1 || return 1
+		security find-generic-password -s cursor-access-token -w >"$out" 2>"$SCRATCH/cursor-token.err" || rc=$?
+		# 44 is errSecItemNotFound: no CLI login on this Mac.
+		((rc != 44)) || return 1
+		if ((rc != 0)); then
+			if grep -qiE 'locked|interaction is not allowed' "$SCRATCH/cursor-token.err"; then
+				CURSOR_LOGIN_REASON="Cursor CLI login unreadable (keychain locked)"
+			else
+				CURSOR_LOGIN_REASON="Cursor CLI login unreadable: security exit $rc: $(head -c 200 "$SCRATCH/cursor-token.err")"
+			fi
+			return 2
+		fi
+		;;
+	ide-store)
+		local db="$HOME/Library/Application Support/Cursor/User/globalStorage/state.vscdb"
+		[[ -f "$db" ]] || return 1
+		command -v sqlite3 >/dev/null 2>&1 ||
+			{ CURSOR_LOGIN_REASON="Cursor IDE login unreadable: sqlite3 not on PATH"; return 2; }
+		sqlite3 -readonly "$db" "SELECT value FROM ItemTable WHERE key = 'cursorAuth/accessToken'" >"$out" 2>"$SCRATCH/cursor-token.err" ||
+			{ CURSOR_LOGIN_REASON="Cursor IDE login unreadable: $(head -c 200 "$SCRATCH/cursor-token.err")"; return 2; }
+		;;
+	esac
+	local token
+	token="$(<"$out")" token="${token#\"}" token="${token%\"}"
+	printf '%s\n' "$token" >"$out"
+	[[ -n "$token" ]] || { CURSOR_LOGIN_REASON="Cursor $login login is empty"; return 2; }
+}
+
+# Builds the cursor vendor object on stdout for the account behind the watched seat's login.
+cursor_probe() {
+	local seat="$1" record='' surface='' model="${2:-default}" login='' cli_login=cli-file rc=0 http body
+	CURSOR_LOGIN_REASON=''
+	cursor_unavailable() {
+		jq -nc --arg r "$1" --arg seat "$seat" --arg login "$login" \
+			'{vendor:"cursor",agent:"cursor",state:"unreadable",verdict:"unknown",reason:$r}
+			 + (if $seat == "" then {} else {seat:$seat} end)
+			 + (if $login == "" then {} else {login:$login} end)'
+	}
+	[[ "$(uname -s)" != Darwin ]] || cli_login='cli-keychain'
+	if [[ -n "$seat" ]]; then
+		[[ -f "${SNO_REACH_ROOT:-$HOME/.local/state/sno-reach}/$seat/reachable.json" ]] ||
+			{ cursor_unavailable "seat unknown: $seat is not a registered Reach seat"; return; }
+		record="$(cursor_seat_record "$seat")" || record=''
+		[[ -n "$record" ]] ||
+			{ cursor_unavailable "seat model unknown: no Cursor conversation record for seat $seat"; return; }
+		surface="$(jq -r '.surface // empty' <<<"$record")"
+		model="$(jq -r '.model // empty' <<<"$record")"
+		[[ -n "$model" ]] || { cursor_unavailable "seat model unknown: the record for seat $seat names no model"; return; }
+		if [[ "$surface" == ide ]]; then login=ide-store; else login="$cli_login"; fi
+		cursor_read_token "$login" || rc=$?
+	else
+		# No seat: the CLI login when present, else the IDE store; default model unless supplied.
+		login="$cli_login"
+		cursor_read_token "$login" || rc=$?
+		if ((rc == 1)); then
+			login=ide-store rc=0
+			cursor_read_token "$login" || rc=$?
+		fi
+	fi
+	((rc != 1)) || { cursor_unavailable "Cursor $login login not found"; return; }
+	((rc == 0)) || { cursor_unavailable "$CURSOR_LOGIN_REASON"; return; }
+	command -v curl >/dev/null 2>&1 || { cursor_unavailable "curl not on PATH: the Cursor usage endpoint cannot be read"; return; }
+
+	# The token travels in a header file, never in argv where ps would show it.
+	printf 'Authorization: Bearer %s\n' "$(<"$SCRATCH/cursor-token")" >"$SCRATCH/cursor-auth"
+	rm -f -- "$SCRATCH/cursor-token"
+	http="$(curl -sS --max-time 20 -o "$SCRATCH/cursor-usage.json" -w '%{http_code}' -X POST \
+		-H 'Content-Type: application/json' -H 'Connect-Protocol-Version: 1' -H "@$SCRATCH/cursor-auth" \
+		-d '{}' https://api2.cursor.sh/aiserver.v1.DashboardService/GetCurrentPeriodUsage 2>"$SCRATCH/cursor-usage.err")" || http=''
+	if [[ "$http" != 200 ]]; then
+		body="$(head -c 200 "$SCRATCH/cursor-usage.json" 2>/dev/null || true)"
+		[[ -n "$body" ]] || body="$(head -c 200 "$SCRATCH/cursor-usage.err")"
+		# A refused login is a login to renew, not an unknown reading.
+		if [[ "$http" == 401 || "$http" == 403 ]]; then
+			jq -nc --arg r "Cursor usage endpoint refused the $login login (HTTP $http): $body" --arg login "$login" \
+				'{vendor:"cursor",agent:"cursor",state:"needs_auth",verdict:"needs_auth",login:$login,reason:$r}'
+		else
+			cursor_unavailable "Cursor usage endpoint failed (HTTP ${http:-none}): $body"
+		fi
+		return
+	fi
+	jq -c --arg model "$model" --arg model_vendor "$(cursor_model_vendor "$model")" --arg login "$login" \
+		--arg seat "$seat" --argjson now "$(now_epoch)" --argjson short "$SHORT_ONLY_REMAINING_PCT" '
+		def pool_verdict($p): if $p >= 100 then "wait" elif (100 - $p) < $short then "short_only" else "go" end;
+		(.billingCycleEnd | tonumber / 1000 | floor) as $reset
+		| {auto: {used_percent: .planUsage.autoPercentUsed}, named: {used_percent: .planUsage.apiPercentUsed}}
+		| if any(.[]; .used_percent | type != "number") then error("planUsage percentages missing") else . end
+		| map_values(.verdict = pool_verdict(.used_percent)) as $pools
+		# Cursor-served models and Auto draw on the auto pool; every other named model on the named pool.
+		| (if ($model | test("^(default|auto|cursor-|composer|grok)")) then "auto" else "named" end) as $pool
+		| $pools[$pool] as $p
+		| {vendor: "cursor", agent: "cursor", model: $model, model_vendor: $model_vendor, login: $login,
+		   pools: $pools, pool: $pool,
+		   state: (if $p.used_percent >= 100 then "blocked" else "ok" end),
+		   verdict: $p.verdict,
+		   tightest_window: {limit_id: $pool, used_pct: $p.used_percent, resets_at_epoch: $reset,
+		                     seconds_to_reset: ($reset - $now)},
+		   blocking: (if $p.used_percent >= 100
+		              then {limit_id: $pool, used_pct: $p.used_percent, resets_at_epoch: $reset,
+		                    seconds_to_reset: ($reset - $now)}
+		              else null end)}
+		  + (if $seat == "" then {} else {seat: $seat} end)' "$SCRATCH/cursor-usage.json" 2>"$SCRATCH/cursor-usage.err" ||
+		cursor_unavailable "Cursor usage response unreadable: $(head -c 200 "$SCRATCH/cursor-usage.err")"
+}
+
 # --------------------------------------------------------------- output ------
 
 # One line per vendor: name, verdict, then the evidence the verdict came from.
@@ -465,6 +619,9 @@ human_line() {
 			elif .state == "blocked" then
 				"\(.blocking.limit_id) at \(.blocking.used_pct)%, frees in "
 				+ hhmm(.blocking.seconds_to_reset)
+			elif .state == "ok" and .vendor == "cursor" then
+				"pool \(.pool) \(.tightest_window.used_pct)% used · auto:\(.pools.auto.used_percent)%"
+				+ " named:\(.pools.named.used_percent)% model:\(.model) login:\(.login)"
 			elif .state == "ok" and .vendor == "codex" then
 				"tightest \(.tightest_window.limit_id) \(.tightest_window.used_pct)% used"
 				+ " · " + ([.buckets[] | "\(.limit_id):\(.primary.used_pct // "?")%"] | join(" "))
@@ -561,7 +718,15 @@ current_model() {
 	case "$agent" in
 	claude-code) model_record "$MODEL" anthropic; return ;;
 	codex) model_record "$MODEL" openai; return ;;
-	cursor) return 1 ;;
+	cursor)
+		if [[ -n "$SEAT" ]]; then
+			record="$(cursor_seat_record "$SEAT")" || return 1
+			raw="$(jq -er '.model | strings | select(length > 0)' <<<"$record")" || return 1
+		else
+			[[ -n "$MODEL" ]] || return 1
+			raw="$MODEL"
+		fi
+		model_record "$raw"; return ;;
 	esac
 	if [[ -z "$SEAT" ]]; then
 		[[ -n "$MODEL" ]] || return 1
@@ -633,13 +798,15 @@ usage_windows() {
 
 # Writes QUOTA, rather than returning it in a subshell, so provider caches survive.
 agent_quota() {
-	local agent="$1" provider="$2" key raw
+	local agent="$1" provider="$2" model="${3:-}" seat="${4:-}" key raw
 	key="$agent:$provider"
+	[[ "$agent" != cursor ]] || key="$agent:$seat:$model"
 	if [[ -n "${QUOTA_CACHE[$key]+yes}" ]]; then QUOTA="${QUOTA_CACHE[$key]}"; return; fi
 	QUOTA_CACHE[$key]='{"state":"unreadable","verdict":"unknown","reason":"quota read failed"}'
 	case "$agent" in
 	codex) QUOTA="$(codex_probe)" ;;
 	claude-code) QUOTA="$(claude_probe)" ;;
+	cursor) QUOTA="$(cursor_probe "$seat" "$model")" ;;
 	hermes)
 		raw="$(agent_command hermes hermes usage --provider "$provider" --json)" || return 1
 		[[ "$raw" != 'No account usage available'* ]] || raw='{"windows":[]}'
@@ -658,7 +825,7 @@ agent_quota() {
 	esac
 	if [[ "$(jq -r '.state' <<<"$QUOTA")" == unreadable || "$(jq -r '.state' <<<"$QUOTA")" == needs_auth ]]; then
 		printf '%s: agent %s command %s failed: %s\n' "$PROG" "$agent" \
-			"$([[ "$agent" == codex ]] && printf 'codex app-server account/rateLimits/read' || printf 'claude get_usage')" \
+			"$(case "$agent" in codex) printf 'codex app-server account/rateLimits/read' ;; cursor) printf 'Cursor GetCurrentPeriodUsage' ;; *) printf 'claude get_usage' ;; esac)" \
 			"$(jq -r '.reason' <<<"$QUOTA")" >&2
 	fi
 	QUOTA_CACHE[$key]="$QUOTA"
@@ -666,7 +833,6 @@ agent_quota() {
 
 agent_read() {
 	local agent="$1" current provider vendor code=0 reason='current-model-unknown'
-	[[ "$agent" != cursor ]] || reason='cursor-not-integrated'
 	if ! current="$(current_model "$agent")"; then
 		jq -n --arg agent "$agent" --arg reason "$reason" \
 			'{ok:false,operation:"agent-read",agent:$agent,reason:$reason}'
@@ -674,7 +840,7 @@ agent_read() {
 	fi
 	provider="$(jq -r '.provider' <<<"$current")"
 	vendor="$(model_vendor "$provider" "$(jq -r '.model // ""' <<<"$current")")"
-	if ! agent_quota "$agent" "$provider"; then
+	if ! agent_quota "$agent" "$provider" "$(jq -r '.model // ""' <<<"$current")" "$SEAT"; then
 		QUOTA='{"state":"unreadable","verdict":"unknown","reason":"quota read failed"}'
 	fi
 	case "$(jq -r '.state' <<<"$QUOTA")" in
@@ -692,11 +858,26 @@ agent_read() {
 }
 
 agent_models() {
-	local agent="$1" raw status fallbacks models
+	local agent="$1" raw status fallbacks models record seat='' seats=()
 	case "$agent" in
 	claude-code) model_record '' anthropic ;;
 	codex) model_record '' openai ;;
-	cursor) model_record '' cursor ;;
+	cursor)
+		if [[ "$FROM" == cursor ]]; then
+			seat="$SEAT"
+		else
+			for record in "${SNO_REACH_ROOT:-$HOME/.local/state/sno-reach}"/*/reachable.json; do
+				[[ -f "$record" ]] || continue
+				if jq -e '.harness=="cursor" or .channel=="cursor-ide"' "$record" >/dev/null 2>&1; then
+					seats+=("$(basename -- "$(dirname -- "$record")")")
+				fi
+			done
+			((${#seats[@]} == 1)) || return 1
+			seat="${seats[0]}"
+		fi
+		raw="$(SEAT="$seat" current_model cursor)" || return 1
+		jq -c --arg seat "$seat" '. + (if $seat=="" then {} else {seat:$seat} end)' <<<"$raw"
+		;;
 	hermes)
 		raw="$(agent_command hermes hermes fallback list)" || return 1
 		awk '/Primary:|^[[:space:]]*[0-9]+\./ {model=$2; provider=$4; sub(/\)$/, "", provider); print model "\t" provider}' <<<"$raw" |
@@ -732,29 +913,43 @@ handoff_order() {
 }
 
 pick_candidate() {
-	local agent="$1" entry="$2" in_place="$3" provider vendor verdict='' reason=''
+	local agent="$1" entry="$2" in_place="$3" provider vendor verdict='' reason='' detail='' cli login rc=0
 	provider="$(jq -r '.provider' <<<"$entry")"
 	vendor="$(model_vendor "$provider" "$(jq -r '.model // ""' <<<"$entry")")"
-	if [[ "$agent" == cursor ]]; then reason='cursor-not-integrated'
-	elif ! command -v "$([[ "$agent" == claude-code ]] && printf claude || printf '%s' "$agent")" >/dev/null; then
+	cli="$agent"
+	case "$agent" in claude-code) cli=claude ;; cursor) cli=cursor-agent ;; esac
+	if ! command -v "$cli" >/dev/null; then
 		printf '%s: agent %s command lookup failed: CLI not on PATH\n' "$PROG" "$agent" >&2
 		reason='unavailable'
-	elif ! agent_quota "$agent" "$provider"; then
+		detail="$cli command not found on PATH"
+	elif [[ "$agent" == cursor ]]; then
+		login=cli-file CURSOR_LOGIN_REASON=''
+		[[ "$(uname -s)" != Darwin ]] || login='cli-keychain'
+		cursor_read_token "$login" || rc=$?
+		rm -f -- "$SCRATCH/cursor-token"
+		if ((rc != 0)); then
+			reason='unavailable'
+			detail="${CURSOR_LOGIN_REASON:-Cursor $login login not found}"
+		fi
+	fi
+	if [[ -z "$reason" ]] && ! agent_quota "$agent" "$provider" "$(jq -r '.model // ""' <<<"$entry")" "$(jq -r '.seat // ""' <<<"$entry")"; then
 		reason='unavailable'
 		if grep -qiE 'Named models unavailable|ActionRequiredError' "$SCRATCH/command.err"; then
 			reason='no-quota'
 			QUOTA_CACHE["$agent:$provider"]='{"state":"blocked","verdict":"wait"}'
 		fi
-	else
+	elif [[ -z "$reason" ]]; then
 		verdict="$(jq -r '.verdict' <<<"$QUOTA")"
-		if [[ "$verdict" == unknown || "$verdict" == needs_auth ]]; then reason='unavailable'
+		if [[ "$verdict" == unknown || "$verdict" == needs_auth ]]; then
+			reason='unavailable'
+			[[ "$agent" != cursor ]] || detail="$(jq -r '.reason // "Cursor quota unreadable"' <<<"$QUOTA")"
 		elif [[ "$vendor" == "$FROM_VENDOR" ]]; then reason='same-vendor'
 		elif [[ "$verdict" == wait || "$verdict" == owner_action ]]; then reason='no-quota'
 		fi
 	fi
 	if [[ -n "$reason" ]]; then
-		jq -cn --argjson entry "$entry" --arg agent "$agent" --arg vendor "$vendor" --arg reason "$reason" \
-			'$entry+{agent:$agent,vendor:$vendor,reason:$reason}' >>"$SCRATCH/skipped"
+		jq -cn --argjson entry "$entry" --arg agent "$agent" --arg vendor "$vendor" --arg reason "$reason" --arg detail "$detail" \
+			'$entry+{agent:$agent,vendor:$vendor,reason:$reason} + (if $agent=="cursor" and $detail!="" then {detail:$detail} else {} end)' >>"$SCRATCH/skipped"
 	else
 		jq -cn --argjson entry "$entry" --arg agent "$agent" --arg vendor "$vendor" \
 			--argjson in_place "$in_place" --arg verdict "$verdict" \
@@ -799,7 +994,7 @@ agent_pick() {
 			continue
 		fi
 		if [[ "$agent" == "$FROM" ]]; then
-			entries="$(jq -cs --argjson current "$current" 'map(select(.!=$current)) | .[]' <<<"$entries")"
+			entries="$(jq -cs --argjson current "$current" 'map(select({model,provider}!=$current)) | .[]' <<<"$entries")"
 		elif [[ "$agent" == hermes || "$agent" == openclaw ]]; then
 			# A uniquely recorded seat supplies current state; never guess a newest session.
 			local -a seats=()
@@ -875,9 +1070,10 @@ done
 readonly QUIET
 
 case "$VENDOR" in
-codex | claude | both) ;;
-*) die "--vendor must be codex, claude, or both (got: ${VENDOR})" 2 ;;
+codex | claude | both | cursor) ;;
+*) die "--vendor must be codex, claude, both, or cursor (got: ${VENDOR})" 2 ;;
 esac
+[[ -z "$SEAT" || -n "$AGENT$PICK" || "$VENDOR" == cursor ]] || die "--seat applies only to --vendor cursor" 2
 
 if [[ -z "$FORMAT" ]]; then
 	if [[ -n "$AGENT$PICK" ]]; then FORMAT="json"
@@ -911,11 +1107,12 @@ if [[ -n "$AGENT" || -n "$PICK" ]]; then
 	fi
 	exit 0
 fi
-[[ -z "$FROM$SEAT$MODEL" ]] || die "--from/--seat/--model require --agent or --pick"
+[[ -z "$FROM$MODEL" && ( -z "$SEAT" || "$VENDOR" == cursor ) ]] || die "--from/--seat/--model require --agent or --pick"
 
 results=()
 [[ "$VENDOR" == "codex" || "$VENDOR" == "both" ]] && results+=("$(codex_probe)")
 [[ "$VENDOR" == "claude" || "$VENDOR" == "both" ]] && results+=("$(claude_probe)")
+[[ "$VENDOR" == "cursor" ]] && results+=("$(cursor_probe "$SEAT")")
 
 ((${#results[@]} > 0)) || die "no vendor probed" 2
 
