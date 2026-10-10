@@ -307,6 +307,7 @@ submit_again() { tmux_submit; }
 send_text() { tmux_send; }
 
 # ── procedure ─────────────────────────────────────────────────────────────────
+started="$(date +%s)"
 delivery_receipt=""
 sent_payload="$text"
 if [[ "$have_text" == true ]]; then
@@ -316,7 +317,7 @@ if [[ "$have_text" == true ]]; then
 		exit "$EXIT_SEND_REFUSED"
 	fi
 	if [[ "$raw" == false && "$seat_runtime" == openclaw ]]; then
-		wait_openclaw_idle "$terminal"
+		wait_openclaw_idle "$terminal" "$timeout_secs"
 	fi
 	# A draft or a suggestion in the composer would be glued to the message: clear it.
 	if composer_has_text; then
@@ -576,8 +577,7 @@ if [[ "$have_text" == true && "$no_wait" == false && ( "$transcript_kind" == her
 fi
 
 transcript_wait() {
-	local file='' offset=0 started text='' after nudge_at receipt_seen=false
-	started="$(date +%s)"
+	local file='' offset=0 text='' after nudge_at receipt_seen=false
 	nudge_at=$(( started + poll_secs * 2 ))
 	while :; do
 		if [[ "$transcript_kind" == hermes || "$transcript_kind" == openclaw ]]; then
@@ -694,7 +694,6 @@ if [[ "$follow" == true ]]; then
 		"${idle_secs:+, stop after ${idle_secs}s idle}"
 	cursor="$cursor_before"
 	total=0
-	started="$(date +%s)"
 	last_new="$started"
 	approval_rung=false
 	delivery_seen=false
@@ -806,7 +805,7 @@ if [[ "$follow" == true ]]; then
 	exit 0
 fi
 
-deadline=$(( $(date +%s) + timeout_secs ))
+deadline=$(( started + timeout_secs ))
 last_after="$cursor_before"
 last_lines=0
 last_out=""

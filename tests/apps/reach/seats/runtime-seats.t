@@ -79,7 +79,7 @@ for kind in ['claude','codex','hermes','openclaw','cursor-agent']:
 import json,os,pathlib,subprocess,sys
 root=pathlib.Path(os.environ['FIXTURE_ROOT']);args=sys.argv[1:]
 if args[0]=='send-keys':
- if (root/'busy').exists():assert int((root/'polls').read_text())>=3,'typed while busy'
+ if (root/'busy').exists() and not (root/'busy-always').exists():assert int((root/'polls').read_text())>=3,'typed while busy'
  with (root/'keys.jsonl').open('a') as f:f.write(json.dumps(args)+'\\n')
 if args[0]=='capture-pane' and (root/'busy').exists():
  counter=root/'polls';n=int(counter.read_text())+1 if counter.exists() else 1;counter.write_text(str(n))
@@ -99,7 +99,7 @@ def wait_file(path):
     assert path.exists(),path
 host=subprocess.check_output(['hostname'],text=True).strip()
 seats={}
-for kind in ['claude','codex','hermes','openclaw','cursor-agent']:
+for kind in (['openclaw'] if sys.argv[2:]==['timeout'] else ['claude','codex','hermes','openclaw','cursor-agent']):
     seat='executor.'+kind+'@'+host;seats[kind]=seat
     ok('init','--as',seat,'--name','Fixture')
     r=ok('spawn',kind,'--as',seat,'--cwd',str(root),'--window','--model','chosen/model','--provider','chosen-provider')
@@ -129,6 +129,25 @@ for kind in ['claude','codex','hermes','openclaw','cursor-agent']:
         assert lines[1].endswith('Then do this: '+context),lines
     assert json.loads((root/'state'/seat/'seat.json').read_text())['runtime']==kind
     print('PASS launch:',kind,flush=True)
+
+if sys.argv[2:]==['timeout']:
+    seat=seats['openclaw']
+    (root/'busy').touch();(root/'busy-always').touch();(root/'empty-reply').touch()
+    for fallback in [False,True]:
+        if fallback:(root/'export-error').touch()
+        started=time.monotonic()
+        r=run('call',seat,'No answer before the deadline.','--expect','^NEVER-ANSWER$','--timeout','3','--every','1',limit=10)
+        assert r.returncode==4 and r.stdout=='',(r.stdout,r.stderr)
+        assert time.monotonic()-started<7,r.stderr
+        assert 'openclaw seat never reached idle' in r.stderr,r.stderr
+        if fallback:assert 'fixture export unavailable' in r.stderr,r.stderr
+        else:assert 'the transcripts showed no reply' in r.stderr,r.stderr
+        print('PASS idle wait shares timeout with '+('screen fallback' if fallback else 'transcript'),flush=True)
+    for name in ['busy','busy-always','empty-reply','export-error']:(root/name).unlink()
+    r=ok('call',seat,'Answer while idle.','--expect','^NEW-TASK-ANSWER$','--timeout','3','--every','1')
+    assert r.stdout.strip()=='NEW-TASK-ANSWER',r.stdout
+    print('PASS idle seat still returns its transcript reply',flush=True)
+    sys.exit(0)
 
 for kind,expected in [
     ('claude',['--dangerously-skip-permissions','--session-id','reach-fixture','literal startup']),
