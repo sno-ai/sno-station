@@ -4,7 +4,7 @@ import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promis
 import { tmpdir, userInfo } from "node:os";
 import { join } from "node:path";
 import { connect, type InitRegistration, type MemoryClient } from "@snoai/memory/client";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { acquirePidFileLock } from "../../../apps/mem-codex/src/files.js";
 import { appStateRoot, importDirectory, spoolDirectory, workerLockPath } from "../../../apps/mem-codex/src/paths.js";
 import { runWorker, type WorkerDependencies } from "../../../apps/mem-codex/src/worker.js";
@@ -227,7 +227,13 @@ describe("mem-codex worker", () => {
 		await profile();
 		const path = await spool("0001.json", "one");
 		const fixture = dependencies({ failCapture: true });
+		const logged = vi.spyOn(console, "log");
 		expect(await runWorker(fixture.deps)).toBe("drained");
+		// Each failed attempt names its turn and cause in the worker log; the cause used to be dropped.
+		const failures = logged.mock.calls.map(([line]) => String(line)).filter(line => line.includes('"capture-failed"'));
+		logged.mockRestore();
+		expect(failures.map(line => JSON.parse(line))).toEqual([1, 2, 3].map(attempt =>
+			expect.objectContaining({ event: "capture-failed", turnId: "one", attempt, error: expect.stringMatching(/\S/) })));
 		expect(JSON.parse(await readFile(path, "utf8"))).toMatchObject({ attempts: 3, state: "failed" });
 		expect(await runWorker(fixture.deps)).toBe("drained");
 		expect(fixture.captures).toEqual(["one", "one", "one"]);
