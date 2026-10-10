@@ -73,7 +73,12 @@ export function registerRuntimeHooks(api: OpenClawPluginApi, config: PluginConfi
   const reportActivity = (context: HostMemoryContext): void => {
     const state = activity.get(injectionSession(context));
     if (!state || state.records.length === 0) return;
-    const folded = foldActivity(state.cursor, [...state.records, { ts: Date.now() }], false);
+    const endedAt = Date.now();
+    // The turn is working time, even without host events inside a fifteen-minute gap.
+    for (let ts = (state.records.at(-1)?.ts ?? endedAt) + 15 * 60_000; ts < endedAt; ts += 15 * 60_000) {
+      state.records.push({ ts });
+    }
+    const folded = foldActivity(state.cursor, [...state.records, { ts: endedAt }], false);
     state.cursor = folded.cursor;
     state.records = [];
     if (!folded.payload) return;

@@ -42,6 +42,15 @@ it("records a human turn even when memory capture is unavailable", async () => {
 			active_ms: 60_000, team_driven_ms: 0, runs_over_12h: 0, longest_run_ms: 60_000, human_messages: 1 },
 	}]);
 });
+it("counts the whole forty-minute turn as working time", async () => {
+	await handlers.get("before_prompt_build")?.({ prompt: "Fix the failing command" }, context);
+	vi.setSystemTime(1_800_002_400_000);
+	await handlers.get("agent_end")?.({ success: true, messages: [] }, context);
+	expect(rows().map(row => row.payload)).toEqual([{
+		harness: "openclaw", window_start_ms: 1_800_000_000_000, window_end_ms: 1_800_002_400_000,
+		active_ms: 2400000, team_driven_ms: 0, runs_over_12h: 0, longest_run_ms: 2400000, human_messages: 1,
+	}]);
+});
 it.each([
 	["typed by the mail transport, not by the owner", "agent:main:session-a"],
 	["Run the assigned task", "agent:main:sno-oneshot-task"],
