@@ -333,6 +333,23 @@ describe("Claude worker callback with an empty spool", () => {
 });
 
 describe("worker lock files", () => {
+	it("waits while a worker from before an upgrade still holds the lock under the old lock kind", async () => {
+		// A worker started before an upgrade held its guard with flock, which the new lock cannot see on Linux; both
+		// workers then drained the same spool, and the second unlink rewrote a committed record for another capture.
+		const path = join(root, "upgrade.lock");
+		const holder = spawn(process.execPath, ["-e", "setTimeout(() => {}, 30_000)"], { stdio: "ignore" });
+		try {
+			await writeFile(path, `${holder.pid} ${Date.now()}\n`);
+			expect(await acquirePidFileLock(path, 60_000)).toBeUndefined();
+			holder.kill();
+			await new Promise(resolve => holder.once("exit", resolve));
+			const taken = await acquirePidFileLock(path, 60_000);
+			expect(taken).toBeDefined();
+			await taken?.release();
+		} finally {
+			holder.kill();
+		}
+	});
 	it("admits one racer and recovers when a reclaim marker's owner is dead", async () => {
 		const path = join(root, "race.lock");
 		const locks = await Promise.all([acquirePidFileLock(path, 60_000), acquirePidFileLock(path, 60_000)]);

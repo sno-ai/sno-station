@@ -1,3 +1,4 @@
+import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir, userInfo } from "node:os";
@@ -492,4 +493,26 @@ describe("mem-codex worker callback with an empty spool", () => {
 			[0, ...everyMinute.filter(offset => offset <= 9 * 60_000)].map(at => ({ at, status: 200 })));
 		expect(fixture.exitedAfter).toBe(9 * 60_000);
 	}, 60_000);
+});
+
+describe("mem-codex worker lock files", () => {
+	it("waits while a worker from before an upgrade still holds the lock under the old lock kind", async () => {
+		// A worker started before an upgrade held its guard with flock, which the new lock cannot see on Linux; both
+		// workers then drained the same spool, and the second unlink rewrote a committed record for another capture.
+		const root = await mkdtemp(join(tmpdir(), "mem-codex-lock-"));
+		roots.push(root);
+		const path = join(root, "upgrade.lock");
+		const holder = spawn(process.execPath, ["-e", "setTimeout(() => {}, 30_000)"], { stdio: "ignore" });
+		try {
+			await writeFile(path, `${holder.pid} ${Date.now()}\n`);
+			expect(await acquirePidFileLock(path, 60_000)).toBeUndefined();
+			holder.kill();
+			await new Promise(resolve => holder.once("exit", resolve));
+			const taken = await acquirePidFileLock(path, 60_000);
+			expect(taken).toBeDefined();
+			await taken?.release();
+		} finally {
+			holder.kill();
+		}
+	});
 });
