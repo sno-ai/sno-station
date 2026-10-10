@@ -16,7 +16,7 @@ and install the plugin for your agent ([Codex](https://www.npmjs.com/package/@sn
 [OpenClaw](https://www.npmjs.com/package/@snoai/mem-claw)).
 
 ```bash
-npm install @snoai/common-core@1.1.1
+npm install @snoai/common-core@1.1.2
 ```
 
 Needs Node.js 22.14 or newer. Licensed under Apache-2.0.
