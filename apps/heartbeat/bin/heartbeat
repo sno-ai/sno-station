@@ -410,16 +410,14 @@ close_inherited_fds
 #   pane   the interactive CLI in tmux: the tick is typed into the pane, as Reach ring types
 #   print  any other CLI chat: `cursor-agent -p --trust --resume <chat>` with the tick on stdin
 # A failed delivery is logged with its exit code and stderr; the next tick tries again, no retry.
-cursor_route() {
-  [[ -n ${CURSOR_AGENT:-} && -n ${CURSOR_CONVERSATION_ID:-} ]] || return 0
-  # CURSOR_INVOKED_AS is set only under the CLI.
-  if [[ -z ${CURSOR_INVOKED_AS:-} ]]; then printf 'ide'; return 0; fi
-  # Typing is safe only into a pane whose own process tree runs the interactive CLI
-  # (`.../cursor-agent/versions/<ver>/index.js` without -p). A print-mode agent arms in the
-  # background and its shell exits, so the arming process's ancestry cannot be relied on.
+# True when the tmux pane's own process tree runs the interactive CLI
+# (`.../cursor-agent/versions/<ver>/index.js` without -p). Typing is safe only then: a print-mode
+# agent arms in the background and its shell exits, so the arming process's ancestry cannot be
+# relied on, and a pane whose Cursor has exited holds the user's shell.
+cursor_pane_runs_cli() {
   local pane_pid
-  if [[ -n ${TMUX_PANE:-} ]] && pane_pid="$(tmux display-message -p -t "$TMUX_PANE" '#{pane_pid}' 2>/dev/null)" &&
-     ps -A -o pid=,ppid=,args= | awk -v root="$pane_pid" '
+  [[ -n ${TMUX_PANE:-} ]] && pane_pid="$(tmux display-message -p -t "$TMUX_PANE" '#{pane_pid}' 2>/dev/null)" &&
+    ps -A -o pid=,ppid=,args= | awk -v root="$pane_pid" '
        { pid[NR] = $1; parent[NR] = $2; $1 = ""; $2 = ""; args[NR] = $0 }
        END {
          tree[root] = 1
@@ -427,11 +425,14 @@ cursor_route() {
          for (i = 1; i <= NR; i++)
            if ((pid[i] in tree) && args[i] ~ /\/cursor-agent\/versions\/[^ ]*\/index\.js/ && args[i] !~ / (-p|--print)( |$)/) exit 0
          exit 1
-       }'; then
-    printf 'pane'
-  else
-    printf 'print'
-  fi
+       }'
+}
+
+cursor_route() {
+  [[ -n ${CURSOR_AGENT:-} && -n ${CURSOR_CONVERSATION_ID:-} ]] || return 0
+  # CURSOR_INVOKED_AS is set only under the CLI.
+  if [[ -z ${CURSOR_INVOKED_AS:-} ]]; then printf 'ide'; return 0; fi
+  if cursor_pane_runs_cli; then printf 'pane'; else printf 'print'; fi
 }
 
 # The Reach seat registered for this IDE conversation, or nothing.
@@ -462,8 +463,14 @@ cursor_deliver() {
       fi
       ;;
     pane)
+      # Recheck before every tick: once Cursor has exited, the pane holds the user's shell and
+      # the tick would run as a command.
+      if ! cursor_pane_runs_cli; then
+        printf 'the pane no longer runs the interactive Cursor CLI; the tick was not typed\n' >"$err"; rc=1
+      else
       { tmux send-keys -t "$TMUX_PANE" C-u && tmux send-keys -t "$TMUX_PANE" -- "$line" &&
         sleep 0.3 && tmux send-keys -t "$TMUX_PANE" Enter; } 2>"$err" || rc=$?
+      fi
       ;;
     print)
       # Bounded by one interval: a run that outlives it would meet the next tick on the same chat.

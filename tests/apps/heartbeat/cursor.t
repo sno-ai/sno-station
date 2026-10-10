@@ -76,5 +76,21 @@ wait_for "$work/pane.txt" 'pane-tick'
 expect 'pane: arming names the pane route' "$work/pane.out" '(pane route)'
 expect 'pane: the tick is typed into the Cursor pane and submitted' "$work/pane.txt" '[pane] tick=1 ok pane-tick'
 
+# ---- the interactive CLI exits between ticks: the pane then holds the user's shell ----
+# The fake CLI takes the first typed line and exits; what the pane's shell reads afterwards is
+# what a tick would run as a command, so it must stay empty.
+cli_gone="$work/install-gone/cursor-agent/versions/2026.10.01-fake/index.js"
+mkdir -p "${cli_gone%/*}"
+printf '#!/usr/bin/env bash\nhead -n1 >"$1"\n' >"$cli_gone"
+chmod +x "$cli_gone"
+tmux -L "$socket" new-session -d -s gone "bash '$cli_gone' '$work/gone-cli.txt'; cat >'$work/gone-shell.txt'"
+TMUX="$tmux_env" TMUX_PANE="$(pane_of gone)" CURSOR_AGENT=1 CURSOR_CONVERSATION_ID="$chat" CURSOR_INVOKED_AS=cursor-agent \
+  "$SCRIPT" --interval 3s --label gone --log "$work/gone.log" --max-ticks 2 -- echo gone-tick >"$work/gone.out"
+expect 'gone: the first tick reaches the running CLI' "$work/gone-cli.txt" '[gone] tick=1 ok gone-tick'
+expect 'gone: a tick after the CLI exited is refused and logged' "$work/gone.log" \
+  'tick=2 cursor pane delivery FAILED exit=1 stderr=the pane no longer runs the interactive Cursor CLI'
+if [[ -s "$work/gone-shell.txt" ]]; then fail 'gone: nothing is typed into the shell the pane fell back to' "$(cat "$work/gone-shell.txt")"
+else ok 'gone: nothing is typed into the shell the pane fell back to'; fi
+
 ((failures == 0)) || { printf 'heartbeat cursor: %d FAILED\n' "$failures"; exit 1; }
 printf 'heartbeat cursor: ALL PASS\n'
