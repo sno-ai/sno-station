@@ -261,6 +261,14 @@ describe("sno-mem-codex install", () => {
 		expect(rules).toContain('"/opt/sno/bin/sno"');
 	});
 
+	it("gives the session end hook no more time than Codex allows, so Codex never clamps it with a warning", async () => {
+		// Codex caps a SessionEnd hook at 3 seconds and prints "clamping SessionEnd hook timeout to 3s" when asked for more.
+		const codexHome = await temporaryHome();
+		await installCodex({ codexHome, programPath: "/opt/sno/bin/sno", writeOutput: () => undefined });
+		const installed = JSON.parse(await readFile(join(codexHome, "hooks.json"), "utf8"));
+		expect(installed.hooks.SessionEnd[0].hooks[0].timeout).toBeLessThanOrEqual(3);
+	});
+
 	it("quotes a program path with spaces before hashing and running each hook", async () => {
 		const codexHome = await temporaryHome();
 		const programPath = join(codexHome, "Application Support", "sno");

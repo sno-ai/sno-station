@@ -115,6 +115,11 @@ function stripTrustSections(text: string, keys: string[]): string {
 	return stripped.trimEnd();
 }
 
+// Codex caps a SessionEnd hook at 3 seconds and prints a clamping warning in every session that asks for more.
+export function codexHookTimeout(event: CodingSkinHookName): number {
+	return event === "SessionEnd" ? Math.min(CODING_SKIN_HOOKS[event].timeout, 3) : CODING_SKIN_HOOKS[event].timeout;
+}
+
 function rules(programPath: string): string {
 	return CODING_SKIN_MODEL_COMMANDS.map(command =>
 		`prefix_rule(pattern=[${JSON.stringify(programPath)}, "memory", ${JSON.stringify(command)}], decision="allow")`)
@@ -143,7 +148,7 @@ export async function installCodex(options: InstallOptions): Promise<void> {
 		const hook: HookCommand = {
 			type: "command",
 			command: codingSkinHookCommand(programPath, details.subcommand, "codex"),
-			timeout: details.timeout,
+			timeout: codexHookTimeout(event),
 		};
 		let installed = false;
 		for (const [groupIndex, group] of currentGroups.entries()) {
