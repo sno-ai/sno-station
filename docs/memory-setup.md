@@ -11,7 +11,7 @@ Install Node.js 22.22.3+, 24.15.0+, or 25.9.0+, then run the commands below. Wit
 before the settings step.
 
 ```bash
-npm install --prefix "$HOME/.sno" @snoai/memory@1.2.4 @snoai/embedder@1.1.2
+npm install --prefix "$HOME/.sno" @snoai/memory@1.2.5 @snoai/embedder@1.1.2
 node --input-type=module <<'NODE'
 import { randomBytes } from 'node:crypto';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -46,7 +46,7 @@ The memory service starts when a plugin needs it; there is no separate start com
 
 Upgrade the memory service and the agent plugin you use to the same version. From 1.0.1 the
 memory service rejects requests that do not carry its access token, and a 1.0.0 plugin does not
-send one. Run `npm install --prefix "$HOME/.sno" @snoai/memory@1.2.4 @snoai/embedder@1.1.2`, then
+send one. Run `npm install --prefix "$HOME/.sno" @snoai/memory@1.2.5 @snoai/embedder@1.1.2`, then
 reinstall your plugin at its latest version (for example `sno setup --harness codex`) and restart
 any running agent session. Do not rerun the settings block; your store and key stay as they are.
 
