@@ -7,7 +7,7 @@
 要求：
 
 - PATH 上有 OpenClaw
-- Node.js：22 系列需 22.22.3 及以上，24 系列需 24.15.0 及以上，或 25.9.0 及以上
+- Node.js：24 系列需 24.16.0 及以上，或 26.1.0 及以上
 
 先按[共享 memory 设置](../../memory-setup.md)做一次。它会以 Local First 模式写入 `~/.sno/settings.json`，并下载 embedding 模型。已经有 memory 库时，不要重新运行其中写设置的那一段：它会换掉加密密钥，旧的 memory 就读不出来了。
 

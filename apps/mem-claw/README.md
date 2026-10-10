@@ -25,7 +25,7 @@ across conversations.
 
 1. Follow the [shared memory setup](https://github.com/sno-ai/sno-station/blob/main/docs/memory-setup.md).
    It takes a few minutes and runs once for every agent on the machine. You need Node.js
-   22.22.3+, 24.15.0+ or 25.9.0+.
+   24.16.0+ on the 24 line, or 26.1.0+.
 2. Install the plugin:
 
    ```bash

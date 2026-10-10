@@ -265,9 +265,9 @@ describe("observability regressions", () => {
 		);
 	});
 
-	it("preserves tool execute this binding and emits every tool.call unsampled", async () => {
+	it.each(["direct", "factory", "context-v2"] as const)("preserves tool execute this binding and emits every tool.call unsampled (%s)", async (kind) => {
 		const stateDir = makeTempDir("mem-claw-tool-observe-binding-");
-		let registeredTool: AnyAgentTool | undefined;
+		let registration: unknown;
 		const observability = {
 			hashText: () => undefined,
 			emit: vi.fn(async () => undefined),
@@ -275,8 +275,8 @@ describe("observability regressions", () => {
 			trackBestEffort: (_label: string, task: () => void | Promise<void>) => { void task(); },
 		} as unknown as PluginObservability;
 		const api = {
-			registerTool(tool: AnyAgentTool) {
-				registeredTool = tool;
+			registerTool(tool: unknown) {
+				registration = tool;
 			},
 		} as unknown as OpenClawPluginApi;
 		const tool = {
@@ -302,7 +302,12 @@ describe("observability regressions", () => {
 			observability,
 			() => "session-1",
 			stateDir,
-		).registerTool(typedTool);
+		).registerTool(kind === "direct" ? typedTool : kind === "factory" ? () => typedTool : { contextVersion: 2, create: () => typedTool });
+
+		const context = { sessionKey: "session-1" };
+		const registeredTool = (kind === "direct" ? registration : kind === "factory"
+			? (registration as (ctx: typeof context) => AnyAgentTool)(context)
+			: (registration as { create: (ctx: typeof context) => AnyAgentTool }).create(context)) as AnyAgentTool;
 
 		const result = await registeredTool?.execute(
 			"call-1",
