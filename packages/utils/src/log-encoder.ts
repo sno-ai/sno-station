@@ -43,7 +43,7 @@ const LABEL_KEYS = new Set([
 	"prompt_template_unavailable_reason", "first_token_reason", "unavailable_reason",
 	"name", "skipped",
 	"runtime_mode", "occasion", "tier", "parser", "preset",
-	"mapped_kind", "category",
+	"mapped_kind", "category", "failure_category", "failure_reason",
 	"mutation_outcome", "action", "tool_name",
 	"locale",
 ]);
