@@ -690,9 +690,14 @@ class SnoMemoryProvider(MemoryProvider):
             prompts = self._activity_prompts.get(session_id)
             if not prompts:
                 return
+            ended_at = int(time.time() * 1000)
+            records: list[tuple[int, Literal["human", "agent"] | None]] = [prompts.pop(0)]
+            # The turn is working time, even without host events inside a fifteen-minute gap.
+            records.extend((ts, None) for ts in range(records[0][0] + _ACTIVITY_GAP_MS, ended_at, _ACTIVITY_GAP_MS))
+            records.append((ended_at, None))
             cursor, payload = _fold_activity(
                 self._activity.get(session_id, ActivityCursor()),
-                [prompts.pop(0), (int(time.time() * 1000), None)],
+                records,
             )
             self._activity[session_id] = cursor
         try:
