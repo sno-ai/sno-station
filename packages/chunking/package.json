@@ -1,6 +1,6 @@
 {
 	"name": "@snoai/chunking",
-	"version": "1.1.1",
+	"version": "1.1.2",
 	"description": "Cuts text into clean, steady pieces so Sno Station can find the right one later.",
 	"license": "Apache-2.0",
 	"type": "module",

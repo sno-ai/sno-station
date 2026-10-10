@@ -1,6 +1,6 @@
 {
 	"name": "@snoai/content-sanitizer",
-	"version": "1.1.1",
+	"version": "1.1.2",
 	"description": "Cleans up text and hides secrets before anything gets remembered.",
 	"license": "Apache-2.0",
 	"type": "module",
