@@ -21,7 +21,7 @@ beforeEach(() => {
 	vi.stubEnv("PATH", `${bin}:${process.env.PATH}`);
 	vi.useFakeTimers();
 	vi.setSystemTime(1_800_000_000_000);
-	writeSettingsFixture(root, { recall: { auto: false } });
+	writeSettingsFixture(root, { recall: { auto: false }, telemetry: { observe: { enabled: true } } });
 	handlers = new Map();
 	const api = { config: {}, logger: { info: () => {}, warn: () => {} }, registerHook: () => {}, on: (name: string, handler: Handler) => handlers.set(name, handler) };
 	const connection = { ready: async () => { throw new Error("memory offline"); } };
@@ -72,6 +72,11 @@ it.each([
 		harness: "openclaw", window_start_ms: 1_800_000_000_000, window_end_ms: 1_800_000_060_000,
 		active_ms: 60_000, team_driven_ms: 60_000, runs_over_12h: 0, longest_run_ms: 60_000, human_messages: 0,
 	}]);
+});
+it("sends nothing when telemetry is switched off", async () => {
+	writeSettingsFixture(root, { recall: { auto: false }, telemetry: { observe: { enabled: false } } });
+	await turn("Fix the failing command");
+	expect(rows()).toEqual([]);
 });
 it("continues the turn after sending the row fails", async () => {
 	let diagnostic = "";

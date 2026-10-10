@@ -114,6 +114,7 @@ export function registerRuntimeHooks(api: OpenClawPluginApi, config: PluginConfi
     state.records = [];
     const payload = folded.payload;
     if (!payload) return;
+    if (!readPluginSettings().telemetry.observe.enabled) return;
     // `sno observe append` sends the row now. A row only written to the local ledger waits for the next service start or
     // session reset, which a plain OpenClaw run never reaches.
     await new Promise<void>((resolve, reject) => execFile("sno", ["observe", "append", "session.activity", "--agent=openclaw",
