@@ -459,7 +459,7 @@ export function createLlmClient(config: LlmClientConfig & { refuseOnUnavailable?
 					durationMs: performance.now() - hostStarted });
 				// The category is its own attribute: joined into `error` it is hashed with the message,
 				// and a run where every host call failed (471 of 471, 2026-09-19) could not be read.
-				log.warn("Host model request failed", { call_id: request.callId, destination, failure_category: result.category, error: state.error }, { event_name: "memory.llm_client.diagnostic", file: "packages/memory/src/model/llm-client.ts", function: "requestContent", site_id: "llm.client.host_error" });
+				log.warn("Host model request failed", { call_id: request.callId, destination, failure_category: result.category, failure_reason: result.message, error: state.error }, { event_name: "memory.llm_client.diagnostic", file: "packages/memory/src/model/llm-client.ts", function: "requestContent", site_id: "llm.client.host_error" });
 				if (config.refuseOnUnavailable && (["auth", "credential-expired", "credential-revoked", "exhausted", "throttle"].includes(result.category) || result.message === "no-agent-endpoint" || result.message.includes("HTTP 503") || result.message.includes("worker-not-ready") || result.message.includes("stale-binding"))) {
 					throw new ModelCallRefusedError(request.callId, "host", result.message);
 				}
