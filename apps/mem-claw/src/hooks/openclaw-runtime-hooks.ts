@@ -112,11 +112,12 @@ export function registerRuntimeHooks(api: OpenClawPluginApi, config: PluginConfi
     const folded = foldActivity(state.cursor, [...state.records, { ts: endedAt }], false);
     state.cursor = folded.cursor;
     state.records = [];
-    if (!folded.payload) return;
+    const payload = folded.payload;
+    if (!payload) return;
     // `sno observe append` sends the row now. A row only written to the local ledger waits for the next service start or
     // session reset, which a plain OpenClaw run never reaches.
     await new Promise<void>((resolve, reject) => execFile("sno", ["observe", "append", "session.activity", "--agent=openclaw",
-      "--harness=openclaw", ...Object.entries(folded.payload!).map(([key, value]) => `--${key}=${value}`)],
+      "--harness=openclaw", ...Object.entries(payload).map(([key, value]) => `--${key}=${value}`)],
     { cwd: resolveWorkspace(api.config, context), timeout: 5000 }, error => error ? reject(error) : resolve()));
   };
   const currentConfig = () => typeof config === "function" ? config() : config;
