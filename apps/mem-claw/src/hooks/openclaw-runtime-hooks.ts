@@ -8,6 +8,7 @@ import { basename, dirname } from "node:path";
 import { detectProjectId, getSnoProfileDir } from "@snoai/observability";
 import { SKILL_CATEGORIES, skillVersionFor } from "@snoai/memory/internal/config/skill-categories";
 import { appendObserveLedgerRows } from "@snoai/memory/internal/engine/telemetry/observe-ledger";
+import { type ActivityCursor, type ActivityRecord, EMPTY_ACTIVITY_CURSOR, foldActivity, isAgentText } from "@snoai/memory/coding-skin";
 import { resolveAgentId } from "@snoai/memory/internal/engine/bindings/memory-tool-access";
 import { setLruEntry } from "@snoai/memory/internal/engine/shared/lru";
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk/core";
@@ -25,7 +26,9 @@ async function contained<T>(hook: string, run: () => Promise<T>): Promise<T | un
   try { return await run(); }
   catch (error) {
     const reason = error instanceof ContractError ? error.reason : "engine-failed";
-    diagnosticLog.warn("Memory service hook skipped", { hook, reason, error }, { event_name: "memory.openclaw_runtime_hooks.hook.skipped", file: "apps/mem-claw/src/hooks/openclaw-runtime-hooks.ts", function: "contained", site_id: "hooks.openclaw-runtime-hooks.contained.memory-hook-skipped" });
+    diagnosticLog.warn(hook === "session-activity"
+      ? "session-activity failed; no session.activity row for this window; host turn continues"
+      : "Memory service hook skipped", { hook, reason, error }, { event_name: "memory.openclaw_runtime_hooks.hook.skipped", file: "apps/mem-claw/src/hooks/openclaw-runtime-hooks.ts", function: "contained", site_id: "hooks.openclaw-runtime-hooks.contained.memory-hook-skipped" });
     return undefined;
   }
 }
@@ -97,6 +100,26 @@ export function registerRuntimeHooks(api: OpenClawPluginApi, config: PluginConfi
   };
   const injectionSession = (context: HostMemoryContext): string =>
     JSON.stringify([resolveWorkspace(api.config, context), context.sessionKey ?? context.sessionId]);
+  const activity = new Map<string, { cursor: ActivityCursor; records: ActivityRecord[] }>();
+  const reportActivity = (context: HostMemoryContext): void => {
+    const state = activity.get(injectionSession(context));
+    if (!state || state.records.length === 0) return;
+    const endedAt = Date.now();
+    // The turn is working time, even without host events inside a fifteen-minute gap.
+    for (let ts = (state.records.at(-1)?.ts ?? endedAt) + 15 * 60_000; ts < endedAt; ts += 15 * 60_000) {
+      state.records.push({ ts });
+    }
+    const folded = foldActivity(state.cursor, [...state.records, { ts: endedAt }], false);
+    state.cursor = folded.cursor;
+    state.records = [];
+    if (!folded.payload) return;
+    appendObserveLedgerRows(getSnoProfileDir(), [{
+      agent_id: "openclaw", ts_ms: folded.payload.window_end_ms,
+      project_id: detectProjectId(resolveWorkspace(api.config, context)),
+      event_type: "session.activity", lane: "memory",
+      payload: { harness: "openclaw", ...folded.payload },
+    }]);
+  };
   const currentConfig = () => typeof config === "function" ? config() : config;
   api.on("llm_input", async (event) => { hostCallStartedAt.set(event.runId, Date.now()); });
   api.on("llm_output", async (event, context) => {
@@ -120,6 +143,13 @@ export function registerRuntimeHooks(api: OpenClawPluginApi, config: PluginConfi
   api.on("gateway_start", async () => { await connection.ready(); });
   api.on("before_prompt_build", async (event, context) => {
     if (skipStationRun(context)) return undefined;
+    await contained("session-activity", async () => {
+      const session = injectionSession(context);
+      const state = activity.get(session) ?? { cursor: EMPTY_ACTIVITY_CURSOR, records: [] };
+      state.records.push({ ts: Date.now(), incoming: context.sessionKey?.includes("sno-oneshot-")
+        || context.sessionKey?.includes(":subagent:") || isAgentText(event.prompt) ? "agent" : "human" });
+      activity.set(session, state);
+    });
     let lessonContext = "";
     if (context.sessionKey && !context.sessionKey.includes(":subagent:")) {
       const firstLessonPrompt = !lessonSessions.has(context.sessionKey);
@@ -170,6 +200,7 @@ export function registerRuntimeHooks(api: OpenClawPluginApi, config: PluginConfi
   });
   api.on("agent_end", async (event, context) => {
     if (skipStationRun(context)) return;
+    await contained("session-activity", async () => { reportActivity(context); });
     // A failed run captures nothing, but its observe session still ends here.
     try {
       if (!event.success || context.sessionKey?.includes(":subagent:")) return;
@@ -186,6 +217,7 @@ export function registerRuntimeHooks(api: OpenClawPluginApi, config: PluginConfi
   api.on("before_reset", async (event, context) => {
     if (skipStationRun(context)) return;
     startedSessions.delete(injectionSession(context));
+    activity.delete(injectionSession(context));
     try {
       await contained("before_reset", async () => {
         const originalScope = await connection.scope(context);
@@ -208,6 +240,7 @@ export function registerRuntimeHooks(api: OpenClawPluginApi, config: PluginConfi
     if (skipStationRun(context)) return;
     const sessionId = context.sessionId ?? event.sessionId;
     startedSessions.delete(injectionSession({ ...context, sessionId }));
+    activity.delete(injectionSession({ ...context, sessionId }));
     try {
       await contained("session_end", async () => {
         const scope = await connection.scope({ ...context, sessionId });
@@ -259,6 +292,8 @@ export function registerRuntimeHooks(api: OpenClawPluginApi, config: PluginConfi
       const event = customEvent.parse(raw);
       if (skipStationRun(event)) return;
       startedSessions.delete(injectionSession({ sessionKey: event.sessionKey,
+        workspaceDir: event.context?.workspaceDir }));
+      activity.delete(injectionSession({ sessionKey: event.sessionKey,
         workspaceDir: event.context?.workspaceDir }));
       await contained(`command:${event.action}`, async () => {
         const context: HostMemoryContext = { sessionKey: event.sessionKey, workspaceDir: event.context?.workspaceDir, ...event.context?.previousSessionEntry };

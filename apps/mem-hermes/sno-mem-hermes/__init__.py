@@ -7,6 +7,7 @@ import hashlib
 import json
 import logging
 import os
+import re
 import secrets
 import subprocess
 import sys
@@ -32,6 +33,54 @@ _HTTP_TIMEOUT_SECONDS = 900
 _CALLBACK_MAX_BODY_BYTES = 1_048_576
 _CALLBACK_TIMEOUT_SECONDS = 900
 _SESSION_QUERY = "standing decisions, open tasks, conventions and known pitfalls for this repository"
+_ACTIVITY_GAP_MS = 15 * 60_000
+_ACTIVITY_LONG_RUN_MS = 12 * 3_600_000
+_HEARTBEAT_TICK = re.compile(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ \[[^\]\n]+\] tick=\d+")
+
+
+@dataclass(frozen=True, slots=True)
+class ActivityCursor:
+    last_ts: int = 0
+    run_start: int = 0
+    agent_driven: bool = False
+    counted: bool = False
+
+
+def _fold_activity(
+    cursor: ActivityCursor, records: list[tuple[int, Literal["human", "agent"] | None]],
+) -> tuple[ActivityCursor, dict[str, int]]:
+    """Mirror packages/memory/config/session-activity.ts without reading Hermes's database."""
+    last, start, agent, counted = cursor.last_ts, cursor.run_start, cursor.agent_driven, cursor.counted
+    window = last if start > 0 else records[0][0]
+    active = team = human = runs = longest = 0
+    for timestamp, incoming in records:
+        if start == 0:
+            start = timestamp
+        elif timestamp > last:
+            gap = timestamp - last
+            if gap <= _ACTIVITY_GAP_MS:
+                active += gap
+                if agent:
+                    team += gap
+            else:
+                longest = max(longest, last - start)
+                start, counted = timestamp, False
+        last = max(last, timestamp)
+        length = last - start
+        longest = max(longest, length)
+        if not counted and length >= _ACTIVITY_LONG_RUN_MS:
+            runs += 1
+            counted = True
+        if incoming == "human":
+            human += 1
+            agent = False
+        elif incoming == "agent":
+            agent = True
+    return ActivityCursor(last, start, agent, counted), {
+        "window_start_ms": window, "window_end_ms": last, "active_ms": active,
+        "team_driven_ms": team, "runs_over_12h": runs, "longest_run_ms": longest,
+        "human_messages": human,
+    }
 
 
 class LlmFacade(Protocol):
@@ -458,6 +507,9 @@ class SnoMemoryProvider(MemoryProvider):
         self._capture_lock = threading.Lock()
         self._captures: dict[str, Future[dict[str, object]]] = {}
         self._committed: dict[str, dict[str, object]] = {}
+        self._activity: dict[str, ActivityCursor] = {}
+        # A new turn supersedes any prompt left behind by an interrupted turn.
+        self._activity_prompts: dict[str, list[tuple[int, Literal["human", "agent"]]]] = {}
 
     @property
     def name(self) -> str:
@@ -623,6 +675,41 @@ class SnoMemoryProvider(MemoryProvider):
         self._last_error = ""
         return text if isinstance(text, str) else ""
 
+    def on_turn_start(self, turn_number: int, message: str, **kwargs: object) -> None:
+        agent = (not self._primary or kwargs.get("author_is_bot") is True
+                 or "typed by the mail transport, not by the owner" in message
+                 or "No work is assigned by this startup message" in message
+                 or _HEARTBEAT_TICK.search(message) is not None)
+        with self._capture_lock:
+            self._activity_prompts[self._session_id] = [
+                (int(time.time() * 1000), "agent" if agent else "human")
+            ]
+
+    def _report_activity(self, session_id: str) -> None:
+        with self._capture_lock:
+            prompts = self._activity_prompts.get(session_id)
+            if not prompts:
+                return
+            ended_at = int(time.time() * 1000)
+            records: list[tuple[int, Literal["human", "agent"] | None]] = [prompts.pop(0)]
+            # The turn is working time, even without host events inside a fifteen-minute gap.
+            records.extend((ts, None) for ts in range(records[0][0] + _ACTIVITY_GAP_MS, ended_at, _ACTIVITY_GAP_MS))
+            records.append((ended_at, None))
+            cursor, payload = _fold_activity(
+                self._activity.get(session_id, ActivityCursor()),
+                records,
+            )
+            self._activity[session_id] = cursor
+        try:
+            subprocess.run(
+                ["sno", "observe", "append", "session.activity", "--agent=hermes",
+                 "--harness=hermes", *(f"--{key}={value}" for key, value in payload.items())],
+                cwd=self._cwd, capture_output=True, text=True, check=True, timeout=5,
+            )
+        except (OSError, subprocess.SubprocessError) as error:
+            cause = error.stderr if isinstance(error, subprocess.CalledProcessError) else str(error)
+            _LOG.error("session-activity: %s; no session.activity row for this window; host turn continues", cause)
+
     def sync_turn(
         self,
         user_content: str,
@@ -632,9 +719,10 @@ class SnoMemoryProvider(MemoryProvider):
         messages: list[dict[str, object]] | None = None,
         **_kwargs: object,
     ) -> None:
+        active_session = session_id or self._session_id
+        self._report_activity(active_session)
         if not self._primary:
             return
-        active_session = session_id or self._session_id
         normalized = _direct_messages(
             messages
             or [
@@ -769,6 +857,9 @@ class SnoMemoryProvider(MemoryProvider):
             self._rewind_epoch += 1
         if reset:
             self._rewind_epoch = 0
+            with self._capture_lock:
+                self._activity.pop(old_session_id, None)
+                self._activity_prompts.pop(old_session_id, None)
             _RUNTIME.invalidate()
 
     def shutdown(self) -> None:
