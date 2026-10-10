@@ -4,7 +4,7 @@ import { isAbsolute, join } from "node:path";
 import { doctor } from "./doctor.js";
 import { correctCommand, getCommand, recallCommand, rememberCommand } from "./explicit.js";
 import { postToolUse, preToolUse, sessionEnd, sessionStart, stop, userPromptSubmit } from "./hooks.js";
-import { installClaude } from "./install.js";
+import { installClaude, uninstallClaude } from "./install.js";
 import { importRepository } from "./import.js";
 import { MESSAGES } from "./messages.js";
 import { workspaceRoot } from "./scope.js";
@@ -63,6 +63,12 @@ async function main(): Promise<number> {
 			dryRun: args.includes("--dry-run"),
 			writeOutput: line => process.stdout.write(`${line}\n`),
 		});
+		return 0;
+	}
+	if (command === "uninstall") {
+		const configDir = option(args, "--config-dir");
+		if (!configDir || !isAbsolute(configDir)) throw new Error("--config-dir must be absolute");
+		await uninstallClaude({ configDir, writeOutput: line => process.stdout.write(`${line}\n`) });
 		return 0;
 	}
 	if (command === "import") {

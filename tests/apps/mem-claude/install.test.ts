@@ -197,6 +197,37 @@ describe("Claude settings installation and diagnosis", () => {
 		expect(await readFile(join(configDir, "settings.json"), "utf8")).toBe(malformed);
 	});
 
+	it("uninstall through the command removes exactly what install wrote and keeps the user's own hooks and rules", async () => {
+		// sno uninstall runs `dist/cli.js uninstall --config-dir <dir>`; without that command uninstall failed and left the hooks behind.
+		await install();
+		const installed = await settings();
+		installed.hooks.SessionStart[0].hooks.push({ type: "command", command: "/usr/local/bin/notify start" });
+		installed.hooks.Notification = [{ hooks: [{ type: "command", command: "/usr/local/bin/notify" }] }];
+		installed.permissions.allow.push("Bash(git status)");
+		installed.model = "opus";
+		await writeFile(join(configDir, "settings.json"), JSON.stringify(installed));
+
+		const cli = spawnSync(process.execPath, ["--import", "tsx", "apps/mem-claude/src/cli.ts", "uninstall", "--config-dir", configDir],
+			{ encoding: "utf8", timeout: 10_000 });
+
+		expect(cli.status, cli.stderr).toBe(0);
+		const remaining = await settings();
+		expect(remaining.hooks).toEqual({
+			SessionStart: [{ hooks: [{ type: "command", command: "/usr/local/bin/notify start" }] }],
+			Notification: [{ hooks: [{ type: "command", command: "/usr/local/bin/notify" }] }],
+		});
+		expect(remaining.permissions.allow).toEqual(["Bash(git status)"]);
+		expect(remaining.model).toBe("opus");
+		expect(await readdir(join(configDir, "skills"))).toEqual([]);
+	});
+
+	it("uninstall with nothing installed exits 0 and creates no file", async () => {
+		const cli = spawnSync(process.execPath, ["--import", "tsx", "apps/mem-claude/src/cli.ts", "uninstall", "--config-dir", configDir],
+			{ encoding: "utf8", timeout: 10_000 });
+		expect(cli.status, cli.stderr).toBe(0);
+		expect(await readdir(configDir)).toEqual([]);
+	});
+
 	it("reports only the missing event, respects disableAllHooks, and prints exactly four items", async () => {
 		await install();
 		let lines = await doctor(configDir);
