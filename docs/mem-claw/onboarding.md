@@ -7,7 +7,7 @@ First-run steps for `@snoai/mem-claw`.
 Requirements:
 
 - OpenClaw on your PATH
-- Node.js 24.16.0 or newer on the 24 line, or 26.1.0 or newer
+- Node.js 22.22.3 or newer on the 22 line, 24.15.0 or newer on the 24 line, or 25.9.0 or newer
 
 Complete the [shared memory setup](../memory-setup.md) once. It writes `~/.sno/settings.json` in
 Local First mode and downloads the embedding model. Do not rerun its settings block for an

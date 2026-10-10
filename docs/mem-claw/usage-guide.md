@@ -8,7 +8,7 @@ configuration changes for `@snoai/mem-claw`.
 Requirements:
 
 - OpenClaw on your PATH
-- Node.js 24.16.0 or newer on the 24 line, or 26.1.0 or newer
+- Node.js 22.22.3 or newer on the 22 line, 24.15.0 or newer on the 24 line, or 25.9.0 or newer
 
 ### Install
 
