@@ -8,7 +8,7 @@ let root: string;
 beforeEach(() => { root = mkdtempSync(join(tmpdir(), "hermes-activity-")); });
 afterEach(() => { rmSync(root, { recursive: true, force: true }); });
 
-function run(prompt: string, fail = false): { status: number | null; stderr: string; rows: unknown[] } {
+function run(prompt: string, fail = false, endedAt = 1800000060): { status: number | null; stderr: string; rows: unknown[] } {
 	writeFileSync(join(root, "sno"), `#!/usr/bin/env python3\nimport json, os, sys\n${fail ? 'sys.stderr.write("ledger unavailable"); sys.exit(1)' : 'with open(os.environ["ACTIVITY_OUTPUT"], "a") as output: output.write(json.dumps(sys.argv[1:]) + "\\n")'}\n`, { mode: 0o755 });
 	const result = spawnSync("python3", ["-c", `
 import importlib.util, json, sys, types
@@ -44,7 +44,7 @@ class OfflineClient:
 provider._client = OfflineClient()
 with patch("time.time", return_value=1800000000):
     provider.on_turn_start(1, sys.argv[3])
-with patch("time.time", return_value=1800000060):
+with patch("time.time", return_value=${endedAt}):
     provider.sync_turn(sys.argv[3], "Done")
 print("turn completed")
 `, resolve("apps/mem-hermes/sno-mem-hermes/__init__.py"), root, prompt], {
@@ -65,6 +65,15 @@ it.each([
 		"observe", "append", "session.activity", "--agent=hermes", "--harness=hermes",
 		"--window_start_ms=1800000000000", "--window_end_ms=1800000060000", "--active_ms=60000",
 		`--team_driven_ms=${team}`, "--runs_over_12h=0", "--longest_run_ms=60000", `--human_messages=${human}`,
+	]]);
+});
+it("counts the whole forty-minute turn as working time", () => {
+	const result = run("Fix the failing command", false, 1800002400);
+	expect(result.status).toBe(0);
+	expect(result.rows).toEqual([[
+		"observe", "append", "session.activity", "--agent=hermes", "--harness=hermes",
+		"--window_start_ms=1800000000000", "--window_end_ms=1800002400000", "--active_ms=2400000",
+		"--team_driven_ms=0", "--runs_over_12h=0", "--longest_run_ms=2400000", "--human_messages=1",
 	]]);
 });
 it("logs a failed append and continues the turn", () => {
