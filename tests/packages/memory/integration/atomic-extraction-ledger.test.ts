@@ -14,6 +14,8 @@ import {
 } from "../../../../packages/memory/src/store/store";
 import type { SqliteDatabaseLike } from "../../../../packages/memory/src/store/sqlite-runtime";
 import { createTestDb, createTestEmbedder, type TestDb } from "../../../apps/mem-claw/helpers/test-db";
+import { privateLogReference } from "@snoai/utils/logger";
+
 
 const BASE_PARAMETERS: AtomicExtractionRunParameters = {
 	maxInputTokens: 1_000,
@@ -301,7 +303,9 @@ describe("atomic extraction ledger", () => {
 			},
 		});
 		expect(captured.output).toContain("atomic extraction chunk stuck at reprocess attempt cap");
-		expect(captured.output).toContain(cappedKey.conversationId);
+		// Logs name the conversation by its private reference only, never by the raw id.
+		expect(captured.output).toContain(String(privateLogReference(cappedKey.conversationId).value));
+		expect(captured.output).not.toContain(cappedKey.conversationId);
 		expect(captured.output).toContain('"attemptCap":1');
 	});
 

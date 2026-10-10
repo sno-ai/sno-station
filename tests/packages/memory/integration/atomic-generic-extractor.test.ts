@@ -584,7 +584,7 @@ describe("atomic generic extractor", () => {
 		);
 		expect(successTransport.callKinds()).toEqual(["extraction", "extraction"]);
 		expect(successTransport.requests[0]?.maxTokens).toBe(2_000);
-		expect(Object.keys(successTransport.requests[0] ?? {}).sort()).toEqual(["maxTokens", "prompt"]);
+		expect(Object.keys(successTransport.requests[0] ?? {}).sort()).toEqual(["callId", "maxTokens", "prompt"]);
 		expect(readLedger(fixture, successKey)).toMatchObject({ state: "calls_recorded" });
 
 		const inputKey = ledgerKey("input-overflow");
