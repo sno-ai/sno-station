@@ -89,6 +89,7 @@ import type {
 	MemoryStore,
 	TaskLifecycleWriteInput,
 } from "../../store/store";
+import { AtomicExtractionCompletedElsewhere } from "../../store/store";
 import { countTodoTransitionsWithoutSource } from "../../store/todo-store";
 
 /** One (older, newer) pair put to the conflict-adjudication adapter; its raw reply, or null. */
@@ -1683,6 +1684,11 @@ export async function runAtomicMemoryExtraction(
 	}
 	return { status: "complete", records: resolved.records, write };
 	} catch (error) {
+		// Another capture of the same turn finished this chunk first: its rows are written, so this run is a skip.
+		if (error instanceof AtomicExtractionCompletedElsewhere) {
+			diagnostic.outcome = "skip";
+			return { status: "skip", entry: error.entry };
+		}
 		diagnostic.outcome = diagnostic.persisted > 0 ? "partial" : "failed";
 		throw error;
 	} finally {

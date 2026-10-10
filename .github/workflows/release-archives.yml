@@ -101,14 +101,24 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ inputs.tag }}
         run: |
-          # A program version lives in exactly one release. sno setup refuses to choose between two releases that carry
-          # the same archive ("ambiguous release asset"), so an archive that an earlier release already has is not attached again.
-          # Only published releases count (plus this draft): anonymous users never see another draft's files.
-          existing=$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" --jq ".[] | select(.draft == false or .tag_name == \"$TAG\") | .assets[].name")
+          # A program version lives in exactly one published release. sno setup refuses to choose between two releases that
+          # carry the same archive ("ambiguous release asset"). The newest page should still offer the downloads, so an archive
+          # that an earlier release already has is copied to this draft byte for byte; the older copy is removed when this
+          # release is published (scripts/npm-release.sh finalize). Another draft's files are never counted: nobody sees them.
+          held=$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" --jq '.[] | select(.draft == false and .tag_name != env.TAG) | .tag_name as $t | .assets[] | "\($t) \(.name)"')
+          on_draft=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name')
+          mkdir -p carried
           find archives -name '*.tar.gz' | while read -r file; do
             name=$(basename "$file")
-            if grep -qxF "$name" <<< "$existing"; then
-              echo "skip $name: a release already carries it"
+            if grep -qxF "$name" <<< "$on_draft"; then
+              echo "skip $name: $TAG already has it"
+              continue
+            fi
+            holder=$(awk -v n="$name" '$2 == n { print $1; exit }' <<< "$held")
+            if [ -n "$holder" ]; then
+              echo "copy $name from $holder"
+              gh release download "$holder" --repo "$GITHUB_REPOSITORY" --pattern "$name" --dir carried
+              gh release upload "$TAG" "carried/$name" --repo "$GITHUB_REPOSITORY"
             else
               gh release upload "$TAG" "$file" --repo "$GITHUB_REPOSITORY"
             fi

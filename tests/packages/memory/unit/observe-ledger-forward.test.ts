@@ -73,10 +73,10 @@ class ObservedObservability extends PluginObservability {
 	}
 }
 
-function observability(): ObservedObservability {
+function observability(agentId = "claude-code"): ObservedObservability {
 	const config = pluginConfigSchema.parse({
 		embedding: { provider: "local-onnx" },
-		observe: { enabled: true, agentId: "claude-code", baseUrl: "http://127.0.0.1:9" },
+		observe: { enabled: true, agentId, baseUrl: "http://127.0.0.1:9" },
 	});
 	const instance = new ObservedObservability(config, root, { warn: (message) => logs.push(message) });
 	instances.push(instance);
@@ -195,13 +195,19 @@ describe("laneForEventType", () => {
 });
 
 describe("PluginObservability.emitError", () => {
-	it("lands one error row carrying the skin component and the operation as context", async () => {
-		await observability().emitError("memory.write:throw", new Error("disk full"));
+	it.each([
+		["claude-code", "mem-claude"],
+		["codex", "mem-codex"],
+		["openclaw", "mem-claw"],
+		["hermes", "mem-hermes"],
+		["cursor", "mem-cursor"],
+	])("lands one error row for %s carrying its component and operation as context", async (agentId, component) => {
+		await observability(agentId).emitError("memory.write:throw", new Error("disk full"));
 		const errors = envelopes().filter((row) => row.event_type === "error");
 		expect(errors).toHaveLength(1);
 		expect(errors[0].payload).toMatchObject({
 			kind: "memory.write:throw",
-			component: "mem-claude",
+			component,
 			context: "memory.write",
 			recoverable: false,
 		});

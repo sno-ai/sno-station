@@ -322,12 +322,16 @@ describe("documented HTTP runtime claims", () => {
 			}
 		}
 	});
-	it.each(["missing", "dead", "stale socket"])("converges concurrent package-client starts with %s discovery", async state => {
+	it.each(["missing", "dead", "stale socket", "pid reused"])("converges concurrent package-client starts with %s discovery", async state => {
 		const discoveryPath = join(root, "station", "sidecar.json");
 		if (state === "dead") {
 			const exited = spawn(process.execPath, ["-e", ""], { stdio: "ignore" });
 			await once(exited, "close");
 			writeFileSync(discoveryPath, JSON.stringify({ pid: exited.pid, port: 1, token: "a".repeat(64) }));
+		} else if (state === "pid reused") {
+			// A sidecar killed outright (power loss, out of memory) leaves its discovery file, and after a reboot its pid
+			// can belong to an unrelated live process. Every session then waited out its hook and got no memory.
+			writeFileSync(discoveryPath, JSON.stringify({ pid: process.pid, port: 1, token: "a".repeat(64) }));
 		} else expect(existsSync(discoveryPath)).toBe(false);
 		if (state === "stale socket") {
 			const holder = spawn(process.execPath, ["-e", `

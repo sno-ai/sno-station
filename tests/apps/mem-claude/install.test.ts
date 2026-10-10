@@ -103,6 +103,53 @@ describe("Claude settings installation and diagnosis", () => {
 		expect(installed.env).toEqual(initial.env);
 	});
 
+	it("leaves one hook per event when two of its own entries from earlier installs are already present", async () => {
+		await install();
+		const initial = await settings();
+		const foreign = { matcher: "startup", hooks: [{ type: "command", command: "/opt/foreign/hook", timeout: 7 }] };
+		for (const [event, subcommand] of events) {
+			initial.hooks[event] = [
+				{ hooks: [{ type: "command", command: `'/old/release/sno-mem-claude' ${subcommand}`, timeout: 1 }] },
+				foreign,
+				{ hooks: [{ type: "command", command: `'/older/release/sno-mem-claude' ${subcommand}`, timeout: 1 }] },
+			];
+		}
+		await writeFile(join(configDir, "settings.json"), JSON.stringify(initial));
+
+		await install();
+
+		const installed = await settings();
+		for (const [event, subcommand] of events) {
+			const own = JSON.stringify(installed.hooks[event]).split(`memory hook ${subcommand} --harness claude`).length - 1;
+			expect(own, `${event} must run its hook once`).toBe(1);
+			expect(JSON.stringify(installed.hooks[event])).toContain("/opt/foreign/hook");
+		}
+	});
+
+	it("cleans up the hooks and rule written with a replaced sno's ' (deleted)' path and never writes that path", async () => {
+		// sno replaced while it ran reads its own path back as "<path> (deleted)". Setup wrote every hook and the
+		// permission rule twice, once at that path; the copy that cannot run failed in every session.
+		const deleted = `${programPath} (deleted)`;
+		await install();
+		const initial = await settings();
+		for (const [event, subcommand, timeout] of events) {
+			initial.hooks[event] = [
+				{ hooks: [{ type: "command", command: hookCommand(deleted, subcommand), timeout }] },
+				{ hooks: [{ type: "command", command: hookCommand(programPath, subcommand), timeout }] },
+			];
+		}
+		initial.permissions.allow = [`Bash(${deleted} memory *)`, `Bash(${programPath} memory *)`];
+		await writeFile(join(configDir, "settings.json"), JSON.stringify(initial));
+
+		await installClaude({ configDir, programPath: deleted, writeOutput: () => {} });
+
+		const installed = await settings();
+		for (const [event, subcommand, timeout] of events) {
+			expect(installed.hooks[event], event).toEqual([{ hooks: [{ type: "command", command: hookCommand(programPath, subcommand), timeout }] }]);
+		}
+		expect(installed.permissions.allow).toEqual([`Bash(${programPath} memory *)`]);
+	});
+
 	it("rewrites its hooks and rule when sno is at another path, never hooking an event twice", async () => {
 		await install();
 		await installClaude({ configDir, programPath: "/other/place/sno", writeOutput: () => {} });
@@ -148,6 +195,37 @@ describe("Claude settings installation and diagnosis", () => {
 		expect(cli.status, cli.stderr).toBe(0);
 		expect(cli.stdout.split("\n").filter(line => /pars|JSON|syntax/i.test(line))).toHaveLength(1);
 		expect(await readFile(join(configDir, "settings.json"), "utf8")).toBe(malformed);
+	});
+
+	it("uninstall through the command removes exactly what install wrote and keeps the user's own hooks and rules", async () => {
+		// sno uninstall runs `dist/cli.js uninstall --config-dir <dir>`; without that command uninstall failed and left the hooks behind.
+		await install();
+		const installed = await settings();
+		installed.hooks.SessionStart[0].hooks.push({ type: "command", command: "/usr/local/bin/notify start" });
+		installed.hooks.Notification = [{ hooks: [{ type: "command", command: "/usr/local/bin/notify" }] }];
+		installed.permissions.allow.push("Bash(git status)");
+		installed.model = "opus";
+		await writeFile(join(configDir, "settings.json"), JSON.stringify(installed));
+
+		const cli = spawnSync(process.execPath, ["--import", "tsx", "apps/mem-claude/src/cli.ts", "uninstall", "--config-dir", configDir],
+			{ encoding: "utf8", timeout: 10_000 });
+
+		expect(cli.status, cli.stderr).toBe(0);
+		const remaining = await settings();
+		expect(remaining.hooks).toEqual({
+			SessionStart: [{ hooks: [{ type: "command", command: "/usr/local/bin/notify start" }] }],
+			Notification: [{ hooks: [{ type: "command", command: "/usr/local/bin/notify" }] }],
+		});
+		expect(remaining.permissions.allow).toEqual(["Bash(git status)"]);
+		expect(remaining.model).toBe("opus");
+		expect(await readdir(join(configDir, "skills"))).toEqual([]);
+	});
+
+	it("uninstall with nothing installed exits 0 and creates no file", async () => {
+		const cli = spawnSync(process.execPath, ["--import", "tsx", "apps/mem-claude/src/cli.ts", "uninstall", "--config-dir", configDir],
+			{ encoding: "utf8", timeout: 10_000 });
+		expect(cli.status, cli.stderr).toBe(0);
+		expect(await readdir(configDir)).toEqual([]);
 	});
 
 	it("reports only the missing event, respects disableAllHooks, and prints exactly four items", async () => {

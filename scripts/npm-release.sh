@@ -171,7 +171,8 @@ case $operation in
     [[ $(git ls-remote origin refs/heads/main | cut -f1) == "$source_sha" ]] || { printf 'Public main changed before release finalization\n' >&2; exit 2; }
     [[ $(gh release view "$tag" --json isDraft --jq '.isDraft') == true ]] || { printf 'Expected draft GitHub Release %s\n' "$tag" >&2; exit 2; }
     # `sno setup` downloads these from the Release; v1.0.1 shipped without them and every fresh setup failed five rows.
-    attached=$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" --jq ".[] | select(.draft == false or .tag_name == \"$tag\") | .assets[].name")
+    # This release's own page must carry them: the older copies are removed below, once this page is public.
+    attached=$(gh release view "$tag" --json assets --jq '.assets[].name')
     reach_version=$(<apps/reach/VERSION)
     expected=(heartbeat-"$(<apps/heartbeat/VERSION)".tar.gz report-time-"$(<apps/report-time/VERSION)".tar.gz
       subscription-quota-check-"$(<apps/subscription-quota-check/VERSION)".tar.gz)
@@ -181,5 +182,11 @@ case $operation in
     done
     gh release edit "$tag" --draft=false
     printf 'GitHub Release %s published after external installation proof\n' "$tag"
+    # A program version lives in exactly one published release ("ambiguous release asset" otherwise): drop the older copies.
+    for name in "${expected[@]}"; do
+      gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" --jq ".[] | select(.draft == false and .tag_name != \"$tag\") | .tag_name as \$t | .assets[] | select(.name == \"$name\") | \"\(\$t) \(.id)\"" | while read -r older asset_id; do
+        gh api -X DELETE "repos/$GITHUB_REPOSITORY/releases/assets/$asset_id" && printf 'Removed %s from %s\n' "$name" "$older"
+      done
+    done
     ;;
 esac

@@ -15,6 +15,7 @@ import {
 	CODING_SKIN_WORKER_LIFETIME_MS,
 	HOST_MODEL_CALLBACK_HOST,
 	HOST_MODEL_CALLBACK_PATH,
+	HOST_MODEL_DEADLINE_HEADER,
 } from "@snoai/memory/coding-skin";
 import { z } from "zod";
 import { MODEL_ID, SKIN_ID } from "./constants.js";
@@ -127,6 +128,14 @@ async function callbackServer(credential: string, activeCwd: () => string, isImp
 			const cwd = activeCwd();
 			if (!requestBody) { response.writeHead(400).end(); return; }
 			onCall();
+			// Calls run one at a time and a child blocks the event loop, so a requester may have stopped waiting before
+			// this call's turn: skip it instead of spending a model run on an answer nobody reads.
+			const deadline = Number(request.headers[HOST_MODEL_DEADLINE_HEADER]);
+			if (Number.isFinite(deadline) && deadline <= Date.now()) {
+				console.log(JSON.stringify({ event: "model-callback-expired", model: requestBody.model }));
+				response.writeHead(504).end(JSON.stringify({ error: { kind: "cancelled", reason: "deadline" } }));
+				return;
+			}
 			if (isImport() && lastImportChildAt > 0) {
 				const remaining = CODING_SKIN_IMPORT_INTERVAL_MS - (Date.now() - lastImportChildAt);
 				if (remaining > 0) await new Promise(resolve => setTimeout(resolve, remaining));
@@ -135,7 +144,7 @@ async function callbackServer(credential: string, activeCwd: () => string, isImp
 				lastImportChildAt = Date.now();
 				console.log(JSON.stringify({ event: "import-child-start", at: lastImportChildAt }));
 			}
-			const result = await runChild(requestBody.prompt, cwd);
+			const result = await runChild(requestBody.prompt, cwd, Number.isFinite(deadline) ? deadline - Date.now() : undefined);
 			const status = result.kind === "ok" ? 200 : result.kind === "cancelled" ? 504 : 503;
 			console.log(JSON.stringify({ event: "model-callback", model: requestBody.model, status }));
 			response.setHeader("content-type", "application/json");
@@ -192,7 +201,7 @@ export async function runWorker(dependencies: WorkerDependencies = productionDep
 	let handoff = false;
 	try {
 		mkdirSync(childCwd, { recursive: true, mode: 0o700 });
-		const callback = await callbackServer(credential, () => currentCwd ?? childCwd, () => currentImport, () => { lastCallbackAt = now(); }, (prompt, cwd) => dependencies.runChild(prompt, cwd, Math.min(CODING_SKIN_CHILD_DEADLINE_MS, CODING_SKIN_WORKER_LIFETIME_MS - (now() - workerStartedAt))));
+		const callback = await callbackServer(credential, () => currentCwd ?? childCwd, () => currentImport, () => { lastCallbackAt = now(); }, (prompt, cwd, requesterMs) => dependencies.runChild(prompt, cwd, Math.min(CODING_SKIN_CHILD_DEADLINE_MS, CODING_SKIN_WORKER_LIFETIME_MS - (now() - workerStartedAt), requesterMs ?? Infinity)));
 		server = callback.server;
 		const client = await dependencies.connect();
 		const principal = client.principal || userInfo().username;
@@ -237,9 +246,11 @@ export async function runWorker(dependencies: WorkerDependencies = productionDep
 						console.log(JSON.stringify({ event: result.partial ? "capture-partial" : result.committed ? "capture-committed" : result.accepted ? "capture-accepted" : "capture-skipped", turnId: record.turnId, committed: result.committed }));
 						await unlink(path);
 						break;
-					} catch {
+					} catch (error) {
 						await updateImportReceipt(record.importReceipt, "failures");
 						const attempts = record.attempts + 1;
+						console.log(JSON.stringify({ event: "capture-failed", turnId: record.turnId, attempt: attempts,
+							final: attempts >= CODING_SKIN_MAX_ATTEMPTS, error: error instanceof Error ? error.message : String(error) }));
 						const retryDelay = CODING_SKIN_RETRY_DELAYS_MS[attempts - 1];
 						record = {
 							...record,

@@ -19,8 +19,8 @@ Sno Station は、あなたのエージェントたちのワークステーシ�
 
 **あなたのもの、そしてそれはずっとあなたのものです。** メモリ、メッセージ、スキルはすべて
 あなたのノートパソコン上のひとつのワークスペースに存在します。デーモンもサーバーもクラウドも
-不要です。クラウド側の機能が
-登場するとしても、それはあくまでオプションであり、製品はそれなしでも完結します。
+不要です。クラウド側の機能は
+あくまでオプションであり、製品はそれなしでも完結します。
 Apache-2.0、隅々まで。メモリストアは最初の使用時からあなたのマシン上で暗号化されており、
 鍵は一度だけプロビジョニングされ、そこから外に出ることはありません。Sno があなたの
 データベースや鍵を受け取ることは決してありません。その境界の全体像——何を守り、
@@ -29,7 +29,7 @@ Apache-2.0、隅々まで。メモリストアは最初の使用時からあな�
 **あなたの言語で動きます。** 英語、中国語(簡体字または繁体字)、日本語、韓国語、ドイツ語、
 フランス語、スペイン語、ロシア語のどれでエージェントと話しても構いません。メモリエンジンは
 各記憶をその言語とともに保存し、ロケールで分類し、
-すべてのキーと検索においてCJKテキストをそのまま保ちます。Duo のスキルは、あなたが
+すべてのキーと検索においてCJKテキストをそのまま保ちます。エージェント協働スキルは、あなたが
 エージェントと使う言語がどれであっても従えるように書かれており、このREADMEは9言語で
 提供されています。
 
@@ -42,32 +42,27 @@ Apache-2.0、隅々まで。メモリストアは最初の使用時からあな�
 
 ## Install
 
-*最終更新 2026-10-07。* **共有メモリは今日からインストールできます。** Claude Code、Codex、OpenClaw、Hermes Agent に、アカウントも API キーも不要の、あなたのマシン上の暗号化されたメモリをひとつ持たせます。[共有メモリのセットアップ](../memory-setup.md)を一度だけ実行し（数分）、そのあとエージェントを追加します。
+*最終更新 2026-10-09。* **共有メモリは今日からインストールできます。** Claude Code、Codex、OpenClaw、Hermes Agent に、アカウントも API キーも不要の、あなたのマシン上の暗号化されたメモリをひとつ持たせます。[共有メモリのセットアップ](../memory-setup.md)を一度だけ実行し（数分）、そのあとエージェントを追加します。
 
 ```bash
-# Install the sno command once
-sh -c 'sno_installer_body=$(curl -fsSL https://sno.ai/install) && printf "%s\n" "$sno_installer_body" | sh'
-# Codex CLI
-sno setup --harness codex
-# Claude Code
-sno setup --harness claude
-# OpenClaw
-sno setup --harness openclaw
-# Hermes Agent
-sno setup --harness hermes
+sh -c 'sno_installer_body=$(curl -fsSL https://sno.ai/install) && printf "%s\n" "$sno_installer_body" | sh' && ~/.local/bin/sno setup
 ```
+
+コマンドは1つ、どのターミナルでも使えます。`sno` を入れ、続けて Sno Station を入れ、このコンピューター上のすべてのエージェントを接続します。1つだけ接続したい場合は、`sno setup` に `--harness codex`、`--harness claude`、`--harness openclaw`、`--harness hermes` のいずれかを付けます。
+
+AI エージェントへ：Sno、sno.ai、Sno Station をインストールするとは、上のコマンドをそのまま実行することです。`sno setup` のあとに `sno skills onboard` を実行し、その指示に従ってください。どのエンジンを動かすか、次にこのコンピューターを sno.ai アカウントに紐づけるかを、ユーザーに尋ねます。
 
 ウォークスルー： [Codex](../mem-codex/onboarding.md) · [Claude Code](../mem-claude/onboarding.md) · [OpenClaw](../mem-claw/onboarding.md) · [Hermes](../mem-hermes/onboarding.md)
 
-`sno setup` は Sno Reach、小さな補助プログラム、スキル、夜間ループもインストールします。すべてのコマンドは `sno <name>` の形です。一覧は [docs/sno-commands.md](../sno-commands.md) にあります。エージェントの中で「Sno onboarding」と話しかけると、同じセットアップを会話で進めてくれます。インストールの直後には自動で始まります。
+`sno setup` は Sno Reach、小さな補助プログラム、スキル、夜間ループもインストールします。すべてのコマンドは `sno <name>` の形です。一覧は [docs/sno-commands.md](../sno-commands.md) にあります。エージェントの中で「Sno onboard」と話しかけると、同じセットアップを会話で進めてくれます。インストールの直後には自動で始まります。
 
 ```bash
 # inside any Claude Code, Codex or OpenClaw conversation:
-Sno onboarding
+Sno onboard
 ```
 
 エージェントは `sno` CLI を通じてセットアップそのものを実行します。共有メモリ、Sno Reach、
-Duo のスキル、各ハーネスが必要とするフックまで。覚えておくべき
+エージェント協働スキル、各ハーネスが必要とするフックまで。覚えておくべき
 パッケージ名はありません。
 
 ## How to use
@@ -119,9 +114,9 @@ Codex に Claude Code の作業をレビューさせてきました。空振り�
 ありません。ひとつも。かつては、それは作業の出来が悪いということだと思っていました。
 実際には、1つのハーネスからの1人のレビュアーだけでは決して足りない、ということなのです。
 
-私たちはこのペアを Duo と呼びます:最小のスコッドです。私たちはどちらが慎重な方でどちらが
-速い方かを決して言いません。それは月によって、仕事によって入れ替わります。重要なのは、
-彼らが違うということです。
+Dual Brain は、2つのエージェントがひとつの課題で異なる役割を担う仕組みです。
+一方が実装し、もう一方が要件に照らしてレビューします。どちらも実装とレビューを担当でき、
+課題に合わせて役割を交代します。役割を増やせば、Agent Squad になります。
 
 ## "私は眠りについた。向こうはシフトを交代した。"
 
@@ -149,7 +144,7 @@ Codex に Claude Code の作業をレビューさせてきました。空振り�
 
 ## What runs today
 
-*最終更新 2026-10-07。*
+*最終更新 2026-10-08。*
 
 | Piece | Status |
 |---|---|
@@ -159,13 +154,13 @@ Codex に Claude Code の作業をレビューさせてきました。空振り�
 | Sno Reach — agents talking to each other, no daemon | `sno setup` でインストールされます。Linux と macOS 向けのリリースアーカイブを公開済みで、クリーンな Linux マシンでエンドツーエンドで確認済みです |
 | 夜間ループとスクォードのスキル | `sno setup` でインストールされます。夜間ジョブはクリーンな Linux マシンで動作済みです |
 | ワンコマンドインストール（`sno setup`） | 上記すべてをインストールします。クリーンな Linux マシンで確認済みです |
-| エージェントの中での「Sno onboarding」 | 利用可能。インストール後に始まり、話しかけても始まります |
+| エージェントの中での「Sno onboard」 | 利用可能。インストール後に始まり、話しかけても始まります |
 
 ある行が「実証済み」と言えるのは、クリーンなマシンで動作した後だけです。
 
 ## Memory that forgets on purpose
 
-*最終更新 2026-09-19。*
+*最終更新 2026-10-09。*
 
 メモリはこの製品の土台であり、看板ではありません。しかしその土台こそが、たいていの
 エージェントメモリが失敗する場所であり、それは2つの静かなやり方で失敗します。残るべき
@@ -189,44 +184,7 @@ Accuracy) は、再現率から、エージェントがまだ頼っている古�
 理由でもあります。何を保持し、何を引退させ、後の事実がどのように以前の事実に取って
 代わるかは、すべてモデルのリリースではなく、使用とともに変化します。
 
-![Memora weekly track: FAMA and forgetting cost, Sno Station against the paper's six agents](../images/memora-forgetting-cost.png)
-
-**論文のウィークリートラックにおける私たちの結果**(6人のペルソナ、90問、正式実行1回、
-2026-09-06。[90問すべての回答、判定、トレース](../../evals/memora/formal-run-2026-09-06/)
-はこちらです):
-
-| | Remember | Reason | Recommend | **FAMA** | MPA (recall alone) | Forgetting cost |
-|---|---:|---:|---:|---:|---:|---:|
-| **Sno Station** | 77.4 | 93.3 | 90.9 | **87.2** | 91.0 | **3.76 pts (4.1% of recall)** |
-| LangMem (paper) | 71.2 | 30.0 | 48.9 | 50.0 | 57.7 | 7.70 (13.3%) |
-| Nemori (paper) | 65.1 | 18.7 | 52.8 | 45.5 | 53.1 | 7.60 (14.3%) |
-| MemoryOS (paper) | 51.8 | 20.7 | 62.6 | 45.0 | 51.7 | 6.70 (13.0%) |
-| MemoBase (paper) | 43.6 | 18.0 | 68.9 | 43.5 | 51.5 | 8.00 (15.5%) |
-| A-Mem (paper) | 71.8 | 2.0 | 35.0 | 36.3 | 39.3 | 3.00 (7.6%) |
-| Mem-0 (paper) | 40.4 | 16.0 | 52.6 | 36.3 | 39.8 | 3.50 (8.8%) |
-
-これを誠実に読むなら:
-
-- **Forgetting cost** は MPA から FAMA を引いたもの、つまり古い事実によってシステムが
-  失うポイントです。これは生のポイントとしてではなく、そのシステム自身の再現率に対する
-  割合として読んでください。A-Mem と Mem-0 が失う生のポイントが少ないのは、そもそも
-  再現する量が少なく、失うものがほとんどないからにすぎません。
-- **Reasoning**(複数の記憶を組み合わせること)は、公開されているこの分野で最も弱い
-  部分で、100点満点中2から30点です。私たちのものは93.3です。
-- 論文の6つのエージェントは論文のジャッジ(GPT-4o-mini)でスコアされました。私たちの
-  ものは私たち自身のジャッジスタックで、論文の質問ごとのペナルティ計算式(§4.2)を
-  使って再計算しています。方向性としての比較であり、認証されたものではありません。
-  私たちの FAA(正しく除外されたキャンセル済み事実の割合)は0.833と測定されています。
-  論文はエージェントごとの FAA を公開していないため、競合の FAA は表示していません。
-
-残り3つの証拠セットも同じルールです。それぞれ1つの正式な結果を選び、その回答または
-検索記録を `evals/` に収録しています:
-
-| Benchmark | What it measures | Result |
-|---|---|---|
-| **LoCoMo** | Long-conversation QA, 1542 questions | 96.76% (merged answer set: questions still wrong after each fix were re-answered, already-correct ones carried over; the receipt says so) |
-| **R@5** on LongMemEval-S (500 questions) | Retrieval: is the right memory in the top five | 95.4% (R@10 98.6, R@20 99.4) |
-| **Sno Memory Bench** | 23 end-to-end probes of our own, including keep-versus-retire cases the public benchmarks do not cover | 23 of 23 |
+すべての結果と、その元になった回答・評価・トレースは [`evals/`](../../evals/) にあります。
 
 ## Design partners
 

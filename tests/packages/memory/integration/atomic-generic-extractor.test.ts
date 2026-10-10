@@ -584,7 +584,7 @@ describe("atomic generic extractor", () => {
 		);
 		expect(successTransport.callKinds()).toEqual(["extraction", "extraction"]);
 		expect(successTransport.requests[0]?.maxTokens).toBe(2_000);
-		expect(Object.keys(successTransport.requests[0] ?? {}).sort()).toEqual(["maxTokens", "prompt"]);
+		expect(Object.keys(successTransport.requests[0] ?? {}).sort()).toEqual(["callId", "maxTokens", "prompt"]);
 		expect(readLedger(fixture, successKey)).toMatchObject({ state: "calls_recorded" });
 
 		const inputKey = ledgerKey("input-overflow");
@@ -601,6 +601,25 @@ describe("atomic generic extractor", () => {
 			failed_reply: null,
 			raw_chunk: JSON.stringify(TURNS),
 		});
+	});
+
+	it("skips a chunk that another capture of the same turn completed while this one waited for the model", async () => {
+		// A worker that hit its lifetime cap abandoned a long capture and the next worker sent the same turn again; the
+		// first run completed the chunk while the second waited for its model, and the second then failed with
+		// "Cannot record calls from atomic extraction state 'complete'", so the turn was marked failed three times.
+		const key = ledgerKey("completed-elsewhere");
+		const scripted = new ScriptedTransport(twoLaneCompletions([wireRecord()]));
+		const racing: AtomicGenericExtractionTransport = {
+			async complete(request) {
+				fixture.runtime.db.prepare(`
+					UPDATE nodix_atomic_extraction_ledger SET state = 'complete'
+					WHERE conversation_id = ? AND chunk_hash = ? AND pipeline_version = ?
+				`).run(key.conversationId, key.chunkHash, key.pipelineVersion);
+				return scripted.complete(request);
+			},
+		};
+		await expect(runAtomicGenericExtractionPass(input(key, racing))).resolves.toMatchObject({ status: "skip" });
+		expect(readLedger(fixture, key)).toMatchObject({ state: "complete" });
 	});
 
 	it("returns every valid record without a numeric record cap", async () => {

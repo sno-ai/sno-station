@@ -20,6 +20,13 @@ import {
 import { log, StorageError } from "./memory-store-shared";
 import { privateLogReference } from "@snoai/utils/logger";
 
+/** Another capture of the same turn completed this chunk while this one was still running; its rows are written. */
+export class AtomicExtractionCompletedElsewhere extends StorageError {
+	constructor(readonly entry: AtomicExtractionLedgerEntry, message: string) {
+		super(message);
+	}
+}
+
 interface AtomicExtractionLedgerDatabaseRow {
 	conversationId: string;
 	chunkHash: string;
@@ -254,6 +261,9 @@ Object.assign(MemoryStore.prototype, {
 		validateKey(key);
 		assertTimestamp(nowMs);
 		const entry = readEntry(this, key);
+		if (entry.state === "complete") {
+			throw new AtomicExtractionCompletedElsewhere(entry, "Cannot record calls from atomic extraction state 'complete'");
+		}
 		if (entry.state !== "open" && entry.state !== "calls_recorded") {
 			throw new StorageError(`Cannot record calls from atomic extraction state '${entry.state}'`);
 		}
@@ -278,6 +288,9 @@ Object.assign(MemoryStore.prototype, {
 		assertTimestamp(nowMs);
 		if (runParameters !== undefined) validateRunParameters(runParameters);
 		const entry = readEntry(this, key);
+		if (entry.state === "complete") {
+			throw new AtomicExtractionCompletedElsewhere(entry, "Cannot pend atomic extraction from state 'complete'");
+		}
 		if (entry.state !== "calls_recorded") {
 			throw new StorageError(`Cannot pend atomic extraction from state '${entry.state}'`);
 		}
@@ -353,6 +366,9 @@ Object.assign(MemoryStore.prototype, {
 		assertTimestamp(nowMs);
 		const transaction = this.sqlite.transaction(() => {
 			const entry = readEntry(this, key);
+			if (entry.state === "complete") {
+				throw new AtomicExtractionCompletedElsewhere(entry, "Cannot complete atomic extraction from state 'complete'");
+			}
 			if (entry.state !== "calls_recorded") {
 				throw new StorageError(`Cannot complete atomic extraction from state '${entry.state}'`);
 			}

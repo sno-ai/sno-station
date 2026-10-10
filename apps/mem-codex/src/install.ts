@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, join } from "node:path";
 import {
 	CODING_SKIN_HOOKS,
@@ -7,6 +7,7 @@ import {
 	type CodingSkinHookName,
 	codingSkinHookCommand,
 	isCodingSkinHookCommand,
+	snoProgramPath,
 } from "@snoai/memory/coding-skin";
 import { APP_NAME } from "./constants.js";
 import { MESSAGES } from "./messages.js";
@@ -114,6 +115,11 @@ function stripTrustSections(text: string, keys: string[]): string {
 	return stripped.trimEnd();
 }
 
+// Codex caps a SessionEnd hook at 3 seconds and prints a clamping warning in every session that asks for more.
+export function codexHookTimeout(event: CodingSkinHookName): number {
+	return event === "SessionEnd" ? Math.min(CODING_SKIN_HOOKS[event].timeout, 3) : CODING_SKIN_HOOKS[event].timeout;
+}
+
 function rules(programPath: string): string {
 	return CODING_SKIN_MODEL_COMMANDS.map(command =>
 		`prefix_rule(pattern=[${JSON.stringify(programPath)}, "memory", ${JSON.stringify(command)}], decision="allow")`)
@@ -124,6 +130,51 @@ async function skillText(): Promise<string> {
 	return readFile(new URL("../skills/sno-mem-codex/SKILL.md", import.meta.url), "utf8");
 }
 
+// Removes the hooks, trust entries, rules and skill installCodex wrote. An emptied group stays as a placeholder while
+// a later group follows, so every foreign hook keeps the position its trust entry names.
+export async function uninstallCodex(options: { codexHome: string; writeOutput: (line: string) => void }): Promise<void> {
+	const hooksPath = join(options.codexHome, "hooks.json");
+	const configPath = join(options.codexHome, "config.toml");
+	const hooks = await readHooks(hooksPath);
+	const before = JSON.stringify(hooks);
+	const ownedTrustKeys: string[] = [];
+	// A user hook after a removed Sno hook in the same group moves down; its trust entry moves with it.
+	const moved: Array<[string, string]> = [];
+	for (const event of Object.keys(CODING_SKIN_HOOKS) as CodingSkinHookName[]) {
+		const groups = hooks.hooks[event];
+		if (!groups) continue;
+		for (const [groupIndex, group] of groups.entries()) {
+			let removed = 0;
+			group.hooks = group.hooks.filter((current, hookIndex) => {
+				if (!isOwnedHookCommand(current.command, CODING_SKIN_HOOKS[event].subcommand)) {
+					if (removed) moved.push([trustKey(hooksPath, event, groupIndex, hookIndex), trustKey(hooksPath, event, groupIndex, hookIndex - removed)]);
+					return true;
+				}
+				ownedTrustKeys.push(trustKey(hooksPath, event, groupIndex, hookIndex));
+				removed += 1;
+				return false;
+			});
+		}
+		while (groups.length && groups[groups.length - 1]?.hooks.length === 0) groups.pop();
+		if (groups.length === 0) delete hooks.hooks[event];
+	}
+	if (JSON.stringify(hooks) !== before) await writeFile(hooksPath, `${JSON.stringify(hooks, null, 2)}\n`, { mode: 0o600 });
+	const config = await readFile(configPath, "utf8").catch(error => {
+		if (error instanceof Error && "code" in error && error.code === "ENOENT") return undefined;
+		throw error;
+	});
+	if (config !== undefined) {
+		// Moves only go down and run in increasing order, so a renamed entry is never renamed again.
+		const stripped = moved.reduce((text, [from, to]) =>
+			text.replace(`[hooks.state.${JSON.stringify(from)}]`, `[hooks.state.${JSON.stringify(to)}]`),
+		stripTrustSections(config, ownedTrustKeys));
+		if (stripped !== config.trimEnd()) await writeFile(configPath, stripped ? `${stripped}\n` : "", { mode: 0o600 });
+	}
+	await rm(join(options.codexHome, "rules", "sno-mem-codex.rules"), { force: true });
+	await rm(join(options.codexHome, "skills", "sno-mem-codex"), { recursive: true, force: true });
+	options.writeOutput(MESSAGES.uninstallComplete);
+}
+
 export async function installCodex(options: InstallOptions): Promise<void> {
 	if (!isAbsolute(options.codexHome) || !isAbsolute(options.programPath)) {
 		throw new Error("codex home and program path must be absolute");
@@ -132,6 +183,7 @@ export async function installCodex(options: InstallOptions): Promise<void> {
 	const configPath = join(options.codexHome, "config.toml");
 	const rulesPath = join(options.codexHome, "rules", "sno-mem-codex.rules");
 	const skillPath = join(options.codexHome, "skills", "sno-mem-codex", "SKILL.md");
+	const programPath = snoProgramPath(options.programPath);
 	const hooks = await readHooks(hooksPath);
 	const trust: string[] = [];
 	const ownedTrustKeys: string[] = [];
@@ -140,14 +192,18 @@ export async function installCodex(options: InstallOptions): Promise<void> {
 		const currentGroups = hooks.hooks[event] ?? [];
 		const hook: HookCommand = {
 			type: "command",
-			command: codingSkinHookCommand(options.programPath, details.subcommand, "codex"),
-			timeout: details.timeout,
+			command: codingSkinHookCommand(programPath, details.subcommand, "codex"),
+			timeout: codexHookTimeout(event),
 		};
 		let installed = false;
 		for (const [groupIndex, group] of currentGroups.entries()) {
+			const lastForeign = group.hooks.findLastIndex(current => !isOwnedHookCommand(current.command, details.subcommand));
 			group.hooks = group.hooks.flatMap((current, hookIndex) => {
 				if (!isOwnedHookCommand(current.command, details.subcommand)) return [current];
 				ownedTrustKeys.push(trustKey(hooksPath, event, groupIndex, hookIndex));
+				// A second copy is dropped unless a foreign hook follows it; an emptied group stays, so every
+				// foreign hook keeps the position Codex trusts.
+				if (installed && hookIndex > lastForeign) return [];
 				installed = true;
 				trust.push(trustSection(hooksPath, event, groupIndex, hookIndex, hook));
 				return [hook];
@@ -168,7 +224,7 @@ export async function installCodex(options: InstallOptions): Promise<void> {
 	const writes = [
 		{ path: hooksPath, content: `${JSON.stringify(hooks, null, 2)}\n` },
 		{ path: configPath, content: `${preservedConfig}${preservedConfig ? "\n\n" : ""}${trust.join("\n")}` },
-		{ path: rulesPath, content: rules(options.programPath) },
+		{ path: rulesPath, content: rules(programPath) },
 		{ path: skillPath, content: await skillText() },
 	];
 	for (const write of writes) {

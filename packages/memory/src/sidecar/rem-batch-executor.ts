@@ -66,6 +66,7 @@ import {
 	assertJobIdentity,
 } from "../engine/rem/index.js";
 import { createEmbedder, type Embedder } from "../engine/extraction/embedding-provider-client";
+import { remNeedsHost } from "./rem-trigger";
 import { readSettings } from "../contract/profile";
 import { settingsToPluginConfig, type Settings } from "../../config/settings";
 import { createLlmClient, LlmClientTerminalError, ModelCallRefusedError, type LlmClient } from "../model/llm-client";
@@ -663,6 +664,7 @@ async function openBatchRuntime(input: {
 			timeoutMs: Math.max(120_000, CODING_SKIN_CHILD_DEADLINE_MS),
 			agentPort: input.agentPort,
 			refuseOnUnavailable: true,
+			hostRequired: remNeedsHost(input.mode ?? pluginConfig.mode, settings.modelCalls),
 			routing: pickLlmRoutingConfig({ mode: input.mode ?? pluginConfig.mode, modelCalls: settings.modelCalls }),
 			onProviderResponse: ({ callId, destination, provider, requestId, model, usage }) => {
 				log.info("llm_provider_response", {

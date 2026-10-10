@@ -45,6 +45,6 @@ assert 'REACH-RECEIPT-' in old.read_text() and 'REACH-RECEIPT-' not in new.read_
 assert new.stat().st_mtime>old.stat().st_mtime
 print('call exit',result.returncode,'expected 0',flush=True)
 assert result.returncode==0,result.stdout+result.stderr
-assert 'OLDER-SESSION-ANSWER' in result.stdout
+assert result.stdout.strip() == 'OLDER-SESSION-ANSWER', result.stdout
 print('PASS: actual receipt in older same-cwd transcript wins over unrelated newer transcript',flush=True)
 PY

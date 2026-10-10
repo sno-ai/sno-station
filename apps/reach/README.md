@@ -12,7 +12,7 @@ make -C apps/reach test
 make -C apps/reach package
 ```
 
-Packaging writes `dist/reach-2.1.2-<platform>.tar.gz` and its exact-basename `.sha256` file. The payload is directly at archive root, with VERSION, LICENSE, NOTICE, bin, lib, vendor, spec and guide. `sno setup` installs the archive; nothing here puts a command on PATH.
+Packaging writes `dist/reach-2.1.4-<platform>.tar.gz` and its exact-basename `.sha256` file. The payload is directly at archive root, with VERSION, LICENSE, NOTICE, bin, lib, vendor, spec and guide. `sno setup` installs the archive; nothing here puts a command on PATH.
 
 Publication and real-agent acceptance remain separate gates. Do not use a source overlay to repair an archive under test. The installer (`sno setup`) must consume the accepted archive and checksum, not this checkout.
 

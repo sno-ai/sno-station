@@ -3706,7 +3706,7 @@ run_log() {
 
 run_spawn() {
     (($# >= 1)) || usage
-    local kind="$1" cwd="$PWD" window=no adapter root
+    local kind="$1" cwd="$PWD" window=no adapter root model='' provider=''
     local started rc=0
     CALLER=''
     shift
@@ -3716,6 +3716,11 @@ run_spawn() {
             --as) (($# >= 2)) || usage; [[ -z "$CALLER" ]] || die 64 'duplicate --as'; [[ -n "$2" ]] || die 64 '--as must not be blank'; CALLER="$2"; shift 2 ;;
             --cwd) (($# >= 2)) || usage; cwd="$2"; shift 2 ;;
             --window) [[ "$window" == no ]] || die 64 'duplicate --window'; window=yes; shift ;;
+            --model|--provider)
+                (($# >= 2)) || usage
+                [[ -n "$2" ]] || die 64 "$1 must not be blank"
+                if [[ "$1" == --model ]]; then model="$2"; else provider="$2"; fi
+                shift 2 ;;
             *) die 64 "unknown spawn option: $1" ;;
         esac
     done
@@ -3728,11 +3733,12 @@ run_spawn() {
     [[ ! -e "$root/$CALLER/reachable.json" && ! -L "$root/$CALLER/reachable.json" ]] || die 65 "seat already registered: $CALLER"
     cwd="$(realpath -e -- "$cwd")" || die 65 '--cwd must exist'
     [[ -d "$cwd" && "$cwd" != *:* && "$cwd" != *[$'\r\n']* ]] || die 65 'invalid spawn directory'
+    [[ -z "$model$provider" ]] || window=yes
     if [[ "$window" == no && -n "$adapter" ]]; then
         require_tools acpx timeout flock
     else require_tools tmux "$kind"; fi
     started="$EPOCHREALTIME"
-    "$REPO_ROOT/lib/reach-spawn" "$kind" "$CALLER" "$cwd" "$window" "$adapter" || rc=$?
+    "$REPO_ROOT/lib/reach-spawn" "$kind" "$CALLER" "$cwd" "$window" "$adapter" "$model" "$provider" || rc=$?
     observe_message "$root" spawn "${SNO_REACH_ADDR:-}" "$CALLER" "$rc" "$started"
     return "$rc"
 }
@@ -3754,11 +3760,12 @@ validate_live_record() {
 run_call() {
     (($# >= 2)) || usage
     local address="$1" text="$2" limit=180 every=2 expect='' root channel output rc=0
-    local started receipt=''
+    local started receipt='' raw=no
     shift 2
     validate_address "$address"
     [[ "$text" =~ [^[:space:]] ]] || die 64 'call text is blank'
     while (($#)); do
+        if [[ "$1" == --raw ]]; then raw=yes; shift; continue; fi
         (($# >= 2)) || usage
         case "$1" in
             --timeout) limit="$2" ;;
@@ -3768,13 +3775,16 @@ run_call() {
         esac
         shift 2
     done
+    [[ "$raw" == no || -z "$expect" ]] || die 64 '--raw cannot be used with --expect'
     [[ "$limit" =~ ^[0-9]{1,8}$ && "$every" =~ ^[1-9][0-9]{0,7}$ ]] || die 64 'call times must be integer seconds'
     ((10#$limit <= 280)) || die 64 '--timeout must not exceed 280 seconds'
     root="$(mailbox_root)"
     channel="$(validate_live_record "$address" "$root/$address/reachable.json")"
     [[ "$channel" != orca ]] || die 3 'channel orca does not support call'
+    [[ "$raw" == no || "$channel" == tmux ]] || die 3 '--raw requires a tmux seat'
     local -a args=(--terminal "$address" --text "$text" --timeout "$limit" --every "$every")
     [[ -z "$expect" ]] || args+=(--expect "$expect")
+    [[ "$raw" == no ]] || args+=(--raw)
     started="$EPOCHREALTIME"
     output="$("$REPO_ROOT/lib/reach-call" "${args[@]}")" || rc=$?
     if ((rc == 0)); then
@@ -3785,6 +3795,10 @@ run_call() {
         esac
     fi
     observe_message "$root" call "${SNO_REACH_ADDR:-}" "$address" "$rc" "$started" '' "$receipt"
+    if [[ "$raw" == yes ]]; then
+        ((rc != 0)) || printf 'typed %s\n' "$address"
+        return "$rc"
+    fi
     if [[ -n "$output" ]]; then
         jq -e 'has("output") and (.output | type == "string")' <<<"$output" >/dev/null || die 5 'call output could not be read'
         jq -r .output <<<"$output"
