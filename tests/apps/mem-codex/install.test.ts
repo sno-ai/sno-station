@@ -234,6 +234,33 @@ describe("sno-mem-codex install", () => {
 		expect(installed.hooks.SessionStart[0].hooks[0].command).toBe("'/other/place/sno' memory hook session-start --harness codex");
 	});
 
+	it("runs each event once at the real path after a setup from a replaced sno wrote ' (deleted)' copies", async () => {
+		// sno replaced while it ran reads its own path back as "<path> (deleted)"; setup then wrote a second hook per
+		// event at that path, which failed in every session, and the rules allowed only the path that cannot run.
+		const codexHome = await temporaryHome();
+		const hooksPath = join(codexHome, "hooks.json");
+		await installCodex({ codexHome, programPath: "/opt/sno/bin/sno", writeOutput: () => undefined });
+		const seeded = JSON.parse(await readFile(hooksPath, "utf8"));
+		for (const groups of Object.values(seeded.hooks) as { hooks: { command: string }[] }[][]) {
+			groups.push({ hooks: [{ ...groups[0].hooks[0], command: groups[0].hooks[0].command.replace("'/opt/sno/bin/sno'", "'/opt/sno/bin/sno (deleted)'") }] });
+		}
+		seeded.hooks.Stop.push({ hooks: [{ type: "command", command: "/usr/local/bin/notify", timeout: 2 }] });
+		await writeFile(hooksPath, `${JSON.stringify(seeded, null, 2)}\n`);
+
+		await installCodex({ codexHome, programPath: "/opt/sno/bin/sno (deleted)", writeOutput: () => undefined });
+
+		const installed = JSON.parse(await readFile(hooksPath, "utf8"));
+		for (const [event, groups] of Object.entries(installed.hooks) as [string, { hooks: { command: string }[] }[]][]) {
+			const commands = groups.flatMap(group => group.hooks.map(hook => hook.command)).filter(command => command.includes(" memory hook "));
+			expect(commands, event).toHaveLength(1);
+			expect(commands[0], event).toMatch(/^'\/opt\/sno\/bin\/sno' memory hook /);
+		}
+		expect(installed.hooks.Stop[2].hooks[0].command).toBe("/usr/local/bin/notify");
+		const rules = await readFile(join(codexHome, "rules", "sno-mem-codex.rules"), "utf8");
+		expect(rules).not.toContain("(deleted)");
+		expect(rules).toContain('"/opt/sno/bin/sno"');
+	});
+
 	it("quotes a program path with spaces before hashing and running each hook", async () => {
 		const codexHome = await temporaryHome();
 		const programPath = join(codexHome, "Application Support", "sno");
