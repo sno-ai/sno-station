@@ -33,6 +33,22 @@ if (result.error) {
 if (result.status !== 0) process.exit(result.status ?? 1);
 console.log("OpenClaw plugin installed. Run sno setup to configure the memory service.");
 
+// OpenClaw loads a new plugin only when its gateway restarts, and after an install the gateway can be left stopped, so the
+// agent has no memory until someone starts it. Restart it here and wait until it answers.
+const gateway = (...rest) => spawnSync("openclaw", [...(profile ? ["--profile", profile] : []), "gateway", ...rest], { stdio: "inherit" });
+const restarted = gateway("restart");
+if (restarted.status !== 0) {
+	console.error(`OpenClaw's gateway did not restart (exit ${restarted.status ?? restarted.error?.message}); start it with: openclaw gateway restart`);
+} else {
+	let ready = false;
+	for (let attempt = 0; attempt < 60 && !ready; attempt++) {
+		if (attempt > 0) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1000);
+		ready = spawnSync("openclaw", [...(profile ? ["--profile", profile] : []), "gateway", "health"], { stdio: "ignore" }).status === 0;
+	}
+	if (ready) console.log("OpenClaw's gateway restarted and answers.");
+	else console.error("OpenClaw's gateway restarted but did not answer within 60 seconds; check it with: openclaw gateway status");
+}
+
 // With several agents and none marked default, OpenClaw refuses a new session that names no agent, which is how Sno Reach
 // seats start. The install itself worked; say how to fix this now.
 const agentList = spawnSync("openclaw", [...(profile ? ["--profile", profile] : []), "agents", "list", "--json"], { encoding: "utf8" });
