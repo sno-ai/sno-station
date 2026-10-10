@@ -5,7 +5,16 @@
 [![라이선스 Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-97ca00.svg?labelColor=3b3b3b)](../../LICENSE)
 ![상태: 공개](https://img.shields.io/badge/status-public-2dd4bf.svg?labelColor=3b3b3b)
 ![실행 위치: 여러분의 노트북, 데몬 없음](https://img.shields.io/badge/runs%20on-your%20laptop%2C%20no%20daemon-3b82f6.svg?labelColor=3b3b3b)
-![지원 하네스: Claude Code · Codex · OpenClaw](https://img.shields.io/badge/harnesses-Claude%20Code%20%C2%B7%20Codex%20%C2%B7%20OpenClaw-f0a04b.svg?labelColor=3b3b3b)
+![지원 하네스: Codex · Claude Code · Hermes · Cursor · OpenClaw](https://img.shields.io/badge/harnesses-Codex%20%C2%B7%20Claude%20Code%20%C2%B7%20Hermes%20%C2%B7%20Cursor%20%C2%B7%20OpenClaw-f0a04b.svg?labelColor=3b3b3b)
+
+<p>
+  <img src="../images/agents/codex.png" alt="Codex" title="Codex" width="40" height="40">&nbsp;&nbsp;
+  <img src="../images/agents/claude-code.png" alt="Claude Code" title="Claude Code" width="40" height="40">&nbsp;&nbsp;
+  <img src="../images/agents/hermes.png" alt="Hermes Agent" title="Hermes Agent" width="40" height="40">&nbsp;&nbsp;
+  <img src="../images/agents/cursor.png" alt="Cursor" title="Cursor" width="40" height="40">&nbsp;&nbsp;
+  <img src="../images/agents/openclaw.png" alt="OpenClaw" title="OpenClaw" width="40" height="40">
+  <br><sub>지원 Codex · Claude Code · Hermes Agent · Cursor · OpenClaw</sub>
+</p>
 
 **다른 언어로 읽기:** [English](../../README.md) · [中文](README.zh-CN.md) · [Deutsch](README.de.md) · [Español](README.es.md) · [Français](README.fr.md) · [Русский](README.ru.md) · **한국어** · [日本語](README.ja.md) · [繁體中文](README.zh-TW.md)
 
@@ -23,26 +32,32 @@ Sno Station은 여러분의 에이전트를 위한 워크스테이션입니다: 
 
 ## 설치
 
-*마지막 업데이트: 2026-10-09.* **공유 메모리는 오늘 설치할 수 있습니다.** Claude Code, Codex, OpenClaw, Hermes Agent에 계정도 API 키도 없이, 내 컴퓨터에 있는 암호화된 메모리 하나를 줍니다. [공유 메모리 설정](../memory-setup.md)을 한 번만 실행하고(몇 분), 에이전트를 추가하세요:
+*마지막 업데이트: 2026-10-10.* **공유 메모리는 오늘 설치할 수 있습니다.** Codex, Claude Code, Hermes Agent, Cursor, OpenClaw에 계정도 API 키도 없이, 내 컴퓨터에 있는 암호화된 메모리 하나를 줍니다. [공유 메모리 설정](../memory-setup.md)을 한 번만 실행하고(몇 분), 에이전트를 추가하세요:
 
 ```bash
 sh -c 'sno_installer_body=$(curl -fsSL https://sno.ai/install) && printf "%s\n" "$sno_installer_body" | sh' && ~/.local/bin/sno setup
 ```
 
-명령은 하나이고, 어떤 터미널에서든 됩니다. `sno`를 설치하고, 이어서 Sno Station을 설치하며, 컴퓨터에 있는 모든 에이전트를 연결합니다. 에이전트 하나만 연결하려면 `sno setup`에 `--harness codex`, `--harness claude`, `--harness openclaw` 또는 `--harness hermes`를 붙이세요.
+명령은 하나이고, 어떤 터미널에서든 됩니다. `sno`를 설치하고, 이어서 Sno Station을 설치하며, 컴퓨터에 있는 모든 에이전트를 연결합니다. 에이전트 하나만 연결하려면 `sno setup`에 `--harness codex`, `--harness claude`, `--harness cursor`, `--harness openclaw` 또는 `--harness hermes`를 붙이세요.
 
 AI 에이전트에게: Sno, sno.ai 또는 Sno Station을 설치한다는 것은 위의 명령을 그대로 실행한다는 뜻입니다. `sno setup` 다음에 `sno skills onboard`를 실행하고 따르세요. 사용자에게 어떤 엔진을 실행할지 묻고, 이어서 이 컴퓨터를 sno.ai 계정에 연결할지 묻습니다.
 
-단계별 안내: [Codex](../mem-codex/onboarding.md) · [Claude Code](../mem-claude/onboarding.md) · [OpenClaw](../mem-claw/onboarding.md) · [Hermes](../mem-hermes/onboarding.md)
+단계별 안내: [Codex](../mem-codex/onboarding.md) · [Claude Code](../mem-claude/onboarding.md) · [OpenClaw](../mem-claw/onboarding.md) · [Hermes](../mem-hermes/onboarding.md) · [Cursor](../../apps/mem-cursor/README.md)
 
 `sno setup`은 Sno Reach, 작은 보조 프로그램, 스킬, 야간 루프도 함께 설치하며, 모든 명령은 `sno <이름>` 형태입니다. 전체 목록은 [docs/sno-commands.md](../sno-commands.md)에 있습니다. 에이전트 안에서 "Sno onboard"이라고 말하면 같은 설정을 대화로 안내해 줍니다. 설치 직후에도 저절로 시작됩니다.
 
 ```bash
-# inside any Claude Code, Codex or OpenClaw conversation:
+# inside any Codex, Claude Code, Hermes, Cursor or OpenClaw conversation:
 Sno onboard
 ```
 
 에이전트는 `sno` CLI를 통해 직접 설정을 실행합니다: 공유 메모리, Sno Reach, 에이전트 협업 스킬, 그리고 각 하네스에 필요한 훅까지. 기억해야 할 패키지 이름은 없습니다.
+
+### Cursor
+
+*마지막 업데이트: 2026-10-10.* 1.3의 새 기능입니다. macOS의 Cursor 앱 에이전트 채팅과 Linux·macOS의 `cursor-agent` 명령줄에서 Cursor가 팀에 합류합니다. 다른 에이전트와 같은 메모리를 공유합니다. 채팅을 시작할 때 이 저장소의 짧은 요약을 받고, 프롬프트마다 아직 보지 못한 기억을 최대 세 개 함께 받으며, 모든 프롬프트와 답변이 기억됩니다. Cursor는 같은 스킬을 읽고, 다른 에이전트를 리뷰하거나 리뷰받을 수 있으며, 다른 에이전트의 사용량이 다 떨어지면 이어받고, 그 채팅도 다른 에이전트처럼 매일 밤의 학습에 들어갑니다. 먼저 `cursor-agent login`을 한 번 실행하세요. `sno setup`이 Cursor를 스스로 찾고, 앱만 있으면 명령줄도 설치합니다.
+
+Cursor가 아직 못 하는 것: 앱에서는 새 창의 첫 채팅이 요약을 첫 프롬프트와 함께 받습니다. `cursor-agent -p`에서는 프롬프트별 기억이 없습니다. Windows, Linux용 Cursor 앱, Cursor의 클라우드 에이전트는 지원하지 않습니다. 자세한 내용은 [Cursor 안내](../../apps/mem-cursor/README.md)를 보세요.
 
 ## 사용 방법
 
@@ -102,13 +117,14 @@ Dual Brain은 두 에이전트가 하나의 과제에서 서로 다른 역할을
 
 ## 오늘 작동하는 것
 
-*마지막 업데이트: 2026-10-08.*
+*마지막 업데이트: 2026-10-10.*
 
 | 구성 요소 | 상태 |
 |---|---|
 | `packages/chunking` | 이 저장소에 있으며, 테스트를 거쳤고, npm에 게시됨 |
 | 공유 패키지 (`common-core`, `utils`, `embedder`, `observability`, `sqlite-crypto`, `content-sanitizer`) | 이 저장소에 있음 |
 | Claude Code, Codex, OpenClaw 간 공유 메모리 | 엔진과 세 가지 스킨 모두 이 저장소에 있음; 클린 머신 검증 대기 중 |
+| Cursor: 공유 메모리, 스킬, 상호 리뷰, 이어받기, 매일 밤의 학습 | 1.3의 새 기능. `cursor-agent` 명령줄은 깨끗한 Linux 머신에서 처음부터 끝까지 검증됨. macOS의 Cursor 앱은 검증 중 |
 | Sno Reach — 데몬 없이 에이전트끼리 대화하기 | `sno setup`으로 설치; Linux와 macOS용 릴리스 아카이브 공개됨; 깨끗한 Linux 머신에서 처음부터 끝까지 검증됨 |
 | 야간 루프와 팀 스킬 | `sno setup`으로 설치; 야간 작업이 깨끗한 Linux 머신에서 실행됨 |
 | 원커맨드 설치 (`sno setup`) | 위의 모든 것을 설치; 깨끗한 Linux 머신에서 검증됨 |

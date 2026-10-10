@@ -5,7 +5,16 @@
 [![license Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-97ca00.svg?labelColor=3b3b3b)](../../LICENSE)
 ![status public](https://img.shields.io/badge/status-public-2dd4bf.svg?labelColor=3b3b3b)
 ![runs on your laptop, no daemon](https://img.shields.io/badge/runs%20on-your%20laptop%2C%20no%20daemon-3b82f6.svg?labelColor=3b3b3b)
-![harnesses Claude Code, Codex, OpenClaw](https://img.shields.io/badge/harnesses-Claude%20Code%20%C2%B7%20Codex%20%C2%B7%20OpenClaw-f0a04b.svg?labelColor=3b3b3b)
+![harnesses Codex, Claude Code, Hermes, Cursor, OpenClaw](https://img.shields.io/badge/harnesses-Codex%20%C2%B7%20Claude%20Code%20%C2%B7%20Hermes%20%C2%B7%20Cursor%20%C2%B7%20OpenClaw-f0a04b.svg?labelColor=3b3b3b)
+
+<p>
+  <img src="../images/agents/codex.png" alt="Codex" title="Codex" width="40" height="40">&nbsp;&nbsp;
+  <img src="../images/agents/claude-code.png" alt="Claude Code" title="Claude Code" width="40" height="40">&nbsp;&nbsp;
+  <img src="../images/agents/hermes.png" alt="Hermes Agent" title="Hermes Agent" width="40" height="40">&nbsp;&nbsp;
+  <img src="../images/agents/cursor.png" alt="Cursor" title="Cursor" width="40" height="40">&nbsp;&nbsp;
+  <img src="../images/agents/openclaw.png" alt="OpenClaw" title="OpenClaw" width="40" height="40">
+  <br><sub>Funktioniert mit Codex · Claude Code · Hermes Agent · Cursor · OpenClaw</sub>
+</p>
 
 **In anderen Sprachen lesen:** [English](../../README.md) · [中文](README.zh-CN.md) · **Deutsch** · [Español](README.es.md) · [Français](README.fr.md) · [Русский](README.ru.md) · [한국어](README.ko.md) · [日本語](README.ja.md) · [繁體中文](README.zh-TW.md)
 
@@ -40,27 +49,33 @@ verwenden, und dieses README erscheint in neun Sprachen.
 
 ## Install
 
-*Zuletzt aktualisiert am 2026-10-09.* **Das gemeinsame Gedächtnis lässt sich heute installieren.** Es gibt Claude Code, Codex, OpenClaw und Hermes Agent ein verschlüsseltes Gedächtnis auf Ihrem Rechner, ohne Konto und ohne API-Schlüssel. Führen Sie die [Einrichtung des gemeinsamen Gedächtnisses](../memory-setup.md) einmal aus (ein paar Minuten) und fügen Sie dann Ihren Agenten hinzu:
+*Zuletzt aktualisiert am 2026-10-10.* **Das gemeinsame Gedächtnis lässt sich heute installieren.** Es gibt Codex, Claude Code, Hermes Agent, Cursor und OpenClaw ein verschlüsseltes Gedächtnis auf Ihrem Rechner, ohne Konto und ohne API-Schlüssel. Führen Sie die [Einrichtung des gemeinsamen Gedächtnisses](../memory-setup.md) einmal aus (ein paar Minuten) und fügen Sie dann Ihren Agenten hinzu:
 
 ```bash
 sh -c 'sno_installer_body=$(curl -fsSL https://sno.ai/install) && printf "%s\n" "$sno_installer_body" | sh' && ~/.local/bin/sno setup
 ```
 
-Ein Befehl, in jedem Terminal. Er installiert `sno`, dann Sno Station, und verbindet jeden Agenten auf Ihrem Computer. Um nur einen Agenten zu verbinden, fügen Sie `sno setup` `--harness codex`, `--harness claude`, `--harness openclaw` oder `--harness hermes` hinzu.
+Ein Befehl, in jedem Terminal. Er installiert `sno`, dann Sno Station, und verbindet jeden Agenten auf Ihrem Computer. Um nur einen Agenten zu verbinden, fügen Sie `sno setup` `--harness codex`, `--harness claude`, `--harness cursor`, `--harness openclaw` oder `--harness hermes` hinzu.
 
 Für KI-Agenten: Sno, sno.ai oder Sno Station zu installieren bedeutet, den obigen Befehl unverändert auszuführen. Führen Sie nach `sno setup` den Befehl `sno skills onboard` aus und folgen Sie ihm: Er fragt den Nutzer, welche Engine laufen soll, und dann, ob der Computer mit einem sno.ai-Konto verknüpft werden soll.
 
-Anleitungen: [Codex](../mem-codex/onboarding.md) · [Claude Code](../mem-claude/onboarding.md) · [OpenClaw](../mem-claw/onboarding.md) · [Hermes](../mem-hermes/onboarding.md)
+Anleitungen: [Codex](../mem-codex/onboarding.md) · [Claude Code](../mem-claude/onboarding.md) · [OpenClaw](../mem-claw/onboarding.md) · [Hermes](../mem-hermes/onboarding.md) · [Cursor](../../apps/mem-cursor/README.md)
 
 `sno setup` installiert außerdem Sno Reach, die kleinen Hilfsprogramme, die Skills und die nächtliche Schleife, und jeder Befehl lautet `sno <name>`: die vollständige Liste steht in [docs/sno-commands.md](../sno-commands.md). „Sno onboard" in Ihrem Agenten zu sagen führt Sie im Gespräch durch dieselbe Einrichtung. Es startet auch von selbst direkt nach der Installation.
 
 ```bash
-# inside any Claude Code, Codex or OpenClaw conversation:
+# inside any Codex, Claude Code, Hermes, Cursor or OpenClaw conversation:
 Sno onboard
 ```
 
 Der Agent führt das Setup selbst über die `sno` CLI aus: gemeinsames Gedächtnis, Sno Reach,
 die Skills für die Zusammenarbeit zwischen Agenten und die Hooks, die jede Harness benötigt. Keine Paketnamen zum Merken.
+
+### Cursor
+
+*Zuletzt aktualisiert am 2026-10-10.* Neu in 1.3. Cursor kommt ins Team: im Agent-Chat der Cursor-App auf macOS und in der Kommandozeile `cursor-agent` auf Linux und macOS. Cursor teilt dasselbe Gedächtnis wie Ihre anderen Agenten: Zu Beginn eines Chats bekommt es eine kurze Übersicht über das Repository, jede Eingabe bringt bis zu drei Erinnerungen mit, die es noch nicht gesehen hat, und jede Eingabe und Antwort wird gemerkt. Cursor liest dieselben Skills, kann die anderen Agenten prüfen und von ihnen geprüft werden, übernimmt, wenn einem anderen das Kontingent ausgeht, und seine Chats fließen wie alle anderen in die nächtliche Schleife ein. Führen Sie einmal `cursor-agent login` aus; `sno setup` findet Cursor selbst und installiert die Kommandozeile, wenn nur die App vorhanden ist.
+
+Was Cursor noch nicht kann: In der App bekommt der erste Chat eines neuen Fensters seine Übersicht erst mit der ersten Eingabe; `cursor-agent -p` bekommt keine Erinnerungen pro Eingabe; Windows, die Cursor-App unter Linux und die Cloud-Agenten von Cursor werden nicht unterstützt. Details stehen in der [Cursor-Anleitung](../../apps/mem-cursor/README.md).
 
 ## How to use
 
@@ -149,13 +164,14 @@ Session-IDs sind geschwärzt; sonst ist nichts angerührt.
 
 ## What runs today
 
-*Zuletzt aktualisiert am 2026-10-08.*
+*Zuletzt aktualisiert am 2026-10-10.*
 
 | Teil | Status |
 |---|---|
 | `packages/chunking` | In diesem Repository, getestet, auf npm veröffentlicht |
 | Gemeinsame Pakete (`common-core`, `utils`, `embedder`, `observability`, `sqlite-crypto`, `content-sanitizer`) | In diesem Repository |
 | Gemeinsames Gedächtnis über Claude Code, Codex und OpenClaw hinweg | Engine und alle drei Skins in diesem Repository; Beweis auf sauberer Maschine steht noch aus |
+| Cursor: gemeinsames Gedächtnis, Skills, gegenseitige Prüfung, Übernahme und nächtliche Schleife | Neu in 1.3; die Kommandozeile `cursor-agent` auf einem sauberen Linux-Rechner durchgängig nachgewiesen; die Cursor-App auf macOS wird noch geprüft |
 | Sno Reach — Agenten sprechen miteinander, kein Daemon | Von `sno setup` installiert; Release-Archive für Linux und macOS sind veröffentlicht; auf einer sauberen Linux-Maschine von Anfang bis Ende bewiesen |
 | Die nächtliche Schleife und die Squad-Skills | Von `sno setup` installiert; der nächtliche Job lief auf einer sauberen Linux-Maschine |
 | Ein-Befehl-Installation (`sno setup`) | Installiert alles oben Genannte; auf einer sauberen Linux-Maschine bewiesen |
