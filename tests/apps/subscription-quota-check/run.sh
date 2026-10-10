@@ -23,4 +23,8 @@ if ! bash "$HERE/claude-fallback.t"; then
   printf 'FAIL claude-fallback.t\n' >&2
   exit 1
 fi
-printf '1..4\nsubscription-quota-check selftest: ALL PASS (4 stage(s))\n'
+if ! bash "$HERE/codex-blocking.t"; then
+  printf 'FAIL codex-blocking.t\n' >&2
+  exit 1
+fi
+printf '1..5\nsubscription-quota-check selftest: ALL PASS (5 stage(s))\n'

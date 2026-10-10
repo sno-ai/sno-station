@@ -282,11 +282,14 @@ codex_probe() {
 			              seconds_to_reset: null,
 			              required_action: "contact_workspace_owner"})
 			           elif ($blocked | length) == 0 then null
-			           else ($blocked | sort_by(.primary.seconds_to_reset // 1e18) | .[0]
+			           else ([ $blocked[]
+			                 | ([.primary, .secondary] | map(select(. != null and .used_pct >= 100))) as $full
+			                 | (if ($full | length) > 0 then $full[] else .primary end) as $w
 			                 | {limit_id, limit_name, reached_type,
-			                    used_pct: .primary.used_pct,
-			                    resets_at_epoch: .primary.resets_at_epoch,
-			                    seconds_to_reset: .primary.seconds_to_reset}) end)
+			                    used_pct: $w.used_pct,
+			                    resets_at_epoch: $w.resets_at_epoch,
+			                    seconds_to_reset: $w.seconds_to_reset} ]
+			                 | max_by(.seconds_to_reset // 1e18)) end)
 		  }'
 }
 
