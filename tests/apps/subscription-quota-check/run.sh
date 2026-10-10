@@ -19,4 +19,8 @@ if ! bash "$HERE/claude-result.t"; then
   printf 'FAIL claude-result.t\n' >&2
   exit 1
 fi
-printf '1..3\nsubscription-quota-check selftest: ALL PASS (3 stage(s))\n'
+if ! bash "$HERE/claude-fallback.t"; then
+  printf 'FAIL claude-fallback.t\n' >&2
+  exit 1
+fi
+printf '1..4\nsubscription-quota-check selftest: ALL PASS (4 stage(s))\n'

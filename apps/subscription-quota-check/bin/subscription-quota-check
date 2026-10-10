@@ -406,12 +406,17 @@ claude_probe() {
 		| (if $binding != null then $binding.percent
 		   else ([$rl.five_hour.utilization, $rl.seven_day.utilization]
 		         | map(select(. != null)) | max) end) as $tight_pct
+		| ($binding // (if $tight_pct >= 100 then
+		     if $rl.five_hour.utilization == $tight_pct then
+		       {kind: "session", percent: $tight_pct, resets_at: $rl.five_hour.resets_at}
+		     else {kind: "weekly_all", percent: $tight_pct, resets_at: $rl.seven_day.resets_at}
+		     end else null end)) as $binding
 		| {
 			vendor: "claude",
 			cli_version: $cli_version,
-			# Blocked only at a full binding window; everything else is usable now.
-			state: (if ($binding != null and $binding.percent >= 100) then "blocked" else "ok" end),
-			verdict: (if ($binding != null and $binding.percent >= 100) then "wait"
+			# Blocked at a full active window or, when none is active, a full fallback window.
+			state: (if $tight_pct >= 100 then "blocked" else "ok" end),
+			verdict: (if $tight_pct >= 100 then "wait"
 			          elif ($tight_pct != null and (100 - $tight_pct) < $short)
 			          then "short_only"
 			          else "go" end),
@@ -432,7 +437,7 @@ claude_probe() {
 			overage: {enabled: $rl.extra_usage.is_enabled,
 			          used_pct: $rl.extra_usage.utilization,
 			          disabled_reason: $rl.extra_usage.disabled_reason},
-			blocking: (if ($binding != null and $binding.percent >= 100)
+			blocking: (if $tight_pct >= 100
 			           then {limit_id: $binding.kind, used_pct: $binding.percent,
 			                 resets_at: $binding.resets_at,
 			                 seconds_to_reset: (iso2epoch($binding.resets_at) - $now)}
