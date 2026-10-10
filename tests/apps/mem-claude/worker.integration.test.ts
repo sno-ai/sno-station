@@ -4,7 +4,7 @@ import { chmod, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs
 import { tmpdir, userInfo } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { connect, type InitRegistration, type MemoryClient } from "@snoai/memory/client";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { acquirePidFileLock } from "../../../apps/mem-claude/src/files.js";
 import { importDirectory, spoolDirectory, workerLockPath } from "../../../apps/mem-claude/src/paths.js";
 import { runWorker, type WorkerDependencies } from "../../../apps/mem-claude/src/worker.js";
@@ -164,7 +164,13 @@ describe("Claude worker with a real sidecar", () => {
 		// The sidecar contract rejects a negative message timestamp over the real HTTP route.
 		const path = await spool("0001.json", "invalid-timestamp", -1);
 		const fixture = observeClient();
+		const logged = vi.spyOn(console, "log");
 		expect(await runWorker(fixture.deps)).toBe("drained");
+		// Each failed attempt names its turn and cause in the worker log; the cause used to be dropped.
+		const failures = logged.mock.calls.map(([line]) => String(line)).filter(line => line.includes('"capture-failed"'));
+		logged.mockRestore();
+		expect(failures.map(line => JSON.parse(line))).toEqual([1, 2, 3].map(attempt =>
+			expect.objectContaining({ event: "capture-failed", turnId: "invalid-timestamp", attempt, error: expect.stringMatching(/\S/) })));
 		expect(JSON.parse(await readFile(path, "utf8"))).toMatchObject({ attempts: 3, state: "failed" });
 		expect(fixture.captures).toHaveLength(3);
 		const [first, second, third] = fixture.captures;
