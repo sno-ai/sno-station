@@ -44,6 +44,7 @@ import type {
 	BeginAtomicExtractionChunkResult,
 	MemoryStore,
 } from "../../store/store";
+import { AtomicExtractionCompletedElsewhere } from "../../store/store";
 
 const log = createLogger("sno-station-mem:atomic-extraction");
 const ATOMIC_REPROCESS_ATTEMPT_CAP = 1;
@@ -668,24 +669,30 @@ export async function runAtomicGenericExtractionPass(
 		}
 		return runAtomicGenericExtractionPass(input);
 	}
-	const attempts = { count: 0 };
-	const outputTokenBudget = Math.min(
-		begin.entry.runParameters.outputTokenBudget, input.runParameters.outputTokenBudget,
-	);
-	const inputOverflow = input.estimatedInputTokens > begin.entry.runParameters.maxInputTokens;
-	// One turn over the input budget is split the same way as one whose reply overflows: a long
-	// replayed transcript is a single turn, and giving up on it unasked lost whole sessions.
-	if (inputOverflow && !(input.turns.length === 1 && splitTurnContent(input.turns[0]?.content ?? "") !== undefined)) {
-		input.store.recordAtomicExtractionCalls(input.ledgerKey, input.nowMs());
-		return markPending(input, "input-overflow", null, 0);
+	try {
+		const attempts = { count: 0 };
+		const outputTokenBudget = Math.min(
+			begin.entry.runParameters.outputTokenBudget, input.runParameters.outputTokenBudget,
+		);
+		const inputOverflow = input.estimatedInputTokens > begin.entry.runParameters.maxInputTokens;
+		// One turn over the input budget is split the same way as one whose reply overflows: a long
+		// replayed transcript is a single turn, and giving up on it unasked lost whole sessions.
+		if (inputOverflow && !(input.turns.length === 1 && splitTurnContent(input.turns[0]?.content ?? "") !== undefined)) {
+			input.store.recordAtomicExtractionCalls(input.ledgerKey, input.nowMs());
+			return markPending(input, "input-overflow", null, 0);
+		}
+		const result = inputOverflow
+			? await splitAtomicCaptureTurn(input, outputTokenBudget, attempts, "")
+			: await captureAtomicWindow(input, outputTokenBudget, attempts);
+		if (result.status === "pending") {
+			return markPending(input, result.reason, result.failedReply, attempts.count);
+		}
+		return result;
+	} catch (error) {
+		// Another capture of the same turn finished this chunk first: its rows are written, so this run is a skip.
+		if (error instanceof AtomicExtractionCompletedElsewhere) return { status: "skip", entry: error.entry };
+		throw error;
 	}
-	const result = inputOverflow
-		? await splitAtomicCaptureTurn(input, outputTokenBudget, attempts, "")
-		: await captureAtomicWindow(input, outputTokenBudget, attempts);
-	if (result.status === "pending") {
-		return markPending(input, result.reason, result.failedReply, attempts.count);
-	}
-	return result;
 }
 
 type CaptureWindowResult =
