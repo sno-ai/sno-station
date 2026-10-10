@@ -269,6 +269,44 @@ describe("sno-mem-codex install", () => {
 		expect(installed.hooks.SessionEnd[0].hooks[0].timeout).toBeLessThanOrEqual(3);
 	});
 
+	it("uninstall through the command removes exactly what install wrote and keeps the user's hooks at the positions Codex trusts", async () => {
+		// sno uninstall runs `dist/cli.js uninstall --codex-home <dir>`; without that command uninstall failed and left the hooks behind.
+		const codexHome = await temporaryHome();
+		const hooksPath = join(codexHome, "hooks.json");
+		const configPath = join(codexHome, "config.toml");
+		await installCodex({ codexHome, programPath: "/opt/sno/bin/sno", writeOutput: () => undefined });
+		const seeded = JSON.parse(await readFile(hooksPath, "utf8"));
+		seeded.hooks.Stop.push({ hooks: [{ type: "command", command: "/usr/local/bin/notify", timeout: 2 }] });
+		await writeFile(hooksPath, `${JSON.stringify(seeded, null, 2)}\n`);
+		const foreignTrust = `[hooks.state.${JSON.stringify(`${hooksPath}:stop:1:0`)}]\nenabled = true\ntrusted_hash = "foreign"\n`;
+		await writeFile(configPath, `model = "gpt-5"\n\n${await readFile(configPath, "utf8")}\n${foreignTrust}`);
+
+		const cli = spawnSync(process.execPath, ["--import", "tsx", "apps/mem-codex/src/cli.ts", "uninstall", "--codex-home", codexHome],
+			{ encoding: "utf8", timeout: 10_000 });
+
+		expect(cli.status, cli.stderr).toBe(0);
+		const remaining = JSON.parse(await readFile(hooksPath, "utf8"));
+		expect(JSON.stringify(remaining)).not.toContain(" memory hook ");
+		expect(remaining.hooks.Stop[1].hooks[0].command).toBe("/usr/local/bin/notify");
+		const config = await readFile(configPath, "utf8");
+		expect(config.match(/^\[hooks\.state\..+\]$/gm)).toEqual([`[hooks.state.${JSON.stringify(`${hooksPath}:stop:1:0`)}]`]);
+		expect(config).toContain('model = "gpt-5"');
+		expect(config).toContain('trusted_hash = "foreign"');
+		const parsed = spawnSync("python3", ["-c", "import sys, tomllib; tomllib.loads(sys.stdin.read())"], { encoding: "utf8", input: config });
+		expect(parsed.status, parsed.stderr).toBe(0);
+		await expect(readFile(join(codexHome, "rules", "sno-mem-codex.rules"))).rejects.toThrow();
+		await expect(readFile(join(codexHome, "skills", "sno-mem-codex", "SKILL.md"))).rejects.toThrow();
+	});
+
+	it("uninstall with nothing installed exits 0 and creates no file", async () => {
+		const codexHome = await temporaryHome();
+		const cli = spawnSync(process.execPath, ["--import", "tsx", "apps/mem-codex/src/cli.ts", "uninstall", "--codex-home", codexHome],
+			{ encoding: "utf8", timeout: 10_000 });
+		expect(cli.status, cli.stderr).toBe(0);
+		const { readdir } = await import("node:fs/promises");
+		expect(await readdir(codexHome)).toEqual([]);
+	});
+
 	it("quotes a program path with spaces before hashing and running each hook", async () => {
 		const codexHome = await temporaryHome();
 		const programPath = join(codexHome, "Application Support", "sno");
