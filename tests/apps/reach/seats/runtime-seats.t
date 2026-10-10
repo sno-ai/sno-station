@@ -197,6 +197,25 @@ if sys.argv[2:]==['openclaw']:
             assert not (root/'state'/seat/'reachable.json').exists()
         print('PASS OpenClaw agent selection:',name,flush=True)
     (root/'agents.json').unlink();(root/'agents-error').unlink()
+    config=root/'home/.config/sno-reach';config.mkdir(parents=True)
+    (config/'agents.json').write_text('{"openclaw":{"acpx_agent":"openclaw"}}')
+    (root/'mode').write_text('absent-new');(root/'events.ndjson').touch()
+    (commands/'acpx').symlink_to(app.parent.parent/'tests/apps/reach/seats/fake_acpx.py')
+    env['ACP_FIXTURE']=str(root)
+    seat='executor.openclaw-acp@'+host
+    ok('init','--as',seat,'--name','Adapter')
+    r=ok('spawn','openclaw','--as',seat,'--cwd',str(root))
+    session=json.loads((root/'created').read_text())['name']
+    assert r.stdout=='seat '+seat+' channel=acp handle=acp-openclaw:'+str(root)+':'+session+'\n',r.stdout
+    assert json.loads((root/'state'/seat/'reachable.json').read_text())['channel']=='acp'
+    assert not (root/'state'/seat/'transcript.json').exists()
+    assert json.loads((root/'received.json').read_text())['no_wait'] is True
+    quota=app.parent/'subscription-quota-check/bin/subscription-quota-check'
+    r=subprocess.run([str(quota),'--agent','openclaw','--seat',seat],
+        env=env|{'SNO_REACH_STATE_ROOT':str(root/'state')},capture_output=True,text=True,timeout=10)
+    assert r.returncode==3 and r.stderr=='',(r.stdout,r.stderr)
+    assert json.loads(r.stdout)=={'ok':False,'operation':'agent-read','agent':'openclaw','reason':'current-model-unknown'},r.stdout
+    print('PASS ACP OpenClaw omits the record id and quota reports current-model-unknown',flush=True)
     sys.exit(0)
 
 if sys.argv[2:]==['selection']:

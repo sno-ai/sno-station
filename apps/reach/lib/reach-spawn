@@ -114,7 +114,8 @@ case "$kind" in
     claude) transcript="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/projects/$(printf '%s' "$cwd" | sed 's/[^A-Za-z0-9]/-/g')/${session_id:-}.jsonl" ;;
     codex) transcript="codex-rollout" ;;
     hermes) transcript="hermes-session" ;;
-    openclaw) transcript="$session_id" ;;
+    # ACPX's record id is not an OpenClaw session key; the adapter does not expose that key.
+    openclaw) transcript="$session_id"; [[ "$channel" != acp ]] || transcript="" ;;
     *) transcript="" ;;
 esac
 if [[ -n "$transcript" ]]; then
