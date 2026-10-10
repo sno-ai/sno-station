@@ -508,7 +508,7 @@ class SnoMemoryProvider(MemoryProvider):
         self._captures: dict[str, Future[dict[str, object]]] = {}
         self._committed: dict[str, dict[str, object]] = {}
         self._activity: dict[str, ActivityCursor] = {}
-        # sync_turn runs on the host's worker; the next prompt may arrive before it drains.
+        # A new turn supersedes any prompt left behind by an interrupted turn.
         self._activity_prompts: dict[str, list[tuple[int, Literal["human", "agent"]]]] = {}
 
     @property
@@ -681,9 +681,9 @@ class SnoMemoryProvider(MemoryProvider):
                  or "No work is assigned by this startup message" in message
                  or _HEARTBEAT_TICK.search(message) is not None)
         with self._capture_lock:
-            self._activity_prompts.setdefault(self._session_id, []).append(
+            self._activity_prompts[self._session_id] = [
                 (int(time.time() * 1000), "agent" if agent else "human")
-            )
+            ]
 
     def _report_activity(self, session_id: str) -> None:
         with self._capture_lock:
