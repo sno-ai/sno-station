@@ -6,6 +6,7 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { Embedder } from "../../../../packages/memory/src/engine/extraction/embedding-provider-client";
 import {
+	AtomicExtractionCompletedElsewhere,
 	type AtomicExtractionLedgerKey,
 	type AtomicExtractionReprocessBounds,
 	type AtomicExtractionReprocessReason,
@@ -197,15 +198,22 @@ describe("atomic extraction ledger", () => {
 			action: "skip",
 			entry: { state: "complete" },
 		});
+		// A capture that loses a race with another capture of the same turn hits 'complete' at any of these three
+		// steps; each says so with one error type, so the capture is a skip instead of a failed turn.
+		expect(() => store.recordAtomicExtractionCalls(key, 12)).toThrow(AtomicExtractionCompletedElsewhere);
 		expect(() => store.recordAtomicExtractionCalls(key, 12)).toThrow(
 			/Cannot record calls from atomic extraction state 'complete'/u,
 		);
+		expect(() =>
+			store.markAtomicExtractionPending(key, "parse-exhaustion", failedReply, 12),
+		).toThrow(AtomicExtractionCompletedElsewhere);
 		expect(() =>
 			store.markAtomicExtractionPending(key, "parse-exhaustion", failedReply, 12),
 		).toThrow(/Cannot pend atomic extraction from state 'complete'/u);
 		expect(() => store.reopenAtomicExtractionChunk(key, 2, REPROCESS_BOUNDS, 12)).toThrow(
 			/Cannot reopen atomic extraction from state 'complete'/u,
 		);
+		expect(() => store.completeAtomicExtractionChunk(key, 12, () => undefined)).toThrow(AtomicExtractionCompletedElsewhere);
 		expect(() => store.completeAtomicExtractionChunk(key, 12, () => undefined)).toThrow(
 			/Cannot complete atomic extraction from state 'complete'/u,
 		);
