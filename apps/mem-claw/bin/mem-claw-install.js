@@ -41,9 +41,10 @@ if (restarted.status !== 0) {
 	console.error(`OpenClaw's gateway did not restart (exit ${restarted.status ?? restarted.error?.message}); start it with: openclaw gateway restart`);
 } else {
 	let ready = false;
-	for (let attempt = 0; attempt < 60 && !ready; attempt++) {
-		if (attempt > 0) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1000);
-		ready = spawnSync("openclaw", [...(profile ? ["--profile", profile] : []), "gateway", "health"], { stdio: "ignore" }).status === 0;
+	// Each probe is cut off after 5 seconds, so the wait is 60 seconds of the clock, not 60 probes.
+	for (const end = Date.now() + 60_000; !ready && Date.now() < end;) {
+		ready = spawnSync("openclaw", [...(profile ? ["--profile", profile] : []), "gateway", "health"], { stdio: "ignore", timeout: 5000 }).status === 0;
+		if (!ready) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1000);
 	}
 	if (ready) console.log("OpenClaw's gateway restarted and answers.");
 	else console.error("OpenClaw's gateway restarted but did not answer within 60 seconds; check it with: openclaw gateway status");
