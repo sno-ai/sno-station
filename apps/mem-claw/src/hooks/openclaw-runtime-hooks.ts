@@ -101,7 +101,7 @@ export function registerRuntimeHooks(api: OpenClawPluginApi, config: PluginConfi
   const injectionSession = (context: HostMemoryContext): string =>
     JSON.stringify([resolveWorkspace(api.config, context), context.sessionKey ?? context.sessionId]);
   const activity = new Map<string, { cursor: ActivityCursor; records: ActivityRecord[] }>();
-  const reportActivity = (context: HostMemoryContext): void => {
+  const reportActivity = async (context: HostMemoryContext): Promise<void> => {
     const state = activity.get(injectionSession(context));
     if (!state || state.records.length === 0) return;
     const endedAt = Date.now();
@@ -113,12 +113,11 @@ export function registerRuntimeHooks(api: OpenClawPluginApi, config: PluginConfi
     state.cursor = folded.cursor;
     state.records = [];
     if (!folded.payload) return;
-    appendObserveLedgerRows(getSnoProfileDir(), [{
-      agent_id: "openclaw", ts_ms: folded.payload.window_end_ms,
-      project_id: detectProjectId(resolveWorkspace(api.config, context)),
-      event_type: "session.activity", lane: "memory",
-      payload: { harness: "openclaw", ...folded.payload },
-    }]);
+    // `sno observe append` sends the row now. A row only written to the local ledger waits for the next service start or
+    // session reset, which a plain OpenClaw run never reaches.
+    await new Promise<void>((resolve, reject) => execFile("sno", ["observe", "append", "session.activity", "--agent=openclaw",
+      "--harness=openclaw", ...Object.entries(folded.payload!).map(([key, value]) => `--${key}=${value}`)],
+    { cwd: resolveWorkspace(api.config, context), timeout: 5000 }, error => error ? reject(error) : resolve()));
   };
   const currentConfig = () => typeof config === "function" ? config() : config;
   api.on("llm_input", async (event) => { hostCallStartedAt.set(event.runId, Date.now()); });
@@ -200,7 +199,7 @@ export function registerRuntimeHooks(api: OpenClawPluginApi, config: PluginConfi
   });
   api.on("agent_end", async (event, context) => {
     if (skipStationRun(context)) return;
-    await contained("session-activity", async () => { reportActivity(context); });
+    await contained("session-activity", async () => { await reportActivity(context); });
     // A failed run captures nothing, but its observe session still ends here.
     try {
       if (!event.success || context.sessionKey?.includes(":subagent:")) return;
