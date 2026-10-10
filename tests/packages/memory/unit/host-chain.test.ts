@@ -50,3 +50,24 @@ it("answers from the next host when the deadline leaves it time", async () => {
 	];
 	expect(await hostChain(() => hosts).complete({ prompt: "question", timeoutMs: 2_000 })).toEqual({ kind: "ok", text: "answer" });
 });
+
+it("tells the host when the caller stops waiting, so a host never runs a model for an abandoned call", async () => {
+	// The worker queues host calls; without this time it ran a model for every call whose caller had already given up.
+	let header: string | undefined;
+	const server = createServer((request, response) => {
+		header = request.headers["x-sno-deadline"] as string | undefined;
+		request.resume();
+		response.writeHead(200, { "content-type": "application/json" });
+		response.end(JSON.stringify({ choices: [{ message: { role: "assistant", content: "answer" } }] }));
+	});
+	await new Promise<void>(done => server.listen(0, "127.0.0.1", done));
+	servers.push(server);
+	const address = server.address();
+	if (!address || typeof address === "string") throw new Error("no port");
+	const port = new RegisteredAgentPort({ baseUrl: `http://127.0.0.1:${address.port}/v1`, credential: "c", model: "m" });
+	const before = Date.now();
+	expect(await port.complete({ prompt: "question", timeoutMs: 5_000 })).toEqual({ kind: "ok", text: "answer" });
+	const sent = Number(header);
+	expect(sent).toBeGreaterThanOrEqual(before + 5_000);
+	expect(sent).toBeLessThanOrEqual(Date.now() + 5_000);
+});
