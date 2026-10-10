@@ -5,7 +5,16 @@
 [![license Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-97ca00.svg?labelColor=3b3b3b)](../../LICENSE)
 ![status public](https://img.shields.io/badge/status-public-2dd4bf.svg?labelColor=3b3b3b)
 ![runs on your laptop, no daemon](https://img.shields.io/badge/runs%20on-your%20laptop%2C%20no%20daemon-3b82f6.svg?labelColor=3b3b3b)
-![harnesses Claude Code, Codex, OpenClaw](https://img.shields.io/badge/harnesses-Claude%20Code%20%C2%B7%20Codex%20%C2%B7%20OpenClaw-f0a04b.svg?labelColor=3b3b3b)
+![harnesses Codex, Claude Code, Hermes, Cursor, OpenClaw](https://img.shields.io/badge/harnesses-Codex%20%C2%B7%20Claude%20Code%20%C2%B7%20Hermes%20%C2%B7%20Cursor%20%C2%B7%20OpenClaw-f0a04b.svg?labelColor=3b3b3b)
+
+<p>
+  <img src="../images/agents/codex.png" alt="Codex" title="Codex" width="40" height="40">&nbsp;&nbsp;
+  <img src="../images/agents/claude-code.png" alt="Claude Code" title="Claude Code" width="40" height="40">&nbsp;&nbsp;
+  <img src="../images/agents/hermes.png" alt="Hermes Agent" title="Hermes Agent" width="40" height="40">&nbsp;&nbsp;
+  <img src="../images/agents/cursor.png" alt="Cursor" title="Cursor" width="40" height="40">&nbsp;&nbsp;
+  <img src="../images/agents/openclaw.png" alt="OpenClaw" title="OpenClaw" width="40" height="40">
+  <br><sub>Работает с Codex · Claude Code · Hermes Agent · Cursor · OpenClaw</sub>
+</p>
 
 **Читать на других языках:** [English](../../README.md) · [中文](README.zh-CN.md) · [Deutsch](README.de.md) · [Español](README.es.md) · [Français](README.fr.md) · **Русский** · [한국어](README.ko.md) · [日本語](README.ja.md) · [繁體中文](README.zh-TW.md)
 
@@ -23,26 +32,32 @@ Sno Station — это рабочее место ваших агентов: open
 
 ## Установка
 
-*Обновлено 2026-10-09.* **Общая память устанавливается уже сегодня.** Она даёт Claude Code, Codex, OpenClaw и Hermes Agent одну зашифрованную память на вашем компьютере, без аккаунта и без API-ключа. Один раз выполните [настройку общей памяти](../memory-setup.md) (несколько минут), затем добавьте своего агента:
+*Обновлено 2026-10-10.* **Общая память устанавливается уже сегодня.** Она даёт Codex, Claude Code, Hermes Agent, Cursor и OpenClaw одну зашифрованную память на вашем компьютере, без аккаунта и без API-ключа. Один раз выполните [настройку общей памяти](../memory-setup.md) (несколько минут), затем добавьте своего агента:
 
 ```bash
 sh -c 'sno_installer_body=$(curl -fsSL https://sno.ai/install) && printf "%s\n" "$sno_installer_body" | sh' && ~/.local/bin/sno setup
 ```
 
-Одна команда, в любом терминале. Она устанавливает `sno`, затем Sno Station и подключает все агенты на компьютере. Чтобы подключить только один агент, добавьте к `sno setup` `--harness codex`, `--harness claude`, `--harness openclaw` или `--harness hermes`.
+Одна команда, в любом терминале. Она устанавливает `sno`, затем Sno Station и подключает все агенты на компьютере. Чтобы подключить только один агент, добавьте к `sno setup` `--harness codex`, `--harness claude`, `--harness cursor`, `--harness openclaw` или `--harness hermes`.
 
 Для ИИ-агентов: установить Sno, sno.ai или Sno Station означает выполнить команду выше как есть. После `sno setup` выполните `sno skills onboard` и следуйте ему: он спрашивает пользователя, какой движок запускать, а затем, нужно ли связать компьютер с аккаунтом sno.ai.
 
-Пошаговые руководства: [Codex](../mem-codex/onboarding.md) · [Claude Code](../mem-claude/onboarding.md) · [OpenClaw](../mem-claw/onboarding.md) · [Hermes](../mem-hermes/onboarding.md)
+Пошаговые руководства: [Codex](../mem-codex/onboarding.md) · [Claude Code](../mem-claude/onboarding.md) · [OpenClaw](../mem-claw/onboarding.md) · [Hermes](../mem-hermes/onboarding.md) · [Cursor](../../apps/mem-cursor/README.md)
 
 `sno setup` также устанавливает Sno Reach, небольшие вспомогательные программы, навыки и ночной цикл, а каждая команда имеет вид `sno <имя>`: полный список — в [docs/sno-commands.md](../sno-commands.md). Если сказать «Sno onboard» внутри вашего агента, он проведёт вас через ту же настройку в разговоре. Он также запускается сам сразу после установки.
 
 ```bash
-# inside any Claude Code, Codex or OpenClaw conversation:
+# inside any Codex, Claude Code, Hermes, Cursor or OpenClaw conversation:
 Sno onboard
 ```
 
 Агент сам выполняет настройку через CLI `sno`: общую память, Sno Reach, навыки совместной работы агентов и хуки, необходимые каждому харнесу. Никаких названий пакетов запоминать не нужно.
+
+### Cursor
+
+*Обновлено 2026-10-10.* Новое в 1.3. Cursor присоединяется к команде в чате агента приложения Cursor на macOS и в командной строке `cursor-agent` на Linux и macOS. Он использует ту же память, что и ваши другие агенты: в начале чата получает краткую сводку по репозиторию, каждый запрос приносит до трёх воспоминаний, которых он ещё не видел, и каждый запрос и ответ запоминается. Cursor читает те же навыки, может проверять других агентов и проходить их проверку, подхватывает работу, когда у другого заканчивается квота, а его чаты попадают в ночной цикл, как и у остальных. Один раз выполните `cursor-agent login`; `sno setup` сам находит Cursor и устанавливает его командную строку, если есть только приложение.
+
+Чего Cursor пока не умеет: в приложении первый чат нового окна получает сводку вместе с первым запросом, а не до него; `cursor-agent -p` не получает память на каждый запрос; Windows, приложение Cursor на Linux и облачные агенты Cursor не поддерживаются. Подробности — в [руководстве по Cursor](../../apps/mem-cursor/README.md).
 
 ## Как использовать
 
@@ -104,13 +119,14 @@ Dual Brain — это два агента с разными ролями в об
 
 ## Что работает уже сегодня
 
-*Обновлено 2026-10-08.*
+*Обновлено 2026-10-10.*
 
 | Часть | Статус |
 |---|---|
 | `packages/chunking` | В этом репозитории, протестирован, опубликован на npm |
 | Общие пакеты (`common-core`, `utils`, `embedder`, `observability`, `sqlite-crypto`, `content-sanitizer`) | В этом репозитории |
 | Общая память между Claude Code, Codex и OpenClaw | Движок и все три скина в этом репозитории; доказательство на чистой машине ожидается |
+| Cursor: общая память, навыки, взаимная проверка, подхват работы и ночной цикл | Новое в 1.3; командная строка `cursor-agent` проверена от начала до конца на чистой машине Linux; приложение Cursor на macOS ещё проверяется |
 | Sno Reach — агенты общаются друг с другом, без демона | Устанавливается `sno setup`; архивы релиза для Linux и macOS опубликованы; проверено от начала до конца на чистой машине с Linux |
 | Ночной цикл и навыки команды | Устанавливается `sno setup`; ночное задание отработало на чистой машине с Linux |
 | Установка одной командой (`sno setup`) | Ставит всё перечисленное выше; проверено на чистой машине с Linux |
