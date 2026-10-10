@@ -327,15 +327,21 @@ claude_probe() {
 		jq -c 'select(.type=="control_response") | .response.response' 2>/dev/null |
 		head -1)" || true
 
-	if [[ -z "$json" ]]; then
+	if [[ -z "$json" || "$json" == null ]]; then
 		jq -n '{vendor:"claude",state:"unreadable",verdict:"unknown",
-		        reason:"get_usage control request returned no response"}'
+		        reason:"get_usage control request returned no result"}'
+		return
+	fi
+
+	if ! printf '%s' "$json" | jq -e '.rate_limits_available | type == "boolean"' >/dev/null 2>&1; then
+		jq -n '{vendor:"claude",state:"unreadable",verdict:"unknown",
+		        reason:"rate_limits_available is absent or not a boolean"}'
 		return
 	fi
 
 	# rate_limits_available:false means API key / Bedrock / Vertex — plan limits do not
 	# apply at all. Reporting 0% there would be a lie in the usable direction.
-	if [[ "$(printf '%s' "$json" | jq -r '.rate_limits_available // false')" != "true" ]]; then
+	if printf '%s' "$json" | jq -e '.rate_limits_available == false' >/dev/null; then
 		jq -n '{vendor:"claude",state:"not_applicable",verdict:"n/a",
 		        reason:"rate_limits_available is false: not a subscription-limited session"}'
 		return

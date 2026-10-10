@@ -25,6 +25,10 @@ if ((structured)); then
 	jq -e -s 'length == 1 and .[0] == {
 		type:"control_request", request_id:"q", request:{subtype:"get_usage"}
 	}' >/dev/null || { printf 'expected one get_usage control request\n' >&2; exit 2; }
+	if [[ "${STUB_CLAUDE_MODE:-answer}" == missing-result ]]; then
+		printf '{"type":"control_response","response":{}}\n'
+		exit 0
+	fi
 	printf '{"type":"control_response","response":{"request_id":"q","response":'
 	tr -d '\n' <"${STUB_CLAUDE_PAYLOAD:?STUB_CLAUDE_PAYLOAD is required}"
 	printf '}}\n'
