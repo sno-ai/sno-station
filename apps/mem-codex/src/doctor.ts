@@ -5,7 +5,7 @@ import {
 	type CodingSkinHookName,
 } from "@snoai/memory/coding-skin";
 import { z } from "zod";
-import { computeTrustHash, isOwnedHookCommand } from "./install.js";
+import { codexHookTimeout, computeTrustHash, isOwnedHookCommand } from "./install.js";
 import { importDirectory, sidecarDiscoveryPath } from "./paths.js";
 
 const discoverySchema = z.object({ pid: z.number().int().positive(), port: z.number().int().positive(), token: z.string() });
@@ -29,7 +29,7 @@ function trustState(config: string, hooksPath: string, event: CodingSkinHookName
 	const section = `[hooks.state.${JSON.stringify(key)}]`;
 	const expected = computeTrustHash({
 		event_name: details.eventName,
-		hooks: [{ type: "command", command, timeout: details.timeout, async: false }],
+		hooks: [{ type: "command", command, timeout: codexHookTimeout(event), async: false }],
 	});
 	const start = config.indexOf(section);
 	if (start < 0) return "no-trust-entry";
