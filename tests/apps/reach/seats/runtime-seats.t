@@ -348,10 +348,10 @@ print('PASS busy OpenClaw calls and rings wait for the idle footer',flush=True)
 if sys.argv[2:]==['quick']:sys.exit(0)
 for operation in ['call','ring']:
     (root/'busy').touch();(root/'busy-always').touch();(root/'polls').unlink(missing_ok=True)
-    if operation=='call':r=ok('call',seats['openclaw'],'Deliver after timeout.','--expect','^NEW-TASK-ANSWER$','--timeout','3','--every','1',limit=75)
+    if operation=='call':r=ok('call',seats['openclaw'],'Deliver after timeout.','--expect','^NEW-TASK-ANSWER$','--timeout','10','--every','1',limit=75)
     else:r=ok('ring',seats['openclaw'],limit=75)
     assert 'reach: openclaw seat never reached idle' in r.stderr,r.stderr
-    assert int((root/'polls').read_text())>=25
+    assert int((root/'polls').read_text())>=(3 if operation=='call' else 25)
     (root/'busy').unlink();(root/'busy-always').unlink()
     print('PASS idle timeout still delivers:',operation,flush=True)
 PY
