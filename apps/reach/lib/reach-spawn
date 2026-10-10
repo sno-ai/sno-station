@@ -6,7 +6,7 @@ kind="${1:?agent required}"
 register_env=(-u SNO_REACH_HARNESS)
 case "$kind" in
     claude) register_env+=(SNO_REACH_HARNESS=claude-code) ;;
-    codex|hermes|openclaw) register_env+=("SNO_REACH_HARNESS=$kind") ;;
+    codex|hermes|openclaw|cursor) register_env+=("SNO_REACH_HARNESS=$kind") ;;
 esac
 address="${2:?address required}"
 cwd="${3:?cwd required}"
@@ -116,6 +116,8 @@ case "$kind" in
     hermes) transcript="hermes-session" ;;
     # ACPX's record id is not an OpenClaw session key; the adapter does not expose that key.
     openclaw) transcript="$session_id"; [[ "$channel" != acp ]] || transcript="" ;;
+    # Cursor names the chat itself; call finds the transcript holding its receipt.
+    cursor) transcript="cursor-transcript" ;;
     *) transcript="" ;;
 esac
 if [[ -n "$transcript" ]]; then
@@ -126,7 +128,7 @@ if [[ -n "$transcript" ]]; then
     mv -- "$temporary" "$root/$address/transcript.json"
 fi
 temporary="$(mktemp "$root/$address/.seat-runtime.XXXXXX")"
-jq --arg runtime "$kind" '.runtime=$runtime' "$root/$address/seat.json" >"$temporary"
+jq --arg runtime "$([[ "$kind" == cursor ]] && printf cursor-agent || printf '%s' "$kind")" '.runtime=$runtime' "$root/$address/seat.json" >"$temporary"
 chmod 0600 "$temporary"
 mv -- "$temporary" "$root/$address/seat.json"
 if [[ "$kind" == openclaw && "$channel" == tmux ]]; then

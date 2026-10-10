@@ -79,7 +79,7 @@ for agent in hermes openclaw; do
   [[ "$RC" == 3 ]] || failed=$((failed+1))
 done
 run --agent cursor
-check 'Cursor is deferred' '[.ok,.reason]' '[false,"cursor-not-integrated"]'
+check 'Cursor without a seat or model is unknown' '[.ok,.reason]' '[false,"current-model-unknown"]'
 RC=0
 OUT="$(python3 - "$PROBE" <<'PY'
 import os, pty, subprocess, sys
@@ -94,7 +94,7 @@ os.close(master)
 sys.exit(result.returncode)
 PY
 )" || RC=$?
-check 'Agent read stays JSON on a terminal' '[.ok,.reason]' '[false,"cursor-not-integrated"]'
+check 'Agent read stays JSON on a terminal' '[.ok,.reason]' '[false,"current-model-unknown"]'
 run --agent codex --model gpt-5.6-terra
 check 'Codex reuses quota probe' '[.model,.provider,.model_vendor,.vendor.verdict]' '["gpt-5.6-terra","openai","openai","go"]'
 run --agent claude-code
@@ -120,7 +120,7 @@ check 'In-place candidates come before other agents' '.candidates[:3] | map([.ag
 check 'Unread quota can win' '[.chosen.model,.chosen.verdict]' '["qwen3.8-27b-reason","unread"]'
 check 'Unread local model is not skipped' '[.skipped[] | select(.provider=="local-reason")]' '[]'
 check 'Same vendor Codex skipped' '[.skipped[] | select(.agent=="codex") | .reason]' '["same-vendor"]'
-check 'Cursor skipped explicitly' '[.skipped[] | select(.agent=="cursor") | .reason]' '["cursor-not-integrated"]'
+check 'Cursor without a recorded model is unavailable' '[.skipped[] | select(.agent=="cursor") | .reason]' '["unavailable"]'
 STUB_HERMES_LOCAL_STDERR=1 run --pick handoff --from hermes --seat test-hermes --json
 check 'No-account message on stderr remains a handoff candidate' '[.chosen.model,.chosen.verdict]' '["qwen3.8-27b-reason","unread"]'
 STUB_HERMES_LOCAL_ERROR="$WORK/local-error.txt" run --pick handoff --from hermes --seat test-hermes --json

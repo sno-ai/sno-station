@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# Boundary fake for curl talking to Cursor's usage endpoint. It writes the body to -o, prints
+# the status for -w, and records its argv and the header files it was handed, so the test can
+# prove the token travels in a file and never in argv.
+#   STUB_CURSOR_BODY  file holding the response body
+#   STUB_CURSOR_HTTP  status code to report (default 200)
+#   STUB_CURSOR_LOG   file that receives argv and header-file contents
+set -Eeuo pipefail
+out=''
+args=("$@")
+printf 'ARGV %s\n' "$*" >>"$STUB_CURSOR_LOG"
+for ((i = 0; i < ${#args[@]}; i++)); do
+	case "${args[i]}" in
+	-o) out="${args[i + 1]}" ;;
+	-H) [[ "${args[i + 1]}" != @* ]] || printf 'HEADERFILE %s\n' "$(cat -- "${args[i + 1]#@}")" >>"$STUB_CURSOR_LOG" ;;
+	esac
+done
+[[ "${args[-1]}" == https://api2.cursor.sh/aiserver.v1.DashboardService/GetCurrentPeriodUsage ]] ||
+	{ printf 'curl stub: unexpected URL %s\n' "${args[-1]}" >&2; exit 2; }
+cat -- "$STUB_CURSOR_BODY" >"$out"
+printf '%s' "${STUB_CURSOR_HTTP:-200}"

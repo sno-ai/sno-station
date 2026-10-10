@@ -155,6 +155,7 @@ ring_for_channel() {
         orca) ring_orca "$root" "$recipient" "$sender" "$message_id" "$record" ;;
         tmux) ring_tmux "$root" "$recipient" "$sender" "$message_id" "$record" ;;
         acp) ring_acp "$root" "$recipient" "$sender" "$message_id" "$record" ;;
+        cursor-ide) ring_cursor_ide "$root" "$recipient" "$sender" "$message_id" "$record" ;;
         *)
             emit "$root" "$recipient" "$sender" "$message_id" no-channel \
                 "unsupported reachability channel $channel"
@@ -205,6 +206,21 @@ ring_acp() {
         return
     fi
     emit "$root" "$recipient" "$sender" "$message_id" rang-unverified "queued Message-ID $message_id for ACP session $name; pickup is unverified"
+}
+
+# A Cursor IDE chat cannot be typed into. The card already waits in the seat's inbox, and the
+# chat's own stop hook (`sno reach cursor-hook stop`) hands it over when its turn ends.
+ring_cursor_ide() {
+    local root="$1" recipient="$2" sender="$3" message_id="$4" record="$5" id conversation
+    id="$(jq -r '.identity.value' "$record")"
+    conversation="${SNO_PROFILE_DIR:-$HOME/.sno}/cursor/conversations/$id.json"
+    if [[ ! -f "$conversation" ]] || ! jq -e '.ended_at == null' "$conversation" >/dev/null 2>&1; then
+        emit "$root" "$recipient" "$sender" "$message_id" unresolved \
+            "Cursor IDE chat $id of $recipient has ended or has no conversation record; the card stays in its inbox"
+        return
+    fi
+    emit "$root" "$recipient" "$sender" "$message_id" rang-unverified \
+        "Message-ID $message_id waits for the stop hook of Cursor IDE chat $id; pickup is unverified"
 }
 
 run_doorbell() {
@@ -516,6 +532,8 @@ tmux_executor_runtime_live() { # pane-id runtime
         queue=("${queue[@]:1}")
         comm="$(ps -o comm= -p "$pid" 2>/dev/null | awk '{print $1}')"
         args="$(ps -o args= -p "$pid" 2>/dev/null || true)"
+        # Cursor's CLI runs as node, with its installed script in argv.
+        if [[ "$runtime" == cursor-agent && "$args" == */cursor-agent/versions/*/index.js* ]]; then return 0; fi
         if [[ "$runtime" == unbound || -z "$runtime" ]]; then
             # Seats registered directly have no launch runtime recorded.
             [[ "$comm" != codex && "$comm" != claude ]] || return 0

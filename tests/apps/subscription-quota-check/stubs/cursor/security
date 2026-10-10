@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# Boundary fake for macOS `security find-generic-password -s cursor-access-token -w`.
+#   STUB_KEYCHAIN  token (default) | locked | absent
+set -Eeuo pipefail
+[[ "$*" == 'find-generic-password -s cursor-access-token -w' ]] || { printf 'security stub: unexpected %s\n' "$*" >&2; exit 2; }
+case "${STUB_KEYCHAIN:-token}" in
+locked) printf 'security: SecKeychainSearchCopyNext: User interaction is not allowed.\n' >&2; exit 36 ;;
+absent) printf 'security: SecKeychainSearchCopyNext: The specified item could not be found in the keychain.\n' >&2; exit 44 ;;
+*) printf 'keychain-secret-token\n' ;;
+esac

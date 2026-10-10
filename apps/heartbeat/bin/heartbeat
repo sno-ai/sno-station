@@ -121,7 +121,8 @@ die() {
 # precisely because an override that loses to an ambient variable is not an override.
 owner_id() {
   local id
-  for id in "${HEARTBEAT_OWNER:-}" "${CLAUDE_CODE_SESSION_ID:-}" \
+  # A Cursor conversation comes before the Claude ids it inherits when started from a Claude shell.
+  for id in "${HEARTBEAT_OWNER:-}" "${CURSOR_CONVERSATION_ID:-}" "${CLAUDE_CODE_SESSION_ID:-}" \
             "${CODEX_COMPANION_SESSION_ID:-}" "${CODEX_SESSION_ID:-}"; do
     if [[ -n $id ]]; then
       printf '%s' "$id"
@@ -402,6 +403,86 @@ close_inherited_fds() {
 }
 close_inherited_fds
 
+# --- Cursor: the arming conversation is the reader ----------------------------------------------
+# Cursor has no Monitor tool, so a heartbeat armed from a Cursor conversation delivers each tick
+# into that conversation itself. The route is fixed at arm time:
+#   ide    an IDE chat: a status card to its Reach seat, handed over by the chat's stop hook
+#   pane   the interactive CLI in tmux: the tick is typed into the pane, as Reach ring types
+#   print  any other CLI chat: `cursor-agent -p --trust --resume <chat>` with the tick on stdin
+# A failed delivery is logged with its exit code and stderr; the next tick tries again, no retry.
+cursor_route() {
+  [[ -n ${CURSOR_AGENT:-} && -n ${CURSOR_CONVERSATION_ID:-} ]] || return 0
+  # CURSOR_INVOKED_AS is set only under the CLI.
+  if [[ -z ${CURSOR_INVOKED_AS:-} ]]; then printf 'ide'; return 0; fi
+  # Typing is safe only into a pane whose own process tree runs the interactive CLI
+  # (`.../cursor-agent/versions/<ver>/index.js` without -p). A print-mode agent arms in the
+  # background and its shell exits, so the arming process's ancestry cannot be relied on.
+  local pane_pid
+  if [[ -n ${TMUX_PANE:-} ]] && pane_pid="$(tmux display-message -p -t "$TMUX_PANE" '#{pane_pid}' 2>/dev/null)" &&
+     ps -A -o pid=,ppid=,args= | awk -v root="$pane_pid" '
+       { pid[NR] = $1; parent[NR] = $2; $1 = ""; $2 = ""; args[NR] = $0 }
+       END {
+         tree[root] = 1
+         do { grew = 0; for (i = 1; i <= NR; i++) if (!(pid[i] in tree) && (parent[i] in tree)) { tree[pid[i]] = 1; grew = 1 } } while (grew)
+         for (i = 1; i <= NR; i++)
+           if ((pid[i] in tree) && args[i] ~ /\/cursor-agent\/versions\/[^ ]*\/index\.js/ && args[i] !~ / (-p|--print)( |$)/) exit 0
+         exit 1
+       }'; then
+    printf 'pane'
+  else
+    printf 'print'
+  fi
+}
+
+# The Reach seat registered for this IDE conversation, or nothing.
+cursor_ide_seat() {
+  local record
+  for record in "${SNO_REACH_ROOT:-$HOME/.local/state/sno-reach}"/*/reachable.json; do
+    [[ -f $record ]] || continue
+    jq -er --arg id "$CURSOR_CONVERSATION_ID" \
+      'select(.channel == "cursor-ide" and .identity.value == $id) | .address' "$record" 2>/dev/null && return 0
+  done
+  return 0
+}
+
+cursor_deliver() {
+  local line="$1" rc=0 err
+  err="$(mktemp "${TMPDIR:-/tmp}/heartbeat-cursor.XXXXXX")" || { printf 'heartbeat: cannot capture Cursor delivery errors\n' >&2; return 0; }
+  case "$cursor_route" in
+    ide)
+      # A seat registered after arming is picked up here.
+      [[ -n $cursor_seat ]] || cursor_seat="$(cursor_ide_seat)"
+      if [[ -z $cursor_seat ]]; then
+        printf 'no Reach seat is registered for this IDE chat; run sno reach register in it\n' >"$err"; rc=1
+      else
+        printf 'From: heartbeat <%s>\nTo: %s\nSubject: [STATUS] heartbeat %s tick %d\nDate: %s\nMessage-ID: <heartbeat-%s-%d-%d@%s>\nX-Work: heartbeat-%s\nX-Type: status\nAuto-Submitted: auto-generated\n\n%s\n' \
+          "$cursor_seat" "$cursor_seat" "$label" "$tick" "$(date -R)" "${EPOCHREALTIME/./}" "$$" "$RANDOM" "$(uname -n)" \
+          "${label//[^A-Za-z0-9._-]/-}" "$line" |
+          sno reach send --as "$cursor_seat" --no-ring >/dev/null 2>"$err" || rc=$?
+      fi
+      ;;
+    pane)
+      { tmux send-keys -t "$TMUX_PANE" C-u && tmux send-keys -t "$TMUX_PANE" -- "$line" &&
+        sleep 0.3 && tmux send-keys -t "$TMUX_PANE" Enter; } 2>"$err" || rc=$?
+      ;;
+    print)
+      # Bounded by one interval: a run that outlives it would meet the next tick on the same chat.
+      printf '%s\n' "$line" | timeout --kill-after=10 "$interval" \
+        cursor-agent -p --trust --resume "$CURSOR_CONVERSATION_ID" >/dev/null 2>"$err" || rc=$?
+      ;;
+  esac
+  if ((rc != 0)); then
+    printf '%s [%s] tick=%d cursor %s delivery FAILED exit=%d stderr=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+      "$label" "$tick" "$cursor_route" "$rc" "$(head -c "$OUTPUT_LIMIT" -- "$err" | tr '\n' ' ')" >>"$log_path" 2>/dev/null ||
+      printf 'heartbeat: cursor %s delivery failed exit=%d\n' "$cursor_route" "$rc" >&2
+  fi
+  rm -f -- "$err"
+}
+
+cursor_route="$(cursor_route)"
+cursor_seat=''
+[[ $cursor_route != ide ]] || cursor_seat="$(cursor_ide_seat)"
+
 mkdir -p -- "$(dirname -- "$log_path")" || die "cannot create the log directory"
 : >>"$log_path" || die "cannot append to $log_path"
 
@@ -476,12 +557,20 @@ claimed=1
 # nothing, and heard nothing; the line telling it to attach a reader was in the skill, was read,
 # and was skipped. So the instruction is printed here instead, at the one moment it cannot be
 # skipped: in the output the agent reads immediately after arming.
+if [[ -n $cursor_route ]]; then
+  printf 'heartbeat: armed from Cursor conversation %s. Each tick arrives in this conversation as a message (%s route); attach no reader.\n' \
+    "$CURSOR_CONVERSATION_ID" "$cursor_route"
+  [[ $cursor_route != ide || -n $cursor_seat ]] ||
+    printf 'heartbeat: this IDE chat is not a Reach seat yet, so ticks only reach the log %s until you run sno reach register in it.\n' "$log_path"
+  printf 'heartbeat: when a tick arrives, say what it says.\n'
+else
 printf 'heartbeat: armed. NOTHING REACHES YOU until you attach a reader to the log:\n'
 # --pid makes the reader retire itself when this heartbeat exits. Without it every finished
 # watch leaves a tail running forever, and a reused log path then delivers every line twice.
 printf 'heartbeat:   Monitor({command: "tail --pid=%s -F -n0 %s", persistent: true, description: "%s ticks"})\n' \
   "$$" "$log_path" "$label"
 printf 'heartbeat: every tick then arrives as one message. Say what it says.\n'
+fi
 
 hook_timeout=$((interval / HOOK_TIMEOUT_FRACTION))
 ((hook_timeout >= MIN_HOOK_TIMEOUT)) || hook_timeout=$MIN_HOOK_TIMEOUT
@@ -506,6 +595,7 @@ say() {
   local line
   line="$(printf '%s [%s] tick=%d %s' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$label" "$tick" "$1")"
   printf '%s\n' "$line" >>"$log_path" 2>/dev/null || printf 'heartbeat: %s\n' "$line" >&2
+  [[ -z $cursor_route || $1 == started\ * ]] || cursor_deliver "$line"
 }
 
 # EVERY ENDING SAYS WHICH ENDING IT WAS, and says it on stdout. The log line alone is not

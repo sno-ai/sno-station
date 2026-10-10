@@ -8,7 +8,7 @@ export HEARTBEAT="$APP/bin/heartbeat"
 
 printf 'TAP version 13\n'
 count=0
-for suite in heartbeat registry; do
+for suite in heartbeat registry cursor; do
   if ! bash "$HERE/$suite.t"; then
     printf 'FAIL %s.t\n' "$suite" >&2
     exit 1
