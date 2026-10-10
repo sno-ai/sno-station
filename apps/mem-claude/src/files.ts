@@ -16,6 +16,15 @@ export interface PidFileLock {
 	release(): Promise<void>;
 }
 
+function alive(pid: number): boolean {
+	try {
+		process.kill(pid, 0);
+		return true;
+	} catch (error) {
+		return error instanceof Error && "code" in error && error.code === "EPERM";
+	}
+}
+
 export async function acquirePidFileLock(path: string, staleAfterMs: number): Promise<PidFileLock | undefined> {
 	await mkdir(dirname(path), { recursive: true, mode: 0o700 });
 	const reclaimPath = `${path}.reclaim`;
@@ -45,6 +54,14 @@ export async function acquirePidFileLock(path: string, staleAfterMs: number): Pr
 			stat(path).catch(() => undefined),
 		]);
 		if (contents === "" && lockStat && Date.now() - lockStat.mtimeMs <= staleAfterMs) {
+			await closeGuard();
+			return undefined;
+		}
+		// A holder from before an upgrade took its guard with flock, which this lock cannot see on Linux; its fresh pid
+		// file is the only sign it still runs.
+		const holder = Number(contents?.split(" ")[0]);
+		if (Number.isInteger(holder) && holder > 0 && holder !== process.pid && lockStat
+			&& Date.now() - lockStat.mtimeMs <= staleAfterMs && alive(holder)) {
 			await closeGuard();
 			return undefined;
 		}
