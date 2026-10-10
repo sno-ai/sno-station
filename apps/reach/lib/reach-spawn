@@ -88,8 +88,12 @@ else
     session_id="$(uuidgen 2>/dev/null || cat /proc/sys/kernel/random/uuid)"
     spawned_at="$(date +%s)"
     if [[ "$kind" == openclaw ]]; then
-        agents="$(timeout --foreground -k 2 10 openclaw agents list --json | sed -n '/^\[/,$p')"
-        agent_id="$(jq -er 'map(select(.isDefault == true)) | .[0].id' <<<"$agents")"
+        agents="$(timeout --foreground -k 2 10 openclaw agents list --json | sed -n '/^\[/,$p')" || {
+            printf 'reach: OpenClaw agent list failed; cannot create a seat\n' >&2; exit 78;
+        }
+        agent_id="$(jq -er '(if length == 1 then . else map(select(.isDefault == true)) end) | .[0].id | strings | select(length > 0)' <<<"$agents")" || {
+            printf 'reach: OpenClaw has no usable agent id for a seat\n' >&2; exit 78;
+        }
         session_id="agent:$agent_id:reach-$(printf '%s%s' "$address" "$EPOCHREALTIME" | sha256sum | cut -c1-12)"
     fi
     handle="$(timeout --foreground 10 tmux 9>&- new-session -d -P -F '#{pane_id}' -s "$session" -c "$cwd" \

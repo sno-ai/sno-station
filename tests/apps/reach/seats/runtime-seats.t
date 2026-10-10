@@ -18,6 +18,8 @@ actor = '''#!/usr/bin/env python3
 import json,os,pathlib,re,subprocess,sys,time
 root=pathlib.Path(os.environ['FIXTURE_ROOT']);kind=pathlib.Path(sys.argv[0]).name
 if sys.argv[1:]==['agents','list','--json']:
+ if (root/'agents-error').exists():sys.exit(1)
+ if (root/'agents.json').exists():print((root/'agents.json').read_text());sys.exit(0)
  print(json.dumps([{'id':'main','isDefault':False},{'id':'research','isDefault':True}]))
  sys.exit(0)
 if len(sys.argv)>1 and sys.argv[1]=='sessions':
@@ -152,6 +154,28 @@ if sys.argv[2:]==['openclaw']:
     assert key.startswith('agent:research:reach-'),key
     assert json.loads((root/'state'/seat/'transcript.json').read_text())['session_key']==key
     print('PASS non-main default agent key persists from TUI launch through transcript export',flush=True)
+    for name,agents,agent_id in [
+        ('sole',[{'id':'solo','isDefault':False}],'solo'),
+        ('unmarked',[{'id':'solo'}],'solo'),
+        ('ambiguous',[{'id':'main','isDefault':False},{'id':'research','isDefault':False}],None),
+        ('list-error',None,None)]:
+        seat='executor.openclaw-'+name+'@'+host
+        ok('init','--as',seat,'--name','Fixture')
+        if agents is None:(root/'agents-error').touch()
+        else:(root/'agents.json').write_text(json.dumps(agents))
+        r=run('spawn','openclaw','--as',seat,'--cwd',str(root),'--window')
+        if agent_id:
+            assert r.returncode==0,(r.stdout,r.stderr)
+            metadata=json.loads((root/'state'/seat/'transcript.json').read_text())
+            assert metadata['session_key'].startswith('agent:solo:reach-'),metadata
+            rows=[json.loads(s) for s in (root/'launches.jsonl').read_text().splitlines()]
+            assert next(row for row in rows if row[0]==seat)[2]==['tui','--session',metadata['session_key']]
+        else:
+            assert r.returncode==78 and r.stdout=='',(r.stdout,r.stderr)
+            assert r.stderr==('reach: OpenClaw agent list failed; cannot create a seat\n' if agents is None else 'reach: OpenClaw has no usable agent id for a seat\n'),r.stderr
+            assert not (root/'state'/seat/'reachable.json').exists()
+        print('PASS OpenClaw agent selection:',name,flush=True)
+    (root/'agents.json').unlink();(root/'agents-error').unlink()
     sys.exit(0)
 
 if sys.argv[2:]==['selection']:
