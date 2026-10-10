@@ -10,7 +10,7 @@ export STUB_COMMAND_LOG="$WORK/commands" PATH="$HERE/stubs:$PATH"
 mkdir -p "$HOME" "$HERMES_HOME/logs" "$XDG_CONFIG_HOME/sno" "$SNO_REACH_STATE_ROOT/test-hermes" "$SNO_REACH_STATE_ROOT/test-claw"
 cp "$STUB_FIXTURES/hermes-agent-log-requests.txt" "$HERMES_HOME/logs/agent.log.1"
 printf '{"session_id":"20261009_071006_873a0a","cwd":"/tmp/reach-test","spawned_at":1791529806}\n' >"$SNO_REACH_STATE_ROOT/test-hermes/transcript.json"
-printf '{"session_key":"reach-test-claw"}\n' >"$SNO_REACH_STATE_ROOT/test-claw/transcript.json"
+printf '{"session_key":"agent:main:reach-test-claw"}\n' >"$SNO_REACH_STATE_ROOT/test-claw/transcript.json"
 export STUB_HERMES_EXPORT="$WORK/export.jsonl"
 printf '{"id":"20261009_071006_873a0a","started_at":1791529806,"messages":[{"role":"user","content":"Reach seat test-hermes"}]}\n' >"$STUB_HERMES_EXPORT"
 printf '{"cachedUsageUtilization":{"fetchedAtMs":%s}}\n' "$(( $(date +%s) * 1000 ))" >"$HOME/.claude.json"
@@ -30,6 +30,20 @@ check() {
   fi
 }
 printf 'TAP version 13\n'
+if [[ "${1:-}" == openclaw ]]; then
+  printf '{"session_key":"agent:research:reach-test-claw"}\n' >"$SNO_REACH_STATE_ROOT/test-claw/transcript.json"
+  run --agent openclaw --seat test-claw
+  check 'Non-main agent exact key selects its own model and provider' "[$RC,.ok,.model,.provider,.vendor.tightest_window.used_pct]" '[0,true,"claude-sonnet-5","anthropic",null]'
+  printf '{"session_key":"agent:research:missing"}\n' >"$SNO_REACH_STATE_ROOT/test-claw/transcript.json"
+  run --agent openclaw --seat test-claw
+  check 'Missing key cannot borrow another session model' "[$RC,.ok,.reason]" '[3,false,"current-model-unknown"]'
+  printf '{"session_key":"agent:main:reach-test-claw"}\n' >"$SNO_REACH_STATE_ROOT/test-claw/transcript.json"
+  run --agent openclaw --seat test-claw
+  check 'Same suffix on main retains the exact main model' "[$RC,.ok,.model,.provider,.vendor.tightest_window.used_pct]" '[0,true,"gpt-5.6-terra","openai",31]'
+  printf '1..%s\nagent quota selftest: %s passed, %s failed\n' "$((passed+failed))" "$passed" "$failed"
+  ((failed==0))
+  exit
+fi
 run --agent hermes --seat test-hermes
 check 'Hermes seat and rotated log' '[.ok,.operation,.agent,.model,.provider,.model_vendor,.vendor.verdict,.vendor.tightest_window.used_pct]' '[true,"agent-read","hermes","gpt-5.6-terra","openai-codex","openai","go",8]'
 check 'Hermes reset from recorded window' '.vendor.tightest_window.resets_at' '"2026-10-15T04:05:18+00:00"'

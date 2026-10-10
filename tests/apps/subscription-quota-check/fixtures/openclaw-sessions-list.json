@@ -1,6 +1,11 @@
 {
   "sessions": [
     {
+      "key": "agent:research:reach-test-claw",
+      "model": "claude-sonnet-5",
+      "modelProvider": "anthropic"
+    },
+    {
       "key": "agent:main:reach-test-claw",
       "model": "gpt-5.6-terra",
       "modelProvider": "openai"

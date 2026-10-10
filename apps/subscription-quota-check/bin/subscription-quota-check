@@ -558,7 +558,7 @@ current_model() {
 	if [[ "$agent" == openclaw ]]; then
 		session="$(jq -er '.session_key' "$record")" || return 1
 		raw="$(agent_command openclaw openclaw sessions list --json)" || return 1
-		jq -ce --arg key "agent:main:$session" '.sessions[] | select(.key==$key)
+		jq -ce --arg key "$session" '.sessions[] | select(.key==$key)
 			| select(.model != null and .modelProvider != null)
 			| {model,provider:.modelProvider}' <<<"$raw"
 		return

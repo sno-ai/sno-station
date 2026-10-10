@@ -17,6 +17,9 @@ env = os.environ | {'HOME': str(root/'home'), 'SNO_REACH_ROOT': str(root/'state'
 actor = '''#!/usr/bin/env python3
 import json,os,pathlib,re,subprocess,sys,time
 root=pathlib.Path(os.environ['FIXTURE_ROOT']);kind=pathlib.Path(sys.argv[0]).name
+if sys.argv[1:]==['agents','list','--json']:
+ print(json.dumps([{'id':'main','isDefault':False},{'id':'research','isDefault':True}]))
+ sys.exit(0)
 if len(sys.argv)>1 and sys.argv[1]=='sessions':
  args=sys.argv[2:]
  with (root/'exports.log').open('a') as f:f.write(json.dumps([kind]+args)+'\\n')
@@ -41,7 +44,7 @@ if len(sys.argv)>1 and sys.argv[1]=='sessions':
     if json.loads(row)['id']==session_id:print(row.replace('NEW-TASK-ANSWER','') if empty_reply else row)
  else:
   assert args[0]=='export-trajectory' and '--json' in args
-  assert args[args.index('--session-key')+1].startswith('agent:main:reach-')
+  assert args[args.index('--session-key')+1].startswith('agent:research:reach-')
   workspace=pathlib.Path(args[args.index('--workspace')+1])
   output=workspace/'.openclaw/trajectory-exports/openclaw-trajectory-fixture';output.mkdir(parents=True,exist_ok=True)
   if (root/'missing-session').exists():(output/'events.jsonl').unlink(missing_ok=True)
@@ -99,7 +102,7 @@ def wait_file(path):
     assert path.exists(),path
 host=subprocess.check_output(['hostname'],text=True).strip()
 seats={}
-for kind in (['hermes'] if sys.argv[2:]==['selection'] else ['openclaw'] if sys.argv[2:]==['timeout'] else ['claude','codex','hermes','openclaw','cursor-agent']):
+for kind in (['hermes'] if sys.argv[2:]==['selection'] else ['openclaw'] if sys.argv[2:] in (['timeout'],['openclaw']) else ['claude','codex','hermes','openclaw','cursor-agent']):
     seat='executor.'+kind+'@'+host;seats[kind]=seat
     ok('init','--as',seat,'--name','Fixture')
     flags=['--window']
@@ -129,7 +132,7 @@ for kind in (['hermes'] if sys.argv[2:]==['selection'] else ['openclaw'] if sys.
     elif kind=='cursor-agent':assert launch[2]==['--model','chosen/model',context],launch
     else:
         assert launch[2][:2]==['tui','--session'] and len(launch[2])==3,launch
-        assert re.fullmatch(r'reach-[0-9a-f]{12}',launch[2][2]),launch
+        assert re.fullmatch(r'agent:research:reach-[0-9a-f]{12}',launch[2][2]),launch
         metadata=json.loads((root/'state'/seat/'transcript.json').read_text())
         assert metadata['runtime']=='openclaw' and metadata['session_key']==launch[2][2]
         wait_file(root/(seat+'.input'))
@@ -138,6 +141,18 @@ for kind in (['hermes'] if sys.argv[2:]==['selection'] else ['openclaw'] if sys.
         assert lines[1].endswith('Then do this: '+context),lines
     assert json.loads((root/'state'/seat/'seat.json').read_text())['runtime']==kind
     print('PASS launch:',kind,flush=True)
+
+if sys.argv[2:]==['openclaw']:
+    seat=seats['openclaw']
+    r=ok('call',seat,'Use the non-main agent session.','--expect','^NEW-TASK-ANSWER$','--timeout','3','--every','1')
+    assert r.stdout.strip()=='NEW-TASK-ANSWER',r.stdout
+    assert 'falling back to screen' not in r.stderr,r.stderr
+    exports=[json.loads(s) for s in (root/'exports.log').read_text().splitlines()]
+    key=exports[-1][exports[-1].index('--session-key')+1]
+    assert key.startswith('agent:research:reach-'),key
+    assert json.loads((root/'state'/seat/'transcript.json').read_text())['session_key']==key
+    print('PASS non-main default agent key persists from TUI launch through transcript export',flush=True)
+    sys.exit(0)
 
 if sys.argv[2:]==['selection']:
     for name,flags,expected in [

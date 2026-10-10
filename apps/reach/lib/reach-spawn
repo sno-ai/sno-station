@@ -88,7 +88,9 @@ else
     session_id="$(uuidgen 2>/dev/null || cat /proc/sys/kernel/random/uuid)"
     spawned_at="$(date +%s)"
     if [[ "$kind" == openclaw ]]; then
-        session_id="reach-$(printf '%s%s' "$address" "$EPOCHREALTIME" | sha256sum | cut -c1-12)"
+        agents="$(timeout --foreground -k 2 10 openclaw agents list --json | sed -n '/^\[/,$p')"
+        agent_id="$(jq -er 'map(select(.isDefault == true)) | .[0].id' <<<"$agents")"
+        session_id="agent:$agent_id:reach-$(printf '%s%s' "$address" "$EPOCHREALTIME" | sha256sum | cut -c1-12)"
     fi
     handle="$(timeout --foreground 10 tmux 9>&- new-session -d -P -F '#{pane_id}' -s "$session" -c "$cwd" \
         -e "SNO_REACH_ROOT=$root" -e "SNO_REACH_ADDR=$address" -e "SNO_REACH_GUIDE=$guide" \

@@ -540,7 +540,7 @@ transcript_export_reply() {
 		jq -c '.messages[] | {role, content}' <<<"$exported" >"$transcript_work/messages.jsonl" 2>"$error" || parse_failed=true
 	else
 		session_id="$(jq -r '.session_key' "$seat_json")"
-		command=(openclaw sessions export-trajectory --session-key "agent:main:$session_id" --json --workspace "$transcript_work")
+		command=(openclaw sessions export-trajectory --session-key "$session_id" --json --workspace "$transcript_work")
 		if ! timeout --foreground -k 2 10 "${command[@]}" >"$file" 2>"$error"; then
 			printf 'reach: seat %s command ' "${record%/reachable.json}" >&2
 			printf '%q ' "${command[@]}" >&2
