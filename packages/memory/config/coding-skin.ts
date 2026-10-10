@@ -3,7 +3,7 @@ import { basename } from "node:path";
 export { appendObserveLedgerRows, type ObserveLedgerRow }
 	from "../src/engine/telemetry/observe-ledger";
 export { SKILL_CATEGORIES, skillVersionFor } from "./skill-categories";
-export { HOST_MODEL_CALLBACK_HOST, HOST_MODEL_CALLBACK_PATH } from "./skin-defaults";
+export { HOST_MODEL_CALLBACK_HOST, HOST_MODEL_CALLBACK_PATH, HOST_MODEL_DEADLINE_HEADER } from "./skin-defaults";
 export {
 	activityCursorSchema,
 	EMPTY_ACTIVITY_CURSOR,
