@@ -1,6 +1,6 @@
 {
   "name": "@snoai/utils",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "Logs you can actually read. When something goes wrong in Sno Station, this is how you find out why.",
   "license": "Apache-2.0",
   "publishConfig": { "access": "public" },

@@ -1,6 +1,6 @@
 {
 	"name": "@snoai/observability",
-	"version": "1.2.1",
+	"version": "1.2.2",
 	"description": "A private record of what your agents did. You decide how much of it is shared with sno.ai.",
 	"license": "Apache-2.0",
 	"publishConfig": { "access": "public" },
