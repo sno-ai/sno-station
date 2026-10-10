@@ -5,7 +5,16 @@
 [![license Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-97ca00.svg?labelColor=3b3b3b)](LICENSE)
 ![status public](https://img.shields.io/badge/status-public-2dd4bf.svg?labelColor=3b3b3b)
 ![runs on your laptop, no daemon](https://img.shields.io/badge/runs%20on-your%20laptop%2C%20no%20daemon-3b82f6.svg?labelColor=3b3b3b)
-![harnesses Claude Code, Codex, OpenClaw](https://img.shields.io/badge/harnesses-Claude%20Code%20%C2%B7%20Codex%20%C2%B7%20OpenClaw-f0a04b.svg?labelColor=3b3b3b)
+![harnesses Codex, Claude Code, Hermes, Cursor, OpenClaw](https://img.shields.io/badge/harnesses-Codex%20%C2%B7%20Claude%20Code%20%C2%B7%20Hermes%20%C2%B7%20Cursor%20%C2%B7%20OpenClaw-f0a04b.svg?labelColor=3b3b3b)
+
+<p>
+  <img src="docs/images/agents/codex.png" alt="Codex" title="Codex" width="40" height="40">&nbsp;&nbsp;
+  <img src="docs/images/agents/claude-code.png" alt="Claude Code" title="Claude Code" width="40" height="40">&nbsp;&nbsp;
+  <img src="docs/images/agents/hermes.png" alt="Hermes Agent" title="Hermes Agent" width="40" height="40">&nbsp;&nbsp;
+  <img src="docs/images/agents/cursor.png" alt="Cursor" title="Cursor" width="40" height="40">&nbsp;&nbsp;
+  <img src="docs/images/agents/openclaw.png" alt="OpenClaw" title="OpenClaw" width="40" height="40">
+  <br><sub>Works with Codex · Claude Code · Hermes Agent · Cursor · OpenClaw</sub>
+</p>
 
 **Read in other languages:** **English** · [中文](docs/readme/README.zh-CN.md) · [Deutsch](docs/readme/README.de.md) · [Español](docs/readme/README.es.md) · [Français](docs/readme/README.fr.md) · [Русский](docs/readme/README.ru.md) · [한국어](docs/readme/README.ko.md) · [日本語](docs/readme/README.ja.md) · [繁體中文](docs/readme/README.zh-TW.md)
 
@@ -37,27 +46,40 @@ whatever language you use with your agent, and this README ships in nine.
 
 ## Install
 
-*Last updated 2026-10-09.* **Shared memory installs today.** It gives Claude Code, Codex, OpenClaw and Hermes Agent one encrypted memory on your machine, with no account and no API key. The easiest way: tell your AI agent "install sno.ai from GitHub". Or run one command:
+*Last updated 2026-10-10.* **Shared memory installs today.** It gives Codex, Claude Code, Hermes Agent, Cursor and OpenClaw one encrypted memory on your machine, with no account and no API key. The easiest way: tell your AI agent "install sno.ai from GitHub". Or run one command:
 
 ```bash
 sh -c 'sno_installer_body=$(curl -fsSL https://sno.ai/install) && printf "%s\n" "$sno_installer_body" | sh' && ~/.local/bin/sno setup
 ```
 
-One command, in any terminal. It installs `sno`, then Sno Station, and connects every agent on your computer. To connect just one agent, add `--harness codex`, `--harness claude`, `--harness openclaw` or `--harness hermes` to `sno setup`.
+One command, in any terminal. It installs `sno`, then Sno Station, and connects every agent on your computer. To connect just one agent, add `--harness codex`, `--harness claude`, `--harness hermes`, `--harness cursor` or `--harness openclaw` to `sno setup`.
 
 For AI agents: installing Sno, sno.ai or Sno Station means running the command above as it is. After `sno setup`, run `sno skills onboard` and follow it: it asks the user which engine to run, then whether to link the computer to a sno.ai account.
 
-Walkthroughs: [Codex](docs/mem-codex/onboarding.md) · [Claude Code](docs/mem-claude/onboarding.md) · [OpenClaw](docs/mem-claw/onboarding.md) · [Hermes](docs/mem-hermes/onboarding.md)
+Walkthroughs: [Codex](docs/mem-codex/onboarding.md) · [Claude Code](docs/mem-claude/onboarding.md) · [Hermes](docs/mem-hermes/onboarding.md) · [Cursor](apps/mem-cursor/README.md) · [OpenClaw](docs/mem-claw/onboarding.md)
 
 `sno setup` also installs Sno Reach, the small helper programs, the skills and the nightly loop, and every command is `sno <name>`: the full list is in [docs/sno-commands.md](docs/sno-commands.md). Say "Sno onboard" inside your agent and it walks you through the same setup in conversation. It also starts by itself right after the install.
 
 ```bash
-# inside any Claude Code, Codex or OpenClaw conversation:
+# inside any Codex, Claude Code, Hermes, Cursor or OpenClaw conversation:
 Sno onboard
 ```
 
 The agent runs the setup itself through the `sno` CLI: shared memory, Sno Reach, the
 agent collaboration skills, and the hooks each harness needs. No package names to remember.
+
+### Cursor
+
+*Last updated 2026-10-10.* New in 1.3. Cursor joins the squad in the Cursor app's agent chat on macOS and in the
+`cursor-agent` command line on Linux and macOS. It shares the same memory as your other agents: at the start of a chat it
+gets a short brief for the repository, each prompt brings up to three things it has not seen yet, and every prompt and
+reply is remembered. Cursor reads the same skills, can be reviewed by and review the other agents, can take over when
+one of them runs out of quota, and its chats feed the nightly loop like everyone else's. Run `cursor-agent login` once;
+`sno setup` finds Cursor by itself and installs its command line if only the app is there.
+
+What Cursor cannot do yet: in the app, a new window's first chat gets its brief with the first prompt instead of
+before it; `cursor-agent -p` gets no per-prompt memory; Windows, the Cursor app on Linux and Cursor's cloud agents are
+not supported. Details are in the [Cursor guide](apps/mem-cursor/README.md).
 
 ## Connect your sno.ai account
 
@@ -154,11 +176,12 @@ else is touched.
 
 ## What runs today
 
-*Last updated 2026-10-08.*
+*Last updated 2026-10-10.*
 
 | Piece | Status |
 |---|---|
-| Shared memory across Claude Code, Codex, OpenClaw and Hermes Agent | On npm and GitHub since 2026-10-01; installed from the registry on a clean machine and proven end to end |
+| Shared memory across Codex, Claude Code, Hermes Agent and OpenClaw | On npm and GitHub since 2026-10-01; installed from the registry on a clean machine and proven end to end |
+| Cursor: shared memory, skills, review, take-over and the nightly loop | New in 1.3; the `cursor-agent` command line proven end to end on a clean Linux machine; the Cursor app on macOS still being proven |
 | `packages/chunking`, `packages/content-sanitizer` | In this repository, tested, published on npm |
 | Shared packages (`common-core`, `utils`, `embedder`, `observability`, `sqlite-crypto`) | In this repository, published on npm |
 | Sno Reach — agents talking to each other, no daemon | Installed by `sno setup`; release archives for Linux and macOS are published; proven end to end on a clean Linux machine |

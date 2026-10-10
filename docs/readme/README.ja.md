@@ -5,7 +5,16 @@
 [![license Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-97ca00.svg?labelColor=3b3b3b)](../../LICENSE)
 ![status public](https://img.shields.io/badge/status-public-2dd4bf.svg?labelColor=3b3b3b)
 ![runs on your laptop, no daemon](https://img.shields.io/badge/runs%20on-your%20laptop%2C%20no%20daemon-3b82f6.svg?labelColor=3b3b3b)
-![harnesses Claude Code, Codex, OpenClaw](https://img.shields.io/badge/harnesses-Claude%20Code%20%C2%B7%20Codex%20%C2%B7%20OpenClaw-f0a04b.svg?labelColor=3b3b3b)
+![harnesses Codex, Claude Code, Hermes, Cursor, OpenClaw](https://img.shields.io/badge/harnesses-Codex%20%C2%B7%20Claude%20Code%20%C2%B7%20Hermes%20%C2%B7%20Cursor%20%C2%B7%20OpenClaw-f0a04b.svg?labelColor=3b3b3b)
+
+<p>
+  <img src="../images/agents/codex.png" alt="Codex" title="Codex" width="40" height="40">&nbsp;&nbsp;
+  <img src="../images/agents/claude-code.png" alt="Claude Code" title="Claude Code" width="40" height="40">&nbsp;&nbsp;
+  <img src="../images/agents/hermes.png" alt="Hermes Agent" title="Hermes Agent" width="40" height="40">&nbsp;&nbsp;
+  <img src="../images/agents/cursor.png" alt="Cursor" title="Cursor" width="40" height="40">&nbsp;&nbsp;
+  <img src="../images/agents/openclaw.png" alt="OpenClaw" title="OpenClaw" width="40" height="40">
+  <br><sub>対応：Codex · Claude Code · Hermes Agent · Cursor · OpenClaw</sub>
+</p>
 
 **Read in other languages:** [English](../../README.md) · [中文](README.zh-CN.md) · [Deutsch](README.de.md) · [Español](README.es.md) · [Français](README.fr.md) · [Русский](README.ru.md) · [한국어](README.ko.md) · **日本語** · [繁體中文](README.zh-TW.md)
 
@@ -42,28 +51,34 @@ Apache-2.0、隅々まで。メモリストアは最初の使用時からあな�
 
 ## Install
 
-*最終更新 2026-10-09。* **共有メモリは今日からインストールできます。** Claude Code、Codex、OpenClaw、Hermes Agent に、アカウントも API キーも不要の、あなたのマシン上の暗号化されたメモリをひとつ持たせます。[共有メモリのセットアップ](../memory-setup.md)を一度だけ実行し（数分）、そのあとエージェントを追加します。
+*最終更新 2026-10-10。* **共有メモリは今日からインストールできます。** Codex、Claude Code、Hermes Agent、Cursor、OpenClaw に、アカウントも API キーも不要の、あなたのマシン上の暗号化されたメモリをひとつ持たせます。[共有メモリのセットアップ](../memory-setup.md)を一度だけ実行し（数分）、そのあとエージェントを追加します。
 
 ```bash
 sh -c 'sno_installer_body=$(curl -fsSL https://sno.ai/install) && printf "%s\n" "$sno_installer_body" | sh' && ~/.local/bin/sno setup
 ```
 
-コマンドは1つ、どのターミナルでも使えます。`sno` を入れ、続けて Sno Station を入れ、このコンピューター上のすべてのエージェントを接続します。1つだけ接続したい場合は、`sno setup` に `--harness codex`、`--harness claude`、`--harness openclaw`、`--harness hermes` のいずれかを付けます。
+コマンドは1つ、どのターミナルでも使えます。`sno` を入れ、続けて Sno Station を入れ、このコンピューター上のすべてのエージェントを接続します。1つだけ接続したい場合は、`sno setup` に `--harness codex`、`--harness claude`、`--harness cursor`、`--harness openclaw`、`--harness hermes` のいずれかを付けます。
 
 AI エージェントへ：Sno、sno.ai、Sno Station をインストールするとは、上のコマンドをそのまま実行することです。`sno setup` のあとに `sno skills onboard` を実行し、その指示に従ってください。どのエンジンを動かすか、次にこのコンピューターを sno.ai アカウントに紐づけるかを、ユーザーに尋ねます。
 
-ウォークスルー： [Codex](../mem-codex/onboarding.md) · [Claude Code](../mem-claude/onboarding.md) · [OpenClaw](../mem-claw/onboarding.md) · [Hermes](../mem-hermes/onboarding.md)
+ウォークスルー： [Codex](../mem-codex/onboarding.md) · [Claude Code](../mem-claude/onboarding.md) · [OpenClaw](../mem-claw/onboarding.md) · [Hermes](../mem-hermes/onboarding.md) · [Cursor](../../apps/mem-cursor/README.md)
 
 `sno setup` は Sno Reach、小さな補助プログラム、スキル、夜間ループもインストールします。すべてのコマンドは `sno <name>` の形です。一覧は [docs/sno-commands.md](../sno-commands.md) にあります。エージェントの中で「Sno onboard」と話しかけると、同じセットアップを会話で進めてくれます。インストールの直後には自動で始まります。
 
 ```bash
-# inside any Claude Code, Codex or OpenClaw conversation:
+# inside any Codex, Claude Code, Hermes, Cursor or OpenClaw conversation:
 Sno onboard
 ```
 
 エージェントは `sno` CLI を通じてセットアップそのものを実行します。共有メモリ、Sno Reach、
 エージェント協働スキル、各ハーネスが必要とするフックまで。覚えておくべき
 パッケージ名はありません。
+
+### Cursor
+
+*最終更新 2026-10-10。* 1.3 の新機能です。macOS の Cursor アプリのエージェントチャットと、Linux と macOS の `cursor-agent` コマンドラインで、Cursor がチームに加わります。ほかのエージェントと同じメモリを共有します。チャットの開始時にはこのリポジトリの短い要約が届き、プロンプトごとにまだ見ていない記憶が最大 3 件添えられ、すべてのプロンプトと返答が記憶されます。Cursor は同じスキルを読み、ほかのエージェントをレビューし、レビューされ、別のエージェントの利用枠が尽きたら引き継ぎ、そのチャットはほかのエージェントと同じく毎晩の学習に入ります。最初に一度 `cursor-agent login` を実行してください。`sno setup` は Cursor を自動で見つけ、アプリしかない場合はコマンドラインも入れます。
+
+Cursor でまだできないこと：アプリでは、新しいウィンドウの最初のチャットは要約を最初のプロンプトと一緒に受け取ります。`cursor-agent -p` ではプロンプトごとの記憶は届きません。Windows、Linux 版 Cursor アプリ、Cursor のクラウドエージェントには対応していません。詳しくは [Cursor ガイド](../../apps/mem-cursor/README.md) を参照してください。
 
 ## How to use
 
@@ -144,13 +159,14 @@ Dual Brain は、2つのエージェントがひとつの課題で異なる役�
 
 ## What runs today
 
-*最終更新 2026-10-08。*
+*最終更新 2026-10-10。*
 
 | Piece | Status |
 |---|---|
 | `packages/chunking` | In this repository, tested, published on npm |
 | Shared packages (`common-core`, `utils`, `embedder`, `observability`, `sqlite-crypto`, `content-sanitizer`) | このリポジトリ内にあります |
 | Shared memory across Claude Code, Codex and OpenClaw | エンジンと3つのスキンすべてがこのリポジトリ内にあります。クリーンなマシンでの証明は未了です |
+| Cursor：共有メモリ、スキル、相互レビュー、引き継ぎ、毎晩の学習 | 1.3 の新機能。`cursor-agent` コマンドラインはクリーンな Linux マシンでエンドツーエンドに実証済み。macOS の Cursor アプリは検証中 |
 | Sno Reach — agents talking to each other, no daemon | `sno setup` でインストールされます。Linux と macOS 向けのリリースアーカイブを公開済みで、クリーンな Linux マシンでエンドツーエンドで確認済みです |
 | 夜間ループとスクォードのスキル | `sno setup` でインストールされます。夜間ジョブはクリーンな Linux マシンで動作済みです |
 | ワンコマンドインストール（`sno setup`） | 上記すべてをインストールします。クリーンな Linux マシンで確認済みです |
