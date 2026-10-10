@@ -1,6 +1,6 @@
 export const SDK_VERSION = "0.1.0";
 
-export const AGENT_IDS = ["openclaw", "hermes", "claude-code", "codex"] as const;
+export const AGENT_IDS = ["openclaw", "hermes", "claude-code", "codex", "cursor"] as const;
 export type AgentId = (typeof AGENT_IDS)[number];
 
 export const CONSENT_VALUES = ["off", "metadata-only", "full"] as const;

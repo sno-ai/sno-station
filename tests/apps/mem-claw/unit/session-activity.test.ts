@@ -17,7 +17,7 @@ beforeEach(() => {
 	vi.setSystemTime(1_800_000_000_000);
 	writeSettingsFixture(root, { recall: { auto: false } });
 	handlers = new Map();
-	const api = { config: {}, registerHook: () => {}, on: (name: string, handler: Handler) => handlers.set(name, handler) };
+	const api = { config: {}, logger: { info: () => {}, warn: () => {} }, registerHook: () => {}, on: (name: string, handler: Handler) => handlers.set(name, handler) };
 	const connection = { ready: async () => { throw new Error("memory offline"); } };
 	const observe = { startObserveSession: async () => {}, finalizeObserveSession: async () => {} };
 	registerRuntimeHooks(api as never, { sessionStrategy: "none" } as never, connection as never, observe as never, {} as never);

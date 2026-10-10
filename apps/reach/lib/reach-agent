@@ -3,6 +3,9 @@
 set -Eeuo pipefail
 kind="${1:?agent kind required}"
 context="${2:?startup context required}"
+model="${3-}" provider="${4-}"
+model_args=() provider_args=()
+[[ -z "$provider" ]] || provider_args=(--provider "$provider")
 record="$SNO_REACH_ROOT/$SNO_REACH_ADDR/reachable.json"
 deadline=$((SECONDS + 10))
 while [[ ! -f "$record" ]]; do
@@ -10,10 +13,19 @@ while [[ ! -f "$record" ]]; do
     sleep 0.1
 done
 case "$kind" in
-    codex) exec codex --dangerously-bypass-approvals-and-sandbox "$context" ;;
+    codex)
+        [[ -z "$model" ]] || model_args=(-m "$model")
+        exec codex --dangerously-bypass-approvals-and-sandbox "${model_args[@]}" "$context" ;;
     # A prompt suggestion sits in the composer and reads as unsubmitted text to call.
-    claude) CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION=0 exec claude --dangerously-skip-permissions --session-id "$SNO_REACH_SESSION_ID" "$context" ;;
-    hermes) exec hermes chat --yolo --query "$context" ;;
-    openclaw) exec openclaw tui --message "$context" ;;
+    claude)
+        [[ -z "$model" ]] || model_args=(--model "$model")
+        CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION=0 exec claude --dangerously-skip-permissions --session-id "$SNO_REACH_SESSION_ID" "${model_args[@]}" "$context" ;;
+    hermes)
+        [[ -z "$model" ]] || model_args=(-m "$model")
+        exec hermes chat --yolo "${model_args[@]}" "${provider_args[@]}" --query "$context" ;;
+    openclaw) exec openclaw tui --session "$SNO_REACH_SESSION_ID" ;;
+    cursor-agent)
+        [[ -z "$model" ]] || model_args=(--model "$model")
+        exec cursor-agent "${model_args[@]}" "$context" ;;
     *) exec "$kind" "$context" ;;
 esac

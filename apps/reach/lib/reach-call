@@ -33,6 +33,7 @@ Options:
   --idle <n>        in --follow, stop after this long with no new output (default: never)
   --ring <address>       with --follow, post mailbox cards when this is a mailbox address
   --no-wait              send and return immediately; delivery stays unverified
+  --raw                  type literal text and C-m, without a wrapper or reply wait
 
 Exit codes:
   0  delivered and verified, or a clean read/watch   3  the runtime refused the send
@@ -43,7 +44,7 @@ USAGE
 
 terminal="" text="" expect="" since="" ring_address=""
 timeout_secs="" poll_secs="" idle_secs=""
-no_wait=false have_text=false follow=false
+no_wait=false have_text=false follow=false raw=false
 
 while [[ $# -gt 0 ]]; do
 	case "$1" in
@@ -57,10 +58,15 @@ while [[ $# -gt 0 ]]; do
 		--ring) ring_address="${2:?--ring needs a value}"; shift 2 ;;
 		--follow) follow=true; shift ;;
 		--no-wait) no_wait=true; shift ;;
+		--raw) raw=true; no_wait=true; shift ;;
 		--help|-h) usage; exit 0 ;;
 		*) printf 'unknown argument: %s\n' "$1" >&2; usage; exit "$EXIT_USAGE" ;;
 	esac
 done
+[[ "$raw" == false || ( "$have_text" == true && -z "$expect" ) ]] || {
+	printf '%s\n' '--raw requires --text and cannot be used with --expect' >&2
+	exit "$EXIT_USAGE"
+}
 
 [[ -n "$terminal" ]] || { printf -- '--terminal is required\n' >&2; usage; exit "$EXIT_USAGE"; }
 [[ "$terminal" =~ ^%[0-9]+$ || "$terminal" =~ ^[a-z][a-z0-9-]{0,31}\.[a-z0-9][a-z0-9-]{0,63}@[a-z0-9][a-z0-9.-]{0,252}$ ]] || {
@@ -87,6 +93,9 @@ if [[ "$have_text" == true && ! "$text" =~ [^[:space:]] ]]; then
 	exit "$EXIT_USAGE"
 fi
 
+# shellcheck source=reach-tmux.sh
+source "$(dirname -- "${BASH_SOURCE[0]}")/reach-tmux.sh"
+seat_runtime=""
 # Mailbox addresses select a transport from the registered seat, never from config.
 emit_watch_event() {
 	local state="$1" detail="${2:-}"
@@ -121,6 +130,10 @@ if [[ "$terminal" != %* ]]; then
         printf 'no reachability record for %s\n' "$terminal" >&2; exit "$EXIT_UNRELIABLE";
     }
     channel="$(jq -er --arg address "$terminal" 'select(.address == $address) | .channel' "$record")" || exit "$EXIT_UNRELIABLE"
+    seat_runtime="$(jq -r '.runtime // empty' "$(dirname -- "$record")/seat.json")"
+    [[ "$raw" == false || "$channel" == tmux ]] || {
+        printf '%s\n' '--raw requires a tmux seat' >&2; exit "$EXIT_SEND_REFUSED";
+    }
     case "$channel" in
         acp)
             # shellcheck source=reach-call-acp.sh
@@ -294,6 +307,7 @@ submit_again() { tmux_submit; }
 send_text() { tmux_send; }
 
 # ── procedure ─────────────────────────────────────────────────────────────────
+started="$(date +%s)"
 delivery_receipt=""
 sent_payload="$text"
 if [[ "$have_text" == true ]]; then
@@ -302,20 +316,35 @@ if [[ "$have_text" == true ]]; then
 		printf 'another send is already active for tmux pane %s\n' "$terminal" >&2
 		exit "$EXIT_SEND_REFUSED"
 	fi
+	if [[ "$raw" == false && "$seat_runtime" == openclaw ]]; then
+		wait_openclaw_idle "$terminal" "$timeout_secs"
+	fi
 	# A draft or a suggestion in the composer would be glued to the message: clear it.
 	if composer_has_text; then
 		tmux send-keys -t "$terminal" C-u 2>/dev/null || true
 	fi
-	delivery_receipt="REACH-RECEIPT-$(date +%s%N)-$$-$RANDOM"
-	pane_command="$(tmux display-message -pt "$terminal" '#{pane_current_command}' 2>/dev/null || true)"
-	case "$pane_command" in
-		bash|zsh|sh|dash|ksh)
-			sent_payload="printf '%s\\n' '$delivery_receipt'; $text"
-			;;
-		*)
-			sent_payload="First output exactly $delivery_receipt to confirm receipt. Then do this: $text"
-			;;
-	esac
+	if [[ "$raw" == false ]]; then
+		delivery_receipt="REACH-RECEIPT-$(date +%s%N)-$$-$RANDOM"
+		pane_command="$(tmux display-message -pt "$terminal" '#{pane_current_command}' 2>/dev/null || true)"
+		case "$pane_command" in
+			bash|zsh|sh|dash|ksh)
+				sent_payload="printf '%s\\n' '$delivery_receipt'; $text"
+				;;
+			*)
+				sent_payload="First output exactly $delivery_receipt to confirm receipt. Then do this: $text"
+				;;
+		esac
+		[[ "$seat_runtime" != hermes ]] || sent_payload="/queue $sent_payload"
+	fi
+fi
+
+if [[ "$raw" == true ]]; then
+	if ! send_text >/dev/null; then
+		printf 'the runtime refused the send to %s\n' "$terminal" >&2
+		exit "$EXIT_SEND_REFUSED"
+	fi
+	printf 'typed %s\n' "$terminal"
+	exit 0
 fi
 
 baseline="$(snapshot "" || true)"
@@ -454,18 +483,117 @@ transcript_text() { # <file> <byte offset>: assistant text appended after the of
 }
 # Capture each existing file's read position before sending, including fast replies.
 declare -A transcript_offsets=()
-if [[ "$have_text" == true && -n "$transcript_path" && -n "$transcript_kind" ]]; then
+if [[ "$have_text" == true && -n "$transcript_path" && "$transcript_kind" != hermes && "$transcript_kind" != openclaw ]]; then
 	while IFS= read -r file; do
 		[[ -n "$file" && -f "$file" ]] || continue
 		transcript_offsets["$file"]="$(stat -c %s -- "$file")"
 	done < <(transcript_files)
 fi
 
+transcript_export_reply() {
+	local cwd session_id session_ids candidate exported='' error temporary file export_dir parse_failed=false
+	local -a command=()
+	cwd="$(jq -r '.cwd' "$seat_json")"
+	file="$transcript_work/export.jsonl"
+	error="$transcript_work/stderr"
+	if [[ "$transcript_kind" == hermes ]]; then
+		session_id="$(jq -r '.session_id // empty' "$seat_json")"
+		if [[ -n "$session_id" ]]; then
+			session_ids="$session_id"
+		else
+			# Filtered bulk exports omit live sessions; list them and export each by ID.
+			command=(hermes sessions list --workspace "$(basename -- "$cwd")" --limit 30)
+			if ! timeout --foreground -k 2 10 "${command[@]}" >"$file" 2>"$error"; then
+				printf 'reach: seat %s command ' "${record%/reachable.json}" >&2
+				printf '%q ' "${command[@]}" >&2
+				printf 'failed; falling back to screen: %s\n' "$(cat "$error")" >&2
+				return 1
+			fi
+			session_ids="$(awk '$NF ~ /^[0-9]{8}_[0-9]{6}_[0-9a-f]{6}$/ {print $NF}' "$file" | sort -r)"
+		fi
+		while IFS= read -r candidate; do
+			[[ -n "$candidate" ]] || continue
+			command=(hermes sessions export - --format jsonl --session-id "$candidate")
+			if ! timeout --foreground -k 2 10 "${command[@]}" >"$file" 2>"$error"; then
+				break
+			fi
+			if exported="$(jq -cse --arg id "$candidate" --arg address "$(jq -r '.address' "$record")" \
+				--argjson earliest "$((transcript_since - 60))" '
+				[.[] | select(.id == $id and (.started_at >= $earliest) and
+					([.messages[]? | select(.role == "user")][0].content // "" | contains($address)))] |
+				if length == 1 then .[0] else empty end' "$file" 2>"$error")"; then
+				break
+			fi
+		done <<<"$session_ids"
+		if [[ -z "$exported" ]]; then
+			printf 'reach: seat %s command ' "${record%/reachable.json}" >&2
+			printf '%q ' "${command[@]}" >&2
+			printf 'failed; falling back to screen: no seat session matching address and spawn time; %s\n' "$(cat "$error")" >&2
+			return 1
+		fi
+		if [[ -z "$session_id" ]]; then
+			session_id="$(jq -r '.id' <<<"$exported")"
+			temporary="$(mktemp "$(dirname -- "$seat_json")/.transcript.XXXXXX")"
+			jq --arg id "$session_id" '.session_id=$id' "$seat_json" >"$temporary"
+			mv -- "$temporary" "$seat_json"
+		fi
+		jq -c '.messages[] | {role, content}' <<<"$exported" >"$transcript_work/messages.jsonl" 2>"$error" || parse_failed=true
+	else
+		session_id="$(jq -r '.session_key' "$seat_json")"
+		command=(openclaw sessions export-trajectory --session-key "$session_id" --json --workspace "$transcript_work")
+		if ! timeout --foreground -k 2 10 "${command[@]}" >"$file" 2>"$error"; then
+			printf 'reach: seat %s command ' "${record%/reachable.json}" >&2
+			printf '%q ' "${command[@]}" >&2
+			printf 'failed; falling back to screen: %s\n' "$(cat "$error")" >&2
+			return 1
+		fi
+		if ! export_dir="$(jq -er '.outputDir' "$file" 2>"$error")" ||
+		   ! jq -c 'select(.type == "user.message" or .type == "assistant.message") |
+			{role:(.type | split(".")[0]), content:.data.message.content}' "$export_dir/events.jsonl" >"$transcript_work/messages.jsonl" 2>"$error"; then
+			parse_failed=true
+		fi
+	fi
+	if [[ "$parse_failed" == true ]]; then
+		printf 'reach: seat %s command ' "${record%/reachable.json}" >&2
+		printf '%q ' "${command[@]}" >&2
+		printf 'failed; falling back to screen: %s\n' "$(cat "$error")" >&2
+		return 1
+	fi
+	jq -rs --arg receipt "$delivery_receipt" '
+		def text: if type == "string" then . elif type == "array" then
+			map(select(.type == "text") | .text) | join("\n") else "" end;
+		map(.content |= text) |
+		([to_entries[] | select(.value.role == "user" and (.value.content | contains($receipt))) | .key] | last) as $at |
+		if $at == null then "" else
+			.[$at+1:] | [limit(1; to_entries[] | select(.value.role == "user") | .key)][0] as $end |
+			.[:$end] | map(select(.role == "assistant") | .content) | join("\n") end
+	' "$transcript_work/messages.jsonl"
+}
+
+transcript_work=""
+if [[ "$have_text" == true && "$no_wait" == false && ( "$transcript_kind" == hermes || "$transcript_kind" == openclaw ) ]]; then
+	transcript_work="$(mktemp -d "$state_dir/transcript.XXXXXX")"
+	trap 'rm -rf -- "$transcript_work"' EXIT
+fi
+
 transcript_wait() {
-	local file='' offset=0 started text='' after nudge_at receipt_seen=false
-	started="$(date +%s)"
+	local file='' offset=0 text='' after nudge_at receipt_seen=false
 	nudge_at=$(( started + poll_secs * 2 ))
 	while :; do
+		if [[ "$transcript_kind" == hermes || "$transcript_kind" == openclaw ]]; then
+			if ! text="$(transcript_export_reply)"; then
+				transcript_path=""
+				return 0
+			fi
+			if [[ -n "$text" ]]; then
+				receipt_seen=true
+				after="$text"
+				if [[ -z "$expect" ]] || printf '%s' "$after" | grep -Eq -- "$expect"; then
+					report true "transcript-matched" "transcript:export" 0 "$after"
+					exit 0
+				fi
+			fi
+		else
 		while IFS= read -r file; do
 			[[ -n "$file" && -f "$file" ]] || continue
 			offset="${transcript_offsets[$file]:-0}"
@@ -479,6 +607,7 @@ transcript_wait() {
 				fi
 			fi
 		done < <(transcript_files)
+		fi
 		if [[ "$nudged" == false && "$receipt_seen" == false && "$(date +%s)" -ge "$nudge_at" ]] && submit_again; then
 			nudged=true
 		fi
@@ -565,7 +694,6 @@ if [[ "$follow" == true ]]; then
 		"${idle_secs:+, stop after ${idle_secs}s idle}"
 	cursor="$cursor_before"
 	total=0
-	started="$(date +%s)"
 	last_new="$started"
 	approval_rung=false
 	delivery_seen=false
@@ -677,7 +805,7 @@ if [[ "$follow" == true ]]; then
 	exit 0
 fi
 
-deadline=$(( $(date +%s) + timeout_secs ))
+deadline=$(( started + timeout_secs ))
 last_after="$cursor_before"
 last_lines=0
 last_out=""
