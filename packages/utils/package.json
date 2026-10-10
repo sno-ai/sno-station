@@ -18,7 +18,7 @@
     "./log-site-catalog.json": "./dist/log-site-catalog.json"
   },
   "files": ["dist", "LICENSE", "README.md"],
-  "dependencies": { "fs-ext": "^2.1.1" },
+  "dependencies": { "fs-native-extensions": "^1.5.1" },
   "devDependencies": { "@babel/parser": "^7.29.8", "tsx": "^4.23.15" },
   "scripts": {
     "build": "tsc -p tsconfig.json && tsx scripts/build-log-catalog.ts",
