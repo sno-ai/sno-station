@@ -306,6 +306,24 @@ describe("REM Enhanced spends no Sno GPU call without a host that can still answ
 			.toEqual({ skipped: true, rem1OnSno: 1, hostCalls: 0, skip: [["no-agent-endpoint", "host"]] });
 	});
 
+	it("moves to an older host when the newest one answers that it is not ready", { timeout: 180_000 }, async () => {
+		await seedPairs();
+		notDue();
+		const older = await recorder();
+		// Still listening, but its worker refuses every call with a typed 503 (worker-not-ready).
+		const newest = await recorder({ refuse: () => true });
+		const sno = await recorder({ refuse: () => false, keepFirstPair: true });
+		pointSnoGpuAt("rem-enhanced", sno.url);
+		sidecar = await startRemSidecar();
+		await registerHost("older-skin", older.url);
+		await registerHost("host-skin", newest.url);
+		await startPass();
+		await until(settled);
+		expect({ completed: auditEvents("rem_completed").length, skipped: skipped(), refusedOnNewest: remSet(newest).includes("REM2"),
+			answeredOnOlder: remSet(older).includes("REM2") })
+			.toEqual({ completed: 1, skipped: false, refusedOnNewest: true, answeredOnOlder: true });
+	});
+
 	it("moves to another connected host when the one it started with has gone", { timeout: 180_000 }, async () => {
 		await seedPairs();
 		notDue();

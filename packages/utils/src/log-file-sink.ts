@@ -110,7 +110,7 @@ export class LogFileSink {
 	}
 
 	private async locked<T>(exclusive: boolean, work: (lock: FileHandle) => Promise<T>): Promise<T | undefined> {
-		const { default: locking } = await import("fs-ext");
+		const { tryLock, unlock } = await import("fs-native-extensions");
 		const lock = await open(this.lockPath, constants.O_RDWR | constants.O_CREAT
 			| constants.O_NOFOLLOW | constants.O_NONBLOCK, 0o600);
 		let held = false;
@@ -118,10 +118,7 @@ export class LogFileSink {
 		try {
 			if (!(await lock.stat()).isFile()) throw new Error("Diagnostic lock is not regular");
 			do {
-				try { locking.flockSync(lock.fd, exclusive ? "exnb" : "shnb"); held = true; }
-				catch (error) {
-					if (!hasCode(error, "EAGAIN") && !hasCode(error, "EWOULDBLOCK")) throw error;
-				}
+				held = tryLock(lock.fd, { shared: !exclusive });
 				if (held) return await work(lock);
 				if (exclusive || performance.now() >= deadline) break;
 				await new Promise<void>((resolve) => setTimeout(resolve, 10));
@@ -130,7 +127,7 @@ export class LogFileSink {
 			else this.report("append_lock_timeout");
 			return undefined;
 		} finally {
-			try { if (held) locking.flockSync(lock.fd, "un"); } finally { await lock.close(); }
+			try { if (held) unlock(lock.fd); } finally { await lock.close(); }
 		}
 	}
 

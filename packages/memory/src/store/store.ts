@@ -33,6 +33,6 @@ import "./memory-store-admin-api";
 export * from "./memory-store-base";
 export { buildTaskLifecycleMigrationManifest } from "./memory-store-task-lifecycle-migration-api";
 export { normalizeMemoryRelationPredicate } from "./memory-store-relation-api";
-export { repairAtomicExtractionParameters } from "./memory-store-atomic-extraction-ledger-api";
+export { AtomicExtractionCompletedElsewhere, repairAtomicExtractionParameters } from "./memory-store-atomic-extraction-ledger-api";
 export { hashMemorySuppressionContent } from "./memory-store-suppression-api";
 export { ATOMIC_FACT_SURFACE_LANE } from "./memory-store-fact-surface-api";

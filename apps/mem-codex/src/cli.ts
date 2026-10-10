@@ -4,7 +4,7 @@ import { isAbsolute, join } from "node:path";
 import { doctor } from "./doctor.js";
 import { correctCommand, getCommand, recallCommand, rememberCommand } from "./explicit.js";
 import { postToolUse, preToolUse, sessionEnd, sessionStart, stop, userPromptSubmit } from "./hooks.js";
-import { installCodex } from "./install.js";
+import { installCodex, uninstallCodex } from "./install.js";
 import { importRepository, importUser } from "./import.js";
 import { MESSAGES } from "./messages.js";
 import { workspaceRoot } from "./scope.js";
@@ -50,6 +50,12 @@ async function main(): Promise<number> {
 	}
 	if (command === "worker") {
 		await runWorker();
+		return 0;
+	}
+	if (command === "uninstall") {
+		const codexHome = option(args, "--codex-home");
+		if (!codexHome || !isAbsolute(codexHome)) throw new Error("--codex-home must be absolute");
+		await uninstallCodex({ codexHome, writeOutput: line => process.stdout.write(`${line}\n`) });
 		return 0;
 	}
 	if (command === "install") {

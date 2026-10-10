@@ -39,7 +39,7 @@ uses con tu agente, y este README se publica en nueve.
 
 ## Install
 
-*Última actualización 2026-10-07.* **La memoria compartida se instala hoy.** Da a Claude Code, Codex, OpenClaw y Hermes Agent una memoria cifrada en tu máquina, sin cuenta y sin clave de API. Ejecuta una vez la [configuración de la memoria compartida](../memory-setup.md) (unos minutos) y luego añade tu agente:
+*Última actualización 2026-10-09.* **La memoria compartida se instala hoy.** Da a Claude Code, Codex, OpenClaw y Hermes Agent una memoria cifrada en tu máquina, sin cuenta y sin clave de API. Ejecuta una vez la [configuración de la memoria compartida](../memory-setup.md) (unos minutos) y luego añade tu agente:
 
 ```bash
 sh -c 'sno_installer_body=$(curl -fsSL https://sno.ai/install) && printf "%s\n" "$sno_installer_body" | sh' && ~/.local/bin/sno setup
@@ -160,7 +160,7 @@ Una fila dice "probada" solo una vez que se ha ejecutado en una máquina limpia.
 
 ## Memory that forgets on purpose
 
-*Última actualización 2026-09-19.*
+*Última actualización 2026-10-09.*
 
 La memoria es el suelo de este producto, no el titular. Pero el suelo es donde falla la
 mayoría de la memoria de los agentes, y falla de dos maneras silenciosas: olvida lo que

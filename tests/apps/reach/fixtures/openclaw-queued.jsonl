@@ -1,0 +1,7 @@
+{"type":"user.message","data":{"message":{"content":"You are the seat __SEAT__"}}}
+{"type":"user.message","data":{"message":{"content":"earlier running task"}}}
+{"type":"assistant.message","data":{"message":{"content":[{"type":"text","text":"OLD-TASK-ANSWER"}]}}}
+{"type":"user.message","data":{"message":{"content":"__PAYLOAD__"}}}
+{"type":"assistant.message","data":{"message":{"content":[{"type":"text","text":"NEW-TASK-ANSWER"}]}}}
+{"type":"user.message","data":{"message":{"content":"later unrelated task"}}}
+{"type":"assistant.message","data":{"message":{"content":"UNRELATED-ANSWER"}}}

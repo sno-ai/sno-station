@@ -11,4 +11,20 @@ if ! bash "$HERE/probe.t"; then
   printf 'FAIL probe.t\n' >&2
   exit 1
 fi
-printf '1..1\nsubscription-quota-check selftest: ALL PASS (1 stage(s))\n'
+if ! bash "$HERE/agents.t"; then
+  printf 'FAIL agents.t\n' >&2
+  exit 1
+fi
+if ! bash "$HERE/claude-result.t"; then
+  printf 'FAIL claude-result.t\n' >&2
+  exit 1
+fi
+if ! bash "$HERE/claude-fallback.t"; then
+  printf 'FAIL claude-fallback.t\n' >&2
+  exit 1
+fi
+if ! bash "$HERE/codex-blocking.t"; then
+  printf 'FAIL codex-blocking.t\n' >&2
+  exit 1
+fi
+printf '1..5\nsubscription-quota-check selftest: ALL PASS (5 stage(s))\n'

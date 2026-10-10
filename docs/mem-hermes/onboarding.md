@@ -12,8 +12,7 @@ service and writes `~/.sno/settings.json` with a local store and encryption key.
 Then install the Hermes plugin:
 
 ```bash
-sh -c 'sno_installer_body=$(curl -fsSL https://sno.ai/install) && printf "%s\n" "$sno_installer_body" | sh'
-sno setup --harness hermes
+sh -c 'sno_installer_body=$(curl -fsSL https://sno.ai/install) && printf "%s\n" "$sno_installer_body" | sh' && ~/.local/bin/sno setup --harness hermes
 ```
 
 `sno setup` installs and enables the plugin from this repository (not a separate Python

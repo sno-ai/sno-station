@@ -178,6 +178,7 @@ export class PluginObservability {
 				component: {
 					"claude-code": "mem-claude", codex: "mem-codex",
 					openclaw: "mem-claw", hermes: "mem-hermes",
+					cursor: "mem-cursor",
 				}[this.agentId],
 				context: kind.split(":", 1)[0] ?? kind,
 				message_hash: messageHash,

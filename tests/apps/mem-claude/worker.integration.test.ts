@@ -4,7 +4,7 @@ import { chmod, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs
 import { tmpdir, userInfo } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { connect, type InitRegistration, type MemoryClient } from "@snoai/memory/client";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { acquirePidFileLock } from "../../../apps/mem-claude/src/files.js";
 import { importDirectory, spoolDirectory, workerLockPath } from "../../../apps/mem-claude/src/paths.js";
 import { runWorker, type WorkerDependencies } from "../../../apps/mem-claude/src/worker.js";
@@ -164,7 +164,13 @@ describe("Claude worker with a real sidecar", () => {
 		// The sidecar contract rejects a negative message timestamp over the real HTTP route.
 		const path = await spool("0001.json", "invalid-timestamp", -1);
 		const fixture = observeClient();
+		const logged = vi.spyOn(console, "log");
 		expect(await runWorker(fixture.deps)).toBe("drained");
+		// Each failed attempt names its turn and cause in the worker log; the cause used to be dropped.
+		const failures = logged.mock.calls.map(([line]) => String(line)).filter(line => line.includes('"capture-failed"'));
+		logged.mockRestore();
+		expect(failures.map(line => JSON.parse(line))).toEqual([1, 2, 3].map(attempt =>
+			expect.objectContaining({ event: "capture-failed", turnId: "invalid-timestamp", attempt, error: expect.stringMatching(/\S/) })));
 		expect(JSON.parse(await readFile(path, "utf8"))).toMatchObject({ attempts: 3, state: "failed" });
 		expect(fixture.captures).toHaveLength(3);
 		const [first, second, third] = fixture.captures;
@@ -300,6 +306,43 @@ describe("Claude worker callback with an empty spool", () => {
 		return { deps, served, prompts, startedAt, get exitedAfter() { return clock - startedAt; } };
 	}
 
+	// The callback runs one child at a time. A call whose requester gave up while it waited in line used to start a
+	// child anyway, spending the user's model quota on an answer nobody read.
+	it("does not run the model for a call its requester gave up on while it waited", async () => {
+		const fixture = callbackWorker([], false);
+		const children: string[] = [];
+		const connect = fixture.deps.connect;
+		fixture.deps.connect = async () => {
+			const connected = await connect();
+			const init = connected.init.bind(connected);
+			connected.init = async (scope, value) => {
+				const result = await init(scope, value);
+				const model = value.model;
+				if (!model) throw new Error("worker registration missing model");
+				const answered = postCallback(model, "ANSWERED");
+				// The requester is another process (the memory service): its call arrives while the worker is blocked and
+				// carries the time after which it no longer waits.
+				const requester = spawn(process.execPath, ["-e", `
+					fetch(process.argv[1], { method: "POST", signal: AbortSignal.timeout(200),
+						headers: { "content-type": "application/json", authorization: "Bearer " + process.argv[2], "x-sno-deadline": String(Date.now() + 200) },
+						body: JSON.stringify({ model: "claude-exec", messages: [{ role: "user", content: "GAVE_UP" }] }) }).catch(() => {});
+				`, `${model.baseUrl}/chat/completions`, model.credential], { stdio: "ignore" });
+				const second = new Promise(resolve => requester.once("exit", resolve));
+				await Promise.all([answered, second]);
+				return result;
+			};
+			return connected;
+		};
+		fixture.deps.runChild = async prompt => {
+			children.push(prompt.split("\n").at(-1) ?? "");
+			// The real child runs under spawnSync, which blocks the event loop until it exits.
+			Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1_000);
+			return { kind: "ok", text: "child answer" };
+		};
+		await runWorker(fixture.deps);
+		expect(children).toEqual(["user: ANSWERED"]);
+	}, 60_000);
+
 	// Calls at 0 (registration), 30 s, 150 s and 200 s: the worker exits exactly 2 minutes after the
 	// last one (320 s). A fixed lifetime or a timer counted from the drain alone exits elsewhere.
 	it("answers model calls with an empty spool and exits exactly two minutes after the last call", async () => {
@@ -333,6 +376,23 @@ describe("Claude worker callback with an empty spool", () => {
 });
 
 describe("worker lock files", () => {
+	it("waits while a worker from before an upgrade still holds the lock under the old lock kind", async () => {
+		// A worker started before an upgrade held its guard with flock, which the new lock cannot see on Linux; both
+		// workers then drained the same spool, and the second unlink rewrote a committed record for another capture.
+		const path = join(root, "upgrade.lock");
+		const holder = spawn(process.execPath, ["-e", "setTimeout(() => {}, 30_000)"], { stdio: "ignore" });
+		try {
+			await writeFile(path, `${holder.pid} ${Date.now()}\n`);
+			expect(await acquirePidFileLock(path, 60_000)).toBeUndefined();
+			holder.kill();
+			await new Promise(resolve => holder.once("exit", resolve));
+			const taken = await acquirePidFileLock(path, 60_000);
+			expect(taken).toBeDefined();
+			await taken?.release();
+		} finally {
+			holder.kill();
+		}
+	});
 	it("admits one racer and recovers when a reclaim marker's owner is dead", async () => {
 		const path = join(root, "race.lock");
 		const locks = await Promise.all([acquirePidFileLock(path, 60_000), acquirePidFileLock(path, 60_000)]);

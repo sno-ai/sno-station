@@ -42,7 +42,7 @@ Apache-2.0、隅々まで。メモリストアは最初の使用時からあな�
 
 ## Install
 
-*最終更新 2026-10-07。* **共有メモリは今日からインストールできます。** Claude Code、Codex、OpenClaw、Hermes Agent に、アカウントも API キーも不要の、あなたのマシン上の暗号化されたメモリをひとつ持たせます。[共有メモリのセットアップ](../memory-setup.md)を一度だけ実行し（数分）、そのあとエージェントを追加します。
+*最終更新 2026-10-09。* **共有メモリは今日からインストールできます。** Claude Code、Codex、OpenClaw、Hermes Agent に、アカウントも API キーも不要の、あなたのマシン上の暗号化されたメモリをひとつ持たせます。[共有メモリのセットアップ](../memory-setup.md)を一度だけ実行し（数分）、そのあとエージェントを追加します。
 
 ```bash
 sh -c 'sno_installer_body=$(curl -fsSL https://sno.ai/install) && printf "%s\n" "$sno_installer_body" | sh' && ~/.local/bin/sno setup
@@ -160,7 +160,7 @@ Dual Brain は、2つのエージェントがひとつの課題で異なる役�
 
 ## Memory that forgets on purpose
 
-*最終更新 2026-09-19。*
+*最終更新 2026-10-09。*
 
 メモリはこの製品の土台であり、看板ではありません。しかしその土台こそが、たいていの
 エージェントメモリが失敗する場所であり、それは2つの静かなやり方で失敗します。残るべき

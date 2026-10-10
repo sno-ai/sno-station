@@ -6,6 +6,7 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { Embedder } from "../../../../packages/memory/src/engine/extraction/embedding-provider-client";
 import {
+	AtomicExtractionCompletedElsewhere,
 	type AtomicExtractionLedgerKey,
 	type AtomicExtractionReprocessBounds,
 	type AtomicExtractionReprocessReason,
@@ -14,6 +15,8 @@ import {
 } from "../../../../packages/memory/src/store/store";
 import type { SqliteDatabaseLike } from "../../../../packages/memory/src/store/sqlite-runtime";
 import { createTestDb, createTestEmbedder, type TestDb } from "../../../apps/mem-claw/helpers/test-db";
+import { privateLogReference } from "@snoai/utils/logger";
+
 
 const BASE_PARAMETERS: AtomicExtractionRunParameters = {
 	maxInputTokens: 1_000,
@@ -195,15 +198,22 @@ describe("atomic extraction ledger", () => {
 			action: "skip",
 			entry: { state: "complete" },
 		});
+		// A capture that loses a race with another capture of the same turn hits 'complete' at any of these three
+		// steps; each says so with one error type, so the capture is a skip instead of a failed turn.
+		expect(() => store.recordAtomicExtractionCalls(key, 12)).toThrow(AtomicExtractionCompletedElsewhere);
 		expect(() => store.recordAtomicExtractionCalls(key, 12)).toThrow(
 			/Cannot record calls from atomic extraction state 'complete'/u,
 		);
+		expect(() =>
+			store.markAtomicExtractionPending(key, "parse-exhaustion", failedReply, 12),
+		).toThrow(AtomicExtractionCompletedElsewhere);
 		expect(() =>
 			store.markAtomicExtractionPending(key, "parse-exhaustion", failedReply, 12),
 		).toThrow(/Cannot pend atomic extraction from state 'complete'/u);
 		expect(() => store.reopenAtomicExtractionChunk(key, 2, REPROCESS_BOUNDS, 12)).toThrow(
 			/Cannot reopen atomic extraction from state 'complete'/u,
 		);
+		expect(() => store.completeAtomicExtractionChunk(key, 12, () => undefined)).toThrow(AtomicExtractionCompletedElsewhere);
 		expect(() => store.completeAtomicExtractionChunk(key, 12, () => undefined)).toThrow(
 			/Cannot complete atomic extraction from state 'complete'/u,
 		);
@@ -301,7 +311,9 @@ describe("atomic extraction ledger", () => {
 			},
 		});
 		expect(captured.output).toContain("atomic extraction chunk stuck at reprocess attempt cap");
-		expect(captured.output).toContain(cappedKey.conversationId);
+		// Logs name the conversation by its private reference only, never by the raw id.
+		expect(captured.output).toContain(String(privateLogReference(cappedKey.conversationId).value));
+		expect(captured.output).not.toContain(cappedKey.conversationId);
 		expect(captured.output).toContain('"attemptCap":1');
 	});
 

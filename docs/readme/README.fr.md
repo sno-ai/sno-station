@@ -40,7 +40,7 @@ dans chaque clé et recherche. Les compétences de collaboration entre agents so
 
 ## Installation
 
-*Dernière mise à jour le 2026-10-07.* **La mémoire partagée s'installe dès aujourd'hui.** Elle donne à Claude Code, Codex, OpenClaw et Hermes Agent une mémoire chiffrée sur votre machine, sans compte et sans clé d'API. Lancez une fois la [configuration de la mémoire partagée](../memory-setup.md) (quelques minutes), puis ajoutez votre agent :
+*Dernière mise à jour le 2026-10-09.* **La mémoire partagée s'installe dès aujourd'hui.** Elle donne à Claude Code, Codex, OpenClaw et Hermes Agent une mémoire chiffrée sur votre machine, sans compte et sans clé d'API. Lancez une fois la [configuration de la mémoire partagée](../memory-setup.md) (quelques minutes), puis ajoutez votre agent :
 
 ```bash
 sh -c 'sno_installer_body=$(curl -fsSL https://sno.ai/install) && printf "%s\n" "$sno_installer_body" | sh' && ~/.local/bin/sno setup
@@ -159,7 +159,7 @@ Une ligne indique « prouvé » seulement une fois qu'elle a tourné sur une mac
 
 ## Une mémoire qui oublie exprès
 
-*Dernière mise à jour le 2026-09-19.*
+*Dernière mise à jour le 2026-10-09.*
 
 La mémoire est le socle de ce produit, pas son titre. Mais c'est sur ce socle que la plupart des
 mémoires d'agents échouent, et elles échouent de deux façons discrètes : elles oublient ce qui aurait

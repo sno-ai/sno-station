@@ -37,7 +37,7 @@ whatever language you use with your agent, and this README ships in nine.
 
 ## Install
 
-*Last updated 2026-10-08.* **Shared memory installs today.** It gives Claude Code, Codex, OpenClaw and Hermes Agent one encrypted memory on your machine, with no account and no API key. The easiest way: tell your AI agent "install sno.ai from GitHub". Or run one command:
+*Last updated 2026-10-09.* **Shared memory installs today.** It gives Claude Code, Codex, OpenClaw and Hermes Agent one encrypted memory on your machine, with no account and no API key. The easiest way: tell your AI agent "install sno.ai from GitHub". Or run one command:
 
 ```bash
 sh -c 'sno_installer_body=$(curl -fsSL https://sno.ai/install) && printf "%s\n" "$sno_installer_body" | sh' && ~/.local/bin/sno setup
@@ -170,7 +170,7 @@ A row says "proven" only once it has run on a clean machine.
 
 ## Memory that forgets on purpose
 
-*Last updated 2026-09-19.*
+*Last updated 2026-10-09.*
 
 Memory is the floor of this product, not the headline. But the floor is where most agent
 memory fails, and it fails in two quiet ways: it forgets what should have stayed, and it
