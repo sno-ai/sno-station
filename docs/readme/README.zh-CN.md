@@ -5,7 +5,16 @@
 [![license Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-97ca00.svg?labelColor=3b3b3b)](../../LICENSE)
 ![status public](https://img.shields.io/badge/status-public-2dd4bf.svg?labelColor=3b3b3b)
 ![runs on your laptop, no daemon](https://img.shields.io/badge/runs%20on-your%20laptop%2C%20no%20daemon-3b82f6.svg?labelColor=3b3b3b)
-![harnesses Claude Code, Codex, OpenClaw](https://img.shields.io/badge/harnesses-Claude%20Code%20%C2%B7%20Codex%20%C2%B7%20OpenClaw-f0a04b.svg?labelColor=3b3b3b)
+![harnesses Codex, Claude Code, Hermes, Cursor, OpenClaw](https://img.shields.io/badge/harnesses-Codex%20%C2%B7%20Claude%20Code%20%C2%B7%20Hermes%20%C2%B7%20Cursor%20%C2%B7%20OpenClaw-f0a04b.svg?labelColor=3b3b3b)
+
+<p>
+  <img src="../images/agents/codex.png" alt="Codex" title="Codex" width="40" height="40">&nbsp;&nbsp;
+  <img src="../images/agents/claude-code.png" alt="Claude Code" title="Claude Code" width="40" height="40">&nbsp;&nbsp;
+  <img src="../images/agents/hermes.png" alt="Hermes Agent" title="Hermes Agent" width="40" height="40">&nbsp;&nbsp;
+  <img src="../images/agents/cursor.png" alt="Cursor" title="Cursor" width="40" height="40">&nbsp;&nbsp;
+  <img src="../images/agents/openclaw.png" alt="OpenClaw" title="OpenClaw" width="40" height="40">
+  <br><sub>支持：Codex · Claude Code · Hermes Agent · Cursor · OpenClaw</sub>
+</p>
 
 **Read in other languages:** [English](../../README.md) · **中文** · [Deutsch](README.de.md) · [Español](README.es.md) · [Français](README.fr.md) · [Русский](README.ru.md) · [한국어](README.ko.md) · [日本語](README.ja.md) · [繁體中文](README.zh-TW.md)
 
@@ -35,27 +44,33 @@ Sno Station 是你的 agent 的工作站：一款开源软件，它把你已经�
 
 ## Install
 
-*最后更新于 2026-10-09。* **共享记忆今天就能安装。** 它让 Claude Code、Codex、OpenClaw 和 Hermes Agent 共用一份存放在你自己机器上的加密记忆，不需要账号，也不需要 API key。先运行一次[共享记忆设置](../memory-setup.md)（几分钟），再添加你的 agent：
+*最后更新于 2026-10-10。* **共享记忆今天就能安装。** 它让 Codex、Claude Code、Hermes Agent、Cursor 和 OpenClaw 共用一份存放在你自己机器上的加密记忆，不需要账号，也不需要 API key。先运行一次[共享记忆设置](../memory-setup.md)（几分钟），再添加你的 agent：
 
 ```bash
 sh -c 'sno_installer_body=$(curl -fsSL https://sno.ai/install) && printf "%s\n" "$sno_installer_body" | sh' && ~/.local/bin/sno setup
 ```
 
-一条命令，在任何终端里都行。它先安装 `sno`，再安装 Sno Station，并连接这台电脑上的每个 agent。只想连接其中一个，就在 `sno setup` 后面加上 `--harness codex`、`--harness claude`、`--harness openclaw` 或 `--harness hermes`。
+一条命令，在任何终端里都行。它先安装 `sno`，再安装 Sno Station，并连接这台电脑上的每个 agent。只想连接其中一个，就在 `sno setup` 后面加上 `--harness codex`、`--harness claude`、`--harness cursor`、`--harness openclaw` 或 `--harness hermes`。
 
 给 AI agent：安装 Sno、sno.ai 或 Sno Station，就是原样执行上面的命令。运行完 `sno setup` 后，执行 `sno skills onboard` 并照着做：它会先问用户要运行哪个引擎，再问是否把这台电脑关联到 sno.ai 账号。
 
-分步说明： [Codex](../mem-codex/onboarding.md) · [Claude Code](../mem-claude/onboarding.md) · [OpenClaw](../mem-claw/onboarding.md) · [Hermes](../mem-hermes/onboarding.md)
+分步说明： [Codex](../mem-codex/onboarding.md) · [Claude Code](../mem-claude/onboarding.md) · [OpenClaw](../mem-claw/onboarding.md) · [Hermes](../mem-hermes/onboarding.md) · [Cursor](../../apps/mem-cursor/README.md)
 
 `sno setup` 还会安装 Sno Reach、小型辅助程序、技能和夜间循环，所有命令都是 `sno <名称>` 的形式，完整清单见 [docs/sno-commands.md](../sno-commands.md)。在你的 agent 里说 "Sno onboard"，它会用对话带你完成同样的设置。安装完成后它也会自动开始。
 
 ```bash
-# inside any Claude Code, Codex or OpenClaw conversation:
+# inside any Codex, Claude Code, Hermes, Cursor or OpenClaw conversation:
 Sno onboard
 ```
 
 Agent 会通过 `sno` CLI 自行完成设置：共享记忆、Sno Reach、智能体协作技能，以及每种 harness
 所需要的 hook。不需要记住任何包名。
+
+### Cursor
+
+*最后更新于 2026-10-10。* 1.3 新增。Cursor 加入小队：macOS 上 Cursor 应用里的 agent 对话，以及 Linux 和 macOS 上的 `cursor-agent` 命令行。它和你的其他 agent 共用同一份记忆：每次对话开始时拿到这个仓库的简短提要，每个提问会带上最多三条它还没见过的记忆，每一轮提问和回答都会被记住。Cursor 读同一套技能，可以审查其他 agent、也可以被它们审查，另一个 agent 额度用完时可以接手，它的对话也和大家一样进入每晚的学习。先运行一次 `cursor-agent login`；`sno setup` 会自己找到 Cursor，只装了应用时还会补装它的命令行。
+
+Cursor 目前还做不到的：在应用里，新窗口的第一个对话要等到第一次提问时才拿到提要；`cursor-agent -p` 没有逐条提问的记忆；不支持 Windows、Linux 上的 Cursor 应用，以及 Cursor 的云端 agent。详情见 [Cursor 说明](../../apps/mem-cursor/README.md)。
 
 ## How to use
 
@@ -128,13 +143,14 @@ agent 已经在工作，第一个带着 1% 的余量签退。交接之前的每�
 
 ## What runs today
 
-*最后更新于 2026-10-08。*
+*最后更新于 2026-10-10。*
 
 | 部分 | 状态 |
 |---|---|
 | `packages/chunking` | 在本仓库中，已测试，已发布到 npm |
 | 共享包（`common-core`、`utils`、`embedder`、`observability`、`sqlite-crypto`、`content-sanitizer`） | 在本仓库中 |
 | Claude Code、Codex 与 OpenClaw 之间的共享记忆 | 引擎与全部三种皮肤均已在本仓库中；干净机器验证待完成 |
+| Cursor：共享记忆、技能、互相审查、接手和每晚学习 | 1.3 新增；`cursor-agent` 命令行已在干净的 Linux 机器上端到端验证；macOS 上的 Cursor 应用还在验证 |
 | Sno Reach —— agent 之间互相通信，无需守护进程 | 由 `sno setup` 安装；Linux 和 macOS 的发布归档已公开；已在干净的 Linux 机器上端到端验证 |
 | 夜间循环和小队技能 | 由 `sno setup` 安装；夜间任务已在干净的 Linux 机器上运行 |
 | 一条命令完成安装（`sno setup`） | 装好上面全部内容；已在干净的 Linux 机器上验证 |
