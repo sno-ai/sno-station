@@ -40,9 +40,16 @@ spending anything. Reports whether work can start now.
 
 Usage:
   sno subscription-quota-check [--vendor codex|claude|both] [--json|--human] [--quiet]
+  sno subscription-quota-check --agent <id> [--seat <address>] [--model <model>]
+  sno subscription-quota-check --pick handoff|review --from <id> [--seat <address>] [--model <model>] --json
 
 Options:
   --vendor <v>   Which vendor to read. Default: both.
+  --agent <id>   Read claude-code, codex, cursor, hermes, or openclaw; always JSON.
+  --seat <addr>  Reach seat whose current session supplies the model and provider.
+  --model <m>    Model to read when no seat is given; locked agents keep their vendor.
+  --pick <p>     List different-vendor handoff or review candidates; always JSON.
+  --from <id>    Sender for --pick. With no seat, Hermes/OpenClaw need --model.
   --json         One JSON object on stdout (default when stdout is not a terminal).
   --human        One line per vendor on stdout (default when stdout is a terminal).
   --quiet        Suppress the stderr progress note.
@@ -63,6 +70,7 @@ Verdict, per vendor and overall:
   unknown     could not be read, or the numbers could not be shown to be current
   needs_auth  credentials need refreshing
   n/a         not a subscription-limited session (API key / Bedrock / Vertex)
+  unread      provider has no account usage; available for picking, not an error
 
 Notes:
   Reads only. This never invokes a model and never redeems a rate-limit reset credit.
@@ -73,6 +81,8 @@ Notes:
   so only a fresh read proves a block is gone.
   This reads the credentials the two CLIs own. It does not measure accounts behind
   OPENAI_BASE_URL or on another machine.
+  Picker order: [models] handoff_order in ${XDG_CONFIG_HOME:-~/.config}/sno/models.toml,
+  default "claude-code,codex,cursor,hermes,openclaw". Cursor is not integrated yet.
 EOF
 	if [[ -n "${OPENAI_BASE_URL:-}" ]]; then
 		printf '%s\n' '  OPENAI_BASE_URL is configured; its account quota is not measured here.'
@@ -272,11 +282,14 @@ codex_probe() {
 			              seconds_to_reset: null,
 			              required_action: "contact_workspace_owner"})
 			           elif ($blocked | length) == 0 then null
-			           else ($blocked | sort_by(.primary.seconds_to_reset // 1e18) | .[0]
+			           else ([ $blocked[]
+			                 | ([.primary, .secondary] | map(select(. != null and .used_pct >= 100))) as $full
+			                 | (if ($full | length) > 0 then $full[] else .primary end) as $w
 			                 | {limit_id, limit_name, reached_type,
-			                    used_pct: .primary.used_pct,
-			                    resets_at_epoch: .primary.resets_at_epoch,
-			                    seconds_to_reset: .primary.seconds_to_reset}) end)
+			                    used_pct: $w.used_pct,
+			                    resets_at_epoch: $w.resets_at_epoch,
+			                    seconds_to_reset: $w.seconds_to_reset} ]
+			                 | max_by(.seconds_to_reset // 1e18)) end)
 		  }'
 }
 
@@ -317,15 +330,21 @@ claude_probe() {
 		jq -c 'select(.type=="control_response") | .response.response' 2>/dev/null |
 		head -1)" || true
 
-	if [[ -z "$json" ]]; then
+	if [[ -z "$json" || "$json" == null ]]; then
 		jq -n '{vendor:"claude",state:"unreadable",verdict:"unknown",
-		        reason:"get_usage control request returned no response"}'
+		        reason:"get_usage control request returned no result"}'
+		return
+	fi
+
+	if ! printf '%s' "$json" | jq -e '.rate_limits_available | type == "boolean"' >/dev/null 2>&1; then
+		jq -n '{vendor:"claude",state:"unreadable",verdict:"unknown",
+		        reason:"rate_limits_available is absent or not a boolean"}'
 		return
 	fi
 
 	# rate_limits_available:false means API key / Bedrock / Vertex — plan limits do not
 	# apply at all. Reporting 0% there would be a lie in the usable direction.
-	if [[ "$(printf '%s' "$json" | jq -r '.rate_limits_available // false')" != "true" ]]; then
+	if printf '%s' "$json" | jq -e '.rate_limits_available == false' >/dev/null; then
 		jq -n '{vendor:"claude",state:"not_applicable",verdict:"n/a",
 		        reason:"rate_limits_available is false: not a subscription-limited session"}'
 		return
@@ -390,12 +409,17 @@ claude_probe() {
 		| (if $binding != null then $binding.percent
 		   else ([$rl.five_hour.utilization, $rl.seven_day.utilization]
 		         | map(select(. != null)) | max) end) as $tight_pct
+		| ($binding // (if $tight_pct >= 100 then
+		     if $rl.five_hour.utilization == $tight_pct then
+		       {kind: "session", percent: $tight_pct, resets_at: $rl.five_hour.resets_at}
+		     else {kind: "weekly_all", percent: $tight_pct, resets_at: $rl.seven_day.resets_at}
+		     end else null end)) as $binding
 		| {
 			vendor: "claude",
 			cli_version: $cli_version,
-			# Blocked only at a full binding window; everything else is usable now.
-			state: (if ($binding != null and $binding.percent >= 100) then "blocked" else "ok" end),
-			verdict: (if ($binding != null and $binding.percent >= 100) then "wait"
+			# Blocked at a full active window or, when none is active, a full fallback window.
+			state: (if $tight_pct >= 100 then "blocked" else "ok" end),
+			verdict: (if $tight_pct >= 100 then "wait"
 			          elif ($tight_pct != null and (100 - $tight_pct) < $short)
 			          then "short_only"
 			          else "go" end),
@@ -416,7 +440,7 @@ claude_probe() {
 			overage: {enabled: $rl.extra_usage.is_enabled,
 			          used_pct: $rl.extra_usage.utilization,
 			          disabled_reason: $rl.extra_usage.disabled_reason},
-			blocking: (if ($binding != null and $binding.percent >= 100)
+			blocking: (if $tight_pct >= 100
 			           then {limit_id: $binding.kind, used_pct: $binding.percent,
 			                 resets_at: $binding.resets_at,
 			                 seconds_to_reset: (iso2epoch($binding.resets_at) - $now)}
@@ -453,22 +477,381 @@ human_line() {
 			end)'
 }
 
+# ----------------------------------------------------------- agent routing ---
+
+model_vendor() {
+	local provider="$1" model="$2"
+	case "$provider" in
+	openai | openai-codex | codex | chatgpt) printf 'openai'; return ;;
+	anthropic | claude) printf 'anthropic'; return ;;
+	custom* | local*) printf 'local:%s' "$provider"; return ;;
+	esac
+	if [[ "$model" == */* ]]; then
+		model_vendor "${model%%/*}" "${model#*/}"
+	elif [[ -z "$provider" ]]; then
+		model="${model#cursor-}"
+		case "$model" in
+		claude*) printf 'anthropic' ;;
+		gpt* | o[0-9]* | *codex*) printf 'openai' ;;
+		gemini*) printf 'google' ;;
+		grok*) printf 'xai' ;;
+		composer* | default | auto) printf 'cursor' ;;
+		esac
+	else
+		printf '%s' "$provider"
+	fi
+}
+
+model_record() {
+	local model="$1" provider="${2:-}"
+	if [[ -z "$provider" ]]; then
+		if [[ "$model" == */* ]]; then
+			provider="${model%%/*}"; model="${model#*/}"
+		else
+			provider="$(model_vendor '' "$model")"
+		fi
+	fi
+	jq -cn --arg model "$model" --arg provider "$provider" \
+		'{model:(if $model=="" then null else $model end),provider:$provider}'
+}
+
+declare -A QUOTA_CACHE=()
+OPENCLAW_USAGE='' OPENCLAW_USAGE_FAILED=0
+agent_command() {
+	local agent="$1" key out no_usage rc=0 seconds=30; shift
+	[[ "$agent" != openclaw ]] || seconds=90
+	printf -v key '%q ' "$@"
+	out="$(timeout -k 2 "$seconds" "$@" 2>"$SCRATCH/command.err")" || rc=$?
+	if ((rc != 0)); then
+		if [[ "$agent" == hermes && "${2:-}" == usage ]]; then
+			no_usage="No account usage available for provider '${4:-}': no credential is configured for it, the provider has no usage endpoint, or the fetch failed."
+			if [[ "$out" == "$no_usage" || "$(cat "$SCRATCH/command.err")" == "$no_usage" ]]; then
+				printf '%s' "$no_usage"
+				return 0
+			fi
+		fi
+		printf '%s: agent %s command %sfailed (exit %s): %s\n' \
+			"$PROG" "$agent" "$key" "$rc" "$(cat "$SCRATCH/command.err")" >&2
+		return 1
+	fi
+	printf '%s' "$out"
+}
+
+hermes_session() {
+	local record="$1" session cwd since listed exported candidate
+	session="$(jq -r '.session_id // empty' "$record")" || return 1
+	if [[ -n "$session" ]]; then printf '%s' "$session"; return; fi
+	cwd="$(jq -r '.cwd // empty' "$record")" || return 1
+	since="$(jq -r '.spawned_at // 0' "$record")" || return 1
+	listed="$(agent_command hermes hermes sessions list --workspace "$(basename -- "$cwd")" --limit 30)" || return 1
+	while IFS= read -r candidate; do
+		[[ -n "$candidate" ]] || continue
+		exported="$(agent_command hermes hermes sessions export - --format jsonl --session-id "$candidate")" || continue
+		session="$(jq -rse --arg id "$candidate" --arg seat "$SEAT" --argjson earliest "$((since - 60))" '
+			[.[] | select(.id==$id and .started_at >= $earliest and
+				([.messages[]? | select(.role=="user")][0].content // "" | contains($seat)))]
+			| if length==1 then .[0].id else empty end' <<<"$exported" 2>/dev/null)" || continue
+		printf '%s' "$session"; return
+	done < <(awk '$NF ~ /^[0-9]{8}_[0-9]{6}_[0-9a-f]{6}$/ {print $NF}' <<<"$listed")
+	return 1
+}
+
+current_model() {
+	local agent="$1" record session raw home="${HERMES_HOME:-$HOME/.hermes}" files=()
+	case "$agent" in
+	claude-code) model_record "$MODEL" anthropic; return ;;
+	codex) model_record "$MODEL" openai; return ;;
+	cursor) return 1 ;;
+	esac
+	if [[ -z "$SEAT" ]]; then
+		[[ -n "$MODEL" ]] || return 1
+		model_record "$MODEL" | jq -c --arg model "$MODEL" '.model=$model'; return
+	fi
+	record="${SNO_REACH_STATE_ROOT:-$HOME/.local/state/sno-reach}/$SEAT/transcript.json"
+	[[ -r "$record" ]] || return 1
+	if [[ "$agent" == openclaw ]]; then
+		session="$(jq -er '.session_key' "$record")" || return 1
+		raw="$(agent_command openclaw openclaw sessions list --json)" || return 1
+		jq -ce --arg key "$session" '.sessions[] | select(.key==$key)
+			| select(.model != null and .modelProvider != null)
+			| {model,provider:.modelProvider}' <<<"$raw"
+		return
+	fi
+	session="$(hermes_session "$record")" || return 1
+	[[ ! -r "$home/logs/agent.log.1" ]] || files+=("$home/logs/agent.log.1")
+	[[ ! -r "$home/logs/agent.log" ]] || files+=("$home/logs/agent.log")
+	if ((${#files[@]})); then
+		raw="$(awk -v id="[$session]" 'index($0,id) && /agent.conversation_loop: API call #[0-9]+:/ {
+			if ($0 >= latest) { latest=$0; model=""; provider="";
+				for (i=1;i<=NF;i++) {if ($i ~ /^model=/) model=substr($i,7); if ($i ~ /^provider=/) provider=substr($i,10)}
+			}
+		} END {if (model!="" && provider!="") print model "\t" provider}' "${files[@]}")"
+		if [[ -n "$raw" ]]; then
+			model_record "${raw%%$'\t'*}" "${raw#*$'\t'}"; return
+		fi
+	fi
+	# Only before a first successful request is the session row authoritative.
+	timeout -k 2 10 python3 - "$home/state.db" "$session" <<'PY'
+import json, pathlib, sqlite3, sys
+try:
+    with sqlite3.connect(pathlib.Path(sys.argv[1]).as_uri() + '?mode=ro', uri=True) as db:
+        row = db.execute('SELECT model, billing_provider FROM sessions WHERE id = ?', (sys.argv[2],)).fetchone()
+    if not row or not row[0] or not row[1]:
+        sys.exit(1)
+    print(json.dumps({'model': row[0], 'provider': row[1]}))
+except (sqlite3.Error, OSError) as error:
+    print('hermes session model read failed: ' + str(error), file=sys.stderr)
+    sys.exit(1)
+PY
+}
+
+usage_windows() {
+	local agent="$1" provider="$2"
+	jq -ce --arg agent "$agent" --arg provider "$provider" --argjson now "$(now_epoch)" --argjson short "$SHORT_ONLY_REMAINING_PCT" '
+		if $agent=="hermes" then
+			.windows | if type!="array" then error("expected windows") else
+				map({limit_id:.label,used_pct:.used_percent,resets_at}) end
+		else
+			.usage.providers | if type!="array" then error("expected providers") else
+				[.[] | select(.provider==$provider) | .windows[] | {limit_id:.label,used_pct:.usedPercent,
+					resets_at:(if .resetAt==null then null else (.resetAt/1000 | floor | todateiso8601) end)}] end
+		end
+		| map(if (.used_pct | type)=="number" then . else error("expected numeric usage percent") end)
+		| max_by(.used_pct) as $w
+		| {vendor:$provider,state:(if $w.used_pct >= 100 then "blocked" else "ok" end),
+			verdict:(if $w==null then "unread" elif $w.used_pct>=100 then "wait"
+				elif (100-$w.used_pct)<=$short then "short_only" else "go" end),
+			tightest_window:(if $w==null then null else
+				$w | .used_pct |= round | .seconds_to_reset=(if .resets_at==null then null else
+					((.resets_at | sub("\\.[0-9]+";"") | sub("\\+00:00$";"Z") | fromdateiso8601)-$now) end) end)}' 2>"$SCRATCH/command.err" || {
+		printf '%s: agent %s command %s failed parsing usage: %s\n' "$PROG" "$agent" \
+			"$([[ "$agent" == hermes ]] && printf 'hermes usage --provider %s --json' "$provider" || printf 'openclaw status --usage --json')" \
+			"$(cat "$SCRATCH/command.err")" >&2
+		return 1
+	}
+}
+
+# Writes QUOTA, rather than returning it in a subshell, so provider caches survive.
+agent_quota() {
+	local agent="$1" provider="$2" key raw
+	key="$agent:$provider"
+	if [[ -n "${QUOTA_CACHE[$key]+yes}" ]]; then QUOTA="${QUOTA_CACHE[$key]}"; return; fi
+	QUOTA_CACHE[$key]='{"state":"unreadable","verdict":"unknown","reason":"quota read failed"}'
+	case "$agent" in
+	codex) QUOTA="$(codex_probe)" ;;
+	claude-code) QUOTA="$(claude_probe)" ;;
+	hermes)
+		raw="$(agent_command hermes hermes usage --provider "$provider" --json)" || return 1
+		[[ "$raw" != 'No account usage available'* ]] || raw='{"windows":[]}'
+		QUOTA="$(usage_windows "$agent" "$provider" <<<"$raw")" || return 1
+		;;
+	openclaw)
+		# One status command supplies every provider, including other-model candidates.
+		if [[ -n "$OPENCLAW_USAGE" ]]; then raw="$OPENCLAW_USAGE"
+		elif ((OPENCLAW_USAGE_FAILED)); then return 1
+		else
+			raw="$(agent_command openclaw openclaw status --usage --json)" || { OPENCLAW_USAGE_FAILED=1; return 1; }
+			OPENCLAW_USAGE="$raw"
+		fi
+		QUOTA="$(usage_windows "$agent" "$provider" <<<"$raw")" || return 1
+		;;
+	esac
+	if [[ "$(jq -r '.state' <<<"$QUOTA")" == unreadable || "$(jq -r '.state' <<<"$QUOTA")" == needs_auth ]]; then
+		printf '%s: agent %s command %s failed: %s\n' "$PROG" "$agent" \
+			"$([[ "$agent" == codex ]] && printf 'codex app-server account/rateLimits/read' || printf 'claude get_usage')" \
+			"$(jq -r '.reason' <<<"$QUOTA")" >&2
+	fi
+	QUOTA_CACHE[$key]="$QUOTA"
+}
+
+agent_read() {
+	local agent="$1" current provider vendor code=0 reason='current-model-unknown'
+	[[ "$agent" != cursor ]] || reason='cursor-not-integrated'
+	if ! current="$(current_model "$agent")"; then
+		jq -n --arg agent "$agent" --arg reason "$reason" \
+			'{ok:false,operation:"agent-read",agent:$agent,reason:$reason}'
+		return 3
+	fi
+	provider="$(jq -r '.provider' <<<"$current")"
+	vendor="$(model_vendor "$provider" "$(jq -r '.model // ""' <<<"$current")")"
+	if ! agent_quota "$agent" "$provider"; then
+		QUOTA='{"state":"unreadable","verdict":"unknown","reason":"quota read failed"}'
+	fi
+	case "$(jq -r '.state' <<<"$QUOTA")" in
+	blocked | owner_action) code=1 ;; unreadable) code=3 ;; needs_auth) code=4 ;;
+	esac
+	jq -n --arg agent "$agent" --arg vendor "$vendor" --argjson current "$current" \
+		--argjson quota "$QUOTA" --argjson code "$code" --arg host "$(uname -n)" \
+		--arg captured "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '
+		{ok:($code==0),operation:"agent-read",captured_at:$captured,host:$host,agent:$agent,
+		model:$current.model,provider:$current.provider,model_vendor:$vendor,
+		vendor:($quota | if .tightest_window!=null then .tightest_window.used_pct |= round
+			| .tightest_window.resets_at //= (if .tightest_window.resets_at_epoch==null then null else
+				(.tightest_window.resets_at_epoch | todateiso8601) end) else . end)}'
+	return "$code"
+}
+
+agent_models() {
+	local agent="$1" raw status fallbacks models
+	case "$agent" in
+	claude-code) model_record '' anthropic ;;
+	codex) model_record '' openai ;;
+	cursor) model_record '' cursor ;;
+	hermes)
+		raw="$(agent_command hermes hermes fallback list)" || return 1
+		awk '/Primary:|^[[:space:]]*[0-9]+\./ {model=$2; provider=$4; sub(/\)$/, "", provider); print model "\t" provider}' <<<"$raw" |
+			while IFS=$'\t' read -r model provider; do model_record "$model" "$provider"; done
+		;;
+	openclaw)
+		status="$(agent_command openclaw openclaw models status --json)" || return 1
+		fallbacks="$(agent_command openclaw openclaw models fallbacks list --json)" || return 1
+		models="$(agent_command openclaw openclaw models list --json)" || return 1
+		raw="$(jq -nre --argjson status "$status" --argjson fallbacks "$fallbacks" --argjson models "$models" '
+			[$status.defaultModel, $fallbacks.fallbacks[], ($models.models[] | select(.available==true) | .key)]
+			| reduce .[] as $m ([]; if index($m)!=null then . else .+[$m] end) | .[]')" || return 1
+		while IFS= read -r model; do model_record "$model"; done <<<"$raw"
+		;;
+	esac
+}
+
+handoff_order() {
+	local file="${XDG_CONFIG_HOME:-$HOME/.config}/sno/models.toml" value='claude-code,codex,cursor,hermes,openclaw'
+	if [[ -f "$file" ]]; then
+		value="$(awk '
+			/^[[:space:]]*\[/ { models=($0 ~ /^[[:space:]]*\[models\][[:space:]]*(#.*)?$/); next }
+			models && /^[[:space:]]*handoff_order[[:space:]]*=/ {
+				value=$0; sub(/^[^=]*=[[:space:]]*/, "", value); quote=substr(value,1,1)
+				if (quote!="\"" && quote!=sprintf("%c",39)) exit 2
+				value=substr(value,2); end=index(value,quote)
+				if (!end || substr(value,end+1)!~/^[[:space:]]*(#.*)?$/) exit 2
+				print substr(value,1,end-1); exit
+			}' "$file")" || die "cannot read quoted handoff_order from $file"
+		value="${value:-claude-code,codex,cursor,hermes,openclaw}"
+	fi
+	jq -cn --arg value "$value" '$value | split(",") | map(gsub("^\\s+|\\s+$";""))'
+}
+
+pick_candidate() {
+	local agent="$1" entry="$2" in_place="$3" provider vendor verdict='' reason=''
+	provider="$(jq -r '.provider' <<<"$entry")"
+	vendor="$(model_vendor "$provider" "$(jq -r '.model // ""' <<<"$entry")")"
+	if [[ "$agent" == cursor ]]; then reason='cursor-not-integrated'
+	elif ! command -v "$([[ "$agent" == claude-code ]] && printf claude || printf '%s' "$agent")" >/dev/null; then
+		printf '%s: agent %s command lookup failed: CLI not on PATH\n' "$PROG" "$agent" >&2
+		reason='unavailable'
+	elif ! agent_quota "$agent" "$provider"; then
+		reason='unavailable'
+		if grep -qiE 'Named models unavailable|ActionRequiredError' "$SCRATCH/command.err"; then
+			reason='no-quota'
+			QUOTA_CACHE["$agent:$provider"]='{"state":"blocked","verdict":"wait"}'
+		fi
+	else
+		verdict="$(jq -r '.verdict' <<<"$QUOTA")"
+		if [[ "$verdict" == unknown || "$verdict" == needs_auth ]]; then reason='unavailable'
+		elif [[ "$vendor" == "$FROM_VENDOR" ]]; then reason='same-vendor'
+		elif [[ "$verdict" == wait || "$verdict" == owner_action ]]; then reason='no-quota'
+		fi
+	fi
+	if [[ -n "$reason" ]]; then
+		jq -cn --argjson entry "$entry" --arg agent "$agent" --arg vendor "$vendor" --arg reason "$reason" \
+			'$entry+{agent:$agent,vendor:$vendor,reason:$reason}' >>"$SCRATCH/skipped"
+	else
+		jq -cn --argjson entry "$entry" --arg agent "$agent" --arg vendor "$vendor" \
+			--argjson in_place "$in_place" --arg verdict "$verdict" \
+			'$entry+{agent:$agent,vendor:$vendor,in_place:$in_place,verdict:$verdict}' >>"$SCRATCH/candidates"
+	fi
+}
+
+agent_pick() {
+	local sender current from_json order agent entries entry in_place record receiver_model
+	agent_read "$FROM" >"$SCRATCH/sender" || true
+	sender="$(cat "$SCRATCH/sender")"
+	if ! jq -e 'has("model_vendor")' <<<"$sender" >/dev/null; then
+		jq --arg purpose "$PICK" '.operation="pick" | .purpose=$purpose' <<<"$sender"
+		return 3
+	fi
+	FROM_VENDOR="$(jq -r '.model_vendor' <<<"$sender")"
+	current="$(jq -c '{model,provider}' <<<"$sender")"
+	from_json="$(jq -c '{agent,model,provider,vendor:.model_vendor,verdict:.vendor.verdict}' <<<"$sender")"
+	order="$(handoff_order)"
+	while IFS= read -r agent; do
+		case "$agent" in claude-code | codex | cursor | hermes | openclaw) ;;
+		*) printf '%s: unknown agent in handoff_order ignored: %s\n' "$PROG" "$agent" >&2 ;;
+		esac
+	done < <(jq -r '.[]' <<<"$order")
+	order="$(jq -c 'map(select(.=="claude-code" or .=="codex" or .=="cursor" or .=="hermes" or .=="openclaw"))' <<<"$order")"
+	: >"$SCRATCH/candidates"; : >"$SCRATCH/skipped"
+	# Load each model list once; sender's list also serves its review position.
+	local -A lists=()
+	local -a walk=()
+	if [[ "$PICK" == handoff && ( "$FROM" == hermes || "$FROM" == openclaw ) ]]; then walk+=("$FROM"); fi
+	while IFS= read -r agent; do
+		[[ "$PICK" != handoff || "$agent" != "$FROM" ]] || continue
+		walk+=("$agent")
+	done < <(jq -r '.[]' <<<"$order")
+	for agent in "${walk[@]}"; do
+		in_place=false
+		[[ "$PICK" != handoff || "$agent" != "$FROM" ]] || in_place=true
+		if [[ -n "${lists[$agent]+yes}" ]]; then entries="${lists[$agent]}"
+		elif entries="$(agent_models "$agent")" && [[ -n "$entries" ]]; then lists[$agent]="$entries"
+		else
+			jq -cn --arg agent "$agent" '{agent:$agent,model:null,provider:null,vendor:null,reason:"unavailable"}' >>"$SCRATCH/skipped"
+			continue
+		fi
+		if [[ "$agent" == "$FROM" ]]; then
+			entries="$(jq -cs --argjson current "$current" 'map(select(.!=$current)) | .[]' <<<"$entries")"
+		elif [[ "$agent" == hermes || "$agent" == openclaw ]]; then
+			# A uniquely recorded seat supplies current state; never guess a newest session.
+			local -a seats=()
+			for record in "${SNO_REACH_STATE_ROOT:-$HOME/.local/state/sno-reach}"/*/transcript.json; do
+				[[ -f "$record" ]] || continue
+				if jq -e --arg agent "$agent" '.runtime==$agent' "$record" >/dev/null 2>&1; then
+					seats+=("$(basename -- "$(dirname -- "$record")")")
+				fi
+			done
+			if ((${#seats[@]} == 1)) && receiver_model="$(SEAT="${seats[0]}" current_model "$agent")"; then
+				entries="$(printf '%s\n%s\n' "$receiver_model" "$entries" | jq -cs '
+					reduce .[] as $m ([]; if index($m)!=null then . else .+[$m] end) | .[]')"
+			fi
+		fi
+		while IFS= read -r entry; do
+			[[ -n "$entry" ]] || continue
+			pick_candidate "$agent" "$entry" "$in_place"
+		done <<<"$entries"
+	done
+	jq -n --arg purpose "$PICK" --argjson from "$from_json" --argjson order "$order" \
+		--slurpfile candidates "$SCRATCH/candidates" --slurpfile skipped "$SCRATCH/skipped" \
+		'{ok:true,operation:"pick",purpose:$purpose,from:$from,order:$order,
+		candidates:$candidates,skipped:$skipped,chosen:($candidates[0] // null)}'
+}
+
 # ----------------------------------------------------------------- main ------
 
 VENDOR="both"
 FORMAT=""
 QUIET=0
+AGENT='' SEAT='' MODEL='' PICK='' FROM='' VENDOR_SET=0
 
 while (($# > 0)); do
 	case "$1" in
 	--vendor)
+		VENDOR_SET=1
 		[[ $# -ge 2 ]] || die "--vendor needs a value: codex, claude, or both" 2
 		VENDOR="$2"
 		shift 2
 		;;
 	--vendor=*)
+		VENDOR_SET=1
 		VENDOR="${1#*=}"
 		shift
+		;;
+	--agent | --seat | --model | --pick | --from)
+		[[ $# -ge 2 && -n "$2" && "$2" != --* ]] || die "$1 needs a value"
+		case "$1" in
+		--agent) AGENT="$2" ;; --seat) SEAT="$2" ;; --model) MODEL="$2" ;;
+		--pick) PICK="$2" ;; --from) FROM="$2" ;;
+		esac
+		shift 2
 		;;
 	--json)
 		FORMAT="json"
@@ -497,7 +880,8 @@ codex | claude | both) ;;
 esac
 
 if [[ -z "$FORMAT" ]]; then
-	if [[ -t 1 ]]; then FORMAT="human"; else FORMAT="json"; fi
+	if [[ -n "$AGENT$PICK" ]]; then FORMAT="json"
+	elif [[ -t 1 ]]; then FORMAT="human"; else FORMAT="json"; fi
 fi
 readonly VENDOR FORMAT
 
@@ -508,6 +892,26 @@ readonly SCRATCH
 # `|| true` matters: under set -E a failing command inside an EXIT trap becomes the
 # script's exit status, which would report a good reading as a failure.
 trap 'rm -rf -- "$SCRATCH" 2>/dev/null || true' EXIT
+
+if [[ -n "$AGENT" || -n "$PICK" ]]; then
+	[[ "$VENDOR_SET" == 0 && "$FORMAT" != human ]] || die "--agent/--pick use JSON and cannot be combined with --vendor/--human"
+	[[ -z "$AGENT" || -z "$PICK" ]] || die "choose --agent or --pick"
+	for id in "$AGENT" "$FROM"; do
+		case "$id" in '' | claude-code | codex | cursor | hermes | openclaw) ;;
+		*) die "unknown agent: $id" ;;
+		esac
+	done
+	if [[ -n "$PICK" ]]; then
+		[[ "$PICK" == handoff || "$PICK" == review ]] || die "--pick must be handoff or review"
+		[[ -n "$FROM" ]] || die "--pick requires --from"
+		agent_pick
+	else
+		[[ -z "$FROM" ]] || die "--from requires --pick"
+		agent_read "$AGENT"
+	fi
+	exit 0
+fi
+[[ -z "$FROM$SEAT$MODEL" ]] || die "--from/--seat/--model require --agent or --pick"
 
 results=()
 [[ "$VENDOR" == "codex" || "$VENDOR" == "both" ]] && results+=("$(codex_probe)")

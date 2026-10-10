@@ -1,0 +1,19 @@
+{
+  "provider": "openai-codex",
+  "source": "usage_api",
+  "title": "Account limits",
+  "plan": "Prolite",
+  "fetched_at": "2026-10-09T07:17:22.923587+00:00",
+  "windows": [
+    {
+      "label": "Weekly",
+      "used_percent": 8.0,
+      "resets_at": "2026-10-15T04:05:18+00:00",
+      "detail": null
+    }
+  ],
+  "details": [
+    "You have 2 resets banked - use /usage reset to activate"
+  ],
+  "unavailable_reason": null
+}

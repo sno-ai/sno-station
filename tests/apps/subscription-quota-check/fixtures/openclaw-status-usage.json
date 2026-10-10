@@ -1,0 +1,26 @@
+{
+  "usage": {
+    "updatedAt": 1791530635941,
+    "providers": [
+      {
+        "provider": "openai",
+        "displayName": "OpenAI",
+        "windows": [
+          {
+            "label": "168h",
+            "usedPercent": 31,
+            "resetAt": 1791948664000
+          }
+        ],
+        "plan": "pro",
+        "billing": [
+          {
+            "type": "balance",
+            "amount": 62809.395015,
+            "unit": "credits"
+          }
+        ]
+      }
+    ]
+  }
+}

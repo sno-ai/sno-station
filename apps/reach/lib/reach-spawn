@@ -12,6 +12,12 @@ address="${2:?address required}"
 cwd="${3:?cwd required}"
 window="${4:?window selection required}"
 adapter="${5-}"
+model="${6-}" provider="${7-}"
+if [[ "$kind" == openclaw && -n "$provider" && -z "$model" ]]; then
+    printf 'reach: OpenClaw --provider requires --model; no seat created\n' >&2; exit 64;
+fi
+# shellcheck source=reach-tmux.sh
+source "$release/lib/reach-tmux.sh"
 root="${SNO_REACH_ROOT:-$HOME/.local/state/sno-reach}"
 guide="$release/guide/agent-reach.md"
 [[ -f "$guide" ]] || { printf 'reach: installed guide unavailable: %s\n' "$guide" >&2; exit 66; }
@@ -84,27 +90,53 @@ else
     [[ "$window" == yes ]] || printf 'reach: %s is not ACP-capable; creating a tmux seat\n' "$kind" >&2
     session_id="$(uuidgen 2>/dev/null || cat /proc/sys/kernel/random/uuid)"
     spawned_at="$(date +%s)"
+    if [[ "$kind" == openclaw ]]; then
+        agents="$(timeout --foreground -k 2 10 openclaw agents list --json | sed -n '/^\[/,$p')" || {
+            printf 'reach: OpenClaw agent list failed; cannot create a seat\n' >&2; exit 78;
+        }
+        agent_id="$(jq -er '(if length == 1 then . else map(select(.isDefault == true)) end) | .[0].id | strings | select(length > 0)' <<<"$agents")" || {
+            printf 'reach: OpenClaw has no usable agent id for a seat\n' >&2; exit 78;
+        }
+        session_id="agent:$agent_id:reach-$(printf '%s%s' "$address" "$EPOCHREALTIME" | sha256sum | cut -c1-12)"
+    fi
     handle="$(timeout --foreground 10 tmux 9>&- new-session -d -P -F '#{pane_id}' -s "$session" -c "$cwd" \
         -e "SNO_REACH_ROOT=$root" -e "SNO_REACH_ADDR=$address" -e "SNO_REACH_GUIDE=$guide" \
         -e "SNO_REACH_SESSION_ID=$session_id" \
-        "$release/lib/reach-agent" "$kind" "$context")"
+        "$release/lib/reach-agent" "$kind" "$context" "$model" "$provider")"
     created=yes
     [[ "$handle" =~ ^%[0-9]+$ ]] || { printf 'reach: tmux returned invalid pane\n' >&2; exit 65; }
     env "${register_env[@]}" "$release/lib/reach-main" register --as "$address" --channel tmux --handle "$handle" 9>&- >&2
 fi
-temporary="$(mktemp "$root/$address/.seat-runtime.XXXXXX")"
 # The transcript is the seat's own record of what it said; call verifies against it,
 # never against the screen. Claude writes <projects>/<cwd slug>/<session id>.jsonl; Codex
 # names its rollout file itself, so call finds it by cwd and start time.
 case "$kind" in
     claude) transcript="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/projects/$(printf '%s' "$cwd" | sed 's/[^A-Za-z0-9]/-/g')/${session_id:-}.jsonl" ;;
     codex) transcript="codex-rollout" ;;
+    hermes) transcript="hermes-session" ;;
+    # ACPX's record id is not an OpenClaw session key; the adapter does not expose that key.
+    openclaw) transcript="$session_id"; [[ "$channel" != acp ]] || transcript="" ;;
     *) transcript="" ;;
 esac
-[[ -z "$transcript" ]] || jq -n --arg kind "$kind" --arg transcript "$transcript" --arg cwd "$cwd" --argjson spawned_at "${spawned_at:-0}" \
-    '{runtime:$kind, transcript:$transcript, cwd:$cwd, spawned_at:$spawned_at}' >"$root/$address/transcript.json"
+if [[ -n "$transcript" ]]; then
+    temporary="$(mktemp "$root/$address/.transcript.XXXXXX")"
+    jq -n --arg kind "$kind" --arg transcript "$transcript" --arg cwd "$cwd" --argjson spawned_at "${spawned_at:-0}" \
+    '{runtime:$kind, transcript:$transcript, cwd:$cwd, spawned_at:$spawned_at} +
+     (if $kind == "openclaw" then {session_key:$transcript} else {} end)' >"$temporary"
+    mv -- "$temporary" "$root/$address/transcript.json"
+fi
+temporary="$(mktemp "$root/$address/.seat-runtime.XXXXXX")"
 jq --arg runtime "$kind" '.runtime=$runtime' "$root/$address/seat.json" >"$temporary"
 chmod 0600 "$temporary"
 mv -- "$temporary" "$root/$address/seat.json"
+if [[ "$kind" == openclaw && "$channel" == tmux ]]; then
+    wait_openclaw_idle "$handle"
+    if [[ -n "$model" ]]; then
+        [[ -z "$provider" ]] || model="$provider/$model"
+        "$release/lib/reach-call" --terminal "$address" --text "/model $model" --raw >/dev/null
+        wait_openclaw_idle "$handle"
+    fi
+    "$release/lib/reach-call" --terminal "$address" --text "$context" --no-wait >/dev/null
+fi
 created=no
 printf 'seat %s channel=%s handle=%s\n' "$address" "$channel" "$handle"

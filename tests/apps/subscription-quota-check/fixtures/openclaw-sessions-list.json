@@ -1,0 +1,44 @@
+{
+  "sessions": [
+    {
+      "key": "agent:research:reach-test-claw",
+      "model": "claude-sonnet-5",
+      "modelProvider": "anthropic"
+    },
+    {
+      "key": "agent:main:reach-test-claw",
+      "model": "gpt-5.6-terra",
+      "modelProvider": "openai"
+    },
+    {
+      "key": "agent:main:sno-probe-m7212",
+      "model": "gpt-5.6-terra",
+      "modelProvider": "openai"
+    },
+    {
+      "key": "agent:main:sno-probe-n25807",
+      "model": "gpt-5.6-terra",
+      "modelProvider": "openai"
+    },
+    {
+      "key": "agent:main:sno-probe-3419",
+      "model": "gpt-5.6-luna",
+      "modelProvider": "openai"
+    },
+    {
+      "key": "agent:main:explicit:rem-reflect-probe-676",
+      "model": "gpt-5.6-terra",
+      "modelProvider": "openai"
+    },
+    {
+      "key": "agent:main:cron:abe1953c-2ec8-4b13-8417-a9541f05f9a4",
+      "model": "gpt-5.6-terra",
+      "modelProvider": "openai"
+    },
+    {
+      "key": "agent:main:main",
+      "model": "gpt-5.6-terra",
+      "modelProvider": "openai"
+    }
+  ]
+}

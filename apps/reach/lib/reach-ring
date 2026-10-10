@@ -3,6 +3,8 @@ set -Eeuo pipefail
 
 REPOSITORY="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 readonly REPOSITORY
+# shellcheck source=reach-tmux.sh
+source "$REPOSITORY/lib/reach-tmux.sh"
 readonly DOORBELL_TOKEN=REACH-RING
 # An unbounded flock inside the send path is a hang with no signal: the sender
 # blocks forever and never learns the wake outcome. bin/mbox-wake already
@@ -502,9 +504,9 @@ tmux_target_current() {
 # `sleep 86400` after the runtime exits.  Pane existence and pane-owned identity
 # proof are therefore not runtime liveness.  Walk only this pane's process tree
 # and require the actual interactive runtime before typing into an executor.
-tmux_executor_runtime_live() { # pane-id
-    local target="$1" pane_pid pid child comm args first
-    local -a queue=()
+tmux_executor_runtime_live() { # pane-id runtime
+    local target="$1" runtime="$2" pane_pid pid child comm args argument
+    local -a queue=() arguments=()
 
     pane_pid="$(tmux display-message -pt "$target" '#{pane_pid}' 2>/dev/null)" || return 1
     [[ "$pane_pid" =~ ^[0-9]+$ ]] || return 1
@@ -514,11 +516,21 @@ tmux_executor_runtime_live() { # pane-id
         queue=("${queue[@]:1}")
         comm="$(ps -o comm= -p "$pid" 2>/dev/null | awk '{print $1}')"
         args="$(ps -o args= -p "$pid" 2>/dev/null || true)"
-        first="${args%% *}"
-        first="${first##*/}"
-        case "$comm:$first" in
-            codex:*|claude:*|*:codex|*:claude) return 0 ;;
-        esac
+        if [[ "$runtime" == unbound || -z "$runtime" ]]; then
+            # Seats registered directly have no launch runtime recorded.
+            [[ "$comm" != codex && "$comm" != claude ]] || return 0
+        else
+            [[ "$comm" == "$runtime" || "$comm" == "$runtime"-* ]] && return 0
+        fi
+        read -r -a arguments <<<"$args"
+        for argument in "${arguments[@]}"; do
+            argument="${argument##*/}"
+            if [[ "$runtime" == unbound || -z "$runtime" ]]; then
+                [[ "$argument" != codex && "$argument" != claude ]] || return 0
+            else
+                [[ "$argument" == "$runtime" || "$argument" == "$runtime"-* ]] && return 0
+            fi
+        done
         while IFS= read -r child; do
             [[ "$child" =~ ^[0-9]+$ ]] && queue+=("$child")
         done < <(ps --ppid "$pid" -o pid= 2>/dev/null | awk '{print $1}')
@@ -528,7 +540,8 @@ tmux_executor_runtime_live() { # pane-id
 
 ring_tmux() {
     local root="$1" recipient="$2" sender="$3" message_id="$4" record="$5"
-    local target line nonce deadline lock_fd expect_ack
+    local target line nonce deadline lock_fd expect_ack runtime
+    runtime="$(jq -r '.runtime // empty' "$root/$recipient/seat.json")"
 
     target="$(jq -er '
         .identity.value |
@@ -551,12 +564,11 @@ ring_tmux() {
         return
     }
     if [[ "${recipient%%.*}" == executor ]] &&
-       ! tmux_executor_runtime_live "$target"; then
+       ! tmux_executor_runtime_live "$target" "$runtime"; then
         emit "$root" "$recipient" "$sender" "$message_id" unresolved \
-            "registered pane $target has no live codex or claude runtime for $recipient; close the retired pane and respawn the executor"
+            "registered pane $target has no live ${runtime:-codex or claude} runtime for $recipient; close the retired pane and respawn the executor"
         return
     fi
-
     nonce="$(printf '%04x%04x' "$((RANDOM & 65535))" "$(($$ & 65535))")"
     # Executors need only the neutral cue that was measured to restart their reasoning
     # loop. A prompt-acceptance hook can print an ACK while the executor stays asleep, so
@@ -576,6 +588,7 @@ ring_tmux() {
     # nobody was home and the seat was reported successfully rung.
         line="$DOORBELL_TOKEN Guide: $REPOSITORY/guide/agent-reach.md. State: $root. Seat: $recipient. $nonce typed by the mail transport, not by the owner. You have unanswered mail as '$recipient'. Read Message-ID $message_id now. Then, so the transport knows you saw this, print one line consisting of the three letters ACK, a hyphen, and then $nonce — nothing else on that line."
     fi
+    [[ "$runtime" != hermes ]] || line="/queue $line"
 
     # Submit once; confirmation polling never retypes the notification.
     deadline=$((SECONDS + TMUX_CONFIRM_SECONDS))
@@ -603,6 +616,7 @@ ring_tmux() {
             "reachability changed before the wake reached $recipient: identity=$target"
         return
     fi
+    [[ "$runtime" != openclaw ]] || wait_openclaw_idle "$target"
     # A stale, unsubmitted composer line must never hitch a ride on the
     # doorbell's Enter.  C-u carries no instruction content; it only clears
     # the current input before the neutral cue is typed.
@@ -614,7 +628,9 @@ ring_tmux() {
         return
     fi
     sleep "$TMUX_SETTLE_SECONDS"
-    if ! tmux send-keys -t "$target" Enter 2>/dev/null; then
+    local submit=Enter
+    [[ "$runtime" != hermes && "$runtime" != openclaw ]] || submit=C-m
+    if ! tmux send-keys -t "$target" "$submit" 2>/dev/null; then
         flock -u "$lock_fd"; exec {lock_fd}>&-
         emit "$root" "$recipient" "$sender" "$message_id" failed \
             "tmux rejected the wake submission for $recipient"

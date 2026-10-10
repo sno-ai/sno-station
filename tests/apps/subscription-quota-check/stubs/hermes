@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+printf 'hermes %s\n' "$*" >>"$STUB_COMMAND_LOG"
+[[ "${STUB_HERMES_FAIL:-0}" == 0 ]] || { printf 'Hermes login expired\n' >&2; exit 1; }
+if [[ "$1" == usage && "${STUB_HERMES_REFUSAL:-0}" == 1 ]]; then
+  printf 'ActionRequiredError: Named models unavailable on this plan\n' >&2; exit 1
+fi
+if [[ "$1" == usage && "${STUB_SINGLE_USAGE:-0}" == 1 ]]; then
+  marker="$STUB_COMMAND_LOG.hermes-${3}"
+  [[ ! -f "$marker" ]] || { printf 'Usage endpoint rate limited: duplicate read\n' >&2; exit 1; }
+  touch "$marker"
+fi
+case "$*" in
+  'usage --provider openai-codex --json'|'usage --provider openai --json') cat "$STUB_FIXTURES/hermes-usage-openai-codex.json" ;;
+  'usage --provider anthropic --json') cat "${STUB_HERMES_ANTHROPIC:-$STUB_FIXTURES/hermes-usage-anthropic.json}" ;;
+  usage*)
+    if [[ "${STUB_HERMES_LOCAL_STDERR:-0}" == 1 ]]; then
+      cat "${STUB_HERMES_LOCAL_ERROR:-$STUB_FIXTURES/hermes-usage-local.txt}" >&2
+    else
+      cat "${STUB_HERMES_LOCAL_ERROR:-$STUB_FIXTURES/hermes-usage-local.txt}"
+    fi
+    exit 1 ;;
+  'fallback list') cat "${STUB_HERMES_MODELS:-$STUB_FIXTURES/hermes-fallback-list.txt}" ;;
+  'sessions list --workspace reach-test --limit 30') cat "$STUB_FIXTURES/hermes-sessions-list.txt" ;;
+  'sessions export - --format jsonl --session-id 20261009_071006_873a0a') cat "$STUB_HERMES_EXPORT" ;;
+  *) printf 'Unexpected Hermes command: %s\n' "$*" >&2; exit 2 ;;
+esac
