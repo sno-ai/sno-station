@@ -11,4 +11,8 @@ if ! bash "$HERE/probe.t"; then
   printf 'FAIL probe.t\n' >&2
   exit 1
 fi
-printf '1..1\nsubscription-quota-check selftest: ALL PASS (1 stage(s))\n'
+if ! bash "$HERE/agents.t"; then
+  printf 'FAIL agents.t\n' >&2
+  exit 1
+fi
+printf '1..2\nsubscription-quota-check selftest: ALL PASS (2 stage(s))\n'

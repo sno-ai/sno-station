@@ -284,7 +284,7 @@ export const payloadSchemas: Record<EventType, z.ZodType<unknown>> = {
 			recoverable: z.boolean(),
 			component: z.enum([
 				"cli-setup", "cli-update", "cli-remove", "cli-doctor", "cli-rem", "cli-claim",
-				"mem-claude", "mem-codex", "mem-claw", "mem-hermes", "reach", "handoff", "review", "rsi",
+				"mem-claude", "mem-codex", "mem-claw", "mem-hermes", "mem-cursor", "reach", "handoff", "review", "rsi",
 			]),
 			context: z.string().min(1).max(64),
 		})
