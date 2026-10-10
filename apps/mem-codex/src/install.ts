@@ -138,13 +138,20 @@ export async function uninstallCodex(options: { codexHome: string; writeOutput: 
 	const hooks = await readHooks(hooksPath);
 	const before = JSON.stringify(hooks);
 	const ownedTrustKeys: string[] = [];
+	// A user hook after a removed Sno hook in the same group moves down; its trust entry moves with it.
+	const moved: Array<[string, string]> = [];
 	for (const event of Object.keys(CODING_SKIN_HOOKS) as CodingSkinHookName[]) {
 		const groups = hooks.hooks[event];
 		if (!groups) continue;
 		for (const [groupIndex, group] of groups.entries()) {
+			let removed = 0;
 			group.hooks = group.hooks.filter((current, hookIndex) => {
-				if (!isOwnedHookCommand(current.command, CODING_SKIN_HOOKS[event].subcommand)) return true;
+				if (!isOwnedHookCommand(current.command, CODING_SKIN_HOOKS[event].subcommand)) {
+					if (removed) moved.push([trustKey(hooksPath, event, groupIndex, hookIndex), trustKey(hooksPath, event, groupIndex, hookIndex - removed)]);
+					return true;
+				}
 				ownedTrustKeys.push(trustKey(hooksPath, event, groupIndex, hookIndex));
+				removed += 1;
 				return false;
 			});
 		}
@@ -157,7 +164,10 @@ export async function uninstallCodex(options: { codexHome: string; writeOutput: 
 		throw error;
 	});
 	if (config !== undefined) {
-		const stripped = stripTrustSections(config, ownedTrustKeys);
+		// Moves only go down and run in increasing order, so a renamed entry is never renamed again.
+		const stripped = moved.reduce((text, [from, to]) =>
+			text.replace(`[hooks.state.${JSON.stringify(from)}]`, `[hooks.state.${JSON.stringify(to)}]`),
+		stripTrustSections(config, ownedTrustKeys));
 		if (stripped !== config.trimEnd()) await writeFile(configPath, stripped ? `${stripped}\n` : "", { mode: 0o600 });
 	}
 	await rm(join(options.codexHome, "rules", "sno-mem-codex.rules"), { force: true });
