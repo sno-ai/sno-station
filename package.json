@@ -38,7 +38,7 @@
   },
   "type": "module",
 	"overrides": {
-    "@modelcontextprotocol/sdk": "1.31.0",
+    "openclaw": { "@modelcontextprotocol/sdk": "1.31.0" },
 		"@esbuild-kit/core-utils": {
 			"esbuild": "0.25.12"
 		},
