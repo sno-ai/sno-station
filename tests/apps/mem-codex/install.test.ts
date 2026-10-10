@@ -298,6 +298,32 @@ describe("sno-mem-codex install", () => {
 		await expect(readFile(join(codexHome, "skills", "sno-mem-codex", "SKILL.md"))).rejects.toThrow();
 	});
 
+	it("uninstall moves the trust entry of a user hook that shifts inside a Sno group, so Codex still trusts it", async () => {
+		// Removing the Sno hook shifts a later hook of the same group down one index; its trust entry kept the old index,
+		// so Codex stopped running the user's own hook until it was approved again.
+		const codexHome = await temporaryHome();
+		const hooksPath = join(codexHome, "hooks.json");
+		const configPath = join(codexHome, "config.toml");
+		await installCodex({ codexHome, programPath: "/opt/sno/bin/sno", writeOutput: () => undefined });
+		const seeded = JSON.parse(await readFile(hooksPath, "utf8"));
+		seeded.hooks.Stop[0].hooks.push({ type: "command", command: "/usr/local/bin/notify", timeout: 2 });
+		await writeFile(hooksPath, `${JSON.stringify(seeded, null, 2)}\n`);
+		const oldKey = `[hooks.state.${JSON.stringify(`${hooksPath}:stop:0:1`)}]`;
+		await writeFile(configPath, `${await readFile(configPath, "utf8")}\n${oldKey}\nenabled = true\ntrusted_hash = "user-hook"\n`);
+
+		const cli = spawnSync(process.execPath, ["--import", "tsx", "apps/mem-codex/src/cli.ts", "uninstall", "--codex-home", codexHome],
+			{ encoding: "utf8", timeout: 10_000 });
+
+		expect(cli.status, cli.stderr).toBe(0);
+		const remaining = JSON.parse(await readFile(hooksPath, "utf8"));
+		expect(remaining.hooks.Stop[0].hooks).toEqual([{ type: "command", command: "/usr/local/bin/notify", timeout: 2 }]);
+		const config = await readFile(configPath, "utf8");
+		expect(config.match(/^\[hooks\.state\..+\]$/gm)).toEqual([`[hooks.state.${JSON.stringify(`${hooksPath}:stop:0:0`)}]`]);
+		expect(config).toContain('trusted_hash = "user-hook"');
+		const parsed = spawnSync("python3", ["-c", "import sys, tomllib; tomllib.loads(sys.stdin.read())"], { encoding: "utf8", input: config });
+		expect(parsed.status, parsed.stderr).toBe(0);
+	});
+
 	it("uninstall with nothing installed exits 0 and creates no file", async () => {
 		const codexHome = await temporaryHome();
 		const cli = spawnSync(process.execPath, ["--import", "tsx", "apps/mem-codex/src/cli.ts", "uninstall", "--codex-home", codexHome],
