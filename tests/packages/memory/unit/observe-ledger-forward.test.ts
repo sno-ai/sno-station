@@ -212,6 +212,11 @@ describe("PluginObservability.emitError", () => {
 			recoverable: false,
 		});
 	});
+
+	it("names mem-cursor as the component of an error from the Cursor skin", async () => {
+		await observability("cursor").emitError("memory.write:throw", new Error("disk full"));
+		expect(envelopes().filter((row) => row.event_type === "error").map((row) => row.payload.component)).toEqual(["mem-cursor"]);
+	});
 });
 
 describe("forwardObserveLedger", () => {
@@ -313,6 +318,25 @@ describe("forwardObserveLedger", () => {
 			["session.activity", "codex", "codex"],
 			["skill.run", "claude-code", "claude-code"],
 		]);
+	});
+
+	it("uploads a Cursor session.activity row under cursor, not under the forwarder", async () => {
+		// The row exactly as apps/mem-cursor writes it at a Cursor stop hook.
+		const cursorRow = {
+			agent_id: "cursor",
+			ts_ms: T0 + 1000,
+			project_id: "billing-service",
+			event_type: "session.activity",
+			lane: "memory",
+			payload: {
+				harness: "cursor", window_start_ms: T0, window_end_ms: T0 + 1000, active_ms: 1000,
+				team_driven_ms: 0, runs_over_12h: 0, longest_run_ms: 1000, human_messages: 1,
+			},
+		};
+		writeLedger([`${JSON.stringify(cursorRow)}\n`]);
+		const result = await ledger.forwardObserveLedger({ profileDir: root, observe: observability() });
+		expect(result).toMatchObject({ status: "forwarded", forwarded: 1 });
+		expect(ledgerAgents()).toEqual([["session.activity", "cursor", "cursor"]]);
 	});
 
 	it("two forwards started in the same tick upload 50 then 10 rows with no duplicate", async () => {

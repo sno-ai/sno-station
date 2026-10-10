@@ -40,9 +40,22 @@ export const CODING_SKIN_HOOKS = {
 
 export type CodingSkinHookName = keyof typeof CODING_SKIN_HOOKS;
 
+/** Cursor's hook events (`hooks.json` names); timeouts match the Claude/Codex event each one stands in for. */
+export const CODING_SKIN_CURSOR_HOOKS = {
+	sessionStart: { subcommand: "session-start", timeout: 15 },
+	beforeSubmitPrompt: { subcommand: "user-prompt-submit", timeout: 8 },
+	afterAgentResponse: { subcommand: "after-agent-response", timeout: 5 },
+	afterAgentThought: { subcommand: "after-agent-thought", timeout: 5 },
+	stop: { subcommand: "stop", timeout: 5 },
+	preCompact: { subcommand: "pre-compact", timeout: 5 },
+	sessionEnd: { subcommand: "session-end", timeout: 8 },
+} as const;
+
+export type CodingSkinCursorHookName = keyof typeof CODING_SKIN_CURSOR_HOOKS;
+
 export const CODING_SKIN_MODEL_COMMANDS = ["recall", "get", "remember", "correct"] as const;
 
-export type CodingSkinHarness = "claude" | "codex";
+export type CodingSkinHarness = "claude" | "codex" | "cursor";
 
 export function shellQuote(value: string): string {
 	return `'${value.replaceAll("'", "'\\''")}'`;

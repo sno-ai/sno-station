@@ -11,7 +11,7 @@
   ],
   "packageManager": "npm@11.9.0",
   "scripts": {
-    "build": "npm run build --workspace @snoai/common-core && npm run build --workspace @snoai/utils && npm run build --workspace @snoai/embedder && npm run build --workspace @snoai/observability && npm run build --workspace @snoai/sqlite-crypto && npm run build --workspace @snoai/memory && npm run build --workspace @snoai/mem-claw && npm run build --workspace @snoai/mem-claude && npm run build --workspace @snoai/mem-codex",
+    "build": "npm run build --workspace @snoai/common-core && npm run build --workspace @snoai/utils && npm run build --workspace @snoai/embedder && npm run build --workspace @snoai/observability && npm run build --workspace @snoai/sqlite-crypto && npm run build --workspace @snoai/memory && npm run build --workspace @snoai/mem-claw && npm run build --workspace @snoai/mem-claude && npm run build --workspace @snoai/mem-codex && npm run build --workspace @snoai/mem-cursor",
     "dev": "npm run dev --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "lint": "npm run lint --workspaces --if-present",

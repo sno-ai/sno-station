@@ -732,6 +732,11 @@ line. Get keeps its entry shape. Both explicit paths append `retired; superseded
 retired text without changing the stored text, even when that successor no longer exists.
 Manual recall includes an invalidated row only when it has a successor; unrelated invalidated
 rows remain excluded. Automatic recall excludes closed rows before ranking and limit.
+Automatic recall reads only the current project; shared global memory remains available through
+explicit manual recall and get, not through any automatic injection phase.
+Per-message automatic injection also excludes candidates with raw query-vector similarity below
+0.5; this is independent of the age-decayed ranking score and does not apply to session-start
+briefs or manual recall. The prompt part of first-prompt injection uses the same similarity rule.
 
 Scope requires nonblank `principal`, `project`, `session`. `host.observeSessionUuid`, if supplied, must be a UUID. Host `at` is nonnegative epoch milliseconds. Other host strings may be empty.
 
