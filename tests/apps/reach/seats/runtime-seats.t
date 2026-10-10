@@ -115,7 +115,8 @@ for kind in (['hermes'] if sys.argv[2:]==['selection'] else ['openclaw'] if sys.
         acpx=commands/'acpx';acpx.symlink_to(app.parent.parent/'tests/apps/reach/seats/fake_acpx.py')
         env['ACP_FIXTURE']=str(root)
         flags=[]
-    r=ok('spawn',kind,'--as',seat,'--cwd',str(root),*flags,'--model','chosen/model','--provider','chosen-provider')
+    model,provider=('claude-sonnet-5','anthropic') if kind=='openclaw' else ('chosen/model','chosen-provider')
+    r=ok('spawn',kind,'--as',seat,'--cwd',str(root),*flags,'--model',model,'--provider',provider)
     assert json.loads((root/'state'/seat/'reachable.json').read_text())['channel']=='tmux'
     wait_file(root/'launches.jsonl')
     end=time.monotonic()+3
@@ -139,7 +140,10 @@ for kind in (['hermes'] if sys.argv[2:]==['selection'] else ['openclaw'] if sys.
         assert metadata['runtime']=='openclaw' and metadata['session_key']==launch[2][2]
         wait_file(root/(seat+'.input'))
         lines=(root/(seat+'.input')).read_text().splitlines()
-        assert lines[0]=='/model chosen/model',lines
+        assert lines[0]=='/model anthropic/claude-sonnet-5',lines
+        pane=json.loads((root/'state'/seat/'reachable.json').read_text())['identity']['value']
+        keys=[json.loads(s) for s in (root/'keys.jsonl').read_text().splitlines()]
+        assert ['send-keys','-t',pane,'-l','--','/model anthropic/claude-sonnet-5'] in keys,keys
         assert lines[1].endswith('Then do this: '+context),lines
     assert json.loads((root/'state'/seat/'seat.json').read_text())['runtime']==kind
     print('PASS launch:',kind,flush=True)
@@ -154,6 +158,23 @@ if sys.argv[2:]==['openclaw']:
     assert key.startswith('agent:research:reach-'),key
     assert json.loads((root/'state'/seat/'transcript.json').read_text())['session_key']==key
     print('PASS non-main default agent key persists from TUI launch through transcript export',flush=True)
+    for name,flags in [('model',['--model','claude-sonnet-5']),('provider',['--provider','anthropic'])]:
+        seat='executor.openclaw-'+name+'@'+host
+        ok('init','--as',seat,'--name','Selection')
+        r=run('spawn','openclaw','--as',seat,'--cwd',str(root),*flags)
+        if name=='model':
+            assert r.returncode==0,(r.stdout,r.stderr)
+            wait_file(root/(seat+'.input'))
+            assert (root/(seat+'.input')).read_text().splitlines()[0]=='/model claude-sonnet-5'
+            pane=json.loads((root/'state'/seat/'reachable.json').read_text())['identity']['value']
+            keys=[json.loads(s) for s in (root/'keys.jsonl').read_text().splitlines()]
+            assert ['send-keys','-t',pane,'-l','--','/model claude-sonnet-5'] in keys,keys
+        else:
+            assert r.returncode==64 and r.stdout=='',(r.stdout,r.stderr)
+            assert r.stderr=='reach: OpenClaw --provider requires --model; no seat created\n',r.stderr
+            assert not (root/'state'/seat/'reachable.json').exists()
+            assert not any(json.loads(s)[0]==seat for s in (root/'launches.jsonl').read_text().splitlines())
+        print('PASS OpenClaw selection:',name,flush=True)
     for name,agents,agent_id in [
         ('sole',[{'id':'solo','isDefault':False}],'solo'),
         ('unmarked',[{'id':'solo'}],'solo'),

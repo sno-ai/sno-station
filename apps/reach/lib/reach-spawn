@@ -13,6 +13,9 @@ cwd="${3:?cwd required}"
 window="${4:?window selection required}"
 adapter="${5-}"
 model="${6-}" provider="${7-}"
+if [[ "$kind" == openclaw && -n "$provider" && -z "$model" ]]; then
+    printf 'reach: OpenClaw --provider requires --model; no seat created\n' >&2; exit 64;
+fi
 # shellcheck source=reach-tmux.sh
 source "$release/lib/reach-tmux.sh"
 root="${SNO_REACH_ROOT:-$HOME/.local/state/sno-reach}"
@@ -128,6 +131,7 @@ mv -- "$temporary" "$root/$address/seat.json"
 if [[ "$kind" == openclaw && "$channel" == tmux ]]; then
     wait_openclaw_idle "$handle"
     if [[ -n "$model" ]]; then
+        [[ -z "$provider" ]] || model="$provider/$model"
         "$release/lib/reach-call" --terminal "$address" --text "/model $model" --raw >/dev/null
         wait_openclaw_idle "$handle"
     fi
