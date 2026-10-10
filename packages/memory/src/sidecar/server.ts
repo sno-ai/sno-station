@@ -6,7 +6,7 @@ import { getSidecarSocketPath, SettingsUnavailableError } from "../contract/prof
  */
 
 import { randomBytes, randomUUID } from "node:crypto";
-import { existsSync, readFileSync, rmSync } from "node:fs";
+import { constants, existsSync, readFileSync, rmSync } from "node:fs";
 import { mkdir, open, readFile, rename, rm } from "node:fs/promises";
 import {
 	createServer,
@@ -17,7 +17,7 @@ import {
 import path from "node:path";
 import { createConnection, createServer as createSocketServer, type Server as SocketServer } from "node:net";
 import { setImmediate as yieldTurn } from "node:timers/promises";
-import locking from "fs-ext";
+import { tryLock } from "fs-native-extensions";
 import { readDiscovery } from "../contract/discovery";
 import { createLogger, effectiveLogLevel, emitDiagnostic } from "@snoai/utils/logger";
 import { withLogContext } from "@snoai/utils/log-context";
@@ -122,16 +122,10 @@ async function socketIsLive(socketPath: string): Promise<boolean> {
 async function bindSidecarSocket(): Promise<SocketServer> {
 	const socketPath = getSidecarSocketPath();
 	await mkdir(path.dirname(socketPath), { recursive: true, mode: 0o700 });
-	const directory = await open(path.dirname(socketPath), "r");
-	// Serialize probe/unlink/bind on the existing directory, never on a replaceable pid file.
+	// Serialize probe/unlink/bind on a lock file that is never removed, never on a replaceable pid file.
+	const lock = await open(`${socketPath}.lock`, constants.O_RDWR | constants.O_CREAT | constants.O_NOFOLLOW, 0o600);
 	try {
-		for (;;) {
-			try { locking.flockSync(directory.fd, "exnb"); break; }
-			catch (error) {
-				if (!(error instanceof Error && "code" in error && error.code === "EAGAIN")) throw error;
-				await yieldTurn();
-			}
-		}
+		while (!tryLock(lock.fd)) await yieldTurn();
 		const guard = createSocketServer(socket => socket.destroy());
 		for (;;) {
 			try {
@@ -153,7 +147,7 @@ async function bindSidecarSocket(): Promise<SocketServer> {
 				await rm(socketPath, { force: true });
 			}
 		}
-	} finally { await directory.close(); }
+	} finally { await lock.close(); }
 }
 
 export async function startRemSidecar(): Promise<RunningRemSidecar> {
