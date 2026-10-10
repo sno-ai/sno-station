@@ -13,8 +13,7 @@ Requirements:
 Complete the [shared memory setup](../memory-setup.md), then install the Claude Code integration:
 
 ```bash
-sh -c 'sno_installer_body=$(curl -fsSL https://sno.ai/install) && printf "%s\n" "$sno_installer_body" | sh'
-sno setup --harness claude
+sh -c 'sno_installer_body=$(curl -fsSL https://sno.ai/install) && printf "%s\n" "$sno_installer_body" | sh' && ~/.local/bin/sno setup --harness claude
 ```
 
 The shared setup writes `<profile root>/settings.json`; the install command configures Claude Code.

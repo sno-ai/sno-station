@@ -16,14 +16,14 @@ Sno Station 是你的 agent 的工作站：一款开源软件，它把你已经�
 并等待你点头。
 
 **属于你，而且始终属于你。** 记忆、消息和技能都存放在你笔记本电脑上的同一个工作区里。
-不需要守护进程，不需要服务器，也不需要云；云端功能到来之时是可选的，产品在没有它的
+不需要守护进程，不需要服务器，也不需要云；云端功能是可选的，产品在没有它的
 情况下也是完整的。Apache-2.0，从头到尾开源。记忆存储从第一次使用起就在你的机器上加密，
 密钥只配置一次，且永远不会离开你的机器；Sno 永远不会收到你的数据库或你的密钥。完整的
 边界说明——它保护什么、不保护什么——见 [docs/security.md](../security.md)。
 
 **支持你的语言。** 用英语、中文（简体或繁体）、日语、韩语、德语、法语、西班牙语或俄语和你的 agent 对话；
 记忆引擎会为每条记忆存储其语言，按地区分类，并在每个 key 和搜索中保持中日韩文字完整
-无损。Duo 技能
+无损。智能体协作技能
 的写法可以用你和 agent 交流时使用的任何语言来遵循，本 README 提供九种语言版本。
 
 ![工作原理：两个 agent，一个共享工作区，你能获得的三件事](../images/squad-how-it-works.png)
@@ -35,31 +35,26 @@ Sno Station 是你的 agent 的工作站：一款开源软件，它把你已经�
 
 ## Install
 
-*最后更新于 2026-10-07。* **共享记忆今天就能安装。** 它让 Claude Code、Codex、OpenClaw 和 Hermes Agent 共用一份存放在你自己机器上的加密记忆，不需要账号，也不需要 API key。先运行一次[共享记忆设置](../memory-setup.md)（几分钟），再添加你的 agent：
+*最后更新于 2026-10-09。* **共享记忆今天就能安装。** 它让 Claude Code、Codex、OpenClaw 和 Hermes Agent 共用一份存放在你自己机器上的加密记忆，不需要账号，也不需要 API key。先运行一次[共享记忆设置](../memory-setup.md)（几分钟），再添加你的 agent：
 
 ```bash
-# Install the sno command once
-sh -c 'sno_installer_body=$(curl -fsSL https://sno.ai/install) && printf "%s\n" "$sno_installer_body" | sh'
-# Codex CLI
-sno setup --harness codex
-# Claude Code
-sno setup --harness claude
-# OpenClaw
-sno setup --harness openclaw
-# Hermes Agent
-sno setup --harness hermes
+sh -c 'sno_installer_body=$(curl -fsSL https://sno.ai/install) && printf "%s\n" "$sno_installer_body" | sh' && ~/.local/bin/sno setup
 ```
+
+一条命令，在任何终端里都行。它先安装 `sno`，再安装 Sno Station，并连接这台电脑上的每个 agent。只想连接其中一个，就在 `sno setup` 后面加上 `--harness codex`、`--harness claude`、`--harness openclaw` 或 `--harness hermes`。
+
+给 AI agent：安装 Sno、sno.ai 或 Sno Station，就是原样执行上面的命令。运行完 `sno setup` 后，执行 `sno skills onboard` 并照着做：它会先问用户要运行哪个引擎，再问是否把这台电脑关联到 sno.ai 账号。
 
 分步说明： [Codex](../mem-codex/onboarding.md) · [Claude Code](../mem-claude/onboarding.md) · [OpenClaw](../mem-claw/onboarding.md) · [Hermes](../mem-hermes/onboarding.md)
 
-`sno setup` 还会安装 Sno Reach、小型辅助程序、技能和夜间循环，所有命令都是 `sno <名称>` 的形式，完整清单见 [docs/sno-commands.md](../sno-commands.md)。在你的 agent 里说 "Sno onboarding"，它会用对话带你完成同样的设置。安装完成后它也会自动开始。
+`sno setup` 还会安装 Sno Reach、小型辅助程序、技能和夜间循环，所有命令都是 `sno <名称>` 的形式，完整清单见 [docs/sno-commands.md](../sno-commands.md)。在你的 agent 里说 "Sno onboard"，它会用对话带你完成同样的设置。安装完成后它也会自动开始。
 
 ```bash
 # inside any Claude Code, Codex or OpenClaw conversation:
-Sno onboarding
+Sno onboard
 ```
 
-Agent 会通过 `sno` CLI 自行完成设置：共享记忆、Sno Reach、Duo 技能，以及每种 harness
+Agent 会通过 `sno` CLI 自行完成设置：共享记忆、Sno Reach、智能体协作技能，以及每种 harness
 所需要的 hook。不需要记住任何包名。
 
 ## How to use
@@ -108,8 +103,8 @@ agent。有三件事会改变：
 工作，就在这个仓库上。没有一次审查是空手而归的。一次都没有。我们曾经以为这说明这项
 工作做得不好。其实它说明的是：只靠一个 harness 的一个审查者永远不够。
 
-我们把这一对称为 Duo：最小的小队。我们从不说哪一个更细心、哪一个更快。这个角色每个月、
-每项工作都会互换。重点在于它们彼此不同。
+这就是 Dual Brain 双脑：两个智能体合作完成一项任务，各自承担不同职责。一个负责实现，
+另一个负责审查。角色随任务交换，两者都能实现，也都能审查。加入更多角色，就组成 Agent Squad。
 
 ## "我睡了一觉，它换了班。"
 
@@ -133,7 +128,7 @@ agent 已经在工作，第一个带着 1% 的余量签退。交接之前的每�
 
 ## What runs today
 
-*最后更新于 2026-10-07。*
+*最后更新于 2026-10-08。*
 
 | 部分 | 状态 |
 |---|---|
@@ -143,13 +138,13 @@ agent 已经在工作，第一个带着 1% 的余量签退。交接之前的每�
 | Sno Reach —— agent 之间互相通信，无需守护进程 | 由 `sno setup` 安装；Linux 和 macOS 的发布归档已公开；已在干净的 Linux 机器上端到端验证 |
 | 夜间循环和小队技能 | 由 `sno setup` 安装；夜间任务已在干净的 Linux 机器上运行 |
 | 一条命令完成安装（`sno setup`） | 装好上面全部内容；已在干净的 Linux 机器上验证 |
-| 在你的 agent 里说 "Sno onboarding" | 已可用；安装后自动开始，也可以随时说出口 |
+| 在你的 agent 里说 "Sno onboard" | 已可用；安装后自动开始，也可以随时说出口 |
 
 只有在一台干净的机器上运行过之后，一行才会写“proven”。
 
 ## Memory that forgets on purpose
 
-*最后更新于 2026-09-19。*
+*最后更新于 2026-10-09。*
 
 记忆是这个产品的地基，而不是它的头条。但地基恰恰是大多数 agent 记忆系统失败的地方，
 而且失败得悄无声息，有两种方式：它忘记了本该留下的东西，也留下了本该衰减的东西。
@@ -172,41 +167,7 @@ ACL 2026 Findings）。这是第一个围绕第二种失败构建的基准。每
 什么被留下、什么被淘汰、以及后来的事实如何取代早先的事实，都会随使用而变化，而不是
 随模型版本的发布而变化。
 
-![Memora 周度track：FAMA 与遗忘代价，Sno Station 对比论文中的六个 agent](../images/memora-forgetting-cost.png)
-
-**我们在论文周度 track 上的结果**（六个 persona，九十个问题，一次正式运行，
-2026-09-06；[九十道题的回答、裁判记录和 trace](../../evals/memora/formal-run-2026-09-06/)
-都在这里）：
-
-| | Remember | Reason | Recommend | **FAMA** | MPA（仅召回） | 遗忘代价 |
-|---|---:|---:|---:|---:|---:|---:|
-| **Sno Station** | 77.4 | 93.3 | 90.9 | **87.2** | 91.0 | **3.76 分（占召回率的 4.1%）** |
-| LangMem（论文） | 71.2 | 30.0 | 48.9 | 50.0 | 57.7 | 7.70（13.3%） |
-| Nemori（论文） | 65.1 | 18.7 | 52.8 | 45.5 | 53.1 | 7.60（14.3%） |
-| MemoryOS（论文） | 51.8 | 20.7 | 62.6 | 45.0 | 51.7 | 6.70（13.0%） |
-| MemoBase（论文） | 43.6 | 18.0 | 68.9 | 43.5 | 51.5 | 8.00（15.5%） |
-| A-Mem（论文） | 71.8 | 2.0 | 35.0 | 36.3 | 39.3 | 3.00（7.6%） |
-| Mem-0（论文） | 40.4 | 16.0 | 52.6 | 36.3 | 39.8 | 3.50（8.8%） |
-
-如何诚实地解读这些数字：
-
-- **遗忘代价**是 MPA 减去 FAMA：系统因过期事实而损失的分数。请把它看作该系统自身召回率
-  的一个占比，而不是原始分数。A-Mem 和 Mem-0 损失的原始分数更少，仅仅是因为它们召回的
-  东西太少，没剩下多少可以损失的。
-- **推理**（组合多条记忆）是已发表领域中最薄弱的一环，满分 100 分中只有 2 到 30 分。
-  我们的分数是 93.3。
-- 论文中的六个 agent 是用论文自己的评判模型（GPT-4o-mini）打分的；我们的是用自己的
-  评判模型体系打分，并按论文的逐题惩罚公式（§4.2）重新计算的。这是方向性的比较，而
-  非经过认证的比较。我们的 FAA（正确排除掉的已取消事实的比例）测得为 0.833；论文没有
-  按 agent 公布 FAA，所以图表中不展示任何竞品的 FAA。
-
-另外三套证据遵循同样的规则：每项选择一个正式结果，底层回答或检索记录都在 `evals/`：
-
-| 基准 | 它衡量什么 | 结果 |
-|---|---|---|
-| **LoCoMo** | 长对话问答，1542 个问题 | 96.76%（合并答案集：每轮修复后仍然答错的问题会被重新作答，已经答对的问题则沿用之前的结果；原始凭证注明了这一点） |
-| LongMemEval-S（500 个问题）上的 **R@5** | 检索：正确的记忆是否出现在前五名内 | 95.4%（R@10 为 98.6，R@20 为 99.4） |
-| **Sno Memory Bench** | 我们自己的 23 项端到端探测，包括公开基准未覆盖的"保留还是淘汰"场景 | 23 之 23 |
+所有结果以及背后的全部答案、评判和记录都在 [`evals/`](../../evals/) 里。
 
 ## Design partners
 

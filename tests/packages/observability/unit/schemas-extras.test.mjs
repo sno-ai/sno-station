@@ -70,7 +70,13 @@ describe("schemas — extras", () => {
 	});
 
 	it("AGENT_IDS is the strict closed enum from the API contract §2.1", () => {
-		assert.deepEqual([...AGENT_IDS].sort(), ["claude-code", "codex", "hermes", "openclaw"].sort());
+		assert.deepEqual([...AGENT_IDS].sort(), ["claude-code", "codex", "cursor", "hermes", "openclaw"].sort());
+		assert.equal(parseEventInput({
+			event_type: "session.start",
+			lane: "memory",
+			agent_id: "cursor",
+			payload: { session_uuid: "018f7d0c-fd8b-7ccf-9b9b-0a2ea938ad0d" },
+		}).agentId, "cursor");
 	});
 
 	it("prompt.submit rejects raw prompt_text at every consent level", () => {

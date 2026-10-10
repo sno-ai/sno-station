@@ -1,10 +1,12 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { createHash } from "node:crypto";
+import { connect } from "node:net";
 import { z } from "zod";
 import { ContractError, type DegradedReason } from "../contract/error";
 import type { Registration } from "../contract/inputs";
 import type { AgentLlmCompletion, AgentLlmPort, AgentLlmRequest } from "./agent-llm-port";
 import { classifyLlmFailure, isTerminalLlmFailure } from "./llm-failure";
+import { HOST_MODEL_DEADLINE_HEADER } from "../../config/skin-defaults";
 import { createLogger } from "@snoai/utils/logger";
 
 const CALLBACK_TIMEOUT_MS = 120_000;
@@ -39,6 +41,20 @@ export class RegisteredAgentPort implements AgentLlmPort {
 		});
 	}
 
+	async reachable(): Promise<boolean> {
+		if (!this.model) return false;
+		const url = new URL(this.model.baseUrl);
+		const listening = await new Promise<boolean>(resolve => {
+			const socket = connect({ host: url.hostname, port: Number(url.port || (url.protocol === "https:" ? 443 : 80)) });
+			const done = (open: boolean) => { socket.destroy(); resolve(open); };
+			socket.setTimeout(2_000, () => done(false));
+			socket.once("connect", () => done(true));
+			socket.once("error", () => done(false));
+		});
+		if (!listening) this.onRefused?.();
+		return listening;
+	}
+
 	async complete(request: AgentLlmRequest): Promise<AgentLlmCompletion> {
 		const identity = createHash("sha256").update(request.system ?? "").update("\0").update(request.prompt).digest("hex");
 		const failures = this.failures.getStore();
@@ -47,14 +63,16 @@ export class RegisteredAgentPort implements AgentLlmPort {
 			failures?.set(identity, "no-agent-endpoint");
 			return { kind: "error", category: "transport", message: "no-agent-endpoint" };
 		}
-		const deadline = AbortSignal.timeout(request.timeoutMs ?? CALLBACK_TIMEOUT_MS);
+		const timeoutMs = request.timeoutMs ?? CALLBACK_TIMEOUT_MS;
+		const deadline = AbortSignal.timeout(timeoutMs);
 		const signal = request.signal ? AbortSignal.any([request.signal, deadline]) : deadline;
 		let fetchCompleted = false;
 		try {
 			const url = this.model.baseUrl.endsWith("/chat/completions") ? this.model.baseUrl : `${this.model.baseUrl.replace(/\/$/, "")}/chat/completions`;
 			const response = await fetch(url, {
 				method: "POST", signal,
-				headers: { "content-type": "application/json", Authorization: `Bearer ${this.model.credential}` },
+				headers: { "content-type": "application/json", Authorization: `Bearer ${this.model.credential}`,
+					[HOST_MODEL_DEADLINE_HEADER]: String(Date.now() + timeoutMs) },
 				body: JSON.stringify({ model: this.model.model, stream: false,
 					messages: [...(request.system ? [{ role: "system", content: request.system }] : []), { role: "user", content: request.prompt }],
 					...(request.maxTokens === undefined ? {} : { max_tokens: request.maxTokens }),
@@ -108,4 +126,30 @@ function completionText(body: unknown): string | undefined {
 	if (!first || typeof first !== "object" || !("message" in first)) return undefined;
 	const message = first.message;
 	return message && typeof message === "object" && "content" in message && typeof message.content === "string" ? message.content : undefined;
+}
+
+/** Hosts in the order to ask them, newest first; `connected` turns false once a host is known to have gone. */
+type HostEntry = { agentPort: RegisteredAgentPort; connected: boolean };
+
+/** Asks the newest host first; a host that has gone, or answers with an error such as worker-not-ready, hands the
+ * call to the next. */
+export function hostChain(hosts: () => HostEntry[]): AgentLlmPort {
+	return {
+		complete: async request => {
+			// One deadline for the whole call: a later host gets only the time the earlier ones left.
+			const deadline = Date.now() + (request.timeoutMs ?? CALLBACK_TIMEOUT_MS);
+			let result: AgentLlmCompletion = { kind: "error", category: "transport", message: "no-agent-endpoint" };
+			for (const entry of hosts()) {
+				const timeoutMs = deadline - Date.now();
+				if (timeoutMs <= 0) return { kind: "cancelled", reason: "deadline" };
+				result = await entry.agentPort.complete({ ...request, timeoutMs });
+				if (entry.connected && result.kind !== "error") return result;
+			}
+			return result;
+		},
+		reachable: async () => {
+			for (const entry of hosts()) if (await entry.agentPort.reachable()) return true;
+			return false;
+		},
+	};
 }

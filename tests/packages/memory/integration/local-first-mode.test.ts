@@ -369,8 +369,9 @@ describe("Local First REM runs only while a host answers", () => {
 		seedDueTriggerState(await seedRemRows(TRANSITION_ROWS));
 		vi.stubEnv("SNO_STATION_MEM_MAINTENANCE_INTERVAL_MS", "500");
 		sidecar = await startRemSidecar();
-		// Opens the memory runtime, and with it the tick, through a registration without a model callback.
-		expect((await contractPost("/v1/inspect", { scope: SEED_SCOPE, op: { op: "stats" } }, "reader")).status).toBe(200);
+		// Opens the memory runtime, and with it the tick, through a registration without a model callback. A read-only
+		// stats request no longer starts background work, so it cannot stand in for one.
+		expect((await contractPost("/v1/init", { scope: { ...SEED_SCOPE, session: "reader" }, registration: { skinId: "reader" } }, "reader")).status).toBe(200);
 		await until(() => auditEvents("rem_trigger_evaluated").length > 0, 10_000);
 		await delay(1_500);
 		expect({
@@ -439,6 +440,31 @@ describe("Local First REM runs only while a host answers", () => {
 		expect({ firstJobs: firstJobs.length, jobsAfterReconnect: jobIds().length, completed: auditEvents("rem_completed").length,
 			rejudged: remAnsweredRows(host, reconnectAt).filter(text => refusedRows.includes(text)), held: heldRows() })
 			.toEqual({ firstJobs: 1, jobsAfterReconnect: 2, completed: 1, rejudged: refusedRows, held: [] });
+	});
+
+	it("stops dispatching a pass its host keeps refusing after three tries, however often hosts connect", { timeout: 240_000 }, async () => {
+		// Every hook that registers a model re-runs the due check. Before the fix each refused pass ended rem_skipped,
+		// the skip cleared the attempt, and the next registration dispatched the same pass again: on a busy machine the
+		// same daily pass ran fifty times in a day, each run re-embedding every row on every core.
+		const sno = await recorder("sno");
+		const host = await recorder("host", "exhausted");
+		pointSnoGpuAt(sno.url);
+		const scope = await seedRemRows(TRANSITION_ROWS);
+		seedDueTriggerState(scope);
+		sidecar = await startRemSidecar();
+		const settled = () => lines("rem-wave-jobs.jsonl").map(line => JSON.parse(line) as { waveId: string; state: string })
+			.reduce((latest, job) => latest.set(job.waveId, job.state), new Map<string, string>());
+		for (let connection = 0; connection < 6; connection += 1) {
+			const before = jobIds().length;
+			await registerHost("host-skin", host.url);
+			await until(() => jobIds().length > before, 5_000);
+			await until(() => [...settled().values()].every(state => state !== "running" && state !== "queued"), 60_000);
+		}
+		const state = JSON.parse(readFileSync(join(root, "sno-station-mem", "rem-trigger-state.json"), "utf8")) as {
+			scopes: Record<string, { last_volume_pass_date: string | null }> };
+		expect({ jobs: jobIds().length, skipped: [...settled().values()].filter(job => job === "skipped").length,
+			dayClosed: state.scopes[scope]?.last_volume_pass_date === new Date().toISOString().slice(0, 10), snoCalls: sno.calls })
+			.toEqual({ jobs: 3, skipped: 3, dayClosed: true, snoCalls: [] });
 	});
 
 	it("refuses a manual start with no connected registration and invents no job", { timeout: 60_000 }, async () => {

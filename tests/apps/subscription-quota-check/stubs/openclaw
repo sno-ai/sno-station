@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+printf 'openclaw %s\n' "$*" >>"$STUB_COMMAND_LOG"
+[[ "${STUB_OPENCLAW_FAIL:-0}" == 0 ]] || { printf 'OpenClaw usage read failed\n' >&2; exit 1; }
+if [[ "$*" == 'status --usage --json' && "${STUB_SINGLE_USAGE:-0}" == 1 ]]; then
+  [[ ! -f "$STUB_COMMAND_LOG.openclaw" ]] || { printf 'Usage endpoint rate limited: duplicate read\n' >&2; exit 1; }
+  touch "$STUB_COMMAND_LOG.openclaw"
+fi
+case "$*" in
+  'sessions list --json') cat "$STUB_FIXTURES/openclaw-sessions-list.json" ;;
+  'status --usage --json') cat "${STUB_OPENCLAW_USAGE:-$STUB_FIXTURES/openclaw-status-usage.json}" ;;
+  'models status --json') cat "$STUB_FIXTURES/openclaw-models-status.json" ;;
+  'models fallbacks list --json') cat "${STUB_OPENCLAW_FALLBACKS:-$STUB_FIXTURES/openclaw-models-fallbacks.json}" ;;
+  'models list --json') cat "$STUB_FIXTURES/openclaw-models-list.json" ;;
+  *) printf 'Unexpected OpenClaw command: %s\n' "$*" >&2; exit 2 ;;
+esac

@@ -382,6 +382,93 @@ class Communication(unittest.TestCase):
                     self.assertFalse((self.root / "created").exists())
                     self.no_tmux()
 
+    def fake_openclaw_agents(self, agents):
+        """A stand-in `openclaw` that answers `agents list --json` the way the real one does."""
+        listing = json.dumps([{"id": name, "isDefault": default} for name, default in agents])
+        (self.bin / "openclaw").write_text(f"#!/bin/sh\n[ \"$*\" = 'agents list --json' ] && {{ cat <<'JSON'\n{listing}\nJSON\nexit 0; }}\nexit 2\n")
+        (self.bin / "openclaw").chmod(0o755)
+
+    def prepare_openclaw_spawn(self):
+        self.prepare_spawn("absent-new")
+        (self.home / ".config/sno-reach/agents.json").write_text('{"openclaw":{"acpx_agent":"openclaw"}}')
+
+    def test_openclaw_spawn_is_refused_when_several_agents_and_none_is_default(self):
+        # OpenClaw refuses the seat's first message in this setup ("Multiple agents are configured, but session ... has no
+        # explicit owner"), so a seat that spawn reported as created could never answer.
+        self.prepare_openclaw_spawn()
+        self.fake_openclaw_agents([("alpha", False), ("beta", False)])
+        result = self.run_cli(SPAWN, "spawn", "openclaw", "--cwd", str(self.cwd), "--as", self.address)
+        self.assertNotEqual(result.returncode, 0, result.stdout)
+        self.assertIn("alpha, beta", result.stderr)
+        self.assertIn("openclaw config set agents.defaults.systemAgent.agentId", result.stderr)
+        self.assertFalse((self.root / "created").exists())
+        self.assertFalse((self.root / "acpx.calls").exists())
+        self.assertFalse(self.record.exists())
+        self.no_tmux()
+
+    def test_openclaw_spawn_goes_ahead_with_a_default_agent_or_a_single_agent(self):
+        for agents in ([("alpha", True), ("beta", False)], [("only", False)]):
+            with self.subTest(agents=agents):
+                self.prepare_openclaw_spawn()
+                self.fake_openclaw_agents(agents)
+                for leftover in ("created", "closed", "acpx.calls"):
+                    (self.root / leftover).unlink(missing_ok=True)
+                result = self.run_cli(SPAWN, "spawn", "openclaw", "--cwd", str(self.cwd), "--as", self.address)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertTrue((self.root / "created").exists())
+
+    def acpx_routes(self, adapter, global_command=None, project_command=None):
+        """Write the acpx config files: `~/.acpx/config.json` and the project's `.acpxrc.json`, which overrides it."""
+        for path, command in ((self.home / ".acpx/config.json", global_command), (self.cwd / ".acpxrc.json", project_command)):
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.unlink(missing_ok=True)
+            if command is not None:
+                path.write_text(json.dumps({"agents": {adapter: {"command": command}}}))
+
+    def spawn_openclaw(self, adapter, with_binary=True):
+        self.prepare_openclaw_spawn()
+        (self.home / ".config/sno-reach/agents.json").write_text(json.dumps({"openclaw": {"acpx_agent": adapter}}))
+        (self.bin / "openclaw").unlink(missing_ok=True)
+        if with_binary:
+            self.fake_openclaw_agents([("main", True)])
+        for leftover in ("created", "closed", "acpx.calls"):
+            (self.root / leftover).unlink(missing_ok=True)
+        return self.run_cli(SPAWN, "spawn", "openclaw", "--cwd", str(self.cwd), "--as", self.address)
+
+    def test_openclaw_spawn_is_refused_when_its_acpx_route_pins_a_conversation(self):
+        # `--session <key>` on the route makes every ACP session join that one conversation: with
+        # `--session agent:main:main` each seat would land in the main conversation and mix its context with it.
+        pinned = ("openclaw acp --session agent:main:main", "openclaw acp --session-label main", "openclaw acp --session=agent:main:main")
+        cases = [("global", "openclaw", command, None) for command in pinned]
+        cases += [("project", "openclaw", None, pinned[0]),
+                  ("project wins over a safe global", "openclaw", "openclaw acp", pinned[0]),
+                  ("another adapter name", "openclaw-acp", pinned[0], None),
+                  ("no openclaw binary on PATH", "openclaw", pinned[0], None)]
+        for name, adapter, global_command, project_command in cases:
+            with self.subTest(name=name, global_command=global_command, project_command=project_command):
+                self.acpx_routes(adapter, global_command, project_command)
+                result = self.spawn_openclaw(adapter, with_binary=name != "no openclaw binary on PATH")
+                self.assertNotEqual(result.returncode, 0, result.stdout)
+                self.assertIn("--session", result.stderr)
+                self.assertIn(adapter, result.stderr)
+                self.assertFalse((self.root / "created").exists())
+                self.assertFalse(self.record.exists())
+
+    def test_openclaw_spawn_goes_ahead_when_its_acpx_route_pins_nothing(self):
+        safe = "openclaw acp"
+        pinned = "openclaw acp --session agent:main:main"
+        cases = [("global only", "openclaw", safe, None),
+                 ("safe project replaces a pinned global", "openclaw", pinned, safe),
+                 ("pin on a different adapter", "openclaw-acp", None, None)]
+        for name, adapter, global_command, project_command in cases:
+            with self.subTest(name=name):
+                self.acpx_routes(adapter, global_command, project_command)
+                if name == "pin on a different adapter":
+                    self.acpx_routes("openclaw", pinned)
+                result = self.spawn_openclaw(adapter)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertTrue((self.root / "created").exists())
+
     def prepare_spawn(self, mode):
         self.record.unlink(missing_ok=True)
         config = self.home / ".config/sno-reach/agents.json"

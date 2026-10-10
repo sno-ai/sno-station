@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { constants } from "node:fs";
 import { chmod, mkdir, open, readFile, rename, stat, unlink, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
-import locking from "fs-ext";
+import { tryLock, unlock } from "fs-native-extensions";
 
 export async function writeJsonAtomic(path: string, value: unknown): Promise<void> {
 	await mkdir(dirname(path), { recursive: true, mode: 0o700 });
@@ -16,6 +16,15 @@ export interface PidFileLock {
 	release(): Promise<void>;
 }
 
+function alive(pid: number): boolean {
+	try {
+		process.kill(pid, 0);
+		return true;
+	} catch (error) {
+		return error instanceof Error && "code" in error && error.code === "EPERM";
+	}
+}
+
 export async function acquirePidFileLock(path: string, staleAfterMs: number): Promise<PidFileLock | undefined> {
 	await mkdir(dirname(path), { recursive: true, mode: 0o700 });
 	const reclaimPath = `${path}.reclaim`;
@@ -27,7 +36,7 @@ export async function acquirePidFileLock(path: string, staleAfterMs: number): Pr
 	let held = false;
 	const closeGuard = async (): Promise<void> => {
 		try {
-			if (held) locking.flockSync(guard.fd, "un");
+			if (held) unlock(guard.fd);
 		} finally {
 			held = false;
 			await guard.close();
@@ -35,21 +44,24 @@ export async function acquirePidFileLock(path: string, staleAfterMs: number): Pr
 	};
 	try {
 		if (!(await guard.stat()).isFile()) throw new Error("Lock guard is not a regular file");
-		try {
-			locking.flockSync(guard.fd, "exnb");
-			held = true;
-		} catch (error) {
-			if (error instanceof Error && "code" in error && (error.code === "EAGAIN" || error.code === "EWOULDBLOCK")) {
-				await closeGuard();
-				return undefined;
-			}
-			throw error;
+		held = tryLock(guard.fd);
+		if (!held) {
+			await closeGuard();
+			return undefined;
 		}
 		const [contents, lockStat] = await Promise.all([
 			readFile(path, "utf8").catch(() => undefined),
 			stat(path).catch(() => undefined),
 		]);
 		if (contents === "" && lockStat && Date.now() - lockStat.mtimeMs <= staleAfterMs) {
+			await closeGuard();
+			return undefined;
+		}
+		// A holder from before an upgrade took its guard with flock, which this lock cannot see on Linux; its fresh pid
+		// file is the only sign it still runs.
+		const holder = Number(contents?.split(" ")[0]);
+		if (Number.isInteger(holder) && holder > 0 && holder !== process.pid && lockStat
+			&& Date.now() - lockStat.mtimeMs <= staleAfterMs && alive(holder)) {
 			await closeGuard();
 			return undefined;
 		}

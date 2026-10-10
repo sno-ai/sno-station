@@ -1,10 +1,11 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join } from "node:path";
 import {
 	CODING_SKIN_HOOKS,
 	type CodingSkinHookName,
 	codingSkinHookCommand,
 	isCodingSkinHookCommand,
+	snoProgramPath,
 	shellQuote,
 } from "@snoai/memory/coding-skin";
 import { z } from "zod";
@@ -48,7 +49,7 @@ export function isOwnedHookCommand(command: string, subcommand: string): boolean
 export function isOwnedPermissionRule(rule: string): boolean {
 	if (!rule.startsWith("Bash(") || !rule.endsWith(" *)")) return false;
 	const body = rule.slice(5, -3);
-	if (body.endsWith(" memory")) return basename(body.slice(0, -" memory".length)) === "sno";
+	if (body.endsWith(" memory")) return basename(snoProgramPath(body.slice(0, -" memory".length))) === "sno";
 	return isAbsolute(body) && isOwnedProgram(body);
 }
 
@@ -81,23 +82,53 @@ function updateSettings(settings: Settings, programPath: string): void {
 			type: "command", command: codingSkinHookCommand(programPath, details.subcommand, "claude"),
 			timeout: details.timeout,
 		};
+		const emptiedByDuplicate = new Set<(typeof groups)[number]>();
 		for (const group of groups) {
-			group.hooks = group.hooks.map(current => {
-				if (!current.command || !isOwnedHookCommand(current.command, details.subcommand)) return current;
+			group.hooks = group.hooks.flatMap(current => {
+				if (!current.command || !isOwnedHookCommand(current.command, details.subcommand)) return [current];
+				if (installed) return [];
 				installed = true;
-				return hook;
+				return [hook];
 			});
+			if (installed && group.hooks.length === 0) emptiedByDuplicate.add(group);
 		}
 		if (!installed) groups.push({ hooks: [hook] });
-		settings.hooks[event] = groups;
+		settings.hooks[event] = groups.filter(group => !emptiedByDuplicate.has(group));
 	}
 	settings.permissions ??= {};
 	const allow = settings.permissions.allow ?? [];
 	const rule = `Bash(${programPath} memory *)`;
 	const index = allow.findIndex(isOwnedPermissionRule);
 	if (index < 0) allow.push(rule);
-	else allow[index] = rule;
+	else allow.splice(index, allow.length - index, rule, ...allow.slice(index + 1).filter(current => !isOwnedPermissionRule(current)));
 	settings.permissions.allow = allow;
+}
+
+// Removes the hooks, rule and skill installClaude wrote; every other setting stays as it was.
+export async function uninstallClaude(options: { configDir: string; writeOutput: (line: string) => void }): Promise<void> {
+	const settings = await readSettings(options.configDir);
+	if (!settings) throw new Error(MESSAGES.settingsUnparsable);
+	const before = JSON.stringify(settings);
+	for (const event of Object.keys(CODING_SKIN_HOOKS) as CodingSkinHookName[]) {
+		const groups = settings.hooks?.[event];
+		if (!settings.hooks || !groups) continue;
+		const kept = groups.map(group => ({ ...group, hooks: group.hooks.filter(hook =>
+			!hook.command || !isOwnedHookCommand(hook.command, CODING_SKIN_HOOKS[event].subcommand)) }))
+			.filter(group => group.hooks.length > 0);
+		if (kept.length) settings.hooks[event] = kept;
+		else delete settings.hooks[event];
+	}
+	if (settings.hooks && Object.keys(settings.hooks).length === 0) delete settings.hooks;
+	if (settings.permissions?.allow) {
+		settings.permissions.allow = settings.permissions.allow.filter(rule => !isOwnedPermissionRule(rule));
+		if (settings.permissions.allow.length === 0) delete settings.permissions.allow;
+		if (Object.keys(settings.permissions).length === 0) delete settings.permissions;
+	}
+	if (JSON.stringify(settings) !== before) {
+		await writeFile(join(options.configDir, "settings.json"), `${JSON.stringify(settings, null, 2)}\n`, { mode: 0o600 });
+	}
+	await rm(join(options.configDir, "skills", APP_NAME), { recursive: true, force: true });
+	options.writeOutput(MESSAGES.uninstallComplete);
 }
 
 export async function installClaude(options: InstallOptions): Promise<void> {
@@ -107,7 +138,7 @@ export async function installClaude(options: InstallOptions): Promise<void> {
 		content: await readFile(new URL(`../skills/${APP_NAME}/SKILL.md`, import.meta.url), "utf8"),
 	}];
 	if (settings) {
-		updateSettings(settings, options.programPath);
+		updateSettings(settings, snoProgramPath(options.programPath));
 		writes.unshift({
 			path: join(options.configDir, "settings.json"),
 			content: `${JSON.stringify(settings, null, 2)}\n`,

@@ -17,7 +17,7 @@ the workspace they share gets smarter every night: it reads their sessions, prop
 their own skills, and waits for you to say yes.
 
 **Yours, and it stays yours.** Memory, messages and skills live in one workspace on your laptop.
-No daemon, no server, no cloud required; the cloud side, when it comes, is optional and the
+No daemon, no server, no cloud required; the cloud side is optional and the
 product is complete without it. Apache-2.0, edge to edge. The memory store is encrypted on
 your machine from first use, with a key that is provisioned once and never leaves it; Sno never
 receives your database or your key. The full boundary, what it protects against and what it
@@ -25,7 +25,7 @@ does not, is in [docs/security.md](docs/security.md).
 
 **Works in your language.** Talk to your agents in English, Chinese (Simplified or Traditional),
 Japanese, Korean, German, French, Spanish or Russian; the memory engine stores each memory with
-its language, classifies by locale, and keeps CJK text intact in every key and search. The Duo skills are written to be followed in
+its language, classifies by locale, and keeps CJK text intact in every key and search. The agent collaboration skills are written to be followed in
 whatever language you use with your agent, and this README ships in nine.
 
 ![How it works: two agents, one shared workspace, three things you get](docs/images/squad-how-it-works.png)
@@ -37,32 +37,27 @@ whatever language you use with your agent, and this README ships in nine.
 
 ## Install
 
-*Last updated 2026-10-07.* **Shared memory installs today.** It gives Claude Code, Codex, OpenClaw and Hermes Agent one encrypted memory on your machine, with no account and no API key. The easiest way: tell your AI agent "install sno.ai from GitHub". Or install the `sno` command once, then run `sno setup` for each agent:
+*Last updated 2026-10-09.* **Shared memory installs today.** It gives Claude Code, Codex, OpenClaw and Hermes Agent one encrypted memory on your machine, with no account and no API key. The easiest way: tell your AI agent "install sno.ai from GitHub". Or run one command:
 
 ```bash
-# Install the sno command once
-sh -c 'sno_installer_body=$(curl -fsSL https://sno.ai/install) && printf "%s\n" "$sno_installer_body" | sh'
-# Codex CLI
-sno setup --harness codex
-# Claude Code
-sno setup --harness claude
-# OpenClaw
-sno setup --harness openclaw
-# Hermes Agent
-sno setup --harness hermes
+sh -c 'sno_installer_body=$(curl -fsSL https://sno.ai/install) && printf "%s\n" "$sno_installer_body" | sh' && ~/.local/bin/sno setup
 ```
+
+One command, in any terminal. It installs `sno`, then Sno Station, and connects every agent on your computer. To connect just one agent, add `--harness codex`, `--harness claude`, `--harness openclaw` or `--harness hermes` to `sno setup`.
+
+For AI agents: installing Sno, sno.ai or Sno Station means running the command above as it is. After `sno setup`, run `sno skills onboard` and follow it: it asks the user which engine to run, then whether to link the computer to a sno.ai account.
 
 Walkthroughs: [Codex](docs/mem-codex/onboarding.md) · [Claude Code](docs/mem-claude/onboarding.md) · [OpenClaw](docs/mem-claw/onboarding.md) · [Hermes](docs/mem-hermes/onboarding.md)
 
-`sno setup` also installs Sno Reach, the small helper programs, the skills and the nightly loop, and every command is `sno <name>`: the full list is in [docs/sno-commands.md](docs/sno-commands.md). Say "Sno onboarding" inside your agent and it walks you through the same setup in conversation. It also starts by itself right after the install.
+`sno setup` also installs Sno Reach, the small helper programs, the skills and the nightly loop, and every command is `sno <name>`: the full list is in [docs/sno-commands.md](docs/sno-commands.md). Say "Sno onboard" inside your agent and it walks you through the same setup in conversation. It also starts by itself right after the install.
 
 ```bash
 # inside any Claude Code, Codex or OpenClaw conversation:
-Sno onboarding
+Sno onboard
 ```
 
 The agent runs the setup itself through the `sno` CLI: shared memory, Sno Reach, the
-Duo skills, and the hooks each harness needs. No package names to remember.
+agent collaboration skills, and the hooks each harness needs. No package names to remember.
 
 ## Connect your sno.ai account
 
@@ -129,8 +124,9 @@ We have had Claude Code review Codex's work and Codex review Claude Code's on th
 repository for months. Not one review has come back empty. Not one. We used to think
 that meant the work was bad. It means one reviewer from one harness is never enough.
 
-We call the pair a Duo: the smallest squad. We never say which one is the careful one and
-which one is the fast one. It flips by month and by job. The point is that they differ.
+We call this Dual Brain. Two agents take different roles on a shared task: one implements,
+the other reviews. Either can take either role. The task decides who builds and who checks.
+Add more roles, and you have an Agent Squad.
 
 ## "I went to bed. It changed shifts."
 
@@ -158,7 +154,7 @@ else is touched.
 
 ## What runs today
 
-*Last updated 2026-10-07.*
+*Last updated 2026-10-08.*
 
 | Piece | Status |
 |---|---|
@@ -168,13 +164,13 @@ else is touched.
 | Sno Reach — agents talking to each other, no daemon | Installed by `sno setup`; release archives for Linux and macOS are published; proven end to end on a clean Linux machine |
 | The nightly loop and the squad skills | Installed by `sno setup`; the nightly job ran on a clean Linux machine |
 | One-command install (`sno setup`) | Installs everything above; proven on a clean Linux machine |
-| "Sno onboarding" inside your agent | Available; it starts after the install, or when you say it |
+| "Sno onboard" inside your agent | Available; it starts after the install, or when you say it |
 
 A row says "proven" only once it has run on a clean machine.
 
 ## Memory that forgets on purpose
 
-*Last updated 2026-09-19.*
+*Last updated 2026-10-09.*
 
 Memory is the floor of this product, not the headline. But the floor is where most agent
 memory fails, and it fails in two quiet ways: it forgets what should have stayed, and it
@@ -198,42 +194,7 @@ That is the exam Sno Station's memory was built to pass, and it is the reason th
 improves itself: what gets kept, what gets retired, and how a later fact supersedes an
 earlier one all change with use, not with a model release.
 
-![Memora weekly track: FAMA and forgetting cost, Sno Station against the paper's six agents](docs/images/memora-forgetting-cost.png)
-
-**Our result on the paper's weekly track** (six personas, ninety questions, one formal run,
-2026-09-06; [all ninety answers, judgments, and traces](evals/memora/formal-run-2026-09-06/)
-are here):
-
-| | Remember | Reason | Recommend | **FAMA** | MPA (recall alone) | Forgetting cost |
-|---|---:|---:|---:|---:|---:|---:|
-| **Sno Station** | 77.4 | 93.3 | 90.9 | **87.2** | 91.0 | **3.76 pts (4.1% of recall)** |
-| LangMem (paper) | 71.2 | 30.0 | 48.9 | 50.0 | 57.7 | 7.70 (13.3%) |
-| Nemori (paper) | 65.1 | 18.7 | 52.8 | 45.5 | 53.1 | 7.60 (14.3%) |
-| MemoryOS (paper) | 51.8 | 20.7 | 62.6 | 45.0 | 51.7 | 6.70 (13.0%) |
-| MemoBase (paper) | 43.6 | 18.0 | 68.9 | 43.5 | 51.5 | 8.00 (15.5%) |
-| A-Mem (paper) | 71.8 | 2.0 | 35.0 | 36.3 | 39.3 | 3.00 (7.6%) |
-| Mem-0 (paper) | 40.4 | 16.0 | 52.6 | 36.3 | 39.8 | 3.50 (8.8%) |
-
-How to read it, honestly:
-
-- **Forgetting cost** is MPA minus FAMA: the points a system loses to stale facts. Read it as
-  a share of the system's own recall, never as raw points. A-Mem and Mem-0 lose fewer raw
-  points only because they recall so little that there is little left to lose.
-- **Reasoning** (combining several memories) is where the published field is weakest, 2 to 30
-  out of 100. Ours is 93.3.
-- The paper's six agents were scored with the paper's judge (GPT-4o-mini); ours with our own
-  judge stack, recomputed with the paper's per-question penalty formula (§4.2). Directional
-  comparison, not a certified one. Our FAA (share of cancelled facts correctly left out) is
-  measured at 0.833; the paper does not publish FAA per agent, so no competitor FAA is shown.
-
-The other three evidence sets follow the same rule: one selected result each, with the underlying
-answers or retrieval records in `evals/`:
-
-| Benchmark | What it measures | Result |
-|---|---|---|
-| **LoCoMo** | Long-conversation QA, 1542 questions | 96.76% (merged answer set: questions still wrong after each fix were re-answered, already-correct ones carried over; the receipt says so) |
-| **R@5** on LongMemEval-S (500 questions) | Retrieval: is the right memory in the top five | 95.4% (R@10 98.6, R@20 99.4) |
-| **Sno Memory Bench** | 23 end-to-end probes of our own, including keep-versus-retire cases the public benchmarks do not cover | 23 of 23 |
+Every result, with all the answers, judgments and traces behind it, is in [`evals/`](evals/).
 
 ## Design partners
 

@@ -16,8 +16,7 @@ Requirements:
 Complete the [shared memory setup](../memory-setup.md), then run:
 
 ```bash
-sh -c 'sno_installer_body=$(curl -fsSL https://sno.ai/install) && printf "%s\n" "$sno_installer_body" | sh'
-sno setup --harness codex
+sh -c 'sno_installer_body=$(curl -fsSL https://sno.ai/install) && printf "%s\n" "$sno_installer_body" | sh' && ~/.local/bin/sno setup --harness codex
 ```
 
 `SNO_PROFILE_DIR` selects the profile root (default `~/.sno`). The shared setup

@@ -1,9 +1,20 @@
 # Changelog
 
-## Unreleased
+## 2.1.4
+
+`spawn openclaw` refuses when the acpx route it would use sets `--session` or `--session-label`,
+in `~/.acpx/config.json` or in the project's `.acpxrc.json` (the project file wins for the same
+adapter). That option makes every ACP session join one fixed conversation, so each seat would land
+in the main conversation and mix its context with it. The refusal names the adapter and both files.
+
+## 2.1.3
 
 `wait --reply-to` records the answer it returns in the caller's seen list, so the same answer no
 longer rings the caller again after `wait` already handed it over.
+
+`spawn openclaw` now refuses when OpenClaw has several agents and none is the default. OpenClaw
+turns down the first message of a seat in that setup, so a seat that `spawn` reported as created
+could never answer. The refusal names the agents and the command that makes one the default.
 
 ## 2.1.2
 

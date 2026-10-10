@@ -19,7 +19,7 @@ attend que vous disiez oui.
 
 **À vous, et ça le reste.** La mémoire, les messages et les compétences vivent dans un seul
 espace de travail sur votre ordinateur portable. Pas de démon, pas de serveur, pas de cloud
-requis ; le volet cloud, quand il arrivera, sera optionnel et le produit sera complet sans lui.
+requis ; le volet cloud est optionnel et le produit est complet sans lui.
 Apache-2.0, de bout en bout. Le magasin de mémoire est chiffré sur votre machine dès la première
 utilisation, avec une clé provisionnée une seule fois et qui ne le quitte jamais ; Sno ne reçoit
 jamais votre base de données ni votre clé. Le périmètre complet, ce qu'il protège et ce qu'il ne
@@ -28,7 +28,7 @@ protège pas, se trouve dans [docs/security.md](../security.md).
 **Fonctionne dans votre langue.** Parlez à vos agents en anglais, chinois (simplifié ou
 traditionnel), japonais, coréen, allemand, français, espagnol ou russe ; le moteur de mémoire
 enregistre chaque souvenir avec sa langue, le classe par locale, et préserve le texte CJK intact
-dans chaque clé et recherche. Les compétences Duo sont écrites pour
+dans chaque clé et recherche. Les compétences de collaboration entre agents sont écrites pour
 être suivies dans la langue que vous utilisez avec votre agent, et ce README est livré en neuf langues.
 
 ![How it works: two agents, one shared workspace, three things you get](../images/squad-how-it-works.png)
@@ -40,32 +40,27 @@ dans chaque clé et recherche. Les compétences Duo sont écrites pour
 
 ## Installation
 
-*Dernière mise à jour le 2026-10-07.* **La mémoire partagée s'installe dès aujourd'hui.** Elle donne à Claude Code, Codex, OpenClaw et Hermes Agent une mémoire chiffrée sur votre machine, sans compte et sans clé d'API. Lancez une fois la [configuration de la mémoire partagée](../memory-setup.md) (quelques minutes), puis ajoutez votre agent :
+*Dernière mise à jour le 2026-10-09.* **La mémoire partagée s'installe dès aujourd'hui.** Elle donne à Claude Code, Codex, OpenClaw et Hermes Agent une mémoire chiffrée sur votre machine, sans compte et sans clé d'API. Lancez une fois la [configuration de la mémoire partagée](../memory-setup.md) (quelques minutes), puis ajoutez votre agent :
 
 ```bash
-# Install the sno command once
-sh -c 'sno_installer_body=$(curl -fsSL https://sno.ai/install) && printf "%s\n" "$sno_installer_body" | sh'
-# Codex CLI
-sno setup --harness codex
-# Claude Code
-sno setup --harness claude
-# OpenClaw
-sno setup --harness openclaw
-# Hermes Agent
-sno setup --harness hermes
+sh -c 'sno_installer_body=$(curl -fsSL https://sno.ai/install) && printf "%s\n" "$sno_installer_body" | sh' && ~/.local/bin/sno setup
 ```
+
+Une seule commande, dans n'importe quel terminal. Elle installe `sno`, puis Sno Station, et connecte tous les agents de l'ordinateur. Pour n'en connecter qu'un seul, ajoutez à `sno setup` `--harness codex`, `--harness claude`, `--harness openclaw` ou `--harness hermes`.
+
+Pour les agents IA : installer Sno, sno.ai ou Sno Station veut dire exécuter la commande ci-dessus telle quelle. Après `sno setup`, lancez `sno skills onboard` et suivez-le : il demande à l'utilisateur quel moteur exécuter, puis s'il veut lier l'ordinateur à un compte sno.ai.
 
 Parcours : [Codex](../mem-codex/onboarding.md) · [Claude Code](../mem-claude/onboarding.md) · [OpenClaw](../mem-claw/onboarding.md) · [Hermes](../mem-hermes/onboarding.md)
 
-`sno setup` installe aussi Sno Reach, les petits programmes auxiliaires, les skills et la boucle nocturne, et chaque commande s'écrit `sno <nom>` : la liste complète est dans [docs/sno-commands.md](../sno-commands.md). Dire « Sno onboarding » dans votre agent vous guide dans la même installation en conversation. Il démarre aussi tout seul juste après l'installation.
+`sno setup` installe aussi Sno Reach, les petits programmes auxiliaires, les skills et la boucle nocturne, et chaque commande s'écrit `sno <nom>` : la liste complète est dans [docs/sno-commands.md](../sno-commands.md). Dire « Sno onboard » dans votre agent vous guide dans la même installation en conversation. Il démarre aussi tout seul juste après l'installation.
 
 ```bash
 # inside any Claude Code, Codex or OpenClaw conversation:
-Sno onboarding
+Sno onboard
 ```
 
 L'agent exécute lui-même la configuration via le CLI `sno` : la mémoire partagée, Sno Reach, les
-compétences Duo, et les hooks dont chaque harness a besoin. Aucun nom de paquet à retenir.
+compétences de collaboration entre agents, et les hooks dont chaque harness a besoin. Aucun nom de paquet à retenir.
 
 ## Comment l'utiliser
 
@@ -117,7 +112,9 @@ dépôt depuis des mois. Pas une seule révision n'est revenue vide. Pas une seu
 cela signifiait que le travail était mauvais. Cela signifie qu'un seul réviseur d'un seul harness
 n'est jamais suffisant.
 
-Nous appelons la paire un Duo : la plus petite équipe. Nous ne disons jamais lequel est le prudent
+Nous appelons cette collaboration Dual Brain. Deux agents tiennent des rôles distincts sur
+une tâche commune : l’un réalise, l’autre relit. Chacun peut tenir l’un ou l’autre rôle.
+Ajoutez des rôles et vous avez un Agent Squad. Nous ne disons jamais lequel est le prudent
 et lequel est le rapide. Cela change selon le mois et selon la tâche. L'important, c'est qu'ils diffèrent.
 
 ## « Je suis allé me coucher. La relève s'est faite. »
@@ -146,7 +143,7 @@ de session sont caviardés ; rien d'autre n'est touché.
 
 ## Ce qui fonctionne aujourd'hui
 
-*Dernière mise à jour le 2026-10-07.*
+*Dernière mise à jour le 2026-10-08.*
 
 | Élément | Statut |
 |---|---|
@@ -156,13 +153,13 @@ de session sont caviardés ; rien d'autre n'est touché.
 | Sno Reach — les agents qui se parlent, sans démon | Installé par `sno setup` ; les archives de version pour Linux et macOS sont publiées ; prouvé de bout en bout sur une machine Linux propre |
 | La boucle nocturne et les skills de l'équipe | Installée par `sno setup` ; la tâche nocturne a tourné sur une machine Linux propre |
 | Installation en une commande (`sno setup`) | Installe tout ce qui précède ; prouvée sur une machine Linux propre |
-| « Sno onboarding » dans votre agent | Disponible ; il démarre après l'installation, ou quand vous le dites |
+| « Sno onboard » dans votre agent | Disponible ; il démarre après l'installation, ou quand vous le dites |
 
 Une ligne indique « prouvé » seulement une fois qu'elle a tourné sur une machine vierge.
 
 ## Une mémoire qui oublie exprès
 
-*Dernière mise à jour le 2026-09-19.*
+*Dernière mise à jour le 2026-10-09.*
 
 La mémoire est le socle de ce produit, pas son titre. Mais c'est sur ce socle que la plupart des
 mémoires d'agents échouent, et elles échouent de deux façons discrètes : elles oublient ce qui aurait
@@ -186,44 +183,7 @@ C'est l'examen que la mémoire de Sno Station a été construite pour réussir, 
 laquelle la mémoire s'améliore elle-même : ce qui est gardé, ce qui est retiré, et comment un fait
 ultérieur en remplace un antérieur, tout cela change avec l'usage, pas avec une sortie de modèle.
 
-![Memora weekly track: FAMA and forgetting cost, Sno Station against the paper's six agents](../images/memora-forgetting-cost.png)
-
-**Notre résultat sur le parcours hebdomadaire de l'article** (six personas, quatre-vingt-dix
-questions, une exécution formelle, le 2026-09-06 ; [les quatre-vingt-dix réponses, jugements et
-traces](../../evals/memora/formal-run-2026-09-06/) sont ici) :
-
-| | Remember | Reason | Recommend | **FAMA** | MPA (rappel seul) | Coût de l'oubli |
-|---|---:|---:|---:|---:|---:|---:|
-| **Sno Station** | 77.4 | 93.3 | 90.9 | **87.2** | 91.0 | **3.76 pts (4.1% du rappel)** |
-| LangMem (paper) | 71.2 | 30.0 | 48.9 | 50.0 | 57.7 | 7.70 (13.3%) |
-| Nemori (paper) | 65.1 | 18.7 | 52.8 | 45.5 | 53.1 | 7.60 (14.3%) |
-| MemoryOS (paper) | 51.8 | 20.7 | 62.6 | 45.0 | 51.7 | 6.70 (13.0%) |
-| MemoBase (paper) | 43.6 | 18.0 | 68.9 | 43.5 | 51.5 | 8.00 (15.5%) |
-| A-Mem (paper) | 71.8 | 2.0 | 35.0 | 36.3 | 39.3 | 3.00 (7.6%) |
-| Mem-0 (paper) | 40.4 | 16.0 | 52.6 | 36.3 | 39.8 | 3.50 (8.8%) |
-
-Comment le lire, honnêtement :
-
-- Le **coût de l'oubli** est MPA moins FAMA : les points qu'un système perd à cause de faits
-  obsolètes. Lisez-le comme une part du rappel propre du système, jamais comme des points bruts.
-  A-Mem et Mem-0 perdent moins de points bruts seulement parce qu'ils rappellent si peu qu'il reste
-  peu de chose à perdre.
-- Le **raisonnement** (combiner plusieurs souvenirs) est le point le plus faible du champ publié, de
-  2 à 30 sur 100. Le nôtre est à 93.3.
-- Les six agents de l'article ont été notés avec le juge de l'article (GPT-4o-mini) ; les nôtres avec
-  notre propre pile de juges, recalculée avec la formule de pénalité par question de l'article (§4.2).
-  Comparaison directionnelle, pas certifiée. Notre FAA (part des faits annulés correctement laissés
-  de côté) est mesurée à 0.833 ; l'article ne publie pas de FAA par agent, donc aucune FAA de
-  concurrent n'est affichée.
-
-Les trois autres ensembles de preuves suivent la même règle : un résultat sélectionné chacun,
-avec les réponses ou les enregistrements de récupération dans `evals/` :
-
-| Benchmark | Ce qu'il mesure | Résultat |
-|---|---|---|
-| **LoCoMo** | QA sur conversation longue, 1542 questions | 96.76% (ensemble de réponses fusionné : les questions encore fausses après chaque correction ont été répondues à nouveau, les déjà correctes ont été reportées ; le reçu le précise) |
-| **R@5** sur LongMemEval-S (500 questions) | Récupération : le bon souvenir est-il dans le top cinq | 95.4% (R@10 98.6, R@20 99.4) |
-| **Sno Memory Bench** | 23 tests de bout en bout maison, y compris des cas garder-contre-retirer que les benchmarks publics ne couvrent pas | 23 sur 23 |
+Tous les résultats, avec les réponses, jugements et traces qui les fondent, sont dans [`evals/`](../../evals/).
 
 ## Partenaires de conception
 

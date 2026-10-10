@@ -1,0 +1,9 @@
+
+  Primary:   gpt-5.6-terra  (via openai-codex)
+
+  Fallback chain (2 entries):
+    1. qwen3.8-27b-reason  (via local-reason)
+    2. claude-sonnet-5  (via anthropic)
+
+  Tried in order when the primary fails (rate-limit, 5xx, connection errors).
+  Docs: https://hermes-agent.nousresearch.com/docs/user-guide/features/fallback-providers

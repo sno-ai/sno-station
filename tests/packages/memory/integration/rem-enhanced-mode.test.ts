@@ -264,6 +264,89 @@ describe("REM Enhanced stops at the first refused call (REQ-4)", () => {
 	});
 });
 
+describe("REM Enhanced spends no Sno GPU call without a host that can still answer", () => {
+	// The coding-agent workers that answer host calls leave after two idle minutes, and a REM Enhanced pass spends
+	// minutes on Sno GPU verdicts before its first host call. On a workstation the pass kept judging on the GPU for
+	// seven minutes after its worker had left, then ended rem_skipped at the first host call: every verdict wasted.
+	const scopeOf = () => (database.sqlite.prepare("SELECT DISTINCT project_id AS scope FROM nodix_memories").get() as { scope: string }).scope;
+	const notDue = () => writeFileSync(join(stateDir(), "rem-trigger-state.json"), JSON.stringify({ version: 1, scopes: { [scopeOf()]: {
+		last_pass_at: new Date().toISOString(), schedule_zone: "UTC", last_covered_count: 0,
+		last_volume_pass_date: new Date().toISOString().slice(0, 10), missed_window: null, attempts: { identity: null, count: 0 },
+	} } }));
+	const startPass = async () => {
+		const response = await fetch(`http://127.0.0.1:${sidecar?.port}/rem/run`, {
+			method: "POST", headers: { [REM_SIDECAR_TOKEN_HEADER]: JSON.parse(readFileSync(join(process.env.SNO_PROFILE_DIR!, "station", "sidecar.json"), "utf8")).token },
+			body: JSON.stringify({ type: "rem-replace", scope: scopeOf() }), signal: AbortSignal.timeout(10_000),
+		});
+		expect(response.status).toBe(202);
+	};
+	const seedPairs = () => seedStore([], [
+		[OLDER_DEPLOYMENT, "entity:deployment"], [NEWER_DEPLOYMENT, "entity:deployment"],
+		[OLDER_OFFICE, "entity:office"], [NEWER_OFFICE, "entity:office"],
+	]);
+
+	it("stops before the next Sno GPU verdict once its host has gone", { timeout: 180_000 }, async () => {
+		await seedPairs();
+		notDue();
+		const host = await recorder();
+		const closeHost = closers.at(-1);
+		const sno = await recorder({ refuse: (id, seen) => {
+			// The worker leaves while the pass is still judging on the GPU.
+			if (id === "REM1" && seen.calls.filter(call => call === "REM1").length === 1) void closeHost?.();
+			return false;
+		}, keepFirstPair: true });
+		pointSnoGpuAt("rem-enhanced", sno.url);
+		sidecar = await startRemSidecar();
+		await registerHost("host-skin", host.url);
+		await startPass();
+		await until(settled);
+		const skip = auditEvents("rem_skipped").map(line => JSON.parse(line).details as { reason?: string; destination?: string });
+		expect({ skipped: skipped(), rem1OnSno: sno.calls.filter(call => call === "REM1").length, hostCalls: host.calls.length,
+			skip: skip.map(details => [details.reason, details.destination]) })
+			.toEqual({ skipped: true, rem1OnSno: 1, hostCalls: 0, skip: [["no-agent-endpoint", "host"]] });
+	});
+
+	it("moves to an older host when the newest one answers that it is not ready", { timeout: 180_000 }, async () => {
+		await seedPairs();
+		notDue();
+		const older = await recorder();
+		// Still listening, but its worker refuses every call with a typed 503 (worker-not-ready).
+		const newest = await recorder({ refuse: () => true });
+		const sno = await recorder({ refuse: () => false, keepFirstPair: true });
+		pointSnoGpuAt("rem-enhanced", sno.url);
+		sidecar = await startRemSidecar();
+		await registerHost("older-skin", older.url);
+		await registerHost("host-skin", newest.url);
+		await startPass();
+		await until(settled);
+		expect({ completed: auditEvents("rem_completed").length, skipped: skipped(), refusedOnNewest: remSet(newest).includes("REM2"),
+			answeredOnOlder: remSet(older).includes("REM2") })
+			.toEqual({ completed: 1, skipped: false, refusedOnNewest: true, answeredOnOlder: true });
+	});
+
+	it("moves to another connected host when the one it started with has gone", { timeout: 180_000 }, async () => {
+		await seedPairs();
+		notDue();
+		const other = await recorder();
+		const first = await recorder();
+		const closeFirst = closers.at(-1);
+		const sno = await recorder({ refuse: (id, seen) => {
+			if (id === "REM1" && seen.calls.filter(call => call === "REM1").length === 1) void closeFirst?.();
+			return false;
+		}, keepFirstPair: true });
+		pointSnoGpuAt("rem-enhanced", sno.url);
+		sidecar = await startRemSidecar();
+		await registerHost("other-skin", other.url);
+		// Registered last, so the pass starts with this one.
+		await registerHost("host-skin", first.url);
+		await startPass();
+		await until(settled);
+		expect({ completed: auditEvents("rem_completed").length, skipped: skipped(), firstCalls: first.calls.length,
+			remOnOther: remSet(other).includes("REM2") })
+			.toEqual({ completed: 1, skipped: false, firstCalls: 0, remOnOther: true });
+	});
+});
+
 describe.each(["rem-enhanced", "agent-native"] as const)("%s: no connected plugin, no REM pass (REQ-4)", mode => {
 	it("the tick opens no job and neither recorder receives a request", { timeout: 120_000 }, async () => {
 		await seedStore([OLDER_HOME, RETRACTION], [[OLDER_DEPLOYMENT, "entity:deployment"], [NEWER_DEPLOYMENT, "entity:deployment"]]);
@@ -272,8 +355,9 @@ describe.each(["rem-enhanced", "agent-native"] as const)("%s: no connected plugi
 		pointSnoGpuAt(mode, sno.url);
 		vi.stubEnv("SNO_STATION_MEM_MAINTENANCE_INTERVAL_MS", "500");
 		sidecar = await startRemSidecar();
-		// Opens the memory runtime, and with it the tick, through a registration without a model callback.
-		expect((await contractPost("/v1/inspect", { scope: SEED_SCOPE, op: { op: "stats" } }, "reader")).status).toBe(200);
+		// Opens the memory runtime, and with it the tick, through a registration without a model callback. A read-only
+		// stats request no longer starts background work, so it cannot stand in for one.
+		expect((await contractPost("/v1/init", { scope: { ...SEED_SCOPE, session: "reader" }, registration: { skinId: "reader" } }, "reader")).status).toBe(200);
 		await until(() => auditEvents("rem_trigger_evaluated").length > 0, 10_000);
 		await delay(2_000);
 		expect({ skipLogged: audit().some(line => line.includes("skipped: no host model connected")),

@@ -13,8 +13,7 @@ Install Hermes Agent and complete the [shared memory setup](https://github.com/s
 once. Then run:
 
 ```bash
-sh -c 'sno_installer_body=$(curl -fsSL https://sno.ai/install) && printf "%s\n" "$sno_installer_body" | sh'
-sno setup --harness hermes
+sh -c 'sno_installer_body=$(curl -fsSL https://sno.ai/install) && printf "%s\n" "$sno_installer_body" | sh' && ~/.local/bin/sno setup --harness hermes
 ```
 
 Setup installs and enables the plugin and selects it as the memory provider unless you already

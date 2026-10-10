@@ -1,6 +1,6 @@
 # Reach agent guide
 
-Reach-Version: 2.1.2
+Reach-Version: 2.1.4
 
 This guide belongs to the Reach release that `sno reach` runs. Use that installed release, not a workshop script.
 

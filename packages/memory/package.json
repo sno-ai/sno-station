@@ -1,6 +1,6 @@
 {
   "name": "@snoai/memory",
-  "version": "1.2.3",
+  "version": "1.2.4",
   "license": "Apache-2.0",
   "publishConfig": { "access": "public" },
   "repository": {
@@ -109,7 +109,7 @@
     "tar": "^7.4.3",
     "uuid": "^14.0.0",
     "zod": "^4.5.4",
-    "fs-ext": "^2.1.1"
+    "fs-native-extensions": "^1.5.1"
   },
   "devDependencies": {
     "@babel/parser": "^7.29.8",
