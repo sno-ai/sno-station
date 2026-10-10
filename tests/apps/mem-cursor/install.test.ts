@@ -19,7 +19,7 @@ const ours = (path: string, subcommand: string) => `'${path}' memory hook ${subc
 // Entries Orca writes into ~/.cursor/hooks.json today, and a Reach entry Sno's CLI writes.
 const ORCA_STOP = { command: "/Applications/Orca.app/Contents/Resources/bin/orca-hook cursor stop", timeout: 10 };
 const ORCA_PROMPT = { command: "/Applications/Orca.app/Contents/Resources/bin/orca-hook cursor prompt" };
-const REACH_STOP = { command: `'${SNO}' reach cursor-hook stop`, timeout: 290, loop_limit: null };
+const REACH_STOP = { command: `'${SNO}' reach cursor-hook stop`, timeout: 3600, loop_limit: null };
 
 let home: string;
 const output: string[] = [];
