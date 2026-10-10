@@ -3733,6 +3733,7 @@ run_spawn() {
     [[ ! -e "$root/$CALLER/reachable.json" && ! -L "$root/$CALLER/reachable.json" ]] || die 65 "seat already registered: $CALLER"
     cwd="$(realpath -e -- "$cwd")" || die 65 '--cwd must exist'
     [[ -d "$cwd" && "$cwd" != *:* && "$cwd" != *[$'\r\n']* ]] || die 65 'invalid spawn directory'
+    [[ -z "$model$provider" ]] || window=yes
     if [[ "$window" == no && -n "$adapter" ]]; then
         require_tools acpx timeout flock
     else require_tools tmux "$kind"; fi

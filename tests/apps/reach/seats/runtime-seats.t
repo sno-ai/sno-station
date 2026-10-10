@@ -99,10 +99,19 @@ def wait_file(path):
     assert path.exists(),path
 host=subprocess.check_output(['hostname'],text=True).strip()
 seats={}
-for kind in (['openclaw'] if sys.argv[2:]==['timeout'] else ['claude','codex','hermes','openclaw','cursor-agent']):
+for kind in (['hermes'] if sys.argv[2:]==['selection'] else ['openclaw'] if sys.argv[2:]==['timeout'] else ['claude','codex','hermes','openclaw','cursor-agent']):
     seat='executor.'+kind+'@'+host;seats[kind]=seat
     ok('init','--as',seat,'--name','Fixture')
-    r=ok('spawn',kind,'--as',seat,'--cwd',str(root),'--window','--model','chosen/model','--provider','chosen-provider')
+    flags=['--window']
+    if sys.argv[2:]==['selection']:
+        config=root/'home/.config/sno-reach';config.mkdir(parents=True)
+        (config/'agents.json').write_text(json.dumps({'hermes':{'acpx_agent':'hermes'}}))
+        (root/'mode').write_text('absent-new');(root/'events.ndjson').touch()
+        acpx=commands/'acpx';acpx.symlink_to(app.parent.parent/'tests/apps/reach/seats/fake_acpx.py')
+        env['ACP_FIXTURE']=str(root)
+        flags=[]
+    r=ok('spawn',kind,'--as',seat,'--cwd',str(root),*flags,'--model','chosen/model','--provider','chosen-provider')
+    assert json.loads((root/'state'/seat/'reachable.json').read_text())['channel']=='tmux'
     wait_file(root/'launches.jsonl')
     end=time.monotonic()+3
     while time.monotonic()<end:
@@ -129,6 +138,30 @@ for kind in (['openclaw'] if sys.argv[2:]==['timeout'] else ['claude','codex','h
         assert lines[1].endswith('Then do this: '+context),lines
     assert json.loads((root/'state'/seat/'seat.json').read_text())['runtime']==kind
     print('PASS launch:',kind,flush=True)
+
+if sys.argv[2:]==['selection']:
+    for name,flags,expected in [
+        ('model',['--model','chosen/model'],['chat','--yolo','-m','chosen/model','--query']),
+        ('provider',['--provider','chosen-provider'],['chat','--yolo','--provider','chosen-provider','--query'])]:
+        seat='executor.hermes-'+name+'@'+host
+        ok('init','--as',seat,'--name','Selection')
+        ok('spawn','hermes','--as',seat,'--cwd',str(root),*flags)
+        end=time.monotonic()+3
+        while time.monotonic()<end:
+            rows=[json.loads(s) for s in (root/'launches.jsonl').read_text().splitlines()]
+            launch=next((row for row in rows if row[0]==seat),None)
+            if launch:break
+            time.sleep(.02)
+        assert launch and launch[2][:-1]==expected,launch
+        assert json.loads((root/'state'/seat/'reachable.json').read_text())['channel']=='tmux'
+        print('PASS configured adapter with '+name+' uses tmux and the requested selection',flush=True)
+    seat='executor.hermes-adapter@'+host
+    ok('init','--as',seat,'--name','Adapter')
+    r=ok('spawn','hermes','--as',seat,'--cwd',str(root))
+    assert json.loads((root/'state'/seat/'reachable.json').read_text())['channel']=='acp',r.stdout
+    assert not any(json.loads(s)[0]==seat for s in (root/'launches.jsonl').read_text().splitlines())
+    print('PASS configured adapter without selection still uses ACP',flush=True)
+    sys.exit(0)
 
 if sys.argv[2:]==['timeout']:
     seat=seats['openclaw']
