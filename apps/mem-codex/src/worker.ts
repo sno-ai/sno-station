@@ -224,9 +224,11 @@ export async function runWorker(dependencies: WorkerDependencies = productionDep
 						console.log(JSON.stringify({ event: result.partial ? "capture-partial" : result.committed ? "capture-committed" : result.accepted ? "capture-accepted" : "capture-skipped", turnId: record.turnId, committed: result.committed }));
 						await unlink(path);
 						break;
-					} catch {
+					} catch (error) {
 						await updateImportReceipt(record.importReceipt, "failures");
 						const attempts = record.attempts + 1;
+						console.log(JSON.stringify({ event: "capture-failed", turnId: record.turnId, attempt: attempts,
+							final: attempts >= CODING_SKIN_MAX_ATTEMPTS, error: error instanceof Error ? error.message : String(error) }));
 						const retryDelay = CODING_SKIN_RETRY_DELAYS_MS[attempts - 1];
 						record = {
 							...record,
