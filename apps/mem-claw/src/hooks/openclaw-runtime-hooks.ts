@@ -7,6 +7,7 @@ import { basename, dirname } from "node:path";
 import { detectProjectId, getSnoProfileDir } from "@snoai/observability";
 import { SKILL_CATEGORIES, skillVersionFor } from "@snoai/memory/internal/config/skill-categories";
 import { appendObserveLedgerRows } from "@snoai/memory/internal/engine/telemetry/observe-ledger";
+import { type ActivityCursor, type ActivityRecord, EMPTY_ACTIVITY_CURSOR, foldActivity, isAgentText } from "@snoai/memory/coding-skin";
 import { resolveAgentId } from "@snoai/memory/internal/engine/bindings/memory-tool-access";
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk/core";
 import { resolveAgentWorkspaceDir } from "openclaw/plugin-sdk/agent-runtime";
@@ -23,7 +24,9 @@ async function contained<T>(hook: string, run: () => Promise<T>): Promise<T | un
   try { return await run(); }
   catch (error) {
     const reason = error instanceof ContractError ? error.reason : "engine-failed";
-    diagnosticLog.warn("Memory service hook skipped", { hook, reason, error }, { event_name: "memory.openclaw_runtime_hooks.hook.skipped", file: "apps/mem-claw/src/hooks/openclaw-runtime-hooks.ts", function: "contained", site_id: "hooks.openclaw-runtime-hooks.contained.memory-hook-skipped" });
+    diagnosticLog.warn(hook === "session-activity"
+      ? "session-activity failed; no session.activity row for this window; host turn continues"
+      : "Memory service hook skipped", { hook, reason, error }, { event_name: "memory.openclaw_runtime_hooks.hook.skipped", file: "apps/mem-claw/src/hooks/openclaw-runtime-hooks.ts", function: "contained", site_id: "hooks.openclaw-runtime-hooks.contained.memory-hook-skipped" });
     return undefined;
   }
 }
@@ -66,6 +69,21 @@ export function registerRuntimeHooks(api: OpenClawPluginApi, config: PluginConfi
   const startedSessions = new Set<string>();
   const injectionSession = (context: HostMemoryContext): string =>
     JSON.stringify([resolveWorkspace(api.config, context), context.sessionKey ?? context.sessionId]);
+  const activity = new Map<string, { cursor: ActivityCursor; records: ActivityRecord[] }>();
+  const reportActivity = (context: HostMemoryContext): void => {
+    const state = activity.get(injectionSession(context));
+    if (!state || state.records.length === 0) return;
+    const folded = foldActivity(state.cursor, [...state.records, { ts: Date.now() }], false);
+    state.cursor = folded.cursor;
+    state.records = [];
+    if (!folded.payload) return;
+    appendObserveLedgerRows(getSnoProfileDir(), [{
+      agent_id: "openclaw", ts_ms: folded.payload.window_end_ms,
+      project_id: detectProjectId(resolveWorkspace(api.config, context)),
+      event_type: "session.activity", lane: "memory",
+      payload: { harness: "openclaw", ...folded.payload },
+    }]);
+  };
   const currentConfig = () => typeof config === "function" ? config() : config;
   api.on("llm_input", async (event) => { hostCallStartedAt.set(event.runId, Date.now()); });
   api.on("llm_output", async (event, context) => {
@@ -88,6 +106,13 @@ export function registerRuntimeHooks(api: OpenClawPluginApi, config: PluginConfi
   });
   api.on("gateway_start", async () => { await connection.ready(); });
   api.on("before_prompt_build", async (event, context) => {
+    await contained("session-activity", async () => {
+      const session = injectionSession(context);
+      const state = activity.get(session) ?? { cursor: EMPTY_ACTIVITY_CURSOR, records: [] };
+      state.records.push({ ts: Date.now(), incoming: context.sessionKey?.includes("sno-oneshot-")
+        || context.sessionKey?.includes(":subagent:") || isAgentText(event.prompt) ? "agent" : "human" });
+      activity.set(session, state);
+    });
     return contained("before_prompt_build", async () => {
       const { recall } = readPluginSettings();
       currentConfig();
@@ -129,6 +154,7 @@ export function registerRuntimeHooks(api: OpenClawPluginApi, config: PluginConfi
     });
   });
   api.on("agent_end", async (event, context) => {
+    await contained("session-activity", async () => { reportActivity(context); });
     // A failed run captures nothing, but its observe session still ends here.
     try {
       if (!event.success || context.sessionKey?.includes(":subagent:")) return;
@@ -144,6 +170,7 @@ export function registerRuntimeHooks(api: OpenClawPluginApi, config: PluginConfi
   });
   api.on("before_reset", async (event, context) => {
     startedSessions.delete(injectionSession(context));
+    activity.delete(injectionSession(context));
     try {
       await contained("before_reset", async () => {
         const originalScope = await connection.scope(context);
@@ -164,6 +191,7 @@ export function registerRuntimeHooks(api: OpenClawPluginApi, config: PluginConfi
   api.on("session_end", async (event, context) => {
     const sessionId = context.sessionId ?? event.sessionId;
     startedSessions.delete(injectionSession({ ...context, sessionId }));
+    activity.delete(injectionSession({ ...context, sessionId }));
     try {
       await contained("session_end", async () => {
         const scope = await connection.scope({ ...context, sessionId });
@@ -213,6 +241,8 @@ export function registerRuntimeHooks(api: OpenClawPluginApi, config: PluginConfi
     const onCommand = async (raw: unknown): Promise<void> => {
       const event = customEvent.parse(raw);
       startedSessions.delete(injectionSession({ sessionKey: event.sessionKey,
+        workspaceDir: event.context?.workspaceDir }));
+      activity.delete(injectionSession({ sessionKey: event.sessionKey,
         workspaceDir: event.context?.workspaceDir }));
       await contained(`command:${event.action}`, async () => {
         const context: HostMemoryContext = { sessionKey: event.sessionKey, workspaceDir: event.context?.workspaceDir, ...event.context?.previousSessionEntry };
