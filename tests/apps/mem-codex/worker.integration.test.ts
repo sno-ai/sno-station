@@ -440,6 +440,43 @@ describe("mem-codex worker callback with an empty spool", () => {
 		return { deps, served, children, startedAt, get exitedAfter() { return clock - startedAt; } };
 	}
 
+	// The callback runs one child at a time. A call whose requester gave up while it waited in line used to start a
+	// child anyway, spending the user's model quota on an answer nobody read.
+	it("does not run the model for a call its requester gave up on while it waited", async () => {
+		const fixture = await callbackWorker([], false);
+		const children: string[] = [];
+		const connectWorker = fixture.deps.connect;
+		fixture.deps.connect = async () => {
+			const connected = await connectWorker();
+			const init = connected.init.bind(connected);
+			connected.init = async (scope, value) => {
+				const result = await init(scope, value);
+				const model = value.model;
+				if (!model) throw new Error("worker registration missing model");
+				const answered = postCallback(model, "ANSWERED");
+				// The requester is another process (the memory service): its call arrives while the worker is blocked and
+				// carries the time after which it no longer waits.
+				const requester = spawn(process.execPath, ["-e", `
+					fetch(process.argv[1], { method: "POST", signal: AbortSignal.timeout(200),
+						headers: { "content-type": "application/json", authorization: "Bearer " + process.argv[2], "x-sno-deadline": String(Date.now() + 200) },
+						body: JSON.stringify({ model: "codex-exec", messages: [{ role: "user", content: "GAVE_UP" }] }) }).catch(() => {});
+				`, `${model.baseUrl}/chat/completions`, model.credential], { stdio: "ignore" });
+				const second = new Promise(resolve => requester.once("exit", resolve));
+				await Promise.all([answered, second]);
+				return result;
+			};
+			return connected;
+		};
+		fixture.deps.runChild = async prompt => {
+			children.push(prompt.split("\n").at(-1) ?? "");
+			// The real child runs under spawnSync, which blocks the event loop until it exits.
+			Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1_000);
+			return { kind: "ok", text: "child answer" };
+		};
+		await runWorker(fixture.deps);
+		expect(children).toEqual(["user: ANSWERED"]);
+	}, 60_000);
+
 	// Calls at 0 (registration), 30 s, 150 s and 200 s: the worker exits exactly 2 minutes after the
 	// last one (320 s). A fixed lifetime or a timer counted from the drain alone exits elsewhere.
 	it("answers model calls with an empty spool and exits exactly two minutes after the last call", async () => {
