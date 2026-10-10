@@ -1,0 +1,40 @@
+{
+  "name": "@snoai/mem-cursor",
+  "version": "1.2.5",
+  "license": "Apache-2.0",
+  "publishConfig": { "access": "public" },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sno-ai/sno-station.git",
+    "directory": "apps/mem-cursor"
+  },
+  "type": "module",
+  "description": "Give Cursor a memory. It remembers what you worked on and brings it back next conversation.",
+  "bin": {
+    "sno-mem-cursor": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "skills",
+    "LICENSE",
+    "package.json",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "prepack": "npm run build",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check src/",
+    "lint:fix": "biome check --write src/"
+  },
+  "dependencies": {
+    "@snoai/memory": "^1.2.0",
+    "fs-ext": "^2.1.1",
+    "zod": "^4.5.4"
+  },
+  "devDependencies": {
+    "@types/fs-ext": "^2.0.3",
+    "@types/node": "^22.19.17",
+    "typescript": "^7.0.2"
+  }
+}

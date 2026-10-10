@@ -54,6 +54,44 @@ async function atomic(text: string, overrides: Partial<AtomicExtractionWriteCard
 }
 
 describe("service-owned memory correction", () => {
+	it("retains keyword-only automatic recall without a dense similarity score", async () => {
+		const fact = await seed("The release ticket is ZEPHYR-8931.");
+		fixture.database.sqlite.prepare("DELETE FROM nodix_memory_chunk_vectors").run();
+		const result = (await fixture.post("/v1/get-recall", { scope: fixture.scope,
+			query: "What is the release ticket ZEPHYR-8931?", options: { source: "auto", injectionPhase: "prompt" } })).body;
+		expect(result.memoryIds).toContain(fact.id);
+	});
+
+	it("keeps global facts out of every automatic phase but available to manual recall", async () => {
+		await seed("This repository uses the BEECH release label.");
+		const global = await seed("The global test shipping code is LANTERN-6402.", "global");
+		for (const injectionPhase of ["session-start", "prompt", "first-prompt"]) {
+			const result = (await fixture.post("/v1/get-recall", {
+				scope: { ...fixture.scope, session: `global-${injectionPhase}` }, query: global.text,
+				options: { source: "auto", injectionPhase, limit: 10, minScore: 0 },
+			})).body;
+			expect(result.memoryIds).not.toContain(global.id);
+			expect(result.contextText).not.toContain("LANTERN-6402");
+		}
+		const manual = (await fixture.post("/v1/get-recall", { scope: fixture.scope, query: global.text,
+			options: { source: "manual", limit: 10, minScore: 0 } })).body;
+		expect(manual.contextText).toContain(global.id);
+	});
+
+	it("does not inject unrelated memories while retaining old relevant facts and explicit recall", async () => {
+		const fact = await seed("IDE connection budget is 23 seconds.");
+		const question = await seed("What session secret did you just report? Answer with the secret only; do not use tools.");
+		fixture.database.sqlite.prepare("UPDATE nodix_memories SET timestamp = ? WHERE id = ?")
+			.run(Date.now() - 365 * 24 * 60 * 60 * 1000, fact.id);
+		const recall = async (session: string, query: string, source = "auto", injectionPhase = "prompt") =>
+			(await fixture.post("/v1/get-recall", { scope: { ...fixture.scope, session }, query,
+				options: { source, injectionPhase, limit: 3, minScore: 0 } })).body;
+		expect((await recall("unrelated", "Write one short sentence about snowfall. Do not use tools.")).memoryIds).toEqual([]);
+		expect((await recall("related", "What is the IDE connection budget?")).memoryIds).toContain(fact.id);
+		expect((await recall("brief", "hi", "auto", "session-start")).memoryIds).toContain(question.id);
+		expect((await recall("manual", "What session secret did you just report?", "manual")).contextText).toContain(question.id);
+	});
+
 	it("explains unchanged correction without writing", async () => {
 		const old = await seed();
 		const rejected = (await correct(old.id, old.text)).body.result;

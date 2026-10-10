@@ -1,0 +1,44 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.4.0/schema.json",
+  "root": false,
+  "extends": [
+    "../../biome.json"
+  ],
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "recommended": true
+    }
+  },
+  "overrides": [
+    {
+      "includes": [
+        "src/**"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "@snoai/memory": "Use the published sidecar client only.",
+                  "better-sqlite3": "Storage is sidecar-owned.",
+                  "better-sqlite3-multiple-ciphers": "Storage is sidecar-owned."
+                },
+                "patterns": [
+                  {
+                    "group": [
+                      "@snoai/memory/internal/**"
+                    ],
+                    "message": "Use the published sidecar client only."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

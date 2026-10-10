@@ -22,30 +22,35 @@ function option(args: string[], name: string): string | undefined {
 	return index >= 0 ? args[index + 1] : undefined;
 }
 
+const HOOK_COMMANDS = ["session-start", "user-prompt-submit", "stop", "session-end", "pre-tool-use", "post-tool-use"];
+
 async function main(): Promise<number> {
 	const [command, ...args] = process.argv.slice(2);
+	const input = HOOK_COMMANDS.includes(command ?? "") ? await readStdin() : undefined;
+	// The Cursor IDE runs Claude Code hooks with Cursor-shaped input; Sno's Cursor hooks own Cursor, so these do nothing there.
+	if (input && typeof input === "object" && "cursor_version" in input) return 0;
 	if (command === "session-start") {
-		process.stdout.write(`${await sessionStart(await readStdin())}\n`);
+		process.stdout.write(`${await sessionStart(input)}\n`);
 		return 0;
 	}
 	if (command === "user-prompt-submit") {
-		process.stdout.write(`${await userPromptSubmit(await readStdin())}\n`);
+		process.stdout.write(`${await userPromptSubmit(input)}\n`);
 		return 0;
 	}
 	if (command === "stop") {
-		await stop(await readStdin());
+		await stop(input);
 		return 0;
 	}
 	if (command === "session-end") {
-		await sessionEnd(await readStdin());
+		await sessionEnd(input);
 		return 0;
 	}
 	if (command === "pre-tool-use") {
-		await preToolUse(await readStdin());
+		await preToolUse(input);
 		return 0;
 	}
 	if (command === "post-tool-use") {
-		await postToolUse(await readStdin());
+		await postToolUse(input);
 		return 0;
 	}
 	if (command === "worker") {

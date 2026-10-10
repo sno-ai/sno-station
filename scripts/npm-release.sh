@@ -22,7 +22,7 @@ manifest="$candidate_dir/manifest.json"
 package_dirs=(
   packages/utils packages/common-core packages/embedder packages/observability
   packages/sqlite-crypto packages/chunking packages/content-sanitizer packages/memory
-  apps/mem-codex apps/mem-claude apps/mem-claw
+  apps/mem-codex apps/mem-claude apps/mem-cursor apps/mem-claw
 )
 
 package_row() {
