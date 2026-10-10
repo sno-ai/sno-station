@@ -1,6 +1,6 @@
 {
   "name": "@snoai/memory",
-  "version": "1.2.4",
+  "version": "1.2.5",
   "license": "Apache-2.0",
   "publishConfig": { "access": "public" },
   "repository": {
@@ -92,7 +92,7 @@
     "@snoai/embedder": "^1.1.0",
     "@snoai/llmix": "2.2.0",
     "@snoai/mda-config": "^1.1.2",
-    "@snoai/observability": "^1.2.0",
+    "@snoai/observability": "^1.2.2",
     "@snoai/sqlite-crypto": "^1.1.2",
     "@snoai/utils": "^1.1.0",
     "argon2": "^0.45.1",

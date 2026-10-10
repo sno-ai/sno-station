@@ -30,7 +30,7 @@
     "lint:fix": "biome check --write src/"
   },
   "dependencies": {
-    "@snoai/memory": "^1.2.0",
+    "@snoai/memory": "^1.2.5",
     "fs-native-extensions": "^1.5.1",
     "zod": "^4.5.4"
   },
