@@ -48,6 +48,11 @@ export function shellQuote(value: string): string {
 	return `'${value.replaceAll("'", "'\\''")}'`;
 }
 
+/** Linux reports a running binary that was replaced on disk as "<path> (deleted)"; the path itself is still the right one. */
+export function snoProgramPath(path: string): string {
+	return path.endsWith(" (deleted)") ? path.slice(0, -" (deleted)".length) : path;
+}
+
 /** The command an agent hook runs: the `sno` binary that ran setup, then `memory hook <event> --harness <name>`. */
 export function codingSkinHookCommand(snoPath: string, subcommand: string, harness: CodingSkinHarness): string {
 	return `${shellQuote(snoPath)} memory hook ${subcommand} --harness ${harness}`;
@@ -61,5 +66,5 @@ export function isCodingSkinHookCommand(command: string, subcommand: string, har
 	const encoded = trimmed.slice(0, -suffix.length);
 	const program = encoded.startsWith("'") && encoded.endsWith("'")
 		? encoded.slice(1, -1).replaceAll("'\\''", "'") : encoded;
-	return basename(program) === "sno";
+	return basename(snoProgramPath(program)) === "sno";
 }

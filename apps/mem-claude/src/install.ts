@@ -5,6 +5,7 @@ import {
 	type CodingSkinHookName,
 	codingSkinHookCommand,
 	isCodingSkinHookCommand,
+	snoProgramPath,
 	shellQuote,
 } from "@snoai/memory/coding-skin";
 import { z } from "zod";
@@ -48,7 +49,7 @@ export function isOwnedHookCommand(command: string, subcommand: string): boolean
 export function isOwnedPermissionRule(rule: string): boolean {
 	if (!rule.startsWith("Bash(") || !rule.endsWith(" *)")) return false;
 	const body = rule.slice(5, -3);
-	if (body.endsWith(" memory")) return basename(body.slice(0, -" memory".length)) === "sno";
+	if (body.endsWith(" memory")) return basename(snoProgramPath(body.slice(0, -" memory".length))) === "sno";
 	return isAbsolute(body) && isOwnedProgram(body);
 }
 
@@ -99,7 +100,7 @@ function updateSettings(settings: Settings, programPath: string): void {
 	const rule = `Bash(${programPath} memory *)`;
 	const index = allow.findIndex(isOwnedPermissionRule);
 	if (index < 0) allow.push(rule);
-	else allow[index] = rule;
+	else allow.splice(index, allow.length - index, rule, ...allow.slice(index + 1).filter(current => !isOwnedPermissionRule(current)));
 	settings.permissions.allow = allow;
 }
 
@@ -110,7 +111,7 @@ export async function installClaude(options: InstallOptions): Promise<void> {
 		content: await readFile(new URL(`../skills/${APP_NAME}/SKILL.md`, import.meta.url), "utf8"),
 	}];
 	if (settings) {
-		updateSettings(settings, options.programPath);
+		updateSettings(settings, snoProgramPath(options.programPath));
 		writes.unshift({
 			path: join(options.configDir, "settings.json"),
 			content: `${JSON.stringify(settings, null, 2)}\n`,

@@ -7,6 +7,7 @@ import {
 	type CodingSkinHookName,
 	codingSkinHookCommand,
 	isCodingSkinHookCommand,
+	snoProgramPath,
 } from "@snoai/memory/coding-skin";
 import { APP_NAME } from "./constants.js";
 import { MESSAGES } from "./messages.js";
@@ -132,6 +133,7 @@ export async function installCodex(options: InstallOptions): Promise<void> {
 	const configPath = join(options.codexHome, "config.toml");
 	const rulesPath = join(options.codexHome, "rules", "sno-mem-codex.rules");
 	const skillPath = join(options.codexHome, "skills", "sno-mem-codex", "SKILL.md");
+	const programPath = snoProgramPath(options.programPath);
 	const hooks = await readHooks(hooksPath);
 	const trust: string[] = [];
 	const ownedTrustKeys: string[] = [];
@@ -140,14 +142,18 @@ export async function installCodex(options: InstallOptions): Promise<void> {
 		const currentGroups = hooks.hooks[event] ?? [];
 		const hook: HookCommand = {
 			type: "command",
-			command: codingSkinHookCommand(options.programPath, details.subcommand, "codex"),
+			command: codingSkinHookCommand(programPath, details.subcommand, "codex"),
 			timeout: details.timeout,
 		};
 		let installed = false;
 		for (const [groupIndex, group] of currentGroups.entries()) {
+			const lastForeign = group.hooks.findLastIndex(current => !isOwnedHookCommand(current.command, details.subcommand));
 			group.hooks = group.hooks.flatMap((current, hookIndex) => {
 				if (!isOwnedHookCommand(current.command, details.subcommand)) return [current];
 				ownedTrustKeys.push(trustKey(hooksPath, event, groupIndex, hookIndex));
+				// A second copy is dropped unless a foreign hook follows it; an emptied group stays, so every
+				// foreign hook keeps the position Codex trusts.
+				if (installed && hookIndex > lastForeign) return [];
 				installed = true;
 				trust.push(trustSection(hooksPath, event, groupIndex, hookIndex, hook));
 				return [hook];
@@ -168,7 +174,7 @@ export async function installCodex(options: InstallOptions): Promise<void> {
 	const writes = [
 		{ path: hooksPath, content: `${JSON.stringify(hooks, null, 2)}\n` },
 		{ path: configPath, content: `${preservedConfig}${preservedConfig ? "\n\n" : ""}${trust.join("\n")}` },
-		{ path: rulesPath, content: rules(options.programPath) },
+		{ path: rulesPath, content: rules(programPath) },
 		{ path: skillPath, content: await skillText() },
 	];
 	for (const write of writes) {

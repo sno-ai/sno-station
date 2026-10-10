@@ -126,6 +126,30 @@ describe("Claude settings installation and diagnosis", () => {
 		}
 	});
 
+	it("cleans up the hooks and rule written with a replaced sno's ' (deleted)' path and never writes that path", async () => {
+		// sno replaced while it ran reads its own path back as "<path> (deleted)". Setup wrote every hook and the
+		// permission rule twice, once at that path; the copy that cannot run failed in every session.
+		const deleted = `${programPath} (deleted)`;
+		await install();
+		const initial = await settings();
+		for (const [event, subcommand, timeout] of events) {
+			initial.hooks[event] = [
+				{ hooks: [{ type: "command", command: hookCommand(deleted, subcommand), timeout }] },
+				{ hooks: [{ type: "command", command: hookCommand(programPath, subcommand), timeout }] },
+			];
+		}
+		initial.permissions.allow = [`Bash(${deleted} memory *)`, `Bash(${programPath} memory *)`];
+		await writeFile(join(configDir, "settings.json"), JSON.stringify(initial));
+
+		await installClaude({ configDir, programPath: deleted, writeOutput: () => {} });
+
+		const installed = await settings();
+		for (const [event, subcommand, timeout] of events) {
+			expect(installed.hooks[event], event).toEqual([{ hooks: [{ type: "command", command: hookCommand(programPath, subcommand), timeout }] }]);
+		}
+		expect(installed.permissions.allow).toEqual([`Bash(${programPath} memory *)`]);
+	});
+
 	it("rewrites its hooks and rule when sno is at another path, never hooking an event twice", async () => {
 		await install();
 		await installClaude({ configDir, programPath: "/other/place/sno", writeOutput: () => {} });
