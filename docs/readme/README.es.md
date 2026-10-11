@@ -28,7 +28,7 @@ Funciona en tu propia computadora. Lo instalas una vez y sigues trabajando como 
 a mitad de una tarea, otro agente la retoma desde la memoria compartida, con el contexto intacto.
 No tienes que pegar nada.
 
-**Todo trabajo recibe una segunda revisión.** El revisor siempre es un agente distinto, de otra
+**Una segunda revisión a petición.** Cualquiera de los agentes puede revisar el trabajo del otro. El revisor siempre es un agente distinto, de otra
 empresa, así que no tiene el hábito de darle la razón al primero.
 
 **Mejora mientras duermes.** Durante la noche lee las sesiones del día, encuentra los errores que
@@ -128,7 +128,7 @@ No hay paso de actualización: `sno` se actualiza solo cuando encuentra una vers
 
 ## De nuestras propias máquinas
 
-*Tres cosas que ocurrieron en este repositorio, septiembre de 2026.*
+*Tres cosas que vimos en este repositorio.*
 
 ### "Anoche le grité a mi agente. Tomó notas."
 

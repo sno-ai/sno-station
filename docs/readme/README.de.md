@@ -29,7 +29,7 @@ Es läuft auf Ihrem eigenen Rechner. Sie installieren es einmal und arbeiten wei
 mitten in einer Aufgabe an ein Rate Limit, und ein anderer Agent übernimmt sie aus dem
 gemeinsamen Gedächtnis, mit intaktem Kontext. Sie kopieren nichts hinein.
 
-**Jede Arbeit bekommt einen zweiten Blick.** Der Prüfer ist immer ein anderer Agent von einem
+**Ein zweiter Blick auf Anfrage.** Jeder Agent kann die Arbeit des anderen prüfen. Der Prüfer ist immer ein anderer Agent von einem
 anderen Unternehmen und hat deshalb keine Neigung, dem ersten recht zu geben.
 
 **Es wird besser, während Sie schlafen.** Über Nacht liest es die Sitzungen des Tages, findet
@@ -138,7 +138,7 @@ Einen Update-Schritt gibt es nicht: `sno` aktualisiert sich selbst, wenn es ein 
 
 ## Von unseren eigenen Rechnern
 
-*Drei Dinge, die in diesem Repository passiert sind, September 2026.*
+*Drei Dinge, die wir in diesem Repository erlebt haben.*
 
 ### „Ich habe meinen Agenten letzte Nacht angeschrien. Er hat sich Notizen gemacht.“
 

@@ -27,7 +27,7 @@ It runs on your own computer. You install it once and keep working the way you d
 **When one agent runs out, the next one carries on.** Hit a rate limit halfway through a task
 and another agent picks it up from the shared memory, with the context intact. You paste nothing.
 
-**Every piece of work gets a second look.** The reviewer is always a different agent from a
+**Ask for a second look and you get one.** Either agent can review the other's work. The reviewer is always a different agent from a
 different company, so it has no habit of agreeing with the first one.
 
 **It gets better while you sleep.** Overnight it reads the day's sessions, finds the mistakes
@@ -127,7 +127,7 @@ There is no update step: `sno` updates itself when it finds a newer release.
 
 ## From our own machines
 
-*Three things that happened on this repository, September 2026.*
+*Three things we saw on this repository.*
 
 ### "I yelled at my agent last night. It took notes."
 
