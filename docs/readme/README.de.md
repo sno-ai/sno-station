@@ -126,8 +126,8 @@ und danach gesendet hat, zählt als Ihres.
 Ihre E-Mail-Adresse: Er führt `sno account login --email you@example.com` aus, und Sie melden
 sich einmal an.
 
-**Schon ein Konto.** Führen Sie einen Befehl aus und öffnen Sie den Link, den er ausgibt,
-während Sie angemeldet sind:
+**Schon ein Konto.** Führen Sie einen Befehl aus, öffnen Sie den Link, den er ausgibt,
+während Sie angemeldet sind, und klicken Sie auf „Approve“:
 
 ```bash
 sno account claim

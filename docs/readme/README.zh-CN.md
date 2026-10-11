@@ -109,7 +109,7 @@ Sno onboard
 **还没有账号。** 引导流程会显示一个只为这台电脑生成的链接。打开它，注册，然后点击 Approve。
 或者把你的邮箱告诉 agent：它会运行 `sno account login --email you@example.com`，你登录一次即可。
 
-**已经有账号。** 运行一条命令，然后在已登录的状态下打开它打印出的链接：
+**已经有账号。** 运行一条命令，在已登录的状态下打开它打印出的链接，然后点击 Approve：
 
 ```bash
 sno account claim
