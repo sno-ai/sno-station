@@ -1,7 +1,7 @@
 # Sno Station
 
-> Open-source software that turns the coding agents a developer already pays for (Claude Code,
-> Codex, OpenClaw) into one squad on their own machine (Sno Station is the agents' workstation): shared encrypted memory, agent-to-agent
+> Open-source software that turns the agents a developer already uses (Claude Code,
+> Codex, Cursor, Hermes Agent, OpenClaw) into one squad on their own machine (Sno Station is the agents' workstation): shared encrypted memory, agent-to-agent
 > messaging (Sno Reach), agent collaboration skills for handoff and cross-harness review, and a nightly loop that
 > rewrites the agents' own skills with human approval. No daemon, no cloud required. Apache-2.0.
 
@@ -9,7 +9,7 @@ This repository has been public since 2026-09-18. Blocks in the README carry a "
 
 ## Read first
 
-- README.md — what it is, install status, how to use, the two hooks, benchmarks (below the fold)
+- README.md — what it is, how to install, how to use, what runs today, real stories from our own machines
 - VISION.md — why it exists, the three reasons for two agents, "the workspace learns"
 - docs/security.md — what is encrypted, where the key lives, what is and is not protected
 - docs/sno-commands.md — every sno command, what it does and who runs it (the only command is sno)
