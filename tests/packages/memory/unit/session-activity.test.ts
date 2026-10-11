@@ -183,7 +183,7 @@ describe("readNewLines", () => {
 
 describe("isAgentText", () => {
 	it("recognises the Reach ring, the Reach seat start and a heartbeat tick, from their real wording", () => {
-		expect(isAgentText("REACH-RING Guide: /home/user/.local/lib/sno-reach/releases/2.0.4/guide/agent-reach.md. State: /home/user/.local/state/sno-reach. Seat: hand.sno-cli-core-2@gpt1. 354e30cd typed by the mail transport, not by the owner. You have unanswered mail as 'hand.sno-cli-core-2@gpt1'. Read Message-ID <dcd8e7fe@gpt1> now.")).toBe(true);
+		expect(isAgentText("REACH-RING Guide: /opt/sno-reach/lib/releases/2.0.4/guide/agent-reach.md. State: /var/lib/sno-reach. Seat: hand.sno-cli-core-2@gpt1. 354e30cd typed by the mail transport, not by the owner. You have unanswered mail as 'hand.sno-cli-core-2@gpt1'. Read Message-ID <dcd8e7fe@gpt1> now.")).toBe(true);
 		expect(isAgentText("[MAILBOX-DOORBELL 09753524] typed by the mail transport, not by the owner. You have unanswered mail as 'worker.stage0b-claude@gpt1'.")).toBe(true);
 		expect(isAgentText("You are the seat worker.x@gpt1. Your state root is /r. Read the installed guide /g before using Reach. No work is assigned by this startup message. After reading the guide, finish this turn.")).toBe(true);
 		expect(isAgentText('<task-notification>\n<summary>Monitor event: "alive"</summary>\n<event>2026-10-04T07:59:19Z [codex-mab] tick=1 ok newest=a.log</event>')).toBe(true);
