@@ -30,7 +30,7 @@ comme aujourd'hui.
 milieu d'une tâche, et un autre agent la reprend depuis la mémoire partagée, avec tout son
 contexte. Vous n'avez rien à coller.
 
-**Chaque travail est relu.** Le relecteur est toujours un autre agent, d'une autre entreprise, qui
+**Une relecture à la demande.** Chaque agent peut relire le travail de l'autre. Le relecteur est toujours un autre agent, d'une autre entreprise, qui
 n'a donc pas l'habitude de donner raison au premier.
 
 **Il progresse pendant que vous dormez.** Pendant la nuit, il lit les sessions de la journée,
@@ -133,7 +133,7 @@ Il n'y a pas d'étape de mise à jour : `sno` se met à jour lui-même quand il 
 
 ## Sur nos propres machines
 
-*Trois choses arrivées sur ce dépôt, en septembre 2026.*
+*Trois choses que nous avons vues sur ce dépôt.*
 
 ### « J'ai crié sur mon agent hier soir. Il a pris des notes. »
 
