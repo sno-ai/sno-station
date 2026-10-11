@@ -324,7 +324,7 @@ export class MemoryRuntimePool {
 			return result;
 		}
 		finally {
-			await this.emitProviderUsage(entry, scope, responses);
+			await this.emitProviderUsage(entry, scope, responses, method === "capture");
 			// A host-named session's skin owns cost.summary; the sidecar's tallies for it are never read.
 			const session = input.scope.host?.observeSessionUuid;
 			if (session) { this.observability.aggregator.delete(session); entry.observability.aggregator.delete(session); }
@@ -372,13 +372,13 @@ export class MemoryRuntimePool {
 		}
 	}
 
-	private async emitProviderUsage(entry: SkinRuntime, scope: ScopeCtx, responses: ProviderResponseTrace[]): Promise<void> {
+	private async emitProviderUsage(entry: SkinRuntime, scope: ScopeCtx, responses: ProviderResponseTrace[], deferrable = false): Promise<void> {
 		if (!scope.host?.observeSessionUuid || responses.length === 0) return;
 		await bestEffort("provider usage", async () => {
 			for (const response of responses) {
 				if (response.failure) {
-					// A call whose host is gone is deferred and retried when a host returns, so it is not an error row.
-					if (response.hostGone) continue;
+					// A save whose host is gone is deferred and retried when a host returns, so it is not an error row.
+					if (response.hostGone && deferrable) continue;
 					await entry.observability.emitError(`llm.call:${response.failure}`, `${response.provider} ${response.callId}`, scope.host?.observeSessionUuid);
 					continue;
 				}
