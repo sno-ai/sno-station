@@ -1,6 +1,6 @@
-/** @file host-gone-recoverable.test.ts
- * @purpose A model call whose host is gone is marked as retried-later, and the error row it becomes says so.
- * @boundary The real llm client and the real RegisteredAgentPort with no endpoint; the real PluginObservability.
+/** @file host-gone-deferred.test.ts
+ * @purpose A model call whose host is gone is marked as deferred, and the sidecar reports no error row for it.
+ * @boundary The real llm client and RegisteredAgentPort with no endpoint; the real MemoryRuntimePool reporting method and PluginObservability.
  */
 
 import { mkdtempSync, rmSync } from "node:fs";
@@ -9,6 +9,7 @@ import { join } from "node:path";
 import { expect, it, vi } from "vitest";
 import { defaultSettings } from "../../../../packages/memory/config/settings";
 import { PluginObservability } from "../../../../packages/memory/src/engine/observability/adapter";
+import { MemoryRuntimePool } from "../../../../packages/memory/src/sidecar/memory-runtime";
 import { pluginConfigSchema } from "../../../../packages/memory/src/engine/shared/types";
 import { createLlmClient } from "../../../../packages/memory/src/model/llm-client";
 import { withProviderResponses } from "../../../../packages/memory/src/model/llm-provider-transport";
@@ -28,15 +29,19 @@ it("marks a host call that found no agent as host-gone", async () => {
 	expect(failed).toMatchObject({ failure: "host_transport", hostGone: true });
 });
 
-it("records the error row as recoverable only when told so", async () => {
+it("reports no error row for a deferred call and still reports other failures", async () => {
 	const dir = mkdtempSync(join(tmpdir(), "host-gone-"));
 	try {
 		const observability = new PluginObservability(pluginConfigSchema.parse({ embedding: { provider: "local-onnx" }, observe: { enabled: false } }), dir);
 		Object.assign(observability, { runtime: { hashRedactedText: (text: string) => `hash:${text}` } });
 		const emit = vi.spyOn(observability, "emit").mockResolvedValue();
-		await observability.emitError("llm.call:host_transport", "agent-host-seam E10", "session", true);
-		await observability.emitError("llm.call:provider_throw", "boom", "session");
-		const recoverable = emit.mock.calls.map(([event]) => (event.payload as { recoverable: boolean }).recoverable);
-		expect(recoverable).toEqual([true, false]);
+		vi.spyOn(observability, "flush").mockResolvedValue(undefined as never);
+		const base = { callId: "E10", destination: "host", provider: "agent-host-seam" } as const;
+		const responses = [{ ...base, failure: "host_transport", hostGone: true }, { ...base, failure: "host_timeout" }] as ProviderResponseTrace[];
+		const scope = { principal: "p", project: "x", session: "s", host: { observeSessionUuid: "session-uuid" } };
+		await (MemoryRuntimePool.prototype as unknown as { emitProviderUsage: (...args: unknown[]) => Promise<void> })
+			.emitProviderUsage.call({}, { observability }, scope, responses);
+		const kinds = emit.mock.calls.map(([event]) => (event.payload as { kind: string }).kind);
+		expect(kinds).toEqual(["llm.call:host_timeout"]);
 	} finally { rmSync(dir, { recursive: true, force: true }); }
 });
