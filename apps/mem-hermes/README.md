@@ -1,5 +1,12 @@
 # Sno Memory for Hermes Agent
 
+> This is only one part of Sno Station. Do not install the plugin on its own. The full install is
+> the line below, which installs the `sno` command and then runs `sno setup`:
+>
+> ```bash
+> sh -c 'sno_installer_body=$(curl -fsSL https://sno.ai/install) && printf "%s\n" "$sno_installer_body" | sh' && ~/.local/bin/sno setup
+> ```
+
 Long-term memory for Hermes Agent sessions. The memory service stores and retrieves project
 memories; this plugin connects Hermes lifecycle hooks and four memory tools.
 
