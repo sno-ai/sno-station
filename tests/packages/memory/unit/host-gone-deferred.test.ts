@@ -29,7 +29,7 @@ it("marks a host call that found no agent as host-gone", async () => {
 	expect(failed).toMatchObject({ failure: "host_transport", hostGone: true });
 });
 
-it("reports no error row for a deferred call and still reports other failures", async () => {
+it("reports no error row for a deferred save, and every other failure", async () => {
 	const dir = mkdtempSync(join(tmpdir(), "host-gone-"));
 	try {
 		const observability = new PluginObservability(pluginConfigSchema.parse({ embedding: { provider: "local-onnx" }, observe: { enabled: false } }), dir);
@@ -39,9 +39,13 @@ it("reports no error row for a deferred call and still reports other failures", 
 		const base = { callId: "E10", destination: "host", provider: "agent-host-seam" } as const;
 		const responses = [{ ...base, failure: "host_transport", hostGone: true }, { ...base, failure: "host_timeout" }] as ProviderResponseTrace[];
 		const scope = { principal: "p", project: "x", session: "s", host: { observeSessionUuid: "session-uuid" } };
-		await (MemoryRuntimePool.prototype as unknown as { emitProviderUsage: (...args: unknown[]) => Promise<void> })
-			.emitProviderUsage.call({}, { observability }, scope, responses);
-		const kinds = emit.mock.calls.map(([event]) => (event.payload as { kind: string }).kind);
-		expect(kinds).toEqual(["llm.call:host_timeout"]);
+		const report = (deferrable: boolean) => (MemoryRuntimePool.prototype as unknown as { emitProviderUsage: (...args: unknown[]) => Promise<void> })
+			.emitProviderUsage.call({}, { observability }, scope, responses, deferrable);
+		await report(true);
+		expect(emit.mock.calls.map(([event]) => (event.payload as { kind: string }).kind)).toEqual(["llm.call:host_timeout"]);
+		// Any other call that finds no host is a real failure: nothing retries it.
+		emit.mockClear();
+		await report(false);
+		expect(emit.mock.calls.map(([event]) => (event.payload as { kind: string }).kind)).toEqual(["llm.call:host_transport", "llm.call:host_timeout"]);
 	} finally { rmSync(dir, { recursive: true, force: true }); }
 });
