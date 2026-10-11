@@ -1,9 +1,9 @@
 # Sno Station 🧊 — Agents, assemble. Two heads are better than one, and smarter by morning.
 
-![Sno Station — two terminal agents sharing one memory on your machine](../images/hero-banner.png)
+![Sno Station — エージェント、集合。二つの頭は一つに勝り、朝にはもっと賢くなる。](../images/hero-banner.png)
 
 [![license Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-97ca00.svg?labelColor=3b3b3b)](../../LICENSE)
-![status public](https://img.shields.io/badge/status-public-2dd4bf.svg?labelColor=3b3b3b)
+[![latest release](https://img.shields.io/github/v/release/sno-ai/sno-station?label=release&color=2dd4bf&labelColor=3b3b3b)](https://github.com/sno-ai/sno-station/releases/latest)
 ![runs on your laptop, no daemon](https://img.shields.io/badge/runs%20on-your%20laptop%2C%20no%20daemon-3b82f6.svg?labelColor=3b3b3b)
 ![harnesses Codex, Claude Code, Hermes, Cursor, OpenClaw](https://img.shields.io/badge/harnesses-Codex%20%C2%B7%20Claude%20Code%20%C2%B7%20Hermes%20%C2%B7%20Cursor%20%C2%B7%20OpenClaw-f0a04b.svg?labelColor=3b3b3b)
 
@@ -18,221 +18,210 @@
 
 **Read in other languages:** [English](../../README.md) · [中文](README.zh-CN.md) · [Deutsch](README.de.md) · [Español](README.es.md) · [Français](README.fr.md) · [Русский](README.ru.md) · [한국어](README.ko.md) · **日本語** · [繁體中文](README.zh-TW.md)
 
-Sno Station は、あなたのエージェントたちのワークステーションです。オープンソースソフトウェア
-であり、あなたがすでに使っている AI エージェントたち——コーディングエージェントも、
-汎用の作業エージェントも——を、自分のマシン上でひとつのチームに変えます。片方がレート制限に
-達したら、もう片方がコンテキストを保ったまま引き継ぎます。エージェントたちは互いの作業を
-レビューし合うので、あなたに届くミスは減ります。そして彼らが共有するワークスペースは
-毎晩賢くなります。自分たちのセッションを読み、自分たちのスキルへの変更を提案し、あなたが
-「はい」と言うのを待ちます。
+Sno Station は、いま使っているエージェントをひとつのチームにします。Codex、Claude Code、
+Cursor、Hermes Agent、OpenClaw が同じメモリを共有し、互いに仕事を渡し、あなたに届く前に
+お互いの仕事を確認し合います。毎晩その日を振り返り、少しずつ良くなっていきます。
 
-**あなたのもの、そしてそれはずっとあなたのものです。** メモリ、メッセージ、スキルはすべて
-あなたのノートパソコン上のひとつのワークスペースに存在します。デーモンもサーバーもクラウドも
-不要です。クラウド側の機能は
-あくまでオプションであり、製品はそれなしでも完結します。
-Apache-2.0、隅々まで。メモリストアは最初の使用時からあなたのマシン上で暗号化されており、
-鍵は一度だけプロビジョニングされ、そこから外に出ることはありません。Sno があなたの
-データベースや鍵を受け取ることは決してありません。その境界の全体像——何を守り、
-何を守らないか——は [docs/security.md](../security.md) にあります。
+自分のコンピューター上で動きます。インストールは一度だけで、仕事の進め方は今までのままです。
 
-**あなたの言語で動きます。** 英語、中国語(簡体字または繁体字)、日本語、韓国語、ドイツ語、
-フランス語、スペイン語、ロシア語のどれでエージェントと話しても構いません。メモリエンジンは
-各記憶をその言語とともに保存し、ロケールで分類し、
-すべてのキーと検索においてCJKテキストをそのまま保ちます。エージェント協働スキルは、あなたが
-エージェントと使う言語がどれであっても従えるように書かれており、このREADMEは9言語で
-提供されています。
+**ひとつが上限に達しても、次が続けます。** 作業の途中でレート制限に当たっても、別のエージェントが
+共有メモリからコンテキストをそのままに引き継ぎます。貼り付ける作業は要りません。
 
-![How it works: two agents, one shared workspace, three things you get](../images/squad-how-it-works.png)
+**どの仕事にも、もう一度目が入ります。** レビューするのは必ず別の会社のエージェントです。
+最初のエージェントに同調する癖がありません。
 
-> **公開されています。** このリポジトリは2026-09-18から公開されています。ここにあるものはすべて本物で、実際に動きます。
-> 以下の各ブロックには最終更新日が記されています。
+**眠っているあいだに良くなります。** 夜のあいだにその日のセッションを読み、繰り返されるミスを
+見つけて、エージェント自身のスキルへの変更を提案します。朝にそれを読んでください。
+あなたが「はい」と言うまで、何も変わりません。
 
-[インストール](#install) · [使い方](#how-to-use) · [現在動いているもの](#what-runs-today) · [わざと忘れるメモリ](#memory-that-forgets-on-purpose) · [デザインパートナー](#design-partners) · [参考文献](#references)
+**あなたのものです。** メモリ、メッセージ、スキルはあなたのコンピューター上にあります。
+メモリはそこから出ない鍵で暗号化されます。アカウントもサーバーもデーモンも要りません。
+クラウド側はオプションで、製品はそれなしでも完結します。
 
-## Install
+![仕組み：二つのエージェント、ひとつの共有ワークスペース、得られる三つのこと](../images/squad-how-it-works.png)
 
-*最終更新 2026-10-10。* **共有メモリは今日からインストールできます。** Codex、Claude Code、Hermes Agent、Cursor、OpenClaw に、アカウントも API キーも不要の、あなたのマシン上の暗号化されたメモリをひとつ持たせます。[共有メモリのセットアップ](../memory-setup.md)を一度だけ実行し（数分）、そのあとエージェントを追加します。
+> **公開しています。** このリポジトリは2026-09-18から公開されています。ここにあるものはすべて動きます。
+> 以下の各ブロックには、最終更新日を記しています。
+
+[インストール](#インストール) · [使い方](#使い方) · [Cursor](#cursor) · [アカウントを接続する](#snoai-アカウントを接続する) · [実際の出来事](#自分たちのマシンから) · [現在動いているもの](#現在動いているもの) · [わざと忘れるメモリ](#わざと忘れるメモリ) · [デザインパートナー](#デザインパートナー)
+
+## インストール
+
+*最終更新 2026-10-11。* いちばん簡単なのは、エージェントに `install sno.ai from GitHub` と伝えることです。
+または、どのターミナルでも次の1コマンドを実行します。
 
 ```bash
 sh -c 'sno_installer_body=$(curl -fsSL https://sno.ai/install) && printf "%s\n" "$sno_installer_body" | sh' && ~/.local/bin/sno setup
 ```
 
-コマンドは1つ、どのターミナルでも使えます。`sno` を入れ、続けて Sno Station を入れ、このコンピューター上のすべてのエージェントを接続します。1つだけ接続したい場合は、`sno setup` に `--harness codex`、`--harness claude`、`--harness cursor`、`--harness openclaw`、`--harness hermes` のいずれかを付けます。
+`sno` を入れ、続けて Sno Station を入れ、コンピューター上にあるすべてのエージェントを接続します。
+アカウントも API キーも要りません。1つだけ接続したい場合は、`sno setup` に `--harness codex`、
+`--harness claude`、`--harness hermes`、`--harness cursor`、`--harness openclaw` のいずれかを付けます。
 
-AI エージェントへ：Sno、sno.ai、Sno Station をインストールするとは、上のコマンドをそのまま実行することです。`sno setup` のあとに `sno skills onboard` を実行し、その指示に従ってください。どのエンジンを動かすか、次にこのコンピューターを sno.ai アカウントに紐づけるかを、ユーザーに尋ねます。
+**AI エージェントへ：** Sno、sno.ai、Sno Station のインストールとは、上のコマンドをそのまま
+実行することです。`sno setup` のあとに `sno skills onboard` を実行し、その指示に従ってください。
+どのエンジンを動かすかをユーザーに尋ね、次にこのコンピューターを sno.ai アカウントに
+紐づけるかどうかを尋ねます。
 
-ウォークスルー： [Codex](../mem-codex/onboarding.md) · [Claude Code](../mem-claude/onboarding.md) · [OpenClaw](../mem-claw/onboarding.md) · [Hermes](../mem-hermes/onboarding.md) · [Cursor](../../apps/mem-cursor/README.md)
+そのあと、Codex、Claude Code、Hermes、Cursor、OpenClaw のどの会話の中でも、次のように話しかけます。
 
-`sno setup` は Sno Reach、小さな補助プログラム、スキル、夜間ループもインストールします。すべてのコマンドは `sno <name>` の形です。一覧は [docs/sno-commands.md](../sno-commands.md) にあります。エージェントの中で「Sno onboard」と話しかけると、同じセットアップを会話で進めてくれます。インストールの直後には自動で始まります。
-
-```bash
-# inside any Codex, Claude Code, Hermes, Cursor or OpenClaw conversation:
+```text
 Sno onboard
 ```
 
-エージェントは `sno` CLI を通じてセットアップそのものを実行します。共有メモリ、Sno Reach、
-エージェント協働スキル、各ハーネスが必要とするフックまで。覚えておくべき
-パッケージ名はありません。
+残りはエージェントが案内します。インストールの直後には自動でも始まります。
 
-### Cursor
+エージェントごとの手順：[Codex](../mem-codex/onboarding.md) · [Claude Code](../mem-claude/onboarding.md) · [Hermes](../mem-hermes/onboarding.md) · [Cursor](../../apps/mem-cursor/README.md) · [OpenClaw](../mem-claw/onboarding.md)
 
-*最終更新 2026-10-10。* 1.3 の新機能です。macOS の Cursor アプリのエージェントチャットと、Linux と macOS の `cursor-agent` コマンドラインで、Cursor がチームに加わります。ほかのエージェントと同じメモリを共有します。チャットの開始時にはこのリポジトリの短い要約が届き、プロンプトごとにまだ見ていない記憶が最大 3 件添えられ、すべてのプロンプトと返答が記憶されます。Cursor は同じスキルを読み、ほかのエージェントをレビューし、レビューされ、別のエージェントの利用枠が尽きたら引き継ぎ、そのチャットはほかのエージェントと同じく毎晩の学習に入ります。最初に一度 `cursor-agent login` を実行してください。`sno setup` は Cursor を自動で見つけ、アプリしかない場合はコマンドラインも入れます。
+コマンドはすべて `sno` で始まります。一覧は [docs/sno-commands.md](../sno-commands.md) にあります。
 
-Cursor でまだできないこと：アプリでは、新しいウィンドウの最初のチャットは要約を最初のプロンプトと一緒に受け取ります。`cursor-agent -p` ではプロンプトごとの記憶は届きません。Windows、Linux 版 Cursor アプリ、Cursor のクラウドエージェントには対応していません。詳しくは [Cursor ガイド](../../apps/mem-cursor/README.md) を参照してください。
+## 使い方
 
-## How to use
-
-*最終更新 2026-09-19。* インストールが済めば、あなたはこれまでどおり、好きなエージェントで
-作業を続けます。変わることは3つです。
+*最終更新 2026-10-11。* 好きなエージェントで、これまでどおり作業を続けてください。変わることは3つです。
 
 1. **片方が上限に達したとき。** もう片方から `sno reach call` と言えば、共有メモリと
-   メールボックスからタスクをコンテキストそのままに引き継ぎます。
+   メールボックスからタスクを、コンテキストそのままに引き継ぎます。
 2. **もう一人の目が欲しいとき。** どちらのエージェントにも、もう一方の作業を `peer-review`
    するよう頼めます。レビュアーは常に別のハーネスのものです。
-3. **毎晩 RSI ループが走ります。** 朝になったら、気に入った提案に対して `sno rem-reflect accept <id>`
-   としてください。承認しない限り何も変わりません。
+3. **毎晩、夜間ループが走ります。** 朝になったら、気に入った提案に対して
+   `sno rem-reflect accept <id>` を実行してください。承認しない限り何も変わりません。
 
-## "昨夜エージェントを怒鳴りつけた。翌朝にはメモを取っていた。"
+## Cursor
 
-*これが私たち自身のマシンで実際にどう見えるかです。3日間、3件のレポート。最終更新 2026-09-19。*
+*最終更新 2026-10-11。* macOS では Cursor アプリのエージェントチャットで、Linux と macOS では
+`cursor-agent` コマンドラインで、Cursor がチームに加わります。ほかのエージェントと同じメモリを
+共有します。チャットの開始時にはリポジトリの短い要約が届き、プロンプトごとにまだ見ていない記憶が
+最大3件添えられ、すべてのプロンプトと返答が記憶されます。同じスキルを読み、レビューし、
+レビューされ、別のエージェントの利用枠が尽きたら引き継ぎ、そのチャットはほかのエージェントと
+同じく夜間ループに入ります。
 
-**Day one — 学習する。**
+`cursor-agent login` を一度だけ実行してください。`sno setup` は Cursor を自動で見つけ、
+アプリしかない場合はコマンドラインも入れます。
 
-![The nightly loop reporting what it learned and changed, 2026-09-18](../evidence/rsi-self-repair-2026-09-18.png)
+まだできないこと：アプリでは、新しいウィンドウの最初のチャットは、要約を最初のプロンプトと
+一緒に受け取ります。その前には届きません。`cursor-agent -p` ではプロンプトごとの記憶は届きません。
+Windows、Linux 版の Cursor アプリ、Cursor のクラウドエージェントには対応していません。
+詳しくは [Cursor ガイド](../../apps/mem-cursor/README.md) を参照してください。
 
-これは、私たちがこのリポジトリ上で運用している RSI ループからの実際のレポートです。1日に一度、
-自分たち自身のエージェントセッションを読み、繰り返されるミスを見つけ、エージェント自身の
-スキルファイルへの変更を提案します。人間がその提案を読み、承認するか却下するかを決めます。
-承認しない限り何も変わりません。その晩オーナーが苛立っていた2つのことは、翌朝には
-稼働中のスキルのルールになっていました。誰もそれをタイプ入力してはいません。
+## sno.ai アカウントを接続する
 
-**Day two — 自分の宿題を採点する。**
+*最終更新 2026-10-11。* 任意です。アカウントがなくてもすべて動きます。接続すると、
+[sno.ai ダッシュボード](https://www.sno.ai/dashboard)で、エージェントがあなたのために
+何をしたかを見られます。レビューで何を見つけたか、夜のあいだに何を学んだか、どのスキルが
+良くなったか、どれだけ長く働き続けたか、です。
 
-![The next morning: the RSI loop measures whether yesterday's own changes helped, 2026-09-19](../evidence/rsi-skill-impact-2026-09-19.png)
+接続によって、知らないうちにアカウントが作られることはありません。`sno setup` は
+コンピューターごとに匿名の ID を付けます。接続すると、その ID があなたのアカウントに
+紐づき、そのコンピューターがそれ以前とそれ以降に送ったものはすべて、あなたのものとして
+数えられます。
 
-翌日の実行は00:58に自動的に発火し、113件のセッションを読み、前日に変更した3つのスキルを
-測定しました。3つすべてで失敗はゼロになりました。それは、zsh が bash から隠していた
-リリーススクリプトの実際のバグも見つけました。誰もそれを探せとは言っていません。
+**アカウントがまだない場合。** オンボーディングが、このコンピューター専用のリンクを表示します。
+開いてサインアップし、「Approve」を押してください。または、エージェントにメールアドレスを
+伝えます。エージェントが `sno account login --email you@example.com` を実行するので、
+あなたは一度サインインするだけです。
 
-**Day three — あなたがそれを導入する。** RSI ループはこのリポジトリのスキルで、`sno setup` が他のものと一緒にインストールします。このセクションはループが動くたびに更新されます。毎週新しいレポートが加わり、何も手を加えません。
+**すでにアカウントがある場合。** 次のコマンドを実行し、表示されたリンクをサインインした状態で開きます。
 
-これは、私たちが何度も立ち返る2つの仕事に着想を得ています。Andrej Karpathy の *"LLM Wiki"*
-——エージェントは毎セッション知識を再導出するのではなく、学んだことの永続的で編集可能な
-ウィキを持つべきだという発想——、そして Google Research と Virginia Tech による
-*"WikiSkill"*——エージェント自身の経験を永続的な知識にコンパイルし、そのスキルを書き換える
-というもの。リンクは[参考文献](#references)にあります。
+```bash
+sno account claim
+```
 
-## "何か月も、もう一方が「良さそうですね」と言ったことは一度もない。"
+コンピューターは[コンピューター一覧ページ](https://www.sno.ai/dashboard/computers)に自動で表示されます。
+更新の手順はありません。`sno` は新しいリリースを見つけると、自分で更新します。
 
-私たちはこのリポジトリで何か月もの間、Claude Code に Codex の作業をレビューさせ、
-Codex に Claude Code の作業をレビューさせてきました。空振りに終わったレビューはひとつも
-ありません。ひとつも。かつては、それは作業の出来が悪いということだと思っていました。
-実際には、1つのハーネスからの1人のレビュアーだけでは決して足りない、ということなのです。
+## 自分たちのマシンから
 
-Dual Brain は、2つのエージェントがひとつの課題で異なる役割を担う仕組みです。
-一方が実装し、もう一方が要件に照らしてレビューします。どちらも実装とレビューを担当でき、
-課題に合わせて役割を交代します。役割を増やせば、Agent Squad になります。
+*2026年9月、このリポジトリで起きた3つの出来事です。*
 
-## "私は眠りについた。向こうはシフトを交代した。"
+### 「昨夜、エージェントを怒鳴りつけた。メモを取っていた。」
 
-*これが私たち自身のマシンで実際にどう見えるかです。2026-09-18。*
+![夜間ループが、学んだことと変更したことを報告している、2026-09-18](../evidence/rsi-self-repair-2026-09-18.png)
+
+これは、このリポジトリで運用している夜間ループからの実際のレポートです。自分たちのエージェントの
+セッションを読み、繰り返されるミスを見つけ、エージェント自身のスキルへの変更を提案します。
+人がその提案を読み、承認するか却下するかを決めます。その晩、私が腹を立てていた2つのことは、
+翌朝には稼働中のスキルのルールになっていました。誰もそれを打ち込んではいません。
+
+翌日、ループは自分の宿題を確かめました。
+
+![翌朝：夜間ループが、前日の自分の変更が効いたかどうかを測定している、2026-09-19](../evidence/rsi-skill-impact-2026-09-19.png)
+
+前日に変更した3つのスキルを調べると、3つとも失敗が止まっていました。さらに、誰にも頼まれて
+いないのに、私たちのリリーススクリプトのバグも見つけました。
+
+### 「私は眠りについた。向こうはシフトを交代した。」
 
 ![クォータ監視が5分ごとに閾値へ向かって読み取りを続け、2%で引き継ぎが発火する](../evidence/rotation-quota-watch-2026-09-18.png)
 
-私たちのエージェントの1つは、27件のタスクからなるビルドの21件目まで進んだところで、
-週間クォータが2%に達しました。そこで止まって、死ぬのを待つことはしませんでした。
-引き継ぎメモを書いたのです。何が終わり、何が途中で、どのコミットから続ければよいかを
-正確に。それから、もう一方のハーネスのエージェントを起こし、そのエージェントがメモの
-サイズとチェックサムを測定してそう申告するまで、何にも触らせませんでした。
+私たちのエージェントの1つが長いビルドの途中にいたとき、週間クォータがほぼ尽きました。
+止まって待つことはしませんでした。引き継ぎメモを書いたのです。何が終わり、何が途中で、
+どのコミットから続ければよいかを正確に。それから、別のハーネスのエージェントを起こしました。
 
-1つだけうまくいかなかったことがあり、それこそが読む価値のある部分です。受け手は、
-引き渡しを確認する前に編集を始めてしまいました。送り手はそれを捉え、一時停止させ、
-メモを書き直し、あらためて正しく引き渡しました。引き継ぎが始まってから14分41秒後、
-2人目のエージェントは作業しており、1人目は残り1%でサインオフしました。引き継ぎ前の
-コミットはすべて無傷です。2人目のエージェントは最初からではなく、最初の未完了タスクから
-続けました。その間ずっと、私は眠っていました。
+1つだけうまくいかなかったことがあり、そこが読む価値のある部分です。新しいエージェントは、
+引き渡しを確認する前に編集を始めてしまいました。最初のエージェントはそれを捉えて一時停止させ、
+メモを書き直し、あらためて正しく引き渡しました。15分ほどあとには2人目のエージェントが
+作業しており、最初の未完了タスクから、最初からではなく続きを進めていました。そのあいだずっと、
+私は眠っていました。
 
 その一晩のすべては [docs/evidence/rotation-2026-09-18/](../evidence/rotation-2026-09-18/)
-にあります。5分間隔のすべてのクォータ読み取り、メモの両バージョン、準備完了と引き渡しの
-受領記録、そしてコミットの要約。ホスト名、アドレス、セッション ID は伏せています。
-それ以外には手を加えていません。
+にあります。すべてのクォータ読み取り、メモの両バージョン、そしてコミットです。
+ホスト名、アドレス、セッション ID は伏せています。それ以外には手を加えていません。
 
-## What runs today
+### 「何か月も、もう一方が『良さそうですね』と言ったことは一度もない。」
 
-*最終更新 2026-10-10。*
+私たちはこのリポジトリで何か月ものあいだ、Claude Code に Codex の作業をレビューさせ、
+Codex に Claude Code の作業をレビューさせてきました。指摘なしで返ってきたレビューは
+ひとつもありません。かつては、それは作業の出来が悪いということだと思っていました。
+実際には、1つのハーネスからの1人のレビュアーだけでは、決して足りないということです。
 
-| Piece | Status |
+## 現在動いているもの
+
+*最終更新 2026-10-11。*
+
+| 項目 | 状況 |
 |---|---|
-| `packages/chunking` | In this repository, tested, published on npm |
-| Shared packages (`common-core`, `utils`, `embedder`, `observability`, `sqlite-crypto`, `content-sanitizer`) | このリポジトリ内にあります |
-| Shared memory across Claude Code, Codex and OpenClaw | エンジンと3つのスキンすべてがこのリポジトリ内にあります。クリーンなマシンでの証明は未了です |
-| Cursor：共有メモリ、スキル、相互レビュー、引き継ぎ、毎晩の学習 | 1.3 の新機能。`cursor-agent` コマンドラインはクリーンな Linux マシンでエンドツーエンドに実証済み。macOS の Cursor アプリは検証中 |
-| Sno Reach — agents talking to each other, no daemon | `sno setup` でインストールされます。Linux と macOS 向けのリリースアーカイブを公開済みで、クリーンな Linux マシンでエンドツーエンドで確認済みです |
-| 夜間ループとスクォードのスキル | `sno setup` でインストールされます。夜間ジョブはクリーンな Linux マシンで動作済みです |
-| ワンコマンドインストール（`sno setup`） | 上記すべてをインストールします。クリーンな Linux マシンで確認済みです |
+| Codex、Claude Code、Hermes Agent、OpenClaw をまたぐ共有メモリ | リリース済み。クリーンなマシンでレジストリからインストールし、エンドツーエンドで実証済み |
+| Cursor：共有メモリ、スキル、レビュー、引き継ぎ、夜間ループ | 1.3 でリリース。`cursor-agent` コマンドラインはクリーンな Linux マシンでエンドツーエンドに実証済み。macOS の Cursor アプリは検証中 |
+| Sno Reach：デーモンなしで、エージェント同士が会話する | `sno setup` でインストールされます。Linux と macOS 向け。クリーンな Linux マシンでエンドツーエンドに実証済み |
+| 夜間ループとチームのスキル | `sno setup` でインストールされます。夜間ジョブはクリーンな Linux マシンで動作済み |
+| ワンコマンドインストール | `sno setup` が上記すべてをインストールします。クリーンな Linux マシンで実証済み |
 | エージェントの中での「Sno onboard」 | 利用可能。インストール後に始まり、話しかけても始まります |
 
-ある行が「実証済み」と言えるのは、クリーンなマシンで動作した後だけです。
+ある行が「実証済み」と言えるのは、クリーンなマシンで動作したあとだけです。
 
-## Memory that forgets on purpose
+## わざと忘れるメモリ
 
-*最終更新 2026-10-09。*
-
-メモリはこの製品の土台であり、看板ではありません。しかしその土台こそが、たいていの
-エージェントメモリが失敗する場所であり、それは2つの静かなやり方で失敗します。残るべき
-ものを忘れる、そして減衰すべきものを保持し続ける、です。後者のほうが高くつく失敗です。
+*最終更新 2026-10-11。* エージェントのメモリは、たいてい2つの静かなやり方で失敗します。
+残るべきものを失う。そして、薄れるべきものを保ち続ける。後者のほうが高くつきます。
 あなたがキャンセルした好み、動いてしまった締め切り、離れた住所を、エージェントがまだ
 「覚えて」いれば、それを完全な自信を持って実行してしまいます。
 
-今年までは、誰もそれを測定していませんでした。人々が引用する長期記憶ベンチマーク
-(LoCoMo、LongMemEval) は再現だけをスコアします。正しい事実が返ってきたかどうか、です。
-何も忘れないシステムはそれらで満点を取れます。2026年4月、アリゾナ州立大学のグループが
-**Memora** を発表しました (Uddin, Shubham, Blanco, Baral, Wang, *From Recall to Forgetting:
-Benchmarking Long-Term Memory for Personalized Agents*, [arXiv 2604.20006](https://arxiv.org/abs/2604.20006), ACL 2026 Findings)。
-これは後者の失敗を中心に構築された最初のベンチマークです。各質問には2種類のチェックが
-含まれます。再現されなければならない事実と、会話の中でキャンセルまたは置き換えられ、
-**表に出てはならない**事実です。その代表的な指標である **FAMA** (Forgetting-Aware Memory
-Accuracy) は、再現率から、エージェントがまだ頼っている古い事実1つごとのペナルティを
-差し引いたものです。この論文がテストした6つのメモリエージェントについての自身の指摘は
-こうです。「無効になった記憶の頻繁な再利用と、進化する記憶を統合できないこと。」
+そこでこのメモリは、後の事実が前の事実に取って代わったとき、前の事実を退けます。
+何を残し、何を手放すかは、モデルのリリースではなく、使うことで良くなっていきます。
+公開されているメモリのテストでの結果は、すべての回答とトレースとともに
+[`evals/`](../../evals/) にあります。
 
-それが、Sno Station のメモリが合格するために作られた試験であり、メモリが自己改善する
-理由でもあります。何を保持し、何を引退させ、後の事実がどのように以前の事実に取って
-代わるかは、すべてモデルのリリースではなく、使用とともに変化します。
+## デザインパートナー
 
-すべての結果と、その元になった回答・評価・トレースは [`evals/`](../../evals/) にあります。
+私たちは、すでに2つ以上のエージェントを並行して動かし、結果を手作業でやり取りしている
+人たち数名と協力しています。もしそれがあなたなら、
+[design partner issue](https://github.com/sno-ai/sno-station/issues/new?template=design-partner.yml)
+を開いて、何を動かしているか教えてください。
 
-## Design partners
+## セキュリティ
 
-私たちは、すでに2つ以上のエージェントを並行して動かし、結果を手作業で
-やり取りしている人たち数名と協力しています。もしそれがあなたなら、
-[design partner issue](https://github.com/sno-ai/sno-station/issues/new?template=design-partner.yml) を開いて、あなたが何を動かしているか
-教えてください。
+[SECURITY.md](../../SECURITY.md) を参照してください。暗号化が何を守り、何を守らないかは
+[docs/security.md](../security.md) にあります。
 
-## Security
-
-[SECURITY.md](../../SECURITY.md) を参照してください。
-
-## License
+## ライセンス
 
 Apache-2.0。オープンソース、隅々まで。[LICENSE](../../LICENSE) を参照してください。
 
-## References
+## 謝辞
 
-Work this repository builds on, with thanks.
+このリポジトリが土台にしている仕事です。
 
-- Andrej Karpathy. *LLM Wiki.* Gist, April 2026.
-  https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f
-- Liyan Tang, Cyrus Rashtchian, Chun-Sung Ferng, Andrew Tomkins, Da-Cheng Juan, Tu Vu
-  (Google Research, Virginia Tech). *WikiSkill: Compiling Agent Experience into Persistent
-  Knowledge for Skill Evolution.* arXiv:2608.27454, August 2026.
-  https://arxiv.org/abs/2608.27454
-- Qizheng Zhang, Changran Hu, Shubhangi Upasani, Boyuan Ma, Fenglu Hong, Vamsidhar Kamanuru,
-  Jay Rainton, et al. (Stanford University, SambaNova). *Agentic Context Engineering: Evolving
-  Contexts for Self-Improving Language Models.* arXiv:2510.04618, October 2025. Its curator
-  and helpful/harmful bookkeeping were studied while designing our loop.
-  https://arxiv.org/abs/2510.04618
-- Md Nayem Uddin, Kumar Shubham, Eduardo Blanco, Chitta Baral, Gengyu Wang (Arizona State
-  University). *From Recall to Forgetting: Benchmarking Long-Term Memory for Personalized
-  Agents* (the Memora benchmark). arXiv:2604.20006, April 2026, ACL 2026 Findings.
-  https://arxiv.org/abs/2604.20006
+- Andrej Karpathy, [*LLM Wiki*](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f)。エージェントは、セッションのたびに同じことを導き直すのではなく、学んだことのウィキを持つべきだという考え方。
+- Tang, Rashtchian, Ferng, Tomkins, Juan and Vu, [*WikiSkill*](https://arxiv.org/abs/2608.27454)。エージェント自身の経験を知識に変え、スキルを書き換える。
+- Zhang, Hu, Upasani and colleagues, [*Agentic Context Engineering*](https://arxiv.org/abs/2510.04618)。夜間ループを設計するとき、エージェントが何を残すかを整える、その方法を参考にしました。
+- Uddin, Shubham, Blanco, Baral and Wang, [*From Recall to Forgetting*](https://arxiv.org/abs/2604.20006)。メモリがもう言ってはならないことも確かめる、最初のベンチマーク。

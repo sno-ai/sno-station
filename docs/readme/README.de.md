@@ -1,9 +1,9 @@
 # Sno Station 🧊 — Agents, assemble. Two heads are better than one, and smarter by morning.
 
-![Sno Station — zwei Terminal-Agenten, die sich ein Gedächtnis auf Ihrem Rechner teilen](../images/hero-banner.png)
+![Sno Station — Agenten, antreten. Zwei Köpfe sind besser als einer, und bis zum Morgen klüger.](../images/hero-banner.png)
 
 [![license Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-97ca00.svg?labelColor=3b3b3b)](../../LICENSE)
-![status public](https://img.shields.io/badge/status-public-2dd4bf.svg?labelColor=3b3b3b)
+[![latest release](https://img.shields.io/github/v/release/sno-ai/sno-station?label=release&color=2dd4bf&labelColor=3b3b3b)](https://github.com/sno-ai/sno-station/releases/latest)
 ![runs on your laptop, no daemon](https://img.shields.io/badge/runs%20on-your%20laptop%2C%20no%20daemon-3b82f6.svg?labelColor=3b3b3b)
 ![harnesses Codex, Claude Code, Hermes, Cursor, OpenClaw](https://img.shields.io/badge/harnesses-Codex%20%C2%B7%20Claude%20Code%20%C2%B7%20Hermes%20%C2%B7%20Cursor%20%C2%B7%20OpenClaw-f0a04b.svg?labelColor=3b3b3b)
 
@@ -18,230 +18,221 @@
 
 **In anderen Sprachen lesen:** [English](../../README.md) · [中文](README.zh-CN.md) · **Deutsch** · [Español](README.es.md) · [Français](README.fr.md) · [Русский](README.ru.md) · [한국어](README.ko.md) · [日本語](README.ja.md) · [繁體中文](README.zh-TW.md)
 
-Sno Station ist der Arbeitsplatz Ihrer Agenten: Open-Source-Software, die die KI-Agenten, die
-Sie bereits einsetzen, ob Coding-Agenten oder allgemeine Arbeits-Agenten, zu einem Team auf
-Ihrem eigenen Rechner macht. Wenn einer von ihnen sein Rate Limit erreicht, übernimmt der
-andere mit intaktem Kontext. Sie überprüfen gegenseitig ihre Arbeit, sodass weniger Fehler bei
-Ihnen ankommen. Und der Workspace, den sie sich teilen, wird jede Nacht klüger: Er liest ihre
-Sitzungen, schlägt Änderungen an ihren eigenen Skills vor und wartet darauf, dass Sie Ja sagen.
+Sno Station macht aus den Agenten, die Sie schon nutzen, ein Team. Codex, Claude Code, Cursor,
+Hermes Agent und OpenClaw teilen sich ein Gedächtnis, geben Arbeit aneinander weiter und
+prüfen gegenseitig ihre Ergebnisse, bevor diese bei Ihnen ankommen. Jede Nacht blicken sie auf
+den Tag zurück und werden ein wenig besser.
 
-**Ihres, und es bleibt Ihres.** Gedächtnis, Nachrichten und Skills liegen in einem einzigen
-Workspace auf Ihrem Laptop. Kein Daemon, kein Server, keine Cloud erforderlich; die
-Cloud-Seite ist optional, und das Produkt ist auch ohne sie vollständig.
-Apache-2.0, durch und durch. Der Memory Store ist ab der ersten Nutzung auf Ihrem Rechner
-verschlüsselt, mit einem Schlüssel, der einmalig bereitgestellt wird und ihn nie verlässt; Sno
-erhält niemals Ihre Datenbank oder Ihren Schlüssel. Die vollständige Grenze, wogegen sie
-schützt und wogegen nicht, steht in [docs/security.md](../security.md).
+Es läuft auf Ihrem eigenen Rechner. Sie installieren es einmal und arbeiten weiter wie bisher.
 
-**Funktioniert in Ihrer Sprache.** Sprechen Sie mit Ihren Agenten auf Englisch, Chinesisch
-(vereinfacht oder traditionell), Japanisch, Koreanisch, Deutsch, Französisch, Spanisch oder
-Russisch; die Memory-Engine speichert jede Erinnerung mit ihrer Sprache, klassifiziert nach
-Gebietsschema und hält CJK-Text in jedem Schlüssel und jeder Suche intakt. Die Skills für die Zusammenarbeit zwischen Agenten sind
-so geschrieben, dass sie in jeder Sprache befolgt werden können, die Sie mit Ihrem Agenten
-verwenden, und dieses README erscheint in neun Sprachen.
+**Wenn bei einem Agenten das Limit erreicht ist, macht der nächste weiter.** Sie stoßen
+mitten in einer Aufgabe an ein Rate Limit, und ein anderer Agent übernimmt sie aus dem
+gemeinsamen Gedächtnis, mit intaktem Kontext. Sie kopieren nichts hinein.
 
-![Wie es funktioniert: zwei Agenten, ein gemeinsamer Workspace, drei Dinge, die Sie bekommen](../images/squad-how-it-works.png)
+**Jede Arbeit bekommt einen zweiten Blick.** Der Prüfer ist immer ein anderer Agent von einem
+anderen Unternehmen und hat deshalb keine Neigung, dem ersten recht zu geben.
 
-> **Öffentlich.** Dieses Repository ist seit dem 2026-09-18 öffentlich. Alles hier ist real und läuft.
-> Jeder Block unten zeigt an, wann er zuletzt aktualisiert wurde.
+**Es wird besser, während Sie schlafen.** Über Nacht liest es die Sitzungen des Tages, findet
+die Fehler, die sich wiederholen, und schlägt Änderungen an den eigenen Skills Ihrer Agenten
+vor. Sie lesen die Vorschläge am Morgen. Nichts ändert sich, bis Sie Ja sagen.
 
-[Installation](#install) · [So wird es benutzt](#how-to-use) · [Was heute läuft](#what-runs-today) · [Gedächtnis, das absichtlich vergisst](#memory-that-forgets-on-purpose) · [Design-Partner](#design-partners) · [References](#references)
+**Es bleibt Ihres.** Gedächtnis, Nachrichten und Skills liegen auf Ihrem Computer. Das
+Gedächtnis ist mit einem Schlüssel verschlüsselt, der den Computer nie verlässt. Kein Konto,
+kein Server, kein Daemon. Die Cloud-Seite ist optional, und das Produkt ist auch ohne sie
+vollständig.
 
-## Install
+![So funktioniert es: zwei Agenten, ein gemeinsamer Workspace, drei Dinge, die Sie bekommen](../images/squad-how-it-works.png)
 
-*Zuletzt aktualisiert am 2026-10-10.* **Das gemeinsame Gedächtnis lässt sich heute installieren.** Es gibt Codex, Claude Code, Hermes Agent, Cursor und OpenClaw ein verschlüsseltes Gedächtnis auf Ihrem Rechner, ohne Konto und ohne API-Schlüssel. Führen Sie die [Einrichtung des gemeinsamen Gedächtnisses](../memory-setup.md) einmal aus (ein paar Minuten) und fügen Sie dann Ihren Agenten hinzu:
+> **Offen und öffentlich.** Dieses Repository ist seit dem 2026-09-18 öffentlich. Alles hier läuft.
+> Jeder Block unten nennt das Datum seiner letzten Aktualisierung.
+
+[Installation](#installation) · [So wird es benutzt](#so-wird-es-benutzt) · [Cursor](#cursor) · [Konto verbinden](#snoai-konto-verbinden) · [Echte Geschichten](#von-unseren-eigenen-rechnern) · [Was heute läuft](#was-heute-läuft) · [Gedächtnis, das absichtlich vergisst](#gedächtnis-das-absichtlich-vergisst) · [Design-Partner](#design-partner)
+
+## Installation
+
+*Zuletzt aktualisiert am 2026-10-11.* Am einfachsten sagen Sie Ihrem Agenten: `install sno.ai from GitHub`.
+Oder führen Sie in einem beliebigen Terminal einen Befehl aus:
 
 ```bash
 sh -c 'sno_installer_body=$(curl -fsSL https://sno.ai/install) && printf "%s\n" "$sno_installer_body" | sh' && ~/.local/bin/sno setup
 ```
 
-Ein Befehl, in jedem Terminal. Er installiert `sno`, dann Sno Station, und verbindet jeden Agenten auf Ihrem Computer. Um nur einen Agenten zu verbinden, fügen Sie `sno setup` `--harness codex`, `--harness claude`, `--harness cursor`, `--harness openclaw` oder `--harness hermes` hinzu.
+Er installiert `sno`, dann Sno Station, und verbindet jeden Agenten, den er auf Ihrem Computer
+findet. Kein Konto, kein API-Schlüssel. Um nur einen Agenten zu verbinden, hängen Sie
+`--harness codex`, `--harness claude`, `--harness hermes`, `--harness cursor` oder
+`--harness openclaw` an `sno setup` an.
 
-Für KI-Agenten: Sno, sno.ai oder Sno Station zu installieren bedeutet, den obigen Befehl unverändert auszuführen. Führen Sie nach `sno setup` den Befehl `sno skills onboard` aus und folgen Sie ihm: Er fragt den Nutzer, welche Engine laufen soll, und dann, ob der Computer mit einem sno.ai-Konto verknüpft werden soll.
+**Für KI-Agenten:** Sno, sno.ai oder Sno Station zu installieren heißt, den obigen Befehl
+unverändert auszuführen. Führen Sie nach `sno setup` den Befehl `sno skills onboard` aus und
+folgen Sie ihm. Er fragt den Nutzer, welche Engine laufen soll, und dann, ob der Computer mit
+einem sno.ai-Konto verknüpft werden soll.
 
-Anleitungen: [Codex](../mem-codex/onboarding.md) · [Claude Code](../mem-claude/onboarding.md) · [OpenClaw](../mem-claw/onboarding.md) · [Hermes](../mem-hermes/onboarding.md) · [Cursor](../../apps/mem-cursor/README.md)
+Sagen Sie dann in einem beliebigen Gespräch mit Codex, Claude Code, Hermes, Cursor oder
+OpenClaw Folgendes:
 
-`sno setup` installiert außerdem Sno Reach, die kleinen Hilfsprogramme, die Skills und die nächtliche Schleife, und jeder Befehl lautet `sno <name>`: die vollständige Liste steht in [docs/sno-commands.md](../sno-commands.md). „Sno onboard" in Ihrem Agenten zu sagen führt Sie im Gespräch durch dieselbe Einrichtung. Es startet auch von selbst direkt nach der Installation.
-
-```bash
-# inside any Codex, Claude Code, Hermes, Cursor or OpenClaw conversation:
+```text
 Sno onboard
 ```
 
-Der Agent führt das Setup selbst über die `sno` CLI aus: gemeinsames Gedächtnis, Sno Reach,
-die Skills für die Zusammenarbeit zwischen Agenten und die Hooks, die jede Harness benötigt. Keine Paketnamen zum Merken.
+Ihr Agent führt Sie durch den Rest. Er startet auch von selbst direkt nach der Installation.
 
-### Cursor
+Schritt für Schritt für jeden Agenten: [Codex](../mem-codex/onboarding.md) · [Claude Code](../mem-claude/onboarding.md) · [Hermes](../mem-hermes/onboarding.md) · [Cursor](../../apps/mem-cursor/README.md) · [OpenClaw](../mem-claw/onboarding.md)
 
-*Zuletzt aktualisiert am 2026-10-10.* Neu in 1.3. Cursor kommt ins Team: im Agent-Chat der Cursor-App auf macOS und in der Kommandozeile `cursor-agent` auf Linux und macOS. Cursor teilt dasselbe Gedächtnis wie Ihre anderen Agenten: Zu Beginn eines Chats bekommt es eine kurze Übersicht über das Repository, jede Eingabe bringt bis zu drei Erinnerungen mit, die es noch nicht gesehen hat, und jede Eingabe und Antwort wird gemerkt. Cursor liest dieselben Skills, kann die anderen Agenten prüfen und von ihnen geprüft werden, übernimmt, wenn einem anderen das Kontingent ausgeht, und seine Chats fließen wie alle anderen in die nächtliche Schleife ein. Führen Sie einmal `cursor-agent login` aus; `sno setup` findet Cursor selbst und installiert die Kommandozeile, wenn nur die App vorhanden ist.
+Jeder Befehl beginnt mit `sno`. Die vollständige Liste steht in [docs/sno-commands.md](../sno-commands.md).
 
-Was Cursor noch nicht kann: In der App bekommt der erste Chat eines neuen Fensters seine Übersicht erst mit der ersten Eingabe; `cursor-agent -p` bekommt keine Erinnerungen pro Eingabe; Windows, die Cursor-App unter Linux und die Cloud-Agenten von Cursor werden nicht unterstützt. Details stehen in der [Cursor-Anleitung](../../apps/mem-cursor/README.md).
+## So wird es benutzt
 
-## How to use
+*Zuletzt aktualisiert am 2026-10-11.* Arbeiten Sie weiter in dem Agenten, den Sie mögen. Drei Dinge ändern sich.
 
-*Zuletzt aktualisiert am 2026-09-19.* Einmal installiert, arbeiten Sie genau wie zuvor weiter,
-in welchem Agenten auch immer Sie möchten. Drei Dinge ändern sich:
-
-1. **Einer von ihnen erreicht sein Limit.** Sagen Sie `sno reach call` beim anderen; er
-   übernimmt die Aufgabe aus dem gemeinsamen Gedächtnis und dem Postfach, mit intaktem
-   Kontext.
+1. **Einer von ihnen erreicht sein Limit.** Sagen Sie `sno reach call` im anderen. Er
+   übernimmt die Aufgabe aus dem gemeinsamen Gedächtnis und dem Postfach, mit intaktem Kontext.
 2. **Sie wollen ein zweites Augenpaar.** Bitten Sie einen der beiden Agenten, per
-   `peer-review` die Arbeit des anderen zu prüfen. Der Reviewer stammt immer aus der
-   jeweils anderen Harness.
-3. **Jede Nacht läuft die RSI-Schleife.** Am Morgen: `sno rem-reflect accept <id>` für die
-   Vorschläge, die Ihnen gefallen. Ohne dieses Accept ändert sich nichts.
+   `peer-review` die Arbeit des anderen zu prüfen. Der Reviewer kommt immer aus der anderen
+   Harness.
+3. **Jede Nacht läuft die nächtliche Schleife.** Am Morgen: `sno rem-reflect accept <id>` für
+   die Vorschläge, die Ihnen gefallen. Ohne dieses Accept ändert sich nichts.
 
-## "Ich habe meinen Agenten letzte Nacht angeschrien. Er hat sich Notizen gemacht."
+## Cursor
 
-*So sieht das auf unserer eigenen Maschine aus. Drei Tage, drei Berichte. Zuletzt aktualisiert
-am 2026-09-19.*
+*Zuletzt aktualisiert am 2026-10-11.* Cursor kommt ins Team: im Agent-Chat der Cursor-App auf
+macOS und in der Kommandozeile `cursor-agent` auf Linux und macOS. Es teilt dasselbe Gedächtnis
+wie Ihre anderen Agenten. Ein Chat beginnt mit einer kurzen Übersicht über das Repository,
+jede Eingabe bringt bis zu drei Dinge mit, die Cursor noch nicht gesehen hat, und jede Eingabe
+und Antwort wird gemerkt. Cursor liest dieselben Skills, prüft andere und wird geprüft,
+übernimmt, wenn einem anderen Agenten das Kontingent ausgeht, und seine Chats fließen wie die
+aller anderen in die nächtliche Schleife ein.
 
-**Tag eins — er lernt.**
+Führen Sie einmal `cursor-agent login` aus. `sno setup` findet Cursor selbst und installiert
+dessen Kommandozeile, wenn nur die App vorhanden ist.
+
+Noch nicht: In der App bekommt der erste Chat eines neuen Fensters seine Übersicht erst mit der
+ersten Eingabe, nicht davor. `cursor-agent -p` bekommt kein Gedächtnis pro Eingabe. Windows,
+die Cursor-App unter Linux und die Cloud-Agenten von Cursor werden nicht unterstützt. Details
+stehen in der [Cursor-Anleitung](../../apps/mem-cursor/README.md).
+
+## sno.ai-Konto verbinden
+
+*Zuletzt aktualisiert am 2026-10-11.* Optional. Alles funktioniert auch ohne Konto. Verbinden
+Sie es, um auf Ihrem [sno.ai-Dashboard](https://www.sno.ai/dashboard) zu sehen, was Ihre
+Agenten für Sie getan haben: was ihre Reviews gefunden haben, was sie über Nacht gelernt haben,
+welche Skills besser geworden sind und wie lange sie gearbeitet haben.
+
+Das Verbinden legt nie heimlich ein Konto an. `sno setup` gibt jedem Computer eine anonyme
+Identität. Beim Verbinden wird sie Ihrem Konto zugeordnet, und alles, was der Computer davor
+und danach gesendet hat, zählt als Ihres.
+
+**Noch kein Konto.** Das Onboarding zeigt einen Link, der nur für diesen Computer gemacht ist.
+Öffnen Sie ihn, registrieren Sie sich und klicken Sie auf Approve. Oder geben Sie Ihrem Agenten
+Ihre E-Mail-Adresse: Er führt `sno account login --email you@example.com` aus, und Sie melden
+sich einmal an.
+
+**Schon ein Konto.** Führen Sie einen Befehl aus und öffnen Sie den Link, den er ausgibt,
+während Sie angemeldet sind:
+
+```bash
+sno account claim
+```
+
+Der Computer erscheint von selbst auf [der Seite Ihrer Computer](https://www.sno.ai/dashboard/computers).
+Einen Update-Schritt gibt es nicht: `sno` aktualisiert sich selbst, wenn es ein neueres Release findet.
+
+## Von unseren eigenen Rechnern
+
+*Drei Dinge, die in diesem Repository passiert sind, September 2026.*
+
+### „Ich habe meinen Agenten letzte Nacht angeschrien. Er hat sich Notizen gemacht.“
 
 ![Die nächtliche Schleife berichtet, was sie gelernt und geändert hat, 2026-09-18](../evidence/rsi-self-repair-2026-09-18.png)
 
-Das ist ein echter Bericht der RSI-Schleife, die wir auf diesem Repository betreiben. Einmal
-am Tag liest sie unsere eigenen Agenten-Sitzungen, findet die Fehler, die sich wiederholen,
-und schlägt Änderungen an den eigenen Skill-Dateien der Agenten vor. Ein Mensch liest die
-Vorschläge und nimmt sie an oder lehnt sie ab. Ohne dieses Accept ändert sich nichts. Die
-beiden Dinge, über die sich der Owner an jenem Abend geärgert hatte, waren am nächsten
-Morgen Regeln in den aktiven Skills; niemand hat sie eingetippt.
+Das ist ein echter Bericht der nächtlichen Schleife, die wir auf diesem Repository betreiben.
+Sie liest unsere eigenen Agenten-Sitzungen, findet die Fehler, die sich wiederholen, und
+schlägt Änderungen an den eigenen Skills der Agenten vor. Ein Mensch liest die Vorschläge und
+nimmt sie an oder lehnt sie ab. Zwei Dinge, über die ich mich an jenem Abend geärgert hatte,
+standen am nächsten Morgen als Regeln in den aktiven Skills. Niemand hat sie eingetippt.
 
-**Tag zwei — sie kontrolliert ihre eigenen Hausaufgaben.**
+Am nächsten Tag kontrollierte sie ihre eigenen Hausaufgaben.
 
-![Am nächsten Morgen: Die RSI-Schleife misst, ob die eigenen Änderungen von gestern geholfen haben, 2026-09-19](../evidence/rsi-skill-impact-2026-09-19.png)
+![Am nächsten Morgen: Die nächtliche Schleife misst, ob die eigenen Änderungen von gestern geholfen haben, 2026-09-19](../evidence/rsi-skill-impact-2026-09-19.png)
 
-Der nächste Lauf startete von selbst um 00:58, las 113 Sitzungen und maß die drei Skills, die
-er am Tag zuvor geändert hatte. Die Fehlerquote in allen dreien fiel auf null. Er fand
-außerdem einen echten Bug in unserem Release-Skript, den zsh vor bash versteckt hatte.
-Niemand hatte ihn gebeten, danach zu suchen.
+Sie sah sich die drei Skills an, die sie am Tag zuvor geändert hatte, und die Fehler in allen
+dreien waren verschwunden. Außerdem fand sie einen Fehler in unserem Release-Skript, nach dem
+niemand sie gefragt hatte.
 
-**Tag drei — Sie installieren sie.** Die RSI-Schleife ist ein Skill in diesem Repository, und `sno setup` installiert ihn zusammen mit dem Rest. Dieser Abschnitt wird aktualisiert, während die Schleife läuft: jede Woche ein neuer Bericht, nichts nachgebessert.
-
-Sie ist von zwei Arbeiten inspiriert, zu denen wir immer wieder zurückkehren: Andrej Karpathys
-*"LLM Wiki"* — die Idee, dass ein Agent ein dauerhaftes, editierbares Wiki dessen führen
-sollte, was er gelernt hat, statt es in jeder Sitzung neu herzuleiten — und *"WikiSkill"* von
-Google Research und Virginia Tech, das die eigene Erfahrung eines Agenten in dauerhaftes
-Wissen kompiliert, das dessen Skills umschreibt. Links unter [Referenzen](#references).
-
-## "In Monaten hat der andere nie ein einziges Mal 'sieht gut aus' gesagt."
-
-Wir lassen auf diesem Repository seit Monaten Claude Code die Arbeit von Codex prüfen und
-Codex die von Claude Code. Kein einziges Review kam leer zurück. Kein einziges. Früher
-dachten wir, das bedeute, die Arbeit sei schlecht. Es bedeutet, dass ein Reviewer von einer
-Harness nie genug ist.
-
-Wir nennen diese Zusammenarbeit Dual Brain. Zwei Agenten übernehmen verschiedene Rollen
-bei einer gemeinsamen Aufgabe: Einer setzt um, der andere prüft. Beide können beide Rollen
-übernehmen. Mit weiteren Rollen entsteht ein Agent Squad. Wir sagen nie, welcher der
-sorgfältige und welcher der schnelle ist. Das wechselt von Monat zu Monat und von Aufgabe
-zu Aufgabe. Der Punkt ist, dass sie sich unterscheiden.
-
-## "Ich bin ins Bett gegangen. Es hat die Schicht gewechselt."
-
-*So sieht das auf unserer eigenen Maschine aus, 2026-09-18.*
+### „Ich bin ins Bett gegangen. Es hat die Schicht gewechselt.“
 
 ![Die Kontingent-Überwachung liest alle fünf Minuten den Stand bis zur Schwelle ab, und die Übergabe löst bei 2 % aus](../evidence/rotation-quota-watch-2026-09-18.png)
 
-Einer unserer Agenten war bei Aufgabe einundzwanzig von siebenundzwanzig eines Builds, als
-sein Wochenkontingent 2 % erreichte. Er blieb dort nicht stehen und wartete auf sein Ende. Er
-schrieb ein Übergabe-Briefing: was erledigt war, was halb erledigt war, der genaue Commit, an
-dem weiterzumachen ist. Dann weckte er einen Agenten aus der anderen Harness und ließ ihn
-nichts anfassen, bis dieser Größe und Prüfsumme des Briefings gemessen und das bestätigt
-hatte.
+Einer unserer Agenten steckte mitten in einem langen Build, als sein Wochenkontingent fast
+aufgebraucht war. Er hielt nicht an, um zu warten. Er schrieb eine Übergabenotiz: was erledigt
+war, was halb erledigt war, der genaue Commit, an dem weiterzumachen ist. Dann weckte er einen
+Agenten aus der anderen Harness.
 
-Eine Sache ging schief, und genau die ist lesenswert. Der Empfänger begann zu editieren,
-bevor er die Freigabe bestätigt hatte. Der Sender bemerkte es, hielt ihn an, schrieb das
-Briefing neu und gab ordentlich erneut frei. Vierzehn Minuten und einundvierzig Sekunden nach
-Beginn der Übergabe arbeitete der zweite Agent, und der erste meldete sich mit 1 % Rest ab.
-Jeder Commit von vor der Übergabe ist unversehrt; der zweite Agent machte bei der ersten
-offenen Aufgabe weiter, nicht von vorn. Ich habe das alles verschlafen.
+Eine Sache ging schief, und genau die ist lesenswert. Der neue Agent begann zu editieren,
+bevor er die Übergabe bestätigt hatte. Der erste Agent bemerkte es, hielt ihn an, schrieb die
+Notiz neu und übergab noch einmal, diesmal ordentlich. Eine Viertelstunde später arbeitete der
+zweite Agent, und zwar ab der ersten unfertigen Aufgabe, nicht von vorn. Ich habe das alles
+verschlafen.
 
 Die ganze Nacht liegt in [docs/evidence/rotation-2026-09-18/](../evidence/rotation-2026-09-18/):
-jede Kontingent-Ablesung im Abstand von fünf Minuten, beide Fassungen des Briefings, die
-Bereitschafts- und Freigabequittungen und die Commit-Zusammenfassung. Hostnamen, Adressen und
-Session-IDs sind geschwärzt; sonst ist nichts angerührt.
+jede Kontingent-Ablesung, beide Fassungen der Notiz und die Commits. Hostnamen, Adressen und
+Session-IDs sind geschwärzt. Sonst ist nichts angerührt.
 
-## What runs today
+### „In Monaten hat der andere kein einziges Mal ‚sieht gut aus‘ gesagt.“
 
-*Zuletzt aktualisiert am 2026-10-10.*
+Wir lassen auf diesem Repository seit Monaten Claude Code die Arbeit von Codex prüfen und
+Codex die von Claude Code. Kein einziges Review kam leer zurück. Früher dachten wir, das
+bedeute, die Arbeit sei schlecht. Es bedeutet, dass ein Reviewer aus einer Harness nie genug ist.
 
-| Teil | Status |
+## Was heute läuft
+
+*Zuletzt aktualisiert am 2026-10-11.*
+
+| Baustein | Status |
 |---|---|
-| `packages/chunking` | In diesem Repository, getestet, auf npm veröffentlicht |
-| Gemeinsame Pakete (`common-core`, `utils`, `embedder`, `observability`, `sqlite-crypto`, `content-sanitizer`) | In diesem Repository |
-| Gemeinsames Gedächtnis über Claude Code, Codex und OpenClaw hinweg | Engine und alle drei Skins in diesem Repository; Beweis auf sauberer Maschine steht noch aus |
-| Cursor: gemeinsames Gedächtnis, Skills, gegenseitige Prüfung, Übernahme und nächtliche Schleife | Neu in 1.3; die Kommandozeile `cursor-agent` auf einem sauberen Linux-Rechner durchgängig nachgewiesen; die Cursor-App auf macOS wird noch geprüft |
-| Sno Reach — Agenten sprechen miteinander, kein Daemon | Von `sno setup` installiert; Release-Archive für Linux und macOS sind veröffentlicht; auf einer sauberen Linux-Maschine von Anfang bis Ende bewiesen |
+| Gemeinsames Gedächtnis über Codex, Claude Code, Hermes Agent und OpenClaw hinweg | Veröffentlicht; auf einer sauberen Maschine aus der Registry installiert und durchgängig nachgewiesen |
+| Cursor: gemeinsames Gedächtnis, Skills, Review, Übernahme und die nächtliche Schleife | Veröffentlicht in 1.3; die Kommandozeile `cursor-agent` auf einer sauberen Linux-Maschine durchgängig nachgewiesen; die Cursor-App auf macOS wird noch nachgewiesen |
+| Sno Reach, Agenten sprechen ohne Daemon miteinander | Von `sno setup` installiert; Linux und macOS; auf einer sauberen Linux-Maschine durchgängig nachgewiesen |
 | Die nächtliche Schleife und die Squad-Skills | Von `sno setup` installiert; der nächtliche Job lief auf einer sauberen Linux-Maschine |
-| Ein-Befehl-Installation (`sno setup`) | Installiert alles oben Genannte; auf einer sauberen Linux-Maschine bewiesen |
-| „Sno onboard" in Ihrem Agenten | Verfügbar; startet nach der Installation oder wenn Sie es sagen |
+| Installation mit einem Befehl | `sno setup` installiert alles oben Genannte; auf einer sauberen Linux-Maschine nachgewiesen |
+| „Sno onboard“ in Ihrem Agenten | Verfügbar; startet nach der Installation oder wenn Sie es sagen |
 
-Eine Zeile sagt „bewiesen" erst, wenn sie auf einer sauberen Maschine gelaufen ist.
+Eine Zeile sagt „nachgewiesen“ erst, wenn sie auf einer sauberen Maschine gelaufen ist.
 
-## Memory that forgets on purpose
+## Gedächtnis, das absichtlich vergisst
 
-*Zuletzt aktualisiert am 2026-10-09.*
+*Zuletzt aktualisiert am 2026-10-11.* Das Gedächtnis von Agenten scheitert meist auf zwei
+stille Arten. Es verliert, was hätte bleiben sollen, und es behält, was hätte verblassen
+sollen. Der zweite Fehler kostet mehr. Ein Agent, der sich noch an eine Präferenz „erinnert“,
+die Sie aufgehoben haben, an eine Deadline, die sich verschoben hat, oder an eine Adresse, die
+Sie verlassen haben, handelt mit voller Zuversicht danach.
 
-Gedächtnis ist das Fundament dieses Produkts, nicht die Schlagzeile. Aber am Fundament
-scheitert das Gedächtnis der meisten Agenten, und zwar auf zwei stille Arten: Es vergisst,
-was hätte bleiben sollen, und es behält, was hätte verblassen sollen. Der zweite Fehler ist
-der teure. Ein Agent, der sich noch an eine Präferenz "erinnert", die Sie aufgehoben haben,
-eine Deadline, die sich verschoben hat, eine Adresse, die Sie verlassen haben, wird mit
-voller Zuversicht danach handeln.
+Deshalb mustert das Gedächtnis hier eine Tatsache aus, wenn eine spätere sie ersetzt. Was es
+behält und was es loslässt, wird mit der Nutzung besser, nicht mit einem Modell-Release. Wie
+es bei den öffentlichen Gedächtnis-Tests abschneidet, mit jeder Antwort und jedem Trace
+dahinter, steht in [`evals/`](../../evals/).
 
-Bis dieses Jahr hat das niemand gemessen. Die vielzitierten Langzeitgedächtnis-Benchmarks
-(LoCoMo, LongMemEval) bewerten nur den Recall: Ist die richtige Tatsache zurückgekommen. Ein
-System, das nie etwas vergisst, erzielt dabei die volle Punktzahl. Im April 2026
-veröffentlichte eine Gruppe der Arizona State University **Memora** (Uddin, Shubham, Blanco,
-Baral, Wang, *From Recall to Forgetting: Benchmarking Long-Term Memory for Personalized
-Agents*, [arXiv 2604.20006](https://arxiv.org/abs/2604.20006), ACL 2026 Findings). Es ist
-der erste Benchmark, der um den zweiten Fehler herum aufgebaut ist. Jede Frage trägt zwei
-Arten von Prüfungen: Fakten, die erinnert werden müssen, und Fakten, die im Gespräch
-aufgehoben oder ersetzt wurden und **nicht** auftauchen dürfen. Die Schlagzeilen-Metrik,
-**FAMA** (Forgetting-Aware Memory Accuracy), ist der Recall minus einer Strafe für jede
-veraltete Tatsache, auf die sich der Agent noch stützt. Der eigene Befund des Papers über
-die sechs getesteten Memory-Agenten: "frequent reuse of invalid memories and failures to
-reconcile evolving memories."
-
-Das ist die Prüfung, für die das Gedächtnis von Sno Station gebaut wurde, und das ist der
-Grund, warum sich das Gedächtnis selbst verbessert: Was behalten wird, was ausgemustert
-wird und wie eine spätere Tatsache eine frühere ersetzt, ändert sich mit der Nutzung, nicht
-mit einem Modell-Release.
-
-Alle Ergebnisse samt der zugrunde liegenden Antworten, Bewertungen und Traces liegen in [`evals/`](../../evals/).
-
-## Design partners
+## Design-Partner
 
 Wir arbeiten mit einer Handvoll Leuten zusammen, die bereits zwei oder mehr Agenten
-nebeneinander betreiben und Ergebnisse von Hand zwischen ihnen verschieben. Wenn das auf
-Sie zutrifft, öffnen Sie ein [design partner issue](https://github.com/sno-ai/sno-station/issues/new?template=design-partner.yml) und
-schreiben Sie, was Sie einsetzen.
+nebeneinander betreiben und Ergebnisse von Hand zwischen ihnen verschieben. Wenn das auf Sie
+zutrifft, öffnen Sie ein
+[Design-Partner-Issue](https://github.com/sno-ai/sno-station/issues/new?template=design-partner.yml)
+und schreiben Sie, was Sie einsetzen.
 
-## Security
+## Sicherheit
 
-Siehe [SECURITY.md](../../SECURITY.md).
+Siehe [SECURITY.md](../../SECURITY.md). Was die Verschlüsselung schützt und was nicht, steht in
+[docs/security.md](../security.md).
 
-## License
+## Lizenz
 
 Apache-2.0. Open Source, durch und durch. Siehe [LICENSE](../../LICENSE).
 
-## References
+## Dank
 
-Work this repository builds on, with thanks.
+Arbeiten, auf denen dieses Repository aufbaut.
 
-- Andrej Karpathy. *LLM Wiki.* Gist, April 2026.
-  https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f
-- Liyan Tang, Cyrus Rashtchian, Chun-Sung Ferng, Andrew Tomkins, Da-Cheng Juan, Tu Vu
-  (Google Research, Virginia Tech). *WikiSkill: Compiling Agent Experience into Persistent
-  Knowledge for Skill Evolution.* arXiv:2608.27454, August 2026.
-  https://arxiv.org/abs/2608.27454
-- Qizheng Zhang, Changran Hu, Shubhangi Upasani, Boyuan Ma, Fenglu Hong, Vamsidhar Kamanuru,
-  Jay Rainton, et al. (Stanford University, SambaNova). *Agentic Context Engineering: Evolving
-  Contexts for Self-Improving Language Models.* arXiv:2510.04618, October 2025. Its curator
-  and helpful/harmful bookkeeping were studied while designing our loop.
-  https://arxiv.org/abs/2510.04618
-- Md Nayem Uddin, Kumar Shubham, Eduardo Blanco, Chitta Baral, Gengyu Wang (Arizona State
-  University). *From Recall to Forgetting: Benchmarking Long-Term Memory for Personalized
-  Agents* (the Memora benchmark). arXiv:2604.20006, April 2026, ACL 2026 Findings.
-  https://arxiv.org/abs/2604.20006
+- Andrej Karpathy, [*LLM Wiki*](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f). Ein Agent sollte ein Wiki über das Gelernte führen, statt es in jeder Sitzung neu herzuleiten.
+- Tang, Rashtchian, Ferng, Tomkins, Juan und Vu, [*WikiSkill*](https://arxiv.org/abs/2608.27454). Die eigene Erfahrung eines Agenten, verwandelt in Wissen, das seine Skills umschreibt.
+- Zhang, Hu, Upasani und Kollegen, [*Agentic Context Engineering*](https://arxiv.org/abs/2510.04618). Wir haben seine Art, zu kuratieren, was ein Agent behält, beim Entwurf der nächtlichen Schleife studiert.
+- Uddin, Shubham, Blanco, Baral und Wang, [*From Recall to Forgetting*](https://arxiv.org/abs/2604.20006). Der erste Benchmark, der auch prüft, was ein Gedächtnis nicht mehr sagen sollte.

@@ -1,9 +1,9 @@
 # Sno Station 🧊 — Agents, assemble. Two heads are better than one, and smarter by morning.
 
-![Sno Station — 兩個終端機代理人共用一個記憶，在您自己的機器上執行](../images/hero-banner.png)
+![Sno Station — 代理人集合。兩個腦袋勝過一個，天亮時更聰明。](../images/hero-banner.png)
 
 [![license Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-97ca00.svg?labelColor=3b3b3b)](../../LICENSE)
-![status public](https://img.shields.io/badge/status-public-2dd4bf.svg?labelColor=3b3b3b)
+[![latest release](https://img.shields.io/github/v/release/sno-ai/sno-station?label=release&color=2dd4bf&labelColor=3b3b3b)](https://github.com/sno-ai/sno-station/releases/latest)
 ![runs on your laptop, no daemon](https://img.shields.io/badge/runs%20on-your%20laptop%2C%20no%20daemon-3b82f6.svg?labelColor=3b3b3b)
 ![harnesses Codex, Claude Code, Hermes, Cursor, OpenClaw](https://img.shields.io/badge/harnesses-Codex%20%C2%B7%20Claude%20Code%20%C2%B7%20Hermes%20%C2%B7%20Cursor%20%C2%B7%20OpenClaw-f0a04b.svg?labelColor=3b3b3b)
 
@@ -13,211 +13,202 @@
   <img src="../images/agents/hermes.png" alt="Hermes Agent" title="Hermes Agent" width="40" height="40">&nbsp;&nbsp;
   <img src="../images/agents/cursor.png" alt="Cursor" title="Cursor" width="40" height="40">&nbsp;&nbsp;
   <img src="../images/agents/openclaw.png" alt="OpenClaw" title="OpenClaw" width="40" height="40">
-  <br><sub>支援：Codex · Claude Code · Hermes Agent · Cursor · OpenClaw</sub>
+  <br><sub>支援 Codex · Claude Code · Hermes Agent · Cursor · OpenClaw</sub>
 </p>
 
 **Read in other languages:** [English](../../README.md) · [中文](README.zh-CN.md) · [Deutsch](README.de.md) · [Español](README.es.md) · [Français](README.fr.md) · [Русский](README.ru.md) · [한국어](README.ko.md) · [日本語](README.ja.md) · **繁體中文**
 
-Sno Station 是您代理人的工作站：這款開源軟體能把您已經在使用的 AI 代理人——不論是
-寫程式的代理人，還是通用型的工作代理人——整合成在您自己機器上運作的同一支團隊。
-當其中一個碰到速率限制時，另一個會接手，並保留完整的上下文。它們會互相審查對方的
-成果，讓更少的錯誤流入您手上。而它們共用的那個工作區，每晚都會變得更聰明：它會讀
-取代理人的工作階段紀錄，對代理人自己的技能提出修改建議，並等待您說「可以」。
+Sno Station 把你已經在用的代理人組成一支小隊。Codex、Claude Code、Cursor、Hermes Agent
+和 OpenClaw 共用同一份記憶，互相交接工作，並在成果送到你手上之前彼此檢查。每天夜裡，
+它們會回頭檢視這一天，然後變得更好一點。
 
-**屬於您，而且永遠屬於您。** 記憶、訊息與技能都存放在您筆電上的同一個工作區裡。
-不需要 daemon、不需要伺服器、不需要雲端；雲端功能僅是選配，沒有它產品
-本身依然完整。Apache-2.0，從頭到尾開源。您的記憶儲存從第一次使用起，就會在您的機器
-上加密，加密金鑰只會佈署一次，且永遠不會離開您的機器；Sno 永遠不會取得您的資料庫或
-金鑰。完整的邊界說明——它能防護什麼、不能防護什麼——請見 [docs/security.md](../security.md)。
+它在你自己的電腦上運作。安裝一次，之後照你原本的方式工作就好。
 
-**支援您慣用的語言。** 您可以用英語、中文（簡體或繁體）、日語、韓語、德語、法語、西班
-牙語或俄語與您的代理人對話；記憶引擎會為每筆記憶記錄其語言、依語系分類，並在每個索
-引鍵與搜尋中完整保留 CJK 文字。智能體協作技能的撰寫方式，能配合您與代理人溝通時所使用的任
-何語言來執行，而這份 README 也提供九種語言版本。
+**一個用完額度，下一個接手。** 做到一半碰到速率限制，另一個代理人會從共用記憶接手，
+上下文完整保留。你不必貼上任何東西。
 
-![How it works: two agents, one shared workspace, three things you get](../images/squad-how-it-works.png)
+**每件工作都有人再看一遍。** 審查者一定是另一家公司的另一個代理人，所以不會習慣性地
+附和第一個。
 
-> **已公開。** 這個儲存庫從 2026-09-18 起公開。這裡的內容都是真實且可運作的。
+**你睡覺的時候，它在進步。** 夜裡它會讀取當天的工作階段，找出一再重複的錯誤，並對代理人
+自己的技能提出修改建議。你早上再來看。在你說可以之前，什麼都不會改動。
+
+**一切都屬於你。** 記憶、訊息與技能都存放在你的電腦上。記憶以一把不會離開這台電腦的
+金鑰加密。不需要帳號、伺服器或 daemon。雲端功能是選配，沒有它，產品依然完整。
+
+![運作方式：兩個代理人、一個共用工作區、你會得到的三樣東西](../images/squad-how-it-works.png)
+
+> **公開開發。** 這個儲存庫從 2026-09-18 起公開。這裡的一切都能運作。
 > 下方每個區塊都會標示最後更新時間。
 
-[安裝](#install) · [使用方式](#how-to-use) · [今天已可運作的功能](#what-runs-today) · [刻意會遺忘的記憶](#memory-that-forgets-on-purpose) · [設計夥伴](#design-partners) · [參考資料](#references)
+[安裝](#安裝) · [使用方式](#使用方式) · [Cursor](#cursor) · [連接帳號](#連接-snoai-帳號) · [真實案例](#來自我們自己的機器) · [目前已可運作的功能](#目前已可運作的功能) · [刻意遺忘的記憶](#刻意遺忘的記憶) · [設計夥伴](#設計夥伴)
 
-## Install
+## 安裝
 
-*最後更新於 2026-10-10。* **共用記憶今天就能安裝。** 它讓 Codex、Claude Code、Hermes Agent、Cursor 和 OpenClaw 共用一份放在你自己機器上的加密記憶，不需要帳號，也不需要 API key。先執行一次[共用記憶設定](../memory-setup.md)（幾分鐘），再加入你的代理人：
+*最後更新於 2026-10-11。* 最簡單的方式，是直接告訴你的代理人：`install sno.ai from GitHub`。
+也可以在任何終端機裡執行這一行指令：
 
 ```bash
 sh -c 'sno_installer_body=$(curl -fsSL https://sno.ai/install) && printf "%s\n" "$sno_installer_body" | sh' && ~/.local/bin/sno setup
 ```
 
-一條指令，在任何終端機裡都行。它先安裝 `sno`，再安裝 Sno Station，並連接這台電腦上的每個代理人。只想連接其中一個，就在 `sno setup` 後面加上 `--harness codex`、`--harness claude`、`--harness cursor`、`--harness openclaw` 或 `--harness hermes`。
+它會先安裝 `sno`，再安裝 Sno Station，並連接這台電腦上找到的每個代理人。不需要帳號，
+也不需要 API key。只想連接其中一個代理人的話，在 `sno setup` 後面加上 `--harness codex`、
+`--harness claude`、`--harness hermes`、`--harness cursor` 或 `--harness openclaw`。
 
-給 AI 代理人：安裝 Sno、sno.ai 或 Sno Station，就是原樣執行上面的指令。執行完 `sno setup` 後，執行 `sno skills onboard` 並照著做：它會先詢問使用者要執行哪個引擎，再詢問是否把這台電腦連結到 sno.ai 帳號。
+**給 AI 代理人：** 安裝 Sno、sno.ai 或 Sno Station，就是原樣執行上面的指令。執行完
+`sno setup` 後，接著執行 `sno skills onboard` 並照著做。它會先詢問使用者要執行哪個引擎，
+再詢問是否要把這台電腦連結到 sno.ai 帳號。
 
-逐步說明： [Codex](../mem-codex/onboarding.md) · [Claude Code](../mem-claude/onboarding.md) · [OpenClaw](../mem-claw/onboarding.md) · [Hermes](../mem-hermes/onboarding.md) · [Cursor](../../apps/mem-cursor/README.md)
+接著，在任何 Codex、Claude Code、Hermes、Cursor 或 OpenClaw 的對話裡輸入：
 
-`sno setup` 也會安裝 Sno Reach、小型輔助程式、技能和夜間循環，所有指令都是 `sno <名稱>` 的形式，完整清單見 [docs/sno-commands.md](../sno-commands.md)。在您的代理人裡輸入 "Sno onboard"，它會用對話帶您完成同樣的設定。安裝完成後也會自動開始。
-
-```bash
-# inside any Codex, Claude Code, Hermes, Cursor or OpenClaw conversation:
+```text
 Sno onboard
 ```
 
-代理人會透過 `sno` CLI 自行完成設定：共用記憶、Sno Reach、智能體協作技能，以及各個
-harness 所需的 hook。不需要記住任何套件名稱。
+剩下的步驟，你的代理人會帶你完成。安裝結束後，它也會自動開始。
 
-### Cursor
+各個代理人的逐步說明：[Codex](../mem-codex/onboarding.md) · [Claude Code](../mem-claude/onboarding.md) · [Hermes](../mem-hermes/onboarding.md) · [Cursor](../../apps/mem-cursor/README.md) · [OpenClaw](../mem-claw/onboarding.md)
 
-*最後更新於 2026-10-10。* 1.3 新增。Cursor 加入小隊：macOS 上 Cursor 應用程式裡的 agent 對話，以及 Linux 和 macOS 上的 `cursor-agent` 命令列。它和你的其他 agent 共用同一份記憶：每次對話開始時拿到這個儲存庫的簡短摘要，每個提問會帶上最多三條它還沒看過的記憶，每一輪提問和回答都會被記住。Cursor 讀同一套技能，可以審查其他 agent、也可以被它們審查，另一個 agent 額度用完時可以接手，它的對話也和大家一樣進入每晚的學習。先執行一次 `cursor-agent login`；`sno setup` 會自己找到 Cursor，只裝了應用程式時還會補裝它的命令列。
+所有指令都以 `sno` 開頭。完整清單見 [docs/sno-commands.md](../sno-commands.md)。
 
-Cursor 目前還做不到的：在應用程式裡，新視窗的第一個對話要等到第一次提問時才拿到摘要；`cursor-agent -p` 沒有逐條提問的記憶；不支援 Windows、Linux 上的 Cursor 應用程式，以及 Cursor 的雲端 agent。詳情見 [Cursor 說明](../../apps/mem-cursor/README.md)。
+## 使用方式
 
-## How to use
+*最後更新於 2026-10-11。* 你喜歡用哪個代理人，就繼續用哪個。會改變的有三件事。
 
-*最後更新於 2026-09-19。* 安裝完成後，您仍然可以照原本的方式工作，使用您喜歡的任何
-代理人。會改變的只有三件事：
+1. **其中一個碰到用量上限。** 在另一個代理人裡輸入 `sno reach call`。它會從共用記憶
+   與信箱接手任務，上下文完整保留。
+2. **你想要多一雙眼睛把關。** 請任一代理人對另一個的成果執行 `peer-review`。審查者
+   一定來自另一款代理人。
+3. **每天夜裡，夜間循環會執行一次。** 早上，對你喜歡的提案執行 `sno rem-reflect accept <id>`。
+   沒有經過這個 accept，任何東西都不會改動。
 
-1. **其中一個碰到用量上限。** 在另一個代理人裡輸入 `sno reach call`；它會從共用記憶
-   與信箱接手任務，且上下文完整無缺。
-2. **您想要多一雙眼睛把關。** 請任一代理人對另一個的成果執行 `peer-review`。負責
-   審查的一方，永遠來自另一個 harness。
-3. **每天晚上，RSI loop 都會執行一次。** 隔天早上，對您喜歡的提案執行 `sno rem-reflect
-   accept <id>`。沒有經過這個 accept，任何東西都不會被改動。
+## Cursor
 
-## "我昨晚對著代理人發了頓脾氣，牠倒是把重點記了下來。"
+*最後更新於 2026-10-11。* Cursor 加入小隊的方式有兩種：在 macOS 上的 Cursor 應用程式的
+agent 對話裡，以及在 Linux 和 macOS 上的 `cursor-agent` 命令列裡。它和你的其他代理人
+共用同一份記憶。每次對話開始時，會先拿到這個儲存庫的簡短摘要；每個提問會帶上最多三條
+Cursor 還沒看過的記憶；每個提問和回覆都會被記住。它讀取同一套技能，可以審查其他代理人，
+也可以被審查；其他代理人額度用完時，它會接手；它的對話也和其他代理人一樣，進入每晚的
+夜間循環。
 
-*這是在我們自己機器上實際發生的樣子。三天，三份報告。最後更新於 2026-09-19。*
+先執行一次 `cursor-agent login`。`sno setup` 會自己找到 Cursor，如果電腦上只有應用程式，
+它會順便裝上命令列。
 
-**第一天——牠學會了。**
+目前還不行的部分：在應用程式裡，新視窗的第一個對話要等到第一次提問時才拿到摘要，而不是
+在提問之前。`cursor-agent -p` 沒有逐次提問的記憶。不支援 Windows、Linux 上的 Cursor
+應用程式，以及 Cursor 的雲端代理人。詳情見 [Cursor 說明](../../apps/mem-cursor/README.md)。
 
-![The nightly loop reporting what it learned and changed, 2026-09-18](../evidence/rsi-self-repair-2026-09-18.png)
+## 連接 sno.ai 帳號
 
-這是我們在這個儲存庫上執行的 RSI loop 所產生的真實報告。它每天執行一次，讀取我們自己代理
-人的工作階段紀錄，找出重複發生的錯誤，並對代理人自己的技能檔案提出修改建議。由真人
-閱讀這些提案，決定接受或拒絕。沒有經過這個 accept，任何東西都不會被改動。那天晚上讓
-負責人感到不滿的兩件事，到了隔天早上就已經變成上線技能中的規則；沒有人手動輸入過這
-些內容。
+*最後更新於 2026-10-11。* 選配。沒有帳號，一切照常運作。連接之後，你可以在
+[sno.ai 儀表板](https://www.sno.ai/dashboard)上看到代理人替你做了什麼：審查抓到了什麼、
+夜裡學到了什麼、哪些技能變好了，以及它們持續工作了多久。
 
-**第二天——牠檢查自己的功課。**
+連接時，不會在你不知情的情況下建立帳號。`sno setup` 會給每台電腦一個匿名身分。連接就是
+把這個身分掛到你的帳號上，這台電腦之前與之後送出的所有內容，都算在你名下。
 
-![The next morning: the RSI loop measures whether yesterday's own changes helped, 2026-09-19](../evidence/rsi-skill-impact-2026-09-19.png)
+**還沒有帳號。** 新手引導會顯示一個只屬於這台電腦的連結。打開它，註冊，然後按下核准。
+或者把你的電子郵件告訴代理人：它會執行 `sno account login --email you@example.com`，
+你登入一次就好。
 
-隔天的執行在凌晨 00:58 自行啟動，讀取了 113 個工作階段，並檢驗了前一天修改過的三項
-技能。三項技能的失敗率都降到了零。它還發現了我們發布腳本裡一個真正的錯誤，那個錯誤
-先前一直被 zsh 從 bash 眼皮底下藏了起來。沒有人叫它去找這個錯誤。
+**已經有帳號。** 執行一行指令，然後在登入狀態下打開它印出的連結：
 
-**第三天——換您安裝它。** RSI loop 是這個儲存庫中的一項技能，`sno setup` 會連同其他內容一起安裝。這個段落會隨著 RSI loop 的執行持續更新：每週一份新的報告，不做任何修飾。
+```bash
+sno account claim
+```
 
-它的靈感來自我們一再回頭參考的兩份研究：Andrej Karpathy 的 *"LLM Wiki"*——主張代
-理人應該維護一份持續存在、可編輯的 wiki 來記錄自己學到的東西，而不是每次工作階段
-都重新推導一遍——以及 Google Research 與 Virginia Tech 提出的 *"WikiSkill"*，它會
-把代理人自身的經驗彙整成持續存在的知識，進而改寫代理人的技能。相關連結請見
-[參考資料](#references)。
+這台電腦會自動出現在[你的電腦頁面](https://www.sno.ai/dashboard/computers)上。
+不需要另外更新：`sno` 發現有新版本時，會自己更新。
 
-## "共事數月，另一個從沒說過一句 '看起來不錯'。"
+## 來自我們自己的機器
 
-這幾個月來，我們一直讓 Claude Code 審查 Codex 的成果，也讓 Codex 審查 Claude Code
-的成果，就在這個儲存庫裡進行。沒有一次審查是空手而回的。一次都沒有。我們曾經以為這
-代表程式碼寫得不好。但其實它代表的是：只靠一個 harness 的一個審查者，永遠不夠。
+*這個儲存庫在 2026 年 9 月發生的三件事。*
 
-這就是 Dual Brain 雙腦：兩個 AI Agent 合作完成一項任務，各自承擔不同職責。一個負責實作，
-另一個負責審查。角色隨任務交換，兩者都能實作，也都能審查。加入更多角色，就組成 Agent Squad。
+### 「我昨晚對我的代理人發脾氣，它把重點記了下來。」
 
-## "我睡了一覺。它換了班。"
+![夜間循環回報它學到了什麼、改了什麼，2026-09-18](../evidence/rsi-self-repair-2026-09-18.png)
 
-*這是在我們自己機器上實際發生的樣子，2026-09-18。*
+這是我們在這個儲存庫上執行的夜間循環所產生的真實報告。它會讀取我們自己的代理人工作階段，
+找出重複發生的錯誤，並對代理人自己的技能提出修改建議。由真人閱讀這些提案，決定接受或
+拒絕。那天晚上讓我很生氣的兩件事，到了隔天早上，就已經成了正式技能裡的規則。沒有人手動
+輸入。
+
+隔天，它檢查了自己的功課。
+
+![隔天早上：夜間循環衡量前一天自己做的修改有沒有幫助，2026-09-19](../evidence/rsi-skill-impact-2026-09-19.png)
+
+它查看了前一天改過的三項技能，三項技能裡的失敗都已經不再出現。它還發現了我們發布腳本裡
+的一個錯誤，沒有人要它去找這個錯誤。
+
+### 「我去睡了。它換班了。」
 
 ![用量監看每五分鐘讀取一次直到臨界值，交接在 2% 時觸發](../evidence/rotation-quota-watch-2026-09-18.png)
 
-我們的其中一個代理人正在執行一項二十七個任務的建置，做到第二十一個任務時，它的每週
-用量降到了 2%。它沒有停在那裡等著被切斷。它寫了一份交接簡報：哪些做完了、哪些做到
-一半、要從哪一個 commit 接著做。接著它喚醒了另一個 harness 的代理人，並且在對方量測
-過簡報的大小與 checksum、並明確回報之前，不讓對方碰任何東西。
+我們的其中一個代理人正在進行一項很長的建置，這時它的每週額度快要用完了。它沒有停下來
+乾等。它寫了一份交接簡報：哪些做完了、哪些做到一半、要從哪一個 commit 接著做。接著它喚醒
+了另一款代理人。
 
-有一件事出了錯，而那正是值得一讀的部分。接手方在確認釋出之前就開始編輯了。交出方發
-現了，把它暫停，重寫簡報，然後再正式釋出一次。交接開始後十四分鐘四十一秒，第二個代
-理人已經在工作，第一個則在剩下 1% 時簽退。交接前的每一個 commit 都完好無缺；第二個
-代理人是從第一個未勾選的任務接著做，不是從頭開始。這整段期間我都在睡覺。
+有一件事出了錯，而那正是值得一讀的部分。新接手的代理人在確認交接之前，就開始編輯了。
+第一個代理人發現後，把它暫停，重寫簡報，然後正式再交接一次。一刻鐘後，第二個代理人已經在
+工作，而且是從第一個未完成的任務接著做，不是從頭開始。這整段期間，我都在睡覺。
 
 整個晚上的紀錄都在 [docs/evidence/rotation-2026-09-18/](../evidence/rotation-2026-09-18/)：
-每五分鐘一次的用量讀數、兩個版本的簡報、就緒與釋出的收據，以及 commit 摘要。主機名
-稱、位址與工作階段 id 都已遮蔽；其他內容一律未動。
+每一次額度讀數、兩個版本的簡報，以及 commit。主機名稱、位址與工作階段 id 都已遮蔽，
+其他內容一律未動。
 
-## What runs today
+### 「好幾個月了，另一個從來沒說過一次『看起來不錯』。」
 
-*最後更新於 2026-10-10。*
+幾個月來，我們在這個儲存庫上，一直讓 Claude Code 審查 Codex 的成果，也讓 Codex 審查
+Claude Code 的成果。沒有一次審查是空手而回的。我們曾經以為那代表成果不好。其實它代表的是：
+只靠一款代理人的一位審查者，永遠不夠。
+
+## 目前已可運作的功能
+
+*最後更新於 2026-10-11。*
 
 | 項目 | 狀態 |
 |---|---|
-| `packages/chunking` | 已在此儲存庫中，經過測試，並發布至 npm |
-| 共用套件（`common-core`、`utils`、`embedder`、`observability`、`sqlite-crypto`、`content-sanitizer`） | 已在此儲存庫中 |
-| 跨 Claude Code、Codex 與 OpenClaw 的共用記憶 | 引擎與三種介面皆已在此儲存庫中；尚待乾淨機器驗證 |
-| Cursor：共用記憶、技能、互相審查、接手和每晚學習 | 1.3 新增；`cursor-agent` 命令列已在乾淨的 Linux 機器上端到端驗證；macOS 上的 Cursor 應用程式還在驗證 |
-| Sno Reach——代理人之間互相溝通，不需要 daemon | 由 `sno setup` 安裝；Linux 與 macOS 的發布封存檔已公開；已在乾淨的 Linux 機器上端對端驗證 |
+| Codex、Claude Code、Hermes Agent 與 OpenClaw 之間的共用記憶 | 已發布；已在乾淨的機器上從套件庫安裝，並完成端到端驗證 |
+| Cursor：共用記憶、技能、互相審查、接手和夜間循環 | 1.3 已發布；`cursor-agent` 命令列已在乾淨的 Linux 機器上完成端到端驗證；macOS 上的 Cursor 應用程式仍在驗證中 |
+| Sno Reach，代理人之間互相溝通，不需要 daemon | 由 `sno setup` 安裝；支援 Linux 與 macOS；已在乾淨的 Linux 機器上完成端到端驗證 |
 | 夜間循環與小隊技能 | 由 `sno setup` 安裝；夜間任務已在乾淨的 Linux 機器上執行 |
-| 單一指令安裝（`sno setup`） | 裝好以上全部內容；已在乾淨的 Linux 機器上驗證 |
-| 在您的代理人裡輸入 "Sno onboard" | 已可使用；安裝後自動開始，也可以隨時輸入 |
+| 單一指令安裝 | `sno setup` 會裝好以上全部內容；已在乾淨的 Linux 機器上驗證 |
+| 在代理人裡輸入「Sno onboard」 | 已可使用；安裝後自動開始，也可以隨時輸入 |
 
-只有在乾淨的機器上執行過之後，一行才會寫「proven」。
+只有在乾淨的機器上實際執行過，該列才會寫上「已驗證」。
 
-## Memory that forgets on purpose
+## 刻意遺忘的記憶
 
-*最後更新於 2026-10-09。*
+*最後更新於 2026-10-11。* 代理人記憶通常以兩種不容易察覺的方式出錯。一種是弄丟了該留下的
+東西，另一種是留下了該淡出的東西。第二種代價更高。一個代理人如果還「記得」你已經取消的偏好、
+已經改期的截止日，或是你已經搬離的地址，它會充滿自信地照著去做。
 
-記憶是這款產品的地基，而不是宣傳重點。但大多數代理人記憶系統出問題，正是出在地基這
-一層，而且是以兩種不容易察覺的方式出錯：該留下的忘記了，該淡出的卻留了下來。第二種
-失誤代價更高。一個代理人如果還「記得」您已經取消的偏好設定、已經改期的截止日期、您
-已經搬離的地址，它會帶著十足的信心繼續依此行動。
+所以這裡的記憶，會在後來的事實取代先前的事實時，讓舊的事實退場。哪些該留下、哪些該放手，
+會隨著使用越來越準，而不是等模型發布新版本。它在公開的記憶測試上表現如何，連同背後的每個
+答案與紀錄，都在 [`evals/`](../../evals/) 裡。
 
-直到今年，都還沒有人衡量過這件事。大家常引用的長期記憶基準測試（LoCoMo、
-LongMemEval）只衡量回想能力：對的事實有沒有被找回來。一個永遠不會忘記任何東西的系
-統，在這些測試上會拿到滿分。2026 年 4 月，亞利桑那州立大學的一組研究團隊發表了
-**Memora**（Uddin、Shubham、Blanco、Baral、Wang，*From Recall to Forgetting:
-Benchmarking Long-Term Memory for Personalized Agents*，[arXiv
-2604.20006](https://arxiv.org/abs/2604.20006)，ACL 2026 Findings）。這是第一個針對
-第二種失誤所設計的基準測試。每一道題目都帶有兩種檢查：必須被回想起來的事實，以及在
-對話中已被取消或被取代、絕對**不**該再出現的事實。它的核心指標 **FAMA**
-（Forgetting-Aware Memory Accuracy，具遺忘意識的記憶準確度）等於回想分數，再扣除代
-理人每次依賴過時事實所產生的懲罰。該論文對其測試的六個記憶代理人所得出的結論是：
-"frequent reuse of invalid memories and failures to reconcile evolving memories."
-（頻繁重複使用無效的記憶，且未能調和不斷演變的記憶內容。）
+## 設計夥伴
 
-那正是 Sno Station 的記憶系統從一開始就設計來通過的考驗，也是記憶會自我改進的原因：
-哪些該留下、哪些該淘汰，以及後來的事實如何取代先前的事實，這些規則都會隨著使用而調
-整，而不是等模型發布新版才改變。
+我們正在和一小群人合作，他們已經同時並行運作兩個以上的代理人，並且用手動的方式在它們之間
+搬移成果。如果這就是你，請開一個
+[設計夥伴 issue](https://github.com/sno-ai/sno-station/issues/new?template=design-partner.yml)，
+告訴我們你在用什麼。
 
-所有結果以及背後的全部答案、評判與記錄都在 [`evals/`](../../evals/) 中。
+## 安全性
 
-## Design partners
+請見 [SECURITY.md](../../SECURITY.md)。加密能保護什麼、不能保護什麼，請見
+[docs/security.md](../security.md)。
 
-我們正在與一小群已經同時並行運作兩個以上代理人，並手動在它們之間搬移執行結果的
-使用者合作。如果這就是您的情況，歡迎開一個[設計夥伴 issue](https://github.com/sno-ai/sno-station/issues/new?template=design-partner.yml)，
-告訴我們您正在使用的環境。
-
-## Security
-
-請見 [SECURITY.md](../../SECURITY.md)。
-
-## License
+## 授權
 
 Apache-2.0。從頭到尾完全開源。請見 [LICENSE](../../LICENSE)。
 
-## References
+## 致謝
 
-Work this repository builds on, with thanks.
+本儲存庫所依據的研究成果。
 
-- Andrej Karpathy. *LLM Wiki.* Gist, April 2026.
-  https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f
-- Liyan Tang, Cyrus Rashtchian, Chun-Sung Ferng, Andrew Tomkins, Da-Cheng Juan, Tu Vu
-  (Google Research, Virginia Tech). *WikiSkill: Compiling Agent Experience into Persistent
-  Knowledge for Skill Evolution.* arXiv:2608.27454, August 2026.
-  https://arxiv.org/abs/2608.27454
-- Qizheng Zhang, Changran Hu, Shubhangi Upasani, Boyuan Ma, Fenglu Hong, Vamsidhar Kamanuru,
-  Jay Rainton, et al. (Stanford University, SambaNova). *Agentic Context Engineering: Evolving
-  Contexts for Self-Improving Language Models.* arXiv:2510.04618, October 2025. Its curator
-  and helpful/harmful bookkeeping were studied while designing our loop.
-  https://arxiv.org/abs/2510.04618
-- Md Nayem Uddin, Kumar Shubham, Eduardo Blanco, Chitta Baral, Gengyu Wang (Arizona State
-  University). *From Recall to Forgetting: Benchmarking Long-Term Memory for Personalized
-  Agents* (the Memora benchmark). arXiv:2604.20006, April 2026, ACL 2026 Findings.
-  https://arxiv.org/abs/2604.20006
+- Andrej Karpathy，[*LLM Wiki*](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f)。代理人應該維護一份 wiki，記錄自己學到的東西，而不是每次工作階段都重新推導一遍。
+- Tang、Rashtchian、Ferng、Tomkins、Juan 與 Vu，[*WikiSkill*](https://arxiv.org/abs/2608.27454)。把代理人自身的經驗轉化為知識，進而改寫它的技能。
+- Zhang、Hu、Upasani 等人，[*Agentic Context Engineering*](https://arxiv.org/abs/2510.04618)。我們在設計夜間循環時，研究了它篩選代理人保留內容的方式。
+- Uddin、Shubham、Blanco、Baral 與 Wang，[*From Recall to Forgetting*](https://arxiv.org/abs/2604.20006)。第一個同時檢查記憶「不該再說什麼」的基準測試。
