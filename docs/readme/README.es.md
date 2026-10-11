@@ -117,7 +117,7 @@ y después cuenta como tuyo.
 regístrate y haz clic en Approve. O dale tu correo a tu agente: ejecuta
 `sno account login --email you@example.com` y inicias sesión una vez.
 
-**Ya tienes una cuenta.** Ejecuta un comando y abre el enlace que imprime con tu sesión iniciada:
+**Ya tienes una cuenta.** Ejecuta un comando, abre el enlace que imprime con tu sesión iniciada y pulsa «Approve»:
 
 ```bash
 sno account claim

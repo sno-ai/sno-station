@@ -116,7 +116,7 @@ before and after counts as yours.
 click Approve. Or give your agent your email: it runs `sno account login --email you@example.com`
 and you sign in once.
 
-**Already have an account.** Run one command and open the link it prints while signed in:
+**Already have an account.** Run one command, open the link it prints while signed in, and click Approve:
 
 ```bash
 sno account claim

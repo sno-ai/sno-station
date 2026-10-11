@@ -121,8 +121,8 @@ avant et après compte comme étant à vous.
 Ouvrez-le, inscrivez-vous et cliquez sur Approve. Ou donnez votre e-mail à votre agent : il lance
 `sno account login --email you@example.com` et vous vous connectez une fois.
 
-**Vous avez déjà un compte.** Lancez une commande et ouvrez le lien qu'elle affiche, une fois
-connecté :
+**Vous avez déjà un compte.** Lancez une commande, ouvrez le lien qu'elle affiche une fois
+connecté, et cliquez sur « Approve » :
 
 ```bash
 sno account claim
