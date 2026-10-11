@@ -167,7 +167,7 @@ export class PluginObservability {
 		}
 	}
 
-	async emitError(kind: string, error: unknown, sessionUuid?: string): Promise<void> {
+	async emitError(kind: string, error: unknown, sessionUuid?: string, recoverable = false): Promise<void> {
 		const messageHash = this.hashText(formatErrorMessage(error));
 		if (!messageHash) return;
 		await this.emit({
@@ -181,7 +181,7 @@ export class PluginObservability {
 				}[this.agentId],
 				context: kind.split(":", 1)[0] ?? kind,
 				message_hash: messageHash,
-				recoverable: false,
+				recoverable,
 			},
 		});
 	}

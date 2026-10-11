@@ -456,6 +456,7 @@ export function createLlmClient(config: LlmClientConfig & { refuseOnUnavailable?
 				state.error = `[${request.callId}] agent-llm ${result.category}: ${result.message}`;
 				recordProviderFailure({ callId: request.callId, destination: "host",
 					provider: "agent-host-seam" as LlmProvider, failure: `host_${result.category}`,
+					...(result.message === "no-agent-endpoint" ? { hostGone: true } : {}),
 					durationMs: performance.now() - hostStarted });
 				// The category is its own attribute: joined into `error` it is hashed with the message,
 				// and a run where every host call failed (471 of 471, 2026-09-19) could not be read.

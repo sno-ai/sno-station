@@ -377,7 +377,7 @@ export class MemoryRuntimePool {
 		await bestEffort("provider usage", async () => {
 			for (const response of responses) {
 				if (response.failure) {
-					await entry.observability.emitError(`llm.call:${response.failure}`, `${response.provider} ${response.callId}`, scope.host?.observeSessionUuid);
+					await entry.observability.emitError(`llm.call:${response.failure}`, `${response.provider} ${response.callId}`, scope.host?.observeSessionUuid, response.hostGone === true);
 					continue;
 				}
 				// A response without a model or usage is an error, never a zero-token call.

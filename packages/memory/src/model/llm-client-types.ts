@@ -114,6 +114,8 @@ export type ProviderResponseTrace = {
 	usage?: Omit<TokenUsage, "estimated">;
 	/** Set when the call produced no answer; the value is the failure category. */
 	failure?: string;
+	/** The host that should have answered was no longer there; the work is retried when a host returns. */
+	hostGone?: boolean;
 };
 
 export type DispatchContext = {
