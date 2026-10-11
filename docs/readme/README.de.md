@@ -20,7 +20,7 @@
 
 Sno Station macht aus den Agenten, die Sie schon nutzen, ein Team. Codex, Claude Code, Cursor,
 Hermes Agent und OpenClaw teilen sich ein Gedächtnis, geben Arbeit aneinander weiter und
-prüfen gegenseitig ihre Ergebnisse, bevor diese bei Ihnen ankommen. Jede Nacht blicken sie auf
+prüfen auf Wunsch gegenseitig ihre Arbeit. Jede Nacht blicken sie auf
 den Tag zurück und werden ein wenig besser.
 
 Es läuft auf Ihrem eigenen Rechner. Sie installieren es einmal und arbeiten weiter wie bisher.

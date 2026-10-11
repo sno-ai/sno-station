@@ -19,7 +19,7 @@
 **Read in other languages:** [English](../../README.md) · [中文](README.zh-CN.md) · [Deutsch](README.de.md) · [Español](README.es.md) · [Français](README.fr.md) · [Русский](README.ru.md) · [한국어](README.ko.md) · [日本語](README.ja.md) · **繁體中文**
 
 Sno Station 把你已經在用的代理人組成一支小隊。Codex、Claude Code、Cursor、Hermes Agent
-和 OpenClaw 共用同一份記憶，互相交接工作，並在成果送到你手上之前彼此檢查。每天夜裡，
+和 OpenClaw 共用同一份記憶，互相交接工作，你提出時還會彼此檢查。每天夜裡，
 它們會回頭檢視這一天，然後變得更好一點。
 
 它在你自己的電腦上運作。安裝一次，之後照你原本的方式工作就好。
@@ -176,7 +176,7 @@ Claude Code 的成果。沒有一次審查是空手而回的。我們曾經以�
 | 單一指令安裝 | `sno setup` 會裝好以上全部內容；已在乾淨的 Linux 機器上驗證 |
 | 在代理人裡輸入「Sno onboard」 | 已可使用；安裝後自動開始，也可以隨時輸入 |
 
-只有在乾淨的機器上實際執行過，該列才會寫上「已驗證」。
+只有在乾淨的機器上實際執行過，該列才會寫上「驗證」。
 
 ## 刻意遺忘的記憶
 

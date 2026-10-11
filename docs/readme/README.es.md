@@ -20,7 +20,7 @@
 
 Sno Station convierte los agentes que ya usas en un equipo. Codex, Claude Code, Cursor, Hermes Agent
 y OpenClaw comparten una sola memoria, se pasan el trabajo entre sí y revisan el trabajo de los
-demás antes de que llegue a ti. Cada noche repasan el día y mejoran un poco.
+demás cuando se lo pides. Cada noche repasan el día y mejoran un poco.
 
 Funciona en tu propia computadora. Lo instalas una vez y sigues trabajando como hasta ahora.
 

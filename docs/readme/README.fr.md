@@ -19,8 +19,8 @@
 **Lire dans d'autres langues :** [English](../../README.md) · [中文](README.zh-CN.md) · [Deutsch](README.de.md) · [Español](README.es.md) · **Français** · [Русский](README.ru.md) · [한국어](README.ko.md) · [日本語](README.ja.md) · [繁體中文](README.zh-TW.md)
 
 Sno Station transforme les agents que vous utilisez déjà en une équipe. Codex, Claude Code, Cursor,
-Hermes Agent et OpenClaw partagent une seule mémoire, se passent le travail et vérifient le travail
-des autres avant qu'il ne vous parvienne. Chaque nuit, ils reviennent sur la journée et
+Hermes Agent et OpenClaw partagent une seule mémoire, se passent le travail et relisent le travail
+des autres à votre demande. Chaque nuit, ils reviennent sur la journée et
 progressent un peu.
 
 Il tourne sur votre propre ordinateur. Vous l'installez une fois et vous continuez à travailler
