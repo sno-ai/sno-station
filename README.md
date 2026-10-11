@@ -19,8 +19,8 @@
 **Read in other languages:** **English** · [中文](docs/readme/README.zh-CN.md) · [Deutsch](docs/readme/README.de.md) · [Español](docs/readme/README.es.md) · [Français](docs/readme/README.fr.md) · [Русский](docs/readme/README.ru.md) · [한국어](docs/readme/README.ko.md) · [日本語](docs/readme/README.ja.md) · [繁體中文](docs/readme/README.zh-TW.md)
 
 Sno Station turns the agents you already use into a squad. Codex, Claude Code, Cursor, Hermes Agent
-and OpenClaw share one memory, pass work to each other, and check each other's work before it
-reaches you. Every night they look back at the day and get a little better.
+and OpenClaw share one memory, pass work to each other, and review each other's work when you
+ask. Every night they look back at the day and get a little better.
 
 It runs on your own computer. You install it once and keep working the way you do now.
 

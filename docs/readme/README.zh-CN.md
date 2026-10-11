@@ -19,7 +19,7 @@
 **Read in other languages:** [English](../../README.md) · **中文** · [Deutsch](README.de.md) · [Español](README.es.md) · [Français](README.fr.md) · [Русский](README.ru.md) · [한국어](README.ko.md) · [日本語](README.ja.md) · [繁體中文](README.zh-TW.md)
 
 Sno Station 把你已经在用的 agent 变成一支小队。Codex、Claude Code、Cursor、Hermes Agent
-和 OpenClaw 共用一份记忆，互相交接工作，并在成果送到你手上之前互相检查。每天夜里，它们
+和 OpenClaw 共用一份记忆，互相交接工作，你提出时还会互相检查。每天夜里，它们
 会回顾这一天，变得更好一点。
 
 它运行在你自己的电脑上。装一次，之后照常工作就行。
@@ -173,7 +173,7 @@ Claude Code 的工作。没有一次审查是空手而归的。我们曾以为�
 | 一条命令安装 | `sno setup` 装好上面的全部内容；已在干净的 Linux 机器上验证 |
 | 在你的 agent 里说“Sno onboard” | 已可用；安装后会自动开始，你说出口时也会开始 |
 
-只有在干净的机器上运行过之后，一行才会写“已验证”。
+只有在干净的机器上运行过之后，一行才会写“验证”。
 
 ## 有意遗忘的记忆
 

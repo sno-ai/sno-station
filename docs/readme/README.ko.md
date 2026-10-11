@@ -19,8 +19,8 @@
 **다른 언어로 읽기:** [English](../../README.md) · [中文](README.zh-CN.md) · [Deutsch](README.de.md) · [Español](README.es.md) · [Français](README.fr.md) · [Русский](README.ru.md) · **한국어** · [日本語](README.ja.md) · [繁體中文](README.zh-TW.md)
 
 Sno Station은 지금 쓰고 있는 에이전트들을 하나의 팀으로 묶어 줍니다. Codex, Claude Code, Cursor,
-Hermes Agent, OpenClaw가 메모리 하나를 함께 쓰고, 서로에게 작업을 넘기고, 결과가 여러분에게
-닿기 전에 서로의 작업을 검토합니다. 매일 밤 하루를 돌아보며 조금씩 나아집니다.
+Hermes Agent, OpenClaw가 메모리 하나를 함께 쓰고, 서로에게 작업을 넘기고, 요청하면
+서로의 작업을 검토합니다. 매일 밤 하루를 돌아보며 조금씩 나아집니다.
 
 모든 것이 여러분의 컴퓨터에서 실행됩니다. 한 번 설치하면, 지금 하던 방식 그대로 작업하면 됩니다.
 

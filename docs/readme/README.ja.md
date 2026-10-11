@@ -19,8 +19,8 @@
 **Read in other languages:** [English](../../README.md) · [中文](README.zh-CN.md) · [Deutsch](README.de.md) · [Español](README.es.md) · [Français](README.fr.md) · [Русский](README.ru.md) · [한국어](README.ko.md) · **日本語** · [繁體中文](README.zh-TW.md)
 
 Sno Station は、いま使っているエージェントをひとつのチームにします。Codex、Claude Code、
-Cursor、Hermes Agent、OpenClaw が同じメモリを共有し、互いに仕事を渡し、あなたに届く前に
-お互いの仕事を確認し合います。毎晩その日を振り返り、少しずつ良くなっていきます。
+Cursor、Hermes Agent、OpenClaw が同じメモリを共有し、互いに仕事を渡し、頼めばお互いの仕事を
+レビューし合います。毎晩その日を振り返り、少しずつ良くなっていきます。
 
 自分のコンピューター上で動きます。インストールは一度だけで、仕事の進め方は今までのままです。
 
