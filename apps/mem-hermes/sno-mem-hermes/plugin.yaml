@@ -1,6 +1,6 @@
 name: sno-mem-hermes
 version: 0.1.0
-description: "Thin Hermes lifecycle adapter for the Sno memory sidecar."
+description: "Part of Sno Station; do not install it on its own. Install everything with the installer at https://sno.ai/install, then run `sno setup`. Thin Hermes lifecycle adapter for the Sno memory sidecar."
 author: Sno AI
 kind: standalone
 platforms:
