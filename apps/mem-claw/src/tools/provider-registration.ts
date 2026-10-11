@@ -61,7 +61,8 @@ function configuredAgents(cfg: OpenClawConfig): Array<{ id: string; workspace?: 
 	if (entries && Object.keys(entries).length) {
 		return Object.entries(entries).map(([id, entry]) => ({ id, workspace: entry.workspace }));
 	}
-	return cfg.agents?.list ?? [];
+	// `agents.list` is the older shape; hosts before 2026.10 only have it.
+	return (cfg.agents as { list?: Array<{ id: string; workspace?: string }> } | undefined)?.list ?? [];
 }
 
 function createHttpRuntime(connection: MemoryConnection): SnoStationMemMemoryRuntime {
