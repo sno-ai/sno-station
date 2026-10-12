@@ -1,5 +1,12 @@
 # Sno Memory for Hermes Agent — Onboarding
 
+> This is only one part of Sno Station. Do not install the plugin on its own. The full install is
+> the line below, which installs the `sno` command and then runs `sno setup`:
+>
+> ```bash
+> sh -c 'sno_installer_body=$(curl -fsSL https://sno.ai/install) && printf "%s\n" "$sno_installer_body" | sh' && ~/.local/bin/sno setup
+> ```
+
 Hermes uses a Python plugin to connect to the shared Sno memory service. The service itself
 comes from npm. The `sno` command installs the plugin and selects it for you.
 

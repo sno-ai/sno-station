@@ -188,9 +188,9 @@ case $operation in
         gh api -X DELETE "repos/$GITHUB_REPOSITORY/releases/assets/$asset_id" && printf 'Removed %s from %s\n' "$name" "$older"
       done
     done
-    # An older page left with no files only clutters the list and offers nothing to download: remove it. Its tag stays.
-    gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" --jq ".[] | select(.draft == false and .tag_name != \"$tag\" and (.assets | length) == 0) | \"\(.tag_name) \(.id)\"" | while read -r older release_id; do
-      gh api -X DELETE "repos/$GITHUB_REPOSITORY/releases/$release_id" && printf 'Removed the empty release page %s\n' "$older"
+    # An older page left with no files only clutters the list and offers nothing to download: remove it and its tag.
+    gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" --jq ".[] | select(.draft == false and .tag_name != \"$tag\" and (.assets | length) == 0) | \"\(.tag_name) \(.id)\"" | while read -r older _; do
+      gh release delete "$older" --cleanup-tag --yes && printf 'Removed the empty release page and tag %s\n' "$older"
     done
     ;;
 esac

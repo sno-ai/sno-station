@@ -13,7 +13,8 @@ import { bestEffortSync } from "@snoai/memory/internal/engine/observability/best
 type SessionUuidProvider = () => string | undefined;
 type ToolRegistration = Parameters<OpenClawPluginApi["registerTool"]>[0];
 type ToolOptions = Parameters<OpenClawPluginApi["registerTool"]>[1];
-type ToolFactory = Exclude<ToolRegistration, AnyAgentTool>;
+// The host also accepts a version 2 descriptor object; this plugin only registers plain function factories.
+type ToolFactory = Extract<ToolRegistration, (ctx: never) => unknown>;
 const log = createLogger("mem-claw:tool");
 
 function stablePayload(value: unknown): string {
@@ -175,7 +176,7 @@ export function withToolObservabilityApi(
 						api.registerTool(wrappedFactory, opts);
 						return;
 					}
-					api.registerTool(wrapTool(tool, observability, sessionUuidProvider, stateDir), opts);
+					api.registerTool(wrapTool(tool as AnyAgentTool, observability, sessionUuidProvider, stateDir), opts);
 				};
 			}
 			const value = Reflect.get(target, prop, receiver);
