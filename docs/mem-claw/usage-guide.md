@@ -15,7 +15,7 @@ Requirements:
 Complete the [shared memory setup](../memory-setup.md) once, then install the plugin:
 
 ```bash
-openclaw plugins install @snoai/mem-claw@1.2.10
+openclaw plugins install @snoai/mem-claw@1.2.11
 ```
 
 `npx @snoai/mem-claw` runs the same install; its only option is `--profile <name>`, forwarded to
