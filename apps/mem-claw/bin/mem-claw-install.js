@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { spawnSync } from "node:child_process";
-import { dirname, resolve } from "node:path";
+import { copyFileSync, lstatSync, readdirSync, renameSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const args = process.argv.slice(2);
@@ -18,6 +19,29 @@ for (let i = 0; i < args.length; i++) {
 	} else {
 		console.error(`Unknown option: ${args[i]}`);
 		process.exit(2);
+	}
+}
+
+// A running gateway keeps a second link to each file of the plugin it loaded, and OpenClaw refuses to replace an installed
+// plugin holding such a file ("Refusing to move hardlinked file"). Give each such file its own copy first; the content stays
+// the same. Links to other directories, such as the host OpenClaw, are not followed. A first install has nothing to inspect.
+const inspected = spawnSync("openclaw", [...(profile ? ["--profile", profile] : []), "plugins", "inspect", "sno-mem-claw", "--json"], { encoding: "utf8" });
+if (inspected.status === 0) {
+	const separate = dir => {
+		for (const entry of readdirSync(dir, { withFileTypes: true })) {
+			const path = join(dir, entry.name);
+			if (entry.isDirectory()) separate(path);
+			else if (entry.isFile() && lstatSync(path).nlink > 1) {
+				copyFileSync(path, `${path}.sno-copy`);
+				renameSync(`${path}.sno-copy`, path);
+			}
+		}
+	};
+	try {
+		const installedDir = JSON.parse(inspected.stdout.slice(inspected.stdout.indexOf("{"))).plugin?.rootDir;
+		if (installedDir) separate(installedDir);
+	} catch (error) {
+		console.error(`Could not separate the installed plugin's files from the running gateway: ${error instanceof Error ? error.message : String(error)}`);
 	}
 }
 
