@@ -32,6 +32,6 @@ Only `mode: "storage-safe"` is supported. Preview-preserving behavior belongs in
 caller-owned adapter, not this package.
 
 Who it is for: the memory engine ([`@snoai/memory`](https://www.npmjs.com/package/@snoai/memory))
-and anyone who needs storage-safe text. If you want shared agent memory, start with the
-[shared memory setup](https://github.com/sno-ai/sno-station/blob/main/docs/memory-setup.md).
+and anyone who needs storage-safe text. If you want agent memory, start with the
+[memory service setup](https://github.com/sno-ai/sno-station/blob/main/docs/memory-setup.md).
 Licensed under Apache-2.0.

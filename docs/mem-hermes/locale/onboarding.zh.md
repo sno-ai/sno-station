@@ -1,12 +1,12 @@
 # Hermes Agent 的 Sno Memory — 初次设置
 
-Hermes 使用 Python 插件连接 Sno 的共用记忆服务；记忆服务本身由 npm 安装。插件由 `sno`
+Hermes 使用 Python 插件连接 Sno 的记忆服务；记忆服务本身由 npm 安装。插件由 `sno`
 命令帮你安装并选用。
 
 ## 安装
 
 先准备 Hermes Agent、Git，以及 Node.js 22.22.3+、24.15.0+ 或 25.9.0+（分别对应
-22、24、25 系列）。完成[共用记忆服务安装](../../memory-setup.md)，它会安装记忆服务，并在
+22、24、25 系列）。完成[记忆服务安装](../../memory-setup.md)，它会安装记忆服务，并在
 `~/.sno/settings.json` 写入本地记忆库设置和加密密钥。
 
 然后安装 Hermes 插件：
@@ -16,10 +16,10 @@ sh -c 'sno_installer_body=$(curl -fsSL https://sno.ai/install) && printf "%s\n" 
 ```
 
 `sno setup` 会从本仓库安装并启用插件（不需要另发一个 Python 包）；你没选过别的记忆提供者时，
-它会把插件设为 Hermes 的记忆提供者，并重启正在运行的 Hermes gateway。共用安装步骤会准备
+它会把插件设为 Hermes 的记忆提供者，并重启正在运行的 Hermes gateway。记忆服务安装步骤会准备
 它使用的 npm 记忆服务和本地模型。首发选择 Local First 模式，不需要模型 API 密钥。
 
-请私下备份 `~/.sno/settings.json` 和记忆库。已有记忆库时不要重跑共用设置中的生成配置
+请私下备份 `~/.sno/settings.json` 和记忆库。已有记忆库时不要重跑记忆服务设置中的生成配置
 步骤；新密钥无法读取旧记忆。
 
 ## 确认安装

@@ -33,6 +33,6 @@ The package runs locally. It does not call hosted chunking APIs, fetch implement
 install, require private npm credentials, or use an LLM for token counting or boundaries.
 
 Who it is for: the memory engine ([`@snoai/memory`](https://www.npmjs.com/package/@snoai/memory))
-and anyone who needs deterministic chunking. If you want shared agent memory, start with the
-[shared memory setup](https://github.com/sno-ai/sno-station/blob/main/docs/memory-setup.md).
+and anyone who needs deterministic chunking. If you want agent memory, start with the
+[memory service setup](https://github.com/sno-ai/sno-station/blob/main/docs/memory-setup.md).
 Licensed under Apache-2.0.
