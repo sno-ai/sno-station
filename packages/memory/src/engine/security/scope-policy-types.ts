@@ -30,7 +30,7 @@ export const DEFAULT_SCOPE_CONFIG: ScopeConfig = {
 	default: "global",
 	definitions: {
 		global: {
-			description: "Shared knowledge across all agents",
+			description: "Knowledge used by all your agents",
 		},
 	},
 	agentAccess: {},

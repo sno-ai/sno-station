@@ -43,7 +43,7 @@ export class MemoryScopePolicy implements ScopePolicy {
 
 		if (!this.config.definitions.global) {
 			this.config.definitions.global = {
-				description: "Shared knowledge across all agents",
+				description: "Knowledge used by all your agents",
 			};
 		}
 

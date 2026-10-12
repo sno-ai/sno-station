@@ -37,7 +37,7 @@ const scopesConfigSchema = z
 				}),
 			)
 			.prefault({
-				global: { description: "Shared knowledge across all agents" },
+				global: { description: "Knowledge used by all your agents" },
 			}),
 		agentAccess: z.record(z.string(), z.array(z.string())).default({}),
 	})
