@@ -24,7 +24,7 @@ then add the plugin for your agent ([Codex](https://www.npmjs.com/package/@snoai
 [OpenClaw](https://www.npmjs.com/package/@snoai/mem-claw)).
 
 ```bash
-npm install @snoai/embedder@1.1.3
+npm install @snoai/embedder@1.1.4
 ```
 
 Licensed under Apache-2.0.

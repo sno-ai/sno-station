@@ -9,16 +9,17 @@ import type { SnoStationMemMemoryCapability, SnoStationMemMemoryRuntime } from "
 import { resolveWorkspace, type MemoryConnection, type HostMemoryContext } from "../install/memory-connection";
 import { executeMemoryGetTool, executeMemoryRecallTool, toolHostContext } from "./http-memory-tools";
 import { APP_NAME } from "../constants";
+import { parseVersionTriple } from "../install/conversation-access-policy";
 
 type MemoryPromptSectionBuilder = NonNullable<MemoryPluginCapability["promptBuilder"]>;
 
 function createPromptBuilder(): MemoryPromptSectionBuilder {
 	return ({ availableTools }) => {
-		if (!availableTools.has("memory_search") && !availableTools.has("memory_get")) return [];
+		if (!availableTools.has("memory_recall") && !availableTools.has("memory_read")) return [];
 		return ["## Memory",
-			"Use memory_search or memory_recall to recall prior facts; use memory_get with an id for the full entry. Retired entries are history, never current recommendations.",
+			"Use memory_recall to recall prior facts; use memory_read with an id for the full entry. Retired entries are history, never current recommendations.",
 			"Correct a wrong identified memory with memory_correct. Recall first when the user identifies a remembered fact but its id is not visible. Leave an unidentified new or changed fact to turn capture. Background and plugin code never call correct; no model delete action exists.",
-			"If correction says already-superseded, your new wording was not applied. Get or recall the named successor, then correct that id only if the wording still differs.", ""];
+			"If correction says already-superseded, your new wording was not applied. Read or recall the named successor, then correct that id only if the wording still differs.", ""];
 	};
 }
 
@@ -43,11 +44,17 @@ function createProviderMemorySearchTool(api: OpenClawPluginApi, connection: Memo
 	};
 }
 
-function createProviderMemoryGetTool(api: OpenClawPluginApi, connection: MemoryConnection,
-	context: unknown): AnyAgentTool {
+/** OpenClaw 2026.10 registers memory_search and memory_get itself; registering them again is rejected with a name conflict. */
+function hostRegistersMemoryTools(rawVersion: unknown): boolean {
+	const version = parseVersionTriple(rawVersion);
+	return version !== undefined && (version[0] > 2026 || (version[0] === 2026 && version[1] >= 10));
+}
+
+function createProviderMemoryReadTool(api: OpenClawPluginApi, connection: MemoryConnection,
+	context: unknown, name: "memory_read" | "memory_get"): AnyAgentTool {
 	const access = providerContext(api, context);
 	return {
-		name: "memory_get", label: "Memory Get",
+		name, label: "Memory Read",
 		description: "Get the full memory by id. A retired memory includes its immediate successor id and is historical context.",
 		parameters: { type: "object", properties: { id: { type: "string" } },
 			required: ["id"], additionalProperties: false },
@@ -122,8 +129,11 @@ export function registerSnoStationMemProviderCapability(params: {
 		},
 	};
 	params.api.registerMemoryCapability(capability as MemoryPluginCapability);
+	params.api.registerTool(ctx => createProviderMemoryReadTool(params.api, params.connection, ctx, "memory_read"),
+		{ names: ["memory_read"] });
+	if (hostRegistersMemoryTools(params.api.runtime.version)) return;
 	params.api.registerTool(ctx => createProviderMemorySearchTool(params.api, params.connection, ctx),
 		{ names: ["memory_search"] });
-	params.api.registerTool(ctx => createProviderMemoryGetTool(params.api, params.connection, ctx),
+	params.api.registerTool(ctx => createProviderMemoryReadTool(params.api, params.connection, ctx, "memory_get"),
 		{ names: ["memory_get"] });
 }

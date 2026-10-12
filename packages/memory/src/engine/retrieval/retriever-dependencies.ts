@@ -48,7 +48,7 @@ export {
 export type { RetrievalStatsCollector } from "./retrieval-stats";
 export type { RetrievalTrace } from "./retrieval-trace";
 export { TraceCollector } from "./retrieval-trace";
-export { RetrievalError } from "../shared/errors";
+export { EmbeddingError, RetrievalError } from "../shared/errors";
 export type {
 	AggregationQuery,
 	MemoryCategory,

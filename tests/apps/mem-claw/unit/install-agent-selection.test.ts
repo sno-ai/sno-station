@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
-// The installer is run for real. Only `openclaw` is a stand-in: it accepts the install and answers `agents list --json`.
+// The installer is run for real. Only `openclaw` is a stand-in: it accepts the install, a gateway restart, and answers `agents list --json`.
 const installer = new URL("../../../../apps/mem-claw/bin/mem-claw-install.js", import.meta.url).pathname;
 const roots: string[] = [];
 
@@ -19,7 +19,7 @@ function install(agents: Array<{ id: string; isDefault: boolean }>) {
 	const stub = join(root, "bin", "openclaw");
 	writeFileSync(
 		stub,
-		`#!/bin/sh\ncase "$*" in\n  "plugins install "*) exit 0 ;;\n  "agents list --json") cat <<'JSON'\n${JSON.stringify(agents)}\nJSON\n  exit 0 ;;\nesac\nexit 2\n`,
+		`#!/bin/sh\ncase "$*" in\n  "plugins install "*) exit 0 ;;\n  "gateway "*) exit 0 ;;\n  "agents list --json") cat <<'JSON'\n${JSON.stringify(agents)}\nJSON\n  exit 0 ;;\nesac\nexit 2\n`,
 	);
 	chmodSync(stub, 0o755);
 	return spawnSync(process.execPath, [installer], {
@@ -49,7 +49,7 @@ describe("mem-claw installer and OpenClaw's agent selection", () => {
 
 describe("mem-claw installer and OpenClaw's gateway", () => {
 	// `openclaw` is a stand-in that logs every call; `gateway health` fails twice, then answers.
-	function installWithGateway(restart: "ok" | "fail") {
+	function installWithGateway(restart: "ok" | "fail", args: string[] = []) {
 		const root = mkdtempSync(join(tmpdir(), "sno-mem-claw-gateway-"));
 		roots.push(root);
 		mkdirSync(join(root, "bin"));
@@ -57,10 +57,10 @@ describe("mem-claw installer and OpenClaw's gateway", () => {
 		const stub = join(root, "bin", "openclaw");
 		writeFileSync(
 			stub,
-			`#!/bin/sh\necho "$*" >> "${calls}"\ncase "$*" in\n  "plugins install "*) exit 0 ;;\n  "agents list --json") echo "[]"; exit 0 ;;\n  "gateway restart") ${restart === "ok" ? "exit 0" : "exit 3"} ;;\n  "gateway health") n=$(grep -c "gateway health" "${calls}"); [ "$n" -ge 3 ] && exit 0; exit 1 ;;\nesac\nexit 2\n`,
+			`#!/bin/sh\necho "$*" >> "${calls}"\nargs="${"$"}{*#--profile work }"\ncase "$args" in\n  "plugins install "*) exit 0 ;;\n  "agents list --json") echo "[]"; exit 0 ;;\n  "gateway restart") ${restart === "ok" ? "exit 0" : "echo 'stopping service'; echo 'service stopped'; echo 'Agent database needs a migration: run openclaw doctor --fix' >&2; exit 3"} ;;\n  "gateway health") n=$(grep -c "gateway health" "${calls}"); [ "$n" -ge 3 ] && exit 0; exit 1 ;;\nesac\nexit 2\n`,
 		);
 		chmodSync(stub, 0o755);
-		const run = spawnSync(process.execPath, [installer], {
+		const run = spawnSync(process.execPath, [installer, ...args], {
 			env: { ...process.env, PATH: `${join(root, "bin")}:${process.env.PATH}` },
 			encoding: "utf8",
 			stdio: ["ignore", "pipe", "pipe"],
@@ -76,10 +76,13 @@ describe("mem-claw installer and OpenClaw's gateway", () => {
 		expect(`${run.stdout}${run.stderr}`).toContain("gateway restarted and answers");
 	});
 
-	it("says how to start the gateway when the restart fails, and still succeeds", () => {
-		const { run, calls } = installWithGateway("fail");
-		expect(run.status).toBe(0);
-		expect(calls.filter(call => call.startsWith("gateway"))).toEqual(["gateway restart"]);
-		expect(`${run.stdout}${run.stderr}`).toContain("start it with: openclaw gateway restart");
+	it("fails when the restart fails, and the last line carries OpenClaw's own hint (it is the only line `sno update` shows)", () => {
+		const { run, calls } = installWithGateway("fail", ["--profile", "work"]);
+		expect(run.status).toBe(1);
+		expect(calls.filter(call => call.includes("gateway"))).toEqual(["--profile work gateway restart"]);
+		const last = run.stderr.trim().split("\n").at(-1) ?? "";
+		expect(last).toContain("did not restart");
+		expect(last).toContain("run openclaw doctor --fix");
+		expect(last).toContain("start it with: openclaw --profile work gateway restart");
 	});
 });

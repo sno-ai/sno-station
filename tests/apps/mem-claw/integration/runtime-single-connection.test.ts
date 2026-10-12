@@ -49,6 +49,7 @@ describe("OpenClaw connection lifecycle", () => {
 		Object.assign(second.config, { plugins: { slots: { memory: "sno-mem-claw" } } });
 		for (const harness of [first, second]) {
 			Object.assign(harness.config, { agents: { defaults: { workspace: fixture.profile } } });
+			Object.assign(harness.runtime, { version: "2026.10.1" });
 			memClawPlugin.register(harness);
 			cleanups.push(() => harness.stopServices());
 			await harness.startServices();
@@ -56,10 +57,10 @@ describe("OpenClaw connection lifecycle", () => {
 		expect(second.registeredServices).toHaveLength(1);
 		expect(second.registeredCommands).toHaveLength(0);
 		expect(second.registeredTools.map(tool => tool.name).sort()).toEqual([
-			"memory_correct", "memory_get", "memory_recall", "memory_search", "memory_store",
+			"memory_correct", "memory_read", "memory_recall", "memory_store",
 		]);
 		const remember = first.getRegisteredTool("memory_store");
-		const get = second.getRegisteredTool("memory_get");
+		const get = second.getRegisteredTool("memory_read");
 		if (!remember || !get) throw new Error("expected tools on both host registries");
 		const content = "Separate gateway host registries share the persisted cedar runbook.";
 		const stored = asClawResult(await remember.execute("first-store", { content }));
