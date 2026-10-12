@@ -219,7 +219,7 @@ A: Not your local database or key: Sno does not receive your DB file or DEK. In 
 
 **Q: Does my memory ever leave my machine?**
 
-A: Not by default. The local database and DEK do not leave your machine through Sno. Selected content may leave only when you ask a configured LLM provider to answer with memory context, export it, or choose REM Enhanced mode. In REM Enhanced mode your memory text and lessons go to your own space in Sno's cloud, which works like your own cloud drive: you can delete them, keep them, or choose to have them processed.
+A: The local database and DEK do not leave your machine through Sno. Selected content leaves when you ask a configured LLM provider to answer with memory context, export it, or choose REM Enhanced mode, and Agent Native's default settings upload the day's sessions to Sno each night for cloud lessons and skill review (you can turn that off in `~/.sno/settings.json`). In REM Enhanced mode your memory text and lessons go to your own space in Sno's cloud, which works like your own cloud drive: you can delete them, keep them, or choose to have them processed.
 
 **Q: Is the local database the source of truth?**
 
