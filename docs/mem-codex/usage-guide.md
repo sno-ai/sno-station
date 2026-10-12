@@ -13,13 +13,13 @@ Requirements:
 
 ### Install
 
-Complete the [shared memory setup](../memory-setup.md), then run:
+Complete the [memory service setup](../memory-setup.md), then run:
 
 ```bash
 sh -c 'sno_installer_body=$(curl -fsSL https://sno.ai/install) && printf "%s\n" "$sno_installer_body" | sh' && ~/.local/bin/sno setup --harness codex
 ```
 
-`SNO_PROFILE_DIR` selects the profile root (default `~/.sno`). The shared setup
+`SNO_PROFILE_DIR` selects the profile root (default `~/.sno`). The memory service setup
 writes `<profile root>/settings.json` with the memory mode, store path, and key.
 Keep a private backup of that file for store recovery.
 
@@ -67,42 +67,33 @@ collected, and this client has no bring-your-own-key transport.
 
 ### REM Enhanced
 
-REM Enhanced splits model-assisted memory work by capability. The Sno GPU handles the
-LoRA-covered calls; your Codex CLI handles the rest:
+REM is how your agents dream: overnight they strengthen their memory and settle what they learned. REM Enhanced lets Sno's own memory models help with the two hardest jobs: writing down what matters from a conversation, and deciding which of two memories that disagree is right. Your Codex CLI does the rest. It needs a Sno key in `snoGpu.apiKey` in `settings.json`.
 
-- Sno handles memory extraction.
-- Sno handles conflict adjudication.
-- Your Codex CLI handles active-task classification, profile merging, completed-task matching,
-  and relative-date resolution.
-
-If a model request fails, only that request uses its Local First behavior. The client does not
-silently reroute it to another model tier.
+**Your data stays yours.** In this mode the memory text for the Sno calls, and the lessons your agents learn, go to your own space in Sno's cloud. It works like your own cloud drive: everything in it is yours, only you can see it, and Sno does not touch it. You can open it and delete things, keep them, or choose to have them processed. Nothing is deleted automatically, and Sno does not give any of it to anyone.
 
 ## Routing defaults
 
-| Occasion | Local First | Agent Native | REM Enhanced |
+| What it does | Local First | Agent Native | REM Enhanced |
 | --- | --- | --- | --- |
-| Memory extraction | Deterministic, verbatim capture | Your Codex CLI | Sno extraction model |
-| Active-task classification | Keyword rules | Your Codex CLI | Your Codex CLI |
-| Profile-section merge | Deterministic merge | Your Codex CLI | Your Codex CLI |
-| Completed-task match | Token overlap | Your Codex CLI | Your Codex CLI |
-| Conflict adjudication | Keep both memories | Your Codex CLI | Sno conflict model |
-| Reflection summary | No model reflection; local session memory remains | Same | Same |
-| Relative-date resolution | No model call | Your Codex CLI | Your Codex CLI |
+| Writing down what matters | Saved word for word | Your Codex CLI | Sno's memory model |
+| Knowing what task you are on | Simple keyword matching | Your Codex CLI | Your Codex CLI |
+| Updating what it knows about you | Fixed rules | Your Codex CLI | Your Codex CLI |
+| Spotting finished tasks | Word matching | Your Codex CLI | Your Codex CLI |
+| Settling memories that disagree | Keep both memories | Your Codex CLI | Sno's memory model |
+| Summing up the day | No model reflection; local session memory remains | Same | Same |
+| Turning "tomorrow" into a date | No model call | Your Codex CLI | Your Codex CLI |
 
 No call is off in Agent Native or REM Enhanced. Model-assisted writes run in the background
 capture worker and fall back per request to the matching Local First behavior when necessary.
 
 In REM Enhanced, the selected mode fixes each model call's destination as shown above.
 
-Two REM operations run over the store on a periodic trigger and route model calls by the selected
-mode:
+REM also tidies your memory on a schedule, in two ways:
 
-- `rem-update` rewrites transition narratives into current-state memories and keeps the history;
-- `rem-replace` adjudicates contradictions across the store and soft-closes the loser reversibly.
+- It rewrites "I used to... then I changed..." stories into one clean, current memory, and keeps the history.
+- It settles memories that contradict each other. The one that lost is retired, and you can bring it back.
 
-Both are requested by default. Change `rem.operations` in `settings.json` to request one, or
-set `rem.tick` to `false` to turn the trigger off.
+Both run by default. To run only one, change `rem.operations` in `settings.json`. To turn REM's schedule off, set `rem.tick` to `false`.
 
 Mode selection governs memory writing. It does not make final claims about retrieval or reranker
 routing.
@@ -175,7 +166,7 @@ There is no deletion command in this client.
 
 | Command | What it does |
 | --- | --- |
-| `sno memory doctor --harness codex [--codex-home <dir>]` | Print sidecar health, hook trust state, rules state, and import receipt count |
+| `sno memory doctor --harness codex [--codex-home <dir>]` | Print memory service health, hook trust state, rules state, and import receipt count |
 | `sno memory import --harness codex --user` | Queue your user-level Codex notes for import into global memory |
 | `sno memory import --harness codex --repo <absolute-root>` | Queue a repository's Codex notes for import into that repository's memory |
 | `sno setup --harness codex` | Install or refresh the hooks, trust entries, rules, and skill |
@@ -209,11 +200,11 @@ The install command writes into your Codex home:
 - `skills/sno-mem-codex/SKILL.md`: the skill Codex reads.
 
 The client keeps its own state under `~/.sno/sno-mem-codex/`: per-session receipts, the capture
-spool, the worker lock and log, correction state, and import receipts. The sidecar's discovery file
+spool, the worker lock and log, correction state, and import receipts. The memory service's discovery file
 and startup log live under `~/.sno/station/` and `~/.sno/sno-station-mem/`.
 
-Use the same `SNO_PROFILE_DIR` and repository root as the Claude Code client to share memories
-between the two.
+Use the same `SNO_PROFILE_DIR` and repository root as the Claude Code client so that both
+use the same memories.
 
 ## Reinstall and data safety
 
@@ -235,7 +226,7 @@ Back up that file and `settings.json` together; the file holds the only encrypti
 - Memory data is stored in encrypted local SQLite storage.
 - Local First sends no memory text to an LLM service.
 - Agent Native sends model-assisted memory work to your own Codex CLI on your subscription.
-- REM Enhanced uses Sno only for the memory-specialized calls listed above.
+- REM Enhanced uses Sno only for the memory-specialized calls listed above. The memory text for those calls goes to your own space in Sno's cloud, which works like your own cloud drive: only you can see it, Sno does not touch it, and you can delete it whenever you want.
 - Injected memory blocks are labelled as data, not instructions.
 - `settings.json` holds the store key and Sno GPU key; keep the file private and backed up.
 - Public setup never requires a private hostname, virtual-machine name, local repository path, or
@@ -245,7 +236,7 @@ Back up that file and `settings.json` together; the file holds the only encrypti
 
 ### `doctor` says the memory service is unavailable
 
-The memory service starts on demand. For a new profile, follow the [shared memory setup](../memory-setup.md);
+The memory service starts on demand. For a new profile, follow the [memory service setup](../memory-setup.md);
 for an existing store, preserve its key while correcting the settings. Then run a memory command
 and `doctor` again. If it stays unavailable, read `<profile root>/sno-station-mem/sidecar-startup.log`.
 
@@ -272,5 +263,5 @@ was interrupted.
 
 ### Memory settings are unavailable
 
-Check `<profile root>/settings.json` and its backup. Follow the shared setup only for a
+Check `<profile root>/settings.json` and its backup. Follow the memory service setup only for a
 new profile; never generate a replacement key for an existing store.

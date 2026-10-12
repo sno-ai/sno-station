@@ -12,14 +12,14 @@ Requirements:
 
 ### Install
 
-Complete the [shared memory setup](../memory-setup.md) once, then install the plugin:
+Complete the [memory service setup](../memory-setup.md) once, then install the plugin:
 
 ```bash
 openclaw plugins install @snoai/mem-claw@1.2.11
 ```
 
 `npx @snoai/mem-claw` runs the same install; its only option is `--profile <name>`, forwarded to
-OpenClaw. The plugin starts the memory service from the path recorded by the shared setup.
+OpenClaw. The plugin starts the memory service from the path recorded by the memory service setup.
 
 Use the published npm package for public installs. Do not build from a private monorepo, copy a
 local build to another machine, or configure a private service address.
@@ -71,42 +71,33 @@ Calls run inline.
 
 ### REM Enhanced
 
-REM Enhanced splits model-assisted memory work by capability. The Sno GPU handles the
-LoRA-covered calls; the host model handles the rest:
+REM is how your agents dream: overnight they strengthen their memory and settle what they learned. REM Enhanced lets Sno's own memory models help with the two hardest jobs: writing down what matters from a conversation, and deciding which of two memories that disagree is right. Your OpenClaw agent does the rest. It needs a Sno key in `snoGpu.apiKey` in `settings.json`.
 
-- Sno handles memory extraction.
-- Sno handles conflict adjudication.
-- The host model handles active-task classification, profile merging, completed-task matching,
-  reflection summaries, and relative-date resolution.
-
-If a model request fails, only that request uses its Local First behavior. The plugin does not
-silently reroute it to another model tier.
+**Your data stays yours.** In this mode the memory text for the Sno calls, and the lessons your agents learn, go to your own space in Sno's cloud. It works like your own cloud drive: everything in it is yours, only you can see it, and Sno does not touch it. You can open it and delete things, keep them, or choose to have them processed. Nothing is deleted automatically, and Sno does not give any of it to anyone.
 
 ## Routing defaults
 
-| Occasion | Local First | Agent Native | REM Enhanced |
+| What it does | Local First | Agent Native | REM Enhanced |
 | --- | --- | --- | --- |
-| Memory extraction | Deterministic, verbatim capture | Host model | Sno extraction model |
-| Active-task classification | Keyword rules | Host model | Host model |
-| Profile-section merge | Deterministic merge | Host model | Host model |
-| Completed-task match | Token overlap | Host model | Host model |
-| Conflict adjudication | Keep both memories | Host model | Sno conflict model |
-| Reflection summary | No model reflection; local session memory remains | Same as Local First | Host model |
-| Relative-date resolution | No model call | Host model | Host model |
+| Writing down what matters | Saved word for word | Host model | Sno's memory model |
+| Knowing what task you are on | Simple keyword matching | Host model | Host model |
+| Updating what it knows about you | Fixed rules | Host model | Host model |
+| Spotting finished tasks | Word matching | Host model | Host model |
+| Settling memories that disagree | Keep both memories | Host model | Sno's memory model |
+| Summing up the day | No model reflection; local session memory remains | Same as Local First | Host model |
+| Turning "tomorrow" into a date | No model call | Host model | Host model |
 
 No call is off in Agent Native or REM Enhanced. Model-assisted writes happen inline and fall
 back per request to the matching Local First behavior when necessary.
 
 In REM Enhanced, the selected mode fixes each model call's destination as shown above.
 
-Two REM operations run over the store on a periodic trigger and route model calls by the selected
-mode:
+REM also tidies your memory on a schedule, in two ways:
 
-- `rem-update` rewrites transition narratives into current-state memories and keeps the history;
-- `rem-replace` adjudicates contradictions across the store and soft-closes the loser reversibly.
+- It rewrites "I used to... then I changed..." stories into one clean, current memory, and keeps the history.
+- It settles memories that contradict each other. The one that lost is retired, and you can bring it back.
 
-Both run by default, and setting `rem.tick` to `false` in `~/.sno/settings.json` turns the trigger
-off.
+Both run by default. To turn REM's schedule off, set `rem.tick` to `false` in `~/.sno/settings.json`.
 
 Mode selection governs memory writing. It does not make final claims about retrieval or reranker
 routing.
@@ -114,7 +105,7 @@ routing.
 ## Change modes
 
 The mode is the `mode` value in `~/.sno/settings.json` (`local-first`, `agent-native` or
-`rem-enhanced`), shared by every plugin. Edit it, keep the existing `store.encryptionKey`, and
+`rem-enhanced`), the same for every plugin. Edit it, keep the existing `store.encryptionKey`, and
 restart OpenClaw. The installer has no flags for this.
 
 ## Daily operation
@@ -123,7 +114,7 @@ restart OpenClaw. The installer has no flags for this.
 
 | Command | What it does |
 | --- | --- |
-| `/memory status` | Show memory counts, the store path, and the sidecar process id |
+| `/memory status` | Show memory counts, the store path, and the memory service's process id |
 | `/memory stats` | Show memory counts by scope and category |
 | `/memory search <query>` | Search memory explicitly |
 | `/memory clear --yes --scope <scope>` | Delete memories in one scope |
@@ -200,7 +191,7 @@ The wipe command deletes memory data. It is not part of normal mode switching or
 - Memory data is stored in encrypted local SQLite storage.
 - Local First sends no memory text to an LLM service.
 - Agent Native uses the host agent's model; no key is collected.
-- REM Enhanced uses Sno only for the memory-specialized calls listed above.
+- REM Enhanced uses Sno only for the memory-specialized calls listed above. The memory text for those calls goes to your own space in Sno's cloud, which works like your own cloud drive: only you can see it, Sno does not touch it, and you can delete it whenever you want.
 - Settings and the encryption key live in `~/.sno/settings.json` (mode 0600); keep a private backup.
 - Public setup never requires a private hostname, virtual-machine name, local repository path, or
   internal service token.
