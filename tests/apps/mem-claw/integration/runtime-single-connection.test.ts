@@ -49,6 +49,7 @@ describe("OpenClaw connection lifecycle", () => {
 		Object.assign(second.config, { plugins: { slots: { memory: "sno-mem-claw" } } });
 		for (const harness of [first, second]) {
 			Object.assign(harness.config, { agents: { defaults: { workspace: fixture.profile } } });
+			Object.assign(harness.runtime, { version: "2026.10.1" });
 			memClawPlugin.register(harness);
 			cleanups.push(() => harness.stopServices());
 			await harness.startServices();
