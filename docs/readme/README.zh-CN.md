@@ -5,7 +5,7 @@
 [![license Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-97ca00.svg?labelColor=3b3b3b)](../../LICENSE)
 [![latest release](https://img.shields.io/github/v/release/sno-ai/sno-station?label=release&color=2dd4bf&labelColor=3b3b3b)](https://github.com/sno-ai/sno-station/releases/latest)
 ![runs on your laptop, no daemon](https://img.shields.io/badge/runs%20on-your%20laptop%2C%20no%20daemon-3b82f6.svg?labelColor=3b3b3b)
-![harnesses Codex, Claude Code, Hermes, Cursor, OpenClaw](https://img.shields.io/badge/harnesses-Codex%20%C2%B7%20Claude%20Code%20%C2%B7%20Hermes%20%C2%B7%20Cursor%20%C2%B7%20OpenClaw-f0a04b.svg?labelColor=3b3b3b)
+![harnesses Codex, Claude Code, Hermes, Cursor, OpenClaw](https://img.shields.io/badge/works%20with-Codex%20%C2%B7%20Claude%20Code%20%C2%B7%20Hermes%20%C2%B7%20Cursor%20%C2%B7%20OpenClaw-f0a04b.svg?labelColor=3b3b3b)
 
 <p>
   <img src="../images/agents/codex.png" alt="Codex" title="Codex" width="40" height="40">&nbsp;&nbsp;
@@ -19,24 +19,25 @@
 **Read in other languages:** [English](../../README.md) · **中文** · [Deutsch](README.de.md) · [Español](README.es.md) · [Français](README.fr.md) · [Русский](README.ru.md) · [한국어](README.ko.md) · [日本語](README.ja.md) · [繁體中文](README.zh-TW.md)
 
 Sno Station 把你已经在用的 agent 变成一支小队。Codex、Claude Code、Cursor、Hermes Agent
-和 OpenClaw 共用一份记忆，互相交接工作，你提出时还会互相检查。每天夜里，它们
+和 OpenClaw 用同一份记忆，互相交接工作，你提出时还会互相检查。每天夜里，它们
 会回顾这一天，变得更好一点。
 
 它运行在你自己的电脑上。装一次，之后照常工作就行。
 
-**一个 agent 用完额度，下一个接着做。** 任务做到一半碰上速率限制，另一个 agent 会从共享记忆里
+**一个 agent 用完额度，下一个接着做。** 任务做到一半碰上速率限制，另一个 agent 会从同一份记忆里
 接手，上下文完整。你什么都不用粘贴。
 
 **需要时，就有人再看一遍。** 任何一个 agent 都可以审查另一个的工作。 审查者总是另一个 agent，所以它不会习惯性地
 附和第一个。
 
-**你睡觉时，它在变好。** 夜里它会读当天的会话，找出反复出现的错误，并对你的 agent 自己的
-技能提出修改建议。你早上再看。你不说同意，什么都不会改。
+**你的 agent 会做梦。** 每天夜里你睡觉的时候，你的 agent 会进入 REM。这个名字取自 Rapid Eye Movement（快速眼动），也就是人睡眠中大脑加强记忆、把白天学到的东西固定下来的那个阶段。我们的 REM 为你的 agent 做同样两件事。一是加强记忆：跨你所有的会话一起整理，让它们记住重要的，放下已经不再成立的。二是固化经验：读当天的会话，找出反复出现的错误，对 agent 自己的技能提出修改建议，让昨天的失误变成今天更好的习惯。建议你早上看，你说同意之前什么都不会变。下文也把它叫作夜间循环。
 
 **它始终属于你。** 记忆、消息和技能都在你的电脑上。记忆用一把永远不会离开这台电脑的密钥
 加密。不用账号，不用服务器，没有守护进程。云端部分是可选的，没有它，产品也是完整的。
 
-![工作原理：两个 agent，一个共享工作区，你得到的三样东西](../images/squad-how-it-works.png)
+**REM 怎样处理你的资料。** REM 是夜里把你所有会话里的记忆统一整理的那一步。在 REM Enhanced 模式下，你自己的记忆文字，以及各个 agent 学到的经验，会送到 Sno 云端属于你自己的空间，由 Sno 的程序只为你一个人处理。这个空间就像你自己的网盘：里面的一切都是你的，只有你自己看得到，Sno 碰不到。你可以进去删除、可以留着，也可以选择让它被处理。不会自动删除，Sno 也不会把其中任何内容交给任何其他人、公司或账号。Local First 模式下不会上传任何记忆文字；Agent Native 模式下，这些工作改由你自己 agent 的模型来做。
+
+![工作原理：两个 agent，一个工作区，你得到的三样东西](../images/squad-how-it-works.png)
 
 > **公开透明。** 本仓库自 2026-09-18 起公开。这里的一切都能运行。
 > 下面每个板块都标有最后更新时间。
@@ -76,7 +77,7 @@ Sno onboard
 
 *最后更新于 2026-10-11。* 你可以继续用自己喜欢的 agent 工作。会有三处变化。
 
-1. **其中一个用到了上限。** 在另一个里说 `sno reach call`。它会从共享记忆和邮箱里接手
+1. **其中一个用到了上限。** 在另一个里说 `sno reach call`。它会从同一份记忆和邮箱里接手
    任务，上下文完整。
 2. **你想让人再看一眼。** 让任意一个 agent 对另一个的工作做 `peer-review`。
    审查者总是来自另一个 harness。
@@ -86,7 +87,7 @@ Sno onboard
 ## Cursor
 
 *最后更新于 2026-10-11。* Cursor 加入小队：在 macOS 上是 Cursor 应用里的 agent 对话，在 Linux
-和 macOS 上是 `cursor-agent` 命令行。它和你的其他 agent 共用同一份记忆。每次对话开始时，会
+和 macOS 上是 `cursor-agent` 命令行。它和你的其他 agent 用同一份记忆。每次对话开始时，会
 先拿到一份这个仓库的简短提要；每次提问，会带上最多三条 Cursor 还没见过的内容；每次提问和
 回复都会被记住。它读取同样的技能，审查别人也被别人审查，在其他 agent 额度用完时接手，它的
 对话也和其他 agent 的一样，进入夜间循环。
@@ -166,8 +167,8 @@ Claude Code 的工作。没有一次审查是空手而归的。我们曾以为�
 
 | 部分 | 状态 |
 |---|---|
-| Codex、Claude Code、Hermes Agent 和 OpenClaw 之间的共享记忆 | 已发布；在干净的机器上从注册表安装，并端到端验证 |
-| Cursor：共享记忆、技能、审查、接手和夜间循环 | 1.3 中发布；`cursor-agent` 命令行已在干净的 Linux 机器上端到端验证；macOS 上的 Cursor 应用仍在验证中 |
+| Codex、Claude Code、Hermes Agent 和 OpenClaw 之间的同一份记忆 | 已发布；在干净的机器上从注册表安装，并端到端验证 |
+| Cursor：同一份记忆、技能、审查、接手和夜间循环 | 1.3 中发布；`cursor-agent` 命令行已在干净的 Linux 机器上端到端验证；macOS 上的 Cursor 应用仍在验证中 |
 | Sno Reach，agent 之间互相通信，无需守护进程 | 由 `sno setup` 安装；Linux 和 macOS；已在干净的 Linux 机器上端到端验证 |
 | 夜间循环和小队技能 | 由 `sno setup` 安装；夜间任务已在干净的 Linux 机器上运行过 |
 | 一条命令安装 | `sno setup` 装好上面的全部内容；已在干净的 Linux 机器上验证 |
