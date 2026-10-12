@@ -51,7 +51,7 @@ Daily use and troubleshooting: [usage guide](https://github.com/sno-ai/sno-stati
 
 **Local First** (what the memory service setup selects) needs no model and no API key: capture is
 verbatim and everything stays on your machine. **Agent Native** lets Claude Code itself do the
-memory work on your existing subscription, and **REM Enhanced** adds Sno's own memory models to REM, the overnight step where your agents dream: it strengthens their memory and settles what they learned. It needs a Sno key in `settings.json`. In that mode your memory text and lessons go to your own space in Sno's cloud, which works like your own cloud drive: only you can see it, Sno does not touch it, and you can delete or keep it as you like. Change the mode in
+memory work on your existing subscription, and **REM Enhanced** adds Sno's own memory models to REM, the overnight step where your agents dream: it strengthens their memory and settles what they learned. Sno's models also write down what matters from each conversation when the session ends. It needs a Sno key in `settings.json`. In that mode your memory text and lessons go to your own space in Sno's cloud, which works like your own cloud drive: only you can see it, Sno does not touch it, and you can delete or keep it as you like. Change the mode in
 `~/.sno/settings.json`, and keep the existing encryption key.
 
 ## Under the hood
