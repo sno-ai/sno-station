@@ -10,13 +10,13 @@ Requirements:
 - Node.js 22.22.3 or newer on the 22 line, 24.15.0 or newer on the 24 line, or 25.9.0 or newer
 - `git` on your PATH (memory is scoped to the repository you work in)
 
-Complete the [shared memory setup](../memory-setup.md), then install the Claude Code integration:
+Complete the [memory service setup](../memory-setup.md), then install the Claude Code integration:
 
 ```bash
 sh -c 'sno_installer_body=$(curl -fsSL https://sno.ai/install) && printf "%s\n" "$sno_installer_body" | sh' && ~/.local/bin/sno setup --harness claude
 ```
 
-The shared setup writes `<profile root>/settings.json`; the install command configures Claude Code.
+The memory service setup writes `<profile root>/settings.json`; the install command configures Claude Code.
 The profile root is `SNO_PROFILE_DIR` or `~/.sno`. Keep a private backup of the
 settings file because it holds the only key for the encrypted store.
 
@@ -50,8 +50,9 @@ process.
 
 ### REM Enhanced
 
-Choose REM Enhanced to use the Sno GPU for the LoRA-covered extraction and conflict calls,
-with your Claude Code covering the other model-assisted memory decisions. REM Enhanced needs a Sno GPU key in `snoGpu.apiKey` in `settings.json`.
+REM is how your agents dream: overnight they strengthen their memory and settle what they learned. REM Enhanced lets Sno's own memory models help with the two hardest jobs: writing down what matters from a conversation, and deciding which of two memories that disagree is right. Your Claude Code does the rest. It needs a Sno key in `snoGpu.apiKey` in `settings.json`.
+
+**Your data stays yours.** In this mode the memory text for the Sno calls, and the lessons your agents learn, go to your own space in Sno's cloud. It works like your own cloud drive: everything in it is yours, only you can see it, and Sno does not touch it. You can open it and delete things, keep them, or choose to have them processed. Nothing is deleted automatically, and Sno does not give any of it to anyone.
 
 ## Step 2: accept or change the remaining defaults
 
@@ -70,43 +71,39 @@ The memory client uses these standard defaults:
 
 Mode-specific defaults are:
 
-| Memory-writing call | Local First | Agent Native | REM Enhanced |
+| What it does | Local First | Agent Native | REM Enhanced |
 | --- | --- | --- | --- |
-| Capture memories | Deterministic, verbatim | Your Claude Code | Sno extraction model |
-| Classify active tasks | Keyword rules | Your Claude Code | Your Claude Code |
-| Merge profile sections | Deterministic merge | Your Claude Code | Your Claude Code |
-| Match completed tasks | Token overlap | Your Claude Code | Your Claude Code |
-| Resolve conflicts | Keep both | Your Claude Code | Sno conflict model |
-| Build reflection summary | No model reflection; local session memory remains | Same | Same |
-| Resolve relative dates | No model call | Your Claude Code | Your Claude Code |
+| Writing down what matters | Saved word for word | Your Claude Code | Sno's memory model |
+| Knowing what task you are on | Simple keyword matching | Your Claude Code | Your Claude Code |
+| Updating what it knows about you | Fixed rules | Your Claude Code | Your Claude Code |
+| Spotting finished tasks | Word matching | Your Claude Code | Your Claude Code |
+| Settling memories that disagree | Keep both | Your Claude Code | Sno's memory model |
+| Summing up the day | No model reflection; local session memory remains | Same | Same |
+| Turning "tomorrow" into a date | No model call | Your Claude Code | Your Claude Code |
 
 No memory-writing call is disabled in Agent Native or REM Enhanced. A failed model request
 uses the corresponding Local First behavior for that request instead of switching model tiers.
 
 In REM Enhanced, the selected mode fixes each model call's destination as shown above.
 
-Two REM operations run over the store on a periodic trigger and route model calls by the selected
-mode:
+REM also tidies your memory on a schedule, in two ways:
 
-- `rem-update` rewrites transition narratives into clean current-state memories while keeping the
-  history;
-- `rem-replace` adjudicates contradictions across the store and soft-closes the losing memory
-  reversibly.
+- It rewrites "I used to... then I changed..." stories into one clean, current memory, and keeps the history.
+- It settles memories that contradict each other. The one that lost is retired, and you can bring it back.
 
-Both are requested by default. Change `rem.operations` in `settings.json` to request one, or set
-`rem.tick` to `false` to turn the trigger off.
+Both run by default. To run only one, change `rem.operations` in `settings.json`. To turn REM's schedule off, set `rem.tick` to `false`.
 
 The mode choice does not finalize retrieval or reranker behavior.
 
 ## Step 3: complete setup and verify
 
-`sno setup --harness claude` installs the hook groups, the permission rule and the skill and prints one row per step. If the memory settings cannot be read, keep the existing file and its backup for key recovery; follow the shared setup only for a new profile.
+`sno setup --harness claude` installs the hook groups, the permission rule and the skill and prints one row per step. If the memory settings cannot be read, keep the existing file and its backup for key recovery; follow the memory service setup only for a new profile.
 
 The memory service starts on demand. The first hook or memory command after install
 starts it and waits for it to be healthy.
 
 Subagents and sessions outside a git repository inject and capture nothing. A session with
-`sandbox.enabled: true` is unsupported: its memory commands cannot reach the local sidecar, so
+`sandbox.enabled: true` is unsupported: its memory commands cannot reach the local memory service, so
 turn the sandbox off or expect a failure line.
 
 Open a new Claude Code session inside a git repository, then run:

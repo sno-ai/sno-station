@@ -2,14 +2,14 @@
 
 First-run steps for `@snoai/mem-claw`.
 
-## Step 1: set up the shared memory service
+## Step 1: set up the memory service
 
 Requirements:
 
 - OpenClaw on your PATH
 - Node.js 22.22.3 or newer on the 22 line, 24.15.0 or newer on the 24 line, or 25.9.0 or newer
 
-Complete the [shared memory setup](../memory-setup.md) once. It writes `~/.sno/settings.json` in
+Complete the [memory service setup](../memory-setup.md) once. It writes `~/.sno/settings.json` in
 Local First mode and downloads the embedding model. Do not rerun its settings block for an
 existing store: it replaces the encryption key and the old memories become unreadable.
 
@@ -20,7 +20,7 @@ openclaw plugins install @snoai/mem-claw@1.2.11
 ```
 
 `npx @snoai/mem-claw` runs the same install. Its only option is `--profile <name>`, which is
-forwarded to OpenClaw. The plugin starts the memory service from the path recorded by the shared
+forwarded to OpenClaw. The plugin starts the memory service from the path recorded by the memory service
 setup; there is no separate start command.
 
 ## Step 3: restart OpenClaw and check
@@ -31,7 +31,7 @@ After restarting OpenClaw, run:
 /memory status
 ```
 
-The status shows the memory counts, the store path, and the sidecar process id.
+The status shows the memory counts, the store path, and the memory service's process id.
 
 ## Step 4: create the first useful memory
 
