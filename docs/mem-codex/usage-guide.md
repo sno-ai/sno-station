@@ -69,7 +69,7 @@ collected, and this client has no bring-your-own-key transport.
 
 REM is how your agents dream: overnight they strengthen their memory and settle what they learned. REM Enhanced lets Sno's own memory models help with the two hardest jobs: writing down what matters from a conversation, and deciding which of two memories that disagree is right. Your Codex CLI does the rest. It needs a Sno key in `snoGpu.apiKey` in `settings.json`.
 
-**Your data stays yours.** In this mode the memory text for the Sno calls, and the lessons your agents learn, go to your own space in Sno's cloud. It works like your own cloud drive: everything in it is yours, only you can see it, and Sno does not touch it. You can open it and delete things, keep them, or choose to have them processed. Nothing is deleted automatically, and Sno does not give any of it to anyone.
+**Your data stays yours.** In this mode the memory text for the Sno calls, and the lessons your agents learn, go to your own space in Sno's cloud. It works like your own cloud drive: everything in it is yours, and a Sno program processes it for you alone. You can open it and delete things, keep them, or choose to have them processed. Nothing is deleted automatically, and Sno does not give any of it to anyone.
 
 ## Routing defaults
 
@@ -225,8 +225,8 @@ Back up that file and `settings.json` together; the file holds the only encrypti
 
 - Memory data is stored in encrypted local SQLite storage.
 - Local First sends no memory text to an LLM service.
-- Agent Native sends model-assisted memory work to your own Codex CLI on your subscription.
-- REM Enhanced uses Sno only for the memory-specialized calls listed above. The memory text for those calls goes to your own space in Sno's cloud, which works like your own cloud drive: only you can see it, Sno does not touch it, and you can delete it whenever you want.
+- Agent Native sends model-assisted memory work to your own Codex CLI on your subscription. By default it also uploads the day's sessions to Sno each night for cloud lessons and skill review and can bring one cloud lesson back on a session's first prompt; you can turn both off in `~/.sno/settings.json`.
+- REM Enhanced uses Sno for the memory-specialized calls listed above and for the same nightly session upload. The memory text for those calls goes to your own space in Sno's cloud, which works like your own cloud drive: a Sno program processes it for you alone, and you can delete it whenever you want.
 - Injected memory blocks are labelled as data, not instructions.
 - `settings.json` holds the store key and Sno GPU key; keep the file private and backed up.
 - Public setup never requires a private hostname, virtual-machine name, local repository path, or

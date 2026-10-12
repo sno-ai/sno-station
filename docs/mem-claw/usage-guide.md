@@ -18,6 +18,8 @@ Complete the [memory service setup](../memory-setup.md) once, then install the p
 openclaw plugins install @snoai/mem-claw@1.2.11
 ```
 
+To upgrade later, run `sno update`; OpenClaw refuses a second `openclaw plugins install` while its gateway is running.
+
 `npx @snoai/mem-claw` runs the same install; its only option is `--profile <name>`, forwarded to
 OpenClaw. The plugin starts the memory service from the path recorded by the memory service setup.
 
@@ -73,7 +75,7 @@ Calls run inline.
 
 REM is how your agents dream: overnight they strengthen their memory and settle what they learned. REM Enhanced lets Sno's own memory models help with the two hardest jobs: writing down what matters from a conversation, and deciding which of two memories that disagree is right. Your OpenClaw agent does the rest. It needs a Sno key in `snoGpu.apiKey` in `settings.json`.
 
-**Your data stays yours.** In this mode the memory text for the Sno calls, and the lessons your agents learn, go to your own space in Sno's cloud. It works like your own cloud drive: everything in it is yours, only you can see it, and Sno does not touch it. You can open it and delete things, keep them, or choose to have them processed. Nothing is deleted automatically, and Sno does not give any of it to anyone.
+**Your data stays yours.** In this mode the memory text for the Sno calls, and the lessons your agents learn, go to your own space in Sno's cloud. It works like your own cloud drive: everything in it is yours, and a Sno program processes it for you alone. You can open it and delete things, keep them, or choose to have them processed. Nothing is deleted automatically, and Sno does not give any of it to anyone.
 
 ## Routing defaults
 
@@ -190,8 +192,8 @@ The wipe command deletes memory data. It is not part of normal mode switching or
 
 - Memory data is stored in encrypted local SQLite storage.
 - Local First sends no memory text to an LLM service.
-- Agent Native uses the host agent's model; no key is collected.
-- REM Enhanced uses Sno only for the memory-specialized calls listed above. The memory text for those calls goes to your own space in Sno's cloud, which works like your own cloud drive: only you can see it, Sno does not touch it, and you can delete it whenever you want.
+- Agent Native uses the host agent's model; no key is collected. By default it also uploads the day's sessions to Sno each night for cloud lessons and skill review and can bring one cloud lesson back on a session's first prompt; you can turn both off in `~/.sno/settings.json`.
+- REM Enhanced uses Sno for the memory-specialized calls listed above and for the same nightly session upload. The memory text for those calls goes to your own space in Sno's cloud, which works like your own cloud drive: a Sno program processes it for you alone, and you can delete it whenever you want.
 - Settings and the encryption key live in `~/.sno/settings.json` (mode 0600); keep a private backup.
 - Public setup never requires a private hostname, virtual-machine name, local repository path, or
   internal service token.
