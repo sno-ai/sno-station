@@ -5,7 +5,7 @@
 [![license Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-97ca00.svg?labelColor=3b3b3b)](../../LICENSE)
 [![latest release](https://img.shields.io/github/v/release/sno-ai/sno-station?label=release&color=2dd4bf&labelColor=3b3b3b)](https://github.com/sno-ai/sno-station/releases/latest)
 ![runs on your laptop, no daemon](https://img.shields.io/badge/runs%20on-your%20laptop%2C%20no%20daemon-3b82f6.svg?labelColor=3b3b3b)
-![harnesses Codex, Claude Code, Hermes, Cursor, OpenClaw](https://img.shields.io/badge/harnesses-Codex%20%C2%B7%20Claude%20Code%20%C2%B7%20Hermes%20%C2%B7%20Cursor%20%C2%B7%20OpenClaw-f0a04b.svg?labelColor=3b3b3b)
+![harnesses Codex, Claude Code, Hermes, Cursor, OpenClaw](https://img.shields.io/badge/works%20with-Codex%20%C2%B7%20Claude%20Code%20%C2%B7%20Hermes%20%C2%B7%20Cursor%20%C2%B7%20OpenClaw-f0a04b.svg?labelColor=3b3b3b)
 
 <p>
   <img src="../images/agents/codex.png" alt="Codex" title="Codex" width="40" height="40">&nbsp;&nbsp;
@@ -19,26 +19,26 @@
 **Leer en otros idiomas:** [English](../../README.md) · [中文](README.zh-CN.md) · [Deutsch](README.de.md) · **Español** · [Français](README.fr.md) · [Русский](README.ru.md) · [한국어](README.ko.md) · [日本語](README.ja.md) · [繁體中文](README.zh-TW.md)
 
 Sno Station convierte los agentes que ya usas en un equipo. Codex, Claude Code, Cursor, Hermes Agent
-y OpenClaw comparten una sola memoria, se pasan el trabajo entre sí y revisan el trabajo de los
+y OpenClaw usan una sola memoria, se pasan el trabajo entre sí y revisan el trabajo de los
 demás cuando se lo pides. Cada noche repasan el día y mejoran un poco.
 
 Funciona en tu propia computadora. Lo instalas una vez y sigues trabajando como hasta ahora.
 
 **Cuando a un agente se le acaba el límite, el siguiente continúa.** Si llegas a un límite de uso
-a mitad de una tarea, otro agente la retoma desde la memoria compartida, con el contexto intacto.
+a mitad de una tarea, otro agente la retoma desde la misma memoria, con el contexto intacto.
 No tienes que pegar nada.
 
 **Una segunda revisión a petición.** Cualquiera de los agentes puede revisar el trabajo del otro. El revisor siempre es un agente distinto, así que no tiene el hábito de darle la razón al primero.
 
-**Mejora mientras duermes.** Durante la noche lee las sesiones del día, encuentra los errores que
-se repiten y propone cambios a las habilidades de tus propios agentes. Tú los lees por la mañana.
-Nada cambia hasta que digas que sí.
+**Tus agentes sueñan.** Cada noche, mientras duermes, tus agentes pasan por REM. Lo llamamos así por Rapid Eye Movement, la fase del sueño en la que el cerebro humano refuerza sus recuerdos y asienta lo aprendido durante el día. Nuestro REM hace lo mismo por tus agentes, de dos maneras. Refuerza su memoria en todas tus sesiones a la vez, para que recuerden lo que importa y suelten lo que ya no es cierto. Y asienta su experiencia: lee las sesiones del día, encuentra los errores que se repiten y propone cambios en las habilidades de tus agentes, para que el tropiezo de ayer sea el mejor hábito de hoy. Lees las propuestas por la mañana y nada cambia hasta que digas que sí. Más abajo también lo llamamos el ciclo nocturno.
 
 **Sigue siendo tuyo.** La memoria, los mensajes y las habilidades viven en tu computadora. La
 memoria está cifrada con una clave que nunca sale de ella. Sin cuenta, sin servidor, sin daemon.
 El lado en la nube es opcional, y el producto está completo sin él.
 
-![Cómo funciona: dos agentes, un espacio de trabajo compartido, tres cosas que obtienes](../images/squad-how-it-works.png)
+**Qué hace REM con tus datos.** REM es el paso nocturno que ordena tu memoria en todas tus sesiones a la vez. En el modo REM Enhanced, el texto de tu propia memoria y las lecciones que aprenden tus agentes van a tu propio espacio en la nube de Sno, y un programa de Sno los procesa solo para ti. Ese espacio funciona como tu propia unidad en la nube: todo lo que hay en él es tuyo, solo tú puedes verlo y Sno no lo toca. Puedes entrar a borrar cosas, conservarlas o elegir que se procesen. Nada se borra automáticamente, y Sno no entrega nada de eso a ninguna otra persona, empresa o cuenta. En el modo Local First no se sube ningún texto de memoria; en el modo Agent Native el trabajo pasa, en su lugar, al modelo de tu propio agente.
+
+![Cómo funciona: dos agentes, un mismo espacio de trabajo, tres cosas que obtienes](../images/squad-how-it-works.png)
 
 > **Abierto al público.** Este repositorio es público desde el 2026-09-18. Todo lo que hay aquí funciona.
 > Cada bloque a continuación indica cuándo se actualizó por última vez.
@@ -79,7 +79,7 @@ Todos los comandos empiezan con `sno`. La lista completa está en [docs/sno-comm
 *Última actualización 2026-10-11.* Sigue trabajando con el agente que prefieras. Cambian tres cosas.
 
 1. **Uno de ellos llega a su límite.** Di `sno reach call` desde el otro. Retoma la tarea desde
-   la memoria compartida y el buzón, con el contexto intacto.
+   la misma memoria y el buzón, con el contexto intacto.
 2. **Quieres un segundo par de ojos.** Pide a cualquiera de los dos agentes que haga `peer-review`
    del trabajo del otro. El revisor siempre viene del otro harness.
 3. **Cada noche corre el ciclo nocturno.** Por la mañana, `sno rem-reflect accept <id>` para las
@@ -88,7 +88,7 @@ Todos los comandos empiezan con `sno`. La lista completa está en [docs/sno-comm
 ## Cursor
 
 *Última actualización 2026-10-11.* Cursor se une al equipo en el chat de agente de la app de Cursor
-en macOS, y en la línea de comandos `cursor-agent` en Linux y macOS. Comparte la misma memoria que
+en macOS, y en la línea de comandos `cursor-agent` en Linux y macOS. Usa la misma memoria que
 tus otros agentes. Un chat empieza con un resumen breve del repositorio, cada mensaje trae hasta
 tres cosas que Cursor aún no ha visto, y cada mensaje y respuesta se recuerda. Lee las mismas
 habilidades, revisa y es revisado, toma el relevo cuando a otro agente se le acaba la cuota, y sus
@@ -174,8 +174,8 @@ trabajo era malo. Significa que un solo revisor de un solo harness nunca basta.
 
 | Pieza | Estado |
 |---|---|
-| Memoria compartida entre Codex, Claude Code, Hermes Agent y OpenClaw | Publicada; instalada desde el registro en una máquina limpia y probada de extremo a extremo |
-| Cursor: memoria compartida, habilidades, revisión, relevo y ciclo nocturno | Publicado en 1.3; la línea de comandos `cursor-agent` probada de extremo a extremo en una máquina Linux limpia; la app de Cursor en macOS aún en prueba |
+| Una sola memoria para Codex, Claude Code, Hermes Agent y OpenClaw | Publicada; instalada desde el registro en una máquina limpia y probada de extremo a extremo |
+| Cursor: la misma memoria, habilidades, revisión, relevo y ciclo nocturno | Publicado en 1.3; la línea de comandos `cursor-agent` probada de extremo a extremo en una máquina Linux limpia; la app de Cursor en macOS aún en prueba |
 | Sno Reach, agentes que hablan entre sí sin daemon | Instalado por `sno setup`; Linux y macOS; probado de extremo a extremo en una máquina Linux limpia |
 | El ciclo nocturno y las habilidades del equipo | Instalado por `sno setup`; el trabajo nocturno se ejecutó en una máquina Linux limpia |
 | Instalación con un solo comando | `sno setup` instala todo lo anterior; probada en una máquina Linux limpia |
