@@ -27,8 +27,7 @@ It runs on your own computer. You install it once and keep working the way you d
 **When one agent runs out, the next one carries on.** Hit a rate limit halfway through a task
 and another agent picks it up from the shared memory, with the context intact. You paste nothing.
 
-**Ask for a second look and you get one.** Either agent can review the other's work. The reviewer is always a different agent from a
-different company, so it has no habit of agreeing with the first one.
+**Ask for a second look and you get one.** Either agent can review the other's work. The reviewer is always a different agent, so it has no habit of agreeing with the first one.
 
 **It gets better while you sleep.** Overnight it reads the day's sessions, finds the mistakes
 that keep repeating, and proposes changes to your agents' own skills. You read them in the

@@ -30,7 +30,7 @@ comme aujourd'hui.
 milieu d'une tâche, et un autre agent la reprend depuis la mémoire partagée, avec tout son
 contexte. Vous n'avez rien à coller.
 
-**Une relecture à la demande.** Chaque agent peut relire le travail de l'autre. Le relecteur est toujours un autre agent, d'une autre entreprise, qui
+**Une relecture à la demande.** Chaque agent peut relire le travail de l'autre. Le relecteur est toujours un autre agent, qui
 n'a donc pas l'habitude de donner raison au premier.
 
 **Il progresse pendant que vous dormez.** Pendant la nuit, il lit les sessions de la journée,
