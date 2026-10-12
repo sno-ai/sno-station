@@ -10,13 +10,13 @@
 - Node.js：22 系列需 22.22.3 及以上，24 系列需 24.15.0 及以上，或 25.9.0 及以上
 - PATH 上有 `git`（memory 按你所在的 repository 划分范围）
 
-先按[共用记忆服务安装说明](../../memory-setup.md)完成设置，再安装 Claude Code 插件：
+先按[记忆服务安装说明](../../memory-setup.md)完成设置，再安装 Claude Code 插件：
 
 ```bash
 sh -c 'sno_installer_body=$(curl -fsSL https://sno.ai/install) && printf "%s\n" "$sno_installer_body" | sh' && ~/.local/bin/sno setup --harness claude
 ```
 
-共用安装步骤写入 `<配置根目录>/settings.json`，插件安装命令配置 Claude Code。配置根目录是
+记忆服务安装步骤写入 `<配置根目录>/settings.json`，插件安装命令配置 Claude Code。配置根目录是
 `SNO_PROFILE_DIR`，未设置时为 `~/.sno`。请私下备份这个文件，里面有记忆库的唯一密钥。
 
 ## 第一步：选 memory mode
@@ -29,7 +29,7 @@ sh -c 'sno_installer_body=$(curl -fsSL https://sno.ai/install) && printf "%s\n" 
 
 Local First 适合完全本地运行：
 
-- 规则式、原文式地 capture 你的每一轮对话；
+- 原文照存地 capture 你的每一轮对话；
 - 确定性的 profile merge 与 task 处理；
 - 不生成由模型撰写的 reflection summary；
 - 不需要 LLM credential。
@@ -46,8 +46,9 @@ capture worker 用 `claude -p` 起一个单轮、关掉 hooks、没有工具、�
 
 ### REM Enhanced
 
-REM Enhanced 让 Sno GPU 负责 LoRA 覆盖的 extraction 与 conflict call，其余需要模型判断的
-memory 决定由你的 Claude Code 处理。REM Enhanced 需要在 `settings.json` 的 `snoGpu.apiKey` 中配置 Sno GPU 密钥。
+REM 是你的 agent 做梦的方式：夜里它们加强记忆，并把当天学到的东西沉淀下来。REM Enhanced 让 Sno 自己的记忆模型帮忙做最难的两件事：从对话里记下重点，以及判断两条互相矛盾的记忆哪条对。其余工作由你自己的 Claude Code 处理。使用它需要在 `settings.json` 的 `snoGpu.apiKey` 里配置 Sno 的密钥。
+
+**你的资料仍然是你的。** 在这个模式下，交给 Sno 处理的记忆文字，以及各个 agent 学到的经验，会送到 Sno 云端属于你自己的空间。它就像你自己的网盘：里面的一切都是你的，只有你自己看得到，Sno 碰不到。你可以进去删除、可以留着，也可以选择让它被处理。不会自动删除，Sno 也不会把其中任何内容交给任何人。
 
 ## 第二步：确认其他默认值
 
@@ -66,15 +67,15 @@ memory 决定由你的 Claude Code 处理。REM Enhanced 需要在 `settings.jso
 
 每个模式的默认 routing 如下：
 
-| Memory-writing call | Local First | Agent Native | REM Enhanced |
+| 要做的事 | Local First | Agent Native | REM Enhanced |
 | --- | --- | --- | --- |
-| Capture memories | 规则式、原文式 | 你的 Claude Code | Sno extraction model |
-| Classify active tasks | Keyword rules | 你的 Claude Code | 你的 Claude Code |
-| Merge profile sections | Deterministic merge | 你的 Claude Code | 你的 Claude Code |
-| Match completed tasks | Token overlap | 你的 Claude Code | 你的 Claude Code |
-| Resolve conflicts | 两条都保留 | 你的 Claude Code | Sno conflict model |
-| Build reflection summary | 不生成 model reflection；仍保留 local session memory | 同左 | 同左 |
-| Resolve relative dates | 不调用模型 | 你的 Claude Code | 你的 Claude Code |
+| 记下重点 | 原文照存 | 你的 Claude Code | Sno 的记忆模型 |
+| 判断你在做哪件事 | 简单关键词匹配 | 你的 Claude Code | 你的 Claude Code |
+| 更新对你的了解 | 固定规则 | 你的 Claude Code | 你的 Claude Code |
+| 识别已完成的任务 | 字词比对 | 你的 Claude Code | 你的 Claude Code |
+| 处理互相矛盾的记忆 | 两条都保留 | 你的 Claude Code | Sno 的记忆模型 |
+| 总结这一天 | 不生成 model reflection；仍保留 local session memory | 同左 | 同左 |
+| 把“明天”换成日期 | 不调用模型 | 你的 Claude Code | 你的 Claude Code |
 
 Agent Native 与 REM Enhanced 不会把任何 memory-writing call 永久关掉。单次 model
 request 失败时，只对该次请求使用对应的 Local First 行为，不会偷偷切到另一个 model tier。
@@ -82,19 +83,18 @@ request 失败时，只对该次请求使用对应的 Local First 行为，不�
 REM Enhanced 的模型调用目标由所选模式决定，不能按用途单独修改。
 上表的模型调用目标由所选模式固定。
 
-两个 REM operation 会按周期触发在整个 store 上运行，模型调用目标由所选模式决定：
+REM 还会按计划整理你的记忆，分两种：
 
-- `rem-update`：把过程叙述改写成干净的当前态 memory，同时保留历史；
-- `rem-replace`：在整个 store 上裁决矛盾，把落败的 memory 可逆地软关闭。
+- 把“我以前……后来改了……”这样的过程叙述，改写成一条干净的当前记忆，同时保留历史；
+- 处理互相矛盾的记忆：输掉的那条被收起，随时可以恢复。
 
-默认两个都请求。在 `settings.json` 中改 `rem.operations` 可只选一个，把 `rem.tick`
-设为 `false` 可关掉触发。
+默认两种都会做。在 `settings.json` 里改 `rem.operations` 可以只选一种，把 `rem.tick` 设为 `false` 可以关掉 REM 的定时运行。
 
 Mode selection 不承诺最终 retrieval 或 reranker 行为。
 
 ## 第三步：完成设置并验证
 
-`sno setup --harness claude` 安装 hook 组、permission 规则和 skill，每一步打印一行结果。记忆设置无法读取时，保留原文件和备份以便恢复密钥；只有新配置才照共用安装说明重新设置。
+`sno setup --harness claude` 安装 hook 组、permission 规则和 skill，每一步打印一行结果。记忆设置无法读取时，保留原文件和备份以便恢复密钥；只有新配置才照记忆服务安装说明重新设置。
 
 记忆服务按需启动。安装后第一个 hook 或 memory 命令会把它拉起来并等它健康。
 
