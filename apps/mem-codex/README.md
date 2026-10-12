@@ -14,7 +14,7 @@ session.
   the old one as retired history. Automatic recall only shows what is current.
 - **Scoped to your work.** Memory belongs to the git repository you are in, plus a global scope
   you can read everywhere. Other agents that use the same setup (Claude Code, OpenClaw, Hermes
-  Agent) share it.
+  Agent) use the same global scope.
 - **Yours, and it stays yours.** The store is encrypted from first use with a key made once on
   your machine. Sno never receives your database or your key. There is no daemon to babysit:
   the memory service starts when Codex needs it.
@@ -24,7 +24,7 @@ session.
 
 ## Get started
 
-1. Follow the [shared memory setup](https://github.com/sno-ai/sno-station/blob/main/docs/memory-setup.md).
+1. Follow the [memory service setup](https://github.com/sno-ai/sno-station/blob/main/docs/memory-setup.md).
    It takes a few minutes and runs once for every agent on the machine.
 2. Install the plugin (Node.js 22.22.3+, 24.15.0+ or 25.9.0+, and `git`):
 
@@ -40,7 +40,7 @@ session.
    sno memory recall --harness codex "indentation"
    ```
 
-   `doctor` should report `sidecar: healthy`. To fix a wrong entry:
+   `doctor` should report the memory service as healthy (the line reads `sidecar: healthy`). To fix a wrong entry:
    `sno memory correct --harness codex <id> "correct text"`. Child agents do not read or write memory.
 
 Walkthrough: [Codex onboarding](https://github.com/sno-ai/sno-station/blob/main/docs/mem-codex/onboarding.md).
@@ -48,10 +48,9 @@ Daily use and troubleshooting: [usage guide](https://github.com/sno-ai/sno-stati
 
 ## Modes
 
-**Local First** (what the shared setup selects) needs no model and no API key: capture is
+**Local First** (what the memory service setup selects) needs no model and no API key: capture is
 verbatim and everything stays on your machine. **Agent Native** lets Codex itself do the memory
-work on your existing subscription, and **REM Enhanced** also uses Sno's memory models for
-extraction and conflict checks, which needs a Sno key in `settings.json`. Change the mode in
+work on your existing subscription, and **REM Enhanced** adds Sno's own memory models to REM, the overnight step where your agents dream: it strengthens their memory and settles what they learned. It needs a Sno key in `settings.json`. In that mode your memory text and lessons go to your own space in Sno's cloud, which works like your own cloud drive: only you can see it, Sno does not touch it, and you can delete or keep it as you like. Change the mode in
 `~/.sno/settings.json`, and keep the existing encryption key.
 
 ## Under the hood

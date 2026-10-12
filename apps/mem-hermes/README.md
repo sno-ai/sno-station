@@ -16,7 +16,7 @@ For a first installation, see [onboarding](../../docs/mem-hermes/onboarding.md) 
 
 ## Install
 
-Install Hermes Agent and complete the [shared memory setup](https://github.com/sno-ai/sno-station/blob/main/docs/memory-setup.md)
+Install Hermes Agent and complete the [memory service setup](https://github.com/sno-ai/sno-station/blob/main/docs/memory-setup.md)
 once. Then run:
 
 ```bash
