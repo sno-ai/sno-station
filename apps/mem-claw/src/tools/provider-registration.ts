@@ -14,11 +14,11 @@ type MemoryPromptSectionBuilder = NonNullable<MemoryPluginCapability["promptBuil
 
 function createPromptBuilder(): MemoryPromptSectionBuilder {
 	return ({ availableTools }) => {
-		if (!availableTools.has("memory_search") && !availableTools.has("memory_get")) return [];
+		if (!availableTools.has("memory_recall") && !availableTools.has("memory_read")) return [];
 		return ["## Memory",
-			"Use memory_search or memory_recall to recall prior facts; use memory_get with an id for the full entry. Retired entries are history, never current recommendations.",
+			"Use memory_recall to recall prior facts; use memory_read with an id for the full entry. Retired entries are history, never current recommendations.",
 			"Correct a wrong identified memory with memory_correct. Recall first when the user identifies a remembered fact but its id is not visible. Leave an unidentified new or changed fact to turn capture. Background and plugin code never call correct; no model delete action exists.",
-			"If correction says already-superseded, your new wording was not applied. Get or recall the named successor, then correct that id only if the wording still differs.", ""];
+			"If correction says already-superseded, your new wording was not applied. Read or recall the named successor, then correct that id only if the wording still differs.", ""];
 	};
 }
 
@@ -30,24 +30,13 @@ function providerContext(api: OpenClawPluginApi, value: unknown): HostMemoryCont
 	return { ...context, agentId: agents[0]?.id };
 }
 
-function createProviderMemorySearchTool(api: OpenClawPluginApi, connection: MemoryConnection,
+// OpenClaw 2026.10 registers memory_search and memory_get itself; registering them again is rejected with a name conflict,
+// so the id-based read has a name of its own.
+function createProviderMemoryReadTool(api: OpenClawPluginApi, connection: MemoryConnection,
 	context: unknown): AnyAgentTool {
 	const access = providerContext(api, context);
 	return {
-		name: "memory_search", label: "Memory Recall",
-		description: "Recall relevant memories, including visibly retired history. Recall first when an identified memory's id is not visible.",
-		parameters: { type: "object", properties: { query: { type: "string" } },
-			required: ["query"], additionalProperties: false },
-		execute: (id, params) => executeMemoryRecallTool({ connection, stateDir: getSnoStationMemStateDir() },
-			access, id, params),
-	};
-}
-
-function createProviderMemoryGetTool(api: OpenClawPluginApi, connection: MemoryConnection,
-	context: unknown): AnyAgentTool {
-	const access = providerContext(api, context);
-	return {
-		name: "memory_get", label: "Memory Get",
+		name: "memory_read", label: "Memory Read",
 		description: "Get the full memory by id. A retired memory includes its immediate successor id and is historical context.",
 		parameters: { type: "object", properties: { id: { type: "string" } },
 			required: ["id"], additionalProperties: false },
@@ -122,8 +111,6 @@ export function registerSnoStationMemProviderCapability(params: {
 		},
 	};
 	params.api.registerMemoryCapability(capability as MemoryPluginCapability);
-	params.api.registerTool(ctx => createProviderMemorySearchTool(params.api, params.connection, ctx),
-		{ names: ["memory_search"] });
-	params.api.registerTool(ctx => createProviderMemoryGetTool(params.api, params.connection, ctx),
-		{ names: ["memory_get"] });
+	params.api.registerTool(ctx => createProviderMemoryReadTool(params.api, params.connection, ctx),
+		{ names: ["memory_read"] });
 }
