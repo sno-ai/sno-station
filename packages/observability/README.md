@@ -4,8 +4,8 @@ A private record of what your agents did, kept on your machine.
 
 When a plugin saves a memory or an agent runs a tool, this package writes it down. It scrubs secrets first and keeps the notes in a small local database under `~/.sno`. You decide how much leaves your machine: nothing, metadata only (what happened and when, which tool, never the text itself), or the full event details. Change it any time with `sno station consent off`, `metadata-only` or `full`.
 
-Most people never use this package directly. It comes with the Sno Station plugins. If you just want shared memory for your agents, start with the
-[shared memory setup](https://github.com/sno-ai/sno-station/blob/main/docs/memory-setup.md) and
+Most people never use this package directly. It comes with the Sno Station plugins. If you just want one memory for your agents, start with the
+[memory service setup](https://github.com/sno-ai/sno-station/blob/main/docs/memory-setup.md) and
 install the plugin for your agent ([Codex](https://www.npmjs.com/package/@snoai/mem-codex),
 [Claude Code](https://www.npmjs.com/package/@snoai/mem-claude),
 [OpenClaw](https://www.npmjs.com/package/@snoai/mem-claw)).
@@ -15,7 +15,7 @@ npm install @snoai/observability@1.2.1
 ```
 
 Needs Node.js 22.14 or newer. The `sno` command can also append an event from a shell:
-`sno observe append <event_type> --agent=<harness> --field=value`.
+`sno observe append <event_type> --agent=<agent> --field=value`.
 It returns as soon as the event is stored on your machine and prints `stored`; sending to sno.ai continues in a short background process, so a slow network never delays or loses the event.
 
 ```ts
