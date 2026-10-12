@@ -58,19 +58,19 @@ describe("provider registration", () => {
 		cleanups.push(() => harness.stopServices());
 		expect(harness.registeredMemoryCapabilities).toHaveLength(1);
 		expect(harness.registeredTools.map(tool => tool.name)).toEqual([
-			"memory_recall", "memory_store", "memory_correct", "memory_search", "memory_get",
+			"memory_recall", "memory_store", "memory_correct", "memory_read",
 		]);
+		// OpenClaw 2026.10 registers these two itself; registering them again is a name conflict in its log.
+		expect(harness.getRegisteredTool("memory_search")).toBeUndefined();
+		expect(harness.getRegisteredTool("memory_get")).toBeUndefined();
 		const recall = harness.getRegisteredTool("memory_recall");
-		const search = harness.getRegisteredTool("memory_search");
-		const get = harness.getRegisteredTool("memory_get");
+		const get = harness.getRegisteredTool("memory_read");
 		const remember = harness.getRegisteredTool("memory_store");
-		if (!recall || !search || !get || !remember) throw new Error("missing provider tools");
-		expect(search.parameters).toMatchObject({ properties: { query: { type: "string" } }, required: ["query"], additionalProperties: false });
-		expect(Object.keys(search.parameters.properties)).toEqual(["query"]);
+		if (!recall || !get || !remember) throw new Error("missing provider tools");
 		expect(get.parameters).toMatchObject({ properties: { id: { type: "string" } }, required: ["id"], additionalProperties: false });
 		expect(Object.keys(get.parameters.properties)).toEqual(["id"]);
-		const prompt = harness.registeredMemoryCapabilities[0]?.promptBuilder?.({ availableTools: new Set(["memory_search", "memory_get"]) })?.join("\n") ?? "";
-		expect(prompt).toContain("memory_get with an id");
+		const prompt = harness.registeredMemoryCapabilities[0]?.promptBuilder?.({ availableTools: new Set(["memory_recall", "memory_read"]) })?.join("\n") ?? "";
+		expect(prompt).toContain("memory_read with an id");
 		expect(prompt).toContain("memory_correct");
 		expect(prompt).toContain("no model delete action");
 		const content = "The Yukon release checklist requires the cedar rollback procedure.";
@@ -79,10 +79,8 @@ describe("provider registration", () => {
 		const id = stored.content[0]?.text ?? "";
 		expect(fixture.store.getById(id)?.text).toBe(content);
 		const canonical = asClawResult(await recall.execute("provider-recall", { query: "Yukon release checklist" }));
-		const alias = asClawResult(await search.execute("provider-search", { query: "Yukon release checklist" }));
-		expect(alias.isError).not.toBe(true);
-		expect(alias.content).toEqual(canonical.content);
-		expect(alias.content[0]?.text).toContain(`${id}\t`);
+		expect(canonical.isError).not.toBe(true);
+		expect(canonical.content[0]?.text).toContain(`${id}\t`);
 		const full = asClawResult(await get.execute("provider-get", { id }));
 		expect(full.isError).not.toBe(true);
 		expect(full.content[0]?.text).toBe(`${id}\n${content}`);

@@ -7,8 +7,7 @@ across conversations.
 ## What you get
 
 - **Agents that remember.** Relevant memories are recalled automatically, and the agent can
-  store, look up and open entries itself with `memory_store`, `memory_recall` (also
-  `memory_search`) and `memory_get`.
+  store, look up and open entries itself with `memory_store`, `memory_recall` and `memory_read`.
 - **Mistakes get corrected, not erased.** `memory_correct` writes the right text as a new entry
   and marks the old one retired. Explicit recall shows retired history with its replacement;
   automatic context only shows what is current. The model has no delete action.

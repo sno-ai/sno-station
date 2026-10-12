@@ -8,8 +8,7 @@
   ],
   "contracts": {
     "tools": [
-      "memory_search",
-      "memory_get",
+      "memory_read",
       "memory_recall",
       "memory_store",
       "memory_correct"
