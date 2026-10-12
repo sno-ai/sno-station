@@ -127,7 +127,7 @@ There is no update step: `sno` updates itself when it finds a newer release.
 
 ## From our own machines
 
-*Three things we saw on this repository.*
+*Last updated 2026-10-11.* Three things we saw on this repository.
 
 ### "I yelled at my agent last night. It took notes."
 

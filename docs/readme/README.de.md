@@ -138,7 +138,7 @@ Einen Update-Schritt gibt es nicht: `sno` aktualisiert sich selbst, wenn es ein 
 
 ## Von unseren eigenen Rechnern
 
-*Drei Dinge, die wir in diesem Repository erlebt haben.*
+*Zuletzt aktualisiert am 2026-10-11.* Drei Dinge, die wir in diesem Repository erlebt haben.
 
 ### „Ich habe meinen Agenten letzte Nacht angeschrien. Er hat sich Notizen gemacht.“
 

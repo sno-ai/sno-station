@@ -133,7 +133,7 @@ Il n'y a pas d'étape de mise à jour : `sno` se met à jour lui-même quand il 
 
 ## Sur nos propres machines
 
-*Trois choses que nous avons vues sur ce dépôt.*
+*Dernière mise à jour le 2026-10-11.* Trois choses que nous avons vues sur ce dépôt.
 
 ### « J'ai crié sur mon agent hier soir. Il a pris des notes. »
 

@@ -128,7 +128,7 @@ No hay paso de actualización: `sno` se actualiza solo cuando encuentra una vers
 
 ## De nuestras propias máquinas
 
-*Tres cosas que vimos en este repositorio.*
+*Última actualización 2026-10-11.* Tres cosas que vimos en este repositorio.
 
 ### "Anoche le grité a mi agente. Tomó notas."
 
