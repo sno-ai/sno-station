@@ -42,7 +42,7 @@ The default Sno profile is `~/.sno`; set `SNO_PROFILE_DIR` to use another profil
 memory-service path. The Hermes plugin does not keep a separate memory database or mode.
 
 Do not replace `store.path` or `store.encryptionKey` when changing a setting for an existing
-store. Keep a private backup of the settings file and database. The [shared setup](../memory-setup.md)
+store. Keep a private backup of the settings file and database. The [memory service setup](../memory-setup.md)
 is for a new profile, not an existing one.
 
 `sno setup --harness hermes` selects this provider when you have not chosen another one. To
