@@ -8,9 +8,9 @@ It makes and checks two kinds of ids. Short, URL-safe ones for records (`createC
 import { createCuid2, createUUIDv7 } from "@snoai/common-core";
 ```
 
-Who it is for: the Sno Station packages themselves. If you only want shared agent memory, you
+Who it is for: the Sno Station packages themselves. If you only want agent memory, you
 do not install this directly; it arrives as a dependency of the memory engine. To set that up,
-follow the [shared memory setup](https://github.com/sno-ai/sno-station/blob/main/docs/memory-setup.md)
+follow the [memory service setup](https://github.com/sno-ai/sno-station/blob/main/docs/memory-setup.md)
 and install the plugin for your agent ([Codex](https://www.npmjs.com/package/@snoai/mem-codex),
 [Claude Code](https://www.npmjs.com/package/@snoai/mem-claude),
 [OpenClaw](https://www.npmjs.com/package/@snoai/mem-claw)).

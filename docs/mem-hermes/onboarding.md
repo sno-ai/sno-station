@@ -7,13 +7,13 @@
 > sh -c 'sno_installer_body=$(curl -fsSL https://sno.ai/install) && printf "%s\n" "$sno_installer_body" | sh' && ~/.local/bin/sno setup
 > ```
 
-Hermes uses a Python plugin to connect to the shared Sno memory service. The service itself
+Hermes uses a Python plugin to connect to the Sno memory service. The service itself
 comes from npm. The `sno` command installs the plugin and selects it for you.
 
 ## Install
 
 You need Hermes Agent, Git, and Node.js 22.22.3+ on the 22 line, 24.15.0+ on the 24 line, or
-25.9.0+. First complete the [shared memory setup](../memory-setup.md). It installs the memory
+25.9.0+. First complete the [memory service setup](../memory-setup.md). It installs the memory
 service and writes `~/.sno/settings.json` with a local store and encryption key.
 
 Then install the Hermes plugin:
@@ -24,11 +24,11 @@ sh -c 'sno_installer_body=$(curl -fsSL https://sno.ai/install) && printf "%s\n" 
 
 `sno setup` installs and enables the plugin from this repository (not a separate Python
 package), selects it as Hermes's memory provider when you have not chosen another one, and
-restarts a running Hermes gateway. The shared setup installs its npm memory service. The
+restarts a running Hermes gateway. The memory service setup installs its npm memory service. The
 first-release setup uses Local First mode, so it needs no model API key. It downloads the
 local embedding model before your first session.
 
-Keep a private backup of `~/.sno/settings.json` and the memory store. Do not rerun the shared
+Keep a private backup of `~/.sno/settings.json` and the memory store. Do not rerun the memory service
 settings block for an existing store: it creates a new encryption key and makes old memories
 unreadable.
 
