@@ -50,7 +50,7 @@ export function applyMultiAgentScopes(scopePolicy: MemoryScopePolicy, scopes: st
 		if (!scopePolicy.getScopeDefinition(scope)) {
 			// This scope policy step establishes state that later reads and cleanup paths depend on.
 			scopePolicy.addScopeDefinition(scope, {
-				description: `Multi-agent shared scope: ${scope}`,
+				description: `Multi-agent scope: ${scope}`,
 			});
 		}
 	}
