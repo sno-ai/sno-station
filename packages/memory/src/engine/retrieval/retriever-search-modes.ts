@@ -14,12 +14,19 @@ import type {
 import { experimentCandidatePoolOverride } from "../../../config/index";
 import {
 	clamp01,
+	DEFAULT_MAX_CONTEXT_TOKENS,
 	MAX_AGGREGATION_ROWS,
 	MAX_CANDIDATE_POOL_SIZE,
 	PRECISION_RECALL_POOL_SIZE_FACTOR,
 	RetrievalError,
 	type TraceCollector,
 } from "./retriever-dependencies";
+
+/** A long query would otherwise fail in the embedder's chunker; the keyword search still sees all of it. */
+async function embedQuery(embedder: MemoryRetrieverInternals["embedder"], query: string): Promise<Float32Array> {
+	await embedder.warmup();
+	return embedder.embed(embedder.truncateToTokens(query, DEFAULT_MAX_CONTEXT_TOKENS));
+}
 
 export function buildRemFacetRecallStatement(input: {
 	facet: "current" | "history";
@@ -86,7 +93,7 @@ Object.assign(MemoryRetriever.prototype, {
 		trace?: TraceCollector,
 	): Promise<RetrievalResult[]> {
 		// Await the retrieval ranking dependency before deriving downstream state.
-		const vector = await this.embedder.embed(context.query);
+		const vector = await embedQuery(this.embedder, context.query);
 		this.throwIfAborted(context);
 
 		// Over-fetch when expiry filtering is on, since filtering removes candidates
@@ -174,7 +181,7 @@ Object.assign(MemoryRetriever.prototype, {
 		// Step 1. The only model call on the read path; its latency was previously
 		// unattributable because nothing recorded it.
 		trace?.startStage("embed_query", []);
-		const queryVector = await this.embedder.embed(context.query);
+		const queryVector = await embedQuery(this.embedder, context.query);
 		trace?.endStage([]);
 		this.throwIfAborted(context);
 		const bm25Query = context.query;
