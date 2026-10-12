@@ -29,8 +29,7 @@ Es läuft auf Ihrem eigenen Rechner. Sie installieren es einmal und arbeiten wei
 mitten in einer Aufgabe an ein Rate Limit, und ein anderer Agent übernimmt sie aus dem
 gemeinsamen Gedächtnis, mit intaktem Kontext. Sie kopieren nichts hinein.
 
-**Ein zweiter Blick auf Anfrage.** Jeder Agent kann die Arbeit des anderen prüfen. Der Prüfer ist immer ein anderer Agent von einem
-anderen Unternehmen und hat deshalb keine Neigung, dem ersten recht zu geben.
+**Ein zweiter Blick auf Anfrage.** Jeder Agent kann die Arbeit des anderen prüfen. Der Prüfer ist immer ein anderer Agent und hat deshalb keine Neigung, dem ersten recht zu geben.
 
 **Es wird besser, während Sie schlafen.** Über Nacht liest es die Sitzungen des Tages, findet
 die Fehler, die sich wiederholen, und schlägt Änderungen an den eigenen Skills Ihrer Agenten

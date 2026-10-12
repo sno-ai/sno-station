@@ -28,8 +28,7 @@ Funciona en tu propia computadora. Lo instalas una vez y sigues trabajando como 
 a mitad de una tarea, otro agente la retoma desde la memoria compartida, con el contexto intacto.
 No tienes que pegar nada.
 
-**Una segunda revisión a petición.** Cualquiera de los agentes puede revisar el trabajo del otro. El revisor siempre es un agente distinto, de otra
-empresa, así que no tiene el hábito de darle la razón al primero.
+**Una segunda revisión a petición.** Cualquiera de los agentes puede revisar el trabajo del otro. El revisor siempre es un agente distinto, así que no tiene el hábito de darle la razón al primero.
 
 **Mejora mientras duermes.** Durante la noche lee las sesiones del día, encuentra los errores que
 se repiten y propone cambios a las habilidades de tus propios agentes. Tú los lees por la mañana.
