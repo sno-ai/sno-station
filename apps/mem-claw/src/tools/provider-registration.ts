@@ -9,6 +9,7 @@ import type { SnoStationMemMemoryCapability, SnoStationMemMemoryRuntime } from "
 import { resolveWorkspace, type MemoryConnection, type HostMemoryContext } from "../install/memory-connection";
 import { executeMemoryGetTool, executeMemoryRecallTool, toolHostContext } from "./http-memory-tools";
 import { APP_NAME } from "../constants";
+import { parseVersionTriple } from "../install/conversation-access-policy";
 
 type MemoryPromptSectionBuilder = NonNullable<MemoryPluginCapability["promptBuilder"]>;
 
@@ -30,13 +31,30 @@ function providerContext(api: OpenClawPluginApi, value: unknown): HostMemoryCont
 	return { ...context, agentId: agents[0]?.id };
 }
 
-// OpenClaw 2026.10 registers memory_search and memory_get itself; registering them again is rejected with a name conflict,
-// so the id-based read has a name of its own.
-function createProviderMemoryReadTool(api: OpenClawPluginApi, connection: MemoryConnection,
+function createProviderMemorySearchTool(api: OpenClawPluginApi, connection: MemoryConnection,
 	context: unknown): AnyAgentTool {
 	const access = providerContext(api, context);
 	return {
-		name: "memory_read", label: "Memory Read",
+		name: "memory_search", label: "Memory Recall",
+		description: "Recall relevant memories, including visibly retired history. Recall first when an identified memory's id is not visible.",
+		parameters: { type: "object", properties: { query: { type: "string" } },
+			required: ["query"], additionalProperties: false },
+		execute: (id, params) => executeMemoryRecallTool({ connection, stateDir: getSnoStationMemStateDir() },
+			access, id, params),
+	};
+}
+
+/** OpenClaw 2026.10 registers memory_search and memory_get itself; registering them again is rejected with a name conflict. */
+function hostRegistersMemoryTools(rawVersion: unknown): boolean {
+	const version = parseVersionTriple(rawVersion);
+	return version !== undefined && (version[0] > 2026 || (version[0] === 2026 && version[1] >= 10));
+}
+
+function createProviderMemoryReadTool(api: OpenClawPluginApi, connection: MemoryConnection,
+	context: unknown, name: "memory_read" | "memory_get"): AnyAgentTool {
+	const access = providerContext(api, context);
+	return {
+		name, label: "Memory Read",
 		description: "Get the full memory by id. A retired memory includes its immediate successor id and is historical context.",
 		parameters: { type: "object", properties: { id: { type: "string" } },
 			required: ["id"], additionalProperties: false },
@@ -111,6 +129,11 @@ export function registerSnoStationMemProviderCapability(params: {
 		},
 	};
 	params.api.registerMemoryCapability(capability as MemoryPluginCapability);
-	params.api.registerTool(ctx => createProviderMemoryReadTool(params.api, params.connection, ctx),
+	params.api.registerTool(ctx => createProviderMemoryReadTool(params.api, params.connection, ctx, "memory_read"),
 		{ names: ["memory_read"] });
+	if (hostRegistersMemoryTools(params.api.runtime.version)) return;
+	params.api.registerTool(ctx => createProviderMemorySearchTool(params.api, params.connection, ctx),
+		{ names: ["memory_search"] });
+	params.api.registerTool(ctx => createProviderMemoryReadTool(params.api, params.connection, ctx, "memory_get"),
+		{ names: ["memory_get"] });
 }
