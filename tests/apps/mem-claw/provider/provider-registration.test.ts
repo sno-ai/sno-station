@@ -51,6 +51,7 @@ describe("provider registration", () => {
 		const fixture = await createMemUpdateFixture(embedder);
 		cleanups.push(fixture.close);
 		const harness = new OpenClawPluginApiHarness({}, { runtimeAgentId: "provider-registration" });
+		Object.assign(harness.runtime, { version: "2026.10.1" });
 		Object.assign(harness.config, { plugins: { slots: { memory: "sno-mem-claw" } },
 			agents: { list: [{ id: "provider-registration", workspace: fixture.profile }] } });
 		memClawPlugin.register(harness);
@@ -127,5 +128,15 @@ describe("provider registration", () => {
 		expect(harness.registeredMemoryCapabilities).toHaveLength(0);
 		expect(harness.getRegisteredTool("memory_search")).toBeUndefined();
 		expect(harness.getRegisteredTool("memory_get")).toBeUndefined();
+	});
+	it("keeps registering memory_search and memory_get on hosts before 2026.10, which do not provide them", () => {
+		const harness = new OpenClawPluginApiHarness({});
+		Object.assign(harness.config, { plugins: { slots: { memory: "sno-mem-claw" } } });
+		Object.assign(harness.runtime, { version: "2026.9.5" });
+		memClawPlugin.register(harness);
+		cleanups.push(() => harness.stopServices());
+		expect(harness.registeredTools.map(tool => tool.name)).toEqual([
+			"memory_recall", "memory_store", "memory_correct", "memory_read", "memory_search", "memory_get",
+		]);
 	});
 });
