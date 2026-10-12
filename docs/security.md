@@ -2,7 +2,7 @@
 
 > **The promise**: your local memory store is encrypted on your machine with a key generated once during [memory service setup](memory-setup.md) and kept in your local `settings.json`. Sno does not receive your database or your Data Encryption Key (DEK).
 >
-> **REM Enhanced uploads memory text to your own space in Sno's cloud.** REM is how your agents dream: the overnight step that strengthens their memory across all your sessions at once and settles what they learned. In REM Enhanced mode your memory text and the lessons your agents learn go to your own space in Sno's cloud. That space works like your own cloud drive: everything in it is yours, only you can see it, and Sno does not touch it. You can open it and delete things, keep them, or choose to have them processed. Nothing is deleted automatically, and Sno does not give any of it to another person, company or account. In Local First mode no memory text leaves your machine and Sno is not in the model path. In Agent Native mode memory work runs on your own agent's model, but by default the nightly step still uploads the day's sessions to Sno for cloud lessons and skill review, and a session's first prompt can bring one cloud lesson back; you can turn both off in `~/.sno/settings.json`. When you ask a model you configured to answer with memory context, only the selected text goes to that provider.
+> **REM Enhanced uploads memory text to your own space in Sno's cloud.** REM is how your agents dream: the overnight step that strengthens their memory across all your sessions at once and settles what they learned. In REM Enhanced mode your memory text and the lessons your agents learn go to your own space in Sno's cloud. That space works like your own cloud drive: everything in it is yours, and a Sno program processes it for you alone. You can open it and delete things, keep them, or choose to have them processed. Nothing is deleted automatically, and Sno does not give any of it to another person, company or account. In Local First mode no memory text leaves your machine and Sno is not in the model path. In Agent Native mode memory work runs on your own agent's model, but by default the nightly step still uploads the day's sessions to Sno for cloud lessons and skill review, and a session's first prompt can bring one cloud lesson back; you can turn both off in `~/.sno/settings.json`. When you ask a model you configured to answer with memory context, only the selected text goes to that provider.
 
 This document explains what we do, why the design is strong, and where the security boundary ends.
 
@@ -46,7 +46,7 @@ Those explicit actions include:
 - using REM Enhanced mode, which uploads your memory text and lessons to your own space in Sno's cloud so they can be processed across all your sessions;
 - using Agent Native mode with its default settings, which uploads the day's sessions to Sno each night for cloud lessons and skill review and can bring one cloud lesson back on a session's first prompt; both can be turned off in `~/.sno/settings.json`.
 
-In those cases, SNO Station Core should send the minimum content needed for the requested action and keep the scope visible to the user. Whatever goes to the cloud goes to your own space, like your own cloud drive: it is your own data, only you can see it, Sno does not touch it, and Sno does not give it to anyone. Outside those flows, memory content is not mirrored to Sno, synced to a hidden cloud memory store, or reconstructed from telemetry.
+In those cases, SNO Station Core should send the minimum content needed for the requested action and keep the scope visible to the user. Whatever goes to the cloud goes to your own space, like your own cloud drive: it is your own data, a Sno program processes it for you alone, and Sno does not give it to anyone. Outside those flows, memory content is not mirrored to Sno, synced to a hidden cloud memory store, or reconstructed from telemetry.
 
 Metadata follows the same principle. Metadata is divided by purpose and scope: local indexing metadata stays with the local database; LLM request metadata is tied to the user's configured provider call; REM Enhanced request metadata is tied to that request to Sno's cloud. Metadata must not become an implicit memory-content replica.
 
@@ -137,7 +137,7 @@ We do not hide these boundaries:
 - **Lost settings and backups.** There is no Sno escrow, backdoor, or support override for a lost key.
 - **Coerced unlock.** Cryptography cannot prevent a person from being forced to unlock a system.
 - **The user's chosen LLM provider.** If you configure Anthropic, OpenAI, a local model server, or another provider, the relevant prompt context sent to that provider is governed by that provider and your configuration.
-- **Future cloud features.** Your encryption key stays on your machine. What you upload in REM Enhanced mode is kept in your own space in Sno's cloud, like files in your own cloud drive, and only you can see it. If cloud sync of the whole local store is added later, it must be explicit opt-in and documented separately.
+- **Future cloud features.** Your encryption key stays on your machine. What you upload in REM Enhanced mode is kept in your own space in Sno's cloud, like files in your own cloud drive, and a Sno program processes it for you alone. If cloud sync of the whole local store is added later, it must be explicit opt-in and documented separately.
 
 ---
 
@@ -146,7 +146,7 @@ We do not hide these boundaries:
 | Pathway | Carries memory content? | Notes |
 |---|---|---|
 | Your local database file and key | **No** | Sno does not receive the database file or the key. |
-| Sno's cloud (REM Enhanced, and Agent Native's nightly session upload) | **Yes: your own memory text and lessons** | Memory text is uploaded when you choose REM Enhanced. It goes to your own space in Sno's cloud, which works like your own cloud drive: everything in it is yours, only you can see it, and Sno does not touch it. You can open it and delete things, keep them, or choose to have them processed across all your sessions. Nothing is deleted automatically, and Sno does not give any of it to anyone. Local First sends nothing here. By default, Agent Native uploads the day's sessions each night for cloud lessons and skill review; you can turn that off in `~/.sno/settings.json`. |
+| Sno's cloud (REM Enhanced, and Agent Native's nightly session upload) | **Yes: your own memory text and lessons** | Memory text is uploaded when you choose REM Enhanced. It goes to your own space in Sno's cloud, which works like your own cloud drive: everything in it is yours, and a Sno program processes it for you alone. You can open it and delete things, keep them, or choose to have them processed across all your sessions. Nothing is deleted automatically, and Sno does not give any of it to anyone. Local First sends nothing here. By default, Agent Native uploads the day's sessions each night for cloud lessons and skill review; you can turn that off in `~/.sno/settings.json`. |
 | Sno telemetry | **No memory content** | Telemetry is on by default. Events carry hashes, counts and identifiers, never memory content. |
 | Crash reports | **No by default** | Production crash reporting must not upload memory content. |
 | Update checks | **No** | Version metadata only. |
@@ -215,7 +215,7 @@ settings from your private backup; do not generate a replacement key.
 
 **Q: Can Sno read my memory database?**
 
-A: Not your local database or key: Sno does not receive your DB file or DEK. In REM Enhanced mode, what you upload goes to your own space in Sno's cloud, which works like your own cloud drive. Only you can see it, and Sno does not touch it.
+A: Not your local database or key: Sno does not receive your DB file or DEK. In REM Enhanced mode, what you upload goes to your own space in Sno's cloud, which works like your own cloud drive. A Sno program processes it for you alone, and Sno does not give it to anyone.
 
 **Q: Does my memory ever leave my machine?**
 
