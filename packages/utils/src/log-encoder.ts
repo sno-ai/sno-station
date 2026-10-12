@@ -75,6 +75,8 @@ function digest(value: string): { length: number; sha256: string } {
 	return { length: value.length, sha256: createHash("sha256").update(value).digest("hex") };
 }
 
+const OWN_ERROR_NAMES = new Set(["EmbeddingError", "RetrievalError", "StorageError", "ConfigError", "ExtractionError"]);
+
 function safeError(error: Error, depth: number, seen: Set<object>): Record<string, unknown> {
 	const message = typeof error.message === "string" ? error.message : "";
 	const result: Record<string, unknown> = {
@@ -82,6 +84,8 @@ function safeError(error: Error, depth: number, seen: Set<object>): Record<strin
 		message_length: message.length, message_sha256: digest(message).sha256,
 	};
 	if (!ERROR_NAMES.has(error.name)) result["type_sha256"] = digest(error.name).sha256;
+	// These errors carry sentences we wrote ourselves (sizes, counts, which setting is missing), so they stay readable.
+	if (OWN_ERROR_NAMES.has(error.name)) result["message"] = message.slice(0, 300);
 	if ("category" in error && typeof error.category === "string"
 		&& ["cancelled", "timeout", "auth", "transport"].includes(error.category)) {
 		result["category"] = error.category;
