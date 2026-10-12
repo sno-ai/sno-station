@@ -75,8 +75,9 @@ function digest(value: string): { length: number; sha256: string } {
 	return { length: value.length, sha256: createHash("sha256").update(value).digest("hex") };
 }
 
-// A third-party error can carry the same name, so the name must come with our own error code.
-const OWN_ERROR_CODES: Record<string, string> = { EmbeddingError: "embedding_error", RetrievalError: "retrieval_error", StorageError: "storage_error", ConfigError: "config_error" };
+// Embedding errors are sentences we wrote ourselves, built from sizes and counts. Other typed errors can carry caller input or a
+// dependency's message, so they stay hashed. A third-party error can borrow the name, so the name must come with our own code.
+const OWN_ERROR_CODES: Record<string, string> = { EmbeddingError: "embedding_error" };
 
 function safeError(error: Error, depth: number, seen: Set<object>): Record<string, unknown> {
 	const message = typeof error.message === "string" ? error.message : "";
@@ -85,7 +86,6 @@ function safeError(error: Error, depth: number, seen: Set<object>): Record<strin
 		message_length: message.length, message_sha256: digest(message).sha256,
 	};
 	if (!ERROR_NAMES.has(error.name)) result["type_sha256"] = digest(error.name).sha256;
-	// These errors carry sentences we wrote ourselves (sizes, counts, which setting is missing), so they stay readable.
 	if ("code" in error && typeof error.code === "string" && OWN_ERROR_CODES[error.name] === error.code) result["message"] = message.slice(0, 300);
 	if ("category" in error && typeof error.category === "string"
 		&& ["cancelled", "timeout", "auth", "transport"].includes(error.category)) {
