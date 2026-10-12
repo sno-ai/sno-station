@@ -35,19 +35,28 @@ console.log("OpenClaw plugin installed. Run sno setup to configure the memory se
 
 // OpenClaw loads a new plugin only when its gateway restarts, and after an install the gateway can be left stopped, so the
 // agent has no memory until someone starts it. Restart it here and wait until it answers.
-const gateway = (...rest) => spawnSync("openclaw", [...(profile ? ["--profile", profile] : []), "gateway", ...rest], { stdio: "inherit" });
+// Hints name the same profile this install used, so the command a person copies acts on the same OpenClaw.
+const profileFlag = profile ? ` --profile ${profile}` : "";
+const gateway = (...rest) => spawnSync("openclaw", [...(profile ? ["--profile", profile] : []), "gateway", ...rest], { encoding: "utf8" });
 const restarted = gateway("restart");
+process.stdout.write(restarted.stdout ?? ""); process.stderr.write(restarted.stderr ?? "");
+// `sno update` shows only the last error line, so a failure is repeated as the last line of this installer, with OpenClaw's own words.
+let gatewayFailure = "";
 if (restarted.status !== 0) {
-	console.error(`OpenClaw's gateway did not restart (exit ${restarted.status ?? restarted.error?.message}); start it with: openclaw gateway restart`);
+	const said = (restarted.stderr?.trim() ? restarted.stderr : restarted.stdout ?? "").split("\n").map(line => line.trim()).filter(Boolean).slice(-2).join(" ");
+	gatewayFailure = `OpenClaw's gateway did not restart (exit ${restarted.status ?? restarted.error?.message})${said ? `: ${said}` : ""}; once that is fixed, start it with: openclaw${profileFlag} gateway restart`;
 } else {
 	let ready = false;
+	let lastProbe = "";
 	// Each probe is cut off after 5 seconds, so the wait is 60 seconds of the clock, not 60 probes.
 	for (const end = Date.now() + 60_000; !ready && Date.now() < end;) {
-		ready = spawnSync("openclaw", [...(profile ? ["--profile", profile] : []), "gateway", "health"], { stdio: "ignore", timeout: 5000 }).status === 0;
+		const probe = spawnSync("openclaw", [...(profile ? ["--profile", profile] : []), "gateway", "health"], { encoding: "utf8", timeout: 5000 });
+		ready = probe.status === 0;
+		if (!ready) lastProbe = ((probe.stderr?.trim() ? probe.stderr : probe.stdout) ?? "").split("\n").map(line => line.trim()).filter(Boolean).at(-1) ?? "";
 		if (!ready) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1000);
 	}
 	if (ready) console.log("OpenClaw's gateway restarted and answers.");
-	else console.error("OpenClaw's gateway restarted but did not answer within 60 seconds; check it with: openclaw gateway status");
+	else gatewayFailure = `OpenClaw's gateway restarted but did not answer within 60 seconds${lastProbe ? ` (${lastProbe})` : ""}; check it with: openclaw${profileFlag} gateway status`;
 }
 
 // With several agents and none marked default, OpenClaw refuses a new session that names no agent, which is how Sno Reach
@@ -59,9 +68,10 @@ if (agentList.status !== 0) {
 	try {
 		const agents = JSON.parse(agentList.stdout.slice(agentList.stdout.indexOf("[")));
 		if (Array.isArray(agents) && agents.length > 1 && !agents.some(agent => agent.isDefault === true)) {
-			console.log(`OpenClaw has several agents (${agents.map(agent => agent.id).join(", ")}) and none is the default, so Sno Reach seats cannot start.\nChoose one with: openclaw config set agents.defaults.systemAgent.agentId <id>`);
+			console.log(`OpenClaw has several agents (${agents.map(agent => agent.id).join(", ")}) and none is the default, so Sno Reach seats cannot start.\nChoose one with: openclaw${profileFlag} config set agents.defaults.systemAgent.agentId <id>`);
 		}
 	} catch (error) {
 		console.error(`Could not read OpenClaw's agent list: ${error instanceof Error ? error.message : String(error)}`);
 	}
 }
+if (gatewayFailure) { console.error(gatewayFailure); process.exitCode = 1; }
