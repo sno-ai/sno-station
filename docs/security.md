@@ -1,8 +1,8 @@
 # Security & Privacy - How Sno Station Protects Your Data
 
-> **The promise**: your local memory store is encrypted on your machine with a key generated once during [shared memory setup](memory-setup.md) and kept in your local `settings.json`. Sno does not receive your database or your Data Encryption Key (DEK).
+> **The promise**: your local memory store is encrypted on your machine with a key generated once during [memory service setup](memory-setup.md) and kept in your local `settings.json`. Sno does not receive your database or your Data Encryption Key (DEK).
 >
-> When you ask an AI model to answer with memory context, share memory, or use an explicit team feature, SNO Station Core may send only the selected data needed for that action. Outside those user-directed flows, actual memory content is not uploaded to a cloud service. Sno is not in the LLM provider path.
+> **REM Enhanced is the one mode that uploads memory text to Sno's cloud.** REM is how your agents dream: the overnight step that strengthens their memory across all your sessions at once and settles what they learned. In REM Enhanced mode your memory text and the lessons your agents learn go to your own space in Sno's cloud. That space works like your own cloud drive: everything in it is yours, only you can see it, and Sno does not touch it. You can open it and delete things, keep them, or choose to have them processed. Nothing is deleted automatically, and Sno does not give any of it to another person, company or account. In Local First mode no memory text leaves your machine, and in Local First and Agent Native modes Sno is not in the model path. When you ask a model you configured to answer with memory context, only the selected text goes to that provider.
 
 This document explains what we do, why the design is strong, and where the security boundary ends.
 
@@ -10,14 +10,14 @@ This document explains what we do, why the design is strong, and where the secur
 
 ## Abstract
 
-- **Local memory is the source of truth, and it is encrypted by default.** SNO Station Core memory databases are encrypted at rest from first use; outside explicit user actions such as model requests, sharing, or team collaboration, actual memory content stays on the local machine.
+- **Local memory is the source of truth, and it is encrypted by default.** SNO Station Core memory databases are encrypted at rest from first use; outside a model request you make and REM Enhanced uploads to your own space in Sno's cloud, actual memory content stays on the local machine.
 - **The key is local and persistent.** First-release setup generates the 256-bit DEK once as 64 lowercase hex characters in `<profile root>/settings.json`. Do not run that one-time settings command again for an existing store.
 - **Recovery needs the original settings file.** Keep a private, durable copy of `settings.json` with the encrypted store; restore its original `store.encryptionKey` if the active file is lost. Sno does not receive the copy.
 - **The database format is standard, not proprietary obfuscation.** SQLite pages are encrypted through `better-sqlite3-multiple-ciphers` / SQLite3MultipleCiphers in SQLCipher v4-compatible mode, while AES, GCM, and SQLite bring standards-backed component assurance.
 - **Our own crypto layer is deliberately small.** `@snoai/sqlite-crypto` is a thin first-party package over vetted libraries: SQLite3MultipleCiphers and Node's built-in `crypto`.
 - **File permissions protect the key.** `settings.json` is written with mode `0600`; anyone who can read it and the store can decrypt the data. There is no Sno recovery copy.
-- **Metadata is scoped to the user's action.** Operational metadata is minimized and segmented by purpose, for example model routing, sharing, team access, or troubleshooting. It is not a shadow copy of memory content.
-- **We are precise about limits.** SNO Station Core protects a copied database only when its key is kept separately; it does not protect an unlocked compromised machine, malware running as your OS user, root-level memory scraping, OS swap, or data you intentionally send to your chosen LLM provider, share target, or team workspace.
+- **Metadata is scoped to the user's action.** Operational metadata is minimized and segmented by purpose, for example model routing or troubleshooting. It is not a shadow copy of memory content.
+- **We are precise about limits.** SNO Station Core protects a copied database only when its key is kept separately; it does not protect an unlocked compromised machine, malware running as your OS user, root-level memory scraping, OS swap, or data you intentionally send to your chosen LLM provider. In REM Enhanced mode, what you upload to your own space in Sno's cloud is outside what the local encryption protects.
 
 ---
 
@@ -42,12 +42,12 @@ SNO Station Core treats local memory as the authoritative store. The encrypted d
 Those explicit actions include:
 
 - asking a configured AI model to answer with selected memory context;
-- exporting or sharing selected memory;
-- enabling a team or collaboration workflow that requires selected memory to be available to other users.
+- exporting selected memory to a file you keep;
+- using REM Enhanced mode, which uploads your memory text and lessons to your own space in Sno's cloud so they can be processed across all your sessions.
 
-In those cases, SNO Station Core should send the minimum content needed for the requested action and keep the scope visible to the user. Outside those flows, memory content is not mirrored to Sno, synced to a hidden cloud memory store, or reconstructed from telemetry.
+In those cases, SNO Station Core should send the minimum content needed for the requested action and keep the scope visible to the user. Whatever goes to the cloud goes to your own space, like your own cloud drive: it is your own data, only you can see it, Sno does not touch it, and Sno does not give it to anyone. Outside those flows, memory content is not mirrored to Sno, synced to a hidden cloud memory store, or reconstructed from telemetry.
 
-Metadata follows the same principle. Metadata is divided by purpose and scope: local indexing metadata stays with the local database; LLM request metadata is tied to the user's configured provider call; sharing metadata is tied to the selected share; team metadata is tied to the selected workspace or permission boundary. Metadata must not become an implicit memory-content replica.
+Metadata follows the same principle. Metadata is divided by purpose and scope: local indexing metadata stays with the local database; LLM request metadata is tied to the user's configured provider call; REM Enhanced request metadata is tied to that request to Sno's cloud. Metadata must not become an implicit memory-content replica.
 
 ---
 
@@ -61,7 +61,7 @@ the 64-lowercase-hex-character `store.encryptionKey` from the same file.
 before application queries run. The store list remains at
 `~/.config/sno-station-core/dbs.json`.
 
-[Shared memory setup](memory-setup.md) generates the key once on first install and writes `settings.json`
+[Memory service setup](memory-setup.md) generates the key once on first install and writes `settings.json`
 with mode `0600`. Keep a private, durable backup of this file with the store.
 If the active file is missing or damaged, preserve it and restore the original
 `store.encryptionKey` and `store.path` from the backup. Restore the complete
@@ -98,7 +98,7 @@ and a small first-party cryptography path.
 
 ### Default: Private Local Settings
 
-Complete [shared memory setup](memory-setup.md) before first use. It writes `<profile root>/settings.json` at
+Complete [memory service setup](memory-setup.md) before first use. It writes `<profile root>/settings.json` at
 mode `0600`, with `store.path` and a newly generated `store.encryptionKey`.
 The first-release store is `<profile root>/memory.sqlite`.
 The key is generated only once. If the store already exists and the key is
@@ -119,8 +119,8 @@ and backup rule applies; no interactive unlock step is required.
 | Time Machine, iCloud, Dropbox, S3, NAS, or other cold backup leakage | Backups contain encrypted DB pages; the DEK is not inside the DB file. |
 | Disk extraction from a powered-off machine | If `settings.json` is on that disk, the attacker can obtain both the database and its key. Use full-disk encryption to protect the whole device. |
 | Another OS user reading the DB file | The DB is encrypted; mode-`0600` settings restrict access to the key. |
-| Sno reading the local memory database | Sno does not receive the DB file or DEK. There is no v1 Sno cloud memory database. |
-| Hidden cloud replication of memory content | Local memory is the authoritative store; actual memory content is not mirrored to Sno outside user-directed sharing, team, or model-request flows. |
+| Sno reading the local memory database | Sno does not receive the DB file or DEK. |
+| Hidden cloud replication of memory content | Local memory is the authoritative store; actual memory content is not mirrored to Sno outside model-request and REM Enhanced flows, where it is your own data and stays yours. |
 | Tampering with encrypted DB pages | Page authentication detects modification and fails closed instead of silently returning changed plaintext. |
 
 ---
@@ -136,7 +136,7 @@ We do not hide these boundaries:
 - **Lost settings and backups.** There is no Sno escrow, backdoor, or support override for a lost key.
 - **Coerced unlock.** Cryptography cannot prevent a person from being forced to unlock a system.
 - **The user's chosen LLM provider.** If you configure Anthropic, OpenAI, a local model server, or another provider, the relevant prompt context sent to that provider is governed by that provider and your configuration.
-- **Future cloud features.** v1 has no Sno-operated cloud memory store. If cloud sync is added later, it must be explicit opt-in and documented separately.
+- **Future cloud features.** Your encryption key stays on your machine. What you upload in REM Enhanced mode is kept in your own space in Sno's cloud, like files in your own cloud drive, and only you can see it. If cloud sync of the whole local store is added later, it must be explicit opt-in and documented separately.
 
 ---
 
@@ -144,13 +144,12 @@ We do not hide these boundaries:
 
 | Pathway | Carries memory content? | Notes |
 |---|---|---|
-| Sno-operated memory cloud | **No** | No such v1 service exists. |
+| Your local database file and key | **No** | Sno does not receive the database file or the key. |
+| Your own space in Sno's cloud (REM Enhanced only) | **Yes: your own memory text and lessons** | Uploaded only when you choose REM Enhanced. It goes to your own space in Sno's cloud, which works like your own cloud drive: everything in it is yours, only you can see it, and Sno does not touch it. You can open it and delete things, keep them, or choose to have them processed across all your sessions. Nothing is deleted automatically, and Sno does not give any of it to anyone. Local First and Agent Native do not send memory text here. |
 | Sno telemetry | **No memory content** | Telemetry is on by default. Events carry hashes, counts and identifiers, never memory content. |
 | Crash reports | **No by default** | Production crash reporting must not upload memory content. |
 | Update checks | **No** | Version metadata only. |
 | User-configured LLM provider | **Yes, when needed for an answer** | The provider is selected by the user and accessed with the user's own API key. Sno is not the intermediary. |
-| User-requested sharing | **Only selected content** | The user chooses what to share; sharing metadata is scoped to that share. |
-| Team collaboration | **Only selected workspace content** | Team memory, if enabled, is scoped to the selected workspace and permission boundary. Local personal memory remains local. |
 | Operational metadata | **No memory content** | Metadata is segmented by purpose and must not contain a copy or reconstruction of actual memory content. |
 | Local exports | User-controlled | `.sno-station-core` exports are encrypted locally before you move or back them up. |
 
@@ -182,7 +181,7 @@ sqlcipher "<store.path from settings.json>"
 > .tables
 ```
 
-Only print or handle a DEK for local verification. Never share it.
+Only print or handle a DEK for local verification. Never give it to anyone.
 
 ### 2. Confirm Sno Is Not Receiving Memory Content
 
@@ -198,7 +197,7 @@ or:
 sudo tcpdump -i any -A 'host not <your-LLM-provider> and not <your-DNS>'
 ```
 
-You may see calls to the LLM provider you configured. You should not see memory database uploads to Sno.
+You may see calls to the LLM provider you configured. You should not see memory database uploads to Sno. In REM Enhanced mode you will also see requests to Sno's cloud that carry your memory text.
 
 ### 3. Confirm the Settings and Recovery Copy
 
@@ -215,19 +214,19 @@ settings from your private backup; do not generate a replacement key.
 
 **Q: Can Sno read my memory database?**
 
-A: No. Sno does not receive your DB file or DEK, and v1 has no Sno-operated cloud memory store.
+A: Not your local database or key: Sno does not receive your DB file or DEK. In REM Enhanced mode, what you upload goes to your own space in Sno's cloud, which works like your own cloud drive. Only you can see it, and Sno does not touch it.
 
 **Q: Does my memory ever leave my machine?**
 
-A: Not by default. The local database and DEK do not leave your machine through Sno. Selected content may leave only when you ask a configured LLM provider to answer with memory context, share memory, export it, or use an explicit team workflow.
+A: Not by default. The local database and DEK do not leave your machine through Sno. Selected content may leave only when you ask a configured LLM provider to answer with memory context, export it, or choose REM Enhanced mode. In REM Enhanced mode your memory text and lessons go to your own space in Sno's cloud, which works like your own cloud drive: you can delete them, keep them, or choose to have them processed.
 
 **Q: Is the local database the source of truth?**
 
-A: Yes. For personal memory, the encrypted local database is the authoritative store. Sno does not rebuild your memory from cloud telemetry or maintain a hidden server-side copy.
+A: Yes. For personal memory, the encrypted local database is the authoritative store. Sno does not rebuild your memory from telemetry. What you upload in REM Enhanced mode lives in your own space in Sno's cloud, which works like your own cloud drive.
 
 **Q: What about metadata?**
 
-A: Metadata is scoped to the user's action. Local indexing metadata stays local; model-call metadata belongs to the configured provider request; sharing metadata belongs to the selected share; team metadata belongs to the selected workspace or permission boundary. It must not become a copy of the memory content.
+A: Metadata is scoped to the user's action. Local indexing metadata stays local; model-call metadata belongs to the configured provider request; REM Enhanced metadata belongs to that request to Sno's cloud. It must not become a copy of the memory content.
 
 **Q: Why is encryption on by default?**
 

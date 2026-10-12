@@ -1,7 +1,7 @@
 # Sno Station
 
 > Open-source software that turns the agents a developer already uses (Claude Code,
-> Codex, Cursor, Hermes Agent, OpenClaw) into one squad on their own machine (Sno Station is the agents' workstation): shared encrypted memory, agent-to-agent
+> Codex, Cursor, Hermes Agent, OpenClaw) into one squad on their own machine (Sno Station is the agents' workstation): one encrypted memory, agent-to-agent
 > messaging (Sno Reach), agent collaboration skills for handoff and cross-harness review, and a nightly loop that
 > rewrites the agents' own skills with human approval. No daemon, no cloud required. Apache-2.0.
 
@@ -17,7 +17,7 @@ This repository has been public since 2026-09-18. Blocks in the README carry a "
 
 ## Directory map
 
-- packages/ — shared libraries (chunking, common-core, utils, embedder, observability,
+- packages/ — libraries used by every app (chunking, common-core, utils, embedder, observability,
   sqlite-crypto, content-sanitizer, memory = the memory engine + sidecar)
 - apps/ — per-harness memory integrations (mem-claude, mem-codex, mem-claw, mem-hermes, mem-cursor), Sno Reach (agent messaging),
   `sno heartbeat`, `sno report-time`, `sno subscription-quota-check` (programs run through `sno`)
@@ -35,7 +35,7 @@ This repository has been public since 2026-09-18. Blocks in the README carry a "
 ## Vocabulary
 
 - squad — the category word: your agents working as one team (always lower-case)
-- Dual Brain — two agents with different roles on a shared task, such as implementation and review; either agent can take either role
+- Dual Brain — two agents with different roles on the same task, such as implementation and review; either agent can take either role
 - Agent Squad — a larger team of agents, each with a clear responsibility
 - Sno Reach — the messaging program, always written as two words (`sno reach <verb>`)
 - the RSI loop — the nightly self-improvement loop (`sno rem-reflect`)

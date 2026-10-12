@@ -5,7 +5,7 @@
 [![license Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-97ca00.svg?labelColor=3b3b3b)](LICENSE)
 [![latest release](https://img.shields.io/github/v/release/sno-ai/sno-station?label=release&color=2dd4bf&labelColor=3b3b3b)](https://github.com/sno-ai/sno-station/releases/latest)
 ![runs on your laptop, no daemon](https://img.shields.io/badge/runs%20on-your%20laptop%2C%20no%20daemon-3b82f6.svg?labelColor=3b3b3b)
-![harnesses Codex, Claude Code, Hermes, Cursor, OpenClaw](https://img.shields.io/badge/harnesses-Codex%20%C2%B7%20Claude%20Code%20%C2%B7%20Hermes%20%C2%B7%20Cursor%20%C2%B7%20OpenClaw-f0a04b.svg?labelColor=3b3b3b)
+![works with Codex, Claude Code, Hermes, Cursor, OpenClaw](https://img.shields.io/badge/works%20with-Codex%20%C2%B7%20Claude%20Code%20%C2%B7%20Hermes%20%C2%B7%20Cursor%20%C2%B7%20OpenClaw-f0a04b.svg?labelColor=3b3b3b)
 
 <p>
   <img src="docs/images/agents/codex.png" alt="Codex" title="Codex" width="40" height="40">&nbsp;&nbsp;
@@ -19,25 +19,25 @@
 **Read in other languages:** **English** · [中文](docs/readme/README.zh-CN.md) · [Deutsch](docs/readme/README.de.md) · [Español](docs/readme/README.es.md) · [Français](docs/readme/README.fr.md) · [Русский](docs/readme/README.ru.md) · [한국어](docs/readme/README.ko.md) · [日本語](docs/readme/README.ja.md) · [繁體中文](docs/readme/README.zh-TW.md)
 
 Sno Station turns the agents you already use into a squad. Codex, Claude Code, Cursor, Hermes Agent
-and OpenClaw share one memory, pass work to each other, and review each other's work when you
-ask. Every night they look back at the day and get a little better.
+and OpenClaw use one memory, pass work to each other, and review each other's work when you
+ask. Every night they dream, and wake up a little better.
 
 It runs on your own computer. You install it once and keep working the way you do now.
 
 **When one agent runs out, the next one carries on.** Hit a rate limit halfway through a task
-and another agent picks it up from the shared memory, with the context intact. You paste nothing.
+and another agent picks it up from the same memory, with the context intact. You paste nothing.
 
 **Ask for a second look and you get one.** Either agent can review the other's work. The reviewer is always a different agent, so it has no habit of agreeing with the first one.
 
-**It gets better while you sleep.** Overnight it reads the day's sessions, finds the mistakes
-that keep repeating, and proposes changes to your agents' own skills. You read them in the
-morning. Nothing changes until you say yes.
+**Your agents dream.** Every night, while you sleep, your agents go through REM. We named it after Rapid Eye Movement, the stage of human sleep when the brain strengthens its memories and settles what it learned that day. Ours does the same two things for your agents. It strengthens their memory across all your sessions at once, so they keep what matters and let go of what is no longer true. And it settles their experience: it reads the day's sessions, finds the mistakes that keep repeating, and proposes changes to your agents' own skills, so yesterday's slip becomes today's better habit. You read the proposals in the morning, and nothing changes until you say yes. Further down we also call this the nightly loop.
 
 **It stays yours.** Memory, messages and skills live on your computer. The memory is encrypted
 with a key that never leaves it. No account, no server, no daemon. The cloud side is optional,
 and the product is complete without it.
 
-![How it works: two agents, one shared workspace, three things you get](docs/images/squad-how-it-works.png)
+**What REM does with your data.** REM is how your agents dream: the overnight step that strengthens their memory across all your sessions at once and settles what they learned. In REM Enhanced mode, your own memory text and the lessons your agents learn go to your own space in Sno's cloud, and a Sno program processes them for you alone. That space works like your own cloud drive: everything in it is yours, only you can see it, and Sno does not touch it. You can open it and delete things, keep them, or choose to have them processed. Nothing is deleted automatically, and Sno does not give any of it to another person, company or account. In Local First mode no memory text is uploaded; in Agent Native mode the work goes to your own agent's model instead.
+
+![How it works: two agents, one workspace, three things you get](docs/images/squad-how-it-works.png)
 
 > **Open in public.** This repository has been public since 2026-09-18. Everything here runs.
 > Every block below says when it was last updated.
@@ -78,16 +78,16 @@ Every command starts with `sno`. The full list is in [docs/sno-commands.md](docs
 *Last updated 2026-10-11.* Keep working in whichever agent you like. Three things change.
 
 1. **One of them hits its cap.** Say `sno reach call` from the other one. It picks up the task
-   from the shared memory and the mailbox, context intact.
+   from the same memory and the mailbox, context intact.
 2. **You want a second pair of eyes.** Ask either agent to `peer-review` the other's work.
-   The reviewer is always from the other harness.
-3. **Every night the nightly loop runs.** In the morning, `sno rem-reflect accept <id>` for the
+   The reviewer is always a different agent.
+3. **Every night your agents dream.** In the morning, `sno rem-reflect accept <id>` for the
    proposals you like. Nothing changes without that accept.
 
 ## Cursor
 
 *Last updated 2026-10-11.* Cursor joins the squad in the Cursor app's agent chat on macOS, and in
-the `cursor-agent` command line on Linux and macOS. It shares the same memory as your other
+the `cursor-agent` command line on Linux and macOS. It uses the same memory as your other
 agents. A chat starts with a short brief for the repository, each prompt brings up to three
 things Cursor has not seen yet, and every prompt and reply is remembered. It reads the same
 skills, reviews and gets reviewed, takes over when another agent runs out of quota, and its
@@ -150,7 +150,7 @@ stopped. It also found a bug in our release script that nobody had asked it to l
 
 One of our agents was deep into a long build when its weekly quota ran almost out. It did not
 stop and wait. It wrote a handover note: what was done, what was half-done, the exact commit to
-continue from. Then it woke an agent from the other harness.
+continue from. Then it woke a different agent.
 
 One thing went wrong, and it is the part worth reading. The new agent started editing before it
 had confirmed the handover. The first agent caught it, paused it, rewrote the note and handed
@@ -165,7 +165,7 @@ session ids are redacted. Nothing else is touched.
 
 We have had Claude Code review Codex's work, and Codex review Claude Code's, on this repository
 for months. Not one review has come back empty. We used to think that meant the work was bad.
-It means one reviewer from one harness is never enough.
+It means one reviewer is never enough.
 
 ## What runs today
 
@@ -173,8 +173,8 @@ It means one reviewer from one harness is never enough.
 
 | Piece | Status |
 |---|---|
-| Shared memory across Codex, Claude Code, Hermes Agent and OpenClaw | Released; installed from the registry on a clean machine and proven end to end |
-| Cursor: shared memory, skills, review, take-over and the nightly loop | Released in 1.3; the `cursor-agent` command line proven end to end on a clean Linux machine; the Cursor app on macOS still being proven |
+| One memory across Codex, Claude Code, Hermes Agent and OpenClaw | Released; installed from the registry on a clean machine and proven end to end |
+| Cursor: the same memory, skills, review, take-over and the nightly loop | Released in 1.3; the `cursor-agent` command line proven end to end on a clean Linux machine; the Cursor app on macOS still being proven |
 | Sno Reach, agents talking to each other with no daemon | Installed by `sno setup`; Linux and macOS; proven end to end on a clean Linux machine |
 | The nightly loop and the squad skills | Installed by `sno setup`; the nightly job ran on a clean Linux machine |
 | One-command install | `sno setup` installs everything above; proven on a clean Linux machine |

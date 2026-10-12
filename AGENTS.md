@@ -2,7 +2,7 @@
 
 Instructions for any coding agent working in this repository.
 
-- **What this is.** Sno Station: shared memory, Reach messaging, squad skills and a nightly
+- **What this is.** Sno Station: one memory, Reach messaging, squad skills and a nightly
 improvement loop for Claude Code, Codex and OpenClaw. Read `llms.txt` for the map.
 - **Fixes land here first.** This is the source of truth for the product code. Do not point users
 or docs at any other repository.
