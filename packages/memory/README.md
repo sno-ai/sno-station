@@ -13,7 +13,7 @@ engine, so what one agent learns is there for the next.
 - **Encrypted from first use.** The store is a SQLite database encrypted with a key made once
   on your machine (`@snoai/sqlite-crypto`). Sno never receives your database or your key.
 - **No account, no API key to start.** Local First mode runs fully on your machine; Agent
-  Native and REM Enhanced let a model help with the memory work. REM is how your agents dream: overnight they strengthen their memory and settle what they learned. In REM Enhanced your memory text and lessons go to your own space in Sno's cloud, which works like your own cloud drive: only you can see it, and you can delete it at any time.
+  Native and REM Enhanced let a model help with the memory work. REM is how your agents dream: overnight they strengthen their memory and settle what they learned. In REM Enhanced your memory text and lessons go to your own space in Sno's cloud, which works like your own cloud drive: a Sno program processes it for you alone, and you can delete it at any time.
 - **Eight languages.** English, Chinese (Simplified and Traditional), Japanese, Korean,
   German, French, Spanish and Russian, with each memory stored with its language.
 - **No daemon.** The engine runs as a local service on `127.0.0.1` that the agent plugins
