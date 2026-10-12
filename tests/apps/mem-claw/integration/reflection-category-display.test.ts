@@ -31,7 +31,7 @@ describe("reflection category storage and service display", () => {
 		memClawPlugin.register(harness);
 		cleanups.push(() => harness.stopServices());
 		const recall = harness.getRegisteredTool("memory_recall");
-		const get = harness.getRegisteredTool("memory_get");
+		const get = harness.getRegisteredTool("memory_read");
 		const remember = harness.getRegisteredTool("memory_store");
 		if (!recall || !get || !remember) throw new Error("expected registered host tools");
 		const read = asClawResult(await get.execute("get-lesson", { id: lesson.id }));
