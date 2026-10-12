@@ -22,7 +22,7 @@ across conversations.
 
 ## Get started
 
-1. Follow the [shared memory setup](https://github.com/sno-ai/sno-station/blob/main/docs/memory-setup.md).
+1. Follow the [memory service setup](https://github.com/sno-ai/sno-station/blob/main/docs/memory-setup.md).
    It takes a few minutes and runs once for every agent on the machine. You need Node.js
    22.22.3+, 24.15.0+ or 25.9.0+.
 2. Install the plugin:
@@ -39,9 +39,9 @@ Daily use and troubleshooting: [usage guide](https://github.com/sno-ai/sno-stati
 
 ## Modes
 
-**Local First** (what the shared setup selects) keeps memory work on your machine with no model
-call. **Agent Native** uses the OpenClaw agent's own model, and **REM Enhanced** uses Sno's
-memory models for extraction and conflict checks and the agent's model for the rest. The
+**Local First** (what the memory service setup selects) keeps memory work on your machine with no model
+call. **Agent Native** uses the OpenClaw agent's own model, and **REM Enhanced** adds Sno's own
+memory models to REM, the overnight step where your agents dream: it strengthens their memory and settles what they learned. The agent's model does the rest. In that mode your memory text and lessons go to your own space in Sno's cloud, which works like your own cloud drive: only you can see it, Sno does not touch it, and you can delete or keep it as you like. The
 `recall` and `capture` groups in `~/.sno/settings.json` set recall limits and what gets
 captured. Keep the existing encryption key when you edit it.
 

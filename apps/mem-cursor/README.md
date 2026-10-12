@@ -7,7 +7,7 @@ next one, whichever agent opens it.
 
 ## Get started
 
-1. Follow the [shared memory setup](https://github.com/sno-ai/sno-station/blob/main/docs/memory-setup.md).
+1. Follow the [memory service setup](https://github.com/sno-ai/sno-station/blob/main/docs/memory-setup.md).
 2. Run `sno setup --harness cursor`. It writes Cursor hook entries into `~/.cursor/hooks.json`
    beside any entries other tools wrote there, allows `sno` in the Cursor CLI, and installs the
    `sno-mem-cursor` skill.
