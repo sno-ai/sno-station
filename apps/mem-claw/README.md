@@ -28,7 +28,7 @@ across conversations.
 2. Install the plugin:
 
    ```bash
-   openclaw plugins install @snoai/mem-claw@1.2.10
+   openclaw plugins install @snoai/mem-claw@1.2.11
    ```
 
 3. Restart OpenClaw, tell an agent "Remember that I prefer tabs for indentation", start a new
