@@ -31,6 +31,8 @@ across conversations.
    openclaw plugins install @snoai/mem-claw@1.2.11
    ```
 
+   To upgrade later, run `sno update`; OpenClaw refuses a second `openclaw plugins install` while its gateway is running.
+
 3. Restart OpenClaw, tell an agent "Remember that I prefer tabs for indentation", start a new
    conversation and ask what you prefer.
 
@@ -41,7 +43,7 @@ Daily use and troubleshooting: [usage guide](https://github.com/sno-ai/sno-stati
 
 **Local First** (what the memory service setup selects) keeps memory work on your machine with no model
 call. **Agent Native** uses the OpenClaw agent's own model, and **REM Enhanced** adds Sno's own
-memory models to REM, the overnight step where your agents dream: it strengthens their memory and settles what they learned. Sno's models also write down what matters from each conversation when the session ends. The agent's model does the rest. In that mode your memory text and lessons go to your own space in Sno's cloud, which works like your own cloud drive: only you can see it, Sno does not touch it, and you can delete or keep it as you like. The
+memory models to REM, the overnight step where your agents dream: it strengthens their memory and settles what they learned. Sno's models also write down what matters from each conversation when the session ends. The agent's model does the rest. In that mode your memory text and lessons go to your own space in Sno's cloud, which works like your own cloud drive: a Sno program processes it for you alone, and you can delete or keep it as you like. The
 `recall` and `capture` groups in `~/.sno/settings.json` set recall limits and what gets
 captured. Keep the existing encryption key when you edit it.
 

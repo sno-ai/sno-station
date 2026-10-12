@@ -19,6 +19,8 @@ existing store: it replaces the encryption key and the old memories become unrea
 openclaw plugins install @snoai/mem-claw@1.2.11
 ```
 
+To upgrade later, run `sno update`; OpenClaw refuses a second `openclaw plugins install` while its gateway is running.
+
 `npx @snoai/mem-claw` runs the same install. Its only option is `--profile <name>`, which is
 forwarded to OpenClaw. The plugin starts the memory service from the path recorded by the memory service
 setup; there is no separate start command.

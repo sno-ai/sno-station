@@ -17,6 +17,8 @@
 openclaw plugins install @snoai/mem-claw@1.2.11
 ```
 
+以后升级请运行 `sno update`；OpenClaw 的网关在运行时，会拒绝再次执行 `openclaw plugins install`。
+
 `npx @snoai/mem-claw` 做的是同一次安装，它只有一个选项 `--profile <name>`，会原样传给 OpenClaw。插件会按记忆服务设置记录的路径启动 memory 服务，没有单独的启动命令。
 
 ## 第三步：重启 OpenClaw 并检查
