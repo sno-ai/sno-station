@@ -15,6 +15,7 @@ import { experimentCandidatePoolOverride } from "../../../config/index";
 import {
 	clamp01,
 	DEFAULT_MAX_CONTEXT_TOKENS,
+	EmbeddingError,
 	MAX_AGGREGATION_ROWS,
 	MAX_CANDIDATE_POOL_SIZE,
 	PRECISION_RECALL_POOL_SIZE_FACTOR,
@@ -22,10 +23,18 @@ import {
 	type TraceCollector,
 } from "./retriever-dependencies";
 
-/** A long query would otherwise fail in the embedder's chunker; the keyword search still sees all of it. */
+/**
+ * Ordinary long prose is chunked and averaged by the embedder. Text it cannot cut under the model's limit (a pasted log or hash
+ * dump) is rejected, and would fail the whole recall, so only then is the query cut to the limit; keyword search still sees all of it.
+ */
 async function embedQuery(embedder: MemoryRetrieverInternals["embedder"], query: string): Promise<Float32Array> {
 	await embedder.warmup();
-	return embedder.embed(embedder.truncateToTokens(query, DEFAULT_MAX_CONTEXT_TOKENS));
+	try {
+		return await embedder.embed(query);
+	} catch (error) {
+		if (!(error instanceof EmbeddingError)) throw error;
+		return embedder.embed(embedder.truncateToTokens(query, DEFAULT_MAX_CONTEXT_TOKENS));
+	}
 }
 
 export function buildRemFacetRecallStatement(input: {
