@@ -2,7 +2,7 @@
   "name": "sno-station",
   "private": true,
   "license": "Apache-2.0",
-  "description": "Sno Station - shared memory and tools for AI agents",
+  "description": "Sno Station - one memory and tools for AI agents",
   "workspaces": [
     "apps/*",
     "packages/*",
