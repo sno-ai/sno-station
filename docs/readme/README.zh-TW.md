@@ -5,7 +5,7 @@
 [![license Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-97ca00.svg?labelColor=3b3b3b)](../../LICENSE)
 [![latest release](https://img.shields.io/github/v/release/sno-ai/sno-station?label=release&color=2dd4bf&labelColor=3b3b3b)](https://github.com/sno-ai/sno-station/releases/latest)
 ![runs on your laptop, no daemon](https://img.shields.io/badge/runs%20on-your%20laptop%2C%20no%20daemon-3b82f6.svg?labelColor=3b3b3b)
-![harnesses Codex, Claude Code, Hermes, Cursor, OpenClaw](https://img.shields.io/badge/harnesses-Codex%20%C2%B7%20Claude%20Code%20%C2%B7%20Hermes%20%C2%B7%20Cursor%20%C2%B7%20OpenClaw-f0a04b.svg?labelColor=3b3b3b)
+![harnesses Codex, Claude Code, Hermes, Cursor, OpenClaw](https://img.shields.io/badge/works%20with-Codex%20%C2%B7%20Claude%20Code%20%C2%B7%20Hermes%20%C2%B7%20Cursor%20%C2%B7%20OpenClaw-f0a04b.svg?labelColor=3b3b3b)
 
 <p>
   <img src="../images/agents/codex.png" alt="Codex" title="Codex" width="40" height="40">&nbsp;&nbsp;
@@ -19,24 +19,25 @@
 **Read in other languages:** [English](../../README.md) · [中文](README.zh-CN.md) · [Deutsch](README.de.md) · [Español](README.es.md) · [Français](README.fr.md) · [Русский](README.ru.md) · [한국어](README.ko.md) · [日本語](README.ja.md) · **繁體中文**
 
 Sno Station 把你已經在用的代理人組成一支小隊。Codex、Claude Code、Cursor、Hermes Agent
-和 OpenClaw 共用同一份記憶，互相交接工作，你提出時還會彼此檢查。每天夜裡，
+和 OpenClaw 用同一份記憶，互相交接工作，你提出時還會彼此檢查。每天夜裡，
 它們會回頭檢視這一天，然後變得更好一點。
 
 它在你自己的電腦上運作。安裝一次，之後照你原本的方式工作就好。
 
-**一個用完額度，下一個接手。** 做到一半碰到速率限制，另一個代理人會從共用記憶接手，
+**一個用完額度，下一個接手。** 做到一半碰到速率限制，另一個代理人會從同一份記憶接手，
 上下文完整保留。你不必貼上任何東西。
 
 **需要時，就有人再看一遍。** 任何一個代理人都可以審查另一個的工作。 審查者一定是另一個代理人，所以不會習慣性地
 附和第一個。
 
-**你睡覺的時候，它在進步。** 夜裡它會讀取當天的工作階段，找出一再重複的錯誤，並對代理人
-自己的技能提出修改建議。你早上再來看。在你說可以之前，什麼都不會改動。
+**你的代理人會做夢。** 每天夜裡你睡覺的時候，你的代理人會進入 REM。這個名字取自 Rapid Eye Movement（快速動眼期），也就是人睡眠中大腦加強記憶、把白天學到的東西固定下來的那個階段。我們的 REM 為你的代理人做同樣兩件事。一是加強記憶：跨你所有的對話一起整理，讓它們記住重要的，放下已經不再成立的。二是固化經驗：讀當天的對話，找出反覆出現的錯誤，對代理人自己的技能提出修改建議，讓昨天的失誤變成今天更好的習慣。建議你早上看，你說同意之前什麼都不會變。下文也把它叫作夜間循環。
 
 **一切都屬於你。** 記憶、訊息與技能都存放在你的電腦上。記憶以一把不會離開這台電腦的
 金鑰加密。不需要帳號、伺服器或 daemon。雲端功能是選配，沒有它，產品依然完整。
 
-![運作方式：兩個代理人、一個共用工作區、你會得到的三樣東西](../images/squad-how-it-works.png)
+**REM 如何處理你的資料。** REM 是夜裡把你所有對話中的記憶統一整理的那一步。在 REM Enhanced 模式下，你自己的記憶文字，以及各個代理人學到的經驗，會送到 Sno 雲端屬於你自己的空間，由 Sno 的程式只為你一個人處理。這個空間就像你自己的雲端硬碟：裡面的一切都是你的，只有你自己看得到，Sno 碰不到。你可以進去刪除、可以留著，也可以選擇讓它被處理。不會自動刪除，Sno 也不會把其中任何內容交給任何其他人、公司或帳號。Local First 模式下不會上傳任何記憶文字；Agent Native 模式下，這些工作改由你自己代理人的模型來做。
+
+![運作方式：兩個代理人、一個工作區、你會得到的三樣東西](../images/squad-how-it-works.png)
 
 > **公開開發。** 這個儲存庫從 2026-09-18 起公開。這裡的一切都能運作。
 > 下方每個區塊都會標示最後更新時間。
@@ -76,7 +77,7 @@ Sno onboard
 
 *最後更新於 2026-10-11。* 你喜歡用哪個代理人，就繼續用哪個。會改變的有三件事。
 
-1. **其中一個碰到用量上限。** 在另一個代理人裡輸入 `sno reach call`。它會從共用記憶
+1. **其中一個碰到用量上限。** 在另一個代理人裡輸入 `sno reach call`。它會從同一份記憶
    與信箱接手任務，上下文完整保留。
 2. **你想要多一雙眼睛把關。** 請任一代理人對另一個的成果執行 `peer-review`。審查者
    一定來自另一款代理人。
@@ -87,7 +88,7 @@ Sno onboard
 
 *最後更新於 2026-10-11。* Cursor 加入小隊的方式有兩種：在 macOS 上的 Cursor 應用程式的
 agent 對話裡，以及在 Linux 和 macOS 上的 `cursor-agent` 命令列裡。它和你的其他代理人
-共用同一份記憶。每次對話開始時，會先拿到這個儲存庫的簡短摘要；每個提問會帶上最多三條
+用同一份記憶。每次對話開始時，會先拿到這個儲存庫的簡短摘要；每個提問會帶上最多三條
 Cursor 還沒看過的記憶；每個提問和回覆都會被記住。它讀取同一套技能，可以審查其他代理人，
 也可以被審查；其他代理人額度用完時，它會接手；它的對話也和其他代理人一樣，進入每晚的
 夜間循環。
@@ -169,8 +170,8 @@ Claude Code 的成果。沒有一次審查是空手而回的。我們曾經以�
 
 | 項目 | 狀態 |
 |---|---|
-| Codex、Claude Code、Hermes Agent 與 OpenClaw 之間的共用記憶 | 已發布；已在乾淨的機器上從套件庫安裝，並完成端到端驗證 |
-| Cursor：共用記憶、技能、互相審查、接手和夜間循環 | 1.3 已發布；`cursor-agent` 命令列已在乾淨的 Linux 機器上完成端到端驗證；macOS 上的 Cursor 應用程式仍在驗證中 |
+| Codex、Claude Code、Hermes Agent 與 OpenClaw 之間的同一份記憶 | 已發布；已在乾淨的機器上從套件庫安裝，並完成端到端驗證 |
+| Cursor：同一份記憶、技能、互相審查、接手和夜間循環 | 1.3 已發布；`cursor-agent` 命令列已在乾淨的 Linux 機器上完成端到端驗證；macOS 上的 Cursor 應用程式仍在驗證中 |
 | Sno Reach，代理人之間互相溝通，不需要 daemon | 由 `sno setup` 安裝；支援 Linux 與 macOS；已在乾淨的 Linux 機器上完成端到端驗證 |
 | 夜間循環與小隊技能 | 由 `sno setup` 安裝；夜間任務已在乾淨的 Linux 機器上執行 |
 | 單一指令安裝 | `sno setup` 會裝好以上全部內容；已在乾淨的 Linux 機器上驗證 |

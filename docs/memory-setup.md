@@ -1,4 +1,4 @@
-# Set up the shared memory service for the first release
+# Set up the memory service for the first release
 
 Codex, Claude Code, OpenClaw, and Hermes use the same npm memory service and the same
 `~/.sno/settings.json`. Complete this setup once before installing an agent plugin. The first
