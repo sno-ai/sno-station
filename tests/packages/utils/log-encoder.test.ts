@@ -11,8 +11,8 @@ it("keeps a failed host model call's category and reason readable, and still hid
 });
 
 it("writes the sentence of our own typed errors in plain text, down the cause chain, and still hides other errors' text", () => {
-	class EmbeddingError extends Error { constructor(m: string) { super(m); this.name = "EmbeddingError"; } }
-	class RetrievalError extends Error { constructor(m: string, cause: unknown) { super(m, { cause }); this.name = "RetrievalError"; } }
+	class EmbeddingError extends Error { code = "embedding_error"; constructor(m: string) { super(m); this.name = "EmbeddingError"; } }
+	class RetrievalError extends Error { code = "retrieval_error"; constructor(m: string, cause: unknown) { super(m, { cause }); this.name = "RetrievalError"; } }
 	const own = new RetrievalError("Failed to retrieve memories", new EmbeddingError("Embedder chunk of 693 tokens exceeds DEFAULT_MAX_CONTEXT_TOKENS (512)"));
 	const out = sanitizeLogAttributes({ error: own }) as { error: { message: string; cause: { message: string } } };
 	expect(out.error.message).toBe("Failed to retrieve memories");
@@ -20,4 +20,10 @@ it("writes the sentence of our own typed errors in plain text, down the cause ch
 	const other = sanitizeLogAttributes({ error: new Error("ENOENT /home/someone/private.txt") }) as { error: Record<string, unknown> };
 	expect(other.error["message"]).toBeUndefined();
 	expect(other.error["message_sha256"]).toBeDefined();
+	// A third-party error that only borrows the name stays hidden.
+	const borrowed = Object.assign(new Error("token=abc123 at /home/someone"), { name: "ConfigError" });
+	const hidden = sanitizeLogAttributes({ error: borrowed }) as { error: Record<string, unknown> };
+	expect(hidden.error["message"]).toBeUndefined();
+	const noCode = Object.assign(new Error("token=abc123"), { code: undefined });
+	expect((sanitizeLogAttributes({ error: noCode }) as { error: Record<string, unknown> }).error["message"]).toBeUndefined();
 });
