@@ -9,7 +9,7 @@
     "directory": "packages/memory"
   },
   "type": "module",
-  "description": "One encrypted memory on your machine, shared by every agent you run. The engine behind Sno Station.",
+  "description": "One encrypted memory on your machine, used by every agent you run. The engine behind Sno Station.",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
