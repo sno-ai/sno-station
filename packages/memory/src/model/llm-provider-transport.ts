@@ -87,7 +87,7 @@ async function observeRequest<T>(
 				prompt_template_hash: input.promptTemplateHash ?? "unavailable",
 				extraction_skill_hash: input.extractionSkillHash ?? "unavailable",
 				prompt_template_unavailable_reason: input.promptTemplateHash ? undefined : "caller_does_not_provide_template_identity",
-				config_hash: createHash("sha256").update(JSON.stringify({ ...input, endpoint: route })).digest("hex"),
+				config_hash: createHash("sha256").update(JSON.stringify({ ...input, requestId: undefined, endpoint: route })).digest("hex"),
 				output_cap: input.cap ?? "unavailable", timeout_ms: input.timeout,
 				sampling: { source: Object.keys(input.sampling).length ? "sent" : "unknown", values: input.sampling },
 				in_flight_at_dispatch: inFlight, status_code: diagnostic.status ?? "unavailable",
