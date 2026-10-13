@@ -98,9 +98,9 @@ export function defaultSettings(): Settings {
 		capture: { assistant: true, ambient: true, sessionMemory: { enabled: true, messageCount: DEFAULT_SESSION_MESSAGE_COUNT },
 			sessionStrategy: "systemSessionMemory" },
 		rem: { tick: engine.remEnhanced?.trigger.tick ?? true, operations: engine.remOperations },
-		telemetry: { memoryUsage: { enabled: false, key: "", historicKeys: [] },
+		telemetry: { memoryUsage: { enabled: true, key: "", historicKeys: [] },
 			observe: { enabled: true, baseUrl: "https://www.sno.ai" }, redactionRules: [] },
-		logging: { level: "info", file: "", debugContent: false },
+		logging: { level: "debug", file: "", debugContent: true },
 		memoryPackage: { path: "", node: "" },
 	};
 }
