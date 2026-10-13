@@ -5,6 +5,7 @@ import { loadMemoryTelemetryKeySet, type MemoryTelemetryKeySet } from "./memory-
 import { validateMemoryTelemetryMetadata } from "./memory-telemetry-metadata";
 import {
 	createMemoryTelemetryReceiptService,
+	type MemoryTelemetryReceipt,
 	type MemoryTelemetryReceiptService,
 } from "./memory-telemetry-receipts";
 import type { MemoryTelemetryEventType, MemoryTelemetryMetadata } from "./memory-telemetry-types";
@@ -51,7 +52,7 @@ export interface WriteLifecycleEventInput {
 
 export class MemoryTelemetryEventWriter {
 	private readonly sqlite: SqliteDatabaseLike;
-	private enabled: boolean;
+	private readonly enabled: boolean;
 	private readonly agentId: string;
 	private readonly receiptService: MemoryTelemetryReceiptService | null;
 	private readonly insertReceiptEventStatement: SqliteStatementLike;
@@ -81,14 +82,7 @@ export class MemoryTelemetryEventWriter {
 			this.receiptService = null;
 			return;
 		}
-		// Receipt signing needs an HMAC key. `loadMemoryTelemetryKeySet` throws
-		// when telemetry is enabled but the configured key is absent (a deliberate
-		// fail-closed contract on the loader). Catch it here and degrade to
-		// disabled with a loud warning rather than letting it propagate out of
-		// MemoryStore construction: telemetry receipts are best-effort
-		// tamper-evidence, and a missing key must NOT brick store construction
-		// (and the whole plugin's `register()`). Matches the sno-station-mem rule that
-		// observability wiring never throws into agent code.
+		// Signing is optional; its configuration must never disable event recording.
 		try {
 			const keySet =
 				options.config?.keySet ??
@@ -99,17 +93,16 @@ export class MemoryTelemetryEventWriter {
 					currentKeyVersion: options.config?.currentKeyVersion,
 				});
 			this.receiptService =
-				options.config?.receiptService ?? createMemoryTelemetryReceiptService(keySet);
+				options.config?.receiptService ?? (keySet.current ? createMemoryTelemetryReceiptService(keySet) : null);
 		} catch (error) {
-			log.warn("memory telemetry disabled: receipt key unavailable", {
+			log.warn("memory telemetry signing unavailable; recording unsigned events", {
 				error,
 			}, {
-				event_name: "sno_station_mem.memory-telemetry-events.memory.telemetry.disabled.receipt.key.unavailable",
+				event_name: "memory.telemetry.signing.unavailable",
 				file: "packages/memory/src/engine/telemetry/memory-telemetry-events.ts",
 				function: "<anonymous callback>",
 				site_id: "memory-telemetry-events.<anonymous callback>.23cfef2d08",
 			});
-			this.enabled = false;
 			this.receiptService = null;
 		}
 	}
@@ -117,12 +110,21 @@ export class MemoryTelemetryEventWriter {
 	writeReceiptEvent(input: WriteReceiptEventInput): void {
 		if (!this.enabled) return;
 		const timestampMs = input.timestampMs ?? Date.now();
-		const receipt = this.requireReceiptService().sign({
-			factId: input.factId,
-			contentHash: input.contentHash,
-			timestampMs,
+		let receipt: MemoryTelemetryReceipt | undefined;
+		try {
+			receipt = this.receiptService?.sign({ factId: input.factId, contentHash: input.contentHash, timestampMs });
+		} catch (error) {
+			log.warn("memory telemetry signing failed; recording unsigned event", { error }, {
+				event_name: "memory.telemetry.signing.failed",
+				file: "packages/memory/src/engine/telemetry/memory-telemetry-events.ts",
+				function: "writeReceiptEvent",
+				site_id: "memory.telemetry.signing.failed",
+			});
+		}
+		const metadata = validateMemoryTelemetryMetadata(input.eventType, {
+			...input.metadata,
+			...(input.eventType === "create" ? { receipt_status: receipt ? "signed" : "unsigned" } : {}),
 		});
-		const metadata = validateMemoryTelemetryMetadata(input.eventType, input.metadata);
 		this.insertReceiptEventStatement.run(
 			input.eventType,
 			input.factId,
@@ -132,9 +134,9 @@ export class MemoryTelemetryEventWriter {
 			input.projectId,
 			input.sourceEventId ?? null,
 			input.derivedFrom ? JSON.stringify(input.derivedFrom) : null,
-			receipt.contentHash,
-			receipt.receiptHmac,
-			receipt.keyVersion,
+			input.contentHash,
+			receipt?.receiptHmac ?? null,
+			receipt?.keyVersion ?? null,
 			JSON.stringify(metadata),
 		);
 	}
@@ -162,10 +164,4 @@ export class MemoryTelemetryEventWriter {
 		return row?.id ?? null;
 	}
 
-	private requireReceiptService(): MemoryTelemetryReceiptService {
-		if (!this.receiptService) {
-			throw new Error("memory telemetry receipt service is unavailable");
-		}
-		return this.receiptService;
-	}
 }
