@@ -4,6 +4,8 @@
  */
 
 import { createHash } from "node:crypto";
+import path from "node:path";
+import { RemJobStore } from "./rem-job-store";
 import { open, readFile } from "node:fs/promises";
 import { createLogger } from "@snoai/utils/logger";
 import { withLogContext } from "@snoai/utils/log-context";
@@ -224,8 +226,7 @@ async function evaluateScope(
 	const zone = scopeState.schedule_zone;
 	// At most one automatic pass per local day, whichever trigger comes first (owner ruling
 	// 2026-09-16). `last_volume_pass_date` is the local day whose pass is used up: a completed
-	// volume pass sets it, so does a completed daily pass, a failed pass, and a third pass refused mid-run
-	// (all in applyCompletedBaselines). A used-up
+	// volume pass sets it, so does a completed daily pass, a failed pass, and an exhausted try limit. A used-up
 	// day closes the volume trigger and moves the daily pass to the next day's schedule.
 	const nextDue = nextDailyDue(scopeState);
 	const localDate = localDateAt(now, zone);
@@ -270,6 +271,17 @@ async function evaluateScope(
 	const correlationId = remAutomaticCorrelationId(trigger, scope, triggerKey);
 	const priorAttempts =
 		scopeState.attempts.identity === correlationId ? scopeState.attempts.count : 0;
+	if (priorAttempts >= REM_TRIGGER_ATTEMPT_LIMIT) {
+		await recordDecision(auditStateDir, scope, "skipped", {
+			row: "attempt-limit", trigger, local_date: localDate, correlation_id: correlationId,
+			attempts: priorAttempts,
+		});
+		const nextState = replaceScopeState(state, scope, {
+			...scopeState, last_volume_pass_date: localDate, attempts: { identity: null, count: 0 },
+		});
+		await writeRemTriggerStateAtomic(input.stateDir, nextState);
+		return { state: nextState, dispatched: false };
+	}
 	await recordDecision(auditStateDir, scope, "ok", {
 		row: "dispatch",
 		trigger,
@@ -351,6 +363,33 @@ async function applyCompletedBaselines(
 	triggerStateDir: string,
 	state: RemTriggerStateDocument,
 ): Promise<RemTriggerStateDocument> {
+	const durableCorrelations = new Set<string>();
+	try {
+		const completedJobs = await RemJobStore.readCompletedJobs(path.join(triggerStateDir, "rem-wave-jobs.jsonl"));
+		for (const job of completedJobs) {
+			durableCorrelations.add(job.correlation_id);
+			const current = state.scopes[job.scope];
+			if (!current || !job.correlation_id.startsWith("rem-auto-") || !job.started_at) continue;
+			const localDate = localDateAt(new Date(job.started_at), current.schedule_zone);
+			const measured = job.stats.measured;
+			const completedScope = {
+				...current,
+				last_pass_at: job.started_at > current.last_pass_at ? job.started_at : current.last_pass_at,
+				last_volume_pass_date: localDate > (current.last_volume_pass_date ?? "") ? localDate : current.last_volume_pass_date,
+				...(current.attempts.identity === job.correlation_id ? { attempts: { identity: null, count: 0 } } : {}),
+				...(measured?.pair_cap_binding === false ? { last_covered_count: measured.rows_considered } : {}),
+			};
+			if (JSON.stringify(current) === JSON.stringify(completedScope)) continue;
+			state = replaceScopeState(state, job.scope, completedScope);
+			await writeRemTriggerStateAtomic(triggerStateDir, state);
+		}
+	} catch (error) {
+		log.warn("REM completion jobs could not be read", { error, outcome: "partial" }, {
+			event_name: "sidecar.trigger.completion_jobs.read.failed", file: "packages/memory/src/sidecar/rem-trigger.ts",
+			function: "applyCompletedBaselines", site_id: "sidecar.trigger.completion_jobs.read.failed",
+		});
+	}
+
 	let content: string;
 	try {
 		content = await readAuditTail(getAuditPath(auditStateDir));
@@ -368,7 +407,6 @@ async function applyCompletedBaselines(
 		string,
 		{ scope: string; trigger?: RemAutomaticTrigger; passAt?: string; localDate?: string }
 	>();
-	const triesByCorrelation = new Map<string, number>();
 	let nextState = state;
 	let malformedCount = 0;
 	for (const line of content.split("\n")) {
@@ -395,34 +433,8 @@ async function applyCompletedBaselines(
 				});
 				continue;
 			}
-			if (entry["event"] === "rem_skipped" && typeof correlationId === "string") {
-				const skipped = dispatched.get(correlationId);
-				// Only a pass refused mid-run names the model destination; a restart recovery or a pass with no host
-				// connected skips before any work and does not count toward the day's tries. A failed pass is handled
-				// below.
-				const tries = (triesByCorrelation.get(correlationId) ?? 0) + (typeof details?.["destination"] === "string" ? 1 : 0);
-				triesByCorrelation.set(correlationId, tries);
-				const skippedScopeState = skipped ? nextState.scopes[skipped.scope] : undefined;
-				if (
-					skipped && skippedScopeState && tries >= REM_TRIGGER_ATTEMPT_LIMIT && isLocalDate(skipped.localDate)
-					&& (skippedScopeState.last_volume_pass_date ?? "") < skipped.localDate
-				) {
-					// Every registration re-runs the due check, so a pass its host keeps refusing would be dispatched
-					// again and again, sending the same model calls each time. After the third refusal the day is used up.
-					nextState = replaceScopeState(nextState, skipped.scope, {
-						...skippedScopeState, last_volume_pass_date: skipped.localDate, attempts: { identity: null, count: 0 },
-					});
-				} else if (skipped && skippedScopeState?.attempts.identity === correlationId) {
-					nextState = replaceScopeState(nextState, skipped.scope, {
-						...skippedScopeState, attempts: { identity: null, count: 0 },
-					});
-				}
-				continue;
-			}
 			if (entry["event"] === "rem_failed" && details?.["source"] === "sidecar" && typeof correlationId === "string") {
-				// The sidecar never starts a failed job again for the same pass, so dispatching that pass again runs
-				// nothing and the scope's nightly pass would stop for good. A failed pass uses up its day; the next
-				// day's schedule is a new pass.
+				// A failed sidecar pass uses up its day; the next day's schedule is a new pass.
 				const failed = dispatched.get(correlationId);
 				const failedScopeState = failed ? nextState.scopes[failed.scope] : undefined;
 				if (failed && failedScopeState && isLocalDate(failed.localDate)
@@ -433,7 +445,7 @@ async function applyCompletedBaselines(
 				}
 				continue;
 			}
-			if (entry["event"] !== "rem_completed" || typeof correlationId !== "string") continue;
+			if (entry["event"] !== "rem_completed" || typeof correlationId !== "string" || durableCorrelations.has(correlationId)) continue;
 			const dispatch = dispatched.get(correlationId);
 			if (
 				dispatch === undefined ||
@@ -445,14 +457,14 @@ async function applyCompletedBaselines(
 			const currentScopeState = requiredScopeState(nextState, dispatch.scope);
 			let completedScopeState: RemTriggerScopeState = {
 				...currentScopeState,
-				...(dispatch.trigger === "daily" && isValidInstant(dispatch.passAt)
+				...(dispatch.trigger === "daily" && isValidInstant(dispatch.passAt) && dispatch.passAt > currentScopeState.last_pass_at
 					? { last_pass_at: dispatch.passAt }
 					: {}),
 				// A completed daily pass uses up its local day too, so the volume trigger stays closed.
-				...(dispatch.trigger === "daily" && isLocalDate(dispatch.localDate)
+				...(dispatch.trigger === "daily" && isLocalDate(dispatch.localDate) && dispatch.localDate > (currentScopeState.last_volume_pass_date ?? "")
 					? { last_volume_pass_date: dispatch.localDate }
 					: {}),
-				...(dispatch.trigger === "volume" && isLocalDate(dispatch.localDate)
+				...(dispatch.trigger === "volume" && isLocalDate(dispatch.localDate) && dispatch.localDate > (currentScopeState.last_volume_pass_date ?? "")
 					? { last_volume_pass_date: dispatch.localDate }
 					: {}),
 				...(currentScopeState.attempts.identity === correlationId
@@ -462,6 +474,7 @@ async function applyCompletedBaselines(
 			const measured = asRecord(asRecord(details?.["stats"])?.["measured"]);
 			const rowsConsidered = measured?.["rows_considered"];
 			if (
+				(!isValidInstant(dispatch.passAt) || dispatch.passAt >= currentScopeState.last_pass_at) &&
 				measured?.["pair_cap_binding"] === false &&
 				Number.isInteger(rowsConsidered) &&
 				Number(rowsConsidered) >= 0
