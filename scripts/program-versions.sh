@@ -10,6 +10,6 @@ base=${1:-$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname --no-contai
 if [[ -z $base ]]; then printf '%s\n' "${programs[@]}"; exit 0; fi
 for program in "${programs[@]}"; do
   if git diff --quiet "$base"..HEAD -- "apps/$program" apps/requirements-contract.json \
-    ":(exclude)apps/$program/VERSION" ":(exclude)apps/$program/dist" ":(exclude,glob)apps/$program/**/*.md"; then continue; fi
+    ":(exclude)apps/$program/VERSION" ":(exclude)apps/$program/dist" ":(exclude)apps/$program/README.md" ":(exclude)apps/$program/CHANGELOG.md"; then continue; fi
   if git diff --quiet "$base"..HEAD -- "apps/$program/VERSION"; then echo "$program"; fi
 done

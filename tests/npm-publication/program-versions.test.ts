@@ -51,6 +51,13 @@ it("compares against the previous release when the tag of the release being buil
 	expect(stale()).toEqual(["heartbeat"]);
 });
 
+it("names Reach when only a document that ships in its archive changed", () => {
+	write("apps/reach/guide/agent-reach.md", "new guide\n");
+	write("apps/reach/CHANGELOG.md", "not shipped\n");
+	commit("change the shipped guide");
+	expect(stale()).toEqual(["reach"]);
+});
+
 it("does not name a program whose VERSION went up with the change", () => {
 	write("apps/heartbeat/bin/heartbeat", "echo two\n");
 	write("apps/heartbeat/VERSION", "1.1\n");
