@@ -30,6 +30,7 @@ import {
 } from "../engine/rem/index.js";
 import {
 	appendAuditEntryStrict,
+	compactAuditLog,
 	getAuditPath,
 	getSnoStationMemStateDir,
 } from "../engine/operations/runtime-audit-log";
@@ -721,7 +722,8 @@ async function persistCompletedJob(
 	store: RemJobStore, job: RemJob, stats: RemJobStats,
 ): Promise<CompletionPersistence> {
 	const auditPersisted = await auditRem("rem_completed", job, { stats });
-	await store.transition(job.job_id, { state: "done", finished_at: new Date().toISOString(), stats });
+	try { await store.transition(job.job_id, { state: "done", finished_at: new Date().toISOString(), stats }); }
+	catch (error) { reportSidecarFailure("completion-job-journal", error); }
 	if (store.isPersisted(job.job_id)) return "job_journal";
 	if (auditPersisted) return "completed_audit";
 	reportSidecarFailure("completion-persistence", new Error("completed work has no durable completion receipt"));
@@ -829,6 +831,8 @@ async function recoverInterruptedJobs(
 
 async function readCompletedJobStats(wantedJobs: ReadonlySet<string>): Promise<Map<string, RemJobStats>> {
 	const completed = new Map<string, RemJobStats>();
+	if (wantedJobs.size === 0) return completed;
+	compactAuditLog(getAuditPath(getSnoStationMemStateDir()));
 	for await (const line of readJsonlLines(getAuditPath(getSnoStationMemStateDir()))) {
 		if (line.length === 0) continue;
 		try {
