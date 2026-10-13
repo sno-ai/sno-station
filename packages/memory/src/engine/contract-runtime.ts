@@ -390,13 +390,15 @@ export class MemoryContractRuntime implements MemoryContract {
 			const retrievalSignal = signal ? AbortSignal.any([signal, deadline]) : deadline;
 			const minimum = current === "prompt" ? options.minScore ?? settings.prompt.minScore : 0;
 			const hits = await retrieveForAutoRecall(this.services.retriever, {
-				query: current === "session-start" ? CODING_SKIN_SESSION_QUERY : query, limit, minScore: minimum,
+				// A prompt over-fetches: the similarity filter below drops rows after the cut, and diversity ordering can push the
+				// row that matters behind rows the filter then removes (a just-captured question crowds out the earlier decision).
+				query: current === "session-start" ? CODING_SKIN_SESSION_QUERY : query, limit: current === "prompt" ? limit * 4 : limit, minScore: minimum,
 				scopeFilter: [context.scopePolicy.getDefaultScope()], signal: retrievalSignal,
 				nowMs: Date.now(), sessionId: key,
 			});
 			retrievalSignal.throwIfAborted();
 			// Rank scores include age/importance decay; use query similarity to exclude unrelated nearest neighbours.
-			prepared.push({ hits: current === "prompt" ? hits.filter(hit => hit.denseScore === undefined || hit.denseScore >= 0.5) : hits, cap: cfg.maxChars });
+			prepared.push({ hits: current === "prompt" ? hits.filter(hit => hit.denseScore === undefined || hit.denseScore >= 0.5).slice(0, limit) : hits, cap: cfg.maxChars });
 		}
 		signal?.throwIfAborted();
 		const state = this.recall.injection.get(key) ?? { ids: new Set<string>(), chars: 0 };
