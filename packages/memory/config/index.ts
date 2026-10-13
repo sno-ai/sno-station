@@ -114,12 +114,11 @@ export const MAX_RECALL_TOOL_CANDIDATES = 512;
 export const ARRIVAL_RETIREMENT_CANDIDATE_CAP = 128;
 
 /**
- * How many older live profile and state rows of the project, most similar first, a newly
- * written row is judged against at write time, one conflict-adjudication call per pair (PRD 140
- * REQ-2). A measured correction pair was its subject's most similar pair (0.688 against 0.495–0.618
- * for the others, 2026-09-23); a target outside this cap is left to the REM replace wave.
+ * Total arrival conflict-adjudication calls one capture may cause across all written rows and
+ * windows, including provider retries. Candidates are considered most similar first; targets
+ * outside this cap are left to the REM replace wave.
  */
-export const ARRIVAL_RETIREMENT_JUDGED_CANDIDATE_CAP = 10;
+export const ARRIVAL_RETIREMENT_JUDGED_CANDIDATE_CAP = 3;
 
 /**
  * Measurement-only overrides for the block 210 retrieval-breadth experiment.
