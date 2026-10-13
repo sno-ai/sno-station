@@ -28,13 +28,26 @@ beforeEach(() => {
 afterEach(() => rmSync(repo, { recursive: true, force: true }));
 
 it("names nothing when no program changed since the last release tag", () => {
+	write("notes.txt", "unrelated\n");
+	commit("unrelated change after the release");
 	expect(stale()).toEqual([]);
+});
+
+it("names every program when HEAD is the first release and there is no earlier tag", () => {
+	expect(stale()).toEqual(programs);
 });
 
 it("names a program whose source changed while its VERSION did not", () => {
 	write("apps/heartbeat/bin/heartbeat", "echo two\n");
 	write("apps/reach/README.md", "docs only\n");
 	commit("change heartbeat, document reach");
+	expect(stale()).toEqual(["heartbeat"]);
+});
+
+it("compares against the previous release when the tag of the release being built is already on HEAD", () => {
+	write("apps/heartbeat/bin/heartbeat", "echo two\n");
+	commit("change heartbeat");
+	git("tag", "v1.1.0");
 	expect(stale()).toEqual(["heartbeat"]);
 });
 
