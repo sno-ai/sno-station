@@ -9,7 +9,7 @@ programs=(reach heartbeat report-time subscription-quota-check)
 base=${1:-$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname --no-contains HEAD | head -n 1)}
 if [[ -z $base ]]; then printf '%s\n' "${programs[@]}"; exit 0; fi
 for program in "${programs[@]}"; do
-  git diff --quiet "$base"..HEAD -- "apps/$program" apps/requirements-contract.json \
-    ":(exclude)apps/$program/VERSION" ":(exclude)apps/$program/dist" ":(exclude,glob)apps/$program/**/*.md" && continue
-  git diff --quiet "$base"..HEAD -- "apps/$program/VERSION" && echo "$program"
+  if git diff --quiet "$base"..HEAD -- "apps/$program" apps/requirements-contract.json \
+    ":(exclude)apps/$program/VERSION" ":(exclude)apps/$program/dist" ":(exclude,glob)apps/$program/**/*.md"; then continue; fi
+  if git diff --quiet "$base"..HEAD -- "apps/$program/VERSION"; then echo "$program"; fi
 done

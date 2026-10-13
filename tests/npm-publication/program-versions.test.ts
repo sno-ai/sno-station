@@ -58,6 +58,13 @@ it("does not name a program whose VERSION went up with the change", () => {
 	expect(stale()).toEqual([]);
 });
 
+it("exits cleanly when the last program changed and its VERSION went up", () => {
+	write("apps/subscription-quota-check/bin/subscription-quota-check", "echo two\n");
+	write("apps/subscription-quota-check/VERSION", "1.1\n");
+	commit("change the last program and raise its VERSION");
+	expect(stale()).toEqual([]);
+});
+
 it("names every program when the shared contract changed", () => {
 	write("apps/requirements-contract.json", '{"a":1}\n');
 	commit("change the contract");
