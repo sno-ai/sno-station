@@ -390,15 +390,15 @@ function compactAuditFile(auditPath: string): void {
 	try {
 		writeFileSync(temporary, [...retained, ...openAttempts.values()].sort((a, b) => a.position - b.position).map(record => record.line).join(""), { mode: 0o600 });
 		appendFileSync(temporary, tail);
-		// Another process may have appended since the snapshot; carry those bytes over before the rename.
+		const output = openSync(temporary, "r+");
+		try { fsyncSync(output); } finally { closeSync(output); }
+		// Another process may have appended since the snapshot; carry those bytes over right before the rename.
 		const grown = statSync(auditPath).size;
 		if (grown > size) {
 			const late = Buffer.alloc(grown - size);
 			const source = openSync(auditPath, "r");
 			try { appendFileSync(temporary, late.subarray(0, readSync(source, late, 0, late.length, size))); } finally { closeSync(source); }
 		}
-		const output = openSync(temporary, "r+");
-		try { fsyncSync(output); } finally { closeSync(output); }
 		renameSync(temporary, auditPath);
 	} finally { rmSync(temporary, { force: true }); }
 }
