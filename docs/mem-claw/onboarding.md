@@ -16,7 +16,7 @@ existing store: it replaces the encryption key and the old memories become unrea
 ## Step 2: install the plugin
 
 ```bash
-openclaw plugins install @snoai/mem-claw@1.2.13
+openclaw plugins install @snoai/mem-claw@1.2.14
 ```
 
 To upgrade later, run `sno update`; OpenClaw refuses a second `openclaw plugins install` while its gateway is running.
