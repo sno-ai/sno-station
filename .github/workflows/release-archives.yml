@@ -72,6 +72,12 @@ jobs:
           ref: ${{ inputs.source_sha || github.sha }}
           fetch-depth: 0
           persist-credentials: false
+      - name: Every program changed since the last release has a new VERSION
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          # An archive is named after its VERSION, and an archive an earlier release already has is carried over unchanged.
+          stale=$(bash scripts/program-versions.sh)
+          [ -z "$stale" ] || { echo "::error::Raise the VERSION of: $stale"; exit 1; }
       - name: Build heartbeat, report-time and subscription-quota-check
         run: |
           sudo apt-get update -qq && sudo apt-get install -y -qq jq
