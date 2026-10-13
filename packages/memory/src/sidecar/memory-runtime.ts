@@ -95,6 +95,7 @@ export class MemoryRuntimePool {
 	private modelReady = false;
 	modelPreparationError: string | undefined;
 	private modelPreparation: Promise<void> | undefined;
+	private replayingCaptures = false;
 	private readonly usageOutbox: MemoryTelemetryUsageOutbox;
 	private constructor(
 		readonly storePath: string,
@@ -106,6 +107,15 @@ export class MemoryRuntimePool {
 	) {
 		this.usageOutbox = new MemoryTelemetryUsageOutbox({ sqlite: store.sqlite, dbPath: storePath });
 		store.sqlite.exec("CREATE TABLE IF NOT EXISTS pending_captures (id TEXT PRIMARY KEY, skin_id TEXT NOT NULL, request TEXT NOT NULL)");
+		const columns = store.sqlite.prepare("PRAGMA table_info(pending_captures)").all() as Array<{ name: string }>;
+		if (!columns.some(column => column.name === "attempt_count"))
+			store.sqlite.exec("ALTER TABLE pending_captures ADD COLUMN attempt_count INTEGER NOT NULL DEFAULT 0");
+		// SQLite mutating statements return their affected-row count.
+		const { changes: pruned } = store.sqlite.prepare("DELETE FROM pending_captures WHERE id IN (SELECT id FROM pending_captures ORDER BY rowid DESC LIMIT -1 OFFSET 1000)").run() as { changes: number };
+		if (pruned) log.warn("Pending capture backlog exceeded capacity; oldest captures removed", { removed_count: pruned, rejection_reason: "capacity" }, {
+			event_name: "memory.sidecar.pending_capture.pruned", file: "packages/memory/src/sidecar/memory-runtime.ts",
+			function: "constructor", site_id: "memory.sidecar.pending_capture.pruned",
+		});
 	}
 
 	private async prepareModel(): Promise<void> {
@@ -125,20 +135,27 @@ export class MemoryRuntimePool {
 	}
 
 	private async replayPendingCaptures(): Promise<void> {
-		const rows = this.store.sqlite.prepare("SELECT id, skin_id, request FROM pending_captures ORDER BY rowid").all() as Array<{ id: string; skin_id: string; request: string }>;
-		for (const row of rows) {
-			try {
-				const result = await this.invoke("capture", JSON.parse(row.request), row.skin_id);
-				if (!result.degraded && "committed" in result && (result.committed || result.skipped || result.partial))
-					this.store.sqlite.prepare("DELETE FROM pending_captures WHERE id = ?").run(row.id);
-				else throw new Error("Pending capture was not completed");
-			} catch (error) {
-				log.error("Pending capture failed", { error }, {
-					event_name: "memory.sidecar.pending_capture.failed", file: "packages/memory/src/sidecar/memory-runtime.ts",
-					function: "replayPendingCaptures", site_id: "memory.sidecar.pending_capture.failed",
-				});
+		if (this.replayingCaptures) return;
+		this.replayingCaptures = true;
+		try {
+			const rows = this.store.sqlite.prepare("SELECT id, skin_id, request, attempt_count FROM pending_captures WHERE attempt_count < 3 ORDER BY rowid").all() as Array<{ id: string; skin_id: string; request: string; attempt_count: number }>;
+			for (const row of rows) {
+				const { changes } = this.store.sqlite.prepare("UPDATE pending_captures SET attempt_count = attempt_count + 1 WHERE id = ? AND attempt_count < 3").run(row.id) as { changes: number };
+				if (!changes) continue;
+				try {
+					const result = await this.invoke("capture", JSON.parse(row.request), row.skin_id);
+					if (!result.degraded && "committed" in result && (result.committed || result.skipped || result.partial))
+						this.store.sqlite.prepare("DELETE FROM pending_captures WHERE id = ?").run(row.id);
+					else throw new Error("Pending capture was not completed");
+				} catch (error) {
+					const parked = row.attempt_count + 1 >= 3;
+					log.error(parked ? "Pending capture parked after three failed attempts" : "Pending capture failed", { error, attempt_count: row.attempt_count + 1 }, {
+						event_name: parked ? "memory.sidecar.pending_capture.parked" : "memory.sidecar.pending_capture.failed", file: "packages/memory/src/sidecar/memory-runtime.ts",
+						function: "replayPendingCaptures", site_id: parked ? "memory.sidecar.pending_capture.parked" : "memory.sidecar.pending_capture.failed",
+					});
+				}
 			}
-		}
+		} finally { this.replayingCaptures = false; }
 	}
 
 	static async open(): Promise<MemoryRuntimePool> {
@@ -180,7 +197,7 @@ export class MemoryRuntimePool {
 			observe: { ...this.config.observe, agentId: isObserveAgentId(registration.skinId)
 				? observeAgentId(registration.skinId) : this.config.observe.agentId } };
 		let entry: SkinRuntime;
-		const agentPort = new RegisteredAgentPort(registration.model, () => { entry.connected = false; });
+		const agentPort = new RegisteredAgentPort(registration.model);
 		const observability = new PluginObservability(config, this.stateDir, engineLogger, {}, this.settings.telemetry.redactionRules);
 		const embedder = new ObservableEmbedder(config.embedding, this.stateDir, observability, observeSessionUuid);
 		const retriever = new ObservableMemoryRetriever(this.store, embedder, engineLogger, { ...DEFAULT_RETRIEVAL_CONFIG, ...config.retrieval }, observability, observeSessionUuid, config.embedding);
@@ -225,8 +242,8 @@ export class MemoryRuntimePool {
 
 	connectedRemPort(): AgentLlmPort | undefined {
 		// Coding-agent workers leave after a few idle minutes and new ones register; a pass outlives several. Each
-		// call goes to the newest registration still there; a host that has gone, or answers with an error such as
-		// worker-not-ready, hands the call to the next.
+		// call tries the newest registered endpoint; reachability and completion check it afresh, so a
+		// temporary disconnect does not exclude a recovered host. An error hands the call to the next.
 		const hosts = () => [...this.skins.values()].reverse().filter(entry => entry.connected);
 		return hosts().length === 0 ? undefined : hostChain(hosts);
 	}
@@ -270,6 +287,15 @@ export class MemoryRuntimePool {
 			const request = JSON.stringify(capture);
 			const existing = this.store.sqlite.prepare("SELECT request FROM pending_captures WHERE id = ?").get(id) as { request: string } | undefined;
 			if (existing && existing.request !== request) throw new Error("Pending capture identity reused with different content");
+			if (!existing) {
+				const { count } = this.store.sqlite.prepare("SELECT COUNT(*) AS count FROM pending_captures").get() as { count: number };
+				const removed = count >= 1000
+					? this.store.sqlite.prepare("DELETE FROM pending_captures WHERE rowid = (SELECT rowid FROM pending_captures WHERE attempt_count >= 3 ORDER BY rowid LIMIT 1)").run() as { changes: number }
+					: undefined;
+				if (count >= 1000 && !removed?.changes)
+					return { degraded: true, reason: "engine-failed", error: "Pending capture capacity exhausted",
+						turnId: capture.turn.turnId, committed: false, accepted: false };
+			}
 			this.store.sqlite.prepare("INSERT OR IGNORE INTO pending_captures (id, skin_id, request) VALUES (?, ?, ?)")
 				.run(id, skinId, request);
 			return { degraded: false, turnId: capture.turn.turnId, committed: false, accepted: true };
@@ -309,6 +335,12 @@ export class MemoryRuntimePool {
 		try {
 			const call = () => observeSession.run({ uuid, entry }, () => withProviderResponses(responses, () => this.call(entry, method, body, signal)));
 			const result = parseOutput(method, await entry.agentPort.run(call, method === "capture"));
+			// The backlog replays in the background: a capture's caller waits for its own turn only.
+			if (method === "capture" && !result.degraded && "committed" in result && (result.committed || result.skipped || result.partial))
+				void this.replayPendingCaptures().catch((error: unknown) => log.error("Pending capture failed", { error }, {
+					event_name: "memory.sidecar.pending_capture.failed", file: "packages/memory/src/sidecar/memory-runtime.ts",
+					function: "invoke", site_id: "memory.sidecar.pending_capture.replay.failed",
+				}));
 			if (method === "onSessionEnd") {
 				// Usage from the closing call must be tallied before the session's cost is summed.
 				await this.emitProviderUsage(entry, scope, responses.splice(0));
@@ -388,7 +420,7 @@ export class MemoryRuntimePool {
 					continue;
 				}
 				await entry.observability.emit({ eventType: "llm.call", sessionUuid: scope.host?.observeSessionUuid,
-					payload: { call_id: response.callId, destination: response.destination, model: `${response.provider}:${response.model}`, prompt_tokens: response.usage.inputTokens,
+					payload: { model: `${response.provider}:${response.model}`, prompt_tokens: response.usage.inputTokens,
 						completion_tokens: response.usage.outputTokens, token_source: "plugin_internal_paid",
 						latency_ms: Math.max(0, Math.round(response.durationMs ?? 0)), cache_read_tokens: 0, cache_write_tokens: 0 } });
 			}
@@ -399,6 +431,7 @@ export class MemoryRuntimePool {
 	/** The local memory event rows written since the last sync go up as `memory.telemetry` batches. */
 	private async forwardTelemetry(entry: SkinRuntime, sessionUuid: string): Promise<void> {
 		await entry.observability.trackBestEffort("memory telemetry", async () => {
+			await this.usageOutbox.flushPendingAsync();
 			const result = await forwardMemoryTelemetryToObserve({
 				sqlite: this.store.sqlite,
 				observe: { tryEmit: (input) => entry.observability.tryEmit({ ...input, sessionUuid }) },
