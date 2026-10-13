@@ -13,8 +13,8 @@
     },
     "E3": {
       "local-first": "off",
-      "agent-native": "host",
-      "rem-enhanced": "sno-gpu"
+      "agent-native": "off",
+      "rem-enhanced": "off"
     },
     "E4": {
       "local-first": "off",
@@ -226,7 +226,7 @@
   },
   "telemetry": {
     "memoryUsage": {
-      "enabled": false,
+      "enabled": true,
       "key": "",
       "historicKeys": []
     },
@@ -237,9 +237,9 @@
     "redactionRules": []
   },
   "logging": {
-    "level": "info",
+    "level": "debug",
     "file": "",
-    "debugContent": false
+    "debugContent": true
   },
   "memoryPackage": {
     "path": "",
