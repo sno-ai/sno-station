@@ -23,9 +23,10 @@ export interface Logger {
 	fatal(body: string, attributes: unknown, source: LogSource): boolean;
 }
 
-const DEFAULT_LEVEL: LogLevel = "info";
+const DEFAULT_LEVEL: LogLevel = "debug";
 const LOG_DIRECTORY = "logs";
 let configuration: LoggerConfiguration | undefined;
+let runtimeLevel: LogLevel | undefined;
 let ordinarySink: LogFileSink | undefined;
 const additionalSinks = new Set<LogFileSink>();
 let fileStatus: { destination: string | null; reason: string | null } = {
@@ -34,7 +35,11 @@ let fileStatus: { destination: string | null; reason: string | null } = {
 const reported = new Set<string>();
 
 export function effectiveLogLevel(): LogLevel {
-	return configuration?.level ?? DEFAULT_LEVEL;
+	return runtimeLevel ?? configuration?.level ?? DEFAULT_LEVEL;
+}
+
+export function setLogLevel(level: LogLevel): void {
+	runtimeLevel = level;
 }
 
 function resource(): LogResource {
