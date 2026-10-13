@@ -9,7 +9,7 @@
 import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir, userInfo } from "node:os";
+import { homedir, userInfo } from "node:os";
 import { basename, join, resolve } from "node:path";
 import { connect, type MemoryClient } from "../../../packages/memory/src/contract/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -34,7 +34,9 @@ let client: MemoryClient;
 const previousProfile = process.env.SNO_PROFILE_DIR;
 
 beforeEach(async () => {
-	root = mkdtempSync(join(tmpdir(), "mem-claude-boundary-"));
+	// Hooks ignore sessions under the temporary directory, so the workspace lives under the home cache.
+	mkdirSync(join(homedir(), ".cache"), { recursive: true });
+	root = mkdtempSync(join(homedir(), ".cache", "mem-claude-boundary-"));
 	// A workspace outside any git repository, so workspaceRoot() keeps it as the project path.
 	workspace = join(root, "billing-service");
 	mkdirSync(workspace);
