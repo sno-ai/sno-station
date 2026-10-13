@@ -7,7 +7,7 @@ import { postToolUse, preToolUse, sessionEnd, sessionStart, stop, userPromptSubm
 import { installCodex, uninstallCodex } from "./install.js";
 import { importRepository, importUser } from "./import.js";
 import { MESSAGES } from "./messages.js";
-import { workspaceRoot } from "./scope.js";
+import { isScriptedSession, isTemporaryDirectory, workspaceRoot } from "./scope.js";
 import { runWorker } from "./worker.js";
 
 async function readStdin(): Promise<unknown> {
@@ -22,30 +22,40 @@ function option(args: string[], name: string): string | undefined {
 	return index >= 0 ? args[index + 1] : undefined;
 }
 
+const HOOK_COMMANDS = ["session-start", "user-prompt-submit", "stop", "session-end", "pre-tool-use", "post-tool-use"];
+
 async function main(): Promise<number> {
 	const [command, ...args] = process.argv.slice(2);
+	const input = HOOK_COMMANDS.includes(command ?? "") ? await readStdin() : undefined;
+	// Scripted runs (a temporary directory, `codex exec`, `--ephemeral` with no transcript) are not conversations; the
+	// real-agent release journeys set SNO_CAPTURE_SCRIPTED=1 to be recorded anyway. Measured 2026-10-13: 184 of 283 queued turns.
+	if (input && process.env["SNO_CAPTURE_SCRIPTED"] !== "1" && typeof input === "object") {
+		const { cwd, transcript_path: transcript } = input as { cwd?: unknown; transcript_path?: unknown };
+		if (typeof cwd === "string" && isTemporaryDirectory(cwd)) return 0;
+		if (transcript === null || (typeof transcript === "string" && isScriptedSession(transcript))) return 0;
+	}
 	if (command === "session-start") {
-		process.stdout.write(`${await sessionStart(await readStdin())}\n`);
+		process.stdout.write(`${await sessionStart(input)}\n`);
 		return 0;
 	}
 	if (command === "user-prompt-submit") {
-		process.stdout.write(`${await userPromptSubmit(await readStdin())}\n`);
+		process.stdout.write(`${await userPromptSubmit(input)}\n`);
 		return 0;
 	}
 	if (command === "stop") {
-		await stop(await readStdin());
+		await stop(input);
 		return 0;
 	}
 	if (command === "session-end") {
-		await sessionEnd(await readStdin());
+		await sessionEnd(input);
 		return 0;
 	}
 	if (command === "pre-tool-use") {
-		await preToolUse(await readStdin());
+		await preToolUse(input);
 		return 0;
 	}
 	if (command === "post-tool-use") {
-		await postToolUse(await readStdin());
+		await postToolUse(input);
 		return 0;
 	}
 	if (command === "worker") {
