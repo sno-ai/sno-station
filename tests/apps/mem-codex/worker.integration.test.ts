@@ -223,7 +223,7 @@ describe("mem-codex worker", () => {
 		expect(await readdir(spoolDirectory())).toEqual([]);
 	});
 
-	it("keeps the head record, counts three failures, and never retries a terminal record", async () => {
+	it("deletes the head record after three failures and never retries it", async () => {
 		await profile();
 		const path = await spool("0001.json", "one");
 		const fixture = dependencies({ failCapture: true });
@@ -234,7 +234,7 @@ describe("mem-codex worker", () => {
 		logged.mockRestore();
 		expect(failures.map(line => JSON.parse(line))).toEqual([1, 2, 3].map(attempt =>
 			expect.objectContaining({ event: "capture-failed", turnId: "one", attempt, error: expect.stringMatching(/\S/) })));
-		expect(JSON.parse(await readFile(path, "utf8"))).toMatchObject({ attempts: 3, state: "failed" });
+		expect(existsSync(path)).toBe(false);
 		expect(await runWorker(fixture.deps)).toBe("drained");
 		expect(fixture.captures).toEqual(["one", "one", "one"]);
 	});
@@ -249,7 +249,8 @@ describe("mem-codex worker", () => {
 
 		await runWorker(fixture.deps);
 
-		expect(JSON.parse(await readFile(first, "utf8"))).toMatchObject({ attempts: 3, state: "failed" });
+		expect(existsSync(first)).toBe(false);
+		expect(fixture.captures).toEqual(["one", "one", "one", "two"]);
 		expect(existsSync(second)).toBe(false);
 	});
 
@@ -283,23 +284,23 @@ describe("mem-codex worker", () => {
 		expect(existsSync(path)).toBe(false);
 	});
 
-	it("relays a typed child transport failure with HTTP 503 and keeps the record", async () => {
+	it("relays a typed child transport failure with HTTP 503 and deletes the exhausted record", async () => {
 		await profile();
 		const path = await spool("0001.json", "one");
 		const fixture = dependencies({ childFailure: true });
 		expect(await runWorker(fixture.deps)).toBe("drained");
 		expect(fixture.callbackStatus).toBe(503);
 		expect(fixture.callbackBody).toEqual({ error: { kind: "error", category: "transport", message: "codex-exit-9" } });
-		expect(JSON.parse(await readFile(path, "utf8"))).toMatchObject({ attempts: 3, state: "failed" });
+		expect(existsSync(path)).toBe(false);
 	});
 
-	it("keeps a capture that completed without committing or deliberately skipping", async () => {
+	it("deletes a capture after three attempts without committing or deliberately skipping", async () => {
 		await profile();
 		const path = await spool("0001.json", "unavailable");
 		const fixture = dependencies({ captureCommitted: false });
 		expect(await runWorker(fixture.deps)).toBe("drained");
 		expect(fixture.captures).toEqual(["unavailable", "unavailable", "unavailable"]);
-		expect(JSON.parse(await readFile(path, "utf8"))).toMatchObject({ attempts: 3, state: "failed" });
+		expect(existsSync(path)).toBe(false);
 	});
 
 	it("paces consecutive import children and records committed blocks", async () => {
