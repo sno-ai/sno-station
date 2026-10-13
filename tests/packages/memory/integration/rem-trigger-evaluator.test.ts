@@ -31,6 +31,7 @@ import {
 	loadRemTriggerState,
 	writeRemTriggerStateAtomic,
 } from "../../../../packages/memory/src/sidecar/rem-trigger-state.ts";
+import { RemJobStore } from "../../../../packages/memory/src/sidecar/rem-job-store.ts";
 import { createTestDb, type TestDb } from "../../../apps/mem-claw/helpers/test-db.ts";
 
 type AuditRow = {
@@ -57,7 +58,7 @@ describe("REM automatic trigger", () => {
 		server = undefined;
 	});
 
-	it("dispatches due work with tick=true and keeps retrying after three failures", async () => {
+	it("gateway dispatch failure across registrations stops after three attempts", async () => {
 		const fixture = createFixture(1);
 		const requests: Array<{ body: unknown; correlationId: string }> = [];
 		const discoveryPath = await startSidecar(requests, 500);
@@ -66,12 +67,53 @@ describe("REM automatic trigger", () => {
 		for (let index = 0; index < 4; index++) await evaluateRemAutomaticTriggers({ modelCalls,
 			database: fixture.database.runtime.db, stateDir: fixture.stateDir, requestedOperations: ["rem-update"],
 			now: new Date("2026-08-12T12:00:00.000Z"), tickEnabled: true, discoveryPath });
-		expect(requests).toHaveLength(4);
+		expect(requests).toHaveLength(3);
 		expect(requests.map(request => (request.body as { types: unknown }).types)).toEqual([
-			["rem-update"], ["rem-update"], ["rem-update"], ["rem-update"],
+			["rem-update"], ["rem-update"], ["rem-update"],
 		]);
 		expect((await loadRemTriggerState(fixture.stateDir)).scopes[fixture.scope]?.last_pass_at).toBe("2026-08-11T12:00:00.000Z");
 	});
+	it("failed job permits the same request again after journal reload on the next day", async () => {
+		const directory = temporaryDirectory("rem-failed-job-");
+		const journal = path.join(directory, "rem-wave-jobs.jsonl");
+		const jobs = await RemJobStore.open(journal);
+		const first = await jobs.createQueued(["rem-update"], "persona:retry", "same-request");
+		await jobs.transition(first.job.job_id, { state: "failed", finished_at: "2026-08-12T12:00:00.000Z", error: "model unavailable" });
+		const reopened = await RemJobStore.open(journal);
+		const next = await reopened.createQueued(["rem-update"], "persona:retry", "same-request");
+		expect({ created: next.created, state: next.job.state, finished: next.job.finished_at }).toEqual({ created: true, state: "queued", finished: null });
+		await reopened.transition(next.job.job_id, { state: "running", started_at: "2026-08-13T03:00:00.000Z" });
+		expect(reopened.get(next.job.job_id)?.started_at).toBe("2026-08-13T03:00:00.000Z");
+	});
+
+	it("completion in the audit tail closes both triggers without the earlier dispatch row", async () => {
+		const fixture = createFixture(101);
+		const requests: Array<{ body: unknown; correlationId: string }> = [];
+		const discoveryPath = await startSidecar(requests, 202);
+		await seedState(fixture, { last_pass_at: "2026-08-11T12:00:00.000Z", schedule_zone: "UTC", last_covered_count: 1,
+			last_volume_pass_date: null, missed_window: null, attempts: { identity: null, count: 0 } });
+		await evaluateRemAutomaticTriggers({ modelCalls, database: fixture.database.runtime.db, stateDir: fixture.stateDir,
+			requestedOperations: ["rem-update"], now: new Date("2026-08-12T12:00:00.000Z"), discoveryPath });
+		const store = await RemJobStore.open(path.join(fixture.stateDir, "rem-wave-jobs.jsonl"));
+		const queued = await store.createQueued(["rem-update"], fixture.scope, requests[0]?.correlationId ?? "missing");
+		await store.transition(queued.job.job_id, { state: "done", started_at: "2026-08-12T12:00:00.000Z", finished_at: "2026-08-12T12:01:00.000Z",
+			stats: { operations: 0, measured: { rows_considered: 101, pair_cap_binding: true, model_calls: 1, model_tokens: 1, wall_ms: 1 } } });
+		appendFileSync(path.join(fixture.stateDir, "audit.jsonl"), "x".repeat(17 * 1024 * 1024) + "\n");
+		appendTerminalAudit(fixture.stateDir, "rem_completed", fixture.scope, requests[0]?.correlationId);
+		await evaluateRemAutomaticTriggers({ modelCalls, database: fixture.database.runtime.db, stateDir: fixture.stateDir,
+			requestedOperations: ["rem-update"], now: new Date("2026-08-12T13:00:00.000Z"), discoveryPath });
+		expect(requests).toHaveLength(1);
+		expect((await loadRemTriggerState(fixture.stateDir)).scopes[fixture.scope]?.last_volume_pass_date).toBe("2026-08-12");
+		const olderCorrelation = remAutomaticCorrelationId("volume", fixture.scope, "2026-08-11");
+		appendFileSync(path.join(fixture.stateDir, "audit.jsonl"), JSON.stringify({ event: "rem_trigger_evaluated", scope: fixture.scope,
+			details: { row: "dispatch", trigger: "volume", pass_at: "2026-08-11T12:00:00.000Z", local_date: "2026-08-11", correlation_id: olderCorrelation } }) + "\n");
+		appendTerminalAudit(fixture.stateDir, "rem_completed", fixture.scope, olderCorrelation);
+		await evaluateRemAutomaticTriggers({ modelCalls, database: fixture.database.runtime.db, stateDir: fixture.stateDir,
+			requestedOperations: ["rem-update"], now: new Date("2026-08-12T14:00:00.000Z"), discoveryPath });
+		expect(requests).toHaveLength(1);
+		expect((await loadRemTriggerState(fixture.stateDir)).scopes[fixture.scope]?.last_volume_pass_date).toBe("2026-08-12");
+	});
+
 	it("pauses due work with tick=false and dispatches on the next enabled evaluation", async () => {
 		const fixture = createFixture(1);
 		const requests: Array<{ body: unknown; correlationId: string }> = [];
@@ -265,10 +307,11 @@ describe("REM automatic trigger", () => {
 		});
 	});
 
-	it("closes the day after three passes refused mid-run, but not after skips that never started the pass", async () => {
+	it("closes the day after three skipped passes, whether refused mid-run or skipped before starting", async () => {
 		// A pass refused by its host has already re-embedded every row; retrying it on every registration pinned
-		// every core of a workstation all day. A skip for "no host model connected" (or a restart recovery) did no work.
-		for (const [destination, closed] of [[undefined, false], ["host", true]] as const) {
+		// every core of a workstation all day. A skip before starting costs no model call, but a host that stays
+		// registered without answering would be dispatched again on every evaluation.
+		for (const destination of [undefined, "host"] as const) {
 			const fixture = createFixture(1);
 			const requests: Array<{ body: unknown; correlationId: string }> = [];
 			const discoveryPath = await startSidecar(requests, 202);
@@ -289,7 +332,7 @@ describe("REM automatic trigger", () => {
 			}
 			await evaluate();
 			expect({ destination, dispatched: requests.length, closedDay: (await loadRemTriggerState(fixture.stateDir)).scopes[fixture.scope]?.last_volume_pass_date })
-				.toEqual({ destination, dispatched: closed ? 3 : 4, closedDay: closed ? "2026-08-12" : null });
+				.toEqual({ destination, dispatched: 3, closedDay: "2026-08-12" });
 			await new Promise<void>((resolve) => server?.close(() => resolve()));
 			server = undefined;
 		}
