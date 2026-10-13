@@ -51,6 +51,36 @@ Consent values are `off`, `metadata-only`, and `full`. `off` keeps emitted event
 
 ## API
 
+### Remote diagnostic logging
+
+Detailed operational logs default to `debug`. The event server can return this optional
+field in a successful response from `POST /api/v1/events`:
+
+```json
+{"receipt_id":"accepted-event-id","logging":{"level":"info"}}
+```
+
+`info` stops debug messages while retaining ordinary operation records, warnings and
+errors. Return `debug` to enable detailed logs again. Only those two values are accepted.
+This setting does not change memory event recording, content previews, evaluation
+traces, or upload consent.
+
+The receiver updates the current process immediately and saves only `logging.level`
+in the existing profile's `settings.json`, preserving its other fields. Restarted
+clients use the saved setting. Other running processes apply it when they receive
+the same server setting through their own upload response, or when they restart.
+The server should include its current choice in every successful event response.
+Without a setting in the response, the client keeps its current choice. Offline
+clients receive changes on their next successful upload; there is no automatic
+three-month expiry or separate polling connection.
+
+A settings-write failure is logged and does not turn an accepted upload into a
+retry; the new level still applies to the receiving process. The server response
+field is the integration contract; an operator dashboard and server-side rollout
+are not provided by this package.
+
+### Methods
+
 - `snoObserve.emit(event)`
 - `snoObserve.flush({ force })`
 - `snoObserve.consent.get()` / `snoObserve.consent.set(value, reason)`
