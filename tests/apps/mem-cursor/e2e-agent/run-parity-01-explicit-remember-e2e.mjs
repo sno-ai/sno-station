@@ -2,11 +2,12 @@ import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
-import { homedir, tmpdir } from "node:os";
+import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { writeSettingsFixture } from "../../../packages/memory/fixtures/settings-file-fixture.ts";
 import { globalPrefixWith, realSno } from "../../support/real-sno.mjs";
+import { cleanupProfile } from "../../support/profile-cleanup.mjs";
 
 const repo = fileURLToPath(new URL("../../../../", import.meta.url));
 const installedPrefix = process.env.SNO_INSTALLED_PREFIX;
@@ -25,16 +26,23 @@ function processRun(command, args, options = {}) {
 		child.stderr.on("data", chunk => { stderr += chunk; });
 		const timeout = setTimeout(() => {
 			stderr += "\nNative test process exceeded its declared deadline.";
-			try { process.kill(-child.pid, "SIGTERM"); } catch { /* Already exited. */ }
+			try { process.kill(-child.pid, "SIGKILL"); } catch { /* Already exited. */ }
 		}, options.timeoutMs ?? 240_000);
 		child.on("error", error => { clearTimeout(timeout); resolveRun({ code: null, stdout, stderr: `${stderr}\n${error.message}` }); });
+		child.on("exit", () => { try { process.kill(-child.pid, "SIGKILL"); } catch (error) { if (error.code !== "ESRCH") stderr += `\nProcess cleanup failed: ${error.message}`; } });
 		child.on("close", code => { clearTimeout(timeout); resolveRun({ code, stdout, stderr }); });
 		child.stdin.on("error", () => {}); child.stdin.end(options.input ?? "");
 	});
 }
 
 async function rememberJourney() {
-	const profile = mkdtempSync(join(tmpdir(), "mem-update-cursor-native-"));
+	// Hooks ignore sessions under the temporary directory, so the project lives under the home cache.
+	mkdirSync(join(homedir(), ".cache"), { recursive: true });
+	const profile = mkdtempSync(join(homedir(), ".cache", "mem-update-cursor-native-"));
+	const previousProfile = process.env.SNO_PROFILE_DIR;
+	process.env.SNO_PROFILE_DIR = profile;
+	let prefix;
+	try {
 	let embedding = { cacheDir: "" };
 	try { embedding = JSON.parse(readFileSync(join(homedir(), ".sno/settings.json"), "utf8")).embedding; }
 	catch (error) { if (error.code !== "ENOENT") throw error; }
@@ -46,11 +54,10 @@ async function rememberJourney() {
 	});
 	const project = join(profile, "repo");
 	const sno = realSno();
-	const prefix = globalPrefixWith({ "@snoai/mem-cursor": dirname(dirname(entry)) });
+	prefix = globalPrefixWith({ "@snoai/mem-cursor": dirname(dirname(entry)) });
 	const env = { ...process.env, SNO_PROFILE_DIR: profile, npm_config_prefix: prefix };
 	const proof = { host: "local", profile, project, database: settings.store.path, checks: {}, passed: false };
 	let client;
-	let failure;
 	try {
 		assert.equal((await processRun("git", ["init", "-q", project], { env })).code, 0);
 		const { connect } = await import(installedMemory
@@ -114,9 +121,15 @@ async function rememberJourney() {
 		assert.ok(records.length >= 2, `Expected a conversation record per Cursor session, found ${records.length}`);
 		proof.checks.conversationRecords = records.length;
 		proof.passed = true;
-	} catch (error) { failure = error; proof.failure = error.message; process.exitCode = 1; }
-	if (client) process.kill(client.pid, "SIGTERM");
+	} catch (error) { proof.failure = error.message; process.exitCode = 1; }
 	console.log(JSON.stringify({ passed: proof.passed, failure: proof.failure, checks: proof.checks, profile }));
+	} finally {
+		try { await cleanupProfile(profile, "cursor", prefix); }
+		finally {
+			if (previousProfile === undefined) delete process.env.SNO_PROFILE_DIR;
+			else process.env.SNO_PROFILE_DIR = previousProfile;
+		}
+	}
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) await rememberJourney();

@@ -5,7 +5,7 @@
  */
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
-import { tmpdir, userInfo } from "node:os";
+import { homedir, userInfo } from "node:os";
 import { join, resolve } from "node:path";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { connect, type MemoryClient } from "../../../packages/memory/src/contract/client";
@@ -26,7 +26,9 @@ let client: MemoryClient;
 const saved = { profile: process.env.SNO_PROFILE_DIR, invokedAs: process.env.CURSOR_INVOKED_AS, entry: process.argv[1] };
 
 beforeAll(async () => {
-	root = mkdtempSync(join(tmpdir(), "mem-cursor-inject-"));
+	// Hooks ignore sessions under the temporary directory, so the workspace lives under the home cache.
+	mkdirSync(join(homedir(), ".cache"), { recursive: true });
+	root = mkdtempSync(join(homedir(), ".cache", "mem-cursor-inject-"));
 	mkdirSync(join(root, "billing-service"));
 	execFileSync("git", ["init", "-q", join(root, "billing-service")]);
 	repo = execFileSync("git", ["-C", join(root, "billing-service"), "rev-parse", "--show-toplevel"], { encoding: "utf8" }).trim();
