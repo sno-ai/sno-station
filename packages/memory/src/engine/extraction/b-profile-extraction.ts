@@ -163,7 +163,8 @@ type ConcurrentTurnOutcome =
  * One logical task: one initial attempt plus at most one retry.
  *
  * The transport collapses "could not reach it" and "it answered with nothing" into a null
- * completion, and both are retryable, as is a reply that fails either validation stage. A reply
+ * completion; an empty answer ends the turn at once (asking again gets the same nothing), while
+ * a connection failure or a reply that fails either validation stage is retried. A reply
  * that passes is never retried — including one whose candidates all dropped, which is a real
  * answer about that turn and not a failure to get one.
  */
@@ -178,10 +179,13 @@ async function extractOneTurn(
 		try {
 			// Model call E9: profile keying.
 			// Mode routing table: [IMP]-single-settings-file/settings-inventory.md
+			// The adapter ends at once on a turn off its trained shape, and asking again gets the same
+			// empty answer: measured 2026-10-13, 102 of 104 requests came back empty, six per turn.
 			raw = await llm.completeText({
 				prompt,
 				callId: "E9",
 				maxTokens: PROFILE_EXTRACTION_MAX_TOKENS,
+				emptyReplyAttempts: 1,
 			});
 		} catch (error) {
 			// A slow or broken connection is this turn's problem. Measured 2026-08-18 against the
@@ -192,7 +196,7 @@ async function extractOneTurn(
 			if (isRetryableTransportError(error)) continue;
 			throw error;
 		}
-		if (raw === null) continue;
+		if (raw === null) return undefined;
 		const outcome = readReply(raw, turnIndex, turnText);
 		if (outcome) return outcome;
 	}
