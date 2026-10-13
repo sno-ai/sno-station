@@ -344,8 +344,9 @@ function compactAuditFile(auditPath: string): void {
 	const retained: { position: number; line: string }[] = [];
 	const openAttempts = new Map<string, { position: number; line: string }>();
 	let tail: Buffer;
+	let size = 0;
 	try {
-		const size = statSync(auditPath).size;
+		size = statSync(auditPath).size;
 		const tailStart = Math.max(0, size - 8 * 1024 * 1024);
 		tail = Buffer.alloc(size - tailStart);
 		const tailRead = readSync(fd, tail, 0, tail.length, tailStart);
@@ -389,6 +390,13 @@ function compactAuditFile(auditPath: string): void {
 	try {
 		writeFileSync(temporary, [...retained, ...openAttempts.values()].sort((a, b) => a.position - b.position).map(record => record.line).join(""), { mode: 0o600 });
 		appendFileSync(temporary, tail);
+		// Another process may have appended since the snapshot; carry those bytes over before the rename.
+		const grown = statSync(auditPath).size;
+		if (grown > size) {
+			const late = Buffer.alloc(grown - size);
+			const source = openSync(auditPath, "r");
+			try { appendFileSync(temporary, late.subarray(0, readSync(source, late, 0, late.length, size))); } finally { closeSync(source); }
+		}
 		const output = openSync(temporary, "r+");
 		try { fsyncSync(output); } finally { closeSync(output); }
 		renameSync(temporary, auditPath);
