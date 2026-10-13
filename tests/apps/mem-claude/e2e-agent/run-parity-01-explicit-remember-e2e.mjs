@@ -2,11 +2,12 @@ import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
-import { homedir, tmpdir } from "node:os";
+import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { writeSettingsFixture } from "../../../packages/memory/fixtures/settings-file-fixture.ts";
 import { globalPrefixWith, realSno } from "../../support/real-sno.mjs";
+import { cleanupProfile } from "../../support/profile-cleanup.mjs";
 
 const repo = fileURLToPath(new URL("../../../../", import.meta.url));
 const installedPrefix = process.env.SNO_INSTALLED_PREFIX;
@@ -25,18 +26,23 @@ function processRun(command, args, options = {}) {
 		child.stderr.on("data", chunk => { stderr += chunk; });
 		const timeout = setTimeout(() => {
 			stderr += "\nNative test process exceeded its declared deadline.";
-			try { process.kill(-child.pid, "SIGTERM"); } catch { /* Already exited. */ }
+			try { process.kill(-child.pid, "SIGKILL"); } catch { /* Already exited. */ }
 		}, options.timeoutMs ?? 240_000);
 		child.on("error", error => { clearTimeout(timeout); resolveRun({ code: null, stdout, stderr: `${stderr}\n${error.message}` }); });
+		child.on("exit", () => { try { process.kill(-child.pid, "SIGKILL"); } catch (error) { if (error.code !== "ESRCH") stderr += `\nProcess cleanup failed: ${error.message}`; } });
 		child.on("close", code => { clearTimeout(timeout); resolveRun({ code, stdout, stderr }); });
 		child.stdin.on("error", () => {}); child.stdin.end(options.input ?? "");
 	});
 }
 
 export async function createClaudeNative(label) {
-	const profile = mkdtempSync(join(tmpdir(), `mem-update-claude-native-${label}-`));
+	// Hooks ignore sessions under the temporary directory, so the project lives under the home cache.
+	mkdirSync(join(homedir(), ".cache"), { recursive: true });
+	const profile = mkdtempSync(join(homedir(), ".cache", `mem-update-claude-native-${label}-`));
 	const previousProfile = process.env.SNO_PROFILE_DIR;
 	process.env.SNO_PROFILE_DIR = profile;
+	let prefix;
+	try {
 	let embedding = { cacheDir: "" };
 	try { embedding = JSON.parse(readFileSync(join(homedir(), ".sno/settings.json"), "utf8")).embedding; }
 	catch (error) { if (error.code !== "ENOENT") throw error; }
@@ -49,7 +55,7 @@ export async function createClaudeNative(label) {
 	const project = join(profile, "repo");
 	// The real sno finds the package under `npm root -g` and runs its entry script by path.
 	const sno = realSno();
-	const prefix = globalPrefixWith({ "@snoai/mem-claude": dirname(dirname(entry)) });
+	prefix = globalPrefixWith({ "@snoai/mem-claude": dirname(dirname(entry)) });
 	const config = join(project, ".claude");
 	mkdirSync(config, { recursive: true });
 	const env = { ...process.env, SNO_PROFILE_DIR: profile, npm_config_prefix: prefix };
@@ -139,17 +145,29 @@ process.stdout.write(output.stdout||''); process.stderr.write(output.stderr||'')
 	const output = (run, action) => outputs(run, action)[0];
 	const finish = async error => {
 		if (error) { proof.failure = error.message; process.exitCode = 1; }
+		try {
 		proof.hooks = hooks();
 		proof.rows = await rows();
 		proof.encryptedStore = !readFileSync(installedSettings.store.path).subarray(0, 16).toString().startsWith("SQLite format 3");
 		const evidence = `/tmp/mem-update-claude-native-${label}-${randomUUID()}.json`;
 		writeFileSync(evidence, JSON.stringify(proof, null, 2), { mode: 0o600 });
-		process.kill(client.pid, "SIGTERM");
+		console.log(JSON.stringify({ evidence }));
+		} finally {
+		await cleanupProfile(profile, "claude", prefix);
 		if (previousProfile === undefined) delete process.env.SNO_PROFILE_DIR;
 		else process.env.SNO_PROFILE_DIR = previousProfile;
-		console.log(JSON.stringify({ label, passed: proof.passed, failure: proof.failure, checks: proof.checks, evidence }));
+		}
+		console.log(JSON.stringify({ label, passed: proof.passed, failure: proof.failure, checks: proof.checks }));
 	};
 	return { rows, sno, memory, project, env, proof, cli, model, output, outputs, hooks, finish };
+	} catch (error) {
+		try { await cleanupProfile(profile, "claude", prefix); }
+		finally {
+			if (previousProfile === undefined) delete process.env.SNO_PROFILE_DIR;
+			else process.env.SNO_PROFILE_DIR = previousProfile;
+		}
+		throw error;
+	}
 }
 
 async function rememberJourney() {

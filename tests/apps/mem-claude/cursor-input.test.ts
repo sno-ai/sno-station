@@ -4,7 +4,7 @@
  */
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { writeSettingsFixture } from "../../packages/memory/fixtures/settings-file-fixture";
@@ -14,7 +14,9 @@ let root: string;
 let profile: string;
 
 beforeEach(() => {
-	root = mkdtempSync(join(tmpdir(), "mem-claude-cursor-input-"));
+	// Hooks ignore sessions under the temporary directory, so the workspace lives under the home cache.
+	mkdirSync(join(homedir(), ".cache"), { recursive: true });
+	root = mkdtempSync(join(homedir(), ".cache", "mem-claude-cursor-input-"));
 	profile = join(root, "profile");
 	mkdirSync(join(root, "repo"));
 	writeSettingsFixture(profile, { recall: { auto: false }, memoryPackage: { path: join(root, "no-memory-package") } });
