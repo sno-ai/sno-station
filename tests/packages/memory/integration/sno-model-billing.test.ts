@@ -86,8 +86,8 @@ function client(snoUrl: string, hostUrl?: string, apiKey = "test-machine-key", r
 	return { llm, attempts };
 }
 
-async function complete(llm: ReturnType<typeof createLlmClient>, callId: "E1" | "E9" | "E10" | "P1", signal?: AbortSignal) {
-	const request = { callId, prompt: "Sno adapter prompt", hostPrompt: "Host chat prompt", timeoutMs: 500,
+async function complete(llm: ReturnType<typeof createLlmClient>, callId: "E1" | "E9" | "E10" | "P1", signal?: AbortSignal, timeoutMs = 5_000) {
+	const request = { callId, prompt: "Sno adapter prompt", hostPrompt: "Host chat prompt", timeoutMs,
 		maxTokens: 32, ...(signal ? { signal } : {}) };
 	return callId === "E10" || callId === "P1"
 		? llm.completeText(request)
@@ -106,7 +106,7 @@ describe("Sno model billing Station journeys", () => {
 	const calls = ["E1", "E9", "E10", "P1"] as const;
 	for (const callId of calls) {
 		for (const failure of failures) {
-			it(`${callId} uses the host answer after Sno ${failure}`, async () => {
+			it(`${callId} ${failure === "timeout" ? "keeps the Sno timeout without asking the host" : `uses the host answer after Sno ${failure}`}`, async () => {
 				const sno = await serve((_request, response) => {
 					if (failure === "timeout") return;
 					if (failure === "empty") return answer(response, "");
@@ -129,10 +129,23 @@ describe("Sno model billing Station journeys", () => {
 					try {
 						result = await withMemoryOperation("capture", undefined, async () => {
 							operationId = memoryOperationId();
+							if (failure === "timeout") {
+								await expect(complete(llm, callId, undefined, 500)).rejects.toMatchObject({
+									name: "LlmClientTerminalError", category: "timeout",
+								});
+								return;
+							}
 							return complete(llm, callId);
 						});
 					} finally { output.mockRestore(); }
 					expect(operationId).toMatch(/^[A-Za-z0-9._:-]{1,64}$/);
+					if (failure === "timeout") {
+						expect(host.requests).toEqual([]);
+						expect(sno.requests).toHaveLength(1);
+						expect(attempts).toEqual([{ callId, destination: "sno-gpu",
+							transport: callId === "E1" ? "chat-completions" : "raw-completions" }]);
+						return;
+					}
 					expect(result).toEqual(callId === "E10" || callId === "P1" ? '{"from":"host"}' : { from: "host" });
 					expect(host.requests).toHaveLength(1);
 					expect(host.requests[0]?.path).toBe("/host/v1/chat/completions");
@@ -153,7 +166,7 @@ describe("Sno model billing Station journeys", () => {
 					}
 					const cause = attributes.sno_failure;
 					const expectedCause = failure === "empty" ? "empty_reply" : failure === "missing-key" ? "missing_key"
-						: failure === "refused" ? "transport" : failure === "timeout" ? "timeout" : `HTTP ${failure}`;
+						: failure === "refused" ? "transport" : `HTTP ${failure}`;
 					expect(cause).toEqual({ length: expectedCause.length,
 						sha256: createHash("sha256").update(expectedCause).digest("hex") });
 					if (callId === "E10" || callId === "P1") {
@@ -162,7 +175,7 @@ describe("Sno model billing Station journeys", () => {
 					}
 					if (failure === "refused") expect(attempts[0]).toMatchObject({ callId, destination: "sno-gpu" });
 					else expect(sno.requests).toHaveLength(failure === "missing-key" ? 0
-						: failure === "401" || failure === "timeout" ? 1 : 3);
+						: failure === "401" ? 1 : 3);
 					if (failure !== "refused" && failure !== "missing-key") {
 						expect(sno.requests.every(request => request.operation === operationId)).toBe(true);
 					}
@@ -361,7 +374,8 @@ describe("Sno model billing Station journeys", () => {
 					}),
 				});
 				if (hostFails) {
-					await expect(run).rejects.toMatchObject({ name: ModelCallRefusedError.name, destination: "sno-gpu" });
+					// The host refusal ends the pass with nothing done; the ordered wave then records it skipped.
+					await expect(run).resolves.toMatchObject({ terminalState: "done", actionsApplied: 0, topRefusalReasons: ["host-refused:REM1"] });
 					const activeClaims = database.runtime.raw.prepare("SELECT row_id FROM nodix_rem_row_claims WHERE state = 'active'").all();
 					const claimedPairs = database.runtime.raw.prepare("SELECT pair_id FROM nodix_rem_scan_pairs WHERE claim_state = 'claimed'").all();
 					expect(activeClaims).toEqual([]);
