@@ -186,7 +186,7 @@ export interface RemRepository {
 		pairingConfigHash: string;
 	}): VerdictGenerationRef | undefined;
 	listVerdictPairs(generationId: string): VerdictPairQueueItem[];
-	/** The given pairs already closed with a recorded verdict in any generation. */
+	/** The given pairs already settled or exhausted in any generation. */
 	readClosedVerdictPairIds(pairIds: readonly string[]): Set<string>;
 	claimNextPair(input: {
 		generationId: string;
@@ -641,18 +641,17 @@ function createVerdictGeneration(
 				claim_state, attempt_count, progress_state, refusal_reason, inherited_from_generation_id
 			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		);
-		const inheritedRefusal = input.inheritedRefusalsFromGenerationId
-			? database.prepare(
-				`SELECT attempt_count, refusal_reason FROM nodix_rem_scan_pairs
-				WHERE generation_id = ? AND pair_id = ? AND progress_state = 'refused'
-					AND refusal_reason IN ('content_changed', 'target_changed')`,
-			)
-			: undefined;
+		const inheritedRefusal = database.prepare(
+			`SELECT pair.attempt_count, pair.refusal_reason, pair.generation_id
+			FROM nodix_rem_scan_pairs AS pair
+			JOIN nodix_rem_scan_generations AS generation USING (generation_id)
+			WHERE pair.pair_id = ? AND pair.progress_state = 'refused'
+			ORDER BY generation.rowid DESC LIMIT 1`,
+		);
 		for (const pair of input.pairs) {
-			const inherited = inheritedRefusal?.get(
-				input.inheritedRefusalsFromGenerationId,
-				pair.pairId,
-			) as Pick<PairRow, "attempt_count" | "refusal_reason"> | undefined;
+			const inherited = inheritedRefusal.get(pair.pairId) as
+				| Pick<PairRow, "attempt_count" | "refusal_reason"> & { generation_id: string }
+				| undefined;
 			insertPair.run(
 				input.generationId,
 				pair.pairId,
@@ -663,7 +662,7 @@ function createVerdictGeneration(
 				inherited?.attempt_count ?? 0,
 				inherited ? "refused" : "pending",
 				inherited?.refusal_reason ?? null,
-				inherited ? input.inheritedRefusalsFromGenerationId : null,
+				inherited?.generation_id ?? null,
 			);
 		}
 	}).immediate();
@@ -730,7 +729,7 @@ function readClosedVerdictPairIds(
 	const rows = database
 		.prepare(
 			`SELECT DISTINCT pair_id FROM nodix_rem_scan_pairs
-			WHERE progress_state = 'closed' AND pair_id IN (SELECT value FROM json_each(?))`,
+			WHERE progress_state IN ('closed', 'exhausted') AND pair_id IN (SELECT value FROM json_each(?))`,
 		)
 		.all(JSON.stringify(pairIds)) as Array<{ pair_id: string }>;
 	return new Set(rows.map((row) => row.pair_id));
@@ -756,7 +755,7 @@ function claimNextPair(
 					reserved_tokens, attempt_count, progress_state, refusal_reason, inherited_from_generation_id
 				FROM nodix_rem_scan_pairs
 				WHERE generation_id = ? AND claim_state = 'unvisited'
-				ORDER BY CASE progress_state WHEN 'refused' THEN 0 ELSE 1 END, sort_key, pair_id
+				ORDER BY attempt_count, sort_key, pair_id
 				LIMIT 1`,
 			)
 			.get(input.generationId) as PairRow | undefined;
