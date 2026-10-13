@@ -776,7 +776,7 @@ describe("REM verdict crash and resume", () => {
 		expect(readRowClaimBytes("row-release-abort")).toBe(releaseBefore);
 	});
 
-	it("re-presents refusals first and exhausts them after three separate process attempts", () => {
+	it("retains refusal history and exhausts a pair after three separate process attempts", () => {
 		const repository = createRemRepository(fixture.runtime.db);
 		const pairs = [
 			{ pairId: "retry", leftRowId: "left-retry", rightRowId: "right-retry", sortKey: "0" },
@@ -808,7 +808,7 @@ describe("REM verdict crash and resume", () => {
 			pairingConfigHash: HASH_B,
 			maxLlmCalls: 1,
 			maxTokens: 10,
-			pairs,
+			pairs: pairs.slice(0, 1),
 			inheritedRefusalsFromGenerationId: "retry-generation-1",
 		});
 		const second = runWorker([
@@ -829,7 +829,7 @@ describe("REM verdict crash and resume", () => {
 			pairingConfigHash: HASH_B,
 			maxLlmCalls: 1,
 			maxTokens: 10,
-			pairs,
+			pairs: pairs.slice(0, 1),
 			inheritedRefusalsFromGenerationId: "retry-generation-2",
 		});
 		const third = runWorker([
@@ -892,7 +892,7 @@ function runWorker(args: string[]): {
 	const result = spawnSync(tsxBinary, [workerPath, ...args], {
 		cwd: repoRoot,
 		encoding: "utf8",
-		env: process.env,
+		env: { ...process.env, REM_TEST_ENCRYPTION_KEY: fixture.encryptionKey },
 		timeout: 10_000,
 	});
 	if (result.error) throw result.error;
@@ -906,7 +906,7 @@ async function startHoldingWorker(args: string[]): Promise<{
 	const child = spawn(tsxBinary, [workerPath, ...args], {
 		cwd: repoRoot,
 		detached: true,
-		env: process.env,
+		env: { ...process.env, REM_TEST_ENCRYPTION_KEY: fixture.encryptionKey },
 		stdio: ["pipe", "pipe", "pipe"],
 	});
 	holdingChildren.push(child);
@@ -952,7 +952,7 @@ async function startZombieClaim(args: string[]): Promise<{
 		{
 			cwd: repoRoot,
 			detached: true,
-			env: process.env,
+			env: { ...process.env, REM_TEST_ENCRYPTION_KEY: fixture.encryptionKey },
 			stdio: ["pipe", "pipe", "pipe"],
 		},
 	);

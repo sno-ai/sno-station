@@ -18,6 +18,7 @@ import { renderRemUpdateVerificationPrompt } from "../../../../packages/memory/s
 import { MODEL_CALLS, type ModelCallId } from "../../../../packages/memory/src/model/model-call-table";
 import { REM_UPDATE_JUDGMENT_SKILL } from "../../../../packages/memory/src/sidecar/rem-update-judgment-skill";
 import { REM_SIDECAR_TOKEN_HEADER } from "../../../../packages/memory/src/contract/routes";
+import { evaluateRemAutomaticTriggers } from "../../../../packages/memory/src/sidecar/rem-trigger";
 import { startRemSidecar } from "../../../../packages/memory/src/sidecar/server";
 import { createTestDb } from "../../../apps/mem-claw/helpers/test-db";
 import { callId, modelReply, type Recorder, type RecorderReply, startRecorder } from "./fixtures/model-recorders";
@@ -228,7 +229,7 @@ describe("one REM pass sends each stage where the table says (REQ-1, REQ-2)", ()
 });
 
 describe("REM Enhanced stops at the first refused call (REQ-4)", () => {
-	it("host refuses REM2 after REM1 answered on the Sno GPU: rem_skipped, the closed pair stays closed, the next pass runs", { timeout: 180_000 }, async () => {
+	it("host refuses REM2 after REM1 answered on the Sno GPU: rem_completed, the closed pair stays closed, neither trigger runs again", { timeout: 180_000 }, async () => {
 		await seedStore([], [
 			[OLDER_DEPLOYMENT, "entity:deployment"], [NEWER_DEPLOYMENT, "entity:deployment"],
 			[OLDER_OFFICE, "entity:office"], [NEWER_OFFICE, "entity:office"],
@@ -249,18 +250,151 @@ describe("REM Enhanced stops at the first refused call (REQ-4)", () => {
 			rem2Calls: host.received.filter(call => call.id === "REM2").length,
 			laterStages: [...sno.received, ...host.received]
 				.filter(call => ["REM3", "REM4", "REM5", "REM6", "REM7", "REM8"].includes(call.id)).length,
-		}).toEqual({ skipped: true, completed: 0, rem1AnsweredOnSno: 2, rem2RefusedOnHost: true, rem2Calls: 1, laterStages: 0 });
-		const firstJobs = jobIds();
-		const before = { sno: sno.received.length, host: host.received.length };
+		}).toEqual({ skipped: false, completed: 1, rem1AnsweredOnSno: 2, rem2RefusedOnHost: true, rem2Calls: 1, laterStages: 0 });
+		expect(database.sqlite.prepare("SELECT count(*) AS count FROM nodix_rem_scan_pairs WHERE verdict = 'keep' AND claim_state = 'done'").get()).toEqual({ count: 1 });
+		const completed = JSON.parse(auditEvents("rem_completed")[0] ?? "{}");
+		expect(completed.details.stats.measured).toMatchObject({ rows_considered: 4, pair_cap_binding: true, model_calls: 3 });
+		expect(completed.details.stats.top_refusal_reasons).toContain("host-refused:REM2");
 		host.refuse = () => false;
 		await registerHost("host-skin", host.url);
-		await until(() => jobIds().length > firstJobs.length && (auditEvents("rem_completed").length > 0 || auditEvents("rem_failed").length > 0));
-		const rejudged = [...sno.received.slice(before.sno), ...host.received.slice(before.host)]
-			.filter(call => call.id === "REM1" && [OLDER_DEPLOYMENT, NEWER_DEPLOYMENT, OLDER_OFFICE, NEWER_OFFICE]
-				.filter(text => keptPair.includes(text)).every(text => call.content.includes(text)));
-		expect({ firstJobs: firstJobs.length, jobs: jobIds().length, completed: auditEvents("rem_completed").length,
-			failed: auditEvents("rem_failed").length, keptPairJudgedAgain: rejudged.length })
-			.toEqual({ firstJobs: 1, jobs: 2, completed: 1, failed: 0, keptPairJudgedAgain: 0 });
+		const scope = (database.sqlite.prepare("SELECT DISTINCT project_id AS scope FROM nodix_memories").get() as { scope: string }).scope;
+		await evaluateRemAutomaticTriggers({ database: database.runtime.db, stateDir: stateDir(), requestedOperations: ["rem-replace", "rem-update"],
+			modelCalls: JSON.parse(readFileSync(join(root, "mode", "settings.json"), "utf8")).modelCalls, volumeThreshold: 1 });
+		expect({ jobs: jobIds().length, completed: auditEvents("rem_completed").length, failed: auditEvents("rem_failed").length }).toEqual({ jobs: 1, completed: 1, failed: 0 });
+		expect(JSON.parse(readFileSync(join(stateDir(), "rem-trigger-state.json"), "utf8")).scopes[scope].last_covered_count).toBe(0);
+	});
+});
+
+describe.each(["rem-enhanced", "agent-native"] as const)("%s interrupted completion", mode => {
+	it("host refuses REM8 after keep verdicts: completes and survives registration with daily and volume due", { timeout: 180_000 }, async () => {
+		await seedStore([OLDER_HOME, RETRACTION], [[OLDER_DEPLOYMENT, "entity:deployment"], [NEWER_DEPLOYMENT, "entity:deployment"]]);
+		const sno = await startRecorder(closers, ({ id, content, raw }) => modelReply(id === "REM1" ? "keep" : remAnswer(id, content, false), raw));
+		const host = await startRecorder(closers, ({ id, content, raw }) => id === "REM8" ? refusal() : modelReply(id === "REM1" ? "keep" : remAnswer(id, content, false), raw));
+		pointSnoGpuAt(mode, sno.url);
+		sidecar = await startRemSidecar();
+		await registerHost("host-skin", host.url);
+		await until(settled);
+		expect({ completed: auditEvents("rem_completed").length, skipped: skipped(), jobs: jobIds().length }).toEqual({ completed: 1, skipped: false, jobs: 1 });
+		expect(database.sqlite.prepare("SELECT count(*) AS count FROM nodix_rem_journal WHERE reason = 'keep' AND outcome = 'no-action'").get()).toEqual({ count: 3 });
+		expect(JSON.parse(auditEvents("rem_completed")[0] ?? "{}").details.stats.top_refusal_reasons).toContain("host-refused:REM8");
+		await registerHost("host-skin", host.url);
+		await evaluateRemAutomaticTriggers({ database: database.runtime.db, stateDir: stateDir(), requestedOperations: ["rem-replace", "rem-update"],
+			modelCalls: JSON.parse(readFileSync(join(root, "mode", "settings.json"), "utf8")).modelCalls, volumeThreshold: 1 });
+		expect(jobIds()).toHaveLength(1);
+	});
+
+	it("host refuses REM8 after a replacement write: the write and its count survive", { timeout: 180_000 }, async () => {
+		await seedStore([OLDER_HOME, RETRACTION], [[OLDER_DEPLOYMENT, "entity:deployment"], [NEWER_DEPLOYMENT, "entity:deployment"]]);
+		const sno = await recorder();
+		const host = await recorder({ refuse: id => id === "REM8" });
+		pointSnoGpuAt(mode, sno.url);
+		sidecar = await startRemSidecar();
+		await registerHost("host-skin", host.url);
+		await until(settled);
+		expect({ completed: auditEvents("rem_completed").length, skipped: skipped() }).toEqual({ completed: 1, skipped: false });
+		expect(JSON.parse(auditEvents("rem_completed")[0] ?? "{}").details.stats).toMatchObject({ applied_count: 1, measured: { rows_considered: 4, pair_cap_binding: true } });
+		expect(database.sqlite.prepare("SELECT count(*) AS count FROM nodix_rem_write_attempts WHERE writer = 'softClose' AND outcome = 'succeeded'").get()).toEqual({ count: 1 });
+	});
+
+	it("host refuses a second retirement judgment after an update write: preserves the current text and count", { timeout: 180_000 }, async () => {
+		const berlinRetraction = "I no longer live in Berlin.";
+		await seedStore([OLDER_HOME, RETRACTION, "I live in Berlin.", berlinRetraction], []);
+		for (const [text, topic] of [[OLDER_HOME, "home"], [RETRACTION, "home"], ["I live in Berlin.", "office"], [berlinRetraction, "office"]]) {
+			database.sqlite.prepare("UPDATE nodix_memories SET metadata = json_set(metadata, '$.topic', ?) WHERE text = ?").run(topic, text);
+		}
+		const sno = await recorder();
+		const host = await recorder({ refuse: (id, seen) => id === "REM8" && seen.calls.filter(call => call === "REM8").length === 2 });
+		pointSnoGpuAt(mode, sno.url, { rem: { operations: ["rem-update"] } });
+		sidecar = await startRemSidecar();
+		await registerHost("host-skin", host.url);
+		await until(settled);
+		expect({ completed: auditEvents("rem_completed").length, skipped: skipped() }).toEqual({ completed: 1, skipped: false });
+		expect(database.sqlite.prepare("SELECT count(*) AS count FROM nodix_memories WHERE text = 'I work at Acme.'").get()).toEqual({ count: 1 });
+		expect(JSON.parse(auditEvents("rem_completed")[0] ?? "{}").details.stats).toMatchObject({ applied_count: 1,
+			measured: { rows_considered: 4, pair_cap_binding: true, model_calls: 5 } });
+	});
+
+	it("host refuses the first call: no valid work is not completed and registration stops after three skips", { timeout: 180_000 }, async () => {
+		await seedStore([], [[OLDER_DEPLOYMENT, "entity:deployment"], [NEWER_DEPLOYMENT, "entity:deployment"]]);
+		const sno = await recorder();
+		const host = await recorder({ refuse: () => true });
+		pointSnoGpuAt(mode, sno.url);
+		sidecar = await startRemSidecar();
+		for (let attempt = 1; attempt <= 4; attempt++) {
+			await registerHost("host-skin", host.url);
+			if (attempt <= 3) await until(() => auditEvents("rem_skipped").length >= attempt);
+		}
+		expect({ completed: auditEvents("rem_completed").length, skipped: auditEvents("rem_skipped").length, jobs: jobIds().length }).toEqual({ completed: 0, skipped: 3, jobs: 3 });
+	});
+});
+
+it("gateway failure across real host registrations stops dispatch after three attempts", { timeout: 180_000 }, async () => {
+	await seedStore([], [[OLDER_DEPLOYMENT, "entity:deployment"], [NEWER_DEPLOYMENT, "entity:deployment"]]);
+	const sno = await recorder();
+	const host = await recorder();
+	const gateway = await startRecorder(closers, () => ({ status: 500, body: { error: "dispatch unavailable" } }));
+	pointSnoGpuAt("rem-enhanced", sno.url);
+	sidecar = await startRemSidecar();
+	const discoveryPath = join(root, "mode", "station", "sidecar.json");
+	const discovery = JSON.parse(readFileSync(discoveryPath, "utf8"));
+	writeFileSync(discoveryPath, JSON.stringify({ ...discovery, port: Number(new URL(gateway.url).port) }));
+	for (let attempt = 1; attempt <= 4; attempt++) {
+		await registerHost("host-skin", host.url);
+		await until(() => auditEvents("rem_failed").length >= Math.min(attempt, 3), 10_000);
+	}
+	await until(() => Object.values(JSON.parse(readFileSync(join(stateDir(), "rem-trigger-state.json"), "utf8")).scopes)
+		.some(scope => (scope as { last_volume_pass_date: string | null }).last_volume_pass_date !== null), 5_000);
+	expect({ dispatches: gateway.calls.length, failures: auditEvents("rem_failed").length, jobs: jobIds(), gpuCalls: sno.calls })
+		.toEqual({ dispatches: 3, failures: 3, jobs: [], gpuCalls: [] });
+});
+
+describe.each(["empty", "error"])("Sno GPU fallback: %s", failure => {
+	it("host refusal after a keep is preserved and ends the pass", { timeout: 180_000 }, async () => {
+		await seedStore([], [[OLDER_DEPLOYMENT, "entity:deployment"], [NEWER_DEPLOYMENT, "entity:deployment"],
+			[OLDER_OFFICE, "entity:office"], [NEWER_OFFICE, "entity:office"],
+			["The project uses Git.", "entity:project"], ["The project uses Mercurial.", "entity:project"]]);
+		const sno = await startRecorder(closers, ({ raw }, seen) => seen.received.length === 0 ? modelReply("keep", raw)
+			: failure === "empty" ? modelReply("", raw) : { status: 500, body: { error: "model unavailable" } });
+		const host = await recorder({ refuse: () => true });
+		pointSnoGpuAt("rem-enhanced", sno.url);
+		sidecar = await startRemSidecar();
+		await registerHost("host-skin", host.url);
+		await until(settled);
+		expect({ completed: auditEvents("rem_completed").length, skipped: skipped(), jobs: jobIds().length }).toEqual({ completed: 1, skipped: false, jobs: 1 });
+		expect(host.calls).toEqual(["REM1"]);
+		expect(new Set(sno.received.map(call => call.content)).size).toBe(2);
+		expect(JSON.parse(auditEvents("rem_completed")[0] ?? "{}").details.stats.top_refusal_reasons).toContain("host-refused:REM1");
+		expect(database.sqlite.prepare("SELECT count(*) AS count FROM nodix_rem_scan_pairs WHERE verdict = 'keep' AND claim_state = 'done'").get()).toEqual({ count: 1 });
+	});
+});
+
+describe.each(["audit", "job journal"])("completion write fails: %s", target => {
+	it("ends the job after its writes instead of leaving it running", { timeout: 180_000 }, async () => {
+		await seedStore([], [[OLDER_DEPLOYMENT, "entity:deployment"], [NEWER_DEPLOYMENT, "entity:deployment"]]);
+		const sno = await recorder();
+		const path = join(stateDir(), target === "audit" ? "audit.jsonl" : "rem-wave-jobs.jsonl");
+		const host = await startRecorder(closers, ({ id, content, raw }) => {
+			if (id === "REM2") { rmSync(path); mkdirSync(path); }
+			return modelReply(remAnswer(id, content, false), raw);
+		});
+		pointSnoGpuAt("rem-enhanced", sno.url, { rem: { tick: false } });
+		sidecar = await startRemSidecar();
+		await registerHost("host-skin", host.url);
+		const token = JSON.parse(readFileSync(join(root, "mode", "station", "sidecar.json"), "utf8")).token;
+		const scope = (database.sqlite.prepare("SELECT DISTINCT project_id AS scope FROM nodix_memories").get() as { scope: string }).scope;
+		const response = await fetch(`http://127.0.0.1:${sidecar.port}/rem/run`, { method: "POST", headers: { [REM_SIDECAR_TOKEN_HEADER]: token },
+			body: JSON.stringify({ type: "rem-replace", scope }) });
+		expect(response.status).toBe(202);
+		const jobId = (await response.json()).job_id;
+		let state = "running";
+		const end = Date.now() + 20_000;
+		while (state !== "done" && Date.now() < end) {
+			const job = await (await fetch(`http://127.0.0.1:${sidecar.port}/rem/jobs/${jobId}`, { headers: { [REM_SIDECAR_TOKEN_HEADER]: token } })).json();
+			state = job.state;
+			if (state !== "done") await delay(100);
+		}
+		expect(state).toBe("done");
+		expect(database.sqlite.prepare("SELECT count(*) AS count FROM nodix_rem_write_attempts WHERE writer = 'softClose' AND outcome = 'succeeded'").get()).toEqual({ count: 1 });
 	});
 });
 
@@ -300,10 +434,8 @@ describe("REM Enhanced spends no Sno GPU call without a host that can still answ
 		await registerHost("host-skin", host.url);
 		await startPass();
 		await until(settled);
-		const skip = auditEvents("rem_skipped").map(line => JSON.parse(line).details as { reason?: string; destination?: string });
-		expect({ skipped: skipped(), rem1OnSno: sno.calls.filter(call => call === "REM1").length, hostCalls: host.calls.length,
-			skip: skip.map(details => [details.reason, details.destination]) })
-			.toEqual({ skipped: true, rem1OnSno: 1, hostCalls: 0, skip: [["no-agent-endpoint", "host"]] });
+		expect({ skipped: skipped(), completed: auditEvents("rem_completed").length, rem1OnSno: sno.calls.filter(call => call === "REM1").length, hostCalls: host.calls.length })
+			.toEqual({ skipped: false, completed: 1, rem1OnSno: 1, hostCalls: 0 });
 	});
 
 	it("moves to an older host when the newest one answers that it is not ready", { timeout: 180_000 }, async () => {
