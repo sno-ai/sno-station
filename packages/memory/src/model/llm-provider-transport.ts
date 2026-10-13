@@ -45,7 +45,7 @@ function snoGpuAttributionHeaders(clientRequestId: string, callId: ModelCallId |
 
 type RequestDiagnostic = {
 	started: number;
-	/** Fresh per HTTP attempt; sent as X-Request-ID to Sno GPU and logged with the status. */
+	/** Sent as X-Request-ID to Sno GPU and logged with the status: the caller's token when it gave one, else a fresh UUID per HTTP attempt. */
 	clientRequestId: string;
 	headersAt?: number;
 	bodyAt?: number;
@@ -56,14 +56,14 @@ type RequestDiagnostic = {
 };
 
 async function observeRequest<T>(
-	input: { endpoint: string; model: string; transport: string; slot?: string; label?: string;
+	input: { endpoint: string; model: string; transport: string; slot?: string; label?: string; requestId?: string;
 		timeout: number; cap?: number; sampling: Record<string, unknown>; promptTemplateHash?: string; extractionSkillHash?: string; forwardedConfigHash?: string },
 	run: (diagnostic: RequestDiagnostic) => Promise<T>,
 ): Promise<T> {
 	const route = createHash("sha256").update(input.endpoint).digest("hex");
 	const inFlight = (routeInFlight.get(route) ?? 0) + 1;
 	routeInFlight.set(route, inFlight);
-	const diagnostic: RequestDiagnostic = { started: performance.now(), clientRequestId: randomUUID() };
+	const diagnostic: RequestDiagnostic = { started: performance.now(), clientRequestId: input.requestId ?? randomUUID() };
 	return withLogContext({ attempt_id: randomUUID() }, async () => {
 		let outcome = "failed";
 		let failure: unknown;
@@ -304,6 +304,7 @@ export interface SnoProfileCompletionRequest {
 	apiKey: string;
 	prompt: string;
 	timeoutMs: number;
+	requestId?: string;
 	operationId?: string;
 	maxTokens?: number;
 	singleTokenVerdict?: boolean;
@@ -318,7 +319,7 @@ export async function callSnoProfileCompletion(
 	request: SnoProfileCompletionRequest,
 ): Promise<ProviderResult> {
 	return observeRequest({ endpoint: request.endpointUrl, model: request.model,
-		transport: "raw-completions", slot: request.callId, label: request.destination,
+		transport: "raw-completions", slot: request.callId, label: request.destination, requestId: request.requestId,
 		timeout: request.timeoutMs, cap: request.singleTokenVerdict ? 1 : request.maxTokens,
 		sampling: {}, promptTemplateHash: request.promptTemplateHash, extractionSkillHash: request.extractionSkillHash }, async (diagnostic) => {
 	const requestAbort = requestAbortSignal(request.timeoutMs, request.signal);
@@ -443,7 +444,7 @@ async function snoStationMemDispatch(ctx: LlmixDispatchContext): Promise<Provide
 	const callBody = buildCallBody(ctx.kwargs, provider);
 	const sampling = Object.fromEntries(["temperature", "top_p", "seed"].flatMap((key) => callBody[key] === undefined ? [] : [[key, callBody[key]]]));
 	return observeRequest({ endpoint: endpointUrl, model: ctx.model, transport: "chat-completions",
-		slot: cfgExt.callId, label: cfgExt.destination, timeout: timeoutMs,
+		slot: cfgExt.callId, label: cfgExt.destination, requestId: typeof cfgExt.requestId === "string" ? cfgExt.requestId : undefined, timeout: timeoutMs,
 		cap: typeof callBody.max_tokens === "number" ? callBody.max_tokens : typeof callBody.max_completion_tokens === "number" ? callBody.max_completion_tokens : undefined,
 		sampling, promptTemplateHash: cfgExt.promptTemplateHash, extractionSkillHash: cfgExt.extractionSkillHash,
 		forwardedConfigHash: createHash("sha256").update(JSON.stringify({
@@ -619,6 +620,7 @@ export async function callProvider(ctx: LlmixDispatchContext): Promise<LocalCall
 				...(cfgExt.onProviderResponse
 					? { onProviderResponse: cfgExt.onProviderResponse }
 					: {}),
+				...(typeof raw.requestId === "string" ? { requestId: raw.requestId } : {}),
 				...(typeof raw.operationId === "string" ? { operationId: raw.operationId } : {}),
 				...(typeof raw.maxTokens === "number" ? { maxTokens: raw.maxTokens } : {}),
 				...(raw.singleTokenVerdict === true ? { singleTokenVerdict: true } : {}),

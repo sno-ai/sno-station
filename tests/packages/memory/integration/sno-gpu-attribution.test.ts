@@ -109,6 +109,18 @@ describe("Sno GPU request attribution headers", () => {
 		} finally { sno.server.closeAllConnections(); sno.server.close(); }
 	});
 
+	it("a request id the caller names is sent as given on both routes", async () => {
+		const sno = await serve((_headers, response) => reply(response, 200, "yes"));
+		try {
+			await callSnoProfileCompletion({
+				endpointUrl: `${sno.url}/extract/profile/v1/completions`, model: "m", apiKey: "k",
+				prompt: "p", timeoutMs: 5_000, callId: "E9", requestId: "caller-token-1",
+			});
+			expect(sno.headers[0]?.["x-request-id"]).toBe("caller-token-1");
+			expect(sno.headers[0]?.["x-sno-workload"]).toBe("station-profile-key");
+		} finally { sno.server.closeAllConnections(); sno.server.close(); }
+	});
+
 	it("every call has a workload in the allowed label format, split by what the caller is doing", () => {
 		for (const workload of Object.values(MODEL_CALL_WORKLOAD)) expect(workload).toMatch(/^[a-z0-9-]{1,64}$/);
 		expect(MODEL_CALL_WORKLOAD.E10).toBe("station-verdict");
