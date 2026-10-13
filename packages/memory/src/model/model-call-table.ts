@@ -68,6 +68,18 @@ export const MODEL_CALLS: Record<ModelCallId, ModelCall> & Record<RsiModelCallId
 	REM8: { description: "update retirement target", occasion: "memoryExtract", destinations: remHost, snoPreset: chat, transport: { host: "agent-host-seam", snoGpu: "chat-completions" }, promptVariant: { host: "standard", snoGpu: "standard" }, replyParser: { host: "json", snoGpu: "json" } },
 };
 
+/** Sno GPU workload label per call (GPU_REQUEST_METADATA_STANDARD): what the caller is doing, one stable value per group. */
+export const MODEL_CALL_WORKLOAD: Record<ModelCallId, string> = {
+	E1: "station-extract", E2: "station-extract", E3: "station-extract", E4: "station-extract", E5: "station-extract",
+	E6: "station-subject", E7: "station-subject", E8: "station-subject",
+	E9: "station-profile-key", E12: "station-profile-key",
+	E10: "station-verdict", P1: "station-verdict",
+	P2: "station-profile-merge", P3: "station-profile-merge", P4: "station-profile-merge", P5: "station-profile-merge", P6: "station-profile-merge",
+	REM1: "station-rem-replace", REM2: "station-rem-replace", REM3: "station-rem-replace", REM4: "station-rem-replace",
+	REM5: "station-rem-update", REM6: "station-rem-update", REM7: "station-rem-update", REM8: "station-rem-update",
+	E11: "station-aux", T1: "station-aux", R1: "station-aux",
+};
+
 export function modelCallDestination(callId: ModelCallId, mode: ProductMode,
 	modelCalls: Record<keyof typeof MODEL_CALLS, Record<ProductMode, ModelDestination>>): ModelDestination {
 	return modelCalls[callId][mode];

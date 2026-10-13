@@ -1,5 +1,6 @@
 import { FIXED_PROTOCOL_VALUE_69 } from "./signed-registry-constants";
 import { classifyLlmFailure } from "./llm-failure";
+import { MODEL_CALL_WORKLOAD, type ModelCallId } from "./model-call-table";
 /** @file llm-provider-transport.ts
  * @purpose Sends OpenAI-compatible chat requests with retries and provider routing.
  * @boundary HTTP transport, base URL resolution, key rotation, and retry behavior.
@@ -31,8 +32,21 @@ export function withProviderResponses<T>(responses: ProviderResponseTrace[], run
 }
 
 
+/** Sno GPU request attribution (GPU_REQUEST_METADATA_STANDARD): self-reported labels, never identity. */
+const SNO_GPU_SOURCE = "sno-station";
+
+function snoGpuAttributionHeaders(clientRequestId: string, callId: ModelCallId | undefined): Record<string, string> {
+	return {
+		"X-Sno-Source": SNO_GPU_SOURCE,
+		"X-Sno-Workload": callId ? MODEL_CALL_WORKLOAD[callId] : "station-aux",
+		"X-Request-ID": clientRequestId,
+	};
+}
+
 type RequestDiagnostic = {
 	started: number;
+	/** Fresh per HTTP attempt; sent as X-Request-ID to Sno GPU and logged with the status. */
+	clientRequestId: string;
 	headersAt?: number;
 	bodyAt?: number;
 	status?: number;
@@ -49,7 +63,7 @@ async function observeRequest<T>(
 	const route = createHash("sha256").update(input.endpoint).digest("hex");
 	const inFlight = (routeInFlight.get(route) ?? 0) + 1;
 	routeInFlight.set(route, inFlight);
-	const diagnostic: RequestDiagnostic = { started: performance.now() };
+	const diagnostic: RequestDiagnostic = { started: performance.now(), clientRequestId: randomUUID() };
 	return withLogContext({ attempt_id: randomUUID() }, async () => {
 		let outcome = "failed";
 		let failure: unknown;
@@ -66,7 +80,7 @@ async function observeRequest<T>(
 			if (remaining === 0) routeInFlight.delete(route);
 			else routeInFlight.set(route, remaining);
 			log.info("Model request completed", {
-				outcome, error: failure, call_id: input.slot ?? "unavailable",
+				outcome, error: failure, call_id: input.slot ?? "unavailable", client_request_id: diagnostic.clientRequestId,
 				destination: input.label ?? "unavailable", route_hash: route,
 				transport: input.transport, requested_model: input.model,
 				returned_model: diagnostic.returnedModel ?? "unavailable",
@@ -290,7 +304,6 @@ export interface SnoProfileCompletionRequest {
 	apiKey: string;
 	prompt: string;
 	timeoutMs: number;
-	requestId?: string;
 	operationId?: string;
 	maxTokens?: number;
 	singleTokenVerdict?: boolean;
@@ -317,7 +330,7 @@ export async function callSnoProfileCompletion(
 			headers: {
 				"Content-Type": "application/json",
 				"X-Internal-Token": request.apiKey,
-				...(request.requestId ? { "X-Request-ID": request.requestId } : {}),
+				...snoGpuAttributionHeaders(diagnostic.clientRequestId, request.callId),
 				...(request.operationId ? { "X-Sno-Operation": request.operationId } : {}),
 			},
 			body: JSON.stringify({
@@ -445,6 +458,7 @@ async function snoStationMemDispatch(ctx: LlmixDispatchContext): Promise<Provide
 	if (typeof cfgExt.requestId === "string") headers["X-Request-ID"] = cfgExt.requestId;
 	if (provider === "sno-gpu") {
 		headers["X-Internal-Token"] = ctx.apiKey;
+		Object.assign(headers, snoGpuAttributionHeaders(diagnostic.clientRequestId, cfgExt.callId));
 		if (typeof cfgExt.operationId === "string") headers["X-Sno-Operation"] = cfgExt.operationId;
 	} else {
 		headers.Authorization = `Bearer ${ctx.apiKey}`;
@@ -605,7 +619,6 @@ export async function callProvider(ctx: LlmixDispatchContext): Promise<LocalCall
 				...(cfgExt.onProviderResponse
 					? { onProviderResponse: cfgExt.onProviderResponse }
 					: {}),
-				...(typeof raw.requestId === "string" ? { requestId: raw.requestId } : {}),
 				...(typeof raw.operationId === "string" ? { operationId: raw.operationId } : {}),
 				...(typeof raw.maxTokens === "number" ? { maxTokens: raw.maxTokens } : {}),
 				...(raw.singleTokenVerdict === true ? { singleTokenVerdict: true } : {}),

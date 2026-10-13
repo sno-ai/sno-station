@@ -532,7 +532,6 @@ export function createLlmClient(config: LlmClientConfig & { refuseOnUnavailable?
 					prompt,
 						timeoutMs: resolveRequestTimeoutMs(request),
 					maxTokens: request.maxTokens ?? RAW_COMPLETION_FALLBACK_MAX_TOKENS,
-						...(request.requestId ? { requestId: request.requestId } : {}),
 						...(operationId ? { operationId } : {}),
 					...(MODEL_CALLS[request.callId].replyParser.snoGpu === "single-token-verdict" ? { singleTokenVerdict: true } : {}),
 					...(request.signal ? { signal: request.signal } : {}),
