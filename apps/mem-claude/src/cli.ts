@@ -7,7 +7,7 @@ import { postToolUse, preToolUse, sessionEnd, sessionStart, stop, userPromptSubm
 import { installClaude, uninstallClaude } from "./install.js";
 import { importRepository } from "./import.js";
 import { MESSAGES } from "./messages.js";
-import { workspaceRoot } from "./scope.js";
+import { isTemporaryDirectory, workspaceRoot } from "./scope.js";
 import { runWorker } from "./worker.js";
 
 async function readStdin(): Promise<unknown> {
@@ -29,6 +29,14 @@ async function main(): Promise<number> {
 	const input = HOOK_COMMANDS.includes(command ?? "") ? await readStdin() : undefined;
 	// The Cursor IDE runs Claude Code hooks with Cursor-shaped input; Sno's Cursor hooks own Cursor, so these do nothing there.
 	if (input && typeof input === "object" && "cursor_version" in input) return 0;
+	// Scripted runs (a temporary directory, `claude -p`) and background-task notices are not conversations; the
+	// real-agent release journeys set SNO_CAPTURE_SCRIPTED=1 to be recorded anyway. Measured 2026-10-13: 616 of 785 queued turns.
+	if (input && process.env["SNO_CAPTURE_SCRIPTED"] !== "1" && typeof input === "object") {
+		const { cwd, prompt } = input as { cwd?: unknown; prompt?: unknown };
+		if (typeof cwd === "string" && isTemporaryDirectory(cwd)) return 0;
+		if (process.env["CLAUDE_CODE_ENTRYPOINT"]?.startsWith("sdk-")) return 0;
+		if (typeof prompt === "string" && prompt.trimStart().startsWith("<task-notification>")) return 0;
+	}
 	if (command === "session-start") {
 		process.stdout.write(`${await sessionStart(input)}\n`);
 		return 0;
