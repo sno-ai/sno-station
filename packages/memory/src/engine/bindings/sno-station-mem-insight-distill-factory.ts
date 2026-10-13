@@ -38,6 +38,8 @@ export function buildInsightDistiller(
 	_sessionUuidProvider: () => string | undefined,
 	stateDir: string,
 	agentPort?: AgentLlmPort,
+	scheduleArrivalRetirement?: (task: () => Promise<void>) => void,
+	captureBatch = false,
 ): AtomicInsightDistiller | undefined {
 	const routing = pickLlmRoutingConfig(config);
 	// The product mode gates LLM extraction: local-first never distills, while
@@ -113,6 +115,8 @@ export function buildInsightDistiller(
 		return new AtomicInsightDistiller(store, transports, {
 			defaultScope: config.scopes.default,
 			locale: config.language,
+			scheduleArrivalRetirement,
+			captureBatch,
 		});
 	} catch (err) {
 		throw new Error(
