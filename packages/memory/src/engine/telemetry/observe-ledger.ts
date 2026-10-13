@@ -120,13 +120,16 @@ function consumeRows(profileDir: string, observe: LedgerObserve, batchSize: numb
 		if (offset >= 1024 * 1024 && size - offset <= 64 * 1024) {
 			// Reclaim only near the end, so a batch never copies a large unread backlog.
 			let source = offset;
-			while (source < size) {
-				const count = readSync(fd, buffer, 0, Math.min(buffer.length, size - source), source);
+			let end = size;
+			while (source < end) {
+				const count = readSync(fd, buffer, 0, Math.min(buffer.length, end - source), source);
 				if (count === 0) break;
 				writeSync(fd, buffer, 0, count, source - offset);
 				source += count;
+				// Hook processes append to this file too; carry whatever arrived while copying.
+				if (source >= end) end = fstatSync(fd).size;
 			}
-			ftruncateSync(fd, size - offset);
+			ftruncateSync(fd, source - offset);
 			offset = 0;
 		}
 		if (rows.length) writeFileSync(syncedPath, String(offset), { mode: 0o600 });
