@@ -206,9 +206,9 @@ describe("B-profile raw extraction", () => {
 		expect(result.turnFailures).toBe(0);
 	});
 
-	it("retries an empty transport reply, then accepts the second", async () => {
-		// Measured 2026-08-17: 45 of one persona's 147 conversations ended on an empty reply and
-		// every one stored nothing. Retrying is what turns most of those back into memories.
+	it("asks once on an empty transport reply and does not ask again", async () => {
+		// Measured 2026-10-13: 102 of 104 profile requests came back empty, and asking again got
+		// the same empty answer, six requests per turn.
 		let calls = 0;
 		const llm = createTestLlmClient({
 			async completeText(): Promise<string | null> {
@@ -217,12 +217,13 @@ describe("B-profile raw extraction", () => {
 			},
 		});
 
-		const result = await extractBProfileCandidatesFromChunk({
-			conversationText: "user: Keep updates short.",
-			llm,
-		});
-		expect(calls).toBe(2);
-		expect(result.candidates).toHaveLength(1);
+		await expect(
+			extractBProfileCandidatesFromChunk({
+				conversationText: "user: Keep updates short.",
+				llm,
+			}),
+		).rejects.toThrow(/no usable reply in 1 turn/);
+		expect(calls).toBe(1);
 	});
 
 	it("never retries a reply that parsed, including one that found nothing", async () => {
