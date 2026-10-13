@@ -268,6 +268,7 @@ export interface RemWaveMeasurements {
 }
 
 export interface RemBatchJobResult extends JournalEntry {
+	hostRefusal?: ModelCallRefusedError;
 	candidateCount: number;
 	stampedSkippedCount: number;
 	actionableCandidateCount: number;
@@ -287,6 +288,7 @@ export interface RemAppliedUnitStatistics {
 }
 
 type RemStageResult = JournalEntry & {
+	hostRefusal?: ModelCallRefusedError;
 	measurements: RemWaveMeasurements;
 	updateRows?: RemAppliedUnitStatistics;
 	relationPairs?: RemAppliedUnitStatistics;
@@ -395,6 +397,12 @@ export async function runRemProductionOrderedWave(input: {
 									? {}
 									: { implementationVersion: input.implementationVersion }),
 							});
+							if (result.hostRefusal) {
+								const work = result.actionsApplied > 0 || repository.listJournal(waveId).some(entry =>
+									entry.actionsApplied > 0 || (entry.outcome === "no-action" && entry.verdicts > 0));
+								if (!work) throw result.hostRefusal;
+								refusal = result.hostRefusal;
+							}
 							results.push({ operation: jobType, ...result });
 							return result;
 						},
@@ -402,7 +410,10 @@ export async function runRemProductionOrderedWave(input: {
 				],
 			});
 			if (stageResults[jobType] === "failed") stageFailed = true;
-			if (refusal) throw refusal;
+			if (refusal) {
+				if (refusal.destination !== "host" || stageFailed) throw refusal;
+				break;
+			}
 		}
 	} finally {
 		journalDatabase.db.close();
@@ -434,7 +445,7 @@ export async function runRemProductionOrderedWave(input: {
 			0,
 		),
 		parseFailureCount: results.reduce((total, result) => total + result.parseFailureCount, 0),
-		topRefusalReasons: [...new Set(results.flatMap((result) => result.topRefusalReasons))].slice(0, 2),
+		topRefusalReasons: [...new Set([...(refusal ? [`host-refused:${refusal.callId}`] : []), ...results.flatMap((result) => result.topRefusalReasons)])].slice(0, 2),
 		measurements: {
 			rowsConsidered: Math.max(0, ...results.map((result) => result.measurements.rowsConsidered)),
 			pairsBuilt: results.reduce((total, result) => total + result.measurements.pairsBuilt, 0),
@@ -562,7 +573,7 @@ async function runRemBatchJobUnlocked(input: {
 					terminalState: "done",
 					appliedFraction,
 					parseFailureCount,
-					topRefusalReasons,
+					topRefusalReasons: [...(result.hostRefusal ? [`host-refused:${result.hostRefusal.callId}`] : []), ...topRefusalReasons].slice(0, 2),
 				};
 				return completed;
 			} finally {
@@ -849,14 +860,12 @@ function createRemUpdateBudget(configuration: RemOperationalConfiguration | unde
 	return { configuration, modelCalls: 0, startedAtMs: Date.now(), tokens: 0 };
 }
 
-// A meter, not a gate. This used to refuse the call when it crossed a configured wall clock, call
-// count or token ceiling; all three were guesses, and the token one could never be satisfied at all,
-// so the stage made zero model calls in every run it was configured for. What each was watching now
-// leaves in the wave summary as a measurement, where a real ceiling can be derived from real waves
-// if one ever turns out to be needed.
-function recordRemUpdateModelCall(budget: RemUpdateBudget, prompt: string): void {
+// All update stages share the existing per-pass budget, including verification and target batches.
+function recordRemUpdateModelCall(budget: RemUpdateBudget, prompt: string): boolean {
+	if (budget.modelCalls >= (budget.configuration?.budgets.maxPairs ?? 0)) return false;
 	budget.modelCalls += 1;
 	budget.tokens += countTokens(prompt) + REM_MODEL_OUTPUT_TOKEN_CAP;
+	return true;
 }
 
 async function runUpdate(input: {
@@ -873,6 +882,7 @@ async function runUpdate(input: {
 	// Every eligible row is considered. This used to keep only the first `maxRows`, which was 10
 	// against a persona's ~209 actionable candidates — not a ceiling on work but silent, permanent
 	// discard of 95% of it, with nothing in the output saying so.
+	try {
 	const candidates = input.candidates;
 	const ports = createSnoStationMemRemPorts({
 		database: input.runtime.database,
@@ -990,7 +1000,10 @@ async function runUpdate(input: {
 				source: candidate.text,
 				...(enumeratedMembers.length === 0 ? {} : { enumeratedMembers }),
 			});
-			recordRemUpdateModelCall(budget, prompt);
+			if (!recordRemUpdateModelCall(budget, prompt)) {
+				releaseCandidate(input.repository, claimed);
+				break;
+			}
 			llmCalls += 1;
 			// Model call REM5: REM update: judgment.
 			// Mode routing table: [IMP]-single-settings-file/settings-inventory.md
@@ -1031,7 +1044,10 @@ async function runUpdate(input: {
 				proposedCurrent: decision.proposedCurrent,
 				retiredValues: decision.retiredValues,
 			});
-			recordRemUpdateModelCall(budget, verificationPrompt);
+			if (!recordRemUpdateModelCall(budget, verificationPrompt)) {
+				releaseCandidate(input.repository, claimed);
+				break;
+			}
 			llmCalls += 1;
 			// Model call REM6: REM verification.
 			// Mode routing table: [IMP]-single-settings-file/settings-inventory.md
@@ -1189,12 +1205,36 @@ async function runUpdate(input: {
 		measurements: {
 			rowsConsidered: candidates.length,
 			pairsBuilt: 0,
-			pairCapBinding: false,
+			pairCapBinding: budget.modelCalls >= (input.configuration?.budgets.maxPairs ?? 0),
 			modelCalls: budget.modelCalls,
 			modelTokens: budget.tokens,
 			wallMs: Date.now() - budget.startedAtMs,
 		},
 	};
+	} catch (error) {
+		if (!(error instanceof ModelCallRefusedError) || error.destination !== "host") throw error;
+		const entries = input.repository.listJournal(input.jobId, input.jobType);
+		const applied = input.runtime.database.prepare(`SELECT count(*) AS count FROM (
+			SELECT row_id FROM nodix_rem_write_attempts
+			WHERE job_id = ? AND stage LIKE 'rem-update%' AND outcome = 'succeeded'
+			  AND writer IN ('softClose', 'writeTextVersion')
+			UNION
+			SELECT json_extract(detail, '$.targetRowId') FROM nodix_rem_journal
+			WHERE job_id = ? AND job_type = 'rem-update' AND outcome = 'done'
+			  AND stage LIKE 'update-retirement-target:%'
+		)`).get(input.jobId, input.jobId) as { count: number };
+		return {
+			...journal(input.jobType,
+				entries.reduce((total, entry) => total + entry.pairsScanned, 0),
+				entries.reduce((total, entry) => total + entry.verdicts, 0),
+				applied.count),
+			hostRefusal: error,
+			measurements: {
+				rowsConsidered: input.candidates.length, pairsBuilt: 0, pairCapBinding: true,
+				modelCalls: budget.modelCalls, modelTokens: budget.tokens, wallMs: Date.now() - budget.startedAtMs,
+			},
+		};
+	}
 }
 
 function appliedUnitStatistics(considered: number, applied: number): RemAppliedUnitStatistics {
@@ -1256,6 +1296,7 @@ async function runProductionUpdateRelations(input: {
 	let successfulLlmCalls = 0;
 	let verdicts = 0;
 	for (let workIndex = 0; workIndex < relationWork.length; workIndex += 1) {
+		if (input.budget.modelCalls >= input.configuration.budgets.maxPairs) break;
 		const work = relationWork[workIndex];
 		if (work === undefined) continue;
 		const { candidates } = work;
@@ -1271,6 +1312,7 @@ async function runProductionUpdateRelations(input: {
 					right.id.localeCompare(left.id),
 			);
 		for (const nominatedRow of retirementPair === undefined ? nominatedRows : []) {
+			if (input.budget.modelCalls >= input.configuration.budgets.maxPairs) break;
 			if (handledRowIds.has(nominatedRow.id)) continue;
 			const candidateSet = await buildRemRetirementCandidateSet({
 				runtime: input.runtime,
@@ -1348,7 +1390,7 @@ async function runProductionUpdateRelations(input: {
 			predecessorTexts: [prior.text],
 			successorTexts: linked.map((candidate) => candidate.text),
 		});
-		recordRemUpdateModelCall(input.budget, prompt);
+		if (!recordRemUpdateModelCall(input.budget, prompt)) break;
 		llmCalls += 1;
 		// Model call REM7: REM update: relation.
 		// Mode routing table: [IMP]-single-settings-file/settings-inventory.md
@@ -1412,7 +1454,7 @@ async function runProductionUpdateRelations(input: {
 				source: prior.text,
 				supersedingText: relationCandidate.text,
 			});
-			recordRemUpdateModelCall(input.budget, rewritePrompt);
+			if (!recordRemUpdateModelCall(input.budget, rewritePrompt)) break;
 			llmCalls += 1;
 			// Model call REM5: REM update: judgment.
 			// Mode routing table: [IMP]-single-settings-file/settings-inventory.md
@@ -1449,7 +1491,7 @@ async function runProductionUpdateRelations(input: {
 				proposedCurrent: rewrite.proposedCurrent,
 				retiredValues: rewrite.retiredValues,
 			});
-			recordRemUpdateModelCall(input.budget, verificationPrompt);
+			if (!recordRemUpdateModelCall(input.budget, verificationPrompt)) break;
 			llmCalls += 1;
 			// Model call REM6: REM verification.
 			// Mode routing table: [IMP]-single-settings-file/settings-inventory.md
@@ -1499,7 +1541,7 @@ async function runProductionUpdateRelations(input: {
 				retiredValues: [prior.text],
 				retractionText: retraction.text,
 			});
-			recordRemUpdateModelCall(input.budget, verificationPrompt);
+			if (!recordRemUpdateModelCall(input.budget, verificationPrompt)) break;
 			llmCalls += 1;
 			// Model call REM6: REM verification.
 			// Mode routing table: [IMP]-single-settings-file/settings-inventory.md
@@ -1893,7 +1935,7 @@ async function runRemRetirementTargetGate(input: {
 			nominatedRow: { id: input.nominatedRow.id, text: input.nominatedRow.text },
 			candidateRows: batch.map((candidate) => ({ id: candidate.id, text: candidate.text })),
 		});
-		recordRemUpdateModelCall(input.budget, prompt);
+		if (!recordRemUpdateModelCall(input.budget, prompt)) break;
 		llmCalls += 1;
 		let reply: string | null = null;
 		try {
@@ -2944,8 +2986,7 @@ async function runReplace(input: {
 	}
 	} catch (error) {
 		if (error instanceof ModelCallRefusedError) {
-			// Every claim is attempted and the refusal is always the error that leaves, so the job still
-			// ends rem_skipped; a release that fails is logged with its target.
+			// Release pending claims while retaining completed verdicts and writes.
 			const release = (target: string, run: () => void): void => {
 				try { run(); } catch (releaseError) {
 					log.error("REM claim release failed after a host refusal", { target, error: releaseError }, {
@@ -2964,7 +3005,15 @@ async function runReplace(input: {
 					owner: "verdict", claimToken: candidate.claimToken }));
 			}
 		}
-		throw error;
+		if (!(error instanceof ModelCallRefusedError) || error.destination !== "host") throw error;
+		return {
+			...journal(input.jobType, pairsScanned, verdicts, actionsApplied),
+			hostRefusal: error,
+			measurements: {
+				rowsConsidered: input.candidates.length, pairsBuilt: indexedPairs.length, pairCapBinding: true,
+				modelCalls: llmCalls, modelTokens, wallMs: Date.now() - startedAtMs,
+			},
+		};
 	}
 	for (const candidate of participatingClaimed) {
 		const modified =
@@ -3271,7 +3320,7 @@ export async function buildRemReplaceCandidateQueue(input: {
 			}
 			return left.sortKey.localeCompare(right.sortKey);
 		});
-	// A pair already closed with a verdict is not judged again when the corpus moves on;
+	// A settled or exhausted pair is not judged again when the corpus moves on;
 	// its identity carries both texts, so an edited row is a new pair.
 	const judged = repository.readClosedVerdictPairIds(ordered.map((pair) => pair.pairId));
 	const unjudged = ordered.filter((pair) => !judged.has(pair.pairId));
