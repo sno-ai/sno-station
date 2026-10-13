@@ -15,7 +15,7 @@ Requirements:
 Complete the [memory service setup](../memory-setup.md) once, then install the plugin:
 
 ```bash
-openclaw plugins install @snoai/mem-claw@1.2.12
+openclaw plugins install @snoai/mem-claw@1.2.13
 ```
 
 To upgrade later, run `sno update`; OpenClaw refuses a second `openclaw plugins install` while its gateway is running.
