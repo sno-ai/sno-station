@@ -35,6 +35,7 @@ export function createMemoryConnection(api: OpenClawPluginApi, skinId: string = 
   let opening: Promise<MemoryClient> | undefined;
   let client: MemoryClient | undefined;
   let retryTimer: NodeJS.Timeout | undefined;
+  let retryDelay = MEMORY_RECONNECT_INTERVAL_MS;
   let closed = false;
   const dropCallback = async (): Promise<void> => { const closing = callback; callback = undefined; await closing?.close(); };
   const open = async (): Promise<MemoryClient> => {
@@ -65,6 +66,7 @@ export function createMemoryConnection(api: OpenClawPluginApi, skinId: string = 
         client = opened;
         if (retryTimer) clearTimeout(retryTimer);
         retryTimer = undefined;
+        retryDelay = MEMORY_RECONNECT_INTERVAL_MS;
         return opened;
       })().catch((error: unknown) => {
         api.logger.error(`Memory service registration failed: ${error instanceof Error ? error.message : String(error)}`);
@@ -72,7 +74,8 @@ export function createMemoryConnection(api: OpenClawPluginApi, skinId: string = 
           retryTimer = setTimeout(() => {
             retryTimer = undefined;
             void ready().catch(() => undefined);
-          }, MEMORY_RECONNECT_INTERVAL_MS);
+          }, retryDelay);
+          retryDelay = Math.min(retryDelay * 2, 60_000);
           retryTimer.unref();
         }
         throw error;
