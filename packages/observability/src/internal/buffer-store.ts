@@ -3,6 +3,7 @@ import { createUUIDv7 } from "@snoai/common-core";
 import DatabaseConstructor from "better-sqlite3";
 import { computeSelfHash } from "./canonical-hash.js";
 import { ChainContentionError, ChainSeedError } from "./errors.js";
+import { logger } from "./log.js";
 import type {
 	AgentId,
 	ConsentValue,
@@ -166,6 +167,7 @@ export class BufferStore {
 				if (result === undefined) {
 					throw new ChainContentionError();
 				}
+				this.pruneRetention();
 				return result;
 			} catch (error) {
 				if (!isUniqueConstraintError(error)) {
@@ -300,16 +302,13 @@ export class BufferStore {
 	 * Moves every pending row of `row`'s chain from `row.seq` onward into a fresh epoch,
 	 * seeded by a new `agent.identify`. `quarantine: "head"` records the head row as evidence
 	 * and drops it; `"all"` records the whole run as evidence and opens no new epoch (the
-	 * server will not take any of it right now); `rewrite` lets the caller change what travels;
-	 * `headLast` sends the head row after the rows behind it, and does nothing when no row is
-	 * behind it.
+	 * server will not take any of it right now); `rewrite` lets the caller change what travels.
 	 */
 	carryForward(
 		row: PendingRow,
 		identifyPayloadFor: IdentifyPayloadFor,
 		options: {
 			quarantine?: "head" | "all";
-			headLast?: boolean;
 			detail?: QuarantineDetail;
 			rewrite?: (envelope: WireEnvelope) => Pick<WireEnvelope, "consent_level" | "payload">;
 		} = {},
@@ -324,12 +323,6 @@ export class BufferStore {
 					ORDER BY seq ASC`,
 				)
 				.all(row.machine_id, row.agent_id, row.chain_epoch, row.seq) as PendingRow[];
-			// Moving a refused head behind rows that were refused before only swaps refused rows
-			// around forever; it moves only while some row behind it has not been refused yet.
-			if (options.headLast === true && suffix.slice(1).every((behind) => behind.attempts > 0)) {
-				return;
-			}
-			const attemptsById = new Map(suffix.map((old) => [old.event_id, old.attempts] as const));
 			const now = Date.now();
 			const deleteRow = this.db.prepare("DELETE FROM events WHERE rowid = ?");
 			for (const old of suffix) {
@@ -351,7 +344,6 @@ export class BufferStore {
 				return;
 			}
 			const carried = suffix.slice(evidenceCount).map((old) => decodeEnvelope(old.payload));
-			const envelopes = options.headLast === true ? [...carried.slice(1), ...carried.slice(0, 1)] : carried;
 			const chainEpoch = this.getCurrentEpochInsideTx(row.machine_id, row.agent_id) + 1;
 			const head = decodeEnvelope(row.payload);
 			const headRewrite = options.rewrite?.(head);
@@ -363,7 +355,7 @@ export class BufferStore {
 				scope: scopeWithoutSession(head.scope),
 				payload: identifyPayloadFor(row.agent_id, row.machine_id),
 			});
-			for (const envelope of envelopes) {
+			for (const envelope of carried) {
 				if (envelope.event_type === "agent.identify") {
 					continue;
 				}
@@ -379,9 +371,6 @@ export class BufferStore {
 					payload: rewritten?.payload ?? envelope.payload,
 					terminal: false,
 					chainEpoch,
-					...(options.headLast === true
-						? { attempts: (attemptsById.get(envelope.event_id) ?? 0) + (envelope.event_id === row.event_id ? 1 : 0) }
-						: {}),
 				});
 				result.carried += 1;
 			}
@@ -458,9 +447,8 @@ export class BufferStore {
 
 	/**
 	 * Deletes shipped and consent-off rows older than a day, closed epochs with no rows left,
-	 * and stale quarantine evidence. Over the byte cap only the oldest already-shipped (or
-	 * consent-off) rows go; an unsent event is never deleted. The count comes back so the caller
-	 * can say so loudly.
+	 * and stale quarantine evidence. Over the byte cap, shipped rows go first, then complete
+	 * oldest pending epochs so the retained rows never depend on a deleted predecessor.
 	 */
 	pruneRetention(
 		maxBytes = RETENTION_MAX_BYTES,
@@ -502,8 +490,14 @@ export class BufferStore {
 			const oldest = this.db.prepare(
 				"DELETE FROM events WHERE rowid IN (SELECT rowid FROM events WHERE shipped = 1 OR terminal = 1 ORDER BY rowid ASC LIMIT ?)",
 			);
+			const oldestPendingEpoch = this.db.prepare(
+				`DELETE FROM events WHERE (machine_id, agent_id, chain_epoch) = (
+					SELECT machine_id, agent_id, chain_epoch FROM events
+					WHERE shipped = 0 AND terminal = 0 ORDER BY rowid ASC LIMIT 1
+				)`,
+			);
 			while (this.logicalDataSizeBytes() > maxBytes) {
-				const deleted = oldest.run(OVERFLOW_DELETE_BATCH).changes;
+				const deleted = oldest.run(OVERFLOW_DELETE_BATCH).changes || oldestPendingEpoch.run().changes;
 				if (deleted === 0) {
 					break;
 				}
@@ -512,6 +506,16 @@ export class BufferStore {
 		});
 		if (report.deletedEvents + report.overflowDeleted > 0) {
 			this.db.pragma("wal_checkpoint(TRUNCATE)");
+		}
+		if (report.overflowDeleted > 0) {
+			logger.error("sno observe buffer over capacity; oldest events removed, including pending epochs", {
+				dropped: report.overflowDeleted,
+			}, {
+				event_name: "sno.observe.internal.flush.pruneloudly",
+				file: "packages/observability/src/internal/buffer-store.ts",
+				function: "pruneRetention",
+				site_id: "sno.observe.internal.flush.pruneloudly.1",
+			});
 		}
 		return report;
 	}

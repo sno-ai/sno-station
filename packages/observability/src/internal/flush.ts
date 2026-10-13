@@ -9,6 +9,7 @@ import {
 import { type MachineRegistrationCache, registerBeforeFlush } from "./flush-registration.js";
 import { type EventPostResult, postEvent } from "./http.js";
 import { logger } from "./log.js";
+import { applyRemoteLogging } from "./remote-logging.js";
 import type { PathEnv } from "./paths.js";
 import { type Identity, SDK_VERSION, type WireEnvelope } from "./types.js";
 
@@ -400,7 +401,7 @@ async function flushPendingWithLease(
 				retryAfterMs: store.getNextChainRetryDelay() || 5_000,
 			};
 		}
-		pruneLoudly(store);
+		store.pruneRetention();
 		store.clearElapsedRetryDeadline();
 		return { shipped: 0, terminal: 0, retryable: 0 };
 	}
@@ -462,27 +463,13 @@ async function flushPendingWithLease(
 			break;
 		}
 	}
-	pruneLoudly(store);
+	store.pruneRetention();
 	const retryAfterMs = globalRetryable > 0 ? globalRetryAfterMs : chainRetryAfterMs;
 	return persistRetryDeadline(
 		store,
 		withOptionalRetryAfter({ shipped, terminal, retryable }, retryAfterMs),
 		globalRetryable > 0,
 	);
-}
-
-function pruneLoudly(store: BufferStore): void {
-	const report = store.pruneRetention();
-	if (report.overflowDeleted > 0) {
-		logger.error("sno observe buffer over capacity; oldest already-sent events removed (unsent events are kept)", {
-			dropped: report.overflowDeleted,
-		}, {
-			event_name: "sno.observe.internal.flush.pruneloudly",
-			file: "packages/observability/src/internal/flush.ts",
-			function: "pruneLoudly",
-			site_id: "sno.observe.internal.flush.pruneloudly.1",
-		});
-	}
 }
 
 function persistRetryDeadline(
@@ -512,6 +499,7 @@ async function flushRow(
 			options.fetch,
 			options.signal,
 		);
+		if (response.status >= 200 && response.status < 300) applyRemoteLogging(response.body, options.env);
 		if (response.status === 401 || response.status === 403) {
 			if (options.machineRegistrationCache !== undefined) {
 				options.machineRegistrationCache.registered = false;
@@ -581,15 +569,21 @@ function handlePostResult(
 		case "suppressed":
 			return handleConsentSuppressed(store, row, response, identifyPayloadFor);
 		case "refused": {
-			// Never parked, never deleted. The rows behind it travel first and it is sent last;
-			// alone, or an identify (which seeds the chain), it waits and is sent again.
-			const isIdentify = decodeEnvelope(row.payload).event_type === "agent.identify";
-			const moved = isIdentify ? undefined : store.carryForward(row, identifyPayloadFor, { headLast: true });
-			logger.error("sno observe event refused by server; kept and will be sent again", {
+			const envelope = decodeEnvelope(row.payload);
+			const agentKey = `${row.machine_id}:${row.agent_id}`;
+			const isIdentify = envelope.event_type === "agent.identify";
+			// One replacement seed is enough: if it is refused too, no suffix can ship.
+			const moved = store.carryForward(row, identifyPayloadFor, {
+				quarantine: isIdentify && rechainedAgents.has(agentKey) ? "all" : "head",
+				detail: { status: response.status, reason: route.reason, body: response.body },
+			});
+			if (isIdentify) rechainedAgents.add(agentKey);
+			logger.error("sno observe event refused by server; quarantined and will not be sent again", {
 				event_id: row.event_id,
-				event_type: decodeEnvelope(row.payload).event_type,
+				event_type: envelope.event_type,
 				status: response.status,
 				reason: route.reason,
+				quarantined: moved.quarantined,
 				body: response.body.slice(0, 512),
 			}, {
 				event_name: "sno.observe.internal.flush.handlepostresult",
@@ -597,10 +591,7 @@ function handlePostResult(
 				function: "handlePostResult",
 				site_id: "sno.observe.internal.flush.handlepostresult.6",
 			});
-			if (moved === undefined || moved.carried === 0) {
-				return retryRow(store, row, response, { kind: "wait", message: `refused (${route.reason})`, retryScope: "chain" });
-			}
-			return { shipped: 0, terminal: 0, retryable: 0, requery: true };
+			return { shipped: 0, terminal: moved.quarantined, retryable: 0, requery: true };
 		}
 		case "rechain": {
 			const agentKey = `${row.machine_id}:${row.agent_id}`;
@@ -696,6 +687,9 @@ function handleConsentSuppressed(
 
 function routeResponse(response: EventPostResult, row: PendingRow): ResponseRoute {
 	const code = responseErrorCode(response.body);
+	if (code === "invalid_event_payload") {
+		return { kind: "refused", reason: code };
+	}
 	switch (response.status) {
 		case 202:
 			return { kind: "shipped" };
