@@ -160,7 +160,7 @@ describe("Claude worker with a real sidecar", () => {
 		expect(existsSync(workerLockPath())).toBe(false);
 	}, 90_000);
 
-	it("keeps a real rejected capture after three attempts spaced by two and ten seconds", async () => {
+	it("deletes a real rejected capture after three attempts spaced by two and ten seconds", async () => {
 		// The sidecar contract rejects a negative message timestamp over the real HTTP route.
 		const path = await spool("0001.json", "invalid-timestamp", -1);
 		const fixture = observeClient();
@@ -171,7 +171,7 @@ describe("Claude worker with a real sidecar", () => {
 		logged.mockRestore();
 		expect(failures.map(line => JSON.parse(line))).toEqual([1, 2, 3].map(attempt =>
 			expect.objectContaining({ event: "capture-failed", turnId: "invalid-timestamp", attempt, error: expect.stringMatching(/\S/) })));
-		expect(JSON.parse(await readFile(path, "utf8"))).toMatchObject({ attempts: 3, state: "failed" });
+		expect(existsSync(path)).toBe(false);
 		expect(fixture.captures).toHaveLength(3);
 		const [first, second, third] = fixture.captures;
 		if (!first || !second || !third) throw new Error("three capture observations are required");

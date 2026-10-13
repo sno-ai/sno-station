@@ -10,7 +10,7 @@ import {
 	type RemVerdictCheckpoint,
 } from "../../../../packages/memory/src/engine/rem/index.ts";
 import {
-	initSqliteRuntimeSync,
+	initSqliteRuntime,
 	openSqliteDatabase,
 } from "../../../../packages/memory/src/store/sqlite-runtime.ts";
 
@@ -19,7 +19,7 @@ if (!command || !dbPath) {
 	throw new Error("usage: rem-batch-crash-worker.ts <command> <db> [...args]");
 }
 
-initSqliteRuntimeSync();
+initSqliteRuntime(process.env.REM_TEST_ENCRYPTION_KEY ?? "");
 const runtime = openSqliteDatabase(dbPath, { fileMustExist: true });
 try {
 	installRemSchema(runtime.db);
