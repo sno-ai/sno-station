@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { type ConversationRecord, cursorSurface, nextRecord, touchConversation } from "../../../apps/mem-cursor/src/conversation.ts";
@@ -65,7 +65,9 @@ describe("touchConversation on disk", () => {
 	let previousProfile: string | undefined;
 
 	beforeEach(() => {
-		root = mkdtempSync(join(tmpdir(), "mem-cursor-record-"));
+		// Hooks ignore sessions under the temporary directory, so the workspace lives under the home cache.
+		mkdirSync(join(homedir(), ".cache"), { recursive: true });
+		root = mkdtempSync(join(homedir(), ".cache", "mem-cursor-record-"));
 		previousProfile = process.env.SNO_PROFILE_DIR;
 		process.env.SNO_PROFILE_DIR = join(root, "profile");
 	});
@@ -105,6 +107,17 @@ describe("touchConversation on disk", () => {
 		const record = await touchConversation({ conversation_id: ID, workspace_roots: [plain], transcript_path: null }, "primary");
 		expect(record?.project).toBeNull();
 		expect(read(ID).project).toBeNull();
+	});
+
+	it("records project null for a git repository in the temporary directory, where scripted runs live", async () => {
+		const scratch = mkdtempSync(join(tmpdir(), "mem-cursor-scripted-"));
+		try {
+			execFileSync("git", ["init", "-q", scratch]);
+			const record = await touchConversation({ conversation_id: ID, workspace_roots: [scratch], transcript_path: null }, "primary");
+			expect(record?.project).toBeNull();
+		} finally {
+			rmSync(scratch, { recursive: true, force: true });
+		}
 	});
 
 	it("gives no record to a conversation first seen on a non-primary event (a subagent's)", async () => {

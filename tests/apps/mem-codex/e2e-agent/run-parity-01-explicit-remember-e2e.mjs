@@ -8,6 +8,7 @@ import { homedir } from "node:os";
 import { createServer, request } from "node:http";
 import { pathToFileURL } from "node:url";
 import { globalPrefixWith, realSno } from "../../support/real-sno.mjs";
+import { cleanupProfile } from "../../support/profile-cleanup.mjs";
 
 // Session plumbing copied from run-stp7-e2e.mjs; no deployment or planted product edits.
 export function remote(script, timeout = 300_000) {
@@ -134,9 +135,15 @@ export async function runNativeCase(journey) {
 		? pathToFileURL(join(installedCodex, "dist/install.js")).href
 		: "../../../../apps/mem-codex/src/install.ts");
 	const sno = realSno();
-	const globalPrefix = globalPrefixWith({ "@snoai/mem-codex": installedCodex || join(repository, "apps/mem-codex") });
 	const sourceHome = process.env.CODEX_HOME || join(homedir(), ".codex");
-	const nativeProfile = mkdtempSync("/tmp/mem-update-codex-native-profile-");
+	// Hooks ignore sessions under the temporary directory, so the project lives under the home cache.
+	mkdirSync(join(homedir(), ".cache"), { recursive: true });
+	const nativeProfile = mkdtempSync(join(homedir(), ".cache", "mem-update-codex-native-profile-"));
+	const previousEnv = { profile: process.env.SNO_PROFILE_DIR, home: process.env.HOME };
+	let globalPrefix;
+	let recorder;
+	try {
+	globalPrefix = globalPrefixWith({ "@snoai/mem-codex": installedCodex || join(repository, "apps/mem-codex") });
 	process.env.SNO_PROFILE_DIR = nativeProfile;
 	process.env.HOME = join(nativeProfile, "home");
 	mkdirSync(process.env.HOME);
@@ -153,7 +160,7 @@ export async function runNativeCase(journey) {
 	const fixture = { profile: nativeProfile, client };
 	const runId = randomUUID().replaceAll("-", "");
 	const wire = [];
-	const recorder = createServer((incoming, outgoing) => {
+	recorder = createServer((incoming, outgoing) => {
 		const parts = [];
 		incoming.on("data", part => parts.push(part));
 		incoming.on("end", () => {
@@ -219,12 +226,13 @@ export async function runNativeCase(journey) {
 	const runs = [], actions = [];
 	async function execute(program, args) {
 		return new Promise((resolveRun, reject) => {
-			const child = spawn(program, args, { cwd, env, stdio: ["ignore", "pipe", "pipe"] });
+			const child = spawn(program, args, { cwd, env, detached: true, stdio: ["ignore", "pipe", "pipe"] });
 			let output = "", error = "";
 			child.stdout.on("data", part => { output += part; });
 			child.stderr.on("data", part => { error += part; });
 			child.on("error", reject);
-			child.on("exit", code => resolveRun({ code, output, error }));
+			child.on("exit", () => { try { process.kill(-child.pid, "SIGKILL"); } catch (error) { if (error.code !== "ESRCH") console.error(`Process cleanup failed: ${error.message}`); } });
+			child.on("close", code => resolveRun({ code, output, error }));
 		});
 	}
 	async function action(name, ...args) {
@@ -273,14 +281,19 @@ export async function runNativeCase(journey) {
 		const evidencePath = `/tmp/mem-update-codex-native-${runId}-evidence.json`;
 		writeFileSync(evidencePath, JSON.stringify(evidence, null, 2));
 		console.log(JSON.stringify({ evidencePath, passed }));
-		recorder.closeAllConnections();
-		await new Promise(resolveClosed => recorder.close(resolveClosed));
-		const lock = join(fixture.profile, "sno-mem-codex/worker.lock");
-		if (existsSync(lock)) {
-			const pid = Number(readFileSync(lock, "utf8").split(" ")[0]);
-			try { process.kill(pid, "SIGTERM"); } catch (error) { if (error.code !== "ESRCH") { console.error(`worker teardown failed: ${error.message}`); process.exitCode = 1; } }
+	}
+	} finally {
+		if (recorder?.listening) {
+			recorder.closeAllConnections();
+			await new Promise(resolveClosed => recorder.close(resolveClosed));
 		}
-		try { process.kill(client.pid, "SIGTERM"); } catch (error) { if (error.code !== "ESRCH") { console.error(`sidecar teardown failed: ${error.message}`); process.exitCode = 1; } }
+		try { await cleanupProfile(nativeProfile, "codex", globalPrefix); }
+		finally {
+			if (previousEnv.profile === undefined) delete process.env.SNO_PROFILE_DIR;
+			else process.env.SNO_PROFILE_DIR = previousEnv.profile;
+			if (previousEnv.home === undefined) delete process.env.HOME;
+			else process.env.HOME = previousEnv.home;
+		}
 	}
 	console.log("green");
 }
