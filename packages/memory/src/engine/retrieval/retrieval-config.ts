@@ -135,6 +135,8 @@ export interface RetrievalContext {
 	 * to `limit` before anything downstream can filter it.
 	 */
 	excludeSuperseded?: boolean;
+	/** False when the caller records access itself, for the rows it actually serves. */
+	trackAccess?: boolean;
 }
 
 /**

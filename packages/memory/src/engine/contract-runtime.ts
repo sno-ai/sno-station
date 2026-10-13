@@ -381,7 +381,7 @@ export class MemoryContractRuntime implements MemoryContract {
 		if (!settings.auto) return empty;
 		const phase = options.injectionPhase ?? "prompt";
 		const phases = phase === "first-prompt" ? ["session-start", "prompt"] as const : [phase];
-		const prepared: Array<{ hits: RetrievalResult[]; cap: number }> = [];
+		const prepared: Array<{ hits: RetrievalResult[]; cap: number; trackServed: boolean }> = [];
 		for (const current of phases) {
 			const cfg = current === "session-start" ? settings.sessionStart : settings.prompt;
 			const limit = Math.max(0, options.limit ?? cfg.limit);
@@ -392,19 +392,20 @@ export class MemoryContractRuntime implements MemoryContract {
 			const hits = await retrieveForAutoRecall(this.services.retriever, {
 				// A prompt over-fetches: the similarity filter below drops rows after the cut, and diversity ordering can push the
 				// row that matters behind rows the filter then removes (a just-captured question crowds out the earlier decision).
-				query: current === "session-start" ? CODING_SKIN_SESSION_QUERY : query, limit: current === "prompt" ? limit * 4 : limit, minScore: minimum,
+				query: current === "session-start" ? CODING_SKIN_SESSION_QUERY : query, limit: current === "prompt" ? limit * 4 : limit, minScore: minimum, trackAccess: current !== "prompt",
 				scopeFilter: [context.scopePolicy.getDefaultScope()], signal: retrievalSignal,
 				nowMs: Date.now(), sessionId: key,
 			});
 			retrievalSignal.throwIfAborted();
 			// Rank scores include age/importance decay; use query similarity to exclude unrelated nearest neighbours.
-			prepared.push({ hits: current === "prompt" ? hits.filter(hit => hit.denseScore === undefined || hit.denseScore >= 0.5).slice(0, limit) : hits, cap: cfg.maxChars });
+			prepared.push({ hits: current === "prompt" ? hits.filter(hit => hit.denseScore === undefined || hit.denseScore >= 0.5).slice(0, limit) : hits, cap: cfg.maxChars, trackServed: current === "prompt" });
 		}
 		signal?.throwIfAborted();
 		const state = this.recall.injection.get(key) ?? { ids: new Set<string>(), chars: 0 };
 		const cap = Math.min(options.maxChars ?? prepared.reduce((sum, item) => sum + item.cap, 0), CODING_SKIN_LEDGER_MAX_CHARS - state.chars);
 		const lines = [INJECTION_HEADER];
 		const memoryIds: string[] = [];
+		const servedFromPrompt: string[] = [];
 		for (const batch of prepared) {
 			let phaseChars = INJECTION_HEADER.length;
 			for (const hit of batch.hits) {
@@ -417,8 +418,11 @@ export class MemoryContractRuntime implements MemoryContract {
 				lines.push(line);
 				phaseChars += line.length + 1;
 				memoryIds.push(current.id);
+				if (batch.trackServed) servedFromPrompt.push(current.id);
 			}
 		}
+		// The prompt fetch did not record access (it fetches more than it serves); only what was injected counts.
+		if (servedFromPrompt.length && this.services.config.recallLifecycle?.autoRecallAccessTracking === true) this.services.accessTracker.recordAccess(servedFromPrompt);
 		this.recordRecallPreview(query, memoryIds.map(id => this.services.store.getById(id)?.text));
 		if (!memoryIds.length) return empty;
 		const contextText = lines.join("\n");

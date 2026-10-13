@@ -255,6 +255,7 @@ export async function retrieveForAutoRecall(
 		signal?: AbortSignal;
 		sessionId?: string;
 		nowMs: number;
+		trackAccess?: boolean;
 	},
 ): Promise<RetrievalResult[]> {
 	// A group-CRUD close records `superseded_by` and, for a same-day or undated replacement, leaves
@@ -272,6 +273,7 @@ export async function retrieveForAutoRecall(
 		includeRefused: true,
 		excludeInvalidatedBefore: input.nowMs,
 		excludeSuperseded: true,
+		...(input.trackAccess === undefined ? {} : { trackAccess: input.trackAccess }),
 	});
 	// The store already dropped them. This is the second reading of the same rule, for a row whose
 	// metadata the SQL predicate could not parse.

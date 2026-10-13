@@ -73,6 +73,7 @@ Object.assign(MemoryRetriever.prototype, {
 
 			if (
 				!isExplicitAggregation &&
+				context.trackAccess !== false &&
 				this._accessTracker &&
 				(this._recallLifecycle?.autoRecallAccessTracking === true ||
 					context.source === "manual") &&
@@ -230,6 +231,7 @@ Object.assign(MemoryRetriever.prototype, {
 
 			if (
 				!isExplicitAggregation &&
+				context.trackAccess !== false &&
 				this._accessTracker &&
 				(this._recallLifecycle?.autoRecallAccessTracking === true ||
 					context.source === "manual") &&
