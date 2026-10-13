@@ -58,7 +58,7 @@ export async function createClaudeNative(label) {
 	prefix = globalPrefixWith({ "@snoai/mem-claude": dirname(dirname(entry)) });
 	const config = join(project, ".claude");
 	mkdirSync(config, { recursive: true });
-	const env = { ...process.env, SNO_PROFILE_DIR: profile, npm_config_prefix: prefix };
+	const env = { ...process.env, SNO_PROFILE_DIR: profile, npm_config_prefix: prefix, SNO_CAPTURE_SCRIPTED: "1" };
 	delete env.CLAUDECODE;
 	delete env.CLAUDE_CONFIG_DIR;
 	delete env.CLAUDE_CODE_SIMPLE;

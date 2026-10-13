@@ -208,7 +208,7 @@ export async function runNativeCase(journey) {
 	copyFileSync(join(repository, "tests/apps/mem-codex/fixtures/capture-installed-hook.mjs"), wrapper);
 	chmodSync(wrapper, 0o700);
 	await installCodex({ codexHome: home, programPath: wrapper, writeOutput() {} });
-	const env = { ...process.env, CODEX_HOME: home, SNO_MEM_UPDATE_CAPTURE_FILE: hookLog,
+	const env = { ...process.env, SNO_CAPTURE_SCRIPTED: "1", CODEX_HOME: home, SNO_MEM_UPDATE_CAPTURE_FILE: hookLog,
 		SNO_BINARY: sno, npm_config_prefix: globalPrefix };
 	const memoryCommand = verb => `${quote(sno)} memory ${verb} --harness codex`;
 	const scope = { principal: client.principal, project: cwd, session: "manual", host: { workspace: cwd, sessionId: "manual" } };
