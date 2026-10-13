@@ -24,7 +24,11 @@ export function loadMemoryTelemetryKeySet(
 	}
 	const key = options.key;
 	if (!key || key.trim().length === 0) {
-		throw new Error("telemetry.memoryUsage.key is required when memory telemetry is enabled");
+		return {
+			enabled: true,
+			current: null,
+			historic: new Map(options.historicKeys.map((value, index) => [index + 1, value])),
+		};
 	}
 	const currentKeyVersion = options.currentKeyVersion ?? options.historicKeys.length + 1;
 	if (!Number.isInteger(currentKeyVersion) || currentKeyVersion <= 0) {
