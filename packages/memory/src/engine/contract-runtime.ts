@@ -5,7 +5,9 @@ import { MAX_SESSION_RECALL_ENTRIES, MAX_TRACKED_SESSIONS } from "../../config/i
 import { pruneOldestEntries, setLruEntry } from "./shared/lru";
 import { CODING_SKIN_SESSION_QUERY, CODING_SKIN_LEDGER_MAX_CHARS, CODING_SKIN_RECALL_SENTENCE_MAX_CHARS, CODING_SKIN_RECALL_ITEM_MAX_CHARS } from "../../config/coding-skin";
 import { defaultSettings, type Settings } from "../../config/settings";
-import { resolve } from "node:path";
+import { debugContentPreview } from "./shared/utils";
+import { appendAuditEntry } from "./operations/runtime-audit-log";
+import { basename, resolve } from "node:path";
 import {
 	ContractError, parseInput, parseOutput, type ContractOutputs, type MemoryContract,
 	type ScopeCtx, type Registration, type RecallOptions, type Turn, type Mutation,
@@ -131,6 +133,7 @@ export class MemoryContractRuntime implements MemoryContract {
 	private registration: Registration | undefined;
 	private readonly providers = new Map<string, SnoStationMemProviderSearchManager>();
 	private readonly reflectionStates = new Map<string, ReflectionStrategyState>();
+	private readonly arrivalRetirements = new Set<Promise<void>>();
 	private recall: RecallState = { history: new Map(), turns: new Map(), injection: new Map() };
 	constructor(private readonly services: MemoryRuntimeServices) {}
 
@@ -140,6 +143,7 @@ export class MemoryContractRuntime implements MemoryContract {
 	}
 
 	async close(): Promise<void> {
+		await Promise.allSettled(this.arrivalRetirements);
 		for (const provider of this.providers.values()) await provider.close();
 		this.providers.clear();
 		this.reflectionStates.clear();
@@ -279,7 +283,12 @@ export class MemoryContractRuntime implements MemoryContract {
 		checkMemoryOperation();
 		const runtimeContext = this.services;
 		const distiller = buildInsightDistiller(runtimeContext, config, this.services.store, this.services.embedder,
-			this.services.observability, () => undefined, this.services.stateDir, this.services.agentPort);
+			this.services.observability, () => undefined, this.services.stateDir, this.services.agentPort, task => {
+				const pending = withMemoryOperation("arrival-retirement", undefined, task)
+					.catch(error => this.services.logger.error(String(error)))
+					.finally(() => this.arrivalRetirements.delete(pending));
+				this.arrivalRetirements.add(pending);
+			}, true);
 		const reason: { value?: string } = {};
 		const outcome = await onAgentEnd(runtimeContext, config, this.services.store, this.services.embedder, context.scopePolicy, distiller,
 			{ success: true, messages: turn.messages.map(({ at, ...message }) => ({ ...message, timestamp: at })) },
@@ -306,6 +315,8 @@ export class MemoryContractRuntime implements MemoryContract {
 			const nativeHits = await manager.search(input.query, {
 				maxResults: input.options.limit, minScore: input.options.minScore, sources: ["memory"], signal,
 			});
+			this.recordReadUsage(nativeHits.map(hit => basename(hit.path, ".md")), input.scope, recallId);
+			this.recordRecallPreview(input.query, nativeHits.map(hit => hit.snippet));
 			return { degraded: false, recallId, contextText: "", nativeHits };
 		}
 		if (input.options.source === "manual") {
@@ -333,6 +344,8 @@ export class MemoryContractRuntime implements MemoryContract {
 				: entries.map(entry => `${entry.id}\t${memoryLine(entry)}\n${entry.text}`).join("\n\n") || "No relevant memories found.";
 			result.content = [{ type: "text", text: contextText }];
 			result.details.memories = entries;
+			this.recordReadUsage(entries.map(entry => entry.id), input.scope, recallId);
+			if (!result.isError) this.recordRecallPreview(input.query, entries.map(entry => entry.text));
 			if (turn !== undefined) this.recordRecalled(sessionId, turn, entries.map(entry => entry.id));
 			return parseOutput("getRecall", { degraded: false, recallId,
 				contextText,
@@ -404,13 +417,42 @@ export class MemoryContractRuntime implements MemoryContract {
 				memoryIds.push(current.id);
 			}
 		}
+		this.recordRecallPreview(query, memoryIds.map(id => this.services.store.getById(id)?.text));
 		if (!memoryIds.length) return empty;
 		const contextText = lines.join("\n");
 		for (const id of memoryIds) state.ids.add(id);
 		state.chars += contextText.length;
 		this.recall.injection.set(key, state);
 		this.recordRecalled(key, turn, memoryIds);
+		this.recordReadUsage(memoryIds, scope, recallId);
+		this.recordReadUsage(memoryIds, scope, recallId, "inject");
 		return { degraded: false, recallId, contextText, memoryIds };
+	}
+
+	private recordRecallPreview(query: string, results: readonly (string | undefined)[]): void {
+		if (!this.configured().config.debugContent) return;
+		appendAuditEntry(this.services.stateDir, {
+			event: "memory_searched", hook: "getRecall", resultStatus: "ok", decision: "content_preview",
+			details: {
+				queryPreview: debugContentPreview(query, true),
+				topResultPreviews: results.slice(0, 5).map(text => debugContentPreview(text, true)),
+			},
+		});
+	}
+
+	private recordReadUsage(ids: readonly string[], scope: ScopeCtx, turnId = scope.host?.sessionId ?? scope.session, eventType: "recall" | "inject" = "recall"): void {
+		const outbox = this.services.telemetryUsage;
+		if (!outbox) return;
+		for (const [index, id] of ids.entries()) {
+			const entry = this.services.store.getById(id);
+			if (!entry) continue;
+			outbox.tryAcceptUsage({ eventType, factId: entry.factId ?? entry.id,
+				memoryKind: entry.category, projectId: entry.projectId, agentId: this.agentId(scope),
+				sessionUuid: scope.host?.observeSessionUuid ?? scope.session, turnId,
+				retrievalRank: index + 1,
+				metadata: eventType === "inject" ? { injection_surface: "memory_contract" } : { retrieval_rank: index + 1 },
+			});
+		}
 	}
 
 	async mutate(op: Mutation, scope: ScopeCtx, signal?: AbortSignal): Promise<ContractOutputs["mutate"]> {
@@ -510,15 +552,22 @@ export class MemoryContractRuntime implements MemoryContract {
 				const counted = await Promise.all(readable.map(scopeId => this.services.store.stats(scopeId)));
 				return { degraded: false, result: { op: "stats", ...sumStats(counted) } };
 			}
-			case "list": return { degraded: false, result: { op: "list", project, entries: await this.services.store.list({ ...op, projectIdFilter: readable, importanceMin: op.importanceMin }) } };
-			case "listReflection": return { degraded: false, result: { op: "listReflection", project, entries: await this.services.store.listReflectionItems({ ...op, projectIdFilter: readable }) } };
+			case "list":
+			case "listReflection": {
+				const entries = op.op === "list" ? await this.services.store.list({ ...op, projectIdFilter: readable, importanceMin: op.importanceMin })
+					: await this.services.store.listReflectionItems({ ...op, projectIdFilter: readable });
+				this.recordReadUsage(entries.map(entry => entry.id), scope);
+				return { degraded: false, result: { op: op.op, project, entries } };
+			}
 			case "get": {
 				if (op.path) {
 					const manager = await this.provider(scope);
 					const file = await manager.readFile({ relPath: op.path, from: op.from, lines: op.lines });
+					this.recordReadUsage([basename(file.path, ".md")], scope);
 					return { degraded: false, result: { op: "get", entry: null, file } };
 				}
 				const entry = op.id ? this.services.store.getById(op.id) : undefined;
+				if (entry && readable.includes(entry.projectId)) this.recordReadUsage([entry.id], scope);
 				return { degraded: false, result: { op: "get", entry: entry && readable.includes(entry.projectId) ? explicitEntry(entry) : null } };
 			}
 		}
@@ -528,6 +577,7 @@ export class MemoryContractRuntime implements MemoryContract {
 		parseInput("recordUsage", { recallId, signal, scope });
 		const project = await this.project(scope);
 		const ids = signal.memoryIds.filter(id => this.services.store.getById(id)?.projectId === project);
+		if (signal.event === "inject") this.recordReadUsage(ids, scope, recallId, "inject");
 		if (signal.event === "used") {
 			this.services.accessTracker.recordAccess(ids);
 			await this.services.accessTracker.flush();
