@@ -285,17 +285,41 @@ describe("forwardObserveLedger", () => {
 		expect(ledgerEnvelopes().map((row) => row.ts_edge_ms)).toEqual([T0 + 1000, T0 + 2000]);
 	});
 
-	it("returns idle and logs when the stored offset is beyond the ledger", async () => {
+	it("recovers and forwards when the stored offset is beyond the ledger", async () => {
 		const lines = [ledgerLine(1), ledgerLine(2)];
 		writeLedger(lines);
 		const beyond = String(bytes(lines) + 100);
 		writeFileSync(join(root, "observe", "ledger.synced"), beyond);
 		const result = await ledger.forwardObserveLedger({ profileDir: root, observe: observability() });
-		expect(result.status).toBe("idle");
-		expect(result.forwarded).toBe(0);
-		expect(synced()).toBe(beyond);
-		expect(ledgerEnvelopes()).toHaveLength(0);
+		expect(result.status).toBe("forwarded");
+		expect(result.forwarded).toBe(2);
+		expect(ledgerEnvelopes().map(row => row.ts_edge_ms)).toEqual([1758300001000, 1758300002000]);
 		expect(logs.some((line) => line.includes("offset beyond ledger"))).toBe(true);
+	});
+
+	it("reclaims a fully consumed large ledger and forwards the next append once", async () => {
+		writeLedger([" ".repeat(1024 * 1024) + "\n", ledgerLine(1), ledgerLine(2).trimEnd()]);
+		const observe = observability();
+		await ledger.forwardObserveLedger({ profileDir: root, observe });
+		expect(readFileSync(join(root, "observe", "ledger.jsonl"), "utf8").length).toBe(196);
+		expect(readFileSync(join(root, "observe", "ledger.jsonl"), "utf8")).toBe('{"ts_ms":1758300002000,"event_type":"skill.run","lane":"skill","payload":{"harness":"claude-code","skill_name":"peer-review","skill_version":"local","category":"J","duration_ms":1,"outcome":"ok"}}');
+		expect(synced()).toBe("0");
+		const { appendFileSync } = await import("node:fs");
+		appendFileSync(join(root, "observe", "ledger.jsonl"), "\n" + ledgerLine(3));
+		await ledger.forwardObserveLedger({ profileDir: root, observe });
+		expect(ledgerEnvelopes().map(row => row.ts_edge_ms)).toEqual([1758300001000, 1758300002000, 1758300003000]);
+	});
+
+	it("reads only the unread suffix of a ledger larger than Node's whole-file limit", async () => {
+		writeLedger([]);
+		const { appendFileSync, truncateSync } = await import("node:fs");
+		truncateSync(join(root, "observe", "ledger.jsonl"), 5 * 1024 * 1024 * 1024);
+		writeFileSync(join(root, "observe", "ledger.synced"), "5368709120");
+		appendFileSync(join(root, "observe", "ledger.jsonl"), ledgerLine(1));
+		const result = await ledger.forwardObserveLedger({ profileDir: root, observe: observability() });
+		expect(result).toEqual({ status: "forwarded", forwarded: 1, offset: 0 });
+		expect(ledgerEnvelopes().map(row => row.ts_edge_ms)).toEqual([1758300001000]);
+		expect(readFileSync(join(root, "observe", "ledger.jsonl"), "utf8")).toBe("");
 	});
 
 	it("uploads a row under the agent that wrote it, and a row with no agent under the forwarder's own", async () => {

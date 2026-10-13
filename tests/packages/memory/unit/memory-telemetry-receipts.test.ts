@@ -17,10 +17,12 @@ function expectedHmac(key: string, input: MemoryTelemetryReceiptInput): string {
 }
 
 describe("memory telemetry receipt service", () => {
-	it("loads the current key fail-closed and defaults current version to 1", () => {
-		expect(() => loadMemoryTelemetryKeySet({ enabled: true, key: "", historicKeys: [] })).toThrow(
-			/telemetry\.memoryUsage\.key/,
-		);
+	it("keeps telemetry enabled without a signing key and defaults current version to 1", () => {
+		expect(loadMemoryTelemetryKeySet({ enabled: true, key: "", historicKeys: [] })).toEqual({
+			enabled: true,
+			current: null,
+			historic: new Map(),
+		});
 		expect(loadMemoryTelemetryKeySet({ enabled: false, key: "", historicKeys: [] })).toEqual({
 			enabled: false,
 			current: null,
