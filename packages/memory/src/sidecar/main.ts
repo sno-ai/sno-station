@@ -12,15 +12,16 @@ import type { RunningRemSidecar } from "./server";
 
 const { startRemSidecar, DuplicateSidecarError } = await import("./server");
 let sidecar: RunningRemSidecar | undefined;
-while (!sidecar) {
+for (let attempt = 1; !sidecar; attempt++) {
 	try { sidecar = await startRemSidecar(); }
 	catch (error) {
 		if (error instanceof DuplicateSidecarError) { await closeLogger(); process.exit(0); }
 		if (error instanceof SettingsUnavailableError) throw error;
-		createLogger("sno-station-mem:sidecar").error("Memory service startup failed; retrying", { error }, {
+		createLogger("sno-station-mem:sidecar").error(attempt >= 3 ? "Memory service startup failed after three attempts; stopping" : "Memory service startup failed; retrying", { error, attempt }, {
 			event_name: "memory.sidecar.startup.failed", file: "packages/memory/src/sidecar/main.ts",
 			function: "<module>", site_id: "sidecar.main.startup.failed",
 		});
+		if (attempt >= 3) { await closeLogger(); process.exit(1); }
 		await delay(MEMORY_RECONNECT_INTERVAL_MS);
 	}
 }
