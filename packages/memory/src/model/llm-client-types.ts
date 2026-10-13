@@ -33,6 +33,8 @@ export type MemoryLlmRequest = {
 	maxTokens?: number;
 	/** Per-request empty-body attempts. Defaults to the shared bounded retry policy. */
 	emptyReplyAttempts?: number;
+	/** Shared capture allowance, consumed for every provider attempt, including retries and fallback. */
+	takeProviderAttempt?: () => boolean;
 	timeoutMs?: number;
 	enableThinking?: boolean;
 	signal?: AbortSignal;

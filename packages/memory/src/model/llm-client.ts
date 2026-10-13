@@ -10,8 +10,10 @@ import { classifyLlmFailure, isCredentialFailure } from "./llm-failure";
 import { CallPipeline, KeyPool } from "@snoai/llmix";
 import { createLogger, withLogContext } from "@snoai/utils/logger";
 import { createHash, randomUUID } from "node:crypto";
+import { AsyncLocalStorage } from "node:async_hooks";
 
 import type {
+	DispatchContext,
 	LlmClient,
 	LlmClientConfig,
 	MemoryLlmRequest,
@@ -265,6 +267,7 @@ function normalizeMemoryLlmRequest(value: unknown): MemoryLlmRequest {
 		);
 	}
 	const enableThinking = raw.enableThinking;
+	const takeProviderAttempt = raw.takeProviderAttempt;
 	if (enableThinking !== undefined && typeof enableThinking !== "boolean") {
 		throw new Error("sno-station-mem llm-client: enableThinking must be a boolean");
 	}
@@ -290,6 +293,7 @@ function normalizeMemoryLlmRequest(value: unknown): MemoryLlmRequest {
 			? { emptyReplyAttempts: Number(emptyReplyAttempts) }
 			: {}),
 		...(enableThinking !== undefined ? { enableThinking } : {}),
+		...(typeof takeProviderAttempt === "function" ? { takeProviderAttempt: () => takeProviderAttempt() === true } : {}),
 		...(requestId !== undefined ? { requestId } : {}),
 		...(typeof raw.promptTemplateHash === "string" && /^[a-f0-9]{64}$/.test(raw.promptTemplateHash)
 			? { promptTemplateHash: raw.promptTemplateHash } : {}),
@@ -300,9 +304,10 @@ function normalizeMemoryLlmRequest(value: unknown): MemoryLlmRequest {
 }
 
 function textSystemContent(request: MemoryLlmRequest): string {
-	return MODEL_CALLS[request.callId].occasion === "conflictAdjudication"
-		? CONFLICT_ADJUDICATION_SYSTEM_CONTENT
-		: REFLECTION_TEXT_SYSTEM_CONTENT;
+	// Every memoryExtract call parses a JSON reply; a plain-text instruction contradicts its prompt.
+	const occasion = MODEL_CALLS[request.callId].occasion;
+	if (occasion === "conflictAdjudication") return CONFLICT_ADJUDICATION_SYSTEM_CONTENT;
+	return occasion === "memoryExtract" ? JSON_SYSTEM_CONTENT : REFLECTION_TEXT_SYSTEM_CONTENT;
 }
 
 /** Creates the LLM client facade with provider routing, key rotation, and JSON parsing. */
@@ -336,8 +341,27 @@ export function createLlmClient(config: LlmClientConfig & { refuseOnUnavailable?
 		}
 		return endpointPromise;
 	};
+	const providerBudget = new AsyncLocalStorage<{ remaining: number; deadlineMs: number; takeProviderAttempt?: () => boolean }>();
 	const pipeline = new CallPipeline({
-		dispatch: callProvider,
+		dispatch: async (context) => {
+			const budget = providerBudget.getStore();
+			if (!budget) return callProvider(context);
+			const timeoutMs = Math.floor(budget.deadlineMs - performance.now());
+			if (timeoutMs <= 0) {
+				throw Object.assign(new Error("Request deadline exhausted before provider dispatch"), { statusCode: 499 });
+			}
+			if (budget.remaining <= 0 || (budget.takeProviderAttempt && !budget.takeProviderAttempt())) {
+				throw Object.assign(new Error("Provider request attempts exhausted"), { statusCode: 499 });
+			}
+			budget.remaining -= 1;
+			// Both pipeline callers construct this config through buildPipelineConfig.
+			const providerConfig = context.config as DispatchContext["config"];
+			const dispatchConfig: DispatchContext["config"] = {
+				...providerConfig, timeoutMs,
+				...(providerConfig.rawCompletion ? { rawCompletion: { ...providerConfig.rawCompletion, timeoutMs } } : {}),
+			};
+			return callProvider({ ...context, config: dispatchConfig });
+		},
 		maxRetries: 2,
 		retryBaseMs: 100,
 		retryMaxDelayMs: 500,
@@ -405,6 +429,7 @@ export function createLlmClient(config: LlmClientConfig & { refuseOnUnavailable?
 					`sno-station-mem: llm-client [${request.callId}] AgentLlmPort is unavailable`,
 				);
 			}
+			if (request.takeProviderAttempt && !request.takeProviderAttempt()) return null;
 			config.onTransportAttempt?.({
 				callId: request.callId, destination,
 				transport,
@@ -595,19 +620,21 @@ export function createLlmClient(config: LlmClientConfig & { refuseOnUnavailable?
 		deadlineMs: number,
 		prompt = request.prompt,
 	): Promise<{ raw: string; transport: RequestTransport } | null> => {
-		let content = await requestContent(state, request, systemContent, prompt);
+		// Transport retries and empty replies spend the same three provider attempts.
+		const budget = { remaining: EMPTY_REPLY_ATTEMPTS, deadlineMs, takeProviderAttempt: request.takeProviderAttempt };
+		let content = await providerBudget.run(budget, () => requestContent(state, request, systemContent, prompt));
 		let usage = state.usage;
 		try {
 			checkMemoryOperation();
 			const attemptLimit = request.emptyReplyAttempts ?? EMPTY_REPLY_ATTEMPTS;
 			for (let attempt = 2; attempt <= attemptLimit; attempt += 1) {
-				if (content === null || content.raw.trim().length > 0) break;
+				if (content === null || content.raw.trim().length > 0 || budget.remaining <= 0) break;
 				const remainingMs = deadlineMs - performance.now();
 				if (remainingMs <= 0) break;
 				log.debug("Retrying empty model reply", { call_id: request.callId, destination: destinationFor(request), attempt, attempt_limit: attemptLimit }, { event_name: "memory.llm_client.diagnostic", file: "packages/memory/src/model/llm-client.ts", function: "requestContentRetryingEmpty", site_id: "shared.llm-client.requestContentRetryingEmpty.cd874fefff" });
 				// The retry gets the time the deadline has left, not another full request timeout:
 				// at the old wording a 300s capture call could spend 600s and still report success.
-				content = await requestContent(state, { ...request, timeoutMs: remainingMs }, systemContent, prompt);
+				content = await providerBudget.run(budget, () => requestContent(state, { ...request, timeoutMs: remainingMs }, systemContent, prompt));
 				usage = addUsage(usage, state.usage);
 				checkMemoryOperation();
 			}
@@ -638,6 +665,7 @@ export function createLlmClient(config: LlmClientConfig & { refuseOnUnavailable?
 			if (snoError !== undefined) throw snoError;
 			return content;
 		}
+		const remainingMs = Math.floor(deadlineMs - performance.now());
 		const originalLastError = state.error;
 		const originalLastUsage = state.usage;
 		const source = snoError instanceof Error ? snoError.message : originalLastError ?? "";
@@ -649,17 +677,19 @@ export function createLlmClient(config: LlmClientConfig & { refuseOnUnavailable?
 		else if (!config.apiKey?.trim()) snoFailure = "missing_key";
 		const operationId = config.operationId ?? memoryOperationId();
 		let hostFailure = "empty_reply";
-		if (!config.agentPort) hostFailure = "port_unavailable";
+		// A GPU attempt that timed out has used the whole deadline, so the host gets no turn; say so.
+		if (remainingMs <= 0) hostFailure = "deadline_exhausted";
+		else if (!config.agentPort) hostFailure = "port_unavailable";
 		else if (["E10", "P1", "REM1"].includes(request.callId) && !request.hostPrompt) {
 			hostFailure = "host_prompt_missing";
 		} else {
 			try {
-				const host = await requestContent(state, request, systemContent,
+				const host = await requestContent(state, { ...request, timeoutMs: remainingMs }, systemContent,
 					request.hostPrompt ?? request.prompt, "host");
 				if (host?.raw.trim()) {
 					log.info("Sno model call answered by host", { call_id: request.callId,
 						operation_id: operationId, sno_failure: snoFailure, host_outcome: "answered",
-						timeout_ms: resolveRequestTimeoutMs(request) }, { event_name: "memory.llm_client.fallback",
+						timeout_ms: remainingMs }, { event_name: "memory.llm_client.fallback",
 						file: "packages/memory/src/model/llm-client.ts", function: "requestContentWithHostFallback",
 						site_id: "llm.client.fallback.answered" });
 					// The Sno attempts before the redo were charged too; the caller reads both.
@@ -668,7 +698,7 @@ export function createLlmClient(config: LlmClientConfig & { refuseOnUnavailable?
 				}
 				if (host === null) hostFailure = "host_error";
 			} catch (error) {
-				if (request.signal?.aborted) throw error;
+				if (request.signal?.aborted || error instanceof ModelCallRefusedError) throw error;
 				hostFailure = error instanceof LlmClientTerminalError ? error.category : "transport";
 			}
 		}
