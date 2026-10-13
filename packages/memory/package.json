@@ -1,6 +1,6 @@
 {
   "name": "@snoai/memory",
-  "version": "1.2.9",
+  "version": "1.2.10",
   "license": "Apache-2.0",
   "publishConfig": { "access": "public" },
   "repository": {
