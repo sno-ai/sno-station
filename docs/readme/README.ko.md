@@ -1,4 +1,4 @@
-# Sno Station 🧊 — Agents, assemble. Two heads are better than one, and smarter by morning.
+# Sno Station — Agents, assemble. Two heads are better than one, and smarter by morning.
 
 ![Sno Station — 에이전트, 모여라. 머리 둘이 하나보다 낫고, 아침이면 더 똑똑해집니다.](../images/hero-banner.png)
 
