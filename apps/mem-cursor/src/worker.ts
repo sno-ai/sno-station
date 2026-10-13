@@ -5,12 +5,13 @@ import { spawn } from "node:child_process";
 import { closeSync, mkdirSync, openSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import { homedir, tmpdir, userInfo } from "node:os";
-import { copyFile, mkdir, mkdtemp, readFile, readdir, rm, symlink, unlink } from "node:fs/promises";
+import { copyFile, mkdir, mkdtemp, readFile, readdir, rm, symlink } from "node:fs/promises";
 import { join } from "node:path";
 import type { MemoryClient } from "@snoai/memory/client";
 import {
 	CODING_SKIN_CHILD_DEADLINE_MS,
 	CODING_SKIN_MAX_ATTEMPTS,
+	CODING_SKIN_MAX_PENDING_CAPTURES,
 	CODING_SKIN_RETRY_DELAYS_MS,
 	CODING_SKIN_WORKER_LIFETIME_MS,
 	HOST_MODEL_CALLBACK_HOST,
@@ -179,16 +180,40 @@ async function callbackServer(credential: string, onCall: () => void, runChild: 
 	return { server, baseUrl: `http://${HOST_MODEL_CALLBACK_HOST}:${address.port}/v1` };
 }
 
+async function readSpool(path: string): Promise<z.infer<typeof spoolSchema> | undefined> {
+	const contents = await readFile(path, "utf8").catch(error => {
+		if (error instanceof Error && "code" in error && error.code === "ENOENT") return undefined;
+		throw error;
+	});
+	if (contents === undefined) return undefined;
+	let record: z.infer<typeof spoolSchema>;
+	try { record = spoolSchema.parse(JSON.parse(contents)); }
+	catch (error) {
+		await rm(path, { force: true });
+		console.log(JSON.stringify({ event: "spool-discarded", path, reason: "invalid-record", error: String(error) }));
+		return undefined;
+	}
+	if (record.attempts >= CODING_SKIN_MAX_ATTEMPTS) {
+		await rm(path, { force: true });
+		console.log(JSON.stringify({ event: "spool-discarded", path, turnId: record.turnId, reason: "attempts-exhausted" }));
+		return undefined;
+	}
+	return record;
+}
+
+async function readSpoolNames(): Promise<string[]> {
+	const names = (await readdir(spoolDirectory()).catch(() => [])).filter(name => name.endsWith(".json")).sort();
+	const removed = names.splice(0, Math.max(0, names.length - CODING_SKIN_MAX_PENDING_CAPTURES));
+	for (const name of removed) await rm(join(spoolDirectory(), name), { force: true });
+	if (removed.length > 0) console.log(JSON.stringify({ event: "spool-pruned", removed: removed.length,
+		remaining: names.length, reason: "capacity" }));
+	return names;
+}
+
 export async function hasActionableSpool(): Promise<boolean> {
-	const names = (await readdir(spoolDirectory()).catch(() => [])).filter(name => name.endsWith(".json"));
+	const names = await readSpoolNames();
 	for (const name of names) {
-		const contents = await readFile(join(spoolDirectory(), name), "utf8").catch(error => {
-			if (error instanceof Error && "code" in error && error.code === "ENOENT") return undefined;
-			throw error;
-		});
-		if (!contents) continue;
-		const record = spoolSchema.parse(JSON.parse(contents));
-		if (record.attempts < CODING_SKIN_MAX_ATTEMPTS) return true;
+		if (await readSpool(join(spoolDirectory(), name))) return true;
 	}
 	return false;
 }
@@ -208,6 +233,7 @@ export async function runWorker(dependencies: WorkerDependencies = productionDep
 		const callback = await callbackServer(credential, () => { lastCallbackAt = now(); },
 			prompt => dependencies.runChild(prompt, Math.min(CODING_SKIN_CHILD_DEADLINE_MS, CODING_SKIN_WORKER_LIFETIME_MS - (now() - workerStartedAt))));
 		server = callback.server;
+		await readSpoolNames();
 		const client = await dependencies.connect();
 		const principal = client.principal || userInfo().username;
 		await client.init({ principal, project: "global", session: "cursor-worker", host: { sessionId: "cursor-worker" } }, {
@@ -215,13 +241,23 @@ export async function runWorker(dependencies: WorkerDependencies = productionDep
 		});
 		console.log(JSON.stringify({ event: "worker-registered" }));
 		while (true) {
-			const spoolNames = (await readdir(spoolDirectory()).catch(() => [])).filter(name => name.endsWith(".json")).sort();
+			const spoolNames = await readSpoolNames();
 			console.log(JSON.stringify({ event: "spool-scan", count: spoolNames.length }));
 			let actionable = 0;
-			for (const name of spoolNames) {
+			for (const name of spoolNames.slice(0, 1)) {
 				const path = join(spoolDirectory(), name);
-				let record = spoolSchema.parse(JSON.parse(await readFile(path, "utf8")));
-				if (record.attempts >= CODING_SKIN_MAX_ATTEMPTS) continue;
+				let record = await readSpool(path);
+				if (!record) continue;
+				const batch = [{ path, record }];
+				for (const pendingName of spoolNames.slice(1)) {
+					const pendingPath = join(spoolDirectory(), pendingName);
+					const pending = await readSpool(pendingPath);
+					if (pending && pending.sessionId === record.sessionId && pending.project === record.project
+						&& pending.attempts === record.attempts
+						&& pending.retryAt === record.retryAt)
+						batch.push({ path: pendingPath, record: pending });
+				}
+				batch.sort((left, right) => left.record.at - right.record.at);
 				actionable += 1;
 				drainedAt = undefined;
 				while (record.attempts < CODING_SKIN_MAX_ATTEMPTS) {
@@ -233,32 +269,38 @@ export async function runWorker(dependencies: WorkerDependencies = productionDep
 						if (record.retryAt > now() || now() - workerStartedAt >= CODING_SKIN_WORKER_LIFETIME_MS) { handoff = true; return "drained"; }
 					}
 					try {
-						const messages = [
-							{ role: "user" as const, content: record.user, at: record.at },
-							{ role: "assistant" as const, content: record.assistant, at: record.at },
-						];
+						const messages = batch.flatMap(({ record: turn }) => [
+							{ role: "user" as const, content: turn.user, at: turn.at },
+							{ role: "assistant" as const, content: turn.assistant, at: turn.at },
+						]);
 						const result = await withinDeadline(
 							client.capture({ turnId: record.turnId, rewindEpoch: 0, messages }, { principal, project: record.project, session: record.sessionId, host: { sessionId: record.sessionId, workspace: record.project } }),
 							CODING_SKIN_WORKER_LIFETIME_MS - (now() - workerStartedAt),
 						);
 						if (result.degraded) throw new Error(result.reason);
 						if (!result.committed && !result.accepted && !result.skipped && !result.partial) throw new Error("capture not committed");
-						console.log(JSON.stringify({ event: result.partial ? "capture-partial" : result.committed ? "capture-committed" : result.accepted ? "capture-accepted" : "capture-skipped", turnId: record.turnId, committed: result.committed }));
-						await unlink(path);
+						for (const entry of batch) {
+							console.log(JSON.stringify({ event: result.partial ? "capture-partial" : result.committed ? "capture-committed" : result.accepted ? "capture-accepted" : "capture-skipped", turnId: entry.record.turnId, committed: result.committed }));
+							await rm(entry.path, { force: true });
+						}
 						break;
 					} catch (error) {
-						const attempts = record.attempts + 1;
-						console.log(JSON.stringify({ event: "capture-failed", turnId: record.turnId, attempts, reason: error instanceof Error ? error.message : String(error) }));
+						const attempts: number = record.attempts + 1;
+						for (const entry of batch) console.log(JSON.stringify({ event: "capture-failed", turnId: entry.record.turnId, attempts, final: attempts >= CODING_SKIN_MAX_ATTEMPTS, reason: error instanceof Error ? error.message : String(error) }));
+						// A batch shares its tries, so only its first turn is given up; the rest keep their own counts on disk.
+						if (attempts >= CODING_SKIN_MAX_ATTEMPTS) { const [first] = batch; if (first) await rm(first.path, { force: true }); break; }
 						const retryDelay = CODING_SKIN_RETRY_DELAYS_MS[attempts - 1];
 						record = {
 							...record,
 							attempts,
-							state: attempts >= CODING_SKIN_MAX_ATTEMPTS ? "failed" : "pending",
-							...(attempts < CODING_SKIN_MAX_ATTEMPTS && retryDelay !== undefined ? { retryAt: now() + retryDelay } : {}),
+							state: "pending",
+							...(retryDelay !== undefined ? { retryAt: now() + retryDelay } : {}),
 						};
-						await writeJsonAtomic(path, record);
+						for (const entry of batch) {
+							entry.record = { ...entry.record, attempts, state: "pending", retryAt: record.retryAt };
+							await writeJsonAtomic(entry.path, entry.record);
+						}
 						if (now() - workerStartedAt >= CODING_SKIN_WORKER_LIFETIME_MS) { handoff = true; return "drained"; }
-						if (record.attempts >= CODING_SKIN_MAX_ATTEMPTS) break;
 					}
 				}
 			}
