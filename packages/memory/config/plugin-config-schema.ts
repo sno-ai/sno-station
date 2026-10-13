@@ -169,7 +169,7 @@ const pluginConfigBaseSchema = z
 				historicKeys: z.array(z.string()).default([]),
 			})
 			.prefault({}),
-		debugContent: z.boolean().default(true),
+		debugContent: z.boolean().default(false),
 		/**
 		 * Product LLM mode, tier-ordered: local-first → agent-native →
 		 * rem-enhanced. A true bare config defaults to agent-native; model route

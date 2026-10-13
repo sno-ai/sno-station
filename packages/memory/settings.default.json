@@ -239,7 +239,7 @@
   "logging": {
     "level": "debug",
     "file": "",
-    "debugContent": true
+    "debugContent": false
   },
   "memoryPackage": {
     "path": "",
