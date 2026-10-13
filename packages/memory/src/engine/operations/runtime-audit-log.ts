@@ -9,10 +9,19 @@ import {
 	appendFileSync,
 	existsSync,
 	mkdirSync,
+	closeSync,
+	fsyncSync,
+	openSync,
+	readSync,
+	renameSync,
+	rmSync,
+	statSync,
+	writeFileSync,
 } from "node:fs";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { appendFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
+import { StringDecoder } from "node:string_decoder";
 import path from "node:path";
 import { createLogger } from "@snoai/utils/logger";
 import { redactSecrets } from "../security/redact";
@@ -291,6 +300,7 @@ function enqueueAuditWrite(auditPath: string, line: string): Promise<boolean> {
 			// This operational safety step establishes state that later reads and cleanup paths depend on.
 			mkdirSync(path.dirname(auditPath), { recursive: true });
 			await appendFile(auditPath, line);
+			compactAuditLog(auditPath);
 			return true;
 		});
 	const next = write.catch((error) => {
@@ -315,6 +325,74 @@ function enqueueAuditWrite(auditPath: string, line: string): Promise<boolean> {
 export function getAuditPath(stateDir: string): string {
 	// Centralize the operational safety fallback value at the boundary of this helper.
 	return path.join(stateDir, "audit.jsonl");
+}
+
+/** Retain the recent tail and two days of REM replay evidence when the audit exceeds 16 MiB. */
+export function compactAuditLog(auditPath: string): void {
+	try { compactAuditFile(auditPath); }
+	catch (error) {
+		createLogger("sno-station-mem:audit").error("Audit compaction failed; existing records retained", { error }, {
+			event_name: "memory.audit.compact.failed", file: "packages/memory/src/engine/operations/runtime-audit-log.ts",
+			function: "compactAuditLog", site_id: "memory.audit.compact.failed",
+		});
+	}
+}
+
+function compactAuditFile(auditPath: string): void {
+	if (!existsSync(auditPath) || statSync(auditPath).size <= 16 * 1024 * 1024) return;
+	const fd = openSync(auditPath, "r");
+	const retained: { position: number; line: string }[] = [];
+	const openAttempts = new Map<string, { position: number; line: string }>();
+	let tail: Buffer;
+	try {
+		const size = statSync(auditPath).size;
+		const tailStart = Math.max(0, size - 8 * 1024 * 1024);
+		tail = Buffer.alloc(size - tailStart);
+		const tailRead = readSync(fd, tail, 0, tail.length, tailStart);
+		tail = tail.subarray(0, tailRead);
+		const newline = tail.indexOf(10);
+		const prefixEnd = newline < 0 ? size : tailStart + newline + 1;
+		tail = newline < 0 ? Buffer.alloc(0) : tail.subarray(newline + 1);
+		const cutoff = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+		const buffer = Buffer.alloc(64 * 1024);
+		let position = 0;
+		let pending = "";
+		let linePosition = 0;
+		const decoder = new StringDecoder("utf8");
+		let oversized = false;
+		while (position < prefixEnd) {
+			const count = readSync(fd, buffer, 0, Math.min(buffer.length, prefixEnd - position), position);
+			if (count === 0) break;
+			position += count;
+			// JSON operational records are small; discard oversized noise while finding the next newline.
+			const parts = (pending + decoder.write(buffer.subarray(0, count))).split("\n");
+			pending = parts.pop() ?? "";
+			for (const line of parts) {
+				if (oversized) { oversized = false; linePosition++; continue; }
+				try {
+					const entry: unknown = JSON.parse(line);
+					if (isRecord(entry) && typeof entry["event"] === "string" && entry["event"].startsWith("rem_")
+						&& typeof entry["timestamp"] === "string" && entry["timestamp"] >= cutoff
+						&& (entry["event"] !== "rem_trigger_evaluated" || (isRecord(entry["details"]) && entry["details"]["row"] === "dispatch"))) retained.push({ position: linePosition, line: line + "\n" });
+					if (isRecord(entry) && isRecord(entry["details"])) {
+						const id = entry["details"]["audit_operation_id"];
+						if (typeof id === "string" && entry["decision"] === "mutation-attempt-open") openAttempts.set(id, { position: linePosition, line: line + "\n" });
+						if (typeof id === "string" && entry["details"]["mutation_outcome"] !== undefined) openAttempts.delete(id);
+					}
+				} catch { /* Malformed audit records cannot supply completion evidence. */ }
+				linePosition++;
+			}
+			if (pending.length > 1024 * 1024 || oversized) { pending = ""; oversized = true; }
+		}
+	} finally { closeSync(fd); }
+	const temporary = `${auditPath}.${randomUUID()}.tmp`;
+	try {
+		writeFileSync(temporary, [...retained, ...openAttempts.values()].sort((a, b) => a.position - b.position).map(record => record.line).join(""), { mode: 0o600 });
+		appendFileSync(temporary, tail);
+		const output = openSync(temporary, "r+");
+		try { fsyncSync(output); } finally { closeSync(output); }
+		renameSync(temporary, auditPath);
+	} finally { rmSync(temporary, { force: true }); }
 }
 
 /** Returns cost path from audit log state state without side effects. */
@@ -367,7 +445,7 @@ function prepareAuditEntry(
 }
 
 /** Persists audit entry through the single audit log state write path. */
-// LH: Audit JSONL entries are operational metadata only and should not include raw memory text.
+// Content is limited to the owner's enabled, shortened and redacted diagnostic previews.
 // LH: Append-only audit files make tool behavior reviewable without becoming another memory store.
 // LH: Write failures are logged but do not convert successful tool operations into failures.
 export function appendAuditEntry(stateDir: string, entry: Omit<AuditEntry, "timestamp">): void {
@@ -402,6 +480,7 @@ export function appendAuditEntrySync(
 	try {
 		mkdirSync(path.dirname(auditPath), { recursive: true });
 		appendFileSync(auditPath, `${JSON.stringify({ ...prepared, timestamp: new Date().toISOString() })}\n`);
+		compactAuditLog(auditPath);
 	} catch (error) {
 		createLogger("sno-station-mem:audit").error("memory.audit.append.failed", { error }, {
 			event_name: "memory.audit.append.failed", file: "packages/memory/src/engine/operations/runtime-audit-log.ts",

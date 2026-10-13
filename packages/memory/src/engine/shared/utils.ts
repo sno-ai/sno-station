@@ -125,9 +125,8 @@ export function stableHash(text: string): string {
 
 /**
  * Return a short, secret-redacted, whitespace-collapsed preview of `text` for
- * debug audit logs when explicitly enabled. Off-by-default
- * and passes the text through `redactSecrets` first because previews persist
- * in audit.jsonl on disk. Enable for bench investigations only.
+ * audit logs. Previews are enabled by default and pass through `redactSecrets`
+ * before they are persisted in audit.jsonl on disk.
  */
 export function debugContentPreview(text: string | undefined, enabled: boolean, maxChars = 80): string | undefined {
 	// Guard this branch early so the remaining module behavior path works with normalized inputs.
