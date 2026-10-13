@@ -7,7 +7,7 @@ import { createLogger } from "@snoai/utils/logger";
 
 import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
-import { mkdir, open, readFile, rename } from "node:fs/promises";
+import { mkdir, open, rename, rm } from "node:fs/promises";
 import path from "node:path";
 import { z } from "zod";
 
@@ -186,6 +186,7 @@ export class RemJobStore {
 	private readonly persistedJobs = new Set<string>();
 	private readonly mergeKeys = new Map<string, string>();
 	private operationQueue: Promise<void> = Promise.resolve();
+	private journalRecords = 0;
 
 	private constructor(
 		private readonly journalPath: string,
@@ -207,6 +208,23 @@ export class RemJobStore {
 	get(jobId: string): RemJob | undefined {
 		const job = this.jobs.get(jobId);
 		return job === undefined ? undefined : toRemJob(job);
+	}
+
+	static async readCompletedJobs(journalPath: string): Promise<RemJob[]> {
+		const completed = new Map<string, RemJob>();
+		for await (const line of readJsonlLines(journalPath)) {
+			try {
+				const parsed = remWaveJobSchema.parse(JSON.parse(line));
+				if (parsed.state === "done") completed.set(parsed.waveId, toRemJob(parsed));
+				else completed.delete(parsed.waveId);
+			} catch (error) {
+				log.error("rem.journal.failed", { error, path: journalPath }, {
+					event_name: "rem.journal.failed", file: "packages/memory/src/sidecar/rem-job-store.ts",
+					function: "readCompletedJobs", site_id: "rem-job-store.readCompletedJobs.invalid-line",
+				});
+			}
+		}
+		return [...completed.values()];
 	}
 
 	nonTerminalJobs(): RemJob[] {
@@ -248,7 +266,7 @@ export class RemJobStore {
 				return { created: false, job: toRemJob(updated) };
 			}
 			if (
-				existing !== undefined && existing.state !== "skipped" &&
+				existing !== undefined && existing.state !== "skipped" && existing.state !== "failed" &&
 				requestedOperations.every((operation) => existing.requestedOperations.includes(operation))
 			) {
 				return { created: false, job: toRemJob(existing) };
@@ -287,6 +305,7 @@ export class RemJobStore {
 				...(transition.stats === undefined ? {} : { stats: transition.stats }),
 				...(transition.error === undefined ? {} : { error: transition.error }),
 			});
+			if (next.state === "done") this.jobs.set(jobId, next);
 			const durable = await this.persist(next);
 			this.jobs.set(jobId, next);
 			const outward = toRemJob(next);
@@ -297,28 +316,62 @@ export class RemJobStore {
 
 	private async load(): Promise<void> {
 		if (!existsSync(this.journalPath)) return;
-		const bytes = await readFile(this.journalPath);
-		const lines = bytes.toString("utf8").split("\n");
-		const endsWithNewline = bytes.length === 0 || bytes[bytes.length - 1] === 0x0a;
-		for (const [index, line] of lines.entries()) {
-			if (!line) continue;
-			if (!endsWithNewline && index === lines.length - 1) {
-				const lastNewline = bytes.lastIndexOf(0x0a);
-				await this.truncateJournal(lastNewline < 0 ? 0 : lastNewline + 1);
-				return;
-			}
+		await this.removeTornTail();
+		let index = 0;
+		for await (const line of readJsonlLines(this.journalPath)) {
+			index++;
+			this.journalRecords++;
 			try {
-				const parsed: unknown = JSON.parse(line);
-				const job = remWaveJobSchema.parse(parsed);
+				const job = remWaveJobSchema.parse(JSON.parse(line));
 				this.jobs.set(job.waveId, job);
 				this.mergeKeys.set(`${job.correlationId}\0${job.scope}`, job.waveId);
 			} catch (error) {
-				log.error("rem.journal.failed", { path: this.journalPath, line: index + 1, error }, {
+				log.error("rem.journal.failed", { path: this.journalPath, line: index, error }, {
 					event_name: "rem.journal.failed", file: "packages/memory/src/sidecar/rem-job-store.ts",
 					function: "load", site_id: "rem-job-store.load.invalid-line",
 				});
 			}
 		}
+		if (this.journalRecords >= 256) await this.compact().catch(error => this.reportFailure(error));
+	}
+
+	private async removeTornTail(): Promise<void> {
+		const handle = await open(this.journalPath, "r");
+		let committed = (await handle.stat()).size;
+		const buffer = Buffer.alloc(64 * 1024);
+		try {
+			while (committed > 0) {
+				const start = Math.max(0, committed - buffer.length);
+				const { bytesRead } = await handle.read(buffer, 0, committed - start, start);
+				const newline = buffer.subarray(0, bytesRead).lastIndexOf(10);
+				if (newline >= 0) { committed = start + newline + 1; break; }
+				committed = start;
+			}
+			if (committed < (await handle.stat()).size) await this.truncateJournal(committed);
+		} finally { await handle.close(); }
+	}
+
+	private async compact(): Promise<void> {
+		const cutoff = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+		const retained = [...this.jobs.values()].filter(job => job.state === "queued" || job.state === "running"
+			|| (job.finishedAt ?? job.startedAt ?? "") >= cutoff);
+		const temporary = `${this.journalPath}.${randomUUID()}.tmp`;
+		const handle = await open(temporary, "wx", 0o600);
+		try {
+			try {
+				for (const job of retained) await handle.writeFile(`${JSON.stringify(job)}\n`, "utf8");
+				await handle.sync();
+			} finally { await handle.close(); }
+			await rename(temporary, this.journalPath);
+			await syncDirectory(path.dirname(this.journalPath));
+			const retainedIds = new Set(retained.map(job => job.waveId));
+			for (const id of this.jobs.keys()) if (!retainedIds.has(id)) {
+				this.jobs.delete(id);
+				this.persistedJobs.delete(id);
+			}
+			for (const [key, id] of this.mergeKeys) if (!retainedIds.has(id)) this.mergeKeys.delete(key);
+			this.journalRecords = 0;
+		} finally { await rm(temporary, { force: true }); }
 	}
 
 	private async migrateLegacyJournal(): Promise<void> {
@@ -373,6 +426,12 @@ export class RemJobStore {
 		this.persistedJobs.delete(job.waveId);
 		await this.append(job);
 		this.persistedJobs.add(job.waveId);
+		this.journalRecords++;
+		if (this.journalRecords >= 256) {
+			// Include the just-appended transition before replacing the journal.
+			this.jobs.set(job.waveId, job);
+			await this.compact().catch(error => this.reportFailure(error));
+		}
 		return true;
 	}
 
