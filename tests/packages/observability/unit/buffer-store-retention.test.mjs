@@ -1,4 +1,4 @@
-// Retention never deletes an unsent row; over the byte cap only the oldest already-shipped rows go.
+// Retention removes shipped rows first, then whole pending epochs when still over the byte cap.
 // Real better-sqlite3 against tmpdir; zero mocks.
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
@@ -60,21 +60,21 @@ describe("buffer-store retention", () => {
 		}
 	});
 
-	it("over the byte cap never deletes an unsent row", () => {
+	it("over the byte cap drops a complete pending epoch", () => {
 		const { dir, store } = makeStore();
 		try {
 			appendRows(store, 300);
 			const report = store.pruneRetention(64 * 1024, DAY_MS);
-			assert.equal(report.overflowDeleted, 0);
-			assert.equal(store.getAllRows().length, 301);
-			assert.equal(store.countPending(), 301);
+			assert.equal(report.overflowDeleted, 301);
+			assert.equal(store.getAllRows().length, 0);
+			assert.equal(store.countPending(), 0);
 		} finally {
 			store.close();
 			rmSync(dir, { recursive: true, force: true });
 		}
 	});
 
-	it("over the byte cap drops the oldest already-shipped rows first and keeps every unsent one", () => {
+	it("over the byte cap drops already-shipped rows first when that frees enough space", () => {
 		const { dir, store } = makeStore();
 		try {
 			appendRows(store, 300);
@@ -82,7 +82,7 @@ describe("buffer-store retention", () => {
 			for (const row of all.slice(0, 200)) {
 				store.markShipped(row.rowid);
 			}
-			const report = store.pruneRetention(64 * 1024, DAY_MS);
+			const report = store.pruneRetention(256 * 1024, DAY_MS);
 			assert.equal(report.overflowDeleted > 0, true);
 			assert.equal(report.overflowDeleted <= 200, true);
 			assert.equal(store.countPending(), 101);

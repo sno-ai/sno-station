@@ -41,10 +41,14 @@ describe("refused rows do not churn", () => {
 			}
 			const db = new DatabaseConstructor(temp.env.SNO_BUFFER_PATH, { readonly: true });
 			const epochs = db.prepare("SELECT COALESCE(MAX(chain_epoch), 0) AS value FROM events").get().value;
+			const quarantined = db.prepare("SELECT COUNT(*) AS count FROM quarantine").get().count;
+			const pending = db.prepare("SELECT COUNT(*) AS count FROM events WHERE shipped = 0 AND terminal = 0").get().count;
 			db.close();
 			// 5 rows, 2 refused forever: three flushes need a handful of requests and epochs, not hundreds.
-			assert.equal(posted.length <= 30, true, `posted ${posted.length} requests in 3 flushes`);
-			assert.equal(epochs <= 6, true, `chain epoch grew to ${epochs}`);
+			assert.equal(quarantined, 2);
+			assert.equal(pending, 0);
+			assert.equal(epochs, 2);
+			for (const id of refused) assert.equal(posted.filter((envelope) => envelope.event_id === id).length, 1);
 			for (const id of ids.filter((value) => !refused.has(value))) {
 				assert.equal(posted.some((envelope) => envelope.event_id === id), true);
 			}
