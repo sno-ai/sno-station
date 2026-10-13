@@ -1,6 +1,7 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { Embedder } from "../../../../packages/memory/src/engine/extraction/embedding-provider-client.ts";
 import { MemoryStore } from "../../../../packages/memory/src/store/store.ts";
+import { defaultSettings, settingsToPluginConfig } from "../../../../packages/memory/config/settings.ts";
 import {
 	createMemoryTelemetryApi,
 	type MemoryTelemetryUsageSummaryResult,
@@ -34,14 +35,38 @@ describe("memory telemetry sno-observe forwarding", () => {
 		const testDb = createTestDb();
 		dbPath = testDb.dbPath;
 		cleanup = testDb.cleanup;
-		// The receipt key is `telemetry.memoryUsage.key`, handed to the store as its telemetry config.
 		store = new MemoryStore({ dbPath, embedder: testEmbedder,
-			memoryTelemetry: { enabled: true, key: "memory-telemetry-observe-test-key", historicKeys: [] } });
+			memoryTelemetry: settingsToPluginConfig(defaultSettings()).memoryTelemetry });
 	});
 
 	afterEach(async () => {
 		await store.close();
 		cleanup();
+	});
+
+	it.each(["invalid key version", "signing failure"])("records create, update and delete despite %s", async (failure) => {
+		await store.close();
+		store = new MemoryStore({ dbPath, embedder: testEmbedder, memoryTelemetry: {
+			enabled: true, key: "test-key", currentKeyVersion: failure === "invalid key version" ? 0 : 1,
+			...(failure === "signing failure" ? { receiptService: {
+				sign: () => { throw new Error("signing failed"); },
+				verify: () => { throw new Error("not used"); },
+			} } : {}),
+		} });
+		const stored = await store.store({ text: "Signing must not block memory records", category: "episodic", projectId: "telemetry-signing" });
+		await store.importEntry({ ...stored, text: "Updated memory survives signing failure", contentHash: "d".repeat(64) });
+		await store.delete(stored.id);
+		const rows = store.sqlite.prepare("SELECT event_type, receipt_hmac FROM nodix_memory_events ORDER BY id").all();
+		expect(rows).toEqual([
+			{ event_type: "create", receipt_hmac: null },
+			{ event_type: "update", receipt_hmac: null },
+			{ event_type: "delete", receipt_hmac: null },
+		]);
+		const emitted: MemoryTelemetryObserveEmitInput[] = [];
+		expect(await forwardMemoryTelemetryToObserve({ sqlite: store.sqlite, observe: {
+			tryEmit: (input) => { emitted.push(input); return true; },
+		} })).toMatchObject({ status: "forwarded", forwarded: 3 });
+		expect(emitted[0]?.payload.event_count).toBe(3);
 	});
 
 	it("forwards only after local rows exist and advances the watermark only after success", async () => {
@@ -65,6 +90,12 @@ describe("memory telemetry sno-observe forwarding", () => {
 			projectId: "telemetry-observe",
 		});
 		const factId = stored.factId ?? stored.id;
+		expect(store.sqlite.prepare("SELECT content_hash, receipt_hmac, key_version, metadata_json FROM nodix_memory_events WHERE fact_id = ?").get(factId)).toEqual({
+			content_hash: stored.contentHash,
+			receipt_hmac: null,
+			key_version: null,
+			metadata_json: JSON.stringify({ operation_source: "store", content_hash: stored.contentHash, receipt_status: "unsigned" }),
+		});
 		const outbox = new MemoryTelemetryUsageOutbox({
 			sqlite: store.sqlite,
 			dbPath,
@@ -83,7 +114,7 @@ describe("memory telemetry sno-observe forwarding", () => {
 			metadata: { retrieval_rank: 1, retrieval_score: 0.88 },
 		});
 		outbox.flushPending();
-		const api = createMemoryTelemetryApi({ sqlite: store.sqlite, key: "memory-telemetry-observe-test-key", historicKeys: [] });
+		const api = createMemoryTelemetryApi({ sqlite: store.sqlite });
 		const usageBeforeFailure: MemoryTelemetryUsageSummaryResult = api.usageSummary({ factId });
 
 		const failed = await forwardMemoryTelemetryToObserve({

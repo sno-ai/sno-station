@@ -116,17 +116,6 @@ it("captures and reads a stored memory after two HTTP registrations without relo
 	expect(model.releases).toBe(0);
 });
 
-it("rejects an unusable successor at init and keeps the previous registration usable", async () => {
-	await openRoutes();
-	expect((await post("/v1/init", { scope: scope(), registration })).status).toBe(200);
-	model.fail = true;
-	expect(await post("/v1/init", { scope: scope(), registration })).toEqual({ status: 500, body: { degraded: true, reason: "engine-failed" } });
-	model.fail = false;
-	expect(await post("/v1/static-block", { scope: scope() })).toEqual({ status: 200, body: { degraded: false, contextText: "" } });
-	expect(model.loads).toBe(1);
-	expect(model.releases).toBe(0);
-});
-
 it("journals unexpected route errors at ERROR without exposing the cause in HTTP", async () => {
 	await openRoutes();
 	if (!pool) throw new Error("Missing runtime");

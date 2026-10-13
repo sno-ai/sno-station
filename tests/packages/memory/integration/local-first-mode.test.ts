@@ -412,7 +412,7 @@ describe("Local First REM runs only while a host answers", () => {
 	const remAnsweredRows = (host: Awaited<ReturnType<typeof recorder>>, from = 0) => TRANSITION_ROWS.filter(text =>
 		host.received.slice(from).some(call => call.answered && call.id.startsWith("REM") && call.content.includes(text)));
 
-	it("ends a pass whose host refuses mid-pass as rem_skipped and dispatches again on the next connection", { timeout: 120_000 }, async () => {
+	it("ends a pass whose host refuses after it has answered as completed, releases the refused row, and does not dispatch it again that day", { timeout: 120_000 }, async () => {
 		const sno = await recorder("sno");
 		const host = await recorder("host", "answer-first-rem-then-refuse");
 		pointSnoGpuAt(sno.url);
@@ -426,23 +426,19 @@ describe("Local First REM runs only while a host answers", () => {
 			skipped: [...audit(), ...lines("rem-wave-jobs.jsonl")].some(line => line.includes("rem_skipped")),
 			completed: auditEvents("rem_completed").length, refusedAfterAnAnswer: host.calls.filter(call => call.startsWith("REM")).length >= 2,
 			snoCalls: sno.calls,
-		}).toEqual({ skipped: true, completed: 0, refusedAfterAnAnswer: true, snoCalls: [] });
-		// The row whose REM call was refused must not stay claimed by the skipped job.
+		}).toEqual({ skipped: false, completed: 1, refusedAfterAnAnswer: true, snoCalls: [] });
+		// The row whose REM call was refused must not stay claimed by the finished job.
 		const refusedRows = TRANSITION_ROWS.filter(text =>
 			host.received.some(call => !call.answered && call.id.startsWith("REM") && call.content.includes(text)));
 		expect({ refusedRows: refusedRows.length > 0, held: heldRows() }).toEqual({ refusedRows: true, held: [] });
-		const firstJobs = jobIds();
-		const reconnectAt = host.received.length;
+		// The pass used up its day: a host connecting again the same day starts nothing.
 		host.mode = "answer";
 		await registerHost("host-skin", host.url);
-		await until(() => jobIds().length > firstJobs.length && auditEvents("rem_completed").length > 0);
-		// The next pass judges the released rows again, on the host, and completes.
-		expect({ firstJobs: firstJobs.length, jobsAfterReconnect: jobIds().length, completed: auditEvents("rem_completed").length,
-			rejudged: remAnsweredRows(host, reconnectAt).filter(text => refusedRows.includes(text)), held: heldRows() })
-			.toEqual({ firstJobs: 1, jobsAfterReconnect: 2, completed: 1, rejudged: refusedRows, held: [] });
+		await delay(3_000);
+		expect({ jobs: jobIds().length, completed: auditEvents("rem_completed").length }).toEqual({ jobs: 1, completed: 1 });
 	});
 
-	it("stops dispatching a pass its host keeps refusing after three tries, however often hosts connect", { timeout: 240_000 }, async () => {
+	it("runs a pass its host refuses after an answer once, however often hosts connect that day", { timeout: 240_000 }, async () => {
 		// Every hook that registers a model re-runs the due check. Before the fix each refused pass ended rem_skipped,
 		// the skip cleared the attempt, and the next registration dispatched the same pass again: on a busy machine the
 		// same daily pass ran fifty times in a day, each run re-embedding every row on every core.
@@ -464,7 +460,7 @@ describe("Local First REM runs only while a host answers", () => {
 			scopes: Record<string, { last_volume_pass_date: string | null }> };
 		expect({ jobs: jobIds().length, skipped: [...settled().values()].filter(job => job === "skipped").length,
 			dayClosed: state.scopes[scope]?.last_volume_pass_date === new Date().toISOString().slice(0, 10), snoCalls: sno.calls })
-			.toEqual({ jobs: 3, skipped: 3, dayClosed: true, snoCalls: [] });
+			.toEqual({ jobs: 1, skipped: 0, dayClosed: true, snoCalls: [] });
 	});
 
 	it("refuses a manual start with no connected registration and invents no job", { timeout: 60_000 }, async () => {
