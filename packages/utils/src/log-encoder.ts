@@ -45,7 +45,7 @@ const LABEL_KEYS = new Set([
 	"runtime_mode", "occasion", "tier", "parser", "preset",
 	"mapped_kind", "category", "failure_category", "failure_reason",
 	"mutation_outcome", "action", "tool_name",
-	"locale",
+	"locale", "client_request_id",
 ]);
 const ERROR_NAMES = new Set([
 	"Error", "TypeError", "RangeError", "SyntaxError", "ReferenceError", "URIError",
