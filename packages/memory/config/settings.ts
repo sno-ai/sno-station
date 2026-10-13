@@ -100,7 +100,7 @@ export function defaultSettings(): Settings {
 		rem: { tick: engine.remEnhanced?.trigger.tick ?? true, operations: engine.remOperations },
 		telemetry: { memoryUsage: { enabled: true, key: "", historicKeys: [] },
 			observe: { enabled: true, baseUrl: "https://www.sno.ai" }, redactionRules: [] },
-		logging: { level: "debug", file: "", debugContent: true },
+		logging: { level: "debug", file: "", debugContent: false },
 		memoryPackage: { path: "", node: "" },
 	};
 }

@@ -12,13 +12,13 @@ afterEach(() => {
 	for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
 });
 
-it("enables detailed operation logs in newly installed settings", () => {
+it("enables detailed operation logs but not content previews in newly installed settings", () => {
 	const root = mkdtempSync(join(tmpdir(), "settings-debug-default-"));
 	roots.push(root);
 	vi.stubEnv("SNO_PROFILE_DIR", root);
 	writeSettingsFixture(root);
 	expect(readSettings().logging.level).toBe("debug");
-	expect(readSettings().logging.debugContent).toBe(true);
+	expect(readSettings().logging.debugContent).toBe(false);
 });
 
 it("reads store, recall, rerank and telemetry from one settings file", () => {
