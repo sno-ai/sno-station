@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.1.5
+
+Reach seats now work with Cursor, and OpenClaw and Hermes seats get quota reading, ordered handoff,
+wake-up and reply confirmation. Spawning OpenClaw keeps the full session key from spawn to the
+readers, keeps the provider you picked, uses a sole agent when none is marked as default, and
+counts idle waits against the call timeout. Spawning with a model or provider choice uses tmux.
+
 ## 2.1.4
 
 `spawn openclaw` refuses when the acpx route it would use sets `--session` or `--session-label`,
