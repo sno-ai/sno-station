@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import { z } from "zod";
 import { writeJsonAtomic } from "./files.js";
 import { conversationPath } from "./paths.js";
-import { gitRoot } from "./scope.js";
+import { gitRoot, isTemporaryDirectory } from "./scope.js";
 
 /** One Cursor conversation, in the shared format of build-contract.md "Conversation record". */
 const recordSchema = z.object({
@@ -93,7 +93,8 @@ export async function touchConversation(event: CursorEvent, kind: EventKind): Pr
 	if (!previous && kind !== "primary") return undefined;
 	const first = event.workspace_roots[0];
 	// A conversation first seen without a git root picks one up when a later event brings one.
-	const project = previous?.project ?? (first ? await gitRoot(first) : null);
+	// A workspace in a temporary directory is a throwaway run and never gets a project, so nothing is captured.
+	const project = previous?.project ?? (first && !isTemporaryDirectory(first) ? await gitRoot(first) : null);
 	const record = nextRecord(previous, event, kind, project, new Date().toISOString(), process.env);
 	await writeJsonAtomic(conversationPath(event.conversation_id), record);
 	return record;

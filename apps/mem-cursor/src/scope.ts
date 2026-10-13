@@ -1,10 +1,24 @@
 import { execFile } from "node:child_process";
-import { resolve } from "node:path";
+import { realpathSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { resolve, sep } from "node:path";
 import { promisify } from "node:util";
 import type { ScopeCtx } from "@snoai/memory/client";
 import { CODING_SKIN_MANUAL_SESSION_ID } from "@snoai/memory/coding-skin";
 
 const execFileAsync = promisify(execFile);
+
+/** A session under the system temporary directory is a throwaway run (a script's or test's agent call); it is never memory. */
+export function isTemporaryDirectory(dir: string): boolean {
+	const real = (path: string): string => {
+		try { return realpathSync(path); } catch { return resolve(path); }
+	};
+	const target = real(dir);
+	return [tmpdir(), "/tmp", "/var/tmp"].some((root) => {
+		const base = real(root);
+		return target === base || target.startsWith(base.endsWith(sep) ? base : `${base}${sep}`);
+	});
+}
 
 /** The git root of `dir`, or null outside a git work tree. */
 export async function gitRoot(dir: string): Promise<string | null> {
