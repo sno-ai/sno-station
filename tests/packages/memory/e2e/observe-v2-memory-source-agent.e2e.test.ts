@@ -49,7 +49,7 @@ afterEach(() => {
 
 type InjectRow = { event_type: string; fact_id?: string; agent_id: string; source_agent_id?: string };
 
-function injectRows(): InjectRow[] {
+function telemetryRows(): InjectRow[] {
 	const path = join(root, "buffer.db");
 	if (!existsSync(path)) return [];
 	const db = new Database(path, { readonly: true });
@@ -57,8 +57,7 @@ function injectRows(): InjectRow[] {
 		return (db.prepare("SELECT payload FROM events ORDER BY rowid").all() as { payload: Buffer }[])
 			.map((row) => JSON.parse(row.payload.toString("utf8")))
 			.filter((e) => e.event_type === "memory.telemetry")
-			.flatMap((e) => e.payload.events as InjectRow[])
-			.filter((row) => row.event_type === "inject");
+			.flatMap((e) => e.payload.events as InjectRow[]);
 	} finally {
 		db.close();
 	}
@@ -68,9 +67,7 @@ describe("the writer of an injected memory reaches the inject row", () => {
 	it("names codex as the source when claude-code is injected with codex's fact, and nothing otherwise", async () => {
 		const fixture = createTestDb();
 		const embedder = await createTestEmbedder();
-		// The receipt key is `telemetry.memoryUsage.key`, handed to the store as its telemetry config.
-		const store = new MemoryStore({ dbPath: fixture.dbPath, embedder,
-			memoryTelemetry: { enabled: true, key: "observe-v2-source-agent-key", historicKeys: [] } });
+		const store = new MemoryStore({ dbPath: fixture.dbPath, embedder });
 		const retriever = createRetriever(store, embedder, undefined, { ...DEFAULT_RETRIEVAL_CONFIG, rerank: "none" });
 		const scopePolicy = createScopePolicy({ default: "global", agentAccess: { codex: ["global"], "claude-code": ["global"] } }, () => {});
 		const stateDir = dirname(fixture.dbPath);
@@ -117,7 +114,10 @@ describe("the writer of an injected memory reaches the inject row", () => {
 			await observability.shutdown();
 
 			const key = (row: InjectRow) => [row.agent_id, row.fact_id === codexFact ? "codex-fact" : row.fact_id === plainFact ? "plain-fact" : row.fact_id, row.source_agent_id];
-			expect(injectRows().map(key).sort()).toEqual([
+			const rows = telemetryRows();
+			expect(rows.filter((row) => row.event_type === "create").map((row) => row.fact_id).sort()).toEqual([codexFact, plainFact].sort());
+			expect(rows.filter((row) => row.event_type === "recall").length).toBeGreaterThan(0);
+			expect(rows.filter((row) => row.event_type === "inject").map(key).sort()).toEqual([
 				["claude-code", "codex-fact", "codex"],
 				["claude-code", "plain-fact", undefined],
 				["codex", "codex-fact", undefined],
