@@ -1,4 +1,4 @@
-import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, closeSync, existsSync, fstatSync, ftruncateSync, mkdirSync, openSync, readFileSync, readSync, writeFileSync, writeSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { AgentId, EventLane, EventType, JsonObject } from "@snoai/observability";
 import { createLogger } from "@snoai/utils/logger";
@@ -90,18 +90,49 @@ function consumeRows(profileDir: string, observe: LedgerObserve, batchSize: numb
 	const path = observeLedgerPath(profileDir);
 	const rows: { start: number; end: number; text: string }[] = [];
 	if (!existsSync(path)) return { rows, offset };
-	const ledger = readFileSync(path);
-	if (offset > ledger.length) {
-		warn(observe, `offset beyond ledger: ${offset} > ${ledger.length}`);
-		return { rows, offset };
+	const fd = openSync(path, "r+");
+	try {
+		const size = fstatSync(fd).size;
+		if (offset > size) {
+			warn(observe, `offset beyond ledger: ${offset} > ${size}`);
+			offset = 0;
+			writeFileSync(syncedPath, "0", { mode: 0o600 });
+		}
+		const buffer = Buffer.alloc(64 * 1024);
+		let position = offset;
+		let pending = Buffer.alloc(0);
+		while (rows.length < batchSize && position < size) {
+			const count = readSync(fd, buffer, 0, Math.min(buffer.length, size - position), position);
+			if (count === 0) break;
+			position += count;
+			pending = Buffer.concat([pending, buffer.subarray(0, count)]);
+			let consumed = 0;
+			while (rows.length < batchSize) {
+				const newline = pending.indexOf(10, consumed);
+				if (newline === -1) break;
+				const end = offset + newline - consumed + 1;
+				rows.push({ start: offset, end, text: pending.toString("utf8", consumed, newline) });
+				offset = end;
+				consumed = newline + 1;
+			}
+			pending = pending.subarray(consumed);
+		}
+		if (offset >= 1024 * 1024 && size - offset <= 64 * 1024) {
+			// Reclaim only near the end, so a batch never copies a large unread backlog.
+			let source = offset;
+			while (source < size) {
+				const count = readSync(fd, buffer, 0, Math.min(buffer.length, size - source), source);
+				if (count === 0) break;
+				writeSync(fd, buffer, 0, count, source - offset);
+				source += count;
+			}
+			ftruncateSync(fd, size - offset);
+			offset = 0;
+		}
+		if (rows.length) writeFileSync(syncedPath, String(offset), { mode: 0o600 });
+	} finally {
+		closeSync(fd);
 	}
-	while (rows.length < batchSize) {
-		const newline = ledger.indexOf(10, offset);
-		if (newline === -1) break;
-		rows.push({ start: offset, end: newline + 1, text: ledger.toString("utf8", offset, newline) });
-		offset = newline + 1;
-	}
-	if (rows.length) writeFileSync(syncedPath, String(offset), { mode: 0o600 });
 	return { rows, offset };
 }
 
