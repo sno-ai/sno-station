@@ -273,7 +273,10 @@ export function materializeBundledLlmixEndpoint(input: {
 			path,
 			resolveEndpointBase(input.baseSource, input.preset.provider !== "sno-gpu"),
 		).toString(),
-		preset: input.preset,
+		// The signed preset names the base model; this route serves the profile adapter.
+		preset: input.preset.provider === "sno-gpu" && path === "/extract/profile/v1/completions"
+			? { ...input.preset, model: "b-profile" }
+			: input.preset,
 	};
 }
 

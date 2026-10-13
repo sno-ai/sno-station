@@ -21,6 +21,8 @@ type ModelCall = {
 
 const extract = { "local-first": "off", "agent-native": "host", "rem-enhanced": "sno-gpu" } as const;
 const host = { "local-first": "off", "agent-native": "host", "rem-enhanced": "host" } as const;
+// Measured 2026-10-13: the missed-figure re-ask recovered 4 of 1144 turns for 22% of GPU time; set it on per mode to use it.
+const offByDefault = { "local-first": "off", "agent-native": "off", "rem-enhanced": "off" } as const;
 const profile = { "local-first": "host", "agent-native": "host", "rem-enhanced": "host" } as const;
 const rem = { "local-first": "host", "agent-native": "host", "rem-enhanced": "sno-gpu" } as const;
 const remHost = { "local-first": "host", "agent-native": "host", "rem-enhanced": "host" } as const;
@@ -34,7 +36,7 @@ export const MODEL_CALLS: Record<ModelCallId, ModelCall> & Record<RsiModelCallId
 }> = {
 	E1: { description: "conversation extraction", occasion: "memoryExtract", destinations: extract, snoPreset: chat, transport: { host: "agent-host-seam", snoGpu: "chat-completions" }, promptVariant: { host: "standard", snoGpu: "standard" }, replyParser: { host: "json", snoGpu: "json" } },
 	E2: { description: "fact enrichment", occasion: "memoryExtract", destinations: extract, snoPreset: chat, transport: { host: "agent-host-seam", snoGpu: "chat-completions" }, promptVariant: { host: "standard", snoGpu: "standard" }, replyParser: { host: "json", snoGpu: "json" } },
-	E3: { description: "missed figure recovery", occasion: "memoryExtract", destinations: extract, snoPreset: chat, transport: { host: "agent-host-seam", snoGpu: "chat-completions" }, promptVariant: { host: "standard", snoGpu: "standard" }, replyParser: { host: "json", snoGpu: "json" } },
+	E3: { description: "missed figure recovery", occasion: "memoryExtract", destinations: offByDefault, snoPreset: chat, transport: { host: "agent-host-seam", snoGpu: "chat-completions" }, promptVariant: { host: "standard", snoGpu: "standard" }, replyParser: { host: "json", snoGpu: "json" } },
 	E4: { description: "compound record split", occasion: "memoryExtract", destinations: extract, snoPreset: chat, transport: { host: "agent-host-seam", snoGpu: "chat-completions" }, promptVariant: { host: "standard", snoGpu: "standard" }, replyParser: { host: "json", snoGpu: "json" } },
 	E5: { description: "missing half recovery", occasion: "memoryExtract", destinations: extract, snoPreset: chat, transport: { host: "agent-host-seam", snoGpu: "chat-completions" }, promptVariant: { host: "standard", snoGpu: "standard" }, replyParser: { host: "json", snoGpu: "json" } },
 	E6: { description: "subject check", occasion: "memoryExtract", destinations: extract, snoPreset: chat, transport: { host: "agent-host-seam", snoGpu: "chat-completions" }, promptVariant: { host: "standard", snoGpu: "standard" }, replyParser: { host: "json", snoGpu: "json" } },
