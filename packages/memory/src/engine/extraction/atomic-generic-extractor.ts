@@ -9,6 +9,7 @@ import { ATOMIC_CAPTURE_TIMEOUT_MS, ATOMIC_ENRICHMENT_OUTPUT_TOKEN_BUDGET } from
  */
 
 import { createLogger } from "@snoai/utils/logger";
+import { countTokens } from "@snoai/chunking";
 import attributeDictionary from "../../../config/attribute-dictionary.json" with { type: "json" };
 import relationDictionary from "../../../config/relation-dictionary.json" with { type: "json" };
 import stateVocabulary from "../../../config/state-vocabulary.json" with { type: "json" };
@@ -162,12 +163,21 @@ export function buildAtomicGenericExtractionPrompt(
 
 function renderAtomicLaneContext(input: AtomicGenericExtractionInput): string {
 	const locale = input.locale ?? DEFAULT_LOCALE;
+	const turns = numberAtomicTurns(input.turns);
+	const preceding = [...(input.contextTurns ?? [])];
+	const following = [...(input.followingTurns ?? [])];
+	// Splitting source turns must also shrink the surrounding text sent to the model.
+	while (countTokens(JSON.stringify({ turns, preceding, following })) > input.runParameters.maxInputTokens) {
+		if (preceding.length > 0) preceding.shift();
+		else if (following.length > 0) following.pop();
+		else break;
+	}
 	return [
 		`session_date_time: ${input.sessionDateTime ?? "unknown"}`,
 		atomicExtractionSkillReference("surrounding-context"),
-		`preceding_context: ${renderAtomicPromptData(input.contextTurns ?? [], locale).value}`,
-		`following_context: ${renderAtomicPromptData(input.followingTurns ?? [], locale).value}`,
-		`transcript:\n${renderAtomicPromptData(numberAtomicTurns(input.turns), locale).value}`,
+		`preceding_context: ${renderAtomicPromptData(preceding, locale).value}`,
+		`following_context: ${renderAtomicPromptData(following, locale).value}`,
+		`transcript:\n${renderAtomicPromptData(turns, locale).value}`,
 	].join("\n\n");
 }
 
@@ -781,6 +791,15 @@ async function captureAtomicWindow(
 	outputTokenBudget: number,
 	attempts: { count: number },
 ): Promise<CaptureWindowResult> {
+	// The caller's chars/4 estimate undercounts Chinese; check the source before dispatch.
+	if (countTokens(JSON.stringify({ turns: numberAtomicTurns(input.turns), preceding: [], following: [] })) > input.runParameters.maxInputTokens) {
+		if (input.turns.length > 1) return splitAtomicCaptureWindow(input, outputTokenBudget, attempts);
+		if (splitTurnContent(input.turns[0]?.content ?? "") === undefined) {
+			input.store.recordAtomicExtractionCalls(input.ledgerKey, input.nowMs());
+			return { status: "pending", reason: "input-overflow", failedReply: "" };
+		}
+		return splitAtomicCaptureTurn(input, outputTokenBudget, attempts, "");
+	}
 	const sanitizedInput = sanitizeAtomicPromptValue(input.turns, input.locale ?? DEFAULT_LOCALE);
 	const prompt = buildAtomicCapturePrompt(input);
 	let lastReply = "";

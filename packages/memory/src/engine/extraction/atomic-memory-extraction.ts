@@ -1,6 +1,6 @@
 import { excludeProgressRecords } from "./atomic-progress-boundary";
 import { FIXED_MEMORY_SNO_EXTRACT_CHAT, FIXED_MEMORY_SNO_EXTRACT_PROFILE } from "../../model/signed-registry-constants";
-import { ATOMIC_CAPTURE_OUTPUT_TOKEN_BUDGET, ATOMIC_EXTRACTION_MAX_INPUT_TOKENS, DEFAULT_MAX_CONTEXT_TOKENS } from "../../../config/index";
+import { ARRIVAL_RETIREMENT_JUDGED_CANDIDATE_CAP, ATOMIC_CAPTURE_OUTPUT_TOKEN_BUDGET, ATOMIC_EXTRACTION_MAX_INPUT_TOKENS, DEFAULT_MAX_CONTEXT_TOKENS } from "../../../config/index";
 /** @file atomic-memory-extraction.ts
  * @purpose Runs the complete dark atomic extraction path through its one storage door.
  * @boundary Product entrypoint; callers supply chunk identity, routing snapshot, and idempotency.
@@ -196,6 +196,8 @@ export interface AtomicExtractPersistResult {
 interface AtomicInsightDistillerConfig {
 	defaultScope: string;
 	locale?: Locale;
+	scheduleArrivalRetirement?: (task: () => Promise<void>) => void;
+	captureBatch?: boolean;
 }
 
 const log = createLogger("sno-station-mem:atomic-extraction-windows");
@@ -214,6 +216,12 @@ interface WindowDiagnostics {
 	parked: number;
 }
 const windowDiagnosticContext = new AsyncLocalStorage<WindowDiagnostics>();
+interface ArrivalRetirementWork {
+	remaining: number;
+	providerCallsLeft: number;
+	tasks?: Array<() => Promise<void>>;
+}
+const arrivalRetirementContext = new AsyncLocalStorage<ArrivalRetirementWork>();
 
 function windowDiagnostics(): WindowDiagnostics {
 	return { proposed: 0, parseRejected: 0, discarded: 0, unkeyed: 0, persisted: 0,
@@ -469,10 +477,11 @@ interface AtomicConversationWindow {
 
 function atomicConversationWindows(
 	turns: readonly AtomicExtractionTurn[],
+	captureBatch = false,
 ): AtomicConversationWindow[] {
 	const userIndexes = turns.flatMap((turn, index) => (turn.role === "user" ? [index] : []));
 	if (userIndexes.length === 0) return [];
-	if (userIndexes.length <= 2) {
+	if (captureBatch || userIndexes.length <= 2) {
 		return [{ turns: [...turns], contextTurns: [], followingTurns: [], startIndex: 0, ownedTurnIndexes: turns.map((_, index) => index) }];
 	}
 	return userIndexes.slice(0, -1).map((start, index) => {
@@ -670,6 +679,13 @@ export function createSignedAtomicMemoryExtractionTransports(
 						: renderAdapterAChatPrompt(pair),
 					hostPrompt: renderAdapterAChatPrompt(pair),
 					callId: "E10",
+					takeProviderAttempt: () => {
+						const work = arrivalRetirementContext.getStore();
+						if (!work) return true;
+						if (work.providerCallsLeft <= 0) return false;
+						work.providerCallsLeft -= 1;
+						return true;
+					},
 				}),
 		},
 	};
@@ -687,14 +703,19 @@ export class AtomicInsightDistiller {
 		sessionKey: string,
 		options: AtomicExtractPersistOptions = {},
 	): Promise<AtomicExtractPersistResult> {
-		return withLogContext({ operation_id: currentLogContext().operation_id ?? randomUUID(), session_reference: sessionKey }, async () => {
+		const retirement: ArrivalRetirementWork = {
+			remaining: ARRIVAL_RETIREMENT_JUDGED_CANDIDATE_CAP,
+			providerCallsLeft: ARRIVAL_RETIREMENT_JUDGED_CANDIDATE_CAP,
+			...(this.config.scheduleArrivalRetirement ? { tasks: [] } : {}),
+		};
+		return arrivalRetirementContext.run(retirement, () => withLogContext({ operation_id: currentLogContext().operation_id ?? randomUUID(), session_reference: sessionKey }, async () => {
 		const diagnosticStarted = performance.now();
 		const diagnostics: WindowDiagnostics[] = [];
 		let captureOutcome = "failed";
 		try {
 		if (!sessionKey.trim()) throw new Error("Atomic extraction requires sessionKey");
 		const turns = parseAtomicConversationTurns(conversationText);
-		const windows = atomicConversationWindows(turns);
+		const windows = atomicConversationWindows(turns, this.config.captureBatch);
 		if (windows.length === 0) {
 			log.warn("atomic extraction found no parseable turn; nothing will be stored", {
 				session_reference: privateLogReference(sessionKey),
@@ -848,6 +869,10 @@ export class AtomicInsightDistiller {
 			...(llmFailures > 0 ? { llmFailures } : {}),
 		};
 		} finally {
+			const tasks = retirement.tasks;
+			if (tasks && tasks.length > 0) this.config.scheduleArrivalRetirement?.(async () => {
+				for (const task of tasks) await task();
+			});
 			const sum = (field: keyof Pick<WindowDiagnostics, "proposed" | "parseRejected" | "discarded" | "unkeyed" | "persisted" | "suppressed" | "modelMs" | "writeMs">): number => diagnostics.reduce((total, row) => total + row[field], 0);
 			log[captureOutcome === "failed" ? "error" : "info"]("Memory capture completed", { outcome: captureOutcome === "failed" && sum("persisted") > 0 ? "partial" : captureOutcome,
 				row_ids: diagnostics.flatMap((row) => row.rowIds).slice(0, 128), store_reference: privateLogReference(this.store.dbPath),
@@ -861,7 +886,7 @@ export class AtomicInsightDistiller {
 				later_window_persisted_count: "undetermined", later_window_persisted_reason: "no_cross_window_record_identity",
 			}, { event_name: "memory.capture.completed", file: "packages/memory/src/engine/extraction/atomic-memory-extraction.ts", function: "extractAndPersist", site_id: "memory.capture.completed" });
 		}
-		});
+		}));
 	}
 }
 
@@ -1650,7 +1675,13 @@ export async function runAtomicMemoryExtraction(
 	// to run for the same correction (one Codex run of three stored the corrected value as
 	// episodic, 2026-09-24), so none of them decides.
 	const nominatedCards = cards.filter((card) => card.lane === "active");
+	const retirement: ArrivalRetirementWork = arrivalRetirementContext.getStore() ?? {
+		remaining: ARRIVAL_RETIREMENT_JUDGED_CANDIDATE_CAP,
+		providerCallsLeft: ARRIVAL_RETIREMENT_JUDGED_CANDIDATE_CAP,
+	};
+	const retire = async (): Promise<void> => {
 	for (const card of nominatedCards) {
+		if (retirement.remaining <= 0 || retirement.providerCallsLeft <= 0) break;
 		const stored = input.store.findByExtractionIdempotencyKey(
 			input.projectId,
 			card.idempotencyKey,
@@ -1664,6 +1695,7 @@ export async function runAtomicMemoryExtraction(
 				nominatedRowId: stored.id,
 				nowMs: atomicFactWrite.nowMs,
 				transport: input.transports.retirementVerdict,
+				budget: retirement,
 			});
 		} catch (error) {
 			// The chunk is already committed and its ledger row complete, so a retry never comes back
@@ -1682,6 +1714,9 @@ export async function runAtomicMemoryExtraction(
 			});
 		}
 	}
+	};
+	if (retirement.tasks) retirement.tasks.push(retire);
+	else await retire();
 	return { status: "complete", records: resolved.records, write };
 	} catch (error) {
 		// Another capture of the same turn finished this chunk first: its rows are written, so this run is a skip.
@@ -1760,13 +1795,16 @@ async function runAtomicArrivalRetirementJudgment(input: {
 	nominatedRowId: string;
 	nowMs: number;
 	transport: AtomicRetirementVerdictTransport;
+	budget: ArrivalRetirementWork;
 }): Promise<void> {
 	const candidateSet = await readAtomicArrivalRetirementCandidateSet(input.store, input);
 	if (candidateSet === undefined || candidateSet.candidateRows.length === 0) return;
 	const replaced = new Set<string>();
-	const queue = [...candidateSet.candidateRows];
+	const queue = candidateSet.candidateRows.slice(0, input.budget.remaining);
+	input.budget.remaining -= queue.length;
 	const judgeQueued = async (): Promise<void> => {
 		for (let candidate = queue.shift(); candidate !== undefined; candidate = queue.shift()) {
+			if (input.budget.providerCallsLeft <= 0) break;
 			const verdict = await judgeArrivalRetirementPair(input, candidateSet, candidate);
 			if (verdict === "replacement") replaced.add(candidate.id);
 		}
