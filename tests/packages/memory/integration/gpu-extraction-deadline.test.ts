@@ -108,3 +108,23 @@ it.each([undefined, 600_000])("uses the standalone GPU fallback only when no req
 	expect(timeout.mock.calls.some(([ms]) => ms > expected - 1000 && ms <= expected)).toBe(true);
 	expect(timeout.mock.calls.some(([ms]) => ms > 299_000 && ms <= 300_000)).toBe(timeoutMs === undefined);
 });
+
+
+it("preserves a host fallback answer when completion logging crosses the capture deadline", async () => {
+	vi.stubGlobal("fetch", async (_url: unknown, init?: RequestInit) => {
+		if (!init?.body) return new Response(JSON.stringify(didDocument));
+		return new Response("GPU unavailable", { status: 503 });
+	});
+	const deadline = performance.now() + 10_000;
+	const llm = createLlmClient({ preset: "mem_claw/sno_ai_extract", apiKey: "test-key", routing,
+		agentPort: {
+			async complete() {
+				vi.spyOn(performance, "now").mockReturnValue(deadline + 1);
+				return { kind: "ok", text: '{"records":[]}' };
+			},
+		} });
+	await withMemoryOperation("capture", undefined, async () => {
+		expect(await llm.completeText({ callId: "E4", prompt: "Recover these records.", maxTokens: 128 }))
+			.toBe('{"records":[]}');
+	}, deadline);
+});

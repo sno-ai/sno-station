@@ -444,6 +444,7 @@ export function createLlmClient(config: LlmClientConfig & { refuseOnUnavailable?
 				callId: request.callId, destination,
 				transport,
 			});
+			const hostTimeoutMs = resolveRequestTimeoutMs(request);
 			const hostStarted = performance.now();
 			const hostInFlight = ++hostRequestsInFlight;
 			const result = await withLogContext({ attempt_id: randomUUID() }, async () => {
@@ -455,7 +456,7 @@ export function createLlmClient(config: LlmClientConfig & { refuseOnUnavailable?
 						maxTokens: request.maxTokens ?? 4096,
 						...(request.enableThinking !== undefined
 							? { enableThinking: request.enableThinking } : {}),
-						timeoutMs: resolveRequestTimeoutMs(request),
+						timeoutMs: hostTimeoutMs,
 						...(request.signal ? { signal: request.signal } : {}),
 					});
 					outcome = completion.kind;
@@ -469,9 +470,9 @@ export function createLlmClient(config: LlmClientConfig & { refuseOnUnavailable?
 						prompt_template_hash: request.promptTemplateHash ?? "unavailable",
 						extraction_skill_hash: request.extractionSkillHash ?? "unavailable",
 						prompt_template_unavailable_reason: request.promptTemplateHash ? undefined : "caller_does_not_provide_template_identity",
-						config_hash: createHash("sha256").update(JSON.stringify({ transport, maxTokens: request.maxTokens ?? 4096, timeoutMs: resolveRequestTimeoutMs(request) })).digest("hex"),
+						config_hash: createHash("sha256").update(JSON.stringify({ transport, maxTokens: request.maxTokens ?? 4096, timeoutMs: hostTimeoutMs })).digest("hex"),
 						output_cap: "unavailable", passed_output_cap: request.maxTokens ?? 4096,
-						output_cap_reason: "host_may_strip_requested_cap", timeout_ms: resolveRequestTimeoutMs(request),
+						output_cap_reason: "host_may_strip_requested_cap", timeout_ms: hostTimeoutMs,
 						sampling: { source: "unknown" }, finish_reason: "unavailable", route: "agent-host-seam",
 						dispatch_to_headers_ms: "unavailable", headers_to_body_ms: "unavailable", first_token_ms: "unavailable",
 						provider_unavailable_reason: "host_port_does_not_report_provider_fields",
