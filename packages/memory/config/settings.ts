@@ -110,14 +110,16 @@ export function defaultSettings(): Settings {
  * else: a third-party key or address in the rerank settings is never sent to Sno. Only REM Enhanced calls Sno GPU;
  * any other mode, or no key yet, ranks locally, which is the configured strategy, not an error.
  */
-function rerankSettings(settings: Settings): { rerank: Settings["rerank"]["mode"]; endpoint: string | undefined; apiKey: string } {
+function rerankSettings(settings: Settings): { rerank: Settings["rerank"]["mode"]; provider: Settings["rerank"]["provider"] | undefined; endpoint: string | undefined; apiKey: string } {
 	const { rerank, snoGpu } = settings;
-	if (rerank.provider !== "sno-gpu") return { rerank: rerank.mode, endpoint: rerank.endpoint || undefined, apiKey: rerank.apiKey };
+	if (rerank.provider !== "sno-gpu") return { rerank: rerank.mode, provider: rerank.provider, endpoint: rerank.endpoint || undefined, apiKey: rerank.apiKey };
 	const apiKey = snoGpu.apiKey;
 	const local = rerank.mode === "cross-encoder" && (settings.mode !== "rem-enhanced" || !apiKey);
+	// When the local ranker is used, no remote ranker is named, so traces and stats do not read as a Sno rank.
 	return {
 		rerank: local ? "lightweight" : rerank.mode,
-		endpoint: new URL("rerank", snoGpu.baseUrl.endsWith("/") ? snoGpu.baseUrl : `${snoGpu.baseUrl}/`).toString(),
+		provider: local ? undefined : rerank.provider,
+		endpoint: local ? undefined : new URL("rerank", snoGpu.baseUrl.endsWith("/") ? snoGpu.baseUrl : `${snoGpu.baseUrl}/`).toString(),
 		apiKey,
 	};
 }
@@ -132,7 +134,7 @@ export function settingsToPluginConfig(settings: Settings): import("./plugin-con
 			dtype: settings.embedding.dtype, cacheDir: settings.embedding.cacheDir || undefined,
 			offline: settings.embedding.offline, mirror: settings.embedding.mirror,
 			sessionOptions: { intraOpNumThreads: settings.embedding.threads || undefined } },
-		retrieval: { rerank: sno.rerank, rerankProvider: settings.rerank.provider,
+		retrieval: { rerank: sno.rerank, rerankProvider: sno.provider,
 			recallTopK: settings.recall.prompt.limit, minScore: settings.recall.prompt.minScore,
 			rerankEndpoint: sno.endpoint, rerankModel: settings.rerank.model,
 			rerankApiKey: sno.apiKey, rerankTimeoutMs: settings.rerank.timeoutMs,

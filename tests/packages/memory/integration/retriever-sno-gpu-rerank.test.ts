@@ -43,10 +43,14 @@ describe("which settings send recall ranking to Sno GPU", () => {
 
 	it("the other two modes and a missing key rank locally and never name a Sno GPU key", () => {
 		for (const mode of ["local-first", "agent-native"] as const) {
-			expect(settingsToPluginConfig(settingsFor(mode)).retrieval.rerank).toBe("lightweight");
+			const retrieval = settingsToPluginConfig(settingsFor(mode)).retrieval;
+			expect(retrieval.rerank).toBe("lightweight");
+			expect(retrieval.rerankProvider).toBeUndefined();
+			expect(retrieval.rerankEndpoint).toBeUndefined();
 		}
 		const noKey = settingsToPluginConfig(settingsFor("rem-enhanced", { snoGpu: { baseUrl: "https://rt3-llm.sno.ai", apiKey: "" } })).retrieval;
 		expect(noKey.rerank).toBe("lightweight");
+		expect(noKey.rerankProvider).toBeUndefined();
 	});
 
 	it("a third-party key or address left in the rerank settings is never sent to Sno GPU", () => {
