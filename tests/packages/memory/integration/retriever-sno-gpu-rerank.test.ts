@@ -49,6 +49,11 @@ describe("which settings send recall ranking to Sno GPU", () => {
 		expect(noKey.rerank).toBe("lightweight");
 	});
 
+	it("a third-party key or address left in the rerank settings is never sent to Sno GPU", () => {
+		const own = settingsFor("rem-enhanced", { rerank: { ...defaultSettings().rerank, apiKey: "voyage-key", endpoint: "https://api.voyageai.com/v1/rerank" } });
+		expect(settingsToPluginConfig(own).retrieval).toMatchObject({ rerankProvider: "sno-gpu", rerankEndpoint: "https://rt3-llm.sno.ai/rerank", rerankApiKey: "machine-key" });
+	});
+
 	it("a user's own third-party reranker settings are passed through untouched", () => {
 		const own = settingsFor("rem-enhanced", { rerank: { ...defaultSettings().rerank, mode: "cross-encoder", provider: "voyage", apiKey: "voyage-key" } });
 		expect(settingsToPluginConfig(own).retrieval).toMatchObject({ rerank: "cross-encoder", rerankProvider: "voyage", rerankApiKey: "voyage-key" });

@@ -106,17 +106,18 @@ export function defaultSettings(): Settings {
 }
 
 /**
- * The "sno-gpu" reranker is Sno's own: its address is the Sno GPU address and its key is the Sno GPU key. Only
- * REM Enhanced calls Sno GPU; any other mode, or no key yet, ranks locally, which is the configured strategy, not an error.
+ * The "sno-gpu" reranker is Sno's own: its address is the Sno GPU address and its key is the Sno GPU key, and nothing
+ * else: a third-party key or address in the rerank settings is never sent to Sno. Only REM Enhanced calls Sno GPU;
+ * any other mode, or no key yet, ranks locally, which is the configured strategy, not an error.
  */
 function rerankSettings(settings: Settings): { rerank: Settings["rerank"]["mode"]; endpoint: string | undefined; apiKey: string } {
 	const { rerank, snoGpu } = settings;
 	if (rerank.provider !== "sno-gpu") return { rerank: rerank.mode, endpoint: rerank.endpoint || undefined, apiKey: rerank.apiKey };
-	const apiKey = rerank.apiKey || snoGpu.apiKey;
+	const apiKey = snoGpu.apiKey;
 	const local = rerank.mode === "cross-encoder" && (settings.mode !== "rem-enhanced" || !apiKey);
 	return {
 		rerank: local ? "lightweight" : rerank.mode,
-		endpoint: rerank.endpoint || new URL("rerank", snoGpu.baseUrl.endsWith("/") ? snoGpu.baseUrl : `${snoGpu.baseUrl}/`).toString(),
+		endpoint: new URL("rerank", snoGpu.baseUrl.endsWith("/") ? snoGpu.baseUrl : `${snoGpu.baseUrl}/`).toString(),
 		apiKey,
 	};
 }
