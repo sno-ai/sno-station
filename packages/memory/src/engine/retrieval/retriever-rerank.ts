@@ -302,7 +302,9 @@ Object.assign(MemoryRetriever.prototype, {
 						const retryAfter = response.headers.get("retry-after");
 						const fatalError = buildRerankHttpError(response.status);
 						// Guard guard condition here so the remaining retrieval scoring path works with normalized inputs.
-						if (fatalError) {
+						// A credential Sno's own reranker refuses must not break recall: it falls back like a 429 or 500 does,
+						// the way the model calls fall back to the host. A third-party key the user chose still fails loudly.
+						if (fatalError && provider !== "sno-gpu") {
 							// Surface this invalid retrieval ranking state as an explicit typed failure.
 							throw fatalError;
 						}

@@ -126,6 +126,22 @@ describe("the recall search against a Sno-style reranker over real HTTP", () => 
 		expect(calls[1]?.headers["x-request-id"]).not.toBe(calls[0]?.headers["x-request-id"]);
 	}, 30_000);
 
+	it("a Sno reranker that refuses the key (401) does not break the recall: the results come back in their earlier order", async () => {
+		const { calls, url } = await reranker(() => ({ status: 401, body: { error: "Unauthorized" } }));
+		const retriever = createRetriever(storeOf(manyCandidates().slice(0, 4)) as never, embedder, { warn: () => {} },
+			{ ...BASE_CONFIG, rerank: "cross-encoder", rerankProvider: "sno-gpu", rerankEndpoint: url, rerankApiKey: "user-key" });
+		const results = await retriever.retrieve({ query: QUERY, limit: 3 });
+		expect(calls.length).toBeGreaterThanOrEqual(1);
+		expect(results.map((r) => r.entry.id)).toEqual(["m0", "m1", "m2"]);
+	}, 30_000);
+
+	it("a third-party reranker that refuses the key (401) still fails the recall loudly", async () => {
+		const { url } = await reranker(() => ({ status: 401, body: { error: "Unauthorized" } }));
+		const retriever = createRetriever(storeOf(manyCandidates().slice(0, 4)) as never, embedder, { warn: () => {} },
+			{ ...BASE_CONFIG, rerank: "cross-encoder", rerankProvider: "voyage", rerankEndpoint: url, rerankApiKey: "k" });
+		await expect(retriever.retrieve({ query: QUERY, limit: 3 })).rejects.toThrow(/status 401/);
+	}, 30_000);
+
 	it("a third-party reranker (voyage) gets no Sno labels", async () => {
 		const { calls, url } = await reranker(() => ({ status: 200, body: { data: [] } }));
 		const retriever = createRetriever(storeOf(manyCandidates().slice(0, 4)) as never, embedder, { warn: () => {} },
