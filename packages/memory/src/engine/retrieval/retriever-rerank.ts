@@ -49,10 +49,6 @@ const RERANK_TRANSIENT_STATUSES = new Set([429, 502, 503, 504]);
 // A production-like concurrency test returned 429 + retry-after: 1 under eight concurrent
 // recalls; bound each queue wait.
 const RERANK_RETRY_AFTER_MAX_MS = 5_000;
-// Auto-recall injects nothing once its own 4 s deadline passes. Sno's reranker is the REM Enhanced default, so its whole step
-// (retries included) must end well before that and fall back to the earlier order. Measured 2026-10-14: a search takes
-// 0.3 to 0.6 s, 1.4 s at worst under load.
-const SNO_RERANK_STEP_BUDGET_MS = 2_000;
 
 function isRerankTimeout(error: unknown): boolean {
 	return error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError");
@@ -161,7 +157,7 @@ Object.assign(MemoryRetriever.prototype, {
 		query: string,
 		candidates: RetrievalResult[],
 		queryVector: Float32Array,
-		options?: { signal?: AbortSignal; autoRecall?: boolean },
+		options?: { signal?: AbortSignal; budgetMs?: number },
 	): Promise<RerankOutcome> {
 		// Treat the empty collection as a first-class outcome instead of widening behavior.
 		if (candidates.length === 0) return { candidates };
@@ -205,9 +201,9 @@ Object.assign(MemoryRetriever.prototype, {
 		}
 		// Compute the normalized rerank timeout ms once so later retrieval scoring checks use one value.
 		const rerankTimeoutMs = this.config.rerankTimeoutMs ?? DEFAULT_RERANK_TIMEOUT_MS;
-		// The step ends when the caller's deadline passes; in auto-recall (which has a deadline of its own) Sno's reranker
-		// also gets its own shorter budget. An explicit recall has no such deadline and waits for the configured timeout.
-		const stepEnds = [options?.signal, provider === "sno-gpu" && options?.autoRecall ? AbortSignal.timeout(SNO_RERANK_STEP_BUDGET_MS) : undefined].filter(
+		// The step ends when the caller's deadline passes; where the caller has a deadline and says how much of it the reranker
+		// may use, Sno's reranker also stops at that budget. An explicit recall has no deadline and waits for the configured timeout.
+		const stepEnds = [options?.signal, provider === "sno-gpu" && options?.budgetMs ? AbortSignal.timeout(options.budgetMs) : undefined].filter(
 			(each): each is AbortSignal => each !== undefined,
 		);
 		const stepStop = stepEnds.length > 0 ? AbortSignal.any(stepEnds) : undefined;
