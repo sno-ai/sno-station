@@ -248,7 +248,7 @@ export class MemoryRuntimePool {
 		return hosts().length === 0 ? undefined : hostChain(hosts);
 	}
 
-	async invoke(method: ContractMethod, raw: unknown, skinId: string, signal?: AbortSignal): Promise<ContractOutputs[ContractMethod]> {
+	async invoke(method: ContractMethod, raw: unknown, skinId: string, signal?: AbortSignal, deadlineMs?: number): Promise<ContractOutputs[ContractMethod]> {
 		signal?.throwIfAborted();
 		const input = parseInput(method, raw);
 		if (method === "inspect") {
@@ -333,7 +333,7 @@ export class MemoryRuntimePool {
 		const scope: ScopeCtx = { ...input.scope, host: { ...input.scope.host, observeSessionUuid: uuid } };
 		const body = { ...(raw as object), scope };
 		try {
-			const call = () => observeSession.run({ uuid, entry }, () => withProviderResponses(responses, () => this.call(entry, method, body, signal)));
+			const call = () => observeSession.run({ uuid, entry }, () => withProviderResponses(responses, () => this.call(entry, method, body, signal, deadlineMs)));
 			const result = parseOutput(method, await entry.agentPort.run(call, method === "capture"));
 			// The backlog replays in the background: a capture's caller waits for its own turn only.
 			if (method === "capture" && !result.degraded && "committed" in result && (result.committed || result.skipped || result.partial))
@@ -389,12 +389,12 @@ export class MemoryRuntimePool {
 		await entry.observability.flush({ force: true, timeoutMs: SNO_OBSERVE_FLUSH_TIMEOUT_MS });
 	}
 
-	private async call(entry: SkinRuntime, method: Exclude<ContractMethod, "init">, raw: unknown, signal?: AbortSignal): Promise<ContractOutputs[ContractMethod]> {
+	private async call(entry: SkinRuntime, method: Exclude<ContractMethod, "init">, raw: unknown, signal?: AbortSignal, deadlineMs?: number): Promise<ContractOutputs[ContractMethod]> {
 		signal?.throwIfAborted();
 		const runtime = entry.runtime;
 		switch (method) {
 			case "hostEvent": { const p = parseInput(method, raw); return runtime.hostEvent(p.event, p.scope); }
-			case "capture": { const p = parseInput(method, raw); return runtime.capture(p.turn, p.scope, signal); }
+			case "capture": { const p = parseInput(method, raw); return runtime.capture(p.turn, p.scope, signal, deadlineMs); }
 			case "getRecall": { const p = parseInput(method, raw); return runtime.getRecall(p.query, p.scope, p.options, signal); }
 			case "mutate": { const p = parseInput(method, raw); return runtime.mutate(p.op, p.scope, signal); }
 			case "inspect": { const p = parseInput(method, raw); return runtime.inspect(p.op, p.scope); }

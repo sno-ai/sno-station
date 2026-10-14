@@ -17,6 +17,7 @@ export async function serveMemoryRoute(request: IncomingMessage, response: Serve
 	let timer: NodeJS.Timeout | undefined;
 	const controller = new AbortController();
 	const abort = (): void => controller.abort(new ContractError("timeout"));
+	const deadlineMs = performance.now() + MEMORY_ROUTES[method].timeoutMs;
 	let rejectDeadline: (() => void) | undefined;
 	// Ordinary capture hooks can exit before extraction finishes; only explicit cancellation opts in.
 	if (method !== "capture" || request.headers[MEMORY_CANCEL_ON_DISCONNECT_HEADER] === "1") response.once("close", abort);
@@ -31,7 +32,8 @@ export async function serveMemoryRoute(request: IncomingMessage, response: Serve
 			controller.signal.throwIfAborted();
 			const pool = await openPool();
 			controller.signal.throwIfAborted();
-			return pool.invoke(method, body, typeof skinId === "string" && skinId.trim() ? skinId : MEMORY_DEFAULT_SKIN_ID, controller.signal);
+			return pool.invoke(method, body, typeof skinId === "string" && skinId.trim() ? skinId : MEMORY_DEFAULT_SKIN_ID, controller.signal,
+				method === "capture" ? deadlineMs : undefined);
 		})();
 		const boundedTask = Promise.race([task, deadline]);
 		const completion = Object.assign(task.then(() => undefined, () => undefined), {

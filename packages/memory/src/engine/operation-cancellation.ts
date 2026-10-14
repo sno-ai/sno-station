@@ -5,6 +5,7 @@ import { createLogger } from "@snoai/utils/logger";
 interface Operation {
 	id: string;
 	signal?: AbortSignal;
+	deadlineMs?: number;
 	writes: number;
 	transactionDepth: number;
 }
@@ -13,8 +14,8 @@ const operations = new AsyncLocalStorage<Operation>();
 const log = createLogger("sno-station-mem:cancellation");
 
 /** Carries cancellation through the existing nested extraction and reflection writers. */
-export async function withMemoryOperation<T>(method: string, signal: AbortSignal | undefined, run: () => Promise<T>): Promise<T> {
-	const operation: Operation = { id: randomUUID(), signal, writes: 0, transactionDepth: 0 };
+export async function withMemoryOperation<T>(method: string, signal: AbortSignal | undefined, run: () => Promise<T>, deadlineMs?: number): Promise<T> {
+	const operation: Operation = { id: randomUUID(), signal, deadlineMs, writes: 0, transactionDepth: 0 };
 	return operations.run(operation, async () => {
 		try {
 			signal?.throwIfAborted();
@@ -32,6 +33,11 @@ export async function withMemoryOperation<T>(method: string, signal: AbortSignal
 
 export function memoryOperationId(): string | undefined {
 	return operations.getStore()?.id;
+}
+
+/** The owning operation's absolute performance.now() deadline, shared by all extraction calls. */
+export function memoryOperationDeadline(): number | undefined {
+	return operations.getStore()?.deadlineMs;
 }
 
 export function memoryOperationSignal(signal?: AbortSignal): AbortSignal | undefined {

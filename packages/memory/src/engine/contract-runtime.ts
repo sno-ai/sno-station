@@ -275,7 +275,7 @@ export class MemoryContractRuntime implements MemoryContract {
 		};
 	}
 
-	async capture(turn: Turn, scope: ScopeCtx, signal?: AbortSignal): Promise<ContractOutputs["capture"]> {
+	async capture(turn: Turn, scope: ScopeCtx, signal?: AbortSignal, deadlineMs?: number): Promise<ContractOutputs["capture"]> {
 		return withMemoryOperation("capture", signal, async () => {
 		parseInput("capture", { turn, scope });
 		const { config } = this.configured();
@@ -299,7 +299,7 @@ export class MemoryContractRuntime implements MemoryContract {
 		return { degraded: false, turnId: turn.turnId, committed: outcome === "success",
 			...(outcome === "skipped" && ["ambient_learning_disabled", "skipped_subagent", "rejected_empty_conversation"].includes(reason.value ?? "") ? { skipped: true as const } : {}),
 			...(outcome === "partial" ? { partial: true as const } : {}) };
-		});
+		}, deadlineMs);
 	}
 
 	async getRecall(query: string, scope: ScopeCtx, options: RecallOptions, signal?: AbortSignal): Promise<ContractOutputs["getRecall"]> {

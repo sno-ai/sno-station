@@ -1,4 +1,4 @@
-import { memoryOperationId, memoryOperationSignal, checkMemoryOperation } from "../engine/operation-cancellation";
+import { memoryOperationId, memoryOperationSignal, memoryOperationDeadline, checkMemoryOperation } from "../engine/operation-cancellation";
 /** @file llm-client.ts
  * @purpose Creates the provider-neutral LLM client facade.
  * @boundary Public LLM client API; JSON parsing and transport live in focused modules.
@@ -36,6 +36,7 @@ import {
 	resolveProviderApiKey,
 } from "./llm-provider-transport";
 import { MODEL_CALLS, type ModelCallId } from "./model-call-table";
+import { ATOMIC_CAPTURE_TIMEOUT_MS } from "../../config/index";
 
 export type {
 	LlmClient,
@@ -377,8 +378,17 @@ export function createLlmClient(config: LlmClientConfig & { refuseOnUnavailable?
 	type CallState = { error: string | null; usage: ReturnType<LlmClient["getLastUsage"]> };
 	let lastError: string | null = null;
 	let lastUsage: ReturnType<LlmClient["getLastUsage"]> = null;
-	const resolveRequestTimeoutMs = (request: MemoryLlmRequest): number =>
-		request.timeoutMs ?? config.timeoutMs ?? 30_000;
+	const resolveRequestTimeoutMs = (request: MemoryLlmRequest): number => {
+		if (destinationFor(request) !== "sno-gpu" || !request.callId.startsWith("E") || MODEL_CALLS[request.callId].occasion !== "memoryExtract") {
+			return request.timeoutMs ?? config.timeoutMs ?? 30_000;
+		}
+		const operationDeadline = memoryOperationDeadline();
+		if (operationDeadline === undefined) return request.timeoutMs ?? ATOMIC_CAPTURE_TIMEOUT_MS;
+		const remainingMs = operationDeadline - performance.now();
+		if (remainingMs <= 0) throw new LlmClientTerminalError("timeout", "Memory operation deadline exhausted before extraction");
+		// The installation default is not a GPU deadline. Queueing and extraction share the owning operation's time.
+		return Math.min(request.timeoutMs ?? remainingMs, remainingMs);
+	};
 	const destinationFor = (request: MemoryLlmRequest): "off" | "host" | "sno-gpu" => {
 		if (!config.routing) return "host";
 		const route = resolveLlmRoute({ callId: request.callId, config: config.routing });
@@ -718,7 +728,8 @@ export function createLlmClient(config: LlmClientConfig & { refuseOnUnavailable?
 			const state: CallState = { error: null, usage: null };
 			const request = normalizeMemoryLlmRequest({ ...input, signal: memoryOperationSignal(input.signal) });
 			checkMemoryOperation();
-			const deadlineMs = performance.now() + resolveRequestTimeoutMs(request);
+			request.timeoutMs = resolveRequestTimeoutMs(request);
+			const deadlineMs = performance.now() + request.timeoutMs;
 			try {
 				let content = await requestContentWithHostFallback(state, request, JSON_SYSTEM_CONTENT, deadlineMs);
 				if (content === null) return null;
@@ -763,7 +774,8 @@ export function createLlmClient(config: LlmClientConfig & { refuseOnUnavailable?
 			const state: CallState = { error: null, usage: null };
 			const request = normalizeMemoryLlmRequest({ ...input, signal: memoryOperationSignal(input.signal) });
 			checkMemoryOperation();
-			const deadlineMs = performance.now() + resolveRequestTimeoutMs(request);
+			request.timeoutMs = resolveRequestTimeoutMs(request);
+			const deadlineMs = performance.now() + request.timeoutMs;
 			try {
 				const content = await requestContentWithHostFallback(
 					state,
