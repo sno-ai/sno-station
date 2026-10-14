@@ -161,7 +161,7 @@ Object.assign(MemoryRetriever.prototype, {
 		query: string,
 		candidates: RetrievalResult[],
 		queryVector: Float32Array,
-		signal?: AbortSignal,
+		options?: { signal?: AbortSignal; autoRecall?: boolean },
 	): Promise<RerankOutcome> {
 		// Treat the empty collection as a first-class outcome instead of widening behavior.
 		if (candidates.length === 0) return { candidates };
@@ -205,8 +205,9 @@ Object.assign(MemoryRetriever.prototype, {
 		}
 		// Compute the normalized rerank timeout ms once so later retrieval scoring checks use one value.
 		const rerankTimeoutMs = this.config.rerankTimeoutMs ?? DEFAULT_RERANK_TIMEOUT_MS;
-		// The step ends when the caller's deadline passes, and for Sno's reranker also at its own shorter budget.
-		const stepEnds = [signal, provider === "sno-gpu" ? AbortSignal.timeout(SNO_RERANK_STEP_BUDGET_MS) : undefined].filter(
+		// The step ends when the caller's deadline passes; in auto-recall (which has a deadline of its own) Sno's reranker
+		// also gets its own shorter budget. An explicit recall has no such deadline and waits for the configured timeout.
+		const stepEnds = [options?.signal, provider === "sno-gpu" && options?.autoRecall ? AbortSignal.timeout(SNO_RERANK_STEP_BUDGET_MS) : undefined].filter(
 			(each): each is AbortSignal => each !== undefined,
 		);
 		const stepStop = stepEnds.length > 0 ? AbortSignal.any(stepEnds) : undefined;

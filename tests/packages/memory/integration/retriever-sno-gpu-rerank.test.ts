@@ -154,7 +154,7 @@ describe("the recall search against a Sno-style reranker over real HTTP", () => 
 		const retriever = createRetriever(storeOf(manyCandidates().slice(0, 4)) as never, embedder, { warn: () => {} },
 			{ ...BASE_CONFIG, rerank: "cross-encoder", rerankProvider: "sno-gpu", rerankEndpoint: url, rerankApiKey: "user-key" });
 		const started = Date.now();
-		const results = await retriever.retrieve({ query: QUERY, limit: 3 });
+		const results = await retriever.retrieve({ query: QUERY, limit: 3, source: "auto-recall" });
 		const elapsed = Date.now() - started;
 		expect(results.map((r) => r.entry.id)).toEqual(["m0", "m1", "m2"]);
 		expect(elapsed).toBeLessThan(3_500);
@@ -166,10 +166,18 @@ describe("the recall search against a Sno-style reranker over real HTTP", () => 
 		const retriever = createRetriever(storeOf(manyCandidates().slice(0, 4)) as never, embedder, { warn: () => {} },
 			{ ...BASE_CONFIG, rerank: "cross-encoder", rerankProvider: "sno-gpu", rerankEndpoint: url, rerankApiKey: "user-key" });
 		const started = Date.now();
-		const results = await retriever.retrieve({ query: QUERY, limit: 3 });
+		const results = await retriever.retrieve({ query: QUERY, limit: 3, source: "auto-recall" });
 		expect(results.map((r) => r.entry.id)).toEqual(["m0", "m1", "m2"]);
 		expect(Date.now() - started).toBeLessThan(3_500);
 		expect(calls).toHaveLength(1);
+	}, 30_000);
+
+	it("an explicit recall waits for a Sno reranker that answers after 2.5 s and is ranked by it", async () => {
+		const { url } = await reranker((_n, texts) => ({ status: 200, body: scoreByText(texts), delayMs: 2_500 }));
+		const retriever = createRetriever(storeOf(manyCandidates()) as never, embedder, { warn: () => {} },
+			{ ...BASE_CONFIG, rerank: "cross-encoder", rerankProvider: "sno-gpu", rerankEndpoint: url, rerankApiKey: "user-key", rerankMaxCandidates: 64 });
+		const results = await retriever.retrieve({ query: QUERY, limit: 3 });
+		expect(results[0]?.entry.id).toBe("m60");
 	}, 30_000);
 
 	it("the caller's deadline stops the reranker request and it is not sent again", async () => {
