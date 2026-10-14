@@ -28,7 +28,7 @@ import {
 	TIME_DECAY_HALF_LIFE_DAYS,
 } from "./retriever-dependencies";
 
-export type RerankProvider = "jina" | "siliconflow" | "voyage" | "pinecone" | "dashscope" | "tei";
+export type RerankProvider = "jina" | "siliconflow" | "voyage" | "pinecone" | "dashscope" | "tei" | "sno-gpu";
 
 export interface RetrievalConfig {
 	/** Enable the historical recency, decay, and retention score transforms. */

@@ -39,11 +39,14 @@ export function buildRerankRequest(
 ): { headers: Record<string, string>; body: Record<string, unknown> } {
 	switch (provider) {
 		case "tei":
+		case "sno-gpu":
 			// Return the normalized retrieval ranking payload expected by callers.
 			return {
 				headers: {
 					"Content-Type": "application/json",
 					Authorization: `Bearer ${apiKey}`,
+					// Self-reported labels for Sno GPU request statistics (GPU_REQUEST_METADATA_STANDARD), never identity.
+					...(provider === "sno-gpu" ? { "X-Sno-Source": "sno-station", "X-Sno-Workload": "station-rerank" } : {}),
 				},
 				body: { query, texts: candidates, raw_scores: true },
 			};
@@ -134,6 +137,7 @@ export function parseRerankResponse(provider: string, data: unknown): RerankItem
 
 	switch (provider) {
 		case "tei":
+		case "sno-gpu":
 			// Centralize the retrieval scoring fallback value at the boundary of this helper.
 			return (
 				parseItems(data, ["score", "relevance_score"]) ??

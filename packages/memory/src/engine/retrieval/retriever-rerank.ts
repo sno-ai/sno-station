@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 /** @file retriever-rerank.ts
  * @purpose Runs remote and local reranking.
  * @boundary Prototype-mounted MemoryRetriever methods; no constructor state ownership.
@@ -290,7 +290,8 @@ Object.assign(MemoryRetriever.prototype, {
 					const { response, data } = await fetchRerankWithRetry(() =>
 						fetch(rerankEndpoint, {
 							method: "POST",
-							headers,
+							// A new request id for every HTTP attempt, so a retry can be told apart in the GPU logs.
+							headers: provider === "sno-gpu" ? { ...headers, "X-Request-ID": randomUUID() } : headers,
 							body: JSON.stringify(body),
 							signal: AbortSignal.timeout(rerankTimeoutMs),
 						}),
@@ -437,7 +438,7 @@ Object.assign(MemoryRetriever.prototype, {
 				if (!candidate) continue;
 				const sourceScore = this.getRerankSourceScore(candidate);
 				let crossScore = item.score;
-				if (provider === "tei") {
+				if (provider === "tei" || provider === "sno-gpu") {
 					crossScore = 1 / (1 + Math.exp(-item.score));
 				}
 				const blendedScore = clamp01(
