@@ -2,7 +2,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { currentLogContext, createLogger } from "@snoai/utils/logger";
 import { ContractError } from "../contract/error";
 import { SettingsUnavailableError } from "../contract/profile";
-import { MEMORY_ROUTES, MEMORY_DEFAULT_SKIN_ID, MEMORY_ERROR_STATUS, MEMORY_SKIN_HEADER, memoryMethod } from "../contract/routes";
+import { MEMORY_ROUTES, MEMORY_DEFAULT_SKIN_ID, MEMORY_ERROR_STATUS, MEMORY_SKIN_HEADER, MEMORY_CANCEL_ON_DISCONNECT_HEADER, memoryMethod } from "../contract/routes";
 import type { MemoryRuntimePool } from "./memory-runtime";
 
 import { PayloadTooLargeError, readRequestBody } from "./request-body";
@@ -18,7 +18,8 @@ export async function serveMemoryRoute(request: IncomingMessage, response: Serve
 	const controller = new AbortController();
 	const abort = (): void => controller.abort(new ContractError("timeout"));
 	let rejectDeadline: (() => void) | undefined;
-	if (method !== "capture") response.once("close", abort);
+	// Ordinary capture hooks can exit before extraction finishes; only explicit cancellation opts in.
+	if (method !== "capture" || request.headers[MEMORY_CANCEL_ON_DISCONNECT_HEADER] === "1") response.once("close", abort);
 	try {
 		const deadline = new Promise<never>((_, reject) => {
 			rejectDeadline = () => reject(controller.signal.reason);

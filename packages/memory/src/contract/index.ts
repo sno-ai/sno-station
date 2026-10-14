@@ -15,7 +15,7 @@ export interface MemoryContract {
 	init(scope: ScopeCtx, registration: Registration): Promise<ContractOutputs["init"]>;
 	hostEvent(event: HostEvent, scope: ScopeCtx): Promise<ContractOutputs["hostEvent"]>;
 	getRecall(query: string, scope: ScopeCtx, options: RecallOptions): Promise<ContractOutputs["getRecall"]>;
-	capture(turn: Turn, scope: ScopeCtx): Promise<ContractOutputs["capture"]>;
+	capture(turn: Turn, scope: ScopeCtx, signal?: AbortSignal): Promise<ContractOutputs["capture"]>;
 	mutate(op: Mutation, scope: ScopeCtx): Promise<ContractOutputs["mutate"]>;
 	inspect(op: Inspection, scope: ScopeCtx): Promise<ContractOutputs["inspect"]>;
 	recordUsage(recallId: string, signal: UsageSignal, scope: ScopeCtx): Promise<ContractOutputs["recordUsage"]>;

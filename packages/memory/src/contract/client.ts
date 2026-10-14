@@ -8,7 +8,7 @@ import type { ContractInputs, HostEvent, InitRegistration, Inspection, Message, 
 import type { ContractMethod, MemoryContract } from "./index";
 import { getPrincipal } from "./profile";
 import { outputSchemas, type ContractOutputs, type InspectData } from "./results";
-import { MEMORY_ROUTES, MEMORY_SKIN_HEADER, REM_SIDECAR_TOKEN_HEADER } from "./routes";
+import { MEMORY_ROUTES, MEMORY_SKIN_HEADER, MEMORY_CANCEL_ON_DISCONNECT_HEADER, REM_SIDECAR_TOKEN_HEADER } from "./routes";
 
 export type { MemoryContract, ScopeCtx, Registration, InitRegistration, RecallOptions, Turn, Mutation, Inspection, UsageSignal, Message, ContractOutputs, JsonValue, HostEvent } from "./index";
 export { ContractError } from "./error";
@@ -133,7 +133,8 @@ export class MemoryClient implements MemoryContract {
 				await this.request("init", this.#registration, signal);
 			}
 			const response = await postJson(discovery.port, route.path,
-				{ "Content-Type": "application/json", [MEMORY_SKIN_HEADER]: this.skinId, [REM_SIDECAR_TOKEN_HEADER]: discovery.token },
+				{ "Content-Type": "application/json", [MEMORY_SKIN_HEADER]: this.skinId, [REM_SIDECAR_TOKEN_HEADER]: discovery.token,
+					...(method === "capture" && signal ? { [MEMORY_CANCEL_ON_DISCONNECT_HEADER]: "1" } : {}) },
 				JSON.stringify({ ...input, scope: { ...input.scope, principal: this.principal } }),
 				signal ? AbortSignal.any([signal, AbortSignal.timeout(route.timeoutMs)]) : AbortSignal.timeout(route.timeoutMs));
 			const body = response.body;
@@ -157,8 +158,8 @@ export class MemoryClient implements MemoryContract {
 		try { return await this.request("getRecall", { query, scope, options }, signal); }
 		catch (error) { return { degraded: true, reason: failureReason(error), error: error instanceof Error ? error.message : String(error), recallId: "", contextText: "" }; }
 	}
-	capture(turn: Turn, scope: ScopeCtx): Promise<ContractOutputs["capture"]> {
-		return this.request("capture", { turn, scope });
+	capture(turn: Turn, scope: ScopeCtx, signal?: AbortSignal): Promise<ContractOutputs["capture"]> {
+		return this.request("capture", { turn, scope }, signal);
 	}
 	mutate(op: Mutation, scope: ScopeCtx): Promise<ContractOutputs["mutate"]> {
 		return this.request("mutate", { op, scope });
