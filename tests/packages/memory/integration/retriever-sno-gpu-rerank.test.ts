@@ -65,17 +65,17 @@ describe("the recall search against a Sno-style reranker over real HTTP", () => 
 		server = undefined;
 	});
 
-	async function reranker(respond: (call: number, texts: string[]) => { status: number; body?: unknown; delayMs?: number }) {
+	async function reranker(respond: (call: number, texts: string[]) => { status: number; body?: unknown; delayMs?: number; headers?: Record<string, string> }) {
 		const calls: Array<{ headers: IncomingHttpHeaders; texts: string[] }> = [];
 		server = createServer(async (request, response) => {
 			let raw = "";
 			for await (const chunk of request) raw += chunk;
 			const body = JSON.parse(raw) as { texts: string[] };
 			calls.push({ headers: request.headers, texts: body.texts });
-			const { status, body: reply, delayMs } = respond(calls.length, body.texts);
+			const { status, body: reply, delayMs, headers } = respond(calls.length, body.texts);
 			if (delayMs) await new Promise((resolve) => setTimeout(resolve, delayMs));
 			if (response.destroyed) return;
-			response.writeHead(status, { "content-type": "application/json" });
+			response.writeHead(status, { "content-type": "application/json", ...headers });
 			response.end(JSON.stringify(reply ?? {}));
 		});
 		server.listen(0, "127.0.0.1");
@@ -149,6 +149,17 @@ describe("the recall search against a Sno-style reranker over real HTTP", () => 
 		const elapsed = Date.now() - started;
 		expect(results.map((r) => r.entry.id)).toEqual(["m0", "m1", "m2"]);
 		expect(elapsed).toBeLessThan(3_500);
+		expect(calls).toHaveLength(1);
+	}, 30_000);
+
+	it("a 429 that asks to wait 5 s does not hold the search past the 2 s budget", async () => {
+		const { calls, url } = await reranker(() => ({ status: 429, headers: { "retry-after": "5" } }));
+		const retriever = createRetriever(storeOf(manyCandidates().slice(0, 4)) as never, embedder, { warn: () => {} },
+			{ ...BASE_CONFIG, rerank: "cross-encoder", rerankProvider: "sno-gpu", rerankEndpoint: url, rerankApiKey: "user-key" });
+		const started = Date.now();
+		const results = await retriever.retrieve({ query: QUERY, limit: 3 });
+		expect(results.map((r) => r.entry.id)).toEqual(["m0", "m1", "m2"]);
+		expect(Date.now() - started).toBeLessThan(3_500);
 		expect(calls).toHaveLength(1);
 	}, 30_000);
 
