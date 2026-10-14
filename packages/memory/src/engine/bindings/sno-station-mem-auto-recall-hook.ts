@@ -166,6 +166,7 @@ export async function onBeforeAgentStart(
 				limit: recallLimit,
 				scopeFilter,
 				signal: signal ? AbortSignal.any([signal, recallController.signal]) : recallController.signal,
+				rerankBudgetMs: timeoutMs / 2,
 				sessionId,
 				nowMs: suppressionNow,
 			}),

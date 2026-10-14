@@ -393,7 +393,7 @@ export class MemoryContractRuntime implements MemoryContract {
 				// A prompt over-fetches: the similarity filter below drops rows after the cut, and diversity ordering can push the
 				// row that matters behind rows the filter then removes (a just-captured question crowds out the earlier decision).
 				query: current === "session-start" ? CODING_SKIN_SESSION_QUERY : query, limit: current === "prompt" ? limit * 4 : limit, minScore: minimum, trackAccess: current !== "prompt",
-				scopeFilter: [context.scopePolicy.getDefaultScope()], signal: retrievalSignal,
+				scopeFilter: [context.scopePolicy.getDefaultScope()], signal: retrievalSignal, rerankBudgetMs: cfg.timeoutMs / 2,
 				nowMs: Date.now(), sessionId: key,
 			});
 			retrievalSignal.throwIfAborted();

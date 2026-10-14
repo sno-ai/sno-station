@@ -109,6 +109,8 @@ export interface RetrievalContext {
 	 */
 	includeRefused?: boolean;
 	signal?: AbortSignal;
+	/** The most a Sno reranker may take (retries included) before recall falls back to the earlier order; set by callers that have a deadline. */
+	rerankBudgetMs?: number;
 	sessionId?: string;
 	explicitLocale?: string;
 	/** Retrieval source: "manual" for user-triggered, "auto-recall" for system-initiated, "cli" for CLI commands */
