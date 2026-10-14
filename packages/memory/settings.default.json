@@ -171,8 +171,8 @@
     "apiKey": ""
   },
   "rerank": {
-    "mode": "lightweight",
-    "provider": "voyage",
+    "mode": "cross-encoder",
+    "provider": "sno-gpu",
     "endpoint": "",
     "model": "rerank-2",
     "apiKey": "",

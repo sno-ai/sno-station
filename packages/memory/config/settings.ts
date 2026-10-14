@@ -13,7 +13,7 @@ export type Settings = {
 	modelCalls: Record<keyof typeof MODEL_CALLS, Record<ProductMode, ModelDestination>>;
 	user: { id: string; language: Locale };
 	snoGpu: { baseUrl: string; apiKey: string };
-	rerank: { mode: "lightweight" | "cross-encoder" | "none"; provider: "jina" | "siliconflow" | "pinecone" | "voyage" | "dashscope" | "tei" | "custom"; endpoint: string; model: string; apiKey: string; timeoutMs: number; maxCandidates: number };
+	rerank: { mode: "lightweight" | "cross-encoder" | "none"; provider: "jina" | "siliconflow" | "pinecone" | "voyage" | "dashscope" | "tei" | "sno-gpu" | "custom"; endpoint: string; model: string; apiKey: string; timeoutMs: number; maxCandidates: number };
 	store: { path: string; encryptionKey: string };
 	embedding: { model: string; revision: string; dtype: "q4" | "q8" | "fp16" | "fp32"; threads: number; cacheDir: string; offline: boolean; mirror: string };
 	recall: { auto: boolean; sessionStart: { limit: number; maxChars: number; timeoutMs: number }; prompt: { limit: number; maxChars: number; timeoutMs: number; minChars: number; minScore: number }; explicitLimit: number };
@@ -42,7 +42,7 @@ const schema: z.ZodType<Settings> = z.strictObject({
 	snoGpu: z.strictObject({ baseUrl: z.string(), apiKey: z.string() }),
 	rerank: z.strictObject({
 		mode: z.enum(["lightweight", "cross-encoder", "none"]),
-		provider: z.enum(["jina", "siliconflow", "pinecone", "voyage", "dashscope", "tei", "custom"]),
+		provider: z.enum(["jina", "siliconflow", "pinecone", "voyage", "dashscope", "tei", "sno-gpu", "custom"]),
 		endpoint: z.string(), model: z.string(), apiKey: z.string(),
 		timeoutMs: z.number().int().min(1000).max(120000),
 		maxCandidates: z.number().int().min(1).max(2000),
@@ -85,7 +85,7 @@ export function defaultSettings(): Settings {
 		modelCalls: Object.fromEntries(Object.entries(MODEL_CALLS).map(([id, call]) => [id, call.destinations])) as Settings["modelCalls"],
 		user: { id: "", language: "en" },
 		snoGpu: { baseUrl: "https://rt3-llm.sno.ai", apiKey: "" },
-		rerank: { mode: "lightweight", provider: "voyage", endpoint: "", model: engine.retrieval.rerankModel,
+		rerank: { mode: "cross-encoder", provider: "sno-gpu", endpoint: "", model: engine.retrieval.rerankModel,
 			apiKey: "", timeoutMs: engine.retrieval.rerankTimeoutMs, maxCandidates: CANDIDATE_POOL_SIZE },
 		store: { path: "", encryptionKey: "" },
 		embedding: { model: EMBEDDER_MODEL_DEFAULT, revision: LOCAL_EMBEDDING_MODEL_REVISION, dtype: engine.embedding.dtype,
@@ -105,7 +105,24 @@ export function defaultSettings(): Settings {
 	};
 }
 
+/**
+ * The "sno-gpu" reranker is Sno's own: its address is the Sno GPU address and its key is the Sno GPU key. Only
+ * REM Enhanced calls Sno GPU; any other mode, or no key yet, ranks locally, which is the configured strategy, not an error.
+ */
+function rerankSettings(settings: Settings): { rerank: Settings["rerank"]["mode"]; endpoint: string | undefined; apiKey: string } {
+	const { rerank, snoGpu } = settings;
+	if (rerank.provider !== "sno-gpu") return { rerank: rerank.mode, endpoint: rerank.endpoint || undefined, apiKey: rerank.apiKey };
+	const apiKey = rerank.apiKey || snoGpu.apiKey;
+	const local = rerank.mode === "cross-encoder" && (settings.mode !== "rem-enhanced" || !apiKey);
+	return {
+		rerank: local ? "lightweight" : rerank.mode,
+		endpoint: rerank.endpoint || new URL("rerank", snoGpu.baseUrl.endsWith("/") ? snoGpu.baseUrl : `${snoGpu.baseUrl}/`).toString(),
+		apiKey,
+	};
+}
+
 export function settingsToPluginConfig(settings: Settings): import("./plugin-config-schema").PluginConfig {
+	const sno = rerankSettings(settings);
 	return pluginConfigSchema.parse({
 		mode: settings.mode, modelCalls: settings.modelCalls,
 		provider: { userId: settings.user.id || undefined }, language: settings.user.language,
@@ -114,10 +131,10 @@ export function settingsToPluginConfig(settings: Settings): import("./plugin-con
 			dtype: settings.embedding.dtype, cacheDir: settings.embedding.cacheDir || undefined,
 			offline: settings.embedding.offline, mirror: settings.embedding.mirror,
 			sessionOptions: { intraOpNumThreads: settings.embedding.threads || undefined } },
-		retrieval: { rerank: settings.rerank.mode, rerankProvider: settings.rerank.provider,
+		retrieval: { rerank: sno.rerank, rerankProvider: settings.rerank.provider,
 			recallTopK: settings.recall.prompt.limit, minScore: settings.recall.prompt.minScore,
-			rerankEndpoint: settings.rerank.endpoint || undefined, rerankModel: settings.rerank.model,
-			rerankApiKey: settings.rerank.apiKey, rerankTimeoutMs: settings.rerank.timeoutMs,
+			rerankEndpoint: sno.endpoint, rerankModel: settings.rerank.model,
+			rerankApiKey: sno.apiKey, rerankTimeoutMs: settings.rerank.timeoutMs,
 			rerankMaxCandidates: settings.rerank.maxCandidates },
 		autoRecall: settings.recall.auto, autoRecallTimeoutMs: settings.recall.prompt.timeoutMs,
 		autoRecallMinLength: settings.recall.prompt.minChars,

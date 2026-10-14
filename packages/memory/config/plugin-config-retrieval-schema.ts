@@ -56,6 +56,7 @@ export const retrievalConfigSchema: z.ZodType<
 			| "voyage"
 			| "dashscope"
 			| "tei"
+			| "sno-gpu"
 			| "custom"
 			| undefined;
 		rerankMaxCandidates?: number | undefined;
@@ -114,7 +115,7 @@ export const retrievalConfigSchema: z.ZodType<
 		rerankEndpoint: z.string().optional(),
 		/** Rerank provider name */
 		rerankProvider: z
-			.enum(["jina", "siliconflow", "pinecone", "voyage", "dashscope", "tei", "custom"])
+			.enum(["jina", "siliconflow", "pinecone", "voyage", "dashscope", "tei", "sno-gpu", "custom"])
 			.optional(),
 		/** Hard cap on candidates sent per rerank API request (some deployments reject over-limit batches) */
 		rerankMaxCandidates: z.number().int().min(1).max(2000).optional(),
