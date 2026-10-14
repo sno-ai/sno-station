@@ -113,14 +113,14 @@ export function defaultSettings(): Settings {
 function rerankSettings(settings: Settings): { rerank: Settings["rerank"]["mode"]; provider: Settings["rerank"]["provider"] | undefined; endpoint: string | undefined; apiKey: string } {
 	const { rerank, snoGpu } = settings;
 	if (rerank.provider !== "sno-gpu") return { rerank: rerank.mode, provider: rerank.provider, endpoint: rerank.endpoint || undefined, apiKey: rerank.apiKey };
-	const apiKey = snoGpu.apiKey;
-	const local = rerank.mode === "cross-encoder" && (settings.mode !== "rem-enhanced" || !apiKey);
-	// When the local ranker is used, no remote ranker is named, so traces and stats do not read as a Sno rank.
+	// Local ranking: chosen (lightweight or none), or forced by the mode or a missing key. No remote ranker is named
+	// then, so traces and stats do not read as a Sno rank.
+	const local = rerank.mode !== "cross-encoder" || settings.mode !== "rem-enhanced" || !snoGpu.apiKey;
 	return {
-		rerank: local ? "lightweight" : rerank.mode,
+		rerank: local && rerank.mode === "cross-encoder" ? "lightweight" : rerank.mode,
 		provider: local ? undefined : rerank.provider,
 		endpoint: local ? undefined : new URL("rerank", snoGpu.baseUrl.endsWith("/") ? snoGpu.baseUrl : `${snoGpu.baseUrl}/`).toString(),
-		apiKey,
+		apiKey: local ? "" : snoGpu.apiKey,
 	};
 }
 

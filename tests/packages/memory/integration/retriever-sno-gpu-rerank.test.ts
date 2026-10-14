@@ -48,6 +48,10 @@ describe("which settings send recall ranking to Sno GPU", () => {
 			expect(retrieval.rerankProvider).toBeUndefined();
 			expect(retrieval.rerankEndpoint).toBeUndefined();
 		}
+		const chosenLocal = settingsToPluginConfig(settingsFor("rem-enhanced", { rerank: { ...defaultSettings().rerank, mode: "lightweight" } })).retrieval;
+		expect(chosenLocal).toMatchObject({ rerank: "lightweight", rerankApiKey: "" });
+		expect(chosenLocal.rerankProvider).toBeUndefined();
+		expect(chosenLocal.rerankEndpoint).toBeUndefined();
 		const noKey = settingsToPluginConfig(settingsFor("rem-enhanced", { snoGpu: { baseUrl: "https://rt3-llm.sno.ai", apiKey: "" } })).retrieval;
 		expect(noKey.rerank).toBe("lightweight");
 		expect(noKey.rerankProvider).toBeUndefined();
