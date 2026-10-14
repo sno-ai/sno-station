@@ -1,9 +1,11 @@
 import { createServer, type Server } from "node:http";
+import { createHash } from "node:crypto";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir, userInfo } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { REM_SIDECAR_TOKEN_HEADER } from "../../../../packages/memory/src/contract/routes";
+import { MemoryClient } from "../../../../packages/memory/src/contract/client";
 import { startRemSidecar } from "../../../../packages/memory/src/sidecar/server";
 import { createTestDb } from "../../../apps/mem-claw/helpers/test-db";
 import { writeSettingsFixture } from "../fixtures/settings-file-fixture";
@@ -19,6 +21,10 @@ let holdJudgments = false;
 let judgmentReply = "keep";
 let judgmentStatus = 200;
 let releaseJudgments = Promise.withResolvers<void>();
+let holdExtraction = false;
+let extractionEntered = Promise.withResolvers<void>();
+let extractionClosed = false;
+let releaseExtraction = Promise.withResolvers<void>();
 const calls: string[] = [];
 
 function data<T>(prompt: string): T {
@@ -69,7 +75,7 @@ async function post(path: string, body: unknown, signal = AbortSignal.timeout(15
 function capture(messages: string[], session = "agent:capture-budget:turn") {
 	return { scope: { principal, project: "global", session },
 		turn: { turnId: "turn", rewindEpoch: 0,
-			messages: messages.map(content => ({ role: "user", content, at: 1791820800000 })) } };
+			messages: messages.map(content => ({ role: "user" as const, content, at: 1791820800000 })) } };
 }
 
 beforeEach(async ({ task }) => {
@@ -81,12 +87,22 @@ beforeEach(async ({ task }) => {
 	judgmentReply = "keep";
 	judgmentStatus = 200;
 	releaseJudgments = Promise.withResolvers<void>();
+	holdExtraction = false;
+	extractionEntered = Promise.withResolvers<void>();
+	extractionClosed = false;
+	releaseExtraction = Promise.withResolvers<void>();
 	host = createServer(async (request, response) => {
 		let raw = "";
 		for await (const chunk of request) raw += chunk;
 		const body = JSON.parse(raw) as { prompt?: string; messages?: Array<{ content: string }> };
 		const answer = modelAnswer(body.prompt ?? body.messages?.at(-1)?.content ?? "");
 		calls.push(answer.kind);
+		if (answer.kind === "extraction" && holdExtraction) {
+			response.once("close", () => { extractionClosed = true; });
+			extractionEntered.resolve();
+			await releaseExtraction.promise;
+			if (response.destroyed) return;
+		}
 		if (answer.kind === "arrival" && holdJudgments) await releaseJudgments.promise;
 		const status = answer.kind === "arrival" ? judgmentStatus : 200;
 		response.writeHead(status, { "content-type": "application/json" }).end(JSON.stringify(status !== 200
@@ -128,6 +144,7 @@ beforeEach(async ({ task }) => {
 
 afterEach(async () => {
 	releaseJudgments.resolve();
+	releaseExtraction.resolve();
 	await sidecar?.stop();
 	sidecar = undefined;
 	if (host) {
@@ -138,6 +155,55 @@ afterEach(async () => {
 	vi.unstubAllEnvs();
 	database?.cleanup();
 	if (root) rmSync(root, { recursive: true, force: true });
+});
+
+it("cancels an explicit Sno GPU capture at the provider connection without persisting or replaying it", async () => {
+	if (!sidecar) throw new Error("missing sidecar");
+	holdExtraction = true;
+	const client = new MemoryClient("capture-budget", database.dbPath, { pid: process.pid, port: sidecar.port, token });
+	const input = capture(["I like lentils."], "explicit-cancel");
+	const controller = new AbortController();
+	const result = client.capture(input.turn, input.scope, controller.signal).catch(error => error);
+	await Promise.race([extractionEntered.promise, result.then(() => { throw new Error("capture ended before extraction"); })]);
+	controller.abort();
+	expect(await result).toMatchObject({ reason: "timeout" });
+	await vi.waitFor(() => expect(extractionClosed).toBe(true), { timeout: 1000 });
+	releaseExtraction.resolve();
+	await sidecar.stop();
+	sidecar = undefined;
+	expect(calls).toEqual(["extraction"]);
+	expect(database.sqlite.prepare("SELECT text FROM nodix_memories WHERE text = 'I like lentils.'").all()).toEqual([]);
+	expect(database.sqlite.prepare("SELECT COUNT(*) AS count FROM pending_captures").get()).toEqual({ count: 0 });
+});
+
+it("finishes a Sno GPU capture after an ordinary hook disconnects without explicit cancellation", async () => {
+	holdExtraction = true;
+	const controller = new AbortController();
+	const result = post("/v1/capture", capture(["I like lentils."], "hook-disconnect"), controller.signal).catch(error => error);
+	await Promise.race([extractionEntered.promise, result.then(() => { throw new Error("capture ended before extraction"); })]);
+	controller.abort();
+	await result;
+	expect(extractionClosed).toBe(false);
+	releaseExtraction.resolve();
+	await vi.waitFor(() => expect(database.sqlite.prepare("SELECT state FROM nodix_atomic_extraction_ledger").all())
+		.toEqual([{ state: "complete" }]), { timeout: 5000 });
+	expect(database.sqlite.prepare("SELECT text FROM nodix_memories WHERE text = 'I like lentils.'").all()).toEqual([{ text: "I like lentils." }]);
+});
+
+it("passes the existing capture deadline to Sno GPU secondary extraction", async () => {
+	const lines: string[] = [];
+	const output = vi.spyOn(process.stderr, "write").mockImplementation(chunk => { lines.push(String(chunk)); return true; });
+	try {
+		const response = await post("/v1/capture", capture(["I like lentils."], "shared-deadline"));
+		expect(await response.json()).toMatchObject({ committed: true });
+		expect(calls).toContain("guard");
+		const guardCall = createHash("sha256").update("E6").digest("hex");
+		const completed = lines.flatMap(line => line.trim().split("\n")).filter(Boolean).map(line => JSON.parse(line))
+			.find(record => record.event_name === "llm.request.completed" && record.attributes.destination === "sno-gpu"
+				&& record.attributes.call_id?.sha256 === guardCall);
+		expect(completed?.attributes.timeout_ms).toBeGreaterThan(800_000);
+		expect(completed?.attributes.timeout_ms).toBeLessThanOrEqual(900_000);
+	} finally { output.mockRestore(); }
 });
 
 it("returns the committed turn while arrival judgments are blocked and skips its resend", async () => {
