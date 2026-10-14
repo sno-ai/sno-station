@@ -49,6 +49,10 @@ const RERANK_TRANSIENT_STATUSES = new Set([429, 502, 503, 504]);
 // A production-like concurrency test returned 429 + retry-after: 1 under eight concurrent
 // recalls; bound each queue wait.
 const RERANK_RETRY_AFTER_MAX_MS = 5_000;
+// Auto-recall injects nothing once its own 4 s deadline passes. Sno's reranker is the REM Enhanced default, so its whole step
+// (retries included) must end well before that and fall back to the earlier order. Measured 2026-10-14: a search takes
+// 0.3 to 0.6 s, 1.4 s at worst under load.
+const SNO_RERANK_STEP_BUDGET_MS = 2_000;
 
 function isRerankTimeout(error: unknown): boolean {
 	return error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError");
@@ -109,7 +113,7 @@ interface RerankReply {
 	data?: unknown;
 }
 
-async function fetchRerankWithRetry(send: () => Promise<Response>): Promise<RerankReply> {
+async function fetchRerankWithRetry(send: () => Promise<Response>, stop?: AbortSignal): Promise<RerankReply> {
 	let lastError: unknown;
 	for (let attempt = 1; attempt <= RERANK_TRANSIENT_ATTEMPTS; attempt += 1) {
 		let retryDelayMs = RERANK_TRANSIENT_BACKOFF_MS * attempt;
@@ -137,9 +141,10 @@ async function fetchRerankWithRetry(send: () => Promise<Response>): Promise<Rera
 			await response.body?.cancel();
 			lastError = new Error(`rerank API responded ${response.status}`);
 		} catch (error) {
-			if (!isTransientRerankError(error) || attempt === RERANK_TRANSIENT_ATTEMPTS) throw error;
+			if (!isTransientRerankError(error) || attempt === RERANK_TRANSIENT_ATTEMPTS || stop?.aborted) throw error;
 			lastError = error;
 		}
+		if (stop?.aborted) throw lastError;
 		await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
 	}
 	throw lastError;
@@ -151,6 +156,7 @@ Object.assign(MemoryRetriever.prototype, {
 		query: string,
 		candidates: RetrievalResult[],
 		queryVector: Float32Array,
+		signal?: AbortSignal,
 	): Promise<RerankOutcome> {
 		// Treat the empty collection as a first-class outcome instead of widening behavior.
 		if (candidates.length === 0) return { candidates };
@@ -194,6 +200,11 @@ Object.assign(MemoryRetriever.prototype, {
 		}
 		// Compute the normalized rerank timeout ms once so later retrieval scoring checks use one value.
 		const rerankTimeoutMs = this.config.rerankTimeoutMs ?? DEFAULT_RERANK_TIMEOUT_MS;
+		// The step ends when the caller's deadline passes, and for Sno's reranker also at its own shorter budget.
+		const stepEnds = [signal, provider === "sno-gpu" ? AbortSignal.timeout(SNO_RERANK_STEP_BUDGET_MS) : undefined].filter(
+			(each): each is AbortSignal => each !== undefined,
+		);
+		const stepStop = stepEnds.length > 0 ? AbortSignal.any(stepEnds) : undefined;
 		// Read the key once: the guard above narrowed it, and a property access does not carry that
 		// narrowing into the per-batch closure below.
 		const rerankApiKey = this.config.rerankApiKey;
@@ -293,8 +304,8 @@ Object.assign(MemoryRetriever.prototype, {
 							// A new request id for every HTTP attempt, so a retry can be told apart in the GPU logs.
 							headers: provider === "sno-gpu" ? { ...headers, "X-Request-ID": randomUUID() } : headers,
 							body: JSON.stringify(body),
-							signal: AbortSignal.timeout(rerankTimeoutMs),
-						}),
+							signal: stepStop ? AbortSignal.any([AbortSignal.timeout(rerankTimeoutMs), stepStop]) : AbortSignal.timeout(rerankTimeoutMs),
+						}), stepStop,
 					);
 
 					// Guard response.ok here so the remaining retrieval scoring path works with normalized inputs.

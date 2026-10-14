@@ -65,14 +65,16 @@ describe("the recall search against a Sno-style reranker over real HTTP", () => 
 		server = undefined;
 	});
 
-	async function reranker(respond: (call: number, texts: string[]) => { status: number; body?: unknown }) {
+	async function reranker(respond: (call: number, texts: string[]) => { status: number; body?: unknown; delayMs?: number }) {
 		const calls: Array<{ headers: IncomingHttpHeaders; texts: string[] }> = [];
 		server = createServer(async (request, response) => {
 			let raw = "";
 			for await (const chunk of request) raw += chunk;
 			const body = JSON.parse(raw) as { texts: string[] };
 			calls.push({ headers: request.headers, texts: body.texts });
-			const { status, body: reply } = respond(calls.length, body.texts);
+			const { status, body: reply, delayMs } = respond(calls.length, body.texts);
+			if (delayMs) await new Promise((resolve) => setTimeout(resolve, delayMs));
+			if (response.destroyed) return;
 			response.writeHead(status, { "content-type": "application/json" });
 			response.end(JSON.stringify(reply ?? {}));
 		});
@@ -136,6 +138,29 @@ describe("the recall search against a Sno-style reranker over real HTTP", () => 
 		const retriever = createRetriever(storeOf(manyCandidates().slice(0, 4)) as never, embedder, { warn: () => {} },
 			{ ...BASE_CONFIG, rerank: "cross-encoder", rerankProvider: "voyage", rerankEndpoint: url, rerankApiKey: "k" });
 		await expect(retriever.retrieve({ query: QUERY, limit: 3 })).rejects.toThrow(/status 401/);
+	}, 30_000);
+
+	it("a Sno reranker that hangs does not hold the search past its 2 s budget: the earlier order comes back", async () => {
+		const { calls, url } = await reranker(() => ({ status: 200, body: [], delayMs: 20_000 }));
+		const retriever = createRetriever(storeOf(manyCandidates().slice(0, 4)) as never, embedder, { warn: () => {} },
+			{ ...BASE_CONFIG, rerank: "cross-encoder", rerankProvider: "sno-gpu", rerankEndpoint: url, rerankApiKey: "user-key" });
+		const started = Date.now();
+		const results = await retriever.retrieve({ query: QUERY, limit: 3 });
+		const elapsed = Date.now() - started;
+		expect(results.map((r) => r.entry.id)).toEqual(["m0", "m1", "m2"]);
+		expect(elapsed).toBeLessThan(3_500);
+		expect(calls).toHaveLength(1);
+	}, 30_000);
+
+	it("the caller's deadline stops the reranker request and it is not sent again", async () => {
+		const { calls, url } = await reranker(() => ({ status: 200, body: [], delayMs: 20_000 }));
+		const retriever = createRetriever(storeOf(manyCandidates().slice(0, 4)) as never, embedder, { warn: () => {} },
+			{ ...BASE_CONFIG, rerank: "cross-encoder", rerankProvider: "voyage", rerankEndpoint: url, rerankApiKey: "k" });
+		const started = Date.now();
+		await expect(retriever.retrieve({ query: QUERY, limit: 3, signal: AbortSignal.timeout(900) })).rejects.toBeDefined();
+		expect(Date.now() - started).toBeLessThan(3_000);
+		await new Promise((resolve) => setTimeout(resolve, 500));
+		expect(calls).toHaveLength(1);
 	}, 30_000);
 
 	it("a third-party reranker (voyage) gets no Sno labels", async () => {

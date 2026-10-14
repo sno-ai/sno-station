@@ -333,7 +333,7 @@ Object.assign(MemoryRetriever.prototype, {
 			fused.map((r) => r.entry.id),
 		);
 		// Await the retrieval ranking dependency before deriving downstream state.
-		const rerankOutcome = await this.rerank(context.query, fused, queryVector);
+		const rerankOutcome = await this.rerank(context.query, fused, queryVector, context.signal);
 		fused = rerankOutcome.candidates;
 		this.throwIfAborted(context);
 		// Report cross-encoder coverage on success and the reason when ranking degraded.
