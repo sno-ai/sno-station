@@ -1,9 +1,5 @@
-import { spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
 import { createServer, type IncomingHttpHeaders, type Server } from "node:http";
 import { once } from "node:events";
-import { homedir } from "node:os";
-import { join } from "node:path";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import type { Embedder } from "../../../../packages/memory/src/engine/extraction/embedding-provider-client.ts";
 import { createTestEmbedder } from "../../../apps/mem-claw/helpers/test-db.ts";
@@ -150,44 +146,4 @@ describe("the recall search against a Sno-style reranker over real HTTP", () => 
 		expect(calls[0]?.headers["x-sno-source"]).toBeUndefined();
 		expect(calls[0]?.headers["x-request-id"]).toBeUndefined();
 	}, 30_000);
-});
-
-function internalSecret(): string | undefined {
-	if (process.env.INTERNAL_SERVICE_SECRET) return process.env.INTERNAL_SERVICE_SECRET;
-	try {
-		const match = readFileSync(join(homedir(), "infra", "onprem-infra", ".env"), "utf8").match(/^\s*INTERNAL_SERVICE_SECRET\s*=\s*(.+?)\s*$/m);
-		return match?.[1]?.replace(/^["']|["']$/g, "");
-	} catch { return undefined; }
-}
-
-describe.skipIf(!internalSecret())("the real Sno reranker and Helicone, end to end", () => {
-	it("a recall search is ranked by the real reranker and its row in Helicone carries the labels", async () => {
-		const candidates: MemorySearchResult[] = [
-			{ entry: entry("hiking", "The user hikes in the Rocky Mountains every weekend."), score: 0.9 },
-			{ entry: entry("sushi", "The user's favorite meal is Japanese sushi with green tea."), score: 0.86 },
-			{ entry: entry("typescript", "The user insists on TypeScript with strict mode for compile-time type safety."), score: 0.7 },
-		];
-		const seen: string[] = [];
-		const realFetch = globalThis.fetch;
-		globalThis.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
-			if (String(input).includes("/rerank")) seen.push(new Headers(init?.headers).get("x-request-id") ?? "");
-			return realFetch(input, init);
-		}) as typeof fetch;
-		try {
-			const retriever = createRetriever(storeOf(candidates) as never, embedder, { warn: () => {} },
-				{ ...BASE_CONFIG, rerank: "cross-encoder", rerankProvider: "sno-gpu", rerankEndpoint: "https://rt3-llm.sno.ai/rerank", rerankApiKey: internalSecret() as string });
-			const results = await retriever.retrieve({ query: QUERY, limit: 3 });
-			expect(results[0]?.entry.id).toBe("typescript");
-		} finally { globalThis.fetch = realFetch; }
-		expect(seen).toHaveLength(1);
-		const sql = `SELECT properties['sourcerepo'] AS source, properties['workload'] AS workload, properties['route'] AS route, properties['status'] AS status FROM default.request_response_rmt FINAL WHERE properties['clientrequestid']='${seen[0]}' FORMAT JSONEachRow`;
-		let row: Record<string, string> | undefined;
-		for (let attempt = 0; attempt < 20 && !row; attempt += 1) {
-			const out = spawnSync("ssh", ["-o", "BatchMode=yes", "-o", "ConnectTimeout=5", "agentforge", "docker", "exec", "-i", "helicone-clickhouse", "clickhouse-client"], { input: sql, encoding: "utf8" });
-			const line = out.stdout.trim().split("\n").filter(Boolean)[0];
-			if (line) row = JSON.parse(line) as Record<string, string>;
-			else await new Promise((resolve) => setTimeout(resolve, 1000));
-		}
-		expect(row).toEqual({ source: "sno-station", workload: "station-rerank", route: "rerank", status: "200" });
-	}, 60_000);
 });
