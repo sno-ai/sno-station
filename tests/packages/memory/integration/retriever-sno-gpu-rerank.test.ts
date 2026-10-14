@@ -180,6 +180,14 @@ describe("the recall search against a Sno-style reranker over real HTTP", () => 
 		expect(results[0]?.entry.id).toBe("m60");
 	}, 30_000);
 
+	it("a budget that is not a whole number of milliseconds (half of an odd timeout) does not break the recall", async () => {
+		const { url } = await reranker((_n, texts) => ({ status: 200, body: scoreByText(texts) }));
+		const retriever = createRetriever(storeOf(manyCandidates()) as never, embedder, { warn: () => {} },
+			{ ...BASE_CONFIG, rerank: "cross-encoder", rerankProvider: "sno-gpu", rerankEndpoint: url, rerankApiKey: "user-key", rerankMaxCandidates: 64 });
+		const results = await retriever.retrieve({ query: QUERY, limit: 3, rerankBudgetMs: 2_000.5 });
+		expect(results[0]?.entry.id).toBe("m60");
+	}, 30_000);
+
 	it("an explicit recall waits for a Sno reranker that answers after 2.5 s and is ranked by it", async () => {
 		const { url } = await reranker((_n, texts) => ({ status: 200, body: scoreByText(texts), delayMs: 2_500 }));
 		const retriever = createRetriever(storeOf(manyCandidates()) as never, embedder, { warn: () => {} },
