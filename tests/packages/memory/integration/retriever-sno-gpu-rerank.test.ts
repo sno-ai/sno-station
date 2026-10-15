@@ -62,6 +62,14 @@ describe("which settings send recall ranking to Sno GPU", () => {
 		expect(settingsToPluginConfig(own).retrieval).toMatchObject({ rerankProvider: "sno-gpu", rerankEndpoint: "https://rt3-llm.sno.ai/rerank", rerankApiKey: "machine-key" });
 	});
 
+	it("a Sno GPU address that is not a valid address does not stop the memory service: recall ranks locally", () => {
+		for (const baseUrl of ["rt3-llm.sno.ai", ""]) {
+			const retrieval = settingsToPluginConfig(settingsFor("rem-enhanced", { snoGpu: { baseUrl, apiKey: "machine-key" } })).retrieval;
+			expect(retrieval).toMatchObject({ rerank: "lightweight", rerankApiKey: "" });
+			expect(retrieval.rerankProvider).toBeUndefined();
+		}
+	});
+
 	it("a user's own third-party reranker settings are passed through untouched", () => {
 		const own = settingsFor("rem-enhanced", { rerank: { ...defaultSettings().rerank, mode: "cross-encoder", provider: "voyage", apiKey: "voyage-key" } });
 		expect(settingsToPluginConfig(own).retrieval).toMatchObject({ rerank: "cross-encoder", rerankProvider: "voyage", rerankApiKey: "voyage-key" });
@@ -190,6 +198,17 @@ describe("the recall search against a Sno-style reranker over real HTTP", () => 
 			{ ...BASE_CONFIG, rerank: "cross-encoder", rerankProvider: "sno-gpu", rerankEndpoint: url, rerankApiKey: "user-key", rerankMaxCandidates: 64 });
 		const results = await retriever.retrieve({ query: QUERY, limit: 3, rerankBudgetMs: 2_000.5 });
 		expect(results[0]?.entry.id).toBe("m60");
+	}, 30_000);
+
+	it("an explicit recall is held by a reranker that never answers for one timeout in total, not one per attempt", async () => {
+		const { calls, url } = await reranker(() => ({ status: 200, body: [], delayMs: 60_000 }));
+		const retriever = createRetriever(storeOf(manyCandidates().slice(0, 4)) as never, embedder, { warn: () => {} },
+			{ ...BASE_CONFIG, rerank: "cross-encoder", rerankProvider: "sno-gpu", rerankEndpoint: url, rerankApiKey: "user-key", rerankTimeoutMs: 1_500 });
+		const started = Date.now();
+		const results = await retriever.retrieve({ query: QUERY, limit: 3 });
+		expect(results.map((r) => r.entry.id)).toEqual(["m0", "m1", "m2"]);
+		expect(Date.now() - started).toBeLessThan(3_000);
+		expect(calls).toHaveLength(1);
 	}, 30_000);
 
 	it("an explicit recall waits for a Sno reranker that answers after 2.5 s and is ranked by it", async () => {

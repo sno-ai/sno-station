@@ -201,9 +201,10 @@ Object.assign(MemoryRetriever.prototype, {
 		}
 		// Compute the normalized rerank timeout ms once so later retrieval scoring checks use one value.
 		const rerankTimeoutMs = this.config.rerankTimeoutMs ?? DEFAULT_RERANK_TIMEOUT_MS;
-		// The step ends when the caller's deadline passes; where the caller has a deadline and says how much of it the reranker
-		// may use, Sno's reranker also stops at that budget. An explicit recall has no deadline and waits for the configured timeout.
-		const stepEnds = [options?.signal, provider === "sno-gpu" && options?.budgetMs ? AbortSignal.timeout(Math.floor(options.budgetMs)) : undefined].filter(
+		// The step ends when the caller's deadline passes. Sno's reranker also has a budget for the whole step, retries
+		// included: what the caller says it may use, else the configured timeout once (not once per attempt), so a reranker
+		// that never answers holds an explicit recall for one timeout, not three.
+		const stepEnds = [options?.signal, provider === "sno-gpu" ? AbortSignal.timeout(Math.floor(options?.budgetMs ?? rerankTimeoutMs)) : undefined].filter(
 			(each): each is AbortSignal => each !== undefined,
 		);
 		const stepStop = stepEnds.length > 0 ? AbortSignal.any(stepEnds) : undefined;

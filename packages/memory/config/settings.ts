@@ -1,5 +1,6 @@
 import { LOCAL_EMBEDDING_MODEL_REVISION } from "@snoai/embedder";
 import { isLowercaseCanonicalUUIDv7 } from "@snoai/common-core";
+import { createLogger } from "@snoai/utils/logger";
 import { z } from "zod";
 import { CANDIDATE_POOL_SIZE, DEFAULT_SESSION_MESSAGE_COUNT, EMBEDDER_MODEL_DEFAULT } from "./index";
 import { PRODUCT_MODES, type ProductMode } from "./plugin-config-mode-schema";
@@ -7,6 +8,8 @@ import { pluginConfigSchema } from "./plugin-config-schema";
 import { SESSION_STRATEGIES } from "./session-strategy";
 import { MODEL_CALLS, type ModelDestination } from "../src/model/model-call-table";
 import { SUPPORTED_LOCALES, type Locale } from "../src/engine/i18n/locales";
+
+const log = createLogger("sno-station-mem:config:settings");
 
 export type Settings = {
 	mode: ProductMode;
@@ -115,11 +118,20 @@ function rerankSettings(settings: Settings): { rerank: Settings["rerank"]["mode"
 	if (rerank.provider !== "sno-gpu") return { rerank: rerank.mode, provider: rerank.provider, endpoint: rerank.endpoint || undefined, apiKey: rerank.apiKey };
 	// Local ranking: chosen (lightweight or none), or forced by the mode or a missing key. No remote ranker is named
 	// then, so traces and stats do not read as a Sno rank.
-	const local = rerank.mode !== "cross-encoder" || settings.mode !== "rem-enhanced" || !snoGpu.apiKey;
+	let endpoint: string | undefined;
+	try {
+		endpoint = new URL("rerank", snoGpu.baseUrl.endsWith("/") ? snoGpu.baseUrl : `${snoGpu.baseUrl}/`).toString();
+	} catch {
+		log.warn("memory.rerank.sno_gpu_address.invalid", { cause: "snoGpu.baseUrl is not a valid address; recall ranks locally" }, {
+			event_name: "memory.rerank.sno_gpu_address.invalid", file: "packages/memory/config/settings.ts",
+			function: "rerankSettings", site_id: "memory.rerank.sno_gpu_address.invalid",
+		});
+	}
+	const local = rerank.mode !== "cross-encoder" || settings.mode !== "rem-enhanced" || !snoGpu.apiKey || endpoint === undefined;
 	return {
 		rerank: local && rerank.mode === "cross-encoder" ? "lightweight" : rerank.mode,
 		provider: local ? undefined : rerank.provider,
-		endpoint: local ? undefined : new URL("rerank", snoGpu.baseUrl.endsWith("/") ? snoGpu.baseUrl : `${snoGpu.baseUrl}/`).toString(),
+		endpoint: local ? undefined : endpoint,
 		apiKey: local ? "" : snoGpu.apiKey,
 	};
 }
