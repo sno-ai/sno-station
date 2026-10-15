@@ -258,11 +258,20 @@ export const RERANK_BLEND_VECTOR = 0.3;
 /** Weight for cross-encoder score in rerank blend */
 export const RERANK_BLEND_CROSS = 0.7;
 
-/** Fusion-score weight in local cosine-blend rerank */
-export const LIGHTWEIGHT_FUSION_WEIGHT = 0.7;
+/**
+ * Fusion-score weight in local cosine-blend rerank.
+ *
+ * The fused score keeps a keyword-only hit at its full keyword score, so a memory sharing one word with the query
+ * outranks the one that answers it; at 0.7 the local ranking passed that order through almost unchanged. Measured
+ * 2026-10-15 on LoCoMo (1,540 questions, the product store and retriever, weights fitted on half the conversations
+ * and checked on the other half): the right memory in the first five went from 27% to 68% in English and from 9% to
+ * 58% in a Chinese translation at 0.1 / 0.9. A candidate with no stored vector keeps its fused score and would now
+ * rank high; none of 27,064 candidates in 299 real local rankings lacked one.
+ */
+export const LIGHTWEIGHT_FUSION_WEIGHT = 0.1;
 
 /** Cosine-similarity weight in local cosine-blend rerank */
-export const LIGHTWEIGHT_COSINE_WEIGHT = 0.3;
+export const LIGHTWEIGHT_COSINE_WEIGHT = 0.9;
 
 /** Default timeout for rerank API calls in milliseconds */
 export const DEFAULT_RERANK_TIMEOUT_MS = 15_000;

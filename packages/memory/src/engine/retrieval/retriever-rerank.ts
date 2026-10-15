@@ -542,8 +542,8 @@ Object.assign(MemoryRetriever.prototype, {
 		let blendedCount = 0;
 		let dimMismatchCount = 0;
 		const reranked = candidates.map((candidate) => {
-			// Blend the fused score with a fresh cosine check (upstream's
-			// cosine-fallback rerank: `score*0.7 + cosine*0.3`). Valid now that
+			// Blend the fused score with a fresh cosine check, cosine-heavy (weights and their measurement at
+			// LIGHTWEIGHT_FUSION_WEIGHT in config/index.ts). Valid now that
 			// fusion is a weighted blend of two calibrated [0, 1) branch scores
 			// (fusedScore tracks raw match strength) — this was NOT valid under
 			// the brief pure-rank RRF formula, where fusedScore was a rank vote
