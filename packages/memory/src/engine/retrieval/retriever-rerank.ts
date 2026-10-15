@@ -158,7 +158,7 @@ Object.assign(MemoryRetriever.prototype, {
 		query: string,
 		candidates: RetrievalResult[],
 		queryVector: Float32Array,
-		options?: { signal?: AbortSignal; budgetMs?: number },
+		options?: { signal?: AbortSignal; deadlineAt?: number },
 	): Promise<RerankOutcome> {
 		// Treat the empty collection as a first-class outcome instead of widening behavior.
 		if (candidates.length === 0) return { candidates };
@@ -205,9 +205,10 @@ Object.assign(MemoryRetriever.prototype, {
 		// Compute the normalized rerank timeout ms once so later retrieval scoring checks use one value.
 		const rerankTimeoutMs = this.config.rerankTimeoutMs ?? DEFAULT_RERANK_TIMEOUT_MS;
 		// The step ends when the caller's deadline passes. Sno's reranker also has a budget for the whole step, retries
-		// included: what the caller says it may use, else the configured timeout once (not once per attempt), so a reranker
-		// that never answers holds an explicit recall for one timeout, not three.
-		const stepEnds = [options?.signal, provider === "sno-gpu" ? AbortSignal.timeout(Math.floor(options?.budgetMs ?? rerankTimeoutMs)) : undefined].filter(
+		// included: the time the caller says it must be done by (what is left of its own deadline, however long the embedding
+		// and search before it took), else the configured timeout once (not once per attempt), so a reranker that never
+		// answers holds an explicit recall for one timeout, not three.
+		const stepEnds = [options?.signal, provider === "sno-gpu" ? AbortSignal.timeout(Math.max(0, Math.floor(options?.deadlineAt === undefined ? rerankTimeoutMs : options.deadlineAt - Date.now()))) : undefined].filter(
 			(each): each is AbortSignal => each !== undefined,
 		);
 		const stepStop = stepEnds.length > 0 ? AbortSignal.any(stepEnds) : undefined;

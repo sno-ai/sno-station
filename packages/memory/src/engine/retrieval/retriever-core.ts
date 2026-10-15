@@ -175,7 +175,7 @@ export interface MemoryRetrieverInternals {
 		query: string,
 		candidates: RetrievalResult[],
 		queryVector: Float32Array,
-		options?: { signal?: AbortSignal; budgetMs?: number },
+		options?: { signal?: AbortSignal; deadlineAt?: number },
 	): Promise<RerankOutcome>;
 	rerankLightweight(candidates: RetrievalResult[], queryVector: Float32Array): RetrievalResult[];
 	getRerankSourceScore(result: RetrievalResult): number;

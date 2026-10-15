@@ -253,7 +253,7 @@ export async function retrieveForAutoRecall(
 		minScore?: number;
 		scopeFilter: string[];
 		signal?: AbortSignal;
-		rerankBudgetMs?: number;
+		rerankDeadlineAt?: number;
 		sessionId?: string;
 		nowMs: number;
 		trackAccess?: boolean;
@@ -268,7 +268,7 @@ export async function retrieveForAutoRecall(
 		minScore: input.minScore,
 		scopeFilter: input.scopeFilter,
 		...(input.signal === undefined ? {} : { signal: input.signal }),
-		...(input.rerankBudgetMs === undefined ? {} : { rerankBudgetMs: input.rerankBudgetMs }),
+		...(input.rerankDeadlineAt === undefined ? {} : { rerankDeadlineAt: input.rerankDeadlineAt }),
 		...(input.sessionId === undefined ? {} : { sessionId: input.sessionId }),
 		source: "auto-recall",
 		facetPolicy: "current-only",
