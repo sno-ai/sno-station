@@ -8,6 +8,7 @@
 
 import { arch } from "node:os";
 import { createLogger } from "@snoai/utils/logger";
+import { LOCAL_EMBEDDING_SESSION_OPTIONS_DEFAULT } from "./constants";
 
 const log = createLogger("embedder:local-reranker");
 
@@ -79,7 +80,9 @@ export class LocalReranker {
 			const tokenizer = await AutoTokenizer.from_pretrained(LOCAL_RERANK_MODEL);
 			const model = await AutoModelForSequenceClassification.from_pretrained(LOCAL_RERANK_MODEL, {
 				dtype: "fp32", model_file_name: MODEL_FILE, device: "cpu",
-				session_options: { interOpNumThreads: 1, ...(this.options.intraOpNumThreads ? { intraOpNumThreads: this.options.intraOpNumThreads } : {}) },
+				// The embedder's low-memory profile (no arena, no memory pattern), so the two models together stay small.
+				session_options: { ...LOCAL_EMBEDDING_SESSION_OPTIONS_DEFAULT, interOpNumThreads: 1,
+					...(this.options.intraOpNumThreads ? { intraOpNumThreads: this.options.intraOpNumThreads } : {}) },
 			});
 			this.loaded = {
 				tokenizer: (texts, options) => tokenizer(texts, options),
