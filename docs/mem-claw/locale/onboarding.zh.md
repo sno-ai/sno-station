@@ -14,7 +14,7 @@
 ## 第二步：安装插件
 
 ```bash
-openclaw plugins install @snoai/mem-claw@1.2.14
+openclaw plugins install @snoai/mem-claw@1.2.15
 ```
 
 以后升级请运行 `sno update`；OpenClaw 的网关在运行时，会拒绝再次执行 `openclaw plugins install`。
