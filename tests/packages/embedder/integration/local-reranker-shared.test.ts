@@ -21,6 +21,8 @@ it("a second reranker scores on its first call once the first has loaded the mod
 		scores = await first.score("Where does Nate live?", ["Nate lives in Berlin.", "Joanna likes tea."]);
 	}
 	expect(scores?.[0]).toBeGreaterThan(scores?.[1] ?? Number.POSITIVE_INFINITY);
+	// A caller that already stopped waiting gets no run at all.
+	expect(await first.score("Where does Nate live?", ["Nate lives in Berlin.", "Joanna likes tea."], AbortSignal.abort())).toBeUndefined();
 
 	const second = new LocalReranker({ cacheDir, intraOpNumThreads: 2 });
 	await first.dispose();

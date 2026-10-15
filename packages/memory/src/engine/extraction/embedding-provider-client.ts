@@ -335,8 +335,8 @@ export class Embedder {
 	 * Local relevance scores (raw logits, higher is more relevant) for each text against the query, or undefined while
 	 * the local reranker is not loaded; the first call starts loading it in the background.
 	 */
-	scoreRelevance(query: string, texts: string[]): Promise<number[] | undefined> {
-		return this.reranker.score(query, texts);
+	scoreRelevance(query: string, texts: string[], signal?: AbortSignal): Promise<number[] | undefined> {
+		return this.reranker.score(query, texts, signal);
 	}
 
 	/** Implements dispose as the local embedding generation operation. */

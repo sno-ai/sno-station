@@ -52,7 +52,7 @@ export class LocalReranker {
 	 * Raw relevance logits, one per text (higher is more relevant), or undefined while the model is not loaded.
 	 * The first call starts the load and does not wait for it.
 	 */
-	async score(query: string, texts: string[]): Promise<number[] | undefined> {
+	async score(query: string, texts: string[], signal?: AbortSignal): Promise<number[] | undefined> {
 		if (texts.length === 0) return [];
 		const loaded = shared;
 		if (!loaded) {
@@ -63,6 +63,8 @@ export class LocalReranker {
 		// about 8% more time (measured 2026-10-15).
 		const scores: number[] = [];
 		for (let start = 0; start < texts.length; start += SCORE_BATCH) {
+			// A caller that stopped waiting (deadline, cancel) gets no further runs.
+			if (signal?.aborted) return undefined;
 			const batch = texts.slice(start, start + SCORE_BATCH);
 			const inputs = loaded.tokenizer(new Array(batch.length).fill(query), {
 				text_pair: batch, padding: true, truncation: true, max_length: 512,

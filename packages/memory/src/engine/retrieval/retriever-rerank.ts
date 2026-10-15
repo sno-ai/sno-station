@@ -620,16 +620,16 @@ Object.assign(MemoryRetriever.prototype, {
 		const started = performance.now();
 		// The model runs on the CPU and cannot be interrupted, so the caller's deadline and cancel are raced instead:
 		// either one brings the order back unchanged and the late scores are dropped. A model failure keeps the order too.
-		const scoring = this.embedder.scoreRelevance(query, head.map((r) => r.entry.text)).catch((error: unknown) => {
+		// A caller with no deadline (an explicit recall, a forget) gets the configured rerank timeout, as the remote path does.
+		const budgetMs = deadlineAt === undefined ? (this.config.rerankTimeoutMs ?? DEFAULT_RERANK_TIMEOUT_MS) : Math.max(0, deadlineAt - Date.now());
+		const stop = signal ? AbortSignal.any([signal, AbortSignal.timeout(budgetMs)]) : AbortSignal.timeout(budgetMs);
+		const scoring = this.embedder.scoreRelevance(query, head.map((r) => r.entry.text), stop).catch((error: unknown) => {
 			log.warn("local reranker failed; recall keeps the local ranking order", { error }, {
 				event_name: "memory.retriever_rerank.diagnostic", file: "packages/memory/src/engine/retrieval/retriever-rerank.ts",
 				function: "rerankLocalModel", site_id: "retrieval.retriever-rerank.rerankLocalModel.failed",
 			});
 			return undefined;
 		});
-		// A caller with no deadline (an explicit recall, a forget) gets the configured rerank timeout, as the remote path does.
-		const budgetMs = deadlineAt === undefined ? (this.config.rerankTimeoutMs ?? DEFAULT_RERANK_TIMEOUT_MS) : Math.max(0, deadlineAt - Date.now());
-		const stop = signal ? AbortSignal.any([signal, AbortSignal.timeout(budgetMs)]) : AbortSignal.timeout(budgetMs);
 		const logits = await Promise.race([
 			scoring,
 			new Promise<undefined>((resolve) => stop.addEventListener("abort", () => resolve(undefined), { once: true })),
