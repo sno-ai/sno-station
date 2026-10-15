@@ -126,9 +126,10 @@ async function callbackServer(credential: string, activeCwd: () => string, isImp
 				lastImportChildAt = Date.now();
 				console.log(JSON.stringify({ event: "import-child-start", at: lastImportChildAt }));
 			}
+			const startedAt = Date.now();
 			const result = await runChild(requestBody.prompt, cwd, Number.isFinite(deadline) ? deadline - Date.now() : undefined);
 			const status = result.kind === "ok" ? 200 : result.kind === "cancelled" ? 504 : 503;
-			console.log(JSON.stringify({ event: "model-callback", model: requestBody.model, status }));
+			console.log(JSON.stringify({ event: "model-callback", model: requestBody.model, status, outcome: result.kind, duration_ms: Date.now() - startedAt, ...(result.kind === "ok" ? {} : { reason: result.kind === "cancelled" ? result.reason : `${result.category}: ${result.message}` }) }));
 			response.setHeader("content-type", "application/json");
 			if (result.kind === "ok") { response.writeHead(200).end(JSON.stringify({ choices: [{ message: { role: "assistant", content: result.text } }] })); return; }
 			response.writeHead(result.kind === "cancelled" ? 504 : 503).end(JSON.stringify({ error: result }));

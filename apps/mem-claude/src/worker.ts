@@ -42,7 +42,7 @@ const spoolSchema = z.object({
 
 export interface WorkerDependencies {
 	connect(): Promise<MemoryClient>;
-	runChild(prompt: string, cwd: string, timeoutMs?: number): Promise<{ kind: "ok"; text: string } | { kind: "cancelled"; reason: string } | { kind: "error"; category: "transport"; message: string }>;
+	runChild(prompt: string, cwd: string, timeoutMs?: number): Promise<{ kind: "ok"; text: string; usage?: { inputTokens: number; outputTokens: number } } | { kind: "cancelled"; reason: string } | { kind: "error"; category: "transport"; message: string }>;
 	now?(): number;
 	sleep?(delayMs: number): Promise<void>;
 	beforeLockRelease?(): Promise<void>;
@@ -77,7 +77,7 @@ export function startWorkerDetached(): void {
 	}
 }
 
-async function runClaudeChild(prompt: string, cwd: string, timeoutMs = CODING_SKIN_CHILD_DEADLINE_MS): Promise<{ kind: "ok"; text: string } | { kind: "cancelled"; reason: string } | { kind: "error"; category: "transport"; message: string }> {
+export async function runClaudeChild(prompt: string, cwd: string, timeoutMs = CODING_SKIN_CHILD_DEADLINE_MS): Promise<{ kind: "ok"; text: string; usage?: { inputTokens: number; outputTokens: number } } | { kind: "cancelled"; reason: string } | { kind: "error"; category: "transport"; message: string }> {
 	if (timeoutMs <= 0) return { kind: "cancelled", reason: "deadline" };
 	const env = { ...process.env };
 	env["GIT_CEILING_DIRECTORIES"] = appStateRoot();
@@ -98,14 +98,18 @@ async function runClaudeChild(prompt: string, cwd: string, timeoutMs = CODING_SK
 	const parsed = z.object({
 		result: z.string().optional(),
 		is_error: z.boolean(),
-		usage: z.object({ cache_creation_input_tokens: z.number().optional(), input_tokens: z.number().optional(), output_tokens: z.number().optional() }).optional(),
+		usage: z.object({ cache_creation_input_tokens: z.number().optional(), cache_read_input_tokens: z.number().optional(), input_tokens: z.number().optional(), output_tokens: z.number().optional() }).optional(),
 	}).safeParse(output);
 	if (!parsed.success) return { kind: "error", category: "transport", message: "invalid-result" };
 	console.log(JSON.stringify({ event: "claude-child", cwd, usage: parsed.data.usage, claudeCodeUnset: true }));
 	if (parsed.data.is_error) return { kind: "error", category: "transport", message: "claude-is-error" };
 	const text = parsed.data.result?.trim();
 	if (!text) return { kind: "error", category: "transport", message: "empty-output" };
-	return { kind: "ok", text };
+	const reported = parsed.data.usage;
+	const usage = reported && reported.input_tokens !== undefined && reported.output_tokens !== undefined
+		? { inputTokens: reported.input_tokens + (reported.cache_creation_input_tokens ?? 0) + (reported.cache_read_input_tokens ?? 0), outputTokens: reported.output_tokens }
+		: undefined;
+	return usage ? { kind: "ok", text, usage } : { kind: "ok", text };
 }
 
 function promptFromMessages(value: unknown): { model: string; prompt: string } | undefined {
@@ -145,11 +149,12 @@ async function callbackServer(credential: string, activeCwd: () => string, isImp
 				lastImportChildAt = Date.now();
 				console.log(JSON.stringify({ event: "import-child-start", at: lastImportChildAt }));
 			}
+			const startedAt = Date.now();
 			const result = await runChild(requestBody.prompt, cwd, Number.isFinite(deadline) ? deadline - Date.now() : undefined);
 			const status = result.kind === "ok" ? 200 : result.kind === "cancelled" ? 504 : 503;
-			console.log(JSON.stringify({ event: "model-callback", model: requestBody.model, status }));
+			console.log(JSON.stringify({ event: "model-callback", model: requestBody.model, status, outcome: result.kind, duration_ms: Date.now() - startedAt, ...(result.kind === "ok" ? {} : { reason: result.kind === "cancelled" ? result.reason : `${result.category}: ${result.message}` }) }));
 			response.setHeader("content-type", "application/json");
-			if (result.kind === "ok") { response.writeHead(200).end(JSON.stringify({ choices: [{ message: { role: "assistant", content: result.text } }] })); return; }
+			if (result.kind === "ok") { response.writeHead(200).end(JSON.stringify({ choices: [{ message: { role: "assistant", content: result.text } }], ...(result.usage ? { usage: { prompt_tokens: result.usage.inputTokens, completion_tokens: result.usage.outputTokens, total_tokens: result.usage.inputTokens + result.usage.outputTokens } } : {}) })); return; }
 			response.writeHead(result.kind === "cancelled" ? 504 : 503).end(JSON.stringify({ error: result }));
 		}).catch(() => { if (!response.headersSent) response.writeHead(503).end(); });
 	});

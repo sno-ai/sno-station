@@ -7,7 +7,7 @@ import { connect, type InitRegistration, type MemoryClient } from "@snoai/memory
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { acquirePidFileLock } from "../../../apps/mem-claude/src/files.js";
 import { importDirectory, spoolDirectory, workerLockPath } from "../../../apps/mem-claude/src/paths.js";
-import { runWorker, type WorkerDependencies } from "../../../apps/mem-claude/src/worker.js";
+import { runClaudeChild, runWorker, type WorkerDependencies } from "../../../apps/mem-claude/src/worker.js";
 import { writeSettingsFixture } from "../../packages/memory/fixtures/settings-file-fixture";
 import { untilModelReady } from "../../packages/memory/integration/fixtures/model-ready";
 
@@ -196,6 +196,7 @@ describe("Claude worker with a real sidecar", () => {
 		const worker = runWorker({ ...fixture.deps, async runChild(prompt) {
 			childStarts.push(Date.now());
 			if (prompt.includes("CHILD_FAILURE_PROBE")) return { kind: "error", category: "transport", message: "child-exit-1" };
+			if (prompt.includes("USAGE_PROBE")) return { kind: "ok", text: "counted", usage: { inputTokens: 120, outputTokens: 7 } };
 			return { kind: "ok", text: prompt.includes("CALLBACK_PROBE") ? "child answer" : extraction };
 		} });
 		await entered.promise;
@@ -212,7 +213,12 @@ describe("Claude worker with a real sidecar", () => {
 					? { choices: [{ message: { role: "assistant", content: "child answer" } }] }
 					: { error: { kind: "error", category: "transport", message: "child-exit-1" } });
 			}
-			expect(childStarts).toHaveLength(2);
+			const counted = await fetch(`${model.baseUrl}/chat/completions`, {
+				method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${model.credential}` },
+				body: JSON.stringify({ model: "claude-exec", messages: [{ role: "user", content: "USAGE_PROBE" }] }),
+			});
+			expect(await counted.json()).toEqual({ choices: [{ message: { role: "assistant", content: "counted" } }], usage: { prompt_tokens: 120, completion_tokens: 7, total_tokens: 127 } });
+			expect(childStarts).toHaveLength(3);
 			const [first, second] = childStarts;
 			if (first === undefined || second === undefined) throw new Error("two child starts are required");
 			expect(second - first).toBeGreaterThanOrEqual(2_000);
@@ -404,5 +410,31 @@ describe("worker lock files", () => {
 		const reclaimed = await acquirePidFileLock(path, 60_000);
 		expect(reclaimed).toBeDefined();
 		await reclaimed?.release();
+	});
+});
+
+describe("Claude child run", () => {
+	let bin: string;
+	beforeEach(async () => {
+		bin = await mkdtemp(join(tmpdir(), "claude-stub-"));
+		vi.stubEnv("PATH", `${bin}:${process.env.PATH}`);
+	});
+	afterEach(async () => {
+		vi.unstubAllEnvs();
+		await rm(bin, { recursive: true, force: true });
+	});
+	const stub = async (output: unknown) => {
+		await writeFile(join(bin, "claude"), `#!${process.execPath}\nconsole.log(${JSON.stringify(JSON.stringify(output))});\n`);
+		await chmod(join(bin, "claude"), 0o700);
+	};
+
+	it("reports the child's own token counts, with cached input counted as input", async () => {
+		await stub({ is_error: false, result: "answer", usage: { input_tokens: 10, cache_creation_input_tokens: 5, cache_read_input_tokens: 100, output_tokens: 3 } });
+		expect(await runClaudeChild("p", bin, 20_000)).toEqual({ kind: "ok", text: "answer", usage: { inputTokens: 115, outputTokens: 3 } });
+	});
+
+	it("reports no token counts when the child gives none", async () => {
+		await stub({ is_error: false, result: "answer" });
+		expect(await runClaudeChild("p", bin, 20_000)).toEqual({ kind: "ok", text: "answer" });
 	});
 });
