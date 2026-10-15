@@ -305,15 +305,35 @@ Object.assign(MemoryRetriever.prototype, {
 					// transient transport failure is retried inside this batch's wave slot (issue
 					// #222): measured 2026-09-10, 5 of 1,542 searches fell back on an idle box and 56
 					// in 30 minutes beside 8 concurrent searches, each on the first miss.
-					const { response, data } = await fetchRerankWithRetry(() =>
-						fetch(rerankEndpoint, {
-							method: "POST",
-							// A new request id for every HTTP attempt, so a retry can be told apart in the GPU logs.
-							headers: provider === "sno-gpu" ? { ...headers, "X-Request-ID": randomUUID() } : headers,
-							body: JSON.stringify(body),
-							signal: stepStop ? AbortSignal.any([AbortSignal.timeout(rerankTimeoutMs), stepStop]) : AbortSignal.timeout(rerankTimeoutMs),
-						}), stepStop,
-					);
+					// Every HTTP attempt leaves one record (outcome, status, time, how many texts, and for Sno's reranker the request
+					// id the GPU side also logs), whichever provider answers: a retry and a refusal are told apart from the log.
+					const sendAttempt = async (): Promise<Response> => {
+						const clientRequestId = provider === "sno-gpu" ? randomUUID() : undefined;
+						const attemptStarted = performance.now();
+						let outcome = "failed";
+						let statusCode: number | undefined;
+						try {
+							const attempt = await fetch(rerankEndpoint, {
+								method: "POST",
+								// A new request id for every HTTP attempt, so a retry can be told apart in the GPU logs.
+								headers: clientRequestId ? { ...headers, "X-Request-ID": clientRequestId } : headers,
+								body: JSON.stringify(body),
+								signal: stepStop ? AbortSignal.any([AbortSignal.timeout(rerankTimeoutMs), stepStop]) : AbortSignal.timeout(rerankTimeoutMs),
+							});
+							statusCode = attempt.status;
+							outcome = attempt.ok ? "success" : "http_error";
+							return attempt;
+						} catch (error) {
+							outcome = isRerankTimeout(error) ? "timeout" : "failed";
+							throw error;
+						} finally {
+							log.info("Rerank request completed", {
+								outcome, provider, status_code: statusCode ?? "unavailable", duration_ms: performance.now() - attemptStarted,
+								texts_sent: batchTexts.length, ...(clientRequestId ? { client_request_id: clientRequestId } : {}),
+							}, { event_name: "rerank.request.completed", file: "packages/memory/src/engine/retrieval/retriever-rerank.ts", function: "runBatch", site_id: "rerank.request.completed" });
+						}
+					};
+					const { response, data } = await fetchRerankWithRetry(sendAttempt, stepStop);
 
 					// Guard response.ok here so the remaining retrieval scoring path works with normalized inputs.
 					if (!response.ok) {

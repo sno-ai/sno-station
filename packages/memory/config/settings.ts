@@ -115,7 +115,12 @@ export function defaultSettings(): Settings {
  */
 function rerankSettings(settings: Settings): { rerank: Settings["rerank"]["mode"]; provider: Settings["rerank"]["provider"] | undefined; endpoint: string | undefined; apiKey: string } {
 	const { rerank, snoGpu } = settings;
-	if (rerank.provider !== "sno-gpu") return { rerank: rerank.mode, provider: rerank.provider, endpoint: rerank.endpoint || undefined, apiKey: rerank.apiKey };
+	if (rerank.provider !== "sno-gpu") {
+		// A provider name sitting in the settings of an install that ranks locally (the old default was "voyage" with local
+		// ranking) is not a ranker anyone chose: name it only when it is really called.
+		const remote = rerank.mode === "cross-encoder";
+		return { rerank: rerank.mode, provider: remote ? rerank.provider : undefined, endpoint: remote ? rerank.endpoint || undefined : undefined, apiKey: rerank.apiKey };
+	}
 	// Local ranking: chosen (lightweight or none), or forced by the mode or a missing key. No remote ranker is named
 	// then, so traces and stats do not read as a Sno rank.
 	let endpoint: string | undefined;

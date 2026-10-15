@@ -73,8 +73,11 @@ describe("which settings send recall ranking to Sno GPU", () => {
 	it("a user's own third-party reranker settings are passed through untouched", () => {
 		const own = settingsFor("rem-enhanced", { rerank: { ...defaultSettings().rerank, mode: "cross-encoder", provider: "voyage", apiKey: "voyage-key" } });
 		expect(settingsToPluginConfig(own).retrieval).toMatchObject({ rerank: "cross-encoder", rerankProvider: "voyage", rerankApiKey: "voyage-key" });
-		const lightweight = settingsFor("rem-enhanced", { rerank: { ...defaultSettings().rerank, mode: "lightweight", provider: "voyage" } });
-		expect(settingsToPluginConfig(lightweight).retrieval.rerank).toBe("lightweight");
+		const lightweight = settingsFor("rem-enhanced", { rerank: { ...defaultSettings().rerank, mode: "lightweight", provider: "voyage", endpoint: "https://api.voyageai.com/v1/rerank" } });
+		const retrieval = settingsToPluginConfig(lightweight).retrieval;
+		expect(retrieval.rerank).toBe("lightweight");
+		expect(retrieval.rerankProvider).toBeUndefined();
+		expect(retrieval.rerankEndpoint).toBeUndefined();
 	});
 });
 
@@ -143,6 +146,24 @@ describe("the recall search against a Sno-style reranker over real HTTP", () => 
 		expect(calls[0]?.headers["x-request-id"]).toMatch(UUID_V4);
 		expect(calls[1]?.headers["x-request-id"]).toMatch(UUID_V4);
 		expect(calls[1]?.headers["x-request-id"]).not.toBe(calls[0]?.headers["x-request-id"]);
+	}, 30_000);
+
+	it("every HTTP attempt leaves one log record with its status and the request id the server received", async () => {
+		const written: string[] = [];
+		const spy = vi.spyOn(process.stderr, "write").mockImplementation((chunk) => { written.push(String(chunk)); return true; });
+		try {
+			const { calls, url } = await reranker((n, texts) => n === 1 ? { status: 503 } : { status: 200, body: scoreByText(texts) });
+			const retriever = createRetriever(storeOf(manyCandidates().slice(0, 4)) as never, embedder, { warn: () => {} },
+				{ ...BASE_CONFIG, rerank: "cross-encoder", rerankProvider: "sno-gpu", rerankEndpoint: url, rerankApiKey: "machine-key" });
+			await retriever.retrieve({ query: QUERY, limit: 3 });
+			const records = written.join("").split("\n").filter((line) => line.includes("rerank.request.completed")).map((line) => JSON.parse(line.slice(line.indexOf("{"))));
+			expect(calls.length).toBe(2);
+			expect(records.map((r) => r.attributes.status_code)).toEqual([503, 200]);
+			const ids = records.map((r) => r.attributes.client_request_id);
+			expect(ids).toEqual(calls.map((c) => c.headers["x-request-id"]));
+		} finally {
+			spy.mockRestore();
+		}
 	}, 30_000);
 
 	it("a Sno reranker that refuses the key (401) does not break the recall: the results come back in their earlier order", async () => {
