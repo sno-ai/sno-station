@@ -172,10 +172,6 @@
   },
   "rerank": {
     "mode": "cross-encoder",
-    "provider": "sno-gpu",
-    "endpoint": "",
-    "model": "rerank-2",
-    "apiKey": "",
     "timeoutMs": 15000,
     "maxCandidates": 64
   },

@@ -17,7 +17,7 @@ function selectedRerank(overrides: Record<string, unknown>) {
 	const root = mkdtempSync(join(tmpdir(), "rerank-choice-"));
 	roots.push(root);
 	vi.stubEnv("SNO_PROFILE_DIR", root);
-	writeSettingsFixture(root, { rerank: overrides });
+	writeSettingsFixture(root, overrides);
 	for (const skinId of ["openclaw", "codex", "claude-code", "hermes"]) {
 		expect(parseInput("init", {
 			scope: { principal: "test", project: "/workspace", session: "session-1" },
@@ -28,23 +28,18 @@ function selectedRerank(overrides: Record<string, unknown>) {
 }
 
 describe("reranker choice shared by four plugins", () => {
-	it("ranks locally by default and with only a key", () => {
-		expect(selectedRerank({}).rerank).toBe("lightweight");
-		expect(selectedRerank({ apiKey: "rerank-key-present" }).rerank).toBe("lightweight");
+	it("ranks locally without a Sno GPU key, and outside REM Enhanced", () => {
+		expect(selectedRerank({ mode: "rem-enhanced" })).toMatchObject({ rerank: "lightweight", rerankEndpoint: undefined });
+		expect(selectedRerank({ mode: "agent-native", snoGpu: { apiKey: "machine-key" } })).toMatchObject({ rerank: "lightweight", rerankEndpoint: undefined });
 	});
 
-	it("refuses a remote ranker without a provider", () => {
-		expect(() => selectedRerank({ mode: "cross-encoder", provider: "", apiKey: "rerank-key-present" }))
-			.toThrow();
+	it("ranks on Sno's reranker in REM Enhanced with a Sno GPU key, at the Sno GPU address", () => {
+		expect(selectedRerank({ mode: "rem-enhanced", snoGpu: { baseUrl: "https://rt3-llm.sno.ai", apiKey: "machine-key" } }))
+			.toMatchObject({ rerank: "cross-encoder", rerankEndpoint: "https://rt3-llm.sno.ai/rerank", rerankApiKey: "machine-key" });
 	});
 
-	it("refuses a remote ranker without a key", () => {
-		expect(() => selectedRerank({ mode: "cross-encoder", provider: "tei", endpoint: "http://127.0.0.1:19213/rerank" }))
-			.toThrow();
-	});
-
-	it("uses the named remote ranker and key", () => {
-		expect(selectedRerank({ mode: "cross-encoder", provider: "tei", endpoint: "http://127.0.0.1:19213/rerank", apiKey: "rerank-key-present" }))
-			.toMatchObject({ rerank: "cross-encoder", rerankProvider: "tei", rerankEndpoint: "http://127.0.0.1:19213/rerank", rerankApiKey: "rerank-key-present" });
+	it("keeps local ranking when the user chose it", () => {
+		expect(selectedRerank({ mode: "rem-enhanced", snoGpu: { apiKey: "machine-key" }, rerank: { mode: "lightweight" } }))
+			.toMatchObject({ rerank: "lightweight", rerankEndpoint: undefined });
 	});
 });
