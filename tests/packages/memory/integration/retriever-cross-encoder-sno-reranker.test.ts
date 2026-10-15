@@ -12,7 +12,7 @@ import type { MemoryEntry, MemorySearchResult } from "../../../../packages/memor
 
 // Real integration test: the Sno cross-encoder reranker is hit over HTTP. No
 // mock of the reranker — the whole point is to prove the mem-claw retriever's
-// `rerank: "cross-encoder"` + `rerankProvider: "tei"` path is wired to the live
+// `rerank: "cross-encoder"` path is wired to the live
 // Sno service (https://rt3-llm.sno.ai/rerank) and actually reorders results.
 //
 // The store supplies fixed candidate scores to isolate reranking. The local
