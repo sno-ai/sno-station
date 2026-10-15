@@ -122,7 +122,6 @@ describe("retriever cross-encoder rerank against the real Sno reranker", () => {
 			{
 				...BASE_CONFIG,
 				rerank: "cross-encoder",
-				rerankProvider: "tei",
 				rerankEndpoint: SNO_RERANK_ENDPOINT,
 				rerankApiKey: internalKey,
 				rerankMaxCandidates: 2,
@@ -177,7 +176,6 @@ describe("retriever cross-encoder rerank against the real Sno reranker", () => {
 				{
 					...BASE_CONFIG,
 					rerank: "cross-encoder",
-					rerankProvider: "tei",
 					rerankEndpoint: SNO_RERANK_ENDPOINT,
 					rerankApiKey: internalKey,
 				},
@@ -223,7 +221,6 @@ describe("retriever cross-encoder rerank against the real Sno reranker", () => {
 				{
 					...BASE_CONFIG,
 					rerank: "cross-encoder",
-					rerankProvider: "tei",
 					rerankEndpoint: SNO_RERANK_ENDPOINT,
 					rerankApiKey: internalKey,
 				},

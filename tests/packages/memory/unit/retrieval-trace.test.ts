@@ -95,14 +95,12 @@ describe("TraceCollector", () => {
 		vi.advanceTimersByTime(4);
 		trace.endStage(["a", "b"], [0.5, 0.4], {
 			rerankFallbackReason: "no_endpoint",
-			rerankFallbackProvider: "cohere",
 		});
 
 		expect(trace.stages[0]).toMatchObject({
 			name: "rerank",
 			metadata: {
 				rerankFallbackReason: "no_endpoint",
-				rerankFallbackProvider: "cohere",
 			},
 		});
 	});
