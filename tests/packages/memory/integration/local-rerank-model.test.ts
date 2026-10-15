@@ -70,7 +70,8 @@ it("returns the local ranking order at the caller's deadline when the model is s
 	const late = (_query: string, texts: string[]) => new Promise<number[]>((resolve) => {
 		setTimeout(() => resolve(texts.map((text) => (text.includes("nurse") ? 10 : -10))), 3_000);
 	});
-	const slow = await order(late, Date.now() + 200);
+	// Auto-recall halves its timeout for the rerank deadline, so an odd timeout leaves a fraction of a millisecond.
+	const slow = await order(late, Date.now() + 200.5);
 	expect(slow.first).toBe("sister-talk");
 	expect(slow.ms).toBeLessThan(2_000);
 	const failed = await order(() => Promise.reject(new Error("onnx session failed")));
