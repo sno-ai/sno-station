@@ -1,6 +1,6 @@
 {
   "name": "@snoai/mem-cursor",
-  "version": "1.2.12",
+  "version": "1.2.13",
   "license": "Apache-2.0",
   "publishConfig": {
     "access": "public"
