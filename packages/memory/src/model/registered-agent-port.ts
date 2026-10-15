@@ -100,7 +100,9 @@ export class RegisteredAgentPort implements AgentLlmPort {
 			}
 			// A successful retry clears only the failed request with the same prompt.
 			failures?.delete(identity);
-			return { kind: "ok", text };
+			const usage = hostUsage(body);
+			const model = hostModel(body);
+			return { kind: "ok", text, ...(usage ? { usage } : {}), ...(model ? { model } : {}) };
 		} catch {
 			if (!signal.aborted && !fetchCompleted) this.onRefused?.();
 			failures?.set(identity, signal.aborted ? "timeout" : "engine-failed");
@@ -108,6 +110,20 @@ export class RegisteredAgentPort implements AgentLlmPort {
 				: { kind: "error", category: "transport", message: "no-agent-endpoint" };
 		}
 	}
+}
+
+/** The token counts a registered callback reports in an OpenAI-style reply; absent when it reports none. */
+function hostUsage(body: unknown): { inputTokens: number; outputTokens: number } | undefined {
+	const usage = (body as { usage?: { prompt_tokens?: unknown; completion_tokens?: unknown } } | null)?.usage;
+	const input = usage?.prompt_tokens;
+	const output = usage?.completion_tokens;
+	return typeof input === "number" && typeof output === "number" && Number.isFinite(input) && Number.isFinite(output)
+		? { inputTokens: input, outputTokens: output } : undefined;
+}
+
+function hostModel(body: unknown): string | undefined {
+	const model = (body as { model?: unknown } | null)?.model;
+	return typeof model === "string" && model.trim() ? model : undefined;
 }
 
 /** A registered callback relays the binding's typed failure in its body; anything else is a plain HTTP failure. */

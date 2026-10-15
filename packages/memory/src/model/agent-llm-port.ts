@@ -30,7 +30,8 @@ export type AgentLlmRequest = {
  * response, which is exactly the trap this shape exists to close).
  */
 export type AgentLlmCompletion =
-	| { kind: "ok"; text: string }
+	/** `usage` and `model` are the host's own report when it gives one; absent means the host did not say. */
+	| { kind: "ok"; text: string; usage?: { inputTokens: number; outputTokens: number }; model?: string }
 	| { kind: "cancelled"; reason: string }
 	| {
 			kind: "error";

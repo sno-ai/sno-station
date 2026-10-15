@@ -449,6 +449,7 @@ export function createLlmClient(config: LlmClientConfig & { refuseOnUnavailable?
 			const hostInFlight = ++hostRequestsInFlight;
 			const result = await withLogContext({ attempt_id: randomUUID() }, async () => {
 				let outcome = "failed";
+				let hostReport: { model?: string; usage?: { inputTokens: number; outputTokens: number } } = {};
 				try {
 					const completion = await agentPort.complete({
 						system: systemContent,
@@ -460,13 +461,18 @@ export function createLlmClient(config: LlmClientConfig & { refuseOnUnavailable?
 						...(request.signal ? { signal: request.signal } : {}),
 					});
 					outcome = completion.kind;
+					if (completion.kind === "ok") hostReport = completion;
 					return completion;
 				} finally {
 					hostRequestsInFlight -= 1;
 					log.info("Host model request completed", { outcome, transport: "agent-host-seam",
 						call_id: request.callId, destination,
 						duration_ms: performance.now() - hostStarted, in_flight_at_dispatch: hostInFlight,
-						requested_model: "unavailable", returned_model: "unavailable", usage: { source: "unavailable" },
+						requested_model: "unavailable", returned_model: hostReport.model ?? "unavailable",
+						usage: hostReport.usage
+							? { source: "provider_reported", inputTokens: hostReport.usage.inputTokens, outputTokens: hostReport.usage.outputTokens,
+								totalTokens: hostReport.usage.inputTokens + hostReport.usage.outputTokens }
+							: { source: "unavailable" },
 						prompt_template_hash: request.promptTemplateHash ?? "unavailable",
 						extraction_skill_hash: request.extractionSkillHash ?? "unavailable",
 						prompt_template_unavailable_reason: request.promptTemplateHash ? undefined : "caller_does_not_provide_template_identity",
@@ -475,7 +481,7 @@ export function createLlmClient(config: LlmClientConfig & { refuseOnUnavailable?
 						output_cap_reason: "host_may_strip_requested_cap", timeout_ms: hostTimeoutMs,
 						sampling: { source: "unknown" }, finish_reason: "unavailable", route: "agent-host-seam",
 						dispatch_to_headers_ms: "unavailable", headers_to_body_ms: "unavailable", first_token_ms: "unavailable",
-						provider_unavailable_reason: "host_port_does_not_report_provider_fields",
+						...(hostReport.usage || hostReport.model ? {} : { provider_unavailable_reason: "host_port_does_not_report_provider_fields" }),
 					}, { event_name: "llm.request.completed", file: "packages/memory/src/model/llm-client.ts", function: "requestContent", site_id: "llm.host.request.completed" });
 				}
 			});

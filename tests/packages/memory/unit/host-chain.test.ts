@@ -4,7 +4,9 @@
  */
 
 import { createServer, type Server } from "node:http";
-import { afterEach, expect, it } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
+import { defaultSettings } from "../../../../packages/memory/config/settings";
+import { createLlmClient } from "../../../../packages/memory/src/model/llm-client.ts";
 import { hostChain, RegisteredAgentPort } from "../../../../packages/memory/src/model/registered-agent-port.ts";
 
 const servers: Server[] = [];
@@ -70,4 +72,50 @@ it("tells the host when the caller stops waiting, so a host never runs a model f
 	const sent = Number(header);
 	expect(sent).toBeGreaterThanOrEqual(before + 5_000);
 	expect(sent).toBeLessThanOrEqual(Date.now() + 5_000);
+});
+
+it("passes on the token counts and model name a host reports, and leaves them out when it reports none", async () => {
+	const reply = async (body: unknown): Promise<RegisteredAgentPort> => {
+		const server = createServer((request, response) => {
+			request.resume();
+			response.writeHead(200, { "content-type": "application/json" });
+			response.end(JSON.stringify(body));
+		});
+		await new Promise<void>(done => server.listen(0, "127.0.0.1", done));
+		servers.push(server);
+		const address = server.address();
+		if (!address || typeof address === "string") throw new Error("no port");
+		return new RegisteredAgentPort({ baseUrl: `http://127.0.0.1:${address.port}/v1`, credential: "c", model: "m" });
+	};
+	const choices = [{ message: { role: "assistant", content: "answer" } }];
+	const reported = await (await reply({ choices, model: "claude-sonnet-5-5", usage: { prompt_tokens: 120, completion_tokens: 7, total_tokens: 127 } })).complete({ prompt: "q", timeoutMs: 2_000 });
+	expect(reported).toEqual({ kind: "ok", text: "answer", usage: { inputTokens: 120, outputTokens: 7 }, model: "claude-sonnet-5-5" });
+	const partial = await (await reply({ choices, usage: { prompt_tokens: 120 } })).complete({ prompt: "q", timeoutMs: 2_000 });
+	expect(partial).toEqual({ kind: "ok", text: "answer" });
+});
+
+it("records the tokens and model a host reported in the host call log", async () => {
+	const server = createServer((request, response) => {
+		request.resume();
+		response.writeHead(200, { "content-type": "application/json" });
+		response.end(JSON.stringify({ choices: [{ message: { role: "assistant", content: "answer" } }], model: "claude-sonnet-5-5", usage: { prompt_tokens: 120, completion_tokens: 7 } }));
+	});
+	await new Promise<void>(done => server.listen(0, "127.0.0.1", done));
+	servers.push(server);
+	const address = server.address();
+	if (!address || typeof address === "string") throw new Error("no port");
+	const written: string[] = [];
+	const spy = vi.spyOn(process.stderr, "write").mockImplementation(chunk => { written.push(String(chunk)); return true; });
+	try {
+		const llm = createLlmClient({
+			preset: "mem_claw/sno_ai_extract", apiKey: "", baseURL: "http://127.0.0.1:9",
+			routing: { mode: "agent-native", language: "en", modelCalls: defaultSettings().modelCalls },
+			agentPort: new RegisteredAgentPort({ baseUrl: `http://127.0.0.1:${address.port}/v1`, credential: "c", model: "m" }),
+		});
+		expect(await llm.completeText({ callId: "E10", prompt: "p", hostPrompt: "p", timeoutMs: 2_000, maxTokens: 16 })).toBe("answer");
+	} finally {
+		spy.mockRestore();
+	}
+	const record = written.join("").split("\n").filter(line => line.includes('"llm.host.request.completed"')).map(line => JSON.parse(line))[0];
+	expect(record.attributes).toMatchObject({ returned_model: "claude-sonnet-5-5", usage: { source: "provider_reported", inputTokens: 120, outputTokens: 7, totalTokens: 127 } });
 });
