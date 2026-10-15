@@ -21,6 +21,9 @@ export const LOCAL_RERANK_MODEL_REVISION = "1427fd652930e4ba29e8149678df786c240d
 /** The repository ships one 8-bit file per CPU family and no generic quantized file. */
 const MODEL_FILE = arch() === "arm64" ? "model_qint8_arm64" : "model_quint8_avx2";
 const SCORE_BATCH = 5;
+// A failed load (a download that broke, a mirror that was down) is tried again on the first call after this long; an
+// offline machine with nothing cached pays one failed attempt per interval.
+const LOAD_RETRY_MS = 10 * 60_000;
 
 export interface LocalRerankerOptions {
 	cacheDir: string;
@@ -40,6 +43,7 @@ interface Loaded {
 let shared: Loaded | undefined;
 let sharedLoading: Promise<Loaded | undefined> | undefined;
 let sharedUsers = 0;
+let sharedFailedAt: number | undefined;
 
 export class LocalReranker {
 	private disposed = false;
@@ -56,6 +60,10 @@ export class LocalReranker {
 		if (texts.length === 0) return [];
 		const loaded = shared;
 		if (!loaded) {
+			if (sharedFailedAt !== undefined && Date.now() - sharedFailedAt >= LOAD_RETRY_MS) {
+				sharedFailedAt = undefined;
+				sharedLoading = undefined;
+			}
 			sharedLoading ??= this.load();
 			return undefined;
 		}
@@ -82,6 +90,7 @@ export class LocalReranker {
 		const loaded = shared ?? (await sharedLoading?.catch(() => undefined));
 		shared = undefined;
 		sharedLoading = undefined;
+		sharedFailedAt = undefined;
 		await loaded?.dispose();
 	}
 
@@ -121,6 +130,7 @@ export class LocalReranker {
 				event_name: "embedder.local_reranker.unavailable", file: "packages/embedder/src/local-reranker.ts",
 				function: "load", site_id: "embedder.local_reranker.unavailable",
 			});
+			sharedFailedAt = Date.now();
 			return undefined;
 		} finally {
 			Object.assign(env, previous);
