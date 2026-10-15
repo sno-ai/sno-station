@@ -49,7 +49,7 @@ export const DEFAULT_IMPORTANCE = 0.7;
 /** Default scope for memories without explicit scope */
 export const DEFAULT_SCOPE = "global";
 
-/** Default embedding vector dimension (Voyage AI 1024-d) */
+/** Default embedding vector dimension (the local PPLX embedder outputs 1024-d) */
 export const VECTOR_DIMENSION_DEFAULT = 1024;
 
 /** Plugin version identifier */
@@ -264,16 +264,12 @@ export const LIGHTWEIGHT_FUSION_WEIGHT = 0.7;
 /** Cosine-similarity weight in local cosine-blend rerank */
 export const LIGHTWEIGHT_COSINE_WEIGHT = 0.3;
 
-/** Default rerank model identifier */
-export const DEFAULT_RERANK_MODEL = "rerank-2";
-
 /** Default timeout for rerank API calls in milliseconds */
 export const DEFAULT_RERANK_TIMEOUT_MS = 15_000;
 
 /**
  * How many rerank batches may be in flight at once. A candidate pool of
- * `MAX_CANDIDATE_POOL_SIZE` divided by a provider's per-request batch limit is 11 requests for
- * TEI, and sending them one after another put `DEFAULT_RERANK_TIMEOUT_MS` on the clock 11 times
+ * `MAX_CANDIDATE_POOL_SIZE` divided by the reranker's per-request batch limit is 11 requests, and sending them one after another put `DEFAULT_RERANK_TIMEOUT_MS` on the clock 11 times
  * over. Four is what the Sno GPU serves concurrently at near-linear 4x (owner-measured
  * 2026-08-17); the first failing wave still ends the whole rerank, so a wedged reranker costs one
  * timeout rather than one per batch.
@@ -284,17 +280,11 @@ export const DEFAULT_RERANK_BATCH_CONCURRENCY = 4;
  * Texts per HTTP request, applied whatever `rerankMaxCandidates` allows out in total: that one
  * is the operator's budget, this one is the transport's own per-request limit.
  *
- * Confirmed 2026-09-14 against the deployed self-hosted ranker, which answers a 51-text request
- * with `{"error":"too many texts: max 50, got 51"}`. Such a deployment rejects an over-limit
+ * Confirmed 2026-09-14 against Sno's reranker, which answers a 51-text request
+ * with `{"error":"too many texts: max 50, got 51"}`. It rejects an over-limit
  * batch outright rather than truncating it, and the retriever files that HTTP 400 as "reranker
- * unavailable" — so getting this wrong degrades every call to raw fusion order with no visible
+ * unavailable" — so getting this wrong degrades every call to local ranking with no visible
  * error.
- *
- * It binds every provider, not only the self-hosted one it was measured against. Making it
- * conditional on the configured provider name put the guarantee in a deploy script instead of
- * in the code. Hosted providers (voyage, jina, pinecone, dashscope) document much higher
- * limits, so holding them to this one only sends more, smaller requests, which the rerank waves
- * already run four at a time.
  */
 export const DEFAULT_TEI_RERANK_MAX_CANDIDATES = 50;
 

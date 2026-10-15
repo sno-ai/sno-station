@@ -7,7 +7,6 @@ import {
 	DEFAULT_BM25_WEIGHT,
 	DEFAULT_HARD_MIN_SCORE,
 	DEFAULT_MIN_SCORE,
-	DEFAULT_RERANK_MODEL,
 	DEFAULT_RERANK_TIMEOUT_MS,
 	DEFAULT_VECTOR_WEIGHT,
 	LENGTH_NORM_ANCHOR,
@@ -30,7 +29,6 @@ export const retrievalConfigSchema: z.ZodType<
 		rerank: "cross-encoder" | "lightweight" | "none";
 		candidatePoolSize: number;
 		rerankApiKey?: string | undefined;
-		rerankModel: string;
 		rerankTimeoutMs: number;
 		recencyHalfLifeDays: number;
 		recencyWeight: number;
@@ -49,16 +47,6 @@ export const retrievalConfigSchema: z.ZodType<
 		timeDecayFloor?: number | undefined;
 		mmrLambda?: number | undefined;
 		rerankEndpoint?: string | undefined;
-		rerankProvider?:
-			| "jina"
-			| "siliconflow"
-			| "pinecone"
-			| "voyage"
-			| "dashscope"
-			| "tei"
-			| "sno-gpu"
-			| "custom"
-			| undefined;
 		rerankMaxCandidates?: number | undefined;
 		reinforcementFactor: number;
 		maxHalfLifeMultiplier: number;
@@ -84,7 +72,6 @@ export const retrievalConfigSchema: z.ZodType<
 		rerank: z.enum(["cross-encoder", "lightweight", "none"]).default("lightweight"),
 		candidatePoolSize: z.number().int().min(10).max(2000).default(CANDIDATE_POOL_SIZE),
 		rerankApiKey: z.string().optional(),
-		rerankModel: z.string().default(DEFAULT_RERANK_MODEL),
 		rerankTimeoutMs: z.number().int().min(1000).max(120000).default(DEFAULT_RERANK_TIMEOUT_MS),
 		recencyHalfLifeDays: z.number().min(0).max(365).default(RECENCY_HALF_LIFE_DAYS),
 		recencyWeight: z.number().min(0).max(RECENCY_WEIGHT_MAX).default(RECENCY_WEIGHT),
@@ -111,13 +98,9 @@ export const retrievalConfigSchema: z.ZodType<
 		timeDecayFloor: z.number().min(0).max(1).optional(),
 		/** Relevance vs diversity tradeoff (default: 0.7) */
 		mmrLambda: z.number().min(0).max(1).optional(),
-		/** Custom rerank API endpoint URL. */
+		/** Address of Sno's reranker (the Sno GPU address plus `/rerank`). */
 		rerankEndpoint: z.string().optional(),
-		/** Rerank provider name */
-		rerankProvider: z
-			.enum(["jina", "siliconflow", "pinecone", "voyage", "dashscope", "tei", "sno-gpu", "custom"])
-			.optional(),
-		/** Hard cap on candidates sent per rerank API request (some deployments reject over-limit batches) */
+		/** Cap on candidates sent to Sno's reranker in total */
 		rerankMaxCandidates: z.number().int().min(1).max(2000).optional(),
 		/** Scaling factor for access-based reinforcement (0 = disabled, default: 0.5) */
 		reinforcementFactor: z.number().min(0).max(5).default(0.5),
@@ -127,21 +110,6 @@ export const retrievalConfigSchema: z.ZodType<
 	.prefault({})
 	.transform((ret, ctx) => {
 		if (ret.rerank === "none") return ret;
-		// A remote ranker runs only when the operator names it: the provider decides the request
-		// shape and the per-request batch limit, and nothing defaults to one on their behalf.
-		if (
-			(ret.rerank === "cross-encoder" || ret.rerankEndpoint !== undefined) &&
-			ret.rerankProvider === undefined
-		) {
-			ctx.addIssue({
-				code: z.ZodIssueCode.custom,
-				path: ["rerankProvider"],
-				message:
-					"retrieval.rerankProvider is required when retrieval.rerank is \"cross-encoder\" or " +
-					"retrieval.rerankEndpoint is set: the provider decides the request shape and the " +
-					"per-request batch limit",
-			});
-		}
 		if (ret.rerankEndpoint !== undefined) {
 			try {
 				new URL(ret.rerankEndpoint);
