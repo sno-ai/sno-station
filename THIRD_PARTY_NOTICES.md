@@ -18,6 +18,13 @@ consumed unmodified through `package.json` under its own license.
 - License: MIT (model card).
 - The model is downloaded at first use; it is not committed to this repository.
 
+## mmarco-mMiniLMv2-L12-H384-v1 (ONNX, 8-bit) — local recall ranking model, `packages/embedder`
+
+- Model: `cross-encoder/mmarco-mMiniLMv2-L12-H384-v1` on Hugging Face, a multilingual cross-encoder trained on mMARCO, a
+  machine translation of MS MARCO.
+- License: Apache-2.0 (model card).
+- The model is downloaded at first use; it is not committed to this repository.
+
 ## SQLite3MultipleCiphers — via `better-sqlite3-multiple-ciphers`, `packages/sqlite-crypto`
 
 - Upstream: https://github.com/utelle/SQLite3MultipleCiphers

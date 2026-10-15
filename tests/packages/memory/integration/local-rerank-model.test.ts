@@ -76,3 +76,39 @@ it("returns the local ranking order at the caller's deadline when the model is s
 	const failed = await order(() => Promise.reject(new Error("onnx session failed")));
 	expect(failed.first).toBe("sister-talk");
 }, 60_000);
+
+it("the model only reorders the candidates it scored: the first results all come from the local ranking's first 15", async () => {
+	const big = createTestDb();
+	const bigStore = new MemoryStore({ dbPath: big.dbPath, embedder });
+	try {
+		const topics = ["the garden", "a hiking trip", "the new laptop", "a cooking class", "the gym schedule", "a book club", "the car repair",
+			"a birthday party", "the rent", "a concert", "the dentist", "a chess game", "the bakery", "a train ride", "the weather",
+			"a movie night", "the office move", "a camping plan", "the guitar lessons", "a beach day", "the job interview", "a road trip",
+			"the coffee shop", "a museum visit"];
+		let order = 0;
+		for (const [index, topic] of topics.entries()) {
+			order += 1;
+			await bigStore.importEntry({
+				id: `t${index}`, text: `Nate: My sister and I talked about ${topic} at work this week.`, category: "episodic", lane: "active",
+				projectId: "global", importance: 0.7, timestamp: Date.UTC(2026, 0, 1) + order, metadata: "{}", contentHash: `t${index}`,
+			});
+		}
+		await bigStore.importEntry({
+			id: "sister-job", text: MEMORIES["sister-job"] ?? "", category: "episodic", lane: "active", projectId: "global", importance: 0.7,
+			timestamp: Date.UTC(2026, 0, 1) + 100, metadata: "{}", contentHash: "sister-job",
+		});
+		const withModel = (scoreRelevance: Embedder["scoreRelevance"]) =>
+			createRetriever(bigStore, Object.create(embedder, { scoreRelevance: { value: scoreRelevance } }) as Embedder, { warn: () => {} },
+				{ ...DEFAULT_RETRIEVAL_CONFIG, rerank: "lightweight", minScore: 0, hardMinScore: 0 });
+		const query = "Where does Nate's sister work?";
+		const local = (await withModel(async () => undefined).retrieve({ query, limit: 25 })).map((r) => r.entry.id);
+		// A model that likes one memory and dislikes every other one it is shown.
+		const picky = async (_q: string, texts: string[]) => texts.map((text) => (text.includes("nurse") ? 10 : -10));
+		const ranked = (await withModel(picky).retrieve({ query, limit: 5 })).map((r) => r.entry.id);
+		expect(ranked[0]).toBe("sister-job");
+		for (const id of ranked) expect(local.slice(0, 15)).toContain(id);
+	} finally {
+		await bigStore.close();
+		big.cleanup();
+	}
+}, 120_000);

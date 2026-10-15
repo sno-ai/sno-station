@@ -176,7 +176,7 @@ Object.assign(MemoryRetriever.prototype, {
 		}
 		if (this.config.rerank === "lightweight" || !this.config.rerankApiKey) {
 			// Lightweight is the configured strategy, not a degradation — no fallback signal.
-			return { candidates: await this.rerankLocalModel(query, this.rerankLightweight(candidates, queryVector), options?.deadlineAt) };
+			return { candidates: await this.rerankLocalModel(query, this.rerankLightweight(candidates, queryVector), options?.deadlineAt, options?.signal) };
 		}
 
 		// Compute the normalized rerank endpoint once so later retrieval scoring checks use one value.
@@ -605,20 +605,21 @@ Object.assign(MemoryRetriever.prototype, {
 	},
 
 	/**
-	 * The local reranker model rescores the first candidates of the local ranking. Their order is unchanged while the
-	 * model is not loaded yet (the first call starts loading it) and when the caller's deadline has already passed.
+	 * The local reranker model reorders the first candidates of the local ranking. Their order is unchanged while the
+	 * model is not loaded yet (the first call starts loading it), past the caller's deadline, and after a cancel.
 	 */
 	async rerankLocalModel(
 		this: MemoryRetrieverInternals,
 		query: string,
 		ordered: RetrievalResult[],
 		deadlineAt?: number,
+		signal?: AbortSignal,
 	): Promise<RetrievalResult[]> {
-		if (ordered.length < 2 || (deadlineAt !== undefined && Date.now() >= deadlineAt)) return ordered;
+		if (ordered.length < 2 || signal?.aborted || (deadlineAt !== undefined && Date.now() >= deadlineAt)) return ordered;
 		const head = ordered.slice(0, LOCAL_RERANK_CANDIDATES);
 		const started = performance.now();
-		// The model runs on the CPU and cannot be interrupted, so the caller's deadline is raced instead: past it the
-		// order comes back unchanged and the late scores are dropped. A model failure keeps the order too.
+		// The model runs on the CPU and cannot be interrupted, so the caller's deadline and cancel are raced instead:
+		// either one brings the order back unchanged and the late scores are dropped. A model failure keeps the order too.
 		const scoring = this.embedder.scoreRelevance(query, head.map((r) => r.entry.text)).catch((error: unknown) => {
 			log.warn("local reranker failed; recall keeps the local ranking order", { error }, {
 				event_name: "memory.retriever_rerank.diagnostic", file: "packages/memory/src/engine/retrieval/retriever-rerank.ts",
@@ -626,19 +627,27 @@ Object.assign(MemoryRetriever.prototype, {
 			});
 			return undefined;
 		});
-		const logits = deadlineAt === undefined ? await scoring : await Promise.race([
+		const stops = [signal, deadlineAt === undefined ? undefined : AbortSignal.timeout(Math.max(0, deadlineAt - Date.now()))]
+			.filter((each): each is AbortSignal => each !== undefined);
+		const logits = stops.length === 0 ? await scoring : await Promise.race([
 			scoring,
 			new Promise<undefined>((resolve) => {
-				AbortSignal.timeout(Math.max(0, deadlineAt - Date.now())).addEventListener("abort", () => resolve(undefined), { once: true });
+				AbortSignal.any(stops).addEventListener("abort", () => resolve(undefined), { once: true });
 			}),
 		]);
-		if (!logits) return ordered;
-		const rescored = head.map((candidate, index) => {
-			const model = 1 / (1 + Math.exp(-(logits[index] ?? 0)));
-			const score = clamp01(LOCAL_RERANK_MODEL_WEIGHT * model + (1 - LOCAL_RERANK_MODEL_WEIGHT) * candidate.score, 0);
+		if (!logits || signal?.aborted) return ordered;
+		// The model only reorders the head: the head's own scores, highest first, go to its new order, so the later
+		// stages (which sort the whole pool by score) keep the head above the candidates the model did not see.
+		const blended = head.map((candidate, index) => ({
+			candidate,
+			value: LOCAL_RERANK_MODEL_WEIGHT / (1 + Math.exp(-(logits[index] ?? 0))) + (1 - LOCAL_RERANK_MODEL_WEIGHT) * candidate.score,
+		}));
+		blended.sort((a, b) => b.value - a.value || a.candidate.entry.id.localeCompare(b.candidate.entry.id));
+		const slots = head.map((candidate) => candidate.score).sort((a, b) => b - a);
+		const rescored = blended.map(({ candidate }, index) => {
+			const score = slots[index] ?? candidate.score;
 			return { ...candidate, score, rerankScore: score, sources: { ...candidate.sources, reranked: { score } } };
 		});
-		rescored.sort((a, b) => b.score - a.score || a.entry.id.localeCompare(b.entry.id));
 		log.debug("local reranker applied", { scored: head.length, duration_ms: performance.now() - started }, {
 			event_name: "memory.retriever_rerank.diagnostic", file: "packages/memory/src/engine/retrieval/retriever-rerank.ts",
 			function: "rerankLocalModel", site_id: "retrieval.retriever-rerank.rerankLocalModel.applied",
