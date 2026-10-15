@@ -1,6 +1,6 @@
 import { createServer, type IncomingHttpHeaders, type Server } from "node:http";
 import { once } from "node:events";
-import { afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import type { Embedder } from "../../../../packages/memory/src/engine/extraction/embedding-provider-client.ts";
 import { createTestEmbedder } from "../../../apps/mem-claw/helpers/test-db.ts";
 import { createRetriever, DEFAULT_RETRIEVAL_CONFIG } from "../../../../packages/memory/src/engine/retrieval/retriever.ts";
@@ -149,8 +149,10 @@ describe("the recall search against a Sno-style reranker over real HTTP", () => 
 		const { calls, url } = await reranker(() => ({ status: 401, body: { error: "Unauthorized" } }));
 		const retriever = createRetriever(storeOf(manyCandidates().slice(0, 4)) as never, embedder, { warn: () => {} },
 			{ ...BASE_CONFIG, rerank: "cross-encoder", rerankProvider: "sno-gpu", rerankEndpoint: url, rerankApiKey: "user-key" });
+		const local = vi.spyOn(retriever as unknown as { rerankLightweight: () => unknown }, "rerankLightweight");
 		const results = await retriever.retrieve({ query: QUERY, limit: 3 });
 		expect(calls.length).toBeGreaterThanOrEqual(1);
+		expect(local).toHaveBeenCalled();
 		expect(results.map((r) => r.entry.id)).toEqual(["m0", "m1", "m2"]);
 	}, 30_000);
 

@@ -170,6 +170,8 @@ Object.assign(MemoryRetriever.prototype, {
 		// (consumers slice by provider, not by which fallback fired). No provider named
 		// means no remote ranker was chosen; the label never names one nobody picked.
 		const provider = this.config.rerankProvider ?? "none";
+		// A remote ranker that cannot answer leaves Sno's own default ranking where it was: the local ranker, not raw fusion order.
+		const unranked = (): RetrievalResult[] => (provider === "sno-gpu" ? this.rerankLightweight(candidates, queryVector) : candidates);
 		// Branch on configuration before selecting the runtime strategy.
 		// This used to warn once per process and rank with the local cosine blend instead. A
 		// deployment then ran a ranker nobody had chosen, and the single warning line was the
@@ -197,7 +199,7 @@ Object.assign(MemoryRetriever.prototype, {
 		if (!rerankEndpoint) {
 			// Log operational context for retrieval ranking without changing control flow.
 			log.warn("rerank skipped: no endpoint for provider", { provider }, { event_name: "memory.retriever_rerank.diagnostic", file: "packages/memory/src/engine/retrieval/retriever-rerank.ts", function: "rerank", site_id: "retrieval.retriever-rerank.rerank.6fbc6b3a22" });
-			return { candidates, fallback: { reason: "no_endpoint", provider } };
+			return { candidates: unranked(), fallback: { reason: "no_endpoint", provider } };
 		}
 		// Compute the normalized rerank timeout ms once so later retrieval scoring checks use one value.
 		const rerankTimeoutMs = this.config.rerankTimeoutMs ?? DEFAULT_RERANK_TIMEOUT_MS;
@@ -256,7 +258,7 @@ Object.assign(MemoryRetriever.prototype, {
 				window: DEFAULT_MAX_CONTEXT_TOKENS,
 				templateTokens: RERANK_PROMPT_TEMPLATE_TOKENS,
 			}, { event_name: "memory.retriever_rerank.diagnostic", file: "packages/memory/src/engine/retrieval/retriever-rerank.ts", function: "rerank", site_id: "retrieval.retriever-rerank.rerank.query_over_window" });
-			return { candidates, fallback: { reason: "query_over_window", provider } };
+			return { candidates: unranked(), fallback: { reason: "query_over_window", provider } };
 		}
 		let truncatedCandidates = 0;
 		const rerankTexts = toRerank.map((c) => {
@@ -424,7 +426,7 @@ Object.assign(MemoryRetriever.prototype, {
 				}
 				for (const outcome of settled) {
 					if (outcome.status === "fulfilled" && typeof outcome.value === "string") {
-						return { candidates, fallback: { reason: outcome.value, provider } };
+						return { candidates: unranked(), fallback: { reason: outcome.value, provider } };
 					}
 				}
 				// Iterate deterministically so retrieval ranking output order remains stable.
@@ -528,7 +530,7 @@ Object.assign(MemoryRetriever.prototype, {
 					attempts: RERANK_TRANSIENT_ATTEMPTS,
 				}, { event_name: "memory.retriever_rerank.diagnostic", file: "packages/memory/src/engine/retrieval/retriever-rerank.ts", function: "rerank", site_id: "retrieval.retriever-rerank.rerank.2c5fc67dbf" });
 			}
-			return { candidates, fallback: { reason, provider } };
+			return { candidates: unranked(), fallback: { reason, provider } };
 		}
 	},
 
