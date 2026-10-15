@@ -35,11 +35,18 @@ interface Loaded {
 	dispose(): Promise<void>;
 }
 
-export class LocalReranker {
-	private loading: Promise<Loaded | undefined> | undefined;
-	private loaded: Loaded | undefined;
+// One model per process: the memory service makes an embedder, and so a reranker, per registered agent, and each copy
+// would hold about 255 MB. The first instance's options load it; the last dispose releases it.
+let shared: Loaded | undefined;
+let sharedLoading: Promise<Loaded | undefined> | undefined;
+let sharedUsers = 0;
 
-	constructor(private readonly options: LocalRerankerOptions) {}
+export class LocalReranker {
+	private disposed = false;
+
+	constructor(private readonly options: LocalRerankerOptions) {
+		sharedUsers += 1;
+	}
 
 	/**
 	 * Raw relevance logits, one per text (higher is more relevant), or undefined while the model is not loaded.
@@ -47,8 +54,9 @@ export class LocalReranker {
 	 */
 	async score(query: string, texts: string[]): Promise<number[] | undefined> {
 		if (texts.length === 0) return [];
-		if (!this.loaded) {
-			this.loading ??= this.load();
+		const loaded = shared;
+		if (!loaded) {
+			sharedLoading ??= this.load();
 			return undefined;
 		}
 		// Five pairs per run: one run of fifteen long pairs held about 200 MB of activations, five hold about 30 MB, for
@@ -56,18 +64,23 @@ export class LocalReranker {
 		const scores: number[] = [];
 		for (let start = 0; start < texts.length; start += SCORE_BATCH) {
 			const batch = texts.slice(start, start + SCORE_BATCH);
-			const inputs = this.loaded.tokenizer(new Array(batch.length).fill(query), {
+			const inputs = loaded.tokenizer(new Array(batch.length).fill(query), {
 				text_pair: batch, padding: true, truncation: true, max_length: 512,
 			});
-			const { logits } = await this.loaded.model(inputs);
+			const { logits } = await loaded.model(inputs);
 			for (let i = 0; i < batch.length; i += 1) scores.push(Number(logits.data[i] ?? 0));
 		}
 		return scores;
 	}
 
 	async dispose(): Promise<void> {
-		const loaded = this.loaded ?? (await this.loading?.catch(() => undefined));
-		this.loaded = undefined;
+		if (this.disposed) return;
+		this.disposed = true;
+		sharedUsers = Math.max(0, sharedUsers - 1);
+		if (sharedUsers > 0) return;
+		const loaded = shared ?? (await sharedLoading?.catch(() => undefined));
+		shared = undefined;
+		sharedLoading = undefined;
 		await loaded?.dispose();
 	}
 
@@ -92,7 +105,7 @@ export class LocalReranker {
 				session_options: { ...LOCAL_EMBEDDING_SESSION_OPTIONS_DEFAULT, interOpNumThreads: 1,
 					...(this.options.intraOpNumThreads ? { intraOpNumThreads: this.options.intraOpNumThreads } : {}) },
 			});
-			this.loaded = {
+			shared = {
 				tokenizer: (texts, options) => tokenizer(texts, options),
 				model: (inputs) => model(inputs as Record<string, unknown>) as Promise<{ logits: { data: ArrayLike<number> } }>,
 				dispose: async () => { await model.dispose(); },
@@ -101,7 +114,7 @@ export class LocalReranker {
 				event_name: "embedder.local_reranker.loaded", file: "packages/embedder/src/local-reranker.ts",
 				function: "load", site_id: "embedder.local_reranker.loaded",
 			});
-			return this.loaded;
+			return shared;
 		} catch (error) {
 			log.warn("local reranker unavailable; recall keeps its cosine order", { error, offline: this.options.offline === true }, {
 				event_name: "embedder.local_reranker.unavailable", file: "packages/embedder/src/local-reranker.ts",

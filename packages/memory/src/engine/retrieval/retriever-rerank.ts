@@ -617,7 +617,21 @@ Object.assign(MemoryRetriever.prototype, {
 		if (ordered.length < 2 || (deadlineAt !== undefined && Date.now() >= deadlineAt)) return ordered;
 		const head = ordered.slice(0, LOCAL_RERANK_CANDIDATES);
 		const started = performance.now();
-		const logits = await this.embedder.scoreRelevance(query, head.map((r) => r.entry.text));
+		// The model runs on the CPU and cannot be interrupted, so the caller's deadline is raced instead: past it the
+		// order comes back unchanged and the late scores are dropped. A model failure keeps the order too.
+		const scoring = this.embedder.scoreRelevance(query, head.map((r) => r.entry.text)).catch((error: unknown) => {
+			log.warn("local reranker failed; recall keeps the local ranking order", { error }, {
+				event_name: "memory.retriever_rerank.diagnostic", file: "packages/memory/src/engine/retrieval/retriever-rerank.ts",
+				function: "rerankLocalModel", site_id: "retrieval.retriever-rerank.rerankLocalModel.failed",
+			});
+			return undefined;
+		});
+		const logits = deadlineAt === undefined ? await scoring : await Promise.race([
+			scoring,
+			new Promise<undefined>((resolve) => {
+				AbortSignal.timeout(Math.max(0, deadlineAt - Date.now())).addEventListener("abort", () => resolve(undefined), { once: true });
+			}),
+		]);
 		if (!logits) return ordered;
 		const rescored = head.map((candidate, index) => {
 			const model = 1 / (1 + Math.exp(-(logits[index] ?? 0)));

@@ -57,3 +57,22 @@ it("keeps the cosine order until the model has loaded, then ranks the answering 
 	expect(await first("Where does Nate's sister work?")).toBe("sister-job");
 	expect(await first("Nate 的狗几岁了？")).toBe("dog-age");
 }, 300_000);
+
+it("returns the local ranking order at the caller's deadline when the model is slower, and when it fails", async () => {
+	const order = async (scoreRelevance: Embedder["scoreRelevance"], rerankDeadlineAt?: number) => {
+		const slowOrFailing = Object.create(embedder, { scoreRelevance: { value: scoreRelevance } }) as Embedder;
+		const retriever = createRetriever(store, slowOrFailing, { warn: () => {} }, { ...DEFAULT_RETRIEVAL_CONFIG, rerank: "lightweight", minScore: 0, hardMinScore: 0 });
+		const started = Date.now();
+		const results = await retriever.retrieve({ query: "Where does Nate's sister work?", limit: 3, ...(rerankDeadlineAt ? { rerankDeadlineAt } : {}) });
+		return { first: results[0]?.entry.id, ms: Date.now() - started };
+	};
+	// A model that would put the answer first, three seconds late.
+	const late = (_query: string, texts: string[]) => new Promise<number[]>((resolve) => {
+		setTimeout(() => resolve(texts.map((text) => (text.includes("nurse") ? 10 : -10))), 3_000);
+	});
+	const slow = await order(late, Date.now() + 200);
+	expect(slow.first).toBe("sister-talk");
+	expect(slow.ms).toBeLessThan(2_000);
+	const failed = await order(() => Promise.reject(new Error("onnx session failed")));
+	expect(failed.first).toBe("sister-talk");
+}, 60_000);
