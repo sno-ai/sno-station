@@ -74,6 +74,7 @@ REM 是你的 agent 做梦的方式：夜里它们加强记忆，并把当天学
 | 更新对你的了解 | 固定规则 | 你的 Claude Code | 你的 Claude Code |
 | 识别已完成的任务 | 字词比对 | 你的 Claude Code | 你的 Claude Code |
 | 处理互相矛盾的记忆 | 两条都保留 | 你的 Claude Code | Sno 的记忆模型 |
+| 排列要召回的记忆 | 在你的电脑上 | 在你的电脑上 | Sno 的重排序服务 |
 | 总结这一天 | 不生成 model reflection；仍保留 local session memory | 同左 | 同左 |
 | 把“明天”换成日期 | 不调用模型 | 你的 Claude Code | 你的 Claude Code |
 

@@ -78,6 +78,7 @@ Mode-specific defaults are:
 | Updating what it knows about you | Fixed rules | Your Claude Code | Your Claude Code |
 | Spotting finished tasks | Word matching | Your Claude Code | Your Claude Code |
 | Settling memories that disagree | Keep both | Your Claude Code | Sno's memory model |
+| Ranking what to recall | On your machine | On your machine | Sno's reranker |
 | Summing up the day | No model reflection; local session memory remains | Same | Same |
 | Turning "tomorrow" into a date | No model call | Your Claude Code | Your Claude Code |
 
