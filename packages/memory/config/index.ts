@@ -275,9 +275,8 @@ export const LIGHTWEIGHT_COSINE_WEIGHT = 0.9;
 
 /**
  * How many of the local ranking's first candidates the local reranker model scores, and its share of their blended score
- * (the rest is the local ranking score). Measured 2026-10-15 on LoCoMo (1,540 questions, the product store and
- * retriever): the right memory first went from 41% to 49% in English and from 35% to 46% in a Chinese translation;
- * scoring 15 candidates gave the same result as 30 in half the time.
+ * (the rest is the local ranking score). The model puts the memory that answers above near misses the cosine order
+ * keeps on top, in English and Chinese alike; scoring more candidates than this found no more answers and took longer.
  */
 export const LOCAL_RERANK_CANDIDATES = 15;
 export const LOCAL_RERANK_MODEL_WEIGHT = 0.5;
