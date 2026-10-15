@@ -148,6 +148,38 @@ describe("the recall search against a Sno-style reranker over real HTTP", () => 
 		}
 	}, 30_000);
 
+	it("a reply whose body breaks after the 200 header is logged as a failed attempt, not a success", async () => {
+		let calls = 0;
+		server = createServer(async (request, response) => {
+			let raw = "";
+			for await (const chunk of request) raw += chunk;
+			calls += 1;
+			response.writeHead(200, { "content-type": "application/json" });
+			if (calls === 1) {
+				response.write('[{"index":');
+				setTimeout(() => response.destroy(), 20);
+				return;
+			}
+			response.end(JSON.stringify(scoreByText((JSON.parse(raw) as { texts: string[] }).texts)));
+		});
+		server.listen(0, "127.0.0.1");
+		await once(server, "listening");
+		const address = server.address();
+		if (!address || typeof address === "string") throw new Error("no port");
+		const written: string[] = [];
+		const spy = vi.spyOn(process.stderr, "write").mockImplementation((chunk) => { written.push(String(chunk)); return true; });
+		try {
+			const retriever = createRetriever(storeOf(manyCandidates().slice(0, 4)) as never, embedder, { warn: () => {} },
+				{ ...BASE_CONFIG, rerank: "cross-encoder", rerankEndpoint: `http://127.0.0.1:${address.port}/rerank`, rerankApiKey: "machine-key" });
+			await retriever.retrieve({ query: QUERY, limit: 3 });
+		} finally {
+			spy.mockRestore();
+		}
+		const records = written.join("").split("\n").filter((line) => line.includes("rerank.request.completed")).map((line) => JSON.parse(line.slice(line.indexOf("{"))));
+		expect(calls).toBe(2);
+		expect(records.map((r) => [r.attributes.outcome, r.attributes.status_code])).toEqual([["failed", 200], ["success", 200]]);
+	}, 30_000);
+
 	it("a Sno reranker that refuses the key (401) does not break the recall: the results come back in their earlier order", async () => {
 		const { calls, url } = await reranker(() => ({ status: 401, body: { error: "Unauthorized" } }));
 		const retriever = createRetriever(storeOf(manyCandidates().slice(0, 4)) as never, embedder, { warn: () => {} },
