@@ -59,8 +59,7 @@ export class LocalReranker {
 			sharedLoading ??= this.load();
 			return undefined;
 		}
-		// Five pairs per run: one run of fifteen long pairs held about 200 MB of activations, five hold about 30 MB, for
-		// about 8% more time (measured 2026-10-15).
+		// Five pairs per run: one run of all the long pairs holds several times the memory, for little time saved.
 		const scores: number[] = [];
 		for (let start = 0; start < texts.length; start += SCORE_BATCH) {
 			// A caller that stopped waiting (deadline, cancel) gets no further runs.
