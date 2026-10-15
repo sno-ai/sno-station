@@ -112,3 +112,12 @@ it("the model only reorders the candidates it scored: the first results all come
 		big.cleanup();
 	}
 }, 120_000);
+
+it("a recall with no deadline still stops waiting for a stalled model at the configured rerank timeout", async () => {
+	const stalled = Object.create(embedder, { scoreRelevance: { value: () => new Promise<number[]>(() => {}) } }) as Embedder;
+	const retriever = createRetriever(store, stalled, { warn: () => {} }, { ...DEFAULT_RETRIEVAL_CONFIG, rerank: "lightweight", minScore: 0, hardMinScore: 0, rerankTimeoutMs: 1_000 });
+	const started = Date.now();
+	const results = await retriever.retrieve({ query: "Where does Nate's sister work?", limit: 3 });
+	expect(Date.now() - started).toBeLessThan(5_000);
+	expect(results[0]?.entry.id).toBe("sister-talk");
+}, 30_000);

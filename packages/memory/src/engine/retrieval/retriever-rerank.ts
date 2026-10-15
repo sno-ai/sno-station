@@ -627,13 +627,12 @@ Object.assign(MemoryRetriever.prototype, {
 			});
 			return undefined;
 		});
-		const stops = [signal, deadlineAt === undefined ? undefined : AbortSignal.timeout(Math.max(0, deadlineAt - Date.now()))]
-			.filter((each): each is AbortSignal => each !== undefined);
-		const logits = stops.length === 0 ? await scoring : await Promise.race([
+		// A caller with no deadline (an explicit recall, a forget) gets the configured rerank timeout, as the remote path does.
+		const budgetMs = deadlineAt === undefined ? (this.config.rerankTimeoutMs ?? DEFAULT_RERANK_TIMEOUT_MS) : Math.max(0, deadlineAt - Date.now());
+		const stop = signal ? AbortSignal.any([signal, AbortSignal.timeout(budgetMs)]) : AbortSignal.timeout(budgetMs);
+		const logits = await Promise.race([
 			scoring,
-			new Promise<undefined>((resolve) => {
-				AbortSignal.any(stops).addEventListener("abort", () => resolve(undefined), { once: true });
-			}),
+			new Promise<undefined>((resolve) => stop.addEventListener("abort", () => resolve(undefined), { once: true })),
 		]);
 		if (!logits || signal?.aborted) return ordered;
 		// The model only reorders the head: the head's own scores, highest first, go to its new order, so the later
