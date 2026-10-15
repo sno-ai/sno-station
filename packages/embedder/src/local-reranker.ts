@@ -36,7 +36,7 @@ interface Loaded {
 }
 
 // One model per process: the memory service makes an embedder, and so a reranker, per registered agent, and each copy
-// would hold about 255 MB. The first instance's options load it; the last dispose releases it.
+// would hold its own copy of the model. The first instance's options load it; the last dispose releases it.
 let shared: Loaded | undefined;
 let sharedLoading: Promise<Loaded | undefined> | undefined;
 let sharedUsers = 0;
