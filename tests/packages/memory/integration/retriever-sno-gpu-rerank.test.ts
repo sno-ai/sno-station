@@ -163,12 +163,12 @@ describe("the recall search against a Sno-style reranker over real HTTP", () => 
 		await expect(retriever.retrieve({ query: QUERY, limit: 3 })).rejects.toThrow(/status 401/);
 	}, 30_000);
 
-	it("a Sno reranker that hangs does not hold the search past the budget the caller gives it (2 s): the earlier order comes back", async () => {
+	it("a Sno reranker that hangs does not hold the search past the deadline the caller gives it (2 s from now): the earlier order comes back", async () => {
 		const { calls, url } = await reranker(() => ({ status: 200, body: [], delayMs: 20_000 }));
 		const retriever = createRetriever(storeOf(manyCandidates().slice(0, 4)) as never, embedder, { warn: () => {} },
 			{ ...BASE_CONFIG, rerank: "cross-encoder", rerankProvider: "sno-gpu", rerankEndpoint: url, rerankApiKey: "user-key" });
 		const started = Date.now();
-		const results = await retriever.retrieve({ query: QUERY, limit: 3, rerankBudgetMs: 2_000 });
+		const results = await retriever.retrieve({ query: QUERY, limit: 3, rerankDeadlineAt: Date.now() + 2_000 });
 		const elapsed = Date.now() - started;
 		expect(results.map((r) => r.entry.id)).toEqual(["m0", "m1", "m2"]);
 		expect(elapsed).toBeLessThan(3_500);
@@ -180,25 +180,36 @@ describe("the recall search against a Sno-style reranker over real HTTP", () => 
 		const retriever = createRetriever(storeOf(manyCandidates().slice(0, 4)) as never, embedder, { warn: () => {} },
 			{ ...BASE_CONFIG, rerank: "cross-encoder", rerankProvider: "sno-gpu", rerankEndpoint: url, rerankApiKey: "user-key" });
 		const started = Date.now();
-		const results = await retriever.retrieve({ query: QUERY, limit: 3, rerankBudgetMs: 2_000 });
+		const results = await retriever.retrieve({ query: QUERY, limit: 3, rerankDeadlineAt: Date.now() + 2_000 });
 		expect(results.map((r) => r.entry.id)).toEqual(["m0", "m1", "m2"]);
 		expect(Date.now() - started).toBeLessThan(3_500);
 		expect(calls).toHaveLength(1);
 	}, 30_000);
 
-	it("a caller with a longer deadline (session start) gives the reranker a larger budget: an answer after 2.5 s is used", async () => {
+	it("a caller with a longer deadline (session start) leaves the reranker more time: an answer after 2.5 s is used", async () => {
 		const { url } = await reranker((_n, texts) => ({ status: 200, body: scoreByText(texts), delayMs: 2_500 }));
 		const retriever = createRetriever(storeOf(manyCandidates()) as never, embedder, { warn: () => {} },
 			{ ...BASE_CONFIG, rerank: "cross-encoder", rerankProvider: "sno-gpu", rerankEndpoint: url, rerankApiKey: "user-key", rerankMaxCandidates: 64 });
-		const results = await retriever.retrieve({ query: QUERY, limit: 3, rerankBudgetMs: 4_000 });
+		const results = await retriever.retrieve({ query: QUERY, limit: 3, rerankDeadlineAt: Date.now() + 4_000 });
 		expect(results[0]?.entry.id).toBe("m60");
+	}, 30_000);
+
+	it("when the embedding and search already used up the reranker's share of the deadline, recall ranks locally at once", async () => {
+		const { calls, url } = await reranker((_n, texts) => ({ status: 200, body: scoreByText(texts), delayMs: 3_000 }));
+		const retriever = createRetriever(storeOf(manyCandidates().slice(0, 4)) as never, embedder, { warn: () => {} },
+			{ ...BASE_CONFIG, rerank: "cross-encoder", rerankProvider: "sno-gpu", rerankEndpoint: url, rerankApiKey: "user-key" });
+		const started = Date.now();
+		const results = await retriever.retrieve({ query: QUERY, limit: 3, rerankDeadlineAt: Date.now() - 500 });
+		expect(results.map((r) => r.entry.id)).toEqual(["m0", "m1", "m2"]);
+		expect(Date.now() - started).toBeLessThan(2_000);
+		expect(calls.length).toBeLessThanOrEqual(1);
 	}, 30_000);
 
 	it("a budget that is not a whole number of milliseconds (half of an odd timeout) does not break the recall", async () => {
 		const { url } = await reranker((_n, texts) => ({ status: 200, body: scoreByText(texts) }));
 		const retriever = createRetriever(storeOf(manyCandidates()) as never, embedder, { warn: () => {} },
 			{ ...BASE_CONFIG, rerank: "cross-encoder", rerankProvider: "sno-gpu", rerankEndpoint: url, rerankApiKey: "user-key", rerankMaxCandidates: 64 });
-		const results = await retriever.retrieve({ query: QUERY, limit: 3, rerankBudgetMs: 2_000.5 });
+		const results = await retriever.retrieve({ query: QUERY, limit: 3, rerankDeadlineAt: Date.now() + 2_000.5 });
 		expect(results[0]?.entry.id).toBe("m60");
 	}, 30_000);
 

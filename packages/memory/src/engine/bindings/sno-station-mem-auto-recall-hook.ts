@@ -143,6 +143,7 @@ export async function onBeforeAgentStart(
 	// Isolate the plugin lifecycle operation that can fail because of runtime I/O or input shape.
 	try {
 		const timeoutMs = config.autoRecallTimeoutMs;
+		const rerankDeadlineAt = Date.now() + timeoutMs / 2;
 		const recallController = new AbortController();
 		const timeoutPromise = new Promise<never>((_, reject) => {
 			timeoutHandle = setTimeout(() => {
@@ -166,7 +167,7 @@ export async function onBeforeAgentStart(
 				limit: recallLimit,
 				scopeFilter,
 				signal: signal ? AbortSignal.any([signal, recallController.signal]) : recallController.signal,
-				rerankBudgetMs: timeoutMs / 2,
+				rerankDeadlineAt,
 				sessionId,
 				nowMs: suppressionNow,
 			}),
