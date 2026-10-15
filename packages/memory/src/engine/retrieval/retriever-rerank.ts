@@ -23,6 +23,8 @@ import {
 	LIGHTWEIGHT_COSINE_WEIGHT,
 	LIGHTWEIGHT_FUSION_WEIGHT,
 	LIGHTWEIGHT_RERANK_PENALTY,
+	LOCAL_RERANK_CANDIDATES,
+	LOCAL_RERANK_MODEL_WEIGHT,
 	RERANK_BLEND_CROSS,
 	RERANK_BLEND_VECTOR,
 	RetrievalError,
@@ -174,7 +176,7 @@ Object.assign(MemoryRetriever.prototype, {
 		}
 		if (this.config.rerank === "lightweight" || !this.config.rerankApiKey) {
 			// Lightweight is the configured strategy, not a degradation — no fallback signal.
-			return { candidates: this.rerankLightweight(candidates, queryVector) };
+			return { candidates: await this.rerankLocalModel(query, this.rerankLightweight(candidates, queryVector), options?.deadlineAt) };
 		}
 
 		// Compute the normalized rerank endpoint once so later retrieval scoring checks use one value.
@@ -600,6 +602,34 @@ Object.assign(MemoryRetriever.prototype, {
 			if (diff !== 0) return diff;
 			return a.entry.id.localeCompare(b.entry.id);
 		});
+	},
+
+	/**
+	 * The local reranker model rescores the first candidates of the local ranking. Their order is unchanged while the
+	 * model is not loaded yet (the first call starts loading it) and when the caller's deadline has already passed.
+	 */
+	async rerankLocalModel(
+		this: MemoryRetrieverInternals,
+		query: string,
+		ordered: RetrievalResult[],
+		deadlineAt?: number,
+	): Promise<RetrievalResult[]> {
+		if (ordered.length < 2 || (deadlineAt !== undefined && Date.now() >= deadlineAt)) return ordered;
+		const head = ordered.slice(0, LOCAL_RERANK_CANDIDATES);
+		const started = performance.now();
+		const logits = await this.embedder.scoreRelevance(query, head.map((r) => r.entry.text));
+		if (!logits) return ordered;
+		const rescored = head.map((candidate, index) => {
+			const model = 1 / (1 + Math.exp(-(logits[index] ?? 0)));
+			const score = clamp01(LOCAL_RERANK_MODEL_WEIGHT * model + (1 - LOCAL_RERANK_MODEL_WEIGHT) * candidate.score, 0);
+			return { ...candidate, score, rerankScore: score, sources: { ...candidate.sources, reranked: { score } } };
+		});
+		rescored.sort((a, b) => b.score - a.score || a.entry.id.localeCompare(b.entry.id));
+		log.debug("local reranker applied", { scored: head.length, duration_ms: performance.now() - started }, {
+			event_name: "memory.retriever_rerank.diagnostic", file: "packages/memory/src/engine/retrieval/retriever-rerank.ts",
+			function: "rerankLocalModel", site_id: "retrieval.retriever-rerank.rerankLocalModel.applied",
+		});
+		return [...rescored, ...ordered.slice(head.length)];
 	},
 
 	getRerankSourceScore(this: MemoryRetrieverInternals, result: RetrievalResult): number {

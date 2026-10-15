@@ -273,6 +273,15 @@ export const LIGHTWEIGHT_FUSION_WEIGHT = 0.1;
 /** Cosine-similarity weight in local cosine-blend rerank */
 export const LIGHTWEIGHT_COSINE_WEIGHT = 0.9;
 
+/**
+ * How many of the local ranking's first candidates the local reranker model scores, and its share of their blended score
+ * (the rest is the local ranking score). Measured 2026-10-15 on LoCoMo (1,540 questions, the product store and
+ * retriever): the right memory first went from 41% to 49% in English and from 35% to 46% in a Chinese translation;
+ * scoring 15 candidates gave the same result as 30 in half the time.
+ */
+export const LOCAL_RERANK_CANDIDATES = 15;
+export const LOCAL_RERANK_MODEL_WEIGHT = 0.5;
+
 /** Default timeout for rerank API calls in milliseconds */
 export const DEFAULT_RERANK_TIMEOUT_MS = 15_000;
 
