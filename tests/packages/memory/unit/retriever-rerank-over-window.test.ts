@@ -54,7 +54,6 @@ function crossEncoderRetriever(): MemoryRetrieverInternals {
 	const retriever = createRetriever(noopStore, wordEmbedder, { warn: () => {} }, {
 		...DEFAULT_RETRIEVAL_CONFIG,
 		rerank: "cross-encoder",
-		rerankProvider: "tei",
 		rerankApiKey: "test-key",
 		rerankEndpoint: "http://127.0.0.1:9/rerank",
 		rerankTimeoutMs: 1_000,

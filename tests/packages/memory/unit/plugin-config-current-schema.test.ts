@@ -39,7 +39,6 @@ describe("plugin config current schema", () => {
 			mode: "rem-enhanced",
 			retrieval: {
 				rerank: "cross-encoder",
-				rerankProvider: "tei",
 				rerankEndpoint: "http://127.0.0.1:19213/rerank",
 			},
 		});
@@ -58,29 +57,17 @@ describe("plugin config current schema", () => {
 		}
 	});
 
-	it("refuses a remote ranker that names no provider instead of calling one by default", () => {
-		const result = pluginConfigSchema.safeParse({
-			mode: "rem-enhanced",
-			retrieval: { rerank: "cross-encoder", rerankApiKey: "test-rerank-key" },
-		});
-		expect(result.success).toBe(false);
-		const paths = result.success ? [] : result.error.issues.map((issue) => issue.path);
-		expect(paths).toContainEqual(["retrieval", "rerankProvider"]);
-	});
-
-	it("loads a remote ranker once provider, endpoint and key are all named", () => {
+	it("loads Sno's reranker once its address and key are named", () => {
 		const parsed = pluginConfigSchema.parse({
 			mode: "agent-native",
 			retrieval: {
 				rerank: "cross-encoder",
-				rerankProvider: "tei",
 				rerankEndpoint: "http://127.0.0.1:19213/rerank",
 				rerankApiKey: "test-rerank-key",
 			},
 		});
 		expect(parsed.retrieval).toMatchObject({
 			rerank: "cross-encoder",
-			rerankProvider: "tei",
 			rerankEndpoint: "http://127.0.0.1:19213/rerank",
 		});
 	});
