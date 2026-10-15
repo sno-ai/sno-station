@@ -102,19 +102,14 @@ interface RerankReply {
 	data?: unknown;
 }
 
-async function fetchRerankWithRetry(send: () => Promise<Response>, stop?: AbortSignal): Promise<RerankReply> {
+async function fetchRerankWithRetry(send: () => Promise<RerankReply>, stop?: AbortSignal): Promise<RerankReply> {
 	let lastError: unknown;
 	for (let attempt = 1; attempt <= RERANK_TRANSIENT_ATTEMPTS; attempt += 1) {
 		let retryDelayMs = RERANK_TRANSIENT_BACKOFF_MS * attempt;
 		try {
-			const response = await send();
-			if (response.ok) {
-				// Reading the body is part of the attempt: a socket that dies after the 200
-				// header rejects here, not in fetch(), and must be retried the same way
-				// (PR #225 review).
-				const data: unknown = await response.json();
-				return { response, data };
-			}
+			const reply = await send();
+			const { response } = reply;
+			if (response.ok) return reply;
 			if (!RERANK_TRANSIENT_STATUSES.has(response.status) || attempt === RERANK_TRANSIENT_ATTEMPTS) {
 				return { response };
 			}
@@ -278,7 +273,7 @@ Object.assign(MemoryRetriever.prototype, {
 					// in 30 minutes beside 8 concurrent searches, each on the first miss.
 					// Every HTTP attempt leaves one record (outcome, status, time, how many texts, and the request id the GPU side
 					// also logs): a retry and a refusal are told apart from the log.
-					const sendAttempt = async (): Promise<Response> => {
+					const sendAttempt = async (): Promise<RerankReply> => {
 						const clientRequestId = randomUUID();
 						const attemptStarted = performance.now();
 						let outcome = "failed";
@@ -292,8 +287,16 @@ Object.assign(MemoryRetriever.prototype, {
 								signal: AbortSignal.any([AbortSignal.timeout(rerankTimeoutMs), stepStop]),
 							});
 							statusCode = attempt.status;
-							outcome = attempt.ok ? "success" : "http_error";
-							return attempt;
+							if (!attempt.ok) {
+								outcome = "http_error";
+								return { response: attempt };
+							}
+							// Reading the body is part of the attempt: a socket that dies after the 200
+							// header rejects here, not in fetch(), and must be retried the same way
+							// (PR #225 review), and logged as the failure it is.
+							const data: unknown = await attempt.json();
+							outcome = "success";
+							return { response: attempt, data };
 						} catch (error) {
 							outcome = isRerankTimeout(error) ? "timeout" : "failed";
 							throw error;
