@@ -143,8 +143,9 @@ async function fetchRerankWithRetry(send: () => Promise<Response>, stop?: AbortS
 		if (stop?.aborted) throw lastError;
 		// The wait ends early when the step's deadline passes: a Retry-After of several seconds must not hold the search.
 		await new Promise<void>((resolve) => {
-			const timer = setTimeout(resolve, retryDelayMs);
-			stop?.addEventListener("abort", () => { clearTimeout(timer); resolve(); }, { once: true });
+			const onAbort = () => { clearTimeout(timer); resolve(); };
+			const timer = setTimeout(() => { stop?.removeEventListener("abort", onAbort); resolve(); }, retryDelayMs);
+			stop?.addEventListener("abort", onAbort, { once: true });
 		});
 		if (stop?.aborted) throw lastError;
 	}
