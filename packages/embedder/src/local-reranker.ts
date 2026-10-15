@@ -41,9 +41,11 @@ interface Loaded {
 // One model per process: the memory service makes an embedder, and so a reranker, per registered agent, and each copy
 // would hold its own copy of the model. The first instance's options load it; the last dispose releases it.
 let shared: Loaded | undefined;
-let sharedLoading: Promise<Loaded | undefined> | undefined;
+let sharedLoading = false;
 let sharedUsers = 0;
 let sharedFailedAt: number | undefined;
+// Bumped by the last release: a load still downloading then discards its model instead of publishing it.
+let releases = 0;
 // Scoring under way on the shared model, possibly for a caller that stopped waiting: the release waits for it.
 const scoring = new Set<Promise<number[] | undefined>>();
 
@@ -64,9 +66,12 @@ export class LocalReranker {
 		if (!loaded) {
 			if (sharedFailedAt !== undefined && Date.now() - sharedFailedAt >= LOAD_RETRY_MS) {
 				sharedFailedAt = undefined;
-				sharedLoading = undefined;
+				sharedLoading = false;
 			}
-			sharedLoading ??= this.load();
+			if (!sharedLoading) {
+				sharedLoading = true;
+				void this.load();
+			}
 			return undefined;
 		}
 		const run = this.run(loaded, query, texts, signal);
@@ -83,9 +88,10 @@ export class LocalReranker {
 		this.disposed = true;
 		sharedUsers = Math.max(0, sharedUsers - 1);
 		if (sharedUsers > 0) return;
-		const loaded = shared ?? (await sharedLoading?.catch(() => undefined));
+		const loaded = shared;
+		releases += 1;
 		shared = undefined;
-		sharedLoading = undefined;
+		sharedLoading = false;
 		sharedFailedAt = undefined;
 		await Promise.allSettled(scoring);
 		await loaded?.dispose();
@@ -108,6 +114,7 @@ export class LocalReranker {
 	}
 
 	private async load(): Promise<Loaded | undefined> {
+		const release = releases;
 		const { AutoModelForSequenceClassification, AutoTokenizer, env } = await import("@huggingface/transformers");
 		// The transformers env is process-wide and the embedder sets it for its own model; this load sets its own
 		// revision and restores everything afterwards. It runs after a query was embedded, so the embedder's load is done.
@@ -128,6 +135,10 @@ export class LocalReranker {
 				session_options: { ...LOCAL_EMBEDDING_SESSION_OPTIONS_DEFAULT, interOpNumThreads: 1,
 					...(this.options.intraOpNumThreads ? { intraOpNumThreads: this.options.intraOpNumThreads } : {}) },
 			});
+			if (release !== releases) {
+				await model.dispose();
+				return undefined;
+			}
 			shared = {
 				tokenizer: (texts, options) => tokenizer(texts, options),
 				model: (inputs) => model(inputs as Record<string, unknown>) as Promise<{ logits: { data: ArrayLike<number> } }>,
