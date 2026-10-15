@@ -30,12 +30,10 @@ import type {
  *
  * - `missing_api_key`: cross-encoder configured but no rerankApiKey set;
  *   call routes through the lightweight cosine path instead.
- * - `no_endpoint`: provider has no known endpoint in `RERANK_DEFAULT_ENDPOINTS`
- *   and `rerankEndpoint` was not overridden; rerank was skipped.
- * - `http_error`: provider responded with a non-OK status that did not map
- *   to a fatal RetrievalError (i.e. degraded but not propagated).
- * - `invalid_response`: provider HTTP 2xx but response shape did not parse.
- * - `timeout`: the per-call AbortSignal fired before the provider responded.
+ * - `no_endpoint`: no reranker address (`rerankEndpoint`) was set; rerank was skipped.
+ * - `http_error`: the reranker responded with a non-OK status.
+ * - `invalid_response`: the reranker answered HTTP 2xx but the response shape did not parse.
+ * - `timeout`: the per-call AbortSignal fired before the reranker responded.
  * - `request_error`: any other thrown error inside the fetch path.
  * - `query_over_window`: the query alone fills the reranker's per-pair token window, so no
  *   document could be sent with it. Nothing was requested.
@@ -53,7 +51,6 @@ export type RerankFallbackReason = (typeof RERANK_FALLBACK_REASONS)[number];
 
 export interface RerankFallbackSignal {
 	reason: RerankFallbackReason;
-	provider: string;
 }
 
 export interface RerankOutcome {

@@ -4,13 +4,7 @@ import { createHash, randomUUID } from "node:crypto";
  * @boundary Prototype-mounted MemoryRetriever methods; no constructor state ownership.
  */
 
-import {
-	buildRerankHttpError,
-	buildRerankRequest,
-	parseRerankResponse,
-	type RerankItem,
-	RERANK_DEFAULT_ENDPOINTS,
-} from "./retrieval-rerank-provider";
+import { buildRerankRequest, parseRerankResponse, type RerankItem } from "./retrieval-rerank-provider";
 import { dotProduct, log } from "./retrieval-scoring-utils";
 import {
 	MemoryRetriever,
@@ -22,7 +16,6 @@ import type { RetrievalResult } from "./retriever-dependencies";
 import {
 	clamp01,
 	DEFAULT_RERANK_BATCH_CONCURRENCY,
-	DEFAULT_RERANK_MODEL,
 	DEFAULT_RERANK_TIMEOUT_MS,
 	DEFAULT_TEI_RERANK_MAX_CANDIDATES,
 	DEFAULT_MAX_CONTEXT_TOKENS,
@@ -166,13 +159,8 @@ Object.assign(MemoryRetriever.prototype, {
 		if (this.config.rerank === "none") {
 			return { candidates };
 		}
-		// Compute the provider name even on the lightweight/skip paths so the
-		// telemetry attribution stays consistent with the cross-encoder branch
-		// (consumers slice by provider, not by which fallback fired). No provider named
-		// means no remote ranker was chosen; the label never names one nobody picked.
-		const provider = this.config.rerankProvider ?? "none";
-		// A remote ranker that cannot answer leaves Sno's own default ranking where it was: the local ranker, not raw fusion order.
-		const unranked = (): RetrievalResult[] => (provider === "sno-gpu" ? this.rerankLightweight(candidates, queryVector) : candidates);
+		// Sno's reranker that cannot answer leaves the default ranking where it was: the local ranker, not raw fusion order.
+		const unranked = (): RetrievalResult[] => this.rerankLightweight(candidates, queryVector);
 		// Branch on configuration before selecting the runtime strategy.
 		// This used to warn once per process and rank with the local cosine blend instead. A
 		// deployment then ran a ranker nobody had chosen, and the single warning line was the
@@ -185,7 +173,7 @@ Object.assign(MemoryRetriever.prototype, {
 		if (this.config.rerank === "cross-encoder" && !this.config.rerankApiKey) {
 			// Surface this invalid retrieval ranking state as an explicit typed failure.
 			throw new RetrievalError(
-				`rerank "cross-encoder" requires retrieval.rerankApiKey (provider: ${provider}); ` +
+				'rerank "cross-encoder" requires retrieval.rerankApiKey; ' +
 					'set the key, or set retrieval.rerank to "lightweight" to choose the local ranker',
 			);
 		}
@@ -195,29 +183,25 @@ Object.assign(MemoryRetriever.prototype, {
 		}
 
 		// Compute the normalized rerank endpoint once so later retrieval scoring checks use one value.
-		const rerankEndpoint = this.config.rerankEndpoint ?? RERANK_DEFAULT_ENDPOINTS[provider];
+		const rerankEndpoint = this.config.rerankEndpoint;
 		// Guard rerank endpoint here so the remaining retrieval scoring path works with normalized inputs.
 		if (!rerankEndpoint) {
 			// Log operational context for retrieval ranking without changing control flow.
-			log.warn("rerank skipped: no endpoint for provider", { provider }, { event_name: "memory.retriever_rerank.diagnostic", file: "packages/memory/src/engine/retrieval/retriever-rerank.ts", function: "rerank", site_id: "retrieval.retriever-rerank.rerank.6fbc6b3a22" });
-			return { candidates: unranked(), fallback: { reason: "no_endpoint", provider } };
+			log.warn("rerank skipped: no reranker address", {}, { event_name: "memory.retriever_rerank.diagnostic", file: "packages/memory/src/engine/retrieval/retriever-rerank.ts", function: "rerank", site_id: "retrieval.retriever-rerank.rerank.6fbc6b3a22" });
+			return { candidates: unranked(), fallback: { reason: "no_endpoint" } };
 		}
 		// Compute the normalized rerank timeout ms once so later retrieval scoring checks use one value.
 		const rerankTimeoutMs = this.config.rerankTimeoutMs ?? DEFAULT_RERANK_TIMEOUT_MS;
-		// The step ends when the caller's deadline passes. Sno's reranker also has a budget for the whole step, retries
-		// included: the time the caller says it must be done by (what is left of its own deadline, however long the embedding
+		// The step ends when the caller's deadline passes, and it has a budget for the whole step, retries included: the time the caller says it must be done by (what is left of its own deadline, however long the embedding
 		// and search before it took), else the configured timeout once (not once per attempt), so a reranker that never
 		// answers holds an explicit recall for one timeout, not three.
-		const stepEnds = [options?.signal, provider === "sno-gpu" ? AbortSignal.timeout(Math.max(0, Math.floor(options?.deadlineAt === undefined ? rerankTimeoutMs : options.deadlineAt - Date.now()))) : undefined].filter(
-			(each): each is AbortSignal => each !== undefined,
-		);
-		const stepStop = stepEnds.length > 0 ? AbortSignal.any(stepEnds) : undefined;
+		const stepBudget = AbortSignal.timeout(Math.max(0, Math.floor(options?.deadlineAt === undefined ? rerankTimeoutMs : options.deadlineAt - Date.now())));
+		const stepStop = options?.signal ? AbortSignal.any([options.signal, stepBudget]) : stepBudget;
 		// Read the key once: the guard above narrowed it, and a property access does not carry that
 		// narrowing into the per-batch closure below.
 		const rerankApiKey = this.config.rerankApiKey;
 
-		// Some rerank deployments (e.g. this repo's Sno TEI reranker, hard-capped
-		// at 50) reject an over-limit batch outright instead of truncating it —
+		// Sno's reranker is hard-capped at 50 texts per request and rejects an over-limit batch outright instead of truncating it —
 		// so the candidates go out in batches of that size and every one of them
 		// is scored. Until 2026-09-06 only the first batch was sent and the rest
 		// were carried through at a penalised score, which pinned the reranker's
@@ -225,16 +209,6 @@ Object.assign(MemoryRetriever.prototype, {
 		// that cap decided the answer more often than the ranker did.
 		// `rerankMaxCandidates` stays the TOTAL an operator allows out to the reranker; the
 		// batch size is the transport's own per-request limit.
-		//
-		// The cap is applied to every provider, not only to the one whose limit it was measured
-		// against. It used to read `provider === "tei"`, which made the guarantee depend on a
-		// deploy script setting that name: with the provider left unset the code sends the whole
-		// pool in one request, and the self-hosted ranker answers a 51-text request with
-		// `"too many texts: max 50, got 51"` — an HTTP 400 the error path files as "reranker
-		// unavailable", so every search silently serves raw fusion order. Hosted providers
-		// document much higher limits, so capping them here only sends more, smaller requests,
-		// which the waves below already run four at a time. Costing a little parallelism is the
-		// cheap side of this trade; a silent whole-search degradation is the expensive one.
 		const maxCandidates = this.config.rerankMaxCandidates;
 		const overCap = maxCandidates !== undefined && candidates.length > maxCandidates;
 		const toRerank = overCap ? candidates.slice(0, maxCandidates) : candidates;
@@ -260,7 +234,7 @@ Object.assign(MemoryRetriever.prototype, {
 				window: DEFAULT_MAX_CONTEXT_TOKENS,
 				templateTokens: RERANK_PROMPT_TEMPLATE_TOKENS,
 			}, { event_name: "memory.retriever_rerank.diagnostic", file: "packages/memory/src/engine/retrieval/retriever-rerank.ts", function: "rerank", site_id: "retrieval.retriever-rerank.rerank.query_over_window" });
-			return { candidates: unranked(), fallback: { reason: "query_over_window", provider } };
+			return { candidates: unranked(), fallback: { reason: "query_over_window" } };
 		}
 		let truncatedCandidates = 0;
 		const rerankTexts = toRerank.map((c) => {
@@ -293,22 +267,19 @@ Object.assign(MemoryRetriever.prototype, {
 				// raw fusion order.
 				for (let pass = 0; ; pass += 1) {
 					const { headers, body } = buildRerankRequest(
-						provider,
 						rerankApiKey,
-						this.config.rerankModel ?? DEFAULT_RERANK_MODEL,
 						query,
 						batchTexts,
-						batchTexts.length,
 					);
 
 					// Await the retrieval ranking dependency before deriving downstream state. A
 					// transient transport failure is retried inside this batch's wave slot (issue
 					// #222): measured 2026-09-10, 5 of 1,542 searches fell back on an idle box and 56
 					// in 30 minutes beside 8 concurrent searches, each on the first miss.
-					// Every HTTP attempt leaves one record (outcome, status, time, how many texts, and for Sno's reranker the request
-					// id the GPU side also logs), whichever provider answers: a retry and a refusal are told apart from the log.
+					// Every HTTP attempt leaves one record (outcome, status, time, how many texts, and the request id the GPU side
+					// also logs): a retry and a refusal are told apart from the log.
 					const sendAttempt = async (): Promise<Response> => {
-						const clientRequestId = provider === "sno-gpu" ? randomUUID() : undefined;
+						const clientRequestId = randomUUID();
 						const attemptStarted = performance.now();
 						let outcome = "failed";
 						let statusCode: number | undefined;
@@ -316,9 +287,9 @@ Object.assign(MemoryRetriever.prototype, {
 							const attempt = await fetch(rerankEndpoint, {
 								method: "POST",
 								// A new request id for every HTTP attempt, so a retry can be told apart in the GPU logs.
-								headers: clientRequestId ? { ...headers, "X-Request-ID": clientRequestId } : headers,
+								headers: { ...headers, "X-Request-ID": clientRequestId },
 								body: JSON.stringify(body),
-								signal: stepStop ? AbortSignal.any([AbortSignal.timeout(rerankTimeoutMs), stepStop]) : AbortSignal.timeout(rerankTimeoutMs),
+								signal: AbortSignal.any([AbortSignal.timeout(rerankTimeoutMs), stepStop]),
 							});
 							statusCode = attempt.status;
 							outcome = attempt.ok ? "success" : "http_error";
@@ -328,8 +299,8 @@ Object.assign(MemoryRetriever.prototype, {
 							throw error;
 						} finally {
 							log.info("Rerank request completed", {
-								outcome, provider, status_code: statusCode ?? "unavailable", duration_ms: performance.now() - attemptStarted,
-								texts_sent: batchTexts.length, ...(clientRequestId ? { client_request_id: clientRequestId } : {}),
+								outcome, status_code: statusCode ?? "unavailable", duration_ms: performance.now() - attemptStarted,
+								texts_sent: batchTexts.length, client_request_id: clientRequestId,
 							}, { event_name: "rerank.request.completed", file: "packages/memory/src/engine/retrieval/retriever-rerank.ts", function: "runBatch", site_id: "rerank.request.completed" });
 						}
 					};
@@ -338,16 +309,9 @@ Object.assign(MemoryRetriever.prototype, {
 					// Guard response.ok here so the remaining retrieval scoring path works with normalized inputs.
 					if (!response.ok) {
 						const retryAfter = response.headers.get("retry-after");
-						const fatalError = buildRerankHttpError(response.status);
-						// Guard guard condition here so the remaining retrieval scoring path works with normalized inputs.
-						// A credential Sno's own reranker refuses must not break recall: it falls back like a 429 or 500 does,
-						// the way the model calls fall back to the host. A third-party key the user chose still fails loudly.
-						if (fatalError && provider !== "sno-gpu") {
-							// Surface this invalid retrieval ranking state as an explicit typed failure.
-							throw fatalError;
-						}
+						// A refused key (401/403) falls back like a 429 or 500 does, the way the model calls fall back to the host.
 						// Capture the response body for diagnostics — a bare status code
-						// previously left every non-fatal rerank failure (e.g. a provider's
+						// previously left every non-fatal rerank failure (e.g. the reranker's
 						// undocumented batch-size or text-length limit) impossible to
 						// diagnose without manually reproducing the request by hand.
 						const errorBody = await response.text().catch(() => "<unreadable body>");
@@ -397,12 +361,11 @@ Object.assign(MemoryRetriever.prototype, {
 						return "http_error";
 					}
 
-					const parsed = parseRerankResponse(provider, data);
+					const parsed = parseRerankResponse(data);
 					// Guard items here so the remaining retrieval scoring path works with normalized inputs.
 					if (!parsed) {
 						// Log operational context for retrieval ranking without changing control flow.
 						log.warn("rerank API returned unparseable response", {
-							provider,
 							endpoint_hash: createHash("sha256").update(rerankEndpoint).digest("hex"),
 							batchStart: start,
 						}, { event_name: "memory.retriever_rerank.diagnostic", file: "packages/memory/src/engine/retrieval/retriever-rerank.ts", function: "runBatch", site_id: "retrieval.retriever-rerank.runBatch.4429b8bd8a" });
@@ -448,7 +411,7 @@ Object.assign(MemoryRetriever.prototype, {
 				}
 				for (const outcome of settled) {
 					if (outcome.status === "fulfilled" && typeof outcome.value === "string") {
-						return { candidates: unranked(), fallback: { reason: outcome.value, provider } };
+						return { candidates: unranked(), fallback: { reason: outcome.value } };
 					}
 				}
 				// Iterate deterministically so retrieval ranking output order remains stable.
@@ -477,10 +440,8 @@ Object.assign(MemoryRetriever.prototype, {
 				// Handle the absent-value case explicitly before the happy path depends on it.
 				if (!candidate) continue;
 				const sourceScore = this.getRerankSourceScore(candidate);
-				let crossScore = item.score;
-				if (provider === "tei" || provider === "sno-gpu") {
-					crossScore = 1 / (1 + Math.exp(-item.score));
-				}
+				// Sno's reranker returns raw logits; the sigmoid puts them on the 0..1 scale the blend expects.
+				const crossScore = 1 / (1 + Math.exp(-item.score));
 				const blendedScore = clamp01(
 					crossScore * blendCross + sourceScore * blendVector,
 					0,
@@ -519,7 +480,6 @@ Object.assign(MemoryRetriever.prototype, {
 				totalCandidateCount: candidates.length,
 				sentToRerankCount: toRerank.length,
 				returnedCount: reranked.length,
-				provider,
 			}, { event_name: "memory.retriever_rerank.diagnostic", file: "packages/memory/src/engine/retrieval/retriever-rerank.ts", function: "rerank", site_id: "retrieval.retriever-rerank.rerank.7847c6248a" });
 			return {
 				candidates: merged.length > 0 ? merged : candidates,
@@ -552,7 +512,7 @@ Object.assign(MemoryRetriever.prototype, {
 					attempts: RERANK_TRANSIENT_ATTEMPTS,
 				}, { event_name: "memory.retriever_rerank.diagnostic", file: "packages/memory/src/engine/retrieval/retriever-rerank.ts", function: "rerank", site_id: "retrieval.retriever-rerank.rerank.2c5fc67dbf" });
 			}
-			return { candidates: unranked(), fallback: { reason, provider } };
+			return { candidates: unranked(), fallback: { reason } };
 		}
 	},
 

@@ -341,7 +341,6 @@ Object.assign(MemoryRetriever.prototype, {
 			? {
 					...rerankOutcome.stats,
 					rerankFallbackReason: rerankOutcome.fallback.reason,
-					rerankFallbackProvider: rerankOutcome.fallback.provider,
 				}
 			: rerankOutcome.stats;
 		trace?.endStage(
