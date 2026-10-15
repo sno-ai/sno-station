@@ -86,6 +86,7 @@ REM is how your agents dream: overnight they strengthen their memory and settle 
 | Updating what it knows about you | Fixed rules | Host model | Host model |
 | Spotting finished tasks | Word matching | Host model | Host model |
 | Settling memories that disagree | Keep both memories | Host model | Sno's memory model |
+| Ranking what to recall | On your machine | On your machine | Sno's reranker |
 | Summing up the day | No model reflection; local session memory remains | Same as Local First | Host model |
 | Turning "tomorrow" into a date | No model call | Host model | Host model |
 

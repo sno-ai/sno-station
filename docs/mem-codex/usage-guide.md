@@ -80,6 +80,7 @@ REM is how your agents dream: overnight they strengthen their memory and settle 
 | Updating what it knows about you | Fixed rules | Your Codex CLI | Your Codex CLI |
 | Spotting finished tasks | Word matching | Your Codex CLI | Your Codex CLI |
 | Settling memories that disagree | Keep both memories | Your Codex CLI | Sno's memory model |
+| Ranking what to recall | On your machine | On your machine | Sno's reranker |
 | Summing up the day | No model reflection; local session memory remains | Same | Same |
 | Turning "tomorrow" into a date | No model call | Your Codex CLI | Your Codex CLI |
 
