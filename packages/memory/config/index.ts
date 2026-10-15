@@ -286,7 +286,7 @@ export const DEFAULT_RERANK_BATCH_CONCURRENCY = 4;
  * unavailable" — so getting this wrong degrades every call to local ranking with no visible
  * error.
  */
-export const DEFAULT_TEI_RERANK_MAX_CANDIDATES = 50;
+export const RERANK_TEXTS_PER_REQUEST = 50;
 
 
 // =============================================================================

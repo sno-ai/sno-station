@@ -17,7 +17,7 @@ import {
 	clamp01,
 	DEFAULT_RERANK_BATCH_CONCURRENCY,
 	DEFAULT_RERANK_TIMEOUT_MS,
-	DEFAULT_TEI_RERANK_MAX_CANDIDATES,
+	RERANK_TEXTS_PER_REQUEST,
 	DEFAULT_MAX_CONTEXT_TOKENS,
 	RERANK_PROMPT_TEMPLATE_TOKENS,
 	LIGHTWEIGHT_COSINE_WEIGHT,
@@ -208,7 +208,7 @@ Object.assign(MemoryRetriever.prototype, {
 		const overCap = maxCandidates !== undefined && candidates.length > maxCandidates;
 		const toRerank = overCap ? candidates.slice(0, maxCandidates) : candidates;
 		const beyondCap = overCap ? candidates.slice(maxCandidates) : [];
-		const batchSize = DEFAULT_TEI_RERANK_MAX_CANDIDATES;
+		const batchSize = RERANK_TEXTS_PER_REQUEST;
 
 		// The reranker scores the query and ONE document together in a single token window, and
 		// refuses the WHOLE request when any pair exceeds it — "no candidates were scored or
