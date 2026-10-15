@@ -29,14 +29,14 @@ it("reads store, recall, rerank and telemetry from one settings file", () => {
 		mode: "rem-enhanced",
 		store: { path: join(root, "existing.sqlite") },
 		recall: { prompt: { limit: 7, timeoutMs: 7000 } },
-		rerank: { mode: "cross-encoder", provider: "tei", endpoint: "http://127.0.0.1:19213/rerank", apiKey: "rerank-key-present" },
+		rerank: { mode: "lightweight", timeoutMs: 9000 },
 		telemetry: { memoryUsage: { enabled: false } },
 	});
 	const read = readSettings();
 	expect(read.mode).toBe("rem-enhanced");
 	expect(read.store.path).toBe(join(root, "existing.sqlite"));
 	expect(read.recall.prompt).toMatchObject({ limit: 7, timeoutMs: 7000 });
-	expect(read.rerank).toMatchObject({ mode: "cross-encoder", provider: "tei", apiKey: "rerank-key-present" });
+	expect(read.rerank).toMatchObject({ mode: "lightweight", timeoutMs: 9000 });
 	expect(read.telemetry.memoryUsage.enabled).toBe(false);
 	expect(read).toEqual(settings);
 });

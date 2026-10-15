@@ -38,47 +38,29 @@ function settingsFor(mode: Settings["mode"], patch: Partial<Settings> = {}): Set
 describe("which settings send recall ranking to Sno GPU", () => {
 	it("REM Enhanced with a Sno GPU key ranks on Sno's reranker at the Sno GPU address, with the same key", () => {
 		const retrieval = settingsToPluginConfig(settingsFor("rem-enhanced")).retrieval;
-		expect(retrieval).toMatchObject({ rerank: "cross-encoder", rerankProvider: "sno-gpu", rerankEndpoint: "https://rt3-llm.sno.ai/rerank", rerankApiKey: "machine-key" });
+		expect(retrieval).toMatchObject({ rerank: "cross-encoder", rerankEndpoint: "https://rt3-llm.sno.ai/rerank", rerankApiKey: "machine-key" });
 	});
 
-	it("the other two modes and a missing key rank locally and never name a Sno GPU key", () => {
+	it("the other two modes and a missing key rank locally and never name a Sno GPU key or address", () => {
 		for (const mode of ["local-first", "agent-native"] as const) {
 			const retrieval = settingsToPluginConfig(settingsFor(mode)).retrieval;
 			expect(retrieval.rerank).toBe("lightweight");
-			expect(retrieval.rerankProvider).toBeUndefined();
 			expect(retrieval.rerankEndpoint).toBeUndefined();
 		}
 		const chosenLocal = settingsToPluginConfig(settingsFor("rem-enhanced", { rerank: { ...defaultSettings().rerank, mode: "lightweight" } })).retrieval;
 		expect(chosenLocal).toMatchObject({ rerank: "lightweight", rerankApiKey: "" });
-		expect(chosenLocal.rerankProvider).toBeUndefined();
 		expect(chosenLocal.rerankEndpoint).toBeUndefined();
 		const noKey = settingsToPluginConfig(settingsFor("rem-enhanced", { snoGpu: { baseUrl: "https://rt3-llm.sno.ai", apiKey: "" } })).retrieval;
 		expect(noKey.rerank).toBe("lightweight");
-		expect(noKey.rerankProvider).toBeUndefined();
-	});
-
-	it("a third-party key or address left in the rerank settings is never sent to Sno GPU", () => {
-		const own = settingsFor("rem-enhanced", { rerank: { ...defaultSettings().rerank, apiKey: "voyage-key", endpoint: "https://api.voyageai.com/v1/rerank" } });
-		expect(settingsToPluginConfig(own).retrieval).toMatchObject({ rerankProvider: "sno-gpu", rerankEndpoint: "https://rt3-llm.sno.ai/rerank", rerankApiKey: "machine-key" });
 	});
 
 	it("a Sno GPU address that is not a valid address does not stop the memory service: recall ranks locally", () => {
 		for (const baseUrl of ["rt3-llm.sno.ai", ""]) {
 			const retrieval = settingsToPluginConfig(settingsFor("rem-enhanced", { snoGpu: { baseUrl, apiKey: "machine-key" } })).retrieval;
 			expect(retrieval).toMatchObject({ rerank: "lightweight", rerankApiKey: "" });
-			expect(retrieval.rerankProvider).toBeUndefined();
 		}
 	});
 
-	it("a user's own third-party reranker settings are passed through untouched", () => {
-		const own = settingsFor("rem-enhanced", { rerank: { ...defaultSettings().rerank, mode: "cross-encoder", provider: "voyage", apiKey: "voyage-key" } });
-		expect(settingsToPluginConfig(own).retrieval).toMatchObject({ rerank: "cross-encoder", rerankProvider: "voyage", rerankApiKey: "voyage-key" });
-		const lightweight = settingsFor("rem-enhanced", { rerank: { ...defaultSettings().rerank, mode: "lightweight", provider: "voyage", endpoint: "https://api.voyageai.com/v1/rerank" } });
-		const retrieval = settingsToPluginConfig(lightweight).retrieval;
-		expect(retrieval.rerank).toBe("lightweight");
-		expect(retrieval.rerankProvider).toBeUndefined();
-		expect(retrieval.rerankEndpoint).toBeUndefined();
-	});
 });
 
 describe("the recall search against a Sno-style reranker over real HTTP", () => {
@@ -121,7 +103,7 @@ describe("the recall search against a Sno-style reranker over real HTTP", () => 
 	it("sends 64 candidates as batches of 50 and 14 with the source labels, a Bearer key and a UUID per request, and the best answer wins", async () => {
 		const { calls, url } = await reranker((_n, texts) => ({ status: 200, body: scoreByText(texts) }));
 		const retriever = createRetriever(storeOf(manyCandidates()) as never, embedder, { warn: () => {} },
-			{ ...BASE_CONFIG, rerank: "cross-encoder", rerankProvider: "sno-gpu", rerankEndpoint: url, rerankApiKey: "machine-key", rerankMaxCandidates: 64 });
+			{ ...BASE_CONFIG, rerank: "cross-encoder", rerankEndpoint: url, rerankApiKey: "machine-key", rerankMaxCandidates: 64 });
 		const results = await retriever.retrieve({ query: QUERY, limit: 3 });
 		expect(results[0]?.entry.id).toBe("m60");
 		expect(calls.map((c) => c.texts.length).sort((a, b) => b - a)).toEqual([50, 14]);
@@ -140,7 +122,7 @@ describe("the recall search against a Sno-style reranker over real HTTP", () => 
 		const { calls, url } = await reranker((n, texts) => n === 1 ? { status: 503 } : { status: 200, body: scoreByText(texts) });
 		const few = manyCandidates().slice(0, 4);
 		const retriever = createRetriever(storeOf(few) as never, embedder, { warn: () => {} },
-			{ ...BASE_CONFIG, rerank: "cross-encoder", rerankProvider: "sno-gpu", rerankEndpoint: url, rerankApiKey: "machine-key" });
+			{ ...BASE_CONFIG, rerank: "cross-encoder", rerankEndpoint: url, rerankApiKey: "machine-key" });
 		await retriever.retrieve({ query: QUERY, limit: 3 });
 		expect(calls.length).toBeGreaterThanOrEqual(2);
 		expect(calls[0]?.headers["x-request-id"]).toMatch(UUID_V4);
@@ -154,7 +136,7 @@ describe("the recall search against a Sno-style reranker over real HTTP", () => 
 		try {
 			const { calls, url } = await reranker((n, texts) => n === 1 ? { status: 503 } : { status: 200, body: scoreByText(texts) });
 			const retriever = createRetriever(storeOf(manyCandidates().slice(0, 4)) as never, embedder, { warn: () => {} },
-				{ ...BASE_CONFIG, rerank: "cross-encoder", rerankProvider: "sno-gpu", rerankEndpoint: url, rerankApiKey: "machine-key" });
+				{ ...BASE_CONFIG, rerank: "cross-encoder", rerankEndpoint: url, rerankApiKey: "machine-key" });
 			await retriever.retrieve({ query: QUERY, limit: 3 });
 			const records = written.join("").split("\n").filter((line) => line.includes("rerank.request.completed")).map((line) => JSON.parse(line.slice(line.indexOf("{"))));
 			expect(calls.length).toBe(2);
@@ -169,7 +151,7 @@ describe("the recall search against a Sno-style reranker over real HTTP", () => 
 	it("a Sno reranker that refuses the key (401) does not break the recall: the results come back in their earlier order", async () => {
 		const { calls, url } = await reranker(() => ({ status: 401, body: { error: "Unauthorized" } }));
 		const retriever = createRetriever(storeOf(manyCandidates().slice(0, 4)) as never, embedder, { warn: () => {} },
-			{ ...BASE_CONFIG, rerank: "cross-encoder", rerankProvider: "sno-gpu", rerankEndpoint: url, rerankApiKey: "user-key" });
+			{ ...BASE_CONFIG, rerank: "cross-encoder", rerankEndpoint: url, rerankApiKey: "user-key" });
 		const local = vi.spyOn(retriever as unknown as { rerankLightweight: () => unknown }, "rerankLightweight");
 		const results = await retriever.retrieve({ query: QUERY, limit: 3 });
 		expect(calls.length).toBeGreaterThanOrEqual(1);
@@ -177,17 +159,10 @@ describe("the recall search against a Sno-style reranker over real HTTP", () => 
 		expect(results.map((r) => r.entry.id)).toEqual(["m0", "m1", "m2"]);
 	}, 30_000);
 
-	it("a third-party reranker that refuses the key (401) still fails the recall loudly", async () => {
-		const { url } = await reranker(() => ({ status: 401, body: { error: "Unauthorized" } }));
-		const retriever = createRetriever(storeOf(manyCandidates().slice(0, 4)) as never, embedder, { warn: () => {} },
-			{ ...BASE_CONFIG, rerank: "cross-encoder", rerankProvider: "voyage", rerankEndpoint: url, rerankApiKey: "k" });
-		await expect(retriever.retrieve({ query: QUERY, limit: 3 })).rejects.toThrow(/status 401/);
-	}, 30_000);
-
 	it("a Sno reranker that hangs does not hold the search past the deadline the caller gives it (2 s from now): the earlier order comes back", async () => {
 		const { calls, url } = await reranker(() => ({ status: 200, body: [], delayMs: 20_000 }));
 		const retriever = createRetriever(storeOf(manyCandidates().slice(0, 4)) as never, embedder, { warn: () => {} },
-			{ ...BASE_CONFIG, rerank: "cross-encoder", rerankProvider: "sno-gpu", rerankEndpoint: url, rerankApiKey: "user-key" });
+			{ ...BASE_CONFIG, rerank: "cross-encoder", rerankEndpoint: url, rerankApiKey: "user-key" });
 		const started = Date.now();
 		const results = await retriever.retrieve({ query: QUERY, limit: 3, rerankDeadlineAt: Date.now() + 2_000 });
 		const elapsed = Date.now() - started;
@@ -199,7 +174,7 @@ describe("the recall search against a Sno-style reranker over real HTTP", () => 
 	it("a 429 that asks to wait 5 s does not hold the search past the 2 s budget", async () => {
 		const { calls, url } = await reranker(() => ({ status: 429, headers: { "retry-after": "5" } }));
 		const retriever = createRetriever(storeOf(manyCandidates().slice(0, 4)) as never, embedder, { warn: () => {} },
-			{ ...BASE_CONFIG, rerank: "cross-encoder", rerankProvider: "sno-gpu", rerankEndpoint: url, rerankApiKey: "user-key" });
+			{ ...BASE_CONFIG, rerank: "cross-encoder", rerankEndpoint: url, rerankApiKey: "user-key" });
 		const started = Date.now();
 		const results = await retriever.retrieve({ query: QUERY, limit: 3, rerankDeadlineAt: Date.now() + 2_000 });
 		expect(results.map((r) => r.entry.id)).toEqual(["m0", "m1", "m2"]);
@@ -210,7 +185,7 @@ describe("the recall search against a Sno-style reranker over real HTTP", () => 
 	it("a caller with a longer deadline (session start) leaves the reranker more time: an answer after 2.5 s is used", async () => {
 		const { url } = await reranker((_n, texts) => ({ status: 200, body: scoreByText(texts), delayMs: 2_500 }));
 		const retriever = createRetriever(storeOf(manyCandidates()) as never, embedder, { warn: () => {} },
-			{ ...BASE_CONFIG, rerank: "cross-encoder", rerankProvider: "sno-gpu", rerankEndpoint: url, rerankApiKey: "user-key", rerankMaxCandidates: 64 });
+			{ ...BASE_CONFIG, rerank: "cross-encoder", rerankEndpoint: url, rerankApiKey: "user-key", rerankMaxCandidates: 64 });
 		const results = await retriever.retrieve({ query: QUERY, limit: 3, rerankDeadlineAt: Date.now() + 4_000 });
 		expect(results[0]?.entry.id).toBe("m60");
 	}, 30_000);
@@ -218,7 +193,7 @@ describe("the recall search against a Sno-style reranker over real HTTP", () => 
 	it("when the embedding and search already used up the reranker's share of the deadline, recall ranks locally at once", async () => {
 		const { calls, url } = await reranker((_n, texts) => ({ status: 200, body: scoreByText(texts), delayMs: 3_000 }));
 		const retriever = createRetriever(storeOf(manyCandidates().slice(0, 4)) as never, embedder, { warn: () => {} },
-			{ ...BASE_CONFIG, rerank: "cross-encoder", rerankProvider: "sno-gpu", rerankEndpoint: url, rerankApiKey: "user-key" });
+			{ ...BASE_CONFIG, rerank: "cross-encoder", rerankEndpoint: url, rerankApiKey: "user-key" });
 		const started = Date.now();
 		const results = await retriever.retrieve({ query: QUERY, limit: 3, rerankDeadlineAt: Date.now() - 500 });
 		expect(results.map((r) => r.entry.id)).toEqual(["m0", "m1", "m2"]);
@@ -229,7 +204,7 @@ describe("the recall search against a Sno-style reranker over real HTTP", () => 
 	it("a budget that is not a whole number of milliseconds (half of an odd timeout) does not break the recall", async () => {
 		const { url } = await reranker((_n, texts) => ({ status: 200, body: scoreByText(texts) }));
 		const retriever = createRetriever(storeOf(manyCandidates()) as never, embedder, { warn: () => {} },
-			{ ...BASE_CONFIG, rerank: "cross-encoder", rerankProvider: "sno-gpu", rerankEndpoint: url, rerankApiKey: "user-key", rerankMaxCandidates: 64 });
+			{ ...BASE_CONFIG, rerank: "cross-encoder", rerankEndpoint: url, rerankApiKey: "user-key", rerankMaxCandidates: 64 });
 		const results = await retriever.retrieve({ query: QUERY, limit: 3, rerankDeadlineAt: Date.now() + 2_000.5 });
 		expect(results[0]?.entry.id).toBe("m60");
 	}, 30_000);
@@ -237,7 +212,7 @@ describe("the recall search against a Sno-style reranker over real HTTP", () => 
 	it("an explicit recall is held by a reranker that never answers for one timeout in total, not one per attempt", async () => {
 		const { calls, url } = await reranker(() => ({ status: 200, body: [], delayMs: 60_000 }));
 		const retriever = createRetriever(storeOf(manyCandidates().slice(0, 4)) as never, embedder, { warn: () => {} },
-			{ ...BASE_CONFIG, rerank: "cross-encoder", rerankProvider: "sno-gpu", rerankEndpoint: url, rerankApiKey: "user-key", rerankTimeoutMs: 1_500 });
+			{ ...BASE_CONFIG, rerank: "cross-encoder", rerankEndpoint: url, rerankApiKey: "user-key", rerankTimeoutMs: 1_500 });
 		const started = Date.now();
 		const results = await retriever.retrieve({ query: QUERY, limit: 3 });
 		expect(results.map((r) => r.entry.id)).toEqual(["m0", "m1", "m2"]);
@@ -248,7 +223,7 @@ describe("the recall search against a Sno-style reranker over real HTTP", () => 
 	it("an explicit recall waits for a Sno reranker that answers after 2.5 s and is ranked by it", async () => {
 		const { url } = await reranker((_n, texts) => ({ status: 200, body: scoreByText(texts), delayMs: 2_500 }));
 		const retriever = createRetriever(storeOf(manyCandidates()) as never, embedder, { warn: () => {} },
-			{ ...BASE_CONFIG, rerank: "cross-encoder", rerankProvider: "sno-gpu", rerankEndpoint: url, rerankApiKey: "user-key", rerankMaxCandidates: 64 });
+			{ ...BASE_CONFIG, rerank: "cross-encoder", rerankEndpoint: url, rerankApiKey: "user-key", rerankMaxCandidates: 64 });
 		const results = await retriever.retrieve({ query: QUERY, limit: 3 });
 		expect(results[0]?.entry.id).toBe("m60");
 	}, 30_000);
@@ -256,20 +231,11 @@ describe("the recall search against a Sno-style reranker over real HTTP", () => 
 	it("the caller's deadline stops the reranker request and it is not sent again", async () => {
 		const { calls, url } = await reranker(() => ({ status: 200, body: [], delayMs: 20_000 }));
 		const retriever = createRetriever(storeOf(manyCandidates().slice(0, 4)) as never, embedder, { warn: () => {} },
-			{ ...BASE_CONFIG, rerank: "cross-encoder", rerankProvider: "voyage", rerankEndpoint: url, rerankApiKey: "k" });
+			{ ...BASE_CONFIG, rerank: "cross-encoder", rerankEndpoint: url, rerankApiKey: "k" });
 		const started = Date.now();
 		await expect(retriever.retrieve({ query: QUERY, limit: 3, signal: AbortSignal.timeout(900) })).rejects.toBeDefined();
 		expect(Date.now() - started).toBeLessThan(3_000);
 		await new Promise((resolve) => setTimeout(resolve, 500));
 		expect(calls).toHaveLength(1);
-	}, 30_000);
-
-	it("a third-party reranker (voyage) gets no Sno labels", async () => {
-		const { calls, url } = await reranker(() => ({ status: 200, body: { data: [] } }));
-		const retriever = createRetriever(storeOf(manyCandidates().slice(0, 4)) as never, embedder, { warn: () => {} },
-			{ ...BASE_CONFIG, rerank: "cross-encoder", rerankProvider: "voyage", rerankEndpoint: url, rerankApiKey: "k" });
-		await retriever.retrieve({ query: QUERY, limit: 3 });
-		expect(calls[0]?.headers["x-sno-source"]).toBeUndefined();
-		expect(calls[0]?.headers["x-request-id"]).toBeUndefined();
 	}, 30_000);
 });
