@@ -44,6 +44,8 @@ let shared: Loaded | undefined;
 let sharedLoading: Promise<Loaded | undefined> | undefined;
 let sharedUsers = 0;
 let sharedFailedAt: number | undefined;
+// Scoring under way on the shared model, possibly for a caller that stopped waiting: the release waits for it.
+const scoring = new Set<Promise<number[] | undefined>>();
 
 export class LocalReranker {
 	private disposed = false;
@@ -67,6 +69,29 @@ export class LocalReranker {
 			sharedLoading ??= this.load();
 			return undefined;
 		}
+		const run = this.run(loaded, query, texts, signal);
+		scoring.add(run);
+		try {
+			return await run;
+		} finally {
+			scoring.delete(run);
+		}
+	}
+
+	async dispose(): Promise<void> {
+		if (this.disposed) return;
+		this.disposed = true;
+		sharedUsers = Math.max(0, sharedUsers - 1);
+		if (sharedUsers > 0) return;
+		const loaded = shared ?? (await sharedLoading?.catch(() => undefined));
+		shared = undefined;
+		sharedLoading = undefined;
+		sharedFailedAt = undefined;
+		await Promise.allSettled(scoring);
+		await loaded?.dispose();
+	}
+
+	private async run(loaded: Loaded, query: string, texts: string[], signal?: AbortSignal): Promise<number[] | undefined> {
 		// Five pairs per run: one run of all the long pairs holds several times the memory, for little time saved.
 		const scores: number[] = [];
 		for (let start = 0; start < texts.length; start += SCORE_BATCH) {
@@ -80,18 +105,6 @@ export class LocalReranker {
 			for (let i = 0; i < batch.length; i += 1) scores.push(Number(logits.data[i] ?? 0));
 		}
 		return scores;
-	}
-
-	async dispose(): Promise<void> {
-		if (this.disposed) return;
-		this.disposed = true;
-		sharedUsers = Math.max(0, sharedUsers - 1);
-		if (sharedUsers > 0) return;
-		const loaded = shared ?? (await sharedLoading?.catch(() => undefined));
-		shared = undefined;
-		sharedLoading = undefined;
-		sharedFailedAt = undefined;
-		await loaded?.dispose();
 	}
 
 	private async load(): Promise<Loaded | undefined> {
