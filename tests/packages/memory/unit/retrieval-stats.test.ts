@@ -9,7 +9,7 @@ function traceWithRerankFallback(reason?: string) {
 		["a", "b"],
 		[0.5, 0.4],
 		reason
-			? { rerankFallbackReason: reason, rerankFallbackProvider: "voyage" }
+			? { rerankFallbackReason: reason }
 			: undefined,
 	);
 	return trace.finalize("q", "precision-recall");

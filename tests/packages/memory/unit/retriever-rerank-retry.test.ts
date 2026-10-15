@@ -1,5 +1,4 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { RetrievalError } from "../../../../packages/memory/src/engine/retrieval/retriever-dependencies.ts";
 import {
 	createRetriever,
 	DEFAULT_RETRIEVAL_CONFIG,
@@ -44,7 +43,6 @@ function crossEncoderRetriever(): MemoryRetrieverInternals {
 	const retriever = createRetriever(noopStore, noopEmbedder, { warn: () => {} }, {
 		...DEFAULT_RETRIEVAL_CONFIG,
 		rerank: "cross-encoder",
-		rerankProvider: "tei",
 		rerankApiKey: "test-key",
 		rerankEndpoint: "http://127.0.0.1:9/rerank",
 		rerankTimeoutMs: 1_000,
@@ -126,19 +124,19 @@ describe("rerank transient-failure retry (issue #222)", () => {
 		const outcome = await crossEncoderRetriever().rerank("query", twoCandidates(), queryVector);
 
 		expect(fetchMock).toHaveBeenCalledTimes(3);
-		expect(outcome.fallback).toEqual({ reason: "timeout", provider: "tei" });
+		expect(outcome.fallback).toEqual({ reason: "timeout" });
 		expect(outcome.candidates.map((c) => c.entry.id)).toEqual(["a", "b"]);
 	});
 
-	it("does not retry a fatal status", async () => {
+	it("does not retry a refused key and ranks locally instead", async () => {
 		const fetchMock = vi
 			.fn<typeof fetch>()
 			.mockResolvedValue(new Response("unauthorized", { status: 401 }));
 		vi.stubGlobal("fetch", fetchMock);
 
-		await expect(
-			crossEncoderRetriever().rerank("query", twoCandidates(), queryVector),
-		).rejects.toBeInstanceOf(RetrievalError);
+		const outcome = await crossEncoderRetriever().rerank("query", twoCandidates(), queryVector);
+		expect(outcome.fallback).toEqual({ reason: "http_error" });
+		expect(outcome.candidates).toHaveLength(2);
 		expect(fetchMock).toHaveBeenCalledTimes(1);
 	});
 });

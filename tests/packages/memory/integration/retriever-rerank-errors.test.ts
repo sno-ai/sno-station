@@ -3,7 +3,6 @@ import {
 	createRetriever,
 	DEFAULT_RETRIEVAL_CONFIG,
 } from "../../../../packages/memory/src/engine/retrieval/retriever.ts";
-import { RetrievalError } from "../../../../packages/memory/src/engine/shared/errors.ts";
 import type { MemoryRetrieverInternals } from "../../../../packages/memory/src/engine/retrieval/retriever-core.ts";
 import { truncateToTokens } from "../../../../packages/memory/src/engine/shared/token-bound.ts";
 import {
@@ -40,6 +39,7 @@ const storeStub = {
 
 // One token per character keeps the ceiling arithmetic readable in the assertions below.
 const embedderStub = {
+	warmup: async () => {},
 	embed: async () => new Float32Array([1, 0, 0]),
 	countTokens: (text: string) => text.length,
 	truncateToTokens: (text: string, maxTokens: number) =>
@@ -51,38 +51,6 @@ afterEach(() => {
 });
 
 describe("retriever rerank error handling", () => {
-	it("surfaces 401 rerank failures instead of silently degrading", async () => {
-		globalThis.fetch = async () => new Response("unauthorized", { status: 401 });
-
-		const retriever = createRetriever(
-			storeStub as never,
-			embedderStub as never,
-			{ warn: () => {} },
-			{
-				...DEFAULT_RETRIEVAL_CONFIG,
-				rerank: "cross-encoder",
-				rerankApiKey: "test-key",
-				minScore: 0,
-				hardMinScore: 0,
-			},
-		);
-
-		try {
-			await retriever.retrieve({ query: "typescript", limit: 1 });
-			throw new Error("expected retrieve() to fail");
-		} catch (error) {
-			expect(error).toBeInstanceOf(RetrievalError);
-			const cause =
-				error instanceof Error &&
-				"cause" in error &&
-				error.cause instanceof Error
-					? error.cause
-					: null;
-			expect(cause).toBeInstanceOf(RetrievalError);
-			expect(cause?.message).toContain("status 401");
-		}
-	});
-
 	it("preserves fused candidates with http_error fallback on 429 with retry-after", async () => {
 		globalThis.fetch = async () =>
 			new Response("rate limited", {
@@ -97,6 +65,7 @@ describe("retriever rerank error handling", () => {
 				...DEFAULT_RETRIEVAL_CONFIG,
 				rerank: "cross-encoder",
 				rerankApiKey: "test-key",
+				rerankEndpoint: "https://rerank.test/rerank",
 			},
 		) as unknown as MemoryRetrieverInternals;
 		const candidates = [
@@ -137,6 +106,7 @@ describe("retriever rerank error handling", () => {
 				...DEFAULT_RETRIEVAL_CONFIG,
 				rerank: "cross-encoder",
 				rerankApiKey: "test-key",
+				rerankEndpoint: "https://rerank.test/rerank",
 				minScore: 0,
 				hardMinScore: 0,
 			},
@@ -148,38 +118,6 @@ describe("retriever rerank error handling", () => {
 		const results = await retriever.retrieve({ query: "typescript", limit: 3 });
 		expect(results.map((result) => result.entry.id)).toEqual(["mem-top", "mem-mid", "mem-low"]);
 	}, 20_000);
-
-	it("wraps retrieveWithTrace rerank failures in RetrievalError", async () => {
-		globalThis.fetch = async () => new Response("unauthorized", { status: 401 });
-
-		const retriever = createRetriever(
-			storeStub as never,
-			embedderStub as never,
-			{ warn: () => {} },
-			{
-				...DEFAULT_RETRIEVAL_CONFIG,
-				rerank: "cross-encoder",
-				rerankApiKey: "test-key",
-				minScore: 0,
-				hardMinScore: 0,
-			},
-		);
-
-		try {
-			await retriever.retrieveWithTrace({ query: "typescript", limit: 1 });
-			throw new Error("expected retrieveWithTrace() to fail");
-		} catch (error) {
-			expect(error).toBeInstanceOf(RetrievalError);
-			const cause =
-				error instanceof Error &&
-				"cause" in error &&
-				error.cause instanceof Error
-					? error.cause
-					: null;
-			expect(cause).toBeInstanceOf(RetrievalError);
-			expect(cause?.message).toContain("status 401");
-		}
-	});
 
 	it("applies minScore after reranking so strong rerank hits are retained", async () => {
 		globalThis.fetch = async () =>
@@ -212,6 +150,7 @@ describe("retriever rerank error handling", () => {
 				...DEFAULT_RETRIEVAL_CONFIG,
 				rerank: "cross-encoder",
 				rerankApiKey: "test-key",
+				rerankEndpoint: "https://rerank.test/rerank",
 				minScore: 0.5,
 				hardMinScore: 0,
 				lengthNormAnchor: 0,
@@ -282,7 +221,7 @@ describe("retriever rerank error handling", () => {
 		globalThis.fetch = async () =>
 			new Response(
 				JSON.stringify({
-					data: [{ index: 1, relevance_score: 1.0 }],
+					data: [{ index: 1, score: 6 }],
 				}),
 				{
 					status: 200,
@@ -324,6 +263,7 @@ describe("retriever rerank error handling", () => {
 				...DEFAULT_RETRIEVAL_CONFIG,
 				rerank: "cross-encoder",
 				rerankApiKey: "test-key",
+				rerankEndpoint: "https://rerank.test/rerank",
 				minScore: 0,
 				hardMinScore: 0,
 				lengthNormAnchor: 0,
@@ -366,7 +306,7 @@ describe("retriever rerank error handling", () => {
 		).rejects.toThrow("requires retrieval.rerankApiKey");
 	});
 
-	it("tags no_endpoint fallback when provider lacks a default endpoint", async () => {
+	it("tags no_endpoint fallback when no reranker address is set", async () => {
 		const retriever = createRetriever(
 			storeStub as never,
 			embedderStub as never,
@@ -375,7 +315,6 @@ describe("retriever rerank error handling", () => {
 				...DEFAULT_RETRIEVAL_CONFIG,
 				rerank: "cross-encoder",
 				rerankApiKey: "test-key",
-				rerankProvider: "no-such-provider",
 				minScore: 0,
 				hardMinScore: 0,
 			},
@@ -388,7 +327,6 @@ describe("retriever rerank error handling", () => {
 		const rerankStage = trace.stages.find((s) => s.name === "rerank");
 		expect(rerankStage?.metadata).toEqual({
 			rerankFallbackReason: "no_endpoint",
-			rerankFallbackProvider: "no-such-provider",
 		});
 	});
 
@@ -403,6 +341,7 @@ describe("retriever rerank error handling", () => {
 				...DEFAULT_RETRIEVAL_CONFIG,
 				rerank: "cross-encoder",
 				rerankApiKey: "test-key",
+				rerankEndpoint: "https://rerank.test/rerank",
 				minScore: 0,
 				hardMinScore: 0,
 			},
@@ -415,7 +354,6 @@ describe("retriever rerank error handling", () => {
 		const rerankStage = trace.stages.find((s) => s.name === "rerank");
 		expect(rerankStage?.metadata).toEqual({
 			rerankFallbackReason: "http_error",
-			rerankFallbackProvider: "voyage",
 		});
 	});
 
@@ -434,6 +372,7 @@ describe("retriever rerank error handling", () => {
 				...DEFAULT_RETRIEVAL_CONFIG,
 				rerank: "cross-encoder",
 				rerankApiKey: "test-key",
+				rerankEndpoint: "https://rerank.test/rerank",
 				minScore: 0,
 				hardMinScore: 0,
 			},
@@ -446,7 +385,6 @@ describe("retriever rerank error handling", () => {
 		const rerankStage = trace.stages.find((s) => s.name === "rerank");
 		expect(rerankStage?.metadata).toEqual({
 			rerankFallbackReason: "invalid_response",
-			rerankFallbackProvider: "voyage",
 		});
 	});
 
@@ -465,6 +403,7 @@ describe("retriever rerank error handling", () => {
 				...DEFAULT_RETRIEVAL_CONFIG,
 				rerank: "cross-encoder",
 				rerankApiKey: "test-key",
+				rerankEndpoint: "https://rerank.test/rerank",
 				minScore: 0,
 				hardMinScore: 0,
 			},
@@ -532,6 +471,7 @@ describe("retriever rerank error handling", () => {
 				...DEFAULT_RETRIEVAL_CONFIG,
 				rerank: "cross-encoder",
 				rerankApiKey: "test-key",
+				rerankEndpoint: "https://rerank.test/rerank",
 				minScore: 0,
 				hardMinScore: 0,
 				lengthNormAnchor: 0,
@@ -584,7 +524,6 @@ describe("retriever rerank error handling", () => {
 				{
 					...DEFAULT_RETRIEVAL_CONFIG,
 					rerank: "cross-encoder",
-					rerankProvider: "tei",
 					rerankEndpoint: "https://example.test/rerank",
 					rerankApiKey: "test-key",
 					minScore: 0,
@@ -614,17 +553,17 @@ describe("retriever rerank error handling", () => {
 		// silently degrading to raw fusion scores with candidatePoolSize=64.
 		const requestedBatches: string[][] = [];
 		globalThis.fetch = async (_url, init) => {
-			const body = JSON.parse(String(init?.body)) as { documents: string[] };
-			requestedBatches.push(body.documents);
+			const body = JSON.parse(String(init?.body)) as { texts: string[] };
+			requestedBatches.push(body.texts);
 			// The one request (3 texts): promote the LAST sent candidate (index 2, entry
 			// "mem-2") to the top — proves the returned index is resolved against what
 			// was sent, not the original 5-candidate array.
 			const scores = [
-				{ index: 2, relevance_score: 0.99 },
-				{ index: 0, relevance_score: 0.5 },
-				{ index: 1, relevance_score: 0.4 },
+				{ index: 2, score: 6 },
+				{ index: 0, score: 0 },
+				{ index: 1, score: -1 },
 			];
-			return new Response(JSON.stringify({ data: scores }), {
+			return new Response(JSON.stringify(scores), {
 				status: 200,
 				headers: { "content-type": "application/json" },
 			});
@@ -649,8 +588,8 @@ describe("retriever rerank error handling", () => {
 			{
 				...DEFAULT_RETRIEVAL_CONFIG,
 				rerank: "cross-encoder",
-				rerankProvider: "voyage",
 				rerankApiKey: "test-key",
+				rerankEndpoint: "https://rerank.test/rerank",
 				rerankMaxCandidates: 3,
 				minScore: 0,
 				hardMinScore: 0,
@@ -681,10 +620,8 @@ describe("retriever rerank error handling", () => {
 		expect(rank.get("mem-4")).toBeGreaterThan(rank.get("mem-2") as number);
 	});
 
-	it("defaults rerankMaxCandidates to 50 for the tei provider when unset, so production users are protected without configuring it", async () => {
-		// The "too many texts" bug is a silent-degrade trap for anyone who
-		// configures rerankProvider: "tei" without also knowing to set
-		// rerankMaxCandidates. This is the safety net for that case.
+	it("sends at most 50 texts per request when rerankMaxCandidates is unset", async () => {
+		// Sno's reranker refuses a request over 50 texts ("too many texts"), and an unset cap must not trip it.
 		const requestedTextCounts: number[] = [];
 		globalThis.fetch = async (_url, init) => {
 			const body = JSON.parse(String(init?.body)) as { texts: string[] };
@@ -714,7 +651,6 @@ describe("retriever rerank error handling", () => {
 			{
 				...DEFAULT_RETRIEVAL_CONFIG,
 				rerank: "cross-encoder",
-				rerankProvider: "tei",
 				rerankEndpoint: "https://example.test/rerank",
 				rerankApiKey: "test-key",
 				// rerankMaxCandidates intentionally left unset.
@@ -768,7 +704,6 @@ describe("retriever rerank error handling", () => {
 			{
 				...DEFAULT_RETRIEVAL_CONFIG,
 				rerank: "cross-encoder",
-				rerankProvider: "tei",
 				rerankEndpoint: "https://example.test/rerank",
 				rerankApiKey: "test-key",
 				minScore: 0,
@@ -860,53 +795,6 @@ const batchedStoreStub = {
 };
 
 describe("retriever rerank batching", () => {
-	it("surfaces 401 when an earlier batch times out on every attempt", async () => {
-		const probe = await startRerankProbe((texts, reply) => {
-			// Leave batch zero unanswered on every attempt to exercise real fetch timeouts.
-			if (texts.length !== 50) reply("unauthorized", 401);
-		});
-		try {
-			const searchResults = BATCHED_ENTRIES.slice(0, 51);
-			const retriever = createRetriever(
-				{
-					...batchedStoreStub,
-					searchSemantic: async () => searchResults,
-					searchKeyword: async () => searchResults,
-				} as never,
-				embedderStub as never,
-				{ warn: () => {} },
-				{
-					...DEFAULT_RETRIEVAL_CONFIG,
-					rerank: "cross-encoder",
-					rerankProvider: "tei",
-					rerankEndpoint: probe.url,
-					rerankTimeoutMs: 50,
-					rerankApiKey: "test-key",
-					candidatePoolSize: 51,
-					minScore: 0,
-					hardMinScore: 0,
-				},
-			);
-
-			try {
-				await retriever.retrieve({ query: "typescript", limit: 51 });
-				throw new Error("expected retrieve() to fail");
-			} catch (error) {
-				expect(error).toBeInstanceOf(RetrievalError);
-				const cause =
-					error instanceof Error &&
-					"cause" in error &&
-					error.cause instanceof Error
-						? error.cause
-						: null;
-				expect(cause).toBeInstanceOf(RetrievalError);
-				expect(cause?.message).toBe("Rerank API failed with status 401");
-			}
-		} finally {
-			await probe.close();
-		}
-	});
-
 	it("serves every candidate when one batch exhausts 503 retries and the next is throttled", async () => {
 		const seen: number[] = [];
 		const probe = await startRerankProbe((texts, reply) => {
@@ -927,7 +815,6 @@ describe("retriever rerank batching", () => {
 				{
 					...DEFAULT_RETRIEVAL_CONFIG,
 					rerank: "cross-encoder",
-					rerankProvider: "tei",
 					rerankEndpoint: probe.url,
 					rerankApiKey: "test-key",
 					candidatePoolSize: 51,
@@ -965,7 +852,6 @@ describe("retriever rerank batching", () => {
 				{
 					...DEFAULT_RETRIEVAL_CONFIG,
 					rerank: "cross-encoder",
-					rerankProvider: "tei",
 					rerankEndpoint: probe.url,
 					rerankApiKey: "test-key",
 					minScore: 0,
@@ -1019,7 +905,6 @@ describe("retriever rerank batching", () => {
 				{
 					...DEFAULT_RETRIEVAL_CONFIG,
 					rerank: "cross-encoder",
-					rerankProvider: "tei",
 					rerankEndpoint: probe.url,
 					rerankApiKey: "test-key",
 					minScore: 0,
@@ -1065,7 +950,6 @@ it("retries 429 backpressure and serves the reranked result", async () => {
 			{
 				...DEFAULT_RETRIEVAL_CONFIG,
 				rerank: "cross-encoder",
-				rerankProvider: "tei",
 				rerankEndpoint: probe.url,
 				rerankApiKey: "test-key",
 				minScore: 0,
