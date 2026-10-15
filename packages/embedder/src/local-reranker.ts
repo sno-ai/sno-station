@@ -20,6 +20,7 @@ export const LOCAL_RERANK_MODEL_REVISION = "1427fd652930e4ba29e8149678df786c240d
 
 /** The repository ships one 8-bit file per CPU family and no generic quantized file. */
 const MODEL_FILE = arch() === "arm64" ? "model_qint8_arm64" : "model_quint8_avx2";
+const SCORE_BATCH = 5;
 
 export interface LocalRerankerOptions {
 	cacheDir: string;
@@ -50,11 +51,18 @@ export class LocalReranker {
 			this.loading ??= this.load();
 			return undefined;
 		}
-		const inputs = this.loaded.tokenizer(new Array(texts.length).fill(query), {
-			text_pair: texts, padding: true, truncation: true, max_length: 512,
-		});
-		const { logits } = await this.loaded.model(inputs);
-		return Array.from({ length: texts.length }, (_, i) => Number(logits.data[i] ?? 0));
+		// Five pairs per run: one run of fifteen long pairs held about 200 MB of activations, five hold about 30 MB, for
+		// about 8% more time (measured 2026-10-15).
+		const scores: number[] = [];
+		for (let start = 0; start < texts.length; start += SCORE_BATCH) {
+			const batch = texts.slice(start, start + SCORE_BATCH);
+			const inputs = this.loaded.tokenizer(new Array(batch.length).fill(query), {
+				text_pair: batch, padding: true, truncation: true, max_length: 512,
+			});
+			const { logits } = await this.loaded.model(inputs);
+			for (let i = 0; i < batch.length; i += 1) scores.push(Number(logits.data[i] ?? 0));
+		}
+		return scores;
 	}
 
 	async dispose(): Promise<void> {
