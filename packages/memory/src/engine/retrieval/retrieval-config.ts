@@ -12,7 +12,6 @@ import {
 	DEFAULT_BM25_WEIGHT,
 	DEFAULT_HARD_MIN_SCORE,
 	DEFAULT_MIN_SCORE,
-	DEFAULT_RERANK_MODEL,
 	DEFAULT_RERANK_TIMEOUT_MS,
 	DEFAULT_VECTOR_WEIGHT,
 	IMPORTANCE_WEIGHT_BASE,
@@ -27,8 +26,6 @@ import {
 	TIME_DECAY_FLOOR,
 	TIME_DECAY_HALF_LIFE_DAYS,
 } from "./retriever-dependencies";
-
-export type RerankProvider = "jina" | "siliconflow" | "voyage" | "pinecone" | "dashscope" | "tei" | "sno-gpu";
 
 export interface RetrievalConfig {
 	/** Enable the historical recency, decay, and retention score transforms. */
@@ -48,7 +45,6 @@ export interface RetrievalConfig {
 	/** Dynamic memories decay 3× faster in time-decay scoring (default ON) */
 	temporalDecay: boolean;
 	rerankApiKey?: string;
-	rerankModel?: string;
 	rerankTimeoutMs?: number;
 	lengthNormAnchor: number;
 	hardMinScore: number;
@@ -67,15 +63,10 @@ export interface RetrievalConfig {
 	timeDecayFloor?: number;
 	/** Relevance vs diversity tradeoff (default: 0.7) */
 	mmrLambda?: number;
-	/** Custom rerank API endpoint URL */
+	/** Address of Sno's reranker (the Sno GPU address plus `/rerank`) */
 	rerankEndpoint?: string;
-	/** Rerank provider name */
-	rerankProvider?: RerankProvider | string;
 	/**
-	 * Hard cap on how many candidates are sent to the cross-encoder rerank API
-	 * in one request. Some rerank deployments (e.g. this repo's Sno TEI
-	 * reranker) reject a batch above a fixed size instead of truncating it, so
-	 * an unset value here must never silently violate that limit. Candidates
+	 * Cap on how many candidates are sent to Sno's reranker in total. Candidates
 	 * beyond the cap are NOT dropped — they still flow through the standard
 	 * `unreturned` preservation-floor path, same as a real reranker choosing
 	 * not to return them.
@@ -179,9 +170,7 @@ export const DEFAULT_RETRIEVAL_CONFIG: RetrievalConfig = {
 	recencyWeight: RECENCY_WEIGHT,
 	temporalExpiry: false,
 	temporalDecay: true,
-	rerankModel: DEFAULT_RERANK_MODEL,
 	rerankTimeoutMs: DEFAULT_RERANK_TIMEOUT_MS,
-	rerankProvider: "voyage",
 	lengthNormAnchor: LENGTH_NORM_ANCHOR,
 	hardMinScore: DEFAULT_HARD_MIN_SCORE,
 	timeDecayHalfLifeDays: TIME_DECAY_HALF_LIFE_DAYS,
