@@ -6,7 +6,8 @@
  * downloads a directory at a time (an O_EXCL lock with a heartbeat; a dead holder's lock is broken at once).
  */
 
-import { closeSync, createWriteStream, mkdirSync, openSync, readdirSync, readFileSync, renameSync, rmSync, statSync,
+import { createHash } from "node:crypto";
+import { closeSync, createReadStream, createWriteStream, mkdirSync, openSync, readdirSync, readFileSync, renameSync, rmSync, statSync,
 	unlinkSync, utimesSync, writeFileSync } from "node:fs";
 import http from "node:http";
 import https from "node:https";
@@ -97,7 +98,9 @@ async function fetchModel(spec: ModelSpec, options: DownloadOptions, dir: string
 		adoptFlatFiles(spec, options.cacheDir, dir);
 		for (const file of spec.files) {
 			const target = join(dir, file.path);
-			if (statSync(target, { throwIfNoEntry: false })?.size === file.size) continue;
+			// A file already here (an earlier release's copy, a try that stopped before the marker) is checked once.
+			if (statSync(target, { throwIfNoEntry: false })?.size === file.size && (await matches(target, file))) continue;
+			rmSync(target, { force: true });
 			await fetchFile(spec, `${host}${spec.id}/resolve/${spec.revision}/${file.path}`, target, file);
 		}
 		writeFileSync(join(dir, MARKER), JSON.stringify({ model: spec.id, revision: spec.revision, files: spec.files,
@@ -203,13 +206,43 @@ async function fetchFile(spec: ModelSpec, url: string, target: string, file: Mod
 	mkdirSync(dirname(target), { recursive: true });
 	// A part file survives a failed try and a killed process; the next request resumes it.
 	const part = `${target}.part`;
+	let mismatches = 0;
 	await withRetries(`${spec.id} ${file.path}`, async () => {
 		if ((statSync(part, { throwIfNoEntry: false })?.size ?? 0) < file.size) await get(url, part);
 		const size = statSync(part).size;
 		if (size > file.size) rmSync(part, { force: true });
 		if (size !== file.size) throw new Error(`got ${size} bytes, expected ${file.size} (${url})`);
+		if (!(await matches(part, file)) && ++mismatches === 1) {
+			rmSync(part, { force: true });
+			throw new Error(`content does not match its SHA-256 (${url})`);
+		}
 		renameSync(part, target);
 	});
+}
+
+/**
+ * Whether a file has its pinned SHA-256. The check never blocks the model: a second fresh download that still
+ * differs is kept with an error in the log, and a check that fails to run counts as a match.
+ */
+async function matches(path: string, file: ModelFile): Promise<boolean> {
+	if (!file.sha256) return true;
+	try {
+		const hash = createHash("sha256");
+		await pipeline(createReadStream(path), hash);
+		const actual = hash.digest("hex");
+		if (actual === file.sha256) return true;
+		log.error("model file SHA-256 differs", { path: file.path, expected_sha256: file.sha256, actual_sha256: actual }, {
+			event_name: "embedder.downloader.sha256_mismatch", file: "packages/embedder/src/downloader.ts",
+			function: "matches", site_id: "embedder.downloader.sha256_mismatch",
+		});
+		return false;
+	} catch (error) {
+		log.warn("model file SHA-256 not checked", { path: file.path, error }, {
+			event_name: "embedder.downloader.sha256_unchecked", file: "packages/embedder/src/downloader.ts",
+			function: "matches", site_id: "embedder.downloader.sha256_unchecked",
+		});
+		return true;
+	}
 }
 
 /** Runs `attemptOnce` until it succeeds, another try cannot help, or ATTEMPTS run out; the error names `label`. */

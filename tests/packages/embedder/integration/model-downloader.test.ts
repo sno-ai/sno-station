@@ -4,15 +4,15 @@
  */
 
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, truncateSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import { afterEach, expect, it } from "vitest";
 import { downloadModel, type ModelSpec } from "../../../../packages/embedder/src/downloader.ts";
 import { LocalEmbedProvider } from "../../../../packages/embedder/src/local-provider.ts";
-import { embeddingModelSpec, ensureModelDownloaded } from "../../../../packages/embedder/src/model-download.ts";
+import { ensureModelDownloaded } from "../../../../packages/embedder/src/model-download.ts";
 
 const EMBEDDING_MODEL = "tss-deposium/pplx-embed-v1-0.6b-onnx-int8-standard";
 const PINNED_REVISION = "a18fdffe7480e6ea5643acb7757142b33838817a";
@@ -51,25 +51,22 @@ it("fetches the pinned revision when the cache holds a complete download of anot
 
 it("moves an earlier release's complete files into the revision directory and removes every older copy", async () => {
 	const cacheDir = tempDir();
-	const spec = embeddingModelSpec("q8");
-	const modelDir = join(cacheDir, EMBEDDING_MODEL);
-	// The flat layout an earlier release wrote (sparse files of the right sizes), its marker, and an older revision.
-	for (const file of spec.files) {
-		mkdirSync(dirname(join(modelDir, file.path)), { recursive: true });
-		writeFileSync(join(modelDir, file.path), "");
-		truncateSync(join(modelDir, file.path), file.size);
-	}
-	writeFileSync(join(cacheDir, ".download-complete"), JSON.stringify({ model: EMBEDDING_MODEL, revision: PINNED_REVISION, dtype: "q8" }));
-	mkdirSync(join(modelDir, "1".repeat(40), "onnx"), { recursive: true });
-	writeFileSync(join(modelDir, "1".repeat(40), "onnx", "model_quantized.onnx"), "older revision");
+	const modelRoot = join(cacheDir, SMALL.id);
+	// The flat layout an earlier release wrote, its marker at the cache root, and an older revision.
+	mkdirSync(join(modelRoot, "onnx"), { recursive: true });
+	writeFileSync(join(modelRoot, "config.json"), CONFIG);
+	writeFileSync(join(modelRoot, "onnx/model.onnx"), WEIGHTS);
+	writeFileSync(join(cacheDir, ".download-complete"), JSON.stringify({ model: SMALL.id, revision: SMALL.revision }));
+	mkdirSync(join(modelRoot, "r0", "onnx"), { recursive: true });
+	writeFileSync(join(modelRoot, "r0", "onnx", "model.onnx"), "older revision");
 	const mirror = await host((_req, res) => { res.statusCode = 404; res.end(); });
 
-	await ensureModelDownloaded({ cacheDir, mirror: mirror.url });
+	const dir = await downloadModel(SMALL, { cacheDir, mirror: mirror.url });
 
 	expect(mirror.requests).toEqual([]);
-	expect(readdirSync(modelDir)).toEqual([PINNED_REVISION]);
+	expect(readdirSync(modelRoot)).toEqual([SMALL.revision]);
 	expect(existsSync(join(cacheDir, ".download-complete"))).toBe(false);
-	for (const file of spec.files) expect(existsSync(join(modelDir, PINNED_REVISION, file.path))).toBe(true);
+	expect(readFileSync(join(dir, "onnx/model.onnx")).equals(WEIGHTS)).toBe(true);
 }, 30_000);
 
 it("downloads through the proxy the environment names", async () => {
@@ -206,4 +203,27 @@ it("loads a custom embedding model only through the downloader: listed, fetched 
 	expect(readFileSync(join(dir, "onnx/model_quantized.onnx")).equals(WEIGHTS)).toBe(true);
 	expect(existsSync(join(dir, ".complete"))).toBe(true);
 	expect(mirror.requests.some((url) => url.includes("README.md"))).toBe(false);
+}, 60_000);
+
+it("fetches a file again when its content does not match the pinned SHA-256", async () => {
+	const cacheDir = tempDir();
+	let weightCalls = 0;
+	const corrupt = Buffer.from(WEIGHTS).fill(0, 1000, 2000);
+	const mirror = await host((req, res) => {
+		if (!req.url?.endsWith("model.onnx")) { res.end(body(req.url)); return; }
+		weightCalls += 1;
+		res.end(weightCalls === 1 ? corrupt : WEIGHTS);
+	});
+	const dir = await downloadModel(SMALL, { cacheDir, mirror: mirror.url });
+	expect(readFileSync(join(dir, "onnx/model.onnx")).equals(WEIGHTS)).toBe(true);
+	expect(weightCalls).toBe(2);
+}, 60_000);
+
+it("never blocks the model on a SHA-256 that keeps differing: the second download is kept", async () => {
+	const cacheDir = tempDir();
+	const corrupt = Buffer.from(WEIGHTS).fill(0, 1000, 2000);
+	const mirror = await host((req, res) => res.end(req.url?.endsWith("model.onnx") ? corrupt : body(req.url)));
+	const dir = await downloadModel(SMALL, { cacheDir, mirror: mirror.url });
+	expect(readFileSync(join(dir, "onnx/model.onnx")).equals(corrupt)).toBe(true);
+	expect(existsSync(join(dir, ".complete"))).toBe(true);
 }, 60_000);
