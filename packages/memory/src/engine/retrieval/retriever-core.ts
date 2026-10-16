@@ -175,6 +175,7 @@ export interface MemoryRetrieverInternals {
 		options?: { signal?: AbortSignal; deadlineAt?: number },
 	): Promise<RerankOutcome>;
 	rerankLightweight(candidates: RetrievalResult[], queryVector: Float32Array): RetrievalResult[];
+	rerankLocalModel(query: string, ordered: RetrievalResult[], deadlineAt?: number, signal?: AbortSignal): Promise<RetrievalResult[]>;
 	getRerankSourceScore(result: RetrievalResult): number;
 	applyScoringPipeline(results: RetrievalResult[], trace?: TraceCollector, limit?: number): RetrievalResult[];
 	applyRecencyBoost(results: RetrievalResult[]): RetrievalResult[];

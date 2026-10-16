@@ -6,7 +6,8 @@
 
 /** Local ONNX embedding with an LRU cache and oversized-text chunking. */
 
-import { CachedEmbeddingProvider, ensureModelDownloaded, LOCAL_EMBEDDING_MODEL, LOCAL_EMBEDDING_MODEL_REVISION } from "@snoai/embedder";
+import { CachedEmbeddingProvider, ensureModelDownloaded, LOCAL_EMBEDDING_MODEL, LOCAL_EMBEDDING_MODEL_REVISION, LocalReranker } from "@snoai/embedder";
+import { availableParallelism } from "node:os";
 import { chunk, type ChunkConfig } from "@snoai/chunking";
 import { createLogger } from "@snoai/utils/logger";
 import {
@@ -42,6 +43,7 @@ export class Embedder {
 	// the local ONNX model loaded.
 	private warmupPromise: Promise<void> | null = null;
 	private readonly modelDownload: Parameters<typeof ensureModelDownloaded>[0];
+	private readonly reranker: LocalReranker;
 
 	/**
 	 * Initializes embedding generation collaborators while keeping runtime work in explicit
@@ -64,6 +66,12 @@ export class Embedder {
 		// Default model is the bundled PPLX INT8 id.
 		this.model =
 			config.model && config.model.trim().length > 0 ? config.model : LOCAL_EMBEDDING_MODEL;
+
+		this.reranker = new LocalReranker({
+			cacheDir: resolveEmbeddingCacheDir(config), offline: config.offline === true,
+			...(config.mirror ? { mirror: config.mirror } : {}),
+			intraOpNumThreads: config.sessionOptions?.intraOpNumThreads ?? Math.max(1, Math.min(4, Math.floor(availableParallelism() / 2))),
+		});
 
 		this.provider = new CachedEmbeddingProvider(inner, {
 			maxSize: CACHE_SIZE,
@@ -323,11 +331,20 @@ export class Embedder {
 		return this.warmupPromise;
 	}
 
+	/**
+	 * Local relevance scores (raw logits, higher is more relevant) for each text against the query, or undefined while
+	 * the local reranker is not loaded; the first call starts loading it in the background.
+	 */
+	scoreRelevance(query: string, texts: string[], signal?: AbortSignal): Promise<number[] | undefined> {
+		return this.reranker.score(query, texts, signal);
+	}
+
 	/** Implements dispose as the local embedding generation operation. */
 	async dispose(): Promise<void> {
 		const warmup = this.warmupPromise;
 		if (warmup) await warmup.catch(() => undefined);
 		await this.provider.dispose();
+		await this.reranker.dispose();
 	}
 }
 

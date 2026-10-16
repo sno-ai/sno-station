@@ -23,6 +23,7 @@ import {
 	LIGHTWEIGHT_COSINE_WEIGHT,
 	LIGHTWEIGHT_FUSION_WEIGHT,
 	LIGHTWEIGHT_RERANK_PENALTY,
+	LOCAL_RERANK_CANDIDATES,
 	RERANK_BLEND_CROSS,
 	RERANK_BLEND_VECTOR,
 	RetrievalError,
@@ -174,7 +175,7 @@ Object.assign(MemoryRetriever.prototype, {
 		}
 		if (this.config.rerank === "lightweight" || !this.config.rerankApiKey) {
 			// Lightweight is the configured strategy, not a degradation — no fallback signal.
-			return { candidates: this.rerankLightweight(candidates, queryVector) };
+			return { candidates: await this.rerankLocalModel(query, this.rerankLightweight(candidates, queryVector), options?.deadlineAt, options?.signal) };
 		}
 
 		// Compute the normalized rerank endpoint once so later retrieval scoring checks use one value.
@@ -600,6 +601,54 @@ Object.assign(MemoryRetriever.prototype, {
 			if (diff !== 0) return diff;
 			return a.entry.id.localeCompare(b.entry.id);
 		});
+	},
+
+	/**
+	 * The local reranker model reorders the first candidates of the local ranking. Their order is unchanged while the
+	 * model is not loaded yet (the first call starts loading it), past the caller's deadline, and after a cancel.
+	 */
+	async rerankLocalModel(
+		this: MemoryRetrieverInternals,
+		query: string,
+		ordered: RetrievalResult[],
+		deadlineAt?: number,
+		signal?: AbortSignal,
+	): Promise<RetrievalResult[]> {
+		if (ordered.length < 2 || signal?.aborted || (deadlineAt !== undefined && Date.now() >= deadlineAt)) return ordered;
+		const head = ordered.slice(0, LOCAL_RERANK_CANDIDATES);
+		const started = performance.now();
+		// The model runs on the CPU and cannot be interrupted, so the caller's deadline and cancel are raced instead:
+		// either one brings the order back unchanged and the late scores are dropped. A model failure keeps the order too.
+		// A caller with no deadline (an explicit recall, a forget) gets the configured rerank timeout, as the remote path does.
+		const budgetMs = deadlineAt === undefined ? (this.config.rerankTimeoutMs ?? DEFAULT_RERANK_TIMEOUT_MS) : Math.max(0, Math.floor(deadlineAt - Date.now()));
+		const stop = signal ? AbortSignal.any([signal, AbortSignal.timeout(budgetMs)]) : AbortSignal.timeout(budgetMs);
+		const scoring = this.embedder.scoreRelevance(query, head.map((r) => r.entry.text), stop).catch((error: unknown) => {
+			log.warn("local reranker failed; recall keeps the local ranking order", { error }, {
+				event_name: "memory.retriever_rerank.diagnostic", file: "packages/memory/src/engine/retrieval/retriever-rerank.ts",
+				function: "rerankLocalModel", site_id: "retrieval.retriever-rerank.rerankLocalModel.failed",
+			});
+			return undefined;
+		});
+		const logits = await Promise.race([
+			scoring,
+			new Promise<undefined>((resolve) => stop.addEventListener("abort", () => resolve(undefined), { once: true })),
+		]);
+		if (!logits || signal?.aborted) return ordered;
+		// The model's order alone ranks the head (blending in the local score only cost answers in English and Chinese).
+		// It only reorders the head: the head's own scores, highest first, go to its new order, so the later stages
+		// (which sort the whole pool by score) keep the head above the candidates the model did not see.
+		const blended = head.map((candidate, index) => ({ candidate, value: logits[index] ?? Number.NEGATIVE_INFINITY }));
+		blended.sort((a, b) => b.value - a.value || a.candidate.entry.id.localeCompare(b.candidate.entry.id));
+		const slots = head.map((candidate) => candidate.score).sort((a, b) => b - a);
+		const rescored = blended.map(({ candidate }, index) => {
+			const score = slots[index] ?? candidate.score;
+			return { ...candidate, score, rerankScore: score, sources: { ...candidate.sources, reranked: { score } } };
+		});
+		log.debug("local reranker applied", { scored: head.length, duration_ms: performance.now() - started }, {
+			event_name: "memory.retriever_rerank.diagnostic", file: "packages/memory/src/engine/retrieval/retriever-rerank.ts",
+			function: "rerankLocalModel", site_id: "retrieval.retriever-rerank.rerankLocalModel.applied",
+		});
+		return [...rescored, ...ordered.slice(head.length)];
 	},
 
 	getRerankSourceScore(this: MemoryRetrieverInternals, result: RetrievalResult): number {
