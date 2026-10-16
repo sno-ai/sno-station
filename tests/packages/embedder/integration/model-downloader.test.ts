@@ -85,3 +85,15 @@ it("downloads through the proxy the environment names", async () => {
 	expect(mirror.requests).toEqual([]);
 	expect(proxy.requests.some((url) => url.startsWith(`${mirror.url}${EMBEDDING_MODEL}/resolve/`))).toBe(true);
 }, 30_000);
+
+it("gives up on a download that stops sending data within a minute, not five", async () => {
+	const cacheDir = tempDir();
+	// Sends the headers and a little of the body, then nothing.
+	const mirror = await host((_req, res) => {
+		res.writeHead(200, { "content-length": String(1024 * 1024) });
+		res.write(Buffer.alloc(1024));
+	});
+	const started = Date.now();
+	await expect(ensureModelDownloaded({ cacheDir, mirror: mirror.url })).rejects.toThrow(/no data/);
+	expect(Date.now() - started).toBeLessThan(60_000);
+}, 90_000);

@@ -11,6 +11,7 @@ import { closeSync, createWriteStream, mkdirSync, openSync, readdirSync, readFil
 import http from "node:http";
 import https from "node:https";
 import { dirname, join, resolve } from "node:path";
+import { pipeline } from "node:stream/promises";
 import { createLogger } from "@snoai/utils/logger";
 
 const log = createLogger("embedder:downloader");
@@ -38,6 +39,8 @@ export interface DownloadOptions {
 const HUB = "https://huggingface.co/";
 const MARKER = ".complete";
 const MAX_REDIRECTS = 5;
+/** A connection that sends nothing for this long is dropped (Node's own limit is five minutes). */
+const STALL_MS = 30_000;
 const LOCK_HEARTBEAT_MS = 5_000;
 const LOCK_POLL_MS = 2_000;
 /** A lock not touched for this long belongs to a holder that hung or died. */
@@ -174,12 +177,10 @@ function get(url: string, part: string, redirects = 0): Promise<void> {
 				response.resume();
 				return reject(new Error(`HTTP ${status} (${url})`));
 			}
-			const out = createWriteStream(part);
-			response.pipe(out);
-			out.on("finish", () => resolvePromise());
-			out.on("error", reject);
-			response.on("error", reject);
+			// Closes the file and the response on either side's error.
+			pipeline(response, createWriteStream(part)).then(resolvePromise, reject);
 		});
+		request.setTimeout(STALL_MS, () => request.destroy(new Error(`no data for ${STALL_MS / 1000} s (${url})`)));
 		request.on("error", reject);
 	});
 }
