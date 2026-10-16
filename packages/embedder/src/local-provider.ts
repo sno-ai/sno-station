@@ -272,10 +272,7 @@ export class LocalEmbedProvider implements DisposableProvider {
 		LocalEmbedProvider.configuredCacheDir = this.cacheDir;
 		// Loaded here, not at module top: transformers pulls in sharp's native binding, and a host
 		// that stages dependencies apart (OpenClaw 2026.9.5) fails the whole plugin load on it.
-		const { env, pipeline } = await import("@huggingface/transformers");
-
-		// Every file comes through the shared downloader; transformers only reads the revision directory it fills.
-		env.allowRemoteModels = false;
+		const { pipeline } = await import("@huggingface/transformers");
 
 		log.info("loading ONNX model", {
 			model: this.modelId,
@@ -302,6 +299,7 @@ export class LocalEmbedProvider implements DisposableProvider {
 				dtype: this.dtype,
 				device: "cpu",
 				session_options: sessionOptions,
+				// Every file comes through the shared downloader; transformers only reads the directory it fills.
 				local_files_only: true,
 			});
 

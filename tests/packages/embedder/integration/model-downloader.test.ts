@@ -365,3 +365,15 @@ it("keeps the working file when the download of its update fails", async () => {
 	await expect(downloadModel(await hubModelSpec("test-org/custom", "main", "q8", options), options)).rejects.toThrow();
 	expect(readFileSync(join(dir, "config.json")).equals(CONFIG)).toBe(true);
 }, 30_000);
+
+it("leaves the transformers library free to download other models after loading one", async () => {
+	const { env } = await import("@huggingface/transformers");
+	const before = env.allowRemoteModels;
+	const cacheDir = tempDir();
+	const tree = [{ type: "file", path: "config.json", size: CONFIG.length }, { type: "file", path: "onnx/model_quantized.onnx", size: WEIGHTS.length }];
+	const mirror = await host((req, res) => (req.url?.startsWith("/api/models/") ? res.end(JSON.stringify(tree)) : res.end(body(req.url))));
+	const provider = new LocalEmbedProvider({ model: "test-org/custom-embedder", revision: "r2", cacheDir, mirror: mirror.url, dtype: "q8" });
+	cleanups.push(() => { void provider.dispose(); });
+	await expect(provider.warmup()).rejects.toThrow();
+	expect(env.allowRemoteModels).toBe(before);
+}, 60_000);
