@@ -125,12 +125,11 @@ export class LocalReranker {
 
 	private async load(): Promise<Loaded | undefined> {
 		const release = releases;
-		const { AutoModelForSequenceClassification, AutoTokenizer, env } = await import("@huggingface/transformers");
+		const { AutoModelForSequenceClassification, AutoTokenizer } = await import("@huggingface/transformers");
 		const started = performance.now();
 		try {
 			const dir = await downloadModel(LOCAL_RERANK_MODEL, this.options);
 			// Every file comes through the shared downloader; transformers only reads the revision directory.
-			env.allowRemoteModels = false;
 			const tokenizer = await AutoTokenizer.from_pretrained(dir, { local_files_only: true });
 			const model = await AutoModelForSequenceClassification.from_pretrained(dir, {
 				dtype: "q8", device: "cpu", local_files_only: true,
