@@ -396,3 +396,15 @@ it("names the pinned revision when the bundled model is configured with a blank 
 	expect(mirror.requests).toEqual([]);
 	expect(readdirSync(join(cacheDir, spec.id))).toEqual([spec.revision]);
 }, 60_000);
+
+it("fetches a kept mismatching file again on the next start, so a corrupted copy can heal", async () => {
+	const cacheDir = tempDir();
+	const corrupt = Buffer.from(WEIGHTS).fill(0, 1000, 2000);
+	let healthy = false;
+	const mirror = await host((req, res) => res.end(req.url?.endsWith("model.onnx") && !healthy ? corrupt : body(req.url)));
+	const dir = await downloadModel(SMALL, { cacheDir, mirror: mirror.url });
+	expect(readFileSync(join(dir, "onnx/model.onnx")).equals(corrupt)).toBe(true);
+	healthy = true;
+	await downloadModel(SMALL, { cacheDir, mirror: mirror.url });
+	expect(readFileSync(join(dir, "onnx/model.onnx")).equals(WEIGHTS)).toBe(true);
+}, 60_000);

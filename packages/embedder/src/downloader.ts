@@ -112,6 +112,8 @@ async function fetchModel(spec: ModelSpec, options: DownloadOptions, dir: string
 		});
 		adoptFlatFiles(spec, options.cacheDir, dir);
 		const recorded = new Map((readMarkerFiles(dir) ?? []).map((file) => [file.path, file]));
+		// A file kept despite a SHA-256 mismatch is recorded with its actual hash, so the next start fetches it again.
+		const kept = new Map<string, string>();
 		for (const file of spec.files) {
 			const target = join(dir, file.path);
 			// A file already here (an earlier release's copy, a try that stopped before the marker) is checked once;
@@ -119,12 +121,14 @@ async function fetchModel(spec: ModelSpec, options: DownloadOptions, dir: string
 			// A blob id the last download did not record means the file changed on its branch.
 			const present = statSync(target, { throwIfNoEntry: false })?.size === file.size &&
 				(!file.oid || recorded.get(file.path)?.oid === file.oid);
-			if (present && (options.offline || (await matches(target, file)))) continue;
+			if (present && (options.offline || (await hashCheck(target, file)).ok)) continue;
 			if (options.offline) throw new Error(`${spec.id}@${spec.revision.slice(0, 12)}: ${file.path} is not in ${dir} and downloads are off`);
 			// The working file stays until its replacement is complete: the rename replaces it in one step.
-			await fetchFile(spec, `${host}${spec.id}/resolve/${encodeURIComponent(spec.revision)}/${file.path}`, target, file);
+			const actual = await fetchFile(spec, `${host}${spec.id}/resolve/${encodeURIComponent(spec.revision)}/${file.path}`, target, file);
+			if (actual) kept.set(file.path, actual);
 		}
-		writeFileSync(join(dir, MARKER), JSON.stringify({ model: spec.id, revision: spec.revision, files: spec.files,
+		const files = spec.files.map((file) => (kept.has(file.path) ? { ...file, sha256: kept.get(file.path) } : file));
+		writeFileSync(join(dir, MARKER), JSON.stringify({ model: spec.id, revision: spec.revision, files,
 			completedAt: new Date().toISOString() }));
 		removeOlderCopies(spec, options.cacheDir);
 		log.info("model download complete", { model: spec.id, revision: spec.revision,
@@ -239,46 +243,49 @@ function hostOf(mirror: string | undefined): string {
 	return host.endsWith("/") ? host : `${host}/`;
 }
 
-async function fetchFile(spec: ModelSpec, url: string, target: string, file: ModelFile): Promise<void> {
+/** Installs one file; returns its actual SHA-256 when it was kept despite differing from the pinned one. */
+async function fetchFile(spec: ModelSpec, url: string, target: string, file: ModelFile): Promise<string | undefined> {
 	mkdirSync(dirname(target), { recursive: true });
 	// A part file survives a failed try and a killed process; the next request resumes it.
 	const part = `${target}.part`;
 	let mismatches = 0;
-	await withRetries(`${spec.id} ${file.path}`, async () => {
+	return withRetries(`${spec.id} ${file.path}`, async () => {
 		if ((statSync(part, { throwIfNoEntry: false })?.size ?? 0) < file.size) await get(url, part);
 		const size = statSync(part).size;
 		if (size > file.size) rmSync(part, { force: true });
 		if (size !== file.size) throw new Error(`got ${size} bytes, expected ${file.size} (${url})`);
-		if (!(await matches(part, file)) && ++mismatches === 1) {
+		const check = await hashCheck(part, file);
+		if (!check.ok && ++mismatches === 1) {
 			rmSync(part, { force: true });
 			throw new Error(`content does not match its SHA-256 (${url})`);
 		}
 		renameSync(part, target);
+		return check.ok ? undefined : check.actual;
 	});
 }
 
 /**
- * Whether a file has its pinned SHA-256. The check never blocks the model: a second fresh download that still
- * differs is kept with an error in the log, and a check that fails to run counts as a match.
+ * Whether a file has its pinned SHA-256, and its actual hash. The check never blocks the model: a second fresh
+ * download that still differs is kept with an error in the log, and a check that fails to run counts as a match.
  */
-async function matches(path: string, file: ModelFile): Promise<boolean> {
-	if (!file.sha256) return true;
+async function hashCheck(path: string, file: ModelFile): Promise<{ ok: boolean; actual?: string }> {
+	if (!file.sha256) return { ok: true };
 	try {
 		const hash = createHash("sha256");
 		await pipeline(createReadStream(path), hash);
 		const actual = hash.digest("hex");
-		if (actual === file.sha256) return true;
+		if (actual === file.sha256) return { ok: true, actual };
 		log.error("model file SHA-256 differs", { path: file.path, expected_sha256: file.sha256, actual_sha256: actual }, {
 			event_name: "embedder.downloader.sha256_mismatch", file: "packages/embedder/src/downloader.ts",
-			function: "matches", site_id: "embedder.downloader.sha256_mismatch",
+			function: "hashCheck", site_id: "embedder.downloader.sha256_mismatch",
 		});
-		return false;
+		return { ok: false, actual };
 	} catch (error) {
 		log.warn("model file SHA-256 not checked", { path: file.path, error }, {
 			event_name: "embedder.downloader.sha256_unchecked", file: "packages/embedder/src/downloader.ts",
-			function: "matches", site_id: "embedder.downloader.sha256_unchecked",
+			function: "hashCheck", site_id: "embedder.downloader.sha256_unchecked",
 		});
-		return true;
+		return { ok: true };
 	}
 }
 
