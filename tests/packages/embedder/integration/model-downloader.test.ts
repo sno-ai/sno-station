@@ -422,3 +422,14 @@ it("forgets a download whose model failed to load, so the next start checks its 
 	await expect(provider.warmup()).rejects.toThrow();
 	expect(existsSync(join(cacheDir, "test-org/custom-embedder", "r3", ".complete"))).toBe(false);
 }, 60_000);
+
+it("forgets a download at most once per process, so a load that keeps failing for another reason does not re-check the files each time", async () => {
+	const cacheDir = tempDir();
+	const mirror = await host((req, res) => res.end(body(req.url)));
+	const spec: ModelSpec = { ...SMALL, revision: "r-once" };
+	const dir = await downloadModel(spec, { cacheDir, mirror: mirror.url });
+	forgetDownload(cacheDir, spec);
+	await downloadModel(spec, { cacheDir, mirror: mirror.url });
+	forgetDownload(cacheDir, spec);
+	expect(existsSync(join(dir, ".complete"))).toBe(true);
+}, 30_000);

@@ -84,11 +84,17 @@ function sameIdentity(file: ModelFile, recorded: ModelFile | undefined): boolean
 
 /**
  * For a loader that could not open the model: drops the marker, so the next start checks every file again and
- * fetches any that differ (a file kept despite a SHA-256 mismatch, a copy that went bad on disk).
+ * fetches any that differ (a file kept despite a SHA-256 mismatch, a copy that went bad on disk). Once per process:
+ * a load that keeps failing for another reason (memory, an unsupported op) does not re-hash the files each time.
  */
 export function forgetDownload(cacheDir: string, spec: ModelSpec): void {
-	rmSync(join(modelDir(cacheDir, spec), MARKER), { force: true });
+	const dir = modelDir(cacheDir, spec);
+	if (forgotten.has(dir)) return;
+	forgotten.add(dir);
+	rmSync(join(dir, MARKER), { force: true });
 }
+
+const forgotten = new Set<string>();
 
 // Concurrent callers in one process share one download.
 const downloads = new Map<string, Promise<string>>();
