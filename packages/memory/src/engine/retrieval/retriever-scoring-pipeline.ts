@@ -131,12 +131,25 @@ function tracedStage(
 	return output;
 }
 
+/** The candidates the local reranker model scored take their own scores, highest first, in its order. */
+function orderByLocalModel(results: RetrievalResult[], modelOrder: readonly string[]): RetrievalResult[] {
+	const present = new Set(results.map((result) => result.entry.id));
+	const order = modelOrder.filter((id) => present.has(id));
+	if (order.length < 2) return results;
+	const judged = new Set(order);
+	const slots = results.filter((result) => judged.has(result.entry.id)).map((result) => result.score).sort((a, b) => b - a);
+	const scores = new Map(order.map((id, index) => [id, slots[index] ?? 0]));
+	return results.map((result) => ({ ...result, score: scores.get(result.entry.id) ?? result.score }))
+		.sort((a, b) => b.score - a.score);
+}
+
 Object.assign(MemoryRetriever.prototype, {
 	applyScoringPipeline(
 		this: MemoryRetrieverInternals,
 		results: RetrievalResult[],
 		trace?: TraceCollector,
 		limit: number = results.length,
+		modelOrder?: readonly string[],
 	): RetrievalResult[] {
 		// Run every score-mutating stage first so the hardMinScore filter sees the final
 		// per-result score. This keeps two contracts honest: (1) the returned set always
@@ -191,6 +204,14 @@ Object.assign(MemoryRetriever.prototype, {
 				? undefined
 				: "recallLifecycle.retentionScorer",
 			(input) => temporalOff ? input : this.applyRetentionBoost(input),
+			scored,
+		);
+		// The local reranker model has the last word on the order of the candidates it scored: the weights above only
+		// moved their scores, so they take those weighted scores back, highest first, in the model's order.
+		scored = stage(
+			"local_model_order",
+			modelOrder ? undefined : "modelOrder",
+			(input) => (modelOrder ? orderByLocalModel(input, modelOrder) : input),
 			scored,
 		);
 		scored = stage(

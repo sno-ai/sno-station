@@ -55,6 +55,8 @@ export interface RerankFallbackSignal {
 
 export interface RerankOutcome {
 	candidates: RetrievalResult[];
+	/** Ids of the candidates the local reranker model scored, in its order; the scoring pipeline restores it last. */
+	modelOrder?: string[];
 	fallback?: RerankFallbackSignal;
 	stats?: {
 		rerankSentCount: number;
@@ -175,9 +177,9 @@ export interface MemoryRetrieverInternals {
 		options?: { signal?: AbortSignal; deadlineAt?: number },
 	): Promise<RerankOutcome>;
 	rerankLightweight(candidates: RetrievalResult[], queryVector: Float32Array): RetrievalResult[];
-	rerankLocalModel(query: string, ordered: RetrievalResult[], deadlineAt?: number, signal?: AbortSignal): Promise<RetrievalResult[]>;
+	rerankLocalModel(query: string, ordered: RetrievalResult[], deadlineAt?: number, signal?: AbortSignal): Promise<RerankOutcome>;
 	getRerankSourceScore(result: RetrievalResult): number;
-	applyScoringPipeline(results: RetrievalResult[], trace?: TraceCollector, limit?: number): RetrievalResult[];
+	applyScoringPipeline(results: RetrievalResult[], trace?: TraceCollector, limit?: number, modelOrder?: readonly string[]): RetrievalResult[];
 	applyRecencyBoost(results: RetrievalResult[]): RetrievalResult[];
 	applyImportanceWeight(results: RetrievalResult[]): RetrievalResult[];
 	applyLengthNormalization(results: RetrievalResult[]): RetrievalResult[];

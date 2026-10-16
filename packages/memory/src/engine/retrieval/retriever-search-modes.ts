@@ -349,7 +349,7 @@ Object.assign(MemoryRetriever.prototype, {
 			rerankStageMetadata,
 		);
 
-		fused = this.applyScoringPipeline(fused, trace, context.limit);
+		fused = this.applyScoringPipeline(fused, trace, context.limit, rerankOutcome.modelOrder);
 		// Two removals for two different reasons; merging their counts hides which one cut a
 		// memory out of the answer.
 		trace?.startStage(
