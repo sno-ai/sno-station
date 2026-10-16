@@ -89,7 +89,7 @@
     "@snoai/chunking": "^1.0.1",
     "@snoai/common-core": "^1.1.0",
     "@snoai/content-sanitizer": "^0.99.3 || ^1.1.0",
-    "@snoai/embedder": "^1.1.0",
+    "@snoai/embedder": "^1.2.0",
     "@snoai/llmix": "2.2.0",
     "@snoai/mda-config": "^1.1.2",
     "@snoai/observability": "^1.2.2",
