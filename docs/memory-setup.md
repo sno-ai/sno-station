@@ -26,7 +26,7 @@ settings.mode = 'local-first';
 settings.store = { ...settings.store, path: join(root, 'memory.sqlite'), encryptionKey: randomBytes(32).toString('hex') };
 settings.memoryPackage = { path: memory, node: process.execPath };
 settings.embedding = { ...settings.embedding, cacheDir: join(root, 'models') };
-settings.rerank = { ...settings.rerank, mode: 'none' };
+settings.rerank = { ...settings.rerank, mode: 'lightweight' };
 settings.rem = { ...settings.rem, tick: false };
 settings.telemetry = { ...settings.telemetry, observe: { ...settings.telemetry.observe, enabled: false } };
 mkdirSync(root, { recursive: true });
@@ -49,6 +49,11 @@ memory service rejects requests that do not carry its access token, and a 1.0.0 
 send one. Run `npm install --prefix "$HOME/.sno" @snoai/memory@1.5.0 @snoai/embedder@1.2.0`, then
 reinstall your plugin at its latest version (for example `sno setup --harness codex`) and restart
 any running agent session. Do not rerun the settings block; your store and key stay as they are.
+
+From 1.5.0, recall reorders its best candidates with a local ranking model that runs on your CPU
+and downloads about 170 MB on first use. It runs when `rerank.mode` is `lightweight`. An earlier
+version of this guide wrote `none`: change `rerank.mode` to `lightweight` in `~/.sno/settings.json`
+to turn it on.
 
 The nightly improvement skill uses `modelCalls.R5` for local lesson and skill-reminder
 generation. Its destinations are `host` in Local First and `off` in Agent Native and REM
