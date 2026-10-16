@@ -6,7 +6,7 @@
  * downloads a directory at a time (an O_EXCL lock with a heartbeat; a dead holder's lock is broken at once).
  */
 
-import { closeSync, createWriteStream, mkdirSync, openSync, readFileSync, renameSync, rmSync, statSync,
+import { closeSync, createWriteStream, mkdirSync, openSync, readdirSync, readFileSync, renameSync, rmSync, statSync,
 	unlinkSync, utimesSync, writeFileSync } from "node:fs";
 import http from "node:http";
 import https from "node:https";
@@ -87,12 +87,14 @@ async function fetchModel(spec: ModelSpec, options: DownloadOptions, dir: string
 			event_name: "embedder.downloader.started", file: "packages/embedder/src/downloader.ts",
 			function: "fetchModel", site_id: "embedder.downloader.started",
 		});
+		adoptFlatFiles(spec, options.cacheDir, dir);
 		for (const file of spec.files) {
 			const target = join(dir, file.path);
 			if (statSync(target, { throwIfNoEntry: false })?.size === file.size) continue;
 			await fetchFile(`${host}${spec.id}/resolve/${spec.revision}/${file.path}`, target, file);
 		}
 		writeFileSync(join(dir, MARKER), JSON.stringify({ model: spec.id, revision: spec.revision, completedAt: new Date().toISOString() }));
+		removeOlderCopies(spec, options.cacheDir);
 		log.info("model download complete", { model: spec.id, revision: spec.revision,
 			duration_ms: Math.round(performance.now() - started) }, {
 			event_name: "embedder.downloader.complete", file: "packages/embedder/src/downloader.ts",
@@ -102,6 +104,40 @@ async function fetchModel(spec: ModelSpec, options: DownloadOptions, dir: string
 	} finally {
 		clearInterval(heartbeat);
 		rmSync(lock, { force: true });
+	}
+}
+
+/**
+ * Releases before the revision directories kept one copy at <cacheDir>/<model>/<file>: a file of the expected size
+ * there moves into the revision directory instead of being fetched again.
+ */
+function adoptFlatFiles(spec: ModelSpec, cacheDir: string, dir: string): void {
+	for (const file of spec.files) {
+		const flat = join(resolve(cacheDir), spec.id, file.path);
+		const target = join(dir, file.path);
+		if (statSync(target, { throwIfNoEntry: false })?.size === file.size) continue;
+		if (statSync(flat, { throwIfNoEntry: false })?.size !== file.size) continue;
+		mkdirSync(dirname(target), { recursive: true });
+		renameSync(flat, target);
+	}
+}
+
+/** Everything else under <cacheDir>/<model>/ is an older copy; a copy that cannot be removed only costs disk. */
+function removeOlderCopies(spec: ModelSpec, cacheDir: string): void {
+	const root = join(resolve(cacheDir), spec.id);
+	const keep = new Set([spec.revision, `${spec.revision}.lock`]);
+	const older = readdirSync(root).filter((entry) => !keep.has(entry)).map((entry) => join(root, entry));
+	// The marker the flat layout kept at the cache root.
+	older.push(join(resolve(cacheDir), ".download-complete"));
+	for (const path of older) {
+		try {
+			rmSync(path, { recursive: true, force: true });
+		} catch (error) {
+			log.warn("older model copy not removed", { path, error }, {
+				event_name: "embedder.downloader.cleanup_failed", file: "packages/embedder/src/downloader.ts",
+				function: "removeOlderCopies", site_id: "embedder.downloader.cleanup_failed",
+			});
+		}
 	}
 }
 
