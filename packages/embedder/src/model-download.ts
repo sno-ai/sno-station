@@ -29,7 +29,8 @@ const DTYPE_SIZES: Record<Dtype, string> = {
 	q4: "~400MB",
 	q8: "~639MB",
 	fp16: "~1.2GB",
-	fp32: "~2.4GB",
+	// The pinned repository ships its int8 weights under the fp32 name too.
+	fp32: "~639MB",
 };
 
 const TOKENIZER_FILES: readonly ModelFile[] = [
