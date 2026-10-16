@@ -55,12 +55,16 @@ export function modelDir(cacheDir: string, spec: Pick<ModelSpec, "id" | "revisio
 	return join(resolve(cacheDir), spec.id, spec.revision);
 }
 
+/** Complete: the marker names this revision and the same hashes, and every file has its expected size. */
 export function isDownloaded(cacheDir: string, spec: ModelSpec): boolean {
 	const dir = modelDir(cacheDir, spec);
 	try {
 		const marker = JSON.parse(readFileSync(join(dir, MARKER), "utf8")) as { revision?: unknown };
-		return marker.revision === spec.revision &&
-			spec.files.every((file) => statSync(join(dir, file.path), { throwIfNoEntry: false })?.size === file.size);
+		if (marker.revision !== spec.revision) return false;
+		// A branch revision such as `main` can change a file without changing its size.
+		const recorded = new Map((readMarkerFiles(dir) ?? []).map((file) => [file.path, file.sha256]));
+		return spec.files.every((file) => statSync(join(dir, file.path), { throwIfNoEntry: false })?.size === file.size &&
+			(!file.sha256 || recorded.get(file.path) === file.sha256));
 	} catch {
 		return false;
 	}

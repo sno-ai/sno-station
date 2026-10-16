@@ -241,3 +241,16 @@ it("offline, uses an earlier release's complete files instead of refusing", asyn
 	expect(mirror.requests).toEqual([]);
 	expect(readFileSync(join(dir, "onnx/model.onnx")).equals(WEIGHTS)).toBe(true);
 }, 30_000);
+
+it("fetches a file again when the hub lists a new SHA-256 for it at the same revision and size", async () => {
+	const cacheDir = tempDir();
+	const updated = Buffer.from('{"model_type":"xlmr"}');
+	let served = CONFIG;
+	const mirror = await host((req, res) => res.end(req.url?.endsWith("config.json") ? served : body(req.url)));
+	await downloadModel(SMALL, { cacheDir, mirror: mirror.url });
+	// Upstream replaced config.json on the same branch with a file of the same size.
+	served = updated;
+	const files = SMALL.files.map((file) => (file.path === "config.json" ? { ...file, sha256: sha(updated) } : file));
+	const dir = await downloadModel({ ...SMALL, files }, { cacheDir, mirror: mirror.url });
+	expect(readFileSync(join(dir, "config.json")).equals(updated)).toBe(true);
+}, 30_000);

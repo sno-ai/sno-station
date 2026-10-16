@@ -55,7 +55,7 @@ beforeAll(() => {
 		writeFileSync(join(dir, file.path), "");
 		truncateSync(join(dir, file.path), file.size);
 	}
-	writeFileSync(join(dir, ".complete"), JSON.stringify({ revision: spec.revision }));
+	writeFileSync(join(dir, ".complete"), JSON.stringify({ revision: spec.revision, files: spec.files }));
 });
 afterAll(() => rmSync(CACHE, { recursive: true, force: true }));
 
