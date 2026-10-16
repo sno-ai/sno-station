@@ -174,13 +174,18 @@ function adoptFlatFiles(spec: ModelSpec, cacheDir: string, dir: string): void {
 	}
 }
 
-/** Everything else under <cacheDir>/<model>/ is an older copy; a copy that cannot be removed only costs disk. */
+/**
+ * Everything else under <cacheDir>/<model>/ is an older copy, except another revision's complete download, which an
+ * install of another version sharing this cache may still load; a copy that cannot be removed only costs disk.
+ */
 function removeOlderCopies(spec: ModelSpec, cacheDir: string): void {
 	const root = join(resolve(cacheDir), spec.id);
 	const keep = new Set([revisionDirName(spec.revision), `${revisionDirName(spec.revision)}.lock`]);
 	// A revision another process is still downloading keeps its directory and its live lock.
 	const downloading = (entry: string) => !lockIsStale(join(root, entry.endsWith(".lock") ? entry : `${entry}.lock`));
-	const older = readdirSync(root).filter((entry) => !keep.has(entry) && !downloading(entry)).map((entry) => join(root, entry));
+	const complete = (entry: string) => statSync(join(root, entry, MARKER), { throwIfNoEntry: false }) !== undefined;
+	const older = readdirSync(root).filter((entry) => !keep.has(entry) && !downloading(entry) && !complete(entry))
+		.map((entry) => join(root, entry));
 	// The marker the flat layout kept at the cache root.
 	older.push(join(resolve(cacheDir), ".download-complete"));
 	for (const path of older) {

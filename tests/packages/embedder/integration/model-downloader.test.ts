@@ -327,6 +327,18 @@ it("leaves another revision alone while its download holds the lock", async () =
 	expect(existsSync(`${other}.lock`)).toBe(true);
 }, 30_000);
 
+it("keeps another revision's complete download, which an install of another version still loads from the same cache", async () => {
+	const cacheDir = tempDir();
+	const other = join(cacheDir, SMALL.id, "r2");
+	mkdirSync(join(other, "onnx"), { recursive: true });
+	writeFileSync(join(other, "onnx/model.onnx"), WEIGHTS);
+	writeFileSync(join(other, ".complete"), JSON.stringify({ model: SMALL.id, revision: "r2", files: SMALL.files }));
+	const mirror = await host((req, res) => res.end(body(req.url)));
+	await downloadModel(SMALL, { cacheDir, mirror: mirror.url });
+	expect(readFileSync(join(other, "onnx/model.onnx")).equals(WEIGHTS)).toBe(true);
+	expect(existsSync(join(other, ".complete"))).toBe(true);
+}, 30_000);
+
 it("fetches a small file again when the hub lists a new blob id for it on the same branch", async () => {
 	const cacheDir = tempDir();
 	const updated = Buffer.from('{"model_type":"xlmr"}');
