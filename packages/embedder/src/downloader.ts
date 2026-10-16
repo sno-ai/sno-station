@@ -121,7 +121,7 @@ async function fetchModel(spec: ModelSpec, options: DownloadOptions, dir: string
 				(!file.oid || recorded.get(file.path)?.oid === file.oid);
 			if (present && (options.offline || (await matches(target, file)))) continue;
 			if (options.offline) throw new Error(`${spec.id}@${spec.revision.slice(0, 12)}: ${file.path} is not in ${dir} and downloads are off`);
-			rmSync(target, { force: true });
+			// The working file stays until its replacement is complete: the rename replaces it in one step.
 			await fetchFile(spec, `${host}${spec.id}/resolve/${encodeURIComponent(spec.revision)}/${file.path}`, target, file);
 		}
 		writeFileSync(join(dir, MARKER), JSON.stringify({ model: spec.id, revision: spec.revision, files: spec.files,

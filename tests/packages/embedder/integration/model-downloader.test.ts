@@ -344,3 +344,24 @@ it("fetches a small file again when the hub lists a new blob id for it on the sa
 	const dir = await downloadModel(await hubModelSpec("test-org/custom", "main", "q8", options), options);
 	expect(readFileSync(join(dir, "config.json")).equals(updated)).toBe(true);
 }, 30_000);
+
+it("keeps the working file when the download of its update fails", async () => {
+	const cacheDir = tempDir();
+	let blob = "1111111111111111111111111111111111111111";
+	let failing = false;
+	const mirror = await host((req, res) => {
+		if (req.url?.startsWith("/api/models/")) {
+			res.end(JSON.stringify([{ type: "file", path: "config.json", size: CONFIG.length, oid: blob }, { type: "file", path: "onnx/model_quantized.onnx", size: WEIGHTS.length }]));
+			return;
+		}
+		if (failing) { res.statusCode = 404; res.end(); return; }
+		res.end(body(req.url));
+	});
+	const options = { cacheDir, mirror: mirror.url };
+	const dir = await downloadModel(await hubModelSpec("test-org/custom", "main", "q8", options), options);
+	// The branch moved, and the new config.json cannot be fetched.
+	blob = "2222222222222222222222222222222222222222";
+	failing = true;
+	await expect(downloadModel(await hubModelSpec("test-org/custom", "main", "q8", options), options)).rejects.toThrow();
+	expect(readFileSync(join(dir, "config.json")).equals(CONFIG)).toBe(true);
+}, 30_000);
