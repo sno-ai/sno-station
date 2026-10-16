@@ -10,7 +10,7 @@ import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, expect, it } from "vitest";
-import { downloadModel, hubModelSpec, type ModelSpec } from "../../../../packages/embedder/src/downloader.ts";
+import { downloadModel, forgetDownload, hubModelSpec, type ModelSpec } from "../../../../packages/embedder/src/downloader.ts";
 import { LocalEmbedProvider } from "../../../../packages/embedder/src/local-provider.ts";
 import { embeddingModelSpec, ensureModelDownloaded, isModelCached } from "../../../../packages/embedder/src/model-download.ts";
 
@@ -181,7 +181,7 @@ it("resumes the part a killed process left behind", async () => {
 	expect(ranges).toEqual(["bytes=50000-"]);
 }, 60_000);
 
-it("loads a custom embedding model only through the downloader: listed, fetched into its revision directory, marked complete", async () => {
+it("loads a custom embedding model only through the downloader: listed and fetched into its revision directory", async () => {
 	const cacheDir = tempDir();
 	const tree = [
 		{ type: "file", path: "config.json", size: CONFIG.length },
@@ -201,7 +201,6 @@ it("loads a custom embedding model only through the downloader: listed, fetched 
 	expect(mirror.requests[0]).toMatch(/^\/api\/models\/test-org\/custom-embedder\/tree\/r1/);
 	const dir = join(cacheDir, "test-org/custom-embedder", "r1");
 	expect(readFileSync(join(dir, "onnx/model_quantized.onnx")).equals(WEIGHTS)).toBe(true);
-	expect(existsSync(join(dir, ".complete"))).toBe(true);
 	expect(mirror.requests.some((url) => url.includes("README.md"))).toBe(false);
 }, 60_000);
 
@@ -397,14 +396,29 @@ it("names the pinned revision when the bundled model is configured with a blank 
 	expect(readdirSync(join(cacheDir, spec.id))).toEqual([spec.revision]);
 }, 60_000);
 
-it("fetches a kept mismatching file again on the next start, so a corrupted copy can heal", async () => {
+it("does not fetch a kept mismatching file again while the model works, and heals it after a failed load", async () => {
 	const cacheDir = tempDir();
 	const corrupt = Buffer.from(WEIGHTS).fill(0, 1000, 2000);
 	let healthy = false;
 	const mirror = await host((req, res) => res.end(req.url?.endsWith("model.onnx") && !healthy ? corrupt : body(req.url)));
 	const dir = await downloadModel(SMALL, { cacheDir, mirror: mirror.url });
-	expect(readFileSync(join(dir, "onnx/model.onnx")).equals(corrupt)).toBe(true);
+	const afterFirst = mirror.requests.length;
+	// The next start uses the kept file: a persistent mismatch is not downloaded again on every start.
+	await downloadModel(SMALL, { cacheDir, mirror: mirror.url });
+	expect(mirror.requests.length).toBe(afterFirst);
+	// The loader could not open it: the next start checks every file again and replaces the bad one.
+	forgetDownload(cacheDir, SMALL);
 	healthy = true;
 	await downloadModel(SMALL, { cacheDir, mirror: mirror.url });
 	expect(readFileSync(join(dir, "onnx/model.onnx")).equals(WEIGHTS)).toBe(true);
+}, 60_000);
+
+it("forgets a download whose model failed to load, so the next start checks its files again", async () => {
+	const cacheDir = tempDir();
+	const tree = [{ type: "file", path: "config.json", size: CONFIG.length }, { type: "file", path: "onnx/model_quantized.onnx", size: WEIGHTS.length }];
+	const mirror = await host((req, res) => (req.url?.startsWith("/api/models/") ? res.end(JSON.stringify(tree)) : res.end(body(req.url))));
+	const provider = new LocalEmbedProvider({ model: "test-org/custom-embedder", revision: "r3", cacheDir, mirror: mirror.url, dtype: "q8" });
+	cleanups.push(() => { void provider.dispose(); });
+	await expect(provider.warmup()).rejects.toThrow();
+	expect(existsSync(join(cacheDir, "test-org/custom-embedder", "r3", ".complete"))).toBe(false);
 }, 60_000);

@@ -22,7 +22,7 @@ import type {
 	LocalEmbedPooling,
 	LocalEmbedSessionOptions,
 } from "./types";
-import { downloadModel, hubModelSpec } from "./downloader";
+import { downloadModel, forgetDownload, hubModelSpec } from "./downloader";
 import { embeddingModelSpec } from "./model-download";
 
 const log = createLogger("embedder:local");
@@ -296,12 +296,17 @@ export class LocalEmbedProvider implements DisposableProvider {
 			const spec = this.modelId === LOCAL_EMBEDDING_MODEL && this.revision === LOCAL_EMBEDDING_MODEL_REVISION
 				? embeddingModelSpec(this.dtype)
 				: await hubModelSpec(this.modelId, this.revision ?? "main", this.dtype, download);
-			const extractor = await pipeline("feature-extraction", await downloadModel(spec, download), {
+			const dir = await downloadModel(spec, download);
+			const extractor = await pipeline("feature-extraction", dir, {
 				dtype: this.dtype,
 				device: "cpu",
 				session_options: sessionOptions,
 				// Every file comes through the shared downloader; transformers only reads the directory it fills.
 				local_files_only: true,
+			}).catch((error: unknown) => {
+				// Files the runtime cannot open are checked, and fetched again if they differ, on the next start.
+				forgetDownload(this.cacheDir, spec);
+				throw error;
 			});
 
 			const durationMs = Math.round(performance.now() - t0);

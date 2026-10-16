@@ -82,6 +82,14 @@ function sameIdentity(file: ModelFile, recorded: ModelFile | undefined): boolean
 	return (!file.sha256 || recorded?.sha256 === file.sha256) && (!file.oid || recorded?.oid === file.oid);
 }
 
+/**
+ * For a loader that could not open the model: drops the marker, so the next start checks every file again and
+ * fetches any that differ (a file kept despite a SHA-256 mismatch, a copy that went bad on disk).
+ */
+export function forgetDownload(cacheDir: string, spec: ModelSpec): void {
+	rmSync(join(modelDir(cacheDir, spec), MARKER), { force: true });
+}
+
 // Concurrent callers in one process share one download.
 const downloads = new Map<string, Promise<string>>();
 
@@ -112,8 +120,6 @@ async function fetchModel(spec: ModelSpec, options: DownloadOptions, dir: string
 		});
 		adoptFlatFiles(spec, options.cacheDir, dir);
 		const recorded = new Map((readMarkerFiles(dir) ?? []).map((file) => [file.path, file]));
-		// A file kept despite a SHA-256 mismatch is recorded with its actual hash, so the next start fetches it again.
-		const kept = new Map<string, string>();
 		for (const file of spec.files) {
 			const target = join(dir, file.path);
 			// A file already here (an earlier release's copy, a try that stopped before the marker) is checked once;
@@ -124,11 +130,9 @@ async function fetchModel(spec: ModelSpec, options: DownloadOptions, dir: string
 			if (present && (options.offline || (await hashCheck(target, file)).ok)) continue;
 			if (options.offline) throw new Error(`${spec.id}@${spec.revision.slice(0, 12)}: ${file.path} is not in ${dir} and downloads are off`);
 			// The working file stays until its replacement is complete: the rename replaces it in one step.
-			const actual = await fetchFile(spec, `${host}${spec.id}/resolve/${encodeURIComponent(spec.revision)}/${file.path}`, target, file);
-			if (actual) kept.set(file.path, actual);
+			await fetchFile(spec, `${host}${spec.id}/resolve/${encodeURIComponent(spec.revision)}/${file.path}`, target, file);
 		}
-		const files = spec.files.map((file) => (kept.has(file.path) ? { ...file, sha256: kept.get(file.path) } : file));
-		writeFileSync(join(dir, MARKER), JSON.stringify({ model: spec.id, revision: spec.revision, files,
+		writeFileSync(join(dir, MARKER), JSON.stringify({ model: spec.id, revision: spec.revision, files: spec.files,
 			completedAt: new Date().toISOString() }));
 		removeOlderCopies(spec, options.cacheDir);
 		log.info("model download complete", { model: spec.id, revision: spec.revision,
@@ -243,8 +247,7 @@ function hostOf(mirror: string | undefined): string {
 	return host.endsWith("/") ? host : `${host}/`;
 }
 
-/** Installs one file; returns its actual SHA-256 when it was kept despite differing from the pinned one. */
-async function fetchFile(spec: ModelSpec, url: string, target: string, file: ModelFile): Promise<string | undefined> {
+async function fetchFile(spec: ModelSpec, url: string, target: string, file: ModelFile): Promise<void> {
 	mkdirSync(dirname(target), { recursive: true });
 	// A part file survives a failed try and a killed process; the next request resumes it.
 	const part = `${target}.part`;
@@ -260,7 +263,6 @@ async function fetchFile(spec: ModelSpec, url: string, target: string, file: Mod
 			throw new Error(`content does not match its SHA-256 (${url})`);
 		}
 		renameSync(part, target);
-		return check.ok ? undefined : check.actual;
 	});
 }
 
