@@ -3,12 +3,14 @@
  * @boundary Real downloader and real filesystem; the download host is a local HTTP server used as the mirror.
  */
 
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, truncateSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, truncateSync, writeFileSync } from "node:fs";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, expect, it } from "vitest";
+import { downloadModel, type ModelSpec } from "../../../../packages/embedder/src/downloader.ts";
 import { embeddingModelSpec, ensureModelDownloaded } from "../../../../packages/embedder/src/model-download.ts";
 
 const EMBEDDING_MODEL = "tss-deposium/pplx-embed-v1-0.6b-onnx-int8-standard";
@@ -86,14 +88,52 @@ it("downloads through the proxy the environment names", async () => {
 	expect(proxy.requests.some((url) => url.startsWith(`${mirror.url}${EMBEDDING_MODEL}/resolve/`))).toBe(true);
 }, 30_000);
 
-it("gives up on a download that stops sending data within a minute, not five", async () => {
+it("drops a download that stops sending data after 30 seconds, not five minutes, and tries again", async () => {
 	const cacheDir = tempDir();
-	// Sends the headers and a little of the body, then nothing.
-	const mirror = await host((_req, res) => {
-		res.writeHead(200, { "content-length": String(1024 * 1024) });
-		res.write(Buffer.alloc(1024));
+	let calls = 0;
+	// The first answer sends the headers and a little of the body, then nothing.
+	const mirror = await host((req, res) => {
+		calls += 1;
+		if (calls === 1) { res.writeHead(200, { "content-length": String(body(req.url).length) }); res.write(body(req.url).subarray(0, 10)); return; }
+		res.end(body(req.url));
 	});
 	const started = Date.now();
-	await expect(ensureModelDownloaded({ cacheDir, mirror: mirror.url })).rejects.toThrow(/no data/);
+	const dir = await downloadModel(SMALL, { cacheDir, mirror: mirror.url });
+	expect(readFileSync(join(dir, "config.json")).equals(CONFIG)).toBe(true);
+	expect(Date.now() - started).toBeGreaterThanOrEqual(30_000);
 	expect(Date.now() - started).toBeLessThan(60_000);
 }, 90_000);
+
+// A small model of two files for the downloader's own behaviour.
+const WEIGHTS = Buffer.from(Array.from({ length: 200_000 }, (_, i) => (i * 7) % 251));
+const CONFIG = Buffer.from('{"model_type":"bert"}');
+const sha = (bytes: Buffer): string => createHash("sha256").update(bytes).digest("hex");
+const SMALL: ModelSpec = {
+	id: "test-org/small-model",
+	revision: "r1",
+	files: [
+		{ path: "config.json", size: CONFIG.length, sha256: sha(CONFIG) },
+		{ path: "onnx/model.onnx", size: WEIGHTS.length, sha256: sha(WEIGHTS) },
+	],
+};
+const body = (url: string | undefined): Buffer => (url?.endsWith("config.json") ? CONFIG : WEIGHTS);
+
+it("retries a server error and a rate limit, then completes the download", async () => {
+	const cacheDir = tempDir();
+	let calls = 0;
+	const mirror = await host((req, res) => {
+		calls += 1;
+		if (calls === 1) { res.statusCode = 500; res.end(); return; }
+		if (calls === 2) { res.writeHead(429, { "retry-after": "1" }); res.end(); return; }
+		res.end(body(req.url));
+	});
+	const dir = await downloadModel(SMALL, { cacheDir, mirror: mirror.url });
+	expect(readFileSync(join(dir, "onnx/model.onnx")).equals(WEIGHTS)).toBe(true);
+	expect(readFileSync(join(dir, "config.json")).equals(CONFIG)).toBe(true);
+}, 60_000);
+
+it("says which file failed and why when the host cannot be reached", async () => {
+	const cacheDir = tempDir();
+	await expect(downloadModel(SMALL, { cacheDir, mirror: "http://127.0.0.1:9/" }))
+		.rejects.toThrow(/test-org\/small-model config\.json: .*ECONNREFUSED.* after 5 attempts/);
+}, 60_000);

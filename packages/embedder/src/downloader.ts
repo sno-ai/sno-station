@@ -41,6 +41,9 @@ const MARKER = ".complete";
 const MAX_REDIRECTS = 5;
 /** A connection that sends nothing for this long is dropped (Node's own limit is five minutes). */
 const STALL_MS = 30_000;
+/** Tries per file; network errors, stalls, 408, 429 and 5xx wait 1, 2, 4, 8 s (or the server's Retry-After). */
+const ATTEMPTS = 5;
+const RETRY_AFTER_CAP_MS = 60_000;
 const LOCK_HEARTBEAT_MS = 5_000;
 const LOCK_POLL_MS = 2_000;
 /** A lock not touched for this long belongs to a holder that hung or died. */
@@ -94,7 +97,7 @@ async function fetchModel(spec: ModelSpec, options: DownloadOptions, dir: string
 		for (const file of spec.files) {
 			const target = join(dir, file.path);
 			if (statSync(target, { throwIfNoEntry: false })?.size === file.size) continue;
-			await fetchFile(`${host}${spec.id}/resolve/${spec.revision}/${file.path}`, target, file);
+			await fetchFile(spec, `${host}${spec.id}/resolve/${spec.revision}/${file.path}`, target, file);
 		}
 		writeFileSync(join(dir, MARKER), JSON.stringify({ model: spec.id, revision: spec.revision, completedAt: new Date().toISOString() }));
 		removeOlderCopies(spec, options.cacheDir);
@@ -149,13 +152,52 @@ function hostOf(mirror: string | undefined): string {
 	return host.endsWith("/") ? host : `${host}/`;
 }
 
-async function fetchFile(url: string, target: string, file: ModelFile): Promise<void> {
+async function fetchFile(spec: ModelSpec, url: string, target: string, file: ModelFile): Promise<void> {
 	mkdirSync(dirname(target), { recursive: true });
 	const part = `${target}.part`;
-	await get(url, part);
-	const size = statSync(part).size;
-	if (size !== file.size) throw new Error(`${file.path}: got ${size} bytes, expected ${file.size} (${url})`);
-	renameSync(part, target);
+	for (let attempt = 1; ; attempt += 1) {
+		try {
+			await get(url, part);
+			const size = statSync(part).size;
+			if (size !== file.size) throw new Error(`got ${size} bytes, expected ${file.size} (${url})`);
+			renameSync(part, target);
+			return;
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error);
+			const delay = attempt < ATTEMPTS ? retryDelay(error, attempt) : undefined;
+			if (delay === undefined) {
+				throw new Error(`${spec.id} ${file.path}: ${message} after ${attempt} attempt${attempt === 1 ? "" : "s"}`, { cause: error });
+			}
+			log.warn("model file download failed; retrying", { model: spec.id, path: file.path, attempt, delay_ms: delay, error }, {
+				event_name: "embedder.downloader.retry", file: "packages/embedder/src/downloader.ts",
+				function: "fetchFile", site_id: "embedder.downloader.retry",
+			});
+			await new Promise((resolveWait) => setTimeout(resolveWait, delay));
+		}
+	}
+}
+
+class HttpError extends Error {
+	constructor(readonly status: number, readonly retryAfterMs: number | undefined, url: string) {
+		super(`HTTP ${status} (${url})`);
+	}
+}
+
+/** Milliseconds before the next try, or undefined when another try cannot help (404, 401, 403 and other 4xx). */
+function retryDelay(error: unknown, attempt: number): number | undefined {
+	if (error instanceof HttpError) {
+		if (error.status !== 408 && error.status !== 429 && error.status < 500) return undefined;
+		if (error.retryAfterMs !== undefined) return Math.min(error.retryAfterMs, RETRY_AFTER_CAP_MS);
+	}
+	return 1000 * 2 ** (attempt - 1);
+}
+
+/** Retry-After in seconds or as an HTTP date. */
+function retryAfterMs(header: string | undefined): number | undefined {
+	if (!header) return undefined;
+	const seconds = Number(header);
+	const ms = Number.isFinite(seconds) ? seconds * 1000 : Date.parse(header) - Date.now();
+	return Number.isFinite(ms) ? Math.max(0, ms) : undefined;
 }
 
 /** Streams one URL into `part`, following redirects. */
@@ -175,7 +217,7 @@ function get(url: string, part: string, redirects = 0): Promise<void> {
 			}
 			if (status !== 200) {
 				response.resume();
-				return reject(new Error(`HTTP ${status} (${url})`));
+				return reject(new HttpError(status, retryAfterMs(response.headers["retry-after"]), url));
 			}
 			// Closes the file and the response on either side's error.
 			pipeline(response, createWriteStream(part)).then(resolvePromise, reject);
