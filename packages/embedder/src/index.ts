@@ -23,6 +23,8 @@ export {
 	truncateAndRenormalize,
 } from "./local-provider";
 export { CachedEmbeddingProvider } from "./lru-cache";
+export type { LocalRerankerOptions } from "./local-reranker";
+export { LOCAL_RERANK_MODEL, LocalReranker } from "./local-reranker";
 // ─── Types & Interface ───────────────────────────────────────────────────────
 export type { EnsureModelDownloadedOptions } from "./model-download";
 export {
