@@ -118,9 +118,9 @@ export async function ensureModelDownloaded(opts?: EnsureModelDownloadedOptions)
 	const spec = embeddingModelSpec(dtype);
 	const fetching = !opts?.offline && !isDownloaded(cacheDir, spec);
 	const started = performance.now();
-	if (fetching) process.stderr.write(`\nDownloading the local embedding model (first run only, ${getDtypeDisplaySize(dtype)})...\n`);
+	if (fetching) process.stderr.write(`\nPreparing the local embedding model (a first run downloads ${getDtypeDisplaySize(dtype)})...\n`);
 	await downloadModel(spec, { cacheDir, offline: opts?.offline, mirror: opts?.mirror });
-	if (fetching) process.stderr.write(`  Download complete in ${Math.round((performance.now() - started) / 1000)}s: ${cacheDir}\n`);
+	if (fetching) process.stderr.write(`  Ready in ${Math.round((performance.now() - started) / 1000)}s: ${cacheDir}\n`);
 	log.info("local embedding model ready", { cacheDir, dtype }, {
 		event_name: "embedder.model.download.complete", file: "packages/embedder/src/model-download.ts",
 		function: "ensureModelDownloaded", site_id: "embedder.model.download.complete",

@@ -1,8 +1,8 @@
 /**
  * Downloads a model's files into <cacheDir>/<model>/<revision>/, the one place the loaders read a model from.
  *
- * A revision directory is complete when its marker lists the same revision and every file has its expected size;
- * the marker is written last, so an interrupted download is never mistaken for a complete one. One process
+ * A revision directory is complete when its marker names the same revision and file hashes and every file has its
+ * expected size; the marker is written last, so an interrupted download is never mistaken for a complete one. One process
  * downloads a directory at a time (an O_EXCL lock with a heartbeat; a dead holder's lock is broken at once).
  */
 
