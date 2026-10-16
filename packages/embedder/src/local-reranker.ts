@@ -8,7 +8,7 @@
 
 import { createLogger } from "@snoai/utils/logger";
 import { LOCAL_EMBEDDING_SESSION_OPTIONS_DEFAULT } from "./constants";
-import { downloadModel, type ModelSpec } from "./downloader";
+import { downloadModel, forgetDownload, type ModelSpec } from "./downloader";
 
 const log = createLogger("embedder:local-reranker");
 
@@ -130,12 +130,20 @@ export class LocalReranker {
 		try {
 			const dir = await downloadModel(LOCAL_RERANK_MODEL, this.options);
 			// Every file comes through the shared downloader; transformers only reads the revision directory.
-			const tokenizer = await AutoTokenizer.from_pretrained(dir, { local_files_only: true });
-			const model = await AutoModelForSequenceClassification.from_pretrained(dir, {
-				dtype: "q8", device: "cpu", local_files_only: true,
-				// The embedder's low-memory profile (no arena, no memory pattern), so the two models together stay small.
-				session_options: { ...LOCAL_EMBEDDING_SESSION_OPTIONS_DEFAULT, interOpNumThreads: 1,
-					...(this.options.intraOpNumThreads ? { intraOpNumThreads: this.options.intraOpNumThreads } : {}) },
+			const open = async () => {
+				const tokenizer = await AutoTokenizer.from_pretrained(dir, { local_files_only: true });
+				const model = await AutoModelForSequenceClassification.from_pretrained(dir, {
+					dtype: "q8", device: "cpu", local_files_only: true,
+					// The embedder's low-memory profile (no arena, no memory pattern), so the two models together stay small.
+					session_options: { ...LOCAL_EMBEDDING_SESSION_OPTIONS_DEFAULT, interOpNumThreads: 1,
+						...(this.options.intraOpNumThreads ? { intraOpNumThreads: this.options.intraOpNumThreads } : {}) },
+				});
+				return { tokenizer, model };
+			};
+			const { tokenizer, model } = await open().catch((error: unknown) => {
+				// Files the runtime cannot open are checked, and fetched again if they differ, on the next load.
+				forgetDownload(this.options.cacheDir, LOCAL_RERANK_MODEL);
+				throw error;
 			});
 			if (release !== releases) {
 				await model.dispose();
