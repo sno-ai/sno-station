@@ -39,6 +39,7 @@ export interface DownloadOptions {
 }
 
 const HUB = "https://huggingface.co/";
+const HUB_HOSTS = new Set(["huggingface.co", "hf.co"]);
 const MARKER = ".complete";
 const MAX_REDIRECTS = 5;
 /** A connection that sends nothing for this long is dropped (Node's own limit is five minutes). */
@@ -313,7 +314,10 @@ function open(url: string, headers: Record<string, string>, redirects = 0): Prom
 		// HTTP(S)_PROXY and NO_PROXY apply to this request only. `proxyEnv` exists from Node 22.21 and 24.5;
 		// @types/node 22.20 does not list it yet.
 		const agent = new client.Agent({ proxyEnv: process.env } as http.AgentOptions);
-		const request = client.get(url, { agent, headers: { "user-agent": "sno-station", ...headers } }, (response) => {
+		// A private or gated model needs the user's token; it goes to the hub itself, never to a mirror or the CDN.
+		const token = HUB_HOSTS.has(new URL(url).hostname) ? (process.env["HF_TOKEN"] ?? process.env["HF_ACCESS_TOKEN"]) : undefined;
+		const auth = token ? { authorization: `Bearer ${token}` } : {};
+		const request = client.get(url, { agent, headers: { "user-agent": "sno-station", ...auth, ...headers } }, (response) => {
 			const location = response.headers.location;
 			const status = response.statusCode ?? 0;
 			if (status < 300 || status >= 400 || !location) return resolvePromise(response);

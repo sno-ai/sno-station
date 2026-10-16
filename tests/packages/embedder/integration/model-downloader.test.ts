@@ -271,3 +271,18 @@ it("uses a custom model already on disk when the hub cannot list its files", asy
 	const dir = await downloadModel(spec, options);
 	expect(readFileSync(join(dir, "onnx/model_quantized.onnx")).equals(WEIGHTS)).toBe(true);
 }, 60_000);
+
+it("sends the Hugging Face token to the hub only, not to a mirror", async () => {
+	const cacheDir = tempDir();
+	const seen: Array<{ url: string; auth: string | undefined }> = [];
+	// A proxy sees each plain-HTTP request's absolute URL and headers.
+	const proxy = await host((req, res) => { seen.push({ url: req.url ?? "", auth: req.headers.authorization }); res.statusCode = 404; res.end(); });
+	const saved = { HTTP_PROXY: process.env.HTTP_PROXY, http_proxy: process.env.http_proxy, NO_PROXY: process.env.NO_PROXY, no_proxy: process.env.no_proxy, HF_TOKEN: process.env.HF_TOKEN };
+	cleanups.push(() => { for (const [key, value] of Object.entries(saved)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; } });
+	Object.assign(process.env, { HTTP_PROXY: proxy.url, http_proxy: proxy.url, NO_PROXY: "", no_proxy: "", HF_TOKEN: "hf_test_token" });
+
+	await expect(downloadModel(SMALL, { cacheDir, mirror: "http://huggingface.co/" })).rejects.toThrow();
+	await expect(downloadModel(SMALL, { cacheDir, mirror: "http://mirror.example/" })).rejects.toThrow();
+	expect(seen.find((request) => request.url.startsWith("http://huggingface.co/"))?.auth).toBe("Bearer hf_test_token");
+	expect(seen.find((request) => request.url.startsWith("http://mirror.example/"))?.auth).toBeUndefined();
+}, 30_000);
