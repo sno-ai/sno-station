@@ -70,11 +70,14 @@ export function recommendDtype(ramGB: number): "q4" | "q8" {
 	return ramGB >= RAM_THRESHOLD_GB ? "q8" : "q4";
 }
 
-/** Whether the bundled embedding model is complete in cacheDir at the pinned (or the given) revision and dtype. */
+/**
+ * Whether the bundled embedding model is complete in cacheDir at the pinned (or the given) revision; with no dtype,
+ * a complete download of any dtype the model ships counts.
+ */
 export function isModelCached(cacheDir: string, expectedRevision?: string, expectedDtype?: string): boolean {
 	if (expectedRevision !== undefined && expectedRevision !== LOCAL_EMBEDDING_MODEL_REVISION) return false;
-	const dtype = (expectedDtype ?? LOCAL_EMBEDDING_DTYPE_DEFAULT) as LocalEmbedDtype;
-	return WEIGHTS[dtype] !== undefined && isDownloaded(cacheDir, embeddingModelSpec(dtype));
+	const dtypes = expectedDtype === undefined ? Object.keys(WEIGHTS) : [expectedDtype];
+	return dtypes.some((dtype) => WEIGHTS[dtype as LocalEmbedDtype] !== undefined && isDownloaded(cacheDir, embeddingModelSpec(dtype as LocalEmbedDtype)));
 }
 
 export function getDirSizeMB(dirPath: string): number {

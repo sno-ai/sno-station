@@ -4,15 +4,15 @@
  */
 
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, truncateSync, writeFileSync } from "node:fs";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { afterEach, expect, it } from "vitest";
 import { downloadModel, hubModelSpec, type ModelSpec } from "../../../../packages/embedder/src/downloader.ts";
 import { LocalEmbedProvider } from "../../../../packages/embedder/src/local-provider.ts";
-import { ensureModelDownloaded } from "../../../../packages/embedder/src/model-download.ts";
+import { embeddingModelSpec, ensureModelDownloaded, isModelCached } from "../../../../packages/embedder/src/model-download.ts";
 
 const EMBEDDING_MODEL = "tss-deposium/pplx-embed-v1-0.6b-onnx-int8-standard";
 const PINNED_REVISION = "a18fdffe7480e6ea5643acb7757142b33838817a";
@@ -296,3 +296,17 @@ it("keeps a custom model whose revision is a ref with slashes", async () => {
 	expect(readFileSync(join(dir, "onnx/model_quantized.onnx")).equals(WEIGHTS)).toBe(true);
 	expect(mirror.requests.some((url) => url.includes("/resolve/refs%2Fpr%2F1/"))).toBe(true);
 }, 30_000);
+
+it("counts a complete download of any shipped dtype as cached when the caller names none", () => {
+	const cacheDir = tempDir();
+	const spec = embeddingModelSpec("fp32");
+	const dir = join(cacheDir, spec.id, spec.revision);
+	for (const file of spec.files) {
+		mkdirSync(dirname(join(dir, file.path)), { recursive: true });
+		writeFileSync(join(dir, file.path), "");
+		truncateSync(join(dir, file.path), file.size);
+	}
+	writeFileSync(join(dir, ".complete"), JSON.stringify({ revision: spec.revision, files: spec.files }));
+	expect(isModelCached(cacheDir)).toBe(true);
+	expect(isModelCached(cacheDir, undefined, "q8")).toBe(false);
+});
