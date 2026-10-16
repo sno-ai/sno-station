@@ -22,6 +22,8 @@ export interface ModelFile {
 	readonly size: number;
 	/** Pinned in code for the bundled models; for other models the hub's LFS hash, when it has one. */
 	readonly sha256?: string | undefined;
+	/** The hub's git blob id, which changes with every edit; only models resolved from the hub carry it. */
+	readonly oid?: string | undefined;
 }
 
 export interface ModelSpec {
@@ -68,12 +70,16 @@ export function isDownloaded(cacheDir: string, spec: ModelSpec): boolean {
 		const marker = JSON.parse(readFileSync(join(dir, MARKER), "utf8")) as { revision?: unknown };
 		if (marker.revision !== spec.revision) return false;
 		// A branch revision such as `main` can change a file without changing its size.
-		const recorded = new Map((readMarkerFiles(dir) ?? []).map((file) => [file.path, file.sha256]));
+		const recorded = new Map((readMarkerFiles(dir) ?? []).map((file) => [file.path, file]));
 		return spec.files.every((file) => statSync(join(dir, file.path), { throwIfNoEntry: false })?.size === file.size &&
-			(!file.sha256 || recorded.get(file.path) === file.sha256));
+			sameIdentity(file, recorded.get(file.path)));
 	} catch {
 		return false;
 	}
+}
+
+function sameIdentity(file: ModelFile, recorded: ModelFile | undefined): boolean {
+	return (!file.sha256 || recorded?.sha256 === file.sha256) && (!file.oid || recorded?.oid === file.oid);
 }
 
 // Concurrent callers in one process share one download.
@@ -105,11 +111,14 @@ async function fetchModel(spec: ModelSpec, options: DownloadOptions, dir: string
 			function: "fetchModel", site_id: "embedder.downloader.started",
 		});
 		adoptFlatFiles(spec, options.cacheDir, dir);
+		const recorded = new Map((readMarkerFiles(dir) ?? []).map((file) => [file.path, file]));
 		for (const file of spec.files) {
 			const target = join(dir, file.path);
 			// A file already here (an earlier release's copy, a try that stopped before the marker) is checked once;
 			// offline, a file of the right size is used as it is.
-			const present = statSync(target, { throwIfNoEntry: false })?.size === file.size;
+			// A blob id the last download did not record means the file changed on its branch.
+			const present = statSync(target, { throwIfNoEntry: false })?.size === file.size &&
+				(!file.oid || recorded.get(file.path)?.oid === file.oid);
 			if (present && (options.offline || (await matches(target, file)))) continue;
 			if (options.offline) throw new Error(`${spec.id}@${spec.revision.slice(0, 12)}: ${file.path} is not in ${dir} and downloads are off`);
 			rmSync(target, { force: true });
@@ -218,10 +227,10 @@ function parseTree(raw: unknown): ModelFile[] {
 	if (!Array.isArray(entries)) throw new Error("the hub's file list is not a list");
 	return entries.flatMap((entry: unknown) => {
 		if (typeof entry !== "object" || entry === null) return [];
-		const { type, path, size, lfs, sha256 } = entry as { type?: unknown; path?: unknown; size?: unknown; lfs?: { oid?: unknown }; sha256?: unknown };
+		const { type, path, size, lfs, sha256, oid } = entry as { type?: unknown; path?: unknown; size?: unknown; lfs?: { oid?: unknown }; sha256?: unknown; oid?: unknown };
 		if (type !== "file" || typeof path !== "string" || typeof size !== "number") return [];
 		const hash = typeof sha256 === "string" ? sha256 : typeof lfs?.oid === "string" ? lfs.oid : undefined;
-		return [{ path, size, ...(hash ? { sha256: hash } : {}) }];
+		return [{ path, size, ...(hash ? { sha256: hash } : {}), ...(typeof oid === "string" ? { oid } : {}) }];
 	});
 }
 

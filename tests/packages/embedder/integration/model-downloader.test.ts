@@ -323,3 +323,24 @@ it("leaves another revision alone while its download holds the lock", async () =
 	expect(existsSync(join(other, "onnx/model.onnx.part"))).toBe(true);
 	expect(existsSync(`${other}.lock`)).toBe(true);
 }, 30_000);
+
+it("fetches a small file again when the hub lists a new blob id for it on the same branch", async () => {
+	const cacheDir = tempDir();
+	const updated = Buffer.from('{"model_type":"xlmr"}');
+	let served = CONFIG;
+	let blob = "1111111111111111111111111111111111111111";
+	const mirror = await host((req, res) => {
+		if (req.url?.startsWith("/api/models/")) {
+			res.end(JSON.stringify([{ type: "file", path: "config.json", size: served.length, oid: blob }, { type: "file", path: "onnx/model_quantized.onnx", size: WEIGHTS.length }]));
+			return;
+		}
+		res.end(req.url?.endsWith("config.json") ? served : body(req.url));
+	});
+	const options = { cacheDir, mirror: mirror.url };
+	await downloadModel(await hubModelSpec("test-org/custom", "main", "q8", options), options);
+	// The branch moved: config.json changed, same size, new blob id.
+	served = updated;
+	blob = "2222222222222222222222222222222222222222";
+	const dir = await downloadModel(await hubModelSpec("test-org/custom", "main", "q8", options), options);
+	expect(readFileSync(join(dir, "config.json")).equals(updated)).toBe(true);
+}, 30_000);
