@@ -175,7 +175,21 @@ export async function hubModelSpec(id: string, revision: string, dtype: string, 
 		return { id, revision, files };
 	}
 	const weights = `onnx/model${DTYPE_SUFFIX[dtype] ?? ""}.onnx`;
-	const listed = parseTree(await withRetries(`${id} file list`, () => getText(`${hostOf(options.mirror)}api/models/${id}/tree/${revision}?recursive=true`)));
+	const url = `${hostOf(options.mirror)}api/models/${id}/tree/${revision}?recursive=true`;
+	// With a complete copy on disk, one try: a hub that is down must not hold the model back.
+	const cached = readMarkerFiles(dir);
+	let tree: string;
+	try {
+		tree = cached ? await getText(url) : await withRetries(`${id} file list`, () => getText(url));
+	} catch (error) {
+		if (!cached) throw error;
+		log.warn("hub file list unavailable; using the copy on disk", { model: id, revision, error }, {
+			event_name: "embedder.downloader.hub_unavailable", file: "packages/embedder/src/downloader.ts",
+			function: "hubModelSpec", site_id: "embedder.downloader.hub_unavailable",
+		});
+		return { id, revision, files: cached };
+	}
+	const listed = parseTree(tree);
 	const files = listed.filter((file) => LOADER_FILES.has(file.path) || file.path === weights || file.path.startsWith(`${weights}_data`));
 	if (!files.some((file) => file.path === weights)) throw new Error(`${id}@${revision} has no ${weights}`);
 	return { id, revision, files };

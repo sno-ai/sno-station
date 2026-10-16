@@ -10,7 +10,7 @@ import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, expect, it } from "vitest";
-import { downloadModel, type ModelSpec } from "../../../../packages/embedder/src/downloader.ts";
+import { downloadModel, hubModelSpec, type ModelSpec } from "../../../../packages/embedder/src/downloader.ts";
 import { LocalEmbedProvider } from "../../../../packages/embedder/src/local-provider.ts";
 import { ensureModelDownloaded } from "../../../../packages/embedder/src/model-download.ts";
 
@@ -254,3 +254,20 @@ it("fetches a file again when the hub lists a new SHA-256 for it at the same rev
 	const dir = await downloadModel({ ...SMALL, files }, { cacheDir, mirror: mirror.url });
 	expect(readFileSync(join(dir, "config.json")).equals(updated)).toBe(true);
 }, 30_000);
+
+it("uses a custom model already on disk when the hub cannot list its files", async () => {
+	const cacheDir = tempDir();
+	const tree = [{ type: "file", path: "config.json", size: CONFIG.length }, { type: "file", path: "onnx/model_quantized.onnx", size: WEIGHTS.length, lfs: { oid: sha(WEIGHTS) } }];
+	let down = false;
+	const mirror = await host((req, res) => {
+		if (down) { res.statusCode = 503; res.end(); return; }
+		if (req.url?.startsWith("/api/models/")) { res.end(JSON.stringify(tree)); return; }
+		res.end(body(req.url));
+	});
+	const options = { cacheDir, mirror: mirror.url };
+	await downloadModel(await hubModelSpec("test-org/custom", "r1", "q8", options), options);
+	down = true;
+	const spec = await hubModelSpec("test-org/custom", "r1", "q8", options);
+	const dir = await downloadModel(spec, options);
+	expect(readFileSync(join(dir, "onnx/model_quantized.onnx")).equals(WEIGHTS)).toBe(true);
+}, 60_000);
