@@ -31,7 +31,7 @@ const zeroCallerAllowlist = new Map<string, string>([
 		"Frozen unwired guard retained by the REM obligations contract.",
 	],
 	[
-		"packages/embedder/src/model-download.ts:325:ensureModelDownloaded",
+		"packages/embedder/src/model-download.ts:118:ensureModelDownloaded",
 		"Published package entry point invoked by external operators, not repository production code.",
 	],
 	[
