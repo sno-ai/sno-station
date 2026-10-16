@@ -151,6 +151,7 @@ We do not hide these boundaries:
 | Sno telemetry | **No memory content** | Telemetry is on by default. Events carry hashes, counts and identifiers, never memory content. |
 | Crash reports | **No by default** | Production crash reporting must not upload memory content. |
 | Update checks | **No** | Version metadata only. |
+| Model downloads | **No** | The local embedding model and the local ranking model download once from Hugging Face, or from the mirror you set, at pinned versions, and each file is checked against a pinned SHA-256. Ranking then runs on your machine. |
 | User-configured LLM provider | **Yes, when needed for an answer** | The provider is selected by the user and accessed with the user's own API key. Sno is not the intermediary. |
 | Operational metadata | **No memory content** | Metadata is segmented by purpose and must not contain a copy or reconstruction of actual memory content. |
 | Local exports | User-controlled | `.sno-station-core` exports are encrypted locally before you move or back them up. |

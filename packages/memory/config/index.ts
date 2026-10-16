@@ -273,6 +273,13 @@ export const LIGHTWEIGHT_FUSION_WEIGHT = 0.1;
 /** Cosine-similarity weight in local cosine-blend rerank */
 export const LIGHTWEIGHT_COSINE_WEIGHT = 0.9;
 
+/**
+ * How many of the local ranking's first candidates the local reranker model reorders. The model puts the memory that
+ * answers above near misses the cosine order keeps on top, in English and Chinese alike; scoring more candidates than
+ * this found no more answers and took longer.
+ */
+export const LOCAL_RERANK_CANDIDATES = 15;
+
 /** Default timeout for rerank API calls in milliseconds */
 export const DEFAULT_RERANK_TIMEOUT_MS = 15_000;
 

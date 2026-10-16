@@ -18,6 +18,14 @@ consumed unmodified through `package.json` under its own license.
 - License: MIT (model card).
 - The model is downloaded at first use; it is not committed to this repository.
 
+## multilingual-reranker-small (ONNX, 8-bit) — local recall ranking model, `packages/embedder`
+
+- Model: `sno-lab/multilingual-reranker-small-int8` on Hugging Face, an 8-bit ONNX copy Sno made of
+  `Horizon-Labs/multilingual-reranker-small` (a cross-encoder built on `jhu-clsp/mmBERT-small`, MIT). The model card
+  names its training data and how the copy was made.
+- License: Apache-2.0 (model card).
+- The model is downloaded at first use; it is not committed to this repository.
+
 ## SQLite3MultipleCiphers — via `better-sqlite3-multiple-ciphers`, `packages/sqlite-crypto`
 
 - Upstream: https://github.com/utelle/SQLite3MultipleCiphers
