@@ -82,7 +82,6 @@ export function downloadModel(spec: ModelSpec, options: DownloadOptions): Promis
 
 async function fetchModel(spec: ModelSpec, options: DownloadOptions, dir: string): Promise<string> {
 	if (isDownloaded(options.cacheDir, spec)) return dir;
-	if (options.offline) throw new Error(`${spec.id}@${spec.revision.slice(0, 12)} is not in ${dir} and downloads are off`);
 	const lock = `${dir}.lock`;
 	await acquireLock(lock);
 	const heartbeat = setInterval(() => touch(lock), LOCK_HEARTBEAT_MS);
@@ -98,8 +97,11 @@ async function fetchModel(spec: ModelSpec, options: DownloadOptions, dir: string
 		adoptFlatFiles(spec, options.cacheDir, dir);
 		for (const file of spec.files) {
 			const target = join(dir, file.path);
-			// A file already here (an earlier release's copy, a try that stopped before the marker) is checked once.
-			if (statSync(target, { throwIfNoEntry: false })?.size === file.size && (await matches(target, file))) continue;
+			// A file already here (an earlier release's copy, a try that stopped before the marker) is checked once;
+			// offline, a file of the right size is used as it is.
+			const present = statSync(target, { throwIfNoEntry: false })?.size === file.size;
+			if (present && (options.offline || (await matches(target, file)))) continue;
+			if (options.offline) throw new Error(`${spec.id}@${spec.revision.slice(0, 12)}: ${file.path} is not in ${dir} and downloads are off`);
 			rmSync(target, { force: true });
 			await fetchFile(spec, `${host}${spec.id}/resolve/${spec.revision}/${file.path}`, target, file);
 		}

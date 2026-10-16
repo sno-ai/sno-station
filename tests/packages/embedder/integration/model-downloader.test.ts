@@ -227,3 +227,17 @@ it("never blocks the model on a SHA-256 that keeps differing: the second downloa
 	expect(readFileSync(join(dir, "onnx/model.onnx")).equals(corrupt)).toBe(true);
 	expect(existsSync(join(dir, ".complete"))).toBe(true);
 }, 60_000);
+
+it("offline, uses an earlier release's complete files instead of refusing", async () => {
+	const cacheDir = tempDir();
+	const modelRoot = join(cacheDir, SMALL.id);
+	mkdirSync(join(modelRoot, "onnx"), { recursive: true });
+	writeFileSync(join(modelRoot, "config.json"), CONFIG);
+	writeFileSync(join(modelRoot, "onnx/model.onnx"), WEIGHTS);
+	const mirror = await host((_req, res) => { res.statusCode = 404; res.end(); });
+
+	const dir = await downloadModel(SMALL, { cacheDir, mirror: mirror.url, offline: true });
+
+	expect(mirror.requests).toEqual([]);
+	expect(readFileSync(join(dir, "onnx/model.onnx")).equals(WEIGHTS)).toBe(true);
+}, 30_000);
