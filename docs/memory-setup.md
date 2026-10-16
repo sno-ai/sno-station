@@ -51,7 +51,7 @@ reinstall your plugin at its latest version (for example `sno setup --harness co
 any running agent session. Do not rerun the settings block; your store and key stay as they are.
 
 From 1.5.0, recall reorders its best candidates with a local ranking model that runs on your CPU
-and downloads about 170 MB on first use. It runs when `rerank.mode` is `lightweight`. An earlier
+and downloads about 206 MB on first use. It runs when `rerank.mode` is `lightweight`. An earlier
 version of this guide wrote `none`: change `rerank.mode` to `lightweight` in `~/.sno/settings.json`
 to turn it on.
 
