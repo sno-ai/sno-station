@@ -18,9 +18,14 @@ it("a release during a model run lets the run finish with scores", async () => {
 		await new Promise((resolve) => setTimeout(resolve, 1_000));
 	}
 	const long = "Nate: We spent most of the evening talking about the garden, who would sort it out, and what it would cost. ".repeat(20);
+	let scored = false;
 	const running = reranker.score("Where does Nate live?", Array.from({ length: 15 }, (_, i) => `${i} ${long}`));
+	void running.then(() => { scored = true; });
 	await new Promise((resolve) => setTimeout(resolve, 50));
+	// The release starts while the run is still going and returns only after it ended.
+	expect(scored).toBe(false);
 	await reranker.dispose();
+	expect(scored).toBe(true);
 	const scores = await running;
 	expect(scores?.length).toBe(15);
 }, 300_000);

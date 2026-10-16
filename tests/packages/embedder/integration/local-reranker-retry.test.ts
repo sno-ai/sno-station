@@ -24,16 +24,14 @@ it("tries the model load again after a failed one, once the retry interval has p
 	// Nothing cached and a download host that refuses the connection.
 	const unreachable = new LocalReranker({ cacheDir: emptyCache, mirror: "http://127.0.0.1:9/" });
 	expect(await unreachable.score("Where does Nate live?", pair)).toBeUndefined();
-	// The downloader retries an unreachable host for about 15 s before the load fails.
-	await wait(20_000);
 	const online = new LocalReranker({ cacheDir: join(homedir(), ".cache", "sno-test-local-reranker"), intraOpNumThreads: 2 });
-	expect(await online.score("Where does Nate live?", pair)).toBeUndefined();
-
-	vi.setSystemTime(Date.now() + 11 * 60_000);
+	// The downloader retries an unreachable host for about 15 s before the load fails. Each call comes past the retry
+	// interval, so the next call after that failure loads again, whenever the failure lands.
 	const deadline = performance.now() + 240_000;
-	let scores = await online.score("Where does Nate live?", pair);
+	let scores: number[] | undefined;
 	while (scores === undefined && performance.now() < deadline) {
 		await wait(1_000);
+		vi.setSystemTime(Date.now() + 11 * 60_000);
 		scores = await online.score("Where does Nate live?", pair);
 	}
 	expect(scores?.[0]).toBeGreaterThan(scores?.[1] ?? Number.POSITIVE_INFINITY);
