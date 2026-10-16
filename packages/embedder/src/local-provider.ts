@@ -22,7 +22,7 @@ import type {
 	LocalEmbedPooling,
 	LocalEmbedSessionOptions,
 } from "./types";
-import { downloadModel } from "./downloader";
+import { downloadModel, hubModelSpec } from "./downloader";
 import { embeddingModelSpec } from "./model-download";
 
 const log = createLogger("embedder:local");
@@ -274,22 +274,8 @@ export class LocalEmbedProvider implements DisposableProvider {
 		// that stages dependencies apart (OpenClaw 2026.9.5) fails the whole plugin load on it.
 		const { env, pipeline } = await import("@huggingface/transformers");
 
-		// Environment hardening -- set BEFORE pipeline creation.
-		// Remote downloads from Hugging Face Hub are enabled by default so that
-		// end users get a friction-free first run (no manual model:pull step,
-		// no HF account/token — the canonical model is a public anonymous
-		// download). Dev/CI environments that must fail-fast on a missing
-		// cache can opt out through caller config. A mirror overrides the hub host.
-		env.cacheDir = this.cacheDir;
-		env.allowRemoteModels = !this.offline;
-		env.localModelPath = this.cacheDir;
-		// transformers 4.3.0 drops `revision` when it lists model files, so the revision lives in the
-		// download path and files stay at <cacheDir>/<model>/, where the offline lookup finds them.
-		env.remotePathTemplate = `{model}/resolve/${this.revision ?? "main"}/`;
-		const hfEndpoint = this.mirror?.trim();
-		if (hfEndpoint) {
-			env.remoteHost = hfEndpoint.endsWith("/") ? hfEndpoint : `${hfEndpoint}/`;
-		}
+		// Every file comes through the shared downloader; transformers only reads the revision directory it fills.
+		env.allowRemoteModels = false;
 
 		log.info("loading ONNX model", {
 			model: this.modelId,
@@ -308,16 +294,15 @@ export class LocalEmbedProvider implements DisposableProvider {
 
 		try {
 			const sessionOptions = buildSessionOptions(this.sessionOptions);
-			// The bundled model loads from its revision directory, which the downloader completes first.
-			const bundled = this.modelId === LOCAL_EMBEDDING_MODEL && this.revision === LOCAL_EMBEDDING_MODEL_REVISION;
-			const source = bundled
-				? await downloadModel(embeddingModelSpec(this.dtype), { cacheDir: this.cacheDir, offline: this.offline, mirror: this.mirror })
-				: this.modelId;
-			const extractor = await pipeline("feature-extraction", source, {
+			const download = { cacheDir: this.cacheDir, offline: this.offline, mirror: this.mirror };
+			const spec = this.modelId === LOCAL_EMBEDDING_MODEL && this.revision === LOCAL_EMBEDDING_MODEL_REVISION
+				? embeddingModelSpec(this.dtype)
+				: await hubModelSpec(this.modelId, this.revision ?? "main", this.dtype, download);
+			const extractor = await pipeline("feature-extraction", await downloadModel(spec, download), {
 				dtype: this.dtype,
 				device: "cpu",
 				session_options: sessionOptions,
-				...(bundled ? { local_files_only: true } : {}),
+				local_files_only: true,
 			});
 
 			const durationMs = Math.round(performance.now() - t0);

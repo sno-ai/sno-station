@@ -11,6 +11,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, expect, it } from "vitest";
 import { downloadModel, type ModelSpec } from "../../../../packages/embedder/src/downloader.ts";
+import { LocalEmbedProvider } from "../../../../packages/embedder/src/local-provider.ts";
 import { embeddingModelSpec, ensureModelDownloaded } from "../../../../packages/embedder/src/model-download.ts";
 
 const EMBEDDING_MODEL = "tss-deposium/pplx-embed-v1-0.6b-onnx-int8-standard";
@@ -181,4 +182,28 @@ it("resumes the part a killed process left behind", async () => {
 	await downloadModel(SMALL, { cacheDir, mirror: mirror.url });
 	expect(readFileSync(join(dir, "onnx/model.onnx")).equals(WEIGHTS)).toBe(true);
 	expect(ranges).toEqual(["bytes=50000-"]);
+}, 60_000);
+
+it("loads a custom embedding model only through the downloader: listed, fetched into its revision directory, marked complete", async () => {
+	const cacheDir = tempDir();
+	const tree = [
+		{ type: "file", path: "config.json", size: CONFIG.length },
+		{ type: "file", path: "onnx/model_quantized.onnx", size: WEIGHTS.length, lfs: { oid: sha(WEIGHTS) } },
+		{ type: "file", path: "README.md", size: 5 },
+	];
+	const mirror = await host((req, res) => {
+		if (req.url?.startsWith("/api/models/test-org/custom-embedder/tree/r1")) { res.end(JSON.stringify(tree)); return; }
+		if (req.url?.endsWith("config.json") || req.url?.endsWith("model_quantized.onnx")) { res.end(body(req.url)); return; }
+		res.statusCode = 404;
+		res.end();
+	});
+	const provider = new LocalEmbedProvider({ model: "test-org/custom-embedder", revision: "r1", cacheDir, mirror: mirror.url, dtype: "q8" });
+	cleanups.push(() => { void provider.dispose(); });
+	// The fake weights cannot run; what matters is how the files arrived.
+	await expect(provider.warmup()).rejects.toThrow();
+	expect(mirror.requests[0]).toMatch(/^\/api\/models\/test-org\/custom-embedder\/tree\/r1/);
+	const dir = join(cacheDir, "test-org/custom-embedder", "r1");
+	expect(readFileSync(join(dir, "onnx/model_quantized.onnx")).equals(WEIGHTS)).toBe(true);
+	expect(existsSync(join(dir, ".complete"))).toBe(true);
+	expect(mirror.requests.some((url) => url.includes("README.md"))).toBe(false);
 }, 60_000);

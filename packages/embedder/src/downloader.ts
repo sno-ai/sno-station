@@ -19,7 +19,8 @@ const log = createLogger("embedder:downloader");
 export interface ModelFile {
 	readonly path: string;
 	readonly size: number;
-	readonly sha256: string;
+	/** Pinned in code for the bundled models; for other models the hub's LFS hash, when it has one. */
+	readonly sha256?: string | undefined;
 }
 
 export interface ModelSpec {
@@ -99,7 +100,8 @@ async function fetchModel(spec: ModelSpec, options: DownloadOptions, dir: string
 			if (statSync(target, { throwIfNoEntry: false })?.size === file.size) continue;
 			await fetchFile(spec, `${host}${spec.id}/resolve/${spec.revision}/${file.path}`, target, file);
 		}
-		writeFileSync(join(dir, MARKER), JSON.stringify({ model: spec.id, revision: spec.revision, completedAt: new Date().toISOString() }));
+		writeFileSync(join(dir, MARKER), JSON.stringify({ model: spec.id, revision: spec.revision, files: spec.files,
+			completedAt: new Date().toISOString() }));
 		removeOlderCopies(spec, options.cacheDir);
 		log.info("model download complete", { model: spec.id, revision: spec.revision,
 			duration_ms: Math.round(performance.now() - started) }, {
@@ -147,6 +149,51 @@ function removeOlderCopies(spec: ModelSpec, cacheDir: string): void {
 	}
 }
 
+// transformers.js file names for each dtype: onnx/model<suffix>.onnx, plus onnx/model<suffix>.onnx_data* if large.
+const DTYPE_SUFFIX: Readonly<Record<string, string>> = { fp32: "", fp16: "_fp16", int8: "_int8", uint8: "_uint8",
+	q8: "_quantized", q4: "_q4", q4f16: "_q4f16", bnb4: "_bnb4" };
+const LOADER_FILES = new Set(["config.json", "tokenizer.json", "tokenizer_config.json", "special_tokens_map.json"]);
+
+/**
+ * The files transformers.js loads for a model that is not pinned in code, as the hub lists them at `revision`;
+ * offline, as the marker of the last complete download lists them.
+ */
+export async function hubModelSpec(id: string, revision: string, dtype: string, options: DownloadOptions): Promise<ModelSpec> {
+	const dir = modelDir(options.cacheDir, { id, revision });
+	if (options.offline) {
+		const files = readMarkerFiles(dir);
+		if (!files) throw new Error(`${id}@${revision} is not in ${dir} and downloads are off`);
+		return { id, revision, files };
+	}
+	const weights = `onnx/model${DTYPE_SUFFIX[dtype] ?? ""}.onnx`;
+	const listed = parseTree(await withRetries(`${id} file list`, () => getText(`${hostOf(options.mirror)}api/models/${id}/tree/${revision}?recursive=true`)));
+	const files = listed.filter((file) => LOADER_FILES.has(file.path) || file.path === weights || file.path.startsWith(`${weights}_data`));
+	if (!files.some((file) => file.path === weights)) throw new Error(`${id}@${revision} has no ${weights}`);
+	return { id, revision, files };
+}
+
+function readMarkerFiles(dir: string): ModelFile[] | undefined {
+	try {
+		const marker = JSON.parse(readFileSync(join(dir, MARKER), "utf8")) as { files?: unknown };
+		return Array.isArray(marker.files) ? parseTree(marker.files.map((file) => ({ type: "file", ...file }))) : undefined;
+	} catch {
+		return undefined;
+	}
+}
+
+/** The hub's tree listing: [{ type, path, size, lfs?: { oid } }]; anything else is not a file it can serve. */
+function parseTree(raw: unknown): ModelFile[] {
+	const entries = typeof raw === "string" ? (JSON.parse(raw) as unknown) : raw;
+	if (!Array.isArray(entries)) throw new Error("the hub's file list is not a list");
+	return entries.flatMap((entry: unknown) => {
+		if (typeof entry !== "object" || entry === null) return [];
+		const { type, path, size, lfs, sha256 } = entry as { type?: unknown; path?: unknown; size?: unknown; lfs?: { oid?: unknown }; sha256?: unknown };
+		if (type !== "file" || typeof path !== "string" || typeof size !== "number") return [];
+		const hash = typeof sha256 === "string" ? sha256 : typeof lfs?.oid === "string" ? lfs.oid : undefined;
+		return [{ path, size, ...(hash ? { sha256: hash } : {}) }];
+	});
+}
+
 function hostOf(mirror: string | undefined): string {
 	const host = mirror?.trim() || HUB;
 	return host.endsWith("/") ? host : `${host}/`;
@@ -156,23 +203,27 @@ async function fetchFile(spec: ModelSpec, url: string, target: string, file: Mod
 	mkdirSync(dirname(target), { recursive: true });
 	// A part file survives a failed try and a killed process; the next request resumes it.
 	const part = `${target}.part`;
+	await withRetries(`${spec.id} ${file.path}`, async () => {
+		if ((statSync(part, { throwIfNoEntry: false })?.size ?? 0) < file.size) await get(url, part);
+		const size = statSync(part).size;
+		if (size > file.size) rmSync(part, { force: true });
+		if (size !== file.size) throw new Error(`got ${size} bytes, expected ${file.size} (${url})`);
+		renameSync(part, target);
+	});
+}
+
+/** Runs `attemptOnce` until it succeeds, another try cannot help, or ATTEMPTS run out; the error names `label`. */
+async function withRetries<T>(label: string, attemptOnce: () => Promise<T>): Promise<T> {
 	for (let attempt = 1; ; attempt += 1) {
 		try {
-			if ((statSync(part, { throwIfNoEntry: false })?.size ?? 0) < file.size) await get(url, part);
-			const size = statSync(part).size;
-			if (size > file.size) rmSync(part, { force: true });
-			if (size !== file.size) throw new Error(`got ${size} bytes, expected ${file.size} (${url})`);
-			renameSync(part, target);
-			return;
+			return await attemptOnce();
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);
 			const delay = attempt < ATTEMPTS ? retryDelay(error, attempt) : undefined;
-			if (delay === undefined) {
-				throw new Error(`${spec.id} ${file.path}: ${message} after ${attempt} attempt${attempt === 1 ? "" : "s"}`, { cause: error });
-			}
-			log.warn("model file download failed; retrying", { model: spec.id, path: file.path, attempt, delay_ms: delay, error }, {
+			if (delay === undefined) throw new Error(`${label}: ${message} after ${attempt} attempt${attempt === 1 ? "" : "s"}`, { cause: error });
+			log.warn("model download failed; retrying", { download_label: label, attempt, delay_ms: delay, error }, {
 				event_name: "embedder.downloader.retry", file: "packages/embedder/src/downloader.ts",
-				function: "fetchFile", site_id: "embedder.downloader.retry",
+				function: "withRetries", site_id: "embedder.downloader.retry",
 			});
 			await new Promise((resolveWait) => setTimeout(resolveWait, delay));
 		}
@@ -202,40 +253,55 @@ function retryAfterMs(header: string | undefined): number | undefined {
 	return Number.isFinite(ms) ? Math.max(0, ms) : undefined;
 }
 
-/** Streams one URL into `part`, resuming after the bytes already there, and follows redirects. */
-function get(url: string, part: string, redirects = 0): Promise<void> {
+/** The response to `url` after redirects. A socket silent for STALL_MS errors the request and its response. */
+function open(url: string, headers: Record<string, string>, redirects = 0): Promise<http.IncomingMessage> {
 	return new Promise((resolvePromise, reject) => {
 		const client = url.startsWith("https:") ? https : http;
 		// HTTP(S)_PROXY and NO_PROXY apply to this request only. `proxyEnv` exists from Node 22.21 and 24.5;
 		// @types/node 22.20 does not list it yet.
 		const agent = new client.Agent({ proxyEnv: process.env } as http.AgentOptions);
-		const start = statSync(part, { throwIfNoEntry: false })?.size ?? 0;
-		const headers = { "user-agent": "sno-station", ...(start > 0 ? { range: `bytes=${start}-` } : {}) };
-		const request = client.get(url, { agent, headers }, (response) => {
-			const status = response.statusCode ?? 0;
+		const request = client.get(url, { agent, headers: { "user-agent": "sno-station", ...headers } }, (response) => {
 			const location = response.headers.location;
-			if (status >= 300 && status < 400 && location) {
-				response.resume();
-				if (redirects >= MAX_REDIRECTS) return reject(new Error(`too many redirects (${url})`));
-				return get(new URL(location, url).toString(), part, redirects + 1).then(resolvePromise, reject);
-			}
-			const resumed = status === 206 && response.headers["content-range"]?.startsWith(`bytes ${start}-`) === true;
-			if (status === 416 || (status === 206 && !resumed)) {
-				// The host will not continue this part: start the file over on the next try.
-				response.resume();
-				rmSync(part, { force: true });
-				return reject(new Error(`HTTP ${status}: the host did not resume at byte ${start} (${url})`));
-			}
-			if (status !== 200 && status !== 206) {
-				response.resume();
-				return reject(new HttpError(status, retryAfterMs(response.headers["retry-after"]), url));
-			}
-			// Closes the file and the response on either side's error.
-			pipeline(response, createWriteStream(part, { flags: resumed ? "a" : "w" })).then(resolvePromise, reject);
+			const status = response.statusCode ?? 0;
+			if (status < 300 || status >= 400 || !location) return resolvePromise(response);
+			response.resume();
+			if (redirects >= MAX_REDIRECTS) return reject(new Error(`too many redirects (${url})`));
+			open(new URL(location, url).toString(), headers, redirects + 1).then(resolvePromise, reject);
 		});
 		request.setTimeout(STALL_MS, () => request.destroy(new Error(`no data for ${STALL_MS / 1000} s (${url})`)));
 		request.on("error", reject);
 	});
+}
+
+/** Streams one URL into `part`, resuming after the bytes already there. */
+async function get(url: string, part: string): Promise<void> {
+	const start = statSync(part, { throwIfNoEntry: false })?.size ?? 0;
+	const response = await open(url, start > 0 ? { range: `bytes=${start}-` } : {});
+	const status = response.statusCode ?? 0;
+	const resumed = status === 206 && response.headers["content-range"]?.startsWith(`bytes ${start}-`) === true;
+	if (status === 416 || (status === 206 && !resumed)) {
+		// The host will not continue this part: start the file over on the next try.
+		response.resume();
+		rmSync(part, { force: true });
+		throw new Error(`HTTP ${status}: the host did not resume at byte ${start} (${url})`);
+	}
+	if (status !== 200 && status !== 206) {
+		response.resume();
+		throw new HttpError(status, retryAfterMs(response.headers["retry-after"]), url);
+	}
+	// Closes the file and the response on either side's error.
+	await pipeline(response, createWriteStream(part, { flags: resumed ? "a" : "w" }));
+}
+
+async function getText(url: string): Promise<string> {
+	const response = await open(url, { accept: "application/json" });
+	if (response.statusCode !== 200) {
+		response.resume();
+		throw new HttpError(response.statusCode ?? 0, retryAfterMs(response.headers["retry-after"]), url);
+	}
+	let text = "";
+	for await (const chunk of response) text += String(chunk);
+	return text;
 }
 
 function touch(lock: string): void {
