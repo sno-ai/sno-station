@@ -68,3 +68,20 @@ it("moves an earlier release's complete files into the revision directory and re
 	expect(existsSync(join(cacheDir, ".download-complete"))).toBe(false);
 	for (const file of spec.files) expect(existsSync(join(modelDir, PINNED_REVISION, file.path))).toBe(true);
 }, 30_000);
+
+it("downloads through the proxy the environment names", async () => {
+	const cacheDir = tempDir();
+	const mirror = await host((_req, res) => { res.statusCode = 404; res.end(); });
+	// A proxy receives the absolute URL of a plain-HTTP request; this one answers it itself.
+	const proxy = await host((_req, res) => { res.statusCode = 404; res.end(); });
+	const saved = { HTTP_PROXY: process.env.HTTP_PROXY, http_proxy: process.env.http_proxy, NO_PROXY: process.env.NO_PROXY, no_proxy: process.env.no_proxy };
+	cleanups.push(() => { for (const [key, value] of Object.entries(saved)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; } });
+	process.env.HTTP_PROXY = proxy.url;
+	process.env.http_proxy = proxy.url;
+	process.env.NO_PROXY = "";
+	process.env.no_proxy = "";
+
+	await expect(ensureModelDownloaded({ cacheDir, mirror: mirror.url })).rejects.toThrow();
+	expect(mirror.requests).toEqual([]);
+	expect(proxy.requests.some((url) => url.startsWith(`${mirror.url}${EMBEDDING_MODEL}/resolve/`))).toBe(true);
+}, 30_000);

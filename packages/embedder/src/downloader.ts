@@ -159,7 +159,10 @@ async function fetchFile(url: string, target: string, file: ModelFile): Promise<
 function get(url: string, part: string, redirects = 0): Promise<void> {
 	return new Promise((resolvePromise, reject) => {
 		const client = url.startsWith("https:") ? https : http;
-		const request = client.get(url, { headers: { "user-agent": "sno-station" } }, (response) => {
+		// HTTP(S)_PROXY and NO_PROXY apply to this request only. `proxyEnv` exists from Node 22.21 and 24.5;
+		// @types/node 22.20 does not list it yet.
+		const agent = new client.Agent({ proxyEnv: process.env } as http.AgentOptions);
+		const request = client.get(url, { agent, headers: { "user-agent": "sno-station" } }, (response) => {
 			const status = response.statusCode ?? 0;
 			const location = response.headers.location;
 			if (status >= 300 && status < 400 && location) {
