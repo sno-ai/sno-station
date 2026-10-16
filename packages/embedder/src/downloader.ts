@@ -67,8 +67,8 @@ function revisionDirName(revision: string): string {
 export function isDownloaded(cacheDir: string, spec: ModelSpec): boolean {
 	const dir = modelDir(cacheDir, spec);
 	try {
-		const marker = JSON.parse(readFileSync(join(dir, MARKER), "utf8")) as { revision?: unknown };
-		if (marker.revision !== spec.revision) return false;
+		const marker = JSON.parse(readFileSync(join(dir, MARKER), "utf8")) as { revision?: unknown; verify?: unknown };
+		if (marker.revision !== spec.revision || marker.verify === true) return false;
 		// A branch revision such as `main` can change a file without changing its size.
 		const recorded = new Map((readMarkerFiles(dir) ?? []).map((file) => [file.path, file]));
 		return spec.files.every((file) => statSync(join(dir, file.path), { throwIfNoEntry: false })?.size === file.size &&
@@ -83,15 +83,21 @@ function sameIdentity(file: ModelFile, recorded: ModelFile | undefined): boolean
 }
 
 /**
- * For a loader that could not open the model: drops the marker, so the next start checks every file again and
- * fetches any that differ (a file kept despite a SHA-256 mismatch, a copy that went bad on disk). Once per process:
- * a load that keeps failing for another reason (memory, an unsupported op) does not re-hash the files each time.
+ * For a loader that could not open the model: marks the download for checking, so the next start checks every file
+ * again and fetches any that differ (a file kept despite a SHA-256 mismatch, a copy that went bad on disk). The marker
+ * keeps its file list for offline use. Once per process: a load that keeps failing for another reason (memory, an
+ * unsupported op) does not re-hash the files each time.
  */
 export function forgetDownload(cacheDir: string, spec: ModelSpec): void {
 	const dir = modelDir(cacheDir, spec);
 	if (forgotten.has(dir)) return;
 	forgotten.add(dir);
-	rmSync(join(dir, MARKER), { force: true });
+	try {
+		const marker = JSON.parse(readFileSync(join(dir, MARKER), "utf8")) as Record<string, unknown>;
+		writeFileSync(join(dir, MARKER), JSON.stringify({ ...marker, verify: true }));
+	} catch {
+		// No marker: the next start checks the files anyway.
+	}
 }
 
 const forgotten = new Set<string>();

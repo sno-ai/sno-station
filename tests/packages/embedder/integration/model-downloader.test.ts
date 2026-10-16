@@ -18,7 +18,11 @@ const EMBEDDING_MODEL = "tss-deposium/pplx-embed-v1-0.6b-onnx-int8-standard";
 const PINNED_REVISION = "a18fdffe7480e6ea5643acb7757142b33838817a";
 
 const cleanups: Array<() => void> = [];
-afterEach(() => { for (const cleanup of cleanups.splice(0)) cleanup(); });
+afterEach(() => {
+	for (const cleanup of cleanups.splice(0)) cleanup();
+	// One cache directory per process is the provider's rule; each test here uses its own.
+	LocalEmbedProvider.resetStaticState();
+});
 
 function tempDir(): string {
 	const dir = mkdtempSync(join(tmpdir(), "sno-downloader-"));
@@ -420,7 +424,8 @@ it("forgets a download whose model failed to load, so the next start checks its 
 	const provider = new LocalEmbedProvider({ model: "test-org/custom-embedder", revision: "r3", cacheDir, mirror: mirror.url, dtype: "q8" });
 	cleanups.push(() => { void provider.dispose(); });
 	await expect(provider.warmup()).rejects.toThrow();
-	expect(existsSync(join(cacheDir, "test-org/custom-embedder", "r3", ".complete"))).toBe(false);
+	const marker = JSON.parse(readFileSync(join(cacheDir, "test-org/custom-embedder", "r3", ".complete"), "utf8")) as { verify?: boolean };
+	expect(marker.verify).toBe(true);
 }, 60_000);
 
 it("forgets a download at most once per process, so a load that keeps failing for another reason does not re-check the files each time", async () => {
@@ -432,4 +437,17 @@ it("forgets a download at most once per process, so a load that keeps failing fo
 	await downloadModel(spec, { cacheDir, mirror: mirror.url });
 	forgetDownload(cacheDir, spec);
 	expect(existsSync(join(dir, ".complete"))).toBe(true);
+}, 30_000);
+
+it("keeps a custom model's file list when its download is forgotten, so offline still finds it", async () => {
+	const cacheDir = tempDir();
+	const tree = [{ type: "file", path: "config.json", size: CONFIG.length }, { type: "file", path: "onnx/model_quantized.onnx", size: WEIGHTS.length }];
+	const mirror = await host((req, res) => (req.url?.startsWith("/api/models/") ? res.end(JSON.stringify(tree)) : res.end(body(req.url))));
+	const options = { cacheDir, mirror: mirror.url };
+	const spec = await hubModelSpec("test-org/custom", "r-forget", "q8", options);
+	await downloadModel(spec, options);
+	forgetDownload(cacheDir, spec);
+	const offline = { cacheDir, offline: true };
+	const dir = await downloadModel(await hubModelSpec("test-org/custom", "r-forget", "q8", offline), offline);
+	expect(readFileSync(join(dir, "onnx/model_quantized.onnx")).equals(WEIGHTS)).toBe(true);
 }, 30_000);
