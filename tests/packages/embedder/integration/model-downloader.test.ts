@@ -310,3 +310,16 @@ it("counts a complete download of any shipped dtype as cached when the caller na
 	expect(isModelCached(cacheDir)).toBe(true);
 	expect(isModelCached(cacheDir, undefined, "q8")).toBe(false);
 });
+
+it("leaves another revision alone while its download holds the lock", async () => {
+	const cacheDir = tempDir();
+	// Another process is downloading revision r2: its directory, a part file and its live lock.
+	const other = join(cacheDir, SMALL.id, "r2");
+	mkdirSync(join(other, "onnx"), { recursive: true });
+	writeFileSync(join(other, "onnx/model.onnx.part"), WEIGHTS.subarray(0, 1000));
+	writeFileSync(`${other}.lock`, `${process.pid}\\n${Date.now()}\\n`);
+	const mirror = await host((req, res) => res.end(body(req.url)));
+	await downloadModel(SMALL, { cacheDir, mirror: mirror.url });
+	expect(existsSync(join(other, "onnx/model.onnx.part"))).toBe(true);
+	expect(existsSync(`${other}.lock`)).toBe(true);
+}, 30_000);
