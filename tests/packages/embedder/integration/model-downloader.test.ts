@@ -286,3 +286,13 @@ it("sends the Hugging Face token to the hub only, not to a mirror", async () => 
 	expect(seen.find((request) => request.url.startsWith("http://huggingface.co/"))?.auth).toBe("Bearer hf_test_token");
 	expect(seen.find((request) => request.url.startsWith("http://mirror.example/"))?.auth).toBeUndefined();
 }, 30_000);
+
+it("keeps a custom model whose revision is a ref with slashes", async () => {
+	const cacheDir = tempDir();
+	const tree = [{ type: "file", path: "config.json", size: CONFIG.length }, { type: "file", path: "onnx/model_quantized.onnx", size: WEIGHTS.length }];
+	const mirror = await host((req, res) => (req.url?.startsWith("/api/models/") ? res.end(JSON.stringify(tree)) : res.end(body(req.url))));
+	const options = { cacheDir, mirror: mirror.url };
+	const dir = await downloadModel(await hubModelSpec("test-org/custom", "refs/pr/1", "q8", options), options);
+	expect(readFileSync(join(dir, "onnx/model_quantized.onnx")).equals(WEIGHTS)).toBe(true);
+	expect(mirror.requests.some((url) => url.includes("/resolve/refs%2Fpr%2F1/"))).toBe(true);
+}, 30_000);

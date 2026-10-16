@@ -53,7 +53,12 @@ const LOCK_POLL_MS = 2_000;
 const LOCK_STALE_MS = 900_000;
 
 export function modelDir(cacheDir: string, spec: Pick<ModelSpec, "id" | "revision">): string {
-	return join(resolve(cacheDir), spec.id, spec.revision);
+	return join(resolve(cacheDir), spec.id, revisionDirName(spec.revision));
+}
+
+/** One directory level per revision, so a ref such as `refs/pr/1` is not nested (and not mistaken for an older copy). */
+function revisionDirName(revision: string): string {
+	return revision.replaceAll("/", "--");
 }
 
 /** Complete: the marker names this revision and the same hashes, and every file has its expected size. */
@@ -108,7 +113,7 @@ async function fetchModel(spec: ModelSpec, options: DownloadOptions, dir: string
 			if (present && (options.offline || (await matches(target, file)))) continue;
 			if (options.offline) throw new Error(`${spec.id}@${spec.revision.slice(0, 12)}: ${file.path} is not in ${dir} and downloads are off`);
 			rmSync(target, { force: true });
-			await fetchFile(spec, `${host}${spec.id}/resolve/${spec.revision}/${file.path}`, target, file);
+			await fetchFile(spec, `${host}${spec.id}/resolve/${encodeURIComponent(spec.revision)}/${file.path}`, target, file);
 		}
 		writeFileSync(join(dir, MARKER), JSON.stringify({ model: spec.id, revision: spec.revision, files: spec.files,
 			completedAt: new Date().toISOString() }));
@@ -143,7 +148,7 @@ function adoptFlatFiles(spec: ModelSpec, cacheDir: string, dir: string): void {
 /** Everything else under <cacheDir>/<model>/ is an older copy; a copy that cannot be removed only costs disk. */
 function removeOlderCopies(spec: ModelSpec, cacheDir: string): void {
 	const root = join(resolve(cacheDir), spec.id);
-	const keep = new Set([spec.revision, `${spec.revision}.lock`]);
+	const keep = new Set([revisionDirName(spec.revision), `${revisionDirName(spec.revision)}.lock`]);
 	const older = readdirSync(root).filter((entry) => !keep.has(entry)).map((entry) => join(root, entry));
 	// The marker the flat layout kept at the cache root.
 	older.push(join(resolve(cacheDir), ".download-complete"));
@@ -176,7 +181,7 @@ export async function hubModelSpec(id: string, revision: string, dtype: string, 
 		return { id, revision, files };
 	}
 	const weights = `onnx/model${DTYPE_SUFFIX[dtype] ?? ""}.onnx`;
-	const url = `${hostOf(options.mirror)}api/models/${id}/tree/${revision}?recursive=true`;
+	const url = `${hostOf(options.mirror)}api/models/${id}/tree/${encodeURIComponent(revision)}?recursive=true`;
 	// With a complete copy on disk, one try: a hub that is down must not hold the model back.
 	const cached = readMarkerFiles(dir);
 	let tree: string;
