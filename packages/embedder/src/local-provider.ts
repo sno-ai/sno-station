@@ -179,9 +179,10 @@ export class LocalEmbedProvider implements DisposableProvider {
 		);
 		this.dtype = config?.dtype ?? LOCAL_EMBEDDING_DTYPE_DEFAULT;
 		this.modelId = config?.model ?? LOCAL_EMBEDDING_MODEL;
+		// The bundled model always means its pinned revision, so a blank setting cannot start a second download.
 		this.revision =
 			config?.revision ??
-			(config?.model === undefined ? LOCAL_EMBEDDING_MODEL_REVISION : undefined);
+			(this.modelId === LOCAL_EMBEDDING_MODEL ? LOCAL_EMBEDDING_MODEL_REVISION : undefined);
 		// Default native dim assumes the bundled PPLX 0.6B (1024). Callers using
 		// other models must pass nativeDim explicitly so Matryoshka math is correct.
 		this.nativeDim = config?.nativeDim ?? EMBEDDING_DIMENSION;

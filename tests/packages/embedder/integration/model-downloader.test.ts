@@ -377,3 +377,22 @@ it("leaves the transformers library free to download other models after loading 
 	await expect(provider.warmup()).rejects.toThrow();
 	expect(env.allowRemoteModels).toBe(before);
 }, 60_000);
+
+it("names the pinned revision when the bundled model is configured with a blank revision", async () => {
+	const cacheDir = tempDir();
+	const spec = embeddingModelSpec("q8");
+	const dir = join(cacheDir, spec.id, spec.revision);
+	for (const file of spec.files) {
+		mkdirSync(dirname(join(dir, file.path)), { recursive: true });
+		writeFileSync(join(dir, file.path), "");
+		truncateSync(join(dir, file.path), file.size);
+	}
+	writeFileSync(join(dir, ".complete"), JSON.stringify({ revision: spec.revision, files: spec.files }));
+	const mirror = await host((_req, res) => { res.statusCode = 404; res.end(); });
+	const provider = new LocalEmbedProvider({ model: EMBEDDING_MODEL, cacheDir, mirror: mirror.url, dtype: "q8" });
+	cleanups.push(() => { void provider.dispose(); });
+	// The sparse stand-in cannot run; what matters is that no second revision is fetched.
+	await expect(provider.warmup()).rejects.toThrow();
+	expect(mirror.requests).toEqual([]);
+	expect(readdirSync(join(cacheDir, spec.id))).toEqual([spec.revision]);
+}, 60_000);
