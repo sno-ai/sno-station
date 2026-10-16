@@ -154,11 +154,13 @@ function hostOf(mirror: string | undefined): string {
 
 async function fetchFile(spec: ModelSpec, url: string, target: string, file: ModelFile): Promise<void> {
 	mkdirSync(dirname(target), { recursive: true });
+	// A part file survives a failed try and a killed process; the next request resumes it.
 	const part = `${target}.part`;
 	for (let attempt = 1; ; attempt += 1) {
 		try {
-			await get(url, part);
+			if ((statSync(part, { throwIfNoEntry: false })?.size ?? 0) < file.size) await get(url, part);
 			const size = statSync(part).size;
+			if (size > file.size) rmSync(part, { force: true });
 			if (size !== file.size) throw new Error(`got ${size} bytes, expected ${file.size} (${url})`);
 			renameSync(part, target);
 			return;
@@ -200,14 +202,16 @@ function retryAfterMs(header: string | undefined): number | undefined {
 	return Number.isFinite(ms) ? Math.max(0, ms) : undefined;
 }
 
-/** Streams one URL into `part`, following redirects. */
+/** Streams one URL into `part`, resuming after the bytes already there, and follows redirects. */
 function get(url: string, part: string, redirects = 0): Promise<void> {
 	return new Promise((resolvePromise, reject) => {
 		const client = url.startsWith("https:") ? https : http;
 		// HTTP(S)_PROXY and NO_PROXY apply to this request only. `proxyEnv` exists from Node 22.21 and 24.5;
 		// @types/node 22.20 does not list it yet.
 		const agent = new client.Agent({ proxyEnv: process.env } as http.AgentOptions);
-		const request = client.get(url, { agent, headers: { "user-agent": "sno-station" } }, (response) => {
+		const start = statSync(part, { throwIfNoEntry: false })?.size ?? 0;
+		const headers = { "user-agent": "sno-station", ...(start > 0 ? { range: `bytes=${start}-` } : {}) };
+		const request = client.get(url, { agent, headers }, (response) => {
 			const status = response.statusCode ?? 0;
 			const location = response.headers.location;
 			if (status >= 300 && status < 400 && location) {
@@ -215,12 +219,19 @@ function get(url: string, part: string, redirects = 0): Promise<void> {
 				if (redirects >= MAX_REDIRECTS) return reject(new Error(`too many redirects (${url})`));
 				return get(new URL(location, url).toString(), part, redirects + 1).then(resolvePromise, reject);
 			}
-			if (status !== 200) {
+			const resumed = status === 206 && response.headers["content-range"]?.startsWith(`bytes ${start}-`) === true;
+			if (status === 416 || (status === 206 && !resumed)) {
+				// The host will not continue this part: start the file over on the next try.
+				response.resume();
+				rmSync(part, { force: true });
+				return reject(new Error(`HTTP ${status}: the host did not resume at byte ${start} (${url})`));
+			}
+			if (status !== 200 && status !== 206) {
 				response.resume();
 				return reject(new HttpError(status, retryAfterMs(response.headers["retry-after"]), url));
 			}
 			// Closes the file and the response on either side's error.
-			pipeline(response, createWriteStream(part)).then(resolvePromise, reject);
+			pipeline(response, createWriteStream(part, { flags: resumed ? "a" : "w" })).then(resolvePromise, reject);
 		});
 		request.setTimeout(STALL_MS, () => request.destroy(new Error(`no data for ${STALL_MS / 1000} s (${url})`)));
 		request.on("error", reject);

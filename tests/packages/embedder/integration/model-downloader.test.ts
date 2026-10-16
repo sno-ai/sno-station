@@ -137,3 +137,48 @@ it("says which file failed and why when the host cannot be reached", async () =>
 	await expect(downloadModel(SMALL, { cacheDir, mirror: "http://127.0.0.1:9/" }))
 		.rejects.toThrow(/test-org\/small-model config\.json: .*ECONNREFUSED.* after 5 attempts/);
 }, 60_000);
+
+/** Serves `bytes` honouring a `Range: bytes=N-` request; records each request's range. */
+function serveRange(req: IncomingMessage, res: ServerResponse, bytes: Buffer, ranges: string[]): void {
+	const range = req.headers.range ?? "";
+	ranges.push(range);
+	const start = Number(/^bytes=(\d+)-$/.exec(range)?.[1] ?? 0);
+	if (start > 0) {
+		res.writeHead(206, { "content-length": String(bytes.length - start), "content-range": `bytes ${start}-${bytes.length - 1}/${bytes.length}` });
+		res.end(bytes.subarray(start));
+		return;
+	}
+	res.writeHead(200, { "content-length": String(bytes.length) });
+	res.end(bytes);
+}
+
+it("resumes a file from where the connection broke instead of starting over", async () => {
+	const cacheDir = tempDir();
+	const ranges: string[] = [];
+	let cut = false;
+	const mirror = await host((req, res) => {
+		if (!req.url?.endsWith("model.onnx")) { res.end(body(req.url)); return; }
+		if (!cut) {
+			cut = true;
+			res.writeHead(200, { "content-length": String(WEIGHTS.length) });
+			res.write(WEIGHTS.subarray(0, 120_000), () => setTimeout(() => req.socket.destroy(), 100));
+			return;
+		}
+		serveRange(req, res, WEIGHTS, ranges);
+	});
+	const dir = await downloadModel(SMALL, { cacheDir, mirror: mirror.url });
+	expect(readFileSync(join(dir, "onnx/model.onnx")).equals(WEIGHTS)).toBe(true);
+	expect(ranges[0]).toMatch(/^bytes=[1-9]\d*-$/);
+}, 60_000);
+
+it("resumes the part a killed process left behind", async () => {
+	const cacheDir = tempDir();
+	const dir = join(cacheDir, SMALL.id, SMALL.revision);
+	mkdirSync(join(dir, "onnx"), { recursive: true });
+	writeFileSync(join(dir, "onnx/model.onnx.part"), WEIGHTS.subarray(0, 50_000));
+	const ranges: string[] = [];
+	const mirror = await host((req, res) => (req.url?.endsWith("model.onnx") ? serveRange(req, res, WEIGHTS, ranges) : res.end(body(req.url))));
+	await downloadModel(SMALL, { cacheDir, mirror: mirror.url });
+	expect(readFileSync(join(dir, "onnx/model.onnx")).equals(WEIGHTS)).toBe(true);
+	expect(ranges).toEqual(["bytes=50000-"]);
+}, 60_000);
