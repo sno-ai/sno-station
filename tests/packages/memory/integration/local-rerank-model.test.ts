@@ -76,6 +76,34 @@ it("keeps the cosine order until the model has loaded, then ranks the answering 
 	}
 }, 300_000);
 
+it("keeps the model's answer first when the memory it demoted was stored as more important", async () => {
+	const own = createTestDb();
+	const ownStore = new MemoryStore({ dbPath: own.dbPath, embedder });
+	try {
+		// The near miss was written as important, the answer as an aside: recall weighs importance after the model.
+		const importance: Record<string, number> = { "pet-wish": 0.9, "pet-cats": 0.3, "city-wish": 0.9, "city-home": 0.3 };
+		let order = 0;
+		for (const [id, text] of Object.entries(MODEL_CASES)) {
+			order += 1;
+			await ownStore.importEntry({
+				id, text, category: "episodic", lane: "active", projectId: "global", importance: importance[id] ?? 0.7,
+				timestamp: Date.UTC(2026, 0, 1) + order, metadata: "{}", contentHash: id,
+			});
+		}
+		const deadline = Date.now() + 240_000;
+		while ((await embedder.scoreRelevance("probe", ["probe"])) === undefined && Date.now() < deadline) {
+			await new Promise((resolve) => setTimeout(resolve, 1_000));
+		}
+		const retriever = createRetriever(ownStore, embedder, { warn: () => {} }, { ...DEFAULT_RETRIEVAL_CONFIG, rerank: "lightweight", minScore: 0, hardMinScore: 0 });
+		const top = async (query: string) => (await retriever.retrieve({ query, limit: 3 }))[0]?.entry.id;
+		expect(await top("What pet does Joanna have?")).toBe("pet-cats");
+		expect(await top("Joanna 住在哪个城市？")).toBe("city-home");
+	} finally {
+		await ownStore.close();
+		own.cleanup();
+	}
+}, 300_000);
+
 it("returns the local ranking order at the caller's deadline when the model is slower, and when it fails", async () => {
 	const order = async (scoreRelevance: Embedder["scoreRelevance"], rerankDeadlineAt?: number) => {
 		const slowOrFailing = Object.create(embedder, { scoreRelevance: { value: scoreRelevance } }) as Embedder;
@@ -96,7 +124,7 @@ it("returns the local ranking order at the caller's deadline when the model is s
 	expect(failed.first).toBe("sister-talk");
 }, 60_000);
 
-it("the model only reorders the candidates it scored: the first results all come from the local ranking's first 15", async () => {
+it("the model scores only the local ranking's first 15 candidates and serves the one it picks first", async () => {
 	const big = createTestDb();
 	const bigStore = new MemoryStore({ dbPath: big.dbPath, embedder });
 	try {
@@ -120,12 +148,16 @@ it("the model only reorders the candidates it scored: the first results all come
 			createRetriever(bigStore, Object.create(embedder, { scoreRelevance: { value: scoreRelevance } }) as Embedder, { warn: () => {} },
 				{ ...DEFAULT_RETRIEVAL_CONFIG, rerank: "lightweight", minScore: 0, hardMinScore: 0 });
 		const query = "Where does Nate's sister work?";
-		const local = (await withModel(async () => undefined).retrieve({ query, limit: 25 })).map((r) => r.entry.id);
 		// A model that likes one memory and dislikes every other one it is shown.
-		const picky = async (_q: string, texts: string[]) => texts.map((text) => (text.includes("nurse") ? 10 : -10));
+		const shown: string[] = [];
+		const picky = async (_q: string, texts: string[]) => {
+			shown.push(...texts);
+			return texts.map((text) => (text.includes("nurse") ? 10 : -10));
+		};
 		const ranked = (await withModel(picky).retrieve({ query, limit: 5 })).map((r) => r.entry.id);
+		// Of 25 candidates the model sees the local ranking's first 15, and the one it picks is served first.
+		expect(shown).toHaveLength(15);
 		expect(ranked[0]).toBe("sister-job");
-		for (const id of ranked) expect(local.slice(0, 15)).toContain(id);
 	} finally {
 		await bigStore.close();
 		big.cleanup();

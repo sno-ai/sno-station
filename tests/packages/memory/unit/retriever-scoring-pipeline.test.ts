@@ -316,3 +316,29 @@ describe("default temporal trace and MMR window", () => {
 		expect(filtered.map((row) => row.mmrScore ?? null)).toEqual([1, null]);
 	});
 });
+
+describe("local reranker model order", () => {
+	it("restores the model's order after the importance weight, and leaves a candidate it did not score alone", () => {
+		const vectors = new Map([
+			["a", new Float32Array([1, 0, 0])],
+			["b", new Float32Array([0, 1, 0])],
+			["c", new Float32Array([0, 0, 1])],
+		]);
+		const internals = createRetriever({ getVectorsByIds: () => vectors } as never, noopEmbedder, undefined,
+			{ ...DEFAULT_RETRIEVAL_CONFIG }) as unknown as MemoryRetrieverInternals;
+		// The model put "b" first; "b" was stored as unimportant, so the importance weight alone would sink it.
+		const candidates = () => [
+			{ ...buildCandidate({ id: "a", score: 0.9, timestamp: 0, importance: 1 }), chunkId: "a" },
+			{ ...buildCandidate({ id: "b", score: 0.8, timestamp: 0, importance: 0 }), chunkId: "b" },
+			{ ...buildCandidate({ id: "c", score: 0.85, timestamp: 0, importance: 1 }), chunkId: "c" },
+		];
+		const weighted = internals.applyScoringPipeline(candidates());
+		expect(weighted.map((row) => row.entry.id)).toEqual(["a", "c", "b"]);
+		const ordered = internals.applyScoringPipeline(candidates(), undefined, undefined, ["b", "a"]);
+		expect(ordered.map((row) => row.entry.id)).toEqual(["b", "c", "a"]);
+		const score = (rows: RetrievalResult[], id: string) => rows.find((row) => row.entry.id === id)?.score;
+		expect(score(ordered, "b")).toBe(score(weighted, "a"));
+		expect(score(ordered, "a")).toBe(score(weighted, "b"));
+		expect(score(ordered, "c")).toBe(score(weighted, "c"));
+	});
+});

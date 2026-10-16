@@ -71,12 +71,13 @@ const STAGE_ORDER = [
 	"length_normalization",
 	"time_decay",
 	"retention_boost",
+	"local_model_order",
 	"hard_min_score",
 	"mmr_diversity",
 ];
 
 describe("the scoring pipeline records every stage", () => {
-	it("emits all seven stages, in pipeline order, with real counts", () => {
+	it("emits all eight stages, in pipeline order, with real counts", () => {
 		const trace = new TraceCollector();
 		const results = [buildResult("a", 0.9), buildResult("b", 0.5), buildResult("c", 0.3)];
 		runPipeline(results, ALL_ON, trace);
