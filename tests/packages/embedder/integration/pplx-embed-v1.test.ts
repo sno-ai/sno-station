@@ -25,7 +25,7 @@ import { LOCAL_EMBEDDING_CACHE_DIR_DEFAULT, LocalEmbedProvider } from "@snoai/em
 const MODEL_DIR = resolve(LOCAL_EMBEDDING_CACHE_DIR_DEFAULT);
 const MODEL_FILE = resolve(
 	MODEL_DIR,
-	"perplexity-ai/pplx-embed-v1-0.6b/onnx/model.onnx",
+	"perplexity-ai/pplx-embed-v1-0.6b/main/onnx/model.onnx",
 );
 
 const HAS_MODEL = existsSync(MODEL_FILE);
