@@ -22,6 +22,8 @@ import type {
 	LocalEmbedPooling,
 	LocalEmbedSessionOptions,
 } from "./types";
+import { downloadModel } from "./downloader";
+import { embeddingModelSpec } from "./model-download";
 
 const log = createLogger("embedder:local");
 
@@ -306,10 +308,16 @@ export class LocalEmbedProvider implements DisposableProvider {
 
 		try {
 			const sessionOptions = buildSessionOptions(this.sessionOptions);
-			const extractor = await pipeline("feature-extraction", this.modelId, {
+			// The bundled model loads from its revision directory, which the downloader completes first.
+			const bundled = this.modelId === LOCAL_EMBEDDING_MODEL && this.revision === LOCAL_EMBEDDING_MODEL_REVISION;
+			const source = bundled
+				? await downloadModel(embeddingModelSpec(this.dtype), { cacheDir: this.cacheDir, offline: this.offline, mirror: this.mirror })
+				: this.modelId;
+			const extractor = await pipeline("feature-extraction", source, {
 				dtype: this.dtype,
 				device: "cpu",
 				session_options: sessionOptions,
+				...(bundled ? { local_files_only: true } : {}),
 			});
 
 			const durationMs = Math.round(performance.now() - t0);

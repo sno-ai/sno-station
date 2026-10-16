@@ -5,7 +5,11 @@ import {
 	type LocalEmbedGraphOptimizationLevel,
 	type LocalEmbedPooling,
 } from "@snoai/embedder";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { mkdirSync, mkdtempSync, rmSync, truncateSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { embeddingModelSpec } from "../../../../packages/embedder/src/model-download.ts";
 
 vi.mock("@huggingface/transformers", () => ({
 	env: {},
@@ -41,6 +45,20 @@ function createExtractor(dim = 1024): {
 	return { extractor, dispose };
 }
 
+// A cache the downloader already completed (sparse files of the right sizes), so loading never reaches the network.
+const CACHE = mkdtempSync(join(tmpdir(), "sno-embedder-lifecycle-"));
+beforeAll(() => {
+	const spec = embeddingModelSpec("q8");
+	const dir = join(CACHE, spec.id, spec.revision);
+	for (const file of spec.files) {
+		mkdirSync(dirname(join(dir, file.path)), { recursive: true });
+		writeFileSync(join(dir, file.path), "");
+		truncateSync(join(dir, file.path), file.size);
+	}
+	writeFileSync(join(dir, ".complete"), JSON.stringify({ revision: spec.revision }));
+});
+afterAll(() => rmSync(CACHE, { recursive: true, force: true }));
+
 describe("LocalEmbedProvider shared lifecycle", () => {
 	const pipelineMock = vi.mocked(pipeline);
 
@@ -68,11 +86,11 @@ describe("LocalEmbedProvider shared lifecycle", () => {
 		pipelineMock.mockResolvedValueOnce(extractor);
 
 		const first = new LocalEmbedProvider({
-			cacheDir: "/tmp/embedder-models",
+			cacheDir: CACHE,
 			dtype: "q8",
 		});
 		const second = new LocalEmbedProvider({
-			cacheDir: "/tmp/embedder-models",
+			cacheDir: CACHE,
 			dtype: "q4",
 		});
 
@@ -93,10 +111,10 @@ describe("LocalEmbedProvider shared lifecycle", () => {
 		const pending = createDeferred<ReturnType<typeof createExtractor>["extractor"]>();
 		pipelineMock.mockReturnValueOnce(pending.promise);
 
-		const first = new LocalEmbedProvider({ cacheDir: "/tmp/embedder-models" });
+		const first = new LocalEmbedProvider({ cacheDir: CACHE });
 		const firstWarmup = first.warmup();
 		const firstDispose = first.dispose();
-		const second = new LocalEmbedProvider({ cacheDir: "/tmp/embedder-models" });
+		const second = new LocalEmbedProvider({ cacheDir: CACHE });
 		const secondWarmup = second.warmup();
 
 		const { extractor, dispose } = createExtractor();
@@ -120,9 +138,9 @@ describe("LocalEmbedProvider shared lifecycle", () => {
 		const pending = createDeferred<ReturnType<typeof createExtractor>["extractor"]>();
 		pipelineMock.mockReturnValueOnce(pending.promise);
 
-		const first = new LocalEmbedProvider({ cacheDir: "/tmp/embedder-models" });
+		const first = new LocalEmbedProvider({ cacheDir: CACHE });
 		const firstWarmup = first.warmup();
-		const second = new LocalEmbedProvider({ cacheDir: "/tmp/embedder-models" });
+		const second = new LocalEmbedProvider({ cacheDir: CACHE });
 		await first.dispose();
 
 		const { extractor, dispose } = createExtractor();
