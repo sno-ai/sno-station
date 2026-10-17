@@ -12,7 +12,6 @@ import {
 } from "../../../../packages/memory/src/engine/operations/runtime-audit-log.ts";
 import { MemoryStore } from "../../../../packages/memory/src/store/store.ts";
 import {
-	assertMemoryKindsCutoverStartupGuard,
 	MEMORY_KINDS_FOUNDATION_MARKER,
 	resetMemoryKindsCutoverDatabase,
 	runMemoryKindsCutoverMigration,
@@ -240,7 +239,7 @@ describe("memory-kinds offline cutover migrator", () => {
 		}
 	});
 
-	it("no-ops after marker commit; startup guard is marker-only while the offline migrator still detects drift", () => {
+	it("no-ops after marker commit while the offline migrator still detects drift", () => {
 		const testDb = createTestDb();
 		try {
 			insertLegacyRow(testDb.sqlite, {
@@ -259,34 +258,12 @@ describe("memory-kinds offline cutover migrator", () => {
 					"identity",
 					"identity-row",
 				);
-				// DB-optimization Step 8: the per-boot guard no longer re-reads and
-				// re-validates every row (linear boot cost). Marker presence is the
-				// steady-state contract; runtime writes stay validated at write time.
-				expect(() => assertMemoryKindsCutoverStartupGuard(handle.db)).not.toThrow();
 			} finally {
 				handle.db.close();
 			}
 			// Drift detection still exists where it is affordable: the offline
 			// migrator's noop path re-validates every row and fails loudly.
 			expect(() => runMemoryKindsCutoverMigration({ dbPath: testDb.dbPath })).toThrow(/identity/);
-		} finally {
-			testDb.cleanup();
-		}
-	});
-
-	it("rejects unmigrated stores during MemoryStore startup before reads or writes", () => {
-		const testDb = createTestDb();
-		try {
-			insertLegacyRow(testDb.sqlite, {
-				id: "identity-row",
-				text: "The user lives in Portland.",
-				category: "identity",
-			});
-			testDb.sqlite.close();
-
-			expect(
-				() => new MemoryStore({ dbPath: testDb.dbPath, embedder: testEmbedder }),
-			).toThrow(/offline migrator/);
 		} finally {
 			testDb.cleanup();
 		}

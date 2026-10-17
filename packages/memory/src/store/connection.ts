@@ -240,24 +240,6 @@ export function loadStorageExtensions(sqlite: SqliteRuntimeHandle): void {
  * Mirrors the regex pattern used by `parseVecTableDimension` for
  * `nodix_memory_chunk_vectors` — single SELECT against `sqlite_master`, regex match.
  */
-/**
- * Round A invariant: detect legacy DBs that pre-date migration 0004
- * (chunk-table swap). If the parent vec/FTS objects still exist, the DB
- * was opened against a build that never ran the new migration — fail loud
- * so the dev wipes the file.
- */
-export function assertNoLegacyBoundarySchema(db: SqliteDatabaseLike): void {
-	const rows = db.prepare("PRAGMA table_info(nodix_memories)").all() as Array<{
-		name?: string;
-	}>;
-	if (rows.length === 0) return;
-	const columnNames = new Set(rows.map((row) => row.name).filter((name): name is string => !!name));
-	const legacyBoundaryColumn = ["s", "c", "o", "p", "e"].join("");
-	if (columnNames.has(legacyBoundaryColumn) && !columnNames.has("project_id")) {
-		throw new StorageError("legacy boundary schema is unsupported for provider v1");
-	}
-}
-
 function ensureMemoryKindIndexes(db: SqliteDatabaseLike): void {
 	db.exec(
 		"CREATE INDEX IF NOT EXISTS nodix_idx_memories_project_fact_key_active ON nodix_memories(project_id, json_extract(metadata, '$.fact_key')) WHERE json_valid(metadata) AND json_extract(metadata, '$.fact_key') IS NOT NULL AND json_extract(metadata, '$.invalidated_at') IS NULL;",

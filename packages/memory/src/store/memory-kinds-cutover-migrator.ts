@@ -372,34 +372,6 @@ function validateFoundationInvariants(db: SqliteDatabaseLike): number {
 	return rows.length;
 }
 
-function countNonFoundationRows(db: SqliteDatabaseLike): number {
-	const row = db
-		.prepare(
-			`SELECT COUNT(*) AS count FROM nodix_memories WHERE category NOT IN (${MEMORY_CATEGORIES.map(() => "?").join(", ")})`,
-		)
-		.get(...MEMORY_CATEGORIES) as { count?: number | bigint } | undefined;
-	const rawCount = row?.count ?? 0;
-	return typeof rawCount === "bigint" ? Number(rawCount) : Number(rawCount);
-}
-
-export function assertMemoryKindsCutoverStartupGuard(db: SqliteDatabaseLike): void {
-	if (markerExists(db)) {
-		// Marker present = the cutover ran and validated its invariants at
-		// migration time. The former per-boot validateFoundationInvariants() here
-		// re-read and JSON-parsed EVERY memory row on EVERY startup — a linear
-		// boot cost that re-proved an already-proven state. The marker check
-		// alone is the steady-state guard; the full validation still runs inside
-		// runMemoryKindsCutoverMigration itself.
-		return;
-	}
-	const nonFoundationRows = countNonFoundationRows(db);
-	if (nonFoundationRows > 0) {
-		throw new StorageError(
-			`memory-kinds-foundation startup guard found ${nonFoundationRows} old/unknown category row(s) without marker ${MEMORY_KINDS_FOUNDATION_MARKER}; run the offline migrator before starting the runtime`,
-		);
-	}
-}
-
 export function runMemoryKindsCutoverMigration(args: {
 	dbPath: string;
 	now?: number;
