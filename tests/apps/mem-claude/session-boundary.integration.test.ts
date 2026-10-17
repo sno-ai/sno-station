@@ -9,7 +9,7 @@
 import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { homedir, userInfo } from "node:os";
+import { homedir } from "node:os";
 import { basename, join, resolve } from "node:path";
 import { connect, type MemoryClient } from "../../../packages/memory/src/contract/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
