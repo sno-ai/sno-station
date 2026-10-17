@@ -27,16 +27,16 @@ interface GuardDefinition {
 
 const zeroCallerAllowlist = new Map<string, string>([
 	[
-		"packages/memory/src/engine/rem/operational-config.ts:129:requireRemCoverageAccuracyFloor",
+		"packages/memory/src/engine/rem/operational-config.ts:127:requireRemCoverageAccuracyFloor",
 		"Frozen unwired guard retained by the REM obligations contract.",
 	],
 	[
-		"packages/embedder/src/model-download.ts:118:ensureModelDownloaded",
-		"Published package entry point invoked by external operators, not repository production code.",
+		"packages/embedder/src/model-download.ts:119:ensureModelDownloaded",
+		"Called by the memory service's embedder through the @snoai/embedder package import, which this analysis does not follow.",
 	],
 	[
-		"packages/qe-lib/src/conformance.ts:27:assertQeCorpusReaderConformance",
-		"Published conformance helper invoked by external corpus-reader implementations.",
+		"packages/memory/src/engine/extraction/atomic-subject-guard.ts:141:guardUserSubjects",
+		"Called through the subject-guard transport object in atomic-memory-extraction.ts, a call this analysis does not resolve.",
 	],
 ]);
 
