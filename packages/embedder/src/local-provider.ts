@@ -28,10 +28,9 @@ import { embeddingModelSpec } from "./model-download";
 const log = createLogger("embedder:local");
 
 // Process-global singleton for the ONNX pipeline. All LocalEmbedProvider instances
-// share one FeatureExtractionPipeline because (a) @huggingface/transformers env is
-// process-global, (b) the configuredCacheDir check already enforces identical config,
-// and (c) each ONNX session allocates ~1.5 GiB native memory — duplicating it when
-// the host framework re-loads the plugin exhausts RSS on constrained VMs.
+// share one FeatureExtractionPipeline because each ONNX session allocates ~1.5 GiB native
+// memory — duplicating it when the host framework re-loads the plugin exhausts RSS on
+// constrained VMs. The pipeline key check refuses a different configuration while one is live.
 let sharedExtractor: FeatureExtractionPipeline | undefined;
 let sharedLoading: Promise<FeatureExtractionPipeline> | undefined;
 let sharedRefCount = 0;
@@ -151,15 +150,8 @@ export class LocalEmbedProvider implements DisposableProvider {
 	private readonly offline: boolean;
 	private readonly mirror: string | undefined;
 
-	/**
-	 * Guard: transformers `env` is process-global — only one cacheDir is allowed per process.
-	 * Intentionally never reset during normal operation; use `resetStaticState()` only in tests.
-	 */
-	private static configuredCacheDir: string | undefined;
-
 	/** Reset static state — FOR TESTS ONLY. Not safe in production. */
 	static resetStaticState(): void {
-		LocalEmbedProvider.configuredCacheDir = undefined;
 		sharedExtractor = undefined;
 		sharedLoading = undefined;
 		sharedRefCount = 0;
@@ -260,17 +252,6 @@ export class LocalEmbedProvider implements DisposableProvider {
 	}
 
 	private async initPipeline(): Promise<FeatureExtractionPipeline> {
-		// Guard: transformers `env` is process-global — reject conflicting cacheDirs.
-		if (
-			LocalEmbedProvider.configuredCacheDir !== undefined &&
-			LocalEmbedProvider.configuredCacheDir !== this.cacheDir
-		) {
-			throw new Error(
-				`transformers env is global; LocalEmbedProvider cacheDir must be consistent ` +
-					`(existing: ${LocalEmbedProvider.configuredCacheDir}, requested: ${this.cacheDir})`,
-			);
-		}
-		LocalEmbedProvider.configuredCacheDir = this.cacheDir;
 		// Loaded here, not at module top: transformers pulls in sharp's native binding, and a host
 		// that stages dependencies apart (OpenClaw 2026.9.5) fails the whole plugin load on it.
 		const { pipeline } = await import("@huggingface/transformers");
