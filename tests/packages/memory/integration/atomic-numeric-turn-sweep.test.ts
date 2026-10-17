@@ -4,6 +4,7 @@
  */
 
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { initializeRuntimeDiagnostics } from "../../../../packages/memory/src/engine/observability/runtime-diagnostics.ts";
 import type {
 	AtomicExtractionRecord,
 	AtomicExtractionTurn,
@@ -207,7 +208,8 @@ describe("atomic numeric turn sweep", () => {
 	});
 
 	it("logs a completed sweep at info when nothing was dropped", async () => {
-		// An unconfigured logger runs at "info"; the service sets `settings.logging.level`.
+		// The service sets its level from `settings.logging`; an unconfigured process logs warnings only.
+		initializeRuntimeDiagnostics({ level: "info", file: "", debugContent: false });
 		const lines = captureStderr();
 		const { store } = callCountingStore();
 		const { transport } = transportReturning(
@@ -317,8 +319,12 @@ describe("atomic numeric turn sweep", () => {
 		const swept = await runAtomicNumericTurnSweep({
 			...BASE,
 			store,
-			// A parked record cites its turn too: the claim was rejected, not the turn skipped.
-			records: [record(STEPS_TURN, TURNS[STEPS_TURN]?.content ?? "")],
+			// The first pass stated the figure in its claim (a parked record counts too: the claim was rejected, not the
+			// turn skipped). A record only quoting the turn does not count; the next case covers that.
+			records: [{
+				...record(STEPS_TURN, TURNS[STEPS_TURN]?.content ?? ""),
+				claimText: "The user walked 4,471 steps today.", value: "4,471 steps",
+			}],
 			transport,
 			nowMs: () => 1_000,
 		});

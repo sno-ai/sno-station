@@ -732,8 +732,9 @@ describe("sidecar keeps serving", () => {
 				.toEqual([{ text: "I keep a green notebook." }]);
 			expect(database.sqlite.prepare("SELECT count(*) AS count FROM nodix_memory_chunks").get()).toEqual({ count: 1 });
 			const records = lines.flatMap(line => line.trim().split("\n")).filter(Boolean).map(line => JSON.parse(line));
+			// Four writes store the green memory and its chunk, the fifth its telemetry receipt; none after the cancel.
 			expect(records.filter(record => record.event_name === "memory.operation.aborted").map(record => record.attributes))
-				.toEqual([{ method: "capture", outcome: "aborted", writes: 4 }]);
+				.toEqual([{ method: "capture", outcome: "aborted", writes: 5 }]);
 		} finally {
 			release.resolve();
 			await result;

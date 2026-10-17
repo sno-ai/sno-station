@@ -26,9 +26,13 @@ interface Fixture {
 
 function makeFixture(): Fixture {
 	const testDb = createTestDb();
+	// Stores written before the record token ceiling (2026-09-14) hold long memories split into many chunks, and
+	// nothing migrated them, so recall still expands snippets over them. Only the ceiling's token count is replaced,
+	// to seed such memories the way an older release wrote them; chunking, embedding and recall stay real.
+	const olderReleaseEmbedder = Object.create(testEmbedder, { countTokens: { value: () => 0 } }) as Embedder;
 	const store = new MemoryStore({
 		dbPath: testDb.dbPath,
-		embedder: testEmbedder,
+		embedder: olderReleaseEmbedder,
 	});
 	return {
 		store,

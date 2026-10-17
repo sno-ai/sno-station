@@ -178,7 +178,8 @@ it("uses the same registered host after it disconnects and comes back", async ()
 		.toEqual({ kind: "error", category: "transport", message: "no-agent-endpoint" });
 	reply = "success";
 	expect(await pool.connectedRemPort()?.complete({ prompt: "question", timeoutMs: 2000 }))
-		.toEqual({ kind: "ok", text: '{"claims_found":[],"decisions":[{"turn_index":0,"progress_only":false}],"facts":[]}' });
+		.toEqual({ kind: "ok", text: '{"claims_found":[],"decisions":[{"turn_index":0,"progress_only":false}],"facts":[]}',
+			model: "loopback-model", usage: { inputTokens: 1, outputTokens: 1 } });
 });
 
 it("already restores a disconnected host after a new registration", async () => {
@@ -189,5 +190,6 @@ it("already restores a disconnected host after a new registration", async () => 
 	reply = "success";
 	await register();
 	expect(await pool.connectedRemPort()?.complete({ prompt: "question", timeoutMs: 2000 }))
-		.toEqual({ kind: "ok", text: '{"claims_found":[],"decisions":[{"turn_index":0,"progress_only":false}],"facts":[]}' });
+		.toEqual({ kind: "ok", text: '{"claims_found":[],"decisions":[{"turn_index":0,"progress_only":false}],"facts":[]}',
+			model: "loopback-model", usage: { inputTokens: 1, outputTokens: 1 } });
 });

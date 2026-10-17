@@ -5,6 +5,7 @@ import {
 	openEncryptedDbReadonly,
 } from "@snoai/sqlite-crypto";
 import { closeLogger } from "@snoai/utils/logger";
+import { initializeRuntimeDiagnostics } from "../../../../packages/memory/src/engine/observability/runtime-diagnostics.ts";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { Embedder } from "../../../../packages/memory/src/engine/extraction/embedding-provider-client.ts";
 import {
@@ -44,6 +45,8 @@ interface OfflineDispositionRow {
 }
 
 beforeAll(async () => {
+	// The service sets its level from `settings.logging`; an unconfigured process logs warnings only.
+	initializeRuntimeDiagnostics({ level: "info", file: "", debugContent: false });
 	diagnosticWrites = vi.spyOn(process.stderr, "write");
 	embedder = await createTestEmbedder();
 });
