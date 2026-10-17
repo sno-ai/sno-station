@@ -18,10 +18,11 @@ import { readSession } from "../../../apps/mem-claude/src/session-state.js";
 import { startRemSidecar } from "../../../packages/memory/src/sidecar/server";
 import { createTestDb } from "../mem-claw/helpers/test-db";
 import { writeSettingsFixture } from "../../packages/memory/fixtures/settings-file-fixture";
+import { LOCAL_EMBEDDING_CACHE_DIR_DEFAULT } from "../../../packages/embedder/src/constants.ts";
 
 const repoRoot = resolve(import.meta.dirname, "../../..");
 // The machine's own model cache (read from the account, not HOME): no per-test model download.
-const MODEL_CACHE = join(userInfo().homedir, ".cache", "sno-station", "models");
+const MODEL_CACHE = LOCAL_EMBEDDING_CACHE_DIR_DEFAULT;
 const OLD_SESSION = "7c1e4b52-3a9d-4f0e-9b6a-2d8f1c5e7a93";
 const TRANSCRIPT_FIXTURE = join(repoRoot, "tests/apps/mem-claude/fixtures", `transcript-${OLD_SESSION}.jsonl`);
 const FALLBACK_MARKER = "(fallback) Reflection generation failed; storing minimal pointer only.";

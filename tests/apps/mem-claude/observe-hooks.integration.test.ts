@@ -12,10 +12,11 @@ import { join, resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { writeSettingsFixture } from "../../packages/memory/fixtures/settings-file-fixture";
+import { LOCAL_EMBEDDING_CACHE_DIR_DEFAULT } from "../../../packages/embedder/src/constants.ts";
 
 const repoRoot = resolve(import.meta.dirname, "../../..");
 // The machine's own model cache (read from the account, not HOME): no per-test model download.
-const MODEL_CACHE = join(userInfo().homedir, ".cache", "sno-station", "models");
+const MODEL_CACHE = LOCAL_EMBEDDING_CACHE_DIR_DEFAULT;
 
 type Envelope = { event_id: string; event_type: string; lane: string; scope: { agent_id: string; session_uuid?: string }; payload: Record<string, unknown> };
 

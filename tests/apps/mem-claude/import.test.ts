@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { importRepository, splitMarkdown } from "../../../apps/mem-claude/src/import.js";
 import { spoolDirectory } from "../../../apps/mem-claude/src/paths.js";
 import { writeSettingsFixture } from "../../packages/memory/fixtures/settings-file-fixture";
+import { LOCAL_EMBEDDING_CACHE_DIR_DEFAULT } from "../../../packages/embedder/src/constants.ts";
 
 const roots: string[] = [];
 const previousProfile = process.env.SNO_PROFILE_DIR;
@@ -38,7 +39,7 @@ describe("Claude auto-memory import", () => {
 		process.env.HOME = join(profile, "home");
 		process.env.CLAUDE_CONFIG_DIR = config;
 		writeSettingsFixture(profile, { capture: { ambient: false },
-			embedding: { cacheDir: join(userInfo().homedir, ".cache", "sno-station", "models") } });
+			embedding: { cacheDir: LOCAL_EMBEDDING_CACHE_DIR_DEFAULT } });
 		await mkdir(join(repository, ".git"));
 		const output = spawnSync(process.execPath, ["--import", "tsx", "apps/mem-claude/src/cli.ts", "import", "--repo", repository], {
 			cwd: resolve(import.meta.dirname, "../../.."), encoding: "utf8", env: process.env,
