@@ -79,7 +79,7 @@ export function ensureConversationAccessGranted(api: SnoStationMemPluginApi): vo
 	if (!hostEnforcesConversationGate(api.runtime.version)) return;
 	if (conversationAccessAlreadyGranted(api.config)) return;
 
-	diagnosticLog.info("sno-mem-claw: granting hooks.allowConversationAccess in host config (required for typed hooks on OpenClaw 2026.6.9+); gateway will restart", undefined, {
+	diagnosticLog.warn("sno-mem-claw: granting hooks.allowConversationAccess in host config (required for typed hooks on OpenClaw 2026.6.9+); gateway will restart", undefined, {
 		event_name: "mem_claw.conversation-access-policy.sno.mem.claw.granting.hooks.allowconversationaccess.in.host.config.req",
 		file: "apps/mem-claw/src/install/conversation-access-policy.ts",
 		function: "ensureConversationAccessGranted",
