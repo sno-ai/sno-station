@@ -57,6 +57,7 @@ export function buildReflectionStorePayloads(params: BuildReflectionStorePayload
 			items: extractInjectableReflectionSliceItems(params.reflectionText),
 			eventId,
 			agentId: params.agentId,
+			derivedAgentId: params.derivedAgentId,
 			sessionKey: params.sessionKey,
 			sessionId: params.sessionId,
 			runAt: params.runAt,

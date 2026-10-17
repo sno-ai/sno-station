@@ -51,6 +51,8 @@ export interface BuildReflectionItemPayloadsParams {
 	items: ReflectionSliceItem[];
 	eventId: string;
 	agentId: string;
+	/** Owner of the derived items; invariant items keep `agentId`. */
+	derivedAgentId?: string | undefined;
 	sessionKey: string;
 	sessionId: string;
 	runAt: number;
@@ -139,7 +141,7 @@ function metadataFromItemPlan(
 		section: source.section,
 		ordinal: source.ordinal,
 		groupSize: source.groupSize,
-		agentId: params.agentId,
+		agentId: source.itemKind === "derived" ? (params.derivedAgentId ?? params.agentId) : params.agentId,
 		sessionKey: params.sessionKey,
 		sessionId: params.sessionId,
 		storedAt: params.runAt,

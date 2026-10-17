@@ -35,6 +35,8 @@ export interface BuildReflectionStorePayloadsParams {
 	sessionKey: string;
 	sessionId: string;
 	agentId: string;
+	/** Owner of the derived items; the event and the invariant items keep `agentId`. */
+	derivedAgentId?: string;
 	command: string;
 	scope: string;
 	toolErrorSignals: ReflectionErrorSignalLike[];
