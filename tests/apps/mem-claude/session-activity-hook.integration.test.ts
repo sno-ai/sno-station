@@ -18,7 +18,7 @@ import { writeSettingsFixture } from "../../packages/memory/fixtures/settings-fi
 import { LOCAL_EMBEDDING_CACHE_DIR_DEFAULT } from "../../../packages/embedder/src/constants.ts";
 
 const repoRoot = resolve(import.meta.dirname, "../../..");
-// The machine's own model cache (read from the account, not HOME): no per-test model download.
+// The repository's test model cache: no per-test model download, and the user's own cache is left alone.
 const MODEL_CACHE = LOCAL_EMBEDDING_CACHE_DIR_DEFAULT;
 const claudeCli = join(repoRoot, "apps/mem-claude/dist/cli.js");
 
@@ -51,7 +51,9 @@ beforeEach(async () => {
 	process.env.SNO_PROFILE_DIR = profile;
 	process.env.HOME = join(root, "home");
 	process.env.SNO_STATION_MEM_NODE_ENV = "test";
-	env = { ...process.env };
+	// The repository lives in a temporary directory, which the hooks skip as a scripted run; the switch the release
+	// journeys use records it anyway.
+	env = { ...process.env, SNO_CAPTURE_SCRIPTED: "1" };
 	// The hook's own cold start of the service can exceed its session-end deadline; start it first.
 	const started = await connect({ skinId: "claude-code" });
 	if (started.degraded) throw new Error(started.error ?? started.reason);
