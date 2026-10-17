@@ -15,7 +15,7 @@ import { once } from "node:events";
 import { cpSync, createReadStream, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import type { Socket } from "node:net";
-import { homedir, tmpdir } from "node:os";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -69,7 +69,7 @@ function writeSettings(profileRoot: string, overrides: SettingsDocument = {}): {
 
 /**
  * A production process environment: no test switches, this test's profile root, and the test home set in
- * `beforeEach`; the staged model cache above was resolved from the operator's home when this file loaded.
+ * `beforeEach`; the staged model cache above is the repository's test model cache.
  */
 function sessionEnv(profileRoot: string): NodeJS.ProcessEnv {
 	const env = Object.fromEntries(Object.entries(process.env).filter(([key]) =>

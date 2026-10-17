@@ -1,7 +1,7 @@
 import { createServer, type Server } from "node:http";
 import { createHash } from "node:crypto";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
-import { tmpdir, userInfo } from "node:os";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { REM_SIDECAR_TOKEN_HEADER } from "../../../../packages/memory/src/contract/routes";

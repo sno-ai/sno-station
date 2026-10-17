@@ -1,5 +1,5 @@
 import { mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
-import { tmpdir, userInfo } from "node:os";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { connect, type MemoryClient } from "@snoai/memory/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
