@@ -53,9 +53,9 @@ reinstall your plugin at its latest version (for example `sno setup --harness co
 any running agent session. Do not rerun the settings block; your store and key stay as they are.
 
 From 1.5.0, recall reorders its best candidates with a local ranking model that runs on your CPU
-and downloads about 206 MB on first use. It runs when `rerank.mode` is `lightweight`. An earlier
-version of this guide wrote `none`: change `rerank.mode` to `lightweight` in `~/.sno/settings.json`
-to turn it on.
+and downloads about 206 MB on first use. It runs unless `rerank.mode` is `none`. An earlier
+version of this guide wrote `none`: change it to `cross-encoder` in `~/.sno/settings.json`, the
+default, which ranks locally and, in REM Enhanced, keeps Sno's reranker.
 
 The nightly improvement skill uses `modelCalls.R5` for local lesson and skill-reminder
 generation. Its destinations are `host` in Local First and `off` in Agent Native and REM
