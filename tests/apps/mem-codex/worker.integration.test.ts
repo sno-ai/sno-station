@@ -10,12 +10,13 @@ import { appStateRoot, importDirectory, spoolDirectory, workerLockPath } from ".
 import { runWorker, type WorkerDependencies } from "../../../apps/mem-codex/src/worker.js";
 import { writeSettingsFixture } from "../../packages/memory/fixtures/settings-file-fixture";
 import { untilModelReady } from "../../packages/memory/integration/fixtures/model-ready";
+import { LOCAL_EMBEDDING_CACHE_DIR_DEFAULT } from "../../../packages/embedder/src/constants.ts";
 
 const previousEnv = { SNO_PROFILE_DIR: process.env.SNO_PROFILE_DIR, HOME: process.env.HOME };
 const roots: string[] = [];
 const sidecarPids: number[] = [];
 // The machine's own model cache (read from the account, not HOME): no per-test model download.
-const MODEL_CACHE = join(userInfo().homedir, ".cache", "sno-station", "models");
+const MODEL_CACHE = LOCAL_EMBEDDING_CACHE_DIR_DEFAULT;
 
 /** A temporary profile with its own settings.json and home (the store list lives under HOME). */
 async function profile(mode: "agent-native" | "local-first" = "agent-native"): Promise<string> {

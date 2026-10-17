@@ -15,10 +15,11 @@ import Database from "better-sqlite3";
 import { connect } from "@snoai/memory/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { writeSettingsFixture } from "../../packages/memory/fixtures/settings-file-fixture";
+import { LOCAL_EMBEDDING_CACHE_DIR_DEFAULT } from "../../../packages/embedder/src/constants.ts";
 
 const repoRoot = resolve(import.meta.dirname, "../../..");
 // The machine's own model cache (read from the account, not HOME): no per-test model download.
-const MODEL_CACHE = join(userInfo().homedir, ".cache", "sno-station", "models");
+const MODEL_CACHE = LOCAL_EMBEDDING_CACHE_DIR_DEFAULT;
 const codexCli = join(repoRoot, "apps/mem-codex/dist/cli.js");
 
 const sessionId = "01a1142e-d0b9-7622-b703-a6cb1a6ae323";

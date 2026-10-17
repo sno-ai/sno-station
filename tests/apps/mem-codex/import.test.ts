@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { importRepository, importUser, splitMarkdown } from "../../../apps/mem-codex/src/import.js";
 import { importDirectory, spoolDirectory } from "../../../apps/mem-codex/src/paths.js";
 import { writeSettingsFixture } from "../../packages/memory/fixtures/settings-file-fixture";
+import { LOCAL_EMBEDDING_CACHE_DIR_DEFAULT } from "../../../packages/embedder/src/constants.ts";
 
 const roots: string[] = [];
 const previousProfile = process.env.SNO_PROFILE_DIR;
@@ -35,7 +36,7 @@ describe("Codex memory import", () => {
 		process.env.SNO_PROFILE_DIR = profile;
 		process.env.HOME = join(profile, "home");
 		writeSettingsFixture(profile, { capture: { ambient: false },
-			embedding: { cacheDir: join(userInfo().homedir, ".cache", "sno-station", "models") } });
+			embedding: { cacheDir: LOCAL_EMBEDDING_CACHE_DIR_DEFAULT } });
 		await mkdir(join(repository, ".git"));
 		const output = spawnSync(process.execPath, ["--import", "tsx", "apps/mem-codex/src/cli.ts", "import", "--repo", repository], {
 			cwd: resolve(import.meta.dirname, "../../.."), encoding: "utf8", env: process.env,

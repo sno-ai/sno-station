@@ -10,6 +10,7 @@ import { importDirectory, spoolDirectory, workerLockPath } from "../../../apps/m
 import { runClaudeChild, runWorker, type WorkerDependencies } from "../../../apps/mem-claude/src/worker.js";
 import { writeSettingsFixture } from "../../packages/memory/fixtures/settings-file-fixture";
 import { untilModelReady } from "../../packages/memory/integration/fixtures/model-ready";
+import { LOCAL_EMBEDDING_CACHE_DIR_DEFAULT } from "../../../packages/embedder/src/constants.ts";
 
 const repoRoot = resolve(import.meta.dirname, "../../..");
 const extraction = '{"claims_found":[],"decisions":[{"turn_index":0,"progress_only":false}],"facts":[]}';
@@ -17,7 +18,7 @@ let root: string;
 let client: MemoryClient;
 let previousEnv: Record<string, string | undefined>;
 // The machine's own model cache (read from the account, not HOME): no per-test model download.
-const MODEL_CACHE = join(userInfo().homedir, ".cache", "sno-station", "models");
+const MODEL_CACHE = LOCAL_EMBEDDING_CACHE_DIR_DEFAULT;
 
 beforeEach(async ({ task }) => {
 	root = await mkdtemp(join(tmpdir(), "mem-claude-worker-"));

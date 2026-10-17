@@ -13,9 +13,10 @@ import { startRemSidecar } from "../../../packages/memory/src/sidecar/server";
 import { afterAgentResponse, preCompact, sessionStart, stop, userPromptSubmit } from "../../../apps/mem-cursor/src/hooks.ts";
 import { createTestDb } from "../mem-claw/helpers/test-db";
 import { writeSettingsFixture } from "../../packages/memory/fixtures/settings-file-fixture";
+import { LOCAL_EMBEDDING_CACHE_DIR_DEFAULT } from "../../../packages/embedder/src/constants.ts";
 
 const repoRoot = resolve(import.meta.dirname, "../../..");
-const MODEL_CACHE = join(userInfo().homedir, ".cache", "sno-station", "models");
+const MODEL_CACHE = LOCAL_EMBEDDING_CACHE_DIR_DEFAULT;
 const FACT = "Release builds are cut from the main branch every Tuesday at 10:00 Pacific.";
 
 let root: string;
