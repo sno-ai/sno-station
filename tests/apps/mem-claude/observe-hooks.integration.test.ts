@@ -11,11 +11,13 @@ import { tmpdir, userInfo } from "node:os";
 import { join, resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { connect } from "@snoai/memory/client";
 import { writeSettingsFixture } from "../../packages/memory/fixtures/settings-file-fixture";
+import { untilModelReady } from "../../packages/memory/integration/fixtures/model-ready";
 import { LOCAL_EMBEDDING_CACHE_DIR_DEFAULT } from "../../../packages/embedder/src/constants.ts";
 
 const repoRoot = resolve(import.meta.dirname, "../../..");
-// The machine's own model cache (read from the account, not HOME): no per-test model download.
+// The repository's test model cache: no per-test model download, and the user's own cache is left alone.
 const MODEL_CACHE = LOCAL_EMBEDDING_CACHE_DIR_DEFAULT;
 
 type Envelope = { event_id: string; event_type: string; lane: string; scope: { agent_id: string; session_uuid?: string }; payload: Record<string, unknown> };
@@ -112,6 +114,11 @@ describe.each([
 		const sessionId = `${app}-observe-1`;
 		const base = { session_id: sessionId, cwd: repoRoot };
 		const prompt = "Which branch is the release cut from?";
+		// The prompt's recall reads memory only once the service has prepared its embedding model; until then it
+		// answers model-preparing and sends no memory.read, as the first prompt after a cold start does.
+		const connected = await connect({ skinId: agentId });
+		if (connected.degraded) throw new Error(connected.error ?? connected.reason);
+		await untilModelReady(({ scope, query, options }) => connected.getRecall(query, { principal: connected.principal, ...scope }, options));
 		hook(cli, "user-prompt-submit", { ...base, [turnKey]: "turn-1", prompt });
 		hook(cli, "pre-tool-use", { ...base, tool_use_id: "tool-1", tool_name: "Bash", tool_input: { command: "git status" } });
 		await delay(40);
@@ -120,9 +127,10 @@ describe.each([
 		hook(cli, "session-end", base);
 
 		const mine = await eventsFor(agentId, "cost.summary");
-		const started = mine.find(event => event.event_type === "session.start");
-		expect(started?.scope.session_uuid).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
-		const sessionUuid = started?.scope.session_uuid;
+		// The hook's session is the one that submitted the prompt; the readiness probe above runs a session of its own.
+		const prompted = mine.find(event => event.event_type === "prompt.submit");
+		expect(prompted?.scope.session_uuid).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+		const sessionUuid = prompted?.scope.session_uuid;
 		const session = mine.filter(event => event.scope.session_uuid === sessionUuid);
 		expect(session.map(event => event.event_type)).toEqual([
 			"session.start", "prompt.submit", "memory.read", "tool.call", "tool.call", "memory.snapshot", "session.end", "cost.summary",
