@@ -34,8 +34,12 @@ let fileStatus: { destination: string | null; reason: string | null } = {
 };
 const reported = new Set<string>();
 
+// A process that never configured the logger (a setup command in a terminal, an agent hook) has no log file, so its
+// stderr is all a person sees: it gets warnings and errors only, not every info line.
+const UNCONFIGURED_LEVEL: LogLevel = "warn";
+
 export function effectiveLogLevel(): LogLevel {
-	return runtimeLevel ?? configuration?.level ?? DEFAULT_LEVEL;
+	return runtimeLevel ?? (configuration ? configuration.level ?? DEFAULT_LEVEL : UNCONFIGURED_LEVEL);
 }
 
 export function setLogLevel(level: LogLevel): void {
