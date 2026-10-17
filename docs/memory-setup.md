@@ -37,7 +37,9 @@ await ensureModelDownloaded({ cacheDir: settings.embedding.cacheDir, dtype: sett
 NODE
 ```
 
-The model download is part of setup, so the first agent session does not have to wait for it.
+The embedding model download is part of setup, so the first agent session does not have to wait for it.
+The local ranking model (about 206 MB) downloads in the background on the first recall; until it is
+ready, recall keeps its own order.
 Do not rerun the settings block for an existing store: it replaces the encryption key and the
 old memories become unreadable. Keep a private backup of `settings.json` with your memory store.
 The memory service starts when a plugin needs it; there is no separate start command.
