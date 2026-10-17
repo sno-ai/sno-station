@@ -26,7 +26,8 @@ type Boundary = "offline" | "system" | "trusted" | "tool";
 type WriteOperation = "store" | "supersede" | "bulkStore" | "importEntry";
 
 const EXPECTED: Record<Boundary, readonly MemoryCategory[]> = {
-	offline: ["episodic", "lesson", "profile", "persona", "summary"],
+	// Offline-family writers (reflection, distillation, REM) may write every category, state included.
+	offline: ["episodic", "lesson", "profile", "persona", "summary", "state"],
 	system: [],
 	trusted: ["episodic", "profile"],
 	tool: ["episodic"],
@@ -94,7 +95,7 @@ function inputFor(category: MemoryCategory, boundary: Boundary, label: string): 
 
 async function seedClosable(category: MemoryCategory): Promise<MemoryEntry> {
 	const boundary: Boundary =
-		category === "summary" || category === "persona" || category === "lesson"
+		category === "summary" || category === "persona" || category === "lesson" || category === "state"
 			? "offline"
 			: category === "profile"
 				? "trusted"
@@ -278,8 +279,11 @@ describe("memory write authority boundary", () => {
 				if (!row) throw new Error(`missing ${category} metadata authority fixture`);
 				const before = store.getById(row.id)?.metadata;
 				const result = operation.invoke(row.id);
-				if (category === "episodic") {
-					await expect(result, `${operation.name} should allow episodic`).resolves.toBeUndefined();
+				// A full update edits like a tool and is episodic-only; a metadata-only change runs with extraction
+				// authority (recall's access bookkeeping touches every recalled row), so state is open to it too.
+				const allowed = category === "episodic" || (operation.name !== "update" && category === "state");
+				if (allowed) {
+					await expect(result, `${operation.name} should allow ${category}`).resolves.toBeUndefined();
 					expect(store.getById(row.id)?.metadata).not.toBe(before);
 					continue;
 				}
