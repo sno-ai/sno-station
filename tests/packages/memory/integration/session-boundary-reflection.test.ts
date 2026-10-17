@@ -267,5 +267,9 @@ describe("a reset keeps the closed session's derived notes out of that session's
 		expect(await block("derived-reset-session")).not.toContain(LEAK_MARKER);
 		// Positive control: the notes exist and reach a session the reset did not close.
 		expect(await block("derived-other-session")).toContain(LEAK_MARKER);
+		// Rules learned by one host stay shared: another host on the same workspace still inherits them.
+		const otherHost = (await pool?.invoke("staticBlock", { scope: scope("derived-codex-session", { agentId: "codex" }) },
+			"derived-host")) as { contextText: string };
+		expect(otherHost.contextText).toContain("Always run typecheck after editing TypeScript files.");
 	});
 });
