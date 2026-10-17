@@ -1,6 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
-import { tmpdir, userInfo } from "node:os";
+import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { importRepository, importUser, splitMarkdown } from "../../../apps/mem-codex/src/import.js";

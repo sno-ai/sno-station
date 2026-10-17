@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { chmod, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
-import { tmpdir, userInfo } from "node:os";
+import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { connect, type InitRegistration, type MemoryClient } from "@snoai/memory/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";

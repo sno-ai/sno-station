@@ -5,7 +5,7 @@
  */
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
-import { homedir, userInfo } from "node:os";
+import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { connect, type MemoryClient } from "../../../packages/memory/src/contract/client";
