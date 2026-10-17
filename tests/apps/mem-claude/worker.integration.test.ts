@@ -17,7 +17,7 @@ const extraction = '{"claims_found":[],"decisions":[{"turn_index":0,"progress_on
 let root: string;
 let client: MemoryClient;
 let previousEnv: Record<string, string | undefined>;
-// The machine's own model cache (read from the account, not HOME): no per-test model download.
+// The repository's test model cache: no per-test model download, and the user's own cache is left alone.
 const MODEL_CACHE = LOCAL_EMBEDDING_CACHE_DIR_DEFAULT;
 
 beforeEach(async ({ task }) => {

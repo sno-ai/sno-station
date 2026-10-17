@@ -15,7 +15,7 @@ import { LOCAL_EMBEDDING_CACHE_DIR_DEFAULT } from "../../../packages/embedder/sr
 const previousEnv = { SNO_PROFILE_DIR: process.env.SNO_PROFILE_DIR, HOME: process.env.HOME };
 const roots: string[] = [];
 const sidecarPids: number[] = [];
-// The machine's own model cache (read from the account, not HOME): no per-test model download.
+// The repository's test model cache: no per-test model download, and the user's own cache is left alone.
 const MODEL_CACHE = LOCAL_EMBEDDING_CACHE_DIR_DEFAULT;
 
 /** A temporary profile with its own settings.json and home (the store list lives under HOME). */

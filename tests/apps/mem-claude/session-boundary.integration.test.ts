@@ -21,7 +21,7 @@ import { writeSettingsFixture } from "../../packages/memory/fixtures/settings-fi
 import { LOCAL_EMBEDDING_CACHE_DIR_DEFAULT } from "../../../packages/embedder/src/constants.ts";
 
 const repoRoot = resolve(import.meta.dirname, "../../..");
-// The machine's own model cache (read from the account, not HOME): no per-test model download.
+// The repository's test model cache: no per-test model download, and the user's own cache is left alone.
 const MODEL_CACHE = LOCAL_EMBEDDING_CACHE_DIR_DEFAULT;
 const OLD_SESSION = "7c1e4b52-3a9d-4f0e-9b6a-2d8f1c5e7a93";
 const TRANSCRIPT_FIXTURE = join(repoRoot, "tests/apps/mem-claude/fixtures", `transcript-${OLD_SESSION}.jsonl`);
