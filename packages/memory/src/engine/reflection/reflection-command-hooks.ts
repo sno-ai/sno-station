@@ -190,8 +190,10 @@ async function runMemoryReflectionBody(
 				: event.timestamp instanceof Date
 					? event.timestamp.getTime()
 					: Date.now();
-		const sourceAgentId = params.deps.parseAgentIdFromSessionKey(sessionKey) || "main";
 		const writerAgentId = resolveHookAgentId(event.context.agentId, sessionKey).agentId;
+		// The reflection is owned by the agent the injection reads as: the host's own identity first, so a host whose
+		// session keys carry no agent prefix (Claude Code, Codex, Hermes) still gets its derived notes back.
+		const sourceAgentId = writerAgentId ?? "main";
 		const command = String(event.action ?? "unknown");
 		// Terminal per-session read: the daily-log reflection wants the full recent error set,
 		// not just signals since the last prompt-injection marker. getPendingSignals drains that
@@ -286,7 +288,7 @@ async function maybeStoreReflection(
 ): Promise<void> {
 	if (!params.reflectionCfg.storeToDb || params.usedFallback) {
 		if (params.sessionKey && params.usedFallback) {
-			params.derivedCache.delete(`${params.sourceAgentId}::${params.sessionKey}`);
+			params.derivedCache.delete(params.derivedKey(params.sessionKey));
 		}
 		return;
 	}
@@ -374,7 +376,7 @@ async function maybeStoreReflection(
 		) {
 			setReflectionDerivedCacheEntry(
 				params.derivedCache,
-				`${params.sourceAgentId}::${params.sessionKey}`,
+				params.derivedKey(params.sessionKey),
 				{
 					updatedAt: params.nowTs,
 					derived: layered.slices.derived,

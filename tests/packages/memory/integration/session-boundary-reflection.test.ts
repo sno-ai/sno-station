@@ -146,7 +146,7 @@ describe("reflection of the previous session on a reset boundary (local-first, e
 });
 
 /** A loopback host model callback: keeps the user prompt of every call and answers with a fixed reflection. */
-async function hostRecorder() {
+async function hostRecorder(answer = "Reflection body from the loopback host.") {
 	const prompts: string[] = [];
 	const server = createServer(async (request, response) => {
 		let raw = "";
@@ -154,7 +154,7 @@ async function hostRecorder() {
 		const body = JSON.parse(raw) as { messages: Array<{ role: string; content: string }> };
 		prompts.push(body.messages.filter(message => message.role === "user").map(message => message.content).join("\n"));
 		response.writeHead(200, { "content-type": "application/json" });
-		response.end(JSON.stringify({ model: "loopback-model", choices: [{ message: { role: "assistant", content: "Reflection body from the loopback host." } }],
+		response.end(JSON.stringify({ model: "loopback-model", choices: [{ message: { role: "assistant", content: answer } }],
 			usage: { prompt_tokens: 1, completion_tokens: 1 } }));
 	});
 	await new Promise<void>(done => server.listen(0, "127.0.0.1", done));
@@ -238,5 +238,34 @@ describe("the reflection prompt carries the previous session's own conversation 
 		expect(prompt).not.toContain("grep: 2 matches in scripts/release.sh");
 		expect(written).toHaveLength(1);
 		expect(written[0]).toContain("Reflection body from the loopback host.");
+	});
+});
+
+describe("a reset keeps the closed session's derived notes out of that session's next prompt (agent-native, R1 on the host)", () => {
+	const LEAK_MARKER = "BOUNDARY-DERIVED-LEAK-MARKER";
+	let host: Awaited<ReturnType<typeof hostRecorder>>;
+	beforeEach(async () => {
+		host = await hostRecorder(["## Context", "- Release work on the billing service.", "", "## Invariants",
+			"- Always run typecheck after editing TypeScript files.", "", "## Derived",
+			`- ${LEAK_MARKER}: the closed session's next step, which must not reach the reset session.`].join("\n"));
+		await openPool("agent-native");
+		await pool?.invoke("init", { scope: scope("derived-host-init"), registration: { skinId: "derived-host",
+			model: { baseUrl: `${host.url}/host/v1/`, credential: "loopback-credential", model: "loopback-model" } } }, "derived-host");
+	});
+	afterEach(async () => { await host.close(); });
+
+	it("leaves the derived notes out after a reset, while a session that never reset still gets them", async () => {
+		// Derived notes fade with age, so this reset happens now rather than at the fixed date the tests above use.
+		const now = Date.now();
+		expect(await pool?.invoke("onSessionEnd", { scope: scope("derived-reset-session", { boundary: "reset", at: now }), messages: [
+			{ role: "user", content: "Ship the billing fix today.", at: now - 60_000 },
+			{ role: "assistant", content: "I will run the tests and open the pull request.", at: now - 59_000 },
+		] }, "derived-host")).toEqual({ degraded: false, completed: true });
+		expect(host.prompts.length).toBeGreaterThan(0);
+		const block = async (sessionId: string) =>
+			((await pool?.invoke("staticBlock", { scope: scope(sessionId) }, "derived-host")) as { contextText: string }).contextText;
+		expect(await block("derived-reset-session")).not.toContain(LEAK_MARKER);
+		// Positive control: the notes exist and reach a session the reset did not close.
+		expect(await block("derived-other-session")).toContain(LEAK_MARKER);
 	});
 });
