@@ -7,6 +7,7 @@ import * as claude from "../../../apps/mem-claude/src/worker";
 import * as codex from "../../../apps/mem-codex/src/worker";
 import * as cursor from "../../../apps/mem-cursor/src/worker";
 import { writeSettingsFixture } from "../../packages/memory/fixtures/settings-file-fixture";
+import { LOCAL_EMBEDDING_CACHE_DIR_DEFAULT } from "../../../packages/embedder/src/constants.ts";
 
 let root: string | undefined;
 let client: MemoryClient | undefined;
@@ -93,7 +94,7 @@ describe.each([["claude", claude], ["codex", codex], ["cursor", cursor]] as cons
 			if (!root) throw new Error("missing profile");
 			vi.stubEnv("HOME", join(root, "home"));
 			writeSettingsFixture(root, { mode: "local-first", capture: { ambient: false }, rem: { tick: false },
-				embedding: { cacheDir: join(userInfo().homedir, ".cache", "sno-station", "models") },
+				embedding: { cacheDir: LOCAL_EMBEDDING_CACHE_DIR_DEFAULT },
 				rerank: { mode: "none" }, telemetry: { observe: { enabled: false }, memoryUsage: { enabled: false } } });
 			const connected = await connect({ skinId: skin });
 			if (connected.degraded) throw new Error(connected.error ?? connected.reason);

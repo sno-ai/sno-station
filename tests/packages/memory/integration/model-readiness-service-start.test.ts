@@ -24,6 +24,7 @@ import { MEMORY_PACKAGE_PATH, type SettingsDocument, writeSettingsFixture } from
 import { REM_SIDECAR_TOKEN_HEADER } from "../../../../packages/memory/src/contract/routes";
 import { MemoryStore } from "../../../../packages/memory/src/store/store";
 import { createTestDb, createTestEmbedder } from "../../../apps/mem-claw/helpers/test-db";
+import { LOCAL_EMBEDDING_CACHE_DIR_DEFAULT } from "../../../../packages/embedder/src/constants.ts";
 
 const REPO_ROOT = fileURLToPath(new URL("../../../../", import.meta.url));
 const CLIENT_URL = pathToFileURL(join(MEMORY_PACKAGE_PATH, "dist", "client.js")).href;
@@ -33,7 +34,7 @@ const SHIPPED = JSON.parse(readFileSync(join(MEMORY_PACKAGE_PATH, "settings.defa
 const MODEL = SHIPPED.embedding.model;
 const REVISION = SHIPPED.embedding.revision;
 /** This machine's staged copy of the pinned model revision; the mirror serves it byte for byte. */
-const STAGED_CACHE = join(homedir(), ".cache", "sno-station", "models");
+const STAGED_CACHE = LOCAL_EMBEDDING_CACHE_DIR_DEFAULT;
 const STAGED_MODEL = join(STAGED_CACHE, MODEL, REVISION);
 
 let root: string;

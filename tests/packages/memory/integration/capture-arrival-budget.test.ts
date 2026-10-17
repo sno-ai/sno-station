@@ -10,6 +10,7 @@ import { startRemSidecar } from "../../../../packages/memory/src/sidecar/server"
 import { createTestDb } from "../../../apps/mem-claw/helpers/test-db";
 import { writeSettingsFixture } from "../fixtures/settings-file-fixture";
 import { untilModelReady } from "./fixtures/model-ready";
+import { LOCAL_EMBEDDING_CACHE_DIR_DEFAULT } from "../../../../packages/embedder/src/constants.ts";
 
 let root: string;
 let database: ReturnType<typeof createTestDb>;
@@ -119,7 +120,7 @@ beforeEach(async ({ task }) => {
 	writeSettingsFixture(root, { mode: task.name.includes("Sno GPU") ? "rem-enhanced" : "agent-native",
 		store: { path: database.dbPath, encryptionKey: database.encryptionKey },
 		snoGpu: { baseUrl: `http://127.0.0.1:${address.port}/v1`, apiKey: "loopback" },
-		embedding: { cacheDir: join(userInfo().homedir, ".cache", "sno-station", "models") },
+		embedding: { cacheDir: LOCAL_EMBEDDING_CACHE_DIR_DEFAULT },
 		rerank: { mode: "none" }, rem: { tick: false },
 		telemetry: { observe: { enabled: false }, memoryUsage: { enabled: false } },
 	});

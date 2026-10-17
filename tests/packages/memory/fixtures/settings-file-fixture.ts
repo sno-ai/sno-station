@@ -5,6 +5,7 @@ import { randomBytes } from "node:crypto";
 import { userInfo } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { LOCAL_EMBEDDING_CACHE_DIR_DEFAULT } from "../../../../packages/embedder/src/constants.ts";
 
 export type SettingsDocument = { [key: string]: unknown };
 
@@ -27,8 +28,8 @@ function merge(base: SettingsDocument, overrides: SettingsDocument): SettingsDoc
 }
 
 /**
- * Reads the shipped default document, sets a 64-hex `store.encryptionKey`, fills the four machine
- * paths inside `profileRoot`, turns observe off (the shipped default sends to production; a test
+ * Reads the shipped default document, sets a 64-hex `store.encryptionKey`, fills the machine
+ * paths inside `profileRoot` (the embedding model comes from the shared test cache), turns observe off (the shipped default sends to production; a test
  * that exercises observe turns it on and points `baseUrl` at a loopback), deep-merges `overrides` (objects merge, everything else replaces),
  * and writes `profileRoot/settings.json` at 0600.
  */
@@ -43,7 +44,9 @@ export function writeSettingsFixture(
 				path: join(profileRoot, "sno-station-mem", userInfo().username, "memory.sqlite"),
 				encryptionKey: randomBytes(32).toString("hex"),
 			},
-			embedding: { cacheDir: join(profileRoot, ".cache", "sno-station", "models") },
+			// The model files are read-only and the downloader locks its writes, so every profile shares the test
+			// model cache instead of downloading the embedding model again into each one.
+			embedding: { cacheDir: LOCAL_EMBEDDING_CACHE_DIR_DEFAULT },
 			memoryPackage: { path: MEMORY_PACKAGE_PATH, node: process.execPath },
 			telemetry: { observe: { enabled: false } },
 		}),

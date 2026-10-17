@@ -10,6 +10,7 @@ import { startRemSidecar } from "../../../packages/memory/src/sidecar/server";
 import { createTestDb } from "../mem-claw/helpers/test-db";
 import { writeSettingsFixture } from "../../packages/memory/fixtures/settings-file-fixture";
 import { untilModelReady } from "../../packages/memory/integration/fixtures/model-ready";
+import { LOCAL_EMBEDDING_CACHE_DIR_DEFAULT } from "../../../packages/embedder/src/constants.ts";
 
 let root: string;
 let database: ReturnType<typeof createTestDb>;
@@ -21,7 +22,7 @@ beforeEach(async () => {
 	vi.stubEnv("SNO_PROFILE_DIR", root);
 	writeSettingsFixture(root, { mode: "agent-native",
 		store: { path: database.dbPath, encryptionKey: database.encryptionKey },
-		embedding: { cacheDir: join(userInfo().homedir, ".cache", "sno-station", "models") },
+		embedding: { cacheDir: LOCAL_EMBEDDING_CACHE_DIR_DEFAULT },
 		rerank: { mode: "none" }, rem: { tick: false },
 		telemetry: { observe: { enabled: false }, memoryUsage: { enabled: false } },
 	});
