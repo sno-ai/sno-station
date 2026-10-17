@@ -26,7 +26,6 @@ settings.mode = 'local-first';
 settings.store = { ...settings.store, path: join(root, 'memory.sqlite'), encryptionKey: randomBytes(32).toString('hex') };
 settings.memoryPackage = { path: memory, node: process.execPath };
 settings.embedding = { ...settings.embedding, cacheDir: join(root, 'models') };
-settings.rerank = { ...settings.rerank, mode: 'lightweight' };
 settings.rem = { ...settings.rem, tick: false };
 settings.telemetry = { ...settings.telemetry, observe: { ...settings.telemetry.observe, enabled: false } };
 mkdirSync(root, { recursive: true });
