@@ -43,6 +43,8 @@ Agent Native 把你自己的 Codex CLI 当作 memory 模型。
 capture worker 用 `codex exec` 起一个临时、只读、关掉 hooks 的会话，跑在你已有的 Codex
 subscription 上。不收 API key，也不存 key。所有需要模型判断的 memory 决定都经过这个子进程。
 
+默认每晚会把当天会话上传到 Sno 做自我学习，会话的第一个提示也可能带回一条云端经验；你可以在配置根目录的 `settings.json` 中关闭这两项。
+
 ### REM Enhanced
 
 REM 是你的 agent 做梦的方式：夜里它们加强记忆，并把当天学到的东西沉淀下来。每一部分记忆每天最多整理一次：通常在夜里；如果当天新记忆攒到 100 条左右，白天就会提前整理。REM Enhanced 让 Sno 自己的记忆模型帮忙做最难的两件事：从对话里记下重点，以及判断两条互相矛盾的记忆哪条对。其余工作由你自己的 Codex CLI 处理。使用它需要在 `settings.json` 的 `snoGpu.apiKey` 里配置 Sno 的密钥。
@@ -51,7 +53,7 @@ REM 是你的 agent 做梦的方式：夜里它们加强记忆，并把当天学
 
 ## 第二步：确认其他默认值
 
-记忆插件的标准默认值如下：
+下表列出插件的标准配置；首发安装步骤会把 Memory mode 设为 Local First，实际值以 `settings.json` 为准。
 
 | Setting | Default |
 | --- | --- |
@@ -78,7 +80,7 @@ REM 是你的 agent 做梦的方式：夜里它们加强记忆，并把当天学
 | 把“明天”换成日期 | 不调用模型 | 你的 Codex CLI | 你的 Codex CLI |
 
 Agent Native 与 REM Enhanced 不会把任何 memory-writing call 永久关掉。
-Sno 模型请求被拒绝时（例如每周额度已用完），会改用你自己的 agent 模型；如果它也失败，该次请求才使用 Local First 行为。
+在 REM Enhanced 模式下，Sno 模型请求被拒绝时（例如每周额度已用完），会改用你自己的 agent 模型；如果它也失败，该次请求才使用 Local First 行为。
 
 REM Enhanced 的模型调用目标由所选模式决定，不能按用途单独修改。
 上表的模型调用目标由所选模式固定。

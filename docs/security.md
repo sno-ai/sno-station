@@ -137,7 +137,7 @@ We do not hide these boundaries:
 - **Lost settings and backups.** There is no Sno escrow, backdoor, or support override for a lost key.
 - **Coerced unlock.** Cryptography cannot prevent a person from being forced to unlock a system.
 - **The user's chosen LLM provider.** If you configure Anthropic, OpenAI, a local model server, or another provider, the relevant prompt context sent to that provider is governed by that provider and your configuration.
-- **Future cloud features.** Your encryption key stays on your machine. What you upload in REM Enhanced mode is kept in your own space in Sno's cloud, like files in your own cloud drive, and a Sno program processes it for you alone. If cloud sync of the whole local store is added later, it must be explicit opt-in and documented separately.
+- **Future cloud features.** Your encryption key stays on your machine. What you upload in REM Enhanced mode or through Agent Native’s default Self Learning session upload is kept in your own space in Sno's cloud, like files in your own cloud drive, and a Sno program processes it for you alone. If cloud sync of the whole local store is added later, it must be explicit opt-in and documented separately.
 
 ---
 
@@ -200,7 +200,7 @@ or:
 sudo tcpdump -i any -A 'host not <your-LLM-provider> and not <your-DNS>'
 ```
 
-You may see calls to the LLM provider you configured. You should not see memory database uploads to Sno. In REM Enhanced mode you will also see requests to Sno's cloud that carry your memory text.
+You may see calls to the LLM provider you configured. You should not see memory database uploads to Sno. In REM Enhanced mode you will also see requests to Sno's cloud that carry your memory text. With Agent Native’s default settings, you will also see a nightly session upload for Self Learning and a cloud lesson request on a session’s first prompt; both can be turned off in `~/.sno/settings.json`.
 
 ### 3. Confirm the Settings and Recovery Copy
 
@@ -217,7 +217,7 @@ settings from your private backup; do not generate a replacement key.
 
 **Q: Can Sno read my memory database?**
 
-A: Not your local database or key: Sno does not receive your DB file or DEK. In REM Enhanced mode, what you upload goes to your own space in Sno's cloud, which works like your own cloud drive. A Sno program processes it for you alone, and Sno does not give it to anyone.
+A: Not your local database or key: Sno does not receive your DB file or DEK. In REM Enhanced mode and through Agent Native’s default Self Learning session upload, what you upload goes to your own space in Sno's cloud, which works like your own cloud drive. A Sno program processes it for you alone, and Sno does not give it to anyone.
 
 **Q: Does my memory ever leave my machine?**
 
@@ -225,7 +225,7 @@ A: The local database and DEK do not leave your machine through Sno. Selected co
 
 **Q: Is the local database the source of truth?**
 
-A: Yes. For personal memory, the encrypted local database is the authoritative store. Sno does not rebuild your memory from telemetry. What you upload in REM Enhanced mode lives in your own space in Sno's cloud, which works like your own cloud drive.
+A: Yes. For personal memory, the encrypted local database is the authoritative store. Sno does not rebuild your memory from telemetry. What you upload in REM Enhanced mode or through Agent Native’s default Self Learning session upload lives in your own space in Sno's cloud, which works like your own cloud drive.
 
 **Q: What about metadata?**
 
