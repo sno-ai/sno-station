@@ -1,44 +1,40 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
-import { homedir, tmpdir } from "node:os";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import {
-	getSnoProfileDir, getIdentityPath, getIdentityLockPath, getBufferPath, getConsentPath, getPausePath, getLogPath,
-} from "../../../../packages/observability/dist/internal/paths.js";
 
-test("an empty profile directory uses the ordinary default paths", () => {
-	const env = { SNO_PROFILE_DIR: "" };
-	const profile = join(homedir(), ".sno");
-	assert.deepEqual([
-		getSnoProfileDir(env), getIdentityPath(env), getIdentityLockPath(env), getBufferPath(env),
-		getConsentPath(env), getPausePath(env), getLogPath(env),
-	], [profile, join(profile, "identity.json"), join(profile, "identity.lock"), join(profile, "buffer.db"),
-		join(profile, "state", "consent.json"), join(profile, "state", "consent-prior.json"), join(profile, "observe.log")]);
-});
-
-test("empty file overrides use the selected profile while nonempty overrides remain exact", () => {
-	const profile = join(tmpdir(), "sno-selected-profile");
-	const env = { SNO_PROFILE_DIR: profile, SNO_IDENTITY_PATH: "", SNO_BUFFER_PATH: "", SNO_CONSENT_PATH: "" };
-	assert.deepEqual([getIdentityPath(env), getBufferPath(env), getConsentPath(env)],
-		[join(profile, "identity.json"), join(profile, "buffer.db"), join(profile, "state", "consent.json")]);
-	assert.deepEqual([getIdentityPath({ ...env, SNO_IDENTITY_PATH: "custom-identity.json" }),
-		getBufferPath({ ...env, SNO_BUFFER_PATH: "custom-buffer.db" }),
-		getConsentPath({ ...env, SNO_CONSENT_PATH: "custom-consent.json" })],
-		["custom-identity.json", "custom-buffer.db", "custom-consent.json"]);
-});
-
-test("bootstrap persists an identity in the selected profile when its file override is empty", () => {
-	const dir = mkdtempSync(join(tmpdir(), "sno-empty-identity-"));
+test("an empty profile override keeps memory, agents and a new test identity in the working directory", () => {
+	const dir = mkdtempSync(join(tmpdir(), "sno-empty-profile-"));
 	try {
-		const profile = join(dir, "profile");
-		const module = new URL("../../../../packages/observability/dist/internal/identity.js", import.meta.url).href;
-		const script = `import { bootstrapIdentity } from ${JSON.stringify(module)};
-console.log(JSON.stringify(bootstrapIdentity({ SNO_PROFILE_DIR: ${JSON.stringify(profile)}, SNO_IDENTITY_PATH: "" })));`;
-		const result = spawnSync(process.execPath, ["--input-type=module", "-e", script], { cwd: dir, encoding: "utf8" });
+		const modules = Object.fromEntries([
+			["identity", "packages/observability/src/internal/identity.ts"],
+			["observe", "packages/observability/src/internal/paths.ts"],
+			["memory", "packages/memory/src/contract/profile.ts"],
+			["claude", "apps/mem-claude/src/paths.ts"],
+			["codex", "apps/mem-codex/src/paths.ts"],
+			["cursor", "apps/mem-cursor/src/paths.ts"],
+		].map(([key, file]) => [key, new URL(`../../../../${file}`, import.meta.url).href]));
+		const script = `
+import { resolve } from "node:path";
+import assert from "node:assert/strict";
+const paths = ${JSON.stringify(modules)};
+const memory = await import(paths.memory);
+const agents = await Promise.all([paths.claude, paths.codex, paths.cursor].map(p => import(p)));
+const observe = await import(paths.observe);
+const { bootstrapIdentity } = await import(paths.identity);
+const roots = [memory.getStateDir(), ...agents.map(m => m.profileRoot()), resolve(observe.getSnoProfileDir())];
+assert.deepEqual(roots, Array(5).fill(process.cwd()));
+console.log(JSON.stringify({ identity: bootstrapIdentity() }));`;
+		const loader = new URL("../../../../node_modules/tsx/dist/loader.mjs", import.meta.url).href;
+		const result = spawnSync(process.execPath, ["--import", loader, "--input-type=module", "-e", script], {
+			cwd: dir, encoding: "utf8", env: { ...process.env, SNO_PROFILE_DIR: "" },
+		});
 		assert.equal(result.status, 0, result.stderr);
-		assert.deepEqual(JSON.parse(readFileSync(join(profile, "identity.json"), "utf8")), JSON.parse(result.stdout));
+		const output = JSON.parse(result.stdout);
+		assert.match(output.identity.user_cuid, /^snotest[0-9a-z]{17}$/);
+		assert.deepEqual(JSON.parse(readFileSync(join(dir, "identity.json"), "utf8")), output.identity);
 	} finally {
 		rmSync(dir, { recursive: true, force: true });
 	}
