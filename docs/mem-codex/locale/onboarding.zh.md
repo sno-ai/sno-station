@@ -78,7 +78,7 @@ REM 是你的 agent 做梦的方式：夜里它们加强记忆，并把当天学
 | 把“明天”换成日期 | 不调用模型 | 你的 Codex CLI | 你的 Codex CLI |
 
 Agent Native 与 REM Enhanced 不会把任何 memory-writing call 永久关掉。单次 model
-request 失败时，只对该次请求使用对应的 Local First 行为，不会偷偷切到另一个 model tier。
+Sno 模型请求被拒绝时（例如每周额度已用完），会改用你自己的 agent 模型；如果它也失败，该次请求才使用 Local First 行为。
 
 REM Enhanced 的模型调用目标由所选模式决定，不能按用途单独修改。
 上表的模型调用目标由所选模式固定。

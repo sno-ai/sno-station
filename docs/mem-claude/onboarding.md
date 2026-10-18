@@ -82,8 +82,7 @@ Mode-specific defaults are:
 | Summing up the day | No model reflection; local session memory remains | Same | Same |
 | Turning "tomorrow" into a date | No model call | Your Claude Code | Your Claude Code |
 
-No memory-writing call is disabled in Agent Native or REM Enhanced. A failed model request
-uses the corresponding Local First behavior for that request instead of switching model tiers.
+No memory-writing call is disabled in Agent Native or REM Enhanced. A Sno model call that is refused, for example because your weekly allowance is used up, is answered by your own agent's model; if that also fails, that request uses the Local First behavior.
 
 In REM Enhanced, the selected mode fixes each model call's destination as shown above.
 
