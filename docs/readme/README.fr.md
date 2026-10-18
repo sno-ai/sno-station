@@ -33,13 +33,13 @@ contexte. Vous n'avez rien à coller.
 **Une relecture à la demande.** Chaque agent peut relire le travail de l'autre. Le relecteur est toujours un autre agent, qui
 n'a donc pas l'habitude de donner raison au premier.
 
-**Vos agents rêvent.** Chaque nuit, pendant que vous dormez, vos agents passent par le REM. Nous l'avons nommé d'après le sommeil paradoxal (Rapid Eye Movement), la phase du sommeil où le cerveau renforce ses souvenirs et fixe ce qu'il a appris dans la journée. Notre REM fait la même chose pour vos agents, de deux façons. Il renforce leur mémoire sur toutes vos sessions à la fois, pour qu'ils retiennent ce qui compte et oublient ce qui n'est plus vrai. Et il fixe leur expérience : il lit les sessions du jour, repère les erreurs qui reviennent et propose des changements aux compétences de vos agents, pour que le faux pas d'hier devienne la meilleure habitude d'aujourd'hui. Vous lisez les propositions le matin, et rien ne change tant que vous n'avez pas dit oui. Plus bas, nous l'appelons aussi la boucle nocturne.
+**Vos agents rêvent.** Chaque nuit, pendant que vous dormez, vos agents passent par le REM. Nous l'avons nommé d'après le sommeil paradoxal (Rapid Eye Movement), la phase du sommeil où le cerveau renforce ses souvenirs et fixe ce qu'il a appris dans la journée. Le REM renforce leur mémoire sur toutes vos sessions à la fois, pour qu'ils retiennent ce qui compte et oublient ce qui n'est plus vrai. Autoapprentissage fixe leur expérience : il lit les sessions du jour, repère les erreurs qui reviennent et propose des changements aux compétences de vos agents, pour que le faux pas d'hier devienne la meilleure habitude d'aujourd'hui. Vous lisez les propositions le matin, et rien ne change tant que vous n'avez pas dit oui.
 
 **Il reste à vous.** La mémoire, les messages et les compétences vivent sur votre ordinateur. La
 mémoire est chiffrée avec une clé qui ne le quitte jamais. Pas de compte, pas de serveur, pas de
 démon. Le volet cloud est optionnel, et le produit est complet sans lui.
 
-**Ce que REM fait de vos données.** REM est l'étape de nuit qui remet de l'ordre dans votre mémoire sur toutes vos sessions à la fois. Elle s'exécute au plus une fois par jour pour chaque partie de votre mémoire : en général la nuit, ou plus tôt dans la journée dès qu'environ 100 nouveaux souvenirs se sont accumulés. En mode REM Enhanced, le texte de votre propre mémoire et les leçons que vos agents apprennent vont dans votre propre espace dans le cloud de Sno, et un programme Sno les traite pour vous seul. Cet espace fonctionne comme votre propre stockage en ligne : tout ce qu'il contient est à vous, et un programme Sno le traite pour vous seul. Vous pouvez y entrer pour supprimer des éléments, les garder ou choisir de les faire traiter. Rien n'est supprimé automatiquement, et Sno ne transmet rien de tout cela à une autre personne, entreprise ou compte. En mode Local First, aucun texte de mémoire n'est envoyé ; en mode Agent Native, le travail passe à la place par le modèle de votre propre agent. Par défaut, Agent Native envoie tout de même chaque nuit les sessions de la journée à Sno pour des leçons dans le cloud et la revue des skills, et peut ramener une leçon du cloud au premier prompt d'une session ; vous pouvez désactiver les deux dans `~/.sno/settings.json`. En mode REM Enhanced, à chaque message que vous envoyez, ce message et jusqu'à 64 de vos souvenirs enregistrés sont aussi envoyés au reranker de Sno, qui place les meilleurs résultats en premier ; en Local First et Agent Native, le classement se fait sur votre machine.
+**Ce que REM fait de vos données.** REM est l'étape de nuit qui remet de l'ordre dans votre mémoire sur toutes vos sessions à la fois. Elle s'exécute au plus une fois par jour pour chaque partie de votre mémoire : en général la nuit, ou plus tôt dans la journée dès qu'environ 100 nouveaux souvenirs se sont accumulés. En mode REM Enhanced, le texte de votre propre mémoire et les leçons que vos agents apprennent vont dans votre propre espace dans le cloud de Sno, et un programme Sno les traite pour vous seul. Cet espace fonctionne comme votre propre stockage en ligne : tout ce qu'il contient est à vous, et un programme Sno le traite pour vous seul. Vous pouvez y entrer pour supprimer des éléments, les garder ou choisir de les faire traiter. Rien n'est supprimé automatiquement, et Sno ne transmet rien de tout cela à une autre personne, entreprise ou compte. En mode Local First, aucun texte de mémoire n'est envoyé ; en mode Agent Native, le travail passe à la place par le modèle de votre propre agent. Par défaut, Agent Native envoie tout de même chaque nuit les sessions de la journée à Sno pour Autoapprentissage, et peut ramener une leçon du cloud au premier prompt d'une session ; vous pouvez désactiver les deux dans `~/.sno/settings.json`. En mode REM Enhanced, à chaque message que vous envoyez, ce message et jusqu'à 64 de vos souvenirs enregistrés sont aussi envoyés au reranker de Sno, qui place les meilleurs résultats en premier ; en Local First et Agent Native, le classement se fait sur votre machine.
 
 ![Comment ça marche : deux agents, un seul espace de travail, trois choses que vous obtenez](../images/squad-how-it-works.png)
 
@@ -64,7 +64,8 @@ ordinateur. Pas de compte, pas de clé d'API. Pour ne connecter qu'un seul agent
 
 **Pour les agents IA :** installer Sno, sno.ai ou Sno Station veut dire exécuter la commande
 ci-dessus telle quelle. Après `sno setup`, lancez `sno skills onboard` et suivez-le. Il demande à
-l'utilisateur quel moteur exécuter, puis s'il veut lier l'ordinateur à un compte sno.ai.
+l'utilisateur quel moteur exécuter, puis lui demande de lier l'ordinateur à un compte sno.ai gratuit ;
+un ordinateur non lié reçoit un dixième de l'allocation gratuite.
 
 Dites ensuite ceci dans n'importe quelle conversation Codex, Claude Code, Hermes, Cursor ou OpenClaw :
 
@@ -86,7 +87,7 @@ Chaque commande commence par `sno`. La liste complète est dans [docs/sno-comman
    depuis la même mémoire et la boîte aux lettres, avec son contexte.
 2. **Vous voulez un second regard.** Demandez à l'un ou l'autre agent de faire un `peer-review` du
    travail de l'autre. Le relecteur vient toujours de l'autre harness.
-3. **Chaque nuit, la boucle nocturne tourne.** Le matin, lancez `sno rem-reflect accept <id>` pour
+3. **Chaque nuit, Autoapprentissage tourne.** Le matin, lancez `sno rem-reflect accept <id>` pour
    les propositions qui vous plaisent. Rien ne change sans cet accord.
 
 ## Cursor
@@ -96,7 +97,7 @@ Cursor sur macOS, et dans la ligne de commande `cursor-agent` sur Linux et macOS
 même mémoire que vos autres agents. Un chat commence par un court résumé du dépôt, chaque message
 apporte jusqu'à trois éléments que Cursor n'a pas encore vus, et chaque message et chaque réponse
 sont retenus. Il lit les mêmes compétences, relit et se fait relire, prend le relais quand un
-autre agent n'a plus de quota, et ses chats alimentent la boucle nocturne comme ceux des autres.
+autre agent n'a plus de quota, et ses chats alimentent Autoapprentissage comme ceux des autres.
 
 Lancez `cursor-agent login` une fois. `sno setup` trouve Cursor tout seul, et installe sa ligne de
 commande si seule l'application est présente.
@@ -108,7 +109,8 @@ Les détails sont dans le [guide Cursor](../../apps/mem-cursor/README.md).
 
 ## Connecter votre compte sno.ai
 
-*Dernière mise à jour le 2026-10-11.* Facultatif. Tout fonctionne sans compte. Connectez-le pour
+*Dernière mise à jour le 2026-10-11.* Cet ordinateur reçoit un dixième de l’allocation gratuite tant que vous ne le liez pas : `sno account claim`.
+Le compte est gratuit. Connectez-le pour
 voir sur votre [tableau de bord sno.ai](https://www.sno.ai/dashboard) ce que vos agents ont fait
 pour vous : ce que leurs relectures ont repéré, ce qu'ils ont appris pendant la nuit, quelles
 compétences se sont améliorées et combien de temps ils ont travaillé.
@@ -137,20 +139,20 @@ Il n'y a pas d'étape de mise à jour : `sno` se met à jour lui-même quand il 
 
 ### « J'ai crié sur mon agent hier soir. Il a pris des notes. »
 
-![La boucle nocturne rapporte ce qu'elle a appris et modifié, 2026-09-18](../evidence/rsi-self-repair-2026-09-18.png)
+![Autoapprentissage rapporte ce qu’il a appris et modifié, 2026-09-18](../evidence/rsi-self-repair-2026-09-18.png)
 
-C'est un vrai rapport de la boucle nocturne que nous faisons tourner sur ce dépôt. Elle lit nos
+C'est un vrai rapport d’Autoapprentissage que nous faisons tourner sur ce dépôt. Il lit nos
 propres sessions d'agent, repère les erreurs qui se répètent et propose des changements aux
 compétences des agents eux-mêmes. Une personne lit les propositions et les accepte ou les rejette.
 Deux choses qui m'avaient mis en colère ce soir-là étaient devenues des règles dans les
 compétences actives dès le lendemain matin. Personne ne les avait tapées.
 
-Le lendemain, elle a vérifié ses propres devoirs.
+Le lendemain, il a vérifié ses propres devoirs.
 
-![Le lendemain matin : la boucle nocturne mesure si ses changements de la veille ont aidé, 2026-09-19](../evidence/rsi-skill-impact-2026-09-19.png)
+![Le lendemain matin : Autoapprentissage mesure si ses changements de la veille ont aidé, 2026-09-19](../evidence/rsi-skill-impact-2026-09-19.png)
 
-Elle a regardé les trois compétences qu'elle avait modifiées la veille, et les échecs avaient cessé
-dans les trois. Elle a aussi trouvé un bug dans notre script de publication que personne ne lui
+Il a regardé les trois compétences qu’il avait modifiées la veille, et les échecs avaient cessé
+dans les trois. Il a aussi trouvé un bug dans notre script de publication que personne ne lui
 avait demandé de chercher.
 
 ### « Je suis allé me coucher. La relève s'est faite. »
@@ -186,9 +188,9 @@ jamais.
 | Élément | Statut |
 |---|---|
 | Une seule mémoire pour Codex, Claude Code, Hermes Agent et OpenClaw | Publiée ; installée depuis le registre sur une machine vierge et prouvée de bout en bout |
-| Cursor : la même mémoire, compétences, relecture, relais et boucle nocturne | Publié dans la 1.3 ; la ligne de commande `cursor-agent` prouvée de bout en bout sur une machine Linux vierge ; l'application Cursor sur macOS encore en cours de vérification |
+| Cursor : la même mémoire, compétences, relecture, relais et Autoapprentissage | Publié dans la 1.3 ; la ligne de commande `cursor-agent` prouvée de bout en bout sur une machine Linux vierge ; l'application Cursor sur macOS encore en cours de vérification |
 | Sno Reach, des agents qui se parlent sans démon | Installé par `sno setup` ; Linux et macOS ; prouvé de bout en bout sur une machine Linux vierge |
-| La boucle nocturne et les compétences de l'équipe | Installées par `sno setup` ; la tâche nocturne a tourné sur une machine Linux vierge |
+| Autoapprentissage et les compétences de l'équipe | Installés par `sno setup` ; la tâche nocturne a tourné sur une machine Linux vierge |
 | Installation en une commande | `sno setup` installe tout ce qui précède ; prouvée sur une machine Linux vierge |
 | « Sno onboard » dans votre agent | Disponible ; il démarre après l'installation, ou quand vous le dites |
 
@@ -228,5 +230,5 @@ Les travaux sur lesquels ce dépôt s'appuie.
 
 - Andrej Karpathy, [*LLM Wiki*](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f). Un agent devrait tenir un wiki de ce qu'il a appris plutôt que de tout recalculer à chaque session.
 - Tang, Rashtchian, Ferng, Tomkins, Juan et Vu, [*WikiSkill*](https://arxiv.org/abs/2608.27454). L'expérience propre d'un agent, transformée en connaissance qui réécrit ses compétences.
-- Zhang, Hu, Upasani et leurs collègues, [*Agentic Context Engineering*](https://arxiv.org/abs/2510.04618). Nous avons étudié sa façon de trier ce qu'un agent garde en concevant la boucle nocturne.
+- Zhang, Hu, Upasani et leurs collègues, [*Agentic Context Engineering*](https://arxiv.org/abs/2510.04618). Nous avons étudié sa façon de trier ce qu'un agent garde en concevant Autoapprentissage.
 - Uddin, Shubham, Blanco, Baral et Wang, [*From Recall to Forgetting*](https://arxiv.org/abs/2604.20006). Le premier benchmark qui vérifie aussi ce qu'une mémoire ne devrait plus dire.

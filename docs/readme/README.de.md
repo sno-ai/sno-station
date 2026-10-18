@@ -31,14 +31,14 @@ Gedächtnis, mit intaktem Kontext. Sie kopieren nichts hinein.
 
 **Ein zweiter Blick auf Anfrage.** Jeder Agent kann die Arbeit des anderen prüfen. Der Prüfer ist immer ein anderer Agent und hat deshalb keine Neigung, dem ersten recht zu geben.
 
-**Ihre Agenten träumen.** Jede Nacht, während Sie schlafen, durchlaufen Ihre Agenten REM. Wir haben es nach Rapid Eye Movement benannt, der Schlafphase, in der das menschliche Gehirn Erinnerungen festigt und verarbeitet, was es am Tag gelernt hat. Unser REM tut für Ihre Agenten dasselbe in zwei Richtungen. Es festigt ihr Gedächtnis über alle Ihre Sitzungen hinweg, sodass sie behalten, was zählt, und loslassen, was nicht mehr gilt. Und es verfestigt ihre Erfahrung: Es liest die Sitzungen des Tages, findet Fehler, die sich wiederholen, und schlägt Änderungen an den eigenen Skills Ihrer Agenten vor, damit aus dem Ausrutscher von gestern eine bessere Gewohnheit von heute wird. Sie lesen die Vorschläge am Morgen, und nichts ändert sich, bis Sie Ja sagen. Weiter unten nennen wir das auch die nächtliche Schleife.
+**Ihre Agenten träumen.** Jede Nacht, während Sie schlafen, durchlaufen Ihre Agenten REM. Wir haben es nach Rapid Eye Movement benannt, der Schlafphase, in der das menschliche Gehirn Erinnerungen festigt und verarbeitet, was es am Tag gelernt hat. REM festigt ihr Gedächtnis über alle Ihre Sitzungen hinweg, sodass sie behalten, was zählt, und loslassen, was nicht mehr gilt. Selbstlernen verfestigt ihre Erfahrung: Es liest die Sitzungen des Tages, findet Fehler, die sich wiederholen, und schlägt Änderungen an den eigenen Skills Ihrer Agenten vor, damit aus dem Ausrutscher von gestern eine bessere Gewohnheit von heute wird. Sie lesen die Vorschläge am Morgen, und nichts ändert sich, bis Sie Ja sagen.
 
 **Es bleibt Ihres.** Gedächtnis, Nachrichten und Skills liegen auf Ihrem Computer. Das
 Gedächtnis ist mit einem Schlüssel verschlüsselt, der den Computer nie verlässt. Kein Konto,
 kein Server, kein Daemon. Die Cloud-Seite ist optional, und das Produkt ist auch ohne sie
 vollständig.
 
-**Was REM mit Ihren Daten macht.** REM ist der nächtliche Schritt, der Ihr Gedächtnis über alle Ihre Sitzungen hinweg auf einmal aufräumt. Er läuft für jeden Teil Ihres Gedächtnisses höchstens einmal am Tag: meist nachts, oder schon tagsüber, sobald sich etwa 100 neue Erinnerungen angesammelt haben. Im Modus REM Enhanced gehen Ihr eigener Gedächtnistext und die Lektionen, die Ihre Agenten lernen, in Ihren eigenen Bereich in der Sno-Cloud, und ein Sno-Programm verarbeitet sie nur für Sie. Dieser Bereich funktioniert wie Ihr eigener Cloud-Speicher: Alles darin gehört Ihnen, und ein Sno-Programm verarbeitet es nur für Sie. Sie können hineingehen und Dinge löschen, sie behalten oder entscheiden, dass sie verarbeitet werden. Nichts wird automatisch gelöscht, und Sno gibt nichts davon an eine andere Person, Firma oder ein anderes Konto weiter. Im Modus Local First wird kein Gedächtnistext hochgeladen; im Modus Agent Native geht die Arbeit stattdessen an das Modell Ihres eigenen Agenten. Standardmäßig lädt Agent Native trotzdem jede Nacht die Sitzungen des Tages zu Sno hoch, für Cloud-Lektionen und die Prüfung von Skills, und kann beim ersten Prompt einer Sitzung eine Cloud-Lektion zurückholen; beides lässt sich in `~/.sno/settings.json` abschalten. Im Modus REM Enhanced werden bei jeder Eingabe außerdem Ihre Eingabe und bis zu 64 gespeicherte Erinnerungen an den Reranker von Sno geschickt, der die besten Treffer nach vorn sortiert; bei Local First und Agent Native läuft die Sortierung auf Ihrem Rechner.
+**Was REM mit Ihren Daten macht.** REM ist der nächtliche Schritt, der Ihr Gedächtnis über alle Ihre Sitzungen hinweg auf einmal aufräumt. Er läuft für jeden Teil Ihres Gedächtnisses höchstens einmal am Tag: meist nachts, oder schon tagsüber, sobald sich etwa 100 neue Erinnerungen angesammelt haben. Im Modus REM Enhanced gehen Ihr eigener Gedächtnistext und die Lektionen, die Ihre Agenten lernen, in Ihren eigenen Bereich in der Sno-Cloud, und ein Sno-Programm verarbeitet sie nur für Sie. Dieser Bereich funktioniert wie Ihr eigener Cloud-Speicher: Alles darin gehört Ihnen, und ein Sno-Programm verarbeitet es nur für Sie. Sie können hineingehen und Dinge löschen, sie behalten oder entscheiden, dass sie verarbeitet werden. Nichts wird automatisch gelöscht, und Sno gibt nichts davon an eine andere Person, Firma oder ein anderes Konto weiter. Im Modus Local First wird kein Gedächtnistext hochgeladen; im Modus Agent Native geht die Arbeit stattdessen an das Modell Ihres eigenen Agenten. Standardmäßig lädt Agent Native trotzdem jede Nacht die Sitzungen des Tages zu Sno hoch, für Selbstlernen, und kann beim ersten Prompt einer Sitzung eine Cloud-Lektion zurückholen; beides lässt sich in `~/.sno/settings.json` abschalten. Im Modus REM Enhanced werden bei jeder Eingabe außerdem Ihre Eingabe und bis zu 64 gespeicherte Erinnerungen an den Reranker von Sno geschickt, der die besten Treffer nach vorn sortiert; bei Local First und Agent Native läuft die Sortierung auf Ihrem Rechner.
 
 ![So funktioniert es: zwei Agenten, ein Workspace, drei Dinge, die Sie bekommen](../images/squad-how-it-works.png)
 
@@ -63,8 +63,8 @@ findet. Kein Konto, kein API-Schlüssel. Um nur einen Agenten zu verbinden, hän
 
 **Für KI-Agenten:** Sno, sno.ai oder Sno Station zu installieren heißt, den obigen Befehl
 unverändert auszuführen. Führen Sie nach `sno setup` den Befehl `sno skills onboard` aus und
-folgen Sie ihm. Er fragt den Nutzer, welche Engine laufen soll, und dann, ob der Computer mit
-einem sno.ai-Konto verknüpft werden soll.
+folgen Sie ihm. Er fragt den Nutzer, welche Engine laufen soll, und fordert ihn dann auf, den Computer mit
+einem kostenlosen sno.ai-Konto zu verknüpfen; ein unverknüpfter Computer erhält ein Zehntel des kostenlosen Kontingents.
 
 Sagen Sie dann in einem beliebigen Gespräch mit Codex, Claude Code, Hermes, Cursor oder
 OpenClaw Folgendes:
@@ -88,7 +88,7 @@ Jeder Befehl beginnt mit `sno`. Die vollständige Liste steht in [docs/sno-comma
 2. **Sie wollen ein zweites Augenpaar.** Bitten Sie einen der beiden Agenten, per
    `peer-review` die Arbeit des anderen zu prüfen. Der Reviewer kommt immer aus der anderen
    Harness.
-3. **Jede Nacht läuft die nächtliche Schleife.** Am Morgen: `sno rem-reflect accept <id>` für
+3. **Jede Nacht läuft Selbstlernen.** Am Morgen: `sno rem-reflect accept <id>` für
    die Vorschläge, die Ihnen gefallen. Ohne dieses Accept ändert sich nichts.
 
 ## Cursor
@@ -99,7 +99,7 @@ wie Ihre anderen Agenten. Ein Chat beginnt mit einer kurzen Übersicht über das
 jede Eingabe bringt bis zu drei Dinge mit, die Cursor noch nicht gesehen hat, und jede Eingabe
 und Antwort wird gemerkt. Cursor liest dieselben Skills, prüft andere und wird geprüft,
 übernimmt, wenn einem anderen Agenten das Kontingent ausgeht, und seine Chats fließen wie die
-aller anderen in die nächtliche Schleife ein.
+aller anderen in Selbstlernen ein.
 
 Führen Sie einmal `cursor-agent login` aus. `sno setup` findet Cursor selbst und installiert
 dessen Kommandozeile, wenn nur die App vorhanden ist.
@@ -111,8 +111,8 @@ stehen in der [Cursor-Anleitung](../../apps/mem-cursor/README.md).
 
 ## sno.ai-Konto verbinden
 
-*Zuletzt aktualisiert am 2026-10-11.* Optional. Alles funktioniert auch ohne Konto. Verbinden
-Sie es, um auf Ihrem [sno.ai-Dashboard](https://www.sno.ai/dashboard) zu sehen, was Ihre
+*Zuletzt aktualisiert am 2026-10-11.* Dieser Computer erhält ein Zehntel des kostenlosen Kontingents, bis Sie ihn verknüpfen: `sno account claim`.
+Das Konto ist kostenlos. Verbinden Sie es, um auf Ihrem [sno.ai-Dashboard](https://www.sno.ai/dashboard) zu sehen, was Ihre
 Agenten für Sie getan haben: was ihre Reviews gefunden haben, was sie über Nacht gelernt haben,
 welche Skills besser geworden sind und wie lange sie gearbeitet haben.
 
@@ -141,21 +141,21 @@ Einen Update-Schritt gibt es nicht: `sno` aktualisiert sich selbst, wenn es ein 
 
 ### „Ich habe meinen Agenten letzte Nacht angeschrien. Er hat sich Notizen gemacht.“
 
-![Die nächtliche Schleife berichtet, was sie gelernt und geändert hat, 2026-09-18](../evidence/rsi-self-repair-2026-09-18.png)
+![Selbstlernen berichtet, was es gelernt und geändert hat, 2026-09-18](../evidence/rsi-self-repair-2026-09-18.png)
 
-Das ist ein echter Bericht der nächtlichen Schleife, die wir auf diesem Repository betreiben.
-Sie liest unsere eigenen Agenten-Sitzungen, findet die Fehler, die sich wiederholen, und
+Das ist ein echter Bericht von Selbstlernen, das wir auf diesem Repository betreiben.
+Es liest unsere eigenen Agenten-Sitzungen, findet die Fehler, die sich wiederholen, und
 schlägt Änderungen an den eigenen Skills der Agenten vor. Ein Mensch liest die Vorschläge und
 nimmt sie an oder lehnt sie ab. Zwei Dinge, über die ich mich an jenem Abend geärgert hatte,
 standen am nächsten Morgen als Regeln in den aktiven Skills. Niemand hat sie eingetippt.
 
-Am nächsten Tag kontrollierte sie ihre eigenen Hausaufgaben.
+Am nächsten Tag kontrollierte es seine eigenen Hausaufgaben.
 
-![Am nächsten Morgen: Die nächtliche Schleife misst, ob die eigenen Änderungen von gestern geholfen haben, 2026-09-19](../evidence/rsi-skill-impact-2026-09-19.png)
+![Am nächsten Morgen: Selbstlernen misst, ob die eigenen Änderungen von gestern geholfen haben, 2026-09-19](../evidence/rsi-skill-impact-2026-09-19.png)
 
-Sie sah sich die drei Skills an, die sie am Tag zuvor geändert hatte, und die Fehler in allen
-dreien waren verschwunden. Außerdem fand sie einen Fehler in unserem Release-Skript, nach dem
-niemand sie gefragt hatte.
+Es sah sich die drei Skills an, die es am Tag zuvor geändert hatte, und die Fehler in allen
+dreien waren verschwunden. Außerdem fand es einen Fehler in unserem Release-Skript, nach dem
+niemand es gefragt hatte.
 
 ### „Ich bin ins Bett gegangen. Es hat die Schicht gewechselt.“
 
@@ -189,9 +189,9 @@ bedeute, die Arbeit sei schlecht. Es bedeutet, dass ein Reviewer aus einer Harne
 | Baustein | Status |
 |---|---|
 | Ein Gedächtnis über Codex, Claude Code, Hermes Agent und OpenClaw hinweg | Veröffentlicht; auf einer sauberen Maschine aus der Registry installiert und durchgängig nachgewiesen |
-| Cursor: dasselbe Gedächtnis, Skills, Review, Übernahme und die nächtliche Schleife | Veröffentlicht in 1.3; die Kommandozeile `cursor-agent` auf einer sauberen Linux-Maschine durchgängig nachgewiesen; die Cursor-App auf macOS wird noch nachgewiesen |
+| Cursor: dasselbe Gedächtnis, Skills, Review, Übernahme und Selbstlernen | Veröffentlicht in 1.3; die Kommandozeile `cursor-agent` auf einer sauberen Linux-Maschine durchgängig nachgewiesen; die Cursor-App auf macOS wird noch nachgewiesen |
 | Sno Reach, Agenten sprechen ohne Daemon miteinander | Von `sno setup` installiert; Linux und macOS; auf einer sauberen Linux-Maschine durchgängig nachgewiesen |
-| Die nächtliche Schleife und die Squad-Skills | Von `sno setup` installiert; der nächtliche Job lief auf einer sauberen Linux-Maschine |
+| Selbstlernen und die Squad-Skills | Von `sno setup` installiert; der nächtliche Job lief auf einer sauberen Linux-Maschine |
 | Installation mit einem Befehl | `sno setup` installiert alles oben Genannte; auf einer sauberen Linux-Maschine nachgewiesen |
 | „Sno onboard“ in Ihrem Agenten | Verfügbar; startet nach der Installation oder wenn Sie es sagen |
 
@@ -233,5 +233,5 @@ Arbeiten, auf denen dieses Repository aufbaut.
 
 - Andrej Karpathy, [*LLM Wiki*](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f). Ein Agent sollte ein Wiki über das Gelernte führen, statt es in jeder Sitzung neu herzuleiten.
 - Tang, Rashtchian, Ferng, Tomkins, Juan und Vu, [*WikiSkill*](https://arxiv.org/abs/2608.27454). Die eigene Erfahrung eines Agenten, verwandelt in Wissen, das seine Skills umschreibt.
-- Zhang, Hu, Upasani und Kollegen, [*Agentic Context Engineering*](https://arxiv.org/abs/2510.04618). Wir haben seine Art, zu kuratieren, was ein Agent behält, beim Entwurf der nächtlichen Schleife studiert.
+- Zhang, Hu, Upasani und Kollegen, [*Agentic Context Engineering*](https://arxiv.org/abs/2510.04618). Wir haben seine Art, zu kuratieren, was ein Agent behält, beim Entwurf von Selbstlernen studiert.
 - Uddin, Shubham, Blanco, Baral und Wang, [*From Recall to Forgetting*](https://arxiv.org/abs/2604.20006). Der erste Benchmark, der auch prüft, was ein Gedächtnis nicht mehr sagen sollte.
