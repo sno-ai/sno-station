@@ -7,11 +7,11 @@
 #   - PATCH: Bug fixes (e.g., 1.0.0 → 1.0.1)
 
 # The only field used for version display across all services
-version: "1.5.0"
+version: "1.5.1"
 
 # Metadata for tracking
-last_updated: "2026-10-16T23:24:06Z"
-updated_by: "release 1.5.0"
+last_updated: "2026-10-18T05:30:13Z"
+updated_by: "release 1.5.1"
 
 # Change log (most recent first)
 changelog:
