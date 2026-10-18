@@ -17,7 +17,7 @@ export interface PathEnv {
 }
 
 export function getSnoProfileDir(env: PathEnv = process.env): string {
-	return env.SNO_PROFILE_DIR ?? join(homedir(), ".sno");
+	return env.SNO_PROFILE_DIR || join(homedir(), ".sno");
 }
 
 export function readStandaloneSettings(env: PathEnv = process.env): {
@@ -42,7 +42,7 @@ export function readStandaloneSettings(env: PathEnv = process.env): {
 }
 
 export function getIdentityPath(env: PathEnv = process.env): string {
-	return env.SNO_IDENTITY_PATH ?? join(getSnoProfileDir(env), "identity.json");
+	return env.SNO_IDENTITY_PATH || join(getSnoProfileDir(env), "identity.json");
 }
 
 export function getIdentityLockPath(env: PathEnv = process.env): string {
@@ -50,11 +50,11 @@ export function getIdentityLockPath(env: PathEnv = process.env): string {
 }
 
 export function getBufferPath(env: PathEnv = process.env): string {
-	return env.SNO_BUFFER_PATH ?? join(getSnoProfileDir(env), "buffer.db");
+	return env.SNO_BUFFER_PATH || join(getSnoProfileDir(env), "buffer.db");
 }
 
 export function getConsentPath(env: PathEnv = process.env): string {
-	return env.SNO_CONSENT_PATH ?? join(getSnoProfileDir(env), "state", "consent.json");
+	return env.SNO_CONSENT_PATH || join(getSnoProfileDir(env), "state", "consent.json");
 }
 
 export function getPausePath(env: PathEnv = process.env): string {

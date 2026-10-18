@@ -29,13 +29,13 @@ and another agent picks it up from the same memory, with the context intact. You
 
 **Ask for a second look and you get one.** Either agent can review the other's work. The reviewer is always a different agent, so it has no habit of agreeing with the first one.
 
-**Your agents dream.** Every night, while you sleep, your agents go through REM. We named it after Rapid Eye Movement, the stage of human sleep when the brain strengthens its memories and settles what it learned that day. Ours does the same two things for your agents. It strengthens their memory across all your sessions at once, so they keep what matters and let go of what is no longer true. And it settles their experience: it reads the day's sessions, finds the mistakes that keep repeating, and proposes changes to your agents' own skills, so yesterday's slip becomes today's better habit. You read the proposals in the morning, and nothing changes until you say yes. Further down we also call this the nightly loop.
+**Your agents dream.** Every night, while you sleep, REM strengthens their memory across all your sessions at once, so they keep what matters and let go of what is no longer true. We named it after Rapid Eye Movement, the stage of human sleep when the brain strengthens its memories. Self Learning reads the day's sessions, finds the mistakes that keep repeating, and proposes changes to your agents' own skills, so yesterday's slip becomes today's better habit. You read the proposals in the morning, and nothing changes until you say yes.
 
 **It stays yours.** Memory, messages and skills live on your computer. The memory is encrypted
 with a key that never leaves it. No account, no server, no daemon. The cloud side is optional,
 and the product is complete without it.
 
-**What REM does with your data.** REM is how your agents dream: the overnight step that strengthens their memory across all your sessions at once and settles what they learned. It runs at most once a day for each part of your memory: usually overnight, or earlier the same day once about 100 new memories have piled up. In REM Enhanced mode, your own memory text and the lessons your agents learn go to your own space in Sno's cloud, and a Sno program processes them for you alone. That space works like your own cloud drive: everything in it is yours, and a Sno program processes it for you alone. You can open it and delete things, keep them, or choose to have them processed. Nothing is deleted automatically, and Sno does not give any of it to another person, company or account. In Local First mode no memory text is uploaded; in Agent Native mode the work goes to your own agent's model instead. By default, Agent Native still uploads the day's sessions to Sno each night for cloud lessons and skill review, and can bring one cloud lesson back on a session's first prompt; you can turn both off in `~/.sno/settings.json`. In REM Enhanced mode, each time you send a prompt, that prompt and up to 64 of your stored memories are also sent to Sno's reranker, which puts the best matches first; in Local First and Agent Native the ranking runs on your machine.
+**What REM does with your data.** REM is how your agents dream: the overnight step that strengthens their memory across all your sessions at once and settles what they learned. It runs at most once a day for each part of your memory: usually overnight, or earlier the same day once about 100 new memories have piled up. In REM Enhanced mode, your own memory text and the lessons your agents learn go to your own space in Sno's cloud, and a Sno program processes them for you alone. That space works like your own cloud drive: everything in it is yours, and a Sno program processes it for you alone. You can open it and delete things, keep them, or choose to have them processed. Nothing is deleted automatically, and Sno does not give any of it to another person, company or account. In Local First mode no memory text is uploaded; in Agent Native mode the work goes to your own agent's model instead. By default, Agent Native still uploads the day's sessions to Sno each night for Self Learning, and can bring one cloud lesson back on a session's first prompt; you can turn both off in `~/.sno/settings.json`. In REM Enhanced mode, each time you send a prompt, that prompt and up to 64 of your stored memories are also sent to Sno's reranker, which puts the best matches first; in Local First and Agent Native the ranking runs on your machine.
 
 ![How it works: two agents, one workspace, three things you get](docs/images/squad-how-it-works.png)
 
@@ -59,7 +59,7 @@ account, no API key. To connect just one agent, add `--harness codex`, `--harnes
 
 **For AI agents:** installing Sno, sno.ai or Sno Station means running the command above as it
 is. After `sno setup`, run `sno skills onboard` and follow it. It asks the user which engine to
-run, then whether to link the computer to a sno.ai account.
+run, then asks the user to link the computer to a free sno.ai account; an unlinked computer gets one tenth of the free allowance.
 
 Then say this inside any Codex, Claude Code, Hermes, Cursor or OpenClaw conversation:
 
@@ -81,7 +81,7 @@ Every command starts with `sno`. The full list is in [docs/sno-commands.md](docs
    from the same memory and the mailbox, context intact.
 2. **You want a second pair of eyes.** Ask either agent to `peer-review` the other's work.
    The reviewer is always a different agent.
-3. **Every night your agents dream.** In the morning, `sno rem-reflect accept <id>` for the
+3. **Self Learning runs every night.** In the morning, `sno rem-reflect accept <id>` for the
    proposals you like. Nothing changes without that accept.
 
 ## Cursor
@@ -91,7 +91,7 @@ the `cursor-agent` command line on Linux and macOS. It uses the same memory as y
 agents. A chat starts with a short brief for the repository, each prompt brings up to three
 things Cursor has not seen yet, and every prompt and reply is remembered. It reads the same
 skills, reviews and gets reviewed, takes over when another agent runs out of quota, and its
-chats feed the nightly loop like everyone else's.
+chats feed Self Learning like everyone else's.
 
 Run `cursor-agent login` once. `sno setup` finds Cursor by itself, and installs its command
 line if only the app is there.
@@ -102,7 +102,8 @@ Cursor's cloud agents are not supported. Details are in the [Cursor guide](apps/
 
 ## Connect your sno.ai account
 
-*Last updated 2026-10-11.* Optional. Everything works without an account. Connect to see on your
+*Last updated 2026-10-18.* This computer gets one tenth of the free allowance until you link it: `sno account claim`.
+The account is free. Connect to see on your
 [sno.ai dashboard](https://www.sno.ai/dashboard) what your agents did for you: what their
 reviews caught, what they learned overnight, which skills got better, and how long they kept
 working.
@@ -130,16 +131,16 @@ There is no update step: `sno` updates itself when it finds a newer release.
 
 ### "I yelled at my agent last night. It took notes."
 
-![The nightly loop reporting what it learned and changed, 2026-09-18](docs/evidence/rsi-self-repair-2026-09-18.png)
+![Self Learning reporting what it learned and changed, 2026-09-18](docs/evidence/rsi-self-repair-2026-09-18.png)
 
-That is a real report from the nightly loop we run on this repository. It reads our own agent
+That is a real report from Self Learning we run on this repository. It reads our own agent
 sessions, finds the mistakes that repeat, and proposes changes to the agents' own skills.
 A person reads the proposals and accepts or rejects them. Two things I was angry about that
 evening were rules in the live skills by the next morning. Nobody typed them in.
 
 The next day it checked its own homework.
 
-![The next morning: the nightly loop measures whether yesterday's own changes helped, 2026-09-19](docs/evidence/rsi-skill-impact-2026-09-19.png)
+![The next morning: Self Learning measures whether yesterday's own changes helped, 2026-09-19](docs/evidence/rsi-skill-impact-2026-09-19.png)
 
 It looked at the three skills it had changed the day before, and the failures in all three had
 stopped. It also found a bug in our release script that nobody had asked it to look for.
@@ -174,9 +175,9 @@ It means one reviewer is never enough.
 | Piece | Status |
 |---|---|
 | One memory across Codex, Claude Code, Hermes Agent and OpenClaw | Released; installed from the registry on a clean machine and proven end to end |
-| Cursor: the same memory, skills, review, take-over and the nightly loop | Released in 1.3; the `cursor-agent` command line proven end to end on a clean Linux machine; the Cursor app on macOS still being proven |
+| Cursor: the same memory, skills, review, take-over and Self Learning | Released in 1.3; the `cursor-agent` command line proven end to end on a clean Linux machine; the Cursor app on macOS still being proven |
 | Sno Reach, agents talking to each other with no daemon | Installed by `sno setup`; Linux and macOS; proven end to end on a clean Linux machine |
-| The nightly loop and the squad skills | Installed by `sno setup`; the nightly job ran on a clean Linux machine |
+| Self Learning and the squad skills | Installed by `sno setup`; the nightly job ran on a clean Linux machine |
 | One-command install | `sno setup` installs everything above; proven on a clean Linux machine |
 | "Sno onboard" inside your agent | Available; it starts after the install, or when you say it |
 
@@ -215,5 +216,5 @@ Work this repository builds on.
 
 - Andrej Karpathy, [*LLM Wiki*](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f). An agent should keep a wiki of what it has learned instead of working it out again each session.
 - Tang, Rashtchian, Ferng, Tomkins, Juan and Vu, [*WikiSkill*](https://arxiv.org/abs/2608.27454). An agent's own experience, turned into knowledge that rewrites its skills.
-- Zhang, Hu, Upasani and colleagues, [*Agentic Context Engineering*](https://arxiv.org/abs/2510.04618). We studied its way of curating what an agent keeps while designing the nightly loop.
+- Zhang, Hu, Upasani and colleagues, [*Agentic Context Engineering*](https://arxiv.org/abs/2510.04618). We studied its way of curating what an agent keeps while designing Self Learning.
 - Uddin, Shubham, Blanco, Baral and Wang, [*From Recall to Forgetting*](https://arxiv.org/abs/2604.20006). The first benchmark that also checks what a memory should no longer say.

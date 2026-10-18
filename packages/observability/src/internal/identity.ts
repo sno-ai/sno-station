@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { chmodSync, statSync } from "node:fs";
-import { dirname } from "node:path";
+import { homedir, userInfo } from "node:os";
+import { dirname, resolve } from "node:path";
 import { createCuid2, createUUIDv7, isCuid2, isLowercaseCanonicalUUIDv7 } from "@snoai/common-core";
 import { atomicWriteJson, ensureDir, readJsonFile, withFileLock } from "./fs-utils.js";
 import { logger } from "./log.js";
@@ -33,7 +34,7 @@ export function bootstrapIdentity(env: PathEnv = process.env): Identity {
 			warnIfPermissiveMode(identityPath);
 			return identity;
 		}
-		const next = createIdentity();
+		const next = createIdentity(identityPath);
 		atomicWriteJson(identityPath, next, 0o600);
 		return next;
 	});
@@ -48,7 +49,7 @@ export function updateIdentity(
 	ensureIdentityDir(identityPath);
 	return withFileLock(lockPath, () => {
 		const existing = readJsonFile<unknown>(identityPath);
-		const identity = normalizeIdentity(existing) ?? createIdentity();
+		const identity = normalizeIdentity(existing) ?? createIdentity(identityPath);
 		const updated = mutate(identity);
 		atomicWriteJson(identityPath, updated, 0o600);
 		return updated;
@@ -143,10 +144,23 @@ function isNormalizableIdentityRecord(record: IdentityRecord): record is Identit
 	);
 }
 
-function createIdentity(): Identity {
+// Mark test profiles so production statistics can exclude them; use the account record
+// because tests can point HOME at a temporary directory.
+export function isTestProfile(identityPath: string): boolean {
+	let home: string;
+	try {
+		home = userInfo().homedir;
+	} catch {
+		home = homedir();
+	}
+	return dirname(resolve(identityPath)) !== resolve(home, ".sno");
+}
+
+function createIdentity(identityPath: string): Identity {
+	const cuid = createCuid2();
 	return {
 		version: 1,
-		user_cuid: createCuid2(),
+		user_cuid: isTestProfile(identityPath) ? `snotest${cuid.slice(7)}` : cuid,
 		machine_uuid: createUUIDv7(),
 		machine_secret: generateMachineSecret(),
 		created_at: new Date().toISOString(),
