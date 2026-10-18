@@ -16,7 +16,7 @@ follow from that:
 3. **No single vendor decides your workflow.** The squad outlives any one model's pricing, limits,
    or outage.
 
-**The workspace learns; the models don't change.** Every night a loop reads the agents' own sessions,
+**The workspace learns; the models don't change.** Every night Self Learning reads the agents' own sessions,
 finds the mistakes that repeat, and proposes changes to the agents' own skill files. A human accepts
 or rejects. Over weeks the workspace gets sharper while the underlying models stay exactly what
 the vendors shipped. That is the part we think matters most, and the part we are building in public.

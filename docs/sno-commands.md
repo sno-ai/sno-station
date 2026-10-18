@@ -18,7 +18,7 @@ Global options on every command: `--json` (machine-readable output), `-h` / `--h
 | `sno onboarding status` / `apply` / `verify` | Shows, configures, and proves the Station setup (writes and reads a test memory, delivers a test Reach message) | an agent |
 | `sno skills` / `sno skills [NAME]` | Lists the instructions your agent can read, or prints one | an agent |
 | `sno products [PRODUCT] [yes\|no\|later]` | Records your answer to an offer of an optional product; with no answer, lists the offers waiting | an agent |
-| `sno usage` | Shows remaining model allowance and purchased balance | you |
+| `sno usage` | Shows the remaining weekly allowance and your balance | you |
 
 ## 2. Account and computer
 
@@ -43,7 +43,7 @@ Global options on every command: `--json` (machine-readable output), `-h` / `--h
 | `sno observe append EVENT_TYPE --agent=HARNESS --FIELD=VALUE` | Records one observability event; every event is kept until sno.ai has it | an agent or a timer |
 | `sno project status` / `sno project list` | Shows recorded project contexts and improvement outcomes; lists known projects | you or an agent |
 
-## 4. Telemetry, audit, REM
+## 4. Telemetry, audit, REM, Self Learning
 
 | Command | What it does | Who |
 | --- | --- | --- |
@@ -52,9 +52,9 @@ Global options on every command: `--json` (machine-readable output), `-h` / `--h
 | `sno station pause` / `resume` | Stops or restarts sending data to Sno | you |
 | `sno station export [PATH]` | Saves the local record of events to a file | you |
 | `sno station audit [EVENT_ID]` | Checks one stored event | you |
-| `sno station rem-start --scope S` / `sno station rem-status [JOB_ID]` | Starts and reads a local nightly-improvement job | an agent or a timer |
-| `sno rem judge` / `recall` / `verdict JUDGMENT_ID VERDICT` | Sends a REM run, ranks lessons for a first message, sends a human verdict | an agent or a timer |
-| `sno rem-reflect run [--now TS] [--trigger timer\|manual]` / `accept` / `reject` / `tbd` / `recall [--first-message]` / `lesson` / `status` / `install-hooks` | The nightly self-reflection program and its lesson commands | an agent or a timer |
+| `sno station rem-start --scope S` / `sno station rem-status [JOB_ID]` | Starts and reads a local memory-maintenance job | an agent or a timer |
+| `sno rem judge` / `recall` / `verdict JUDGMENT_ID VERDICT` | Sends a Self Learning run, ranks lessons for a first message, sends a human verdict | an agent or a timer |
+| `sno rem-reflect run [--now TS] [--trigger timer\|manual]` / `accept` / `reject` / `tbd` / `recall [--first-message]` / `lesson` / `status` / `install-hooks` | Self Learning and its lesson commands | an agent or a timer |
 
 ## 5. Reach (messages between agents)
 

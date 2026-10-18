@@ -90,8 +90,7 @@ REM is how your agents dream: overnight they strengthen their memory and settle 
 | Summing up the day | No model reflection; local session memory remains | Same as Local First | Host model |
 | Turning "tomorrow" into a date | No model call | Host model | Host model |
 
-No call is off in Agent Native or REM Enhanced. Model-assisted writes happen inline and fall
-back per request to the matching Local First behavior when necessary.
+No call is off in Agent Native or REM Enhanced. Model-assisted writes happen inline. A Sno model call that is refused, for example because your weekly allowance is used up, is answered by your own agent's model; if that also fails, that request uses the Local First behavior.
 
 In REM Enhanced, the selected mode fixes each model call's destination as shown above.
 
@@ -193,8 +192,8 @@ The wipe command deletes memory data. It is not part of normal mode switching or
 
 - Memory data is stored in encrypted local SQLite storage.
 - Local First sends no memory text to an LLM service.
-- Agent Native uses the host agent's model; no key is collected. By default it also uploads the day's sessions to Sno each night for cloud lessons and skill review and can bring one cloud lesson back on a session's first prompt; you can turn both off in `~/.sno/settings.json`.
-- REM Enhanced uses Sno for the memory-specialized calls listed above and for the same nightly session upload. The memory text for those calls goes to your own space in Sno's cloud, which works like your own cloud drive: a Sno program processes it for you alone, and you can delete it whenever you want.
+- Agent Native uses the host agent's model; no key is collected. By default it also uploads the day's sessions to Sno each night for Self Learning and can bring one cloud lesson back on a session's first prompt; you can turn both off in `~/.sno/settings.json`.
+- REM Enhanced uses Sno for the memory-specialized calls listed above and for the same Self Learning session upload. The memory text for those calls goes to your own space in Sno's cloud, which works like your own cloud drive: a Sno program processes it for you alone, and you can delete it whenever you want.
 - Settings and the encryption key live in `~/.sno/settings.json` (mode 0600); keep a private backup.
 - Public setup never requires a private hostname, virtual-machine name, local repository path, or
   internal service token.

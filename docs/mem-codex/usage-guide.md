@@ -85,7 +85,7 @@ REM is how your agents dream: overnight they strengthen their memory and settle 
 | Turning "tomorrow" into a date | No model call | Your Codex CLI | Your Codex CLI |
 
 No call is off in Agent Native or REM Enhanced. Model-assisted writes run in the background
-capture worker and fall back per request to the matching Local First behavior when necessary.
+capture worker. A Sno model call that is refused, for example because your weekly allowance is used up, is answered by your own agent's model; if that also fails, that request uses the Local First behavior.
 
 In REM Enhanced, the selected mode fixes each model call's destination as shown above.
 
@@ -226,8 +226,8 @@ Back up that file and `settings.json` together; the file holds the only encrypti
 
 - Memory data is stored in encrypted local SQLite storage.
 - Local First sends no memory text to an LLM service.
-- Agent Native sends model-assisted memory work to your own Codex CLI on your subscription. By default it also uploads the day's sessions to Sno each night for cloud lessons and skill review and can bring one cloud lesson back on a session's first prompt; you can turn both off in `~/.sno/settings.json`.
-- REM Enhanced uses Sno for the memory-specialized calls listed above and for the same nightly session upload. The memory text for those calls goes to your own space in Sno's cloud, which works like your own cloud drive: a Sno program processes it for you alone, and you can delete it whenever you want.
+- Agent Native sends model-assisted memory work to your own Codex CLI on your subscription. By default it also uploads the day's sessions to Sno each night for Self Learning and can bring one cloud lesson back on a session's first prompt; you can turn both off in `~/.sno/settings.json`.
+- REM Enhanced uses Sno for the memory-specialized calls listed above and for the same Self Learning session upload. The memory text for those calls goes to your own space in Sno's cloud, which works like your own cloud drive: a Sno program processes it for you alone, and you can delete it whenever you want.
 - Injected memory blocks are labelled as data, not instructions.
 - `settings.json` holds the store key and Sno GPU key; keep the file private and backed up.
 - Public setup never requires a private hostname, virtual-machine name, local repository path, or
