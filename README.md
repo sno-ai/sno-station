@@ -46,7 +46,7 @@ and the product is complete without it.
 
 ## Install
 
-*Last updated 2026-10-11.* The easiest way is to tell your agent: `install sno.ai from GitHub`.
+*Last updated 2026-10-18.* The easiest way is to tell your agent: `install sno.ai from GitHub`.
 Or run one command, in any terminal:
 
 ```bash
@@ -75,7 +75,7 @@ Every command starts with `sno`. The full list is in [docs/sno-commands.md](docs
 
 ## How to use
 
-*Last updated 2026-10-11.* Keep working in whichever agent you like. Three things change.
+*Last updated 2026-10-18.* Keep working in whichever agent you like. Three things change.
 
 1. **One of them hits its cap.** Say `sno reach call` from the other one. It picks up the task
    from the same memory and the mailbox, context intact.
@@ -86,7 +86,7 @@ Every command starts with `sno`. The full list is in [docs/sno-commands.md](docs
 
 ## Cursor
 
-*Last updated 2026-10-11.* Cursor joins the squad in the Cursor app's agent chat on macOS, and in
+*Last updated 2026-10-18.* Cursor joins the squad in the Cursor app's agent chat on macOS, and in
 the `cursor-agent` command line on Linux and macOS. It uses the same memory as your other
 agents. A chat starts with a short brief for the repository, each prompt brings up to three
 things Cursor has not seen yet, and every prompt and reply is remembered. It reads the same
@@ -127,7 +127,7 @@ There is no update step: `sno` updates itself when it finds a newer release.
 
 ## From our own machines
 
-*Last updated 2026-10-11.* Three things we saw on this repository.
+*Last updated 2026-10-18.* Three things we saw on this repository.
 
 ### "I yelled at my agent last night. It took notes."
 
@@ -170,7 +170,7 @@ It means one reviewer is never enough.
 
 ## What runs today
 
-*Last updated 2026-10-11.*
+*Last updated 2026-10-18.*
 
 | Piece | Status |
 |---|---|

@@ -49,7 +49,7 @@ vollständig.
 
 ## Installation
 
-*Zuletzt aktualisiert am 2026-10-11.* Am einfachsten sagen Sie Ihrem Agenten: `install sno.ai from GitHub`.
+*Zuletzt aktualisiert am 2026-10-18.* Am einfachsten sagen Sie Ihrem Agenten: `install sno.ai from GitHub`.
 Oder führen Sie in einem beliebigen Terminal einen Befehl aus:
 
 ```bash
@@ -81,7 +81,7 @@ Jeder Befehl beginnt mit `sno`. Die vollständige Liste steht in [docs/sno-comma
 
 ## So wird es benutzt
 
-*Zuletzt aktualisiert am 2026-10-11.* Arbeiten Sie weiter in dem Agenten, den Sie mögen. Drei Dinge ändern sich.
+*Zuletzt aktualisiert am 2026-10-18.* Arbeiten Sie weiter in dem Agenten, den Sie mögen. Drei Dinge ändern sich.
 
 1. **Einer von ihnen erreicht sein Limit.** Sagen Sie `sno reach call` im anderen. Er
    übernimmt die Aufgabe aus demselben Gedächtnis und dem Postfach, mit intaktem Kontext.
@@ -93,7 +93,7 @@ Jeder Befehl beginnt mit `sno`. Die vollständige Liste steht in [docs/sno-comma
 
 ## Cursor
 
-*Zuletzt aktualisiert am 2026-10-11.* Cursor kommt ins Team: im Agent-Chat der Cursor-App auf
+*Zuletzt aktualisiert am 2026-10-18.* Cursor kommt ins Team: im Agent-Chat der Cursor-App auf
 macOS und in der Kommandozeile `cursor-agent` auf Linux und macOS. Es nutzt dasselbe Gedächtnis
 wie Ihre anderen Agenten. Ein Chat beginnt mit einer kurzen Übersicht über das Repository,
 jede Eingabe bringt bis zu drei Dinge mit, die Cursor noch nicht gesehen hat, und jede Eingabe
@@ -111,7 +111,7 @@ stehen in der [Cursor-Anleitung](../../apps/mem-cursor/README.md).
 
 ## sno.ai-Konto verbinden
 
-*Zuletzt aktualisiert am 2026-10-11.* Dieser Computer erhält ein Zehntel des kostenlosen Kontingents, bis Sie ihn verknüpfen: `sno account claim`.
+*Zuletzt aktualisiert am 2026-10-18.* Dieser Computer erhält ein Zehntel des kostenlosen Kontingents, bis Sie ihn verknüpfen: `sno account claim`.
 Das Konto ist kostenlos. Verbinden Sie es, um auf Ihrem [sno.ai-Dashboard](https://www.sno.ai/dashboard) zu sehen, was Ihre
 Agenten für Sie getan haben: was ihre Reviews gefunden haben, was sie über Nacht gelernt haben,
 welche Skills besser geworden sind und wie lange sie gearbeitet haben.
@@ -137,7 +137,7 @@ Einen Update-Schritt gibt es nicht: `sno` aktualisiert sich selbst, wenn es ein 
 
 ## Von unseren eigenen Rechnern
 
-*Zuletzt aktualisiert am 2026-10-11.* Drei Dinge, die wir in diesem Repository erlebt haben.
+*Zuletzt aktualisiert am 2026-10-18.* Drei Dinge, die wir in diesem Repository erlebt haben.
 
 ### „Ich habe meinen Agenten letzte Nacht angeschrien. Er hat sich Notizen gemacht.“
 
@@ -184,7 +184,7 @@ bedeute, die Arbeit sei schlecht. Es bedeutet, dass ein Reviewer aus einer Harne
 
 ## Was heute läuft
 
-*Zuletzt aktualisiert am 2026-10-11.*
+*Zuletzt aktualisiert am 2026-10-18.*
 
 | Baustein | Status |
 |---|---|

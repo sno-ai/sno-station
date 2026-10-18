@@ -50,7 +50,7 @@ démon. Le volet cloud est optionnel, et le produit est complet sans lui.
 
 ## Installation
 
-*Dernière mise à jour le 2026-10-11.* Le plus simple est de dire à votre agent : `install sno.ai from GitHub`.
+*Dernière mise à jour le 2026-10-18.* Le plus simple est de dire à votre agent : `install sno.ai from GitHub`.
 Ou de lancer une commande, dans n'importe quel terminal :
 
 ```bash
@@ -81,7 +81,7 @@ Chaque commande commence par `sno`. La liste complète est dans [docs/sno-comman
 
 ## Comment l'utiliser
 
-*Dernière mise à jour le 2026-10-11.* Continuez à travailler dans l'agent que vous voulez. Trois choses changent.
+*Dernière mise à jour le 2026-10-18.* Continuez à travailler dans l'agent que vous voulez. Trois choses changent.
 
 1. **L'un d'eux atteint son plafond.** Dites `sno reach call` depuis l'autre. Il reprend la tâche
    depuis la même mémoire et la boîte aux lettres, avec son contexte.
@@ -92,7 +92,7 @@ Chaque commande commence par `sno`. La liste complète est dans [docs/sno-comman
 
 ## Cursor
 
-*Dernière mise à jour le 2026-10-11.* Cursor rejoint l'équipe dans le chat d'agent de l'application
+*Dernière mise à jour le 2026-10-18.* Cursor rejoint l'équipe dans le chat d'agent de l'application
 Cursor sur macOS, et dans la ligne de commande `cursor-agent` sur Linux et macOS. Il utilise la
 même mémoire que vos autres agents. Un chat commence par un court résumé du dépôt, chaque message
 apporte jusqu'à trois éléments que Cursor n'a pas encore vus, et chaque message et chaque réponse
@@ -109,7 +109,7 @@ Les détails sont dans le [guide Cursor](../../apps/mem-cursor/README.md).
 
 ## Connecter votre compte sno.ai
 
-*Dernière mise à jour le 2026-10-11.* Cet ordinateur reçoit un dixième de l’allocation gratuite tant que vous ne le liez pas : `sno account claim`.
+*Dernière mise à jour le 2026-10-18.* Cet ordinateur reçoit un dixième de l’allocation gratuite tant que vous ne le liez pas : `sno account claim`.
 Le compte est gratuit. Connectez-le pour
 voir sur votre [tableau de bord sno.ai](https://www.sno.ai/dashboard) ce que vos agents ont fait
 pour vous : ce que leurs relectures ont repéré, ce qu'ils ont appris pendant la nuit, quelles
@@ -135,7 +135,7 @@ Il n'y a pas d'étape de mise à jour : `sno` se met à jour lui-même quand il 
 
 ## Sur nos propres machines
 
-*Dernière mise à jour le 2026-10-11.* Trois choses que nous avons vues sur ce dépôt.
+*Dernière mise à jour le 2026-10-18.* Trois choses que nous avons vues sur ce dépôt.
 
 ### « J'ai crié sur mon agent hier soir. Il a pris des notes. »
 
@@ -183,7 +183,7 @@ jamais.
 
 ## Ce qui fonctionne aujourd'hui
 
-*Dernière mise à jour le 2026-10-11.*
+*Dernière mise à jour le 2026-10-18.*
 
 | Élément | Statut |
 |---|---|

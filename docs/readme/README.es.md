@@ -47,7 +47,7 @@ El lado en la nube es opcional, y el producto está completo sin él.
 
 ## Instalación
 
-*Última actualización 2026-10-11.* La forma más fácil es decirle a tu agente: `install sno.ai from GitHub`.
+*Última actualización 2026-10-18.* La forma más fácil es decirle a tu agente: `install sno.ai from GitHub`.
 O ejecuta un solo comando, en cualquier terminal:
 
 ```bash
@@ -77,7 +77,7 @@ Todos los comandos empiezan con `sno`. La lista completa está en [docs/sno-comm
 
 ## Cómo usarlo
 
-*Última actualización 2026-10-11.* Sigue trabajando con el agente que prefieras. Cambian tres cosas.
+*Última actualización 2026-10-18.* Sigue trabajando con el agente que prefieras. Cambian tres cosas.
 
 1. **Uno de ellos llega a su límite.** Di `sno reach call` desde el otro. Retoma la tarea desde
    la misma memoria y el buzón, con el contexto intacto.
@@ -88,7 +88,7 @@ Todos los comandos empiezan con `sno`. La lista completa está en [docs/sno-comm
 
 ## Cursor
 
-*Última actualización 2026-10-11.* Cursor se une al equipo en el chat de agente de la app de Cursor
+*Última actualización 2026-10-18.* Cursor se une al equipo en el chat de agente de la app de Cursor
 en macOS, y en la línea de comandos `cursor-agent` en Linux y macOS. Usa la misma memoria que
 tus otros agentes. Un chat empieza con un resumen breve del repositorio, cada mensaje trae hasta
 tres cosas que Cursor aún no ha visto, y cada mensaje y respuesta se recuerda. Lee las mismas
@@ -104,7 +104,7 @@ Cursor en Linux ni para los agentes en la nube de Cursor. Los detalles están en
 
 ## Conecta tu cuenta de sno.ai
 
-*Última actualización 2026-10-11.* Esta computadora recibe una décima parte de la asignación gratuita hasta que la vincules: `sno account claim`.
+*Última actualización 2026-10-18.* Esta computadora recibe una décima parte de la asignación gratuita hasta que la vincules: `sno account claim`.
 La cuenta es gratuita. Conéctala para ver en
 tu [panel de sno.ai](https://www.sno.ai/dashboard) lo que tus agentes hicieron por ti: lo que
 detectaron sus revisiones, lo que aprendieron durante la noche, qué habilidades mejoraron y cuánto
@@ -129,7 +129,7 @@ No hay paso de actualización: `sno` se actualiza solo cuando encuentra una vers
 
 ## De nuestras propias máquinas
 
-*Última actualización 2026-10-11.* Tres cosas que vimos en este repositorio.
+*Última actualización 2026-10-18.* Tres cosas que vimos en este repositorio.
 
 ### "Anoche le grité a mi agente. Tomó notas."
 
@@ -172,7 +172,7 @@ trabajo era malo. Significa que un solo revisor de un solo harness nunca basta.
 
 ## Qué funciona hoy
 
-*Última actualización 2026-10-11.*
+*Última actualización 2026-10-18.*
 
 | Pieza | Estado |
 |---|---|
