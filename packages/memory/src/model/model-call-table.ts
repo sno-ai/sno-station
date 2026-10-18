@@ -31,7 +31,7 @@ const verdict = FIXED_MEMORY_SNO_CONFLICT_VERDICT;
 
 export const MODEL_CALLS: Record<ModelCallId, ModelCall> & Record<RsiModelCallId, {
 	description: string;
-	calledBy: "RSI skill";
+	calledBy: "Self Learning";
 	destinations: Record<ProductMode, ModelDestination>;
 }> = {
 	E1: { description: "conversation extraction", occasion: "memoryExtract", destinations: extract, snoPreset: chat, transport: { host: "agent-host-seam", snoGpu: "chat-completions" }, promptVariant: { host: "standard", snoGpu: "standard" }, replyParser: { host: "json", snoGpu: "json" } },
@@ -54,10 +54,10 @@ export const MODEL_CALLS: Record<ModelCallId, ModelCall> & Record<RsiModelCallId
 	P6: { description: "retire by name", occasion: "profileSectionMerge", destinations: profile, snoPreset: chat, transport: { host: "agent-host-seam", snoGpu: "chat-completions" }, promptVariant: { host: "standard", snoGpu: "standard" }, replyParser: { host: "json", snoGpu: "json" } },
 	T1: { description: "active task classification and match", occasion: "profileActiveTaskClassify", destinations: host, snoPreset: chat, transport: { host: "agent-host-seam", snoGpu: "chat-completions" }, promptVariant: { host: "standard", snoGpu: "standard" }, replyParser: { host: "json", snoGpu: "json" } },
 	R1: { description: "session reflection", occasion: "summaryBuild", destinations: host, snoPreset: chat, transport: { host: "agent-host-seam", snoGpu: "chat-completions" }, promptVariant: { host: "standard", snoGpu: "standard" }, replyParser: { host: "text", snoGpu: "text" } },
-	R2: { description: "label local sessions before the nightly cloud upload", calledBy: "RSI skill", destinations: host },
-	R3: { description: "upload sessions nightly for cloud experience and skill review", calledBy: "RSI skill", destinations: { "local-first": "off", "agent-native": "sno-gpu", "rem-enhanced": "sno-gpu" } },
-	R4: { description: "recall one relevant cloud experience on a session's first prompt", calledBy: "RSI skill", destinations: { "local-first": "off", "agent-native": "sno-gpu", "rem-enhanced": "sno-gpu" } },
-	R5: { description: "generate local lessons and skill reminders nightly", calledBy: "RSI skill", destinations: { "local-first": "host", "agent-native": "off", "rem-enhanced": "off" } },
+	R2: { description: "label local sessions before the Self Learning cloud upload", calledBy: "Self Learning", destinations: host },
+	R3: { description: "upload sessions nightly for Self Learning", calledBy: "Self Learning", destinations: { "local-first": "off", "agent-native": "sno-gpu", "rem-enhanced": "sno-gpu" } },
+	R4: { description: "recall one relevant cloud experience on a session's first prompt", calledBy: "Self Learning", destinations: { "local-first": "off", "agent-native": "sno-gpu", "rem-enhanced": "sno-gpu" } },
+	R5: { description: "generate local lessons and skill reminders nightly for Self Learning", calledBy: "Self Learning", destinations: { "local-first": "host", "agent-native": "off", "rem-enhanced": "off" } },
 	REM1: { description: "replace conflict pair", occasion: "conflictAdjudication", destinations: rem, snoPreset: verdict, transport: { host: "agent-host-seam", snoGpu: "raw-completions" }, promptVariant: { host: "adapter-a-chat", snoGpu: "adapter-a-raw" }, replyParser: { host: "json-or-single-token-verdict", snoGpu: "single-token-verdict" } },
 	REM2: { description: "replace clauses", occasion: "memoryExtract", destinations: remHost, snoPreset: chat, transport: { host: "agent-host-seam", snoGpu: "chat-completions" }, promptVariant: { host: "standard", snoGpu: "standard" }, replyParser: { host: "json", snoGpu: "json" } },
 	REM3: { description: "replace coverage", occasion: "memoryExtract", destinations: rem, snoPreset: chat, transport: { host: "agent-host-seam", snoGpu: "chat-completions" }, promptVariant: { host: "standard", snoGpu: "standard" }, replyParser: { host: "json", snoGpu: "json" } },

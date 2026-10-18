@@ -55,7 +55,7 @@
     <g transform="translate(580,536)">
       <rect width="440" height="82" rx="12" fill="#0d1b2b" fill-opacity="0.94" stroke="#21394c"/>
       <circle cx="28" cy="41" r="7" fill="#f0a04b"/>
-      <text x="52" y="34" fill="#f8fafc" font-size="20" font-weight="700">RSI loop</text>
+      <text x="52" y="34" fill="#f8fafc" font-size="20" font-weight="700">Self Learning</text>
       <text x="52" y="60" fill="#aebccc" font-size="16">reads sessions, proposes changes, you accept</text>
     </g>
 
