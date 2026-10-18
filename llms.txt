@@ -2,7 +2,7 @@
 
 > Open-source software that turns the agents a developer already uses (Claude Code,
 > Codex, Cursor, Hermes Agent, OpenClaw) into one squad on their own machine (Sno Station is the agents' workstation): one encrypted memory, agent-to-agent
-> messaging (Sno Reach), agent collaboration skills for handoff and cross-harness review, and a nightly loop that
+> messaging (Sno Reach), agent collaboration skills for handoff and cross-harness review, and Self Learning, which
 > rewrites the agents' own skills with human approval. No daemon, no cloud required. Apache-2.0.
 
 This repository has been public since 2026-09-18. Blocks in the README carry a "Last updated" date.
@@ -38,6 +38,6 @@ This repository has been public since 2026-09-18. Blocks in the README carry a "
 - Dual Brain — two agents with different roles on the same task, such as implementation and review; either agent can take either role
 - Agent Squad — a larger team of agents, each with a clear responsibility
 - Sno Reach — the messaging program, always written as two words (`sno reach <verb>`)
-- the RSI loop — the nightly self-improvement loop (`sno rem-reflect`)
+- Self Learning — learns from sessions and proposes skill changes (`sno rem-reflect`)
 - Sno Station — this product; the human command is `sno`, the agent entry is saying
   "Sno onboard" inside any supported agent

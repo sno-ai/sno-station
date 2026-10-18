@@ -56,7 +56,7 @@ and downloads about 206 MB on first use. It runs unless `rerank.mode` is `none`,
 sends recall to Sno's reranker instead. An earlier version of this guide wrote `none`: change it to
 `cross-encoder`, the default, in `~/.sno/settings.json`.
 
-The nightly improvement skill uses `modelCalls.R5` for local lesson and skill-reminder
+Self Learning uses `modelCalls.R5` for local lesson and skill-reminder
 generation. Its destinations are `host` in Local First and `off` in Agent Native and REM
 Enhanced. Existing settings without this row use those defaults; supplied values are
 preserved. Set `modelCalls.R5["local-first"]` to `off` to disable this model call.

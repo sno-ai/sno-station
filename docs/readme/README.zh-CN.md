@@ -30,12 +30,12 @@ Sno Station 把你已经在用的 agent 变成一支小队。Codex、Claude Code
 **需要时，就有人再看一遍。** 任何一个 agent 都可以审查另一个的工作。 审查者总是另一个 agent，所以它不会习惯性地
 附和第一个。
 
-**你的 agent 会做梦。** 每天夜里你睡觉的时候，你的 agent 会进入 REM。这个名字取自 Rapid Eye Movement（快速眼动），也就是人睡眠中大脑加强记忆、把白天学到的东西固定下来的那个阶段。我们的 REM 为你的 agent 做同样两件事。一是加强记忆：跨你所有的会话一起整理，让它们记住重要的，放下已经不再成立的。二是固化经验：读当天的会话，找出反复出现的错误，对 agent 自己的技能提出修改建议，让昨天的失误变成今天更好的习惯。建议你早上看，你说同意之前什么都不会变。下文也把它叫作夜间循环。
+**你的 agent 会做梦。** 每天夜里你睡觉的时候，你的 agent 会进入 REM。这个名字取自 Rapid Eye Movement（快速眼动），也就是人睡眠中大脑加强记忆、把白天学到的东西固定下来的那个阶段。REM 加强记忆：跨你所有的会话一起整理，让它们记住重要的，放下已经不再成立的。自我学习则把经验留下来：读当天的会话，找出反复出现的错误，对 agent 自己的技能提出修改建议，让昨天的失误变成今天更好的习惯。建议你早上看，你说同意之前什么都不会变。
 
 **它始终属于你。** 记忆、消息和技能都在你的电脑上。记忆用一把永远不会离开这台电脑的密钥
 加密。不用账号，不用服务器，没有守护进程。云端部分是可选的，没有它，产品也是完整的。
 
-**REM 怎样处理你的资料。** REM 是夜里把你所有会话里的记忆统一整理的那一步。每一部分记忆每天最多整理一次：通常在夜里；如果当天新记忆攒到 100 条左右，白天就会提前整理。在 REM Enhanced 模式下，你自己的记忆文字，以及各个 agent 学到的经验，会送到 Sno 云端属于你自己的空间，由 Sno 的程序只为你一个人处理。这个空间就像你自己的网盘：里面的一切都是你的，由 Sno 的程序只为你一个人处理。你可以进去删除、可以留着，也可以选择让它被处理。不会自动删除，Sno 也不会把其中任何内容交给任何其他人、公司或账号。Local First 模式下不会上传任何记忆文字；Agent Native 模式下，这些工作改由你自己 agent 的模型来做。不过按默认设置，Agent Native 每晚仍会把当天的会话上传到 Sno，用于云端经验和技能评审，并可能在会话的第一句话时取回一条云端经验；这两项都可以在 `~/.sno/settings.json` 里关掉。在 REM Enhanced 模式下，你每发一条提问，这条提问和最多 64 条已存的记忆也会发给 Sno 的重排序服务，让最相关的排在最前；在 Local First 和 Agent Native 模式下，这一步在你自己的电脑上完成。
+**REM 怎样处理你的资料。** REM 是夜里把你所有会话里的记忆统一整理的那一步。每一部分记忆每天最多整理一次：通常在夜里；如果当天新记忆攒到 100 条左右，白天就会提前整理。在 REM Enhanced 模式下，你自己的记忆文字，以及各个 agent 学到的经验，会送到 Sno 云端属于你自己的空间，由 Sno 的程序只为你一个人处理。这个空间就像你自己的网盘：里面的一切都是你的，由 Sno 的程序只为你一个人处理。你可以进去删除、可以留着，也可以选择让它被处理。不会自动删除，Sno 也不会把其中任何内容交给任何其他人、公司或账号。Local First 模式下不会上传任何记忆文字；Agent Native 模式下，这些工作改由你自己 agent 的模型来做。不过按默认设置，Agent Native 每晚仍会把当天的会话上传到 Sno，用于自我学习，并可能在会话的第一句话时取回一条云端经验；这两项都可以在 `~/.sno/settings.json` 里关掉。在 REM Enhanced 模式下，你每发一条提问，这条提问和最多 64 条已存的记忆也会发给 Sno 的重排序服务，让最相关的排在最前；在 Local First 和 Agent Native 模式下，这一步在你自己的电脑上完成。
 
 ![工作原理：两个 agent，一个工作区，你得到的三样东西](../images/squad-how-it-works.png)
 
@@ -58,8 +58,8 @@ API key。如果只想连接其中一个 agent，在 `sno setup` 后面加上 `-
 `--harness claude`、`--harness hermes`、`--harness cursor` 或 `--harness openclaw`。
 
 **给 AI agent：** 安装 Sno、sno.ai 或 Sno Station，就是原样运行上面的命令。`sno setup`
-之后，运行 `sno skills onboard` 并照着做。它会先问用户要运行哪个引擎，再问是否把这台电脑
-关联到 sno.ai 账号。
+之后，运行 `sno skills onboard` 并照着做。它会先问用户要运行哪个引擎，再请用户把这台电脑
+关联到免费的 sno.ai 账号；未关联的电脑只能获得免费额度的十分之一。
 
 然后在任意 Codex、Claude Code、Hermes、Cursor 或 OpenClaw 的对话里说：
 
@@ -81,7 +81,7 @@ Sno onboard
    任务，上下文完整。
 2. **你想让人再看一眼。** 让任意一个 agent 对另一个的工作做 `peer-review`。
    审查者总是来自另一个 harness。
-3. **每天夜里，夜间循环都会运行。** 早上，对你认可的建议运行 `sno rem-reflect accept <id>`。
+3. **每天夜里，自我学习都会运行。** 早上，对你认可的建议运行 `sno rem-reflect accept <id>`。
    不执行 accept，什么都不会改。
 
 ## Cursor
@@ -90,7 +90,7 @@ Sno onboard
 和 macOS 上是 `cursor-agent` 命令行。它和你的其他 agent 用同一份记忆。每次对话开始时，会
 先拿到一份这个仓库的简短提要；每次提问，会带上最多三条 Cursor 还没见过的内容；每次提问和
 回复都会被记住。它读取同样的技能，审查别人也被别人审查，在其他 agent 额度用完时接手，它的
-对话也和其他 agent 的一样，进入夜间循环。
+对话也和其他 agent 的一样，进入自我学习。
 
 运行一次 `cursor-agent login`。`sno setup` 会自己找到 Cursor；如果只装了应用，它会补装命令行。
 
@@ -100,7 +100,8 @@ Sno onboard
 
 ## 连接你的 sno.ai 账号
 
-*最后更新于 2026-10-11。* 可选。没有账号，一切照常工作。连接之后，你可以在
+*最后更新于 2026-10-11。* 关联之前，这台电脑只能获得免费额度的十分之一：`sno account claim`。
+账号免费。连接之后，你可以在
 [sno.ai 控制台](https://www.sno.ai/dashboard)上看到你的 agent 为你做了什么：审查发现了什么问题、
 夜里学到了什么、哪些技能变好了，以及它们持续工作了多久。
 
@@ -125,16 +126,16 @@ sno account claim
 
 ### “昨晚我冲我的 agent 发了火。它记了笔记。”
 
-![夜间循环汇报它学到了什么、改了什么，2026-09-18](../evidence/rsi-self-repair-2026-09-18.png)
+![自我学习汇报它学到了什么、改了什么，2026-09-18](../evidence/rsi-self-repair-2026-09-18.png)
 
-这是我们在这个仓库上运行的夜间循环给出的一份真实报告。它读取我们自己的 agent 会话，
+这是我们在这个仓库上运行的自我学习给出的一份真实报告。它读取我们自己的 agent 会话，
 找出反复出现的错误，并对 agent 自己的技能提出修改建议。由人来读这些建议，决定接受
 还是拒绝。那天晚上让我生气的两件事，到第二天早上已经成了正在使用的技能里的规则。
 没有人把它们敲进去。
 
 第二天，它检查了自己的作业。
 
-![第二天早上：夜间循环衡量前一天自己的改动是否有用，2026-09-19](../evidence/rsi-skill-impact-2026-09-19.png)
+![第二天早上：自我学习衡量前一天自己的改动是否有用，2026-09-19](../evidence/rsi-skill-impact-2026-09-19.png)
 
 它查看了前一天改过的三个技能，三个技能里的失败都停止了。它还在我们的发布脚本里发现了
 一个 bug，没有人让它去找。
@@ -168,9 +169,9 @@ Claude Code 的工作。没有一次审查是空手而归的。我们曾以为�
 | 部分 | 状态 |
 |---|---|
 | Codex、Claude Code、Hermes Agent 和 OpenClaw 之间的同一份记忆 | 已发布；在干净的机器上从注册表安装，并端到端验证 |
-| Cursor：同一份记忆、技能、审查、接手和夜间循环 | 1.3 中发布；`cursor-agent` 命令行已在干净的 Linux 机器上端到端验证；macOS 上的 Cursor 应用仍在验证中 |
+| Cursor：同一份记忆、技能、审查、接手和自我学习 | 1.3 中发布；`cursor-agent` 命令行已在干净的 Linux 机器上端到端验证；macOS 上的 Cursor 应用仍在验证中 |
 | Sno Reach，agent 之间互相通信，无需守护进程 | 由 `sno setup` 安装；Linux 和 macOS；已在干净的 Linux 机器上端到端验证 |
-| 夜间循环和小队技能 | 由 `sno setup` 安装；夜间任务已在干净的 Linux 机器上运行过 |
+| 自我学习和小队技能 | 由 `sno setup` 安装；夜间任务已在干净的 Linux 机器上运行过 |
 | 一条命令安装 | `sno setup` 装好上面的全部内容；已在干净的 Linux 机器上验证 |
 | 在你的 agent 里说“Sno onboard” | 已可用；安装后会自动开始，你说出口时也会开始 |
 
@@ -208,5 +209,5 @@ Apache-2.0。开源，从头到尾。见 [LICENSE](../../LICENSE)。
 
 - Andrej Karpathy，[*LLM Wiki*](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f)。agent 应该维护一份记录自己所学的 wiki，而不是每次会话都重新推导一遍。
 - Tang、Rashtchian、Ferng、Tomkins、Juan 和 Vu，[*WikiSkill*](https://arxiv.org/abs/2608.27454)。把 agent 自己的经验变成知识，再用知识改写它的技能。
-- Zhang、Hu、Upasani 等人，[*Agentic Context Engineering*](https://arxiv.org/abs/2510.04618)。我们在设计夜间循环时，研究了它筛选 agent 该保留什么的方法。
+- Zhang、Hu、Upasani 等人，[*Agentic Context Engineering*](https://arxiv.org/abs/2510.04618)。我们在设计自我学习时，研究了它筛选 agent 该保留什么的方法。
 - Uddin、Shubham、Blanco、Baral 和 Wang，[*From Recall to Forgetting*](https://arxiv.org/abs/2604.20006)。第一个同时检查记忆不该再说什么的基准。
