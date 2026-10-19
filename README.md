@@ -50,15 +50,14 @@ and the product is complete without it.
 Or run one command, in any terminal:
 
 ```bash
-sh -c 'sno_installer_body=$(curl -fsSL https://sno.ai/install) && printf "%s\n" "$sno_installer_body" | sh' && ~/.local/bin/sno setup
+sh -c 'sno_installer_body=$(curl -fsSL https://sno.ai/install) && printf "%s\n" "$sno_installer_body" | sh'
 ```
 
 It installs `sno`, then Sno Station, and connects every agent it finds on your computer. No
-account, no API key. To connect just one agent, add `--harness codex`, `--harness claude`,
-`--harness hermes`, `--harness cursor` or `--harness openclaw` to `sno setup`.
+account, no API key. If you install another agent later, run `sno setup` again to connect it too.
 
 **For AI agents:** installing Sno, sno.ai or Sno Station means running the command above as it
-is. After `sno setup`, run `sno skills onboard` and follow it. It asks the user which engine to
+is. It also sets up Sno Station; then run `sno skills onboard` and follow it. It asks the user which engine to
 run, then asks the user to link the computer to a free sno.ai account; an unlinked computer gets one tenth of the free allowance.
 
 Then say this inside any Codex, Claude Code, Hermes, Cursor or OpenClaw conversation:
