@@ -51,15 +51,14 @@ El lado en la nube es opcional, y el producto está completo sin él.
 O ejecuta un solo comando, en cualquier terminal:
 
 ```bash
-sh -c 'sno_installer_body=$(curl -fsSL https://sno.ai/install) && printf "%s\n" "$sno_installer_body" | sh' && ~/.local/bin/sno setup
+sh -c 'sno_installer_body=$(curl -fsSL https://sno.ai/install) && printf "%s\n" "$sno_installer_body" | sh'
 ```
 
 Instala `sno`, luego Sno Station, y conecta todos los agentes que encuentre en tu computadora. Sin
-cuenta y sin clave de API. Para conectar un solo agente, añade `--harness codex`, `--harness claude`,
-`--harness hermes`, `--harness cursor` o `--harness openclaw` a `sno setup`.
+cuenta y sin clave de API. Si más adelante instalas otro agente, vuelve a ejecutar `sno setup` para conectarlo también.
 
 **Para agentes de IA:** instalar Sno, sno.ai o Sno Station significa ejecutar el comando de arriba
-tal cual. Después de `sno setup`, ejecuta `sno skills onboard` y síguelo. Pregunta al usuario qué
+tal cual. También configura Sno Station; después ejecuta `sno skills onboard` y síguelo. Pregunta al usuario qué
 motor ejecutar y después le pide que vincule la computadora a una cuenta gratuita de sno.ai;
 una computadora sin vincular recibe una décima parte de la asignación gratuita.
 

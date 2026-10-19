@@ -53,16 +53,15 @@ Cursor, Hermes Agent и OpenClaw используют одну память, п�
 Или выполните одну команду в любом терминале:
 
 ```bash
-sh -c 'sno_installer_body=$(curl -fsSL https://sno.ai/install) && printf "%s\n" "$sno_installer_body" | sh' && ~/.local/bin/sno setup
+sh -c 'sno_installer_body=$(curl -fsSL https://sno.ai/install) && printf "%s\n" "$sno_installer_body" | sh'
 ```
 
 Она устанавливает `sno`, затем Sno Station и подключает каждого агента, которого находит на
-вашем компьютере. Аккаунт и API-ключ не нужны. Чтобы подключить только одного агента, добавьте к
-`sno setup` `--harness codex`, `--harness claude`, `--harness hermes`, `--harness cursor` или
-`--harness openclaw`.
+вашем компьютере. Аккаунт и API-ключ не нужны. Если позже вы установите другого агента,
+снова запустите `sno setup`, чтобы подключить и его.
 
 **Для ИИ-агентов:** установить Sno, sno.ai или Sno Station значит выполнить команду выше как
-есть. После `sno setup` выполните `sno skills onboard` и следуйте ему. Он спрашивает
+есть. Она также настраивает Sno Station; затем выполните `sno skills onboard` и следуйте ему. Он спрашивает
 пользователя, какой движок запускать, а затем просит связать компьютер с бесплатным аккаунтом sno.ai;
 непривязанный компьютер получает одну десятую бесплатного лимита.
 

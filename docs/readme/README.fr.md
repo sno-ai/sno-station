@@ -54,16 +54,15 @@ démon. Le volet cloud est optionnel, et le produit est complet sans lui.
 Ou de lancer une commande, dans n'importe quel terminal :
 
 ```bash
-sh -c 'sno_installer_body=$(curl -fsSL https://sno.ai/install) && printf "%s\n" "$sno_installer_body" | sh' && ~/.local/bin/sno setup
+sh -c 'sno_installer_body=$(curl -fsSL https://sno.ai/install) && printf "%s\n" "$sno_installer_body" | sh'
 ```
 
 Elle installe `sno`, puis Sno Station, et connecte tous les agents qu'elle trouve sur votre
-ordinateur. Pas de compte, pas de clé d'API. Pour ne connecter qu'un seul agent, ajoutez
-`--harness codex`, `--harness claude`, `--harness hermes`, `--harness cursor` ou `--harness openclaw`
-à `sno setup`.
+ordinateur. Pas de compte, pas de clé d'API. Si vous installez un autre agent plus tard,
+relancez `sno setup` pour le connecter aussi.
 
 **Pour les agents IA :** installer Sno, sno.ai ou Sno Station veut dire exécuter la commande
-ci-dessus telle quelle. Après `sno setup`, lancez `sno skills onboard` et suivez-le. Il demande à
+ci-dessus telle quelle. Elle configure aussi Sno Station ; lancez ensuite `sno skills onboard` et suivez-le. Il demande à
 l'utilisateur quel moteur exécuter, puis lui demande de lier l'ordinateur à un compte sno.ai gratuit ;
 un ordinateur non lié reçoit un dixième de l'allocation gratuite.
 

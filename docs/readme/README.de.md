@@ -53,16 +53,15 @@ vollständig.
 Oder führen Sie in einem beliebigen Terminal einen Befehl aus:
 
 ```bash
-sh -c 'sno_installer_body=$(curl -fsSL https://sno.ai/install) && printf "%s\n" "$sno_installer_body" | sh' && ~/.local/bin/sno setup
+sh -c 'sno_installer_body=$(curl -fsSL https://sno.ai/install) && printf "%s\n" "$sno_installer_body" | sh'
 ```
 
 Er installiert `sno`, dann Sno Station, und verbindet jeden Agenten, den er auf Ihrem Computer
-findet. Kein Konto, kein API-Schlüssel. Um nur einen Agenten zu verbinden, hängen Sie
-`--harness codex`, `--harness claude`, `--harness hermes`, `--harness cursor` oder
-`--harness openclaw` an `sno setup` an.
+findet. Kein Konto, kein API-Schlüssel. Wenn Sie später einen weiteren Agenten installieren, führen
+Sie `sno setup` erneut aus, um auch ihn zu verbinden.
 
 **Für KI-Agenten:** Sno, sno.ai oder Sno Station zu installieren heißt, den obigen Befehl
-unverändert auszuführen. Führen Sie nach `sno setup` den Befehl `sno skills onboard` aus und
+unverändert auszuführen. Er richtet auch Sno Station ein. Führen Sie danach `sno skills onboard` aus und
 folgen Sie ihm. Er fragt den Nutzer, welche Engine laufen soll, und fordert ihn dann auf, den Computer mit
 einem kostenlosen sno.ai-Konto zu verknüpfen; ein unverknüpfter Computer erhält ein Zehntel des kostenlosen Kontingents.
 
