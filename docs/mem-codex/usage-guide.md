@@ -16,7 +16,7 @@ Requirements:
 Complete the [memory service setup](../memory-setup.md), then run:
 
 ```bash
-sh -c 'sno_installer_body=$(curl -fsSL https://sno.ai/install) && printf "%s\n" "$sno_installer_body" | sh' && ~/.local/bin/sno setup --harness codex
+sh -c 'sno_installer_body=$(curl -fsSL https://sno.ai/install) && printf "%s\n" "$sno_installer_body" | sh'
 ```
 
 `SNO_PROFILE_DIR` selects the profile root (default `~/.sno`). The memory service setup
