@@ -20,6 +20,8 @@ Global options on every command: `--json` (machine-readable output), `-h` / `--h
 | `sno products [PRODUCT] [yes\|no\|later]` | Records your answer to an offer of an optional product; with no answer, lists the offers waiting | an agent |
 | `sno usage` | Shows the remaining weekly allowance and your balance | you |
 
+`sno usage` shows the remaining weekly allowances for memory and Self Learning. It also shows when each allowance resets and your balance in dollars. When a weekly allowance is used up, your balance is used; with no balance left, Sno uses your own agent's model until it resets.
+
 ## 2. Account and computer
 
 | Command | What it does | Who |
