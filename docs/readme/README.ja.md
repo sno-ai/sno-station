@@ -51,15 +51,15 @@ Cursor、Hermes Agent、OpenClaw がひとつのメモリを使い、互いに�
 または、どのターミナルでも次の1コマンドを実行します。
 
 ```bash
-sh -c 'sno_installer_body=$(curl -fsSL https://sno.ai/install) && printf "%s\n" "$sno_installer_body" | sh' && ~/.local/bin/sno setup
+sh -c 'sno_installer_body=$(curl -fsSL https://sno.ai/install) && printf "%s\n" "$sno_installer_body" | sh'
 ```
 
 `sno` を入れ、続けて Sno Station を入れ、コンピューター上にあるすべてのエージェントを接続します。
-アカウントも API キーも要りません。1つだけ接続したい場合は、`sno setup` に `--harness codex`、
-`--harness claude`、`--harness hermes`、`--harness cursor`、`--harness openclaw` のいずれかを付けます。
+アカウントも API キーも要りません。あとで別のエージェントを入れたら、
+`sno setup` をもう一度実行すればそのエージェントも接続されます。
 
 **AI エージェントへ：** Sno、sno.ai、Sno Station のインストールとは、上のコマンドをそのまま
-実行することです。`sno setup` のあとに `sno skills onboard` を実行し、その指示に従ってください。
+実行することです。このコマンドは Sno Station のセットアップまで行います。続けて `sno skills onboard` を実行し、その指示に従ってください。
 どのエンジンを動かすかをユーザーに尋ね、次にこのコンピューターを無料の sno.ai アカウントに
 紐づけるよう求めます。未連携のコンピューターが受け取れるのは、無料枠の 10 分の 1 です。
 

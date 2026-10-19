@@ -51,15 +51,15 @@ Hermes Agent, OpenClaw가 메모리 하나를 함께 쓰고, 서로에게 작업
 아니면 아무 터미널에서나 명령 하나를 실행하세요:
 
 ```bash
-sh -c 'sno_installer_body=$(curl -fsSL https://sno.ai/install) && printf "%s\n" "$sno_installer_body" | sh' && ~/.local/bin/sno setup
+sh -c 'sno_installer_body=$(curl -fsSL https://sno.ai/install) && printf "%s\n" "$sno_installer_body" | sh'
 ```
 
 `sno`를 설치하고, 이어서 Sno Station을 설치한 다음, 컴퓨터에서 찾은 모든 에이전트를 연결합니다.
-계정도 API 키도 필요 없습니다. 에이전트 하나만 연결하려면 `sno setup`에 `--harness codex`,
-`--harness claude`, `--harness hermes`, `--harness cursor`, `--harness openclaw` 중 하나를 붙이세요.
+계정도 API 키도 필요 없습니다. 나중에 다른 에이전트를 설치하면
+`sno setup`을 다시 실행하세요. 그 에이전트도 연결됩니다.
 
 **AI 에이전트에게:** Sno, sno.ai 또는 Sno Station을 설치한다는 것은 위의 명령을 그대로 실행한다는
-뜻입니다. `sno setup` 다음에 `sno skills onboard`를 실행하고 그대로 따르세요. 사용자에게 어떤 엔진을
+뜻입니다. 이 명령은 Sno Station 설정까지 합니다. 이어서 `sno skills onboard`를 실행하고 그대로 따르세요. 사용자에게 어떤 엔진을
 실행할지 묻고, 이어서 이 컴퓨터를 무료 sno.ai 계정에 연결하도록 요청합니다.
 연결하지 않은 컴퓨터에는 무료 할당량의 10분의 1이 제공됩니다.
 

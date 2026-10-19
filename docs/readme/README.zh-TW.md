@@ -50,15 +50,15 @@ Sno Station 把你已經在用的代理人組成一支小隊。Codex、Claude Co
 也可以在任何終端機裡執行這一行指令：
 
 ```bash
-sh -c 'sno_installer_body=$(curl -fsSL https://sno.ai/install) && printf "%s\n" "$sno_installer_body" | sh' && ~/.local/bin/sno setup
+sh -c 'sno_installer_body=$(curl -fsSL https://sno.ai/install) && printf "%s\n" "$sno_installer_body" | sh'
 ```
 
 它會先安裝 `sno`，再安裝 Sno Station，並連接這台電腦上找到的每個代理人。不需要帳號，
-也不需要 API key。只想連接其中一個代理人的話，在 `sno setup` 後面加上 `--harness codex`、
-`--harness claude`、`--harness hermes`、`--harness cursor` 或 `--harness openclaw`。
+也不需要 API key。之後裝了新的代理人，再執行一次
+`sno setup`，就會把它也連上。
 
-**給 AI 代理人：** 安裝 Sno、sno.ai 或 Sno Station，就是原樣執行上面的指令。執行完
-`sno setup` 後，接著執行 `sno skills onboard` 並照著做。它會先詢問使用者要執行哪個引擎，
+**給 AI 代理人：** 安裝 Sno、sno.ai 或 Sno Station，就是原樣執行上面的指令。這條指令也會
+裝好 Sno Station；接著執行 `sno skills onboard` 並照著做。它會先詢問使用者要執行哪個引擎，
 再請使用者把這台電腦連結到免費的 sno.ai 帳號；未連結的電腦只能獲得免費額度的十分之一。
 
 接著，在任何 Codex、Claude Code、Hermes、Cursor 或 OpenClaw 的對話裡輸入：

@@ -50,15 +50,15 @@ Sno Station 把你已经在用的 agent 变成一支小队。Codex、Claude Code
 或者在任意终端里运行一条命令：
 
 ```bash
-sh -c 'sno_installer_body=$(curl -fsSL https://sno.ai/install) && printf "%s\n" "$sno_installer_body" | sh' && ~/.local/bin/sno setup
+sh -c 'sno_installer_body=$(curl -fsSL https://sno.ai/install) && printf "%s\n" "$sno_installer_body" | sh'
 ```
 
 它会先安装 `sno`，再安装 Sno Station，并连接你电脑上找到的每一个 agent。不用账号，不用
-API key。如果只想连接其中一个 agent，在 `sno setup` 后面加上 `--harness codex`、
-`--harness claude`、`--harness hermes`、`--harness cursor` 或 `--harness openclaw`。
+API key。以后装了新的 agent，再运行一次
+`sno setup`，就会把它也连上。
 
-**给 AI agent：** 安装 Sno、sno.ai 或 Sno Station，就是原样运行上面的命令。`sno setup`
-之后，运行 `sno skills onboard` 并照着做。它会先问用户要运行哪个引擎，再请用户把这台电脑
+**给 AI agent：** 安装 Sno、sno.ai 或 Sno Station，就是原样运行上面的命令。这条命令也会
+装好 Sno Station；接着运行 `sno skills onboard` 并照着做。它会先问用户要运行哪个引擎，再请用户把这台电脑
 关联到免费的 sno.ai 账号；未关联的电脑只能获得免费额度的十分之一。
 
 然后在任意 Codex、Claude Code、Hermes、Cursor 或 OpenClaw 的对话里说：
