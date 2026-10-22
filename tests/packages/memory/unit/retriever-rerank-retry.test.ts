@@ -76,6 +76,37 @@ afterEach(() => {
 });
 
 describe("rerank transient-failure retry (issue #222)", () => {
+	it("blends the local model's logit range with cosine while retaining the head's score slots", async () => {
+		const embedder = { scoreRelevance: async () => [10, 9, 11] } as never;
+		const retriever = createRetriever(noopStore, embedder, undefined, DEFAULT_RETRIEVAL_CONFIG) as unknown as MemoryRetrieverInternals;
+		const outcome = await retriever.rerankLocalModel("query", [candidate("first", 0.9), candidate("second", 0.8), candidate("third", 0.1)]);
+		expect(outcome.modelOrder).toEqual(["first", "third", "second"]);
+		expect(outcome.candidates.map((result) => result.score)).toEqual([0.9, 0.8, 0.1]);
+	});
+
+	it("preserves distinct positive model scores through source blending and final diversity", async () => {
+		// The high positive logits and competing source scores reproduce the saturation failure.
+		vi.stubGlobal("fetch", vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify([
+			{ index: 0, score: 9.5 }, { index: 1, score: 9.25 }, { index: 2, score: 8.1875 },
+		]), { status: 200, headers: { "content-type": "application/json" } })));
+		const vectors = new Map([
+			["first", new Float32Array([1, 0, 0])],
+			["gold", new Float32Array([1, 0, 0])],
+			["distractor", new Float32Array([0, 1, 0])],
+		]);
+		const retriever = createRetriever({ getVectorsByIds: () => vectors } as never, noopEmbedder, undefined, {
+			...DEFAULT_RETRIEVAL_CONFIG, rerank: "cross-encoder", rerankApiKey: "test-key",
+			rerankEndpoint: "http://127.0.0.1:9/rerank",
+		}) as unknown as MemoryRetrieverInternals;
+		const candidates = [candidate("first", 0.5), candidate("gold", 0.480465), candidate("distractor", 0.514725)]
+			.map((result) => ({ ...result, chunkId: result.entry.id }));
+		const outcome = await retriever.rerank("query", candidates, queryVector);
+		const final = retriever.applyScoringPipeline(outcome.candidates);
+		expect(outcome.fallback).toBeUndefined();
+		expect(outcome.candidates.every((result) => result.rerankScore === result.score)).toBe(true);
+		expect(final.map((result) => result.entry.id)).toEqual(["first", "gold", "distractor"]);
+	});
+
 	it("retries a socket reset and returns the reranked order without a fallback", async () => {
 		const fetchMock = vi
 			.fn<typeof fetch>()
