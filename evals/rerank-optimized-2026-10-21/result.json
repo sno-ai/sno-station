@@ -1,0 +1,2047 @@
+{
+  "measured_at_utc": "2026-10-21T23:22:55.173342+00:00",
+  "quality_host": {
+    "Architecture:": "x86_64",
+    "CPU(s):": "32",
+    "Model name:": "AMD EPYC 7F52 16-Core Processor",
+    "Core(s) per socket:": "16",
+    "Socket(s):": "1"
+  },
+  "models": {
+    "local": {
+      "upstream": "Horizon-Labs/multilingual-reranker-small",
+      "artifact": "sno-lab/multilingual-reranker-small-int8",
+      "revision": "ce76796ae42628f54f501271aeac16df8ecc8a6f",
+      "dtype": "q8",
+      "quality_threads": 1,
+      "mac_latency_threads": 4
+    },
+    "gpu": {
+      "model": "ettin-reranker-400m-v1",
+      "endpoint": "https://rt3-llm.sno.ai/rerank",
+      "native_request_limit": 50
+    }
+  },
+  "raw_artifact_directory": "/tmp/rerank-optimize-20261021",
+  "experiment": {
+    "start_utc": "2026-10-21T21:53:32.242146+00:00",
+    "models": [
+      "sno-lab/multilingual-reranker-small-int8",
+      "ettin-reranker-400m-v1"
+    ],
+    "candidate_caps": [
+      5,
+      10,
+      15,
+      20,
+      30,
+      40,
+      50,
+      64
+    ],
+    "initial_fused_weights": [
+      0
+    ],
+    "model_score_transforms": [
+      "sigmoid",
+      "minmax",
+      "rank"
+    ],
+    "model_blend_weights": [
+      0.0,
+      0.1,
+      0.2,
+      0.3,
+      0.4,
+      0.5,
+      0.6,
+      0.7,
+      0.8,
+      0.9,
+      1.0
+    ],
+    "source_scores": [
+      "cosine"
+    ],
+    "fit_split": "sorted conversation ids at positions 0,2,4,6,8",
+    "selection": [
+      "mean R@5 over languages",
+      "mean MRR@10",
+      "mean R@1",
+      "smaller candidate cap"
+    ],
+    "heldout_split": "other five conversations; do not use during selection",
+    "additional_dataset": "existing 20 LongMemEval pools, independent check with no tuning",
+    "postprocessing": "trace actual enabled production stages, including MMR with real embeddings",
+    "latency": "measure finalists only after bulk scoring finishes",
+    "production_code_changes": "proposal first; no live settings change",
+    "data_audit_correction": {
+      "reason": "Original fill-texts.py restored real lightweight retrieval hits but wrote unknown branch and fusion scores as zero; these are not model quality evidence.",
+      "filled_candidates": {
+        "en": 14323,
+        "zh": 12489,
+        "xl": 0
+      },
+      "verified_vector_recovery": "1/(1+sqrt(2-2*cosine)); max error below 4e-7 on stored positive vector scores; does not reconstruct branch membership or keyword scores.",
+      "safe_tuning": "Identical original lightweight 64 candidate set for both models; shortlist by complete cosine only; vary cap, model score transform and model/cosine blend. Invalid filled fusion/source values are not used for fitting or final selection.",
+      "source_score_effects": "Use fully observed candidate branch scores and unfilled cross-language pools; distinguish original replay from product end-to-end.",
+      "frozen_before_fit": true
+    },
+    "mmr_lambdas": [
+      0.3,
+      0.5,
+      0.7,
+      0.8,
+      0.9,
+      1.0
+    ],
+    "score_assignment_policies": [
+      "score_value: model/cosine blend for judged head; existing 0.8 source penalty for unjudged tail",
+      "rank_slots: local-model implementation: permute existing cosine score slots in judged head; retain tail"
+    ],
+    "batch_audit": {
+      "observation": "Product q8 scores change with length-sorted batch composition; sampled cap64-vs-cap15 matched 1254 English questions, 661 top5-order changes; median abs logit delta .1200, max1.3592.",
+      "final_validation": "After both configurations freeze, replay the selected local cap literally on held-out questions; never report subset scores as actual cap15 predictions. GPU final shortlist also sent as actual request, not just a full-pool subset.",
+      "heldout_note": "Previously reported raw scores have been seen; conversation split is an optimization split, not a pristine new independent test."
+    },
+    "postprocessing_verified_defaults": {
+      "mmrWindowOnly": false,
+      "temporalWeighting": false,
+      "lengthNormAnchor": 0,
+      "hardMinScore": 0,
+      "importance": 0.7,
+      "unjudged_penalty": 0.8
+    },
+    "embedding_audit": {
+      "documents": 11749,
+      "over_448_embedding_tokens": 0,
+      "max_embedding_tokens": 144,
+      "boundary": "Original LoCoMo per-turn memories are single chunks under the current product storage profile.",
+      "long_memory": {
+        "documents": 1412,
+        "over448": 0,
+        "max_embedding_tokens": 395
+      }
+    },
+    "budget_revision": {
+      "total_minutes": 90,
+      "operation_max_seconds": 300,
+      "reason": "Missing branch values and observed dynamic-quantization batch dependence require literal final inference; proposal and fair final metrics cannot reuse historical blended/subset outputs."
+    },
+    "native_debug": {
+      "actual_gpu_product_calls": 5,
+      "source_scores_complete": true,
+      "real_doc_vectors": true,
+      "finding": "Pure sigmoid logits alone do not repair MMR. On fixed training examples an evidence candidate at raw rank 2 is sent to final rank 44 by pure-sigmoid relevance with default MMR; raw-logit minmax then actual product MMR retains it at rank 2. This is a mechanism reproduction, not a global preferred configuration."
+    },
+    "native_local_debug": {
+      "actual_product_cases": 5,
+      "path": "rerankLightweight -> rerankLocalModel -> applyScoringPipeline with modelOrder",
+      "real_embeddings": true,
+      "model": "sno-lab/multilingual-reranker-small-int8",
+      "finding": "The common MMR stage can change the local model order; the fixed cap also prevents correcting evidence outside the first 15. No general local quality loss is inferred from five examples."
+    },
+    "parameter_scope": "Best observed configuration in the frozen finite search, not a claim of globally optimal models or all possible training/prompting/architectural changes.",
+    "final_call_note": "Search uses full64 cached logits as a computational proxy. Literal held-out finalists must be rerun because cap/order changes alter local q8 batch composition. All final reported metrics must use the literal predictions.",
+    "mmr_search_reason": "Before fitting, include both stronger and weaker diversity than default; do not presume the diversity stage is harmful.",
+    "embedding_similarity_dtype": "float64 multiplication of true float32 vectors, matching JS numeric accumulation",
+    "final_worker_timeouts": {
+      "backend": "gpu_15",
+      "worker_wall_limit_seconds": 240,
+      "workers": 4,
+      "reason": "Worker wall limit reached under concurrent bulk evaluation; completed outputs retained. This is not a production latency measurement.",
+      "completed_rows": [
+        389,
+        390,
+        389,
+        391
+      ],
+      "remaining_questions": 41,
+      "resume_ranges": [
+        {
+          "offset": 789,
+          "count": 11
+        },
+        {
+          "offset": 1190,
+          "count": 10
+        },
+        {
+          "offset": 1589,
+          "count": 11
+        },
+        {
+          "offset": 1991,
+          "count": 9
+        }
+      ]
+    }
+  },
+  "frozen_finalists": {
+    "frozen_utc": "2026-10-21T22:46:14.829552+00:00",
+    "configs": {
+      "local_best": {
+        "cap": 40,
+        "transform": "minmax",
+        "alpha": 0.5,
+        "policy": "rank_slots",
+        "mmr_lambda": 0.9,
+        "fit_R@5": 0.7167090754877015,
+        "fit_MRR": 0.5940491336483704,
+        "fit_R@1": 0.5042408821034775
+      },
+      "local_15": {
+        "cap": 15,
+        "transform": "minmax",
+        "alpha": 0.3,
+        "policy": "score_value",
+        "mmr_lambda": 0.8,
+        "fit_R@5": 0.6929601357082273,
+        "fit_MRR": 0.5761011147461529,
+        "fit_R@1": 0.48812553011026294
+      },
+      "gpu_best": {
+        "cap": 64,
+        "transform": "rank",
+        "alpha": 0.9,
+        "policy": "score_value",
+        "mmr_lambda": 0.9,
+        "fit_R@5": 0.7591178965224766,
+        "fit_MRR": 0.6423258545714016,
+        "fit_R@1": 0.5606446140797285
+      },
+      "gpu_15": {
+        "cap": 15,
+        "transform": "minmax",
+        "alpha": 0.5,
+        "policy": "score_value",
+        "mmr_lambda": 1.0,
+        "fit_R@5": 0.7133163698049194,
+        "fit_MRR": 0.6168990737374962,
+        "fit_R@1": 0.5466497031382528
+      }
+    }
+  },
+  "quality": {
+    "method": "Original evaluate.py score_all and metrics; original evidence labels; observed current-product scoring pipeline outputs.",
+    "finalists": {
+      "local_best": {
+        "configuration": {
+          "cap": 40,
+          "transform": "minmax",
+          "alpha": 0.5,
+          "policy": "rank_slots",
+          "mmr_lambda": 0.9,
+          "fit_R@5": 0.7167090754877015,
+          "fit_MRR": 0.5940491336483704,
+          "fit_R@1": 0.5042408821034775
+        },
+        "observed_product_post_rows": 2270,
+        "datasets": {
+          "en": {
+            "questions": 750,
+            "metrics": {
+              "R@1": 0.5426666666666666,
+              "R@3": 0.7053333333333334,
+              "R@5": 0.7613333333333333,
+              "R@10": 0.7973333333333333,
+              "MRR": 0.6329820105820102,
+              "nDCG": 0.6347505405114428
+            },
+            "before_final_product_pipeline": {
+              "R@1": 0.5426666666666666,
+              "R@3": 0.7053333333333334,
+              "R@5": 0.7573333333333333,
+              "R@10": 0.7946666666666666,
+              "MRR": 0.6340523809523808,
+              "nDCG": 0.6355128086397613
+            },
+            "per_conversation": {
+              "conv-30": {
+                "R@1": 0.6172839506172839,
+                "R@3": 0.7654320987654321,
+                "R@5": 0.7777777777777778,
+                "R@10": 0.8024691358024691,
+                "MRR": 0.6890260631001374,
+                "nDCG": 0.7025306396739682
+              },
+              "conv-42": {
+                "R@1": 0.5125628140703518,
+                "R@3": 0.678391959798995,
+                "R@5": 0.7286432160804021,
+                "R@10": 0.7788944723618091,
+                "MRR": 0.6018884103054959,
+                "nDCG": 0.6122704368126166
+              },
+              "conv-44": {
+                "R@1": 0.4715447154471545,
+                "R@3": 0.6260162601626016,
+                "R@5": 0.7154471544715447,
+                "R@10": 0.7398373983739838,
+                "MRR": 0.566021422118983,
+                "nDCG": 0.5548270082349755
+              },
+              "conv-48": {
+                "R@1": 0.5759162303664922,
+                "R@3": 0.7591623036649214,
+                "R@5": 0.837696335078534,
+                "R@10": 0.8848167539267016,
+                "MRR": 0.6849247901603922,
+                "nDCG": 0.6881327142637677
+              },
+              "conv-50": {
+                "R@1": 0.5576923076923077,
+                "R@3": 0.7051282051282052,
+                "R@5": 0.7371794871794872,
+                "R@10": 0.7564102564102564,
+                "MRR": 0.6327457264957264,
+                "nDCG": 0.625891257737166
+              }
+            },
+            "post_ms_median": 4.417107499999929
+          },
+          "zh": {
+            "questions": 750,
+            "metrics": {
+              "R@1": 0.47333333333333333,
+              "R@3": 0.5933333333333334,
+              "R@5": 0.6186666666666667,
+              "R@10": 0.6386666666666667,
+              "MRR": 0.5363656084656083,
+              "nDCG": 0.5208876008011566
+            },
+            "before_final_product_pipeline": {
+              "R@1": 0.47333333333333333,
+              "R@3": 0.596,
+              "R@5": 0.6186666666666667,
+              "R@10": 0.64,
+              "MRR": 0.5373640211640209,
+              "nDCG": 0.5218926610698066
+            },
+            "per_conversation": {
+              "conv-30": {
+                "R@1": 0.6172839506172839,
+                "R@3": 0.7777777777777778,
+                "R@5": 0.7777777777777778,
+                "R@10": 0.7901234567901234,
+                "MRR": 0.6887860082304528,
+                "nDCG": 0.6882560074963764
+              },
+              "conv-42": {
+                "R@1": 0.4623115577889447,
+                "R@3": 0.5376884422110553,
+                "R@5": 0.5778894472361809,
+                "R@10": 0.6130653266331658,
+                "MRR": 0.5107741086384303,
+                "nDCG": 0.49631814700756804
+              },
+              "conv-44": {
+                "R@1": 0.3902439024390244,
+                "R@3": 0.4959349593495935,
+                "R@5": 0.5203252032520326,
+                "R@10": 0.5284552845528455,
+                "MRR": 0.44302168021680216,
+                "nDCG": 0.42469710218860396
+              },
+              "conv-48": {
+                "R@1": 0.5078534031413613,
+                "R@3": 0.6387434554973822,
+                "R@5": 0.6701570680628273,
+                "R@10": 0.6910994764397905,
+                "MRR": 0.5761115266350868,
+                "nDCG": 0.5590516444262774
+              },
+              "conv-50": {
+                "R@1": 0.4358974358974359,
+                "R@3": 0.5897435897435898,
+                "R@5": 0.6025641025641025,
+                "R@10": 0.6153846153846154,
+                "MRR": 0.5148046398046399,
+                "nDCG": 0.4944425966957519
+              }
+            },
+            "post_ms_median": 4.629369499999484
+          },
+          "xl": {
+            "questions": 750,
+            "metrics": {
+              "R@1": 0.488,
+              "R@3": 0.6466666666666666,
+              "R@5": 0.7,
+              "R@10": 0.7586666666666667,
+              "MRR": 0.5780920634920631,
+              "nDCG": 0.5855132010486853
+            },
+            "before_final_product_pipeline": {
+              "R@1": 0.488,
+              "R@3": 0.6546666666666666,
+              "R@5": 0.7013333333333334,
+              "R@10": 0.7586666666666667,
+              "MRR": 0.5808058201058199,
+              "nDCG": 0.5877694020641151
+            },
+            "per_conversation": {
+              "conv-30": {
+                "R@1": 0.5679012345679012,
+                "R@3": 0.6790123456790124,
+                "R@5": 0.7407407407407407,
+                "R@10": 0.7654320987654321,
+                "MRR": 0.6350137174211249,
+                "nDCG": 0.647342107118039
+              },
+              "conv-42": {
+                "R@1": 0.44221105527638194,
+                "R@3": 0.5778894472361809,
+                "R@5": 0.6432160804020101,
+                "R@10": 0.6984924623115578,
+                "MRR": 0.5233768046582118,
+                "nDCG": 0.5340918395620909
+              },
+              "conv-44": {
+                "R@1": 0.42276422764227645,
+                "R@3": 0.5853658536585366,
+                "R@5": 0.6341463414634146,
+                "R@10": 0.7235772357723578,
+                "MRR": 0.5174958059104401,
+                "nDCG": 0.5214516730803519
+              },
+              "conv-48": {
+                "R@1": 0.5235602094240838,
+                "R@3": 0.7120418848167539,
+                "R@5": 0.7643979057591623,
+                "R@10": 0.8272251308900523,
+                "MRR": 0.6286711543256046,
+                "nDCG": 0.6347247107013482
+              },
+              "conv-50": {
+                "R@1": 0.5128205128205128,
+                "R@3": 0.6858974358974359,
+                "R@5": 0.7243589743589743,
+                "R@10": 0.7756410256410257,
+                "MRR": 0.604184472934473,
+                "nDCG": 0.6092624263093305
+              }
+            },
+            "post_ms_median": 5.259757499999978
+          },
+          "lme": {
+            "questions": 20,
+            "metrics": {
+              "R@1": 0.95,
+              "R@3": 1.0,
+              "R@5": 1.0,
+              "R@10": 1.0,
+              "MRR": 0.975,
+              "nDCG": 0.8479395701447485
+            },
+            "before_final_product_pipeline": {
+              "R@1": 0.95,
+              "R@3": 1.0,
+              "R@5": 1.0,
+              "R@10": 1.0,
+              "MRR": 0.9666666666666668,
+              "nDCG": 0.858995333779727
+            },
+            "per_conversation": {
+              "1d4da289": {
+                "R@1": 1.0,
+                "R@3": 1.0,
+                "R@5": 1.0,
+                "R@10": 1.0,
+                "MRR": 1.0,
+                "nDCG": 1.0
+              },
+              "21436231": {
+                "R@1": 1.0,
+                "R@3": 1.0,
+                "R@5": 1.0,
+                "R@10": 1.0,
+                "MRR": 1.0,
+                "nDCG": 0.8643145546088337
+              },
+              "41698283": {
+                "R@1": 1.0,
+                "R@3": 1.0,
+                "R@5": 1.0,
+                "R@10": 1.0,
+                "MRR": 1.0,
+                "nDCG": 0.7529694065526481
+              },
+              "4388e9dd": {
+                "R@1": 1.0,
+                "R@3": 1.0,
+                "R@5": 1.0,
+                "R@10": 1.0,
+                "MRR": 1.0,
+                "nDCG": 0.9828920819566879
+              },
+              "4dfccbf7": {
+                "R@1": 1.0,
+                "R@3": 1.0,
+                "R@5": 1.0,
+                "R@10": 1.0,
+                "MRR": 1.0,
+                "nDCG": 1.0
+              },
+              "545bd2b5": {
+                "R@1": 1.0,
+                "R@3": 1.0,
+                "R@5": 1.0,
+                "R@10": 1.0,
+                "MRR": 1.0,
+                "nDCG": 0.7526136409516658
+              },
+              "5c40ec5b": {
+                "R@1": 1.0,
+                "R@3": 1.0,
+                "R@5": 1.0,
+                "R@10": 1.0,
+                "MRR": 1.0,
+                "nDCG": 0.8932076516505887
+              },
+              "61f8c8f8": {
+                "R@1": 1.0,
+                "R@3": 1.0,
+                "R@5": 1.0,
+                "R@10": 1.0,
+                "MRR": 1.0,
+                "nDCG": 1.0
+              },
+              "7e974930": {
+                "R@1": 1.0,
+                "R@3": 1.0,
+                "R@5": 1.0,
+                "R@10": 1.0,
+                "MRR": 1.0,
+                "nDCG": 0.9305687780632227
+              },
+              "8a2466db": {
+                "R@1": 1.0,
+                "R@3": 1.0,
+                "R@5": 1.0,
+                "R@10": 1.0,
+                "MRR": 1.0,
+                "nDCG": 0.5493640533376876
+              },
+              "a89d7624": {
+                "R@1": 1.0,
+                "R@3": 1.0,
+                "R@5": 1.0,
+                "R@10": 1.0,
+                "MRR": 1.0,
+                "nDCG": 0.7227265726449519
+              },
+              "e25c3b8d": {
+                "R@1": 1.0,
+                "R@3": 1.0,
+                "R@5": 1.0,
+                "R@10": 1.0,
+                "MRR": 1.0,
+                "nDCG": 1.0
+              },
+              "e47becba": {
+                "R@1": 1.0,
+                "R@3": 1.0,
+                "R@5": 1.0,
+                "R@10": 1.0,
+                "MRR": 1.0,
+                "nDCG": 0.6508205185601091
+              },
+              "e4e14d04": {
+                "R@1": 1.0,
+                "R@3": 1.0,
+                "R@5": 1.0,
+                "R@10": 1.0,
+                "MRR": 1.0,
+                "nDCG": 1.0
+              },
+              "gpt4_2655b836": {
+                "R@1": 1.0,
+                "R@3": 1.0,
+                "R@5": 1.0,
+                "R@10": 1.0,
+                "MRR": 1.0,
+                "nDCG": 0.933745776545611
+              },
+              "gpt4_2f584639": {
+                "R@1": 1.0,
+                "R@3": 1.0,
+                "R@5": 1.0,
+                "R@10": 1.0,
+                "MRR": 1.0,
+                "nDCG": 1.0
+              },
+              "gpt4_31ff4165": {
+                "R@1": 1.0,
+                "R@3": 1.0,
+                "R@5": 1.0,
+                "R@10": 1.0,
+                "MRR": 1.0,
+                "nDCG": 1.0
+              },
+              "gpt4_68e94287": {
+                "R@1": 1.0,
+                "R@3": 1.0,
+                "R@5": 1.0,
+                "R@10": 1.0,
+                "MRR": 1.0,
+                "nDCG": 0.6238470455881189
+              },
+              "gpt4_f2262a51": {
+                "R@1": 0.0,
+                "R@3": 1.0,
+                "R@5": 1.0,
+                "R@10": 1.0,
+                "MRR": 0.5,
+                "nDCG": 0.4912596920895758
+              },
+              "gpt4_f49edff3": {
+                "R@1": 1.0,
+                "R@3": 1.0,
+                "R@5": 1.0,
+                "R@10": 1.0,
+                "MRR": 1.0,
+                "nDCG": 0.8104616303452686
+              }
+            },
+            "post_ms_median": 6.367846000000043
+          }
+        }
+      },
+      "local_15": {
+        "configuration": {
+          "cap": 15,
+          "transform": "minmax",
+          "alpha": 0.3,
+          "policy": "score_value",
+          "mmr_lambda": 0.8,
+          "fit_R@5": 0.6929601357082273,
+          "fit_MRR": 0.5761011147461529,
+          "fit_R@1": 0.48812553011026294
+        },
+        "observed_product_post_rows": 2270,
+        "datasets": {
+          "en": {
+            "questions": 750,
+            "metrics": {
+              "R@1": 0.52,
+              "R@3": 0.688,
+              "R@5": 0.7373333333333333,
+              "R@10": 0.7693333333333333,
+              "MRR": 0.6146513227513226,
+              "nDCG": 0.6145334317784449
+            },
+            "before_final_product_pipeline": {
+              "R@1": 0.52,
+              "R@3": 0.688,
+              "R@5": 0.732,
+              "R@10": 0.7693333333333333,
+              "MRR": 0.6136105820105819,
+              "nDCG": 0.6127392484839046
+            },
+            "per_conversation": {
+              "conv-30": {
+                "R@1": 0.5925925925925926,
+                "R@3": 0.7283950617283951,
+                "R@5": 0.7283950617283951,
+                "R@10": 0.7407407407407407,
+                "MRR": 0.6596707818930042,
+                "nDCG": 0.6660599669334248
+              },
+              "conv-42": {
+                "R@1": 0.47738693467336685,
+                "R@3": 0.6381909547738693,
+                "R@5": 0.6934673366834171,
+                "R@10": 0.7286432160804021,
+                "MRR": 0.5658590571907155,
+                "nDCG": 0.5761036970291817
+              },
+              "conv-44": {
+                "R@1": 0.45528455284552843,
+                "R@3": 0.6260162601626016,
+                "R@5": 0.6991869918699187,
+                "R@10": 0.7235772357723578,
+                "MRR": 0.5578913408181702,
+                "nDCG": 0.5475499442940257
+              },
+              "conv-48": {
+                "R@1": 0.5549738219895288,
+                "R@3": 0.7539267015706806,
+                "R@5": 0.8219895287958116,
+                "R@10": 0.8534031413612565,
+                "MRR": 0.6719230449596942,
+                "nDCG": 0.6686153607466737
+              },
+              "conv-50": {
+                "R@1": 0.5448717948717948,
+                "R@3": 0.6987179487179487,
+                "R@5": 0.7243589743589743,
+                "R@10": 0.7692307692307693,
+                "MRR": 0.6281491656491657,
+                "nDCG": 0.6234000240553758
+              }
+            },
+            "post_ms_median": 4.663295999999946
+          },
+          "zh": {
+            "questions": 750,
+            "metrics": {
+              "R@1": 0.46,
+              "R@3": 0.588,
+              "R@5": 0.608,
+              "R@10": 0.6306666666666667,
+              "MRR": 0.5256619047619046,
+              "nDCG": 0.5101645266178547
+            },
+            "before_final_product_pipeline": {
+              "R@1": 0.46,
+              "R@3": 0.5893333333333334,
+              "R@5": 0.6106666666666667,
+              "R@10": 0.6293333333333333,
+              "MRR": 0.5260142857142855,
+              "nDCG": 0.510228161736821
+            },
+            "per_conversation": {
+              "conv-30": {
+                "R@1": 0.5925925925925926,
+                "R@3": 0.7654320987654321,
+                "R@5": 0.7777777777777778,
+                "R@10": 0.8024691358024691,
+                "MRR": 0.6747256515775035,
+                "nDCG": 0.6824274737701812
+              },
+              "conv-42": {
+                "R@1": 0.4371859296482412,
+                "R@3": 0.5175879396984925,
+                "R@5": 0.5527638190954773,
+                "R@10": 0.592964824120603,
+                "MRR": 0.4876306133843823,
+                "nDCG": 0.4733580673564589
+              },
+              "conv-44": {
+                "R@1": 0.3902439024390244,
+                "R@3": 0.5121951219512195,
+                "R@5": 0.5203252032520326,
+                "R@10": 0.5284552845528455,
+                "MRR": 0.4472319008904375,
+                "nDCG": 0.42075470384220115
+              },
+              "conv-48": {
+                "R@1": 0.5026178010471204,
+                "R@3": 0.643979057591623,
+                "R@5": 0.6649214659685864,
+                "R@10": 0.6858638743455497,
+                "MRR": 0.5731446854483503,
+                "nDCG": 0.5549118807630444
+              },
+              "conv-50": {
+                "R@1": 0.4230769230769231,
+                "R@3": 0.5769230769230769,
+                "R@5": 0.5897435897435898,
+                "R@10": 0.6025641025641025,
+                "MRR": 0.5004807692307693,
+                "nDCG": 0.48338151529319534
+              }
+            },
+            "post_ms_median": 4.382095000000163
+          },
+          "xl": {
+            "questions": 750,
+            "metrics": {
+              "R@1": 0.46,
+              "R@3": 0.6026666666666667,
+              "R@5": 0.6626666666666666,
+              "R@10": 0.7053333333333334,
+              "MRR": 0.5436867724867723,
+              "nDCG": 0.5458019558814197
+            },
+            "before_final_product_pipeline": {
+              "R@1": 0.46,
+              "R@3": 0.6053333333333333,
+              "R@5": 0.6613333333333333,
+              "R@10": 0.704,
+              "MRR": 0.5448661375661374,
+              "nDCG": 0.5459195148613584
+            },
+            "per_conversation": {
+              "conv-30": {
+                "R@1": 0.5432098765432098,
+                "R@3": 0.6666666666666666,
+                "R@5": 0.7160493827160493,
+                "R@10": 0.7283950617283951,
+                "MRR": 0.6119341563786008,
+                "nDCG": 0.6181182985529646
+              },
+              "conv-42": {
+                "R@1": 0.4020100502512563,
+                "R@3": 0.5376884422110553,
+                "R@5": 0.6080402010050251,
+                "R@10": 0.6432160804020101,
+                "MRR": 0.48301028954295294,
+                "nDCG": 0.4908356307662072
+              },
+              "conv-44": {
+                "R@1": 0.3821138211382114,
+                "R@3": 0.5284552845528455,
+                "R@5": 0.6097560975609756,
+                "R@10": 0.6747967479674797,
+                "MRR": 0.47694863853400443,
+                "nDCG": 0.47604207050124764
+              },
+              "conv-48": {
+                "R@1": 0.5026178010471204,
+                "R@3": 0.6596858638743456,
+                "R@5": 0.7172774869109948,
+                "R@10": 0.7696335078534031,
+                "MRR": 0.5919907753677388,
+                "nDCG": 0.594250139786852
+              },
+              "conv-50": {
+                "R@1": 0.5,
+                "R@3": 0.6410256410256411,
+                "R@5": 0.6794871794871795,
+                "R@10": 0.717948717948718,
+                "MRR": 0.5791310541310541,
+                "nDCG": 0.5740554027875432
+              }
+            },
+            "post_ms_median": 4.384894999999688
+          },
+          "lme": {
+            "questions": 20,
+            "metrics": {
+              "R@1": 0.95,
+              "R@3": 1.0,
+              "R@5": 1.0,
+              "R@10": 1.0,
+              "MRR": 0.9666666666666668,
+              "nDCG": 0.8136130647146107
+            },
+            "before_final_product_pipeline": {
+              "R@1": 0.95,
+              "R@3": 1.0,
+              "R@5": 1.0,
+              "R@10": 1.0,
+              "MRR": 0.9666666666666668,
+              "nDCG": 0.8234229639311573
+            },
+            "per_conversation": {
+              "1d4da289": {
+                "R@1": 1.0,
+                "R@3": 1.0,
+                "R@5": 1.0,
+                "R@10": 1.0,
+                "MRR": 1.0,
+                "nDCG": 1.0
+              },
+              "21436231": {
+                "R@1": 1.0,
+                "R@3": 1.0,
+                "R@5": 1.0,
+                "R@10": 1.0,
+                "MRR": 1.0,
+                "nDCG": 0.8006937664098819
+              },
+              "41698283": {
+                "R@1": 1.0,
+                "R@3": 1.0,
+                "R@5": 1.0,
+                "R@10": 1.0,
+                "MRR": 1.0,
+                "nDCG": 0.7353797772725617
+              },
+              "4388e9dd": {
+                "R@1": 1.0,
+                "R@3": 1.0,
+                "R@5": 1.0,
+                "R@10": 1.0,
+                "MRR": 1.0,
+                "nDCG": 1.0
+              },
+              "4dfccbf7": {
+                "R@1": 1.0,
+                "R@3": 1.0,
+                "R@5": 1.0,
+                "R@10": 1.0,
+                "MRR": 1.0,
+                "nDCG": 1.0
+              },
+              "545bd2b5": {
+                "R@1": 1.0,
+                "R@3": 1.0,
+                "R@5": 1.0,
+                "R@10": 1.0,
+                "MRR": 1.0,
+                "nDCG": 0.7456919575934261
+              },
+              "5c40ec5b": {
+                "R@1": 1.0,
+                "R@3": 1.0,
+                "R@5": 1.0,
+                "R@10": 1.0,
+                "MRR": 1.0,
+                "nDCG": 0.9020870746500321
+              },
+              "61f8c8f8": {
+                "R@1": 1.0,
+                "R@3": 1.0,
+                "R@5": 1.0,
+                "R@10": 1.0,
+                "MRR": 1.0,
+                "nDCG": 1.0
+              },
+              "7e974930": {
+                "R@1": 1.0,
+                "R@3": 1.0,
+                "R@5": 1.0,
+                "R@10": 1.0,
+                "MRR": 1.0,
+                "nDCG": 0.8630152897016882
+              },
+              "8a2466db": {
+                "R@1": 1.0,
+                "R@3": 1.0,
+                "R@5": 1.0,
+                "R@10": 1.0,
+                "MRR": 1.0,
+                "nDCG": 0.5547710914144913
+              },
+              "a89d7624": {
+                "R@1": 1.0,
+                "R@3": 1.0,
+                "R@5": 1.0,
+                "R@10": 1.0,
+                "MRR": 1.0,
+                "nDCG": 0.7227265726449519
+              },
+              "e25c3b8d": {
+                "R@1": 1.0,
+                "R@3": 1.0,
+                "R@5": 1.0,
+                "R@10": 1.0,
+                "MRR": 1.0,
+                "nDCG": 1.0
+              },
+              "e47becba": {
+                "R@1": 1.0,
+                "R@3": 1.0,
+                "R@5": 1.0,
+                "R@10": 1.0,
+                "MRR": 1.0,
+                "nDCG": 0.46927872602275644
+              },
+              "e4e14d04": {
+                "R@1": 1.0,
+                "R@3": 1.0,
+                "R@5": 1.0,
+                "R@10": 1.0,
+                "MRR": 1.0,
+                "nDCG": 0.933745776545611
+              },
+              "gpt4_2655b836": {
+                "R@1": 1.0,
+                "R@3": 1.0,
+                "R@5": 1.0,
+                "R@10": 1.0,
+                "MRR": 1.0,
+                "nDCG": 0.9266360779006398
+              },
+              "gpt4_2f584639": {
+                "R@1": 1.0,
+                "R@3": 1.0,
+                "R@5": 1.0,
+                "R@10": 1.0,
+                "MRR": 1.0,
+                "nDCG": 0.8006937664098819
+              },
+              "gpt4_31ff4165": {
+                "R@1": 1.0,
+                "R@3": 1.0,
+                "R@5": 1.0,
+                "R@10": 1.0,
+                "MRR": 1.0,
+                "nDCG": 0.9363792118010481
+              },
+              "gpt4_68e94287": {
+                "R@1": 1.0,
+                "R@3": 1.0,
+                "R@5": 1.0,
+                "R@10": 1.0,
+                "MRR": 1.0,
+                "nDCG": 0.6238470455881189
+              },
+              "gpt4_f2262a51": {
+                "R@1": 0.0,
+                "R@3": 1.0,
+                "R@5": 1.0,
+                "R@10": 1.0,
+                "MRR": 0.3333333333333333,
+                "nDCG": 0.4468535299918563
+              },
+              "gpt4_f49edff3": {
+                "R@1": 1.0,
+                "R@3": 1.0,
+                "R@5": 1.0,
+                "R@10": 1.0,
+                "MRR": 1.0,
+                "nDCG": 0.8104616303452686
+              }
+            },
+            "post_ms_median": 4.135416999999961
+          }
+        }
+      },
+      "gpu_best": {
+        "configuration": {
+          "cap": 64,
+          "transform": "rank",
+          "alpha": 0.9,
+          "policy": "score_value",
+          "mmr_lambda": 0.9,
+          "fit_R@5": 0.7591178965224766,
+          "fit_MRR": 0.6423258545714016,
+          "fit_R@1": 0.5606446140797285
+        },
+        "observed_product_post_rows": 2270,
+        "datasets": {
+          "en": {
+            "questions": 750,
+            "metrics": {
+              "R@1": 0.6333333333333333,
+              "R@3": 0.7733333333333333,
+              "R@5": 0.8053333333333333,
+              "R@10": 0.824,
+              "MRR": 0.7054698412698409,
+              "nDCG": 0.6946498468519577
+            },
+            "before_final_product_pipeline": {
+              "R@1": 0.6333333333333333,
+              "R@3": 0.772,
+              "R@5": 0.8066666666666666,
+              "R@10": 0.824,
+              "MRR": 0.7066809523809523,
+              "nDCG": 0.6957734580838225
+            },
+            "per_conversation": {
+              "conv-30": {
+                "R@1": 0.6790123456790124,
+                "R@3": 0.8271604938271605,
+                "R@5": 0.8271604938271605,
+                "R@10": 0.8271604938271605,
+                "MRR": 0.7448559670781894,
+                "nDCG": 0.7495956355867145
+              },
+              "conv-42": {
+                "R@1": 0.628140703517588,
+                "R@3": 0.7487437185929648,
+                "R@5": 0.7889447236180904,
+                "R@10": 0.8140703517587939,
+                "MRR": 0.6951483608518786,
+                "nDCG": 0.6922503583083371
+              },
+              "conv-44": {
+                "R@1": 0.5365853658536586,
+                "R@3": 0.7073170731707317,
+                "R@5": 0.7317073170731707,
+                "R@10": 0.7479674796747967,
+                "MRR": 0.6208672086720868,
+                "nDCG": 0.592250930781691
+              },
+              "conv-48": {
+                "R@1": 0.7015706806282722,
+                "R@3": 0.8324607329842932,
+                "R@5": 0.8743455497382199,
+                "R@10": 0.8900523560209425,
+                "MRR": 0.7721266517078034,
+                "nDCG": 0.7522155594815472
+              },
+              "conv-50": {
+                "R@1": 0.6089743589743589,
+                "R@3": 0.7564102564102564,
+                "R@5": 0.7884615384615384,
+                "R@10": 0.8141025641025641,
+                "MRR": 0.6832799145299145,
+                "nDCG": 0.6794376987561633
+              }
+            },
+            "post_ms_median": 4.452143500000375
+          },
+          "zh": {
+            "questions": 750,
+            "metrics": {
+              "R@1": 0.47733333333333333,
+              "R@3": 0.5946666666666667,
+              "R@5": 0.6133333333333333,
+              "R@10": 0.6506666666666666,
+              "MRR": 0.5408312169312165,
+              "nDCG": 0.5264224061288594
+            },
+            "before_final_product_pipeline": {
+              "R@1": 0.47733333333333333,
+              "R@3": 0.5933333333333334,
+              "R@5": 0.6133333333333333,
+              "R@10": 0.6506666666666666,
+              "MRR": 0.5402518518518514,
+              "nDCG": 0.5262474248569492
+            },
+            "per_conversation": {
+              "conv-30": {
+                "R@1": 0.6049382716049383,
+                "R@3": 0.7160493827160493,
+                "R@5": 0.7283950617283951,
+                "R@10": 0.7777777777777778,
+                "MRR": 0.6629972565157751,
+                "nDCG": 0.6668277831555178
+              },
+              "conv-42": {
+                "R@1": 0.46733668341708545,
+                "R@3": 0.5678391959798995,
+                "R@5": 0.5879396984924623,
+                "R@10": 0.6331658291457286,
+                "MRR": 0.5238733349286114,
+                "nDCG": 0.513466913111137
+              },
+              "conv-44": {
+                "R@1": 0.3983739837398374,
+                "R@3": 0.4959349593495935,
+                "R@5": 0.5284552845528455,
+                "R@10": 0.5447154471544715,
+                "MRR": 0.4578010065814944,
+                "nDCG": 0.43147724082266076
+              },
+              "conv-48": {
+                "R@1": 0.518324607329843,
+                "R@3": 0.643979057591623,
+                "R@5": 0.6649214659685864,
+                "R@10": 0.6963350785340314,
+                "MRR": 0.5863625031164298,
+                "nDCG": 0.5633796374735973
+              },
+              "conv-50": {
+                "R@1": 0.4358974358974359,
+                "R@3": 0.5833333333333334,
+                "R@5": 0.5897435897435898,
+                "R@10": 0.6346153846153846,
+                "MRR": 0.5087505087505088,
+                "nDCG": 0.4996578658544028
+              }
+            },
+            "post_ms_median": 4.743834000000334
+          },
+          "xl": {
+            "questions": 750,
+            "metrics": {
+              "R@1": 0.5493333333333333,
+              "R@3": 0.7133333333333334,
+              "R@5": 0.7706666666666667,
+              "R@10": 0.8106666666666666,
+              "MRR": 0.6399534391534386,
+              "nDCG": 0.6463100752021088
+            },
+            "before_final_product_pipeline": {
+              "R@1": 0.5493333333333333,
+              "R@3": 0.7173333333333334,
+              "R@5": 0.7733333333333333,
+              "R@10": 0.8093333333333333,
+              "MRR": 0.6424142857142852,
+              "nDCG": 0.6489329689474822
+            },
+            "per_conversation": {
+              "conv-30": {
+                "R@1": 0.5432098765432098,
+                "R@3": 0.7160493827160493,
+                "R@5": 0.7777777777777778,
+                "R@10": 0.8024691358024691,
+                "MRR": 0.6341563786008232,
+                "nDCG": 0.6522412097240077
+              },
+              "conv-42": {
+                "R@1": 0.5326633165829145,
+                "R@3": 0.6633165829145728,
+                "R@5": 0.7437185929648241,
+                "R@10": 0.7788944723618091,
+                "MRR": 0.6115398420674804,
+                "nDCG": 0.6203596573964174
+              },
+              "conv-44": {
+                "R@1": 0.4878048780487805,
+                "R@3": 0.7235772357723578,
+                "R@5": 0.7723577235772358,
+                "R@10": 0.8130081300813008,
+                "MRR": 0.612059620596206,
+                "nDCG": 0.6136967989908727
+              },
+              "conv-48": {
+                "R@1": 0.5968586387434555,
+                "R@3": 0.743455497382199,
+                "R@5": 0.806282722513089,
+                "R@10": 0.8534031413612565,
+                "MRR": 0.682973905094324,
+                "nDCG": 0.6842182335971586
+              },
+              "conv-50": {
+                "R@1": 0.5641025641025641,
+                "R@3": 0.7307692307692307,
+                "R@5": 0.7564102564102564,
+                "R@10": 0.8012820512820513,
+                "MRR": 0.6485297110297109,
+                "nDCG": 0.6556349852507363
+              }
+            },
+            "post_ms_median": 4.38751000000002
+          },
+          "lme": {
+            "questions": 20,
+            "metrics": {
+              "R@1": 0.95,
+              "R@3": 1.0,
+              "R@5": 1.0,
+              "R@10": 1.0,
+              "MRR": 0.975,
+              "nDCG": 0.8561045103938382
+            },
+            "before_final_product_pipeline": {
+              "R@1": 0.95,
+              "R@3": 1.0,
+              "R@5": 1.0,
+              "R@10": 1.0,
+              "MRR": 0.9666666666666668,
+              "nDCG": 0.8667445276797381
+            },
+            "per_conversation": {
+              "1d4da289": {
+                "R@1": 1.0,
+                "R@3": 1.0,
+                "R@5": 1.0,
+                "R@10": 1.0,
+                "MRR": 1.0,
+                "nDCG": 1.0
+              },
+              "21436231": {
+                "R@1": 1.0,
+                "R@3": 1.0,
+                "R@5": 1.0,
+                "R@10": 1.0,
+                "MRR": 1.0,
+                "nDCG": 0.7273298443105218
+              },
+              "41698283": {
+                "R@1": 1.0,
+                "R@3": 1.0,
+                "R@5": 1.0,
+                "R@10": 1.0,
+                "MRR": 1.0,
+                "nDCG": 0.6429424283490954
+              },
+              "4388e9dd": {
+                "R@1": 1.0,
+                "R@3": 1.0,
+                "R@5": 1.0,
+                "R@10": 1.0,
+                "MRR": 1.0,
+                "nDCG": 0.9047172294870751
+              },
+              "4dfccbf7": {
+                "R@1": 1.0,
+                "R@3": 1.0,
+                "R@5": 1.0,
+                "R@10": 1.0,
+                "MRR": 1.0,
+                "nDCG": 1.0
+              },
+              "545bd2b5": {
+                "R@1": 1.0,
+                "R@3": 1.0,
+                "R@5": 1.0,
+                "R@10": 1.0,
+                "MRR": 1.0,
+                "nDCG": 0.8534811121179371
+              },
+              "5c40ec5b": {
+                "R@1": 1.0,
+                "R@3": 1.0,
+                "R@5": 1.0,
+                "R@10": 1.0,
+                "MRR": 1.0,
+                "nDCG": 0.9020870746500321
+              },
+              "61f8c8f8": {
+                "R@1": 1.0,
+                "R@3": 1.0,
+                "R@5": 1.0,
+                "R@10": 1.0,
+                "MRR": 1.0,
+                "nDCG": 0.9363792118010481
+              },
+              "7e974930": {
+                "R@1": 1.0,
+                "R@3": 1.0,
+                "R@5": 1.0,
+                "R@10": 1.0,
+                "MRR": 1.0,
+                "nDCG": 0.9363792118010481
+              },
+              "8a2466db": {
+                "R@1": 1.0,
+                "R@3": 1.0,
+                "R@5": 1.0,
+                "R@10": 1.0,
+                "MRR": 1.0,
+                "nDCG": 0.6238470455881189
+              },
+              "a89d7624": {
+                "R@1": 1.0,
+                "R@3": 1.0,
+                "R@5": 1.0,
+                "R@10": 1.0,
+                "MRR": 1.0,
+                "nDCG": 0.8435378753444459
+              },
+              "e25c3b8d": {
+                "R@1": 1.0,
+                "R@3": 1.0,
+                "R@5": 1.0,
+                "R@10": 1.0,
+                "MRR": 1.0,
+                "nDCG": 1.0
+              },
+              "e47becba": {
+                "R@1": 1.0,
+                "R@3": 1.0,
+                "R@5": 1.0,
+                "R@10": 1.0,
+                "MRR": 1.0,
+                "nDCG": 0.6713860725233041
+              },
+              "e4e14d04": {
+                "R@1": 1.0,
+                "R@3": 1.0,
+                "R@5": 1.0,
+                "R@10": 1.0,
+                "MRR": 1.0,
+                "nDCG": 1.0
+              },
+              "gpt4_2655b836": {
+                "R@1": 1.0,
+                "R@3": 1.0,
+                "R@5": 1.0,
+                "R@10": 1.0,
+                "MRR": 1.0,
+                "nDCG": 0.8701249883466592
+              },
+              "gpt4_2f584639": {
+                "R@1": 1.0,
+                "R@3": 1.0,
+                "R@5": 1.0,
+                "R@10": 1.0,
+                "MRR": 1.0,
+                "nDCG": 1.0
+              },
+              "gpt4_31ff4165": {
+                "R@1": 1.0,
+                "R@3": 1.0,
+                "R@5": 1.0,
+                "R@10": 1.0,
+                "MRR": 1.0,
+                "nDCG": 0.9363792118010481
+              },
+              "gpt4_68e94287": {
+                "R@1": 1.0,
+                "R@3": 1.0,
+                "R@5": 1.0,
+                "R@10": 1.0,
+                "MRR": 1.0,
+                "nDCG": 0.8417771098923534
+              },
+              "gpt4_f2262a51": {
+                "R@1": 0.0,
+                "R@3": 1.0,
+                "R@5": 1.0,
+                "R@10": 1.0,
+                "MRR": 0.5,
+                "nDCG": 0.5296347172140421
+              },
+              "gpt4_f49edff3": {
+                "R@1": 1.0,
+                "R@3": 1.0,
+                "R@5": 1.0,
+                "R@10": 1.0,
+                "MRR": 1.0,
+                "nDCG": 0.9020870746500321
+              }
+            },
+            "post_ms_median": 4.080753999999985
+          }
+        }
+      },
+      "gpu_15": {
+        "configuration": {
+          "cap": 15,
+          "transform": "minmax",
+          "alpha": 0.5,
+          "policy": "score_value",
+          "mmr_lambda": 1.0,
+          "fit_R@5": 0.7133163698049194,
+          "fit_MRR": 0.6168990737374962,
+          "fit_R@1": 0.5466497031382528
+        },
+        "observed_product_post_rows": 2270,
+        "datasets": {
+          "en": {
+            "questions": 750,
+            "metrics": {
+              "R@1": 0.608,
+              "R@3": 0.7333333333333333,
+              "R@5": 0.7613333333333333,
+              "R@10": 0.7746666666666666,
+              "MRR": 0.6723253968253968,
+              "nDCG": 0.6547870002836657
+            },
+            "before_final_product_pipeline": {
+              "R@1": 0.608,
+              "R@3": 0.7333333333333333,
+              "R@5": 0.7613333333333333,
+              "R@10": 0.7746666666666666,
+              "MRR": 0.6723253968253968,
+              "nDCG": 0.6547870002836657
+            },
+            "per_conversation": {
+              "conv-30": {
+                "R@1": 0.6296296296296297,
+                "R@3": 0.7530864197530864,
+                "R@5": 0.7530864197530864,
+                "R@10": 0.7530864197530864,
+                "MRR": 0.683127572016461,
+                "nDCG": 0.6844111969497024
+              },
+              "conv-42": {
+                "R@1": 0.5577889447236181,
+                "R@3": 0.6884422110552764,
+                "R@5": 0.7236180904522613,
+                "R@10": 0.7437185929648241,
+                "MRR": 0.6267288825077769,
+                "nDCG": 0.616990765692833
+              },
+              "conv-44": {
+                "R@1": 0.5609756097560976,
+                "R@3": 0.7154471544715447,
+                "R@5": 0.7154471544715447,
+                "R@10": 0.7235772357723578,
+                "MRR": 0.627371273712737,
+                "nDCG": 0.5936271423752689
+              },
+              "conv-48": {
+                "R@1": 0.680628272251309,
+                "R@3": 0.806282722513089,
+                "R@5": 0.837696335078534,
+                "R@10": 0.8481675392670157,
+                "MRR": 0.7478184991273995,
+                "nDCG": 0.7182468552429696
+              },
+              "conv-50": {
+                "R@1": 0.6089743589743589,
+                "R@3": 0.7051282051282052,
+                "R@5": 0.7564102564102564,
+                "R@10": 0.7756410256410257,
+                "MRR": 0.6678952991452992,
+                "nDCG": 0.6581441860473342
+              }
+            },
+            "post_ms_median": 4.364533999999935
+          },
+          "zh": {
+            "questions": 750,
+            "metrics": {
+              "R@1": 0.47733333333333333,
+              "R@3": 0.5826666666666667,
+              "R@5": 0.6066666666666667,
+              "R@10": 0.6346666666666667,
+              "MRR": 0.5350560846560843,
+              "nDCG": 0.5184756866058173
+            },
+            "before_final_product_pipeline": {
+              "R@1": 0.47733333333333333,
+              "R@3": 0.5826666666666667,
+              "R@5": 0.6066666666666667,
+              "R@10": 0.6346666666666667,
+              "MRR": 0.5350560846560843,
+              "nDCG": 0.5184756866058173
+            },
+            "per_conversation": {
+              "conv-30": {
+                "R@1": 0.6049382716049383,
+                "R@3": 0.7283950617283951,
+                "R@5": 0.7407407407407407,
+                "R@10": 0.8024691358024691,
+                "MRR": 0.6735057809131882,
+                "nDCG": 0.6784317908472531
+              },
+              "conv-42": {
+                "R@1": 0.457286432160804,
+                "R@3": 0.5376884422110553,
+                "R@5": 0.5628140703517588,
+                "R@10": 0.5979899497487438,
+                "MRR": 0.5036073223259153,
+                "nDCG": 0.4906110659643895
+              },
+              "conv-44": {
+                "R@1": 0.4065040650406504,
+                "R@3": 0.5040650406504065,
+                "R@5": 0.5203252032520326,
+                "R@10": 0.5284552845528455,
+                "MRR": 0.4590108401084011,
+                "nDCG": 0.4265818808541856
+              },
+              "conv-48": {
+                "R@1": 0.5287958115183246,
+                "R@3": 0.6282722513089005,
+                "R@5": 0.6649214659685864,
+                "R@10": 0.6963350785340314,
+                "MRR": 0.587534280727998,
+                "nDCG": 0.5661078935826697
+              },
+              "conv-50": {
+                "R@1": 0.42948717948717946,
+                "R@3": 0.5705128205128205,
+                "R@5": 0.5897435897435898,
+                "R@10": 0.6025641025641025,
+                "MRR": 0.49899267399267405,
+                "nDCG": 0.4851026201888918
+              }
+            },
+            "post_ms_median": 4.368429500000275
+          },
+          "xl": {
+            "questions": 750,
+            "metrics": {
+              "R@1": 0.512,
+              "R@3": 0.6546666666666666,
+              "R@5": 0.692,
+              "R@10": 0.7186666666666667,
+              "MRR": 0.5888206349206347,
+              "nDCG": 0.581536386156175
+            },
+            "before_final_product_pipeline": {
+              "R@1": 0.512,
+              "R@3": 0.6546666666666666,
+              "R@5": 0.692,
+              "R@10": 0.7186666666666667,
+              "MRR": 0.5888206349206347,
+              "nDCG": 0.581536386156175
+            },
+            "per_conversation": {
+              "conv-30": {
+                "R@1": 0.5555555555555556,
+                "R@3": 0.7037037037037037,
+                "R@5": 0.7283950617283951,
+                "R@10": 0.7283950617283951,
+                "MRR": 0.6255144032921812,
+                "nDCG": 0.6228161524101704
+              },
+              "conv-42": {
+                "R@1": 0.4723618090452261,
+                "R@3": 0.6030150753768844,
+                "R@5": 0.6381909547738693,
+                "R@10": 0.6633165829145728,
+                "MRR": 0.5444643854191594,
+                "nDCG": 0.5412992686479089
+              },
+              "conv-44": {
+                "R@1": 0.42276422764227645,
+                "R@3": 0.6097560975609756,
+                "R@5": 0.6585365853658537,
+                "R@10": 0.6829268292682927,
+                "MRR": 0.5256420183249452,
+                "nDCG": 0.5098801294590151
+              },
+              "conv-48": {
+                "R@1": 0.5916230366492147,
+                "R@3": 0.7120418848167539,
+                "R@5": 0.7591623036649214,
+                "R@10": 0.7853403141361257,
+                "MRR": 0.6560188647884984,
+                "nDCG": 0.6424220103303429
+              },
+              "conv-50": {
+                "R@1": 0.5128205128205128,
+                "R@3": 0.6602564102564102,
+                "R@5": 0.6858974358974359,
+                "R@10": 0.7307692307692307,
+                "MRR": 0.5938899063899064,
+                "nDCG": 0.5933831212462767
+              }
+            },
+            "post_ms_median": 4.3659040000000005
+          },
+          "lme": {
+            "questions": 20,
+            "metrics": {
+              "R@1": 0.95,
+              "R@3": 1.0,
+              "R@5": 1.0,
+              "R@10": 1.0,
+              "MRR": 0.9666666666666668,
+              "nDCG": 0.8282787244740536
+            },
+            "before_final_product_pipeline": {
+              "R@1": 0.95,
+              "R@3": 1.0,
+              "R@5": 1.0,
+              "R@10": 1.0,
+              "MRR": 0.9666666666666668,
+              "nDCG": 0.8282787244740536
+            },
+            "per_conversation": {
+              "1d4da289": {
+                "R@1": 1.0,
+                "R@3": 1.0,
+                "R@5": 1.0,
+                "R@10": 1.0,
+                "MRR": 1.0,
+                "nDCG": 1.0
+              },
+              "21436231": {
+                "R@1": 1.0,
+                "R@3": 1.0,
+                "R@5": 1.0,
+                "R@10": 1.0,
+                "MRR": 1.0,
+                "nDCG": 0.9266360779006398
+              },
+              "41698283": {
+                "R@1": 1.0,
+                "R@3": 1.0,
+                "R@5": 1.0,
+                "R@10": 1.0,
+                "MRR": 1.0,
+                "nDCG": 0.5631102580041938
+              },
+              "4388e9dd": {
+                "R@1": 1.0,
+                "R@3": 1.0,
+                "R@5": 1.0,
+                "R@10": 1.0,
+                "MRR": 1.0,
+                "nDCG": 1.0
+              },
+              "4dfccbf7": {
+                "R@1": 1.0,
+                "R@3": 1.0,
+                "R@5": 1.0,
+                "R@10": 1.0,
+                "MRR": 1.0,
+                "nDCG": 1.0
+              },
+              "545bd2b5": {
+                "R@1": 1.0,
+                "R@3": 1.0,
+                "R@5": 1.0,
+                "R@10": 1.0,
+                "MRR": 1.0,
+                "nDCG": 0.8480740740411332
+              },
+              "5c40ec5b": {
+                "R@1": 1.0,
+                "R@3": 1.0,
+                "R@5": 1.0,
+                "R@10": 1.0,
+                "MRR": 1.0,
+                "nDCG": 0.9083745556952363
+              },
+              "61f8c8f8": {
+                "R@1": 1.0,
+                "R@3": 1.0,
+                "R@5": 1.0,
+                "R@10": 1.0,
+                "MRR": 1.0,
+                "nDCG": 1.0
+              },
+              "7e974930": {
+                "R@1": 1.0,
+                "R@3": 1.0,
+                "R@5": 1.0,
+                "R@10": 1.0,
+                "MRR": 1.0,
+                "nDCG": 0.9305687780632227
+              },
+              "8a2466db": {
+                "R@1": 1.0,
+                "R@3": 1.0,
+                "R@5": 1.0,
+                "R@10": 1.0,
+                "MRR": 1.0,
+                "nDCG": 0.6238470455881189
+              },
+              "a89d7624": {
+                "R@1": 1.0,
+                "R@3": 1.0,
+                "R@5": 1.0,
+                "R@10": 1.0,
+                "MRR": 1.0,
+                "nDCG": 0.7227265726449519
+              },
+              "e25c3b8d": {
+                "R@1": 1.0,
+                "R@3": 1.0,
+                "R@5": 1.0,
+                "R@10": 1.0,
+                "MRR": 1.0,
+                "nDCG": 1.0
+              },
+              "e47becba": {
+                "R@1": 1.0,
+                "R@3": 1.0,
+                "R@5": 1.0,
+                "R@10": 1.0,
+                "MRR": 1.0,
+                "nDCG": 0.46927872602275644
+              },
+              "e4e14d04": {
+                "R@1": 1.0,
+                "R@3": 1.0,
+                "R@5": 1.0,
+                "R@10": 1.0,
+                "MRR": 1.0,
+                "nDCG": 1.0
+              },
+              "gpt4_2655b836": {
+                "R@1": 1.0,
+                "R@3": 1.0,
+                "R@5": 1.0,
+                "R@10": 1.0,
+                "MRR": 1.0,
+                "nDCG": 0.933745776545611
+              },
+              "gpt4_2f584639": {
+                "R@1": 1.0,
+                "R@3": 1.0,
+                "R@5": 1.0,
+                "R@10": 1.0,
+                "MRR": 1.0,
+                "nDCG": 0.8006937664098819
+              },
+              "gpt4_31ff4165": {
+                "R@1": 1.0,
+                "R@3": 1.0,
+                "R@5": 1.0,
+                "R@10": 1.0,
+                "MRR": 1.0,
+                "nDCG": 0.9363792118010481
+              },
+              "gpt4_68e94287": {
+                "R@1": 1.0,
+                "R@3": 1.0,
+                "R@5": 1.0,
+                "R@10": 1.0,
+                "MRR": 1.0,
+                "nDCG": 0.644824486427155
+              },
+              "gpt4_f2262a51": {
+                "R@1": 0.0,
+                "R@3": 1.0,
+                "R@5": 1.0,
+                "R@10": 1.0,
+                "MRR": 0.3333333333333333,
+                "nDCG": 0.4468535299918563
+              },
+              "gpt4_f49edff3": {
+                "R@1": 1.0,
+                "R@3": 1.0,
+                "R@5": 1.0,
+                "R@10": 1.0,
+                "MRR": 1.0,
+                "nDCG": 0.8104616303452686
+              }
+            },
+            "post_ms_median": 3.884580999999997
+          }
+        }
+      }
+    },
+    "paired_hits_at_5": {
+      "local_best_vs_gpu_best": {
+        "en": {
+          "both_hit": 566,
+          "gpu_only": 38,
+          "both_miss": 141,
+          "local_only": 5
+        },
+        "zh": {
+          "both_hit": 449,
+          "both_miss": 275,
+          "local_only": 15,
+          "gpu_only": 11
+        },
+        "xl": {
+          "both_hit": 510,
+          "both_miss": 157,
+          "gpu_only": 68,
+          "local_only": 15
+        },
+        "lme": {
+          "both_hit": 20
+        }
+      },
+      "local_15_vs_gpu_15": {
+        "en": {
+          "both_hit": 551,
+          "gpu_only": 20,
+          "both_miss": 177,
+          "local_only": 2
+        },
+        "zh": {
+          "both_hit": 448,
+          "both_miss": 287,
+          "local_only": 8,
+          "gpu_only": 7
+        },
+        "xl": {
+          "both_hit": 490,
+          "both_miss": 224,
+          "gpu_only": 29,
+          "local_only": 7
+        },
+        "lme": {
+          "both_hit": 20
+        }
+      }
+    }
+  },
+  "current_pipeline_cross_language_reference": {
+    "local_current": {
+      "dataset": "Chinese queries / English memories; fully observed source scores only",
+      "questions": 750,
+      "before_mmr": {
+        "R@1": 0.45466666666666666,
+        "R@3": 0.6106666666666667,
+        "R@5": 0.6666666666666666,
+        "R@10": 0.708,
+        "MRR": 0.5436619047619045,
+        "nDCG": 0.5463052081417913
+      },
+      "after_mmr": {
+        "R@1": 0.45466666666666666,
+        "R@3": 0.5813333333333334,
+        "R@5": 0.6453333333333333,
+        "R@10": 0.704,
+        "MRR": 0.5315211640211637,
+        "nDCG": 0.532324706270213
+      },
+      "inference_source": "Retained actual 2026-10-20 product model predictions; current product scoring pipeline replayed with true recomputed embeddings."
+    },
+    "gpu_current": {
+      "dataset": "Chinese queries / English memories; fully observed source scores only",
+      "questions": 750,
+      "before_mmr": {
+        "R@1": 0.29733333333333334,
+        "R@3": 0.484,
+        "R@5": 0.5613333333333334,
+        "R@10": 0.668,
+        "MRR": 0.4106338624338621,
+        "nDCG": 0.43990132682207345
+      },
+      "after_mmr": {
+        "R@1": 0.29733333333333334,
+        "R@3": 0.35733333333333334,
+        "R@5": 0.404,
+        "R@10": 0.4786666666666667,
+        "MRR": 0.342831746031746,
+        "nDCG": 0.33314643633697166
+      },
+      "inference_source": "Retained actual 2026-10-20 product model predictions; current product scoring pipeline replayed with true recomputed embeddings."
+    }
+  },
+  "latency": {
+    "local_15": {
+      "client": "Apple M4",
+      "model": "sno-lab/multilingual-reranker-small-int8",
+      "candidate_cap": 15,
+      "queries": 30,
+      "median_ms": 167.84639599999917,
+      "maximum_ms": 242.08341699999437,
+      "scope": "Warm reranking inference (CPU tokenization included) or public HTTP network + GPU + response body; excludes retrieval and later scoring."
+    },
+    "local_best": {
+      "client": "Apple M4",
+      "model": "sno-lab/multilingual-reranker-small-int8",
+      "candidate_cap": 40,
+      "queries": 30,
+      "median_ms": 360.6614169999998,
+      "maximum_ms": 455.2437910000008,
+      "scope": "Warm reranking inference (CPU tokenization included) or public HTTP network + GPU + response body; excludes retrieval and later scoring."
+    },
+    "gpu_15": {
+      "client": "Apple M4",
+      "model": "ettin-reranker-400m-v1",
+      "candidate_cap": 15,
+      "queries": 30,
+      "median_ms": 278.8353959999986,
+      "maximum_ms": 1742.725958,
+      "scope": "Warm reranking inference (CPU tokenization included) or public HTTP network + GPU + response body; excludes retrieval and later scoring."
+    },
+    "gpu_best": {
+      "client": "Apple M4",
+      "model": "ettin-reranker-400m-v1",
+      "candidate_cap": 64,
+      "queries": 30,
+      "median_ms": 541.8774165000013,
+      "maximum_ms": 878.3094580000034,
+      "scope": "Warm reranking inference (CPU tokenization included) or public HTTP network + GPU + response body; excludes retrieval and later scoring."
+    }
+  },
+  "source_audit": {
+    "en": {
+      "questions": 1536,
+      "filled_candidates": 14289,
+      "fully_observed_questions": 25,
+      "fully_observed_metrics": {
+        "raw": {
+          "R@1": 0.56,
+          "R@3": 0.72,
+          "R@5": 0.84,
+          "R@10": 0.84,
+          "MRR": 0.6633333333333333,
+          "nDCG": 0.6671505158802088
+        },
+        "blend": {
+          "R@1": 0.36,
+          "R@3": 0.64,
+          "R@5": 0.72,
+          "R@10": 0.76,
+          "MRR": 0.5083809523809524,
+          "nDCG": 0.5185805823672271
+        }
+      },
+      "unfilled_inversion_count": 120,
+      "warning": "Original full-pool blend values include fabricated zero branch scores; never equate those values to product quality."
+    },
+    "zh": {
+      "questions": 1536,
+      "filled_candidates": 12466,
+      "fully_observed_questions": 8,
+      "fully_observed_metrics": {
+        "raw": {
+          "R@1": 0.75,
+          "R@3": 0.75,
+          "R@5": 0.75,
+          "R@10": 0.75,
+          "MRR": 0.75,
+          "nDCG": 0.7312931131918443
+        },
+        "blend": {
+          "R@1": 0.5,
+          "R@3": 0.5,
+          "R@5": 0.625,
+          "R@10": 0.625,
+          "MRR": 0.53125,
+          "nDCG": 0.5384799289655771
+        }
+      },
+      "unfilled_inversion_count": 32,
+      "warning": "Original full-pool blend values include fabricated zero branch scores; never equate those values to product quality."
+    },
+    "xl": {
+      "questions": 1536,
+      "filled_candidates": 0,
+      "fully_observed_questions": 1536,
+      "fully_observed_metrics": {
+        "raw": {
+          "R@1": 0.5625,
+          "R@3": 0.7330729166666666,
+          "R@5": 0.7864583333333334,
+          "R@10": 0.8307291666666666,
+          "MRR": 0.6567085710152126,
+          "nDCG": 0.6595063663005838
+        },
+        "blend": {
+          "R@1": 0.3216145833333333,
+          "R@3": 0.5078125,
+          "R@5": 0.6002604166666666,
+          "R@10": 0.7063802083333334,
+          "MRR": 0.43929268973214364,
+          "nDCG": 0.4657689405927706
+        }
+      },
+      "unfilled_inversion_count": 199,
+      "warning": "Original full-pool blend values include fabricated zero branch scores; never equate those values to product quality."
+    }
+  },
+  "changes": {
+    "production_source": false,
+    "settings_hooks_memory_database": false,
+    "commit_push_release": false
+  },
+  "limits": [
+    "Fixed retained 64-candidate pools, original evidence labels and unchanged original evaluate.py; not a fresh end-to-end retrieval or answer-generation benchmark.",
+    "Five source conversations for fitting and five for final validation; translated variants share questions. Previously published untuned results have already exposed these questions.",
+    "Cached full64 logits guide the finite search. Q8 batch composition changes predictions: final metrics use literal actual-cap inference, not subsets. This does not establish a global optimum over every possible pipeline.",
+    "Only 20 retained LongMemEval-S questions; answer-session metric follows original --session-gold logic.",
+    "Mac latency uses 30 short-memory LoCoMo queries, not long-memory or cold-start latency. GPU card-seconds cannot be inferred from client time.",
+    "Positive custom score thresholds, unanswerable queries and live production memory distribution were not evaluated."
+  ],
+  "implementation_update_2026_10_22": {
+    "measured_utc": "2026-10-22T12:51:48.232785+00:00",
+    "method": "Original evaluate.py, original held-out pools and actual GPU64 inference. Only equal-logit rank normalization changed to average rank; current product applyScoringPipeline and actual retained embeddings replayed. No new model inference or client latency measurement.",
+    "host": "Linux AMD EPYC 7F52",
+    "model": "ettin-reranker-400m-v1",
+    "cap": 64,
+    "weights": {
+      "model": 0.9,
+      "cosine": 0.1
+    },
+    "mmr_lambda": 0.9,
+    "rows": 2270,
+    "datasets": {
+      "en": {
+        "questions": 750,
+        "metrics": {
+          "R@1": 0.632,
+          "R@3": 0.7746666666666666,
+          "R@5": 0.8053333333333333,
+          "R@10": 0.824,
+          "MRR": 0.705195238095238,
+          "nDCG": 0.6950995380047204
+        }
+      },
+      "zh": {
+        "questions": 750,
+        "metrics": {
+          "R@1": 0.4746666666666667,
+          "R@3": 0.5946666666666667,
+          "R@5": 0.6133333333333333,
+          "R@10": 0.6506666666666666,
+          "MRR": 0.5394661375661371,
+          "nDCG": 0.525182532712072
+        }
+      },
+      "xl": {
+        "questions": 750,
+        "metrics": {
+          "R@1": 0.5453333333333333,
+          "R@3": 0.7133333333333334,
+          "R@5": 0.772,
+          "R@10": 0.8106666666666666,
+          "MRR": 0.6378481481481476,
+          "nDCG": 0.6453359097433782
+        }
+      },
+      "lme": {
+        "questions": 20,
+        "metrics": {
+          "R@1": 0.95,
+          "R@3": 1.0,
+          "R@5": 1.0,
+          "R@10": 1.0,
+          "MRR": 0.975,
+          "nDCG": 0.8561045103938382
+        }
+      }
+    },
+    "validation": {
+      "real_gpu_regression": "Previously failed saturated-positive-score case now passes against the live Sno GPU endpoint.",
+      "local_integration": "5 checks passed: real models, importance, deadlines, failures, 40-candidate cap.",
+      "gpu_transport_regressions": "6 previously failing checks now pass: 50+14 batching, retries/body-failure logs, longer and fractional deadlines.",
+      "scope": "Source implementation and local build; no running-service restart, installation, or release."
+    }
+  }
+}
