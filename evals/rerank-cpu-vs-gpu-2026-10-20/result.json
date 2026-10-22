@@ -1,0 +1,444 @@
+{
+  "measured_at_pacific": "2026-10-20T08:04:44.412808-07:00",
+  "local_model": {
+    "upstream": "Horizon-Labs/multilingual-reranker-small",
+    "artifact": "sno-lab/multilingual-reranker-small-int8",
+    "revision": "ce76796ae42628f54f501271aeac16df8ecc8a6f",
+    "runtime": "@huggingface/transformers 4.3.0, CPU ONNX q8",
+    "candidates": 15,
+    "inference_batch_size": 5,
+    "max_pair_tokens": 512,
+    "quality_threads": [
+      1,
+      4
+    ],
+    "latency_threads": 4
+  },
+  "gpu_model": {
+    "name": "ettin-reranker-400m-v1",
+    "endpoint": "https://rt3-llm.sno.ai/rerank",
+    "image": "sno-reranker-encoder:ettin400-20260914",
+    "runtime_started_utc": "2026-10-18T19:22:25.155449155Z",
+    "max_pair_tokens": 512,
+    "batch_limit": 50
+  },
+  "benchmark": {
+    "source": "Recovered original evals/rerank-cpu evaluation and retained LoCoMo candidate pools",
+    "variants": [
+      "en",
+      "zh",
+      "xl"
+    ],
+    "questions_per_variant": 1540,
+    "excluded_missing_evidence_per_variant": 4,
+    "paired_scored_per_variant": 1536,
+    "new_local_scored_pairs": 69120,
+    "gpu_scored_pairs": 295680,
+    "metric_implementation": "original evaluate.py metrics and score_all, unchanged",
+    "candidate_preselection": "0.1 fused + 0.9 cosine; local reranks first 15",
+    "gpu_blend_replay": "0.7 * sigmoid(raw logit) + 0.3 * max(vector score, BM25 score)",
+    "scope": "ranking within retained candidate pools; not end-to-end recall or answer generation"
+  },
+  "quality": {
+    "en": {
+      "total_questions": 1540,
+      "questions_with_evidence_labels": 1536,
+      "gpu_rows": 1540,
+      "gpu_complete": 1540,
+      "live_local_questions": 1536,
+      "live_paired": 1536,
+      "metrics": {
+        "first_stage": {
+          "R@1": 0.412987012987013,
+          "R@3": 0.6071428571428571,
+          "R@5": 0.6753246753246753,
+          "R@10": 0.7636363636363637,
+          "MRR": 0.5259157905586479,
+          "nDCG": 0.5424640541009305
+        },
+        "horizon_cached_top15": {
+          "R@1": 0.5487012987012987,
+          "R@3": 0.7045454545454546,
+          "R@5": 0.75,
+          "R@10": 0.7915584415584416,
+          "MRR": 0.6348902288188011,
+          "nDCG": 0.6266433625874668
+        },
+        "ettin_same15": {
+          "R@1": 0.6123376623376623,
+          "R@3": 0.75,
+          "R@5": 0.7844155844155845,
+          "R@10": 0.7987012987012987,
+          "MRR": 0.6845078334364059,
+          "nDCG": 0.6642486160946417
+        },
+        "ettin_raw_top64": {
+          "R@1": 0.6253246753246753,
+          "R@3": 0.772077922077922,
+          "R@5": 0.814935064935065,
+          "R@10": 0.837012987012987,
+          "MRR": 0.7049144506287375,
+          "nDCG": 0.6945429274626513
+        },
+        "ettin_production_blend64": {
+          "R@1": 0.3525974025974026,
+          "R@3": 0.5305194805194805,
+          "R@5": 0.5909090909090909,
+          "R@10": 0.6655844155844156,
+          "MRR": 0.45384482580911173,
+          "nDCG": 0.4712587691628945
+        }
+      },
+      "matched_live_metrics": {
+        "first_stage": {
+          "R@1": 0.4140625,
+          "R@3": 0.6087239583333334,
+          "R@5": 0.6770833333333334,
+          "R@10": 0.765625,
+          "MRR": 0.5272853629298944,
+          "nDCG": 0.5438767209084849
+        },
+        "horizon_cached_top15": {
+          "R@1": 0.5501302083333334,
+          "R@3": 0.7063802083333334,
+          "R@5": 0.751953125,
+          "R@10": 0.7936197916666666,
+          "MRR": 0.6365435887896834,
+          "nDCG": 0.6282752463442051
+        },
+        "ettin_same15": {
+          "R@1": 0.6139322916666666,
+          "R@3": 0.751953125,
+          "R@5": 0.7864583333333334,
+          "R@10": 0.80078125,
+          "MRR": 0.6862904059193132,
+          "nDCG": 0.6659784301990549
+        },
+        "ettin_raw_top64": {
+          "R@1": 0.626953125,
+          "R@3": 0.7740885416666666,
+          "R@5": 0.8170572916666666,
+          "R@10": 0.8391927083333334,
+          "MRR": 0.7067501653439164,
+          "nDCG": 0.6963516330029186
+        },
+        "ettin_production_blend64": {
+          "R@1": 0.353515625,
+          "R@3": 0.5319010416666666,
+          "R@5": 0.5924479166666666,
+          "R@10": 0.6673177083333334,
+          "MRR": 0.455026713376323,
+          "nDCG": 0.47248600554092285
+        },
+        "horizon_live_top15": {
+          "R@1": 0.5520833333333334,
+          "R@3": 0.7115885416666666,
+          "R@5": 0.751953125,
+          "R@10": 0.7936197916666666,
+          "MRR": 0.6380471850198424,
+          "nDCG": 0.6288342039814966
+        }
+      },
+      "status_counts": {
+        "200": 3080,
+        "429": 25
+      },
+      "paired_hits_at_1": {
+        "both_hit": 478,
+        "both_miss": 630,
+        "local_only": 367,
+        "gpu_only": 65
+      },
+      "paired_hits_at_5": {
+        "both_hit": 855,
+        "both_miss": 330,
+        "local_only": 300,
+        "gpu_only": 55
+      },
+      "live_cached_order_disagreements": 824
+    },
+    "zh": {
+      "total_questions": 1540,
+      "questions_with_evidence_labels": 1536,
+      "gpu_rows": 1540,
+      "gpu_complete": 1540,
+      "live_local_questions": 1536,
+      "live_paired": 1536,
+      "metrics": {
+        "first_stage": {
+          "R@1": 0.34805194805194806,
+          "R@3": 0.5194805194805194,
+          "R@5": 0.5818181818181818,
+          "R@10": 0.6298701298701299,
+          "MRR": 0.4446292001649148,
+          "nDCG": 0.45040579655913876
+        },
+        "horizon_cached_top15": {
+          "R@1": 0.4753246753246753,
+          "R@3": 0.5889610389610389,
+          "R@5": 0.6149350649350649,
+          "R@10": 0.6396103896103896,
+          "MRR": 0.5367890641104931,
+          "nDCG": 0.5169692790683459
+        },
+        "ettin_same15": {
+          "R@1": 0.4824675324675325,
+          "R@3": 0.5961038961038961,
+          "R@5": 0.6188311688311688,
+          "R@10": 0.6428571428571429,
+          "MRR": 0.5423155019583596,
+          "nDCG": 0.5212982997072616
+        },
+        "ettin_raw_top64": {
+          "R@1": 0.4876623376623377,
+          "R@3": 0.6051948051948052,
+          "R@5": 0.6292207792207792,
+          "R@10": 0.6551948051948052,
+          "MRR": 0.5493787363430225,
+          "nDCG": 0.5303575156224202
+        },
+        "ettin_production_blend64": {
+          "R@1": 0.19025974025974027,
+          "R@3": 0.2714285714285714,
+          "R@5": 0.3038961038961039,
+          "R@10": 0.33896103896103896,
+          "MRR": 0.23829648526077085,
+          "nDCG": 0.237225133269991
+        }
+      },
+      "matched_live_metrics": {
+        "first_stage": {
+          "R@1": 0.3489583333333333,
+          "R@3": 0.5208333333333334,
+          "R@5": 0.5833333333333334,
+          "R@10": 0.6315104166666666,
+          "MRR": 0.44578708870701095,
+          "nDCG": 0.45157872832101154
+        },
+        "horizon_cached_top15": {
+          "R@1": 0.4765625,
+          "R@3": 0.5904947916666666,
+          "R@5": 0.6165364583333334,
+          "R@10": 0.6412760416666666,
+          "MRR": 0.5381869522982808,
+          "nDCG": 0.5183155532325864
+        },
+        "ettin_same15": {
+          "R@1": 0.4837239583333333,
+          "R@3": 0.59765625,
+          "R@5": 0.6204427083333334,
+          "R@10": 0.64453125,
+          "MRR": 0.5437277819113762,
+          "nDCG": 0.5226558473627493
+        },
+        "ettin_raw_top64": {
+          "R@1": 0.4889322916666667,
+          "R@3": 0.6067708333333334,
+          "R@5": 0.630859375,
+          "R@10": 0.6569010416666666,
+          "MRR": 0.5508094101355824,
+          "nDCG": 0.5317386549860202
+        },
+        "ettin_production_blend64": {
+          "R@1": 0.19075520833333334,
+          "R@3": 0.2721354166666667,
+          "R@5": 0.3046875,
+          "R@10": 0.33984375,
+          "MRR": 0.23891704902447078,
+          "nDCG": 0.23784290705454827
+        },
+        "horizon_live_top15": {
+          "R@1": 0.4733072916666667,
+          "R@3": 0.591796875,
+          "R@5": 0.619140625,
+          "R@10": 0.6419270833333334,
+          "MRR": 0.5360106130125667,
+          "nDCG": 0.5172129207897567
+        }
+      },
+      "status_counts": {
+        "200": 3080
+      },
+      "paired_hits_at_1": {
+        "both_hit": 259,
+        "both_miss": 774,
+        "local_only": 473,
+        "gpu_only": 34
+      },
+      "paired_hits_at_5": {
+        "both_hit": 439,
+        "both_miss": 564,
+        "local_only": 508,
+        "gpu_only": 29
+      },
+      "live_cached_order_disagreements": 812
+    },
+    "xl": {
+      "total_questions": 1540,
+      "questions_with_evidence_labels": 1536,
+      "gpu_rows": 1540,
+      "gpu_complete": 1540,
+      "live_local_questions": 1536,
+      "live_paired": 1536,
+      "metrics": {
+        "first_stage": {
+          "R@1": 0.32532467532467535,
+          "R@3": 0.4993506493506494,
+          "R@5": 0.5694805194805195,
+          "R@10": 0.6896103896103896,
+          "MRR": 0.43265203050917356,
+          "nDCG": 0.4556937434828397
+        },
+        "horizon_cached_top15": {
+          "R@1": 0.4727272727272727,
+          "R@3": 0.6318181818181818,
+          "R@5": 0.6805194805194805,
+          "R@10": 0.724025974025974,
+          "MRR": 0.5604166666666669,
+          "nDCG": 0.5568554467425012
+        },
+        "ettin_same15": {
+          "R@1": 0.535064935064935,
+          "R@3": 0.6733766233766234,
+          "R@5": 0.7090909090909091,
+          "R@10": 0.7357142857142858,
+          "MRR": 0.6106341475984337,
+          "nDCG": 0.5967635228063758
+        },
+        "ettin_raw_top64": {
+          "R@1": 0.561038961038961,
+          "R@3": 0.7311688311688311,
+          "R@5": 0.7844155844155845,
+          "R@10": 0.8285714285714286,
+          "MRR": 0.6550028344671212,
+          "nDCG": 0.6577933627517512
+        },
+        "ettin_production_blend64": {
+          "R@1": 0.3207792207792208,
+          "R@3": 0.5064935064935064,
+          "R@5": 0.5987012987012987,
+          "R@10": 0.7045454545454546,
+          "MRR": 0.43815166975881337,
+          "nDCG": 0.4645591511366855
+        }
+      },
+      "matched_live_metrics": {
+        "first_stage": {
+          "R@1": 0.326171875,
+          "R@3": 0.5006510416666666,
+          "R@5": 0.5709635416666666,
+          "R@10": 0.69140625,
+          "MRR": 0.4337787285052912,
+          "nDCG": 0.4568804459398263
+        },
+        "horizon_cached_top15": {
+          "R@1": 0.4739583333333333,
+          "R@3": 0.6334635416666666,
+          "R@5": 0.6822916666666666,
+          "R@10": 0.7259114583333334,
+          "MRR": 0.5618760850694448,
+          "nDCG": 0.5583055911350598
+        },
+        "ettin_same15": {
+          "R@1": 0.5364583333333334,
+          "R@3": 0.6751302083333334,
+          "R@5": 0.7109375,
+          "R@10": 0.7376302083333334,
+          "MRR": 0.612224340691138,
+          "nDCG": 0.5983175944803507
+        },
+        "ettin_raw_top64": {
+          "R@1": 0.5625,
+          "R@3": 0.7330729166666666,
+          "R@5": 0.7864583333333334,
+          "R@10": 0.8307291666666666,
+          "MRR": 0.6567085710152126,
+          "nDCG": 0.6595063663005838
+        },
+        "ettin_production_blend64": {
+          "R@1": 0.3216145833333333,
+          "R@3": 0.5078125,
+          "R@5": 0.6002604166666666,
+          "R@10": 0.7063802083333334,
+          "MRR": 0.43929268973214364,
+          "nDCG": 0.4657689405927706
+        },
+        "horizon_live_top15": {
+          "R@1": 0.47265625,
+          "R@3": 0.6263020833333334,
+          "R@5": 0.68359375,
+          "R@10": 0.724609375,
+          "MRR": 0.5603386450066142,
+          "nDCG": 0.5568170078292097
+        }
+      },
+      "status_counts": {
+        "failed": 1,
+        "200": 3080
+      },
+      "paired_hits_at_1": {
+        "both_hit": 397,
+        "both_miss": 715,
+        "local_only": 331,
+        "gpu_only": 97
+      },
+      "paired_hits_at_5": {
+        "both_hit": 861,
+        "both_miss": 431,
+        "local_only": 187,
+        "gpu_only": 61
+      },
+      "live_cached_order_disagreements": 972
+    }
+  },
+  "linux_latency": {
+    "hardware": "AMD EPYC 7F52, 32 logical CPUs; same Linux host as GPU service, requests use public endpoint",
+    "selection": "10 retained questions per language, every 51st original question; alternate local-first and GPU-first",
+    "statistics": {
+      "local_ms": {
+        "n": 30,
+        "median_ms": 585.7687929999993,
+        "maximum_ms": 690.3422370000008
+      },
+      "gpu15_ms": {
+        "n": 30,
+        "median_ms": 127.17966700000034,
+        "maximum_ms": 221.3164670000001
+      },
+      "gpu64_ms": {
+        "n": 30,
+        "median_ms": 354.20939999999973,
+        "maximum_ms": 403.6459420000001
+      }
+    }
+  },
+  "mac_network_latency": {
+    "hardware": "Apple M4, arm64, separate configured test Mac",
+    "statistics": {
+      "gpu15_ms": {
+        "n": 30,
+        "median_ms": 266.2806870000004,
+        "maximum_ms": 875.0682080000001
+      },
+      "gpu64_ms": {
+        "n": 30,
+        "median_ms": 503.0611665000006,
+        "maximum_ms": 784.8219159999999
+      }
+    },
+    "local_model_measured": false,
+    "limitation": "No existing local memory-model runtime; no dependency or model was installed"
+  },
+  "transport": {
+    "initial_customer_rate_limit_refusals": 25,
+    "tls_eof_failures": 1,
+    "all_missing_requests_repaired": true,
+    "overlapping_mac_measurement_excluded": true,
+    "quality_authorization": "existing service evaluation credential, public endpoint",
+    "latency_authorization": "normal configured client key; credentials not recorded"
+  },
+  "raw_artifact_directory": "/tmp/recovered-rerank-cpu-20261020",
+  "changes": "No production code, settings, hooks or memory stores were changed.",
+  "superseded_by": "../rerank-optimized-2026-10-21/result.json",
+  "validity_correction": "Historical stage-only replay. English/Chinese source-score zeros include missing values fabricated by original text-filling script; all original figures exclude the final product diversity stage. Do not use its unoptimized comparison as a backend-selection conclusion."
+}
