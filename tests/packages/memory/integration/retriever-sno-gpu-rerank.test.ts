@@ -1,6 +1,7 @@
 import { createServer, type IncomingHttpHeaders, type Server } from "node:http";
 import { once } from "node:events";
-import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { effectiveLogLevel, setLogLevel } from "@snoai/utils/logger";
 import type { Embedder } from "../../../../packages/memory/src/engine/extraction/embedding-provider-client.ts";
 import { createTestEmbedder } from "../../../apps/mem-claw/helpers/test-db.ts";
 import { createRetriever, DEFAULT_RETRIEVAL_CONFIG } from "../../../../packages/memory/src/engine/retrieval/retriever.ts";
@@ -29,7 +30,9 @@ const BASE_CONFIG = {
 };
 
 let embedder: Embedder;
-beforeAll(async () => { embedder = await createTestEmbedder(); });
+const previousLogLevel = effectiveLogLevel();
+beforeAll(async () => { setLogLevel("info"); embedder = await createTestEmbedder(); });
+afterAll(() => { setLogLevel(previousLogLevel); });
 
 function settingsFor(mode: Settings["mode"], patch: Partial<Settings> = {}): Settings {
 	return { ...defaultSettings(), mode, snoGpu: { baseUrl: "https://rt3-llm.sno.ai", apiKey: "machine-key" }, ...patch };

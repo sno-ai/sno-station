@@ -124,14 +124,14 @@ it("returns the local ranking order at the caller's deadline when the model is s
 	expect(failed.first).toBe("sister-talk");
 }, 60_000);
 
-it("the model scores only the local ranking's first 15 candidates and serves the one it picks first", async () => {
+it("the model scores only the local ranking's first 40 candidates and serves the one it picks first", async () => {
 	const big = createTestDb();
 	const bigStore = new MemoryStore({ dbPath: big.dbPath, embedder });
 	try {
 		const topics = ["the garden", "a hiking trip", "the new laptop", "a cooking class", "the gym schedule", "a book club", "the car repair",
 			"a birthday party", "the rent", "a concert", "the dentist", "a chess game", "the bakery", "a train ride", "the weather",
 			"a movie night", "the office move", "a camping plan", "the guitar lessons", "a beach day", "the job interview", "a road trip",
-			"the coffee shop", "a museum visit"];
+			"the coffee shop", "a museum visit", ...Array.from({ length: 20 }, (_, index) => `weekend plan ${index}`)];
 		let order = 0;
 		for (const [index, topic] of topics.entries()) {
 			order += 1;
@@ -155,8 +155,8 @@ it("the model scores only the local ranking's first 15 candidates and serves the
 			return texts.map((text) => (text.includes("nurse") ? 10 : -10));
 		};
 		const ranked = (await withModel(picky).retrieve({ query, limit: 5 })).map((r) => r.entry.id);
-		// Of 25 candidates the model sees the local ranking's first 15, and the one it picks is served first.
-		expect(shown).toHaveLength(15);
+		// Of 45 candidates the model sees the local ranking's first 40, and the one it picks is served first.
+		expect(shown).toHaveLength(40);
 		expect(ranked[0]).toBe("sister-job");
 	} finally {
 		await bigStore.close();
