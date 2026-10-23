@@ -336,17 +336,9 @@ Object.assign(MemoryRetriever.prototype, {
 		const rerankOutcome = await this.rerank(context.query, fused, queryVector, { signal: context.signal, deadlineAt: context.rerankDeadlineAt });
 		fused = rerankOutcome.candidates;
 		this.throwIfAborted(context);
-		// Report cross-encoder coverage on success and the reason when ranking degraded.
-		const rerankStageMetadata = rerankOutcome.fallback
-			? {
-					...rerankOutcome.stats,
-					rerankFallbackReason: rerankOutcome.fallback.reason,
-				}
-			: rerankOutcome.stats;
 		trace?.endStage(
 			fused.map((r) => r.entry.id),
 			fused.map((r) => r.score),
-			rerankStageMetadata,
 		);
 
 		fused = this.applyScoringPipeline(fused, trace, context.limit, rerankOutcome.modelOrder);

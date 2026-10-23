@@ -22,47 +22,11 @@ import type {
 	TraceCollector,
 } from "./retriever-dependencies";
 
-/**
- * Enumerates every branch in `rerank()` that fell back to the pre-rerank
- * candidate ordering instead of applying the cross-encoder score. Aggregated
- * via {@link RetrievalStatsCollector} and surfaced as trace stage metadata
- * so callers can attribute degraded ranking without parsing log lines.
- *
- * - `missing_api_key`: cross-encoder configured but no rerankApiKey set;
- *   call routes through the lightweight cosine path instead.
- * - `no_endpoint`: no reranker address (`rerankEndpoint`) was set; rerank was skipped.
- * - `http_error`: the reranker responded with a non-OK status.
- * - `invalid_response`: the reranker answered HTTP 2xx but the response shape did not parse.
- * - `timeout`: the per-call AbortSignal fired before the reranker responded.
- * - `request_error`: any other thrown error inside the fetch path.
- * - `query_over_window`: the query alone fills the reranker's per-pair token window, so no
- *   document could be sent with it. Nothing was requested.
- */
-export const RERANK_FALLBACK_REASONS = [
-	"missing_api_key",
-	"no_endpoint",
-	"http_error",
-	"invalid_response",
-	"timeout",
-	"request_error",
-	"query_over_window",
-] as const;
-export type RerankFallbackReason = (typeof RERANK_FALLBACK_REASONS)[number];
-
-export interface RerankFallbackSignal {
-	reason: RerankFallbackReason;
-}
-
 export interface RerankOutcome {
 	candidates: RetrievalResult[];
 	/** Ids of the candidates the local reranker model scored, in its order; the scoring pipeline restores it last. */
 	modelOrder?: string[];
-	fallback?: RerankFallbackSignal;
-	stats?: {
-		rerankSentCount: number;
-		rerankReturnedCount: number;
-		rerankBeyondCapCount: number;
-	};
+
 }
 
 export class MemoryRetriever {
@@ -178,7 +142,6 @@ export interface MemoryRetrieverInternals {
 	): Promise<RerankOutcome>;
 	rerankLightweight(candidates: RetrievalResult[], queryVector: Float32Array): RetrievalResult[];
 	rerankLocalModel(query: string, ordered: RetrievalResult[], deadlineAt?: number, signal?: AbortSignal): Promise<RerankOutcome>;
-	getRerankSourceScore(result: RetrievalResult): number;
 	applyScoringPipeline(results: RetrievalResult[], trace?: TraceCollector, limit?: number, modelOrder?: readonly string[]): RetrievalResult[];
 	applyRecencyBoost(results: RetrievalResult[]): RetrievalResult[];
 	applyImportanceWeight(results: RetrievalResult[]): RetrievalResult[];
