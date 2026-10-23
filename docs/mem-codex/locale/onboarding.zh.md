@@ -75,7 +75,7 @@ REM 是你的 agent 做梦的方式：夜里它们加强记忆，并把当天学
 | 更新对你的了解 | 固定规则 | 你的 Codex CLI | 你的 Codex CLI |
 | 识别已完成的任务 | 字词比对 | 你的 Codex CLI | 你的 Codex CLI |
 | 处理互相矛盾的记忆 | 两条都保留 | 你的 Codex CLI | Sno 的记忆模型 |
-| 排列要召回的记忆 | 在你的电脑上 | 在你的电脑上 | Sno 的重排序服务 |
+| 排列要召回的记忆 | 在你的电脑上 | 在你的电脑上 | 在你的电脑上 |
 | 总结这一天 | 不生成 model reflection；仍保留 local session memory | 同左 | 同左 |
 | 把“明天”换成日期 | 不调用模型 | 你的 Codex CLI | 你的 Codex CLI |
 
@@ -92,7 +92,11 @@ REM 还会按计划整理你的记忆，分两种：
 
 默认两种都会做。在 `settings.json` 里改 `rem.operations` 可以只选一种，把 `rem.tick` 设为 `false` 可以关掉 REM 的定时运行。
 
-Mode selection 不承诺最终 retrieval 或 reranker 行为。
+模式选择决定记忆写入和维护的处理方式。所有模式下，搜索都先由本地程序检索并初排，
+再由本地 `Horizon-Labs/multilingual-reranker-small` 模型重排最多 32 条候选记忆，
+不会使用 Sno GPU 重排。把 `rerank.mode` 设为 `none`，即可保留程序初排、不使用重排模型。
+模型正在加载、失败或超时时，也使用程序初排。其他记忆写入、REM 和自我学习的处理目标
+仍由原有模式设置决定。
 
 ## 第三步：完成设置并验证
 

@@ -22,9 +22,7 @@ import { pickLlmRoutingConfig } from "../../../../packages/memory/src/model/llm-
 import { pluginConfigSchema } from "../../../../packages/memory/src/engine/shared/types.ts";
 
 /**
- * The local ranker, stated explicitly. Nothing in this file exercises the remote
- * reranker, and a mode that resolves to the cross-encoder is refused without its key
- * (owner ruling 2026-08-30), so the fixture names the ranker it has always used.
+ * The local ranker, stated explicitly; these tests measure observe token sources, not ranking.
  */
 const LOCAL_RERANK = { retrieval: { rerank: "lightweight" } } as const;
 const modelCalls = JSON.parse(readFileSync(new URL("../../../../packages/memory/settings.default.json", import.meta.url), "utf8")).modelCalls;
