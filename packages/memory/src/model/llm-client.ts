@@ -185,6 +185,7 @@ function buildPipelineConfig(
 		requestId?: string;
 		signal?: AbortSignal;
 		onProviderResponse?: LlmClientConfig["onProviderResponse"];
+		usageClass?: LlmClientConfig["usageClass"];
 	} {
 	return {
 		provider: preset.provider,
@@ -210,6 +211,7 @@ function buildPipelineConfig(
 		destination,
 		...(request.requestId ? { requestId: request.requestId } : {}),
 		...(operationId ? { operationId } : {}),
+		...(config.usageClass ? { usageClass: config.usageClass } : {}),
 		...(request.promptTemplateHash ? { promptTemplateHash: request.promptTemplateHash } : {}),
 		...(request.extractionSkillHash ? { extractionSkillHash: request.extractionSkillHash } : {}),
 		...(request.signal ? { signal: request.signal } : {}),

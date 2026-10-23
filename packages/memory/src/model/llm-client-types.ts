@@ -21,6 +21,8 @@ export type LlmPreset = (typeof LLM_PRESETS)[number];
 
 export type LlmProvider = "openai" | "openrouter" | "sno-gpu";
 
+export type ModelUsageClass = "product" | "research" | "ops";
+
 export type MemoryLlmRequest = {
 	prompt: string;
 	hostPrompt?: string;
@@ -58,6 +60,8 @@ export interface LlmClientConfig {
 	timeoutMs?: number;
 	agentPort?: AgentLlmPort;
 	operationId?: string;
+	/** Optional diagnostic execution purpose; absent remains unknown. */
+	usageClass?: ModelUsageClass;
 	onTransportAttempt?: (attempt: {
 		callId: ModelCallId;
 		destination: "host" | "sno-gpu";
@@ -136,6 +140,7 @@ export type DispatchContext = {
 		userBaseUrlOverride?: boolean;
 		requestId?: string;
 		operationId?: string;
+		usageClass?: ModelUsageClass;
 		promptTemplateHash?: string;
 		extractionSkillHash?: string;
 		onProviderResponse?: (response: ProviderResponseTrace) => void;

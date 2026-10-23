@@ -15,6 +15,7 @@ import type {
 	DispatchContext,
 	LlmClientConfig,
 	LlmProvider,
+	ModelUsageClass,
 	ResolvedLlmConfig,
 	LocalCallResult,
 	ProviderResult,
@@ -35,11 +36,12 @@ export function withProviderResponses<T>(responses: ProviderResponseTrace[], run
 /** Sno GPU request attribution (GPU_REQUEST_METADATA_STANDARD): self-reported labels, never identity. */
 const SNO_GPU_SOURCE = "sno-station";
 
-function snoGpuAttributionHeaders(clientRequestId: string, callId: ModelCallId | undefined): Record<string, string> {
+function snoGpuAttributionHeaders(clientRequestId: string, callId: ModelCallId | undefined, usageClass?: ModelUsageClass): Record<string, string> {
 	return {
 		"X-Sno-Source": SNO_GPU_SOURCE,
 		"X-Sno-Workload": callId ? MODEL_CALL_WORKLOAD[callId] : "station-aux",
 		"X-Request-ID": clientRequestId,
+		...(usageClass ? { "X-Sno-Usage-Class": usageClass } : {}),
 	};
 }
 
@@ -297,6 +299,7 @@ async function describeProviderFailure(response: Response, diagnostic?: RequestD
 }
 
 export interface SnoProfileCompletionRequest {
+	usageClass?: ModelUsageClass;
 	promptTemplateHash?: string;
 	extractionSkillHash?: string;
 	endpointUrl: string;
@@ -331,7 +334,7 @@ export async function callSnoProfileCompletion(
 			headers: {
 				"Content-Type": "application/json",
 				"X-Internal-Token": request.apiKey,
-				...snoGpuAttributionHeaders(diagnostic.clientRequestId, request.callId),
+				...snoGpuAttributionHeaders(diagnostic.clientRequestId, request.callId, request.usageClass),
 				...(request.operationId ? { "X-Sno-Operation": request.operationId } : {}),
 			},
 			body: JSON.stringify({
@@ -459,7 +462,7 @@ async function snoStationMemDispatch(ctx: LlmixDispatchContext): Promise<Provide
 	if (typeof cfgExt.requestId === "string") headers["X-Request-ID"] = cfgExt.requestId;
 	if (provider === "sno-gpu") {
 		headers["X-Internal-Token"] = ctx.apiKey;
-		Object.assign(headers, snoGpuAttributionHeaders(diagnostic.clientRequestId, cfgExt.callId));
+		Object.assign(headers, snoGpuAttributionHeaders(diagnostic.clientRequestId, cfgExt.callId, cfgExt.usageClass));
 		if (typeof cfgExt.operationId === "string") headers["X-Sno-Operation"] = cfgExt.operationId;
 	} else {
 		headers.Authorization = `Bearer ${ctx.apiKey}`;
@@ -608,6 +611,7 @@ export async function callProvider(ctx: LlmixDispatchContext): Promise<LocalCall
 		}
 		return {
 			...(await callSnoProfileCompletion({
+				...(cfgExt.usageClass ? { usageClass: cfgExt.usageClass } : {}),
 				...(cfgExt.promptTemplateHash ? { promptTemplateHash: cfgExt.promptTemplateHash } : {}),
 				...(cfgExt.extractionSkillHash ? { extractionSkillHash: cfgExt.extractionSkillHash } : {}),
 				endpointUrl: raw.endpointUrl,
