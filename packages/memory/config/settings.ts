@@ -1,22 +1,20 @@
 import { LOCAL_EMBEDDING_MODEL_REVISION } from "@snoai/embedder";
 import { isLowercaseCanonicalUUIDv7 } from "@snoai/common-core";
-import { createLogger } from "@snoai/utils/logger";
 import { z } from "zod";
-import { CANDIDATE_POOL_SIZE, DEFAULT_SESSION_MESSAGE_COUNT, EMBEDDER_MODEL_DEFAULT } from "./index";
+import { DEFAULT_SESSION_MESSAGE_COUNT, EMBEDDER_MODEL_DEFAULT } from "./index";
 import { PRODUCT_MODES, type ProductMode } from "./plugin-config-mode-schema";
 import { pluginConfigSchema } from "./plugin-config-schema";
+import { rerankModeSchema, rerankTimeoutSchema } from "./plugin-config-retrieval-schema";
 import { SESSION_STRATEGIES } from "./session-strategy";
 import { MODEL_CALLS, type ModelDestination } from "../src/model/model-call-table";
 import { SUPPORTED_LOCALES, type Locale } from "../src/engine/i18n/locales";
-
-const log = createLogger("sno-station-mem:config:settings");
 
 export type Settings = {
 	mode: ProductMode;
 	modelCalls: Record<keyof typeof MODEL_CALLS, Record<ProductMode, ModelDestination>>;
 	user: { id: string; language: Locale };
 	snoGpu: { baseUrl: string; apiKey: string };
-	rerank: { mode: "lightweight" | "cross-encoder" | "none"; timeoutMs: number; maxCandidates: number };
+	rerank: { mode: "lightweight" | "none"; timeoutMs: number };
 	store: { path: string; encryptionKey: string };
 	embedding: { model: string; revision: string; dtype: "q4" | "q8" | "fp16" | "fp32"; threads: number; cacheDir: string; offline: boolean; mirror: string };
 	recall: { auto: boolean; sessionStart: { limit: number; maxChars: number; timeoutMs: number }; prompt: { limit: number; maxChars: number; timeoutMs: number; minChars: number; minScore: number }; explicitLimit: number };
@@ -43,11 +41,12 @@ const schema: z.ZodType<Settings> = z.strictObject({
 	modelCalls,
 	user: z.strictObject({ id: z.string().refine((id) => id === "" || isLowercaseCanonicalUUIDv7(id)), language: z.enum(SUPPORTED_LOCALES) }),
 	snoGpu: z.strictObject({ baseUrl: z.string(), apiKey: z.string() }),
-	rerank: z.strictObject({
-		mode: z.enum(["lightweight", "cross-encoder", "none"]),
-		timeoutMs: z.number().int().min(1000).max(120000),
-		maxCandidates: z.number().int().min(1).max(2000),
-	}),
+	rerank: z.preprocess((value) => {
+		if (typeof value !== "object" || value === null || Array.isArray(value) || !("maxCandidates" in value)) return value;
+		// Only this published, retired field is removed; unknown settings still fail strict validation.
+		const { maxCandidates: _retired, ...current } = value;
+		return current;
+	}, z.strictObject({ mode: rerankModeSchema, timeoutMs: rerankTimeoutSchema })),
 	store: z.strictObject({ path: z.string(), encryptionKey: z.string().min(1).regex(/^[0-9a-f]{64}$/u) }),
 	embedding: z.strictObject({
 		model: z.string(), revision: z.string(), dtype: z.enum(["q4", "q8", "fp16", "fp32"]),
@@ -86,7 +85,7 @@ export function defaultSettings(): Settings {
 		modelCalls: Object.fromEntries(Object.entries(MODEL_CALLS).map(([id, call]) => [id, call.destinations])) as Settings["modelCalls"],
 		user: { id: "", language: "en" },
 		snoGpu: { baseUrl: "https://rt3-llm.sno.ai", apiKey: "" },
-		rerank: { mode: "cross-encoder", timeoutMs: engine.retrieval.rerankTimeoutMs, maxCandidates: CANDIDATE_POOL_SIZE },
+		rerank: { mode: "lightweight", timeoutMs: engine.retrieval.rerankTimeoutMs },
 		store: { path: "", encryptionKey: "" },
 		embedding: { model: EMBEDDER_MODEL_DEFAULT, revision: LOCAL_EMBEDDING_MODEL_REVISION, dtype: engine.embedding.dtype,
 			threads: 0, cacheDir: "", offline: false, mirror: "" },
@@ -105,31 +104,7 @@ export function defaultSettings(): Settings {
 	};
 }
 
-/**
- * Recall ranking is local, or Sno's reranker: its address is the Sno GPU address and its key is the Sno GPU key. Only
- * REM Enhanced calls Sno GPU; any other mode, or no key yet, ranks locally, which is the configured strategy, not an error.
- */
-function rerankSettings(settings: Settings): { rerank: Settings["rerank"]["mode"]; endpoint: string | undefined; apiKey: string } {
-	const { rerank, snoGpu } = settings;
-	let endpoint: string | undefined;
-	try {
-		endpoint = new URL("rerank", snoGpu.baseUrl.endsWith("/") ? snoGpu.baseUrl : `${snoGpu.baseUrl}/`).toString();
-	} catch {
-		log.warn("memory.rerank.sno_gpu_address.invalid", { cause: "snoGpu.baseUrl is not a valid address; recall ranks locally" }, {
-			event_name: "memory.rerank.sno_gpu_address.invalid", file: "packages/memory/config/settings.ts",
-			function: "rerankSettings", site_id: "memory.rerank.sno_gpu_address.invalid",
-		});
-	}
-	const local = rerank.mode !== "cross-encoder" || settings.mode !== "rem-enhanced" || !snoGpu.apiKey || endpoint === undefined;
-	return {
-		rerank: local && rerank.mode === "cross-encoder" ? "lightweight" : rerank.mode,
-		endpoint: local ? undefined : endpoint,
-		apiKey: local ? "" : snoGpu.apiKey,
-	};
-}
-
 export function settingsToPluginConfig(settings: Settings): import("./plugin-config-schema").PluginConfig {
-	const sno = rerankSettings(settings);
 	return pluginConfigSchema.parse({
 		mode: settings.mode, modelCalls: settings.modelCalls,
 		provider: { userId: settings.user.id || undefined }, language: settings.user.language,
@@ -138,11 +113,9 @@ export function settingsToPluginConfig(settings: Settings): import("./plugin-con
 			dtype: settings.embedding.dtype, cacheDir: settings.embedding.cacheDir || undefined,
 			offline: settings.embedding.offline, mirror: settings.embedding.mirror,
 			sessionOptions: { intraOpNumThreads: settings.embedding.threads || undefined } },
-		retrieval: { rerank: sno.rerank,
+		retrieval: { rerank: settings.rerank.mode,
 			recallTopK: settings.recall.prompt.limit, minScore: settings.recall.prompt.minScore,
-			rerankEndpoint: sno.endpoint,
-			rerankApiKey: sno.apiKey, rerankTimeoutMs: settings.rerank.timeoutMs,
-			rerankMaxCandidates: settings.rerank.maxCandidates },
+			rerankTimeoutMs: settings.rerank.timeoutMs },
 		autoRecall: settings.recall.auto, autoRecallTimeoutMs: settings.recall.prompt.timeoutMs,
 		autoRecallMinLength: settings.recall.prompt.minChars,
 		captureAssistant: settings.capture.assistant, ambientLearning: settings.capture.ambient,

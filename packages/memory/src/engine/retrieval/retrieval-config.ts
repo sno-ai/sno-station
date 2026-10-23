@@ -21,8 +21,6 @@ import {
 	MMR_LAMBDA,
 	RECENCY_HALF_LIFE_DAYS,
 	RECENCY_WEIGHT,
-	RERANK_BLEND_CROSS,
-	RERANK_BLEND_VECTOR,
 	TIME_DECAY_FLOOR,
 	TIME_DECAY_HALF_LIFE_DAYS,
 } from "./retriever-dependencies";
@@ -36,7 +34,7 @@ export interface RetrievalConfig {
 	vectorWeight: number;
 	bm25Weight: number;
 	minScore: number;
-	rerank: "cross-encoder" | "lightweight" | "none";
+	rerank: "lightweight" | "none";
 	candidatePoolSize: number;
 	recencyHalfLifeDays: number;
 	recencyWeight: number;
@@ -44,15 +42,10 @@ export interface RetrievalConfig {
 	temporalExpiry: boolean;
 	/** Dynamic memories decay 3× faster in time-decay scoring (default ON) */
 	temporalDecay: boolean;
-	rerankApiKey?: string;
 	rerankTimeoutMs?: number;
 	lengthNormAnchor: number;
 	hardMinScore: number;
 	timeDecayHalfLifeDays: number;
-	/** Weight for fusion score in rerank blend */
-	rerankBlendVector?: number;
-	/** Weight for cross-encoder score in rerank blend */
-	rerankBlendCross?: number;
 	/** Fusion-score weight when rerank="lightweight" (local cosine blend) */
 	lightweightFusionWeight?: number;
 	/** Cosine-score weight when rerank="lightweight" (local cosine blend) */
@@ -63,15 +56,6 @@ export interface RetrievalConfig {
 	timeDecayFloor?: number;
 	/** Relevance vs diversity tradeoff (default: 0.7) */
 	mmrLambda?: number;
-	/** Address of Sno's reranker (the Sno GPU address plus `/rerank`) */
-	rerankEndpoint?: string;
-	/**
-	 * Cap on how many candidates are sent to Sno's reranker in total. Candidates
-	 * beyond the cap are NOT dropped — they still flow through the standard
-	 * `unreturned` preservation-floor path, same as a real reranker choosing
-	 * not to return them.
-	 */
-	rerankMaxCandidates?: number;
 	/** Scaling factor for access-based reinforcement (0 = disabled, default: 0.5) */
 	reinforcementFactor?: number;
 	/** Hard cap: effective half-life <= baseHalfLife * maxHalfLifeMultiplier (default: 3) */
@@ -100,7 +84,7 @@ export interface RetrievalContext {
 	 */
 	includeRefused?: boolean;
 	signal?: AbortSignal;
-	/** The time (ms since the epoch) by which a Sno reranker must have finished, retries included, before recall falls back to local ranking; set by callers that have a deadline. */
+	/** The time (ms since the epoch) by which the local model must finish before recall keeps its initial ranking. */
 	rerankDeadlineAt?: number;
 	sessionId?: string;
 	explicitLocale?: string;
@@ -164,7 +148,7 @@ export const DEFAULT_RETRIEVAL_CONFIG: RetrievalConfig = {
 	vectorWeight: DEFAULT_VECTOR_WEIGHT,
 	bm25Weight: DEFAULT_BM25_WEIGHT,
 	minScore: DEFAULT_MIN_SCORE,
-	rerank: "cross-encoder",
+	rerank: "lightweight",
 	candidatePoolSize: CANDIDATE_POOL_SIZE,
 	recencyHalfLifeDays: RECENCY_HALF_LIFE_DAYS,
 	recencyWeight: RECENCY_WEIGHT,
@@ -174,8 +158,6 @@ export const DEFAULT_RETRIEVAL_CONFIG: RetrievalConfig = {
 	lengthNormAnchor: LENGTH_NORM_ANCHOR,
 	hardMinScore: DEFAULT_HARD_MIN_SCORE,
 	timeDecayHalfLifeDays: TIME_DECAY_HALF_LIFE_DAYS,
-	rerankBlendVector: RERANK_BLEND_VECTOR,
-	rerankBlendCross: RERANK_BLEND_CROSS,
 	lightweightFusionWeight: LIGHTWEIGHT_FUSION_WEIGHT,
 	lightweightCosineWeight: LIGHTWEIGHT_COSINE_WEIGHT,
 	importanceWeightBase: IMPORTANCE_WEIGHT_BASE,

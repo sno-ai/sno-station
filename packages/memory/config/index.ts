@@ -240,70 +240,35 @@ export const TIME_DECAY_FLOOR = 0.6;
 export const TEMPORAL_DYNAMIC_HALF_LIFE_DIVISOR = 3;
 
 /**
- * Relevance vs diversity tradeoff for MMR (0.7 = 70% relevance, 30% diversity).
+ * Relevance vs diversity tradeoff for MMR (0.9 = 90% relevance, 10% diversity).
  * `applyMmrDiversity` normalizes the relevance term to [0,1] (batch-max) before
  * applying this weight — without that normalization, the shrinker chain above
  * compresses relevance so far below the [0,1] cosine-similarity diversity term
  * that this ratio was moot (diversity always won). Fixed 2026-07-05.
  */
-export const MMR_LAMBDA = 0.7;
+export const MMR_LAMBDA = 0.9;
 
 // =============================================================================
 // RETRIEVAL — RERANKING
 // =============================================================================
 
-/** Weight for fusion score in rerank blend */
-export const RERANK_BLEND_VECTOR = 0.3;
-
-/** Weight for cross-encoder score in rerank blend */
-export const RERANK_BLEND_CROSS = 0.7;
-
 /**
- * Fusion-score weight in local cosine-blend rerank.
- *
- * The fused score keeps a keyword-only hit at its full keyword score, so a memory sharing one word with the query
- * outranks the one that answers it; at 0.7 the local ranking passed that order through almost unchanged. Measured
- * 2026-10-15 on LoCoMo (1,540 questions, the product store and retriever, weights fitted on half the conversations
- * and checked on the other half): the right memory in the first five went from 27% to 68% in English and from 9% to
- * 58% in a Chinese translation at 0.1 / 0.9. A candidate with no stored vector keeps its fused score and would now
- * rank high; none of 27,064 candidates in 299 real local rankings lacked one.
+ * Fusion-score weight in the initial ranking. The local model uses the
+ * cosine ordering evaluated in evals/rerank-optimized-2026-10-21.
  */
-export const LIGHTWEIGHT_FUSION_WEIGHT = 0.1;
+export const LIGHTWEIGHT_FUSION_WEIGHT = 0;
 
 /** Cosine-similarity weight in local cosine-blend rerank */
-export const LIGHTWEIGHT_COSINE_WEIGHT = 0.9;
+export const LIGHTWEIGHT_COSINE_WEIGHT = 1;
 
 /**
- * How many of the local ranking's first candidates the local reranker model reorders. The model puts the memory that
- * answers above near misses the cosine order keeps on top, in English and Chinese alike; scoring more candidates than
- * this found no more answers and took longer.
+ * How many of the initial ranking's candidates the local model reorders.
+ * Evaluation and the owner-selected default are recorded in evals/rerank-optimized-2026-10-21.
  */
-export const LOCAL_RERANK_CANDIDATES = 15;
+export const LOCAL_RERANK_CANDIDATES = 32;
 
-/** Default timeout for rerank API calls in milliseconds */
-export const DEFAULT_RERANK_TIMEOUT_MS = 15_000;
-
-/**
- * How many rerank batches may be in flight at once. A candidate pool of
- * `MAX_CANDIDATE_POOL_SIZE` divided by the reranker's per-request batch limit is 11 requests, and sending them one after another put `DEFAULT_RERANK_TIMEOUT_MS` on the clock 11 times
- * over. Four is what the Sno GPU serves concurrently at near-linear 4x (owner-measured
- * 2026-08-17); the first failing wave still ends the whole rerank, so a wedged reranker costs one
- * timeout rather than one per batch.
- */
-export const DEFAULT_RERANK_BATCH_CONCURRENCY = 4;
-
-/**
- * Texts per HTTP request, applied whatever `rerankMaxCandidates` allows out in total: that one
- * is the operator's budget, this one is the transport's own per-request limit.
- *
- * Confirmed 2026-09-14 against Sno's reranker, which answers a 51-text request
- * with `{"error":"too many texts: max 50, got 51"}`. It rejects an over-limit
- * batch outright rather than truncating it, and the retriever files that HTTP 400 as "reranker
- * unavailable" — so getting this wrong degrades every call to local ranking with no visible
- * error.
- */
-export const RERANK_TEXTS_PER_REQUEST = 50;
-
+/** Maximum wait for the local reranker in milliseconds; caller deadlines may be earlier. */
+export const DEFAULT_RERANK_TIMEOUT_MS = 2_000;
 
 // =============================================================================
 // EMBEDDING — CHUNKER
@@ -330,13 +295,6 @@ export const RERANK_TEXTS_PER_REQUEST = 50;
  * a literal anywhere else.
  */
 export const DEFAULT_MAX_CONTEXT_TOKENS = 512;
-
-/**
- * Tokens the ranking model's own prompt template adds to a pair, on top of the query and the
- * document. Measured against the deployed endpoint 2026-09-14: a 509-token pair is accepted
- * and reported back as 512 input tokens, and a 510-token pair is refused as 513.
- */
-export const RERANK_PROMPT_TEMPLATE_TOKENS = 3;
 
 /** Maximum lines per chunk before forcing an earlier split at a line boundary */
 export const DEFAULT_MAX_LINES_PER_CHUNK = 50;
@@ -825,8 +783,6 @@ export const EVAL_QA_TRACES_FILENAME = "qa_traces.jsonl" as const;
 // RETRIEVAL — MISC LIFTED LITERALS (PRD §15.1.3)
 // =============================================================================
 
-/** Multiplicative penalty applied to unreturned candidates after rerank. */
-export const LIGHTWEIGHT_RERANK_PENALTY = 0.8;
 
 /** Maximum tokens kept in a sanitized FTS5 MATCH expression. */
 export const FTS_QUERY_TOKEN_CAP = 50;
