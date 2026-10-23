@@ -303,6 +303,7 @@ async function maybeStoreReflection(
 		const llmCfg = params.config.extraction.llm ?? DEFAULT_MEMORY_LLM_CONFIG;
 		const mappedLlm = createLlmClient({
 			preset: llmCfg.preset,
+			usageClass: llmCfg.usageClass,
 			...(llmCfg.apiKey ? { apiKey: llmCfg.apiKey } : {}),
 			...(llmCfg.baseURL ? { baseURL: llmCfg.baseURL } : {}),
 			timeoutMs: llmCfg.timeoutMs,

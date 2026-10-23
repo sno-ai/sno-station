@@ -79,6 +79,7 @@ export function buildInsightDistiller(
 	try {
 		const transports = createSignedAtomicMemoryExtractionTransports({
 			preset: llmCfg.preset,
+			usageClass: llmCfg.usageClass,
 			...(llmCfg.apiKey ? { apiKey: llmCfg.apiKey } : {}),
 			...(llmCfg.baseURL ? { baseURL: llmCfg.baseURL } : {}),
 			timeoutMs: llmCfg.timeoutMs,

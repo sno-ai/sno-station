@@ -41,6 +41,7 @@ export function createReflectionGenerator(
 		if (!llmConfig) return null;
 		const client = createLlmClient({
 			preset: llmConfig.preset,
+			usageClass: llmConfig.usageClass,
 			...(llmConfig.apiKey ? { apiKey: llmConfig.apiKey } : {}),
 			...(llmConfig.baseURL ? { baseURL: llmConfig.baseURL } : {}),
 			timeoutMs,
