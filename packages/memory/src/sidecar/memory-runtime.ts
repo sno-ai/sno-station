@@ -161,7 +161,7 @@ export class MemoryRuntimePool {
 	static async open(): Promise<MemoryRuntimePool> {
 		const settings = readSettings();
 		const storePath = settings.store.path;
-		const config = settingsToPluginConfig(settings);
+		const config = settingsToPluginConfig(settings, "product");
 		try {
 			emitRuntimeStartSnapshot({ runtimeMode: "sidecar", preset: FIXED_MEMORY_SNO_EXTRACT_CHAT,
 				logging: settings.logging,

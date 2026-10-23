@@ -8,7 +8,7 @@ import {
 	DEFAULT_REFLECTION_TIMEOUT_MS,
 	DEFAULT_SESSION_MESSAGE_COUNT,
 } from "./index";
-import { LLM_PRESETS } from "../src/model/llm-client-types";
+import { LLM_PRESETS, type ModelUsageClass } from "../src/model/llm-client-types";
 
 export const sessionMemoryConfigSchema: z.ZodType<
 	{ enabled: boolean; messageCount: number },
@@ -43,6 +43,7 @@ export const extractionConfigSchema: z.ZodType<
 			preset: (typeof LLM_PRESETS)[number];
 			baseURL?: string | undefined;
 			apiKey?: string | undefined;
+			usageClass?: ModelUsageClass | undefined;
 			timeoutMs: number;
 		};
 	},
@@ -56,6 +57,7 @@ export const extractionConfigSchema: z.ZodType<
 				baseURL: z.string().optional(),
 				/** Overrides provider-native env if set. */
 				apiKey: z.string().optional(),
+				usageClass: z.enum(["product", "research", "ops"]).optional(),
 				timeoutMs: z.number().int().min(1000).max(300_000).default(30_000),
 		})
 			.strict()

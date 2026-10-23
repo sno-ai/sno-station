@@ -38,7 +38,7 @@ async function main(): Promise<void> {
 	const sqlite = openSqliteDatabase(storePath, { fileMustExist: true });
 	let embedder: Embedder | undefined;
 	try {
-		const pluginConfig = settingsToPluginConfig(settings);
+		const pluginConfig = settingsToPluginConfig(settings, "product");
 		embedder = createEmbedder(pluginConfig.embedding, getSnoStationMemStateDir());
 		const routing = pickLlmRoutingConfig(pluginConfig);
 		// This command runs outside the memory service, so no plugin's host model is reachable from it:
@@ -53,6 +53,7 @@ async function main(): Promise<void> {
 		}
 		const chatClient = runs("E8") || runs("E12") ? createLlmClient({
 			preset: FIXED_MEMORY_SNO_EXTRACT_CHAT,
+			usageClass: pluginConfig.extraction.llm.usageClass,
 			apiKey: settings.snoGpu.apiKey,
 			baseURL: settings.snoGpu.baseUrl,
 			timeoutMs: 60_000,
@@ -60,6 +61,7 @@ async function main(): Promise<void> {
 		}) : undefined;
 		const profileClient = runs("E9") ? createLlmClient({
 			preset: FIXED_MEMORY_SNO_EXTRACT_PROFILE,
+			usageClass: pluginConfig.extraction.llm.usageClass,
 			apiKey: settings.snoGpu.apiKey,
 			baseURL: settings.snoGpu.baseUrl,
 			timeoutMs: 60_000,

@@ -642,7 +642,7 @@ async function openBatchRuntime(input: {
 }): Promise<BatchRuntime> {
 	const settings = input.settings;
 	const dbPath = settings.store.path;
-	const pluginConfig = settingsToPluginConfig(settings);
+	const pluginConfig = settingsToPluginConfig(settings, "product");
 	initSqliteRuntime(settings.store.encryptionKey);
 	const embedder = createEmbedder(pluginConfig.embedding, getSnoStationMemStateDir());
 	let store: MemoryStore | undefined;
@@ -669,6 +669,7 @@ async function openBatchRuntime(input: {
 		loadStorageExtensions(database);
 		const llm = createLlmClient({
 			preset: FIXED_MEMORY_SNO_EXTRACT_CHAT,
+			usageClass: pluginConfig.extraction.llm.usageClass,
 			operationId: input.jobId,
 			apiKey: settings.snoGpu.apiKey,
 			baseURL: settings.snoGpu.baseUrl,

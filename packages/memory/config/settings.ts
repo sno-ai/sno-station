@@ -8,6 +8,7 @@ import { rerankModeSchema, rerankTimeoutSchema } from "./plugin-config-retrieval
 import { SESSION_STRATEGIES } from "./session-strategy";
 import { MODEL_CALLS, type ModelDestination } from "../src/model/model-call-table";
 import { SUPPORTED_LOCALES, type Locale } from "../src/engine/i18n/locales";
+import type { ModelUsageClass } from "../src/model/llm-client-types";
 
 export type Settings = {
 	mode: ProductMode;
@@ -104,7 +105,7 @@ export function defaultSettings(): Settings {
 	};
 }
 
-export function settingsToPluginConfig(settings: Settings): import("./plugin-config-schema").PluginConfig {
+export function settingsToPluginConfig(settings: Settings, usageClass?: ModelUsageClass): import("./plugin-config-schema").PluginConfig {
 	return pluginConfigSchema.parse({
 		mode: settings.mode, modelCalls: settings.modelCalls,
 		provider: { userId: settings.user.id || undefined }, language: settings.user.language,
@@ -126,6 +127,6 @@ export function settingsToPluginConfig(settings: Settings): import("./plugin-con
 			currentKeyVersion: settings.telemetry.memoryUsage.historicKeys.length + 1,
 			key: settings.telemetry.memoryUsage.key, historicKeys: settings.telemetry.memoryUsage.historicKeys },
 		observe: settings.telemetry.observe,
-		extraction: { llm: { baseURL: settings.snoGpu.baseUrl, apiKey: settings.snoGpu.apiKey } },
+		extraction: { llm: { baseURL: settings.snoGpu.baseUrl, apiKey: settings.snoGpu.apiKey, usageClass } },
 	});
 }
