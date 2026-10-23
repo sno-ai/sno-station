@@ -170,7 +170,7 @@ export interface QueryManifestCapture {
 		source: "auto-recall";
 		method: "onBeforeAgentStart -> MemoryRetriever.retrieve";
 		captureMethod: "MemoryRetriever.retrieveWithTrace";
-		retrievalConfig: Omit<RetrievalConfig, "rerankApiKey">;
+		retrievalConfig: RetrievalConfig;
 		retrievalConfigSha256: string;
 	};
 	queries: QueryCapture[];
@@ -277,8 +277,8 @@ function captureScore(value: number | undefined): CandidateScoreCapture {
 }
 
 function sanitizedRetrievalConfig(
-	config: RetrievalConfig,
-): Omit<RetrievalConfig, "rerankApiKey"> {
+	config: RetrievalConfig & { rerankApiKey?: string },
+): RetrievalConfig {
 	const { rerankApiKey: _rerankApiKey, ...sanitized } = config;
 	return sanitized;
 }
