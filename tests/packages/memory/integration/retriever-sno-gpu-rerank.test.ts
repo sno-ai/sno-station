@@ -1,276 +1,62 @@
-import { createServer, type IncomingHttpHeaders, type Server } from "node:http";
+/** Historical remote configuration now serves a real local-model answer without remote rerank traffic. */
 import { once } from "node:events";
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { effectiveLogLevel, setLogLevel } from "@snoai/utils/logger";
-import type { Embedder } from "../../../../packages/memory/src/engine/extraction/embedding-provider-client.ts";
-import { createTestEmbedder } from "../../../apps/mem-claw/helpers/test-db.ts";
+import { mkdtempSync, rmSync } from "node:fs";
+import { createServer } from "node:http";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { expect, it, vi } from "vitest";
+import { settingsToPluginConfig } from "../../../../packages/memory/config/settings.ts";
+import { readSettings } from "../../../../packages/memory/src/contract/profile.ts";
 import { createRetriever, DEFAULT_RETRIEVAL_CONFIG } from "../../../../packages/memory/src/engine/retrieval/retriever.ts";
-import type { MemoryEntry, MemorySearchResult } from "../../../../packages/memory/src/engine/shared/types.ts";
-import { defaultSettings, settingsToPluginConfig, type Settings } from "../../../../packages/memory/config/settings";
+import { MemoryStore } from "../../../../packages/memory/src/store/store.ts";
+import { createTestDb, createTestEmbedder } from "../../../apps/mem-claw/helpers/test-db.ts";
+import { writeSettingsFixture } from "../fixtures/settings-file-fixture.ts";
 
-const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
-const QUERY = "Which programming language does the user prefer for type safety?";
-
-function entry(id: string, text: string): MemoryEntry {
-	return { id, text, category: "episodic", lane: "active", projectId: "global", importance: 0.5, timestamp: Date.now(), metadata: "{}", contentHash: `hash-${id}` };
-}
-
-function storeOf(candidates: MemorySearchResult[]) {
-	return {
-		hasFtsSupport: true,
-		isMemoryOnFactSurface: (id: string) => candidates.some((c) => c.entry.id === id),
-		searchSemantic: async () => candidates,
-		searchKeyword: async () => [] as MemorySearchResult[],
-		getVectorsByIds: () => new Map<string, Float32Array>(),
-	};
-}
-
-const BASE_CONFIG = {
-	...DEFAULT_RETRIEVAL_CONFIG, minScore: 0, hardMinScore: 0, lengthNormAnchor: 0, importanceWeightBase: 1, mmrLambda: 1, candidatePoolSize: 64,
-};
-
-let embedder: Embedder;
-const previousLogLevel = effectiveLogLevel();
-beforeAll(async () => { setLogLevel("info"); embedder = await createTestEmbedder(); });
-afterAll(() => { setLogLevel(previousLogLevel); });
-
-function settingsFor(mode: Settings["mode"], patch: Partial<Settings> = {}): Settings {
-	return { ...defaultSettings(), mode, snoGpu: { baseUrl: "https://rt3-llm.sno.ai", apiKey: "machine-key" }, ...patch };
-}
-
-describe("which settings send recall ranking to Sno GPU", () => {
-	it("REM Enhanced with a Sno GPU key ranks on Sno's reranker at the Sno GPU address, with the same key", () => {
-		const retrieval = settingsToPluginConfig(settingsFor("rem-enhanced")).retrieval;
-		expect(retrieval).toMatchObject({ rerank: "cross-encoder", rerankEndpoint: "https://rt3-llm.sno.ai/rerank", rerankApiKey: "machine-key" });
+it("reads a historical GPU profile, promotes the answering memory with the real local model, and makes no remote rerank request", async () => {
+	const requests: string[] = [];
+	const server = createServer((request, response) => {
+		requests.push(request.url ?? "");
+		request.resume();
+		response.writeHead(200, { "content-type": "application/json" });
+		response.end("[]");
 	});
-
-	it("the other two modes and a missing key rank locally and never name a Sno GPU key or address", () => {
-		for (const mode of ["local-first", "agent-native"] as const) {
-			const retrieval = settingsToPluginConfig(settingsFor(mode)).retrieval;
-			expect(retrieval.rerank).toBe("lightweight");
-			expect(retrieval.rerankEndpoint).toBeUndefined();
-		}
-		const chosenLocal = settingsToPluginConfig(settingsFor("rem-enhanced", { rerank: { ...defaultSettings().rerank, mode: "lightweight" } })).retrieval;
-		expect(chosenLocal).toMatchObject({ rerank: "lightweight", rerankApiKey: "" });
-		expect(chosenLocal.rerankEndpoint).toBeUndefined();
-		const noKey = settingsToPluginConfig(settingsFor("rem-enhanced", { snoGpu: { baseUrl: "https://rt3-llm.sno.ai", apiKey: "" } })).retrieval;
-		expect(noKey.rerank).toBe("lightweight");
-	});
-
-	it("a Sno GPU address that is not a valid address does not stop the memory service: recall ranks locally", () => {
-		for (const baseUrl of ["rt3-llm.sno.ai", ""]) {
-			const retrieval = settingsToPluginConfig(settingsFor("rem-enhanced", { snoGpu: { baseUrl, apiKey: "machine-key" } })).retrieval;
-			expect(retrieval).toMatchObject({ rerank: "lightweight", rerankApiKey: "" });
-		}
-	});
-
-});
-
-describe("the recall search against a Sno-style reranker over real HTTP", () => {
-	let server: Server | undefined;
-	afterEach(async () => {
-		server?.closeAllConnections();
-		await new Promise((resolve) => server?.close(resolve));
-		server = undefined;
-	});
-
-	async function reranker(respond: (call: number, texts: string[]) => { status: number; body?: unknown; delayMs?: number; headers?: Record<string, string> }) {
-		const calls: Array<{ headers: IncomingHttpHeaders; texts: string[] }> = [];
-		server = createServer(async (request, response) => {
-			let raw = "";
-			for await (const chunk of request) raw += chunk;
-			const body = JSON.parse(raw) as { texts: string[] };
-			calls.push({ headers: request.headers, texts: body.texts });
-			const { status, body: reply, delayMs, headers } = respond(calls.length, body.texts);
-			if (delayMs) await new Promise((resolve) => setTimeout(resolve, delayMs));
-			if (response.destroyed) return;
-			response.writeHead(status, { "content-type": "application/json", ...headers });
-			response.end(JSON.stringify(reply ?? {}));
-		});
-		server.listen(0, "127.0.0.1");
-		await once(server, "listening");
-		let address = server.address();
-		while (address && typeof address !== "string" && address.port <= 10_080) {
-			server.close(); server.listen(0, "127.0.0.1"); await once(server, "listening"); address = server.address();
-		}
-		if (!address || typeof address === "string") throw new Error("no port");
-		return { calls, url: `http://127.0.0.1:${address.port}/rerank` };
+	server.listen(0, "127.0.0.1");
+	await once(server, "listening");
+	const address = server.address();
+	if (!address || typeof address === "string") throw new Error("no loopback port");
+	const baseUrl = `http://127.0.0.1:${address.port}`;
+	const profile = mkdtempSync(join(tmpdir(), "local-rerank-profile-"));
+	const fixture = createTestDb();
+	const embedder = await createTestEmbedder();
+	const store = new MemoryStore({ dbPath: fixture.dbPath, embedder });
+	try {
+		// A positive observation proves that this server can detect a request; the old product path also recorded two before removal.
+		await (await fetch(`${baseUrl}/probe`)).text();
+		expect(requests).toEqual(["/probe"]);
+		vi.stubEnv("SNO_PROFILE_DIR", profile);
+		writeSettingsFixture(profile, { mode: "rem-enhanced", snoGpu: { baseUrl, apiKey: "historical-key" }, rerank: { mode: "cross-encoder", maxCandidates: 64, timeoutMs: 15000 } });
+		const retrieval = settingsToPluginConfig(readSettings()).retrieval;
+		const memories = {
+			"pet-wish": "Joanna: I've always wanted a pet, but my landlord says no.",
+			"pet-cats": "Joanna: I have two cats at home, Doudou and Mimi.",
+		};
+		for (const [id, text] of Object.entries(memories)) await store.importEntry({ id, text, category: "episodic", lane: "active", projectId: "global", importance: 0.7, timestamp: Date.UTC(2026, 0, 1), metadata: "{}", contentHash: id });
+		const config = { ...DEFAULT_RETRIEVAL_CONFIG, ...retrieval, minScore: 0, hardMinScore: 0 };
+		const query = "What pet does Joanna have?";
+		const initialOnly = Object.create(embedder, { scoreRelevance: { value: async () => undefined } });
+		expect((await createRetriever(store, initialOnly, undefined, config).retrieve({ query, limit: 2 }))[0]?.entry.id).toBe("pet-wish");
+		const loadingDeadline = Date.now() + 90_000;
+		while ((await embedder.scoreRelevance("probe", ["probe"])) === undefined && Date.now() < loadingDeadline) await new Promise((resolve) => setTimeout(resolve, 100));
+		expect(await embedder.scoreRelevance("probe", ["probe"])).toHaveLength(1);
+		const results = await createRetriever(store, embedder, undefined, config).retrieve({ query, limit: 2 });
+		expect(results[0]?.entry.id).toBe("pet-cats");
+		expect(requests).toEqual(["/probe"]);
+	} finally {
+		vi.unstubAllEnvs();
+		await store.close();
+		fixture.cleanup();
+		rmSync(profile, { recursive: true, force: true });
+		server.closeAllConnections();
+		await new Promise<void>((resolve) => server.close(() => resolve()));
 	}
-
-	const manyCandidates = (): MemorySearchResult[] => Array.from({ length: 64 }, (_, i) => ({
-		entry: entry(`m${i}`, i === 60 ? "The user insists on TypeScript with strict mode for type safety." : `Unrelated memory number ${i} about weekend plans.`),
-		score: 0.9 - i * 0.01,
-	}));
-	const scoreByText = (texts: string[]) => texts.map((text, index) => ({ index, score: text.includes("TypeScript") ? 6 : -6 }));
-
-	it("sends 64 candidates as batches of 50 and 14 with the source labels, a Bearer key and a UUID per request, and the best answer wins", async () => {
-		const { calls, url } = await reranker((_n, texts) => ({ status: 200, body: scoreByText(texts) }));
-		const retriever = createRetriever(storeOf(manyCandidates()) as never, embedder, { warn: () => {} },
-			{ ...BASE_CONFIG, rerank: "cross-encoder", rerankEndpoint: url, rerankApiKey: "machine-key", rerankMaxCandidates: 64 });
-		const results = await retriever.retrieve({ query: QUERY, limit: 3 });
-		expect(results[0]?.entry.id).toBe("m60");
-		expect(calls.map((c) => c.texts.length).sort((a, b) => b - a)).toEqual([50, 14]);
-		for (const call of calls) {
-			expect(call.headers["x-sno-source"]).toBe("sno-station");
-			expect(call.headers["x-sno-workload"]).toBe("station-rerank");
-			expect(call.headers.authorization).toBe("Bearer machine-key");
-			expect(call.headers["x-request-id"]).toMatch(UUID_V4);
-			expect(call.headers["x-sno-user-id"]).toBeUndefined();
-			expect(call.headers["x-sno-machine-id"]).toBeUndefined();
-		}
-		expect(new Set(calls.map((c) => c.headers["x-request-id"])).size).toBe(2);
-	}, 30_000);
-
-	it("a retried request after a 503 carries a new request id", async () => {
-		const { calls, url } = await reranker((n, texts) => n === 1 ? { status: 503 } : { status: 200, body: scoreByText(texts) });
-		const few = manyCandidates().slice(0, 4);
-		const retriever = createRetriever(storeOf(few) as never, embedder, { warn: () => {} },
-			{ ...BASE_CONFIG, rerank: "cross-encoder", rerankEndpoint: url, rerankApiKey: "machine-key" });
-		await retriever.retrieve({ query: QUERY, limit: 3 });
-		expect(calls.length).toBeGreaterThanOrEqual(2);
-		expect(calls[0]?.headers["x-request-id"]).toMatch(UUID_V4);
-		expect(calls[1]?.headers["x-request-id"]).toMatch(UUID_V4);
-		expect(calls[1]?.headers["x-request-id"]).not.toBe(calls[0]?.headers["x-request-id"]);
-	}, 30_000);
-
-	it("every HTTP attempt leaves one log record with its status and the request id the server received", async () => {
-		const written: string[] = [];
-		const spy = vi.spyOn(process.stderr, "write").mockImplementation((chunk) => { written.push(String(chunk)); return true; });
-		try {
-			const { calls, url } = await reranker((n, texts) => n === 1 ? { status: 503 } : { status: 200, body: scoreByText(texts) });
-			const retriever = createRetriever(storeOf(manyCandidates().slice(0, 4)) as never, embedder, { warn: () => {} },
-				{ ...BASE_CONFIG, rerank: "cross-encoder", rerankEndpoint: url, rerankApiKey: "machine-key" });
-			await retriever.retrieve({ query: QUERY, limit: 3 });
-			const records = written.join("").split("\n").filter((line) => line.includes("rerank.request.completed")).map((line) => JSON.parse(line.slice(line.indexOf("{"))));
-			expect(calls.length).toBe(2);
-			expect(records.map((r) => r.attributes.status_code)).toEqual([503, 200]);
-			const ids = records.map((r) => r.attributes.client_request_id);
-			expect(ids).toEqual(calls.map((c) => c.headers["x-request-id"]));
-		} finally {
-			spy.mockRestore();
-		}
-	}, 30_000);
-
-	it("a reply whose body breaks after the 200 header is logged as a failed attempt, not a success", async () => {
-		let calls = 0;
-		server = createServer(async (request, response) => {
-			let raw = "";
-			for await (const chunk of request) raw += chunk;
-			calls += 1;
-			response.writeHead(200, { "content-type": "application/json" });
-			if (calls === 1) {
-				response.write('[{"index":');
-				setTimeout(() => response.destroy(), 20);
-				return;
-			}
-			response.end(JSON.stringify(scoreByText((JSON.parse(raw) as { texts: string[] }).texts)));
-		});
-		server.listen(0, "127.0.0.1");
-		await once(server, "listening");
-		const address = server.address();
-		if (!address || typeof address === "string") throw new Error("no port");
-		const written: string[] = [];
-		const spy = vi.spyOn(process.stderr, "write").mockImplementation((chunk) => { written.push(String(chunk)); return true; });
-		try {
-			const retriever = createRetriever(storeOf(manyCandidates().slice(0, 4)) as never, embedder, { warn: () => {} },
-				{ ...BASE_CONFIG, rerank: "cross-encoder", rerankEndpoint: `http://127.0.0.1:${address.port}/rerank`, rerankApiKey: "machine-key" });
-			await retriever.retrieve({ query: QUERY, limit: 3 });
-		} finally {
-			spy.mockRestore();
-		}
-		const records = written.join("").split("\n").filter((line) => line.includes("rerank.request.completed")).map((line) => JSON.parse(line.slice(line.indexOf("{"))));
-		expect(calls).toBe(2);
-		expect(records.map((r) => [r.attributes.outcome, r.attributes.status_code])).toEqual([["failed", 200], ["success", 200]]);
-	}, 30_000);
-
-	it("a Sno reranker that refuses the key (401) does not break the recall: the results come back in their earlier order", async () => {
-		const { calls, url } = await reranker(() => ({ status: 401, body: { error: "Unauthorized" } }));
-		const retriever = createRetriever(storeOf(manyCandidates().slice(0, 4)) as never, embedder, { warn: () => {} },
-			{ ...BASE_CONFIG, rerank: "cross-encoder", rerankEndpoint: url, rerankApiKey: "user-key" });
-		const local = vi.spyOn(retriever as unknown as { rerankLightweight: () => unknown }, "rerankLightweight");
-		const results = await retriever.retrieve({ query: QUERY, limit: 3 });
-		expect(calls.length).toBeGreaterThanOrEqual(1);
-		expect(local).toHaveBeenCalled();
-		expect(results.map((r) => r.entry.id)).toEqual(["m0", "m1", "m2"]);
-	}, 30_000);
-
-	it("a Sno reranker that hangs does not hold the search past the deadline the caller gives it (2 s from now): the earlier order comes back", async () => {
-		const { calls, url } = await reranker(() => ({ status: 200, body: [], delayMs: 20_000 }));
-		const retriever = createRetriever(storeOf(manyCandidates().slice(0, 4)) as never, embedder, { warn: () => {} },
-			{ ...BASE_CONFIG, rerank: "cross-encoder", rerankEndpoint: url, rerankApiKey: "user-key" });
-		const started = Date.now();
-		const results = await retriever.retrieve({ query: QUERY, limit: 3, rerankDeadlineAt: Date.now() + 2_000 });
-		const elapsed = Date.now() - started;
-		expect(results.map((r) => r.entry.id)).toEqual(["m0", "m1", "m2"]);
-		expect(elapsed).toBeLessThan(3_500);
-		expect(calls).toHaveLength(1);
-	}, 30_000);
-
-	it("a 429 that asks to wait 5 s does not hold the search past the 2 s budget", async () => {
-		const { calls, url } = await reranker(() => ({ status: 429, headers: { "retry-after": "5" } }));
-		const retriever = createRetriever(storeOf(manyCandidates().slice(0, 4)) as never, embedder, { warn: () => {} },
-			{ ...BASE_CONFIG, rerank: "cross-encoder", rerankEndpoint: url, rerankApiKey: "user-key" });
-		const started = Date.now();
-		const results = await retriever.retrieve({ query: QUERY, limit: 3, rerankDeadlineAt: Date.now() + 2_000 });
-		expect(results.map((r) => r.entry.id)).toEqual(["m0", "m1", "m2"]);
-		expect(Date.now() - started).toBeLessThan(3_500);
-		expect(calls).toHaveLength(1);
-	}, 30_000);
-
-	it("a caller with a longer deadline (session start) leaves the reranker more time: an answer after 2.5 s is used", async () => {
-		const { url } = await reranker((_n, texts) => ({ status: 200, body: scoreByText(texts), delayMs: 2_500 }));
-		const retriever = createRetriever(storeOf(manyCandidates()) as never, embedder, { warn: () => {} },
-			{ ...BASE_CONFIG, rerank: "cross-encoder", rerankEndpoint: url, rerankApiKey: "user-key", rerankMaxCandidates: 64 });
-		const results = await retriever.retrieve({ query: QUERY, limit: 3, rerankDeadlineAt: Date.now() + 4_000 });
-		expect(results[0]?.entry.id).toBe("m60");
-	}, 30_000);
-
-	it("when the embedding and search already used up the reranker's share of the deadline, recall ranks locally at once", async () => {
-		const { calls, url } = await reranker((_n, texts) => ({ status: 200, body: scoreByText(texts), delayMs: 3_000 }));
-		const retriever = createRetriever(storeOf(manyCandidates().slice(0, 4)) as never, embedder, { warn: () => {} },
-			{ ...BASE_CONFIG, rerank: "cross-encoder", rerankEndpoint: url, rerankApiKey: "user-key" });
-		const started = Date.now();
-		const results = await retriever.retrieve({ query: QUERY, limit: 3, rerankDeadlineAt: Date.now() - 500 });
-		expect(results.map((r) => r.entry.id)).toEqual(["m0", "m1", "m2"]);
-		expect(Date.now() - started).toBeLessThan(2_000);
-		expect(calls.length).toBeLessThanOrEqual(1);
-	}, 30_000);
-
-	it("a budget that is not a whole number of milliseconds (half of an odd timeout) does not break the recall", async () => {
-		const { url } = await reranker((_n, texts) => ({ status: 200, body: scoreByText(texts) }));
-		const retriever = createRetriever(storeOf(manyCandidates()) as never, embedder, { warn: () => {} },
-			{ ...BASE_CONFIG, rerank: "cross-encoder", rerankEndpoint: url, rerankApiKey: "user-key", rerankMaxCandidates: 64 });
-		const results = await retriever.retrieve({ query: QUERY, limit: 3, rerankDeadlineAt: Date.now() + 2_000.5 });
-		expect(results[0]?.entry.id).toBe("m60");
-	}, 30_000);
-
-	it("an explicit recall is held by a reranker that never answers for one timeout in total, not one per attempt", async () => {
-		const { calls, url } = await reranker(() => ({ status: 200, body: [], delayMs: 60_000 }));
-		const retriever = createRetriever(storeOf(manyCandidates().slice(0, 4)) as never, embedder, { warn: () => {} },
-			{ ...BASE_CONFIG, rerank: "cross-encoder", rerankEndpoint: url, rerankApiKey: "user-key", rerankTimeoutMs: 1_500 });
-		const started = Date.now();
-		const results = await retriever.retrieve({ query: QUERY, limit: 3 });
-		expect(results.map((r) => r.entry.id)).toEqual(["m0", "m1", "m2"]);
-		expect(Date.now() - started).toBeLessThan(3_000);
-		expect(calls).toHaveLength(1);
-	}, 30_000);
-
-	it("an explicit recall waits for a Sno reranker that answers after 2.5 s and is ranked by it", async () => {
-		const { url } = await reranker((_n, texts) => ({ status: 200, body: scoreByText(texts), delayMs: 2_500 }));
-		const retriever = createRetriever(storeOf(manyCandidates()) as never, embedder, { warn: () => {} },
-			{ ...BASE_CONFIG, rerank: "cross-encoder", rerankEndpoint: url, rerankApiKey: "user-key", rerankMaxCandidates: 64 });
-		const results = await retriever.retrieve({ query: QUERY, limit: 3 });
-		expect(results[0]?.entry.id).toBe("m60");
-	}, 30_000);
-
-	it("the caller's deadline stops the reranker request and it is not sent again", async () => {
-		const { calls, url } = await reranker(() => ({ status: 200, body: [], delayMs: 20_000 }));
-		const retriever = createRetriever(storeOf(manyCandidates().slice(0, 4)) as never, embedder, { warn: () => {} },
-			{ ...BASE_CONFIG, rerank: "cross-encoder", rerankEndpoint: url, rerankApiKey: "k" });
-		const started = Date.now();
-		await expect(retriever.retrieve({ query: QUERY, limit: 3, signal: AbortSignal.timeout(900) })).rejects.toBeDefined();
-		expect(Date.now() - started).toBeLessThan(3_000);
-		await new Promise((resolve) => setTimeout(resolve, 500));
-		expect(calls).toHaveLength(1);
-	}, 30_000);
-});
+}, 120_000);

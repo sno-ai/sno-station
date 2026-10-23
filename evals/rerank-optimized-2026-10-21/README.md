@@ -83,3 +83,42 @@ The source now implements the local 40-candidate profile and the GPU 64-candidat
 A focused transport regression exposed an additional error in the proposed rank transform: equal low logits received different scores according to ID order, and those at the top of the tie could overtake the unique model winner after blending. Equal logits now share their average rank. The previously failing saturated-logit case passes against the real GPU service; the first-40 local cap, model ordering and deadline checks also pass. Two existing log assertions required enabling info logs in their test setup; product logging behavior was not changed.
 
 The original evaluation and actual GPU64 inference were reused on the same Linux AMD EPYC 7F52 host, with retained real embeddings and the product scoring pipeline. This is a replay of the changed scoring, not new model inference or new latency measurements. All 2,250 LoCoMo observations and 20 LongMemEval observations were retained. The original experiment tables above remain historical. Updated GPU64 R@5 is 80.53% English/English, 61.33% Chinese/Chinese, 77.20% Chinese/English, and 100% on the 20 LongMemEval questions. Local40 retains the study's unchanged scoring profile. Full updated metrics and validation scope are under `implementation_update_2026_10_22` in the receipt.
+
+## Candidate-count precision check — 2026-10-22
+
+The original search tested only 5, 10, 15, 20, 30, 40, 50 and 64 candidates. It did not establish that 40 is better than 36, 38 or 45. An additional cached comparison reuses the original training split, original fitting code, full64 local logits, and fixed local40 scoring parameters. All-language R@5 is 71.54% at 36, 71.59% at 38, 71.67% at 40 and 71.54% at 45; the spread is about 0.13 percentage points. These are fitting/proxy values, not the held-out quality values above. The receipt also contains a same-language-only check, excluding Chinese queries against English memories.
+
+This check does not run actual local inference at 36, 38 or 45 candidates. Q8 batch-composition effects still apply. Forty remains a reasonable measured default; neither the original coarse search nor this cached comparison proves it uniquely optimal.
+
+## Dense local candidate-count selection — 2026-10-22
+
+**Study selection: local reranking of 38 candidates. The subsequent owner-selected source default is 32; see the decision below.** The earlier 40-candidate recommendation is superseded by this count-selection experiment. The default settings now select local reranking even when a GPU key exists; explicitly saved GPU choices remain supported. No installation, profile migration, service restart or release occurred.
+
+Every integer from 1 to 64 received real, batch-equivalent model inference on 120 fitting observations (60 English/English and 60 Chinese/Chinese, drawn by prediction-independent query-ID ordering across the original five fitting conversations). Translations share source questions. The smallest count tied for the best original R@5 was 33. Before held-out inference, the finalists were frozen as 33 plus the requested 36, 38, 40 and 45. All five were evaluated on the same complete 750 English and 750 Chinese held-out observations. Cross-language retrieval was excluded from this objective at the owner's request. Model-score normalization, blend, score-slot handling and final diversity parameters were held fixed.
+
+| Candidates | English/English R@5 | Chinese/Chinese R@5 | Combined evidence hits / 1,500 | Mean R@5 |
+|---|---:|---:|---:|---:|
+| 33 | 76.00% | 61.87% | 1034 | 68.93% |
+| 36 | 75.87% | 61.60% | 1031 | 68.73% |
+| 38 | 76.27% | 61.73% | 1035 | 69.00% |
+| 40 | 76.13% | 61.87% | 1035 | 69.00% |
+| 45 | 76.27% | 61.47% | 1033 | 68.87% |
+
+Selection maximizes the original mean evidence-hit-at-five metric, resolving an exact total-hit tie with fewer candidates. Thirty-eight and forty tie at 1,035/1,500: 38 gains one English observation and loses one Chinese observation. This selects 38; it does not establish a statistically meaningful quality difference between nearby counts or a universal optimum for other datasets. The full 1–64 fitting results, full finalist metrics, parity checks and reproducibility details are in `dense_local_candidate_count_search_2026_10_22` in the receipt.
+
+The existing `LocalReranker` is used with its exact length sorting, five-pair batches, pinned q8 model, tokenizer and 512-token pair window. An identical ordered query/text batch can reuse its model output across candidate counts; an arbitrary full64 score slice cannot. Direct whole-call comparisons at 33/36/38/40/45 and fitting comparisons including 64 have zero logit difference. The 40-candidate held-out control exactly reproduces the preceding study. Metrics still come from the original `evaluate.py` and final ordering from the product scoring pipeline with real retained vectors. Only repeated output serialization was removed from the temporary replay adapter to shorten aggregation.
+
+After all bulk inference, tests, type/lint checks and workspace builds finished, ten paired same-language queries were timed serially on Linux AMD EPYC 7F52 with the product default of four CPU threads. These measure warm full-prefix inference and tokenization, not batch-cache lookup, Apple M4 performance or complete recall. An initial timing overlapping verification work was excluded.
+
+| Candidates | Paired queries | Median reranking latency on this Linux host |
+|---|---:|---:|
+| 38 | 10 | 1357.2 ms |
+| 40 | 10 | 1433.9 ms |
+
+Validation passed: five real-local-model integration checks, three shared-plugin settings checks, three explicit-GPU configuration checks, workspace builds, typechecks and lint. The source defaults to local reranking with 38 candidates. Existing saved explicit settings and running installations were not changed.
+
+## Owner-selected default — 2026-10-23
+
+The owner selected 32 local reranking candidates after reviewing the small differences between nearby counts. The source default is now 32. Retrieval and initial cosine ordering still run first; only the first 32 candidates are scored by the local Horizon reranker, followed by the existing final scoring/diversity pipeline and requested result limit. This is neither the initial retrieval-pool size nor the returned result count.
+
+Thirty-two was included in the 1–64 fitting-panel inference above, but was not among the five counts validated on all 1,500 held-out same-language observations. The 33-candidate held-out result must not be attributed to 32. The preceding tables and latency measurements remain historical measurements at their stated candidate counts. No new full quality or latency evaluation was run for this owner-selected change.

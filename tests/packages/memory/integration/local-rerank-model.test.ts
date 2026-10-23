@@ -10,6 +10,13 @@ import { createTestDb, createTestEmbedder, type TestDb } from "../../../apps/mem
 import type { Embedder } from "../../../../packages/memory/src/engine/extraction/embedding-provider-client.ts";
 import { createRetriever, DEFAULT_RETRIEVAL_CONFIG } from "../../../../packages/memory/src/engine/retrieval/retriever.ts";
 import { MemoryStore } from "../../../../packages/memory/src/store/store.ts";
+import { settingsToPluginConfig } from "../../../../packages/memory/config/settings.ts";
+import { readSettings } from "../../../../packages/memory/src/contract/profile.ts";
+import { writeSettingsFixture } from "../fixtures/settings-file-fixture.ts";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { vi } from "vitest";
 
 // The first memory shares more of the question's words; the second one answers it.
 const MEMORIES: Record<string, string> = {
@@ -124,7 +131,7 @@ it("returns the local ranking order at the caller's deadline when the model is s
 	expect(failed.first).toBe("sister-talk");
 }, 60_000);
 
-it("the model scores only the local ranking's first 40 candidates and serves the one it picks first", async () => {
+it("the model scores only the local ranking's first 32 candidates and serves the one it picks first", async () => {
 	const big = createTestDb();
 	const bigStore = new MemoryStore({ dbPath: big.dbPath, embedder });
 	try {
@@ -144,9 +151,19 @@ it("the model scores only the local ranking's first 40 candidates and serves the
 			id: "sister-job", text: MEMORIES["sister-job"] ?? "", category: "episodic", lane: "active", projectId: "global", importance: 0.7,
 			timestamp: Date.UTC(2026, 0, 1) + 100, metadata: "{}", contentHash: "sister-job",
 		});
+		const profile = mkdtempSync(join(tmpdir(), "local-rerank-head-"));
+		let retrieval: ReturnType<typeof settingsToPluginConfig>["retrieval"];
+		try {
+			vi.stubEnv("SNO_PROFILE_DIR", profile);
+			writeSettingsFixture(profile, { rerank: { mode: "cross-encoder", maxCandidates: 64, timeoutMs: 15000 } });
+			retrieval = settingsToPluginConfig(readSettings()).retrieval;
+		} finally {
+			vi.unstubAllEnvs();
+			rmSync(profile, { recursive: true, force: true });
+		}
 		const withModel = (scoreRelevance: Embedder["scoreRelevance"]) =>
 			createRetriever(bigStore, Object.create(embedder, { scoreRelevance: { value: scoreRelevance } }) as Embedder, { warn: () => {} },
-				{ ...DEFAULT_RETRIEVAL_CONFIG, rerank: "lightweight", minScore: 0, hardMinScore: 0 });
+				{ ...DEFAULT_RETRIEVAL_CONFIG, ...retrieval, minScore: 0, hardMinScore: 0 });
 		const query = "Where does Nate's sister work?";
 		// A model that likes one memory and dislikes every other one it is shown.
 		const shown: string[] = [];
@@ -154,9 +171,10 @@ it("the model scores only the local ranking's first 40 candidates and serves the
 			shown.push(...texts);
 			return texts.map((text) => (text.includes("nurse") ? 10 : -10));
 		};
-		const ranked = (await withModel(picky).retrieve({ query, limit: 5 })).map((r) => r.entry.id);
-		// Of 45 candidates the model sees the local ranking's first 40, and the one it picks is served first.
-		expect(shown).toHaveLength(40);
+		const ranked = (await withModel(picky).retrieve({ query, limit: 50 })).map((r) => r.entry.id);
+		// Of 45 candidates the model sees the local ranking's first 32, and the one it picks is served first.
+		expect(shown).toHaveLength(32);
+		expect(ranked).toHaveLength(45);
 		expect(ranked[0]).toBe("sister-job");
 	} finally {
 		await bigStore.close();
@@ -164,11 +182,32 @@ it("the model scores only the local ranking's first 40 candidates and serves the
 	}
 }, 120_000);
 
-it("a recall with no deadline still stops waiting for a stalled model at the configured rerank timeout", async () => {
+it("a recall with no deadline limits an old remote-sized timeout to the local two-second ceiling", async () => {
 	const stalled = Object.create(embedder, { scoreRelevance: { value: () => new Promise<number[]>(() => {}) } }) as Embedder;
-	const retriever = createRetriever(store, stalled, { warn: () => {} }, { ...DEFAULT_RETRIEVAL_CONFIG, rerank: "lightweight", minScore: 0, hardMinScore: 0, rerankTimeoutMs: 1_000 });
+	const retriever = createRetriever(store, stalled, { warn: () => {} }, { ...DEFAULT_RETRIEVAL_CONFIG, rerank: "lightweight", minScore: 0, hardMinScore: 0, rerankTimeoutMs: 120_000 });
 	const started = Date.now();
 	const results = await retriever.retrieve({ query: "Where does Nate's sister work?", limit: 3 });
-	expect(Date.now() - started).toBeLessThan(5_000);
+	expect(Date.now() - started).toBeLessThan(3_500);
 	expect(results[0]?.entry.id).toBe("sister-talk");
 }, 30_000);
+
+
+it("caller cancellation rejects the search instead of returning a successful fallback", async () => {
+	const controller = new AbortController();
+	const reason = new Error("caller cancelled recall");
+	let scoringStarted = () => {};
+	const started = new Promise<void>((resolve) => { scoringStarted = resolve; });
+	let modelSignal: AbortSignal | undefined;
+	const stalled = Object.create(embedder, { scoreRelevance: { value: (_query: string, _texts: string[], signal?: AbortSignal) => {
+		modelSignal = signal;
+		scoringStarted();
+		return new Promise<number[]>(() => {});
+	} } }) as Embedder;
+	const retriever = createRetriever(store, stalled, undefined, { ...DEFAULT_RETRIEVAL_CONFIG, minScore: 0, hardMinScore: 0 });
+	const result = retriever.retrieve({ query: "Where does Nate's sister work?", limit: 3, signal: controller.signal });
+	const rejected = expect(result).rejects.toThrow("caller cancelled recall");
+	await started;
+	controller.abort(reason);
+	await rejected;
+	expect(modelSignal?.aborted).toBe(true);
+}, 10_000);
