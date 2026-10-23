@@ -25,9 +25,11 @@ const didDocument = {
 
 async function serve(onRequest: (headers: IncomingHttpHeaders, response: ServerResponse) => void) {
 	const headers: IncomingHttpHeaders[] = [];
+	const paths: string[] = [];
 	const server: Server = createServer(async (request, response) => {
 		for await (const _chunk of request) { /* drain body */ }
 		headers.push(request.headers);
+		paths.push(request.url ?? "");
 		onRequest(request.headers, response);
 	});
 	server.listen(0, "127.0.0.1");
@@ -41,7 +43,7 @@ async function serve(onRequest: (headers: IncomingHttpHeaders, response: ServerR
 		address = server.address();
 	}
 	if (!address || typeof address === "string") throw new Error("HTTP server has no port");
-	return { server, headers, url: `http://127.0.0.1:${address.port}` };
+	return { server, headers, paths, url: `http://127.0.0.1:${address.port}` };
 }
 
 function reply(response: ServerResponse, status: number, content = '{"ok":true}'): void {
@@ -59,22 +61,24 @@ describe("Sno GPU request attribution headers", () => {
 	});
 	afterEach(() => { globalThis.fetch = originalFetch; });
 
-	it("chat calls to Sno GPU carry source, workload and a new request id per attempt; the host fallback carries none", async () => {
+	it.each(["product", "research", "ops", undefined] as const)("chat calls retain %s attribution while the host fallback carries none", async (usageClass) => {
 		const sno = await serve((_headers, response) => reply(response, 401));
 		const host = await serve((_headers, response) => reply(response, 200));
 		try {
 			const llm = createLlmClient({
-				preset: "mem_claw/sno_ai_extract", apiKey: "test-machine-key", baseURL: sno.url, refuseOnUnavailable: false,
+				preset: "mem_claw/sno_ai_extract", apiKey: "test-machine-key", baseURL: sno.url, refuseOnUnavailable: false, usageClass,
 				routing: { mode: "rem-enhanced", language: "en", modelCalls: defaultSettings().modelCalls },
 				agentPort: new RegisteredAgentPort({ baseUrl: `${host.url}/host/v1`, credential: "host-key", model: "host-model" }),
 			});
 			const request = { callId: "E1" as const, prompt: "Sno prompt", hostPrompt: "Host prompt", timeoutMs: 5_000, maxTokens: 32 };
 			await llm.completeJson(request);
 			await llm.completeJson(request);
+			expect(sno.paths).toEqual(["/extract/v1/chat/completions", "/extract/v1/chat/completions"]);
 			expect(sno.headers).toHaveLength(2);
 			for (const headers of sno.headers) {
 				expect(headers["x-sno-source"]).toBe("sno-station");
 				expect(headers["x-sno-workload"]).toBe("station-extract");
+				expect(headers["x-sno-usage-class"]).toBe(usageClass);
 				expect(headers["x-request-id"]).toMatch(UUID_V4);
 				expect(headers["x-internal-token"]).toBe("test-machine-key");
 				expect(headers["x-sno-user-id"]).toBeUndefined();
@@ -85,23 +89,28 @@ describe("Sno GPU request attribution headers", () => {
 			for (const headers of host.headers) {
 				expect(headers["x-sno-source"]).toBeUndefined();
 				expect(headers["x-sno-workload"]).toBeUndefined();
+				expect(headers["x-sno-usage-class"]).toBeUndefined();
 			}
 		} finally { sno.server.closeAllConnections(); sno.server.close(); host.server.closeAllConnections(); host.server.close(); }
 	});
 
-	it("profile completions carry their own workload and a new request id each time", async () => {
-		const sno = await serve((_headers, response) => reply(response, 200, "yes"));
+	it.each(["product", "research", "ops", undefined] as const)("profile completions retain %s attribution through the client", async (usageClass) => {
+		const sno = await serve((_headers, response) => reply(response, 200));
 		try {
-			const call = () => callSnoProfileCompletion({
-				endpointUrl: `${sno.url}/extract/profile/v1/completions`, model: "m", apiKey: "k",
-				prompt: "p", timeoutMs: 5_000, callId: "E9", operationId: "capture:job-1",
+			const llm = createLlmClient({
+				preset: "mem_claw/sno_ai_extract", apiKey: "k", baseURL: sno.url, usageClass,
+				operationId: "capture:job-1",
+				routing: { mode: "rem-enhanced", language: "en", modelCalls: defaultSettings().modelCalls },
 			});
+			const call = () => llm.completeJson({ callId: "E9", prompt: "p", timeoutMs: 5_000, maxTokens: 32 });
 			await call();
 			await call();
+			expect(sno.paths).toEqual(["/extract/profile/v1/completions", "/extract/profile/v1/completions"]);
 			expect(sno.headers).toHaveLength(2);
 			for (const headers of sno.headers) {
 				expect(headers["x-sno-source"]).toBe("sno-station");
 				expect(headers["x-sno-workload"]).toBe("station-profile-key");
+				expect(headers["x-sno-usage-class"]).toBe(usageClass);
 				expect(headers["x-request-id"]).toMatch(UUID_V4);
 				expect(headers["x-sno-operation"]).toBe("capture:job-1");
 			}
@@ -109,7 +118,26 @@ describe("Sno GPU request attribution headers", () => {
 		} finally { sno.server.closeAllConnections(); sno.server.close(); }
 	});
 
-	it("a request id the caller names is sent as given on both routes", async () => {
+
+	it.each(["E1", "E9"] as const)("retries %s with the same usage class and a new request id per attempt", async (callId) => {
+		let attempts = 0;
+		const sno = await serve((_headers, response) => reply(response, ++attempts === 1 ? 503 : 200));
+		try {
+			const llm = createLlmClient({
+				preset: "mem_claw/sno_ai_extract", apiKey: "k", baseURL: sno.url, usageClass: "research",
+				routing: { mode: "rem-enhanced", language: "en", modelCalls: defaultSettings().modelCalls },
+			});
+			expect(await llm.completeJson({ callId, prompt: "p", timeoutMs: 5_000, maxTokens: 32 })).toEqual({ ok: true });
+			expect(sno.headers).toHaveLength(2);
+			for (const headers of sno.headers) {
+				expect(headers["x-sno-usage-class"]).toBe("research");
+				expect(headers["x-request-id"]).toMatch(UUID_V4);
+			}
+			expect(sno.headers[0]?.["x-request-id"]).not.toBe(sno.headers[1]?.["x-request-id"]);
+		} finally { sno.server.closeAllConnections(); sno.server.close(); }
+	});
+
+	it("a request id the caller names is sent as given on the profile route", async () => {
 		const sno = await serve((_headers, response) => reply(response, 200, "yes"));
 		try {
 			await callSnoProfileCompletion({

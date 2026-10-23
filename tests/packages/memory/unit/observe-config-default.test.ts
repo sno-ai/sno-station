@@ -15,3 +15,11 @@ describe("observe config", () => {
 		expect(observeEnabledFrom(true)).toBe(true);
 	});
 });
+
+describe("usage attribution config", () => {
+	it.each(["product", "research", "ops", undefined] as const)("retains %s through strict settings conversion without guessing a default", (usageClass) => {
+		const shipped = JSON.parse(readFileSync(DEFAULT_SETTINGS_PATH, "utf8")) as Settings;
+		const config = settingsToPluginConfig(shipped, usageClass);
+		expect(config.extraction.llm.usageClass).toBe(usageClass);
+	});
+});
