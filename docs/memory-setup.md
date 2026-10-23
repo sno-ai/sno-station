@@ -11,7 +11,7 @@ Install Node.js 22.22.3+, 24.15.0+, or 25.9.0+, then run the commands below. Wit
 before the settings step.
 
 ```bash
-npm install --prefix "$HOME/.sno" @snoai/memory@1.5.1 @snoai/embedder@1.2.1
+npm install --prefix "$HOME/.sno" @snoai/memory@1.5.2 @snoai/embedder@1.2.1
 node --input-type=module <<'NODE'
 import { randomBytes } from 'node:crypto';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -47,14 +47,17 @@ The memory service starts when a plugin needs it; there is no separate start com
 
 Upgrade the memory service and the agent plugin you use to the same version. From 1.0.1 the
 memory service rejects requests that do not carry its access token, and a 1.0.0 plugin does not
-send one. Run `npm install --prefix "$HOME/.sno" @snoai/memory@1.5.1 @snoai/embedder@1.2.1`, then
+send one. Run `npm install --prefix "$HOME/.sno" @snoai/memory@1.5.2 @snoai/embedder@1.2.1`, then
 reinstall your plugin at its latest version (for example `sno setup --harness codex`) and restart
 any running agent session. Do not rerun the settings block; your store and key stay as they are.
 
-From 1.5.0, recall reorders its best candidates with a local ranking model that runs on your CPU
-and downloads about 206 MB on first use. It runs unless `rerank.mode` is `none`, or REM Enhanced
-sends recall to Sno's reranker instead. An earlier version of this guide wrote `none`: change it to
-`cross-encoder`, the default, in `~/.sno/settings.json`.
+In every mode, search and recall first retrieve and order memories locally, then the local
+`Horizon-Labs/multilingual-reranker-small` model reranks at most 32 candidates on your CPU.
+The model downloads about 206 MB in the background on first use. Until it is ready, or if it
+fails or exceeds the local wait limit, recall keeps the initial ranking. Reranking never
+uses Sno GPU. The default `rerank.mode` is `lightweight`; set it to `none` to disable model
+reranking. Existing `cross-encoder` settings are read as `lightweight` without changing
+unrelated memory-writing or REM settings.
 
 Self Learning uses `modelCalls.R5` for local lesson and skill-reminder
 generation. Its destinations are `host` in Local First and `off` in Agent Native and REM

@@ -171,9 +171,8 @@
     "apiKey": ""
   },
   "rerank": {
-    "mode": "cross-encoder",
-    "timeoutMs": 15000,
-    "maxCandidates": 64
+    "mode": "lightweight",
+    "timeoutMs": 2000
   },
   "store": {
     "path": "",
