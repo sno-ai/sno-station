@@ -1,12 +1,12 @@
 /** Proves the memory service's strict `settings.json` reader (PRD single-settings-file, change 1). */
 
-import { chmodSync, copyFileSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, copyFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { getSettingsPath, readSettings } from "../../../../packages/memory/src/contract/profile";
 import { pluginConfigSchema } from "../../../../packages/memory/config/plugin-config-schema";
-import { settingsToPluginConfig } from "../../../../packages/memory/config/settings";
+import { settingsSchema, settingsToPluginConfig } from "../../../../packages/memory/config/settings";
 import {
 	DEFAULT_SETTINGS_PATH,
 	type SettingsDocument,
@@ -202,4 +202,25 @@ it("parses the shipped default once sno fills the key and the four machine paths
 	});
 	expect(read.store.encryptionKey).toBe(group(settings, "store").encryptionKey);
 	expect(read.store.encryptionKey).toMatch(/^[0-9a-f]{64}$/u);
+});
+
+it("normalizes a published remote rerank profile without changing unrelated GPU work or rewriting the file", () => {
+	const { path, settings } = writeSettingsFixture(root, {
+		mode: "rem-enhanced", snoGpu: { baseUrl: "https://gpu.example.test", apiKey: "retain-background-key" },
+		rerank: { mode: "cross-encoder", timeoutMs: 15000, maxCandidates: 64 },
+	});
+	const raw = readFileSync(path, "utf8");
+	chmodSync(path, 0o444);
+	const read = readSettings();
+	expect(read.rerank).toEqual({ mode: "lightweight", timeoutMs: 2000 });
+	expect(read.snoGpu).toEqual(settings.snoGpu);
+	expect(read.modelCalls).toEqual(settings.modelCalls);
+	expect(read.store).toEqual(settings.store);
+	expect(settingsSchema.parse(settings)).toEqual(read);
+	expect(readFileSync(path, "utf8")).toBe(raw);
+});
+
+it("preserves a shorter local wait when loading a historical remote choice", () => {
+	writeSettingsFixture(root, { rerank: { mode: "cross-encoder", timeoutMs: 1000, maxCandidates: 50 } });
+	expect(readSettings().rerank).toEqual({ mode: "lightweight", timeoutMs: 1000 });
 });

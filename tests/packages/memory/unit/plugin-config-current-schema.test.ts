@@ -21,63 +21,24 @@ describe("plugin config current schema", () => {
 	it("gives the mode that promises no network call the local ranker, with no key", () => {
 		const parsed = pluginConfigSchema.parse({ mode: "local-first" });
 		expect(parsed.retrieval.rerank).toBe("lightweight");
-		expect(parsed.retrieval.rerankApiKey).toBeUndefined();
+		expect(parsed.retrieval).not.toHaveProperty("rerankApiKey");
 	});
 
-	it("gives a keyless remote-ranking mode the local ranker instead of the remote one", () => {
-		// Owner ruling 2026-08-30 refused this pair outright; the same day's follow-up
-		// (`preserve keyless rerank configs`) kept it loadable and moved it to the local
-		// ranker, which is what ships. What the ruling actually forbids — ranking
-		// remotely with no key — is still refused, by the case below.
-		const parsed = pluginConfigSchema.parse({ mode: "rem-enhanced" });
+	it.each(["local-first", "agent-native", "rem-enhanced"])("normalizes retired remote fields before validation in %s", (mode) => {
+		const parsed = pluginConfigSchema.parse({ mode, retrieval: {
+			rerank: "cross-encoder", rerankEndpoint: { invalid: "old endpoint" }, rerankApiKey: 123,
+			rerankMaxCandidates: "old cap", rerankBlendCross: null, rerankBlendVector: "old weight", rerankTimeoutMs: 15000,
+		} });
 		expect(parsed.retrieval.rerank).toBe("lightweight");
-		expect(parsed.retrieval.rerankApiKey).toBeUndefined();
+		expect(parsed.retrieval.rerankTimeoutMs).toBe(2000);
+		for (const field of ["rerankEndpoint", "rerankApiKey", "rerankMaxCandidates", "rerankBlendCross", "rerankBlendVector"]) expect(parsed.retrieval).not.toHaveProperty(field);
 	});
 
-	it("refuses an explicitly chosen remote ranker when no reranker key is supplied", () => {
-		const result = pluginConfigSchema.safeParse({
-			mode: "rem-enhanced",
-			retrieval: {
-				rerank: "cross-encoder",
-				rerankEndpoint: "http://127.0.0.1:19213/rerank",
-			},
-		});
-		expect(result.success).toBe(false);
-		const paths = result.success ? [] : result.error.issues.map((issue) => issue.path);
-		expect(paths).toContainEqual(["retrieval", "rerankApiKey"]);
-	});
-
-	it("keeps the local ranker in every mode when only a reranker key is supplied", () => {
-		for (const mode of ["local-first", "agent-native", "rem-enhanced"] as const) {
-			const parsed = pluginConfigSchema.parse({
-				mode,
-				retrieval: { rerankApiKey: "test-rerank-key" },
-			});
-			expect(parsed.retrieval.rerank).toBe("lightweight");
-		}
-	});
-
-	it("loads Sno's reranker once its address and key are named", () => {
-		const parsed = pluginConfigSchema.parse({
-			mode: "agent-native",
-			retrieval: {
-				rerank: "cross-encoder",
-				rerankEndpoint: "http://127.0.0.1:19213/rerank",
-				rerankApiKey: "test-rerank-key",
-			},
-		});
-		expect(parsed.retrieval).toMatchObject({
-			rerank: "cross-encoder",
-			rerankEndpoint: "http://127.0.0.1:19213/rerank",
-		});
-	});
-
-	it("keeps an explicitly chosen ranker in a mode whose default is the other one", () => {
-		const parsed = pluginConfigSchema.parse({
-			mode: "rem-enhanced",
-			retrieval: { rerank: "lightweight" },
-		});
-		expect(parsed.retrieval.rerank).toBe("lightweight");
+	it("preserves disabled reranking and shorter valid local waits", () => {
+		const parsed = pluginConfigSchema.parse({ retrieval: { rerank: "none", rerankTimeoutMs: 1000, rerankEndpoint: "invalid old URL" } });
+		expect(parsed.retrieval.rerank).toBe("none");
+		expect(parsed.retrieval.rerankTimeoutMs).toBe(1000);
+		expect(parsed.retrieval).not.toHaveProperty("rerankEndpoint");
 	});
 
 	// rem-enhanced PRD REQ-3: the mode alone decides where a call goes; a config still carrying a removed
