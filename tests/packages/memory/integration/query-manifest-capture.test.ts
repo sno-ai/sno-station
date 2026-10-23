@@ -1,6 +1,6 @@
 /** @file query-manifest-capture.test.ts
  * @purpose Proves deterministic, read-only query capture against real encrypted SQLite.
- * @boundary Production MemoryStore, retriever, rendering, token counting, and task projection reads.
+ * @boundary Production MemoryStore, retriever, rendering, token counting, and dedicated task-table reads.
  */
 
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
@@ -92,7 +92,6 @@ async function seedCaptureRows(
 	target: MemoryStore,
 ): Promise<{
 	supportingCarrierId: string;
-	projectionMemoryId: string;
 	activeTaskIds: string[];
 	terminalTaskId: string;
 }> {
@@ -135,13 +134,12 @@ async function seedCaptureRows(
 		occurrenceId: terminalText,
 		at: REFERENCE_TIME_MS - 6_000,
 	});
-	const activeTaskIds = [alpha.write.activeTaskId, beta.write.activeTaskId];
+	const alphaTaskId = alpha.write.activeTaskId;
+	const betaTaskId = beta.write.activeTaskId;
 	const terminalTaskId = terminal.write.activeTaskId;
-	if (activeTaskIds.some((id) => id === null) || terminalTaskId === null) {
+	if (alphaTaskId === null || betaTaskId === null || terminalTaskId === null) {
 		throw new Error("expected task lifecycle identifiers");
 	}
-	const projection = target.getByFactKey(PROJECT_ID, "profile:active_tasks");
-	if (!projection) throw new Error("expected active-task projection");
 	await storeProfile(
 		target,
 		"The user prefers concise Chinese status updates.",
@@ -159,8 +157,7 @@ async function seedCaptureRows(
 	});
 	return {
 		supportingCarrierId: supportingCarrier.id,
-		projectionMemoryId: projection.id,
-		activeTaskIds: activeTaskIds as string[],
+		activeTaskIds: [alphaTaskId, betaTaskId],
 		terminalTaskId,
 	};
 }
@@ -177,7 +174,7 @@ function reviewedQueries(
 			projectId: PROJECT_ID,
 			intent: "list-all",
 			taskMode: "current",
-			expectedAddresses: [{ sectionName: "active_tasks", expectedLiveMatchCount: 1 }],
+			expectedAddresses: [],
 			requiredSupportingCarrierIds: [supportingCarrierId],
 			expectedActiveTaskIds: activeTaskIds,
 			expectedTerminalTaskIds: [terminalTaskId],
@@ -202,7 +199,6 @@ describe("query manifest capture integration", () => {
 	it("emits byte-identical complete captures without mutating the real store", async () => {
 		const target = openStore();
 		const {
-			projectionMemoryId,
 			supportingCarrierId,
 			activeTaskIds,
 			terminalTaskId,
@@ -239,9 +235,7 @@ describe("query manifest capture integration", () => {
 		const currentList = first.queries[0];
 		expect(currentList?.addressResolution.status).toBe("missing");
 		expect(currentList?.addressResolution.reason).toMatch(/production Query address resolver/i);
-		expect(currentList?.reviewedExpectations.expectedAddresses).toEqual([
-			{ sectionName: "active_tasks", expectedLiveMatchCount: 1 },
-		]);
+		expect(currentList?.reviewedExpectations.expectedAddresses).toEqual([]);
 		expect(currentList?.retrieval.method).toBe("MemoryRetriever.retrieveWithTrace");
 		expect(currentList?.retrieval.storeMethods).toContain("MemoryStore.searchSemantic");
 		expect(currentList?.retrieval.storeMethods).toContain("MemoryStore.searchKeyword");
@@ -260,20 +254,6 @@ describe("query manifest capture integration", () => {
 				"MemoryRetriever.retrieveWithTrace",
 			);
 		}
-		const projectionCandidate = currentList?.candidates.find(
-			(candidate) => candidate.memoryId === projectionMemoryId,
-		);
-		expect(projectionCandidate?.renderedText.status).toBe("available");
-		if (projectionCandidate?.renderedText.status !== "available") {
-			throw new Error("expected rendered projection candidate");
-		}
-		expect(projectionCandidate.renderedText.value).toContain(
-			"Prepare the deterministic launch checklist.",
-		);
-		expect(projectionCandidate.renderedText.value).toContain(
-			"Review the encrypted snapshot opening procedure.",
-		);
-		expect(projectionCandidate.renderedText.value.split("\n")).toHaveLength(1);
 
 		expect(currentList?.currentListCapture.status).toBe("available");
 		if (currentList?.currentListCapture.status !== "available") {
@@ -282,26 +262,27 @@ describe("query manifest capture integration", () => {
 		expect(currentList.currentListCapture.value.productionQueryFallbackPath.status).toBe(
 			"missing",
 		);
-		expect(currentList.currentListCapture.value.captureEnumerationPath).toBe(
-			"MemoryStore.readTaskLifecycleInstances",
-		);
-		expect(
-			currentList.currentListCapture.value.directFallbackRowsBeforeOrdering.map(
-				(row) => row.activeTaskId,
-			),
-		).toEqual(activeTaskIds);
-		expect(
-			currentList.currentListCapture.value.directFallbackRowsAfterOrdering.map(
-				(row) => row.activeTaskId,
-			),
-		).toEqual(activeTaskIds);
-		expect(currentList.currentListCapture.value.directTaskRead.rows).toHaveLength(3);
-		expect(
-			currentList.currentListCapture.value.directFallbackRowsBeforeOrdering.some(
-				(row) => row.activeTaskId === terminalTaskId,
-			),
-		).toBe(false);
-		expect(currentList.currentListCapture.value.projection.validity).toBe("valid");
+		const taskRead = currentList.currentListCapture.value.directTaskRead;
+		expect(taskRead.method).toBe("MemoryStore.listTodos");
+		expect(taskRead.input).toEqual({
+			projectIdFilter: [PROJECT_ID],
+			includeHistory: false,
+			limit: 50,
+		});
+		expect(taskRead.result.totalCount).toBe(2);
+		expect(taskRead.result.items.map((row) => row.activeTaskId)).toEqual(activeTaskIds);
+		expect(taskRead.result.items.map((row) => row.description)).toEqual([
+			"Prepare the deterministic launch checklist.",
+			"Review the encrypted snapshot opening procedure.",
+		]);
+		expect(taskRead.result.items.every((row) => row.status === "open")).toBe(true);
+		expect(taskRead.result.items.some((row) => row.activeTaskId === terminalTaskId)).toBe(false);
+		const history = target.listTodos({
+			projectIdFilter: [PROJECT_ID], includeHistory: true, limit: 50,
+		});
+		expect(history.totalCount).toBe(3);
+		expect(history.items.find((row) => row.activeTaskId === terminalTaskId)?.status).toBe("done");
+		expect(first.schemaVersion).toBe("query-manifest-capture.phase-zero.v2");
 
 		const lookup = first.queries[1];
 		expect(lookup?.currentListCapture.status).toBe("not-applicable");
@@ -330,7 +311,7 @@ describe("query manifest capture integration", () => {
 
 		const query = capture.queries[0];
 		expect(query?.retrieval.topK).toBe(1);
-		expect(query?.retrieval.candidatePoolLimit).toBeGreaterThan(1);
+		expect(query?.retrieval.candidatePoolLimit).toBe(DEFAULT_RETRIEVAL_CONFIG.candidatePoolSize);
 		expect(query?.candidates).toHaveLength(1);
 		expect(
 			query?.retrieval.stages.find((stage) => stage.name === "parallel_search")?.outputCount,

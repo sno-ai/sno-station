@@ -1,6 +1,6 @@
 /** @file query-manifest-capture.ts
  * @purpose Captures reviewed query inputs through production read paths for phase-zero calibration.
- * @boundary Read-only MemoryStore, retrieval, rendering, token counting, and task projection reads.
+ * @boundary Read-only MemoryStore, retrieval, rendering, token counting, and dedicated task-table reads.
  */
 
 import { createHash } from "node:crypto";
@@ -10,13 +10,10 @@ import {
 	AUTO_RECALL_INJECTION_TOP_K,
 	DEFAULT_TOP_K,
 	MAX_CANDIDATE_POOL_SIZE,
+	MAX_RECALLED_TODOS,
 	PRECISION_RECALL_POOL_SIZE_FACTOR,
 } from "../../../config/index";
 import { formatRelevantMemoriesContext } from "../extraction/capture-policy-detector";
-import {
-	ACTIVE_TASK_PROJECTION_MAX_ITEMS,
-	buildActiveTaskProjection,
-} from "../extraction/active-task-projection";
 import type { Embedder } from "../extraction/embedding-provider-client";
 import { createRetriever, type RetrievalConfig } from "./retriever";
 import type { RetrievalStageMetadata } from "./retrieval-trace";
@@ -114,46 +111,17 @@ export interface QueryCandidateCapture {
 	};
 }
 
-export interface DirectFallbackTaskRow {
-	activeTaskId: string;
-	currentRevisionId: string;
-	description: string;
-	status: "active";
-	createdAt: number;
-	occurrenceAnchors: ReturnType<
-		MemoryStore["readTaskLifecycleInstances"]
-	>[number]["occurrenceAnchors"];
-	revisionDetails: ReturnType<
-		MemoryStore["readTaskLifecycleInstances"]
-	>[number]["revisionDetails"];
-}
-
 export interface CurrentListCapture {
 	productionQueryFallbackPath: CapturedValue<string>;
-	captureEnumerationPath: "MemoryStore.readTaskLifecycleInstances";
-	fallbackValidity: {
-		validity: "valid" | "invalid";
-		reasons: string[];
-	};
-	directFallbackRowsBeforeOrdering: DirectFallbackTaskRow[];
-	directFallbackRowsAfterOrdering: DirectFallbackTaskRow[];
 	directTaskRead: {
-		method: "MemoryStore.readTaskLifecycleInstances";
-		rows: ReturnType<MemoryStore["readTaskLifecycleInstances"]>;
-	};
-	projection: {
-		method: "buildActiveTaskProjection";
-		maxItems: number;
-		validity: "valid" | "invalid";
-		reasons: string[];
-		expectedText: string;
-		expectedTaskIds: string[];
-		actualProjectionMemoryIds: string[];
+		method: "MemoryStore.listTodos";
+		input: Parameters<MemoryStore["listTodos"]>[0];
+		result: ReturnType<MemoryStore["listTodos"]>;
 	};
 }
 
 export interface QueryManifestCapture {
-	schemaVersion: "query-manifest-capture.phase-zero.v1";
+	schemaVersion: "query-manifest-capture.phase-zero.v2";
 	referenceTimeMs: number;
 	inputStore: {
 		sha256: string;
@@ -228,7 +196,7 @@ const ADDRESS_RESOLVER_MISSING_REASON =
 	"No production Query address resolver exists; reviewed address expectations are not resolved by fixture-only or write-side mappings.";
 const VALUE_MISSING_REASON = "Source field is absent on the production row or retrieval result.";
 const QUERY_FALLBACK_MISSING_REASON =
-	"No production Query current-list direct fallback path exists; rows below are an explicit read-only capture through production store and Extraction projection methods.";
+	"No auto-recall current-list direct fallback path exists; the captured read uses the same scoped to-do store method and limit as the manual recall tool, without claiming to render its output.";
 
 const REFERENCE_TIME_METHODS = [
 	"filterExpired",
@@ -405,69 +373,6 @@ function addressResolutionFor(query: ReviewedQueryInput): QueryAddressResolution
 	};
 }
 
-async function listAllActiveProfiles(store: MemoryStore, projectId: string): Promise<MemoryEntry[]> {
-	const rows: MemoryEntry[] = [];
-	const pageSize = 100;
-	for (let offset = 0; ; offset += pageSize) {
-		const page = await store.list({
-			projectId,
-			category: "profile",
-			lane: "active",
-			limit: pageSize,
-			offset,
-		});
-		rows.push(...page);
-		if (page.length < pageSize) return rows;
-	}
-}
-
-function validateProjection(
-	entries: readonly MemoryEntry[],
-	orderedRows: readonly DirectFallbackTaskRow[],
-	fallbackReasons: readonly string[],
-): CurrentListCapture["projection"] {
-	const projection = buildActiveTaskProjection(
-		orderedRows.map((row) => ({
-			id: row.activeTaskId,
-			description: row.description,
-			status: "active",
-			createdAt: row.createdAt,
-		})),
-	);
-	const projectionRows = entries.filter((entry) => {
-		const metadata = parseMetadata(entry);
-		return (
-			metadata.section_name === "active_tasks" &&
-			metadata.active_task_kind === "projection" &&
-			(metadata.invalidated_at === undefined || metadata.invalidated_at === null)
-		);
-	});
-	const reasons = [...fallbackReasons];
-	if (projectionRows.length !== 1) {
-		reasons.push(`Expected one active projection row, found ${projectionRows.length}.`);
-	}
-	const storedProjection = projectionRows[0];
-	if (storedProjection) {
-		const metadata = parseMetadata(storedProjection);
-		if (storedProjection.text !== projection.text) reasons.push("Projection text differs.");
-		if (JSON.stringify(metadata.active_task_ids) !== JSON.stringify(projection.taskIds)) {
-			reasons.push("Projection task identifiers differ.");
-		}
-		if (JSON.stringify(metadata.active_task_titles) !== JSON.stringify(projection.titles)) {
-			reasons.push("Projection titles differ.");
-		}
-	}
-	return {
-		method: "buildActiveTaskProjection",
-		maxItems: ACTIVE_TASK_PROJECTION_MAX_ITEMS,
-		validity: reasons.length === 0 ? "valid" : "invalid",
-		reasons,
-		expectedText: projection.text,
-		expectedTaskIds: projection.taskIds,
-		actualProjectionMemoryIds: projectionRows.map((entry) => entry.id),
-	};
-}
-
 async function captureCurrentList(
 	store: MemoryStore,
 	query: ReviewedQueryInput,
@@ -478,48 +383,20 @@ async function captureCurrentList(
 			reason: "The reviewed input is not a current-list query.",
 		};
 	}
-	const profiles = await listAllActiveProfiles(store, query.projectId);
-	const directTaskRows = store.readTaskLifecycleInstances(query.projectId);
-	const beforeOrdering = directTaskRows
-		.filter((instance) => instance.terminalAtMs === undefined)
-		.map((instance) => ({
-			activeTaskId: instance.activeTaskId,
-			currentRevisionId: instance.currentRevisionId,
-			description: instance.currentDescription,
-			status: "active" as const,
-			createdAt: instance.createdAtMs,
-			occurrenceAnchors: instance.occurrenceAnchors,
-			revisionDetails: instance.revisionDetails,
-		}));
-	const projectionOrder = buildActiveTaskProjection(
-		beforeOrdering.map((row) => ({
-			id: row.activeTaskId,
-			description: row.description,
-			status: "active",
-			createdAt: row.createdAt,
-		})),
-	).taskIds;
-	const byTaskId = new Map(beforeOrdering.map((row) => [row.activeTaskId, row]));
-	const afterOrdering = projectionOrder.flatMap((taskId) => {
-		const row = byTaskId.get(taskId);
-		return row ? [row] : [];
-	});
+	const input = {
+		projectIdFilter: [query.projectId],
+		includeHistory: false,
+		limit: MAX_RECALLED_TODOS,
+	};
 	return {
 		status: "available",
 		value: {
 			productionQueryFallbackPath: missing(QUERY_FALLBACK_MISSING_REASON),
-			captureEnumerationPath: "MemoryStore.readTaskLifecycleInstances",
-			fallbackValidity: {
-				validity: "valid",
-				reasons: [],
-			},
-			directFallbackRowsBeforeOrdering: beforeOrdering,
-			directFallbackRowsAfterOrdering: afterOrdering,
 			directTaskRead: {
-				method: "MemoryStore.readTaskLifecycleInstances",
-				rows: directTaskRows,
+				method: "MemoryStore.listTodos",
+				input,
+				result: store.listTodos(input),
 			},
-			projection: validateProjection(profiles, afterOrdering, []),
 		},
 	};
 }
@@ -664,7 +541,7 @@ export async function captureQueryManifest(
 		);
 	}
 	return {
-		schemaVersion: "query-manifest-capture.phase-zero.v1",
+		schemaVersion: "query-manifest-capture.phase-zero.v2",
 		referenceTimeMs: input.referenceTimeMs,
 		inputStore: {
 			sha256: inputStoreHash,

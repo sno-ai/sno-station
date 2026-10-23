@@ -39,22 +39,18 @@ describe("eval-trace (PRD §11.2.2)", () => {
 
 	beforeEach(() => {
 		tmp = mkdtempSync(join(tmpdir(), "claw-eval-trace-"));
-		// biome-ignore lint/performance/noDelete: env reset must remove the key, not just nullify.
 		delete process.env.EVAL_TRACE_ENABLED;
-		// biome-ignore lint/performance/noDelete: env reset must remove the key, not just nullify.
 		delete process.env.EVAL_TRACE_DIR;
 	});
 
 	afterEach(() => {
 		rmSync(tmp, { recursive: true, force: true });
 		if (originalEnv.EVAL_TRACE_ENABLED === undefined) {
-			// biome-ignore lint/performance/noDelete: restoring undefined removes the key.
 			delete process.env.EVAL_TRACE_ENABLED;
 		} else {
 			process.env.EVAL_TRACE_ENABLED = originalEnv.EVAL_TRACE_ENABLED;
 		}
 		if (originalEnv.EVAL_TRACE_DIR === undefined) {
-			// biome-ignore lint/performance/noDelete: restoring undefined removes the key.
 			delete process.env.EVAL_TRACE_DIR;
 		} else {
 			process.env.EVAL_TRACE_DIR = originalEnv.EVAL_TRACE_DIR;
@@ -187,7 +183,7 @@ describe("eval-trace (PRD §11.2.2)", () => {
 			.split("\n")
 			.filter((line) => line.length > 0);
 		expect(lines.length).toBe(1);
-		const parsed = JSON.parse(lines[0]!) as Record<string, unknown> & {
+		const parsed = JSON.parse(lines[0] ?? "") as Record<string, unknown> & {
 			traceMetadata?: { omittedScoreArrays?: Record<string, string[]> };
 		};
 		// rerankScores must be ABSENT, not present-as-null
@@ -234,8 +230,8 @@ describe("eval-trace (PRD §11.2.2)", () => {
 			.filter((line) => line.length > 0);
 		const parsed = lines
 			.map((l) => JSON.parse(l) as Record<string, unknown>)
-			.find((p) => p.query === "full-stage probe")!;
-		expect(parsed).toBeDefined();
+			.find((p) => p.query === "full-stage probe");
+		if (parsed === undefined) throw new Error("Expected the full-stage trace record");
 
 		const expectedLen = (parsed.retrievedChunkIds as string[]).length;
 		for (const stage of [
@@ -246,13 +242,13 @@ describe("eval-trace (PRD §11.2.2)", () => {
 			"mmrScores",
 			"finalMemoryScores",
 		]) {
-			const arr = parsed[stage] as number[] | undefined;
-			expect(Array.isArray(arr)).toBe(true);
-			expect(arr!.length).toBe(expectedLen);
+			const arr = parsed[stage];
+			if (!Array.isArray(arr)) throw new Error(`Expected the ${stage} score array`);
+			expect(arr.length).toBe(expectedLen);
 			// No null fill (PRD §4): JSON.stringify([undefined]) would emit
 			// [null]; ensure the helper's omit path is what triggers, not a
 			// mid-array null.
-			for (const v of arr!) expect(v).not.toBeNull();
+			for (const v of arr) expect(v).not.toBeNull();
 		}
 		// Side-channel must be absent when no stage is partial.
 		expect(parsed.traceMetadata).toBeUndefined();
