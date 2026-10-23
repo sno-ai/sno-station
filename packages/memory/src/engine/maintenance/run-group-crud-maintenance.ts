@@ -38,7 +38,7 @@ async function main(): Promise<void> {
 	const sqlite = openSqliteDatabase(storePath, { fileMustExist: true });
 	let embedder: Embedder | undefined;
 	try {
-		const pluginConfig = settingsToPluginConfig(settings, "product");
+		const pluginConfig = settingsToPluginConfig(settings, "ops");
 		embedder = createEmbedder(pluginConfig.embedding, getSnoStationMemStateDir());
 		const routing = pickLlmRoutingConfig(pluginConfig);
 		// This command runs outside the memory service, so no plugin's host model is reachable from it:
