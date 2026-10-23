@@ -61,11 +61,11 @@ const SOURCE_ROOT = fileURLToPath(new URL("../../../../packages/memory/src/", im
 const MODES = ["local-first", "agent-native", "rem-enhanced"] as const;
 type Mode = (typeof MODES)[number];
 
-// The released PRD's call table, written out literally so a changed row in the product fails here.
+// Released routing includes the 2026-10-13 decision to disable missed-figure recovery by default.
 const EXPECTED: Record<string, Record<Mode, "off" | "host" | "sno-gpu">> = {
 	E1: { "local-first": "off", "agent-native": "host", "rem-enhanced": "sno-gpu" },
 	E2: { "local-first": "off", "agent-native": "host", "rem-enhanced": "sno-gpu" },
-	E3: { "local-first": "off", "agent-native": "host", "rem-enhanced": "sno-gpu" },
+	E3: { "local-first": "off", "agent-native": "off", "rem-enhanced": "off" },
 	E4: { "local-first": "off", "agent-native": "host", "rem-enhanced": "sno-gpu" },
 	E5: { "local-first": "off", "agent-native": "host", "rem-enhanced": "sno-gpu" },
 	E6: { "local-first": "off", "agent-native": "host", "rem-enhanced": "sno-gpu" },

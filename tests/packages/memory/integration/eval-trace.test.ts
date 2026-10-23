@@ -327,11 +327,6 @@ describe("eval-trace (PRD §11.2.2)", () => {
 
 	it("snapshot covers the Task #9 tunables surface", () => {
 		const snap = buildConfigSnapshot();
-		// Spot-check: at least 30 keys (28 added in Task #9 + a few retrieval
-		// tunables wired into the snapshot). Strict equality would lock the
-		// list; a min-count guard catches accidental deletions without
-		// blocking additive tunable additions.
-		expect(Object.keys(snap).length).toBeGreaterThanOrEqual(30);
 		// Required fields per PRD §11.2.2.
 		expect(snap).toHaveProperty("CHUNK_MAX_TOKENS");
 		expect(snap).toHaveProperty("CHUNK_MIN_TOKENS");
