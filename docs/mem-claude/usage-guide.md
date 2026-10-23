@@ -81,7 +81,7 @@ REM is how your agents dream: overnight they strengthen their memory and settle 
 | Updating what it knows about you | Fixed rules | Your Claude Code | Your Claude Code |
 | Spotting finished tasks | Word matching | Your Claude Code | Your Claude Code |
 | Settling memories that disagree | Keep both memories | Your Claude Code | Sno's memory model |
-| Ranking what to recall | On your machine | On your machine | Sno's reranker |
+| Ranking what to recall | On your machine | On your machine | On your machine |
 | Summing up the day | No model reflection; local session memory remains | Same | Same |
 | Turning "tomorrow" into a date | No model call | Your Claude Code | Your Claude Code |
 
@@ -97,8 +97,12 @@ REM also tidies your memory on a schedule, in two ways:
 
 Both run by default. To run only one, change `rem.operations` in `settings.json`. To turn REM's schedule off, set `rem.tick` to `false`.
 
-Mode selection governs memory writing. It does not make final claims about retrieval or reranker
-routing.
+Mode selection governs memory writing and maintenance. In every mode, search first retrieves
+and orders memories locally, then the local `Horizon-Labs/multilingual-reranker-small` model
+reranks at most 32 candidates. Reranking never uses Sno GPU. Set `rerank.mode` to `none`
+to keep the initial ranking without the model. If the model is loading, fails or times out,
+search uses the initial ranking. Other memory-writing, REM and Self Learning destinations
+remain mode-dependent.
 
 ## Change modes
 
