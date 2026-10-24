@@ -187,7 +187,7 @@ bedeute, die Arbeit sei schlecht. Es bedeutet, dass ein Reviewer aus einer Harne
 
 | Baustein | Status |
 |---|---|
-| Ein Gedächtnis über Codex, Claude Code, Hermes Agent und OpenClaw hinweg | Veröffentlicht; auf einer sauberen Maschine aus der Registry installiert und durchgängig nachgewiesen |
+| Ein Gedächtnis über Codex, Claude Code, Hermes Agent, Cursor und OpenClaw hinweg | Veröffentlicht; auf einer sauberen Maschine aus der Registry installiert und durchgängig nachgewiesen |
 | Cursor: dasselbe Gedächtnis, Skills, Review, Übernahme und Selbstlernen | Veröffentlicht in 1.3; die Kommandozeile `cursor-agent` auf einer sauberen Linux-Maschine durchgängig nachgewiesen; die Cursor-App auf macOS wird noch nachgewiesen |
 | Sno Reach, Agenten sprechen ohne Daemon miteinander | Von `sno setup` installiert; Linux und macOS; auf einer sauberen Linux-Maschine durchgängig nachgewiesen |
 | Selbstlernen und die Squad-Skills | Von `sno setup` installiert; der nächtliche Job lief auf einer sauberen Linux-Maschine |

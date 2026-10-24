@@ -175,7 +175,7 @@ trabajo era malo. Significa que un solo revisor de un solo harness nunca basta.
 
 | Pieza | Estado |
 |---|---|
-| Una sola memoria para Codex, Claude Code, Hermes Agent y OpenClaw | Publicada; instalada desde el registro en una máquina limpia y probada de extremo a extremo |
+| Una sola memoria para Codex, Claude Code, Hermes Agent, Cursor y OpenClaw | Publicada; instalada desde el registro en una máquina limpia y probada de extremo a extremo |
 | Cursor: la misma memoria, habilidades, revisión, relevo y Autoaprendizaje | Publicado en 1.3; la línea de comandos `cursor-agent` probada de extremo a extremo en una máquina Linux limpia; la app de Cursor en macOS aún en prueba |
 | Sno Reach, agentes que hablan entre sí sin daemon | Instalado por `sno setup`; Linux y macOS; probado de extremo a extremo en una máquina Linux limpia |
 | Autoaprendizaje y las habilidades del equipo | Instalado por `sno setup`; el trabajo nocturno se ejecutó en una máquina Linux limpia |

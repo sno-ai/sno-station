@@ -186,7 +186,7 @@ jamais.
 
 | Élément | Statut |
 |---|---|
-| Une seule mémoire pour Codex, Claude Code, Hermes Agent et OpenClaw | Publiée ; installée depuis le registre sur une machine vierge et prouvée de bout en bout |
+| Une seule mémoire pour Codex, Claude Code, Hermes Agent, Cursor et OpenClaw | Publiée ; installée depuis le registre sur une machine vierge et prouvée de bout en bout |
 | Cursor : la même mémoire, compétences, relecture, relais et Autoapprentissage | Publié dans la 1.3 ; la ligne de commande `cursor-agent` prouvée de bout en bout sur une machine Linux vierge ; l'application Cursor sur macOS encore en cours de vérification |
 | Sno Reach, des agents qui se parlent sans démon | Installé par `sno setup` ; Linux et macOS ; prouvé de bout en bout sur une machine Linux vierge |
 | Autoapprentissage et les compétences de l'équipe | Installés par `sno setup` ; la tâche nocturne a tourné sur une machine Linux vierge |

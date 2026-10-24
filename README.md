@@ -173,7 +173,7 @@ It means one reviewer is never enough.
 
 | Piece | Status |
 |---|---|
-| One memory across Codex, Claude Code, Hermes Agent and OpenClaw | Released; installed from the registry on a clean machine and proven end to end |
+| One memory across Codex, Claude Code, Hermes Agent, Cursor and OpenClaw | Released; installed from the registry on a clean machine and proven end to end |
 | Cursor: the same memory, skills, review, take-over and Self Learning | Released in 1.3; the `cursor-agent` command line proven end to end on a clean Linux machine; the Cursor app on macOS still being proven |
 | Sno Reach, agents talking to each other with no daemon | Installed by `sno setup`; Linux and macOS; proven end to end on a clean Linux machine |
 | Self Learning and the squad skills | Installed by `sno setup`; the nightly job ran on a clean Linux machine |
