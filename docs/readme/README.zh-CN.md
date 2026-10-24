@@ -168,7 +168,7 @@ Claude Code 的工作。没有一次审查是空手而归的。我们曾以为�
 
 | 部分 | 状态 |
 |---|---|
-| Codex、Claude Code、Hermes Agent 和 OpenClaw 之间的同一份记忆 | 已发布；在干净的机器上从注册表安装，并端到端验证 |
+| Codex、Claude Code、Hermes Agent、Cursor 和 OpenClaw 之间的同一份记忆 | 已发布；在干净的机器上从注册表安装，并端到端验证 |
 | Cursor：同一份记忆、技能、审查、接手和自我学习 | 1.3 中发布；`cursor-agent` 命令行已在干净的 Linux 机器上端到端验证；macOS 上的 Cursor 应用仍在验证中 |
 | Sno Reach，agent 之间互相通信，无需守护进程 | 由 `sno setup` 安装；Linux 和 macOS；已在干净的 Linux 机器上端到端验证 |
 | 自我学习和小队技能 | 由 `sno setup` 安装；夜间任务已在干净的 Linux 机器上运行过 |

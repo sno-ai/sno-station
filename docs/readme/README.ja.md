@@ -181,7 +181,7 @@ Codex に Claude Code の作業をレビューさせてきました。指摘な�
 
 | 項目 | 状況 |
 |---|---|
-| Codex、Claude Code、Hermes Agent、OpenClaw をまたぐひとつのメモリ | リリース済み。クリーンなマシンでレジストリからインストールし、エンドツーエンドで実証済み |
+| Codex、Claude Code、Hermes Agent、Cursor、OpenClaw をまたぐひとつのメモリ | リリース済み。クリーンなマシンでレジストリからインストールし、エンドツーエンドで実証済み |
 | Cursor：同じメモリ、スキル、レビュー、引き継ぎ、自己学習 | 1.3 でリリース。`cursor-agent` コマンドラインはクリーンな Linux マシンでエンドツーエンドに実証済み。macOS の Cursor アプリは検証中 |
 | Sno Reach：デーモンなしで、エージェント同士が会話する | `sno setup` でインストールされます。Linux と macOS 向け。クリーンな Linux マシンでエンドツーエンドに実証済み |
 | 自己学習とチームのスキル | `sno setup` でインストールされます。夜間ジョブはクリーンな Linux マシンで動作済み |

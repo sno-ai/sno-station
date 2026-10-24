@@ -174,7 +174,7 @@ sno account claim
 
 | 구성 요소 | 상태 |
 |---|---|
-| Codex, Claude Code, Hermes Agent, OpenClaw를 아우르는 하나의 메모리 | 릴리스됨. 깨끗한 컴퓨터에서 레지스트리로 설치해 처음부터 끝까지 검증됨 |
+| Codex, Claude Code, Hermes Agent, Cursor, OpenClaw를 아우르는 하나의 메모리 | 릴리스됨. 깨끗한 컴퓨터에서 레지스트리로 설치해 처음부터 끝까지 검증됨 |
 | Cursor: 같은 메모리, 스킬, 검토, 이어받기, 자기 학습 | 1.3에서 릴리스됨. `cursor-agent` 명령줄은 깨끗한 Linux 컴퓨터에서 처음부터 끝까지 검증됨. macOS의 Cursor 앱은 아직 검증 중 |
 | Sno Reach, 데몬 없이 에이전트끼리 대화하기 | `sno setup`으로 설치됨. Linux와 macOS. 깨끗한 Linux 컴퓨터에서 처음부터 끝까지 검증됨 |
 | 자기 학습와 팀 스킬 | `sno setup`으로 설치됨. 야간 작업이 깨끗한 Linux 컴퓨터에서 실행됨 |

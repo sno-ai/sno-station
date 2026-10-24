@@ -171,7 +171,7 @@ Claude Code 的成果。沒有一次審查是空手而回的。我們曾經以�
 
 | 項目 | 狀態 |
 |---|---|
-| Codex、Claude Code、Hermes Agent 與 OpenClaw 之間的同一份記憶 | 已發布；已在乾淨的機器上從套件庫安裝，並完成端到端驗證 |
+| Codex、Claude Code、Hermes Agent、Cursor 與 OpenClaw 之間的同一份記憶 | 已發布；已在乾淨的機器上從套件庫安裝，並完成端到端驗證 |
 | Cursor：同一份記憶、技能、互相審查、接手和自我學習 | 1.3 已發布；`cursor-agent` 命令列已在乾淨的 Linux 機器上完成端到端驗證；macOS 上的 Cursor 應用程式仍在驗證中 |
 | Sno Reach，代理人之間互相溝通，不需要 daemon | 由 `sno setup` 安裝；支援 Linux 與 macOS；已在乾淨的 Linux 機器上完成端到端驗證 |
 | 自我學習與小隊技能 | 由 `sno setup` 安裝；夜間任務已在乾淨的 Linux 機器上執行 |
