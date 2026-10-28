@@ -475,13 +475,47 @@ interface AtomicConversationWindow {
 	ownedTurnIndexes: number[];
 }
 
+/**
+ * A capture carries a whole session, so one window over the input budget would be left pending
+ * unextracted: cut it into consecutive windows of whole user-started groups that each fit. A single
+ * group over the budget stays alone.
+ */
+function captureBatchWindows(
+	turns: readonly AtomicExtractionTurn[],
+	userIndexes: readonly number[],
+): AtomicConversationWindow[] {
+	const window = (from: number, until: number): AtomicConversationWindow => ({
+		turns: turns.slice(from, until), contextTurns: [], followingTurns: [], startIndex: from,
+		ownedTurnIndexes: Array.from({ length: until - from }, (_, offset) => from + offset),
+	});
+	// Both of the extractor's measures: the raw chunk's chars/4, and the tokenizer on the numbered turns.
+	const fits = (from: number, until: number): boolean => {
+		const slice = turns.slice(from, until);
+		return Math.ceil(JSON.stringify({ context: [], following: [], turns: slice }).length / 4) <= ATOMIC_EXTRACTION_MAX_INPUT_TOKENS
+			&& countTokens(JSON.stringify({ turns: numberAtomicTurns(slice), preceding: [], following: [] })) <= ATOMIC_EXTRACTION_MAX_INPUT_TOKENS;
+	};
+	const starts = [0, ...userIndexes.filter((index) => index > 0)];
+	const windows: AtomicConversationWindow[] = [];
+	let from = 0;
+	for (let group = 1; group < starts.length; group += 1) {
+		const start = starts[group] ?? turns.length;
+		if (!fits(from, starts[group + 1] ?? turns.length)) {
+			windows.push(window(from, start));
+			from = start;
+		}
+	}
+	windows.push(window(from, turns.length));
+	return windows;
+}
+
 function atomicConversationWindows(
 	turns: readonly AtomicExtractionTurn[],
 	captureBatch = false,
 ): AtomicConversationWindow[] {
 	const userIndexes = turns.flatMap((turn, index) => (turn.role === "user" ? [index] : []));
 	if (userIndexes.length === 0) return [];
-	if (captureBatch || userIndexes.length <= 2) {
+	if (captureBatch) return captureBatchWindows(turns, userIndexes);
+	if (userIndexes.length <= 2) {
 		return [{ turns: [...turns], contextTurns: [], followingTurns: [], startIndex: 0, ownedTurnIndexes: turns.map((_, index) => index) }];
 	}
 	return userIndexes.slice(0, -1).map((start, index) => {
