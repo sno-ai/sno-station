@@ -104,7 +104,7 @@ function captureReplyFor(
 	turns: ReadonlyArray<{ turn_index: number; role: string }>,
 ): string {
 	return JSON.stringify({
-		claims_found: records.map((record) => record.claim_text),
+		claims_found: records.map((record) => (record.source_span as { turn_index: number }).turn_index),
 		decisions: turns
 			.filter((turn) => turn.role === "user")
 			.map((turn) => ({ turn_index: turn.turn_index, progress_only: false })),

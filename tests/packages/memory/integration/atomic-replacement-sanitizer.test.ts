@@ -207,7 +207,7 @@ function enhancedRecord(overrides: Partial<AtomicKeyedRecord> = {}): AtomicKeyed
 // the code-carried fields keyed by id, then a lane-2 enrichment reply for that id.
 function captureReply(): string {
 	return JSON.stringify({
-		claims_found: ["Safe extracted claim."],
+		claims_found: [0],
 		decisions: [{ turn_index: 0, progress_only: false }],
 		facts: [
 			{

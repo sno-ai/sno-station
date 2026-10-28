@@ -131,7 +131,7 @@ class FixedGenericTransport implements AtomicGenericExtractionTransport {
 		// Lane 1 (capture): decisions for every user turn, one fact per scripted record.
 		const turns = JSON.parse(request.prompt.split("<take>\n").at(-1)?.split("\n</take>")[0] ?? "[]") as Array<{role: string; turn_index: number}>;
 		return { text: JSON.stringify({
-			claims_found: this.records.map((record) => record.claim_text),
+			claims_found: this.records.map((record) => (record.source_span as { turn_index: number }).turn_index),
 			decisions: turns.filter((turn) => turn.role === "user").map((turn) => ({ turn_index: turn.turn_index, progress_only: this.progressTurns.includes(turn.turn_index) })),
 			facts: this.records.map((record, id) => captureFactRecord(record, id)),
 		}), truncated: false };

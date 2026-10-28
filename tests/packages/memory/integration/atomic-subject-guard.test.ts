@@ -424,7 +424,7 @@ describe("atomic subject guard failure behavior", () => {
 		});
 		for (const callId of ["E5", "E6"] as const) {
 			expect(resolveLlmRoute({ callId, config: { mode: "rem-enhanced" } })).toMatchObject({
-				destination: "sno-gpu",
+				destination: "host",
 			});
 		}
 

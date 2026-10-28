@@ -216,7 +216,7 @@ function completion(text: string, truncated = false): AtomicGenericExtractionCom
  */
 function captureReplyFor(records: Array<Record<string, unknown>>): string {
 	return JSON.stringify({
-		claims_found: records.map((record) => record.claim_text),
+		claims_found: records.map((record) => (record.source_span as { turn_index: number }).turn_index),
 		decisions: [{ turn_index: 1, progress_only: false }],
 		facts: records.map((record, id) => ({
 			id,
