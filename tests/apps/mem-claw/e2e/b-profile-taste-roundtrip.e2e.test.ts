@@ -179,6 +179,8 @@ async function runTurn(journey: Journey, content: string, timestamp: string): Pr
 			sessionTimezone: "UTC",
 		},
 	);
+	// Capture waits for a quiet session or a boundary; the gateway stop captures this turn now.
+	await journey.harness.getOnHookHandler("gateway_stop")?.({}, {});
 }
 
 function readTodos(store: MemoryStore): TodoRow[] {

@@ -146,6 +146,8 @@ setTimeout(() => {
     if (!hook) throw new Error("agent_end missing");
     expect(await prompt("agent:main:sno-oneshot-user")).toEqual({ prependContext: "Existing memory.\n\nUse literal results in tests." });
     await hook({ success: true, messages: [{ role: "user", content: "ordinary message", at: 1 }] }, { ...context, sessionId: "sno-oneshot-user" });
+    // Capture waits for a quiet session or a boundary; the gateway stop captures the pending session now.
+    await harness.getOnHookHandler("gateway_stop")?.({}, {});
     const writes = journal("memory.jsonl").filter(row => typeof row === "object" && row !== null && "path" in row && row.path === "/v1/capture");
     expect(writes.length).toBe(1);
     expect(writes[0]).toMatchObject({ body: { turn: { messages: [{ role: "user", content: "ordinary message", at: 1 }] } } });

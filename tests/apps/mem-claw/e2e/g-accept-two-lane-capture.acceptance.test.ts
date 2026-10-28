@@ -245,6 +245,8 @@ journeyDescribe(`G-accept two-lane capture bootstrap${journeySelectionNote}`, ()
 			{ messages, success: true },
 			{ agentId: "g-accept-two-lane", sessionKey: "agent:g-accept-two-lane:test" },
 		);
+		// Capture waits for a quiet session or a boundary; the gateway stop captures the pending session now.
+		await harness.getOnHookHandler("gateway_stop")?.({}, {});
 		await flushAuditWrites();
 
 		const store = new MemoryStore({ dbPath, embedder });
