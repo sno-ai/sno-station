@@ -1,4 +1,4 @@
-import { mkdtempSync, readdirSync, rmSync } from "node:fs";
+import { mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -116,6 +116,33 @@ it("captures pending turns before a reset or compaction drops them from the sess
 	expect(sent).toHaveLength(4);
 });
 
+it("keeps turns whose capture failed at a reset, though the session's later snapshots no longer carry them", async () => {
+	await turn(sessionA, "Store backups in the eu bucket", "Switched the bucket");
+	failCaptures = [1];
+	await handlers.get("before_reset")?.({ messages: [] }, sessionA);
+	// After the reset, OpenClaw's snapshots start over without the earlier turns.
+	history[sessionA.sessionId] = [];
+	await turn(sessionA, "Rotate the backup key monthly", "Scheduled the rotation");
+	await vi.advanceTimersByTimeAsync(QUIET_MS);
+	expect(sent.filter(entry => entry.kind === "capture").flatMap(capture => capture.contents)).toEqual([
+		"Store backups in the eu bucket", "Switched the bucket", "Rotate the backup key monthly", "Scheduled the rotation",
+	]);
+	await vi.advanceTimersByTimeAsync(2 * QUIET_MS);
+	expect(sent.filter(entry => entry.kind === "capture")).toHaveLength(1);
+});
+
+it("sends held turns once when a failed quiet capture is followed by a snapshot that repeats them", async () => {
+	await turn(sessionA, "Pin Node 24 in CI", "Pinned it in the workflow");
+	failCaptures = [1];
+	await vi.advanceTimersByTimeAsync(QUIET_MS);
+	expect(sent).toEqual([]);
+	await turn(sessionA, "Cache the pnpm store", "Cached by lockfile hash");
+	await vi.advanceTimersByTimeAsync(QUIET_MS);
+	expect(sent).toEqual([{ kind: "capture", session: "session-a", contents: [
+		"Pin Node 24 in CI", "Pinned it in the workflow", "Cache the pnpm store", "Cached by lockfile hash",
+	] }]);
+});
+
 it("captures every session with pending turns when the gateway stops", async () => {
 	await turn(sessionA, "Prefer pnpm here", "Noted");
 	await turn(sessionB, "The API key lives in vault", "Noted");
@@ -178,11 +205,27 @@ it("captures the turns a killed gateway held inside the quiet window when the ne
 	await vi.advanceTimersByTimeAsync(10 * 60_000);
 	expect(sent).toEqual([]);
 
-	// SIGKILL runs no hook and no exit handler: the next process starts with nothing in memory.
+	// SIGKILL runs no hook and no exit handler: the next process starts with nothing in memory, and a write it cut off
+	// leaves a temporary file behind.
+	writeFileSync(join(root, "mem-claw", "pending-captures", "cut-off.json.tmp"), "{\"session\":");
 	startGateway();
 	await handlers.get("gateway_start")?.({}, {});
 	expect(sent).toEqual([{ kind: "capture", session: "session-a", contents: [
 		"Pin Node 24 in CI", "Pinned it in the workflow", "Cache the pnpm store", "Cached by lockfile hash",
 	] }]);
+	expect(readdirSync(join(root, "mem-claw", "pending-captures"))).toEqual([]);
+});
+
+it("stops sending held turns to extraction after three failed captures, counting across gateway restarts", async () => {
+	await turn(sessionA, "Pin Node 24 in CI", "Pinned it in the workflow");
+	failCaptures = [1, 2, 3, 4, 5, 6];
+	await vi.advanceTimersByTimeAsync(QUIET_MS);
+	// The gateway is killed while its retry waits; its timers die with it.
+	vi.clearAllTimers();
+	startGateway();
+	await handlers.get("gateway_start")?.({}, {});
+	await vi.advanceTimersByTimeAsync(5 * QUIET_MS);
+	expect(captureCalls).toBe(3);
+	expect(sent).toEqual([]);
 	expect(readdirSync(join(root, "mem-claw", "pending-captures"))).toEqual([]);
 });

@@ -9,7 +9,7 @@ import { basename, dirname, join } from "node:path";
 import { detectProjectId, getSnoProfileDir } from "@snoai/observability";
 import { SKILL_CATEGORIES, skillVersionFor } from "@snoai/memory/internal/config/skill-categories";
 import { appendObserveLedgerRows } from "@snoai/memory/internal/engine/telemetry/observe-ledger";
-import { type ActivityCursor, type ActivityRecord, CODING_SKIN_CAPTURE_MAX_INPUT_TOKENS, CODING_SKIN_CAPTURE_QUIET_MS, EMPTY_ACTIVITY_CURSOR, foldActivity, isAgentText } from "@snoai/memory/coding-skin";
+import { type ActivityCursor, type ActivityRecord, CODING_SKIN_CAPTURE_MAX_INPUT_TOKENS, CODING_SKIN_CAPTURE_QUIET_MS, CODING_SKIN_MAX_ATTEMPTS, EMPTY_ACTIVITY_CURSOR, foldActivity, isAgentText } from "@snoai/memory/coding-skin";
 import { resolveAgentId } from "@snoai/memory/internal/engine/bindings/memory-tool-access";
 import { setLruEntry } from "@snoai/memory/internal/engine/shared/lru";
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk/core";
@@ -141,26 +141,33 @@ export function registerRuntimeHooks(api: OpenClawPluginApi, config: PluginConfi
   };
   // Capture runs model extraction, so a session is captured once it has been quiet for CODING_SKIN_CAPTURE_QUIET_MS or
   // reaches a boundary (end, reset, compaction, shutdown), never after every turn.
-  const pendingCaptures = new Map<string, { messages: Message[]; scope: ScopeCtx; timer: NodeJS.Timeout }>();
+  // `carried` turns failed at a reset, compaction or session end, so the session's later snapshots no longer hold them.
+  const pendingCaptures = new Map<string, { messages: Message[]; scope: ScopeCtx; timer: NodeJS.Timeout; carried: boolean; attempts: number }>();
   // Held turns are also written to disk, so a gateway killed or crashed inside the quiet window loses none of them:
   // the next gateway start captures what is left.
   const pendingDirectory = join(getSnoProfileDir(), "mem-claw", "pending-captures");
   const pendingPath = (session: string): string => join(pendingDirectory, `${createHash("sha256").update(session).digest("hex")}.json`);
-  const holdCapture = (session: string, messages: Message[], scope: ScopeCtx): void => {
+  const holdCapture = (session: string, messages: Message[], scope: ScopeCtx, carried = false, attempts = 0): void => {
     clearTimeout(pendingCaptures.get(session)?.timer);
     const timer = setTimeout(() => { void flushCapture(session, true); }, CODING_SKIN_CAPTURE_QUIET_MS);
     timer.unref();
-    pendingCaptures.set(session, { messages, scope, timer });
+    pendingCaptures.set(session, { messages, scope, timer, carried, attempts });
     try {
       mkdirSync(pendingDirectory, { recursive: true, mode: 0o700 });
       const path = pendingPath(session);
-      writeFileSync(`${path}.tmp`, JSON.stringify({ session, messages, scope }), { mode: 0o600 });
+      writeFileSync(`${path}.tmp`, JSON.stringify({ session, messages, scope, carried, attempts }), { mode: 0o600 });
       renameSync(`${path}.tmp`, path);
     } catch (error) {
       diagnosticLog.warn("pending capture not written to disk; held in memory only until its quiet window ends", { error: String(error) }, { event_name: "memory.openclaw_runtime_hooks.pending_capture.write_failed", file: "apps/mem-claw/src/hooks/openclaw-runtime-hooks.ts", function: "holdCapture", site_id: "hooks.openclaw-runtime-hooks.hold-capture.write-failed" });
     }
   };
-  const flushCapture = async (session: string, keepOnFailure: boolean): Promise<void> => {
+  // Carried turns stay ahead of a newer snapshot, except those it repeats. Turns compare by role and content: a turn
+  // without a host timestamp gets a new one each snapshot.
+  const unsentFirst = (older: Message[], newer: Message[]): Message[] => {
+    const repeated = new Set(newer.map(message => JSON.stringify([message.role, message.content])));
+    return [...older.filter(message => !repeated.has(JSON.stringify([message.role, message.content]))), ...newer];
+  };
+  const flushCapture = async (session: string, keepOnFailure: boolean, boundary = false): Promise<void> => {
     const pending = pendingCaptures.get(session);
     if (!pending) return;
     pendingCaptures.delete(session);
@@ -173,9 +180,22 @@ export function registerRuntimeHooks(api: OpenClawPluginApi, config: PluginConfi
         return true;
       });
       if (captured) continue;
-      // A newer snapshot already holds these turns; otherwise they wait for the next quiet period or boundary.
-      // Without a timer to keep them, the file on disk stays for the next gateway start.
-      if (keepOnFailure && !pendingCaptures.has(session)) holdCapture(session, chunks.slice(index).flat(), pending.scope);
+      // The turns wait for the next quiet period or boundary; without a timer to keep them, the file on disk stays for
+      // the next gateway start.
+      if (!keepOnFailure) return;
+      const left = chunks.slice(index).flat();
+      const attempts = pending.attempts + 1;
+      const carried = boundary || pending.carried;
+      const newer = pendingCaptures.get(session);
+      // Capture runs extraction on the model, so turns it keeps failing on are not sent again forever.
+      if (attempts >= CODING_SKIN_MAX_ATTEMPTS) {
+        diagnosticLog.error("held turns dropped after repeated failed captures", { turns: left.length, attempts }, { event_name: "memory.openclaw_runtime_hooks.pending_capture.dropped", file: "apps/mem-claw/src/hooks/openclaw-runtime-hooks.ts", function: "flushCapture", site_id: "hooks.openclaw-runtime-hooks.flush-capture.dropped" });
+        if (!newer) rmSync(pendingPath(session), { force: true });
+        return;
+      }
+      // A newer snapshot already holds turns that were not carried.
+      if (!newer) holdCapture(session, left, pending.scope, carried, attempts);
+      else if (carried) holdCapture(session, unsentFirst(left, newer.messages), newer.scope, true, attempts);
       return;
     }
     if (!pendingCaptures.has(session)) rmSync(pendingPath(session), { force: true });
@@ -205,13 +225,16 @@ export function registerRuntimeHooks(api: OpenClawPluginApi, config: PluginConfi
       await observability.emit({ eventType: "llm.call", sessionUuid, payload: { model, prompt_tokens: usage.input, completion_tokens: usage.output, latency_ms: startedAt === undefined ? 0 : Math.max(0, Math.round(Date.now() - startedAt)), cache_read_tokens: usage.cacheRead, cache_write_tokens: usage.cacheWrite, token_source: "host_agent_paid" } });
     });
   });
-  const pendingFile = z.object({ session: z.string(), messages: z.array(z.unknown()),
+  // Files from 1.7.0 carry neither `carried` nor `attempts`.
+  const pendingFile = z.object({ session: z.string(), messages: z.array(z.unknown()), carried: z.boolean().default(false), attempts: z.number().default(0),
     scope: z.object({ principal: z.string(), project: z.string(), session: z.string() }).passthrough() });
   api.on("gateway_start", async () => {
     await connection.ready();
     // Turns a previous gateway held when it stopped are past their quiet window by now.
     await contained("pending-captures", async () => {
       mkdirSync(pendingDirectory, { recursive: true, mode: 0o700 });
+      // A write the previous gateway did not finish; the file it was replacing, if any, holds the turns.
+      for (const name of readdirSync(pendingDirectory).filter(file => file.endsWith(".tmp"))) rmSync(join(pendingDirectory, name), { force: true });
       for (const name of readdirSync(pendingDirectory).filter(file => file.endsWith(".json")).sort()) {
         let raw: unknown;
         try { raw = JSON.parse(readFileSync(join(pendingDirectory, name), "utf8")); } catch { raw = undefined; }
@@ -222,7 +245,7 @@ export function registerRuntimeHooks(api: OpenClawPluginApi, config: PluginConfi
         }
         if (pendingCaptures.has(parsed.data.session)) continue;
         // The file was written by holdCapture from a ScopeCtx; its required fields were checked above.
-        holdCapture(parsed.data.session, messages(parsed.data.messages), parsed.data.scope as ScopeCtx);
+        holdCapture(parsed.data.session, messages(parsed.data.messages), parsed.data.scope as ScopeCtx, parsed.data.carried, parsed.data.attempts);
         await flushCapture(parsed.data.session, true);
       }
     });
@@ -294,14 +317,18 @@ export function registerRuntimeHooks(api: OpenClawPluginApi, config: PluginConfi
       await contained("agent_end", async () => {
         const originalScope = await connection.scope(context);
         const scope = { ...originalScope, host: { ...originalScope.host, observeSessionUuid: observe.lookupActiveObserveSession(context) } };
-        // agent_end carries the whole session snapshot, so the latest one holds every turn not yet captured.
-        holdCapture(injectionSession(context), messages(event.messages), scope);
+        // agent_end carries the whole session snapshot since the last reset or compaction.
+        const session = injectionSession(context);
+        const held = pendingCaptures.get(session);
+        // A new turn restarts the failure count: only a session that has gone idle runs into the cap.
+        if (held?.carried) holdCapture(session, unsentFirst(held.messages, messages(event.messages)), scope, true);
+        else holdCapture(session, messages(event.messages), scope);
       });
     } finally { await observe.finalizeObserveSession(context, event.durationMs); }
   });
   api.on("before_reset", async (event, context) => {
     if (skipStationRun(context)) return;
-    await flushCapture(injectionSession(context), true);
+    await flushCapture(injectionSession(context), true, true);
     startedSessions.delete(injectionSession(context));
     activity.delete(injectionSession(context));
     try {
@@ -315,7 +342,7 @@ export function registerRuntimeHooks(api: OpenClawPluginApi, config: PluginConfi
   });
   api.on("after_compaction", async (_event, context) => {
     if (skipStationRun(context)) return;
-    await flushCapture(injectionSession(context), true);
+    await flushCapture(injectionSession(context), true, true);
     startedSessions.delete(injectionSession(context));
     await contained("after_compaction", async () => {
       const scope = await connection.scope(context);
@@ -326,7 +353,7 @@ export function registerRuntimeHooks(api: OpenClawPluginApi, config: PluginConfi
   api.on("session_end", async (event, context) => {
     if (skipStationRun(context)) return;
     const sessionId = context.sessionId ?? event.sessionId;
-    await flushCapture(injectionSession({ ...context, sessionId }), true);
+    await flushCapture(injectionSession({ ...context, sessionId }), true, true);
     startedSessions.delete(injectionSession({ ...context, sessionId }));
     activity.delete(injectionSession({ ...context, sessionId }));
     try {
@@ -379,7 +406,7 @@ export function registerRuntimeHooks(api: OpenClawPluginApi, config: PluginConfi
     const onCommand = async (raw: unknown): Promise<void> => {
       const event = customEvent.parse(raw);
       if (skipStationRun(event)) return;
-      await flushCapture(injectionSession({ sessionKey: event.sessionKey, workspaceDir: event.context?.workspaceDir }), true);
+      await flushCapture(injectionSession({ sessionKey: event.sessionKey, workspaceDir: event.context?.workspaceDir }), true, true);
       startedSessions.delete(injectionSession({ sessionKey: event.sessionKey,
         workspaceDir: event.context?.workspaceDir }));
       activity.delete(injectionSession({ sessionKey: event.sessionKey,
