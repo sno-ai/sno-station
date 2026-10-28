@@ -22,7 +22,7 @@ Sno Station turns the agents you already use into a squad. Codex, Claude Code, C
 and OpenClaw use one memory, pass work to each other, and review each other's work when you
 ask. Every night they dream, and wake up a little better.
 
-It runs on your own computer. You install it once and keep working the way you do now.
+It runs on your own computer. You install it once and keep working the way you do now. Find out more on our website, [sno.ai](https://sno.ai).
 
 **When one agent runs out, the next one carries on.** Hit a rate limit halfway through a task
 and another agent picks it up from the same memory, with the context intact. You paste nothing.
@@ -36,6 +36,25 @@ with a key that never leaves it. No account, no server, no daemon. The cloud sid
 and the product is complete without it.
 
 **What REM does with your data.** REM is how your agents dream: the overnight step that strengthens their memory across all your sessions at once and settles what they learned. It runs at most once a day for each part of your memory: usually overnight, or earlier the same day once about 100 new memories have piled up. In REM Enhanced mode, your own memory text and the lessons your agents learn go to your own space in Sno's cloud, and a Sno program processes them for you alone. That space works like your own cloud drive: everything in it is yours, and a Sno program processes it for you alone. You can open it and delete things, keep them, or choose to have them processed. Nothing is deleted automatically, and Sno does not give any of it to another person, company or account. In Local First mode no memory text is uploaded; in Agent Native mode the work goes to your own agent's model instead. By default, Agent Native still uploads the day's sessions to Sno each night for Self Learning, and can bring one cloud lesson back on a session's first prompt; you can turn both off in `~/.sno/settings.json`. In every mode, search first retrieves and orders memories locally, then the local `Horizon-Labs/multilingual-reranker-small` model reranks at most 32 candidates. Reranking sends no prompt or memory text to Sno GPU. Set `rerank.mode` to `none` to keep the initial ranking without the model.
+
+## The pain, and what fixes it
+
+*Last updated 2026-10-23.* Every line in the left column is a real complaint from r/ClaudeCode, r/codex or r/ClaudeAI in the week of October 20, 2026. The right column is what runs on our own machines, free and open source, to make it stop.
+
+| What people said this week | What fixes it | Where |
+|---|---|---|
+| “Ran out of my 5-hour limit within 30 minutes.” | Stop sending the biggest model to do everything. Opus plans and reviews; Codex writes the code, called as an agent from the same session. When one subscription runs dry, the other picks the task up from the same memory. | `codex-coder`, `sno reach call` |
+| “Lost 10 hours of overnight work to ‘this model is at capacity’.” | At 2% of its quota the working agent writes a handover brief and wakes the other vendor's agent, which continues from the exact commit. You were asleep. | `rotate-agent` |
+| “1,100 files, 30,000 lines. I don't have the token budget to review their PRs.” | Whoever pushes, reviews first: the author runs a review by the other vendor, in a fresh session that never saw the conversation, and fixes what comes back before anyone else looks. | `peer-review` |
+| “A reviewer subagent checked every commit for two weeks. 86 runs, it stopped exactly one.” | A harness reviewing itself finds nothing real. The reviewer is always a different model in a different harness, with none of the author's chat. | `peer-review` |
+| “Codex never finishes a review.” | Hard caps written into the skill: 3 rounds on code, 5 on a plan, 1 on tests, then it stops and waits for a person. A run that has written nothing for 15 minutes is killed as stalled. | `peer-review`, `codex-coder`, `heartbeat` |
+| “Codex treats every byte like a criminal.” | Speculative safeguards, blockers and hashes are the first thing the review deletes. Nothing goes in without an observed failure asking for it. | `less-is-more` |
+| “When Claude says it won't change something, is that reason stored anywhere Codex reads next time?” | Every finding is filed once, with a status only a human sets. A finding raised again updates its row instead of coming back as new, and earlier rulings are handed to the next review. | `peer-review` findings ledger |
+| “It said done. Nothing happened.” | A task carries a written list of success checks, each answered pass or fail by a real run. An agent saying “done” counts for nothing. | `pl` work orders |
+| “Tomorrow it makes the same mistake it made today.” | Every night a separate model reads the day's sessions, turns your corrections into one-line lessons, and you approve what stays. On our own machine: 162 written so far, 7 approved. The bottleneck is us. | Self Learning (`R` skills) |
+| “Half my subagents were glorified one-liners with a fresh context window.” | Procedures live in skills, not subagents. Two agents remain, for plan and execution, and for review, because those two splits are the ones that pay. | the whole set |
+
+The habits in the right column are skills, installed into Claude Code and Codex by Sno Station and kept in [sno-station-skills](https://github.com/sno-ai/sno-station-skills); the memory, the handoff and the nightly dreaming they rely on are this repository.
 
 ![How it works: two agents, one workspace, three things you get](docs/images/squad-how-it-works.png)
 
