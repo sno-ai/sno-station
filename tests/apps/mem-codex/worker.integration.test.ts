@@ -4,6 +4,7 @@ import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promis
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { connect, type InitRegistration, type MemoryClient } from "@snoai/memory/client";
+import { CODING_SKIN_CAPTURE_QUIET_MS, CODING_SKIN_CHILD_DEADLINE_MS, CODING_SKIN_WORKER_LIFETIME_MS } from "@snoai/memory/coding-skin";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { acquirePidFileLock } from "../../../apps/mem-codex/src/files.js";
 import { appStateRoot, importDirectory, spoolDirectory, workerLockPath } from "../../../apps/mem-codex/src/paths.js";
@@ -28,10 +29,11 @@ async function profile(mode: "agent-native" | "local-first" = "agent-native"): P
 	return root;
 }
 
-async function spool(name: string, turnId: string): Promise<string> {
+// Live turns are captured once their session has been quiet for the window; the injected clocks start at 1 s.
+async function spool(name: string, turnId: string, at = 1 - CODING_SKIN_CAPTURE_QUIET_MS): Promise<string> {
 	await mkdir(spoolDirectory(), { recursive: true });
 	const path = join(spoolDirectory(), name);
-	await writeFile(path, JSON.stringify({ sessionId: `session-${turnId}`, turnId, project: "/repo", childCwd: "/repo", user: `user-${turnId}`, assistant: `assistant-${turnId}`, at: 1, attempts: 0, state: "pending" }));
+	await writeFile(path, JSON.stringify({ sessionId: `session-${turnId}`, turnId, project: "/repo", childCwd: "/repo", user: `user-${turnId}`, assistant: `assistant-${turnId}`, at, attempts: 0, state: "pending" }));
 	return path;
 }
 
@@ -212,6 +214,32 @@ describe("mem-codex worker", () => {
 		expect(await readdir(spoolDirectory())).toEqual([]);
 	});
 
+	it("finishes a capture still running at the nine-minute cap with its model call served, then hands off", async () => {
+		await profile();
+		await spool("0001.json", "long-capture");
+		await spool("0002.json", "next");
+		let now = 1_000;
+		// The capture starts before the cap; its model call arrives after it.
+		const fixture = dependencies({ async onCapture() { now = 1_000 + CODING_SKIN_WORKER_LIFETIME_MS + 60_000; } });
+		fixture.deps.now = () => now;
+		fixture.deps.sleep = async delayMs => { now += delayMs; };
+		const timeouts: number[] = [];
+		let queuedAtHandoff: string[] | undefined;
+		const deps: WorkerDependencies = {
+			...fixture.deps,
+			async runChild(prompt, cwd, timeoutMs) {
+				timeouts.push(timeoutMs ?? 0);
+				return fixture.deps.runChild(prompt, cwd, timeoutMs);
+			},
+			async handoff() { queuedAtHandoff = await readdir(spoolDirectory()); },
+		};
+		expect(await runWorker(deps)).toBe("drained");
+		expect(fixture.captures).toEqual(["long-capture"]);
+		expect(fixture.callbackStatus).toBe(200);
+		expect(timeouts).toEqual([CODING_SKIN_CHILD_DEADLINE_MS]);
+		expect(queuedAtHandoff).toEqual(["0002.json"]);
+	});
+
 	it("rescans before exit and drains a record appended during capture", async () => {
 		await profile();
 		await spool("0001.json", "one");
@@ -328,7 +356,8 @@ describe("mem-codex worker", () => {
 
 	it("registers and captures through a real sidecar in a temporary profile", async () => {
 		const root = await profile("agent-native");
-		await spool("0001.json", "real-sidecar");
+		// The real sidecar rejects a negative timestamp; its clock starts now, so 1 ms is long quiet.
+		await spool("0001.json", "real-sidecar", 1);
 		const prompts: string[] = [];
 		// The drained worker idles two minutes; the injected clock makes that wait instant.
 		let clock = Date.now();
@@ -358,7 +387,7 @@ describe("mem-codex worker", () => {
 	it("finishes an import without a failed receipt when ambient capture is disabled", async () => {
 		const root = await profile();
 		writeSettingsFixture(root, { mode: "agent-native", capture: { ambient: false }, rerank: { mode: "none" }, embedding: { cacheDir: MODEL_CACHE } });
-		const path = await spool("0001.json", "capture-disabled");
+		const path = await spool("0001.json", "capture-disabled", 1);
 		await mkdir(importDirectory(), { recursive: true });
 		const receiptPath = join(importDirectory(), "receipt.json");
 		await writeFile(receiptPath, JSON.stringify({ files: { "/note.md": { committed: 0, failures: 0 } } }));
