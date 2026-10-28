@@ -134,6 +134,7 @@ We do not hide these boundaries:
 - **An unlocked machine in someone else's hands.** If the machine is unlocked and SNO Station Core is already running, the OS boundary has already been crossed.
 - **Root, kernel, debugger, or memory-dump access.** The DEK must exist in process memory while the gateway is using the database.
 - **OS swap and hibernation.** Use full-disk encryption to reduce that risk.
+- **Conversation waiting to be captured.** Memory captures a session after it has been quiet for thirty minutes or has ended. Until then its turns sit in plain files, readable only by your OS user (mode `0600`): `<profile root>/sno-mem-claude/spool/`, `<profile root>/sno-mem-codex/spool/` and `<profile root>/sno-mem-cursor/spool/` for Claude Code, Codex and Cursor, `<profile root>/mem-claw/pending-captures/` for OpenClaw and `<profile root>/sno-mem-hermes/pending-captures/` for Hermes. Each file is deleted once its turns are captured, or after three failed captures. Use full-disk encryption to protect them at rest.
 - **Lost settings and backups.** There is no Sno escrow, backdoor, or support override for a lost key.
 - **Coerced unlock.** Cryptography cannot prevent a person from being forced to unlock a system.
 - **The user's chosen LLM provider.** If you configure Anthropic, OpenAI, a local model server, or another provider, the relevant prompt context sent to that provider is governed by that provider and your configuration.
