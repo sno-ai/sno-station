@@ -37,6 +37,9 @@ _ACTIVITY_GAP_MS = 15 * 60_000
 _ACTIVITY_LONG_RUN_MS = 12 * 3_600_000
 # Capture runs model extraction, so a session is captured once it has been quiet this long or reaches a boundary.
 _CAPTURE_QUIET_SECONDS = 30 * 60
+# Capture runs extraction on the model, so held turns it keeps failing on are dropped after this many tries, like the
+# coding-agent workers (CODING_SKIN_MAX_ATTEMPTS). A new turn restarts the count.
+_CAPTURE_MAX_ATTEMPTS = 3
 # Input per capture, estimated as UTF-8 bytes / 3; the same limit as the coding-agent workers
 # (CODING_SKIN_CAPTURE_MAX_INPUT_TOKENS): about one 4,096-token extraction window per capture, so a failure retries a small part.
 _CAPTURE_MAX_INPUT_TOKENS = 3_500
@@ -512,8 +515,9 @@ class SnoMemoryProvider(MemoryProvider):
         self._capture_lock = threading.Lock()
         self._captures: dict[str, Future[dict[str, object]]] = {}
         self._committed: dict[str, dict[str, object]] = {}
-        # Per session: turns not yet captured, their quiet timer, and whether they are the host's whole-conversation snapshot.
-        self._pending: dict[str, tuple[list[dict[str, str]], threading.Timer, bool]] = {}
+        # Per session: turns not yet captured, their quiet timer, whether they are the host's whole-conversation snapshot,
+        # and how many captures of them failed.
+        self._pending: dict[str, tuple[list[dict[str, str]], threading.Timer, bool, int]] = {}
         # The same turns on disk, so a host killed inside the quiet window loses none; the next start captures them.
         self._pending_dir: Path | None = None
         self._activity: dict[str, ActivityCursor] = {}
@@ -746,7 +750,7 @@ class SnoMemoryProvider(MemoryProvider):
         self._hold_capture(active_session, normalized, snapshot=bool(messages))
 
     def _hold_capture(
-        self, session_id: str, turns: list[dict[str, str]], *, snapshot: bool, unsent: bool = False,
+        self, session_id: str, turns: list[dict[str, str]], *, snapshot: bool, unsent: bool = False, attempts: int = 0,
     ) -> None:
         """Keeps turns until the session is quiet; `unsent` turns from a failed capture go before newer turns."""
         timer = threading.Timer(_CAPTURE_QUIET_SECONDS, self._flush_capture, args=(session_id,))
@@ -761,8 +765,9 @@ class SnoMemoryProvider(MemoryProvider):
                 pending = turns
             else:
                 pending = turns + previous[0] if unsent else previous[0] + turns
-            self._pending[session_id] = (pending, timer, snapshot)
-            self._write_pending(session_id, pending)
+            attempts = attempts if previous is None else 0
+            self._pending[session_id] = (pending, timer, snapshot, attempts)
+            self._write_pending(session_id, pending, attempts)
         timer.start()
 
     def _flush_capture(self, session_id: str, *, keep_on_failure: bool = True) -> None:
@@ -778,9 +783,18 @@ class SnoMemoryProvider(MemoryProvider):
             except (OSError, RuntimeError, ValueError) as error:
                 self._last_error = str(error)
                 _LOG.error("memory capture failed", extra={"error": self._last_error})
-                if keep_on_failure:
-                    left = [turn for rest in chunks[index:] for turn in rest]
-                    self._hold_capture(session_id, left, snapshot=False, unsent=True)
+                if not keep_on_failure:
+                    return
+                left = [turn for rest in chunks[index:] for turn in rest]
+                attempts = pending[3] + 1
+                if attempts >= _CAPTURE_MAX_ATTEMPTS:
+                    _LOG.error("held turns dropped after repeated failed captures",
+                               extra={"turns": len(left), "attempts": attempts})
+                    with self._capture_lock:
+                        if session_id not in self._pending:
+                            self._pending_path(session_id).unlink(missing_ok=True)
+                    return
+                self._hold_capture(session_id, left, snapshot=False, unsent=True, attempts=attempts)
                 return
         with self._capture_lock:
             if session_id not in self._pending:
@@ -792,12 +806,12 @@ class SnoMemoryProvider(MemoryProvider):
         name = hashlib.sha256(f"{self._project}\0{session_id}".encode()).hexdigest()
         return self._pending_dir / f"{name}.json"
 
-    def _write_pending(self, session_id: str, turns: list[dict[str, str]]) -> None:
+    def _write_pending(self, session_id: str, turns: list[dict[str, str]], attempts: int) -> None:
         path = self._pending_path(session_id)
         try:
             path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
             temporary = path.with_suffix(".tmp")
-            temporary.write_text(json.dumps({"project": self._project, "session_id": session_id, "turns": turns}))
+            temporary.write_text(json.dumps({"project": self._project, "session_id": session_id, "turns": turns, "attempts": attempts}))
             temporary.chmod(0o600)
             temporary.replace(path)
         except OSError as error:
@@ -805,16 +819,26 @@ class SnoMemoryProvider(MemoryProvider):
                          extra={"error": str(error)})
 
     def _capture_left_over(self) -> None:
-        """Captures this project's turns that an earlier host process held when it stopped; they are past their quiet window."""
+        """Captures this project's turns that an earlier host process held when it stopped; they are past their quiet window.
+
+        Another project's turns wait for a host in that project; once its directory is gone, none will come, so they are
+        deleted."""
         if self._pending_dir is None or not self._pending_dir.is_dir():
             return
+        # A write an earlier host did not finish; the file it was replacing, if any, holds the turns.
+        for path in self._pending_dir.glob("*.tmp"):
+            path.unlink(missing_ok=True)
         for path in sorted(self._pending_dir.glob("*.json")):
             try:
                 held = json.loads(path.read_text())
                 if held["project"] != self._project:
+                    if not Path(held["project"]).is_dir():
+                        _LOG.warning("held turns of a deleted project removed uncaptured", extra={"turns": len(held["turns"])})
+                        path.unlink(missing_ok=True)
                     continue
                 session_id = str(held["session_id"])
                 turns = [{"role": str(turn["role"]), "content": str(turn["content"])} for turn in held["turns"]]
+                attempts = int(held.get("attempts", 0))  # files from 1.7.0 carry no count
             except (OSError, ValueError, KeyError, TypeError) as error:
                 _LOG.warning("unreadable pending capture left on disk; its turns are not captured",
                              extra={"file": path.name, "error": str(error)})
@@ -822,7 +846,7 @@ class SnoMemoryProvider(MemoryProvider):
             with self._capture_lock:
                 if session_id in self._pending:
                     continue
-            self._hold_capture(session_id, turns, snapshot=False)
+            self._hold_capture(session_id, turns, snapshot=False, attempts=attempts)
             self._flush_capture(session_id)
 
     def on_pre_compress(

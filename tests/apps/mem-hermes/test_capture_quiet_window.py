@@ -155,8 +155,8 @@ class CaptureQuietWindowTest(unittest.TestCase):
         self.assertEqual(self.sidecar.sent, [])
         # SIGKILL runs no shutdown and its daemon timers die with it; the next process starts with nothing in memory.
         with self.provider._capture_lock:
-            for _, timer, _ in self.provider._pending.values():
-                timer.cancel()
+            for held in self.provider._pending.values():
+                held[1].cancel()
         restarted = self.module.SnoMemoryProvider()
         restarted._project = self.home.name
         restarted._client = self.sidecar
@@ -166,6 +166,50 @@ class CaptureQuietWindowTest(unittest.TestCase):
             "Pin Node 24 in CI", "Pinned it in the workflow", "Cache the pnpm store", "Cached by lockfile hash",
         ])])
         self.assertEqual(list(restarted._pending_dir.glob("*.json")), [])
+
+    def held_by_a_killed_host(self, project: str, session_id: str) -> Path:
+        other = self.module.SnoMemoryProvider()
+        other._project = project
+        other._primary = True
+        other._client = self.sidecar
+        other._pending_dir = self.provider._pending_dir
+        other.sync_turn("Use the staging bucket", "Switched it", session_id=session_id)
+        with other._capture_lock:
+            for held in other._pending.values():
+                held[1].cancel()
+        return other._pending_path(session_id)
+
+    def test_next_start_removes_what_no_host_can_capture_and_leaves_live_projects_alone(self) -> None:
+        live = tempfile.TemporaryDirectory()
+        self.addCleanup(live.cleanup)
+        gone = tempfile.TemporaryDirectory()
+        live_file = self.held_by_a_killed_host(live.name, "session-live")
+        self.held_by_a_killed_host(gone.name, "session-gone")
+        gone.cleanup()
+        # A write cut off by the kill leaves its temporary file behind.
+        (self.provider._pending_dir / "cut-off.tmp").write_text('{"project":')
+        self.provider._capture_left_over()
+        self.assertEqual(self.sidecar.captures(), [])
+        self.assertEqual(list(self.provider._pending_dir.iterdir()), [live_file])
+
+    def test_stops_sending_held_turns_after_three_failed_captures_counting_across_restarts(self) -> None:
+        self.turn("Pin Node 24 in CI", "Pinned it in the workflow")
+        self.sidecar.fail_captures = set(range(1, 10))
+        time.sleep(QUIET_SECONDS * 1.5)
+        self.assertEqual(self.sidecar.capture_calls, 1)
+        # The host is killed while the retry waits; its daemon timers die with it.
+        with self.provider._capture_lock:
+            for held in self.provider._pending.values():
+                held[1].cancel()
+        restarted = self.module.SnoMemoryProvider()
+        restarted._project = self.home.name
+        restarted._client = self.sidecar
+        restarted._pending_dir = self.provider._pending_dir
+        restarted._capture_left_over()
+        time.sleep(QUIET_SECONDS * 4)
+        self.assertEqual(self.sidecar.capture_calls, 3)
+        self.assertEqual(self.sidecar.captures(), [])
+        self.assertEqual(list(restarted._pending_dir.iterdir()), [])
 
     def test_compression_checkpoint_covers_the_pending_turns(self) -> None:
         self.turn("Store backups in the eu bucket", "Switched the bucket")
