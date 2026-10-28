@@ -12,9 +12,10 @@
     "claims_found": {
       "type": "array",
       "items": {
-        "type": "string"
+        "type": "integer",
+        "minimum": 0
       },
-      "description": "One short string for each claim the turns this call owns state, in the order they appear; empty when they state none. Written before records so the list is read before the array is opened."
+      "description": "For each claim the turns this call owns state, in the order they appear, the turn_index it came from: a number, never the claim's words; empty when they state none. Written before records so the list is read before the array is opened."
     },
     "records": {
       "type": "array",
