@@ -22,7 +22,7 @@ Sno Station convierte los agentes que ya usas en un equipo. Codex, Claude Code, 
 y OpenClaw usan una sola memoria, se pasan el trabajo entre sí y revisan el trabajo de los
 demás cuando se lo pides. Cada noche repasan el día y mejoran un poco.
 
-Funciona en tu propia computadora. Lo instalas una vez y sigues trabajando como hasta ahora.
+Funciona en tu propia computadora. Lo instalas una vez y sigues trabajando como hasta ahora. Más información en nuestro sitio web, [sno.ai](https://sno.ai).
 
 **Cuando a un agente se le acaba el límite, el siguiente continúa.** Si llegas a un límite de uso
 a mitad de una tarea, otro agente la retoma desde la misma memoria, con el contexto intacto.

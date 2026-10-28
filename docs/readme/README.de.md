@@ -23,7 +23,7 @@ Hermes Agent und OpenClaw nutzen ein Gedächtnis, geben Arbeit aneinander weiter
 prüfen auf Wunsch gegenseitig ihre Arbeit. Jede Nacht blicken sie auf
 den Tag zurück und werden ein wenig besser.
 
-Es läuft auf Ihrem eigenen Rechner. Sie installieren es einmal und arbeiten weiter wie bisher.
+Es läuft auf Ihrem eigenen Rechner. Sie installieren es einmal und arbeiten weiter wie bisher. Mehr dazu auf unserer Website [sno.ai](https://sno.ai).
 
 **Wenn bei einem Agenten das Limit erreicht ist, macht der nächste weiter.** Sie stoßen
 mitten in einer Aufgabe an ein Rate Limit, und ein anderer Agent übernimmt sie aus demselben

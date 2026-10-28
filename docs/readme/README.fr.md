@@ -24,7 +24,7 @@ des autres à votre demande. Chaque nuit, ils reviennent sur la journée et
 progressent un peu.
 
 Il tourne sur votre propre ordinateur. Vous l'installez une fois et vous continuez à travailler
-comme aujourd'hui.
+comme aujourd'hui. Pour en savoir plus, consultez notre site [sno.ai](https://sno.ai).
 
 **Quand l'un manque de souffle, le suivant continue.** Vous atteignez une limite de débit en plein
 milieu d'une tâche, et un autre agent la reprend depuis la même mémoire, avec tout son
