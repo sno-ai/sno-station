@@ -70,7 +70,7 @@
     "lru-cache": "^11.3.5",
     "sqlite-vec": "^0.1.6",
     "uuid": "^14.0.0",
-    "zod": "^4.5.4",
+    "zod": "^4.6.6",
     "@snoai/memory": "^1.7.0"
   },
   "devDependencies": {

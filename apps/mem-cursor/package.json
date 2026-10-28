@@ -32,7 +32,7 @@
   "dependencies": {
     "@snoai/memory": "^1.7.0",
     "fs-native-extensions": "^1.5.1",
-    "zod": "^4.5.4"
+    "zod": "^4.6.6"
   },
   "devDependencies": {
     "@types/node": "^22.19.17",
