@@ -1,14 +1,19 @@
 import { readFileSync } from "node:fs";
+import { createServer } from "node:http";
 import { setTimeout as delay } from "node:timers/promises";
 import { afterEach, expect, it, vi } from "vitest";
 import { createLlmClient } from "../../../../packages/memory/src/model/llm-client";
 import { withMemoryOperation } from "../../../../packages/memory/src/engine/operation-cancellation";
+import { RegisteredAgentPort } from "../../../../packages/memory/src/model/registered-agent-port";
 import type { ModelCallId } from "../../../../packages/memory/src/model/model-call-table";
 import type { LlmRoutingConfig } from "../../../../packages/memory/src/model/llm-mode-routing";
 
+const shipped: NonNullable<LlmRoutingConfig["modelCalls"]> = JSON.parse(readFileSync(new URL("../../../../packages/memory/settings.default.json", import.meta.url), "utf8")).modelCalls;
+// E4-E6 ship on the agent in REM Enhanced; a user can still route them to Sno GPU, which is the path tested here.
 const routing: LlmRoutingConfig = {
 	mode: "rem-enhanced", language: "en",
-	modelCalls: JSON.parse(readFileSync(new URL("../../../../packages/memory/settings.default.json", import.meta.url), "utf8")).modelCalls,
+	modelCalls: Object.fromEntries(Object.entries(shipped).map(([id, column]) =>
+		[id, ["E4", "E5", "E6"].includes(id) ? { ...column, "rem-enhanced": "sno-gpu" } : column])) as typeof shipped,
 };
 const didDocument = {
 	id: "did:web:www.sno.ai",
@@ -79,6 +84,46 @@ it("keeps an explicit shorter GPU request deadline", async () => {
 	}, performance.now() + 1000);
 });
 
+// Measured 2026-10-27: the capture's remaining time is fractional, and the registered host port's
+// AbortSignal.timeout refuses a non-integer delay, so every host E4/E5/E6 call failed in 0 ms.
+it("answers host extraction through the registered agent port with the capture's remaining time", async () => {
+	const server = createServer((_request, response) => {
+		response.writeHead(200, { "content-type": "application/json" })
+			.end(JSON.stringify({ choices: [{ message: { content: '{"records":[]}' } }] }));
+	});
+	await new Promise<void>(done => server.listen(0, "127.0.0.1", done));
+	const address = server.address();
+	if (!address || typeof address === "string") throw new Error("missing host endpoint");
+	try {
+		const llm = createLlmClient({ preset: "mem_claw/sno_ai_extract", routing: { ...routing, mode: "agent-native" },
+			agentPort: new RegisteredAgentPort({ baseUrl: `http://127.0.0.1:${address.port}/v1`, credential: "host", model: "host-model" }) });
+		await withMemoryOperation("capture", undefined, async () => {
+			expect(await llm.completeText({ callId: "E4", prompt: "Host records." })).toBe('{"records":[]}');
+		}, performance.now() + 300_000.5);
+	} finally {
+		await new Promise(done => server.close(done));
+	}
+});
+
+it("retries an empty host reply through the registered agent port within the request's remaining time", async () => {
+	const replies = ["", "2026-10-28"];
+	const server = createServer((_request, response) => {
+		response.writeHead(200, { "content-type": "application/json" })
+			.end(JSON.stringify({ choices: [{ message: { content: replies.shift() ?? "" } }] }));
+	});
+	await new Promise<void>(done => server.listen(0, "127.0.0.1", done));
+	const address = server.address();
+	if (!address || typeof address === "string") throw new Error("missing host endpoint");
+	try {
+		const llm = createLlmClient({ preset: "mem_claw/sno_ai_extract", routing: { ...routing, mode: "agent-native" },
+			agentPort: new RegisteredAgentPort({ baseUrl: `http://127.0.0.1:${address.port}/v1`, credential: "host", model: "host-model" }) });
+		expect(await llm.completeText({ callId: "E11", prompt: "Resolve tomorrow.", timeoutMs: 5_000, emptyReplyAttempts: 2 }))
+			.toBe("2026-10-28");
+	} finally {
+		await new Promise(done => server.close(done));
+	}
+});
+
 it.each(["E10", "REM3"] satisfies ModelCallId[])("keeps the existing GPU budget for excluded call %s", async callId => {
 	provider(80);
 	const llm = client();
@@ -88,16 +133,22 @@ it.each(["E10", "REM3"] satisfies ModelCallId[])("keeps the existing GPU budget 
 	}, performance.now() + 1000);
 });
 
-it("keeps the host extraction budget", async () => {
+// Measured 2026-10-27: a host E4 got the 30 s client default and was cancelled at 30,000 ms while the
+// capture still had minutes left; host E2 calls that day took 22-34 s.
+it.each([
+	["agent-native", routing.modelCalls],
+	["rem-enhanced", shipped],
+] as const)("gives host extraction the capture's remaining time in %s", async (mode, modelCalls) => {
 	let hostTimeout: number | undefined;
-	const llm = createLlmClient({ preset: "mem_claw/sno_ai_extract", timeoutMs: 25,
-		routing: { ...routing, mode: "agent-native" }, agentPort: {
+	const llm = createLlmClient({ preset: "mem_claw/sno_ai_extract",
+		routing: { ...routing, mode, modelCalls }, agentPort: {
 			async complete(request) { hostTimeout = request.timeoutMs; return { kind: "ok", text: '{"records":[]}' }; },
 		} });
 	await withMemoryOperation("capture", undefined, async () => {
 		expect(await llm.completeText({ callId: "E4", prompt: "Host records." })).toBe('{"records":[]}');
-	}, performance.now() + 1000);
-	expect(hostTimeout).toBe(25);
+	}, performance.now() + 300_000);
+	expect(hostTimeout).toBeGreaterThan(299_000);
+	expect(hostTimeout).toBeLessThanOrEqual(300_000);
 });
 
 it.each([undefined, 600_000])("uses the standalone GPU fallback only when no request deadline was supplied (%s)", async timeoutMs => {

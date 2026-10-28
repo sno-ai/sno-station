@@ -381,15 +381,17 @@ export function createLlmClient(config: LlmClientConfig & { refuseOnUnavailable?
 	let lastError: string | null = null;
 	let lastUsage: ReturnType<LlmClient["getLastUsage"]> = null;
 	const resolveRequestTimeoutMs = (request: MemoryLlmRequest): number => {
-		if (destinationFor(request) !== "sno-gpu" || !request.callId.startsWith("E") || MODEL_CALLS[request.callId].occasion !== "memoryExtract") {
+		if (!request.callId.startsWith("E") || MODEL_CALLS[request.callId].occasion !== "memoryExtract") {
 			return request.timeoutMs ?? config.timeoutMs ?? 30_000;
 		}
 		const operationDeadline = memoryOperationDeadline();
 		if (operationDeadline === undefined) return request.timeoutMs ?? ATOMIC_CAPTURE_TIMEOUT_MS;
 		const remainingMs = operationDeadline - performance.now();
 		if (remainingMs <= 0) throw new LlmClientTerminalError("timeout", "Memory operation deadline exhausted before extraction");
-		// The installation default is not a GPU deadline. Queueing and extraction share the owning operation's time.
-		return Math.min(request.timeoutMs ?? remainingMs, remainingMs);
+		// The installation default is not an extraction deadline on either destination. Queueing and extraction share
+		// the owning operation's time.
+		// Whole milliseconds: AbortSignal.timeout refuses a fractional delay.
+		return Math.floor(Math.min(request.timeoutMs ?? remainingMs, remainingMs));
 	};
 	const destinationFor = (request: MemoryLlmRequest): "off" | "host" | "sno-gpu" => {
 		if (!config.routing) return "host";
@@ -648,7 +650,7 @@ export function createLlmClient(config: LlmClientConfig & { refuseOnUnavailable?
 			const attemptLimit = request.emptyReplyAttempts ?? EMPTY_REPLY_ATTEMPTS;
 			for (let attempt = 2; attempt <= attemptLimit; attempt += 1) {
 				if (content === null || content.raw.trim().length > 0 || budget.remaining <= 0) break;
-				const remainingMs = deadlineMs - performance.now();
+				const remainingMs = Math.floor(deadlineMs - performance.now());
 				if (remainingMs <= 0) break;
 				log.debug("Retrying empty model reply", { call_id: request.callId, destination: destinationFor(request), attempt, attempt_limit: attemptLimit }, { event_name: "memory.llm_client.diagnostic", file: "packages/memory/src/model/llm-client.ts", function: "requestContentRetryingEmpty", site_id: "shared.llm-client.requestContentRetryingEmpty.cd874fefff" });
 				// The retry gets the time the deadline has left, not another full request timeout:
