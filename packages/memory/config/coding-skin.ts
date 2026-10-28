@@ -20,6 +20,13 @@ export const CODING_SKIN_WORKER_LIFETIME_MS: number = 9 * 60_000;
 export const CODING_SKIN_RETRY_DELAYS_MS = [2_000, 10_000] as const;
 export const CODING_SKIN_MAX_ATTEMPTS = 3;
 export const CODING_SKIN_MAX_PENDING_CAPTURES = 1000;
+/** A session's turns wait in the spool until the session ends or has had no new turn for this long, then go together. */
+export const CODING_SKIN_CAPTURE_QUIET_MS: number = 30 * 60_000;
+/**
+ * Input per capture, estimated as UTF-8 bytes / 3 (at or above the sidecar's CJK-aware count). The sidecar extracts a
+ * multi-turn capture as one window and parks it unextracted above 4,096 tokens; the rest is room for its JSON framing.
+ */
+export const CODING_SKIN_CAPTURE_MAX_INPUT_TOKENS = 3_500;
 export const CODING_SKIN_IMPORT_INTERVAL_MS = 2_010;
 export const CODING_SKIN_CHILD_MAX_BUFFER_BYTES: number = 8 * 1024 * 1024;
 export const CODING_SKIN_MANUAL_SESSION_ID = "manual";

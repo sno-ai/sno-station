@@ -19,6 +19,7 @@ import { readSkillRuns } from "./skill-runs.js";
 import { startWorkerDetached } from "./worker.js";
 import {
 	appendSpool,
+	markSessionEnded,
 	readLastSession,
 	readSession,
 	recordDegraded,
@@ -86,6 +87,11 @@ export async function sessionStart(raw: unknown): Promise<string> {
 			const previous = await readLastSession(project);
 			// A fresh session ends the previous one as "new"; /clear is sent from SessionEnd.
 			if (input.source === "startup" && previous && previous.sessionId !== input.session_id) {
+				// Its queued turns are captured now instead of after the quiet window.
+				if (readCaptureSettings().ambient) {
+					await markSessionEnded(previous.sessionId);
+					startWorkerDetached();
+				}
 				try {
 					const boundaryClient = await withinDeadline(connectMemory(), Math.max(1, recall.sessionStart.timeoutMs - (performance.now() - started)));
 					if (!isDegradedConnection(boundaryClient)) {
@@ -359,6 +365,10 @@ export async function sessionEnd(raw: unknown): Promise<void> {
 			return;
 		}
 		await sendSessionActivity(input, "SessionEnd");
+		if (readCaptureSettings().ambient) {
+			await markSessionEnded(input.session_id);
+			startWorkerDetached();
+		}
 		const state = await readSession(input.session_id);
 		try {
 			const rows = await readSkillRuns(input);
