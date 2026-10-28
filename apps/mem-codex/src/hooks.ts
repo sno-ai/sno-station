@@ -17,6 +17,7 @@ import { reportSessionActivity } from "./session-activity.js";
 import { reportSkillRuns } from "./skill-runs.js";
 import {
 	appendSpool,
+	markSessionEnded,
 	readLastSession,
 	readSession,
 	recordDegraded,
@@ -304,6 +305,10 @@ export async function sessionEnd(raw: unknown): Promise<void> {
 		const input = sessionEndSchema.parse(raw);
 		if (input.agent_id !== undefined) return;
 		sessionId = input.session_id;
+		if (readCaptureSettings().ambient) {
+			await markSessionEnded(input.session_id);
+			startWorkerDetached();
+		}
 		const state = await readSession(input.session_id);
 		try {
 			await reportSkillRuns(state, input.cwd);

@@ -1,11 +1,11 @@
 import { createHash, randomUUID } from "node:crypto";
-import { mkdir, readFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { activityCursorSchema } from "@snoai/memory/coding-skin";
 import { z } from "zod";
 import { acquirePidFileLock, writeJsonAtomic } from "./files.js";
-import { appStateRoot, sessionPath, spoolDirectory } from "./paths.js";
+import { appStateRoot, endedSessionPath, endedSessionsDirectory, sessionPath, spoolDirectory } from "./paths.js";
 
 const lastSessionSchema = z.object({ sessionId: z.string().min(1), transcriptPath: z.string().min(1) });
 
@@ -138,4 +138,10 @@ export async function appendSpool(record: Omit<SpoolRecord, "attempts" | "state"
 	const path = join(directory, `${String(record.at).padStart(16, "0")}-${randomUUID()}.json`);
 	await writeJsonAtomic(path, { ...record, attempts: 0, state: "pending" });
 	return path;
+}
+
+/** Marks a session ended, so the worker captures its queued turns now instead of after the quiet window. */
+export async function markSessionEnded(sessionId: string): Promise<void> {
+	await mkdir(endedSessionsDirectory(), { recursive: true, mode: 0o700 });
+	await writeFile(endedSessionPath(sessionId), "", { mode: 0o600 });
 }

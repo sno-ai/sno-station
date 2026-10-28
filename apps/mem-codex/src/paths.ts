@@ -20,6 +20,15 @@ export function spoolDirectory(): string {
 	return join(appStateRoot(), "spool");
 }
 
+/** One empty file per ended session, named by the session id's hash; the worker then captures that session at once. */
+export function endedSessionsDirectory(): string {
+	return join(appStateRoot(), "ended");
+}
+
+export function endedSessionPath(sessionId: string): string {
+	return join(endedSessionsDirectory(), createHash("sha256").update(sessionId).digest("hex"));
+}
+
 export function workerLockPath(): string {
 	return join(appStateRoot(), "worker.lock");
 }
