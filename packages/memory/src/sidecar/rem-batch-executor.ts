@@ -642,7 +642,7 @@ async function openBatchRuntime(input: {
 }): Promise<BatchRuntime> {
 	const settings = input.settings;
 	const dbPath = settings.store.path;
-	const pluginConfig = settingsToPluginConfig(settings, "product");
+	const pluginConfig = settingsToPluginConfig(settings, process.env.SNO_USAGE_CLASS === "research" ? "research" : "product");
 	initSqliteRuntime(settings.store.encryptionKey);
 	const embedder = createEmbedder(pluginConfig.embedding, getSnoStationMemStateDir());
 	let store: MemoryStore | undefined;

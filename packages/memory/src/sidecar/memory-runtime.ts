@@ -161,7 +161,8 @@ export class MemoryRuntimePool {
 	static async open(): Promise<MemoryRuntimePool> {
 		const settings = readSettings();
 		const storePath = settings.store.path;
-		const config = settingsToPluginConfig(settings, "product");
+		// An evaluation starts its sidecar with SNO_USAGE_CLASS=research, so its Sno GPU requests are not counted as product use.
+		const config = settingsToPluginConfig(settings, process.env.SNO_USAGE_CLASS === "research" ? "research" : "product");
 		try {
 			emitRuntimeStartSnapshot({ runtimeMode: "sidecar", preset: FIXED_MEMORY_SNO_EXTRACT_CHAT,
 				logging: settings.logging,
