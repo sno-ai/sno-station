@@ -110,6 +110,8 @@ describe("session date threads through agent_end into the memory row timestamp",
 				sessionKey: "agent:memora-date-threading:test",
 			},
 		);
+		// Capture waits for a quiet session or a boundary; the gateway stop captures the pending session now.
+		await harness.getOnHookHandler("gateway_stop")?.({}, {});
 
 		// Audit writes are async-queued; drain before reading back rows.
 		await flushAuditWrites();

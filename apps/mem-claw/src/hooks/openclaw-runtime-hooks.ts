@@ -8,7 +8,7 @@ import { basename, dirname } from "node:path";
 import { detectProjectId, getSnoProfileDir } from "@snoai/observability";
 import { SKILL_CATEGORIES, skillVersionFor } from "@snoai/memory/internal/config/skill-categories";
 import { appendObserveLedgerRows } from "@snoai/memory/internal/engine/telemetry/observe-ledger";
-import { type ActivityCursor, type ActivityRecord, EMPTY_ACTIVITY_CURSOR, foldActivity, isAgentText } from "@snoai/memory/coding-skin";
+import { type ActivityCursor, type ActivityRecord, CODING_SKIN_CAPTURE_MAX_INPUT_TOKENS, CODING_SKIN_CAPTURE_QUIET_MS, EMPTY_ACTIVITY_CURSOR, foldActivity, isAgentText } from "@snoai/memory/coding-skin";
 import { resolveAgentId } from "@snoai/memory/internal/engine/bindings/memory-tool-access";
 import { setLruEntry } from "@snoai/memory/internal/engine/shared/lru";
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk/core";
@@ -50,6 +50,23 @@ function hostUsage(value: unknown): { input: number; output: number; cacheRead: 
 }
 /** The host emits no call duration; `llm_input` marks the start per run and `llm_output` closes it. */
 const hostCallStartedAt = new Map<string, number>();
+/** Splits a session in order into captures of at most CODING_SKIN_CAPTURE_MAX_INPUT_TOKENS (UTF-8 bytes / 3), cut only where a user turn starts. */
+function captureChunks(all: Message[]): Message[][] {
+  const chunks: Message[][] = [];
+  let tokens = 0;
+  for (const message of all) {
+    const size = Buffer.byteLength(typeof message.content === "string" ? message.content : JSON.stringify(message.content)) / 3;
+    const current = chunks.at(-1);
+    if (!current || (message.role === "user" && tokens + size > CODING_SKIN_CAPTURE_MAX_INPUT_TOKENS)) {
+      chunks.push([message]);
+      tokens = size;
+    } else {
+      current.push(message);
+      tokens += size;
+    }
+  }
+  return chunks;
+}
 const messageSchema = z.object({ role: z.enum(["system", "developer", "user", "assistant", "tool"]), content: z.json(), timestamp: z.union([z.number(), z.string()]).optional(), at: z.number().optional() });
 function messages(value: unknown): Message[] {
   if (!Array.isArray(value)) return [];
@@ -121,6 +138,38 @@ export function registerRuntimeHooks(api: OpenClawPluginApi, config: PluginConfi
       "--harness=openclaw", ...Object.entries(payload).map(([key, value]) => `--${key}=${value}`)],
     { cwd: resolveWorkspace(api.config, context), timeout: 5000 }, error => error ? reject(error) : resolve()));
   };
+  // Capture runs model extraction, so a session is captured once it has been quiet for CODING_SKIN_CAPTURE_QUIET_MS or
+  // reaches a boundary (end, reset, compaction, shutdown), never after every turn.
+  const pendingCaptures = new Map<string, { messages: Message[]; scope: ScopeCtx; timer: NodeJS.Timeout }>();
+  const holdCapture = (session: string, messages: Message[], scope: ScopeCtx): void => {
+    clearTimeout(pendingCaptures.get(session)?.timer);
+    const timer = setTimeout(() => { void flushCapture(session, true); }, CODING_SKIN_CAPTURE_QUIET_MS);
+    timer.unref();
+    pendingCaptures.set(session, { messages, scope, timer });
+  };
+  const flushCapture = async (session: string, keepOnFailure: boolean): Promise<void> => {
+    const pending = pendingCaptures.get(session);
+    if (!pending) return;
+    pendingCaptures.delete(session);
+    clearTimeout(pending.timer);
+    const chunks = captureChunks(pending.messages);
+    for (const [index, chunk] of chunks.entries()) {
+      const turnId = createHash("sha256").update(JSON.stringify({ session: pending.scope.session, messages: chunk })).digest("hex");
+      const captured = await contained("capture", async () => {
+        await (await connection.ready()).capture({ turnId, rewindEpoch: 0, messages: chunk }, pending.scope);
+        return true;
+      });
+      if (captured) continue;
+      // A newer snapshot already holds these turns; otherwise they wait for the next quiet period or boundary.
+      if (keepOnFailure && !pendingCaptures.has(session)) holdCapture(session, chunks.slice(index).flat(), pending.scope);
+      return;
+    }
+  };
+  const flushAllCaptures = async (keepOnFailure: boolean): Promise<void> => {
+    await Promise.all([...pendingCaptures.keys()].map(session => flushCapture(session, keepOnFailure)));
+  };
+  // The quiet timer does not hold the process open; a process that exits before it fires captures here, once.
+  process.on("beforeExit", () => { void flushAllCaptures(false); });
   const currentConfig = () => typeof config === "function" ? config() : config;
   api.on("llm_input", async (event) => { hostCallStartedAt.set(event.runId, Date.now()); });
   api.on("llm_output", async (event, context) => {
@@ -142,6 +191,7 @@ export function registerRuntimeHooks(api: OpenClawPluginApi, config: PluginConfi
     });
   });
   api.on("gateway_start", async () => { await connection.ready(); });
+  api.on("gateway_stop", async () => { await flushAllCaptures(true); });
   api.on("before_prompt_build", async (event, context) => {
     if (skipStationRun(context)) return undefined;
     await contained("session-activity", async () => {
@@ -206,17 +256,16 @@ export function registerRuntimeHooks(api: OpenClawPluginApi, config: PluginConfi
     try {
       if (!event.success || context.sessionKey?.includes(":subagent:")) return;
       await contained("agent_end", async () => {
-        const client = await connection.ready();
         const originalScope = await connection.scope(context);
         const scope = { ...originalScope, host: { ...originalScope.host, observeSessionUuid: observe.lookupActiveObserveSession(context) } };
-        const captured = messages(event.messages);
-        const turnId = createHash("sha256").update(JSON.stringify({ session: scope.session, messages: event.messages })).digest("hex");
-        await client.capture({ turnId, rewindEpoch: 0, messages: captured }, scope);
+        // agent_end carries the whole session snapshot, so the latest one holds every turn not yet captured.
+        holdCapture(injectionSession(context), messages(event.messages), scope);
       });
     } finally { await observe.finalizeObserveSession(context, event.durationMs); }
   });
   api.on("before_reset", async (event, context) => {
     if (skipStationRun(context)) return;
+    await flushCapture(injectionSession(context), true);
     startedSessions.delete(injectionSession(context));
     activity.delete(injectionSession(context));
     try {
@@ -230,6 +279,7 @@ export function registerRuntimeHooks(api: OpenClawPluginApi, config: PluginConfi
   });
   api.on("after_compaction", async (_event, context) => {
     if (skipStationRun(context)) return;
+    await flushCapture(injectionSession(context), true);
     startedSessions.delete(injectionSession(context));
     await contained("after_compaction", async () => {
       const scope = await connection.scope(context);
@@ -240,6 +290,7 @@ export function registerRuntimeHooks(api: OpenClawPluginApi, config: PluginConfi
   api.on("session_end", async (event, context) => {
     if (skipStationRun(context)) return;
     const sessionId = context.sessionId ?? event.sessionId;
+    await flushCapture(injectionSession({ ...context, sessionId }), true);
     startedSessions.delete(injectionSession({ ...context, sessionId }));
     activity.delete(injectionSession({ ...context, sessionId }));
     try {
@@ -292,6 +343,7 @@ export function registerRuntimeHooks(api: OpenClawPluginApi, config: PluginConfi
     const onCommand = async (raw: unknown): Promise<void> => {
       const event = customEvent.parse(raw);
       if (skipStationRun(event)) return;
+      await flushCapture(injectionSession({ sessionKey: event.sessionKey, workspaceDir: event.context?.workspaceDir }), true);
       startedSessions.delete(injectionSession({ sessionKey: event.sessionKey,
         workspaceDir: event.context?.workspaceDir }));
       activity.delete(injectionSession({ sessionKey: event.sessionKey,

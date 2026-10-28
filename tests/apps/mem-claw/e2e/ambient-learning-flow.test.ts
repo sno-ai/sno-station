@@ -88,6 +88,8 @@ describe("Ambient Learning flow (agent_end hook)", () => {
 			},
 			{ agentId, sessionKey: `agent:${agentId}:test` },
 		);
+		// Capture waits for a quiet session or a boundary; the gateway stop captures the pending session now.
+		await agentNativeHarness.getOnHookHandler("gateway_stop")?.({}, {});
 
 		const rows = await store.list({ limit: 10 });
 		const rowsWithoutModelExtractionTrace = rows.filter((row) => {
@@ -136,6 +138,8 @@ describe("Ambient Learning flow (agent_end hook)", () => {
 				sessionKey: "agent:agent-native-host-unavailable:test",
 			},
 		);
+		// Capture waits for a quiet session or a boundary; the gateway stop captures the pending session now.
+		await agentNativeHarness.getOnHookHandler("gateway_stop")?.({}, {});
 
 		const rows = await store.list({ limit: 10 });
 		expect((await store.stats()).total - countBefore).toBe(0);

@@ -133,6 +133,8 @@ describe("agent_end insight-distill smoke (Phase 0 verify gate)", () => {
 				sessionKey: "agent:memora-distill-smoke:test",
 			},
 		);
+		// Capture waits for a quiet session or a boundary; the gateway stop captures the pending session now.
+		await harness.getOnHookHandler("gateway_stop")?.({}, {});
 
 		// Audit writes are async-queued; drain before reading audit.jsonl.
 		await flushAuditWrites();
