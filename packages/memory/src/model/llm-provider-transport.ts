@@ -433,6 +433,41 @@ function isCcproxyOpenAiBaseUrl(value: string | undefined): boolean {
 	}
 }
 
+type ChatCompletionBody = {
+	id?: unknown;
+	model?: unknown;
+	choices?: Array<{ message?: { content?: string }; finish_reason?: string }>;
+	usage?: {
+		prompt_tokens?: number;
+		completion_tokens?: number;
+		total_tokens?: number;
+	};
+};
+
+/** Joins a chat-completion SSE stream into the body a non-streamed reply carries; `: ping` comments are skipped. */
+function assembleChatStream(text: string): ChatCompletionBody {
+	const body: ChatCompletionBody = {};
+	let message: { content: string; finishReason?: string } | undefined;
+	for (const line of text.split("\n")) {
+		if (!line.startsWith("data:")) continue;
+		const data = line.slice(5).trim();
+		if (data === "[DONE]") break;
+		const chunk = JSON.parse(data) as Omit<ChatCompletionBody, "choices"> & {
+			choices?: Array<{ delta?: { content?: unknown }; finish_reason?: string | null }>;
+		};
+		body.id ??= chunk.id;
+		body.model ??= chunk.model;
+		if (chunk.usage) body.usage = chunk.usage;
+		const choice = chunk.choices?.[0];
+		if (!choice) continue;
+		message ??= { content: "" };
+		if (typeof choice.delta?.content === "string") message.content += choice.delta.content;
+		if (choice.finish_reason) message.finishReason = choice.finish_reason;
+	}
+	// No choice at all leaves `choices` empty, so the caller's missing-content check still fails the call.
+	return { ...body, choices: message ? [{ message: { content: message.content }, finish_reason: message.finishReason }] : [] };
+}
+
 async function snoStationMemDispatch(ctx: LlmixDispatchContext): Promise<ProviderResult> {
 	const cfgExt = ctx.config as DispatchContext["config"];
 	const provider = ctx.provider;
@@ -477,6 +512,9 @@ async function snoStationMemDispatch(ctx: LlmixDispatchContext): Promise<Provide
 				model: ctx.model,
 				messages: ctx.messages,
 				...callBody,
+				// Cloudflare ends a request with no response byte after about 125 s (HTTP 524); a streamed
+				// reply keeps bytes flowing, so long extractions finish instead of being cut and retried.
+				...(provider === "sno-gpu" ? { stream: true, stream_options: { include_usage: true } } : {}),
 			}),
 		});
 		diagnostic.headersAt = performance.now();
@@ -508,18 +546,11 @@ async function snoStationMemDispatch(ctx: LlmixDispatchContext): Promise<Provide
 		throw err;
 	}
 
-	let body: {
-		id?: unknown;
-		model?: unknown;
-		choices?: Array<{ message?: { content?: string }; finish_reason?: string }>;
-		usage?: {
-			prompt_tokens?: number;
-			completion_tokens?: number;
-			total_tokens?: number;
-		};
-	};
+	let body: ChatCompletionBody;
 	try {
-		body = (await response.json()) as typeof body;
+		body = response.headers.get("content-type")?.includes("text/event-stream")
+			? assembleChatStream(await response.text())
+			: (await response.json()) as ChatCompletionBody;
 		diagnostic.bodyAt = performance.now();
 	} catch (parseErr) {
 		if (abortedProviderCategory(requestAbort)) {
