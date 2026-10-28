@@ -767,7 +767,8 @@ class SnoMemoryProvider(MemoryProvider):
                 pending = turns + previous[0] if unsent else previous[0] + turns
             attempts = attempts if previous is None else 0
             self._pending[session_id] = (pending, timer, snapshot, attempts)
-            self._write_pending(session_id, pending, attempts)
+            self._write_pending(self._pending_path(session_id),
+                                {"project": self._project, "session_id": session_id, "turns": pending, "attempts": attempts})
         timer.start()
 
     def _flush_capture(self, session_id: str, *, keep_on_failure: bool = True) -> None:
@@ -807,12 +808,11 @@ class SnoMemoryProvider(MemoryProvider):
         name = hashlib.sha256(f"{self._project}\0{session_id}".encode()).hexdigest()
         return self._pending_dir / f"{name}.json"
 
-    def _write_pending(self, session_id: str, turns: list[dict[str, str]], attempts: int) -> None:
-        path = self._pending_path(session_id)
+    def _write_pending(self, path: Path, held: dict[str, object]) -> None:
         try:
             path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
             temporary = path.with_suffix(".tmp")
-            temporary.write_text(json.dumps({"project": self._project, "session_id": session_id, "turns": turns, "attempts": attempts}))
+            temporary.write_text(json.dumps(held))
             temporary.chmod(0o600)
             temporary.replace(path)
         except OSError as error:
@@ -822,8 +822,8 @@ class SnoMemoryProvider(MemoryProvider):
     def _capture_left_over(self) -> None:
         """Captures this project's turns that an earlier host process held when it stopped; they are past their quiet window.
 
-        Another project's turns wait for a host in that project; once its directory is gone, none will come, so they are
-        deleted."""
+        Another project's turns wait for a host in that project; once its directory is gone (removed, renamed or moved),
+        none will start there, so this host captures them under the project they were held in."""
         if self._pending_dir is None or not self._pending_dir.is_dir():
             return
         # A write an earlier host did not finish; the file it was replacing, if any, holds the turns.
@@ -832,11 +832,7 @@ class SnoMemoryProvider(MemoryProvider):
         for path in sorted(self._pending_dir.glob("*.json")):
             try:
                 held = json.loads(path.read_text())
-                if held["project"] != self._project:
-                    if not Path(held["project"]).is_dir():
-                        _LOG.warning("held turns of a deleted project removed uncaptured", extra={"turns": len(held["turns"])})
-                        path.unlink(missing_ok=True)
-                    continue
+                project = str(held["project"])
                 session_id = str(held["session_id"])
                 turns = [{"role": str(turn["role"]), "content": str(turn["content"])} for turn in held["turns"]]
                 attempts = int(held.get("attempts", 0))  # files from 1.7.0 carry no count
@@ -844,11 +840,35 @@ class SnoMemoryProvider(MemoryProvider):
                 _LOG.warning("unreadable pending capture left on disk; its turns are not captured",
                              extra={"file": path.name, "error": str(error)})
                 continue
+            if project != self._project:
+                if not Path(project).is_dir():
+                    self._capture_orphan(path, project, session_id, turns, attempts)
+                continue
             with self._capture_lock:
                 if session_id in self._pending:
                     continue
             self._hold_capture(session_id, turns, snapshot=False, attempts=attempts)
             self._flush_capture(session_id)
+
+    def _capture_orphan(
+        self, path: Path, project: str, session_id: str, turns: list[dict[str, str]], attempts: int,
+    ) -> None:
+        """Captures held turns of a project whose directory is gone; a failure keeps the rest on disk for the next start."""
+        chunks = _capture_chunks(turns)
+        for index, chunk in enumerate(chunks):
+            try:
+                self._capture(chunk, session_id, project)
+            except (OSError, RuntimeError, ValueError) as error:
+                _LOG.error("memory capture failed", extra={"error": str(error)})
+                left = [turn for rest in chunks[index:] for turn in rest]
+                attempts = (attempts if index == 0 else 0) + 1
+                if attempts < _CAPTURE_MAX_ATTEMPTS:
+                    self._write_pending(path, {"project": project, "session_id": session_id, "turns": left, "attempts": attempts})
+                    return
+                _LOG.error("held turns dropped after repeated failed captures",
+                           extra={"turns": len(left), "attempts": attempts})
+                break
+        path.unlink(missing_ok=True)
 
     def on_pre_compress(
         self,
@@ -1040,7 +1060,7 @@ class SnoMemoryProvider(MemoryProvider):
         return ended
 
     def _capture(
-        self, normalized: list[dict[str, str]], session_id: str
+        self, normalized: list[dict[str, str]], session_id: str, project: str | None = None,
     ) -> dict[str, object]:
         identity = json.dumps(
             {
@@ -1070,7 +1090,7 @@ class SnoMemoryProvider(MemoryProvider):
                 lambda: self._require_client().post(
                     "capture",
                     {
-                        "scope": self._scope(session_id),
+                        "scope": self._scope(session_id, project=project),
                         "turn": {
                             "turnId": key,
                             "rewindEpoch": self._rewind_epoch,
@@ -1165,12 +1185,15 @@ class SnoMemoryProvider(MemoryProvider):
         memory_id = details.get("id") if isinstance(details, dict) else None
         return memory_id if isinstance(memory_id, str) and memory_id else "engine-failed"
 
-    def _scope(self, session_id: str, *, boundary: Literal["reset"] | None = None) -> dict[str, object]:
+    def _scope(
+        self, session_id: str, *, boundary: Literal["reset"] | None = None, project: str | None = None,
+    ) -> dict[str, object]:
+        project = project or self._project
         return {
             "principal": getpass.getuser(),
-            "project": self._project,
+            "project": project,
             "session": session_id,
-            "host": {"sessionId": session_id, "workspace": self._project,
+            "host": {"sessionId": session_id, "workspace": project,
                      **({"boundary": boundary} if boundary else {})},
         }
 

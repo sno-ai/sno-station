@@ -48,6 +48,7 @@ class RecordingSidecar:
         self.sent: list[tuple[str, str, list[str]]] = []
         self.capture_calls = 0
         self.fail_captures: set[int] = set()
+        self.capture_projects: list[str] = []
 
     def post(self, method: str, body: dict[str, object], timeout_seconds: float = 0) -> dict[str, object]:
         scope = body["scope"]
@@ -59,6 +60,8 @@ class RecordingSidecar:
                     raise OSError("capture timed out")
             turn = body["turn"]
             assert isinstance(turn, dict)
+            with self.lock:
+                self.capture_projects.append(str(scope["project"]))
             contents = [str(message["content"]) for message in turn["messages"]]
         elif method == "on-session-end":
             contents = [str(message.get("content")) for message in body["messages"]]
@@ -179,7 +182,7 @@ class CaptureQuietWindowTest(unittest.TestCase):
                 held[1].cancel()
         return other._pending_path(session_id)
 
-    def test_next_start_removes_what_no_host_can_capture_and_leaves_live_projects_alone(self) -> None:
+    def test_next_start_captures_held_turns_of_a_removed_project_and_leaves_live_projects_alone(self) -> None:
         live = tempfile.TemporaryDirectory()
         self.addCleanup(live.cleanup)
         gone = tempfile.TemporaryDirectory()
@@ -189,7 +192,10 @@ class CaptureQuietWindowTest(unittest.TestCase):
         # A write cut off by the kill leaves its temporary file behind.
         (self.provider._pending_dir / "cut-off.tmp").write_text('{"project":')
         self.provider._capture_left_over()
-        self.assertEqual(self.sidecar.captures(), [])
+        # Its directory was removed, renamed or moved, so no host will start there; this one captures the turns under
+        # the project they were held in.
+        self.assertEqual(self.sidecar.captures(), [("capture", "session-gone", ["Use the staging bucket", "Switched it"])])
+        self.assertEqual(self.sidecar.capture_projects, [gone.name])
         self.assertEqual(list(self.provider._pending_dir.iterdir()), [live_file])
 
     def test_stops_sending_held_turns_after_three_failed_captures_counting_across_restarts(self) -> None:
