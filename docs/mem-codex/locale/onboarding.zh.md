@@ -47,7 +47,7 @@ subscription 上。不收 API key，也不存 key。所有需要模型判断的 
 
 ### REM Enhanced
 
-REM 是你的 agent 做梦的方式：夜里它们加强记忆，并把当天学到的东西沉淀下来。每一部分记忆每天最多整理一次：通常在夜里；如果当天新记忆攒到 100 条左右，白天就会提前整理。REM Enhanced 让 Sno 自己的记忆模型帮忙做最难的两件事：从对话里记下重点，以及判断两条互相矛盾的记忆哪条对。其余工作由你自己的 Codex CLI 处理。使用它需要在 `settings.json` 的 `snoGpu.apiKey` 里配置 Sno 的密钥。
+REM 是你的 agent 做梦的方式：夜里它们加强记忆，并把当天学到的东西沉淀下来。每一部分记忆每天最多整理一次：通常在夜里；如果当天新记忆攒到 100 条左右，白天就会提前整理。REM Enhanced 让 Sno 自己的记忆模型帮忙做最难的两件事：从对话里记下重点，以及判断两条互相矛盾的记忆哪条对。其余工作由你自己的 Codex CLI 处理，包括补全每条记忆的细节、确认它说的是谁。使用它需要在 `settings.json` 的 `snoGpu.apiKey` 里配置 Sno 的密钥。
 
 **你的资料仍然是你的。** 在这个模式下，交给 Sno 处理的记忆文字，以及各个 agent 学到的经验，会送到 Sno 云端属于你自己的空间。它就像你自己的网盘：里面的一切都是你的，由 Sno 的程序只为你一个人处理。你可以进去删除、可以留着，也可以选择让它被处理。不会自动删除，Sno 也不会把其中任何内容交给任何人。
 
@@ -60,7 +60,7 @@ REM 是你的 agent 做梦的方式：夜里它们加强记忆，并把当天学
 | Memory mode | Agent Native |
 | Scope | 当前 repository，加上处处可读的 `global` scope |
 | Embedder | Local |
-| Ambient capture | 开（每一轮完成的对话都 capture） |
+| Ambient capture | 开（会话安静 30 分钟或结束后，整段一起 capture） |
 | Auto-recall | 开（session 开始和每个 prompt） |
 | Session handling | 本地 system session memory |
 | Management tools | 关闭 |
@@ -70,7 +70,7 @@ REM 是你的 agent 做梦的方式：夜里它们加强记忆，并把当天学
 
 | 要做的事 | Local First | Agent Native | REM Enhanced |
 | --- | --- | --- | --- |
-| 记下重点 | 原文照存 | 你的 Codex CLI | Sno 的记忆模型 |
+| 记下重点 | 原文照存 | 你的 Codex CLI | Sno 的记忆模型记下；你的 Codex CLI补全细节、确认说的是谁 |
 | 判断你在做哪件事 | 简单关键词匹配 | 你的 Codex CLI | 你的 Codex CLI |
 | 更新对你的了解 | 固定规则 | 你的 Codex CLI | 你的 Codex CLI |
 | 识别已完成的任务 | 字词比对 | 你的 Codex CLI | 你的 Codex CLI |
@@ -145,7 +145,7 @@ sno memory remember --harness codex "Prefer concise replies and tabs for indenta
 sno memory recall --harness codex "indentation"
 ```
 
-在 Codex 会话里完成的每一轮对话会在 `Stop` hook 触发后自动 capture；显式命令用于你想立刻存下
+在 Codex 会话里完成的对话会在会话安静 30 分钟或结束后，整段一起自动 capture；显式命令用于你想立刻存下
 的事实。
 
 不要把临时 debug 状态、测试输出或私有基础设施细节当作第一批 memory。

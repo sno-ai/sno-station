@@ -50,7 +50,7 @@ process.
 
 ### REM Enhanced
 
-REM is how your agents dream: overnight they strengthen their memory and settle what they learned. It runs at most once a day for each part of your memory: usually overnight, or earlier the same day once about 100 new memories have piled up. REM Enhanced lets Sno's own memory models help with the two hardest jobs: writing down what matters from a conversation, and deciding which of two memories that disagree is right. Your Claude Code does the rest. It needs a Sno key in `snoGpu.apiKey` in `settings.json`.
+REM is how your agents dream: overnight they strengthen their memory and settle what they learned. It runs at most once a day for each part of your memory: usually overnight, or earlier the same day once about 100 new memories have piled up. REM Enhanced lets Sno's own memory models help with the two hardest jobs: writing down what matters from a conversation, and deciding which of two memories that disagree is right. Your Claude Code does the rest, including filling in each memory's details and checking who it is about. It needs a Sno key in `snoGpu.apiKey` in `settings.json`.
 
 **Your data stays yours.** In this mode the memory text for the Sno calls, and the lessons your agents learn, go to your own space in Sno's cloud. It works like your own cloud drive: everything in it is yours, and a Sno program processes it for you alone. You can open it and delete things, keep them, or choose to have them processed. Nothing is deleted automatically, and Sno does not give any of it to anyone.
 
@@ -63,7 +63,7 @@ The memory client uses these standard defaults:
 | Memory mode | Agent Native |
 | Scope | The current repository, plus a `global` scope readable everywhere |
 | Embedder | Local |
-| Ambient capture | On (every completed turn is captured) |
+| Ambient capture | On (a session is captured once it has been quiet for 30 minutes or has ended) |
 | Auto-recall | On (session start and every prompt) |
 | Session handling | Local system session memory |
 | Management tools | Off |
@@ -73,7 +73,7 @@ Mode-specific defaults are:
 
 | What it does | Local First | Agent Native | REM Enhanced |
 | --- | --- | --- | --- |
-| Writing down what matters | Saved word for word | Your Claude Code | Sno's memory model |
+| Writing down what matters | Saved word for word | Your Claude Code | Sno's memory model writes it down; your Claude Code fills in the details and checks who it is about |
 | Knowing what task you are on | Simple keyword matching | Your Claude Code | Your Claude Code |
 | Updating what it knows about you | Fixed rules | Your Claude Code | Your Claude Code |
 | Spotting finished tasks | Word matching | Your Claude Code | Your Claude Code |
@@ -152,8 +152,8 @@ Then verify:
 sno memory recall --harness claude "indentation"
 ```
 
-Turns you complete inside a Claude Code session are captured on their own after the session's `Stop`
-hook fires; explicit commands are for facts you want stored right now.
+Turns you complete inside a Claude Code session are captured on their own, all at once, after the session
+has been quiet for 30 minutes or has ended; explicit commands are for facts you want stored right now.
 
 Do not use temporary debug state, test output, or private infrastructure details as first memories.
 
