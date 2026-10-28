@@ -251,7 +251,8 @@ const captureFactSchema = wireRecordSchema.pick({
 });
 
 const captureReplySchema = z.object({
-	claims_found: z.array(z.string().min(1)),
+	// The source turn of each claim found, listed before the facts: a count, not a second copy of each claim.
+	claims_found: z.array(z.number().int().nonnegative()),
 	decisions: z.array(z.object({
 		turn_index: z.number().int().nonnegative(), progress_only: z.boolean(),
 	})),

@@ -65,10 +65,10 @@ function captureFactWire(id: number, fact: string): Record<string, unknown> {
 	};
 }
 
-/** A valid lane-1 capture reply: claims_found length equals facts length, ids are 0..n-1. */
+/** A valid lane-1 capture reply: one claims_found turn per fact, ids are 0..n-1. */
 function captureReplyJson(facts: readonly { id: number; fact: string }[]): string {
 	return JSON.stringify({
-		claims_found: facts.map((f) => f.fact),
+		claims_found: facts.map(() => 1),
 		decisions: [{ turn_index: 1, progress_only: false }],
 		facts: facts.map((f) => captureFactWire(f.id, f.fact)),
 	});
@@ -339,7 +339,7 @@ describe("two-lane atomic extraction — single-fact fallback persists and reads
 	];
 	const FACT_5B = "The user adopted a dog named Rex";
 	const capture5bReply = JSON.stringify({
-		claims_found: [FACT_5B],
+		claims_found: [1],
 		decisions: [{ turn_index: 1, progress_only: false }],
 		facts: [
 			{

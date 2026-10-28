@@ -43,7 +43,7 @@ it("recovers all source turns under a fixed token ceiling instead of doubling an
 		const neededTokens = turns.length * 3000;
 		if (neededTokens > Math.min(maxTokens, 4096)) return { text: '{"claims_found":[', truncated: true, outputTokens: 4096 };
 		return { truncated: false, text: JSON.stringify({
-			claims_found: turns.map((turn) => turn.content),
+			claims_found: turns.map((turn) => turn.turn_index),
 			decisions: turns.filter((turn) => turn.role === "user").map((turn) => ({ turn_index: turn.turn_index, progress_only: false })),
 			facts: turns.map((turn, id) => ({ id, fact: turn.content, subject: "Alex", subject_kind: "named_entity", temporal_phrase: null, ended_at_phrase: null, source_span: { turn_index: turn.turn_index, quote: turn.content } })),
 		}) };
@@ -60,7 +60,7 @@ it("recovers all source turns under a fixed token ceiling instead of doubling an
 it("rejects a nonempty capture when salvage removes every invalid source turn", () => {
 	const rejected: string[] = [];
 	const result = parseAtomicCaptureReply(JSON.stringify({
-		claims_found: ["Alex likes tea."],
+		claims_found: [0],
 		decisions: [{ turn_index: 0, progress_only: false }],
 		facts: [{
 			id: 0, fact: "Alex likes tea.", subject: "Alex", subject_kind: "named_entity",
@@ -77,7 +77,9 @@ it("rejects a nonempty capture when salvage removes every invalid source turn", 
 it.each([
 	["```json\n```", "unreadable-json"],
 	['{"claims_found":[],"decisions":[]}', "capture-schema"],
-	['{"claims_found":["Alex likes tea."],"decisions":[],"facts":[]}', "claims-without-facts"],
+	['{"claims_found":[0],"decisions":[],"facts":[]}', "claims-without-facts"],
+	// Each claim is counted by its source turn, not written out a second time before its fact.
+	['{"claims_found":["Alex likes tea."],"decisions":[],"facts":[]}', "capture-schema"],
 ])("names the failed capture gate for %s", async (text, gate) => {
 	let output = "";
 	vi.spyOn(process.stderr, "write").mockImplementation(((chunk: string | Uint8Array) => {
@@ -115,7 +117,7 @@ it("splits one overflowing turn at a paragraph break and keeps every fact on tur
 		// The whole six-paragraph turn overflows; each half fits.
 		if (lines.length > 3) return { text: '{"claims_found":[', truncated: true, outputTokens: 4096 };
 		return { truncated: false, text: JSON.stringify({
-			claims_found: lines,
+			claims_found: lines.map(() => 0),
 			decisions: [{ turn_index: 0, progress_only: false }],
 			facts: lines.map((line, id) => ({ id, fact: line, subject: "Alex", subject_kind: "named_entity", temporal_phrase: null, ended_at_phrase: null, source_span: { turn_index: 0, quote: line } })),
 		}) };
@@ -135,7 +137,7 @@ it("splits one turn over the input budget instead of parking the window unasked"
 		const turns = JSON.parse(prompt.split("transcript:\n")[1]?.split("<take>\n")[1]?.split("\n</take>")[0] ?? "[]") as Array<{ content: string; role: string; turn_index: number }>;
 		const lines = turns.flatMap((turn) => turn.content.split("\n\n"));
 		return { truncated: false, text: JSON.stringify({
-			claims_found: lines,
+			claims_found: lines.map(() => 0),
 			decisions: [{ turn_index: 0, progress_only: false }],
 			facts: lines.map((line, id) => ({ id, fact: line, subject: "Alex", subject_kind: "named_entity", temporal_phrase: null, ended_at_phrase: null, source_span: { turn_index: 0, quote: line } })),
 		}) };

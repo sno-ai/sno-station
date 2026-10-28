@@ -287,11 +287,12 @@ or `removed`, and is `null` otherwise. `value` for a to-do is the discrete actio
 Reply with one JSON object and nothing before or after it. Its shape is
 
 ```
-{"claims_found": ["<claim>", "<claim>"], "records": [{...}, {...}]}
+{"claims_found": [<turn_index>, <turn_index>], "records": [{...}, {...}]}
 ```
 
-`claims_found` comes first, inside the object under its key: one short string for each claim
-you return, in the order the claims appear, and an empty array when the window states none.
+`claims_found` comes first, inside the object under its key: for each claim you return, in the
+order the claims appear, the `turn_index` of the turn that states it (a number, never the claim's
+words), and an empty array when the window states none.
 `records` follows, one record for each entry of `claims_found`, each record complete as
 `response_schema` describes, with its `source_span` filled in. Listing the claims first is what
 makes the array complete: a reply that opens `records` at once is where whole turns go missing. The task-specific instructions the engine appends below (turns to account for, subject
