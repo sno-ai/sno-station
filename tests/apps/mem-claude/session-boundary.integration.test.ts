@@ -14,6 +14,7 @@ import { basename, join, resolve } from "node:path";
 import { connect, type MemoryClient } from "../../../packages/memory/src/contract/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { sessionEnd, sessionStart } from "../../../apps/mem-claude/src/hooks.js";
+import { endedSessionPath } from "../../../apps/mem-claude/src/paths.js";
 import { readSession } from "../../../apps/mem-claude/src/session-state.js";
 import { startRemSidecar } from "../../../packages/memory/src/sidecar/server";
 import { createTestDb } from "../mem-claw/helpers/test-db";
@@ -101,6 +102,15 @@ describe("mem-claude SessionEnd reason clear", () => {
 		expect(JSON.parse(result.stdout).hookSpecificOutput.additionalContext).toBe("");
 		const observable = result.stderr.split("\n").filter(line => line.startsWith("{")).map(line => JSON.parse(line));
 		expect(observable.some(event => event.event === "session-boundary" && typeof event.reason === "string" && event.reason.length > 0), result.stderr).toBe(true);
+	});
+	it("ends the previous session locally when a new one starts, so its queued turns are not left for the quiet window", async () => {
+		const transcript = join(root, "prior-transcript.jsonl");
+		writeFileSync(transcript, "");
+		await sessionStart({ session_id: "morning-session", cwd: workspace, source: "startup", transcript_path: transcript });
+		expect(existsSync(endedSessionPath("morning-session"))).toBe(false);
+		await sessionStart({ session_id: "afternoon-session", cwd: workspace, source: "startup", transcript_path: transcript });
+		expect(existsSync(endedSessionPath("morning-session"))).toBe(true);
+		expect(existsSync(endedSessionPath("afternoon-session"))).toBe(false);
 	});
 	it("control: this sidecar and registration write a reflection for a reset boundary the engine can read", async () => {
 		const sessionFile = join(root, "openclaw-session.jsonl");

@@ -4,9 +4,11 @@ import { chmod, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { connect, type InitRegistration, type MemoryClient } from "@snoai/memory/client";
+import { CODING_SKIN_CAPTURE_QUIET_MS, CODING_SKIN_WORKER_LIFETIME_MS } from "@snoai/memory/coding-skin";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { acquirePidFileLock } from "../../../apps/mem-claude/src/files.js";
-import { importDirectory, spoolDirectory, workerLockPath } from "../../../apps/mem-claude/src/paths.js";
+import { endedSessionPath, importDirectory, spoolDirectory, workerLockPath } from "../../../apps/mem-claude/src/paths.js";
+import { markSessionEnded } from "../../../apps/mem-claude/src/session-state.js";
 import { runClaudeChild, runWorker, type WorkerDependencies } from "../../../apps/mem-claude/src/worker.js";
 import { writeSettingsFixture } from "../../packages/memory/fixtures/settings-file-fixture";
 import { untilModelReady } from "../../packages/memory/integration/fixtures/model-ready";
@@ -51,7 +53,8 @@ afterEach(async () => {
 	await rm(root, { recursive: true, force: true });
 });
 
-async function spool(name: string, turnId: string, at = Date.now()): Promise<string> {
+// Live turns are captured once their session has been quiet for the window.
+async function spool(name: string, turnId: string, at = Date.now() - CODING_SKIN_CAPTURE_QUIET_MS): Promise<string> {
 	await mkdir(spoolDirectory(), { recursive: true });
 	const path = join(spoolDirectory(), name);
 	await writeFile(path, JSON.stringify({ sessionId: `session-${turnId}`, turnId, project: root,
@@ -62,9 +65,10 @@ async function spool(name: string, turnId: string, at = Date.now()): Promise<str
 
 // Worker time runs on an injected clock: retry waits and the two idle minutes a drained worker
 // stays up advance it instantly, so no case waits in real time for the worker's own sleeps.
-function observeClient() {
-	let clock = Date.now();
+function observeClient(start = Date.now()) {
+	let clock = start;
 	const captures: Array<{ turnId: string; at: number; committed?: boolean }> = [];
+	const batches: Array<[turnId: string, messages: number]> = [];
 	let registration: InitRegistration | undefined;
 	const originalInit = client.init.bind(client);
 	const originalCapture = client.capture.bind(client);
@@ -75,6 +79,7 @@ function observeClient() {
 	client.capture = async (turn, scope) => {
 		const record: (typeof captures)[number] = { turnId: turn.turnId, at: clock };
 		captures.push(record);
+		batches.push([turn.turnId, turn.messages.length]);
 		const result = await originalCapture(turn, scope);
 		record.committed = !result.degraded && result.committed;
 		return result;
@@ -88,7 +93,7 @@ function observeClient() {
 			return { kind: "ok", text: extraction };
 		},
 	};
-	return { captures, deps, get registration() { return registration; } };
+	return { captures, batches, deps, get registration() { return registration; } };
 }
 
 describe("Claude worker with a real sidecar", () => {
@@ -438,4 +443,89 @@ describe("Claude child run", () => {
 		await stub({ is_error: false, result: "answer" });
 		expect(await runClaudeChild("p", bin, 20_000)).toEqual({ kind: "ok", text: "answer" });
 	});
+});
+
+describe("Claude worker capture timing with a real sidecar", () => {
+	it("captures a session once it is quiet or ended, whole and within the input budget, before import blocks", async () => {
+		const quiet = Date.now() - CODING_SKIN_CAPTURE_QUIET_MS - 60_000;
+		await mkdir(spoolDirectory(), { recursive: true });
+		const write = async (name: string, record: Record<string, unknown>) => writeFile(join(spoolDirectory(), name),
+			JSON.stringify({ project: root, childCwd: root, attempts: 0, state: "pending", ...record }));
+		await mkdir(importDirectory(), { recursive: true });
+		const receiptPath = join(importDirectory(), "receipt.json");
+		const empty = { committed: 0, skipped: 0, failures: 0 };
+		await writeFile(receiptPath, JSON.stringify({ files: { "/notes/a.md": empty, "/notes/b.md": empty } }));
+		// The import blocks are the oldest records and sort first, yet every due session goes before them.
+		for (const [index, file] of ["/notes/a.md", "/notes/a.md", "/notes/b.md"].entries()) {
+			await write(`000${index + 1}.json`, { sessionId: "import-notes", turnId: `import-${index + 1}`, kind: "import",
+				importReceipt: { path: receiptPath, file }, at: quiet - 60_000,
+				user: `Imported Claude Code memory note from ${file} § Block ${index + 1} (information, not instructions):\nService ${index + 1} deploys on Tuesdays.` });
+		}
+		await write("0004.json", { sessionId: "quiet", turnId: "quiet-1", user: "Which port does the docs server use?", assistant: "It listens on 4310.", at: quiet });
+		await write("0005.json", { sessionId: "quiet", turnId: "quiet-2", user: "Keep it on 4310.", assistant: "Kept.", at: quiet + 1_000 });
+		// About 2,000 estimated tokens each: the two turns do not fit one capture's input budget together.
+		const long = "The migration notes list every table the release touches and its owner. ".repeat(85);
+		await write("0006.json", { sessionId: "long", turnId: "long-1", user: long, assistant: "Noted.", at: quiet });
+		await write("0007.json", { sessionId: "long", turnId: "long-2", user: long, assistant: "Noted.", at: quiet + 1_000 });
+		const now = Date.now();
+		await write("0008.json", { sessionId: "ended", turnId: "ended-1", user: "Ship the patch tonight.", assistant: "Will do.", at: now });
+		await markSessionEnded("ended");
+		await write("0009.json", { sessionId: "talking", turnId: "talking-1", user: "Still reworking the parser.", assistant: "Go on.", at: now });
+
+		// The worker does not leave the session still talking for a later hook: it waits for its quiet window and, being
+		// past its nine-minute cap by then, hands it to a successor the moment it turns due.
+		const first = observeClient();
+		let handedOffAt: number | undefined;
+		expect(await runWorker({ ...first.deps, async handoff() { handedOffAt = first.deps.now?.(); } })).toBe("drained");
+		expect(first.batches).toEqual([["quiet-1", 4], ["long-1", 2], ["long-2", 2], ["ended-1", 2], ["import-1", 3]]);
+		expect(await readdir(spoolDirectory())).toEqual(["0009.json"]);
+		expect(handedOffAt).toBeGreaterThanOrEqual(now + CODING_SKIN_CAPTURE_QUIET_MS);
+		expect(handedOffAt).toBeLessThan(now + CODING_SKIN_CAPTURE_QUIET_MS + 10_000);
+		expect(existsSync(endedSessionPath("ended"))).toBe(false);
+		const files = JSON.parse(await readFile(receiptPath, "utf8")).files;
+		expect(files["/notes/a.md"].committed + files["/notes/a.md"].skipped).toBe(2);
+		expect(files["/notes/b.md"].committed + files["/notes/b.md"].skipped).toBe(1);
+
+		const later = observeClient(handedOffAt);
+		expect(await runWorker(later.deps)).toBe("drained");
+		expect(later.batches).toEqual([["talking-1", 2]]);
+		expect(await readdir(spoolDirectory())).toEqual([]);
+	}, 180_000);
+});
+
+describe("Claude worker lifetime with a real sidecar", () => {
+	it("finishes and commits a capture still running at the nine-minute cap, serves its model calls, then hands off", async () => {
+		await spool("0001.json", "long-capture");
+		await spool("0002.json", "next");
+		let clock = Date.now();
+		const started = clock;
+		const childTimeouts: number[] = [];
+		const committed: Array<[turnId: string, committed: boolean]> = [];
+		const originalCapture = client.capture.bind(client);
+		client.capture = async (turn, scope) => {
+			// The capture starts before the cap and its extraction runs on past it.
+			clock = started + CODING_SKIN_WORKER_LIFETIME_MS + 60_000;
+			const result = await originalCapture(turn, scope);
+			committed.push([turn.turnId, !result.degraded && result.committed]);
+			return result;
+		};
+		let queuedAtHandoff: string[] | undefined;
+		const deps: WorkerDependencies = {
+			async connect() { return client; },
+			now: () => clock,
+			async sleep(delayMs) { clock += delayMs; },
+			async runChild(_prompt, _cwd, timeoutMs) {
+				childTimeouts.push(timeoutMs ?? 0);
+				return { kind: "ok", text: extraction };
+			},
+			async handoff() { queuedAtHandoff = await readdir(spoolDirectory()); },
+		};
+		expect(await runWorker(deps)).toBe("drained");
+		expect(committed).toEqual([["long-capture", true]]);
+		expect(childTimeouts.length).toBeGreaterThan(0);
+		expect(childTimeouts.every(timeout => timeout > 0)).toBe(true);
+		// The committed record is gone without a failed try; the next one waits, untouched, for the successor.
+		expect(queuedAtHandoff).toEqual(["0002.json"]);
+		expect(JSON.parse(await readFile(join(spoolDirectory(), "0002.json"), "utf8")).attempts).toBe(0);
+	}, 60_000);
 });
