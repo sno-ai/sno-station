@@ -21,6 +21,7 @@ import { withinDeadline } from "./recall.js";
 import { hookScope } from "./scope.js";
 import {
 	appendSpool,
+	markSessionEnded,
 	changeSession,
 	readSession,
 	recordDegraded,
@@ -372,12 +373,12 @@ export async function sessionEnd(raw: unknown): Promise<string> {
 			row = takeActivity(state, project, true);
 		});
 		appendActivity(row, "sessionEnd");
-		if (record.surface === "cli" && readCaptureSettings().ambient) {
-			try {
-				if (await captureTranscript(record, project, "sessionEnd", true) > 0) startWorkerDetached();
-			} catch (error) {
-				logFailure("sessionEnd", "capture", error, "turns after the last stop are not captured");
-			}
+		try {
+			if (record.surface === "cli" && readCaptureSettings().ambient) await captureTranscript(record, project, "sessionEnd", true);
+			await markSessionEnded(input.conversation_id);
+			startWorkerDetached();
+		} catch (error) {
+			logFailure("sessionEnd", "capture", error, "this conversation's turns wait until it has been quiet for 30 minutes");
 		}
 		const remaining = (): number => Math.max(1, hookBudgetMs("sessionEnd") - (performance.now() - started));
 		const client = await withinDeadline(connectMemory(), remaining());

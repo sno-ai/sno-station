@@ -6,9 +6,11 @@ import { closeSync, mkdirSync, openSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import { homedir, tmpdir, userInfo } from "node:os";
 import { copyFile, mkdir, mkdtemp, readFile, readdir, rm, symlink } from "node:fs/promises";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import type { MemoryClient } from "@snoai/memory/client";
 import {
+	CODING_SKIN_CAPTURE_MAX_INPUT_TOKENS,
+	CODING_SKIN_CAPTURE_QUIET_MS,
 	CODING_SKIN_CHILD_DEADLINE_MS,
 	CODING_SKIN_MAX_ATTEMPTS,
 	CODING_SKIN_MAX_PENDING_CAPTURES,
@@ -21,8 +23,7 @@ import { z } from "zod";
 import { MODEL_ID, SKIN_ID } from "./constants.js";
 import { acquirePidFileLock, writeJsonAtomic } from "./files.js";
 import { connectMemory, isDegradedConnection } from "./memory-client.js";
-import { withinDeadline } from "./recall.js";
-import { appStateRoot, profileRoot, spoolDirectory, workerLockPath, workerLogPath } from "./paths.js";
+import { appStateRoot, endedSessionPath, endedSessionsDirectory, profileRoot, spoolDirectory, workerLockPath, workerLogPath } from "./paths.js";
 
 const spoolSchema = z.object({
 	sessionId: z.string().min(1),
@@ -211,12 +212,61 @@ async function readSpoolNames(): Promise<string[]> {
 	return names;
 }
 
-export async function hasActionableSpool(): Promise<boolean> {
-	const names = await readSpoolNames();
-	for (const name of names) {
-		if (await readSpool(join(spoolDirectory(), name))) return true;
+type SpoolEntry = { path: string; record: z.infer<typeof spoolSchema> };
+
+async function readSpoolEntries(): Promise<SpoolEntry[]> {
+	const entries: SpoolEntry[] = [];
+	for (const name of await readSpoolNames()) {
+		const path = join(spoolDirectory(), name);
+		const record = await readSpool(path);
+		if (record) entries.push({ path, record });
 	}
-	return false;
+	return entries;
+}
+
+/** The queued sessions that have ended; markers of sessions with nothing queued are removed. */
+async function readEndedSessions(entries: readonly SpoolEntry[]): Promise<Set<string>> {
+	const queued = new Map(entries.map(({ record }) => [basename(endedSessionPath(record.sessionId)), record.sessionId]));
+	const ended = new Set<string>();
+	for (const name of await readdir(endedSessionsDirectory()).catch(() => [])) {
+		const sessionId = queued.get(name);
+		if (sessionId === undefined) await rm(join(endedSessionsDirectory(), name), { force: true });
+		else ended.add(sessionId);
+	}
+	return ended;
+}
+
+/**
+ * The next capture: a session's turns once it has ended or been quiet for the window, then its consecutive records that
+ * share the first one's scope and tries, up to the input budget. `nextDueAt` is when the earliest waiting session turns due.
+ */
+export function nextCapture(entries: readonly SpoolEntry[], ended: ReadonlySet<string>, now: number): { batch: SpoolEntry[]; nextDueAt: number | undefined } {
+	const newest = new Map<string, number>();
+	for (const { record } of entries) newest.set(record.sessionId, Math.max(newest.get(record.sessionId) ?? record.at, record.at));
+	const dueAt = (sessionId: string): number => ended.has(sessionId) ? now : (newest.get(sessionId) ?? now) + CODING_SKIN_CAPTURE_QUIET_MS;
+	const waiting = [...newest.keys()].map(dueAt).filter(at => at > now);
+	const nextDueAt = waiting.length > 0 ? Math.min(...waiting) : undefined;
+	const head = entries.find(({ record }) => dueAt(record.sessionId) <= now);
+	if (!head) return { batch: [], nextDueAt };
+	const batch: SpoolEntry[] = [];
+	let tokens = 0;
+	for (const entry of entries) {
+		const { record } = entry;
+		if (record.sessionId !== head.record.sessionId || record.project !== head.record.project
+			|| record.attempts !== head.record.attempts || record.retryAt !== head.record.retryAt) continue;
+		const size = Buffer.byteLength(record.user + record.assistant) / 3;
+		if (batch.length > 0 && tokens + size > CODING_SKIN_CAPTURE_MAX_INPUT_TOKENS) break;
+		batch.push(entry);
+		tokens += size;
+	}
+	return { batch, nextDueAt };
+}
+
+/** True when a capture is due now or a queued session turns due later, so a worker started now has work or waits for it. */
+export async function hasActionableSpool(now: number = Date.now()): Promise<boolean> {
+	const entries = await readSpoolEntries();
+	const { batch, nextDueAt } = nextCapture(entries, await readEndedSessions(entries), now);
+	return batch.length > 0 || nextDueAt !== undefined;
 }
 
 export async function runWorker(dependencies: WorkerDependencies = productionDependencies()): Promise<"drained" | "locked" | "failed"> {
@@ -232,7 +282,7 @@ export async function runWorker(dependencies: WorkerDependencies = productionDep
 	let handoff = false;
 	try {
 		const callback = await callbackServer(credential, () => { lastCallbackAt = now(); },
-			prompt => dependencies.runChild(prompt, Math.min(CODING_SKIN_CHILD_DEADLINE_MS, CODING_SKIN_WORKER_LIFETIME_MS - (now() - workerStartedAt))));
+			prompt => dependencies.runChild(prompt, CODING_SKIN_CHILD_DEADLINE_MS));
 		server = callback.server;
 		await readSpoolNames();
 		const client = await dependencies.connect();
@@ -242,23 +292,12 @@ export async function runWorker(dependencies: WorkerDependencies = productionDep
 		});
 		console.log(JSON.stringify({ event: "worker-registered" }));
 		while (true) {
-			const spoolNames = await readSpoolNames();
-			console.log(JSON.stringify({ event: "spool-scan", count: spoolNames.length }));
+			const entries = await readSpoolEntries();
+			console.log(JSON.stringify({ event: "spool-scan", count: entries.length }));
+			const { batch, nextDueAt } = nextCapture(entries, await readEndedSessions(entries), now());
 			let actionable = 0;
-			for (const name of spoolNames.slice(0, 1)) {
-				const path = join(spoolDirectory(), name);
-				let record = await readSpool(path);
-				if (!record) continue;
-				const batch = [{ path, record }];
-				for (const pendingName of spoolNames.slice(1)) {
-					const pendingPath = join(spoolDirectory(), pendingName);
-					const pending = await readSpool(pendingPath);
-					if (pending && pending.sessionId === record.sessionId && pending.project === record.project
-						&& pending.attempts === record.attempts
-						&& pending.retryAt === record.retryAt)
-						batch.push({ path: pendingPath, record: pending });
-				}
-				batch.sort((left, right) => left.record.at - right.record.at);
+			for (const head of batch.slice(0, 1)) {
+				let record = head.record;
 				actionable += 1;
 				drainedAt = undefined;
 				while (record.attempts < CODING_SKIN_MAX_ATTEMPTS) {
@@ -274,10 +313,9 @@ export async function runWorker(dependencies: WorkerDependencies = productionDep
 							{ role: "user" as const, content: turn.user, at: turn.at },
 							{ role: "assistant" as const, content: turn.assistant, at: turn.at },
 						]);
-						const result = await withinDeadline(
-							client.capture({ turnId: record.turnId, rewindEpoch: 0, messages }, { principal, project: record.project, session: record.sessionId, host: { sessionId: record.sessionId, workspace: record.project } }),
-							CODING_SKIN_WORKER_LIFETIME_MS - (now() - workerStartedAt),
-						);
+						// A capture in flight is never abandoned for the lifetime: the sidecar would go on extracting it while this
+						// worker's model callback is gone. Its route deadline bounds it, and the lifetime is checked before the next one.
+						const result = await client.capture({ turnId: record.turnId, rewindEpoch: 0, messages }, { principal, project: record.project, session: record.sessionId, host: { sessionId: record.sessionId, workspace: record.project } });
 						if (result.degraded) throw new Error(result.reason);
 						if (!result.committed && !result.accepted && !result.skipped && !result.partial) throw new Error("capture not committed");
 						for (const entry of batch) {
@@ -309,9 +347,11 @@ export async function runWorker(dependencies: WorkerDependencies = productionDep
 				drainedAt ??= now();
 				const remainingLifetime = CODING_SKIN_WORKER_LIFETIME_MS - (now() - workerStartedAt);
 				const remainingIdle = 2 * 60_000 - (now() - Math.max(drainedAt, lastCallbackAt));
-				if (remainingLifetime <= 0 || remainingIdle <= 0) { handoff = true; return "drained"; }
+				// A waiting session is waited for however far off, so it is captured when its quiet window ends; the lifetime
+				// bounds busy work only, and a capture turning due past it is handed to a fresh worker.
+				if (nextDueAt === undefined && (remainingLifetime <= 0 || remainingIdle <= 0)) { handoff = true; return "drained"; }
 				// Short slices, so a turn spooled while idle is captured within seconds instead of after the window.
-				await sleep(Math.min(remainingLifetime, remainingIdle, 5_000));
+				await sleep(Math.min(nextDueAt === undefined ? Math.min(remainingLifetime, remainingIdle) : nextDueAt - now(), 5_000));
 			}
 		}
 	} finally {
@@ -320,6 +360,6 @@ export async function runWorker(dependencies: WorkerDependencies = productionDep
 			await new Promise<void>(resolve => server?.close(() => resolve()));
 		}
 		await lock.release();
-		if (handoff && await hasActionableSpool()) startWorkerDetached();
+		if (handoff && await hasActionableSpool(now())) startWorkerDetached();
 	}
 }
