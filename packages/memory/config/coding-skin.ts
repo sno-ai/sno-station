@@ -23,8 +23,9 @@ export const CODING_SKIN_MAX_PENDING_CAPTURES = 1000;
 /** A session's turns wait in the spool until the session ends or has had no new turn for this long, then go together. */
 export const CODING_SKIN_CAPTURE_QUIET_MS: number = 30 * 60_000;
 /**
- * Input per capture, estimated as UTF-8 bytes / 3 (at or above the sidecar's CJK-aware count). The sidecar extracts a
- * multi-turn capture as one window and parks it unextracted above 4,096 tokens; the rest is room for its JSON framing.
+ * Input per capture, estimated as UTF-8 bytes / 3 (at or above the sidecar's CJK-aware count). It keeps one capture to
+ * about one 4,096-token extraction window, so a capture ends well inside its route deadline and a failed one retries
+ * a small part; the rest is room for the window's JSON framing.
  */
 export const CODING_SKIN_CAPTURE_MAX_INPUT_TOKENS = 3_500;
 export const CODING_SKIN_IMPORT_INTERVAL_MS = 2_010;
