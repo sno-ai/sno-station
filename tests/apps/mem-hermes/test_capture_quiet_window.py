@@ -258,5 +258,11 @@ class CaptureQuietWindowTest(unittest.TestCase):
         self.assertEqual(self.captured_contents(), self.long_session())
 
 
+    def test_failure_count_restarts_when_a_retry_gets_further_through_a_long_session(self) -> None:
+        self.send_long_session()
+        self.sidecar.fail_captures = {2, 3, 5}
+        time.sleep(QUIET_SECONDS * 6)
+        self.assertEqual(self.captured_contents(), self.long_session())
+
 if __name__ == "__main__":
     unittest.main()

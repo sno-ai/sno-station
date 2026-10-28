@@ -786,7 +786,8 @@ class SnoMemoryProvider(MemoryProvider):
                 if not keep_on_failure:
                     return
                 left = [turn for rest in chunks[index:] for turn in rest]
-                attempts = pending[3] + 1
+                # A chunk captured in this flush is progress, so the count restarts at the failing chunk.
+                attempts = (pending[3] if index == 0 else 0) + 1
                 if attempts >= _CAPTURE_MAX_ATTEMPTS:
                     _LOG.error("held turns dropped after repeated failed captures",
                                extra={"turns": len(left), "attempts": attempts})

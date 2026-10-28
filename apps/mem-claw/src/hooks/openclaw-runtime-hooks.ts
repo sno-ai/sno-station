@@ -184,7 +184,8 @@ export function registerRuntimeHooks(api: OpenClawPluginApi, config: PluginConfi
       // the next gateway start.
       if (!keepOnFailure) return;
       const left = chunks.slice(index).flat();
-      const attempts = pending.attempts + 1;
+      // A chunk captured in this flush is progress, so the count restarts at the failing chunk.
+      const attempts = (index === 0 ? pending.attempts : 0) + 1;
       const carried = boundary || pending.carried;
       const newer = pendingCaptures.get(session);
       // Capture runs extraction on the model, so turns it keeps failing on are not sent again forever.

@@ -199,6 +199,13 @@ it("keeps the turns of a failed capture and sends them at the next quiet period"
 	expect(sent.filter(entry => entry.kind === "capture").flatMap(capture => capture.contents)).toEqual(longSession());
 });
 
+it("restarts the failure count when a retry gets further through a long session", async () => {
+	await sendLongSession();
+	failCaptures = [2, 3, 5];
+	await vi.advanceTimersByTimeAsync(4 * QUIET_MS);
+	expect(sent.filter(entry => entry.kind === "capture").flatMap(capture => capture.contents)).toEqual(longSession());
+});
+
 it("captures the turns a killed gateway held inside the quiet window when the next gateway starts", async () => {
 	await turn(sessionA, "Pin Node 24 in CI", "Pinned it in the workflow");
 	await turn(sessionA, "Cache the pnpm store", "Cached by lockfile hash");
