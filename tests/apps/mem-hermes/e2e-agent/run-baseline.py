@@ -79,7 +79,8 @@ first_result = first.run_conversation(
 )
 assert first_result.get("completed"), first_result
 assert first._memory_manager is not None
-assert first._memory_manager.flush_pending(timeout=60), "capture did not drain"
+# Capture waits for a quiet session or its end; closing the agent ends the session, which captures it.
+first.close()
 
 second_session = f"mem-hermes-b-{uuid.uuid4().hex[:10]}"
 readback = recall(second_session)
