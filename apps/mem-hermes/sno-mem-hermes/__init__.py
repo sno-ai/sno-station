@@ -38,7 +38,7 @@ _ACTIVITY_LONG_RUN_MS = 12 * 3_600_000
 # Capture runs model extraction, so a session is captured once it has been quiet this long or reaches a boundary.
 _CAPTURE_QUIET_SECONDS = 30 * 60
 # Input per capture, estimated as UTF-8 bytes / 3; the same limit as the coding-agent workers
-# (CODING_SKIN_CAPTURE_MAX_INPUT_TOKENS): the sidecar parks a multi-turn capture above its 4,096-token window.
+# (CODING_SKIN_CAPTURE_MAX_INPUT_TOKENS): about one 4,096-token extraction window per capture, so a failure retries a small part.
 _CAPTURE_MAX_INPUT_TOKENS = 3_500
 _HEARTBEAT_TICK = re.compile(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ \[[^\]\n]+\] tick=\d+")
 
@@ -514,6 +514,8 @@ class SnoMemoryProvider(MemoryProvider):
         self._committed: dict[str, dict[str, object]] = {}
         # Per session: turns not yet captured, their quiet timer, and whether they are the host's whole-conversation snapshot.
         self._pending: dict[str, tuple[list[dict[str, str]], threading.Timer, bool]] = {}
+        # The same turns on disk, so a host killed inside the quiet window loses none; the next start captures them.
+        self._pending_dir: Path | None = None
         self._activity: dict[str, ActivityCursor] = {}
         # A new turn supersedes any prompt left behind by an interrupted turn.
         self._activity_prompts: dict[str, list[tuple[int, Literal["human", "agent"]]]] = {}
@@ -533,6 +535,7 @@ class SnoMemoryProvider(MemoryProvider):
             os.environ.get("SNO_PROFILE_DIR", Path.home() / ".sno")
         ).resolve()
         client = SidecarClient(profile_dir)
+        self._pending_dir = profile_dir / "sno-mem-hermes" / "pending-captures"
         cwd = kwargs.get("cwd")
         self._cwd = str(Path(cwd).resolve()) if isinstance(cwd, str) and cwd else None
         self._project = self._cwd or str(Path.cwd().resolve())
@@ -555,6 +558,8 @@ class SnoMemoryProvider(MemoryProvider):
         except (OSError, RuntimeError, ValueError) as error:
             self._last_error = str(error)
             _LOG.error("memory service unavailable", extra={"error": self._last_error})
+            return
+        threading.Thread(target=self._capture_left_over, daemon=True).start()
 
     def system_prompt_block(self) -> str:
         return (
@@ -757,6 +762,7 @@ class SnoMemoryProvider(MemoryProvider):
             else:
                 pending = turns + previous[0] if unsent else previous[0] + turns
             self._pending[session_id] = (pending, timer, snapshot)
+            self._write_pending(session_id, pending)
         timer.start()
 
     def _flush_capture(self, session_id: str, *, keep_on_failure: bool = True) -> None:
@@ -776,6 +782,48 @@ class SnoMemoryProvider(MemoryProvider):
                     left = [turn for rest in chunks[index:] for turn in rest]
                     self._hold_capture(session_id, left, snapshot=False, unsent=True)
                 return
+        with self._capture_lock:
+            if session_id not in self._pending:
+                self._pending_path(session_id).unlink(missing_ok=True)
+
+    def _pending_path(self, session_id: str) -> Path:
+        if self._pending_dir is None:
+            raise RuntimeError("memory provider is not initialized")
+        name = hashlib.sha256(f"{self._project}\0{session_id}".encode()).hexdigest()
+        return self._pending_dir / f"{name}.json"
+
+    def _write_pending(self, session_id: str, turns: list[dict[str, str]]) -> None:
+        path = self._pending_path(session_id)
+        try:
+            path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+            temporary = path.with_suffix(".tmp")
+            temporary.write_text(json.dumps({"project": self._project, "session_id": session_id, "turns": turns}))
+            temporary.chmod(0o600)
+            temporary.replace(path)
+        except OSError as error:
+            _LOG.warning("pending capture not written to disk; held in memory until its quiet window ends",
+                         extra={"error": str(error)})
+
+    def _capture_left_over(self) -> None:
+        """Captures this project's turns that an earlier host process held when it stopped; they are past their quiet window."""
+        if self._pending_dir is None or not self._pending_dir.is_dir():
+            return
+        for path in sorted(self._pending_dir.glob("*.json")):
+            try:
+                held = json.loads(path.read_text())
+                if held["project"] != self._project:
+                    continue
+                session_id = str(held["session_id"])
+                turns = [{"role": str(turn["role"]), "content": str(turn["content"])} for turn in held["turns"]]
+            except (OSError, ValueError, KeyError, TypeError) as error:
+                _LOG.warning("unreadable pending capture left on disk; its turns are not captured",
+                             extra={"file": path.name, "error": str(error)})
+                continue
+            with self._capture_lock:
+                if session_id in self._pending:
+                    continue
+            self._hold_capture(session_id, turns, snapshot=False)
+            self._flush_capture(session_id)
 
     def on_pre_compress(
         self,
@@ -793,6 +841,7 @@ class SnoMemoryProvider(MemoryProvider):
         # The checkpoint holds the whole conversation, so the pending turns are captured with it.
         with self._capture_lock:
             pending = self._pending.pop(self._session_id, None)
+            self._pending_path(self._session_id).unlink(missing_ok=True)
         if pending is not None:
             pending[1].cancel()
         self._brief_pending = True
@@ -910,8 +959,11 @@ class SnoMemoryProvider(MemoryProvider):
             _RUNTIME.invalidate()
 
     def shutdown(self) -> None:
-        # The host is going away, so a failed capture here is logged, not kept for a timer that will not run.
-        self._flush_capture(self._session_id, keep_on_failure=False)
+        # The host is going away: every held session is captured now; a failed one stays on disk for the next start.
+        with self._capture_lock:
+            held = list(self._pending)
+        for session_id in held:
+            self._flush_capture(session_id, keep_on_failure=False)
         ended = self._end_session(self._session_id)
         if ended is not None:
             _RUNTIME.keep_shut_down(self._session_id, ended)

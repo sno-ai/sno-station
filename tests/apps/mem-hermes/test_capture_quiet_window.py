@@ -93,6 +93,7 @@ class CaptureQuietWindowTest(unittest.TestCase):
         self.provider._primary = True
         self.provider._project = self.home.name
         self.provider._client = self.sidecar
+        self.provider._pending_dir = Path(self.home.name) / "pending-captures"
         self.history: list[dict[str, object]] = []
 
     def tearDown(self) -> None:
@@ -140,6 +141,31 @@ class CaptureQuietWindowTest(unittest.TestCase):
         self.assertEqual([entry[0] for entry in self.sidecar.sent], ["capture", "on-session-end"])
         time.sleep(QUIET_SECONDS * 2)
         self.assertEqual(len(self.sidecar.captures()), 1)
+
+    def test_shutdown_captures_every_held_session(self) -> None:
+        self.turn("The API key lives in vault", "Noted")
+        self.provider.sync_turn("Rotate the staging cert", "Rotated", session_id="session-b")
+        self.provider.shutdown()
+        self.assertEqual(sorted(entry[1] for entry in self.sidecar.captures()), ["session-a", "session-b"])
+        self.assertEqual(list(self.provider._pending_dir.glob("*.json")), [])
+
+    def test_next_start_captures_turns_a_killed_host_held(self) -> None:
+        self.turn("Pin Node 24 in CI", "Pinned it in the workflow")
+        self.turn("Cache the pnpm store", "Cached by lockfile hash")
+        self.assertEqual(self.sidecar.sent, [])
+        # SIGKILL runs no shutdown and its daemon timers die with it; the next process starts with nothing in memory.
+        with self.provider._capture_lock:
+            for _, timer, _ in self.provider._pending.values():
+                timer.cancel()
+        restarted = self.module.SnoMemoryProvider()
+        restarted._project = self.home.name
+        restarted._client = self.sidecar
+        restarted._pending_dir = self.provider._pending_dir
+        restarted._capture_left_over()
+        self.assertEqual(self.sidecar.captures(), [("capture", "session-a", [
+            "Pin Node 24 in CI", "Pinned it in the workflow", "Cache the pnpm store", "Cached by lockfile hash",
+        ])])
+        self.assertEqual(list(restarted._pending_dir.glob("*.json")), [])
 
     def test_compression_checkpoint_covers_the_pending_turns(self) -> None:
         self.turn("Store backups in the eu bucket", "Switched the bucket")
