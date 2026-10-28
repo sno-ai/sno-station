@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -30,6 +30,13 @@ beforeEach(() => {
 	history = {};
 	failCaptures = [];
 	captureCalls = 0;
+	startGateway();
+});
+afterEach(() => { vi.restoreAllMocks(); vi.useRealTimers(); vi.unstubAllEnvs(); rmSync(root, { recursive: true, force: true }); });
+
+/** Registers the plugin's hooks as one gateway process does; calling it again stands for a restarted gateway. */
+function startGateway(): void {
+	handlers = new Map();
 	const api = { config: {}, logger: { info: () => {}, warn: () => {} }, registerHook: () => {}, on: (name: string, handler: Handler) => handlers.set(name, handler) };
 	// The sidecar is a separate process; this stand-in only records what reaches its capture and session-end routes.
 	const client = {
@@ -50,8 +57,7 @@ beforeEach(() => {
 	};
 	const observe = { startObserveSession: async () => {}, finalizeObserveSession: async () => {}, lookupActiveObserveSession: () => undefined };
 	registerRuntimeHooks(api as never, { sessionStrategy: "none" } as never, connection as never, observe as never, {} as never);
-});
-afterEach(() => { vi.restoreAllMocks(); vi.useRealTimers(); vi.unstubAllEnvs(); rmSync(root, { recursive: true, force: true }); });
+}
 
 // OpenClaw's agent_end carries the whole session snapshot after the run, so each turn's event repeats every earlier turn.
 async function turn(session: typeof sessionA, prompt: string, reply: string): Promise<void> {
@@ -164,4 +170,19 @@ it("keeps the turns of a failed capture and sends them at the next quiet period"
 	expect(first.length).toBeLessThan(longSession().length);
 	await vi.advanceTimersByTimeAsync(QUIET_MS);
 	expect(sent.filter(entry => entry.kind === "capture").flatMap(capture => capture.contents)).toEqual(longSession());
+});
+
+it("captures the turns a killed gateway held inside the quiet window when the next gateway starts", async () => {
+	await turn(sessionA, "Pin Node 24 in CI", "Pinned it in the workflow");
+	await turn(sessionA, "Cache the pnpm store", "Cached by lockfile hash");
+	await vi.advanceTimersByTimeAsync(10 * 60_000);
+	expect(sent).toEqual([]);
+
+	// SIGKILL runs no hook and no exit handler: the next process starts with nothing in memory.
+	startGateway();
+	await handlers.get("gateway_start")?.({}, {});
+	expect(sent).toEqual([{ kind: "capture", session: "session-a", contents: [
+		"Pin Node 24 in CI", "Pinned it in the workflow", "Cache the pnpm store", "Cached by lockfile hash",
+	] }]);
+	expect(readdirSync(join(root, "mem-claw", "pending-captures"))).toEqual([]);
 });

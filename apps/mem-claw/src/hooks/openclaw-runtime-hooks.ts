@@ -4,7 +4,8 @@ import { createLogger as createDiagnosticLogger } from "@snoai/utils/logger";
 import { createHash } from "node:crypto";
 import { execFile } from "node:child_process";
 import { setTimeout as delay } from "node:timers/promises";
-import { basename, dirname } from "node:path";
+import { mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { basename, dirname, join } from "node:path";
 import { detectProjectId, getSnoProfileDir } from "@snoai/observability";
 import { SKILL_CATEGORIES, skillVersionFor } from "@snoai/memory/internal/config/skill-categories";
 import { appendObserveLedgerRows } from "@snoai/memory/internal/engine/telemetry/observe-ledger";
@@ -141,11 +142,23 @@ export function registerRuntimeHooks(api: OpenClawPluginApi, config: PluginConfi
   // Capture runs model extraction, so a session is captured once it has been quiet for CODING_SKIN_CAPTURE_QUIET_MS or
   // reaches a boundary (end, reset, compaction, shutdown), never after every turn.
   const pendingCaptures = new Map<string, { messages: Message[]; scope: ScopeCtx; timer: NodeJS.Timeout }>();
+  // Held turns are also written to disk, so a gateway killed or crashed inside the quiet window loses none of them:
+  // the next gateway start captures what is left.
+  const pendingDirectory = join(getSnoProfileDir(), "mem-claw", "pending-captures");
+  const pendingPath = (session: string): string => join(pendingDirectory, `${createHash("sha256").update(session).digest("hex")}.json`);
   const holdCapture = (session: string, messages: Message[], scope: ScopeCtx): void => {
     clearTimeout(pendingCaptures.get(session)?.timer);
     const timer = setTimeout(() => { void flushCapture(session, true); }, CODING_SKIN_CAPTURE_QUIET_MS);
     timer.unref();
     pendingCaptures.set(session, { messages, scope, timer });
+    try {
+      mkdirSync(pendingDirectory, { recursive: true, mode: 0o700 });
+      const path = pendingPath(session);
+      writeFileSync(`${path}.tmp`, JSON.stringify({ session, messages, scope }), { mode: 0o600 });
+      renameSync(`${path}.tmp`, path);
+    } catch (error) {
+      diagnosticLog.warn("pending capture not written to disk; held in memory only until its quiet window ends", { error: String(error) }, { event_name: "memory.openclaw_runtime_hooks.pending_capture.write_failed", file: "apps/mem-claw/src/hooks/openclaw-runtime-hooks.ts", function: "holdCapture", site_id: "hooks.openclaw-runtime-hooks.hold-capture.write-failed" });
+    }
   };
   const flushCapture = async (session: string, keepOnFailure: boolean): Promise<void> => {
     const pending = pendingCaptures.get(session);
@@ -161,9 +174,11 @@ export function registerRuntimeHooks(api: OpenClawPluginApi, config: PluginConfi
       });
       if (captured) continue;
       // A newer snapshot already holds these turns; otherwise they wait for the next quiet period or boundary.
+      // Without a timer to keep them, the file on disk stays for the next gateway start.
       if (keepOnFailure && !pendingCaptures.has(session)) holdCapture(session, chunks.slice(index).flat(), pending.scope);
       return;
     }
+    if (!pendingCaptures.has(session)) rmSync(pendingPath(session), { force: true });
   };
   const flushAllCaptures = async (keepOnFailure: boolean): Promise<void> => {
     await Promise.all([...pendingCaptures.keys()].map(session => flushCapture(session, keepOnFailure)));
@@ -190,7 +205,28 @@ export function registerRuntimeHooks(api: OpenClawPluginApi, config: PluginConfi
       await observability.emit({ eventType: "llm.call", sessionUuid, payload: { model, prompt_tokens: usage.input, completion_tokens: usage.output, latency_ms: startedAt === undefined ? 0 : Math.max(0, Math.round(Date.now() - startedAt)), cache_read_tokens: usage.cacheRead, cache_write_tokens: usage.cacheWrite, token_source: "host_agent_paid" } });
     });
   });
-  api.on("gateway_start", async () => { await connection.ready(); });
+  const pendingFile = z.object({ session: z.string(), messages: z.array(z.unknown()),
+    scope: z.object({ principal: z.string(), project: z.string(), session: z.string() }).passthrough() });
+  api.on("gateway_start", async () => {
+    await connection.ready();
+    // Turns a previous gateway held when it stopped are past their quiet window by now.
+    await contained("pending-captures", async () => {
+      mkdirSync(pendingDirectory, { recursive: true, mode: 0o700 });
+      for (const name of readdirSync(pendingDirectory).filter(file => file.endsWith(".json")).sort()) {
+        let raw: unknown;
+        try { raw = JSON.parse(readFileSync(join(pendingDirectory, name), "utf8")); } catch { raw = undefined; }
+        const parsed = pendingFile.safeParse(raw);
+        if (!parsed.success) {
+          diagnosticLog.warn("unreadable pending capture left on disk; its turns are not captured", { file: name }, { event_name: "memory.openclaw_runtime_hooks.pending_capture.unreadable", file: "apps/mem-claw/src/hooks/openclaw-runtime-hooks.ts", function: "gateway_start", site_id: "hooks.openclaw-runtime-hooks.gateway-start.pending-unreadable" });
+          continue;
+        }
+        if (pendingCaptures.has(parsed.data.session)) continue;
+        // The file was written by holdCapture from a ScopeCtx; its required fields were checked above.
+        holdCapture(parsed.data.session, messages(parsed.data.messages), parsed.data.scope as ScopeCtx);
+        await flushCapture(parsed.data.session, true);
+      }
+    });
+  });
   api.on("gateway_stop", async () => { await flushAllCaptures(true); });
   api.on("before_prompt_build", async (event, context) => {
     if (skipStationRun(context)) return undefined;
