@@ -91,6 +91,10 @@ describe("IDE hooks", () => {
 		expect(spool()).toEqual([]);
 		const state = JSON.parse(readFileSync(join(profile, "sno-mem-cursor", "sessions", `${id}.json`), "utf8"));
 		expect([state.prompts, state.replies]).toEqual([{}, {}]);
+		// Ending the conversation marks nothing for capture and starts no worker, whose log would appear.
+		hook("session-end", { ...ide, reason: "completed", final_status: "completed" }, IDE_ENV);
+		expect(existsSync(join(profile, "sno-mem-cursor", "ended"))).toBe(false);
+		expect(existsSync(join(profile, "sno-mem-cursor", "worker.log"))).toBe(false);
 	});
 
 	it("does nothing for a conversation that never had sessionStart or beforeSubmitPrompt (a subagent)", () => {

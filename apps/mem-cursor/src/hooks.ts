@@ -374,9 +374,11 @@ export async function sessionEnd(raw: unknown): Promise<string> {
 		});
 		appendActivity(row, "sessionEnd");
 		try {
-			if (record.surface === "cli" && readCaptureSettings().ambient) await captureTranscript(record, project, "sessionEnd", true);
-			await markSessionEnded(input.conversation_id);
-			startWorkerDetached();
+			if (readCaptureSettings().ambient) {
+				if (record.surface === "cli") await captureTranscript(record, project, "sessionEnd", true);
+				await markSessionEnded(input.conversation_id);
+				startWorkerDetached();
+			}
 		} catch (error) {
 			logFailure("sessionEnd", "capture", error, "this conversation's turns wait until it has been quiet for 30 minutes");
 		}
