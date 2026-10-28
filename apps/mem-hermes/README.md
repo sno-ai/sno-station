@@ -31,7 +31,8 @@ conversation. Use `SNO_PROFILE_DIR` to select another profile root.
 
 The plugin offers `sno_memory_recall`, `sno_memory_get`, `sno_memory_remember`, and
 `sno_memory_correct`. Correction returns a fresh successor id; the previous entry remains visible as retired
-history. Primary agents capture direct turns and receive the service memory block at session
+history. Primary agents capture their turns once a session has been quiet for 30 minutes or is switched,
+reset, compacted or shut down, and receive the service memory block at session
 start and before prompts. Child agents can use explicit tools but do not inject or capture memory.
 
 ## Update and remove

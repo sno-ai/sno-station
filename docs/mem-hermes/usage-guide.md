@@ -17,7 +17,8 @@ In a later session in the same directory, ask:
 
 > What indentation does this project use?
 
-The plugin also captures completed primary-agent turns. It supplies relevant memories when a
+The plugin also captures completed primary-agent turns, a whole session at once, after it has been
+quiet for 30 minutes or when it is switched, reset, compacted or shut down. It supplies relevant memories when a
 primary session starts and before a prompt. A child agent can call the explicit memory tools,
 but it does not receive automatic memory injection or capture its own turns.
 

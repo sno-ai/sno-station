@@ -35,6 +35,11 @@ _CALLBACK_TIMEOUT_SECONDS = 900
 _SESSION_QUERY = "standing decisions, open tasks, conventions and known pitfalls for this repository"
 _ACTIVITY_GAP_MS = 15 * 60_000
 _ACTIVITY_LONG_RUN_MS = 12 * 3_600_000
+# Capture runs model extraction, so a session is captured once it has been quiet this long or reaches a boundary.
+_CAPTURE_QUIET_SECONDS = 30 * 60
+# Input per capture, estimated as UTF-8 bytes / 3; the same limit as the coding-agent workers
+# (CODING_SKIN_CAPTURE_MAX_INPUT_TOKENS): the sidecar parks a multi-turn capture above its 4,096-token window.
+_CAPTURE_MAX_INPUT_TOKENS = 3_500
 _HEARTBEAT_TICK = re.compile(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ \[[^\]\n]+\] tick=\d+")
 
 
@@ -507,6 +512,8 @@ class SnoMemoryProvider(MemoryProvider):
         self._capture_lock = threading.Lock()
         self._captures: dict[str, Future[dict[str, object]]] = {}
         self._committed: dict[str, dict[str, object]] = {}
+        # Per session: turns not yet captured, their quiet timer, and whether they are the host's whole-conversation snapshot.
+        self._pending: dict[str, tuple[list[dict[str, str]], threading.Timer, bool]] = {}
         self._activity: dict[str, ActivityCursor] = {}
         # A new turn supersedes any prompt left behind by an interrupted turn.
         self._activity_prompts: dict[str, list[tuple[int, Literal["human", "agent"]]]] = {}
@@ -730,11 +737,45 @@ class SnoMemoryProvider(MemoryProvider):
                 {"role": "assistant", "content": assistant_content},
             ]
         )
-        try:
-            self._capture(normalized, active_session)
-        except (OSError, RuntimeError, ValueError) as error:
-            self._last_error = str(error)
-            _LOG.error("memory capture failed", extra={"error": self._last_error})
+        # Hermes passes the whole conversation in `messages`; without it only this turn's pair arrives.
+        self._hold_capture(active_session, normalized, snapshot=bool(messages))
+
+    def _hold_capture(
+        self, session_id: str, turns: list[dict[str, str]], *, snapshot: bool, unsent: bool = False,
+    ) -> None:
+        """Keeps turns until the session is quiet; `unsent` turns from a failed capture go before newer turns."""
+        timer = threading.Timer(_CAPTURE_QUIET_SECONDS, self._flush_capture, args=(session_id,))
+        timer.daemon = True
+        with self._capture_lock:
+            previous = self._pending.get(session_id)
+            if unsent and previous is not None and previous[2]:
+                return  # a newer whole-conversation snapshot already holds the unsent turns
+            if previous is not None:
+                previous[1].cancel()
+            if snapshot or previous is None:
+                pending = turns
+            else:
+                pending = turns + previous[0] if unsent else previous[0] + turns
+            self._pending[session_id] = (pending, timer, snapshot)
+        timer.start()
+
+    def _flush_capture(self, session_id: str, *, keep_on_failure: bool = True) -> None:
+        with self._capture_lock:
+            pending = self._pending.pop(session_id, None)
+        if pending is None:
+            return
+        pending[1].cancel()
+        chunks = _capture_chunks(pending[0])
+        for index, chunk in enumerate(chunks):
+            try:
+                self._capture(chunk, session_id)
+            except (OSError, RuntimeError, ValueError) as error:
+                self._last_error = str(error)
+                _LOG.error("memory capture failed", extra={"error": self._last_error})
+                if keep_on_failure:
+                    left = [turn for rest in chunks[index:] for turn in rest]
+                    self._hold_capture(session_id, left, snapshot=False, unsent=True)
+                return
 
     def on_pre_compress(
         self,
@@ -747,7 +788,13 @@ class SnoMemoryProvider(MemoryProvider):
         normalized = _direct_messages(messages)
         if not normalized:
             raise RuntimeError("checkpoint has no direct evidence")
-        self._capture(normalized, self._session_id)
+        for chunk in _capture_chunks(normalized):
+            self._capture(chunk, self._session_id)
+        # The checkpoint holds the whole conversation, so the pending turns are captured with it.
+        with self._capture_lock:
+            pending = self._pending.pop(self._session_id, None)
+        if pending is not None:
+            pending[1].cancel()
         self._brief_pending = True
         return self.startup_brief(self._session_id, boundary="reset")
 
@@ -863,6 +910,8 @@ class SnoMemoryProvider(MemoryProvider):
             _RUNTIME.invalidate()
 
     def shutdown(self) -> None:
+        # The host is going away, so a failed capture here is logged, not kept for a timer that will not run.
+        self._flush_capture(self._session_id, keep_on_failure=False)
         ended = self._end_session(self._session_id)
         if ended is not None:
             _RUNTIME.keep_shut_down(self._session_id, ended)
@@ -897,6 +946,7 @@ class SnoMemoryProvider(MemoryProvider):
     ) -> tuple[SidecarClient, str, list[dict[str, object]]] | None:
         if not session_id or self._client is None:
             return None
+        self._flush_capture(session_id)
         ended = _RUNTIME.take_ended(session_id)
         messages = ended[2] if ended else []
         scope = self._scope(session_id)
@@ -1077,6 +1127,22 @@ def _tool_schema(name: str, description: str, argument: str) -> dict[str, object
             "additionalProperties": False,
         },
     }
+
+
+def _capture_chunks(messages: list[dict[str, str]]) -> list[list[dict[str, str]]]:
+    """Splits turns in order into captures of at most _CAPTURE_MAX_INPUT_TOKENS (UTF-8 bytes / 3), cut only where a user
+    turn starts; one oversized turn goes alone and the sidecar splits it."""
+    chunks: list[list[dict[str, str]]] = []
+    tokens = 0.0
+    for message in messages:
+        size = len(message["content"].encode()) / 3
+        if not chunks or (message["role"] == "user" and tokens + size > _CAPTURE_MAX_INPUT_TOKENS):
+            chunks.append([message])
+            tokens = size
+        else:
+            chunks[-1].append(message)
+            tokens += size
+    return chunks
 
 
 def _direct_messages(messages: list[dict[str, object]]) -> list[dict[str, str]]:
