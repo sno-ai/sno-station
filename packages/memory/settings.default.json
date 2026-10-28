@@ -9,7 +9,7 @@
     "E2": {
       "local-first": "off",
       "agent-native": "host",
-      "rem-enhanced": "sno-gpu"
+      "rem-enhanced": "host"
     },
     "E3": {
       "local-first": "off",
@@ -19,27 +19,27 @@
     "E4": {
       "local-first": "off",
       "agent-native": "host",
-      "rem-enhanced": "sno-gpu"
+      "rem-enhanced": "host"
     },
     "E5": {
       "local-first": "off",
       "agent-native": "host",
-      "rem-enhanced": "sno-gpu"
+      "rem-enhanced": "host"
     },
     "E6": {
       "local-first": "off",
       "agent-native": "host",
-      "rem-enhanced": "sno-gpu"
+      "rem-enhanced": "host"
     },
     "E7": {
       "local-first": "off",
       "agent-native": "host",
-      "rem-enhanced": "sno-gpu"
+      "rem-enhanced": "host"
     },
     "E8": {
       "local-first": "off",
       "agent-native": "host",
-      "rem-enhanced": "sno-gpu"
+      "rem-enhanced": "host"
     },
     "E9": {
       "local-first": "off",
@@ -59,7 +59,7 @@
     "E12": {
       "local-first": "off",
       "agent-native": "host",
-      "rem-enhanced": "sno-gpu"
+      "rem-enhanced": "host"
     },
     "P1": {
       "local-first": "off",

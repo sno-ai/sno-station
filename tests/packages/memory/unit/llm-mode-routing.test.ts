@@ -64,17 +64,17 @@ type Mode = (typeof MODES)[number];
 // Released routing includes the 2026-10-13 decision to disable missed-figure recovery by default.
 const EXPECTED: Record<string, Record<Mode, "off" | "host" | "sno-gpu">> = {
 	E1: { "local-first": "off", "agent-native": "host", "rem-enhanced": "sno-gpu" },
-	E2: { "local-first": "off", "agent-native": "host", "rem-enhanced": "sno-gpu" },
+	E2: { "local-first": "off", "agent-native": "host", "rem-enhanced": "host" },
 	E3: { "local-first": "off", "agent-native": "off", "rem-enhanced": "off" },
-	E4: { "local-first": "off", "agent-native": "host", "rem-enhanced": "sno-gpu" },
-	E5: { "local-first": "off", "agent-native": "host", "rem-enhanced": "sno-gpu" },
-	E6: { "local-first": "off", "agent-native": "host", "rem-enhanced": "sno-gpu" },
-	E7: { "local-first": "off", "agent-native": "host", "rem-enhanced": "sno-gpu" },
-	E8: { "local-first": "off", "agent-native": "host", "rem-enhanced": "sno-gpu" },
+	E4: { "local-first": "off", "agent-native": "host", "rem-enhanced": "host" },
+	E5: { "local-first": "off", "agent-native": "host", "rem-enhanced": "host" },
+	E6: { "local-first": "off", "agent-native": "host", "rem-enhanced": "host" },
+	E7: { "local-first": "off", "agent-native": "host", "rem-enhanced": "host" },
+	E8: { "local-first": "off", "agent-native": "host", "rem-enhanced": "host" },
 	E9: { "local-first": "off", "agent-native": "host", "rem-enhanced": "sno-gpu" },
 	E10: { "local-first": "off", "agent-native": "host", "rem-enhanced": "sno-gpu" },
 	E11: { "local-first": "off", "agent-native": "host", "rem-enhanced": "host" },
-	E12: { "local-first": "off", "agent-native": "host", "rem-enhanced": "sno-gpu" },
+	E12: { "local-first": "off", "agent-native": "host", "rem-enhanced": "host" },
 	P1: { "local-first": "off", "agent-native": "host", "rem-enhanced": "sno-gpu" },
 	P2: { "local-first": "host", "agent-native": "host", "rem-enhanced": "host" },
 	P3: { "local-first": "host", "agent-native": "host", "rem-enhanced": "host" },
@@ -165,7 +165,7 @@ describe("model call transport", () => {
 			mode: "rem-enhanced",
 			modelCalls: SHIPPED_MODEL_CALLS,
 		});
-		for (const callId of ["E1", "E4", "E5", "E6"] as const) {
+		for (const callId of ["E1"] as const) {
 			expect(resolveLlmRoute({ callId, config })).toEqual({
 				tier: "snoRemMem",
 				destination: "sno-gpu",
@@ -191,6 +191,9 @@ describe("model call transport", () => {
 		const host = { tier: "agent", destination: "host", transport: "agent-host-seam", parser: "json" };
 		expect(resolveLlmRoute({ callId: "E1", config: llmRoutingConfigSchema.parse({ mode: "agent-native", modelCalls: SHIPPED_MODEL_CALLS }) })).toEqual(host);
 		expect(resolveLlmRoute({ callId: "REM2", config: llmRoutingConfigSchema.parse({ mode: "rem-enhanced", modelCalls: SHIPPED_MODEL_CALLS }) })).toEqual(host);
+		for (const callId of ["E2", "E4", "E5", "E6", "E7", "E8", "E12"] as const) {
+			expect(resolveLlmRoute({ callId, config: llmRoutingConfigSchema.parse({ mode: "rem-enhanced", modelCalls: SHIPPED_MODEL_CALLS }) })).toEqual(host);
+		}
 		expect(() => llmRoutingConfigSchema.parse({ mode: "agent-native", agentNative: { flavor: "byok" } })).toThrow(/agentNative/);
 		expect(() => llmRoutingConfigSchema.parse({ mode: "rem-enhanced", remEnhanced: { occasions: { memoryExtract: "agent" } } }))
 			.toThrow(/remEnhanced/);

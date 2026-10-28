@@ -580,10 +580,11 @@ describe.each(["rem-enhanced", "agent-native"] as const)("%s: the other twenty c
 			child.once("error", reject);
 			child.once("close", code => done({ code, stderr }));
 		});
-		// No plugin's host is reachable from this command, so a host call is skipped; a Sno call is made.
+		// No plugin's host is reachable from this command, so a host call is skipped; maintenance's calls all ship on
+		// the agent, so no mode reaches Sno GPU.
 		const labels = sno.received.map(call => nonRemCall(call.content));
 		expect({ exitCode: run.code, misrouted: labels.filter(label => tableDestination(label, mode) !== "sno-gpu"),
 			reachedSno: labels.length > 0 }, run.stderr.slice(-2000))
-			.toEqual({ exitCode: 0, misrouted: [], reachedSno: mode === "rem-enhanced" });
+			.toEqual({ exitCode: 0, misrouted: [], reachedSno: false });
 	});
 });

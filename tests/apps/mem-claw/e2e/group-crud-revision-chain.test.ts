@@ -1,4 +1,4 @@
-import { readTestSnoGpuSettings } from "../helpers/settings.ts";
+import { readTestModelCalls, readTestSnoGpuSettings } from "../helpers/settings.ts";
 
 import { readFileSync, rmSync } from "node:fs";
 import { join, resolve } from "node:path";
@@ -112,7 +112,12 @@ function liveTransports(apiKey: string): AtomicMemoryExtractionTransports {
 		{
 			preset: "mem_claw/sno_extract_chat",
 			apiKey,
-			routing: llmRoutingConfigSchema.parse({ mode: "rem-enhanced" }),
+			// E8 and E12 ship on the agent in REM Enhanced; a user can still route them to Sno GPU, which is the path tested here.
+			routing: llmRoutingConfigSchema.parse({
+				mode: "rem-enhanced",
+				modelCalls: Object.fromEntries(Object.entries(readTestModelCalls()).map(([id, column]) =>
+					[id, ["E8", "E12"].includes(id) ? { ...column, "rem-enhanced": "sno-gpu" } : column])),
+			}),
 			timeoutMs: 180_000,
 		},
 		"en",
