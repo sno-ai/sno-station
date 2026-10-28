@@ -209,11 +209,11 @@ describe("atomic extraction signed Sno GPU routes", () => {
 			const attemptCallIds = new Set(attempts.map(({ callId }) => callId));
 			expect(attemptCallIds).toContain("E1");
 			expect(attemptCallIds).toContain("E9");
-			expect(attemptCallIds).toContain("E6");
+			// REM Enhanced sends the subject check to the host agent, never to the Sno GPU.
+			expect(attemptCallIds).not.toContain("E6");
 			const responseCallIds = new Set(responses.map(({ callId }) => callId));
 			expect(responseCallIds).toContain("E1");
 			expect(responseCallIds).toContain("E9");
-			expect(responseCallIds).toContain("E6");
 			for (const response of responses) {
 				expect(response.provider).toBe("sno-gpu");
 				expect(response.model).not.toBe("");
@@ -233,7 +233,7 @@ describe("atomic extraction signed Sno GPU routes", () => {
 						attempt.transport === "raw-completions" && url.includes("/extract/profile/"),
 				),
 			).toBe(true);
-			for (const callId of ["E1", "E6"]) {
+			for (const callId of ["E1"]) {
 				const matching = providerRequests.filter(({ attempt }) => attempt.callId === callId);
 				expect(matching.length).toBeGreaterThan(0);
 				expect(

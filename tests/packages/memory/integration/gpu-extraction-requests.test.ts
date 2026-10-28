@@ -112,7 +112,7 @@ it.each([
 				const content = turns[0]?.content ?? "";
 				const fact = content.includes("Alex likes tea.") ? "Alex likes tea." : "Alex has a dog.";
 				return { truncated: false, text: JSON.stringify({
-					claims_found: [fact], decisions: [{ turn_index: 0, progress_only: false }],
+					claims_found: [0], decisions: [{ turn_index: 0, progress_only: false }],
 					facts: [{ id: 0, fact, subject: "Alex", subject_kind: "named_entity", temporal_phrase: null,
 						ended_at_phrase: null, source_span: { turn_index: 0, quote: fact } }],
 				}) };

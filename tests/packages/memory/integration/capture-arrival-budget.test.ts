@@ -55,7 +55,7 @@ function modelAnswer(prompt: string): { kind: string; text: string } {
 		const turns = data<Array<{ role: string; content: string; turn_index: number }>>(prompt)
 			.filter(turn => turn.role === "user");
 		return { kind: "extraction", text: JSON.stringify({
-			claims_found: turns.map(turn => turn.content),
+			claims_found: turns.map(turn => turn.turn_index),
 			decisions: turns.map(turn => ({ turn_index: turn.turn_index, progress_only: false })),
 			facts: turns.map((turn, id) => ({ id, fact: turn.content, subject: "user", subject_kind: "user",
 				temporal_phrase: null, ended_at_phrase: null,
@@ -123,6 +123,8 @@ beforeEach(async ({ task }) => {
 		embedding: { cacheDir: LOCAL_EMBEDDING_CACHE_DIR_DEFAULT },
 		rerank: { mode: "none" }, rem: { tick: false },
 		telemetry: { observe: { enabled: false }, memoryUsage: { enabled: false } },
+		// The subject check ships on the agent in REM Enhanced; route it to Sno GPU to test that path's deadline.
+		modelCalls: { E6: { "rem-enhanced": "sno-gpu" } },
 	});
 	sidecar = await startRemSidecar();
 	token = JSON.parse(readFileSync(join(root, "station", "sidecar.json"), "utf8")).token;
