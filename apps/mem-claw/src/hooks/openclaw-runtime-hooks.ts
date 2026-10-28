@@ -183,17 +183,16 @@ export function registerRuntimeHooks(api: OpenClawPluginApi, config: PluginConfi
       // The turns wait for the next quiet period or boundary; without a timer to keep them, the file on disk stays for
       // the next gateway start.
       if (!keepOnFailure) return;
-      const left = chunks.slice(index).flat();
-      // A chunk captured in this flush is progress, so the count restarts at the failing chunk.
+      // A chunk passed in this flush (captured or dropped) starts a fresh count at the failing chunk.
       const attempts = (index === 0 ? pending.attempts : 0) + 1;
+      // Capture runs extraction on the model, so a chunk it keeps failing on is dropped and the rest go on.
+      if (attempts >= CODING_SKIN_MAX_ATTEMPTS) {
+        diagnosticLog.error("held turns dropped after repeated failed captures", { turns: chunk.length, attempts }, { event_name: "memory.openclaw_runtime_hooks.pending_capture.dropped", file: "apps/mem-claw/src/hooks/openclaw-runtime-hooks.ts", function: "flushCapture", site_id: "hooks.openclaw-runtime-hooks.flush-capture.dropped" });
+        continue;
+      }
+      const left = chunks.slice(index).flat();
       const carried = boundary || pending.carried;
       const newer = pendingCaptures.get(session);
-      // Capture runs extraction on the model, so turns it keeps failing on are not sent again forever.
-      if (attempts >= CODING_SKIN_MAX_ATTEMPTS) {
-        diagnosticLog.error("held turns dropped after repeated failed captures", { turns: left.length, attempts }, { event_name: "memory.openclaw_runtime_hooks.pending_capture.dropped", file: "apps/mem-claw/src/hooks/openclaw-runtime-hooks.ts", function: "flushCapture", site_id: "hooks.openclaw-runtime-hooks.flush-capture.dropped" });
-        if (!newer) rmSync(pendingPath(session), { force: true });
-        return;
-      }
       // A newer snapshot already holds turns that were not carried.
       if (!newer) holdCapture(session, left, pending.scope, carried, attempts);
       else if (carried) holdCapture(session, unsentFirst(left, newer.messages), newer.scope, true, attempts);

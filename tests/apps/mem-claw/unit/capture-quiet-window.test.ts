@@ -206,6 +206,17 @@ it("restarts the failure count when a retry gets further through a long session"
 	expect(sent.filter(entry => entry.kind === "capture").flatMap(capture => capture.contents)).toEqual(longSession());
 });
 
+it("drops only the chunk that keeps failing and still captures the rest of a long session", async () => {
+	await sendLongSession();
+	failCaptures = [1, 2, 3];
+	await vi.advanceTimersByTimeAsync(4 * QUIET_MS);
+	const captured = sent.filter(entry => entry.kind === "capture").flatMap(capture => capture.contents);
+	expect(captured.length).toBeGreaterThan(0);
+	expect(captured).toEqual(longSession().slice(longSession().length - captured.length));
+	expect(String(captured[0])).toMatch(/^Turn \d+:/);
+	expect(readdirSync(join(root, "mem-claw", "pending-captures"))).toEqual([]);
+});
+
 it("captures the turns a killed gateway held inside the quiet window when the next gateway starts", async () => {
 	await turn(sessionA, "Pin Node 24 in CI", "Pinned it in the workflow");
 	await turn(sessionA, "Cache the pnpm store", "Cached by lockfile hash");

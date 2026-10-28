@@ -270,5 +270,27 @@ class CaptureQuietWindowTest(unittest.TestCase):
         time.sleep(QUIET_SECONDS * 6)
         self.assertEqual(self.captured_contents(), self.long_session())
 
+    def test_drops_only_the_chunk_that_keeps_failing_and_still_captures_the_rest(self) -> None:
+        self.send_long_session()
+        self.sidecar.fail_captures = {1, 2, 3}
+        time.sleep(QUIET_SECONDS * 6)
+        captured = self.captured_contents()
+        self.assertTrue(0 < len(captured) < len(self.long_session()))
+        self.assertEqual(captured, self.long_session()[len(self.long_session()) - len(captured):])
+        self.assertTrue(captured[0].startswith("Turn "))
+        self.assertEqual(list(self.provider._pending_dir.glob("*.json")), [])
+
+    def test_held_turns_of_a_removed_project_stop_after_three_failed_starts(self) -> None:
+        gone = tempfile.TemporaryDirectory()
+        held = self.held_by_a_killed_host(gone.name, "session-gone")
+        gone.cleanup()
+        self.sidecar.fail_captures = {1, 2, 3}
+        for _ in range(2):
+            self.provider._capture_left_over()
+            self.assertTrue(held.exists())
+        self.provider._capture_left_over()
+        self.assertFalse(held.exists())
+        self.assertEqual((self.sidecar.capture_calls, self.sidecar.captures()), (3, []))
+
 if __name__ == "__main__":
     unittest.main()

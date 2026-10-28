@@ -786,16 +786,13 @@ class SnoMemoryProvider(MemoryProvider):
                 _LOG.error("memory capture failed", extra={"error": self._last_error})
                 if not keep_on_failure:
                     return
-                left = [turn for rest in chunks[index:] for turn in rest]
-                # A chunk captured in this flush is progress, so the count restarts at the failing chunk.
+                # A chunk passed in this flush (captured or dropped) starts a fresh count at the failing chunk.
                 attempts = (pending[3] if index == 0 else 0) + 1
                 if attempts >= _CAPTURE_MAX_ATTEMPTS:
                     _LOG.error("held turns dropped after repeated failed captures",
-                               extra={"turns": len(left), "attempts": attempts})
-                    with self._capture_lock:
-                        if session_id not in self._pending:
-                            self._pending_path(session_id).unlink(missing_ok=True)
-                    return
+                               extra={"turns": len(chunk), "attempts": attempts})
+                    continue
+                left = [turn for rest in chunks[index:] for turn in rest]
                 self._hold_capture(session_id, left, snapshot=False, unsent=True, attempts=attempts)
                 return
         with self._capture_lock:
@@ -860,14 +857,14 @@ class SnoMemoryProvider(MemoryProvider):
                 self._capture(chunk, session_id, project)
             except (OSError, RuntimeError, ValueError) as error:
                 _LOG.error("memory capture failed", extra={"error": str(error)})
-                left = [turn for rest in chunks[index:] for turn in rest]
                 attempts = (attempts if index == 0 else 0) + 1
-                if attempts < _CAPTURE_MAX_ATTEMPTS:
-                    self._write_pending(path, {"project": project, "session_id": session_id, "turns": left, "attempts": attempts})
-                    return
-                _LOG.error("held turns dropped after repeated failed captures",
-                           extra={"turns": len(left), "attempts": attempts})
-                break
+                if attempts >= _CAPTURE_MAX_ATTEMPTS:
+                    _LOG.error("held turns dropped after repeated failed captures",
+                               extra={"turns": len(chunk), "attempts": attempts})
+                    continue
+                left = [turn for rest in chunks[index:] for turn in rest]
+                self._write_pending(path, {"project": project, "session_id": session_id, "turns": left, "attempts": attempts})
+                return
         path.unlink(missing_ok=True)
 
     def on_pre_compress(
