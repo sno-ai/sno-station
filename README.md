@@ -24,8 +24,16 @@ ask. Every night they dream, and wake up a little better.
 
 It runs on your own computer. You install it once and keep working the way you do now. Find out more on our website, [sno.ai](https://sno.ai).
 
+Install with one command in any terminal, or tell your agent `install sno.ai from GitHub`:
+
+```bash
+sh -c 'sno_installer_body=$(curl -fsSL https://sno.ai/install) && printf "%s\n" "$sno_installer_body" | sh'
+```
+
+Then say `Sno onboard` in any Codex, Claude Code, Hermes, Cursor or OpenClaw conversation. [More on installing](#install).
+
 **When one agent runs out, the next one carries on.** Hit a rate limit halfway through a task
-and another agent picks it up from the same memory, with the context intact. You paste nothing.
+and another agent picks it up from the same memory. You paste nothing.
 
 **Ask for a second look and you get one.** Either agent can review the other's work. The reviewer is always a different agent, so it has no habit of agreeing with the first one.
 
@@ -34,8 +42,6 @@ and another agent picks it up from the same memory, with the context intact. You
 **It stays yours.** Memory, messages and skills live on your computer. The memory is encrypted
 with a key that never leaves it. No account, no server, no daemon. The cloud side is optional,
 and the product is complete without it.
-
-**What REM does with your data.** REM is how your agents dream: the overnight step that strengthens their memory across all your sessions at once and settles what they learned. It runs at most once a day for each part of your memory: usually overnight, or earlier the same day once about 100 new memories have piled up. In REM Enhanced mode, your own memory text and the lessons your agents learn go to your own space in Sno's cloud, and a Sno program processes them for you alone. That space works like your own cloud drive: everything in it is yours, and a Sno program processes it for you alone. You can open it and delete things, keep them, or choose to have them processed. Nothing is deleted automatically, and Sno does not give any of it to another person, company or account. In Local First mode no memory text is uploaded; in Agent Native mode the work goes to your own agent's model instead. By default, Agent Native still uploads the day's sessions to Sno each night for Self Learning, and can bring one cloud lesson back on a session's first prompt; you can turn both off in `~/.sno/settings.json`. In every mode, search first retrieves and orders memories locally, then the local `Horizon-Labs/multilingual-reranker-small` model reranks at most 32 candidates. Reranking sends no prompt or memory text to Sno GPU. Set `rerank.mode` to `none` to keep the initial ranking without the model.
 
 ## The pain, and what fixes it
 
@@ -65,7 +71,7 @@ The habits in the right column are skills, installed into Claude Code and Codex 
 
 ## Install
 
-*Last updated 2026-10-18.* The easiest way is to tell your agent: `install sno.ai from GitHub`.
+*Last updated 2026-10-28.* The easiest way is to tell your agent: `install sno.ai from GitHub`.
 Or run one command, in any terminal:
 
 ```bash
@@ -90,6 +96,8 @@ Your agent walks you through the rest. It also starts by itself right after the 
 Step by step for each agent: [Codex](docs/mem-codex/onboarding.md) · [Claude Code](docs/mem-claude/onboarding.md) · [Hermes](docs/mem-hermes/onboarding.md) · [Cursor](apps/mem-cursor/README.md) · [OpenClaw](docs/mem-claw/onboarding.md)
 
 Every command starts with `sno`. The full list is in [docs/sno-commands.md](docs/sno-commands.md).
+
+**What REM does with your data.** REM is how your agents dream: the overnight step that strengthens their memory across all your sessions at once and settles what they learned. It runs at most once a day for each part of your memory: usually overnight, or earlier the same day once about 100 new memories have piled up. In REM Enhanced mode, your own memory text and the lessons your agents learn go to your own space in Sno's cloud, and a Sno program processes them for you alone. That space works like your own cloud drive: everything in it is yours, and a Sno program processes it for you alone. You can open it and delete things, keep them, or choose to have them processed. Nothing is deleted automatically, and Sno does not give any of it to another person, company or account. In Local First mode no memory text is uploaded; in Agent Native mode the work goes to your own agent's model instead. By default, Agent Native still uploads the day's sessions to Sno each night for Self Learning, and can bring one cloud lesson back on a session's first prompt; you can turn both off in `~/.sno/settings.json`. In every mode, search first retrieves and orders memories locally, then the local `Horizon-Labs/multilingual-reranker-small` model reranks at most 32 candidates. Reranking sends no prompt or memory text to Sno GPU. Set `rerank.mode` to `none` to keep the initial ranking without the model.
 
 ## How to use
 
