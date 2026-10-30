@@ -4,7 +4,7 @@
 > the line below, which installs the `sno` command and then runs `sno setup`:
 >
 > ```bash
-> sh -c 'sno_installer_body=$(curl -fsSL https://sno.ai/install) && printf "%s\n" "$sno_installer_body" | sh'
+> curl -fsSL https://sno.ai/install | sh
 > ```
 
 Long-term memory for Hermes Agent sessions. The memory service stores and retrieves project
@@ -20,7 +20,7 @@ Install Hermes Agent and complete the [memory service setup](https://github.com/
 once. Then run:
 
 ```bash
-sh -c 'sno_installer_body=$(curl -fsSL https://sno.ai/install) && printf "%s\n" "$sno_installer_body" | sh'
+curl -fsSL https://sno.ai/install | sh
 ```
 
 Setup installs and enables the plugin and selects it as the memory provider unless you already

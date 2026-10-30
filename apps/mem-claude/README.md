@@ -29,7 +29,7 @@ start of every session.
 2. Install the plugin (Node.js 22.22.3+, 24.15.0+ or 25.9.0+, and `git`):
 
    ```bash
-   sh -c 'sno_installer_body=$(curl -fsSL https://sno.ai/install) && printf "%s\n" "$sno_installer_body" | sh'
+   curl -fsSL https://sno.ai/install | sh
    ```
 
 3. Open a new Claude Code session inside a git repository, then try it:
