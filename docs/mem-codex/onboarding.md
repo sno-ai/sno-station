@@ -13,7 +13,7 @@ Requirements:
 Complete the [memory service setup](../memory-setup.md), then install the Codex integration:
 
 ```bash
-sh -c 'sno_installer_body=$(curl -fsSL https://sno.ai/install) && printf "%s\n" "$sno_installer_body" | sh'
+curl -fsSL https://sno.ai/install | sh
 ```
 
 The memory service setup writes `<profile root>/settings.json`; the install command configures Codex.
