@@ -1,0 +1,94 @@
+# Sno Memory for Cursor — Usage Guide
+
+This guide covers day-to-day memory behavior, commands, multi-root workspace handling, and troubleshooting for `@snoai/mem-cursor`.
+
+For initial installation and verification, see the [Cursor Onboarding Guide](onboarding.md).
+
+## Day-to-day memory behavior
+
+Sno Memory integrates with both the Cursor desktop IDE and the Cursor CLI (`cursor-agent`), giving both environments shared, persistent project memory.
+
+### How memory works in the IDE vs CLI
+
+- **Cursor IDE**:
+  - **At session start**: A short brief of key repository context, open tasks, and standing conventions is injected into the conversation.
+  - **On each user prompt**: Memory matching the prompt is retrieved and injected as reference data before the model responds.
+  - **At turn completion**: The prompt and assistant response are captured in memory once the turn finishes. Empty or unfulfilled turns are skipped.
+- **Cursor CLI (`cursor-agent`)**:
+  - Non-interactive prompts (`cursor-agent -p`) receive the project brief at session initialization.
+  - The CLI reads turns directly from the conversation transcript at each `stop` event and when the session ends.
+
+A background worker processes captured turns asynchronously. Turns are flushed when a session ends or after 30 minutes of inactivity.
+
+## The four memory commands
+
+The installed Cursor skill (`skills/sno-mem-cursor/SKILL.md`) teaches the Cursor agent four commands. You can also run them manually from your terminal inside the repository.
+
+| Command | What it does | When to use |
+| --- | --- | --- |
+| `sno memory recall --harness cursor <query>` | Searches repository and global memory for relevant context | When researching a topic, checking past conventions, or answering a user question |
+| `sno memory get --harness cursor <id>` | Fetches the full text and metadata of a specific memory entry | When inspecting an entry referenced in search results or checking superseding records |
+| `sno memory remember --harness cursor <text>` | Stores a new memory entry in the repository's store | When establishing a project rule, design decision, architecture constraint, or verified fact |
+| `sno memory correct --harness cursor <id> <text>` | Stores a corrected entry and marks the previous entry superseded | When a decision changes or an existing memory is discovered to be inaccurate or outdated |
+
+### How corrections supersede old memories
+
+When `sno memory correct --harness cursor <id> <text>` runs:
+
+1. A new memory entry is created with the updated text.
+2. The old memory entry (`<id>`) is marked as superseded by the new record.
+3. Future `recall` queries return the updated memory, preventing the agent from following stale instructions.
+4. Calling `sno memory get --harness cursor <id>` on the superseded entry displays both the original entry and the ID of the replacement record.
+
+## Multi-folder and workspace scoping
+
+Memory is strictly scoped by repository boundaries to prevent context contamination across projects:
+
+- **Inside a git repository**: The memory store is keyed to the top-level git root (`git rev-parse --show-toplevel`). All subdirectories within the repository share the same memory space.
+- **Multiple folders open (multi-root workspace)**: When multiple workspace folders are open, the hooks use the repository containing the first workspace root. To interact with memory for another folder, navigate to that directory and execute explicit memory commands.
+- **Outside a git repository**: Ambient capture and automatic recall are disabled. Explicit `sno memory` commands fallback to using the current working directory as the workspace scope.
+- **Temporary directories**: Any path under the system temporary directory (`/tmp`, `/var/tmp`, or `os.tmpdir()`) is treated as a transient run and never captured into persistent memory.
+
+## Operator commands and configuration
+
+### Verification
+
+Check integration status and hook registration at any time:
+
+```bash
+sno memory doctor --harness cursor
+```
+
+A healthy installation reports:
+- `sidecar: healthy`
+- `hooks: sessionStart=present beforeSubmitPrompt=present afterAgentResponse=present afterAgentThought=present stop=present preCompact=present sessionEnd=present`
+- `permission rule: present`
+- `IDE permission rule: present`
+
+### Controlling automatic features
+
+Settings are saved in `~/.sno/settings.json` (or under `SNO_PROFILE_DIR` if configured):
+
+| Setting | Type | Default | Description |
+| --- | --- | --- | --- |
+| `recall.auto` | boolean | `true` | Set to `false` to disable automatic injection of briefs and prompt-relevant memories |
+| `capture.ambient` | boolean | `true` | Set to `false` to disable automatic background capture of conversation turns |
+
+Explicit commands (`sno memory remember`, `sno memory recall`, etc.) remain fully functional even when automatic settings are disabled.
+
+## Troubleshooting: What to check when memory seems missing
+
+If memories are not being recalled or captured as expected, verify the following:
+
+1. **Verify git repository root**:
+   Ensure your conversation or terminal is open inside a git work tree. Ambient recall and capture intentionally do not run in non-git directories or temporary folders.
+2. **Check `cursor-agent login`**:
+   The capture worker requires `cursor-agent login` authentication. If the agent CLI is logged out, turns cannot be spooled or stored.
+3. **Run `sno memory doctor --harness cursor`**:
+   - If `sidecar` is `unavailable`, open a new conversation inside a git repository to trigger on-demand startup.
+   - If any hook reports `absent`, re-run `sno setup --harness cursor` to regenerate missing hook entries.
+   - If a file reports `unparsable`, inspect the corresponding JSON file in `~/.cursor` for syntax errors.
+4. **Inspect `hooks.json`**:
+   Confirm that `~/.cursor/hooks.json` contains entries for the seven required Cursor events pointing to `sno memory hook <event> --harness cursor`.
+5. **Check recall query specifics**:
+   `recall` looks for semantic and lexical relevance. If a query is overly generic, try searching with exact keywords from the original memory.
