@@ -115,6 +115,9 @@ describe("IDE hooks", () => {
 		expect(record(id).project).toBeNull();
 		expect(stderr).toContain("no-git-root");
 		expect(spool()).toEqual([]);
+		// The session file is plain JSON that nothing deletes, so the turn's text must never land there.
+		const state = JSON.parse(readFileSync(join(profile, "sno-mem-cursor", "sessions", `${id}.json`), "utf8"));
+		expect([state.prompts, state.replies]).toEqual([{}, {}]);
 	});
 
 	it("never captures a Reach keep-alive turn or counts it as working time", () => {

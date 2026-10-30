@@ -218,7 +218,8 @@ export async function userPromptSubmit(raw: unknown): Promise<string> {
 		const state = await changeSession(input.conversation_id, current => {
 			current.activityRecords.push({ ts: Date.now(), incoming: isAgentText(input.prompt) ? "agent" : "human" });
 			// Only the IDE pairs prompt and reply here; the CLI reads its turns from the transcript.
-			if (generation && record.surface === "ide") current.prompts[generation] = { prompt: input.prompt, at: Date.now() };
+			// Without a project the turn is never captured, so its text is not kept.
+			if (generation && record.surface === "ide" && record.project) current.prompts[generation] = { prompt: input.prompt, at: Date.now() };
 		});
 		const project = projectOf(record, "beforeSubmitPrompt");
 		if (!project || !settings.auto) {
@@ -257,7 +258,8 @@ export async function userPromptSubmit(raw: unknown): Promise<string> {
 export async function afterAgentResponse(raw: unknown): Promise<string> {
 	try {
 		const input = responseSchema.parse(raw);
-		if (!await touchConversation(input, "other")) return EMPTY;
+		const record = await touchConversation(input, "other");
+		if (!record?.project) return EMPTY;
 		const generation = input.generation_id;
 		if (generation) await changeSession(input.conversation_id, state => { state.replies[generation] = input.text; });
 	} catch (error) {
