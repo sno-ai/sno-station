@@ -47,11 +47,16 @@ Hermes Agent, OpenClaw가 메모리 하나를 함께 쓰고, 서로에게 작업
 
 ## 설치
 
-*마지막 업데이트: 2026-10-18.* 가장 쉬운 방법은 에이전트에게 `install sno.ai from GitHub`라고 말하는 것입니다.
+*마지막 업데이트: 2026-10-30.* 가장 쉬운 방법은 에이전트에게 이렇게 말하는 것입니다:
+
+```text
+install sno.ai from GitHub
+```
+
 아니면 아무 터미널에서나 명령 하나를 실행하세요:
 
 ```bash
-sh -c 'sno_installer_body=$(curl -fsSL https://sno.ai/install) && printf "%s\n" "$sno_installer_body" | sh'
+curl -fsSL https://sno.ai/install | sh
 ```
 
 `sno`를 설치하고, 이어서 Sno Station을 설치한 다음, 컴퓨터에서 찾은 모든 에이전트를 연결합니다.

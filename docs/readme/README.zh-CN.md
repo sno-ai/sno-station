@@ -46,11 +46,16 @@ Sno Station 把你已经在用的 agent 变成一支小队。Codex、Claude Code
 
 ## 安装
 
-*最后更新于 2026-10-18。* 最简单的办法是对你的 agent 说：`install sno.ai from GitHub`。
+*最后更新于 2026-10-30。* 最简单的办法是对你的 agent 说：
+
+```text
+install sno.ai from GitHub
+```
+
 或者在任意终端里运行一条命令：
 
 ```bash
-sh -c 'sno_installer_body=$(curl -fsSL https://sno.ai/install) && printf "%s\n" "$sno_installer_body" | sh'
+curl -fsSL https://sno.ai/install | sh
 ```
 
 它会先安装 `sno`，再安装 Sno Station，并连接你电脑上找到的每一个 agent。不用账号，不用

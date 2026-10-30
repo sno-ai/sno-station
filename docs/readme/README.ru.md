@@ -49,11 +49,16 @@ Cursor, Hermes Agent и OpenClaw используют одну память, п�
 
 ## Установка
 
-*Обновлено 2026-10-18.* Проще всего сказать своему агенту: `install sno.ai from GitHub`.
+*Обновлено 2026-10-30.* Проще всего сказать своему агенту:
+
+```text
+install sno.ai from GitHub
+```
+
 Или выполните одну команду в любом терминале:
 
 ```bash
-sh -c 'sno_installer_body=$(curl -fsSL https://sno.ai/install) && printf "%s\n" "$sno_installer_body" | sh'
+curl -fsSL https://sno.ai/install | sh
 ```
 
 Она устанавливает `sno`, затем Sno Station и подключает каждого агента, которого находит на

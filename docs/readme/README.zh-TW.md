@@ -46,11 +46,16 @@ Sno Station 把你已經在用的代理人組成一支小隊。Codex、Claude Co
 
 ## 安裝
 
-*最後更新於 2026-10-18。* 最簡單的方式，是直接告訴你的代理人：`install sno.ai from GitHub`。
+*最後更新於 2026-10-30。* 最簡單的方式，是直接告訴你的代理人：
+
+```text
+install sno.ai from GitHub
+```
+
 也可以在任何終端機裡執行這一行指令：
 
 ```bash
-sh -c 'sno_installer_body=$(curl -fsSL https://sno.ai/install) && printf "%s\n" "$sno_installer_body" | sh'
+curl -fsSL https://sno.ai/install | sh
 ```
 
 它會先安裝 `sno`，再安裝 Sno Station，並連接這台電腦上找到的每個代理人。不需要帳號，
