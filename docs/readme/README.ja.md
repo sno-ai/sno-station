@@ -47,11 +47,16 @@ Cursor、Hermes Agent、OpenClaw がひとつのメモリを使い、互いに�
 
 ## インストール
 
-*最終更新 2026-10-18。* いちばん簡単なのは、エージェントに `install sno.ai from GitHub` と伝えることです。
+*最終更新 2026-10-30。* いちばん簡単なのは、エージェントに次のように伝えることです。
+
+```text
+install sno.ai from GitHub
+```
+
 または、どのターミナルでも次の1コマンドを実行します。
 
 ```bash
-sh -c 'sno_installer_body=$(curl -fsSL https://sno.ai/install) && printf "%s\n" "$sno_installer_body" | sh'
+curl -fsSL https://sno.ai/install | sh
 ```
 
 `sno` を入れ、続けて Sno Station を入れ、コンピューター上にあるすべてのエージェントを接続します。

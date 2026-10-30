@@ -49,11 +49,16 @@ vollständig.
 
 ## Installation
 
-*Zuletzt aktualisiert am 2026-10-18.* Am einfachsten sagen Sie Ihrem Agenten: `install sno.ai from GitHub`.
+*Zuletzt aktualisiert am 2026-10-30.* Am einfachsten sagen Sie Ihrem Agenten:
+
+```text
+install sno.ai from GitHub
+```
+
 Oder führen Sie in einem beliebigen Terminal einen Befehl aus:
 
 ```bash
-sh -c 'sno_installer_body=$(curl -fsSL https://sno.ai/install) && printf "%s\n" "$sno_installer_body" | sh'
+curl -fsSL https://sno.ai/install | sh
 ```
 
 Er installiert `sno`, dann Sno Station, und verbindet jeden Agenten, den er auf Ihrem Computer

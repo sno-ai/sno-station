@@ -47,11 +47,16 @@ El lado en la nube es opcional, y el producto está completo sin él.
 
 ## Instalación
 
-*Última actualización 2026-10-18.* La forma más fácil es decirle a tu agente: `install sno.ai from GitHub`.
+*Última actualización 2026-10-30.* La forma más fácil es decirle a tu agente:
+
+```text
+install sno.ai from GitHub
+```
+
 O ejecuta un solo comando, en cualquier terminal:
 
 ```bash
-sh -c 'sno_installer_body=$(curl -fsSL https://sno.ai/install) && printf "%s\n" "$sno_installer_body" | sh'
+curl -fsSL https://sno.ai/install | sh
 ```
 
 Instala `sno`, luego Sno Station, y conecta todos los agentes que encuentre en tu computadora. Sin

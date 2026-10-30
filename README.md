@@ -24,10 +24,16 @@ ask. Every night they dream, and wake up a little better.
 
 It runs on your own computer. You install it once and keep working the way you do now. Find out more on our website, [sno.ai](https://sno.ai).
 
-Install with one command in any terminal, or tell your agent `install sno.ai from GitHub`:
+Install with one command in any terminal:
 
 ```bash
-sh -c 'sno_installer_body=$(curl -fsSL https://sno.ai/install) && printf "%s\n" "$sno_installer_body" | sh'
+curl -fsSL https://sno.ai/install | sh
+```
+
+Or tell your agent:
+
+```text
+install sno.ai from GitHub
 ```
 
 Then say `Sno onboard` in any Codex, Claude Code, Hermes, Cursor or OpenClaw conversation. [More on installing](#install).
@@ -71,11 +77,16 @@ The habits in the right column are skills, installed into Claude Code and Codex 
 
 ## Install
 
-*Last updated 2026-10-28.* The easiest way is to tell your agent: `install sno.ai from GitHub`.
+*Last updated 2026-10-30.* The easiest way is to tell your agent:
+
+```text
+install sno.ai from GitHub
+```
+
 Or run one command, in any terminal:
 
 ```bash
-sh -c 'sno_installer_body=$(curl -fsSL https://sno.ai/install) && printf "%s\n" "$sno_installer_body" | sh'
+curl -fsSL https://sno.ai/install | sh
 ```
 
 It installs `sno`, then Sno Station, and connects every agent it finds on your computer. No

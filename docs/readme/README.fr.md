@@ -50,11 +50,16 @@ démon. Le volet cloud est optionnel, et le produit est complet sans lui.
 
 ## Installation
 
-*Dernière mise à jour le 2026-10-18.* Le plus simple est de dire à votre agent : `install sno.ai from GitHub`.
+*Dernière mise à jour le 2026-10-30.* Le plus simple est de dire à votre agent :
+
+```text
+install sno.ai from GitHub
+```
+
 Ou de lancer une commande, dans n'importe quel terminal :
 
 ```bash
-sh -c 'sno_installer_body=$(curl -fsSL https://sno.ai/install) && printf "%s\n" "$sno_installer_body" | sh'
+curl -fsSL https://sno.ai/install | sh
 ```
 
 Elle installe `sno`, puis Sno Station, et connecte tous les agents qu'elle trouve sur votre
