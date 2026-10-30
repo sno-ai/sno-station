@@ -4,7 +4,7 @@
 > the line below, which installs the `sno` command and then runs `sno setup`:
 >
 > ```bash
-> sh -c 'sno_installer_body=$(curl -fsSL https://sno.ai/install) && printf "%s\n" "$sno_installer_body" | sh'
+> curl -fsSL https://sno.ai/install | sh
 > ```
 
 Hermes uses a Python plugin to connect to the Sno memory service. The service itself
@@ -19,7 +19,7 @@ service and writes `~/.sno/settings.json` with a local store and encryption key.
 Then install the Hermes plugin:
 
 ```bash
-sh -c 'sno_installer_body=$(curl -fsSL https://sno.ai/install) && printf "%s\n" "$sno_installer_body" | sh'
+curl -fsSL https://sno.ai/install | sh
 ```
 
 `sno setup` installs and enables the plugin from this repository (not a separate Python
