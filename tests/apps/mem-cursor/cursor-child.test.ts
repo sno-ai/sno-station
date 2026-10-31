@@ -22,6 +22,11 @@ describe("cursor-agent print-mode result to host-model answer", () => {
 			.toEqual({ kind: "error", category: "exhausted", message: "Cursor usage limit reached" });
 	});
 
+	it("keeps a successful answer that mentions a usage limit", () => {
+		const stdout = JSON.stringify({ type: "result", is_error: false, result: "User: I hit your usage limit again, switching to Codex." });
+		expect(cursorChildResult(0, stdout, "")).toEqual({ kind: "ok", text: "User: I hit your usage limit again, switching to Codex." });
+	});
+
 	it("reports other failures as transport errors", () => {
 		expect(cursorChildResult(1, "", "Workspace Trust Required")).toEqual({ kind: "error", category: "transport", message: "cursor-agent-exit-1" });
 		expect(cursorChildResult(0, "not json", "")).toEqual({ kind: "error", category: "transport", message: "invalid-json" });
