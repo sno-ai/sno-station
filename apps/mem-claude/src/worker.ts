@@ -107,7 +107,7 @@ export function claudeChildResult(status: number | null, stdout: string, stderr:
 	if (status === 0 && parsed.success && cwd !== undefined) console.log(JSON.stringify({ event: "claude-child", cwd, usage: parsed.data.usage, claudeCodeUnset: true }));
 	if (status !== 0 || (parsed.success && parsed.data.is_error)) {
 		const failure = `${parsed.success ? parsed.data.result ?? "" : stdout}\n${stderr}`;
-		if (/not logged in|run \/login|authentication required|authentication failed|invalid (?:api key|auth token)|oauth token (?:expired|revoked)|login expired/i.test(failure)) return { kind: "error", category: "auth", message: "Claude login unavailable" };
+		if (/\b401\b|unauthori[sz]ed|invalid x-api-key|authentication_error|not logged in|run \/login|authentication required|authentication failed|invalid (?:api key|auth token)|oauth token (?:expired|revoked)|login expired/i.test(failure)) return { kind: "error", category: "auth", message: "Claude login unavailable" };
 		if (/you['’]ve (?:hit|reached) your|usage limit reached|out of (?:extra usage|usage credits)|credit balance.{0,20}too low/i.test(failure)) return { kind: "error", category: "exhausted", message: "Claude usage limit reached" };
 		return { kind: "error", category: "transport", message: status !== 0 ? `claude-exit-${status ?? "signal"}` : "claude-is-error" };
 	}
