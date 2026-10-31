@@ -1,14 +1,25 @@
-## What changed and why
+<!--
+Thanks for contributing. Two sections are required; everything else is optional.
+An idea with no code is welcome too.
 
-<!-- One change per PR. Say what a reviewer will see and why it is needed. -->
+How we take your change: documentation merges as you wrote it. Code, tests and
+evaluations are rewritten by our agents from what you describe below, to the same
+result and the same passing test, and you stay the commit author: the PR is merged
+under your name and you appear in the contributor list.
+-->
 
-## How it was tested
+## What should be different
 
-<!-- The exact commands you ran and what they printed. "Tests pass" is not enough. -->
+<!-- Required. The problem, and what should happen after this PR. One sentence is enough. -->
 
-## Checklist
+## How to tell it works
 
-- [ ] `npm run build && npm run typecheck && npm run lint` pass
-- [ ] Unit tests of the touched package pass
-- [ ] No private host names, absolute home paths, credentials, or links to private documents
-- [ ] No benchmark numbers or vendor comparisons added to docs
+<!-- Required. A command, a test or a few steps, and what you expect to see. -->
+
+## Your code or test (optional)
+
+<!-- Attach code, a sketch or a test in this PR, or leave it out. If you include a test, we keep what it checks. -->
+
+## Anything else (optional)
+
+<!-- Related issue ("Closes #123"), links, screenshots. -->

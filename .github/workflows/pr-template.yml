@@ -1,0 +1,46 @@
+name: pr-template
+
+# Pull requests from outside the team must fill the two required sections of
+# .github/pull_request_template.md; every other section is optional.
+# pull_request_target is used so a fork PR gets the check and the comment without
+# waiting for approval. It reads only the PR body and never checks out the PR's code.
+on:
+  pull_request_target:
+    types: [opened, edited, reopened]
+
+permissions:
+  pull-requests: write
+
+jobs:
+  pr-template:
+    if: |
+      github.event.pull_request.user.type != 'Bot' &&
+      !contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.pull_request.author_association)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check the required sections
+        env:
+          BODY: ${{ github.event.pull_request.body }}
+          ACTION: ${{ github.event.action }}
+          PR: ${{ github.event.pull_request.number }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          # Text under a "## <heading>" line, with HTML comments and whitespace removed.
+          section() {
+            printf '%s\n' "$BODY" | tr -d '\r' | perl -0pe 's/<!--.*?-->//gs' \
+              | awk -v h="## $1" '$0 == h { on = 1; next } /^## / { on = 0 } on' | tr -d '[:space:]'
+          }
+          missing=()
+          [[ -n "$(section 'What should be different')" ]] || missing+=('What should be different')
+          [[ -n "$(section 'How to tell it works')" ]] || missing+=('How to tell it works')
+          (( ${#missing[@]} == 0 )) && exit 0
+          list=$(printf -- '- %s\n' "${missing[@]}")
+          if [[ "$ACTION" == opened ]]; then
+            gh pr comment "$PR" --body "Thanks for the PR! Please fill these sections of the template in the description (edit it above; a sentence each is enough):
+
+          $list
+          We use them to take your change in: code is rewritten by our agents from what you describe, and you stay the commit author."
+          fi
+          printf 'Missing required sections:\n%s\n' "$list"
+          exit 1

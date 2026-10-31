@@ -10,6 +10,20 @@ Thanks for helping build Sno Station in public. This page is short on purpose.
 - **Using Claude Code and Codex together already?** Open a
   [design partner issue](.github/ISSUE_TEMPLATE/design-partner.yml). We want to hear from you first.
 
+## How we take your change
+
+Pull requests are welcome, and we answer every one within a day.
+
+- **Documentation** and other non-code files: we review and merge them as you wrote them.
+- **Code, tests and evaluations:** we keep what your change is for and our agents rewrite it to our house
+  standard, to the same result and the same passing test. You stay the commit author: the PR is merged under
+  your name and you appear in GitHub's contributor list and in [CONTRIBUTORS.md](CONTRIBUTORS.md).
+- **An idea with no code** counts too. Describe it in a PR or a feature request; if we build it, the commit is
+  yours.
+
+Every PR uses the [template](.github/pull_request_template.md). Two sections are required, a sentence each:
+what should be different, and how to tell it works. Code is optional.
+
 ## Making a change
 
 1. Fork and branch from `main`.

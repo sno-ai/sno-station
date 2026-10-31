@@ -1,7 +1,8 @@
 # Contributors
 
-People whose pull requests or issues changed Sno Station. We rewrite every accepted change
-ourselves (see [CONTRIBUTING.md](CONTRIBUTING.md)); this list records whose request it was.
+People whose pull requests or ideas changed Sno Station. We rewrite accepted code changes ourselves
+and keep the contributor as the commit author (see [CONTRIBUTING.md](CONTRIBUTING.md)); this list
+records whose change it was.
 
 | Contributor | What was adopted |
 |---|---|

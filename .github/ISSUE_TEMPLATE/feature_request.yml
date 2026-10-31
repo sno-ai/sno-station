@@ -3,6 +3,9 @@ description: Something the squad should do and does not yet.
 title: "[Feature] "
 labels: ["enhancement"]
 body:
+  - type: markdown
+    attributes:
+      value: "If we build your idea, the commit is yours: you are its author and appear in our contributor list."
   - type: textarea
     id: problem
     attributes:
