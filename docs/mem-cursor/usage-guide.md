@@ -43,9 +43,9 @@ When `sno memory correct --harness cursor <id> <text>` runs:
 
 ## Multi-folder and workspace scoping
 
-Memory is strictly scoped by repository boundaries to prevent context contamination across projects:
+Automatic recall and capture are scoped to one repository, its top-level git root; explicit `recall` and `get` also search global memory:
 
-- **Inside a git repository**: The memory store is keyed to the top-level git root (`git rev-parse --show-toplevel`). All subdirectories within the repository share the same memory space.
+- **Inside a git repository**: The top-level git root (`git rev-parse --show-toplevel`) is the project scope. All subdirectories within the repository share the same memory space.
 - **Multiple folders open (multi-root workspace)**: When multiple workspace folders are open, the hooks use the repository containing the first workspace root. To interact with memory for another folder, navigate to that directory and execute explicit memory commands.
 - **Outside a git repository**: Ambient capture and automatic recall are disabled. Explicit `sno memory` commands fallback to using the current working directory as the workspace scope.
 - **Temporary directories**: Any path under the system temporary directory (`/tmp`, `/var/tmp`, or `os.tmpdir()`) is treated as a transient run: nothing is captured or recalled automatically there. Explicit `sno memory` commands still work.
@@ -88,7 +88,7 @@ If memories are not being recalled or captured as expected, verify the following
 3. **Run `sno memory doctor --harness cursor`**:
    - If `sidecar` is `unavailable`, run any `sno memory recall --harness cursor <query>` inside the repository; explicit commands start it.
    - If any hook reports `absent`, re-run `sno setup --harness cursor` to regenerate missing hook entries.
-   - If a file reports `unparsable`, inspect the corresponding JSON file in `~/.cursor` for syntax errors.
+   - If a file reports `unparsable`, the file could not be read as the JSON the installer expects (unreadable, invalid JSON, or an unexpected shape); check the corresponding file in `~/.cursor`.
 4. **Inspect `hooks.json`**:
    Confirm that `~/.cursor/hooks.json` has an entry for each of the seven Cursor events, each running `'<path to sno>' memory hook <subcommand> --harness cursor`. Re-run `sno setup --harness cursor` instead of editing these entries by hand.
 5. **Check recall query specifics**:
