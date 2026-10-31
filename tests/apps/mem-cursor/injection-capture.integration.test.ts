@@ -10,7 +10,7 @@ import { join, resolve } from "node:path";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { connect, type MemoryClient } from "../../../packages/memory/src/contract/client";
 import { startRemSidecar } from "../../../packages/memory/src/sidecar/server";
-import { afterAgentResponse, preCompact, sessionStart, stop, userPromptSubmit } from "../../../apps/mem-cursor/src/hooks.ts";
+import { afterAgentResponse, preCompact, sessionEnd, sessionStart, stop, userPromptSubmit } from "../../../apps/mem-cursor/src/hooks.ts";
 import { createTestDb } from "../mem-claw/helpers/test-db";
 import { writeSettingsFixture } from "../../packages/memory/fixtures/settings-file-fixture";
 import { LOCAL_EMBEDDING_CACHE_DIR_DEFAULT } from "../../../packages/embedder/src/constants.ts";
@@ -111,6 +111,7 @@ describe("Cursor injection against a real sidecar", () => {
 		await userPromptSubmit({ ...input(id, "g1"), prompt: `Decision for this repo: ${decision}` });
 		await afterAgentResponse({ ...input(id, "g1"), text: `Recorded. ${decision}` });
 		expect(await stop({ ...input(id, "g1"), status: "completed", loop_count: 0 })).toBe("{}");
+		await sessionEnd({ ...input(id, "g1"), reason: "completed" });
 		const spool = join(root, "sno-mem-cursor", "spool");
 		await vi.waitFor(() => expect(readdirSync(spool)).toEqual([]), { timeout: 60_000, interval: 500 });
 		const recalled = await client.getRecall("how are invoices rounded", { principal: "caller", project: repo, session: "manual",
