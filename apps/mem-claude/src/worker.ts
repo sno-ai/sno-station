@@ -43,7 +43,7 @@ const spoolSchema = z.object({
 
 export interface WorkerDependencies {
 	connect(): Promise<MemoryClient>;
-	runChild(prompt: string, cwd: string, timeoutMs?: number): Promise<{ kind: "ok"; text: string; usage?: { inputTokens: number; outputTokens: number } } | { kind: "cancelled"; reason: string } | { kind: "error"; category: "transport"; message: string }>;
+	runChild(prompt: string, cwd: string, timeoutMs?: number): Promise<{ kind: "ok"; text: string; usage?: { inputTokens: number; outputTokens: number } } | { kind: "cancelled"; reason: string } | { kind: "error"; category: "transport" | "auth" | "exhausted"; message: string }>;
 	now?(): number;
 	sleep?(delayMs: number): Promise<void>;
 	beforeLockRelease?(): Promise<void>;
@@ -78,7 +78,7 @@ export function startWorkerDetached(): void {
 	}
 }
 
-export async function runClaudeChild(prompt: string, cwd: string, timeoutMs = CODING_SKIN_CHILD_DEADLINE_MS): Promise<{ kind: "ok"; text: string; usage?: { inputTokens: number; outputTokens: number } } | { kind: "cancelled"; reason: string } | { kind: "error"; category: "transport"; message: string }> {
+export async function runClaudeChild(prompt: string, cwd: string, timeoutMs = CODING_SKIN_CHILD_DEADLINE_MS): Promise<{ kind: "ok"; text: string; usage?: { inputTokens: number; outputTokens: number } } | { kind: "cancelled"; reason: string } | { kind: "error"; category: "transport" | "auth" | "exhausted"; message: string }> {
 	if (timeoutMs <= 0) return { kind: "cancelled", reason: "deadline" };
 	const env = { ...process.env };
 	env["GIT_CEILING_DIRECTORIES"] = appStateRoot();
@@ -93,17 +93,26 @@ export async function runClaudeChild(prompt: string, cwd: string, timeoutMs = CO
 		maxBuffer: CODING_SKIN_CHILD_MAX_BUFFER_BYTES,
 	});
 	if (result.error && "code" in result.error && result.error.code === "ETIMEDOUT") return { kind: "cancelled", reason: "deadline" };
-	if (result.status !== 0) return { kind: "error", category: "transport", message: `claude-exit-${result.status ?? "signal"}` };
+	return claudeChildResult(result.status, result.stdout ?? "", result.stderr ?? "", cwd);
+}
+
+export function claudeChildResult(status: number | null, stdout: string, stderr: string, cwd?: string): Awaited<ReturnType<WorkerDependencies["runChild"]>> {
 	let output: unknown;
-	try { output = JSON.parse(result.stdout); } catch { return { kind: "error", category: "transport", message: "invalid-json" }; }
+	try { output = JSON.parse(stdout); } catch { output = undefined; }
 	const parsed = z.object({
 		result: z.string().optional(),
 		is_error: z.boolean(),
 		usage: z.object({ cache_creation_input_tokens: z.number().optional(), cache_read_input_tokens: z.number().optional(), input_tokens: z.number().optional(), output_tokens: z.number().optional() }).optional(),
 	}).safeParse(output);
+	if (status === 0 && parsed.success && cwd !== undefined) console.log(JSON.stringify({ event: "claude-child", cwd, usage: parsed.data.usage, claudeCodeUnset: true }));
+	if (status !== 0 || (parsed.success && parsed.data.is_error)) {
+		const failure = `${parsed.success ? parsed.data.result ?? "" : stdout}\n${stderr}`;
+		if (/not logged in|run \/login|authentication required|authentication failed|invalid (?:api key|auth token)|oauth token (?:expired|revoked)|login expired/i.test(failure)) return { kind: "error", category: "auth", message: "Claude login unavailable" };
+		if (/you['’]ve (?:hit|reached) your|usage limit reached|out of (?:extra usage|usage credits)|credit balance.{0,20}too low/i.test(failure)) return { kind: "error", category: "exhausted", message: "Claude usage limit reached" };
+		return { kind: "error", category: "transport", message: status !== 0 ? `claude-exit-${status ?? "signal"}` : "claude-is-error" };
+	}
+	if (output === undefined) return { kind: "error", category: "transport", message: "invalid-json" };
 	if (!parsed.success) return { kind: "error", category: "transport", message: "invalid-result" };
-	console.log(JSON.stringify({ event: "claude-child", cwd, usage: parsed.data.usage, claudeCodeUnset: true }));
-	if (parsed.data.is_error) return { kind: "error", category: "transport", message: "claude-is-error" };
 	const text = parsed.data.result?.trim();
 	if (!text) return { kind: "error", category: "transport", message: "empty-output" };
 	const reported = parsed.data.usage;
@@ -283,9 +292,14 @@ export async function runWorker(dependencies: WorkerDependencies = productionDep
 	let currentImport = false;
 	let server: Server | undefined;
 	let handoff = false;
+	let modelUnavailable = false;
 	try {
 		mkdirSync(childCwd, { recursive: true, mode: 0o700 });
-		const callback = await callbackServer(credential, () => currentCwd ?? childCwd, () => currentImport, () => { lastCallbackAt = now(); }, (prompt, cwd, requesterMs) => dependencies.runChild(prompt, cwd, Math.min(CODING_SKIN_CHILD_DEADLINE_MS, requesterMs ?? Infinity)));
+		const callback = await callbackServer(credential, () => currentCwd ?? childCwd, () => currentImport, () => { lastCallbackAt = now(); }, async (prompt, cwd, requesterMs) => {
+			const result = await dependencies.runChild(prompt, cwd, Math.min(CODING_SKIN_CHILD_DEADLINE_MS, requesterMs ?? Infinity));
+			if (result.kind === "error" && (result.category === "auth" || result.category === "exhausted")) modelUnavailable = true;
+			return result;
+		});
 		server = callback.server;
 		await readSpoolNames();
 		const client = await dependencies.connect();
@@ -313,6 +327,7 @@ export async function runWorker(dependencies: WorkerDependencies = productionDep
 					}
 					currentCwd = childCwd;
 					currentImport = record.kind === "import";
+					modelUnavailable = false;
 					try {
 						const messages = batch.flatMap(({ record: turn }) => turn.kind === "import"
 							? [{ role: "user" as const, content: turn.user, at: turn.at }]
@@ -323,6 +338,7 @@ export async function runWorker(dependencies: WorkerDependencies = productionDep
 						// A capture in flight is never abandoned for the lifetime: the sidecar would go on extracting it while this
 						// worker's model callback is gone. Its route deadline bounds it, and the lifetime is checked before the next one.
 						const result = await client.capture({ turnId: record.turnId, rewindEpoch: 0, messages }, { principal, project: record.project, session: record.sessionId, host: { sessionId: record.sessionId, workspace: record.project } });
+						if (modelUnavailable) throw new Error("host model unavailable");
 						if (result.degraded) throw new Error(result.reason);
 						if (!result.committed && !result.accepted && !result.skipped && !result.partial) throw new Error("capture not committed");
 						for (const entry of batch) await updateImportReceipt(entry.record.importReceipt, result.committed || result.accepted || result.partial ? "committed" : "skipped");
@@ -332,6 +348,10 @@ export async function runWorker(dependencies: WorkerDependencies = productionDep
 						}
 						break;
 					} catch (error) {
+						if (modelUnavailable) {
+							console.log(JSON.stringify({ event: "capture-deferred", turnId: record.turnId, reason: "host-model-unavailable" }));
+							return "failed";
+						}
 						for (const entry of batch) await updateImportReceipt(entry.record.importReceipt, "failures");
 						const attempts: number = record.attempts + 1;
 						for (const entry of batch) console.log(JSON.stringify({ event: "capture-failed", turnId: entry.record.turnId, attempt: attempts,

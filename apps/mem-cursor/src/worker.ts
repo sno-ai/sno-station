@@ -85,6 +85,7 @@ export function cursorChildResult(status: number | null, stdout: string, stderr:
 	const text = result.success && !result.data.is_error ? result.data.result?.trim() : undefined;
 	if (status === 0 && text) return { kind: "ok", text };
 	const output = `${stdout}\n${stderr}`;
+	if (/Authentication required|Unauthenticated|authentication failed|invalid (?:auth )?token|token (?:has )?expired/i.test(output)) return { kind: "error", category: "auth", message: "Cursor CLI login required or expired" };
 	if (output.includes("keychain is locked")) return { kind: "error", category: "auth", message: "Cursor CLI login unreadable (keychain locked)" };
 	if (output.includes("hit your usage limit")) return { kind: "error", category: "exhausted", message: "Cursor usage limit reached" };
 	if (status !== 0) return { kind: "error", category: "transport", message: `cursor-agent-exit-${status ?? "signal"}` };
@@ -282,9 +283,14 @@ export async function runWorker(dependencies: WorkerDependencies = productionDep
 	let drainedAt: number | undefined;
 	let server: Server | undefined;
 	let handoff = false;
+	let unavailable: Extract<ChildResult, { kind: "error" }> | undefined;
 	try {
 		const callback = await callbackServer(credential, () => { lastCallbackAt = now(); },
-			prompt => dependencies.runChild(prompt, CODING_SKIN_CHILD_DEADLINE_MS));
+			async prompt => {
+				const result = await dependencies.runChild(prompt, CODING_SKIN_CHILD_DEADLINE_MS);
+				if (result.kind === "error" && result.category !== "transport") unavailable = result;
+				return result;
+			});
 		server = callback.server;
 		await readSpoolNames();
 		const client = await dependencies.connect();
@@ -310,6 +316,7 @@ export async function runWorker(dependencies: WorkerDependencies = productionDep
 						await sleep(Math.min(record.retryAt - now(), remainingLifetime));
 						if (record.retryAt > now() || now() - workerStartedAt >= CODING_SKIN_WORKER_LIFETIME_MS) { handoff = true; return "drained"; }
 					}
+					unavailable = undefined;
 					try {
 						const messages = batch.flatMap(({ record: turn }) => [
 							{ role: "user" as const, content: turn.user, at: turn.at },
@@ -318,6 +325,7 @@ export async function runWorker(dependencies: WorkerDependencies = productionDep
 						// A capture in flight is never abandoned for the lifetime: the sidecar would go on extracting it while this
 						// worker's model callback is gone. Its route deadline bounds it, and the lifetime is checked before the next one.
 						const result = await client.capture({ turnId: record.turnId, rewindEpoch: 0, messages }, { principal, project: record.project, session: record.sessionId, host: { sessionId: record.sessionId, workspace: record.project } });
+						if (unavailable) throw new Error("host model unavailable");
 						if (result.degraded) throw new Error(result.reason);
 						if (!result.committed && !result.accepted && !result.skipped && !result.partial) throw new Error("capture not committed");
 						for (const entry of batch) {
@@ -326,6 +334,10 @@ export async function runWorker(dependencies: WorkerDependencies = productionDep
 						}
 						break;
 					} catch (error) {
+						if (unavailable) {
+							console.log(JSON.stringify({ event: "capture-deferred", turnId: record.turnId, reason: unavailable }));
+							return "failed";
+						}
 						const attempts: number = record.attempts + 1;
 						for (const entry of batch) console.log(JSON.stringify({ event: "capture-failed", turnId: entry.record.turnId, attempts, final: attempts >= CODING_SKIN_MAX_ATTEMPTS, reason: error instanceof Error ? error.message : String(error) }));
 						// A batch shares its tries, so only its first turn is given up; the rest keep their own counts on disk.
