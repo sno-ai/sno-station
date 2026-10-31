@@ -43,7 +43,7 @@ const spoolSchema = z.object({
 
 export interface WorkerDependencies {
 	connect(): Promise<MemoryClient>;
-	runChild(prompt: string, cwd: string, timeoutMs?: number): Promise<{ kind: "ok"; text: string } | { kind: "cancelled"; reason: string } | { kind: "error"; category: "transport"; message: string }>;
+	runChild(prompt: string, cwd: string, timeoutMs?: number): Promise<{ kind: "ok"; text: string } | { kind: "cancelled"; reason: string } | { kind: "error"; category: "transport" | "auth" | "exhausted"; message: string }>;
 	now?(): number;
 	sleep?(delayMs: number): Promise<void>;
 	beforeLockRelease?(): Promise<void>;
@@ -78,7 +78,7 @@ export function startWorkerDetached(): void {
 	}
 }
 
-async function runCodexChild(prompt: string, cwd: string, timeoutMs = CODING_SKIN_CHILD_DEADLINE_MS): Promise<{ kind: "ok"; text: string } | { kind: "cancelled"; reason: string } | { kind: "error"; category: "transport"; message: string }> {
+async function runCodexChild(prompt: string, cwd: string, timeoutMs = CODING_SKIN_CHILD_DEADLINE_MS): Promise<{ kind: "ok"; text: string } | { kind: "cancelled"; reason: string } | { kind: "error"; category: "transport" | "auth" | "exhausted"; message: string }> {
 	if (timeoutMs <= 0) return { kind: "cancelled", reason: "deadline" };
 	const result = spawnSync("codex", ["exec", "--ephemeral", "--disable", "hooks", "-s", "read-only", "--skip-git-repo-check", "-C", cwd, prompt], {
 		encoding: "utf8",
@@ -86,8 +86,18 @@ async function runCodexChild(prompt: string, cwd: string, timeoutMs = CODING_SKI
 		maxBuffer: CODING_SKIN_CHILD_MAX_BUFFER_BYTES,
 	});
 	if (result.error && "code" in result.error && result.error.code === "ETIMEDOUT") return { kind: "cancelled", reason: "deadline" };
-	const text = result.stdout.trim();
-	if (result.status !== 0 || !text) return { kind: "error", category: "transport", message: result.status === 0 ? "empty-output" : `codex-exit-${result.status ?? "signal"}` };
+	return codexChildResult(result.status, result.stdout ?? "", result.stderr ?? "");
+}
+
+export function codexChildResult(status: number | null, stdout: string, stderr: string): Awaited<ReturnType<WorkerDependencies["runChild"]>> {
+	const text = stdout.trim();
+	if (status !== 0) {
+		const lines = stderr.trim().split(/\r?\n/);
+		const failure = lines.findLast(line => line.startsWith("ERROR:")) ?? lines.at(-1) ?? "";
+		if (/not logged in|unauthorized|\b401\b|refresh token.{0,40}(?:expired|revoked|reused|invalid)|sign in again|missing authentication|authentication (?:failed|required)/i.test(failure)) return { kind: "error", category: "auth", message: "Codex login unavailable" };
+		if (/usage limit|usage_limit_reached|insufficient_quota/i.test(failure)) return { kind: "error", category: "exhausted", message: "Codex usage limit reached" };
+	}
+	if (status !== 0 || !text) return { kind: "error", category: "transport", message: status === 0 ? "empty-output" : `codex-exit-${status ?? "signal"}` };
 	return { kind: "ok", text };
 }
 
@@ -261,9 +271,14 @@ export async function runWorker(dependencies: WorkerDependencies = productionDep
 	let currentImport = false;
 	let server: Server | undefined;
 	let handoff = false;
+	let modelUnavailable = false;
 	try {
 		mkdirSync(childCwd, { recursive: true, mode: 0o700 });
-		const callback = await callbackServer(credential, () => currentCwd ?? childCwd, () => currentImport, () => { lastCallbackAt = now(); }, (prompt, cwd, requesterMs) => dependencies.runChild(prompt, cwd, Math.min(CODING_SKIN_CHILD_DEADLINE_MS, requesterMs ?? Infinity)));
+		const callback = await callbackServer(credential, () => currentCwd ?? childCwd, () => currentImport, () => { lastCallbackAt = now(); }, async (prompt, cwd, requesterMs) => {
+			const result = await dependencies.runChild(prompt, cwd, Math.min(CODING_SKIN_CHILD_DEADLINE_MS, requesterMs ?? Infinity));
+			if (result.kind === "error" && (result.category === "auth" || result.category === "exhausted")) modelUnavailable = true;
+			return result;
+		});
 		server = callback.server;
 		await readSpoolNames();
 		const client = await dependencies.connect();
@@ -291,6 +306,7 @@ export async function runWorker(dependencies: WorkerDependencies = productionDep
 					}
 					currentCwd = record.childCwd;
 					currentImport = record.kind === "import";
+					modelUnavailable = false;
 					try {
 						const messages = batch.flatMap(({ record: turn }) => turn.kind === "import"
 							? [{ role: "user" as const, content: turn.user, at: turn.at }]
@@ -299,6 +315,7 @@ export async function runWorker(dependencies: WorkerDependencies = productionDep
 								{ role: "assistant" as const, content: turn.assistant ?? "", at: turn.at },
 							]);
 						const result = await client.capture({ turnId: record.turnId, rewindEpoch: 0, messages }, { principal, project: record.project, session: record.sessionId, host: record.project === "global" ? { sessionId: record.sessionId } : { sessionId: record.sessionId, workspace: record.project } });
+						if (modelUnavailable) throw new Error("host model unavailable");
 						if (result.degraded) throw new Error(result.reason);
 						if (!result.committed && !result.accepted && !result.skipped && !result.partial) throw new Error("capture not committed");
 						for (const entry of batch) await updateImportReceipt(entry.record.importReceipt, result.committed || result.accepted || result.partial ? "committed" : "skipped");
@@ -308,6 +325,10 @@ export async function runWorker(dependencies: WorkerDependencies = productionDep
 						}
 						break;
 					} catch (error) {
+						if (modelUnavailable) {
+							console.log(JSON.stringify({ event: "capture-deferred", turnId: record.turnId, reason: "host-model-unavailable" }));
+							return "failed";
+						}
 						for (const entry of batch) await updateImportReceipt(entry.record.importReceipt, "failures");
 						const attempts: number = record.attempts + 1;
 						for (const entry of batch) console.log(JSON.stringify({ event: "capture-failed", turnId: entry.record.turnId, attempt: attempts,

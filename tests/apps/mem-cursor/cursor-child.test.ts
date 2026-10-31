@@ -42,6 +42,11 @@ describe("cursor-agent print-mode result to host-model answer", () => {
 			.toEqual({ kind: "error", category: "exhausted", message: "Cursor usage limit reached" });
 	});
 
+	it.each(["Error: Authentication required. Run 'cursor-agent login'.", "ConnectError: [unauthenticated] Login expired"])("recognizes unavailable login: %s", failure => {
+		expect(cursorChildResult(1, "", failure)).toMatchObject({ kind: "error", category: "auth" });
+		expect(cursorChildResult(0, JSON.stringify({ is_error: false, result: failure }), "")).toEqual({ kind: "ok", text: failure });
+	});
+
 	it("reports other failures as transport errors", () => {
 		expect(cursorChildResult(1, "", "Workspace Trust Required")).toEqual({ kind: "error", category: "transport", message: "cursor-agent-exit-1" });
 		expect(cursorChildResult(0, "not json", "")).toEqual({ kind: "error", category: "transport", message: "invalid-json" });
