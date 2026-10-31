@@ -13,7 +13,7 @@ Sno Memory integrates with both the Cursor desktop IDE and the Cursor CLI (`curs
 - **Cursor IDE**:
   - **At session start**: A short brief of key repository context, open tasks, and standing conventions is injected into the conversation. In the IDE app, the first chat of a new window gets the brief with its first prompt instead.
   - **On each user prompt**: Memory matching the prompt is retrieved and injected as reference data before the model responds.
-  - **At turn completion**: The prompt and assistant response are captured in memory once the turn finishes. Empty or unfulfilled turns are skipped.
+  - **At turn completion**: The prompt and assistant response are queued; they are saved to memory when the conversation ends or after 30 quiet minutes. Empty or unfulfilled turns are skipped.
 - **Cursor CLI (`cursor-agent`)**:
   - Non-interactive prompts (`cursor-agent -p`) receive the project brief at session initialization.
   - The CLI reads turns directly from the conversation transcript at each `stop` event and when the session ends.
@@ -22,7 +22,7 @@ A background worker processes captured turns asynchronously. Turns are flushed w
 
 ## The four memory commands
 
-The installed Cursor skill (`skills/sno-mem-cursor/SKILL.md`) teaches the Cursor agent four commands. You can also run them manually from your terminal inside the repository.
+The installed Cursor skill (`~/.cursor/skills/sno-mem-cursor/SKILL.md`) teaches the Cursor agent four commands. You can also run them manually from your terminal inside the repository.
 
 | Command | What it does | When to use |
 | --- | --- | --- |
@@ -39,7 +39,7 @@ When `sno memory correct --harness cursor <id> <text>` runs:
 2. The old memory entry (`<id>`) is marked as superseded by the new record.
 3. Automatic recall stops injecting the old entry. Explicit `recall` and `get` still show it, marked `retired; superseded by <id>`.
 
-`correct` writes nothing when the entry was already corrected (`already-superseded`) or the new text is the same as the old (`invalid-input`).
+`correct` stores nothing, and says why, when the entry was already corrected or the new text is already stored.
 
 ## Multi-folder and workspace scoping
 
@@ -86,10 +86,10 @@ If memories are not being recalled or captured as expected, verify the following
 2. **Check the Cursor CLI login** (`cursor-agent login`):
    Background capture saves each finished turn through the Cursor CLI with your login. While you are logged out every save fails, and after three failed attempts the waiting turn is dropped. `sno memory doctor` does not check the login.
 3. **Run `sno memory doctor --harness cursor`**:
-   - If `sidecar` is `unavailable`, open a new conversation inside a git repository, or run any `sno memory recall --harness cursor <query>` there. With `recall.auto` set to `false`, only explicit commands start it.
+   - If `sidecar` is `unavailable`, run any `sno memory recall --harness cursor <query>` inside the repository; explicit commands start it.
    - If any hook reports `absent`, re-run `sno setup --harness cursor` to regenerate missing hook entries.
    - If a file reports `unparsable`, inspect the corresponding JSON file in `~/.cursor` for syntax errors.
 4. **Inspect `hooks.json`**:
-   Confirm that `~/.cursor/hooks.json` has an entry for each of the seven Cursor events, each running `'<path to sno>' memory hook <subcommand> --harness cursor`; the subcommand is the event's hyphenated name (`beforeSubmitPrompt` runs `user-prompt-submit`). Re-run `sno setup --harness cursor` instead of editing these entries by hand.
+   Confirm that `~/.cursor/hooks.json` has an entry for each of the seven Cursor events, each running `'<path to sno>' memory hook <subcommand> --harness cursor`. Re-run `sno setup --harness cursor` instead of editing these entries by hand.
 5. **Check recall query specifics**:
    `recall` looks for semantic and lexical relevance. If a query is overly generic, try searching with exact keywords from the original memory.
