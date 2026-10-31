@@ -84,7 +84,7 @@ If memories are not being recalled or captured as expected, verify the following
 1. **Verify git repository root**:
    Ensure your conversation or terminal is open inside a git work tree. Ambient recall and capture intentionally do not run in non-git directories or temporary folders.
 2. **Check the Cursor CLI login** (`cursor-agent login`):
-   Background capture saves each finished turn through the Cursor CLI with your login. While you are logged out every save fails, and after three failed attempts the waiting turn is dropped. `sno memory doctor` does not check the login.
+   Background capture saves each finished turn through the Cursor CLI with your login. If your login is missing or expired, the keychain is locked, or your usage limit is reached, the worker leaves the waiting turns in the queue and exits. After access is restored, the next worker run retries them. Other save failures still discard a turn after three failed attempts. `sno memory doctor` does not check the login.
 3. **Run `sno memory doctor --harness cursor`**:
    - If `sidecar` is `unavailable`, run any `sno memory recall --harness cursor <query>` inside the repository; explicit commands start it.
    - If any hook reports `absent`, re-run `sno setup --harness cursor` to regenerate missing hook entries.
