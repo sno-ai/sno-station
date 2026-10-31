@@ -38,7 +38,6 @@ When `sno memory correct --harness cursor <id> <text>` runs:
 1. A new memory entry is created with the updated text.
 2. The old memory entry (`<id>`) is marked as superseded by the new record.
 3. Future `recall` queries return the updated memory, preventing the agent from following stale instructions.
-4. Calling `sno memory get --harness cursor <id>` on the superseded entry displays both the original entry and the ID of the replacement record.
 
 ## Multi-folder and workspace scoping
 
@@ -82,13 +81,11 @@ If memories are not being recalled or captured as expected, verify the following
 
 1. **Verify git repository root**:
    Ensure your conversation or terminal is open inside a git work tree. Ambient recall and capture intentionally do not run in non-git directories or temporary folders.
-2. **Check `cursor-agent login`**:
-   The capture worker requires `cursor-agent login` authentication. If the agent CLI is logged out, turns cannot be spooled or stored.
-3. **Run `sno memory doctor --harness cursor`**:
+2. **Run `sno memory doctor --harness cursor`**:
    - If `sidecar` is `unavailable`, open a new conversation inside a git repository to trigger on-demand startup.
    - If any hook reports `absent`, re-run `sno setup --harness cursor` to regenerate missing hook entries.
    - If a file reports `unparsable`, inspect the corresponding JSON file in `~/.cursor` for syntax errors.
-4. **Inspect `hooks.json`**:
+3. **Inspect `hooks.json`**:
    Confirm that `~/.cursor/hooks.json` contains entries for the seven required Cursor events pointing to `sno memory hook <event> --harness cursor`.
-5. **Check recall query specifics**:
+4. **Check recall query specifics**:
    `recall` looks for semantic and lexical relevance. If a query is overly generic, try searching with exact keywords from the original memory.
