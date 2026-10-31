@@ -80,8 +80,8 @@ export function startWorkerDetached(): void {
 /** Maps one `cursor-agent -p --output-format json` run to a result; failure texts are the ones measured on Linux and macOS. */
 export function cursorChildResult(status: number | null, stdout: string, stderr: string): ChildResult {
 	const output = `${stdout}\n${stderr}`;
-	if (output.includes("keychain is locked")) return { kind: "error", category: "auth", message: "Cursor CLI login unreadable (keychain locked)" };
-	if (output.includes("hit your usage limit")) return { kind: "error", category: "exhausted", message: "Cursor usage limit reached" };
+	if (status !== 0 && output.includes("keychain is locked")) return { kind: "error", category: "auth", message: "Cursor CLI login unreadable (keychain locked)" };
+	if (status !== 0 && output.includes("hit your usage limit")) return { kind: "error", category: "exhausted", message: "Cursor usage limit reached" };
 	if (status !== 0) return { kind: "error", category: "transport", message: `cursor-agent-exit-${status ?? "signal"}` };
 	let parsed: unknown;
 	try { parsed = JSON.parse(stdout); } catch { return { kind: "error", category: "transport", message: "invalid-json" }; }
