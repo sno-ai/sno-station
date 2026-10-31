@@ -4,6 +4,7 @@ import { claudeChildResult } from "../../../apps/mem-claude/src/worker.js";
 describe("Claude child failures", () => {
 	it.each([
 		["Not logged in · Please run /login", "auth"],
+		['API Error: 401 {"type":"error","error":{"type":"authentication_error","message":"invalid x-api-key"}}', "auth"],
 		["OAuth token revoked · Please run /login", "auth"],
 		["Login expired · Please run /login", "auth"],
 		["You've hit your limit · resets 3pm", "exhausted"],
