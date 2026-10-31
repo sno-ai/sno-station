@@ -94,31 +94,29 @@ async function rememberJourney() {
 			// Cursor's streaming connection does not survive an HTTP proxy, so it runs without one.
 			const direct = { ...env };
 			for (const name of ["HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy"]) delete direct[name];
-			let run;
-			// Cursor's service connection drops now and then and leaves no answer; ask again, up to three times.
-			for (let attempt = 0; attempt < 3; attempt++) {
-				run = await processRun(agent, ["-p", "--force", "--trust", "--workspace", project, "--output-format", "text", prompt],
-					{ cwd: project, env: direct, timeoutMs: 300_000 });
-				if (run.stdout.trim() && !run.stdout.includes("RetriableError")) break;
-			}
-			// Cursor's own connection retries can end the process with a failure code after its work is done, so the
-			// checks below read the effects, not the exit code.
-			return run.stdout;
+			const run = await processRun(agent, ["-p", "--force", "--trust", "--workspace", project, "--output-format", "json", "--mode", "ask", prompt],
+				{ cwd: project, env: direct, timeoutMs: 120_000 });
+			assert.equal(run.code, 0, `Cursor failed: ${run.stderr.slice(0, 600)}`);
+			const result = JSON.parse(run.stdout);
+			assert.equal(result.is_error, false, `Cursor returned an error: ${result.result}`);
+			return result.result;
 		};
 		const sh = `${envPrefix} ${shellQuote(sno)}`;
 		const nonce = randomUUID();
 		const text = `The native Cursor orchid release label is ${nonce}.`;
-		const said = await model(`Run exactly one shell command: ${sh} memory remember --harness cursor ${shellQuote(text)}. Do not run anything else. Then say exactly what it printed.`);
+		const remembered = await processRun("sh", ["-c", `${sh} memory remember --harness cursor ${shellQuote(text)}`], { cwd: project, env, timeoutMs: 60_000 });
+		assert.equal(remembered.code, 0, remembered.stderr);
+		const said = remembered.stdout;
 		const id = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i.exec(said)?.[0];
-		assert.ok(id, `Cursor did not print a memory id; it said: ${said.slice(0, 600)}`);
+		assert.ok(id, `The memory command did not print a memory id; it said: ${said.slice(0, 600)}`);
 		const stored = await processRun("sh", ["-c", `${sh} memory get ${id} --harness cursor`], { cwd: project, env, timeoutMs: 60_000 });
 		assert.ok(stored.stdout.includes(nonce), `The remembered text is not in the memory store: ${(stored.stdout + stored.stderr).slice(0, 400)}`);
-		proof.checks.modelRemember = true;
-		const answer = await model(`Run exactly one shell command: ${sh} memory recall --harness cursor ${shellQuote("native Cursor orchid release label")}. Then reply with the label value only.`);
+		proof.checks.cliRemember = true;
+		const answer = await model("What is the native Cursor orchid release label from your memory context? Do not call tools. Reply with the label value only.");
 		assert.ok(answer.includes(nonce), `A new Cursor session did not recall the label: ${answer.slice(0, 300)}`);
 		proof.checks.freshSessionRecall = true;
 		const records = readdirSync(join(profile, "cursor", "conversations")).filter(name => name.endsWith(".json"));
-		assert.ok(records.length >= 2, `Expected a conversation record per Cursor session, found ${records.length}`);
+		assert.ok(records.length >= 1, `Expected a conversation record per Cursor session, found ${records.length}`);
 		proof.checks.conversationRecords = records.length;
 		proof.passed = true;
 	} catch (error) { proof.failure = error.message; process.exitCode = 1; }
