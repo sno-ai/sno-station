@@ -12,6 +12,26 @@ describe("cursor-agent print-mode result to host-model answer", () => {
 		expect(cursorChildResult(0, stdout, "")).toEqual({ kind: "ok", text: "Probe code SLOW-0: HARRIER-0" });
 	});
 
+	it("keeps a successful answer that mentions a usage limit", () => {
+		const stdout = JSON.stringify({ type: "result", is_error: false, result: " User: I hit your usage limit again, switching to Codex.\n" });
+		expect(cursorChildResult(0, stdout, "")).toEqual({ kind: "ok", text: "User: I hit your usage limit again, switching to Codex." });
+	});
+
+	it("keeps a successful answer that mentions a locked keychain", () => {
+		const stdout = JSON.stringify({ type: "result", is_error: false, result: " User: My keychain is locked again.\n" });
+		expect(cursorChildResult(0, stdout, "")).toEqual({ kind: "ok", text: "User: My keychain is locked again." });
+	});
+
+	it.each(["keychain is locked", "hit your usage limit"])("keeps a successful answer despite stderr containing %s", stderr => {
+		const stdout = JSON.stringify({ type: "result", is_error: false, result: " Saved answer.\n" });
+		expect(cursorChildResult(0, stdout, stderr)).toEqual({ kind: "ok", text: "Saved answer." });
+	});
+
+	it("keeps failure classifications for exit zero without a successful JSON result", () => {
+		expect(cursorChildResult(0, "", "keychain is locked")).toEqual({ kind: "error", category: "auth", message: "Cursor CLI login unreadable (keychain locked)" });
+		expect(cursorChildResult(0, "hit your usage limit", "")).toEqual({ kind: "error", category: "exhausted", message: "Cursor usage limit reached" });
+	});
+
 	it("names a locked macOS keychain as an unreadable login, never as quota", () => {
 		const stderr = "\u001b[33mError: Your macOS login keychain is locked.\u001b[0m\nRun \u001b[36msecurity unlock-keychain\u001b[0m and try again.\n";
 		expect(cursorChildResult(1, "", stderr)).toEqual({ kind: "error", category: "auth", message: "Cursor CLI login unreadable (keychain locked)" });
@@ -20,11 +40,6 @@ describe("cursor-agent print-mode result to host-model answer", () => {
 	it("names a used-up plan as exhausted", () => {
 		expect(cursorChildResult(1, "", "ActionRequiredError: You've hit your usage limit Get Cursor Pro for more Agent usage, unlimited Tab, and more.\n"))
 			.toEqual({ kind: "error", category: "exhausted", message: "Cursor usage limit reached" });
-	});
-
-	it("keeps a successful answer that mentions a usage limit", () => {
-		const stdout = JSON.stringify({ type: "result", is_error: false, result: "User: I hit your usage limit again, switching to Codex." });
-		expect(cursorChildResult(0, stdout, "")).toEqual({ kind: "ok", text: "User: I hit your usage limit again, switching to Codex." });
 	});
 
 	it("reports other failures as transport errors", () => {

@@ -79,17 +79,19 @@ export function startWorkerDetached(): void {
 
 /** Maps one `cursor-agent -p --output-format json` run to a result; failure texts are the ones measured on Linux and macOS. */
 export function cursorChildResult(status: number | null, stdout: string, stderr: string): ChildResult {
-	const output = `${stdout}\n${stderr}`;
-	if (status !== 0 && output.includes("keychain is locked")) return { kind: "error", category: "auth", message: "Cursor CLI login unreadable (keychain locked)" };
-	if (status !== 0 && output.includes("hit your usage limit")) return { kind: "error", category: "exhausted", message: "Cursor usage limit reached" };
-	if (status !== 0) return { kind: "error", category: "transport", message: `cursor-agent-exit-${status ?? "signal"}` };
 	let parsed: unknown;
-	try { parsed = JSON.parse(stdout); } catch { return { kind: "error", category: "transport", message: "invalid-json" }; }
+	try { parsed = JSON.parse(stdout); } catch { /* Report invalid JSON after checking CLI failure texts. */ }
 	const result = z.object({ is_error: z.boolean(), result: z.string().optional() }).safeParse(parsed);
+	const text = result.success && !result.data.is_error ? result.data.result?.trim() : undefined;
+	if (status === 0 && text) return { kind: "ok", text };
+	const output = `${stdout}\n${stderr}`;
+	if (output.includes("keychain is locked")) return { kind: "error", category: "auth", message: "Cursor CLI login unreadable (keychain locked)" };
+	if (output.includes("hit your usage limit")) return { kind: "error", category: "exhausted", message: "Cursor usage limit reached" };
+	if (status !== 0) return { kind: "error", category: "transport", message: `cursor-agent-exit-${status ?? "signal"}` };
+	if (parsed === undefined) return { kind: "error", category: "transport", message: "invalid-json" };
 	if (!result.success) return { kind: "error", category: "transport", message: "invalid-result" };
 	if (result.data.is_error) return { kind: "error", category: "transport", message: "cursor-is-error" };
-	const text = result.data.result?.trim();
-	return text ? { kind: "ok", text } : { kind: "error", category: "transport", message: "empty-output" };
+	return { kind: "error", category: "transport", message: "empty-output" };
 }
 
 /**
