@@ -47,7 +47,7 @@ what should be different, and how to tell it works. Code is optional.
 
    The sign-off certifies the [Developer Certificate of Origin](https://developercertificate.org/).
 
-5. Open the PR using the template. Say what changed, why, and how you tested it.
+5. Open the PR using the template: what should be different, and how to tell it works.
 
 ## What we will ask you to remove
 

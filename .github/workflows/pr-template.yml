@@ -40,6 +40,7 @@ jobs:
             gh pr comment "$PR" --body "Thanks for the PR! Please fill these sections of the template in the description (edit it above; a sentence each is enough):
 
           $list
+
           We use them to take your change in: code is rewritten by our agents from what you describe, and you stay the commit author."
           fi
           printf 'Missing required sections:\n%s\n' "$list"
