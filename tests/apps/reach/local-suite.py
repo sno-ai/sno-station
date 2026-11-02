@@ -42,7 +42,7 @@ test_sender_declared_no_reply_stops_at_delivery test_send_enforces_informational
 test_send_rate_limits_non_questions_per_pair
 """)
 cases("progress-reporting.t", "reply state reminder")
-cases("reachability-wake.t", "lifecycle doorbell-measurement")
+cases("reachability-wake.t", "lifecycle doorbell-measurement orca-person-draft")
 CASES.append(("ACP integration", ["bash", str(HERE / "seats/acp-communication.t")]))
 for script in ("default-environment.t", "remote-protocol.t", "seats/call-no-background.t", "seats/call-tmux.t",
                "seats/call-real-tmux.t", "seats/call-foreign-pipe.t", "seats/call-short-popup.t", "seats/call-echo-receipt.t", "seats/registered-tmux.t",
