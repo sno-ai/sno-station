@@ -262,19 +262,6 @@ completion_popup_present() {
 		printf '%s\n' "$screen" | grep -Eqi 'enter insert.*esc close'
 }
 
-composer_has_text() {
-	local screen
-	screen="$(tmux capture-pane -p -t "$terminal" 2>/dev/null || true)"
-	printf '%s\n' "$screen" | perl -CSD -ne '
-		if (/^\s*[\x{203A}\x{276F}]\s*(.*)$/) { $last = $1 }
-		END {
-			$last //= q{};
-			$last =~ s/^\s+|\s+$//g;
-			exit(($last ne q{} && $last ne q{Ask Codex to do anything}) ? 0 : 1);
-		}
-	'
-}
-
 tmux_submit() {
 	local screen_compact payload_compact payload_suffix
 	completion_popup_present || return 1
@@ -319,8 +306,17 @@ if [[ "$have_text" == true ]]; then
 	if [[ "$raw" == false && "$seat_runtime" == openclaw ]]; then
 		wait_openclaw_idle "$terminal" "$timeout_secs"
 	fi
-	# A draft or a suggestion in the composer would be glued to the message: clear it.
-	if composer_has_text; then
+	# A person's draft is never erased or sent with the call; Reach's own leftover is cleared.
+	screen="$(tmux capture-pane -e -p -t "$terminal" 2>/dev/null)" || {
+		printf 'could not read the input box of %s; the call was not sent\n' "$terminal" >&2
+		exit "$EXIT_UNRELIABLE"
+	}
+	composer="$(composer_text <<<"$screen")"
+	if is_person_draft "$composer"; then
+		printf 'someone is typing in the input box of %s; the call was not sent, so the draft stays as typed. Send it again once the box is empty.\n' "$terminal" >&2
+		exit "$EXIT_SEND_REFUSED"
+	fi
+	if [[ -n "$composer" ]]; then
 		tmux send-keys -t "$terminal" C-u 2>/dev/null || true
 	fi
 	if [[ "$raw" == false ]]; then
