@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.1.6
+
+When another agent rings or calls a seat while you are typing in that agent's window, your
+half-written message stays exactly as you left it. Before, a tmux window cleared it and an Orca
+window sent it together with the ring. Now the ring reports busy and the call exits 3; nothing is
+submitted and the card waits in the mailbox.
+
 ## 2.1.5
 
 Reach seats now work with Cursor, and OpenClaw and Hermes seats get quota reading, ordered handoff,
