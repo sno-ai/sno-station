@@ -261,6 +261,27 @@ run_doorbell() {
     ring_for_channel "$channel" "$root" "$recipient" "$sender" "$message_id" "$record"
 }
 
+# Reads an Orca screen on stdin and succeeds when the input box after the last prompt mark
+# (› or ❯) holds exactly the cue, compared without whitespace because the box wraps it.
+# A screen without a prompt mark cannot be judged and is accepted, as before this check.
+orca_box_holds_only() {
+    CUE="$1" perl -CSD -e '
+        my @rows = <STDIN>; chomp @rows;
+        my $at;
+        for my $i (0 .. $#rows) { $at = $i if $rows[$i] =~ /^[\s\x{A0}]*[\x{203A}\x{276F}]/ }
+        exit 0 unless defined $at;
+        (my $rest = $ENV{CUE}) =~ s/[\s\x{A0}]+//g;
+        for my $i ($at .. $#rows) {
+            (my $row = $rows[$i]) =~ s/[\s\x{A0}]+//g;
+            $row =~ s/^[\x{203A}\x{276F}]// if $i == $at;
+            exit 1 if index($rest, $row) != 0;
+            $rest = substr($rest, length $row);
+            exit 0 if $rest eq q{};
+        }
+        exit 1;
+    '
+}
+
 ring_orca() {
     local root="$1" recipient="$2" sender="$3" message_id="$4" record="$5"
     local channel stored_handle identity_kind identity
@@ -446,6 +467,32 @@ ring_orca() {
         exec 7>&-
         emit "$root" "$recipient" "$sender" "$message_id" failed \
             'terminal rejected the wake text'
+        return
+    fi
+    # Orca's screen read carries no styling, so a person's draft shows only after the cue is
+    # typed: the input box then holds more than the cue, before or after it. Erase exactly the
+    # typed cue, leave the draft as typed, and report busy; the card stays in the mailbox.
+    # The read waits the tmux settle first: an unredrawn box still shows its placeholder.
+    sleep "$TMUX_SETTLE_SECONDS"
+    local screen erase box=only-cue
+    if ! screen="$(orca_json terminal read --terminal "$terminal_handle" --screen --limit 40 | \
+        jq -r '.terminal.tail[]?')"; then
+        box=unread
+    elif ! orca_box_holds_only "$line" <<<"$screen"; then
+        box=draft
+    fi
+    if [[ "$box" != only-cue ]]; then
+        printf -v erase '%*s' "${#line}" ''
+        orca_json terminal send --terminal "$terminal_handle" --text "${erase// /$'\x7f'}" >/dev/null ||
+            printf 'reach-ring: could not erase the wake text typed into %s\n' "$recipient" >&2
+        exec 7>&-
+        if [[ "$box" == unread ]]; then
+            emit "$root" "$recipient" "$sender" "$message_id" failed \
+                "could not read the input box of $recipient after typing the wake; not submitted"
+        else
+            emit "$root" "$recipient" "$sender" "$message_id" busy \
+                "someone is typing in the input box of $recipient; not rung, so the draft is not sent; the card stays in the mailbox"
+        fi
         return
     fi
     tail="$(orca_json terminal read --terminal "$terminal_handle" --limit 40 | \
@@ -635,9 +682,21 @@ ring_tmux() {
         return
     fi
     [[ "$runtime" != openclaw ]] || wait_openclaw_idle "$target"
-    # A stale, unsubmitted composer line must never hitch a ride on the
-    # doorbell's Enter.  C-u carries no instruction content; it only clears
-    # the current input before the neutral cue is typed.
+    # A person's draft is never erased or sent with the doorbell; the card stays in the mailbox.
+    # C-u then clears only an empty box or Reach's own leftover before the cue.
+    local screen
+    if ! screen="$(tmux capture-pane -e -p -t "$target" 2>/dev/null)"; then
+        flock -u "$lock_fd"; exec {lock_fd}>&-
+        emit "$root" "$recipient" "$sender" "$message_id" failed \
+            "could not read the input box of $recipient; nothing typed"
+        return
+    fi
+    if is_person_draft "$(composer_text <<<"$screen")"; then
+        flock -u "$lock_fd"; exec {lock_fd}>&-
+        emit "$root" "$recipient" "$sender" "$message_id" busy \
+            "someone is typing in the input box of $recipient; not rung, so the draft is neither erased nor sent; the card stays in the mailbox"
+        return
+    fi
     if ! tmux send-keys -t "$target" C-u 2>/dev/null ||
        ! tmux send-keys -t "$target" -- "$line" 2>/dev/null; then
         flock -u "$lock_fd"; exec {lock_fd}>&-

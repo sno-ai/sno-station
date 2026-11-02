@@ -14,3 +14,25 @@ wait_openclaw_idle() {
     done
     printf 'reach: openclaw seat never reached idle: %s; delivering anyway\n' "$pane" >&2
 }
+
+# Reads a screen on stdin and prints what the input box of a coding agent holds: the text after
+# the last prompt mark (› or ❯), with dimmed spans removed. An empty box shows a dimmed
+# placeholder or suggestion, while typed text is not dimmed (measured on Claude Code 2.1 and
+# Codex 0.166 with `tmux capture-pane -e`). A screen without escapes keeps a placeholder.
+composer_text() {
+    perl -CSD -ne '
+        $last = $1 if /^\s*(?:\e\[[0-9;]*m)*[\x{203A}\x{276F}](.*)$/;
+        END {
+            $last //= q{};
+            $last =~ s/\e\[2m.*?(?:\e\[(?:0|22)?m|\z)//g;
+            $last =~ s/\e\[[0-9;?]*[ -\/]*[@-~]//g;
+            $last =~ s/^[\s\x{A0}]+|[\s\x{A0}]+$//g;
+            print $last;
+        }'
+}
+
+# Succeeds when the input-box text was typed by a person. A leftover of what Reach itself types
+# is not a draft and may be cleared; a person's draft is never erased or sent with a message.
+is_person_draft() {
+    [[ -n "$1" && ! "$1" =~ ^(/queue\ )?(REACH-RING|First\ output\ exactly\ REACH-RECEIPT-) ]]
+}
