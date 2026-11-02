@@ -185,9 +185,9 @@ stale_input="$state_root/stale-composer-input.bin"
 stale_command="stty raw -echo; printf '\\n› stale instruction\\n  fixture-model high · Context 100%% left\\n'; dd bs=1 count=1 of=$(printf '%q' "$stale_input") status=none; sleep 1"
 stale_pane="$(tmux new-window -d -P -F '#{pane_id}' -t "$session" "$stale_command")"
 sleep 0.3
-check "pre-existing composer text is cleared, then the send goes out" 4 \
+check "a person's text in the input box refuses the send" 3 \
 	"$(run_rc "$messenger" --terminal "$stale_pane" --text 'new instruction' --timeout 1 --every 1)"
-check "cleared stale composer receives the message bytes" 1 \
+check "the person's text is neither cleared nor joined: no byte is typed" 0 \
 	"$(stat -c '%s' "$stale_input" 2>/dev/null || echo 0)"
 tmux kill-pane -t "$stale_pane" 2>/dev/null || true
 

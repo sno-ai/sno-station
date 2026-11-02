@@ -33,6 +33,8 @@ composer_text() {
 
 # Succeeds when the input-box text was typed by a person. A leftover of what Reach itself types
 # is not a draft and may be cleared; a person's draft is never erased or sent with a message.
+# Codex's placeholder is named too, for a screen that does not dim it.
 is_person_draft() {
-    [[ -n "$1" && ! "$1" =~ ^(/queue\ )?(REACH-RING|First\ output\ exactly\ REACH-RECEIPT-) ]]
+    [[ -n "$1" && "$1" != 'Ask Codex to do anything' &&
+       ! "$1" =~ ^(/queue\ )?(REACH-RING|First\ output\ exactly\ REACH-RECEIPT-) ]]
 }
