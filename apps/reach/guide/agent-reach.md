@@ -104,9 +104,9 @@ Filtered wait returns one matching answer path, not acceptance statuses. It incl
 
 ## Live seats
 
-`seats [--json]` lists registered addresses, channels, handles and live/stale registration status. Registration becomes stale after900 seconds. `ring <seat>` writes no card and reports rang, rang-unverified, busy, unregistered or failed.
+`seats [--json]` lists registered addresses, channels, handles and live/stale registration status. Registration becomes stale after900 seconds. `ring <seat>` writes no card and reports rang, rang-unverified, busy, unregistered or failed. Busy includes a person typing in the seat's input box: nothing is typed, the draft is left as it is, and a card stays in the mailbox.
 
-`call <seat> "<text>" [--expect <regex>] [--timeout <seconds>]` sends to the registered live channel and prints subsequent output. It succeeds only on the seat's own receipt and any requested expectation. It is not an RPC. Exit3 means runtime refusal,4 means no verified reply in time,5 means the seat could not be read. Orca has no call path.
+`call <seat> "<text>" [--expect <regex>] [--timeout <seconds>]` sends to the registered live channel and prints subsequent output. It succeeds only on the seat's own receipt and any requested expectation. It is not an RPC. Exit3 means runtime refusal or a person typing in the seat's input box (nothing is typed; send again later),4 means no verified reply in time,5 means the seat could not be read. Orca has no call path.
 
 On tmux, an existing output pipe owned by another program is never replaced or
 closed. Calls still send and verify through `tmux capture-pane -p -S -` in
