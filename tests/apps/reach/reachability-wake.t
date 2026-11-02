@@ -1217,6 +1217,64 @@ ORCA
     printf 'ok - every valid doorbell outcome emits one fleet aggregate row\n'
 }
 
+case_orca_person_draft() {
+    local root="$test_root/orca-person-draft"
+    local recipient=worker.draft@${HOST}
+    local sender=sender.draft@${HOST}
+    local fake_orca="$root/fake-orca"
+    local sends="$root/sends.jsonl"
+
+    mkdir -p "$root"
+    init_address "$root" "$recipient"
+    # A Claude Code input box already holding a person's draft: what is typed lands after it,
+    # and a screen read shows the box as one plain row, as Orca's --screen read does.
+    cat >"$fake_orca" <<'ORCA'
+#!/usr/bin/env bash
+text='' enter=false screen=false
+for arg in "$@"; do
+    case "$prev" in --text) text="$arg" ;; esac
+    case "$arg" in --enter) enter=true ;; --screen) screen=true ;; esac
+    prev="$arg"
+done
+case "${1:-} ${2:-}" in
+    'terminal list') printf '%s\n' '{"ok":true,"result":{"terminals":[{"tabId":"tab-draft","connected":true,"handle":"term-draft"}]}}' ;;
+    'terminal wait') printf '%s\n' '{"ok":true,"result":{"wait":{"satisfied":true}}}' ;;
+    'terminal send')
+        jq -cn --arg text "$text" --argjson enter "$enter" '{text:$text,enter:$enter}' >>"$ORCA_SENDS"
+        printf '%s\n' '{"ok":true,"result":{}}' ;;
+    'terminal read')
+        if [[ "$screen" == true ]]; then
+            jq -s 'map(.text) | join("") as $typed |
+                {ok:true,result:{terminal:{tail:["Claude Code", ("\u276f\u00a0hello draft" + $typed), "  status line"]}}}' "$ORCA_SENDS"
+        else
+            printf '%s\n' '{"ok":true,"result":{"terminal":{"tail":[]}}}'
+        fi ;;
+    *) printf '%s\n' '{"ok":false}' ;;
+esac
+ORCA
+    chmod 0755 "$fake_orca"
+    : >"$sends"
+    SNO_REACH_SKIP_WAKE_ADOPTION=1 SNO_REACH_ROOT="$root" \
+        "$repo_root/lib/reach-reachability" register --root "$root" --as "$recipient" --channel orca \
+        --handle term-draft --identity-kind orca-tab \
+        --identity tab-draft --pid "$$" --host fixture-host >/dev/null
+    ORCA_SENDS="$sends" ORCA_CLI_COMMAND="$fake_orca" SNO_REACH_ROOT="$root" \
+        "$repo_root/lib/reach-ring" doorbell --to "$recipient" --from "$sender" \
+        --msg-id '<orca-person-draft@'"${HOST}"'>' >"$root/doorbell.out" 2>"$root/doorbell.err"
+    assert_contains "$(<"$root/doorbell.out")" 'outcome=busy' \
+        'a wake that would land after a person draft reports busy'
+    assert_eq 2 "$(wc -l <"$sends")" 'the cue is typed once and erased once'
+    jq -se '
+        (.[0].text | startswith("REACH-RING ")) and
+        (.[1].text | test("^\u007f+$")) and
+        (.[1].text | length) == (.[0].text | length) and
+        all(.[]; .enter == false)
+    ' "$sends" >/dev/null ||
+        fail 'the typed cue is erased character for character and Enter is never sent'
+
+    printf 'ok - an orca wake never sends or keeps text after a person draft\n'
+}
+
 case_four_report_incident() {
     local root="$test_root/four-report"
     local sender=executor.unheard@${HOST}
@@ -2129,6 +2187,7 @@ case "$mode" in
     doorbell-deadline) case_doorbell_deadline ;;
     executor-wake) case_executor_wake ;;
     doorbell-measurement) case_doorbell_measurement ;;
+    orca-person-draft) case_orca_person_draft ;;
     confirmation) case_confirmation ;;
     retry-bound) case_retry_bound ;;
     supervisor) case_supervisor_resolution ;;
@@ -2158,6 +2217,7 @@ case "$mode" in
         case_doorbell_deadline
         case_executor_wake
         case_doorbell_measurement
+        case_orca_person_draft
         case_confirmation
         case_retry_bound
         case_supervisor_resolution
