@@ -47,7 +47,7 @@ describe("Cursor hook and allowlist installation", () => {
 				.toEqual([{ command: ours(SNO, subcommand), timeout }]);
 		}
 		const config = await readJson("cli-config.json");
-		expect(config).toEqual({ version: 1, permissions: { allow: ["Shell(ls)", `Shell(${SNO})`, "Shell(sno)"], deny: ["Shell(rm)"] }, model: { default: "auto" } });
+		expect(config).toEqual({ version: 1, permissions: { allow: ["Shell(ls)", `Shell(${SNO})`, "Shell(sno)"], deny: ["Shell(rm)"] }, model: { default: "auto" }, statusLine: expect.objectContaining({ type: "command", command: expect.stringContaining("status-line --sno-original") }) });
 		expect(await readFile(join(home, "skills", "sno-mem-cursor", "SKILL.md"), "utf8")).toContain("--harness cursor");
 		const before = [await readFile(join(home, "hooks.json"), "utf8"), await readFile(join(home, "cli-config.json"), "utf8")];
 		await install();
@@ -127,5 +127,29 @@ describe("Cursor hook and allowlist installation", () => {
 		await expect(stat(join(empty, "cli-config.json"))).rejects.toThrow();
 		await expect(stat(join(empty, "permissions.json"))).rejects.toThrow();
 		await rm(empty, { recursive: true, force: true });
+	});
+});
+
+describe("agent state view Cursor installation", () => {
+	it("composes once and restores the full original status command", async () => {
+		const original = { type: "command", command: "printf 'cursor user  \\n'", padding: 3 };
+		await writeFile(join(home, "cli-config.json"), JSON.stringify({ statusLine: original }));
+		await install();
+		const installed = await readJson("cli-config.json");
+		expect(installed.statusLine.command).toContain("/mem-cursor/dist/cli.js' status-line --sno-original '");
+		await install();
+		expect((await readJson("cli-config.json")).statusLine).toEqual(installed.statusLine);
+		await uninstallCursor({ cursorHome: home, writeOutput: () => {} });
+		expect((await readJson("cli-config.json")).statusLine).toEqual(original);
+	});
+
+	it("preserves a newer user status command during uninstall", async () => {
+		await install();
+		const config = await readJson("cli-config.json");
+		const newer = { type: "command", command: "printf 'replacement'" };
+		config.statusLine = newer;
+		await writeFile(join(home, "cli-config.json"), JSON.stringify(config));
+		await uninstallCursor({ cursorHome: home, writeOutput: () => {} });
+		expect((await readJson("cli-config.json")).statusLine).toEqual(newer);
 	});
 });
