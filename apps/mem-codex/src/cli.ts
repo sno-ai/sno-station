@@ -51,8 +51,7 @@ async function main(): Promise<number> {
 		return 0;
 	}
 	if (command === "post-compact") {
-		const compact = input && typeof input === "object" ? { ...input, source: "compact" } : input;
-		process.stdout.write(`${await composeContinuityContext("codex", "PostCompact", compact, () => sessionStart(compact))}\n`);
+		// Codex delivers compacted context through SessionStart(source=compact), not PostCompact stdout.
 		return 0;
 	}
 	if (command === "stop") {

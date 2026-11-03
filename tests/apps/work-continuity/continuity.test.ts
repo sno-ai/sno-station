@@ -123,9 +123,8 @@ describe("task and approved-lesson host delivery", () => {
 		expect(next).toContain(lesson.advice);
 		expect(next.split(lesson.advice)).toHaveLength(2);
 		expect(hook(app, "user-prompt-submit").context).not.toContain(lesson.advice);
-		const restored = app === "mem-claude"
-			? hook(app, "session-start", "session-one", { source: "compact" })
-			: hook(app, "post-compact");
+		if (app === "mem-codex") expect(hook(app, "post-compact").stdout).toBe("");
+		const restored = hook(app, "session-start", "session-one", { source: "compact" });
 		expect(restored.context).toContain(lesson.advice);
 		expect(hook(app, "user-prompt-submit").context).not.toContain(lesson.advice);
 	});
