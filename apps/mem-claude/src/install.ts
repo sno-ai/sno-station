@@ -1,8 +1,10 @@
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
 	CODING_SKIN_HOOKS,
 	type CodingSkinHookName,
+	composeAgentStatusLine,
 	codingSkinHookCommand,
 	isCodingSkinHookCommand,
 	snoProgramPath,
@@ -20,6 +22,26 @@ const settingsSchema = z.looseObject({
 	disableAllHooks: z.boolean().optional(),
 });
 type Settings = z.infer<typeof settingsSchema>;
+
+const STATE_HOOKS = {
+	PermissionRequest: { subcommand: "permission-request", timeout: 5 },
+	Notification: { subcommand: "notification", timeout: 5 },
+	StopFailure: { subcommand: "stop-failure", timeout: 5 },
+} as const;
+const CLI_ENTRY = fileURLToPath(new URL("../dist/cli.js", import.meta.url));
+
+function updateStateHooks(settings: Settings, installing: boolean): void {
+	settings.hooks ??= {};
+	for (const [event, details] of Object.entries(STATE_HOOKS)) {
+		const groups = settings.hooks[event] ?? [];
+		const suffix = ` agent-state-hook ${details.subcommand}`;
+		const kept = groups.map(group => ({ ...group, hooks: group.hooks.filter(hook =>
+			!hook.command?.endsWith(suffix) || !hook.command.includes("/mem-claude/dist/cli.js'")) })).filter(group => group.hooks.length > 0);
+		if (installing) kept.push({ hooks: [{ type: "command", command: `${shellQuote(process.execPath)} ${shellQuote(CLI_ENTRY)}${suffix}`, timeout: details.timeout }] });
+		if (kept.length > 0) settings.hooks[event] = kept;
+		else delete settings.hooks[event];
+	}
+}
 
 export interface InstallOptions {
 	configDir: string;
@@ -102,6 +124,8 @@ function updateSettings(settings: Settings, programPath: string): void {
 	if (index < 0) allow.push(rule);
 	else allow.splice(index, allow.length - index, rule, ...allow.slice(index + 1).filter(current => !isOwnedPermissionRule(current)));
 	settings.permissions.allow = allow;
+	updateStateHooks(settings, true);
+	composeAgentStatusLine(settings, CLI_ENTRY, "claude", true);
 }
 
 // Removes the hooks, rule and skill installClaude wrote; every other setting stays as it was.
@@ -109,6 +133,8 @@ export async function uninstallClaude(options: { configDir: string; writeOutput:
 	const settings = await readSettings(options.configDir);
 	if (!settings) throw new Error(MESSAGES.settingsUnparsable);
 	const before = JSON.stringify(settings);
+	updateStateHooks(settings, false);
+	composeAgentStatusLine(settings, CLI_ENTRY, "claude", false);
 	for (const event of Object.keys(CODING_SKIN_HOOKS) as CodingSkinHookName[]) {
 		const groups = settings.hooks?.[event];
 		if (!settings.hooks || !groups) continue;
