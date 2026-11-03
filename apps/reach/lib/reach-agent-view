@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+# Read machine-wide work using Reach's existing work projection.
+set -Eeuo pipefail
+release="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+export PATH="$release/vendor/bin${PATH:+:$PATH}"
+root="${SNO_REACH_ROOT:-$HOME/.local/state/sno-reach}"
+[[ -d "$root" ]] || { printf 'reach: read squad work %s: inventory unavailable\n' "$root" >&2; exit 73; }
+declare -A works=() sources=()
+status=0
+shopt -s nullglob
+for path in "$root"/*/new/* "$root"/*/cur/* "$root"/*/sent/*; do
+    if headers="$(mhdr "$path")"; then :
+    else
+        rc=$?
+        if ((rc != 1)); then
+            printf 'reach: read squad work %s: mhdr failed (%s); this message is unavailable\n' "$path" "$rc" >&2
+            status=74
+            continue
+        fi
+    fi
+    work='' id=''
+    while IFS= read -r line; do
+        [[ "$line" == *:* ]] || continue
+        name="${line%%:*}"; value="${line#*:}"
+        value="${value#"${value%%[!$' \t']*}"}"
+        case "${name,,}" in
+            x-work) [[ -n "$work" ]] || work="$value" ;;
+            message-id) [[ -n "$id" ]] || id="$value" ;;
+        esac
+    done <<<"$headers"
+    [[ -z "$work" ]] || works["$work"]=1
+    [[ -z "$id" ]] || sources["$id"]="$path"
+done
+while IFS= read -r work; do
+    [[ -n "$work" ]] || continue
+    if rows="$("$release/lib/reach-main" state --json --work "$work")"; then :
+    else
+        rc=$?
+        printf 'reach: project squad work %s: state failed (%s); this work is incomplete\n' "$work" "$rc" >&2
+        status="$rc"
+    fi
+    while IFS= read -r row; do
+        [[ -n "$row" ]] || continue
+        id="$(jq -r '.message_id // empty' <<<"$row")"
+        source=''
+        [[ -z "$id" ]] || source="${sources[$id]:-}"
+        sender=''
+        if [[ -n "$source" ]]; then
+            sender="$(maddr -a -h from: "$source")" || {
+                printf 'reach: read squad work sender %s: maddr failed; owner relationship unknown\n' "$source" >&2
+                status=74
+            }
+        fi
+        jq -c --arg work "$work" --arg source "$source" --arg sender "$sender" \
+            '. + {work:$work,source:$source,sender:$sender,owner:(.recipient // "unknown")}' <<<"$row"
+    done <<<"$rows"
+done < <(printf '%s\n' "${!works[@]}" | sort)
+exit "$status"
