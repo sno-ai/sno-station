@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { doctor } from "../../../apps/mem-claude/src/doctor.ts";
-import { installClaude } from "../../../apps/mem-claude/src/install.ts";
+import { installClaude, uninstallClaude } from "../../../apps/mem-claude/src/install.ts";
 
 const events = [
 	["SessionStart", "session-start", 15],
@@ -43,8 +43,8 @@ describe("Claude settings installation and diagnosis", () => {
 	it("creates only the six hook groups, absolute permission and skill", async () => {
 		await install();
 		const installed = await settings();
-		expect(Object.keys(installed).sort()).toEqual(["hooks", "permissions"]);
-		expect(Object.keys(installed.hooks).sort()).toEqual(events.map(([event]) => event).sort());
+		expect(Object.keys(installed).sort()).toEqual(["hooks", "permissions", "statusLine"]);
+		expect(Object.keys(installed.hooks).sort()).toEqual([...events.map(([event]) => event), "PermissionRequest", "Notification", "StopFailure"].sort());
 		for (const [event, subcommand, timeout] of events) {
 			expect(installed.hooks[event]).toHaveLength(1);
 			expect(installed.hooks[event][0].hooks).toEqual([
@@ -246,5 +246,33 @@ describe("Claude settings installation and diagnosis", () => {
 		lines = await doctor(configDir);
 		expect(lines).toHaveLength(4);
 		for (const [event] of events) expect(lines[1]).toContain(`${event}=disabled`);
+	});
+});
+
+describe("agent state view Claude installation", () => {
+	it("composes once, retains the full original status configuration and restores it", async () => {
+		const original = { type: "command", command: "printf 'user colors and spaces  \\n'", padding: 2, refreshInterval: 10 };
+		await writeFile(join(configDir, "settings.json"), JSON.stringify({ statusLine: original }));
+		await install();
+		const first = await settings();
+		expect(first.statusLine.command).toContain("/mem-claude/dist/cli.js' status-line --sno-original '");
+		for (const event of ["PermissionRequest", "Notification", "StopFailure"]) {
+			expect(first.hooks[event][0].hooks[0].command).toContain("/mem-claude/dist/cli.js' agent-state-hook ");
+		}
+		await install();
+		expect((await settings()).statusLine).toEqual(first.statusLine);
+		await uninstallClaude({ configDir, writeOutput: () => {} });
+		expect((await settings()).statusLine).toEqual(original);
+		expect((await settings()).hooks).toBeUndefined();
+	});
+
+	it("preserves a newer user status command during uninstall", async () => {
+		await install();
+		const config = await settings();
+		const newer = { type: "command", command: "printf 'new user command'", padding: 5 };
+		config.statusLine = newer;
+		await writeFile(join(configDir, "settings.json"), JSON.stringify(config));
+		await uninstallClaude({ configDir, writeOutput: () => {} });
+		expect((await settings()).statusLine).toEqual(newer);
 	});
 });
