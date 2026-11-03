@@ -7,6 +7,7 @@ root="${SNO_REACH_ROOT:-$HOME/.local/state/sno-reach}"
 [[ -d "$root" ]] || { printf 'reach: read squad work %s: inventory unavailable\n' "$root" >&2; exit 73; }
 declare -A works=() sources=()
 status=0
+projected=()
 shopt -s nullglob
 for path in "$root"/*/new/* "$root"/*/cur/* "$root"/*/sent/*; do
     if headers="$(mhdr "$path")"; then :
@@ -51,8 +52,25 @@ while IFS= read -r work; do
                 status=74
             }
         fi
-        jq -c --arg work "$work" --arg source "$source" --arg sender "$sender" \
-            '. + {work:$work,source:$source,sender:$sender,owner:(.recipient // "unknown")}' <<<"$row"
+        body=''
+        [[ -z "$source" ]] || body="$(cat -- "$source")"
+        projected+=("$(jq -c --arg work "$work" --arg source "$source" --arg sender "$sender" --arg body "$body" \
+            '. + {work:$work,source:$source,sender:$sender,owner:(.recipient // "unknown"),body:$body}' <<<"$row")")
     done <<<"$rows"
 done < <(printf '%s\n' "${!works[@]}" | sort)
+if ((${#projected[@]})); then
+    printf '%s\n' "${projected[@]}" | jq -sc '
+        . as $items |
+        map(. as $original |
+            [$items[] | select(.work == $original.work and .sender == $original.recipient and
+                .recipient != $original.recipient and (.body | contains($original.message_id)))] as $targets |
+            if ($targets | length) == 1 then
+                . + {handoff_to:$targets[0].recipient,handoff_message_id:$targets[0].message_id,
+                    handoff_state:$targets[0].state,handoff_since:$targets[0].since,handoff_blocked_on:$targets[0].blocked_on}
+            elif ($targets | length) > 1 then . + {owner:"unknown",handoff_error:"multiple linked handoff cards"}
+            else . end) |
+        . as $linked | .[] |
+        select(.message_id as $id | any($linked[]; .handoff_message_id == $id) | not) |
+        del(.body)'
+fi
 exit "$status"

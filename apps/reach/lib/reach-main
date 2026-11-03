@@ -3806,6 +3806,18 @@ run_call() {
         esac
     fi
     observe_message "$root" call "${SNO_REACH_ADDR:-}" "$address" "$rc" "$started" '' "$receipt"
+    if [[ "$receipt" == handoff_released ]]; then
+        local npm_root state_view
+        if npm_root="$(npm root -g)"; then
+            if [[ ! -w "$npm_root" && -z "${npm_config_prefix:-}${NPM_CONFIG_PREFIX:-}" ]]; then
+                npm_root="$HOME/.local/lib/node_modules"
+            fi
+            state_view="$npm_root/@snoai/memory/dist/agent-state-view.js"
+            if ! printf '%s' "$text" | node "$state_view" --record-release --source "${SNO_REACH_ADDR:-}" --target "$address"; then
+                printf 'reach: record released work %s: observation failed; handoff succeeded, work ownership unavailable\n' "$address" >&2
+            fi
+        else printf 'reach: record released work %s: package lookup failed; handoff succeeded, work ownership unavailable\n' "$address" >&2; fi
+    fi
     if [[ "$raw" == yes ]]; then
         ((rc != 0)) || printf 'typed %s\n' "$address"
         return "$rc"
