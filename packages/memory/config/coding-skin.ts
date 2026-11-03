@@ -4,6 +4,7 @@ export { observeAgentEvent, readAgentView, compactAgentView, markAgentResultSeen
 	type AgentHarness, type AgentObservation, type AgentOperationError, type AgentRow, type AgentView,
 	type AgentViewOptions, type AgentIdentity } from "./agent-state";
 export { composeAgentStatusLine, renderAgentStatusLine } from "./agent-statusline";
+export { composeContinuityContext, continuityBriefPath, refreshContinuityBrief } from "./work-continuity";
 
 export { appendObserveLedgerRows, type ObserveLedgerRow }
 	from "../src/engine/telemetry/observe-ledger";
