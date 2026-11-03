@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { homedir } from "node:os";
 import { isAbsolute, join } from "node:path";
-import { observeAgentEvent, renderAgentStatusLine } from "@snoai/memory/coding-skin";
+import { composeContinuityContext, observeAgentEvent, refreshContinuityBrief, renderAgentStatusLine } from "@snoai/memory/coding-skin";
 import { doctor } from "./doctor.js";
 import { correctCommand, getCommand, recallCommand, rememberCommand } from "./explicit.js";
 import { postToolUse, preToolUse, sessionEnd, sessionStart, stop, userPromptSubmit } from "./hooks.js";
@@ -27,7 +27,7 @@ function option(args: string[], name: string): string | undefined {
 	return index >= 0 ? args[index + 1] : undefined;
 }
 
-const HOOK_COMMANDS = ["session-start", "user-prompt-submit", "stop", "session-end", "pre-tool-use", "post-tool-use"];
+const HOOK_COMMANDS = ["session-start", "user-prompt-submit", "stop", "session-end", "pre-tool-use", "post-tool-use", "pre-compact"];
 
 async function main(): Promise<number> {
 	const [command, ...args] = process.argv.slice(2);
@@ -49,11 +49,15 @@ async function main(): Promise<number> {
 		if (typeof prompt === "string" && prompt.trimStart().startsWith("<task-notification>")) return 0;
 	}
 	if (command === "session-start") {
-		process.stdout.write(`${await sessionStart(input)}\n`);
+		process.stdout.write(`${await composeContinuityContext("claude", "SessionStart", input, () => sessionStart(input))}\n`);
 		return 0;
 	}
 	if (command === "user-prompt-submit") {
-		process.stdout.write(`${await userPromptSubmit(input)}\n`);
+		process.stdout.write(`${await composeContinuityContext("claude", "UserPromptSubmit", input, () => userPromptSubmit(input))}\n`);
+		return 0;
+	}
+	if (command === "pre-compact") {
+		await refreshContinuityBrief("claude", input);
 		return 0;
 	}
 	if (command === "stop") {

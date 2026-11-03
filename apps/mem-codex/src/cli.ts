@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { homedir } from "node:os";
 import { isAbsolute, join } from "node:path";
-import { observeAgentEvent } from "@snoai/memory/coding-skin";
+import { composeContinuityContext, observeAgentEvent, refreshContinuityBrief } from "@snoai/memory/coding-skin";
 import { doctor } from "./doctor.js";
 import { correctCommand, getCommand, recallCommand, rememberCommand } from "./explicit.js";
 import { postToolUse, preToolUse, sessionEnd, sessionStart, stop, userPromptSubmit } from "./hooks.js";
@@ -23,7 +23,7 @@ function option(args: string[], name: string): string | undefined {
 	return index >= 0 ? args[index + 1] : undefined;
 }
 
-const HOOK_COMMANDS = ["session-start", "user-prompt-submit", "stop", "session-end", "pre-tool-use", "post-tool-use"];
+const HOOK_COMMANDS = ["session-start", "user-prompt-submit", "stop", "session-end", "pre-tool-use", "post-tool-use", "pre-compact", "post-compact"];
 const STATE_HOOK_COMMANDS = ["permission-request", "interrupt"];
 
 async function main(): Promise<number> {
@@ -39,11 +39,20 @@ async function main(): Promise<number> {
 		if (transcript === null || (typeof transcript === "string" && isScriptedSession(transcript))) return 0;
 	}
 	if (command === "session-start") {
-		process.stdout.write(`${await sessionStart(input)}\n`);
+		process.stdout.write(`${await composeContinuityContext("codex", "SessionStart", input, () => sessionStart(input))}\n`);
 		return 0;
 	}
 	if (command === "user-prompt-submit") {
-		process.stdout.write(`${await userPromptSubmit(input)}\n`);
+		process.stdout.write(`${await composeContinuityContext("codex", "UserPromptSubmit", input, () => userPromptSubmit(input))}\n`);
+		return 0;
+	}
+	if (command === "pre-compact") {
+		await refreshContinuityBrief("codex", input);
+		return 0;
+	}
+	if (command === "post-compact") {
+		const compact = input && typeof input === "object" ? { ...input, source: "compact" } : input;
+		process.stdout.write(`${await composeContinuityContext("codex", "PostCompact", compact, () => sessionStart(compact))}\n`);
 		return 0;
 	}
 	if (command === "stop") {
