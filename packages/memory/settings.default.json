@@ -167,7 +167,7 @@
     "language": "en"
   },
   "snoGpu": {
-    "baseUrl": "https://rt3-llm.sno.ai",
+    "baseUrl": "https://gpu.sno.ai",
     "apiKey": ""
   },
   "rerank": {

@@ -85,7 +85,7 @@ export function defaultSettings(): Settings {
 		mode: engine.mode,
 		modelCalls: Object.fromEntries(Object.entries(MODEL_CALLS).map(([id, call]) => [id, call.destinations])) as Settings["modelCalls"],
 		user: { id: "", language: "en" },
-		snoGpu: { baseUrl: "https://rt3-llm.sno.ai", apiKey: "" },
+		snoGpu: { baseUrl: "https://gpu.sno.ai", apiKey: "" },
 		rerank: { mode: "lightweight", timeoutMs: engine.retrieval.rerankTimeoutMs },
 		store: { path: "", encryptionKey: "" },
 		embedding: { model: EMBEDDER_MODEL_DEFAULT, revision: LOCAL_EMBEDDING_MODEL_REVISION, dtype: engine.embedding.dtype,
