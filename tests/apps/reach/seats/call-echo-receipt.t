@@ -39,7 +39,7 @@ cleanup() {
 }
 trap cleanup EXIT
 printf -v actor 'bash %q --actor' "$here/call-echo-receipt.t"
-tmux -L "$server" -f /dev/null new-session -d -s actor "$actor"
+tmux -L "$server" -f /dev/null new-session -d -x 240 -y 40 -s actor "$actor"
 pane="$(tmux -L "$server" display-message -p '#{pane_id}')"
 TMUX="$(tmux -L "$server" display-message -p '#{socket_path},#{pid},0')"
 export TMUX

@@ -44,7 +44,10 @@ until tmux -L "$SERVER" capture-pane -p -t "$pane" | grep -q 'READY mailbox acto
     sleep 0.05
 done
 reach register --as "$RECEIVER" --channel tmux --handle "$pane"
+scenario="${1:-all}"
+[[ "$scenario" == all || "$scenario" == delivery-failure ]] || fail "unknown scenario: $scenario"
 
+if [[ "$scenario" == all ]]; then
 # Preserve trailing newlines in both the shell argument and byte-level expectation.
 text=$'BODY-SECRET HANDOFF_RELEASED request-only\nsecond line\n'
 for ((i=0; i<120; i++)); do text+="line-$i: a complete instruction containing Unicode café and punctuation ; []"$'\n'; done
@@ -82,7 +85,7 @@ handled="$(cat "$WORK/out")"
 cmp "$WORK/actor/read-mail" "$handled" || fail 'dismiss changed call bytes'
 pass 'exact long multiline payload precedes one short cue, auto caller, inbox, dismiss and no ownership'
 
-# A matching marker in the stored request and cue echo is never a receiver answer.
+# A marker present only in the stored request is never a receiver answer.
 touch "$WORK/actor/echo-only"
 invoke call "$RECEIVER" 'ACTOR-ANSWER HANDOFF_RELEASED request-only' --expect ACTOR-ANSWER --timeout 1 --every 1
 expect_rc 4
@@ -91,7 +94,7 @@ has "$WORK/err" 'stored'
 rm "$WORK/actor/echo-only"
 callers="$(find "$STATE" -mindepth 1 -maxdepth 1 -type d -name 'caller.*' | wc -l)"
 [[ "$callers" == 1 ]] || fail 'direct calls created repeated sender identities'
-pass 'request text and terminal echo cannot satisfy expectation; repeated calls reuse caller'
+pass 'stored request text cannot satisfy expectation; repeated calls reuse caller'
 
 # No implicit second Enter is sent on a mailbox call, even without a response.
 touch "$WORK/actor/timeout"
@@ -149,18 +152,37 @@ for channel in orca cursor-ide; do
     grep -rq 'UNSUPPORTED-SAVED' "$STATE/$address/new" || fail 'unsupported channel lost mail'
 done
 pass 'missing and unsupported synchronous channels retain readable mail'
+fi
 
 # A real filesystem delivery failure must not notify the live receiver.
+initialize "$SENDER" Sender
+touch "$WORK/actor/input"
 before="$(wc -l <"$WORK/actor/input")"
 mv "$STATE/$RECEIVER/new" "$STATE/$RECEIVER/new-held"
 printf 'not a directory\n' >"$STATE/$RECEIVER/new"
-invoke call "$RECEIVER" 'STORAGE-FAILURE-MUST-NOT-TYPE' --timeout 1 --every 1
+RC=0
+env HOME="$TEST_HOME" SNO_REACH_ROOT="$STATE" SNO_REACH_ADDR="$SENDER" TMUX="$TEST_TMUX" \
+    "$REACH" call "$RECEIVER" 'STORAGE-FAILURE-MUST-NOT-TYPE' --timeout 1 --every 1 >"$WORK/out" 2>"$WORK/err" || RC=$?
 [[ "$RC" != 0 ]] || fail 'failed storage returned success'
 has "$WORK/err" "$RECEIVER"
 [[ "$(wc -l <"$WORK/actor/input")" == "$before" ]] || fail 'storage failure notified receiver'
+saved=''
+for path in "$STATE/$SENDER/tmp/"*; do
+    [[ -f "$path" ]] || continue
+    if grep -Fq 'STORAGE-FAILURE-MUST-NOT-TYPE' "$path"; then saved="$path"; break; fi
+done
+[[ -n "$saved" ]] || fail 'failed delivery discarded saved bytes'
+has "$WORK/err" "$saved"
 rm "$STATE/$RECEIVER/new"
 mv "$STATE/$RECEIVER/new-held" "$STATE/$RECEIVER/new"
-pass 'actual delivery failure remains nonzero and sends no cue'
+RC=0
+env HOME="$TEST_HOME" SNO_REACH_ROOT="$STATE" SNO_REACH_ADDR="$SENDER" TMUX="$TEST_TMUX" \
+    "$REACH" call "$RECEIVER" 'EXPLICIT-SENDER-SUCCESS' --expect '^ACTOR-ANSWER$' --timeout 3 --every 1 >"$WORK/out" 2>"$WORK/err" || RC=$?
+expect_rc 0
+[[ "$(header from "$WORK/actor/read-mail")" == *"$SENDER"* ]] || fail 'call ignored explicit sender identity'
+[[ -f "$saved" ]] || fail 'subsequent successful call discarded failed bytes'
+pass 'actual delivery failure retains named saved bytes without cue; explicit sender survives later success'
+[[ "$scenario" != delivery-failure ]] || exit 0
 
 # ACP assistant chunks retain the same storage/cue contract; transport fixture only.
 mkdir -p "$WORK/bin" "$WORK/acp"
