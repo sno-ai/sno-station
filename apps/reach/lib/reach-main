@@ -1074,7 +1074,7 @@ observe_message() {
         value="$(progress_header "$message" auto-submitted || true)"
         [[ -z "$value" || "${value,,}" == no ]] || from_role=system
         value="$(progress_header "$message" x-type || true)"
-        case "$value" in question|decision|answer|info|status|done|cancel) card_type="$value" ;; esac
+        case "$value" in question|decision|answer|info|status|done|cancel|call) card_type="$value" ;; esac
         value="$(progress_header "$message" x-state || true)"
         case "$value" in accepted|running|requires-action|completed|failed|cancelled|refused) state="$value" ;; esac
     fi
@@ -2176,7 +2176,7 @@ progress_load() {
         [[ "$recipient" =~ $ADDRESS_RE && ( "${path%/*/*}" == "$root/$recipient" || "${path%/*}" == */sent ) ]] || continue
         maddr -a -h to: "$path" | grep -Fqx -- "$recipient" || continue
         P_HELD["$id|$recipient"]="$path"
-        [[ -z "${P_STATE[$id]}" && "${P_TYPE[$id]}" != cancel ]] || continue
+        [[ -z "${P_STATE[$id]}" && "${P_TYPE[$id]}" != cancel && "${P_TYPE[$id]}" != call ]] || continue
         key="$id|$recipient"
         P_ITEMS["$key"]="$path"
         P_FLAGS["$key"]=''
@@ -3130,7 +3130,7 @@ run_dismiss() {
     local type
     type="$(mhdr -h x-type "$source")"
     if maddr -a -h to: "$source" | grep -Fxq -- "$CALLER"; then
-        case "$type" in status|answer) ;; *) die 65 'actionable work requires reply; dismiss only acknowledges reports or informed copies' ;; esac
+        case "$type" in status|answer|call) ;; *) die 65 'actionable work requires reply; dismiss only acknowledges reports or informed copies' ;; esac
     fi
     new_dir="$(realpath -e -- "$maildir/new")" ||
         die 73 "caller new directory is unavailable: $maildir/new"
@@ -3789,10 +3789,10 @@ run_call() {
     [[ "$limit" =~ ^[0-9]{1,8}$ && "$every" =~ ^[1-9][0-9]{0,7}$ ]] || die 64 'call times must be integer seconds'
     ((10#$limit <= 280)) || die 64 '--timeout must not exceed 280 seconds'
     root="$(mailbox_root)"
-    channel="$(validate_live_record "$address" "$root/$address/reachable.json")"
-    [[ "$channel" != orca ]] || die 3 'channel orca does not support call'
-    [[ "$raw" == no || "$channel" == tmux ]] || die 3 '--raw requires a tmux seat'
-    [[ "$channel" != cursor-ide ]] || die 3 'channel cursor-ide does not support call; send a card, its stop hook delivers it'
+    if [[ "$raw" == yes ]]; then
+        channel="$(validate_live_record "$address" "$root/$address/reachable.json")"
+        [[ "$channel" == tmux ]] || die 3 '--raw requires a tmux seat'
+    fi
     local -a args=(--terminal "$address" --text "$text" --timeout "$limit" --every "$every")
     [[ -z "$expect" ]] || args+=(--expect "$expect")
     [[ "$raw" == no ]] || args+=(--raw)

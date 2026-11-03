@@ -6,6 +6,8 @@ if [[ "$follow" == true && "$have_text" == true ]]; then
     printf '%s\n' 'ACP --follow is read-only; --text is not allowed' >&2
     exit "$EXIT_USAGE"
 fi
+store_call_mail || exit $?
+
 handle="$(jq -r '.handle // empty' "$record")"
 if [[ ! "$handle" =~ ^acp-([a-zA-Z0-9][a-zA-Z0-9_-]*):(/[^:[:cntrl:]]*):([^:[:space:]]+)$ ]]; then
     printf 'malformed ACP handle: %s\n' "$handle" >&2; exit "$EXIT_UNRELIABLE"
@@ -23,8 +25,12 @@ session_id="$(jq -er --arg name "$name" --arg cwd "$cwd" '
 ' <<<"$metadata")" || { printf 'ACP session %s is closed or mismatched\n' "$name" >&2; exit "$EXIT_SEND_REFUSED"; }
 
 if [[ "$have_text" == true ]]; then
-    delivery_receipt="REACH-RECEIPT-$(date +%s%N)-$$-$RANDOM"
-    payload="First output exactly $delivery_receipt to confirm receipt. Then do this: $text"
+    if [[ -n "$mail_address" ]]; then
+        payload="$sent_payload"
+    else
+        delivery_receipt="REACH-RECEIPT-$(date +%s%N)-$$-$RANDOM"
+        payload="First output exactly $delivery_receipt to confirm receipt. Then do this: $text"
+    fi
     flags=()
     [[ "$no_wait" == false ]] || flags+=(--no-wait)
     response="$(printf '%s\n' "$payload" | timeout --foreground -k 2 "$((timeout_secs + 2))" acpx \
@@ -49,9 +55,11 @@ if [[ "$have_text" == true ]]; then
         output="$(jq -sr '[.[] | select(.method == "session/update") | .params.update |
             select(.sessionUpdate == "agent_message_chunk" and .content.type == "text") |
             .content.text] | join("")' <<<"$response")" || exit "$EXIT_UNRELIABLE"
-        if [[ "$output" == *"$delivery_receipt"* ]] &&
-           { [[ -z "$expect" ]] || grep -Eq -- "$expect" <<<"$output"; }; then
-            verified=true
+        if [[ "$output" == *"$delivery_receipt"* ]]; then
+            output="${output#*"$delivery_receipt"}"
+            if [[ -z "$expect" ]] || grep -Eq -- "$expect" <<<"$output"; then
+                verified=true
+            fi
         fi
     fi
     printf '%s' "$output" | jq -Rs --arg terminal "$terminal" --arg receipt "$delivery_receipt" \
