@@ -13,6 +13,8 @@ import { MESSAGES } from "./messages.js";
 
 const CODEX_HOOKS = {
 	...CODING_SKIN_HOOKS,
+	PreCompact: { eventName: "pre_compact", subcommand: "pre-compact", timeout: 5 },
+	PostCompact: { eventName: "post_compact", subcommand: "post-compact", timeout: CODING_SKIN_HOOKS.SessionStart.timeout },
 	PermissionRequest: { eventName: "permission_request", subcommand: "permission-request", timeout: 5 },
 	Interrupt: { eventName: "interrupt", subcommand: "interrupt", timeout: 3 },
 } as const;

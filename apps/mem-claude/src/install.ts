@@ -24,6 +24,7 @@ type Settings = z.infer<typeof settingsSchema>;
 
 const CLAUDE_HOOKS = {
 	...CODING_SKIN_HOOKS,
+	PreCompact: { subcommand: "pre-compact", timeout: 5 },
 	PermissionRequest: { subcommand: "permission-request", timeout: 5 },
 	Notification: { subcommand: "notification", timeout: 5 },
 	StopFailure: { subcommand: "stop-failure", timeout: 5 },
