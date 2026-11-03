@@ -1,5 +1,10 @@
 import { basename } from "node:path";
 
+export { observeAgentEvent, readAgentView, compactAgentView, markAgentResultSeen, agentProcessIdentity,
+	type AgentHarness, type AgentObservation, type AgentOperationError, type AgentRow, type AgentView,
+	type AgentViewOptions, type AgentIdentity } from "./agent-state";
+export { composeAgentStatusLine, renderAgentStatusLine } from "./agent-statusline";
+
 export { appendObserveLedgerRows, type ObserveLedgerRow }
 	from "../src/engine/telemetry/observe-ledger";
 export { SKILL_CATEGORIES, skillVersionFor } from "./skill-categories";

@@ -39,6 +39,7 @@ export default defineConfig([
   "internal/config/skill-categories": "config/skill-categories.ts",
   "internal/engine/telemetry/observe-ledger": "src/engine/telemetry/observe-ledger.ts",
   "coding-skin": "config/coding-skin.ts",
+  "agent-state-view": "config/agent-state-cli.ts",
   "internal/contract/discovery": "src/contract/discovery.ts",
   "internal/contract/routes": "src/contract/routes.ts",
   "internal/contract/profile": "src/contract/profile.ts",
