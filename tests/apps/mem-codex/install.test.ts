@@ -3,7 +3,7 @@ import { chmod, mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { computeTrustHash, installCodex } from "../../../apps/mem-codex/src/install.ts";
+import { computeTrustHash, installCodex, uninstallCodex } from "../../../apps/mem-codex/src/install.ts";
 import { doctor } from "../../../apps/mem-codex/src/doctor.ts";
 
 const temporaryHomes: string[] = [];
@@ -435,5 +435,41 @@ describe("sno-mem-codex install", () => {
 		expect(new Set(headers).size).toBe(headers.length);
 		const parsed = spawnSync("python3", ["-c", "import sys, tomllib; tomllib.loads(sys.stdin.read())"], { encoding: "utf8", input: config });
 		expect(parsed.status, parsed.stderr).toBe(0);
+	});
+});
+
+
+describe("agent state view Codex installation", () => {
+	it("routes observation hooks through sno once and preserves foreign hooks and trust on uninstall", async () => {
+		const codexHome = await temporaryHome();
+		const hooksPath = join(codexHome, "hooks.json");
+		const configPath = join(codexHome, "config.toml");
+		const extras = [["PermissionRequest", "permission_request", "permission-request"], ["Interrupt", "interrupt", "interrupt"]] as const;
+		const foreign = { matcher: "user", hooks: [{ type: "command", command: "/opt/user/event", timeout: 2 }] };
+		await writeFile(hooksPath, JSON.stringify({ hooks: Object.fromEntries(extras.map(([event]) => [event, [foreign]])) }));
+		const foreignTrust = extras.map(([, eventName]) => `[hooks.state.${JSON.stringify(`${hooksPath}:${eventName}:0:0`)}]\nenabled = false\ntrusted_hash = "user"`).join("\n\n");
+		await writeFile(configPath, `${foreignTrust}\n`);
+		await installCodex({ codexHome, programPath: "/opt/sno/bin/sno", writeOutput: () => {} });
+		const options = { codexHome, programPath: "/other/place/sno", writeOutput: () => {} };
+		await installCodex(options);
+		const first = await readFile(hooksPath, "utf8");
+		const firstTrust = await readFile(configPath, "utf8");
+		await installCodex(options);
+		expect(await readFile(hooksPath, "utf8")).toBe(first);
+		expect(await readFile(configPath, "utf8")).toBe(firstTrust);
+		const installed = JSON.parse(first);
+		for (const [event, eventName, subcommand] of extras) {
+			expect(installed.hooks[event]).toHaveLength(2);
+			expect(installed.hooks[event][0]).toEqual(foreign);
+			const hook = installed.hooks[event][1].hooks[0];
+			expect(hook.command).toBe(`'${options.programPath}' memory hook ${subcommand} --harness codex`);
+			const trust = computeTrustHash({ event_name: eventName, hooks: [{ ...hook, async: false }] });
+			expect(firstTrust).toContain(`[hooks.state.${JSON.stringify(`${hooksPath}:${eventName}:1:0`)}]\nenabled = true\ntrusted_hash = "${trust}"`);
+		}
+		expect(firstTrust).toContain(foreignTrust);
+		await uninstallCodex({ codexHome, writeOutput: () => {} });
+		const remaining = JSON.parse(await readFile(hooksPath, "utf8"));
+		expect(remaining.hooks).toEqual(Object.fromEntries(extras.map(([event]) => [event, [foreign]])));
+		expect((await readFile(configPath, "utf8")).trim()).toBe(foreignTrust);
 	});
 });

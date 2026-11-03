@@ -256,14 +256,38 @@ describe("agent state view Claude installation", () => {
 		await install();
 		const first = await settings();
 		expect(first.statusLine.command).toContain("/mem-claude/dist/cli.js' status-line --sno-original '");
-		for (const event of ["PermissionRequest", "Notification", "StopFailure"]) {
-			expect(first.hooks[event][0].hooks[0].command).toContain("/mem-claude/dist/cli.js' agent-state-hook ");
+		for (const [event, subcommand] of [
+			["PermissionRequest", "permission-request"], ["Notification", "notification"], ["StopFailure", "stop-failure"],
+		]) {
+			expect(first.hooks[event][0].hooks[0].command).toBe(hookCommand(programPath, subcommand));
 		}
 		await install();
 		expect((await settings()).statusLine).toEqual(first.statusLine);
 		await uninstallClaude({ configDir, writeOutput: () => {} });
 		expect((await settings()).statusLine).toEqual(original);
 		expect((await settings()).hooks).toBeUndefined();
+	});
+
+	it("rewrites observation hooks through sno once and preserves foreign hooks on uninstall", async () => {
+		const extras = [
+			["PermissionRequest", "permission-request"], ["Notification", "notification"], ["StopFailure", "stop-failure"],
+		] as const;
+		const foreign = { matcher: "user", hooks: [{ type: "command", command: "/opt/user/event", timeout: 2 }] };
+		await writeFile(join(configDir, "settings.json"), JSON.stringify({ hooks: Object.fromEntries(extras.map(([event]) => [event, [foreign]])) }));
+		await install();
+		const options = { configDir, programPath: "/other/place/sno", writeOutput: () => {} };
+		await installClaude(options);
+		const first = await readFile(join(configDir, "settings.json"), "utf8");
+		await installClaude(options);
+		expect(await readFile(join(configDir, "settings.json"), "utf8")).toBe(first);
+		const installed = await settings();
+		for (const [event, subcommand] of extras) {
+			expect(installed.hooks[event]).toHaveLength(2);
+			expect(installed.hooks[event][0]).toEqual(foreign);
+			expect(installed.hooks[event][1].hooks[0].command).toBe(hookCommand(options.programPath, subcommand));
+		}
+		await uninstallClaude({ configDir, writeOutput: () => {} });
+		expect((await settings()).hooks).toEqual(Object.fromEntries(extras.map(([event]) => [event, [foreign]])));
 	});
 
 	it("preserves a newer user status command during uninstall", async () => {

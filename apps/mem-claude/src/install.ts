@@ -3,7 +3,6 @@ import { basename, dirname, isAbsolute, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
 	CODING_SKIN_HOOKS,
-	type CodingSkinHookName,
 	composeAgentStatusLine,
 	codingSkinHookCommand,
 	isCodingSkinHookCommand,
@@ -23,25 +22,15 @@ const settingsSchema = z.looseObject({
 });
 type Settings = z.infer<typeof settingsSchema>;
 
-const STATE_HOOKS = {
+const CLAUDE_HOOKS = {
+	...CODING_SKIN_HOOKS,
 	PermissionRequest: { subcommand: "permission-request", timeout: 5 },
 	Notification: { subcommand: "notification", timeout: 5 },
 	StopFailure: { subcommand: "stop-failure", timeout: 5 },
 } as const;
 const CLI_ENTRY = fileURLToPath(new URL("../dist/cli.js", import.meta.url));
 
-function updateStateHooks(settings: Settings, installing: boolean): void {
-	settings.hooks ??= {};
-	for (const [event, details] of Object.entries(STATE_HOOKS)) {
-		const groups = settings.hooks[event] ?? [];
-		const suffix = ` agent-state-hook ${details.subcommand}`;
-		const kept = groups.map(group => ({ ...group, hooks: group.hooks.filter(hook =>
-			!hook.command?.endsWith(suffix) || !hook.command.includes("/mem-claude/dist/cli.js'")) })).filter(group => group.hooks.length > 0);
-		if (installing) kept.push({ hooks: [{ type: "command", command: `${shellQuote(process.execPath)} ${shellQuote(CLI_ENTRY)}${suffix}`, timeout: details.timeout }] });
-		if (kept.length > 0) settings.hooks[event] = kept;
-		else delete settings.hooks[event];
-	}
-}
+type ClaudeHookName = keyof typeof CLAUDE_HOOKS;
 
 export interface InstallOptions {
 	configDir: string;
@@ -96,8 +85,8 @@ export async function readSettings(configDir: string): Promise<Settings | undefi
 
 function updateSettings(settings: Settings, programPath: string): void {
 	settings.hooks ??= {};
-	for (const event of Object.keys(CODING_SKIN_HOOKS) as CodingSkinHookName[]) {
-		const details = CODING_SKIN_HOOKS[event];
+	for (const event of Object.keys(CLAUDE_HOOKS) as ClaudeHookName[]) {
+		const details = CLAUDE_HOOKS[event];
 		const groups = settings.hooks[event] ?? [];
 		let installed = false;
 		const hook = {
@@ -124,7 +113,6 @@ function updateSettings(settings: Settings, programPath: string): void {
 	if (index < 0) allow.push(rule);
 	else allow.splice(index, allow.length - index, rule, ...allow.slice(index + 1).filter(current => !isOwnedPermissionRule(current)));
 	settings.permissions.allow = allow;
-	updateStateHooks(settings, true);
 	composeAgentStatusLine(settings, CLI_ENTRY, "claude", true);
 }
 
@@ -133,13 +121,12 @@ export async function uninstallClaude(options: { configDir: string; writeOutput:
 	const settings = await readSettings(options.configDir);
 	if (!settings) throw new Error(MESSAGES.settingsUnparsable);
 	const before = JSON.stringify(settings);
-	updateStateHooks(settings, false);
 	composeAgentStatusLine(settings, CLI_ENTRY, "claude", false);
-	for (const event of Object.keys(CODING_SKIN_HOOKS) as CodingSkinHookName[]) {
+	for (const event of Object.keys(CLAUDE_HOOKS) as ClaudeHookName[]) {
 		const groups = settings.hooks?.[event];
 		if (!settings.hooks || !groups) continue;
 		const kept = groups.map(group => ({ ...group, hooks: group.hooks.filter(hook =>
-			!hook.command || !isOwnedHookCommand(hook.command, CODING_SKIN_HOOKS[event].subcommand)) }))
+			!hook.command || !isOwnedHookCommand(hook.command, CLAUDE_HOOKS[event].subcommand)) }))
 			.filter(group => group.hooks.length > 0);
 		if (kept.length) settings.hooks[event] = kept;
 		else delete settings.hooks[event];
