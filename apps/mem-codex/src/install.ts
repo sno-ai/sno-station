@@ -1,16 +1,24 @@
 import { createHash } from "node:crypto";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
 	CODING_SKIN_HOOKS,
 	CODING_SKIN_MODEL_COMMANDS,
-	type CodingSkinHookName,
 	codingSkinHookCommand,
 	isCodingSkinHookCommand,
 	snoProgramPath,
+	shellQuote,
 } from "@snoai/memory/coding-skin";
 import { APP_NAME } from "./constants.js";
 import { MESSAGES } from "./messages.js";
+
+const CODEX_HOOKS = {
+	...CODING_SKIN_HOOKS,
+	PermissionRequest: { eventName: "permission_request", subcommand: "permission-request", timeout: 5 },
+	Interrupt: { eventName: "interrupt", subcommand: "interrupt", timeout: 3 },
+} as const;
+type CodexHookName = keyof typeof CODEX_HOOKS;
 
 interface HookCommand {
 	type: "command";
@@ -24,7 +32,7 @@ interface HookGroup {
 }
 
 interface HooksFile {
-	hooks: Partial<Record<CodingSkinHookName, HookGroup[]>> & Record<string, HookGroup[] | undefined>;
+	hooks: Partial<Record<CodexHookName, HookGroup[]>> & Record<string, HookGroup[] | undefined>;
 }
 
 export interface InstallOptions {
@@ -71,7 +79,7 @@ function parseHooks(value: unknown): HooksFile | undefined {
 	if (!value || typeof value !== "object" || !("hooks" in value)) return undefined;
 	const hooks = value.hooks;
 	if (!hooks || typeof hooks !== "object" || Array.isArray(hooks)) return undefined;
-	for (const event of Object.keys(CODING_SKIN_HOOKS) as CodingSkinHookName[]) {
+	for (const event of Object.keys(CODEX_HOOKS) as CodexHookName[]) {
 		const groups = (hooks as Record<string, unknown>)[event];
 		if (groups === undefined) continue;
 		if (!Array.isArray(groups) || !groups.every(hasStringCommands)) return undefined;
@@ -90,13 +98,13 @@ async function readHooks(path: string): Promise<HooksFile> {
 	}
 }
 
-function trustKey(path: string, event: CodingSkinHookName, groupIndex: number, hookIndex: number): string {
-	const details = CODING_SKIN_HOOKS[event];
+function trustKey(path: string, event: CodexHookName, groupIndex: number, hookIndex: number): string {
+	const details = CODEX_HOOKS[event];
 	return `${path}:${details.eventName}:${groupIndex}:${hookIndex}`;
 }
 
-function trustSection(path: string, event: CodingSkinHookName, groupIndex: number, hookIndex: number, hook: HookCommand): string {
-	const details = CODING_SKIN_HOOKS[event];
+function trustSection(path: string, event: CodexHookName, groupIndex: number, hookIndex: number, hook: HookCommand): string {
+	const details = CODEX_HOOKS[event];
 	const key = trustKey(path, event, groupIndex, hookIndex);
 	const hash = computeTrustHash({
 		event_name: details.eventName,
@@ -116,8 +124,8 @@ function stripTrustSections(text: string, keys: string[]): string {
 }
 
 // Codex caps a SessionEnd hook at 3 seconds and prints a clamping warning in every session that asks for more.
-export function codexHookTimeout(event: CodingSkinHookName): number {
-	return event === "SessionEnd" ? Math.min(CODING_SKIN_HOOKS[event].timeout, 3) : CODING_SKIN_HOOKS[event].timeout;
+export function codexHookTimeout(event: CodexHookName): number {
+	return event === "SessionEnd" ? Math.min(CODEX_HOOKS[event].timeout, 3) : CODEX_HOOKS[event].timeout;
 }
 
 function rules(programPath: string): string {
@@ -140,13 +148,13 @@ export async function uninstallCodex(options: { codexHome: string; writeOutput: 
 	const ownedTrustKeys: string[] = [];
 	// A user hook after a removed Sno hook in the same group moves down; its trust entry moves with it.
 	const moved: Array<[string, string]> = [];
-	for (const event of Object.keys(CODING_SKIN_HOOKS) as CodingSkinHookName[]) {
+	for (const event of Object.keys(CODEX_HOOKS) as CodexHookName[]) {
 		const groups = hooks.hooks[event];
 		if (!groups) continue;
 		for (const [groupIndex, group] of groups.entries()) {
 			let removed = 0;
 			group.hooks = group.hooks.filter((current, hookIndex) => {
-				if (!isOwnedHookCommand(current.command, CODING_SKIN_HOOKS[event].subcommand)) {
+				if (!isOwnedHookCommand(current.command, CODEX_HOOKS[event].subcommand)) {
 					if (removed) moved.push([trustKey(hooksPath, event, groupIndex, hookIndex), trustKey(hooksPath, event, groupIndex, hookIndex - removed)]);
 					return true;
 				}
@@ -187,12 +195,14 @@ export async function installCodex(options: InstallOptions): Promise<void> {
 	const hooks = await readHooks(hooksPath);
 	const trust: string[] = [];
 	const ownedTrustKeys: string[] = [];
-	for (const event of Object.keys(CODING_SKIN_HOOKS) as CodingSkinHookName[]) {
-		const details = CODING_SKIN_HOOKS[event];
+	for (const event of Object.keys(CODEX_HOOKS) as CodexHookName[]) {
+		const details = CODEX_HOOKS[event];
 		const currentGroups = hooks.hooks[event] ?? [];
 		const hook: HookCommand = {
 			type: "command",
-			command: codingSkinHookCommand(programPath, details.subcommand, "codex"),
+			command: event === "PermissionRequest" || event === "Interrupt"
+				? `${shellQuote(process.execPath)} ${shellQuote(fileURLToPath(new URL("./cli.js", import.meta.url)))} ${details.subcommand}`
+				: codingSkinHookCommand(programPath, details.subcommand, "codex"),
 			timeout: codexHookTimeout(event),
 		};
 		let installed = false;
