@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { homedir } from "node:os";
 import { isAbsolute, join } from "node:path";
+import { observeAgentEvent } from "@snoai/memory/coding-skin";
 import { doctor } from "./doctor.js";
 import { correctCommand, getCommand, recallCommand, rememberCommand } from "./explicit.js";
 import { postToolUse, preToolUse, sessionEnd, sessionStart, stop, userPromptSubmit } from "./hooks.js";
@@ -23,10 +24,13 @@ function option(args: string[], name: string): string | undefined {
 }
 
 const HOOK_COMMANDS = ["session-start", "user-prompt-submit", "stop", "session-end", "pre-tool-use", "post-tool-use"];
+const STATE_HOOK_COMMANDS = ["permission-request", "interrupt"];
 
 async function main(): Promise<number> {
 	const [command, ...args] = process.argv.slice(2);
-	const input = HOOK_COMMANDS.includes(command ?? "") ? await readStdin() : undefined;
+	const input = [...HOOK_COMMANDS, ...STATE_HOOK_COMMANDS].includes(command ?? "") ? await readStdin() : undefined;
+	if (input !== undefined && command) await observeAgentEvent("codex", command, input);
+	if (STATE_HOOK_COMMANDS.includes(command ?? "")) return 0;
 	// Scripted runs (a temporary directory, `codex exec`, `--ephemeral` with no transcript) are not conversations; the
 	// real-agent release journeys set SNO_CAPTURE_SCRIPTED=1 to be recorded anyway. Measured 2026-10-13: 184 of 283 queued turns.
 	if (input && process.env["SNO_CAPTURE_SCRIPTED"] !== "1" && typeof input === "object") {

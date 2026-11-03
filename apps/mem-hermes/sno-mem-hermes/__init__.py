@@ -17,9 +17,11 @@ import types
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Literal, Protocol, cast
+from urllib.parse import quote
 
 from agent.memory_provider import MemoryProvider, RecallStatus
 from hermes_constants import get_hermes_home
@@ -44,6 +46,38 @@ _CAPTURE_MAX_ATTEMPTS = 3
 # (CODING_SKIN_CAPTURE_MAX_INPUT_TOKENS): about one 4,096-token extraction window per capture, so a failure retries a small part.
 _CAPTURE_MAX_INPUT_TOKENS = 3_500
 _HEARTBEAT_TICK = re.compile(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ \[[^\]\n]+\] tick=\d+")
+
+
+def _observe_agent_event(session_id: str, event: str, input_data: dict[str, object]) -> None:
+    path = Path(os.environ.get("SNO_PROFILE_DIR", Path.home() / ".sno")) / "station" / "agents"
+    if not session_id:
+        _LOG.error("agent observation missing session identity; observation not recorded",
+                   extra={"operation": "append", "target": str(path), "event": event})
+        return
+    filename = quote(session_id, safe="~()*!.'-")
+    path /= f"hermes--{filename}.jsonl"
+    observation: dict[str, object] = {
+        "harness": "hermes", "sessionId": session_id,
+        "at": datetime.now(timezone.utc).isoformat(), "event": event,
+        "input": input_data, "pid": os.getpid(),
+    }
+    try:
+        observation["processStart"] = Path("/proc/self/stat").read_text().rsplit(")", 1)[1].split()[19]
+    except (OSError, IndexError) as error:
+        _LOG.error("agent process start unavailable; process observation unknown",
+                   extra={"operation": "read", "target": "/proc/self/stat", "error": str(error)})
+    if os.environ.get("SNO_REACH_ADDR"):
+        observation["reachAddress"] = os.environ["SNO_REACH_ADDR"]
+    cwd = input_data.get("cwd")
+    if isinstance(cwd, str) and cwd:
+        observation["cwd"] = cwd
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8") as output:
+            output.write(json.dumps(observation, ensure_ascii=False, default=str) + "\n")
+    except (OSError, TypeError, ValueError) as error:
+        _LOG.error("agent observation append failed; observation missing",
+                   extra={"operation": "append", "target": str(path), "event": event, "error": str(error)})
 
 
 @dataclass(frozen=True, slots=True)
@@ -535,6 +569,7 @@ class SnoMemoryProvider(MemoryProvider):
         return self._last_error
 
     def initialize(self, session_id: str, **kwargs: object) -> None:
+        _observe_agent_event(session_id, "session-start", kwargs)
         profile_dir = Path(
             os.environ.get("SNO_PROFILE_DIR", Path.home() / ".sno")
         ).resolve()
@@ -696,6 +731,8 @@ class SnoMemoryProvider(MemoryProvider):
                  or "typed by the mail transport, not by the owner" in message
                  or "No work is assigned by this startup message" in message
                  or _HEARTBEAT_TICK.search(message) is not None)
+        _observe_agent_event(self._session_id, "agent-prompt-submit" if agent else "user-prompt-submit",
+                             {"prompt": message, **kwargs})
         with self._capture_lock:
             self._activity_prompts[self._session_id] = [
                 (int(time.time() * 1000), "agent" if agent else "human")
@@ -1028,6 +1065,12 @@ class SnoMemoryProvider(MemoryProvider):
             )
 
     def on_session_end(self, messages: list[dict[str, object]]) -> None:
+        last_reply = next((message.get("content") for message in reversed(messages)
+                           if message.get("role") == "assistant"), None)
+        observed: dict[str, object] = {}
+        if isinstance(last_reply, str):
+            observed["last_assistant_message"] = last_reply
+        _observe_agent_event(self._session_id, "stop", observed)
         if self._client is not None:
             _RUNTIME.keep_ended(self._session_id, self._client, self._project, [
                 {"role": message.get("role"), "content": message.get("content"), "at": time.time() * 1000}
@@ -1284,6 +1327,7 @@ def _count(value: object) -> int:
 
 def _pre_llm_call(**kwargs: object) -> dict[str, str] | None:
     session_id = kwargs.get("session_id")
+    _observe_agent_event(session_id if isinstance(session_id, str) else "", "pre-model-call", kwargs)
     context = _RUNTIME.startup_brief(session_id if isinstance(session_id, str) else "")
     return {"context": context} if context else None
 
@@ -1291,18 +1335,21 @@ def _pre_llm_call(**kwargs: object) -> dict[str, str] | None:
 def _post_api_request(**kwargs: object) -> None:
     session_id = kwargs.get("session_id")
     if isinstance(session_id, str) and session_id:
+        _observe_agent_event(session_id, "post-model-call", kwargs)
         _RUNTIME.host_llm_call(session_id, kwargs)
 
 
 def _post_tool_call(**kwargs: object) -> None:
     session_id = kwargs.get("session_id")
     if isinstance(session_id, str) and session_id:
+        _observe_agent_event(session_id, "post-tool-use", kwargs)
         _RUNTIME.host_tool_call(session_id, kwargs)
 
 
 def _post_approval_response(**kwargs: object) -> None:
     session_id = kwargs.get("session_id")
     if isinstance(session_id, str) and session_id:
+        _observe_agent_event(session_id, "approval-response", kwargs)
         _RUNTIME.host_approval(session_id, kwargs)
 
 
@@ -1310,6 +1357,7 @@ def _on_session_reset(**kwargs: object) -> None:
     old_session_id = kwargs.get("old_session_id")
     if not isinstance(old_session_id, str):
         return
+    _observe_agent_event(old_session_id, "session-end", kwargs)
     ended = _RUNTIME.take_ended(old_session_id) or _RUNTIME.take_shut_down(old_session_id)
     if ended is None:
         return
