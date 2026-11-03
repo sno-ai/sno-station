@@ -52,7 +52,7 @@ const journeyDescribe = describe.skipIf(journeyNotSelected);
 if (journeyNotSelected) process.stdout.write(`G-accept${journeySelectionNote}\n`);
 const J3_API_KEY = JOURNEY === "J3" ? readTestSnoGpuSettings().apiKey : "";
 const J3_MISSING_API_KEY = JOURNEY === "J3" && !J3_API_KEY?.trim();
-const DEFAULT_LIVE_BASE_URL = "https://rt3-llm.sno.ai";
+const DEFAULT_LIVE_BASE_URL = "https://gpu.sno.ai";
 
 journeyDescribe(`G-accept live route configuration${journeySelectionNote}`, () => {
 	it("keeps the configured base at the origin and lets signed presets own both paths", async () => {
@@ -70,9 +70,9 @@ journeyDescribe(`G-accept live route configuration${journeySelectionNote}`, () =
 				transport: "raw-completions",
 			}),
 		]);
-		expect(DEFAULT_LIVE_BASE_URL).toBe("https://rt3-llm.sno.ai");
-		expect(episodic.url).toBe("https://rt3-llm.sno.ai/extract/v1/chat/completions");
-		expect(profile.url).toBe("https://rt3-llm.sno.ai/extract/profile/v1/completions");
+		expect(DEFAULT_LIVE_BASE_URL).toBe("https://gpu.sno.ai");
+		expect(episodic.url).toBe("https://gpu.sno.ai/extract/v1/chat/completions");
+		expect(profile.url).toBe("https://gpu.sno.ai/extract/profile/v1/completions");
 	});
 });
 

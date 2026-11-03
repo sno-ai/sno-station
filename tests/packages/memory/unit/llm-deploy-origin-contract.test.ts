@@ -20,11 +20,11 @@ function checkOrigin(script: string, origin?: string): ReturnType<typeof spawnSy
 
 describe("LLM deployment origin contract", () => {
 	it.each([
-		"https://rt3-llm.sno.ai:99999",
-		"https://rt3-llm.sno.ai:notaport",
-		"https://rt3-llm.sno.ai?route=extract",
-		"https://user:password@rt3-llm.sno.ai",
-		"https://rt3-llm.sno.ai/extract/v1",
+		"https://gpu.sno.ai:99999",
+		"https://gpu.sno.ai:notaport",
+		"https://gpu.sno.ai?route=extract",
+		"https://user:password@gpu.sno.ai",
+		"https://gpu.sno.ai/extract/v1",
 	])("shared checker rejects invalid origin %s", (origin) => {
 		const result = spawnSync("bash", [ORIGIN_CHECKER, origin], { encoding: "utf8" });
 
@@ -40,7 +40,7 @@ describe("LLM deployment origin contract", () => {
 			const result = checkOrigin(script);
 
 			expect(result.status, String(result.stderr)).toBe(0);
-			expect(result.stdout).toContain("https://rt3-llm.sno.ai");
+			expect(result.stdout).toContain("https://gpu.sno.ai");
 			expect(result.stdout).not.toContain("/extract/v1/extract/v1");
 		});
 
@@ -48,7 +48,7 @@ describe("LLM deployment origin contract", () => {
 
 	// The sync script takes its origin from the shipped settings document, with no override to reject.
 	it("evaluation deploy rejects a base that already contains the signed route prefix", () => {
-		const result = checkOrigin(DEPLOY_SCRIPT, "https://rt3-llm.sno.ai/extract/v1");
+		const result = checkOrigin(DEPLOY_SCRIPT, "https://gpu.sno.ai/extract/v1");
 
 		expect(result.status).toBe(1);
 		expect(result.stderr).toContain("valid HTTPS origin");
@@ -59,7 +59,7 @@ describe("LLM deployment origin contract", () => {
 			encoding: "utf8",
 			env: {
 				...process.env,
-				REM_ENHANCED_GPU_BASE_URL: "https://rt3-llm.sno.ai/extract/v1",
+				REM_ENHANCED_GPU_BASE_URL: "https://gpu.sno.ai/extract/v1",
 			},
 		});
 
