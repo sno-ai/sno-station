@@ -89,9 +89,13 @@ describe("task and approved-lesson host delivery", () => {
 		const started = hook("mem-claude", "session-start", "first-session", { source: "startup" });
 		const file = continuityBriefPath("first-session");
 		expect(started.context).toContain(file);
-		const saved = spawnSync(program, ["handoff-checkpoint", "--repo", workspace, file], { encoding: "utf8", env: process.env });
+		const command = /Run (.+?) to create its template first/.exec(started.context)?.[1];
+		expect(command).toBeDefined();
+		const saved = spawnSync("bash", ["-c", command ?? ""], { encoding: "utf8", env: process.env });
 		expect(saved.status, saved.stderr).toBe(0);
-		expect(readFileSync(file, "utf8")).toContain("## Next");
+		const record = readFileSync(file, "utf8");
+		expect(record).toContain("## Next");
+		expect(record).toContain("runtime: claude-code\nsession-id: first-session");
 	});
 
 	it.each(["mem-claude", "mem-codex"] as const)("%s keeps the full brief when memory settings are unavailable", app => {
