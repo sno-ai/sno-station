@@ -706,7 +706,7 @@ ring_tmux() {
     fi
     sleep "$TMUX_SETTLE_SECONDS"
     local submit=Enter
-    [[ "$runtime" != hermes && "$runtime" != openclaw ]] || submit=C-m
+    [[ "$runtime" != hermes && "$runtime" != openclaw && "$runtime" != cursor-agent ]] || submit=C-m
     if ! tmux send-keys -t "$target" "$submit" 2>/dev/null; then
         flock -u "$lock_fd"; exec {lock_fd}>&-
         emit "$root" "$recipient" "$sender" "$message_id" failed \

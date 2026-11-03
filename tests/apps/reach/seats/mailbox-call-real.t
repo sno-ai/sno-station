@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Real Claude receiver, isolated home/profile/project and private tmux server.
 set -Eeuo pipefail
-scenario="${1:?usage: mailbox-call-real.t typing|compacting|handoff|handoff-card|handoff-acp}"
-[[ "$scenario" == typing || "$scenario" == compacting || "$scenario" == handoff || "$scenario" == handoff-card || "$scenario" == handoff-acp ]] || exit 64
+scenario="${1:?usage: mailbox-call-real.t typing|compacting|handoff|handoff-card|handoff-acp|handoff-skill}"
+[[ "$scenario" == typing || "$scenario" == compacting || "$scenario" == handoff || "$scenario" == handoff-card || "$scenario" == handoff-acp || "$scenario" == handoff-skill ]] || exit 64
 real_home="$HOME"
 claude_source="${CLAUDE_CONFIG_DIR:-$real_home/.claude}"
 # shellcheck source-path=SCRIPTDIR
@@ -14,10 +14,15 @@ cp "$claude_source/.credentials.json" "$TEST_HOME/.claude/.credentials.json"
 chmod 600 "$TEST_HOME/.claude/.credentials.json"
 export MAILBOX_REAL_ROOT="$WORK" MAILBOX_REAL_SCENARIO="$scenario" MAILBOX_REAL_APP="$APP"
 export MAILBOX_REAL_HOME="$TEST_HOME" MAILBOX_REAL_SERVER="$SERVER"
-sno_record_programs "reach=$REACH"
+export MAILBOX_REAL_OWNER_HOME="$real_home"
+if [[ "$scenario" == handoff-skill ]]; then
+    sno_record_programs "reach=$REACH" "handoff-checkpoint=$TEST_HOME/.local/lib/sno-commands/handoff-checkpoint"
+else
+    sno_record_programs "reach=$REACH"
+fi
 # The Python driver observes real agent transcripts; it never reads mail for the agent.
 python3 - <<'PY'
-import email.utils, json, os, shlex, shutil, socket, subprocess, time, uuid
+import email.utils, hashlib, json, os, re, shlex, shutil, socket, sqlite3, subprocess, time, uuid
 from pathlib import Path
 root=Path(os.environ['MAILBOX_REAL_ROOT']); home=Path(os.environ['MAILBOX_REAL_HOME'])
 app=Path(os.environ['MAILBOX_REAL_APP']); server=os.environ['MAILBOX_REAL_SERVER']
@@ -95,7 +100,84 @@ try:
         wait_until(lambda: bool(transcript_text()),'receiver startup did not finish')
     # The startup turn reads the installed guide. Wait until the command prompt is idle.
     time.sleep(1)
-    if scenario=='handoff-card':
+    if scenario=='handoff-skill':
+        owner_home=Path(os.environ['MAILBOX_REAL_OWNER_HOME'])
+        skill_path=owner_home/'.agents/skills/handoff/SKILL.md'
+        skill=skill_path.read_text()
+        checkpoint=owner_home/'.local/lib/sno-commands/handoff-checkpoint'
+        installed=home/'.local/lib/sno-commands/handoff-checkpoint'
+        installed.parent.mkdir(parents=True,exist_ok=True)
+        shutil.copy2(checkpoint,installed)
+        subprocess.run(['git','init','-q',str(project)],env=env,check=True,timeout=10)
+        brief=root/'handoff.md'
+        checked=subprocess.run([real_sno,'handoff-checkpoint',str(brief)],cwd=project,env=env,text=True,capture_output=True,timeout=15)
+        require(checked)
+        contents=brief.read_text()
+        sections={
+            '## Objective and authorization':
+                'The owner authorizes the receiver to write handoff-result.txt in '+str(project)+' containing exactly '+nonce+'. '
+                'This is a direct owner task: no original work card exists and no acceptance or cancellation is required. '
+                'Report the completed result in this receiver session. The sender remains paused until verified release.',
+            '## Done':'The sender captured the checkout and has not created handoff-result.txt.',
+            '## Next':'After the exact explicit release, output its standalone HANDOFF_RELEASED receipt before any task write. '
+                        'Then use Bash to write handoff-result.txt with the authorized content and report completion.',
+            '## Decisions and assumptions':'Use only this checkout. No original card exists. Do not create a work card or write other task files.',
+            '## Risks and open questions':'A missing release or digest mismatch leaves the receiver paused. '
+                                       'Acceptance: readiness includes the measured digest and checkout with no task writes; '
+                                       'release precedes the Bash write; final file contains the authorized text.'}
+        for heading,body in sections.items():
+            contents=contents.replace(heading,heading+'\n\n'+body)
+        brief.write_text(contents.rstrip()+'\n\n<!-- AGENT_CUTOVER_EOF -->\n')
+        data=brief.read_bytes(); digest=hashlib.sha256(data).hexdigest()
+        ready_nonce='HANDOFF_READY_'+uuid.uuid4().hex
+        launcher=skill.split('## Short launcher\n\n```text\n',1)[1].split('\n```',1)[0]
+        for token,value in {'<CURRENT_CHECKOUT>':str(project),'<BRIEF_PATH>':str(brief),'<BYTE_COUNT>':str(len(data)),
+                            '<DIGEST>':digest,'<READY_NONCE>':ready_nonce}.items():
+            launcher=launcher.replace(token,value)
+        ready=require(reach('call',address,launcher,'--expect',ready_nonce,'--timeout','60','--every','1'))
+        stored_payload(launcher)
+        assert ready_nonce in ready.stdout and digest in ready.stdout and str(project) in ready.stdout,ready.stdout
+        assert not (project/'handoff-result.txt').exists(),'receiver wrote before explicit release'
+        unchanged=subprocess.run([real_sno,'handoff-checkpoint','--verify',str(brief)],cwd=project,env=env,text=True,capture_output=True,timeout=15)
+        require(unchanged)
+        assert 'MATCH' in unchanged.stdout,unchanged.stdout
+        release_nonce=uuid.uuid4().hex
+        release=skill.split('## Release message\n\n```text\n',1)[1].split('\n```',1)[0]
+        for token,value in {'<DIGEST>':digest,'<B_CARD_ID_OR_NO_CARD>':'no card (direct owner task)',
+                            '<RELEASE_NONCE>':release_nonce}.items():
+            release=release.replace(token,value)
+        released=require(reach('call',address,release,'--expect','^HANDOFF_RELEASED '+release_nonce+'$','--timeout','60','--every','1'))
+        stored_payload(release)
+        wait_until(lambda:(project/'handoff-result.txt').exists(),'released receiver did not write the authorized result',30)
+        assert (project/'handoff-result.txt').read_text().strip()==nonce
+        transcript=Path(json.loads((state/address/'transcript.json').read_text())['transcript'])
+        observed=[]
+        for line in transcript.read_text().splitlines():
+            row=json.loads(line)
+            if row.get('type')!='assistant': continue
+            for block in row.get('message',{}).get('content',[]):
+                if block.get('type')=='text' and re.search(r'(?m)^HANDOFF_RELEASED '+release_nonce+r'$',block.get('text','')):
+                    observed.append('release')
+                elif block.get('type')=='tool_use':
+                    operation=json.dumps(block.get('input',{}))
+                    command=block.get('input',{}).get('command','')
+                    if 'handoff-result.txt' in operation and (block.get('name') in ('Write','Edit','MultiEdit') or
+                            re.search(r'>\s*[^\s;&|]*handoff-result\.txt|\btee\b[^;&|]*handoff-result\.txt|write_text|writeFile',command)):
+                        observed.append('write')
+        assert 'release' in observed and 'write' in observed and observed.index('release')<observed.index('write'),observed
+        pause=require(reach('call',address,'PAUSE HANDOFF RECOVERY: stop, emit HANDOFF_PAUSED','--expect','HANDOFF_PAUSED','--timeout','60','--every','1'))
+        before=(project/'handoff-result.txt').read_bytes()
+        snapshot=require(reach('call',address,'Keep handoff-result.txt unchanged and emit exactly HANDOFF_SNAPSHOT_UNCHANGED '+nonce+'.',
+                               '--expect','HANDOFF_SNAPSHOT_UNCHANGED '+nonce,'--timeout','60','--every','1'))
+        assert (project/'handoff-result.txt').read_bytes()==before
+        with sqlite3.connect('file:'+str(home/'.sno/buffer.db')+'?mode=ro',uri=True) as database:
+            events=[json.loads(row[0]) for row in database.execute('SELECT payload FROM events ORDER BY rowid')]
+        receipts=[event.get('payload',{}).get('receipt') for event in events if event.get('event_type')=='reach.message']
+        assert all(value in receipts for value in ('handoff_released','handoff_paused','handoff_snapshot')),receipts
+        print('PASS installed handoff templates: independent brief byte/digest/checkout readiness, unchanged checkpoint, release before actual write, pause/snapshot and recorded receipts',flush=True)
+        print('installed handoff source: '+str(skill_path),flush=True)
+        print('LIMITATION direct no-card entry intentionally skips original sender cancellation and card-backed ownership transfer',flush=True)
+    elif scenario=='handoff-card':
         sender='lead.transfer-'+nonce+'@'+socket.gethostname()
         owner='lead.owner-'+nonce+'@'+socket.gethostname()
         for person in (sender,owner):
