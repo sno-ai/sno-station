@@ -305,6 +305,7 @@ case "$type" in
     status) tag='[STATUS]' ;;
     done) tag='[DONE]' ;;
     cancel) tag='[CANCEL]' ;;
+    call) tag='[CALL]' ;;
     *) die 65 "unknown X-Type value: $type" ;;
 esac
 [[ "$subject" == "$tag" ||
@@ -323,6 +324,7 @@ for name in X-Name X-No-Reply X-State Supersedes Expiry-Date Auto-Submitted In-R
 done
 
 if (( $(header_count X-State) == 1 )); then
+    [[ "$type" != call ]] || die 65 'call transport has no work X-State'
     state="$(header_value X-State)"
     case "$state" in
         accepted|running)

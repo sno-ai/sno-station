@@ -93,6 +93,48 @@ if [[ "$have_text" == true && ! "$text" =~ [^[:space:]] ]]; then
 	exit "$EXIT_USAGE"
 fi
 
+# Ordinary address calls use Reach's existing mail renderer, below send's live
+# registration requirement. Pane-handle internal calls and explicit raw stay literal.
+mail_address="" mail_id="" mail_stored=false
+delivery_receipt=""
+if [[ "$terminal" != %* && "$have_text" == true && "$raw" == false ]]; then
+    mail_address="$terminal"
+    delivery_receipt="REACH-RECEIPT-$(date +%s%N)-$$-$RANDOM"
+    mail_id="<call-${delivery_receipt#REACH-RECEIPT-}@${terminal##*@}>"
+fi
+store_call_mail() {
+    [[ -n "$mail_address" && "$mail_stored" == false ]] || return 0
+    local sender="${SNO_REACH_ADDR:-}" message status=0
+    if [[ -z "$sender" ]]; then
+        sender="caller.local@$(hostname)"
+        "$REACH" init --as "$sender" --name Caller >&2 || return $?
+    fi
+    message="$(mktemp "${TMPDIR:-/tmp}/reach-call-mail.XXXXXXXXXX")" || return 74
+    {
+        printf 'From: Caller <%s>\nTo: Receiver <%s>\nDate: %s\nSubject: [CALL] instruction\nMessage-ID: %s\nX-Type: call\nX-Work: call-%s\n\n' \
+            "$sender" "$mail_address" "$(date -R)" "$mail_id" "${delivery_receipt#REACH-RECEIPT-}"
+        printf 'Read the complete original call text below before responding. First output exactly %s on its own line, then follow the original instruction. This is transport mail, not a task card: do not accept or complete it; dismiss it after handling. Keep any existing task card and reply destination.\n\nOriginal call text:\n' "$delivery_receipt"
+        printf '%s' "$text"
+    } >"$message"
+    "$(dirname -- "$REACH")/reach-lint" "$message" &&
+        "$(dirname -- "$REACH")/reach-deliver" <"$message" || status=$?
+    rm -f -- "$message"
+    if ((status != 0)); then
+        printf 'call deliver %s %s: mailbox delivery failed (exit %s); no cue sent\n' "$mail_address" "$mail_id" "$status" >&2
+        return "$status"
+    fi
+    mail_stored=true
+    sent_payload="REACH-RING $mail_id: run sno reach inbox --as $mail_address; read the exact returned mail file matching this Message-ID before replying. Receipt $delivery_receipt is instructed in that file."
+}
+call_cleanup() {
+    local status=$?
+    [[ -z "${transcript_work:-}" ]] || rm -rf -- "$transcript_work"
+    if [[ "$mail_stored" == true && "$status" != 0 ]]; then
+        printf 'call observe %s %s: exit %s; stored; receipt not verified\n' "$mail_address" "$mail_id" "$status" >&2
+    fi
+}
+trap call_cleanup EXIT
+
 # shellcheck source=reach-tmux.sh
 source "$(dirname -- "${BASH_SOURCE[0]}")/reach-tmux.sh"
 seat_runtime=""
@@ -127,9 +169,13 @@ ring_or_fail() {
 if [[ "$terminal" != %* ]]; then
     record="${SNO_REACH_ROOT:-$HOME/.local/state/sno-reach}/$terminal/reachable.json"
     [[ -f "$record" && ! -L "$record" ]] || {
+        store_call_mail || exit $?
         printf 'no reachability record for %s\n' "$terminal" >&2; exit "$EXIT_UNRELIABLE";
     }
-    channel="$(jq -er --arg address "$terminal" 'select(.address == $address) | .channel' "$record")" || exit "$EXIT_UNRELIABLE"
+    channel="$(jq -er --arg address "$terminal" 'select(.address == $address) | .channel' "$record")" || {
+        store_call_mail || exit $?
+        exit "$EXIT_UNRELIABLE"
+    }
     seat_runtime="$(jq -r '.runtime // empty' "$(dirname -- "$record")/seat.json")"
     [[ "$raw" == false || "$channel" == tmux ]] || {
         printf '%s\n' '--raw requires a tmux seat' >&2; exit "$EXIT_SEND_REFUSED";
@@ -139,21 +185,30 @@ if [[ "$terminal" != %* ]]; then
             # shellcheck source=reach-call-acp.sh
             source "$(dirname -- "${BASH_SOURCE[0]}")/reach-call-acp.sh"
             exit $? ;;
-        tmux) terminal="$(jq -er 'select(.identity.kind == "tmux-pane") | .identity.value | select(test("^%[0-9]+$"))' "$record")" || exit "$EXIT_UNRELIABLE" ;;
-        *) printf 'unsupported reachability channel: %s\n' "$channel" >&2; exit "$EXIT_UNRELIABLE" ;;
+        tmux) terminal="$(jq -er 'select(.identity.kind == "tmux-pane") | .identity.value | select(test("^%[0-9]+$"))' "$record")" || {
+            store_call_mail || exit $?
+            exit "$EXIT_UNRELIABLE"
+        } ;;
+        orca|cursor-ide)
+            store_call_mail || exit $?
+            printf 'channel %s does not support synchronous call: %s\n' "$channel" "$terminal" >&2
+            exit "$EXIT_SEND_REFUSED" ;;
+        *) store_call_mail || exit $?; printf 'unsupported reachability channel: %s\n' "$channel" >&2; exit "$EXIT_UNRELIABLE" ;;
     esac
 fi
 
 for tool in jq perl tmux flock stat diff; do
-	command -v "$tool" >/dev/null || { printf 'required tool is missing: %s\n' "$tool" >&2; exit "$EXIT_UNRELIABLE"; }
+	command -v "$tool" >/dev/null || { store_call_mail || exit $?; printf 'required tool is missing: %s\n' "$tool" >&2; exit "$EXIT_UNRELIABLE"; }
 done
 
 # ── tmux state ────────────────────────────────────────────────────────────────
 tmux has-session 2>/dev/null || {
+	store_call_mail || exit $?
 	printf 'no tmux server is running; window %s cannot be read\n' "$terminal" >&2
 	exit "$EXIT_UNRELIABLE"
 }
 tmux display-message -pt "$terminal" '#{pane_id}' >/dev/null 2>&1 || {
+	store_call_mail || exit $?
 	printf 'tmux pane does not exist: %s\n' "$terminal" >&2
 	exit "$EXIT_UNRELIABLE"
 }
@@ -171,6 +226,7 @@ ensure_pane_token() {
 }
 
 pane_token="$(ensure_pane_token)" || {
+	store_call_mail || exit $?
 	printf 'could not establish a stable identity for tmux pane %s\n' "$terminal" >&2
 	exit "$EXIT_UNRELIABLE"
 }
@@ -293,11 +349,7 @@ snapshot() { tmux_snapshot "$1"; }
 submit_again() { tmux_submit; }
 send_text() { tmux_send; }
 
-# ── procedure ─────────────────────────────────────────────────────────────────
-started="$(date +%s)"
-delivery_receipt=""
-sent_payload="$text"
-if [[ "$have_text" == true ]]; then
+prepare_input() {
 	exec 7>"$send_lock"
 	if ! flock -n 7; then
 		printf 'another send is already active for tmux pane %s\n' "$terminal" >&2
@@ -313,13 +365,23 @@ if [[ "$have_text" == true ]]; then
 	}
 	composer="$(composer_text <<<"$screen")"
 	if is_person_draft "$composer"; then
-		printf 'someone is typing in the input box of %s; the call was not sent, so the draft stays as typed. Send it again once the box is empty.\n' "$terminal" >&2
+		if [[ "$mail_stored" == true ]]; then
+            printf 'someone is typing in the input box of %s; call mail is stored, no cue sent; do not resend.\n' "$terminal" >&2
+        else
+            printf 'someone is typing in the input box of %s; the call was not sent, so the draft stays as typed. Send it again once the box is empty.\n' "$terminal" >&2
+        fi
 		exit "$EXIT_SEND_REFUSED"
 	fi
 	if [[ -n "$composer" ]]; then
 		tmux send-keys -t "$terminal" C-u 2>/dev/null || true
 	fi
-	if [[ "$raw" == false ]]; then
+}
+
+# ── procedure ─────────────────────────────────────────────────────────────────
+started="$(date +%s)"
+sent_payload="$text"
+if [[ "$have_text" == true ]]; then
+	if [[ "$raw" == false && -z "$mail_address" ]]; then
 		delivery_receipt="REACH-RECEIPT-$(date +%s%N)-$$-$RANDOM"
 		pane_command="$(tmux display-message -pt "$terminal" '#{pane_current_command}' 2>/dev/null || true)"
 		case "$pane_command" in
@@ -335,6 +397,7 @@ if [[ "$have_text" == true ]]; then
 fi
 
 if [[ "$raw" == true ]]; then
+	prepare_input
 	if ! send_text >/dev/null; then
 		printf 'the runtime refused the send to %s\n' "$terminal" >&2
 		exit "$EXIT_SEND_REFUSED"
@@ -344,7 +407,7 @@ if [[ "$raw" == true ]]; then
 fi
 
 baseline="$(snapshot "" || true)"
-[[ -n "$baseline" ]] || { printf 'could not read tmux pane %s\n' "$terminal" >&2; exit "$EXIT_UNRELIABLE"; }
+[[ -n "$baseline" ]] || { store_call_mail || exit $?; printf 'could not read tmux pane %s\n' "$terminal" >&2; exit "$EXIT_UNRELIABLE"; }
 cursor_before="${since:-$(printf '%s' "$baseline" | jq -r '.cursor')}"
 status_before="$(printf '%s' "$baseline" | jq -r '.status')"
 baseline_screen="$(printf '%s' "$baseline" | jq -r '.screen // ""')"
@@ -579,7 +642,6 @@ transcript_export_reply() {
 transcript_work=""
 if [[ "$have_text" == true && "$no_wait" == false && ( "$transcript_kind" == hermes || "$transcript_kind" == openclaw ) ]]; then
 	transcript_work="$(mktemp -d "$state_dir/transcript.XXXXXX")"
-	trap 'rm -rf -- "$transcript_work"' EXIT
 fi
 
 transcript_wait() {
@@ -614,7 +676,7 @@ transcript_wait() {
 			fi
 		done < <(transcript_files)
 		fi
-		if [[ "$nudged" == false && "$receipt_seen" == false && "$(date +%s)" -ge "$nudge_at" ]] && submit_again; then
+		if [[ -z "$mail_address" && "$nudged" == false && "$receipt_seen" == false && "$(date +%s)" -ge "$nudge_at" ]] && submit_again; then
 			nudged=true
 		fi
 		(( $(date +%s) - started < timeout_secs )) || break
@@ -626,12 +688,14 @@ transcript_wait() {
 }
 
 if [[ "$have_text" == true ]]; then
+    store_call_mail || exit $?
+	prepare_input
 	if ! bytes="$(send_text)"; then
 		printf 'the runtime refused the send to %s\n' "$terminal" >&2
 		exit "$EXIT_SEND_REFUSED"
 	fi
 	accepted=true
-	if [[ "$no_wait" != true && -z "$transcript_path" ]]; then
+	if [[ -z "$mail_address" && "$no_wait" != true && -z "$transcript_path" ]]; then
 		# Only this send's unique receipt can prove submission. Busy pane output and
 		# the composer's echo are unrelated and must not suppress the retry.
 		sleep "$poll_secs"
