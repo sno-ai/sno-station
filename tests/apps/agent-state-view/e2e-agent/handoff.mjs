@@ -109,6 +109,16 @@ try {
 	const files = await readdir(join(env.SNO_PROFILE_DIR, "station/agents"));
 	const allEvents = (await Promise.all(files.map(file => readFile(join(env.SNO_PROFILE_DIR, "station/agents", file), "utf8")))).flatMap(text => text.trim().split("\n").map(line => JSON.parse(line)));
 	assert(allEvents.some(event => event.event === "handoff-released" && event.input.message_id === original && event.input.target === target));
+	const metadata = JSON.parse(await readFile(join(state, target, "transcript.json"), "utf8"));
+	const transcript = (await readFile(metadata.transcript, "utf8")).trim().split("\n").map(line => JSON.parse(line));
+	const actions = transcript.filter(row => row.type === "assistant").flatMap(row => row.message?.content ?? []).flatMap(block => {
+		if (block.type === "text" && block.text.split("\n").some(line => line.trim() === `HANDOFF_RELEASED ${nonce}`)) return ["released"];
+		if (block.type === "tool_use" && ((["Write", "Edit"].includes(block.name) && block.input.file_path?.endsWith("handoff-result.txt")) ||
+			(block.name === "Bash" && />\s*["']?(?:[^\s"']*\/)?handoff-result\.txt/.test(block.input.command ?? "")))) return ["write"];
+		return [];
+	});
+	assert(actions.includes("released") && actions.includes("write") && actions.indexOf("released") < actions.indexOf("write"), "receiver must emit its standalone release before the actual result write");
+	result.receiverActions = actions;
 	await writeFile(join(root, "result.json"), JSON.stringify(result, null, 2));
 	console.log(JSON.stringify({ result: "passed", realAgents: 2, explicitReleaseBeforeActualWrite: true, singleWorkOwner: true, elapsedSeconds: result.elapsedSeconds, evidence: root }));
 } finally {
