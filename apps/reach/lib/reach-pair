@@ -1,0 +1,191 @@
+#!/usr/bin/env bash
+# Two visible seats share one task; their existing Reach mail carries the review.
+set -Eeuo pipefail
+if (($# != 1)) || [[ ! "$1" =~ [^[:space:]] ]]; then
+    printf 'reach: pair requires one nonblank task string\n' >&2; exit 64
+fi
+task="$1"
+release="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+reach="$release/bin/sno-reach"
+root="${SNO_REACH_ROOT:-$HOME/.local/state/sno-reach}"
+cwd="$PWD"
+host="$(hostname)"
+sender="${SNO_REACH_ADDR:-caller.local@$host}"
+work="pair-$(date +%s%N)-$$"
+implementer="executor.$work-impl@$host"
+reviewer="executor.$work-review@$host"
+export SNO_REACH_ROOT="$root"
+scratch="$(mktemp -d "${TMPDIR:-/tmp}/reach-pair.XXXXXXXX")"
+trap 'rm -rf -- "$scratch"' EXIT
+
+# Same configured order and model/provider vocabulary as subscription-quota-check.
+order='claude-code,codex,cursor,hermes,openclaw'
+config="${XDG_CONFIG_HOME:-$HOME/.config}/sno/models.toml"
+if [[ -f "$config" ]]; then
+    configured="$(awk '
+        /^[[:space:]]*\[/ { models=($0 ~ /^[[:space:]]*\[models\][[:space:]]*(#.*)?$/); next }
+        models && /^[[:space:]]*handoff_order[[:space:]]*=/ {
+            value=$0; sub(/^[^=]*=[[:space:]]*/, "", value); quote=substr(value,1,1)
+            if (quote!="\"" && quote!=sprintf("%c",39)) exit 2
+            value=substr(value,2); end=index(value,quote)
+            if (!end || substr(value,end+1)!~/^[[:space:]]*(#.*)?$/) exit 2
+            print substr(value,1,end-1); exit
+        }' "$config")" || {
+        printf 'reach: pair selection %s: cannot read handoff_order; no agents started\n' "$config" >&2; exit 65;
+    }
+    order="${configured:-$order}"
+fi
+
+model_vendor() {
+    local provider="$1" model="$2"
+    case "$provider" in
+        openai|openai-codex|codex|chatgpt) printf openai; return ;;
+        anthropic|claude) printf anthropic; return ;;
+        custom*|local*) printf 'local:%s' "$provider"; return ;;
+    esac
+    if [[ "$model" == */* ]]; then model_vendor "${model%%/*}" "${model#*/}"
+    elif [[ -n "$provider" ]]; then
+        case "$provider" in google|xai|cursor) printf '%s' "$provider" ;; *) model_vendor '' "$model" ;; esac
+    else
+        case "${model#cursor-}" in
+            claude*) printf anthropic ;; gpt*|o[0-9]*|*codex*) printf openai ;;
+            gemini*) printf google ;; grok*) printf xai ;; composer*|default|auto) printf cursor ;;
+        esac
+    fi
+    return 0
+}
+
+candidates=() kinds=() models=() providers=() vendors=()
+while IFS= read -r agent; do
+    kind="$agent" model='' provider='' login=unknown status='' rc=0
+    case "$agent" in claude-code) kind=claude ;; codex|cursor|hermes|openclaw) ;; *) continue ;; esac
+    cli="$kind"; [[ "$kind" != cursor ]] || cli=cursor-agent
+    if ! command -v "$cli" >/dev/null; then
+        printf 'reach: pair selection %s: CLI unavailable\n' "$cli" >&2; continue
+    fi
+    case "$kind" in
+        claude)
+            provider=anthropic
+            status="$(timeout --foreground 15 claude auth status --json 2>"$scratch/auth.err")" || rc=$?
+            if ((rc == 0)) && jq -e '.loggedIn == true' <<<"$status" >/dev/null 2>&1; then login=yes
+            elif jq -e '.loggedIn == false' <<<"$status" >/dev/null 2>&1; then login=no; fi ;;
+        codex)
+            provider=openai
+            status="$(timeout --foreground 15 codex login status 2>&1)" || rc=$?
+            if ((rc == 0)) && grep -qiE '^[[:space:]]*Logged in' <<<"$status"; then login=yes
+            elif grep -qiE '^[[:space:]]*Not logged in' <<<"$status"; then login=no; fi ;;
+        cursor)
+            status="$(timeout --foreground 15 cursor-agent status --format json 2>"$scratch/auth.err")" || rc=$?
+            if ((rc == 0)) && jq -e '.isAuthenticated == true' <<<"$status" >/dev/null 2>&1; then login=yes
+            elif jq -e '.isAuthenticated == false' <<<"$status" >/dev/null 2>&1; then login=no; fi
+            # Existing installed Cursor hooks record actual models, not CLI-brand guesses.
+            conversations="${SNO_PROFILE_DIR:-$HOME/.sno}/cursor/conversations"
+            if [[ -d "$conversations" ]]; then
+                mapfile -d '' records < <(find "$conversations" -maxdepth 1 -name '*.json' -type f -print0)
+                if ((${#records[@]})); then
+                    model="$(jq -sr 'map(select(.model != null)) | sort_by(.last_event) | last.model // empty' "${records[@]}")"
+                fi
+            fi ;;
+        hermes)
+            status="$(timeout --foreground 15 hermes fallback list 2>"$scratch/auth.err")" || rc=$?
+            read -r model provider < <(awk '/Primary:/ {p=$4; sub(/\)$/, "", p); print $2, p; exit}' <<<"$status") || true
+            # Nous status may renew OAuth credentials; pair never performs that operation.
+            if [[ -n "$provider" && "$provider" != nous ]]; then
+                status="$(timeout --foreground 15 hermes auth status "$provider" 2>"$scratch/auth.err")" || rc=$?
+                if ((rc == 0)) && grep -Fqx "$provider: logged in" <<<"$status"; then login=yes
+                elif grep -qF "$provider: logged out" <<<"$status"; then login=no; fi
+            fi ;;
+        openclaw)
+            status="$(timeout --foreground 15 openclaw models status --json 2>"$scratch/auth.err")" || rc=$?
+            if ((rc == 0)); then
+                model="$(jq -r '.resolvedDefault // .defaultModel // empty' <<<"$status")"
+                provider="${model%%/*}"
+                if jq -e --arg p "$provider" '.auth.oauth.profiles[]? | select(.provider==$p and (.status=="ok" or .status=="static"))' <<<"$status" >/dev/null 2>&1; then login=yes
+                elif jq -e --arg p "$provider" '.auth.providers[]? | select(.provider==$p and (.effective.kind=="env" or .effective.kind=="models.json" or (.profiles.count // 0)>0))' <<<"$status" >/dev/null 2>&1; then login=yes
+                elif jq -e --arg p "$provider" '.auth.missingProviders[]? | select(.==$p)' <<<"$status" >/dev/null 2>&1; then login=no; fi
+            fi ;;
+    esac
+    if [[ "$login" != yes ]]; then
+        printf 'reach: pair selection %s: login %s (status exit %s); not selected\n' "$cli" "$([[ "$login" == no ]] && printf 'signed out' || printf unknown)" "$rc" >&2
+        if ((rc != 0)) && [[ -s "$scratch/auth.err" ]]; then cat "$scratch/auth.err" >&2; fi
+        continue
+    fi
+    vendor="$(model_vendor "$provider" "$model")"
+    candidates+=("$agent"); kinds+=("$kind"); models+=("$model"); providers+=("$provider"); vendors+=("${vendor:-unknown}")
+done < <(jq -nr --arg order "$order" '$order | split(",")[] | gsub("^\\s+|\\s+$"; "")')
+((${#candidates[@]})) || { printf 'reach: pair selection: no usable signed-in agent found; no agents started\n' >&2; exit 3; }
+first=0 second=0
+for index in "${!candidates[@]}"; do
+    [[ "${vendors[$index]}" != unknown ]] || continue
+    for partner_index in "${!candidates[@]}"; do
+        if [[ "${vendors[$partner_index]}" != unknown && "${vendors[$partner_index]}" != "${vendors[$index]}" ]]; then
+            first="$index"; second="$partner_index"; break 2
+        fi
+    done
+done
+if [[ "${vendors[$first]}" == "${vendors[$second]}" ]]; then
+    printf 'Both agents use %s (%s). They implement and review together; this pair has no cross-vendor review.\n' "${candidates[$first]}" "${vendors[$first]}"
+else
+    printf 'Agents use %s (%s) and %s (%s).\n' "${candidates[$first]}" "${vendors[$first]}" "${candidates[$second]}" "${vendors[$second]}"
+fi
+for entry in "$sender Caller" "$implementer Implementer" "$reviewer Reviewer"; do
+    read -r address name <<<"$entry"
+    [[ -f "$root/$address/seat.json" ]] || "$reach" init --as "$address" --name "$name" > /dev/null
+done
+
+spawn() {
+    local index="$1" address="$2"
+    local -a flags=(--as "$address" --cwd "$cwd" --window)
+    [[ -z "${models[$index]}" ]] || flags+=(--model "${models[$index]}")
+    [[ "${kinds[$index]}" != hermes || -z "${providers[$index]}" ]] || flags+=(--provider "${providers[$index]}")
+    "$reach" spawn "${kinds[$index]}" "${flags[@]}"
+}
+
+send_assignment() {
+    local address="$1" role="$2" partner="$3" reply_to="$4" body="$5" id="$6"
+    {
+        printf 'From: Caller <%s>\nTo: %s <%s>\nReply-To: Partner <%s>\nDate: %s\nSubject: [DECISION] %s task\nMessage-ID: <%s>\nX-Type: decision\nX-Work: %s\n\n' \
+            "$sender" "$role" "$address" "$reply_to" "$(date -R)" "$role" "$id" "$work"
+        printf 'Role: %s\nProject: %s\nPartner: %s\n\n%s\n\nTask:\n%s\n' "$role" "$cwd" "$partner" "$body" "$task"
+    } | "$reach" send --as "$sender" --no-ring
+}
+
+spawn "$first" "$implementer" || { rc=$?; printf 'reach: pair spawn %s: failed (exit %s); no implementer started\n' "$implementer" "$rc" >&2; exit "$rc"; }
+printf 'Implementer: %s; view: tmux attach-session -t %s\n' "$implementer" "$(jq -r '.handle | split(":") | last' "$root/$implementer/reachable.json")"
+spawn_status=0
+spawn "$second" "$reviewer" || spawn_status=$?
+if ((spawn_status != 0)); then
+    send_assignment "$implementer" Implementer "$reviewer" "$implementer" \
+        'Implement the task. The reviewer failed to start; continue useful work and report this limitation. Preserve installed project memory and use existing memory tools.' "$work-impl@$host"
+    "$reach" ring "$implementer" || true
+    printf 'reach: pair spawn %s: reviewer launch failed (exit %s); only implementer started; task stored at %s\n' "$reviewer" "$spawn_status" "$root/$implementer" >&2
+    exit "$spawn_status"
+fi
+printf 'Reviewer: %s; view: tmux attach-session -t %s\n' "$reviewer" "$(jq -r '.handle | split(":") | last' "$root/$reviewer/reachable.json")"
+review_id="$work-review@$host"
+delivery_status=0
+send_assignment "$reviewer" Reviewer "$implementer" "$implementer" \
+    'Read the task and project experience through installed memory tools. Do not independently implement or edit production files. Accept this assignment, then finish this turn and await a Reach message from the implementer containing its result. Read that result and the actual changed files. Reply without --state to this original assignment with concrete defects or an explicit no-defect result; its Reply-To sends your review to the implementer. Review subsequent fixes with the same partner. Use the installed Reach guide for acceptance/reply syntax.' "$review_id" || {
+    delivery_status=$?
+    printf 'reach: pair assign %s: delivery failed (exit %s); continuing implementer assignment\n' "$reviewer" "$delivery_status" >&2
+}
+send_assignment "$implementer" Implementer "$reviewer" "$reviewer" \
+    "Implement the task in this project using its installed memory tools. Your assigned reviewer is $reviewer. After implementation, send a decision card through Reach to that reviewer with changed paths, checks and the result; include this review assignment Message-ID <$review_id> so it can reply to its original assignment. Read the review sent to your mailbox, address concrete findings, and send fixes back for review. Do not start a third reviewer or invoke the standalone peer-review skill." "$work-impl@$host" || {
+    delivery_status=$?
+    printf 'reach: pair assign %s: delivery failed (exit %s); reviewer assignment remains available\n' "$implementer" "$delivery_status" >&2
+}
+"$reach" ring "$reviewer" || printf 'reach: pair notify %s: failed; review assignment remains stored\n' "$reviewer" >&2
+"$reach" ring "$implementer" || printf 'reach: pair notify %s: failed; implementation task remains stored\n' "$implementer" >&2
+((delivery_status == 0)) || exit "$delivery_status"
+# Reuse the existing wait command and its invocation deadline; no background waiter.
+remaining=$((280 - SECONDS))
+((remaining >= 0)) || remaining=0
+review_path=''
+if review_path="$("$reach" wait --as "$implementer" --from "$reviewer" --reply-to "<$review_id>" --timeout "$remaining" --every 2)"; then
+    printf 'Review returned by %s:\n' "$reviewer"
+    "$release/vendor/bin/mshow" -N -h '' "$review_path"
+else
+    rc=$?
+    printf 'reach: pair review %s: no verified review result (exit %s); assignments remain stored; both agents continue in %s\n' "$reviewer" "$rc" "$cwd" >&2
+    exit "$rc"
+fi
