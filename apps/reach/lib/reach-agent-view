@@ -70,7 +70,9 @@ if ((${#projected[@]})); then
             elif ($targets | length) > 1 then . + {owner:"unknown",handoff_error:"multiple linked handoff cards"}
             else . end) |
         . as $linked | .[] |
-        select(.message_id as $id | any($linked[]; .handoff_message_id == $id) | not) |
+        select(. as $candidate | any($linked[]; . as $original |
+            $candidate.work == $original.work and $candidate.sender == $original.recipient and
+            $candidate.recipient != $original.recipient and ($candidate.body | contains($original.message_id))) | not) |
         del(.body)'
 fi
 exit "$status"

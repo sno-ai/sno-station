@@ -349,6 +349,9 @@ export async function readAgentView(options: AgentViewOptions = {}): Promise<Age
 	const root = options.reachRoot ?? process.env.SNO_REACH_ROOT ?? join(homedir(), ".local/state/sno-reach");
 	await readSeats(root, view.agents, view.errors);
 	view.work = await reachWork({ ...options, reachRoot: root }, view.errors);
+	for (const item of view.work.filter(item => item.handoff_error)) {
+		view.errors.push(failure("associate Reach handoff", text(item.message_id), item.handoff_error, "work ownership unknown"));
+	}
 	const releases = view.agents.flatMap(row => row.work);
 	for (const release of releases) {
 		const item = view.work.find(item => item.message_id === release.message_id && item.work === release.work &&
@@ -369,7 +372,6 @@ export async function readAgentView(options: AgentViewOptions = {}): Promise<Age
 			!row.work.some(item => !["completed", "failed", "cancelled", "refused", "dismissed", "expired", "superseded"].includes(text(item.state)))) {
 			row.group = "Finished"; row.subgroup = "handed over";
 		}
-		for (const item of row.work.filter(item => item.handoff_error)) row.missingReasons.push(text(item.handoff_error));
 	}
 	view.quota = [...new Set(view.agents.map(row => row.harness))].map(harness => ({ harness, state: "unknown", reason: "no quota observation; use explicit refresh", source: "unknown", observedAt: "unknown" }));
 	const groups = ["Needs you", "Working", "Finished", "unknown"];
