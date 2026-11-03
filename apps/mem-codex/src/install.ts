@@ -1,14 +1,12 @@
 import { createHash } from "node:crypto";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, join } from "node:path";
-import { fileURLToPath } from "node:url";
 import {
 	CODING_SKIN_HOOKS,
 	CODING_SKIN_MODEL_COMMANDS,
 	codingSkinHookCommand,
 	isCodingSkinHookCommand,
 	snoProgramPath,
-	shellQuote,
 } from "@snoai/memory/coding-skin";
 import { APP_NAME } from "./constants.js";
 import { MESSAGES } from "./messages.js";
@@ -200,9 +198,7 @@ export async function installCodex(options: InstallOptions): Promise<void> {
 		const currentGroups = hooks.hooks[event] ?? [];
 		const hook: HookCommand = {
 			type: "command",
-			command: event === "PermissionRequest" || event === "Interrupt"
-				? `${shellQuote(process.execPath)} ${shellQuote(fileURLToPath(new URL("./cli.js", import.meta.url)))} ${details.subcommand}`
-				: codingSkinHookCommand(programPath, details.subcommand, "codex"),
+			command: codingSkinHookCommand(programPath, details.subcommand, "codex"),
 			timeout: codexHookTimeout(event),
 		};
 		let installed = false;
