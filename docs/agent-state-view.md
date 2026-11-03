@@ -2,7 +2,7 @@
 
 Sno Station records observations from Claude Code, Codex, Cursor and Hermes without the memory service. A reader computes activity, process presence, resume evidence and human waits when a view opens. Known Reach seats without supported capture remain visible with unknown observations, including OpenClaw.
 
-The `sno squad` dispatcher is pending CLI integration. The Station implementation is packaged as `@snoai/memory/dist/agent-state-view.js`. The CLI integration should run that entry with Node, forward the existing global JSON option as `--json`, inherit terminal input/output, and propagate its exit code. It takes no work-set argument. Without a terminal it prints one snapshot; `--json` prints one JSON object. With a terminal, arrows or j/k select a row, Enter opens a result, Space reads local observations, r explicitly reads account quota, and q/Escape restores the terminal and exits.
+`sno squad` shows your local agents. The Rust command runs the packaged Station reader with Node, inherits terminal input/output, and returns its exit code. `sno --json squad` emits one JSON object. It takes no work-set argument. Without a terminal it prints one snapshot; `--json` prints one JSON object. With a terminal, arrows or j/k select a row, Enter opens a result, Space reads local observations, r explicitly reads account quota, and q/Escape restores the terminal and exits.
 
 For installed integrations:
 
@@ -25,4 +25,4 @@ Reach-created tmux sessions append a local command to their session's inherited 
 
 Quota is read only through the existing subscription reader on explicit full-screen refresh. Local redraw, JSON, status lines and tmux do not probe account endpoints. Unknown, unauthenticated and not-applicable results retain their meaning; a reader failure is not exhaustion.
 
-Work discovery reuses Reach message headers and its existing progress parser. Released handoff ownership needs the actual work/message and both agents associated with the release. That association and the public CLI dispatcher remain pending; readiness and a generic release category do not establish transfer. Live model/visual journeys still need authenticated disposable client profiles.
+Work discovery reuses Reach message headers and its existing progress parser. A transfer card names the original Message-ID in its body, keeps the same X-Work, and goes from the current owner to the receiver. The original item retains its owner while the receiver prepares. After Reach verifies the release response naming that transfer card, it appends `handoff-released` to the receiver's captured session. The observation identifies the original message, transfer card, work and both agents. The view then assigns that same item to the receiver and reads its progress from the transfer card. Readiness does not move ownership. A missing or ambiguous association leaves ownership unconfirmed with a diagnostic; other work stays visible.

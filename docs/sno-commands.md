@@ -63,9 +63,12 @@ Global options on every command: `--json` (machine-readable output), `-h` / `--h
 | Command | What it does | Who |
 | --- | --- | --- |
 | `sno reach VERB [options]` with VERB one of `pair spawn register unregister seats call watch ring send reply inbox wait dismiss log state flush init rebind doctor export lint remind` | Contact another agent, exchange work cards, read the inbox, wait for a reply, manage seats | an agent |
+| `sno squad` / `sno --json squad` | Shows who needs you, who is working, and finished results across local agents; opens full screen in a terminal, or prints a snapshot/JSON | you or an agent |
 | `sno reach pair "TASK"` | Starts two new agents in the current project: one implements and the other reviews its result through Reach; uses one signed-in vendor when needed and identifies the actual composition | you or an agent |
 | `sno reach call SEAT "TEXT" [--expect REGEX] [--timeout SECONDS] [--every SECONDS]` | Stores the full instruction in the local receiver's mailbox, sends one short cue, and waits for verified receiver output; busy or timed-out calls retain their mail | an agent |
 | `sno reach call SEAT "TEXT" --raw` | Types literal text into a tmux seat without mailbox storage or a reply wait | an agent |
+
+See [local squad observations](agent-state-view.md) for the status lines, tmux bar and full-screen controls.
 
 ## 6. Small programs
 
