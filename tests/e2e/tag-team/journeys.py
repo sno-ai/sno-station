@@ -164,9 +164,19 @@ def lesson(f, agent):
         f.send(pane, "Report whether this sum task is ready; leave files unchanged.")
         reply = f.until(lambda: next((t for t in f.replies(agent)[before:] if t.strip().startswith("Verified result:")), None),
                         "same-session next reply follows approved lesson without restatement", 85)
+        after_compact = None
+        if agent == "codex":
+            f.send(pane, "/compact")
+            f.until(lambda: compacted(f, agent), "approved-lesson conversation actually compacted", 75)
+            before = len(f.replies(agent))
+            f.send(pane, "Report whether this sum task is ready; leave files unchanged.")
+            after_compact = f.until(lambda: next((t for t in f.replies(agent)[before:]
+                if t.strip().startswith("Verified result:")), None), "approved lesson applies again after compaction", 60)
+            assert "invalid PostCompact hook JSON output" not in f.screen(pane, "lesson-postcompact-ui")
         sessions = {r.get("sessionId") for r in f.view("lesson-view")["agents"] if r["harness"] == agent}
         assert len(sessions) == 1, sessions
-        return dict(next_reply=reply, sessions=list(sessions), expected_result_shown=True, success_criteria_shown=True)
+        return dict(next_reply=reply, postcompact_reply=after_compact, sessions=list(sessions),
+                    expected_result_shown=True, success_criteria_shown=True)
     finally:
         f.screen(pane, "lesson-final-ui")
 
