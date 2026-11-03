@@ -7,13 +7,22 @@
 set -Eeuo pipefail
 here="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 public="${REACH_UNDER_TEST:-$here/../../../../apps/reach/bin/sno-reach}"
-python3 - "$public" <<'PY'
-import atexit, json, os, pathlib, subprocess, sys, tempfile, time
+python3 - "$public" "${1:-all}" <<'PY'
+import atexit, json, os, pathlib, shutil, subprocess, sys, tempfile, time
 reach = sys.argv[1]
+scenario = sys.argv[2]
+assert scenario in ("all", "ring-submit"), scenario
 proof = pathlib.Path(tempfile.mkdtemp(prefix='reach-cursor-spawn.'))
 print('evidence:', proof, flush=True)
 commands = proof / 'commands'; commands.mkdir()
 version = proof / 'install/cursor-agent/versions/2026.10.01-fake'; version.mkdir(parents=True)
+real_tmux = shutil.which('tmux')
+(commands / 'tmux').write_text('#!/usr/bin/env python3\n' +
+    'import json,subprocess,sys\n' +
+    f'with open({str(proof / "tmux-commands.jsonl")!r}, "a") as log: log.write(json.dumps(sys.argv[1:])+"\\n")\n' +
+    f'sys.exit(subprocess.call([{real_tmux!r}]+sys.argv[1:]))\n')
+(commands / 'tmux').chmod(0o755)
+
 (commands / 'cursor-agent').write_text(f'#!/usr/bin/env bash\nexec -a "$0" python3 {version}/index.js "$@"\n')
 (commands / 'cursor-agent').chmod(0o755)
 (version / 'index.js').write_text('''import json,os,pathlib,re,subprocess,sys,time,uuid
@@ -62,13 +71,19 @@ assert json.loads((state / 'reachable.json').read_text())['harness'] == 'cursor'
 assert json.loads((state / 'transcript.json').read_text())['transcript'] == 'cursor-transcript'
 print('PASS: spawn cursor --model runs cursor-agent --force --trust --model with the startup context; seat runtime cursor-agent', flush=True)
 
-result = subprocess.run([reach, 'call', seat, 'Reply from the Cursor seat.', '--expect', '^CURSOR-ANSWER$', '--timeout', '5', '--every', '1'],
-                        env=env, capture_output=True, text=True, timeout=20)
-assert result.returncode == 0, result.stdout + result.stderr
-assert 'CURSOR-ANSWER' in result.stdout and 'Unrelated' not in result.stdout, result.stdout
-print('PASS: call verifies the reply from the Cursor transcript that holds its receipt', flush=True)
+if scenario == 'all':
+    result = subprocess.run([reach, 'call', seat, 'Reply from the Cursor seat.', '--expect', '^CURSOR-ANSWER$', '--timeout', '5', '--every', '1'],
+                            env=env, capture_output=True, text=True, timeout=20)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert 'CURSOR-ANSWER' in result.stdout and 'Unrelated' not in result.stdout, result.stdout
+    print('PASS: call verifies the reply from the Cursor transcript that holds its receipt', flush=True)
 
+log_path = proof / 'tmux-commands.jsonl'
+command_offset = len(log_path.read_text().splitlines())
 result = subprocess.run([reach, 'ring', seat], env=env, capture_output=True, text=True, timeout=60)
 assert result.stdout.strip() == 'rang-unverified', (result.stdout, result.stderr)
-print('PASS: ring finds the executor live by the Cursor CLI command line', flush=True)
+commands_sent = [json.loads(line) for line in log_path.read_text().splitlines()[command_offset:]]
+submits = [args[-1] for args in commands_sent if args and args[0] == 'send-keys' and args[-1] in ('Enter', 'C-m')]
+assert submits == ['C-m'], ('Cursor notification remained in composer with Enter', submits)
+print('PASS: ring submits Cursor with one literal carriage return and finds its executor process', flush=True)
 PY
