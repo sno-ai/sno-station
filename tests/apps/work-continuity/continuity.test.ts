@@ -85,8 +85,8 @@ function saveBrief(session: string, body: string): string {
 }
 
 describe("task and approved-lesson host delivery", () => {
-	it("makes the first session's instructed brief path writable without inventing its task", () => {
-		const started = hook("mem-claude", "session-start", "first-session", { source: "startup" });
+	it.each(["mem-claude", "mem-codex"] as const)("%s makes the first session's instructed brief path writable without inventing its task", app => {
+		const started = hook(app, "session-start", "first-session", { source: "startup" });
 		const file = continuityBriefPath("first-session");
 		expect(started.context).toContain(file);
 		const command = /Run (.+?) to create its template first/.exec(started.context)?.[1];
@@ -95,7 +95,7 @@ describe("task and approved-lesson host delivery", () => {
 		expect(saved.status, saved.stderr).toBe(0);
 		const record = readFileSync(file, "utf8");
 		expect(record).toContain("## Next");
-		expect(record).toContain("runtime: claude-code\nsession-id: first-session");
+		expect(record).toContain(`runtime: ${app === "mem-claude" ? "claude-code" : "codex"}\nsession-id: first-session`);
 	});
 
 	it.each(["mem-claude", "mem-codex"] as const)("%s keeps the full brief when memory settings are unavailable", app => {
