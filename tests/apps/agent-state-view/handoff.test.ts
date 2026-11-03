@@ -40,6 +40,11 @@ it("retains the original work owner until the matching release and transfers onl
 		expect(view.agents.find(row => row.reachAddress === source)).toMatchObject({ group: "Working" });
 		await rm(join(root, source, "new", "unrelated"));
 		expect((await readAgentView(options)).agents.find(row => row.reachAddress === source)).toMatchObject({ group: "Finished", subgroup: "handed over" });
+		await writeFile(join(root, target, "new", "second-transfer"), card("second-transfer", source, target, "transfer-work", "Another transfer of <original@localhost>"));
+		const ambiguous = await readAgentView(options);
+		expect(ambiguous.work).toHaveLength(1);
+		expect(ambiguous.work[0]?.owner).toBe("unknown");
+		expect(ambiguous.errors.some(error => error.operation === "associate Reach handoff")).toBe(true);
 	} finally {
 		if (previous.profile === undefined) delete process.env.SNO_PROFILE_DIR; else process.env.SNO_PROFILE_DIR = previous.profile;
 		if (previous.address === undefined) delete process.env.SNO_REACH_ADDR; else process.env.SNO_REACH_ADDR = previous.address;
