@@ -106,6 +106,21 @@ else
     created=yes
     [[ "$handle" =~ ^%[0-9]+$ ]] || { printf 'reach: tmux returned invalid pane\n' >&2; exit 65; }
     env "${register_env[@]}" "$release/lib/reach-main" register --as "$address" --channel tmux --handle "$handle" 9>&- >&2
+    # Resolve once at spawn; tmux refreshes only run the local state reader.
+    if npm_root="$(npm root -g 9>&-)"; then
+        if [[ ! -w "$npm_root" && -z "${npm_config_prefix:-}${NPM_CONFIG_PREFIX:-}" ]]; then
+            npm_root="$HOME/.local/lib/node_modules"
+        fi
+        state_view="$npm_root/@snoai/memory/dist/agent-state-view.js"
+        if [[ -r "$state_view" ]]; then
+            if original_bar="$(tmux show-options -Aqv -t "$session" status-right)" &&
+               bar_command="$(jq -nr '$ARGS.positional | @sh' --args -- env \
+                   "SNO_PROFILE_DIR=${SNO_PROFILE_DIR:-$HOME/.sno}" "SNO_REACH_ROOT=$root" \
+                   node "$state_view" --compact --reach-address "$address")" &&
+               tmux set-option -t "$session" status-right "$original_bar #($bar_command)"; then :
+            else printf 'reach: compose squad bar %s: tmux setup failed; agent remains available\n' "$session" >&2; fi
+        else printf 'reach: compose squad bar %s: state reader unavailable at %s; agent remains available\n' "$session" "$state_view" >&2; fi
+    else printf 'reach: compose squad bar %s: npm package lookup failed; agent remains available\n' "$session" >&2; fi
 fi
 # The transcript is the seat's own record of what it said; call verifies against it,
 # never against the screen. Claude writes <projects>/<cwd slug>/<session id>.jsonl; Codex
