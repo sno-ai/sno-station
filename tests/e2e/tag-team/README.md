@@ -13,6 +13,15 @@ The tested packages are the source checkout's actual built packages, linked into
 private npm prefix. No fake `sno`, agent, mailbox, hook or recovery implementation
 is supplied.
 
+The current shared ccproxy drops native Codex developer messages when their content
+is an array. Each private fixture therefore runs a local HTTP relay that converts
+only system/developer content arrays to equivalent text before forwarding to the
+real ccproxy at `http://localhost:8070/codex/v1`. It supplies no task facts, hook
+output, lesson, tool result or model response. `ccproxy-context.jsonl` records the
+converted-message count and upstream status; provenance names both endpoints. The
+shared service is left unchanged. Passing through this relay does not establish
+that the unmodified shared endpoint preserves native Codex context.
+
 ```sh
 python3 tests/e2e/tag-team/run.py pair --variant two-vendors
 python3 tests/e2e/tag-team/run.py pair --variant claude-only

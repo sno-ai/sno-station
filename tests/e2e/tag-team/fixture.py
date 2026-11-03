@@ -4,6 +4,9 @@ Reuse tests/apps/*/e2e-agent and tests/apps/reach/seats isolation conventions.
 No simulated agents, fabricated host events or production settings are used.
 """
 import json
+import http.client
+from contextlib import closing
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import os
 from pathlib import Path
 import shlex
@@ -12,6 +15,7 @@ import signal
 import socket
 import subprocess
 import tempfile
+import threading
 import time
 import tomllib
 import uuid
@@ -20,6 +24,44 @@ import uuid
 REPO = Path(__file__).resolve().parents[3]
 SKILLS = Path(os.environ.get("SNO_SKILLS_SOURCE", REPO.parent / "sno-station-skills-core"))
 SNO = Path(os.environ.get("SNO_BINARY", REPO.parent / "sno-cli-core/target/debug/sno"))
+
+
+class CodexProxy(BaseHTTPRequestHandler):
+    """Preserve native developer context across ccproxy's observed array-content loss."""
+
+    def do_POST(self):
+        body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+        converted = 0
+        for item in body.get("input", []):
+            if isinstance(item, dict) and item.get("role") in ("system", "developer") and isinstance(item.get("content"), list):
+                item["content"] = "\n".join(part["text"] for part in item["content"] if isinstance(part.get("text"), str))
+                converted += 1
+        payload = json.dumps(body).encode()
+        self.forward(payload, converted)
+
+    def do_GET(self):
+        self.forward(None, 0)
+
+    def forward(self, payload, converted):
+        headers = {k: v for k, v in self.headers.items() if k.lower() not in ("host", "content-length", "connection")}
+        if payload is not None:
+            headers["Content-Length"] = str(len(payload))
+        with closing(http.client.HTTPConnection("localhost", 8070, timeout=90)) as upstream:
+            upstream.request(self.command, self.path, payload, headers)
+            response = upstream.getresponse()
+            self.send_response(response.status)
+            for key, value in response.getheaders():
+                if key.lower() not in ("content-length", "transfer-encoding", "connection"):
+                    self.send_header(key, value)
+            self.end_headers()
+            while chunk := response.read1(65536):
+                self.wfile.write(chunk)
+                self.wfile.flush()
+        with self.server.evidence.open("a") as out:
+            out.write(json.dumps(dict(path=self.path, developer_arrays_preserved=converted, status=response.status)) + "\n")
+
+    def log_message(self, *_args):
+        pass
 
 
 class Unavailable(RuntimeError):
@@ -35,6 +77,7 @@ class Fixture:
         self.server = "tag-team-" + uuid.uuid4().hex[:12]
         self.credentials = []
         self.sidecar = None
+        self.codex_proxy = None
         self.started = time.monotonic()
         self.deadline = self.started + 270  # Reserve cleanup within the 295-second total budget.
         self.agents = agents
@@ -109,11 +152,17 @@ class Fixture:
             p.write_text(json.dumps(onboarding))
         source_config = Path(os.environ.get("CODEX_HOME", Path.home() / ".codex")) / "config.toml"
         selected = tomllib.loads(source_config.read_text()) if source_config.exists() else {}
+        if "codex" in self.agents:
+            self.codex_proxy = ThreadingHTTPServer(("127.0.0.1", 0), CodexProxy)
+            self.codex_proxy.evidence = self.root / "ccproxy-context.jsonl"
+            threading.Thread(target=self.codex_proxy.serve_forever, daemon=True).start()
+        codex_endpoint = ("http://127.0.0.1:" + str(self.codex_proxy.server_port) + "/codex/v1"
+                          if self.codex_proxy else "http://localhost:8070/codex/v1")
         # The user-level Codex E2E convention uses ccproxy, never a direct OpenAI endpoint.
         config = 'model = ' + json.dumps(selected.get("model", "gpt-6.1-sol")) + '\n'
         config += 'model_reasoning_effort = "low"\napproval_policy = "never"\nsandbox_mode = "danger-full-access"\n'
         config += 'model_provider = "ccproxy"\n[model_providers.ccproxy]\nname = "ccproxy"\n'
-        config += 'base_url = "http://localhost:8070/codex/v1"\nwire_api = "responses"\nrequires_openai_auth = false\n'
+        config += 'base_url = ' + json.dumps(codex_endpoint) + '\nwire_api = "responses"\nrequires_openai_auth = false\n'
         config += '[projects.' + json.dumps(str(self.project)) + ']\ntrust_level = "trusted"\n'
         (self.home / ".codex/config.toml").write_text(config)
         (self.home / ".config/sno/models.toml").write_text('[models]\nhandoff_order="claude-code,codex"\n')
@@ -154,6 +203,7 @@ console.log(JSON.stringify({pid:c.pid,port:c.port}));
                     for a in self.agents}
         (self.root / "provenance.json").write_text(json.dumps(dict(host=socket.gethostname(), versions=versions,
             sno=str(SNO), source=str(REPO), codex_model=selected.get("model"), codex_endpoint="http://localhost:8070/codex/v1",
+            codex_test_relay=codex_endpoint,
             sidecar=self.sidecar), indent=2))
 
     def run(self, args, *, timeout=30, check=False, input=None, cwd=None, env=None):
@@ -245,7 +295,7 @@ console.log(JSON.stringify({pid:c.pid,port:c.port}));
         return json.loads(result.stdout)
 
     def stop_codex(self):
-        # Closing the TUI alone leaves its private app-server writing the native thread.
+        # Abrupt interruption also stops the private app-server; native hook shutdown can outlive SIGTERM.
         owned = []
         marker = ("CODEX_HOME=" + str(self.home / ".codex")).encode()
         for proc in Path("/proc").iterdir():
@@ -258,7 +308,7 @@ console.log(JSON.stringify({pid:c.pid,port:c.port}));
                 continue
         for pid in owned:
             try:
-                os.kill(pid, signal.SIGTERM)
+                os.kill(pid, signal.SIGKILL)
             except ProcessLookupError:
                 pass
         def exited():
@@ -272,11 +322,16 @@ console.log(JSON.stringify({pid:c.pid,port:c.port}));
         try:
             subprocess.run([self.tmux, "-L", self.server, "kill-server"], capture_output=True, timeout=10)
         finally:
-            self.stop_codex()
-            for p in self.credentials:
-                p.unlink(missing_ok=True)
-            if self.sidecar:
-                try:
-                    os.kill(self.sidecar["pid"], signal.SIGTERM)
-                except ProcessLookupError:
-                    pass
+            try:
+                self.stop_codex()
+            finally:
+                if self.codex_proxy:
+                    self.codex_proxy.shutdown()
+                    self.codex_proxy.server_close()
+                for p in self.credentials:
+                    p.unlink(missing_ok=True)
+                if self.sidecar:
+                    try:
+                        os.kill(self.sidecar["pid"], signal.SIGTERM)
+                    except ProcessLookupError:
+                        pass
