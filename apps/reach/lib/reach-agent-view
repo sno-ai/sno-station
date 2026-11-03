@@ -62,16 +62,16 @@ if ((${#projected[@]})); then
     printf '%s\n' "${projected[@]}" | jq -sc '
         . as $items |
         map(. as $original |
-            [$items[] | select(.work == $original.work and .sender == $original.recipient and
+            [$items[] | select(.work == $original.work and
                 .recipient != $original.recipient and (.body | contains($original.message_id)))] as $targets |
             if ($targets | length) == 1 then
-                . + {handoff_to:$targets[0].recipient,handoff_message_id:$targets[0].message_id,
+                . + {handoff_to:$targets[0].recipient,handoff_sender:$targets[0].sender,handoff_message_id:$targets[0].message_id,
                     handoff_state:$targets[0].state,handoff_since:$targets[0].since,handoff_blocked_on:$targets[0].blocked_on}
             elif ($targets | length) > 1 then . + {owner:"unknown",handoff_error:"multiple linked handoff cards"}
             else . end) |
         . as $linked | .[] |
         select(. as $candidate | any($linked[]; . as $original |
-            $candidate.work == $original.work and $candidate.sender == $original.recipient and
+            $candidate.work == $original.work and
             $candidate.recipient != $original.recipient and ($candidate.body | contains($original.message_id))) | not) |
         del(.body)'
 fi

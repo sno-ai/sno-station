@@ -382,7 +382,7 @@ export async function readAgentView(options: AgentViewOptions = {}): Promise<Age
 /** Called only after Reach verifies the receiver's release response. */
 export async function recordAgentHandoff(source: string, target: string, releaseText: string, options: AgentViewOptions = {}): Promise<void> {
 	const view = await readAgentView(options);
-	const candidates = view.work.filter(item => item.handoff_to === target && (!source || item.recipient === source) &&
+	const candidates = view.work.filter(item => item.handoff_to === target && (!source || item.handoff_sender === source) &&
 		typeof item.handoff_message_id === "string" && releaseText.includes(item.handoff_message_id));
 	if (candidates.length !== 1) throw new Error("release has no unique linked work card; ownership remains unknown");
 	const item = candidates[0];

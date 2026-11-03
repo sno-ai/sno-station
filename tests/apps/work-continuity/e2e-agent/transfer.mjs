@@ -214,6 +214,13 @@ try {
   proof.releaseObservation = { source: 'real Reach call output and native receiver transcript', recipient: receiver, card: receiverId, nonce: releaseNonce, output: releaseCall.stdout };
   proof.auxiliaryFailures = [];
   proof.squadOwnershipObservation = !releaseCall.stderr.includes('observation failed');
+  const squad = JSON.parse(ok(invoke(sno, ['--json', 'squad'])));
+  writeFileSync(join(root, 'squad-after-release.json'), JSON.stringify(squad, null, 2));
+  const owned = squad.work.filter(item => item.work === work);
+  assert.equal(owned.length, 1, 'continued work must remain a single task');
+  assert.equal(owned[0].owner, receiver, 'the real release must move work ownership to the receiver');
+  assert.equal(owned[0].message_id, originalId, 'ownership must preserve the original task');
+  proof.squadOwnershipObservation &&= owned[0].owner === receiver;
   if (!proof.squadOwnershipObservation) proof.auxiliaryFailures.push({ operation: 'record released work for squad display', target: receiver,
     error: releaseCall.stderr, impact: 'squad ownership observation unavailable; released task still completed' });
   const ledger = join(profile, 'observe/ledger.jsonl');
@@ -238,7 +245,7 @@ try {
     releaseNonce, releaseBeforeWrite: true, realScopedRecall: fixture.memory.id, actualResult: '57\n', nextAction: 'completed', recovery: 'rebuilt', originalConversation: 'lost', fullPayloadInMailboxAndShortCue: true, releaseObservation: true };
   proof.models = [...new Set(rows.filter(row => row.type === 'assistant').map(row => row.message.model))];
   proof.transcript = rows; proof.taskRows = finalTasks; proof.report = report;
-  proof.functional_passed = true; proof.passed = proof.persistedReleaseTelemetry;
+  proof.functional_passed = true; proof.passed = proof.persistedReleaseTelemetry && proof.squadOwnershipObservation;
   proof.acceptance = proof.passed ? 'passed' : 'partial: real transfer completed; persisted release observation is unproven';
   if (!proof.passed) process.exitCode = 2;
   console.log(JSON.stringify({ functional_passed: true, passed: proof.passed, persistedReleaseTelemetry: proof.persistedReleaseTelemetry,
