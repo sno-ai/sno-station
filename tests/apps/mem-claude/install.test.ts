@@ -44,7 +44,7 @@ describe("Claude settings installation and diagnosis", () => {
 		await install();
 		const installed = await settings();
 		expect(Object.keys(installed).sort()).toEqual(["hooks", "permissions", "statusLine"]);
-		expect(Object.keys(installed.hooks).sort()).toEqual([...events.map(([event]) => event), "PermissionRequest", "Notification", "StopFailure"].sort());
+		expect(Object.keys(installed.hooks).sort()).toEqual([...events.map(([event]) => event), "PreCompact", "PermissionRequest", "Notification", "StopFailure"].sort());
 		for (const [event, subcommand, timeout] of events) {
 			expect(installed.hooks[event]).toHaveLength(1);
 			expect(installed.hooks[event][0].hooks).toEqual([
