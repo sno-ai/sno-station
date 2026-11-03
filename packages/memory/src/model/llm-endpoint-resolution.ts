@@ -12,7 +12,7 @@ import {
 	resolveConfiguredBundledLlmixEndpoint,
 } from "./llmix-registry";
 
-const SNO_GPU_ORIGIN = "https://rt3-llm.sno.ai";
+const SNO_GPU_ORIGIN = "https://gpu.sno.ai";
 const PROVIDER_API_BASES: Record<Exclude<LlmProvider, "sno-gpu">, string> = {
 	openai: FIXED_PROTOCOL_VALUE_69,
 	openrouter: "https://openrouter.ai/api/v1",
