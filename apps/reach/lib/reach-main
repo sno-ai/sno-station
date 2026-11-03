@@ -104,7 +104,7 @@ die() {
 
 usage() {
     printf 'usage: sno reach <verb> [options]\n'
-    printf '%s\n' 'spawn register unregister seats call watch ring send reply inbox wait dismiss log state flush init rebind doctor export lint remind'
+    printf '%s\n' 'pair spawn register unregister seats call watch ring send reply inbox wait dismiss log state flush init rebind doctor export lint remind'
     if (($#)); then exit "$1"; else exit 64; fi
 }
 
@@ -3926,6 +3926,7 @@ case "$verb" in
     export) run_export "$@" ;;
     state) run_state "$@" ;;
     lint) "$LINTER" "$@" ;;
+    pair) exec "$REPO_ROOT/lib/reach-pair" "$@" ;;
     spawn|seats|call|watch|ring|remind) run_"$verb" "$@" ;;
     *) usage ;;
 esac

@@ -25,6 +25,20 @@ sno reach spawn codex --as "$address" --cwd "$PWD"
 
 `init` derives the machine identity, writes `seat.json` with unbound runtime, empty owns and self-supervision, and does not register. An identical repeat preserves identity and mail. A conflicting identity refuses. `spawn` refuses missing initialization or an existing registration. Configured agent kinds use ACP by default; `--window` explicitly creates tmux. The config is `~/.config/sno-reach/agents.json` with entries such as `{"codex":{"acpx_agent":"codex"}}`. Missing config is empty; malformed config refuses.
 
+### Start a pair
+
+Start two agents with one command from the project directory:
+
+```sh
+sno reach pair "Implement the requested change and have the second agent review it."
+```
+
+`pair` initializes and starts two new agents in visible tmux windows using the existing spawn path. It gives them the same task, checkout and partner address through Reach task mail, with complementary roles. The implementer writes the change and sends its result to the reviewer. The reviewer reads that result, inspects the change and returns concrete findings or an explicit no-defect result through Reach; it does not independently edit the same production files. The implementer addresses findings. The launching process is not counted as either agent, and no permanent third agent is required.
+
+The command prefers different known vendors among usable signed-in agents. When only one vendor is usable, both agents use it and still implement and review together. Output identifies the actual composition and says when review is not cross-vendor. Unknown login or vendor information stays unknown; missing optional usage data does not mean signed out. The pair uses existing model/provider configuration and keeps the selected project/profile and installed memory integrations. It does not change agent settings or create another experience base. Its reviewer is the second live agent, not the standalone cross-vendor peer-review skill.
+
+Output gives both addresses, roles and where to view their work. After assigning work, the command uses the existing Reach wait path to return the assigned reviewer's answer to the implementer. If no review answer arrives before the existing command deadline, it returns nonzero and reports that both assignments remain stored and the agents can continue. Launch and registration alone do not prove a finished review. If the second agent fails to launch, the command reports failure and preserves the working implementer with its delivered task. Inspect the returned review, reported windows and Reach mail for the actual result.
+
 An already running seat registers its real channel explicitly:
 
 ```sh
@@ -138,6 +152,6 @@ the 0.3-second pause between literal text and the carriage return. A person can 
 
 ## Public cut
 
-Only these verbs exist: spawn register unregister seats call watch ring send reply inbox wait dismiss log state flush init rebind doctor export lint remind.
+Only these verbs exist: pair spawn register unregister seats call watch ring send reply inbox wait dismiss log state flush init rebind doctor export lint remind.
 
 Use X-Work and X-Name. Old headers, old CLI flags and old wrapper commands are not supported. SNO_REACH_ROOT selects the store; SNO_REACH_ADDR is the default caller. Legacy environment variables and legacy stores are not read. Unknown arguments fail; never interpret a failed read as an empty inbox.
