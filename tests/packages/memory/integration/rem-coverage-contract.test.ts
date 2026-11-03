@@ -285,7 +285,7 @@ describe("ACC-37 production edge: live journal outcomes", () => {
 		// Local-first REM calls the registered host model through its chat-completions route.
 		const responseFixture = await startQcg17ScriptedInvalidResponseFixture({
 			invalidPromptMarker: marker,
-			upstreamUrl: "https://rt3-llm.sno.ai/verdict/v1/completions",
+			upstreamUrl: "https://gpu.sno.ai/verdict/v1/completions",
 			// Every attempt at the marked prompt, retries included, must stay in the scripted fixture.
 			maxInjectedCalls: Number.MAX_SAFE_INTEGER,
 		});

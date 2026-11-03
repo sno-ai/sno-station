@@ -45,9 +45,9 @@ describe("LLM endpoint resolution", () => {
 		expect(
 			materializeBundledLlmixEndpoint({
 				preset: snoPreset("/extract/v1/chat/completions"),
-				baseSource: "https://rt3-llm.sno.ai",
+				baseSource: "https://gpu.sno.ai",
 			}),
-		).toMatchObject({ url: "https://rt3-llm.sno.ai/extract/v1/chat/completions" });
+		).toMatchObject({ url: "https://gpu.sno.ai/extract/v1/chat/completions" });
 	});
 
 	it.each([
@@ -71,7 +71,7 @@ describe("LLM endpoint resolution", () => {
 					provider: "sno-gpu",
 					model: "qwen3.8-27b-extract",
 				},
-				baseSource: "https://rt3-llm.sno.ai",
+				baseSource: "https://gpu.sno.ai",
 			}),
 		).toThrow(/signed endpoint path/);
 	});

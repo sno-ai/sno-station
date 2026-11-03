@@ -50,7 +50,7 @@ it("keeps the signed profile preset intact and sends the route's adapter model a
 	});
 	expect(result).toEqual([]);
 	expect(requests).toEqual([{
-		url: "https://rt3-llm.sno.ai/extract/profile/v1/completions",
+		url: "https://gpu.sno.ai/extract/profile/v1/completions",
 		body: { model: "b-profile", prompt: "user: I prefer tea.\nI live in Rome.", max_tokens: 4096 },
 	}]);
 });
@@ -71,7 +71,7 @@ it("sends the E1 chat route, base model and caller's output budget", async () =>
 	expect(await transport.complete({ callId: "E1", prompt: "Capture this conversation.", maxTokens: 16384 })).toEqual({
 		text: '{"claims_found":[],"decisions":[],"facts":[]}', truncated: false, outputTokens: 16,
 	});
-	expect(requests[0]?.url).toBe("https://rt3-llm.sno.ai/extract/v1/chat/completions");
+	expect(requests[0]?.url).toBe("https://gpu.sno.ai/extract/v1/chat/completions");
 	expect(requests[0]?.body.model).toBe("qwen3.8-27b-extract");
 	expect(requests[0]?.body.max_tokens).toBe(16384);
 	expect(requests[0]?.body.messages).toEqual([
