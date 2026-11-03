@@ -1,7 +1,9 @@
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
 	CODING_SKIN_CURSOR_HOOKS,
+	composeAgentStatusLine,
 	type CodingSkinCursorHookName,
 	codingSkinHookCommand,
 	isCodingSkinHookCommand,
@@ -97,7 +99,9 @@ export function updateHooks(file: HooksFile, programPath: string | undefined): H
 export function updateCliConfig(config: CliConfig, programPath: string | undefined): CliConfig {
 	const allow = (config.permissions?.allow ?? []).filter(rule => !isOwnedPermissionRule(rule));
 	if (programPath !== undefined) allow.push(`Shell(${programPath})`, "Shell(sno)");
-	return { ...config, permissions: { ...config.permissions, allow } };
+	const updated = { ...config, permissions: { ...config.permissions, allow } };
+	composeAgentStatusLine(updated, fileURLToPath(new URL("../dist/cli.js", import.meta.url)), "cursor", programPath !== undefined);
+	return updated;
 }
 
 function updateIdePermissions(config: IdePermissions, programPath: string | undefined): IdePermissions {

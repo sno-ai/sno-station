@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { homedir } from "node:os";
 import { isAbsolute, join } from "node:path";
+import { observeAgentEvent, renderAgentStatusLine } from "@snoai/memory/coding-skin";
 import { doctor } from "./doctor.js";
 import { correctCommand, getCommand, recallCommand, rememberCommand } from "./explicit.js";
 import { postToolUse, preToolUse, sessionEnd, sessionStart, stop, userPromptSubmit } from "./hooks.js";
@@ -11,10 +12,14 @@ import { isTemporaryDirectory, workspaceRoot } from "./scope.js";
 import { runWorker } from "./worker.js";
 
 async function readStdin(): Promise<unknown> {
+	const text = await readStdinText();
+	return text.trim() ? JSON.parse(text) : {};
+}
+
+async function readStdinText(): Promise<string> {
 	const chunks: Buffer[] = [];
 	for await (const chunk of process.stdin) chunks.push(Buffer.from(chunk));
-	const text = Buffer.concat(chunks).toString("utf8").trim();
-	return text ? JSON.parse(text) : {};
+	return Buffer.concat(chunks).toString("utf8");
 }
 
 function option(args: string[], name: string): string | undefined {
@@ -26,9 +31,15 @@ const HOOK_COMMANDS = ["session-start", "user-prompt-submit", "stop", "session-e
 
 async function main(): Promise<number> {
 	const [command, ...args] = process.argv.slice(2);
+	if (command === "status-line") return renderAgentStatusLine("claude", option(args, "--sno-original") ?? "W10=", await readStdinText());
+	if (command === "agent-state-hook") {
+		await observeAgentEvent("claude", args[0] ?? "unknown", await readStdin());
+		return 0;
+	}
 	const input = HOOK_COMMANDS.includes(command ?? "") ? await readStdin() : undefined;
 	// The Cursor IDE runs Claude Code hooks with Cursor-shaped input; Sno's Cursor hooks own Cursor, so these do nothing there.
 	if (input && typeof input === "object" && "cursor_version" in input) return 0;
+	if (input !== undefined && command) await observeAgentEvent("claude", command, input);
 	// Scripted runs (a temporary directory, `claude -p`) and background-task notices are not conversations; the
 	// real-agent release journeys set SNO_CAPTURE_SCRIPTED=1 to be recorded anyway. Measured 2026-10-13: 616 of 785 queued turns.
 	if (input && process.env["SNO_CAPTURE_SCRIPTED"] !== "1" && typeof input === "object") {
@@ -123,13 +134,13 @@ async function main(): Promise<number> {
 
 main().then(code => {
 	process.exitCode = code;
-	if (["session-start", "user-prompt-submit", "stop", "session-end", "pre-tool-use", "post-tool-use", "worker"].includes(process.argv[2] ?? "")) {
+	if ([...HOOK_COMMANDS, "agent-state-hook", "worker"].includes(process.argv[2] ?? "")) {
 		process.stdout.write("", () => process.exit(code));
 	}
 }, error => {
 	const reason = error instanceof Error ? error.message : "engine-failed";
 	const command = process.argv[2];
-	const silentHooks = ["stop", "session-end", "pre-tool-use", "post-tool-use"];
+	const silentHooks = ["stop", "session-end", "pre-tool-use", "post-tool-use", "agent-state-hook"];
 	if (command === "session-start" || command === "user-prompt-submit" || (command !== undefined && silentHooks.includes(command))) {
 		process.stderr.write(`${JSON.stringify({ event: command, reason: "invalid-input" })}\n`);
 		if (command === "session-start" || command === "user-prompt-submit") {

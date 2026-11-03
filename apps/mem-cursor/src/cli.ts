@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { homedir } from "node:os";
 import { isAbsolute, join } from "node:path";
+import { observeAgentEvent, renderAgentStatusLine } from "@snoai/memory/coding-skin";
 import { doctor } from "./doctor.js";
 import { correctCommand, getCommand, recallCommand, rememberCommand } from "./explicit.js";
 import { afterAgentResponse, afterAgentThought, preCompact, sessionEnd, sessionStart, stop, userPromptSubmit } from "./hooks.js";
@@ -20,10 +21,14 @@ const HOOKS: Record<string, (raw: unknown) => Promise<string>> = {
 };
 
 async function readStdin(): Promise<unknown> {
+	const text = await readStdinText();
+	return text.trim() ? JSON.parse(text) : {};
+}
+
+async function readStdinText(): Promise<string> {
 	const chunks: Buffer[] = [];
 	for await (const chunk of process.stdin) chunks.push(Buffer.from(chunk));
-	const text = Buffer.concat(chunks).toString("utf8").trim();
-	return text ? JSON.parse(text) : {};
+	return Buffer.concat(chunks).toString("utf8");
 }
 
 function option(args: string[], name: string): string | undefined {
@@ -39,9 +44,12 @@ function cursorHome(args: string[], required: boolean): string {
 
 async function main(): Promise<number> {
 	const [command = "", ...args] = process.argv.slice(2);
+	if (command === "status-line") return renderAgentStatusLine("cursor", option(args, "--sno-original") ?? "W10=", await readStdinText());
 	const hook = HOOKS[command];
 	if (hook) {
-		process.stdout.write(`${await hook(await readStdin())}\n`);
+		const input = await readStdin();
+		await observeAgentEvent("cursor", command, input);
+		process.stdout.write(`${await hook(input)}\n`);
 		return 0;
 	}
 	const writeOutput = (line: string): void => { process.stdout.write(`${line}\n`); };
