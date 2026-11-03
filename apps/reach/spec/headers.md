@@ -11,8 +11,11 @@ Required: one nonblank unfolded From, Subject, Date, Message-ID, X-Work and X-Ty
 | status | STATUS |
 | done | DONE |
 | cancel | CANCEL |
+| call | CALL |
 
 The tag is bracketed at the start of Subject, optionally preceded by `Re: `. To is action, Cc informed, Bcc private. Each delivered copy has its own Delivered-To; Bcc is stripped. Info cannot name To. An answer includes the original work's Reply-To destination on To, or its From when Reply-To is absent. Blank/invalid Reply-To is an error.
+
+Call mail transports an instruction with its own Message-ID and transport X-Work. It has no X-State and is excluded from owned work/progress derivation. Its body preserves the supplied text as a distinct portion alongside transport instructions. Read it before outputting its delivery receipt; dismiss it after handling, never accept/complete it as a new task. Existing task cards retain their original ownership and Reply-To lifecycle.
 
 X-Name carries the initialized display name. X-Tag is a repeatable printable label. X-No-Reply can only be true and is invalid for questions. X-State is accepted/running/requires-action/completed/failed/cancelled/refused. Accepted/running use status; requires-action uses question. Terminal values are written by reply only. Completed/failed require an accepted chain; cancelled/refused do not.
 

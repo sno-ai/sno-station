@@ -62,13 +62,13 @@ printf '%s\n' 'Completed. The requested effect and its evidence are ...' |
 
 Acceptance writes a separate status and keeps the original path/bytes/flags unchanged. Completion or failure requires prior acceptance. Cancelled/refused can finish before or after acceptance. A second acceptance or terminal reply refuses. Replies read nonblank body text from stdin. Never send a raw terminal X-State through `send`.
 
-Received status and answer cards do not require another reply. Acknowledge them without sending a message:
+Received status and answer cards do not require another reply. A call mail (`X-Type: call`, subject `[CALL]`) transports an instruction, not a new owned task. Read its full body, output its delivery receipt only after reading it, then follow the supplied instruction. Do not accept or complete the call mail as a work card. Card-backed work keeps its original card and Reply-To destination; direct work needs no artificial task card. Acknowledge reports and handled call mail without sending a message:
 
 ```sh
 sno reach dismiss --as "$SNO_REACH_ADDR" --card "$received_report" --reason acknowledged
 ```
 
-This retains report bytes and thread history, moves the received copy to handled `cur/`, and removes it from the actionable queue. It does not finish somebody else's work. Dismiss refuses actionable question/decision cards; use their reply path. Never automatically answer `Auto-Submitted` messages whose value is not `no`.
+This retains message bytes and thread history, moves the received copy to handled `cur/`, and removes it from the actionable queue. It does not finish somebody else's work. Dismiss refuses actionable question/decision cards; use their reply path. Never automatically answer `Auto-Submitted` messages whose value is not `no`.
 
 A question carrying `X-State: requires-action` is different: it asks you for information. Reply without `--state` on that received question. That answer targets the question's own Reply-To/From and does not finish the original work item. Acceptance and terminal reports continue to use the original work card's destination.
 
@@ -106,10 +106,16 @@ Filtered wait returns one matching answer path, not acceptance statuses. It incl
 
 `seats [--json]` lists registered addresses, channels, handles and live/stale registration status. Registration becomes stale after900 seconds. `ring <seat>` writes no card and reports rang, rang-unverified, busy, unregistered or failed. Busy includes a person typing in the seat's input box: nothing is submitted, the draft is left as it is, and a card stays in the mailbox.
 
-`call <seat> "<text>" [--expect <regex>] [--timeout <seconds>]` sends to the registered live channel and prints subsequent output. It succeeds only on the seat's own receipt and any requested expectation. It is not an RPC. Exit3 means runtime refusal or a person typing in the seat's input box (nothing is typed; send again later),4 means no verified reply in time,5 means the seat could not be read. Orca has no call path.
+`call <seat> "<text>" [--expect <regex>] [--timeout <seconds>] [--every <seconds>]` saves the full text, including newlines, in the initialized local receiver's existing mailbox before attempting notification. Each call has its own Message-ID and transport X-Work, `X-Type: call`, subject `[CALL]`, and no X-State; it creates no owned work item. `SNO_REACH_ADDR` supplies the sender. Without it, call automatically initializes a local caller mailbox without starting another agent or assigning work.
+
+The terminal receives one short `REACH-RING` cue with the Message-ID and instructions to read the addressed inbox and exact returned mail file. The cue contains no call-body excerpt or handoff marker. After reading that file, the receiver outputs the mail's delivery receipt and follows the instruction. The caller observes fresh receiver output through its transcript, ACP assistant chunks, or the existing screen fallback. `--expect` matches output after this call's receipt. Terminal echo, an inbox listing and mail storage alone never prove execution or release.
+
+Exit0 means a verified receiver response and any requested match; exit3 means runtime refusal, busy input or an unsupported synchronous channel; exit4 means no verified reply in time; exit5 means unreadable receiver output. Orca and Cursor IDE remain unsupported for synchronous calls, but their saved call mail remains readable. Failed delivery returns nonzero without ringing. A failure after storage reports the receiver and Message-ID on stderr as stored with receipt unverified, leaving stdout for receiver output. Busy input leaves the person's draft intact. Do not resend stored mail to repair notification: there is no second Enter nudge, re-ring, automatic retry or background recovery. A later inbox and file read can recover the complete instruction after a timeout or compaction; that does not turn the earlier failed call into synchronous success.
+
+`call <seat> "<literal text>" --raw` keeps literal tmux typing and `typed <seat>` output. It is tmux-only, cannot use `--expect`, and does not store call mail or wait for a receipt. Normal calls never fall back to raw typing.
 
 On tmux, an existing output pipe owned by another program is never replaced or
-closed. Calls still send and verify through `tmux capture-pane -p -S -` in
+closed. Seats without a readable agent transcript use `tmux capture-pane -p -S -` in
 `screen-fallback` mode, announced on stderr. The internal JSON result has
 `mode: "screen-fallback"` and cursors shaped as `<pane-token>:screen:<line-count>`.
 The count tracks observed output, not the screen's height. Each read compares
@@ -126,7 +132,7 @@ reads cannot be recovered. This mode is not a byte-exact transcript.
 Use only returned screen cursors with `--since`; read without `--since` to
 establish a new screen cursor. Screen cursors remain screen reads if the
 foreign writer later exits. New calls use screen snapshots without installing a persistent terminal output pipe or writer. Text submission keeps
-the 0.3-second pause between literal text and the carriage return.
+the 0.3-second pause between literal text and the carriage return. A person can begin typing during that interval; the existing check does not eliminate that race or add composer recognition for Hermes/OpenClaw.
 
 `watch <seat> [--idle <seconds>] [--timeout <seconds>]` only reads output. It never creates a session, takes a lock or sends a prompt. Automatic call/watch reports carry `Auto-Submitted: auto-generated` and cannot trigger another notification.
 
