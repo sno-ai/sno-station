@@ -134,13 +134,17 @@ function matchingTool(permission: AgentObservation | undefined, input: Record<st
 	if (!permission) return false;
 	const requested = text(permission.input.tool_use_id ?? permission.input.call_id);
 	const completed = text(input.tool_use_id ?? input.call_id);
-	if (requested || completed) return Boolean(requested && requested === completed);
+	if (requested && completed) return requested === completed;
 	const name = text(input.tool_name);
 	return Boolean(name && name === permission.input.tool_name);
 }
 
 function applyEvent(row: AgentRow, observation: AgentObservation, index: number, source: string, permission?: AgentObservation): void {
 	const { input, event, at } = observation;
+	if (event === "handoff-released") {
+		row.work.push({ ...input, releasedAt: at });
+		return;
+	}
 	if (event === "human-seen") {
 		if (input.resultId === row.resultId) row.humanSeen = true;
 		return;
@@ -345,15 +349,48 @@ export async function readAgentView(options: AgentViewOptions = {}): Promise<Age
 	const root = options.reachRoot ?? process.env.SNO_REACH_ROOT ?? join(homedir(), ".local/state/sno-reach");
 	await readSeats(root, view.agents, view.errors);
 	view.work = await reachWork({ ...options, reachRoot: root }, view.errors);
+	const releases = view.agents.flatMap(row => row.work);
+	for (const release of releases) {
+		const item = view.work.find(item => item.message_id === release.message_id && item.work === release.work &&
+			item.recipient === release.source && item.handoff_to === release.target && item.handoff_message_id === release.target_message_id);
+		if (item) {
+			item.owner = release.target; item.releasedAt = release.releasedAt;
+			item.state = item.handoff_state; item.since = item.handoff_since; item.blocked_on = item.handoff_blocked_on;
+		}
+	}
 	for (const row of view.agents) {
-		row.work = view.work.filter(item => item.owner === row.reachAddress || item.recipient === row.reachAddress);
+		row.work = view.work.filter(item => item.owner === row.reachAddress);
 		const blocked = row.work.find(item => item.blocked_on && item.blocked_on !== "-");
 		if (blocked && row.group === "Working") row.subgroup = "waiting on another agent";
+		if (row.waitingForHuman !== "yes" && row.work.some(item => item.handoff_to && !item.releasedAt)) {
+			row.group = "Working"; row.subgroup = "handing over";
+		}
+		if (row.waitingForHuman !== "yes" && view.work.some(item => item.recipient === row.reachAddress && item.releasedAt) &&
+			!row.work.some(item => !["completed", "failed", "cancelled", "refused", "dismissed", "expired", "superseded"].includes(text(item.state)))) {
+			row.group = "Finished"; row.subgroup = "handed over";
+		}
+		for (const item of row.work.filter(item => item.handoff_error)) row.missingReasons.push(text(item.handoff_error));
 	}
 	view.quota = [...new Set(view.agents.map(row => row.harness))].map(harness => ({ harness, state: "unknown", reason: "no quota observation; use explicit refresh", source: "unknown", observedAt: "unknown" }));
 	const groups = ["Needs you", "Working", "Finished", "unknown"];
 	view.agents.sort((a, b) => groups.indexOf(a.group) - groups.indexOf(b.group) || Number(a.humanSeen === true) - Number(b.humanSeen === true));
 	return view;
+}
+
+/** Called only after Reach verifies the receiver's release response. */
+export async function recordAgentHandoff(source: string, target: string, releaseText: string, options: AgentViewOptions = {}): Promise<void> {
+	const view = await readAgentView(options);
+	const candidates = view.work.filter(item => item.handoff_to === target && (!source || item.recipient === source) &&
+		typeof item.handoff_message_id === "string" && releaseText.includes(item.handoff_message_id));
+	if (candidates.length !== 1) throw new Error("release has no unique linked work card; ownership remains unknown");
+	const item = candidates[0];
+	const agents = view.agents.filter(row => row.reachAddress === target && row.sessionId !== "unknown");
+	if (!item || agents.length !== 1 || !agents[0]) throw new Error("receiver has no unique captured session; release observation unavailable");
+	const agent = agents[0];
+	const observation: AgentObservation = { harness: agent.harness, sessionId: agent.sessionId, at: new Date().toISOString(),
+		event: "handoff-released", reachAddress: target, input: { message_id: item.message_id, target_message_id: item.handoff_message_id,
+			work: item.work, source: item.recipient, target } };
+	await appendFile(eventFile(options.profileDir ?? profileDir(), agent.harness, agent.sessionId), `${JSON.stringify(observation)}\n`);
 }
 
 export function compactAgentView(view: AgentView, current: AgentIdentity = {}): string {

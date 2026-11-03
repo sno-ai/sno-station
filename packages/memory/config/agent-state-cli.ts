@@ -2,7 +2,7 @@
 import { execFile } from "node:child_process";
 import { emitKeypressEvents } from "node:readline";
 import { promisify } from "node:util";
-import { compactAgentView, markAgentResultSeen, readAgentView, type AgentView } from "./agent-state";
+import { compactAgentView, markAgentResultSeen, readAgentView, recordAgentHandoff, type AgentView } from "./agent-state";
 
 const execute = promisify(execFile);
 
@@ -91,6 +91,12 @@ async function screen(): Promise<number> {
 }
 
 async function agentStateMain(args: string[]): Promise<number> {
+	if (args.includes("--record-release")) {
+		let text = "";
+		for await (const chunk of process.stdin) text += chunk;
+		await recordAgentHandoff(option(args, "--source") ?? "", option(args, "--target") ?? "", text);
+		return 0;
+	}
 	if (args.includes("--help")) { process.stdout.write("sno squad [global --json] · local squad observations\n"); return 0; }
 	if (!args.includes("--json") && !args.includes("--compact") && process.stdout.isTTY && process.stdin.isTTY) return screen();
 	const view = await readAgentView();
