@@ -74,31 +74,34 @@ export async function composeContinuityContext(harness: ContinuityHarness, event
 	if (!object(input) || typeof input["session_id"] !== "string" || typeof input["cwd"] !== "string"
 		|| input["agent_id"] !== undefined) return JSON.stringify({ hookSpecificOutput: { hookEventName: event, additionalContext: "" } });
 	const path = continuityBriefPath(input["session_id"]);
-	if (event === "SessionStart") {
-		try {
-			await mkdir(dirname(path), { recursive: true, mode: 0o700 });
-			// The hook writes the template itself, so keeping the brief never asks the user to approve a command.
-			const exists = await readFile(path, "utf8").then(() => true, () => false);
-			if (!exists) await sno(["handoff-checkpoint", "--repo", input["cwd"], path], input,
-				CODING_SKIN_HOOKS.SessionStart.timeout * 1000, checkpointEnvironment(harness, input["session_id"]));
-		}
-		catch (error) { failure("prepare handoff brief", path, error, "the agent has no brief template; available context is still delivered"); }
-	}
-	const brief = readFile(path, "utf8").catch(error => {
+	const lessons = recallDeadline(event).then(timeoutMs => sno([
+		"rem-reflect", "recall", "--agent", harness === "claude" ? "claude-code" : "codex", "--first-message",
+	], { ...input, hook_event_name: event }, timeoutMs));
+	const recalled = memory();
+	const readBrief = () => readFile(path, "utf8").catch(error => {
 		if (!(error instanceof Error && "code" in error && error.code === "ENOENT")) {
 			failure("read handoff brief", path, error, "task restoration from this brief failed; other context remains available");
 		}
 		return "";
 	});
-	const lessons = recallDeadline(event).then(timeoutMs => sno([
-		"rem-reflect", "recall", "--agent", harness === "claude" ? "claude-code" : "codex", "--first-message",
-	], { ...input, hook_event_name: event }, timeoutMs));
-	const [saved, recalled, approved] = await Promise.allSettled([brief, memory(), lessons]);
+	// At session start the hook writes a missing template itself, so keeping the brief never asks the user to approve
+	// a command. It runs beside the memory and lesson reads, within their deadline; a new template holds no task yet.
+	const brief = event !== "SessionStart" ? readBrief() : (async () => {
+		const sessionId = String(input["session_id"]);
+		try {
+			await mkdir(dirname(path), { recursive: true, mode: 0o700 });
+			if (await readFile(path, "utf8").then(() => true, () => false)) return readBrief();
+			await sno(["handoff-checkpoint", "--repo", String(input["cwd"]), path], input, await recallDeadline(event),
+				checkpointEnvironment(harness, sessionId));
+		} catch (error) { failure("prepare handoff brief", path, error, "the agent has no brief template; available context is still delivered"); }
+		return "";
+	})();
+	const [saved, memoryRecall, approved] = await Promise.allSettled([brief, recalled, lessons]);
 	const parts: string[] = [];
 	if (event === "SessionStart") parts.push(`Keep the current task in the readable handoff brief at ${path}; its template already exists. Fill and maintain the template's existing readable sections by editing that file. Before each unfinished task action, update Next with the exact action and expected observable result. Keep Objective and authorization, decisions and exclusions, Done/current files, Known failure with operation/target/error, Reach card/recipient when present, and Report destination accurate. Refresh the same record at task boundaries and before an orderly interruption, preserving its readable sections. Do not ask the owner to reconstruct lost work.`);
 	if (saved.status === "fulfilled" && saved.value) parts.push(`Current task handoff brief (complete file: ${path}). If the host reports context overflow, read that complete file before task action; do not infer the missing text. Reconcile actual file/tool results before repeating an unfinished action.\n\n${saved.value}`);
-	if (recalled.status === "fulfilled") parts.push(context(recalled.value, "memory recall"));
-	else failure("memory recall", input["session_id"], recalled.reason, "memory recall failed; the saved brief and approved lessons remain available");
+	if (memoryRecall.status === "fulfilled") parts.push(context(memoryRecall.value, "memory recall"));
+	else failure("memory recall", input["session_id"], memoryRecall.reason, "memory recall failed; the saved brief and approved lessons remain available");
 	if (approved.status === "fulfilled") parts.push(context(approved.value, join(process.env["REM_REFLECT_STORE"] ?? join(homedir(), ".sno", "experience"), "wiki", "lessons.jsonl")));
 	else failure("read approved lessons", input["session_id"], approved.reason, "lesson delivery failed; task context remains available");
 	return JSON.stringify({ hookSpecificOutput: { hookEventName: event, additionalContext: parts.filter(Boolean).join("\n\n") } });
