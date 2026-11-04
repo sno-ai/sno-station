@@ -108,7 +108,8 @@ export async function observeAgentEvent(harness: AgentHarness, event: string, ra
 	let target = `${harness}/${sessionId || "missing session identity"}`;
 	try {
 		if (!sessionId) throw new Error("host supplied no session identity");
-		if (input.agent_id && input.agent_id !== sessionId && input.parent_session_id === sessionId) {
+		// A subagent's hooks carry its own agent_id beside the parent's session id; its events are its own, never the parent's.
+		if (typeof input.agent_id === "string" && input.agent_id && input.agent_id !== sessionId) {
 			await observeAgentEvent(harness, event, { ...input, session_id: input.agent_id, parent_session_id: undefined });
 			return;
 		}

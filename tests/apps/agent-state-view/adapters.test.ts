@@ -55,3 +55,23 @@ it("stores only bounded observation fields in owner-only files while the state s
 		await rm(home, { recursive: true, force: true });
 	}
 });
+
+it("keeps a Claude subagent's stop and question out of its working parent's state", async () => {
+	const home = await mkdtemp(join(tmpdir(), "sno-subagent-observation-"));
+	const previous = process.env.SNO_PROFILE_DIR;
+	process.env.SNO_PROFILE_DIR = home;
+	try {
+		await mkdir(join(home, "reach"));
+		const parent = { session_id: "parent-session", cwd: home };
+		await observeAgentEvent("claude", "user-prompt-submit", { ...parent, prompt: "Delegate the check" });
+		await observeAgentEvent("claude", "pre-tool-use", { ...parent, agent_id: "child-agent", tool_name: "AskUserQuestion" });
+		await observeAgentEvent("claude", "stop", { ...parent, agent_id: "child-agent", last_assistant_message: "Child finished?" });
+		const view = await readAgentView({ profileDir: home, reachRoot: join(home, "reach"), reachProgram: resolve("apps/reach/lib/reach-agent-view") });
+		expect(view.agents.find(row => row.sessionId === "parent-session")).toMatchObject({ doing: "working", group: "Working", waitingForHuman: "no" });
+		expect(view.agents.find(row => row.sessionId === "child-agent")?.finalReply).toBe("Child finished?");
+	} finally {
+		if (previous === undefined) delete process.env.SNO_PROFILE_DIR;
+		else process.env.SNO_PROFILE_DIR = previous;
+		await rm(home, { recursive: true, force: true });
+	}
+});

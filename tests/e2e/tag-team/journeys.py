@@ -340,3 +340,31 @@ def brief_prompts(f, agent):
         return dict(prompts=len(prompts), brief_prompts=len(brief))
     finally:
         f.screen(pane, "brief-prompts-final")
+
+
+def subagent(f, agent):
+    """A Claude subagent's hook events never change the parent agent's own state."""
+    prompt = ("Use the Task tool to start one general-purpose subagent whose only job is to run the shell command "
+              "`echo child-done` and report its output. When it returns, run the shell command `sleep 25`, "
+              "then reply exactly: PARENT-DONE.")
+    pane = f.launch(agent, prompt)
+    try:
+        def files():
+            root = f.home / ".sno" / "station" / "agents"
+            return {p.name: [json.loads(line) for line in p.read_text().splitlines()] for p in root.glob("claude--*.jsonl")}
+        f.until(lambda: any(r.get("input", {}).get("tool_name") in ("Task", "Agent")
+                            for rows in files().values() for r in rows if r["event"] == "post-tool-use"),
+                "the subagent returned to the parent", 120)
+        f.until(lambda: any("PARENT-DONE" in t for t in f.replies(agent)), "parent final reply", 90)
+        observed = files()
+        (f.root / "observations.json").write_text(json.dumps(observed, indent=2))
+        parent = next(name for name, rows in observed.items() if any(r["event"] == "user-prompt-submit" for r in rows))
+        children = {name: rows for name, rows in observed.items() if name != parent}
+        assert children, f"subagent events were recorded in the parent's file; evidence {f.root}"
+        assert any(r["event"] == "pre-tool-use" for rows in children.values() for r in rows), children
+        session = parent[len("claude--"):-len(".jsonl")]
+        final = next(r for r in f.view("subagent-final")["agents"] if r["sessionId"] == session)
+        assert final["finalReply"].strip() == "PARENT-DONE", final
+        return dict(parent=len(observed[parent]), children={name: len(rows) for name, rows in children.items()})
+    finally:
+        f.screen(pane, "subagent-final")
