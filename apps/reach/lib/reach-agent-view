@@ -15,11 +15,12 @@ else
 fi
 if [[ -n "$rows" ]]; then
     printf '%s\n' "$rows" | jq -sc '
-        # Rows arrive grouped by work in name order; a handoff links only cards of the same work.
-        group_by(.work)[] | map(. + {owner:(.recipient // "unknown")}) |
+        # Rows arrive grouped by work in name order; a handoff links only cards of the same work. A transfer card names
+        # the original card in its body text; an ordinary answer names it only in its headers (References).
+        group_by(.work)[] | map(. + {owner:(.recipient // "unknown"), text:(.body | split("\n\n") | .[1:] | join("\n\n"))}) |
         . as $items |
         map(. as $original |
-            [$items[] | select(.recipient != $original.recipient and (.body | contains($original.message_id)))] as $targets |
+            [$items[] | select(.recipient != $original.recipient and (.text | contains($original.message_id)))] as $targets |
             if ($targets | length) == 1 then
                 . + {handoff_to:$targets[0].recipient,handoff_sender:$targets[0].sender,handoff_message_id:$targets[0].message_id,
                     handoff_state:$targets[0].state,handoff_since:$targets[0].since,handoff_blocked_on:$targets[0].blocked_on}
@@ -27,7 +28,7 @@ if [[ -n "$rows" ]]; then
             else . end) |
         . as $linked | .[] |
         select(. as $candidate | any($linked[]; . as $original |
-            $candidate.recipient != $original.recipient and ($candidate.body | contains($original.message_id))) | not) |
-        del(.body)'
+            $candidate.recipient != $original.recipient and ($candidate.text | contains($original.message_id))) | not) |
+        del(.body, .text)'
 fi
 exit "$status"

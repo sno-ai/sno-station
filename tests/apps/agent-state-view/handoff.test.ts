@@ -88,3 +88,39 @@ it("records a release on the receiver's most recent primary session when /clear 
 		await rm(home, { recursive: true, force: true });
 	}
 });
+
+it("does not read an ordinary answer, which names the task only in its headers, as a transfer card", async () => {
+	const home = await mkdtemp(join(tmpdir(), "sno-view-answer-"));
+	const previous = { profile: process.env.SNO_PROFILE_DIR, address: process.env.SNO_REACH_ADDR };
+	const root = join(home, "reach");
+	const lead = "lead.owner@localhost";
+	const worker = "worker.answer@localhost";
+	const options = { profileDir: home, reachRoot: root, reachProgram: resolve("apps/reach/lib/reach-agent-view") };
+	process.env.SNO_PROFILE_DIR = home;
+	try {
+		for (const address of [lead, worker]) await mkdir(join(root, address, "new"), { recursive: true });
+		await mkdir(join(root, worker, "sent"), { recursive: true });
+		process.env.SNO_REACH_ADDR = worker;
+		await observeAgentEvent("claude", "user-prompt-submit", { session_id: "worker-session", prompt: "Do the task" });
+		const date = "Tue, 03 Nov 2026 00:00:00 +0000";
+		await writeFile(join(root, worker, "new", "task"), `From: Lead <${lead}>\nTo: Worker <${worker}>\nDelivered-To: ${worker}\nDate: ${date}\n` +
+			"Subject: [DECISION] Task\nMessage-ID: <task@localhost>\nX-Type: decision\nX-Work: answer-work\n\nDo the task.\n");
+		await writeFile(join(root, worker, "sent", "accepted"), `From: Worker <${worker}>\nTo: Lead <${lead}>\nDate: ${date}\n` +
+			"Subject: [STATUS] Task\nMessage-ID: <accepted@localhost>\nIn-Reply-To: <task@localhost>\nReferences: <task@localhost>\n" +
+			"X-Type: status\nX-State: accepted\nX-Work: answer-work\n\nAccepted.\n");
+		await writeFile(join(root, lead, "new", "answer"), `From: Worker <${worker}>\nTo: Lead <${lead}>\nDelivered-To: ${lead}\nDate: ${date}\n` +
+			"Subject: [ANSWER] Task\nMessage-ID: <answer@localhost>\nIn-Reply-To: <task@localhost>\nReferences: <task@localhost>\n" +
+			"X-Type: answer\nX-Work: answer-work\n\nThe answer is 42.\n");
+		const view = await readAgentView(options);
+		expect(view.work.find(item => item.message_id === "<task@localhost>")).toMatchObject({ owner: worker, state: "accepted" });
+		expect(view.work.find(item => item.message_id === "<task@localhost>")?.handoff_to).toBeUndefined();
+		expect(view.work.find(item => item.message_id === "<answer@localhost>")).toMatchObject({ owner: lead });
+		const row = view.agents.find(item => item.reachAddress === worker);
+		expect(row?.sessionId).toBe("worker-session");
+		expect(row?.subgroup).not.toBe("handing over");
+	} finally {
+		if (previous.profile === undefined) delete process.env.SNO_PROFILE_DIR; else process.env.SNO_PROFILE_DIR = previous.profile;
+		if (previous.address === undefined) delete process.env.SNO_REACH_ADDR; else process.env.SNO_REACH_ADDR = previous.address;
+		await rm(home, { recursive: true, force: true });
+	}
+});
