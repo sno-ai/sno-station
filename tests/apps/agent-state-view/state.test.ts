@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { appendFile, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { appendFile, mkdir, mkdtemp, readFile, readdir, rm, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -79,6 +79,18 @@ describe("agent state view read-time semantics", () => {
 	it("reads no transcript when the process is unknown", async () => {
 		await events("codex", "unknown-process", [{ event: "stop", input: { transcript_path: join(home, "missing-rollout.jsonl") } }]);
 		expect((await view()).errors.filter(error => error.operation === "read resume record")).toEqual([]);
+	});
+	it("reads only fresh observations and no Reach work for a status redraw", async () => {
+		const stale = await events("claude", "stale", [{ event: "user-prompt-submit" }]);
+		await events("claude", "fresh", [{ event: "user-prompt-submit" }]);
+		const past = new Date(now - 901_000);
+		await utimes(stale, past, past);
+		const recent = await readAgentView({ profileDir: home, reachRoot: join(home, "reach"), now, reachProgram: "/nonexistent/reach-agent-view", recent: true });
+		expect(recent.agents.map(row => row.sessionId)).toEqual(["fresh"]);
+		expect(recent.errors).toEqual([]);
+		const full = await readAgentView({ profileDir: home, reachRoot: join(home, "reach"), now, reachProgram: "/nonexistent/reach-agent-view" });
+		expect(full.agents.map(row => row.sessionId).sort()).toEqual(["fresh", "stale"]);
+		expect(full.errors.some(error => error.operation === "read Reach work")).toBe(true);
 	});
 	it("marks only the opened completion seen; passive reads and new completions stay unseen", async () => {
 		const path = await events("claude", "result", [{ event: "stop", input: { last_assistant_message: "First." } }]);

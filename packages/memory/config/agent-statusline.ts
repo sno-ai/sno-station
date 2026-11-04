@@ -59,7 +59,7 @@ export async function renderAgentStatusLine(harness: StatusHarness, originalEnco
 		// Both clients' status-line payloads use session_id; Cursor hooks separately use conversation_id.
 		const sessionId = payload?.session_id;
 		if (typeof sessionId !== "string" || !sessionId) throw new Error("current client session identity unavailable");
-		const view = await readAgentView();
+		const view = await readAgentView({ recent: true });
 		const segment = compactAgentView(view, { harness, sessionId });
 		const color = /\bneed you\b/.test(segment) ? "\x1b[1;33m" : "\x1b[2m";
 		const displayed = process.env.NO_COLOR === undefined ? `${color}${segment}\x1b[0m` : segment;

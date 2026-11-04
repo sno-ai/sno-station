@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { createReadStream } from "node:fs";
-import { appendFile, mkdir, readFile, readdir, realpath } from "node:fs/promises";
+import { appendFile, mkdir, readFile, readdir, realpath, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { createInterface } from "node:readline";
@@ -38,6 +38,8 @@ export interface AgentView {
 }
 export interface AgentViewOptions {
 	profileDir?: string; reachRoot?: string; now?: number; reachProgram?: string;
+	/** Status-line and tmux redraws: only observations inside the freshness horizon, and no Reach work scan. */
+	recent?: boolean;
 }
 export interface AgentIdentity { harness?: string; sessionId?: string; reachAddress?: string }
 
@@ -369,13 +371,16 @@ export async function readAgentView(options: AgentViewOptions = {}): Promise<Age
 	try { files = await readdir(directory); } catch (error) { if (!absent(error)) throw new Error(`read agent inventory ${directory}: ${String(error)}`); }
 	for (const name of files.filter(name => name.endsWith(".jsonl")).sort()) {
 		try {
+			// A file untouched for the 900-second freshness horizon can only add an expired, unknown row to a count.
+			if (options.recent && now - (await stat(join(directory, name))).mtimeMs > 900_000) continue;
 			const row = await readAgentFile(join(directory, name), now, view.errors);
 			if (row) view.agents.push(row);
 		} catch (error) { view.errors.push(failure("read agent events", join(directory, name), error, "agent observations unknown")); }
 	}
 	const root = options.reachRoot ?? process.env.SNO_REACH_ROOT ?? join(homedir(), ".local/state/sno-reach");
 	await readSeats(root, view.agents, view.errors);
-	view.work = await reachWork({ ...options, reachRoot: root }, view.errors);
+	// Projecting Reach work rescans every mailbox per work item; a redraw shows only counts and skips it.
+	view.work = options.recent ? [] : await reachWork({ ...options, reachRoot: root }, view.errors);
 	for (const item of view.work.filter(item => item.handoff_error)) {
 		view.errors.push(failure("associate Reach handoff", text(item.message_id), item.handoff_error, "work ownership unknown"));
 	}
