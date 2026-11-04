@@ -99,7 +99,7 @@ async function agentStateMain(args: string[]): Promise<number> {
 	}
 	if (args.includes("--help")) { process.stdout.write("sno squad [global --json] · local squad observations\n"); return 0; }
 	if (!args.includes("--json") && !args.includes("--compact") && process.stdout.isTTY && process.stdin.isTTY) return screen();
-	const view = await readAgentView();
+	const view = await readAgentView({ recent: args.includes("--compact") });
 	if (args.includes("--json")) process.stdout.write(`${JSON.stringify(view)}\n`);
 	else if (args.includes("--compact")) process.stdout.write(`${compactAgentView(view, {
 		harness: option(args, "--harness"), sessionId: option(args, "--session-id"), reachAddress: option(args, "--reach-address"),
