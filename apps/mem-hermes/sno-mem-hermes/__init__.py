@@ -48,6 +48,31 @@ _CAPTURE_MAX_INPUT_TOKENS = 3_500
 _HEARTBEAT_TICK = re.compile(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ \[[^\]\n]+\] tick=\d+")
 
 
+# The fields the state reader uses, as in packages/memory/config/agent-state.ts. Prompts, replies and tool output are
+# not memory: only a bounded prompt start, a bounded reply end and whether a tool answered are kept.
+_OBSERVED_FIELDS = ("tool_name", "tool_use_id", "call_id", "notification_type", "error", "error_type", "approved", "decision",
+                    "choice", "human_addressee", "review_requested", "decision_required", "context_exhausted", "reference",
+                    "transcript_path")
+_OBSERVED_TEXT_CHARS = 200
+
+
+def _observed_input(input_data: dict[str, object]) -> dict[str, object]:
+    kept: dict[str, object] = {key: input_data[key] for key in _OBSERVED_FIELDS if input_data.get(key) is not None}
+    prompt = input_data.get("prompt")
+    if isinstance(prompt, str) and prompt:
+        kept["prompt"] = prompt[:_OBSERVED_TEXT_CHARS]
+    reply = next((value for value in (input_data.get(key) for key in
+                  ("last_assistant_message", "text", "response", "last-assistant-message")) if value is not None), None)
+    if isinstance(reply, str) and reply:
+        kept["last_assistant_message"] = reply.rstrip()[-_OBSERVED_TEXT_CHARS:]
+    if input_data.get("tool_response") is not None:
+        response = input_data["tool_response"]
+        kept["tool_response"] = {"accepted": isinstance(response, dict) and response.get("accepted") is True}
+    if input_data.get("tool_output") is not None:
+        kept["tool_output"] = True
+    return kept
+
+
 def _observe_agent_event(session_id: str, event: str, input_data: dict[str, object]) -> None:
     path = Path(os.environ.get("SNO_PROFILE_DIR", Path.home() / ".sno")) / "station" / "agents"
     if not session_id:
@@ -59,7 +84,7 @@ def _observe_agent_event(session_id: str, event: str, input_data: dict[str, obje
     observation: dict[str, object] = {
         "harness": "hermes", "sessionId": session_id,
         "at": datetime.now(timezone.utc).isoformat(), "event": event,
-        "input": input_data, "pid": os.getpid(),
+        "input": _observed_input(input_data), "pid": os.getpid(),
     }
     try:
         observation["processStart"] = Path("/proc/self/stat").read_text().rsplit(")", 1)[1].split()[19]
@@ -72,8 +97,9 @@ def _observe_agent_event(session_id: str, event: str, input_data: dict[str, obje
     if isinstance(cwd, str) and cwd:
         observation["cwd"] = cwd
     try:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        with path.open("a", encoding="utf-8") as output:
+        path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        descriptor = os.open(path, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
+        with os.fdopen(descriptor, "a", encoding="utf-8") as output:
             output.write(json.dumps(observation, ensure_ascii=False, default=str) + "\n")
     except (OSError, TypeError, ValueError) as error:
         _LOG.error("agent observation append failed; observation missing",

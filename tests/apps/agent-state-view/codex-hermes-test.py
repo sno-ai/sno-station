@@ -89,6 +89,34 @@ class HermesObservationTest(unittest.TestCase):
         self.assertEqual(records[2]["event"], "stop")
         self.assertEqual(records[2]["input"]["last_assistant_message"], "Proceed？")
 
+    def test_callbacks_store_only_bounded_fields_in_owner_only_files(self) -> None:
+        secret = "SECRET-PAYLOAD " * 400
+        callbacks = {}
+        context = types.SimpleNamespace(
+            register_memory_provider=lambda provider: None,
+            register_hook=lambda name, callback: callbacks.update({name: callback}),
+        )
+        self.module.register(context)
+        callbacks["pre_llm_call"](session_id="session/one", cwd=str(self.profile), conversation_history=[secret], user_message=secret)
+        callbacks["post_tool_call"](session_id="session/one", tool_name="terminal", result=secret, args={"command": secret})
+        provider = self.module.SnoMemoryProvider()
+        provider._session_id = "session/one"
+        provider._primary = True
+        provider.on_turn_start(1, "Fix the parser " + "x" * 5000)
+        provider.on_session_end([{"role": "assistant", "content": secret + "Should I continue?"}])
+        directory = self.profile / "station/agents"
+        stored = (directory / "hermes--session%2Fone.jsonl").read_text()
+        self.assertNotIn("SECRET-PAYLOAD SECRET-PAYLOAD SECRET-PAYLOAD SECRET-PAYLOAD SECRET-PAYLOAD SECRET-PAYLOAD "
+                         "SECRET-PAYLOAD SECRET-PAYLOAD SECRET-PAYLOAD SECRET-PAYLOAD SECRET-PAYLOAD SECRET-PAYLOAD "
+                         "SECRET-PAYLOAD SECRET-PAYLOAD", stored)
+        self.assertLess(len(stored), 3000)
+        records = self.events()
+        self.assertEqual(records[1]["input"], {"tool_name": "terminal"})
+        self.assertEqual(len(records[2]["input"]["prompt"]), 200)
+        self.assertTrue(records[3]["input"]["last_assistant_message"].endswith("Should I continue?"))
+        self.assertEqual(directory.stat().st_mode & 0o777, 0o700)
+        self.assertEqual((directory / "hermes--session%2Fone.jsonl").stat().st_mode & 0o777, 0o600)
+
     def test_append_failure_is_logged_and_does_not_stop_callback(self) -> None:
         (self.profile / "station").write_text("not a directory")
         with self.assertLogs(self.module._LOG, level="ERROR") as captured:
