@@ -1,7 +1,9 @@
 import { execFile } from "node:child_process";
-import { appendFile, mkdir, readFile, readdir, realpath } from "node:fs/promises";
+import { createReadStream } from "node:fs";
+import { appendFile, mkdir, open, readFile, readdir, realpath } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
+import { createInterface } from "node:readline";
 import { promisify } from "node:util";
 import { z } from "zod";
 import { isAgentText } from "./session-activity";
@@ -235,16 +237,23 @@ async function inspectProcess(row: AgentRow, observations: AgentObservation[], e
 }
 
 async function inspectResume(row: AgentRow, observations: AgentObservation[], errors: AgentOperationError[]): Promise<void> {
-	if (["present", "detached"].includes(row.process) || row.resumable === "context full") return;
+	// Only an exited process makes a saved session resumable; an unknown process (unsupported platform) never does.
+	if (row.process !== "exited" || row.resumable === "context full") return;
 	const transcript = observations.map(item => text(item.input.transcript_path)).findLast(Boolean);
 	if (!transcript || !["claude", "codex"].includes(row.harness)) return;
+	const stream = createReadStream(transcript, "utf8");
 	try {
-		const records = (await readFile(transcript, "utf8")).trim().split("\n").map(line => record(JSON.parse(line)));
-		const matches = row.harness === "codex"
-			? records.some(item => item.type === "session_meta" && record(item.payload).id === row.sessionId)
-			: records.some(item => item.sessionId === row.sessionId && ["user", "assistant"].includes(text(item.type)));
-		if (matches && row.process === "exited") { row.resumable = "resumable"; row.resumeEvidence = transcript; }
+		// The session's identity is near the start of the transcript; stop reading at the first match.
+		for await (const line of createInterface({ input: stream, crlfDelay: Number.POSITIVE_INFINITY })) {
+			if (!line.trim()) continue;
+			const item = record(JSON.parse(line));
+			const matches = row.harness === "codex"
+				? item.type === "session_meta" && record(item.payload).id === row.sessionId
+				: item.sessionId === row.sessionId && ["user", "assistant"].includes(text(item.type));
+			if (matches) { row.resumable = "resumable"; row.resumeEvidence = transcript; break; }
+		}
 	} catch (error) { errors.push(failure("read resume record", transcript, error, "resume availability unknown")); }
+	finally { stream.destroy(); }
 }
 
 function classify(row: AgentRow): void {
@@ -256,14 +265,31 @@ function classify(row: AgentRow): void {
 	}
 }
 
+// Each status redraw reads every session file, so only a file's recent observations are read.
+const OBSERVATION_TAIL_BYTES = 256 * 1024;
+
 async function readAgentFile(path: string, now: number, errors: AgentOperationError[]): Promise<AgentRow | undefined> {
 	const observations: AgentObservation[] = [];
+	const offsets: number[] = [];
 	let unreadable = false;
-	const contents = await readFile(path, "utf8");
-	for (const [index, line] of contents.split("\n").entries()) {
+	const file = await open(path, "r");
+	let bytes: Buffer;
+	let offset: number;
+	try {
+		const { size } = await file.stat();
+		offset = Math.max(0, size - OBSERVATION_TAIL_BYTES);
+		bytes = Buffer.alloc(size - offset);
+		await file.read(bytes, 0, bytes.length, offset);
+	} finally { await file.close(); }
+	// A tail starts inside a line; that partial line is skipped.
+	const skip = offset > 0 ? bytes.indexOf(10) + 1 : 0;
+	offset += skip;
+	for (const line of bytes.subarray(skip).toString("utf8").split("\n")) {
+		const start = offset;
+		offset += Buffer.byteLength(line) + 1;
 		if (!line.trim()) continue;
-		try { observations.push(observationSchema.parse(JSON.parse(line))); }
-		catch (error) { unreadable = true; errors.push(failure("parse agent observation", `${path}:${index + 1}`, error, "current agent observation unknown")); }
+		try { observations.push(observationSchema.parse(JSON.parse(line))); offsets.push(start); }
+		catch (error) { unreadable = true; errors.push(failure("parse agent observation", `${path}@${start}`, error, "current agent observation unknown")); }
 	}
 	const first = observations[0];
 	if (!first) {
@@ -284,7 +310,8 @@ async function readAgentFile(path: string, now: number, errors: AgentOperationEr
 		const wasWaiting = row.waitingForHuman;
 		if (["permission-request", "pre-tool-use"].includes(observation.event) &&
 			(observation.event === "permission-request" || askTool(observation.input))) permission = observation;
-		applyEvent(row, observation, index, path, permission);
+		// The result id is the observation's byte position, stable however much of the file is read.
+		applyEvent(row, observation, offsets[index] ?? index, path, permission);
 		if (row.waitingForHuman === "yes" && wasWaiting !== "yes") waitAt = observation.at;
 		if (row.waitingForHuman !== "yes") waitAt = undefined;
 	}
