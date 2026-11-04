@@ -77,7 +77,7 @@ Working (2)
   claude docs-site     Rewrite the quick-start page for the 2.0 install      12s
   codex api            Review the rate limiter change from the web-app age…  40s
 Finished (2)
-  hermes infra         finished · result unseen · Rotate the staging certi…  25m
+  cursor infra         finished · result unseen · Rotate the staging certi…  25m
   claude web-app       finished · Bump the UI kit to 4.2                      2h
 ```
 
