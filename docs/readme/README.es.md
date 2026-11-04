@@ -24,6 +24,12 @@ demás cuando se lo pides. Cada noche repasan el día y mejoran un poco.
 
 Funciona en tu propia computadora. Lo instalas una vez y sigues trabajando como hasta ahora. Más información en nuestro sitio web, [sno.ai](https://sno.ai).
 
+**Nuevo en 2.0: Tag Team. Tus agentes ya se tienen el uno al otro.** Un solo comando pone a dos de ellos en una tarea: uno construye, el otro lo pone a prueba, y el trabajo te llega con la discusión ya zanjada. [Mira qué cambió](#nuevo-en-20-tag-team).
+
+```bash
+sno reach pair "Fix the login redirect"
+```
+
 **Cuando a un agente se le acaba el límite, el siguiente continúa.** Si llegas a un límite de uso
 a mitad de una tarea, otro agente la retoma desde la misma memoria, con el contexto intacto.
 No tienes que pegar nada.
@@ -43,7 +49,33 @@ El lado en la nube es opcional, y el producto está completo sin él.
 > **Abierto al público.** Este repositorio es público desde el 2026-09-18. Todo lo que hay aquí funciona.
 > Cada bloque a continuación indica cuándo se actualizó por última vez.
 
-[Instalación](#instalación) · [Cómo usarlo](#cómo-usarlo) · [Cursor](#cursor) · [Conecta tu cuenta](#conecta-tu-cuenta-de-snoai) · [Casos reales](#de-nuestras-propias-máquinas) · [Qué funciona hoy](#qué-funciona-hoy) · [Memoria que olvida a propósito](#memoria-que-olvida-a-propósito) · [Socios de diseño](#socios-de-diseño)
+[Nuevo en 2.0](#nuevo-en-20-tag-team) · [Instalación](#instalación) · [Cómo usarlo](#cómo-usarlo) · [Cursor](#cursor) · [Conecta tu cuenta](#conecta-tu-cuenta-de-snoai) · [Casos reales](#de-nuestras-propias-máquinas) · [Qué funciona hoy](#qué-funciona-hoy) · [Memoria que olvida a propósito](#memoria-que-olvida-a-propósito) · [Socios de diseño](#socios-de-diseño)
+
+## Nuevo en 2.0: Tag Team
+
+*Última actualización 2026-11-04.* Tus agentes ya se tienen el uno al otro. Hasta ahora, quien llevaba el trabajo de uno a otro eras tú. Ese oficio se acabó.
+
+```bash
+sno reach pair "Fix the login redirect"
+```
+
+Un agente construye. El otro le busca las grietas a lo construido. Lo que encuentran lo resuelven entre ellos, así que el trabajo te llega con la discusión ya zanjada. Los dos corren en ventanas de tmux que puedes abrir y mirar. Con sesión iniciada en dos proveedores, tienes uno de cada uno. Con sesión en uno solo, sigues teniendo una pareja, y el comando te avisa de que la revisión se quedó en ese proveedor.
+
+**Deja de hacer guardia frente a las terminales.** Cuando alguien te necesita, tu línea de estado de Claude Code o Cursor te lo dice:
+
+```text
+❄ 2 need you · claude: approve
+```
+
+`sno squad` despliega todo el equipo a pantalla completa: quién te necesita, quién está trabajando, qué está terminado. Los agentes iniciados con Reach muestran lo mismo en su barra de tmux.
+
+**El trabajo sobrevive al agente que lo hace.** Cuota, caída, ventana cerrada. La tarea continúa en la misma conversación cuando se puede restaurar, o en una nueva creada a partir de la nota de relevo guardada, y te dicen la verdad sobre lo que pasó: reanudada (resumed), reconstruida (rebuilt) o perdida (lost). Y cuando el contexto de un agente se llena y se compacta, sigue sabiendo qué estaba haciendo y qué ya falló.
+
+**Aprueba una lección y la próxima respuesta ya la sabe.** No la próxima sesión. La próxima respuesta.
+
+**Los mensajes esperan su turno.** El texto completo llega primero al buzón del otro agente. Si estás escribiendo en esa ventana, o el agente está compactando su contexto, el mensaje espera allí y tu borrador a medias se queda como lo dejaste.
+
+Aún no: la continuación de tareas y las lecciones desde la próxima respuesta funcionan en Claude Code y Codex. La línea de estado funciona en Claude Code y Cursor. Hermes Agent y OpenClaw no han pasado por estos recorridos en instalaciones reales, y OpenClaw aparece en `sno squad` con su estado desconocido.
 
 ## Instalación
 
@@ -81,14 +113,18 @@ Todos los comandos empiezan con `sno`. La lista completa está en [docs/sno-comm
 
 ## Cómo usarlo
 
-*Última actualización 2026-10-18.* Sigue trabajando con el agente que prefieras. Cambian tres cosas.
+*Última actualización 2026-11-04.* Sigue trabajando con el agente que prefieras. Cambian cinco cosas.
 
-1. **Uno de ellos llega a su límite.** Di `sno reach call` desde el otro. Retoma la tarea desde
+1. **Tienes una tarea que dos agentes podrían compartir.** Ejecuta `sno reach pair "the task"`.
+   Uno construye, el otro lo pone a prueba.
+2. **Te preguntas quién está atascado.** Mira tu línea de estado, o ejecuta `sno squad`.
+3. **Uno de ellos llega a su límite.** Di `sno reach call` desde el otro. Retoma la tarea desde
    la misma memoria y el buzón, con el contexto intacto.
-2. **Quieres un segundo par de ojos.** Pide a cualquiera de los dos agentes que haga `peer-review`
+4. **Quieres un segundo par de ojos.** Pide a cualquiera de los dos agentes que haga `peer-review`
    del trabajo del otro. El revisor siempre viene del otro harness.
-3. **Cada noche corre Autoaprendizaje.** Por la mañana, `sno rem-reflect accept <id>` para las
-   propuestas que te gusten. Sin ese accept, nada cambia.
+5. **Cada noche corre Autoaprendizaje.** Por la mañana, `sno rem-reflect accept <id>` para las
+   propuestas que te gusten. Sin ese accept, nada cambia, y en Claude Code y Codex una lección
+   aceptada se aplica desde la próxima respuesta.
 
 ## Cursor
 
@@ -176,7 +212,7 @@ trabajo era malo. Significa que un solo revisor de un solo harness nunca basta.
 
 ## Qué funciona hoy
 
-*Última actualización 2026-10-18.*
+*Última actualización 2026-11-04.*
 
 | Pieza | Estado |
 |---|---|
@@ -186,6 +222,11 @@ trabajo era malo. Significa que un solo revisor de un solo harness nunca basta.
 | Autoaprendizaje y las habilidades del equipo | Instalado por `sno setup`; el trabajo nocturno se ejecutó en una máquina Linux limpia |
 | Instalación con un solo comando | `sno setup` instala todo lo anterior; probada en una máquina Linux limpia |
 | "Sno onboard" dentro de tu agente | Disponible; arranca tras la instalación, o cuando lo dices |
+| Un solo comando inicia dos agentes | Nuevo en 2.0; ejecutado con agentes reales de Claude Code y Codex, uno de cada uno y dos del mismo proveedor |
+| Ver quién te necesita: línea de estado, barra de tmux, `sno squad` | Nuevo en 2.0; ejecutado con agentes reales de Claude Code y Codex pidiendo permiso, y la línea de estado en Claude Code y Cursor reales |
+| El trabajo interrumpido continúa, y una tarea sobrevive a la compactación | Nuevo en 2.0; ejecutado con agentes reales de Claude Code y Codex |
+| Una lección aprobada funciona desde la próxima respuesta | Nuevo en 2.0; ejecutado con agentes reales de Claude Code y Codex |
+| Los mensajes esperan mientras escribes o un agente compacta su contexto | Nuevo en 2.0; ejecutado con agentes reales de Claude Code y Codex |
 
 Una fila dice "probado" solo cuando se ha ejecutado en una máquina limpia.
 
