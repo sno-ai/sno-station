@@ -4,6 +4,8 @@ Close a Codex session and most of what it learned is gone. Sno Memory keeps it: 
 memory on your own machine that Codex fills as you work and reads from at the start of every
 session.
 
+**New in 2.0: Tag Team.** Run `sno reach pair "Fix the login redirect"` and two agents take the task: one builds, one challenges, and the work reaches you already argued over. `sno squad` shows who needs you. An interrupted task comes back, or you are told it did not, and a lesson you approve works from the next reply. [What changed](https://github.com/sno-ai/sno-station#new-in-20-tag-team).
+
 ## What you get
 
 - **It remembers without being asked.** Each session is captured in the background once it has been quiet for 30 minutes or has ended.

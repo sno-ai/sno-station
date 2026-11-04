@@ -5,6 +5,8 @@ Codex use through Sno: a conversation starts with what the repository already es
 relevant memory arrives with each message, and what the conversation settles is stored for the
 next one, whichever agent opens it.
 
+**New in 2.0: Tag Team.** Your Cursor status line now says when any agent on your squad needs you, and `sno squad` shows the whole picture. [What changed](https://github.com/sno-ai/sno-station#new-in-20-tag-team).
+
 ## Get started
 
 1. Follow the [memory service setup](https://github.com/sno-ai/sno-station/blob/main/docs/memory-setup.md).
