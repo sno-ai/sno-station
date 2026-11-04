@@ -69,6 +69,19 @@ Un agente construye. El otro le busca las grietas a lo construido. Lo que encuen
 
 `sno squad` despliega todo el equipo a pantalla completa: quién te necesita, quién está trabajando, qué está terminado. Los agentes iniciados con Reach muestran lo mismo en su barra de tmux.
 
+```text
+Sno Station · squad · 09:15 · 2 need you · 2 working · 2 finished
+Needs you (2)
+> claude web-app       approve a permission · Fix the login redirect loop …   1m
+  codex api            asked a question · Migrate the billing tables to th…   5m
+Working (2)
+  claude docs-site     Rewrite the quick-start page for the 2.0 install      12s
+  codex api            Review the rate limiter change from the web-app age…  40s
+Finished (2)
+  hermes infra         finished · result unseen · Rotate the staging certi…  25m
+  claude web-app       finished · Bump the UI kit to 4.2                      2h
+```
+
 **El trabajo sobrevive al agente que lo hace.** Cuota, caída, ventana cerrada. La tarea continúa en la misma conversación cuando se puede restaurar, o en una nueva creada a partir de la nota de relevo guardada, y te dicen la verdad sobre lo que pasó: reanudada (resumed), reconstruida (rebuilt) o perdida (lost). Y cuando el contexto de un agente se llena y se compacta, sigue sabiendo qué estaba haciendo y qué ya falló.
 
 **Aprueba una lección y la próxima respuesta ya la sabe.** No la próxima sesión. La próxima respuesta.
