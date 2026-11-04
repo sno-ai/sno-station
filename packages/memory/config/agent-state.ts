@@ -421,7 +421,7 @@ export async function recordAgentHandoff(source: string, target: string, release
 	const observation: AgentObservation = { harness: agent.harness, sessionId: agent.sessionId, at: new Date().toISOString(),
 		event: "handoff-released", reachAddress: target, input: { message_id: item.message_id, target_message_id: item.handoff_message_id,
 			work: item.work, source: item.recipient, target } };
-	await appendFile(eventFile(options.profileDir ?? profileDir(), agent.harness, agent.sessionId), `${JSON.stringify(observation)}\n`);
+	await appendFile(eventFile(options.profileDir ?? profileDir(), agent.harness, agent.sessionId), `${JSON.stringify(observation)}\n`, { mode: 0o600 });
 }
 
 export function compactAgentView(view: AgentView, current: AgentIdentity = {}): string {
@@ -439,6 +439,6 @@ export async function markAgentResultSeen(row: AgentRow, profile: string = profi
 	if (row.resultId === "unknown") return;
 	const target = eventFile(profile, row.harness, row.sessionId);
 	try {
-		await appendFile(target, `${JSON.stringify({ harness: row.harness, sessionId: row.sessionId, at: new Date().toISOString(), event: "human-seen", input: { resultId: row.resultId } })}\n`);
+		await appendFile(target, `${JSON.stringify({ harness: row.harness, sessionId: row.sessionId, at: new Date().toISOString(), event: "human-seen", input: { resultId: row.resultId } })}\n`, { mode: 0o600 });
 	} catch (error) { process.stderr.write(`${JSON.stringify(failure("append human result view", target, error, "result remains unseen"))}\n`); }
 }
