@@ -60,4 +60,5 @@ invoke call "$RECEIVER" 'Wrong incarnation must receive nothing.' --timeout 1 --
 expect_rc 5
 tmux -L "$SERVER" capture-pane -p -t "$pane" >"$WORK/after"
 cmp "$WORK/before" "$WORK/after"
+grep -rlqF 'Wrong incarnation must receive nothing.' "$STATE/$RECEIVER/new" || fail 'mismatched call mail was not stored'
 pass 'registered seats list, stale age, unregister, dead pane and reused-server identity'

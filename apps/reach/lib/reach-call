@@ -191,7 +191,15 @@ if [[ "$terminal" != %* ]]; then
         tmux) terminal="$(jq -er 'select(.identity.kind == "tmux-pane") | .identity.value | select(test("^%[0-9]+$"))' "$record")" || {
             store_call_mail || exit $?
             exit "$EXIT_UNRELIABLE"
-        } ;;
+        }
+            # After a tmux restart the same pane number can belong to another session: the registered server must match.
+            if ! session="$(timeout --foreground 5 tmux display-message -pt "$terminal" '#S' 2>/dev/null)" ||
+                ! server="$(printf '%s\t%s\n' "$(tmux display-message -pt "$terminal" '#{socket_path}')" "$(tmux display-message -pt "$terminal" '#{pid}')" | sha256sum | cut -d ' ' -f1)" ||
+                [[ "$(jq -r .handle "$record")" != "tmux-$server:$session" ]]; then
+                store_call_mail || exit $?
+                printf 'tmux server identity mismatch for %s; call mail is stored, no cue sent\n' "$terminal" >&2
+                exit "$EXIT_UNRELIABLE"
+            fi ;;
         orca|cursor-ide)
             store_call_mail || exit $?
             printf 'channel %s does not support synchronous call: %s\n' "$channel" "$terminal" >&2
