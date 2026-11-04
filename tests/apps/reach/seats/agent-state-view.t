@@ -37,8 +37,7 @@ if [[ "$mode" != work ]]; then
     ln -s "$repo/packages/memory" "$WORK/npm/lib/node_modules/@snoai/memory"
     printf '#!/usr/bin/env bash\nexec cat\n' >"$WORK/commands/claude"
     chmod +x "$WORK/commands/claude"
-    tmux -L "$SERVER" set-option -g status-right 'USER #{session_name}'
-    tmux -L "$SERVER" set-option -g status-right-length 180
+    # tmux's own status-right and status-right-length, as on an unconfigured machine.
     tmux -L "$SERVER" set-option -g status-interval 1
     tmux -L "$SERVER" set-option -t proof status-right OTHER
     before_global="$(tmux -L "$SERVER" show-options -gqv status-right)"
@@ -50,9 +49,11 @@ if [[ "$mode" != work ]]; then
     pane="$(jq -r .identity.value "$STATE/$agent/reachable.json")"
     session="$(tmux -L "$SERVER" display-message -pt "$pane" '#S')"
     bar="$(tmux -L "$SERVER" show-options -qv -t "$session" status-right)"
-    [[ "$bar" == 'USER #{session_name} '* && "$bar" == *agent-state-view.js* ]] || fail 'spawn did not preserve and compose inherited status-right'
+    [[ "$bar" == "$before_global "* && "$bar" == *agent-state-view.js* ]] || fail 'spawn did not preserve and compose inherited status-right'
     [[ "$(tmux -L "$SERVER" show-options -gqv status-right)" == "$before_global" ]]
     [[ "$(tmux -L "$SERVER" show-options -qv -t proof status-right)" == OTHER ]]
+    [[ "$(tmux -L "$SERVER" show-options -qv -t "$session" status-right-length)" == 120 &&
+       "$(tmux -L "$SERVER" show-options -gqv status-right-length)" == 40 ]] || fail 'spawn did not widen only its own status-right'
     python3 - "$SERVER" "$session" "$WORK/profile/station/agents/claude--other.jsonl" <<'PY'
 import datetime, fcntl, json, os, pathlib, pty, select, struct, subprocess, sys, termios, time
 server, session, event_file = sys.argv[1:]
@@ -77,10 +78,10 @@ def displayed(needle):
                 return output
     raise AssertionError(f'actual tmux client never displayed {needle!r}: {output[-2000:]!r}')
 try:
-    initial = displayed(b'working')
-    assert b'USER' in initial, initial
+    displayed(b'working')
     append('permission-request', {'tool_name':'Bash','tool_use_id':'approval-one'})
-    displayed(b'need you')
+    # The whole segment, its end included: tmux's default length of 40 cuts it after the default clock text.
+    displayed(b'need you \xc2\xb7 claude: approve')
     print('PASS actual attached tmux client changed from working to need you on its idle refresh', flush=True)
 finally:
     client.terminate()

@@ -113,11 +113,14 @@ else
         fi
         state_view="$npm_root/@snoai/memory/dist/agent-state-view.js"
         if [[ -r "$state_view" ]]; then
+            # The compact segment needs about 60 columns; tmux's default length of 40 would cut it off.
             if original_bar="$(tmux show-options -Aqv -t "$session" status-right)" &&
+               original_length="$(tmux show-options -Aqv -t "$session" status-right-length)" &&
                bar_command="$(jq -nr '$ARGS.positional | @sh' --args -- env \
                    "SNO_PROFILE_DIR=${SNO_PROFILE_DIR:-$HOME/.sno}" "SNO_REACH_ROOT=$root" \
                    node "$state_view" --compact --reach-address "$address")" &&
-               tmux set-option -t "$session" status-right "$original_bar #($bar_command)"; then :
+               tmux set-option -t "$session" status-right "$original_bar #($bar_command)" &&
+               tmux set-option -t "$session" status-right-length "$((original_length + 80))"; then :
             else printf 'reach: compose squad bar %s: tmux setup failed; agent remains available\n' "$session" >&2; fi
         else printf 'reach: compose squad bar %s: state reader unavailable at %s; agent remains available\n' "$session" "$state_view" >&2; fi
     else printf 'reach: compose squad bar %s: npm package lookup failed; agent remains available\n' "$session" >&2; fi
