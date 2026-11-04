@@ -82,6 +82,23 @@ async function observedProcess(harness: AgentHarness, input: Record<string, unkn
 	return undefined;
 }
 
+// The fields the reader uses. Prompts, replies and tool output are not memory: only a bounded prompt start,
+// a bounded reply end (its final punctuation marks a question) and whether a tool answered are kept.
+const OBSERVED_FIELDS = ["tool_name", "tool_use_id", "call_id", "notification_type", "error", "error_type", "approved", "decision",
+	"choice", "human_addressee", "review_requested", "decision_required", "context_exhausted", "reference", "transcript_path"];
+const OBSERVED_TEXT_CHARS = 200;
+
+function observedInput(input: Record<string, unknown>): Record<string, unknown> {
+	const kept: Record<string, unknown> = Object.fromEntries(OBSERVED_FIELDS.filter(key => input[key] !== undefined).map(key => [key, input[key]]));
+	const prompt = text(input.prompt);
+	if (prompt) kept.prompt = prompt.slice(0, OBSERVED_TEXT_CHARS);
+	const reply = text(input.last_assistant_message ?? input.text ?? input.response ?? input["last-assistant-message"]);
+	if (reply) kept.last_assistant_message = reply.trimEnd().slice(-OBSERVED_TEXT_CHARS);
+	if (input.tool_response !== undefined) kept.tool_response = { accepted: record(input.tool_response).accepted === true };
+	if (input.tool_output !== undefined) kept.tool_output = true;
+	return kept;
+}
+
 /** Observational failures are logged; they never prevent an agent's ordinary hook. */
 export async function observeAgentEvent(harness: AgentHarness, event: string, raw: unknown): Promise<void> {
 	const input = record(raw);
@@ -104,12 +121,12 @@ export async function observeAgentEvent(harness: AgentHarness, event: string, ra
 		const observation: AgentObservation = {
 			harness, sessionId, at: new Date().toISOString(),
 			event: event === "user-prompt-submit" && isAgentText(text(input.prompt)) ? "agent-prompt-submit" : event,
-			input, ...identity,
+			input: observedInput(input), ...identity,
 			...(process.env.SNO_REACH_ADDR ? { reachAddress: process.env.SNO_REACH_ADDR } : {}),
 			...(cwd ? { cwd } : {}),
 		};
-		await mkdir(dirname(target), { recursive: true });
-		await appendFile(target, `${JSON.stringify(observation)}\n`);
+		await mkdir(dirname(target), { recursive: true, mode: 0o700 });
+		await appendFile(target, `${JSON.stringify(observation)}\n`, { mode: 0o600 });
 	} catch (error) {
 		process.stderr.write(`${JSON.stringify(failure("append agent observation", target, error, `${event} observation missing`))}\n`);
 	}
