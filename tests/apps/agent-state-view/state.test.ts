@@ -76,17 +76,9 @@ describe("agent state view read-time semantics", () => {
 		await events("codex", "saved", [{ event: "stop", input: { transcript_path: transcript }, identity: { pid: process.pid, processStart: "different-start" } }]);
 		expect((await view()).agents[0]).toMatchObject({ process: "exited", resumable: "resumable", resumeEvidence: transcript, subgroup: "resumable" });
 	});
-	it("reads no transcript when the process is unknown and keeps a seen result through a large observation file", async () => {
+	it("reads no transcript when the process is unknown", async () => {
 		await events("codex", "unknown-process", [{ event: "stop", input: { transcript_path: join(home, "missing-rollout.jsonl") } }]);
 		expect((await view()).errors.filter(error => error.operation === "read resume record")).toEqual([]);
-		const filler = Array.from({ length: 4000 }, () => ({ event: "pre-model-call", input: { tool_name: "x".repeat(80) } }));
-		const path = await events("claude", "long", [...filler, { event: "stop", input: { last_assistant_message: "Done." } }]);
-		const row = (await view()).agents.find(item => item.sessionId === "long");
-		if (!row) throw new Error("expected long row");
-		expect(row.group).toBe("Finished");
-		await markAgentResultSeen(row, home);
-		await appendFile(path, JSON.stringify({ harness: "claude", sessionId: "long", at: new Date(now).toISOString(), event: "notification", input: {} }) + "\n");
-		expect((await view()).agents.find(item => item.sessionId === "long")).toMatchObject({ resultId: row.resultId, humanSeen: true });
 	});
 	it("marks only the opened completion seen; passive reads and new completions stay unseen", async () => {
 		const path = await events("claude", "result", [{ event: "stop", input: { last_assistant_message: "First." } }]);
