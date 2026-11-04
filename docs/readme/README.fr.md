@@ -72,6 +72,19 @@ Un agent construit. L'autre lui porte la contradiction. Ils règlent entre eux c
 
 `sno squad` déploie toute l'équipe en plein écran : qui a besoin de vous, qui travaille, ce qui est terminé. Les agents lancés via Reach affichent la même chose dans leur barre tmux.
 
+```text
+Sno Station · squad · 09:15 · 2 need you · 2 working · 2 finished
+Needs you (2)
+> claude web-app       approve a permission · Fix the login redirect loop …   1m
+  codex api            asked a question · Migrate the billing tables to th…   5m
+Working (2)
+  claude docs-site     Rewrite the quick-start page for the 2.0 install      12s
+  codex api            Review the rate limiter change from the web-app age…  40s
+Finished (2)
+  hermes infra         finished · result unseen · Rotate the staging certi…  25m
+  claude web-app       finished · Bump the UI kit to 4.2                      2h
+```
+
 **Le travail survit à l'agent qui le fait.** Quota, plantage, fenêtre fermée. La tâche continue dans la même conversation quand elle peut être restaurée, ou dans une nouvelle, construite à partir de la note de passation enregistrée, et on vous dit la vérité sur ce qui s'est passé : reprise (resumed), reconstruite (rebuilt) ou perdue (lost). Et quand le contexte d'un agent se remplit et se compacte, il sait toujours ce qu'il faisait et ce qui a déjà échoué.
 
 **Approuvez une leçon, et la réponse suivante la connaît déjà.** Pas la prochaine session. La réponse suivante.

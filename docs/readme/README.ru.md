@@ -71,6 +71,19 @@ sno reach pair "Fix the login redirect"
 
 `sno squad` разворачивает весь ваш отряд на полный экран: кому вы нужны, кто работает, что готово. Агенты, запущенные через Reach, показывают то же самое в панели tmux.
 
+```text
+Sno Station · squad · 09:15 · 2 need you · 2 working · 2 finished
+Needs you (2)
+> claude web-app       approve a permission · Fix the login redirect loop …   1m
+  codex api            asked a question · Migrate the billing tables to th…   5m
+Working (2)
+  claude docs-site     Rewrite the quick-start page for the 2.0 install      12s
+  codex api            Review the rate limiter change from the web-app age…  40s
+Finished (2)
+  hermes infra         finished · result unseen · Rotate the staging certi…  25m
+  claude web-app       finished · Bump the UI kit to 4.2                      2h
+```
+
 **Работа переживает агента, который её делает.** Квота, сбой, закрытое окно. Задача продолжается в том же разговоре, если его можно восстановить, или в новом, собранном из сохранённой сводки, и вам честно скажут, что именно случилось: возобновлено (resumed), пересобрано (rebuilt) или потеряно (lost). А когда контекст агента заполняется и сжимается, он всё равно знает, чем занимался и что уже не сработало.
 
 **Одобрите урок, и следующий ответ уже будет его знать.** Не следующая сессия. Следующий ответ.

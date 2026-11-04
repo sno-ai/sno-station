@@ -71,6 +71,19 @@ Ein Agent baut. Der andere nimmt das Ergebnis in die Zange. Die Befunde klären 
 
 `sno squad` breitet das ganze Team im Vollbild vor Ihnen aus: wer Sie braucht, wer arbeitet, was fertig ist. Agenten, die über Reach gestartet wurden, zeigen dasselbe in ihrer tmux-Leiste.
 
+```text
+Sno Station · squad · 09:15 · 2 need you · 2 working · 2 finished
+Needs you (2)
+> claude web-app       approve a permission · Fix the login redirect loop …   1m
+  codex api            asked a question · Migrate the billing tables to th…   5m
+Working (2)
+  claude docs-site     Rewrite the quick-start page for the 2.0 install      12s
+  codex api            Review the rate limiter change from the web-app age…  40s
+Finished (2)
+  hermes infra         finished · result unseen · Rotate the staging certi…  25m
+  claude web-app       finished · Bump the UI kit to 4.2                      2h
+```
+
 **Die Arbeit überlebt den Agenten, der an ihr sitzt.** Kontingent, Absturz, geschlossenes Fenster. Die Aufgabe geht im selben Gespräch weiter, wenn es sich wiederherstellen lässt, oder in einem neuen, das aus der gespeicherten Übergabenotiz entsteht, und Sie erfahren ungeschönt, was davon zutrifft: fortgesetzt (resumed), neu aufgebaut (rebuilt) oder verloren (lost). Und wenn der Kontext eines Agenten voll ist und komprimiert wird, weiß er immer noch, woran er war und was schon gescheitert ist.
 
 **Sagen Sie Ja zu einer Lektion, und die nächste Antwort kennt sie schon.** Nicht die nächste Sitzung. Die nächste Antwort.
