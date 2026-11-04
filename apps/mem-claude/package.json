@@ -9,7 +9,7 @@
     "directory": "apps/mem-claude"
   },
   "type": "module",
-  "description": "Give Claude Code a memory. It remembers what you worked on and brings it back next session.",
+  "description": "Put Claude Code on a squad: one memory with your other agents, a status line that says who needs you, and a task that survives compaction.",
   "files": [
     "dist",
     "skills",

@@ -11,7 +11,7 @@
     "directory": "apps/mem-cursor"
   },
   "type": "module",
-  "description": "Give Cursor a memory. It remembers what you worked on and brings it back next conversation.",
+  "description": "Put Cursor on a squad: one memory with your other agents, and a status line that says who needs you.",
   "bin": {
     "sno-mem-cursor": "dist/cli.js"
   },

@@ -9,7 +9,7 @@
     "directory": "apps/mem-codex"
   },
   "type": "module",
-  "description": "Give Codex a memory. It remembers what you worked on and brings it back next session.",
+  "description": "Put Codex on a squad: one memory with your other agents, and a task that survives interruptions and compaction.",
   "files": [
     "dist",
     "skills",
