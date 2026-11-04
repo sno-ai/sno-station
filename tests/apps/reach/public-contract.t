@@ -8,8 +8,8 @@ case "$mode" in
 surface)
   invoke --help; expect_rc 0
   cp "$WORK/out" "$WORK/help"
-  verbs=(spawn register unregister seats call watch ring send reply inbox wait dismiss log state flush init rebind doctor export lint remind)
-  [[ "${#verbs[@]}" == 21 ]]
+  verbs=(pair spawn register unregister seats call watch ring send reply inbox wait dismiss log state flush init rebind doctor export lint remind)
+  [[ "${#verbs[@]}" == 22 ]]
   for verb in "${verbs[@]}"; do
     grep -Eq "(^|[[:space:],|])$verb([[:space:],|]|$)" "$WORK/help" || fail "help omits $verb"
   done
