@@ -410,7 +410,9 @@ export async function readAgentView(options: AgentViewOptions = {}): Promise<Age
 	}
 	view.quota = [...new Set(view.agents.map(row => row.harness))].map(harness => ({ harness, state: "unknown", reason: "no quota observation; use explicit refresh", source: "unknown", observedAt: "unknown" }));
 	const groups = ["Needs you", "Working", "Finished", "unknown"];
-	view.agents.sort((a, b) => groups.indexOf(a.group) - groups.indexOf(b.group) || Number(a.humanSeen === true) - Number(b.humanSeen === true));
+	const age = (row: AgentRow): number => (row.ageSeconds === "unknown" ? Number.POSITIVE_INFINITY : row.ageSeconds);
+	view.agents.sort((a, b) => groups.indexOf(a.group) - groups.indexOf(b.group) || Number(a.humanSeen === true) - Number(b.humanSeen === true) ||
+		age(a) - age(b));
 	return view;
 }
 
@@ -428,6 +430,101 @@ export async function recordAgentHandoff(source: string, target: string, release
 		event: "handoff-released", reachAddress: target, input: { message_id: item.message_id, target_message_id: item.handoff_message_id,
 			work: item.work, source: item.recipient, target } };
 	await appendFile(eventFile(options.profileDir ?? profileDir(), agent.harness, agent.sessionId), `${JSON.stringify(observation)}\n`, { mode: 0o600 });
+}
+
+// East Asian wide and emoji code points take two terminal columns.
+const WIDE = /[\u1100-\u115F\u2E80-\u303E\u3041-\u33FF\u3400-\u4DBF\u4E00-\u9FFF\uA000-\uA4CF\uAC00-\uD7A3\uF900-\uFAFF\uFE30-\uFE4F\uFF00-\uFF60\uFFE0-\uFFE6\u{20000}-\u{3FFFD}]|\p{Emoji_Presentation}/u;
+const columns = (char: string): number => (WIDE.test(char) ? 2 : 1);
+
+/** One terminal cell of exactly `width` columns: whitespace folded, cut with an ellipsis. */
+function cell(value: string, width: number): string {
+	const chars = [...value.replace(/\s+/g, " ").trim()];
+	const total = chars.reduce((sum, char) => sum + columns(char), 0);
+	let out = "";
+	let used = 0;
+	for (const char of chars) {
+		if (total > width && used + columns(char) > width - 1) { out += "…"; used += 1; break; }
+		out += char; used += columns(char);
+	}
+	return out + " ".repeat(Math.max(0, width - used));
+}
+
+/** Whitespace-folded text broken into lines of at most `width` columns. */
+function wrap(value: string, width: number): string[] {
+	const lines = [""];
+	let used = 0;
+	for (const char of value.replace(/\s+/g, " ").trim()) {
+		if (used + columns(char) > width) { lines.push(""); used = 0; }
+		lines[lines.length - 1] += char; used += columns(char);
+	}
+	return lines;
+}
+
+function ago(seconds: number | "unknown"): string {
+	if (seconds === "unknown") return "?";
+	const value = Math.round(seconds);
+	if (value < 60) return `${value}s`;
+	if (value < 3600) return `${Math.floor(value / 60)}m`;
+	return value < 86_400 ? `${Math.floor(value / 3600)}h` : `${Math.floor(value / 86_400)}d`;
+}
+
+function rowWho(row: AgentRow): string {
+	const project = row.cwd === "unknown" ? "" : row.cwd.slice(row.cwd.lastIndexOf("/") + 1);
+	return `${row.harness} ${project || (row.reachAddress === "unknown" ? row.sessionId.slice(0, 8) : row.reachAddress)}`;
+}
+
+function rowWhat(row: AgentRow): string {
+	const task = row.description === "unknown" ? "" : row.description;
+	const parts = (...items: string[]): string => items.filter(Boolean).join(" · ");
+	if (row.group === "Needs you") return parts(row.waitingReason === "permission to approve" ? "approve a permission" : row.waitingReason, task);
+	if (row.group === "Working") return parts(row.subgroup === "working" ? "" : row.subgroup, task || "working");
+	if (row.group === "Finished") return parts(row.subgroup === "unknown" ? "finished" : row.subgroup, row.humanSeen === false ? "result unseen" : "", task);
+	return parts("state unknown", task);
+}
+
+/** The interactive squad screen: one line per agent, "Needs you" pinned on top, the selected row's details below. */
+export function renderAgentScreen(view: AgentView, selected: number, size: { columns: number; rows: number }, message = ""): string {
+	const width = Math.max(40, size.columns);
+	const whoWidth = Math.min(22, Math.floor(width / 4));
+	const whatWidth = width - whoWidth - 8;
+	const count = (group: AgentRow["group"]): number => view.agents.filter(row => row.group === group).length;
+	const header = [`Sno Station · squad · ${new Date(view.observedAt).toTimeString().slice(0, 5)}`, `${count("Needs you")} need you`,
+		`${count("Working")} working`, `${count("Finished")} finished`, ...(view.errors.length ? [`${view.errors.length} errors (sno --json squad)`] : [])];
+	const pinned: { text: string; index: number }[] = [];
+	const rest: { text: string; index: number }[] = [];
+	for (const [group, label] of [["Needs you", "Needs you"], ["Working", "Working"], ["Finished", "Finished"], ["unknown", "Unknown"]] as const) {
+		const members = view.agents.flatMap((row, index) => (row.group === group ? [index] : []));
+		if (!members.length) continue;
+		const lines = [{ text: `${label} (${members.length})`, index: -1 }, ...members.map(index => {
+			const row = view.agents[index] as AgentRow;
+			return { index, text: `${index === selected ? ">" : " "} ${cell(rowWho(row), whoWidth)} ${cell(rowWhat(row), whatWidth)} ${ago(row.ageSeconds).padStart(4)}` };
+		})];
+		(group === "Needs you" ? pinned : rest).push(...lines);
+	}
+	const row = view.agents[selected];
+	let details: string[];
+	// An opened result is shown whole; the list gives up the lines it needs.
+	if (message) details = wrap(message, width).slice(0, Math.max(3, size.rows - 5));
+	else if (row) {
+		const handing = row.work.some(item => item.handoff_to && !item.releasedAt) ? " (handing over)" : "";
+		const last = row.lastEvent === "unknown" ? "no event" : `last ${row.lastEvent.event} ${ago(row.ageSeconds)} ago`;
+		details = [`Task: ${row.description}`,
+			`${row.cwd} · Reach ${row.reachAddress} · process ${row.process} · ${row.resumable} · session ${row.sessionId}`,
+			[`Work: ${row.work.length} card(s)${handing}`, last, ...row.missingReasons].join(" · ")];
+	} else details = ["", "", ""];
+	// Title, separator, detail lines and the key line leave the rest of the screen to the list. "Needs you" stays on top
+	// while it leaves room; the remaining lines scroll to keep the selected row in view.
+	const space = Math.max(1, size.rows - 3 - details.length);
+	const visible = (lines: { text: string; index: number }[], room: number): string[] => {
+		const at = lines.findIndex(line => line.index === selected);
+		const start = lines.length <= room || at < 0 ? 0 : Math.min(Math.max(0, at - Math.floor(room / 2)), lines.length - room);
+		return lines.slice(start, start + room).map(line => line.text);
+	};
+	const list = pinned.length < space ? [...pinned.map(line => line.text), ...visible(rest, space - pinned.length)] : visible([...pinned, ...rest], space);
+	if (!view.agents.length) list.push("No observed agents.");
+	while (list.length < space) list.push("");
+	return [cell(header.join(" · "), width), ...list, "─".repeat(width), ...details.map(line => cell(line, width)),
+		cell("↑/↓ select · Enter result · Space refresh · r quota · q exit", width)].map(line => line.trimEnd()).join("\n");
 }
 
 export function compactAgentView(view: AgentView, current: AgentIdentity = {}): string {
