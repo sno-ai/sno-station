@@ -5,6 +5,7 @@ import {
 	CODING_SKIN_HOOKS,
 	composeAgentStatusLine,
 	codingSkinHookCommand,
+	continuityBriefPath,
 	isCodingSkinHookCommand,
 	snoProgramPath,
 	shellQuote,
@@ -59,6 +60,7 @@ export function isOwnedHookCommand(command: string, subcommand: string): boolean
 }
 
 export function isOwnedPermissionRule(rule: string): boolean {
+	if (/^(?:Read|Edit)\(\/\/.+\/station\/handoff\/\*\*\)$/.test(rule)) return true;
 	if (!rule.startsWith("Bash(") || !rule.endsWith(" *)")) return false;
 	const body = rule.slice(5, -3);
 	if (body.endsWith(" memory")) return basename(snoProgramPath(body.slice(0, -" memory".length))) === "sno";
@@ -109,11 +111,13 @@ function updateSettings(settings: Settings, programPath: string): void {
 	}
 	settings.permissions ??= {};
 	const allow = settings.permissions.allow ?? [];
-	const rule = `Bash(${programPath} memory *)`;
+	// Reading and editing the task brief directory, and nothing else, so keeping the brief never asks for approval.
+	const briefs = `/${dirname(continuityBriefPath("session"))}/**`;
+	const rules = [`Bash(${programPath} memory *)`, `Read(${briefs})`, `Edit(${briefs})`];
 	const index = allow.findIndex(isOwnedPermissionRule);
-	if (index < 0) allow.push(rule);
-	else allow.splice(index, allow.length - index, rule, ...allow.slice(index + 1).filter(current => !isOwnedPermissionRule(current)));
-	settings.permissions.allow = allow;
+	const kept = allow.filter(current => !isOwnedPermissionRule(current));
+	kept.splice(index < 0 ? kept.length : index, 0, ...rules);
+	settings.permissions.allow = kept;
 	composeAgentStatusLine(settings, CLI_ENTRY, "claude", true);
 }
 

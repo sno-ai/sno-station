@@ -1,8 +1,9 @@
 import { spawnSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { chmod, mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { computeTrustHash, installCodex, uninstallCodex } from "../../../apps/mem-codex/src/install.ts";
 import { doctor } from "../../../apps/mem-codex/src/doctor.ts";
 
@@ -14,7 +15,15 @@ async function temporaryHome(): Promise<string> {
 	return home;
 }
 
+let previousProfile: string | undefined;
+beforeEach(async () => {
+	previousProfile = process.env.SNO_PROFILE_DIR;
+	process.env.SNO_PROFILE_DIR = join(await temporaryHome(), "profile");
+});
+
 afterEach(async () => {
+	if (previousProfile === undefined) delete process.env.SNO_PROFILE_DIR;
+	else process.env.SNO_PROFILE_DIR = previousProfile;
 	const { rm } = await import("node:fs/promises");
 	await Promise.all(temporaryHomes.splice(0).map(path => rm(path, { recursive: true, force: true })));
 });
@@ -409,6 +418,29 @@ describe("sno-mem-codex install", () => {
 			input: config,
 		});
 		expect(parsed.status, parsed.stderr).toBe(0);
+	});
+
+	it("makes only the task brief directory writable, merging into the user's table and removing only its own entry", async () => {
+		const codexHome = await temporaryHome();
+		const configPath = join(codexHome, "config.toml");
+		const briefs = join(process.env.SNO_PROFILE_DIR ?? "", "station", "handoff");
+		const roots = () => {
+			const parsed = spawnSync("python3", ["-c", "import sys, json, tomllib; print(json.dumps(tomllib.loads(sys.stdin.read()).get('sandbox_workspace_write', {})))"],
+				{ encoding: "utf8", input: readFileSync(configPath, "utf8") });
+			expect(parsed.status, parsed.stderr).toBe(0);
+			return JSON.parse(parsed.stdout) as { writable_roots?: string[]; network_access?: boolean };
+		};
+		await installCodex({ codexHome, programPath: "/opt/sno/bin/sno", writeOutput: () => undefined });
+		expect(roots()).toEqual({ writable_roots: [briefs] });
+		await uninstallCodex({ codexHome, writeOutput: () => undefined });
+		expect(roots()).toEqual({});
+
+		await writeFile(configPath, '[sandbox_workspace_write]\nnetwork_access = true\nwritable_roots = [\n  "/srv/data",\n]\n');
+		await installCodex({ codexHome, programPath: "/opt/sno/bin/sno", writeOutput: () => undefined });
+		await installCodex({ codexHome, programPath: "/opt/sno/bin/sno", writeOutput: () => undefined });
+		expect(roots()).toEqual({ network_access: true, writable_roots: [briefs, "/srv/data"] });
+		await uninstallCodex({ codexHome, writeOutput: () => undefined });
+		expect(roots()).toEqual({ network_access: true, writable_roots: ["/srv/data"] });
 	});
 
 	it("leaves one trust table per key and a parseable file when two of its own entries from earlier installs are already present", async () => {
