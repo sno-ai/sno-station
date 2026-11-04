@@ -289,7 +289,7 @@ test_reminder_deadline() {
     ended="$(date +%s.%N)"
     elapsed="$(awk -v before="$begun" -v after="$ended" 'BEGIN {print after-before}')"
     [[ "$rc" != 0 && "$rc" != 124 ]] || fail "expected whole-command deadline, got $rc after $elapsed seconds"
-    has "$case_root/err" 'whole-command deadline'
+    has "$case_root/err" 'command deadline exceeded'
     expect 1 "$(grep -c '^validation ' "$case_root/delays")"
     expect 2 "$(grep -c '^state ' "$case_root/delays")"
     awk -v elapsed="$elapsed" 'BEGIN {exit !(elapsed>=4.5 && elapsed<5.2)}' || fail "whole command took $elapsed seconds"
