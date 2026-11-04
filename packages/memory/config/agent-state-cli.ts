@@ -2,7 +2,7 @@
 import { execFile } from "node:child_process";
 import { emitKeypressEvents } from "node:readline";
 import { promisify } from "node:util";
-import { compactAgentView, markAgentResultSeen, readAgentView, recordAgentHandoff, type AgentView } from "./agent-state";
+import { compactAgentView, markAgentResultSeen, readAgentView, recordAgentHandoff, renderAgentScreen, type AgentView } from "./agent-state";
 
 const execute = promisify(execFile);
 
@@ -11,13 +11,12 @@ function option(args: string[], name: string): string | undefined {
 	return index < 0 ? undefined : args[index + 1];
 }
 
-function renderAgentSnapshot(view: AgentView, selected = -1): string {
+function renderAgentSnapshot(view: AgentView): string {
 	const lines = [`Sno Station · squad · ${view.observedAt}`, ""];
 	for (const group of ["Needs you", "Working", "Finished", "unknown"]) {
 		lines.push(group === "unknown" ? "Unknown observations" : group);
 		for (const row of view.agents.filter(row => row.group === group)) {
-			const index = view.agents.indexOf(row);
-			lines.push(`${index === selected ? ">" : " "} ${row.harness} ${row.sessionId} · ${row.subgroup} · ${row.ageSeconds}s ago`,
+			lines.push(`  ${row.harness} ${row.sessionId} · ${row.subgroup} · ${row.ageSeconds}s ago`,
 				`  Doing: ${row.doing} · Process: ${row.process} · Resumable: ${row.resumable} · Waiting for a human: ${row.waitingForHuman}`,
 				`  Reason: ${row.waitingReason} · Reach: ${row.reachAddress} · Project: ${row.cwd} · Task: ${row.description}`,
 				`  Work: ${JSON.stringify(row.work)} · Delivery: ${row.delivery} · Resume: ${row.resumeEvidence}`,
@@ -59,9 +58,17 @@ async function screen(): Promise<number> {
 	let selected = 0;
 	let result = "";
 	const wasRaw = process.stdin.isRaw;
-	const draw = (): void => {
-		process.stdout.write(`\x1b[H\x1b[2J${renderAgentSnapshot(view, selected)}\n${result}\n↑/↓ select · Enter open result · r refresh quota · Space refresh · q/Escape exit\n`);
+	// A refresh can reorder rows (a seen result sorts lower); keep the same session selected.
+	const reread = async (): Promise<void> => {
+		const current = view.agents[selected];
+		view = await readAgentView();
+		const index = view.agents.findIndex(row => row.harness === current?.harness && row.sessionId === current?.sessionId);
+		selected = index >= 0 ? index : Math.max(0, Math.min(selected, view.agents.length - 1));
 	};
+	const draw = (): void => {
+		process.stdout.write(`\x1b[H\x1b[2J${renderAgentScreen(view, selected, { columns: process.stdout.columns ?? 80, rows: process.stdout.rows ?? 24 }, result)}`);
+	};
+	process.stdout.on("resize", draw);
 	process.stdout.write("\x1b[?1049h\x1b[?25l");
 	emitKeypressEvents(process.stdin);
 	process.stdin.setRawMode(true); process.stdin.resume(); draw();
@@ -71,19 +78,23 @@ async function screen(): Promise<number> {
 			const keypress = async (value: string, key: { name?: string; ctrl?: boolean }): Promise<void> => {
 				if (value === "q" || key.name === "escape" || (key.ctrl && key.name === "c")) { close(); return; }
 				try {
-					if (key.name === "down" || value === "j") selected = Math.min(view.agents.length - 1, selected + 1);
-					else if (key.name === "up" || value === "k") selected = Math.max(0, selected - 1);
+					if (key.name === "down" || value === "j") { selected = Math.min(view.agents.length - 1, selected + 1); result = ""; }
+					else if (key.name === "up" || value === "k") { selected = Math.max(0, selected - 1); result = ""; }
 					else if (key.name === "return") {
 						const row = view.agents[selected];
-						if (row) { result = row.finalReply; await markAgentResultSeen(row); view = await readAgentView(); }
-					} else if (value === "r") await refreshAgentQuota(view);
-					else if (value === " ") { const quota = view.quota; view = await readAgentView(); view.quota = quota; }
+						if (row) { result = `Result: ${row.finalReply}`; await markAgentResultSeen(row); await reread(); }
+					} else if (value === "r") {
+						await refreshAgentQuota(view);
+						result = `Quota: ${view.quota.map(item => JSON.stringify(item.observation ?? item)).join(" · ")}`;
+					}
+					else if (value === " ") { const quota = view.quota; await reread(); view.quota = quota; }
 					draw();
 				} catch (error) { result = `refresh failed: ${String(error)}`; draw(); }
 			};
 			process.stdin.on("keypress", keypress); process.on("SIGTERM", close); process.on("SIGINT", close);
 		});
 	} finally {
+		process.stdout.off("resize", draw);
 		process.stdin.setRawMode(wasRaw ?? false); process.stdin.pause();
 		process.stdout.write("\x1b[?25h\x1b[?1049l");
 	}
