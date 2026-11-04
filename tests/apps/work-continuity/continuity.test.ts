@@ -85,14 +85,11 @@ function saveBrief(session: string, body: string): string {
 }
 
 describe("task and approved-lesson host delivery", () => {
-	it.each(["mem-claude", "mem-codex"] as const)("%s makes the first session's instructed brief path writable without inventing its task", app => {
+	it.each(["mem-claude", "mem-codex"] as const)("%s writes the first session's brief template itself, so the agent runs no command", app => {
 		const started = hook(app, "session-start", "first-session", { source: "startup" });
 		const file = continuityBriefPath("first-session");
 		expect(started.context).toContain(file);
-		const command = /Run (.+?) to create its template first/.exec(started.context)?.[1];
-		expect(command).toBeDefined();
-		const saved = spawnSync("bash", ["-c", command ?? ""], { encoding: "utf8", env: process.env });
-		expect(saved.status, saved.stderr).toBe(0);
+		expect(started.context).not.toContain("handoff-checkpoint");
 		const record = readFileSync(file, "utf8");
 		expect(record).toContain("## Next");
 		expect(record).toContain(`runtime: ${app === "mem-claude" ? "claude-code" : "codex"}\nsession-id: first-session`);
