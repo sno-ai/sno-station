@@ -15,6 +15,9 @@ const events = [
 	["PostToolUse", "post-tool-use", 8],
 ] as const;
 const programPath = "/opt/sno/bin/sno";
+// Only the task brief directory is readable and editable without approval.
+const briefRules = () => [`Read(/${join(process.env.SNO_PROFILE_DIR ?? "", "station/handoff")}/**)`,
+	`Edit(/${join(process.env.SNO_PROFILE_DIR ?? "", "station/handoff")}/**)`];
 const hookCommand = (path: string, subcommand: string) => `'${path}' memory hook ${subcommand} --harness claude`;
 let configDir: string;
 let previousProfile: string | undefined;
@@ -51,7 +54,7 @@ describe("Claude settings installation and diagnosis", () => {
 				{ type: "command", command: hookCommand(programPath, subcommand), timeout },
 			]);
 		}
-		expect(installed.permissions.allow).toEqual([`Bash(${programPath} memory *)`]);
+		expect(installed.permissions.allow).toEqual([`Bash(${programPath} memory *)`, ...briefRules()]);
 		expect(await readFile(join(configDir, "skills/sno-mem-claude/SKILL.md"), "utf8"))
 			.toContain("name: sno-mem-claude");
 		expect((await readdir(configDir)).sort()).toEqual(["settings.json", "skills"]);
@@ -99,7 +102,7 @@ describe("Claude settings installation and diagnosis", () => {
 				{ type: "command", command: hookCommand(programPath, subcommand), timeout },
 			]);
 		}
-		expect(installed.permissions.allow).toEqual(["Bash(git status)", `Bash(${programPath} memory *)`, "Read(/tmp/*)"]);
+		expect(installed.permissions.allow).toEqual(["Bash(git status)", `Bash(${programPath} memory *)`, ...briefRules(), "Read(/tmp/*)"]);
 		expect(installed.env).toEqual(initial.env);
 	});
 
@@ -147,7 +150,7 @@ describe("Claude settings installation and diagnosis", () => {
 		for (const [event, subcommand, timeout] of events) {
 			expect(installed.hooks[event], event).toEqual([{ hooks: [{ type: "command", command: hookCommand(programPath, subcommand), timeout }] }]);
 		}
-		expect(installed.permissions.allow).toEqual([`Bash(${programPath} memory *)`]);
+		expect(installed.permissions.allow).toEqual([`Bash(${programPath} memory *)`, ...briefRules()]);
 	});
 
 	it("rewrites its hooks and rule when sno is at another path, never hooking an event twice", async () => {
@@ -160,7 +163,7 @@ describe("Claude settings installation and diagnosis", () => {
 				{ type: "command", command: hookCommand("/other/place/sno", subcommand), timeout },
 			]);
 		}
-		expect(installed.permissions.allow).toEqual(["Bash(/other/place/sno memory *)"]);
+		expect(installed.permissions.allow).toEqual(["Bash(/other/place/sno memory *)", ...briefRules()]);
 	});
 
 	it("runs each installed command through sh even when the absolute program path contains spaces", async () => {

@@ -7,6 +7,7 @@ import {
 	codingSkinHookCommand,
 	isCodingSkinHookCommand,
 	snoProgramPath,
+	continuityBriefPath,
 } from "@snoai/memory/coding-skin";
 import { APP_NAME } from "./constants.js";
 import { MESSAGES } from "./messages.js";
@@ -123,6 +124,32 @@ function stripTrustSections(text: string, keys: string[]): string {
 	return stripped.trimEnd();
 }
 
+const SANDBOX_TABLE = "[sandbox_workspace_write]";
+
+// The task brief lives outside the workspace; its one directory becomes a writable root so keeping the brief asks for
+// no approval. An existing table and array are extended in place, because a second table header is invalid TOML.
+export function withBriefRoot(config: string, directory: string): string {
+	const entry = JSON.stringify(directory);
+	const lines = config.split("\n");
+	const header = lines.findIndex(line => line.trim() === SANDBOX_TABLE);
+	if (header < 0) {
+		if (/^\s*sandbox_workspace_write\s*[.=]/m.test(config)) throw new Error("sandbox_workspace_write is set without its table header");
+		return `${config.trimEnd()}${config.trim() ? "\n\n" : ""}${SANDBOX_TABLE}\nwritable_roots = [${entry}]`;
+	}
+	const next = lines.findIndex((line, index) => index > header && /^\s*\[/.test(line));
+	const end = next < 0 ? lines.length : next;
+	const key = lines.findIndex((line, index) => index > header && index < end && /^\s*writable_roots\s*=/.test(line));
+	if (key < 0) lines.splice(header + 1, 0, `writable_roots = [${entry}]`);
+	else if (!lines.slice(key, end).join("\n").split("]")[0]?.includes(entry)) lines[key] = (lines[key] ?? "").replace("[", `[${entry}, `);
+	return lines.join("\n");
+}
+
+export function withoutBriefRoot(config: string, directory: string): string {
+	const entry = JSON.stringify(directory);
+	return config.replace(`${entry}, `, "").replace(`, ${entry}`, "").replace(`[${entry}]`, "[]")
+		.replace(/^writable_roots = \[\]\n?/m, "").replace(/(^|\n)\[sandbox_workspace_write\]\n*(?=\n\[|$)/, "$1").trimEnd();
+}
+
 // Codex caps a SessionEnd hook at 3 seconds and prints a clamping warning in every session that asks for more.
 export function codexHookTimeout(event: CodexHookName): number {
 	return event === "SessionEnd" ? Math.min(CODEX_HOOKS[event].timeout, 3) : CODEX_HOOKS[event].timeout;
@@ -173,9 +200,9 @@ export async function uninstallCodex(options: { codexHome: string; writeOutput: 
 	});
 	if (config !== undefined) {
 		// Moves only go down and run in increasing order, so a renamed entry is never renamed again.
-		const stripped = moved.reduce((text, [from, to]) =>
+		const stripped = withoutBriefRoot(moved.reduce((text, [from, to]) =>
 			text.replace(`[hooks.state.${JSON.stringify(from)}]`, `[hooks.state.${JSON.stringify(to)}]`),
-		stripTrustSections(config, ownedTrustKeys));
+		stripTrustSections(config, ownedTrustKeys)), dirname(continuityBriefPath("session")));
 		if (stripped !== config.trimEnd()) await writeFile(configPath, stripped ? `${stripped}\n` : "", { mode: 0o600 });
 	}
 	await rm(join(options.codexHome, "rules", "sno-mem-codex.rules"), { force: true });
@@ -228,7 +255,12 @@ export async function installCodex(options: InstallOptions): Promise<void> {
 		if (error instanceof Error && "code" in error && error.code === "ENOENT") return "";
 		throw error;
 	});
-	const preservedConfig = stripTrustSections(currentConfig, ownedTrustKeys);
+	const briefs = dirname(continuityBriefPath("session"));
+	let preservedConfig = stripTrustSections(currentConfig, ownedTrustKeys);
+	try { preservedConfig = withBriefRoot(preservedConfig, briefs); }
+	catch (error) {
+		options.writeOutput(`add task brief writable root ${briefs} to ${configPath}: ${String(error)}; Codex will ask before editing the brief`);
+	}
 	const writes = [
 		{ path: hooksPath, content: `${JSON.stringify(hooks, null, 2)}\n` },
 		{ path: configPath, content: `${preservedConfig}${preservedConfig ? "\n\n" : ""}${trust.join("\n")}` },
@@ -243,5 +275,8 @@ export async function installCodex(options: InstallOptions): Promise<void> {
 		await mkdir(dirname(write.path), { recursive: true, mode: 0o700 });
 		await writeFile(write.path, write.content, { mode: 0o600 });
 	}
-	if (!options.dryRun) options.writeOutput(MESSAGES.installComplete);
+	if (!options.dryRun) {
+		await mkdir(briefs, { recursive: true, mode: 0o700 });
+		options.writeOutput(MESSAGES.installComplete);
+	}
 }
