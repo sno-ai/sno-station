@@ -435,7 +435,7 @@ describe("sno-mem-codex install", () => {
 		await uninstallCodex({ codexHome, writeOutput: () => undefined });
 		expect(roots()).toEqual({});
 
-		await writeFile(configPath, '[sandbox_workspace_write]\nnetwork_access = true\nwritable_roots = [\n  "/srv/data",\n]\n');
+		await writeFile(configPath, '[ sandbox_workspace_write ] # local settings\nnetwork_access = true\nwritable_roots = [\n  "/srv/data",\n]\n');
 		await installCodex({ codexHome, programPath: "/opt/sno/bin/sno", writeOutput: () => undefined });
 		await installCodex({ codexHome, programPath: "/opt/sno/bin/sno", writeOutput: () => undefined });
 		expect(roots()).toEqual({ network_access: true, writable_roots: [briefs, "/srv/data"] });
