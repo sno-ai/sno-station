@@ -2,6 +2,7 @@
 import email
 import json
 import re
+import shlex
 import socket
 import time
 import uuid
@@ -300,3 +301,42 @@ def mailbox(f, agent, variant):
                     reply="PICKED_UP " + nonce, actual_compact=variant == "compact")
     finally:
         f.screen(pane, "mailbox-final-ui")
+
+
+def brief_prompt(screen):
+    """Whether the approval dialog on this screen is about the task brief, judged from the dialog alone."""
+    lines = screen.rstrip().splitlines()
+    rules = [i for i, line in enumerate(lines) if "────" in line]
+    dialog = "\n".join(lines[rules[-1]:] if rules else lines[-15:])
+    return bool(re.search(r"station/handoff|handoff-checkpoint|[0-9a-f]{8}-[0-9a-f-]{27}\.md", dialog))
+
+
+def brief_prompts(f, agent):
+    """A user in default permission mode sees no approval prompt caused by the task brief."""
+    seed = "Create hello.txt in this project containing exactly hi, then reply exactly: DONE."
+    if agent == "claude":
+        pane = f.launch(agent, seed, permission=True)
+    else:
+        # Codex's own default: workspace writes allowed, approval on request. The fixture home sits under the
+        # temporary directory, which that sandbox can write; exclude it so the profile is outside, as for a user.
+        pane = f.mux("new-window", "-d", "-P", "-F", "#{pane_id}", "-t", "fixture", "-c", str(f.project),
+                     shlex.join(["codex", "--no-alt-screen", "-a", "on-request", "-s", "workspace-write",
+                                 "-c", "sandbox_workspace_write.exclude_tmpdir_env_var=true",
+                                 "-c", "sandbox_workspace_write.exclude_slash_tmp=true", seed])).stdout.strip()
+    prompts = []
+    try:
+        def step():
+            screen = f.mux("capture-pane", "-p", "-t", pane).stdout
+            if re.search(r"Do you want to|Would you like to|Allow Codex to", screen):
+                prompts.append(screen)
+                (f.root / f"prompt-{len(prompts)}.txt").write_text(screen)
+                f.mux("send-keys", "-t", pane, "Enter")
+                time.sleep(1.5)
+            return any("DONE" in text for text in f.replies(agent))
+        f.until(step, "agent finished the user's task", 150)
+        assert (f.project / "hello.txt").read_text().strip() == "hi"
+        brief = [p for p in prompts if brief_prompt(p)]
+        assert not brief, f"{len(brief)} approval prompts were caused by the task brief; evidence {f.root}"
+        return dict(prompts=len(prompts), brief_prompts=len(brief))
+    finally:
+        f.screen(pane, "brief-prompts-final")
