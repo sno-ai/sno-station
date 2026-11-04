@@ -39,6 +39,12 @@ install sno.ai from GitHub
 
 Then say `Sno onboard` in any Codex, Claude Code, Hermes, Cursor or OpenClaw conversation. [More on installing](#install).
 
+**New in 2.0: Tag Team. Your agents have each other now.** One command puts two of them on a task: one builds, one challenges, and the work reaches you already argued over. [See what changed](#new-in-20-tag-team).
+
+```bash
+sno reach pair "Fix the login redirect"
+```
+
 **When one agent runs out, the next one carries on.** Hit a rate limit halfway through a task
 and another agent picks it up from the same memory. You paste nothing.
 
@@ -49,6 +55,32 @@ and another agent picks it up from the same memory. You paste nothing.
 **It stays yours.** Memory, messages and skills live on your computer. The memory is encrypted
 with a key that never leaves it. No account, no server, no daemon. The cloud side is optional,
 and the product is complete without it.
+
+## New in 2.0: Tag Team
+
+*Last updated 2026-11-04.* Your agents have each other now. You have been the one carrying work between them. That job just ended.
+
+```bash
+sno reach pair "Fix the login redirect"
+```
+
+One agent builds. The other challenges what it built. They settle the findings between themselves, so the work reaches you already argued over. Both run in tmux windows you can open and watch. Signed in to two vendors, you get one of each. Signed in to only one, you still get the pair, and the command tells you the review stayed with that vendor.
+
+**Stop watching terminals.** When someone needs you, your Claude Code or Cursor status line says so:
+
+```text
+❄ 2 need you · claude: approve
+```
+
+`sno squad` lays out the whole squad full screen: who needs you, who is working, what is finished. Agents started through Reach show the same thing in their tmux bar.
+
+**Work outlives the agent doing it.** Quota, crash, closed window. The task continues in the same conversation when that can be restored, or in a new one built from the saved brief, and you get the truth about which: resumed, rebuilt or lost. And when an agent's context fills up and compacts, it still knows what it was doing and what already failed.
+
+**Approve a lesson, and the next reply already knows it.** Not the next session. The next reply.
+
+**Messages wait their turn.** The full text lands in the other agent's inbox first. If you are typing in that window, or the agent is compacting, the message waits there and your half-written draft stays as you left it.
+
+Not yet: task carry-over and next-reply lessons run on Claude Code and Codex. The status line is Claude Code and Cursor. Hermes Agent and OpenClaw have not been through these journeys on real installs, and OpenClaw shows in `sno squad` with its state unknown.
 
 ## The pain, and what fixes it
 
@@ -74,7 +106,7 @@ The habits in the right column are skills, installed into Claude Code and Codex 
 > **Open in public.** This repository has been public since 2026-09-18. Everything here runs.
 > Every block below says when it was last updated.
 
-[Install](#install) · [How to use](#how-to-use) · [Cursor](#cursor) · [Connect your account](#connect-your-snoai-account) · [Real stories](#from-our-own-machines) · [What runs today](#what-runs-today) · [Memory that forgets on purpose](#memory-that-forgets-on-purpose) · [Design partners](#design-partners)
+[New in 2.0](#new-in-20-tag-team) · [Install](#install) · [How to use](#how-to-use) · [Cursor](#cursor) · [Connect your account](#connect-your-snoai-account) · [Real stories](#from-our-own-machines) · [What runs today](#what-runs-today) · [Memory that forgets on purpose](#memory-that-forgets-on-purpose) · [Design partners](#design-partners)
 
 ## Install
 
@@ -113,14 +145,18 @@ Every command starts with `sno`. The full list is in [docs/sno-commands.md](docs
 
 ## How to use
 
-*Last updated 2026-10-18.* Keep working in whichever agent you like. Three things change.
+*Last updated 2026-11-04.* Keep working in whichever agent you like. Five things change.
 
-1. **One of them hits its cap.** Say `sno reach call` from the other one. It picks up the task
+1. **You have a task two agents could share.** Run `sno reach pair "the task"`. One builds, the
+   other challenges.
+2. **You wonder who is stuck.** Look at your status line, or run `sno squad`.
+3. **One of them hits its cap.** Say `sno reach call` from the other one. It picks up the task
    from the same memory and the mailbox, context intact.
-2. **You want a second pair of eyes.** Ask either agent to `peer-review` the other's work.
+4. **You want a second pair of eyes.** Ask either agent to `peer-review` the other's work.
    The reviewer is always a different agent.
-3. **Self Learning runs every night.** In the morning, `sno rem-reflect accept <id>` for the
-   proposals you like. Nothing changes without that accept.
+5. **Self Learning runs every night.** In the morning, `sno rem-reflect accept <id>` for the
+   proposals you like. Nothing changes without that accept, and in Claude Code and Codex an
+   accepted lesson applies from the next reply.
 
 ## Cursor
 
@@ -208,7 +244,7 @@ It means one reviewer is never enough.
 
 ## What runs today
 
-*Last updated 2026-10-18.*
+*Last updated 2026-11-04.*
 
 | Piece | Status |
 |---|---|
@@ -218,6 +254,11 @@ It means one reviewer is never enough.
 | Self Learning and the squad skills | Installed by `sno setup`; the nightly job ran on a clean Linux machine |
 | One-command install | `sno setup` installs everything above; proven on a clean Linux machine |
 | "Sno onboard" inside your agent | Available; it starts after the install, or when you say it |
+| One command starts two agents | New in 2.0; run with real Claude Code and Codex agents, as one of each and as two from one vendor |
+| Seeing who needs you: status line, tmux bar, `sno squad` | New in 2.0; run with real Claude Code and Codex agents asking for permission, and the status line in real Claude Code and Cursor |
+| Interrupted work carries on, and a task survives compaction | New in 2.0; run with real Claude Code and Codex agents |
+| An approved lesson works on the next reply | New in 2.0; run with real Claude Code and Codex agents |
+| Messages wait while you type or an agent compacts | New in 2.0; run with real Claude Code and Codex agents |
 
 A row says "proven" only once it has run on a clean machine.
 
