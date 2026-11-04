@@ -144,8 +144,9 @@ spawn() {
 send_assignment() {
     local address="$1" role="$2" partner="$3" reply_to="$4" body="$5" id="$6"
     {
+        # Each role's assignment is its own work item, so the squad view never reads the pair as one handed over.
         printf 'From: Caller <%s>\nTo: %s <%s>\nReply-To: Partner <%s>\nDate: %s\nSubject: [DECISION] %s task\nMessage-ID: <%s>\nX-Type: decision\nX-Work: %s\n\n' \
-            "$sender" "$role" "$address" "$reply_to" "$(date -R)" "$role" "$id" "$work"
+            "$sender" "$role" "$address" "$reply_to" "$(date -R)" "$role" "$id" "${id%@*}"
         printf 'Role: %s\nProject: %s\nPartner: %s\n\n%s\n\nTask:\n%s\n' "$role" "$cwd" "$partner" "$body" "$task"
     } | "$reach" send --as "$sender" --no-ring
 }
