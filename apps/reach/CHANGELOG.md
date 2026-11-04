@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.1.7
+
+`sno reach pair "task"` starts two agents on one task: one implements, the other reviews and
+answers through Reach. With one vendor signed in, both use it and the command says so. A call now
+stores the full instruction in the receiver's mailbox first and rings once, so nothing is lost
+while a person is typing or the agent is compacting; a Hermes seat gets the cue queued. Agents
+started through Reach show who needs you in their tmux bar, and a call checks the registered tmux
+server before it rings, so a reused pane number never receives someone else's cue.
+
 ## 2.1.6
 
 When another agent rings or calls a seat while you are typing in that agent's window, your
