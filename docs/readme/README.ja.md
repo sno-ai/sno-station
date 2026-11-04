@@ -69,6 +69,19 @@ sno reach pair "Fix the login redirect"
 
 `sno squad` は squad 全体を全画面に広げます。誰があなたを待っているか、誰が作業中か、何が終わったか。Reach から起動したエージェントは、同じ内容を tmux のバーに表示します。
 
+```text
+Sno Station · squad · 09:15 · 2 need you · 2 working · 2 finished
+Needs you (2)
+> claude web-app       approve a permission · Fix the login redirect loop …   1m
+  codex api            asked a question · Migrate the billing tables to th…   5m
+Working (2)
+  claude docs-site     Rewrite the quick-start page for the 2.0 install      12s
+  codex api            Review the rate limiter change from the web-app age…  40s
+Finished (2)
+  hermes infra         finished · result unseen · Rotate the staging certi…  25m
+  claude web-app       finished · Bump the UI kit to 4.2                      2h
+```
+
 **エージェントが倒れても、仕事は生き延びます。** クォータ切れ、クラッシュ、閉じたウィンドウ。タスクは、復元できれば同じ会話の中で、できなければ保存された引き継ぎメモから作る新しい会話で続きます。どうなったかは包み隠さず伝えます。再開（resumed）、再構築（rebuilt）、消失（lost）のいずれかです。コンテキストがいっぱいになって圧縮されても、エージェントは何をしていたか、何がすでに失敗したかを覚えています。
 
 **教訓を承認すれば、次の返答はもう知っています。** 次のセッションではありません。次の返答です。

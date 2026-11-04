@@ -68,6 +68,19 @@ sno reach pair "Fix the login redirect"
 
 `sno squad` 把整支 squad 鋪滿整個螢幕：誰在等你、誰在工作、什麼已經做完。透過 Reach 啟動的代理人，會在自己的 tmux 狀態列顯示同樣的內容。
 
+```text
+Sno Station · squad · 09:15 · 2 need you · 2 working · 2 finished
+Needs you (2)
+> claude web-app       approve a permission · Fix the login redirect loop …   1m
+  codex api            asked a question · Migrate the billing tables to th…   5m
+Working (2)
+  claude docs-site     Rewrite the quick-start page for the 2.0 install      12s
+  codex api            Review the rate limiter change from the web-app age…  40s
+Finished (2)
+  hermes infra         finished · result unseen · Rotate the staging certi…  25m
+  claude web-app       finished · Bump the UI kit to 4.2                      2h
+```
+
 **代理人倒下，工作還在。** 額度用完、當機、視窗被關。原本的對話能恢復，任務就在原本的對話裡接著做；不能恢復，就憑儲存好的交接簡報另開一個新對話。究竟是哪一種，都跟你說實話：恢復（resumed）、重建（rebuilt）或遺失（lost）。代理人的上下文滿了、被壓縮之後，它也還記得自己在做什麼，哪些路已經走不通。
 
 **批准一條經驗，下一則回覆就已經懂了。** 不是下一次對話，就是下一則回覆。

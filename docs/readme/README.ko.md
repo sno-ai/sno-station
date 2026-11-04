@@ -69,6 +69,19 @@ sno reach pair "Fix the login redirect"
 
 `sno squad`는 squad 전체를 화면 가득 펼칩니다. 누가 여러분을 기다리는지, 누가 일하는지, 무엇이 끝났는지. Reach로 시작한 에이전트는 같은 내용을 tmux 표시줄에 보여 줍니다.
 
+```text
+Sno Station · squad · 09:15 · 2 need you · 2 working · 2 finished
+Needs you (2)
+> claude web-app       approve a permission · Fix the login redirect loop …   1m
+  codex api            asked a question · Migrate the billing tables to th…   5m
+Working (2)
+  claude docs-site     Rewrite the quick-start page for the 2.0 install      12s
+  codex api            Review the rate limiter change from the web-app age…  40s
+Finished (2)
+  hermes infra         finished · result unseen · Rotate the staging certi…  25m
+  claude web-app       finished · Bump the UI kit to 4.2                      2h
+```
+
 **에이전트가 쓰러져도 작업은 살아남습니다.** 사용량 소진, 크래시, 닫힌 창. 복원할 수 있으면 같은 대화에서, 아니면 저장된 인수인계 메모로 만든 새 대화에서 작업이 이어집니다. 어느 쪽인지는 숨김없이 알려 줍니다. 재개(resumed), 재구성(rebuilt), 유실(lost) 중 하나입니다. 에이전트의 맥락이 가득 차서 압축되어도, 무엇을 하고 있었는지와 무엇이 이미 실패했는지는 잊지 않습니다.
 
 **교훈을 승인하면, 다음 답변은 이미 알고 있습니다.** 다음 세션이 아닙니다. 바로 다음 답변입니다.
