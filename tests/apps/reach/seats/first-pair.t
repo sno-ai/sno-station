@@ -84,6 +84,10 @@ def run_case(name,config,order,expected,fail=False):
   else:
    assert any('Role: Reviewer' in b and 'Do not independently implement' in b for b in bodies)
    assert 'No defects found in the fixture result.' in r.stdout
+   view=subprocess.run([str(app/'lib/reach-agent-view')],env=env,capture_output=True,text=True,timeout=20)
+   items=[json.loads(line) for line in view.stdout.splitlines() if line.strip()]
+   assert not [x for x in items if 'handoff_to' in x],(name,items)
+   assert {x['recipient'] for x in items if x['recipient'].startswith('executor.')}=={p.name for p in seats},(name,items)
  print('PASS',name,'elapsed',round(time.monotonic()-start,2),flush=True)
 run_case('unknown-first',{'cursor-agent':{'signed':True},'claude':{'signed':True},'codex':{'signed':True}},'cursor,claude-code,codex',['claude','codex'])
 run_case('two-vendors',{'claude':{'signed':True},'codex':{'signed':True}},'claude-code,codex',['claude','codex'])
