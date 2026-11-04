@@ -3,6 +3,7 @@ import email
 import json
 import re
 import socket
+import time
 import uuid
 
 from fixture import SKILLS, SNO
@@ -81,16 +82,23 @@ def state(f, agent):
     try:
         f.until(lambda: permission.search(f.screen(pane, "permission-ui")), "actual " + agent + " permission prompt", 90)
         assert not (f.project / "permission-proof.txt").exists(), "Permission was bypassed"
-        view = f.view("permission-view")
-        waiting = [r for r in view["agents"] if r["harness"] == agent and r["waitingForHuman"] == "yes"]
-        assert len(waiting) == 1, view
+        # The permission hook can finish writing just after the prompt is drawn.
+        waiting = f.until(lambda: [r for r in f.view("permission-view")["agents"]
+                                   if r["harness"] == agent and r["waitingForHuman"] == "yes"] or None,
+                          "permission observation recorded", 15)
+        assert len(waiting) == 1, waiting
         row = waiting[0]
         assert row["group"] == "Needs you" and row["waitingReason"] == "permission to approve", row
         segment(f, "permission")
         squad_screen(f, row["sessionId"], "permission-full-screen")
-        f.mux("send-keys", "-t", pane, "Enter")
-        f.until(lambda: (f.project / "permission-proof.txt").exists(), "approved command wrote real file", 60)
-        f.until(lambda: any("Approved operation complete." in text for text in f.replies(agent)), "agent final reply", 45)
+        # The agent may ask for other approvals (such as its task brief) first; approve each prompt shown.
+        def approve(done):
+            if re.search(r"Do you want to|Would you like to", f.mux("capture-pane", "-p", "-t", pane).stdout):
+                f.mux("send-keys", "-t", pane, "Enter")
+                time.sleep(1)
+            return done()
+        f.until(lambda: approve(lambda: (f.project / "permission-proof.txt").exists()), "approved command wrote real file", 90)
+        f.until(lambda: approve(lambda: any("Approved operation complete." in text for text in f.replies(agent))), "agent final reply", 60)
         session = row["sessionId"]
         row = f.until(lambda: next((r for r in f.view("finished-view")["agents"]
                       if r["sessionId"] == session and r["harness"] == agent and r["group"] == "Finished"), None),
