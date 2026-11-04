@@ -55,6 +55,8 @@ readonly ADDRESS_RE='^[a-z][a-z0-9-]{0,31}\.[a-z0-9][a-z0-9-]{0,63}@[a-z0-9][a-z
 readonly TOKEN_RE='^[^[:space:][:cntrl:]]+$'
 readonly NAME_RE='^[^[:space:][:cntrl:]<>,]+$'
 readonly MESSAGE_ID_RE='^<[^<>[:space:]]+>$'
+# One header read per message for `state --all-work`; progress_load uses it when present.
+declare -A STATE_HEADERS=() STATE_PATHS=() STATE_SOURCE=() STATE_FROM=() STATE_TO=() STATE_EPOCH=()
 readonly MACHINE_ID_RE='^[0-9a-f]{32}$'
 readonly UPDATED_RE='^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$'
 readonly LINTER="$REPO_ROOT/lib/reach-lint"
@@ -2138,13 +2140,16 @@ progress_load() {
     local -A values=()
     declare -gA P_PATH=() P_FROM=() P_TYPE=() P_PARENT=() P_REFS=() P_STATE=()
     declare -gA P_DATE=() P_EPOCH=() P_EXPIRY=() P_SUPER=() P_ITEMS=() P_FLAGS=()
-    declare -gA P_ANOMALY=() P_HELD=()
+    declare -gA P_ANOMALY=() P_HELD=() P_ROOT=()
     [[ -d "$root" && ! -L "$root" ]] || die 73 "state root is unavailable: $root"
-    for path in "$root"/*/new/* "$root"/*/cur/* "$root"/*/sent/*; do
+    local -a paths=("$root"/*/new/* "$root"/*/cur/* "$root"/*/sent/*)
+    [[ -z "${STATE_PATHS[$journey]+set}" ]] || mapfile -t paths <<<"${STATE_PATHS[$journey]%$'\n'}"
+    for path in "${paths[@]}"; do
         [[ -e "$path" ]] || continue
         [[ -f "$path" && ! -L "$path" && -r "$path" ]] ||
             die 74 "state cannot read message: $path"
-        if headers="$(mhdr "$path")"; then :
+        if [[ -n "${STATE_HEADERS[$path]+set}" ]]; then headers="${STATE_HEADERS[$path]}"
+        elif headers="$(mhdr "$path")"; then :
         else status=$?; ((status == 1)) || return "$status"; fi
         values=()
         # mhdr already unfolds headers; retain its first value for each name.
@@ -2161,20 +2166,27 @@ progress_load() {
         [[ "$id" =~ $MESSAGE_ID_RE ]] || die 65 "state invalid Message-ID: $path"
         if [[ -z "${P_PATH[$id]:-}" ]]; then
             P_PATH["$id"]="$path"
-            P_FROM["$id"]="$(maddr -a -h from: "$path")"
+            if [[ -n "${STATE_FROM[$path]+set}" ]]; then P_FROM["$id"]="${STATE_FROM[$path]}"
+            else P_FROM["$id"]="$(maddr -a -h from: "$path")"; fi
             P_TYPE["$id"]="${values[x-type]:-}"
             P_PARENT["$id"]="${values[in-reply-to]:-}"
             P_REFS["$id"]="${values[references]:-}"
+            # The item a message belongs to is the first Message-ID in its References.
+            value=''; read -r value _ <<<"${P_REFS[$id]}" || true
+            P_ROOT["$id"]="$value"
             P_STATE["$id"]="${values[x-state]:-}"
             P_DATE["$id"]="${values[date]:-}"
-            epoch="$(date -u -d "${P_DATE[$id]}" +%s)" || die 65 "state invalid Date: $path"
+            if [[ -n "${STATE_EPOCH[$path]+set}" ]]; then epoch="${STATE_EPOCH[$path]}"
+            else epoch="$(date -u -d "${P_DATE[$id]}" +%s)" || die 65 "state invalid Date: $path"; fi
             P_EPOCH["$id"]="$epoch"
             P_EXPIRY["$id"]="${values[expiry-date]:-}"
             P_SUPER["$id"]="${values[supersedes]:-}"
         fi
         recipient="${values[delivered-to]:-}"
         [[ "$recipient" =~ $ADDRESS_RE && ( "${path%/*/*}" == "$root/$recipient" || "${path%/*}" == */sent ) ]] || continue
-        maddr -a -h to: "$path" | grep -Fqx -- "$recipient" || continue
+        if [[ -n "${STATE_TO[$path]+set}" ]]; then
+            [[ $'\n'"${STATE_TO[$path]}"$'\n' == *$'\n'"$recipient"$'\n'* ]] || continue
+        else maddr -a -h to: "$path" | grep -Fqx -- "$recipient" || continue; fi
         P_HELD["$id|$recipient"]="$path"
         [[ -z "${P_STATE[$id]}" && "${P_TYPE[$id]}" != cancel && "${P_TYPE[$id]}" != call ]] || continue
         key="$id|$recipient"
@@ -2182,13 +2194,6 @@ progress_load() {
         P_FLAGS["$key"]=''
         [[ "$path" != *':2,'* ]] || P_FLAGS["$key"]="${path##*:2,}"
     done
-}
-
-progress_root_id() {
-    local id first rest
-    id="$1"
-    read -r first rest <<<"${P_REFS[$id]}"
-    printf '%s\n' "$first"
 }
 
 progress_is_terminal() {
@@ -2203,7 +2208,7 @@ progress_ancestry() {
     P_CHAIN=()
     while [[ "$cursor" != "$item" ]]; do
         [[ -n "$cursor" && -n "${P_PATH[$cursor]:-}" && -z "${visited[$cursor]:-}" ]] || return 1
-        [[ "${P_FROM[$cursor]}" == "$recipient" && "$(progress_root_id "$cursor")" == "$item" ]] || return 1
+        [[ "${P_FROM[$cursor]}" == "$recipient" && "${P_ROOT[$cursor]:-}" == "$item" ]] || return 1
         [[ -n "${P_STATE[$cursor]}" || "${P_TYPE[$cursor]}" == answer ]] || return 1
         visited["$cursor"]=1
         P_CHAIN=("$cursor" "${P_CHAIN[@]}")
@@ -2227,7 +2232,7 @@ progress_chain() {
     for id in "${!P_PATH[@]}"; do
         [[ -z "${P_ANOMALY[$id]:-}" ]] || continue
         [[ -n "${P_STATE[$id]}" || ( "$flags" == *R* && "${P_TYPE[$id]}" == answer ) ]] || continue
-        root_id="$(progress_root_id "$id")"
+        root_id="${P_ROOT[$id]:-}"
         [[ "$root_id" == "$item" && "${P_FROM[$id]}" == "$recipient" ]] || continue
         if ! progress_ancestry "$item" "$recipient" "$id"; then
             P_ANOMALY["$id"]=outside-chain
@@ -2277,7 +2282,7 @@ progress_validate_reports() {
     local id root_id holder
     for id in "${!P_PATH[@]}"; do
         [[ -n "${P_STATE[$id]}" ]] || continue
-        root_id="$(progress_root_id "$id")"
+        root_id="${P_ROOT[$id]:-}"
         holder="${P_FROM[$id]}"
         if [[ -z "$root_id" || -z "${P_PARENT[$id]}" || -z "${P_ITEMS[$root_id|$holder]:-}" ]]; then
             P_ANOMALY["$id"]=unheld-item
@@ -2305,7 +2310,10 @@ progress_item() {
     local flags="${P_FLAGS[$key]}" id record expiry replacement='' cancel='' answer
     P_VALUE=queued P_SINCE="${P_DATE[$item]}" P_BLOCKED=- P_ANSWERED=no P_REASON=-
     progress_chain "$item" "$recipient" "$flags"
-    if ! record="$(progress_record "$root/$recipient/dismissals.jsonl" "$item")"; then
+    # A missing record file is an empty record; reading it in a subshell costs a fork per item.
+    record='{}'
+    if [[ -e "$root/$recipient/dismissals.jsonl" || -L "$root/$recipient/dismissals.jsonl" ]] &&
+        ! record="$(progress_record "$root/$recipient/dismissals.jsonl" "$item")"; then
         P_REASON=unreadable
         return 65
     fi
@@ -2314,7 +2322,7 @@ progress_item() {
         P_SINCE="$(jq -r --arg date "$P_SINCE" '.dismissed_at // $date' <<<"$record")"
         case "$P_REASON" in expired) P_VALUE=expired ;; superseded:*) P_VALUE=superseded ;; *) P_VALUE=dismissed ;; esac
         for id in "${!P_PATH[@]}"; do
-            [[ "$(progress_root_id "$id")" != "$item" || -z "${P_STATE[$id]}" ]] || P_ANOMALY["$id"]=closed-item
+            [[ "${P_ROOT[$id]:-}" != "$item" || -z "${P_STATE[$id]}" ]] || P_ANOMALY["$id"]=closed-item
         done
         return 0
     fi
@@ -2334,8 +2342,9 @@ progress_item() {
         done
         if [[ -n "$cancel" ]]; then P_VALUE='cancel-requested'; P_SINCE="${P_DATE[$cancel]}"
         elif [[ -n "$P_TAIL" ]]; then P_VALUE="${P_STATE[$P_TAIL]}"
-        elif record="$(progress_record "$root/$recipient/seen.jsonl" "$item")"; then
-            if [[ "$(jq -r '.message_id // empty' <<<"$record")" == "$item" ]]; then
+        elif record='{}'; [[ ! -e "$root/$recipient/seen.jsonl" && ! -L "$root/$recipient/seen.jsonl" ]] ||
+            record="$(progress_record "$root/$recipient/seen.jsonl" "$item")"; then
+            if [[ "$record" != '{}' && "$(jq -r '.message_id // empty' <<<"$record")" == "$item" ]]; then
                 P_VALUE=seen; P_SINCE="$(jq -r '.seen_at' <<<"$record")"
             fi
         else P_REASON=unreadable; return 65
@@ -2412,7 +2421,7 @@ thread_state_reply() {
 }
 
 run_state() {
-    local journey='' root key item recipient now status=0 id json=no
+    local journey='' json=no all=no
     while (($# > 0)); do
         case "$1" in
             --json) [[ "$json" == no ]] || die 64 'duplicate --json'; json=yes; shift ;;
@@ -2420,15 +2429,139 @@ run_state() {
                 (($# >= 2)) || die 64 '--work requires a value'
                 [[ -z "$journey" ]] || die 64 '--work appears more than once'
                 journey="$2"; shift 2 ;;
+            --all-work) all=yes; shift ;;
             *) die 64 "unknown state option: $1" ;;
         esac
     done
+    if [[ "$all" == yes ]]; then
+        [[ -z "$journey" && "$json" == yes ]] || die 64 '--all-work takes --json and no --work'
+        require_tools jq mhdr maddr date sort
+        state_all_work "$(mailbox_root)"
+        return
+    fi
     [[ "$journey" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$ ]] || die 64 '--work must be one safe non-empty token'
     require_tools jq mhdr maddr date sort
-    root="$(mailbox_root)"
+    state_rows "$(mailbox_root)" "$journey" "$json" no
+}
+
+# The squad view's projection: every work item from one header read per message. Each work is projected in its
+# own subshell with the per-work rules, so one unreadable work does not stop the others.
+state_all_work() {
+    local root="$1" path file line work id value joined rc status=0 marker index type state unread=
+    local -a paths=() args=() segment=()
+    local -A projected=() calls=()
+    [[ -d "$root" && ! -L "$root" ]] || die 73 "state root is unavailable: $root"
+    make_temp_dir
+    for path in "$root"/*/new/* "$root"/*/cur/* "$root"/*/sent/*; do [[ -e "$path" ]] && paths+=("$path"); done
+    ((${#paths[@]})) || return 0
+    # One header read for every message; a file whose batch read fails falls back to its own read in progress_load.
+    if mhdr -H "${paths[@]}" >"$TEMP_DIR/headers" 2>/dev/null || (($? == 1)); then
+        while IFS=$'\t' read -r file line; do STATE_HEADERS["$file"]+="$line"$'\n'; done <"$TEMP_DIR/headers"
+    fi
+    # Addresses through maddr itself, one call per header: a separator message between files splits the output.
+    marker='reach-separator@invalid'
+    printf 'From: <%s>\nTo: <%s>\n\n' "$marker" "$marker" >"$TEMP_DIR/separator"
+    for path in "${paths[@]}"; do args+=("$path" "$TEMP_DIR/separator"); done
+    for value in from to; do
+        index=0 segment=()
+        if maddr -a -h "$value:" "${args[@]}" >"$TEMP_DIR/addresses" 2>/dev/null; then
+            while IFS= read -r line; do
+                if [[ "$line" != "$marker" ]]; then segment+=("$line"); continue; fi
+                ((index < ${#paths[@]})) || { index=-1; break; }
+                printf -v joined '%s\n' "${segment[@]}"
+                if [[ "$value" == from ]]; then STATE_FROM["${paths[index]}"]="${joined%$'\n'}"
+                else STATE_TO["${paths[index]}"]="${joined%$'\n'}"; fi
+                index=$((index + 1)) segment=()
+            done <"$TEMP_DIR/addresses"
+        fi
+        if ((index != ${#paths[@]})); then
+            if [[ "$value" == from ]]; then STATE_FROM=(); else STATE_TO=(); fi
+        fi
+    done
+    for path in "${paths[@]}"; do
+        # An unreadable message has no known work, so every work reads it again and fails on it, as each separate
+        # state call did.
+        [[ -f "$path" && ! -L "$path" && -r "$path" ]] || { unread+="$path"$'\n'; continue; }
+        if [[ -z "${STATE_HEADERS[$path]+set}" ]]; then
+            if value="$(mhdr "$path")" || (($? == 1)); then STATE_HEADERS["$path"]="$value"
+            else
+                printf 'reach: state read %s: mhdr failed; this message is unavailable\n' "$path" >&2
+                unread+="$path"$'\n' status=74; continue
+            fi
+        fi
+        work='' id='' value='' type='' state=''
+        while IFS= read -r line; do
+            case "${line,,}" in
+                x-type:*) [[ -n "$type" ]] || { type="${line#*:}"; type="${type#"${type%%[!$' \t']*}"}"; } ;;
+                x-state:*) [[ -n "$state" ]] || { state="${line#*:}"; state="${state#"${state%%[!$' \t']*}"}"; } ;;
+                x-work:*) [[ -n "$work" ]] || { work="${line#*:}"; work="${work#"${work%%[!$' \t']*}"}"; } ;;
+                message-id:*) [[ -n "$id" ]] || { id="${line#*:}"; id="${id#"${id%%[!$' \t']*}"}"; } ;;
+                date:*) [[ -n "$value" ]] || { value="${line#*:}"; value="${value#"${value%%[!$' \t']*}"}"; } ;;
+            esac
+        done <<<"${STATE_HEADERS[$path]}"
+        [[ -z "$work" ]] || STATE_PATHS["$work"]+="$path"$'\n'
+        # Call mail without a state report is never an item or an anomaly; a work holding only well-formed call mail is
+        # skipped. A malformed Message-ID or Date (checked after the dates below) still fails its work as before.
+        if [[ -n "$work" && "$type" == call && -z "$state" && "$id" =~ $MESSAGE_ID_RE ]]; then calls["$path"]="$work"
+        elif [[ -n "$work" ]]; then projected["$work"]=1; fi
+        [[ -z "$id" ]] || STATE_SOURCE["$id"]="$path"
+        printf '%s\n1970-01-01 00:00:07 UTC\n' "$value"
+    done >"$TEMP_DIR/dates"
+    # Dates in one call: a separator date follows each; an unreadable date leaves its message to progress_load.
+    index=0 segment=()
+    while IFS= read -r line; do
+        if [[ "$line" != 7 ]]; then segment+=("$line"); continue; fi
+        while ((index < ${#paths[@]})) && [[ -z "${STATE_HEADERS[${paths[index]}]+set}" ]]; do index=$((index + 1)); done
+        ((index < ${#paths[@]})) || break
+        ((${#segment[@]} != 1)) || STATE_EPOCH["${paths[index]}"]="${segment[0]}"
+        index=$((index + 1)) segment=()
+    done < <(date -u -f "$TEMP_DIR/dates" +%s 2>/dev/null)
+    for path in "${!calls[@]}"; do [[ -n "${STATE_EPOCH[$path]+set}" ]] || projected["${calls[$path]}"]=1; done
+    while IFS= read -r work; do
+        [[ -n "$work" ]] || continue
+        STATE_PATHS["$work"]+="$unread"
+        # Outside a condition, so a failed read inside still ends this work as it ended a separate state call.
+        set +e
+        ( set -e; state_rows "$root" "$work" yes yes ) >>"$TEMP_DIR/records"
+        rc=$?
+        set -e
+        if ((rc != 0)); then
+            printf 'reach: state work %s: failed (%s); this work is incomplete\n' "$work" "$rc" >&2
+            status="$rc"
+        fi
+    done < <(printf '%s\n' "${!projected[@]}" | sort)
+    # The per-work output order: works by name, items by date, Message-ID, path and holder, then anomalies by text.
+    [[ ! -s "$TEMP_DIR/records" ]] || jq -nc --rawfile records "$TEMP_DIR/records" '
+        [$records | split("\u0000") | .[:-1] | _nwise(14)] | group_by(.[1])[] |
+        (map(select(.[0] == "item")) | sort_by((.[2] | tonumber), .[4], .[3], .[5])[] |
+            {message_id:.[4],recipient:.[5],state:.[6],since:.[7],blocked_on:.[8],answered:.[9],reason:.[10],
+             work:.[1],source:.[11],sender:.[12],body:.[13]}),
+        ([map(select(.[0] == "anomaly"))[] |
+            {anomaly:true,message_id:.[4],reason:.[6],work:.[1],source:.[11],sender:.[12],body:.[13]}] | sort_by(tojson)[])'
+    return "$status"
+}
+
+state_rows() {
+    local root="$1" journey="$2" json="$3" projected="$4" key item recipient now status=0 id body
+    [[ "$journey" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$ ]] || die 64 '--work must be one safe non-empty token'
     progress_load "$root" "$journey"
     progress_validate_reports
-    now="$(date +%s)"
+    printf -v now '%(%s)T' -1
+    if [[ "$projected" == yes ]]; then
+        # NUL-separated records for state_all_work, which orders and encodes every work in one jq.
+        for key in "${!P_ITEMS[@]}"; do
+            item="${key%%|*}" recipient="${key#*|}"
+            progress_item "$key" "$root" "$now" || status=65
+            body=''; [[ -z "${STATE_SOURCE[$item]:-}" ]] || IFS= read -r -d '' body <"${STATE_SOURCE[$item]}" || true
+            printf '%s\0' item "$journey" "${P_EPOCH[$item]}" "${P_ITEMS[$key]}" "$item" "$recipient" "$P_VALUE" "$P_SINCE" \
+                "$P_BLOCKED" "$P_ANSWERED" "$P_REASON" "${STATE_SOURCE[$item]:-}" "${P_FROM[$item]}" "$body"
+        done
+        for id in "${!P_ANOMALY[@]}"; do
+            body=''; [[ -z "${STATE_SOURCE[$id]:-}" ]] || IFS= read -r -d '' body <"${STATE_SOURCE[$id]}" || true
+            printf '%s\0' anomaly "$journey" 0 '' "$id" '' "${P_ANOMALY[$id]}" '' '' '' '' "${STATE_SOURCE[$id]:-}" "${P_FROM[$id]:-}" "$body"
+        done
+        return "$status"
+    fi
     while IFS=$'\t' read -r _ item _ recipient; do
         [[ -n "$item" ]] || continue
         key="$item|$recipient"

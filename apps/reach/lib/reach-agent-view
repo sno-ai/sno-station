@@ -5,65 +5,21 @@ release="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 export PATH="$release/vendor/bin${PATH:+:$PATH}"
 root="${SNO_REACH_ROOT:-$HOME/.local/state/sno-reach}"
 [[ -d "$root" ]] || { printf 'reach: read squad work %s: inventory unavailable\n' "$root" >&2; exit 73; }
-declare -A works=() sources=()
 status=0
-projected=()
-shopt -s nullglob
-for path in "$root"/*/new/* "$root"/*/cur/* "$root"/*/sent/*; do
-    if headers="$(mhdr "$path")"; then :
-    else
-        rc=$?
-        if ((rc != 1)); then
-            printf 'reach: read squad work %s: mhdr failed (%s); this message is unavailable\n' "$path" "$rc" >&2
-            status=74
-            continue
-        fi
-    fi
-    work='' id=''
-    while IFS= read -r line; do
-        [[ "$line" == *:* ]] || continue
-        name="${line%%:*}"; value="${line#*:}"
-        value="${value#"${value%%[!$' \t']*}"}"
-        case "${name,,}" in
-            x-work) [[ -n "$work" ]] || work="$value" ;;
-            message-id) [[ -n "$id" ]] || id="$value" ;;
-        esac
-    done <<<"$headers"
-    [[ -z "$work" ]] || works["$work"]=1
-    [[ -z "$id" ]] || sources["$id"]="$path"
-done
-while IFS= read -r work; do
-    [[ -n "$work" ]] || continue
-    if rows="$("$release/lib/reach-main" state --json --work "$work")"; then :
-    else
-        rc=$?
-        printf 'reach: project squad work %s: state failed (%s); this work is incomplete\n' "$work" "$rc" >&2
-        status="$rc"
-    fi
-    while IFS= read -r row; do
-        [[ -n "$row" ]] || continue
-        id="$(jq -r '.message_id // empty' <<<"$row")"
-        source=''
-        [[ -z "$id" ]] || source="${sources[$id]:-}"
-        sender=''
-        if [[ -n "$source" ]]; then
-            sender="$(maddr -a -h from: "$source")" || {
-                printf 'reach: read squad work sender %s: maddr failed; owner relationship unknown\n' "$source" >&2
-                status=74
-            }
-        fi
-        body=''
-        [[ -z "$source" ]] || body="$(cat -- "$source")"
-        projected+=("$(jq -c --arg work "$work" --arg source "$source" --arg sender "$sender" --arg body "$body" \
-            '. + {work:$work,source:$source,sender:$sender,owner:(.recipient // "unknown"),body:$body}' <<<"$row")")
-    done <<<"$rows"
-done < <(printf '%s\n' "${!works[@]}" | sort)
-if ((${#projected[@]})); then
-    printf '%s\n' "${projected[@]}" | jq -sc '
+# One header read per message projects every work item (`state --all-work`), instead of a full mailbox scan per work.
+rows=''
+if rows="$("$release/lib/reach-main" state --json --all-work)"; then :
+else
+    status=$?
+    printf 'reach: project squad work: state failed (%s); some work is incomplete\n' "$status" >&2
+fi
+if [[ -n "$rows" ]]; then
+    printf '%s\n' "$rows" | jq -sc '
+        # Rows arrive grouped by work in name order; a handoff links only cards of the same work.
+        group_by(.work)[] | map(. + {owner:(.recipient // "unknown")}) |
         . as $items |
         map(. as $original |
-            [$items[] | select(.work == $original.work and
-                .recipient != $original.recipient and (.body | contains($original.message_id)))] as $targets |
+            [$items[] | select(.recipient != $original.recipient and (.body | contains($original.message_id)))] as $targets |
             if ($targets | length) == 1 then
                 . + {handoff_to:$targets[0].recipient,handoff_sender:$targets[0].sender,handoff_message_id:$targets[0].message_id,
                     handoff_state:$targets[0].state,handoff_since:$targets[0].since,handoff_blocked_on:$targets[0].blocked_on}
@@ -71,7 +27,6 @@ if ((${#projected[@]})); then
             else . end) |
         . as $linked | .[] |
         select(. as $candidate | any($linked[]; . as $original |
-            $candidate.work == $original.work and
             $candidate.recipient != $original.recipient and ($candidate.body | contains($original.message_id))) | not) |
         del(.body)'
 fi
