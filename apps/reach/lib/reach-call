@@ -128,6 +128,8 @@ store_call_mail() {
     rm -f -- "$message"
     mail_stored=true
     sent_payload="REACH-RING $mail_id: run sno reach inbox --as $mail_address; read the exact returned mail file matching this Message-ID before replying. Receipt $delivery_receipt is instructed in that file."
+    # Hermes runs a mid-turn plain prompt as an interruption; /queue reads the mail after the current turn.
+    [[ "${seat_runtime:-}" != hermes ]] || sent_payload="/queue $sent_payload"
 }
 call_cleanup() {
     local status=$?

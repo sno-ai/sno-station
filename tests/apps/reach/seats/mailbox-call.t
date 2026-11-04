@@ -68,6 +68,15 @@ assert len(lines[0]) < len(expected.read_bytes())
 assert 'inbox --as ' in lines[0] and 'file' in lines[0]
 PY
 has "$WORK/actor/read-mail" 'X-Type: call'
+# A Hermes seat gets the cue as /queue, so a mid-turn Hermes reads the stored mail after its turn.
+cp "$STATE/$RECEIVER/seat.json" "$WORK/seat.json"
+jq '.runtime = "hermes"' "$WORK/seat.json" >"$STATE/$RECEIVER/seat.json"
+: >"$WORK/actor/input"
+invoke call "$RECEIVER" 'HERMES-BODY queued instruction' --expect '^ACTOR-ANSWER$' --timeout 3 --every 1
+expect_rc 0
+grep -q '^/queue REACH-RING ' "$WORK/actor/input" || fail 'Hermes call cue was not queued'
+has "$WORK/actor/read-mail" 'HERMES-BODY queued instruction'
+cp "$WORK/seat.json" "$STATE/$RECEIVER/seat.json"
 ! grep -q '^X-State:' "$WORK/actor/read-mail" || fail 'call acquired work state'
 [[ "$(header from "$WORK/actor/read-mail")" == *"caller.local@$HOST"* ]] || fail 'automatic caller identity is not stable'
 [[ -f "$STATE/caller.local@$HOST/seat.json" && ! -e "$STATE/caller.local@$HOST/reachable.json" ]] || fail 'automatic caller registered an agent or lacked identity'
