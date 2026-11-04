@@ -25,6 +25,12 @@ den Tag zurück und werden ein wenig besser.
 
 Es läuft auf Ihrem eigenen Rechner. Sie installieren es einmal und arbeiten weiter wie bisher. Mehr dazu auf unserer Website [sno.ai](https://sno.ai).
 
+**Neu in 2.0: Tag Team. Ihre Agenten sind jetzt füreinander da.** Ein Befehl setzt zwei von ihnen auf eine Aufgabe an: Einer baut, einer hält dagegen, und die Arbeit kommt bei Ihnen an, wenn der Streit schon ausgefochten ist. [Was sich geändert hat](#neu-in-20-tag-team).
+
+```bash
+sno reach pair "Fix the login redirect"
+```
+
 **Wenn bei einem Agenten das Limit erreicht ist, macht der nächste weiter.** Sie stoßen
 mitten in einer Aufgabe an ein Rate Limit, und ein anderer Agent übernimmt sie aus demselben
 Gedächtnis, mit intaktem Kontext. Sie kopieren nichts hinein.
@@ -45,7 +51,33 @@ vollständig.
 > **Offen und öffentlich.** Dieses Repository ist seit dem 2026-09-18 öffentlich. Alles hier läuft.
 > Jeder Block unten nennt das Datum seiner letzten Aktualisierung.
 
-[Installation](#installation) · [So wird es benutzt](#so-wird-es-benutzt) · [Cursor](#cursor) · [Konto verbinden](#snoai-konto-verbinden) · [Echte Geschichten](#von-unseren-eigenen-rechnern) · [Was heute läuft](#was-heute-läuft) · [Gedächtnis, das absichtlich vergisst](#gedächtnis-das-absichtlich-vergisst) · [Design-Partner](#design-partner)
+[Neu in 2.0](#neu-in-20-tag-team) · [Installation](#installation) · [So wird es benutzt](#so-wird-es-benutzt) · [Cursor](#cursor) · [Konto verbinden](#snoai-konto-verbinden) · [Echte Geschichten](#von-unseren-eigenen-rechnern) · [Was heute läuft](#was-heute-läuft) · [Gedächtnis, das absichtlich vergisst](#gedächtnis-das-absichtlich-vergisst) · [Design-Partner](#design-partner)
+
+## Neu in 2.0: Tag Team
+
+*Zuletzt aktualisiert am 2026-11-04.* Ihre Agenten sind jetzt füreinander da. Bisher haben Sie die Arbeit zwischen ihnen hin- und hergetragen. Diesen Botendienst sind Sie los.
+
+```bash
+sno reach pair "Fix the login redirect"
+```
+
+Ein Agent baut. Der andere nimmt das Ergebnis in die Zange. Die Befunde klären die beiden unter sich, und so kommt die Arbeit bei Ihnen an, wenn der Streit schon ausgefochten ist. Beide laufen in tmux-Fenstern, die Sie öffnen und beobachten können. Sind Sie bei zwei Anbietern angemeldet, bekommen Sie von jedem einen. Sind Sie nur bei einem angemeldet, bekommen Sie trotzdem ein Paar, und der Befehl sagt Ihnen, dass die Prüfung bei diesem Anbieter geblieben ist.
+
+**Schieben Sie keine Wache mehr vor dem Terminal.** Sobald jemand Sie braucht, sagt es Ihre Statuszeile in Claude Code oder Cursor:
+
+```text
+❄ 2 need you · claude: approve
+```
+
+`sno squad` breitet das ganze Team im Vollbild vor Ihnen aus: wer Sie braucht, wer arbeitet, was fertig ist. Agenten, die über Reach gestartet wurden, zeigen dasselbe in ihrer tmux-Leiste.
+
+**Die Arbeit überlebt den Agenten, der an ihr sitzt.** Kontingent, Absturz, geschlossenes Fenster. Die Aufgabe geht im selben Gespräch weiter, wenn es sich wiederherstellen lässt, oder in einem neuen, das aus der gespeicherten Übergabenotiz entsteht, und Sie erfahren ungeschönt, was davon zutrifft: fortgesetzt (resumed), neu aufgebaut (rebuilt) oder verloren (lost). Und wenn der Kontext eines Agenten voll ist und komprimiert wird, weiß er immer noch, woran er war und was schon gescheitert ist.
+
+**Sagen Sie Ja zu einer Lektion, und die nächste Antwort kennt sie schon.** Nicht die nächste Sitzung. Die nächste Antwort.
+
+**Nachrichten warten, bis sie dran sind.** Der vollständige Text landet zuerst im Postfach des anderen Agenten. Wenn Sie gerade in diesem Fenster tippen oder der Agent seinen Kontext komprimiert, wartet die Nachricht dort, und Ihr halb geschriebener Entwurf bleibt, wie Sie ihn gelassen haben.
+
+Noch nicht: Die Übernahme von Aufgaben und die Lektionen ab der nächsten Antwort laufen auf Claude Code und Codex. Die Statuszeile gibt es in Claude Code und Cursor. Hermes Agent und OpenClaw haben diese Abläufe auf echten Installationen noch nicht durchlaufen, und OpenClaw erscheint in `sno squad` mit unbekanntem Status.
 
 ## Installation
 
@@ -85,15 +117,20 @@ Jeder Befehl beginnt mit `sno`. Die vollständige Liste steht in [docs/sno-comma
 
 ## So wird es benutzt
 
-*Zuletzt aktualisiert am 2026-10-18.* Arbeiten Sie weiter in dem Agenten, den Sie mögen. Drei Dinge ändern sich.
+*Zuletzt aktualisiert am 2026-11-04.* Arbeiten Sie weiter in dem Agenten, den Sie mögen. Fünf Dinge ändern sich.
 
-1. **Einer von ihnen erreicht sein Limit.** Sagen Sie `sno reach call` im anderen. Er
+1. **Sie haben eine Aufgabe, die sich zwei Agenten teilen könnten.** Führen Sie
+   `sno reach pair "the task"` aus. Einer baut, der andere hält dagegen.
+2. **Sie fragen sich, wer festhängt.** Schauen Sie auf Ihre Statuszeile oder führen Sie
+   `sno squad` aus.
+3. **Einer von ihnen erreicht sein Limit.** Sagen Sie `sno reach call` im anderen. Er
    übernimmt die Aufgabe aus demselben Gedächtnis und dem Postfach, mit intaktem Kontext.
-2. **Sie wollen ein zweites Augenpaar.** Bitten Sie einen der beiden Agenten, per
+4. **Sie wollen ein zweites Augenpaar.** Bitten Sie einen der beiden Agenten, per
    `peer-review` die Arbeit des anderen zu prüfen. Der Reviewer kommt immer aus der anderen
    Harness.
-3. **Jede Nacht läuft Selbstlernen.** Am Morgen: `sno rem-reflect accept <id>` für
-   die Vorschläge, die Ihnen gefallen. Ohne dieses Accept ändert sich nichts.
+5. **Jede Nacht läuft Selbstlernen.** Am Morgen: `sno rem-reflect accept <id>` für
+   die Vorschläge, die Ihnen gefallen. Ohne dieses Accept ändert sich nichts, und in Claude Code
+   und Codex gilt eine angenommene Lektion ab der nächsten Antwort.
 
 ## Cursor
 
@@ -188,7 +225,7 @@ bedeute, die Arbeit sei schlecht. Es bedeutet, dass ein Reviewer aus einer Harne
 
 ## Was heute läuft
 
-*Zuletzt aktualisiert am 2026-10-18.*
+*Zuletzt aktualisiert am 2026-11-04.*
 
 | Baustein | Status |
 |---|---|
@@ -198,6 +235,11 @@ bedeute, die Arbeit sei schlecht. Es bedeutet, dass ein Reviewer aus einer Harne
 | Selbstlernen und die Squad-Skills | Von `sno setup` installiert; der nächtliche Job lief auf einer sauberen Linux-Maschine |
 | Installation mit einem Befehl | `sno setup` installiert alles oben Genannte; auf einer sauberen Linux-Maschine nachgewiesen |
 | „Sno onboard“ in Ihrem Agenten | Verfügbar; startet nach der Installation oder wenn Sie es sagen |
+| Ein Befehl startet zwei Agenten | Neu in 2.0; mit echten Claude-Code- und Codex-Agenten gelaufen, als je einer von beiden und als zwei vom selben Anbieter |
+| Sehen, wer Sie braucht: Statuszeile, tmux-Leiste, `sno squad` | Neu in 2.0; mit echten Claude-Code- und Codex-Agenten gelaufen, die um Erlaubnis bitten, und die Statuszeile in echtem Claude Code und Cursor |
+| Unterbrochene Arbeit geht weiter, und eine Aufgabe übersteht das Komprimieren | Neu in 2.0; mit echten Claude-Code- und Codex-Agenten gelaufen |
+| Eine angenommene Lektion wirkt bei der nächsten Antwort | Neu in 2.0; mit echten Claude-Code- und Codex-Agenten gelaufen |
+| Nachrichten warten, während Sie tippen oder ein Agent seinen Kontext komprimiert | Neu in 2.0; mit echten Claude-Code- und Codex-Agenten gelaufen |
 
 Eine Zeile sagt „nachgewiesen“ erst, wenn sie auf einer sauberen Maschine gelaufen ist.
 
