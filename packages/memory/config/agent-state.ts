@@ -449,6 +449,17 @@ function cell(value: string, width: number): string {
 	return out + " ".repeat(Math.max(0, width - used));
 }
 
+/** A prepared line cut at `width` columns, its alignment kept. */
+function clip(value: string, width: number): string {
+	let out = "";
+	let used = 0;
+	for (const char of value) {
+		if (used + columns(char) > width) break;
+		out += char; used += columns(char);
+	}
+	return out;
+}
+
 /** Whitespace-folded text broken into lines of at most `width` columns. */
 function wrap(value: string, width: number): string[] {
 	const lines = [""];
@@ -482,8 +493,14 @@ function rowWhat(row: AgentRow): string {
 	return parts("state unknown", task);
 }
 
+/** The screen lists finished and unknown sessions active in the last day; --json and the snapshot list every session. */
+export function screenAgents(view: AgentView): { view: AgentView; hidden: number } {
+	const agents = view.agents.filter(row => !["Finished", "unknown"].includes(row.group) || typeof row.ageSeconds !== "number" || row.ageSeconds <= 86_400);
+	return { view: { ...view, agents }, hidden: view.agents.length - agents.length };
+}
+
 /** The interactive squad screen: one line per agent, "Needs you" pinned on top, the selected row's details below. */
-export function renderAgentScreen(view: AgentView, selected: number, size: { columns: number; rows: number }, message = ""): string {
+export function renderAgentScreen(view: AgentView, selected: number, size: { columns: number; rows: number }, message = "", hidden = 0): string {
 	const width = Math.max(40, size.columns);
 	const whoWidth = Math.min(22, Math.floor(width / 4));
 	const whatWidth = width - whoWidth - 8;
@@ -501,6 +518,7 @@ export function renderAgentScreen(view: AgentView, selected: number, size: { col
 		})];
 		(group === "Needs you" ? pinned : rest).push(...lines);
 	}
+	if (hidden) rest.push({ text: `  ${hidden} older finished or unknown sessions hidden · sno --json squad lists all`, index: -1 });
 	const row = view.agents[selected];
 	let details: string[];
 	// An opened result is shown whole; the list gives up the lines it needs.
@@ -523,7 +541,7 @@ export function renderAgentScreen(view: AgentView, selected: number, size: { col
 	const list = pinned.length < space ? [...pinned.map(line => line.text), ...visible(rest, space - pinned.length)] : visible([...pinned, ...rest], space);
 	if (!view.agents.length) list.push("No observed agents.");
 	while (list.length < space) list.push("");
-	return [cell(header.join(" · "), width), ...list, "─".repeat(width), ...details.map(line => cell(line, width)),
+	return [cell(header.join(" · "), width), ...list.map(line => clip(line, width)), "─".repeat(width), ...details.map(line => cell(line, width)),
 		cell("↑/↓ select · Enter result · Space refresh · r quota · q exit", width)].map(line => line.trimEnd()).join("\n");
 }
 

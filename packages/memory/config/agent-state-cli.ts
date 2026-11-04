@@ -2,7 +2,7 @@
 import { execFile } from "node:child_process";
 import { emitKeypressEvents } from "node:readline";
 import { promisify } from "node:util";
-import { compactAgentView, markAgentResultSeen, readAgentView, recordAgentHandoff, renderAgentScreen, type AgentView } from "./agent-state";
+import { compactAgentView, markAgentResultSeen, readAgentView, recordAgentHandoff, renderAgentScreen, screenAgents, type AgentView } from "./agent-state";
 
 const execute = promisify(execFile);
 
@@ -53,20 +53,24 @@ async function refreshAgentQuota(view: AgentView): Promise<void> {
 	}
 }
 
+async function screenView(): Promise<{ view: AgentView; hidden: number }> {
+	return screenAgents(await readAgentView());
+}
+
 async function screen(): Promise<number> {
-	let view = await readAgentView();
+	let { view, hidden } = await screenView();
 	let selected = 0;
 	let result = "";
 	const wasRaw = process.stdin.isRaw;
 	// A refresh can reorder rows (a seen result sorts lower); keep the same session selected.
 	const reread = async (): Promise<void> => {
 		const current = view.agents[selected];
-		view = await readAgentView();
+		({ view, hidden } = await screenView());
 		const index = view.agents.findIndex(row => row.harness === current?.harness && row.sessionId === current?.sessionId);
 		selected = index >= 0 ? index : Math.max(0, Math.min(selected, view.agents.length - 1));
 	};
 	const draw = (): void => {
-		process.stdout.write(`\x1b[H\x1b[2J${renderAgentScreen(view, selected, { columns: process.stdout.columns ?? 80, rows: process.stdout.rows ?? 24 }, result)}`);
+		process.stdout.write(`\x1b[H\x1b[2J${renderAgentScreen(view, selected, { columns: process.stdout.columns ?? 80, rows: process.stdout.rows ?? 24 }, result, hidden)}`);
 	};
 	process.stdout.on("resize", draw);
 	process.stdout.write("\x1b[?1049h\x1b[?25l");

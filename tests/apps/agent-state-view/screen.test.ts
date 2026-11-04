@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { type AgentRow, type AgentView, renderAgentScreen } from "../../../packages/memory/config/agent-state.ts";
+import { type AgentRow, type AgentView, renderAgentScreen, screenAgents } from "../../../packages/memory/config/agent-state.ts";
 
 const row = (index: number, group: AgentRow["group"], description: string): AgentRow => ({
 	harness: index % 2 ? "codex" : "claude", sessionId: `session-${index}`, reachAddress: "unknown", cwd: `/home/dev/code/project-${index}`,
@@ -39,4 +39,16 @@ it("keeps the selected row visible when Needs you alone fills the list, and show
 	const lines = renderAgentScreen(view, 0, { columns: 40, rows: 24 }, reply).split("\n");
 	expect(lines.length).toBeLessThanOrEqual(24);
 	expect(lines.join(" ")).toContain("end-of-reply");
+});
+
+it("lists finished and unknown sessions from the last day only and says how many older ones are hidden", () => {
+	const aged = (index: number, group: AgentRow["group"], ageSeconds: number | "unknown"): AgentRow => ({ ...row(index, group, `Task ${index}`), ageSeconds });
+	const agents = [aged(0, "Needs you", 200_000), aged(1, "Working", 100_000), aged(2, "Finished", 3600), aged(3, "Finished", 90_000),
+		aged(4, "unknown", 86_000), aged(5, "unknown", 400_000), aged(6, "unknown", "unknown")];
+	const { view, hidden } = screenAgents({ observedAt: "2026-11-04T05:10:00Z", agents, work: [], quota: [], errors: [] });
+	expect(view.agents.map(item => item.sessionId)).toEqual(["session-0", "session-1", "session-2", "session-4", "session-6"]);
+	expect(hidden).toBe(2);
+	const screen = renderAgentScreen(view, 0, { columns: 40, rows: 24 }, "", hidden);
+	for (const line of screen.split("\n")) expect(line.length).toBeLessThanOrEqual(40);
+	expect(renderAgentScreen(view, 0, { columns: 80, rows: 24 }, "", hidden)).toContain("2 older finished or unknown sessions hidden");
 });
