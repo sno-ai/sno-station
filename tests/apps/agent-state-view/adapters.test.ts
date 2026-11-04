@@ -58,8 +58,9 @@ it("stores only bounded observation fields in owner-only files while the state s
 
 it("keeps a Claude subagent's stop and question out of its working parent's state", async () => {
 	const home = await mkdtemp(join(tmpdir(), "sno-subagent-observation-"));
-	const previous = process.env.SNO_PROFILE_DIR;
+	const previous = { profile: process.env.SNO_PROFILE_DIR, address: process.env.SNO_REACH_ADDR };
 	process.env.SNO_PROFILE_DIR = home;
+	process.env.SNO_REACH_ADDR = "executor.parent@localhost";
 	try {
 		await mkdir(join(home, "reach"));
 		const parent = { session_id: "parent-session", cwd: home };
@@ -68,10 +69,11 @@ it("keeps a Claude subagent's stop and question out of its working parent's stat
 		await observeAgentEvent("claude", "stop", { ...parent, agent_id: "child-agent", last_assistant_message: "Child finished?" });
 		const view = await readAgentView({ profileDir: home, reachRoot: join(home, "reach"), reachProgram: resolve("apps/reach/lib/reach-agent-view") });
 		expect(view.agents.find(row => row.sessionId === "parent-session")).toMatchObject({ doing: "working", group: "Working", waitingForHuman: "no" });
-		expect(view.agents.find(row => row.sessionId === "child-agent")?.finalReply).toBe("Child finished?");
+		expect(view.agents.find(row => row.sessionId === "child-agent")).toMatchObject({ finalReply: "Child finished?", reachAddress: "unknown" });
+		expect(view.agents.find(row => row.sessionId === "parent-session")?.reachAddress).toBe("executor.parent@localhost");
 	} finally {
-		if (previous === undefined) delete process.env.SNO_PROFILE_DIR;
-		else process.env.SNO_PROFILE_DIR = previous;
+		if (previous.profile === undefined) delete process.env.SNO_PROFILE_DIR; else process.env.SNO_PROFILE_DIR = previous.profile;
+		if (previous.address === undefined) delete process.env.SNO_REACH_ADDR; else process.env.SNO_REACH_ADDR = previous.address;
 		await rm(home, { recursive: true, force: true });
 	}
 });

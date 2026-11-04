@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { expect, it } from "vitest";
@@ -48,6 +48,40 @@ it.each(["worker.source@localhost", "worker.recover@localhost"])("retains the or
 		expect(ambiguous.work).toHaveLength(1);
 		expect(ambiguous.work[0]?.owner).toBe("unknown");
 		expect(ambiguous.errors.some(error => error.operation === "associate Reach handoff")).toBe(true);
+	} finally {
+		if (previous.profile === undefined) delete process.env.SNO_PROFILE_DIR; else process.env.SNO_PROFILE_DIR = previous.profile;
+		if (previous.address === undefined) delete process.env.SNO_REACH_ADDR; else process.env.SNO_REACH_ADDR = previous.address;
+		await rm(home, { recursive: true, force: true });
+	}
+});
+
+it("records a release on the receiver's most recent primary session when /clear and a subagent left others on its address", async () => {
+	const home = await mkdtemp(join(tmpdir(), "sno-view-handoff-sessions-"));
+	const previous = { profile: process.env.SNO_PROFILE_DIR, address: process.env.SNO_REACH_ADDR };
+	const root = join(home, "reach");
+	const source = "worker.source@localhost";
+	const target = "worker.target@localhost";
+	const options = { profileDir: home, reachRoot: root, reachProgram: resolve("apps/reach/lib/reach-agent-view") };
+	process.env.SNO_PROFILE_DIR = home;
+	try {
+		for (const address of [source, target]) await mkdir(join(root, address, "new"), { recursive: true });
+		process.env.SNO_REACH_ADDR = source;
+		await observeAgentEvent("claude", "user-prompt-submit", { session_id: "source-session", prompt: "Hand the work over" });
+		process.env.SNO_REACH_ADDR = target;
+		await observeAgentEvent("claude", "user-prompt-submit", { session_id: "before-clear", prompt: "Earlier work" });
+		await new Promise(done => setTimeout(done, 20));
+		await observeAgentEvent("claude", "user-prompt-submit", { session_id: "after-clear", prompt: "Continue the transferred work" });
+		await observeAgentEvent("claude", "pre-tool-use", { session_id: "after-clear", agent_id: "child", tool_name: "Read" });
+		const card = (id: string, from: string, to: string, body: string) =>
+			`From: Sender <${from}>\nTo: Receiver <${to}>\nDelivered-To: ${to}\nDate: Tue, 03 Nov 2026 00:00:00 +0000\nSubject: [DECISION] Work\nMessage-ID: <${id}@localhost>\nX-Type: decision\nX-Work: transfer-work\n\n${body}\n`;
+		await writeFile(join(root, source, "new", "original"), card("original", "lead.owner@localhost", source, "Do the work"));
+		await writeFile(join(root, target, "new", "transfer"), card("transfer", source, target, "Continue original card <original@localhost>."));
+		await recordAgentHandoff(source, target, "Release original work card <transfer@localhost>", options);
+		const released = async (session: string) => (await readFile(join(home, "station/agents", `claude--${session}.jsonl`), "utf8")).includes("handoff-released");
+		expect(await released("after-clear")).toBe(true);
+		expect(await released("before-clear")).toBe(false);
+		expect(await released("child")).toBe(false);
+		expect((await readAgentView(options)).work.find(item => item.work === "transfer-work")).toMatchObject({ owner: target });
 	} finally {
 		if (previous.profile === undefined) delete process.env.SNO_PROFILE_DIR; else process.env.SNO_PROFILE_DIR = previous.profile;
 		if (previous.address === undefined) delete process.env.SNO_REACH_ADDR; else process.env.SNO_REACH_ADDR = previous.address;
