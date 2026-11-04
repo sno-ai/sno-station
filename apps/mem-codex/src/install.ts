@@ -125,13 +125,15 @@ function stripTrustSections(text: string, keys: string[]): string {
 }
 
 const SANDBOX_TABLE = "[sandbox_workspace_write]";
+// TOML allows spaces inside the brackets and a trailing comment on a table header.
+const SANDBOX_HEADER = /^\s*\[\s*sandbox_workspace_write\s*\]\s*(?:#.*)?$/;
 
 // The task brief lives outside the workspace; its one directory becomes a writable root so keeping the brief asks for
 // no approval. An existing table and array are extended in place, because a second table header is invalid TOML.
 export function withBriefRoot(config: string, directory: string): string {
 	const entry = JSON.stringify(directory);
 	const lines = config.split("\n");
-	const header = lines.findIndex(line => line.trim() === SANDBOX_TABLE);
+	const header = lines.findIndex(line => SANDBOX_HEADER.test(line));
 	if (header < 0) {
 		if (/^\s*sandbox_workspace_write\s*[.=]/m.test(config)) throw new Error("sandbox_workspace_write is set without its table header");
 		return `${config.trimEnd()}${config.trim() ? "\n\n" : ""}${SANDBOX_TABLE}\nwritable_roots = [${entry}]`;
