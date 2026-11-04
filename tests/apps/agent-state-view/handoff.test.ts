@@ -40,6 +40,9 @@ it.each(["worker.source@localhost", "worker.recover@localhost"])("retains the or
 		expect(view.agents.find(row => row.reachAddress === source)).toMatchObject({ group: "Working" });
 		await rm(join(root, source, "new", "unrelated"));
 		expect((await readAgentView(options)).agents.find(row => row.reachAddress === source)).toMatchObject({ group: "Finished", subgroup: "handed over" });
+		process.env.SNO_REACH_ADDR = source;
+		await observeAgentEvent("claude", "user-prompt-submit", { session_id: "source-session", prompt: "Start a new task" });
+		expect((await readAgentView(options)).agents.find(row => row.reachAddress === source)).toMatchObject({ group: "Working" });
 		await writeFile(join(root, target, "new", "second-transfer"), card("second-transfer", caller, target, "transfer-work", "Another transfer of <original@localhost>"));
 		const ambiguous = await readAgentView(options);
 		expect(ambiguous.work).toHaveLength(1);

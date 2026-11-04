@@ -53,6 +53,8 @@ describe("agent state view read-time semantics", () => {
 		expect((await view()).agents[0]?.waitingReason).toBe("asked a question");
 		await events("claude", "answered", [{ event: "permission-request", input: { tool_name: "AskUserQuestion" } }, { event: "post-tool-use", input: { tool_name: "AskUserQuestion", tool_response: { answers: { question: "yes" } } } }]);
 		expect((await view()).agents.find(row => row.sessionId === "answered")?.waitingForHuman).toBe("no");
+		await events("codex", "codex-answered", [{ event: "pre-tool-use", input: { tool_name: "functions.request_user_input", call_id: "q" } }, { event: "post-tool-use", input: { tool_name: "functions.request_user_input", call_id: "q", tool_response: { answers: { question: "yes" } } } }]);
+		expect((await view()).agents.find(row => row.sessionId === "codex-answered")?.waitingForHuman).toBe("no");
 	});
 	it("keeps accepted async questions unanswered and clears permission on Interrupt without success", async () => {
 		await events("codex", "async", [{ event: "pre-tool-use", input: { tool_name: "functions.request_user_input_async" } }, { event: "post-tool-use", input: { tool_name: "functions.request_user_input_async", tool_response: { accepted: true } } }]);
