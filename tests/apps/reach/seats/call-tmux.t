@@ -280,15 +280,14 @@ big_json="$("$messenger" --terminal "$pane" --timeout 6 --every 2 2>/dev/null ||
 check "a large capture still parses" true \
 	"$(printf '%s' "$big_json" | jq -e '.ok == true' >/dev/null 2>&1 && echo true || echo false)"
 
-# Replacing this messenger's pipe releases its lifetime lease. The next read
-# must fail rather than claim or overwrite the external pipe.
+# The messenger reads by capture and installs no pipe; a read must leave a
+# user's own pipe in place.
 external_pane="$(tmux new-window -d -P -F '#{pane_id}' -t "$session" -c "${TMPDIR:-/tmp}" 'bash --norc')"
 external_json="$("$messenger" --terminal "$external_pane" --timeout 1 --every 1)"
 external_cursor="$(printf '%s' "$external_json" | jq -r '.cursorAfter')"
 external_log="$state_root/external-pipe.log"
 tmux pipe-pane -t "$external_pane" "cat >> $(printf '%q' "$external_log")"
-check "external pipe replacement is rejected" 5 \
-	"$(run_rc "$messenger" --terminal "$external_pane" --since "$external_cursor" --timeout 1 --every 1)"
+"$messenger" --terminal "$external_pane" --since "$external_cursor" --timeout 1 --every 1 >/dev/null 2>&1 || true
 tmux send-keys -t "$external_pane" -l -- "printf 'EXTERNAL-PIPE-KEPT\\n'"
 tmux send-keys -t "$external_pane" C-m
 wait_for_capture "$external_log" 'EXTERNAL-PIPE-KEPT' 3 || true
