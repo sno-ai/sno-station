@@ -163,7 +163,10 @@ function matchingTool(permission: AgentObservation | undefined, input: Record<st
 }
 
 function applyEvent(row: AgentRow, observation: AgentObservation, index: number, source: string, permission?: AgentObservation): void {
-	const { input, event, at } = observation;
+	const { input, at } = observation;
+	// Claude delivers a finished background task's notice as a prompt; it continues the user's task, never starts one.
+	const event = observation.event === "user-prompt-submit" && text(input.prompt).trimStart().startsWith("<task-notification>")
+		? "agent-prompt-submit" : observation.event;
 	if (event === "handoff-released") {
 		row.work.push({ ...input, releasedAt: at });
 		return;

@@ -157,6 +157,12 @@ describe("agent state view read-time semantics", () => {
 			content: "The user doesn't want to proceed with this tool use.", tool_use_id: "toolu_denied" }] }, toolUseResult: "User rejected tool use" })}\n`);
 		expect((await view()).agents[0]).toMatchObject({ waitingForHuman: "no", doing: "idle at prompt", group: "Finished", subgroup: "permission denied" });
 	});
+	it("keeps the user's task line when a Claude background task notification arrives as a prompt", async () => {
+		await events("claude", "notified", [{ event: "user-prompt-submit", input: { prompt: "Fix the login redirect loop" } },
+			{ event: "pre-tool-use", input: { tool_name: "Bash" } },
+			{ event: "user-prompt-submit", input: { prompt: "<task-notification>\n<task-id>b7bhp5v8t</task-id>\n<tool-use-id>toolu_01</tool-use-id>" } }]);
+		expect((await view()).agents[0]).toMatchObject({ description: "Fix the login redirect loop", doing: "working" });
+	});
 	it("only resolves the matching permission and preserves its actual age through unrelated activity", async () => {
 		await events("claude", "permission", [{ event: "permission-request", input: { tool_name: "Bash", tool_use_id: "waiting" } },
 			{ event: "post-tool-use", input: { tool_name: "Read", tool_use_id: "unrelated" }, at: new Date(now + 1000_000).toISOString() }]);
