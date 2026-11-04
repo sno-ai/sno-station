@@ -74,6 +74,19 @@ One agent builds. The other challenges what it built. They settle the findings b
 
 `sno squad` lays out the whole squad full screen: who needs you, who is working, what is finished. Agents started through Reach show the same thing in their tmux bar.
 
+```text
+Sno Station · squad · 09:15 · 2 need you · 2 working · 2 finished
+Needs you (2)
+> claude web-app       approve a permission · Fix the login redirect loop …   1m
+  codex api            asked a question · Migrate the billing tables to th…   5m
+Working (2)
+  claude docs-site     Rewrite the quick-start page for the 2.0 install      12s
+  codex api            Review the rate limiter change from the web-app age…  40s
+Finished (2)
+  hermes infra         finished · result unseen · Rotate the staging certi…  25m
+  claude web-app       finished · Bump the UI kit to 4.2                      2h
+```
+
 **Work outlives the agent doing it.** Quota, crash, closed window. The task continues in the same conversation when that can be restored, or in a new one built from the saved brief, and you get the truth about which: resumed, rebuilt or lost. And when an agent's context fills up and compacts, it still knows what it was doing and what already failed.
 
 **Approve a lesson, and the next reply already knows it.** Not the next session. The next reply.
