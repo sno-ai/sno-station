@@ -340,6 +340,49 @@ def brief_prompt(screen):
     return bool(re.search(r"station/handoff|handoff-checkpoint|[0-9a-f]{8}-[0-9a-f-]{27}\.md", dialog))
 
 
+def first_actions(f, agent, target):
+    """Seconds from the user's prompt (in the agent's own transcript) until the task's target file exists, the tool
+    calls that touched the task brief before the first call that did not, and any that touched it through the shell."""
+    from datetime import datetime
+    calls, prompts = [], []
+    if agent == "claude":
+        for path in (f.home / ".claude" / "projects").rglob("*.jsonl"):
+            for item in map(json.loads, path.read_text().splitlines()):
+                content = (item.get("message") or {}).get("content")
+                if item.get("type") == "user" and isinstance(content, str) and not item.get("isMeta"):
+                    prompts.append(item["timestamp"])
+                if item.get("type") == "assistant" and isinstance(content, list):
+                    calls += [(item["timestamp"], c["name"], json.dumps(c.get("input"))) for c in content if c.get("type") == "tool_use"]
+    else:
+        for path in (f.home / ".codex" / "sessions").rglob("rollout-*.jsonl"):
+            for item in map(json.loads, path.read_text().splitlines()):
+                payload = item.get("payload") or {}
+                text = " ".join(c.get("text", "") for c in payload.get("content") or [] if isinstance(c, dict))
+                if item.get("type") == "response_item" and payload.get("role") == "user" and not text.startswith("<"):
+                    prompts.append(item["timestamp"])
+                if item.get("type") == "response_item" and payload.get("type") in ("function_call", "custom_tool_call", "local_shell_call"):
+                    body = json.dumps(payload.get("arguments") or payload.get("input") or payload.get("action"))
+                    # One code cell can call several tools in order; each call counts on its own.
+                    marks = list(re.finditer(r"tools\.(\w+)\(", body)) or [None]
+                    for index, mark in enumerate(marks):
+                        end = marks[index + 1].start() if index + 1 < len(marks) else len(body)
+                        calls.append((item["timestamp"] + f"#{index:02d}", mark.group(1) if mark else payload.get("name") or payload["type"],
+                                      body[mark.start():end] if mark else body))
+    calls.sort()
+    brief = [c for c in calls if "/station/handoff/" in c[2]]
+    first = next((c for c in calls if c not in brief), None)
+    at = lambda stamp: datetime.fromisoformat(stamp.replace("Z", "+00:00")).timestamp()
+    observed = dict(task_seconds=round((f.project / target).stat().st_mtime - at(min(prompts)), 1),
+                    first_task_call=first and first[1],
+                    brief_before_task=[c[1] for c in brief if not first or c[0] < first[0]],
+                    # A shell call on the brief may only read it by name (Codex has no other reader); writing it or a
+                    # command that can wait on input is what blocked a user's first task.
+                    brief_shell=[c[2][:300] for c in brief if (c[1] in ("Bash", "shell", "local_shell_call", "exec_command")
+                                 or "exec_command" in c[2]) and re.search(r">|<<|\btee\b|sed -i|write|open\(|python|perl|\bcat\s*(?:-(?:\s|$)|[;|&]|\\*\"\s*[,}]|$)", c[2])])
+    (f.root / "first-action.json").write_text(json.dumps(dict(observed, calls=calls), indent=2))
+    return observed
+
+
 def brief_prompts(f, agent):
     """A user in default permission mode sees no approval prompt caused by the task brief."""
     seed = "Create hello.txt in this project containing exactly hi, then reply exactly: DONE."
@@ -365,8 +408,11 @@ def brief_prompts(f, agent):
         f.until(step, "agent finished the user's task", 150)
         assert (f.project / "hello.txt").read_text().strip() == "hi"
         brief = [p for p in prompts if brief_prompt(p)]
+        first = first_actions(f, agent, "hello.txt")
         assert not brief, f"{len(brief)} approval prompts were caused by the task brief; evidence {f.root}"
-        return dict(prompts=len(prompts), brief_prompts=len(brief))
+        # Keeping the brief never runs a shell command and never comes before the user's task.
+        assert first["first_task_call"] and not first["brief_before_task"] and not first["brief_shell"], first
+        return dict(prompts=len(prompts), brief_prompts=len(brief), **first)
     finally:
         f.screen(pane, "brief-prompts-final")
 
@@ -393,7 +439,8 @@ def subagent(f, agent):
         assert any(r["event"] == "pre-tool-use" for rows in children.values() for r in rows), children
         session = parent[len("claude--"):-len(".jsonl")]
         final = next(r for r in f.view("subagent-final")["agents"] if r["sessionId"] == session)
-        assert final["finalReply"].strip() == "PARENT-DONE", final
+        # The prompt itself ends the exact reply with a period.
+        assert final["finalReply"].strip().rstrip(".") == "PARENT-DONE", final
         return dict(parent=len(observed[parent]), children={name: len(rows) for name, rows in children.items()})
     finally:
         f.screen(pane, "subagent-final")
