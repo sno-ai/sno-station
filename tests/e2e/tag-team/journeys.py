@@ -67,8 +67,9 @@ def segment(f, label):
 def squad_screen(f, session, label):
     pane = f.mux("new-window", "-d", "-P", "-F", "#{pane_id}", "-t", "fixture", str(SNO) + " squad").stdout.strip()
     try:
-        text = f.until(lambda: (t if "q/Escape exit" in (t := f.screen(pane, label)) else None), "full-screen squad view", 15)
-        assert session in text and "Needs you" in text and "permission to approve" in text, text
+        text = f.until(lambda: (t if "q exit" in (t := f.screen(pane, label)) else None), "full-screen squad view", 15)
+        selected = next((line for line in text.splitlines() if line.startswith(">")), "")
+        assert "Needs you (1)" in text and "approve a permission" in selected and session in text, text
         return text
     finally:
         f.mux("send-keys", "-t", pane, "q")
@@ -109,6 +110,34 @@ def state(f, agent):
         return dict(waiting=waiting[0], finished=row)
     finally:
         f.screen(pane, "state-final-ui")
+
+
+def permission_denied(f, agent):
+    """Denying a real permission prompt must not leave the agent waiting for approval."""
+    prompt = ("Use the shell tool to run exactly: python3 -c \"from pathlib import Path; "
+              "Path('denied-proof.txt').write_text('ran\\n')\". Do not substitute another tool or ask a text question.")
+    pane = f.launch(agent, prompt, permission=True)
+    permission = re.compile(r"Do you want to (?:proceed|allow|run)|Allow (?:this|Claude)|Would you like to run|Yes, proceed", re.I)
+    try:
+        f.until(lambda: permission.search(f.screen(pane, "denied-permission-ui")), "actual " + agent + " permission prompt", 90)
+        waiting = f.until(lambda: [r for r in f.view("denied-waiting")["agents"]
+                                   if r["harness"] == agent and r["waitingReason"] == "permission to approve"] or None,
+                          "permission observation recorded", 15)
+        session = waiting[0]["sessionId"]
+        # Deny with the prompt's "No" choice; Escape records the same rejection.
+        choice = re.search(r"(\d)\. No\b", f.screen(pane, "denied-choices"))
+        assert choice, "permission prompt has no No choice"
+        f.mux("send-keys", "-t", pane, choice.group(1))
+        def cleared(label):
+            row = next((r for r in f.view(label)["agents"] if r["sessionId"] == session), None)
+            return row if row and row["waitingForHuman"] != "yes" else None
+        # Claude fires no hook for the denial; the view must read it without any further prompt.
+        row = f.until(lambda: cleared("denied-after-deny"), "denial clears the wait", 30)
+        assert not (f.project / "denied-proof.txt").exists(), "Denied command ran"
+        assert row["group"] == "Finished" and row["subgroup"] == "permission denied", row
+        return dict(waiting=waiting[0], cleared=row)
+    finally:
+        f.screen(pane, "denied-final-ui")
 
 
 def cursor_status(f):

@@ -6,7 +6,7 @@ import time
 import traceback
 
 from fixture import Fixture, Unavailable
-from journeys import pair, state, continuity, lesson, mailbox, cursor_status, brief_prompts, subagent
+from journeys import pair, state, continuity, lesson, mailbox, cursor_status, brief_prompts, subagent, permission_denied
 
 
 def main():
@@ -16,7 +16,7 @@ def main():
     parser.add_argument("--variant", default=None)
     args = parser.parse_args()
     variants = {"pair": ("two-vendors", "claude-only", "codex-only"), "continuity": ("resume", "compact"),
-                "mailbox": ("typing", "compact"), "state": ("permission", "brief-prompts", "subagent"), "lesson": ("approval",),
+                "mailbox": ("typing", "compact"), "state": ("permission", "brief-prompts", "subagent", "permission-denied"), "lesson": ("approval",),
                 "cursor-status": ("status",)}
     variant = args.variant or variants[args.journey][0]
     if variant not in variants[args.journey]:
@@ -30,7 +30,8 @@ def main():
         if args.journey == "pair":
             proof["observed"] = pair(f, variant)
         elif args.journey == "state":
-            proof["observed"] = {"permission": state, "brief-prompts": brief_prompts, "subagent": subagent}[variant](f, args.agent)
+            proof["observed"] = {"permission": state, "brief-prompts": brief_prompts, "subagent": subagent,
+                                 "permission-denied": permission_denied}[variant](f, args.agent)
         elif args.journey == "continuity":
             proof["observed"] = continuity(f, args.agent, variant)
         elif args.journey == "lesson":
