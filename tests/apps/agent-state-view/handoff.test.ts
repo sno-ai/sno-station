@@ -124,3 +124,33 @@ it("does not read an ordinary answer, which names the task only in its headers, 
 		await rm(home, { recursive: true, force: true });
 	}
 });
+
+it("keeps the second transfer when one work passes from A to B to C, so B can release it to C", async () => {
+	const home = await mkdtemp(join(tmpdir(), "sno-view-chain-"));
+	const previous = { profile: process.env.SNO_PROFILE_DIR, address: process.env.SNO_REACH_ADDR };
+	const root = join(home, "reach");
+	const [a, b, c] = ["worker.a@localhost", "worker.b@localhost", "worker.c@localhost"];
+	const options = { profileDir: home, reachRoot: root, reachProgram: resolve("apps/reach/lib/reach-agent-view") };
+	process.env.SNO_PROFILE_DIR = home;
+	try {
+		for (const address of [a, b, c]) {
+			await mkdir(join(root, address, "new"), { recursive: true });
+			process.env.SNO_REACH_ADDR = address;
+			await observeAgentEvent("claude", "user-prompt-submit", { session_id: `${address}-session`, prompt: "Continue requested work" });
+		}
+		const card = (id: string, from: string, to: string, body: string) =>
+			`From: Sender <${from}>\nTo: Receiver <${to}>\nDelivered-To: ${to}\nDate: Tue, 03 Nov 2026 00:00:00 +0000\nSubject: [DECISION] Work\nMessage-ID: <${id}@localhost>\nX-Type: decision\nX-Work: chain-work\n\n${body}\n`;
+		await writeFile(join(root, a, "new", "original"), card("original", "lead.owner@localhost", a, "Do the work"));
+		await writeFile(join(root, b, "new", "to-b"), card("to-b", a, b, "Continue original card <original@localhost>."));
+		await writeFile(join(root, c, "new", "to-c"), card("to-c", b, c, "Continue original card <to-b@localhost>."));
+		const view = await readAgentView(options);
+		expect(view.work.find(item => item.message_id === "<original@localhost>")).toMatchObject({ owner: a, handoff_to: b });
+		expect(view.work.find(item => item.message_id === "<to-b@localhost>")).toMatchObject({ owner: b, handoff_to: c });
+		await recordAgentHandoff(b, c, "Release <to-c@localhost>", options);
+		expect((await readAgentView(options)).work.find(item => item.message_id === "<to-b@localhost>")).toMatchObject({ owner: c });
+	} finally {
+		if (previous.profile === undefined) delete process.env.SNO_PROFILE_DIR; else process.env.SNO_PROFILE_DIR = previous.profile;
+		if (previous.address === undefined) delete process.env.SNO_REACH_ADDR; else process.env.SNO_REACH_ADDR = previous.address;
+		await rm(home, { recursive: true, force: true });
+	}
+});

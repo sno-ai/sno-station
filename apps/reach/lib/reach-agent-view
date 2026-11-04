@@ -26,9 +26,10 @@ if [[ -n "$rows" ]]; then
                     handoff_state:$targets[0].state,handoff_since:$targets[0].since,handoff_blocked_on:$targets[0].blocked_on}
             elif ($targets | length) > 1 then . + {owner:"unknown",handoff_error:"multiple linked handoff cards"}
             else . end) |
+        # A transfer card folds into the card it continues, unless it hands the work on again (A to B to C).
         . as $linked | .[] |
-        select(. as $candidate | any($linked[]; . as $original |
-            $candidate.recipient != $original.recipient and ($candidate.text | contains($original.message_id))) | not) |
+        select(.handoff_to != null or (. as $candidate | any($linked[]; . as $original |
+            $candidate.recipient != $original.recipient and ($candidate.text | contains($original.message_id))) | not)) |
         del(.body, .text)'
 fi
 exit "$status"
