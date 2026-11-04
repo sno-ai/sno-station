@@ -144,6 +144,19 @@ describe("agent state view read-time semantics", () => {
 		expect(run().stdout).toContain("Waiting for a human: yes");
 		expect(await readFile(join(home, "station/agents/claude--hook-record.jsonl"), "utf8")).not.toContain("human-seen");
 	});
+	it("clears a Claude permission wait once its transcript records the person's denial, and only then", async () => {
+		const transcript = join(home, "transcript.jsonl");
+		const asked = [{ event: "user-prompt-submit", input: { prompt: "Run the command" } },
+			{ event: "pre-tool-use", input: { tool_name: "Bash", tool_use_id: "toolu_denied", transcript_path: transcript } },
+			{ event: "permission-request", input: { tool_name: "Bash", transcript_path: transcript } }];
+		await events("claude", "denied", asked);
+		await writeFile(transcript, `${JSON.stringify({ type: "user", message: { content: [{ type: "tool_use", id: "toolu_denied" }] } })}\n`);
+		expect((await view()).agents[0]).toMatchObject({ waitingForHuman: "yes", waitingReason: "permission to approve" });
+		// The record Claude Code 2.1 writes when "No" or Escape answers the prompt.
+		await appendFile(transcript, `${JSON.stringify({ type: "user", message: { role: "user", content: [{ type: "tool_result", is_error: true,
+			content: "The user doesn't want to proceed with this tool use.", tool_use_id: "toolu_denied" }] }, toolUseResult: "User rejected tool use" })}\n`);
+		expect((await view()).agents[0]).toMatchObject({ waitingForHuman: "no", doing: "idle at prompt", group: "Finished", subgroup: "permission denied" });
+	});
 	it("only resolves the matching permission and preserves its actual age through unrelated activity", async () => {
 		await events("claude", "permission", [{ event: "permission-request", input: { tool_name: "Bash", tool_use_id: "waiting" } },
 			{ event: "post-tool-use", input: { tool_name: "Read", tool_use_id: "unrelated" }, at: new Date(now + 1000_000).toISOString() }]);

@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { createReadStream } from "node:fs";
-import { appendFile, mkdir, readFile, readdir, realpath, stat } from "node:fs/promises";
+import { appendFile, mkdir, open, readFile, readdir, realpath, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { createInterface } from "node:readline";
@@ -259,6 +259,31 @@ async function inspectResume(row: AgentRow, observations: AgentObservation[], er
 	finally { stream.destroy(); }
 }
 
+/** Claude fires no hook when a person denies a permission prompt; only its transcript records the rejected call. */
+async function permissionDenied(row: AgentRow, observations: AgentObservation[], errors: AgentOperationError[]): Promise<boolean> {
+	const at = observations.findLastIndex(item => item.event === "permission-request");
+	const request = observations[at];
+	if (row.harness !== "claude" || !request) return false;
+	const call = text(request.input.tool_use_id) || text(observations.slice(0, at)
+		.findLast(item => item.event === "pre-tool-use" && item.input.tool_name === request.input.tool_name)?.input.tool_use_id);
+	const transcript = text(request.input.transcript_path);
+	if (!call || !transcript) return false;
+	const handle = await open(transcript, "r").catch((error: unknown) => {
+		errors.push(failure("read permission outcome", transcript, error, "a denied permission still shows as waiting")); return undefined;
+	});
+	if (!handle) return false;
+	try {
+		// The rejection is written right after the request; the transcript's last 256 KiB holds it.
+		const { size } = await handle.stat();
+		const start = Math.max(0, size - 262_144);
+		const { buffer, bytesRead } = await handle.read(Buffer.alloc(size - start), 0, size - start, start);
+		return buffer.subarray(0, bytesRead).toString("utf8").split("\n")
+			.some(line => line.includes(`"tool_use_id":"${call}"`) && line.includes('"toolUseResult":"User rejected tool use"'));
+	} catch (error) {
+		errors.push(failure("read permission outcome", transcript, error, "a denied permission still shows as waiting")); return false;
+	} finally { await handle.close(); }
+}
+
 function classify(row: AgentRow): void {
 	if (row.waitingForHuman === "yes") { row.group = "Needs you"; row.subgroup = row.waitingReason; }
 	else if (row.doing === "working") { row.group = "Working"; row.subgroup = "working"; }
@@ -299,6 +324,9 @@ async function readAgentFile(path: string, now: number, errors: AgentOperationEr
 		applyEvent(row, observation, index, path, permission);
 		if (row.waitingForHuman === "yes" && wasWaiting !== "yes") waitAt = observation.at;
 		if (row.waitingForHuman !== "yes") waitAt = undefined;
+	}
+	if (row.waitingReason === "permission to approve" && await permissionDenied(row, observations, errors)) {
+		row.doing = "idle at prompt"; resolveWait(row); row.group = "Finished"; row.subgroup = "permission denied";
 	}
 	await inspectProcess(row, observations, errors);
 	await inspectResume(row, observations, errors);
