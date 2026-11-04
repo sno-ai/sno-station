@@ -163,7 +163,7 @@ function applyEvent(row: AgentRow, observation: AgentObservation, index: number,
 	if (["pre-tool-use", "permission-request"].includes(event) && askTool(input)) wait(row, "asked a question");
 	if (event === "post-tool-use") {
 		const response = record(input.tool_response);
-		if (matchingTool(permission, input) && ((askTool(input) && row.harness === "claude" && (input.tool_response !== undefined || input.tool_output !== undefined)) ||
+		if (matchingTool(permission, input) && ((askTool(input) && (input.tool_response !== undefined || input.tool_output !== undefined)) ||
 			(!askTool(input) && row.waitingReason === "permission to approve"))) resolveWait(row);
 		if (askTool(input) && row.harness === "codex" && response.accepted === true) wait(row, "asked a question");
 	}
@@ -368,7 +368,10 @@ export async function readAgentView(options: AgentViewOptions = {}): Promise<Age
 		if (row.waitingForHuman !== "yes" && row.work.some(item => item.handoff_to && !item.releasedAt)) {
 			row.group = "Working"; row.subgroup = "handing over";
 		}
-		if (row.waitingForHuman !== "yes" && view.work.some(item => item.recipient === row.reachAddress && item.releasedAt) &&
+		const released = view.work.filter(item => item.recipient === row.reachAddress && item.releasedAt).map(item => text(item.releasedAt)).sort().at(-1);
+		// Work started after the latest release is current activity, not the finished handover.
+		const workingSince = row.doing === "working" && row.lastEvent !== "unknown" && released !== undefined && row.lastEvent.at > released;
+		if (row.waitingForHuman !== "yes" && released !== undefined && !workingSince &&
 			!row.work.some(item => !["completed", "failed", "cancelled", "refused", "dismissed", "expired", "superseded"].includes(text(item.state)))) {
 			row.group = "Finished"; row.subgroup = "handed over";
 		}
