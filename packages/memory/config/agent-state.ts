@@ -127,7 +127,8 @@ export async function observeAgentEvent(harness: AgentHarness, event: string, ra
 			harness, sessionId, at: new Date().toISOString(),
 			event: event === "user-prompt-submit" && isAgentText(text(input.prompt)) ? "agent-prompt-submit" : event,
 			input: observedInput(input), ...identity,
-			...(process.env.SNO_REACH_ADDR ? { reachAddress: process.env.SNO_REACH_ADDR } : {}),
+			// A subagent inherits its parent's environment; the Reach address belongs to the parent session only.
+			...(process.env.SNO_REACH_ADDR && input.agent_id === undefined ? { reachAddress: process.env.SNO_REACH_ADDR } : {}),
 			...(cwd ? { cwd } : {}),
 		};
 		await mkdir(dirname(target), { recursive: true, mode: 0o700 });
@@ -451,9 +452,10 @@ export async function recordAgentHandoff(source: string, target: string, release
 		typeof item.handoff_message_id === "string" && releaseText.includes(item.handoff_message_id));
 	if (candidates.length !== 1) throw new Error("release has no unique linked work card; ownership remains unknown");
 	const item = candidates[0];
-	const agents = view.agents.filter(row => row.reachAddress === target && row.sessionId !== "unknown");
-	if (!item || agents.length !== 1 || !agents[0]) throw new Error("receiver has no unique captured session; release observation unavailable");
-	const agent = agents[0];
+	// After /clear several sessions share the address; the receiver is the one that acted most recently.
+	const at = (row: AgentRow): number => (row.lastEvent === "unknown" ? 0 : Date.parse(row.lastEvent.at));
+	const agent = view.agents.filter(row => row.reachAddress === target && row.sessionId !== "unknown").sort((a, b) => at(b) - at(a))[0];
+	if (!item || !agent) throw new Error("receiver has no captured session; release observation unavailable");
 	const observation: AgentObservation = { harness: agent.harness, sessionId: agent.sessionId, at: new Date().toISOString(),
 		event: "handoff-released", reachAddress: target, input: { message_id: item.message_id, target_message_id: item.handoff_message_id,
 			work: item.work, source: item.recipient, target } };
