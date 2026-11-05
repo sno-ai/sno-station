@@ -27,7 +27,7 @@ cases("progress-eligibility.t", "expiry supersede reverse unheld")
 for script in ("transport.t", "progress-reporting-lint.t",
                "local-delivery.t", "empty-body-refusal.t", "seat-ownership.t",
                "read-only.t", "send-preflight.t", "requires-action.t",
-               "reply-routing.t", "notification-once.t"):
+               "reply-routing.t", "notification-once.t", "seats/pair-help.t"):
     CASES.append((script, ["bash", str(HERE / script)]))
 cases("terminal-states.t", "completed-after failed-after cancelled-before cancelled-after refused-before refused-after")
 cases("agent-mailbox-commands.t", """
