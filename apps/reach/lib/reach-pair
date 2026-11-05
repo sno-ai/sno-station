@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 # Two visible seats share one task; their existing Reach mail carries the review.
 set -Eeuo pipefail
+usage='usage: sno reach pair "<task>"
+Starts two agents on the task in the current folder, with approval prompts off.'
+case "${1:-}" in
+    -h|--help) printf '%s\n' "$usage"; exit 0 ;;
+    -*) printf '%s\n' "$usage" >&2; exit 64 ;;
+esac
 if (($# != 1)) || [[ ! "$1" =~ [^[:space:]] ]]; then
     printf 'reach: pair requires one nonblank task string\n' >&2; exit 64
 fi
