@@ -426,7 +426,9 @@ export async function readAgentView(options: AgentViewOptions = {}): Promise<Age
 		}
 	}
 	for (const row of view.agents) {
-		row.work = view.work.filter(item => item.owner === row.reachAddress);
+		// A released card whose transfer card is itself listed (A to B to C) has been replaced by that card.
+		row.work = view.work.filter(item => item.owner === row.reachAddress &&
+			!(item.releasedAt && view.work.some(other => other.message_id === item.handoff_message_id)));
 		const blocked = row.work.find(item => item.blocked_on && item.blocked_on !== "-");
 		if (blocked && row.group === "Working") row.subgroup = "waiting on another agent";
 		if (row.waitingForHuman !== "yes" && row.work.some(item => item.handoff_to && !item.releasedAt)) {

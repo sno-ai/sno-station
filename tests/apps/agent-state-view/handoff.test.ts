@@ -146,8 +146,18 @@ it("keeps the second transfer when one work passes from A to B to C, so B can re
 		const view = await readAgentView(options);
 		expect(view.work.find(item => item.message_id === "<original@localhost>")).toMatchObject({ owner: a, handoff_to: b });
 		expect(view.work.find(item => item.message_id === "<to-b@localhost>")).toMatchObject({ owner: b, handoff_to: c });
+		const row = (current: Awaited<ReturnType<typeof readAgentView>>, address: string) => current.agents.find(agent => agent.reachAddress === address);
+		await recordAgentHandoff(a, b, "Release <to-b@localhost>", options);
+		const afterFirstRelease = await readAgentView(options);
+		expect(row(afterFirstRelease, b)?.work.map(item => item.message_id)).toEqual(["<to-b@localhost>"]);
+		expect(row(afterFirstRelease, b)).toMatchObject({ group: "Working", subgroup: "handing over" });
+		expect(row(afterFirstRelease, a)).toMatchObject({ group: "Finished", subgroup: "handed over", work: [] });
 		await recordAgentHandoff(b, c, "Release <to-c@localhost>", options);
-		expect((await readAgentView(options)).work.find(item => item.message_id === "<to-b@localhost>")).toMatchObject({ owner: c });
+		const afterSecondRelease = await readAgentView(options);
+		expect(afterSecondRelease.work.find(item => item.message_id === "<to-b@localhost>")).toMatchObject({ owner: c });
+		expect(row(afterSecondRelease, c)?.work.map(item => item.message_id)).toEqual(["<to-b@localhost>"]);
+		expect(row(afterSecondRelease, b)).toMatchObject({ group: "Finished", subgroup: "handed over", work: [] });
+		expect(row(afterSecondRelease, a)).toMatchObject({ group: "Finished", subgroup: "handed over", work: [] });
 	} finally {
 		if (previous.profile === undefined) delete process.env.SNO_PROFILE_DIR; else process.env.SNO_PROFILE_DIR = previous.profile;
 		if (previous.address === undefined) delete process.env.SNO_REACH_ADDR; else process.env.SNO_REACH_ADDR = previous.address;
