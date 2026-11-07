@@ -93,7 +93,7 @@ export function defaultSettings(): Settings {
 		recall: { auto: true,
 			sessionStart: { limit: 5, maxChars: 3_500, timeoutMs: 8_000 },
 			prompt: { limit: 3, maxChars: 1_500,
-				timeoutMs: 4_000, minChars: 12, minScore: 0 },
+				timeoutMs: 25_000, minChars: 12, minScore: 0 },
 			explicitLimit: 5 },
 		capture: { assistant: true, ambient: true, sessionMemory: { enabled: true, messageCount: DEFAULT_SESSION_MESSAGE_COUNT },
 			sessionStrategy: "systemSessionMemory" },

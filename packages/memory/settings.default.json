@@ -197,7 +197,7 @@
     "prompt": {
       "limit": 3,
       "maxChars": 1500,
-      "timeoutMs": 4000,
+      "timeoutMs": 25000,
       "minChars": 12,
       "minScore": 0
     },

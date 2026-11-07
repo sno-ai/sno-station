@@ -46,11 +46,11 @@ export const CODING_SKIN_RECALL_ITEM_MAX_CHARS = 240;
 
 export const CODING_SKIN_HOOKS = {
 	SessionStart: { eventName: "session_start", subcommand: "session-start", timeout: 15 },
-	UserPromptSubmit: { eventName: "user_prompt_submit", subcommand: "user-prompt-submit", timeout: 8 },
+	UserPromptSubmit: { eventName: "user_prompt_submit", subcommand: "user-prompt-submit", timeout: 30 },
 	Stop: { eventName: "stop", subcommand: "stop", timeout: 5 },
 	SessionEnd: { eventName: "session_end", subcommand: "session-end", timeout: 8 },
 	PreToolUse: { eventName: "pre_tool_use", subcommand: "pre-tool-use", timeout: 5 },
-	PostToolUse: { eventName: "post_tool_use", subcommand: "post-tool-use", timeout: 8 },
+	PostToolUse: { eventName: "post_tool_use", subcommand: "post-tool-use", timeout: 30 },
 } as const;
 
 export type CodingSkinHookName = keyof typeof CODING_SKIN_HOOKS;
@@ -58,7 +58,7 @@ export type CodingSkinHookName = keyof typeof CODING_SKIN_HOOKS;
 /** Cursor's hook events (`hooks.json` names); timeouts match the Claude/Codex event each one stands in for. */
 export const CODING_SKIN_CURSOR_HOOKS = {
 	sessionStart: { subcommand: "session-start", timeout: 15 },
-	beforeSubmitPrompt: { subcommand: "user-prompt-submit", timeout: 8 },
+	beforeSubmitPrompt: { subcommand: "user-prompt-submit", timeout: 30 },
 	afterAgentResponse: { subcommand: "after-agent-response", timeout: 5 },
 	afterAgentThought: { subcommand: "after-agent-thought", timeout: 5 },
 	stop: { subcommand: "stop", timeout: 5 },
