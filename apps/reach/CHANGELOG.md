@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.1.8
+
+Work passed from one agent to another keeps its current owner visible through further handoffs.
+`sno reach pair --help` shows usage without starting agents.
+
 ## 2.1.7
 
 `sno reach pair "task"` starts two agents on one task: one implements, the other reviews and
