@@ -52,6 +52,8 @@ jobs:
         if: runner.os == 'Linux'
         run: sudo apt-get update -qq && sudo apt-get install -y -qq build-essential perl jq
       - name: Build the Reach archive
+        env:
+          MACOSX_DEPLOYMENT_TARGET: "14.0"
         run: |
           cd apps/reach
           ${{ matrix.make }} package ${{ matrix.extra }}
