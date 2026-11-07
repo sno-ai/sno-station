@@ -139,7 +139,7 @@ async function main(): Promise<number> {
 
 main().then(code => {
 	process.exitCode = code;
-	if (process.argv[2] === "session-start") {
+	if (["session-start", "user-prompt-submit", "post-tool-use"].includes(process.argv[2] ?? "")) {
 		process.stdout.write("", () => process.exit(code));
 	}
 }, error => {
