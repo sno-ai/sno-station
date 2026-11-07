@@ -8,7 +8,7 @@ import { installCursor, uninstallCursor } from "../../../apps/mem-cursor/src/ins
 const SNO = "/opt/sno/bin/sno";
 const EVENTS = [
 	["sessionStart", "session-start", 15],
-	["beforeSubmitPrompt", "user-prompt-submit", 8],
+	["beforeSubmitPrompt", "user-prompt-submit", 30],
 	["afterAgentResponse", "after-agent-response", 5],
 	["afterAgentThought", "after-agent-thought", 5],
 	["stop", "stop", 5],
@@ -40,7 +40,7 @@ describe("Cursor hook and allowlist installation", () => {
 		const hooks = await readJson("hooks.json");
 		expect(hooks.version).toBe(1);
 		expect(hooks.hooks.stop).toEqual([ORCA_STOP, REACH_STOP, { command: ours(SNO, "stop"), timeout: 5 }]);
-		expect(hooks.hooks.beforeSubmitPrompt).toEqual([ORCA_PROMPT, { command: ours(SNO, "user-prompt-submit"), timeout: 8 }]);
+		expect(hooks.hooks.beforeSubmitPrompt).toEqual([ORCA_PROMPT, { command: ours(SNO, "user-prompt-submit"), timeout: 30 }]);
 		expect(hooks.hooks.afterFileEdit).toEqual([ORCA_PROMPT]);
 		for (const [event, subcommand, timeout] of EVENTS) {
 			expect(hooks.hooks[event].filter((entry: { command: string }) => entry.command.includes("memory hook")), event)

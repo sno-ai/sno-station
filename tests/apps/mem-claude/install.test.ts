@@ -8,11 +8,11 @@ import { installClaude, uninstallClaude } from "../../../apps/mem-claude/src/ins
 
 const events = [
 	["SessionStart", "session-start", 15],
-	["UserPromptSubmit", "user-prompt-submit", 8],
+	["UserPromptSubmit", "user-prompt-submit", 30],
 	["Stop", "stop", 5],
 	["SessionEnd", "session-end", 8],
 	["PreToolUse", "pre-tool-use", 5],
-	["PostToolUse", "post-tool-use", 8],
+	["PostToolUse", "post-tool-use", 30],
 ] as const;
 const programPath = "/opt/sno/bin/sno";
 // Only the task brief directory is readable and editable without approval.
