@@ -1,8 +1,14 @@
+![Sno Station: Eine Person. Ein ganzes Engineering-Team aus KI-Agenten.](../images/station-header.png)
+
 # Sno Station: Eine Person. Ein ganzes Engineering-Team aus KI-Agenten.
 
 **Sno Station ist die Workstation für Ihre KI-Coding-Agenten.** Claude Code, Codex und Cursor laufen jeweils in ihrer eigenen Harness. In Sno Station sitzen diese Harnesses nebeneinander und arbeiten als ein Team. Kein weiterer Agent, kein weiteres Modell: Es lässt die laufen, die Sie schon nutzen.
 
 Fangen Sie mit Arbeit an, die Sie sonst beaufsichtigen müssten. Ein Agent baut, ein anderer prüft, und die beiden klären die Befunde, bevor das Ergebnis bei Ihnen ankommt. Stößt einer an sein Nutzungslimit, übernimmt der andere die Aufgabe. Was Sie heute korrigieren, steht morgen als Regel in ihren Skills.
+
+[![GitHub-Sterne](https://img.shields.io/github/stars/sno-ai/sno-station?label=stars&color=eab308&labelColor=3b3b3b)](https://github.com/sno-ai/sno-station/stargazers)
+[![Neuestes Release](https://img.shields.io/github/v/release/sno-ai/sno-station?label=release&color=2dd4bf&labelColor=3b3b3b)](https://github.com/sno-ai/sno-station/releases/latest)
+[![Lizenz Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-97ca00.svg?labelColor=3b3b3b)](../../LICENSE)
 
 So bekommen Sie es. Sagen Sie Ihrem Agenten:
 
@@ -17,10 +23,6 @@ sno reach pair "Fix the login redirect"
 ```
 
 Einer baut, der andere hält dagegen, und Sie können beiden zusehen. Es läuft auf Ihrem eigenen Computer mit Claude Code, Codex, Cursor, Hermes Agent und OpenClaw. Kein API-Schlüssel. Open Source. [Lieber ein einziger Terminal-Befehl?](#install)
-
-[![GitHub-Sterne](https://img.shields.io/github/stars/sno-ai/sno-station?label=stars&color=eab308&labelColor=3b3b3b)](https://github.com/sno-ai/sno-station/stargazers)
-[![Neuestes Release](https://img.shields.io/github/v/release/sno-ai/sno-station?label=release&color=2dd4bf&labelColor=3b3b3b)](https://github.com/sno-ai/sno-station/releases/latest)
-[![Lizenz Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-97ca00.svg?labelColor=3b3b3b)](../../LICENSE)
 
 **In anderen Sprachen lesen:** [English](../../README.md) · [中文](README.zh-CN.md) · **Deutsch** · [Español](README.es.md) · [Français](README.fr.md) · [Русский](README.ru.md) · [한국어](README.ko.md) · [日本語](README.ja.md) · [繁體中文](README.zh-TW.md)
 

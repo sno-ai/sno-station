@@ -1,8 +1,14 @@
+![Sno Station: Один человек. Целая инженерная команда ИИ-агентов.](../images/station-header.png)
+
 # Sno Station: Один человек. Целая инженерная команда ИИ-агентов.
 
 **Sno Station: рабочая станция для ваших ИИ-агентов, которые пишут код.** Claude Code, Codex и Cursor работают каждый в своём харнессе. В Sno Station эти харнессы стоят рядом и работают как одна команда. Это не ещё один агент и не ещё одна модель: Sno Station запускает тех, которыми вы уже пользуетесь.
 
 Начните с работы, за которой иначе пришлось бы присматривать самому. Один агент строит, другой проверяет, и замечания они улаживают до того, как результат дойдёт до вас. Когда один упирается в лимит, задачу подхватывает другой. То, что вы поправили сегодня, завтра уже правило в их навыках.
+
+[![GitHub stars](https://img.shields.io/github/stars/sno-ai/sno-station?label=stars&color=eab308&labelColor=3b3b3b)](https://github.com/sno-ai/sno-station/stargazers)
+[![latest release](https://img.shields.io/github/v/release/sno-ai/sno-station?label=release&color=2dd4bf&labelColor=3b3b3b)](https://github.com/sno-ai/sno-station/releases/latest)
+[![license Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-97ca00.svg?labelColor=3b3b3b)](../../LICENSE)
 
 Чтобы его получить, скажите своему агенту:
 
@@ -17,10 +23,6 @@ sno reach pair "Fix the login redirect"
 ```
 
 Один строит, другой спорит, а вы можете смотреть за обоими. Всё работает на вашем компьютере с Claude Code, Codex, Cursor, Hermes Agent и OpenClaw. Без API-ключа. Открытый исходный код. [Удобнее одной командой в терминале?](#install)
-
-[![GitHub stars](https://img.shields.io/github/stars/sno-ai/sno-station?label=stars&color=eab308&labelColor=3b3b3b)](https://github.com/sno-ai/sno-station/stargazers)
-[![latest release](https://img.shields.io/github/v/release/sno-ai/sno-station?label=release&color=2dd4bf&labelColor=3b3b3b)](https://github.com/sno-ai/sno-station/releases/latest)
-[![license Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-97ca00.svg?labelColor=3b3b3b)](../../LICENSE)
 
 **Читать на других языках:** [English](../../README.md) · [中文](README.zh-CN.md) · [Deutsch](README.de.md) · [Español](README.es.md) · [Français](README.fr.md) · **Русский** · [한국어](README.ko.md) · [日本語](README.ja.md) · [繁體中文](README.zh-TW.md)
 

@@ -1,8 +1,14 @@
+![Sno Station : Une seule personne. Toute une équipe d'ingénierie, faite d'agents IA.](../images/station-header.png)
+
 # Sno Station : Une seule personne. Toute une équipe d'ingénierie, faite d'agents IA.
 
 **Sno Station est le poste de travail de vos agents de code IA.** Claude Code, Codex et Cursor tournent chacun dans leur propre harness. Sno Station est l'endroit où ces harness s'installent côte à côte et travaillent comme une seule équipe. Pas un agent de plus, pas un modèle de plus : il fait tourner ceux que vous utilisez déjà.
 
 Commencez par le travail que vous devriez sinon surveiller. Un agent construit, un autre relit, et ils règlent entre eux ce qui a été relevé avant que le résultat ne vous arrive. Quand l'un atteint sa limite d'utilisation, l'autre reprend la tâche. Ce que vous corrigez aujourd'hui est demain une règle dans leurs compétences.
+
+[![Étoiles GitHub](https://img.shields.io/github/stars/sno-ai/sno-station?label=stars&color=eab308&labelColor=3b3b3b)](https://github.com/sno-ai/sno-station/stargazers)
+[![Dernière version](https://img.shields.io/github/v/release/sno-ai/sno-station?label=release&color=2dd4bf&labelColor=3b3b3b)](https://github.com/sno-ai/sno-station/releases/latest)
+[![Licence Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-97ca00.svg?labelColor=3b3b3b)](../../LICENSE)
 
 Pour l'obtenir, dites à votre agent :
 
@@ -17,10 +23,6 @@ sno reach pair "Fix the login redirect"
 ```
 
 L'un construit, l'autre lui porte la contradiction, et vous pouvez regarder les deux. Il tourne sur votre propre ordinateur avec Claude Code, Codex, Cursor, Hermes Agent et OpenClaw. Pas de clé d'API. Open source. [Vous préférez une seule commande dans le terminal ?](#install)
-
-[![Étoiles GitHub](https://img.shields.io/github/stars/sno-ai/sno-station?label=stars&color=eab308&labelColor=3b3b3b)](https://github.com/sno-ai/sno-station/stargazers)
-[![Dernière version](https://img.shields.io/github/v/release/sno-ai/sno-station?label=release&color=2dd4bf&labelColor=3b3b3b)](https://github.com/sno-ai/sno-station/releases/latest)
-[![Licence Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-97ca00.svg?labelColor=3b3b3b)](../../LICENSE)
 
 **Lire dans d'autres langues :** [English](../../README.md) · [中文](README.zh-CN.md) · [Deutsch](README.de.md) · [Español](README.es.md) · **Français** · [Русский](README.ru.md) · [한국어](README.ko.md) · [日本語](README.ja.md) · [繁體中文](README.zh-TW.md)
 

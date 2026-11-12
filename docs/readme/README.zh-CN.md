@@ -1,8 +1,14 @@
+![Sno Station：一个人，一整支 AI 工程团队。](../images/station-header.png)
+
 # Sno Station：一个人，一整支 AI 工程团队。
 
 **Sno Station 是你那些 AI 编程 agent 的工作站。** Claude Code、Codex 和 Cursor 各自跑在自己的 harness 里。Sno Station 让这些 harness 并排坐到一起，像一支团队那样干活。它不是又一个 agent，也不是又一个模型：它跑的就是你已经在用的那些。
 
 先从那些你本来得守着的活儿开始。一个 agent 动手做，另一个审查，它们先把发现的问题掰扯清楚，结果才交到你手上。一个撞上用量上限，另一个把任务接过去。你今天纠正的事，明天就是它们技能里的一条规则。
+
+[![GitHub star 数](https://img.shields.io/github/stars/sno-ai/sno-station?label=stars&color=eab308&labelColor=3b3b3b)](https://github.com/sno-ai/sno-station/stargazers)
+[![最新版本](https://img.shields.io/github/v/release/sno-ai/sno-station?label=release&color=2dd4bf&labelColor=3b3b3b)](https://github.com/sno-ai/sno-station/releases/latest)
+[![许可证 Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-97ca00.svg?labelColor=3b3b3b)](../../LICENSE)
 
 想装上它，对你的 agent 说：
 
@@ -17,10 +23,6 @@ sno reach pair "Fix the login redirect"
 ```
 
 一个动手，一个挑刺，两边你都能看着。它跑在你自己的电脑上，支持 Claude Code、Codex、Cursor、Hermes Agent 和 OpenClaw。不用 API key。开源。[想用一条终端命令安装？](#install)
-
-[![GitHub star 数](https://img.shields.io/github/stars/sno-ai/sno-station?label=stars&color=eab308&labelColor=3b3b3b)](https://github.com/sno-ai/sno-station/stargazers)
-[![最新版本](https://img.shields.io/github/v/release/sno-ai/sno-station?label=release&color=2dd4bf&labelColor=3b3b3b)](https://github.com/sno-ai/sno-station/releases/latest)
-[![许可证 Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-97ca00.svg?labelColor=3b3b3b)](../../LICENSE)
 
 **Read in other languages:** [English](../../README.md) · **中文** · [Deutsch](README.de.md) · [Español](README.es.md) · [Français](README.fr.md) · [Русский](README.ru.md) · [한국어](README.ko.md) · [日本語](README.ja.md) · [繁體中文](README.zh-TW.md)
 
