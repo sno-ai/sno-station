@@ -1,78 +1,95 @@
-# Sno Station — Agents, assemble. Two heads are better than one, and smarter by morning.
+# Sno Station: One person. A whole engineering team of AI agents.
 
-![Sno Station — Agents, assemble. Two heads are better than one, and smarter by morning.](docs/images/hero-banner.png)
+**Sno Station is the workstation for your AI coding agents.** Claude Code, Codex and Cursor each run in their own harness. Sno Station is where those harnesses sit side by side and work as one team. Not another agent, not another model: it runs the ones you already use.
 
-[![license Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-97ca00.svg?labelColor=3b3b3b)](LICENSE)
-[![latest release](https://img.shields.io/github/v/release/sno-ai/sno-station?label=release&color=2dd4bf&labelColor=3b3b3b)](https://github.com/sno-ai/sno-station/releases/latest)
-[![GitHub stars](https://img.shields.io/github/stars/sno-ai/sno-station?label=stars&color=eab308&labelColor=3b3b3b)](https://github.com/sno-ai/sno-station/stargazers)
-![runs on your laptop, no daemon](https://img.shields.io/badge/runs%20on-your%20laptop%2C%20no%20daemon-3b82f6.svg?labelColor=3b3b3b)
-![works with Codex, Claude Code, Hermes, Cursor, OpenClaw](https://img.shields.io/badge/works%20with-Codex%20%C2%B7%20Claude%20Code%20%C2%B7%20Hermes%20%C2%B7%20Cursor%20%C2%B7%20OpenClaw-f0a04b.svg?labelColor=3b3b3b)
+Start with work you would otherwise babysit. One agent builds, another reviews, and they settle the findings before the result reaches you. When one hits its usage limit, the other picks the task up. What you correct today is a rule in their skills tomorrow.
 
-<p>
-  <img src="docs/images/agents/codex.png" alt="Codex" title="Codex" width="40" height="40">&nbsp;&nbsp;
-  <img src="docs/images/agents/claude-code.png" alt="Claude Code" title="Claude Code" width="40" height="40">&nbsp;&nbsp;
-  <img src="docs/images/agents/hermes.png" alt="Hermes Agent" title="Hermes Agent" width="40" height="40">&nbsp;&nbsp;
-  <img src="docs/images/agents/cursor.png" alt="Cursor" title="Cursor" width="40" height="40">&nbsp;&nbsp;
-  <img src="docs/images/agents/openclaw.png" alt="OpenClaw" title="OpenClaw" width="40" height="40">
-  <br><sub>Works with Codex · Claude Code · Hermes Agent · Cursor · OpenClaw</sub>
-</p>
-
-**Read in other languages:** **English** · [中文](docs/readme/README.zh-CN.md) · [Deutsch](docs/readme/README.de.md) · [Español](docs/readme/README.es.md) · [Français](docs/readme/README.fr.md) · [Русский](docs/readme/README.ru.md) · [한국어](docs/readme/README.ko.md) · [日本語](docs/readme/README.ja.md) · [繁體中文](docs/readme/README.zh-TW.md)
-
-Sno Station turns the agents you already use into a squad. Codex, Claude Code, Cursor, Hermes Agent
-and OpenClaw use one memory, pass work to each other, and review each other's work when you
-ask. Every night they dream, and wake up a little better.
-
-It runs on your own computer. You install it once and keep working the way you do now. Find out more on our website, [sno.ai](https://sno.ai).
-
-Install with one command in any terminal:
-
-```bash
-curl -fsSL https://sno.ai/install | sh
-```
-
-Or tell your agent:
+To get it, tell your agent:
 
 ```text
 install sno.ai from GitHub
 ```
 
-Then say `Sno onboard` in any Codex, Claude Code, Hermes, Cursor or OpenClaw conversation. [More on installing](#install).
-
-**New in 2.0: Tag Team. Your agents have each other now.** One command puts two of them on a task: one builds, one challenges, and the work reaches you already argued over. [See what changed](#new-in-20-tag-team).
+Your agent installs it, connects every agent it finds on your computer, and asks you two short questions. Then give two agents their first task:
 
 ```bash
 sno reach pair "Fix the login redirect"
 ```
 
-**When one agent runs out, the next one carries on.** Hit a rate limit halfway through a task
-and another agent picks it up from the same memory. You paste nothing.
+One builds, the other challenges it, and you can watch both. It runs on your own computer with Claude Code, Codex, Cursor, Hermes Agent and OpenClaw. No API key. Open source. [Prefer one terminal command?](#install)
 
-**Ask for a second look and you get one.** Either agent can review the other's work. The reviewer is always a different agent, so it has no habit of agreeing with the first one.
+[![GitHub stars](https://img.shields.io/github/stars/sno-ai/sno-station?label=stars&color=eab308&labelColor=3b3b3b)](https://github.com/sno-ai/sno-station/stargazers)
+[![latest release](https://img.shields.io/github/v/release/sno-ai/sno-station?label=release&color=2dd4bf&labelColor=3b3b3b)](https://github.com/sno-ai/sno-station/releases/latest)
+[![license Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-97ca00.svg?labelColor=3b3b3b)](LICENSE)
 
-**Your agents dream.** Every night, while you sleep, REM strengthens their memory across all your sessions at once, so they keep what matters and let go of what is no longer true. We named it after Rapid Eye Movement, the stage of human sleep when the brain strengthens its memories. Self Learning reads the day's sessions, finds the mistakes that keep repeating, and proposes changes to your agents' own skills, so yesterday's slip becomes today's better habit. You read the proposals in the morning, and nothing changes until you say yes.
+**Read in other languages:** **English** · [中文](docs/readme/README.zh-CN.md) · [Deutsch](docs/readme/README.de.md) · [Español](docs/readme/README.es.md) · [Français](docs/readme/README.fr.md) · [Русский](docs/readme/README.ru.md) · [한국어](docs/readme/README.ko.md) · [日本語](docs/readme/README.ja.md) · [繁體中文](docs/readme/README.zh-TW.md)
 
-**It stays yours.** Memory, messages and skills live on your computer. The memory is encrypted
-with a key that never leaves it. No account, no server, no daemon. The cloud side is optional,
-and the product is complete without it.
+## Hand the work off tonight. In the morning you get results, not three questions.
 
-## New in 2.0: Tag Team
+Three things that happened to us before we built this:
 
-*Last updated 2026-11-04.* Your agents have each other now. You have been the one carrying work between them. That job just ended.
+- An agent stopped to ask a question it never needed to ask. We came back seven hours later and nothing had moved.
+- An agent handed us fifteen small questions. Thirty minutes of our attention later, it turned out it could have answered every one of them itself.
+- One agent tried to wake another in the middle of the night and could not. Both sat there until morning.
+
+Your agents are fast. What is slow is the waiting: for you, for a usage limit to reset, for someone to carry a result to the next window. So the whole workstation is built around one rule: **the work does not stop because one agent did.**
+
+- **A usage limit is not a stop sign.** Another agent continues from the exact commit.
+- **The author does not get the last word.** A different agent reviews, in a session that never saw the conversation.
+- **"Done" counts for nothing.** Each success check is answered by a real run.
+- **You come back to one page.** What got done, what is stuck, what is waiting for your answer.
+
+**It delivers. You ship.**
+
+**Star it now. The next time an agent stalls on you at 2 a.m., you will want to know where this was.**
+
+Three ways to use it follow: start a builder and a reviewer with one command, run the whole squad through one agent, and approve a lesson tonight that works in the next reply. Each comes with something we saw on our own machines.
+
+<a id="new-in-20-tag-team"></a>
+
+## I went to bed. They changed shifts, then argued over the code.
 
 ```bash
 sno reach pair "Fix the login redirect"
 ```
 
-One agent builds. The other challenges what it built. They settle the findings between themselves, so the work reaches you already argued over. Both run in tmux windows you can open and watch. Signed in to two vendors, you get one of each. Signed in to only one, you still get the pair, and the command tells you the review stayed with that vendor.
+One agent builds. The other challenges what it built. They settle the findings between themselves, so the work reaches you already argued over. Both run in tmux windows you can open and watch. With two different agents signed in, you get one of each. With only one, you still get the pair in two separate sessions, and the command tells you the review stayed in the same family.
 
-**Stop watching terminals.** When someone needs you, your Claude Code or Cursor status line says so:
+**When one runs out, the other clocks in.** For a long run, tell the working agent to use `rotate-agent`. At 2% of its quota it writes a handover and wakes a different agent, which continues from the exact commit. And when an agent's context fills up and compacts, it still knows what it was doing and what already failed.
+
+**The other one sees what the first one can't.** Ask either agent to `peer-review` the other's work. The reviewer always works in a fresh session that never saw the conversation, and it is a different agent whenever you have two. A review does not always find a problem. It keeps finding the ones the author could not see, because an agent reviewing itself brings the same habits it wrote the code with.
+
+What we saw, the night of 2026-09-18:
+
+![The quota watch reading down to the threshold every five minutes, and the handover firing at 2%](docs/evidence/rotation-quota-watch-2026-09-18.png)
+
+One of our agents was deep into a long build when its weekly quota ran almost out. It did not
+stop and wait. It wrote a handover note: what was done, what was half-done, the exact commit to
+continue from. Then it woke a different agent.
+
+One thing went wrong, and it is the part worth reading. The new agent started editing before it
+had confirmed the handover. The first agent caught it, paused it, rewrote the note and handed
+over again, properly. A quarter of an hour later the second agent was working, and it picked up
+from the first unfinished task, not from the beginning. I was asleep for all of it.
+
+The whole night is in [docs/evidence/rotation-2026-09-18/](docs/evidence/rotation-2026-09-18/):
+every quota reading, both versions of the note, and the commits. Only identifying details and
+credential lines are removed, and the folder's own README lists each one. The timings, the
+mistakes and the corrections are as they happened.
+
+## We talk to one agent. It runs the rest.
+
+Running five agents used to mean five terminals, and us in the middle, carrying what one said to the next. That job is over.
+
+Say `/cos` in Claude Code, or `$cos` in Codex. That agent becomes your chief of staff, the only one you deal with. It opens a lead agent for each project, the leads hand the work down, and what comes back to you is only what needs your call. The one in charge gets checked too: after a night shift it goes back over the approvals the project leads gave themselves, and a management mistake that keeps repeating becomes a rule for all of them. Sno Station installs the skills that run this delegation, review and learning, and you can read every instruction in [sno-station-skills](https://github.com/sno-ai/sno-station-skills/tree/main/skills/T-delegation-and-work-orders).
+
+**Stop watching terminals.** With or without a chief of staff, your Claude Code or Cursor status line tells you when someone needs you. The install sets it up:
 
 ```text
 ❄ 2 need you · claude: approve
 ```
 
-`sno squad` lays out the whole squad full screen: who needs you, who is working, what is finished. Agents started through Reach show the same thing in their tmux bar.
+`sno squad` lays out the whole squad full screen: who needs you, who is working, what is finished.
 
 ```text
 Sno Station · squad · 09:15 · 2 need you · 2 working · 2 finished
@@ -87,15 +104,65 @@ Finished (2)
   claude web-app       finished · Bump the UI kit to 4.2                      2h
 ```
 
-**Work outlives the agent doing it.** Quota, crash, closed window. The task continues in the same conversation when that can be restored, or in a new one built from the saved brief, and you get the truth about which: resumed, rebuilt or lost. And when an agent's context fills up and compacts, it still knows what it was doing and what already failed.
+**Stop carrying messages.** Agents send each other tasks and review requests directly. The full text lands in the other agent's inbox first. If you are typing in that window, or the agent is compacting, the message waits there and your half-written draft stays as you left it.
 
-**Approve a lesson, and the next reply already knows it.** Not the next session. The next reply.
+## I yelled at my agent last night. It took notes.
 
-**Messages wait their turn.** The full text lands in the other agent's inbox first. If you are typing in that window, or the agent is compacting, the message waits there and your half-written draft stays as you left it.
+Out of the box, every agent ships to everyone with the same instructions. Yours get a rewrite proposed every night, around the way you work. You decide what sticks.
 
-Not yet: task carry-over and next-reply lessons run on Claude Code and Codex. The status line is Claude Code and Cursor. Hermes Agent and OpenClaw have not been through these journeys on real installs, and OpenClaw shows in `sno squad` with its state unknown.
+You correct an agent today. Tonight Self Learning reads the day's sessions from all your agents, finds the mistakes that keep repeating, and proposes changes to the agents' own skills. In the morning, ask your agent what Self Learning proposed. It lists each proposal with its id, and you approve the ones you want:
 
-## The pain, and what fixes it
+```bash
+sno rem-reflect accept <id>
+```
+
+Nothing changes without that accept. In Claude Code and Codex, an accepted lesson applies from the next reply. Not the next session. The next reply.
+
+What we saw, 2026-09-18 and the morning after:
+
+![Self Learning reporting what it learned and changed, 2026-09-18](docs/evidence/rsi-self-repair-2026-09-18.png)
+
+That is a real report from Self Learning we run on this repository. A person reads the proposals
+and accepts or rejects them. Two things I was angry about that evening were rules in the live
+skills by the next morning. Nobody typed them in.
+
+The next day it checked its own homework.
+
+![The next morning: Self Learning measures whether yesterday's own changes helped, 2026-09-19](docs/evidence/rsi-skill-impact-2026-09-19.png)
+
+It looked at the three skills it had changed the day before. The two that had been used again
+showed no failures, and the third had not been used yet. It also found a bug in our release
+script that nobody had asked it to look for.
+
+## The workstation where your AI agents become a team that runs itself and gets better every night
+
+Everything above, as one line each. None of it needs learning up front.
+
+| What you get | The one line that gets it |
+|---|---|
+| **A usage limit is not a stop sign.** Before its quota runs out, the working agent writes a handover with the unfinished work and the exact commit, and a different agent continues from there. | Tell the working agent: `use rotate-agent` |
+| **The author does not get the last word.** The work goes to a different agent, in a fresh session that never saw the conversation. | `sno reach pair "the task"`, or tell an agent: `peer-review this` |
+| **"Done" counts for nothing.** The task carries pass or fail checks, and each one is answered by a real run. | Tell your agent: `write a charter for this`, then `/deliver` it |
+| **One page when you come back.** What got done, what is stuck, what is waiting for your answer. | `sno away-brief run` |
+| **A crash or a closed window is not the end.** The task comes back in the same conversation, or in a new one built from the saved brief, and you are told which: resumed, rebuilt or lost. | Nothing to run. It is on after the install |
+| **Nobody explains the project twice.** Your agents share one memory, and a fact is retired when a newer one replaces it. | Nothing to run. It is on after the install |
+
+Tell your agent:
+
+```text
+install sno.ai from GitHub
+```
+
+**And star this repository.** We build Sno Station with Sno Station. What our own night shifts teach us ships here, release after release. Which parts run on which agent today is in [what you can use today](#what-you-can-use-today-and-where-it-stops).
+
+---
+
+> **Open in public.** This repository has been public since 2026-09-18. Everything here runs.
+> Every block below says when it was last updated.
+
+[What we learned](#everything-we-learned-running-ai-agents-around-the-clock-in-one-install) · [Install](#install) · [Editors](#if-you-live-in-an-editor-not-a-terminal) · [Your account](#see-what-your-agents-did-while-you-were-not-looking) · [What runs today](#what-you-can-use-today-and-where-it-stops) · [Memory that forgets on purpose](#memory-that-forgets-on-purpose)
+
+## Everything we learned running AI agents around the clock. In one install.
 
 *Last updated 2026-10-23.* Every line in the left column is a real complaint from r/ClaudeCode, r/codex or r/ClaudeAI in the week of October 20, 2026. The right column is what runs on our own machines, free and open source, to make it stop.
 
@@ -114,14 +181,9 @@ Not yet: task carry-over and next-reply lessons run on Claude Code and Codex. Th
 
 The habits in the right column are skills, installed into Claude Code and Codex by Sno Station and kept in [sno-station-skills](https://github.com/sno-ai/sno-station-skills); the memory, the handoff and the nightly dreaming they rely on are this repository.
 
-![How it works: two agents, one workspace, three things you get](docs/images/squad-how-it-works.png)
+<a id="install"></a>
 
-> **Open in public.** This repository has been public since 2026-09-18. Everything here runs.
-> Every block below says when it was last updated.
-
-[New in 2.0](#new-in-20-tag-team) · [Install](#install) · [How to use](#how-to-use) · [Cursor](#cursor) · [Connect your account](#connect-your-snoai-account) · [Real stories](#from-our-own-machines) · [What runs today](#what-runs-today) · [Memory that forgets on purpose](#memory-that-forgets-on-purpose) · [Design partners](#design-partners)
-
-## Install
+## Install: one line, then two words
 
 *Last updated 2026-10-30.* The easiest way is to tell your agent:
 
@@ -142,13 +204,13 @@ account, no API key. If you install another agent later, run `sno setup` again t
 is. It also sets up Sno Station; then run `sno skills onboard` and follow it. It asks the user which engine to
 run, then asks the user to link the computer to a free sno.ai account; an unlinked computer gets one tenth of the free allowance.
 
-Then say this inside any Codex, Claude Code, Hermes, Cursor or OpenClaw conversation:
+Installed through your agent, onboarding starts by itself. Installed from a terminal, say this inside any Codex, Claude Code, Hermes, Cursor or OpenClaw conversation:
 
 ```text
 Sno onboard
 ```
 
-Your agent walks you through the rest. It also starts by itself right after the install.
+Your agent walks you through the rest.
 
 Step by step for each agent: [Codex](docs/mem-codex/onboarding.md) · [Claude Code](docs/mem-claude/onboarding.md) · [Hermes](docs/mem-hermes/onboarding.md) · [Cursor](docs/mem-cursor/onboarding.md) · [OpenClaw](docs/mem-claw/onboarding.md)
 
@@ -156,22 +218,7 @@ Every command starts with `sno`. The full list is in [docs/sno-commands.md](docs
 
 **What REM does with your data.** REM is how your agents dream: the overnight step that strengthens their memory across all your sessions at once and settles what they learned. It runs at most once a day for each part of your memory: usually overnight, or earlier the same day once about 100 new memories have piled up. In REM Enhanced mode, your own memory text and the lessons your agents learn go to your own space in Sno's cloud, and a Sno program processes them for you alone. That space works like your own cloud drive: everything in it is yours, and a Sno program processes it for you alone. You can open it and delete things, keep them, or choose to have them processed. Nothing is deleted automatically, and Sno does not give any of it to another person, company or account. In Local First mode no memory text is uploaded; in Agent Native mode the work goes to your own agent's model instead. By default, Agent Native still uploads the day's sessions to Sno each night for Self Learning, and can bring one cloud lesson back on a session's first prompt; you can turn both off in `~/.sno/settings.json`. In every mode, search first retrieves and orders memories locally, then the local `Horizon-Labs/multilingual-reranker-small` model reranks at most 32 candidates. Reranking sends no prompt or memory text to Sno GPU. Set `rerank.mode` to `none` to keep the initial ranking without the model.
 
-## How to use
-
-*Last updated 2026-11-04.* Keep working in whichever agent you like. Five things change.
-
-1. **You have a task two agents could share.** Run `sno reach pair "the task"`. One builds, the
-   other challenges.
-2. **You wonder who is stuck.** Look at your status line, or run `sno squad`.
-3. **One of them hits its cap.** Say `sno reach call` from the other one. It picks up the task
-   from the same memory and the mailbox, context intact.
-4. **You want a second pair of eyes.** Ask either agent to `peer-review` the other's work.
-   The reviewer is always a different agent.
-5. **Self Learning runs every night.** In the morning, `sno rem-reflect accept <id>` for the
-   proposals you like. Nothing changes without that accept, and in Claude Code and Codex an
-   accepted lesson applies from the next reply.
-
-## Cursor
+## If you live in an editor, not a terminal
 
 *Last updated 2026-10-18.* Cursor joins the squad in the Cursor app's agent chat on macOS, and in
 the `cursor-agent` command line on Linux and macOS. It uses the same memory as your other
@@ -187,7 +234,7 @@ Not yet: in the app, the first chat of a new window gets its brief with the firs
 before it. `cursor-agent -p` gets no per-prompt memory. Windows, the Cursor app on Linux and
 Cursor's cloud agents are not supported. Details are in the [Cursor guide](apps/mem-cursor/README.md).
 
-## Connect your sno.ai account
+## See what your agents did while you were not looking
 
 *Last updated 2026-10-18.* This computer gets one tenth of the free allowance until you link it: `sno account claim`.
 The account is free. Connect to see on your
@@ -212,50 +259,7 @@ sno account claim
 The computer shows up on [your computers page](https://www.sno.ai/dashboard/computers) by itself.
 There is no update step: `sno` updates itself when it finds a newer release.
 
-## From our own machines
-
-*Last updated 2026-10-18.* Three things we saw on this repository.
-
-### "I yelled at my agent last night. It took notes."
-
-![Self Learning reporting what it learned and changed, 2026-09-18](docs/evidence/rsi-self-repair-2026-09-18.png)
-
-That is a real report from Self Learning we run on this repository. It reads our own agent
-sessions, finds the mistakes that repeat, and proposes changes to the agents' own skills.
-A person reads the proposals and accepts or rejects them. Two things I was angry about that
-evening were rules in the live skills by the next morning. Nobody typed them in.
-
-The next day it checked its own homework.
-
-![The next morning: Self Learning measures whether yesterday's own changes helped, 2026-09-19](docs/evidence/rsi-skill-impact-2026-09-19.png)
-
-It looked at the three skills it had changed the day before, and the failures in all three had
-stopped. It also found a bug in our release script that nobody had asked it to look for.
-
-### "I went to bed. It changed shifts."
-
-![The quota watch reading down to the threshold every five minutes, and the handover firing at 2%](docs/evidence/rotation-quota-watch-2026-09-18.png)
-
-One of our agents was deep into a long build when its weekly quota ran almost out. It did not
-stop and wait. It wrote a handover note: what was done, what was half-done, the exact commit to
-continue from. Then it woke a different agent.
-
-One thing went wrong, and it is the part worth reading. The new agent started editing before it
-had confirmed the handover. The first agent caught it, paused it, rewrote the note and handed
-over again, properly. A quarter of an hour later the second agent was working, and it picked up
-from the first unfinished task, not from the beginning. I was asleep for all of it.
-
-The whole night is in [docs/evidence/rotation-2026-09-18/](docs/evidence/rotation-2026-09-18/):
-every quota reading, both versions of the note, and the commits. Host names, addresses and
-session ids are redacted. Nothing else is touched.
-
-### "In months, the other one has never once said 'looks good.'"
-
-We have had Claude Code review Codex's work, and Codex review Claude Code's, on this repository
-for months. Not one review has come back empty. We used to think that meant the work was bad.
-It means one reviewer is never enough.
-
-## What runs today
+## What you can use today, and where it stops
 
 *Last updated 2026-11-04.*
 
@@ -275,6 +279,8 @@ It means one reviewer is never enough.
 
 A row says "proven" only once it has run on a clean machine.
 
+Not yet: task carry-over and next-reply lessons run on Claude Code and Codex. The status line is Claude Code and Cursor. Hermes Agent and OpenClaw have not been through these journeys on real installs, and OpenClaw shows in `sno squad` with its state unknown.
+
 ## Memory that forgets on purpose
 
 *Last updated 2026-10-11.* Agent memory usually fails in two quiet ways. It loses what should
@@ -286,23 +292,23 @@ So the memory here retires a fact when a later one replaces it, and what it keep
 lets go improves with use, not with a model release. How it does on the public memory tests,
 with every answer and trace behind it, is in [`evals/`](evals/).
 
-## Design partners
+## Running two agents side by side? Talk to us
 
 We are working with a handful of people who already run two or more agents side by side and move
 results between them by hand. If that is you, open a
 [design partner issue](https://github.com/sno-ai/sno-station/issues/new?template=design-partner.yml)
 and tell us what you run.
 
-## Security
+## What the encryption protects, and what it does not
 
 See [SECURITY.md](SECURITY.md). What the encryption protects and what it does not is in
 [docs/security.md](docs/security.md).
 
-## License
+## Apache-2.0, edge to edge
 
 Apache-2.0. Open source, edge to edge. See [LICENSE](LICENSE).
 
-## Thanks
+## Shoulders we stand on
 
 Work this repository builds on.
 
