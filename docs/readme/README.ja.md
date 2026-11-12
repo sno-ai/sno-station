@@ -1,8 +1,14 @@
+![Sno Station: ひとりで、AI エージェントの開発チームをまるごと。](../images/station-header.png)
+
 # Sno Station: ひとりで、AI エージェントの開発チームをまるごと。
 
 **Sno Station は、AI コーディングエージェントのためのワークステーションです。** Claude Code、Codex、Cursor は、それぞれ自分のハーネスの中で動いています。Sno Station は、そのハーネスが並んで、ひとつのチームとして働く場所です。新しいエージェントでも、新しいモデルでもありません。いま使っているものをそのまま動かします。
 
 まずは、放っておくと付きっきりになる仕事から始めてください。片方のエージェントが作り、もう片方がレビューし、指摘は結果があなたに届く前にふたりで片づけます。片方が利用上限に当たれば、もう片方がタスクを引き継ぎます。今日あなたが直したことは、明日にはスキルのルールになっています。
+
+[![GitHub スター](https://img.shields.io/github/stars/sno-ai/sno-station?label=stars&color=eab308&labelColor=3b3b3b)](https://github.com/sno-ai/sno-station/stargazers)
+[![最新リリース](https://img.shields.io/github/v/release/sno-ai/sno-station?label=release&color=2dd4bf&labelColor=3b3b3b)](https://github.com/sno-ai/sno-station/releases/latest)
+[![ライセンス Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-97ca00.svg?labelColor=3b3b3b)](../../LICENSE)
 
 手に入れるには、エージェントにこう伝えます。
 
@@ -17,10 +23,6 @@ sno reach pair "Fix the login redirect"
 ```
 
 片方が作り、もう片方が物申す。どちらの様子も見られます。あなた自身のコンピューター上で、Claude Code、Codex、Cursor、Hermes Agent、OpenClaw と一緒に動きます。API キーは要りません。オープンソースです。[ターミナルのコマンド 1 つで入れたい場合はこちら](#install)
-
-[![GitHub スター](https://img.shields.io/github/stars/sno-ai/sno-station?label=stars&color=eab308&labelColor=3b3b3b)](https://github.com/sno-ai/sno-station/stargazers)
-[![最新リリース](https://img.shields.io/github/v/release/sno-ai/sno-station?label=release&color=2dd4bf&labelColor=3b3b3b)](https://github.com/sno-ai/sno-station/releases/latest)
-[![ライセンス Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-97ca00.svg?labelColor=3b3b3b)](../../LICENSE)
 
 **Read in other languages:** [English](../../README.md) · [中文](README.zh-CN.md) · [Deutsch](README.de.md) · [Español](README.es.md) · [Français](README.fr.md) · [Русский](README.ru.md) · [한국어](README.ko.md) · **日本語** · [繁體中文](README.zh-TW.md)
 

@@ -1,8 +1,14 @@
+![Sno Station: Una persona. Todo un equipo de ingeniería de agentes de IA.](../images/station-header.png)
+
 # Sno Station: Una persona. Todo un equipo de ingeniería de agentes de IA.
 
 **Sno Station es la estación de trabajo de tus agentes de programación con IA.** Claude Code, Codex y Cursor corren cada uno en su propio harness. Sno Station es el lugar donde esos harness se sientan lado a lado y trabajan como un solo equipo. No es otro agente ni otro modelo: pone a trabajar los que ya usas.
 
 Empieza por el trabajo que, si no, tendrías que vigilar tú. Un agente construye, otro revisa, y resuelven entre ellos lo que encuentran antes de que el resultado te llegue. Cuando uno llega a su límite de uso, el otro retoma la tarea. Lo que corriges hoy es mañana una regla en sus habilidades.
+
+[![GitHub stars](https://img.shields.io/github/stars/sno-ai/sno-station?label=stars&color=eab308&labelColor=3b3b3b)](https://github.com/sno-ai/sno-station/stargazers)
+[![latest release](https://img.shields.io/github/v/release/sno-ai/sno-station?label=release&color=2dd4bf&labelColor=3b3b3b)](https://github.com/sno-ai/sno-station/releases/latest)
+[![license Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-97ca00.svg?labelColor=3b3b3b)](../../LICENSE)
 
 Para tenerlo, dile a tu agente:
 
@@ -17,10 +23,6 @@ sno reach pair "Fix the login redirect"
 ```
 
 Uno construye, el otro lo pone a prueba, y puedes mirar a los dos. Corre en tu propia computadora con Claude Code, Codex, Cursor, Hermes Agent y OpenClaw. Sin clave de API. Código abierto. [¿Prefieres un solo comando en la terminal?](#install)
-
-[![GitHub stars](https://img.shields.io/github/stars/sno-ai/sno-station?label=stars&color=eab308&labelColor=3b3b3b)](https://github.com/sno-ai/sno-station/stargazers)
-[![latest release](https://img.shields.io/github/v/release/sno-ai/sno-station?label=release&color=2dd4bf&labelColor=3b3b3b)](https://github.com/sno-ai/sno-station/releases/latest)
-[![license Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-97ca00.svg?labelColor=3b3b3b)](../../LICENSE)
 
 **Leer en otros idiomas:** [English](../../README.md) · [中文](README.zh-CN.md) · [Deutsch](README.de.md) · **Español** · [Français](README.fr.md) · [Русский](README.ru.md) · [한국어](README.ko.md) · [日本語](README.ja.md) · [繁體中文](README.zh-TW.md)
 

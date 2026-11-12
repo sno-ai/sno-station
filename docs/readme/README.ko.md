@@ -1,8 +1,14 @@
+![Sno Station: 사람은 한 명. AI 에이전트 엔지니어링 팀은 통째로.](../images/station-header.png)
+
 # Sno Station: 사람은 한 명. AI 에이전트 엔지니어링 팀은 통째로.
 
 **Sno Station은 AI 코딩 에이전트를 위한 워크스테이션입니다.** Claude Code, Codex, Cursor는 각자 자기 하네스 안에서 돌아갑니다. Sno Station은 그 하네스들이 나란히 앉아 한 팀으로 일하는 곳입니다. 또 하나의 에이전트도, 또 하나의 모델도 아닙니다. 이미 쓰고 있는 것들을 그대로 돌립니다.
 
 맡기지 않으면 옆에 붙어 지켜봐야 할 작업부터 시작하세요. 한 에이전트가 만들고, 다른 에이전트가 검토하고, 지적 사항은 결과가 여러분에게 오기 전에 둘이 정리합니다. 하나가 사용량 한도에 걸리면 다른 하나가 작업을 이어받습니다. 오늘 여러분이 바로잡은 것은 내일 스킬의 규칙이 됩니다.
+
+[![GitHub 스타](https://img.shields.io/github/stars/sno-ai/sno-station?label=stars&color=eab308&labelColor=3b3b3b)](https://github.com/sno-ai/sno-station/stargazers)
+[![최신 릴리스](https://img.shields.io/github/v/release/sno-ai/sno-station?label=release&color=2dd4bf&labelColor=3b3b3b)](https://github.com/sno-ai/sno-station/releases/latest)
+[![라이선스 Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-97ca00.svg?labelColor=3b3b3b)](../../LICENSE)
 
 설치하려면 에이전트에게 이렇게 말하세요:
 
@@ -17,10 +23,6 @@ sno reach pair "Fix the login redirect"
 ```
 
 하나는 만들고, 하나는 따져 묻고, 여러분은 둘 다 지켜볼 수 있습니다. 여러분의 컴퓨터에서 Claude Code, Codex, Cursor, Hermes Agent, OpenClaw와 함께 돌아갑니다. API 키는 필요 없습니다. 오픈소스입니다. [터미널 명령 하나가 더 편한가요?](#install)
-
-[![GitHub 스타](https://img.shields.io/github/stars/sno-ai/sno-station?label=stars&color=eab308&labelColor=3b3b3b)](https://github.com/sno-ai/sno-station/stargazers)
-[![최신 릴리스](https://img.shields.io/github/v/release/sno-ai/sno-station?label=release&color=2dd4bf&labelColor=3b3b3b)](https://github.com/sno-ai/sno-station/releases/latest)
-[![라이선스 Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-97ca00.svg?labelColor=3b3b3b)](../../LICENSE)
 
 **다른 언어로 읽기:** [English](../../README.md) · [中文](README.zh-CN.md) · [Deutsch](README.de.md) · [Español](README.es.md) · [Français](README.fr.md) · [Русский](README.ru.md) · **한국어** · [日本語](README.ja.md) · [繁體中文](README.zh-TW.md)
 
