@@ -1,8 +1,14 @@
+![Sno Station: One person. A whole engineering team of AI agents.](docs/images/station-header.png)
+
 # Sno Station: One person. A whole engineering team of AI agents.
 
 **Sno Station is the workstation for your AI coding agents.** Claude Code, Codex and Cursor each run in their own harness. Sno Station is where those harnesses sit side by side and work as one team. Not another agent, not another model: it runs the ones you already use.
 
 Start with work you would otherwise babysit. One agent builds, another reviews, and they settle the findings before the result reaches you. When one hits its usage limit, the other picks the task up. What you correct today is a rule in their skills tomorrow.
+
+[![GitHub stars](https://img.shields.io/github/stars/sno-ai/sno-station?label=stars&color=eab308&labelColor=3b3b3b)](https://github.com/sno-ai/sno-station/stargazers)
+[![latest release](https://img.shields.io/github/v/release/sno-ai/sno-station?label=release&color=2dd4bf&labelColor=3b3b3b)](https://github.com/sno-ai/sno-station/releases/latest)
+[![license Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-97ca00.svg?labelColor=3b3b3b)](LICENSE)
 
 To get it, tell your agent:
 
@@ -17,10 +23,6 @@ sno reach pair "Fix the login redirect"
 ```
 
 One builds, the other challenges it, and you can watch both. It runs on your own computer with Claude Code, Codex, Cursor, Hermes Agent and OpenClaw. No API key. Open source. [Prefer one terminal command?](#install)
-
-[![GitHub stars](https://img.shields.io/github/stars/sno-ai/sno-station?label=stars&color=eab308&labelColor=3b3b3b)](https://github.com/sno-ai/sno-station/stargazers)
-[![latest release](https://img.shields.io/github/v/release/sno-ai/sno-station?label=release&color=2dd4bf&labelColor=3b3b3b)](https://github.com/sno-ai/sno-station/releases/latest)
-[![license Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-97ca00.svg?labelColor=3b3b3b)](LICENSE)
 
 **Read in other languages:** **English** · [中文](docs/readme/README.zh-CN.md) · [Deutsch](docs/readme/README.de.md) · [Español](docs/readme/README.es.md) · [Français](docs/readme/README.fr.md) · [Русский](docs/readme/README.ru.md) · [한국어](docs/readme/README.ko.md) · [日本語](docs/readme/README.ja.md) · [繁體中文](docs/readme/README.zh-TW.md)
 
