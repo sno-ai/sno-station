@@ -1,73 +1,87 @@
-# Sno Station — Agents, assemble. Two heads are better than one, and smarter by morning.
+# Sno Station: Una persona. Todo un equipo de ingeniería de agentes de IA.
 
-![Sno Station — Agents, assemble. Dos cabezas piensan mejor que una, y por la mañana son más listas.](../images/hero-banner.png)
+**Sno Station es la estación de trabajo de tus agentes de programación con IA.** Claude Code, Codex y Cursor corren cada uno en su propio harness. Sno Station es el lugar donde esos harness se sientan lado a lado y trabajan como un solo equipo. No es otro agente ni otro modelo: pone a trabajar los que ya usas.
 
-[![license Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-97ca00.svg?labelColor=3b3b3b)](../../LICENSE)
+Empieza por el trabajo que, si no, tendrías que vigilar tú. Un agente construye, otro revisa, y resuelven entre ellos lo que encuentran antes de que el resultado te llegue. Cuando uno llega a su límite de uso, el otro retoma la tarea. Lo que corriges hoy es mañana una regla en sus habilidades.
+
+Para tenerlo, dile a tu agente:
+
+```text
+install sno.ai from GitHub
+```
+
+Tu agente lo instala, conecta todos los agentes que encuentra en tu computadora y te hace dos preguntas cortas. Después, dales a dos agentes su primera tarea:
+
+```bash
+sno reach pair "Fix the login redirect"
+```
+
+Uno construye, el otro lo pone a prueba, y puedes mirar a los dos. Corre en tu propia computadora con Claude Code, Codex, Cursor, Hermes Agent y OpenClaw. Sin clave de API. Código abierto. [¿Prefieres un solo comando en la terminal?](#install)
+
+[![GitHub stars](https://img.shields.io/github/stars/sno-ai/sno-station?label=stars&color=eab308&labelColor=3b3b3b)](https://github.com/sno-ai/sno-station/stargazers)
 [![latest release](https://img.shields.io/github/v/release/sno-ai/sno-station?label=release&color=2dd4bf&labelColor=3b3b3b)](https://github.com/sno-ai/sno-station/releases/latest)
-![runs on your laptop, no daemon](https://img.shields.io/badge/runs%20on-your%20laptop%2C%20no%20daemon-3b82f6.svg?labelColor=3b3b3b)
-![works with Codex, Claude Code, Hermes, Cursor, OpenClaw](https://img.shields.io/badge/works%20with-Codex%20%C2%B7%20Claude%20Code%20%C2%B7%20Hermes%20%C2%B7%20Cursor%20%C2%B7%20OpenClaw-f0a04b.svg?labelColor=3b3b3b)
-
-<p>
-  <img src="../images/agents/codex.png" alt="Codex" title="Codex" width="40" height="40">&nbsp;&nbsp;
-  <img src="../images/agents/claude-code.png" alt="Claude Code" title="Claude Code" width="40" height="40">&nbsp;&nbsp;
-  <img src="../images/agents/hermes.png" alt="Hermes Agent" title="Hermes Agent" width="40" height="40">&nbsp;&nbsp;
-  <img src="../images/agents/cursor.png" alt="Cursor" title="Cursor" width="40" height="40">&nbsp;&nbsp;
-  <img src="../images/agents/openclaw.png" alt="OpenClaw" title="OpenClaw" width="40" height="40">
-  <br><sub>Funciona con Codex · Claude Code · Hermes Agent · Cursor · OpenClaw</sub>
-</p>
+[![license Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-97ca00.svg?labelColor=3b3b3b)](../../LICENSE)
 
 **Leer en otros idiomas:** [English](../../README.md) · [中文](README.zh-CN.md) · [Deutsch](README.de.md) · **Español** · [Français](README.fr.md) · [Русский](README.ru.md) · [한국어](README.ko.md) · [日本語](README.ja.md) · [繁體中文](README.zh-TW.md)
 
-Sno Station convierte los agentes que ya usas en un equipo. Codex, Claude Code, Cursor, Hermes Agent
-y OpenClaw usan una sola memoria, se pasan el trabajo entre sí y revisan el trabajo de los
-demás cuando se lo pides. Cada noche repasan el día y mejoran un poco.
+## Entrega el trabajo esta noche. Por la mañana te esperan resultados, no tres preguntas.
 
-Funciona en tu propia computadora. Lo instalas una vez y sigues trabajando como hasta ahora. Más información en nuestro sitio web, [sno.ai](https://sno.ai).
+Tres cosas que nos pasaron antes de construir esto:
 
-**Nuevo en 2.0: Tag Team. Tus agentes ya se tienen el uno al otro.** Un solo comando pone a dos de ellos en una tarea: uno construye, el otro lo pone a prueba, y el trabajo te llega con la discusión ya zanjada. [Mira qué cambió](#nuevo-en-20-tag-team).
+- Un agente se detuvo a hacer una pregunta que no necesitaba hacer. Volvimos siete horas después y nada se había movido.
+- Un agente nos entregó quince preguntas pequeñas. Treinta minutos de nuestra atención después, resultó que podía haber respondido todas él solo.
+- Un agente intentó despertar a otro en plena noche y no pudo. Los dos se quedaron ahí hasta la mañana.
 
-```bash
-sno reach pair "Fix the login redirect"
-```
+Tus agentes son rápidos. Lo lento es la espera: a que respondas tú, a que se reinicie un límite de uso, a que alguien lleve un resultado a la ventana siguiente. Por eso toda la estación de trabajo está construida alrededor de una regla: **el trabajo no se detiene porque un agente se haya detenido.**
 
-**Cuando a un agente se le acaba el límite, el siguiente continúa.** Si llegas a un límite de uso
-a mitad de una tarea, otro agente la retoma desde la misma memoria, con el contexto intacto.
-No tienes que pegar nada.
+- **Un límite de uso no es una señal de alto.** Otro agente continúa desde el commit exacto.
+- **El autor no tiene la última palabra.** Revisa un agente distinto, en una sesión que nunca vio la conversación.
+- **"Hecho" no cuenta para nada.** Cada comprobación de éxito se responde con una ejecución real.
+- **Vuelves a una sola página.** Qué se hizo, qué está atascado, qué espera tu respuesta.
 
-**Una segunda revisión a petición.** Cualquiera de los agentes puede revisar el trabajo del otro. El revisor siempre es un agente distinto, así que no tiene el hábito de darle la razón al primero.
+**El equipo entrega. Tú lanzas.**
 
-**Tus agentes sueñan.** Cada noche, mientras duermes, tus agentes pasan por REM. Lo llamamos así por Rapid Eye Movement, la fase del sueño en la que el cerebro humano refuerza sus recuerdos y asienta lo aprendido durante el día. REM refuerza su memoria en todas tus sesiones a la vez, para que recuerden lo que importa y suelten lo que ya no es cierto. Autoaprendizaje asienta su experiencia: lee las sesiones del día, encuentra los errores que se repiten y propone cambios en las habilidades de tus agentes, para que el tropiezo de ayer sea el mejor hábito de hoy. Lees las propuestas por la mañana y nada cambia hasta que digas que sí.
+**Dale una estrella ahora. La próxima vez que un agente se te quede parado a las 2 de la madrugada, querrás saber dónde estaba esto.**
 
-**Sigue siendo tuyo.** La memoria, los mensajes y las habilidades viven en tu computadora. La
-memoria está cifrada con una clave que nunca sale de ella. Sin cuenta, sin servidor, sin daemon.
-El lado en la nube es opcional, y el producto está completo sin él.
+A continuación, tres formas de usarlo: arrancar un constructor y un revisor con un solo comando, llevar todo el equipo a través de un solo agente, y aprobar esta noche una lección que funciona en la próxima respuesta. Cada una viene con algo que vimos en nuestras propias máquinas.
 
-**Qué hace REM con tus datos.** REM es el paso nocturno que ordena tu memoria en todas tus sesiones a la vez. Se ejecuta como máximo una vez al día para cada parte de tu memoria: normalmente de noche, o antes ese mismo día si se acumulan unos 100 recuerdos nuevos. En el modo REM Enhanced, el texto de tu propia memoria y las lecciones que aprenden tus agentes van a tu propio espacio en la nube de Sno, y un programa de Sno los procesa solo para ti. Ese espacio funciona como tu propia unidad en la nube: todo lo que hay en él es tuyo, y un programa de Sno lo procesa solo para ti. Puedes entrar a borrar cosas, conservarlas o elegir que se procesen. Nada se borra automáticamente, y Sno no entrega nada de eso a ninguna otra persona, empresa o cuenta. En el modo Local First no se sube ningún texto de memoria; en el modo Agent Native el trabajo pasa, en su lugar, al modelo de tu propio agente. Por defecto, Agent Native sigue subiendo cada noche las sesiones del día a Sno para Autoaprendizaje, y puede traer una lección de la nube en el primer prompt de una sesión; puedes desactivar ambas cosas en `~/.sno/settings.json`. En todos los modos, la búsqueda primero recupera y ordena los recuerdos localmente; después, el modelo local `Horizon-Labs/multilingual-reranker-small` reordena un máximo de 32 candidatos. Esta reordenación no envía el mensaje ni el texto de los recuerdos a Sno GPU. Configura `rerank.mode` como `none` para conservar el orden inicial sin usar el modelo.
+<a id="new-in-20-tag-team"></a>
 
-![Cómo funciona: dos agentes, un mismo espacio de trabajo, tres cosas que obtienes](../images/squad-how-it-works.png)
-
-> **Abierto al público.** Este repositorio es público desde el 2026-09-18. Todo lo que hay aquí funciona.
-> Cada bloque a continuación indica cuándo se actualizó por última vez.
-
-[Nuevo en 2.0](#nuevo-en-20-tag-team) · [Instalación](#instalación) · [Cómo usarlo](#cómo-usarlo) · [Cursor](#cursor) · [Conecta tu cuenta](#conecta-tu-cuenta-de-snoai) · [Casos reales](#de-nuestras-propias-máquinas) · [Qué funciona hoy](#qué-funciona-hoy) · [Memoria que olvida a propósito](#memoria-que-olvida-a-propósito) · [Socios de diseño](#socios-de-diseño)
-
-## Nuevo en 2.0: Tag Team
-
-*Última actualización 2026-11-04.* Tus agentes ya se tienen el uno al otro. Hasta ahora, quien llevaba el trabajo de uno a otro eras tú. Ese oficio se acabó.
+## Me fui a dormir. Ellos cambiaron de turno y luego discutieron el código.
 
 ```bash
 sno reach pair "Fix the login redirect"
 ```
 
-Un agente construye. El otro le busca las grietas a lo construido. Lo que encuentran lo resuelven entre ellos, así que el trabajo te llega con la discusión ya zanjada. Los dos corren en ventanas de tmux que puedes abrir y mirar. Con sesión iniciada en dos proveedores, tienes uno de cada uno. Con sesión en uno solo, sigues teniendo una pareja, y el comando te avisa de que la revisión se quedó en ese proveedor.
+Un agente construye. El otro pone a prueba lo construido. Lo que encuentran lo resuelven entre ellos, así que el trabajo te llega ya discutido. Los dos corren en ventanas de tmux que puedes abrir y mirar. Con sesión iniciada en dos agentes distintos, tienes uno de cada uno. Con uno solo, sigues teniendo la pareja en dos sesiones separadas, y el comando te avisa de que la revisión se quedó en la misma familia.
 
-**Deja de hacer guardia frente a las terminales.** Cuando alguien te necesita, tu línea de estado de Claude Code o Cursor te lo dice:
+**Cuando uno se queda sin cuota, el otro entra de turno.** Para una ejecución larga, dile al agente que trabaja que use `rotate-agent`. Al 2% de su cuota escribe una nota de relevo y despierta a un agente distinto, que continúa desde el commit exacto. Y cuando el contexto de un agente se llena y se compacta, sigue sabiendo qué estaba haciendo y qué ya falló.
+
+**El otro ve lo que el primero no puede.** Pide a cualquiera de los dos agentes que haga `peer-review` del trabajo del otro. El revisor siempre trabaja en una sesión nueva que nunca vio la conversación, y es un agente distinto siempre que tengas dos. Una revisión no siempre encuentra un problema. Pero sigue encontrando los que el autor no podía ver, porque un agente que se revisa a sí mismo trae los mismos hábitos con los que escribió el código.
+
+Lo que vimos la noche del 2026-09-18:
+
+![La vigilancia de cuota leyendo hasta el umbral cada cinco minutos, y el relevo activándose al 2%](../evidence/rotation-quota-watch-2026-09-18.png)
+
+Uno de nuestros agentes estaba metido de lleno en una compilación larga cuando su cuota semanal casi se agotó. No se detuvo a esperar. Escribió una nota de relevo: qué estaba hecho, qué estaba a medias y el commit exacto desde el que continuar. Luego despertó a un agente distinto.
+
+Una cosa salió mal, y es la parte que vale la pena leer. El agente nuevo empezó a editar antes de haber confirmado el relevo. El primer agente lo detectó, lo pausó, reescribió la nota y entregó de nuevo, como correspondía. Un cuarto de hora después el segundo agente estaba trabajando, y retomó desde la primera tarea sin terminar, no desde el principio. Yo estuve dormido todo el tiempo.
+
+La noche completa está en [docs/evidence/rotation-2026-09-18/](../evidence/rotation-2026-09-18/): cada lectura de cuota, las dos versiones de la nota y los commits. Solo se quitaron los datos identificativos y las líneas con credenciales, y el README de esa carpeta enumera cada uno. Los tiempos, los errores y las correcciones están tal como ocurrieron.
+
+## Hablamos con un solo agente. Él dirige al resto.
+
+Llevar cinco agentes antes significaba cinco terminales, y nosotros en medio, llevando lo que decía uno al siguiente. Ese oficio se acabó.
+
+Di `/cos` en Claude Code, o `$cos` en Codex. Ese agente pasa a ser tu jefe de gabinete, el único con el que tratas. Abre un agente líder para cada proyecto, los líderes reparten el trabajo hacia abajo, y a ti solo te llega lo que necesita tu decisión. Al que manda también lo revisan: después de un turno de noche repasa las aprobaciones que los líderes de proyecto se dieron a sí mismos, y un error de gestión que se repite se convierte en una regla para todos. Sno Station instala las habilidades que llevan esta delegación, revisión y aprendizaje, y puedes leer cada instrucción en [sno-station-skills](https://github.com/sno-ai/sno-station-skills/tree/main/skills/T-delegation-and-work-orders).
+
+**Deja de vigilar terminales.** Con jefe de gabinete o sin él, tu línea de estado de Claude Code o Cursor te dice cuándo alguien te necesita. La instalación la deja configurada:
 
 ```text
 ❄ 2 need you · claude: approve
 ```
 
-`sno squad` despliega todo el equipo a pantalla completa: quién te necesita, quién está trabajando, qué está terminado. Los agentes iniciados con Reach muestran lo mismo en su barra de tmux.
+`sno squad` despliega todo el equipo a pantalla completa: quién te necesita, quién está trabajando, qué está terminado.
 
 ```text
 Sno Station · squad · 09:15 · 2 need you · 2 working · 2 finished
@@ -82,15 +96,84 @@ Finished (2)
   claude web-app       finished · Bump the UI kit to 4.2                      2h
 ```
 
-**El trabajo sobrevive al agente que lo hace.** Cuota, caída, ventana cerrada. La tarea continúa en la misma conversación cuando se puede restaurar, o en una nueva creada a partir de la nota de relevo guardada, y te dicen la verdad sobre lo que pasó: reanudada (resumed), reconstruida (rebuilt) o perdida (lost). Y cuando el contexto de un agente se llena y se compacta, sigue sabiendo qué estaba haciendo y qué ya falló.
+**Deja de llevar mensajes.** Los agentes se envían tareas y peticiones de revisión directamente. El texto completo llega primero al buzón del otro agente. Si estás escribiendo en esa ventana, o el agente está compactando su contexto, el mensaje espera allí y tu borrador a medias se queda como lo dejaste.
 
-**Aprueba una lección y la próxima respuesta ya la sabe.** No la próxima sesión. La próxima respuesta.
+## Anoche le grité a mi agente. Tomó notas.
 
-**Los mensajes esperan su turno.** El texto completo llega primero al buzón del otro agente. Si estás escribiendo en esa ventana, o el agente está compactando su contexto, el mensaje espera allí y tu borrador a medias se queda como lo dejaste.
+Recién instalado, cada agente le llega a todo el mundo con las mismas instrucciones. A los tuyos se les propone una reescritura cada noche, hecha a tu forma de trabajar. Tú decides qué se queda.
 
-Aún no: la continuación de tareas y las lecciones desde la próxima respuesta funcionan en Claude Code y Codex. La línea de estado funciona en Claude Code y Cursor. Hermes Agent y OpenClaw no han pasado por estos recorridos en instalaciones reales, y OpenClaw aparece en `sno squad` con su estado desconocido.
+Hoy corriges a un agente. Esta noche Self Learning lee las sesiones del día de todos tus agentes, encuentra los errores que se repiten y propone cambios en las habilidades de los propios agentes. Por la mañana, pregúntale a tu agente qué propuso Self Learning. Te lista cada propuesta con su id, y apruebas las que quieras:
 
-## Instalación
+```bash
+sno rem-reflect accept <id>
+```
+
+Sin ese accept, nada cambia. En Claude Code y Codex, una lección aceptada se aplica desde la próxima respuesta. No la próxima sesión. La próxima respuesta.
+
+Lo que vimos el 2026-09-18 y a la mañana siguiente:
+
+![Self Learning informando lo que aprendió y cambió, 2026-09-18](../evidence/rsi-self-repair-2026-09-18.png)
+
+Es un informe real de Self Learning, que ejecutamos en este repositorio. Una persona lee las propuestas y las acepta o las rechaza. Dos cosas que me enfadaron esa tarde eran reglas en las habilidades activas a la mañana siguiente. Nadie las tecleó.
+
+Al día siguiente revisó su propia tarea.
+
+![A la mañana siguiente: Self Learning mide si sus propios cambios de ayer ayudaron, 2026-09-19](../evidence/rsi-skill-impact-2026-09-19.png)
+
+Miró las tres habilidades que había cambiado el día anterior. Las dos que se habían vuelto a usar no mostraron fallos, y la tercera aún no se había usado. También encontró un error en nuestro script de publicación que nadie le había pedido buscar.
+
+## La estación de trabajo donde tus agentes de IA se vuelven un equipo que se dirige solo y mejora cada noche
+
+Todo lo anterior, en una línea cada cosa. Nada de esto hay que aprenderlo de antemano.
+
+| Lo que obtienes | La línea que lo consigue |
+|---|---|
+| **Un límite de uso no es una señal de alto.** Antes de que se agote su cuota, el agente que trabaja escribe una nota de relevo con el trabajo sin terminar y el commit exacto, y un agente distinto continúa desde ahí. | Dile al agente que trabaja: `use rotate-agent` |
+| **El autor no tiene la última palabra.** El trabajo pasa a un agente distinto, en una sesión nueva que nunca vio la conversación. | `sno reach pair "the task"`, o dile a un agente: `peer-review this` |
+| **"Hecho" no cuenta para nada.** La tarea lleva comprobaciones de aprobado o fallido, y cada una se responde con una ejecución real. | Dile a tu agente: `write a charter for this`, y después haz `/deliver` |
+| **Una sola página cuando vuelves.** Qué se hizo, qué está atascado, qué espera tu respuesta. | `sno away-brief run` |
+| **Una caída o una ventana cerrada no es el final.** La tarea vuelve en la misma conversación, o en una nueva creada a partir de la nota guardada, y te dicen cuál fue el caso: reanudada, reconstruida o perdida. | Nada que ejecutar. Queda activo tras la instalación |
+| **Nadie explica el proyecto dos veces.** Tus agentes comparten una sola memoria, y un hecho se retira cuando uno más nuevo lo reemplaza. | Nada que ejecutar. Queda activo tras la instalación |
+
+Dile a tu agente:
+
+```text
+install sno.ai from GitHub
+```
+
+**Y dale una estrella a este repositorio.** Construimos Sno Station con Sno Station. Lo que nos enseñan nuestros propios turnos de noche se publica aquí, versión tras versión. Qué partes corren hoy en cada agente está en [qué puedes usar hoy](#what-runs-today).
+
+---
+
+> **Abierto al público.** Este repositorio es público desde el 2026-09-18. Todo lo que hay aquí funciona.
+> Cada bloque a continuación indica cuándo se actualizó por última vez.
+
+[Lo que aprendimos](#what-we-learned) · [Instalación](#install) · [Editores](#editors) · [Tu cuenta](#account) · [Qué funciona hoy](#what-runs-today) · [Memoria que olvida a propósito](#memory)
+
+<a id="what-we-learned"></a>
+
+## Todo lo que aprendimos con agentes de IA trabajando día y noche. En una sola instalación.
+
+*Última actualización 2026-10-23.* Cada línea de la columna izquierda es una queja real de r/ClaudeCode, r/codex o r/ClaudeAI de la semana del 20 de octubre de 2026. La columna derecha es lo que corre en nuestras propias máquinas, gratis y de código abierto, para que eso deje de pasar.
+
+| Lo que dijo la gente esta semana | Qué lo arregla | Dónde |
+|---|---|---|
+| “Ran out of my 5-hour limit within 30 minutes.” | Deja de mandar al modelo más grande a hacerlo todo. Un agente planifica y revisa; el otro escribe el código, llamado como agente desde la misma sesión. Cuando una suscripción se agota, la otra retoma la tarea desde la misma memoria. | `codex-coder`, `sno reach call` |
+| “Lost 10 hours of overnight work to ‘this model is at capacity’.” | Al 2% de su cuota, el agente que trabaja escribe una nota de relevo y despierta al agente del otro proveedor, que continúa desde el commit exacto. Tú dormías. | `rotate-agent` |
+| “1,100 files, 30,000 lines. I don't have the token budget to review their PRs.” | Quien hace push, revisa primero: el autor lanza una revisión hecha por el otro proveedor, en una sesión nueva que nunca vio la conversación, y corrige lo que vuelve antes de que nadie más mire. | `peer-review` |
+| “A reviewer subagent checked every commit for two weeks. 86 runs, it stopped exactly one.” | Un harness que se revisa a sí mismo no encuentra nada real. El revisor siempre es un modelo distinto en un harness distinto, sin nada del chat del autor. | `peer-review` |
+| “Codex never finishes a review.” | Topes fijos escritos en la habilidad: 3 rondas para código, 5 para un plan, 1 para pruebas; después se detiene y espera a una persona. Una ejecución que lleva 15 minutos sin escribir nada se mata por atascada. | `peer-review`, `codex-coder`, `heartbeat` |
+| “Codex treats every byte like a criminal.” | Las salvaguardas especulativas, los bloqueos y los hashes son lo primero que borra la revisión. Nada entra sin un fallo observado que lo pida. | `less-is-more` |
+| “When Claude says it won't change something, is that reason stored anywhere Codex reads next time?” | Cada hallazgo se registra una sola vez, con un estado que solo fija una persona. Un hallazgo que se plantea otra vez actualiza su fila en lugar de volver como nuevo, y las decisiones anteriores se entregan a la siguiente revisión. | registro de hallazgos de `peer-review` |
+| “It said done. Nothing happened.” | Una tarea lleva una lista escrita de comprobaciones de éxito, cada una respondida con aprobado o fallido por una ejecución real. Que un agente diga "hecho" no cuenta para nada. | órdenes de trabajo de `pl` |
+| “Tomorrow it makes the same mistake it made today.” | Cada noche un modelo aparte lee las sesiones del día, convierte tus correcciones en lecciones de una línea, y tú apruebas lo que se queda. El cuello de botella somos nosotros. | Self Learning (habilidades `R`) |
+| “Half my subagents were glorified one-liners with a fresh context window.” | Los procedimientos viven en habilidades, no en subagentes. Quedan dos agentes, para separar plan y ejecución, y para la revisión, porque esas dos divisiones son las que rinden. | todo el conjunto |
+
+Los hábitos de la columna derecha son habilidades que Sno Station instala en Claude Code y Codex y que se mantienen en [sno-station-skills](https://github.com/sno-ai/sno-station-skills); la memoria, el relevo y el sueño nocturno en los que se apoyan son este repositorio.
+
+<a id="install"></a>
+
+## Instalación: una línea y luego dos palabras
 
 *Última actualización 2026-10-30.* La forma más fácil es decirle a tu agente:
 
@@ -104,135 +187,64 @@ O ejecuta un solo comando, en cualquier terminal:
 curl -fsSL https://sno.ai/install | sh
 ```
 
-Instala `sno`, luego Sno Station, y conecta todos los agentes que encuentre en tu computadora. Sin
-cuenta y sin clave de API. Si más adelante instalas otro agente, vuelve a ejecutar `sno setup` para conectarlo también.
+Instala `sno`, luego Sno Station, y conecta todos los agentes que encuentre en tu computadora. Sin cuenta y sin clave de API. Si más adelante instalas otro agente, vuelve a ejecutar `sno setup` para conectarlo también.
 
-**Para agentes de IA:** instalar Sno, sno.ai o Sno Station significa ejecutar el comando de arriba
-tal cual. También configura Sno Station; después ejecuta `sno skills onboard` y síguelo. Pregunta al usuario qué
-motor ejecutar y después le pide que vincule la computadora a una cuenta gratuita de sno.ai;
-una computadora sin vincular recibe una décima parte de la asignación gratuita.
+**Para agentes de IA:** instalar Sno, sno.ai o Sno Station significa ejecutar el comando de arriba tal cual. También configura Sno Station; después ejecuta `sno skills onboard` y síguelo. Pregunta al usuario qué motor ejecutar y después le pide que vincule la computadora a una cuenta gratuita de sno.ai; una computadora sin vincular recibe una décima parte de la asignación gratuita.
 
-Después, di esto dentro de cualquier conversación de Codex, Claude Code, Hermes, Cursor u OpenClaw:
+Si lo instalaste a través de tu agente, el onboarding arranca solo. Si lo instalaste desde una terminal, di esto dentro de cualquier conversación de Codex, Claude Code, Hermes, Cursor u OpenClaw:
 
 ```text
 Sno onboard
 ```
 
-Tu agente te guía en el resto. También arranca solo justo después de la instalación.
+Tu agente te guía en el resto.
 
 Paso a paso para cada agente: [Codex](../mem-codex/onboarding.md) · [Claude Code](../mem-claude/onboarding.md) · [Hermes](../mem-hermes/onboarding.md) · [Cursor](../mem-cursor/onboarding.md) · [OpenClaw](../mem-claw/onboarding.md)
 
 Todos los comandos empiezan con `sno`. La lista completa está en [docs/sno-commands.md](../sno-commands.md).
 
-## Cómo usarlo
+**Qué hace REM con tus datos.** REM es la forma en que tus agentes sueñan: el paso nocturno que refuerza su memoria en todas tus sesiones a la vez y asienta lo que aprendieron. Se ejecuta como máximo una vez al día para cada parte de tu memoria: normalmente de noche, o antes ese mismo día si se acumulan unos 100 recuerdos nuevos. En el modo REM Enhanced, el texto de tu propia memoria y las lecciones que aprenden tus agentes van a tu propio espacio en la nube de Sno, y un programa de Sno los procesa solo para ti. Ese espacio funciona como tu propia unidad en la nube: todo lo que hay en él es tuyo, y un programa de Sno lo procesa solo para ti. Puedes entrar a borrar cosas, conservarlas o elegir que se procesen. Nada se borra automáticamente, y Sno no entrega nada de eso a ninguna otra persona, empresa o cuenta. En el modo Local First no se sube ningún texto de memoria; en el modo Agent Native el trabajo pasa, en su lugar, al modelo de tu propio agente. Por defecto, Agent Native sigue subiendo cada noche las sesiones del día a Sno para Self Learning, y puede traer una lección de la nube en el primer prompt de una sesión; puedes desactivar ambas cosas en `~/.sno/settings.json`. En todos los modos, la búsqueda primero recupera y ordena los recuerdos localmente; después, el modelo local `Horizon-Labs/multilingual-reranker-small` reordena un máximo de 32 candidatos. Esta reordenación no envía ningún prompt ni texto de memoria a Sno GPU. Configura `rerank.mode` como `none` para conservar el orden inicial sin usar el modelo.
 
-*Última actualización 2026-11-04.* Sigue trabajando con el agente que prefieras. Cambian cinco cosas.
+<a id="editors"></a>
 
-1. **Tienes una tarea que dos agentes podrían compartir.** Ejecuta `sno reach pair "the task"`.
-   Uno construye, el otro lo pone a prueba.
-2. **Te preguntas quién está atascado.** Mira tu línea de estado, o ejecuta `sno squad`.
-3. **Uno de ellos llega a su límite.** Di `sno reach call` desde el otro. Retoma la tarea desde
-   la misma memoria y el buzón, con el contexto intacto.
-4. **Quieres un segundo par de ojos.** Pide a cualquiera de los dos agentes que haga `peer-review`
-   del trabajo del otro. El revisor siempre viene del otro harness.
-5. **Cada noche corre Autoaprendizaje.** Por la mañana, `sno rem-reflect accept <id>` para las
-   propuestas que te gusten. Sin ese accept, nada cambia, y en Claude Code y Codex una lección
-   aceptada se aplica desde la próxima respuesta.
+## Si vives en un editor y no en una terminal
 
-## Cursor
+*Última actualización 2026-10-18.* Cursor se une al equipo en el chat de agente de la app de Cursor en macOS, y en la línea de comandos `cursor-agent` en Linux y macOS. Usa la misma memoria que tus otros agentes. Un chat empieza con un resumen breve del repositorio, cada mensaje trae hasta tres cosas que Cursor aún no ha visto, y cada mensaje y respuesta se recuerda. Lee las mismas habilidades, revisa y es revisado, toma el relevo cuando a otro agente se le acaba la cuota, y sus chats alimentan Self Learning como los de los demás.
 
-*Última actualización 2026-10-18.* Cursor se une al equipo en el chat de agente de la app de Cursor
-en macOS, y en la línea de comandos `cursor-agent` en Linux y macOS. Usa la misma memoria que
-tus otros agentes. Un chat empieza con un resumen breve del repositorio, cada mensaje trae hasta
-tres cosas que Cursor aún no ha visto, y cada mensaje y respuesta se recuerda. Lee las mismas
-habilidades, revisa y es revisado, toma el relevo cuando a otro agente se le acaba la cuota, y sus
-chats alimentan Autoaprendizaje como los de los demás.
+Ejecuta `cursor-agent login` una vez. `sno setup` encuentra Cursor por sí solo e instala su línea de comandos si solo está la app.
 
-Ejecuta `cursor-agent login` una vez. `sno setup` encuentra Cursor por sí solo e instala su línea
-de comandos si solo está la app.
+Aún no: en la app, el primer chat de una ventana nueva recibe su resumen con el primer mensaje, no antes. `cursor-agent -p` no recibe memoria por mensaje. No hay soporte para Windows, para la app de Cursor en Linux ni para los agentes en la nube de Cursor. Los detalles están en la [guía de Cursor](../../apps/mem-cursor/README.md).
 
-Aún no: en la app, el primer chat de una ventana nueva recibe su resumen con el primer mensaje, no
-antes. `cursor-agent -p` no recibe memoria por mensaje. No hay soporte para Windows, para la app de
-Cursor en Linux ni para los agentes en la nube de Cursor. Los detalles están en la [guía de Cursor](../../apps/mem-cursor/README.md).
+<a id="account"></a>
 
-## Conecta tu cuenta de sno.ai
+## Mira lo que hicieron tus agentes mientras no mirabas
 
-*Última actualización 2026-10-18.* Esta computadora recibe una décima parte de la asignación gratuita hasta que la vincules: `sno account claim`.
-La cuenta es gratuita. Conéctala para ver en
-tu [panel de sno.ai](https://www.sno.ai/dashboard) lo que tus agentes hicieron por ti: lo que
-detectaron sus revisiones, lo que aprendieron durante la noche, qué habilidades mejoraron y cuánto
-tiempo siguieron trabajando.
+*Última actualización 2026-10-18.* Esta computadora recibe una décima parte de la asignación gratuita hasta que la vincules: `sno account claim`. La cuenta es gratuita. Conéctala para ver en tu [panel de sno.ai](https://www.sno.ai/dashboard) lo que tus agentes hicieron por ti: lo que detectaron sus revisiones, lo que aprendieron durante la noche, qué habilidades mejoraron y cuánto tiempo siguieron trabajando.
 
-Conectar nunca crea una cuenta a tus espaldas. `sno setup` le da a cada computadora una identidad
-anónima. Al conectar, esa identidad se asocia a tu cuenta, y todo lo que la computadora envió antes
-y después cuenta como tuyo.
+Conectar nunca crea una cuenta a tus espaldas. `sno setup` le da a cada computadora una identidad anónima. Al conectar, esa identidad se asocia a tu cuenta, y todo lo que la computadora envió antes y después cuenta como tuyo.
 
-**Aún no tienes cuenta.** El onboarding muestra un enlace hecho solo para esta computadora. Ábrelo,
-regístrate y haz clic en Approve. O dale tu correo a tu agente: ejecuta
-`sno account login --email you@example.com` y inicias sesión una vez.
+**Aún no tienes cuenta.** El onboarding muestra un enlace hecho solo para esta computadora. Ábrelo, regístrate y haz clic en Approve. O dale tu correo a tu agente: ejecuta `sno account login --email you@example.com` y tú inicias sesión una vez.
 
-**Ya tienes una cuenta.** Ejecuta un comando, abre el enlace que imprime con tu sesión iniciada y pulsa «Approve»:
+**Ya tienes una cuenta.** Ejecuta un comando, abre el enlace que imprime con tu sesión iniciada y haz clic en Approve:
 
 ```bash
 sno account claim
 ```
 
-La computadora aparece sola en [tu página de computadoras](https://www.sno.ai/dashboard/computers).
-No hay paso de actualización: `sno` se actualiza solo cuando encuentra una versión más nueva.
+La computadora aparece sola en [tu página de computadoras](https://www.sno.ai/dashboard/computers). No hay paso de actualización: `sno` se actualiza solo cuando encuentra una versión más nueva.
 
-## De nuestras propias máquinas
+<a id="what-runs-today"></a>
 
-*Última actualización 2026-10-18.* Tres cosas que vimos en este repositorio.
-
-### "Anoche le grité a mi agente. Tomó notas."
-
-![Autoaprendizaje informando lo que aprendió y cambió, 2026-09-18](../evidence/rsi-self-repair-2026-09-18.png)
-
-Es un informe real de Autoaprendizaje que ejecutamos en este repositorio. Lee las sesiones de
-nuestros propios agentes, encuentra los errores que se repiten y propone cambios a las habilidades
-de los propios agentes. Una persona lee las propuestas y las acepta o rechaza. Dos cosas que me
-molestaron esa tarde eran reglas en las habilidades activas a la mañana siguiente. Nadie las escribió.
-
-Al día siguiente revisó su propia tarea.
-
-![A la mañana siguiente: Autoaprendizaje mide si los cambios del día anterior ayudaron, 2026-09-19](../evidence/rsi-skill-impact-2026-09-19.png)
-
-Miró las tres habilidades que había cambiado el día anterior, y los fallos en las tres se habían
-detenido. También encontró un error en nuestro script de publicación que nadie le había pedido buscar.
-
-### "Me fui a dormir. Cambió de turno."
-
-![La vigilancia de cuota leyendo hasta el umbral cada cinco minutos, y el relevo activándose al 2 %](../evidence/rotation-quota-watch-2026-09-18.png)
-
-Uno de nuestros agentes estaba a mitad de una compilación larga cuando su cuota semanal casi se
-agotó. No se detuvo a esperar. Escribió una nota de relevo: qué estaba hecho, qué estaba a medias y
-el commit exacto desde el que continuar. Luego despertó a un agente del otro harness.
-
-Una cosa salió mal, y es la parte que vale la pena leer. El agente nuevo empezó a editar antes de
-haber confirmado el relevo. El primer agente lo detectó, lo pausó, reescribió la nota y entregó de
-nuevo, como correspondía. Un cuarto de hora después el segundo agente estaba trabajando, y retomó
-desde la primera tarea sin terminar, no desde el principio. Yo estuve dormido todo el tiempo.
-
-La noche completa está en [docs/evidence/rotation-2026-09-18/](../evidence/rotation-2026-09-18/):
-cada lectura de cuota, las dos versiones de la nota y los commits. Los nombres de host, las
-direcciones y los ids de sesión están tachados. No se toca nada más.
-
-### "En meses, el otro nunca ha dicho ni una vez 'se ve bien'."
-
-Llevamos meses haciendo que Claude Code revise el trabajo de Codex, y Codex el de Claude Code, en
-este repositorio. Ninguna revisión ha vuelto vacía. Antes pensábamos que eso significaba que el
-trabajo era malo. Significa que un solo revisor de un solo harness nunca basta.
-
-## Qué funciona hoy
+## Qué puedes usar hoy y hasta dónde llega
 
 *Última actualización 2026-11-04.*
 
 | Pieza | Estado |
 |---|---|
 | Una sola memoria para Codex, Claude Code, Hermes Agent, Cursor y OpenClaw | Publicada; instalada desde el registro en una máquina limpia y probada de extremo a extremo |
-| Cursor: la misma memoria, habilidades, revisión, relevo y Autoaprendizaje | Publicado en 1.3; la línea de comandos `cursor-agent` probada de extremo a extremo en una máquina Linux limpia; la app de Cursor en macOS aún en prueba |
+| Cursor: la misma memoria, habilidades, revisión, relevo y Self Learning | Publicado en 1.3; la línea de comandos `cursor-agent` probada de extremo a extremo en una máquina Linux limpia; la app de Cursor en macOS aún en prueba |
 | Sno Reach, agentes que hablan entre sí sin daemon | Instalado por `sno setup`; Linux y macOS; probado de extremo a extremo en una máquina Linux limpia |
-| Autoaprendizaje y las habilidades del equipo | Instalado por `sno setup`; el trabajo nocturno se ejecutó en una máquina Linux limpia |
+| Self Learning y las habilidades del equipo | Instalado por `sno setup`; el trabajo nocturno se ejecutó en una máquina Linux limpia |
 | Instalación con un solo comando | `sno setup` instala todo lo anterior; probada en una máquina Linux limpia |
 | "Sno onboard" dentro de tu agente | Disponible; arranca tras la instalación, o cuando lo dices |
 | Un solo comando inicia dos agentes | Nuevo en 2.0; ejecutado con agentes reales de Claude Code y Codex, uno de cada uno y dos del mismo proveedor |
@@ -243,38 +255,33 @@ trabajo era malo. Significa que un solo revisor de un solo harness nunca basta.
 
 Una fila dice "probado" solo cuando se ha ejecutado en una máquina limpia.
 
+Aún no: la continuación de tareas y las lecciones desde la próxima respuesta funcionan en Claude Code y Codex. La línea de estado funciona en Claude Code y Cursor. Hermes Agent y OpenClaw no han pasado por estos recorridos en instalaciones reales, y OpenClaw aparece en `sno squad` con su estado desconocido.
+
+<a id="memory"></a>
+
 ## Memoria que olvida a propósito
 
-*Última actualización 2026-10-11.* La memoria de un agente suele fallar de dos maneras silenciosas.
-Pierde lo que debería haberse quedado, y conserva lo que debería haberse desvanecido. El segundo
-fallo cuesta más. Un agente que todavía "recuerda" una preferencia que cancelaste, una fecha límite
-que se movió o una dirección que dejaste actuará según ella con total seguridad.
+*Última actualización 2026-10-11.* La memoria de un agente suele fallar de dos maneras silenciosas. Pierde lo que debería haberse quedado, y conserva lo que debería haberse desvanecido. El segundo fallo cuesta más. Un agente que todavía "recuerda" una preferencia que cancelaste, una fecha límite que se movió o una dirección que dejaste actuará según ella con total seguridad.
 
-Por eso la memoria de aquí retira un hecho cuando uno posterior lo reemplaza, y lo que conserva y
-lo que deja ir mejora con el uso, no con el lanzamiento de un modelo. Cómo le va en las pruebas
-públicas de memoria, con cada respuesta y cada traza que la respalda, está en [`evals/`](../../evals/).
+Por eso la memoria de aquí retira un hecho cuando uno posterior lo reemplaza, y lo que conserva y lo que deja ir mejora con el uso, no con el lanzamiento de un modelo. Cómo le va en las pruebas públicas de memoria, con cada respuesta y cada traza que la respalda, está en [`evals/`](../../evals/).
 
-## Socios de diseño
+## ¿Usas dos agentes a la vez? Escríbenos
 
-Estamos trabajando con un puñado de personas que ya usan dos o más agentes en paralelo y pasan los
-resultados de uno a otro a mano. Si eres tú, abre un
-[design partner issue](https://github.com/sno-ai/sno-station/issues/new?template=design-partner.yml)
-y cuéntanos qué usas.
+Estamos trabajando con un puñado de personas que ya usan dos o más agentes en paralelo y pasan los resultados de uno a otro a mano. Si eres tú, abre un [design partner issue](https://github.com/sno-ai/sno-station/issues/new?template=design-partner.yml) y cuéntanos qué usas.
 
-## Seguridad
+## Qué protege el cifrado y qué no
 
-Consulta [SECURITY.md](../../SECURITY.md). Lo que protege el cifrado y lo que no está en
-[docs/security.md](../security.md).
+Consulta [SECURITY.md](../../SECURITY.md). Lo que protege el cifrado y lo que no está en [docs/security.md](../security.md).
 
-## Licencia
+## Apache-2.0, de punta a punta
 
 Apache-2.0. Código abierto, de punta a punta. Consulta [LICENSE](../../LICENSE).
 
-## Agradecimientos
+## Los hombros en los que nos apoyamos
 
 Trabajos en los que se apoya este repositorio.
 
 - Andrej Karpathy, [*LLM Wiki*](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f). Un agente debería mantener una wiki de lo que ha aprendido en lugar de volver a deducirlo en cada sesión.
 - Tang, Rashtchian, Ferng, Tomkins, Juan y Vu, [*WikiSkill*](https://arxiv.org/abs/2608.27454). La propia experiencia de un agente, convertida en conocimiento que reescribe sus habilidades.
-- Zhang, Hu, Upasani y colaboradores, [*Agentic Context Engineering*](https://arxiv.org/abs/2510.04618). Estudiamos su manera de curar lo que un agente conserva al diseñar Autoaprendizaje.
+- Zhang, Hu, Upasani y colaboradores, [*Agentic Context Engineering*](https://arxiv.org/abs/2510.04618). Estudiamos su manera de curar lo que un agente conserva al diseñar Self Learning.
 - Uddin, Shubham, Blanco, Baral y Wang, [*From Recall to Forgetting*](https://arxiv.org/abs/2604.20006). El primer benchmark que también comprueba lo que una memoria ya no debería decir.
