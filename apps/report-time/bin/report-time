@@ -224,8 +224,6 @@ case "${1:-}" in
     epoch=$(date +%s)
     ;;
   -*)
-    # An option this script does not know. Handed to date it reads as a time
-    # (GNU date takes "-x" as a zone letter) and prints a confident wrong one.
     die "unknown option '$1' (see --help)"
     ;;
   *)
