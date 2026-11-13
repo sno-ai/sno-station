@@ -1031,7 +1031,7 @@ while (($# > 0)); do
 	case "$1" in
 	--vendor)
 		VENDOR_SET=1
-		[[ $# -ge 2 ]] || die "--vendor needs a value: codex, claude, or both" 2
+		[[ $# -ge 2 ]] || die "--vendor needs a value: codex, claude, both, or cursor" 2
 		VENDOR="$2"
 		shift 2
 		;;

@@ -137,6 +137,11 @@ check 'HTTP 401: needs_auth, exit 4' "$RC $(jqv '.vendors[0].state')" '4 needs_a
 RC=0; "$PROBE" --vendor codex --seat executor.x@h >/dev/null 2>&1 || RC=$?
 check '--seat without --vendor cursor is refused' "$RC" 2
 
+RC=0; "$PROBE" --vendor >/dev/null 2>"$WORK/vendor.err" || RC=$?
+check '--vendor without a value lists all four vendors and exits 2' \
+	"$RC $(<"$WORK/vendor.err")" \
+	'2 subscription-quota-check: --vendor needs a value: codex, claude, both, or cursor'
+
 # Shared picker: only the external quota endpoint and agent CLIs are substitutes.
 prepare picker; linux_login "$H"
 mkdir -p "$H/bin" "$H/config/sno"
