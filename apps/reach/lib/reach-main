@@ -4039,7 +4039,7 @@ trap 'exit 143' TERM
 verb="$1"
 shift
 case "$verb" in
-    --help) usage 0 ;;
+    --help|-h) usage 0 ;;
     --version)
         (($# == 0)) || usage
         [[ -r "$REPO_ROOT/VERSION" ]] || die 66 "VERSION is unavailable: $REPO_ROOT/VERSION"
