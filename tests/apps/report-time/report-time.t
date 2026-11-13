@@ -48,4 +48,10 @@ for option in -x --version --wall; do
   printf "report-time: unknown option '%s' (see --help)\n" "$option" >"$WORK/expected-err"
   cmp -s "$WORK/expected-err" "$WORK/err" || { printf 'FAIL unknown option %s stderr:\n' "$option" >&2; cat "$WORK/err" >&2; exit 1; }
 done
-printf 'ok report-time fixed epoch, zone override, interval, non-timeout refusal, and unknown options\n'
+status=0
+"$SCRIPT" --in 60 junk extra >"$WORK/out" 2>"$WORK/err" || status=$?
+[[ "$status" -eq 2 ]] || { printf 'FAIL --in extra arguments: expected exit 2, got %s\n' "$status" >&2; exit 1; }
+[[ ! -s "$WORK/out" ]] || { printf 'FAIL --in extra arguments wrote stdout\n' >&2; exit 1; }
+printf "%s\n" "report-time: --in takes exactly one value, got '60 junk extra'" | cmp -s - "$WORK/err" \
+  || { printf 'FAIL --in extra arguments stderr:\n' >&2; cat "$WORK/err" >&2; exit 1; }
+printf 'ok report-time fixed epoch, zone override, interval, non-timeout refusal, unknown options, and --in extra-arguments refusal\n'
