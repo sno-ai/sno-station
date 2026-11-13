@@ -223,6 +223,11 @@ case "${1:-}" in
     fi
     epoch=$(date +%s)
     ;;
+  -*)
+    # An option this script does not know. Handed to date it reads as a time
+    # (GNU date takes "-x" as a zone letter) and prints a confident wrong one.
+    die "unknown option '$1' (see --help)"
+    ;;
   *)
     # Any other argument is an instant. Bare strings are read as UTC, because
     # callers supply source timestamps in UTC.
