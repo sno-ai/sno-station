@@ -76,7 +76,7 @@ See [local squad observations](agent-state-view.md) for the status lines, tmux b
 | --- | --- | --- |
 | `sno heartbeat --label NAME [--interval M] [--log PATH] [--until-file PATH] [--max-ticks N] [--max-hours H] [-- COMMAND...]`, `--stop NAME`, `--list` | Reports every so often or waits until a file appears, for long jobs | an agent |
 | `sno report-time [--in SECONDS \| --pid PID [--expect-wall S] \| "UTC TIMESTAMP" \| @EPOCH]` | Prints a clock time for the user in their zone | an agent |
-| `sno subscription-quota-check [--vendor codex\|claude\|both\|cursor] [--json\|--human] [--quiet]` | Reads Codex and Claude Code subscription quota without spending any, and Cursor's with `--vendor cursor` | an agent or a timer |
+| `sno subscription-quota-check [--vendor codex\|claude\|both\|cursor] [--json\|--human] [--quiet]` | Reads Codex and Claude Code subscription quota without spending any; Cursor is read only with `--vendor cursor`, not the default `both` | an agent or a timer |
 
 ## 7. Skill commands
 
