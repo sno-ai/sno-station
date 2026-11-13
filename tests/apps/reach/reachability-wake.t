@@ -1275,6 +1275,65 @@ ORCA
     printf 'ok - an orca wake never sends or keeps text after a person draft\n'
 }
 
+case_orca_detached_draft() {
+    local root="$test_root/orca-detached-draft"
+    local recipient=worker.composer@${HOST} sender=sender.composer@${HOST}
+    local fake_orca="$root/fake-orca" draft
+    mkdir -p "$root"
+    init_address "$root" "$recipient"
+    cat >"$fake_orca" <<'ORCA'
+#!/usr/bin/env python3
+import json, os, pathlib, sys
+args = sys.argv[1:]
+root = pathlib.Path(os.environ['ORCA_PROOF'])
+result = {}
+if args[:2] == ['terminal', 'list']:
+    result = {'terminals': [{'tabId': 'tab-composer', 'connected': True, 'handle': 'term-composer'}]}
+elif args[:2] == ['terminal', 'wait']:
+    result = {'wait': {'satisfied': True}}
+elif args[:2] == ['terminal', 'send']:
+    text = args[args.index('--text') + 1]
+    path = root / 'draft'
+    current = path.read_text()
+    for char in text:
+        current = current[:-1] if char == '\x7f' else current + char
+    path.write_text(current)
+    if '--enter' in args:
+        (root / 'submitted').write_text(current)
+        path.write_text('')
+elif args[:2] == ['terminal', 'read']:
+    # Real Orca screen output removes the composer from tail and returns it separately.
+    result = {'terminal': {'source': 'screen', 'tail': ['Codex', '›', 'status'],
+                           'draft': (root / 'draft').read_text().replace(' ', '\n')}}
+else:
+    sys.exit(2)
+print(json.dumps({'ok': True, 'result': result}))
+ORCA
+    chmod 0755 "$fake_orca"
+    SNO_REACH_ROOT="$root" "$repo_root/lib/reach-reachability" register \
+        --root "$root" --as "$recipient" --channel orca --handle term-composer \
+        --identity-kind orca-tab --identity tab-composer --pid "$$" --host fixture-host >/dev/null
+    for draft in '' 'keep my draft' $'保留我的草稿\n第二行'; do
+        printf '%s' "$draft" >"$root/draft"
+        rm -f "$root/submitted"
+        ORCA_PROOF="$root" ORCA_CLI_COMMAND="$fake_orca" SNO_REACH_ROOT="$root" \
+            "$repo_root/lib/reach-ring" doorbell --to "$recipient" --from "$sender" \
+            --msg-id '<orca-composer@'"${HOST}"'>' >"$root/out" 2>"$root/err"
+        if [[ -z "$draft" ]]; then
+            assert_contains "$(<"$root/out")" 'outcome=rang-unverified' 'empty composer is rung'
+            [[ -s "$root/submitted" ]] || fail 'empty composer wake was never submitted'
+            assert_contains "$(<"$root/submitted")" "Read Message-ID <orca-composer@${HOST}> now." \
+                'submitted wake retains the complete mail reference'
+            [[ ! -s "$root/draft" ]] || fail 'submitted wake remains in composer'
+        else
+            assert_contains "$(<"$root/out")" 'outcome=busy' 'actual draft refuses wake submission'
+            [[ ! -e "$root/submitted" ]] || fail 'a person draft was submitted'
+            assert_eq "$draft" "$(<"$root/draft")" 'only the wake is erased, preserving the draft'
+        fi
+    done
+    printf 'ok - Orca separate composer wakes an empty box and preserves real drafts\n'
+}
+
 case_four_report_incident() {
     local root="$test_root/four-report"
     local sender=executor.unheard@${HOST}
@@ -2188,6 +2247,7 @@ case "$mode" in
     executor-wake) case_executor_wake ;;
     doorbell-measurement) case_doorbell_measurement ;;
     orca-person-draft) case_orca_person_draft ;;
+    orca-detached-draft) case_orca_detached_draft ;;
     confirmation) case_confirmation ;;
     retry-bound) case_retry_bound ;;
     supervisor) case_supervisor_resolution ;;

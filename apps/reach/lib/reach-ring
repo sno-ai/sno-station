@@ -469,16 +469,20 @@ ring_orca() {
             'terminal rejected the wake text'
         return
     fi
-    # Orca's screen read carries no styling, so a person's draft shows only after the cue is
-    # typed: the input box then holds more than the cue, before or after it. Erase exactly the
-    # typed cue, leave the draft as typed, and report busy; the card stays in the mailbox.
+    # Orca exposes the composer separately as draft when available, excluding it from tail.
+    # Compare the complete composer, so extra text is left unsubmitted in either format.
     # The read waits the tmux settle first: an unredrawn box still shows its placeholder.
     sleep "$TMUX_SETTLE_SECONDS"
     local screen erase box=only-cue
-    if ! screen="$(orca_json terminal read --terminal "$terminal_handle" --screen --limit 40 | \
-        jq -r '.terminal.tail[]?')"; then
+    if ! screen="$(orca_json terminal read --terminal "$terminal_handle" --screen --limit 40)"; then
         box=unread
-    elif ! orca_box_holds_only "$line" <<<"$screen"; then
+    elif jq -e '.terminal.draft | type == "string"' <<<"$screen" >/dev/null; then
+        if ! jq -e --arg cue "$line" '
+            (.terminal.draft | gsub("\\s+"; "")) == ($cue | gsub("\\s+"; ""))
+        ' <<<"$screen" >/dev/null; then
+            box=draft
+        fi
+    elif ! orca_box_holds_only "$line" <<<"$(jq -r '.terminal.tail[]?' <<<"$screen")"; then
         box=draft
     fi
     if [[ "$box" != only-cue ]]; then
