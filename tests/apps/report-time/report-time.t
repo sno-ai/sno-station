@@ -38,4 +38,14 @@ fi
 [[ ! -s "$WORK/out" ]] || { printf 'FAIL refusal wrote stdout\n' >&2; exit 1; }
 if [[ -r /proc/uptime ]]; then expected_refusal='not a timeout wrapper'; else expected_refusal='needs Linux /proc'; fi
 grep -F "$expected_refusal" "$WORK/err" >/dev/null || { cat "$WORK/err" >&2; exit 1; }
-printf 'ok report-time fixed epoch, zone override, interval, and non-timeout refusal\n'
+for option in -x --version --wall; do
+  args=("$option")
+  if [[ "$option" == --wall ]]; then args+=(3600); fi
+  status=0
+  "$SCRIPT" "${args[@]}" >"$WORK/out" 2>"$WORK/err" || status=$?
+  [[ "$status" == 2 ]] || { printf 'FAIL unknown option %s: exit %s, expected 2\n' "$option" "$status" >&2; exit 1; }
+  [[ ! -s "$WORK/out" ]] || { printf 'FAIL unknown option %s wrote stdout\n' "$option" >&2; exit 1; }
+  printf "report-time: unknown option '%s' (see --help)\n" "$option" >"$WORK/expected-err"
+  cmp -s "$WORK/expected-err" "$WORK/err" || { printf 'FAIL unknown option %s stderr:\n' "$option" >&2; cat "$WORK/err" >&2; exit 1; }
+done
+printf 'ok report-time fixed epoch, zone override, interval, non-timeout refusal, and unknown options\n'

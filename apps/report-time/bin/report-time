@@ -223,6 +223,9 @@ case "${1:-}" in
     fi
     epoch=$(date +%s)
     ;;
+  -*)
+    die "unknown option '$1' (see --help)"
+    ;;
   *)
     # Any other argument is an instant. Bare strings are read as UTC, because
     # callers supply source timestamps in UTC.
