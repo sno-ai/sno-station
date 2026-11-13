@@ -42,7 +42,7 @@ test_sender_declared_no_reply_stops_at_delivery test_send_enforces_informational
 test_send_rate_limits_non_questions_per_pair
 """)
 cases("progress-reporting.t", "reply state reminder")
-cases("reachability-wake.t", "lifecycle doorbell-measurement orca-person-draft")
+cases("reachability-wake.t", "lifecycle doorbell-measurement orca-person-draft orca-detached-draft")
 CASES.append(("ACP integration", ["bash", str(HERE / "seats/acp-communication.t")]))
 cases("seats/mailbox-call.t", "all delivery-failure")
 cases("seats/agent-state-view.t", "work bar")
