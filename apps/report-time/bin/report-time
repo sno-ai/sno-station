@@ -76,8 +76,6 @@ case "${1:-}" in
     ;;
   --in)
     [ $# -ge 2 ] || die "--in needs seconds"
-    # Exactly one value, like --pid: quietly ignoring the rest would print a
-    # time for a call the caller did not make.
     [ $# -eq 2 ] || die "--in takes exactly one value, got '${*:2}'"
     # Strict: an optional minus then digits, nothing else. A loose character class
     # lets "1-2" through, and shell arithmetic then evaluates it to -1 instead of

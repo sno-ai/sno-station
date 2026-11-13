@@ -9,4 +9,4 @@ records whose change it was.
 | [@cullielika](https://github.com/cullielika) | Fixed the test commands in CONTRIBUTING.md ([#25](https://github.com/sno-ai/sno-station/pull/25)) |
 | [@Vijaysir0hi](https://github.com/Vijaysir0hi) | Cursor in the command reference and the translated READMEs ([#152](https://github.com/sno-ai/sno-station/pull/152), [#153](https://github.com/sno-ai/sno-station/pull/153)) |
 | [@hskl18](https://github.com/hskl18) | `sno reach -h` works like `--help`, and reach-call names itself in its usage; the quota check lists cursor in every `--vendor` message and the command reference ([#191](https://github.com/sno-ai/sno-station/pull/191), [#192](https://github.com/sno-ai/sno-station/pull/192)) |
-| [@bardrop](https://github.com/bardrop) | `sno report-time` refuses an unknown option instead of printing a wrong time ([#193](https://github.com/sno-ai/sno-station/pull/193)) |
+| [@bardrop](https://github.com/bardrop) | `sno report-time` refuses an unknown option, and extra values after `--in`, instead of printing a wrong time ([#193](https://github.com/sno-ai/sno-station/pull/193), [#194](https://github.com/sno-ai/sno-station/pull/194)) |
