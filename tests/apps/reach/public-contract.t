@@ -8,6 +8,8 @@ case "$mode" in
 surface)
   invoke --help; expect_rc 0
   cp "$WORK/out" "$WORK/help"
+  invoke -h; expect_rc 0
+  cmp -s "$WORK/out" "$WORK/help" || fail "-h prints something other than --help"
   verbs=(pair spawn register unregister seats call watch ring send reply inbox wait dismiss log state flush init rebind doctor export lint remind)
   [[ "${#verbs[@]}" == 22 ]]
   for verb in "${verbs[@]}"; do

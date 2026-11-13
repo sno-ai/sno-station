@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# message-agent-window.sh — send into a live agent window and prove it landed, read what the
+# reach-call — send into a live agent window and prove it landed, read what the
 # window has produced since a cursor, or sit and watch it line by line.
 #
 # A send counts only after the selected seat produces its own receipt.
@@ -17,7 +17,7 @@ readonly REACH
 
 usage() {
 	cat >&2 <<'USAGE'
-usage: message-agent-window.sh --terminal <handle> [--text <message>] [options]
+usage: reach-call --terminal <handle> [--text <message>] [options]
 
 Modes:
   --text <message>       send it, then wait for the window to react
