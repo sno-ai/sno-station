@@ -26,6 +26,17 @@ Einer baut, der andere hält dagegen, und Sie können beiden zusehen. Es läuft 
 
 **In anderen Sprachen lesen:** [English](../../README.md) · [中文](README.zh-CN.md) · **Deutsch** · [Español](README.es.md) · [Français](README.fr.md) · [Русский](README.ru.md) · [한국어](README.ko.md) · [日本語](README.ja.md) · [繁體中文](README.zh-TW.md)
 
+## Sno Reach
+
+| Funktion | Wann sie hilft |
+|---|---|
+| **Instant Messenger** | Jetzt einen Agenten kontaktieren und auf seine tatsächliche Antwort warten. |
+| **Agent Email** | Nachrichten und Aufgaben speichern, damit ein Agent sie später bearbeiten und beantworten kann. |
+
+Die rechnerübergreifende Version verbindet Agenten über LAN oder Tailscale. Auf jedem Rechner läuft ein Reach-Empfangsprozess; ein SSH-Server ist dafür nicht nötig. Prüfen Sie, ob `sno reach --help` die Befehle `network` und `peer` enthält.
+
+[Kurzanleitung](../reach.md)
+
 ## Geben Sie die Arbeit heute Abend ab. Morgen früh gibt es Ergebnisse statt drei Rückfragen.
 
 Drei Dinge, die uns passiert sind, bevor wir das hier gebaut haben:
@@ -285,7 +296,7 @@ Einen Update-Schritt gibt es nicht: `sno` aktualisiert sich selbst, wenn es ein 
 |---|---|
 | Ein Gedächtnis über Codex, Claude Code, Hermes Agent, Cursor und OpenClaw hinweg | Veröffentlicht; auf einer sauberen Maschine aus der Registry installiert und durchgängig nachgewiesen |
 | Cursor: dasselbe Gedächtnis, Skills, Review, Übernahme und Self Learning | Veröffentlicht in 1.3; die Kommandozeile `cursor-agent` auf einer sauberen Linux-Maschine durchgängig nachgewiesen; die Cursor-App auf macOS wird noch nachgewiesen |
-| Sno Reach, Agenten sprechen ohne Daemon miteinander | Von `sno setup` installiert; Linux und macOS; auf einer sauberen Linux-Maschine durchgängig nachgewiesen |
+| Sno Reach: Instant Messenger / Agent Email | Von `sno setup` installiert; Linux und macOS; auf einer sauberen Linux-Maschine durchgängig nachgewiesen |
 | Self Learning und die Team-Skills | Von `sno setup` installiert; der nächtliche Job lief auf einer sauberen Linux-Maschine |
 | Installation mit einem Befehl | `sno setup` installiert alles oben Genannte; auf einer sauberen Linux-Maschine nachgewiesen |
 | „Sno onboard“ in Ihrem Agenten | Verfügbar; startet nach der Installation oder wenn Sie es sagen |

@@ -26,6 +26,17 @@ Uno construye, el otro lo pone a prueba, y puedes mirar a los dos. Corre en tu p
 
 **Leer en otros idiomas:** [English](../../README.md) · [中文](README.zh-CN.md) · [Deutsch](README.de.md) · **Español** · [Français](README.fr.md) · [Русский](README.ru.md) · [한국어](README.ko.md) · [日本語](README.ja.md) · [繁體中文](README.zh-TW.md)
 
+## Sno Reach
+
+| Función | Cuándo usarla |
+|---|---|
+| **Instant Messenger** | Contactar a otro agente ahora y esperar su respuesta real. |
+| **Agent Email** | Guardar mensajes y tareas para que otro agente los atienda y responda más tarde. |
+
+La versión para varias computadoras conecta agentes por LAN o Tailscale. Cada computadora ejecuta un proceso receptor de Reach; no necesita un servidor SSH. Comprueba que `sno reach --help` incluya `network` y `peer`.
+
+[Guía breve](../reach.md)
+
 ## Entrega el trabajo esta noche. Por la mañana te esperan resultados, no tres preguntas.
 
 Tres cosas que nos pasaron antes de construir esto:
@@ -245,7 +256,7 @@ La computadora aparece sola en [tu página de computadoras](https://www.sno.ai/d
 |---|---|
 | Una sola memoria para Codex, Claude Code, Hermes Agent, Cursor y OpenClaw | Publicada; instalada desde el registro en una máquina limpia y probada de extremo a extremo |
 | Cursor: la misma memoria, habilidades, revisión, relevo y Self Learning | Publicado en 1.3; la línea de comandos `cursor-agent` probada de extremo a extremo en una máquina Linux limpia; la app de Cursor en macOS aún en prueba |
-| Sno Reach, agentes que hablan entre sí sin daemon | Instalado por `sno setup`; Linux y macOS; probado de extremo a extremo en una máquina Linux limpia |
+| Sno Reach: Instant Messenger / Agent Email | Instalado por `sno setup`; Linux y macOS; probado de extremo a extremo en una máquina Linux limpia |
 | Self Learning y las habilidades del equipo | Instalado por `sno setup`; el trabajo nocturno se ejecutó en una máquina Linux limpia |
 | Instalación con un solo comando | `sno setup` instala todo lo anterior; probada en una máquina Linux limpia |
 | "Sno onboard" dentro de tu agente | Disponible; arranca tras la instalación, o cuando lo dices |

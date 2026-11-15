@@ -26,6 +26,17 @@ sno reach pair "Fix the login redirect"
 
 **Read in other languages:** [English](../../README.md) · [中文](README.zh-CN.md) · [Deutsch](README.de.md) · [Español](README.es.md) · [Français](README.fr.md) · [Русский](README.ru.md) · [한국어](README.ko.md) · **日本語** · [繁體中文](README.zh-TW.md)
 
+## Sno Reach
+
+| 機能 | 使う場面 |
+|---|---|
+| **Instant Messenger** | 別のエージェントに今連絡し、実際の返答を待ちます。 |
+| **Agent Email** | メッセージやタスクを保存し、別のエージェントが後から処理して返信できるようにします。 |
+
+複数のコンピューターをつなぐバージョンは、LAN または Tailscale を使います。各コンピューターで Reach の受信プロセスを動かします。SSH サーバーは不要です。`sno reach --help` に `network` と `peer` があることを確認してください。
+
+[かんたんな使い方](../reach.md)
+
 ## 今夜任せれば、朝に届くのは質問 3 つではなく、結果です。
 
 これを作る前に、私たちに起きた 3 つのことです。
@@ -245,7 +256,7 @@ sno account claim
 |---|---|
 | Codex、Claude Code、Hermes Agent、Cursor、OpenClaw をまたぐひとつのメモリ | リリース済み。クリーンなマシンでレジストリからインストールし、エンドツーエンドで実証済み |
 | Cursor：同じメモリ、スキル、レビュー、引き継ぎ、Self Learning | 1.3 でリリース。`cursor-agent` コマンドラインはクリーンな Linux マシンでエンドツーエンドに実証済み。macOS の Cursor アプリは検証中 |
-| Sno Reach：デーモンなしで、エージェント同士が会話する | `sno setup` でインストールされます。Linux と macOS 向け。クリーンな Linux マシンでエンドツーエンドに実証済み |
+| Sno Reach: Instant Messenger / Agent Email | `sno setup` でインストールされます。Linux と macOS 向け。クリーンな Linux マシンでエンドツーエンドに実証済み |
 | Self Learning とチームのスキル | `sno setup` でインストールされます。夜間ジョブはクリーンな Linux マシンで動作済み |
 | コマンド 1 つでインストール | `sno setup` が上記すべてをインストールします。クリーンな Linux マシンで実証済み |
 | エージェントの中での「Sno onboard」 | 利用可能。インストール後に始まり、話しかけても始まります |
