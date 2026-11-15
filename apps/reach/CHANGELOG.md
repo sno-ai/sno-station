@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2.1.9
 
 Instant Messenger and Agent Email can connect agents across a LAN or Tailscale with
 a bundled, pinned iroh transport. Ordinary terminals can register input endpoints,
