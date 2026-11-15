@@ -18,7 +18,7 @@ import uuid
 
 
 REPO = Path(__file__).resolve().parents[3]
-SKILLS = Path(os.environ.get("SNO_SKILLS_SOURCE", REPO.parent / "sno-station-skills-core"))
+SKILLS = Path(os.environ.get("SNO_SKILLS_SOURCE", REPO.parent / "sno-station-skills"))
 SNO = Path(os.environ.get("SNO_BINARY", REPO.parent / "sno-cli-core/target/debug/sno"))
 
 
