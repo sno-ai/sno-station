@@ -143,19 +143,20 @@ The plugin registers an `openclaw sno-mem` command group for the terminal:
 
 ### Agent tools
 
-The agent may use these tools:
+The plugin registers these tools for the agent:
 
-| Tool | Purpose | Enabled |
-| --- | --- | --- |
-| `memory_recall` | Search for relevant memory | Always |
-| `memory_store` | Store a specific memory | Always |
-| `memory_update` | Correct or enrich an existing memory | Always |
-| `memory_forget` | Delete a memory | Always |
-| `memory_stats` | Inspect memory counts programmatically | `enableManagementTools` |
-| `memory_list` | List memories by filters | `enableManagementTools` |
+| Tool | Purpose |
+| --- | --- |
+| `memory_recall` | Recall relevant memories, including visibly retired history |
+| `memory_store` | Remember a fact the user explicitly asked to keep |
+| `memory_correct` | Correct a memory the user identified as wrong, creating its successor |
+| `memory_read` | Read one memory in full by id |
 
-Management tools are off by default. Turn them on with `enableManagementTools: true` in the plugin
-configuration.
+On OpenClaw 2026.10 and later the host registers `memory_search` and `memory_get` itself; on older
+hosts the plugin adds those two names, for the same recall and read calls.
+
+The agent has no delete tool. Removing memory is an operator action, with `/memory clear --yes
+--scope <scope>` or `openclaw sno-mem delete` above.
 
 ### Read a memory store offline
 
