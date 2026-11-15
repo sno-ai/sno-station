@@ -4,6 +4,25 @@ Reach-Version: 2.1.8
 
 This guide belongs to the Reach release that `sno reach` runs. Use that installed release, not a workshop script.
 
+## Choose the feature
+
+Sno Reach has two feature names: **Instant Messenger** and **Agent Email**.
+
+| Owner's intent | Feature | Agent action |
+| --- | --- | --- |
+| Talk to another agent now and get its response | Instant Messenger | `sno reach call ADDRESS "TEXT" --timeout SECONDS` with your registered sender identity |
+| Leave a message or task and handle the reply later | Agent Email | `send --as ADDRESS` with a complete message on stdin; the recipient uses `inbox` and `reply` |
+
+`join-talk` registers the existing conversation for both features. Cross-machine
+communication also needs a receiver on each machine and reciprocal `peer` contacts.
+Use the exact returned agent address; do not invent or silently change it.
+
+For mail-reply calls, read the original `[CALL]` file and answer with
+`sno reach reply --as YOUR_ADDRESS --card ORIGINAL_FILE`, body on stdin and no
+`--state`. For task email, reply `--state accepted`, wait for that command to succeed,
+perform the work, then reply `--state completed` or `failed` on the original task.
+A saved message, accepted wake or queued turn is not evidence of a recipient response.
+
 ## Prerequisites
 
 Use Bash 5 or newer, Perl with its standard POSIX module, and `realpath`, `find`, `stat`, `sed`, `sha256sum`, `timeout`, `readlink`, `flock` and `jq`; the first seven commands need the GNU tools. The tmux channel also needs `tmux`. On macOS the GNU and channel tools are Homebrew's `bash`, `coreutils`, `findutils`, `gnu-sed`, `flock`, `tmux`, `jq`, on PATH under their plain names. Perl must also be available on PATH with its standard POSIX module; do not assume every macOS version preinstalls it. The GNU formulae provide `libexec/gnubin` directories for the plain command names; put those directories before the system tools on PATH. The agent running the program installs missing prerequisites; Reach only reports what is missing. Windows: run inside WSL; the Windows side is not supported.
@@ -48,6 +67,24 @@ sno reach doctor --as "$address"
 
 Register from that seat. Never copy another seat's registration. `unregister --as` removes registration; `rebind --as --reason` deliberately binds identity to the current machine.
 
+Ordinary terminals are also accepted. Run `sno reach terminal-info` inside the agent's shell
+to discover its input endpoint, then `sno reach register --as "$address" --channel terminal`
+to register it. Codex uses its native session queue when available, independently of the
+terminal. On macOS, Ghostty's scripting interface can target the exact terminal surface.
+If the operating system refuses input into an already running terminal, start or resume the
+agent with `sno reach terminal -- <agent command>` and register from there. This foreground
+command carries the agent's input, output, window size and exit status in any terminal on
+macOS, Linux or Windows WSL; it does not require tmux. Python 3 is required for this channel.
+Accepted input reports `rang-unverified`; use the recipient's reply to establish processing.
+
+Registration has no channel-name allowlist. A separately installed input adapter can use any
+channel name: provide `reach-channel-<channel>` on PATH, register its handle, and implement
+`reach-channel-<channel> ring <handle> <wake text>`. Exit zero means input was accepted;
+nonzero means the wake failed. Missing adapters and actual input failures are reported while
+the original card remains in the inbox. `watch` requires a readable receiver output
+stream. Cross-machine and supported local `call` paths can return an actual threaded
+mail reply without reading the terminal screen.
+
 ### Stay available without blocking a turn
 
 After startup with no assigned work, finish your current turn. The transport delivers later task input or a ring. Do not run `sno reach wait`, `sleep`, or a polling loop just to remain available: a blocking tool can prevent queued input from being processed. This is also what "wait for task input" means when no work has been assigned.
@@ -74,9 +111,9 @@ printf '%s\n' 'Completed. The requested effect and its evidence are ...' |
   sno reach reply --as "$SNO_REACH_ADDR" --card "$original_card" --state completed
 ```
 
-Acceptance writes a separate status and keeps the original path/bytes/flags unchanged. Completion or failure requires prior acceptance. Cancelled/refused can finish before or after acceptance. A second acceptance or terminal reply refuses. Replies read nonblank body text from stdin. Never send a raw terminal X-State through `send`.
+Acceptance writes a separate status and keeps the original path/bytes/flags unchanged. Completion or failure requires prior acceptance. Cancelled/refused can finish before or after acceptance. A second acceptance or terminal reply refuses. Replies read nonblank body text from stdin. Never send a raw terminal X-State through `send`. A non-terminal X-State you `send` on work you hold must set In-Reply-To to that work's latest report and References to the work card followed by every report so far; `send` refuses one whose In-Reply-To is not that latest report and prints both expected values.
 
-Received status and answer cards do not require another reply. A call mail (`X-Type: call`, subject `[CALL]`) transports an instruction, not a new owned task. Read its full body, output its delivery receipt only after reading it, then follow the supplied instruction. Do not accept or complete the call mail as a work card. Card-backed work keeps its original card and Reply-To destination; direct work needs no artificial task card. Acknowledge reports and handled call mail without sending a message:
+Received status and answer cards do not require another reply. A call mail (`X-Type: call`, subject `[CALL]`) transports an Instant Messenger instruction, not a new owned task. Read its full body. When it requests a Reach answer, reply on that local original file without `--state`; returning text only in your terminal does not send that answer. Existing capture-based calls may instead request a visible receipt: follow the original call's instructions. Do not accept or complete call mail as a task. A replied call is already handled; do not dismiss it again. Card-backed work keeps its original task card and Reply-To destination. Acknowledge received reports or other dismissible messages without replying:
 
 ```sh
 sno reach dismiss --as "$SNO_REACH_ADDR" --card "$received_report" --reason acknowledged
@@ -155,3 +192,28 @@ the 0.3-second pause between literal text and the carriage return. A person can 
 Only these verbs exist: pair spawn register unregister seats call watch ring send reply inbox wait dismiss log state flush init rebind doctor export lint remind.
 
 Use X-Work and X-Name. Old headers, old CLI flags and old wrapper commands are not supported. SNO_REACH_ROOT selects the store; SNO_REACH_ADDR is the default caller. Legacy environment variables and legacy stores are not read. Unknown arguments fail; never interpret a failed read as an empty inbox.
+# Cross-machine messaging
+
+Start a receiver on each machine with `sno reach network start`. Use
+`sno reach network status` to inspect its process, listening address and mailbox root.
+The root must be the same one used by the local agents. Stop only this receiver with
+`sno reach network stop`; stopping it leaves existing mail intact.
+
+Export a contact with `sno reach network address --ip <LAN-or-Tailscale-IP> > contact.json`.
+Copy that contact to the other machine and run
+`sno reach peer add <complete-hostname-after-@> --file contact.json`.
+Configure the reverse contact too, so replies can return. `sno reach peer list` shows
+the exact configured hostnames. Contact files contain public endpoint addresses, not
+the private endpoint key. The receiver preserves its identity across restarts.
+
+Use ordinary `send`, `reply`, and `call` commands afterward. Configured peers use iroh
+direct connections and need no system SSH server. A configured connection failure
+never falls back to SSH. Existing destinations without an iroh contact retain their
+SSH behavior. For an immediate call, set `SNO_REACH_ADDR` to the caller's registered
+address (or use its existing `SNO_EXECUTOR_ADDR`). The called agent reads the received
+message and replies through Reach; the caller returns that answer, not a prompt echo.
+
+Reach bundles its native transport. Users do not need Rust. Developers build with the
+checked-in Rust toolchain and Cargo.lock; the iroh requirement is exact, and release
+builds use `--locked`. Dependency upgrades are deliberate changes tested on the affected
+machine-to-machine paths, never automatic runtime upgrades.
