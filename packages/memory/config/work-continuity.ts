@@ -77,6 +77,9 @@ export async function composeContinuityContext(harness: ContinuityHarness, event
 	const lessons = recallDeadline(event).then(timeoutMs => sno([
 		"rem-reflect", "recall", "--agent", harness === "claude" ? "claude-code" : "codex", "--first-message",
 	], { ...input, hook_event_name: event }, timeoutMs));
+	const problems = event === "SessionStart"
+		? recallDeadline(event).then(timeoutMs => sno(["heartbeat", "--due", "--problems"], input, timeoutMs))
+		: Promise.resolve("");
 	const recalled = memory();
 	const readBrief = () => readFile(path, "utf8").catch(error => {
 		if (!(error instanceof Error && "code" in error && error.code === "ENOENT")) {
@@ -96,15 +99,18 @@ export async function composeContinuityContext(harness: ContinuityHarness, event
 		} catch (error) { failure("prepare handoff brief", path, error, "the agent has no brief template; available context is still delivered"); }
 		return "";
 	})();
-	const [saved, memoryRecall, approved] = await Promise.allSettled([brief, recalled, lessons]);
+	const [saved, memoryRecall, approved, dueProblems] = await Promise.allSettled([brief, recalled, lessons, problems]);
 	const parts: string[] = [];
 	// Keeping the brief must never delay the user's first task action or run a shell command that can wait on input.
-	if (event === "SessionStart") parts.push(`Keep the current task in the readable handoff brief at ${path}; its template already exists. Start the user's task first: do not read or edit the brief before your first action on the task. Update the brief only when there is real progress to record (a finished step, a decision, a failure, or before an orderly interruption), and only with your ${harness === "claude" ? "Edit or Write tool" : "apply_patch tool"}, never through a shell command. Keep its readable sections accurate: Objective and authorization, decisions and exclusions, Done/current files, Next with the exact next action and its expected observable result, Known failure with operation/target/error, Reach card/recipient when present, and Report destination. Do not ask the owner to reconstruct lost work.`);
+	if (event === "SessionStart") parts.push(`Keep the current task in the readable handoff brief at ${path}; its template already exists. Start the user's task first: do not read or edit the brief before your first action on the task. Update the brief only when there is real progress to record (a finished step, a decision, a failure, or before an orderly interruption), and only with your ${harness === "claude" ? "Edit or Write tool" : "apply_patch tool"}, never through a shell command. Keep its readable sections accurate: Objective and authorization, decisions and exclusions, Done/current files, Next with the exact next action and its expected observable result, Known failure with operation/target/error, Reach card/recipient when present, and Report destination. Do not ask the owner to reconstruct lost work. When the task has something to do at a later time, use your file edit tool to add an entry under a "## Due" section of this same brief with separate lines "at: YYYY-MM-DD HH:MM <IANA time zone>", optional "repeat: daily" or "repeat: weekly", and "do: <the action, one line>", separated from other entries by a blank line; never write "last:".`);
 	if (saved.status === "fulfilled" && saved.value) parts.push(`Current task handoff brief (complete file: ${path}). If the host reports context overflow, read that complete file before task action; do not infer the missing text. Reconcile actual file/tool results before repeating an unfinished action.\n\n${saved.value}`);
 	if (memoryRecall.status === "fulfilled") parts.push(context(memoryRecall.value, "memory recall"));
 	else failure("memory recall", input["session_id"], memoryRecall.reason, "memory recall failed; the saved brief and approved lessons remain available");
 	if (approved.status === "fulfilled") parts.push(context(approved.value, join(process.env["REM_REFLECT_STORE"] ?? join(homedir(), ".sno", "experience"), "wiki", "lessons.jsonl")));
 	else failure("read approved lessons", input["session_id"], approved.reason, "lesson delivery failed; task context remains available");
+	if (dueProblems.status === "fulfilled") {
+		if (dueProblems.value.trim()) parts.push(`Timed tasks did not run as planned:\n${dueProblems.value}`);
+	} else failure("read timed task problems", input["session_id"], dueProblems.reason, "timed task problems were not delivered; task context remains available");
 	return JSON.stringify({ hookSpecificOutput: { hookEventName: event, additionalContext: parts.filter(Boolean).join("\n\n") } });
 }
 
