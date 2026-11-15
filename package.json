@@ -38,6 +38,15 @@
   },
   "type": "module",
 	"overrides": {
+    "@modelcontextprotocol/sdk": "^1.32.0",
+    "body-parser": "^2.4.0",
+    "glob": "^14.0.2",
+    "minimatch": "^11.0.1",
+    "undici": "^8.12.2",
+    "sanitize-html": "^2.18.2",
+    "openclaw": {
+      "zod": "^4.6.6"
+    },
 		"@esbuild-kit/core-utils": {
 			"esbuild": "0.25.12"
 		},
