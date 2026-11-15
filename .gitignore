@@ -25,3 +25,6 @@ dev-scripts/
 __pycache__/
 *.pyc
 *.log
+# Built native Reach transport; source and Cargo.lock live in apps/reach/net.
+apps/reach/lib/reach-net
+apps/reach/lib/reach-codex-wake

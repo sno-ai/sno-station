@@ -1,14 +1,22 @@
 # Reach
 
-One installed program for agent-to-agent communication. Run it as `sno reach <verb>`; the `sno` command finds the installed release.
+Sno Reach lets your agents talk to each other through **Instant Messenger** and
+**Agent Email**. Use Instant Messenger when you need a response now. Use Agent Email
+to leave a message or task for the other agent to handle later.
+
+Run it as `sno reach <verb>`; the `sno` command finds the installed release.
+[Simple guide](../../docs/reach.md) · [中文说明](../../docs/reach.zh-CN.md) ·
+[Agent instructions](guide/agent-reach.md)
 
 ## Build
 
-Requires Bash, Perl with its standard POSIX module, GNU make, a C compiler/libc, jq, coreutils, flock, and the channel tools used by the seat (tmux or acpx; Orca for registered Orca terminals). Vendored mail tools build from the included source; no system mblaze is selected.
+Requires Bash, Perl with its standard POSIX module, GNU make, a C compiler/libc, jq,
+coreutils, flock, and the pinned Rust toolchain in `net/rust-toolchain.toml`.
+Input adapters need the tools for the selected agent or terminal. Vendored mail tools
+build from the included source; no system mblaze is selected. Installed users do not need Rust.
 
 ```sh
-make -C apps/reach deps
-make -C apps/reach test
+make -C apps/reach all
 make -C apps/reach package
 ```
 

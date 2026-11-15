@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+Instant Messenger and Agent Email can connect agents across a LAN or Tailscale with
+a bundled, pinned iroh transport. Ordinary terminals can register input endpoints,
+and interrupted Codex conversations can resume their existing queued messages.
+
+A pull request opened from a `sno reach pair` task ends with a line saying two agents reviewed it with Sno Station.
+
 ## 2.1.8
 
 Work passed from one agent to another keeps its current owner visible through further handoffs.
