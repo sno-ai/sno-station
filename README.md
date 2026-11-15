@@ -45,6 +45,33 @@ no central messaging server is required. Look for `network` and `peer` in
 
 [See what your agents can do with Reach →](apps/reach/README.md) · [中文说明](docs/reach.zh-CN.md)
 
+## Finish: say when, and an agent shows up
+
+Give your agent a task and a time, then leave. At that time an agent starts and does the work, with the conversation open or closed.
+
+```text
+Check the nightly build tomorrow at 9 and tell me what failed.
+```
+
+| You want | What you do |
+| --- | --- |
+| **Work at a set time** | Say the time to your agent in Claude Code or Codex. Once, every day or every week. |
+| **A long run watched to the end** | Ask your agent to check on it every few minutes until it finishes. |
+| **Work that outlives a usage limit** | Tell the working agent to use `rotate-agent`. A different agent continues. |
+
+See what is scheduled, and what did not go as planned:
+
+```bash
+sno heartbeat --due
+sno heartbeat --due --problems
+```
+
+A task that could not start stays due, with the reason written beside it. Your agent also tells you at the start of your next conversation.
+
+Not yet: timed tasks start Claude Code and Codex only, and a full restart of the computer has not been through a real test.
+
+[Start using Finish](docs/finish.md) · [中文说明](docs/finish.zh-CN.md)
+
 ## Hand the work off tonight. In the morning you get results, not three questions.
 
 Three things that happened to us before we built this:
@@ -297,6 +324,7 @@ There is no update step: `sno` updates itself when it finds a newer release.
 | Interrupted work carries on, and a task survives compaction | New in 2.0; run with real Claude Code and Codex agents |
 | An approved lesson works on the next reply | New in 2.0; run with real Claude Code and Codex agents |
 | Messages wait while you type or an agent compacts | New in 2.0; run with real Claude Code and Codex agents |
+| Finish: timed tasks start an agent at the time you named | New; run with real Claude Code and Codex agents: with the conversation open and closed on Linux, and in a new conversation on macOS. See the [Finish guide](docs/finish.md). |
 
 A row says "proven" only once it has run on a clean machine.
 
