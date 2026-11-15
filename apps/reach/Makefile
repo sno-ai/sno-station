@@ -24,8 +24,14 @@ ARCHIVE := reach-$(VERSION)-$(PLATFORM).tar.gz
 TAR := $(shell if tar --sort=name --version >/dev/null 2>&1; then printf tar; elif gtar --sort=name --version >/dev/null 2>&1; then printf gtar; fi)
 TOOLS := maddr magrep mcom mrep mbnc mdate mdeliver mdirs mflag mgenmid mhdr mlist mmime mmkdir mpick mquote mscan msed mseq mshow msort mthread museragent
 
-.PHONY: all deps test package
-all: deps
+.PHONY: all deps net test package
+all: deps net
+
+net:
+	cd net
+	cargo build --release --locked $(if $(RUST_TARGET),--target $(RUST_TARGET),)
+	cp target/$(if $(RUST_TARGET),$(RUST_TARGET)/,)release/reach-net ../lib/reach-net
+	cp target/$(if $(RUST_TARGET),$(RUST_TARGET)/,)release/reach-codex-wake ../lib/reach-codex-wake
 
 deps:
 	SOURCE_DATE_EPOCH="$$(git -C "$(REPO_ROOT)" show -s --format=%ct HEAD)" GIT_CEILING_DIRECTORIES="$(abspath vendor)" $(MAKE) -C vendor/mblaze all CFLAGS='-O2 -fstack-protector-strong -D_FORTIFY_SOURCE=2 -ffile-prefix-map=$(CURDIR)=.'
@@ -38,7 +44,7 @@ deps:
 test: deps
 	bash "$(REPO_ROOT)/tests/apps/reach/run.sh"
 
-package: deps
+package: deps net
 	[[ "$(VERSION)" =~ ^[0-9]+[.][0-9]+([.][0-9]+)?$$ ]]
 	[[ -n "$(TAR)" ]] || { printf 'reach package: needs GNU tar; install it and run again.\n' >&2; exit 1; }
 	command -v sha256sum >/dev/null || { printf 'reach package: needs sha256sum; install it and run again.\n' >&2; exit 1; }

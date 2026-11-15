@@ -33,7 +33,7 @@ jobs:
           - { name: linux-x86_64, os: ubuntu-22.04, make: make, extra: "" }
           - { name: linux-aarch64, os: ubuntu-22.04-arm, make: make, extra: "" }
           - { name: macos-aarch64, os: macos-15, make: gmake, extra: "" }
-          - { name: macos-x86_64, os: macos-15, make: gmake, extra: 'CC="cc -arch x86_64" PLATFORM=macos-x86_64' }
+          - { name: macos-x86_64, os: macos-15, make: gmake, extra: 'CC="cc -arch x86_64" PLATFORM=macos-x86_64 RUST_TARGET=x86_64-apple-darwin' }
     runs-on: ${{ matrix.os }}
     permissions:
       contents: read
@@ -55,6 +55,10 @@ jobs:
         env:
           MACOSX_DEPLOYMENT_TARGET: "14.0"
         run: |
+          rustup toolchain install 1.96.0 --profile minimal
+          if [[ '${{ matrix.name }}' == macos-x86_64 ]]; then
+            rustup target add --toolchain 1.96.0 x86_64-apple-darwin
+          fi
           cd apps/reach
           ${{ matrix.make }} package ${{ matrix.extra }}
           ls -l dist

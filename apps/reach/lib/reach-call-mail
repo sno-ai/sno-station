@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+# Ordinary calls return a threaded answer through the existing Reach mailbox.
+set -Eeuo pipefail
+umask 077
+
+[[ $# == 5 ]] || { printf 'usage: reach-call-mail address text timeout every expect\n' >&2; exit 64; }
+address=$1 text=$2 limit=$3 every=$4 expect=$5
+directory="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+reach="$directory/reach-main"
+export PATH="$directory/../vendor/bin:$PATH"
+sender="${SNO_REACH_ADDR:-${SNO_EXECUTOR_ADDR:-}}"
+[[ -n "$sender" ]] || { printf 'reach: call needs the caller identity; run join-talk or set SNO_REACH_ADDR\n' >&2; exit 64; }
+root="${SNO_REACH_ROOT:-$HOME/.local/state/sno-reach}"
+started=$SECONDS
+deadline=$((started + 10#$limit))
+((deadline > SECONDS)) || { printf 'reach: call deadline expired before sending\n' >&2; exit 4; }
+message="$(mktemp "$root/$sender/tmp/reach-call.XXXXXXXXXX")" || {
+    printf 'reach: call %s cannot save original text in caller mailbox %s\n' "$address" "$sender" >&2
+    exit 74
+}
+token="$(date +%s%N)-$$-$RANDOM"
+message_id="<call-$token@${sender##*@}>"
+{
+    printf 'From: Caller <%s>\nTo: Receiver <%s>\nDate: %s\nSubject: [CALL] instruction\nMessage-ID: %s\nX-Type: call\nX-Work: call-%s\n\n' \
+        "$sender" "$address" "$(date -R)" "$message_id" "$token"
+    printf 'Read and follow the original instruction below. Return your actual answer with sno reach reply --as %s --card <local-original-file>, supplying the answer on stdin and no --state. Find that local file with sno reach inbox --as %s and match Message-ID %s. Do not accept or complete this call as a work card. Do not substitute a terminal acknowledgment for your answer.\n\nOriginal instruction:\n' \
+        "$address" "$address" "$message_id"
+    printf '%s\n' "$text"
+} >"$message"
+
+status=0
+remaining=$((deadline - SECONDS))
+if ((remaining <= 0)); then
+    printf 'reach: call %s deadline expired before send; original retained at %s\n' "$address" "$message" >&2
+    exit 4
+fi
+timeout --signal=TERM --kill-after=1 "$remaining" \
+    "$reach" send --as "$sender" <"$message" >&2 || status=$?
+if ((status != 0)); then
+    printf 'reach: call %s send failed (exit %s); original %s retained at %s; inspect outbox before retrying\n' \
+        "$address" "$status" "$message_id" "$message" >&2
+    case "$status" in 124|137) exit 4 ;; *) exit "$status" ;; esac
+fi
+rm -- "$message"
+remaining=$((deadline - SECONDS))
+if ((remaining <= 0)); then
+    printf 'reach: call %s stored %s; no answer verified before deadline\n' "$address" "$message_id" >&2
+    exit 4
+fi
+reply=''
+reply="$(timeout --signal=TERM --kill-after=1 "$remaining" "$reach" wait \
+    --as "$sender" --reply-to "$message_id" --from "$address" --timeout "$remaining" --every "$every")" || status=$?
+if ((status != 0)); then
+    printf 'reach: call %s stored %s; answer wait failed (exit %s)\n' "$address" "$message_id" "$status" >&2
+    case "$status" in 4|124|137) exit 4 ;; *) exit "$status" ;; esac
+fi
+# mrep puts its generated attribution and quoted original before the answer body.
+# Strip that leading block only; preserve quoting that is part of the actual answer.
+answer="$(mshow -R "$reply" | awk '
+    NR == 1 && / wrote:$/ {quoted=1; next}
+    quoted && /^>/ {next}
+    quoted && /^[[:space:]]*$/ {quoted=0; next}
+    {quoted=0; print}
+')"
+jq -n --arg output "$answer" '{output:$output}'
+if [[ -n "$expect" && ! "$answer" =~ $expect ]]; then
+    printf 'reach: call %s received an answer to %s but it did not match --expect\n' "$address" "$message_id" >&2
+    exit 4
+fi

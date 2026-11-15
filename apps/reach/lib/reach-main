@@ -53,7 +53,7 @@ REPO_ROOT="$(cd -- "$SCRIPT_DIR/.." && pwd)"
 readonly REPO_ROOT
 readonly ADDRESS_RE='^[a-z][a-z0-9-]{0,31}\.[a-z0-9][a-z0-9-]{0,63}@[a-z0-9][a-z0-9.-]{0,252}$'
 readonly TOKEN_RE='^[^[:space:][:cntrl:]]+$'
-readonly NAME_RE='^[^[:space:][:cntrl:]<>,]+$'
+readonly NAME_RE='^[^[:cntrl:]<>,]+$'
 readonly MESSAGE_ID_RE='^<[^<>[:space:]]+>$'
 # One header read per message for `state --all-work`; progress_load uses it when present.
 declare -A STATE_HEADERS=() STATE_PATHS=() STATE_SOURCE=() STATE_FROM=() STATE_TO=() STATE_EPOCH=()
@@ -106,7 +106,7 @@ die() {
 
 usage() {
     printf 'usage: sno reach <verb> [options]\n'
-    printf '%s\n' 'pair spawn register unregister seats call watch ring send reply inbox wait dismiss log state flush init rebind doctor export lint remind'
+    printf '%s\n' 'pair spawn terminal terminal-info network peer register unregister seats call watch ring send reply inbox wait dismiss log state flush init rebind doctor export lint remind'
     if (($#)); then exit "$1"; else exit 64; fi
 }
 
@@ -360,7 +360,7 @@ validate_card() {
       .seat == ($address | split("@")[0] | sub("^[^.]+\\."; "")) and
       .host == ($address | split("@")[1]) and
       (.machine_id | type == "string" and test("^[0-9a-f]{32}$")) and
-      (.name | type == "string" and test("^[^[:space:][:cntrl:]<>,]+$")) and
+      (.name | type == "string" and test("^[^[:cntrl:]<>,]+$")) and
       (.runtime | type == "string" and length > 0) and
       (.supervisor | type == "string" and test("^[a-z][a-z0-9-]{0,31}\\.[a-z0-9][a-z0-9-]{0,63}@[a-z0-9][a-z0-9.-]{0,252}$")) and
       (.owns | type == "array") and (.history | type == "array") and
@@ -378,7 +378,7 @@ read_live_machine() {
 }
 
 prepare_target() {
-    root_value=$1
+    root_value=${SNO_REACH_RECEIVER_ROOT:-$1}
     address_value=$2
     safe_root "$root_value" || remote_error 65 PATH-UNSAFE
     valid_address "$address_value" || remote_error 64 INVALID-ADDRESS
@@ -619,7 +619,7 @@ case "$operation" in
             remote_error 65 MACHINE-MISMATCH
         if [ "$operation" = PREFLIGHT ]; then
             [ -f "$target_path/reachable.json" ] && [ ! -L "$target_path/reachable.json" ] || remote_error 65 REGISTER-FIRST
-            jq -e --arg address "$address_value" '.address == $address and (.channel == "acp" or .channel == "tmux" or .channel == "orca") and (.handle | type == "string" and length > 0)' "$target_path/reachable.json" >/dev/null || remote_error 65 REACHABILITY-INVALID
+            jq -e --arg address "$address_value" '.address == $address and (.channel | type == "string" and length > 0) and (.handle | type == "string" and length > 0)' "$target_path/reachable.json" >/dev/null || remote_error 65 REACHABILITY-INVALID
         fi
         printf 'DOCTOR-OK\n'
         ;;
@@ -633,6 +633,12 @@ case "$operation" in
         require_eof
         prepare_target "$root_value" "$address_value"
         valid_address "$sender_value" || remote_error 64 INVALID-ADDRESS
+        if [ -n "${SNO_REACH_RECEIVER_PROGRAM:-}" ]; then
+            ring_outcome=$(SNO_REACH_ROOT=$root_value SNO_REACH_ADDR=$sender_value \
+                "$SNO_REACH_RECEIVER_PROGRAM" ring "$address_value") || remote_error 75 RING-FAILED
+            printf '%s\n' "$ring_outcome"
+            exit 0
+        fi
         PATH=${HOME-}/.local/bin:$PATH
         sno_program=${SNO_EXECUTABLE:-sno}
         command -v "$sno_program" >/dev/null 2>&1 || remote_error 69 TOOL-UNAVAILABLE
@@ -876,6 +882,11 @@ execute_fixed_request() {
         "${deadline[@]}" /bin/sh -c "$literal" <"$wire_file" \
             >"$output_file" 2>"$error_file"
         request_status=$?
+    elif [[ -e "$(mailbox_root)/network/peers/$host.json" ]]; then
+        "${deadline[@]}" "$REPO_ROOT/lib/reach-net" connect \
+            --peer-file "$(mailbox_root)/network/peers/$host.json" <"$wire_file" \
+            >"$output_file" 2>"$error_file"
+        request_status=$?
     else
         # Fixed receiver program is the remote command.
         # shellcheck disable=SC2029
@@ -890,7 +901,6 @@ execute_fixed_request() {
     fi
     [[ ! -s "$error_file" ]] || {
         cat "$error_file" >&2
-        return 74
     }
     mapfile -t output_lines <"$output_file"
     if ((${#output_lines[@]} != 1)) ||
@@ -912,7 +922,7 @@ parse_init_options() {
     done
     [[ -n "$CALLER" ]] || CALLER="$(printenv SNO_REACH_ADDR || true)"
     validate_address "$CALLER"
-    [[ "$NAME" =~ $NAME_RE ]] || die 64 '--name must be one display-safe token'
+    [[ "$NAME" =~ $NAME_RE ]] || die 64 '--name must be nonempty display text without control characters or <>, characters'
     MACHINE_ID="$("$REPO_ROOT/lib/reach-machine-id")" || die 74 'machine identity is unavailable'
     validate_machine_id "$MACHINE_ID"
     SUPERVISOR="$CALLER"
@@ -1087,6 +1097,17 @@ observe_message() {
         "--to_role=$to_role" "--card_type=$card_type" "--state=$state" "${fields[@]}"
 }
 
+run_terminal_info() {
+    local info handle
+    info="$(python3 "$REPO_ROOT/lib/reach-terminal" discover)" || return $?
+    if [[ "$(uname -s)" == Darwin && "$(jq -r .handle <<<"$info")" == tty:* ]]; then
+        if handle="$(timeout --foreground 10 bash "$REPO_ROOT/lib/reach-terminal-macos" discover "$(jq -r '.handle | ltrimstr("tty:")' <<<"$info")")"; then
+            info="$(jq -nc --arg handle "$handle" '{handle:$handle,identity:$handle}')"
+        fi
+    fi
+    printf '%s\n' "$info"
+}
+
 run_register() {
     local root channel='' handle='' pane session server identity kind harness=codex recorded
     [[ ! -v CLAUDECODE ]] || harness=claude-code
@@ -1138,7 +1159,11 @@ run_register() {
             inventory="$(timeout --foreground 20 "$orca" terminal list --json)" || die 65 'Orca inventory failed'
             identity="$(jq -er --arg handle "$handle" '[.result.terminals[]? | select(.connected == true and .handle == $handle)] | select(length == 1) | .[0].tabId' <<<"$inventory")" || die 65 'Orca handle is not uniquely connected'
             kind='orca-tab' ;;
-        *) die 64 '--channel must be acp, tmux, orca or cursor-ide' ;;
+        terminal)
+            [[ -n "$handle" ]] || handle="$(run_terminal_info | jq -er .handle)" || die 69 'could not discover the running terminal'
+            identity="$handle" kind=terminal
+            ;;
+        *) identity="$handle" kind="$channel" ;;
     esac
     "$REACHABILITY" register --root "$root" --as "$CALLER" --channel "$channel" --handle "$handle" --identity-kind "$kind" --identity "$identity" --harness "$harness"
     observe_append "$root" reach.register "--agent=$harness" "--harness=$harness" --action=register
@@ -1416,6 +1441,8 @@ preflight_strict_recipient_registry() {
         if [[ "${recipient##*@}" == "$(hostname)" ]]; then
             require_safe_caller_dir "$root" "$recipient" >/dev/null
         else
+            # Configured peers can be offline; delivery checks identity after saving the outbox.
+            [[ ! -e "$root/network/peers/${recipient##*@}.json" ]] || continue
             wire="$TEMP_DIR/preflight-remote"
             printf 'SNO-REACH-REMOTE/1\nDOCTOR\n' >"$wire"
             append_text_frame "$wire" root "$root"
@@ -1433,6 +1460,7 @@ preflight_recipient_reachability() {
     maddr -a -h to: "$message" >"$recipient_file" || die 65 'cannot parse To recipients'
     while IFS= read -r recipient; do
         if [[ "${recipient##*@}" != "$(hostname)" ]]; then
+            [[ ! -e "$root/network/peers/${recipient##*@}.json" ]] || continue
             wire="$TEMP_DIR/preflight-reachability"
             printf 'SNO-REACH-REMOTE/1\nPREFLIGHT\n' >"$wire"
             append_text_frame "$wire" root "$root"
@@ -1564,8 +1592,11 @@ deliver_remote_copy() {
     # Fixed receiver program is the remote command.
     # shellcheck disable=SC2029
     coproc REACH_REMOTE_DELIVERY {
-        ssh "${SSH_OPTIONS[@]}" "${recipient##*@}" "$literal" \
-            2>"$error_file"
+        if [[ -e "$root/network/peers/${recipient##*@}.json" ]]; then
+            "$REPO_ROOT/lib/reach-net" connect --peer-file "$root/network/peers/${recipient##*@}.json" 2>"$error_file"
+        else
+            ssh "${SSH_OPTIONS[@]}" "${recipient##*@}" "$literal" 2>"$error_file"
+        fi
     }
     remote_pid=$REACH_REMOTE_DELIVERY_PID
     output_fd=${REACH_REMOTE_DELIVERY[0]}
@@ -1621,7 +1652,6 @@ deliver_remote_copy() {
     fi
     [[ ! -s "$error_file" ]] || {
         cat "$error_file" >&2
-        return 74
     }
     ((${#results[@]} == 1)) ||
         return 74
@@ -2796,6 +2826,24 @@ preflight_reply_destination() {
     done <"$TEMP_DIR/resolved-reply"
 }
 
+# A holder's report that skips the chain tail forks the chain and makes the item unclosable.
+preflight_report_tail() {
+    local message="$1" root="$2" work item expected report id
+    [[ -n "$(progress_header "$message" x-state)" ]] || return 0
+    work="$(progress_header "$message" x-work)"
+    read -r item _ <<<"$(progress_header "$message" references)" || true
+    [[ -n "$work" && -n "$item" ]] || return 0
+    progress_load "$root" "$work"
+    progress_validate_reports
+    [[ -n "${P_ITEMS[$item|$CALLER]:-}" ]] || return 0
+    progress_chain "$item" "$CALLER" ''
+    expected="${P_TAIL:-$item}"
+    [[ "$(progress_header "$message" in-reply-to)" != "$expected" ]] || return 0
+    report="$item"
+    for id in "${P_CHAIN[@]}"; do report+=" $id"; done
+    die 65 "report must continue the chain of held work $item; send delivered nothing. Set In-Reply-To: $expected and References: $report"
+}
+
 ring_remote() {
     local root="$1" sender="$2" recipient="$3" remaining="$4" wire="$TEMP_DIR/ring-remote"
     printf 'SNO-REACH-REMOTE/1\nRING\n' >"$wire"
@@ -2863,6 +2911,7 @@ run_send() {
     preflight_strict_recipient_registry "$input_file" "$root" "$CALLER"
     preflight_recipient_reachability "$root" "$CALLER" "$input_file" "$message_type"
     preflight_reply_destination "$input_file" "$root"
+    preflight_report_tail "$input_file" "$root"
     preflight_send_rate_limit "$root" "$input_file" "$message_type"
     started="$EPOCHREALTIME"
     status=0
@@ -3023,7 +3072,7 @@ normalize_reply_source() {
     read_required_header "$source" subject "$header_file" ||
         die 74 "could not read reply source subject: $source"
     subject="$(<"$header_file")"
-    if [[ "$subject" =~ ^(Re:\ )?\[(QUESTION|DECISION|ANSWER|FYI|STATUS|DONE)\](.*)$ ]]; then
+    if [[ "$subject" =~ ^(Re:\ )?\[(QUESTION|DECISION|ANSWER|FYI|STATUS|DONE|CALL)\](.*)$ ]]; then
         normalized="[ANSWER]${BASH_REMATCH[3]}"
     else
         die 65 "reply source has a non-canonical subject: $source"
@@ -3068,7 +3117,7 @@ write_reply_support_files() {
     local type=answer
     [[ "$REPLY_STATE" != accepted ]] || type=status
     printf 'X-Work: %s\nX-Type: %s\nX-Name: %s\n' \
-        "$journey" "$type" "$name" >"$profile_dir/headers" ||
+        "$journey" "$type" "${name//[[:space:]]/}" >"$profile_dir/headers" ||
         die 74 'could not write private reply headers'
     if [[ -n "$REPLY_STATE" ]]; then
         printf 'X-State: %s\n' "$REPLY_STATE" >>"$profile_dir/headers" ||
@@ -3930,7 +3979,13 @@ run_call() {
     [[ -z "$expect" ]] || args+=(--expect "$expect")
     [[ "$raw" == no ]] || args+=(--raw)
     started="$EPOCHREALTIME"
-    output="$("$REPO_ROOT/lib/reach-call" "${args[@]}")" || rc=$?
+    channel=''
+    [[ ! -f "$root/$address/reachable.json" ]] || channel="$(jq -r .channel "$root/$address/reachable.json")"
+    if [[ "$raw" == no && ( "${address##*@}" != "$(hostname)" || "$channel" == terminal || "$channel" == orca || "$channel" == cursor ) ]]; then
+        output="$("$REPO_ROOT/lib/reach-call-mail" "$address" "$text" "$limit" "$every" "$expect")" || rc=$?
+    else
+        output="$("$REPO_ROOT/lib/reach-call" "${args[@]}")" || rc=$?
+    fi
     if ((rc == 0)); then
         case "$expect" in
             *HANDOFF_SNAPSHOT_UNCHANGED*) receipt=handoff_snapshot ;;
@@ -4004,11 +4059,16 @@ run_ring() {
     local started status
     validate_address "$recipient"
     root="$(mailbox_root)"
-    [[ -f "$root/$recipient/reachable.json" && ! -L "$root/$recipient/reachable.json" ]] || { printf 'unregistered\n'; return 1; }
     sender="${SNO_REACH_ADDR:-$recipient}"
     validate_address "$sender"
     started="$EPOCHREALTIME"
-    output="$("$REPO_ROOT/lib/reach-ring" doorbell --to "$recipient" --from "$sender" --msg-id "<ring-$$-$RANDOM@localhost>")" || rc=$?
+    if [[ "${recipient##*@}" != "$(hostname)" ]]; then
+        make_temp_dir
+        output="$(ring_remote "$root" "$sender" "$recipient" 25)" || rc=$?
+    else
+        [[ -f "$root/$recipient/reachable.json" && ! -L "$root/$recipient/reachable.json" ]] || { printf 'unregistered\n'; return 1; }
+        output="$("$REPO_ROOT/lib/reach-ring" doorbell --to "$recipient" --from "$sender" --msg-id "<ring-$$-$RANDOM@localhost>")" || rc=$?
+    fi
     outcome="${output%%$'\n'*}"; outcome="${outcome#outcome=}"
     case "$rc" in
         124|137) status=timeout ;;
@@ -4056,6 +4116,8 @@ for option in "$@"; do
     esac
 done
 case "$verb" in
+    network|peer) python3 "$REPO_ROOT/lib/reach-network" --root "$(mailbox_root)" "$verb" "$@" ;;
+    __receive) SNO_REACH_RECEIVER_PROGRAM="$REPO_ROOT/bin/sno-reach" /bin/sh -c "$(remote_program_literal)" ;;
     send) run_send "$@" ;;
     inbox) run_inbox "$@" ;;
     wait) run_wait "$@" ;;
@@ -4066,6 +4128,7 @@ case "$verb" in
     init) run_init "$@" ;;
     rebind) run_rebind "$@" ;;
     register) run_register "$@" ;;
+    terminal-info) run_terminal_info "$@" ;;
     unregister) run_unregister "$@" ;;
     doctor) run_doctor "$@" ;;
     export) run_export "$@" ;;
