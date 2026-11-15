@@ -1,5 +1,12 @@
 # Hermes Agent 的 Sno Memory — 初次设置
 
+> 这个插件只是 Sno Station 的一部分，请不要单独安装。完整安装只需下面这一行，它会先安装
+> `sno` 命令，再运行 `sno setup`：
+>
+> ```bash
+> curl -fsSL https://sno.ai/install | sh
+> ```
+
 Hermes 使用 Python 插件连接 Sno 的记忆服务；记忆服务本身由 npm 安装。插件由 `sno`
 命令帮你安装并选用。
 
@@ -34,7 +41,9 @@ hermes config get memory.provider
 打开 Hermes，叫它记住一条简单的项目事实。结束会话后，在同一目录开新会话，请它说出那条
 事实。记忆服务会在插件需要时自行启动，不用另开一个服务命令。
 
-如果你已有记忆库，只运行 `sno setup --harness hermes`，不要替换现有的 `settings.json`、记忆库路径或加密密钥。
+## 已有记忆库
+
+只运行 `sno setup --harness hermes`，不要替换现有的 `settings.json`、记忆库路径或加密密钥。
 `SNO_PROFILE_DIR` 可指定另一份配置。如果 Hermes 已选了别的记忆提供者，setup 不会改你的选择；
 想用 Sno 记忆，请自己运行 `hermes config set memory.provider sno-mem-hermes`。更新或卸载插件不会
 删除已存的记忆。
