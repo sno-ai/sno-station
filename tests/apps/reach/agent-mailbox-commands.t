@@ -2412,8 +2412,93 @@ test_send_rate_limits_non_questions_per_pair() {
         fail "question was blocked by the rate limit"
 }
 
+test_pair_implementer_assignment_requires_pr_review_footer() {
+    local root="$test_root/pair-pr-review-footer"
+    local path implementer_body='' reviewer_body=''
+
+    mkdir -p "$root/bin" "$root/home/.config/sno"
+    printf '[models]\nhandoff_order="claude-code,codex"\n' \
+        >"$root/home/.config/sno/models.toml"
+    cat >"$root/bin/claude" <<'PY'
+#!/usr/bin/env python3
+import email
+import os
+from pathlib import Path
+import re
+import subprocess
+import sys
+
+if sys.argv[1:3] == ['auth', 'status']:
+    print('{"loggedIn":true}')
+    sys.exit(0)
+if sys.argv[1:3] == ['login', 'status']:
+    print('Logged in using ChatGPT')
+    sys.exit(0)
+subprocess.run(['stty', '-echo'], check=True)
+seat = os.environ['SNO_REACH_ADDR']
+state = Path(os.environ['SNO_REACH_ROOT']) / seat
+reach = os.environ['PAIR_REACH']
+reviewed = False
+print('READY fake pair actor', flush=True)
+for line in sys.stdin:
+    if not line.startswith('REACH-RING'):
+        continue
+    subprocess.run([reach, 'inbox', '--as', seat], check=True)
+    nonce = re.search(r'and then ([0-9a-f]{8})', line)
+    if nonce:
+        print('ACK-' + nonce.group(1), flush=True)
+    if reviewed:
+        continue
+    for path in list((state / 'new').glob('*')) + list((state / 'cur').glob('*')):
+        message = email.message_from_string(path.read_text())
+        if message['Subject'] != '[DECISION] Reviewer task':
+            continue
+        subprocess.run([reach, 'reply', '--as', seat, '--card', str(path),
+                        '--state', 'accepted'], input='Accepted.\n', text=True, check=True)
+        subprocess.run([reach, 'reply', '--as', seat, '--card', str(path)],
+                       input='No defects found in the fixture result.\n', text=True, check=True)
+        reviewed = True
+        break
+PY
+    ln -s claude "$root/bin/codex"
+    printf '#!/usr/bin/env bash\nexec %q -L %q "$@"\n' \
+        "$(command -v tmux)" "$SERVER" >"$root/bin/tmux"
+    chmod +x "$root/bin/claude" "$root/bin/tmux"
+    run_command "$root/pair.out" "$root/pair.err" \
+        env -i PATH="$root/bin:$APP/vendor/bin:/usr/bin:/bin" \
+        HOME="$root/home" XDG_CONFIG_HOME="$root/home/.config" \
+        SNO_REACH_ROOT="$root/state" PAIR_REACH="$mbox" \
+        "$mbox" pair 'Implement the fixture task and have the partner review it.'
+    assert_eq 0 "$LAST_STATUS" 'pair with both agents started status'
+    assert_contains "$(<"$root/pair.out")" 'Implementer:' 'Implementer started'
+    assert_contains "$(<"$root/pair.out")" 'Reviewer:' 'Reviewer started'
+
+    while IFS= read -r -d '' path; do
+        case "$(mhdr -h subject "$path")" in
+            '[DECISION] Implementer task')
+                implementer_body="$(mshow -N -h '' "$path")" ;;
+            '[DECISION] Reviewer task')
+                reviewer_body="$(mshow -N -h '' "$path")" ;;
+        esac
+    done < <(find "$root" -type f \( -path '*/state/executor.*/new/*' -o \
+        -path '*/state/executor.*/cur/*' \) -print0)
+
+    assert_contains "$implementer_body" 'Role: Implementer' \
+        'stored Implementer assignment body'
+    assert_contains "$reviewer_body" 'Role: Reviewer' \
+        'stored Reviewer assignment body'
+    assert_not_contains "$reviewer_body" 'Reviewed by two agents' \
+        'Reviewer assignment excludes PR review footer'
+    assert_contains "$implementer_body" \
+        'Reviewed by two agents with [Sno Station](https://github.com/sno-ai/sno-station).' \
+        'Implementer assignment includes exact PR review footer'
+    assert_contains "$implementer_body" 'last line of its description' \
+        'Implementer assignment requires footer placement'
+}
+
 printf 'TAP version 13\n'
 case "${1:-}" in
+    test_pair_implementer_assignment_requires_pr_review_footer) run_case 'test_pair_implementer_assignment_requires_pr_review_footer' test_pair_implementer_assignment_requires_pr_review_footer ;;
     cleanup-proof) run_case cleanup-proof bash "$TEST_DIR/cleanup.t" --seed "$WORK/state" agent "${REACH_CLEANUP_PROOF:?}" ;;
     test_real_dependencies_and_delivery_headers) run_case 'test_real_dependencies_and_delivery_headers' test_real_dependencies_and_delivery_headers ;;
     test_lint_rejects_ambiguous_contract_values) run_case 'test_lint_rejects_ambiguous_contract_values' test_lint_rejects_ambiguous_contract_values ;;
