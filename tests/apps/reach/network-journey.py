@@ -11,7 +11,7 @@ from email.utils import formatdate
 
 reach, directory = sys.argv[1:3]
 case = sys.argv[3] if len(sys.argv) > 3 else "all"
-assert case in ("all", "recovery", "notification"), case
+assert case in ("all", "recovery", "notification", "authorization"), case
 work = Path(directory)
 hosts = []
 
@@ -93,6 +93,36 @@ try:
         assert recipient["name"] in run(sender, "peer", "list").stdout
     print("PASS receiver lifecycle and reciprocal contacts use public commands", flush=True)
 
+    if case == "authorization":
+        native = str(Path(reach).resolve().parent.parent / "lib/reach-net")
+        command = [native, "connect", "--key-file", str(first["root"] / "network/identity"),
+                   "--peer-file", str(first["root"] / "network/peers" / (second["name"] + ".json"))]
+
+        def frame(name, value):
+            return f"{name} {len(value.encode())}\n{value}\n"
+
+        def reject(wire, reason):
+            result = subprocess.run(command, input=wire, text=True, capture_output=True,
+                                    env=first["env"], timeout=10)
+            assert result.returncode != 0 and reason in result.stderr, result
+
+        forged = message(second["address"], second["address"], "forged-sender", "Not authorized.")
+        wire = "SNO-REACH-REMOTE/1\nDELIVER\n" + frame("root", str(first["root"]))
+        wire += frame("address", second["address"]) + frame("basename", "forged-sender")
+        wire += f"body {len(forged.encode())}\n" + forged
+        reject(wire, "SENDER-NOT-AUTHORIZED")
+        assert not messages(second, "forged-sender")
+        wire = "SNO-REACH-REMOTE/1\nRING\n" + frame("root", str(first["root"]))
+        wire += frame("address", second["address"]) + frame("sender", second["address"])
+        reject(wire, "SENDER-NOT-AUTHORIZED")
+        assert not (second["home"] / "wakes").exists()
+        wire = "SNO-REACH-REMOTE/1\nRING\n" + frame("root", str(first["root"]))
+        wire += frame("address", "reader.agent@third.test") + frame("sender", first["address"])
+        reject(wire, "OPERATION-NOT-AUTHORIZED")
+        assert not (second["home"] / "ssh-called").exists(), "peer used receiver as an SSH relay"
+        reject("SNO-REACH-REMOTE/1\nREBIND\n", "OPERATION-NOT-AUTHORIZED")
+        print("PASS configured peer cannot forge another host or perform identity administration", flush=True)
+
     if case != "recovery":
         identifier = "network-original"
         body = "Complete original body: line one\nline two — 中文\n"
@@ -125,6 +155,10 @@ try:
         assert "NETWORK-ANSWER-7Q" in reply.get_payload(), reply
         assert reply["In-Reply-To"] == f"<{identifier}@example.test>", reply
         print("PASS real iroh delivery uses the receiver root and returns a threaded reply", flush=True)
+
+    if case == "authorization":
+        assert all(not (host["home"] / "ssh-called").exists() for host in hosts)
+        sys.exit(0)
 
     run(second, "network", "stop")
     unavailable = run(first, "send", "--as", first["address"],

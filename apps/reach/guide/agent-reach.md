@@ -206,6 +206,12 @@ Configure the reverse contact too, so replies can return. `sno reach peer list` 
 the exact configured hostnames. Contact files contain public endpoint addresses, not
 the private endpoint key. The receiver preserves its identity across restarts.
 
+Contacts authorize machines: both sides must add each other before communicating.
+Sending uses the same persistent identity as receiving. The receiver accepts only
+configured peer identities and checks that message From and ring sender addresses
+belong to a hostname registered for that peer. A network contact grants messaging,
+not remote identity creation or rebinding; initialize and manage agents locally.
+
 Use ordinary `send`, `reply`, and `call` commands afterward. Configured peers use iroh
 direct connections and need no system SSH server. A configured connection failure
 never falls back to SSH. Existing destinations without an iroh contact retain their

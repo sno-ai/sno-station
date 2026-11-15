@@ -40,6 +40,7 @@ enum Args {
     },
     Connect {
         peer: PathBuf,
+        key: PathBuf,
         bind: SocketAddr,
     },
     Version,
@@ -73,6 +74,7 @@ fn arguments() -> Result<Args> {
         },
         "connect" => Args::Connect {
             peer: required(&mut flags, "--peer-file")?.into(),
+            key: required(&mut flags, "--key-file")?.into(),
             bind: flags
                 .remove("--bind")
                 .unwrap_or_else(|| "0.0.0.0:0".into())
@@ -142,7 +144,41 @@ impl Drop for ReceiverGroup {
     }
 }
 
-async fn receive(connection: Connection, receiver: PathBuf) -> Result<()> {
+async fn peer_hosts(directory: &std::path::Path, remote: &str) -> Result<String> {
+    let mut entries = tokio::fs::read_dir(directory)
+        .await
+        .context("read configured peers")?;
+    let mut hosts = Vec::new();
+    while let Some(entry) = entries.next_entry().await? {
+        let path = entry.path();
+        if path.extension().and_then(|value| value.to_str()) != Some("json") {
+            continue;
+        }
+        let contact: Contact = serde_json::from_slice(&tokio::fs::read(&path).await?)
+            .with_context(|| format!("read peer {}", path.display()))?;
+        if contact.endpoint_id == remote {
+            hosts.push(
+                path.file_stem()
+                    .context("peer hostname missing")?
+                    .to_string_lossy()
+                    .into_owned(),
+            );
+        }
+    }
+    if hosts.is_empty() {
+        bail!("peer {remote} is not configured");
+    }
+    Ok(hosts.join("\n"))
+}
+
+async fn receive(connection: Connection, receiver: PathBuf, peers: PathBuf) -> Result<()> {
+    let hosts = match peer_hosts(&peers, &connection.remote_id().to_string()).await {
+        Ok(hosts) => hosts,
+        Err(error) => {
+            connection.close(1u32.into(), b"peer is not authorized");
+            return Err(error);
+        }
+    };
     let (mut send, mut recv) = connection
         .accept_bi()
         .await
@@ -151,6 +187,7 @@ async fn receive(connection: Connection, receiver: PathBuf) -> Result<()> {
     let operation = async {
         let mut child = Command::new(&receiver)
             .arg("__receive")
+            .env("SNO_REACH_AUTHORIZED_HOSTS", &hosts)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
@@ -246,6 +283,10 @@ async fn shutdown_signal() -> Result<()> {
 }
 
 async fn serve(bind: SocketAddr, key: PathBuf, info: PathBuf, receiver: PathBuf) -> Result<()> {
+    let peers = key
+        .parent()
+        .context("identity directory missing")?
+        .join("peers");
     let endpoint = endpoint(bind, persistent_key(&key).await?).await?;
     let bind_addr = endpoint
         .bound_sockets()
@@ -282,8 +323,9 @@ async fn serve(bind: SocketAddr, key: PathBuf, info: PathBuf, receiver: PathBuf)
             incoming = endpoint.accept() => {
                 let Some(incoming) = incoming else { break Err(anyhow::anyhow!("receiver accept loop closed")); };
                 let receiver = receiver.clone();
+                let peers = peers.clone();
                 requests.spawn(async move {
-                    receive(incoming.await.context("accept peer connection")?, receiver).await
+                    receive(incoming.await.context("accept peer connection")?, receiver, peers).await
                 });
             }
             Some(result) = requests.join_next() => match result {
@@ -299,7 +341,7 @@ async fn serve(bind: SocketAddr, key: PathBuf, info: PathBuf, receiver: PathBuf)
     result
 }
 
-async fn connect(peer: PathBuf, bind: SocketAddr) -> Result<i32> {
+async fn connect(peer: PathBuf, key: PathBuf, bind: SocketAddr) -> Result<i32> {
     let contact: Contact = serde_json::from_slice(
         &tokio::fs::read(&peer)
             .await
@@ -315,7 +357,7 @@ async fn connect(peer: PathBuf, bind: SocketAddr) -> Result<i32> {
     for addr in contact.addresses {
         address = address.with_ip_addr(addr);
     }
-    let endpoint = endpoint(bind, SecretKey::generate()).await?;
+    let endpoint = endpoint(bind, persistent_key(&key).await?).await?;
     let connection = endpoint
         .connect(address, ALPN)
         .await
@@ -384,7 +426,7 @@ async fn main() {
                 info,
                 receiver,
             } => serve(bind, key, info, receiver).await.map(|()| 0),
-            Args::Connect { peer, bind } => connect(peer, bind).await,
+            Args::Connect { peer, key, bind } => connect(peer, key, bind).await,
             Args::Version => {
                 println!(
                     "reach-net {} iroh {IROH_VERSION}",

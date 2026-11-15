@@ -377,11 +377,23 @@ read_live_machine() {
     valid_machine_id "$live_machine" || remote_error 65 MACHINE-MISMATCH
 }
 
+authorize_sender() {
+    [ "${SNO_REACH_AUTHORIZED_HOSTS+x}" = x ] || return 0
+    case "$1" in ''|*[[:space:]]*) remote_error 65 SENDER-NOT-AUTHORIZED ;; esac
+    valid_address "$1" || remote_error 65 SENDER-NOT-AUTHORIZED
+    printf '%s\n' "$SNO_REACH_AUTHORIZED_HOSTS" | grep -Fxq -- "${1##*@}" ||
+        remote_error 65 SENDER-NOT-AUTHORIZED
+}
+
 prepare_target() {
     root_value=${SNO_REACH_RECEIVER_ROOT:-$1}
     address_value=$2
     safe_root "$root_value" || remote_error 65 PATH-UNSAFE
     valid_address "$address_value" || remote_error 64 INVALID-ADDRESS
+    if [ "${SNO_REACH_AUTHORIZED_HOSTS+x}" = x ]; then
+        receiver_host=$(hostname) || remote_error 74 IO
+        [ "${address_value##*@}" = "$receiver_host" ] || remote_error 65 OPERATION-NOT-AUTHORIZED
+    fi
     target_path=$root_value/$address_value
 }
 
@@ -458,6 +470,12 @@ rebind_card() {
 IFS= read -r protocol_line || remote_error 64 PROTOCOL
 [ "$protocol_line" = 'SNO-REACH-REMOTE/1' ] || remote_error 64 PROTOCOL
 IFS= read -r operation || remote_error 64 PROTOCOL
+if [ "${SNO_REACH_AUTHORIZED_HOSTS+x}" = x ]; then
+    case "$operation" in
+        DELIVER|RING|DOCTOR|PREFLIGHT) ;;
+        *) remote_error 65 OPERATION-NOT-AUTHORIZED ;;
+    esac
+fi
 
 case "$operation" in
     DELIVER)
@@ -496,6 +514,10 @@ case "$operation" in
         actual_count=$(wc -c <"$delivery_tmp" | tr -d ' ')
         [ "$actual_count" = "$body_count" ] ||
             remote_error 74 SHORT-BODY
+        if [ "${SNO_REACH_AUTHORIZED_HOSTS+x}" = x ]; then
+            sender_value=$(maddr -a -h from: "$delivery_tmp") || remote_error 65 INVALID-SENDER
+            authorize_sender "$sender_value"
+        fi
         no_reply_value=$(sed -n '
             /^[[:space:]]*$/q
             s/\r$//
@@ -633,6 +655,7 @@ case "$operation" in
         require_eof
         prepare_target "$root_value" "$address_value"
         valid_address "$sender_value" || remote_error 64 INVALID-ADDRESS
+        authorize_sender "$sender_value"
         if [ -n "${SNO_REACH_RECEIVER_PROGRAM:-}" ]; then
             ring_outcome=$(SNO_REACH_ROOT=$root_value SNO_REACH_ADDR=$sender_value \
                 "$SNO_REACH_RECEIVER_PROGRAM" ring "$address_value") || remote_error 75 RING-FAILED
@@ -884,6 +907,7 @@ execute_fixed_request() {
         request_status=$?
     elif [[ -e "$(mailbox_root)/network/peers/$host.json" ]]; then
         "${deadline[@]}" "$REPO_ROOT/lib/reach-net" connect \
+            --key-file "$(mailbox_root)/network/identity" \
             --peer-file "$(mailbox_root)/network/peers/$host.json" <"$wire_file" \
             >"$output_file" 2>"$error_file"
         request_status=$?
@@ -1593,7 +1617,8 @@ deliver_remote_copy() {
     # shellcheck disable=SC2029
     coproc REACH_REMOTE_DELIVERY {
         if [[ -e "$root/network/peers/${recipient##*@}.json" ]]; then
-            "$REPO_ROOT/lib/reach-net" connect --peer-file "$root/network/peers/${recipient##*@}.json" 2>"$error_file"
+            "$REPO_ROOT/lib/reach-net" connect --key-file "$root/network/identity" \
+                --peer-file "$root/network/peers/${recipient##*@}.json" 2>"$error_file"
         else
             ssh "${SSH_OPTIONS[@]}" "${recipient##*@}" "$literal" 2>"$error_file"
         fi
