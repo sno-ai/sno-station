@@ -58,15 +58,22 @@ Global options on every command: `--json` (machine-readable output), `-h` / `--h
 | `sno rem judge` / `recall` / `verdict JUDGMENT_ID VERDICT` | Sends a Self Learning run, ranks lessons for a first message, sends a human verdict | an agent or a timer |
 | `sno rem-reflect run [--now TS] [--trigger timer\|manual]` / `accept` / `reject` / `tbd` / `recall [--first-message]` / `lesson` / `status` / `install-hooks` | Self Learning and its lesson commands | an agent or a timer |
 
-## 5. Reach (messages between agents)
+## 5. Reach: Instant Messenger and Agent Email
+
+**Instant Messenger** asks another agent now and waits for a response. **Agent Email**
+leaves a saved message or task to handle later. See the [simple guide](reach.md).
 
 | Command | What it does | Who |
 | --- | --- | --- |
-| `sno reach VERB [options]` with VERB one of `pair spawn register unregister seats call watch ring send reply inbox wait dismiss log state flush init rebind doctor export lint remind` | Contact another agent, exchange work cards, read the inbox, wait for a reply, manage seats | an agent |
+| `sno reach VERB [options]` with VERB one of `pair spawn terminal terminal-info network peer register unregister seats call watch ring send reply inbox wait dismiss log state flush init rebind doctor export lint remind` | Use Instant Messenger or Agent Email, configure connections, and manage agent identities | an agent |
 | `sno squad` / `sno --json squad` | Shows who needs you, who is working, and finished results across local agents; opens full screen in a terminal, or prints a snapshot/JSON | you or an agent |
 | `sno reach pair "TASK"` | Starts two new agents in the current project: one implements and the other reviews its result through Reach; uses one signed-in vendor when needed and identifies the actual composition | you or an agent |
-| `sno reach call SEAT "TEXT" [--expect REGEX] [--timeout SECONDS] [--every SECONDS]` | Stores the full instruction in the local receiver's mailbox, sends one short cue, and waits for verified receiver output; busy or timed-out calls retain their mail | an agent |
+| `sno reach call SEAT "TEXT" [--expect REGEX] [--timeout SECONDS] [--every SECONDS]` | Instant Messenger: sends the instruction and waits for an actual response. Remote and supported local conversations return a threaded mail answer; existing terminal capture paths verify receiver output. Timeout does not mean the message was never delivered. | an agent |
 | `sno reach call SEAT "TEXT" --raw` | Types literal text into a tmux seat without mailbox storage or a reply wait | an agent |
+| `sno reach send --as ADDRESS` | Agent Email: reads a complete message on stdin, saves it, and attempts delivery | an agent |
+| `sno reach inbox --as ADDRESS` / `reply --as ADDRESS --card FILE` | Read saved Agent Email and reply to the original message; reply body comes from stdin | an agent |
+| `sno reach network start` / `status` / `stop` / `address` | Start or inspect the local cross-machine receiver; export its contact | you or an agent |
+| `sno reach peer add MACHINE --file CONTACT.json` / `peer list` | Add or inspect the machine contacts used for cross-machine communication | you or an agent |
 
 See [local squad observations](agent-state-view.md) for the status lines, tmux bar and full-screen controls.
 
