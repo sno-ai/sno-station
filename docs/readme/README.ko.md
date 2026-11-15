@@ -26,6 +26,17 @@ sno reach pair "Fix the login redirect"
 
 **다른 언어로 읽기:** [English](../../README.md) · [中文](README.zh-CN.md) · [Deutsch](README.de.md) · [Español](README.es.md) · [Français](README.fr.md) · [Русский](README.ru.md) · **한국어** · [日本語](README.ja.md) · [繁體中文](README.zh-TW.md)
 
+## Sno Reach
+
+| 기능 | 사용하는 경우 |
+|---|---|
+| **Instant Messenger** | 다른 에이전트에게 지금 연락하고 실제 답변을 기다립니다. |
+| **Agent Email** | 메시지와 작업을 보관해 다른 에이전트가 나중에 처리하고 답할 수 있게 합니다. |
+
+여러 컴퓨터를 연결하는 버전은 LAN이나 Tailscale을 사용합니다. 각 컴퓨터에서 Reach 수신 프로세스가 실행되며 SSH 서버는 필요하지 않습니다. `sno reach --help`에 `network`와 `peer`가 있는지 확인하세요.
+
+[간단한 사용 안내](../reach.md)
+
 ## 오늘 밤 일을 넘기세요. 아침에 받는 건 질문 세 개가 아니라 결과입니다.
 
 이걸 만들기 전에 우리가 겪은 일 세 가지입니다.
@@ -245,7 +256,7 @@ sno account claim
 |---|---|
 | Codex, Claude Code, Hermes Agent, Cursor, OpenClaw를 아우르는 하나의 메모리 | 릴리스됨. 깨끗한 컴퓨터에서 레지스트리로 설치해 처음부터 끝까지 검증됨 |
 | Cursor: 같은 메모리, 스킬, 검토, 이어받기, Self Learning | 1.3에서 릴리스됨. `cursor-agent` 명령줄은 깨끗한 Linux 컴퓨터에서 처음부터 끝까지 검증됨. macOS의 Cursor 앱은 아직 검증 중 |
-| Sno Reach, 데몬 없이 에이전트끼리 대화하기 | `sno setup`으로 설치됨. Linux와 macOS. 깨끗한 Linux 컴퓨터에서 처음부터 끝까지 검증됨 |
+| Sno Reach: Instant Messenger / Agent Email | `sno setup`으로 설치됨. Linux와 macOS. 깨끗한 Linux 컴퓨터에서 처음부터 끝까지 검증됨 |
 | Self Learning과 팀 스킬 | `sno setup`으로 설치됨. 야간 작업이 깨끗한 Linux 컴퓨터에서 실행됨 |
 | 명령 하나로 설치 | `sno setup`이 위의 모든 것을 설치함. 깨끗한 Linux 컴퓨터에서 검증됨 |
 | 에이전트 안에서 "Sno onboard" | 사용 가능. 설치 후에 시작되며, 직접 말해도 시작됨 |

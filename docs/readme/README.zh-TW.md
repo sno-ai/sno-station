@@ -26,6 +26,17 @@ sno reach pair "Fix the login redirect"
 
 **Read in other languages:** [English](../../README.md) · [中文](README.zh-CN.md) · [Deutsch](README.de.md) · [Español](README.es.md) · [Français](README.fr.md) · [Русский](README.ru.md) · [한국어](README.ko.md) · [日本語](README.ja.md) · **繁體中文**
 
+## Sno Reach
+
+| 功能 | 什麼時候用 |
+|---|---|
+| **Instant Messenger** | 現在聯絡另一個代理人，等待它的實際回覆。 |
+| **Agent Email** | 儲存訊息和任務，讓另一個代理人稍後處理並回信。 |
+
+跨機器版本透過區域網路或 Tailscale 連線。每台電腦執行 Reach 接收程序，不需要 SSH 服務。使用前確認 `sno reach --help` 中有 `network` 和 `peer` 指令。
+
+[簡明使用說明](../reach.md)
+
 ## 今晚把工作交出去。明天早上拿到的是成果，不是三個問題。
 
 做這個東西之前，我們自己遇過三件事：
@@ -245,7 +256,7 @@ sno account claim
 |---|---|
 | Codex、Claude Code、Hermes Agent、Cursor 和 OpenClaw 共用一份記憶 | 已發布；已在乾淨的機器上從套件庫安裝，並完成端到端驗證 |
 | Cursor：同一份記憶、技能、審查、接手和 Self Learning | 1.3 已發布；`cursor-agent` 命令列已在乾淨的 Linux 機器上完成端到端驗證；macOS 上的 Cursor 應用程式仍在驗證中 |
-| Sno Reach，agent 之間互相溝通，不需要 daemon | 由 `sno setup` 安裝；Linux 和 macOS；已在乾淨的 Linux 機器上完成端到端驗證 |
+| Sno Reach: Instant Messenger / Agent Email | 由 `sno setup` 安裝；支援 Linux 與 macOS；已在乾淨的 Linux 機器上完成端到端驗證 |
 | Self Learning 和小隊技能 | 由 `sno setup` 安裝；夜間工作已在乾淨的 Linux 機器上執行過 |
 | 一行指令安裝 | `sno setup` 會裝好以上全部內容；已在乾淨的 Linux 機器上驗證 |
 | 在你的 agent 裡說「Sno onboard」 | 已可使用；安裝後會自動開始，你說出口時也會開始 |
