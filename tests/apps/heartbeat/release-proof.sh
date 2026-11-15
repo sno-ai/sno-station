@@ -158,7 +158,7 @@ package|manifest|refusal)
       pass "$app exact archive files, bytes and checksum"
     else
       digest="$(sha256sum "$release/requirements-contract.json" | cut -d ' ' -f1)"
-      dependencies='["bash","timeout","flock","tail"]'
+      dependencies='["bash","timeout","flock","tail","jq"]'
       if [[ "$app" == report-time ]]; then
         dependencies='["bash","date","sed","cat","awk","ps","tr","getconf"]'
       elif [[ "$app" == subscription-quota-check ]]; then
