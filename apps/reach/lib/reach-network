@@ -1,0 +1,139 @@
+#!/usr/bin/env python3
+"""Manage Reach's receiving endpoint and exported peer contacts."""
+import argparse
+import json
+import os
+from pathlib import Path
+import signal
+import subprocess
+import sys
+import time
+
+
+def emit(value: object) -> None:
+    sys.stdout.write(json.dumps(value) + "\n")
+
+
+def running(info: dict) -> bool:
+    pid = info.get("pid")
+    if not isinstance(pid, int):
+        return False
+    result = subprocess.run(
+        ["ps", "-p", str(pid), "-o", "args="], capture_output=True, text=True, check=False
+    )
+    return result.returncode == 0 and "reach-net serve" in result.stdout
+
+
+def read_info(path: Path) -> dict:
+    if not path.exists():
+        return {}
+    return json.loads(path.read_text())
+
+
+def start(root: Path, state: Path, bind: str) -> None:
+    info_path = state / "receiver.json"
+    info = read_info(info_path)
+    if running(info):
+        emit(info)
+        return
+    info_path.unlink(missing_ok=True)
+    release = Path(__file__).resolve().parent.parent
+    env = dict(os.environ, SNO_REACH_ROOT=str(root), SNO_REACH_RECEIVER_ROOT=str(root))
+    with (state / "receiver.log").open("ab") as log:
+        process = subprocess.Popen(
+            [str(release / "lib/reach-net"), "serve", "--bind", bind,
+             "--key-file", str(state / "identity"), "--info-file", str(info_path),
+             "--receiver", str(release / "bin/sno-reach")],
+            stdin=subprocess.DEVNULL, stdout=log, stderr=log,
+            start_new_session=True, env=env,
+        )
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline:
+        if process.poll() is not None:
+            raise RuntimeError(f"receiver exited {process.returncode}; see {state / 'receiver.log'}")
+        try:
+            info = read_info(info_path)
+        except json.JSONDecodeError:
+            info = {}
+        if info:
+            emit(info)
+            return
+        time.sleep(0.05)
+    process.terminate()
+    process.wait(timeout=5)
+    raise RuntimeError(f"receiver did not start within 10 seconds; see {state / 'receiver.log'}")
+
+
+def network(args: argparse.Namespace, root: Path, state: Path) -> None:
+    info_path = state / "receiver.json"
+    if args.action == "start":
+        start(root, state, args.bind)
+        return
+    info = read_info(info_path)
+    alive = running(info)
+    if args.action == "status":
+        emit(dict(info, state="running" if alive else "stopped", mailbox_root=str(root)))
+    elif args.action == "stop":
+        if alive:
+            os.kill(info["pid"], signal.SIGTERM)
+            deadline = time.monotonic() + 5
+            while running(info) and time.monotonic() < deadline:
+                time.sleep(0.05)
+            if running(info):
+                raise RuntimeError("receiver has not stopped after SIGTERM")
+        info_path.unlink(missing_ok=True)
+        emit({"state": "stopped"})
+    else:
+        if not alive:
+            raise RuntimeError("receiver is stopped; run sno reach network start")
+        addresses = info["addresses"]
+        if args.ip:
+            port = info["bind_addr"].rsplit(":", 1)[1]
+            addresses = [f"{args.ip}:{port}"]
+        emit({"endpoint_id": info["endpoint_id"], "addresses": addresses,
+              "iroh_version": info["iroh_version"]})
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--root", required=True)
+    groups = parser.add_subparsers(dest="group", required=True)
+    actions = groups.add_parser("network").add_subparsers(dest="action", required=True)
+    actions.add_parser("start").add_argument("--bind", default="0.0.0.0:47470")
+    actions.add_parser("status")
+    actions.add_parser("stop")
+    actions.add_parser("address").add_argument("--ip")
+    peers = groups.add_parser("peer").add_subparsers(dest="action", required=True)
+    add = peers.add_parser("add")
+    add.add_argument("machine")
+    add.add_argument("--file", required=True)
+    peers.add_parser("list")
+    args = parser.parse_args()
+    root = Path(args.root).resolve()
+    state = root / "network"
+    state.mkdir(parents=True, exist_ok=True)
+    if args.group == "network":
+        network(args, root, state)
+        return
+    directory = state / "peers"
+    directory.mkdir(exist_ok=True)
+    if args.action == "list":
+        emit([{ "machine": path.stem, **json.loads(path.read_text()) }
+              for path in sorted(directory.glob("*.json"))])
+        return
+    machine = args.machine.lower()
+    if not machine or any(c not in "abcdefghijklmnopqrstuvwxyz0123456789.-" for c in machine):
+        raise ValueError("machine must be the hostname appearing after @ in the Reach address")
+    contact = json.loads(Path(args.file).read_text())
+    if not contact.get("endpoint_id") or not contact.get("addresses"):
+        raise ValueError("contact needs endpoint_id and addresses from network address")
+    (directory / f"{machine}.json").write_text(json.dumps(contact) + "\n")
+    emit({"machine": machine, **contact})
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except (OSError, ValueError, RuntimeError, subprocess.TimeoutExpired) as error:
+        sys.stderr.write(f"reach: network operation failed: {error}\n")
+        sys.exit(1)
