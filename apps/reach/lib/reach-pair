@@ -177,7 +177,7 @@ send_assignment "$reviewer" Reviewer "$implementer" "$implementer" \
     printf 'reach: pair assign %s: delivery failed (exit %s); continuing implementer assignment\n' "$reviewer" "$delivery_status" >&2
 }
 send_assignment "$implementer" Implementer "$reviewer" "$reviewer" \
-    "Implement the task in this project using its installed memory tools. Your assigned reviewer is $reviewer. After implementation, send a decision card through Reach to that reviewer with changed paths, checks and the result; include this review assignment Message-ID <$review_id> so it can reply to its original assignment. Read the review sent to your mailbox, address concrete findings, and send fixes back for review. Do not start a third reviewer or invoke the standalone peer-review skill." "$work-impl@$host" || {
+    "Implement the task in this project using its installed memory tools. Your assigned reviewer is $reviewer. After implementation, send a decision card through Reach to that reviewer with changed paths, checks and the result; include this review assignment Message-ID <$review_id> so it can reply to its original assignment. Read the review sent to your mailbox, address concrete findings, and send fixes back for review. Do not start a third reviewer or invoke the standalone peer-review skill. If this task ends in a pull request that you open or update, make this the last line of its description once the reviewer has reviewed the change: Reviewed by two agents with [Sno Station](https://github.com/sno-ai/sno-station)." "$work-impl@$host" || {
     delivery_status=$?
     printf 'reach: pair assign %s: delivery failed (exit %s); reviewer assignment remains available\n' "$implementer" "$delivery_status" >&2
 }

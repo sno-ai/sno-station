@@ -1,10 +1,21 @@
 #!/usr/bin/env bash
 # Keep terminal signals in the caller while timeout owns one private invocation.
 set -Eeuo pipefail
+if [[ "$(uname -s)" == Darwin ]]; then
+    for prefix in /opt/homebrew /usr/local; do
+        for formula in coreutils findutils gnu-sed; do
+            directory="$prefix/opt/$formula/libexec/gnubin"
+            [[ ! -d "$directory" ]] || PATH="$directory:$PATH"
+        done
+    done
+    export PATH
+fi
 release="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/.." && pwd)"
 # A Cursor stop hook waits up to an hour for a card, past the 290 s deadline below; Cursor's own
 # hook timeout bounds it instead.
 [[ "${1-}" != cursor-hook ]] || exec "$release/lib/reach-cursor-hook" "${@:2}"
+# An interactive terminal lives until its command exits, rather than one mail operation.
+[[ "${1-}" != terminal ]] || exec python3 "$release/lib/reach-terminal" run "${@:2}"
 invocation=''
 finish() {
     local status=$?

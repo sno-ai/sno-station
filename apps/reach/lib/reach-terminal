@@ -1,0 +1,254 @@
+#!/usr/bin/env python3
+"""Own a terminal input stream so Reach can wake any interactive command."""
+
+import argparse
+import base64
+import errno
+import fcntl
+import json
+import logging
+import os
+import pty
+import select
+import selectors
+import shutil
+import signal
+import socket
+import stat
+import subprocess
+import sys
+import tempfile
+import termios
+import tty
+
+logger = logging.getLogger("reach-terminal")
+
+
+def request(path: str, text: str | None = None) -> None:
+    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as connection:
+        connection.settimeout(3)
+        connection.connect(path)
+        connection.sendall((json.dumps({} if text is None else {"text": text}) + "\n").encode())
+        with connection.makefile("rb") as response:
+            result = json.loads(response.readline())
+        if not result.get("ok"):
+            raise OSError(result.get("error", "terminal relay refused input"))
+
+
+def discover() -> None:
+    path = os.environ.get("SNO_REACH_TERMINAL_SOCKET")
+    if path:
+        request(path)
+        sys.stdout.write(json.dumps({"handle": "relay:" + path, "identity": path}) + "\n")
+        return
+    pid = os.getppid()
+    terminal_path = None
+    thread = os.environ.get("CODEX_THREAD_ID") or os.environ.get("CODEX_SESSION_ID")
+    while pid > 1:
+        result = subprocess.run(["ps", "-p", str(pid), "-o", "ppid=", "-o", "tty=", "-o", "comm="],
+                                capture_output=True, text=True, check=True, timeout=3)
+        parent, terminal, command = result.stdout.split(maxsplit=2)
+        name = os.path.basename(command.strip())
+        if name in ("claude", "cursor-agent", "agent", "hermes", "openclaw"):
+            # A nested agent can inherit Codex's environment without being that session.
+            thread = None
+        if thread and name in ("codex", "codex-code-mode-host"):
+            executable = shutil.which("codex") or os.path.expanduser("~/.local/bin/codex")
+            available = subprocess.run([executable, "queue", "--help"], capture_output=True, timeout=5)
+            if available.returncode == 0:
+                home = os.environ.get("CODEX_HOME") or os.path.expanduser("~/.codex")
+                encoded_home = base64.urlsafe_b64encode(os.fsencode(home)).decode()
+                handle = "codex:" + thread + ":" + encoded_home
+                sys.stdout.write(json.dumps({"handle": handle, "identity": handle}) + "\n")
+                return
+            thread = None
+        if terminal_path is None and terminal not in ("?", "??", "-"):
+            terminal_path = terminal if terminal.startswith("/dev/") else "/dev/" + terminal
+        pid = int(parent)
+    if terminal_path is not None:
+        sys.stdout.write(json.dumps({"handle": "tty:" + terminal_path, "identity": terminal_path}) + "\n")
+        return
+    raise OSError("no controlling terminal found; start the agent with sno reach terminal -- <agent>")
+
+
+def terminal_input(handle: str, text: str | None) -> None:
+    kind, _, path = handle.partition(":")
+    if kind == "relay":
+        request(path, text)
+        return
+    if kind == "codex":
+        thread, encoded_home = path.split(":", 1)
+        environment = dict(os.environ, CODEX_HOME=os.fsdecode(base64.urlsafe_b64decode(encoded_home)))
+        executable = shutil.which("codex") or os.path.expanduser("~/.local/bin/codex")
+        command = [executable, "queue", "--help"] if text is None else [
+            executable, "queue", "--thread", thread, "--message", text, "--resume"]
+        result = subprocess.run(command, env=environment, capture_output=True, text=True, timeout=15)
+        if result.returncode:
+            raise OSError("Codex queue failed: " + result.stderr.strip())
+        if result.stderr.strip():
+            logger.warning("Codex queue: %s", result.stderr.strip())
+        if text is not None:
+            wake = os.path.join(os.path.dirname(__file__), "reach-codex-wake")
+            result = subprocess.run([wake, "--codex", executable, "--thread", thread],
+                                    env=environment, capture_output=True, text=True, timeout=15)
+            if result.returncode:
+                raise OSError("Codex wake failed: " + result.stderr.strip())
+        return
+    if kind != "tty":
+        raise ValueError("terminal handle must be relay:/socket, codex:thread:home or tty:/dev/terminal")
+    with open(path, "wb", buffering=0) as terminal:
+        if text is not None:
+            try:
+                for byte in (text + "\r").encode():
+                    fcntl.ioctl(terminal.fileno(), termios.TIOCSTI, bytes([byte]))
+            except OSError as error:
+                raise OSError("kernel refused terminal input (%s); start the agent with "
+                              "sno reach terminal -- <agent>" % error) from error
+
+
+def write_all(descriptor: int, data: bytes) -> None:
+    while data:
+        try:
+            count = os.write(descriptor, data)
+            data = data[count:]
+        except BlockingIOError:
+            if not select.select([], [descriptor], [], 3)[1]:
+                raise TimeoutError("terminal input did not become writable")
+
+
+def relay_client(listener: socket.socket, master: int) -> None:
+    connection, _ = listener.accept()
+    with connection:
+        connection.settimeout(3)
+        try:
+            with connection.makefile("rb") as source:
+                message = json.loads(source.readline())
+            text = message.get("text")
+            if text is not None:
+                write_all(master, b"\x1b[200~" + text.encode() + b"\x1b[201~")
+                write_all(master, b"\r")
+            answer = {"ok": True}
+        except (OSError, ValueError, AttributeError) as error:
+            answer = {"ok": False, "error": str(error)}
+        try:
+            connection.sendall((json.dumps(answer) + "\n").encode())
+        except OSError as error:
+            logger.error("could not return terminal input result: %s", error)
+
+
+def relay_io(master: int, listener: socket.socket) -> None:
+    with selectors.DefaultSelector() as events:
+        events.register(master, selectors.EVENT_READ, "output")
+        events.register(listener, selectors.EVENT_READ, "message")
+        # epoll and kqueue cannot watch every redirected input device, including /dev/null.
+        if stat.S_ISREG(os.fstat(0).st_mode):
+            write_all(master, sys.stdin.buffer.read())
+        else:
+            try:
+                events.register(0, selectors.EVENT_READ, "input")
+            except OSError as error:
+                if error.errno not in (errno.EPERM, errno.EINVAL):
+                    raise
+        while True:
+            for key, _ in events.select():
+                if key.data == "message":
+                    relay_client(listener, master)
+                elif key.data == "input":
+                    data = os.read(0, 65536)
+                    if data:
+                        write_all(master, data)
+                    else:
+                        events.unregister(0)
+                else:
+                    try:
+                        data = os.read(master, 65536)
+                    except OSError as error:
+                        if error.errno != errno.EIO:
+                            raise
+                        return
+                    if not data:
+                        return
+                    write_all(1, data)
+
+
+def run(command: list[str]) -> int:
+    if not command:
+        raise ValueError("terminal needs a command after --")
+    original = termios.tcgetattr(0) if os.isatty(0) else None
+    # Keep the Unix socket below macOS's sockaddr_un path limit, regardless of TMPDIR.
+    with tempfile.TemporaryDirectory(prefix="sno-reach-", dir="/tmp") as directory:
+        path = directory + "/terminal.sock"
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as listener:
+            listener.bind(path)
+            listener.listen()
+            pid, master = pty.fork()
+            if pid == 0:
+                listener.close()
+                os.environ["SNO_REACH_TERMINAL_SOCKET"] = path
+                try:
+                    os.execvpe(command[0], command, os.environ)
+                except OSError as error:
+                    os.write(2, ("reach-terminal: could not start command: %s\n" % error).encode())
+                    os._exit(127)
+
+            def resize(_signum: int = 0, _frame: object = None) -> None:
+                if original is not None:
+                    size = fcntl.ioctl(0, termios.TIOCGWINSZ, b"\0" * 8)
+                    fcntl.ioctl(master, termios.TIOCSWINSZ, size)
+
+            def forward(signum: int, _frame: object) -> None:
+                try:
+                    os.killpg(pid, signum)
+                except ProcessLookupError:
+                    pass
+
+            previous = {number: signal.getsignal(number) for number in
+                        (signal.SIGWINCH, signal.SIGTERM, signal.SIGHUP, signal.SIGINT)}
+            signal.signal(signal.SIGWINCH, resize)
+            for number in (signal.SIGTERM, signal.SIGHUP, signal.SIGINT):
+                signal.signal(number, forward)
+            try:
+                resize()
+                if original is not None:
+                    tty.setraw(0)
+                os.set_blocking(master, False)
+                relay_io(master, listener)
+            finally:
+                if original is not None:
+                    termios.tcsetattr(0, termios.TCSADRAIN, original)
+                os.close(master)
+                for number, handler in previous.items():
+                    signal.signal(number, handler)
+            _, status = os.waitpid(pid, 0)
+            result = os.waitstatus_to_exitcode(status)
+            return result if result >= 0 else 128 - result
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("action", choices=("discover", "probe", "ring", "run"))
+    parser.add_argument("arguments", nargs=argparse.REMAINDER)
+    args = parser.parse_args()
+    values = args.arguments
+    if values[:1] == ["--"]:
+        values = values[1:]
+    try:
+        if args.action == "run":
+            return run(values)
+        if args.action == "discover":
+            discover()
+        elif args.action == "probe" and len(values) == 1:
+            terminal_input(values[0], None)
+        elif args.action == "ring" and len(values) == 2:
+            terminal_input(values[0], values[1])
+        else:
+            parser.error("probe needs a handle; ring needs a handle and text")
+    except (OSError, ValueError, subprocess.SubprocessError) as error:
+        logger.error("%s", error)
+        return 3
+    return 0
+
+
+if __name__ == "__main__":
+    logging.basicConfig(format="reach-terminal: %(message)s")
+    raise SystemExit(main())

@@ -156,11 +156,38 @@ ring_for_channel() {
         tmux) ring_tmux "$root" "$recipient" "$sender" "$message_id" "$record" ;;
         acp) ring_acp "$root" "$recipient" "$sender" "$message_id" "$record" ;;
         cursor-ide) ring_cursor_ide "$root" "$recipient" "$sender" "$message_id" "$record" ;;
+        terminal) ring_terminal "$root" "$recipient" "$sender" "$message_id" "$record" ;;
         *)
-            emit "$root" "$recipient" "$sender" "$message_id" no-channel \
-                "unsupported reachability channel $channel"
+            local adapter handle text error
+            adapter="reach-channel-$channel"
+            handle="$(jq -r .handle "$record")"
+            text="$DOORBELL_TOKEN Guide: $REPOSITORY/guide/agent-reach.md. State: $root. Seat: $recipient. Read your mailbox now."
+            if ! command -v "$adapter" >/dev/null; then
+                emit "$root" "$recipient" "$sender" "$message_id" no-channel "input adapter $adapter is not installed; the card stays in the inbox"
+            elif error="$(timeout --foreground 20 "$adapter" ring "$handle" "$text" 2>&1)"; then
+                emit "$root" "$recipient" "$sender" "$message_id" rang-unverified "input adapter $adapter accepted the wake; recipient pickup is unverified"
+            else
+                emit "$root" "$recipient" "$sender" "$message_id" failed "input adapter $adapter failed: $error; the card stays in the inbox"
+            fi
             ;;
     esac
+}
+
+ring_terminal() {
+    local root="$1" recipient="$2" sender="$3" message_id="$4" record="$5" handle text error
+    local -a command
+    handle="$(jq -r .handle "$record")"
+    text="$DOORBELL_TOKEN Guide: $REPOSITORY/guide/agent-reach.md. State: $root. Seat: $recipient. Read your mailbox now."
+    if [[ "$handle" == ghostty:* ]]; then
+        command=(bash "$REPOSITORY/lib/reach-terminal-macos")
+    else
+        command=(python3 "$REPOSITORY/lib/reach-terminal")
+    fi
+    if error="$(timeout --foreground 20 "${command[@]}" ring "$handle" "$text" 2>&1)"; then
+        emit "$root" "$recipient" "$sender" "$message_id" rang-unverified 'terminal accepted the wake; recipient pickup is unverified'
+    else
+        emit "$root" "$recipient" "$sender" "$message_id" failed "terminal input failed: $error; the card stays in the inbox"
+    fi
 }
 
 ring_acp() {

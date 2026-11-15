@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# Ghostty's scripting API targets a stable surface, never the focused window.
+set -Eeuo pipefail
+case "${1-}" in
+    discover)
+        tty="${2:?controlling tty required}"
+        [[ "$(osascript -e 'application "Ghostty" is running')" == true ]] || exit 1
+        nonce="sno-reach-$$-$RANDOM"
+        # The terminal title identifies the caller even when several windows share a cwd.
+        printf '\033[22;2t\033]2;%s\007' "$nonce" >"$tty"
+        trap 'printf "\033[23;2t" >"$tty"' EXIT
+        id="$(osascript - "$nonce" <<'APPLESCRIPT'
+on run argv
+    tell application "Ghostty"
+        set matches to every terminal whose name is item 1 of argv
+        if (count of matches) is not 1 then error "Cannot identify the calling Ghostty terminal"
+        return id of item 1 of matches
+    end tell
+end run
+APPLESCRIPT
+        )"
+        printf 'ghostty:%s\n' "$id"
+        ;;
+    ring)
+        id="${2#ghostty:}"
+        osascript - "$id" "${3:?wake text required}" <<'APPLESCRIPT'
+on run argv
+    tell application "Ghostty"
+        set matches to every terminal whose id is item 1 of argv
+        if (count of matches) is not 1 then error "Registered Ghostty terminal no longer exists"
+        set targetTerminal to item 1 of matches
+        input text (item 2 of argv) to targetTerminal
+        send key "enter" to targetTerminal
+    end tell
+end run
+APPLESCRIPT
+        ;;
+    *) printf 'usage: reach-terminal-macos discover <tty> | ring <handle> <text>\n' >&2; exit 64 ;;
+esac
