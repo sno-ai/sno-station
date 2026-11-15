@@ -82,6 +82,7 @@ See [local squad observations](agent-state-view.md) for the status lines, tmux b
 | Command | What it does | Who |
 | --- | --- | --- |
 | `sno heartbeat --label NAME [--interval M] [--log PATH] [--until-file PATH] [--max-ticks N] [--max-hours H] [-- COMMAND...]`, `--stop NAME`, `--list` | Reports every so often or waits until a file appears, for long jobs | an agent |
+| `sno heartbeat --due [--problems]`, `--due-set RECORD "YYYY-MM-DD HH:MM ZONE" "ACTION" [daily\|weekly]`, `--due-cancel RECORD [ACTION]`, `--due-tick` | Lists, adds and removes timed tasks kept in progress records; `--due-tick` starts the agent for each one that is due and is run every minute by the service `sno setup` installs | an agent, a person or the service |
 | `sno report-time [--in SECONDS \| --pid PID [--expect-wall S] \| "UTC TIMESTAMP" \| @EPOCH]` | Prints a clock time for the user in their zone | an agent |
 | `sno subscription-quota-check [--vendor codex\|claude\|both\|cursor] [--json\|--human] [--quiet]` | Reads Codex and Claude Code subscription quota without spending any; Cursor is read only with `--vendor cursor`, not the default `both` | an agent or a timer |
 
