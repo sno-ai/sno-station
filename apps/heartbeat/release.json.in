@@ -1,1 +1,1 @@
-{"program":"heartbeat","version":"@VERSION@","requirements_contract_sha256":"@CONTRACT_SHA256@","dependencies":["bash","timeout","flock","tail"]}
+{"program":"heartbeat","version":"@VERSION@","requirements_contract_sha256":"@CONTRACT_SHA256@","dependencies":["bash","timeout","flock","tail","jq"]}

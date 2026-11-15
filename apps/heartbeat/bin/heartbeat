@@ -73,6 +73,10 @@ usage: sno heartbeat --label NAME [--interval MINUTES] [--log PATH] [--until-fil
                      [--max-ticks N] [--max-hours H] [-- COMMAND [ARG ...]]
        sno heartbeat --stop NAME
        sno heartbeat --list
+       sno heartbeat --due-set RECORD "YYYY-MM-DD HH:MM IANA_ZONE" "ACTION" [daily|weekly]
+       sno heartbeat --due-cancel RECORD [ACTION]
+       sno heartbeat --due [--problems]
+       sno heartbeat --due-tick
 
 Two shapes, and nothing else should ever be hand-written:
 
@@ -264,14 +268,339 @@ do_stop() {
   return 0
 }
 
+# Due entries stay in the record; only locks and output live in heartbeat state.
+readonly DUE_ROOT="${SNO_PROFILE_DIR:-$HOME/.sno}/station/handoff"
+
+due_field() {
+  awk -v key="$2" 'index($0, key ": ") == 1 { print substr($0, length(key) + 3); exit }' <<<"$1"
+}
+
+due_epoch() {
+  local at="$1" zone epoch
+  [[ $at =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}\ [0-9]{2}:[0-9]{2}\ ([A-Za-z_+-]+(/[A-Za-z0-9_+-]+)*)$ ]] || return 1
+  zone="${BASH_REMATCH[1]}"
+  [[ -f /usr/share/zoneinfo/$zone ]] || return 1
+  epoch="$(TZ="$zone" date -d "${at% *}" +%s 2>/dev/null)" || return 1
+  [[ $(TZ="$zone" date -d "@$epoch" '+%Y-%m-%d %H:%M') == "${at% *}" ]] || return 1
+  printf '%s' "$epoch"
+}
+
+# One parser handles both reads and writes, including headings outside the machine block.
+# Values use the environment so awk never interprets backslashes in task text.
+due_document() {
+  DUE_MODE="$1" DUE_ENTRY="${2:-}" DUE_AT="${3:-}" DUE_LAST="${4:-}" awk '
+    BEGIN {
+      mode=ENVIRON["DUE_MODE"]; wanted=ENVIRON["DUE_ENTRY"]
+      count=split(wanted, original, "\n")
+      for (i=1;i<=count;i++) {
+        if (original[i] ~ /^do: /) action=substr(original[i],5)
+        if (original[i] ~ /^(at|repeat|do):/) signature=signature original[i] "\n"
+      }
+    }
+    function flush(    j,task,sig,oldlast,matchentry) {
+      if (!n) return
+      for (j=1;j<=n;j++) {
+        if (lines[j] ~ /^do: /) task=substr(lines[j],5)
+        if (lines[j] ~ /^last: /) oldlast=substr(lines[j],7)
+        if (lines[j] ~ /^(at|repeat|do):/) sig=sig lines[j] "\n"
+      }
+      matchentry=(task == action)
+      if (mode == "entries") {
+        if (task != "") { for(j=1;j<=n;j++) printf "%s%s",lines[j],(j==n?"":"\n"); printf "%c",0 }
+      } else if (mode == "cancel" && (wanted == "" || matchentry)) {
+      } else if (mode == "set" && matchentry) {
+        print wanted; if(oldlast != "") print "last: " oldlast; replaced=1
+      } else {
+        if (mode == "failure" && matchentry && index(oldlast," not started: ") &&
+            substr(oldlast,index(oldlast," not started: ")) == substr(ENVIRON["DUE_LAST"],index(ENVIRON["DUE_LAST"]," not started: "))) matchentry=0
+        if (mode == "finish" && index(oldlast,"result pending") == 0) matchentry=0
+        for (j=1;j<=n;j++) {
+          if (matchentry && mode == "start" && sig == signature && lines[j] ~ /^at:/) {
+            if (ENVIRON["DUE_AT"] != "") print "at: " ENVIRON["DUE_AT"]
+          } else if (!(matchentry && mode ~ /^(start|finish|failure)$/ && lines[j] ~ /^last:/)) print lines[j]
+        }
+        if (matchentry && mode ~ /^(start|finish|failure)$/) print "last: " ENVIRON["DUE_LAST"]
+      }
+      n=0
+    }
+    function endsection() {
+      flush()
+      if (mode == "set" && !replaced) { print ""; print wanted; print ""; replaced=1 }
+      section=0
+    }
+    $0 == "<!-- machine-record:start -->" { machine=1 }
+    !machine && /^## / {
+      if(section) endsection()
+      if($0 == "## Due") { section=1; found=1; if(mode != "entries" && !(mode == "cancel" && wanted == "")) print; next }
+    }
+    section {
+      if ($0 == "") { flush(); if(mode != "entries" && !(mode == "cancel" && wanted == "")) print "" }
+      else lines[++n]=$0
+      next
+    }
+    { if(mode != "entries") print }
+    $0 == "<!-- machine-record:end -->" { machine=0 }
+    END {
+      if(section) endsection()
+      if(mode == "set" && !found) printf "\n## Due\n%s\n",wanted
+    }
+  '
+}
+
+due_edit() (
+  local record="$1" mode="$2" entry="$3" at="${4:-}" last="${5:-}" temporary action
+  exec {record_fd}>"$record.lock"
+  flock -x "$record_fd"
+  [[ -f $record ]] || exit 0
+  temporary="$(mktemp "$record.XXXXXX")"
+  trap 'rm -f -- "$temporary"' EXIT
+  due_document "$mode" "$entry" "$at" "$last" <"$record" >"$temporary"
+  if ! cmp -s -- "$record" "$temporary"; then
+    chmod --reference="$record" "$temporary"
+    mv -- "$temporary" "$record"
+    if [[ $mode == failure ]]; then
+      printf 'last: %s\n' "$last" >>"$STATE_ROOT/log/due.log"
+      action="$(due_field "$entry" 'do')"
+      printf '%s | %s | %s\n' "${record##*/}" "${action:0:60}" "$last" 2>/dev/null || true
+    fi
+  fi
+)
+
+due_record() {
+  local record root
+  root="$(realpath -m -- "$DUE_ROOT")"
+  record="$(realpath -e -- "$1" 2>/dev/null)" || die "record not found: $1"
+  [[ ${record%/*} == "$root" && $record == *.md ]] || die 'only records directly inside ${SNO_PROFILE_DIR:-~/.sno}/station/handoff/ are accepted'
+  printf '%s' "$record"
+}
+
+due_lock() {
+  printf '%s/due/%s.lock' "$STATE_ROOT" "$(registry_key "$1"$'\n'"$2")"
+}
+
+due_next() {
+  local at="$1" repeat="$2" now="$3" zone="${1##* }" day="${1%% *}" clock step=1 candidate
+  clock="${at#* }"; clock="${clock% *}"
+  [[ $repeat != weekly ]] || step=7
+  while true; do
+    day="$(TZ="$zone" date -d "$day 12:00 $step days" +%F)"
+    candidate="$(TZ="$zone" date -d "$day $clock" +%s)"
+    if ((candidate > now)); then printf '%s %s %s' "$day" "$clock" "$zone"; return; fi
+  done
+}
+
+due_machine() {
+  awk -v key="$2" '$0 == "<!-- machine-record:start -->" { inside=1; next }
+    $0 == "<!-- machine-record:end -->" { inside=0 }
+    inside && index($0,key ": ") == 1 { print substr($0,length(key)+3); exit }' "$1"
+}
+
+due_open_home() {
+  local runtime="$1" id="$2" file pid target
+  if [[ $runtime == claude-code ]]; then
+    for file in "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/sessions"/*.json; do
+      [[ -f $file ]] || continue
+      pid="$(jq -er --arg id "$id" 'select(.sessionId == $id) | .pid' "$file" 2>/dev/null)" || continue
+      [[ $pid =~ ^[0-9]+$ ]] && kill -0 "$pid" 2>/dev/null && { printf 'open'; return; }
+    done
+  elif [[ -d /proc ]]; then
+    while IFS= read -r target; do
+      if [[ $target == */thread-writer-locks/"$id".lock ]]; then printf '%s' "${target%/thread-writer-locks/*}"; return; fi
+    done < <(readlink -- /proc/[0-9]*/fd/* 2>/dev/null || true)
+  elif command -v lsof >/dev/null 2>&1; then
+    while IFS= read -r target; do
+      [[ $target == n*/thread-writer-locks/"$id".lock ]] || continue
+      target="${target#n}"; printf '%s' "${target%/thread-writer-locks/*}"; return
+    done < <(lsof -Fn -u "$(id -un)" 2>/dev/null)
+  fi
+  return 0
+}
+
+due_runner() {
+  local record="$1" entry="$2" lock_fd="${3:-}" at action repeat checkout runtime id open operation=fresh how='fresh conversation'
+  local now epoch zone late lateness='on time' prompt next='' pending='' line text result='' error='' status started=0 agent_pid output_fd blocked=0
+  local -a command
+  at="$(due_field "$entry" at)"; action="$(due_field "$entry" 'do')"; repeat="$(due_field "$entry" repeat)"
+  # A concurrent tick may have read this occurrence just before the previous runner used it up.
+  local current found=0
+  while IFS= read -r -d '' current; do
+    if [[ $(due_field "$current" 'do') == "$action" && $(due_field "$current" at) == "$at" && $(due_field "$current" repeat) == "$repeat" ]]; then found=1; break; fi
+  done < <(due_document entries <"$record")
+  ((found)) || return 0
+  checkout="$(due_machine "$record" checkout)"; runtime="$(due_machine "$record" runtime)"; id="$(due_machine "$record" session-id)"
+  if [[ -z $runtime ]]; then
+    if command -v claude >/dev/null 2>&1; then runtime=claude-code; else runtime=codex; fi
+  fi
+  zone="${at##* }"; epoch="$(due_epoch "$at")"; now="$(date +%s)"; late=$(((now-epoch)/60))
+  ((late <= 5)) || lateness="late by $late min"
+  prompt="Timed task in record: $record
+Original time: $at
+Lateness: $lateness
+Do: $action
+Use the record as context and keep the record accurate, but do not edit its ## Due section; the timer writes it. End with one line:
+DUE_RESULT done|unfinished <why>|waiting-for-you <need>"
+  if [[ -n $id ]]; then
+    operation=resume; how="resumed conversation $id"
+    open="$(due_open_home "$runtime" "$id")"
+    if [[ -n $open ]]; then operation=fork; how="copy of open conversation $id"; fi
+  fi
+  while true; do
+    command=(); error=''; blocked=0
+    case "$runtime" in
+      claude-code)
+        command=(claude -p)
+        [[ $operation == fresh ]] || command+=(--resume "$id")
+        [[ $operation != fork ]] || command+=(--fork-session)
+        command+=(--verbose --output-format stream-json) ;;
+      codex)
+        command=(codex exec)
+        [[ $operation == fresh ]] || command+=("$operation" "$id")
+        command+=(--json --skip-git-repo-check) ;; # records also exist outside a repository
+      *) error="unsupported runtime: $runtime"; break ;;
+    esac
+    printf 'operation: %s %s\n' "$operation" "$id"
+    # A process substitution keeps stream consumption in this shell, while wait retains the
+    # agent exit status. The runner and its agent both inherit the entry lock.
+    exec {output_fd}< <(
+      # The runner holds the entry lock until the agent exits; the agent must not inherit it, or a
+      # background process it leaves behind would hold the lock and block every later run.
+      [[ ! $lock_fd =~ ^[0-9]+$ ]] || exec {lock_fd}>&-
+      cd -- "$checkout" || exit 1
+      if [[ $runtime == codex && $operation == fork ]]; then export CODEX_HOME="$open"; fi
+      exec "${command[@]}" "$prompt" </dev/null 2>&1
+    )
+    agent_pid=$!
+    while IFS= read -r line <&"$output_fd"; do
+      printf '%s\n' "$line"
+      if ((started == 0)) && jq -e --arg runtime "$runtime" '
+        if $runtime == "claude-code" then .type == "assistant" and .message.model != "<synthetic>"
+        else .type == "item.completed" and .item.type != "error" end' <<<"$line" >/dev/null 2>&1; then
+        started=1; now="$(date +%s)"
+        [[ -z $repeat ]] || next="$(due_next "$at" "$repeat" "$now")"
+        pending="$(TZ="$zone" date -d "@$now" '+%Y-%m-%d %H:%M') $zone started, $how, $lateness, result pending"
+        due_edit "$record" start "$entry" "$next" "$pending"
+      fi
+      text="$(jq -r '[.message.content[]?.text, .item.text?, .item.message?, .result?, .error.message?, .message? | strings] | join("\n")' <<<"$line" 2>/dev/null)" || text="$line"
+      [[ -z $text ]] || error="${text//$'\n'/ }"
+      while IFS= read -r text; do
+        case "$text" in DUE_RESULT\ done|DUE_RESULT\ done\ *|DUE_RESULT\ unfinished\ *|DUE_RESULT\ waiting-for-you\ *) result="$text" ;; esac
+      done <<<"$text"
+      if [[ ${line,,} =~ login|log\ in|logged\ in|auth|quota|rate.limit|usage.limit|401|429 ]]; then blocked=1; fi
+    done
+    exec {output_fd}<&-
+    status=0; wait "$agent_pid" || status=$?
+    if ((started)); then
+      if ((status != 0)); then result="ended with error $status $error"
+      elif [[ -z $result ]]; then result='no result line'; fi
+      due_edit "$record" finish "$entry" '' "${pending%result pending}$result"
+      return 0
+    fi
+    # Login/quota errors have several vendor spellings, including HTTP status codes.
+    if [[ $operation == fresh ]] || ((blocked)); then break; fi
+    prompt+=$'\nEarlier context was not found; this is a fresh conversation.'
+    how="fresh conversation, $operation $id ended before a real reply: ${error:-no output}"
+    operation=fresh
+  done
+  [[ $operation != fresh ]] || id="$runtime"
+  due_edit "$record" failure "$entry" '' "$(TZ="$zone" date '+%Y-%m-%d %H:%M') $zone not started: $operation ${id:-$runtime} ${error:-no real reply}"
+}
+
+due_scan() {
+  local mode="$1" problems="${2:-}" record entry at action repeat last epoch lock entry_fd running next now detach
+  mkdir -p -- "$STATE_ROOT/due" "$STATE_ROOT/log"
+  now="$(date +%s)"
+  for record in "$DUE_ROOT"/*.md; do
+    [[ -f $record ]] || continue
+    while IFS= read -r -d '' entry; do
+      at="$(due_field "$entry" at)"; action="$(due_field "$entry" 'do')"; repeat="$(due_field "$entry" repeat)"; last="$(due_field "$entry" last)"
+      lock="$(due_lock "$record" "$action")"
+      exec {entry_fd}>>"$lock"
+      running=0; flock -n "$entry_fd" || running=1
+      if [[ $mode == list ]]; then
+        exec {entry_fd}>&-
+        if [[ -n $problems ]]; then
+          case "$last" in
+            *'not started:'*|*'ended with error'*|*'waiting-for-you'*|*'unfinished'*|*'no result line'*) ;;
+            *'result pending'*) ((running == 0)) || continue ;;
+            *) continue ;;
+          esac
+        fi
+        next='none'
+        if [[ -n $at ]]; then
+          if epoch="$(due_epoch "$at")"; then next="$(date -d "@$epoch" '+%Y-%m-%d %H:%M %Z')"; else next="$at"; fi
+        fi
+        printf '%s | do: %s | next: %s | repeat: %s | last: %s' "$record" "$action" "$next" "${repeat:-none}" "$last"
+        if ((running)); then printf ' | running since %s' "$(date -r "$lock" '+%Y-%m-%d %H:%M %Z')"; fi
+        printf '\n'
+      else
+        if ((running)) || [[ -z $at ]]; then exec {entry_fd}>&-; continue; fi
+        if ! epoch="$(due_epoch "$at")"; then
+          due_edit "$record" failure "$entry" '' "$(date '+%Y-%m-%d %H:%M %Z') not started: time not understood: at: $at"
+          exec {entry_fd}>&-; continue
+        fi
+        if ((epoch > now)); then exec {entry_fd}>&-; continue; fi
+        if [[ -n $repeat && $repeat != daily && $repeat != weekly ]]; then
+          due_edit "$record" failure "$entry" '' "$(date '+%Y-%m-%d %H:%M %Z') not started: repeat not understood: $repeat"
+          exec {entry_fd}>&-; continue
+        fi
+        touch -- "$lock"
+        # macOS ships no setsid; nohup alone still detaches the runner there.
+        detach=(); if command -v setsid >/dev/null 2>&1; then detach=(setsid); fi
+        nohup "${detach[@]}" "$0" --due-run "$record" "$entry" "$entry_fd" </dev/null >>"$STATE_ROOT/log/due-$(basename -- "$lock").log" 2>&1 &
+        printf '%s | %s | runner launched\n' "${record##*/}" "${action:0:60}" 2>/dev/null || true
+        exec {entry_fd}>&-
+      fi
+    done < <(due_document entries <"$record")
+  done
+}
+
 if (($# == 0)); then
   usage
   exit 0
 fi
 
-# The two management verbs are answered before anything else, so neither needs a log, an
-# interval, or a hook.
 case "$1" in
+  --due-run|--due-tick|--due|--due-set|--due-cancel)
+    if ! command -v jq >/dev/null 2>&1; then
+      printf 'heartbeat: needs jq — read agent reply events; install it and run again.\n' >&2
+      exit 1
+    fi ;;
+esac
+
+# Management verbs are answered before anything else, so none needs an interval or hook.
+# The interval loop below owns its own log.
+case "$1" in
+  --due-run)
+    (($# == 4)) || die 'internal due runner needs a record, entry and inherited lock'
+    due_runner "$2" "$3" "$4"
+    exit 0 ;;
+  --due-set)
+    (($# == 4 || $# == 5)) || die '--due-set needs <record> "YYYY-MM-DD HH:MM <IANA zone>" "<do>" [daily|weekly]'
+    record="$(due_record "$2")"
+    due_epoch "$3" >/dev/null || die 'expected at: YYYY-MM-DD HH:MM <IANA zone>; time not understood'
+    [[ -n $4 && $4 != *$'\n'* ]] || die 'do must be one nonempty line'
+    [[ ${5:-} == '' || ${5:-} == daily || ${5:-} == weekly ]] || die 'repeat must be daily or weekly'
+    entry="at: $3"$'\n'
+    [[ -z ${5:-} ]] || entry+="repeat: $5"$'\n'
+    entry+="do: $4"
+    due_edit "$record" set "$entry"
+    exit 0 ;;
+  --due-cancel)
+    (($# == 2 || $# == 3)) || die '--due-cancel needs <record> [<do text>]'
+    record="$(due_record "$2")"
+    entry=''; [[ -z ${3:-} ]] || entry="do: $3"
+    due_edit "$record" cancel "$entry"
+    exit 0 ;;
+  --due)
+    [[ $# == 1 || ( $# == 2 && $2 == --problems ) ]] || die '--due accepts only --problems'
+    due_scan list "${2:-}"
+    exit 0 ;;
+  --due-tick)
+    (($# == 1)) || die '--due-tick takes no arguments'
+    # Hook output may be truncated by its reader; auxiliary writes must not stop the scan.
+    trap '' PIPE
+    due_scan tick
+    exit 0 ;;
   --list)
     (($# == 1)) || die "--list takes no other arguments"
     do_list
