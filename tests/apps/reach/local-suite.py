@@ -40,6 +40,7 @@ test_wait_isolated_by_recipient_thread_and_type test_reply_quotes_threads_and_re
 test_strict_lint_and_zero_placement test_private_bcc_dismissal
 test_sender_declared_no_reply_stops_at_delivery test_send_enforces_informational_recipient_fields
 test_send_rate_limits_non_questions_per_pair
+test_pair_implementer_assignment_requires_pr_review_footer
 """)
 cases("progress-reporting.t", "reply state reminder")
 cases("reachability-wake.t", "lifecycle doorbell-measurement orca-person-draft orca-detached-draft")
@@ -49,7 +50,8 @@ cases("seats/agent-state-view.t", "work bar")
 for script in ("default-environment.t", "remote-protocol.t", "seats/call-no-background.t", "seats/call-tmux.t",
                "seats/call-real-tmux.t", "seats/call-foreign-pipe.t", "seats/call-short-popup.t", "seats/call-echo-receipt.t", "seats/registered-tmux.t",
                "seats/ring-reregistration.t", "seats/ring-real-tmux.t", "seats/ring-channel.t",
-               "seats/cursor-spawn.t", "seats/cursor-heartbeat.t", "seats/cursor-ide.t"):
+               "seats/cursor-spawn.t", "seats/cursor-heartbeat.t", "seats/cursor-ide.t",
+               "seats/terminal-registration.t", "seats/terminal-relay.t"):
     CASES.append((script, ["bash", str(HERE / script)]))
 # Start the genuinely long, isolated groups first. The result order is stable.
 priority = {"seats/ring-real-tmux.t": 0, "seats/call-tmux.t": 1, "ACP integration": 2}
