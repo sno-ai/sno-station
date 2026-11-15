@@ -29,7 +29,9 @@ One builds, the other challenges it, and you can watch both. It runs on your own
 
 ## Sno Reach: two ways to talk
 
-Your agents can ask each other directly, without asking you to carry the messages.
+Your laptop agent can ask your desktop agent for a second opinion and bring the
+answer back. Leave a review request while you keep working. Sno Reach lets your
+agents talk directly, so you spend less time copying messages between conversations.
 
 | Feature | Use it when |
 | --- | --- |
@@ -41,7 +43,7 @@ machines need Reach and exchanged contacts. Each machine runs its own receiver;
 no central messaging server is required. Look for `network` and `peer` in
 `sno reach --help` before following cross-machine setup instructions.
 
-[Start using Reach](docs/reach.md) · [中文说明](docs/reach.zh-CN.md)
+[See what your agents can do with Reach →](apps/reach/README.md) · [中文说明](docs/reach.zh-CN.md)
 
 ## Hand the work off tonight. In the morning you get results, not three questions.
 
@@ -286,7 +288,7 @@ There is no update step: `sno` updates itself when it finds a newer release.
 |---|---|
 | One memory across Codex, Claude Code, Hermes Agent, Cursor and OpenClaw | Released; installed from the registry on a clean machine and proven end to end |
 | Cursor: the same memory, skills, review, take-over and Self Learning | Released in 1.3; the `cursor-agent` command line proven end to end on a clean Linux machine; the Cursor app on macOS still being proven |
-| Sno Reach: Instant Messenger and Agent Email | Local agent communication; the cross-machine build adds LAN and Tailscale connections. See the [Reach guide](docs/reach.md) for setup and availability. |
+| Sno Reach: Instant Messenger and Agent Email | Let agents ask questions and exchange work across conversations and computers. See [what you can do with Reach](apps/reach/README.md) for examples, setup and availability. |
 | Self Learning and the squad skills | Installed by `sno setup`; the nightly job ran on a clean Linux machine |
 | One-command install | `sno setup` installs everything above; proven on a clean Linux machine |
 | "Sno onboard" inside your agent | Available; it starts after the install, or when you say it |
