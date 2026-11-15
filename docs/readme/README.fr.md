@@ -26,6 +26,17 @@ L'un construit, l'autre lui porte la contradiction, et vous pouvez regarder les 
 
 **Lire dans d'autres langues :** [English](../../README.md) · [中文](README.zh-CN.md) · [Deutsch](README.de.md) · [Español](README.es.md) · **Français** · [Русский](README.ru.md) · [한국어](README.ko.md) · [日本語](README.ja.md) · [繁體中文](README.zh-TW.md)
 
+## Sno Reach
+
+| Fonction | Quand l’utiliser |
+|---|---|
+| **Instant Messenger** | Contacter un autre agent maintenant et attendre sa réponse réelle. |
+| **Agent Email** | Conserver des messages et des tâches pour qu’un agent les traite et y réponde plus tard. |
+
+La version pour plusieurs ordinateurs relie les agents par LAN ou Tailscale. Chaque ordinateur exécute un processus de réception Reach ; aucun serveur SSH n’est nécessaire. Vérifiez que `sno reach --help` propose `network` et `peer`.
+
+[Guide rapide](../reach.md)
+
 ## Passez la main ce soir. Au matin, des résultats, pas trois questions.
 
 Trois choses qui nous sont arrivées avant que nous construisions ceci :
@@ -285,7 +296,7 @@ Il n'y a pas d'étape de mise à jour : `sno` se met à jour lui-même quand il 
 |---|---|
 | Une seule mémoire pour Codex, Claude Code, Hermes Agent, Cursor et OpenClaw | Publiée ; installée depuis le registre sur une machine vierge et prouvée de bout en bout |
 | Cursor : la même mémoire, compétences, relecture, relais et Self Learning | Publié dans la 1.3 ; la ligne de commande `cursor-agent` prouvée de bout en bout sur une machine Linux vierge ; l'application Cursor sur macOS encore en cours de vérification |
-| Sno Reach, des agents qui se parlent sans démon | Installé par `sno setup` ; Linux et macOS ; prouvé de bout en bout sur une machine Linux vierge |
+| Sno Reach: Instant Messenger / Agent Email | Installé par `sno setup` ; Linux et macOS ; prouvé de bout en bout sur une machine Linux vierge |
 | Self Learning et les compétences de l'équipe | Installés par `sno setup` ; la tâche nocturne a tourné sur une machine Linux vierge |
 | Installation en une commande | `sno setup` installe tout ce qui précède ; prouvée sur une machine Linux vierge |
 | « Sno onboard » dans votre agent | Disponible ; il démarre après l'installation, ou quand vous le dites |
