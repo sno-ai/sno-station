@@ -9,7 +9,7 @@ import { composeContinuityContext, continuityBriefPath } from "../../../packages
 import { writeSettingsFixture } from "../../packages/memory/fixtures/settings-file-fixture";
 
 const repo = resolve(import.meta.dirname, "../../..");
-const skills = resolve(repo, "../sno-station-skills-core/skills");
+const skills = resolve(repo, "../sno-station-skills/skills");
 const lessonCommand = join(skills, "R-recursive-self-improvement/rem-reflect/skill/scripts/rem-reflect.ts");
 const checkpoint = join(skills, "S-communication-and-handoff/handoff/skill/scripts/handoff-checkpoint");
 let root: string;

@@ -7,7 +7,7 @@ implementation orchestrator, modify product source, use live agent sessions, or 
 Requirements: current built Sno CLI, built Station packages, the skills source
 checkout, tmux, Node, Python 3.11+, and existing logins for both installed agent CLIs.
 `SNO_BINARY` defaults to the sibling `sno-cli-core/target/debug/sno`;
-`SNO_SKILLS_SOURCE` defaults to the sibling `sno-station-skills-core` checkout.
+`SNO_SKILLS_SOURCE` defaults to the sibling `sno-station-skills` checkout.
 The fixtures reuse `tests/apps/*/e2e-agent` and `tests/apps/reach/seats` conventions.
 The tested packages are the source checkout's actual built packages, linked into a
 private npm prefix. No fake `sno`, agent, mailbox, hook or recovery implementation
