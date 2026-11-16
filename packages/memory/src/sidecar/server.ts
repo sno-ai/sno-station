@@ -1,7 +1,7 @@
 import { MEMORY_SHUTDOWN_TIMEOUT_MS } from "../../config/index";
 import { getSidecarSocketPath, SettingsUnavailableError } from "../contract/profile";
 /** @file server.ts
- * @purpose Runs the loopback HTTP surface and empty asynchronous REM executor.
+ * @purpose Runs the loopback HTTP surface and asynchronous precision night.
  * @boundary Sno CLI requests, durable REM job state, and the existing local audit writer.
  */
 
@@ -23,23 +23,14 @@ import { createLogger, effectiveLogLevel, emitDiagnostic } from "@snoai/utils/lo
 import { withLogContext } from "@snoai/utils/log-context";
 import { z } from "zod";
 import {
-	parseRemOperationType,
-	REM_BUILT_OPERATION_TYPES,
-	type RemBuiltOperationType,
-	type RemOperationType,
-} from "../engine/rem/index.js";
-import {
 	appendAuditEntryStrict,
 	compactAuditLog,
 	getAuditPath,
 	getSnoStationMemStateDir,
 } from "../engine/operations/runtime-audit-log";
 import {
-	getRemChassisJournalPath,
 	HEALTH_PATH,
-	readRemOperationalConfig,
 	readRemTestHoldMs,
-	REM_ASYNC_START_DELAY_MS,
 	REM_CORRELATION_ID_HEADER,
 	getRemDiscoveryPath,
 	getRemJobJournalPath,
@@ -56,7 +47,6 @@ import { ModelCallRefusedError } from "../model/llm-client";
 import { PayloadTooLargeError, readRequestBody } from "./request-body";
 import { serveMemoryRoute } from "./memory-routes";
 import { REM_SIDECAR_TOKEN_HEADER } from "../contract/routes";
-import { RemChassisJournal } from "./rem-chassis-journal";
 import {
 	parseRemJobStats,
 	type RemJob,
@@ -66,19 +56,8 @@ import {
 
 const log = createLogger("sno-station-mem:rem-sidecar");
 type CompletionPersistence = "job_journal" | "completed_audit" | "unavailable";
-type RunRequest =
-	| { type: string; scope: string }
-	| { types: string[]; scope: string };
-
-const runRequestSchema: z.ZodType<RunRequest> = z.union([
-	z.object({ type: z.string().min(1), scope: z.string().trim().min(1) }).strict(),
-	z
-		.object({
-			types: z.array(z.string().min(1)).min(1),
-			scope: z.string().trim().min(1),
-		})
-		.strict(),
-]);
+type RunRequest = { scope: string; full?: boolean };
+const runRequestSchema: z.ZodType<RunRequest> = z.object({ scope: z.string().trim().min(1), full: z.boolean().optional() }).strict();
 
 interface DiscoveryState {
 	port: number;
@@ -196,7 +175,6 @@ async function startOwnedRemSidecar(): Promise<{ port: number; stop(): Promise<{
 	};
 	const token = randomBytes(32).toString("hex");
 	const holdMs = readRemTestHoldMs();
-	const chassisJournal = new RemChassisJournal(getRemChassisJournalPath());
 	const onDurableTransition = (job: RemJob): void => {
 		log.info("job_transition_durable", {
 			event: "job_transition_durable",
@@ -255,7 +233,6 @@ async function startOwnedRemSidecar(): Promise<{ port: number; stop(): Promise<{
 			request,
 			response,
 			store,
-			chassisJournal,
 			holdMs,
 			pendingTimers,
 			activeTasks,
@@ -323,7 +300,7 @@ async function startOwnedRemSidecar(): Promise<{ port: number; stop(): Promise<{
 	});
 	const recovery = (async () => {
 		const jobIds = await recoverInterruptedJobs(jobs, await readCompletedJobStats(new Set(recoveryJobs.map(job => job.job_id))), recoveryJobs);
-		for (const jobId of jobIds) await runChassisJob(jobs, chassisJournal, jobId, 0, await memory.open());
+		for (const jobId of jobIds) await runChassisJob(jobs, jobId, 0, await memory.open());
 	})().catch(error => reportSidecarFailure("recovery", error));
 	activeTasks.add(Object.assign(recovery, { label: "rem-recovery" }));
 	void recovery.finally(() => activeTasks.delete(recovery));
@@ -407,7 +384,6 @@ async function routeRequest(
 	request: IncomingMessage,
 	response: ServerResponse,
 	pendingStore: Promise<RemJobStore>,
-	chassisJournal: RemChassisJournal,
 	holdMs: number,
 	pendingTimers: Map<NodeJS.Timeout, () => void>,
 	activeTasks: Set<Promise<void>>,
@@ -443,15 +419,6 @@ async function routeRequest(
 		const parsedInput = runRequestSchema.safeParse(raw);
 		if (!parsedInput.success) throw new HttpError(400, "invalid_request");
 		const input = parsedInput.data;
-		const types = "types" in input ? input.types : [input.type];
-		const requestedTypes = types.filter(type => REM_BUILT_OPERATION_TYPES.some(operation => operation === type));
-		const unknownTypes = types.filter(type => !requestedTypes.includes(type));
-		if (unknownTypes.length) {
-			reportSidecarFailure("unsupported_rem_type", new Error(unknownTypes.join(",")));
-			context.error_code = "unsupported_rem_type";
-			sendJson(response, 400, { error: "unsupported_rem_type", unknownTypes });
-			return;
-		}
 		const store = await pendingStore;
 		const runtime = await memory.open();
 		if (remNeedsHost(runtime.config.mode, runtime.settings.modelCalls) && !runtime.connectedRemPort()) {
@@ -459,17 +426,7 @@ async function routeRequest(
 			sendJson(response, 503, { error: "no host model connected" });
 			return;
 		}
-		let allocation: Awaited<ReturnType<RemJobStore["createQueued"]>>;
-		try {
-			allocation = await store.createQueued(requestedTypes, input.scope, correlationId);
-		} catch (error) {
-			if (errorMessage(error) === "wave_closed") {
-				context.error_code = "wave_closed";
-				sendJson(response, 409, { error: "wave_closed" });
-				return;
-			}
-			throw error;
-		}
+		const allocation = await store.createQueued(input.scope, correlationId);
 		const { created, job } = allocation;
 		context.job_id = job.job_id;
 		log.info("job_allocated", {
@@ -486,7 +443,6 @@ async function routeRequest(
 			site_id: "server.routeRequest.0ea180a77c",
 		});
 		if (created) {
-			const delayMs = "types" in input ? 0 : REM_ASYNC_START_DELAY_MS;
 			const { promise: task, resolve, reject } = Promise.withResolvers<void>();
 			activeTasks.add(Object.assign(task, { label: job.job_id }));
 			void task.catch(error => reportSidecarFailure("rem_run", error))
@@ -494,9 +450,9 @@ async function routeRequest(
 			const start = (): void => {
 				clearTimeout(timer);
 				pendingTimers.delete(timer);
-				void runChassisJob(store, chassisJournal, job.job_id, holdMs, runtime).then(resolve, reject);
+				void runChassisJob(store, job.job_id, holdMs, runtime, input.full).then(resolve, reject);
 			};
-			const timer = setTimeout(start, delayMs);
+			const timer = setTimeout(start, 0);
 			pendingTimers.set(timer, start);
 			if (isStopping()) start();
 		}
@@ -523,10 +479,10 @@ async function routeRequest(
 
 async function runChassisJob(
 	store: RemJobStore,
-	journal: RemChassisJournal,
 	waveId: string,
 	holdMs: number,
 	runtime: MemoryRuntimePool,
+	full?: boolean,
 ): Promise<void> {
 	const queued = store.get(waveId);
 	if (queued === undefined) throw new Error(`REM wave not found: ${waveId}`);
@@ -537,10 +493,6 @@ async function runChassisJob(
 		let completion: RemJobStats | undefined;
 		let failed = false;
 		let failure: unknown;
-		const requestedOperations = queued.requested_operations.flatMap((operation) => {
-			const parsed = parseRemOperationType(operation);
-			return parsed === undefined ? [] : [parsed];
-		});
 		let writesApplied = false;
 		try {
 			// A registration whose worker has since left still counts as connected until a call fails; check that a
@@ -561,139 +513,22 @@ async function runChassisJob(
 			if (holdMs > 0) {
 				await new Promise((resolvePromise) => setTimeout(resolvePromise, holdMs));
 			}
-			const configuration = readRemOperationalConfig();
-			const enabledBySettings = runtime.settings.rem.operations;
-			const enabledOperations: RemBuiltOperationType[] = [];
-			const cleanRefusalReasons: string[] = [];
-			for (const operation of requestedOperations) {
-				let reason: string;
-				if (!isBuiltOperation(operation)) {
-					reason = `not-built:${operation}`;
-				} else if (configuration.operations[operation] && enabledBySettings.includes(operation)) {
-					enabledOperations.push(operation);
-					continue;
-				} else {
-					reason = `switched-off:${operation}`;
-				}
-				cleanRefusalReasons.push(reason);
-				await appendChassisRefusal(journal, queued, operation, "refused", reason);
-			}
-			const { runRemProductionOrderedWave } = await import("./rem-batch-executor");
-			const result = enabledOperations.length === 0
-				? {
-						decision: "allow" as const,
-						reasonCode: null,
-						waveId: queued.job_id,
-						actionsApplied: 0,
-						actionableCandidateCount: 0,
-						appliedFraction: null,
-						candidateCount: 0,
-						stampedSkippedCount: 0,
-						parseFailureCount: 0,
-						topRefusalReasons: [],
-						measurements: {
-							rowsConsidered: 0,
-							pairsBuilt: 0,
-							pairCapBinding: false,
-							modelCalls: 0,
-							modelTokens: 0,
-							wallMs: 0,
-						},
-						perOperation: [],
-					}
-				: await runRemProductionOrderedWave({
-						mode: runtime.config.mode, settings: runtime.settings, agentPort: runtime.connectedRemPort(),
-						scope: queued.scope,
-						waveId: queued.job_id,
-						requestedOperations: enabledOperations,
-					});
-			if (result.decision === "refuse") {
-				const operation = enabledOperations[0] ?? "rem-replace";
-				const reason = result.reasonCode;
-				await appendChassisRefusal(journal, queued, operation, "failed", reason);
-				throw new Error(reason);
-			}
-			writesApplied = true;
-			const completionStats: RemJobStats = {
-				operations: result.actionsApplied,
-				applied_count: result.actionsApplied,
-				actionable_candidate_count: result.actionableCandidateCount,
-				applied_fraction: result.appliedFraction,
-				scan: {
-					scope: queued.scope,
-					candidate_count: result.candidateCount,
-					stamped_skipped_count: result.stampedSkippedCount,
-					actionable_candidate_count: result.actionableCandidateCount,
-				},
-				parse_failure_count: result.parseFailureCount,
-				top_refusal_reasons: [...cleanRefusalReasons, ...result.topRefusalReasons].slice(0, 2),
-				measured: {
-					rows_considered: result.measurements.rowsConsidered,
-					pairs_built: result.measurements.pairsBuilt,
-					pair_cap_binding: result.measurements.pairCapBinding,
-					model_calls: result.measurements.modelCalls,
-					model_tokens: result.measurements.modelTokens,
-					wall_ms: result.measurements.wallMs,
-				},
-				...(result.perOperation.length === 0
-					? {}
-					: {
-							by_operation: result.perOperation.map(({ operation, ...operationResult }) => ({
-								operation,
-								applied_count: operationResult.actionsApplied,
-								actionable_candidate_count: operationResult.actionableCandidateCount,
-								candidate_count: operationResult.candidateCount,
-								parse_failure_count: operationResult.parseFailureCount,
-								top_refusal_reasons: operationResult.topRefusalReasons,
-								measured: {
-									rows_considered: operationResult.measurements.rowsConsidered,
-									pairs_built: operationResult.measurements.pairsBuilt,
-									pair_cap_binding: operationResult.measurements.pairCapBinding,
-									model_calls: operationResult.measurements.modelCalls,
-									model_tokens: operationResult.measurements.modelTokens,
-									wall_ms: operationResult.measurements.wallMs,
-								},
-							})),
-						}),
-			};
-			completion = completionStats;
-			persistence = await persistCompletedJob(store, running, completionStats);
-			// The chassis journal also records each operation's own terminal outcome.
-			for (const operationResult of result.perOperation) {
-				try {
-					await journal.appendJournalWithCorrelation(
-						running.job_id,
-						operationResult.operation,
-						running.correlation_id,
-						{
-							stage: operationResult.operation,
-							outcome: operationResult.actionsApplied > 0 ? "done" : "no-action",
-							pairsScanned: operationResult.measurements.pairsBuilt,
-							verdicts: operationResult.actionableCandidateCount,
-							actionsApplied: operationResult.actionsApplied,
-						},
-					);
-				} catch (error) {
-					log.error("job_completion_journal_failed", {
-						error,
-						job_id: running.job_id,
-						job_type: operationResult.operation,
-						correlation_id: running.correlation_id,
-					}, {
-						event_name: "sno_station_mem.server.job.completion.journal.failed",
-						file: "packages/memory/src/sidecar/server.ts",
-						function: "runChassisJob",
-						site_id: "server.runChassisJob.e7639bd8fc",
-					});
-				}
-			}
+			const { runPrecisionNightly } = await import("./rem-batch-executor");
+			await runPrecisionNightly({ settings: runtime.settings, mode: runtime.config.mode,
+				agentPort: host, waveId: queued.job_id, full });
+			const totals = runtime.store.sqlite.prepare(`SELECT coalesce(sum(actions_applied), 0) AS applied,
+				count(CASE WHEN outcome = 'failed' THEN 1 END) AS failed
+				FROM nodix_rem_journal WHERE job_id = ? AND job_type = 'precision-nightly'`)
+				.get(queued.job_id) as { applied: number; failed: number };
+			writesApplied = totals.applied > 0;
+			completion = { operations: totals.applied, applied_count: totals.applied };
+			if (totals.failed > 0) throw new Error("Nightly precision steps failed; inspect precision report");
+			persistence = await persistCompletedJob(store, running, completion);
 		} catch (error) {
 			failed = true;
 			failure = error;
-			if (!writesApplied) {
-				if (error instanceof ModelCallRefusedError) await skipNonTerminalJob(store, queued.job_id, error.reason, error.callId, error.destination);
-				else await failNonTerminalJob(store, queued.job_id, errorMessage(error));
-			}
+			if (error instanceof ModelCallRefusedError) await skipNonTerminalJob(store, queued.job_id, error.reason, error.callId, error.destination);
+			else await failNonTerminalJob(store, queued.job_id, errorMessage(error));
 		} finally {
 			let outcome = "empty-success";
 			if (failed) outcome = writesApplied ? "partial" : "failed";
@@ -704,8 +539,6 @@ async function runChassisJob(
 				job_id: queued.job_id,
 				basis: persistence,
 				applied_count: completion?.applied_count ?? (writesApplied ? null : 0),
-				candidate_count: completion?.scan?.candidate_count ?? null,
-				parse_failure_count: completion?.parse_failure_count ?? null,
 				duration_ms: performance.now() - started,
 				...(failure === undefined ? {} : { error: failure }),
 			}, {
@@ -728,27 +561,6 @@ async function persistCompletedJob(
 	if (auditPersisted) return "completed_audit";
 	reportSidecarFailure("completion-persistence", new Error("completed work has no durable completion receipt"));
 	return "unavailable";
-}
-
-async function appendChassisRefusal(
-	journal: RemChassisJournal,
-	job: RemJob,
-	jobType: RemOperationType,
-	outcome: "failed" | "refused",
-	reason: string,
-): Promise<void> {
-	await journal.appendJournalWithCorrelation(job.job_id, jobType, job.correlation_id, {
-		stage: jobType,
-		outcome,
-		pairsScanned: 0,
-		verdicts: 0,
-		actionsApplied: 0,
-		reason,
-	});
-}
-
-function isBuiltOperation(jobType: RemOperationType): jobType is RemBuiltOperationType {
-	return REM_BUILT_OPERATION_TYPES.some((operation) => operation === jobType);
 }
 
 function errorMessage(error: unknown): string {
@@ -841,7 +653,7 @@ async function readCompletedJobStats(wantedJobs: ReadonlySet<string>): Promise<M
 			const details = entry["details"];
 			if (!isRecord(details) || typeof details["job_id"] !== "string" || !wantedJobs.has(details["job_id"])) continue;
 			const type = details["type"];
-			if (typeof type !== "string" || parseRemOperationType(type) === undefined) continue;
+			if (type !== "precision-nightly") continue;
 			const stats = parseRemJobStats(details["stats"]);
 			if (stats === undefined) continue;
 			completed.set(details["job_id"], stats);

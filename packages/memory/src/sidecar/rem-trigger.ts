@@ -1,5 +1,5 @@
 /** @file rem-trigger.ts
- * @purpose Evaluates daily and candidate-growth REM triggers on the gateway maintenance tick.
+ * @purpose Evaluates daily precision triggers on the gateway maintenance tick.
  * @boundary Reads candidate scopes and durable trigger state, audits decisions, then calls the sidecar.
  */
 
@@ -15,7 +15,6 @@ import {
 	getAuditPath,
 	type AuditStatus,
 } from "../engine/operations/runtime-audit-log";
-import { readSettings } from "../contract/profile";
 import type { Settings } from "../../config/settings";
 import {
 	REM_CORRELATION_ID_HEADER,
@@ -36,24 +35,20 @@ import type { SqliteDatabaseLike } from "../store/sqlite-runtime";
 import type { ProductMode } from "../../config/plugin-config-mode-schema";
 
 export const REM_DAILY_SCHEDULE_HOUR = 3;
-export const REM_VOLUME_THRESHOLD = 100;
 export const REM_TRIGGER_ATTEMPT_LIMIT = 3;
 export const REM_TRIGGER_DISPATCH_TIMEOUT_MS = 10_000;
 
 const REM_COMPLETION_AUDIT_TAIL_BYTES = 16 * 1024 * 1024;
 const log = createLogger("sno-station-mem:rem-trigger");
 
-type RemAutomaticTrigger = "daily" | "volume";
-export type RemAutomaticOperation = "rem-replace" | "rem-update";
+type RemAutomaticTrigger = "daily";
 
 export interface RemAutomaticTriggerInput {
 	database: SqliteDatabaseLike;
 	stateDir: string;
 	auditStateDir?: string;
-	requestedOperations: RemAutomaticOperation[];
 	now?: Date;
 	tickEnabled?: boolean;
-	volumeThreshold?: number;
 	discoveryPath?: string;
 	dispatchTimeoutMs?: number;
 	resolveScheduleZone?: () => string;
@@ -63,8 +58,8 @@ export interface RemAutomaticTriggerInput {
 }
 
 export function remNeedsHost(mode: ProductMode, modelCalls: Settings["modelCalls"]): boolean {
-	return Object.keys(modelCalls)
-		.some(id => id.startsWith("REM") && modelCalls[id as keyof typeof modelCalls][mode] === "host");
+	return (["E13", "E15", "E16", "E19", "E20", "E21", "E22", "E23", "E24"] as const)
+		.some(id => modelCalls[id][mode] === "host");
 }
 
 export interface RemAutomaticTriggerReport {
@@ -81,29 +76,13 @@ const discoverySchema = z
 	.strict();
 
 const idleEvaluations = new Map<string, number>();
-export function readRemAutomaticOperations(): { mode: ProductMode; requestedOperations: RemAutomaticOperation[]; tickEnabled: boolean } {
-	const installed = readSettings();
-	return {
-		mode: installed.mode,
-		requestedOperations: installed.rem.operations,
-		tickEnabled: installed.rem.tick,
-	};
-}
-
 export async function evaluateRemAutomaticTriggers(
 	input: RemAutomaticTriggerInput,
 ): Promise<RemAutomaticTriggerReport> {
 	const now = input.now ?? new Date();
-	if (!Number.isInteger(input.volumeThreshold ?? REM_VOLUME_THRESHOLD) || (input.volumeThreshold ?? REM_VOLUME_THRESHOLD) < 1) throw new Error("REM volume threshold must be a positive integer");
 	const auditStateDir = input.auditStateDir ?? input.stateDir;
 	if (Number.isNaN(now.getTime())) throw new Error("REM trigger evaluation time is invalid");
-	if (input.requestedOperations.length === 0) {
-		await recordDecision(auditStateDir, undefined, "skipped", {
-			row: "automatic-trigger-skipped",
-			reason: "product-mode-disabled",
-		});
-		return { evaluations: 0, dispatches: 0 };
-	}
+
 	if (input.mode && remNeedsHost(input.mode, input.modelCalls) && !input.hasConnectedHost?.()) {
 		await recordDecision(auditStateDir, undefined, "skipped", {
 			row: "automatic-trigger-skipped", reason: "skipped: no host model connected",
@@ -147,12 +126,11 @@ export async function evaluateRemAutomaticTriggers(
 
 	state = await applyCompletedBaselines(auditStateDir, input.stateDir, state);
 	let dispatches = 0;
-	for (const { scope, candidateCount } of scopes) {
+	for (const { scope } of scopes) {
 		try {
 			const ensured = ensureRemTriggerScope(state, {
 				scope,
 				now: lostState ? previousDay(now) : now,
-				candidateCount,
 				resolveScheduleZone: input.resolveScheduleZone,
 			});
 			state = ensured.state;
@@ -162,7 +140,6 @@ export async function evaluateRemAutomaticTriggers(
 				auditStateDir,
 				state,
 				scope,
-				candidateCount,
 				now,
 			);
 			state = scopeResult.state;
@@ -219,47 +196,21 @@ async function evaluateScope(
 	auditStateDir: string,
 	state: RemTriggerStateDocument,
 	scope: string,
-	candidateCount: number,
 	now: Date,
 ): Promise<{ state: RemTriggerStateDocument; dispatched: boolean }> {
 	const scopeState = requiredScopeState(state, scope);
 	const zone = scopeState.schedule_zone;
-	// At most one automatic pass per local day, whichever trigger comes first (owner ruling
-	// 2026-09-16). `last_volume_pass_date` is the local day whose pass is used up: a completed
-	// volume pass sets it, so does a completed daily pass, a failed pass, and an exhausted try limit. A used-up
-	// day closes the volume trigger and moves the daily pass to the next day's schedule.
 	const nextDue = nextDailyDue(scopeState);
 	const localDate = localDateAt(now, zone);
-	const growth = candidateCount - scopeState.last_covered_count;
-	// A pass the other trigger dispatched today and has not seen complete already holds today's slot.
-	// Only today's identities count, so a completion that never arrives blocks for a day at most.
-	const scheduledDue = computeRemDailyDue(scopeState.last_pass_at, zone);
-	const pendingVolumeToday = scopeState.attempts.identity === remAutomaticCorrelationId("volume", scope, localDate);
-	const pendingDailyToday = localDateAt(scheduledDue, zone) === localDate
-		&& scopeState.attempts.identity === remAutomaticCorrelationId("daily", scope, scheduledDue.toISOString());
-	const dailyDue = now.getTime() >= nextDue.getTime() && !pendingVolumeToday;
-	const volumeDue = growth >= (input.volumeThreshold ?? REM_VOLUME_THRESHOLD)
-		&& scopeState.last_volume_pass_date !== localDate
-		&& !pendingDailyToday;
-	if (!dailyDue && !volumeDue) {
-		const consecutiveIdle = (idleEvaluations.get(scope) ?? 0) + 1;
-		idleEvaluations.set(scope, consecutiveIdle);
-		await recordDecision(auditStateDir, scope, "ok", {
-			row: "waiting-for-schedule",
-			next_due: nextDue.toISOString(),
-			milliseconds_until_due: Math.max(0, nextDue.getTime() - now.getTime()),
-			growth: growthDetails(candidateCount, scopeState.last_covered_count, input.volumeThreshold ?? REM_VOLUME_THRESHOLD),
-			consecutive_idle: consecutiveIdle,
-		});
+	if (now.getTime() < nextDue.getTime()) {
 		return { state, dispatched: false };
 	}
-
-	const trigger: RemAutomaticTrigger = dailyDue ? "daily" : "volume";
+	const trigger: RemAutomaticTrigger = "daily";
 	if (input.tickEnabled === false) {
 		const nextState = replaceScopeState(state, scope, {
 			...scopeState,
 			missed_window: {
-				due_at: dailyDue ? nextDue.toISOString() : now.toISOString(),
+				due_at: nextDue.toISOString(),
 				trigger,
 				recorded_at: now.toISOString(),
 			},
@@ -267,7 +218,7 @@ async function evaluateScope(
 		await writeRemTriggerStateAtomic(input.stateDir, nextState);
 		return { state: nextState, dispatched: false };
 	}
-	const triggerKey = trigger === "daily" ? nextDue.toISOString() : localDate;
+	const triggerKey = nextDue.toISOString();
 	const correlationId = remAutomaticCorrelationId(trigger, scope, triggerKey);
 	const priorAttempts =
 		scopeState.attempts.identity === correlationId ? scopeState.attempts.count : 0;
@@ -277,7 +228,7 @@ async function evaluateScope(
 			attempts: priorAttempts,
 		});
 		const nextState = replaceScopeState(state, scope, {
-			...scopeState, last_volume_pass_date: localDate, attempts: { identity: null, count: 0 },
+			...scopeState, last_pass_date: localDate, attempts: { identity: null, count: 0 },
 		});
 		await writeRemTriggerStateAtomic(input.stateDir, nextState);
 		return { state: nextState, dispatched: false };
@@ -288,7 +239,6 @@ async function evaluateScope(
 		next_due: nextDue.toISOString(),
 		pass_at: now.toISOString(),
 		local_date: localDate,
-		growth: growthDetails(candidateCount, scopeState.last_covered_count, input.volumeThreshold ?? REM_VOLUME_THRESHOLD),
 		correlation_id: correlationId,
 		consecutive_idle: 0,
 	});
@@ -339,7 +289,7 @@ async function dispatchRemWave(
 			[REM_SIDECAR_TOKEN_HEADER]: discovery.token,
 			[REM_CORRELATION_ID_HEADER]: correlationId,
 		},
-		body: JSON.stringify({ types: input.requestedOperations, scope }),
+		body: JSON.stringify({ scope }),
 		signal: AbortSignal.timeout(input.dispatchTimeoutMs ?? REM_TRIGGER_DISPATCH_TIMEOUT_MS),
 	});
 	if (response.status !== 202) throw new Error(`REM sidecar returned HTTP ${response.status}`);
@@ -371,13 +321,11 @@ async function applyCompletedBaselines(
 			const current = state.scopes[job.scope];
 			if (!current || !job.correlation_id.startsWith("rem-auto-") || !job.started_at) continue;
 			const localDate = localDateAt(new Date(job.started_at), current.schedule_zone);
-			const measured = job.stats.measured;
 			const completedScope = {
 				...current,
 				last_pass_at: job.started_at > current.last_pass_at ? job.started_at : current.last_pass_at,
-				last_volume_pass_date: localDate > (current.last_volume_pass_date ?? "") ? localDate : current.last_volume_pass_date,
+				last_pass_date: localDate > (current.last_pass_date ?? "") ? localDate : current.last_pass_date,
 				...(current.attempts.identity === job.correlation_id ? { attempts: { identity: null, count: 0 } } : {}),
-				...(measured?.pair_cap_binding === false ? { last_covered_count: measured.rows_considered } : {}),
 			};
 			if (JSON.stringify(current) === JSON.stringify(completedScope)) continue;
 			state = replaceScopeState(state, job.scope, completedScope);
@@ -427,7 +375,7 @@ async function applyCompletedBaselines(
 				const localDate = details["local_date"];
 				dispatched.set(correlationId, {
 					scope,
-					...(trigger === "daily" || trigger === "volume" ? { trigger } : {}),
+					...(trigger === "daily" ? { trigger } : {}),
 					...(typeof passAt === "string" ? { passAt } : {}),
 					...(typeof localDate === "string" ? { localDate } : {}),
 				});
@@ -438,9 +386,9 @@ async function applyCompletedBaselines(
 				const failed = dispatched.get(correlationId);
 				const failedScopeState = failed ? nextState.scopes[failed.scope] : undefined;
 				if (failed && failedScopeState && isLocalDate(failed.localDate)
-					&& (failedScopeState.last_volume_pass_date ?? "") < failed.localDate) {
+					&& (failedScopeState.last_pass_date ?? "") < failed.localDate) {
 					nextState = replaceScopeState(nextState, failed.scope, {
-						...failedScopeState, last_volume_pass_date: failed.localDate, attempts: { identity: null, count: 0 },
+						...failedScopeState, last_pass_date: failed.localDate, attempts: { identity: null, count: 0 },
 					});
 				}
 				continue;
@@ -455,35 +403,19 @@ async function applyCompletedBaselines(
 				continue;
 			}
 			const currentScopeState = requiredScopeState(nextState, dispatch.scope);
-			let completedScopeState: RemTriggerScopeState = {
+			const completedScopeState: RemTriggerScopeState = {
 				...currentScopeState,
 				...(dispatch.trigger === "daily" && isValidInstant(dispatch.passAt) && dispatch.passAt > currentScopeState.last_pass_at
 					? { last_pass_at: dispatch.passAt }
 					: {}),
-				// A completed daily pass uses up its local day too, so the volume trigger stays closed.
-				...(dispatch.trigger === "daily" && isLocalDate(dispatch.localDate) && dispatch.localDate > (currentScopeState.last_volume_pass_date ?? "")
-					? { last_volume_pass_date: dispatch.localDate }
-					: {}),
-				...(dispatch.trigger === "volume" && isLocalDate(dispatch.localDate) && dispatch.localDate > (currentScopeState.last_volume_pass_date ?? "")
-					? { last_volume_pass_date: dispatch.localDate }
+				// A completed pass uses up its local day.
+				...(dispatch.trigger === "daily" && isLocalDate(dispatch.localDate) && dispatch.localDate > (currentScopeState.last_pass_date ?? "")
+					? { last_pass_date: dispatch.localDate }
 					: {}),
 				...(currentScopeState.attempts.identity === correlationId
 					? { attempts: { identity: null, count: 0 } }
 					: {}),
 			};
-			const measured = asRecord(asRecord(details?.["stats"])?.["measured"]);
-			const rowsConsidered = measured?.["rows_considered"];
-			if (
-				(!isValidInstant(dispatch.passAt) || dispatch.passAt >= currentScopeState.last_pass_at) &&
-				measured?.["pair_cap_binding"] === false &&
-				Number.isInteger(rowsConsidered) &&
-				Number(rowsConsidered) >= 0
-			) {
-				completedScopeState = {
-					...completedScopeState,
-					last_covered_count: Number(rowsConsidered),
-				};
-			}
 			if (JSON.stringify(completedScopeState) === JSON.stringify(currentScopeState)) continue;
 			nextState = replaceScopeState(nextState, dispatch.scope, completedScopeState);
 		} catch {
@@ -536,14 +468,14 @@ export function remAutomaticCorrelationId(
 /** The daily due time, pushed to the schedule after the last used-up local day. */
 function nextDailyDue(scopeState: RemTriggerScopeState): Date {
 	const scheduled = computeRemDailyDue(scopeState.last_pass_at, scopeState.schedule_zone);
-	const volumeDate = scopeState.last_volume_pass_date;
-	if (volumeDate === null) return scheduled;
-	const parsed = /^(\d{4})-(\d{2})-(\d{2})$/u.exec(volumeDate);
+	const lastPassDate = scopeState.last_pass_date;
+	if (lastPassDate === null) return scheduled;
+	const parsed = /^(\d{4})-(\d{2})-(\d{2})$/u.exec(lastPassDate);
 	// The state schema only admits YYYY-MM-DD here; anything else leaves the daily schedule alone.
 	if (parsed === null) return scheduled;
 	const following = addCalendarDays({ year: Number(parsed[1]), month: Number(parsed[2]), day: Number(parsed[3]) }, 1);
-	const afterVolume = zonedInstant(scopeState.schedule_zone, following.year, following.month, following.day);
-	return afterVolume.getTime() > scheduled.getTime() ? afterVolume : scheduled;
+	const afterLastPass = zonedInstant(scopeState.schedule_zone, following.year, following.month, following.day);
+	return afterLastPass.getTime() > scheduled.getTime() ? afterLastPass : scheduled;
 }
 
 export function computeRemDailyDue(lastPassAt: string, scheduleZone: string): Date {
@@ -639,17 +571,6 @@ function addCalendarDays(
 		year: instant.getUTCFullYear(),
 		month: instant.getUTCMonth() + 1,
 		day: instant.getUTCDate(),
-	};
-}
-
-function growthDetails(candidateCount: number, coveredCount: number, threshold: number): Record<string, number> {
-	const growth = candidateCount - coveredCount;
-	return {
-		candidate_count: candidateCount,
-		last_covered_count: coveredCount,
-		delta: growth,
-		threshold,
-		remaining: Math.max(0, threshold - growth),
 	};
 }
 

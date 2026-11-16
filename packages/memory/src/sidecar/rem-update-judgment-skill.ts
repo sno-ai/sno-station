@@ -8,7 +8,6 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const REM_UPDATE_SKILL_PATH = path.join("skills", "judge-rem-memory-updates", "SKILL.md");
-const GROUP_CLOSURE_SKILL_PATH = path.join("skills", "judge-group-closure", "SKILL.md");
 
 function resolveSkillPath(skillPath: string): string {
 	const moduleDir = path.dirname(fileURLToPath(import.meta.url));
@@ -24,7 +23,6 @@ function resolveSkillPath(skillPath: string): string {
 }
 
 const skillText = readFileSync(resolveSkillPath(REM_UPDATE_SKILL_PATH), "utf8");
-const groupClosureSkillText = readFileSync(resolveSkillPath(GROUP_CLOSURE_SKILL_PATH), "utf8");
 
 function readSection(heading: string): string {
 	const marker = `## ${heading}\n`;
@@ -35,18 +33,6 @@ function readSection(heading: string): string {
 	return skillText.slice(bodyStart, nextSection === -1 ? undefined : nextSection).trim();
 }
 
-export type RemUpdateJudgmentSkill = {
-	readonly relation: string;
-	readonly retirementTarget: string;
-	readonly rewrite: string;
-	readonly verification: string;
-	readonly clauseCarry: string;
-};
-
-export const REM_UPDATE_JUDGMENT_SKILL: RemUpdateJudgmentSkill = {
-	relation: readSection("Relation Judgment"),
-	retirementTarget: groupClosureSkillText,
-	rewrite: readSection("Source Rewrite"),
-	verification: readSection("Rewrite Verification"),
-	clauseCarry: readSection("Clause Carry"),
+export const REM_UPDATE_JUDGMENT_SKILL: { readonly verification: string } = {
+ verification: readSection("Rewrite Verification"),
 };
