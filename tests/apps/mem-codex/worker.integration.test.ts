@@ -1,8 +1,8 @@
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { connect, type InitRegistration, type MemoryClient } from "@snoai/memory/client";
 import { CODING_SKIN_CAPTURE_QUIET_MS, CODING_SKIN_CHILD_DEADLINE_MS, CODING_SKIN_WORKER_LIFETIME_MS } from "@snoai/memory/coding-skin";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -12,6 +12,7 @@ import { runWorker, type WorkerDependencies } from "../../../apps/mem-codex/src/
 import { writeSettingsFixture } from "../../packages/memory/fixtures/settings-file-fixture";
 import { untilModelReady } from "../../packages/memory/integration/fixtures/model-ready";
 import { LOCAL_EMBEDDING_CACHE_DIR_DEFAULT } from "../../../packages/embedder/src/constants.ts";
+import { withRegisteredWorker } from "../support/registered-worker";
 
 const previousEnv = { SNO_PROFILE_DIR: process.env.SNO_PROFILE_DIR, HOME: process.env.HOME };
 const roots: string[] = [];
@@ -111,6 +112,21 @@ afterEach(async () => {
 });
 
 describe("mem-codex worker", () => {
+	it("writes its node and CLI entry at mode 0600 after registration", async () => {
+		const root = await profile();
+		writeSettingsFixture(root, { mode: "agent-native", rem: { tick: false }, rerank: { mode: "none" }, embedding: { cacheDir: MODEL_CACHE } });
+		const connected = await connect({ skinId: "codex" });
+		if (connected.degraded) throw new Error(connected.reason);
+		sidecarPids.push(connected.pid);
+		const entry = resolve(import.meta.dirname, "../../../apps/mem-codex/src/cli.ts");
+		await withRegisteredWorker(entry, async () => {
+			const record = join(root, "station", "host-worker.json");
+			expect(existsSync(record)).toBe(true);
+			expect(JSON.parse(await readFile(record, "utf8"))).toEqual({ node: process.execPath, entry });
+			expect((await stat(record)).mode & 0o777).toBe(0o600);
+		});
+	}, 30_000);
+
 	it("holds one lock, drains in filename order, registers with only its skin and model, and deletes only after commit", async () => {
 		await profile();
 		const first = await spool("0002.json", "two");

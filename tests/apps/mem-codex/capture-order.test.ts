@@ -1,12 +1,14 @@
 import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { CODING_SKIN_CAPTURE_QUIET_MS } from "@snoai/memory/coding-skin";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { endedSessionPath, spoolDirectory } from "../../../apps/mem-codex/src/paths.js";
+import { stop, userPromptSubmit } from "../../../apps/mem-codex/src/hooks.js";
 import { markSessionEnded } from "../../../apps/mem-codex/src/session-state.js";
 import { hasActionableSpool, nextCapture } from "../../../apps/mem-codex/src/worker.js";
+import { writeSettingsFixture } from "../../packages/memory/fixtures/settings-file-fixture";
 
 const now = 10 * CODING_SKIN_CAPTURE_QUIET_MS;
 // About 2,000 estimated tokens: two of these do not fit one capture's input budget together.
@@ -31,6 +33,41 @@ afterEach(async () => {
 });
 
 describe("mem-codex capture timing", () => {
+	it("queues ordinary session turns including a later marked prompt, but no turns from a session whose first prompt is marked", async () => {
+		await mkdir(join(homedir(), ".cache"), { recursive: true });
+		const workspace = await mkdtemp(join(homedir(), ".cache", "mem-codex-marked-capture-"));
+		const command = process.argv[1];
+		try {
+			// Keep the real spool observable without launching its detached consumer.
+			process.argv[1] = "";
+			writeSettingsFixture(root, { recall: { auto: false }, memoryPackage: { path: join(root, "no-memory-package") } });
+			const base = { session_id: "ordinary-capture", cwd: workspace };
+			const spool = join(root, "sno-mem-codex", "spool");
+			const queued = async () => existsSync(spool) ? Promise.all((await readdir(spool)).map(async name => {
+				const row = JSON.parse(await readFile(join(spool, name), "utf8"));
+				return { user: row.user, assistant: row.assistant };
+			})) : [];
+			await userPromptSubmit({ ...base, turn_id: "ordinary", prompt: "Keep invoices in cents." });
+			await stop({ ...base, turn_id: "ordinary", last_assistant_message: "Recorded." });
+			expect(await queued()).toEqual([{ user: "Keep invoices in cents.", assistant: "Recorded." }]);
+			await userPromptSubmit({ ...base, turn_id: "marked", prompt: "[sno-oneshot] Station one-shot run, not a user session.\nKeep invoices in dollars." });
+			await stop({ ...base, turn_id: "marked", last_assistant_message: "Recorded the automated instruction." });
+			expect(await queued()).toHaveLength(2);
+			expect(await queued()).toContainEqual({ user: "Keep invoices in cents.", assistant: "Recorded." });
+			expect(await queued()).toContainEqual({ user: "[sno-oneshot] Station one-shot run, not a user session.\nKeep invoices in dollars.", assistant: "Recorded the automated instruction." });
+			const marked = { session_id: "marked-capture", cwd: workspace };
+			await userPromptSubmit({ ...marked, turn_id: "first", prompt: "[sno-oneshot] Station one-shot run, not a user session.\nKeep invoices in euros." });
+			await stop({ ...marked, turn_id: "first", last_assistant_message: "Recorded euros." });
+			expect(await queued()).toHaveLength(2);
+			await userPromptSubmit({ ...marked, turn_id: "second", prompt: "Keep invoices in pounds." });
+			await stop({ ...marked, turn_id: "second", last_assistant_message: "Recorded pounds." });
+			expect(await queued()).toHaveLength(2);
+		} finally {
+			process.argv[1] = command ?? "";
+			await rm(workspace, { recursive: true, force: true });
+		}
+	});
+
 	it("waits for a session to be quiet or ended, then takes all its turns within the input budget", () => {
 		const quiet = now - CODING_SKIN_CAPTURE_QUIET_MS;
 		const entries = [
