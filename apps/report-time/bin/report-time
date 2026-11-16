@@ -7,6 +7,7 @@ fi
 #
 # UTC timestamps need conversion to the user's zone before they are reported.
 # Converting in your head can make a wrong hour look right.
+# REPORT_TIME_USER_TZ names the zone to report in, overriding TZ when set.
 #
 #   sno report-time                 -> now
 #   sno report-time --in 3600       -> 3600 seconds from now
@@ -24,9 +25,6 @@ fi
 #                                 -> the same, and refuses if the process's own limit is not 3600 seconds
 #   sno report-time "<UTC timestamp>"  -> that UTC instant, converted
 #   sno report-time @<epoch>        -> that epoch, converted
-#
-# Set REPORT_TIME_USER_TZ to a zone name (for example Europe/Berlin) to report in that
-# zone instead of the one in TZ.
 #
 # Output: "09:31 CET (08:31 UTC)"  — with dates when the instant is not today.
 set -euo pipefail

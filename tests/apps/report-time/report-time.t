@@ -10,6 +10,9 @@ cleanup() {
 }
 trap cleanup EXIT
 
+actual="$("$SCRIPT" --help)"
+[[ "$actual" == *'REPORT_TIME_USER_TZ'* ]] || { printf 'FAIL help missing REPORT_TIME_USER_TZ\n' >&2; exit 1; }
+
 actual="$(env -u REPORT_TIME_USER_TZ TZ=Asia/Tokyo "$SCRIPT" @1704067200)"
 expected='2024-01-01 09:00 JST (2024-01-01 00:00 UTC)'
 [[ "$actual" == "$expected" ]] || { printf 'FAIL Tokyo epoch: %s\n' "$actual" >&2; exit 1; }
