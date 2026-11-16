@@ -39,6 +39,7 @@ const receiptEventSchema = z.object({
 
 const sessionStateSchema = z.object({
 	sessionId: z.string().min(1),
+	oneshot: z.boolean().optional(),
 	skillRunsReported: z.number().int().nonnegative().default(0),
 	/** Where the previous session.activity send stopped in the transcript. */
 	activity: activityCursorSchema.optional(),
