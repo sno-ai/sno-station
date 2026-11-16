@@ -7,17 +7,10 @@ import { createServer } from "node:http";
 
 /** A fixed line inside each prompt template, and the call id of the model-call table it belongs to. */
 export const PROMPT_LINES: Array<[string, string]> = [
-	["Task: REM source rewrite.", "REM5"],
-	["Task: REM rewrite verification.", "REM6"],
-	["Task: REM relation judgment.", "REM7"],
-	["Task: REM retirement target judgment.", "REM8"],
-	["Task: REM clause carry judgment.", "REM4"],
-	["Classify whether every older-memory clause remains covered after replacement.", "REM3"],
-	["Judge whether the newer memory replaces the older memory.", "REM2"],
-	// The two conflict-verdict prompts: chat (host) and raw "Verdict:" completion (Sno GPU). REM1, P1 and
+	// The two conflict-verdict prompts: chat (host) and raw "Verdict:" completion (Sno GPU). P1 and
 	// E10 all render them, so a caller outside REM reads the id by the entry it drove.
-	["Adjudicate whether the newer memory replaces the older memory.", "REM1"],
-	["Judge the relationship of the newer memory to the older memory.", "REM1"],
+	["Adjudicate whether the newer memory replaces the older memory.", "P1"],
+	["Judge the relationship of the newer memory to the older memory.", "P1"],
 	["Judge one current-state profile update.", "P4"],
 	["Separate lifecycle retirement from profile ownership cleanup.", "P2"],
 	["Stored clause (retired): ", "P3"],
