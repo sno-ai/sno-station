@@ -1,4 +1,6 @@
-import { basename } from "node:path";
+import { mkdir, rename, writeFile } from "node:fs/promises";
+import { basename, join } from "node:path";
+export { loadedFilesAtStart } from "./loaded-files";
 
 export { observeAgentEvent, readAgentView, compactAgentView, markAgentResultSeen, agentProcessIdentity,
 	type AgentHarness, type AgentObservation, type AgentOperationError, type AgentRow, type AgentView,
@@ -21,6 +23,7 @@ export {
 	type SessionActivityPayload,
 } from "./session-activity";
 
+export const HOST_MODEL_CONCURRENCY = 4;
 export const CODING_SKIN_CHILD_DEADLINE_MS = 110_000;
 export const CODING_SKIN_WORKER_LIFETIME_MS: number = 9 * 60_000;
 export const CODING_SKIN_RETRY_DELAYS_MS = [2_000, 10_000] as const;
@@ -60,7 +63,6 @@ export const CODING_SKIN_CURSOR_HOOKS = {
 	sessionStart: { subcommand: "session-start", timeout: 15 },
 	beforeSubmitPrompt: { subcommand: "user-prompt-submit", timeout: 30 },
 	afterAgentResponse: { subcommand: "after-agent-response", timeout: 5 },
-	afterAgentThought: { subcommand: "after-agent-thought", timeout: 5 },
 	stop: { subcommand: "stop", timeout: 5 },
 	preCompact: { subcommand: "pre-compact", timeout: 5 },
 	sessionEnd: { subcommand: "session-end", timeout: 8 },
@@ -71,6 +73,15 @@ export type CodingSkinCursorHookName = keyof typeof CODING_SKIN_CURSOR_HOOKS;
 export const CODING_SKIN_MODEL_COMMANDS = ["recall", "get", "remember", "correct"] as const;
 
 export type CodingSkinHarness = "claude" | "codex" | "cursor";
+
+export async function writeHostWorkerRecord(profile: string): Promise<void> {
+	const directory = join(profile, "station");
+	await mkdir(directory, { recursive: true, mode: 0o700 });
+	const path = join(directory, "host-worker.json");
+	const temporary = `${path}.${process.pid}.tmp`;
+	await writeFile(temporary, JSON.stringify({ node: process.execPath, entry: process.argv[1] }), { mode: 0o600 });
+	await rename(temporary, path);
+}
 
 export function shellQuote(value: string): string {
 	return `'${value.replaceAll("'", "'\\''")}'`;
@@ -96,3 +107,5 @@ export function isCodingSkinHookCommand(command: string, subcommand: string, har
 		? encoded.slice(1, -1).replaceAll("'\\''", "'") : encoded;
 	return basename(snoProgramPath(program)) === "sno";
 }
+
+export { formatPrecisionDoctor } from "./precision-doctor";

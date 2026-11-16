@@ -178,7 +178,7 @@ function applyEvent(row: AgentRow, observation: AgentObservation, index: number,
 	row.lastEvent = { at, event, source };
 	row.reachAddress = observation.reachAddress ?? row.reachAddress;
 	row.cwd = observation.cwd ?? row.cwd;
-	if (["user-prompt-submit", "agent-prompt-submit", "pre-tool-use", "pre-model-call", "after-agent-thought"].includes(event)) row.doing = "working";
+	if (["user-prompt-submit", "agent-prompt-submit", "pre-tool-use", "pre-model-call"].includes(event)) row.doing = "working";
 	if (event === "user-prompt-submit") {
 		resolveWait(row); row.resultId = "unknown"; row.humanSeen = "unknown"; row.subgroup = "unknown";
 		row.delivery = "unknown"; row.finalReply = "unknown";
