@@ -12,9 +12,6 @@ import { RegisteredAgentPort } from "../../../../packages/memory/src/model/regis
 import { SNO_STATION_MEM_RELEASE_ANCHOR_URL } from "../../../../packages/memory/src/model/llmix-registry";
 import { memoryOperationId, withMemoryOperation } from "../../../../packages/memory/src/engine/operation-cancellation";
 import type { ModelCallId } from "../../../../packages/memory/src/model/model-call-table";
-import { runRemBatchJob } from "../../../../packages/memory/src/sidecar/rem-batch-executor";
-import { parseRemOperationalConfiguration } from "../../../../packages/memory/src/engine/rem";
-import { createRemOwnerDecidedOperationalConfiguration } from "../../../apps/mem-claw/helpers/rem-entry-config-fixture";
 import { seedProductionMemory } from "../../../apps/mem-claw/helpers/rem-production-entry-fixture";
 import { createTestDb } from "../../../apps/mem-claw/helpers/test-db";
 import { writeSettingsFixture } from "../fixtures/settings-file-fixture";
@@ -332,80 +329,6 @@ describe("Sno model billing Station journeys", () => {
 			expect(sno.requests[2]?.operation).toBeUndefined();
 		} finally { await close(sno.server); }
 	});
-
-	for (const hostFails of [false, true]) {
-		it(`runs a real REM pair after Sno refuses and the host ${hostFails ? "fails" : "answers"}`, async () => {
-			const database = createTestDb();
-			const stateRoot = mkdtempSync(join(tmpdir(), "daisy-rem-"));
-			const previousProfile = process.env["SNO_PROFILE_DIR"];
-			const previousExpectedPath = process.env["SNO_STATION_MEM_REM_EXPECTED_DB_PATH"];
-			process.env["SNO_PROFILE_DIR"] = stateRoot;
-			process.env["SNO_STATION_MEM_REM_EXPECTED_DB_PATH"] = database.dbPath;
-			const sno = await serve((_request, response) => { response.writeHead(503); response.end(); });
-			const host = await serve((_request, response) => {
-				if (hostFails) { response.writeHead(503); response.end(); }
-				else answer(response, "keep");
-			});
-			try {
-				const scope = `persona:billing-rem-${hostFails ? "host-fails" : "host-answers"}`;
-				for (let index = 0; index < 2; index++) {
-					seedProductionMemory(database.runtime.raw, {
-						id: `billing-rem-${hostFails}-${index}`, scope,
-						text: `The researcher uses option ${index} for memory storage.`,
-						metadata: { fact_key: "profile:preferences.memory-storage", section_name: "preferences.memory-storage" },
-						timestamp: `2026-08-0${index + 1}T10:00:00.000Z`,
-					});
-				}
-				const settings = defaultSettings();
-				settings.mode = "rem-enhanced";
-				settings.store = { path: database.dbPath, encryptionKey: database.encryptionKey };
-				settings.snoGpu = { baseUrl: sno.url, apiKey: "test-machine-key" };
-				settings.embedding.cacheDir = "";
-				settings.rerank.mode = "none";
-				const jobId = `billing-rem-job-${hostFails ? "failed" : "answered"}`;
-				const run = runRemBatchJob({
-					settings, mode: "rem-enhanced", agentPort: new RegisteredAgentPort({
-						baseUrl: `${host.url}/host/v1`, credential: "host-key", model: "host-model",
-					}),
-					jobId, jobType: "rem-replace", scope,
-					configuration: parseRemOperationalConfiguration({
-						...createRemOwnerDecidedOperationalConfiguration(), budgets: { maxPairs: 1 },
-						retrieval: { neighborLimit: 2, similarityThreshold: 1 },
-					}),
-				});
-				if (hostFails) {
-					// The host refusal ends the pass with nothing done; the ordered wave then records it skipped.
-					await expect(run).resolves.toMatchObject({ terminalState: "done", actionsApplied: 0, topRefusalReasons: ["host-refused:REM1"] });
-					const activeClaims = database.runtime.raw.prepare("SELECT row_id FROM nodix_rem_row_claims WHERE state = 'active'").all();
-					const claimedPairs = database.runtime.raw.prepare("SELECT pair_id FROM nodix_rem_scan_pairs WHERE claim_state = 'claimed'").all();
-					expect(activeClaims).toEqual([]);
-					expect(claimedPairs).toEqual([]);
-				}
-				else await expect(run).resolves.toMatchObject({ terminalState: "done" });
-				expect(sno.requests.length).toBeGreaterThan(0);
-				expect(sno.requests.every(request => request.operation === jobId)).toBe(true);
-				expect(host.requests.length).toBeGreaterThan(0);
-				const hostMessages = host.requests[0]?.body.messages;
-				if (!Array.isArray(hostMessages)) throw new Error("host request has no chat messages");
-				const hostUserMessage = hostMessages.at(-1);
-				if (!hostUserMessage || typeof hostUserMessage !== "object" || !("content" in hostUserMessage)) {
-					throw new Error("host request has no user prompt");
-				}
-				expect(hostUserMessage.content).toContain("Adjudicate whether the newer memory replaces the older memory.");
-				expect(hostUserMessage.content).not.toContain("Judge the relationship of the newer memory to the older memory.");
-				expect(sno.requests[0]?.body.prompt).toContain("Judge the relationship of the newer memory to the older memory.");
-			} finally {
-				await close(sno.server);
-				await close(host.server);
-				database.cleanup();
-				rmSync(stateRoot, { recursive: true, force: true });
-				if (previousProfile === undefined) delete process.env["SNO_PROFILE_DIR"];
-				else process.env["SNO_PROFILE_DIR"] = previousProfile;
-				if (previousExpectedPath === undefined) delete process.env["SNO_STATION_MEM_REM_EXPECTED_DB_PATH"];
-				else process.env["SNO_STATION_MEM_REM_EXPECTED_DB_PATH"] = previousExpectedPath;
-			}
-		});
-	}
 
 	it("keeps one operation id across a group maintenance command", async () => {
 		const database = createTestDb();

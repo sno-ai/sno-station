@@ -34,7 +34,7 @@ let fixture: Fixture | undefined;
 const SETTINGS = defaultSettings();
 const PASS_SETTINGS = {
 	modelCalls: SETTINGS.modelCalls,
-	remSettings: { mode: SETTINGS.mode, requestedOperations: SETTINGS.rem.operations, tickEnabled: SETTINGS.rem.tick },
+	remSettings: { mode: SETTINGS.mode, tickEnabled: SETTINGS.rem.tick },
 };
 
 afterEach(async () => {

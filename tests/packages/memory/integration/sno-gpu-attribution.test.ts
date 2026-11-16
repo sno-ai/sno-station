@@ -2,7 +2,7 @@ import { createServer, type IncomingHttpHeaders, type Server, type ServerRespons
 import { once } from "node:events";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createLlmClient } from "../../../../packages/memory/src/model/llm-client";
-import { MODEL_CALL_WORKLOAD } from "../../../../packages/memory/src/model/model-call-table";
+import { MODEL_CALL_WORKLOAD, type ModelCallId } from "../../../../packages/memory/src/model/model-call-table";
 import { callSnoProfileCompletion } from "../../../../packages/memory/src/model/llm-provider-transport";
 import { defaultSettings } from "../../../../packages/memory/config/settings";
 import { RegisteredAgentPort } from "../../../../packages/memory/src/model/registered-agent-port";
@@ -149,12 +149,42 @@ describe("Sno GPU request attribution headers", () => {
 		} finally { sno.server.closeAllConnections(); sno.server.close(); }
 	});
 
+	it.each(["product", "research"] as const)("precision calls carry literal workload labels and %s usage class", async usageClass => {
+		const sno = await serve((_headers, response) => reply(response, 200));
+		const hostPrompts: string[] = [];
+		try {
+			const llm = createLlmClient({
+				preset: "mem_claw/sno_ai_extract", apiKey: "fixture", baseURL: sno.url, usageClass,
+				routing: { mode: "rem-enhanced", language: "en", modelCalls: defaultSettings().modelCalls },
+				agentPort: { async complete({ prompt }) {
+					hostPrompts.push(prompt);
+					return { kind: "ok", text: '{"ok":true}' };
+				} },
+			});
+			for (const callId of ["E13", "E14", "E15", "E16", "E17", "E19", "E20"] as ModelCallId[]) {
+				expect(await llm.completeJson({ callId, prompt: `fixture judgment ${callId}`, timeoutMs: 5_000, maxTokens: 32 })).toEqual({ ok: true });
+			}
+			expect.soft(hostPrompts).toEqual(["fixture judgment E15", "fixture judgment E19", "fixture judgment E20"]);
+			expect.soft(sno.headers.map(headers => [headers["x-sno-source"], headers["x-sno-workload"], headers["x-sno-usage-class"]])).toEqual([
+				["sno-station", "station-capture-mode", usageClass],
+				["sno-station", "station-profile-scope", usageClass],
+				["sno-station", "station-cleanup", usageClass],
+				["sno-station", "station-recall-pick", usageClass],
+			]);
+			expect.soft(new Set(sno.headers.map(headers => headers["x-request-id"])).size).toBe(4);
+			for (const headers of sno.headers) expect(headers["x-request-id"]).toMatch(UUID_V4);
+		} finally { sno.server.closeAllConnections(); sno.server.close(); }
+	});
+
 	it("every call has a workload in the allowed label format, split by what the caller is doing", () => {
 		for (const workload of Object.values(MODEL_CALL_WORKLOAD)) expect(workload).toMatch(/^[a-z0-9-]{1,64}$/);
 		expect(MODEL_CALL_WORKLOAD.E10).toBe("station-verdict");
-		expect(MODEL_CALL_WORKLOAD.REM1).toBe("station-rem-replace");
-		expect(MODEL_CALL_WORKLOAD.REM5).toBe("station-rem-update");
-		expect(new Set(Object.values(MODEL_CALL_WORKLOAD)).size).toBe(8);
+		expect(MODEL_CALL_WORKLOAD).toMatchObject({
+			E17: "station-recall-pick",
+			E19: "station-start-label",
+			E20: "station-start-pick",
+		});
+		expect(new Set(Object.values(MODEL_CALL_WORKLOAD)).size).toBe(13);
 	});
 
 	it("the log keeps client_request_id readable so it can be joined to the GPU logs", () => {
