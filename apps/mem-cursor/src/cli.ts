@@ -3,8 +3,8 @@ import { homedir } from "node:os";
 import { isAbsolute, join } from "node:path";
 import { observeAgentEvent, renderAgentStatusLine } from "@snoai/memory/coding-skin";
 import { doctor } from "./doctor.js";
-import { correctCommand, getCommand, recallCommand, rememberCommand } from "./explicit.js";
-import { afterAgentResponse, afterAgentThought, preCompact, sessionEnd, sessionStart, stop, userPromptSubmit } from "./hooks.js";
+import { correctCommand, getCommand, recallCommand, rememberCommand, undoCommand } from "./explicit.js";
+import { afterAgentResponse, preCompact, sessionEnd, sessionStart, stop, userPromptSubmit } from "./hooks.js";
 import { installCursor, uninstallCursor } from "./install.js";
 import { runWorker } from "./worker.js";
 
@@ -14,7 +14,6 @@ const HOOKS: Record<string, (raw: unknown) => Promise<string>> = {
 	"session-start": sessionStart,
 	"user-prompt-submit": userPromptSubmit,
 	"after-agent-response": afterAgentResponse,
-	"after-agent-thought": afterAgentThought,
 	stop,
 	"pre-compact": preCompact,
 	"session-end": sessionEnd,
@@ -76,7 +75,7 @@ async function main(): Promise<number> {
 		recall: () => recallCommand(args.join(" ")),
 		get: () => getCommand(args[0] ?? ""),
 		remember: () => rememberCommand(args.join(" ")),
-		correct: () => correctCommand(args[0] ?? "", args.slice(1).join(" ")),
+		correct: () => args[0] === "--undo" ? undoCommand(args[1] ?? "") : correctCommand(args[0] ?? "", args.slice(1).join(" ")),
 	}[command];
 	if (explicit) {
 		const result = await explicit();
