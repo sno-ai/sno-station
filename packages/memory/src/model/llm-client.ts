@@ -63,10 +63,7 @@ const RAW_COMPLETION_FALLBACK_MAX_TOKENS = 4096;
  * measured 2026-08-17 against the live endpoint, 25% of 36 paired calls with `enable_thinking`
  * and 31% without (llm-provider-transport.ts:242, where that fault is recorded as still open).
  * An empty body is not a transport error, so the call pipeline never retried it, and every caller
- * turned it into `null`. The REM replace clause stage then journals that null as
- * `clause_parse_failed` and releases the pair, so the memory is never updated at all — measured
- * 2026-08-26, 2 of 4 identical runs of `rem-replace-roundtrip-reopen` died that way on a
- * two-clause fixture the model answers correctly 12 times out of 12 when asked directly.
+ * turned it into `null`.
  *
  * Asking again is all this does. It is bounded by attempt count AND by the caller's own deadline,
  * so a slow endpoint cannot turn one request into three timeouts. It does not repair the
@@ -243,7 +240,7 @@ function normalizeMemoryLlmRequest(value: unknown): MemoryLlmRequest {
 	if (typeof value !== "object" || value === null) {
 		throw new Error("sno-station-mem llm-client: structured request object is required");
 	}
-	const raw = value as Record<string, unknown>;
+	const raw = value as MemoryLlmRequest & Record<string, unknown>;
 	const prompt = readRequiredString(raw, "prompt");
 	const callId = readRequiredString(raw, "callId");
 	if (!(callId in MODEL_CALLS)) throw new Error(`Unknown model call id ${callId}`);
@@ -288,6 +285,8 @@ function normalizeMemoryLlmRequest(value: unknown): MemoryLlmRequest {
 	}
 	return {
 		prompt,
+		hostTarget: raw.hostTarget,
+		onHostResponse: raw.onHostResponse,
 		...(typeof raw.hostPrompt === "string" ? { hostPrompt: raw.hostPrompt } : {}),
 		callId: callId as ModelCallId,
 		...(timeoutMs !== undefined ? { timeoutMs: Number(timeoutMs) } : {}),
@@ -456,6 +455,8 @@ export function createLlmClient(config: LlmClientConfig & { refuseOnUnavailable?
 				let hostReport: { model?: string; usage?: { inputTokens: number; outputTokens: number } } = {};
 				try {
 					const completion = await agentPort.complete({
+						callId: request.callId,
+						hostTarget: request.hostTarget,
 						system: systemContent,
 						prompt,
 						maxTokens: request.maxTokens ?? 4096,
@@ -465,7 +466,10 @@ export function createLlmClient(config: LlmClientConfig & { refuseOnUnavailable?
 						...(request.signal ? { signal: request.signal } : {}),
 					});
 					outcome = completion.kind;
-					if (completion.kind === "ok") hostReport = completion;
+					if (completion.kind === "ok") {
+						hostReport = completion;
+						request.onHostResponse?.(completion);
+					}
 					return completion;
 				} finally {
 					hostRequestsInFlight -= 1;
@@ -677,7 +681,7 @@ export function createLlmClient(config: LlmClientConfig & { refuseOnUnavailable?
 		let snoError: unknown;
 		try { content = await requestContentRetryingEmpty(state, request, systemContent, deadlineMs); }
 		catch (error) { snoError = error; }
-		if (destinationFor(request) !== "sno-gpu" || content?.raw.trim()) {
+		if (request.callId === "E21" || request.callId === "E22" || destinationFor(request) !== "sno-gpu" || content?.raw.trim()) {
 			if (snoError !== undefined) throw snoError;
 			return content;
 		}
@@ -701,7 +705,7 @@ export function createLlmClient(config: LlmClientConfig & { refuseOnUnavailable?
 		// A GPU attempt that timed out has used the whole deadline, so the host gets no turn; say so.
 		if (remainingMs <= 0) hostFailure = "deadline_exhausted";
 		else if (!config.agentPort) hostFailure = "port_unavailable";
-		else if (["E10", "P1", "REM1"].includes(request.callId) && !request.hostPrompt) {
+		else if (["E10", "P1"].includes(request.callId) && !request.hostPrompt) {
 			hostFailure = "host_prompt_missing";
 		} else {
 			try {
