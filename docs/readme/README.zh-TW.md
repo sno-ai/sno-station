@@ -95,9 +95,9 @@ sno reach pair "Fix the login redirect"
 
 一個 agent 動手做。另一個專門找它的碴。找到的問題由它們自己談妥，所以工作交到你手上時，已經吵過一輪了。兩個都跑在 tmux 視窗裡，你可以打開來看。登入了兩種不同的 agent，就各來一個。只登入一種，也照樣是一對，分在兩個獨立的工作階段裡，指令會告訴你這次審查是同一家的 agent 做的。
 
-**一個用完，另一個上工。** 要跑很久的任務，叫正在工作的 agent 用 `rotate-agent`。額度剩 2% 時，它寫好交接簡報，叫醒另一個不同的 agent，對方從同一個 commit 接著做。agent 的上下文滿了、被壓縮之後，它也還記得自己在做什麼，哪些路已經試過走不通。
+**一個用完，另一個上工。** 要跑很久的任務，叫正在工作的 agent 用 [`rotate-agent`](https://github.com/sno-ai/sno-station-skills/tree/main/skills/S-communication-and-handoff/rotate-agent)。額度剩 2% 時，它寫好交接簡報，叫醒另一個不同的 agent，對方從同一個 commit 接著做。agent 的上下文滿了、被壓縮之後，它也還記得自己在做什麼，哪些路已經試過走不通。
 
-**一個看不到的，另一個看得到。** 請任何一個 agent 對另一個的成果做 `peer-review`。審查者一定在一個沒看過這段對話的全新工作階段裡工作；只要你有兩種 agent，審查者就一定是不同的那一種。審查不是每次都找得出問題。但作者自己看不見的那些，它總是找得出來，因為 agent 審查自己時，帶著的還是寫程式時的那套習慣。
+**一個看不到的，另一個看得到。** 請任何一個 agent 對另一個的成果做 [`peer-review`](https://github.com/sno-ai/sno-station-skills/tree/main/skills/J-peer-review-and-audit/peer-review)。審查者一定在一個沒看過這段對話的全新工作階段裡工作；只要你有兩種 agent，審查者就一定是不同的那一種。審查不是每次都找得出問題。但作者自己看不見的那些，它總是找得出來，因為 agent 審查自己時，帶著的還是寫程式時的那套習慣。
 
 我們看到的，2026-09-18 那一夜：
 
