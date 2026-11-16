@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { spawn, spawnSync } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { closeSync, mkdirSync, openSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import { userInfo } from "node:os";
@@ -16,9 +16,11 @@ import {
 	CODING_SKIN_MAX_PENDING_CAPTURES,
 	CODING_SKIN_RETRY_DELAYS_MS,
 	CODING_SKIN_WORKER_LIFETIME_MS,
+	HOST_MODEL_CONCURRENCY,
 	HOST_MODEL_CALLBACK_HOST,
 	HOST_MODEL_CALLBACK_PATH,
 	HOST_MODEL_DEADLINE_HEADER,
+	writeHostWorkerRecord,
 } from "@snoai/memory/coding-skin";
 import { z } from "zod";
 import { MODEL_ID, SKIN_ID } from "./constants.js";
@@ -80,13 +82,17 @@ export function startWorkerDetached(): void {
 
 async function runCodexChild(prompt: string, cwd: string, timeoutMs = CODING_SKIN_CHILD_DEADLINE_MS): Promise<{ kind: "ok"; text: string } | { kind: "cancelled"; reason: string } | { kind: "error"; category: "transport" | "auth" | "exhausted"; message: string }> {
 	if (timeoutMs <= 0) return { kind: "cancelled", reason: "deadline" };
-	const result = spawnSync("codex", ["exec", "--ephemeral", "--disable", "hooks", "-s", "read-only", "--skip-git-repo-check", "-C", cwd, prompt], {
-		encoding: "utf8",
-		timeout: timeoutMs,
-		maxBuffer: CODING_SKIN_CHILD_MAX_BUFFER_BYTES,
+	return new Promise(resolve => {
+		const child = execFile("codex", ["exec", "--ephemeral", "--disable", "hooks", "-s", "read-only", "--skip-git-repo-check", "-C", cwd, prompt], {
+			encoding: "utf8", timeout: timeoutMs, maxBuffer: CODING_SKIN_CHILD_MAX_BUFFER_BYTES,
+		}, (error, stdout, stderr) => {
+			if (error?.killed && error.code !== "ERR_CHILD_PROCESS_STDIO_MAXBUFFER") { resolve({ kind: "cancelled", reason: "deadline" }); return; }
+			let status: number | null = 0;
+			if (error) status = typeof error.code === "number" ? error.code : null;
+			resolve(codexChildResult(status, stdout, stderr));
+		});
+		child.stdin?.end();
 	});
-	if (result.error && "code" in result.error && result.error.code === "ETIMEDOUT") return { kind: "cancelled", reason: "deadline" };
-	return codexChildResult(result.status, result.stdout ?? "", result.stderr ?? "");
 }
 
 export function codexChildResult(status: number | null, stdout: string, stderr: string): Awaited<ReturnType<WorkerDependencies["runChild"]>> {
@@ -108,10 +114,12 @@ function promptFromMessages(value: unknown): { model: string; prompt: string } |
 }
 
 async function callbackServer(credential: string, activeCwd: () => string, isImport: () => boolean, onCall: () => void, runChild: WorkerDependencies["runChild"]): Promise<{ server: Server; baseUrl: string }> {
-	let serial = Promise.resolve();
+	const lanes = Array.from({ length: HOST_MODEL_CONCURRENCY }, () => Promise.resolve());
+	let nextLane = 0;
 	let lastImportChildAt = 0;
 	const server = createServer((request, response) => {
-		serial = serial.then(async () => {
+		const lane = isImport() ? 0 : nextLane++ % lanes.length;
+		lanes[lane] = (lanes[lane] ?? Promise.resolve()).then(async () => {
 			if (request.method !== "POST" || request.url !== HOST_MODEL_CALLBACK_PATH) { response.writeHead(404).end(); return; }
 			if (request.headers.authorization !== `Bearer ${credential}`) { response.writeHead(401).end(); return; }
 			const chunks: Buffer[] = [];
@@ -122,8 +130,7 @@ async function callbackServer(credential: string, activeCwd: () => string, isImp
 			const cwd = activeCwd();
 			if (!requestBody) { response.writeHead(400).end(); return; }
 			onCall();
-			// Calls run one at a time and a child blocks the event loop, so a requester may have stopped waiting before
-			// this call's turn: skip it instead of spending a model run on an answer nobody reads.
+			// A requester may have stopped waiting while all child slots were occupied.
 			const deadline = Number(request.headers[HOST_MODEL_DEADLINE_HEADER]);
 			if (Number.isFinite(deadline) && deadline <= Date.now()) {
 				console.log(JSON.stringify({ event: "model-callback-expired", model: requestBody.model }));
@@ -286,6 +293,7 @@ export async function runWorker(dependencies: WorkerDependencies = productionDep
 		await client.init({ principal, project: "global", session: "codex-worker", host: { sessionId: "codex-worker" } }, {
 			skinId: SKIN_ID, model: { baseUrl: callback.baseUrl, credential, model: MODEL_ID },
 		});
+		await writeHostWorkerRecord(profileRoot());
 		console.log(JSON.stringify({ event: "worker-registered" }));
 		while (true) {
 			const entries = await readSpoolEntries();
@@ -365,7 +373,6 @@ export async function runWorker(dependencies: WorkerDependencies = productionDep
 		}
 	} finally {
 		if (server) {
-			server.closeAllConnections();
 			await new Promise<void>(resolve => server?.close(() => resolve()));
 		}
 		if (handoff) await dependencies.beforeLockRelease?.();
