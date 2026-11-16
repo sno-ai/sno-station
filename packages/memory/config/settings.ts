@@ -20,7 +20,7 @@ export type Settings = {
 	embedding: { model: string; revision: string; dtype: "q4" | "q8" | "fp16" | "fp32"; threads: number; cacheDir: string; offline: boolean; mirror: string };
 	recall: { auto: boolean; sessionStart: { limit: number; maxChars: number; timeoutMs: number }; prompt: { limit: number; maxChars: number; timeoutMs: number; minChars: number; minScore: number }; explicitLimit: number };
 	capture: { assistant: boolean; ambient: boolean; sessionMemory: { enabled: boolean; messageCount: number }; sessionStrategy: (typeof SESSION_STRATEGIES)[number] };
-	rem: { tick: boolean; operations: ("rem-replace" | "rem-update")[] };
+	rem: { tick: boolean };
 	telemetry: { memoryUsage: { enabled: boolean; key: string; historicKeys: string[] }; observe: { enabled: boolean; baseUrl: string }; redactionRules: string[] };
 	logging: { level: "debug" | "info" | "warn" | "error"; file: string; debugContent: boolean };
 	memoryPackage: { path: string; node: string };
@@ -35,7 +35,20 @@ const destinations = z.strictObject({
 const modelCalls = z.strictObject(Object.fromEntries(
 	Object.keys(MODEL_CALLS).map((id) => [id, destinations]),
 ) as Record<keyof typeof MODEL_CALLS, typeof destinations>)
-	.extend({ R5: destinations.default(MODEL_CALLS.R5.destinations) });
+	.extend({
+		R5: destinations.default(MODEL_CALLS.R5.destinations),
+		E13: destinations.default(MODEL_CALLS.E13.destinations),
+		E14: destinations.default(MODEL_CALLS.E14.destinations),
+		E15: destinations.default(MODEL_CALLS.E15.destinations),
+		E16: destinations.default(MODEL_CALLS.E16.destinations),
+		E17: destinations.default(MODEL_CALLS.E17.destinations),
+		E19: destinations.default(MODEL_CALLS.E19.destinations),
+		E20: destinations.default(MODEL_CALLS.E20.destinations),
+		E21: destinations.default(MODEL_CALLS.E21.destinations),
+		E22: destinations.default(MODEL_CALLS.E22.destinations),
+		E23: destinations.default(MODEL_CALLS.E23.destinations),
+		E24: destinations.default(MODEL_CALLS.E24.destinations),
+	});
 
 const schema: z.ZodType<Settings> = z.strictObject({
 	mode: z.enum(PRODUCT_MODES),
@@ -66,7 +79,7 @@ const schema: z.ZodType<Settings> = z.strictObject({
 		sessionStrategy: z.enum(SESSION_STRATEGIES),
 	}),
 	rem: z.strictObject({
-		tick: z.boolean(), operations: z.array(z.enum(["rem-replace", "rem-update"])).min(1).max(2),
+		tick: z.boolean(),
 	}),
 	telemetry: z.strictObject({
 		memoryUsage: z.strictObject({ enabled: z.boolean(), key: z.string(), historicKeys: z.array(z.string()) }),
@@ -97,7 +110,7 @@ export function defaultSettings(): Settings {
 			explicitLimit: 5 },
 		capture: { assistant: true, ambient: true, sessionMemory: { enabled: true, messageCount: DEFAULT_SESSION_MESSAGE_COUNT },
 			sessionStrategy: "systemSessionMemory" },
-		rem: { tick: engine.remEnhanced?.trigger.tick ?? true, operations: engine.remOperations },
+		rem: { tick: engine.remEnhanced?.trigger.tick ?? true },
 		telemetry: { memoryUsage: { enabled: true, key: "", historicKeys: [] },
 			observe: { enabled: true, baseUrl: "https://www.sno.ai" }, redactionRules: [] },
 		logging: { level: "debug", file: "", debugContent: false },
@@ -122,7 +135,7 @@ export function settingsToPluginConfig(settings: Settings, usageClass?: ModelUsa
 		captureAssistant: settings.capture.assistant, ambientLearning: settings.capture.ambient,
 		debugContent: settings.logging.debugContent,
 		sessionMemory: settings.capture.sessionMemory, sessionStrategy: settings.capture.sessionStrategy,
-		remEnhanced: { trigger: { tick: settings.rem.tick } }, remOperations: settings.rem.operations,
+		remEnhanced: { trigger: { tick: settings.rem.tick } },
 		memoryTelemetry: { enabled: settings.telemetry.memoryUsage.enabled,
 			currentKeyVersion: settings.telemetry.memoryUsage.historicKeys.length + 1,
 			key: settings.telemetry.memoryUsage.key, historicKeys: settings.telemetry.memoryUsage.historicKeys },
