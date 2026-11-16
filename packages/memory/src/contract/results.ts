@@ -17,7 +17,32 @@ export type ProjectSummary = {
 	memoryCount: number;
 	kind: "general" | "project";
 };
+export type PrecisionNight = {
+	jobId: string; scope: "project" | "shared"; checked: number; replaced: number; merged: number;
+	corrected: number; removed: number; undecided: number;
+	failures: Array<{ stage: string; error: string; rows: string[] }>;
+};
+export type PrecisionInspection = {
+	op: "precision"; nights: PrecisionNight[]; pending: { project: string[]; shared: string[] };
+	notFit: { project: number; shared: number }; contradictions: Array<{ id: string; filePath: string }>;
+	sameVendor?: boolean; lines: string[];
+};
+const precisionNightSchema: z.ZodType<PrecisionNight, unknown> = z.strictObject({
+	jobId: z.string(), scope: z.enum(["project", "shared"]),
+	checked: z.number().int().nonnegative(), replaced: z.number().int().nonnegative(),
+	merged: z.number().int().nonnegative(), corrected: z.number().int().nonnegative(),
+	removed: z.number().int().nonnegative(), undecided: z.number().int().nonnegative(),
+	failures: z.array(z.strictObject({ stage: z.string(), error: z.string(), rows: z.array(z.string()) })),
+});
+export const precisionInspectionSchema: z.ZodType<PrecisionInspection, unknown> = z.strictObject({
+	op: z.literal("precision"), nights: z.array(precisionNightSchema),
+	pending: z.strictObject({ project: z.array(z.string()), shared: z.array(z.string()) }),
+	notFit: z.strictObject({ project: z.number().int().nonnegative(), shared: z.number().int().nonnegative() }),
+	contradictions: z.array(z.strictObject({ id: z.string(), filePath: z.string() })),
+	sameVendor: z.boolean().optional(), lines: z.array(z.string()),
+});
 export type InspectData =
+	| PrecisionInspection
 	| { op: "storage"; dimension: number | null; failed: boolean; reason?: string }
 	| { op: "stats"; total: number; projectBreakdown: Record<string, number>; categoryBreakdown: Record<string, number> }
 	/** `project` is the call's resolved write project, so a caller can address it even when no entry exists. */
@@ -71,7 +96,7 @@ const projectSummarySchema: z.ZodType<ProjectSummary, unknown> = z.strictObject(
 	projectId: z.string().min(1), workspace: z.string().nullable(),
 	memoryCount: z.number().int().nonnegative(), kind: z.enum(["general", "project"]),
 });
-export const inspectDataSchema: z.ZodType<InspectData, unknown> = z.discriminatedUnion("op", [
+export const inspectDataSchema: z.ZodType<InspectData, unknown> = z.union([
 	z.strictObject({ op: z.literal("storage"), dimension: z.number().int().positive().nullable(), failed: z.boolean(), reason: z.string().optional() }),
 	z.strictObject({ op: z.literal("stats"), total: z.number().int().nonnegative(),
 		projectBreakdown: z.record(z.string(), z.number().int().nonnegative()),
@@ -84,6 +109,7 @@ export const inspectDataSchema: z.ZodType<InspectData, unknown> = z.discriminate
 	z.strictObject({ op: z.literal("projects"), projects: z.array(projectSummarySchema) }),
 	z.strictObject({ op: z.literal("currentProject"), workspace: z.string(), status: z.enum(["known", "unknown"]),
 		project: projectSummarySchema.nullable() }),
+	precisionInspectionSchema,
 ]);
 
 function resultSchema<T extends z.ZodRawShape>(shape: T) {

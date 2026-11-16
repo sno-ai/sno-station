@@ -134,6 +134,7 @@ export async function onAgentEnd(
 	ctx: PluginHookAgentContext,
 	stateDir: string,
 	reasonOut?: { value?: string },
+	captureMode?: import("../../store/store").CaptureMode,
 ): Promise<AmbientCaptureOutcome> {
 	const sessionKey = typeof ctx.sessionKey === "string" ? ctx.sessionKey : "";
 	return withLogContext({ operation_id: currentLogContext().operation_id ?? randomUUID(), session_reference: sessionKey }, async () => {
@@ -198,6 +199,7 @@ export async function onAgentEnd(
 
 	try {
 		const stats = await insightDistiller.extractAndPersist(conversationText, sessionKey, {
+			captureMode,
 			scope,
 			writerAgentId: resolvedAgentId,
 			sessionDateTime,

@@ -49,7 +49,6 @@ export const engineSettingsSchema: z.ZodType<EngineSettings, unknown> = z.object
 	recallLifecycle: recallLifecycleSchema,
 	memoryTelemetry: z.object({ enabled: z.boolean(), currentKeyVersion: z.number().int().positive(),
 		key: z.string(), historicKeys: z.array(z.string()) }),
-	remOperations: z.array(z.enum(["rem-replace", "rem-update"])).min(1).max(2),
 	onboarding: z.object({
 		version: z.number().int().positive(),
 		completedAt: z.string(),
