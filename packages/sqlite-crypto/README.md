@@ -61,7 +61,7 @@ Layered import error contract:
 
 1. `InvalidExportFormat` / `UnsupportedExportVersion` — structural gates (magic, version) before any AEAD work.
 2. `ForeignDekError` — DEK fingerprint mismatch (computed BEFORE `decipher.final()`); restore the original `store.encryptionKey` from your settings backup.
-3. `IntegrityCheckFailed` — GCM auth failure (the path that catches all meaningful header tampering, since the entire 12-byte header is bound as AAD).
+3. `IntegrityCheckFailed` — GCM auth failure (the path that catches all meaningful header tampering, since the entire 23-byte header is bound as AAD).
 
 ---
 
