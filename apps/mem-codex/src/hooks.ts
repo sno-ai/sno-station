@@ -1,6 +1,7 @@
 import { performance } from "node:perf_hooks";
 import {
 	CODING_SKIN_SESSION_QUERY,
+	loadedFilesAtStart,
 } from "@snoai/memory/coding-skin";
 import { z } from "zod";
 import { readCaptureSettings, readRecallSettings } from "./settings.js";
@@ -111,7 +112,7 @@ export async function sessionStart(raw: unknown): Promise<string> {
 		if (!recall.auto) return emptyEnvelope("SessionStart");
 		recordLookup(state, "SessionStart");
 		const recalled = await withinDeadline(
-			client.getRecall(CODING_SKIN_SESSION_QUERY, hookScope(project, input.session_id), { source: "auto", injectionPhase: "session-start", limit: recall.sessionStart.limit, maxChars: recall.sessionStart.maxChars }),
+			client.getRecall(CODING_SKIN_SESSION_QUERY, hookScope(project, input.session_id), { source: "auto", injectionPhase: "session-start", loadedFiles: loadedFilesAtStart("codex", input.cwd, project), limit: recall.sessionStart.limit, maxChars: recall.sessionStart.maxChars }),
 			Math.max(1, recall.sessionStart.timeoutMs - (performance.now() - started)),
 		);
 		if (recalled.degraded) recordDegraded(state, "SessionStart", recalled.error ?? recalled.reason);
@@ -135,6 +136,7 @@ export async function userPromptSubmit(raw: unknown): Promise<string> {
 		if (input.agent_id !== undefined) return emptyEnvelope("UserPromptSubmit");
 		const project = await workspaceRoot(input.cwd);
 		const state = await readSession(input.session_id);
+		state.oneshot ??= input.prompt.startsWith("[sno-oneshot]");
 		state.prompts[input.turn_id] = { prompt: input.prompt, at: Date.now() };
 		await writeSession(state);
 		const client = await withinDeadline(connectMemory(), Math.max(1, recall.prompt.timeoutMs - (performance.now() - started)));
@@ -149,7 +151,7 @@ export async function userPromptSubmit(raw: unknown): Promise<string> {
 		if (!recall.auto) return emptyEnvelope("UserPromptSubmit");
 		recordLookup(state, "UserPromptSubmit");
 		const recalled = await withinDeadline(
-			client.getRecall(input.prompt, hookScope(project, input.session_id), { source: "auto", injectionPhase: "prompt", limit: recall.prompt.limit, minScore: recall.prompt.minScore, maxChars: recall.prompt.maxChars }),
+			client.getRecall(input.prompt, hookScope(project, input.session_id), { source: "auto", injectionPhase: "prompt", loadedFiles: loadedFilesAtStart("codex", input.cwd, project), limit: recall.prompt.limit, minScore: recall.prompt.minScore, maxChars: recall.prompt.maxChars }),
 			Math.max(1, recall.prompt.timeoutMs - (performance.now() - started)),
 		);
 		if (recalled.degraded) recordDegraded(state, "UserPromptSubmit", recalled.error ?? recalled.reason);
@@ -188,7 +190,9 @@ export async function stop(raw: unknown): Promise<void> {
 		const state = await readSession(input.session_id);
 		const prompt = state.prompts[input.turn_id]?.prompt.trim() ?? "";
 		const assistant = input.last_assistant_message.trim();
-		if (!prompt || !assistant) {
+		if (state.oneshot) {
+			recordSkip(state, "Stop", "[sno-oneshot]");
+		} else if (!prompt || !assistant) {
 			recordSkip(state, "Stop", "empty-turn");
 		} else {
 			await appendSpool({
