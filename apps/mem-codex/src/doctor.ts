@@ -1,3 +1,5 @@
+import { connectMemory, isDegradedConnection } from "./memory-client.js";
+import { manualScope, workspaceRoot } from "./scope.js";
 import { access, readFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
 import {
@@ -62,10 +64,20 @@ export async function doctor(codexHome: string): Promise<string[]> {
 	const rulesPath = join(codexHome, "rules", "sno-mem-codex.rules");
 	const rules = await access(rulesPath).then(() => "present", () => "absent");
 	const imports = await readdir(importDirectory()).then(entries => String(entries.length), () => "0");
-	return [
+	const lines = [
 		`sidecar: ${await sidecarStatus()}`,
 		`hook trust: ${await trustSummary(codexHome)}`,
 		`rules: ${rules}`,
 		`import receipts: ${imports}`,
 	];
+	try {
+		const client = await connectMemory();
+		if (isDegradedConnection(client)) lines.push(`precision: ${client.error ?? client.reason}`);
+		else {
+			const inspected = await client.inspect({ op: "precision" }, manualScope(await workspaceRoot(process.cwd())));
+			if (inspected.degraded) lines.push(`precision: ${inspected.error ?? inspected.reason}`);
+			else if (inspected.result.op === "precision") lines.push(...inspected.result.lines);
+		}
+	} catch (error) { lines.push(`precision: ${String(error)}`); }
+	return lines;
 }
