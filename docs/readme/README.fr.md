@@ -37,6 +37,33 @@ La version pour plusieurs ordinateurs relie les agents par LAN ou Tailscale. Cha
 
 [Guide rapide](../reach.md)
 
+## Finish
+
+Donnez à votre agent une tâche et une heure, puis partez. À cette heure, un agent démarre et fait le travail, que la conversation soit ouverte ou fermée.
+
+```text
+Vérifie le build de nuit demain à 9 h et dis-moi ce qui a échoué.
+```
+
+| Vous voulez | Ce que vous faites |
+|---|---|
+| **Timed tasks** | Dites l'heure à votre agent dans Claude Code ou Codex. Une fois, chaque jour ou chaque semaine. |
+| **Surveiller une longue exécution jusqu'au bout** | Demandez à votre agent de la vérifier toutes les quelques minutes jusqu'à la fin. |
+| **Un travail qui survit à une limite d'utilisation** | Dites à l'agent qui travaille d'utiliser `rotate-agent`. Un autre agent continue. |
+
+Voyez ce qui est planifié et ce qui ne s'est pas passé comme prévu :
+
+```bash
+sno heartbeat --due
+sno heartbeat --due --problems
+```
+
+Une tâche qui n'a pas pu démarrer reste due, avec la raison écrite à côté. Votre agent vous le dit aussi au début de la conversation suivante.
+
+Pas encore : Timed tasks ne démarrent que Claude Code et Codex, et un redémarrage complet de l'ordinateur n'a pas encore passé un vrai test.
+
+[Commencer avec Finish](../finish.md)
+
 ## Passez la main ce soir. Au matin, des résultats, pas trois questions.
 
 Trois choses qui nous sont arrivées avant que nous construisions ceci :
@@ -305,6 +332,7 @@ Il n'y a pas d'étape de mise à jour : `sno` se met à jour lui-même quand il 
 | Le travail interrompu continue, et une tâche survit à la compaction | Nouveau dans la 2.0 ; exécuté avec de vrais agents Claude Code et Codex |
 | Une leçon approuvée s'applique dès la réponse suivante | Nouveau dans la 2.0 ; exécuté avec de vrais agents Claude Code et Codex |
 | Les messages attendent pendant que vous tapez ou qu'un agent compacte son contexte | Nouveau dans la 2.0 ; exécuté avec de vrais agents Claude Code et Codex |
+| Finish : Timed tasks démarrent un agent à l'heure indiquée | Nouveau ; exécuté avec de vrais agents Claude Code et Codex : sous Linux avec la conversation ouverte et fermée, sous macOS dans une nouvelle conversation. Voir le [guide Finish](../finish.md). |
 
 Une ligne indique « prouvé » seulement une fois qu'elle a tourné sur une machine vierge.
 
