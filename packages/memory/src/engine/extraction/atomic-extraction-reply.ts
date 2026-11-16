@@ -15,6 +15,8 @@ import stateVocabulary from "../../../config/state-vocabulary.json" with { type:
 import { modelReplyJsonCandidates, readModelReplyJson } from "../shared/model-reply-text";
 import { parseProgressTurns } from "./atomic-progress-boundary";
 
+export type PrecisionKind = "rule" | "decision" | "fact" | "pitfall" | "person";
+
 export type AtomicExtractionTurnRole = "system" | "user" | "assistant";
 
 export interface AtomicExtractionTurn {
@@ -36,6 +38,7 @@ export interface AtomicExtractionRelation {
 }
 
 export interface AtomicExtractionRecord {
+	precisionKind?: PrecisionKind;
 	kind: "occurrence" | "standing";
 	claimText: string;
 	subject: string;
@@ -259,6 +262,16 @@ const captureReplySchema = z.object({
 	facts: z.array(captureFactSchema),
 });
 
+const captureWorkReplySchema = captureReplySchema.extend({
+	facts: z.array(captureFactSchema.extend({
+		kind: z.enum(["rule", "decision", "fact", "pitfall", "person"]),
+	})),
+});
+
+const captureWorkWireReplySchema = captureWorkReplySchema.extend({
+	facts: z.array(captureWorkReplySchema.shape.facts.element.extend({ kind: z.string() })),
+});
+
 const enrichmentSchema = wireRecordSchema.omit({
 	claim_text: true, subject: true, subject_kind: true, temporal_phrase: true,
 	ended_at_phrase: true, source_span: true,
@@ -273,6 +286,7 @@ const enrichmentSchema = wireRecordSchema.omit({
 const enrichmentReplySchema = z.object({ enrichments: z.array(enrichmentSchema) });
 
 export interface AtomicCapturedFact {
+	kind?: PrecisionKind;
 	id: number;
 	fact: string;
 	subject: string;
@@ -282,16 +296,17 @@ export interface AtomicCapturedFact {
 	source_span: { turn_index: number; quote: string };
 }
 export const ATOMIC_CAPTURE_RESPONSE_JSON_SCHEMA: unknown = z.toJSONSchema(captureReplySchema);
+export const ATOMIC_WORK_CAPTURE_RESPONSE_JSON_SCHEMA: unknown = z.toJSONSchema(captureWorkReplySchema);
 export const ATOMIC_ENRICHMENT_RESPONSE_JSON_SCHEMA: unknown = z.toJSONSchema(enrichmentReplySchema);
 
 export function parseAtomicCaptureReply(
 	raw: string,
 	turns: readonly AtomicExtractionTurn[],
-	{ salvage = false, onReject }: { salvage?: boolean; onReject?: (gate: string) => void } = {},
-): { facts: AtomicCapturedFact[]; progressTurns: ReadonlySet<number> } | undefined {
+	{ salvage = false, work = false, onReject }: { salvage?: boolean; work?: boolean; onReject?: (gate: string) => void } = {},
+): { facts: AtomicCapturedFact[]; progressTurns: ReadonlySet<number>; rejectedKindCount: number } | undefined {
 	let gate = "unreadable-json";
 	const result = readModelReplyJson(raw, (value) => {
-		const parsed = captureReplySchema.safeParse(value);
+		const parsed = (work ? captureWorkWireReplySchema : captureReplySchema).safeParse(value);
 		if (!parsed.success) {
 			if (gate === "unreadable-json") gate = "capture-schema";
 			return undefined;
@@ -325,7 +340,12 @@ export function parseAtomicCaptureReply(
 				event_name: "memory.atomic_extraction_reply.diagnostic", file: "packages/memory/src/engine/extraction/atomic-extraction-reply.ts", function: "parseAtomicCaptureReply", site_id: "extraction.atomic-extraction-reply.salvage_spans",
 			});
 		}
-		return { facts: kept, progressTurns };
+		// Filter kinds only after the reply's other checks, retaining ids for enrichment.
+		const accepted = kept.flatMap((fact) => {
+			const parsedFact = (work ? captureWorkReplySchema.shape.facts.element : captureFactSchema).safeParse(fact);
+			return parsedFact.success ? [parsedFact.data] : [];
+		});
+		return { facts: accepted, progressTurns, rejectedKindCount: kept.length - accepted.length };
 	});
 	if (result === undefined) onReject?.(gate);
 	return result;
@@ -371,17 +391,19 @@ export function parseAtomicEnrichmentReply(
 			const enrichment = byId.get(fact.id);
 			if (enrichment === undefined) return undefined;
 			warnUnresolvedEnrichmentTime(enrichment, sessionDateTime);
-			records.push(projectRecord({ ...enrichment, ...fact, claim_text: fact.fact }));
+			records.push({ ...projectRecord({ ...enrichment, ...fact, kind: enrichment.kind, claim_text: fact.fact }),
+				...(fact.kind === undefined ? {} : { precisionKind: fact.kind }),
+			});
 		}
 		return records;
 	});
 }
 
 export function fallbackAtomicCapturedFact(fact: AtomicCapturedFact): AtomicExtractionRecord {
-	return projectRecord({
+	return { ...projectRecord({
 		...fact, claim_text: fact.fact, kind: "occurrence", attribute: null, value: fact.fact,
 		ends_current: false, todo: "none", close_reason: null, changes_current_state: false,
 		importance: "low", single_claim: true, relations: [],
 		time: { kind: "unresolved" }, ended_time: { kind: "none" },
-	});
+	}), ...(fact.kind === undefined ? {} : { precisionKind: fact.kind }) };
 }
