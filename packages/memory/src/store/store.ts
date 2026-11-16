@@ -22,13 +22,13 @@ import "./memory-store-task-lifecycle-migration-api";
 import "./memory-store-persistence-api";
 import "./memory-store-correct-api";
 import "./memory-store-update-api";
-import "./memory-store-rem-api";
 import "./memory-store-import-api";
 import "./memory-store-chunk-search";
 import "./memory-store-search-api";
 import "./memory-store-vector-api";
 import "./memory-store-read-api";
 import "./memory-store-admin-api";
+import "./memory-store-precision-api";
 
 export * from "./memory-store-base";
 export { buildTaskLifecycleMigrationManifest } from "./memory-store-task-lifecycle-migration-api";
@@ -36,3 +36,5 @@ export { normalizeMemoryRelationPredicate } from "./memory-store-relation-api";
 export { AtomicExtractionCompletedElsewhere, repairAtomicExtractionParameters } from "./memory-store-atomic-extraction-ledger-api";
 export { hashMemorySuppressionContent } from "./memory-store-suppression-api";
 export { ATOMIC_FACT_SURFACE_LANE } from "./memory-store-fact-surface-api";
+
+export type { CaptureMode, MemoryPlace, PlaceMode, PlaceLoadedFiles, LoadedFileJudgment } from "./memory-store-precision-api";
