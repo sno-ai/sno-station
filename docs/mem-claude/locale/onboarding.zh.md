@@ -48,7 +48,7 @@ capture worker 用 `claude -p` 起一个单轮、关掉 hooks、没有工具、�
 
 ### REM Enhanced
 
-REM 是你的 agent 做梦的方式：夜里它们加强记忆，并把当天学到的东西沉淀下来。每一部分记忆每天最多整理一次：通常在夜里；如果当天新记忆攒到 100 条左右，白天就会提前整理。REM Enhanced 让 Sno 自己的记忆模型帮忙做最难的两件事：从对话里记下重点，以及判断两条互相矛盾的记忆哪条对。其余工作由你自己的 Claude Code 处理，包括补全每条记忆的细节、确认它说的是谁。使用它需要在 `settings.json` 的 `snoGpu.apiKey` 里配置 Sno 的密钥。
+REM 是你的 agent 做梦的方式：夜里它们加强记忆，并把当天学到的东西沉淀下来。每一部分记忆每天最多整理一次：通常在夜里；如果当天新记忆攒到 100 条左右，白天就会提前整理。REM Enhanced 让 Sno 的记忆模型从对话里提取重点。记忆判断由你的代理提议，优先交给已连接、已注册的其他厂商代理确认；否则另起一次调用确认，doctor 会显示 `checked by the same vendor`。如果没有代理回答，就不执行提议的改动。其余工作由你自己的 Claude Code 处理，包括补全每条记忆的细节、确认它说的是谁。使用它需要在 `settings.json` 的 `snoGpu.apiKey` 里配置 Sno 的密钥。
 
 **你的资料仍然是你的。** 在这个模式下，交给 Sno 处理的记忆文字，以及各个 agent 学到的经验，会送到 Sno 云端属于你自己的空间。它就像你自己的网盘：里面的一切都是你的，由 Sno 的程序只为你一个人处理。你可以进去删除、可以留着，也可以选择让它被处理。不会自动删除，Sno 也不会把其中任何内容交给任何人。
 
@@ -75,7 +75,7 @@ REM 是你的 agent 做梦的方式：夜里它们加强记忆，并把当天学
 | 判断你在做哪件事 | 简单关键词匹配 | 你的 Claude Code | 你的 Claude Code |
 | 更新对你的了解 | 固定规则 | 你的 Claude Code | 你的 Claude Code |
 | 识别已完成的任务 | 字词比对 | 你的 Claude Code | 你的 Claude Code |
-| 处理互相矛盾的记忆 | 两条都保留 | 你的 Claude Code | Sno 的记忆模型 |
+| 处理互相矛盾的记忆 | 两条都保留 | 你的 Claude Code | 你的代理提议并确认 |
 | 排列要召回的记忆 | 在你的电脑上 | 在你的电脑上 | 在你的电脑上 |
 | 总结这一天 | 不生成 model reflection；仍保留 local session memory | 同左 | 同左 |
 | 把“明天”换成日期 | 不调用模型 | 你的 Claude Code | 你的 Claude Code |
@@ -86,12 +86,7 @@ Agent Native 与 REM Enhanced 不会把任何 memory-writing call 永久关掉�
 REM Enhanced 的模型调用目标由所选模式决定，不能按用途单独修改。
 上表的模型调用目标由所选模式固定。
 
-REM 还会按计划整理你的记忆，分两种：
-
-- 把“我以前……后来改了……”这样的过程叙述，改写成一条干净的当前记忆，同时保留历史；
-- 处理互相矛盾的记忆：输掉的那条被收起，随时可以恢复。
-
-默认两种都会做。在 `settings.json` 里改 `rem.operations` 可以只选一种，把 `rem.tick` 设为 `false` 可以关掉 REM 的定时运行。
+把 `rem.tick` 设为 `false` 可以关掉 REM 的定时运行。
 
 模式选择决定记忆写入和维护的处理方式。所有模式下，搜索都先由本地程序检索并初排，
 再由本地 `Horizon-Labs/multilingual-reranker-small` 模型重排最多 32 条候选记忆，
