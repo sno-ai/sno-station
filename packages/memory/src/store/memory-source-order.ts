@@ -34,6 +34,7 @@ export interface CloseMemoryRowInput {
 	closingOrder: MemorySourceOrder;
 	closingValidFrom: number | null;
 	supersededAt: number | string;
+	supersedeReason?: "write-judgement" | "night" | "merge" | "undo";
 	validUntilMode?: "clear" | "when-later";
 }
 
@@ -259,6 +260,8 @@ export function closeMemoryRow(
 				...metadata,
 				superseded_by: input.closingRowId,
 				superseded_at: input.supersededAt,
+				superseded_valid_until: row.validUntil,
+				...(input.supersedeReason === undefined ? {} : { supersede_reason: input.supersedeReason }),
 				...(mergeId === undefined
 					? {}
 					: {
