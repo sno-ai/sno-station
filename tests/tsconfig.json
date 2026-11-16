@@ -23,9 +23,5 @@
 		}
 	},
 	"include": ["**/*.ts"],
-	// `apps/mem-claw` was excluded here until 2026-08-13. That exclusion, plus the fact that
-	// nothing ever ran this config, is why 20 of the 40 cases in
-	// apps/mem-claw/integration/rem-update-rewrite.test.ts could call the composer without a
-	// required argument for weeks and report as an ordinary red.
 	"exclude": ["node_modules"]
 }
