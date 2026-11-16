@@ -37,6 +37,33 @@ sno reach pair "Fix the login redirect"
 
 [簡明使用說明](../reach.md)
 
+## Finish
+
+給 agent 一項任務和一個時間，然後離開。到了時間，一個 agent 會啟動並把事做完，對話開著或關了都一樣。
+
+```text
+明天早上 9 點檢查夜間建置，告訴我哪些失敗了。
+```
+
+| 你想要 | 你怎麼做 |
+|---|---|
+| **Timed tasks（定時任務）** | 在 Claude Code 或 Codex 裡把時間告訴 agent。可以一次、每天或每週。 |
+| **盯著長任務跑完** | 讓 agent 每隔幾分鐘看一次，直到任務結束。 |
+| **額度用完也不停** | 讓正在工作的 agent 使用 `rotate-agent`，另一個 agent 會接著做。 |
+
+查看已安排的任務，以及沒按計畫完成的：
+
+```bash
+sno heartbeat --due
+sno heartbeat --due --problems
+```
+
+沒能啟動的任務保持待辦，原因寫在旁邊。下次開始對話時 agent 也會告訴你。
+
+目前還不行：定時任務只會啟動 Claude Code 和 Codex；整台電腦重新開機的情況還沒有做過真實測試。
+
+[開始使用 Finish](../finish.md)
+
 ## 今晚把工作交出去。明天早上拿到的是成果，不是三個問題。
 
 做這個東西之前，我們自己遇過三件事：
@@ -265,6 +292,7 @@ sno account claim
 | 被打斷的工作繼續做，任務在壓縮後依然保留 | 2.0 新增；已用真實的 Claude Code 和 Codex agent 執行過 |
 | 批准的經驗，下一則回覆就生效 | 2.0 新增；已用真實的 Claude Code 和 Codex agent 執行過 |
 | 你打字或 agent 壓縮時，訊息會等著 | 2.0 新增；已用真實的 Claude Code 和 Codex agent 執行過 |
+| Finish：定時任務到點啟動一個 agent | 新增；已用真實的 Claude Code 和 Codex agent 執行過：Linux 上對話開著和關著兩種情況，macOS 上是新對話。見 [Finish 說明](../finish.md)。 |
 
 只有在乾淨的機器上實際執行過，那一列才會寫上「驗證」。
 
