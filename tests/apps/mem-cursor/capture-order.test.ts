@@ -1,12 +1,15 @@
+import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { CODING_SKIN_CAPTURE_QUIET_MS } from "@snoai/memory/coding-skin";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { endedSessionPath, spoolDirectory } from "../../../apps/mem-cursor/src/paths.js";
+import { afterAgentResponse, stop, userPromptSubmit } from "../../../apps/mem-cursor/src/hooks.ts";
 import { markSessionEnded } from "../../../apps/mem-cursor/src/session-state.js";
 import { hasActionableSpool, nextCapture } from "../../../apps/mem-cursor/src/worker.js";
+import { writeSettingsFixture } from "../../packages/memory/fixtures/settings-file-fixture";
 
 const now = 10 * CODING_SKIN_CAPTURE_QUIET_MS;
 // About 2,000 estimated tokens: two of these do not fit one capture's input budget together.
@@ -31,6 +34,70 @@ afterEach(async () => {
 });
 
 describe("mem-cursor capture timing", () => {
+	it.each(["ide", "cli"].flatMap(surface => [
+		{ surface, preceding: "no keep-alive", keepAlive: false },
+		{ surface, preceding: "keep-alive before the first real prompt", keepAlive: true },
+	]))("$surface with $preceding: captures ordinary sessions including later marked prompts, but excludes sessions whose first real prompt is marked", async ({ surface, keepAlive }) => {
+		await mkdir(join(homedir(), ".cache"), { recursive: true });
+		const workspace = await mkdtemp(join(homedir(), ".cache", "mem-cursor-marked-capture-"));
+		const command = process.argv[1];
+		const invokedAs = process.env.CURSOR_INVOKED_AS;
+		try {
+			execFileSync("git", ["init", "-q", workspace]);
+			if (surface === "cli") process.env.CURSOR_INVOKED_AS = "cursor-agent";
+			else delete process.env.CURSOR_INVOKED_AS;
+			// Keep the real spool observable without launching its detached consumer.
+			process.argv[1] = "";
+			writeSettingsFixture(root, { recall: { auto: false }, memoryPackage: { path: join(root, "no-memory-package") } });
+			const transcripts: Record<string, string[]> = { "ordinary-capture": [], "marked-capture": [] };
+			const base = { workspace_roots: [workspace], model: "default" };
+			const spool = join(root, "sno-mem-cursor", "spool");
+			const queued = async () => existsSync(spool) ? Promise.all((await readdir(spool)).map(async name => {
+				const row = JSON.parse(await readFile(join(spool, name), "utf8"));
+				return { user: row.user, assistant: row.assistant };
+			})) : [];
+			const turn = async (session: string, generation: string, prompt: string, reply: string) => {
+				const transcript = join(root, `${session}.jsonl`);
+				const input = { ...base, conversation_id: session, transcript_path: surface === "cli" ? transcript : null, generation_id: generation };
+				await userPromptSubmit({ ...input, prompt });
+				if (surface === "ide") await afterAgentResponse({ ...input, text: reply });
+				else {
+					const transcriptRows = transcripts[session];
+					transcriptRows.push(
+						JSON.stringify({ role: "user", message: { content: [{ type: "text", text: `<user_query>\n${prompt}\n</user_query>` }] } }),
+						JSON.stringify({ role: "assistant", message: { content: [{ type: "text", text: reply }] } }),
+						JSON.stringify({ type: "turn_ended", status: "success" }),
+					);
+					await writeFile(transcript, `${transcriptRows.join("\n")}\n`);
+				}
+				await stop({ ...input, status: "completed" });
+			};
+			if (keepAlive) {
+				await turn("ordinary-capture", "keep-alive", "[Sno Reach keep-alive]\nRemain available for Reach messages.", "Available.");
+				expect(await queued()).toEqual([]);
+			}
+			await turn("ordinary-capture", "ordinary", "Keep invoices in cents.", "Recorded.");
+			expect(await queued()).toEqual([{ user: "Keep invoices in cents.", assistant: "Recorded." }]);
+			await turn("ordinary-capture", "marked", "[sno-oneshot] Station one-shot run, not a user session.\nKeep invoices in dollars.", "Recorded the automated instruction.");
+			expect(await queued()).toHaveLength(2);
+			expect(await queued()).toContainEqual({ user: "Keep invoices in cents.", assistant: "Recorded." });
+			expect(await queued()).toContainEqual({ user: "[sno-oneshot] Station one-shot run, not a user session.\nKeep invoices in dollars.", assistant: "Recorded the automated instruction." });
+			if (keepAlive) {
+				await turn("marked-capture", "keep-alive", "[Sno Reach keep-alive]\nRemain available for Reach messages.", "Available.");
+				expect(await queued()).toHaveLength(2);
+			}
+			await turn("marked-capture", "first", "[sno-oneshot] Station one-shot run, not a user session.\nKeep invoices in euros.", "Recorded euros.");
+			expect(await queued()).toHaveLength(2);
+			await turn("marked-capture", "second", "Keep invoices in pounds.", "Recorded pounds.");
+			expect(await queued()).toHaveLength(2);
+		} finally {
+			process.argv[1] = command ?? "";
+			if (invokedAs === undefined) delete process.env.CURSOR_INVOKED_AS;
+			else process.env.CURSOR_INVOKED_AS = invokedAs;
+			await rm(workspace, { recursive: true, force: true });
+		}
+	});
+
 	it("waits for a session to be quiet or ended, then takes all its turns within the input budget", () => {
 		const quiet = now - CODING_SKIN_CAPTURE_QUIET_MS;
 		const entries = [
