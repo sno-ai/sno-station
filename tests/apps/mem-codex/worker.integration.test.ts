@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { connect, type InitRegistration, type MemoryClient } from "@snoai/memory/client";
@@ -13,6 +13,10 @@ import { writeSettingsFixture } from "../../packages/memory/fixtures/settings-fi
 import { untilModelReady } from "../../packages/memory/integration/fixtures/model-ready";
 import { LOCAL_EMBEDDING_CACHE_DIR_DEFAULT } from "../../../packages/embedder/src/constants.ts";
 import { withRegisteredWorker } from "../support/registered-worker";
+import { runClaudeChild, runWorker as runClaudeWorker } from "../../../apps/mem-claude/src/worker.js";
+import * as claudeConnection from "../../../apps/mem-claude/src/memory-client.js";
+import * as codexConnection from "../../../apps/mem-codex/src/memory-client.js";
+import { RegisteredAgentPort } from "../../../packages/memory/src/model/registered-agent-port";
 
 const previousEnv = { SNO_PROFILE_DIR: process.env.SNO_PROFILE_DIR, HOME: process.env.HOME };
 const roots: string[] = [];
@@ -605,4 +609,111 @@ describe("mem-codex worker lock files", () => {
 			holder.kill();
 		}
 	});
+});
+
+
+describe.each(["claude", "codex"] as const)("%s concurrent host requests", skin => {
+	it.each(["success", "one failed child", "deadline", "lifetime ends during child"])("overlaps real children through the registered HTTP port: %s", async scenario => {
+		const root = await profile();
+		const events = join(root, "child-events.jsonl");
+		const executable = join(root, skin);
+		await writeFile(executable, `#!${process.execPath}
+const fs = require('node:fs');
+const events = ${JSON.stringify(events)};
+fs.appendFileSync(events, JSON.stringify({kind:'start',pid:process.pid,args:process.argv.slice(2),cwd:process.cwd(),claudeCodeUnset:!process.env.CLAUDECODE}) + '\\n');
+let prompt = process.argv.at(-1);
+process.stdin.on('data', chunk => { prompt = (prompt === undefined ? '' : prompt) + chunk; });
+setTimeout(() => {
+  fs.appendFileSync(events, JSON.stringify({kind:'end',pid:process.pid,prompt}) + '\\n');
+  if (${JSON.stringify(scenario)} === 'one failed child' && prompt.includes('report 1')) { console.error('fixture child failed'); process.exit(7); }
+  console.log(${skin === "claude" ? "JSON.stringify({is_error:false,result:'child answer'})" : "'child answer'"});
+  process.exit(0);
+}, 800);
+`);
+		await chmod(executable, 0o755);
+		const savedPath = process.env.PATH;
+		process.env.PATH = `${root}:${savedPath}`;
+		let clock = Date.now();
+		let drained = false;
+		vi.spyOn(Date, "now").mockImplementation(() => {
+			if (drained) clock += 3 * 60_000;
+			return clock;
+		});
+		let finishing: Promise<unknown> | undefined;
+		const fakeClient = { principal: "tester", async init(_scope: unknown, registration: InitRegistration) {
+			const port = new RegisteredAgentPort(registration.model);
+			if (scenario === "lifetime ends during child") {
+				finishing = port.complete({ callId: "E16", prompt: "report 0", timeoutMs: 10_000 });
+				await vi.waitFor(() => expect(existsSync(events)).toBe(true), { timeout: 3_000 });
+			} else if (scenario === "deadline") {
+				const response = await fetch(`${registration.model.baseUrl}/chat/completions`, {
+					method: "POST", headers: { authorization: `Bearer ${registration.model.credential}`, "content-type": "application/json", "x-sno-deadline": String(Date.now() + 200) },
+					body: JSON.stringify({ model: registration.model.model, messages: [{ role: "user", content: "timeout probe" }] }),
+				});
+				expect(response.status).toBe(504);
+				expect(await response.json()).toEqual({ error: { kind: "cancelled", reason: "deadline" } });
+			} else {
+				const replies = await Promise.all(Array.from({ length: 6 }, (_, index) => port.complete({
+					callId: "E16", prompt: `report ${index}`, timeoutMs: 10_000,
+				})));
+				expect(replies).toEqual(Array.from({ length: 6 }, (_, index) => scenario === "one failed child" && index === 1
+					? { kind: "error", category: "transport", message: `registered model HTTP 503: ${skin}-exit-7` }
+					: { kind: "ok", text: "child answer" }));
+			}
+			drained = true;
+			return { degraded: false };
+		} } as unknown as MemoryClient;
+		vi.spyOn(skin === "claude" ? claudeConnection : codexConnection, "connectMemory").mockResolvedValue(fakeClient);
+		try {
+			expect(await (skin === "claude" ? runClaudeWorker : runWorker)()).toBe("drained");
+			if (scenario === "lifetime ends during child") await expect(finishing).resolves.toEqual({ kind: "ok", text: "child answer" });
+			const observed = (await readFile(events, "utf8")).trim().split("\n").map(line => JSON.parse(line) as { kind: string; pid: number; args?: string[]; cwd?: string; claudeCodeUnset?: boolean; prompt?: string });
+			if (scenario === "deadline") {
+				expect(observed).toHaveLength(1);
+				const child = observed[0];
+				if (!child) throw new Error("missing child start");
+				expect(() => process.kill(child.pid, 0)).toThrow();
+				return;
+			}
+			if (scenario === "lifetime ends during child") {
+				expect(observed.map(event => event.kind)).toEqual(["start", "end"]);
+				return;
+			}
+			const first = observed[0];
+			expect(skin === "claude" ? first?.args : first?.args?.slice(0, -1)).toEqual(skin === "claude"
+				? ["-p", "--output-format", "json", "--max-turns", "1", "--setting-sources", "", "--settings", '{"disableAllHooks":true}', "--no-session-persistence", "--permission-mode", "dontAsk", "--tools", ""]
+				: ["exec", "--ephemeral", "--disable", "hooks", "-s", "read-only", "--skip-git-repo-check", "-C", join(root, `sno-mem-${skin}`, "child")]);
+			if (skin === "claude") {
+				expect(first?.cwd).toBe(join(root, "sno-mem-claude", "child"));
+				expect(first?.claudeCodeUnset).toBe(true);
+			}
+			expect(observed.filter(event => event.kind === "end").map(event => event.prompt).sort()).toEqual(
+				Array.from({ length: 6 }, (_, index) => `user: report ${index}`));
+			let active = 0; let peak = 0;
+			for (const event of observed) {
+				active += event.kind === "start" ? 1 : -1;
+				peak = Math.max(peak, active);
+				expect(active).toBeLessThanOrEqual(4);
+			}
+			expect(observed.slice(0, 4).map(event => event.kind)).toEqual(["start", "start", "start", "start"]);
+			expect(peak).toBe(4);
+			expect(active).toBe(0);
+		} finally {
+			process.env.PATH = savedPath;
+			vi.restoreAllMocks();
+		}
+	}, 30_000);
+});
+
+
+it("reports a Claude child that exits before reading a large prompt", async () => {
+	const root = await profile();
+	const executable = join(root, "claude");
+	await writeFile(executable, `#!${process.execPath}\nrequire('node:fs').closeSync(0); process.exit(7);\n`);
+	await chmod(executable, 0o755);
+	const savedPath = process.env.PATH;
+	process.env.PATH = `${root}:${savedPath}`;
+	try {
+		expect(await runClaudeChild("report ".repeat(100_000), root, 2_000)).toEqual({ kind: "error", category: "transport", message: "claude-exit-7" });
+	} finally { process.env.PATH = savedPath; }
 });

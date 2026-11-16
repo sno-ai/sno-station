@@ -4,6 +4,8 @@
  * Merge checks use the existing E22 rewrite-verification fields. No production step is supplied by the harness.
  */
 import { createHash } from "node:crypto";
+import { NightBudgetExhausted, precisionNightBudget, runPrecisionNightSteps } from "../../../../packages/memory/src/engine/precision-night";
+import type { LlmClient } from "../../../../packages/memory/src/model/llm-client";
 import { WORK_MEMORY_ADMISSION } from "../../../../packages/memory/src/engine/extraction/atomic-extraction-skill";
 import { writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -1147,3 +1149,132 @@ async function duplicate(variant: typeof duplicateVariants[number]) {
 	judge = (fact, row) => fact.text.includes("Chinese") && ["duplicate-keep", "duplicate-remove"].includes(row.id)
 		? "same" : "unrelated";
 }
+
+
+describe("admission concurrency", () => {
+	function seed(count: number): void {
+		const insert = database.sqlite.prepare(`INSERT INTO nodix_memories
+			(id, fact_id, text, category, project_id, importance, timestamp, metadata, content_hash, timezone)
+			VALUES (?, ?, ?, 'episodic', 'global', 0.7, ?, ?, ?, 'UTC')`);
+		database.sqlite.transaction(() => {
+			for (let index = 0; index < count; index += 1) {
+				const id = `admission-${String(index).padStart(3, "0")}`;
+				insert.run(id, id, `The owner requires report ${index} to retain its source.`, 1_794_556_800_000,
+					JSON.stringify({ precision_night: { at: Date.now(), text: id } }), id);
+			}
+		})();
+	}
+	function answer(prompt: string, vote: number): string {
+		const data = payload(prompt) as Array<{ id: string }> | { rows: Array<{ id: string }> };
+		if (!Array.isArray(data)) return JSON.stringify({ rows: data.rows.map(row => ({ id: row.id, confirmed: true })) });
+		return JSON.stringify({ rows: data.map((row, index) => index === 0
+			? { id: row.id, verdict: "delete", reason: "fixture activity record" }
+			: index === 1 || vote === 1 ? { id: row.id, verdict: "unsure" }
+			: { id: row.id, verdict: "keep", kind: "fact", origin: "owner", about_user: false }) });
+	}
+	function run(waveId: string, complete: Parameters<typeof runPrecisionNightSteps>[0]["complete"]) {
+		const beforeMutation = vi.fn(async () => true);
+		const done = runPrecisionNightSteps({ store, waveId, complete, beforeMutation, previousAt: Date.now() });
+		return { done, beforeMutation };
+	}
+	it("has four batches in flight, applies reverse completions in input order, and equals serial results", async () => {
+		seed(200);
+		const original = database.sqlite.prepare("SELECT * FROM nodix_memories ORDER BY id").all() as Array<Record<string, unknown>>;
+		const votes = new Map<string, number>();
+		await run("serial-admission", async request => {
+			const vote = votes.get(request.prompt) ?? 0; votes.set(request.prompt, vote + 1);
+			return { text: answer(request.prompt, vote), truncated: false };
+		}).done;
+		const expectedRows = database.sqlite.prepare("SELECT id, text, metadata FROM nodix_memories ORDER BY id").all();
+		const expectedJournal = journal("serial-admission");
+		expect(expectedJournal.filter(entry => entry.stage === "admission" && entry.outcome === "removed")).toHaveLength(5);
+		expect(expectedJournal.filter(entry => entry.stage === "admission" && entry.outcome === "undecided")).toHaveLength(5);
+		database.sqlite.prepare("DELETE FROM nodix_memories").run();
+		for (const row of original) {
+			const columns = Object.keys(row);
+			database.sqlite.prepare(`INSERT INTO nodix_memories (${columns.join(",")}) VALUES (${columns.map(() => "?").join(",")})`).run(...Object.values(row));
+		}
+		votes.clear();
+		let inFlight = 0; let peak = 0;
+		const waiting: Array<() => void> = [];
+		const concurrent = run("parallel-admission", async request => {
+			inFlight += 1; peak = Math.max(peak, inFlight);
+			await new Promise<void>(resolve => waiting.push(resolve));
+			inFlight -= 1;
+			const vote = votes.get(request.prompt) ?? 0; votes.set(request.prompt, vote + 1);
+			return { text: answer(request.prompt, vote), truncated: false };
+		});
+		let settled = false;
+		void concurrent.done.finally(() => { settled = true; });
+		try {
+			await new Promise(resolve => setTimeout(resolve, 20));
+			expect(inFlight).toBe(4);
+			expect(database.sqlite.prepare("SELECT count(*) AS count FROM nodix_memories WHERE json_extract(metadata, '$.precision_admission') IS NOT NULL").get()).toEqual({ count: 0 });
+		} finally {
+			for (let attempt = 0; !settled && attempt < 3_000; attempt += 1) {
+				for (const release of waiting.splice(0).reverse()) release();
+				await new Promise(resolve => setTimeout(resolve, 1));
+			}
+			expect(settled).toBe(true);
+			await concurrent.done;
+		}
+		expect(peak).toBe(4);
+		expect(concurrent.beforeMutation).toHaveBeenCalledTimes(1);
+		expect(database.sqlite.prepare("SELECT id, text, metadata FROM nodix_memories ORDER BY id").all()).toEqual(expectedRows);
+		expect(journal("parallel-admission")).toEqual(expectedJournal);
+	});
+	it.each(["failed", "unreadable"])("keeps the other three batches after one %s call", async failure => {
+		seed(160);
+		let inFlight = 0;
+		const waiting: Array<() => void> = [];
+		const votes = new Map<string, number>();
+		const started = run(`admission-${failure}`, async request => {
+			inFlight += 1;
+			await new Promise<void>(resolve => waiting.push(resolve));
+			inFlight -= 1;
+			const rows = payload(request.prompt) as Array<{ id: string }>;
+			if (Array.isArray(rows) && rows[0]?.id === "admission-040") {
+				if (failure === "failed") throw new Error("fixture host failed");
+				return { text: "unreadable", truncated: false };
+			}
+			const vote = votes.get(request.prompt) ?? 0; votes.set(request.prompt, vote + 1);
+			return { text: answer(request.prompt, vote), truncated: false };
+		});
+		let settled = false;
+		void started.done.finally(() => { settled = true; });
+		try {
+			await new Promise(resolve => setTimeout(resolve, 20));
+			expect(inFlight).toBe(4);
+		} finally {
+			for (let attempt = 0; !settled && attempt < 3_000; attempt += 1) {
+				for (const release of waiting.splice(0).reverse()) release();
+				await new Promise(resolve => setTimeout(resolve, 1));
+			}
+			expect(settled).toBe(true);
+			await started.done;
+		}
+		expect(metadata("admission-040")).not.toHaveProperty("precision_admission");
+		expect(journal(`admission-${failure}`).filter(entry => entry.stage === "admission" && entry.outcome === "fine")).toHaveLength(114);
+		expect(journal(`admission-${failure}`).filter(entry => entry.stage === "admission" && entry.outcome === "failed")).toHaveLength(1);
+	});
+	it.each([0, 1, 2, 3, 11, 12, 14])("counts every actual call with only %i calls left", async remaining => {
+		seed(160);
+		let actual = 0;
+		const votes = new Map<string, number>();
+		const budget = precisionNightBudget({ completeText: async request => {
+			actual += 1;
+			if (request.prompt === "spent") return "spent";
+			const vote = votes.get(request.prompt) ?? 0; votes.set(request.prompt, vote + 1);
+			return answer(request.prompt, vote);
+		}, getLastError: () => null } as LlmClient);
+		for (let index = 0; index < 100 - remaining; index += 1) await budget.llm.completeText({ callId: "E16", prompt: "spent" });
+		await expect(run(`admission-budget-${remaining}`, budget.complete).done).rejects.toBeInstanceOf(NightBudgetExhausted);
+		expect(actual).toBe(100);
+		expect(journal(`admission-budget-${remaining}`).filter(entry => entry.outcome === "failed")).toEqual([]);
+		if (remaining < 3) expect(metadata("admission-000")).not.toHaveProperty("precision_admission");
+		if (remaining === 14) {
+			// Two confirmation calls may run out, but every completed vote batch still applies its keep decisions.
+			expect(journal(`admission-budget-${remaining}`).filter(entry => entry.stage === "admission" && entry.outcome === "fine")).toHaveLength(152);
+		}
+	});
+});
