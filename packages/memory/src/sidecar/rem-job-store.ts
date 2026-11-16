@@ -15,41 +15,9 @@ const log = createLogger("sno-station-mem:rem-jobs");
 
 export type RemJobState = "queued" | "running" | "done" | "failed" | "skipped";
 
-interface RemJobMeasurements {
-	rows_considered: number;
-	pairs_built?: number;
-	pair_cap_binding?: boolean;
-	model_calls: number;
-	model_tokens: number;
-	wall_ms: number;
-}
-
 export interface RemJobStats {
 	operations: number;
 	applied_count?: number;
-	actionable_candidate_count?: number;
-	applied_fraction?: number | null;
-	scan?: {
-		scope: string;
-		candidate_count: number;
-		stamped_skipped_count?: number;
-		actionable_candidate_count?: number;
-	};
-	parse_failure_count?: number;
-	top_refusal_reasons?: string[];
-	// What the wave actually consumed. `model_calls` is the one number that separates a wave which
-	// judged everything and changed nothing — a legitimate outcome — from a wave whose engine never
-	// ran at all. Both write `applied_count: 0`, and for four months only the second was happening.
-	measured?: RemJobMeasurements;
-	by_operation?: Array<{
-		operation: string;
-		applied_count: number;
-		actionable_candidate_count: number;
-		candidate_count: number;
-		parse_failure_count: number;
-		top_refusal_reasons: string[];
-		measured: RemJobMeasurements;
-	}>;
 }
 
 export interface RemJob {
@@ -62,7 +30,6 @@ export interface RemJob {
 	stats: RemJobStats;
 	error?: string;
 	correlation_id: string;
-	requested_operations: string[];
 }
 
 interface RemWaveJob {
@@ -70,7 +37,6 @@ interface RemWaveJob {
 	waveId: string;
 	correlationId: string;
 	scope: string;
-	requestedOperations: string[];
 	state: RemJobState;
 	startedAt: string | null;
 	finishedAt: string | null;
@@ -85,57 +51,10 @@ const remJobStateSchema: z.ZodType<RemJobState> = z.enum([
 	"failed",
 	"skipped",
 ]);
-const remJobMeasurementsSchema: z.ZodType<RemJobMeasurements> = z
-	.object({
-		rows_considered: z.number().int().nonnegative(),
-		pairs_built: z.number().int().nonnegative().optional(),
-		pair_cap_binding: z.boolean().optional(),
-		model_calls: z.number().int().nonnegative(),
-		model_tokens: z.number().int().nonnegative(),
-		wall_ms: z.number().int().nonnegative(),
-	})
-	.strict();
-const remJobStatsSchema: z.ZodType<RemJobStats> = z
-	.object({
-		operations: z.number().int().nonnegative(),
-		applied_count: z.number().int().nonnegative().optional(),
-		actionable_candidate_count: z.number().int().nonnegative().optional(),
-		applied_fraction: z.number().min(0).max(1).nullable().optional(),
-		scan: z
-			.object({
-				scope: z.string().min(1),
-				candidate_count: z.number().int().nonnegative(),
-				stamped_skipped_count: z.number().int().nonnegative().optional(),
-				actionable_candidate_count: z.number().int().nonnegative().optional(),
-			})
-			.strict()
-			.optional(),
-		parse_failure_count: z.number().int().nonnegative().optional(),
-		top_refusal_reasons: z.array(z.string().min(1)).max(2).optional(),
-		// The declared type above is not what decides: this schema is `.strict()`, and without this
-		// block every completed wave threw `Unrecognized key: "measured"` before its line reached the
-		// journal — so the measurements were unreadable and the runner's liveness check could only
-		// ever report that it could not find them. Proved by reverting this block: the round-trip
-		// test goes red with that exact ZodError.
-		measured: remJobMeasurementsSchema.optional(),
-		by_operation: z
-			.array(
-				z
-					.object({
-						operation: z.string().min(1),
-						applied_count: z.number().int().nonnegative(),
-						actionable_candidate_count: z.number().int().nonnegative(),
-						candidate_count: z.number().int().nonnegative(),
-						parse_failure_count: z.number().int().nonnegative(),
-						top_refusal_reasons: z.array(z.string().min(1)).max(2),
-						measured: remJobMeasurementsSchema,
-					})
-					.strict(),
-			)
-			.min(1)
-			.optional(),
-	})
-	.strict();
+const remJobStatsSchema: z.ZodType<RemJobStats> = z.object({
+	operations: z.number().int().nonnegative(),
+	applied_count: z.number().int().nonnegative().optional(),
+}).strict();
 
 export function parseRemJobStats(value: unknown): RemJobStats | undefined {
 	const parsed = remJobStatsSchema.safeParse(value);
@@ -148,7 +67,6 @@ const remWaveJobSchema: z.ZodType<RemWaveJob> = z
 		waveId: z.string().min(1),
 		correlationId: z.string().min(1),
 		scope: z.string().min(1),
-		requestedOperations: z.array(z.string().min(1)).min(1),
 		state: remJobStateSchema,
 		startedAt: z.string().datetime().nullable(),
 		finishedAt: z.string().datetime().nullable(),
@@ -156,22 +74,6 @@ const remWaveJobSchema: z.ZodType<RemWaveJob> = z
 		error: z.string().min(1).optional(),
 	})
 	.strict();
-
-const legacyJobSchema = z
-	.object({
-		job_id: z.string().min(1),
-		state: remJobStateSchema,
-		type: z.string().min(1),
-		scope: z.string().min(1),
-		started_at: z.string().datetime().nullable(),
-		finished_at: z.string().datetime().nullable(),
-		stats: remJobStatsSchema,
-		error: z.string().min(1).optional(),
-		correlation_id: z.string().min(1),
-	})
-	.strict();
-
-const OPERATION_ORDER = ["rem-replace", "rem-update", "rem-distill", "rem-retire"] as const;
 
 export type RemJobTransition = {
 	state: Exclude<RemJobState, "queued">;
@@ -198,7 +100,6 @@ export class RemJobStore {
 		onDurableTransition: (job: RemJob) => void = () => undefined,
 	): Promise<RemJobStore> {
 		const store = new RemJobStore(journalPath, onDurableTransition);
-		await store.migrateLegacyJournal().catch(error => store.reportFailure(error));
 		await store.load();
 		return store;
 	}
@@ -234,41 +135,14 @@ export class RemJobStore {
 	}
 
 	async createQueued(
-		type: string | readonly string[],
 		scope: string,
 		correlationId: string,
 	): Promise<{ created: boolean; job: RemJob }> {
 		return this.enqueue(async () => {
-			const requestedOperations = canonicalOperations(
-				typeof type === "string" ? [type] : type,
-			);
-			if (requestedOperations.length === 0) {
-				throw new Error("REM wave requires at least one supported operation");
-			}
 			const mergeKey = `${correlationId}\0${scope}`;
 			const existingId = this.mergeKeys.get(mergeKey);
 			const existing = existingId === undefined ? undefined : this.jobs.get(existingId);
-			if (existing !== undefined && existing.state === "queued") {
-				const mergedOperations = canonicalOperations([
-					...existing.requestedOperations,
-					...requestedOperations,
-				]);
-				if (mergedOperations.length === existing.requestedOperations.length) {
-					return { created: false, job: toRemJob(existing) };
-				}
-				const updated = remWaveJobSchema.parse({
-					...existing,
-					requestedOperations: mergedOperations,
-				});
-				const durable = await this.persist(updated);
-				this.jobs.set(updated.waveId, updated);
-				if (durable) this.onDurableTransition(toRemJob(updated));
-				return { created: false, job: toRemJob(updated) };
-			}
-			if (
-				existing !== undefined && existing.state !== "skipped" && existing.state !== "failed" &&
-				requestedOperations.every((operation) => existing.requestedOperations.includes(operation))
-			) {
+			if (existing !== undefined && existing.state !== "skipped" && existing.state !== "failed") {
 				return { created: false, job: toRemJob(existing) };
 			}
 			const job = remWaveJobSchema.parse({
@@ -276,7 +150,6 @@ export class RemJobStore {
 				waveId: `rem-wave-${randomUUID()}`,
 				correlationId,
 				scope,
-				requestedOperations,
 				state: "queued",
 				startedAt: null,
 				finishedAt: null,
@@ -374,47 +247,6 @@ export class RemJobStore {
 		} finally { await rm(temporary, { force: true }); }
 	}
 
-	private async migrateLegacyJournal(): Promise<void> {
-		const legacyPath = path.join(path.dirname(this.journalPath), "rem-jobs.jsonl");
-		if (!existsSync(legacyPath)) return;
-
-		const latest = new Map<string, z.infer<typeof legacyJobSchema>>();
-		for await (const line of readJsonlLines(legacyPath)) {
-			try {
-				const parsed: unknown = JSON.parse(line);
-				const job = legacyJobSchema.parse(parsed);
-				latest.set(job.job_id, job);
-			} catch (error) {
-				const reason = error instanceof Error ? error.message : String(error);
-				this.reportFailure(reason);
-			}
-		}
-		const interrupted = [...latest.values()].filter(
-			(job) => job.state === "queued" || job.state === "running",
-		);
-		if (interrupted.length > 0) {
-			const finishedAt = new Date().toISOString();
-			const handle = await open(legacyPath, "a");
-			try {
-				for (const job of interrupted) {
-					await handle.writeFile(
-						`${JSON.stringify({
-							...job,
-							state: "failed",
-							finished_at: finishedAt,
-							error: "sidecar_upgrade_interrupted",
-						})}\n`,
-						"utf8",
-					);
-				}
-				await handle.sync();
-			} finally {
-				await handle.close();
-			}
-		}
-		await rename(legacyPath, path.join(path.dirname(legacyPath), "rem-jobs.v0.jsonl"));
-	}
-
 	private reportFailure(error: unknown): void {
 		log.error("rem.journal.failed", { error, path: this.journalPath }, {
 			event_name: "rem.journal.failed", file: "packages/memory/src/sidecar/rem-job-store.ts",
@@ -471,23 +303,17 @@ export class RemJobStore {
 	}
 }
 
-function canonicalOperations(operations: readonly string[]): string[] {
-	const unique = new Set(operations);
-	return OPERATION_ORDER.filter((operation) => unique.has(operation));
-}
-
 function toRemJob(job: RemWaveJob): RemJob {
 	return {
 		job_id: job.waveId,
 		state: job.state,
-		type: job.requestedOperations[0] ?? "rem-replace",
+		type: "precision-nightly",
 		scope: job.scope,
 		started_at: job.startedAt,
 		finished_at: job.finishedAt,
 		stats: job.stats,
 		...(job.error === undefined ? {} : { error: job.error }),
 		correlation_id: job.correlationId,
-		requested_operations: [...job.requestedOperations],
 	};
 }
 

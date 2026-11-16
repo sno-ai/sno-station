@@ -11,9 +11,8 @@ import { z } from "zod";
 export interface RemTriggerScopeState {
 	last_pass_at: string;
 	schedule_zone: string;
-	last_covered_count: number;
-	last_volume_pass_date: string | null;
-	missed_window: { due_at: string; trigger: "daily" | "volume"; recorded_at: string } | null;
+	last_pass_date: string | null;
+	missed_window: { due_at: string; trigger: "daily"; recorded_at: string } | null;
 	attempts: { identity: string | null; count: number };
 }
 
@@ -26,10 +25,8 @@ const remTriggerScopeStateSchema: z.ZodType<RemTriggerScopeState> = z
 	.object({
 		last_pass_at: z.string().datetime(),
 		schedule_zone: z.string().min(1).refine(isValidScheduleZone, "invalid IANA time zone"),
-		last_covered_count: z.number().int().nonnegative(),
-		last_volume_pass_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/u).nullable(),
-		// Earlier version 1 files have five fields; only the added field may be absent.
-		missed_window: z.object({ due_at: z.string().datetime(), trigger: z.enum(["daily", "volume"]), recorded_at: z.string().datetime() }).strict().nullable().default(null),
+		last_pass_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/u).nullable(),
+		missed_window: z.object({ due_at: z.string().datetime(), trigger: z.literal("daily"), recorded_at: z.string().datetime() }).strict().nullable(),
 		attempts: z
 			.object({
 				identity: z.string().min(1).nullable(),
@@ -83,7 +80,6 @@ export function ensureRemTriggerScope(
 	input: {
 		scope: string;
 		now: Date;
-		candidateCount: number;
 		resolveScheduleZone?: () => string;
 	},
 ): {
@@ -94,17 +90,13 @@ export function ensureRemTriggerScope(
 	const existing = state.scopes[input.scope];
 	if (existing !== undefined) return { state, scopeState: existing, initialized: false };
 	if (input.scope.trim().length === 0) throw new Error("REM trigger scope is required");
-	if (!Number.isInteger(input.candidateCount) || input.candidateCount < 0) {
-		throw new Error("REM trigger candidate count must be a nonnegative integer");
-	}
 	if (Number.isNaN(input.now.getTime())) throw new Error("REM trigger initialization time is invalid");
 	const scheduleZone = (input.resolveScheduleZone ?? resolveHostScheduleZone)();
 	if (!isValidScheduleZone(scheduleZone)) throw new Error(`invalid REM schedule zone: ${scheduleZone}`);
 	const scopeState: RemTriggerScopeState = {
 		last_pass_at: input.now.toISOString(),
 		schedule_zone: scheduleZone,
-		last_covered_count: input.candidateCount,
-		last_volume_pass_date: null,
+		last_pass_date: null,
 		missed_window: null,
 		attempts: { identity: null, count: 0 },
 	};
