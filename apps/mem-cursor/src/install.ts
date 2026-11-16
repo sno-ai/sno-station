@@ -77,6 +77,10 @@ export async function readIdePermissions(cursorHome: string): Promise<IdePermiss
 /** Replaces our entry of each event in place (one per event), appends it when missing, keeps every other entry. */
 export function updateHooks(file: HooksFile, programPath: string | undefined): HooksFile {
 	const hooks = file.hooks ?? {};
+	// Measured 2026-11-12: Cursor CLI 2026.10.22 disconnects if afterAgentThought prints output or takes over ~0.1 s.
+	const thoughts = (hooks["afterAgentThought"] ?? []).filter(entry => entry.command === undefined || !isCodingSkinHookCommand(entry.command, "after-agent-thought", "cursor"));
+	if (thoughts.length > 0) hooks["afterAgentThought"] = thoughts;
+	else delete hooks["afterAgentThought"];
 	for (const event of EVENTS) {
 		const entry = programPath === undefined ? undefined : {
 			command: codingSkinHookCommand(programPath, CODING_SKIN_CURSOR_HOOKS[event].subcommand, "cursor"),

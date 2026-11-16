@@ -23,6 +23,7 @@ const activityRecordSchema: z.ZodType<ActivityRecord> = z.object({ ts: z.number(
 
 const sessionStateSchema = z.object({
 	sessionId: z.string().min(1),
+	oneshot: z.boolean().optional(),
 	/** Set when the conversation is first seen and at preCompact; cleared when a hook returns the brief. */
 	briefOwed: z.boolean().default(true),
 	/** IDE: prompt and final reply of each turn, by generation_id, until its stop. */

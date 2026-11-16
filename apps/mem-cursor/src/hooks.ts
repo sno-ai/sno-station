@@ -8,6 +8,7 @@ import {
 	appendObserveLedgerRows,
 	CODING_SKIN_CURSOR_HOOKS,
 	CODING_SKIN_SESSION_QUERY,
+	loadedFilesAtStart,
 	EMPTY_ACTIVITY_CURSOR,
 	foldActivity,
 	isAgentText,
@@ -181,7 +182,7 @@ export async function sessionStart(raw: unknown): Promise<string> {
 		// Print mode has no prompt event, so the brief must arrive here; connect starts a stopped sidecar.
 		const result = await recall(input.conversation_id, project,
 			hookBudgetMs("sessionStart") - (performance.now() - started), CODING_SKIN_SESSION_QUERY, undefined,
-			{ source: "auto", injectionPhase: "session-start", limit: settings.sessionStart.limit, maxChars: settings.sessionStart.maxChars });
+			{ source: "auto", injectionPhase: "session-start", loadedFiles: loadedFilesAtStart("cursor", project, project), limit: settings.sessionStart.limit, maxChars: settings.sessionStart.maxChars });
 		await changeSession(input.conversation_id, state => {
 			state.activityRecords.push({ ts: at });
 			recordLookup(state, "sessionStart");
@@ -216,6 +217,7 @@ export async function userPromptSubmit(raw: unknown): Promise<string> {
 			return EMPTY;
 		}
 		const state = await changeSession(input.conversation_id, current => {
+			current.oneshot ??= input.prompt.startsWith("[sno-oneshot]");
 			current.activityRecords.push({ ts: Date.now(), incoming: isAgentText(input.prompt) ? "agent" : "human" });
 			// Only the IDE pairs prompt and reply here; the CLI reads its turns from the transcript.
 			// Without a project the turn is never captured, so its text is not kept.
@@ -236,8 +238,8 @@ export async function userPromptSubmit(raw: unknown): Promise<string> {
 			owed ? hookBudgetMs("beforeSubmitPrompt") - (performance.now() - started) : settings.prompt.timeoutMs,
 			input.prompt, owed ? "reset" : undefined,
 			owed
-				? { source: "auto", injectionPhase: "first-prompt" }
-				: { source: "auto", injectionPhase: "prompt", limit: settings.prompt.limit, minScore: settings.prompt.minScore, maxChars: settings.prompt.maxChars },
+				? { source: "auto", injectionPhase: "first-prompt", loadedFiles: loadedFilesAtStart("cursor", project, project) }
+				: { source: "auto", injectionPhase: "prompt", loadedFiles: loadedFilesAtStart("cursor", project, project), limit: settings.prompt.limit, minScore: settings.prompt.minScore, maxChars: settings.prompt.maxChars },
 			client => reportPrompt(client, hookScope(project, input.conversation_id), input.prompt));
 		await changeSession(input.conversation_id, current => {
 			recordLookup(current, "beforeSubmitPrompt");
@@ -268,29 +270,29 @@ export async function afterAgentResponse(raw: unknown): Promise<string> {
 	return EMPTY;
 }
 
-/** Only records the model Auto picked: under Auto the prompt events say `default`. */
-export async function afterAgentThought(raw: unknown): Promise<string> {
-	try {
-		await touchConversation(baseSchema.parse(raw), "other");
-	} catch (error) {
-		logFailure("afterAgentThought", "conversation-record", error, "conversation model not updated");
-	}
-	return EMPTY;
-}
-
 /** CLI: spools each complete transcript turn after the saved cursor; `final` also takes the turn still open. */
 async function captureTranscript(record: ConversationRecord, project: string, hook: HookName, final: boolean): Promise<number> {
 	if (!record.transcript_path) {
 		console.error(JSON.stringify({ event: hook, reason: "no-transcript-path", impact: "nothing captured this time" }));
 		return 0;
 	}
-	const before = (await readSession(record.conversation_id)).transcript ?? { offset: 0, users: 0 };
+	const state = await readSession(record.conversation_id);
+	if (state.oneshot) {
+		await changeSession(record.conversation_id, current => recordSkip(current, hook, "[sno-oneshot]"));
+		return 0;
+	}
+	const before = state.transcript ?? { offset: 0, users: 0 };
 	const read = await readTurns(record.transcript_path, before, hookBudgetMs(hook) / 4, final);
-	const turns = read.turns.filter(turn => !isKeepAlive(turn.user));
+	if (state.oneshot === undefined && read.firstPrompt !== undefined) state.oneshot = read.firstPrompt.startsWith("[sno-oneshot]");
+	const turns = state.oneshot ? [] : read.turns.filter(turn => !isKeepAlive(turn.user));
 	for (const turn of turns) {
 		await appendSpool({ sessionId: record.conversation_id, turnId: turn.turnId, project, user: turn.user, assistant: turn.assistant, at: Date.now() });
 	}
-	await changeSession(record.conversation_id, state => { state.transcript = read.cursor; });
+	await changeSession(record.conversation_id, current => {
+		current.oneshot ??= state.oneshot;
+		current.transcript = read.cursor;
+		if (state.oneshot) recordSkip(current, hook, "[sno-oneshot]");
+	});
 	return turns.length;
 }
 
@@ -300,12 +302,13 @@ async function captureTurn(record: ConversationRecord, project: string, input: z
 	const state = await readSession(record.conversation_id);
 	const prompt = state.prompts[generation]?.prompt.trim() ?? "";
 	const reply = state.replies[generation]?.trim() ?? "";
-	const captured = ambient && input.status === "completed" && prompt !== "" && reply !== "";
+	const captured = !state.oneshot && ambient && input.status === "completed" && prompt !== "" && reply !== "";
 	if (captured) await appendSpool({ sessionId: record.conversation_id, turnId: generation, project, user: prompt, assistant: reply, at: Date.now() });
 	await changeSession(record.conversation_id, current => {
 		delete current.prompts[generation];
 		delete current.replies[generation];
-		if (!captured) recordSkip(current, "stop", !ambient ? "capture-off" : input.status === "completed" ? "empty-turn" : `status-${input.status}`);
+		if (state.oneshot) recordSkip(current, "stop", "[sno-oneshot]");
+		else if (!captured) recordSkip(current, "stop", !ambient ? "capture-off" : input.status === "completed" ? "empty-turn" : `status-${input.status}`);
 	});
 	return captured ? 1 : 0;
 }
