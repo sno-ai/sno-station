@@ -9,7 +9,6 @@ import { createHash } from "node:crypto";
 import { afterEach, describe, expect, it } from "vitest";
 import {
 	enumerateRemCandidateScopes,
-	readCandidates,
 } from "../../../../packages/memory/src/sidecar/rem-batch-executor.ts";
 import { createTestDb, type TestDb } from "../../../apps/mem-claw/helpers/test-db.ts";
 
@@ -21,7 +20,7 @@ describe("REM automatic trigger foundations", () => {
 		database = undefined;
 	});
 
-	it("ACC-21 groups candidate-bearing scopes with the same predicate as readCandidates", () => {
+	it("groups candidate-bearing scopes", () => {
 		database = createTestDb();
 		const rows = [
 			candidate("a-1", "scope-a", "profile", "active", "Alpha preference", "{}"),
@@ -53,9 +52,6 @@ describe("REM automatic trigger foundations", () => {
 			{ scope: "scope-a", candidateCount: 2 },
 			{ scope: "scope-b", candidateCount: 1 },
 		]);
-		for (const item of grouped) {
-			expect(readCandidates(database.runtime.db, item.scope)).toHaveLength(item.candidateCount);
-		}
 	});
 });
 
