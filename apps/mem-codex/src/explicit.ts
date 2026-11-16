@@ -81,3 +81,8 @@ export async function correctCommand(id: string, content: string): Promise<Comma
 	if (!id.trim() || !content.trim()) return { ok: false, text: "invalid-input" };
 	return mutateCommand({ op: "correct", id, content });
 }
+
+export async function undoCommand(id: string): Promise<CommandResult> {
+	if (!id.trim()) return { ok: false, text: "invalid-input" };
+	return mutateCommand({ op: "undo", id });
+}

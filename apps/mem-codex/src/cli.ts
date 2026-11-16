@@ -3,7 +3,7 @@ import { homedir } from "node:os";
 import { isAbsolute, join } from "node:path";
 import { composeContinuityContext, observeAgentEvent, refreshContinuityBrief } from "@snoai/memory/coding-skin";
 import { doctor } from "./doctor.js";
-import { correctCommand, getCommand, recallCommand, rememberCommand } from "./explicit.js";
+import { correctCommand, getCommand, recallCommand, rememberCommand, undoCommand } from "./explicit.js";
 import { postToolUse, preToolUse, sessionEnd, sessionStart, stop, userPromptSubmit } from "./hooks.js";
 import { installCodex, uninstallCodex } from "./install.js";
 import { importRepository, importUser } from "./import.js";
@@ -129,7 +129,7 @@ async function main(): Promise<number> {
 		return result.ok ? 0 : 1;
 	}
 	if (command === "correct") {
-		const result = await correctCommand(args[0] ?? "", args.slice(1).join(" "));
+		const result = args[0] === "--undo" ? await undoCommand(args[1] ?? "") : await correctCommand(args[0] ?? "", args.slice(1).join(" "));
 		process.stdout.write(`${result.text}\n`);
 		return result.ok ? 0 : 1;
 	}
