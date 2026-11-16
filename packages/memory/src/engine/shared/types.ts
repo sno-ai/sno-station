@@ -102,6 +102,12 @@ export const DEFAULT_MEMORY_TIER: MemoryTier = "peripheral";
  * persisted historically (e.g. accessCount + access_count).
  */
 export interface MemoryMetadata extends Partial<MemoryMetadataBaseFields> {
+	precision_kind?: import("../extraction/atomic-extraction-reply").PrecisionKind;
+	precision_judged?: boolean;
+	start_label?: "core" | "topic" | "drop";
+	start_rank?: number;
+	asserted_by?: "assistant";
+	source_project_id?: string;
 	// --- Storage / recall-healing fields — NOT part of the insight Zod schema.
 	// Persisted by the storage + lifecycle layers, not the extractor. The
 	// camelCase pair mirrors snake_case `access_count` / `last_accessed_at` from
