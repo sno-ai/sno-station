@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
-import { chmod, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { connect, type InitRegistration, type MemoryClient } from "@snoai/memory/client";
@@ -13,6 +13,7 @@ import { runClaudeChild, runWorker, type WorkerDependencies } from "../../../app
 import { writeSettingsFixture } from "../../packages/memory/fixtures/settings-file-fixture";
 import { untilModelReady } from "../../packages/memory/integration/fixtures/model-ready";
 import { LOCAL_EMBEDDING_CACHE_DIR_DEFAULT } from "../../../packages/embedder/src/constants.ts";
+import { withRegisteredWorker } from "../support/registered-worker";
 
 const repoRoot = resolve(import.meta.dirname, "../../..");
 const extraction = '{"claims_found":[],"decisions":[{"turn_index":0,"progress_only":false}],"facts":[]}';
@@ -28,7 +29,8 @@ beforeEach(async ({ task }) => {
 	process.env.SNO_PROFILE_DIR = root;
 	// The store list lives under HOME; the service started below inherits this environment.
 	process.env.HOME = join(root, "home");
-	writeSettingsFixture(root, { mode: "agent-native", capture: { ambient: task.name !== "finishes an import when ambient capture is disabled" }, rerank: { mode: "none" }, embedding: { cacheDir: MODEL_CACHE } });
+	writeSettingsFixture(root, { mode: "agent-native", capture: { ambient: task.name !== "finishes an import when ambient capture is disabled" }, rerank: { mode: "none" }, embedding: { cacheDir: MODEL_CACHE },
+		...(task.name === "writes its node and CLI entry at mode 0600 after registration" ? { rem: { tick: false } } : {}) });
 	const connected = await connect({ skinId: "claude-code" });
 	if (connected.degraded) throw new Error(connected.error ?? connected.reason);
 	client = connected;
@@ -97,6 +99,16 @@ function observeClient(start = Date.now()) {
 }
 
 describe("Claude worker with a real sidecar", () => {
+	it("writes its node and CLI entry at mode 0600 after registration", async () => {
+		const entry = join(repoRoot, "apps/mem-claude/src/cli.ts");
+		await withRegisteredWorker(entry, async () => {
+			const record = join(root, "station", "host-worker.json");
+			expect(existsSync(record)).toBe(true);
+			expect(JSON.parse(await readFile(record, "utf8"))).toEqual({ node: process.execPath, entry });
+			expect((await stat(record)).mode & 0o777).toBe(0o600);
+		});
+	}, 30_000);
+
 	it("finishes an import when ambient capture is disabled", async () => {
 		const path = await spool("0001.json", "capture-disabled");
 		await mkdir(importDirectory(), { recursive: true });
