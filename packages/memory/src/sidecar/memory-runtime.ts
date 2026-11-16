@@ -2,6 +2,8 @@ import { getSnoProfileDir } from "@snoai/observability";
 import { forwardObserveLedgerUntilIdle } from "../engine/telemetry/observe-ledger";
 import { readMaintenanceOverrides } from "./config";
 import { AsyncLocalStorage } from "node:async_hooks";
+import { spawn } from "node:child_process";
+import { existsSync, readFileSync } from "node:fs";
 import { createUUIDv7 } from "@snoai/common-core";
 import { readMemorySnapshotPayload, type SnapshotReason } from "../engine/observability/memory-snapshot";
 import { forwardMemoryTelemetryToObserve } from "../engine/telemetry/memory-telemetry-observability";
@@ -71,6 +73,8 @@ const engineLogger = {
 	debug: (message: string): void => engineLog("debug", message),
 };
 interface SkinRuntime {
+	skinId: string;
+	vendor: string | null;
 	runtime: MemoryContractRuntime;
 	tracker: AccessTracker;
 	observability: PluginObservability;
@@ -88,6 +92,8 @@ export class MemoryRuntimePool {
 	readonly stateDir: string = getSnoStationMemStateDir();
 	readonly counters: { engineAccesses: number; storeAccesses: number } = { engineAccesses: 0, storeAccesses: 0 };
 	private readonly skins = new Map<string, SkinRuntime>();
+	private readonly profileDir = getSnoProfileDir();
+	private readonly workerRegistrations = new Set<() => void>();
 	private readonly owned = new Set<SkinRuntime>();
 	private maintenance: MaintenanceTimerHandle | undefined;
 	private usageTimer: NodeJS.Timeout | undefined;
@@ -185,9 +191,9 @@ export class MemoryRuntimePool {
 		this.modelPreparation = this.prepareModel();
 		this.store.scheduleLegacyChunkBackfill();
 		const maintenance = readMaintenanceOverrides();
-		this.maintenance = startMaintenanceTimer({ store: this.store, dbPath: this.storePath, stateDir: this.stateDir, remClock: maintenance.now, remVolumeThreshold: maintenance.volumeThreshold,
+		this.maintenance = startMaintenanceTimer({ store: this.store, dbPath: this.storePath, stateDir: this.stateDir, remClock: maintenance.now,
 			mode: this.config.mode, modelCalls: this.settings.modelCalls,
-			remSettings: { mode: this.settings.mode, requestedOperations: this.settings.rem.operations, tickEnabled: this.settings.rem.tick }, hasConnectedHost: () => this.connectedRemPort() !== undefined,
+			remSettings: { mode: this.settings.mode, tickEnabled: this.settings.rem.tick }, hasConnectedHost: () => this.connectedRemPort() !== undefined,
 			backupDir: join(this.stateDir, "backups"), usageOutbox: this.usageOutbox }, maintenance.intervalMs, maintenance.intervalMs,
 			maintenance.intervalMs === undefined ? undefined : uniformMaintenanceIntervals(maintenance.intervalMs));
 		this.startUsageTimer();
@@ -199,6 +205,15 @@ export class MemoryRuntimePool {
 				? observeAgentId(registration.skinId) : this.config.observe.agentId } };
 		let entry: SkinRuntime;
 		const agentPort = new RegisteredAgentPort(registration.model);
+		let vendor: string | null = null;
+		if (registration.skinId === "claude-code") vendor = "anthropic";
+		else if (registration.skinId === "codex") vendor = "openai";
+		const chain = hostChain(() => [...this.skins.values()].reverse(), undefined, registration.skinId);
+		const capturePort: AgentLlmPort = {
+			complete: request => !registration.model || request.callId && ["E13", "E16", "E21", "E24", "E22", "E23"].includes(request.callId)
+				? chain.complete(request) : agentPort.complete(request),
+			reachable: () => chain.reachable?.() ?? Promise.resolve(false),
+		};
 		const observability = new PluginObservability(config, this.stateDir, engineLogger, {}, this.settings.telemetry.redactionRules);
 		const embedder = new ObservableEmbedder(config.embedding, this.stateDir, observability, observeSessionUuid);
 		const retriever = new ObservableMemoryRetriever(this.store, embedder, engineLogger, { ...DEFAULT_RETRIEVAL_CONFIG, ...config.retrieval }, observability, observeSessionUuid, config.embedding);
@@ -207,8 +222,8 @@ export class MemoryRuntimePool {
 		retriever.setRecallLifecycle(config.recallLifecycle);
 		retriever.setTierPromoter(createTierPromoter());
 		const runtime = new MemoryContractRuntime({ config, store: this.store, embedder, retriever, accessTracker: tracker, observability,
-			stateDir: this.stateDir, agentPort, logger: engineLogger, telemetryUsage: this.usageOutbox, recallSettings: this.settings.recall });
-		entry = { runtime, tracker, observability, embedder, agentPort, connected: !!registration.model, active: 0, retired: false, hostSessions: new Map() };
+			stateDir: this.stateDir, agentPort: capturePort, logger: engineLogger, telemetryUsage: this.usageOutbox, recallSettings: this.settings.recall });
+		entry = { skinId: registration.skinId, vendor, runtime, tracker, observability, embedder, agentPort, connected: !!registration.model, active: 0, retired: false, hostSessions: new Map() };
 		this.owned.add(entry);
 		try {
 			const result = await runtime.init(scope, registration);
@@ -228,12 +243,13 @@ export class MemoryRuntimePool {
 			}
 			this.skins.delete(registration.skinId);
 			this.skins.set(registration.skinId, entry);
+			if (registration.model) for (const registered of this.workerRegistrations) registered();
 			if (previous) { previous.retired = true; if (previous.active === 0) await this.dispose(previous); }
 			if (registration.model) this.modelPreparation = this.modelPreparation?.then(() => this.modelReady
 				? this.replayPendingCaptures() : this.prepareModel()).catch(error => engineLogger.error(String(error)));
 			if (registration.model) void Promise.resolve().then(() => evaluateRemAutomaticTriggers({
 				database: this.store.sqlite, stateDir: this.stateDir,
-				mode: this.settings.mode, requestedOperations: this.settings.rem.operations,
+				mode: this.settings.mode,
 				tickEnabled: this.settings.rem.tick, modelCalls: this.settings.modelCalls,
 				hasConnectedHost: () => this.connectedRemPort() !== undefined,
 			})).catch(error => engineLogger.error(String(error)));
@@ -246,7 +262,51 @@ export class MemoryRuntimePool {
 		// call tries the newest registered endpoint; reachability and completion check it afresh, so a
 		// temporary disconnect does not exclude a recovered host. An error hands the call to the next.
 		const hosts = () => [...this.skins.values()].reverse().filter(entry => entry.connected);
-		return hosts().length === 0 ? undefined : hostChain(hosts);
+		return hosts().length === 0 && !existsSync(join(this.profileDir, "station", "host-worker.json"))
+			? undefined : hostChain(hosts, deadlineMs => this.startRecordedWorker(deadlineMs));
+	}
+
+	private async startRecordedWorker(deadlineMs: number): Promise<boolean> {
+		const startedAt = Date.now();
+		let startReason: "registered" | "no-record" | "spawn-error" | "exited" | "timeout" = "no-record";
+		let exitCode: number | null | undefined;
+		try {
+			let record: { node: string; entry: string };
+			try {
+				// The user's worker writes this record in its own profile; no content checks are needed.
+				record = JSON.parse(readFileSync(join(this.profileDir, "station", "host-worker.json"), "utf8"));
+			} catch { return false; }
+			if (deadlineMs <= Date.now()) { startReason = "timeout"; return false; }
+			startReason = "spawn-error";
+			const child = spawn(record.node, [record.entry, "worker"], {
+				detached: true, stdio: "ignore", env: { ...process.env, SNO_PROFILE_DIR: this.profileDir },
+			});
+			child.unref();
+			return await new Promise<boolean>(resolve => {
+				const finish = (reason: typeof startReason): void => {
+					startReason = reason;
+					clearTimeout(timer);
+					this.workerRegistrations.delete(registered);
+					child.removeListener("error", failed);
+					child.removeListener("exit", exited);
+					resolve(reason === "registered");
+				};
+				const registered = (): void => finish("registered");
+				const failed = (): void => finish("spawn-error");
+				const exited = (code: number | null): void => { exitCode = code; finish("exited"); };
+				const timer = setTimeout(() => finish("timeout"), Math.max(0, Math.min(60_000, deadlineMs - Date.now())));
+				this.workerRegistrations.add(registered);
+				child.once("error", failed);
+				child.once("exit", exited);
+			});
+		} catch { return false; }
+		finally {
+			log.info("Recorded host worker start finished", { start_reason: startReason,
+				...(exitCode === undefined ? {} : { exit_code: exitCode }), duration_ms: Date.now() - startedAt }, {
+				event_name: "memory.host.worker.start", file: "packages/memory/src/sidecar/memory-runtime.ts",
+				function: "startRecordedWorker", site_id: "memory.host.worker.start",
+			});
+		}
 	}
 
 	async invoke(method: ContractMethod, raw: unknown, skinId: string, signal?: AbortSignal, deadlineMs?: number): Promise<ContractOutputs[ContractMethod]> {

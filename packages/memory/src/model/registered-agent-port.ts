@@ -57,7 +57,8 @@ export class RegisteredAgentPort implements AgentLlmPort {
 
 	async complete(request: AgentLlmRequest): Promise<AgentLlmCompletion> {
 		const identity = createHash("sha256").update(request.system ?? "").update("\0").update(request.prompt).digest("hex");
-		const failures = this.failures.getStore();
+		// Write judgements report failure per fact; their caller persists the pending mark.
+		const failures = request.callId === "E21" || request.callId === "E22" ? undefined : this.failures.getStore();
 		if (!this.model) {
 			this.onRefused?.();
 			failures?.set(identity, "no-agent-endpoint");
@@ -85,7 +86,7 @@ export class RegisteredAgentPort implements AgentLlmPort {
 				if (relayed) {
 					failures?.set(identity, relayed.kind === "cancelled" ? "timeout" : isTerminalLlmFailure(relayed.category) ? "no-agent-endpoint" : "engine-failed");
 					// A worker whose host child failed answers a typed 503; keep the status so REM counts it as a refusal.
-					if (relayed.kind === "error" && response.status === 503) return { ...relayed, message: `registered model HTTP 503: ${relayed.message}` };
+					if (relayed.kind === "error" && response.status === 503 && relayed.message !== "no-agent-endpoint") return { ...relayed, message: `registered model HTTP 503: ${relayed.message}` };
 					return relayed;
 				}
 				const failure = classifyLlmFailure({ status: response.status });
@@ -145,26 +146,48 @@ function completionText(body: unknown): string | undefined {
 }
 
 /** Hosts in the order to ask them, newest first; `connected` turns false once a host is known to have gone. */
-type HostEntry = { agentPort: RegisteredAgentPort; connected: boolean };
+type HostEntry = { agentPort: RegisteredAgentPort; connected: boolean; skinId: string; vendor: string | null };
 
 /** Asks the newest host first; a host that has gone, or answers with an error such as worker-not-ready, hands the
  * call to the next. */
-export function hostChain(hosts: () => HostEntry[]): AgentLlmPort {
+export function hostChain(hosts: () => HostEntry[], start?: (deadlineMs: number) => Promise<boolean>, preferredSkin?: string): AgentLlmPort {
 	return {
 		complete: async request => {
 			// One deadline for the whole call: a later host gets only the time the earlier ones left.
 			const deadline = Date.now() + (request.timeoutMs ?? CALLBACK_TIMEOUT_MS);
 			let result: AgentLlmCompletion = { kind: "error", category: "transport", message: "no-agent-endpoint" };
-			for (const entry of hosts()) {
-				const timeoutMs = deadline - Date.now();
-				if (timeoutMs <= 0) return { kind: "cancelled", reason: "deadline" };
-				result = await entry.agentPort.complete({ ...request, timeoutMs });
-				if (entry.connected && result.kind !== "error") return result;
+			for (let attempt = 0; attempt < 2; attempt++) {
+				let allGone = true;
+				const target = request.hostTarget;
+				const proposer = target && "otherVendorThan" in target ? target.otherVendorThan : undefined;
+				const entries = hosts().filter(entry => entry.connected);
+				const preferred = proposer?.skinId ?? preferredSkin;
+				const ordered = target && "skinId" in target ? entries.filter(entry => entry.skinId === target.skinId)
+					: entries.sort((a, b) => {
+						const priority = (entry: HostEntry): number => proposer?.vendor && entry.vendor && entry.vendor !== proposer.vendor
+							? 0 : entry.skinId === preferred ? 1 : 2;
+						return priority(a) - priority(b);
+					});
+				for (const entry of ordered) {
+					const timeoutMs = deadline - Date.now();
+					if (request.signal?.aborted) return { kind: "cancelled", reason: "cancelled" };
+					if (timeoutMs <= 0) return { kind: "cancelled", reason: "deadline" };
+					result = await entry.agentPort.complete({ ...request, timeoutMs });
+					if (result.kind === "cancelled") return result;
+					if (entry.connected && result.kind === "ok") return { ...result,
+						responder: { skinId: entry.skinId, vendor: entry.vendor },
+						...(proposer ? { checkedBySameVendor: !proposer.vendor || !entry.vendor || proposer.vendor === entry.vendor } : {}) };
+					if (result.kind !== "error" || result.category !== "transport" || result.message !== "no-agent-endpoint") allGone = false;
+				}
+				if (target || attempt > 0 || !allGone || !start || Date.now() >= deadline || request.signal?.aborted || !await start(deadline)) break;
 			}
 			return result;
 		},
 		reachable: async () => {
 			for (const entry of hosts()) if (await entry.agentPort.reachable()) return true;
+			if (start && await start(Date.now() + 60_000)) {
+				for (const entry of hosts()) if (await entry.agentPort.reachable()) return true;
+			}
 			return false;
 		},
 	};
