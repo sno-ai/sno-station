@@ -666,3 +666,62 @@ export const nodixProfileRecoveryEntries: SQLiteTableWithColumns<{
 	removedValue: text("removed_value").notNull(),
 	removedAtMs: integer("removed_at_ms").notNull(),
 });
+
+export const nodixPlaceModes: SQLiteTableWithColumns<{
+	name: "nodix_place_modes";
+	schema: undefined;
+	columns: {
+		skinId: TextColumn<"skin_id", "nodix_place_modes", true, false, false>;
+		projectId: TextColumn<"project_id", "nodix_place_modes", true, false, false>;
+		surface: TextColumn<"surface", "nodix_place_modes", true, true, false>;
+		mode: TextColumn<"mode", "nodix_place_modes", true, false, false>;
+		decidedAt: IntegerColumn<"decided_at", "nodix_place_modes", true, false, false>;
+	};
+	dialect: "sqlite";
+}> = sqliteTable("nodix_place_modes", {
+	skinId: text("skin_id").notNull(),
+	projectId: text("project_id").notNull(),
+	surface: text("surface").notNull().default(""),
+	mode: text("mode", { enum: ["work", "chat"] }).notNull(),
+	decidedAt: integer("decided_at").notNull(),
+}, (table) => [primaryKey({ columns: [table.skinId, table.projectId, table.surface] })]);
+
+export const nodixPlaceLoadedFiles: SQLiteTableWithColumns<{
+	name: "nodix_place_loaded_files";
+	schema: undefined;
+	columns: {
+		skinId: TextColumn<"skin_id", "nodix_place_loaded_files", true, false, false>;
+		projectId: TextColumn<"project_id", "nodix_place_loaded_files", true, false, false>;
+		surface: TextColumn<"surface", "nodix_place_loaded_files", true, true, false>;
+		files: TextColumn<"files", "nodix_place_loaded_files", true, false, false>;
+		updatedAt: IntegerColumn<"updated_at", "nodix_place_loaded_files", true, false, false>;
+	};
+	dialect: "sqlite";
+}> = sqliteTable("nodix_place_loaded_files", {
+	skinId: text("skin_id").notNull(),
+	projectId: text("project_id").notNull(),
+	surface: text("surface").notNull().default(""),
+	files: text("files").notNull(),
+	updatedAt: integer("updated_at").notNull(),
+}, (table) => [primaryKey({ columns: [table.skinId, table.projectId, table.surface] })]);
+
+export const nodixLoadedFileJudgments: SQLiteTableWithColumns<{
+	name: "nodix_loaded_file_judgments";
+	schema: undefined;
+	columns: {
+		memoryId: TextColumn<"memory_id", "nodix_loaded_file_judgments", true, false, false>;
+		memoryContentHash: TextColumn<"memory_content_hash", "nodix_loaded_file_judgments", true, false, false>;
+		filePath: TextColumn<"file_path", "nodix_loaded_file_judgments", true, false, false>;
+		fileSha256: TextColumn<"file_sha256", "nodix_loaded_file_judgments", true, false, false>;
+		verdict: TextColumn<"verdict", "nodix_loaded_file_judgments", true, false, false>;
+		judgedAt: IntegerColumn<"judged_at", "nodix_loaded_file_judgments", true, false, false>;
+	};
+	dialect: "sqlite";
+}> = sqliteTable("nodix_loaded_file_judgments", {
+	memoryId: text("memory_id").notNull().references(() => nodixMemories.id, { onDelete: "cascade" }),
+	memoryContentHash: text("memory_content_hash").notNull(),
+	filePath: text("file_path").notNull(),
+	fileSha256: text("file_sha256").notNull(),
+	verdict: text("verdict", { enum: ["said", "not-said", "opposite"] }).notNull(),
+	judgedAt: integer("judged_at").notNull(),
+}, (table) => [primaryKey({ columns: [table.memoryId, table.filePath] })]);
