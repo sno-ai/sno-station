@@ -294,7 +294,7 @@ function journalRefusedAttribute(
 		);
 }
 
-function sessionOrdinal(store: MemoryStoreInternals, conversationId: string): number {
+export function sessionOrdinal(store: Pick<MemoryStoreInternals, "sqlite">, conversationId: string): number {
 	const row = store.sqlite
 		.prepare(`
 			WITH conversation_first_write AS (
@@ -441,6 +441,8 @@ function closeOnArrival(
 	prepared: PreparedAtomicCard,
 	order: MemorySourceOrder,
 ): void {
+	// Work-place rows are closed only by the confirmed write judgement.
+	if (prepared.card.metadata?.precision_check === "pending") return;
 	if (!isOneCardinalityAttribute(prepared.card.attribute)) return;
 	// A sibling from the same turn is neither the newest row that would close this one nor an
 	// older row this one closes: the facets of one statement stay live together.

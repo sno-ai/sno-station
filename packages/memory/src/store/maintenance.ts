@@ -92,11 +92,10 @@ const FTS_MERGE_MAX_ITERATIONS = 10;
 export interface MaintenanceDeps {
 	mode?: ProductMode;
 	modelCalls: Settings["modelCalls"];
-	remSettings: { mode: ProductMode; requestedOperations: Settings["rem"]["operations"]; tickEnabled: boolean };
+	remSettings: { mode: ProductMode; tickEnabled: boolean };
 	hasConnectedHost?: () => boolean;
 	store: MemoryStore;
 	remClock?: Date;
-	remVolumeThreshold?: number;
 	usageOutbox?: MemoryTelemetryUsageOutbox;
 	dbPath: string;
 	backupDir: string;
@@ -530,10 +529,9 @@ export function startMaintenanceTimer(
 					database: deps.store.sqlite,
 					stateDir: deps.stateDir,
 					auditStateDir: getSnoStationMemStateDir(),
-					requestedOperations: deps.remSettings.requestedOperations,
 					tickEnabled: deps.remSettings.tickEnabled, modelCalls: deps.modelCalls,
 					mode: deps.mode, hasConnectedHost: deps.hasConnectedHost,
-					now: deps.remClock, volumeThreshold: deps.remVolumeThreshold,
+					now: deps.remClock,
 				});
 			} catch (error) {
 				log.warn("maintenance pass threw", { error }, {
