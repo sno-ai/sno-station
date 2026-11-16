@@ -61,6 +61,61 @@
       "agent-native": "host",
       "rem-enhanced": "host"
     },
+    "E13": {
+      "local-first": "off",
+      "agent-native": "host",
+      "rem-enhanced": "host"
+    },
+    "E14": {
+      "local-first": "off",
+      "agent-native": "host",
+      "rem-enhanced": "sno-gpu"
+    },
+    "E15": {
+      "local-first": "off",
+      "agent-native": "host",
+      "rem-enhanced": "host"
+    },
+    "E16": {
+      "local-first": "off",
+      "agent-native": "host",
+      "rem-enhanced": "host"
+    },
+    "E17": {
+      "local-first": "off",
+      "agent-native": "off",
+      "rem-enhanced": "sno-gpu"
+    },
+    "E19": {
+      "local-first": "off",
+      "agent-native": "host",
+      "rem-enhanced": "host"
+    },
+    "E20": {
+      "local-first": "off",
+      "agent-native": "host",
+      "rem-enhanced": "host"
+    },
+    "E21": {
+      "local-first": "off",
+      "agent-native": "host",
+      "rem-enhanced": "host"
+    },
+    "E22": {
+      "local-first": "off",
+      "agent-native": "host",
+      "rem-enhanced": "host"
+    },
+    "E23": {
+      "local-first": "off",
+      "agent-native": "host",
+      "rem-enhanced": "host"
+    },
+    "E24": {
+      "local-first": "off",
+      "agent-native": "host",
+      "rem-enhanced": "host"
+    },
     "P1": {
       "local-first": "off",
       "agent-native": "host",
@@ -120,46 +175,6 @@
       "local-first": "host",
       "agent-native": "off",
       "rem-enhanced": "off"
-    },
-    "REM1": {
-      "local-first": "host",
-      "agent-native": "host",
-      "rem-enhanced": "sno-gpu"
-    },
-    "REM2": {
-      "local-first": "host",
-      "agent-native": "host",
-      "rem-enhanced": "host"
-    },
-    "REM3": {
-      "local-first": "host",
-      "agent-native": "host",
-      "rem-enhanced": "sno-gpu"
-    },
-    "REM4": {
-      "local-first": "host",
-      "agent-native": "host",
-      "rem-enhanced": "sno-gpu"
-    },
-    "REM5": {
-      "local-first": "host",
-      "agent-native": "host",
-      "rem-enhanced": "sno-gpu"
-    },
-    "REM6": {
-      "local-first": "host",
-      "agent-native": "host",
-      "rem-enhanced": "host"
-    },
-    "REM7": {
-      "local-first": "host",
-      "agent-native": "host",
-      "rem-enhanced": "host"
-    },
-    "REM8": {
-      "local-first": "host",
-      "agent-native": "host",
-      "rem-enhanced": "host"
     }
   },
   "user": {
@@ -213,11 +228,7 @@
     "sessionStrategy": "systemSessionMemory"
   },
   "rem": {
-    "tick": true,
-    "operations": [
-      "rem-replace",
-      "rem-update"
-    ]
+    "tick": true
   },
   "telemetry": {
     "memoryUsage": {
