@@ -295,7 +295,6 @@ export function initDb(dbPath: string, vectorDim: number): DrizzleDB {
 		["extensions", () => loadStorageExtensions(sqlite)],
 		["pragmas", () => sqlite.db.exec("PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000; PRAGMA foreign_keys=ON; PRAGMA synchronous=NORMAL; PRAGMA cache_size=-65536; PRAGMA temp_store=MEMORY; PRAGMA journal_size_limit=67108864;")],
 		["namespace", () => migrateLegacyDatabaseNamespace(sqlite.db, vectorDim)],
-		["rem-columns", () => ensureRemMigrationCompatibilityColumns(sqlite.db)],
 		["migrations", () => migrateCompat(db, { migrationsFolder: MIGRATIONS_DIR })],
 		["entity-keys", () => applyEntityNameKeyMigration(sqlite.db)],
 		["unplaced-candidates", () => migrateUnplacedCandidates(sqlite.db)],
@@ -319,39 +318,4 @@ export function closeDb(db: DrizzleDB): void {
 /** Implements migrate compat as the local SQLite connection setup operation. */
 function migrateCompat(db: RuntimeDrizzleDB, options: { migrationsFolder: string }): void {
 	migrate(db, options);
-}
-
-function ensureRemMigrationCompatibilityColumns(database: SqliteDatabaseLike): void {
-	ensureColumn(database, "nodix_rem_scan_pairs", "budget_invocation_id", "TEXT");
-	ensureColumn(
-		database,
-		"nodix_rem_scan_pairs",
-		"attempt_count",
-		"INTEGER NOT NULL DEFAULT 0 CHECK (attempt_count >= 0)",
-	);
-	ensureColumn(
-		database,
-		"nodix_rem_scan_pairs",
-		"progress_state",
-		"TEXT NOT NULL DEFAULT 'pending' CHECK (progress_state IN ('pending', 'refused', 'closed', 'exhausted'))",
-	);
-	ensureColumn(database, "nodix_rem_scan_pairs", "refusal_reason", "TEXT");
-	ensureColumn(database, "nodix_rem_scan_pairs", "inherited_from_generation_id", "TEXT");
-}
-
-function ensureColumn(
-	database: SqliteDatabaseLike,
-	tableName: "nodix_memory_chunks" | "nodix_rem_scan_pairs",
-	columnName: string,
-	declaration: string,
-): void {
-	const table = database
-		.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?")
-		.get(tableName);
-	if (table === undefined) return;
-	const columns = database.prepare(`PRAGMA table_info(${tableName})`).all() as Array<{
-		name: string;
-	}>;
-	if (columns.some(({ name }) => name === columnName)) return;
-	database.exec(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${declaration}`);
 }

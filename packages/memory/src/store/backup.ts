@@ -191,3 +191,45 @@ export function runBackup(dbPath: string, stateDir: string, options: BackupOptio
 	});
 	return safeBackupPath;
 }
+
+/** Full encrypted snapshot kept outside the daily backup rotation. */
+export function runPrecisionBackup(dbPath: string, stateDir: string): { path: string; rows: number } {
+	mkdirSync(stateDir, { recursive: true });
+	const backupPath = path.resolve(stateDir, `precision-before-cleanup-${formatBackupTimestamp(new Date())}.sqlite`);
+	const source = openSqliteDatabase(dbPath, { fileMustExist: true });
+	loadSqliteVecExtension(source.raw);
+	try {
+		source.db.exec(`VACUUM INTO ${quoteSqliteStringLiteral(backupPath)}`);
+		// Reopen the snapshot under this encrypted connection; normal opens reject its copied database id.
+		source.db.prepare("ATTACH DATABASE ? AS precision_backup").run(backupPath);
+		try {
+			const count = source.db.prepare("SELECT count(*) AS rows FROM precision_backup.nodix_memories").get() as { rows: number };
+			return { path: backupPath, rows: count.rows };
+		} finally {
+			source.db.exec("DETACH DATABASE precision_backup");
+		}
+	} finally {
+		source.db.close();
+	}
+}
+
+/** The successful nightly snapshot replaces earlier precision snapshots and their SQLite side files. */
+export function removeOlderPrecisionBackups(backupPath: string): void {
+	const stateDir = path.dirname(backupPath);
+	const newest = path.basename(backupPath);
+	try {
+		for (const name of readdirSync(stateDir)) {
+			if (!/^precision-before-cleanup-.*\.sqlite(?:-(?:wal|shm|journal))?$/.test(name)
+				|| name === newest || name.startsWith(`${newest}-`)) continue;
+			const file = path.join(stateDir, name);
+			try { rmSync(file); }
+			catch (error) { logPrecisionBackupDeletionFailure(file, error); }
+		}
+	} catch (error) { logPrecisionBackupDeletionFailure(stateDir, error); }
+}
+function logPrecisionBackupDeletionFailure(file: string, error: unknown): void {
+	log.error("Could not remove older precision backup", { target_reason: file, error }, {
+		event_name: "memory.precision.backup.delete_failed", file: "packages/memory/src/store/backup.ts",
+		function: "removeOlderPrecisionBackups", site_id: "memory.precision.backup.delete_failed",
+	});
+}
