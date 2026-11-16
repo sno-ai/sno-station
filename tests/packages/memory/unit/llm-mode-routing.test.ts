@@ -14,7 +14,7 @@ import {
 	modelCallDestination,
 	type ModelCallId,
 } from "../../../../packages/memory/src/model/model-call-table";
-import type { Settings } from "../../../../packages/memory/config/settings";
+import { defaultSettings, settingsSchema, type Settings } from "../../../../packages/memory/config/settings";
 import { pluginConfigSchema } from "../../../../packages/memory/src/engine/shared/types";
 import { DEFAULT_SETTINGS_PATH } from "../fixtures/settings-file-fixture";
 
@@ -75,6 +75,17 @@ const EXPECTED: Record<string, Record<Mode, "off" | "host" | "sno-gpu">> = {
 	E10: { "local-first": "off", "agent-native": "host", "rem-enhanced": "sno-gpu" },
 	E11: { "local-first": "off", "agent-native": "host", "rem-enhanced": "host" },
 	E12: { "local-first": "off", "agent-native": "host", "rem-enhanced": "host" },
+	E13: { "local-first": "off", "agent-native": "host", "rem-enhanced": "host" },
+	E14: { "local-first": "off", "agent-native": "host", "rem-enhanced": "sno-gpu" },
+	E15: { "local-first": "off", "agent-native": "host", "rem-enhanced": "host" },
+	E16: { "local-first": "off", "agent-native": "host", "rem-enhanced": "host" },
+	E17: { "local-first": "off", "agent-native": "off", "rem-enhanced": "sno-gpu" },
+	E19: { "local-first": "off", "agent-native": "host", "rem-enhanced": "host" },
+	E20: { "local-first": "off", "agent-native": "host", "rem-enhanced": "host" },
+	E21: { "local-first": "off", "agent-native": "host", "rem-enhanced": "host" },
+	E22: { "local-first": "off", "agent-native": "host", "rem-enhanced": "host" },
+	E23: { "local-first": "off", "agent-native": "host", "rem-enhanced": "host" },
+	E24: { "local-first": "off", "agent-native": "host", "rem-enhanced": "host" },
 	P1: { "local-first": "off", "agent-native": "host", "rem-enhanced": "sno-gpu" },
 	P2: { "local-first": "host", "agent-native": "host", "rem-enhanced": "host" },
 	P3: { "local-first": "host", "agent-native": "host", "rem-enhanced": "host" },
@@ -83,14 +94,6 @@ const EXPECTED: Record<string, Record<Mode, "off" | "host" | "sno-gpu">> = {
 	P6: { "local-first": "host", "agent-native": "host", "rem-enhanced": "host" },
 	T1: { "local-first": "off", "agent-native": "host", "rem-enhanced": "host" },
 	R1: { "local-first": "off", "agent-native": "host", "rem-enhanced": "host" },
-	REM1: { "local-first": "host", "agent-native": "host", "rem-enhanced": "sno-gpu" },
-	REM2: { "local-first": "host", "agent-native": "host", "rem-enhanced": "host" },
-	REM3: { "local-first": "host", "agent-native": "host", "rem-enhanced": "sno-gpu" },
-	REM4: { "local-first": "host", "agent-native": "host", "rem-enhanced": "sno-gpu" },
-	REM5: { "local-first": "host", "agent-native": "host", "rem-enhanced": "sno-gpu" },
-	REM6: { "local-first": "host", "agent-native": "host", "rem-enhanced": "host" },
-	REM7: { "local-first": "host", "agent-native": "host", "rem-enhanced": "host" },
-	REM8: { "local-first": "host", "agent-native": "host", "rem-enhanced": "host" },
 };
 
 function column(read: (id: ModelCallId) => string): Record<string, string> {
@@ -108,7 +111,7 @@ function sourceCallIds(): Set<string> {
 	for (const entry of readdirSync(SOURCE_ROOT, { recursive: true, withFileTypes: true })) {
 		if (!entry.isFile() || !entry.name.endsWith(".ts")) continue;
 		const text = readFileSync(join(entry.parentPath, entry.name), "utf8");
-		for (const match of text.matchAll(/\/\/ Model call (REM\d+|[EPTR]\d+)\b/gu)) {
+		for (const match of text.matchAll(/(?:\/\/ Model call |callId:\s*["']|json\(night,\s*["'])(REM\d+|[EPTR]\d+)\b/gu)) {
 			const [, id] = match;
 			if (id) ids.add(id);
 		}
@@ -117,6 +120,31 @@ function sourceCallIds(): Set<string> {
 }
 
 describe("model call table", () => {
+	it.each(["E13", "E16", "E21", "E24", "E22", "E23"] as const)(
+		"checking-side case 1: %s defaults agree in table, schema, factory and shipped JSON",
+		callId => {
+			const defaults = defaultSettings();
+			const modelCalls = { ...defaults.modelCalls };
+			Reflect.deleteProperty(modelCalls, callId);
+			const parsed = settingsSchema.parse({ ...defaults, modelCalls, store: { path: "fixture.sqlite", encryptionKey: "a".repeat(64) } });
+			const expected = { "local-first": "off", "agent-native": "host", "rem-enhanced": "host" };
+			expect.soft(MODEL_CALLS[callId].destinations, "table").toEqual(expected);
+			expect.soft(parsed.modelCalls[callId], "schema default").toEqual(expected);
+			expect.soft(defaults.modelCalls[callId], "settings factory").toEqual(expected);
+			expect.soft(SHIPPED_MODEL_CALLS[callId], "generated settings").toEqual(expected);
+			expect(MODEL_CALLS.E1.destinations).toEqual(EXPECTED.E1);
+			expect(parsed.modelCalls.E1).toEqual(EXPECTED.E1);
+			expect(SHIPPED_MODEL_CALLS.E1).toEqual(EXPECTED.E1);
+		},
+	);
+	it.each([
+		["E15", { "local-first": "off", "agent-native": "host", "rem-enhanced": "host" }],
+		["E20", { "local-first": "off", "agent-native": "host", "rem-enhanced": "host" }],
+		["E19", { "local-first": "off", "agent-native": "host", "rem-enhanced": "host" }],
+	] as const)("declares %s destinations for nightly session-start work", (callId, destinations) => {
+		expect(MODEL_CALLS[callId].destinations).toEqual(destinations);
+	});
+
 	it("marks exactly the memory service's rows in the product source", () => {
 		expect([...sourceCallIds()].sort()).toEqual(Object.keys(EXPECTED).sort());
 	});
@@ -179,18 +207,11 @@ describe("model call transport", () => {
 			transport: "raw-completions",
 			parser: "json",
 		});
-		expect(resolveLlmRoute({ callId: "REM1", config })).toEqual({
-			tier: "snoRemMem",
-			destination: "sno-gpu",
-			transport: "raw-completions",
-			parser: "single-token-verdict",
-		});
 	});
 
 	it("uses the call's host transport on every host route and refuses the removed flavor key", () => {
 		const host = { tier: "agent", destination: "host", transport: "agent-host-seam", parser: "json" };
 		expect(resolveLlmRoute({ callId: "E1", config: llmRoutingConfigSchema.parse({ mode: "agent-native", modelCalls: SHIPPED_MODEL_CALLS }) })).toEqual(host);
-		expect(resolveLlmRoute({ callId: "REM2", config: llmRoutingConfigSchema.parse({ mode: "rem-enhanced", modelCalls: SHIPPED_MODEL_CALLS }) })).toEqual(host);
 		for (const callId of ["E2", "E4", "E5", "E6", "E7", "E8", "E12"] as const) {
 			expect(resolveLlmRoute({ callId, config: llmRoutingConfigSchema.parse({ mode: "rem-enhanced", modelCalls: SHIPPED_MODEL_CALLS }) })).toEqual(host);
 		}
