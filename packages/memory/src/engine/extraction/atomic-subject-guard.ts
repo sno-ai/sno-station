@@ -63,6 +63,7 @@ export interface AtomicSubjectGuardTransport {
 }
 
 export interface RunAtomicSubjectGuardInput {
+	captureMode?: import("../../store/store").CaptureMode;
 	records: readonly AtomicKeyedRecord[];
 	turns: readonly AtomicExtractionTurn[];
 	transport: AtomicSubjectGuardTransport;
@@ -219,7 +220,8 @@ async function repairMissingHalves(
 			}
 			if (records === null || records.length === 0) return [];
 			const repaired = await runAtomicExtractionGauntlet({
-				records,
+				captureMode: input.captureMode,
+				records: input.captureMode === "work" ? records.map(record => ({ ...record, precisionKind: episode.precisionKind })) : records,
 				turns: input.turns,
 				resplit: true,
 				...(input.locale ? { locale: input.locale } : {}),
