@@ -529,6 +529,50 @@ describe("sidecar keeps serving", () => {
 	});
 
 
+	it("accepts scope alone and boolean full, and rejects non-boolean full", async () => {
+		// Keep the Unix socket path short while the fixture stays inside TMPDIR.
+		const directory = root;
+		const fd = openSync(directory, "r");
+		root = `/proc/self/fd/${fd}`;
+		process.env.SNO_PROFILE_DIR = root;
+		try {
+			writeSettings({ mode: "agent-native" });
+			await health();
+			const host = await startRecorder(closers, ({ raw }) => modelReply('{"rows":[{"id":"route-full","verdict":"keep","kind":"fact","origin":"owner","about_user":false}]}', raw));
+			expect((await contractPost("/v1/init", { scope: { principal: "caller", project: "global", session: "rem-host" }, registration: {
+				skinId: "rem-host", model: { baseUrl: `${host.url}/v1`, credential: "loopback-credential", model: "loopback-model" },
+			} })).status).toBe(200);
+			database.sqlite.prepare(`INSERT INTO nodix_memories(id, fact_id, text, category, project_id, importance, timestamp, timezone, metadata, content_hash)
+				VALUES ('route-full', 'route-full', 'The project uses WAL mode.', 'episodic', 'global', 0.7, 1, 'UTC', '{}', ?)`)
+				.run("a".repeat(64));
+			database.sqlite.exec("CREATE TABLE IF NOT EXISTS nodix_memory_migration_markers (name TEXT PRIMARY KEY, applied_at INTEGER NOT NULL, payload TEXT NOT NULL)");
+			database.sqlite.prepare("INSERT INTO nodix_memory_migration_markers VALUES ('memory-precision-last-night', ?, ?)")
+				.run(Date.now(), JSON.stringify({ day: new Date(Date.now()).toLocaleDateString("en-CA") }));
+			for (const full of ["true", 1, null, {}, []]) {
+				const response = await contractPost("/rem/run", { scope: "global", full });
+				expect(response.status).toBe(400);
+				expect(await response.json()).toEqual({ error: "invalid_request" });
+			}
+			for (const body of [{ scope: "global" }, { scope: "global", full: false }, { scope: "global", full: true }]) {
+				const response = await contractPost("/rem/run", body);
+				expect(response.status).toBe(202);
+				const job = await response.json();
+				expect(job).toMatchObject({ job_id: expect.any(String) });
+				await expect.poll(async () => (await (await fetch(`http://127.0.0.1:${sidecar?.port}/rem/jobs/${job.job_id}`, { headers: tokenHeader() })).json()).state,
+					{ timeout: 10_000 }).toBe("done");
+				expect(database.sqlite.prepare("SELECT json_extract(metadata, '$.precision_judged') AS judged FROM nodix_memories WHERE id = 'route-full'").get())
+					.toEqual({ judged: "full" in body && body.full ? 1 : null });
+			}
+		} finally {
+			await sidecar?.stop();
+			sidecar = undefined;
+			root = directory;
+			process.env.SNO_PROFILE_DIR = root;
+			closeSync(fd);
+		}
+	});
+
+
 	it("serves without a bearer token", () => health(false));
 	it.each(["/v1/inspect", "/rem/run"])("rejects oversized request bodies at %s", async (route) => {
 		await health();
