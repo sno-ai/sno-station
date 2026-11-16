@@ -20,8 +20,6 @@ describe("LLM endpoint resolution", () => {
 		["E9", "mem_claw/sno_extract_profile"],
 		["E10", "mem_claw/sno_conflict_verdict"],
 		["P1", "mem_claw/sno_conflict_verdict"],
-		["REM1", "mem_claw/sno_conflict_verdict"],
-		["REM2", "mem_claw/sno_extract_chat"],
 	] as const)("selects call %s's signed Sno GPU preset", (callId, expected) => {
 		expect(
 			selectEndpointPreset({

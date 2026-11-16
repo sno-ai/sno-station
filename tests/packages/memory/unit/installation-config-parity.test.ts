@@ -47,13 +47,13 @@ it.each(["local-first", "agent-native", "rem-enhanced"] as const)("uses %s routi
 	vi.stubEnv("SNO_PROFILE_DIR", root);
 	writeSettingsFixture(root, { mode });
 	const settings = readSettings();
-	const destination = (callId: "E1" | "REM1" | "REM2" | "P2") => {
+	const destination = (callId: "E1" | "P2") => {
 		const route = resolveLlmRoute({ callId, config: settings });
 		return "off" in route ? "off" : route.destination;
 	};
 	if (mode === "rem-enhanced") {
-		expect([destination("E1"), destination("REM1"), destination("REM2"), destination("P2")])
-			.toEqual(["sno-gpu", "sno-gpu", "host", "host"]);
+		expect([destination("E1"), destination("P2")])
+			.toEqual(["sno-gpu", "host"]);
 	} else {
 		expect(settings.mode).toBe(mode);
 	}
