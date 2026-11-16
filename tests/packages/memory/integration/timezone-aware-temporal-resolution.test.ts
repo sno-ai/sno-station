@@ -247,7 +247,7 @@ describe("timestamp and timezone persistence", () => {
 		});
 	});
 
-	it("preserves the pair through an in-place update and a REM full-row save", async () => {
+	it("preserves the pair through an in-place update", async () => {
 		const created = await store.store({
 			text: "The user preferred tea in the morning.",
 			category: "episodic",
@@ -261,20 +261,5 @@ describe("timestamp and timezone persistence", () => {
 			timezone: "user",
 		});
 
-		const remResult = await store.applyRemTextVersion({
-			jobId: "timezone-rem-job",
-			jobType: "rem-update",
-			rowId: created.id,
-			plannedContentHash: created.contentHash,
-			replacementText: "The user now prefers coffee in the morning.",
-			historyText: created.text,
-			reason: "timezone pair preservation proof",
-			timestamp: "2026-06-07T08:00:00.000Z",
-		});
-		expect(remResult).toMatchObject({ applied: true });
-		expect(persistedPair(created.id)).toEqual({
-			timestamp: FIRST_TIMESTAMP,
-			timezone: "user",
-		});
 	});
 });

@@ -48,7 +48,7 @@ it("loads durable jobs and truncates the incomplete UTF-8 tail without whole-fil
 	const root = await fixture();
 	const path = join(root, "rem-wave-jobs.jsonl");
 	const record = { payloadVersion: 1, waveId: "wave-one", correlationId: "corr-one", scope: "项目",
-		requestedOperations: ["rem-update"], state: "running", startedAt: "2026-09-17T00:00:00.000Z",
+		state: "running", startedAt: "2026-09-17T00:00:00.000Z",
 		finishedAt: null, stats: { operations: 0 } };
 	const durable = `${JSON.stringify(record)}\n`;
 	await fsp.writeFile(path, `${durable}{"partial":"尾`);
