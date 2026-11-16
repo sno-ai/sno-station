@@ -195,7 +195,7 @@ Object.assign(MemoryStore.prototype, {
 			throw new StorageError("update: timestamp and timezone must change together");
 		}
 		const writerAuthority = safeChanges.writerAuthority ?? "extraction";
-		if (safeChanges.text !== undefined) {
+		if (safeChanges.text !== undefined && writerAuthority !== "offline-family") {
 			const atomicRow = this.sqlite
 				.prepare(
 					"SELECT extractor_version AS extractorVersion FROM nodix_memories WHERE id = ? LIMIT 1",
@@ -476,6 +476,7 @@ Object.assign(MemoryStore.prototype, {
 		this: MemoryStoreInternals,
 		memoryId: string,
 		patch: Partial<MemoryMetadata>,
+		options?: { writerAuthority?: "offline-family" },
 	): Promise<void> {
 		log.debug("updating metadata", { memory_id: memoryId }, {
 			event_name: "sno_station_mem.memory-store-update-api.updating.metadata",
@@ -487,7 +488,7 @@ Object.assign(MemoryStore.prototype, {
 			const read = readMetadataRow(this, memoryId);
 			if (!read) return;
 			assertNotLegacyTaskRow(read.current);
-			assertGenericMetadataWriteAuthority(read.row.category, "updateMetadata");
+			assertWriterAuthority(read.row.category, options?.writerAuthority ?? "extraction", "updateMetadata");
 			const next = sanitizeMemoryMetadataObject(mergeMetadata(read.current, patch));
 			assertStorageAxesUnchanged(read.current, next, "updateMetadata");
 			assertMetadataOnlyUpdatePreservesHashInput("updateMetadata", read.current, next);
