@@ -37,6 +37,33 @@ La versión para varias computadoras conecta agentes por LAN o Tailscale. Cada c
 
 [Guía breve](../reach.md)
 
+## Finish
+
+Dale a tu agente una tarea y una hora, y vete. A esa hora un agente arranca y hace el trabajo, con la conversación abierta o cerrada.
+
+```text
+Revisa la compilación nocturna mañana a las 9 y dime qué falló.
+```
+
+| Quieres | Qué haces |
+|---|---|
+| **Timed tasks** | Dile la hora a tu agente en Claude Code o Codex. Una vez, cada día o cada semana. |
+| **Vigilar una ejecución larga hasta el final** | Pide a tu agente que la revise cada pocos minutos hasta que termine. |
+| **Trabajo que sobrevive a un límite de uso** | Dile al agente que trabaja que use `rotate-agent`. Otro agente continúa. |
+
+Mira qué está programado y qué no salió según lo previsto:
+
+```bash
+sno heartbeat --due
+sno heartbeat --due --problems
+```
+
+Una tarea que no pudo arrancar sigue pendiente, con el motivo escrito al lado. Tu agente también te lo dice al empezar la siguiente conversación.
+
+Todavía no: Timed tasks solo arrancan Claude Code y Codex, y un reinicio completo del ordenador aún no ha pasado una prueba real.
+
+[Empieza a usar Finish](../finish.md)
+
 ## Entrega el trabajo esta noche. Por la mañana te esperan resultados, no tres preguntas.
 
 Tres cosas que nos pasaron antes de construir esto:
@@ -265,6 +292,7 @@ La computadora aparece sola en [tu página de computadoras](https://www.sno.ai/d
 | El trabajo interrumpido continúa, y una tarea sobrevive a la compactación | Nuevo en 2.0; ejecutado con agentes reales de Claude Code y Codex |
 | Una lección aprobada funciona desde la próxima respuesta | Nuevo en 2.0; ejecutado con agentes reales de Claude Code y Codex |
 | Los mensajes esperan mientras escribes o un agente compacta su contexto | Nuevo en 2.0; ejecutado con agentes reales de Claude Code y Codex |
+| Finish: Timed tasks arrancan un agente a la hora que dijiste | Nuevo; ejecutado con agentes reales de Claude Code y Codex: en Linux con la conversación abierta y cerrada, y en macOS en una conversación nueva. Consulta la [guía de Finish](../finish.md). |
 
 Una fila dice "probado" solo cuando se ha ejecutado en una máquina limpia.
 

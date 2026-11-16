@@ -37,6 +37,33 @@ Die rechnerübergreifende Version verbindet Agenten über LAN oder Tailscale. Au
 
 [Kurzanleitung](../reach.md)
 
+## Finish
+
+Geben Sie Ihrem Agenten eine Aufgabe und eine Uhrzeit, dann gehen Sie. Zu dieser Zeit startet ein Agent und erledigt die Arbeit, ob die Unterhaltung offen ist oder geschlossen.
+
+```text
+Prüfe morgen um 9 Uhr den Nightly-Build und sag mir, was fehlgeschlagen ist.
+```
+
+| Sie möchten | Was Sie tun |
+|---|---|
+| **Timed tasks** | Nennen Sie Ihrem Agenten in Claude Code oder Codex die Zeit. Einmal, täglich oder wöchentlich. |
+| **Einen langen Lauf bis zum Ende beobachten** | Bitten Sie Ihren Agenten, alle paar Minuten nachzusehen, bis der Lauf fertig ist. |
+| **Arbeit, die ein Nutzungslimit überlebt** | Sagen Sie dem arbeitenden Agenten, er soll `rotate-agent` verwenden. Ein anderer Agent macht weiter. |
+
+So sehen Sie, was geplant ist und was nicht wie geplant lief:
+
+```bash
+sno heartbeat --due
+sno heartbeat --due --problems
+```
+
+Eine Aufgabe, die nicht starten konnte, bleibt fällig, mit dem Grund daneben. Ihr Agent sagt es Ihnen auch zu Beginn der nächsten Unterhaltung.
+
+Noch nicht: Timed tasks starten nur Claude Code und Codex, und ein vollständiger Neustart des Rechners wurde noch nicht real getestet.
+
+[Finish verwenden](../finish.md)
+
 ## Geben Sie die Arbeit heute Abend ab. Morgen früh gibt es Ergebnisse statt drei Rückfragen.
 
 Drei Dinge, die uns passiert sind, bevor wir das hier gebaut haben:
@@ -305,6 +332,7 @@ Einen Update-Schritt gibt es nicht: `sno` aktualisiert sich selbst, wenn es ein 
 | Unterbrochene Arbeit geht weiter, und eine Aufgabe übersteht das Komprimieren | Neu in 2.0; mit echten Claude-Code- und Codex-Agenten gelaufen |
 | Eine freigegebene Lektion wirkt bei der nächsten Antwort | Neu in 2.0; mit echten Claude-Code- und Codex-Agenten gelaufen |
 | Nachrichten warten, während Sie tippen oder ein Agent seinen Kontext komprimiert | Neu in 2.0; mit echten Claude-Code- und Codex-Agenten gelaufen |
+| Finish: Timed tasks starten einen Agenten zur genannten Zeit | Neu; mit echten Claude-Code- und Codex-Agenten gelaufen: unter Linux mit offener und geschlossener Unterhaltung, unter macOS in einer neuen Unterhaltung. Siehe die [Finish-Anleitung](../finish.md). |
 
 Eine Zeile sagt „nachgewiesen“ erst, wenn sie auf einer sauberen Maschine gelaufen ist.
 
