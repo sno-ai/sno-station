@@ -51,7 +51,6 @@ const providerConfigSchema = z
 	.prefault({});
 
 const ONBOARDING_PROFILES = ["local-active", "capture-only", "manual-only", "custom"] as const;
-const REM_OPERATIONS = ["rem-replace", "rem-update"] as const;
 
 type PluginConfigOutput = {
 		embedding: z.output<typeof embeddingConfigSchema>;
@@ -89,7 +88,6 @@ type PluginConfigOutput = {
 		debugContent: boolean;
 		mode: (typeof PRODUCT_MODES)[number];
 		modelCalls?: Settings["modelCalls"];
-		remOperations: (typeof REM_OPERATIONS)[number][];
 		remEnhanced?: { trigger: { tick: boolean } };
 		onboarding?:
 			| { version: number; completedAt: string; profile: (typeof ONBOARDING_PROFILES)[number] }
@@ -177,7 +175,6 @@ const pluginConfigBaseSchema = z
 		 */
 		mode: z.enum(PRODUCT_MODES).default(DEFAULT_MODEL_MODE),
 		modelCalls: modelCallsConfigSchema,
-		remOperations: z.array(z.enum(REM_OPERATIONS)).min(1).max(2).default([...REM_OPERATIONS]),
 		remEnhanced: remEnhancedConfigSchema,
 		/**
 		 * Installer completion marker (bin/_onboarding-core.js writes it into
