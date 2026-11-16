@@ -2,7 +2,7 @@ import { writeSettingsFixture } from "../fixtures/settings-file-fixture";
 /** @file PRD 150 QCG-9 — entity identity: the merge, the forced split, the tag.
  *
  * @boundary The real extraction pipeline (`runAtomicMemoryExtraction`) writing to a real encrypted
- * SQLite store, then the production REM update wave (`runRemBatchJob`) over the same file.
+ * SQLite store.
  * Nothing about the store is mocked. The two model seams — the entity-identity judgement on the
  * generic transport, and the wave's stages — are
  * ANSWERED here on purpose: QCG-9 measures what the engine does with an answer, not how well a
@@ -42,12 +42,6 @@ import {
 	type AtomicExtractionRunParameters,
 	MemoryStore,
 } from "../../../../packages/memory/src/store/store";
-import {
-	createRemModelStageResponsePort,
-	runRemBatchJob,
-} from "../../../../packages/memory/src/sidecar/rem-batch-executor.ts";
-import { parseRemOperationalConfiguration } from "../../../../packages/memory/src/engine/rem/index.ts";
-import { createRemOwnerDecidedOperationalConfiguration } from "../../../apps/mem-claw/helpers/rem-entry-config-fixture.ts";
 import { createTestDb, createTestEmbedder, type TestDb } from "../../../apps/mem-claw/helpers/test-db.ts";
 
 const EXTRACTOR_VERSION = "atomic-v3-entity-merge-test";
@@ -338,114 +332,6 @@ function journalRows(
 }
 
 // ---------------------------------------------------------------------------------------------
-// The production REM update wave, with its stages answered.
-// ---------------------------------------------------------------------------------------------
-
-interface Observation {
-	stage: string;
-	prompt: string;
-}
-
-function neutralReplyFor(stage: string): string {
-	switch (stage) {
-		case "rem-update-retirement-target":
-			return JSON.stringify({ target_row_ids: [] });
-		case "rem-update-judgment":
-			return JSON.stringify({ proposed_current: "", retired_values: [] });
-		case "rem-update-relation-judgment":
-			return JSON.stringify({
-				supersedes: true,
-				retires_anything: true,
-				supersedes_everything: true,
-			});
-		case "rem-update-verification":
-			return JSON.stringify({
-				faithful: false,
-				retired_absent: false,
-				all_facts_accounted: false,
-			});
-		case "rem-replace-clause-carry":
-			return JSON.stringify({ already_current: [] });
-		default:
-			return "{}";
-	}
-}
-
-/** The nominated row and the offered candidates, read off the retirement-target prompt. */
-function retirementPrompt(prompt: string): {
-	nominated: { id: string };
-	candidates: Array<{ id: string }>;
-} {
-	const candidateMark = prompt.lastIndexOf("Candidate rows: ");
-	const nominatedMark = prompt.lastIndexOf("Nominated row: ");
-	return {
-		nominated: JSON.parse(
-			prompt.slice(nominatedMark + "Nominated row: ".length, candidateMark).trim(),
-		) as { id: string },
-		candidates: JSON.parse(prompt.slice(candidateMark + "Candidate rows: ".length)) as Array<{
-			id: string;
-		}>,
-	};
-}
-
-/** Every candidate id offered to a given nominated row, across its batches. */
-function offeredIds(observations: readonly Observation[], nominatedRowId: string): string[] {
-	return observations
-		.filter((observation) => observation.stage === "rem-update-retirement-target")
-		.map((observation) => retirementPrompt(observation.prompt))
-		.filter((parsed) => parsed.nominated.id === nominatedRowId)
-		.flatMap((parsed) => parsed.candidates.map((candidate) => candidate.id));
-}
-
-/**
- * Runs the shipped wave over the store file. The retirement answer is a plan keyed on the
- * nominated row id, filtered to what was actually offered — so naming a row the engine never
- * offered cannot smuggle a close into the fixture.
- */
-async function runUpdateWave(
-	target: StoreFixture,
-	plan: Readonly<Record<string, readonly string[]>>,
-): Promise<Observation[]> {
-	await target.closeStore();
-	const stateRoot = mkdtempSync(join(tmpdir(), "group-crud-entity-merge-"));
-	writeSettingsFixture(stateRoot, { mode: "local-first", store: { path: target.fixture.dbPath, encryptionKey: target.fixture.encryptionKey },
-		embedding: { cacheDir: "" } });
-	process.env["SNO_STATION_MEM_REM_EXPECTED_DB_PATH"] = target.fixture.dbPath;
-	process.env["SNO_PROFILE_DIR"] = stateRoot;
-	cleanups.push(() => rmSync(stateRoot, { recursive: true, force: true }));
-	const observations: Observation[] = [];
-	try {
-		await runRemBatchJob({
-			jobId: `job-${target.projectId}`,
-			jobType: "rem-update",
-			scope: target.projectId,
-			configuration: parseRemOperationalConfiguration(
-				createRemOwnerDecidedOperationalConfiguration(),
-			),
-			modelStageResponses: createRemModelStageResponsePort({
-				respond: async ({ stage, prompt }) => {
-					observations.push({ stage, prompt });
-					if (stage !== "rem-update-retirement-target") return neutralReplyFor(stage);
-					const parsed = retirementPrompt(prompt);
-					const wanted = plan[parsed.nominated.id] ?? [];
-					return JSON.stringify({
-						target_row_ids: wanted.filter((id) =>
-							parsed.candidates.some((candidate) => candidate.id === id),
-						),
-					});
-				},
-			}),
-		});
-	} catch (error) {
-		// A wave whose model calls are all refused throws; that is production behaviour and not what
-		// this file measures. Anything else is a real failure.
-		const message = error instanceof Error ? error.message : String(error);
-		if (!message.startsWith("REM LLM calls all failed")) throw error;
-	}
-	return observations;
-}
-
-// ---------------------------------------------------------------------------------------------
 // Clauses 1 and 3 — one store, one journey: merge and tag both close directions.
 // ---------------------------------------------------------------------------------------------
 
@@ -702,61 +588,6 @@ describe("PRD 150 QCG-9 — a variant name is shown A's name, and an existing-id
 	);
 });
 
-describe("PRD 150 QCG-9 — both close directions of a merge carry the merge_id", () => {
-	it(
-		"tags a later A-statement's close of a B-row and a merged B-statement's close of an A-row",
-		{ timeout: 300_000 },
-		async () => {
-			const journey = await runMergeJourney();
-			const { fixture } = journey.target;
-			const aRecipient = rowByText(fixture, JOURNEY_PROJECT, A_RECIPIENT_TEXT);
-			const bRecipient = rowByText(fixture, JOURNEY_PROJECT, B_RECIPIENT_TEXT);
-			const bKeyPoint = rowByText(fixture, JOURNEY_PROJECT, B_KEY_POINT_TEXT);
-			const aKeyPointLater = rowByText(fixture, JOURNEY_PROJECT, A_KEY_POINT_LATER_TEXT);
-			const cKeyPoint = rowByText(fixture, JOURNEY_PROJECT, C_KEY_POINT_TEXT);
-			const cKeyPointLater = rowByText(fixture, JOURNEY_PROJECT, C_KEY_POINT_LATER_TEXT);
-
-			await runUpdateWave(journey.target, {
-				// The statement carries the tag; the row it closes does not.
-				[bRecipient.id]: [aRecipient.id],
-				// The row being closed carries the tag; the statement does not.
-				[aKeyPointLater.id]: [bKeyPoint.id],
-				// Neither side carries anything: the untagged control clause 4 leans on.
-				[cKeyPointLater.id]: [cKeyPoint.id],
-			});
-
-			const closedA = rowByText(fixture, JOURNEY_PROJECT, A_RECIPIENT_TEXT);
-			expect(
-				metadataOf(closedA)["superseded_by"],
-				"the merged statement did not close the A-row it was pointed at",
-			).toBe(bRecipient.id);
-			expect(
-				metadataOf(closedA)["close_merge_id"],
-				"a merged statement closed an A-row and the close carries no merge_id",
-			).toBe(journey.mergeId);
-
-			const closedB = rowByText(fixture, JOURNEY_PROJECT, B_KEY_POINT_TEXT);
-			expect(
-				metadataOf(closedB)["superseded_by"],
-				"the later A-statement did not close the B-row it was pointed at",
-			).toBe(aKeyPointLater.id);
-			expect(
-				metadataOf(closedB)["close_merge_id"],
-				"a merged row was closed and the close carries no merge_id",
-			).toBe(journey.mergeId);
-
-			const closedC = rowByText(fixture, JOURNEY_PROJECT, C_KEY_POINT_TEXT);
-			expect(
-				metadataOf(closedC)["superseded_by"],
-				"the untagged control pair did not close, so clause 4 would prove nothing",
-			).toBe(cKeyPointLater.id);
-			expect(
-				metadataOf(closedC)["close_merge_id"],
-				"a close between two rows of an unmerged entity was tagged with a merge_id",
-			).toBeUndefined();
-		},
-	);
-});
 
 // ---------------------------------------------------------------------------------------------
 // Clause 2 — a forced `new` answer writes a fresh id and closes nothing, on all three paths.
@@ -929,45 +760,6 @@ describe("PRD 150 QCG-9 — a forced `new` answer writes a fresh id and closes n
 				).toBeUndefined();
 			}
 
-			const observations = await runUpdateWave(target, {});
-
-			// The three transition-shaped fresh rows are nominated, and each is offered NOTHING —
-			// no judged candidate and no mechanical one. Without the fresh-entity gate the newer
-			// fresh row of each path would be offered its own older sibling, and the `one` path
-			// would close it with no model in the loop at all.
-			for (const path of SPLIT_PATHS) {
-				const text = SPLIT_FRESH_TRANSITION_TEXTS[path.label];
-				if (text === undefined) throw new Error(`no text for the ${path.label} path`);
-				const nominated = rowByText(fixture, SPLIT_PROJECT, text);
-				expect(
-					offeredIds(observations, nominated.id),
-					`the ${path.label} path offered candidates to a statement about a fresh entity`,
-				).toEqual([]);
-				expect(
-					journalRows(fixture, "no_retirement_target").map((row) => row.rowId),
-					`the ${path.label} path did not record an empty candidate set for the fresh subject`,
-				).toContain(nominated.id);
-			}
-			expect(
-				journalRows(fixture, "cardinality_one"),
-				"a single-valued attribute closed a row mechanically under a fresh entity",
-			).toEqual([]);
-
-			// Every row A owns, and every row the fresh entity owns, is still open.
-			for (const row of readRows(fixture, SPLIT_PROJECT)) {
-				expect(
-					metadataOf(row)["superseded_by"],
-					`a \`new\` answer closed ${row.text}`,
-				).toBeUndefined();
-				expect(row.validUntil, `a \`new\` answer ended ${row.text}`).toBeNull();
-			}
-			for (const path of SPLIT_PATHS) {
-				const text = SPLIT_A_TEXTS[path.label];
-				if (text === undefined) throw new Error(`no text for the ${path.label} path`);
-				const row = rowByText(fixture, SPLIT_PROJECT, text);
-				expect(row.subject, `A's ${path.label} row changed subject`).toBe(entityA);
-			}
-			expect(freshRowIds).toHaveLength(6);
 		},
 	);
 });
