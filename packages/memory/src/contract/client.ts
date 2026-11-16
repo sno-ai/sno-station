@@ -168,7 +168,8 @@ export class MemoryClient implements MemoryContract {
 		try { return await this.request("inspect", { op, scope }); }
 		catch (error) {
 			let result: InspectData;
-			if (op.op === "storage") result = { op: "storage", dimension: null, failed: true };
+			if (op.op === "precision") result = { op: "precision", nights: [], pending: { project: [], shared: [] }, notFit: { project: 0, shared: 0 }, contradictions: [], lines: [] };
+			else if (op.op === "storage") result = { op: "storage", dimension: null, failed: true };
 			else if (op.op === "stats") result = { op: "stats", total: 0, projectBreakdown: {}, categoryBreakdown: {} };
 			else if (op.op === "get") result = { op: "get", entry: null };
 			else if (op.op === "projects") result = { op: "projects", projects: [] };
