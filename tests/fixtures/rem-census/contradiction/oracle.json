@@ -1,5 +1,0 @@
-[
-  { "input": { "sameFactKey": true, "valuesConflict": true }, "expected": "yes" },
-  { "input": { "sameFactKey": true, "valuesConflict": false }, "expected": "no" },
-  { "input": { "sameFactKey": false, "valuesConflict": true }, "expected": "undetermined" }
-]
