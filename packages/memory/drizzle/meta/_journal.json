@@ -239,6 +239,20 @@
       "when": 1740000000033,
       "tag": "0033_todo_own_store",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1740000000034,
+      "tag": "0034_memory_precision",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1740000000035,
+      "tag": "0035_remove_older_rem_steps",
+      "breakpoints": true
     }
   ]
 }
