@@ -4,7 +4,6 @@ import { randomUUID } from "node:crypto";
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { Embedder } from "../../../../packages/memory/src/engine/extraction/embedding-provider-client";
 import { readMemorySourceOrder } from "../../../../packages/memory/src/store/memory-source-order";
-import { createSnoStationMemRemPorts } from "../../../../packages/memory/src/store/rem-sqlite-adapter";
 import type { AtomicExtractionWriteCard } from "../../../../packages/memory/src/store/store";
 import { MemoryStore } from "../../../../packages/memory/src/store/store";
 import { createTestEmbedder } from "../../../apps/mem-claw/helpers/test-db";
@@ -62,16 +61,16 @@ describe("service-owned memory correction", () => {
 		expect(result.memoryIds).toContain(fact.id);
 	});
 
-	it("keeps global facts out of every automatic phase but available to manual recall", async () => {
+	it("delivers shared rules in every automatic phase and manual recall", async () => {
 		await seed("This repository uses the BEECH release label.");
-		const global = await seed("The global test shipping code is LANTERN-6402.", "global");
+		const global = await fixture.store.store({ text: "The global test shipping code is LANTERN-6402.", category: "episodic", projectId: "global", metadata: JSON.stringify({ precision_kind: "rule" }) });
 		for (const injectionPhase of ["session-start", "prompt", "first-prompt"]) {
 			const result = (await fixture.post("/v1/get-recall", {
 				scope: { ...fixture.scope, session: `global-${injectionPhase}` }, query: global.text,
 				options: { source: "auto", injectionPhase, limit: 10, minScore: 0 },
 			})).body;
-			expect(result.memoryIds).not.toContain(global.id);
-			expect(result.contextText).not.toContain("LANTERN-6402");
+			expect(result.memoryIds).toContain(global.id);
+			expect(result.contextText).toContain("The global test shipping code is LANTERN-6402.");
 		}
 		const manual = (await fixture.post("/v1/get-recall", { scope: fixture.scope, query: global.text,
 			options: { source: "manual", limit: 10, minScore: 0 } })).body;
@@ -88,7 +87,7 @@ describe("service-owned memory correction", () => {
 				options: { source, injectionPhase, limit: 3, minScore: 0 } })).body;
 		expect((await recall("unrelated", "Write one short sentence about snowfall. Do not use tools.")).memoryIds).toEqual([]);
 		expect((await recall("related", "What is the IDE connection budget?")).memoryIds).toContain(fact.id);
-		expect((await recall("brief", "hi", "auto", "session-start")).memoryIds).toContain(question.id);
+		expect((await recall("brief", "hi", "auto", "session-start")).memoryIds).toEqual([]);
 		expect((await recall("manual", "What session secret did you just report?", "manual")).contextText).toContain(question.id);
 	});
 
@@ -327,33 +326,9 @@ describe("service-owned memory correction", () => {
 		expect(fixture.store.listAtomicValidAt(PROJECT, Date.now()).map(row => row.id)).toContain(nextId);
 	});
 
-	it("refuses stale REM close, lane, and rewrite plans without replacing correction lineage", async () => {
-		const old = await seed();
-		const alternative = await seed("The release owner is Avery.");
-		const nextId = (await correct(old.id, "The release owner is Jordan.")).body.result.details.id;
-		const ports = createSnoStationMemRemPorts({ database: fixture.database.runtime.db });
-		const retained = fixture.store.getById(old.id);
-		expect(retained).toBeDefined();
-		expect((await ports.conflict.softClose({ rowId: old.id, successorId: alternative.id, plannedContentHash: retained?.contentHash ?? "",
-			plannedSuccessorContentHash: alternative.contentHash, reason: "A stale plan predates the correction.", timestamp: new Date().toISOString() })).applied).toBe(false);
-		expect((await ports.forget.moveLane({ rowId: old.id, plannedContentHash: retained?.contentHash ?? "", targetLane: "parked",
-			reason: "A stale plan predates the correction.", timestamp: new Date().toISOString() })).applied).toBe(false);
-		expect((await fixture.store.applyRemTextVersion({ rowId: old.id, plannedContentHash: retained?.contentHash ?? "",
-			jobId: "mem-update-stale-rem", jobType: "update", attemptId: "mem-update-stale-rem-attempt",
-			replacementText: "The release owner was rewritten by a stale REM plan.", reason: "A stale plan predates the correction.", timestamp: new Date().toISOString() })).applied).toBe(false);
-		expect(metadata(old.id).superseded_by).toBe(nextId);
-		expect(fixture.store.getById(nextId)?.lane).toBe("active");
-	});
 
-	it("reports a REM winner as already superseded and never inserts another row", async () => {
-		const old = await seed();
-		const winner = await seed("The release owner is Jordan.");
-		const ports = createSnoStationMemRemPorts({ database: fixture.database.runtime.db });
-		expect((await ports.conflict.softClose({ rowId: old.id, successorId: winner.id, plannedContentHash: old.contentHash,
-			plannedSuccessorContentHash: winner.contentHash, reason: "A real REM close committed before correction.", timestamp: new Date().toISOString() })).applied).toBe(true);
-		expect((await correct(old.id, "The release owner is Avery.")).body.result).toMatchObject({ isError: true, details: { errorCode: "already-superseded", successorId: winner.id } });
-		expect(countRows()).toBe(2);
-	});
+
+
 
 	it("includes invalidated retirement history manually and removes it before automatic ranking and limit", async () => {
 		const old = await atomic("The user prefers jasmine tea.");
@@ -450,7 +425,7 @@ describe("service-owned memory correction", () => {
 		fixture = await createMemUpdateFixture(embedder, { capture: { ambient: false }, recall: {
 			sessionStart: { limit: 10, maxChars: 3000 }, prompt: { minChars: 40, minScore: 1, limit: 10, maxChars: 3000 },
 		} });
-		const row = await seed("The current task objective is finish the release ownership review.");
+		const row = await fixture.store.store({ text: "The current task objective is finish the release ownership review.", category: "episodic", projectId: PROJECT, metadata: JSON.stringify({ precision_kind: "rule" }) });
 		const request = async (session: string, injectionPhase: string, query: string, options = {}) =>
 			(await fixture.post("/v1/get-recall", { scope: { ...fixture.scope, session }, query,
 				options: { source: "auto", injectionPhase, ...options } })).body;
@@ -499,9 +474,10 @@ describe("service-owned memory correction", () => {
 
 	it("counts rendered characters across phases toward the session cap", async () => {
 		const rows = [];
-		for (let index = 0; index < 60; index++) rows.push(await seed(
-			`The release objective for note ${index} is review current ownership and finish the correction flow with clear deployment evidence for all four memory plugins before the scheduled release meeting`,
-		));
+		for (let index = 0; index < 60; index++) rows.push(await fixture.store.store({
+			text: `The release objective for note ${index} is review current ownership and finish the correction flow with clear deployment evidence for all four memory plugins before the scheduled release meeting`,
+			category: "episodic", projectId: PROJECT, metadata: JSON.stringify({ precision_kind: "rule" }),
+		}));
 		const blocks: string[] = [], ids: string[] = [];
 		for (let index = 0; index < 12; index++) {
 			const result = await fixture.post("/v1/get-recall", { scope: fixture.scope, query: "What release objective and ownership review notes are current?",

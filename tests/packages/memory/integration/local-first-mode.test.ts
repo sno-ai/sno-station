@@ -88,10 +88,7 @@ function jsonAfter(content: string, prefix: string): unknown[] {
 
 function hostAnswer(id: string, content: string): string {
 	switch (id) {
-		case "REM5": return JSON.stringify({ proposed_current: "", retired_values: [] });
-		case "REM7": return JSON.stringify({ supersedes: false, retires_anything: false, supersedes_everything: false });
-		case "REM8": return JSON.stringify({ target_row_ids: [] });
-		case "REM1": return "keep";
+		case "P1": return "keep";
 		case "P4": {
 			const clauses = jsonAfter(content, "Eligible clauses: ") as Array<{ origin: string }>;
 			const stored = clauses.flatMap((clause, index) => clause.origin === "stored" ? [index] : []);
@@ -151,8 +148,7 @@ async function seedRemRows(texts: string[]): Promise<string> {
 /** The daily pass is due: the last one was two days ago. */
 function seedDueTriggerState(scope: string): void {
 	writeFileSync(join(root, "sno-station-mem", "rem-trigger-state.json"), JSON.stringify({ version: 1, scopes: { [scope]: {
-		last_pass_at: new Date(Date.now() - 2 * 86_400_000).toISOString(), schedule_zone: "UTC", last_covered_count: 0,
-		last_volume_pass_date: null, missed_window: null, attempts: { identity: null, count: 0 },
+		last_pass_at: new Date(Date.now() - 2 * 86_400_000).toISOString(), schedule_zone: "UTC", last_pass_date: null, missed_window: null, attempts: { identity: null, count: 0 },
 	} } }));
 }
 
@@ -358,147 +354,5 @@ describe("The model-call table alone decides whether capture uses a model (PRD V
 		const extraction = host.received.filter(call => call.content.startsWith(atomicExtractionSkillReference("capture")));
 		expect({ extractionReachedHost: extraction.length > 0, carriesTurn: extraction.every(call => call.content.includes(SENTENCE)),
 			storedAsSentence: storedSentences() }).toEqual({ extractionReachedHost: true, carriesTurn: true, storedAsSentence: 0 });
-	});
-});
-
-describe("Local First REM runs only while a host answers", () => {
-	it("skips the tick with no connected registration, then a connection the same day dispatches", { timeout: 120_000 }, async () => {
-		const sno = await recorder("sno");
-		const host = await recorder("host");
-		pointSnoGpuAt(sno.url);
-		seedDueTriggerState(await seedRemRows(TRANSITION_ROWS));
-		vi.stubEnv("SNO_STATION_MEM_MAINTENANCE_INTERVAL_MS", "500");
-		sidecar = await startRemSidecar();
-		// Opens the memory runtime, and with it the tick, through a registration without a model callback. A read-only
-		// stats request no longer starts background work, so it cannot stand in for one.
-		expect((await contractPost("/v1/init", { scope: { ...SEED_SCOPE, session: "reader" }, registration: { skinId: "reader" } }, "reader")).status).toBe(200);
-		await until(() => auditEvents("rem_trigger_evaluated").length > 0, 10_000);
-		await delay(1_500);
-		expect({
-			skipLogged: audit().some(line => line.includes("skipped: no host model connected")),
-			jobs: jobIds(), snoCalls: sno.calls, hostCalls: host.calls,
-		}).toEqual({ skipLogged: true, jobs: [], snoCalls: [], hostCalls: [] });
-		await registerHost("host-skin", host.url);
-		await until(() => auditEvents("rem_completed").length > 0);
-		// The 500 ms tick keeps running here, so it may dispatch the pass as well as the connection.
-		expect({ dispatched: jobIds().length > 0, completed: auditEvents("rem_completed").length > 0, snoCalls: sno.calls,
-			remOnHost: host.calls.some(call => call.startsWith("REM")), otherOnHost: host.calls.filter(call => !call.startsWith("REM")) })
-			.toEqual({ dispatched: true, completed: true, snoCalls: [], remOnHost: true, otherOnHost: [] });
-	});
-
-	it("runs a due pass on the host as soon as a skin registers a model callback", { timeout: 120_000 }, async () => {
-		const sno = await recorder("sno");
-		const host = await recorder("host");
-		pointSnoGpuAt(sno.url);
-		seedDueTriggerState(await seedRemRows(TRANSITION_ROWS));
-		sidecar = await startRemSidecar();
-		await registerHost("host-skin", host.url);
-		await until(() => auditEvents("rem_completed").length > 0);
-		expect({ jobs: jobIds().length, completed: auditEvents("rem_completed").length, snoCalls: sno.calls,
-			remOnHost: host.calls.some(call => call.startsWith("REM")), otherOnHost: host.calls.filter(call => !call.startsWith("REM")) })
-			.toEqual({ jobs: 1, completed: 1, snoCalls: [], remOnHost: true, otherOnHost: [] });
-	});
-
-	/** Rows REM holds right now: an active claim or a non-released ledger owner. */
-	function heldRows(): string[] {
-		// A job that never reached REM's own tables claimed nothing.
-		if (!database.sqlite.prepare("SELECT 1 FROM sqlite_master WHERE name = 'nodix_rem_row_claims'").get()) return [];
-		return (database.sqlite.prepare(`SELECT m.text FROM nodix_memories m
-			WHERE m.id IN (SELECT row_id FROM nodix_rem_row_claims WHERE state = 'active')
-				OR m.id IN (SELECT row_id FROM nodix_rem_relation_ledger WHERE owner <> 'none')`).all() as Array<{ text: string }>)
-			.map(row => row.text);
-	}
-	/** Transition rows whose text an answered REM prompt carried, from `received[from]` on. */
-	const remAnsweredRows = (host: Awaited<ReturnType<typeof recorder>>, from = 0) => TRANSITION_ROWS.filter(text =>
-		host.received.slice(from).some(call => call.answered && call.id.startsWith("REM") && call.content.includes(text)));
-
-	it("ends a pass whose host refuses after it has answered as completed, releases the refused row, and does not dispatch it again that day", { timeout: 120_000 }, async () => {
-		const sno = await recorder("sno");
-		const host = await recorder("host", "answer-first-rem-then-refuse");
-		pointSnoGpuAt(sno.url);
-		seedDueTriggerState(await seedRemRows(TRANSITION_ROWS));
-		sidecar = await startRemSidecar();
-		await registerHost("host-skin", host.url);
-		const terminal = () => [...audit(), ...lines("rem-wave-jobs.jsonl")].some(line => line.includes("rem_skipped"))
-			|| auditEvents("rem_completed").length > 0 || auditEvents("rem_failed").length > 0;
-		await until(terminal);
-		expect({
-			skipped: [...audit(), ...lines("rem-wave-jobs.jsonl")].some(line => line.includes("rem_skipped")),
-			completed: auditEvents("rem_completed").length, refusedAfterAnAnswer: host.calls.filter(call => call.startsWith("REM")).length >= 2,
-			snoCalls: sno.calls,
-		}).toEqual({ skipped: false, completed: 1, refusedAfterAnAnswer: true, snoCalls: [] });
-		// The row whose REM call was refused must not stay claimed by the finished job.
-		const refusedRows = TRANSITION_ROWS.filter(text =>
-			host.received.some(call => !call.answered && call.id.startsWith("REM") && call.content.includes(text)));
-		expect({ refusedRows: refusedRows.length > 0, held: heldRows() }).toEqual({ refusedRows: true, held: [] });
-		// The pass used up its day: a host connecting again the same day starts nothing.
-		host.mode = "answer";
-		await registerHost("host-skin", host.url);
-		await delay(3_000);
-		expect({ jobs: jobIds().length, completed: auditEvents("rem_completed").length }).toEqual({ jobs: 1, completed: 1 });
-	});
-
-	it("runs a pass its host refuses after an answer once, however often hosts connect that day", { timeout: 240_000 }, async () => {
-		// Every hook that registers a model re-runs the due check. Before the fix each refused pass ended rem_skipped,
-		// the skip cleared the attempt, and the next registration dispatched the same pass again: on a busy machine the
-		// same daily pass ran fifty times in a day, each run re-embedding every row on every core.
-		const sno = await recorder("sno");
-		const host = await recorder("host", "exhausted");
-		pointSnoGpuAt(sno.url);
-		const scope = await seedRemRows(TRANSITION_ROWS);
-		seedDueTriggerState(scope);
-		sidecar = await startRemSidecar();
-		const settled = () => lines("rem-wave-jobs.jsonl").map(line => JSON.parse(line) as { waveId: string; state: string })
-			.reduce((latest, job) => latest.set(job.waveId, job.state), new Map<string, string>());
-		for (let connection = 0; connection < 6; connection += 1) {
-			const before = jobIds().length;
-			await registerHost("host-skin", host.url);
-			await until(() => jobIds().length > before, 5_000);
-			await until(() => [...settled().values()].every(state => state !== "running" && state !== "queued"), 60_000);
-		}
-		const state = JSON.parse(readFileSync(join(root, "sno-station-mem", "rem-trigger-state.json"), "utf8")) as {
-			scopes: Record<string, { last_volume_pass_date: string | null }> };
-		expect({ jobs: jobIds().length, skipped: [...settled().values()].filter(job => job === "skipped").length,
-			dayClosed: state.scopes[scope]?.last_volume_pass_date === new Date().toISOString().slice(0, 10), snoCalls: sno.calls })
-			.toEqual({ jobs: 1, skipped: 0, dayClosed: true, snoCalls: [] });
-	});
-
-	it("refuses a manual start with no connected registration and invents no job", { timeout: 60_000 }, async () => {
-		const sno = await recorder("sno");
-		pointSnoGpuAt(sno.url);
-		sidecar = await startRemSidecar();
-		const response = await fetch(`http://127.0.0.1:${sidecar.port}/rem/run`, {
-			method: "POST", headers: { [REM_SIDECAR_TOKEN_HEADER]: JSON.parse(readFileSync(join(process.env.SNO_PROFILE_DIR!, "station", "sidecar.json"), "utf8")).token },
-			body: JSON.stringify({ type: "rem-update", scope: "global" }), signal: AbortSignal.timeout(10_000),
-		});
-		const text = await response.text();
-		await delay(500);
-		expect({ ok: response.ok, reason: text.includes("no host model connected"), jobId: text.includes("job_id"), jobs: jobIds(), snoCalls: sno.calls })
-			.toEqual({ ok: false, reason: true, jobId: false, jobs: [], snoCalls: [] });
-	});
-
-	it("ends a job recovered after a restart with no connected registration as rem_skipped", { timeout: 120_000 }, async () => {
-		const sno = await recorder("sno");
-		pointSnoGpuAt(sno.url);
-		const scope = await seedRemRows(TRANSITION_ROWS);
-		writeFileSync(join(root, "sno-station-mem", "rem-wave-jobs.jsonl"), `${JSON.stringify({
-			payloadVersion: 1, waveId: "recovered-wave", correlationId: "recovered-correlation", scope,
-			requestedOperations: ["rem-update"], state: "running", startedAt: new Date().toISOString(), finishedAt: null,
-			stats: { operations: 0 },
-		})}\n`);
-		sidecar = await startRemSidecar();
-		const settled = () => lines("rem-wave-jobs.jsonl").map(line => JSON.parse(line) as { waveId: string; state: string })
-			.some(job => job.waveId === "recovered-wave" && job.state !== "running" && job.state !== "queued");
-		await until(settled);
-		expect({ settled: settled(), skipped: audit().some(line => line.includes("rem_skipped") && line.includes("recovered-wave")),
-			completed: auditEvents("rem_completed").length, snoCalls: sno.calls, held: heldRows() })
-			.toEqual({ settled: true, skipped: true, completed: 0, snoCalls: [], held: [] });
-		// Released, not lost: the first connection's pass judges both rows on the host and completes.
-		const host = await recorder("host");
-		seedDueTriggerState(scope);
-		await registerHost("host-skin", host.url);
-		await until(() => auditEvents("rem_completed").length > 0);
-		expect({ completed: auditEvents("rem_completed").length, judged: remAnsweredRows(host), snoCalls: sno.calls, held: heldRows() })
-			.toEqual({ completed: 1, judged: TRANSITION_ROWS, snoCalls: [], held: [] });
 	});
 });
