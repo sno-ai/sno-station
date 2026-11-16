@@ -25,7 +25,7 @@ sno setup --harness cursor
 
 | 位置 | 添加内容 |
 | --- | --- |
-| `hooks.json` | 为七个 Cursor 事件各添加一条配置：`sessionStart`、`beforeSubmitPrompt`、`afterAgentResponse`、`afterAgentThought`、`stop`、`preCompact`、`sessionEnd`。Sno Reach 会在同一文件中保留自己的两条配置，分别挂在 `beforeSubmitPrompt` 和 `stop` 上的 `sno reach cursor-hook`；保留即可，`doctor` 不会检查它们 |
+| `hooks.json` | 为六个 Cursor 事件各添加一条配置：`sessionStart`、`beforeSubmitPrompt`、`afterAgentResponse`、`stop`、`preCompact`、`sessionEnd`。Sno Reach 会在同一文件中保留自己的两条配置，分别挂在 `beforeSubmitPrompt` 和 `stop` 上的 `sno reach cursor-hook`；保留即可，`doctor` 不会检查它们 |
 | `cli-config.json` | 权限规则 `Shell(sno)` 与 `Shell(<path to sno>)`，这样 Cursor CLI 在执行每次 `sno` 命令前无需反复确认 |
 | `permissions.json` | 在 IDE 的终端白名单中添加 `sno` 以及 `sno` 的完整路径条目 |
 | `skills/sno-mem-cursor/SKILL.md` | 向 Cursor agent 传授四条命令的技能：recall、get、remember、correct |
@@ -50,7 +50,7 @@ sno memory doctor --harness cursor
 
 ```text
 sidecar: healthy
-hooks: sessionStart=present beforeSubmitPrompt=present afterAgentResponse=present afterAgentThought=present stop=present preCompact=present sessionEnd=present
+hooks: sessionStart=present beforeSubmitPrompt=present afterAgentResponse=present stop=present preCompact=present sessionEnd=present
 permission rule: present
 IDE permission rule: present
 ```
@@ -92,7 +92,7 @@ hook 永远不会阻塞 Cursor。若某个 hook 失败或收到无法读取的�
 
 - 已执行 `cursor-agent login`；
 - `sno setup --harness cursor` 无错误执行完毕，且未提示跳过 Cursor；
-- 在新对话后，`doctor` 打印 `healthy`，七个 hook 均为 `present`，且两条权限规则均为 `present`；
+- 在新对话后，`doctor` 打印 `healthy`，六个 hook 均为 `present`，且两条权限规则均为 `present`；
 - 用户可以创建第一条记忆并通过 `recall` 再次找到它；
 - 其他工具写入 `hooks.json` 的条目未受影响；
 - 输出中不包含任何密钥、私有主机名、内部路径或部署说明。
