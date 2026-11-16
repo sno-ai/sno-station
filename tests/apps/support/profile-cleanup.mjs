@@ -36,8 +36,10 @@ export async function cleanupProfile(profile, skin, prefix) {
 		catch (error) { if (error.code === "ENOENT") return undefined; throw error; }
 	};
 	try {
-		const lock = read(join(profile, `sno-mem-${skin}`, "worker.lock"));
-		if (lock) await stop(Number(lock.split(" ")[0]));
+		for (const harness of new Set([skin, "claude", "codex", "cursor"])) {
+			const lock = read(join(profile, `sno-mem-${harness}`, "worker.lock"));
+			if (lock) await stop(Number(lock.split(" ")[0]));
+		}
 		const discovery = read(join(profile, "station", "sidecar.json"));
 		if (discovery) await stop(JSON.parse(discovery).pid);
 	} finally {
