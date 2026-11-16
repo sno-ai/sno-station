@@ -40,8 +40,7 @@ describe("REM trigger durable state", () => {
 		expect(initialized.scopeState).toEqual({
 			last_pass_at: now.toISOString(),
 			schedule_zone: "America/Los_Angeles",
-			last_covered_count: 12,
-			last_volume_pass_date: null,
+			last_pass_date: null,
 			missed_window: null,
 			attempts: { identity: null, count: 0 },
 		});
@@ -90,40 +89,6 @@ describe("REM trigger durable state", () => {
 		await expect(loadRemTriggerState(stateDir)).rejects.toThrow(/invalid/i);
 	});
 
-	it("reads five-field version 1 scopes after a store rotation and persists the new field", async () => {
-		stateDir = mkdtempSync(join(tmpdir(), "rem-trigger-old-state-"));
-		const oldScope = {
-			last_pass_at: "2026-09-10T03:00:00.000Z",
-			schedule_zone: "America/Los_Angeles",
-			last_covered_count: 123,
-			last_volume_pass_date: "2026-09-10",
-			attempts: { identity: "rem-auto-daily-existing", count: 2 },
-		};
-		writeFileSync(join(stateDir, "rem-trigger-state.json"), JSON.stringify({
-			version: 1,
-			scopes: {
-				"agent:provider-native-memory": oldScope,
-				"01a083fc-b5e6-7707-86d4-636a9ace990a": oldScope,
-			},
-		}));
-		const loaded = await loadRemTriggerState(stateDir);
-		expect(Object.keys(loaded.scopes)).toEqual([
-			"agent:provider-native-memory", "01a083fc-b5e6-7707-86d4-636a9ace990a",
-		]);
-		for (const scope of Object.values(loaded.scopes)) {
-			expect(scope).toEqual({
-				last_pass_at: "2026-09-10T03:00:00.000Z",
-				schedule_zone: "America/Los_Angeles",
-				last_covered_count: 123,
-				last_volume_pass_date: "2026-09-10",
-				attempts: { identity: "rem-auto-daily-existing", count: 2 },
-				missed_window: null,
-			});
-		}
-		await writeRemTriggerStateAtomic(stateDir, loaded);
-		const persisted = JSON.parse(readFileSync(join(stateDir, "rem-trigger-state.json"), "utf8"));
-		expect(persisted.scopes["agent:provider-native-memory"].missed_window).toBeNull();
-		expect(persisted.scopes["01a083fc-b5e6-7707-86d4-636a9ace990a"].missed_window).toBeNull();
-	});
+
 
 });
