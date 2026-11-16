@@ -17,7 +17,6 @@ import { readSettings } from "../../../../packages/memory/src/contract/profile";
 import { REM_SIDECAR_TOKEN_HEADER } from "../../../../packages/memory/src/contract/routes";
 import { startRemSidecar } from "../../../../packages/memory/src/sidecar/server";
 import { MemoryRuntimePool } from "../../../../packages/memory/src/sidecar/memory-runtime";
-import { readRemAutomaticOperations } from "../../../../packages/memory/src/sidecar/rem-trigger";
 import { MemoryContractRuntime } from "../../../../packages/memory/src/engine/contract-runtime";
 import { MemoryRetriever } from "../../../../packages/memory/src/engine/retrieval/retriever";
 import { AccessTracker } from "../../../../packages/memory/src/engine/retrieval/access-tracker";
@@ -49,7 +48,7 @@ function writeSettings(overrides: SettingsDocument = {}): string {
 function maintenanceSettings() {
 	const settings = readSettings();
 	return { modelCalls: settings.modelCalls,
-		remSettings: { mode: settings.mode, requestedOperations: settings.rem.operations, tickEnabled: settings.rem.tick } };
+		remSettings: { mode: settings.mode, tickEnabled: settings.rem.tick } };
 }
 
 beforeEach(async () => {
@@ -101,7 +100,6 @@ function installRemEnhancedMode(): void {
 	writeSettings({ mode: "rem-enhanced" });
 }
 
-// REM Enhanced sends REM2, REM6, REM7 and REM8 to the host model, so a REM run needs a skin with a model callback.
 async function connectHost(port: number, token?: string): Promise<void> {
 	const host = await startRecorder(closers, ({ raw }) => modelReply("{}", raw));
 	const response = await fetch(`http://127.0.0.1:${port}/v1/init`, {
@@ -520,49 +518,16 @@ describe("sidecar keeps serving", () => {
 		]) {
 			const refused = await register("a", extra);
 			expect(refused.status).toBe(400);
-			expect(readRemAutomaticOperations().tickEnabled).toBe(false);
+			expect(readSettings().rem.tick).toBe(false);
 		}
 		const accepted = await register("b");
 		expect(accepted.status).toBe(200);
 		expect(await accepted.json()).toMatchObject({ degraded: false });
-		expect(readRemAutomaticOperations().tickEnabled).toBe(false);
+		expect(readSettings().rem.tick).toBe(false);
 		writeSettings();
-		expect(readRemAutomaticOperations().tickEnabled).toBe(true);
+		expect(readSettings().rem.tick).toBe(true);
 	});
-	it("runs accepted delayed REM starts when shutdown overlaps body reading", async () => {
-		vi.stubEnv("SNO_STATION_MEM_REM_TEST_HOLD_MS", "200");
-		installRemEnhancedMode();
-		try {
-			await health();
-			if (!sidecar) throw new Error("missing test sidecar");
-			await connectHost(sidecar.port);
-			const url = `http://127.0.0.1:${sidecar.port}/rem/run`;
-			const accepted = await fetch(url, { method: "POST", headers: { ...tokenHeader(), Connection: "close" }, body: JSON.stringify({ type: "rem-update", scope: "queued" }) });
-			expect(accepted.status).toBe(202);
-			await accepted.json();
-			const request = httpRequest(url, { method: "POST", headers: { ...tokenHeader(), Connection: "close" } });
-			const response = new Promise<number>((resolve, reject) => {
-				request.on("error", reject);
-				request.on("response", incoming => { incoming.resume(); incoming.on("end", () => resolve(incoming.statusCode ?? 0)); });
-			});
-			request.write('{"type":"rem-update",');
-			await delay(20);
-			expect(readFileSync(join(root, "sno-station-mem", "rem-wave-jobs.jsonl"), "utf8")
-				.trim().split("\n").map(line => JSON.parse(line).state)).toEqual(["queued"]);
-			const started = performance.now();
-			const stopped = sidecar.stop();
-			request.end('"scope":"reading"}');
-			expect(await response).toBe(202);
-			await stopped;
-			sidecar = undefined;
-			expect(performance.now() - started).toBeLessThan(5_000);
-			const jobs = readFileSync(join(root, "sno-station-mem", "rem-wave-jobs.jsonl"), "utf8")
-				.trim().split("\n").filter(Boolean).map(line => JSON.parse(line));
-			expect(jobs.filter(job => job.state === "done").map(job => ({ scope: job.scope, state: job.state })).sort((a, b) => a.scope.localeCompare(b.scope))).toEqual([
-				{ scope: "queued", state: "done" }, { scope: "reading", state: "done" },
-			]);
-		} finally { vi.unstubAllEnvs(); }
-	});
+
 
 	it("serves without a bearer token", () => health(false));
 	it.each(["/v1/inspect", "/rem/run"])("rejects oversized request bodies at %s", async (route) => {
@@ -584,31 +549,8 @@ describe("sidecar keeps serving", () => {
 		expect(response.status).toBe(200);
 		expect(await response.json()).toEqual({ degraded: false, result: { op: "list", project: "global", entries: [] } });
 	});
-	it("rejects invalid REM requests without allocating jobs", async () => {
-		await health();
-		if (!sidecar) throw new Error("missing test sidecar");
-		for (const [body, error] of [
-			[{}, "invalid_request"], [{ type: "rem-update", scope: " " }, "invalid_request"],
-			[{ types: [], scope: "global" }, "invalid_request"],
-			[{ type: "typo", scope: "global" }, "unsupported_rem_type"],
-		] as const) {
-			const response = await fetch(`http://127.0.0.1:${sidecar.port}/rem/run`, { method: "POST", headers: tokenHeader(), body: JSON.stringify(body) });
-			expect(response.status).toBe(400);
-			expect(await response.json()).toEqual(error === "unsupported_rem_type" ? { error, unknownTypes: ["typo"] } : { error });
-		}
-		const journal = join(root, "sno-station-mem", "rem-wave-jobs.jsonl");
-		expect(existsSync(journal)).toBe(false);
-	});
-	it("rejects mixed REM types without allocating jobs", async () => {
-		await health();
-		if (!sidecar) throw new Error("missing test sidecar");
-		const response = await fetch(`http://127.0.0.1:${sidecar.port}/rem/run`, { method: "POST", headers: tokenHeader(),
-			body: JSON.stringify({ types: ["typo", "rem-update", "old-operation"], scope: "global" }),
-		});
-		expect(response.status).toBe(400);
-		expect(await response.json()).toEqual({ error: "unsupported_rem_type", unknownTypes: ["typo", "old-operation"] });
-		expect(existsSync(join(root, "sno-station-mem", "rem-wave-jobs.jsonl"))).toBe(false);
-	});
+
+
 	it.each(["capture", "mutate"] as const)("retains timed-out %s until the paused write settles before closing storage", async method => {
 		const entered = Promise.withResolvers<void>();
 		const release = Promise.withResolvers<void>();
@@ -1063,34 +1005,7 @@ describe("sidecar keeps serving", () => {
 				.toEqual({ degraded: false, result: { op: "stats", total: 0, projectBreakdown: {}, categoryBreakdown: {} } });
 		} finally { await pool.close(); }
 	});
-	it("runs REM without enable artifacts or operational configuration", async () => {
-		// Local First sends REM to the host model, so a skin with a model callback must be connected first.
-		const host = createServer((_request, response) => {
-			response.writeHead(200, { "content-type": "application/json" });
-			response.end(JSON.stringify({ id: "recorder", object: "chat.completion", model: "loopback-model",
-				choices: [{ index: 0, message: { role: "assistant", content: "{}" }, finish_reason: "stop" }] }));
-		});
-		await new Promise<void>(resolve => host.listen(0, "127.0.0.1", resolve));
-		try {
-			const address = host.address();
-			if (!address || typeof address === "string") throw new Error("missing host model port");
-			await health();
-			if (!sidecar) throw new Error("missing test sidecar");
-			const connected = await contractPost("/v1/init", { scope: { principal: "caller", project: "global", session: "rem-host" },
-				registration: registration({ baseUrl: `http://127.0.0.1:${address.port}/v1`, credential: "loopback-credential", model: "loopback-model" }) });
-			expect(connected.status).toBe(200);
-			const response = await fetch(`http://127.0.0.1:${sidecar.port}/rem/run`, { method: "POST", headers: tokenHeader(), body: JSON.stringify({ type: "rem-update", scope: "global" }) });
-			expect(response.status).toBe(202);
-			const started = await response.json();
-			let job: { state?: string; stats?: { operations: number }; error?: string } = {};
-			for (let attempt = 0; attempt < 100; attempt++) {
-				job = await (await fetch(`http://127.0.0.1:${sidecar.port}/rem/jobs/${started.job_id}`, { headers: tokenHeader() })).json();
-				if (job.state === "done" || job.state === "failed") break;
-				await delay(100);
-			}
-			expect(job).toMatchObject({ state: "done", stats: { operations: 0 } });
-		} finally { host.closeAllConnections(); await new Promise<void>((resolve, reject) => host.close(error => error ? reject(error) : resolve())); }
-	});
+
 	it("serves an unregistered skin with installed settings", async () => {
 		const pool = await MemoryRuntimePool.open();
 		try {
@@ -1217,314 +1132,7 @@ it("holds the socket through a discovery publication after the shutdown bound", 
 	}
 }, 25_000);
 
-it("excludes jobs accepted before recovery finishes from the startup snapshot", async () => {
-	const filesystem = (await import("node:fs/promises")).default;
-	const { syncBuiltinESMExports } = await import("node:module");
-	const journalPath = join(root, "sno-station-mem", "rem-wave-jobs.jsonl");
-	const discoveryPath = join(root, "station", "sidecar.json");
-	writeFileSync(journalPath, `${JSON.stringify({
-		payloadVersion: 1, waveId: "interrupted-wave", correlationId: "interrupted-correlation",
-		scope: "global", requestedOperations: ["rem-update"], state: "queued",
-		startedAt: null, finishedAt: null, stats: { operations: 7 },
-	})}\n`);
-	installRemEnhancedMode();
-	const previousHold = process.env.SNO_STATION_MEM_REM_TEST_HOLD_MS;
-	process.env.SNO_STATION_MEM_REM_TEST_HOLD_MS = "300";
-	const rename = filesystem.rename;
-	let accepted: { status: number; job_id: string } | undefined;
-	// Schedule a real HTTP request in the listen-to-publication window; retain the real rename.
-	const publication = vi.spyOn(filesystem, "rename").mockImplementation(async (source, destination) => {
-		if (destination === discoveryPath) {
-			const discovery = JSON.parse(readFileSync(source, "utf8"));
-			await connectHost(discovery.port, discovery.token);
-			const response = await fetch(`http://127.0.0.1:${discovery.port}/rem/run`, {
-				method: "POST", headers: tokenHeader(discovery.token), body: JSON.stringify({ type: "rem-update", scope: "global" }),
-				signal: AbortSignal.timeout(5_000),
-			});
-			accepted = { status: response.status, job_id: (await response.json()).job_id };
-		}
-		await rename(source, destination);
-	});
-	syncBuiltinESMExports();
-	try {
-		sidecar = await startRemSidecar();
-		expect(accepted?.status).toBe(202);
-		if (!accepted) throw new Error("missing accepted job");
-		const jobId = accepted.job_id;
-		const terminalRecords = () => readFileSync(journalPath, "utf8").trim().split("\n")
-			.filter(line => line.trim()).map(line => JSON.parse(line))
-			.filter(job => job.state === "done" || job.state === "failed");
-		await vi.waitFor(() => {
-			expect(terminalRecords().filter(job => job.waveId === "interrupted-wave"))
-				.toMatchObject([{ state: "failed", error: "sidecar_restart", stats: { operations: 7 } }]);
-			expect(terminalRecords().filter(job => job.waveId === jobId).length).toBe(1);
-		}, { timeout: 10_000, interval: 20 });
-		await sidecar.stop();
-		sidecar = undefined;
-		const newRecords = terminalRecords().filter(job => job.waveId === jobId);
-		expect(newRecords).toMatchObject([{ state: "done", stats: { operations: 0 } }]);
-		expect(newRecords.map(job => job.error ?? null)).toEqual([null]);
-	} finally {
-		publication.mockRestore();
-		syncBuiltinESMExports();
-		if (previousHold === undefined) delete process.env.SNO_STATION_MEM_REM_TEST_HOLD_MS;
-		else process.env.SNO_STATION_MEM_REM_TEST_HOLD_MS = previousHold;
-	}
-}, 20_000);
 
-it("holds the socket after shutdown times out until the runtime task settles", async () => {
-	const entered = Promise.withResolvers<void>();
-	const blocked = Promise.withResolvers<never>();
-	const closed = Promise.withResolvers<void>();
-	const close = MemoryRuntimePool.prototype.close;
-	const closing = vi.spyOn(MemoryRuntimePool.prototype, "close").mockImplementation(async function () {
-		try { await close.call(this); } finally { closed.resolve(); }
-	});
-	const inspection = vi.spyOn(MemoryContractRuntime.prototype, "inspect").mockImplementationOnce(() => {
-		entered.resolve();
-		return blocked.promise;
-	});
-	const socketPath = join(root, "station", "sidecar.sock");
-	const controller = new AbortController();
-	let request: Promise<Response | undefined> | undefined;
-	let bound: ReturnType<typeof setTimeout> | undefined;
-	let contender: Awaited<ReturnType<typeof startRemSidecar>> | undefined;
-	try {
-		await health();
-		if (!sidecar) throw new Error("missing test sidecar");
-		request = fetch(`http://127.0.0.1:${sidecar.port}/v1/inspect`, { method: "POST", headers: tokenHeader(), signal: controller.signal,
-			body: JSON.stringify({ scope: { principal: "caller", project: "global", session: "shutdown-guard" }, op: { op: "list" } }),
-		}).catch(() => undefined);
-		await entered.promise;
-		const stopping = sidecar.stop();
-		sidecar = undefined;
-		expect(await Promise.race([stopping.then(() => "stopped"), new Promise(resolve => {
-			bound = setTimeout(() => resolve("still running"), 6_000);
-		})])).toBe("stopped");
-		const storeBefore = readFileSync(database.dbPath);
-		await expect(startRemSidecar().then(running => { contender = running; })).rejects.toThrow();
-		expect(readFileSync(database.dbPath).equals(storeBefore)).toBe(true);
-		expect(existsSync(join(root, "station", "sidecar.json"))).toBe(false);
-		const socket = createConnection(socketPath);
-		try {
-			await once(socket, "connect", { signal: AbortSignal.timeout(5_000) });
-			expect(socket.readyState).toBe("open");
-		} finally { socket.destroy(); }
-		blocked.reject(new Error("inspection released"));
-		await closed.promise;
-		await vi.waitFor(() => expect(existsSync(socketPath)).toBe(false), { timeout: 5_000 });
-		await health();
-		await sidecar?.stop();
-		sidecar = undefined;
-		expect(existsSync(socketPath)).toBe(false);
-	} finally {
-		clearTimeout(bound);
-		controller.abort();
-		blocked.reject(new Error("inspection released"));
-		await request;
-		await contender?.stop();
-		await closed.promise;
-		inspection.mockRestore();
-		closing.mockRestore();
-	}
-}, 15_000);
-
-// Auto recall serves at most `recall.prompt.limit` rows; one row more leaves exactly one for manual recall.
-const AUTO_RECALL_LIMIT = 1;
-const AUTO_ACCOUNT_ROWS = AUTO_RECALL_LIMIT + 1;
-
-async function startRecallAccount(rows: number, autoRecall = true, settings: SettingsDocument = {}): Promise<void> {
-	const store = new MemoryStore({ dbPath: database.dbPath, embedder: await createTestEmbedder() });
-	try {
-		for (let index = 0; index < rows; index++) {
-			await store.store({
-				text: (`Notebook record ${index}: The archive holds the expedition route and supply notes. ` +
-					// Long rows only for the token-budget accounts; the auto account must fit the manual budget whole.
-					(rows > AUTO_ACCOUNT_ROWS ? "The notebook describes the route, water supplies, camp equipment and weather observations. ".repeat(18) : "")),
-				category: "episodic", projectId: "global", importance: 0.8,
-			});
-		}
-	} finally { await store.close(); }
-	// Recall is read from settings.json; the registration carries only the skin.
-	writeSettings({ recall: { auto: autoRecall, prompt: { timeoutMs: 30_000, limit: AUTO_RECALL_LIMIT } }, ...settings });
-	await health();
-	const response = await contractPost("/v1/init", {
-		scope: { principal: "caller", project: "global", session: "recall-account" },
-		registration: { skinId: "body-skin" },
-	});
-	expect(response.status).toBe(200);
-}
-
-async function recallAccount(source: "auto" | "manual", session = "recall-account", query = "What route and supplies does the expedition notebook describe?") {
-	const response = await contractPost("/v1/get-recall", {
-		scope: { principal: "caller", project: "global", session }, query,
-		options: { source, minScore: 0 },
-	});
-	expect(response.status).toBe(200);
-	return response.json();
-}
-
-describe("manual recall turn account over HTTP", () => {
-
-	it("logs a hashed session reference for manual recall", async () => {
-		await startRecallAccount(1, false, { logging: { level: "info" } });
-		const lines: string[] = [];
-		const output = vi.spyOn(process.stderr, "write").mockImplementation(chunk => { lines.push(String(chunk)); return true; });
-		try {
-			const response = await contractPost("/v1/get-recall", {
-				scope: { principal: "caller", project: "global", session: "recall-log",
-					host: { sessionKey: "agent:main:recall-log" } },
-				query: "What route and supplies does the expedition notebook describe?",
-				options: { source: "manual", minScore: 0 },
-			});
-			expect(response.status).toBe(200);
-			expect(await response.json()).toMatchObject({ degraded: false, toolResult: { details: { count: 1 } } });
-			const records = lines.flatMap(line => line.trim().split("\n")).map(line => JSON.parse(line));
-			const completed = records.filter(record => record.event_name === "memory.recall.completed");
-			expect(completed).toHaveLength(1);
-			expect(completed[0].context.session_reference.visibility).toBe("hashed");
-		} finally {
-			output.mockRestore();
-		}
-	});
-	it("shares the account when auto recall has a UUID and manual recall has only the session key", async () => {
-		await startRecallAccount(AUTO_ACCOUNT_ROWS);
-		const scope = { principal: "caller", project: "global", session: "agent:main:recall-account" };
-		const query = "What route and supplies does the expedition notebook describe?";
-		const automaticResponse = await contractPost("/v1/get-recall", {
-			scope: { ...scope, host: { sessionKey: scope.session, sessionId: "5548ef70-0a75-4e45-9412-3564a0d53993" } },
-			query, options: { source: "auto", minScore: 0 },
-		});
-		expect(automaticResponse.status).toBe(200);
-		const automatic = await automaticResponse.json();
-		expect(automatic.memoryIds).toHaveLength(AUTO_RECALL_LIMIT);
-		const manualResponse = await contractPost("/v1/get-recall", {
-			scope: { ...scope, host: { sessionKey: scope.session } }, query, options: { source: "manual", minScore: 0 },
-		});
-		expect(manualResponse.status).toBe(200);
-		const manual = await manualResponse.json();
-		expect(manual.toolResult.details.already_served_count).toBe(AUTO_RECALL_LIMIT);
-		expect(manual.toolResult.details.memories).toHaveLength(1);
-		expect(manual.toolResult.details.memories.filter((row: { id: string }) => automatic.memoryIds.includes(row.id))).toEqual([]);
-	});
-
-
-	it("keeps different scope sessions separate when host session keys are blank and UUIDs are absent", async () => {
-		await startRecallAccount(AUTO_ACCOUNT_ROWS);
-		const scope = { principal: "caller", project: "global", session: "agent:main:K1",
-			host: { sessionKey: "   " } };
-		const query = "What route and supplies does the expedition notebook describe?";
-		const automaticResponse = await contractPost("/v1/get-recall", {
-			scope, query, options: { source: "auto", minScore: 0 },
-		});
-		expect(automaticResponse.status).toBe(200);
-		const automatic = await automaticResponse.json();
-		expect(automatic.memoryIds).toHaveLength(AUTO_RECALL_LIMIT);
-		const manualResponse = await contractPost("/v1/get-recall", {
-			scope: { ...scope, session: "agent:main:K2" }, query, options: { source: "manual", minScore: 0 },
-		});
-		expect(manualResponse.status).toBe(200);
-		const manual = await manualResponse.json();
-		expect(manual.toolResult.details.already_served_count).toBeUndefined();
-		expect(manual.toolResult.details.memories).toHaveLength(AUTO_ACCOUNT_ROWS);
-		expect(manual.toolResult.details.memories.map((row: { id: string }) => row.id)).toEqual(expect.arrayContaining(automatic.memoryIds));
-	});
-
-	it("accounts an empty or whitespace host session key under scope.session before the session UUID", async () => {
-		await startRecallAccount(2, false);
-		const query = "What route and supplies does the expedition notebook describe?";
-		const scope = { principal: "caller", project: "global", session: "empty-key",
-			host: { sessionKey: "", sessionId: "5548ef70-0a75-4e45-9412-3564a0d53993" } };
-		const automatic = await contractPost("/v1/get-recall", {
-			scope, query, options: { source: "auto", minScore: 0 },
-		});
-		expect(automatic.status).toBe(200);
-		expect((await automatic.json()).contextText).toBe("");
-		const first = await contractPost("/v1/get-recall", {
-			scope, query, options: { source: "manual", minScore: 0 },
-		});
-		expect(first.status).toBe(200);
-		expect((await first.json()).toolResult.details).toMatchObject({ count: 2, already_served_count: 0 });
-		for (const sessionKey of ["", "   ", scope.session]) {
-			const repeated = await contractPost("/v1/get-recall", {
-				scope: { ...scope, host: { ...scope.host, sessionKey } },
-				query, options: { source: "manual", minScore: 0 },
-			});
-			expect(repeated.status).toBe(200);
-			expect((await repeated.json()).toolResult.details).toMatchObject({ count: 0, memories: [], already_served_count: 2 });
-		}
-	});
-
-
-	it("starts a fresh manual account on each prompt turn with auto recall disabled", async () => {
-		await startRecallAccount(2, false);
-		for (let turn = 0; turn < 2; turn++) {
-			const automatic = await recallAccount("auto");
-			expect(automatic.contextText).toBe("");
-			const manual = await recallAccount("manual");
-			expect(manual.toolResult.details.already_served_count).toBe(0);
-			expect(manual.toolResult.details.memories).toHaveLength(2);
-			expect(manual.contextText).toContain("The archive holds the expedition route and supply notes.");
-		}
-	});
-
-	it("does not omit manual recall without a prompt turn", { timeout: 300_000 }, async () => {
-		await startRecallAccount(30);
-		for (let call = 0; call < 3; call++) {
-			const response = await contractPost("/v1/get-recall", {
-				scope: { principal: "caller", project: "global", session: "recall-account" },
-				query: "What route and supplies does the expedition notebook describe?",
-				options: { source: "manual", minScore: 0, tokenBudget: 20_000 },
-			});
-			expect(response.status).toBe(200);
-			const result = await response.json();
-			expect(result.toolResult.details.already_served_count).toBeUndefined();
-			expect(result.toolResult.details.memories).toHaveLength(30);
-			expect(result.contextText).toContain("The archive holds the expedition route and supply notes.");
-		}
-	});
-
-	it("does not mark rows when manual recall is cancelled during metadata writes", { timeout: 300_000 }, async () => {
-		await startRecallAccount(30, false);
-		const pool = await MemoryRuntimePool.open();
-		await poolReady(pool);
-		const scope = { principal: "caller", project: "global", session: "manual-abort" };
-		const entered = Promise.withResolvers<void>();
-		const release = Promise.withResolvers<void>();
-		const controller = new AbortController();
-		const updateMetadata = pool.store.updateMetadata.bind(pool.store);
-		const updating = vi.spyOn(pool.store, "updateMetadata").mockImplementationOnce(async (...args) => {
-			const result = await updateMetadata(...args);
-			entered.resolve();
-			await release.promise;
-			return result;
-		});
-		let cancelled: Promise<unknown> | undefined;
-		try {
-			await pool.invoke("init", { scope, registration: { skinId: "manual-abort" } }, "manual-abort");
-			const query = "What route and supplies does the expedition notebook describe?";
-			await pool.invoke("getRecall", { scope, query, options: { source: "auto" } }, "manual-abort");
-			const request = { scope, query, options: { source: "manual", minScore: 0, tokenBudget: 20_000 } };
-			cancelled = pool.invoke("getRecall", request, "manual-abort", controller.signal).catch(error => error);
-			await entered.promise;
-			controller.abort(new Error("manual recall cancelled"));
-			release.resolve();
-			expect(await cancelled).toEqual(new Error("manual recall cancelled"));
-			const retry = await pool.invoke("getRecall", request, "manual-abort");
-			expect(retry).toMatchObject({ toolResult: { details: { count: 30, already_served_count: 0 } } });
-			if (!("toolResult" in retry) || !retry.toolResult) throw new Error("missing recall result");
-			expect(retry.toolResult.details.memories).toHaveLength(30);
-			const following = await pool.invoke("getRecall", request, "manual-abort");
-			expect(following).toMatchObject({ toolResult: { details: { count: 0, memories: [], already_served_count: 30 } } });
-			if (!("toolResult" in following) || !following.toolResult) throw new Error("missing recall result");
-		} finally {
-			release.resolve();
-			await cancelled;
-			updating.mockRestore();
-			await pool.close();
-		}
-	});
-});
 
 describe("one workspace is one shared memory", () => {
 	it("lets every skin read what another wrote in the same workspace, with no configured userId", async () => {
