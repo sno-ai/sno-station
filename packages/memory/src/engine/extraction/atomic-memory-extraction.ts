@@ -1,3 +1,5 @@
+import { precisionCandidates, judgePrecisionRelations, precisionRelations, confirmPrecisionReplacement, type PrecisionFact, type WriteRelation } from "./precision-write-judgement";
+import { scopeCapturedProfiles } from "./precision-judgments";
 import { excludeProgressRecords } from "./atomic-progress-boundary";
 import { FIXED_MEMORY_SNO_EXTRACT_CHAT, FIXED_MEMORY_SNO_EXTRACT_PROFILE } from "../../model/signed-registry-constants";
 import { ARRIVAL_RETIREMENT_JUDGED_CANDIDATE_CAP, ATOMIC_CAPTURE_OUTPUT_TOKEN_BUDGET, ATOMIC_EXTRACTION_MAX_INPUT_TOKENS, DEFAULT_MAX_CONTEXT_TOKENS } from "../../../config/index";
@@ -75,7 +77,10 @@ import {
 	closeAtomicArrivalRetirementTargets,
 	journalAtomicArrivalRetirementRefusal,
 	readAtomicArrivalRetirementCandidateSet,
+	sessionOrdinal,
 } from "../../store/memory-store-atomic-extraction-write-api";
+import { closeMemoryRow, compareMemoryRetirementOrder, readMemorySourceOrderOrOldest, type MemorySourceOrder } from "../../store/memory-source-order";
+import type { MemoryEntry } from "../shared/types";
 import {
 	listAtomicMemoryEntityCandidates,
 	normalizeEntityName,
@@ -84,6 +89,7 @@ import type {
 	AtomicExtractionLedgerKey,
 	AtomicExtractionRunParameters,
 	AtomicExtractionWriteInput,
+	AtomicExtractionWriteCard,
 	AtomicExtractionWriteResult,
 	AtomicMemoryEntityRegistration,
 	MemoryStore,
@@ -106,6 +112,7 @@ export interface AtomicMemoryExtractionTransports {
 }
 
 export interface RunAtomicMemoryExtractionInput {
+	captureMode?: import("../../store/store").CaptureMode;
 	diagnostics?: WindowDiagnostics;
 	writerAgentId?: string;
 	store: MemoryStore;
@@ -178,6 +185,7 @@ export type AtomicMemoryExtractionResult =
 	  };
 
 export interface AtomicExtractPersistOptions {
+	captureMode?: import("../../store/store").CaptureMode;
 	scope?: string;
 	writerAgentId?: string;
 	sessionDateTime?: string;
@@ -217,6 +225,7 @@ interface WindowDiagnostics {
 }
 const windowDiagnosticContext = new AsyncLocalStorage<WindowDiagnostics>();
 interface ArrivalRetirementWork {
+	profileRowIds: string[];
 	remaining: number;
 	providerCallsLeft: number;
 	tasks?: Array<() => Promise<void>>;
@@ -240,6 +249,166 @@ const DOCUMENT_NAMING_SLUGS = new Set(
 		.filter((slug) => slug.endsWith(".purpose") || slug.endsWith(".title")),
 );
 const TRANSCRIPT_ROLE_LINE = /^(system|user|assistant): ?(.*)$/;
+
+interface WriteJudgement {
+	proposer?: import("../../model/agent-llm-port").HostIdentity;
+	checkedBySameVendor?: boolean;
+	index: number;
+	card: AtomicExtractionWriteCard;
+	by: "owner" | "assistant";
+	handled: Set<string>;
+	same?: MemoryEntry;
+	maybeSame: boolean;
+	replacements: MemoryEntry[];
+	recheck: Set<string>;
+	overrides?: string;
+	failure?: { operation: string; error: unknown };
+	finished: boolean;
+}
+
+function precisionFact(input: RunAtomicMemoryExtractionInput, fact: WriteJudgement): PrecisionFact {
+ return { index: fact.index, text: fact.card.text, by: fact.by, scope: input.projectId };
+}
+
+async function acceptWriteRelations(input: RunAtomicMemoryExtractionInput, fact: WriteJudgement,
+	rows: MemoryEntry[], answers: WriteRelation[]): Promise<boolean> {
+	let searchAgain = false;
+	// Select the stand-in before replacements, regardless of the model's answer order.
+	for (const row of rows) {
+		const relation = answers.find(answer => answer.id === row.id)?.relation;
+		if (relation === "same") { fact.same ??= row; searchAgain = true; }
+		if (relation === "maybe-same") fact.maybeSame = true;
+	}
+	for (const row of rows) {
+		const relation = answers.find(answer => answer.id === row.id)?.relation;
+		if (relation === "overlaps" || relation === "maybe-replaces") fact.recheck.add(row.id);
+		if (relation !== "replaces") continue;
+		const metadata: Record<string, unknown> = JSON.parse(row.metadata);
+		if (fact.by === "assistant" && metadata.asserted_by === undefined) continue;
+		if (fact.card.metadata?.precision_kind === undefined && metadata.precision_kind === "rule") {
+			fact.recheck.add(row.id);
+			continue;
+		}
+		fact.failure = { operation: "replacement-confirmation", error: new Error("confirmation did not finish") };
+		const confirmation = await confirmPrecisionReplacement(input.transports.generic.complete.bind(input.transports.generic), precisionFact(input, fact), row, fact.proposer);
+		fact.checkedBySameVendor ||= confirmation.checkedBySameVendor;
+		if (confirmation.replaces) {
+			if (input.projectId !== "global" && row.projectId === "global") fact.overrides = row.id;
+			else fact.replacements.push(row);
+			searchAgain = true;
+		}
+		fact.failure = undefined;
+	}
+	return searchAgain;
+}
+
+async function judgeWorkWrites(input: RunAtomicMemoryExtractionInput, cards: AtomicExtractionWriteCard[]): Promise<WriteJudgement[]> {
+	const facts: WriteJudgement[] = cards.map((card, index) => ({ index, card,
+		by: input.turns[card.globalTurnIndex - (input.sourceTurnOffset ?? 0)]?.role === "user" ? "owner" : "assistant",
+		handled: new Set(), maybeSame: false, replacements: [], recheck: new Set(), finished: false }));
+	for (let round = 0; round < 4; round += 1) {
+		const batch: Array<{ fact: WriteJudgement; rows: MemoryEntry[] }> = [];
+		for (const fact of facts.filter(fact => !fact.finished && !fact.failure)) {
+			try {
+				const rows = await precisionCandidates(input.store, fact.card.text, input.projectId, fact.handled, input.nowMs());
+				if (rows.length === 0) fact.finished = true;
+				else {
+					for (const row of rows) fact.handled.add(row.id);
+					batch.push({ fact, rows });
+				}
+			} catch (error) { fact.failure = { operation: "write-judgement-search", error }; }
+		}
+		if (batch.length === 0) break;
+		let reply: Awaited<ReturnType<typeof judgePrecisionRelations>>;
+		try { reply = await judgePrecisionRelations(input.transports.generic.complete.bind(input.transports.generic), batch.map(({ fact, rows }) => ({ fact: precisionFact(input, fact), rows }))); }
+		catch (error) {
+			for (const { fact } of batch) fact.failure = { operation: "write-judgement-call", error };
+			break;
+		}
+		for (const { fact, rows } of batch) {
+			try {
+				fact.proposer = reply.proposer;
+				const answers = precisionRelations(reply.facts, fact.index, rows);
+				fact.finished = !await acceptWriteRelations(input, fact, rows, answers);
+				if (!fact.finished && round === 3) fact.failure = { operation: "write-judgement-round-limit", error: new Error("four rounds reached") };
+			} catch (error) { fact.failure = { operation: fact.failure?.operation ?? "write-judgement-reply", error }; }
+		}
+	}
+	return facts;
+}
+
+function journalWriteJudgement(input: RunAtomicMemoryExtractionInput, rowId: string, outcome: string,
+	rows: string[], reason: string | null = null, actionsApplied = 0, sameVendor = false): void {
+	input.store.sqlite.prepare(`INSERT INTO nodix_rem_journal(job_id, job_type, stage, outcome, row_id, actions_applied, reason, detail)
+		VALUES (?, 'atomic-extraction', 'write-judgement', ?, ?, ?, ?, ?)`)
+		.run(input.ledgerKey.conversationId, outcome === "failed" ? "failed" : outcome === "undecided" ? "pending" : outcome === "fine" || outcome === "maybe-same" ? "no-action" : "done",
+			rowId, actionsApplied,
+			reason, JSON.stringify({ scope: input.projectId, outcome, rows, sameVendor }));
+}
+
+async function applyWriteJudgements(input: RunAtomicMemoryExtractionInput, facts: WriteJudgement[]): Promise<void> {
+	for (const fact of facts) {
+		const stored = input.store.findByExtractionIdempotencyKey(input.projectId, fact.card.idempotencyKey);
+		const representative = fact.failure ? stored : fact.same ?? stored;
+		if (!representative) {
+			const rowId = fact.handled.values().next().value;
+			if (fact.maybeSame && rowId) journalWriteJudgement(input, rowId, "maybe-same", [...fact.handled], null, 0, fact.checkedBySameVendor);
+			continue;
+		}
+		try {
+			if (!fact.failure) await input.store.writeMutex.runExclusive(() => input.store.sqlite.transaction(() => {
+				const current = input.store.getById(representative.id);
+				if (!current) throw new Error("write judgement representative disappeared");
+				const metadata: Record<string, unknown> = JSON.parse(current.metadata);
+				let order: MemorySourceOrder = readMemorySourceOrderOrOldest(current.metadata);
+				if (fact.same && fact.by === "owner" && (typeof metadata.undo_at !== "number" || fact.card.timestamp > metadata.undo_at)) {
+					const physical = input.store.sqlite.prepare("SELECT rowid FROM nodix_memories WHERE id = ?").get(current.id) as { rowid: number };
+					order = { valid_from: fact.card.validFrom, session_moment: fact.card.timestamp,
+						session_ordinal: sessionOrdinal(input.store, input.ledgerKey.conversationId),
+						global_turn_index: fact.card.globalTurnIndex, rowid: physical.rowid, conversation_id: input.ledgerKey.conversationId,
+						...(typeof metadata.undo_at === "number" ? { correction: true } : {}) };
+					metadata.source_order = order;
+					delete metadata.asserted_by;
+				}
+				const closed: string[] = [];
+				for (const row of fact.replacements) {
+					if (row.id === current.id) continue;
+					const target = input.store.getById(row.id);
+					if (!target) throw new Error("write judgement target disappeared");
+					if (compareMemoryRetirementOrder(input.store.sqlite, current.id, order, row.id, readMemorySourceOrderOrOldest(target.metadata)) <= 0) {
+						if (typeof JSON.parse(target.metadata).undo_at === "number") {
+							closeMemoryRow(input.store.sqlite, { targetRowId: current.id, closingRowId: target.id,
+								closingOrder: readMemorySourceOrderOrOldest(target.metadata), closingValidFrom: null,
+								supersededAt: input.nowMs(), supersedeReason: "write-judgement" });
+							Object.assign(metadata, JSON.parse(input.store.getById(current.id)?.metadata ?? current.metadata));
+							break;
+						}
+						fact.recheck.add(row.id); continue;
+					}
+					if (closeMemoryRow(input.store.sqlite, { targetRowId: row.id, closingRowId: current.id,
+						closingOrder: order, closingValidFrom: fact.card.validFrom, supersededAt: input.nowMs(), supersedeReason: "write-judgement" })) closed.push(row.id);
+				}
+				delete metadata.precision_check;
+				if (fact.recheck.size > 0) metadata.precision_recheck_with = [...fact.recheck];
+				if (fact.overrides) metadata.overrides_shared = fact.overrides;
+				input.store.sqlite.prepare("UPDATE nodix_memories SET metadata = ? WHERE id = ?").run(JSON.stringify(metadata), current.id);
+				if (fact.same) journalWriteJudgement(input, current.id, "same", [current.id], null, 0, fact.checkedBySameVendor);
+				if (closed.length > 0) journalWriteJudgement(input, current.id, "replaced", [current.id, ...closed], null, closed.length, fact.checkedBySameVendor);
+				if (fact.overrides) journalWriteJudgement(input, current.id, "exception", [current.id, fact.overrides], null, 0, fact.checkedBySameVendor);
+				if (fact.recheck.size > 0) journalWriteJudgement(input, current.id, "undecided", [current.id, ...fact.recheck], null, 0, fact.checkedBySameVendor);
+				if (!fact.same && closed.length === 0 && !fact.overrides && fact.recheck.size === 0) {
+					journalWriteJudgement(input, current.id, "fine", [current.id, ...fact.handled], null, 0, fact.checkedBySameVendor);
+				}
+			}).immediate());
+		} catch (error) { fact.failure = { operation: "write-judgement-apply", error }; }
+		if (fact.failure) {
+			log.error("Write judgement failed; fact remains pending and older rows stay open", {
+				operation: fact.failure.operation, row_ids: [representative.id, ...fact.handled], error: fact.failure.error,
+			}, { event_name: "memory.precision.write.failed", file: "packages/memory/src/engine/extraction/atomic-memory-extraction.ts", function: "applyWriteJudgements", site_id: "memory.precision.write.failed" });
+			journalWriteJudgement(input, representative.id, "failed", [representative.id, ...fact.handled], fact.failure.operation, 0, fact.checkedBySameVendor);
+		}
+	}
+}
 
 const standingSubjectResolutionSchema = z
 	.object({
@@ -738,6 +907,7 @@ export class AtomicInsightDistiller {
 		options: AtomicExtractPersistOptions = {},
 	): Promise<AtomicExtractPersistResult> {
 		const retirement: ArrivalRetirementWork = {
+			profileRowIds: [],
 			remaining: ARRIVAL_RETIREMENT_JUDGED_CANDIDATE_CAP,
 			providerCallsLeft: ARRIVAL_RETIREMENT_JUDGED_CANDIDATE_CAP,
 			...(this.config.scheduleArrivalRetirement ? { tasks: [] } : {}),
@@ -831,6 +1001,7 @@ export class AtomicInsightDistiller {
 					try {
 						return await windowDiagnosticContext.run(diagnostic, () => runAtomicMemoryExtraction({
 							diagnostics: diagnostic,
+							captureMode: options.captureMode,
 							writerAgentId: options.writerAgentId,
 							store: this.store,
 							projectId: scope,
@@ -903,10 +1074,13 @@ export class AtomicInsightDistiller {
 			...(llmFailures > 0 ? { llmFailures } : {}),
 		};
 		} finally {
-			const tasks = retirement.tasks;
-			if (tasks && tasks.length > 0) this.config.scheduleArrivalRetirement?.(async () => {
-				for (const task of tasks) await task();
-			});
+			const finish = async (): Promise<void> => {
+				for (const task of retirement.tasks ?? []) await task();
+				if (options.captureMode === "work") await scopeCapturedProfiles(this.store, this.transports.generic,
+					options.scope ?? this.config.defaultScope, retirement.profileRowIds);
+			};
+			if (retirement.tasks && retirement.tasks.length > 0) this.config.scheduleArrivalRetirement?.(finish);
+			else if (options.captureMode === "work") await finish();
 			const sum = (field: keyof Pick<WindowDiagnostics, "proposed" | "parseRejected" | "discarded" | "unkeyed" | "persisted" | "suppressed" | "modelMs" | "writeMs">): number => diagnostics.reduce((total, row) => total + row[field], 0);
 			log[captureOutcome === "failed" ? "error" : "info"]("Memory capture completed", { outcome: captureOutcome === "failed" && sum("persisted") > 0 ? "partial" : captureOutcome,
 				row_ids: diagnostics.flatMap((row) => row.rowIds).slice(0, 128), store_reference: privateLogReference(this.store.dbPath),
@@ -915,6 +1089,8 @@ export class AtomicInsightDistiller {
 				outside_window_discarded_count: sum("discarded"), parse_candidate_rejected_count: sum("parseRejected"),
 				parse_rejected_count: sum("parseRejected") === 0 ? 0 : "unavailable", parse_rejected_reason: "invalid_payload_has_no_reliable_record_count",
 				stored_unkeyed_count: sum("unkeyed"), persisted_count: sum("persisted"), suppressed_count: sum("suppressed"),
+				invalid_kind_count: diagnostics.reduce((total, row) => total + (row.reasons.invalid_kind ?? 0), 0),
+				...(options.captureMode === "work" ? { exact_repeat_count: diagnostics.reduce((total, row) => total + (row.reasons.exact_repeat ?? 0), 0) } : {}),
 				model_duration_ms: sum("modelMs"), write_duration_ms: sum("writeMs"),
 				model_duration_reason: "sum_actual_transport_gate_durations",
 				later_window_persisted_count: "undetermined", later_window_persisted_reason: "no_cross_window_record_identity",
@@ -1399,6 +1575,7 @@ export async function runAtomicMemoryExtraction(
 	if (!input.extractorVersion.trim()) throw new Error("Atomic extraction requires extractorVersion");
 	const locale = input.locale ?? DEFAULT_LOCALE;
 	const generic = await runAtomicGenericExtractionPass({
+		captureMode: input.captureMode,
 		diagnostics: diagnostic,
 		store: input.store,
 		ledgerKey: input.ledgerKey,
@@ -1437,7 +1614,7 @@ export async function runAtomicMemoryExtraction(
 				),
 			)
 		: undefined;
-	const swept = await runAtomicNumericTurnSweep({
+	const swept = input.captureMode === "work" ? [] : await runAtomicNumericTurnSweep({
 		diagnostics: diagnostic,
 		store: input.store,
 		ledgerKey: input.ledgerKey,
@@ -1455,6 +1632,7 @@ export async function runAtomicMemoryExtraction(
 	});
 
 	const candidates = await runAtomicExtractionGauntlet({
+		captureMode: input.captureMode,
 		records: excludeProgressRecords([...generic.records, ...swept], progressTurns),
 		turns: input.turns,
 		resplitTransport: input.transports.resplit,
@@ -1487,6 +1665,7 @@ export async function runAtomicMemoryExtraction(
 		keyed.length === 0
 			? []
 			: await runAtomicSubjectGuard({
+					captureMode: input.captureMode,
 					records: keyed,
 					turns: input.turns,
 					transport: input.transports.subjectGuard,
@@ -1604,7 +1783,7 @@ export async function runAtomicMemoryExtraction(
 	// it exactly (measured 2026-09-06: "$9.02 on coffee" silently mapped onto "$37.36 on
 	// groceries" and was never stored).
 	const sourceFactKeys = admitted.map(factKeyOf);
-	const projectedCards = buildAtomicWriteCards({
+	const projectedCards: AtomicExtractionWriteCard[] = buildAtomicWriteCards({
 		records: resolved.records,
 		writerAgentId: input.writerAgentId,
 		idempotencyKeys: resolved.records.map((_record, recordIndex) =>
@@ -1643,7 +1822,7 @@ export async function runAtomicMemoryExtraction(
 	const keptCards = projectedCards.map(
 		(card) => countRecordTokens(card.text) <= DEFAULT_MAX_CONTEXT_TOKENS,
 	);
-	const cards = projectedCards.filter((_card, index) => keptCards[index] === true);
+	let cards = projectedCards.filter((_card, index) => keptCards[index] === true);
 	if (cards.length !== projectedCards.length) {
 		// A dropped card leaves no row, so its claim must not reach the shared table — that is
 		// exactly what `publishClaims` is held back for. Left published, the next overlapping
@@ -1667,6 +1846,13 @@ export async function runAtomicMemoryExtraction(
 			maxTokens: DEFAULT_MAX_CONTEXT_TOKENS,
 		}, { event_name: "memory.atomic_extraction.diagnostic", file: "packages/memory/src/engine/extraction/atomic-memory-extraction.ts", function: "runAtomicMemoryExtraction", site_id: "extraction.atomic-memory-extraction.over_token_ceiling" });
 	}
+	const judgements = input.captureMode === "work" ? await judgeWorkWrites(input, cards) : [];
+	if (input.captureMode === "work") {
+		cards = judgements.filter(fact => fact.failure || (!fact.same && !fact.maybeSame)).map(fact => ({
+			...fact.card, metadata: { ...fact.card.metadata, precision_check: "pending" },
+		}));
+	}
+
 	const atomicFactWrite: AtomicExtractionWriteInput = {
 		ledgerKey: input.ledgerKey,
 		projectId: input.projectId,
@@ -1704,15 +1890,28 @@ export async function runAtomicMemoryExtraction(
 		(card.subject === null || card.attribute === null)).length;
 	diagnostic.outcome = write.createdCount > 0 ? "success" : "empty_success";
 	publishClaims();
+	if (input.captureMode === "work") await applyWriteJudgements(input, judgements);
 	// Nominated for the arrival judgement, decided AFTER the write so a card can see the rows of
 	// its own batch: every active card. Category, subject, attribute and the ended flag differ run
 	// to run for the same correction (one Codex run of three stored the corrected value as
 	// episodic, 2026-09-24), so none of them decides.
-	const nominatedCards = cards.filter((card) => card.lane === "active");
-	const retirement: ArrivalRetirementWork = arrivalRetirementContext.getStore() ?? {
+	const captureRetirement = arrivalRetirementContext.getStore();
+	const retirement: ArrivalRetirementWork = captureRetirement ?? {
+		profileRowIds: [],
 		remaining: ARRIVAL_RETIREMENT_JUDGED_CANDIDATE_CAP,
 		providerCallsLeft: ARRIVAL_RETIREMENT_JUDGED_CANDIDATE_CAP,
 	};
+	if (input.captureMode === "work") {
+		for (const card of cards) {
+			if (card.lane !== "active" || card.subject !== "user"
+				|| !["rule", "person"].includes(String(card.metadata?.precision_kind))
+				|| input.turns[card.globalTurnIndex - sourceTurnOffset]?.role !== "user") continue;
+			const stored = input.store.findByExtractionIdempotencyKey(input.projectId, card.idempotencyKey);
+			if (stored && JSON.parse(stored.metadata).overrides_shared === undefined) retirement.profileRowIds.push(stored.id);
+		}
+	}
+	if (input.captureMode !== "work") {
+	const nominatedCards = cards.filter((card) => card.lane === "active");
 	const retire = async (): Promise<void> => {
 	for (const card of nominatedCards) {
 		if (retirement.remaining <= 0 || retirement.providerCallsLeft <= 0) break;
@@ -1749,8 +1948,12 @@ export async function runAtomicMemoryExtraction(
 		}
 	}
 	};
-	if (retirement.tasks) retirement.tasks.push(retire);
-	else await retire();
+		if (retirement.tasks) retirement.tasks.push(retire);
+		else await retire();
+	}
+	if (input.captureMode === "work" && captureRetirement === undefined) {
+		await scopeCapturedProfiles(input.store, input.transports.generic, input.projectId, retirement.profileRowIds);
+	}
 	return { status: "complete", records: resolved.records, write };
 	} catch (error) {
 		// Another capture of the same turn finished this chunk first: its rows are written, so this run is a skip.
