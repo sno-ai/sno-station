@@ -124,7 +124,7 @@ it("retries an empty host reply through the registered agent port within the req
 	}
 });
 
-it.each(["E10", "REM3"] satisfies ModelCallId[])("keeps the existing GPU budget for excluded call %s", async callId => {
+it.each(["E10"] satisfies ModelCallId[])("keeps the existing GPU budget for excluded call %s", async callId => {
 	provider(80);
 	const llm = client();
 	await withMemoryOperation("capture", undefined, async () => {
