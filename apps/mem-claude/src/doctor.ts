@@ -1,3 +1,5 @@
+import { connectMemory, isDegradedConnection } from "./memory-client.js";
+import { manualScope, workspaceRoot } from "./scope.js";
 import { readFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { CODING_SKIN_HOOKS, type CodingSkinHookName } from "@snoai/memory/coding-skin";
@@ -53,10 +55,20 @@ export async function doctor(configDir: string): Promise<string[]> {
 	}).join(" ");
 	let permission = "unparsable";
 	if (settings) permission = settings.permissions?.allow?.some(isOwnedPermissionRule) ? "present" : "absent";
-	return [
+	const lines = [
 		`sidecar: ${await sidecarStatus()}`,
 		`hooks: ${hooks}`,
 		`permission rule: ${permission}`,
 		`import receipts: ${await importSummary()}`,
 	];
+	try {
+		const client = await connectMemory();
+		if (isDegradedConnection(client)) lines.push(`precision: ${client.error ?? client.reason}`);
+		else {
+			const inspected = await client.inspect({ op: "precision" }, manualScope(await workspaceRoot(process.cwd())));
+			if (inspected.degraded) lines.push(`precision: ${inspected.error ?? inspected.reason}`);
+			else if (inspected.result.op === "precision") lines.push(...inspected.result.lines);
+		}
+	} catch (error) { lines.push(`precision: ${String(error)}`); }
+	return lines;
 }
