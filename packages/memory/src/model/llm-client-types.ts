@@ -6,7 +6,7 @@ import { FIXED_MEMORY_SNO_AI_EXTRACT, FIXED_MEMORY_SNO_CONFLICT_VERDICT, FIXED_M
 
 import type { LLMConfig } from "@snoai/llmix";
 
-import type { AgentLlmPort } from "./agent-llm-port";
+import type { AgentLlmPort, HostResponse, HostTarget } from "./agent-llm-port";
 import type { ModelCallId } from "./model-call-table";
 import type { LlmRoutingConfig } from "../../config/plugin-config-mode-schema";
 
@@ -24,6 +24,8 @@ export type LlmProvider = "openai" | "openrouter" | "sno-gpu";
 export type ModelUsageClass = "product" | "research" | "ops";
 
 export type MemoryLlmRequest = {
+	hostTarget?: HostTarget;
+	onHostResponse?: (response: HostResponse) => void;
 	prompt: string;
 	hostPrompt?: string;
 	callId: ModelCallId;

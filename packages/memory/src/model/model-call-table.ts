@@ -7,7 +7,7 @@ import type { LlmPreset } from "./llm-client-types";
 import type { ProductMode, LlmOccasion } from "../../config/plugin-config-mode-schema";
 
 export type ModelDestination = "off" | "host" | "sno-gpu";
-export type ModelCallId = "E1" | "E2" | "E3" | "E4" | "E5" | "E6" | "E7" | "E8" | "E9" | "E10" | "E11" | "E12" | "P1" | "P2" | "P3" | "P4" | "P5" | "P6" | "T1" | "R1" | "REM1" | "REM2" | "REM3" | "REM4" | "REM5" | "REM6" | "REM7" | "REM8";
+export type ModelCallId = "E1" | "E2" | "E3" | "E4" | "E5" | "E6" | "E7" | "E8" | "E9" | "E10" | "E11" | "E12" | "E13" | "E14" | "E15" | "E16" | "E17" | "E19" | "E20" | "E21" | "E22" | "E23" | "E24" | "P1" | "P2" | "P3" | "P4" | "P5" | "P6" | "T1" | "R1";
 export type RsiModelCallId = "R2" | "R3" | "R4" | "R5";
 type ModelCall = {
 	description: string;
@@ -26,8 +26,6 @@ const host = { "local-first": "off", "agent-native": "host", "rem-enhanced": "ho
 // Measured 2026-10-13: the missed-figure re-ask recovered 4 of 1144 turns for 22% of GPU time; set it on per mode to use it.
 const offByDefault = { "local-first": "off", "agent-native": "off", "rem-enhanced": "off" } as const;
 const profile = { "local-first": "host", "agent-native": "host", "rem-enhanced": "host" } as const;
-const rem = { "local-first": "host", "agent-native": "host", "rem-enhanced": "sno-gpu" } as const;
-const remHost = { "local-first": "host", "agent-native": "host", "rem-enhanced": "host" } as const;
 const chat = FIXED_MEMORY_SNO_EXTRACT_CHAT;
 const verdict = FIXED_MEMORY_SNO_CONFLICT_VERDICT;
 
@@ -48,6 +46,19 @@ export const MODEL_CALLS: Record<ModelCallId, ModelCall> & Record<RsiModelCallId
 	E10: { description: "arrival retirement judgment", occasion: "conflictAdjudication", destinations: extract, snoPreset: verdict, transport: { host: "agent-host-seam", snoGpu: "raw-completions" }, promptVariant: { host: "adapter-a-chat", snoGpu: "adapter-a-raw" }, replyParser: { host: "json-or-single-token-verdict", snoGpu: "single-token-verdict" } },
 	E11: { description: "date resolution", occasion: "dateResolution", destinations: host, snoPreset: chat, transport: { host: "agent-host-seam", snoGpu: "chat-completions" }, promptVariant: { host: "standard", snoGpu: "standard" }, replyParser: { host: "text", snoGpu: "text" } },
 	E12: { description: "background state keying", occasion: "memoryExtract", destinations: extractHost, snoPreset: chat, transport: { host: "agent-host-seam", snoGpu: "chat-completions" }, promptVariant: { host: "standard", snoGpu: "standard" }, replyParser: { host: "json", snoGpu: "json" } },
+	E13: { description: "capture mode judgment", occasion: "memoryExtract", destinations: host, snoPreset: chat, transport: { host: "agent-host-seam", snoGpu: "chat-completions" }, promptVariant: { host: "standard", snoGpu: "standard" }, replyParser: { host: "json", snoGpu: "json" } },
+	E14: { description: "profile scope judgment", occasion: "memoryExtract", destinations: extract, snoPreset: chat, transport: { host: "agent-host-seam", snoGpu: "chat-completions" }, promptVariant: { host: "standard", snoGpu: "standard" }, replyParser: { host: "json", snoGpu: "json" } },
+	// Model call E15: judge loaded files against memory rows in nightly work.
+	E15: { description: "loaded-file judgment", occasion: "memoryExtract", destinations: extractHost, snoPreset: chat, transport: { host: "agent-host-seam", snoGpu: "chat-completions" }, promptVariant: { host: "standard", snoGpu: "standard" }, replyParser: { host: "json", snoGpu: "json" } },
+	// Model call E16: judge existing memory rows during cleanup.
+	E16: { description: "cleanup row judgment", occasion: "memoryExtract", destinations: host, snoPreset: chat, transport: { host: "agent-host-seam", snoGpu: "chat-completions" }, promptVariant: { host: "standard", snoGpu: "standard" }, replyParser: { host: "json", snoGpu: "json" } },
+	E17: { description: "per-message relevance pick", occasion: "memoryExtract", destinations: { "local-first": "off", "agent-native": "off", "rem-enhanced": "sno-gpu" }, snoPreset: chat, transport: { host: "agent-host-seam", snoGpu: "chat-completions" }, promptVariant: { host: "standard", snoGpu: "standard" }, replyParser: { host: "json", snoGpu: "json" } },
+	E19: { description: "session-start label", occasion: "memoryExtract", destinations: extractHost, snoPreset: chat, transport: { host: "agent-host-seam", snoGpu: "chat-completions" }, promptVariant: { host: "standard", snoGpu: "standard" }, replyParser: { host: "json", snoGpu: "json" } },
+	E20: { description: "session-start pick", occasion: "memoryExtract", destinations: extractHost, snoPreset: chat, transport: { host: "agent-host-seam", snoGpu: "chat-completions" }, promptVariant: { host: "standard", snoGpu: "standard" }, replyParser: { host: "json", snoGpu: "json" } },
+	E21: { description: "write judgement", occasion: "memoryExtract", destinations: host, snoPreset: chat, transport: { host: "agent-host-seam", snoGpu: "chat-completions" }, promptVariant: { host: "standard", snoGpu: "standard" }, replyParser: { host: "json", snoGpu: "json" } },
+	E22: { description: "replacement confirmation", occasion: "memoryExtract", destinations: extractHost, snoPreset: chat, transport: { host: "agent-host-seam", snoGpu: "chat-completions" }, promptVariant: { host: "standard", snoGpu: "standard" }, replyParser: { host: "json", snoGpu: "json" } },
+	E23: { description: "nightly change confirmation", occasion: "memoryExtract", destinations: extractHost, snoPreset: chat, transport: { host: "agent-host-seam", snoGpu: "chat-completions" }, promptVariant: { host: "standard", snoGpu: "standard" }, replyParser: { host: "json", snoGpu: "json" } },
+	E24: { description: "merged row", occasion: "memoryExtract", destinations: host, snoPreset: chat, transport: { host: "agent-host-seam", snoGpu: "chat-completions" }, promptVariant: { host: "standard", snoGpu: "standard" }, replyParser: { host: "json", snoGpu: "json" } },
 	P1: { description: "profile conflict judgment", occasion: "conflictAdjudication", destinations: extract, snoPreset: verdict, transport: { host: "agent-host-seam", snoGpu: "raw-completions" }, promptVariant: { host: "adapter-a-chat", snoGpu: "adapter-a-raw" }, replyParser: { host: "json-or-single-token-verdict", snoGpu: "single-token-verdict" } },
 	P2: { description: "profile lifecycle retirement", occasion: "profileSectionMerge", destinations: profile, snoPreset: chat, transport: { host: "agent-host-seam", snoGpu: "chat-completions" }, promptVariant: { host: "standard", snoGpu: "standard" }, replyParser: { host: "json", snoGpu: "json" } },
 	P3: { description: "profile retirement recheck", occasion: "profileSectionMerge", destinations: profile, snoPreset: chat, transport: { host: "agent-host-seam", snoGpu: "chat-completions" }, promptVariant: { host: "standard", snoGpu: "standard" }, replyParser: { host: "json", snoGpu: "json" } },
@@ -60,14 +71,6 @@ export const MODEL_CALLS: Record<ModelCallId, ModelCall> & Record<RsiModelCallId
 	R3: { description: "upload sessions nightly for Self Learning", calledBy: "Self Learning", destinations: { "local-first": "off", "agent-native": "sno-gpu", "rem-enhanced": "sno-gpu" } },
 	R4: { description: "recall one relevant cloud experience on a session's first prompt", calledBy: "Self Learning", destinations: { "local-first": "off", "agent-native": "sno-gpu", "rem-enhanced": "sno-gpu" } },
 	R5: { description: "generate local lessons and skill reminders nightly for Self Learning", calledBy: "Self Learning", destinations: { "local-first": "host", "agent-native": "off", "rem-enhanced": "off" } },
-	REM1: { description: "replace conflict pair", occasion: "conflictAdjudication", destinations: rem, snoPreset: verdict, transport: { host: "agent-host-seam", snoGpu: "raw-completions" }, promptVariant: { host: "adapter-a-chat", snoGpu: "adapter-a-raw" }, replyParser: { host: "json-or-single-token-verdict", snoGpu: "single-token-verdict" } },
-	REM2: { description: "replace clauses", occasion: "memoryExtract", destinations: remHost, snoPreset: chat, transport: { host: "agent-host-seam", snoGpu: "chat-completions" }, promptVariant: { host: "standard", snoGpu: "standard" }, replyParser: { host: "json", snoGpu: "json" } },
-	REM3: { description: "replace coverage", occasion: "memoryExtract", destinations: rem, snoPreset: chat, transport: { host: "agent-host-seam", snoGpu: "chat-completions" }, promptVariant: { host: "standard", snoGpu: "standard" }, replyParser: { host: "json", snoGpu: "json" } },
-	REM4: { description: "replace clause carry", occasion: "memoryExtract", destinations: rem, snoPreset: chat, transport: { host: "agent-host-seam", snoGpu: "chat-completions" }, promptVariant: { host: "standard", snoGpu: "standard" }, replyParser: { host: "json", snoGpu: "json" } },
-	REM5: { description: "update judgment", occasion: "memoryExtract", destinations: rem, snoPreset: chat, transport: { host: "agent-host-seam", snoGpu: "chat-completions" }, promptVariant: { host: "standard", snoGpu: "standard" }, replyParser: { host: "json", snoGpu: "json" } },
-	REM6: { description: "update verification", occasion: "memoryExtract", destinations: remHost, snoPreset: chat, transport: { host: "agent-host-seam", snoGpu: "chat-completions" }, promptVariant: { host: "standard", snoGpu: "standard" }, replyParser: { host: "json", snoGpu: "json" } },
-	REM7: { description: "update relation", occasion: "memoryExtract", destinations: remHost, snoPreset: chat, transport: { host: "agent-host-seam", snoGpu: "chat-completions" }, promptVariant: { host: "standard", snoGpu: "standard" }, replyParser: { host: "json", snoGpu: "json" } },
-	REM8: { description: "update retirement target", occasion: "memoryExtract", destinations: remHost, snoPreset: chat, transport: { host: "agent-host-seam", snoGpu: "chat-completions" }, promptVariant: { host: "standard", snoGpu: "standard" }, replyParser: { host: "json", snoGpu: "json" } },
 };
 
 /** Sno GPU workload label per call (GPU_REQUEST_METADATA_STANDARD): what the caller is doing, one stable value per group. */
@@ -75,10 +78,14 @@ export const MODEL_CALL_WORKLOAD: Record<ModelCallId, string> = {
 	E1: "station-extract", E2: "station-extract", E3: "station-extract", E4: "station-extract", E5: "station-extract",
 	E6: "station-subject", E7: "station-subject", E8: "station-subject",
 	E9: "station-profile-key", E12: "station-profile-key",
+	E13: "station-capture-mode", E14: "station-profile-scope",
+	E15: "station-loaded-file", E16: "station-cleanup",
+	E17: "station-recall-pick",
+	E19: "station-start-label",
+	E20: "station-start-pick",
+	E21: "station-verdict", E22: "station-verdict", E23: "station-verdict", E24: "station-extract",
 	E10: "station-verdict", P1: "station-verdict",
 	P2: "station-profile-merge", P3: "station-profile-merge", P4: "station-profile-merge", P5: "station-profile-merge", P6: "station-profile-merge",
-	REM1: "station-rem-replace", REM2: "station-rem-replace", REM3: "station-rem-replace", REM4: "station-rem-replace",
-	REM5: "station-rem-update", REM6: "station-rem-update", REM7: "station-rem-update", REM8: "station-rem-update",
 	E11: "station-aux", T1: "station-aux", R1: "station-aux",
 };
 
