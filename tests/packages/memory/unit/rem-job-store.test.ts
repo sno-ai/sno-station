@@ -24,34 +24,7 @@ afterEach(() => {
 });
 
 describe("REM job store", () => {
-	it("reuses a running merged job when a tick requests one of its operations", async () => {
-		const journalPath = createJournalPath();
-		writeFileSync(journalPath, `${JSON.stringify({
-			payloadVersion: 1,
-			waveId: "rem-wave-merged-repeat",
-			correlationId: "rem-auto-merged-repeat",
-			scope: "persona:merged-repeat",
-			requestedOperations: ["rem-replace"],
-			state: "queued",
-			startedAt: null,
-			finishedAt: null,
-			stats: { operations: 0 },
-		})}\n`);
-		const store = await RemJobStore.open(journalPath);
-		const merged = await store.createQueued(
-			"rem-update", "persona:merged-repeat", "rem-auto-merged-repeat",
-		);
-		expect(merged.job.requested_operations).toEqual(["rem-replace", "rem-update"]);
-		await store.transition("rem-wave-merged-repeat", { state: "running" });
 
-		const repeated = await store.createQueued(
-			"rem-replace", "persona:merged-repeat", "rem-auto-merged-repeat",
-		);
-
-		expect.soft(repeated.created).toBe(false);
-		expect.soft(repeated.job.job_id).toBe("rem-wave-merged-repeat");
-		expect.soft(store.nonTerminalJobs()).toHaveLength(1);
-	});
 
 	it("reuses the running automatic job on a second tick and after completion", async () => {
 		const journalPath = createJournalPath();
@@ -60,7 +33,6 @@ describe("REM job store", () => {
 			waveId: "rem-wave-automatic-repeat",
 			correlationId: "rem-auto-daily-repeat",
 			scope: "persona:automatic-repeat",
-			requestedOperations: ["rem-replace", "rem-update"],
 			state: "queued",
 			startedAt: null,
 			finishedAt: null,
@@ -69,14 +41,14 @@ describe("REM job store", () => {
 		const store = await RemJobStore.open(journalPath);
 		await store.transition("rem-wave-automatic-repeat", { state: "running" });
 		const repeated = await store.createQueued(
-			["rem-update", "rem-replace"], "persona:automatic-repeat", "rem-auto-daily-repeat",
+			"persona:automatic-repeat", "rem-auto-daily-repeat",
 		);
 		expect.soft(repeated.created).toBe(false);
 		expect.soft(repeated.job.job_id).toBe("rem-wave-automatic-repeat");
 		expect.soft(store.nonTerminalJobs()).toHaveLength(1);
 		await store.transition("rem-wave-automatic-repeat", { state: "done" });
 		const completed = await store.createQueued(
-			["rem-update", "rem-replace"], "persona:automatic-repeat", "rem-auto-daily-repeat",
+			"persona:automatic-repeat", "rem-auto-daily-repeat",
 		);
 		expect(completed.created).toBe(false);
 		expect(completed.job.job_id).toBe("rem-wave-automatic-repeat");
@@ -88,11 +60,11 @@ describe("REM job store", () => {
 		// The trigger owns the daily try limit; a failed job must not permanently hold the request.
 		const journalPath = createJournalPath();
 		const store = await RemJobStore.open(journalPath);
-		const first = await store.createQueued(["rem-replace"], "persona:failed-repeat", "rem-auto-daily-failed");
+		const first = await store.createQueued("persona:failed-repeat", "rem-auto-daily-failed");
 		await store.transition(first.job.job_id, { state: "running" });
 		await store.transition(first.job.job_id, { state: "failed", error: "REM LLM calls all failed" });
 		for (const opened of [store, await RemJobStore.open(journalPath)]) {
-			const again = await opened.createQueued(["rem-replace"], "persona:failed-repeat", "rem-auto-daily-failed");
+			const again = await opened.createQueued("persona:failed-repeat", "rem-auto-daily-failed");
 			expect({ created: again.created, state: again.job.state, waiting: opened.nonTerminalJobs().length })
 				.toEqual({ created: true, state: "queued", waiting: 1 });
 		}
@@ -103,12 +75,12 @@ describe("REM job store", () => {
 		for (const device of ["/dev/full", "/dev/null"]) {
 			const journalPath = createJournalPath();
 			const store = await RemJobStore.open(journalPath);
-			const { job } = await store.createQueued("rem-update", "persona:disk-error", "corr-original");
+			const { job } = await store.createQueued("persona:disk-error", "corr-original");
 			rmSync(journalPath);
 			symlinkSync(device, journalPath);
 
 			results.push(...await Promise.allSettled([
-				store.createQueued("rem-update", "persona:disk-error", "corr-new"),
+				store.createQueued("persona:disk-error", "corr-new"),
 				store.transition(job.job_id, { state: "running" }),
 			]));
 			expect.soft(store.nonTerminalJobs()).toHaveLength(1);
@@ -122,29 +94,13 @@ describe("REM job store", () => {
 		]);
 	});
 
-	it("creates a complete ordered wave in one durable append", async () => {
-		const journalPath = createJournalPath();
-		const store = await RemJobStore.open(journalPath);
 
-		const allocation = await store.createQueued(
-			["rem-update", "rem-replace"],
-			"persona:atomic-wave",
-			"corr-atomic-wave",
-		);
-
-		expect(allocation).toMatchObject({
-			created: true,
-			job: { requested_operations: ["rem-replace", "rem-update"] },
-		});
-		expect(readFileSync(journalPath, "utf8").trim().split("\n")).toHaveLength(1);
-	});
 
 	it("persists the correlation id in every durable transition", async () => {
 		const journalPath = createJournalPath();
 		const store = await RemJobStore.open(journalPath);
 
 		const { job: queued } = await store.createQueued(
-			"rem-update",
 			"persona:test-68a19d8c",
 			"corr-job-019f8da3",
 		);
@@ -168,7 +124,6 @@ describe("REM job store", () => {
 		const store = await RemJobStore.open(journalPath);
 
 		const { job: queued } = await store.createQueued(
-			"rem-update",
 			"persona:test-68a19d8c",
 			"corr-queued-019f8da3",
 		);
@@ -178,7 +133,6 @@ describe("REM job store", () => {
 		expect(JSON.parse(lines[0] ?? "{}")).toMatchObject({
 			waveId: queued.job_id,
 			state: "queued",
-			requestedOperations: ["rem-update"],
 			scope: "persona:test-68a19d8c",
 		});
 	});
@@ -187,7 +141,6 @@ describe("REM job store", () => {
 		const journalPath = createJournalPath();
 		const first = await RemJobStore.open(journalPath);
 		const { job: queued } = await first.createQueued(
-			"rem-update",
 			"persona:test-68a19d8c",
 			"corr-reopen-019f8da3",
 		);
@@ -205,7 +158,7 @@ describe("REM job store", () => {
 
 		expect(reopened.get(queued.job_id)).toMatchObject({
 			state: "done",
-			type: "rem-update",
+			type: "precision-nightly",
 			scope: "persona:test-68a19d8c",
 			stats: { operations: 0 },
 		});
@@ -220,7 +173,6 @@ describe("REM job store", () => {
 		const allocations = await Promise.all(
 			Array.from({ length: 12 }, (_, index) =>
 				store.createQueued(
-					"rem-update",
 					`persona:test-68a19d8c-${index}`,
 					`corr-concurrent-${index}`,
 				),
@@ -241,7 +193,6 @@ describe("REM job store", () => {
 		const journalPath = createJournalPath();
 		const first = await RemJobStore.open(journalPath);
 		const { job: queued } = await first.createQueued(
-			"rem-update",
 			"persona:test-68a19d8c",
 			"corr-torn-019f8da3",
 		);
@@ -257,7 +208,6 @@ describe("REM job store", () => {
 		const journalPath = createJournalPath();
 		const first = await RemJobStore.open(journalPath);
 		const { job: queued } = await first.createQueued(
-			"rem-update",
 			"persona:test-68a19d8c",
 			"corr-uncommitted-019f8da3",
 		);
@@ -280,10 +230,10 @@ describe("REM job store", () => {
 	it("keeps valid jobs around malformed complete records and leaves the journal intact", async () => {
 		const journalPath = createJournalPath();
 		const first = await RemJobStore.open(journalPath);
-		const { job: queued } = await first.createQueued("rem-update", "persona:queued", "corr-queued");
+		const { job: queued } = await first.createQueued("persona:queued", "corr-queued");
 		const badLine = '{"job_id":"malformed"}\n';
 		appendFileSync(journalPath, badLine, "utf8");
-		const { job: running } = await first.createQueued("rem-replace", "persona:running", "corr-running");
+		const { job: running } = await first.createQueued("persona:running", "corr-running");
 		await first.transition(running.job_id, { state: "running" });
 		const reopened = await RemJobStore.open(journalPath);
 		expect(reopened.nonTerminalJobs().map(job => job.state)).toEqual(["queued", "running"]);
