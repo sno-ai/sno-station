@@ -62,7 +62,7 @@ sno memory doctor --harness cursor
 
 A healthy installation reports:
 - `sidecar: healthy`
-- `hooks: sessionStart=present beforeSubmitPrompt=present afterAgentResponse=present afterAgentThought=present stop=present preCompact=present sessionEnd=present`
+- `hooks: sessionStart=present beforeSubmitPrompt=present afterAgentResponse=present stop=present preCompact=present sessionEnd=present`
 - `permission rule: present`
 - `IDE permission rule: present`
 
@@ -90,6 +90,6 @@ If memories are not being recalled or captured as expected, verify the following
    - If any hook reports `absent`, re-run `sno setup --harness cursor` to regenerate missing hook entries.
    - If a file reports `unparsable`, the file could not be read as the JSON the installer expects (unreadable, invalid JSON, or an unexpected shape); check the corresponding file in `~/.cursor`.
 4. **Inspect `hooks.json`**:
-   Confirm that `~/.cursor/hooks.json` has an entry for each of the seven Cursor events, each running `'<path to sno>' memory hook <subcommand> --harness cursor`. Re-run `sno setup --harness cursor` instead of editing these entries by hand.
+   Confirm that `~/.cursor/hooks.json` has an entry for each of the six Cursor events, each running `'<path to sno>' memory hook <subcommand> --harness cursor`. Re-run `sno setup --harness cursor` instead of editing these entries by hand.
 5. **Check recall query specifics**:
    `recall` looks for semantic and lexical relevance. If a query is overly generic, try searching with exact keywords from the original memory.

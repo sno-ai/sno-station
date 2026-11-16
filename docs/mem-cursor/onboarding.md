@@ -31,7 +31,7 @@ In your Cursor folder (`~/.cursor`), `sno setup --harness cursor` writes these f
 
 | Where | What it adds |
 | --- | --- |
-| `hooks.json` | One entry for each of seven Cursor events: `sessionStart`, `beforeSubmitPrompt`, `afterAgentResponse`, `afterAgentThought`, `stop`, `preCompact`, `sessionEnd`. Sno Reach keeps two entries of its own in the same file, `sno reach cursor-hook` on `beforeSubmitPrompt` and on `stop`; leave them in place, `doctor` does not check them |
+| `hooks.json` | One entry for each of six Cursor events: `sessionStart`, `beforeSubmitPrompt`, `afterAgentResponse`, `stop`, `preCompact`, `sessionEnd`. Sno Reach keeps two entries of its own in the same file, `sno reach cursor-hook` on `beforeSubmitPrompt` and on `stop`; leave them in place, `doctor` does not check them |
 | `cli-config.json` | The permission rules `Shell(sno)` and `Shell(<path to sno>)`, so the Cursor CLI does not ask before every `sno` command |
 | `permissions.json` | The entries `sno` and the path to `sno` in the IDE's terminal allowlist |
 | `skills/sno-mem-cursor/SKILL.md` | The skill that teaches the Cursor agent four commands: recall, get, remember, correct |
@@ -63,7 +63,7 @@ The output has four lines:
 
 ```text
 sidecar: healthy
-hooks: sessionStart=present beforeSubmitPrompt=present afterAgentResponse=present afterAgentThought=present stop=present preCompact=present sessionEnd=present
+hooks: sessionStart=present beforeSubmitPrompt=present afterAgentResponse=present stop=present preCompact=present sessionEnd=present
 permission rule: present
 IDE permission rule: present
 ```
@@ -121,7 +121,7 @@ Onboarding is complete when:
 
 - `cursor-agent login` has been run;
 - `sno setup --harness cursor` finishes without an error and does not say it skipped Cursor;
-- `doctor` prints `healthy`, seven hooks `present`, and both permission rules `present` after a new
+- `doctor` prints `healthy`, six hooks `present`, and both permission rules `present` after a new
   conversation;
 - the user can create a first memory and find it again with `recall`;
 - entries other tools wrote into `hooks.json` are unchanged;
