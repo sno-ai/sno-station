@@ -1,6 +1,6 @@
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { connect, type MemoryClient } from "../../../packages/memory/src/contract/client";
 import { startRemSidecar } from "../../../packages/memory/src/sidecar/server";
@@ -10,6 +10,7 @@ import { runWorker as runCodexWorker } from "../../../apps/mem-codex/src/worker"
 import { createTestDb } from "../mem-claw/helpers/test-db";
 import { writeSettingsFixture } from "../../packages/memory/fixtures/settings-file-fixture";
 import { untilModelReady } from "../../packages/memory/integration/fixtures/model-ready";
+import { withRegisteredWorker } from "../support/registered-worker";
 
 let root: string;
 let database: ReturnType<typeof createTestDb>;
@@ -49,7 +50,7 @@ process.stdin.on('end', () => {
     const turns = data.filter(turn => turn.role === 'user');
     answer = {claims_found: turns.map(turn => turn.turn_index),
       decisions: turns.map(turn => ({turn_index: turn.turn_index, progress_only: false})),
-      facts: turns.map((turn, id) => ({id, fact: turn.content, subject: 'user', subject_kind: 'user',
+      facts: turns.map((turn, id) => ({id, kind: 'fact', fact: turn.content, subject: 'user', subject_kind: 'user',
         temporal_phrase: null, ended_at_phrase: null, source_span: {turn_index: turn.turn_index, quote: turn.content}}))};
   } else { answer = {records: []}; }
   console.log(JSON.stringify({is_error: false, result: JSON.stringify(answer)}));
@@ -70,6 +71,16 @@ afterAll(async () => {
 	process.env.PATH = savedPath;
 	if (root) rmSync(root, { recursive: true, force: true });
 });
+
+it("writes its node and CLI entry at mode 0600 after registration", async () => {
+	const entry = resolve(import.meta.dirname, "../../../apps/mem-cursor/src/cli.ts");
+	await withRegisteredWorker(entry, async () => {
+		const record = join(root, "station", "host-worker.json");
+		expect(existsSync(record)).toBe(true);
+		expect(JSON.parse(readFileSync(record, "utf8"))).toEqual({ node: process.execPath, entry });
+		expect(statSync(record).mode & 0o777).toBe(0o600);
+	});
+}, 30_000);
 
 // Advance only the worker's existing idle/retry clock; model execution and filesystem operations use real time.
 describe.each(["cursor", "claude", "codex"] as const)("%s worker retention", skin => {

@@ -10,7 +10,6 @@ const EVENTS = [
 	["sessionStart", "session-start", 15],
 	["beforeSubmitPrompt", "user-prompt-submit", 30],
 	["afterAgentResponse", "after-agent-response", 5],
-	["afterAgentThought", "after-agent-thought", 5],
 	["stop", "stop", 5],
 	["preCompact", "pre-compact", 5],
 	["sessionEnd", "session-end", 8],
@@ -33,7 +32,7 @@ beforeEach(async () => {
 afterEach(() => rm(home, { recursive: true, force: true }));
 
 describe("Cursor hook and allowlist installation", () => {
-	it("writes the seven entries beside foreign ones, keeps their content and order, and a second run changes nothing", async () => {
+	it("writes the six entries beside foreign ones, keeps their content and order, and a second run changes nothing", async () => {
 		await writeFile(join(home, "hooks.json"), JSON.stringify({ version: 1, hooks: { stop: [ORCA_STOP, REACH_STOP], beforeSubmitPrompt: [ORCA_PROMPT], afterFileEdit: [ORCA_PROMPT] } }, null, 2));
 		await writeFile(join(home, "cli-config.json"), JSON.stringify({ version: 1, permissions: { allow: ["Shell(ls)"], deny: ["Shell(rm)"] }, model: { default: "auto" } }));
 		await install();
@@ -90,6 +89,16 @@ describe("Cursor hook and allowlist installation", () => {
 		await install();
 		expect((await readJson("hooks.json")).hooks.stop).toEqual([{ command: ours(SNO, "stop"), timeout: 5 }, ORCA_STOP]);
 		expect((await readJson("cli-config.json")).permissions.allow).toEqual(["Shell(git)", `Shell(${SNO})`, "Shell(sno)"]);
+	});
+
+	it("removes our old afterAgentThought entry on install and uninstall and preserves foreign entries", async () => {
+		const old = { command: ours("/old/place/sno", "after-agent-thought"), timeout: 5 };
+		await writeFile(join(home, "hooks.json"), JSON.stringify({ version: 1, hooks: { afterAgentThought: [old, ORCA_PROMPT] } }));
+		await install();
+		expect((await readJson("hooks.json")).hooks.afterAgentThought).toEqual([ORCA_PROMPT]);
+		await writeFile(join(home, "hooks.json"), JSON.stringify({ version: 1, hooks: { afterAgentThought: [old] } }));
+		await uninstallCursor({ cursorHome: home, writeOutput: line => output.push(line) });
+		expect((await readJson("hooks.json")).hooks).not.toHaveProperty("afterAgentThought");
 	});
 
 	it("creates configuration files on a fresh home and the doctor sees every entry", async () => {
