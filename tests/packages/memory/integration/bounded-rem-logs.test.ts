@@ -18,8 +18,7 @@ it("compacts historical transitions, retaining pending jobs and two days of comp
 	const now = new Date().toISOString();
 	const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 	const row = (waveId: string, state: string, finishedAt: string | null) => JSON.stringify({
-		payloadVersion: 1, waveId, correlationId: `corr-${waveId}`, scope: "persona:retention",
-		requestedOperations: ["rem-update"], state, startedAt: finishedAt, finishedAt, stats: { operations: 7 },
+		payloadVersion: 1, waveId, correlationId: `corr-${waveId}`, scope: "persona:retention", state, startedAt: finishedAt, finishedAt, stats: { operations: 7 },
 	}) + "\n";
 	writeFileSync(journal, row("old", "done", "2020-01-01T00:00:00.000Z").repeat(300)
 		+ row("undated-terminal", "done", null) + row("pending", "running", null) + row("yesterday", "done", yesterday)

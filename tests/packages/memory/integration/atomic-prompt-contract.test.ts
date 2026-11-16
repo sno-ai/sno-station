@@ -44,7 +44,7 @@ const RUN_PARAMETERS: AtomicExtractionRunParameters = {
 	subchunkCount: 1,
 };
 
-const GENERIC_TRANSPORT_CALL_IDS = new Set<MemoryLlmRequest["callId"]>(["E1", "E2", "E3", "E7", "E8", "E12"]);
+const GENERIC_TRANSPORT_CALL_IDS = new Set<MemoryLlmRequest["callId"]>(["E1", "E2", "E3", "E7", "E8", "E12", "E14"]);
 
 class RecordingAtomicClient implements LlmClient {
 	readonly requests: MemoryLlmRequest[] = [];

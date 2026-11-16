@@ -33,6 +33,17 @@ function data<T>(prompt: string): T {
 }
 
 function modelAnswer(prompt: string): { kind: string; text: string } {
+	const lastLine = prompt.trimEnd().split("\n").at(-1) ?? "";
+	if (lastLine.startsWith("{") && lastLine.includes('"facts"') && lastLine.includes('"rows"')) {
+		const input = JSON.parse(lastLine) as { facts: Array<{ index: number; rows: Array<{ id: string }> }> };
+		return { kind: "arrival", text: judgmentReply === "" ? "" : JSON.stringify({ facts: input.facts.map(fact => ({
+			index: fact.index, rows: fact.rows.map(row => ({ id: row.id,
+				relation: judgmentReply === "replacement" ? "replaces" : "unrelated" })),
+		})) }) };
+	}
+	if (lastLine.startsWith("{") && lastLine.includes('"older"') && lastLine.includes('"newer"')) {
+		return { kind: "confirmation", text: '{"replaces":true}' };
+	}
 	if (prompt.includes("Adjudicate whether the newer memory replaces the older memory.")
 		|| prompt.includes("Judge the relationship of the newer memory to the older memory.")) {
 		return { kind: "arrival", text: judgmentReply };
@@ -57,7 +68,7 @@ function modelAnswer(prompt: string): { kind: string; text: string } {
 		return { kind: "extraction", text: JSON.stringify({
 			claims_found: turns.map(turn => turn.turn_index),
 			decisions: turns.map(turn => ({ turn_index: turn.turn_index, progress_only: false })),
-			facts: turns.map((turn, id) => ({ id, fact: turn.content, subject: "user", subject_kind: "user",
+			facts: turns.map((turn, id) => ({ id, fact: turn.content, kind: "rule", subject: "user", subject_kind: "user",
 				temporal_phrase: null, ended_at_phrase: null,
 				source_span: { turn_index: turn.turn_index, quote: turn.content } })),
 		}) };
@@ -133,6 +144,7 @@ beforeEach(async ({ task }) => {
 			baseUrl: `http://127.0.0.1:${address.port}/v1`, credential: "loopback", model: "loopback-model",
 		} } });
 	principal = (await init.json() as { principal: string }).principal;
+	database.sqlite.prepare("INSERT INTO nodix_place_modes(skin_id, project_id, surface, mode, decided_at) VALUES ('capture-budget', 'global', '', 'work', 1791820800000)").run();
 	await untilModelReady(async ({ scope, query, options }) =>
 		(await post("/v1/get-recall", { scope: { principal, ...scope }, query, options })).json(), 30_000);
 	for (const food of ["tea", "coffee", "rice", "noodles", "curry", "soup", "apples", "pears", "beans", "bread", "oats", "corn"]) {
@@ -209,12 +221,17 @@ it("passes the existing capture deadline to Sno GPU secondary extraction", async
 	} finally { output.mockRestore(); }
 });
 
-it("returns the committed turn while arrival judgments are blocked and skips its resend", async () => {
+it("waits for write judgement before committing and skips the committed turn's resend", async () => {
 	holdJudgments = true;
 	judgmentReply = "replacement";
 	const request = capture(["I like lentils."]);
+	const pending = post("/v1/capture", request);
 	try {
-		const response = await post("/v1/capture", request, AbortSignal.timeout(2000));
+		await vi.waitFor(() => expect(calls).toContain("arrival"), { timeout: 5000 });
+		expect(database.sqlite.prepare("SELECT text FROM nodix_memories WHERE text = 'I like lentils.'").all()).toEqual([]);
+		expect(database.sqlite.prepare("SELECT COUNT(*) AS count FROM nodix_memories WHERE json_extract(metadata, '$.superseded_by') IS NOT NULL").get()).toEqual({ count: 0 });
+		releaseJudgments.resolve();
+		const response = await pending;
 		expect(response.status).toBe(200);
 		expect(await response.json()).toEqual({ degraded: false, turnId: "turn", committed: true });
 		expect(database.sqlite.prepare("SELECT state FROM nodix_atomic_extraction_ledger").all()).toEqual([{ state: "complete" }]);
@@ -223,15 +240,14 @@ it("returns the committed turn while arrival judgments are blocked and skips its
 		expect(await retry.json()).toEqual({ degraded: false, turnId: "turn", committed: true });
 		expect(calls.filter(kind => kind === "extraction")).toEqual(["extraction"]);
 		expect(database.sqlite.prepare("SELECT COUNT(*) AS count FROM nodix_memories").get()).toEqual({ count: 13 });
-		expect(database.sqlite.prepare("SELECT COUNT(*) AS count FROM nodix_memories WHERE json_extract(metadata, '$.superseded_by') IS NOT NULL").get()).toEqual({ count: 0 });
+		expect(database.sqlite.prepare("SELECT COUNT(*) AS count FROM nodix_memories WHERE json_extract(metadata, '$.superseded_by') IS NOT NULL").get()).toEqual({ count: 12 });
 	} finally { releaseJudgments.resolve(); }
 	await sidecar?.stop();
 	sidecar = undefined;
-	expect(database.sqlite.prepare("SELECT COUNT(*) AS count FROM nodix_memories WHERE json_extract(metadata, '$.superseded_by') IS NOT NULL").get()).toEqual({ count: 3 });
+	expect(database.sqlite.prepare("SELECT COUNT(*) AS count FROM nodix_memories WHERE json_extract(metadata, '$.superseded_by') IS NOT NULL").get()).toEqual({ count: 12 });
 });
 
 it("does not extract again after the caller times out on a committed turn", async () => {
-	holdJudgments = true;
 	const request = capture(["I like lentils."]);
 	const controller = new AbortController();
 	const first = post("/v1/capture", request, controller.signal).then(
@@ -249,12 +265,12 @@ it("does not extract again after the caller times out on a committed turn", asyn
 	} finally { releaseJudgments.resolve(); }
 });
 
-it("shares three arrival calls across all cards of one capture", async () => {
+it("writes all judged cards without the former three-pair arrival limit", async () => {
 	const response = await post("/v1/capture", capture(["I like lentils.", "I like barley.", "I like chickpeas."]));
 	expect(await response.json()).toEqual({ degraded: false, turnId: "turn", committed: true });
 	await sidecar?.stop();
 	sidecar = undefined;
-	expect(calls.filter(kind => kind === "arrival")).toHaveLength(3);
+	expect(database.sqlite.prepare("SELECT COUNT(*) AS count FROM nodix_memories WHERE json_extract(metadata, '$.precision_check') = 'pending'").get()).toEqual({ count: 0 });
 	expect(calls.filter(kind => kind === "extraction")).toEqual(["extraction"]);
 	expect(database.sqlite.prepare("SELECT COUNT(*) AS count FROM nodix_memories").get()).toEqual({ count: 15 });
 	expect(database.sqlite.prepare("SELECT COUNT(*) AS count FROM nodix_memories WHERE json_extract(metadata, '$.superseded_by') IS NOT NULL").get()).toEqual({ count: 0 });
@@ -263,14 +279,14 @@ it("shares three arrival calls across all cards of one capture", async () => {
 	]);
 });
 
-it.each(["empty", "unavailable"])("counts Sno GPU %s retries and host fallback in the same ten-call capture budget", async failure => {
+it.each(["empty", "unavailable"])("stores the fact pending when the Sno GPU write judgement is %s", async failure => {
 	judgmentReply = failure === "empty" ? "" : "keep";
 	judgmentStatus = failure === "unavailable" ? 503 : 200;
 	const response = await post("/v1/capture", capture(["I like lentils."]));
 	expect(await response.json()).toEqual({ degraded: false, turnId: "turn", committed: true });
 	await sidecar?.stop();
 	sidecar = undefined;
-	expect(calls.filter(kind => kind === "arrival")).toHaveLength(3);
+	expect(database.sqlite.prepare("SELECT COUNT(*) AS count FROM nodix_memories WHERE json_extract(metadata, '$.precision_check') = 'pending'").get()).toEqual({ count: 1 });
 	expect(database.sqlite.prepare("SELECT COUNT(*) AS count FROM nodix_memories").get()).toEqual({ count: 13 });
 	expect(database.sqlite.prepare("SELECT COUNT(*) AS count FROM nodix_memories WHERE json_extract(metadata, '$.superseded_by') IS NOT NULL").get()).toEqual({ count: 0 });
 });
