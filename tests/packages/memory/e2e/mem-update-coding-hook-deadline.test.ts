@@ -127,7 +127,7 @@ describe("coding hook deadline includes first repository import", () => {
 
 	it.each<Host>(["codex", "claude"])("%s still injects real service memory with an adequate startup deadline", async host => {
 		notes(host, 1);
-		const memory = await fixture.store.store({ text: "The Harbor repository deployment owner is Jordan.", projectId: "global", category: "episodic" });
+		const memory = await fixture.store.store({ text: "The Harbor repository deployment owner is Jordan.", projectId: "global", category: "episodic", metadata: JSON.stringify({ precision_kind: "rule" }) });
 		const output = await (host === "codex" ? codexHooks : claudeHooks).sessionStart(payload(host, `${host}-positive`));
 		const context = JSON.parse(output).hookSpecificOutput.additionalContext as string;
 		expect(context).toContain("The Harbor repository deployment owner is Jordan.");
@@ -157,7 +157,7 @@ describe("coding hook deadline includes first repository import", () => {
 	});
 
 	it.each<Host>(["codex", "claude"])("%s CLI emits one valid hook envelope when ambient capture is disabled", async host => {
-		const memory = await fixture.store.store({ text: "The Harbor repository deployment owner is Jordan.", projectId: "global", category: "episodic" });
+		const memory = await fixture.store.store({ text: "The Harbor repository deployment owner is Jordan.", projectId: "global", category: "episodic", metadata: JSON.stringify({ precision_kind: "rule" }) });
 		settings({ ambient: false });
 		const output = await new Promise<{ code: number | null; stdout: string; stderr: string }>((resolve, reject) => {
 			const child = spawn(process.execPath, ["--import", "tsx", join(repo, `apps/mem-${host}/src/cli.ts`), "session-start"], {
