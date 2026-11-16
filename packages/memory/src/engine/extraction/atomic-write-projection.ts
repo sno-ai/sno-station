@@ -75,6 +75,8 @@ function metadataForRecord(
 		// because retrieval is one of those readers. `record.category` here is the card's own
 		// category, already adjusted for a to-do, so the metadata cannot disagree with the column.
 		kind: record.category,
+		...(record.precisionKind === undefined ? {} : { precision_kind: record.precisionKind }),
+		...(record.assertedBy === undefined ? {} : { asserted_by: record.assertedBy }),
 		memory_category: record.category,
 		// The write door reads both: an ended profile claim that is not a to-do closure stays live,
 		// and a later positive claim on the same group is judged against it (see closeEndedCardAtCreate).
