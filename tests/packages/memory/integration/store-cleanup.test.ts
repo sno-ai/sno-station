@@ -309,32 +309,94 @@ describe("store cleanup over a store written under the old content hash", () => 
 		]);
 	});
 
-	it("shares one nightly budget across place checks and three-vote admission batches", async () => {
+	it.each([false, true])("shares one pass budget and continues only for full runs: %s", async full => {
 		const profile = dirname(fixture.dbPath);
 		writeSettingsFixture(profile, { store: { path: fixture.dbPath, encryptionKey: fixture.encryptionKey } });
 		installRemSchema(fixture.runtime.db);
+		const previousAt = Date.now() - 86_400_000;
+		fixture.runtime.db.exec("CREATE TABLE IF NOT EXISTS nodix_memory_migration_markers (name TEXT PRIMARY KEY, applied_at INTEGER NOT NULL, payload TEXT NOT NULL)");
+		fixture.runtime.db.prepare("INSERT INTO nodix_memory_migration_markers VALUES ('memory-precision-last-night', ?, ?)")
+			.run(previousAt, JSON.stringify({ day: "2026-11-14", since: previousAt }));
 		for (let index = 0; index < 2000; index += 1) {
 			plant({ id: `budget-rule-${index}`, text: `The owner requires report detail ${index}.`, timestamp: index,
-				hash: createHash("sha256").update(String(index)).digest("hex"), metadata: { writer_agent_id: "codex" } });
+				hash: createHash("sha256").update(String(index)).digest("hex"), metadata: { writer_agent_id: "codex", precision_night: { at: previousAt, text: createHash("sha256").update(String(index)).digest("hex") } } });
 		}
 		fixture.runtime.db.prepare("UPDATE nodix_memories SET project_id = CASE WHEN timestamp < 1000 THEN 'first-project' ELSE 'second-project' END").run();
 		const agentPort = { async complete(request: { prompt: string; callId?: string }) {
 			const precision = precisionReply(request);
 			if (precision !== undefined) return { kind: "ok" as const, text: JSON.stringify(precision) };
 			const data = JSON.parse(request.prompt.slice(request.prompt.lastIndexOf("\n") + 1));
+			if (request.callId === "E19") return { kind: "ok" as const, text: JSON.stringify({ rows: data.map((row: { id: string }) => ({ id: row.id, label: "topic" })) }) };
+			if (request.callId === "E20") return { kind: "ok" as const, text: '{"ids":[]}' };
 			const answer = Array.isArray(data) ? { rows: data.map((row: { id: string }) => ({ id: row.id, verdict: "keep", kind: "rule", origin: "owner", about_user: true })) }
 				: data.place ? { mode: "work" } : { rows: data.rows.map((row: { id: string }) => ({ id: row.id, scope: "project" })) };
 			return { kind: "ok" as const, text: JSON.stringify(answer) };
 		} };
-		await runPrecisionNightly({ settings: readSettings(), agentPort, waveId: "nightly-budget" });
-		expect(fixture.runtime.db.prepare("SELECT count(*) AS rows FROM nodix_memories WHERE json_extract(metadata, '$.precision_judged') = 1").get()).toEqual({ rows: 1280 });
-		expect(fixture.runtime.db.prepare("SELECT count(*) AS rows FROM nodix_memories WHERE json_extract(metadata, '$.precision_kind') IS NULL").get()).toEqual({ rows: 720 });
+		await runPrecisionNightly({ settings: readSettings(), agentPort, waveId: "nightly-budget", full });
+		const judged = full ? 2000 : 1280;
+		expect(fixture.runtime.db.prepare("SELECT count(*) AS rows FROM nodix_memories WHERE json_extract(metadata, '$.precision_judged') = 1").get()).toEqual({ rows: judged });
+		expect(fixture.runtime.db.prepare("SELECT count(*) AS rows FROM nodix_memories WHERE json_extract(metadata, '$.precision_kind') IS NULL").get()).toEqual({ rows: 2000 - judged });
 		expect(fixture.runtime.db.prepare("SELECT project_id, count(*) AS rows FROM nodix_memories WHERE json_extract(metadata, '$.precision_judged') = 1 GROUP BY project_id ORDER BY project_id").all()).toEqual([
-			{ project_id: "first-project", rows: 1000 }, { project_id: "second-project", rows: 280 },
+			{ project_id: "first-project", rows: 1000 }, { project_id: "second-project", rows: judged - 1000 },
 		]);
+		if (full) {
+			const backup = fixture.runtime.db.prepare("SELECT payload FROM nodix_memory_migration_markers WHERE name = 'memory-precision-backup'").get() as { payload: string };
+			const path = JSON.parse(backup.payload).path;
+			expect((await readdir(dirname(path))).filter(name => name.startsWith("precision-before-cleanup-") && name.endsWith(".sqlite"))).toEqual([path.split("/").at(-1)]);
+			fixture.runtime.db.prepare("ATTACH DATABASE ? AS before_last_pass").run(path);
+			try {
+				const prior = fixture.runtime.db.prepare("SELECT count(*) AS rows FROM before_last_pass.nodix_memories WHERE json_extract(metadata, '$.precision_judged') = 1").get() as { rows: number };
+				expect(prior.rows).toBeGreaterThanOrEqual(1280);
+			} finally { fixture.runtime.db.exec("DETACH DATABASE before_last_pass"); }
+			expect(fixture.runtime.db.prepare("SELECT count(*) AS rows FROM nodix_rem_journal WHERE job_id = 'nightly-budget' AND stage = 'night' AND outcome = 'fine'").get()).toEqual({ rows: 1 });
+		}
 		expect(readRows()).toHaveLength(2000);
-		expect(fixture.runtime.db.prepare("SELECT count(*) AS rows FROM nodix_memories WHERE json_type(metadata, '$.precision_admission') = 'text'").get()).toEqual({ rows: 1280 });
-		expect(fixture.runtime.db.prepare("SELECT json_extract(payload, '$.since') AS since FROM nodix_memory_migration_markers WHERE name = 'memory-precision-last-night'").get()).toEqual({ since: 0 });
+		expect(fixture.runtime.db.prepare("SELECT count(*) AS rows FROM nodix_memories WHERE json_type(metadata, '$.precision_admission') = 'text'").get()).toEqual({ rows: judged });
+		expect(fixture.runtime.db.prepare("SELECT json_extract(payload, '$.since') AS since FROM nodix_memory_migration_markers WHERE name = 'memory-precision-last-night'").get()).toEqual({ since: full ? Date.now() : previousAt });
+	});
+
+	it.each([false, true])("honours today's marker unless full is requested: %s", async full => {
+		writeSettingsFixture(dirname(fixture.dbPath), { store: { path: fixture.dbPath, encryptionKey: fixture.encryptionKey } });
+		installRemSchema(fixture.runtime.db);
+		plant({ id: "today-rule", text: "The owner requires concise reports.", hash: "a".repeat(64), timestamp: 1, metadata: {} });
+		fixture.runtime.db.exec("CREATE TABLE IF NOT EXISTS nodix_memory_migration_markers (name TEXT PRIMARY KEY, applied_at INTEGER NOT NULL, payload TEXT NOT NULL)");
+		const day = new Date(Date.now()).toLocaleDateString("en-CA");
+		fixture.runtime.db.prepare("INSERT INTO nodix_memory_migration_markers VALUES ('memory-precision-last-night', ?, ?)")
+			.run(Date.now(), JSON.stringify({ day }));
+		const agentPort = { async complete(request: { callId?: string; prompt: string }) {
+			const precision = precisionReply(request);
+			if (precision !== undefined) return { kind: "ok" as const, text: JSON.stringify(precision) };
+			if (request.callId === "E19") return { kind: "ok" as const, text: '{"rows":[{"id":"today-rule","label":"topic"}]}' };
+			return { kind: "ok" as const, text: '{"rows":[{"id":"today-rule","verdict":"keep","kind":"rule","origin":"owner","about_user":false}]}' };
+		} };
+		await runPrecisionNightly({ settings: readSettings(), agentPort, waveId: "today-marker", full });
+		expect(JSON.parse(store.getById("today-rule")?.metadata ?? "{}").precision_judged).toBe(full ? true : undefined);
+		if (full) {
+			await runPrecisionNightly({ settings: readSettings(), agentPort, waveId: "automatic-after-full" });
+			expect(fixture.runtime.db.prepare("SELECT count(*) AS rows FROM nodix_rem_journal WHERE job_id = 'automatic-after-full'").get()).toEqual({ rows: 0 });
+		}
+	});
+
+	it("ends a full run when a deferred pass changed nothing and judged no new row", async () => {
+		writeSettingsFixture(dirname(fixture.dbPath), { store: { path: fixture.dbPath, encryptionKey: fixture.encryptionKey } });
+		installRemSchema(fixture.runtime.db);
+		for (let index = 0; index < 1400; index += 1) {
+			plant({ id: `unsure-${index}`, text: `Report requirement ${index}.`, hash: createHash("sha256").update(String(index)).digest("hex"), timestamp: index, metadata: {} });
+		}
+		let calls = 0;
+		const agentPort = { async complete(request: { prompt: string }) {
+			calls += 1;
+			const rows = JSON.parse(request.prompt.slice(request.prompt.lastIndexOf("\n") + 1)) as Array<{ id: string }>;
+			return { kind: "ok" as const, text: JSON.stringify({ rows: rows.map(row => ({ id: row.id, verdict: "unsure" })) }) };
+		} };
+		await runPrecisionNightly({ settings: readSettings(), agentPort, waveId: "no-progress", full: true });
+		expect(calls).toBe(100);
+		expect(readRows()).toHaveLength(1400);
+		expect(fixture.runtime.db.prepare("SELECT count(*) AS rows FROM nodix_memories WHERE json_extract(metadata, '$.precision_judged') = 1").get()).toEqual({ rows: 0 });
+		expect(fixture.runtime.db.prepare("SELECT reason FROM nodix_rem_journal WHERE job_id = 'no-progress' AND stage = 'night'").all())
+			.toEqual([{ reason: "Full cleanup stopped: deferred pass changed nothing and judged no new row" }]);
+		expect(fixture.runtime.db.prepare("SELECT json_extract(payload, '$.day') AS day FROM nodix_memory_migration_markers WHERE name = 'memory-precision-last-night'").get())
+			.toEqual({ day: new Date(Date.now()).toLocaleDateString("en-CA") });
 	});
 
 	it("nightly backup: two successful nights retain only the newer snapshot and remove old side files", async () => {
@@ -432,7 +494,7 @@ describe("store cleanup over a store written under the old content hash", () => 
 		]);
 	});
 
-	it("uses the remaining whole-night budget for file checks and skips cached, changed and missing files", async () => {
+	it.each([false, true])("uses the pass budget for file checks and continues only for full runs: %s", async full => {
 		const profile = dirname(fixture.dbPath);
 		writeSettingsFixture(profile, { store: { path: fixture.dbPath, encryptionKey: fixture.encryptionKey } });
 		installRemSchema(fixture.runtime.db);
@@ -440,7 +502,7 @@ describe("store cleanup over a store written under the old content hash", () => 
 		const sha256 = createHash("sha256").update("Use short reports.").digest("hex");
 		const changed = join(profile, "changed.md");
 		await writeFile(changed, "The bytes changed.");
-		for (let index = 0; index < 52; index += 1) {
+		for (let index = 0; index < (full ? 110 : 52); index += 1) {
 			const file = join(profile, `loaded-${index}.md`);
 			await writeFile(file, "Use short reports.");
 			const files = [{ path: file, bytes: 18, sha256 }];
@@ -464,14 +526,14 @@ describe("store cleanup over a store written under the old content hash", () => 
 			return { kind: "ok" as const, text: JSON.stringify(data.rule ? { verdict: "covered" }
 				: { rows: data.rows.map((row: { id: string }) => ({ id: row.id, quote: "Use short reports.", verdict: "said" })) }) };
 		} };
-		await runPrecisionNightly({ settings: readSettings(), agentPort, waveId: "nightly-loaded-budget" });
-		expect.soft(fixture.runtime.db.prepare("SELECT count(*) AS rows FROM nodix_loaded_file_judgments").get()).toEqual({ rows: 33 });
+		await runPrecisionNightly({ settings: readSettings(), agentPort, waveId: "nightly-loaded-budget", full });
+		expect.soft(fixture.runtime.db.prepare("SELECT count(*) AS rows FROM nodix_loaded_file_judgments").get()).toEqual({ rows: full ? 110 : 33 });
 		expect(fixture.runtime.db.prepare("SELECT judged_at FROM nodix_loaded_file_judgments WHERE file_path = ?").get(join(profile, "loaded-0.md"))).toEqual({ judged_at: 1 });
 		expect.soft(fixture.runtime.db.prepare("SELECT verdict FROM nodix_loaded_file_judgments WHERE file_path = ?").get(join(profile, "loaded-32.md"))).toEqual({ verdict: "said" });
-		expect.soft(fixture.runtime.db.prepare("SELECT verdict FROM nodix_loaded_file_judgments WHERE file_path IN (?, ?, ?, ?)").all(changed, join(profile, "missing.md"), join(profile, "loaded-33.md"), join(profile, "loaded-51.md"))).toEqual([]);
+		expect.soft(fixture.runtime.db.prepare("SELECT verdict FROM nodix_loaded_file_judgments WHERE file_path IN (?, ?, ?, ?)").all(changed, join(profile, "missing.md"), join(profile, "loaded-33.md"), join(profile, "loaded-51.md"))).toEqual(full ? [{ verdict: "said" }, { verdict: "said" }] : []);
 	});
 
-	it("preserves admission and file judgments when the nightly backup fails", async () => {
+	it.each([false, true])("preserves admission and file judgments when the nightly backup fails: %s", async full => {
 		const profile = dirname(fixture.dbPath);
 		writeSettingsFixture(profile, { store: { path: fixture.dbPath, encryptionKey: fixture.encryptionKey } });
 		installRemSchema(fixture.runtime.db);
@@ -498,7 +560,7 @@ describe("store cleanup over a store written under the old content hash", () => 
 				: { rows: data.rows.map((row: { id: string }) => ({ id: row.id, quote: "", verdict: "not-said" })) };
 			return { kind: "ok" as const, text: JSON.stringify(answer) };
 		} };
-		await runPrecisionNightly({ settings: readSettings(), agentPort, waveId: "nightly-backup-failure" });
+		await runPrecisionNightly({ settings: readSettings(), agentPort, waveId: "nightly-backup-failure", full });
 		expect(readRows()).toHaveLength(3);
 		expect.soft(JSON.parse(store.getById("backup-keep")?.metadata ?? "{}")).toEqual({ writer_agent_id: "codex" });
 		expect.soft(JSON.parse(store.getById("backup-delete")?.metadata ?? "{}")).toEqual({ writer_agent_id: "codex" });
