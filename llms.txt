@@ -35,6 +35,11 @@ This repository has been public since 2026-09-18. Blocks in the README carry a "
 - .github/ISSUE_TEMPLATE/ — bug, feature, design partner
 - SECURITY.md — report vulnerabilities to security@sno.ai, never in a public issue
 
+## Related
+
+- https://github.com/sno-ai/sno-station-skills — the skills Sno Station installs: 39 skills in 30 units, each a plain-text SKILL.md
+  with its scripts; its README has the full catalog and one-skill install prompts
+
 ## Vocabulary
 
 - squad — the category word: your agents working as one team (always lower-case)

@@ -6,6 +6,9 @@ Thanks for helping build Sno Station in public. This page is short on purpose.
 
 - **Questions and ideas** go to [Discussions](https://github.com/sno-ai/sno-station/discussions).
 - **Bugs and feature requests** use the issue templates.
+- **A change to a skill** (`peer-review`, `rotate-agent`, `handoff` and the rest) goes to
+  [sno-station-skills](https://github.com/sno-ai/sno-station-skills), where the skills live. It has its own
+  good first issues.
 - **Security problems** never go in a public issue. See [SECURITY.md](SECURITY.md).
 - **Using Claude Code and Codex together already?** Open a
   [design partner issue](.github/ISSUE_TEMPLATE/design-partner.yml). We want to hear from you first.
