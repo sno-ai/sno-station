@@ -18,6 +18,7 @@ import {
 	CODING_SKIN_WORKER_LIFETIME_MS,
 	HOST_MODEL_CALLBACK_HOST,
 	HOST_MODEL_CALLBACK_PATH,
+	writeHostWorkerRecord,
 } from "@snoai/memory/coding-skin";
 import { z } from "zod";
 import { MODEL_ID, SKIN_ID } from "./constants.js";
@@ -298,6 +299,7 @@ export async function runWorker(dependencies: WorkerDependencies = productionDep
 		await client.init({ principal, project: "global", session: "cursor-worker", host: { sessionId: "cursor-worker" } }, {
 			skinId: SKIN_ID, model: { baseUrl: callback.baseUrl, credential, model: MODEL_ID },
 		});
+		await writeHostWorkerRecord(profileRoot());
 		console.log(JSON.stringify({ event: "worker-registered" }));
 		while (true) {
 			const entries = await readSpoolEntries();

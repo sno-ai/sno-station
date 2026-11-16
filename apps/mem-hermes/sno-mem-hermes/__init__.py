@@ -20,7 +20,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import Literal, Protocol, cast
+from typing import Literal, Protocol, TypedDict, cast
 from urllib.parse import quote
 
 from agent.memory_provider import MemoryProvider, RecallStatus
@@ -54,6 +54,47 @@ _OBSERVED_FIELDS = ("tool_name", "tool_use_id", "call_id", "notification_type", 
                     "choice", "human_addressee", "review_requested", "decision_required", "context_exhausted", "reference",
                     "transcript_path")
 _OBSERVED_TEXT_CHARS = 200
+
+
+class LoadedFile(TypedDict):
+    path: str
+    sha256: str
+    bytes: int
+
+
+def _loaded_files_at_start(cwd: str) -> list[LoadedFile]:
+    home = Path(os.environ.get("HERMES_HOME") or Path.home() / ".hermes").resolve()
+    directory = Path(cwd).resolve()
+    candidates: list[Path] = []
+    for parent in (directory, *directory.parents):
+        candidates.extend((parent / ".hermes.md", parent / "HERMES.md"))
+        if (parent / ".git").exists():
+            break
+    candidates.extend(directory / name for name in
+                      ("AGENTS.override.md", "AGENTS.md", "CLAUDE.md", ".cursorrules"))
+
+    def read(path: Path) -> bytes | None:
+        try:
+            with path.open(encoding="utf-8", newline="") as source:
+                return source.read(20_000).encode("utf-8")
+        except FileNotFoundError:
+            return None
+        except (OSError, UnicodeError) as error:
+            _LOG.error("loaded file read failed; file omitted and memory remains deliverable",
+                       extra={"operation": "read-loaded-file", "target": str(path), "error": str(error)})
+            return None
+
+    paths = [home / "SOUL.md"]
+    project_file = next((path for path in candidates if path.exists()), None)
+    if project_file is not None:
+        paths.append(project_file)
+    paths.extend((home / "memories" / "MEMORY.md", home / "memories" / "USER.md"))
+    files: list[LoadedFile] = []
+    for path in paths:
+        content = read(path)
+        if content is not None:
+            files.append({"path": str(path), "sha256": hashlib.sha256(content).hexdigest(), "bytes": len(content)})
+    return files
 
 
 def _observed_input(input_data: dict[str, object]) -> dict[str, object]:
@@ -182,9 +223,9 @@ class PluginRuntime:
         self._server: ThreadingHTTPServer | None = None
         self._thread: threading.Thread | None = None
         self._providers: dict[str, SnoMemoryProvider] = {}
-        self._ended: dict[str, tuple[SidecarClient, str, list[dict[str, object]]]] = {}
+        self._ended: dict[str, tuple[SidecarClient, str, list[dict[str, object]], str]] = {}
         # The last shut-down session's messages: gateway /new fires on_session_reset after shutdown.
-        self._shut_down: tuple[str, tuple[SidecarClient, str, list[dict[str, object]]]] | None = None
+        self._shut_down: tuple[str, tuple[SidecarClient, str, list[dict[str, object]], str]] | None = None
 
     def activate(self, ctx: RegistrationContext) -> None:
         self._llm = ctx.llm
@@ -239,22 +280,22 @@ class PluginRuntime:
 
     def keep_ended(
         self, session_id: str, client: SidecarClient, project: str,
-        messages: list[dict[str, object]],
+        messages: list[dict[str, object]], surface: str,
     ) -> None:
         with self._state_lock:
-            self._ended[session_id] = (client, project, messages)
+            self._ended[session_id] = (client, project, messages, surface)
 
-    def take_ended(self, session_id: str) -> tuple[SidecarClient, str, list[dict[str, object]]] | None:
+    def take_ended(self, session_id: str) -> tuple[SidecarClient, str, list[dict[str, object]], str] | None:
         with self._state_lock:
             return self._ended.pop(session_id, None)
 
     def keep_shut_down(
-        self, session_id: str, ended: tuple[SidecarClient, str, list[dict[str, object]]],
+        self, session_id: str, ended: tuple[SidecarClient, str, list[dict[str, object]], str],
     ) -> None:
         with self._state_lock:
             self._shut_down = (session_id, ended)
 
-    def take_shut_down(self, session_id: str) -> tuple[SidecarClient, str, list[dict[str, object]]] | None:
+    def take_shut_down(self, session_id: str) -> tuple[SidecarClient, str, list[dict[str, object]], str] | None:
         with self._state_lock:
             if self._shut_down is None or self._shut_down[0] != session_id:
                 return None
@@ -566,6 +607,7 @@ class SnoMemoryProvider(MemoryProvider):
         self._client: SidecarClient | None = None
         self._project = ""
         self._cwd: str | None = None
+        self._surface = ""
         self._session_id = ""
         self._primary = False
         self._rewind_epoch = 0
@@ -603,6 +645,8 @@ class SnoMemoryProvider(MemoryProvider):
         self._pending_dir = profile_dir / "sno-mem-hermes" / "pending-captures"
         cwd = kwargs.get("cwd")
         self._cwd = str(Path(cwd).resolve()) if isinstance(cwd, str) and cwd else None
+        platform = kwargs.get("platform")
+        self._surface = platform if isinstance(platform, str) else ""
         self._project = self._cwd or str(Path.cwd().resolve())
         self._session_id = session_id
         self._primary = kwargs.get("agent_context", "primary") == "primary"
@@ -725,6 +769,8 @@ class SnoMemoryProvider(MemoryProvider):
                 "limit": int(self._recall_number(group, "limit")),
                 "maxChars": int(self._recall_number(group, "maxChars")),
             }
+            if phase == "session-start":
+                options["loadedFiles"] = _loaded_files_at_start(self._cwd or self._project)
             if phase == "prompt":
                 options["minScore"] = self._recall_number(group, "minScore")
             result = self._require_client().post(
@@ -1102,11 +1148,11 @@ class SnoMemoryProvider(MemoryProvider):
                 {"role": message.get("role"), "content": message.get("content"), "at": time.time() * 1000}
                 for message in messages if isinstance(message, dict)
                 and message.get("role") in ("system", "developer", "user", "assistant", "tool")
-            ])
+            ], self._surface)
 
     def _end_session(
         self, session_id: str, boundary: str | None = None,
-    ) -> tuple[SidecarClient, str, list[dict[str, object]]] | None:
+    ) -> tuple[SidecarClient, str, list[dict[str, object]], str] | None:
         if not session_id or self._client is None:
             return None
         self._flush_capture(session_id)
@@ -1259,7 +1305,7 @@ class SnoMemoryProvider(MemoryProvider):
             "principal": getpass.getuser(),
             "project": project,
             "session": session_id,
-            "host": {"sessionId": session_id, "workspace": project,
+            "host": {"sessionId": session_id, "workspace": project, "surface": self._surface,
                      **({"boundary": boundary} if boundary else {})},
         }
 
@@ -1387,11 +1433,11 @@ def _on_session_reset(**kwargs: object) -> None:
     ended = _RUNTIME.take_ended(old_session_id) or _RUNTIME.take_shut_down(old_session_id)
     if ended is None:
         return
-    client, project, messages = ended
+    client, project, messages, surface = ended
     try:
         client.post("on-session-end", {"messages": messages, "scope": {
             "principal": getpass.getuser(), "project": project, "session": old_session_id,
-            "host": {"sessionId": old_session_id, "workspace": project,
+            "host": {"sessionId": old_session_id, "workspace": project, "surface": surface,
                      "boundary": "reset", "at": time.time() * 1000},
         }})
     except (OSError, RuntimeError, ValueError) as error:

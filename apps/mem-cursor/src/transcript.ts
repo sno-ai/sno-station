@@ -41,8 +41,9 @@ export function foldTranscript(
 	cursor: TranscriptCursor,
 	lines: readonly string[],
 	final: boolean,
-): { turns: TranscriptTurn[]; cursor: TranscriptCursor } {
+): { turns: TranscriptTurn[]; cursor: TranscriptCursor; firstPrompt?: string } {
 	let { users, pending } = cursor;
+	let firstPrompt: string | undefined;
 	const turns: TranscriptTurn[] = [];
 	const finish = (complete: boolean): void => {
 		if (pending && complete && pending.user && pending.assistant) turns.push(pending);
@@ -64,12 +65,14 @@ export function foldTranscript(
 			finish(true);
 			users += 1;
 			pending = { turnId: `u${users}`, user: userQuery(text), assistant: "" };
+			if (users === 1) firstPrompt = pending.user;
 		} else if (row.role === "assistant" && pending && text) {
 			pending = { ...pending, assistant: pending.assistant ? `${pending.assistant}\n\n${text}` : text };
 		}
 	}
 	if (final) finish(true);
-	return { turns, cursor: { offset: cursor.offset, users, ...(pending ? { pending } : {}) } };
+	return { turns, cursor: { offset: cursor.offset, users, ...(pending ? { pending } : {}) },
+		...(firstPrompt === undefined ? {} : { firstPrompt }) };
 }
 
 /** Reads the rows after the cursor and returns the turns they complete and the advanced cursor. */
@@ -78,9 +81,9 @@ export async function readTurns(
 	cursor: TranscriptCursor,
 	budgetMs: number,
 	final: boolean,
-): Promise<{ turns: TranscriptTurn[]; cursor: TranscriptCursor }> {
+): Promise<{ turns: TranscriptTurn[]; cursor: TranscriptCursor; firstPrompt?: string }> {
 	const lines: string[] = [];
 	const read = await readNewLines(path, cursor.offset, budgetMs, line => lines.push(line));
 	const folded = foldTranscript(cursor, lines, final && read.done);
-	return { turns: folded.turns, cursor: { ...folded.cursor, offset: read.offset } };
+	return { ...folded, cursor: { ...folded.cursor, offset: read.offset } };
 }
