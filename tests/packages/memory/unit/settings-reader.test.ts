@@ -150,6 +150,15 @@ it("reads the local lesson generation destination from shipped settings", async 
 	});
 });
 
+it.each([
+	["E15", { "local-first": "off", "agent-native": "host", "rem-enhanced": "host" }],
+	["E20", { "local-first": "off", "agent-native": "host", "rem-enhanced": "host" }],
+	["E19", { "local-first": "off", "agent-native": "host", "rem-enhanced": "host" }],
+] as const)("reads %s nightly destinations from shipped settings", async (callId, destinations) => {
+	writeSettingsFixture(root);
+	expect((await readSettings()).modelCalls[callId]).toEqual(destinations);
+});
+
 it("reads published settings without the local lesson row and preserves supplied destinations", async () => {
 	const { path, settings } = writeSettingsFixture(root, {
 		modelCalls: { R2: { "agent-native": "off" } },
@@ -157,7 +166,7 @@ it("reads published settings without the local lesson row and preserves supplied
 	const calls = group(settings, "modelCalls");
 	delete calls.R5;
 	rewrite(path, settings);
-	expect(Object.keys(calls)).toHaveLength(31);
+	expect(Object.keys(calls)).toHaveLength(34);
 	const read = await readSettings();
 	expect(read.modelCalls.R5).toEqual({
 		"local-first": "host", "agent-native": "off", "rem-enhanced": "off",
