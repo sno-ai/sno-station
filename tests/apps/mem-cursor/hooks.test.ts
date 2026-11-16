@@ -64,7 +64,6 @@ describe("IDE hooks", () => {
 		expect(hook("session-start", { ...ide(""), is_background_agent: false, composer_mode: "agent", hook_event_name: "sessionStart" }, IDE_ENV).stdout).toBe("{}");
 		expect(hook("user-prompt-submit", { ...ide(generation), composer_mode: "agent", attachments: [], hook_event_name: "beforeSubmitPrompt",
 			prompt: "From now on invoices are rounded half-even." }, IDE_ENV).stdout).toBe("{}");
-		hook("after-agent-thought", { ...ide(generation), text: "Checking rounding.", duration_ms: 2579, hook_event_name: "afterAgentThought" }, IDE_ENV);
 		hook("after-agent-response", { ...ide(generation), text: "Done: invoices now round half-even.", input_tokens: 48196, hook_event_name: "afterAgentResponse", transcript_path: transcript }, IDE_ENV);
 		// A message queued for the next turn arrives before this turn's stop; pairing must follow generation_id.
 		hook("user-prompt-submit", { ...ide("0b353f61-5d1e-4f5c-9a1e-3c2b1a0f9e8d"), prompt: "Next: update the changelog." }, IDE_ENV);
@@ -148,15 +147,14 @@ describe("CLI hooks", () => {
 	const user = (query: string) => JSON.stringify({ role: "user", message: { content: [{ type: "text", text: `<timestamp>Friday, Oct 9, 2026, 4:38 AM (UTC)</timestamp>\n<user_query>\n${query}\n</user_query>` }] } });
 	const reply = (text: string) => JSON.stringify({ role: "assistant", message: { content: [{ type: "text", text }] } });
 
-	it("keeps the model Auto picked, captures complete transcript turns at stop and the rest at sessionEnd", () => {
+	it("captures complete transcript turns at stop and the rest at sessionEnd", () => {
 		const transcript = join(root, "agent-transcripts", id, `${id}.jsonl`);
 		mkdirSync(join(transcript, ".."), { recursive: true });
 		const cli = (generation: string, model = "default") => base(id, generation, model, "2026.10.01-e373342");
 		hook("session-start", { ...cli(id), is_background_agent: false, hook_event_name: "sessionStart" }, CLI_ENV);
 		hook("user-prompt-submit", { ...cli("778de69f"), prompt: "Use pnpm here.", attachments: [] }, CLI_ENV);
-		hook("after-agent-thought", { ...cli("778de69f", "cursor-grok-4.5-high"), model_id: "grok-4.5", text: "thinking" }, CLI_ENV);
 		hook("user-prompt-submit", { ...cli("12dc3e2b"), prompt: "And Node 24." }, CLI_ENV);
-		expect(record(id)).toMatchObject({ surface: "cli", model: "cursor-grok-4.5-high" });
+		expect(record(id)).toMatchObject({ surface: "cli", model: "default" });
 		writeFileSync(transcript, `${[user("Use pnpm here."), reply("pnpm it is."), JSON.stringify({ type: "turn_ended", status: "success" }),
 			user("[Sno Reach keep-alive]\nAnswer with the single word idle and end your turn."), reply("idle"), JSON.stringify({ type: "turn_ended", status: "success" }),
 			user("And Node 24."), reply("Pinned Node 24 in .nvmrc.")].join("\n")}\n`);

@@ -46,6 +46,7 @@ beforeAll(async () => {
 	await client.init(scope, { skinId: "cursor" });
 	const stored = await client.mutate({ op: "store", content: FACT, category: "episodic" }, scope);
 	if (stored.degraded || stored.result.isError) throw new Error("seed memory not stored");
+	database.sqlite.prepare("UPDATE nodix_memories SET metadata = json_set(metadata, '$.precision_kind', 'rule') WHERE text = ?").run(FACT);
 }, 120_000);
 
 afterAll(async () => {
