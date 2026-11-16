@@ -10,6 +10,7 @@ export type HostContext = {
 	sessionTimezone?: string;
 	workspace?: string;
 	sessionFile?: string;
+	surface?: string;
 	boundary?: "new" | "reset" | "session-end";
 	systemCaller?: boolean;
 	at?: number;
@@ -32,6 +33,7 @@ export type RecallOptions = {
 	corpus?: "memory" | "wiki" | "all" | "sessions";
 	source?: "auto" | "manual" | "native";
 	injectionPhase?: "session-start" | "prompt" | "first-prompt";
+	loadedFiles?: Array<{ path: string; sha256: string; bytes: number }>;
 	maxChars?: number;
 	limit?: number;
 	minScore?: number;
@@ -45,6 +47,7 @@ export type RecallOptions = {
 	aggregation?: { operation: (typeof AGGREGATION_OPERATIONS)[number]; terms: string[] };
 };
 export type Mutation =
+	| { op: "undo"; id: string }
 	| { op: "correct"; id: string; content: string }
 	| { op: "store"; content: string; category?: MemoryCategory; importance?: number; metadata?: Record<string, JsonValue> }
 	| { op: "forget"; id?: string; query?: string; suppressKey?: { subject: string; attribute: string }; suppressContent?: string; minScore?: number; maxDelete?: number; confirm?: boolean }
@@ -52,6 +55,7 @@ export type Mutation =
 	| { op: "clear"; confirm: boolean; all?: boolean }
 	| { op: "resolveReflection"; memoryId?: string; query?: string; dryRun?: boolean; note?: string; limit?: number };
 export type Inspection =
+	| { op: "precision" }
 	| { op: "storage" }
 	| { op: "stats"; scope?: string }
 	| { op: "list"; category?: MemoryCategory; limit?: number; offset?: number; importanceMin?: number }
@@ -98,6 +102,7 @@ export const scopeSchema: z.ZodType<ScopeCtx, unknown> = z.object({
 		agentId: z.string().optional(), sessionKey: z.string().optional(),
 		sessionId: z.string().optional(), sessionTimezone: z.string().optional(),
 		workspace: z.string().optional(), sessionFile: z.string().optional(),
+		surface: z.string().optional(),
 		boundary: z.enum(["new", "reset", "session-end"]).optional(), at: timestamp.optional(),
 		systemCaller: z.boolean().optional(),
 	}).optional(),
@@ -120,6 +125,9 @@ export const recallOptionsSchema: z.ZodType<RecallOptions, unknown> = z.object({
 	corpus: z.enum(["memory", "wiki", "all", "sessions"]).default("memory"),
 	source: z.enum(["auto", "manual", "native"]).optional(),
 	injectionPhase: z.enum(["session-start", "prompt", "first-prompt"]).optional(),
+	loadedFiles: z.array(z.object({
+		path: z.string(), sha256: z.string(), bytes: z.number().int().nonnegative(),
+	})).optional(),
 	maxChars: z.number().int().nonnegative().optional(),
 	limit: z.number().int().optional(), minScore: z.number().finite().optional(),
 	category: category.optional(), includeMetadata: z.boolean().optional(),
@@ -153,6 +161,7 @@ export const mutationSchema: z.ZodType<Mutation, unknown> = z.discriminatedUnion
 		query: nonempty.optional(), dryRun: z.boolean().optional(), note: z.string().optional(),
 		limit: z.number().int().optional(),
 	}).refine((value) => (value.memoryId !== undefined) !== (value.query !== undefined)),
+	z.strictObject({ op: z.literal("undo"), id: nonempty }),
 ]);
 export const inspectionSchema: z.ZodType<Inspection, unknown> = z.discriminatedUnion("op", [
 	z.object({ op: z.literal("storage") }),
@@ -167,6 +176,7 @@ export const inspectionSchema: z.ZodType<Inspection, unknown> = z.discriminatedU
 		unresolvedOnly: z.boolean().optional() }),
 	z.object({ op: z.literal("projects") }),
 	z.object({ op: z.literal("currentProject"), workspace: nonempty }),
+	z.object({ op: z.literal("precision") }),
 ]);
 export const usageSignalSchema: z.ZodType<UsageSignal, unknown> = z.object({
 	event: z.enum(["inject", "used", "rejected", "tool-error"]), memoryIds: z.array(nonempty),

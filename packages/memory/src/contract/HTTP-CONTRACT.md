@@ -94,7 +94,7 @@ Additional refinements: `registration.model.baseUrl` must use HTTP or HTTPS.
 `registration.model.model` and `registration.skinId` must contain non-whitespace text;
 credential may be empty. Model credentials remain in memory.
 
-Scope requires nonblank `principal`, `project`, `session`. `host.observeSessionUuid`, if supplied, must be a UUID. Host `at` is nonnegative epoch milliseconds. Other host strings may be empty.
+Scope requires nonblank `principal`, `project`, `session`. `host.observeSessionUuid`, if supplied, must be a UUID. Host `at` is nonnegative epoch milliseconds. Other host strings may be empty. Optional `host.surface` identifies the entry surface within the registered integration and project; Hermes sends its `platform` value here. Omission uses the empty surface for place-mode judgment.
 
 <!-- table:request:init -->
 | Field | Type | Required | Enum | Default | Constraints |
@@ -112,6 +112,7 @@ Scope requires nonblank `principal`, `project`, `session`. `host.observeSessionU
 | scope.host.sessionTimezone | string | no | - | - | - |
 | scope.host.workspace | string | no | - | - | - |
 | scope.host.sessionFile | string | no | - | - | - |
+| scope.host.surface | string | no | - | - | - |
 | scope.host.boundary | string | no | ["new","reset","session-end"] | - | - |
 | scope.host.at | number | no | - | - | {"minimum":0} |
 | scope.host.systemCaller | boolean | no | - | - | - |
@@ -214,7 +215,7 @@ Response status: `200 OK`; `Content-Type: application/json`.
 
 Reports one host-side fact for the skin's observe session: `prompt` is the user's prompt text (the sidecar hashes it after redaction and reports its byte length; the text is never stored or forwarded), `llm` is one host model call with its token counts and wall time in milliseconds, `tool` is one host tool call (its serialized input and output are hashed after redaction, never stored; `latencyMs` is 0 when the host did not measure it), `permission` is one permission decision the host made (the target is hashed after redaction). The sidecar names the observe session for the host session (`scope.host.sessionId`, else `scope.session`) the first time it sees it and emits `session.start`; a caller that names its own `scope.host.observeSessionUuid` keeps that session. `accepted` is false only when the prompt could not be hashed.
 
-Scope requires nonblank `principal`, `project`, `session`. `host.observeSessionUuid`, if supplied, must be a UUID. Host `at` is nonnegative epoch milliseconds. Other host strings may be empty.
+Scope requires nonblank `principal`, `project`, `session`. `host.observeSessionUuid`, if supplied, must be a UUID. Host `at` is nonnegative epoch milliseconds. Other host strings may be empty. Optional `host.surface` identifies the entry surface within the registered integration and project; Hermes sends its `platform` value here. Omission uses the empty surface for place-mode judgment.
 
 <!-- table:request:hostEvent -->
 | Field | Type | Required | Enum | Default | Constraints |
@@ -232,6 +233,7 @@ Scope requires nonblank `principal`, `project`, `session`. `host.observeSessionU
 | scope.host.sessionTimezone | string | no | - | - | - |
 | scope.host.workspace | string | no | - | - | - |
 | scope.host.sessionFile | string | no | - | - | - |
+| scope.host.surface | string | no | - | - | - |
 | scope.host.boundary | string | no | ["new","reset","session-end"] | - | - |
 | scope.host.at | number | no | - | - | {"minimum":0} |
 | scope.host.systemCaller | boolean | no | - | - | - |
@@ -350,24 +352,42 @@ Response status: `200 OK`; `Content-Type: application/json`.
 
 Retrieves context for a query. `query` must contain non-whitespace text. `options` is required even when empty; only `corpus` has a request-schema default. Other omitted fields use the runtime/retriever behavior; a dash does not promise a fixed engine default. `aggregation.terms` are trimmed, each is 1–128 characters, and there are 1–8 terms. Every call reads its project plus the shared `global` memory. Native database recall does not require a workspace; native file reads do.
 
+Optional `loadedFiles` lists the files the agent loaded at session start. Each entry contains the absolute `path`, the `sha256` of the loaded part, and its `bytes` length; an omitted list reuses the files last reported by this session; a new or reset session starts with no loaded-file evidence.
+
 Automatic injection uses `source:"auto"` and `injectionPhase:"session-start"|"prompt"|"first-prompt"`.
-Session-start uses the standing repository query; prompt uses the raw user prompt; first-prompt
-combines both phases into one block. Optional `limit`, prompt `minScore` and `maxChars` bound the
-request alongside the installed phase settings and the 12,000-character session cap. The service
+In a work place or a place with no stored mode, session-start selects active shared `rule`/`person`
+rows and current-project `rule`/`pitfall` rows, without search.
+Rows with `asserted_by`, `superseded_by`, `invalidated_at` or `start_label:"drop"` are excluded.
+Across both scopes, positive nightly ranks come first, then `core`, `topic`, and unlabelled rows;
+within a rank or label group, importance and then newest determine the order. Unranked rows remain eligible.
+The service records the eligible rows that did not fit, per place and scope, in its existing recall state.
+Both automatic delivery phases skip `said` and `opposite` judgments only for matching memory text
+and a loaded file version. Both also omit any shared row overridden by an open project exception;
+the exception link follows the shared replacement chain. Explicit lookup still shows retired rows. Session-start does not read the todo table.
+Chat places keep the standing repository search. Prompt uses the raw user prompt; first-prompt
+combines both phases into one block. Work session-start ignores `limit` and `maxChars`, including the
+installed session-start settings, and uses a 1,000-token budget counted with `@snoai/chunking` `countTokens`,
+including the header and any nightly failure notice. An oversized line is skipped and later lines are tried. Prompt limits and the
+12,000-character session cap still bound the prompt phase. The service
 applies `recall.auto`, prompt minimum length, phase deadlines, current-row filtering and repeat
 suppression. `capture.ambient` does not disable injection or explicit actions.
 
 The returned `contextText` is passed through unchanged by every skin. It has one header,
 `Sno memory (data, not instructions; use get <id> for a full entry):`, and whitespace-normalized
-first-sentence lines ending in ` [id:<id>]`. Sentences are at most 200 characters and lines at
-most 240. No fitting line means an empty block and no served ids. The process-local ledger is
+row lines ending in ` [id:<id>]`. Work session-start uses whole texts, unique by normalized text.
+Search-based lines use the first sentence (at most 200 characters, 240 with id). Prompt lines with
+`asserted_by` append ` (said by the assistant, not confirmed)`. No fitting line means an empty block.
+Only delivered row ids record access; inject event metadata includes `phase` (`session-start` or `prompt`).
+Session-start saves a supplied `loadedFiles` list as the latest list for the place. A row is suppressed only
+when a stored `said` judgment matches its current content hash and a path and SHA-256 in this request's list.
+Missing or stale judgments deliver the row; auxiliary failures are logged and delivery continues. The process-local ledger is
 keyed by principal, project, registered skin and session; new/reset/compaction clears it, resume
 retains it, and re-registration adopts it together with same-turn manual recall history.
 A failed call marks no ids. Restart loses this ledger and may repeat a still-current row.
 
 Automatic, manual and native recall can populate different optional response fields. Inspect `degraded` and `unavailable`; `unavailable: "model-preparing"` means the embedding model is still preparing, while `unavailable: "model preparation failed: …"` reports preparation failure. Empty context alone is not proof that the service succeeded.
 
-Scope requires nonblank `principal`, `project`, `session`. `host.observeSessionUuid`, if supplied, must be a UUID. Host `at` is nonnegative epoch milliseconds. Other host strings may be empty.
+Scope requires nonblank `principal`, `project`, `session`. `host.observeSessionUuid`, if supplied, must be a UUID. Host `at` is nonnegative epoch milliseconds. Other host strings may be empty. Optional `host.surface` identifies the entry surface within the registered integration and project; Hermes sends its `platform` value here. Omission uses the empty surface for place-mode judgment.
 
 <!-- table:request:getRecall -->
 | Field | Type | Required | Enum | Default | Constraints |
@@ -386,6 +406,7 @@ Scope requires nonblank `principal`, `project`, `session`. `host.observeSessionU
 | scope.host.sessionTimezone | string | no | - | - | - |
 | scope.host.workspace | string | no | - | - | - |
 | scope.host.sessionFile | string | no | - | - | - |
+| scope.host.surface | string | no | - | - | - |
 | scope.host.boundary | string | no | ["new","reset","session-end"] | - | - |
 | scope.host.at | number | no | - | - | {"minimum":0} |
 | scope.host.systemCaller | boolean | no | - | - | - |
@@ -393,6 +414,11 @@ Scope requires nonblank `principal`, `project`, `session`. `host.observeSessionU
 | options.corpus | string | no | ["memory","wiki","all","sessions"] | "memory" | - |
 | options.source | string | no | ["auto","manual","native"] | - | - |
 | options.injectionPhase | string | no | ["session-start","prompt","first-prompt"] | - | - |
+| options.loadedFiles | array | no | - | - | - |
+| options.loadedFiles[] | object | yes | - | - | - |
+| options.loadedFiles[].path | string | yes | - | - | - |
+| options.loadedFiles[].sha256 | string | yes | - | - | - |
+| options.loadedFiles[].bytes | integer | yes | - | - | {"minimum":0,"maximum":9007199254740991} |
 | options.maxChars | integer | no | - | - | {"minimum":0,"maximum":9007199254740991} |
 | options.limit | integer | no | - | - | {"minimum":-9007199254740991,"maximum":9007199254740991} |
 | options.minScore | number | no | - | - | - |
@@ -575,7 +601,7 @@ Response status: `200 OK`; `Content-Type: application/json`.
 
 Captures one completed turn. `turnId` must contain non-whitespace text; `rewindEpoch` is a nonnegative integer. Message times are nonnegative finite epoch milliseconds. JSON content can be structured or plain text. No minimum message-array length is imposed by this schema. `committed:true` acknowledges completed synchronous extraction/persistence, not a queued write. `skipped:true` means capture was deliberately disabled, omitted for a subagent, or given an empty conversation. `partial:true` means extraction stored some facts but did not fully complete. A plain `committed:false` remains retryable. A deadline is not a durable commit receipt.
 
-Scope requires nonblank `principal`, `project`, `session`. `host.observeSessionUuid`, if supplied, must be a UUID. Host `at` is nonnegative epoch milliseconds. Other host strings may be empty.
+Scope requires nonblank `principal`, `project`, `session`. `host.observeSessionUuid`, if supplied, must be a UUID. Host `at` is nonnegative epoch milliseconds. Other host strings may be empty. Optional `host.surface` identifies the entry surface within the registered integration and project; Hermes sends its `platform` value here. Omission uses the empty surface for place-mode judgment.
 
 <!-- table:request:capture -->
 | Field | Type | Required | Enum | Default | Constraints |
@@ -601,6 +627,7 @@ Scope requires nonblank `principal`, `project`, `session`. `host.observeSessionU
 | scope.host.sessionTimezone | string | no | - | - | - |
 | scope.host.workspace | string | no | - | - | - |
 | scope.host.sessionFile | string | no | - | - | - |
+| scope.host.surface | string | no | - | - | - |
 | scope.host.boundary | string | no | ["new","reset","session-end"] | - | - |
 | scope.host.at | number | no | - | - | {"minimum":0} |
 | scope.host.systemCaller | boolean | no | - | - | - |
@@ -701,10 +728,11 @@ Response status: `200 OK`; `Content-Type: application/json`.
 
 ### Request body
 
-Select exactly one operation using the nested `op.op` discriminant. The numbered table branches are: 0 `correct`, 1 `store`, 2 `forget`, 3 `update`, 4 `clear`, 5 `resolveReflection`.
+Select exactly one operation using the nested `op.op` discriminant. The numbered table branches are: 0 `correct`, 1 `store`, 2 `forget`, 3 `update`, 4 `clear`, 5 `resolveReflection`, 6 `undo`.
 
 Cross-field constraints (Zod refinements, not expressible in the generated field tables):
 
+- `undo` accepts exactly `{op:"undo",id}`. The target must be open and directly replace or merge at least one source. One transaction closes it with `supersede_reason:"undo"` and restores every direct source, removing its replaced marks and restoring its prior validity end. Restored rows carry `undo_at` and a correction source order at that time; older statements cannot close them. A replaced target is refused with `already-superseded` and its successor id. All three coding-agent correct commands accept `correct --undo <ID>`.
 - `correct` accepts exactly `{op:"correct",id,content}` with nonblank strings. It reads only the current project and global scope. The service creates a fresh row and closes the old row in one transaction; the successor retains the old project, fact identity, filing and entity links. A failure leaves the old row unchanged. Success contains one text part with the successor id and `details.id`; refusal sets `isError:true` and `details.errorCode`. A closed target returns `already-superseded` with `details.successorId` naming its immediate successor, including on a retry with different text. Identical normalized text or hash collisions in the same project/category, inactive/refused/invalidated rows, reflections and active-task rows are `invalid-input`; an unreadable or missing id is `not-found`. Model preparation is awaited only within the existing mutation deadline.
 - `store.content` must contain non-whitespace text. Every stored category in the enum is allowed.
 - `forget` requires exactly one of `id`, `query`, `suppressKey`, `suppressContent`. Supplied selectors and both suppress-key strings must contain non-whitespace text. `maxDelete` is a positive integer.
@@ -732,13 +760,12 @@ line. Get keeps its entry shape. Both explicit paths append `retired; superseded
 retired text without changing the stored text, even when that successor no longer exists.
 Manual recall includes an invalidated row only when it has a successor; unrelated invalidated
 rows remain excluded. Automatic recall excludes closed rows before ranking and limit.
-Automatic recall reads only the current project; shared global memory remains available through
-explicit manual recall and get, not through any automatic injection phase.
+Both automatic recall phases read the current project and shared `global` memory.
 Per-message automatic injection also excludes candidates with raw query-vector similarity below
 0.5; this is independent of the age-decayed ranking score and does not apply to session-start
 briefs or manual recall. The prompt part of first-prompt injection uses the same similarity rule.
 
-Scope requires nonblank `principal`, `project`, `session`. `host.observeSessionUuid`, if supplied, must be a UUID. Host `at` is nonnegative epoch milliseconds. Other host strings may be empty.
+Scope requires nonblank `principal`, `project`, `session`. `host.observeSessionUuid`, if supplied, must be a UUID. Host `at` is nonnegative epoch milliseconds. Other host strings may be empty. Optional `host.surface` identifies the entry surface within the registered integration and project; Hermes sends its `platform` value here. Omission uses the empty surface for place-mode judgment.
 
 <!-- table:request:mutate -->
 | Field | Type | Required | Enum | Default | Constraints |
@@ -787,6 +814,9 @@ Scope requires nonblank `principal`, `project`, `session`. `host.observeSessionU
 | op<5>.dryRun | boolean | no | - | - | - |
 | op<5>.note | string | no | - | - | - |
 | op<5>.limit | integer | no | - | - | {"minimum":-9007199254740991,"maximum":9007199254740991} |
+| op<6> | object | yes | - | - | {"additionalProperties":false} |
+| op<6>.op | string | yes | ["undo"] | - | - |
+| op<6>.id | string | yes | - | - | {"minLength":1} |
 | scope | object | yes | - | - | - |
 | scope.principal | string | yes | - | - | {"minLength":1} |
 | scope.project | string | yes | - | - | {"minLength":1} |
@@ -799,6 +829,7 @@ Scope requires nonblank `principal`, `project`, `session`. `host.observeSessionU
 | scope.host.sessionTimezone | string | no | - | - | - |
 | scope.host.workspace | string | no | - | - | - |
 | scope.host.sessionFile | string | no | - | - | - |
+| scope.host.surface | string | no | - | - | - |
 | scope.host.boundary | string | no | ["new","reset","session-end"] | - | - |
 | scope.host.at | number | no | - | - | {"minimum":0} |
 | scope.host.systemCaller | boolean | no | - | - | - |
@@ -923,7 +954,7 @@ The response `result` branches are storage, stats, list/listReflection, get, pro
 
 These memory operations do not supply Self Learning status. That producer's existing `sno rem-reflect status` command and stored records remain the source for those reports; memory REM jobs do not establish per-project Self Learning success.
 
-Scope requires nonblank `principal`, `project`, `session`. `host.observeSessionUuid`, if supplied, must be a UUID. Host `at` is nonnegative epoch milliseconds. Other host strings may be empty.
+Scope requires nonblank `principal`, `project`, `session`. `host.observeSessionUuid`, if supplied, must be a UUID. Host `at` is nonnegative epoch milliseconds. Other host strings may be empty. Optional `host.surface` identifies the entry surface within the registered integration and project; Hermes sends its `platform` value here. Omission uses the empty surface for place-mode judgment.
 
 <!-- table:request:inspect -->
 | Field | Type | Required | Enum | Default | Constraints |
@@ -956,6 +987,8 @@ Scope requires nonblank `principal`, `project`, `session`. `host.observeSessionU
 | op<6> | object | yes | - | - | - |
 | op<6>.op | string | yes | ["currentProject"] | - | - |
 | op<6>.workspace | string | yes | - | - | {"minLength":1} |
+| op<7> | object | yes | - | - | - |
+| op<7>.op | string | yes | ["precision"] | - | - |
 | scope | object | yes | - | - | - |
 | scope.principal | string | yes | - | - | {"minLength":1} |
 | scope.project | string | yes | - | - | {"minLength":1} |
@@ -968,6 +1001,7 @@ Scope requires nonblank `principal`, `project`, `session`. `host.observeSessionU
 | scope.host.sessionTimezone | string | no | - | - | - |
 | scope.host.workspace | string | no | - | - | - |
 | scope.host.sessionFile | string | no | - | - | - |
+| scope.host.surface | string | no | - | - | - |
 | scope.host.boundary | string | no | ["new","reset","session-end"] | - | - |
 | scope.host.at | number | no | - | - | {"minimum":0} |
 | scope.host.systemCaller | boolean | no | - | - | - |
@@ -1059,6 +1093,39 @@ HTTP 200, JSON. The complete successful body is below. The schema also permits t
 | result<5>.project<0>.memoryCount | integer | yes | - | - | {"minimum":0,"maximum":9007199254740991} |
 | result<5>.project<0>.kind | string | yes | ["general","project"] | - | - |
 | result<5>.project<1> | null | yes | - | - | - |
+| result<6> | object | yes | - | - | {"additionalProperties":false} |
+| result<6>.op | string | yes | ["precision"] | - | - |
+| result<6>.nights | array | yes | - | - | - |
+| result<6>.nights[] | object | yes | - | - | {"additionalProperties":false} |
+| result<6>.nights[].jobId | string | yes | - | - | - |
+| result<6>.nights[].scope | string | yes | ["project","shared"] | - | - |
+| result<6>.nights[].checked | integer | yes | - | - | {"minimum":0,"maximum":9007199254740991} |
+| result<6>.nights[].replaced | integer | yes | - | - | {"minimum":0,"maximum":9007199254740991} |
+| result<6>.nights[].merged | integer | yes | - | - | {"minimum":0,"maximum":9007199254740991} |
+| result<6>.nights[].corrected | integer | yes | - | - | {"minimum":0,"maximum":9007199254740991} |
+| result<6>.nights[].removed | integer | yes | - | - | {"minimum":0,"maximum":9007199254740991} |
+| result<6>.nights[].undecided | integer | yes | - | - | {"minimum":0,"maximum":9007199254740991} |
+| result<6>.nights[].failures | array | yes | - | - | - |
+| result<6>.nights[].failures[] | object | yes | - | - | {"additionalProperties":false} |
+| result<6>.nights[].failures[].stage | string | yes | - | - | - |
+| result<6>.nights[].failures[].error | string | yes | - | - | - |
+| result<6>.nights[].failures[].rows | array | yes | - | - | - |
+| result<6>.nights[].failures[].rows[] | string | yes | - | - | - |
+| result<6>.pending | object | yes | - | - | {"additionalProperties":false} |
+| result<6>.pending.project | array | yes | - | - | - |
+| result<6>.pending.project[] | string | yes | - | - | - |
+| result<6>.pending.shared | array | yes | - | - | - |
+| result<6>.pending.shared[] | string | yes | - | - | - |
+| result<6>.notFit | object | yes | - | - | {"additionalProperties":false} |
+| result<6>.notFit.project | integer | yes | - | - | {"minimum":0,"maximum":9007199254740991} |
+| result<6>.notFit.shared | integer | yes | - | - | {"minimum":0,"maximum":9007199254740991} |
+| result<6>.contradictions | array | yes | - | - | - |
+| result<6>.contradictions[] | object | yes | - | - | {"additionalProperties":false} |
+| result<6>.contradictions[].id | string | yes | - | - | - |
+| result<6>.contradictions[].filePath | string | yes | - | - | - |
+| result<6>.sameVendor | boolean | no | - | - | - |
+| result<6>.lines | array | yes | - | - | - |
+| result<6>.lines[] | string | yes | - | - | - |
 | degraded | boolean | yes | [false] | - | - |
 
 ### Errors
@@ -1141,7 +1208,7 @@ Response status: `200 OK`; `Content-Type: application/json`.
 
 Records usage of an explicit nonblank `recallId`. Each memory ID and supplied toolName must be nonblank. `at` is a nonnegative finite epoch-millisecond timestamp. `error` and `result` accept arbitrary JSON; supply the original tool event so error-signal handling can distinguish errors from successful result text. `accepted` reports acceptance; it is not an acknowledgement of remote telemetry delivery.
 
-Scope requires nonblank `principal`, `project`, `session`. `host.observeSessionUuid`, if supplied, must be a UUID. Host `at` is nonnegative epoch milliseconds. Other host strings may be empty.
+Scope requires nonblank `principal`, `project`, `session`. `host.observeSessionUuid`, if supplied, must be a UUID. Host `at` is nonnegative epoch milliseconds. Other host strings may be empty. Optional `host.surface` identifies the entry surface within the registered integration and project; Hermes sends its `platform` value here. Omission uses the empty surface for place-mode judgment.
 
 <!-- table:request:recordUsage -->
 | Field | Type | Required | Enum | Default | Constraints |
@@ -1169,6 +1236,7 @@ Scope requires nonblank `principal`, `project`, `session`. `host.observeSessionU
 | scope.host.sessionTimezone | string | no | - | - | - |
 | scope.host.workspace | string | no | - | - | - |
 | scope.host.sessionFile | string | no | - | - | - |
+| scope.host.surface | string | no | - | - | - |
 | scope.host.boundary | string | no | ["new","reset","session-end"] | - | - |
 | scope.host.at | number | no | - | - | {"minimum":0} |
 | scope.host.systemCaller | boolean | no | - | - | - |
@@ -1263,7 +1331,7 @@ Response status: `200 OK`; `Content-Type: application/json`.
 
 Runs session-end work using the message schema shared with capture. Host cleanup must not repeat capture. Optional `scope.host.boundary` carries new/reset/session-end; no boundary default is assigned by the input schema. `completed` reports completed session-end handling.
 
-Scope requires nonblank `principal`, `project`, `session`. `host.observeSessionUuid`, if supplied, must be a UUID. Host `at` is nonnegative epoch milliseconds. Other host strings may be empty.
+Scope requires nonblank `principal`, `project`, `session`. `host.observeSessionUuid`, if supplied, must be a UUID. Host `at` is nonnegative epoch milliseconds. Other host strings may be empty. Optional `host.surface` identifies the entry surface within the registered integration and project; Hermes sends its `platform` value here. Omission uses the empty surface for place-mode judgment.
 
 <!-- table:request:onSessionEnd -->
 | Field | Type | Required | Enum | Default | Constraints |
@@ -1286,6 +1354,7 @@ Scope requires nonblank `principal`, `project`, `session`. `host.observeSessionU
 | scope.host.sessionTimezone | string | no | - | - | - |
 | scope.host.workspace | string | no | - | - | - |
 | scope.host.sessionFile | string | no | - | - | - |
+| scope.host.surface | string | no | - | - | - |
 | scope.host.boundary | string | no | ["new","reset","session-end"] | - | - |
 | scope.host.at | number | no | - | - | {"minimum":0} |
 | scope.host.systemCaller | boolean | no | - | - | - |
@@ -1379,7 +1448,7 @@ Response status: `200 OK`; `Content-Type: application/json`.
 
 Returns the current static context text for the selected skin and scope. An empty string is a valid successful response. There are no body fields beyond scope.
 
-Scope requires nonblank `principal`, `project`, `session`. `host.observeSessionUuid`, if supplied, must be a UUID. Host `at` is nonnegative epoch milliseconds. Other host strings may be empty.
+Scope requires nonblank `principal`, `project`, `session`. `host.observeSessionUuid`, if supplied, must be a UUID. Host `at` is nonnegative epoch milliseconds. Other host strings may be empty. Optional `host.surface` identifies the entry surface within the registered integration and project; Hermes sends its `platform` value here. Omission uses the empty surface for place-mode judgment.
 
 <!-- table:request:staticBlock -->
 | Field | Type | Required | Enum | Default | Constraints |
@@ -1397,6 +1466,7 @@ Scope requires nonblank `principal`, `project`, `session`. `host.observeSessionU
 | scope.host.sessionTimezone | string | no | - | - | - |
 | scope.host.workspace | string | no | - | - | - |
 | scope.host.sessionFile | string | no | - | - | - |
+| scope.host.surface | string | no | - | - | - |
 | scope.host.boundary | string | no | ["new","reset","session-end"] | - | - |
 | scope.host.at | number | no | - | - | {"minimum":0} |
 | scope.host.systemCaller | boolean | no | - | - | - |
@@ -1483,21 +1553,16 @@ is separate; the server may still accept or run the job after that client discon
 
 ### Request body
 
-Choose exactly one strict object variant. Unknown keys are rejected. There is no default
-scope or operation set. A mixed list with **any** unsupported type fails as a whole before
-job allocation. Built operation names are `rem-replace` and `rem-update`.
+The strict request object contains a scope and an optional full-run flag. The request runs the daily precision sequence.
 
-| Variant | Field | Type | Required | Default | Constraints |
-| --- | --- | --- | --- | --- | --- |
-| Single | type | string | yes | none | Nonempty and one of the built names |
-| Single | scope | string | yes | none | Trimmed; nonblank |
-| Multiple | types | string[] | yes | none | At least one; each nonempty and built |
-| Multiple | scope | string | yes | none | Trimmed; nonblank |
+| Field | Type | Required | Constraints |
+| --- | --- | --- | --- |
+| scope | string | yes | Trimmed; nonblank |
+| full | boolean | no | When true, bypasses today's marker and immediately repeats budget-deferred passes in the same job until none remain; stops on failure or a pass with no changes and no newly judged rows |
 
-Do not send both `type` and `types`. Duplicates are canonicalized. Requests sharing
-correlation ID and scope merge operations while the job is queued. A later request after
-that job starts can create another job; correlation ID is not permanent idempotency.
-Single-type requests schedule execution after 100 ms; `types` requests after 0 ms.
+Full runs retain the newest backup, back up before each pass changes memory, and write the day marker at the end. Automatic nightly requests omit `full`.
+
+Requests sharing a correlation ID and scope use the same task. Completion is asynchronous.
 
 ### Response body
 
@@ -1510,14 +1575,12 @@ HTTP 202, JSON. Completion is asynchronous; poll the job route.
 
 ### Errors
 
-These bodies use `error`, not `degraded` or `reason`. The unsupported-type body additionally contains required `unknownTypes:string[]`, in request order (duplicates retained); it lists the submitted unknown or unbuilt names.
+These bodies use `error`, not `degraded` or `reason`.
 
 | HTTP status | Body | When |
 | --- | --- | --- |
-| 400 | {"error":"invalid_request"} | Invalid JSON, shape, blank scope, empty type list or unknown keys |
-| 400 | {"error":"unsupported_rem_type","unknownTypes":["<unsupported type>"]} | Any requested operation is unknown or unbuilt; none allocated |
+| 400 | {"error":"invalid_request"} | Invalid JSON, shape, blank scope or unknown keys |
 | 413 | {"error":"payload_too_large"} | Streamed body exceeds 8 MiB; none allocated |
-| 409 | {"error":"wave_closed"} | Server catch branch if allocation throws wave_closed; current allocator has no such throw |
 | 500 | {"error":"internal_error"} | Unhandled server/allocation failure |
 | 404 | {"error":"not_found"} | Wrong method or unmatched path |
 
@@ -1532,7 +1595,7 @@ Host: 127.0.0.1:43127
 Content-Type: application/json
 x-rem-correlation-id: release-maintenance-2026-09-17
 
-{"types":["rem-replace","rem-update"],"scope":"release-notes"}
+{"scope":"release-notes"}
 ```
 
 ```http
@@ -1563,41 +1626,16 @@ fields from `toRemJob` and the validated stats schema in `rem-job-store.ts`.
 | Field | Type | Required | Meaning / constraints |
 | --- | --- | --- | --- |
 | job_id | string | yes | Wave identifier |
-| state | string | yes | queued, running, done, failed |
-| type | string | yes | First operation in canonical order; inspect requested_operations for all operations |
+| state | string | yes | queued, running, done, failed, skipped |
+| type | string | yes | precision-nightly |
 | scope | string | yes | Submitted trimmed scope |
 | started_at | string or null | yes | ISO timestamp after execution begins |
 | finished_at | string or null | yes | ISO timestamp at terminal transition |
 | correlation_id | string | yes | Submitted trimmed ID or generated ID |
-| requested_operations | string[] | yes | Unique operations in canonical execution order |
 | error | string | no | Nonempty failure message, not a closed reason enum |
 | stats | object | yes | Initially {"operations":0}; fields below |
 | stats.operations | integer | yes | Nonnegative applied operation count |
 | stats.applied_count | integer | no | Nonnegative applied count |
-| stats.actionable_candidate_count | integer | no | Nonnegative actionable count |
-| stats.applied_fraction | number or null | no | Fraction in [0,1], or null |
-| stats.scan | object | no | Scan summary |
-| stats.scan.scope | string | yes in scan | Nonempty scope |
-| stats.scan.candidate_count | integer | yes in scan | Nonnegative count |
-| stats.scan.stamped_skipped_count | integer | no | Nonnegative count |
-| stats.scan.actionable_candidate_count | integer | no | Nonnegative count |
-| stats.parse_failure_count | integer | no | Nonnegative count |
-| stats.top_refusal_reasons | string[] | no | At most two nonempty strings |
-| stats.measured | object | no | Measurements below |
-| stats.measured.rows_considered | integer | yes in measured | Nonnegative count |
-| stats.measured.pairs_built | integer | no | Nonnegative count |
-| stats.measured.pair_cap_binding | boolean | no | Pair cap reached |
-| stats.measured.model_calls | integer | yes in measured | Nonnegative count |
-| stats.measured.model_tokens | integer | yes in measured | Nonnegative count |
-| stats.measured.wall_ms | integer | yes in measured | Nonnegative elapsed milliseconds |
-| stats.by_operation | object[] | no | At least one per-operation result when present |
-| stats.by_operation[].operation | string | yes | Nonempty operation name |
-| stats.by_operation[].applied_count | integer | yes | Nonnegative count |
-| stats.by_operation[].actionable_candidate_count | integer | yes | Nonnegative count |
-| stats.by_operation[].candidate_count | integer | yes | Nonnegative count |
-| stats.by_operation[].parse_failure_count | integer | yes | Nonnegative count |
-| stats.by_operation[].top_refusal_reasons | string[] | yes | At most two nonempty strings |
-| stats.by_operation[].measured | object | yes | Same fields and required-ness as stats.measured |
 
 ### Errors
 
@@ -1621,7 +1659,7 @@ Host: 127.0.0.1:43127
 HTTP/1.1 200 OK
 Content-Type: application/json
 
-{"job_id":"rem-wave-6b201063-a847-4ee4-8a18-636af16b2bf1","state":"queued","type":"rem-replace","scope":"release-notes","started_at":null,"finished_at":null,"stats":{"operations":0},"correlation_id":"release-maintenance-2026-09-17","requested_operations":["rem-replace","rem-update"]}
+{"job_id":"rem-wave-6b201063-a847-4ee4-8a18-636af16b2bf1","state":"queued","type":"precision-nightly","scope":"release-notes","started_at":null,"finished_at":null,"stats":{"operations":0},"correlation_id":"release-maintenance-2026-09-17"}
 ```
 
 ## Transport and discovery
@@ -1661,6 +1699,18 @@ to `<state dir>/sno-station-mem/sidecar-startup.log`. The service reads its rout
 store path from the same installed settings when the memory pool opens.
 
 ## Outbound call: the sidecar calling the registered host model
+
+Work-place capture uses `E21` for write judgement (`local-first`: off;
+`agent-native` and `rem-enhanced`: host)
+and `E22` for replacement confirmation (`local-first`: off; `agent-native` and
+`rem-enhanced`: host). Both use the existing host transport by default;
+their Sno GPU workload label remains `station-verdict` when explicitly routed there. `E21` returns `{"facts":[{"index":0,"rows":[{"id":"shown-row-id","relation":"same"}]}]}`;
+relations are `unrelated`, `same`, `replaces`, `overlaps`, `maybe-same`, `maybe-replaces`.
+`E22` receives both texts and speakers and returns `{"replaces":true}` or
+`{"replaces":false}`. Only true confirms a replacement. A failed judgement is
+stored with `precision_check: "pending"`, per fact, without failing the committed capture.
+These two calls do not fall back between Sno GPU and the host. Their call identity stays
+inside the sidecar and is not added to the host HTTP body. Chat-place capture retains `E10`.
 
 Source: [../model/registered-agent-port.ts](../model/registered-agent-port.ts). This is the
 only HTTP request the sidecar makes back toward the client. It is used for every occasion that
@@ -1737,7 +1787,7 @@ and trigger-state read/write failures produce logs rather than a persistent deni
 A failed runtime open is retried on a later request. HTTP startup does not wait for memory
 opening or full integrity checks.
 
-Invalid request JSON/schema, oversized input, unknown REM operations, route deadlines,
+Invalid request JSON/schema, oversized input, route deadlines,
 and actual engine/model/I/O errors affect the current request. A parsed JSON memory request
 opens the runtime before `parseInput` checks its shape; schema validation therefore prevents
 method invocation but is not a guarantee of zero initialization side effects. Output validation
@@ -1786,7 +1836,6 @@ store until process exit. This is not a write rollback guarantee.
 
 REM submission, REM job reads and health have no corresponding application deadline timer.
 Node's HTTP transport limits or client cancellation are separate from this API's 504 behavior.
-The old `REM_REQUEST_BODY_LIMIT_BYTES` constant (65536) is not used by the active body reader.
 
 ## GET /healthz
 
@@ -1896,7 +1945,6 @@ Principal is the OS username. All paths below are relative to that root unless a
 | settings.json | Installed service, model routing, and storage settings |
 | sno-station-mem/sidecar-startup.log | Startup output |
 | sno-station-mem/rem-wave-jobs.jsonl | Durable REM wave transitions |
-| sno-station-mem/rem-chassis-journal.jsonl | Per-operation REM execution records |
 | sno-station-mem/rem-trace.jsonl | REM trace output; shared rotating log sink |
 | sno-station-mem/audit.jsonl | Runtime audit and completion recovery records |
 | sno-station-mem/backups/ | Maintenance backups |
@@ -1908,13 +1956,10 @@ same installed settings. A supplied client store path does not override the runn
 | Environment | Meaning |
 | --- | --- |
 | SNO_PROFILE_DIR | Profile root |
-| SNO_STATION_MEM_REM_CONFIG_JSON | Operational REM config; absent/invalid parsed config uses built-in defaults with invalid config logged |
-| SNO_STATION_MEM_REM_EXPECTED_DB_PATH | Optional REM persona database path passed to the executor |
 | SNO_STATION_MEM_REM_TRACE | Trace enabled by default; 0, false, off disable it (case-insensitive) |
 | SNO_STATION_MEM_REM_TEST_HOLD_MS | Nonnegative integer execution hold for tests; invalid logs and uses 0 |
 | SNO_STATION_MEM_MAINTENANCE_INTERVAL_MS | Positive integer scheduler override described below |
 | SNO_STATION_MEM_REM_CLOCK_OVERRIDE | Clock override parsed as Date; use an ISO instant |
-| SNO_STATION_MEM_REM_VOLUME_THRESHOLD | Positive integer volume threshold override |
 | SNO_STATION_MEM_NODE_ENV | Package test mode; enables observation loopback validation exception |
 | `snoGpu.baseUrl` in `settings.json` | Sno GPU transport endpoint setting |
 
@@ -1928,18 +1973,12 @@ controls, not every environment variable used by model/provider libraries.
 Maintenance starts when the lazy memory pool first opens. Overrides are read then, not
 at initial HTTP bind. A valid interval override controls the tick, first tick, and every
 maintenance job interval, including backup and REM trigger checks. Without it, normal
-scheduler intervals apply. The default volume threshold is 100 rows. Invalid positive
-integer overrides log and are ignored. An invalid clock logs and causes the override reader
-to return no overrides, including otherwise supplied interval/volume values.
+scheduler intervals apply. Invalid positive integer overrides log and are ignored. An invalid
+clock logs and causes the override reader to return no overrides.
 
-Each scope gets at most one completed automatic REM pass per local day, from either daily
-schedule or volume trigger. Completion records that day in `last_volume_pass_date`, closes
-the volume trigger and moves the next daily pass. Lost state cannot prove completion, so
-due work can run again. Failed dispatch stays eligible beyond the former three-attempt
-limit. Installed operations select what runs; old tick-disable and product-mode admission
-checks do not block automatic REM. Trigger-state failures log and proceed with fresh state.
-Pause/resume commands and kill-switch activation were removed; old kill-switch files have
-no runtime effect. Workspace learning tools remain local file operations.
+The daily schedule runs the precision sequence at most once per local day. Completion
+records that day in `last_pass_date`. `rem.tick` controls automatic runs. Trigger-state
+failures log and proceed with fresh state. Workspace learning tools remain local file operations.
 
 Retrieval settings `temporalWeighting` and `mmrWindowOnly` default to false. The former
 controls historical timestamp/access-based recency, decay and retention scoring; without
@@ -1958,3 +1997,19 @@ The test reads this file; it does not update it or mock schemas. Adding/removing
 field, nested variant, enum, serialized constraint, default, or mapped reason requires
 updating the corresponding table. It also parses the complete JSON examples through the
 live schemas. The route-index case also probes every listed path over loopback HTTP. The cited integration tests prove the specific header, pre-init, failure, deadline, CLI and outbound-call claims above. CLI tests execute the existing `dist/cli.js` artifact; the other new HTTP tests execute source. Existing deadline tests pause embedding and forward to the real implementation; new runtime tests do not mock sidecar internals. Other custom refinements, REM/health field tables, maintenance prose and state-file descriptions still need source review.
+
+In both Agent Native and REM Enhanced, the user's registered agent proposes write judgments (`E21`), nightly row judgments (`E16`), merged rows (`E24`), and place-mode judgments (`E13`). Local First disables these calls; extraction routing is unchanged. Capture prefers the capturing session's registered agent, otherwise the newest connected agent. Confirmations (`E22`, `E23`) first ask a connected registered agent of a different declared vendor from the actual proposer. If none answers, a separate call asks the proposer, then the remaining connected agents. Claude Code declares Anthropic and Codex OpenAI; other integrations use the provider namespace in their registered model description. Unknown vendors count as the same vendor. Admission's remaining votes stay on its first responder. Each operation journals its actual confirmation vendor result; same or unknown vendor checks produce the doctor line `checked by the same vendor`. If no agent answers, the check fails and applies no proposed change. This selection uses internal request metadata, with no new HTTP field, setting, or table.
+
+Nightly precision processing runs daily as `precision-nightly`. `E21` and `E22` use the same relation and strict replacement replies as
+capture. `E23` (nightly change confirmation) has the destinations of `E22` and returns
+`{"confirmed":true|false}` for a proposed deletion or correction. `E24` (merged row) has
+the destinations of `E21` and returns `{"text":"one sentence"}`. Its workload is
+`station-extract`; `E21`, `E22`, and `E23` use `station-verdict`. Merge verification uses
+`E22` with `faithful`, `retired_absent`, and `all_facts_accounted`, all strictly true.
+Metadata `precision_admission` carries the short hash of the admission instruction;
+`precision_night` carries `{at,text}` for the last fine judgment. Unreached rows remain due;
+the daily marker retains its previous change watermark when the call budget is exhausted.
+For source-sentence checking, `E21` returns `{"action":"keep"|"correct"|"remove","text":"sentence or empty"}`;
+`E23` confirms any correction or removal before it is applied.
+
+`inspect({op:"precision"})` returns project and shared results for the latest three nightly jobs: `nights` holds checked rows, replacements, merges, corrections, removals, undecided outcomes, and failed stages with errors and row ids. `pending` holds unchecked open row ids, `notFit` holds the latest session-start overflow counts for the caller’s place, and `contradictions` holds row ids and file paths from stored opposite judgments. `sameVendor` reports checks recorded as using the same vendor. `lines` is rendered by the shared coding-skin formatter and appended after each doctor command’s existing four lines. Session start adds exactly one line only when the latest night contains a relevant failed entry. The file comparison checks session-start candidates, then project and shared decisions, facts and pitfalls in nightly order, within its existing 50-call budget and the whole-night budget.
