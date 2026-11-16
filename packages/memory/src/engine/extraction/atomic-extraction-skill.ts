@@ -38,6 +38,7 @@ export const ATOMIC_EXTRACTION_SKILL: string = `${stripFrontmatter(loadedSkillFi
 
 const REFERENCE_NAMES = [
 	"capture",
+	"capture-work",
 	"enrichment",
 	"calendar-meaning",
 	"account-for-turns",
@@ -71,3 +72,6 @@ export function atomicExtractionSkillReference(name: AtomicExtractionSkillRefere
 	if (text === undefined) throw new Error(`sno-station-mem atomic extraction skill reference missing: ${name}`);
 	return text;
 }
+
+const workCapture = atomicExtractionSkillReference("capture-work");
+export const WORK_MEMORY_ADMISSION: string = workCapture.slice(0, workCapture.indexOf("\n\nWrite each fact as one complete"));

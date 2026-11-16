@@ -23,6 +23,7 @@ import {
 	type AtomicExtractionTurn,
 	type AtomicCapturedFact,
 	ATOMIC_CAPTURE_RESPONSE_JSON_SCHEMA,
+	ATOMIC_WORK_CAPTURE_RESPONSE_JSON_SCHEMA,
 	ATOMIC_ENRICHMENT_RESPONSE_JSON_SCHEMA,
 	fallbackAtomicCapturedFact,
 	parseAtomicCaptureReply,
@@ -65,6 +66,7 @@ const GENERIC_RESPONSE_SCHEMA = {
 };
 
 export interface AtomicGenericExtractionRequest {
+	hostTarget?: import("../../model/agent-llm-port").HostTarget;
 	callId: import("../../model/model-call-table").ModelCallId;
 	prompt: string;
 	maxTokens: number;
@@ -72,6 +74,8 @@ export interface AtomicGenericExtractionRequest {
 }
 
 export interface AtomicGenericExtractionCompletion {
+	responder?: import("../../model/agent-llm-port").HostIdentity;
+	checkedBySameVendor?: boolean;
 	text: string;
 	truncated: boolean;
 	outputTokens?: number;
@@ -82,7 +86,8 @@ export interface AtomicGenericExtractionTransport {
 }
 
 export interface AtomicGenericExtractionInput {
-	diagnostics?: { proposed: number; parseRejected: number };
+	captureMode?: import("../../store/store").CaptureMode;
+	diagnostics?: { proposed: number; parseRejected: number; reasons?: Record<string, number> };
 	store: MemoryStore;
 	ledgerKey: AtomicExtractionLedgerKey;
 	turns: readonly AtomicExtractionTurn[];
@@ -183,8 +188,8 @@ function renderAtomicLaneContext(input: AtomicGenericExtractionInput): string {
 
 export function buildAtomicCapturePrompt(input: AtomicGenericExtractionInput): string {
 	return [
-		atomicExtractionSkillReference("capture"),
-		`response_schema: ${JSON.stringify(ATOMIC_CAPTURE_RESPONSE_JSON_SCHEMA)}`,
+		atomicExtractionSkillReference(input.captureMode === "work" ? "capture-work" : "capture"),
+		`response_schema: ${JSON.stringify(input.captureMode === "work" ? ATOMIC_WORK_CAPTURE_RESPONSE_JSON_SCHEMA : ATOMIC_CAPTURE_RESPONSE_JSON_SCHEMA)}`,
 		renderAtomicLaneContext(input),
 	].join("\n\n");
 }
@@ -618,7 +623,10 @@ export function createAtomicGenericExtractionTransport(
 ): AtomicGenericExtractionTransport {
 	return {
 		async complete(request): Promise<AtomicGenericExtractionCompletion | null> {
+			let response: import("../../model/agent-llm-port").HostResponse = {};
 			const text = await client.completeText({
+				hostTarget: request.hostTarget,
+				onHostResponse: value => { response = value; },
 				prompt: request.prompt,
 				extractionSkillHash: ATOMIC_EXTRACTION_SKILL_HASH,
 				callId: request.callId,
@@ -636,6 +644,8 @@ export function createAtomicGenericExtractionTransport(
 			// emptyReplyAttempts is 1, so the usage is one reply's; with retries it would be a sum over attempts.
 			const usage = client.getLastUsage();
 			return {
+				responder: response.responder,
+				checkedBySameVendor: response.checkedBySameVendor,
 				text,
 				truncated: usage !== null && usage.outputTokens >= request.maxTokens,
 				...(usage === null ? {} : { outputTokens: usage.outputTokens }),
@@ -826,14 +836,17 @@ async function captureAtomicWindow(
 		}
 		let gate = "unreadable-json";
 		const parsed = parseAtomicCaptureReply(completion.text, input.turns, {
-			salvage: attempt >= 2, onReject: (reason) => { gate = reason; },
+			work: input.captureMode === "work", salvage: attempt >= 2, onReject: (reason) => { gate = reason; },
 		});
 		if (parsed !== undefined) {
+			if (input.diagnostics?.reasons && parsed.rejectedKindCount > 0) {
+				input.diagnostics.reasons.invalid_kind = (input.diagnostics.reasons.invalid_kind ?? 0) + parsed.rejectedKindCount;
+			}
 			const records: AtomicExtractionRecord[] = [];
 			for (const batch of chunkAtomicCapturedFacts(parsed.facts)) {
 				records.push(...await enrichAtomicBatch(input, batch, outputTokenBudget));
 			}
-			if (input.diagnostics) input.diagnostics.proposed += records.length;
+			if (input.diagnostics) input.diagnostics.proposed += records.length + parsed.rejectedKindCount;
 			return {
 				status: "complete", progressTurns: parsed.progressTurns,
 				records: records.map((record) => withAtomicSanitizerMatches(record, sanitizedInput.matched)),
