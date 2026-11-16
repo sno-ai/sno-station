@@ -49,7 +49,7 @@ memory decision goes through that child process.
 
 ### REM Enhanced
 
-REM is how your agents dream: overnight they strengthen their memory and settle what they learned. It runs at most once a day for each part of your memory: usually overnight, or earlier the same day once about 100 new memories have piled up. REM Enhanced lets Sno's own memory models help with the two hardest jobs: writing down what matters from a conversation, and deciding which of two memories that disagree is right. Your Codex CLI does the rest, including filling in each memory's details and checking who it is about. It needs a Sno key in `snoGpu.apiKey` in `settings.json`.
+REM is how your agents dream: overnight they strengthen their memory and settle what they learned. It runs at most once a day for each part of your memory: usually overnight, or earlier the same day once about 100 new memories have piled up. REM Enhanced lets Sno's memory model extract what matters from a conversation. Your agent proposes memory judgments; a connected registered agent of another vendor confirms them when available. Otherwise a separate call checks them, and doctor reports `checked by the same vendor`. If no agent answers, the proposed change is not applied. Your Codex CLI does the rest, including filling in each memory's details and checking who it is about. It needs a Sno key in `snoGpu.apiKey` in `settings.json`.
 
 **Your data stays yours.** In this mode the memory text for the Sno calls, and the lessons your agents learn, go to your own space in Sno's cloud. It works like your own cloud drive: everything in it is yours, and a Sno program processes it for you alone. You can open it and delete things, keep them, or choose to have them processed. Nothing is deleted automatically, and Sno does not give any of it to anyone.
 
@@ -76,7 +76,7 @@ Mode-specific defaults are:
 | Knowing what task you are on | Simple keyword matching | Your Codex CLI | Your Codex CLI |
 | Updating what it knows about you | Fixed rules | Your Codex CLI | Your Codex CLI |
 | Spotting finished tasks | Word matching | Your Codex CLI | Your Codex CLI |
-| Settling memories that disagree | Keep both | Your Codex CLI | Sno's memory model |
+| Settling memories that disagree | Keep both | Your Codex CLI | Your agents propose and confirm |
 | Ranking what to recall | On your machine | On your machine | On your machine |
 | Summing up the day | No model reflection; local session memory remains | Same | Same |
 | Turning "tomorrow" into a date | No model call | Your Codex CLI | Your Codex CLI |
@@ -85,12 +85,7 @@ No memory-writing call is disabled in Agent Native or REM Enhanced. A Sno model 
 
 In REM Enhanced, the selected mode fixes each model call's destination as shown above.
 
-REM also tidies your memory on a schedule, in two ways:
-
-- It rewrites "I used to... then I changed..." stories into one clean, current memory, and keeps the history.
-- It settles memories that contradict each other. The one that lost is retired, and you can bring it back.
-
-Both run by default. To run only one, change `rem.operations` in `settings.json`. To turn REM's schedule off, set `rem.tick` to `false`.
+To turn REM's schedule off, set `rem.tick` to `false`.
 
 Mode selection governs memory writing and maintenance. In every mode, search first retrieves
 and orders memories locally, then the local `Horizon-Labs/multilingual-reranker-small` model
