@@ -50,7 +50,6 @@ interface StoredRow {
 	metadata: string;
 }
 
-/** The closure question's candidate block, as `renderRemRetirementTargetPrompt` writes it. */
 function offeredCandidates(prompt: string): Array<{ id: string; text: string }> | undefined {
 	const block = prompt.split("\n\n").find((part) => part.startsWith("Candidate rows: "));
 	if (block === undefined) return undefined;
