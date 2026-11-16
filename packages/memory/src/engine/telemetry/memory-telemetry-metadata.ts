@@ -29,7 +29,7 @@ const METADATA_ALLOWED_KEYS = {
 	],
 	supersede: ["superseded_by", "supersedes", "source_event_id", "supersede_mode"],
 	delete: ["delete_reason", "source_event_id"],
-	inject: ["injection_surface", "retrieval_rank", "retrieval_score", "source_agent_id"],
+	inject: ["injection_surface", "retrieval_rank", "retrieval_score", "source_agent_id", "phase"],
 	epoch_boundary: ["subtype", "baseline_pre", "baseline_post", "scorer_version"],
 	purge: ["status", "affected_fact_count", "purged_fact_ids", "failed_fact_ids", "blocked_reason"],
 } as const satisfies Record<MemoryTelemetryEventType, readonly string[]>;

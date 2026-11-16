@@ -8,7 +8,14 @@
  * binding absorbs its transport's limitations (OAuth, cancellation shape,
  * unsupported knobs) — callers never branch on host specifics.
  */
+export type HostIdentity = { skinId: string; vendor: string | null };
+export type HostTarget = { skinId: string } | { otherVendorThan: HostIdentity };
+export type HostResponse = { responder?: HostIdentity; checkedBySameVendor?: boolean };
+
 export type AgentLlmRequest = {
+	hostTarget?: HostTarget;
+	/** Internal call identity; not forwarded in the host HTTP request. */
+	callId?: import("./model-call-table").ModelCallId;
 	/** System prompt; the binding places it wherever its transport expects. */
 	system?: string;
 	/** User prompt content. */
@@ -31,7 +38,7 @@ export type AgentLlmRequest = {
  */
 export type AgentLlmCompletion =
 	/** `usage` and `model` are the host's own report when it gives one; absent means the host did not say. */
-	| { kind: "ok"; text: string; usage?: { inputTokens: number; outputTokens: number }; model?: string }
+	| ({ kind: "ok"; text: string; usage?: { inputTokens: number; outputTokens: number }; model?: string } & HostResponse)
 	| { kind: "cancelled"; reason: string }
 	| {
 			kind: "error";
