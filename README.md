@@ -103,9 +103,9 @@ sno reach pair "Fix the login redirect"
 
 One agent builds. The other challenges what it built. They settle the findings between themselves, so the work reaches you already argued over. Both run in tmux windows you can open and watch. With two different agents signed in, you get one of each. With only one, you still get the pair in two separate sessions, and the command tells you the review stayed in the same family.
 
-**When one runs out, the other clocks in.** For a long run, tell the working agent to use `rotate-agent`. At 2% of its quota it writes a handover and wakes a different agent, which continues from the exact commit. And when an agent's context fills up and compacts, it still knows what it was doing and what already failed.
+**When one runs out, the other clocks in.** For a long run, tell the working agent to use [`rotate-agent`](https://github.com/sno-ai/sno-station-skills/tree/main/skills/S-communication-and-handoff/rotate-agent). At 2% of its quota it writes a handover and wakes a different agent, which continues from the exact commit. And when an agent's context fills up and compacts, it still knows what it was doing and what already failed.
 
-**The other one sees what the first one can't.** Ask either agent to `peer-review` the other's work. The reviewer always works in a fresh session that never saw the conversation, and it is a different agent whenever you have two. A review does not always find a problem. It keeps finding the ones the author could not see, because an agent reviewing itself brings the same habits it wrote the code with.
+**The other one sees what the first one can't.** Ask either agent to [`peer-review`](https://github.com/sno-ai/sno-station-skills/tree/main/skills/J-peer-review-and-audit/peer-review) the other's work. The reviewer always works in a fresh session that never saw the conversation, and it is a different agent whenever you have two. A review does not always find a problem. It keeps finding the ones the author could not see, because an agent reviewing itself brings the same habits it wrote the code with.
 
 What we saw, the night of 2026-09-18:
 
@@ -316,7 +316,7 @@ There is no update step: `sno` updates itself when it finds a newer release.
 | One memory across Codex, Claude Code, Hermes Agent, Cursor and OpenClaw | Released; installed from the registry on a clean machine and proven end to end |
 | Cursor: the same memory, skills, review, take-over and Self Learning | Released in 1.3; the `cursor-agent` command line proven end to end on a clean Linux machine; the Cursor app on macOS still being proven |
 | Sno Reach: Instant Messenger and Agent Email | Let agents ask questions and exchange work across conversations and computers. See [what you can do with Reach](apps/reach/README.md) for examples, setup and availability. |
-| Self Learning and the squad skills | Installed by `sno setup`; the nightly job ran on a clean Linux machine |
+| Self Learning and the [squad skills](https://github.com/sno-ai/sno-station-skills) | Installed by `sno setup`; the nightly job ran on a clean Linux machine |
 | One-command install | `sno setup` installs everything above; proven on a clean Linux machine |
 | "Sno onboard" inside your agent | Available; it starts after the install, or when you say it |
 | One command starts two agents | New in 2.0; run with real Claude Code and Codex agents, as one of each and as two from one vendor |

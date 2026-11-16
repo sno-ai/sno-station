@@ -3,6 +3,9 @@ contact_links:
   - name: Question or idea
     url: https://github.com/sno-ai/sno-station/discussions
     about: Ask, propose, or show what you built. Discussions, not issues.
+  - name: A problem with a skill (peer-review, rotate-agent, handoff and the rest)
+    url: https://github.com/sno-ai/sno-station-skills/issues/new/choose
+    about: The skills live in sno-ai/sno-station-skills. Report those there.
   - name: Security vulnerability
     url: https://github.com/sno-ai/sno-station/blob/main/SECURITY.md
     about: Never file a security problem as a public issue. Email security@sno.ai.
