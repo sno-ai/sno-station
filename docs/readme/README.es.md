@@ -95,9 +95,9 @@ sno reach pair "Fix the login redirect"
 
 Un agente construye. El otro pone a prueba lo construido. Lo que encuentran lo resuelven entre ellos, así que el trabajo te llega ya discutido. Los dos corren en ventanas de tmux que puedes abrir y mirar. Con sesión iniciada en dos agentes distintos, tienes uno de cada uno. Con uno solo, sigues teniendo la pareja en dos sesiones separadas, y el comando te avisa de que la revisión se quedó en la misma familia.
 
-**Cuando uno se queda sin cuota, el otro entra de turno.** Para una ejecución larga, dile al agente que trabaja que use `rotate-agent`. Al 2% de su cuota escribe una nota de relevo y despierta a un agente distinto, que continúa desde el commit exacto. Y cuando el contexto de un agente se llena y se compacta, sigue sabiendo qué estaba haciendo y qué ya falló.
+**Cuando uno se queda sin cuota, el otro entra de turno.** Para una ejecución larga, dile al agente que trabaja que use [`rotate-agent`](https://github.com/sno-ai/sno-station-skills/tree/main/skills/S-communication-and-handoff/rotate-agent). Al 2% de su cuota escribe una nota de relevo y despierta a un agente distinto, que continúa desde el commit exacto. Y cuando el contexto de un agente se llena y se compacta, sigue sabiendo qué estaba haciendo y qué ya falló.
 
-**El otro ve lo que el primero no puede.** Pide a cualquiera de los dos agentes que haga `peer-review` del trabajo del otro. El revisor siempre trabaja en una sesión nueva que nunca vio la conversación, y es un agente distinto siempre que tengas dos. Una revisión no siempre encuentra un problema. Pero sigue encontrando los que el autor no podía ver, porque un agente que se revisa a sí mismo trae los mismos hábitos con los que escribió el código.
+**El otro ve lo que el primero no puede.** Pide a cualquiera de los dos agentes que haga [`peer-review`](https://github.com/sno-ai/sno-station-skills/tree/main/skills/J-peer-review-and-audit/peer-review) del trabajo del otro. El revisor siempre trabaja en una sesión nueva que nunca vio la conversación, y es un agente distinto siempre que tengas dos. Una revisión no siempre encuentra un problema. Pero sigue encontrando los que el autor no podía ver, porque un agente que se revisa a sí mismo trae los mismos hábitos con los que escribió el código.
 
 Lo que vimos la noche del 2026-09-18:
 
