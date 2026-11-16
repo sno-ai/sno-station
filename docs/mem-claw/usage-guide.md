@@ -155,8 +155,11 @@ The plugin registers these tools for the agent:
 On OpenClaw 2026.10 and later the host registers `memory_search` and `memory_get` itself; on older
 hosts the plugin adds those two names, for the same recall and read calls.
 
-The agent has no delete tool. Removing memory is an operator action, with `/memory clear --yes
---scope <scope>` or `openclaw sno-mem delete` above.
+`memory_read`, and on older hosts `memory_search` and `memory_get`, are registered only while
+OpenClaw's memory slot selects this plugin.
+
+The agent has no delete tool. Removing memory is an operator action, with
+`openclaw sno-mem delete --id <id> | --query <query>` above.
 
 ### Read a memory store offline
 
