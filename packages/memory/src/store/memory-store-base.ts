@@ -3,10 +3,6 @@
  * @boundary Runtime collaborators and cross-file method typing only.
  */
 
-import type {
-	RemMutationResult,
-	WriteTextVersionInput,
-} from "../engine/rem/index";
 
 import type { MemoryTier, MemoryMetadata } from "../engine/shared/types";
 import type {
@@ -23,6 +19,7 @@ import {
 	type DrizzleDB,
 	type Embedder,
 	initDb,
+	JSON_ID_BATCH_SIZE,
 	type ListOptions,
 	log,
 	type MemoryCategory,
@@ -49,7 +46,6 @@ import {
 	VECTOR_DIMENSION_DEFAULT,
 } from "./memory-store-shared";
 import { MemoryTelemetryEventWriter } from "../engine/telemetry/memory-telemetry-events";
-import { migrateLegacyRemUpdateStamps } from "./rem-update-stamp-migration";
 
 export type {
 	BulkDeleteResult,
@@ -71,6 +67,8 @@ export type {
 	UnplacedCandidateQuery,
 	UpdateChanges,
 } from "./memory-store-shared";
+
+import type { CaptureMode, MemoryPlace, PlaceMode, PlaceLoadedFiles, LoadedFileJudgment } from "./memory-store-precision-api";
 
 export type SupersedeActiveFactGuard =
 	| {
@@ -270,11 +268,6 @@ export interface AtomicExtractionWriteCard {
 	 * loudly: measured 2026-09-04, 18 parked rows per persona had no value here, the migration
 	 * aborted inside `initDb`, and all three Memora personas produced no score at all.
 	 *
-	 * It stays null on an active row on purpose. REM reads this same column as replace evidence
-	 * (rem-batch-executor.ts:1855) and tests it with `evidence.includes(clause.value)` over rows
-	 * where `lane = 'active'`; a serialized record escapes quotes and newlines, so filling it for
-	 * an active row would refuse a replace that a plain-text row allows. REM never reads a parked
-	 * row, so the two consumers do not collide.
 	 */
 	rawCandidateJson: string | null;
 	metadata?: Readonly<Record<string, unknown>>;
@@ -543,6 +536,33 @@ export class MemoryStore {
 	backfillLastFailureAt: number;
 	closed: boolean;
 	sqliteClosed: boolean;
+	getPlaceMode(_place: MemoryPlace): CaptureMode | undefined {
+		throw new StorageError("MemoryStore implementation modules were not loaded");
+	}
+	setPlaceMode(_place: PlaceMode): void {
+		throw new StorageError("MemoryStore implementation modules were not loaded");
+	}
+	setPlaceLoadedFiles(_place: PlaceLoadedFiles): void {
+		throw new StorageError("MemoryStore implementation modules were not loaded");
+	}
+	listPlaceLoadedFiles(): PlaceLoadedFiles[] {
+		throw new StorageError("MemoryStore implementation modules were not loaded");
+	}
+	getLoadedFileJudgments(_memoryId: string): LoadedFileJudgment[] {
+		throw new StorageError("MemoryStore implementation modules were not loaded");
+	}
+	setLoadedFileJudgment(_judgment: LoadedFileJudgment): void {
+		throw new StorageError("MemoryStore implementation modules were not loaded");
+	}
+	readActivePrecisionRows(_projectId: string): MemoryEntry[] {
+		throw new StorageError("MemoryStore implementation modules were not loaded");
+	}
+	listPrecisionProjects(): string[] {
+		throw new StorageError("MemoryStore implementation modules were not loaded");
+	}
+	moveRowsToGlobal(_ids: readonly string[]): Promise<void> {
+		throw new StorageError("MemoryStore implementation modules were not loaded");
+	}
 	findByContentHash(_hash: string, _scope?: string): MemoryEntry | undefined {
 		throw new StorageError("MemoryStore implementation modules were not loaded");
 	}
@@ -696,7 +716,15 @@ export class MemoryStore {
 		throw new StorageError("MemoryStore implementation modules were not loaded");
 	}
 
+	deleteByIds(_ids: string[], _options?: MemoryDeleteOptions): void {
+		throw new StorageError("MemoryStore implementation modules were not loaded");
+	}
+
 	store(_entry: StoreInput): Promise<StoreResult> {
+		throw new StorageError("MemoryStore implementation modules were not loaded");
+	}
+
+	undo(_input: Omit<CorrectMemoryInput, "content" | "temporalMetadata">): Promise<CorrectMemoryResult> {
 		throw new StorageError("MemoryStore implementation modules were not loaded");
 	}
 
@@ -840,10 +868,6 @@ export class MemoryStore {
 		throw new StorageError("MemoryStore implementation modules were not loaded");
 	}
 
-	applyRemTextVersion(_input: WriteTextVersionInput): Promise<RemMutationResult> {
-		throw new StorageError("MemoryStore implementation modules were not loaded");
-	}
-
 	updateTier(
 		memoryId: string,
 		newTier: MemoryTier,
@@ -855,9 +879,14 @@ export class MemoryStore {
 		throw new StorageError("MemoryStore implementation modules were not loaded");
 	}
 
-	updateMetadata(memoryId: string, patch: Partial<MemoryMetadata>): Promise<void> {
+	updateMetadata(
+		memoryId: string,
+		patch: Partial<MemoryMetadata>,
+		options?: { writerAuthority?: "offline-family" },
+	): Promise<void> {
 		void memoryId;
 		void patch;
+		void options;
 		throw new StorageError("MemoryStore implementation modules were not loaded");
 	}
 
@@ -965,6 +994,28 @@ export class MemoryStore {
 		// Isolate the storage operation that can fail because of runtime I/O or input shape.
 		try {
 			this.vectorDim = db.vectorDimension;
+			if (db.vectorSearchAvailable) {
+				const removed = sqlite.transaction(() => {
+					const orphans = sqlite.prepare(
+						"SELECT id FROM nodix_memory_chunk_vectors WHERE id NOT IN (SELECT chunk_id FROM nodix_memory_chunks)",
+					).all() as { id: string }[];
+					const remove = sqlite.prepare(
+						"DELETE FROM nodix_memory_chunk_vectors WHERE id IN (SELECT value FROM json_each(?))",
+					);
+					for (let i = 0; i < orphans.length; i += JSON_ID_BATCH_SIZE) {
+						remove.run(JSON.stringify(orphans.slice(i, i + JSON_ID_BATCH_SIZE).map(row => row.id)));
+					}
+					return orphans.length;
+				})();
+				if (Number(removed) > 0) {
+					log.info("removed chunk vectors without chunks", { count: removed }, {
+						event_name: "sno_station_mem.memory-store-base.orphan.chunk.vectors.removed",
+						file: "packages/memory/src/store/memory-store-base.ts",
+						function: "constructor",
+						site_id: "memory-store-base.orphan.chunk.vectors.removed",
+					});
+				}
+			}
 			const hasFtsSupport =
 				sqlite
 					.prepare(
@@ -979,7 +1030,6 @@ export class MemoryStore {
 				sqlite,
 				config: config.memoryTelemetry,
 			});
-			migrateLegacyRemUpdateStamps(sqlite);
 		} catch (error) {
 			sqlite.close();
 			// Surface this invalid storage state as an explicit typed failure.
@@ -1001,6 +1051,7 @@ export class MemoryStore {
 }
 
 export interface MemoryStoreInternals {
+	readActivePrecisionRows(projectId: string): MemoryEntry[];
 	dbPath: string;
 	hasFtsSupport: boolean;
 	db: DrizzleDB;
@@ -1095,6 +1146,7 @@ export interface MemoryStoreInternals {
 	storeAtomicExtractionChunk(input: AtomicExtractionWriteInput): Promise<AtomicExtractionWriteResult>;
 	createMemorySuppression(input: MemorySuppressionInput): Promise<MemorySuppressionResult>;
 	store(entry: StoreInput): Promise<StoreResult>;
+	undo(input: Omit<CorrectMemoryInput, "content" | "temporalMetadata">): Promise<CorrectMemoryResult>;
 	correct(input: CorrectMemoryInput): Promise<CorrectMemoryResult>;
 	storeQuarantinedCandidate(entry: QuarantinedStoreInput): Promise<StoreResult>;
 	bulkStore(entries: Array<StoreInput | null | undefined>): Promise<MemoryEntry[]>;
@@ -1162,8 +1214,11 @@ export interface MemoryStoreInternals {
 		newTier: MemoryTier,
 		options?: { writerAuthority?: "offline-family" },
 	): Promise<void>;
-	applyRemTextVersion(input: WriteTextVersionInput): Promise<RemMutationResult>;
-	updateMetadata(memoryId: string, patch: Partial<MemoryMetadata>): Promise<void>;
+	updateMetadata(
+		memoryId: string,
+		patch: Partial<MemoryMetadata>,
+		options?: { writerAuthority?: "offline-family" },
+	): Promise<void>;
 	/**
 	 * Atomically marks a `memory-reflection-item` row resolved (sets the
 	 * reflection-item `resolvedAt` / `resolvedBy` / `resolutionNote` fields only,

@@ -25,6 +25,8 @@ type SemanticMetaRow = Omit<ChunkSearchRow, "distance">;
 const SEMANTIC_CANDIDATE_MIN_BUDGET = 64;
 const SEMANTIC_CANDIDATE_MAX_BUDGET = 1024;
 const SEMANTIC_CANDIDATE_GROWTH_FACTOR = 2;
+// sqlite-vec limits KNN k to 4096; larger searches use an exact scan.
+const SQLITE_VEC_MAX_KNN_K = 4096;
 
 function readVecRowCount(sqlite: MemoryStoreInternals["sqlite"]): number {
 	const row = sqlite.prepare("SELECT COUNT(*) AS count FROM nodix_memory_chunk_vectors").get() as
@@ -46,16 +48,18 @@ function readSemanticVecRows(
 	candidateBudget: number,
 	projectIdFilter: readonly string[] | undefined,
 ): SemanticVecRow[] {
+	const exactScan = candidateBudget > SQLITE_VEC_MAX_KNN_K;
+	let sql = exactScan
+		? "SELECT id, vec_distance_l2(embedding, vec_f32(?)) AS distance FROM nodix_memory_chunk_vectors"
+		: "SELECT id, distance FROM nodix_memory_chunk_vectors WHERE embedding MATCH vec_f32(?)";
+	const params: (Uint8Array | string | number)[] = [vecBytes];
 	if (projectIdFilter && projectIdFilter.length > 0) {
-		return sqlite
-			.prepare(
-				"SELECT id, distance FROM nodix_memory_chunk_vectors WHERE embedding MATCH vec_f32(?) AND project_id IN (SELECT value FROM json_each(?)) AND k = ?",
-			)
-			.all(vecBytes, JSON.stringify(projectIdFilter), candidateBudget) as SemanticVecRow[];
+		sql += `${exactScan ? " WHERE" : " AND"} project_id IN (SELECT value FROM json_each(?))`;
+		params.push(JSON.stringify(projectIdFilter));
 	}
-	return sqlite
-		.prepare("SELECT id, distance FROM nodix_memory_chunk_vectors WHERE embedding MATCH vec_f32(?) AND k = ?")
-		.all(vecBytes, candidateBudget) as SemanticVecRow[];
+	sql += exactScan ? " ORDER BY distance LIMIT ?" : " AND k = ?";
+	params.push(candidateBudget);
+	return sqlite.prepare(sql).all(...params) as SemanticVecRow[];
 }
 
 function readSemanticMetaRows(
@@ -80,6 +84,10 @@ function readSemanticMetaRows(
 		if (opts.category) {
 			conditions.push("m.category = ?");
 			params.push(opts.category);
+		}
+		if (opts.excludeMemoryIds && opts.excludeMemoryIds.length > 0) {
+			conditions.push("m.id NOT IN (SELECT value FROM json_each(?))");
+			params.push(JSON.stringify(opts.excludeMemoryIds));
 		}
 		if (opts.includeRefused === false) {
 			conditions.push("m.disposition_reason IS NULL");
@@ -185,25 +193,30 @@ Object.assign(MemoryStore.prototype, {
 			Math.max(limit * 8, SEMANTIC_CANDIDATE_MIN_BUDGET),
 			Math.max(limit, SEMANTIC_CANDIDATE_MAX_BUDGET),
 		);
-		const shouldRetryAfterFiltering = true;
-
 		try {
 			const vecBytes = f32ToBytes(vector);
 			let vectorRowCount: number | undefined;
 			while (true) {
+				const exactScan = candidateBudget > SQLITE_VEC_MAX_KNN_K;
+				if (exactScan) {
+					vectorRowCount ??= readVecRowCount(this.sqlite);
+					candidateBudget = vectorRowCount;
+				}
 				const vecRows = readSemanticVecRows(
 					this.sqlite,
 					vecBytes,
 					candidateBudget,
 					opts.projectIdFilter,
 				);
-				if (vecRows.length === 0) return [];
+				const farthest = vecRows[vecRows.length - 1];
+				if (!farthest) return [];
 				const metaRows = readSemanticMetaRows(this.sqlite, vecRows, opts);
 				const results = buildChunkSearchResults(vecRows, metaRows, limit, minScore);
 
 				if (
 					results.length >= limit ||
-					!shouldRetryAfterFiltering ||
+					exactScan ||
+					1 / (1 + Number(farthest.distance)) < minScore ||
 					vecRows.length < candidateBudget
 				) {
 					log.debug("chunk semantic search", {

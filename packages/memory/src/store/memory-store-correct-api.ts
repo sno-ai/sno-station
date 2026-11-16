@@ -24,7 +24,7 @@ interface CorrectionRow {
 	valid_until: number | null;
 }
 
-function correctionTarget(store: MemoryStoreInternals, input: CorrectMemoryInput): CorrectionRow | undefined {
+function correctionTarget(store: MemoryStoreInternals, input: Pick<CorrectMemoryInput, "id" | "projectIdFilter">): CorrectionRow | undefined {
 	return store.sqlite.prepare(`SELECT * FROM nodix_memories
 		WHERE id = ? AND project_id IN (SELECT value FROM json_each(?))`)
 		.get(input.id, JSON.stringify(input.projectIdFilter)) as CorrectionRow | undefined;
@@ -62,6 +62,38 @@ function correctedMetadata(store: MemoryStoreInternals, row: CorrectionRow, inpu
 }
 
 Object.assign(MemoryStore.prototype, {
+	async undo(this: MemoryStoreInternals, input: Omit<CorrectMemoryInput, "content" | "temporalMetadata">): Promise<CorrectMemoryResult> {
+		return this.writeMutex.runExclusive(() => {
+			checkMemoryOperation();
+			return this.sqlite.transaction((): CorrectMemoryResult => {
+				const target = correctionTarget(this, input);
+				const refused = refusal(this, target);
+				if (refused) return refused;
+				if (!target) return { corrected: false, errorCode: "not-found" };
+				const sources = this.sqlite.prepare(`SELECT * FROM nodix_memories
+					WHERE json_extract(metadata, '$.superseded_by') = ?`).all(input.id) as CorrectionRow[];
+				if (sources.length === 0) return { corrected: false, errorCode: "invalid-input" };
+				const now = Date.now();
+				closeMemoryRow(this.sqlite, { targetRowId: input.id, closingRowId: input.id,
+					closingOrder: readMemorySourceOrderOrOldest(target.metadata), closingValidFrom: null,
+					supersededAt: now, supersedeReason: "undo" });
+				for (const row of sources) {
+					const metadata = this.parseMetadataObject(row.metadata);
+					const validUntil = typeof metadata.superseded_valid_until === "number" ? metadata.superseded_valid_until : null;
+					for (const key of ["superseded_by", "superseded_at", "supersede_reason", "superseded_valid_until", "close_merge_id", "invalidated_at"]) delete metadata[key];
+					const physical = this.sqlite.prepare("SELECT rowid FROM nodix_memories WHERE id = ?").get(row.id) as { rowid: number };
+					metadata.undo_at = now;
+					metadata.source_order = { valid_from: null, session_moment: now,
+						session_ordinal: 0, global_turn_index: 0, rowid: physical.rowid,
+						conversation_id: input.session, correction: true } satisfies MemorySourceOrder;
+					this.sqlite.prepare("UPDATE nodix_memories SET metadata = ?, valid_until = ? WHERE id = ?")
+						.run(JSON.stringify(metadata), validUntil, row.id);
+				}
+				return { corrected: true, id: sources.map(row => row.id).join("\n") };
+			}).immediate() as CorrectMemoryResult;
+		});
+	},
+
 	async correct(this: MemoryStoreInternals, input: CorrectMemoryInput): Promise<CorrectMemoryResult> {
 		if (!input.id.trim() || !input.content.trim()) return { corrected: false, errorCode: "invalid-input" };
 		const early = refusal(this, correctionTarget(this, input));
