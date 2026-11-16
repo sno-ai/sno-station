@@ -68,7 +68,6 @@ function createLegacySchema(database: SqliteDatabaseLike): void {
 			agent_id TEXT NOT NULL
 		);
 		CREATE INDEX idx_me_fact ON memory_events(fact_id);
-		CREATE TABLE rem_relation_ledger (row_id TEXT PRIMARY KEY, content_hash TEXT NOT NULL);
 		CREATE TABLE rem_memory_facets (
 			memory_id TEXT NOT NULL REFERENCES mem_claw_memories(id) ON DELETE CASCADE,
 			facet TEXT NOT NULL,
@@ -123,9 +122,6 @@ function createLegacySchema(database: SqliteDatabaseLike): void {
 		.prepare(
 			"INSERT INTO memory_events(event_type, fact_id, timestamp_ms, agent_id) VALUES ('create', 'fact-1', 1700000000000, 'agent-1')",
 		)
-		.run();
-	database
-		.prepare("INSERT INTO rem_relation_ledger(row_id, content_hash) VALUES ('memory-1', 'hash-1')")
 		.run();
 }
 
@@ -228,9 +224,6 @@ describe("legacy database namespace migration", () => {
 			expect(handle.db.prepare("SELECT COUNT(*) AS count FROM nodix_memory_events").get()).toEqual({
 				count: 1,
 			});
-			expect(
-				handle.db.prepare("SELECT COUNT(*) AS count FROM nodix_rem_relation_ledger").get(),
-			).toEqual({ count: 1 });
 			expect(handle.db.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
 			expect(handle.db.prepare("PRAGMA integrity_check").get()).toEqual({ integrity_check: "ok" });
 		} finally {
