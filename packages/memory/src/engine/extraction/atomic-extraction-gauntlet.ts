@@ -46,6 +46,7 @@ export interface AtomicGauntletRecord
 	attribute: string | null;
 	sourceSpan: ResolvedAtomicExtractionSourceSpan | null;
 	relations: AtomicGauntletRelation[];
+	assertedBy?: "assistant";
 	lane: "active" | "parked";
 	dispositionReason: AtomicExtractionDispositionReason | null;
 	resplit: boolean;
@@ -70,6 +71,7 @@ export interface AtomicResplitTransport {
 }
 
 export interface RunAtomicExtractionGauntletInput {
+	captureMode?: import("../../store/store").CaptureMode;
 	records: readonly AtomicExtractionRecord[];
 	turns: readonly AtomicExtractionTurn[];
 	resplit?: boolean;
@@ -115,6 +117,7 @@ function resolveSpan(
 	span: AtomicExtractionSourceSpan,
 	turns: readonly AtomicExtractionTurn[],
 	locale: Locale,
+	work: boolean,
 ): ResolvedAtomicExtractionSourceSpan | null {
 	if (!span.quote.trim()) return null;
 	const turn = turns[span.turnIndex];
@@ -124,7 +127,25 @@ function resolveSpan(
 		return { ...span, startOffset, endOffset: startOffset + span.quote.length };
 	}
 	const restored = restoreAtomicSanitizedSpan(turn.content, span.quote, locale);
-	return restored === null ? null : { ...span, ...restored };
+	if (restored !== null) return { ...span, ...restored };
+	if (!work) return null;
+	const quote = span.quote.replace(/`|\*\*|__/g, "");
+	if (!quote.trim()) return null;
+	const offsets: number[] = [];
+	// Keep UTF-16 offsets, as used by indexOf and slice, while omitting only Markdown marks.
+	const plain = turn.content.replace(/(`|\*\*|__)|[\s\S]/g,
+		(character: string, mark: string | undefined, offset: number) => {
+			if (mark !== undefined) return "";
+			offsets.push(offset);
+			return character;
+		});
+	const match = plain.indexOf(quote);
+	if (match === -1) return null;
+	const originalStart = offsets[match];
+	const originalEnd = offsets[match + quote.length - 1];
+	if (originalStart === undefined || originalEnd === undefined) return null;
+	return { ...span, quote: turn.content.slice(originalStart, originalEnd + 1),
+		startOffset: originalStart, endOffset: originalEnd + 1 };
 }
 
 function normalizeRelations(record: AtomicExtractionRecord): AtomicGauntletRelation[] {
@@ -139,13 +160,16 @@ function processRecord(
 	turns: readonly AtomicExtractionTurn[],
 	locale: Locale,
 	resplit: boolean,
+	captureMode: import("../../store/store").CaptureMode = "chat",
 	forceCompound = false,
 	resplitFailure?: string,
 ): AtomicGauntletRecord {
-	const span = resolveSpan(record.sourceSpan, turns, locale);
+	const span = resolveSpan(record.sourceSpan, turns, locale, captureMode === "work");
 	const sourceRole = turns[record.sourceSpan.turnIndex]?.role;
+	const assistantFact = captureMode === "work" && sourceRole !== "user"
+		&& record.subjectKind !== "user";
 	const subjectUnverified =
-		record.kind === "standing" && (sourceRole !== "user" || span === null);
+		record.kind === "standing" && ((!assistantFact && sourceRole !== "user") || span === null);
 	const compound = forceCompound || isCompoundSuspect(record);
 	const dispositionReason = compound
 		? "compound"
@@ -155,6 +179,7 @@ function processRecord(
 	const unkeyed = compound || subjectUnverified || (record.kind === "occurrence" && span === null);
 	return {
 		...record,
+		...(assistantFact && record.kind === "standing" ? { assertedBy: "assistant" as const } : {}),
 		subject: unkeyed && record.subjectKind !== "named_entity" ? null : record.subject,
 		attribute: unkeyed ? null : record.attribute,
 		sourceSpan: span,
@@ -186,12 +211,12 @@ export async function runAtomicExtractionGauntlet(
 		else ordinary.push(record);
 	}
 	const output = ordinary.map((record) =>
-		normalizeTemporal(processRecord(record, input.turns, locale, alreadyResplit)),
+		normalizeTemporal(processRecord(record, input.turns, locale, alreadyResplit, input.captureMode)),
 	);
 	const keepSuspects = (failure?: string): AtomicGauntletRecord[] => [
 		...output,
 		...suspects.map((record) =>
-			normalizeTemporal(processRecord(record, input.turns, locale, true, true, failure)),
+			normalizeTemporal(processRecord(record, input.turns, locale, true, input.captureMode, true, failure)),
 		),
 	];
 	if (suspects.length === 0) return output;
@@ -222,22 +247,23 @@ export async function runAtomicExtractionGauntlet(
 	if (splitRecords.length === 0) {
 		return keepSuspects("resplit-empty");
 	}
-	const boundSplitRecords = splitRecords.filter((record) =>
-		suspects.some(
+	const boundSplitRecords = splitRecords.flatMap((record) => {
+		const suspect = suspects.find(
 			(suspect) =>
 				record.sourceSpan.turnIndex === suspect.sourceSpan.turnIndex &&
 				sanitizeAtomicPromptValue(suspect.sourceSpan.quote, locale).value.includes(
 					record.sourceSpan.quote,
 				),
-		),
-	);
+		);
+		return suspect === undefined ? [] : [{ ...record, ...(suspect.precisionKind === undefined ? {} : { precisionKind: suspect.precisionKind }) }];
+	});
 	return [
 		...output,
 		...boundSplitRecords.map((record) =>
-			normalizeTemporal(processRecord(record, input.turns, locale, true)),
+			normalizeTemporal(processRecord(record, input.turns, locale, true, input.captureMode)),
 		),
 		...suspects.map((record) =>
-			normalizeTemporal(processRecord(record, input.turns, locale, true, true)),
+			normalizeTemporal(processRecord(record, input.turns, locale, true, input.captureMode, true)),
 		),
 	];
 }
