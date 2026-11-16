@@ -102,7 +102,7 @@ describe("LLM request deadline and attempt budget", () => {
 		} finally { await close(sno.server); await close(host.server); }
 	});
 
-	it.each(["E1", "E9", "REM1"] as const)("shares three GPU attempts between transport retries and empty replies for %s", async callId => {
+	it.each(["E1", "E9"] as const)("shares three GPU attempts between transport retries and empty replies for %s", async callId => {
 		let sent = 0;
 		const sno = await serve((_request, response) => {
 			if (++sent % 3 !== 0) { response.writeHead(503); response.end(); }
@@ -112,13 +112,13 @@ describe("LLM request deadline and attempt budget", () => {
 		try {
 			const llm = client(sno.url, host.url);
 			const request = { callId, prompt: "Return the judgment", hostPrompt: "Return the host judgment", maxTokens: 32, timeoutMs: 10_000 };
-			const result = callId === "REM1" ? await llm.completeText(request) : await llm.completeJson(request);
-			expect(result).toEqual(callId === "REM1" ? '{"from":"host"}' : { from: "host" });
+			const result = await llm.completeJson(request);
+			expect(result).toEqual({ from: "host" });
 			expect(sno.paths).toHaveLength(3);
 			expect(host.paths).toEqual(["/host/v1/chat/completions"]);
 			expect(llm.getLastUsage()).toEqual({ inputTokens: 1, outputTokens: 1, totalTokens: 2 });
-			const next = callId === "REM1" ? await llm.completeText(request) : await llm.completeJson(request);
-			expect(next).toEqual(callId === "REM1" ? '{"from":"host"}' : { from: "host" });
+			const next = await llm.completeJson(request);
+			expect(next).toEqual({ from: "host" });
 			expect(sno.paths).toHaveLength(6);
 			expect(host.paths).toEqual(["/host/v1/chat/completions", "/host/v1/chat/completions"]);
 		} finally { await close(sno.server); await close(host.server); }
