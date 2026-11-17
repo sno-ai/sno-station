@@ -89,7 +89,7 @@ EOF
 	if [[ -n "${OPENAI_BASE_URL:-}" ]]; then
 		printf '%s\n' '  OPENAI_BASE_URL is configured; its account quota is not measured here.'
 	else
-		printf '%s\n' "  using the harness's own endpoint; quota describes only the CLIs."
+		printf '%s\n' '  OPENAI_BASE_URL is not set; the CLIs use their own endpoints, and the quota shown is theirs.'
 	fi
 }
 
