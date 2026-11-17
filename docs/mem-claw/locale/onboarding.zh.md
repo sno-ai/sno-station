@@ -23,13 +23,13 @@ openclaw plugins install @snoai/mem-claw@2.0.2
 
 ## 第三步：重启 OpenClaw 并检查
 
-重启 OpenClaw 后运行：
+重启 OpenClaw 后，在终端里检查插件的命令是否可用：
 
-```text
-/memory status
+```bash
+openclaw sno-mem stats
 ```
 
-状态会显示 memory 数量、存储路径和记忆服务的进程 id。
+它会以 JSON 输出 memory 数量：总数，以及按项目和按类别的数量。
 
 ## 第四步：建立第一条有用的 memory
 
@@ -50,8 +50,8 @@ openclaw plugins install @snoai/mem-claw@2.0.2
 
 然后验证：
 
-```text
-/memory stats
+```bash
+openclaw sno-mem stats
 ```
 
 不要把临时调试状态、测试输出或私有基础设施信息当作第一批 memory。
