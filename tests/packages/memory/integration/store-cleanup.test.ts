@@ -83,6 +83,9 @@ describe("store cleanup over a store written under the old content hash", () => 
 		if (request.callId === "E13") return { mode: "work" };
 		if (request.callId === "E23") {
 			const data = JSON.parse(request.prompt.slice(request.prompt.lastIndexOf("\n") + 1));
+			if (request.prompt.startsWith("Another model already chose the list below.")) {
+				return { ids: data.map((row: { id: string }) => row.id) };
+			}
 			return data.operation === "admission deletion"
 				? { rows: data.rows.map((row: { id: string }) => ({ id: row.id, confirmed: true })) }
 				: { confirmed: true };
@@ -230,7 +233,7 @@ describe("store cleanup over a store written under the old content hash", () => 
 			.run(JSON.stringify([{ path: file, bytes: 18, sha256: createHash("sha256").update("Use short reports.").digest("hex") }]));
 		let rejectReadmission = false;
 		const agentPort = { async complete({ prompt, callId }: { prompt: string; callId?: string }) {
-			if (callId === "E23") return { kind: "ok" as const, text: '{"confirmed":true}' };
+			if (callId === "E23" && !prompt.startsWith("Another model already chose the list below.")) return { kind: "ok" as const, text: '{"confirmed":true}' };
 			if (callId === "E16") return { kind: "ok" as const, text: JSON.stringify({ rows: rejectReadmission ? [
 				{ id: "host-rule", verdict: "delete", reason: "activity record" },
 				{ id: "needs-label", verdict: "delete", reason: "activity record" },
@@ -287,8 +290,8 @@ describe("store cleanup over a store written under the old content hash", () => 
 			const precision = precisionReply(request);
 			if (precision !== undefined) return { kind: "ok" as const, text: JSON.stringify(precision) };
 			const data = JSON.parse(request.prompt.slice(request.prompt.lastIndexOf("\n") + 1));
-			if (request.callId === "E19") return { kind: "ok" as const, text: JSON.stringify({ rows: data.map((row: { id: string }) => ({ id: row.id, label: "topic" })) }) };
-			if (request.callId === "E20") return { kind: "ok" as const, text: '{"ids":[]}' };
+			if (request.callId === "E19") return { kind: "ok" as const, text: JSON.stringify({ rows: data.map((row: { id: string }) => ({ id: row.id, label: "core" })) }) };
+			if (request.callId === "E20") return { kind: "ok" as const, text: JSON.stringify({ ids: data.map((row: { id: string }) => row.id) }) };
 			if (data.rule) return { kind: "ok" as const, text: '{"verdict":"covered"}' };
 			const path = Array.isArray(data) ? "cleanup" : data.files ? "loaded-file" : "scope";
 			const rows = path === "cleanup" ? data.map((row: { id: string }) => row.id === "array-activity"
@@ -333,7 +336,7 @@ describe("store cleanup over a store written under the old content hash", () => 
 			return { kind: "ok" as const, text: JSON.stringify(answer) };
 		} };
 		await runPrecisionNightly({ settings: readSettings(), agentPort, waveId: "nightly-budget", full });
-		const judged = full ? 2000 : 1280;
+		const judged = full ? 2000 : 1040;
 		expect(fixture.runtime.db.prepare("SELECT count(*) AS rows FROM nodix_memories WHERE json_extract(metadata, '$.precision_judged') = 1").get()).toEqual({ rows: judged });
 		expect(fixture.runtime.db.prepare("SELECT count(*) AS rows FROM nodix_memories WHERE json_extract(metadata, '$.precision_kind') IS NULL").get()).toEqual({ rows: 2000 - judged });
 		expect(fixture.runtime.db.prepare("SELECT project_id, count(*) AS rows FROM nodix_memories WHERE json_extract(metadata, '$.precision_judged') = 1 GROUP BY project_id ORDER BY project_id").all()).toEqual([
@@ -346,7 +349,7 @@ describe("store cleanup over a store written under the old content hash", () => 
 			fixture.runtime.db.prepare("ATTACH DATABASE ? AS before_last_pass").run(path);
 			try {
 				const prior = fixture.runtime.db.prepare("SELECT count(*) AS rows FROM before_last_pass.nodix_memories WHERE json_extract(metadata, '$.precision_judged') = 1").get() as { rows: number };
-				expect(prior.rows).toBeGreaterThanOrEqual(1280);
+				expect(prior.rows).toBe(960);
 			} finally { fixture.runtime.db.exec("DETACH DATABASE before_last_pass"); }
 			expect(fixture.runtime.db.prepare("SELECT count(*) AS rows FROM nodix_rem_journal WHERE job_id = 'nightly-budget' AND stage = 'night' AND outcome = 'fine'").get()).toEqual({ rows: 1 });
 		}
@@ -397,6 +400,68 @@ describe("store cleanup over a store written under the old content hash", () => 
 			.toEqual([{ reason: "Full cleanup stopped: deferred pass changed nothing and judged no new row" }]);
 		expect(fixture.runtime.db.prepare("SELECT json_extract(payload, '$.day') AS day FROM nodix_memory_migration_markers WHERE name = 'memory-precision-last-night'").get())
 			.toEqual({ day: new Date(Date.now()).toLocaleDateString("en-CA") });
+	});
+
+	it("picks and checks session-start before the pair stage in a full run", async () => {
+		writeSettingsFixture(dirname(fixture.dbPath), { store: { path: fixture.dbPath, encryptionKey: fixture.encryptionKey } });
+		installRemSchema(fixture.runtime.db);
+		const rows = [];
+		for (const [index, id] of ["concise", "autonomous"].entries()) {
+			rows.push(await store.store({ text: `The owner requires ${id} work in every session.`, category: "episodic", projectId: SCOPE,
+				timestamp: index + 1, metadata: JSON.stringify({ writer_agent_id: "codex", precision_kind: "rule", start_label: "core", start_rank: index + 1 }) }));
+		}
+		const order: string[] = [];
+		const agentPort = { async complete(request: { callId?: string; prompt: string }) {
+			order.push(request.callId ?? "unknown");
+			const data = JSON.parse(request.prompt.slice(request.prompt.lastIndexOf("\n") + 1));
+			if (request.callId === "E20" || (request.callId === "E23" && Array.isArray(data))) {
+				return { kind: "ok" as const, text: JSON.stringify({ ids: [rows[1]?.id] }), responder: { skinId: "codex", vendor: "openai" } };
+			}
+			const precision = precisionReply(request);
+			if (precision !== undefined) return { kind: "ok" as const, text: JSON.stringify(precision) };
+			return { kind: "ok" as const, text: JSON.stringify({ rows: data.map((row: { id: string }) => ({ id: row.id, verdict: "keep", kind: "rule", origin: "owner", about_user: true })) }) };
+		} };
+		await runPrecisionNightly({ settings: readSettings(), agentPort, waveId: "session-start-before-pairs", full: true });
+		expect.soft(order.filter(callId => callId === "E20")).toHaveLength(3);
+		expect.soft(order.filter(callId => callId === "E23")).toHaveLength(1);
+		expect.soft(order.slice(0, 4)).toEqual(["E20", "E20", "E20", "E23"]);
+		expect.soft(order.indexOf("E21")).toBeGreaterThan(3);
+		expect.soft([rows[1], rows[0]].map(row => JSON.parse(store.getById(row.id)?.metadata ?? "{}").start_rank)).toEqual([1, 0]);
+		expect(fixture.runtime.db.prepare(`SELECT count(*) AS rows FROM nodix_rem_journal
+			WHERE job_id = 'session-start-before-pairs' AND stage = 'pairs' AND outcome = 'fine'`).get()).toEqual({ rows: 2 });
+	});
+
+	it("does not label, rank, pick or check session-start when the backup fails in a full run", async () => {
+		const profile = dirname(fixture.dbPath);
+		writeSettingsFixture(profile, { store: { path: fixture.dbPath, encryptionKey: fixture.encryptionKey } });
+		installRemSchema(fixture.runtime.db);
+		plant({ id: "backup-start-rule", text: "The owner requires concise reports.", hash: "a".repeat(64), timestamp: 1,
+			metadata: { writer_agent_id: "codex", precision_kind: "rule", start_label: "core", start_rank: 1 } });
+		plant({ id: "backup-start-person", text: "The owner prefers autonomous work.", hash: "b".repeat(64), timestamp: 2,
+			metadata: { writer_agent_id: "codex", precision_kind: "person" } });
+		await writeFile(join(profile, "sno-station-mem"), "Block the backup directory with a file.");
+		const calls: string[] = [];
+		const agentPort = { async complete(request: { callId?: string; prompt: string }) {
+			calls.push(request.callId ?? "unknown");
+			const rows = JSON.parse(request.prompt.slice(request.prompt.lastIndexOf("\n") + 1)) as Array<{ id: string }>;
+			if (request.callId === "E19") {
+				return { kind: "ok" as const, text: JSON.stringify({ rows: rows.map(row => ({ id: row.id, label: "core" })) }) };
+			}
+			if (request.callId === "E20" || request.callId === "E23") {
+				return { kind: "ok" as const, text: JSON.stringify({ ids: ["backup-start-rule", "backup-start-person"] }) };
+			}
+			throw new Error(`Unexpected model call: ${request.callId}`);
+		} };
+		await runPrecisionNightly({ settings: readSettings(), agentPort, waveId: "session-start-backup-failure", full: true });
+		const rows = readRows();
+		expect(rows).toHaveLength(2);
+		expect.soft(JSON.parse(store.getById("backup-start-rule")?.metadata ?? "{}"))
+			.toMatchObject({ start_label: "core", start_rank: 1 });
+		const unlabelled = JSON.parse(store.getById("backup-start-person")?.metadata ?? "{}");
+		expect.soft(unlabelled).not.toHaveProperty("start_label");
+		expect.soft(unlabelled).not.toHaveProperty("start_rank");
+		expect.soft(calls).not.toContain("E20");
+		expect.soft(calls).not.toContain("E23");
 	});
 
 	it("nightly backup: two successful nights retain only the newer snapshot and remove old side files", async () => {
@@ -498,7 +563,7 @@ describe("store cleanup over a store written under the old content hash", () => 
 		const profile = dirname(fixture.dbPath);
 		writeSettingsFixture(profile, { store: { path: fixture.dbPath, encryptionKey: fixture.encryptionKey } });
 		installRemSchema(fixture.runtime.db);
-		plant({ id: "loaded-rule", text: "The owner requires concise reports.", hash: "4".repeat(64), timestamp: 1, metadata: { precision_kind: "rule", writer_agent_id: "codex", start_label: "topic" } });
+		plant({ id: "loaded-rule", text: "The owner requires concise reports.", hash: "4".repeat(64), timestamp: 1, metadata: { precision_kind: "rule", writer_agent_id: "codex", start_label: "core", start_rank: 1 } });
 		const sha256 = createHash("sha256").update("Use short reports.").digest("hex");
 		const changed = join(profile, "changed.md");
 		await writeFile(changed, "The bytes changed.");
@@ -518,7 +583,7 @@ describe("store cleanup over a store written under the old content hash", () => 
 			if (request.prompt.includes("You choose what a coding agent is told at the start of every working session")) {
 				return { kind: "ok" as const, text: '{"rows":[]}' };
 			}
-			if (request.prompt.includes("These are lasting rules")) return { kind: "ok" as const, text: '{"ids":[]}' };
+			if (request.prompt.includes("These are lasting rules")) return { kind: "ok" as const, text: '{"ids":["loaded-rule"]}' };
 			const data = JSON.parse(request.prompt.slice(request.prompt.lastIndexOf("\n") + 1));
 			if (request.callId === "E16") return { kind: "ok" as const, text: JSON.stringify({ rows: data.map((row: { id: string }) => ({
 				id: row.id, verdict: "keep", kind: "rule", origin: "owner", about_user: false,
@@ -577,8 +642,8 @@ describe("store cleanup over a store written under the old content hash", () => 
 			plant({ id: `failure-row-${index}`, text: `The project has durable fact ${index}.`, timestamp: index,
 				hash: createHash("sha256").update(String(index)).digest("hex"), metadata: { writer_agent_id: "codex" } });
 		}
-		plant({ id: "file-row-a", text: "The owner requires short reports.", hash: "8".repeat(64), timestamp: 42, metadata: { precision_kind: "rule", writer_agent_id: "codex" } });
-		plant({ id: "file-row-b", text: "The owner works in UTC.", hash: "9".repeat(64), timestamp: 43, metadata: { precision_kind: "person", writer_agent_id: "codex" } });
+		plant({ id: "file-row-a", text: "The owner requires short reports.", hash: "8".repeat(64), timestamp: 42, metadata: { precision_kind: "rule", writer_agent_id: "codex", start_label: "core", start_rank: 1 } });
+		plant({ id: "file-row-b", text: "The owner works in UTC.", hash: "9".repeat(64), timestamp: 43, metadata: { precision_kind: "person", writer_agent_id: "codex", start_label: "core", start_rank: 2 } });
 		const files = [];
 		for (const name of ["accepted.md", "rejected.md"]) {
 			const file = join(profile, name);
