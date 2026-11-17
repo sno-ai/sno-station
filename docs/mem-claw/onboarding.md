@@ -27,13 +27,13 @@ setup; there is no separate start command.
 
 ## Step 3: restart OpenClaw and check
 
-After restarting OpenClaw, run:
+After restarting OpenClaw, check from a terminal that the plugin's commands are there:
 
-```text
-/memory status
+```bash
+openclaw sno-mem stats
 ```
 
-The status shows the memory counts, the store path, and the memory service's process id.
+It prints the memory counts as JSON: the total, and the counts per project and per category.
 
 ## Step 4: create the first useful memory
 
@@ -54,8 +54,8 @@ Remember that I prefer concise replies and tabs for indentation.
 
 Then verify:
 
-```text
-/memory stats
+```bash
+openclaw sno-mem stats
 ```
 
 Do not use temporary debug state, test output, or private infrastructure details as first memories.
