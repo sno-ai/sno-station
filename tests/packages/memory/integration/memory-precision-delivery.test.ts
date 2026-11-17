@@ -1,6 +1,6 @@
 /** Precision delivery through the existing runtime, encrypted store and real retrieval. */
 import { createHash } from "node:crypto";
-import { readFile, unlink, writeFile } from "node:fs/promises";
+import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import { countTokens } from "@snoai/chunking";
 import { afterEach, beforeAll, beforeEach, expect, it } from "vitest";
@@ -504,7 +504,9 @@ it.each(["changed", "deleted"])("omits a %s file entirely, judges the readable f
 	const replies: unknown[] = [found(memory.id, "said", "Before publishing, explain the release risk."),
 		{ verdict: "covered" }, { verdict: "covered" }];
 	const llm = await scriptedModel(replies);
-	expect.soft(await judgeNightlyLoadedFiles(store, llm, dirname(database.dbPath))).toBe(3);
+	expect.soft(await judgeNightlyLoadedFiles(store, llm, dirname(database.dbPath), "changed-file-night")).toBe(3);
+	expect.soft(database.sqlite.prepare("SELECT outcome FROM nodix_rem_journal WHERE job_id = 'changed-file-night' AND outcome != 'fine'").all())
+		.toEqual([{ outcome: "undecided" }]);
 	expect.soft(modelPrompts).toHaveLength(3);
 	expect.soft(modelPrompts[0]).toContain("Before publishing, explain the release risk. Keep formatter settings local.");
 	for (const prompt of modelPrompts) {
@@ -526,6 +528,17 @@ it.each(["changed", "deleted"])("omits a %s file entirely, judges the readable f
 	expect.soft(modelPrompts[0]).toContain("Before publishing, explain the release risk. Keep formatter settings local.");
 	expect.soft(storedVerdicts(memory.id)).toEqual([{ file: "A.md", verdict: "said" }, { file: "B.md", verdict: "not-said" }]);
 	expect.soft(await start("restored-file", [current])).toMatchObject({ degraded: false, contextText: "", memoryIds: [] });
+});
+
+it("keeps genuine loaded-file read errors failed", async () => {
+	const file = await loadedFile("unreadable.md", "Explain the release risk.");
+	recordLoadedFiles([file]);
+	await unlink(file.path);
+	await mkdir(file.path);
+	const llm = await scriptedModel([]);
+	expect(await judgeNightlyLoadedFiles(store, llm, dirname(database.dbPath), "read-error-night")).toBe(0);
+	expect(database.sqlite.prepare("SELECT outcome, reason FROM nodix_rem_journal WHERE job_id = 'read-error-night'").get())
+		.toMatchObject({ outcome: "failed", reason: expect.stringContaining("EISDIR") });
 });
 
 it("does not rejudge a memory on a later run while one recorded file remains unreadable", async () => {

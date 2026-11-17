@@ -25,10 +25,15 @@ function candidates(store: MemoryStore, place: PlaceLoadedFiles, previousAt: num
 	return [...first, ...rest];
 }
 
-async function loadedText(file: PlaceLoadedFiles["files"][number]): Promise<string> {
-	const prefix = (await readFile(file.path)).subarray(0, file.bytes);
+async function loadedText(file: PlaceLoadedFiles["files"][number]): Promise<string | undefined> {
+	let prefix: Buffer;
+	try { prefix = (await readFile(file.path)).subarray(0, file.bytes); }
+	catch (error) {
+		if (typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT") return undefined;
+		throw error;
+	}
 	if (createHash("sha256").update(prefix).digest("hex") !== file.sha256) {
-		throw new Error("loaded file sha256 changed; skipped");
+		return undefined;
 	}
 	return prefix.toString("utf8");
 }
@@ -45,7 +50,13 @@ export async function judgeNightlyLoadedFiles(store: MemoryStore, llm: LlmClient
 	for (const place of store.listPlaceLoadedFiles()) {
 		const files: Array<PlaceLoadedFiles["files"][number] & { text: string }> = [];
 		for (const file of place.files) {
-			try { files.push({ ...file, text: await loadedText(file) }); }
+			try {
+				const text = await loadedText(file);
+				if (text === undefined) {
+					if (waveId) journalPrecisionNight(store, waveId, "loaded-file", "undecided", [],
+						"loaded file changed or deleted; skipped", place.projectId);
+				} else files.push({ ...file, text });
+			}
 			catch (error) { logFailure(store, place, file.path, error, waveId); }
 		}
 		if (files.length === 0) continue;
