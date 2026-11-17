@@ -9,14 +9,29 @@ Run from the repository root, using the already prepared environment:
 
 ```sh
 export MP_SOURCE_HOME="$HOME"
-export HOME="$MP_SOURCE_HOME/.cache/mp-e2e/home"
+export MP_WORK_ROOT=<the scratch directory allocated for this run>
+mkdir -p "$MP_WORK_ROOT/home"
+export TMPDIR="$MP_WORK_ROOT"
+export TMP="$MP_WORK_ROOT"
+export TEMP="$MP_WORK_ROOT"
+export HOME="$MP_WORK_ROOT/home"
+export XDG_CACHE_HOME="$MP_WORK_ROOT/cache"
 export SNO_PROFILE_DIR="$MP_SOURCE_HOME/.cache/mp-e2e/profile"
 export SNO_USAGE_CLASS=research
 export SNO_BINARY="$MP_SOURCE_HOME/.local/bin/sno"
 export MP_CONVERSATION=<path to one real Claude Code session .jsonl>
 ```
 
-Before using the copied profile, stop any already-running copy-profile service by the
+For step 9, omit `MP_CONVERSATION`. The prepared `SNO_PROFILE_DIR/settings.json`
+provides model settings only; the driver creates an empty profile, store, npm prefix,
+agent homes and one throwaway repository under `TMPDIR`. It does not read the owner's
+live profile or identity, and does not copy its store. Agent credentials come from
+`MP_SOURCE_HOME/.claude/.credentials.json` and `MP_SOURCE_HOME/.codex/auth.json`;
+owner instruction files are deliberately not copied, so they cannot supply the rule
+being tested. Hooks use this tree's built packages, just as step 6 does. Do not run
+`sno setup`, `sno update`, or stop any existing service for step 9.
+
+For steps that use a copied profile (not step 9), before using it, stop any already-running copy-profile service by the
 PID recorded in `$SNO_PROFILE_DIR/station/sidecar.json` and wait for it to exit. That
 process keeps its old machine identity after `identity.json` changes. The driver does
 not stop it automatically; never use pattern-based process killing.
@@ -45,6 +60,26 @@ The historical conversation is resumable: each invocation remains bounded, and s
 | New Cursor capture | `timeout 285 node --import tsx tests/apps/memory-precision/e2e-agent/run.mjs 6 cursor` | Estimated 4–6 minutes; callbacks may take longer | Same capture → nightly preservation → receiver journey, with Cursor project hooks and copied Cursor credentials in an isolated home; reads first-prompt delivery through native hook/session observations. |
 | Everyday chat | `timeout 285 node --import tsx tests/apps/memory-precision/e2e-agent/run.mjs 7` | 2 minutes | Original chat capture instruction, real GPU extraction and real Claude host enrichment; read back chat mode and personal occurrences/feelings/day plans. |
 | Historical work conversation | `timeout 285 node --import tsx tests/apps/memory-precision/e2e-agent/run.mjs 8` | 4 minutes, may time out | Restore unique messages and real human turns from JSONL using the existing Claude classifier; use the existing worker batch selector and real host enrichment; assert allowed labels, complete sentences on review, fewer than half the original 777 rows, and no known activity phrasings, including completed-and-merged tasks. |
+| Real-agent duplicate and changed value | `MP_BUDGET_MS=900000 timeout 960 node --import tsx tests/apps/memory-precision/e2e-agent/run.mjs 9` | Estimated 8–15 minutes | Two new Claude sessions state the Chinese reply rule in different words; two new Codex sessions change port 8070 to 8090. Await each real capture, assert one open rule and retirement of the old port, observe new Claude/Codex deliveries, record their port answers, and run the installed mem-claude doctor. |
+
+Step 9 runs on Linux and accesses its scratch directory through `/proc/<driver PID>/cwd`
+to keep the sidecar's Unix socket path below the platform limit; the files still live
+under `TMPDIR`. This addresses the observed `EINVAL` on a long allocated scratch path.
+Step 9 defaults to a 900,000 ms driver budget. The outer 960-second timeout reserves
+cleanup time. Individual CLI calls are capped at 110 seconds, capture waits at 240
+seconds and the remaining driver budget. It stops only its own CLI process groups
+and workers/sidecar identified by PID files in its newly created profile. It removes
+that profile, prefix and agent homes, including copied credentials, on completion.
+Its evidence is `ai-doc/ACTIVE/PRD/Precision-Memory/evidence/e2e-real-agents/9.json`:
+stored rows after each statement, semantic judgments, observed deliveries, answers,
+doctor output, timing and assertion failures. It excludes credentials, raw native
+transcripts and raw service logs. The judge is a real Claude CLI with hooks disabled
+and session persistence off; it classifies meaning rather than using keyword rules.
+All model calls use provider defaults; the driver does not set temperature to zero.
+The run does not invoke a night: it records whether one ran, checks the doctor's
+service-rendered number lines if present, and otherwise records that no night ran.
+Product assertion failures stop the journey; fix only harness defects before retrying,
+with at most three executions in total.
 
 Hermes/OpenClaw plugin checks remain in the existing focused files documented by
 `memory-precision-tests-report.md`; this driver does not rerun them or claim a new pass.
