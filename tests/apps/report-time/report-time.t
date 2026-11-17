@@ -32,6 +32,9 @@ chmod +x "$WORK/tools/date"
 actual="$(env -u REPORT_TIME_USER_TZ PATH="$WORK/tools:$PATH" TZ=Asia/Tokyo "$SCRIPT" --in 3600)"
 expected='2024-01-01 10:00 JST (2024-01-01 01:00 UTC)'
 [[ "$actual" == "$expected" ]] || { printf 'FAIL interval: %s\n' "$actual" >&2; exit 1; }
+actual="$(env -u REPORT_TIME_USER_TZ PATH="$WORK/tools:$PATH" TZ=Asia/Tokyo "$SCRIPT" --in 03600)"
+expected='2024-01-01 10:00 JST (2024-01-01 01:00 UTC)'
+[[ "$actual" == "$expected" ]] || { printf 'FAIL zero-padded interval: %s\n' "$actual" >&2; exit 1; }
 
 sleep 10 &
 pid=$!
@@ -57,4 +60,16 @@ status=0
 [[ ! -s "$WORK/out" ]] || { printf 'FAIL --in extra arguments wrote stdout\n' >&2; exit 1; }
 printf "%s\n" "report-time: --in takes exactly one value, got '60 junk extra'" | cmp -s - "$WORK/err" \
   || { printf 'FAIL --in extra arguments stderr:\n' >&2; cat "$WORK/err" >&2; exit 1; }
-printf 'ok report-time fixed epoch, zone override, interval, non-timeout refusal, unknown options, and --in extra-arguments refusal\n'
+status=0
+"$SCRIPT" "" >"$WORK/out" 2>"$WORK/err" || status=$?
+[[ "$status" -eq 2 ]] || { printf 'FAIL empty argument: expected exit 2, got %s\n' "$status" >&2; exit 1; }
+[[ ! -s "$WORK/out" ]] || { printf 'FAIL empty argument wrote stdout\n' >&2; exit 1; }
+printf "%s\n" "report-time: empty time argument — refusing to substitute the current time for a value you failed to obtain" | cmp -s - "$WORK/err" \
+  || { printf 'FAIL empty argument stderr:\n' >&2; cat "$WORK/err" >&2; exit 1; }
+status=0
+env PATH="$WORK/tools:$PATH" "$SCRIPT" --in 1-2 >"$WORK/out" 2>"$WORK/err" || status=$?
+[[ "$status" -eq 2 ]] || { printf 'FAIL --in 1-2: expected exit 2, got %s\n' "$status" >&2; exit 1; }
+[[ ! -s "$WORK/out" ]] || { printf 'FAIL --in 1-2 wrote stdout\n' >&2; exit 1; }
+printf "%s\n" "report-time: --in takes an integer number of seconds, got '1-2'" | cmp -s - "$WORK/err" \
+  || { printf 'FAIL --in 1-2 stderr:\n' >&2; cat "$WORK/err" >&2; exit 1; }
+printf 'ok report-time fixed epoch, zone override, interval, zero-padded interval, non-timeout refusal, unknown options, --in extra-arguments, empty-argument and --in 1-2 refusals\n'
