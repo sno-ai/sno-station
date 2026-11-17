@@ -749,8 +749,9 @@ export class MemoryStore {
 		preserveExisting?: SupersedePreserveExisting;
 		reviveInvalidatedExisting?: boolean;
 		profileRecovery?: ProfileRecoveryWrite;
-	}): Promise<MemoryEntry> {
+	}, beforeWrite?: () => void): Promise<MemoryEntry> {
 		void args;
+		void beforeWrite;
 		throw new StorageError("MemoryStore implementation modules were not loaded");
 	}
 
@@ -862,9 +863,10 @@ export class MemoryStore {
 		throw new StorageError("MemoryStore implementation modules were not loaded");
 	}
 
-	update(id: string, changes: UpdateChanges): Promise<MemoryEntry | null> {
+	update(id: string, changes: UpdateChanges, beforeWrite?: () => void): Promise<MemoryEntry | null> {
 		void id;
 		void changes;
+		void beforeWrite;
 		throw new StorageError("MemoryStore implementation modules were not loaded");
 	}
 
@@ -1158,7 +1160,7 @@ export interface MemoryStoreInternals {
 		preserveExisting?: SupersedePreserveExisting;
 		reviveInvalidatedExisting?: boolean;
 		profileRecovery?: ProfileRecoveryWrite;
-	}): Promise<MemoryEntry>;
+	}, beforeWrite?: () => void): Promise<MemoryEntry>;
 	createMergeWithRawLineage(args: {
 		rawSource: StoreInput;
 		merged:
@@ -1208,7 +1210,7 @@ export interface MemoryStoreInternals {
 	deleteByIds(ids: string[], options?: MemoryDeleteOptions): void;
 	list(opts: ListOptions): Promise<MemoryEntry[]>;
 	stats(projectId?: string): Promise<StatsResult>;
-	update(id: string, changes: UpdateChanges): Promise<MemoryEntry | null>;
+	update(id: string, changes: UpdateChanges, beforeWrite?: () => void): Promise<MemoryEntry | null>;
 	updateTier(
 		memoryId: string,
 		newTier: MemoryTier,

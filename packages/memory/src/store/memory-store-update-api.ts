@@ -178,6 +178,7 @@ Object.assign(MemoryStore.prototype, {
 		this: MemoryStoreInternals,
 		id: string,
 		changes: UpdateChanges,
+		beforeWrite?: () => void,
 	): Promise<MemoryEntry | null> {
 		const countRecordTokens = await recordTokenCounter(this.embedder);
 		// Log operational context for storage without changing control flow.
@@ -223,6 +224,7 @@ Object.assign(MemoryStore.prototype, {
 			safeChanges.text !== undefined ? await this.prepareChunkInserts(id, safeChanges.text) : [];
 
 		return this.writeMutex.runExclusive(() => {
+			beforeWrite?.();
 			const existing = this.sqlite
 				.prepare(
 					"SELECT id, text, category, project_id AS projectId, importance, timestamp, timezone, metadata, content_hash, fact_id, lane, raw_candidate_json, disposition_reason, dispositioned_at_ms FROM nodix_memories WHERE id = ? LIMIT 1",
