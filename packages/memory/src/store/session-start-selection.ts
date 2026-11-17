@@ -10,8 +10,9 @@ export function selectSessionStartRows(store: MemoryStore, projectId: string): M
 		const metadata: Record<string, unknown> = JSON.parse(row.metadata);
 		const kind = String(metadata.precision_kind);
 		if (metadata.asserted_by !== undefined || metadata.start_label === "drop") continue;
+		if (metadata.start_label !== undefined && (typeof metadata.start_rank !== "number" || !(metadata.start_rank >= 1))) continue;
 		if (row.projectId === "global" && ["rule", "person"].includes(kind)) shared.push(row);
-		else if (row.projectId === projectId && ["rule", "pitfall"].includes(kind)) project.push(row);
+		else if (row.projectId !== "global" && row.projectId === projectId && ["rule", "pitfall"].includes(kind)) project.push(row);
 	}
 	return rankedRows([...shared, ...project]);
 }

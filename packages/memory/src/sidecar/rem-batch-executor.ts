@@ -92,12 +92,21 @@ export async function runPrecisionNightly(input: {
 						const budget = precisionNightBudget(runtime.llm);
 						let deferred: NightBudgetExhausted | undefined;
 						try {
+							if (input.full) {
+								if (!await beforeMutation()) return;
+								try { await chooseNightlySessionStart(runtime.store, budget.llm, { waveId: input.waveId, full: true }); }
+								catch (error) {
+									if (error instanceof NightBudgetExhausted) error.stage = "session-start";
+									throw error;
+								}
+							}
 							await runPrecisionNightSteps({ store: runtime.store, waveId: input.waveId, complete: budget.complete, beforeMutation, previousAt });
 							if (backup === false) return;
 							for (const [stage, run] of [
 								["session-start", () => chooseNightlySessionStart(runtime.store, budget.llm)],
 								["loaded-files", () => judgeNightlyLoadedFiles(runtime.store, budget.llm, stateDir, input.waveId, previousAt)],
 							] as const) {
+								if (input.full && stage === "session-start") continue;
 								try { await run(); }
 								catch (error) {
 									if (error instanceof NightBudgetExhausted) {
