@@ -129,17 +129,21 @@ wipe-db`).
 
 ### Hooks
 
-The install command registers six Codex hooks. Each one is scoped to the git repository that
+The install command registers ten Codex hooks. Each one is scoped to the git repository that
 contains the session's working directory; outside a repository, hooks inject and capture nothing.
 
 | Hook | Timeout | What it does |
 | --- | --- | --- |
 | `SessionStart` | 15 s | Injects up to 5 memories (at most 3,500 characters) about standing decisions, open tasks, conventions, and pitfalls for the repository; imports the repository's Codex notes on first start |
-| `UserPromptSubmit` | 8 s | Injects up to 3 memories (at most 1,500 characters) relevant to the prompt; prompts shorter than 12 characters are skipped |
+| `UserPromptSubmit` | 30 s | Injects up to 3 memories (at most 1,500 characters) relevant to the prompt; prompts shorter than 12 characters are skipped |
 | `Stop` | 5 s | Spools the completed turn and starts the capture worker |
-| `SessionEnd` | 8 s | Tells the memory service the session has ended |
+| `SessionEnd` | 3 s | Tells the memory service the session has ended |
 | `PreToolUse` | 5 s | Notes when a tool call starts, so its duration can be measured |
-| `PostToolUse` | 8 s | Reports each finished tool call to the memory service |
+| `PostToolUse` | 30 s | Reports each finished tool call to the memory service |
+| `PreCompact` | 5 s | Refreshes the continuity brief before Codex compacts the conversation, so the summary is written from the latest state |
+| `PostCompact` | 15 s | Registered for completeness; Codex delivers the compacted context through `SessionStart` with `source=compact`, so this hook produces no output |
+| `PermissionRequest` | 5 s | Records that the agent is waiting on a permission prompt, for the status line |
+| `Interrupt` | 3 s | Records that the user interrupted the turn, for the status line |
 
 A session receives at most 12,000 characters of injected memory in total, and a memory already
 shown in the session is not shown again. The injected block is labelled as data, not
