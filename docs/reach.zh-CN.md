@@ -73,4 +73,10 @@ Linux 和 macOS 的跨机器收发已经实测。Windows 使用 WSL；本轮没�
   Reach 不会在后台自动重试。
 - Agent Email 是 agent 之间的邮件，不是连接个人 Gmail 或 Outlook 的邮箱助手。
 
-Agent 的具体命令、任务接受及完成回信步骤见[英文 agent 指南](../apps/reach/guide/agent-reach.md)。
+## 给 agent
+
+Instant Messenger 用 `call`。Agent Email 用 `send`、`inbox`、`reply` 和 `wait`。
+消息头、回信流程和错误说明见已安装的[英文 agent 指南](../apps/reach/guide/agent-reach.md)。
+`[CALL]` 邮件只要求回复，不带 `--state`；任务邮件必须先 `accepted`，才能 `completed` 或 `failed`。
+
+[English](reach.md) · [命令参考](sno-commands.md#5-reach-instant-messenger-and-agent-email)
