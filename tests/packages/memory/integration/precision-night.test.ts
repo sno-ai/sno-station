@@ -831,6 +831,24 @@ describe("precision night through the public daily entry", () => {
 		outcome("merge-success", "merged", "shared", ["report-language", "report-causes"]);
 	});
 
+	it.each(["", " \n "])("merge: contradiction reply %j leaves sources open without recurring failures", async text => {
+		await replacement();
+		judge = () => "overlaps";
+		checkingMerge = true;
+		mergeText = text;
+		await night("merge-contradiction");
+		openPorts();
+		expect(journal("merge-contradiction").filter(entry => entry.outcome === "failed")).toEqual([]);
+		expect(journal("merge-contradiction").filter(entry => entry.stage === "merge")
+			.map(entry => ({ outcome: entry.outcome, reason: entry.reason })))
+			.toEqual([{ outcome: "undecided", reason: "sources contradict" }]);
+		for (const id of ["pending-port", "stale-port"]) expect(metadata(id)).not.toHaveProperty("precision_recheck_with");
+		nextNight();
+		await night("after-merge-contradiction");
+		openPorts();
+		expect(journal("after-merge-contradiction").filter(entry => entry.stage === "merge" || entry.outcome === "failed")).toEqual([]);
+	});
+
 	it.each(["longer", "unfaithful", "missing facts"])("merge: %s proposal leaves sources untouched and journals undecided", async refusal => {
 		await mergePair();
 		if (refusal === "longer") mergeText = `${firstPart} ${secondPart} This unnecessary sentence makes the proposal longer.`;
