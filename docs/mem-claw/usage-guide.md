@@ -26,10 +26,10 @@ OpenClaw. The plugin starts the memory service from the path recorded by the mem
 Use the published npm package for public installs. Do not build from a private monorepo, copy a
 local build to another machine, or configure a private service address.
 
-Restart the OpenClaw gateway, then run:
+Restart the OpenClaw gateway, then check from a terminal that the plugin's commands are there:
 
-```text
-/memory status
+```bash
+openclaw sno-mem stats
 ```
 
 Create a test memory:
@@ -40,8 +40,8 @@ Remember that I prefer tabs for indentation.
 
 Verify it:
 
-```text
-/memory stats
+```bash
+openclaw sno-mem stats
 ```
 
 ## The three modes
@@ -116,17 +116,8 @@ restart OpenClaw. The installer has no flags for this.
 
 ## Daily operation
 
-### Chat commands
-
-| Command | What it does |
-| --- | --- |
-| `/memory status` | Show memory counts, the store path, and the memory service's process id |
-| `/memory stats` | Show memory counts by scope and category |
-| `/memory search <query>` | Search memory explicitly |
-| `/memory clear --yes --scope <scope>` | Delete memories in one scope |
-
-`/memory clear` is destructive. Confirm the scope and keep a backup before deleting important
-memory.
+The plugin registers no chat commands. Manage memory from the terminal with the operator commands
+below; the agent works with memory through its agent tools.
 
 ### Operator commands
 
@@ -177,7 +168,7 @@ or compacted, on `/new` and `/reset`, and when the gateway shuts down.
 
 To stop automatic capture without uninstalling, turn off ambient capture in the `capture` group of
 `~/.sno/settings.json` and limit automatic recall in the `recall` group, then restart the gateway.
-Explicit `memory_store` calls and `/memory` commands are separate and keep working.
+Explicit `memory_store` calls and `openclaw sno-mem` commands are separate and keep working.
 
 Normal uninstall and reinstall preserve the memory library:
 
@@ -218,7 +209,7 @@ Agent Native needs the OpenClaw agent's own model to be configured and working; 
 
 ### Capture produces Local First output in a model-assisted mode
 
-A model call may have failed and fallen back for that request. Check `/memory status` and the
+A model call may have failed and fallen back for that request. Check the
 OpenClaw logs for a visible credential, quota, timeout, or provider error. Fix model access, then
 retry with a new statement. Do not add a private endpoint from an internal troubleshooting note.
 
@@ -226,7 +217,7 @@ retry with a new statement. Do not add a private endpoint from an internal troub
 
 1. Confirm Node.js meets the requirement above.
 2. Restart the OpenClaw gateway.
-3. Run `/memory status`.
+3. Run `openclaw sno-mem stats`.
 4. If the command is missing, inspect the OpenClaw plugin log for `sno-mem-claw` registration
    errors.
 
@@ -234,5 +225,5 @@ retry with a new statement. Do not add a private endpoint from an internal troub
 
 1. Confirm capture is not turned off in the `capture` group of `~/.sno/settings.json`.
 2. Use a concrete preference or fact rather than a greeting.
-3. Run `/memory stats` after the agent replies.
+3. Run `openclaw sno-mem stats` after the agent replies.
 4. Check the OpenClaw logs for capture or embedder errors.
