@@ -142,6 +142,33 @@ it("refuses a modelCalls table with an extra id", async () => {
 	expect(field).toContain("R9");
 });
 
+it("reads published retired REM settings without losing user choices or rewriting the file", () => {
+	const { path, settings } = writeSettingsFixture(root, {
+		rem: { tick: false },
+		modelCalls: { R2: { "agent-native": "off" } },
+	});
+	const published = structuredClone(settings);
+	group(published, "rem").operations = ["rem-replace", "rem-update"];
+	const calls = group(published, "modelCalls");
+	for (let index = 1; index <= 8; index++) {
+		calls[`REM${index}`] = { "local-first": "host", "agent-native": "host", "rem-enhanced": "sno-gpu" };
+	}
+	rewrite(path, published);
+	const raw = readFileSync(path, "utf8");
+	chmodSync(path, 0o444);
+	const read = readSettings();
+	expect(read).toEqual(settings);
+	expect(settingsToPluginConfig(read).modelCalls).toEqual(settings.modelCalls);
+	expect(readFileSync(path, "utf8")).toBe(raw);
+});
+
+it("still refuses unknown REM settings alongside retired operations", async () => {
+	const { path } = writeSettingsFixture(root, {
+		rem: { operations: ["rem-update"], unknownSetting: true },
+	});
+	expect(await refusal(path)).toContain("rem.unknownSetting");
+});
+
 it("reads the local lesson generation destination from shipped settings", async () => {
 	writeSettingsFixture(root);
 
