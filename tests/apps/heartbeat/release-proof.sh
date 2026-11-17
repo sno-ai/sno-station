@@ -127,10 +127,9 @@ package|manifest|refusal)
   for app in "${APPS[@]}"; do
     appdir="$WORK/repo/apps/$app"
     if [[ "$1" == refusal ]]; then
-      refused 'scripts/requirements-contract.json' env -u CONTRACT make -C "$appdir" package
-      grep -F sno-station-skills "$WORK/refusal.log"
+      refused 'apps/requirements-contract.json' env -u CONTRACT make -C "$appdir" package
       no_archive "$app"
-      refused 'scripts/requirements-contract.json' make -C "$appdir" package "CONTRACT=$WORK/absent.json"
+      refused 'apps/requirements-contract.json' make -C "$appdir" package "CONTRACT=$WORK/absent.json"
       no_archive "$app"
       jq '.schema_version = 2' "$CONTRACT_FILE" >"$WORK/bad-contract.json"
       refused schema_version make -C "$appdir" package "CONTRACT=$WORK/bad-contract.json"

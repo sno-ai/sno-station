@@ -12,7 +12,7 @@ test:
 package:
 	@contract="$(CONTRACT)"
 	if [[ -z "$$contract" || ! -f "$$contract" || ! -r "$$contract" ]]; then
-		printf '%s\n' 'package: missing readable CONTRACT: sno-station-skills/scripts/requirements-contract.json' >&2
+		printf '%s\n' 'package: missing readable CONTRACT: apps/requirements-contract.json' >&2
 		exit 2
 	fi
 	jq -se 'length == 1 and (.[0] | type == "object")' "$$contract" >/dev/null || { printf '%s\n' 'package: contract must be one JSON object' >&2; exit 2; }
