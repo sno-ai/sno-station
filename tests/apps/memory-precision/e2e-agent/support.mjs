@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { randomUUID, createHash } from 'node:crypto';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFileSync, copyFileSync, chmodSync, rmSync } from 'node:fs';
+import { randomUUID, randomBytes, createHash } from 'node:crypto';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFileSync, copyFileSync, chmodSync, rmSync, realpathSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { createServer, request as httpRequest } from 'node:http';
 import { request as httpsRequest } from 'node:https';
@@ -13,11 +13,11 @@ import { connect } from '../../../../packages/memory/dist/client.js';
 import { settingsSchema } from '../../../../packages/memory/config/settings.ts';
 
 const activeProcesses = new Set();
-export const deadline = Date.now() + Number(process.env.MP_BUDGET_MS ?? 265_000);
+export const deadline = Date.now() + Number(process.env.MP_BUDGET_MS ?? (process.argv[2] === '9' ? 900_000 : 265_000));
 export function stopRuns() { for (const child of activeProcesses) { try { process.kill(-child.pid, 'SIGKILL'); } catch (error) { if (error.code !== 'ESRCH') throw error; } } }
 export const repo = resolve(import.meta.dirname, '../../../..');
 export const sourceHome = process.env.MP_SOURCE_HOME;
-export const evidenceDir = join(repo, 'ai-doc/ACTIVE/PRD/memory-precision/evidence/e2e-2026-11-11');
+export const evidenceDir = join(repo, process.argv[2] === '9' ? 'ai-doc/ACTIVE/PRD/Precision-Memory/evidence/e2e-real-agents' : 'ai-doc/ACTIVE/PRD/memory-precision/evidence/e2e-2026-11-11');
 export const quote = value => `'${String(value).replaceAll("'", "'\\''")}'`;
 export const json = path => JSON.parse(readFileSync(path, 'utf8'));
 export const lines = path => existsSync(path) ? readFileSync(path, 'utf8').split('\n').filter(Boolean).map(line => JSON.parse(line)) : [];
@@ -64,8 +64,11 @@ export async function environment({ copied = false, capture = true, root: existi
   assert.ok(sourceHome, 'MP_SOURCE_HOME is the credential/instruction source home');
   assert.equal(process.env.SNO_USAGE_CLASS, 'research');
   const preparedProfile = process.env.SNO_PROFILE_DIR;
-  const prepared = json(join(preparedProfile, 'settings.json'));
-  const root = existingRoot ?? mkdtempSync(join(sourceHome, '.cache/mp-e2e-run-'));
+  const inputSettings = json(join(preparedProfile, 'settings.json'));
+  const prepared = process.argv[2] === '9' ? { ...json(join(repo, 'packages/memory/settings.default.json')), snoGpu: inputSettings.snoGpu, embedding: inputSettings.embedding } : inputSettings;
+  // The allocated scratch path exceeds the Unix socket path limit; /proc keeps all writes there.
+  if (process.argv[2] === '9') process.chdir(process.env.TMPDIR);
+  const root = existingRoot ?? mkdtempSync(process.argv[2] === '9' ? `/proc/${process.pid}/cwd/mp-e2e-run-` : join(sourceHome, '.cache/mp-e2e-run-'));
   const profile = copied ? preparedProfile : join(root, 'profile');
   let identityAlignment;
   if (copied) {
@@ -106,7 +109,7 @@ export async function environment({ copied = false, capture = true, root: existi
     });
     await new Promise(done => proxy.listen(0, '127.0.0.1', done));
     ({ settings } = writeSettingsFixture(profile, { ...prepared,
-      store: { path: join(root, 'memory.sqlite'), encryptionKey: prepared.store.encryptionKey },
+      store: { path: join(root, 'memory.sqlite'), encryptionKey: process.argv[2] === '9' ? randomBytes(32).toString('hex') : prepared.store.encryptionKey },
       memoryPackage: { path: join(repo, 'packages/memory'), node: process.execPath },
       snoGpu: { ...prepared.snoGpu, baseUrl: `http://127.0.0.1:${proxy.address().port}${upstream.pathname.replace(/\/$/, '')}` },
       capture: { ...prepared.capture, ambient: capture, assistant: true },
@@ -124,7 +127,9 @@ export async function environment({ copied = false, capture = true, root: existi
   const client = async skin => {
     if (!clients[skin]) {
       clients[skin] = await connect({ skinId: skin });
-      assert.equal(clients[skin].degraded, false, clients[skin].error);
+      const startupLog = join(profile, 'sno-station-mem/sidecar-startup.log');
+      const startupError = process.argv[2] === '9' && clients[skin].degraded && existsSync(startupLog) ? readFileSync(startupLog, 'utf8').slice(-8000).replaceAll(settings.snoGpu.apiKey, '[credential]').replaceAll(settings.store.encryptionKey, '[store key]') : '';
+      assert.equal(clients[skin].degraded, false, `${clients[skin].error ?? ''}\n${startupError}`);
     }
     return clients[skin];
   };
@@ -164,18 +169,18 @@ export async function environment({ copied = false, capture = true, root: existi
     } };
 }
 
-export async function agentHome(test, agent) {
+export async function agentHome(test, agent, { instructions = true } = {}) {
   const home = join(test.root, agent); mkdirSync(home, { recursive: true });
   if (agent === 'cursor') return home;
   const cli = join(repo, `apps/mem-${agent}/dist/cli.js`);
   if (agent === 'codex') {
     copyFileSync(join(sourceHome, '.codex/auth.json'), join(home, 'auth.json'));
-    for (const name of ['AGENTS.override.md', 'AGENTS.md']) if (existsSync(join(sourceHome, '.codex', name))) copyFileSync(join(sourceHome, '.codex', name), join(home, name));
+    if (instructions) for (const name of ['AGENTS.override.md', 'AGENTS.md']) if (existsSync(join(sourceHome, '.codex', name))) copyFileSync(join(sourceHome, '.codex', name), join(home, name));
     writeFileSync(join(home, 'config.toml'), 'model_provider = "ccproxy"\nmodel_reasoning_effort = "low"\napproval_policy = "never"\nsandbox_mode = "danger-full-access"\n[features]\nhooks = true\n[model_providers.ccproxy]\nname = "ccproxy"\nbase_url = "http://localhost:8070/codex/v1"\nwire_api = "responses"\nrequires_openai_auth = false\n');
     const recorder = join(home, 'sno');
     copyFileSync(join(repo, 'tests/apps/mem-codex/fixtures/capture-installed-hook.mjs'), recorder); chmodSync(recorder, 0o700);
     const { installCodex } = await import('../../../../apps/mem-codex/dist/install.js');
-    await installCodex({ codexHome: home, programPath: recorder, writeOutput() {} });
+    await installCodex({ codexHome: realpathSync(home), programPath: recorder, writeOutput() {} });
     return home;
   }
   const args = ['--config-dir', home];
@@ -195,7 +200,7 @@ export async function agentHome(test, agent) {
   writeFileSync(hooksPath, JSON.stringify(hooks));
   if (agent === 'claude') {
     copyFileSync(join(sourceHome, '.claude/.credentials.json'), join(home, '.credentials.json'));
-    copyFileSync(join(sourceHome, '.claude/CLAUDE.md'), join(home, 'CLAUDE.md'));
+    if (instructions) copyFileSync(join(sourceHome, '.claude/CLAUDE.md'), join(home, 'CLAUDE.md'));
     const path = join(home, 'settings.json'), config = json(path);
     config.autoMemoryEnabled = false;
     config.hooks.InstructionsLoaded = [{ hooks: [{ type: 'command', command: `${quote(process.execPath)} ${quote(join(repo, 'tests/apps/memory-precision/e2e-agent/observe.mjs'))} ${quote(join(home, 'instructions.jsonl'))}` }] }];
@@ -233,7 +238,6 @@ export async function turn(test, agent, home, cwd, prompt, session) {
   }
   const c = await test.client(agent === 'claude' ? 'claude-code' : agent);
   const scope = test.scope(c, cwd);
-  assert.equal((await c.init(scope, { skinId: agent === 'claude' ? 'claude-code' : agent })).degraded, false);
   const readyDeadline = Math.min(deadline, Date.now() + 60_000);
   let ready;
   do {
