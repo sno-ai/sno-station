@@ -752,6 +752,7 @@ Object.assign(MemoryStore.prototype, {
 			reviveInvalidatedExisting?: boolean;
 			profileRecovery?: ProfileRecoveryWrite;
 		},
+		beforeWrite?: () => void,
 	): Promise<StoreResult> {
 		assertPlaceableMemory(args.create, "supersede");
 		assertProfileRecoveryWrite(args.profileRecovery);
@@ -825,6 +826,7 @@ Object.assign(MemoryStore.prototype, {
 		const chunkRows = earlyDup ? [] : await this.prepareChunkInserts(id, text);
 
 		return this.writeMutex.runExclusive(() => {
+			beforeWrite?.();
 			// Re-check under lock; another writer may have inserted while we
 			// were embedding chunks.
 			const existing = dedupCandidate(this.readExistingByHash(projectId, hash, category));
