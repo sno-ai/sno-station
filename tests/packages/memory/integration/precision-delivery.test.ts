@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { countTokens } from "@snoai/chunking";
-import { afterEach, beforeAll, beforeEach, expect, it } from "vitest";
+import { afterEach, beforeAll, beforeEach, expect, it, vi } from "vitest";
 import { pluginConfigSchema } from "../../../../packages/memory/config/plugin-config-schema";
 import { defaultSettings, settingsSchema } from "../../../../packages/memory/config/settings";
 import { MemoryContractRuntime } from "../../../../packages/memory/src/engine/contract-runtime";
@@ -334,6 +334,31 @@ it("inspection reports literal counts for both scopes and only the last three ni
 		{ jobId: "night-2026-11-13", scope: "shared", checked: 6, replaced: 1, merged: 1, corrected: 1, removed: 1, undecided: 1,
 			failures: [{ stage: "loaded-file", error: "shared file unreadable", rows: ["shared-failed"] }] },
 	]));
+});
+
+it("reads only the latest three relevant nights without per-memory file queries", async () => {
+	plant("history-rule", "Explain the release risk.");
+	const loaded = await file();
+	verdict("history-rule", loaded, "opposite");
+	for (let index = 0; index < 8; index++) {
+		plant(`history-row-${index}`, `Explain release risk ${index}.`);
+		journal(`history-${index}`, "admission", "fine", "project", [`history-row-${index}`]);
+	}
+	journal("history-0", "loaded-file", "failed", "project", ["history-row-0"], "late failure in the earliest job");
+	const oldDetails = database.sqlite.prepare("SELECT detail FROM nodix_rem_journal WHERE job_id BETWEEN 'history-1' AND 'history-5'")
+		.all() as Array<{ detail: string }>;
+	const parsed = vi.spyOn(JSON, "parse");
+	const fileQueries = vi.spyOn(store, "getLoadedFileJudgments");
+	try {
+		const inspected = await runtime.inspect({ op: "precision" }, scope);
+		expect.soft(inspected).toHaveProperty("result.contradictions", [{ id: "history-rule", filePath: loaded.path }]);
+		expect.soft(inspected).toHaveProperty("result.nights", expect.arrayContaining([
+			expect.objectContaining({ jobId: "history-7" }), expect.objectContaining({ jobId: "history-6" }),
+			expect.objectContaining({ jobId: "history-0" }),
+		]));
+		expect.soft(parsed.mock.calls.filter(([text]) => oldDetails.some(row => row.detail === text))).toEqual([]);
+		expect.soft(fileQueries).not.toHaveBeenCalled();
+	} finally { parsed.mockRestore(); fileQueries.mockRestore(); }
 });
 
 it("keeps a project's failed night in doctor numbers and session start after three other-project nights", async () => {

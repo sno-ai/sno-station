@@ -12,7 +12,21 @@ type JournalRow = { jobId: string; stage: string; outcome: string; reason: strin
 export function inspectPrecision(store: MemoryStore, projectId: string,
 	notFit: PrecisionInspection["notFit"]): PrecisionInspection {
 	const journal = store.sqlite.prepare(`SELECT job_id AS jobId, stage, outcome, reason, detail
-		FROM nodix_rem_journal WHERE job_type = 'precision-nightly' ORDER BY sequence DESC`).all() as JournalRow[];
+		FROM nodix_rem_journal WHERE job_type = 'precision-nightly' AND job_id IN (
+			SELECT job_id FROM nodix_rem_journal
+			WHERE job_type = 'precision-nightly' AND (
+				json_extract(detail, '$.scope') = 'shared' OR (
+					json_extract(detail, '$.scope') = 'project' AND (
+						json_extract(detail, '$.projectId') = ? OR (
+							json_extract(detail, '$.projectId') IS NULL AND EXISTS (
+								SELECT 1 FROM json_each(detail, '$.rows') source
+								JOIN nodix_memories memory ON memory.id = source.value WHERE memory.project_id = ?
+							)
+						)
+					)
+				)
+			) GROUP BY job_id ORDER BY MAX(sequence) DESC LIMIT 3
+		) ORDER BY sequence DESC`).all(projectId, projectId) as JournalRow[];
 	const relevant = journal.flatMap(row => {
 		const parsed = detailSchema.safeParse(row.detail === null ? null : JSON.parse(row.detail));
 		if (!parsed.success) return [];
@@ -21,7 +35,7 @@ export function inspectPrecision(store: MemoryStore, projectId: string,
 			: !detail.rows.some(id => store.getById(id)?.projectId === projectId))) return [];
 		return [{ ...row, detail }];
 	});
-	const jobs = [...new Set(relevant.map(row => row.jobId))].slice(0, 3);
+	const jobs = [...new Set(relevant.map(row => row.jobId))];
 	const nights: PrecisionNight[] = [];
 	for (const jobId of jobs) for (const scope of ["project", "shared"] as const) {
 		const night: PrecisionNight = { jobId, scope, checked: 0, replaced: 0, merged: 0, corrected: 0, removed: 0, undecided: 0, failures: [] };
@@ -41,9 +55,12 @@ export function inspectPrecision(store: MemoryStore, projectId: string,
 	const project = projectId === "global" ? [] : store.readActivePrecisionRows(projectId);
 	const shared = store.readActivePrecisionRows("global");
 	const pending = (rows: typeof project): string[] => rows.filter(row => JSON.parse(row.metadata).precision_check === "pending").map(row => row.id);
-	const contradictions = [...project, ...shared].flatMap(row => store.getLoadedFileJudgments(row.id)
-		.filter(answer => answer.verdict === "opposite" && answer.memoryContentHash === row.contentHash)
-		.map(answer => ({ id: row.id, filePath: answer.filePath })));
+	const contradictions = store.sqlite.prepare(`SELECT memory.id, judgment.file_path AS filePath
+		FROM json_each(?) selected JOIN nodix_memories memory ON memory.id = selected.value
+		JOIN nodix_loaded_file_judgments judgment ON judgment.memory_id = memory.id
+			AND judgment.verdict = 'opposite' AND judgment.memory_content_hash = memory.content_hash
+		ORDER BY selected.key, judgment.file_path`)
+		.all(JSON.stringify([...project, ...shared].map(row => row.id))) as PrecisionInspection["contradictions"];
 	const data = { nights, pending: { project: pending(project), shared: pending(shared) }, notFit, contradictions,
 		sameVendor: relevant.some(row => jobs.includes(row.jobId) && row.detail.sameVendor === true) };
 	return { op: "precision", ...data, lines: formatPrecisionDoctor(data) };
