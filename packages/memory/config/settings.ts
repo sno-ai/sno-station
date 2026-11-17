@@ -52,7 +52,10 @@ const modelCalls = z.strictObject(Object.fromEntries(
 
 const schema: z.ZodType<Settings> = z.strictObject({
 	mode: z.enum(PRODUCT_MODES),
-	modelCalls,
+	modelCalls: z.preprocess((value) => {
+		if (typeof value !== "object" || value === null || Array.isArray(value)) return value;
+		return Object.fromEntries(Object.entries(value).filter(([id]) => !/^REM[1-8]$/u.test(id)));
+	}, modelCalls),
 	user: z.strictObject({ id: z.string().refine((id) => id === "" || isLowercaseCanonicalUUIDv7(id)), language: z.enum(SUPPORTED_LOCALES) }),
 	snoGpu: z.strictObject({ baseUrl: z.string(), apiKey: z.string() }),
 	rerank: z.preprocess((value) => {
@@ -78,9 +81,13 @@ const schema: z.ZodType<Settings> = z.strictObject({
 		sessionMemory: z.strictObject({ enabled: z.boolean(), messageCount: z.number().int().min(1).max(100) }),
 		sessionStrategy: z.enum(SESSION_STRATEGIES),
 	}),
-	rem: z.strictObject({
+	rem: z.preprocess((value) => {
+		if (typeof value !== "object" || value === null || Array.isArray(value) || !("operations" in value)) return value;
+		const { operations: _retired, ...current } = value;
+		return current;
+	}, z.strictObject({
 		tick: z.boolean(),
-	}),
+	})),
 	telemetry: z.strictObject({
 		memoryUsage: z.strictObject({ enabled: z.boolean(), key: z.string(), historicKeys: z.array(z.string()) }),
 		observe: z.strictObject({ enabled: z.boolean(), baseUrl: z.string() }),
