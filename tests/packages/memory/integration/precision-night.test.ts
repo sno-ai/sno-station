@@ -1,11 +1,14 @@
 /** Daily entry -> real encrypted SQLite/chunks -> persisted nightly effects.
  * Only the external host model is scripted, by the request's call id.
- * E23 confirms admission deletions with {rows:[{id,confirmed}]}, other changes with {confirmed:boolean}; E24 writes {text:string}.
+ * E23 checks session-start choices with {ids}, confirms admission deletions with {rows:[{id,confirmed}]}, other changes with {confirmed:boolean}; E24 writes {text:string}.
  * Merge checks use the existing E22 rewrite-verification fields. No production step is supplied by the harness.
  */
 import { createHash } from "node:crypto";
 import { NightBudgetExhausted, precisionNightBudget, runPrecisionNightSteps } from "../../../../packages/memory/src/engine/precision-night";
+import { precisionCandidates } from "../../../../packages/memory/src/engine/extraction/precision-write-judgement";
 import type { LlmClient } from "../../../../packages/memory/src/model/llm-client";
+import * as llmClient from "../../../../packages/memory/src/model/llm-client";
+import { HOST_MODEL_CONCURRENCY } from "../../../../packages/memory/config/coding-skin";
 import { WORK_MEMORY_ADMISSION } from "../../../../packages/memory/src/engine/extraction/atomic-extraction-skill";
 import { writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -47,6 +50,7 @@ let deleteIds: string[];
 let throwCall: string | undefined;
 let sourceReply: { action: "keep" | "correct" | "remove"; text: string };
 let modelCalls: AgentLlmRequest[];
+let placeMode: "work" | "chat" | "unsure";
 
 beforeAll(async () => { embedder = await createTestEmbedder(); });
 beforeEach(() => {
@@ -61,6 +65,7 @@ beforeEach(() => {
 	mergeText = mergedSentence; mergeFaithful = true; mergeAccounted = true; checkingMerge = false;
 	deleteIds = []; throwCall = undefined; sourceReply = { action: "keep", text: "" };
 	modelCalls = [];
+	placeMode = "work";
 	agentPort = { async complete(request: AgentLlmRequest) {
 		modelCalls.push(request);
 		const id = String(request.callId);
@@ -70,7 +75,7 @@ beforeEach(() => {
 		}
 		let reply: unknown;
 		switch (id) {
-			case "E13": reply = { mode: "work" }; break;
+			case "E13": reply = { mode: placeMode }; break;
 			case "E14": {
 				const data = payload(request.prompt) as { rows: Array<{ id: string }> };
 				reply = { rows: data.rows.map(row => ({ id: row.id, scope: "project" })) }; break;
@@ -100,6 +105,10 @@ beforeEach(() => {
 				? { faithful: mergeFaithful, retired_absent: true, all_facts_accounted: mergeAccounted }
 				: { replaces: pairCheck }; break;
 			case "E23": {
+				if (request.prompt.startsWith("Another model already chose the list below.")) {
+					const rows = payload(request.prompt) as Array<{ id: string }>;
+					reply = { ids: rows.map(row => row.id) }; break;
+				}
 				const data = payload(request.prompt) as { operation: string; rows: Array<{ id: string }> };
 				reply = data.operation === "admission deletion"
 					? { rows: data.rows.map(row => ({ id: row.id, confirmed: changeCheck })) }
@@ -195,6 +204,51 @@ async function followingStep() {
 function followingStepRan() { expect.soft(metadata("next-step")).toMatchObject({ start_label: "core", start_rank: 1 }); }
 
 describe("precision night through the public daily entry", () => {
+	it.each([
+		{ reply: "unsure", stored: undefined, work: true },
+		{ reply: "chat", stored: undefined, work: false },
+		{ reply: "chat", stored: "work", work: true },
+		{ reply: "work", stored: "chat", work: false },
+	] as const)("place-mode: $reply with stored $stored runs nightly work: $work", async ({ reply, stored, work }) => {
+		const place = { skinId: "codex", projectId: "routine-checks", surface: "" };
+		const older = "Check every 10 minutes.";
+		const newer = "The routine check runs every 8 hours.";
+		await plant("old-check", older, 1_794_556_800_000, {}, place.projectId);
+		await plant("new-check", newer, 1_794_643_200_000, {}, place.projectId);
+		if (stored !== undefined) store.setPlaceMode({ ...place, mode: stored, decidedAt: Date.now() });
+		placeMode = reply;
+		// This fixture's only two rows are a confirmed replacement; no text rule judges their meaning.
+		judge = () => "replaces";
+		await night("place-mode-first");
+
+		expect.soft(store.getPlaceMode(place)).toBe(stored ?? (reply === "unsure" ? undefined : reply));
+		expect.soft(modelCalls.filter(call => call.callId === "E13")).toHaveLength(stored === undefined ? 1 : 0);
+		expect.soft(journal("place-mode-first").filter(entry => entry.stage === "place-mode")
+			.map(entry => ({ outcome: entry.outcome, rows: JSON.parse(entry.detail ?? "{}").rows.sort() })))
+			.toEqual(reply === "unsure" ? [{ outcome: "undecided", rows: ["new-check", "old-check"] }] : []);
+		if (work) {
+			expect.soft(metadata("old-check")).toMatchObject({ superseded_by: "new-check", supersede_reason: "night" });
+			expect.soft(store.readActivePrecisionRows(place.projectId).map(row => row.id)).toEqual(["new-check"]);
+			outcome("place-mode-first", "replaced", "project", ["old-check", "new-check"]);
+		} else {
+			expect.soft(store.readActivePrecisionRows(place.projectId).map(row => row.id).sort()).toEqual(["new-check", "old-check"]);
+			for (const id of ["old-check", "new-check"]) {
+				expect.soft(metadata(id)).not.toHaveProperty("superseded_by");
+				expect.soft(metadata(id)).not.toHaveProperty("precision_night");
+			}
+			expect.soft(modelCalls.filter(call => ["E16", "E21", "E22", "E23"].includes(String(call.callId)))).toEqual([]);
+		}
+
+		if (reply === "unsure") {
+			modelCalls = []; nextNight();
+			await night("place-mode-second");
+			expect.soft(modelCalls.filter(call => call.callId === "E13")).toHaveLength(1);
+			expect.soft(store.getPlaceMode(place)).toBeUndefined();
+			expect.soft(journal("place-mode-second").filter(entry => entry.stage === "place-mode")
+				.map(entry => entry.outcome)).toEqual(["undecided"]);
+		}
+	});
+
 	it("merge: realistic profile metadata produces one open row and closes both sources", async () => {
 		checkingMerge = true;
 		for (const [id, text, timestamp] of [
@@ -819,13 +873,90 @@ describe("precision night through the public daily entry", () => {
 			if (first?.type !== "return") throw new Error("Missing changed-neighbour search");
 			const neighbours = await first.value;
 			expect(neighbours).toHaveLength(8);
-			expected.push("unmarked-other", ...neighbours.map(hit => hit.entry.id).filter(id => id.startsWith("checked-")));
+			expected.push(...neighbours.map(hit => hit.entry.id).filter(id => id.startsWith("checked-")));
 		}
 		expect(search.mock.calls.map(([, options]) => options?.excludeMemoryIds?.[0]).sort()).toEqual(expected.sort());
 		for (const id of ["unmarked-old", "unmarked-other"]) {
 			expect(metadata(id)).toHaveProperty("precision_night.at", 1_794_729_600_000);
 		}
 		expect(journal(`skip-checked-searches-${changed}`).filter(entry => entry.outcome === "failed")).toEqual([]);
+	});
+
+	it("candidate searches stay within started groups when the relation call budget ends", async () => {
+		const unchecked = 100;
+		const groupSize = 8 * HOST_MODEL_CONCURRENCY;
+		const previousAt = 1_794_643_200_000;
+		const admitted = createHash("sha256").update(WORK_MEMORY_ADMISSION).digest("hex").slice(0, 12);
+		for (let index = 0; index < unchecked; index += 1) {
+			await plant(`search-budget-${String(index).padStart(3, "0")}`,
+				`The owner requires service report ${index} to explain its failure causes.`,
+				previousAt - unchecked + index, { precision_admission: admitted });
+		}
+		database.sqlite.exec("CREATE TABLE IF NOT EXISTS nodix_memory_migration_markers (name TEXT PRIMARY KEY, applied_at INTEGER NOT NULL, payload TEXT NOT NULL)");
+		database.sqlite.prepare("INSERT INTO nodix_memory_migration_markers VALUES ('memory-precision-last-night', ?, ?)")
+			.run(previousAt, JSON.stringify({ day: "2026-11-14", since: previousAt }));
+		const search = vi.spyOn(MemoryStore.prototype, "searchSemantic");
+		const searchesAtRelation: number[] = [];
+		// Replace only the external model facade; use the real budget, engine and nightly journal.
+		const budget = precisionNightBudget({ completeText: async request => {
+			if (request.prompt === "spent") return "spent";
+			searchesAtRelation.push(search.mock.calls.length);
+			const reply = await agentPort.complete({ callId: request.callId, prompt: request.prompt, maxTokens: request.maxTokens ?? 4096 });
+			if (reply.kind !== "ok") throw new Error("Missing fixture model reply");
+			return reply.text;
+		}, getLastError: () => null } as LlmClient);
+		for (let index = 0; index < 100 - HOST_MODEL_CONCURRENCY; index += 1) {
+			await budget.llm.completeText({ callId: "E21", prompt: "spent" });
+		}
+		vi.spyOn(llmClient, "createLlmClient").mockReturnValue(budget.llm);
+		await night("search-budget");
+
+		const facts = modelCalls.flatMap(call => (payload(call.prompt) as { facts: Fact[] }).facts);
+		const expected = Array.from({ length: groupSize }, (_, index) => `search-budget-${String(unchecked - 1 - index).padStart(3, "0")}`);
+		expect(facts.map(fact => fact.text)).toEqual(expected.map(id => store.getById(id)?.text));
+		expect(facts.every(fact => fact.rows.length > 0)).toBe(true);
+		expect(journal("search-budget").filter(entry => entry.stage === "pairs" && entry.outcome === "fine").map(entry => entry.row_id)).toEqual(expected);
+		expect(budget.exhausted).toBe(true);
+		expect(journal("search-budget").filter(entry => entry.outcome === "failed")).toEqual([]);
+		const deferred = journal("search-budget").filter(entry => entry.stage === "ordered-pairs" && entry.outcome === "undecided");
+		expect(deferred).toHaveLength(1);
+		const remaining = Number(deferred[0]?.reason?.match(/(\d+) rows left for next night/)?.[1]);
+		expect(remaining).toBeGreaterThan(0);
+		expect(remaining).toBeLessThanOrEqual(unchecked - facts.length);
+		// All replies are unrelated, so judged rows require no later search rounds.
+		expect.soft(searchesAtRelation[0], `searches before first relation call; judged=${facts.length}, deferred=${remaining}`)
+			.toBeLessThanOrEqual(groupSize);
+		// The group that encounters exhaustion may already have searched its rows.
+		expect.soft(search.mock.calls.length, `searches in pass; judged=${facts.length}, deferred=${remaining}`)
+			.toBeLessThanOrEqual(2 * groupSize);
+	});
+
+	it("a changed row is searched once before its first relation call", async () => {
+		const previousAt = 1_794_643_200_000;
+		const admitted = createHash("sha256").update(WORK_MEMORY_ADMISSION).digest("hex").slice(0, 12);
+		await plant("changed-search", firstPart, previousAt + 1000, { precision_admission: admitted });
+		await plant("changed-search-neighbour", secondPart, previousAt - 1000, { precision_admission: admitted });
+		const search = vi.spyOn(MemoryStore.prototype, "searchSemantic");
+		const searchesBeforeRelation: number[] = [];
+		const complete = agentPort.complete.bind(agentPort);
+		agentPort.complete = async request => {
+			const data = payload(request.prompt) as { facts?: Fact[] };
+			if (request.callId === "E21" && data.facts?.some(fact => fact.text === firstPart)) {
+				searchesBeforeRelation.push(search.mock.calls.filter(([, options]) =>
+					store.getById(options?.excludeMemoryIds?.[0] ?? "")?.text === firstPart).length);
+			}
+			return complete(request);
+		};
+		await runPrecisionNightSteps({ store, waveId: "changed-search", previousAt, beforeMutation: async () => true,
+			complete: async request => {
+				const reply = await agentPort.complete({ callId: request.callId, prompt: request.prompt, maxTokens: request.maxTokens ?? 4096 });
+				if (reply.kind !== "ok") throw new Error("Missing fixture model reply");
+				return { text: reply.text, truncated: false };
+			} });
+		expect(journal("changed-search").filter(entry => entry.stage === "pairs" && entry.outcome === "fine").map(entry => entry.row_id))
+			.toEqual(["changed-search", "changed-search-neighbour"]);
+		expect(journal("changed-search").filter(entry => entry.outcome === "failed")).toEqual([]);
+		expect(searchesBeforeRelation, "searches for the changed row text before its first relation call").toEqual([1]);
 	});
 
 	it("fine: persists a per-row mark, skips the next night, and rejudges after a nearby write", async () => {
@@ -850,7 +981,29 @@ describe("precision night through the public daily entry", () => {
 		expect.soft(metadata("fine-rule")).toHaveProperty("precision_night.at", 1_794_902_400_000);
 	});
 
-	it("priority: pending and recorded pairs precede changed rows, session-start rows, decisions and facts", async () => {
+	it("recorded recheck: a current text mark does not skip an unresolved pair", async () => {
+		await plant("marked-recheck", firstPart);
+		await plant("marked-peer", secondPart);
+		await night("marked-recheck-first");
+		for (const previousAt of [1_794_729_600_000, 0]) {
+			database.sqlite.prepare("UPDATE nodix_memories SET metadata = json_set(metadata, '$.precision_recheck_with', json(?)) WHERE id = ?")
+				.run(JSON.stringify(["marked-peer"]), "marked-recheck");
+			expect(metadata("marked-recheck")).not.toHaveProperty("precision_check");
+			database.sqlite.prepare("UPDATE nodix_memory_migration_markers SET payload = ? WHERE name = 'memory-precision-last-night'")
+				.run(JSON.stringify({ day: "2026-11-14", since: previousAt }));
+			modelCalls = [];
+			const waveId = `marked-recheck-${previousAt}`;
+			await night(waveId);
+			expect.soft(modelCalls.filter(call => call.callId === "E21")
+				.flatMap(call => (payload(call.prompt) as { facts?: Fact[] }).facts ?? [])
+				.filter(fact => fact.text === firstPart).flatMap(fact => fact.rows.map(row => row.id)),
+				`recorded pair must be judged with previousAt ${previousAt}`).toContain("marked-peer");
+			expect.soft(metadata("marked-recheck")).not.toHaveProperty("precision_recheck_with");
+			outcome(waveId, "fine", "shared", ["marked-recheck"]);
+		}
+	});
+
+	it("priority: pending precedes changed rows, session-start rows, decisions and facts", async () => {
 		// All old rows predate the previous nightly marker; insertion order is deliberately reversed.
 		await plant("old-fact", "The Chinese service report archive uses the account name Prism.", 1_794_556_800_000, { precision_kind: "fact" });
 		await plant("old-decision", "The owner chose manual approval before publishing Chinese service reports.", 1_794_556_800_001, { precision_kind: "decision" });
@@ -863,14 +1016,13 @@ describe("precision night through the public daily entry", () => {
 			.run(1_794_643_200_000, JSON.stringify({ day: "2026-11-14", waveId: "prior-night" }));
 		await night("priority");
 		const judged = journal("priority").filter(entry => entry.stage === "pairs" && entry.outcome === "fine").map(entry => entry.row_id);
-		// The first priority group has no specified ordering within itself.
-		expect.soft(judged.slice(0, 2).sort()).toEqual([
-			"pending-row", "recorded-row",
-		].sort());
-		expect.soft(judged.slice(2, 4)).toEqual([
-			"changed-row", "start-rule",
+		// Recorded rechecks belong to normal groups, whose batching is checked separately.
+		expect.soft(judged.filter(id => id === "recorded-row")).toEqual(["recorded-row"]);
+		const otherRows = judged.filter(id => id !== "recorded-row");
+		expect.soft(otherRows.slice(0, 3)).toEqual([
+			"pending-row", "changed-row", "start-rule",
 		]);
-		expect.soft(judged.slice(4).sort()).toEqual([
+		expect.soft(otherRows.slice(3).sort()).toEqual([
 			"old-decision", "old-fact",
 		].sort());
 	});
@@ -889,6 +1041,25 @@ describe("precision night through the public daily entry", () => {
 			.toEqual([{ id: "pending-port", text: "The owner requires the service to use port 8090." }]);
 
 		outcome("exception-rejudged", "fine", "project", ["project-exception"]);
+	});
+
+	it("project exception: skips a row already journaled undecided in the same job", async () => {
+		await replacement();
+		await plant("project-exception", "In this project the service must use port 8091.", 1_794_643_200_001,
+			{ overrides_shared: "stale-port" }, "work-project");
+		const waveId = "exception-already-undecided";
+		database.sqlite.prepare(`INSERT INTO nodix_rem_journal(job_id, job_type, stage, outcome, row_id, actions_applied, detail)
+			VALUES (?, 'precision-nightly', 'pairs', 'undecided', 'project-exception', 0, ?)`)
+			.run(waveId, JSON.stringify({ scope: "project", projectId: "work-project", rows: ["project-exception"] }));
+		const undecided = journal(waveId);
+		await night(waveId);
+		expect.soft(metadata("stale-port")).toMatchObject({ superseded_by: "pending-port", supersede_reason: "night" });
+		expect.soft(modelCalls.filter(call => call.callId === "E21")
+			.flatMap(call => (payload(call.prompt) as { facts?: Fact[] }).facts ?? [])
+			.filter(fact => fact.text === "In this project the service must use port 8091.")).toEqual([]);
+		expect.soft(metadata("project-exception").overrides_shared).toBe("stale-port");
+		expect.soft(metadata("project-exception")).not.toHaveProperty("precision_night");
+		expect(journal(waveId).filter(entry => entry.stage === "pairs" && entry.row_id === "project-exception")).toEqual(undecided);
 	});
 
 	it("project exception: failed rejudgement preserves the old shared link and journals failure", async () => {
@@ -952,8 +1123,8 @@ describe("precision night through the public daily entry", () => {
 		database.sqlite.prepare("INSERT INTO nodix_memory_migration_markers VALUES ('memory-precision-last-night', ?, ?)")
 			.run(1_794_643_200_000, JSON.stringify({ day: "2026-11-14", since: 1_794_643_200_000 }));
 		await night("budget-first");
-		expect.soft(journal("budget-first").filter(entry => entry.stage === "pairs" && entry.outcome === "fine").slice(0, 6).map(entry => entry.row_id))
-			.toEqual(["budget-pending", "budget-recorded", "budget-start", "budget-delivered", "budget-fact-98", "budget-fact-97"]);
+		expect.soft(journal("budget-first").filter(entry => entry.stage === "pairs" && entry.outcome === "fine" && entry.row_id !== "budget-recorded").slice(0, 6).map(entry => entry.row_id))
+			.toEqual(["budget-pending", "budget-start", "budget-delivered", "budget-fact-98", "budget-fact-97", "budget-fact-96"]);
 		expect.soft(database.sqlite.prepare("SELECT count(*) AS rows FROM nodix_memories WHERE json_extract(metadata, '$.precision_night.at') = 1794729600000").get())
 			.toEqual({ rows: 104 });
 		expect.soft(database.sqlite.prepare("SELECT id FROM nodix_memories WHERE json_extract(metadata, '$.precision_night.at') IS NULL ORDER BY id").all())
@@ -1151,6 +1322,199 @@ async function duplicate(variant: typeof duplicateVariants[number]) {
 }
 
 
+describe("night snapshot writes", () => {
+	const admitted = createHash("sha256").update(WORK_MEMORY_ADMISSION).digest("hex").slice(0, 12);
+	type Complete = Parameters<typeof runPrecisionNightSteps>[0]["complete"];
+	const edited = "The owner corrected the service requirement to retain detailed audit reports.";
+	function run(waveId: string, complete: Complete) {
+		return runPrecisionNightSteps({ store, waveId, complete, beforeMutation: async () => true, previousAt: Date.now() });
+	}
+	function edit(id: string): void {
+		database.sqlite.transaction(() => {
+			database.sqlite.prepare("UPDATE nodix_memories SET text = ? WHERE id = ?").run(edited, id);
+		})();
+	}
+	async function editDuringCall(wave: string, matches: (request: Parameters<Complete>[0]) => boolean,
+		change: () => void): Promise<void> {
+		let release: (() => void) | undefined;
+		let paused = false;
+		const done = run(wave, async request => {
+			const reply = await agentPort.complete(request);
+			if (!paused && matches(request)) {
+				paused = true;
+				await new Promise<void>(resolve => { release = resolve; });
+			}
+			if (reply.kind !== "ok") throw new Error("fixture model failed");
+			return { text: reply.text, truncated: false };
+		});
+		try {
+			await vi.waitFor(() => expect(release).toBeTypeOf("function"), { timeout: 10_000 });
+			await store.writeMutex.runExclusive(change);
+		} finally { release?.(); await done; }
+	}
+	it.each(["same", "replaces"] as const)("pending-call edit prevents serial %s and checked marks", async relation => {
+		await replacement();
+		judge = (fact, peer) => fact.text === newPort && peer.id === "stale-port" ? relation : "unrelated";
+		await editDuringCall(`serial-edit-${relation}`, request => request.callId === (relation === "same" ? "E23" : "E22"),
+			() => edit("pending-port"));
+		expect.soft(store.getById("pending-port")?.text).toBe(edited);
+		openPorts();
+		expect.soft(metadata("pending-port")).not.toHaveProperty("precision_night");
+		expect(metadata("pending-port").precision_check).toBe("pending");
+	});
+	it("pending-call edit prevents project exception link and checked marks", async () => {
+		await plant("old-shared", oldPort, 1_794_400_000_000, { superseded_by: "new-shared", precision_admission: admitted });
+		await plant("new-shared", newPort, 1_794_556_800_000, { precision_admission: admitted });
+		await plant("local-exception", "In this project the service must use port 8091.", 1_794_643_200_000,
+			{ overrides_shared: "old-shared", precision_admission: admitted }, "work-project");
+		await editDuringCall("exception-call-edit", request => request.callId === "E21"
+			&& (payload(request.prompt) as { facts?: Fact[] }).facts?.some(fact => fact.text.includes("8091")) === true,
+			() => edit("local-exception"));
+		expect.soft(store.getById("local-exception")?.text).toBe(edited);
+		expect.soft(metadata("local-exception").overrides_shared).toBe("old-shared");
+		expect(metadata("local-exception")).not.toHaveProperty("precision_night");
+	});
+	it.each([false, true])("pending-call source keep preserves edited row without checked mark, serial %s", async serial => {
+		await plant("source-edited", oldPort, 1_794_556_800_000, { precision_admission: admitted,
+			source_span: { quote: oldPort }, ...(serial ? { precision_check: "pending" } : {}) });
+		await editDuringCall(`source-keep-edit-${serial}`, request => request.callId === "E21"
+			&& Array.isArray((payload(request.prompt) as { rows?: unknown[] }).rows), () => edit("source-edited"));
+		expect.soft(store.getById("source-edited")?.text).toBe(edited);
+		expect.soft(metadata("source-edited")).not.toHaveProperty("precision_night");
+		if (serial) expect(metadata("source-edited").precision_check).toBe("pending");
+	});
+	it("pending-call relation fine preserves edited row without checked mark", async () => {
+		await plant("relation-edited", newPort, 1_794_643_200_000, { precision_admission: admitted });
+		await plant("relation-peer", oldPort, 1_794_400_000_000, { precision_admission: admitted });
+		await editDuringCall("relation-fine-edit", request => request.callId === "E21"
+			&& Array.isArray((payload(request.prompt) as { facts?: Fact[] }).facts), () => edit("relation-edited"));
+		expect.soft(store.getById("relation-edited")?.text).toBe(edited);
+		expect(metadata("relation-edited")).not.toHaveProperty("precision_night");
+	});
+	it("pending-call merge preserves metadata edited after review", async () => {
+		await mergePair(true);
+		for (const id of ["report-language", "report-causes"]) {
+			const row = store.getById(id);
+			if (!row) throw new Error("missing merge source");
+			database.sqlite.prepare("UPDATE nodix_memories SET metadata = ? WHERE id = ?").run(JSON.stringify({
+				...JSON.parse(row.metadata), precision_admission: admitted,
+				...(id === "report-language" ? { precision_night: { at: Date.now(), text: row.contentHash } } : {}),
+			}), id);
+		}
+		await editDuringCall("merge-metadata-edit", request => request.callId === "E22", () => {
+			database.sqlite.prepare("UPDATE nodix_memories SET metadata = json_set(metadata, '$.owner_note', ?) WHERE id = ?")
+				.run("Keep the original wording.", "report-causes");
+		});
+		unchangedMergeSources();
+		expect.soft(metadata("report-causes").owner_note).toBe("Keep the original wording.");
+		expect.soft(metadata("report-causes").precision_recheck_with).toEqual(["report-language"]);
+		expect(metadata("report-causes")).not.toHaveProperty("precision_night");
+	});
+	it("pending-call result preserves a new user recheck request", async () => {
+		await plant("recheck-edited", newPort, 1_794_643_200_000, { precision_admission: admitted, precision_check: "pending" });
+		await plant("recheck-peer", oldPort, 1_794_400_000_000, { precision_admission: admitted });
+		await editDuringCall("user-recheck-edit", request => request.callId === "E21"
+			&& Array.isArray((payload(request.prompt) as { facts?: Fact[] }).facts), () => {
+			database.sqlite.prepare("UPDATE nodix_memories SET metadata = json_set(metadata, '$.precision_recheck_with', json(?)) WHERE id = ?")
+				.run(JSON.stringify(["recheck-peer"]), "recheck-edited");
+		});
+		expect.soft(metadata("recheck-edited").precision_check).toBe("pending");
+		expect.soft(metadata("recheck-edited").precision_recheck_with).toEqual(["recheck-peer"]);
+		expect(metadata("recheck-edited")).not.toHaveProperty("precision_night");
+	});
+	it("applies source removal, source correction and replacement in one whole night", async () => {
+		await replacement();
+		await plant("remove-source", "The service completed a temporary report.", 1_794_556_800_001,
+			{ precision_admission: admitted, source_span: { quote: "Temporary activity only." } });
+		await plant("correct-source", firstPart, 1_794_556_800_002,
+			{ precision_admission: admitted, source_span: { quote: secondPart } });
+		const complete = agentPort.complete.bind(agentPort);
+		agentPort.complete = async request => {
+			const data = payload(request.prompt) as { rows?: Array<{ id: string }> };
+			if (request.callId === "E21" && data.rows) return { kind: "ok", text: JSON.stringify({
+				rows: data.rows.map(row => ({ id: row.id, action: row.id === "remove-source" ? "remove" : "correct", text: secondPart })),
+			}) };
+			return complete(request);
+		};
+		await night("whole-night-own-writes");
+		expect.soft(store.getById("remove-source")).toBeUndefined();
+		expect.soft(store.getById("correct-source")?.text).toBe(secondPart);
+		expect.soft(metadata("stale-port")).toMatchObject({ superseded_by: "pending-port", supersede_reason: "night" });
+		expect.soft(metadata("pending-port")).toHaveProperty("precision_night");
+		expect(journal("whole-night-own-writes").filter(row => row.outcome === "failed")).toEqual([]);
+	});
+	it.each(["delete", "keep"] as const)("leaves an edited admission row due while %s is pending", async verdict => {
+		await plant("admission-edited", oldPort);
+		await plant("admission-control", firstPart);
+		let votes = 0;
+		const wave = `snapshot-admission-${verdict}`;
+		await run(wave, async request => {
+			if (request.callId === "E16") {
+				votes += 1;
+				if (votes === 3 && verdict === "keep") await store.writeMutex.runExclusive(() => edit("admission-edited"));
+				return { text: JSON.stringify({ rows: ["admission-edited", "admission-control"].map(id => ({ id,
+					verdict: id === "admission-control" ? "keep" : verdict, reason: "fixture activity record",
+					kind: "rule", origin: "owner", about_user: false })) }), truncated: false };
+			}
+			if (request.callId === "E23") {
+				await store.writeMutex.runExclusive(() => edit("admission-edited"));
+				return { text: JSON.stringify({ rows: [{ id: "admission-edited", confirmed: true }] }), truncated: false };
+			}
+			const data = payload(request.prompt) as { facts: Fact[] };
+			return { text: JSON.stringify({ facts: data.facts.map(fact => ({ index: fact.index,
+				rows: fact.rows.map(row => ({ id: row.id, relation: "unrelated" })) })) }), truncated: false };
+		});
+		expect.soft(store.getById("admission-edited")?.text).toBe(edited);
+		for (const key of ["precision_admission", "precision_night", "superseded_by"])
+			expect.soft(metadata("admission-edited")).not.toHaveProperty(key);
+		expect.soft(journal(wave).some(row => row.outcome === "undecided" && JSON.parse(row.detail ?? "{}").rows.includes("admission-edited"))).toBe(true);
+		expect(metadata("admission-control")).toHaveProperty("precision_admission", admitted);
+	});
+	it.each(["same", "replaces", "overlaps", "correct", "remove", "keep"] as const)(
+		"skips a planned %s and its marks when a user edit is queued first", async operation => {
+			await plant("pair-old", oldPort, 1_794_400_000_000, { precision_admission: admitted });
+			await plant("pair-new", newPort, 1_794_556_800_000, { precision_admission: admitted,
+				source_span: { quote: newPort } });
+			const queuedTarget = operation === "same" || operation === "replaces" || operation === "overlaps" ? "pair-old" : "pair-new";
+			const exclusive = store.writeMutex.runExclusive.bind(store.writeMutex);
+			let queued = false;
+			const queueEdit = (): void => {
+				if (queued) return;
+				queued = true;
+				vi.spyOn(store.writeMutex, "runExclusive").mockImplementation(callback => {
+					vi.mocked(store.writeMutex.runExclusive).mockRestore();
+					void exclusive(() => edit(queuedTarget));
+					return exclusive(callback);
+				});
+			};
+			if (operation === "correct") {
+				const update = store.update.bind(store);
+				vi.spyOn(store, "update").mockImplementation((...args) => { queueEdit(); return update(...args); });
+			}
+			const wave = `snapshot-pair-${operation}`;
+			await run(wave, async request => {
+				const data = payload(request.prompt) as { facts?: Fact[]; rows?: Array<{ id: string }> };
+				let reply: unknown;
+				if (data.facts) reply = { facts: data.facts.map(fact => ({ index: fact.index,
+					rows: fact.rows.map(row => ({ id: row.id, relation: ["same", "replaces", "overlaps"].includes(operation) && fact.text === newPort ? operation : "unrelated" })) })) };
+				else if (request.callId === "E24") reply = { text: "Retain service audit reports." };
+				else if (request.callId === "E22") reply = { replaces: true, faithful: true, retired_absent: true, all_facts_accounted: true };
+				else if (request.callId === "E23") reply = { confirmed: true };
+				else reply = { rows: data.rows?.map(row => ({ id: row.id, action: ["correct", "remove"].includes(operation) ? operation : "keep", text: firstPart })) };
+				// Insert a real SQLite edit before the first planned write acquires the real mutex.
+				if (operation !== "correct") queueEdit();
+				return { text: JSON.stringify(reply), truncated: false };
+			});
+			expect.soft(store.getById(queuedTarget)?.text).toBe(edited);
+			expect.soft(ids()).toEqual(["pair-new", "pair-old"]);
+			for (const id of ids()) {
+				expect.soft(metadata(id)).not.toHaveProperty("superseded_by");
+				if (operation !== "correct" || id === queuedTarget) expect.soft(metadata(id)).not.toHaveProperty("precision_night");
+			}
+			expect.soft(journal(wave).some(row => row.outcome === "undecided")).toBe(true);
+		});
+});
+
 describe("admission concurrency", () => {
 	function seed(count: number): void {
 		const insert = database.sqlite.prepare(`INSERT INTO nodix_memories
@@ -1177,8 +1541,9 @@ describe("admission concurrency", () => {
 		const done = runPrecisionNightSteps({ store, waveId, complete, beforeMutation, previousAt: Date.now() });
 		return { done, beforeMutation };
 	}
-	it("has four batches in flight, applies reverse completions in input order, and equals serial results", async () => {
+	it("fills the concurrency bound, applies reverse completions in input order, and equals serial results", async () => {
 		seed(200);
+		const expectedConcurrency = Math.min(HOST_MODEL_CONCURRENCY, Math.ceil(200 / 40));
 		const original = database.sqlite.prepare("SELECT * FROM nodix_memories ORDER BY id").all() as Array<Record<string, unknown>>;
 		const votes = new Map<string, number>();
 		await run("serial-admission", async request => {
@@ -1208,7 +1573,7 @@ describe("admission concurrency", () => {
 		void concurrent.done.finally(() => { settled = true; });
 		try {
 			await new Promise(resolve => setTimeout(resolve, 20));
-			expect(inFlight).toBe(4);
+			expect(inFlight).toBe(expectedConcurrency);
 			expect(database.sqlite.prepare("SELECT count(*) AS count FROM nodix_memories WHERE json_extract(metadata, '$.precision_admission') IS NOT NULL").get()).toEqual({ count: 0 });
 		} finally {
 			for (let attempt = 0; !settled && attempt < 3_000; attempt += 1) {
@@ -1218,7 +1583,7 @@ describe("admission concurrency", () => {
 			expect(settled).toBe(true);
 			await concurrent.done;
 		}
-		expect(peak).toBe(4);
+		expect(peak).toBe(expectedConcurrency);
 		expect(concurrent.beforeMutation).toHaveBeenCalledTimes(1);
 		expect(database.sqlite.prepare("SELECT id, text, metadata FROM nodix_memories ORDER BY id").all()).toEqual(expectedRows);
 		expect(journal("parallel-admission")).toEqual(expectedJournal);
@@ -1276,5 +1641,310 @@ describe("admission concurrency", () => {
 			// Two confirmation calls may run out, but every completed vote batch still applies its keep decisions.
 			expect(journal(`admission-budget-${remaining}`).filter(entry => entry.stage === "admission" && entry.outcome === "fine")).toHaveLength(152);
 		}
+	});
+});
+
+
+describe("ordered pair concurrency", () => {
+	const admitted = createHash("sha256").update(WORK_MEMORY_ADMISSION).digest("hex").slice(0, 12);
+	type Complete = Parameters<typeof runPrecisionNightSteps>[0]["complete"];
+	async function seed(count = 32, correct = false): Promise<void> {
+		await plant("wave-anchor", oldPort, 1_794_400_000_000, {
+			precision_admission: admitted, precision_night: { at: Date.now(), text: "placeholder" },
+		});
+		const anchor = store.getById("wave-anchor");
+		database.sqlite.prepare("UPDATE nodix_memories SET metadata = ? WHERE id = ?")
+			.run(JSON.stringify({ ...metadata("wave-anchor"), precision_night: { at: Date.now(), text: anchor?.contentHash } }), "wave-anchor");
+		if (correct) for (let group = 0; group < 4; group += 1) store.setPlaceMode({ skinId: "codex",
+			projectId: `wave-project-${group}`, surface: "", mode: "work", decidedAt: Date.now() });
+		const insert = database.sqlite.prepare(`INSERT INTO nodix_memories
+			(id, fact_id, text, category, project_id, importance, timestamp, metadata, content_hash, timezone)
+			VALUES (?, ?, ?, 'episodic', ?, 0.7, ?, ?, ?, 'UTC')`);
+		for (let index = 0; index < count; index += 1) {
+			const id = `wave-${String(index).padStart(3, "0")}`;
+			const text = `The owner requires service report ${index} to retain its source.`;
+			insert.run(id, id, text, correct ? `wave-project-${Math.floor(index / 8)}` : "global", 1_794_556_800_000 + index,
+				JSON.stringify({ precision_kind: "rule", ...(correct ? { writer_agent_id: "codex" } : {}),
+				precision_judged: true, precision_admission: admitted,
+				source_span: { quote: correct ? `Retain the source for report ${index}.` : text }, source_order: { valid_from: null,
+					session_moment: 1_794_556_800_000 + index, session_ordinal: 0,
+					global_turn_index: 0, rowid: 0, conversation_id: id } }), id);
+		}
+	}
+	function run(waveId: string, complete: Complete) {
+		return runPrecisionNightSteps({ store, waveId, complete, beforeMutation: async () => true, previousAt: Date.now() });
+	}
+	function answer(request: Parameters<Complete>[0], conflict?: "replaces" | "overlaps", correct = false): string {
+		const data = payload(request.prompt) as { facts?: Fact[]; rows?: Array<{ id: string; quote: string }>; operation?: string };
+		if (request.callId === "E24") return JSON.stringify({ text: "Retain report 31 sources; use port 8070." });
+		if (request.callId === "E22") return JSON.stringify({ replaces: true, faithful: true, retired_absent: true, all_facts_accounted: true });
+		if (request.callId === "E23") return JSON.stringify({ confirmed: true });
+		if (data.facts) return JSON.stringify({ facts: data.facts.map(fact => ({ index: fact.index,
+			rows: fact.rows.map(row => ({ id: row.id, relation: conflict && row.id === "wave-anchor"
+				&& ["The owner requires service report 31 to retain its source.",
+					"The owner requires service report 23 to retain its source."].includes(fact.text) ? conflict : "unrelated" })) })) });
+		return JSON.stringify({ rows: data.rows?.map(row => ({ id: row.id, action: correct ? "correct" : "keep", text: correct ? row.quote : "" })) });
+	}
+	function controlled(conflict?: "replaces" | "overlaps", failedBatch?: string, correct = false) {
+		let inFlight = 0; let peak = 0;
+		const waiting: Array<{ request: Parameters<Complete>[0]; release: () => void }> = [];
+		const complete: Complete = async request => {
+			inFlight += 1; peak = Math.max(peak, inFlight);
+			await new Promise<void>(resolve => waiting.push({ request, release: resolve }));
+			inFlight -= 1;
+			if (failedBatch && (payload(request.prompt) as { facts?: Fact[] }).facts?.[0]?.text === failedBatch) throw new Error("fixture relation batch failed");
+			return { text: answer(request, conflict, correct), truncated: false };
+		};
+		async function drain(done: Promise<unknown>): Promise<void> {
+			let settled = false;
+			void done.then(() => { settled = true; }, () => { settled = true; });
+			for (let attempt = 0; !settled && attempt < 3_000; attempt += 1) {
+				for (const item of waiting.splice(0).reverse()) item.release();
+				await new Promise(resolve => setTimeout(resolve, 1));
+			}
+			expect(settled).toBe(true);
+			await done;
+		}
+		return { complete, waiting, drain, get inFlight() { return inFlight; }, get peak() { return peak; } };
+	}
+	it("batches recorded rechecks with forced peers outside pending", async () => {
+		await seed(40);
+		const peersByText = new Map<string, string>();
+		const recheckIds = ids().filter(id => id !== "wave-anchor");
+		for (let index = 0; index < 40; index += 1) {
+			const id = `wave-${String(index).padStart(3, "0")}`;
+			const text = `The owner requires service report ${index} to retain its source.`;
+			const neighbours = await precisionCandidates(store, text, "global", new Set([id]), Date.now());
+			// Pick a real row outside search results so only the recorded request can supply it.
+			const peer = recheckIds.find(peer => peer !== id && !neighbours.some(row => row.id === peer));
+			if (!peer) throw new Error("Missing recheck peer outside semantic candidates");
+			peersByText.set(text, peer);
+			database.sqlite.prepare(`UPDATE nodix_memories SET metadata =
+				json_set(json_remove(metadata, '$.source_span'), '$.precision_recheck_with', json(?)) WHERE id = ?`)
+				.run(JSON.stringify([peer]), id);
+			expect(metadata(id)).not.toHaveProperty("precision_check");
+		}
+		const budget = precisionNightBudget({ completeText: async request => {
+			if (request.prompt === "spent") return "spent";
+			const reply = await agentPort.complete({ callId: request.callId, prompt: request.prompt, maxTokens: request.maxTokens ?? 4096 });
+			if (reply.kind !== "ok") throw new Error("Missing fixture model reply");
+			return reply.text;
+		}, getLastError: () => null } as LlmClient);
+		for (let index = 0; index < 99; index += 1) await budget.llm.completeText({ callId: "E21", prompt: "spent" });
+		const exhausted = await run("recorded-recheck-budget", budget.complete).then(() => undefined, error => {
+			if (!(error instanceof NightBudgetExhausted)) throw error;
+			return error;
+		});
+
+		const batches = modelCalls.filter(call => call.callId === "E21")
+			.map(call => (payload(call.prompt) as { facts: Fact[] }).facts);
+		expect.soft(batches.some(facts => facts.filter(fact => peersByText.has(fact.text)).length > 1),
+			"multiple recorded rechecks must share a relation call").toBe(true);
+		expect(batches.every(facts => facts.length <= 8)).toBe(true);
+		for (const fact of batches.flat()) {
+			expect.soft(fact.rows.map(row => row.id), `listed recheck peer for ${fact.text}`)
+				.toContain(peersByText.get(fact.text));
+		}
+		expect(budget.exhausted).toBe(true);
+		expect.soft(exhausted?.stage, "recorded rechecks must not consume the pending stage budget").toBe("ordered-pairs");
+		expect(journal("recorded-recheck-budget").filter(row => row.outcome === "failed")).toEqual([]);
+	});
+	it.each([false, true])("skips undecided rows in the same job and retries a new job, pending %s", async pending => {
+		await seed();
+		const complete: Complete = async request => {
+			modelCalls.push(request);
+			return { text: answer(request, "replaces"), truncated: false };
+		};
+		const waveId = `undecided-same-job-${pending}`;
+		await run(waveId, complete);
+		expect(journal(waveId)).toContainEqual(expect.objectContaining({
+			row_id: "wave-023", stage: "pairs", outcome: "undecided",
+		}));
+		expect(metadata("wave-023")).not.toHaveProperty("precision_night");
+		if (pending) database.sqlite.prepare("UPDATE nodix_memories SET metadata = json_set(metadata, '$.precision_check', 'pending') WHERE id = ?")
+			.run("wave-023");
+
+		modelCalls = [];
+		await run(waveId, complete);
+		const repeated = modelCalls.filter(call => {
+			const data = payload(call.prompt) as { facts?: Fact[]; rows?: Array<{ id: string }> };
+			return data.facts?.some(fact => fact.text === "The owner requires service report 23 to retain its source.")
+				|| data.rows?.some(row => row.id === "wave-023");
+		});
+		expect(repeated.map(call => call.callId), "the same job must not judge an already undecided row again").toEqual([]);
+		expect(metadata("wave-023")).not.toHaveProperty("precision_night");
+
+		modelCalls = [];
+		await run(`${waveId}-next`, complete);
+		expect(modelCalls.filter(call => call.callId === "E21").flatMap(call => {
+			const data = payload(call.prompt) as { facts?: Fact[]; rows?: Array<{ id: string }> };
+			return [...(data.facts?.map(fact => fact.text) ?? []), ...(data.rows?.map(row => row.id) ?? [])];
+		})).toContain("wave-023");
+		expect(metadata("wave-023")).toHaveProperty("precision_night");
+	});
+	it("retries budget-deferred rows in the same job with an explicit reason", async () => {
+		await seed(1);
+		judge = () => "same";
+		const llm = { completeText: async request => {
+			if (request.prompt === "spent") return "spent";
+			const reply = await agentPort.complete({ callId: request.callId, prompt: request.prompt, maxTokens: request.maxTokens ?? 4096 });
+			if (reply.kind !== "ok") throw new Error("Missing fixture model reply");
+			return reply.text;
+		}, getLastError: () => null } as LlmClient;
+		const budget = precisionNightBudget(llm);
+		for (let index = 0; index < 99; index += 1) await budget.llm.completeText({ callId: "E21", prompt: "spent" });
+		await expect(run("mid-row-budget", budget.complete)).rejects.toBeInstanceOf(NightBudgetExhausted);
+		const undecided = journal("mid-row-budget").filter(row => row.row_id === "wave-000" && row.stage === "pairs" && row.outcome === "undecided");
+		expect(undecided).toHaveLength(1);
+		expect.soft(undecided[0]?.reason, "budget deferral must be distinguishable from a refused pair").toEqual(expect.stringContaining("budget"));
+		expect(metadata("wave-000")).not.toHaveProperty("precision_night");
+
+		modelCalls = [];
+		// A new pass gets a fresh call budget, while retaining the job's real journal.
+		await run("mid-row-budget", precisionNightBudget(llm).complete);
+		expect(modelCalls.filter(call => call.callId === "E21").flatMap(call =>
+			(payload(call.prompt) as { facts: Fact[] }).facts.map(fact => fact.text)))
+			.toContain("The owner requires service report 0 to retain its source.");
+		expect(store.getById("wave-000")).toBeUndefined();
+		expect(journal("mid-row-budget")).toContainEqual(expect.objectContaining({ stage: "duplicate", outcome: "removed" }));
+	});
+	it("runs relation and source batches together within the concurrency bound and matches the serial fixture", async () => {
+		await seed(40);
+		const expectedConcurrency = Math.min(HOST_MODEL_CONCURRENCY, Math.ceil(40 / 8));
+		const original = database.sqlite.prepare("SELECT id, text, metadata FROM nodix_memories ORDER BY id").all() as Array<{ id: string; text: string; metadata: string }>;
+		// The original serial path leaves all texts intact and emits one ordered fine journal per due row.
+		const expectedRows = original.map(row => row.id === "wave-anchor" ? row : { ...row,
+			metadata: JSON.stringify({ ...JSON.parse(row.metadata), precision_night: { at: Date.now(), text: row.id } }) });
+		const expectedJournal = original.filter(row => row.id !== "wave-anchor").reverse().map(row => ({
+			stage: "pairs", job_type: "precision-nightly", outcome: "fine", row_id: row.id, reason: null,
+			detail: JSON.stringify({ scope: "shared", projectId: "global", sameVendor: false, rows: [row.id], error: null }),
+		}));
+		const port = controlled();
+		const done = run("parallel-pairs", port.complete);
+		try {
+			await vi.waitFor(() => expect(port.waiting).toHaveLength(expectedConcurrency), { timeout: 10_000 });
+			expect(port.waiting.every(item => (payload(item.request.prompt) as { facts?: Fact[] }).facts?.length === 8)).toBe(true);
+			expect(journal("parallel-pairs")).toEqual([]);
+			for (const item of port.waiting.splice(0).reverse()) item.release();
+			await vi.waitFor(() => expect(port.waiting).toHaveLength(expectedConcurrency), { timeout: 10_000 });
+			expect(port.waiting.every(item => Array.isArray((payload(item.request.prompt) as { rows?: unknown[] }).rows))).toBe(true);
+		} finally { await port.drain(done); }
+		expect(port.peak).toBe(expectedConcurrency);
+		expect(database.sqlite.prepare("SELECT id, text, metadata FROM nodix_memories ORDER BY id").all()).toEqual(expectedRows);
+		expect(journal("parallel-pairs")).toEqual(expectedJournal);
+	});
+	it("prepares four source confirmations together and applies the serial correction fixture in order", async () => {
+		await seed(32, true);
+		const original = database.sqlite.prepare("SELECT id, text, metadata, project_id FROM nodix_memories ORDER BY id").all() as Array<{ id: string; text: string; metadata: string; project_id: string }>;
+		const port = controlled(undefined, undefined, true);
+		const done = run("parallel-source-corrections", port.complete);
+		try {
+			for (let stage = 0; stage < 3; stage += 1) {
+				await vi.waitFor(() => expect(port.waiting).toHaveLength(4), { timeout: 10_000 });
+				if (stage === 2) {
+					expect(port.waiting.every(item => item.request.callId === "E23")).toBe(true);
+					expect(database.sqlite.prepare("SELECT id, text, metadata, project_id FROM nodix_memories ORDER BY id").all()).toEqual(original);
+				} else for (const item of port.waiting.splice(0).reverse()) item.release();
+			}
+		} finally { await port.drain(done); }
+		expect(port.peak).toBe(4);
+		expect(database.sqlite.prepare("SELECT id, text, metadata, project_id FROM nodix_memories ORDER BY id").all())
+			.toEqual(original.map(row => row.id === "wave-anchor" ? row : { ...row,
+				text: JSON.parse(row.metadata).source_span.quote,
+				metadata: JSON.stringify({ kind: "episodic", l0_abstract: JSON.parse(row.metadata).source_span.quote,
+					l1_overview: `- ${JSON.parse(row.metadata).source_span.quote}`, l2_content: JSON.parse(row.metadata).source_span.quote,
+					memory_category: "episodic", tier: "working", access_count: 0, confidence: 0.7,
+					last_accessed_at: JSON.parse(row.metadata).source_order.session_moment,
+					asserted_at: JSON.parse(row.metadata).source_order.session_moment, state: "confirmed", source: "legacy",
+					injected_count: 0, bad_recall_count: 0, suppressed_until_turn: 0, temporal_resolution_status: "unresolved",
+					...JSON.parse(row.metadata), rem_updated_at: Date.now() }) }));
+		expect(journal("parallel-source-corrections")).toEqual(original.filter(row => row.id !== "wave-anchor").reverse().map(row => ({
+			stage: "source-sentence", job_type: "precision-nightly", outcome: "corrected", row_id: row.id, reason: null,
+			detail: JSON.stringify({ scope: "project", projectId: row.project_id, sameVendor: true, rows: [row.id], error: null }),
+		})));
+	});
+	it("journals one refused merge for the same pair encountered in two batches", async () => {
+		await seed();
+		for (const id of ["wave-031", "wave-023"]) {
+			const row = store.getById(id);
+			if (!row) throw new Error("missing fixture row");
+			await store.deleteMany([id]);
+			await plant(id, row.text, row.timestamp, JSON.parse(row.metadata));
+		}
+		const port = controlled();
+		const complete: Complete = async request => {
+			const result = await port.complete(request);
+			const data = payload(request.prompt) as { facts?: Fact[] };
+			let text: string | undefined;
+			if (data.facts) text = JSON.stringify({ facts: data.facts.map(fact => ({ index: fact.index,
+				rows: fact.rows.map(row => ({ id: row.id, relation:
+					fact.text === "The owner requires service report 31 to retain its source." && row.id === "wave-023"
+					|| fact.text === "The owner requires service report 23 to retain its source." && row.id === "wave-031"
+						? "overlaps" : "unrelated" })) })) });
+			if (request.callId === "E24") text = JSON.stringify({ text: "Retain sources for reports 31 and 23." });
+			if (request.callId === "E22") text = JSON.stringify({ faithful: false, retired_absent: true, all_facts_accounted: true });
+			return text === undefined ? result : { text, truncated: false };
+		};
+		await port.drain(run("refused-cross-batch-pair", complete));
+		expect(journal("refused-cross-batch-pair").filter(row => row.stage === "merge"))
+			.toEqual([expect.objectContaining({ outcome: "undecided", reason: "merge verification refused" })]);
+		expect(store.getById("wave-031")?.text).toBe("The owner requires service report 31 to retain its source.");
+		expect(store.getById("wave-023")?.text).toBe("The owner requires service report 23 to retain its source.");
+	});
+	it.each(["replaces", "overlaps"] as const)("applies only the first %s of a shared row and leaves the conflicting row due", async conflict => {
+		await seed();
+		const port = controlled(conflict);
+		await port.drain(run(`conflicting-${conflict}`, port.complete));
+		const applied = journal(`conflicting-${conflict}`).filter(row => ["replaced", "merged"].includes(row.outcome));
+		expect(applied).toHaveLength(1);
+		expect(metadata("wave-anchor")).toHaveProperty("superseded_by");
+		if (conflict === "replaces") expect(metadata("wave-031")).toHaveProperty("precision_night");
+		expect(store.getById("wave-023")?.text).toBe("The owner requires service report 23 to retain its source.");
+		expect(metadata("wave-023")).not.toHaveProperty("precision_night");
+		expect(metadata("wave-023")).not.toHaveProperty("superseded_by");
+		expect(journal(`conflicting-${conflict}`).filter(row => row.row_id === "wave-023"))
+			.toContainEqual(expect.objectContaining({ stage: "pairs", outcome: "undecided" }));
+		const activeRows = store.readActivePrecisionRows("global");
+		expect(activeRows).toHaveLength(32);
+		if (conflict === "overlaps") expect(activeRows.some(row => row.text === "Retain report 31 sources; use port 8070.")).toBe(true);
+	});
+	it.each([1, 4, 5, 7])("applies returned results without exceeding the budget with %i calls left", async remaining => {
+		await seed();
+		let calls = 0;
+		const budget = precisionNightBudget({ completeText: async request => {
+			calls += 1;
+			return request.prompt === "spent" ? "spent" : answer(request);
+		}, getLastError: () => null } as LlmClient);
+		for (let index = 0; index < 100 - remaining; index += 1) await budget.llm.completeText({ callId: "E21", prompt: "spent" });
+		await expect(run(`pair-budget-${remaining}`, budget.complete)).rejects.toBeInstanceOf(NightBudgetExhausted);
+		expect(calls).toBe(100);
+		expect(journal(`pair-budget-${remaining}`).filter(row => row.outcome === "failed")).toEqual([]);
+		const marked = ids().filter(id => id !== "wave-anchor" && metadata(id).precision_night);
+		expect(marked).toHaveLength(Math.max(0, remaining - 4) * 8);
+	});
+	it.each([5, 8, 9, 11, 15])("preserves completed corrections when the budget ends with %i calls left", async remaining => {
+		await seed(32, true);
+		let calls = 0;
+		const budget = precisionNightBudget({ completeText: async request => {
+			calls += 1;
+			return request.prompt === "spent" ? "spent" : answer(request, undefined, true);
+		}, getLastError: () => null } as LlmClient);
+		for (let index = 0; index < 100 - remaining; index += 1) await budget.llm.completeText({ callId: "E21", prompt: "spent" });
+		await expect(run(`correction-budget-${remaining}`, budget.complete)).rejects.toBeInstanceOf(NightBudgetExhausted);
+		expect(calls).toBe(100);
+		expect(journal(`correction-budget-${remaining}`).filter(row => row.outcome === "failed")).toEqual([]);
+		expect(journal(`correction-budget-${remaining}`).filter(row => row.outcome === "corrected")).toHaveLength(Math.max(0, remaining - 8));
+		expect(ids().filter(id => id !== "wave-anchor" && metadata(id).precision_night)).toEqual([]);
+	});
+	it("applies the other three batches when one relation call fails", async () => {
+		await seed();
+		const port = controlled(undefined, "The owner requires service report 23 to retain its source.");
+		await port.drain(run("pair-failure", port.complete));
+		expect(journal("pair-failure").filter(row => row.stage === "pairs" && row.outcome === "failed")).toHaveLength(8);
+		expect(journal("pair-failure").filter(row => row.stage === "pairs" && row.outcome === "fine")).toHaveLength(24);
+		expect(metadata("wave-023")).not.toHaveProperty("precision_night");
+		expect(metadata("wave-031")).toHaveProperty("precision_night");
+		expect(metadata("wave-015")).toHaveProperty("precision_night");
+		expect(metadata("wave-007")).toHaveProperty("precision_night");
 	});
 });

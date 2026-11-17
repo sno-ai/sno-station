@@ -23,7 +23,7 @@ export {
 	type SessionActivityPayload,
 } from "./session-activity";
 
-export const HOST_MODEL_CONCURRENCY = 4;
+export const HOST_MODEL_CONCURRENCY = 12;
 export const CODING_SKIN_CHILD_DEADLINE_MS = 110_000;
 export const CODING_SKIN_WORKER_LIFETIME_MS: number = 9 * 60_000;
 export const CODING_SKIN_RETRY_DELAYS_MS = [2_000, 10_000] as const;
