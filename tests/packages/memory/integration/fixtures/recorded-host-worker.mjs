@@ -1,10 +1,11 @@
-import { writeFileSync } from "node:fs";
+import { appendFileSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { join } from "node:path";
 import { connect as connectMemory } from "@snoai/memory/client";
 
 if (process.argv[2] !== "worker") throw new Error("expected worker argument");
 const profile = process.env.SNO_PROFILE_DIR;
+appendFileSync(join(profile, "host-worker-starts.jsonl"), `${JSON.stringify({ pid: process.pid })}\n`);
 writeFileSync(join(profile, "host-worker-started.json"), JSON.stringify({ pid: process.pid, argument: process.argv[2] }));
 let idle;
 const server = createServer((request, response) => {

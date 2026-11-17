@@ -94,6 +94,7 @@ export class MemoryRuntimePool {
 	private readonly skins = new Map<string, SkinRuntime>();
 	private readonly profileDir = getSnoProfileDir();
 	private readonly workerRegistrations = new Set<() => void>();
+	private workerStart: Promise<boolean> | undefined;
 	private readonly owned = new Set<SkinRuntime>();
 	private maintenance: MaintenanceTimerHandle | undefined;
 	private usageTimer: NodeJS.Timeout | undefined;
@@ -263,7 +264,10 @@ export class MemoryRuntimePool {
 		// temporary disconnect does not exclude a recovered host. An error hands the call to the next.
 		const hosts = () => [...this.skins.values()].reverse().filter(entry => entry.connected);
 		return hosts().length === 0 && !existsSync(join(this.profileDir, "station", "host-worker.json"))
-			? undefined : hostChain(hosts, deadlineMs => this.startRecordedWorker(deadlineMs));
+			? undefined : hostChain(hosts, deadlineMs => {
+				this.workerStart ??= this.startRecordedWorker(deadlineMs).finally(() => { this.workerStart = undefined; });
+				return this.workerStart;
+			});
 	}
 
 	private async startRecordedWorker(deadlineMs: number): Promise<boolean> {

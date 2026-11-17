@@ -179,7 +179,7 @@ export function hostChain(hosts: () => HostEntry[], start?: (deadlineMs: number)
 						...(proposer ? { checkedBySameVendor: !proposer.vendor || !entry.vendor || proposer.vendor === entry.vendor } : {}) };
 					if (result.kind !== "error" || result.category !== "transport" || result.message !== "no-agent-endpoint") allGone = false;
 				}
-				if (target || attempt > 0 || !allGone || !start || Date.now() >= deadline || request.signal?.aborted || !await start(deadline)) break;
+				if (attempt > 0 || !allGone || !start || Date.now() >= deadline || request.signal?.aborted || !await start(deadline)) break;
 			}
 			return result;
 		},

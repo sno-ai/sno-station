@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { closeSync, openSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -9,6 +9,8 @@ import { createTestDb } from "../../../apps/mem-claw/helpers/test-db";
 import { writeSettingsFixture } from "../fixtures/settings-file-fixture";
 
 let root: string;
+let directory: string;
+let profileFd: number;
 let database: ReturnType<typeof createTestDb>;
 let sidecar: Awaited<ReturnType<typeof startRemSidecar>>;
 let pool: MemoryRuntimePool;
@@ -17,7 +19,10 @@ const previousProfile = process.env.SNO_PROFILE_DIR;
 
 beforeEach(async () => {
 	database = createTestDb();
-	root = mkdtempSync(join(tmpdir(), "host-worker-start-"));
+	directory = mkdtempSync(join(tmpdir(), "host-worker-start-"));
+	// Keep the Unix socket path short while all files stay in the requested temporary directory.
+	profileFd = openSync(directory, "r");
+	root = `/proc/${process.pid}/fd/${profileFd}`;
 	process.env.SNO_PROFILE_DIR = root;
 	writeSettingsFixture(root, { mode: "agent-native", rem: { tick: false }, rerank: { mode: "none" },
 		store: { path: database.dbPath, encryptionKey: database.encryptionKey },
@@ -40,15 +45,16 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
-	const marker = join(root, "host-worker-started.json");
-	if (existsSync(marker)) {
-		const { pid } = JSON.parse(readFileSync(marker, "utf8"));
+	const marker = join(root, "host-worker-starts.jsonl");
+	for (const line of existsSync(marker) ? readFileSync(marker, "utf8").trim().split("\n") : []) {
+		const { pid } = JSON.parse(line);
 		try { process.kill(pid, "SIGTERM"); }
 		catch (error) { if (!(error instanceof Error && "code" in error && error.code === "ESRCH")) throw error; }
 	}
 	await sidecar?.stop();
 	database?.cleanup();
-	rmSync(root, { recursive: true, force: true });
+	closeSync(profileFd);
+	rmSync(directory, { recursive: true, force: true });
 	if (previousProfile === undefined) delete process.env.SNO_PROFILE_DIR;
 	else process.env.SNO_PROFILE_DIR = previousProfile;
 });
@@ -56,7 +62,7 @@ afterEach(async () => {
 it("starts the recorded worker without any registration and answers through the runtime host route", async () => {
 	writeFileSync(join(root, "station", "host-worker.json"), JSON.stringify({ node: process.execPath, entry }), { mode: 0o600 });
 	const result = await pool.connectedRemPort()?.complete({ prompt: "question", timeoutMs: 10_000 });
-	expect(result).toEqual({ kind: "ok", text: "recorded worker answer" });
+	expect(result).toEqual({ kind: "ok", text: "recorded worker answer", responder: { skinId: "recorded-host", vendor: null } });
 	expect(existsSync(join(root, "host-worker-started.json"))).toBe(true);
 	expect(JSON.parse(readFileSync(join(root, "host-worker-started.json"), "utf8"))).toMatchObject({ argument: "worker" });
 }, 20_000);
@@ -74,3 +80,27 @@ it("keeps today's absent host route and starts no worker without a record or reg
 	expect(pool.connectedRemPort()).toBeUndefined();
 	expect(existsSync(join(root, "host-worker-started.json"))).toBe(false);
 });
+
+
+it("four concurrent callers share one recorded worker start", async () => {
+	writeFileSync(join(root, "station", "host-worker.json"), JSON.stringify({ node: process.execPath, entry }), { mode: 0o600 });
+	const results = await Promise.all(Array.from({ length: 4 }, (_, index) =>
+		pool.connectedRemPort()?.complete({ prompt: `question ${index}`, timeoutMs: 10_000 })));
+	for (const result of results) expect(result).toMatchObject({ kind: "ok", text: "recorded worker answer" });
+	expect(readFileSync(join(root, "host-worker-starts.jsonl"), "utf8").trim().split("\n")).toHaveLength(1);
+}, 20_000);
+
+it.each([
+	{ skinId: "recorded-host" },
+	{ otherVendorThan: { skinId: "recorded-host", vendor: "openai" } },
+])("starts the recorded worker for a targeted call after it has gone: %j", async hostTarget => {
+	writeFileSync(join(root, "station", "host-worker.json"), JSON.stringify({ node: process.execPath, entry }), { mode: 0o600 });
+	const port = pool.connectedRemPort();
+	expect(await port?.reachable?.()).toBe(true);
+	const previous = JSON.parse(readFileSync(join(root, "host-worker-started.json"), "utf8"));
+	process.kill(previous.pid, "SIGTERM");
+	await vi.waitFor(() => expect(() => process.kill(previous.pid, 0)).toThrow(), { timeout: 2_000 });
+	const result = await port?.complete({ prompt: "question", hostTarget, timeoutMs: 10_000 });
+	expect(result).toMatchObject({ kind: "ok", text: "recorded worker answer", responder: { skinId: "recorded-host", vendor: null } });
+	expect(readFileSync(join(root, "host-worker-starts.jsonl"), "utf8").trim().split("\n")).toHaveLength(2);
+}, 20_000);
