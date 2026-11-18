@@ -118,13 +118,18 @@ sno reach pair "Fix the login redirect"
 **Хватит караулить терминалы.** С начальником штаба или без него строка состояния Claude Code или Cursor скажет, когда вы кому-то нужны. Её настраивает установка:
 
 ```text
-❄ 2 need you · claude: approve
+[sno] 2 agents are waiting for you
+  Claude in web-app needs your approval (Bash) · 1m
+  Codex in api asks: Should the billing migration run tonight? · 5m
 ```
 
 `sno squad` разворачивает весь отряд на полный экран: кому вы нужны, кто работает, что готово.
 
 ```text
 Sno Station · squad · 09:15 · 2 need you · 2 working · 2 finished
+Waiting for you (2)
+  Claude in web-app needs your approval (Bash) · 1m
+  Codex in api asks: Should the billing migration run tonight? · 5m
 Needs you (2)
 > claude web-app       approve a permission · Fix the login redirect loop …   1m
   codex api            asked a question · Migrate the billing tables to th…   5m
