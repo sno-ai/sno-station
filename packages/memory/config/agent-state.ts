@@ -929,9 +929,14 @@ function waitLine(view: AgentView, question: AgentView["openQuestions"][number])
 	const place = row?.cwd && row.cwd !== "unknown" ? row.cwd : approval?.[2];
 	const who = row ? (HARNESS_NAMES[row.harness] ?? row.harness) : question.agent.startsWith("station.notices@") ? "An agent" : question.agent;
 	const where = place ? ` in ${basename(place)}` : "";
-	const tool = approval?.[1] ?? (row?.waitingReason === "permission to approve" ? row.waitingSubject?.replace(/^approval needed: /, "") : undefined);
-	const what = tool || row?.waitingReason === "permission to approve" ? `needs your approval${tool ? ` (${tool})` : ""}`
-		: `asks: ${cell(finalSentence(subject), 40).trimEnd()}`;
+	const named = row?.waitingSubject?.startsWith("approval needed: ") ? row.waitingSubject.slice("approval needed: ".length) : undefined;
+	const tool = approval?.[1] ?? (row?.waitingReason === "permission to approve" ? named : undefined);
+	const states: Record<string, string> = {
+		"quota exhausted": "is out of quota", "done awaiting review": "finished and waits for your review",
+		"failed awaiting decision": "failed and needs your decision",
+	};
+	const what = approval || row?.waitingReason === "permission to approve" ? `needs your approval${tool ? ` (${tool})` : ""}`
+		: row && states[row.waitingReason] ? states[row.waitingReason] : `asks: ${cell(finalSentence(subject), 40).trimEnd()}`;
 	return `${who}${where} ${what}`;
 }
 
