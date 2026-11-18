@@ -15,7 +15,7 @@ it("fits 80x24 with every Needs you row and the selected row visible, one line p
 		...[0, 1, 2].map(index => row(index, "Needs you", "修复登录跳转循环并补一个测试，然后把结果发给负责审查的助手")),
 		...Array.from({ length: 27 }, (_, index) => row(index + 3, index < 10 ? "Working" : "Finished", `🚀 Ship task number ${index + 3} ✅ ${"🚀".repeat(40)}`)),
 	];
-	const view: AgentView = { observedAt: "2026-11-04T05:10:00Z", agents, work: [], quota: [], errors: [] };
+	const view: AgentView = { observedAt: "2026-11-04T05:10:00Z", agents, work: [], quota: [], errors: [], openQuestions: [], stuck: [] };
 	const width = (line: string): number => [...line].reduce((sum, char) => sum + (/[一-鿿＀-｠]/u.test(char) ? 2 : 1), 0);
 	for (const selected of [0, 15, 29]) {
 		const lines = renderAgentScreen(view, selected, { columns: 80, rows: 24 }).split("\n");
@@ -29,7 +29,7 @@ it("fits 80x24 with every Needs you row and the selected row visible, one line p
 
 it("keeps the selected row visible when Needs you alone fills the list, and shows an opened result whole", () => {
 	const agents = [...Array.from({ length: 18 }, (_, index) => row(index, "Needs you", `Approve step ${index}`)), row(18, "Working", "Last task")];
-	const view: AgentView = { observedAt: "2026-11-04T05:10:00Z", agents, work: [], quota: [], errors: [] };
+	const view: AgentView = { observedAt: "2026-11-04T05:10:00Z", agents, work: [], quota: [], errors: [], openQuestions: [], stuck: [] };
 	for (const selected of [17, 18]) {
 		const lines = renderAgentScreen(view, selected, { columns: 80, rows: 24 }).split("\n");
 		expect(lines.length).toBeLessThanOrEqual(24);
@@ -45,7 +45,7 @@ it("lists finished and unknown sessions from the last day only and says how many
 	const aged = (index: number, group: AgentRow["group"], ageSeconds: number | "unknown"): AgentRow => ({ ...row(index, group, `Task ${index}`), ageSeconds });
 	const agents = [aged(0, "Needs you", 200_000), aged(1, "Working", 100_000), aged(2, "Finished", 3600), aged(3, "Finished", 90_000),
 		aged(4, "unknown", 86_000), aged(5, "unknown", 400_000), aged(6, "unknown", "unknown")];
-	const { view, hidden } = screenAgents({ observedAt: "2026-11-04T05:10:00Z", agents, work: [], quota: [], errors: [] });
+	const { view, hidden } = screenAgents({ observedAt: "2026-11-04T05:10:00Z", agents, work: [], quota: [], errors: [], openQuestions: [], stuck: [] });
 	expect(view.agents.map(item => item.sessionId)).toEqual(["session-0", "session-1", "session-2", "session-4", "session-6"]);
 	expect(hidden).toBe(2);
 	const screen = renderAgentScreen(view, 0, { columns: 40, rows: 24 }, "", hidden);

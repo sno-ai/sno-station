@@ -1,7 +1,8 @@
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
+import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
 import { appendFile, mkdir, open, readFile, readdir, realpath, stat } from "node:fs/promises";
-import { homedir } from "node:os";
+import { homedir, hostname } from "node:os";
 import { dirname, join } from "node:path";
 import { createInterface } from "node:readline";
 import { promisify } from "node:util";
@@ -26,19 +27,22 @@ export interface AgentRow {
 	doing: "working" | "idle at prompt" | "unknown";
 	process: "present" | "detached" | "exited" | "absent" | "unknown";
 	resumable: "live" | "resumable" | "context full" | "unknown";
-	waitingForHuman: "yes" | "no" | "unknown"; waitingReason: string;
+	waitingForHuman: "yes" | "no" | "unknown"; waitingReason: string; waitingSince?: string; waitingSubject?: string;
 	group: "Needs you" | "Working" | "Finished" | "unknown"; subgroup: string;
 	lastEvent: { at: string; event: string; source: string } | "unknown"; ageSeconds: number | "unknown";
 	resultId: string; humanSeen: boolean | "unknown"; finalReply: string;
 	work: Record<string, unknown>[]; delivery: string; resumeEvidence: string; missingReasons: string[];
 }
+interface OpenQuestion { agent: string; subject: string; age: number | "unknown"; source: "mail" | "native"; sessionId?: string; harness?: AgentHarness }
+interface StuckItem { card: string; holder: string; reason: string; since: string; subject: string; taker?: string }
 export interface AgentView {
 	observedAt: string; agents: AgentRow[]; work: Record<string, unknown>[];
 	quota: Record<string, unknown>[]; errors: AgentOperationError[];
+	openQuestions: OpenQuestion[]; stuck: StuckItem[]; reachUnavailable?: string;
 }
 export interface AgentViewOptions {
 	profileDir?: string; reachRoot?: string; now?: number; reachProgram?: string;
-	/** Status-line and tmux redraws: only observations inside the freshness horizon, and no Reach work scan. */
+	/** Status-line and tmux redraws: omit stale non-waiting sessions and skip the existing Reach work projection. */
 	recent?: boolean;
 }
 export interface AgentIdentity { harness?: string; sessionId?: string; reachAddress?: string }
@@ -48,6 +52,7 @@ function record(value: unknown): Record<string, unknown> {
 }
 function text(value: unknown): string { return typeof value === "string" ? value : ""; }
 function profileDir(): string { return process.env.SNO_PROFILE_DIR ?? join(homedir(), ".sno"); }
+function reachRoot(): string { return process.env.SNO_REACH_ROOT || join(homedir(), ".local/state/sno-reach"); }
 function eventFile(profile: string, harness: string, sessionId: string): string {
 	return join(profile, "station", "agents", `${encodeURIComponent(harness)}--${encodeURIComponent(sessionId)}.jsonl`);
 }
@@ -94,6 +99,11 @@ const OBSERVED_TEXT_CHARS = 200;
 
 function observedInput(input: Record<string, unknown>): Record<string, unknown> {
 	const kept: Record<string, unknown> = Object.fromEntries(OBSERVED_FIELDS.filter(key => input[key] !== undefined).map(key => [key, input[key]]));
+	if (askTool(input)) {
+		const tool = record(input.tool_input);
+		const question = text(tool.question) || (Array.isArray(tool.questions) ? text(record(tool.questions[0]).question) : "");
+		if (question) kept.question = question.slice(0, OBSERVED_TEXT_CHARS);
+	}
 	const prompt = text(input.prompt);
 	if (prompt) kept.prompt = prompt.slice(0, OBSERVED_TEXT_CHARS);
 	const reply = text(input.last_assistant_message ?? input.text ?? input.response ?? input["last-assistant-message"]);
@@ -103,11 +113,83 @@ function observedInput(input: Record<string, unknown>): Record<string, unknown> 
 	return kept;
 }
 
+function logHookFailure(operation: string, target: string, error: unknown, impact: string): void {
+	process.stderr.write(`${JSON.stringify(failure(operation, target, error, impact))}\n`);
+}
+
+async function logReachHookFailure(operation: string, target: string, error: unknown, impact: string): Promise<void> {
+	logHookFailure(operation, target, error, impact);
+	const path = join(reachRoot(), "reach.log");
+	try { await appendFile(path, `reach: ${operation} ${target}: ${error instanceof Error ? error.message : String(error)}\n`); }
+	catch (logError) { logHookFailure("append Reach log", path, logError, "failure reported on stderr"); }
+}
+
+async function hookHistory(target: string): Promise<AgentObservation[]> {
+	try {
+		const contents = await readFile(target, "utf8");
+		return contents.split("\n").filter(Boolean).flatMap(line => {
+			try { return [observationSchema.parse(JSON.parse(line))]; }
+			catch (error) { logHookFailure("parse agent observation", target, error, "one hook record ignored"); return []; }
+		});
+	} catch (error) {
+		if (!absent(error)) logHookFailure("read agent observations", target, error, "previous hook records unavailable");
+		return [];
+	}
+}
+
+async function hookSeat(history: AgentObservation[], target: string): Promise<string | undefined> {
+	const cached = process.env.SNO_REACH_ADDR || history.findLast(item => item.reachAddress)?.reachAddress;
+	if (cached) return cached;
+	try { return (await execute("sno", ["reach", "whoami"], { timeout: 1000 })).stdout.trim() || undefined; }
+	catch (error) {
+		if (record(error).code !== 1 || record(error).stderr) {
+			await logReachHookFailure("resolve Reach seat", target, error, "seat unavailable");
+		}
+		return undefined;
+	}
+}
+
+async function pickupSeat(seat: string): Promise<void> {
+	try {
+		const { stdout } = await execute("sno", ["reach", "pickup"], {
+			timeout: 3000, killSignal: "SIGKILL", env: { ...process.env, SNO_REACH_ADDR: seat },
+		});
+		const reason = stdout.trim();
+		if (reason) process.stdout.write(`${JSON.stringify({ decision: "block", reason })}\n`);
+	} catch (error) {
+		await logReachHookFailure("pick up Reach mail", seat, error, "turn ends without a continuation");
+	}
+}
+
+function approvalNotice(observation: AgentObservation, history: AgentObservation[]): void {
+	const { input, event, sessionId, reachAddress, cwd } = observation;
+	const dismiss = event === "approval-response" || event === "interrupt" ||
+		(event === "post-tool-use" && pendingApproval(history, input));
+	const args = dismiss ? ["--dismiss-session", sessionId] :
+		event === "permission-request" && text(input.tool_name) && !askTool(input)
+			? [...(reachAddress ? ["--as", reachAddress] : []), "--type", "approval", "--session", sessionId,
+				"--subject", `approval needed: ${text(input.tool_name)} in ${cwd ?? process.cwd()}`]
+			: undefined;
+	if (!args) return;
+	const child = spawn("sno", ["reach", "notify", ...args], { detached: true, stdio: "ignore" });
+	child.on("error", error => void logReachHookFailure(dismiss ? "dismiss Reach approval" : "send Reach approval", sessionId, error, "approval card unchanged"));
+	child.unref();
+}
+
+function pendingApproval(history: AgentObservation[], completed: Record<string, unknown>): boolean {
+	const index = history.findLastIndex(item =>
+		["permission-request", "approval-response", "interrupt"].includes(item.event));
+	const request = history[index];
+	return request?.event === "permission-request" && !askTool(request.input) && matchingTool(request, completed) &&
+		!history.slice(index + 1).some(item => item.event === "post-tool-use" && matchingTool(request, item.input));
+}
+
 /** Observational failures are logged; they never prevent an agent's ordinary hook. */
 export async function observeAgentEvent(harness: AgentHarness, event: string, raw: unknown): Promise<void> {
 	const input = record(raw);
 	const sessionId = text(harness === "cursor" ? input.conversation_id : input.session_id ?? input.thread_id);
 	let target = `${harness}/${sessionId || "missing session identity"}`;
+	let pickup: Promise<void> | undefined;
 	try {
 		if (!sessionId) throw new Error("host supplied no session identity");
 		// A subagent's hooks carry its own agent_id beside the parent's session id; its events are its own, never the parent's.
@@ -117,25 +199,30 @@ export async function observeAgentEvent(harness: AgentHarness, event: string, ra
 		}
 		const thread = text(input.thread_id ?? input["thread-id"]);
 		if (event === "notify" && thread && thread !== sessionId) return;
-		let identity: { pid: number; processStart: string } | undefined;
-		try { identity = await observedProcess(harness, input); }
-		catch (error) { process.stderr.write(`${JSON.stringify(failure("inspect agent process", target, error, "process observation unknown"))}\n`); }
+		const agent = (harness === "claude" || harness === "codex") && input.agent_id === undefined;
+		target = eventFile(profileDir(), harness, sessionId);
+		const identity = observedProcess(harness, input).catch(error => {
+			logHookFailure("inspect agent process", target, error, "process observation unknown");
+			return undefined;
+		});
+		const history = agent && (!process.env.SNO_REACH_ADDR || event === "post-tool-use") ? await hookHistory(target) : [];
+		const reachAddress = agent ? await hookSeat(history, target) :
+			input.agent_id === undefined ? process.env.SNO_REACH_ADDR : undefined;
+		if (event === "stop" && agent && reachAddress) pickup = pickupSeat(reachAddress);
 		let cwd = text(input.cwd);
 		if (!cwd && harness === "cursor" && Array.isArray(input.workspace_roots)) cwd = text(input.workspace_roots[0]);
-		target = eventFile(profileDir(), harness, sessionId);
 		const observation: AgentObservation = {
 			harness, sessionId, at: new Date().toISOString(),
 			event: event === "user-prompt-submit" && isAgentText(text(input.prompt)) ? "agent-prompt-submit" : event,
-			input: observedInput(input), ...identity,
-			// A subagent inherits its parent's environment; the Reach address belongs to the parent session only.
-			...(process.env.SNO_REACH_ADDR && input.agent_id === undefined ? { reachAddress: process.env.SNO_REACH_ADDR } : {}),
-			...(cwd ? { cwd } : {}),
+			input: observedInput(input), ...(reachAddress ? { reachAddress } : {}), ...(cwd ? { cwd } : {}),
 		};
+		if (agent && process.env.SNO_DUE_RUN !== "1") approvalNotice(observation, history);
+		Object.assign(observation, await identity);
 		await mkdir(dirname(target), { recursive: true, mode: 0o700 });
 		await appendFile(target, `${JSON.stringify(observation)}\n`, { mode: 0o600 });
 	} catch (error) {
-		process.stderr.write(`${JSON.stringify(failure("append agent observation", target, error, `${event} observation missing`))}\n`);
-	}
+		logHookFailure("append agent observation", target, error, `${event} observation missing`);
+	} finally { await pickup; }
 }
 
 function emptyAgent(harness: AgentHarness, sessionId: string): AgentRow {
@@ -317,17 +404,21 @@ async function readAgentFile(path: string, now: number, errors: AgentOperationEr
 	}
 	const row = emptyAgent(first.harness, first.sessionId);
 	let permission: AgentObservation | undefined;
-	let waitAt: string | undefined;
 	for (const [index, observation] of observations.entries()) {
 		if (observation.sessionId !== row.sessionId || observation.harness !== row.harness) {
 			unreadable = true; errors.push(failure("read agent identity", path, "mixed identities in event file", "current agent observation unknown")); continue;
 		}
-		const wasWaiting = row.waitingForHuman;
+		const previousReason = row.waitingForHuman === "yes" ? row.waitingReason : "";
 		if (["permission-request", "pre-tool-use"].includes(observation.event) &&
 			(observation.event === "permission-request" || askTool(observation.input))) permission = observation;
 		applyEvent(row, observation, index, path, permission);
-		if (row.waitingForHuman === "yes" && wasWaiting !== "yes") waitAt = observation.at;
-		if (row.waitingForHuman !== "yes") waitAt = undefined;
+		if (row.waitingForHuman === "yes" && (previousReason !== row.waitingReason || observation.event === "permission-request")) {
+			row.waitingSince = observation.at;
+			row.waitingSubject = text(observation.input.question ?? observation.input.last_assistant_message) ||
+				(row.waitingReason === "permission to approve" && text(observation.input.tool_name)
+					? `approval needed: ${text(observation.input.tool_name)}` : row.waitingReason);
+		}
+		if (row.waitingForHuman !== "yes") { row.waitingSince = undefined; row.waitingSubject = undefined; }
 	}
 	if (row.waitingReason === "permission to approve" && await permissionDenied(row, observations, errors)) {
 		row.doing = "idle at prompt"; resolveWait(row); row.group = "Finished"; row.subgroup = "permission denied";
@@ -338,20 +429,14 @@ async function readAgentFile(path: string, now: number, errors: AgentOperationEr
 	// Existing Reach freshness horizon; this expires observations, never infers failure.
 	if (unreadable || (typeof row.ageSeconds === "number" && row.ageSeconds > 900)) {
 		if (row.doing === "working") row.doing = "unknown";
-		if (row.waitingForHuman === "yes") row.waitingForHuman = "unknown";
+		if (unreadable && row.waitingForHuman === "yes") row.waitingForHuman = "unknown";
 		row.missingReasons.push(unreadable ? "unreadable observation" : "current observation older than 900 seconds");
-	}
-	if (row.waitingForHuman === "yes" && waitAt && now - Date.parse(waitAt) > 900_000) {
-		row.waitingForHuman = "unknown"; row.missingReasons.push("human-wait observation older than 900 seconds");
 	}
 	classify(row);
 	return row;
 }
 
-async function readSeats(root: string, rows: AgentRow[], errors: AgentOperationError[]): Promise<void> {
-	let entries: string[];
-	try { entries = (await readdir(root, { withFileTypes: true })).filter(entry => entry.isDirectory()).map(entry => entry.name); }
-	catch (error) { if (!absent(error)) errors.push(failure("read Reach inventory", root, error, "Reach seats unknown")); return; }
+async function readSeats(root: string, entries: string[], rows: AgentRow[], errors: AgentOperationError[]): Promise<void> {
 	for (const address of entries) {
 		const path = join(root, address, "seat.json");
 		try {
@@ -367,6 +452,118 @@ async function readSeats(root: string, rows: AgentRow[], errors: AgentOperationE
 			row.reachAddress = address; row.missingReasons.push(row.harness === "openclaw" ? "OpenClaw state capture unsupported" : "Reach seat has no captured events");
 			rows.push(row);
 		} catch (error) { if (!absent(error)) errors.push(failure("read Reach seat", path, error, "seat observations unknown")); }
+	}
+}
+
+type MailCard = { path: string; id: string; sender: string; subject: string; type: string; date: string };
+
+async function readReachFile<T>(operation: string, path: string, view: AgentView, read: () => Promise<T>): Promise<T | undefined> {
+	try { return await read(); }
+	catch (error) {
+		if (!absent(error)) view.errors.push(failure(operation, path, error, "some Reach status unavailable"));
+		return undefined;
+	}
+}
+
+async function* mailboxCards(mailbox: string, view: AgentView): AsyncGenerator<MailCard> {
+	for (const folder of ["new", "cur"]) {
+		const directory = join(mailbox, folder);
+		const files = await readReachFile("list Reach mailbox", directory, view, () => readdir(directory, { withFileTypes: true }));
+		for (const file of files ?? []) {
+			if (!file.isFile() || /:2,[^,]*T/.test(file.name)) continue;
+			const path = join(directory, file.name);
+			const contents = await readReachFile("read Reach card", path, view, () => readFile(path, "utf8"));
+			if (contents === undefined) continue;
+			const header = contents.split(/\r?\n\r?\n/, 1)[0]?.replace(/\r?\n[ \t]+/g, " ") ?? "";
+			const fields = new Map(header.split(/\r?\n/).flatMap(line => {
+				const delimiter = line.indexOf(":");
+				return delimiter < 0 ? [] : [[line.slice(0, delimiter).toLowerCase(), line.slice(delimiter + 1).trim()]];
+			}));
+			const from = fields.get("from") ?? "";
+			yield { path, id: fields.get("message-id") ?? "", sender: /<([^<>]+)>$/.exec(from)?.[1] ?? from,
+				subject: fields.get("subject") ?? "unknown", type: fields.get("x-type") ?? "", date: fields.get("date") ?? "" };
+		}
+	}
+}
+
+async function readTaker(root: string, sender: string, id: string, view: AgentView): Promise<string | undefined> {
+	if (!sender || !id) return undefined;
+	const path = join(root, sender, "takers", createHash("sha256").update(id).digest("hex"));
+	return (await readReachFile("read Reach taker", path, view, () => readFile(path, "utf8")))?.trim() || undefined;
+}
+
+const trySchema = z.object({ msg_id: z.string(), at: z.iso.datetime() });
+
+async function readExhausted(root: string, holder: string, view: AgentView): Promise<void> {
+	const mailbox = join(root, holder);
+	const path = join(mailbox, "tries.jsonl");
+	const contents = await readReachFile("read Reach tries", path, view, () => readFile(path, "utf8"));
+	if (!contents) return;
+	const tries = new Map<string, { count: number; since: string }>();
+	for (const line of contents.split("\n").filter(Boolean)) {
+		try {
+			const entry = trySchema.parse(JSON.parse(line));
+			const previous = tries.get(entry.msg_id);
+			tries.set(entry.msg_id, { count: (previous?.count ?? 0) + 1, since: entry.at });
+		} catch (error) { view.errors.push(failure("parse Reach try", path, error, "some Reach tries unknown")); }
+	}
+	if (![...tries.values()].some(tryRecord => tryRecord.count >= 3)) return;
+	for await (const card of mailboxCards(mailbox, view)) {
+		const tryRecord = tries.get(card.id);
+		if (!tryRecord || tryRecord.count < 3) continue;
+		try {
+			await execute("sno", ["reach", "__needs-handling", "--as", holder, card.path], {
+				env: { ...process.env, SNO_REACH_ROOT: root }, timeout: 3000,
+			});
+			const taker = await readTaker(root, card.sender, card.id, view);
+			view.stuck.push({ card: card.path, holder: taker ?? holder, reason: "3 tries used", since: tryRecord.since, subject: card.subject, ...(taker ? { taker } : {}) });
+		} catch (error) {
+			if (record(error).code !== 1) view.errors.push(failure("check Reach handling", card.path, error, "card status unknown"));
+		}
+	}
+}
+
+function agoSeconds(now: number, date: string): number | "unknown" {
+	const then = Date.parse(date);
+	return Number.isFinite(then) ? Math.max(0, (now - then) / 1000) : "unknown";
+}
+
+async function readReachStatus(root: string, view: AgentView, now: number): Promise<void> {
+	const start = view.errors.length;
+	try {
+		const seats = (await readdir(root, { withFileTypes: true })).filter(entry => entry.isDirectory()).map(entry => entry.name);
+		await readSeats(root, seats, view.agents, view.errors);
+		const developer = `developer.human@${hostname()}`;
+		for await (const card of mailboxCards(join(root, developer), view)) {
+			if (["question", "decision", "approval"].includes(card.type)) {
+				view.openQuestions.push({ agent: card.sender, subject: card.subject, age: agoSeconds(now, card.date), source: "mail" });
+			}
+		}
+		await Promise.all(seats.map(seat => readExhausted(root, seat, view)));
+	} catch (error) {
+		view.errors.push(failure("read Reach inventory", root, error, "Reach status unavailable"));
+	}
+	view.reachUnavailable = view.errors[start]?.error;
+}
+
+async function readSeatStatus(root: string, view: AgentView, now: number): Promise<void> {
+	const seats = new Map<string, AgentRow[]>();
+	for (const row of view.agents) {
+		if (row.reachAddress === "unknown" || row.reachAddress.startsWith("developer.human@")) continue;
+		const rows = seats.get(row.reachAddress) ?? [];
+		rows.push(row);
+		seats.set(row.reachAddress, rows);
+	}
+	for (const [holder, rows] of seats) {
+		if (rows.some(row => row.process === "present" || row.process === "detached")) continue;
+		const latest = rows.map(row => row.lastEvent === "unknown" ? "" : row.lastEvent.at).sort().at(-1) || "unknown";
+		const age = agoSeconds(now, latest);
+		const registration = join(root, holder, "reachable.json");
+		const registered = await readReachFile("inspect Reach registration", registration, view, () => stat(registration));
+		const exited = !registered && rows.every(row => row.process === "exited");
+		if (!exited && age !== "unknown" && age <= 900) continue;
+		const subject = rows.find(row => row.lastEvent !== "unknown" && row.lastEvent.at === latest)?.description ?? "unknown";
+		view.stuck.push({ card: "unknown", holder, reason: exited ? "agent process exited" : "silent", since: latest, subject });
 	}
 }
 
@@ -398,24 +595,50 @@ async function reachWork(options: AgentViewOptions, errors: AgentOperationError[
 export async function readAgentView(options: AgentViewOptions = {}): Promise<AgentView> {
 	const now = options.now ?? Date.now();
 	const directory = join(options.profileDir ?? profileDir(), "station", "agents");
-	const view: AgentView = { observedAt: new Date(now).toISOString(), agents: [], work: [], quota: [], errors: [] };
+	const view: AgentView = { observedAt: new Date(now).toISOString(), agents: [], work: [], quota: [], errors: [], openQuestions: [], stuck: [] };
 	let files: string[] = [];
 	try { files = await readdir(directory); } catch (error) { if (!absent(error)) throw new Error(`read agent inventory ${directory}: ${String(error)}`); }
 	for (const name of files.filter(name => name.endsWith(".jsonl")).sort()) {
 		try {
-			// A file untouched for the 900-second freshness horizon can only add an expired, unknown row to a count.
-			if (options.recent && now - (await stat(join(directory, name))).mtimeMs > 900_000) continue;
-			const row = await readAgentFile(join(directory, name), now, view.errors);
-			if (row) view.agents.push(row);
+			const path = join(directory, name);
+			const row = await readAgentFile(path, now, view.errors);
+			if (row?.waitingForHuman === "yes") {
+				view.openQuestions.push({ agent: row.reachAddress === "unknown" ? rowWho(row) : row.reachAddress,
+					subject: row.waitingSubject ?? row.waitingReason, age: agoSeconds(now, row.waitingSince ?? ""),
+					source: "native", sessionId: row.sessionId, harness: row.harness });
+			}
+			if (row && (!options.recent || row.waitingForHuman === "yes" || row.reachAddress !== "unknown" ||
+				now - (await stat(path)).mtimeMs <= 900_000)) view.agents.push(row);
 		} catch (error) { view.errors.push(failure("read agent events", join(directory, name), error, "agent observations unknown")); }
 	}
-	const root = options.reachRoot ?? process.env.SNO_REACH_ROOT ?? join(homedir(), ".local/state/sno-reach");
-	await readSeats(root, view.agents, view.errors);
+	const root = options.reachRoot ?? reachRoot();
+	await readReachStatus(root, view, now);
+	await readSeatStatus(root, view, now);
 	// Projecting Reach work rescans every mailbox per work item; a redraw shows only counts and skips it.
 	view.work = options.recent ? [] : await reachWork({ ...options, reachRoot: root }, view.errors);
 	for (const item of view.work.filter(item => item.handoff_error)) {
 		view.errors.push(failure("associate Reach handoff", text(item.message_id), item.handoff_error, "work ownership unknown"));
 	}
+	const confirmation = new Map<string, string>();
+	if (view.work.length) {
+		const logPath = join(root, "reach.log");
+		const log = await readReachFile("read Reach confirmations", logPath, view, () => readFile(logPath, "utf8"));
+		for (const match of (log ?? "").matchAll(/^reach: confirm taker (<[^>]+>): (waiting for confirmation: .+)$/gm)) {
+			const [, id, reason] = match;
+			if (id && reason) confirmation.set(id, reason);
+		}
+	}
+	for (const item of view.work) {
+		const id = text(item.message_id);
+		const taker = await readTaker(root, text(item.sender), id, view);
+		if (taker) item.taker = taker;
+		const reason = confirmation.get(id);
+		if (reason && !taker && ["queued", "seen", "unknown"].includes(text(item.state))) {
+			view.stuck.push({ card: text(item.path) || id, holder: text(item.owner) || "unknown", reason,
+				since: text(item.since) || "unknown", subject: text(item.subject) || "unknown" });
+		}
+	}
+	view.reachUnavailable ??= view.errors.find(error => error.operation.startsWith("read Reach"))?.error;
 	const releases = view.agents.flatMap(row => row.work);
 	for (const release of releases) {
 		const item = view.work.find(item => item.message_id === release.message_id && item.work === release.work &&
@@ -514,6 +737,15 @@ function ago(seconds: number | "unknown"): string {
 	return value < 86_400 ? `${Math.floor(value / 3600)}h` : `${Math.floor(value / 86_400)}d`;
 }
 
+export function questionAndStuckLines(view: AgentView): string[] {
+	return [
+		`Open questions (${view.openQuestions.length})`,
+		...view.openQuestions.map(question => `  ${question.agent} · ${question.subject} · ${ago(question.age)}`),
+		`Stuck (${view.stuck.length})`,
+		...view.stuck.map(item => `  ${item.holder} · ${item.subject} · ${item.reason} · since ${item.since}${item.taker ? ` · taken by ${item.taker}` : ""}`),
+	];
+}
+
 function rowWho(row: AgentRow): string {
 	const project = row.cwd === "unknown" ? "" : row.cwd.slice(row.cwd.lastIndexOf("/") + 1);
 	return `${row.harness} ${project || (row.reachAddress === "unknown" ? row.sessionId.slice(0, 8) : row.reachAddress)}`;
@@ -542,7 +774,10 @@ export function renderAgentScreen(view: AgentView, selected: number, size: { col
 	const count = (group: AgentRow["group"]): number => view.agents.filter(row => row.group === group).length;
 	const header = [`Sno Station · squad · ${new Date(view.observedAt).toTimeString().slice(0, 5)}`, `${count("Needs you")} need you`,
 		`${count("Working")} working`, `${count("Finished")} finished`, ...(view.errors.length ? [`${view.errors.length} errors (sno --json squad)`] : [])];
-	const pinned: { text: string; index: number }[] = [];
+	const pinned = [
+		...(view.reachUnavailable ? [`Reach unavailable: ${view.reachUnavailable}`] : []),
+		...questionAndStuckLines(view),
+	].map(text => ({ text, index: -2 }));
 	const rest: { text: string; index: number }[] = [];
 	for (const [group, label] of [["Needs you", "Needs you"], ["Working", "Working"], ["Finished", "Finished"], ["unknown", "Unknown"]] as const) {
 		const members = view.agents.flatMap((row, index) => (row.group === group ? [index] : []));
@@ -563,7 +798,8 @@ export function renderAgentScreen(view: AgentView, selected: number, size: { col
 		const last = row.lastEvent === "unknown" ? "no event" : `last ${row.lastEvent.event} ${ago(row.ageSeconds)} ago`;
 		details = [`Task: ${row.description}`,
 			`${row.cwd} · Reach ${row.reachAddress} · process ${row.process} · ${row.resumable} · session ${row.sessionId}`,
-			[`Work: ${row.work.length} card(s)${handing}`, last, ...row.missingReasons].join(" · ")];
+			[`Work: ${row.work.length} card(s)${handing}`, last, ...row.missingReasons].join(" · "),
+			...row.work.filter(item => item.taker).map(item => `${text(item.subject)} · taken by ${text(item.taker)}`)];
 	} else details = ["", "", ""];
 	// Title, separator, detail lines and the key line leave the rest of the screen to the list. "Needs you" stays on top
 	// while it leaves room; the remaining lines scroll to keep the selected row in view.
@@ -583,12 +819,16 @@ export function renderAgentScreen(view: AgentView, selected: number, size: { col
 export function compactAgentView(view: AgentView, current: AgentIdentity = {}): string {
 	const rows = view.agents.filter(row => !((current.harness === row.harness && current.sessionId === row.sessionId) ||
 		(current.reachAddress && current.reachAddress === row.reachAddress)));
-	const waits = rows.filter(row => row.waitingForHuman === "yes");
+	const waits = view.openQuestions.filter(question => question.source === "mail" ||
+		!(current.harness === question.harness && current.sessionId === question.sessionId) &&
+		!(current.reachAddress && current.reachAddress === question.agent));
 	const working = rows.filter(row => row.group === "Working").length;
 	const unknown = rows.filter(row => row.waitingForHuman === "unknown" || row.group === "unknown").length + view.errors.length;
-	const reason = waits[0];
-	const description = reason ? `${waits.length} need you · ${reason.harness}: ${reason.waitingReason === "permission to approve" ? "approve" : reason.waitingReason}` : `${working} working`;
-	return `❄ ${description}${unknown ? ` · ${unknown} unknown` : ""}`;
+	const first = waits[0];
+	const row = first?.source === "native" ? rows.find(item => item.sessionId === first.sessionId && item.harness === first.harness) : undefined;
+	const subject = row?.waitingReason === "permission to approve" ? "approve" : first?.subject;
+	const description = first ? `${waits.length} need you · ${first.harness ?? first.agent}: ${subject}` : `${working} working`;
+	return `❄ ${description} · ${view.stuck.length} stuck${unknown ? ` · ${unknown} unknown` : ""}${view.reachUnavailable ? ` · Reach unavailable: ${view.reachUnavailable}` : ""}`;
 }
 
 export async function markAgentResultSeen(row: AgentRow, profile: string = profileDir()): Promise<void> {

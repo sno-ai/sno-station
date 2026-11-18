@@ -1,6 +1,7 @@
+import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { appendFile, mkdir, mkdtemp, readFile, readdir, rm, utimes, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { hostname, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { agentProcessIdentity, compactAgentView, markAgentResultSeen, observeAgentEvent, readAgentView,
@@ -8,17 +9,22 @@ import { agentProcessIdentity, compactAgentView, markAgentResultSeen, observeAge
 
 let home: string;
 let previous: string | undefined;
+let previousReach: string | undefined;
 const now = Date.now();
 const helper = resolve("apps/reach/lib/reach-agent-view");
 beforeEach(async () => {
 	home = await mkdtemp(join(tmpdir(), "sno-agent-view-"));
 	previous = process.env.SNO_PROFILE_DIR;
+	previousReach = process.env.SNO_REACH_ROOT;
+	process.env.SNO_REACH_ROOT = join(home, "reach");
 	process.env.SNO_PROFILE_DIR = home;
 	await mkdir(join(home, "reach"));
 });
 afterEach(async () => {
 	if (previous === undefined) delete process.env.SNO_PROFILE_DIR;
 	else process.env.SNO_PROFILE_DIR = previous;
+	if (previousReach === undefined) delete process.env.SNO_REACH_ROOT;
+	else process.env.SNO_REACH_ROOT = previousReach;
 	await rm(home, { recursive: true, force: true });
 });
 async function events(harness: AgentHarness, sessionId: string, entries: { event: string; input?: Record<string, unknown>; at?: string; identity?: { pid: number; processStart: string } }[]) {
@@ -63,11 +69,11 @@ describe("agent state view read-time semantics", () => {
 		expect(result.agents.find(row => row.sessionId === "async")).toMatchObject({ group: "Needs you", waitingReason: "asked a question" });
 		expect(result.agents.find(row => row.sessionId === "denied")).toMatchObject({ doing: "idle at prompt", waitingForHuman: "unknown", group: "unknown", delivery: "unknown" });
 	});
-	it("expires current working/wait observations while keeping actual age, reason and completion", async () => {
+	it("expires working observations while keeping old waits and completion", async () => {
 		await events("claude", "old", [{ event: "user-prompt-submit" }, { event: "permission-request" }]);
 		await events("claude", "finished", [{ event: "stop", input: { last_assistant_message: "Done." } }]);
 		const result = await view(now + 901_000);
-		expect(result.agents.find(row => row.sessionId === "old")).toMatchObject({ doing: "unknown", waitingForHuman: "unknown", waitingReason: "permission to approve", ageSeconds: 901, group: "unknown" });
+		expect(result.agents.find(row => row.sessionId === "old")).toMatchObject({ doing: "unknown", waitingForHuman: "yes", waitingReason: "permission to approve", ageSeconds: 901, group: "Needs you" });
 		expect(result.agents.find(row => row.sessionId === "finished")?.group).toBe("Finished");
 	});
 	it("does not mistake PID reuse for presence, and reads a real-format saved session", async () => {
@@ -91,6 +97,55 @@ describe("agent state view read-time semantics", () => {
 		const full = await readAgentView({ profileDir: home, reachRoot: join(home, "reach"), now, reachProgram: "/nonexistent/reach-agent-view" });
 		expect(full.agents.map(row => row.sessionId).sort()).toEqual(["fresh", "stale"]);
 		expect(full.errors.some(error => error.operation === "read Reach work")).toBe(true);
+	});
+	it("keeps native and mailed questions visible until answered or dismissed, including on status redraw", async () => {
+		const old = new Date(now - 1200_000);
+		const path = await events("codex", "waiting", [{ event: "stop", at: old.toISOString(), input: { last_assistant_message: "Which project?" } }]);
+		await utimes(path, old, old);
+		const root = join(home, "reach");
+		const mailbox = join(root, `developer.human@${hostname()}`);
+		await mkdir(join(mailbox, "new"), { recursive: true });
+		await mkdir(join(mailbox, "cur"));
+		const mail = "Subject: Choose a destination\nFrom: Agent <agent.one@local>\nX-Type: decision\nDate: " + old.toUTCString() + "\n\nPlease decide.\n";
+		await writeFile(join(mailbox, "new/question"), mail);
+		const options = { profileDir: home, reachRoot: root, now, recent: true };
+		const result = await readAgentView(options);
+		expect(result.openQuestions).toMatchObject([
+			{ subject: "Which project?", age: 1200, source: "native" },
+			{ subject: "Choose a destination", agent: "agent.one@local", source: "mail" },
+		]);
+		expect(compactAgentView(result)).toContain("2 need you");
+		await appendFile(path, JSON.stringify({ harness: "codex", sessionId: "waiting", at: new Date(now).toISOString(), event: "user-prompt-submit", input: { prompt: "Use Sno Station" } }) + "\n");
+		await rm(join(mailbox, "new/question"));
+		await writeFile(join(mailbox, "cur/question:2,ST"), mail);
+		expect((await readAgentView(options)).openQuestions).toEqual([]);
+	});
+
+	it("lists an exhausted card with its subject and the recorded taker", async () => {
+		const root = join(home, "reach");
+		const holder = `coder.one@${hostname()}`;
+		const sender = `sender.one@${hostname()}`;
+		const id = "<shared@local>";
+		const mail = join(root, holder, "new/card");
+		const time = "2026-11-18T12:00:00Z";
+		await mkdir(join(root, holder, "new"), { recursive: true });
+		await mkdir(join(root, sender, "takers"), { recursive: true });
+		await writeFile(join(root, ".reach-2.5-since"), "2026-11-17T00:00:00Z\n");
+		await writeFile(join(root, sender, "takers", createHash("sha256").update(id).digest("hex")), holder + "\n");
+		await writeFile(mail, `From: Sender <${sender}>\nTo: <${holder}>, <coder.two@${hostname()}>\nDelivered-To: ${holder}\nSubject: Ship the update\nX-Type: decision\nMessage-ID: ${id}\n\nShip it.\n`);
+		await writeFile(join(root, holder, "tries.jsonl"), [
+			{ msg_id: id, at: "2026-11-18T11:50:00Z", kind: "ring" },
+			{ msg_id: id, at: "2026-11-18T11:55:00Z", kind: "pickup" },
+			{ msg_id: id, at: time, kind: "ring" },
+		].map(item => JSON.stringify(item)).join("\n") + "\n");
+		await writeFile(join(home, "sno"), `#!/bin/sh\nshift\nexec "${resolve("apps/reach/lib/reach-main")}" "$@"\n`, { mode: 0o700 });
+		const originalPath = process.env.PATH;
+		process.env.PATH = `${home}:${originalPath}`;
+		try {
+			const result = await readAgentView({ profileDir: home, reachRoot: root, now, recent: true });
+			expect(result.stuck).toEqual([{ card: mail, holder, reason: "3 tries used", since: time, subject: "Ship the update", taker: holder }]);
+			expect(compactAgentView(result)).toContain("1 stuck");
+		} finally { process.env.PATH = originalPath; }
 	});
 	it("marks only the opened completion seen; passive reads and new completions stay unseen", async () => {
 		const path = await events("claude", "result", [{ event: "stop", input: { last_assistant_message: "First." } }]);
@@ -167,8 +222,8 @@ describe("agent state view read-time semantics", () => {
 		await events("claude", "permission", [{ event: "permission-request", input: { tool_name: "Bash", tool_use_id: "waiting" } },
 			{ event: "post-tool-use", input: { tool_name: "Read", tool_use_id: "unrelated" }, at: new Date(now + 1000_000).toISOString() }]);
 		const result = await view(now + 1000_000);
-		expect(result.agents[0]).toMatchObject({ waitingForHuman: "unknown", waitingReason: "permission to approve" });
-		expect(result.agents[0]?.missingReasons).toContain("human-wait observation older than 900 seconds");
+		expect(result.agents[0]).toMatchObject({ waitingForHuman: "yes", waitingReason: "permission to approve" });
+		expect(result.openQuestions).toMatchObject([{ age: 1000, source: "native" }]);
 	});
 	it("keeps an entirely corrupt known agent visible with unknown observations", async () => {
 		await mkdir(join(home, "station/agents"), { recursive: true });

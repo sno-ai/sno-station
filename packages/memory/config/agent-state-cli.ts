@@ -2,7 +2,7 @@
 import { execFile } from "node:child_process";
 import { emitKeypressEvents } from "node:readline";
 import { promisify } from "node:util";
-import { compactAgentView, markAgentResultSeen, readAgentView, recordAgentHandoff, renderAgentScreen, screenAgents, type AgentView } from "./agent-state";
+import { compactAgentView, markAgentResultSeen, questionAndStuckLines, readAgentView, recordAgentHandoff, renderAgentScreen, screenAgents, type AgentView } from "./agent-state";
 
 const execute = promisify(execFile);
 
@@ -12,7 +12,8 @@ function option(args: string[], name: string): string | undefined {
 }
 
 function renderAgentSnapshot(view: AgentView): string {
-	const lines = [`Sno Station · squad · ${view.observedAt}`, ""];
+	const lines = [`Sno Station · squad · ${view.observedAt}`, "",
+		...(view.reachUnavailable ? [`Reach unavailable: ${view.reachUnavailable}`] : []), ...questionAndStuckLines(view), ""];
 	for (const group of ["Needs you", "Working", "Finished", "unknown"]) {
 		lines.push(group === "unknown" ? "Unknown observations" : group);
 		for (const row of view.agents.filter(row => row.group === group)) {
