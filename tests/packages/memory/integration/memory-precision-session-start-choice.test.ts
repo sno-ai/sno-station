@@ -95,6 +95,26 @@ describe("nightly session-start choice", () => {
 			.toEqual(["shared-first", "shared-second", "unlabelled-important", "unlabelled-newer", "unlabelled"]);
 	});
 
+	it("delivers unclassified owner memories newest first before eligible classified rows", () => {
+		plant("unlabelled", {}, "work-project");
+		plant("ranked", { start_label: "core", start_rank: 1 }, "work-project");
+		plant("project-older", { precision_kind: undefined }, "work-project");
+		plant("project-newer", { precision_kind: undefined }, "work-project");
+		plant("shared", { precision_kind: undefined });
+		plant("assistant", { precision_kind: undefined, asserted_by: "assistant" });
+		plant("dropped", { precision_kind: undefined, start_label: "drop", start_rank: 1 });
+		plant("other-project", { precision_kind: undefined }, "other-project");
+		plant("decision", { start_label: "core", start_rank: 1 }, "work-project", "decision");
+
+		const updateOrder = fixture.runtime.db.prepare("UPDATE nodix_memories SET importance = ?, timestamp = ? WHERE id = ?");
+		updateOrder.run(0.9, 2000, "project-older");
+		updateOrder.run(0.7, 4000, "project-newer");
+		updateOrder.run(0.8, 3000, "shared");
+
+		expect(selectSessionStartRows(store, "work-project").map(row => row.id))
+			.toEqual(["project-newer", "shared", "project-older", "ranked", "unlabelled"]);
+	});
+
 	it("puts the short-list instruction immediately before the JSON instruction in both pick prompts", async () => {
 		plant("shared", { start_label: "core" });
 		plant("project", { start_label: "core" }, "work-project");
