@@ -42,6 +42,9 @@ what should be different, and how to tell it works. Code is optional.
    npm run test:integration --workspace <package-you-changed> --if-present
    ```
 
+   For a change under `apps/heartbeat`, `apps/report-time` or `apps/subscription-quota-check`, run
+   `make -C apps/<program> test`.
+
 4. Sign off every commit (DCO). We do not use a CLA.
 
    ```bash
