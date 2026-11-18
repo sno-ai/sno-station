@@ -28,7 +28,7 @@ This repository has been public since 2026-09-18. Blocks in the README carry a "
   `sno heartbeat`, `sno report-time`, `sno subscription-quota-check` (programs run through `sno`)
 - evals/ — one README + one formal result per benchmark (LoCoMo, Memora, R@5, Sno Memory Bench);
   no datasets, no raw runs
-- docs/ — setup guides for the four memory integrations, images, evidence, translations, security page
+- docs/ — setup guides for the five memory integrations, images, evidence, translations, security page
 - tests/apps/ — public-contract tests only
 
 ## Contributing
