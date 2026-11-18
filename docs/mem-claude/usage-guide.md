@@ -130,9 +130,7 @@ wipe-db`).
 
 ### Hooks
 
-The install command registers ten Claude Code hooks. The memory hooks are scoped to the git repository
-that contains the session's working directory; outside a repository, and in subagents, they
-inject and capture nothing.
+The install command registers ten Claude Code hooks.
 
 | Hook | Timeout | What it does |
 | --- | --- | --- |
