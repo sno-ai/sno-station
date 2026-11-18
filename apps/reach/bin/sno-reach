@@ -16,6 +16,10 @@ release="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/.." && p
 [[ "${1-}" != cursor-hook ]] || exec "$release/lib/reach-cursor-hook" "${@:2}"
 # An interactive terminal lives until its command exits, rather than one mail operation.
 [[ "${1-}" != terminal ]] || exec python3 "$release/lib/reach-terminal" run "${@:2}"
+case "${1-}" in
+    pickup|whoami|notify|__since|__needs-handling|__try)
+        exec "$release/lib/reach-main" "$@" ;;
+esac
 invocation=''
 finish() {
     local status=$?

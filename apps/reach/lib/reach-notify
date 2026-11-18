@@ -1,0 +1,265 @@
+#!/usr/bin/env bash
+# Sourced by reach-main after the mailbox and transport functions are defined.
+set -Eeuo pipefail
+
+# Also embedded in the fixed POSIX receiver.
+ensure_notice_seat() (
+    seat_dir=$1/$2
+    [ ! -f "$seat_dir/seat.json" ] || exit 0
+    mkdir -p -- "$seat_dir/new" "$seat_dir/cur" "$seat_dir/tmp" || exit 74
+    if [ "${REPO_ROOT+x}" = x ]; then machine=$("$REPO_ROOT/lib/reach-machine-id") || exit 74
+    else machine=$(reach_machine_id) || exit 74; fi
+    stage=$(mktemp "$seat_dir/tmp/seat.XXXXXXXXXX") || exit 74
+    trap 'rm -f -- "$stage"' EXIT
+    jq -n --arg addr "$2" --arg machine "$machine" --arg name "$3" \
+        --arg at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '
+        ($addr | split("@")) as [$namepart,$host] | ($namepart | split(".")) as [$role,$seat] |
+        {address:$addr, role:$role, seat:$seat, host:$host, machine_id:$machine, name:$name,
+         runtime:"unbound", owns:[], supervisor:$addr, updated:$at, history:[]}
+    ' >"$stage" || exit 74
+    ln -- "$stage" "$seat_dir/seat.json" 2>/dev/null || [ -f "$seat_dir/seat.json" ]
+)
+
+typed_time() (
+    events=$(perl -e '
+        my $dir = shift;
+        opendir my $list, $dir or do { exit 0 if $!{ENOENT}; die "list $dir: $!\n"; };
+        my @files;
+        for (grep /\.jsonl$/, readdir $list) {
+            my $path = "$dir/$_";
+            my @st = stat $path;
+            next unless @st && -f _;
+            push @files, [$st[9], $path];
+        }
+        @files = sort { $b->[0] <=> $a->[0] || $a->[1] cmp $b->[1] } @files;
+        splice @files, 8 if @files > 8;
+        for (@files) {
+            open my $events, "<", $_->[1] or die "read $_->[1]: $!\n";
+            print while <$events>;
+        }
+    ' "${SNO_PROFILE_DIR:-$HOME/.sno}/station/agents") || return 74
+    printf '%s\n' "$events" | jq -Rrs '
+        split("\n") | map(select(. != "") | fromjson |
+            select(.event == "user-prompt-submit") | .at |
+            select(type == "string" and test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{3})?Z$")) |
+            sub("(?<![.][0-9]{3})Z$"; ".000Z")) | max // empty'
+)
+
+detach_placement() {
+    local root="$1"
+    shift
+    # setsid runs before fork, so a successful launcher return confirms the
+    # worker is already outside the wrapper's process group.
+    perl -MPOSIX -e '
+        my $log = shift;
+        POSIX::setsid() >= 0 or die "setsid: $!\n";
+        my $pid = fork();
+        defined $pid or die "fork: $!\n";
+        exit 0 if $pid;
+        open STDERR, ">>", $log or open STDERR, ">", "/dev/null";
+        exec @ARGV or die "exec $ARGV[0]: $!\n";
+    ' "$root/reach.log" timeout --foreground --kill-after=1 165 "$REPO_ROOT/lib/reach-main" "$@" </dev/null >/dev/null
+}
+
+schedule_placement() {
+    local root="$1" sender="$2" message="$3" ring="$4" job
+    [[ -s "$TEMP_DIR/delivered-paths" ]] || return 0
+    if ! grep -q '^developer\.human@' "$TEMP_DIR/delivered-paths"; then
+        [[ "$ring" == yes && "$(progress_header "$message" x-no-reply)" != true ]] || return 0
+        local automatic
+        automatic="$(progress_header "$message" auto-submitted)"
+        [[ -z "$automatic" || "$automatic" == no ]] || return 0
+        [[ -n "$(maddr -a -h to: "$message")" ]] || return 0
+    fi
+    if job="$(mktemp -d "${TMPDIR:-/tmp}/reach-placement.XXXXXXXXXX")" &&
+       cp -- "$message" "$job/message" &&
+       cp -- "$TEMP_DIR/delivered-paths" "$job/placed" &&
+       detach_placement "$root" __after-placement "$job" "$sender" "$ring"; then
+        if [[ "$ring" == yes && -z "${notify_command:-}" ]]; then printf 'wake running in background\n'; fi
+    else
+        reach_failure "$root" 'start background wake' "$sender" 'could not stage or detach worker; cards remain delivered'
+        [[ -z "$job" ]] || rm -rf -- "$job"
+    fi
+}
+
+after_placement() {
+    TEMP_DIR="$1"
+    local root sender="$2" ring="$3" recipient rest
+    root="$(mailbox_root)"
+    # Process the developer notice before an unrelated slow terminal adapter.
+    while IFS=$'\t' read -r recipient rest; do
+        [[ "${recipient%@*}" == developer.human && "${recipient##*@}" == "${sender##*@}" ]] || continue
+        route_notice "$root" "$recipient" "$TEMP_DIR/message" ||
+            reach_failure "$root" 'route notice' "$recipient" "failed (exit $?)"
+    done <"$TEMP_DIR/placed"
+    if [[ "$ring" == yes ]]; then ring_delivered "$root" "$sender" "$TEMP_DIR/message" "$TEMP_DIR/placed"; fi
+}
+
+schedule_notice() {
+    local recipient="$1" source="$2" root job
+    root="$(mailbox_root)"
+    if job="$(mktemp -d "${TMPDIR:-/tmp}/reach-placement.XXXXXXXXXX")" &&
+       cp -- "$source" "$job/message" &&
+       printf '%s\t%s\t-\n' "$recipient" "$source" >"$job/placed" &&
+       detach_placement "$root" __after-placement "$job" "$recipient" no; then
+        return 0
+    fi
+    reach_failure "$root" 'start background notice' "$recipient" 'could not stage or detach worker; card remains delivered'
+    [[ -z "$job" ]] || rm -rf -- "$job"
+    return 74
+}
+
+show_notice() {
+    local root="$1" id="$2" card="$3" claim="$4" reason="${5:-}" subject body tool_status
+    if [[ -z "$reason" ]]; then
+        subject="$(mhdr -h subject "$card")"
+        body="$(sed '1,/^\r\?$/d' "$card")"
+        if [[ "$(uname -s)" == Darwin ]]; then
+            tool_status=0
+            timeout --foreground 5 osascript -e 'on run argv
+                display notification (item 2 of argv) with title (item 1 of argv)
+            end run' "$subject" "$body" || tool_status=$?
+            if ((tool_status != 0)); then reason="osascript failed (exit $tool_status)"; fi
+        elif command -v notify-send >/dev/null 2>&1; then
+            tool_status=0
+            timeout --foreground 5 notify-send -- "$subject" "$body" || tool_status=$?
+            if ((tool_status != 0)); then reason="notify-send failed (exit $tool_status)"; fi
+        else
+            reason='notify-send unavailable'
+        fi
+    fi
+    if [[ -n "$reason" ]]; then
+        printf 'not-shown: %s\n' "$reason" >"$claim/outcome" || return 74
+        reach_failure "$root" 'show notice' "$id" "$reason"
+    else
+        printf 'shown\n' >"$claim/outcome" || return 74
+    fi
+}
+
+route_notice() {
+    local root="$1" recipient="$2" card="$3" id claim latest best peer host response when forwarded sender
+    [[ "$(mhdr -h x-type "$card")" != routine ]] || return 0
+    id="$(mhdr -h message-id "$card")"
+    claim="$root/$recipient/shown/$(message_hash "$id")"
+    mkdir -p -- "${claim%/*}" || return 74
+    if ! mkdir -- "$claim" 2>/dev/null; then [[ -d "$claim" ]]; return; fi
+    if [[ "$(progress_header "$card" x-reach-notice)" == forwarded ]]; then
+        show_notice "$root" "$id" "$card" "$claim"
+        return
+    fi
+    sender="$(maddr -a -h from: "$card")"
+    latest="$(typed_time)" || { show_notice "$root" "$id" "$card" "$claim" 'cannot read local typed time'; return; }
+    best="$recipient"
+    local -a peers=() pids=()
+    for peer in "$root"/network/peers/*.json; do
+        [[ -f "$peer" ]] || continue
+        host="${peer##*/}"; host="${host%.json}"
+        peers+=("developer.human@$host")
+        # Query peers together, so every linked machine has the same five-second window.
+        (
+            TEMP_DIR="$(mktemp -d "$TEMP_DIR/typed.XXXXXXXXXX")" || exit 74
+            trap cleanup EXIT
+            local wire="$TEMP_DIR/wire"
+            printf 'SNO-REACH-REMOTE/1\nTYPED\n' >"$wire"
+            append_text_frame "$wire" root "$root"
+            append_text_frame "$wire" address "developer.human@$host"
+            append_text_frame "$wire" sender "$sender"
+            execute_fixed_request "$wire" "developer.human@$host" '^TYPED (none|[0-9TZ:.-]+)$' 5
+        ) >"$TEMP_DIR/typed-$host" &
+        pids+=("$!")
+    done
+    local index reason=''
+    for index in "${!peers[@]}"; do
+        peer="${peers[$index]}"
+        if ! wait "${pids[$index]}"; then
+            reason="linked peer did not answer: ${peer##*@}"
+            continue
+        fi
+        response="$(<"$TEMP_DIR/typed-${peer##*@}")"
+        when="${response#TYPED }"
+        [[ "$when" != none && "$when" > "$latest" ]] || continue
+        latest="$when"
+        best="$peer"
+    done
+    if [[ -n "$reason" ]]; then show_notice "$root" "$id" "$card" "$claim" "$reason"
+    elif [[ -z "$latest" ]]; then show_notice "$root" "$id" "$card" "$claim" 'no typed prompt recorded'
+    elif [[ "$best" == "$recipient" ]]; then show_notice "$root" "$id" "$card" "$claim"
+    else
+        forwarded="$TEMP_DIR/forwarded"
+        # The developer copy has exactly one destination. Preserve its ID and body.
+        NOTICE_TO="$best" awk '
+            BEGIN {headers=1}
+            headers && /^\r?$/ {print "To: Developer <" ENVIRON["NOTICE_TO"] ">"; print "Delivered-To: " ENVIRON["NOTICE_TO"]; print "X-Reach-Notice: forwarded"; headers=0}
+            headers && tolower($0) ~ /^(to|cc|bcc|delivered-to|x-reach-notice):/ {skip=1; next}
+            headers && /^[ \t]/ {if (!skip) print; next}
+            {skip=0; print}
+        ' "$card" >"$forwarded" || return 74
+        if ! deliver_remote_copy "$root" "$best" "notice-$(message_hash "$id")" "$forwarded"; then
+            show_notice "$root" "$id" "$card" "$claim" "forward to $best failed"
+        else
+            printf 'not-shown: forwarded to %s\n' "$best" >"$claim/outcome" || return 74
+        fi
+    fi
+}
+
+run_notify() {
+    local root recipient sender='' type='' subject='' session='' body='' body_file='' dismiss='' token card rc=0
+    local notify_command=yes
+    root="$(mailbox_root)"
+    recipient="developer.human@$(hostname)"
+    if [[ "${1:-}" == --dismiss-session ]]; then
+        [[ $# == 2 && -n "$2" ]] || die 64 'usage: notify --dismiss-session <id>'
+        dismiss="$2"
+        for card in "$root/$recipient"/new/* "$root/$recipient"/cur/*; do
+            [[ -f "$card" && "${card##*:2,}" != *T ]] || continue
+            [[ "$(progress_header "$card" x-type)" == approval && "$(progress_header "$card" x-session)" == "$dismiss" ]] || continue
+            ("$REPO_ROOT/lib/reach-main" dismiss --as "$recipient" --card "$card" --reason 'approval answered') || rc=$?
+        done
+        return "$rc"
+    fi
+    while (($#)); do
+        if [[ "$1" == --help ]]; then
+            printf '%s\n' 'usage: notify [--as <sender>] --type question|decision|result|routine|approval|failure --subject <text> [--session <id>] [--body-file <path>|--body <text>]'
+            return 0
+        fi
+        (($# >= 2)) || die 64 "notify: missing value for $1"
+        case "$1" in
+            --as) sender="$2" ;;
+            --type) type="$2" ;;
+            --subject) subject="$2" ;;
+            --session) session="$2" ;;
+            --body) body="$2" ;;
+            --body-file) body_file="$2" ;;
+            *) die 64 "unknown notify option: $1" ;;
+        esac
+        shift 2
+    done
+    case "$type" in
+        question|decision|result|routine|approval|failure) ;;
+        *) die 64 "unknown notify type: $type" ;;
+    esac
+    [[ "$subject" =~ [^[:space:]] && "$subject" != *$'\n'* && "$subject" != *$'\r'* ]] ||
+        die 64 'notify subject must be nonblank and on one line'
+    [[ -z "$session" || "$session" =~ $TOKEN_RE ]] || die 64 'notify session must be one token'
+    [[ -z "$body" || -z "$body_file" ]] || die 64 'notify accepts only one body option'
+    if [[ -n "$body_file" ]]; then body="$(cat -- "$body_file")" || die 74 "read notice body $body_file: failed"; fi
+    if [[ -z "$sender" ]]; then
+        sender="station.notices@${recipient##*@}"
+        ensure_notice_seat "$root" "$sender" Station || die 74 "create notice sender $sender: initialization failed"
+    fi
+    validate_address "$sender"
+    token="$(date +%s%N)-$$-$RANDOM"
+    # Build the input in the same shell, so placement failures reach the caller.
+    run_send --as "$sender" --no-ring < <(
+        printf 'From: Reach <%s>\nTo: Developer <%s>\nDate: %s\nSubject: [%s] %s\nMessage-ID: <notice-%s@%s>\nX-Work: notice-%s\nX-Type: %s\n' \
+            "$sender" "$recipient" "$(date -R)" "${type^^}" "$subject" "$token" "${sender##*@}" "$token" "$type"
+        [[ -z "$session" ]] || printf 'X-Session: %s\n' "$session"
+        printf '\n%s\n' "${body:-$subject}"
+        if [[ "$type" == question || "$type" == decision ]]; then
+            local terminal
+            terminal="$(jq -r '.handle // empty' "$root/$sender/reachable.json" 2>/dev/null)" || terminal=''
+            printf '\nReply to %s in its terminal%s. The asking agent then dismisses this exact card from %s.\n' \
+                "$sender" "${terminal:+ ($terminal)}" "$recipient"
+        fi
+    )
+}

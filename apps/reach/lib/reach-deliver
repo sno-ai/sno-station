@@ -136,8 +136,21 @@ for index in "${!RECIPIENTS[@]}"; do
     if ! ln -- "$staged_file" "$destination"; then
         die 74 "hard-link delivery failed for recipient: $recipient"
     fi
+    if [[ "${REACH_RENDER_COPIES:-}" == 1 ]]; then
+        printf '%s\t%s\n' "$recipient" "$destination"
+    fi
     rm -- "$staged_file" ||
         die 74 "delivered but could not remove staging file for recipient: $recipient"
     rm -- "$stripped_file" ||
         die 74 "delivered but could not remove header staging file for recipient: $recipient"
 done
+
+# Terminal-backed calls deliver directly, outside reach-main's outbox path.
+if [[ "${REACH_RENDER_COPIES:-}" != 1 && "$(mhdr -h x-type "$input_file")" == call ]]; then
+    sender="$(maddr -a -h from: "$input_file")"
+    if ! "$SCRIPT_DIR/reach-main" __record-call "$sender" "$input_file" "${RECIPIENTS[0]}"; then
+        detail="reach: append sent record for call $sender: write failed"
+        printf '%s\n' "$detail" >&2
+        printf '%s\n' "$detail" >>"$REACH_ROOT/reach.log" || true
+    fi
+fi

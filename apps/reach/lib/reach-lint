@@ -306,6 +306,10 @@ case "$type" in
     done) tag='[DONE]' ;;
     cancel) tag='[CANCEL]' ;;
     call) tag='[CALL]' ;;
+    result) tag='[RESULT]' ;;
+    routine) tag='[ROUTINE]' ;;
+    approval) tag='[APPROVAL]' ;;
+    failure) tag='[FAILURE]' ;;
     *) die 65 "unknown X-Type value: $type" ;;
 esac
 [[ "$subject" == "$tag" ||
@@ -318,7 +322,7 @@ journey="$(header_value X-Work)"
 [[ "$journey" =~ ^[^[:space:][:cntrl:]]+$ ]] ||
     die 65 'X-Work must be one non-empty bare token'
 
-for name in X-Name X-No-Reply X-State Supersedes Expiry-Date Auto-Submitted In-Reply-To References; do
+for name in X-Name X-No-Reply X-State Supersedes Expiry-Date Auto-Submitted In-Reply-To References X-Session X-Reach-Notice X-Forwarded-From; do
     count="$(header_count "$name")"
     ((count <= 1)) || die 65 "header appears more than once: $name"
 done
@@ -380,7 +384,7 @@ fi
 
 while IFS= read -r extension; do
     case "$extension" in
-        x-work|x-type|x-name|x-no-reply|x-state|x-tag) ;;
+        x-work|x-type|x-name|x-no-reply|x-state|x-tag|x-session|x-reach-notice|x-forwarded-from) ;;
         *) die 65 "unsupported agent extension: $extension" ;;
     esac
 done < <(

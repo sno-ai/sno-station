@@ -106,7 +106,7 @@ die() {
 
 usage() {
     printf 'usage: sno reach <verb> [options]\n'
-    printf '%s\n' 'pair spawn terminal terminal-info network peer register unregister seats call watch ring send reply inbox wait dismiss log state flush init rebind doctor export lint remind'
+    printf '%s\n' 'pair spawn terminal terminal-info network peer register unregister seats call watch ring send reply inbox wait dismiss log state flush init rebind doctor export lint remind whoami pickup rewake notify sent'
     if (($#)); then exit "$1"; else exit 64; fi
 }
 
@@ -152,6 +152,7 @@ remote_program_literal() {
     printf 'reach_machine_id() {\n'
     cat "$REPO_ROOT/lib/reach-machine-id"
     printf '\n}\n'
+    declare -f take_winner typed_time ensure_notice_seat since_mark
     cat <<'SNO_REACH_REMOTE_PROGRAM'
 set -eu
 LC_ALL=C
@@ -211,7 +212,8 @@ read_frame() {
     minimum_count=$2
     maximum_count=$3
 
-    IFS= read -r frame_header || remote_error 64 PROTOCOL
+    if [ "$#" = 4 ]; then frame_header=$4
+    else IFS= read -r frame_header || remote_error 64 PROTOCOL; fi
     [ "${#frame_header}" -le 64 ] || remote_error 64 PROTOCOL
     case "$frame_header" in
         *"$carriage_return"*) remote_error 64 PROTOCOL ;;
@@ -472,7 +474,7 @@ IFS= read -r protocol_line || remote_error 64 PROTOCOL
 IFS= read -r operation || remote_error 64 PROTOCOL
 if [ "${SNO_REACH_AUTHORIZED_HOSTS+x}" = x ]; then
     case "$operation" in
-        DELIVER|RING|DOCTOR|PREFLIGHT) ;;
+        DELIVER|RING|DOCTOR|PREFLIGHT|TAKE|TYPED) ;;
         *) remote_error 65 OPERATION-NOT-AUTHORIZED ;;
     esac
 fi
@@ -498,6 +500,9 @@ case "$operation" in
                 remote_error 64 INVALID-BASENAME
                 ;;
         esac
+        if [ "${address_value%@*}" = developer.human ]; then
+            ensure_notice_seat "$root_value" "$address_value" Developer || remote_error 74 IO
+        fi
         safe_maildir "$target_path"
         card_path=$target_path/seat.json
         validate_card "$card_path" "$address_value"
@@ -518,6 +523,7 @@ case "$operation" in
             sender_value=$(maddr -a -h from: "$delivery_tmp") || remote_error 65 INVALID-SENDER
             authorize_sender "$sender_value"
         fi
+        since_mark "$root_value" >/dev/null || printf 'reach: create start mark %s: write failed\n' "$root_value" >&2
         no_reply_value=$(sed -n '
             /^[[:space:]]*$/q
             s/\r$//
@@ -547,6 +553,17 @@ case "$operation" in
             rm -f -- "$delivery_tmp" || remote_error 74 IO
             delivery_tmp=''
             printf 'PLACED\n'
+        fi
+        if [ "${address_value%@*}" = developer.human ]; then
+            PATH=${HOME-}/.local/bin:$PATH
+            receiver=${SNO_REACH_RECEIVER_PROGRAM:-}
+            if [ -n "$receiver" ]; then
+                SNO_REACH_ROOT=$root_value "$receiver" __notice-placed "$address_value" "$destination_path" >&2 || :
+            elif command -v "${SNO_EXECUTABLE:-sno}" >/dev/null 2>&1; then
+                SNO_REACH_ROOT=$root_value "${SNO_EXECUTABLE:-sno}" reach __notice-placed "$address_value" "$destination_path" >&2 || :
+            else
+                printf 'reach: notify %s: receiver command unavailable\n' "$address_value" >&2
+            fi
         fi
         ;;
     INIT)
@@ -626,6 +643,34 @@ case "$operation" in
         prepare_target "$root_value" "$address_value"
         rebind_card "$machine_value" "$reason_value" "$updated_value"
         ;;
+    TYPED)
+        read_frame root 1 4096
+        read_frame address 1 255
+        read_frame sender 1 255
+        require_eof
+        prepare_target "$(frame_text root)" "$(frame_text address)"
+        authorize_sender "$(frame_text sender)"
+        typed=$(typed_time) || remote_error 74 TYPED-READ
+        printf 'TYPED %s\n' "${typed:-none}"
+        ;;
+    TAKE)
+        read_frame root 1 4096
+        read_frame address 1 255
+        read_frame sender 1 255
+        read_frame message-id 3 998
+        require_eof
+        prepare_target "$(frame_text root)" "$(frame_text address)"
+        taker=$(frame_text sender)
+        valid_address "$taker" || remote_error 64 INVALID-ADDRESS
+        authorize_sender "$taker"
+        id=$(frame_text message-id)
+        printf '%s\n' "$id" | grep -Eq '^<[^<>[:space:]]+>$' || remote_error 64 INVALID-ARGUMENT
+        safe_maildir "$target_path"
+        validate_card "$target_path/seat.json" "$address_value"
+        read_live_machine
+        [ "$card_machine" = "$live_machine" ] || remote_error 65 MACHINE-MISMATCH
+        take_winner "$target_path" "$id" "$taker" || remote_error 74 TAKE-FAILED
+        ;;
     DOCTOR|PREFLIGHT)
         read_frame root 1 4096
         root_value=$(frame_text root)
@@ -633,6 +678,10 @@ case "$operation" in
         address_value=$(frame_text address)
         require_eof
         prepare_target "$root_value" "$address_value"
+        if [ "${address_value%@*}" = developer.human ]; then
+            printf 'DOCTOR-OK\n'
+            exit 0
+        fi
         safe_maildir "$target_path"
         card_path=$target_path/seat.json
         validate_card "$card_path" "$address_value"
@@ -652,10 +701,31 @@ case "$operation" in
         address_value=$(frame_text address)
         read_frame sender 1 255
         sender_value=$(frame_text sender)
+        basename_value=''
+        if IFS= read -r optional_frame; then
+            read_frame basename 1 255 "$optional_frame"
+            basename_value=$(frame_text basename)
+            case "$basename_value" in
+                ''|.|..|*/*|*[!A-Za-z0-9._-]*) remote_error 64 INVALID-BASENAME ;;
+            esac
+        fi
         require_eof
         prepare_target "$root_value" "$address_value"
         valid_address "$sender_value" || remote_error 64 INVALID-ADDRESS
         authorize_sender "$sender_value"
+        if [ -n "$basename_value" ]; then
+            PATH=${HOME-}/.local/bin:$PATH
+            if [ -n "${SNO_REACH_RECEIVER_PROGRAM:-}" ]; then
+                set -- "$SNO_REACH_RECEIVER_PROGRAM"
+            else
+                set -- "${SNO_EXECUTABLE:-sno}" reach
+            fi
+            card=$target_path/new/$basename_value
+            if [ ! -f "$card" ]; then printf 'skipped\n'; exit 0; fi
+            SNO_REACH_ROOT=$root_value "$@" __ring-card "$address_value" "$sender_value" "$card" ||
+                remote_error 75 RING-FAILED
+            exit 0
+        fi
         if [ -n "${SNO_REACH_RECEIVER_PROGRAM:-}" ]; then
             ring_outcome=$(SNO_REACH_ROOT=$root_value SNO_REACH_ADDR=$sender_value \
                 "$SNO_REACH_RECEIVER_PROGRAM" ring "$address_value") || remote_error 75 RING-FAILED
@@ -1462,6 +1532,13 @@ preflight_strict_recipient_registry() {
     local message="$1" root="$2" recipient recipient_file="$TEMP_DIR/preflight-all" wire
     extract_recipients "$message" "$recipient_file"
     while IFS= read -r recipient; do
+        if [[ "${recipient%@*}" == developer.human ]]; then
+            if [[ "${recipient##*@}" == "$(hostname)" ]]; then
+                ensure_notice_seat "$root" "$recipient" Developer ||
+                    die 74 "create developer mailbox $recipient: initialization failed"
+            fi
+            continue
+        fi
         if [[ "${recipient##*@}" == "$(hostname)" ]]; then
             require_safe_caller_dir "$root" "$recipient" >/dev/null
         else
@@ -1483,6 +1560,7 @@ preflight_recipient_reachability() {
     local recipient_file="$TEMP_DIR/preflight-to"
     maddr -a -h to: "$message" >"$recipient_file" || die 65 'cannot parse To recipients'
     while IFS= read -r recipient; do
+        [[ "${recipient%@*}" != developer.human ]] || continue
         if [[ "${recipient##*@}" != "$(hostname)" ]]; then
             [[ ! -e "$root/network/peers/${recipient##*@}.json" ]] || continue
             wire="$TEMP_DIR/preflight-reachability"
@@ -1576,24 +1654,6 @@ stage_outbox_entry() {
         fi
         die 74 'could not make complete outbox entry visible atomically'
     done
-}
-
-find_rendered_copy() {
-    local render_root="$1"
-    local recipient="$2"
-    local output_file="$3"
-    local -a copies=()
-
-    mapfile -t copies < <(
-        find "$render_root/$recipient/new" "$render_root/$recipient/cur" \
-            -mindepth 1 -maxdepth 1 -type f -print
-    )
-    ((${#copies[@]} == 1)) || {
-        printf 'reach: canonical renderer produced %d copies for %s\n' \
-            "${#copies[@]}" "$recipient" >&2
-        return 74
-    }
-    printf '%s\n' "${copies[0]}" >"$output_file"
 }
 
 deliver_remote_copy() {
@@ -1692,7 +1752,7 @@ record_remote_delivery() {
     [[ "$message_id" =~ $MESSAGE_ID_RE ]] ||
         die 65 'remote delivered copy has an invalid Message-ID'
     digest="$(sha256sum "$body_file" | cut -d ' ' -f1)"
-    key="$(printf '%s\n%s\n' "$message_id" "$recipient" | sha256sum | cut -c1-64)"
+    key="$(delivery_key "$message_id" "$recipient")"
     receipt_dir="$root/$caller/delivery-receipts"
     mkdir -p -- "$receipt_dir" || die 74 'could not create delivery receipt directory'
     [[ -d "$receipt_dir" && ! -L "$receipt_dir" ]] ||
@@ -1751,15 +1811,16 @@ process_outbox_entry() {
     local recipient
     local recipient_host
     local actual_maildir
-    local rendered_path_file="$TEMP_DIR/rendered-path.$RANDOM"
     local rendered_path
+    local manifest="$TEMP_DIR/rendered-copies"
+    local -A rendered=()
     local render_status
     local failed=0
     local -A queued=()
     local -A seen=()
     local -A local_unavailable=()
 
-    : >"$TEMP_DIR/delivered-recipients"
+    : >"$TEMP_DIR/delivered-paths"
     [[ "$basename" =~ ^[A-Za-z0-9._-]+$ ]] ||
         die 65 "outbox entry has an invalid basename: $entry"
     [[ -d "$entry" && ! -L "$entry" ]] ||
@@ -1829,47 +1890,47 @@ process_outbox_entry() {
         fi
     done <"$all_file"
 
-    set +e
-    SNO_REACH_ROOT="$render_root" "$DELIVER" <"$message"
-    render_status=$?
-    set -e
-    if ((render_status != 0)); then
-        printf 'reach: canonical per-recipient rendering failed\n' >&2
-        return 74
-    fi
+    since_mark "$root" >/dev/null || reach_failure "$root" 'create start mark' "$root" 'write failed'
+    SNO_REACH_ROOT="$render_root" REACH_RENDER_COPIES=1 "$DELIVER" <"$message" >"$manifest" || render_status=$?
+    while IFS=$'\t' read -r recipient rendered_path; do
+        rendered["$recipient"]="$rendered_path"
+    done <"$manifest"
 
     : >"$remaining_file"
+    local error detail
+    local -a placements=()
     while IFS= read -r recipient; do
         recipient_host="${recipient##*@}"
-        if [[ "$recipient_host" == "$caller_host" ]]; then
-            if [[ -n "${local_unavailable[$recipient]+present}" ]]; then
-                printf '%s\n' "$recipient" >>"$remaining_file"
-                failed=1
+        rendered_path="${rendered[$recipient]:-}"
+        error=''
+        if [[ -z "$rendered_path" || -n "${local_unavailable[$recipient]+present}" ]]; then
+            error="local rendering or mailbox unavailable (exit ${render_status:-0})"
+        elif [[ "$recipient_host" != "$caller_host" ]]; then
+            if detail="$(deliver_remote_copy "$root" "$recipient" "$basename" "$rendered_path" 2>&1)"; then
+                # A failed receipt must not turn a confirmed placement into an outbox retry.
+                (record_remote_delivery "$root" "$caller" "$recipient" "$rendered_path") ||
+                    reach_failure "$root" 'record remote delivery' "$recipient" "receipt or sent copy write failed (exit $?)"
+                rendered_path="$root/$caller/sent/$(delivery_key "$(mhdr -h message-id "$message")" "$recipient")"
+            else
+                error="${detail:-remote delivery failed (exit $?)}"
             fi
-            continue
+        else
+            rendered_path="$root/$recipient/${rendered_path#"$render_root/$recipient/"}"
         fi
-        if ! find_rendered_copy "$render_root" "$recipient" \
-            "$rendered_path_file"; then
+        if [[ -n "$error" ]]; then
             printf '%s\n' "$recipient" >>"$remaining_file"
-            failed=1
-            continue
-        fi
-        rendered_path="$(<"$rendered_path_file")"
-        if ! deliver_remote_copy "$root" "$recipient" "$basename" \
-            "$rendered_path"; then
-            printf '%s\n' "$recipient" >>"$remaining_file"
+            reach_failure "$root" 'place card' "$recipient" "$error"
+            printf 'kept in outbox for %s: %s\n' "$recipient" "$error"
+            placements+=("$recipient" kept-in-outbox)
             failed=1
         else
-            record_remote_delivery "$root" "$caller" "$recipient" \
-                "$rendered_path"
+            printf 'delivered to %s\n' "$recipient"
+            printf '%s\t%s\t%s\n' "$recipient" "$rendered_path" "$basename" >>"$TEMP_DIR/delivered-paths"
+            placements+=("$recipient" placed)
         fi
     done <"$queued_file"
-
-    while IFS= read -r recipient; do
-        if ! grep -Fxq -- "$recipient" "$remaining_file"; then
-            printf '%s\n' "$recipient" >>"$TEMP_DIR/delivered-recipients"
-        fi
-    done <"$queued_file"
+    append_sent "$root" "$caller" "$message" "${placements[@]}" ||
+        reach_failure "$root" 'append sent record' "$caller" "write failed (exit $?)"
     rewrite_entry_recipients "$entry" "$remaining_file"
     rm -r -- "$render_root" ||
         die 74 'could not clean private rendering root'
@@ -2026,7 +2087,7 @@ run_flush() {
         if ! process_outbox_entry "$root" "$CALLER" "$entry"; then
             failed=1
         fi
-        ring_delivered "$root" "$CALLER" "$message" "$TEMP_DIR/delivered-recipients"
+        schedule_placement "$root" "$CALLER" "$message" yes
     done
     ((failed == 0))
 }
@@ -2621,10 +2682,14 @@ state_rows() {
         [[ -n "$item" ]] || continue
         key="$item|$recipient"
         progress_item "$key" "$root" "$now" || status=65
+        local taker=''
+        case "${P_TYPE[$item]}" in question|decision) taker="$(read_taker "$root" "${P_FROM[$item]}" "$item")" || status=74 ;; esac
         if [[ "$json" == yes ]]; then
-            jq -nc --arg message_id "$item" --arg recipient "$recipient" --arg state "$P_VALUE" --arg since "$P_SINCE" --arg blocked_on "$P_BLOCKED" --arg answered "$P_ANSWERED" --arg reason "$P_REASON" '{message_id:$message_id,recipient:$recipient,state:$state,since:$since,blocked_on:$blocked_on,answered:$answered,reason:$reason}'
+            jq -nc --arg message_id "$item" --arg recipient "$recipient" --arg state "$P_VALUE" --arg since "$P_SINCE" --arg blocked_on "$P_BLOCKED" --arg answered "$P_ANSWERED" --arg reason "$P_REASON" --arg taker "$taker" '{message_id:$message_id,recipient:$recipient,state:$state,since:$since,blocked_on:$blocked_on,answered:$answered,reason:$reason} + (if $taker == "" then {} else {taker:$taker} end)'
         else
-            printf 'message_id: %s\trecipient: %s\tstate: %s\tsince: %s\tblocked_on: %s\tanswered: %s\treason: %s\n' "$item" "$recipient" "$P_VALUE" "$P_SINCE" "$P_BLOCKED" "$P_ANSWERED" "$P_REASON"
+            local taker_field=''
+            [[ -z "$taker" ]] || printf -v taker_field '\ttaker: %s' "$taker"
+            printf 'message_id: %s\trecipient: %s\tstate: %s\tsince: %s\tblocked_on: %s\tanswered: %s\treason: %s%s\n' "$item" "$recipient" "$P_VALUE" "$P_SINCE" "$P_BLOCKED" "$P_ANSWERED" "$P_REASON" "$taker_field"
         fi
     done < <(
         for key in "${!P_ITEMS[@]}"; do
@@ -2869,45 +2934,348 @@ preflight_report_tail() {
     die 65 "report must continue the chain of held work $item; send delivered nothing. Set In-Reply-To: $expected and References: $report"
 }
 
+reach_failure() {
+    local root="$1" operation="$2" target="$3" error="$4"
+    printf 'reach: %s %s: %s\n' "$operation" "$target" "$error" >&2
+    printf 'reach: %s %s: %s\n' "$operation" "$target" "$error" >>"$root/reach.log" || :
+}
+
+# These two functions are also included in the fixed POSIX receiver.
+since_mark() (
+    mark=$1/.reach-2.5-since
+    if [ ! -f "$mark" ]; then
+        mkdir -p -- "$1" || exit 74
+        stage=$(mktemp "$1/.reach-since.XXXXXXXXXX") || exit 74
+        trap 'rm -f -- "$stage"' EXIT
+        date -u +%Y-%m-%dT%H:%M:%SZ >"$stage" || exit 74
+        ln -- "$stage" "$mark" 2>/dev/null || [ -f "$mark" ] || exit 74
+    fi
+    cat -- "$mark"
+)
+
+take_winner() (
+    hash=$(printf '%s' "$2" | sha256sum) || exit 74
+    mkdir -p -- "$1/takers" || exit 74
+    perl -MFcntl=O_WRONLY,O_CREAT,O_EXCL -MTime::HiRes=usleep -e '
+        my ($file, $candidate) = @ARGV;
+        if (sysopen(my $out, $file, O_WRONLY|O_CREAT|O_EXCL, 0600)) {
+            syswrite($out, "$candidate\n") == length($candidate) + 1
+                or die "write taker $file: $!\n";
+            print "$candidate\n";
+        } elsif ($!{EEXIST}) {
+            # The winner may still be writing between its exclusive open and write.
+            open my $in, "<", $file or die "read taker $file: $!\n";
+            for (1..100) {
+                if (my $winner = <$in>) { print $winner; exit 0; }
+                usleep(1000);
+                seek($in, 0, 0) or die "seek taker $file: $!\n";
+            }
+            die "read taker $file: winner was not written\n";
+        } else { die "create taker $file: $!\n"; }
+    ' "$1/takers/${hash%% *}" "$3"
+)
+
+message_hash() {
+    printf '%s' "$1" | sha256sum | cut -d ' ' -f1
+}
+
+delivery_key() {
+    printf '%s\n%s\n' "$1" "$2" | sha256sum | cut -c1-64
+}
+
+read_taker() {
+    local hash file
+    hash="$(message_hash "$3")" || return 74
+    file="$1/$2/takers/$hash"
+    [[ ! -f "$file" ]] || cat -- "$file"
+}
+
+claim_acceptance() {
+    local root="$1" caller="$2" source="$3" author id winner detail wire to
+    to="$(maddr -a -h to: "$source" | sort -u)"
+    grep -Fxq -- "$caller" <<<"$to" || die 65 "accept $source: $caller is not a To recipient"
+    [[ "$to" == *$'\n'* ]] || return 0
+    id="$(mhdr -h message-id "$source")"
+    author="$(maddr -a -h from: "$source")"
+    if [[ "${author##*@}" == "$(hostname)" ]]; then
+        winner="$(take_winner "$root/$author" "$id" "$caller" 2>&1)" || {
+            reach_failure "$root" 'confirm taker' "$id" "waiting for confirmation: $winner"
+            return 75
+        }
+    else
+        wire="$TEMP_DIR/take-remote"
+        printf 'SNO-REACH-REMOTE/1\nTAKE\n' >"$wire"
+        append_text_frame "$wire" root "$root"
+        append_text_frame "$wire" address "$author"
+        append_text_frame "$wire" sender "$caller"
+        append_text_frame "$wire" message-id "$id"
+        if ! winner="$(execute_fixed_request "$wire" "$author" "$ADDRESS_RE" 5 2>"$TEMP_DIR/take.stderr")"; then
+            detail="$(<"$TEMP_DIR/take.stderr")"
+            reach_failure "$root" 'confirm taker' "$id" "waiting for confirmation: ${detail:-remote request failed}"
+            return 75
+        fi
+        take_winner "$root/$author" "$id" "$winner" >/dev/null ||
+            reach_failure "$root" 'record remote taker' "$id" "write failed (exit $?)"
+    fi
+    if [[ "$winner" != "$caller" ]]; then
+        reach_failure "$root" 'accept card' "$id" "taken by $winner"
+        return 75
+    fi
+}
+
+needs_handling() {
+    local root="$1" addr="$2" card="$3" kind="${4:-pickup}"
+    local since modified to auto type flags id author winner sent_state try_file
+    [[ -r "$card" ]] || { reach_failure "$root" 'read card' "$card" 'file unavailable'; return 74; }
+    [[ "$(progress_header "$card" delivered-to)" == "$addr" ]] || return 1
+    to="$(maddr -a -h to: "$card")" || return 74
+    grep -Fxq -- "$addr" <<<"$to" || return 1
+    [[ "$(progress_header "$card" x-no-reply)" != true ]] || return 1
+    since="$(since_mark "$root")" || return 74
+    validate_updated "$since"
+    modified="$(TZ=UTC stat -c '%y' -- "$card")" || return 74
+    since="${since/T/ }"
+    [[ "$modified" > "${since%Z}.000000000 +0000" ]] || return 1
+    type="$(mhdr -h x-type "$card")" || return 74
+    auto="$(progress_header "$card" auto-submitted)"
+    if [[ -n "$auto" && "$auto" != no ]]; then
+        [[ "$kind" == pickup && "$auto" == auto-generated &&
+            "$(progress_header "$card" x-name)" == agent-window ]] || return 1
+    fi
+    flags="${card##*/}"
+    if [[ "$flags" == *:2,* ]]; then
+        flags="${flags##*:2,}"
+        [[ "$flags" != *T* && "$flags" != *R* ]] || return 1
+    fi
+    id="$(mhdr -h message-id "$card")" || return 74
+    try_file="$root/$addr/tries.jsonl"
+    if [[ -f "$try_file" ]]; then
+        local forwarded
+        forwarded="$(jq -s --arg id "$id" 'any(.[]; .msg_id == $id and .kind == "forward")' "$try_file")" || return 74
+        [[ "$forwarded" != true ]] || return 1
+    fi
+    case "$type" in
+        status|answer|done|result|approval|failure) return 0 ;;
+        call|decision|question) ;;
+        *) return 1 ;;
+    esac
+    if [[ "$type" != call && -z "$(progress_header "$card" x-state)" ]]; then
+        author="$(maddr -a -h from: "$card")" || return 74
+        winner="$(read_taker "$root" "$author" "$id")" || return 74
+        [[ -z "$winner" || "$winner" == "$addr" ]] || return 1
+    fi
+    if [[ -f "$root/$addr/sent.jsonl" ]]; then
+        sent_state="$(jq -sr --arg id "$id" '
+            [ .[] | select(any(.placement[]; . == "placed")) |
+              if .state == "" then
+                  select(.parent == $id and .type == "answer") | "answered"
+              else select((.references | split(" ")[0]) == $id) | .state end ]
+            | if any(.[]; IN("answered","completed","failed","cancelled","refused")) then "final"
+              elif index("accepted") then "accepted" else "" end
+            ' "$root/$addr/sent.jsonl")" || return 74
+        case "$sent_state" in
+            final) return 1 ;;
+            accepted) [[ "$kind" == resume ]] || return 1 ;;
+        esac
+    fi
+    return 0
+}
+
+run_needs_handling() {
+    [[ $# == 3 && "$1" == --as ]] || die 64 'usage: __needs-handling --as <addr> <card>'
+    validate_address "$2"
+    local root status=0
+    root="$(mailbox_root)"
+    needs_handling "$root" "$2" "$3" || status=$?
+    ((status < 2)) || reach_failure "$root" 'check needs handling' "$3" "read failed (exit $status)"
+    return "$status"
+}
+
+run_try() {
+    [[ $# == 6 && "$1" == --as && "$3" == --card && "$5" == --kind ]] ||
+        die 64 'usage: __try --as <addr> --card <path> --kind <kind>'
+    validate_address "$2"
+    case "$6" in pickup|ring|resume|forward|notice) ;; *) die 64 "invalid try kind: $6" ;; esac
+    local root addr="$2" card="$4" kind="$6" id now history count latest age fd status=0 file
+    root="$(mailbox_root)"
+    file="$root/$addr/tries.jsonl"
+    exec {fd}>>"$file" && flock -x -w 1 "$fd" ||
+        { reach_failure "$root" 'lock tries' "$file" 'open or flock failed'; return 74; }
+    needs_handling "$root" "$addr" "$card" "$kind" || status=$?
+    if ((status != 0)); then
+        if ((status == 1)); then printf 'card no longer needs handling: %s\n' "$card"
+        else reach_failure "$root" 'check needs handling' "$card" "read failed (exit $status)"; fi
+        return "$status"
+    fi
+    id="$(mhdr -h message-id "$card")" || return 74
+    history="$(jq -rs --arg id "$id" '[.[] | select(.msg_id == $id) | .at] | [length, (max // "-")] | @tsv' "$file")" ||
+        { reach_failure "$root" 'read tries' "$file" 'invalid or unreadable record'; return 74; }
+    IFS=$'\t' read -r count latest <<<"$history"
+    if ((count >= 3)); then printf 'three tries already recorded: %s\n' "$id"; return 1; fi
+    if [[ "$latest" != - ]]; then
+        age="$(date -u -d "$latest" +%s)" ||
+            { reach_failure "$root" 'read tries' "$file" "invalid try time: $latest"; return 74; }
+        if (( $(date +%s) - age < 300 )); then
+            printf 'last try is less than 300 seconds old: %s\n' "$id"; return 1
+        fi
+    fi
+    now="$(utc_now)"
+    jq -nc --arg msg_id "$id" --arg at "$now" --arg kind "$kind" '{msg_id:$msg_id,at:$at,kind:$kind}' >&"$fd" ||
+        { reach_failure "$root" 'append try' "$file" 'write failed'; return 74; }
+}
+
+append_sent() {
+    local root="$1" sender="$2" card="$3" reply_to
+    shift 3
+    reply_to="$(maddr -a -h reply-to: "$card")" || return 74
+    jq -nc --arg msg_id "$(mhdr -h message-id "$card")" --arg subject "$(mhdr -h subject "$card")" \
+        --arg work "$(mhdr -h x-work "$card")" --arg time "$(utc_now)" \
+        --arg to "$(maddr -a -h to: "$card")" --arg cc "$(maddr -a -h cc: "$card")" \
+        --arg bcc "$(maddr -a -h bcc: "$card")" --arg reply_to "${reply_to:-$sender}" \
+        --arg parent "$(progress_header "$card" in-reply-to)" --arg references "$(progress_header "$card" references)" \
+        --arg type "$(mhdr -h x-type "$card")" --arg state "$(progress_header "$card" x-state)" '
+            {msg_id:$msg_id, subject:$subject, work:$work, time:$time,
+             to:($to | split("\n")), cc:($cc | split("\n")), bcc:($bcc | split("\n")),
+             reply_to:$reply_to, parent:$parent, references:$references, type:$type, state:$state,
+             placement: ($ARGS.positional as $pairs | reduce range(0; $pairs|length; 2) as $i
+                ({}; .[$pairs[$i]] = $pairs[$i+1]))}
+        ' --args "$@" >>"$root/$sender/sent.jsonl"
+}
+
+run_sent() {
+    local caller='' work='' json=no root id recipient item placement tries ring taker reports reply_to
+    local -A mail=()
+    while (($#)); do
+        case "$1" in
+            --json) json=yes; shift; continue ;;
+            --as|--work) (($# >= 2)) || die 64 "missing value for $1" ;;
+            *) die 64 "unknown sent option: $1" ;;
+        esac
+        if [[ "$1" == --as ]]; then caller="$2"; else work="$2"; fi
+        shift 2
+    done
+    validate_address "$caller"
+    root="$(mailbox_root)"
+    require_local_reader_address "$root" "$caller"
+    local source="$root/$caller/sent.jsonl"
+    local ring_log="${SNO_REACH_RING_LOG:-${SNO_REACH_ROOT:+$root/reach-ring.jsonl}}"
+    ring_log="${ring_log:-$HOME/.local/state/reach-ring.jsonl}"
+    local items output
+    [[ -e "$source" ]] || source=/dev/null
+    items="$(jq -cs --arg work "$work" '
+        reduce .[] as $row ({};
+          .[$row.msg_id] as $prev | .[$row.msg_id] =
+          (($prev // $row) + {placement: (($prev.placement // {}) + $row.placement)}))
+        | [.[] | select($work == "" or .work == $work)] | sort_by(.time) | reverse | .[:20][]' "$source")" ||
+        die 74 "read sent records $source: invalid or unreadable record"
+    output="$(
+        while IFS= read -r item; do
+            [[ -n "$item" ]] || continue
+            id="$(jq -r .msg_id <<<"$item")"
+            reply_to="$(jq -r .reply_to <<<"$item")"
+            taker="$(read_taker "$root" "$caller" "$id")"
+            if [[ "$reply_to" =~ $ADDRESS_RE && -z "${mail[$reply_to]+set}" ]]; then
+                mail["$reply_to"]="$(sent_reports "$root/$reply_to")"
+            fi
+            while IFS=$'\t' read -r recipient placement; do
+                [[ ! -f "$root/$caller/delivery-receipts/$(delivery_key "$id" "$recipient").json" ]] || placement=placed
+                local try_file="$root/$recipient/tries.jsonl"
+                [[ -f "$try_file" ]] || try_file=/dev/null
+                tries="$(jq -cs --arg id "$id" '[.[] | select(.msg_id == $id)] | if length == 0 then "unknown" else . end' "$try_file")" || exit 74
+                ring=unknown
+                if [[ -f "$ring_log" ]]; then
+                    ring="$(grep -F -- "$id" "$ring_log" | jq -rs --arg id "$id" --arg to "$recipient" \
+                        '[.[] | select(.msg_id == $id and .to == $to) | .outcome] | last // "unknown"')" || {
+                        # grep exits 1 for no matching records.
+                        [[ "$ring" == unknown ]] || exit 74
+                    }
+                fi
+                reports="${mail[$reply_to]:-[]}"
+                jq -c --arg recipient "$recipient" --arg placement "$placement" --argjson tries "$tries" \
+                    --arg ring "$ring" --arg taker "${taker:-unknown}" --argjson reports "$reports" '
+                    .msg_id as $id | {
+                        msg_id, subject, work, time, to, cc, recipient:$recipient, placement:$placement,
+                        tries:$tries, ring:$ring, taker:$taker,
+                        accepted:([$reports[] | select(.from == $recipient and .root == $id and .state == "accepted") | .id] | last // "unknown"),
+                        answered:([$reports[] | select(.from == $recipient and .parent == $id and .type == "answer" and .state == "") | .id] | last // "unknown")
+                    }' <<<"$item" || exit 74
+            done < <(jq -r '.placement | to_entries[] | [.key,.value] | @tsv' <<<"$item")
+        done <<<"$items"
+    )" || die 74 "read sent details for $caller: invalid or unreadable record"
+    if [[ "$json" == yes ]]; then jq -s . <<<"$output"
+    else
+        jq -r '[.time, .msg_id, .recipient, .placement, (.tries | if type == "array" then length | tostring else . end), .ring, .taker, .accepted, .answered, .subject] | @tsv' <<<"$output"
+    fi
+}
+
+sent_reports() {
+    local dir="$1" card parent refs
+    for card in "$dir"/new/* "$dir"/cur/*; do
+        [[ -f "$card" ]] || continue
+        parent="$(progress_header "$card" in-reply-to)"
+        [[ -n "$parent" ]] || continue
+        read -r refs _ <<<"$(progress_header "$card" references)"
+        jq -nc --arg from "$(maddr -a -h from: "$card")" --arg id "$(mhdr -h message-id "$card")" \
+            --arg root "$refs" --arg parent "$parent" --arg type "$(mhdr -h x-type "$card")" \
+            --arg state "$(progress_header "$card" x-state)" \
+            '{from:$from,id:$id,root:$root,parent:$parent,type:$type,state:$state}'
+    done | jq -cs .
+}
+
 ring_remote() {
     local root="$1" sender="$2" recipient="$3" remaining="$4" wire="$TEMP_DIR/ring-remote"
     printf 'SNO-REACH-REMOTE/1\nRING\n' >"$wire"
     append_text_frame "$wire" root "$root"
     append_text_frame "$wire" address "$recipient"
     append_text_frame "$wire" sender "$sender"
-    execute_fixed_request "$wire" "$recipient" '^(rang|rang-unverified|busy)$' "$remaining"
+    if [[ -n "${5:-}" ]]; then append_text_frame "$wire" basename "$5"; fi
+    execute_fixed_request "$wire" "$recipient" '^(rang|rang-unverified|busy|skipped)$' "$remaining"
+}
+
+ring_received_card() {
+    local root recipient="$1" sender="$2" card="$3" status=0
+    root="$(mailbox_root)"
+    run_try --as "$recipient" --card "$card" --kind ring >/dev/null || status=$?
+    if ((status == 1)); then printf 'skipped\n'; return 0; fi
+    ((status == 0)) || return "$status"
+    SNO_REACH_ADDR="$sender" ring_card "$recipient" "$(mhdr -h message-id "$card")"
 }
 
 ring_delivered() {
-    local root="$1" sender="$2" message="$3" delivered="${4:-}"
-    local recipient id rc outcome remaining automatic
+    local root="$1" sender="$2" message="$3" delivered="$4"
+    local recipient id rc outcome remaining automatic card basename to type
     [[ "$(progress_header "$message" x-no-reply)" != true ]] || return 0
     automatic="$(progress_header "$message" auto-submitted)"
     [[ -z "$automatic" || "${automatic,,}" == no ]] || return 0
     id="$(mhdr -h message-id "$message")"
-    maddr -a -h to: "$message" | sort -u >"$TEMP_DIR/ring-recipients"
-    while IFS= read -r recipient; do
-        [[ -z "$delivered" ]] || grep -Fxq -- "$recipient" "$delivered" || continue
+    type="$(mhdr -h x-type "$message")"
+    to="$(maddr -a -h to: "$message")"
+    while IFS=$'\t' read -r recipient card basename; do
+        [[ "${recipient%@*}" != developer.human ]] || continue
+        grep -Fxq -- "$recipient" <<<"$to" || continue
         remaining=$((NOTIFICATION_DEADLINE - SECONDS))
         if ((remaining <= 0)); then
-            printf 'reach: message delivered; notification deadline reached for %s. Read the mailbox; do not resend.\n' "$recipient" >&2
+            reach_failure "$root" 'ring' "$recipient" 'notification deadline reached; card delivered'
             continue
         fi
+        rc=0
         if [[ "${recipient##*@}" != "${sender##*@}" ]]; then
-            if outcome="$(ring_remote "$root" "$sender" "$recipient" "$remaining" </dev/null)"; then rc=0; else rc=6; fi
+            if [[ "$type" == call ]]; then basename=''; fi
+            outcome="$(ring_remote "$root" "$sender" "$recipient" "$remaining" "$basename")" || rc=$?
         else
-            rc=0
-            outcome="$(SNO_REACH_ROOT="$root" timeout --foreground --signal=TERM --kill-after=5 "$remaining" "$REPO_ROOT/lib/reach-ring" doorbell --to "$recipient" --from "$sender" --msg-id "$id" </dev/null)" || rc=$?
+            if [[ "$type" != call ]]; then
+                ("$REPO_ROOT/lib/reach-main" __try --as "$recipient" --card "$card" --kind ring) >/dev/null || rc=$?
+                ((rc == 0)) || continue
+            fi
+            outcome="$(SNO_REACH_ROOT="$root" timeout --foreground --signal=TERM --kill-after=5 "$remaining" "$REPO_ROOT/lib/reach-ring" doorbell --to "$recipient" --from "$sender" --msg-id "$id")" || rc=$?
             outcome="${outcome%%$'\n'*}"
             outcome="${outcome#outcome=}"
-            case "$outcome" in rang|rang-unverified|busy) ;; *) rc=6 ;; esac
         fi
+        case "$outcome" in rang|rang-unverified|busy|skipped) ;; *) rc=6 ;; esac
         if ((rc != 0)); then
-            printf 'reach: message delivered; notification failed for %s. No retry is scheduled; read the mailbox, do not resend.\n' "$recipient" >&2
-        else
-            printf 'reach: notification %s for %s; no retry is scheduled\n' "$outcome" "$recipient" >&2
+            reach_failure "$root" 'ring' "$recipient" "exit $rc (${outcome:-no outcome}); card $id delivered; do not resend"
         fi
-    done <"$TEMP_DIR/ring-recipients"
+    done <"$delivered"
     return 0
 }
 
@@ -2937,14 +3305,27 @@ run_send() {
     preflight_recipient_reachability "$root" "$CALLER" "$input_file" "$message_type"
     preflight_reply_destination "$input_file" "$root"
     preflight_report_tail "$input_file" "$root"
-    preflight_send_rate_limit "$root" "$input_file" "$message_type"
+    if [[ -z "${notify_command:-}" ]]; then preflight_send_rate_limit "$root" "$input_file" "$message_type"; fi
+    if [[ "$(progress_header "$input_file" x-state)" == accepted ]]; then
+        local original
+        read -r original _ <<<"$(progress_header "$input_file" references)"
+        local source="${P_HELD[$original|$CALLER]:-}"
+        [[ -n "$source" ]] || die 65 "accept $original: no held To copy for $CALLER"
+        claim_acceptance "$root" "$CALLER" "$source"
+    fi
     started="$EPOCHREALTIME"
     status=0
     queue_and_attempt_message "$root" "$CALLER" "$input_file" || status=$?
-    while IFS= read -r recipient; do
-        observe_message "$root" card "$CALLER" "$recipient" "$status" "$started" '' '' "$input_file"
-    done <"$TEMP_DIR/validated-recipients"
-    [[ "$no_ring" == yes ]] || ring_delivered "$root" "$CALLER" "$input_file" "$TEMP_DIR/delivered-recipients"
+    if [[ -z "${notify_command:-}" ]]; then
+        while IFS= read -r recipient; do
+            observe_message "$root" card "$CALLER" "$recipient" "$status" "$started" '' '' "$input_file"
+        done <"$TEMP_DIR/validated-recipients"
+    fi
+    if [[ "$message_type" == call && "$no_ring" == no ]]; then
+        ring_delivered "$root" "$CALLER" "$input_file" "$TEMP_DIR/delivered-paths"
+    else
+        schedule_placement "$root" "$CALLER" "$input_file" "$([[ "$no_ring" == no ]] && printf yes || printf no)"
+    fi
     ((status == 0)) || die 74 'one or more copies remain queued; do not resend'
 }
 
@@ -3336,7 +3717,7 @@ run_dismiss() {
 
     local type
     type="$(mhdr -h x-type "$source")"
-    if maddr -a -h to: "$source" | grep -Fxq -- "$CALLER"; then
+    if [[ "${CALLER%@*}" != developer.human ]] && maddr -a -h to: "$source" | grep -Fxq -- "$CALLER"; then
         case "$type" in status|answer|call) ;; *) die 65 'actionable work requires reply; dismiss only acknowledges reports or informed copies' ;; esac
     fi
     new_dir="$(realpath -e -- "$maildir/new")" ||
@@ -3351,8 +3732,8 @@ run_dismiss() {
     observe_message "$root" dismiss "$CALLER" "$recipient" "$status" "$started"
     ((status == 0)) || return "$status"
     dismissed_at="$(utc_now)"
-    append_dismissal_record \
-        "$maildir" "$message_id" "$source" "$dismissed_at"
+    (append_dismissal_record "$maildir" "$message_id" "$source" "$dismissed_at") ||
+        reach_failure "$root" 'append dismissal' "$source" "write failed (exit $?)"
     printf '%s\n' "$source"
 }
 
@@ -3509,7 +3890,9 @@ run_reply() {
 
     preflight_recipient_reachability "$root" "$CALLER" "$reply_input" "$(mhdr -h x-type "$reply_input")"
     preflight_reply_destination "$reply_input" "$root" "$source"
-    if [[ "$REPLY_STATE" != accepted ]]; then
+    if [[ "$REPLY_STATE" == accepted ]]; then
+        claim_acceptance "$root" "$CALLER" "$source"
+    else
         source="$(move_reply_source_to_cur "$source" "$new_dir" "$cur_dir")"
     fi
     entry="$(stage_message_in_outbox "$root" "$CALLER" "$reply_input")"
@@ -3533,7 +3916,7 @@ run_reply() {
             die 74 'could not read the delivered reply Message-ID'
         printf '%s\n' "$(<"$header_file")"
     fi
-    ring_delivered "$root" "$CALLER" "$reply_input" "$TEMP_DIR/delivered-recipients"
+    schedule_placement "$root" "$CALLER" "$reply_input" yes
     if ((status != 0)); then
         die 74 "reply delivery failed; queued for explicit flush: $entry"
     fi
@@ -4080,7 +4463,11 @@ run_seats() {
 
 run_ring() {
     [[ "$#" == 1 ]] || usage
-    local recipient="$1" root output outcome rc=0 sender
+    ring_card "$1" "<ring-$$-$RANDOM@localhost>"
+}
+
+ring_card() {
+    local recipient="$1" id="$2" root output outcome rc=0 sender
     local started status
     validate_address "$recipient"
     root="$(mailbox_root)"
@@ -4092,7 +4479,7 @@ run_ring() {
         output="$(ring_remote "$root" "$sender" "$recipient" 25)" || rc=$?
     else
         [[ -f "$root/$recipient/reachable.json" && ! -L "$root/$recipient/reachable.json" ]] || { printf 'unregistered\n'; return 1; }
-        output="$("$REPO_ROOT/lib/reach-ring" doorbell --to "$recipient" --from "$sender" --msg-id "<ring-$$-$RANDOM@localhost>")" || rc=$?
+        output="$("$REPO_ROOT/lib/reach-ring" doorbell --to "$recipient" --from "$sender" --msg-id "$id")" || rc=$?
     fi
     outcome="${output%%$'\n'*}"; outcome="${outcome#outcome=}"
     case "$rc" in
@@ -4114,6 +4501,9 @@ run_remind() {
     observe_message "$(mailbox_root)" remind "$CALLER" "$CALLER" "$rc" "$started"
     if ((rc)); then printf 'reach: remind could not read work state (exit %s)\n' "$rc" >&2; return "$rc"; fi
 }
+
+# shellcheck source=reach-notify
+source "$REPO_ROOT/lib/reach-notify"
 
 trap cleanup EXIT
 trap 'exit 129' HUP
@@ -4144,6 +4534,16 @@ case "$verb" in
     network|peer) python3 "$REPO_ROOT/lib/reach-network" --root "$(mailbox_root)" "$verb" "$@" ;;
     __receive) SNO_REACH_RECEIVER_PROGRAM="$REPO_ROOT/bin/sno-reach" /bin/sh -c "$(remote_program_literal)" ;;
     send) run_send "$@" ;;
+    whoami|pickup|rewake) exec "$REPO_ROOT/lib/reach-$verb" "$@" ;;
+    notify) run_notify "$@" ;;
+    sent) run_sent "$@" ;;
+    __since) [[ $# == 0 ]] || die 64 'usage: __since'; since_mark "$(mailbox_root)" ;;
+    __needs-handling) run_needs_handling "$@" ;;
+    __try) run_try "$@" ;;
+    __record-call) append_sent "$(mailbox_root)" "$1" "$2" "$3" placed ;;
+    __after-placement) after_placement "$@" ;;
+    __notice-placed) schedule_notice "$@" ;;
+    __ring-card) ring_received_card "$@" ;;
     inbox) run_inbox "$@" ;;
     wait) run_wait "$@" ;;
     reply) run_reply "$@" ;;
