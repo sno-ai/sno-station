@@ -61,7 +61,7 @@ export async function renderAgentStatusLine(harness: StatusHarness, originalEnco
 		if (typeof sessionId !== "string" || !sessionId) throw new Error("current client session identity unavailable");
 		const view = await readAgentView({ recent: true });
 		const segment = compactAgentView(view, { harness, sessionId });
-		const color = /\bneed you\b/.test(segment) ? "\x1b[1;33m" : "\x1b[2m";
+		const color = /^\[sno\] \d+ agents? (?:is|are) waiting/.test(segment) ? "\x1b[1;33m" : "\x1b[2m";
 		const displayed = process.env.NO_COLOR === undefined ? `${color}${segment}\x1b[0m` : segment;
 		process.stdout.write(`${user.output.length > newlineLength ? " | " : ""}${displayed}\n`);
 	} catch (error) {

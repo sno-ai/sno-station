@@ -54,8 +54,12 @@ async function refreshAgentQuota(view: AgentView): Promise<void> {
 	}
 }
 
+// A person's squad view: the last day's sessions and every open wait, without the slow machine-wide Reach work
+// projection (minutes on a busy machine). `--json` keeps the full inventory.
+const PERSON_VIEW = { recent: true, recentSeconds: 86_400 } as const;
+
 async function screenView(): Promise<{ view: AgentView; hidden: number }> {
-	return screenAgents(await readAgentView());
+	return screenAgents(await readAgentView(PERSON_VIEW));
 }
 
 async function screen(): Promise<number> {
@@ -115,7 +119,7 @@ async function agentStateMain(args: string[]): Promise<number> {
 	}
 	if (args.includes("--help")) { process.stdout.write("sno squad [global --json] · local squad observations\n"); return 0; }
 	if (!args.includes("--json") && !args.includes("--compact") && process.stdout.isTTY && process.stdin.isTTY) return screen();
-	const view = await readAgentView({ recent: args.includes("--compact") && !args.includes("--json") });
+	const view = await readAgentView(args.includes("--json") ? {} : args.includes("--compact") ? { recent: true } : PERSON_VIEW);
 	if (args.includes("--json")) process.stdout.write(`${JSON.stringify(view)}\n`);
 	else if (args.includes("--compact")) process.stdout.write(`${compactAgentView(view, {
 		harness: option(args, "--harness"), sessionId: option(args, "--session-id"), reachAddress: option(args, "--reach-address"),
