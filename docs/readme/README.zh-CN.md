@@ -118,13 +118,18 @@ sno reach pair "Fix the login redirect"
 **别再盯着终端了。** 不管有没有大管家，只要有谁需要你，Claude Code 或 Cursor 的状态栏都会告诉你。安装时就配好了：
 
 ```text
-❄ 2 need you · claude: approve
+[sno] 2 agents are waiting for you
+  Claude in web-app needs your approval (Bash) · 1m
+  Codex in api asks: Should the billing migration run tonight? · 5m
 ```
 
 `sno squad` 把整支小队铺满一屏：谁在等你，谁在干活，什么已经做完。
 
 ```text
 Sno Station · squad · 09:15 · 2 need you · 2 working · 2 finished
+Waiting for you (2)
+  Claude in web-app needs your approval (Bash) · 1m
+  Codex in api asks: Should the billing migration run tonight? · 5m
 Needs you (2)
 > claude web-app       approve a permission · Fix the login redirect loop …   1m
   codex api            asked a question · Migrate the billing tables to th…   5m
