@@ -139,6 +139,21 @@ describe("agent state view read-time semantics", () => {
 		await utimes(path, past, past);
 		expect((await readAgentView(options)).agents).toEqual([]);
 	});
+	it("drops a wait and its redraw marker when the session ends unanswered", async () => {
+		const identity = { conversation_id: "abandoned" };
+		await observeAgentEvent("cursor", "stop", { ...identity, last_assistant_message: "Which project?" });
+		const path = join(home, "station/agents/cursor--abandoned.jsonl");
+		const marker = `${path}.waiting`;
+		expect(await readFile(marker, "utf8")).toBe("");
+
+		await observeAgentEvent("cursor", "session-end", identity);
+		await expect(stat(marker)).rejects.toMatchObject({ code: "ENOENT" });
+		const options = { profileDir: home, reachRoot: join(home, "reach"), now: Date.now(), recent: true };
+		const past = new Date(options.now - 901_000);
+		await utimes(path, past, past);
+		expect(compactAgentView(await readAgentView(options))).not.toContain("need you");
+		expect((await readAgentView({ ...options, recent: false })).agents[0]?.waitingForHuman).toBe("no");
+	});
 	it("keeps old native questions in the full view and mailed questions on status redraw until dismissed", async () => {
 		const old = new Date(now - 1200_000);
 		const path = await events("codex", "waiting", [{ event: "stop", at: old.toISOString(), input: { last_assistant_message: "Which project?" } }]);
@@ -332,7 +347,8 @@ describe("agent state view read-time semantics", () => {
 			const denied = await readAgentView(redraw);
 			expect(denied.agents[0]).toMatchObject({ waitingForHuman: "no", doing: "idle at prompt", group: "Finished", subgroup: "permission denied" });
 			expect(denied.openQuestions).toMatchObject([{ source: "mail", subject: "[APPROVAL] Other approval" }]);
-			expect(await readdir(join(mailbox, "cur"))).toEqual([expect.stringMatching(/:2,[^,]*T/)]);
+			// The redraw starts the dismissal and does not wait for it.
+			await expect.poll(() => readdir(join(mailbox, "cur"))).toEqual([expect.stringMatching(/:2,[^,]*T/)]);
 		} finally { vi.unstubAllEnvs(); }
 	});
 	it("keeps the user's task line when a Claude background task notification arrives as a prompt", async () => {

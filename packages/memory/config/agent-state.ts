@@ -1,6 +1,5 @@
 import { execFile, spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import { once } from "node:events";
 import { createReadStream } from "node:fs";
 import { appendFile, mkdir, open, readFile, readdir, realpath, rm, stat, writeFile } from "node:fs/promises";
 import { homedir, hostname } from "node:os";
@@ -284,14 +283,14 @@ function canChangeWait(observation: AgentObservation): boolean {
 	if (event === "pre-tool-use") return askTool(input);
 	if (event === "stop-failure") return quotaFailure(input);
 	return ["user-prompt-submit", "permission-request", "post-tool-use", "approval-response",
-		"stop", "after-agent-response", "notify", "interrupt"].includes(event);
+		"stop", "after-agent-response", "notify", "interrupt", "session-end"].includes(event);
 }
 
 // These events can end a wait but never start one, so with no marker there is nothing to replay.
 function endsWaitOnly(observation: AgentObservation): boolean {
 	const event = effectiveEvent(observation);
 	if (event === "post-tool-use") return !(askTool(observation.input) && observation.harness === "codex");
-	return ["user-prompt-submit", "approval-response", "interrupt"].includes(event);
+	return ["user-prompt-submit", "approval-response", "interrupt", "session-end"].includes(event);
 }
 
 async function updateWaitingMarker(path: string, endsOnly: boolean): Promise<void> {
@@ -351,7 +350,8 @@ function applyEvent(row: AgentRow, observation: AgentObservation, index: number,
 		row.doing = "idle at prompt";
 		if (row.waitingReason === "permission to approve") { row.waitingForHuman = "unknown"; row.waitingReason = "unknown"; }
 	}
-	if (event === "session-end") row.doing = "idle at prompt";
+	// A wait ends with its session: nobody can answer a question in a cleared or closed session.
+	if (event === "session-end") { row.doing = "idle at prompt"; resolveWait(row); }
 	if (event === "stop-failure" && quotaFailure(input)) wait(row, "quota exhausted");
 	if (input.human_addressee === true && input.review_requested === true) wait(row, "done awaiting review");
 	if (input.human_addressee === true && input.decision_required === true) wait(row, "failed awaiting decision");
@@ -603,11 +603,11 @@ async function readReachStatus(root: string, view: AgentView, now: number, recen
 		for await (const card of mailboxCards(join(root, developer), view)) {
 			if (card.type === "approval" && view.agents.some(row => row.harness === "claude" &&
 				row.sessionId === card.sessionId && row.subgroup === "permission denied")) {
-				try {
-					const [code, signal] = await once(dismissApproval(card.sessionId, root), "close");
-					if (code !== 0) throw new Error(`Reach notify exited with ${signal ?? code}`);
-					continue;
-				} catch (error) { view.errors.push(failure("dismiss Reach approval", card.sessionId, error, "approval card unchanged")); }
+				// A redraw never waits for the dismissal; the next read sees the card gone.
+				const child = dismissApproval(card.sessionId, root);
+				child.on("error", error => void logReachHookFailure("dismiss Reach approval", card.sessionId, error, "approval card unchanged"));
+				child.unref();
+				continue;
 			}
 			if (["question", "decision", "approval"].includes(card.type)) {
 				view.openQuestions.push({ agent: card.sender, subject: card.subject, age: agoSeconds(now, card.date), source: "mail" });
