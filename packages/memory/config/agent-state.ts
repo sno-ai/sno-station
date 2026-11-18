@@ -599,7 +599,8 @@ async function readReachStatus(root: string, view: AgentView, now: number, recen
 	const start = view.errors.length;
 	try {
 		const seats = (await readdir(root, { withFileTypes: true })).filter(entry => entry.isDirectory()).map(entry => entry.name);
-		await readSeats(root, seats, view.agents, view.errors);
+		// A redraw skips idle event files, so a seat placeholder would count every idle seat as unknown.
+		if (!recent) await readSeats(root, seats, view.agents, view.errors);
 		const developer = `developer.human@${hostname()}`;
 		for await (const card of mailboxCards(join(root, developer), view)) {
 			if (card.type === "approval" && view.agents.some(row => row.harness === "claude" &&
@@ -913,7 +914,10 @@ export function compactAgentView(view: AgentView, current: AgentIdentity = {}): 
 	const unknown = rows.filter(row => row.waitingForHuman === "unknown" || row.group === "unknown").length + view.errors.length;
 	const first = waits[0];
 	const row = first?.source === "native" ? rows.find(item => item.sessionId === first.sessionId && item.harness === first.harness) : undefined;
-	const subject = row?.waitingReason === "permission to approve" ? "approve" : first?.subject;
+	// One status line: the question an agent ended on, never its whole multi-line reply.
+	const folded = (first?.subject ?? "").replace(/\s+/g, " ").trim();
+	const question = /[^。！？.!?]*[？?]$/.exec(folded)?.[0].trim() || folded;
+	const subject = row?.waitingReason === "permission to approve" ? "approve" : cell(question, 40).trimEnd();
 	const description = first ? `${waits.length} need you · ${first.harness ?? first.agent}: ${subject}` : `${working} working`;
 	return `❄ ${description} · ${view.stuck.length} stuck${unknown ? ` · ${unknown} unknown` : ""}${view.reachUnavailable ? ` · Reach unavailable: ${view.reachUnavailable}` : ""}`;
 }

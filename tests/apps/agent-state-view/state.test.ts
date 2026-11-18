@@ -95,6 +95,18 @@ describe("agent state view read-time semantics", () => {
 		await expect(stat(marker)).rejects.toMatchObject({ code: "ENOENT" });
 		expect((await view()).agents[0]).toMatchObject({ process: "exited", waitingForHuman: "yes", waitingReason: "permission to approve" });
 	});
+	it("keeps the status redraw to one line: the final question only, and no placeholder rows for idle Reach seats", async () => {
+		const reply = "写着这些限制。改成了“限制跟着任务走”。\n- 第三遍通过，存下来的是第三遍的原文。\n\n按一天最多发一帖的规矩，最早能排到周一。就排 23 号早上 8 点吗？";
+		await events("claude", "asks", [{ event: "stop", input: { last_assistant_message: reply } }]);
+		const root = join(home, "reach");
+		await mkdir(join(root, "idle.seat@local"), { recursive: true });
+		await writeFile(join(root, "idle.seat@local", "seat.json"), JSON.stringify({ address: "idle.seat@local", runtime: "codex" }));
+		const line = compactAgentView(await readAgentView({ profileDir: home, reachRoot: root, now, recent: true }));
+		expect(line).not.toContain("\n");
+		expect(line).toContain("1 need you · claude: 就排 23 号早上 8 点吗？");
+		expect(line).not.toContain("unknown");
+		expect((await readAgentView({ profileDir: home, reachRoot: root, now })).agents.map(row => row.reachAddress)).toContain("idle.seat@local");
+	});
 	it("reads no transcript when the process is unknown", async () => {
 		await events("codex", "unknown-process", [{ event: "stop", input: { transcript_path: join(home, "missing-rollout.jsonl") } }]);
 		expect((await view()).errors.filter(error => error.operation === "read resume record")).toEqual([]);
