@@ -42,7 +42,7 @@ export interface AgentView {
 }
 export interface AgentViewOptions {
 	profileDir?: string; reachRoot?: string; now?: number; reachProgram?: string;
-	/** Status-line and tmux redraws: skip stale event files, Reach work, and exhausted cards. */
+	/** Status-line and tmux redraws: keep fresh or waiting sessions and skip Reach work and exhausted cards. */
 	recent?: boolean;
 }
 export interface AgentIdentity { harness?: string; sessionId?: string; reachAddress?: string }
@@ -241,6 +241,9 @@ function emptyAgent(harness: AgentHarness, sessionId: string): AgentRow {
 function askTool(input: Record<string, unknown>): boolean {
 	return /(?:^|\.)(?:AskUserQuestion|request_user_input_async|request_user_input)$/.test(text(input.tool_name));
 }
+function startsPermission(observation: AgentObservation): boolean {
+	return observation.event === "permission-request" || (observation.event === "pre-tool-use" && askTool(observation.input));
+}
 function wait(row: AgentRow, reason: string): void { row.waitingForHuman = "yes"; row.waitingReason = reason; }
 function resolveWait(row: AgentRow): void { row.waitingForHuman = "no"; row.waitingReason = "unknown"; }
 
@@ -388,6 +391,24 @@ function classify(row: AgentRow): void {
 	}
 }
 
+async function lastEventWaitsForHuman(path: string, size: number): Promise<boolean> {
+	const start = Math.max(0, size - 8 * 1024);
+	const handle = await open(path, "r");
+	try {
+		const tail = Buffer.alloc(size - start);
+		const { bytesRead } = await handle.read(tail, 0, tail.length, start);
+		let contents = tail.toString("utf8", 0, bytesRead).trimEnd();
+		// Without a preceding newline, the last record may start before the tail.
+		if (start > 0 && !contents.includes("\n")) contents = (await handle.readFile("utf8")).trimEnd();
+		const line = contents.slice(contents.lastIndexOf("\n") + 1);
+		if (!line) return false;
+		const observation = observationSchema.parse(JSON.parse(line));
+		const row = emptyAgent(observation.harness, observation.sessionId);
+		applyEvent(row, observation, 0, path, startsPermission(observation) ? observation : undefined);
+		return row.waitingForHuman === "yes";
+	} finally { await handle.close(); }
+}
+
 async function readAgentFile(path: string, now: number, errors: AgentOperationError[]): Promise<AgentRow | undefined> {
 	const observations: AgentObservation[] = [];
 	let unreadable = false;
@@ -413,8 +434,7 @@ async function readAgentFile(path: string, now: number, errors: AgentOperationEr
 			unreadable = true; errors.push(failure("read agent identity", path, "mixed identities in event file", "current agent observation unknown")); continue;
 		}
 		const previousReason = row.waitingForHuman === "yes" ? row.waitingReason : "";
-		if (["permission-request", "pre-tool-use"].includes(observation.event) &&
-			(observation.event === "permission-request" || askTool(observation.input))) permission = observation;
+		if (startsPermission(observation)) permission = observation;
 		applyEvent(row, observation, index, path, permission);
 		if (row.waitingForHuman === "yes" && (previousReason !== row.waitingReason || observation.event === "permission-request")) {
 			row.waitingSince = observation.at;
@@ -605,7 +625,10 @@ export async function readAgentView(options: AgentViewOptions = {}): Promise<Age
 	for (const name of files.filter(name => name.endsWith(".jsonl")).sort()) {
 		try {
 			const path = join(directory, name);
-			if (options.recent && now - (await stat(path)).mtimeMs > 900_000) continue;
+			if (options.recent) {
+				const { mtimeMs, size } = await stat(path);
+				if (now - mtimeMs > 900_000 && !await lastEventWaitsForHuman(path, size)) continue;
+			}
 			const row = await readAgentFile(path, now, view.errors);
 			if (row?.waitingForHuman === "yes") {
 				view.openQuestions.push({ agent: row.reachAddress === "unknown" ? rowWho(row) : row.reachAddress,
