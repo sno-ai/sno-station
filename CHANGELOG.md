@@ -12,6 +12,15 @@ first product packages are published.
 - Public README in nine languages, the security page, and the first evidence image of the
   nightly improvement loop running on our own repository.
 
+## [2.1.1] - 2026-11-18
+
+Long sessions keep the next step in view.
+
+- An agent's progress record now stays short. It is rewritten to where the task stands, not
+  stretched with dated updates, so after a long day the next step and the last failure are still
+  right there when the agent picks the task up again.
+- Clearer `--help` in the timed-task, time and quota commands.
+
 ## [2.1.0] - 2026-11-17
 
 Tell one agent once. Every agent works from the newest version.
