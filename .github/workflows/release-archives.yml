@@ -1,8 +1,8 @@
 name: release archives
 
-# Builds the Reach archive for every platform and the three small-program archives that `sno setup`
-# downloads, and attaches them to the GitHub Release. Everything is built from this repository.
-# On a pull request it only builds, so the build is proven before a release needs it.
+# Builds the Linux Reach archives and the three small-program archives that `sno setup` downloads, and
+# attaches them to the GitHub Release. The two macOS Reach archives are built on the team's own Mac and
+# uploaded to the draft before this runs (recipe at the reach job). On a pull request it only builds.
 
 on:
   workflow_dispatch:
