@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
-import { appendFile, mkdir, mkdtemp, readFile, readdir, rm, utimes, writeFile } from "node:fs/promises";
+import { appendFile, mkdir, mkdtemp, readFile, readdir, rm, stat, utimes, writeFile } from "node:fs/promises";
 import { hostname, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -12,6 +12,7 @@ let previous: string | undefined;
 let previousReach: string | undefined;
 const now = Date.now();
 const helper = resolve("apps/reach/lib/reach-agent-view");
+const reach = resolve("apps/reach/bin/sno-reach");
 beforeEach(async () => {
 	home = await mkdtemp(join(tmpdir(), "sno-agent-view-"));
 	previous = process.env.SNO_PROFILE_DIR;
@@ -111,6 +112,33 @@ describe("agent state view read-time semantics", () => {
 		expect(recent.errors).toEqual([]);
 		expect((await view()).errors.map(error => error.operation)).toEqual(["parse agent observation", "parse Reach try"]);
 	});
+	it.each([
+		["stop", { last_assistant_message: "Which project?" }, "asked a question"],
+		["permission-request", { tool_name: "Bash" }, "permission to approve"],
+	] as const)("keeps an old %s wait on status redraw until the user answers", async (event, input, reason) => {
+		const identity = { conversation_id: "waiting" };
+		await observeAgentEvent("cursor", event, { ...identity, ...input });
+		const path = join(home, "station/agents/cursor--waiting.jsonl");
+		const marker = `${path}.waiting`;
+		const options = { profileDir: home, reachRoot: join(home, "reach"), now: Date.now(), recent: true };
+		const past = new Date(options.now - 901_000);
+		await utimes(path, past, past);
+
+		const waiting = await readAgentView(options);
+		expect(waiting.openQuestions).toMatchObject([{ source: "native", sessionId: "waiting" }]);
+		expect(waiting.agents[0]?.waitingReason).toBe(reason);
+		expect(compactAgentView(waiting)).toContain("1 need you");
+		expect(await readFile(marker, "utf8")).toBe("");
+
+		await observeAgentEvent("cursor", "user-prompt-submit", { ...identity, prompt: "Continue with Sno Station." });
+		const answered = await readAgentView(options);
+		expect(answered.agents[0]?.waitingForHuman).toBe("no");
+		expect(answered.openQuestions).toEqual([]);
+		expect(compactAgentView(answered)).not.toContain("need you");
+		await expect(stat(marker)).rejects.toMatchObject({ code: "ENOENT" });
+		await utimes(path, past, past);
+		expect((await readAgentView(options)).agents).toEqual([]);
+	});
 	it("keeps old native questions in the full view and mailed questions on status redraw until dismissed", async () => {
 		const old = new Date(now - 1200_000);
 		const path = await events("codex", "waiting", [{ event: "stop", at: old.toISOString(), input: { last_assistant_message: "Which project?" } }]);
@@ -187,6 +215,19 @@ describe("agent state view read-time semantics", () => {
 		expect(result.stuck).toEqual([]);
 		expect(compactAgentView(result, { harness: "claude", sessionId: "foreground" })).toMatch(/1 need you.*claude: approve.*unknown/);
 	});
+	it("excludes the Reach notice sender and developer mailbox from the agent inventory", async () => {
+		const root = join(home, "reach");
+		const notice = spawnSync(reach, ["notify", "--type", "routine", "--subject", "Watch finished"], {
+			encoding: "utf8", env: { ...process.env, XDG_STATE_HOME: home },
+		});
+		expect(notice.status, notice.stderr).toBe(0);
+		for (const address of [`developer.human@${hostname()}`, `station.notices@${hostname()}`]) {
+			const seat = JSON.parse(await readFile(join(root, address, "seat.json"), "utf8"));
+			expect(seat).toMatchObject({ address, runtime: "unbound" });
+		}
+		expect((await view()).agents).toEqual([]);
+		expect(compactAgentView(await readAgentView({ recent: true }))).toBe("❄ 0 working · 0 stuck");
+	});
 	it("keeps corrupt observations explicit instead of a false all-clear", async () => {
 		const path = await events("claude", "broken", [{ event: "user-prompt-submit" }]);
 		await appendFile(path, "{truncated\n");
@@ -195,13 +236,24 @@ describe("agent state view read-time semantics", () => {
 		expect(result.agents[0]?.doing).toBe("unknown");
 		expect(compactAgentView(result)).toContain("unknown");
 	});
-	it("appends real per-session observations without a sidecar, ignores foreign notify and keeps same-vendor files separate", async () => {
+	it("appends real per-session observations, marks only the wait, and ignores foreign notify", async () => {
 		await observeAgentEvent("claude", "permission-request", { session_id: "first", tool_name: "Bash" });
 		await observeAgentEvent("claude", "stop", { session_id: "second", last_assistant_message: "Done." });
 		await observeAgentEvent("codex", "notify", { session_id: "foreground", thread_id: "background", last_assistant_message: "Done." });
-		expect(await readdir(join(home, "station/agents"))).toEqual(["claude--first.jsonl", "claude--second.jsonl"]);
+		expect((await readdir(join(home, "station/agents"))).sort()).toEqual([
+			"claude--first.jsonl", "claude--first.jsonl.waiting", "claude--second.jsonl",
+		]);
 		expect((await view()).agents).toHaveLength(2);
 		expect(await readdir(join(home, "station"))).toEqual(["agents"]);
+	});
+	it.each([
+		{ "thread-id": "hyphenated" },
+		{ session_id: "", thread_id: "empty-session" },
+	])("captures a Codex Stop with payload %j", async fields => {
+		await observeAgentEvent("codex", "stop", { ...fields, "last-assistant-message": "The review is ready." });
+		expect((await view()).agents).toMatchObject([{
+			harness: "codex", sessionId: Object.values(fields).find(Boolean), finalReply: "The review is ready.", group: "Finished",
+		}]);
 	});
 	it("offers a card from pickup output even when the scan timed out", async () => {
 		await writeFile(join(home, "sno"), "#!/bin/sh\nprintf 'REACH-RING Guide: g. Read each original card.\\n\\nCard: /reach/worker/new/card\\n'\nexit 124\n", { mode: 0o700 });
@@ -257,15 +309,31 @@ describe("agent state view read-time semantics", () => {
 	it("clears a Claude permission wait once its transcript records the person's denial, and only then", async () => {
 		const transcript = join(home, "transcript.jsonl");
 		const asked = [{ event: "user-prompt-submit", input: { prompt: "Run the command" } },
-			{ event: "pre-tool-use", input: { tool_name: "Bash", tool_use_id: "toolu_denied", transcript_path: transcript } },
-			{ event: "permission-request", input: { tool_name: "Bash", transcript_path: transcript } }];
+			{ event: "pre-tool-use", input: { tool_name: "Bash", tool_use_id: "toolu_denied", transcript_path: transcript } }];
 		await events("claude", "denied", asked);
 		await writeFile(transcript, `${JSON.stringify({ type: "user", message: { content: [{ type: "tool_use", id: "toolu_denied" }] } })}\n`);
-		expect((await view()).agents[0]).toMatchObject({ waitingForHuman: "yes", waitingReason: "permission to approve" });
-		// The record Claude Code 2.1 writes when "No" or Escape answers the prompt.
-		await appendFile(transcript, `${JSON.stringify({ type: "user", message: { role: "user", content: [{ type: "tool_result", is_error: true,
-			content: "The user doesn't want to proceed with this tool use.", tool_use_id: "toolu_denied" }] }, toolUseResult: "User rejected tool use" })}\n`);
-		expect((await view()).agents[0]).toMatchObject({ waitingForHuman: "no", doing: "idle at prompt", group: "Finished", subgroup: "permission denied" });
+		await writeFile(join(home, "sno"), `#!/bin/sh\nshift\nexec "${reach}" "$@"\n`, { mode: 0o700 });
+		vi.stubEnv("PATH", `${home}:${process.env.PATH}`);
+		vi.stubEnv("XDG_STATE_HOME", home);
+		vi.stubEnv("SNO_REACH_ADDR", undefined);
+		vi.stubEnv("SNO_DUE_RUN", undefined);
+		try {
+			await observeAgentEvent("claude", "permission-request", { session_id: "denied", tool_name: "Bash", transcript_path: transcript });
+			expect((await view()).agents[0]).toMatchObject({ waitingForHuman: "yes", waitingReason: "permission to approve" });
+			const redraw = { profileDir: home, reachRoot: join(home, "reach"), recent: true };
+			await expect.poll(async () => (await readAgentView(redraw)).openQuestions.map(question => question.source)).toEqual(["native", "mail"]);
+			const mailbox = join(redraw.reachRoot, `developer.human@${hostname()}`);
+			const other = spawnSync(reach, ["notify", "--type", "approval", "--session", "other", "--subject", "Other approval"], { encoding: "utf8" });
+			expect(other.status, other.stderr).toBe(0);
+
+			// The record Claude Code 2.1 writes when "No" or Escape answers the prompt.
+			await appendFile(transcript, `${JSON.stringify({ type: "user", message: { role: "user", content: [{ type: "tool_result", is_error: true,
+				content: "The user doesn't want to proceed with this tool use.", tool_use_id: "toolu_denied" }] }, toolUseResult: "User rejected tool use" })}\n`);
+			const denied = await readAgentView(redraw);
+			expect(denied.agents[0]).toMatchObject({ waitingForHuman: "no", doing: "idle at prompt", group: "Finished", subgroup: "permission denied" });
+			expect(denied.openQuestions).toMatchObject([{ source: "mail", subject: "[APPROVAL] Other approval" }]);
+			expect(await readdir(join(mailbox, "cur"))).toEqual([expect.stringMatching(/:2,[^,]*T/)]);
+		} finally { vi.unstubAllEnvs(); }
 	});
 	it("keeps the user's task line when a Claude background task notification arrives as a prompt", async () => {
 		await events("claude", "notified", [{ event: "user-prompt-submit", input: { prompt: "Fix the login redirect loop" } },
