@@ -140,7 +140,11 @@ async function hookHistory(target: string): Promise<AgentObservation[]> {
 async function hookSeat(history: AgentObservation[], target: string): Promise<string | undefined> {
 	const cached = process.env.SNO_REACH_ADDR || history.findLast(item => item.reachAddress)?.reachAddress;
 	if (cached) return cached;
-	try { return (await execute("sno", ["reach", "whoami"], { timeout: 1000 })).stdout.trim() || undefined; }
+	try {
+		// A sno without this Reach verb prints its help with exit 0; only a one-line address is a seat.
+		const address = (await execute("sno", ["reach", "whoami"], { timeout: 1000 })).stdout.trim();
+		return /^[^\s@]+@[^\s@]+$/.test(address) ? address : undefined;
+	}
 	catch (error) {
 		if (record(error).code !== 1 || record(error).stderr) {
 			await logReachHookFailure("resolve Reach seat", target, error, "seat unavailable");
@@ -161,7 +165,8 @@ async function pickupSeat(seat: string): Promise<void> {
 		await logReachHookFailure("pick up Reach mail", seat, error,
 			reason ? "some pickup offers may be missing" : "turn ends without a continuation");
 	}
-	if (reason) process.stdout.write(`${JSON.stringify({ decision: "block", reason })}\n`);
+	// Only pickup offers continue the turn; help or usage text from an older sno or Reach never does.
+	if (/^Card: /m.test(reason)) process.stdout.write(`${JSON.stringify({ decision: "block", reason })}\n`);
 }
 
 function approvalNotice(observation: AgentObservation, history: AgentObservation[]): void {
