@@ -148,6 +148,24 @@ emit_watch_event() {
 	local state="$1" detail="${2:-}"
 	printf '# EVENT: window %s terminal=%s%s\n' \
 		"$state" "$terminal" "${detail:+ $detail}"
+	# Both terminal events end the watch. Leave the wrapper's group before returning.
+	if [[ "$follow" == true && ( "$state" == dead || "$state" == idle ) ]]; then
+		perl -MPOSIX -e '
+			my ($window, $log) = @ARGV;
+			my $operation = "reach: notify finished window $window";
+			POSIX::setsid() >= 0 or die "$operation: setsid failed: $!\n";
+			my $pid = fork();
+			defined $pid or die "$operation: fork failed: $!\n";
+			exit 0 if $pid;
+			open STDERR, ">>", $log or warn "$operation: cannot open $log: $!\n";
+			my $status = system("sno", "reach", "notify", "--type", "result", "--subject", "finished: $window");
+			if ($status != 0) {
+				warn "$operation: " . ($status == -1 ? "$!" : "status $status") . "\n";
+				exit 1;
+			}
+		' "$terminal" "${SNO_REACH_ROOT:-$HOME/.local/state/sno-reach}/reach.log" </dev/null >/dev/null 7>&- ||
+			printf 'reach: notify finished window %s failed to detach\n' "$terminal" >&2
+	fi
 }
 
 ring_watch_event() {

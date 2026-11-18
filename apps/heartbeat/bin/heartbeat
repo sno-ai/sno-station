@@ -73,7 +73,7 @@ usage: sno heartbeat --label NAME [--interval MINUTES] [--log PATH] [--until-fil
                      [--max-ticks N] [--max-hours H] [-- COMMAND [ARG ...]]
        sno heartbeat --stop NAME
        sno heartbeat --list
-       sno heartbeat --due-set RECORD "YYYY-MM-DD HH:MM IANA_ZONE" "ACTION" [daily|weekly]
+       sno heartbeat --due-set RECORD "YYYY-MM-DD HH:MM IANA_ZONE" "ACTION" [hourly|daily|weekly]
        sno heartbeat --due-cancel RECORD [ACTION]
        sno heartbeat --due [--problems]
        sno heartbeat --due-tick
@@ -104,7 +104,7 @@ Two shapes, and nothing else should ever be hand-written:
   --stop NAME   stop YOUR heartbeat with that label; another owner's is never reachable
   --list        every heartbeat running on this machine, yours marked "you"
   --due-set     add or update a timed task in a progress record's "## Due" section
-                (match by action; optionally repeat daily or weekly)
+                (match by action; optionally repeat hourly, daily or weekly)
   --due-cancel  remove a timed task by action, or remove the entire "## Due"
                 section when no action is given
   --due         list timed tasks; --problems shows only tasks with recorded problems
@@ -386,6 +386,21 @@ due_lock() {
 
 due_next() {
   local at="$1" repeat="$2" now="$3" zone="${1##* }" day="${1%% *}" clock step=1 candidate
+  if [[ $repeat == hourly ]]; then
+    local minute second next
+    read -r minute second < <(TZ="$zone" date -d "@$now" '+%M %S')
+    candidate=$((now + 3600 - 10#$minute * 60 - 10#$second))
+    minute="$(TZ="$zone" date -d "@$candidate" +%M)"
+    # A fractional-hour offset change can leave the candidate between whole hours.
+    if [[ $minute != 00 ]]; then candidate=$((candidate + 3600 - 10#$minute * 60)); fi
+    next="$(TZ="$zone" date -d "@$candidate" "+%Y-%m-%d %H:%M $zone")"
+    # The record format cannot distinguish two occurrences of the same local hour.
+    if [[ $(due_epoch "$next") != "$candidate" ]]; then
+      next="$(date -u -d "@$candidate" '+%Y-%m-%d %H:%M UTC')"
+    fi
+    printf '%s\n' "$next"
+    return
+  fi
   clock="${at#* }"; clock="${clock% *}"
   [[ $repeat != weekly ]] || step=7
   while true; do
@@ -422,9 +437,19 @@ due_open_home() {
   return 0
 }
 
+due_notice() {
+  local lock_fd="$1" action="$2" reason="$3" details="$4" status=0
+  [[ ! $lock_fd =~ ^[0-9]+$ ]] || exec {lock_fd}>&-
+  sno reach notify --type failure --subject "$reason: $action" --body "$details" || status=$?
+  if ((status != 0)); then
+    printf 'heartbeat: reach notify for %s failed (exit %s)\n' "$action" "$status" >&2
+  fi
+  exit "$status"
+}
+
 due_runner() {
   local record="$1" entry="$2" lock_fd="${3:-}" at action repeat checkout runtime id open operation=fresh how='fresh conversation'
-  local now epoch zone late lateness='on time' prompt next='' pending='' line text result='' error='' status started=0 agent_pid output_fd blocked=0
+  local now epoch zone late lateness='on time' prompt next='' pending='' line text result='' error='' status started=0 agent_pid output_fd blocked=0 reason=''
   local -a command
   at="$(due_field "$entry" at)"; action="$(due_field "$entry" 'do')"; repeat="$(due_field "$entry" repeat)"
   # A concurrent tick may have read this occurrence just before the previous runner used it up.
@@ -473,6 +498,7 @@ DUE_RESULT done|unfinished <why>|waiting-for-you <need>"
       [[ ! $lock_fd =~ ^[0-9]+$ ]] || exec {lock_fd}>&-
       cd -- "$checkout" || exit 1
       if [[ $runtime == codex && $operation == fork ]]; then export CODEX_HOME="$open"; fi
+      export SNO_DUE_RUN=1
       exec "${command[@]}" "$prompt" </dev/null 2>&1
     )
     agent_pid=$!
@@ -496,8 +522,16 @@ DUE_RESULT done|unfinished <why>|waiting-for-you <need>"
     exec {output_fd}<&-
     status=0; wait "$agent_pid" || status=$?
     if ((started)); then
-      if ((status != 0)); then result="ended with error $status $error"
-      elif [[ -z $result ]]; then result='no result line'; fi
+      if ((status != 0)); then
+        reason='ended with error'; result="$reason $status $error"
+      elif [[ -z $result ]]; then
+        reason='no result line'; result="$reason"
+      elif [[ $result == 'DUE_RESULT waiting-for-you '* ]]; then
+        reason='waiting-for-you'
+      fi
+      if [[ -n $reason ]]; then
+        due_notice "$lock_fd" "$action" "$reason" "$record: $result" </dev/null &
+      fi
       due_edit "$record" finish "$entry" '' "${pending%result pending}$result"
       return 0
     fi
@@ -508,12 +542,46 @@ DUE_RESULT done|unfinished <why>|waiting-for-you <need>"
     operation=fresh
   done
   [[ $operation != fresh ]] || id="$runtime"
-  due_edit "$record" failure "$entry" '' "$(TZ="$zone" date '+%Y-%m-%d %H:%M') $zone not started: $operation ${id:-$runtime} ${error:-no real reply}"
+  result="not started: $operation ${id:-$runtime} ${error:-no real reply}"
+  due_notice "$lock_fd" "$action" 'not started' "$record: $result" </dev/null &
+  due_edit "$record" failure "$entry" '' "$(TZ="$zone" date '+%Y-%m-%d %H:%M') $zone $result"
+}
+
+due_rewake() {
+  local root="${SNO_REACH_ROOT:-$HOME/.local/state/sno-reach}"
+  exec >>"$STATE_ROOT/log/due.log" || {
+    printf 'heartbeat: reach rewake for %s cannot append to %s/log/due.log\n' "$root" "$STATE_ROOT" >&2
+    exec >/dev/null
+  }
+  local -a detach=(setsid)
+  # Reach already uses Perl's setsid on macOS, which has no setsid command.
+  if ! command -v setsid >/dev/null 2>&1; then
+    detach=(perl -MPOSIX -e 'POSIX::setsid() >= 0 or die "heartbeat: setsid failed: $!\n"; exec @ARGV or die "heartbeat: exec failed: $!\n"')
+  fi
+  exec "${detach[@]}" bash -c '
+    root=$1
+    error() { printf "heartbeat: reach rewake for %s failed: %s\n" "$root" "$1" >&2; }
+    command -v sno >/dev/null 2>&1 || { error "sno command not found"; exit 127; }
+    mkdir -p -- "$root" || { error "cannot create store directory"; exit 1; }
+    exec 9>"$root/.rewake.lock" || { error "cannot open lock"; exit 1; }
+    flock -n -E 75 9 || {
+      status=$?
+      if ((status == 75)); then exit 0; fi
+      error "flock exit $status"
+      exit "$status"
+    }
+    timeout --verbose 290 sno reach rewake 9>&- || {
+      status=$?
+      error "exit $status"
+      exit "$status"
+    }
+  ' bash "$root" 2>&1
 }
 
 due_scan() {
   local mode="$1" problems="${2:-}" record entry at action repeat last epoch lock entry_fd running next now detach
   mkdir -p -- "$STATE_ROOT/due" "$STATE_ROOT/log"
+  if [[ $mode == tick ]]; then due_rewake </dev/null & fi
   now="$(date +%s)"
   for record in "$DUE_ROOT"/*.md; do
     [[ -f $record ]] || continue
@@ -545,7 +613,7 @@ due_scan() {
           exec {entry_fd}>&-; continue
         fi
         if ((epoch > now)); then exec {entry_fd}>&-; continue; fi
-        if [[ -n $repeat && $repeat != daily && $repeat != weekly ]]; then
+        if [[ -n $repeat && $repeat != hourly && $repeat != daily && $repeat != weekly ]]; then
           due_edit "$record" failure "$entry" '' "$(date '+%Y-%m-%d %H:%M %Z') not started: repeat not understood: $repeat"
           exec {entry_fd}>&-; continue
         fi
@@ -581,11 +649,11 @@ case "$1" in
     due_runner "$2" "$3" "$4"
     exit 0 ;;
   --due-set)
-    (($# == 4 || $# == 5)) || die '--due-set needs <record> "YYYY-MM-DD HH:MM <IANA zone>" "<do>" [daily|weekly]'
+    (($# == 4 || $# == 5)) || die '--due-set needs <record> "YYYY-MM-DD HH:MM <IANA zone>" "<do>" [hourly|daily|weekly]'
     record="$(due_record "$2")"
     due_epoch "$3" >/dev/null || die 'expected at: YYYY-MM-DD HH:MM <IANA zone>; time not understood'
     [[ -n $4 && $4 != *$'\n'* ]] || die 'do must be one nonempty line'
-    [[ ${5:-} == '' || ${5:-} == daily || ${5:-} == weekly ]] || die 'repeat must be daily or weekly'
+    [[ ${5:-} == '' || ${5:-} == hourly || ${5:-} == daily || ${5:-} == weekly ]] || die 'repeat must be hourly, daily or weekly'
     entry="at: $3"$'\n'
     [[ -z ${5:-} ]] || entry+="repeat: $5"$'\n'
     entry+="do: $4"
