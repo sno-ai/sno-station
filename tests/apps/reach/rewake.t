@@ -6,7 +6,12 @@ export SNO_PROFILE_DIR="$WORK/profile" SNO_REACH_RING_LOG="$WORK/rings.jsonl"
 unset ORCA_TAB_ID
 participants
 heartbeat="$APP/../heartbeat/bin/heartbeat"
-sno_record_programs "heartbeat=$heartbeat" "reach=$REACH"
+mkdir "$WORK/heartbeat-bin"
+# shellcheck disable=SC2016 # variables in the generated script expand when it runs
+printf '#!/usr/bin/env bash\nif [[ "${1:-}" == heartbeat ]]; then shift; exec %q "$@"; fi\nexec %q "$@"\n' \
+  "$heartbeat" "$WORK/test-bin/sno" >"$WORK/heartbeat-bin/sno"
+chmod +x "$WORK/heartbeat-bin/sno"
+export PATH="$WORK/heartbeat-bin:$PATH"
 mkdir -p "$SNO_PROFILE_DIR/station/"{agents,handoff}
 events="$SNO_PROFILE_DIR/station/agents"
 handoff="$SNO_PROFILE_DIR/station/handoff"
@@ -52,8 +57,19 @@ send_fixture "$automatic" "$SENDER" "$RECEIVER" decision filtered $'Auto-Submitt
 send_fixture "$no_reply" "$SENDER" "$RECEIVER" status filtered 'X-No-Reply: true'
 send_fixture "$old" "$SENDER" "$RECEIVER" decision filtered
 touch -t 200001010000 "$(message_path "$RECEIVER" "$old")"
+expired="expired@$HOST"; replaced="replaced@$HOST"; replacement="replacement@$HOST"
+send_fixture "$expired" "$OTHER" "$RECEIVER" decision filtered 'Expiry-Date: Sat, 01 Jan 2000 00:00:00 +0000'
+send_fixture "$replaced" "$OTHER" "$RECEIVER" decision filtered
+send_fixture "$replacement" "$OTHER" "$RECEIVER" decision filtered "Supersedes: <$replaced>"
+replacement_path="$(message_path "$RECEIVER" "$replacement")"
+mv -- "$replacement_path" "$STATE/$RECEIVER/cur/${replacement_path##*/}:2,T"
 
 invoke rewake; expect_rc 0
+jq -se --arg expired "<$expired>" --arg replaced "<$replaced>" '
+  all(.[]; .msg_id != $expired and .msg_id != $replaced)
+' "$tries" >/dev/null || { cat "$tries"; fail 'rewake recorded a try for expired or superseded work'; }
+ring_count "$expired" 0
+ring_count "$replaced" 0
 ring_count "$job" 0
 age "$tries"
 reach rewake >"$WORK/rewake-first" 2>&1 &

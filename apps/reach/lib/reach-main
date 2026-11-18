@@ -1122,18 +1122,24 @@ run_doctor() {
 }
 
 observe_append() {
-    local root="$1" status stored detail
+    local root="$1" status output detail
     shift
     (
         trap - EXIT
-        if stored="$(timeout --foreground --signal=TERM --kill-after=1 5 sno observe append "$@" </dev/null 2>/dev/null)"; then
+        output="$(mktemp "${TMPDIR:-/tmp}/reach-observe.XXXXXXXXXX")" || {
+            reach_failure "$root" 'capture observation' "$1" 'could not create temporary output; event not stored'
+            exit 0
+        }
+        trap 'rm -f -- "$output"' EXIT
+        # A child retaining this file descriptor cannot keep the caller waiting for pipe EOF.
+        if timeout --foreground --signal=TERM --kill-after=1 5 sno observe append "$@" >"$output"; then
             exit 0
         else
             status=$?
         fi
         if ((status == 127)); then
             detail="sno: not found; $1 event not stored"
-        elif [[ "$stored" == stored ]]; then
+        elif [[ "$(<"$output")" == stored ]]; then
             detail="sno observe append $1 failed (exit $status); event stored locally, delivery pending"
         else
             detail="sno observe append $1 failed (exit $status); event not stored"
@@ -2202,8 +2208,7 @@ list_actions() {
         [[ ! -s "$error_file" ]] || cat "$error_file" >&2
         return 74
     fi
-    filter_authorized_actions "$maildir" "$caller" "$candidates_file" \
-        "$output_file" "$paths_file"
+    filter_authorized_actions "$caller" "$candidates_file" <"$paths_file" >"$output_file"
 }
 
 list_informed() {
@@ -2740,12 +2745,14 @@ progress_authority_target() {
 
 
 filter_authorized_actions() {
-    local maildir="$1" caller="$2" input="$3" output="$4" all="$5"
-    local message delivered recipients replacement id expiry now
+    local caller="$1" input="$2"
+    local message delivered recipients replacement id expiry now replacement_paths
     local -A replacements=()
     now="$(date +%s)" || return 74
     # A replacement still supersedes its original after the replacement is handled.
+    replacement_paths="$(mpick -t '"supersedes" =~ "."')" || return 74
     while IFS= read -r message; do
+        [[ -f "$message" && ! -L "$message" ]] || continue
         delivered="$(mhdr -h delivered-to "$message")" || return 74
         [[ "$delivered" == "$caller" ]] || continue
         recipients="$(maddr -a -h to: "$message")" || return 74
@@ -2754,8 +2761,7 @@ filter_authorized_actions() {
         [[ -n "$replacement" ]] || continue
         [[ "$replacement" =~ $MESSAGE_ID_RE ]] || return 65
         replacements["$replacement"]=1
-    done <"$all"
-    : >"$output"
+    done <<<"$replacement_paths"
     while IFS= read -r message; do
         delivered="$(mhdr -h delivered-to "$message")" || return 74
         [[ "$delivered" == "$caller" ]] || return 65
@@ -2767,7 +2773,7 @@ filter_authorized_actions() {
             [[ "$expiry" =~ ^-?[0-9]+$ ]] || return 65
             ((expiry >= now)) || continue
         fi
-        printf '%s\n' "$message" >>"$output"
+        printf '%s\n' "$message" || return 74
     done <"$input"
 }
 
@@ -3047,6 +3053,10 @@ needs_handling() {
         flags="${flags##*:2,}"
         [[ "$flags" != *T* && "$flags" != *R* ]] || return 1
     fi
+    local paths eligible
+    paths="$(mlist "$root/$addr")" || return 74
+    eligible="$(filter_authorized_actions "$addr" <(printf '%s\n' "$card") <<<"$paths")" || return $?
+    [[ -n "$eligible" ]] || return 1
     id="$(mhdr -h message-id "$card")" || return 74
     try_file="$root/$addr/tries.jsonl"
     if [[ -f "$try_file" ]]; then
@@ -3905,7 +3915,7 @@ run_reply() {
     fi
     started="$EPOCHREALTIME"
     status=0
-    attempt_outbox_entry "$root" "$CALLER" "$entry" || status=$?
+    attempt_outbox_entry "$root" "$CALLER" "$entry" >&2 || status=$?
     flock -u "$reply_fd"
     exec {reply_fd}<&-
     while IFS= read -r recipient; do
@@ -3916,7 +3926,7 @@ run_reply() {
             die 74 'could not read the delivered reply Message-ID'
         printf '%s\n' "$(<"$header_file")"
     fi
-    schedule_placement "$root" "$CALLER" "$reply_input" yes
+    schedule_placement "$root" "$CALLER" "$reply_input" yes >&2
     if ((status != 0)); then
         die 74 "reply delivery failed; queued for explicit flush: $entry"
     fi
