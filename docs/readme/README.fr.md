@@ -129,13 +129,18 @@ Dites `/cos` dans Claude Code, ou `$cos` dans Codex. Cet agent devient votre che
 **Arrêtez de surveiller des terminaux.** Avec ou sans chef de cabinet, votre ligne d'état de Claude Code ou de Cursor vous dit quand quelqu'un a besoin de vous. L'installation la met en place :
 
 ```text
-❄ 2 need you · claude: approve
+[sno] 2 agents are waiting for you
+  Claude in web-app needs your approval (Bash) · 1m
+  Codex in api asks: Should the billing migration run tonight? · 5m
 ```
 
 `sno squad` déploie toute l'équipe en plein écran : qui a besoin de vous, qui travaille, ce qui est terminé.
 
 ```text
 Sno Station · squad · 09:15 · 2 need you · 2 working · 2 finished
+Waiting for you (2)
+  Claude in web-app needs your approval (Bash) · 1m
+  Codex in api asks: Should the billing migration run tonight? · 5m
 Needs you (2)
 > claude web-app       approve a permission · Fix the login redirect loop …   1m
   codex api            asked a question · Migrate the billing tables to th…   5m
