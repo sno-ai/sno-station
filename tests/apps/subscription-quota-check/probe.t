@@ -86,11 +86,17 @@ done
 
 # ---------------------------------------------------------------- arguments --
 
+unset OPENAI_BASE_URL
 run help --help; check "--help exits 0" "$RC" 0
 if printf '%s' "$OUT" | grep -q 'short_only'; then
 	ok "--help documents the verdict values"
 else
 	bad "--help documents the verdict values"
+fi
+if [[ "$OUT" == *'OPENAI_BASE_URL is not set'* && "$OUT" != *"using the harness's own endpoint"* ]]; then
+	ok "--help explains the quota when OPENAI_BASE_URL is unset"
+else
+	bad "--help explains the quota when OPENAI_BASE_URL is unset"
 fi
 
 run badvendor --vendor nope --json; check "an unknown vendor is rejected" "$RC" 2
