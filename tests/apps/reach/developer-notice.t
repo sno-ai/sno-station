@@ -34,8 +34,11 @@ done
 has "$NOTICE_OUTPUT" '[APPROVAL] approval needed'
 ! grep -Fq 'background bookkeeping' "$NOTICE_OUTPUT"
 [[ "$(grep -Fc "[QUESTION] developer@$HOST" "$NOTICE_OUTPUT")" == 1 ]]
+approval="$(grep -Flx 'X-Session: abc' "$STATE/$developer"/new/*)"
+mv -- "$approval" "$STATE/$developer/new/reach-deliver.fixture00T"
 reach notify --dismiss-session abc
-[[ "$(find "$STATE/$developer/cur" -name '*:2,*T*' | wc -l)" == 1 ]]
+[[ "$(find "$STATE/$developer/cur" -name '*:2,*T*' | wc -l)" == 1 ]] ||
+    fail 'the answered approval with a new filename ending in T was not dismissed'
 
 frame() { printf '%s %s\n%s\n' "$1" "${#2}" "$2"; }
 {
