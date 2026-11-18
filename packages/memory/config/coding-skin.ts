@@ -2,7 +2,7 @@ import { mkdir, rename, writeFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 export { loadedFilesAtStart } from "./loaded-files";
 
-export { observeAgentEvent, readAgentView, compactAgentView, markAgentResultSeen, agentProcessIdentity,
+export { observeAgentEvent, readAgentView, compactAgentView, statusLines, markAgentResultSeen, agentProcessIdentity,
 	type AgentHarness, type AgentObservation, type AgentOperationError, type AgentRow, type AgentView,
 	type AgentViewOptions, type AgentIdentity } from "./agent-state";
 export { composeAgentStatusLine, renderAgentStatusLine } from "./agent-statusline";
