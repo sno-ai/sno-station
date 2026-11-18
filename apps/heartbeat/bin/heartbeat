@@ -666,9 +666,9 @@ case "$1" in
     due_edit "$record" set "$entry"
     exit 0 ;;
   --due-cancel)
-    (($# == 2 || $# == 3)) || die '--due-cancel needs <record> [<do text>]'
+    [[ $# == 2 || ( $# == 3 && -n $3 ) ]] || die '--due-cancel needs <record> [<do text>]'
     record="$(due_record "$2")"
-    entry=''; [[ -z ${3:-} ]] || entry="do: $3"
+    entry=''; [[ $# == 2 ]] || entry="do: $3"
     due_edit "$record" cancel "$entry"
     exit 0 ;;
   --due)
@@ -983,8 +983,11 @@ else
 printf 'heartbeat: armed. NOTHING REACHES YOU until you attach a reader to the log:\n'
 # --pid makes the reader retire itself when this heartbeat exits. Without it every finished
 # watch leaves a tail running forever, and a reused log path then delivers every line twice.
-printf 'heartbeat:   Monitor({command: "tail --pid=%s -F -n0 %s", persistent: true, description: "%s ticks"})\n' \
-  "$$" "$log_path" "$label"
+# Quote for the shell, then escape the quoted path for the Monitor command string.
+reader_path="${log_path@Q}"
+reader_path="${reader_path//\\/\\\\}"
+printf 'heartbeat:   Monitor({command: "tail --pid=%s -F -n0 -- %s", persistent: true, description: "%s ticks"})\n' \
+  "$$" "${reader_path//\"/\\\"}" "$label"
 printf 'heartbeat: every tick then arrives as one message. Say what it says.\n'
 fi
 
