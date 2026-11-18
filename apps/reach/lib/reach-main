@@ -1609,7 +1609,7 @@ require_safe_outbox() {
         [[ -d "$outbox" && ! -L "$outbox" ]] ||
             die 65 "caller outbox path is unsafe: $outbox"
     elif [[ "$create" == yes ]]; then
-        mkdir -- "$outbox" ||
+        mkdir -- "$outbox" 2>/dev/null || [[ -d "$outbox" && ! -L "$outbox" ]] ||
             die 74 "could not create caller outbox: $outbox"
     else
         return 1
