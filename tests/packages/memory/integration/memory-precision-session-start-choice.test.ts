@@ -95,7 +95,7 @@ describe("nightly session-start choice", () => {
 			.toEqual(["shared-first", "shared-second", "unlabelled-important", "unlabelled-newer", "unlabelled"]);
 	});
 
-	it("delivers unclassified owner memories newest first before eligible classified rows", () => {
+	it("delivers unclassified owner memories newest first between ranked and unlabelled rules", () => {
 		plant("unlabelled", {}, "work-project");
 		plant("ranked", { start_label: "core", start_rank: 1 }, "work-project");
 		plant("project-older", { precision_kind: undefined, source: "manual" }, "work-project");
@@ -114,7 +114,7 @@ describe("nightly session-start choice", () => {
 		updateOrder.run(0.8, 3000, "shared");
 
 		expect(selectSessionStartRows(store, "work-project").map(row => row.id))
-			.toEqual(["project-newer", "shared", "project-older", "ranked", "unlabelled"]);
+			.toEqual(["ranked", "project-newer", "shared", "project-older", "unlabelled"]);
 	});
 
 	it("puts the short-list instruction immediately before the JSON instruction in both pick prompts", async () => {

@@ -1,7 +1,7 @@
 import type { MemoryStore } from "./store";
 import type { MemoryEntry } from "../engine/shared/types";
 
-/** Unclassified manually saved rows newest first, then active shared rules/person rows and project rules/pitfalls. */
+/** Ranked classified rows, then unclassified manual rows newest first, then remaining eligible classified rows. */
 export function selectSessionStartRows(store: MemoryStore, projectId: string): MemoryEntry[] {
 	const rows = [...new Set(["global", projectId])].flatMap(project => store.readActivePrecisionRows(project));
 	const shared: MemoryEntry[] = [];
@@ -14,18 +14,29 @@ export function selectSessionStartRows(store: MemoryStore, projectId: string): M
 			if (metadata.source === "manual") unclassified.push(row);
 			continue;
 		}
-		if (metadata.start_label !== undefined && (typeof metadata.start_rank !== "number" || !(metadata.start_rank >= 1))) continue;
+		if (metadata.start_label !== undefined && !hasPositiveRank(metadata.start_rank)) continue;
 		const kind = String(metadata.precision_kind);
 		if (row.projectId === "global" && ["rule", "person"].includes(kind)) shared.push(row);
 		else if (row.projectId !== "global" && row.projectId === projectId && ["rule", "pitfall"].includes(kind)) project.push(row);
 	}
-	return [...unclassified.sort((a, b) => b.timestamp - a.timestamp), ...rankedRows([...shared, ...project])];
+	const classified = rankedRows([...shared, ...project]);
+	const firstUnranked = classified.findIndex(row => !hasPositiveRank(JSON.parse(row.metadata).start_rank));
+	const rankedCount = firstUnranked === -1 ? classified.length : firstUnranked;
+	return [
+		...classified.slice(0, rankedCount),
+		...unclassified.sort((a, b) => b.timestamp - a.timestamp),
+		...classified.slice(rankedCount),
+	];
+}
+
+function hasPositiveRank(rank: unknown): rank is number {
+	return typeof rank === "number" && rank >= 1;
 }
 
 function rankedRows(rows: MemoryEntry[]): MemoryEntry[] {
 	const ranked = rows.map(row => ({ row, metadata: JSON.parse(row.metadata) }));
 	const rank = (metadata: Record<string, unknown>): number =>
-		typeof metadata.start_rank === "number" && metadata.start_rank >= 1 ? metadata.start_rank : Infinity;
+		hasPositiveRank(metadata.start_rank) ? metadata.start_rank : Infinity;
 	const label = (metadata: Record<string, unknown>): number => {
 		if (metadata.start_label === "core") return 0;
 		if (metadata.start_label === "topic") return 1;
