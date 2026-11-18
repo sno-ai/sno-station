@@ -161,8 +161,8 @@ resume_card() {
     record="$station/handoff/${session[$address]}.md"
     if [[ ! -f "$record" ]]; then log "$record" "resume $card: session progress record is missing"; return 74; fi
     at="$(date -u '+%Y-%m-%d %H:%M UTC')" || return 74
-    printf -v action 'First read the progress of Reach card %q (Message-ID %s) with SNO_REACH_ROOT=%q sno reach state --work %q, as seat %s. Stop if it is final or someone else holds it. Check every outside action before repeating it. Ask the developer about any action you cannot confirm. Resume try at %s.' \
-        "$card" "$id" "$root" "$work" "$address" "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+    printf -v action 'First read the progress of Reach card %q (Message-ID %s) by running this exact command: `SNO_REACH_ROOT=%q SNO_REACH_ADDR=%q sno reach state --work %q`. Stop if it is final or someone else holds it. Check every outside action before repeating it. Ask the developer about any action you cannot confirm. Resume try at %s.' \
+        "$card" "$id" "$root" "$address" "$work" "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
     run sno heartbeat --due-set "$record" "$at" "$action"
 }
 
