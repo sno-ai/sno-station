@@ -140,7 +140,7 @@ The install command registers ten Codex hooks.
 | `PreToolUse` | 5 s | Notes when a tool call starts, so its duration can be measured |
 | `PostToolUse` | 30 s | Reports each finished tool call to the memory service |
 | `PreCompact` | 5 s | Updates the session's saved progress record, if it has one, before the conversation is compacted |
-| `PostCompact` | 15 s | Codex delivers the compacted context through `SessionStart` with `source=compact`, so this hook produces no output |
+| `PostCompact` | 15 s | Produces no output |
 | `PermissionRequest` | 5 s | Records that the agent is waiting on a permission prompt, for `sno squad` |
 | `Interrupt` | 3 s | Records that the user interrupted the turn, for `sno squad` |
 
