@@ -1,0 +1,104 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+root="${SNO_REACH_ROOT:-$HOME/.local/state/sno-reach}"
+log() {
+    printf 'reach pickup %s: %s\n' "$1" "$2" >&2
+    { printf 'reach pickup %s: %s\n' "$1" "$2" >>"$root/reach.log"; } 2>/dev/null || true
+}
+
+# Bound the whole scan, including time spent in a shared command or its children.
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+    if [[ "${1-}" == --help && $# == 1 ]]; then
+        printf 'usage: sno reach pickup\n'
+        exit 0
+    fi
+    if (($#)); then log "$root" 'expected no arguments'; exit 64; fi
+    rc=0
+    timeout --kill-after=0.05 2.8 bash -c 'source "$1"' bash "$0" || rc=$?
+    case "$rc" in 124|137) log "$root" 'scan exceeded the pickup deadline' ;; esac
+    exit "$rc"
+fi
+
+lib="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+export PATH="$lib/../vendor/bin:$PATH" SNO_REACH_ROOT="$root"
+rc=0
+address="$("$lib/reach-whoami")" || rc=$?
+case "$rc" in 0) ;; 1) exit 0 ;; *) exit "$rc" ;; esac
+if ! since="$("$lib/reach-main" __since)"; then
+    log "$root" 'read start mark: __since failed'
+    exit 74
+fi
+
+# A watch report has its own receipt, since it must never consume a try or mark the card seen.
+watch_offer() (
+    local card_id="$1" receipts="$root/$address/watch-offered" found=0
+    exec {fd}>>"$root/$address/tries.jsonl" || return 74
+    flock "$fd" || return 74
+    if [[ -e "$receipts" ]]; then
+        grep -Fxq -- "$card_id" "$receipts" || found=$?
+        case "$found" in 0) return 1 ;; 1) ;; *) return 74 ;; esac
+    fi
+    printf '%s\n' "$card_id" >>"$receipts" || return 74
+)
+
+exec {cards_fd}< <(find "$root/$address/new" "$root/$address/cur" -maxdepth 1 -type f -newermt "$since" -print0)
+scan_pid=$!
+prompt='' failed=0
+while IFS= read -r -d '' card <&"$cards_fd"; do
+    rc=0
+    detail="$("$lib/reach-main" __needs-handling --as "$address" "$card" 2>&1)" || rc=$?
+    if ((rc > 1)); then log "$card" "check handling failed ($rc): $detail"; failed=74; fi
+    ((rc == 0)) || continue
+    if headers="$(mhdr "$card")"; then :
+    else log "$card" 'read headers: mhdr failed'; failed=74; continue
+    fi
+    from='' subject='' type='' state='' name='' automatic='' id=''
+    while IFS= read -r line; do
+        value="${line#*:}"; value="${value#"${value%%[!$' \t']*}"}"
+        case "${line,,}" in
+            from:*) from="$value" ;;
+            subject:*) subject="$value" ;;
+            x-type:*) type="$value" ;;
+            x-state:*) state="$value" ;;
+            x-name:*) name="$value" ;;
+            auto-submitted:*) automatic="$value" ;;
+            message-id:*) id="$value" ;;
+        esac
+    done <<<"$headers"
+    if [[ "$name" == agent-window && -n "$automatic" && "${automatic,,}" != no ]]; then
+        rc=0
+        watch_offer "$id" || rc=$?
+        case "$rc" in
+            0) ;;
+            1) continue ;;
+            *) log "$card" 'record watch offer: receipt unavailable'; failed=74; continue ;;
+        esac
+        rule='Read the watch report.'
+    else
+        detail="$("$lib/reach-main" __try --as "$address" --card "$card" --kind pickup 2>&1)" || rc=$?
+        if ((rc > 1)); then log "$card" "claim pickup failed ($rc): $detail"; failed=74; fi
+        ((rc == 0)) || continue
+        case "$type/$state" in
+            call/*|question/requires-action)
+                rule='Answer on the original thread for this card without --state. Other work keeps its state.' ;;
+            status/*|answer/*|done/*)
+                printf -v rule 'Read the card, then run sno reach dismiss --as %q --card %q --reason acknowledged.' "$address" "$card" ;;
+            *)
+                rule='Reply --state accepted on this original card and wait for acceptance to succeed. Do the work, then reply --state completed or failed on the same card.' ;;
+        esac
+    fi
+    printf -v entry 'Card: %s\nFrom: %s\nSubject: %s\n%s' "$card" "$from" "$subject" "$rule"
+    prompt+=$'\n\n'"$entry"
+done
+exec {cards_fd}<&-
+if ! wait "$scan_pid"; then
+    log "$root/$address" 'scan new and cur: find failed'
+    failed=74
+fi
+if [[ -n "$prompt" ]]; then
+    printf 'REACH-RING Guide: %s/../guide/agent-reach.md. State: %s. Seat: %s. Read each original card.%s\n' \
+        "$lib" "$root" "$address" "$prompt"
+    printf 'Once the developer answers your own question, dismiss that exact question card with sno reach dismiss --as developer.human@%s --card <card> --reason answered.\n' "$(hostname)"
+fi
+exit "$failed"
