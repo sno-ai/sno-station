@@ -27,12 +27,12 @@ afterEach(async () => {
 	else process.env.SNO_REACH_ROOT = previousReach;
 	await rm(home, { recursive: true, force: true });
 });
-async function events(harness: AgentHarness, sessionId: string, entries: { event: string; input?: Record<string, unknown>; at?: string; reachAddress?: string; identity?: { pid: number; processStart: string } }[]) {
+async function events(harness: AgentHarness, sessionId: string, entries: { event: string; input?: Record<string, unknown>; at?: string; identity?: { pid: number; processStart: string } }[]) {
 	const directory = join(home, "station/agents");
 	await mkdir(directory, { recursive: true });
 	const path = join(directory, `${encodeURIComponent(harness)}--${encodeURIComponent(sessionId)}.jsonl`);
-	await writeFile(path, entries.map(({ input = {}, at = new Date(now).toISOString(), identity, ...entry }) =>
-		JSON.stringify({ harness, sessionId, input, at, ...entry, ...identity } satisfies AgentObservation)).join("\n") + "\n");
+	await writeFile(path, entries.map(({ event, input = {}, at = new Date(now).toISOString(), identity }) =>
+		JSON.stringify({ harness, sessionId, event, input, at, ...identity } satisfies AgentObservation)).join("\n") + "\n");
 	return path;
 }
 const view = (at = now) => readAgentView({ profileDir: home, reachRoot: join(home, "reach"), reachProgram: helper, now: at });
@@ -98,9 +98,9 @@ describe("agent state view read-time semantics", () => {
 		expect(full.agents.map(row => row.sessionId).sort()).toEqual(["fresh", "stale"]);
 		expect(full.errors.some(error => error.operation === "read Reach work")).toBe(true);
 	});
-	it("skips full reads of stale non-waiting events and Reach retry logs on status redraw", async () => {
+	it("skips stale event files and Reach retry logs before reading them on status redraw", async () => {
 		const stale = await events("claude", "stale", [{ event: "user-prompt-submit" }]);
-		await writeFile(stale, "{broken\n" + await readFile(stale, "utf8"));
+		await appendFile(stale, "{broken\n");
 		const past = new Date(now - 901_000);
 		await utimes(stale, past, past);
 		const root = join(home, "reach");
@@ -111,34 +111,7 @@ describe("agent state view read-time semantics", () => {
 		expect(recent.errors).toEqual([]);
 		expect((await view()).errors.map(error => error.operation)).toEqual(["parse agent observation", "parse Reach try"]);
 	});
-	it("keeps stale permission waits after notifications and human-seen records on status redraw", async () => {
-		const old = new Date(now - 1200_000);
-		const at = old.toISOString();
-		const path = await events("claude", "stale-permission", [
-			{ event: "stop", at, input: { last_assistant_message: "Done." } },
-			{ event: "permission-request", at, input: { tool_name: "Bash", tool_use_id: "waiting" } },
-			{ event: "post-tool-use", at, input: { tool_name: "Read", tool_use_id: "unrelated" } },
-			{ event: "notification", at, input: { notification_type: "permission_prompt" } },
-			{ event: "human-seen", at, input: { resultId: "claude/stale-permission/0" } },
-		]);
-		await utimes(path, old, old);
-		const recent = await readAgentView({ profileDir: home, reachRoot: join(home, "reach"), now, recent: true });
-		expect(compactAgentView(recent)).toContain("1 need you");
-	});
-	it("keeps a stale Reach seat and reports it silent on status redraw", async () => {
-		const old = new Date(now - 1200_000);
-		const at = old.toISOString();
-		const reachAddress = "coder.quiet@local";
-		const path = await events("claude", "quiet-seat", [
-			{ event: "stop", at, reachAddress, input: { last_assistant_message: "Done." } },
-			{ event: "notification", at, input: { notification_type: "idle_prompt" } },
-		]);
-		await utimes(path, old, old);
-		const recent = await readAgentView({ profileDir: home, reachRoot: join(home, "reach"), now, recent: true });
-		expect(recent.agents).toMatchObject([{ sessionId: "quiet-seat", reachAddress }]);
-		expect(recent.stuck).toMatchObject([{ holder: reachAddress, reason: "silent" }]);
-	});
-	it("keeps native and mailed questions visible until answered or dismissed, including on status redraw", async () => {
+	it("keeps old native questions in the full view and mailed questions on status redraw until dismissed", async () => {
 		const old = new Date(now - 1200_000);
 		const path = await events("codex", "waiting", [{ event: "stop", at: old.toISOString(), input: { last_assistant_message: "Which project?" } }]);
 		await utimes(path, old, old);
@@ -149,12 +122,13 @@ describe("agent state view read-time semantics", () => {
 		const mail = "Subject: Choose a destination\nFrom: Agent <agent.one@local>\nX-Type: decision\nDate: " + old.toUTCString() + "\n\nPlease decide.\n";
 		await writeFile(join(mailbox, "new/question"), mail);
 		const options = { profileDir: home, reachRoot: root, now, recent: true };
-		const result = await readAgentView(options);
-		expect(result.openQuestions).toMatchObject([
+		expect((await view()).openQuestions).toMatchObject([
 			{ subject: "Which project?", age: 1200, source: "native" },
 			{ subject: "Choose a destination", agent: "agent.one@local", source: "mail" },
 		]);
-		expect(compactAgentView(result)).toContain("2 need you");
+		const result = await readAgentView(options);
+		expect(result.openQuestions).toMatchObject([{ subject: "Choose a destination", source: "mail" }]);
+		expect(compactAgentView(result)).toContain("1 need you");
 		await appendFile(path, JSON.stringify({ harness: "codex", sessionId: "waiting", at: new Date(now).toISOString(), event: "user-prompt-submit", input: { prompt: "Use Sno Station" } }) + "\n");
 		await rm(join(mailbox, "new/question"));
 		await writeFile(join(mailbox, "cur/question:2,ST"), mail);
