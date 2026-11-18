@@ -83,7 +83,14 @@ card = '\n'.join([f'From: Sender <{sender}>', f'To: {seat}', 'Subject: [QUESTION
     'X-Work: cursor-ide-review', 'X-Type: question', '', 'CARD-BODY-7Q: review README.md and answer.', ''])
 sent = run(['send', '--as', sender], stdin=card)
 assert sent.returncode == 0, sent.stderr
-assert 'notification rang-unverified' in sent.stderr, sent.stderr
+ring_log = proof / 'state' / 'reach-ring.jsonl'
+deadline = time.monotonic() + 30
+while True:
+    rings = [json.loads(line) for line in ring_log.read_text().splitlines()] if ring_log.exists() else []
+    if any(ring['msg_id'] == f'<cursor-ide-1@{host}>' and ring['outcome'] == 'rang-unverified' for ring in rings):
+        break
+    assert time.monotonic() < deadline, rings
+    time.sleep(.1)
 out, err = waiting.communicate(timeout=30)
 assert waiting.returncode == 0, err
 followup = json.loads(out)['followup_message']
