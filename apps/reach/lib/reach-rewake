@@ -1,0 +1,307 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+lib="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+root="${SNO_REACH_ROOT:-$HOME/.local/state/sno-reach}"
+station="${SNO_PROFILE_DIR:-$HOME/.sno}/station"
+export SNO_REACH_ROOT="$root" PATH="$lib/../vendor/bin:$PATH"
+shopt -s nullglob
+log() {
+    printf 'reach rewake %s: %s\n' "$1" "$2" >&2
+    { printf 'reach rewake %s: %s\n' "$1" "$2" >>"$root/reach.log"; } 2>/dev/null || true
+}
+if [[ "${1-}" == --help && $# == 1 ]]; then
+    printf 'usage: sno reach rewake\n'
+    exit 0
+fi
+if (($#)); then log "$root" 'expected no arguments'; exit 64; fi
+
+deadline=$((SECONDS + 288))
+run() {
+    local remaining=$((deadline - SECONDS))
+    ((remaining > 0)) || return 124
+    timeout --foreground --kill-after=1 "$remaining" "$@"
+}
+
+# The heartbeat owns the pass lock. Every action also claims its per-card try,
+# including direct invocations outside that heartbeat.
+if ! since="$(run "$lib/reach-main" __since)"; then
+    log "$root" 'read start mark: __since failed'
+    exit 74
+fi
+host="$(hostname)"
+failed=0
+declare -A session=() latest=() dead=() live=() uncertain=()
+declare -A release=() release_at=()
+records=("$station"/agents/*.jsonl)
+observations=''
+inventory_incomplete=no
+if (("${#records[@]}")); then
+    if ! observations="$(run jq -Rr '
+        (try fromjson catch {parseError:.}) |
+        if type != "object" then ["error",input_filename,"hook event is not an object"]
+        elif has("parseError") then ["error",input_filename,.parseError]
+        elif .event == "handoff-released" and .reachAddress == .input.target and
+           ([.input.source,.input.work,.input.message_id,.input.target,.input.target_message_id,.at] |
+            all(type == "string" and length > 0))
+        then ["release",.input.source,.input.work,.input.message_id,.input.target,.input.target_message_id,.at]
+        elif (.reachAddress | type == "string" and length > 0) and
+             (.sessionId | type == "string" and length > 0)
+        then ["observation",.reachAddress,.sessionId,(.at // "-"),(.pid // "-"),(.processStart // "-")]
+        else empty end | @tsv
+    ' "${records[@]}")"; then
+        log "$station/agents" 'read hook events: jq failed; the inventory is incomplete'
+        inventory_incomplete=yes failed=74
+    fi
+fi
+while IFS=$'\t' read -r kind address first second third fourth fifth; do
+    ((SECONDS < deadline)) || exit "$failed"
+    case "$kind" in
+        error)
+            log "$address" "parse hook event: $first"
+            inventory_incomplete=yes failed=74
+            ;;
+        release)
+            key="$address|$first|$second"
+            if [[ "${release_at[$key]:-}" < "$fifth" ]]; then
+                release_at["$key"]="$fifth"
+                release["$key"]="$third"$'\t'"$fourth"
+            fi
+            ;;
+        observation)
+            if [[ "${latest[$address]:-}" < "$second" ]]; then
+                latest["$address"]="$second"
+                session["$address"]="$first"
+            fi
+            [[ "$third" != - ]] || continue
+            if [[ ! -d /proc/self || ! "$third" =~ ^[1-9][0-9]*$ || ! "$fourth" =~ ^[0-9]+$ ]]; then
+                uncertain["$address"]=1
+            elif [[ ! -d "/proc/$third" ]]; then
+                dead["$address"]=1
+            elif stat_line="$(<"/proc/$third/stat")"; then
+                read -r -a fields <<<"${stat_line##*) }"
+                if [[ -z "${fields[19]:-}" ]]; then
+                    uncertain["$address"]=1
+                elif [[ "${fields[19]}" == "$fourth" && "${fields[0]}" != Z ]]; then
+                    live["$address"]=1
+                else
+                    dead["$address"]=1
+                fi
+            elif [[ -d "/proc/$third" ]]; then
+                log "$address" "read /proc/$third/stat: process identity unavailable"
+                uncertain["$address"]=1
+                failed=74
+            else
+                dead["$address"]=1
+            fi
+            ;;
+    esac
+done <<<"$observations"
+
+# A live hook process is sufficient. For a dead one, confirm that the registered
+# window did not acquire a new agent that has yet to write its first hook event.
+seat_liveness() {
+    local address="$1" record="$root/$1/reachable.json" registration channel identity pane pid inventory orca
+    if [[ -n "${live[$address]:-}" ]]; then printf 'live\n'; return; fi
+    if [[ "$inventory_incomplete" == yes || -z "${dead[$address]:-}" || -n "${uncertain[$address]:-}" ]]; then
+        printf 'unknown\n'; return
+    fi
+    if [[ ! -e "$record" ]]; then printf 'dead\n'; return; fi
+    registration="$(jq -er '[.channel, .identity.value] | select(all(type == "string" and length > 0)) | @tsv' "$record")" || return 74
+    IFS=$'\t' read -r channel identity <<<"$registration"
+    case "$channel" in
+        tmux)
+            if pane="$(run tmux display-message -p -t "$identity" '#{pane_dead} #{pane_pid}' 2>&1)"; then
+                if [[ -z "$pane" || "$pane" == '1 '* ]]; then printf 'dead\n'; return; fi
+                pid="${pane#* }"
+                inventory="$(ps -eo pid=,ppid=,comm=,args=)" || return 74
+                awk -v pane="$pid" '
+                    {parent[$1]=$2; runtime[$1]=($3 ~ /^(codex|claude|cursor-agent|hermes|openclaw)(-|$)/ ||
+                        $0 ~ /\/cursor-agent\/versions\/[^ ]+\/index\.js/)}
+                    END {
+                        for (pid in runtime) if (runtime[pid])
+                            for (p=pid; p in parent && p != parent[p]; p=parent[p])
+                                if (p == pane) {print "live"; exit}
+                        print "dead"
+                    }' <<<"$inventory"
+            else
+                case "$pane" in
+                    *"can't find pane"*|*"no server running"*|*"No such file or directory"*) printf 'dead\n' ;;
+                    *) log "$record" "inspect tmux pane $identity: $pane"; return 74 ;;
+                esac
+            fi
+            ;;
+        orca)
+            orca="${ORCA_CLI_COMMAND:-}"
+            if [[ -z "$orca" ]]; then
+                orca="$(command -v orca-ide || command -v orca)" || return 74
+                [[ "$orca" != /usr/bin/orca ]] || return 74
+            fi
+            inventory="$(run env -u ORCA_RELAY_DIR -u ORCA_RELAY_SOCKET_PATH timeout --foreground 20 "$orca" terminal list --json)" || return 74
+            # A connected tab might be hosting a replacement agent. With no
+            # process identity in the terminal inventory, leave that case unknown.
+            jq -er --arg id "$identity" '
+                select(.ok == true and (.result.terminals | type == "array")) |
+                if any(.result.terminals[]; .tabId == $id and .connected == true)
+                then "unknown" else "dead" end' <<<"$inventory"
+            ;;
+        *) printf 'unknown\n' ;;
+    esac
+}
+
+claim() {
+    local address="$1" card="$2" kind="$3" rc=0 detail
+    detail="$(run "$lib/reach-main" __try --as "$address" --card "$card" --kind "$kind" 2>&1)" || rc=$?
+    if ((rc > 1)); then log "$card" "claim $kind for $address failed ($rc): $detail"; failed=74; fi
+    return "$rc"
+}
+
+resume_card() {
+    local address="$1" card="$2" id="$3" work="$4" record at action
+    record="$station/handoff/${session[$address]}.md"
+    if [[ ! -f "$record" ]]; then log "$record" "resume $card: session progress record is missing"; return 74; fi
+    at="$(date -u '+%Y-%m-%d %H:%M UTC')" || return 74
+    printf -v action 'First read the progress of Reach card %q (Message-ID %s) with SNO_REACH_ROOT=%q sno reach state --work %q, as seat %s. Stop if it is final or someone else holds it. Check every outside action before repeating it. Ask the developer about any action you cannot confirm. Resume try at %s.' \
+        "$card" "$id" "$root" "$work" "$address" "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+    run sno heartbeat --due-set "$record" "$at" "$action"
+}
+
+linked_card_exists() {
+    local target="$1" target_id="$2" original="$3" work="$4" path
+    for path in "$root/$target/new/"* "$root/$target/cur/"*; do
+        ((SECONDS < deadline)) || return 124
+        [[ -f "$path" ]] || continue
+        [[ "$(mhdr -h message-id "$path")" == "$target_id" &&
+           "$(mhdr -h x-work "$path")" == "$work" ]] || continue
+        ORIGINAL_ID="$original" awk '
+            body && index($0, ENVIRON["ORIGINAL_ID"]) { found=1; exit }
+            /^\r?$/ { body=1 }
+            END { exit !found }' "$path" && return 0
+    done
+    return 1
+}
+
+forward_card() {
+    local address="$1" card="$2" target="$3" id="$4" work="$5" type="$6" state="$7"
+    local from subject reply_to date
+    from="$(maddr -a -h from: "$card")" || return 74
+    reply_to="$(maddr -a -h reply-to: "$card")" || return 74
+    subject="$(mhdr -h subject "$card")" || return 74
+    date="$(date -R)" || return 74
+    {
+        printf 'From: Reach <%s>\nTo: <%s>\nReply-To: <%s>\n' "$address" "$target" "${reply_to:-$from}"
+        printf 'Date: %s\nMessage-ID: <forward-%s-%s-%s@%s>\nX-Work: %s\nX-Forwarded-From: %s\n' \
+            "$date" "${EPOCHREALTIME/./}" "$$" "$RANDOM" "$host" "$work" "$id"
+        case "$type" in
+            question|decision|call)
+                printf 'X-Type: %s\nSubject: [%s] Forwarded: %s\n' "$type" "${type^^}" "$subject"
+                if [[ "$state" == requires-action ]]; then
+                    printf 'X-State: requires-action\nIn-Reply-To: %s\nReferences: %s\n' "$id" "$id"
+                fi
+                ;;
+            *) printf 'X-Type: status\nSubject: [STATUS] Forwarded: %s\n' "$subject" ;;
+        esac
+        printf '\nOriginally sent by %s.\n\n' "$from"
+        awk 'body { print; next } /^\r?$/ { body=1 }' "$card"
+    } | run "$lib/reach-main" send --as "$address" --no-ring
+}
+
+for seat in "$root"/*@"$host"/seat.json; do
+    ((SECONDS < deadline)) || break
+    maildir="${seat%/*}" address="${maildir##*/}"
+    exec {cards_fd}< <(run find "$maildir/new" "$maildir/cur" -maxdepth 1 -type f -newermt "$since" -print0)
+    scan_pid=$!
+    liveness=''
+    while ((SECONDS < deadline)) && IFS= read -r -d '' card <&"$cards_fd"; do
+        if ! headers="$(mhdr "$card")"; then log "$card" 'read headers: mhdr failed'; failed=74; continue; fi
+        id='' work='' type='' state='' refs='' parent='' automatic='' no_reply=''
+        while IFS= read -r line; do
+            value="${line#*:}"; value="${value#"${value%%[!$' \t']*}"}"
+            case "${line,,}" in
+                message-id:*) id="$value" ;;
+                x-work:*) work="$value" ;;
+                x-type:*) type="$value" ;;
+                x-state:*) state="$value" ;;
+                references:*) refs="$value" ;;
+                in-reply-to:*) parent="$value" ;;
+                auto-submitted:*) automatic="$value" ;;
+                x-no-reply:*) no_reply="$value" ;;
+            esac
+        done <<<"$headers"
+        [[ -z "$automatic" || "${automatic,,}" == no ]] || continue
+        [[ "$no_reply" != true ]] || continue
+        if [[ -z "$liveness" ]] && ! liveness="$(seat_liveness "$address")"; then
+            log "$address" 'inspect seat liveness: process or terminal inventory failed'
+            liveness=unknown failed=74
+        fi
+
+        rc=0
+        detail="$(run "$lib/reach-main" __needs-handling --as "$address" "$card" 2>&1)" || rc=$?
+        if ((rc > 1)); then log "$card" "check handling for $address failed ($rc): $detail"; failed=74; continue; fi
+
+        if ((rc == 0)); then
+            key="$address|$work|${refs%% *}"
+            [[ -n "${release[$key]:-}" ]] || key="$address|$work|$parent"
+            link="${release[$key]:-}"
+            original="${key##*|}"
+            if [[ -z "$refs$parent" ]]; then
+                # A new thread identifies its work by X-Work. Use it only if the
+                # old seat released exactly one original card for that work.
+                link=''
+                for key in "${!release[@]}"; do
+                    [[ "$key" == "$address|$work|"* ]] || continue
+                    if [[ -n "$link" ]]; then link=''; break; fi
+                    link="${release[$key]}"
+                    original="${key##*|}"
+                done
+            fi
+            if [[ -n "$link" && "$id" != "$original" ]]; then
+                IFS=$'\t' read -r target target_id <<<"$link"
+                if linked_card_exists "$target" "$target_id" "$original" "$work"; then
+                    if claim "$address" "$card" forward && ! forward_card "$address" "$card" "$target" "$id" "$work" "$type" "$state" >/dev/null; then
+                        log "$card" "forward to $target (handoff $target_id): send failed"
+                        failed=74
+                    fi
+                    continue
+                else
+                    log "$card" "check handoff $target_id for $target: linked card unavailable"
+                    failed=74
+                fi
+            fi
+            [[ "$liveness" != live ]] || {
+                if claim "$address" "$card" ring; then
+                    from="$(maddr -a -h from: "$card")" || from=''
+                    rc=0
+                    outcome="$(run "$lib/reach-ring" doorbell --to "$address" --from "$from" --msg-id "$id" 2>&1)" || rc=$?
+                    if ((rc != 0)) || [[ "$outcome" != *outcome=rang* ]]; then
+                        log "$card" "ring $address failed ($rc): $outcome"
+                        failed=74
+                    fi
+                fi
+                continue
+            }
+        else
+            # Accepted tasks are outside ordinary pickup eligibility. Reuse the
+            # progress projection to distinguish an unfinished holder from final mail.
+            [[ "$liveness" == dead && -z "$state" && ( "$type" == question || "$type" == decision ) ]] || continue
+            if ! progress="$(run "$lib/reach-main" state --work "$work" --json)"; then
+                log "$card" "read work $work for $address: state failed"
+                failed=74
+                continue
+            fi
+            if ! jq -e --arg id "$id" --arg holder "$address" '
+                select(.message_id == $id and .recipient == $holder and
+                    (.state == "accepted" or .state == "running" or .state == "requires-action"))
+            ' >/dev/null <<<"$progress"; then continue; fi
+        fi
+        [[ "$liveness" == dead ]] || continue
+        if claim "$address" "$card" resume && ! resume_card "$address" "$card" "$id" "$work"; then
+            log "$card" "resume $address: due entry was not written"
+            failed=74
+        fi
+    done
+    exec {cards_fd}<&-
+    ((SECONDS < deadline)) || break
+    if ! wait "$scan_pid"; then log "$maildir" 'scan new and cur: find failed'; failed=74; fi
+done
+exit "$failed"
