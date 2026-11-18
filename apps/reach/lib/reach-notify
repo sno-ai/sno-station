@@ -207,7 +207,7 @@ run_notify() {
         [[ $# == 2 && -n "$2" ]] || die 64 'usage: notify --dismiss-session <id>'
         dismiss="$2"
         for card in "$root/$recipient"/new/* "$root/$recipient"/cur/*; do
-            [[ -f "$card" && "${card##*:2,}" != *T ]] || continue
+            [[ -f "$card" && "${card##*/}" != *:2,*T* ]] || continue
             [[ "$(progress_header "$card" x-type)" == approval && "$(progress_header "$card" x-session)" == "$dismiss" ]] || continue
             ("$REPO_ROOT/lib/reach-main" dismiss --as "$recipient" --card "$card" --reason 'approval answered') || rc=$?
         done
