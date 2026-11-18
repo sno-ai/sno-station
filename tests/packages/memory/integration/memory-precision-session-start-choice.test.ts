@@ -98,12 +98,14 @@ describe("nightly session-start choice", () => {
 	it("delivers unclassified owner memories newest first before eligible classified rows", () => {
 		plant("unlabelled", {}, "work-project");
 		plant("ranked", { start_label: "core", start_rank: 1 }, "work-project");
-		plant("project-older", { precision_kind: undefined }, "work-project");
-		plant("project-newer", { precision_kind: undefined }, "work-project");
-		plant("shared", { precision_kind: undefined });
-		plant("assistant", { precision_kind: undefined, asserted_by: "assistant" });
-		plant("dropped", { precision_kind: undefined, start_label: "drop", start_rank: 1 });
-		plant("other-project", { precision_kind: undefined }, "other-project");
+		plant("project-older", { precision_kind: undefined, source: "manual" }, "work-project");
+		plant("project-newer", { precision_kind: undefined, source: "manual" }, "work-project");
+		plant("shared", { precision_kind: undefined, source: "manual" });
+		plant("assistant", { precision_kind: undefined, source: "manual", asserted_by: "assistant" });
+		plant("dropped", { precision_kind: undefined, source: "manual", start_label: "drop", start_rank: 1 });
+		plant("other-project", { precision_kind: undefined, source: "manual" }, "other-project");
+		plant("reflection", { precision_kind: undefined, type: "memory-reflection-item" });
+		plant("active-task", { precision_kind: undefined, source: "ambient-learning" }, "work-project");
 		plant("decision", { start_label: "core", start_rank: 1 }, "work-project", "decision");
 
 		const updateOrder = fixture.runtime.db.prepare("UPDATE nodix_memories SET importance = ?, timestamp = ? WHERE id = ?");

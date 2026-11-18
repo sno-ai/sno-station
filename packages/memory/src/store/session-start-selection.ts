@@ -1,7 +1,7 @@
 import type { MemoryStore } from "./store";
 import type { MemoryEntry } from "../engine/shared/types";
 
-/** Unclassified owner rows newest first, then active shared rules/person rows and project rules/pitfalls. */
+/** Unclassified manually saved rows newest first, then active shared rules/person rows and project rules/pitfalls. */
 export function selectSessionStartRows(store: MemoryStore, projectId: string): MemoryEntry[] {
 	const rows = [...new Set(["global", projectId])].flatMap(project => store.readActivePrecisionRows(project));
 	const shared: MemoryEntry[] = [];
@@ -11,7 +11,7 @@ export function selectSessionStartRows(store: MemoryStore, projectId: string): M
 		const metadata: Record<string, unknown> = JSON.parse(row.metadata);
 		if (metadata.asserted_by !== undefined || metadata.start_label === "drop") continue;
 		if (metadata.precision_kind === undefined) {
-			unclassified.push(row);
+			if (metadata.source === "manual") unclassified.push(row);
 			continue;
 		}
 		if (metadata.start_label !== undefined && (typeof metadata.start_rank !== "number" || !(metadata.start_rank >= 1))) continue;
