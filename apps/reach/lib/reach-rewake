@@ -186,10 +186,11 @@ forward_card() {
     local from subject reply_to date
     from="$(maddr -a -h from: "$card")" || return 74
     reply_to="$(maddr -a -h reply-to: "$card")" || return 74
+    reply_to="${reply_to:-$from}"
     subject="$(mhdr -h subject "$card")" || return 74
     date="$(date -R)" || return 74
     {
-        printf 'From: Reach <%s>\nTo: <%s>\nReply-To: <%s>\n' "$address" "$target" "${reply_to:-$from}"
+        printf 'From: Reach <%s>\nTo: %s\nReply-To: %s\n' "$address" "$target" "${reply_to//$'\n'/, }"
         printf 'Date: %s\nMessage-ID: <forward-%s-%s-%s@%s>\nX-Work: %s\nX-Forwarded-From: %s\n' \
             "$date" "${EPOCHREALTIME/./}" "$$" "$RANDOM" "$host" "$work" "$id"
         case "$type" in
