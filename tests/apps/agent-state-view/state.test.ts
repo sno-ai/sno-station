@@ -98,9 +98,9 @@ describe("agent state view read-time semantics", () => {
 		expect(full.agents.map(row => row.sessionId).sort()).toEqual(["fresh", "stale"]);
 		expect(full.errors.some(error => error.operation === "read Reach work")).toBe(true);
 	});
-	it("skips stale event files and Reach retry logs before reading them on status redraw", async () => {
+	it("skips full reads of stale non-waiting events and Reach retry logs on status redraw", async () => {
 		const stale = await events("claude", "stale", [{ event: "user-prompt-submit" }]);
-		await appendFile(stale, "{broken\n");
+		await writeFile(stale, "{broken\n" + await readFile(stale, "utf8"));
 		const past = new Date(now - 901_000);
 		await utimes(stale, past, past);
 		const root = join(home, "reach");
@@ -111,7 +111,7 @@ describe("agent state view read-time semantics", () => {
 		expect(recent.errors).toEqual([]);
 		expect((await view()).errors.map(error => error.operation)).toEqual(["parse agent observation", "parse Reach try"]);
 	});
-	it("keeps old native questions in the full view and mailed questions on status redraw until dismissed", async () => {
+	it("keeps native and mailed questions visible until answered or dismissed, including on status redraw", async () => {
 		const old = new Date(now - 1200_000);
 		const path = await events("codex", "waiting", [{ event: "stop", at: old.toISOString(), input: { last_assistant_message: "Which project?" } }]);
 		await utimes(path, old, old);
@@ -122,13 +122,12 @@ describe("agent state view read-time semantics", () => {
 		const mail = "Subject: Choose a destination\nFrom: Agent <agent.one@local>\nX-Type: decision\nDate: " + old.toUTCString() + "\n\nPlease decide.\n";
 		await writeFile(join(mailbox, "new/question"), mail);
 		const options = { profileDir: home, reachRoot: root, now, recent: true };
-		expect((await view()).openQuestions).toMatchObject([
+		const result = await readAgentView(options);
+		expect(result.openQuestions).toMatchObject([
 			{ subject: "Which project?", age: 1200, source: "native" },
 			{ subject: "Choose a destination", agent: "agent.one@local", source: "mail" },
 		]);
-		const result = await readAgentView(options);
-		expect(result.openQuestions).toMatchObject([{ subject: "Choose a destination", source: "mail" }]);
-		expect(compactAgentView(result)).toContain("1 need you");
+		expect(compactAgentView(result)).toContain("2 need you");
 		await appendFile(path, JSON.stringify({ harness: "codex", sessionId: "waiting", at: new Date(now).toISOString(), event: "user-prompt-submit", input: { prompt: "Use Sno Station" } }) + "\n");
 		await rm(join(mailbox, "new/question"));
 		await writeFile(join(mailbox, "cur/question:2,ST"), mail);
