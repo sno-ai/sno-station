@@ -1,4 +1,5 @@
-import { spawnSync } from "node:child_process";
+import { spawn as spawnChild, spawnSync } from "node:child_process";
+import { once } from "node:events";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -32,6 +33,30 @@ it("distinguishes actual detached and attached tmux process observations", async
 	} finally {
 		client?.kill();
 		spawnSync("tmux", ["-S", socket, "kill-server"]);
+		await rm(home, { recursive: true, force: true });
+	}
+});
+
+it("keeps a confirmed live process when its tmux socket cannot be queried", async () => {
+	const home = await mkdtemp(join(tmpdir(), "sno-agent-tmux-error-"));
+	const child = spawnChild("sleep", ["60"], {
+		env: { ...process.env, TMUX: `${join(home, "missing.sock")},0,0`, TMUX_PANE: "%1" },
+	});
+	try {
+		await once(child, "spawn");
+		const identity = await agentProcessIdentity(child.pid ?? 0);
+		await mkdir(join(home, "station/agents"), { recursive: true });
+		await mkdir(join(home, "reach"));
+		await writeFile(join(home, "station/agents/claude--live.jsonl"), JSON.stringify({
+			harness: "claude", sessionId: "live", at: new Date().toISOString(), event: "user-prompt-submit", input: {}, ...identity,
+		}) + "\n");
+		const result = await readAgentView({ profileDir: home, reachRoot: join(home, "reach"), recent: true });
+		expect(result.errors).toMatchObject([{ operation: "inspect tmux attachment", target: "%1", error: expect.stringContaining("missing.sock") }]);
+		expect(result.agents[0]).toMatchObject({ process: "present", resumable: "live" });
+	} finally {
+		const closed = once(child, "close");
+		child.kill();
+		await closed;
 		await rm(home, { recursive: true, force: true });
 	}
 });

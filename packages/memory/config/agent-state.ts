@@ -1,7 +1,8 @@
 import { execFile, spawn } from "node:child_process";
 import { createHash } from "node:crypto";
+import { once } from "node:events";
 import { createReadStream } from "node:fs";
-import { appendFile, mkdir, open, readFile, readdir, realpath, stat } from "node:fs/promises";
+import { appendFile, mkdir, open, readFile, readdir, realpath, rm, stat, writeFile } from "node:fs/promises";
 import { homedir, hostname } from "node:os";
 import { dirname, join } from "node:path";
 import { createInterface } from "node:readline";
@@ -10,6 +11,7 @@ import { z } from "zod";
 import { isAgentText } from "./session-activity";
 
 const execute = promisify(execFile);
+const WAITING_SUFFIX = ".waiting";
 export type AgentHarness = "claude" | "codex" | "cursor" | "hermes" | "openclaw" | "unknown";
 export interface AgentObservation {
 	harness: AgentHarness; sessionId: string; at: string; event: string; input: Record<string, unknown>;
@@ -42,7 +44,7 @@ export interface AgentView {
 }
 export interface AgentViewOptions {
 	profileDir?: string; reachRoot?: string; now?: number; reachProgram?: string;
-	/** Status-line and tmux redraws: skip stale event files, Reach work, and exhausted cards. */
+	/** Status-line and tmux redraws: skip stale event files without a wait marker, Reach work, and exhausted cards. */
 	recent?: boolean;
 }
 export interface AgentIdentity { harness?: string; sessionId?: string; reachAddress?: string }
@@ -164,17 +166,22 @@ async function pickupSeat(seat: string): Promise<void> {
 	if (reason) process.stdout.write(`${JSON.stringify({ decision: "block", reason })}\n`);
 }
 
+function dismissApproval(sessionId: string, root: string): ReturnType<typeof spawn> {
+	return spawn("sno", ["reach", "notify", "--dismiss-session", sessionId], {
+		detached: true, stdio: "ignore", env: { ...process.env, SNO_REACH_ROOT: root },
+	});
+}
+
 function approvalNotice(observation: AgentObservation, history: AgentObservation[]): void {
 	const { input, event, sessionId, reachAddress, cwd } = observation;
 	const dismiss = event === "approval-response" || event === "interrupt" ||
 		(event === "post-tool-use" && pendingApproval(history, input));
-	const args = dismiss ? ["--dismiss-session", sessionId] :
-		event === "permission-request" && text(input.tool_name) && !askTool(input)
-			? [...(reachAddress ? ["--as", reachAddress] : []), "--type", "approval", "--session", sessionId,
-				"--subject", `approval needed: ${text(input.tool_name)} in ${cwd ?? process.cwd()}`]
-			: undefined;
-	if (!args) return;
-	const child = spawn("sno", ["reach", "notify", ...args], { detached: true, stdio: "ignore" });
+	const tool = text(input.tool_name);
+	if (!dismiss && (event !== "permission-request" || !tool || askTool(input))) return;
+	const child = dismiss ? dismissApproval(sessionId, reachRoot()) : spawn("sno", [
+		"reach", "notify", ...(reachAddress ? ["--as", reachAddress] : []), "--type", "approval",
+		"--session", sessionId, "--subject", `approval needed: ${tool} in ${cwd ?? process.cwd()}`,
+	], { detached: true, stdio: "ignore" });
 	child.on("error", error => void logReachHookFailure(dismiss ? "dismiss Reach approval" : "send Reach approval", sessionId, error, "approval card unchanged"));
 	child.unref();
 }
@@ -190,7 +197,8 @@ function pendingApproval(history: AgentObservation[], completed: Record<string, 
 /** Observational failures are logged; they never prevent an agent's ordinary hook. */
 export async function observeAgentEvent(harness: AgentHarness, event: string, raw: unknown): Promise<void> {
 	const input = record(raw);
-	const sessionId = text(harness === "cursor" ? input.conversation_id : input.session_id ?? input.thread_id);
+	const thread = text(input.thread_id) || text(input["thread-id"]);
+	const sessionId = harness === "cursor" ? text(input.conversation_id) : text(input.session_id) || thread;
 	let target = `${harness}/${sessionId || "missing session identity"}`;
 	let pickup: Promise<void> | undefined;
 	try {
@@ -200,7 +208,6 @@ export async function observeAgentEvent(harness: AgentHarness, event: string, ra
 			await observeAgentEvent(harness, event, { ...input, session_id: input.agent_id, parent_session_id: undefined });
 			return;
 		}
-		const thread = text(input.thread_id ?? input["thread-id"]);
 		if (event === "notify" && thread && thread !== sessionId) return;
 		const agent = (harness === "claude" || harness === "codex") && input.agent_id === undefined;
 		target = eventFile(profileDir(), harness, sessionId);
@@ -224,6 +231,7 @@ export async function observeAgentEvent(harness: AgentHarness, event: string, ra
 		Object.assign(observation, await identity);
 		await mkdir(dirname(target), { recursive: true, mode: 0o700 });
 		await appendFile(target, `${JSON.stringify(observation)}\n`, { mode: 0o600 });
+		if (canChangeWait(observation)) await updateWaitingMarker(target, endsWaitOnly(observation));
 	} catch (error) {
 		logHookFailure("append agent observation", target, error, `${event} observation missing`);
 	} finally { await pickup; }
@@ -253,11 +261,49 @@ function matchingTool(permission: AgentObservation | undefined, input: Record<st
 	return Boolean(name && name === permission.input.tool_name);
 }
 
+function effectiveEvent({ event, input }: AgentObservation): string {
+	// Claude delivers a finished background task's notice as a prompt; it continues the user's task, never starts one.
+	return event === "user-prompt-submit" && text(input.prompt).trimStart().startsWith("<task-notification>")
+		? "agent-prompt-submit" : event;
+}
+
+function quotaFailure(input: Record<string, unknown>): boolean {
+	return ["rate_limit", "rate_limit_error", "quota_exhausted"].includes(text(input.error ?? input.error_type));
+}
+
+function canChangeWait(observation: AgentObservation): boolean {
+	const { input } = observation;
+	const event = effectiveEvent(observation);
+	if (event === "handoff-released" || event === "human-seen") return false;
+	if (input.human_addressee === true && (input.review_requested === true || input.decision_required === true)) return true;
+	if (event === "pre-tool-use") return askTool(input);
+	if (event === "stop-failure") return quotaFailure(input);
+	return ["user-prompt-submit", "permission-request", "post-tool-use", "approval-response",
+		"stop", "after-agent-response", "notify", "interrupt"].includes(event);
+}
+
+// These events can end a wait but never start one, so with no marker there is nothing to replay.
+function endsWaitOnly(observation: AgentObservation): boolean {
+	const event = effectiveEvent(observation);
+	if (event === "post-tool-use") return !(askTool(observation.input) && observation.harness === "codex");
+	return ["user-prompt-submit", "approval-response", "interrupt"].includes(event);
+}
+
+async function updateWaitingMarker(path: string, endsOnly: boolean): Promise<void> {
+	const marker = path + WAITING_SUFFIX;
+	const errors: AgentOperationError[] = [];
+	try {
+		if (endsOnly && !await stat(marker).then(() => true, (error: unknown) => { if (absent(error)) return false; throw error; })) return;
+		const replay = await replayAgentFile(path, errors);
+		if (replay?.row.waitingForHuman === "yes") await writeFile(marker, "", { mode: 0o600 });
+		else await rm(marker, { force: true });
+	} catch (error) { logHookFailure("update agent wait marker", marker, error, "redraw may skip a stale wait or read a stale session"); }
+	for (const error of errors) process.stderr.write(`${JSON.stringify(error)}\n`);
+}
+
 function applyEvent(row: AgentRow, observation: AgentObservation, index: number, source: string, permission?: AgentObservation): void {
 	const { input, at } = observation;
-	// Claude delivers a finished background task's notice as a prompt; it continues the user's task, never starts one.
-	const event = observation.event === "user-prompt-submit" && text(input.prompt).trimStart().startsWith("<task-notification>")
-		? "agent-prompt-submit" : observation.event;
+	const event = effectiveEvent(observation);
 	if (event === "handoff-released") {
 		row.work.push({ ...input, releasedAt: at });
 		return;
@@ -301,7 +347,7 @@ function applyEvent(row: AgentRow, observation: AgentObservation, index: number,
 		if (row.waitingReason === "permission to approve") { row.waitingForHuman = "unknown"; row.waitingReason = "unknown"; }
 	}
 	if (event === "session-end") row.doing = "idle at prompt";
-	if (event === "stop-failure" && ["rate_limit", "rate_limit_error", "quota_exhausted"].includes(text(input.error ?? input.error_type))) wait(row, "quota exhausted");
+	if (event === "stop-failure" && quotaFailure(input)) wait(row, "quota exhausted");
 	if (input.human_addressee === true && input.review_requested === true) wait(row, "done awaiting review");
 	if (input.human_addressee === true && input.decision_required === true) wait(row, "failed awaiting decision");
 	if (input.context_exhausted === true) row.resumable = "context full";
@@ -325,7 +371,7 @@ async function inspectProcess(row: AgentRow, observations: AgentObservation[], e
 				try {
 					const attached = (await execute("tmux", ["-S", socket, "display-message", "-p", "-t", pane, "#{session_attached}"])).stdout.trim();
 					row.process = attached === "0" ? "detached" : "present";
-				} catch (error) { row.process = "unknown"; errors.push(failure("inspect tmux attachment", pane, error, "process attachment unknown")); }
+				} catch (error) { errors.push(failure("inspect tmux attachment", pane, error, "process attachment unknown")); }
 			}
 		}
 	} catch (error) {
@@ -388,7 +434,9 @@ function classify(row: AgentRow): void {
 	}
 }
 
-async function readAgentFile(path: string, now: number, errors: AgentOperationError[]): Promise<AgentRow | undefined> {
+async function replayAgentFile(path: string, errors: AgentOperationError[]): Promise<{
+	row: AgentRow; observations: AgentObservation[]; unreadable: boolean;
+} | undefined> {
 	const observations: AgentObservation[] = [];
 	let unreadable = false;
 	const contents = await readFile(path, "utf8");
@@ -398,14 +446,7 @@ async function readAgentFile(path: string, now: number, errors: AgentOperationEr
 		catch (error) { unreadable = true; errors.push(failure("parse agent observation", `${path}:${index + 1}`, error, "current agent observation unknown")); }
 	}
 	const first = observations[0];
-	if (!first) {
-		const name = path.slice(path.lastIndexOf("/") + 1, -".jsonl".length);
-		const separator = name.indexOf("--");
-		const harness = harnessSchema.safeParse(decodeURIComponent(name.slice(0, separator)));
-		if (!harness.success || separator < 0) return undefined;
-		const row = emptyAgent(harness.data, decodeURIComponent(name.slice(separator + 2)));
-		row.missingReasons.push("unreadable observation"); return row;
-	}
+	if (!first) return undefined;
 	const row = emptyAgent(first.harness, first.sessionId);
 	let permission: AgentObservation | undefined;
 	for (const [index, observation] of observations.entries()) {
@@ -427,13 +468,27 @@ async function readAgentFile(path: string, now: number, errors: AgentOperationEr
 	if (row.waitingReason === "permission to approve" && await permissionDenied(row, observations, errors)) {
 		row.doing = "idle at prompt"; resolveWait(row); row.group = "Finished"; row.subgroup = "permission denied";
 	}
+	if (unreadable && row.waitingForHuman === "yes") row.waitingForHuman = "unknown";
+	return { row, observations, unreadable };
+}
+
+async function readAgentFile(path: string, now: number, errors: AgentOperationError[]): Promise<AgentRow | undefined> {
+	const replay = await replayAgentFile(path, errors);
+	if (!replay) {
+		const name = path.slice(path.lastIndexOf("/") + 1, -".jsonl".length);
+		const separator = name.indexOf("--");
+		const harness = harnessSchema.safeParse(decodeURIComponent(name.slice(0, separator)));
+		if (!harness.success || separator < 0) return undefined;
+		const row = emptyAgent(harness.data, decodeURIComponent(name.slice(separator + 2)));
+		row.missingReasons.push("unreadable observation"); return row;
+	}
+	const { row, observations, unreadable } = replay;
 	await inspectProcess(row, observations, errors);
 	await inspectResume(row, observations, errors);
 	if (row.lastEvent !== "unknown") row.ageSeconds = Math.max(0, (now - Date.parse(row.lastEvent.at)) / 1000);
 	// Existing Reach freshness horizon; this expires observations, never infers failure.
 	if (unreadable || (typeof row.ageSeconds === "number" && row.ageSeconds > 900)) {
 		if (row.doing === "working") row.doing = "unknown";
-		if (unreadable && row.waitingForHuman === "yes") row.waitingForHuman = "unknown";
 		row.missingReasons.push(unreadable ? "unreadable observation" : "current observation older than 900 seconds");
 	}
 	classify(row);
@@ -442,6 +497,7 @@ async function readAgentFile(path: string, now: number, errors: AgentOperationEr
 
 async function readSeats(root: string, entries: string[], rows: AgentRow[], errors: AgentOperationError[]): Promise<void> {
 	for (const address of entries) {
+		if (address.startsWith("developer.human@") || address.startsWith("station.notices@")) continue;
 		const path = join(root, address, "seat.json");
 		try {
 			const seat = record(JSON.parse(await readFile(path, "utf8")));
@@ -459,7 +515,7 @@ async function readSeats(root: string, entries: string[], rows: AgentRow[], erro
 	}
 }
 
-type MailCard = { path: string; id: string; sender: string; subject: string; type: string; date: string };
+type MailCard = { path: string; id: string; sender: string; subject: string; type: string; date: string; sessionId: string };
 
 async function readReachFile<T>(operation: string, path: string, view: AgentView, read: () => Promise<T>): Promise<T | undefined> {
 	try { return await read(); }
@@ -485,7 +541,8 @@ async function* mailboxCards(mailbox: string, view: AgentView): AsyncGenerator<M
 			}));
 			const from = fields.get("from") ?? "";
 			yield { path, id: fields.get("message-id") ?? "", sender: /<([^<>]+)>$/.exec(from)?.[1] ?? from,
-				subject: fields.get("subject") ?? "unknown", type: fields.get("x-type") ?? "", date: fields.get("date") ?? "" };
+				subject: fields.get("subject") ?? "unknown", type: fields.get("x-type") ?? "", date: fields.get("date") ?? "",
+				sessionId: fields.get("x-session") ?? "" };
 		}
 	}
 }
@@ -539,6 +596,14 @@ async function readReachStatus(root: string, view: AgentView, now: number, recen
 		await readSeats(root, seats, view.agents, view.errors);
 		const developer = `developer.human@${hostname()}`;
 		for await (const card of mailboxCards(join(root, developer), view)) {
+			if (card.type === "approval" && view.agents.some(row => row.harness === "claude" &&
+				row.sessionId === card.sessionId && row.subgroup === "permission denied")) {
+				try {
+					const [code, signal] = await once(dismissApproval(card.sessionId, root), "close");
+					if (code !== 0) throw new Error(`Reach notify exited with ${signal ?? code}`);
+					continue;
+				} catch (error) { view.errors.push(failure("dismiss Reach approval", card.sessionId, error, "approval card unchanged")); }
+			}
 			if (["question", "decision", "approval"].includes(card.type)) {
 				view.openQuestions.push({ agent: card.sender, subject: card.subject, age: agoSeconds(now, card.date), source: "mail" });
 			}
@@ -600,12 +665,15 @@ export async function readAgentView(options: AgentViewOptions = {}): Promise<Age
 	const now = options.now ?? Date.now();
 	const directory = join(options.profileDir ?? profileDir(), "station", "agents");
 	const view: AgentView = { observedAt: new Date(now).toISOString(), agents: [], work: [], quota: [], errors: [], openQuestions: [], stuck: [] };
-	let files: string[] = [];
-	try { files = await readdir(directory); } catch (error) { if (!absent(error)) throw new Error(`read agent inventory ${directory}: ${String(error)}`); }
+	const files = await readdir(directory).catch((error: unknown) => {
+		if (!absent(error)) throw new Error(`read agent inventory ${directory}: ${String(error)}`);
+		return [];
+	});
+	const redrawNames = options.recent ? new Set(files) : undefined;
 	for (const name of files.filter(name => name.endsWith(".jsonl")).sort()) {
 		try {
 			const path = join(directory, name);
-			if (options.recent && now - (await stat(path)).mtimeMs > 900_000) continue;
+			if (redrawNames && !redrawNames.has(name + WAITING_SUFFIX) && now - (await stat(path)).mtimeMs > 900_000) continue;
 			const row = await readAgentFile(path, now, view.errors);
 			if (row?.waitingForHuman === "yes") {
 				view.openQuestions.push({ agent: row.reachAddress === "unknown" ? rowWho(row) : row.reachAddress,
