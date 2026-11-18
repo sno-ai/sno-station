@@ -27,7 +27,8 @@ cases("progress-eligibility.t", "expiry supersede reverse unheld")
 for script in ("transport.t", "progress-reporting-lint.t",
                "local-delivery.t", "empty-body-refusal.t", "seat-ownership.t",
                "read-only.t", "send-preflight.t", "requires-action.t",
-               "reply-routing.t", "notification-once.t", "seats/pair-help.t"):
+               "reply-routing.t", "notification-once.t", "seats/pair-help.t",
+               "quick-return.t", "one-taker.t", "developer-notice.t", "sent-box.t"):
     CASES.append((script, ["bash", str(HERE / script)]))
 cases("terminal-states.t", "completed-after failed-after cancelled-before cancelled-after refused-before refused-after")
 cases("agent-mailbox-commands.t", """
@@ -52,6 +53,8 @@ for script in ("default-environment.t", "remote-protocol.t", "seats/call-no-back
                "seats/ring-reregistration.t", "seats/ring-real-tmux.t", "seats/ring-channel.t",
                "seats/cursor-spawn.t", "seats/cursor-heartbeat.t", "seats/cursor-ide.t",
                "seats/terminal-registration.t", "seats/terminal-relay.t"):
+    CASES.append((script, ["bash", str(HERE / script)]))
+for script in ("pickup.t", "rewake.t", "whoami.t", "watch-notice.t"):
     CASES.append((script, ["bash", str(HERE / script)]))
 # Start the genuinely long, isolated groups first. The result order is stable.
 priority = {"seats/ring-real-tmux.t": 0, "seats/call-tmux.t": 1, "ACP integration": 2}
