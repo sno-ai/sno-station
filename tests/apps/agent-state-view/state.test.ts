@@ -4,7 +4,7 @@ import { appendFile, mkdir, mkdtemp, readFile, readdir, rm, stat, utimes, writeF
 import { hostname, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { agentProcessIdentity, compactAgentView, markAgentResultSeen, observeAgentEvent, questionAndStuckLines, readAgentView,
+import { agentProcessIdentity, compactAgentView, markAgentResultSeen, observeAgentEvent, questionAndStuckLines, readAgentView, statusLines,
 	type AgentHarness, type AgentObservation } from "../../../packages/memory/config/agent-state.ts";
 
 let home: string;
@@ -124,6 +124,16 @@ describe("agent state view read-time semantics", () => {
 	it("says what a non-question wait needs instead of quoting it as a question", async () => {
 		await events("claude", "quota", [{ event: "stop-failure", input: { error: "rate_limit" } }]);
 		expect(compactAgentView(await view())).toBe("[sno] 1 agent is waiting for you · Claude is out of quota");
+	});
+	it("gives the status line one row per wait, at most two, so a long question is not cut at the summary", async () => {
+		await events("claude", "first", [{ event: "stop", input: { last_assistant_message: "Shall I schedule the Reddit post for Monday 23 November at 8 in the morning?" } }]);
+		await events("codex", "second", [{ event: "permission-request", input: { tool_name: "Bash" } }]);
+		await events("claude", "third", [{ event: "stop", input: { last_assistant_message: "Ship it?" } }]);
+		const rows = statusLines(await view());
+		expect(rows).toHaveLength(3);
+		expect(rows[0]).toBe("[sno] 3 agents are waiting for you · all: sno squad");
+		expect(rows.slice(1).join("\n")).toContain("Claude asks: Shall I schedule the Reddit post for Monday 23 November at 8 in the m…");
+		expect(statusLines({ ...(await view()), openQuestions: [] })).toEqual(["[sno] no agent is waiting for you"]);
 	});
 	it("reads no transcript when the process is unknown", async () => {
 		await events("codex", "unknown-process", [{ event: "stop", input: { transcript_path: join(home, "missing-rollout.jsonl") } }]);

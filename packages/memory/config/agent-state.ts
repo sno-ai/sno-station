@@ -922,7 +922,7 @@ function finalSentence(value: string): string {
 }
 
 /** Who waits for the developer, in which project, and for what: one line a person can act on. */
-function waitLine(view: AgentView, question: AgentView["openQuestions"][number]): string {
+function waitLine(view: AgentView, question: AgentView["openQuestions"][number], width = 40): string {
 	const row = question.source === "native" ? view.agents.find(item => item.sessionId === question.sessionId && item.harness === question.harness) : undefined;
 	const subject = question.subject.replace(/^\[[A-Z]+\]\s*/, "");
 	const approval = /^approval needed: (\S+)(?: in (.+))?$/.exec(subject);
@@ -936,17 +936,41 @@ function waitLine(view: AgentView, question: AgentView["openQuestions"][number])
 		"failed awaiting decision": "failed and needs your decision",
 	};
 	const what = approval || row?.waitingReason === "permission to approve" ? `needs your approval${tool ? ` (${tool})` : ""}`
-		: row && states[row.waitingReason] ? states[row.waitingReason] : `asks: ${cell(finalSentence(subject), 40).trimEnd()}`;
+		: row && states[row.waitingReason] ? states[row.waitingReason] : `asks: ${cell(finalSentence(subject), width).trimEnd()}`;
 	return `${who}${where} ${what}`;
+}
+
+/** Waits for the developer other than the viewing session's own. */
+function visibleWaits(view: AgentView, current: AgentIdentity): AgentView["openQuestions"] {
+	return view.openQuestions.filter(question => question.source === "mail" ||
+		!(current.harness === question.harness && current.sessionId === question.sessionId) &&
+		!(current.reachAddress && current.reachAddress === question.agent));
+}
+
+function attention(view: AgentView): string[] {
+	return [...(view.stuck.length ? [`${view.stuck.length} stuck: sno squad`] : []),
+		// An unreadable record must never read as an all-clear.
+		...(view.errors.length ? ["some agents unreadable: sno squad"] : []),
+		...(view.reachUnavailable ? ["Reach is not running"] : [])];
+}
+
+/**
+ * The status line as rows: the summary, then each of the first two waits on its own row so nothing is cut.
+ * With nothing waiting it is the single compact row.
+ */
+export function statusLines(view: AgentView, current: AgentIdentity = {}): string[] {
+	const waits = visibleWaits(view, current);
+	if (!waits.length) return [compactAgentView(view, current)];
+	const count = waits.length === 1 ? "1 agent is" : `${waits.length} agents are`;
+	return [[`[sno] ${count} waiting for you`, ...(waits.length > 2 ? ["all: sno squad"] : []), ...attention(view)].join(" · "),
+		...waits.slice(0, 2).map(question => `  ${waitLine(view, question, 70)} · ${ago(question.age)}`)];
 }
 
 /** One status line a person can act on: who waits, in which project, and for what. */
 export function compactAgentView(view: AgentView, current: AgentIdentity = {}): string {
 	const rows = view.agents.filter(row => !((current.harness === row.harness && current.sessionId === row.sessionId) ||
 		(current.reachAddress && current.reachAddress === row.reachAddress)));
-	const waits = view.openQuestions.filter(question => question.source === "mail" ||
-		!(current.harness === question.harness && current.sessionId === question.sessionId) &&
-		!(current.reachAddress && current.reachAddress === question.agent));
+	const waits = visibleWaits(view, current);
 	const working = rows.filter(row => row.group === "Working").length;
 	const parts: string[] = [];
 	const first = waits[0];
@@ -954,11 +978,7 @@ export function compactAgentView(view: AgentView, current: AgentIdentity = {}): 
 		parts.push(`${waits.length === 1 ? "1 agent is" : `${waits.length} agents are`} waiting for you`, waitLine(view, first));
 		if (waits.length > 1) parts.push("all: sno squad");
 	} else parts.push(working ? `${working} working, none waiting for you` : "no agent is waiting for you");
-	if (view.stuck.length) parts.push(`${view.stuck.length} stuck: sno squad`);
-	// An unreadable record must never read as an all-clear.
-	if (view.errors.length) parts.push("some agents unreadable: sno squad");
-	if (view.reachUnavailable) parts.push("Reach is not running");
-	return `[sno] ${parts.join(" · ")}`;
+	return `[sno] ${[...parts, ...attention(view)].join(" · ")}`;
 }
 
 export async function markAgentResultSeen(row: AgentRow, profile: string = profileDir()): Promise<void> {

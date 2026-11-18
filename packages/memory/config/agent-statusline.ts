@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { compactAgentView, readAgentView } from "./agent-state";
+import { compactAgentView, readAgentView, statusLines } from "./agent-state";
 import { shellQuote } from "./coding-skin";
 
 type StatusHarness = "claude" | "cursor";
@@ -60,9 +60,10 @@ export async function renderAgentStatusLine(harness: StatusHarness, originalEnco
 		const sessionId = payload?.session_id;
 		if (typeof sessionId !== "string" || !sessionId) throw new Error("current client session identity unavailable");
 		const view = await readAgentView({ recent: true });
-		const segment = compactAgentView(view, { harness, sessionId });
-		const color = /^\[sno\] \d+ agents? (?:is|are) waiting/.test(segment) ? "\x1b[1;33m" : "\x1b[2m";
-		const displayed = process.env.NO_COLOR === undefined ? `${color}${segment}\x1b[0m` : segment;
+		// Claude Code shows each output line as a status row, so each wait gets its own row; Cursor keeps one row.
+		const rows = harness === "claude" ? statusLines(view, { harness, sessionId }) : [compactAgentView(view, { harness, sessionId })];
+		const color = /^\[sno\] \d+ agents? (?:is|are) waiting/.test(rows[0] ?? "") ? "\x1b[1;33m" : "\x1b[2m";
+		const displayed = rows.map(row => (process.env.NO_COLOR === undefined ? `${color}${row}\x1b[0m` : row)).join("\n");
 		process.stdout.write(`${user.output.length > newlineLength ? " | " : ""}${displayed}\n`);
 	} catch (error) {
 		process.stdout.write(user.output.subarray(user.output.length - newlineLength));

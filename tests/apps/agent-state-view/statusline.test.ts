@@ -40,12 +40,14 @@ describe("agent state view composed command", () => {
 			delete env.NO_COLOR;
 			const result = spawnSync("sh", ["-c", settings.statusLine.command], { input, encoding: "utf8", env, timeout: 10_000 });
 			expect(result.status, result.stderr).toBe(0);
-			expect(result.stdout).toContain(`\x1b[31muser  ${input}  \x1b[0m | \x1b[1;33m${waiting}\x1b[0m\n`);
+			// Claude Code shows each line as a status row: the summary, then the wait on its own row.
+			if (harness === "claude") expect(result.stdout.replace(/ · \d+s/, " · 0s")).toContain(`\x1b[31muser  ${input}  \x1b[0m | \x1b[1;33m[sno] 1 agent is waiting for you\x1b[0m\n\x1b[1;33m  Claude needs your approval · 0s\x1b[0m\n`);
+			else expect(result.stdout).toContain(`\x1b[31muser  ${input}  \x1b[0m | \x1b[1;33m${waiting}\x1b[0m\n`);
 			expect(result.stdout).not.toContain("2 agents are waiting for you");
 			if (harness === "claude") {
 				const plain = spawnSync("sh", ["-c", settings.statusLine.command], { input, encoding: "utf8", env: { ...env, NO_COLOR: "1" }, timeout: 10_000 });
 				expect(plain.status, plain.stderr).toBe(0);
-				expect(plain.stdout).toContain(`\x1b[31muser  ${input}  \x1b[0m | ${waiting}\n`);
+				expect(plain.stdout).toMatch(/ \| \[sno\] 1 agent is waiting for you\n {2}Claude needs your approval · \d+s\n$/);
 			}
 		});
 
