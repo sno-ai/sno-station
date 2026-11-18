@@ -17,6 +17,14 @@ SENDER="lead.sender@$HOST"
 RECEIVER="worker.receiver@$HOST"
 OTHER="observer.other@$HOST"
 mkdir -p "$TEST_HOME" "$STATE"
+mkdir "$WORK/test-bin"
+cat >"$WORK/test-bin/sno" <<'SH'
+#!/bin/sh
+printf '%s\n' 'Reach tests: sno is disabled unless the test provides its own executable.' >&2
+exit 127
+SH
+chmod +x "$WORK/test-bin/sno"
+export PATH="$WORK/test-bin:$PATH"
 cleanup() {
   local status=$?
   local record pid command_line
