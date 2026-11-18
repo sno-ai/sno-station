@@ -178,7 +178,7 @@ case $operation in
       subscription-quota-check-"$(<apps/subscription-quota-check/VERSION)".tar.gz)
     for platform in linux-x86_64 linux-aarch64 macos-x86_64 macos-aarch64; do expected+=("reach-$reach_version-$platform.tar.gz"); done
     for name in "${expected[@]}"; do
-      grep -qxF "$name" <<< "$attached" || { printf 'No release carries %s (checked before publishing %s); run the release archives workflow for this tag first\n' "$name" "$tag" >&2; exit 2; }
+      grep -qxF "$name" <<< "$attached" || { printf 'No release carries %s (checked before publishing %s); build it on our own machines and gh release upload it to this draft first\n' "$name" "$tag" >&2; exit 2; }
     done
     gh release edit "$tag" --draft=false
     printf 'GitHub Release %s published after external installation proof\n' "$tag"
