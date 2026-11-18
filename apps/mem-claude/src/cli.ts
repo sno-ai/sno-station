@@ -29,6 +29,8 @@ function option(args: string[], name: string): string | undefined {
 
 const HOOK_COMMANDS = ["session-start", "user-prompt-submit", "stop", "session-end", "pre-tool-use", "post-tool-use", "pre-compact"];
 
+const STATE_HOOK_COMMANDS = ["permission-request", "approval-response", "interrupt", "notification", "stop-failure"];
+
 async function main(): Promise<number> {
 	const [command, ...args] = process.argv.slice(2);
 	if (command === "status-line") return renderAgentStatusLine("claude", option(args, "--sno-original") ?? "W10=", await readStdinText());
@@ -36,17 +38,21 @@ async function main(): Promise<number> {
 		await observeAgentEvent("claude", args[0] ?? "unknown", await readStdin());
 		return 0;
 	}
-	const input = HOOK_COMMANDS.includes(command ?? "") ? await readStdin() : undefined;
+	const input = [...HOOK_COMMANDS, ...STATE_HOOK_COMMANDS].includes(command ?? "") ? await readStdin() : undefined;
 	// The Cursor IDE runs Claude Code hooks with Cursor-shaped input; Sno's Cursor hooks own Cursor, so these do nothing there.
 	if (input && typeof input === "object" && "cursor_version" in input) return 0;
-	if (input !== undefined && command) await observeAgentEvent("claude", command, input);
+	if (input !== undefined && command && command !== "stop") await observeAgentEvent("claude", command, input);
+	if (STATE_HOOK_COMMANDS.includes(command ?? "")) return 0;
 	// Scripted runs (a temporary directory, `claude -p`) and background-task notices are not conversations; the
 	// real-agent release journeys set SNO_CAPTURE_SCRIPTED=1 to be recorded anyway. Measured 2026-10-13: 616 of 785 queued turns.
 	if (input && process.env["SNO_CAPTURE_SCRIPTED"] !== "1" && typeof input === "object") {
 		const { cwd, prompt } = input as { cwd?: unknown; prompt?: unknown };
-		if (typeof cwd === "string" && isTemporaryDirectory(cwd)) return 0;
-		if (process.env["CLAUDE_CODE_ENTRYPOINT"]?.startsWith("sdk-")) return 0;
-		if (typeof prompt === "string" && prompt.trimStart().startsWith("<task-notification>")) return 0;
+		if ((typeof cwd === "string" && isTemporaryDirectory(cwd)) ||
+			process.env["CLAUDE_CODE_ENTRYPOINT"]?.startsWith("sdk-") ||
+			(typeof prompt === "string" && prompt.trimStart().startsWith("<task-notification>"))) {
+			if (command === "stop") await stop(input, false);
+			return 0;
+		}
 	}
 	if (command === "session-start") {
 		process.stdout.write(`${await composeContinuityContext("claude", "SessionStart", input, () => sessionStart(input))}\n`);

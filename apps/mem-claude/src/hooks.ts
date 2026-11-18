@@ -4,6 +4,7 @@ import {
 	appendObserveLedgerRows,
 	CODING_SKIN_SESSION_QUERY,
 	loadedFilesAtStart,
+	observeAgentEvent,
 } from "@snoai/memory/coding-skin";
 import { z } from "zod";
 import { readCaptureSettings, readRecallSettings } from "./settings.js";
@@ -229,7 +230,12 @@ async function sendSessionActivity(
 	}
 }
 
-export async function stop(raw: unknown): Promise<void> {
+export async function stop(raw: unknown, capture = true): Promise<void> {
+	const observation = observeAgentEvent("claude", "stop", raw);
+	await Promise.all([observation, capture ? captureStop(raw) : undefined]);
+}
+
+async function captureStop(raw: unknown): Promise<void> {
 	const started = performance.now();
 	let sessionId: string | undefined;
 	try {

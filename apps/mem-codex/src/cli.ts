@@ -24,19 +24,22 @@ function option(args: string[], name: string): string | undefined {
 }
 
 const HOOK_COMMANDS = ["session-start", "user-prompt-submit", "stop", "session-end", "pre-tool-use", "post-tool-use", "pre-compact", "post-compact"];
-const STATE_HOOK_COMMANDS = ["permission-request", "interrupt"];
+const STATE_HOOK_COMMANDS = ["permission-request", "interrupt", "approval-response"];
 
 async function main(): Promise<number> {
 	const [command, ...args] = process.argv.slice(2);
 	const input = [...HOOK_COMMANDS, ...STATE_HOOK_COMMANDS].includes(command ?? "") ? await readStdin() : undefined;
-	if (input !== undefined && command) await observeAgentEvent("codex", command, input);
+	if (input !== undefined && command && command !== "stop") await observeAgentEvent("codex", command, input);
 	if (STATE_HOOK_COMMANDS.includes(command ?? "")) return 0;
 	// Scripted runs (a temporary directory, `codex exec`, `--ephemeral` with no transcript) are not conversations; the
 	// real-agent release journeys set SNO_CAPTURE_SCRIPTED=1 to be recorded anyway. Measured 2026-10-13: 184 of 283 queued turns.
 	if (input && process.env["SNO_CAPTURE_SCRIPTED"] !== "1" && typeof input === "object") {
 		const { cwd, transcript_path: transcript } = input as { cwd?: unknown; transcript_path?: unknown };
-		if (typeof cwd === "string" && isTemporaryDirectory(cwd)) return 0;
-		if (transcript === null || (typeof transcript === "string" && isScriptedSession(transcript))) return 0;
+		if ((typeof cwd === "string" && isTemporaryDirectory(cwd)) ||
+			transcript === null || (typeof transcript === "string" && isScriptedSession(transcript))) {
+			if (command === "stop") await stop(input, false);
+			return 0;
+		}
 	}
 	if (command === "session-start") {
 		process.stdout.write(`${await composeContinuityContext("codex", "SessionStart", input, () => sessionStart(input))}\n`);
