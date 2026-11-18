@@ -168,21 +168,17 @@ route_notice() {
         ) >"$TEMP_DIR/typed-$host" &
         pids+=("$!")
     done
-    local index reason=''
+    local index
     for index in "${!peers[@]}"; do
         peer="${peers[$index]}"
-        if ! wait "${pids[$index]}"; then
-            reason="linked peer did not answer: ${peer##*@}"
-            continue
-        fi
+        wait "${pids[$index]}" || continue
         response="$(<"$TEMP_DIR/typed-${peer##*@}")"
         when="${response#TYPED }"
         [[ "$when" != none && "$when" > "$latest" ]] || continue
         latest="$when"
         best="$peer"
     done
-    if [[ -n "$reason" ]]; then show_notice "$root" "$id" "$card" "$claim" "$reason"
-    elif [[ -z "$latest" ]]; then show_notice "$root" "$id" "$card" "$claim" 'no typed prompt recorded'
+    if [[ -z "$latest" ]]; then show_notice "$root" "$id" "$card" "$claim" 'no typed prompt recorded'
     elif [[ "$best" == "$recipient" ]]; then show_notice "$root" "$id" "$card" "$claim"
     else
         forwarded="$TEMP_DIR/forwarded"

@@ -67,4 +67,14 @@ for ((i=0; i<40; i++)); do
 done
 has "$NOTICE_OUTPUT" "[QUESTION] forwarded@$HOST"
 has "$remote/$forwarded/new/forwarded" 'X-Reach-Notice: forwarded'
+
+# The real transport fails to read this unavailable peer contact.
+mkdir -p "$STATE/network/peers"
+printf '{}\n' >"$STATE/network/peers/unavailable-peer.json"
+reach notify --type question --subject 'question with an unavailable peer'
+for ((i=0; i<40; i++)); do
+    grep -Fxq '[QUESTION] question with an unavailable peer' "$NOTICE_OUTPUT" && break
+    sleep .1
+done
+has "$NOTICE_OUTPUT" '[QUESTION] question with an unavailable peer'
 pass 'developer mail is created, shown once, cleared by session, and displayed at the forwarding destination'
