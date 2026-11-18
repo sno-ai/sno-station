@@ -1,22 +1,23 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
 import { observeAgentEvent, readAgentView, recordAgentHandoff } from "../../../packages/memory/config/agent-state.ts";
+import { stubReach } from "./reach-test-env.js";
 
 it.each(["worker.source@localhost", "worker.recover@localhost"])("retains the original work owner until release by %s and transfers only that item", async caller => {
 	const home = await mkdtemp(join(tmpdir(), "sno-view-handoff-"));
-	const previous = { profile: process.env.SNO_PROFILE_DIR, address: process.env.SNO_REACH_ADDR };
 	const root = join(home, "reach");
 	const source = "worker.source@localhost";
 	const target = "worker.target@localhost";
 	const options = { profileDir: home, reachRoot: root, reachProgram: resolve("apps/reach/lib/reach-agent-view") };
-	process.env.SNO_PROFILE_DIR = home;
+	vi.stubEnv("SNO_PROFILE_DIR", home);
 	try {
+		await stubReach(home);
 		for (const [address, session] of [[source, "source-session"], [target, "target-session"]]) {
 			await mkdir(join(root, address, "new"), { recursive: true });
 			await writeFile(join(root, address, "seat.json"), JSON.stringify({ runtime: "claude" }));
-			process.env.SNO_REACH_ADDR = address;
+			vi.stubEnv("SNO_REACH_ADDR", address);
 			await observeAgentEvent("claude", "user-prompt-submit", { session_id: session, prompt: "Continue requested work" });
 		}
 		const card = (id: string, from: string, to: string, work: string, body: string) =>
@@ -40,7 +41,7 @@ it.each(["worker.source@localhost", "worker.recover@localhost"])("retains the or
 		expect(view.agents.find(row => row.reachAddress === source)).toMatchObject({ group: "Working" });
 		await rm(join(root, source, "new", "unrelated"));
 		expect((await readAgentView(options)).agents.find(row => row.reachAddress === source)).toMatchObject({ group: "Finished", subgroup: "handed over" });
-		process.env.SNO_REACH_ADDR = source;
+		vi.stubEnv("SNO_REACH_ADDR", source);
 		await observeAgentEvent("claude", "user-prompt-submit", { session_id: "source-session", prompt: "Start a new task" });
 		expect((await readAgentView(options)).agents.find(row => row.reachAddress === source)).toMatchObject({ group: "Working" });
 		await writeFile(join(root, target, "new", "second-transfer"), card("second-transfer", caller, target, "transfer-work", "Another transfer of <original@localhost>"));
@@ -49,25 +50,24 @@ it.each(["worker.source@localhost", "worker.recover@localhost"])("retains the or
 		expect(ambiguous.work[0]?.owner).toBe("unknown");
 		expect(ambiguous.errors.some(error => error.operation === "associate Reach handoff")).toBe(true);
 	} finally {
-		if (previous.profile === undefined) delete process.env.SNO_PROFILE_DIR; else process.env.SNO_PROFILE_DIR = previous.profile;
-		if (previous.address === undefined) delete process.env.SNO_REACH_ADDR; else process.env.SNO_REACH_ADDR = previous.address;
+		vi.unstubAllEnvs();
 		await rm(home, { recursive: true, force: true });
 	}
 });
 
 it("records a release on the receiver's most recent primary session when /clear and a subagent left others on its address", async () => {
 	const home = await mkdtemp(join(tmpdir(), "sno-view-handoff-sessions-"));
-	const previous = { profile: process.env.SNO_PROFILE_DIR, address: process.env.SNO_REACH_ADDR };
 	const root = join(home, "reach");
 	const source = "worker.source@localhost";
 	const target = "worker.target@localhost";
 	const options = { profileDir: home, reachRoot: root, reachProgram: resolve("apps/reach/lib/reach-agent-view") };
-	process.env.SNO_PROFILE_DIR = home;
+	vi.stubEnv("SNO_PROFILE_DIR", home);
 	try {
+		await stubReach(home);
 		for (const address of [source, target]) await mkdir(join(root, address, "new"), { recursive: true });
-		process.env.SNO_REACH_ADDR = source;
+		vi.stubEnv("SNO_REACH_ADDR", source);
 		await observeAgentEvent("claude", "user-prompt-submit", { session_id: "source-session", prompt: "Hand the work over" });
-		process.env.SNO_REACH_ADDR = target;
+		vi.stubEnv("SNO_REACH_ADDR", target);
 		await observeAgentEvent("claude", "user-prompt-submit", { session_id: "before-clear", prompt: "Earlier work" });
 		await new Promise(done => setTimeout(done, 20));
 		await observeAgentEvent("claude", "user-prompt-submit", { session_id: "after-clear", prompt: "Continue the transferred work" });
@@ -83,24 +83,23 @@ it("records a release on the receiver's most recent primary session when /clear 
 		expect(await released("child")).toBe(false);
 		expect((await readAgentView(options)).work.find(item => item.work === "transfer-work")).toMatchObject({ owner: target });
 	} finally {
-		if (previous.profile === undefined) delete process.env.SNO_PROFILE_DIR; else process.env.SNO_PROFILE_DIR = previous.profile;
-		if (previous.address === undefined) delete process.env.SNO_REACH_ADDR; else process.env.SNO_REACH_ADDR = previous.address;
+		vi.unstubAllEnvs();
 		await rm(home, { recursive: true, force: true });
 	}
 });
 
 it("does not read an ordinary answer, which names the task only in its headers, as a transfer card", async () => {
 	const home = await mkdtemp(join(tmpdir(), "sno-view-answer-"));
-	const previous = { profile: process.env.SNO_PROFILE_DIR, address: process.env.SNO_REACH_ADDR };
 	const root = join(home, "reach");
 	const lead = "lead.owner@localhost";
 	const worker = "worker.answer@localhost";
 	const options = { profileDir: home, reachRoot: root, reachProgram: resolve("apps/reach/lib/reach-agent-view") };
-	process.env.SNO_PROFILE_DIR = home;
+	vi.stubEnv("SNO_PROFILE_DIR", home);
 	try {
+		await stubReach(home);
 		for (const address of [lead, worker]) await mkdir(join(root, address, "new"), { recursive: true });
 		await mkdir(join(root, worker, "sent"), { recursive: true });
-		process.env.SNO_REACH_ADDR = worker;
+		vi.stubEnv("SNO_REACH_ADDR", worker);
 		await observeAgentEvent("claude", "user-prompt-submit", { session_id: "worker-session", prompt: "Do the task" });
 		const date = "Tue, 03 Nov 2026 00:00:00 +0000";
 		await writeFile(join(root, worker, "new", "task"), `From: Lead <${lead}>\nTo: Worker <${worker}>\nDelivered-To: ${worker}\nDate: ${date}\n` +
@@ -119,23 +118,22 @@ it("does not read an ordinary answer, which names the task only in its headers, 
 		expect(row?.sessionId).toBe("worker-session");
 		expect(row?.subgroup).not.toBe("handing over");
 	} finally {
-		if (previous.profile === undefined) delete process.env.SNO_PROFILE_DIR; else process.env.SNO_PROFILE_DIR = previous.profile;
-		if (previous.address === undefined) delete process.env.SNO_REACH_ADDR; else process.env.SNO_REACH_ADDR = previous.address;
+		vi.unstubAllEnvs();
 		await rm(home, { recursive: true, force: true });
 	}
 });
 
 it("keeps the second transfer when one work passes from A to B to C, so B can release it to C", async () => {
 	const home = await mkdtemp(join(tmpdir(), "sno-view-chain-"));
-	const previous = { profile: process.env.SNO_PROFILE_DIR, address: process.env.SNO_REACH_ADDR };
 	const root = join(home, "reach");
 	const [a, b, c] = ["worker.a@localhost", "worker.b@localhost", "worker.c@localhost"];
 	const options = { profileDir: home, reachRoot: root, reachProgram: resolve("apps/reach/lib/reach-agent-view") };
-	process.env.SNO_PROFILE_DIR = home;
+	vi.stubEnv("SNO_PROFILE_DIR", home);
 	try {
+		await stubReach(home);
 		for (const address of [a, b, c]) {
 			await mkdir(join(root, address, "new"), { recursive: true });
-			process.env.SNO_REACH_ADDR = address;
+			vi.stubEnv("SNO_REACH_ADDR", address);
 			await observeAgentEvent("claude", "user-prompt-submit", { session_id: `${address}-session`, prompt: "Continue requested work" });
 		}
 		const card = (id: string, from: string, to: string, body: string) =>
@@ -159,8 +157,7 @@ it("keeps the second transfer when one work passes from A to B to C, so B can re
 		expect(row(afterSecondRelease, b)).toMatchObject({ group: "Finished", subgroup: "handed over", work: [] });
 		expect(row(afterSecondRelease, a)).toMatchObject({ group: "Finished", subgroup: "handed over", work: [] });
 	} finally {
-		if (previous.profile === undefined) delete process.env.SNO_PROFILE_DIR; else process.env.SNO_PROFILE_DIR = previous.profile;
-		if (previous.address === undefined) delete process.env.SNO_REACH_ADDR; else process.env.SNO_REACH_ADDR = previous.address;
+		vi.unstubAllEnvs();
 		await rm(home, { recursive: true, force: true });
 	}
 });

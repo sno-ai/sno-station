@@ -1,15 +1,15 @@
-import { mkdir, mkdtemp, readFile, rm, stat } from "node:fs/promises";
+import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
 import { observeAgentEvent, readAgentView } from "../../../packages/memory/config/agent-state.ts";
+import { stubReach } from "./reach-test-env.js";
 
 it("preserves Cursor final response through its textless Stop and shows the observed task/project", async () => {
 	const home = await mkdtemp(join(tmpdir(), "sno-cursor-observation-"));
-	const previous = process.env.SNO_PROFILE_DIR;
-	process.env.SNO_PROFILE_DIR = home;
+	vi.stubEnv("SNO_PROFILE_DIR", home);
 	try {
-		await mkdir(join(home, "reach"));
+		await stubReach(home);
 		const input = { conversation_id: "cursor-session", workspace_roots: [home] };
 		await observeAgentEvent("cursor", "user-prompt-submit", { ...input, prompt: "Inspect the requested module" });
 		await observeAgentEvent("cursor", "after-agent-response", { ...input, text: "Would you like to proceed？" });
@@ -21,18 +21,16 @@ it("preserves Cursor final response through its textless Stop and shows the obse
 		const answered = await readAgentView({ profileDir: home, reachRoot: join(home, "reach"), reachProgram: resolve("apps/reach/lib/reach-agent-view") });
 		expect(answered.agents[0]).toMatchObject({ finalReply: "unknown", waitingForHuman: "no", group: "Working" });
 	} finally {
-		if (previous === undefined) delete process.env.SNO_PROFILE_DIR;
-		else process.env.SNO_PROFILE_DIR = previous;
+		vi.unstubAllEnvs();
 		await rm(home, { recursive: true, force: true });
 	}
 });
 
 it("stores only bounded observation fields in owner-only files while the state still resolves", async () => {
 	const home = await mkdtemp(join(tmpdir(), "sno-observation-fields-"));
-	const previous = process.env.SNO_PROFILE_DIR;
-	process.env.SNO_PROFILE_DIR = home;
+	vi.stubEnv("SNO_PROFILE_DIR", home);
 	try {
-		await mkdir(join(home, "reach"));
+		await stubReach(home);
 		const secret = "SECRET-FILE-CONTENT ".repeat(500);
 		const input = { session_id: "bounded", cwd: home };
 		await observeAgentEvent("claude", "user-prompt-submit", { ...input, prompt: `Fix the parser ${"x".repeat(5000)}` });
@@ -50,19 +48,17 @@ it("stores only bounded observation fields in owner-only files while the state s
 		expect(view.agents[0]).toMatchObject({ description: expect.stringMatching(/^Fix the parser x+$/), group: "Needs you", waitingReason: "asked a question" });
 		expect(view.agents[0]?.finalReply).toMatch(/Should I continue\?$/);
 	} finally {
-		if (previous === undefined) delete process.env.SNO_PROFILE_DIR;
-		else process.env.SNO_PROFILE_DIR = previous;
+		vi.unstubAllEnvs();
 		await rm(home, { recursive: true, force: true });
 	}
 });
 
 it("keeps a Claude subagent's stop and question out of its working parent's state", async () => {
 	const home = await mkdtemp(join(tmpdir(), "sno-subagent-observation-"));
-	const previous = { profile: process.env.SNO_PROFILE_DIR, address: process.env.SNO_REACH_ADDR };
-	process.env.SNO_PROFILE_DIR = home;
-	process.env.SNO_REACH_ADDR = "executor.parent@localhost";
+	vi.stubEnv("SNO_PROFILE_DIR", home);
+	vi.stubEnv("SNO_REACH_ADDR", "executor.parent@localhost");
 	try {
-		await mkdir(join(home, "reach"));
+		await stubReach(home);
 		const parent = { session_id: "parent-session", cwd: home };
 		await observeAgentEvent("claude", "user-prompt-submit", { ...parent, prompt: "Delegate the check" });
 		await observeAgentEvent("claude", "pre-tool-use", { ...parent, agent_id: "child-agent", tool_name: "AskUserQuestion" });
@@ -72,8 +68,7 @@ it("keeps a Claude subagent's stop and question out of its working parent's stat
 		expect(view.agents.find(row => row.sessionId === "child-agent")).toMatchObject({ finalReply: "Child finished?", reachAddress: "unknown" });
 		expect(view.agents.find(row => row.sessionId === "parent-session")?.reachAddress).toBe("executor.parent@localhost");
 	} finally {
-		if (previous.profile === undefined) delete process.env.SNO_PROFILE_DIR; else process.env.SNO_PROFILE_DIR = previous.profile;
-		if (previous.address === undefined) delete process.env.SNO_REACH_ADDR; else process.env.SNO_REACH_ADDR = previous.address;
+		vi.unstubAllEnvs();
 		await rm(home, { recursive: true, force: true });
 	}
 });
