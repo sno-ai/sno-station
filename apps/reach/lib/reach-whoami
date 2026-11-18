@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+root="${SNO_REACH_ROOT:-$HOME/.local/state/sno-reach}"
+if [[ "${1-}" == --help && $# == 1 ]]; then
+    printf 'usage: sno reach whoami\n'
+    exit 0
+fi
+if (($#)); then
+    printf 'reach whoami %s: expected no arguments\n' "$root" >&2
+    { printf 'reach whoami %s: expected no arguments\n' "$root" >>"$root/reach.log"; } 2>/dev/null || true
+    exit 64
+fi
+if [[ -n "${SNO_REACH_ADDR:-}" ]]; then
+    printf '%s\n' "$SNO_REACH_ADDR"
+    exit 0
+fi
+orca="${ORCA_TAB_ID:-}" pane="${TMUX_PANE:-}"
+[[ -n "$orca$pane" ]] || exit 1
+shopt -s nullglob
+records=("$root"/*/reachable.json)
+(("${#records[@]}")) || exit 1
+
+if matches="$(jq -r --arg orca "$orca" --arg pane "$pane" '
+    select(($orca != "" and .channel == "orca" and
+            (.identity.value == $orca or .handle == $orca)) or
+           ($pane != "" and .channel == "tmux" and
+            (.identity.value == $pane or .handle == $pane))) |
+    .address | strings | select(length > 0)
+' "${records[@]}" 2>&1)"; then
+    [[ -n "$matches" ]] || exit 1
+    printf '%s\n' "${matches%%$'\n'*}"
+else
+    printf 'reach whoami %s: read seat registrations: %s\n' "$root" "$matches" >&2
+    { printf 'reach whoami %s: read seat registrations: %s\n' "$root" "$matches" >>"$root/reach.log"; } 2>/dev/null || true
+    exit 74
+fi
