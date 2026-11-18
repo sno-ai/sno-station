@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.5.1
+
+The squad bar in a tmux window agents were started in has room for the longer line that says who is waiting
+for you, in which project, and for what.
+
 ## 2.5.0
 
 Agents pick up their mail on their own. When an agent finishes a turn it reads the cards
