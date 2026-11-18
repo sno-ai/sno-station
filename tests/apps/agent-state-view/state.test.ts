@@ -83,6 +83,17 @@ describe("agent state view read-time semantics", () => {
 		await events("codex", "saved", [{ event: "stop", input: { transcript_path: transcript }, identity: { pid: process.pid, processStart: "different-start" } }]);
 		expect((await view()).agents[0]).toMatchObject({ process: "exited", resumable: "resumable", resumeEvidence: transcript, subgroup: "resumable" });
 	});
+	it("drops a wait and its leftover redraw marker once the agent process has exited", async () => {
+		const path = await events("claude", "rebooted", [{ event: "permission-request", input: { tool_name: "Bash" }, identity: { pid: process.pid, processStart: "different-start" } }]);
+		const marker = `${path}.waiting`;
+		await writeFile(marker, "");
+		const past = new Date(now - 901_000);
+		await utimes(path, past, past);
+		const redraw = await readAgentView({ profileDir: home, reachRoot: join(home, "reach"), now, recent: true });
+		expect(redraw.agents[0]).toMatchObject({ process: "exited", waitingForHuman: "no" });
+		expect(compactAgentView(redraw)).not.toContain("need you");
+		await expect(stat(marker)).rejects.toMatchObject({ code: "ENOENT" });
+	});
 	it("reads no transcript when the process is unknown", async () => {
 		await events("codex", "unknown-process", [{ event: "stop", input: { transcript_path: join(home, "missing-rollout.jsonl") } }]);
 		expect((await view()).errors.filter(error => error.operation === "read resume record")).toEqual([]);
