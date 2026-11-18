@@ -17,3 +17,4 @@ records whose change it was.
 | [@tridev-tej](https://github.com/tridev-tej) | `make package` for the three small programs names the contract file that is in this repository when it refuses ([#217](https://github.com/sno-ai/sno-station/pull/217)) |
 | [@bfs2021](https://github.com/bfs2021) | `sno subscription-quota-check --help` ends with a full sentence when `OPENAI_BASE_URL` is not set ([#218](https://github.com/sno-ai/sno-station/pull/218)) |
 | [@JamesonMa](https://github.com/JamesonMa) | `sno heartbeat --help` says what each timed-task flag does ([#220](https://github.com/sno-ai/sno-station/pull/220)) |
+| [@cobola](https://github.com/cobola) | `llms.txt` counts five memory integrations in its directory map ([#235](https://github.com/sno-ai/sno-station/pull/235)) |
