@@ -103,13 +103,12 @@ Two shapes, and nothing else should ever be hand-written:
 
   --stop NAME   stop YOUR heartbeat with that label; another owner's is never reachable
   --list        every heartbeat running on this machine, yours marked "you"
-
-  --due-set RECORD "YYYY-MM-DD HH:MM IANA_ZONE" "ACTION" [daily|weekly]
-                add or update a due task in a handoff record's ## Due section
-  --due-cancel RECORD [ACTION]
-                remove one due task, or the whole ## Due section when no action is given
-  --due         list due tasks; --problems shows only failed or unfinished ones
-  --due-tick    start detached agents for due tasks, then return promptly
+  --due-set     add or update a timed task in a progress record's "## Due" section
+                (match by action; optionally repeat daily or weekly)
+  --due-cancel  remove a timed task by action, or remove the entire "## Due"
+                section when no action is given
+  --due         list timed tasks; --problems shows only tasks with recorded problems
+  --due-tick    launch agents for tasks that are due, then return without waiting
 
 Every ending says on stdout WHICH ending it was — FINISHED, NOT FINISHED, or STOPPED — so
 the notification that wakes you can never make "the job is done" look like "I gave up".
