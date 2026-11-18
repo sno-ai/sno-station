@@ -1,18 +1,21 @@
 import { spawnSync } from "node:child_process";
-import { mkdir, mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, expect, it } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
 import { readAgentView } from "../../../packages/memory/config/agent-state.ts";
+import { stubReach } from "./reach-test-env.js";
 
 const homes: string[] = [];
 afterEach(async () => {
+	vi.unstubAllEnvs();
 	await Promise.all(homes.splice(0).map(home => rm(home, { recursive: true, force: true })));
 });
 
 it("reads Hermes native callback observations through the shared TypeScript reader", async () => {
 	const home = await mkdtemp(join(tmpdir(), "sno-state-hermes-"));
 	homes.push(home);
+	const reachRoot = await stubReach(home);
 	const written = spawnSync("python3", ["-c", `
 import os, runpy, sys
 suite = runpy.run_path("tests/apps/agent-state-view/codex-hermes-test.py")
@@ -30,8 +33,6 @@ finally:
 `, home], { encoding: "utf8", timeout: 10_000 });
 	expect(written.error, written.stderr).toBeUndefined();
 	expect(written.status, written.stderr).toBe(0);
-	const reachRoot = join(home, "reach");
-	await mkdir(reachRoot);
 	const view = await readAgentView({ profileDir: home, reachRoot,
 		reachProgram: join(process.cwd(), "apps/reach/lib/reach-agent-view") });
 	expect(view.errors).toEqual([]);

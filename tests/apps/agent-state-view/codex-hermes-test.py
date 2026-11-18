@@ -18,8 +18,18 @@ class HermesObservationTest(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()
         self.profile = Path(self.temporary.name)
-        self.previous_profile = os.environ.get("SNO_PROFILE_DIR")
-        os.environ["SNO_PROFILE_DIR"] = str(self.profile)
+        reach = self.profile / "reach"
+        reach.mkdir()
+        sno = self.profile / "sno"
+        sno.write_text("#!/bin/sh\nexit 127\n")
+        sno.chmod(0o700)
+        env = {
+            "SNO_PROFILE_DIR": str(self.profile),
+            "SNO_REACH_ROOT": str(reach),
+            "PATH": os.pathsep.join((str(self.profile), os.environ.get("PATH", os.defpath))),
+        }
+        self.previous_env = {name: os.environ.get(name) for name in env}
+        os.environ.update(env)
         self.previous_modules = {name: sys.modules.get(name) for name in (
             "agent", "agent.memory_provider", "hermes_constants", "sno_state_hermes",
         )}
@@ -37,10 +47,11 @@ class HermesObservationTest(unittest.TestCase):
         spec.loader.exec_module(self.module)
 
     def tearDown(self) -> None:
-        if self.previous_profile is None:
-            os.environ.pop("SNO_PROFILE_DIR", None)
-        else:
-            os.environ["SNO_PROFILE_DIR"] = self.previous_profile
+        for name, original in self.previous_env.items():
+            if original is None:
+                os.environ.pop(name, None)
+            else:
+                os.environ[name] = original
         for name, original in self.previous_modules.items():
             if original is None:
                 sys.modules.pop(name, None)
