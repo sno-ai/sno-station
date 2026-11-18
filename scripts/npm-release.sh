@@ -147,7 +147,7 @@ case $operation in
         [[ $result == 4 ]] || exit "$result"
       fi
       printf 'Publishing %s@%s (%s/%s)\n' "$name" "$version" "$((index + 1))" "$count" >&2
-      npm publish "$candidate_dir/tarballs/$file" --access public --tag "$tag" --provenance
+      npm publish "$candidate_dir/tarballs/$file" --access public --tag "$tag"
     done
     verify_registry
     tag=$(release_tag)
