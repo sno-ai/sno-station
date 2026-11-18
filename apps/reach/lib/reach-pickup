@@ -44,7 +44,7 @@ watch_offer() (
 
 exec {cards_fd}< <(find "$root/$address/new" "$root/$address/cur" -maxdepth 1 -type f -newermt "$since" -print0)
 scan_pid=$!
-prompt='' failed=0
+offered=no failed=0
 while IFS= read -r -d '' card <&"$cards_fd"; do
     rc=0
     detail="$("$lib/reach-main" __needs-handling --as "$address" "$card" 2>&1)" || rc=$?
@@ -88,17 +88,19 @@ while IFS= read -r -d '' card <&"$cards_fd"; do
                 rule='Reply --state accepted on this original card and wait for acceptance to succeed. Do the work, then reply --state completed or failed on the same card.' ;;
         esac
     fi
-    printf -v entry 'Card: %s\nFrom: %s\nSubject: %s\n%s' "$card" "$from" "$subject" "$rule"
-    prompt+=$'\n\n'"$entry"
+    if [[ "$offered" == no ]]; then
+        printf 'REACH-RING Guide: %s/../guide/agent-reach.md. State: %s. Seat: %s. Read each original card.\n' \
+            "$lib" "$root" "$address"
+        offered=yes
+    fi
+    printf '\nCard: %s\nFrom: %s\nSubject: %s\n%s\n' "$card" "$from" "$subject" "$rule"
 done
 exec {cards_fd}<&-
 if ! wait "$scan_pid"; then
     log "$root/$address" 'scan new and cur: find failed'
     failed=74
 fi
-if [[ -n "$prompt" ]]; then
-    printf 'REACH-RING Guide: %s/../guide/agent-reach.md. State: %s. Seat: %s. Read each original card.%s\n' \
-        "$lib" "$root" "$address" "$prompt"
+if [[ "$offered" == yes ]]; then
     printf 'Once the developer answers your own question, dismiss that exact question card with sno reach dismiss --as developer.human@%s --card <card> --reason answered.\n' "$(hostname)"
 fi
 exit "$failed"

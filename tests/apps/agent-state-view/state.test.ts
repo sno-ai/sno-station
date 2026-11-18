@@ -166,9 +166,11 @@ describe("agent state view read-time semantics", () => {
 		await events("claude", "other", [{ event: "permission-request" }]);
 		await mkdir(join(home, "reach/peer"));
 		await writeFile(join(home, "reach/peer/seat.json"), JSON.stringify({ runtime: "openclaw" }));
+		await writeFile(join(home, "reach/peer/reachable.json"), JSON.stringify({ channel: "terminal", handle: "tty:/dev/pts/1" }));
 		const result = await view();
 		expect(result.agents).toHaveLength(3);
 		expect(result.agents.find(row => row.harness === "openclaw")?.missingReasons).toContain("OpenClaw state capture unsupported");
+		expect(result.stuck).toEqual([]);
 		expect(compactAgentView(result, { harness: "claude", sessionId: "foreground" })).toMatch(/1 need you.*claude: approve.*unknown/);
 	});
 	it("keeps corrupt observations explicit instead of a false all-clear", async () => {
@@ -186,6 +188,18 @@ describe("agent state view read-time semantics", () => {
 		expect(await readdir(join(home, "station/agents"))).toEqual(["claude--first.jsonl", "claude--second.jsonl"]);
 		expect((await view()).agents).toHaveLength(2);
 		expect(await readdir(join(home, "station"))).toEqual(["agents"]);
+	});
+	it("offers a card from pickup output even when the scan timed out", async () => {
+		await writeFile(join(home, "sno"), "#!/bin/sh\nprintf 'Card: /reach/worker/new/card\\n'\nexit 124\n", { mode: 0o700 });
+		const hook = spawnSync(process.execPath, ["--import", "tsx", "--input-type=module", "-e", `
+			import { observeAgentEvent } from "./packages/memory/config/agent-state.ts";
+			await observeAgentEvent("claude", "stop", { session_id: "pickup" });
+		`], {
+			encoding: "utf8", timeout: 5000,
+			env: { ...process.env, PATH: `${home}:${process.env.PATH}`, SNO_REACH_ADDR: "worker.one@local" },
+		});
+		expect(hook.status, hook.stderr).toBe(0);
+		expect(hook.stdout).toBe('{"decision":"block","reason":"Card: /reach/worker/new/card"}\n');
 	});
 	it("supports packaged JSON, compact and snapshot entries against actual hook records", async () => {
 		await observeAgentEvent("claude", "permission-request", { session_id: "hook-record", tool_name: "Bash" });
