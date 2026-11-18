@@ -5,16 +5,19 @@
 # Hook input is the IDE 3.24.9 stop event recorded on 2026-10-09 (cursor-station T2).
 # The stop hook's timeout is shortened to 40 s here, so the keep-alive arrives after 30 s.
 set -Eeuo pipefail
-here="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-public="${REACH_UNDER_TEST:-$here/../../../../apps/reach/bin/sno-reach}"
-python3 - "$public" <<'PY'
+# shellcheck source=../test-lib.sh
+source "$(dirname -- "${BASH_SOURCE[0]}")/../test-lib.sh"
+python3 - "$REACH" "$WORK/test-bin/sno" <<'PY'
 import json, os, pathlib, subprocess, sys, tempfile, time
-reach = sys.argv[1]
+reach, sno_stub = sys.argv[1:]
 proof = pathlib.Path(tempfile.mkdtemp(prefix='reach-cursor-ide.'))
 print('evidence:', proof, flush=True)
 host = subprocess.check_output(['hostname'], text=True).strip()
 base = {k: v for k, v in os.environ.items() if not k.startswith(('CURSOR_', 'SNO_REACH_', 'CLAUDECODE'))}
 base |= {'SNO_REACH_CURSOR_STOP_WAIT': '40', 'HOME': str(proof / 'home'), 'SNO_REACH_ROOT': str(proof / 'state'), 'SNO_PROFILE_DIR': str(proof / 'profile')}
+resolved_sno = subprocess.check_output(['bash', '-c', 'command -v sno'], env=base, text=True).strip()
+assert resolved_sno == sno_stub, resolved_sno
+print('PASS: command -v sno resolved to', resolved_sno, flush=True)
 (proof / 'home').mkdir()
 conversations = proof / 'profile/cursor/conversations'; conversations.mkdir(parents=True)
 chat, idle_chat = '11111111-2222-4333-8444-555555555555', '7a1c0de0-0000-4000-8000-00000000idle'
@@ -84,13 +87,16 @@ card = '\n'.join([f'From: Sender <{sender}>', f'To: {seat}', 'Subject: [QUESTION
 sent = run(['send', '--as', sender], stdin=card)
 assert sent.returncode == 0, sent.stderr
 ring_log = proof / 'state' / 'reach-ring.jsonl'
-deadline = time.monotonic() + 30
-while True:
-    rings = [json.loads(line) for line in ring_log.read_text().splitlines()] if ring_log.exists() else []
-    if any(ring['msg_id'] == f'<cursor-ide-1@{host}>' and ring['outcome'] == 'rang-unverified' for ring in rings):
-        break
-    assert time.monotonic() < deadline, rings
-    time.sleep(.1)
+def wait_for_ring(message_id, outcome):
+    deadline = time.monotonic() + 30
+    while True:
+        rings = [json.loads(line) for line in ring_log.read_text().splitlines()] if ring_log.exists() else []
+        for ring in rings:
+            if ring['msg_id'] == message_id and ring['outcome'] == outcome:
+                return ring
+        assert time.monotonic() < deadline, rings
+        time.sleep(.1)
+wait_for_ring(f'<cursor-ide-1@{host}>', 'rang-unverified')
 out, err = waiting.communicate(timeout=30)
 assert waiting.returncode == 0, err
 followup = json.loads(out)['followup_message']
@@ -106,14 +112,16 @@ assert 'is seen but not accepted' in answer['additional_context'], answer
 print('PASS: the prompt hook finds the IDE seat by conversation_id and returns the reminder as additional_context', flush=True)
 
 result = run(['call', seat, 'hello'])
-assert result.returncode == 3 and 'cursor-ide does not support call' in result.stderr, (result.returncode, result.stderr)
+assert result.returncode == 3 and 'cursor-ide does not support synchronous call' in result.stderr, (result.returncode, result.stderr)
 print('PASS: call refuses an IDE seat', flush=True)
 
 # An ended chat is not rung; the card still lands in its inbox.
 record(chat, ended='2026-10-10T02:00:00.000Z')
 sent = run(['send', '--as', sender], stdin=card.replace('cursor-ide-1@', 'cursor-ide-2@'))
-assert sent.returncode == 0 and 'notification failed' in sent.stderr, sent.stderr
+assert sent.returncode == 0, sent.stderr
 assert any('cursor-ide-2@' in p.read_text() for p in (proof / 'state' / seat / 'new').iterdir())
+ended_ring = wait_for_ring(f'<cursor-ide-2@{host}>', 'unresolved')
+assert 'has ended' in ended_ring['detail'], ended_ring
 print('PASS: a card to an ended IDE chat is delivered to the inbox and its ring reports failure', flush=True)
 
 out, err = idle.communicate(timeout=300)

@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 source "$(dirname -- "${BASH_SOURCE[0]}")/test-lib.sh"
+resolved_sno="$(command -v sno || true)"
+[[ "$resolved_sno" == "$WORK/test-bin/sno" ]] || fail "isolated PATH resolved sno to ${resolved_sno:-nothing}, expected the test stub"
+rc=0
+sno 2>"$WORK/sno.err" || rc=$?
+[[ "$rc" == 127 ]] || fail "the test stub exited $rc instead of 127"
+has "$WORK/sno.err" 'sno is disabled unless the test provides its own executable'
+printf 'PASS: command -v sno resolved to %s\n' "$resolved_sno"
 export SNO_REACH_ROOT="$STATE" PATH="$WORK:$PATH" WAKE_PROOF="$WORK/wake"
 initialize "$SENDER" Sender
 initialize "$RECEIVER" Receiver
