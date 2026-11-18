@@ -118,13 +118,18 @@ Claude Code에서는 `/cos`, Codex에서는 `$cos`라고 말하세요. 그 에�
 **터미널은 그만 지켜보세요.** 비서실장이 있든 없든, 누군가 여러분을 찾으면 Claude Code나 Cursor의 상태 표시줄이 알려 줍니다. 설치할 때 함께 설정됩니다:
 
 ```text
-❄ 2 need you · claude: approve
+[sno] 2 agents are waiting for you
+  Claude in web-app needs your approval (Bash) · 1m
+  Codex in api asks: Should the billing migration run tonight? · 5m
 ```
 
 `sno squad`는 팀 전체를 화면 가득 펼칩니다. 누가 여러분을 기다리는지, 누가 일하는지, 무엇이 끝났는지.
 
 ```text
 Sno Station · squad · 09:15 · 2 need you · 2 working · 2 finished
+Waiting for you (2)
+  Claude in web-app needs your approval (Bash) · 1m
+  Codex in api asks: Should the billing migration run tonight? · 5m
 Needs you (2)
 > claude web-app       approve a permission · Fix the login redirect loop …   1m
   codex api            asked a question · Migrate the billing tables to th…   5m
