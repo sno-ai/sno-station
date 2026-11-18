@@ -489,6 +489,8 @@ async function readAgentFile(path: string, now: number, errors: AgentOperationEr
 	}
 	const { row, observations, unreadable } = replay;
 	await inspectProcess(row, observations, errors);
+	// Nobody can answer a wait whose agent process has exited (reboot, killed agent, closed terminal).
+	if (row.process === "exited" && row.waitingForHuman === "yes") resolveWait(row);
 	await inspectResume(row, observations, errors);
 	if (row.lastEvent !== "unknown") row.ageSeconds = Math.max(0, (now - Date.parse(row.lastEvent.at)) / 1000);
 	// Existing Reach freshness horizon; this expires observations, never infers failure.
@@ -674,12 +676,19 @@ export async function readAgentView(options: AgentViewOptions = {}): Promise<Age
 		if (!absent(error)) throw new Error(`read agent inventory ${directory}: ${String(error)}`);
 		return [];
 	});
-	const redrawNames = options.recent ? new Set(files) : undefined;
+	const names = new Set(files);
 	for (const name of files.filter(name => name.endsWith(".jsonl")).sort()) {
 		try {
 			const path = join(directory, name);
-			if (redrawNames && !redrawNames.has(name + WAITING_SUFFIX) && now - (await stat(path)).mtimeMs > 900_000) continue;
+			const marked = names.has(name + WAITING_SUFFIX);
+			if (options.recent && !marked && now - (await stat(path)).mtimeMs > 900_000) continue;
 			const row = await readAgentFile(path, now, view.errors);
+			// A marker outlives its wait when the agent exits without an event that ends it.
+			if (marked && row?.waitingForHuman !== "yes") {
+				await rm(path + WAITING_SUFFIX, { force: true }).catch((error: unknown) => {
+					view.errors.push(failure("remove agent wait marker", path + WAITING_SUFFIX, error, "redraw keeps reading this session"));
+				});
+			}
 			if (row?.waitingForHuman === "yes") {
 				view.openQuestions.push({ agent: row.reachAddress === "unknown" ? rowWho(row) : row.reachAddress,
 					subject: row.waitingSubject ?? row.waitingReason, age: agoSeconds(now, row.waitingSince ?? ""),
