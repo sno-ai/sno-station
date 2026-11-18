@@ -130,4 +130,23 @@ chmod +x "$WORK/bin/find"
 PATH="$WORK/bin:$PATH" invoke pickup; expect_rc 124
 has "$WORK/out" "Card: $PICKUP_CARD"
 jq -se --arg id "<$lost>" '[.[] | select(.msg_id == $id and .kind == "pickup")] | length == 3' "$tries" >/dev/null
+
+expired="expired@$HOST"; replaced="replaced@$HOST"; replacement="replacement@$HOST"
+SNO_REACH_RATE_LIMIT_MAX=20 send_fixture "$expired" "$RECEIVER" decision 'Expiry-Date: Sat, 01 Jan 2000 00:00:00 +0000'
+SNO_REACH_RATE_LIMIT_MAX=20 send_fixture "$replaced" "$RECEIVER" decision
+SNO_REACH_RATE_LIMIT_MAX=20 send_fixture "$replacement" "$RECEIVER" decision "Supersedes: <$replaced>"
+replacement_path="$(message_path "$RECEIVER" "$replacement")"
+mv -- "$replacement_path" "$STATE/$RECEIVER/cur/${replacement_path##*/}:2,T"
+invoke pickup; expect_rc 0
+if grep -F -e "Subject: [DECISION] $expired" -e "Subject: [DECISION] $replaced" "$WORK/out"; then
+  fail 'pickup offered expired or superseded work'
+fi
+jq -se --arg expired "<$expired>" --arg replaced "<$replaced>" '
+  all(.[]; .msg_id != $expired and .msg_id != $replaced)
+' "$tries" >/dev/null || fail 'pickup recorded a try for expired or superseded work'
+invoke inbox --as "$RECEIVER"; expect_rc 0
+has "$WORK/out" "[DECISION] $job"
+if grep -F -e "[DECISION] $expired" -e "[DECISION] $replaced" "$WORK/out"; then
+  fail 'inbox listed expired or superseded work'
+fi
 pass 'pickup claims To mail before printing, leaves its flags intact and retries within the bound'
