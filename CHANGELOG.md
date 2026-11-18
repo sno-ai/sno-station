@@ -12,6 +12,13 @@ first product packages are published.
 - Public README in nine languages, the security page, and the first evidence image of the
   nightly improvement loop running on our own repository.
 
+## [2.1.2] - 2026-11-18
+
+Say "remember this", open a new session, and it is already there.
+
+- A memory you ask an agent to save now reaches the start of your next session right away, in
+  every agent, instead of waiting for the nightly tidy-up to sort it first.
+
 ## [2.1.1] - 2026-11-18
 
 Long sessions keep the next step in view.
