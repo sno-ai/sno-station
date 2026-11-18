@@ -28,7 +28,7 @@ root=Path(os.environ['MAILBOX_REAL_ROOT']); home=Path(os.environ['MAILBOX_REAL_H
 app=Path(os.environ['MAILBOX_REAL_APP']); server=os.environ['MAILBOX_REAL_SERVER']
 scenario=os.environ['MAILBOX_REAL_SCENARIO']; project=root/'project'; state=root/'state'
 nonce=uuid.uuid4().hex[:12]; address='worker.mailbox-'+nonce+'@'+socket.gethostname()
-real_sno=shutil.which('sno'); real_claude=shutil.which('claude')
+real_sno=shutil.which('sno', path=os.pathsep.join(d for d in os.environ['PATH'].split(os.pathsep) if not d.endswith('/test-bin'))); real_claude=shutil.which('claude')
 assert real_sno and real_claude, 'real sno and claude are required'
 env={k:v for k,v in os.environ.items() if k not in ('CLAUDECODE','CODEX_THREAD_ID','SNO_REACH_ADDR','SNO_EXECUTOR_ADDR','TMUX','TMUX_PANE')}
 env.update(HOME=str(home), CLAUDE_CONFIG_DIR=str(home/'.claude'), CODEX_HOME=str(home/'.codex'),
