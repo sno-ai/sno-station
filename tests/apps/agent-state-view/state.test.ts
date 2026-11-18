@@ -27,12 +27,12 @@ afterEach(async () => {
 	else process.env.SNO_REACH_ROOT = previousReach;
 	await rm(home, { recursive: true, force: true });
 });
-async function events(harness: AgentHarness, sessionId: string, entries: { event: string; input?: Record<string, unknown>; at?: string; identity?: { pid: number; processStart: string } }[]) {
+async function events(harness: AgentHarness, sessionId: string, entries: { event: string; input?: Record<string, unknown>; at?: string; reachAddress?: string; identity?: { pid: number; processStart: string } }[]) {
 	const directory = join(home, "station/agents");
 	await mkdir(directory, { recursive: true });
 	const path = join(directory, `${encodeURIComponent(harness)}--${encodeURIComponent(sessionId)}.jsonl`);
-	await writeFile(path, entries.map(({ event, input = {}, at = new Date(now).toISOString(), identity }) =>
-		JSON.stringify({ harness, sessionId, event, input, at, ...identity } satisfies AgentObservation)).join("\n") + "\n");
+	await writeFile(path, entries.map(({ input = {}, at = new Date(now).toISOString(), identity, ...entry }) =>
+		JSON.stringify({ harness, sessionId, input, at, ...entry, ...identity } satisfies AgentObservation)).join("\n") + "\n");
 	return path;
 }
 const view = (at = now) => readAgentView({ profileDir: home, reachRoot: join(home, "reach"), reachProgram: helper, now: at });
@@ -110,6 +110,33 @@ describe("agent state view read-time semantics", () => {
 		const recent = await readAgentView({ profileDir: home, reachRoot: root, now, recent: true });
 		expect(recent.errors).toEqual([]);
 		expect((await view()).errors.map(error => error.operation)).toEqual(["parse agent observation", "parse Reach try"]);
+	});
+	it("keeps stale permission waits after notifications and human-seen records on status redraw", async () => {
+		const old = new Date(now - 1200_000);
+		const at = old.toISOString();
+		const path = await events("claude", "stale-permission", [
+			{ event: "stop", at, input: { last_assistant_message: "Done." } },
+			{ event: "permission-request", at, input: { tool_name: "Bash", tool_use_id: "waiting" } },
+			{ event: "post-tool-use", at, input: { tool_name: "Read", tool_use_id: "unrelated" } },
+			{ event: "notification", at, input: { notification_type: "permission_prompt" } },
+			{ event: "human-seen", at, input: { resultId: "claude/stale-permission/0" } },
+		]);
+		await utimes(path, old, old);
+		const recent = await readAgentView({ profileDir: home, reachRoot: join(home, "reach"), now, recent: true });
+		expect(compactAgentView(recent)).toContain("1 need you");
+	});
+	it("keeps a stale Reach seat and reports it silent on status redraw", async () => {
+		const old = new Date(now - 1200_000);
+		const at = old.toISOString();
+		const reachAddress = "coder.quiet@local";
+		const path = await events("claude", "quiet-seat", [
+			{ event: "stop", at, reachAddress, input: { last_assistant_message: "Done." } },
+			{ event: "notification", at, input: { notification_type: "idle_prompt" } },
+		]);
+		await utimes(path, old, old);
+		const recent = await readAgentView({ profileDir: home, reachRoot: join(home, "reach"), now, recent: true });
+		expect(recent.agents).toMatchObject([{ sessionId: "quiet-seat", reachAddress }]);
+		expect(recent.stuck).toMatchObject([{ holder: reachAddress, reason: "silent" }]);
 	});
 	it("keeps native and mailed questions visible until answered or dismissed, including on status redraw", async () => {
 		const old = new Date(now - 1200_000);
