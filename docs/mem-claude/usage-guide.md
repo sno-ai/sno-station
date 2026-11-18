@@ -142,8 +142,8 @@ The install command registers ten Claude Code hooks.
 | `PostToolUse` | 30 s | Reports each finished tool call to the memory service |
 | `PreCompact` | 5 s | Updates the session's saved progress record, if it has one, before the conversation is compacted |
 | `PermissionRequest` | 5 s | Records that the agent is waiting on a permission prompt, for the status line |
-| `Notification` | 5 s | Records agent notifications (such as a pending permission prompt), for the status line |
-| `StopFailure` | 5 s | Records why a turn failed (for example an exhausted quota), for the status line |
+| `Notification` | 5 s | Records agent notifications (such as a pending permission prompt) |
+| `StopFailure` | 5 s | Records why a turn failed (for example an exhausted quota) |
 
 A session receives at most 12,000 characters of injected memory in total, and a memory already
 shown in the session is not shown again. The injected block is labelled as data, not
