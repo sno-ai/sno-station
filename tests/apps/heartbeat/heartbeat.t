@@ -21,6 +21,17 @@ SCRIPT="${HEARTBEAT:-$HERE/../../../apps/heartbeat/bin/heartbeat}"
 [[ -x "$SCRIPT" ]] ||
   { printf 'selftest: not executable: %s\n' "$SCRIPT" >&2; exit 2; }
 
+if help="$("$SCRIPT" --help)" &&
+   grep -Fxq -- "  --due-set     add or update a timed task in a progress record's \"## Due\" section" <<<"$help" &&
+   grep -Fxq -- '  --due-cancel  remove a timed task by action, or remove the entire "## Due"' <<<"$help" &&
+   grep -Fxq -- '  --due         list timed tasks; --problems shows only tasks with recorded problems' <<<"$help" &&
+   grep -Fxq -- '  --due-tick    launch agents for tasks that are due, then return without waiting' <<<"$help"; then
+  printf 'ok    --help explains the timed-task flags\n'
+else
+  printf 'FAIL  --help is missing timed-task flag explanations\n' >&2
+  exit 1
+fi
+
 work="$(mktemp -d "${TMPDIR:-/tmp}/heartbeat-selftest.XXXXXX")"
 trap 'rm -rf -- "$work"' EXIT
 
