@@ -13,7 +13,7 @@ case "$2" in
 	whoami) [ ! -e "$SNO_REACH_ROOT/no-seat" ] || exit 1
 	        printf '%s\\n' 'coder.one@local';;
 	pickup) [ "$SNO_REACH_ADDR" = 'coder.one@local' ] || exit 2
-	        printf '%s\\n' 'Continue with this card.';;
+	        printf '%s\\n' 'Card: /reach/coder/new/card';;
 	notify) case "$3" in
 	          --dismiss-session) rm -f "$SNO_REACH_ROOT/approval.$4";;
 	          --as) printf '%s\\n' "$*" > "$SNO_REACH_ROOT/approval.$8";;
@@ -42,7 +42,7 @@ it.each(["claude", "codex"])("%s resolves and reuses the seat, picks up at stop,
 	);
 	// A fresh process must still have the previous hook's resolved address.
 	await writeFile(join(reach, "no-seat"), "");
-	expect(run("stop")).toBe('{"decision":"block","reason":"Continue with this card."}\n');
+	expect(run("stop")).toBe('{"decision":"block","reason":"Card: /reach/coder/new/card"}\n');
 	const records = (await readFile(join(profile, "station", "agents", `${harness}--test-session.jsonl`), "utf8")).trim().split("\n").map(line => JSON.parse(line));
 	expect(records.map(record => record.reachAddress)).toEqual(["coder.one@local", "coder.one@local"]);
 	run("post-tool-use", { ...approval, tool_use_id: "toolu_other" });

@@ -204,7 +204,7 @@ describe("agent state view read-time semantics", () => {
 		expect(await readdir(join(home, "station"))).toEqual(["agents"]);
 	});
 	it("offers a card from pickup output even when the scan timed out", async () => {
-		await writeFile(join(home, "sno"), "#!/bin/sh\nprintf 'Card: /reach/worker/new/card\\n'\nexit 124\n", { mode: 0o700 });
+		await writeFile(join(home, "sno"), "#!/bin/sh\nprintf 'REACH-RING Guide: g. Read each original card.\\n\\nCard: /reach/worker/new/card\\n'\nexit 124\n", { mode: 0o700 });
 		const hook = spawnSync(process.execPath, ["--import", "tsx", "--input-type=module", "-e", `
 			import { observeAgentEvent } from "./packages/memory/config/agent-state.ts";
 			await observeAgentEvent("claude", "stop", { session_id: "pickup" });
@@ -213,7 +213,21 @@ describe("agent state view read-time semantics", () => {
 			env: { ...process.env, PATH: `${home}:${process.env.PATH}`, SNO_REACH_ADDR: "worker.one@local" },
 		});
 		expect(hook.status, hook.stderr).toBe(0);
-		expect(hook.stdout).toBe('{"decision":"block","reason":"Card: /reach/worker/new/card"}\n');
+		expect(hook.stdout).toBe('{"decision":"block","reason":"REACH-RING Guide: g. Read each original card.\\n\\nCard: /reach/worker/new/card"}\n');
+	});
+	it.each([
+		["a usage error from an older Reach", "printf 'usage: sno reach <verb> ...\\n'\nexit 64\n", "worker.one@local"],
+		["sno help printed for a missing reach command", "printf 'The Sno command line\\nUsage: sno <command>\\n'\nexit 0\n", undefined],
+	])("never turns %s into a turn-end continuation", async (_case, script, address) => {
+		await writeFile(join(home, "sno"), `#!/bin/sh\n${script}`, { mode: 0o700 });
+		const env: NodeJS.ProcessEnv = { ...process.env, PATH: `${home}:${process.env.PATH}` };
+		if (address) env.SNO_REACH_ADDR = address; else delete env.SNO_REACH_ADDR;
+		const hook = spawnSync(process.execPath, ["--import", "tsx", "--input-type=module", "-e", `
+			import { observeAgentEvent } from "./packages/memory/config/agent-state.ts";
+			await observeAgentEvent("claude", "stop", { session_id: "stray-output" });
+		`], { encoding: "utf8", timeout: 5000, env });
+		expect(hook.status, hook.stderr).toBe(0);
+		expect(hook.stdout).toBe("");
 	});
 	it("records a pre-tool-use event without looking up the Reach seat", async () => {
 		const calls = join(home, "sno-calls");
