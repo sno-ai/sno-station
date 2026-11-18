@@ -48,7 +48,7 @@ async function waitUntil(check, label, seconds = 30) {
 }
 async function agentStopped(address) {
 	try {
-		const files = await readdir(join(env.SNO_PROFILE_DIR, "station/agents"));
+		const files = (await readdir(join(env.SNO_PROFILE_DIR, "station/agents"))).filter(file => file.endsWith(".jsonl"));
 		for (const file of files) {
 			const events = (await readFile(join(env.SNO_PROFILE_DIR, "station/agents", file), "utf8")).trim().split("\n").map(line => JSON.parse(line));
 			if (events.some(event => event.reachAddress === address) && events.at(-1)?.event === "stop") return true;
@@ -106,7 +106,7 @@ try {
 	assert.equal(after.agents.find(row => row.reachAddress === source)?.group, "Finished");
 	assert.equal(after.agents.find(row => row.reachAddress === source)?.subgroup, "handed over");
 	assert.equal(after.agents.find(row => row.reachAddress === target)?.work.filter(item => item.work === work).length, 1);
-	const files = await readdir(join(env.SNO_PROFILE_DIR, "station/agents"));
+	const files = (await readdir(join(env.SNO_PROFILE_DIR, "station/agents"))).filter(file => file.endsWith(".jsonl"));
 	const allEvents = (await Promise.all(files.map(file => readFile(join(env.SNO_PROFILE_DIR, "station/agents", file), "utf8")))).flatMap(text => text.trim().split("\n").map(line => JSON.parse(line)));
 	assert(allEvents.some(event => event.event === "handoff-released" && event.input.message_id === original && event.input.target === target));
 	const metadata = JSON.parse(await readFile(join(state, target, "transcript.json"), "utf8"));
