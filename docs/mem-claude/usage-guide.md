@@ -130,8 +130,8 @@ wipe-db`).
 
 ### Hooks
 
-The install command registers ten Claude Code hooks. Each one is scoped to the git repository
-that contains the session's working directory; outside a repository, and in subagents, hooks
+The install command registers ten Claude Code hooks. The memory hooks are scoped to the git repository
+that contains the session's working directory; outside a repository, and in subagents, they
 inject and capture nothing.
 
 | Hook | Timeout | What it does |
@@ -142,7 +142,7 @@ inject and capture nothing.
 | `SessionEnd` | 8 s | Tells the memory service the session has ended |
 | `PreToolUse` | 5 s | Notes when a tool call starts, so its duration can be measured |
 | `PostToolUse` | 30 s | Reports each finished tool call to the memory service |
-| `PreCompact` | 5 s | Refreshes the continuity brief before Claude Code compacts the conversation, so the summary is written from the latest state |
+| `PreCompact` | 5 s | Updates the session's saved progress record, if it has one, before the conversation is compacted |
 | `PermissionRequest` | 5 s | Records that the agent is waiting on a permission prompt, for the status line |
 | `Notification` | 5 s | Records agent notifications (such as a pending permission prompt), for the status line |
 | `StopFailure` | 5 s | Records why a turn failed (for example an exhausted quota), for the status line |

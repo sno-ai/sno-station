@@ -129,8 +129,8 @@ wipe-db`).
 
 ### Hooks
 
-The install command registers ten Codex hooks. Each one is scoped to the git repository that
-contains the session's working directory; outside a repository, hooks inject and capture nothing.
+The install command registers ten Codex hooks. The memory hooks are scoped to the git repository that
+contains the session's working directory; outside a repository, they inject and capture nothing.
 
 | Hook | Timeout | What it does |
 | --- | --- | --- |
@@ -140,10 +140,10 @@ contains the session's working directory; outside a repository, hooks inject and
 | `SessionEnd` | 3 s | Tells the memory service the session has ended |
 | `PreToolUse` | 5 s | Notes when a tool call starts, so its duration can be measured |
 | `PostToolUse` | 30 s | Reports each finished tool call to the memory service |
-| `PreCompact` | 5 s | Refreshes the continuity brief before Codex compacts the conversation, so the summary is written from the latest state |
+| `PreCompact` | 5 s | Updates the session's saved progress record, if it has one, before the conversation is compacted |
 | `PostCompact` | 15 s | Registered for completeness; Codex delivers the compacted context through `SessionStart` with `source=compact`, so this hook produces no output |
-| `PermissionRequest` | 5 s | Records that the agent is waiting on a permission prompt, for the status line |
-| `Interrupt` | 3 s | Records that the user interrupted the turn, for the status line |
+| `PermissionRequest` | 5 s | Records that the agent is waiting on a permission prompt, for `sno squad` |
+| `Interrupt` | 3 s | Records that the user interrupted the turn, for `sno squad` |
 
 A session receives at most 12,000 characters of injected memory in total, and a memory already
 shown in the session is not shown again. The injected block is labelled as data, not
