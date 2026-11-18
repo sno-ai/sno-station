@@ -74,9 +74,17 @@ UDP 47470. This setup needs no central messaging server or system SSH daemon.
 - A saved or delivered message is not proof that the other agent read or finished it.
 - Instant Messenger succeeds when the expected receiver response arrives. A timeout
   means no qualifying response arrived in time; the instruction may already be saved.
+- Sending returns as soon as each copy is placed; the wake runs in the background.
+  `sno reach sent --as <your-address>` shows, per recipient, whether it was delivered,
+  woken, taken, accepted and answered.
+- Mail that arrives while an agent is busy is picked up when its turn ends. A card that
+  still needs handling five minutes later is woken again, at most three times in all.
+- A task card sent to several agents is taken by one; the others are told who took it.
 - Agent Email keeps undelivered transport copies in the sender's outbox. Restore the
-  connection, then explicitly run `sno reach flush --as <your-address>`. Reach does not
-  run an automatic background retry loop. Do not send a duplicate to retry delivery.
+  connection, then explicitly run `sno reach flush --as <your-address>`. Do not send a
+  duplicate to retry delivery.
+- Questions, results, approval requests and failed timed runs reach you once as a desktop
+  notice on the machine you last typed on, and stay listed in `sno squad` until handled.
 - Agent Email is messaging between Reach agents. Its addresses are not public email
   accounts, and it does not connect to a personal Gmail or Outlook inbox.
 

@@ -43,6 +43,14 @@ machines need Reach and exchanged contacts. Each machine runs its own receiver;
 no central messaging server is required. Look for `network` and `peer` in
 `sno reach --help` before following cross-machine setup instructions.
 
+To use it, tell your agent in one sentence, for example: "Send this task to the reviewer on my desktop and tell me when it is done." Mail that arrives while an agent is busy is picked up when its turn ends; a task sent to several agents is taken by one; questions, results and approval requests reach you once on the machine you last typed on, and stay in `sno squad` until handled.
+
+| | Claude Code | Codex | Cursor | Hermes | OpenClaw |
+| --- | --- | --- | --- | --- | --- |
+| Mail picked up at turn end | yes | yes | yes | not yet | not yet |
+| Sent box, one taker, re-wake, notices | yes | yes | yes | yes | yes |
+| Approval request notice | yes | yes | not yet | not yet | not yet |
+
 [See what your agents can do with Reach →](apps/reach/README.md) · [中文说明](docs/reach.zh-CN.md)
 
 ## Finish: say when, and an agent shows up
