@@ -95,6 +95,7 @@ has "$record" "Message-ID <$held>"
 has "$record" 'First read the progress of Reach card'
 has "$record" 'Stop if it is final or someone else holds it.'
 has "$record" 'Ask the developer about any action you cannot confirm.'
+has "$record" 'Read the original card itself and continue its work. Reply on that card with --state completed or --state failed when the work ends.'
 grep -Eq '^at: [0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2} UTC$' "$record" || fail 'resume did not use a parseable time'
 HOME="$TEST_HOME" "$heartbeat" --due >"$WORK/due"
 has "$WORK/due" "Message-ID <$held>"
