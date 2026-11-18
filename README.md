@@ -142,13 +142,18 @@ Say `/cos` in Claude Code, or `$cos` in Codex. That agent becomes your chief of 
 **Stop watching terminals.** With or without a chief of staff, your Claude Code or Cursor status line tells you when someone needs you. The install sets it up:
 
 ```text
-❄ 2 need you · claude: approve
+[sno] 2 agents are waiting for you
+  Claude in web-app needs your approval (Bash) · 1m
+  Codex in api asks: Should the billing migration run tonight? · 5m
 ```
 
 `sno squad` lays out the whole squad full screen: who needs you, who is working, what is finished.
 
 ```text
 Sno Station · squad · 09:15 · 2 need you · 2 working · 2 finished
+Waiting for you (2)
+  Claude in web-app needs your approval (Bash) · 1m
+  Codex in api asks: Should the billing migration run tonight? · 5m
 Needs you (2)
 > claude web-app       approve a permission · Fix the login redirect loop …   1m
   codex api            asked a question · Migrate the billing tables to th…   5m
