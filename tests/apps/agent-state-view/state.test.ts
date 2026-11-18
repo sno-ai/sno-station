@@ -121,6 +121,10 @@ describe("agent state view read-time semantics", () => {
 		expect(result.openQuestions).toMatchObject([{ sessionId: "asked" }]);
 		expect(questionAndStuckLines(result)).toContain("  Claude asks: Ship it? · 0s");
 	});
+	it("says what a non-question wait needs instead of quoting it as a question", async () => {
+		await events("claude", "quota", [{ event: "stop-failure", input: { error: "rate_limit" } }]);
+		expect(compactAgentView(await view())).toBe("[sno] 1 agent is waiting for you · Claude is out of quota");
+	});
 	it("reads no transcript when the process is unknown", async () => {
 		await events("codex", "unknown-process", [{ event: "stop", input: { transcript_path: join(home, "missing-rollout.jsonl") } }]);
 		expect((await view()).errors.filter(error => error.operation === "read resume record")).toEqual([]);

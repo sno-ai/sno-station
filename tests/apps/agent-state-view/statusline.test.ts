@@ -35,7 +35,7 @@ describe("agent state view composed command", () => {
 			const settings = JSON.parse(await readFile(settingsPath, "utf8"));
 			const input = JSON.stringify({ session_id: "current" });
 			const agent = harness === "claude" ? "Claude" : "Cursor";
-			const waiting = `[sno] 1 agent is waiting for you · ${agent} needs your approval (permission to approve)`;
+			const waiting = `[sno] 1 agent is waiting for you · ${agent} needs your approval`;
 			const env = { ...process.env };
 			delete env.NO_COLOR;
 			const result = spawnSync("sh", ["-c", settings.statusLine.command], { input, encoding: "utf8", env, timeout: 10_000 });
