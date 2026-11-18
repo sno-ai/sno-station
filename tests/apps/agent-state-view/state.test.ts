@@ -3,7 +3,7 @@ import { spawnSync } from "node:child_process";
 import { appendFile, mkdir, mkdtemp, readFile, readdir, rm, utimes, writeFile } from "node:fs/promises";
 import { hostname, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { agentProcessIdentity, compactAgentView, markAgentResultSeen, observeAgentEvent, readAgentView,
 	type AgentHarness, type AgentObservation } from "../../../packages/memory/config/agent-state.ts";
 
@@ -98,7 +98,20 @@ describe("agent state view read-time semantics", () => {
 		expect(full.agents.map(row => row.sessionId).sort()).toEqual(["fresh", "stale"]);
 		expect(full.errors.some(error => error.operation === "read Reach work")).toBe(true);
 	});
-	it("keeps native and mailed questions visible until answered or dismissed, including on status redraw", async () => {
+	it("skips stale event files and Reach retry logs before reading them on status redraw", async () => {
+		const stale = await events("claude", "stale", [{ event: "user-prompt-submit" }]);
+		await appendFile(stale, "{broken\n");
+		const past = new Date(now - 901_000);
+		await utimes(stale, past, past);
+		const root = join(home, "reach");
+		await mkdir(join(root, "coder.one@local"));
+		await writeFile(join(root, "coder.one@local", "tries.jsonl"), "{broken\n");
+
+		const recent = await readAgentView({ profileDir: home, reachRoot: root, now, recent: true });
+		expect(recent.errors).toEqual([]);
+		expect((await view()).errors.map(error => error.operation)).toEqual(["parse agent observation", "parse Reach try"]);
+	});
+	it("keeps old native questions in the full view and mailed questions on status redraw until dismissed", async () => {
 		const old = new Date(now - 1200_000);
 		const path = await events("codex", "waiting", [{ event: "stop", at: old.toISOString(), input: { last_assistant_message: "Which project?" } }]);
 		await utimes(path, old, old);
@@ -109,12 +122,13 @@ describe("agent state view read-time semantics", () => {
 		const mail = "Subject: Choose a destination\nFrom: Agent <agent.one@local>\nX-Type: decision\nDate: " + old.toUTCString() + "\n\nPlease decide.\n";
 		await writeFile(join(mailbox, "new/question"), mail);
 		const options = { profileDir: home, reachRoot: root, now, recent: true };
-		const result = await readAgentView(options);
-		expect(result.openQuestions).toMatchObject([
+		expect((await view()).openQuestions).toMatchObject([
 			{ subject: "Which project?", age: 1200, source: "native" },
 			{ subject: "Choose a destination", agent: "agent.one@local", source: "mail" },
 		]);
-		expect(compactAgentView(result)).toContain("2 need you");
+		const result = await readAgentView(options);
+		expect(result.openQuestions).toMatchObject([{ subject: "Choose a destination", source: "mail" }]);
+		expect(compactAgentView(result)).toContain("1 need you");
 		await appendFile(path, JSON.stringify({ harness: "codex", sessionId: "waiting", at: new Date(now).toISOString(), event: "user-prompt-submit", input: { prompt: "Use Sno Station" } }) + "\n");
 		await rm(join(mailbox, "new/question"));
 		await writeFile(join(mailbox, "cur/question:2,ST"), mail);
@@ -142,7 +156,7 @@ describe("agent state view read-time semantics", () => {
 		const originalPath = process.env.PATH;
 		process.env.PATH = `${home}:${originalPath}`;
 		try {
-			const result = await readAgentView({ profileDir: home, reachRoot: root, now, recent: true });
+			const result = await view();
 			expect(result.stuck).toEqual([{ card: mail, holder, reason: "3 tries used", since: time, subject: "Ship the update", taker: holder }]);
 			expect(compactAgentView(result)).toContain("1 stuck");
 		} finally { process.env.PATH = originalPath; }
@@ -200,6 +214,19 @@ describe("agent state view read-time semantics", () => {
 		});
 		expect(hook.status, hook.stderr).toBe(0);
 		expect(hook.stdout).toBe('{"decision":"block","reason":"Card: /reach/worker/new/card"}\n');
+	});
+	it("records a pre-tool-use event without looking up the Reach seat", async () => {
+		const calls = join(home, "sno-calls");
+		await writeFile(calls, "");
+		await writeFile(join(home, "sno"), `#!/bin/sh\nprintf '%s\\n' "$*" >> "$SNO_PROFILE_DIR/sno-calls"\n`, { mode: 0o700 });
+		vi.stubEnv("PATH", `${home}:${process.env.PATH}`);
+		vi.stubEnv("SNO_REACH_ADDR", undefined);
+		try {
+			await observeAgentEvent("claude", "pre-tool-use", { session_id: "tool-start", tool_name: "Bash" });
+			expect(await readFile(calls, "utf8")).toBe("");
+			const event = await readFile(join(home, "station/agents/claude--tool-start.jsonl"), "utf8");
+			expect(JSON.parse(event)).toMatchObject({ event: "pre-tool-use", input: { tool_name: "Bash" } });
+		} finally { vi.unstubAllEnvs(); }
 	});
 	it("supports packaged JSON, compact and snapshot entries against actual hook records", async () => {
 		await observeAgentEvent("claude", "permission-request", { session_id: "hook-record", tool_name: "Bash" });

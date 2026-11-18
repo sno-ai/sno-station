@@ -42,7 +42,7 @@ export interface AgentView {
 }
 export interface AgentViewOptions {
 	profileDir?: string; reachRoot?: string; now?: number; reachProgram?: string;
-	/** Status-line and tmux redraws: omit stale non-waiting sessions and skip the existing Reach work projection. */
+	/** Status-line and tmux redraws: skip stale event files, Reach work, and exhausted cards. */
 	recent?: boolean;
 }
 export interface AgentIdentity { harness?: string; sessionId?: string; reachAddress?: string }
@@ -208,8 +208,9 @@ export async function observeAgentEvent(harness: AgentHarness, event: string, ra
 			logHookFailure("inspect agent process", target, error, "process observation unknown");
 			return undefined;
 		});
-		const history = agent && (!process.env.SNO_REACH_ADDR || event === "post-tool-use") ? await hookHistory(target) : [];
-		const reachAddress = agent ? await hookSeat(history, target) :
+		const needsSeat = agent && (event === "stop" || event === "permission-request");
+		const history = agent && (event === "post-tool-use" || (needsSeat && !process.env.SNO_REACH_ADDR)) ? await hookHistory(target) : [];
+		const reachAddress = needsSeat ? await hookSeat(history, target) :
 			input.agent_id === undefined ? process.env.SNO_REACH_ADDR : undefined;
 		if (event === "stop" && agent && reachAddress) pickup = pickupSeat(reachAddress);
 		let cwd = text(input.cwd);
@@ -531,7 +532,7 @@ function agoSeconds(now: number, date: string): number | "unknown" {
 	return Number.isFinite(then) ? Math.max(0, (now - then) / 1000) : "unknown";
 }
 
-async function readReachStatus(root: string, view: AgentView, now: number): Promise<void> {
+async function readReachStatus(root: string, view: AgentView, now: number, recent = false): Promise<void> {
 	const start = view.errors.length;
 	try {
 		const seats = (await readdir(root, { withFileTypes: true })).filter(entry => entry.isDirectory()).map(entry => entry.name);
@@ -542,7 +543,7 @@ async function readReachStatus(root: string, view: AgentView, now: number): Prom
 				view.openQuestions.push({ agent: card.sender, subject: card.subject, age: agoSeconds(now, card.date), source: "mail" });
 			}
 		}
-		await Promise.all(seats.map(seat => readExhausted(root, seat, view)));
+		if (!recent) await Promise.all(seats.map(seat => readExhausted(root, seat, view)));
 	} catch (error) {
 		view.errors.push(failure("read Reach inventory", root, error, "Reach status unavailable"));
 	}
@@ -604,18 +605,18 @@ export async function readAgentView(options: AgentViewOptions = {}): Promise<Age
 	for (const name of files.filter(name => name.endsWith(".jsonl")).sort()) {
 		try {
 			const path = join(directory, name);
+			if (options.recent && now - (await stat(path)).mtimeMs > 900_000) continue;
 			const row = await readAgentFile(path, now, view.errors);
 			if (row?.waitingForHuman === "yes") {
 				view.openQuestions.push({ agent: row.reachAddress === "unknown" ? rowWho(row) : row.reachAddress,
 					subject: row.waitingSubject ?? row.waitingReason, age: agoSeconds(now, row.waitingSince ?? ""),
 					source: "native", sessionId: row.sessionId, harness: row.harness });
 			}
-			if (row && (!options.recent || row.waitingForHuman === "yes" || row.reachAddress !== "unknown" ||
-				now - (await stat(path)).mtimeMs <= 900_000)) view.agents.push(row);
+			if (row) view.agents.push(row);
 		} catch (error) { view.errors.push(failure("read agent events", join(directory, name), error, "agent observations unknown")); }
 	}
 	const root = options.reachRoot ?? reachRoot();
-	await readReachStatus(root, view, now);
+	await readReachStatus(root, view, now, options.recent);
 	await readSeatStatus(root, view, now);
 	// Projecting Reach work rescans every mailbox per work item; a redraw shows only counts and skips it.
 	view.work = options.recent ? [] : await reachWork({ ...options, reachRoot: root }, view.errors);
