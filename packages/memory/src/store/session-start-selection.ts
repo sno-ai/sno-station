@@ -1,20 +1,25 @@
 import type { MemoryStore } from "./store";
 import type { MemoryEntry } from "../engine/shared/types";
 
-/** Active shared rules/person rows and project rules/pitfalls. */
+/** Unclassified owner rows newest first, then active shared rules/person rows and project rules/pitfalls. */
 export function selectSessionStartRows(store: MemoryStore, projectId: string): MemoryEntry[] {
 	const rows = [...new Set(["global", projectId])].flatMap(project => store.readActivePrecisionRows(project));
 	const shared: MemoryEntry[] = [];
 	const project: MemoryEntry[] = [];
+	const unclassified: MemoryEntry[] = [];
 	for (const row of rows) {
 		const metadata: Record<string, unknown> = JSON.parse(row.metadata);
-		const kind = String(metadata.precision_kind);
 		if (metadata.asserted_by !== undefined || metadata.start_label === "drop") continue;
+		if (metadata.precision_kind === undefined) {
+			unclassified.push(row);
+			continue;
+		}
 		if (metadata.start_label !== undefined && (typeof metadata.start_rank !== "number" || !(metadata.start_rank >= 1))) continue;
+		const kind = String(metadata.precision_kind);
 		if (row.projectId === "global" && ["rule", "person"].includes(kind)) shared.push(row);
 		else if (row.projectId !== "global" && row.projectId === projectId && ["rule", "pitfall"].includes(kind)) project.push(row);
 	}
-	return rankedRows([...shared, ...project]);
+	return [...unclassified.sort((a, b) => b.timestamp - a.timestamp), ...rankedRows([...shared, ...project])];
 }
 
 function rankedRows(rows: MemoryEntry[]): MemoryEntry[] {
