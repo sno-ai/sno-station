@@ -4,7 +4,7 @@ import { appendFile, mkdir, mkdtemp, readFile, readdir, rm, stat, utimes, writeF
 import { hostname, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { agentProcessIdentity, compactAgentView, markAgentResultSeen, observeAgentEvent, readAgentView,
+import { agentProcessIdentity, compactAgentView, markAgentResultSeen, observeAgentEvent, questionAndStuckLines, readAgentView,
 	type AgentHarness, type AgentObservation } from "../../../packages/memory/config/agent-state.ts";
 
 let home: string;
@@ -20,12 +20,16 @@ beforeEach(async () => {
 	process.env.SNO_REACH_ROOT = join(home, "reach");
 	process.env.SNO_PROFILE_DIR = home;
 	await mkdir(join(home, "reach"));
+	// Hooks call sno; a test reaches only this repository's Reach, never the developer's installed sno.
+	await writeFile(join(home, "sno"), `#!/bin/sh\nif [ "$1" = reach ]; then shift; exec '${reach}' "$@"; fi\nexit 127\n`, { mode: 0o700 });
+	vi.stubEnv("PATH", `${home}:${process.env.PATH}`);
 });
 afterEach(async () => {
 	if (previous === undefined) delete process.env.SNO_PROFILE_DIR;
 	else process.env.SNO_PROFILE_DIR = previous;
 	if (previousReach === undefined) delete process.env.SNO_REACH_ROOT;
 	else process.env.SNO_REACH_ROOT = previousReach;
+	vi.unstubAllEnvs();
 	await rm(home, { recursive: true, force: true });
 });
 async function events(harness: AgentHarness, sessionId: string, entries: { event: string; input?: Record<string, unknown>; at?: string; identity?: { pid: number; processStart: string } }[]) {
@@ -84,16 +88,16 @@ describe("agent state view read-time semantics", () => {
 		expect((await view()).agents[0]).toMatchObject({ process: "exited", resumable: "resumable", resumeEvidence: transcript, subgroup: "resumable" });
 	});
 	it("keeps a wait in the full view but drops its leftover redraw marker once the agent process has exited", async () => {
-		const path = await events("claude", "rebooted", [{ event: "permission-request", input: { tool_name: "Bash" }, identity: { pid: process.pid, processStart: "different-start" } }]);
+		const path = await events("claude", "rebooted", [{ event: "stop", input: { last_assistant_message: "Ship it?" }, identity: { pid: process.pid, processStart: "different-start" } }]);
 		const marker = `${path}.waiting`;
 		await writeFile(marker, "");
 		const past = new Date(now - 901_000);
 		await utimes(path, past, past);
 		const redraw = await readAgentView({ profileDir: home, reachRoot: join(home, "reach"), now, recent: true });
 		expect(redraw.agents).toEqual([]);
-		expect(compactAgentView(redraw)).not.toContain("need you");
+		expect(compactAgentView(redraw)).not.toMatch(/\d+ agents? (?:is|are) waiting/);
 		await expect(stat(marker)).rejects.toMatchObject({ code: "ENOENT" });
-		expect((await view()).agents[0]).toMatchObject({ process: "exited", waitingForHuman: "yes", waitingReason: "permission to approve" });
+		expect((await view()).agents[0]).toMatchObject({ process: "exited", waitingForHuman: "yes", waitingReason: "asked a question" });
 	});
 	it("keeps the status redraw to one line: the final question only, and no placeholder rows for idle Reach seats", async () => {
 		const reply = "写着这些限制。改成了“限制跟着任务走”。\n- 第三遍通过，存下来的是第三遍的原文。\n\n按一天最多发一帖的规矩，最早能排到周一。就排 23 号早上 8 点吗？";
@@ -103,9 +107,19 @@ describe("agent state view read-time semantics", () => {
 		await writeFile(join(root, "idle.seat@local", "seat.json"), JSON.stringify({ address: "idle.seat@local", runtime: "codex" }));
 		const line = compactAgentView(await readAgentView({ profileDir: home, reachRoot: root, now, recent: true }));
 		expect(line).not.toContain("\n");
-		expect(line).toContain("1 need you · claude: 就排 23 号早上 8 点吗？");
+		expect(line).toMatch(/^\[sno\] 1 agent is waiting for you · Claude.* asks: 就排 23 号早上 8 点吗？$/);
 		expect(line).not.toContain("unknown");
 		expect((await readAgentView({ profileDir: home, reachRoot: root, now })).agents.map(row => row.reachAddress)).toContain("idle.seat@local");
+	});
+	it("drops an approval wait once its session ended or its agent process exited; nobody is left to approve", async () => {
+		await events("claude", "ended", [{ event: "permission-request", input: { tool_name: "Bash" } }, { event: "session-end" }]);
+		await events("codex", "gone", [{ event: "permission-request", input: { tool_name: "Bash" }, identity: { pid: process.pid, processStart: "different-start" } }]);
+		await events("claude", "asked", [{ event: "stop", input: { last_assistant_message: "Ship it?" } }, { event: "session-end" }]);
+		const result = await view();
+		expect(result.agents.find(row => row.sessionId === "ended")?.waitingForHuman).toBe("no");
+		expect(result.agents.find(row => row.sessionId === "gone")).toMatchObject({ process: "exited", waitingForHuman: "no" });
+		expect(result.openQuestions).toMatchObject([{ sessionId: "asked" }]);
+		expect(questionAndStuckLines(result)).toContain("  Claude asks: Ship it? · 0s");
 	});
 	it("reads no transcript when the process is unknown", async () => {
 		await events("codex", "unknown-process", [{ event: "stop", input: { transcript_path: join(home, "missing-rollout.jsonl") } }]);
@@ -151,14 +165,14 @@ describe("agent state view read-time semantics", () => {
 		const waiting = await readAgentView(options);
 		expect(waiting.openQuestions).toMatchObject([{ source: "native", sessionId: "waiting" }]);
 		expect(waiting.agents[0]?.waitingReason).toBe(reason);
-		expect(compactAgentView(waiting)).toContain("1 need you");
+		expect(compactAgentView(waiting)).toContain("1 agent is waiting for you");
 		expect(await readFile(marker, "utf8")).toBe("");
 
 		await observeAgentEvent("cursor", "user-prompt-submit", { ...identity, prompt: "Continue with Sno Station." });
 		const answered = await readAgentView(options);
 		expect(answered.agents[0]?.waitingForHuman).toBe("no");
 		expect(answered.openQuestions).toEqual([]);
-		expect(compactAgentView(answered)).not.toContain("need you");
+		expect(compactAgentView(answered)).not.toMatch(/\d+ agents? (?:is|are) waiting/);
 		await expect(stat(marker)).rejects.toMatchObject({ code: "ENOENT" });
 		await utimes(path, past, past);
 		expect((await readAgentView(options)).agents).toEqual([]);
@@ -175,7 +189,7 @@ describe("agent state view read-time semantics", () => {
 		const options = { profileDir: home, reachRoot: join(home, "reach"), now: Date.now(), recent: true };
 		const past = new Date(options.now - 901_000);
 		await utimes(path, past, past);
-		expect(compactAgentView(await readAgentView(options))).not.toContain("need you");
+		expect(compactAgentView(await readAgentView(options))).not.toMatch(/\d+ agents? (?:is|are) waiting/);
 		// A one-shot run ends its session while its question can still be answered by resuming it.
 		expect((await readAgentView({ ...options, recent: false })).agents[0]).toMatchObject({ waitingForHuman: "yes", waitingReason: "asked a question" });
 	});
@@ -196,7 +210,7 @@ describe("agent state view read-time semantics", () => {
 		]);
 		const result = await readAgentView(options);
 		expect(result.openQuestions).toMatchObject([{ subject: "Choose a destination", source: "mail" }]);
-		expect(compactAgentView(result)).toContain("1 need you");
+		expect(compactAgentView(result)).toContain("1 agent is waiting for you");
 		await appendFile(path, JSON.stringify({ harness: "codex", sessionId: "waiting", at: new Date(now).toISOString(), event: "user-prompt-submit", input: { prompt: "Use Sno Station" } }) + "\n");
 		await rm(join(mailbox, "new/question"));
 		await writeFile(join(mailbox, "cur/question:2,ST"), mail);
@@ -226,7 +240,7 @@ describe("agent state view read-time semantics", () => {
 		try {
 			const result = await view();
 			expect(result.stuck).toEqual([{ card: mail, holder, reason: "3 tries used", since: time, subject: "Ship the update", taker: holder }]);
-			expect(compactAgentView(result)).toContain("1 stuck");
+			expect(compactAgentView(result)).toContain("1 stuck: sno squad");
 		} finally { process.env.PATH = originalPath; }
 	});
 	it("marks only the opened completion seen; passive reads and new completions stay unseen", async () => {
@@ -253,7 +267,7 @@ describe("agent state view read-time semantics", () => {
 		expect(result.agents).toHaveLength(3);
 		expect(result.agents.find(row => row.harness === "openclaw")?.missingReasons).toContain("OpenClaw state capture unsupported");
 		expect(result.stuck).toEqual([]);
-		expect(compactAgentView(result, { harness: "claude", sessionId: "foreground" })).toMatch(/1 need you.*claude: approve.*unknown/);
+		expect(compactAgentView(result, { harness: "claude", sessionId: "foreground" })).toMatch(/^\[sno\] 1 agent is waiting for you · Claude.* needs your approval/);
 	});
 	it("excludes the Reach notice sender and developer mailbox from the agent inventory", async () => {
 		const root = join(home, "reach");
@@ -266,7 +280,7 @@ describe("agent state view read-time semantics", () => {
 			expect(seat).toMatchObject({ address, runtime: "unbound" });
 		}
 		expect((await view()).agents).toEqual([]);
-		expect(compactAgentView(await readAgentView({ recent: true }))).toBe("❄ 0 working · 0 stuck");
+		expect(compactAgentView(await readAgentView({ recent: true }))).toBe("[sno] no agent is waiting for you");
 	});
 	it("keeps corrupt observations explicit instead of a false all-clear", async () => {
 		const path = await events("claude", "broken", [{ event: "user-prompt-submit" }]);
@@ -274,7 +288,7 @@ describe("agent state view read-time semantics", () => {
 		const result = await view();
 		expect(result.errors.some(error => error.operation === "parse agent observation")).toBe(true);
 		expect(result.agents[0]?.doing).toBe("unknown");
-		expect(compactAgentView(result)).toContain("unknown");
+		expect(compactAgentView(result)).toContain("some agents unreadable: sno squad");
 	});
 	it("appends real per-session observations, marks only the wait, and ignores foreign notify", async () => {
 		await observeAgentEvent("claude", "permission-request", { session_id: "first", tool_name: "Bash" });
@@ -342,7 +356,7 @@ describe("agent state view read-time semantics", () => {
 		const json = run("--json");
 		expect(json.status, json.stderr).toBe(0);
 		expect(JSON.parse(json.stdout).agents[0]).toMatchObject({ sessionId: "hook-record", group: "Needs you" });
-		expect(run("--compact").stdout).toContain("1 need you");
+		expect(run("--compact").stdout).toContain("1 agent is waiting for you");
 		expect(run().stdout).toContain("Waiting for a human: yes");
 		expect(await readFile(join(home, "station/agents/claude--hook-record.jsonl"), "utf8")).not.toContain("human-seen");
 	});
@@ -361,8 +375,10 @@ describe("agent state view read-time semantics", () => {
 			await observeAgentEvent("claude", "permission-request", { session_id: "denied", tool_name: "Bash", transcript_path: transcript });
 			expect((await view()).agents[0]).toMatchObject({ waitingForHuman: "yes", waitingReason: "permission to approve" });
 			const redraw = { profileDir: home, reachRoot: join(home, "reach"), recent: true };
-			await expect.poll(async () => (await readAgentView(redraw)).openQuestions.map(question => question.source)).toEqual(["native", "mail"]);
 			const mailbox = join(redraw.reachRoot, `developer.human@${hostname()}`);
+			await expect.poll(() => readdir(join(mailbox, "new")).catch(() => [])).toHaveLength(1);
+			// The approval card and the agent's own wait are one thing waiting for the developer.
+			expect((await readAgentView(redraw)).openQuestions.map(question => question.source)).toEqual(["native"]);
 			const other = spawnSync(reach, ["notify", "--type", "approval", "--session", "other", "--subject", "Other approval"], { encoding: "utf8" });
 			expect(other.status, other.stderr).toBe(0);
 

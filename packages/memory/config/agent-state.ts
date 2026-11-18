@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
 import { appendFile, mkdir, open, readFile, readdir, realpath, rm, stat, writeFile } from "node:fs/promises";
 import { homedir, hostname } from "node:os";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { createInterface } from "node:readline";
 import { promisify } from "node:util";
 import { z } from "zod";
@@ -45,6 +45,8 @@ export interface AgentViewOptions {
 	profileDir?: string; reachRoot?: string; now?: number; reachProgram?: string;
 	/** Status-line and tmux redraws: skip stale event files without a wait marker, Reach work, and exhausted cards. */
 	recent?: boolean;
+	/** With `recent`: how old an idle event file may be and still be read (default 900 s, the status-line redraw). */
+	recentSeconds?: number;
 }
 export interface AgentIdentity { harness?: string; sessionId?: string; reachAddress?: string }
 
@@ -352,7 +354,11 @@ function applyEvent(row: AgentRow, observation: AgentObservation, index: number,
 		row.doing = "idle at prompt";
 		if (row.waitingReason === "permission to approve") { row.waitingForHuman = "unknown"; row.waitingReason = "unknown"; }
 	}
-	if (event === "session-end") row.doing = "idle at prompt";
+	if (event === "session-end") {
+		row.doing = "idle at prompt";
+		// An approval prompt dies with its session; a question can still be answered by resuming it.
+		if (row.waitingReason === "permission to approve") resolveWait(row);
+	}
 	if (event === "stop-failure" && quotaFailure(input)) wait(row, "quota exhausted");
 	if (input.human_addressee === true && input.review_requested === true) wait(row, "done awaiting review");
 	if (input.human_addressee === true && input.decision_required === true) wait(row, "failed awaiting decision");
@@ -490,6 +496,7 @@ async function readAgentFile(path: string, now: number, errors: AgentOperationEr
 	}
 	const { row, observations, unreadable } = replay;
 	await inspectProcess(row, observations, errors);
+	if (row.process === "exited" && row.waitingReason === "permission to approve") resolveWait(row);
 	await inspectResume(row, observations, errors);
 	if (row.lastEvent !== "unknown") row.ageSeconds = Math.max(0, (now - Date.parse(row.lastEvent.at)) / 1000);
 	// Existing Reach freshness horizon; this expires observations, never infers failure.
@@ -611,6 +618,8 @@ async function readReachStatus(root: string, view: AgentView, now: number, recen
 				child.unref();
 				continue;
 			}
+			// A Claude or Codex approval is already counted from the agent's own wait.
+			if (card.type === "approval" && view.openQuestions.some(question => question.source === "native" && question.sessionId === card.sessionId)) continue;
 			if (["question", "decision", "approval"].includes(card.type)) {
 				view.openQuestions.push({ agent: card.sender, subject: card.subject, age: agoSeconds(now, card.date), source: "mail" });
 			}
@@ -681,7 +690,7 @@ export async function readAgentView(options: AgentViewOptions = {}): Promise<Age
 		try {
 			const path = join(directory, name);
 			const marked = names.has(name + WAITING_SUFFIX);
-			const stale = options.recent && now - (await stat(path)).mtimeMs > 900_000;
+			const stale = options.recent && now - (await stat(path)).mtimeMs > (options.recentSeconds ?? 900) * 1000;
 			if (stale && !marked) continue;
 			const row = await readAgentFile(path, now, view.errors);
 			// A marker outlives its session when the agent exits without session-end (reboot, killed agent, closed terminal).
@@ -827,8 +836,8 @@ function ago(seconds: number | "unknown"): string {
 
 export function questionAndStuckLines(view: AgentView): string[] {
 	return [
-		`Open questions (${view.openQuestions.length})`,
-		...view.openQuestions.map(question => `  ${question.agent} · ${question.subject} · ${ago(question.age)}`),
+		`Waiting for you (${view.openQuestions.length})`,
+		...view.openQuestions.map(question => `  ${waitLine(view, question)} · ${ago(question.age)}`),
 		`Stuck (${view.stuck.length})`,
 		...view.stuck.map(item => `  ${item.holder} · ${item.subject} · ${item.reason} · since ${item.since}${item.taker ? ` · taken by ${item.taker}` : ""}`),
 	];
@@ -861,7 +870,7 @@ export function renderAgentScreen(view: AgentView, selected: number, size: { col
 	const whatWidth = width - whoWidth - 8;
 	const count = (group: AgentRow["group"]): number => view.agents.filter(row => row.group === group).length;
 	const header = [`Sno Station · squad · ${new Date(view.observedAt).toTimeString().slice(0, 5)}`, `${count("Needs you")} need you`,
-		`${count("Working")} working`, `${count("Finished")} finished`, ...(view.errors.length ? [`${view.errors.length} errors (sno --json squad)`] : [])];
+		`${count("Working")} working`, `${count("Finished")} finished`, ...(view.errors.length ? [`${view.errors.length} unreadable (sno squad --json)`] : [])];
 	const pinned = [
 		...(view.reachUnavailable ? [`Reach unavailable: ${view.reachUnavailable}`] : []),
 		...questionAndStuckLines(view),
@@ -904,6 +913,29 @@ export function renderAgentScreen(view: AgentView, selected: number, size: { col
 		cell("↑/↓ select · Enter result · Space refresh · r quota · q exit", width)].map(line => line.trimEnd()).join("\n");
 }
 
+const HARNESS_NAMES: Record<string, string> = { claude: "Claude", codex: "Codex", cursor: "Cursor", hermes: "Hermes", openclaw: "OpenClaw" };
+
+/** The sentence a reply ends on, whitespace folded; a period inside a file name or version is not a sentence end. */
+function finalSentence(value: string): string {
+	const folded = value.replace(/\s+/g, " ").trim();
+	return folded.split(/(?<=[。！？])|(?<=[.!?])\s+/).map(part => part.trim()).filter(Boolean).at(-1) ?? folded;
+}
+
+/** Who waits for the developer, in which project, and for what: one line a person can act on. */
+function waitLine(view: AgentView, question: AgentView["openQuestions"][number]): string {
+	const row = question.source === "native" ? view.agents.find(item => item.sessionId === question.sessionId && item.harness === question.harness) : undefined;
+	const subject = question.subject.replace(/^\[[A-Z]+\]\s*/, "");
+	const approval = /^approval needed: (\S+)(?: in (.+))?$/.exec(subject);
+	const place = row?.cwd && row.cwd !== "unknown" ? row.cwd : approval?.[2];
+	const who = row ? (HARNESS_NAMES[row.harness] ?? row.harness) : question.agent.startsWith("station.notices@") ? "An agent" : question.agent;
+	const where = place ? ` in ${basename(place)}` : "";
+	const tool = approval?.[1] ?? (row?.waitingReason === "permission to approve" ? row.waitingSubject?.replace(/^approval needed: /, "") : undefined);
+	const what = tool || row?.waitingReason === "permission to approve" ? `needs your approval${tool ? ` (${tool})` : ""}`
+		: `asks: ${cell(finalSentence(subject), 40).trimEnd()}`;
+	return `${who}${where} ${what}`;
+}
+
+/** One status line a person can act on: who waits, in which project, and for what. */
 export function compactAgentView(view: AgentView, current: AgentIdentity = {}): string {
 	const rows = view.agents.filter(row => !((current.harness === row.harness && current.sessionId === row.sessionId) ||
 		(current.reachAddress && current.reachAddress === row.reachAddress)));
@@ -911,15 +943,17 @@ export function compactAgentView(view: AgentView, current: AgentIdentity = {}): 
 		!(current.harness === question.harness && current.sessionId === question.sessionId) &&
 		!(current.reachAddress && current.reachAddress === question.agent));
 	const working = rows.filter(row => row.group === "Working").length;
-	const unknown = rows.filter(row => row.waitingForHuman === "unknown" || row.group === "unknown").length + view.errors.length;
+	const parts: string[] = [];
 	const first = waits[0];
-	const row = first?.source === "native" ? rows.find(item => item.sessionId === first.sessionId && item.harness === first.harness) : undefined;
-	// One status line: the question an agent ended on, never its whole multi-line reply.
-	const folded = (first?.subject ?? "").replace(/\s+/g, " ").trim();
-	const question = /[^。！？.!?]*[？?]$/.exec(folded)?.[0].trim() || folded;
-	const subject = row?.waitingReason === "permission to approve" ? "approve" : cell(question, 40).trimEnd();
-	const description = first ? `${waits.length} need you · ${first.harness ?? first.agent}: ${subject}` : `${working} working`;
-	return `❄ ${description} · ${view.stuck.length} stuck${unknown ? ` · ${unknown} unknown` : ""}${view.reachUnavailable ? ` · Reach unavailable: ${view.reachUnavailable}` : ""}`;
+	if (first) {
+		parts.push(`${waits.length === 1 ? "1 agent is" : `${waits.length} agents are`} waiting for you`, waitLine(view, first));
+		if (waits.length > 1) parts.push("all: sno squad");
+	} else parts.push(working ? `${working} working, none waiting for you` : "no agent is waiting for you");
+	if (view.stuck.length) parts.push(`${view.stuck.length} stuck: sno squad`);
+	// An unreadable record must never read as an all-clear.
+	if (view.errors.length) parts.push("some agents unreadable: sno squad");
+	if (view.reachUnavailable) parts.push("Reach is not running");
+	return `[sno] ${parts.join(" · ")}`;
 }
 
 export async function markAgentResultSeen(row: AgentRow, profile: string = profileDir()): Promise<void> {
