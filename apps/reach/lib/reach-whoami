@@ -21,11 +21,16 @@ shopt -s nullglob
 records=("$root"/*/reachable.json)
 (("${#records[@]}")) || exit 1
 
-if matches="$(jq -r --arg orca "$orca" --arg pane "$pane" '
-    select(($orca != "" and .channel == "orca" and
+handle=''
+if [[ -n "$pane" ]]; then
+    terminal="$(tmux display-message -pt "$pane" $'#{socket_path}\t#{pid}\t#{session_name}' 2>/dev/null)" || exit 1
+    server="$(printf '%s\n' "${terminal%$'\t'*}" | sha256sum)"
+    handle="tmux-${server%% *}:${terminal##*$'\t'}"
+fi
+if matches="$(jq -r --arg orca "$orca" --arg pane "$pane" --arg handle "$handle" '
+    select(($pane == "" and $orca != "" and .channel == "orca" and
             (.identity.value == $orca or .handle == $orca)) or
-           ($pane != "" and .channel == "tmux" and
-            (.identity.value == $pane or .handle == $pane))) |
+           ($pane != "" and .channel == "tmux" and .identity.value == $pane and .handle == $handle)) |
     .address | strings | select(length > 0)
 ' "${records[@]}" 2>&1)"; then
     [[ -n "$matches" ]] || exit 1
