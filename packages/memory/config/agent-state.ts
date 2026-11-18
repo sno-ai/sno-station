@@ -150,15 +150,18 @@ async function hookSeat(history: AgentObservation[], target: string): Promise<st
 }
 
 async function pickupSeat(seat: string): Promise<void> {
+	let reason: string;
 	try {
 		const { stdout } = await execute("sno", ["reach", "pickup"], {
 			timeout: 3000, killSignal: "SIGKILL", env: { ...process.env, SNO_REACH_ADDR: seat },
 		});
-		const reason = stdout.trim();
-		if (reason) process.stdout.write(`${JSON.stringify({ decision: "block", reason })}\n`);
+		reason = stdout.trim();
 	} catch (error) {
-		await logReachHookFailure("pick up Reach mail", seat, error, "turn ends without a continuation");
+		reason = text(record(error).stdout).trim();
+		await logReachHookFailure("pick up Reach mail", seat, error,
+			reason ? "some pickup offers may be missing" : "turn ends without a continuation");
 	}
+	if (reason) process.stdout.write(`${JSON.stringify({ decision: "block", reason })}\n`);
 }
 
 function approvalNotice(observation: AgentObservation, history: AgentObservation[]): void {
@@ -561,7 +564,7 @@ async function readSeatStatus(root: string, view: AgentView, now: number): Promi
 		const registration = join(root, holder, "reachable.json");
 		const registered = await readReachFile("inspect Reach registration", registration, view, () => stat(registration));
 		const exited = !registered && rows.every(row => row.process === "exited");
-		if (!exited && age !== "unknown" && age <= 900) continue;
+		if (!exited && (age === "unknown" || age <= 900)) continue;
 		const subject = rows.find(row => row.lastEvent !== "unknown" && row.lastEvent.at === latest)?.description ?? "unknown";
 		view.stuck.push({ card: "unknown", holder, reason: exited ? "agent process exited" : "silent", since: latest, subject });
 	}

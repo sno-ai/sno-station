@@ -114,4 +114,20 @@ invoke pickup; expect_rc 0
 age
 invoke pickup; expect_rc 0
 has "$WORK/out" "Card: $lost_path"
+
+age
+export PICKUP_CARD="$lost_path" PICKUP_FIND="$(command -v find)"
+mkdir "$WORK/bin"
+cat >"$WORK/bin/find" <<'SH'
+#!/usr/bin/env bash
+if [[ "$1" == "${PICKUP_CARD%/*}" && "${2:-}" == "${PICKUP_CARD%/*/*}/cur" ]]; then
+    printf '%s\0' "$PICKUP_CARD"
+    exec sleep 4
+fi
+exec "$PICKUP_FIND" "$@"
+SH
+chmod +x "$WORK/bin/find"
+PATH="$WORK/bin:$PATH" invoke pickup; expect_rc 124
+has "$WORK/out" "Card: $PICKUP_CARD"
+jq -se --arg id "<$lost>" '[.[] | select(.msg_id == $id and .kind == "pickup")] | length == 3' "$tries" >/dev/null
 pass 'pickup claims To mail before printing, leaves its flags intact and retries within the bound'
