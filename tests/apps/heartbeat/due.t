@@ -7,6 +7,7 @@ SCRIPT="${HEARTBEAT:-$HERE/../../../apps/heartbeat/bin/heartbeat}"
 work="$(mktemp -d "${TMPDIR:-/tmp}/heartbeat-due.XXXXXX")"
 work="$(cd -- "$work" && pwd -P)" # macOS temporary folders sit behind the /var symlink
 export TMPDIR="$work" HEARTBEAT_STATE="$work/state" SNO_PROFILE_DIR="$work/profile"
+export SNO_REACH_ROOT="$work/reach"
 export CLAUDE_CONFIG_DIR="$work/claude" CODEX_HOME="$work/codex"
 export DUE_TEST_WORK="$work" DUE_TEST_MODE=reply
 mkdir -p "$work/bin" "$work/checkout space" "$CLAUDE_CONFIG_DIR/sessions" "$CODEX_HOME" "$SNO_PROFILE_DIR/station/handoff"
@@ -42,6 +43,7 @@ printf '%s\n' "$$" >"$call/pid"
 printf '%s\n' "$PPID" >"$call/runner"
 printf '%s\n' "$PWD" >"$call/cwd"
 printf '%s\n' "${CODEX_HOME:-}" >"$call/home"
+printf '%s\n' "${SNO_DUE_RUN:-}" >"$call/due-run"
 printf '%s\n' "${@: -1}" >"$call/prompt"
 printf '%s\n' "$@" >"$call/argv"
 if [[ /dev/stdin -ef /dev/null ]]; then printf 'devnull\n' >"$call/stdin"; else printf 'wrong\n' >"$call/stdin"; fi
@@ -95,7 +97,27 @@ if [[ -n ${DUE_TEST_NOW:-} ]]; then
 fi
 exec "$DUE_TEST_DATE" "$@"
 CLOCK
-chmod +x "$work/bin/claude" "$work/bin/codex" "$work/bin/date"
+cat >"$work/bin/sno" <<'SNO'
+#!/usr/bin/env bash
+set -Eeuo pipefail
+case "$1 $2" in
+  'reach notify')
+    printf -v args '%s\t' "$@"
+    printf '%s\n' "$args" >>"$DUE_TEST_WORK/notices" ;;
+  'reach rewake')
+    [[ -f "$DUE_TEST_WORK/hold-rewake" ]] || exit 0
+    printf '%s\n' "$*" >>"$DUE_TEST_WORK/rewake-started"
+    for ((i=0;i<100;i++)); do
+      [[ ! -f "$DUE_TEST_WORK/hold-rewake" ]] || { sleep 0.05; continue; }
+      printf 'rewake finished\n'
+      exit 0
+    done
+    printf 'rewake fixture was not released\n' >&2
+    exit 1 ;;
+  *) exit 64 ;;
+esac
+SNO
+chmod +x "$work/bin/claude" "$work/bin/codex" "$work/bin/date" "$work/bin/sno"
 export PATH="$work/bin:$PATH"
 mkdir -p "$work/calls"
 record="$SNO_PROFILE_DIR/station/handoff/task.md"
@@ -127,6 +149,14 @@ wait_exit() {
   done
   fail 'runner did not exit after external agent finished'
   return 1
+}
+notice() {
+  local args
+  printf -v args '%s\t' reach notify --type failure --subject "$1" --body
+  args+="$record: $2"
+  if wait_for "$work/notices" "$args"; then
+    equal "one failure notice for $1" "$(grep -Fc -- "$args" "$work/notices")" 1
+  fi
 }
 
 # Keep all tools needed by interval and until-file heartbeats, but no jq.
@@ -205,6 +235,7 @@ equal 'used-up entries do not run again' "$(calls)" 2
 for call in "$work"/calls/*; do
   expect 'record checkout used' "$call/cwd" "$work/checkout space"
   expect 'stdin closed' "$call/stdin" devnull
+  equal 'due agent carries SNO_DUE_RUN' "$(cat "$call/due-run")" 1
   expect 'stream-json requested' "$call/argv" stream-json
   expect 'record path in prompt' "$call/prompt" "$record"
 done
@@ -248,6 +279,23 @@ equal 'three missed days run once' "$(calls)" 1
 expect 'missed repeat moves to first future day' "$record" 'at: 2026-11-04 07:00 America/Los_Angeles'
 unset DUE_TEST_NOW
 
+new_record
+export DUE_TEST_NOW=1793725320 # 2026-11-03 17:02 UTC, 22:32 in Kolkata
+set_due '2026-10-31 07:15 Asia/Kolkata' 'repeat hourly' hourly
+tick; finished
+expect 'hourly advances to the next local whole hour' "$record" 'at: 2026-11-03 23:00 Asia/Kolkata'
+expect 'hourly repeat is preserved' "$record" 'repeat: hourly'
+tick
+equal 'the next hour does not run early' "$(calls)" 1
+new_record
+export DUE_TEST_NOW=1793521800 # 2026-11-01 01:30 PDT, before the repeated 01:00 PST
+set_due '2026-10-31 07:15 America/Los_Angeles' 'repeat across fallback' hourly
+tick; finished
+expect 'repeated local hour is saved as an unambiguous future time' "$record" 'at: 2026-11-01 09:00 UTC'
+tick
+equal 'the repeated hour does not run early' "$(calls)" 1
+unset DUE_TEST_NOW
+
 for runtime in claude-code codex; do
   new_record "$runtime" closed-session
   set_due '2026-10-31 07:00 UTC' 'cannot log in'
@@ -255,6 +303,7 @@ for runtime in claude-code codex; do
   export DUE_TEST_NOW=1793725200 # 2026-11-03 17:00 UTC
   tick
   wait_for "$record" 'not started:'
+  notice 'not started: cannot log in' "not started: resume closed-session Not logged in"
   expect "$runtime failed start keeps time" "$record" 'at: 2026-10-31 07:00 UTC'
   expect "$runtime first failure records controlled minute" "$record" 'last: 2026-11-03 17:00 UTC not started:'
   equal "$runtime login never falls back" "$(calls)" 1
@@ -266,9 +315,12 @@ for runtime in claude-code codex; do
   for ((i=0;i<200;i++)); do [[ $(calls) == 2 ]] && break; sleep 0.05; done
   equal "$runtime second failure actually runs" "$(calls)" 2
   wait_exit "$(cat "$(last_call)/runner")"
+  for ((i=0;i<200;i++)); do [[ $(wc -l <"$work/notices") -ge 2 ]] && break; sleep 0.05; done
+  equal "$runtime sends one notice per failed launch" "$(wc -l <"$work/notices")" 2
   if cmp -s "$record" "$work/once" && cmp -s "$HEARTBEAT_STATE/log/due.log" "$work/log-once"; then ok "$runtime unchanged failure written once"; else fail "$runtime rewrote identical failure"; fi
   "$SCRIPT" --due --problems >"$work/problems"
   expect "$runtime failure displayed" "$work/problems" 'not started:'
+  rm -f -- "$work/notices"
 done
 unset DUE_TEST_NOW
 
@@ -365,6 +417,7 @@ export DUE_TEST_MODE=failed
 set_due '2026-10-31 07:00 UTC' 'replied then failed'
 tick
 finished 'ended with error 7'
+notice 'ended with error: replied then failed' 'ended with error 7 agent crashed'
 equal 'reply then failure never starts fresh' "$(calls)" 1
 "$SCRIPT" --due --problems >"$work/problems"
 expect 'exit failure displayed' "$work/problems" 'ended with error 7'
@@ -372,6 +425,7 @@ new_record
 export DUE_TEST_MODE=noresult
 set_due '2026-10-31 07:00 UTC' 'no final answer'
 tick; finished 'no result line'
+notice 'no result line: no final answer' 'no result line'
 "$SCRIPT" --due --problems >"$work/problems"
 expect 'missing result displayed' "$work/problems" 'no result line'
 new_record codex
@@ -388,6 +442,9 @@ for result in 'unfinished work remains' 'waiting-for-you approval needed'; do
   export DUE_TEST_RESULT="$result"
   set_due '2026-10-31 07:00 UTC' 'needs attention'
   tick; finished "DUE_RESULT ${result:-done}"
+  if [[ $result == waiting-for-you* ]]; then
+    notice 'waiting-for-you: needs attention' 'DUE_RESULT waiting-for-you approval needed'
+  fi
   "$SCRIPT" --due --problems >"$work/problems"
   if [[ -n $result ]]; then expect "$result displayed" "$work/problems" "$result"; fi
 done
@@ -445,6 +502,20 @@ finished
 "$SCRIPT" --due >"$work/list"
 expect 'due listing keeps full record path' "$work/list" "$record"
 expect 'due listing keeps full action' "$work/list" '012345678901234567890123456789012345678901234567890123456789 beyond sixty'
+
+rm -- "$record"
+touch "$work/hold-rewake"
+"$SCRIPT" --due-tick | cat >"$work/rewake-tick.out"
+wait_for "$work/rewake-started" 'reach rewake'
+absent 'tick pipe closes while rewake is still running' "$HEARTBEAT_STATE/log/due.log" 'rewake fixture was not released'
+if flock -n "$SNO_REACH_ROOT/.rewake.lock" true; then
+  fail 'tick released the rewake lock before its pass ended'
+else
+  ok 'background rewake holds the store lock'
+fi
+rm -- "$work/hold-rewake"
+wait_for "$HEARTBEAT_STATE/log/due.log" 'rewake finished'
+equal 'one rewake from the tick' "$(cat "$work/rewake-started")" 'reach rewake'
 
 ((failures == 0)) || { printf 'heartbeat due: %d FAILED\n' "$failures"; exit 1; }
 printf 'heartbeat due: ALL PASS\n'
