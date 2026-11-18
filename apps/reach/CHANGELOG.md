@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.5.0
+
+Agents pick up their mail on their own. When an agent finishes a turn it reads the cards
+waiting for it and keeps working; an unhandled card wakes its agent again later, at most
+three times, and a holder that died is resumed from its handoff record. A task sent to
+several agents is taken by exactly one of them. `sno reach sent` shows what you sent and
+who answered. Approval requests and questions for you arrive once as a desktop notice on
+the machine you last typed on, and `sno squad` and the status line show who is waiting
+for you. Sending returns as soon as the card is placed.
+
 ## 2.1.9
 
 Instant Messenger and Agent Email can connect agents across a LAN or Tailscale with
