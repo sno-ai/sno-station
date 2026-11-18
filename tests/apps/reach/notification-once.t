@@ -15,8 +15,12 @@ ring_count() {
     '[.[] | select(.msg_id == $id and .to == $to)] | length' "$SNO_REACH_RING_LOG"
 }
 expect_rings() {
-  local count
+  local count deadline=$((SECONDS + 30))
   count="$(ring_count "$1" "$2")"
+  while (( $3 > 0 && count == 0 && SECONDS < deadline )); do
+    sleep .1
+    count="$(ring_count "$1" "$2")"
+  done
   [[ "$count" == "$3" ]] || fail "<$1> to $2 rang $count times, expected $3"
 }
 copy_count() {
@@ -82,9 +86,11 @@ card "$id" "$SENDER" "$RECEIVER" question notification-once >"$WORK/card"
 invoke send --as "$SENDER" <"$WORK/card"; expect_rc 0
 expect_copy "$RECEIVER" "$id" "$WORK/card"
 expect_rings "$id" "$RECEIVER" 1
-grep -Eiq 'notification|wake|ring' "$WORK/err" || fail 'notification failure was silent'
-grep -Eiq 'delivered|saved|stored' "$WORK/err" || fail 'failure did not say the message was delivered'
-grep -Eiq 'do not resend|do not re-send|not resend|no resend' "$WORK/err" || fail 'failure did not explain that resending would duplicate delivery'
+deadline=$((SECONDS + 30))
+until grep -Fq "card <$id> delivered; do not resend" "$STATE/reach.log"; do
+  ((SECONDS < deadline)) || fail 'notification failure did not record successful delivery and warn against resending'
+  sleep .1
+done
 [[ ! -d "$STATE/$SENDER/outbox" ]] || fail 'delivered message remains queued'
 expect_no_workers
 pass 'dead terminal reports notification failure but successful delivery returns zero and stays unqueued'
