@@ -165,10 +165,16 @@ for tool in bash timeout tail flock awk sha256sum dirname mkdir rm mv date mktem
   ln -s "$(type -P "$tool")" "$work/no-jq/$tool"
 done
 status=0
-PATH="$work/no-jq" CURSOR_AGENT='' "$SCRIPT" --label no-jq --log "$work/no-jq.log" \
+log_path="$work/no jq.log"
+PATH="$work/no-jq" CURSOR_AGENT='' "$SCRIPT" --label no-jq --log "$log_path" \
   --max-ticks 1 --interval 1s -- true >"$work/no-jq.out" 2>"$work/no-jq.err" || status=$?
 equal 'plain heartbeat without jq exits successfully' "$status" 0
-expect 'plain heartbeat without jq runs its hook' "$work/no-jq.log" '[no-jq] tick=1 ok (no output)'
+expect 'plain heartbeat without jq runs its hook' "$log_path" '[no-jq] tick=1 ok (no output)'
+reader="$(sed -n 's/^heartbeat:   Monitor({command: \(.*\), persistent: true, description: .*$/\1/p' "$work/no-jq.out" | jq -er 'select(startswith("tail "))')"
+status=0
+timeout 5 bash -c "$reader" >"$work/reader.out" 2>"$work/reader.err" || status=$?
+equal 'printed reader exits successfully for a log path with spaces' "$status" 0
+equal 'printed reader opens the log path with spaces' "$(cat "$work/reader.err")" ''
 status=0
 PATH="$work/no-jq" CURSOR_AGENT='' "$SCRIPT" --label no-jq-until --log "$work/no-jq-until.log" \
   --max-ticks 1 --interval 1s --until-file "$work/not-created" >"$work/no-jq.out" 2>"$work/no-jq.err" || status=$?
@@ -258,6 +264,12 @@ expect 'future displayed' "$work/list" '2099-01-01'
 absent 'cancel selected action' "$record" 'future action'
 set_due '2099-01-01 07:00 UTC' one
 set_due '2099-01-02 07:00 UTC' two
+cp -- "$record" "$work/before-cancel"
+status=0
+"$SCRIPT" --due-cancel "$record" '' >"$work/refused" 2>&1 || status=$?
+equal 'cancel rejects an explicitly empty action' "$status" 2
+expect 'empty cancellation uses the argument error' "$work/refused" '--due-cancel needs <record> [<do text>]'
+if cmp -s -- "$record" "$work/before-cancel"; then ok 'empty action preserves the record'; else fail 'empty action changed the record'; fi
 "$SCRIPT" --due-cancel "$record"
 absent 'cancel whole section' "$record" '## Due'
 expect 'cancel preserves other sections' "$record" 'Something unrelated now'
