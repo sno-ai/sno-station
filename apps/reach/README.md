@@ -177,8 +177,10 @@ your sending agent to flush its outbox:
 sno reach flush --as yourname.agent@your-machine
 ```
 
-Replace the address with the sender's registered address. Retry is explicit;
-Reach does not run an automatic background retry loop.
+Replace the address with the sender's registered address. Delivery retry is
+explicit. Waking is not: a delivered card that still needs handling five minutes
+later is woken again, at most three times in all, and mail that arrives while an
+agent is busy is picked up when its turn ends.
 
 ## Platforms and conversations
 
