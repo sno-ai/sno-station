@@ -42,7 +42,7 @@ export interface AgentView {
 }
 export interface AgentViewOptions {
 	profileDir?: string; reachRoot?: string; now?: number; reachProgram?: string;
-	/** Status-line and tmux redraws: keep fresh or waiting sessions and skip Reach work and exhausted cards. */
+	/** Status-line and tmux redraws: keep fresh, waiting or seated sessions and skip Reach work and exhausted cards. */
 	recent?: boolean;
 }
 export interface AgentIdentity { harness?: string; sessionId?: string; reachAddress?: string }
@@ -391,21 +391,33 @@ function classify(row: AgentRow): void {
 	}
 }
 
-async function lastEventWaitsForHuman(path: string, size: number): Promise<boolean> {
-	const start = Math.max(0, size - 8 * 1024);
+async function staleFileStillMatters(path: string, size: number): Promise<boolean> {
+	// Include the byte before the tail so a record starting exactly at the boundary is kept.
+	const start = Math.max(0, size - 8 * 1024 - 1);
 	const handle = await open(path, "r");
 	try {
 		const tail = Buffer.alloc(size - start);
 		const { bytesRead } = await handle.read(tail, 0, tail.length, start);
 		let contents = tail.toString("utf8", 0, bytesRead).trimEnd();
-		// Without a preceding newline, the last record may start before the tail.
-		if (start > 0 && !contents.includes("\n")) contents = (await handle.readFile("utf8")).trimEnd();
-		const line = contents.slice(contents.lastIndexOf("\n") + 1);
-		if (!line) return false;
-		const observation = observationSchema.parse(JSON.parse(line));
-		const row = emptyAgent(observation.harness, observation.sessionId);
-		applyEvent(row, observation, 0, path, startsPermission(observation) ? observation : undefined);
-		return row.waitingForHuman === "yes";
+		if (start > 0) {
+			const firstBreak = contents.indexOf("\n");
+			contents = firstBreak === -1 ? await handle.readFile("utf8") : contents.slice(firstBreak + 1);
+		}
+		let row: AgentRow | undefined;
+		let permission: AgentObservation | undefined;
+		let hasReachAddress = false;
+		for (const [index, line] of contents.split("\n").entries()) {
+			if (!line.trim()) continue;
+			let observation: AgentObservation;
+			// The full read reports malformed records for any retained session.
+			try { observation = observationSchema.parse(JSON.parse(line)); }
+			catch { continue; }
+			row ??= emptyAgent(observation.harness, observation.sessionId);
+			if (startsPermission(observation)) permission = observation;
+			applyEvent(row, observation, index, path, permission);
+			hasReachAddress ||= observation.reachAddress !== undefined && observation.reachAddress !== "unknown";
+		}
+		return hasReachAddress || row?.waitingForHuman === "yes";
 	} finally { await handle.close(); }
 }
 
@@ -627,7 +639,7 @@ export async function readAgentView(options: AgentViewOptions = {}): Promise<Age
 			const path = join(directory, name);
 			if (options.recent) {
 				const { mtimeMs, size } = await stat(path);
-				if (now - mtimeMs > 900_000 && !await lastEventWaitsForHuman(path, size)) continue;
+				if (now - mtimeMs > 900_000 && !await staleFileStillMatters(path, size)) continue;
 			}
 			const row = await readAgentFile(path, now, view.errors);
 			if (row?.waitingForHuman === "yes") {
