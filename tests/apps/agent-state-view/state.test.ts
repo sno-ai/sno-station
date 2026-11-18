@@ -83,16 +83,17 @@ describe("agent state view read-time semantics", () => {
 		await events("codex", "saved", [{ event: "stop", input: { transcript_path: transcript }, identity: { pid: process.pid, processStart: "different-start" } }]);
 		expect((await view()).agents[0]).toMatchObject({ process: "exited", resumable: "resumable", resumeEvidence: transcript, subgroup: "resumable" });
 	});
-	it("drops a wait and its leftover redraw marker once the agent process has exited", async () => {
+	it("keeps a wait in the full view but drops its leftover redraw marker once the agent process has exited", async () => {
 		const path = await events("claude", "rebooted", [{ event: "permission-request", input: { tool_name: "Bash" }, identity: { pid: process.pid, processStart: "different-start" } }]);
 		const marker = `${path}.waiting`;
 		await writeFile(marker, "");
 		const past = new Date(now - 901_000);
 		await utimes(path, past, past);
 		const redraw = await readAgentView({ profileDir: home, reachRoot: join(home, "reach"), now, recent: true });
-		expect(redraw.agents[0]).toMatchObject({ process: "exited", waitingForHuman: "no" });
+		expect(redraw.agents).toEqual([]);
 		expect(compactAgentView(redraw)).not.toContain("need you");
 		await expect(stat(marker)).rejects.toMatchObject({ code: "ENOENT" });
+		expect((await view()).agents[0]).toMatchObject({ process: "exited", waitingForHuman: "yes", waitingReason: "permission to approve" });
 	});
 	it("reads no transcript when the process is unknown", async () => {
 		await events("codex", "unknown-process", [{ event: "stop", input: { transcript_path: join(home, "missing-rollout.jsonl") } }]);
@@ -150,7 +151,7 @@ describe("agent state view read-time semantics", () => {
 		await utimes(path, past, past);
 		expect((await readAgentView(options)).agents).toEqual([]);
 	});
-	it("drops a wait and its redraw marker when the session ends unanswered", async () => {
+	it("keeps an unanswered wait in the full view but drops its redraw marker when the session ends", async () => {
 		const identity = { conversation_id: "abandoned" };
 		await observeAgentEvent("cursor", "stop", { ...identity, last_assistant_message: "Which project?" });
 		const path = join(home, "station/agents/cursor--abandoned.jsonl");
@@ -163,7 +164,8 @@ describe("agent state view read-time semantics", () => {
 		const past = new Date(options.now - 901_000);
 		await utimes(path, past, past);
 		expect(compactAgentView(await readAgentView(options))).not.toContain("need you");
-		expect((await readAgentView({ ...options, recent: false })).agents[0]?.waitingForHuman).toBe("no");
+		// A one-shot run ends its session while its question can still be answered by resuming it.
+		expect((await readAgentView({ ...options, recent: false })).agents[0]).toMatchObject({ waitingForHuman: "yes", waitingReason: "asked a question" });
 	});
 	it("keeps old native questions in the full view and mailed questions on status redraw until dismissed", async () => {
 		const old = new Date(now - 1200_000);

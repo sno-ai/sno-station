@@ -235,7 +235,9 @@ export async function observeAgentEvent(harness: AgentHarness, event: string, ra
 		Object.assign(observation, await identity);
 		await mkdir(dirname(target), { recursive: true, mode: 0o700 });
 		await appendFile(target, `${JSON.stringify(observation)}\n`, { mode: 0o600 });
-		if (canChangeWait(observation)) await updateWaitingMarker(target, endsWaitOnly(observation));
+		// The marker keeps a wait on the redraw only while its session is open; a closed session's wait stays in the full view.
+		if (event === "session-end") await rm(target + WAITING_SUFFIX, { force: true });
+		else if (canChangeWait(observation)) await updateWaitingMarker(target, endsWaitOnly(observation));
 	} catch (error) {
 		logHookFailure("append agent observation", target, error, `${event} observation missing`);
 	} finally { await pickup; }
@@ -283,14 +285,14 @@ function canChangeWait(observation: AgentObservation): boolean {
 	if (event === "pre-tool-use") return askTool(input);
 	if (event === "stop-failure") return quotaFailure(input);
 	return ["user-prompt-submit", "permission-request", "post-tool-use", "approval-response",
-		"stop", "after-agent-response", "notify", "interrupt", "session-end"].includes(event);
+		"stop", "after-agent-response", "notify", "interrupt"].includes(event);
 }
 
 // These events can end a wait but never start one, so with no marker there is nothing to replay.
 function endsWaitOnly(observation: AgentObservation): boolean {
 	const event = effectiveEvent(observation);
 	if (event === "post-tool-use") return !(askTool(observation.input) && observation.harness === "codex");
-	return ["user-prompt-submit", "approval-response", "interrupt", "session-end"].includes(event);
+	return ["user-prompt-submit", "approval-response", "interrupt"].includes(event);
 }
 
 async function updateWaitingMarker(path: string, endsOnly: boolean): Promise<void> {
@@ -350,8 +352,7 @@ function applyEvent(row: AgentRow, observation: AgentObservation, index: number,
 		row.doing = "idle at prompt";
 		if (row.waitingReason === "permission to approve") { row.waitingForHuman = "unknown"; row.waitingReason = "unknown"; }
 	}
-	// A wait ends with its session: nobody can answer a question in a cleared or closed session.
-	if (event === "session-end") { row.doing = "idle at prompt"; resolveWait(row); }
+	if (event === "session-end") row.doing = "idle at prompt";
 	if (event === "stop-failure" && quotaFailure(input)) wait(row, "quota exhausted");
 	if (input.human_addressee === true && input.review_requested === true) wait(row, "done awaiting review");
 	if (input.human_addressee === true && input.decision_required === true) wait(row, "failed awaiting decision");
@@ -489,8 +490,6 @@ async function readAgentFile(path: string, now: number, errors: AgentOperationEr
 	}
 	const { row, observations, unreadable } = replay;
 	await inspectProcess(row, observations, errors);
-	// Nobody can answer a wait whose agent process has exited (reboot, killed agent, closed terminal).
-	if (row.process === "exited" && row.waitingForHuman === "yes") resolveWait(row);
 	await inspectResume(row, observations, errors);
 	if (row.lastEvent !== "unknown") row.ageSeconds = Math.max(0, (now - Date.parse(row.lastEvent.at)) / 1000);
 	// Existing Reach freshness horizon; this expires observations, never infers failure.
@@ -681,13 +680,15 @@ export async function readAgentView(options: AgentViewOptions = {}): Promise<Age
 		try {
 			const path = join(directory, name);
 			const marked = names.has(name + WAITING_SUFFIX);
-			if (options.recent && !marked && now - (await stat(path)).mtimeMs > 900_000) continue;
+			const stale = options.recent && now - (await stat(path)).mtimeMs > 900_000;
+			if (stale && !marked) continue;
 			const row = await readAgentFile(path, now, view.errors);
-			// A marker outlives its wait when the agent exits without an event that ends it.
-			if (marked && row?.waitingForHuman !== "yes") {
+			// A marker outlives its session when the agent exits without session-end (reboot, killed agent, closed terminal).
+			if (marked && (row?.waitingForHuman !== "yes" || row.process === "exited")) {
 				await rm(path + WAITING_SUFFIX, { force: true }).catch((error: unknown) => {
 					view.errors.push(failure("remove agent wait marker", path + WAITING_SUFFIX, error, "redraw keeps reading this session"));
 				});
+				if (stale) continue;
 			}
 			if (row?.waitingForHuman === "yes") {
 				view.openQuestions.push({ agent: row.reachAddress === "unknown" ? rowWho(row) : row.reachAddress,

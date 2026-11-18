@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, expect, it } from "vitest";
@@ -30,15 +30,6 @@ finally:
 `, home], { encoding: "utf8", timeout: 10_000 });
 	expect(written.error, written.stderr).toBeUndefined();
 	expect(written.status, written.stderr).toBe(0);
-	// The fixture's python process has exited, which would end the wait; a live Hermes process hosts this plugin.
-	const agents = join(home, "station", "agents");
-	for (const name of await readdir(agents)) {
-		const lines = (await readFile(join(agents, name), "utf8")).trim().split("\n").map(line => {
-			const { pid: _pid, processStart: _start, ...observation } = JSON.parse(line);
-			return JSON.stringify(observation);
-		});
-		await writeFile(join(agents, name), `${lines.join("\n")}\n`);
-	}
 	const reachRoot = join(home, "reach");
 	await mkdir(reachRoot);
 	const view = await readAgentView({ profileDir: home, reachRoot,
