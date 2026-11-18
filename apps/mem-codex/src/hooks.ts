@@ -2,6 +2,7 @@ import { performance } from "node:perf_hooks";
 import {
 	CODING_SKIN_SESSION_QUERY,
 	loadedFilesAtStart,
+	observeAgentEvent,
 } from "@snoai/memory/coding-skin";
 import { z } from "zod";
 import { readCaptureSettings, readRecallSettings } from "./settings.js";
@@ -167,7 +168,12 @@ export async function userPromptSubmit(raw: unknown): Promise<string> {
 	}
 }
 
-export async function stop(raw: unknown): Promise<void> {
+export async function stop(raw: unknown, capture = true): Promise<void> {
+	const observation = observeAgentEvent("codex", "stop", raw);
+	await Promise.all([observation, capture ? captureStop(raw) : undefined]);
+}
+
+async function captureStop(raw: unknown): Promise<void> {
 	const started = performance.now();
 	let sessionId: string | undefined;
 	try {
