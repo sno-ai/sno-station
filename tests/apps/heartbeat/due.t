@@ -315,8 +315,7 @@ for runtime in claude-code codex; do
   for ((i=0;i<200;i++)); do [[ $(calls) == 2 ]] && break; sleep 0.05; done
   equal "$runtime second failure actually runs" "$(calls)" 2
   wait_exit "$(cat "$(last_call)/runner")"
-  for ((i=0;i<200;i++)); do [[ $(wc -l <"$work/notices") -ge 2 ]] && break; sleep 0.05; done
-  equal "$runtime sends one notice per failed launch" "$(wc -l <"$work/notices")" 2
+  notice 'not started: cannot log in' 'not started: resume closed-session Not logged in'
   if cmp -s "$record" "$work/once" && cmp -s "$HEARTBEAT_STATE/log/due.log" "$work/log-once"; then ok "$runtime unchanged failure written once"; else fail "$runtime rewrote identical failure"; fi
   "$SCRIPT" --due --problems >"$work/problems"
   expect "$runtime failure displayed" "$work/problems" 'not started:'

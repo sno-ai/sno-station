@@ -449,7 +449,7 @@ due_notice() {
 
 due_runner() {
   local record="$1" entry="$2" lock_fd="${3:-}" at action repeat checkout runtime id open operation=fresh how='fresh conversation'
-  local now epoch zone late lateness='on time' prompt next='' pending='' line text result='' error='' status started=0 agent_pid output_fd blocked=0 reason=''
+  local now epoch zone late lateness='on time' prompt next='' pending='' line text result='' error='' status started=0 agent_pid output_fd blocked=0 reason='' written
   local -a command
   at="$(due_field "$entry" at)"; action="$(due_field "$entry" 'do')"; repeat="$(due_field "$entry" repeat)"
   # A concurrent tick may have read this occurrence just before the previous runner used it up.
@@ -543,8 +543,14 @@ DUE_RESULT done|unfinished <why>|waiting-for-you <need>"
   done
   [[ $operation != fresh ]] || id="$runtime"
   result="not started: $operation ${id:-$runtime} ${error:-no real reply}"
-  due_notice "$lock_fd" "$action" 'not started' "$record: $result" </dev/null &
-  due_edit "$record" failure "$entry" '' "$(TZ="$zone" date '+%Y-%m-%d %H:%M') $zone $result"
+  written="$(
+    set -e
+    due_edit "$record" failure "$entry" '' "$(TZ="$zone" date '+%Y-%m-%d %H:%M') $zone $result"
+  )"
+  if [[ -n $written ]]; then
+    printf '%s\n' "$written" || true
+    due_notice "$lock_fd" "$action" 'not started' "$record: $result" </dev/null &
+  fi
 }
 
 due_rewake() {
