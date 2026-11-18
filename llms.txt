@@ -16,6 +16,8 @@ This repository has been public since 2026-09-18. Blocks in the README carry a "
 - docs/sno-commands.md — every sno command, what it does and who runs it (the only command is sno)
 - docs/reach.md — Instant Messenger versus Agent Email, first use, cross-machine setup
 - apps/reach/guide/agent-reach.md — exact agent command and reply behavior
+- docs/finish.md — Finish: timed tasks, a long run watched, work that outlives a usage limit
+- docs/agent-state-view.md — `sno squad` and the status lines: what your local agents are doing
 - docs/readme/ — the README in 中文, 繁體中文, Deutsch, Español, Français, Русский, 한국어, 日本語
 
 ## Directory map
