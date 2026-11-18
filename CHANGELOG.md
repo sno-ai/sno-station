@@ -11,8 +11,6 @@ first product packages are published.
 - Opened `sno-ai/sno-station` with `packages/chunking` (already on npm) and its real history.
 - Public README in nine languages, the security page, and the first evidence image of the
   nightly improvement loop running on our own repository.
-- Nothing is released yet: no product package version, no tag, no install path. Those land
-  with the following waves and will appear here when they do.
 
 ## [2.1.0] - 2026-11-17
 
@@ -22,8 +20,6 @@ Tell one agent once. Every agent works from the newest version.
 - Change your mind in Codex, and the old version stops reaching every agent, not just that one.
 - Each night the shared memory tidies itself. Repeats go, outdated lines go, and a line that drifted
   from what you actually said is put back right.
-- Nothing is changed on one model's word. One agent proposes the change, and an agent from the other
-  vendor checks it first.
 - A new session opens with a short list of the rules that matter almost every time, not everything
   ever said.
 
