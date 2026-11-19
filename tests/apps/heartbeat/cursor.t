@@ -78,12 +78,14 @@ expect 'pane: the tick is typed into the Cursor pane and submitted' "$work/pane.
 
 # ---- the interactive CLI exits between ticks: the pane then holds the user's shell ----
 # The fake CLI takes the first typed line and exits; what the pane's shell reads afterwards is
-# what a tick would run as a command, so it must stay empty.
+# what a tick would run as a command, so it must stay empty. The path goes in through CLI: a bash or
+# dash `-c` shell outlives the CLI, and the path in its arguments would read as a running CLI (#236).
 cli_gone="$work/install-gone/cursor-agent/versions/2026.10.01-fake/index.js"
 mkdir -p "${cli_gone%/*}"
-printf '#!/usr/bin/env bash\nhead -n1 >"$1"\n' >"$cli_gone"
+printf '#!/usr/bin/env bash\necho up >"$1.up"\nhead -n1 >"$1"\n' >"$cli_gone"
 chmod +x "$cli_gone"
-tmux -L "$socket" new-session -d -s gone "bash '$cli_gone' '$work/gone-cli.txt'; cat >'$work/gone-shell.txt'"
+tmux -L "$socket" new-session -d -s gone -e CLI="$cli_gone" "bash \"\$CLI\" '$work/gone-cli.txt'; cat >'$work/gone-shell.txt'"
+wait_for "$work/gone-cli.txt.up" up
 TMUX="$tmux_env" TMUX_PANE="$(pane_of gone)" CURSOR_AGENT=1 CURSOR_CONVERSATION_ID="$chat" CURSOR_INVOKED_AS=cursor-agent \
   "$SCRIPT" --interval 3s --label gone --log "$work/gone.log" --max-ticks 2 -- echo gone-tick >"$work/gone.out"
 expect 'gone: the first tick reaches the running CLI' "$work/gone-cli.txt" '[gone] tick=1 ok gone-tick'
