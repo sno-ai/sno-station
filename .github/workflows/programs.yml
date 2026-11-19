@@ -1,0 +1,34 @@
+name: programs
+
+# Builds Reach and the three small programs on a pull request that touches them, on ci-vm (never a GitHub-hosted
+# machine). Release archives are built by hand on ci-vm and the team's Mac; this only proves the source still builds.
+
+on:
+  pull_request:
+    paths:
+      - apps/reach/**
+      - apps/heartbeat/**
+      - apps/report-time/**
+      - apps/subscription-quota-check/**
+      - apps/requirements-contract.json
+      - .github/workflows/programs.yml
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: [self-hosted, ci-vm]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Build Reach
+        run: |
+          . "$HOME/.cargo/env"
+          make -C apps/reach package
+      - name: Build heartbeat, report-time and subscription-quota-check
+        run: |
+          for program in heartbeat report-time subscription-quota-check; do
+            make -C "apps/$program" package CONTRACT="$PWD/apps/requirements-contract.json"
+          done
