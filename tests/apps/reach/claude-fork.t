@@ -84,6 +84,32 @@ has "$WORK/err" 'no live Claude conversation'
 [[ "$(typed)" == "$before" ]] || fail 'a pane with no listed conversation was typed into'
 pass 'a tmux pane is rung only while its Claude conversation is listed'
 
+# A refused wake typed nothing, so it must not use up the card's three tries: once the
+# conversation is back in its window, turn-end pickup still offers the card.
+export SNO_PROFILE_DIR="$WORK/profile" SNO_REACH_RING_LOG="$WORK/rings.jsonl"
+claude_lists 4242 background
+question="refused-$$@$HOST"
+card "$question" "$SENDER" "$RECEIVER" question pickup >"$WORK/card"
+invoke send --as "$SENDER" <"$WORK/card"; expect_rc 0
+question_path="$(message_path "$RECEIVER" "$question")"
+tries="$STATE/$RECEIVER/tries.jsonl"
+for ((i = 0; i < 100; i++)); do grep -qF "<$question>" "$WORK/rings.jsonl" 2>/dev/null && break; sleep 0.1; done
+has "$WORK/rings.jsonl" "<$question>"
+for pass in 2 3; do
+  sed -i 's/"at":"[^"]*"/"at":"2000-01-01T00:00:00Z"/' "$tries"
+  invoke __try --as "$RECEIVER" --card "$question_path" --kind ring; expect_rc 0
+  env HOME="$TEST_HOME" SNO_REACH_ROOT="$STATE" TMUX="$TEST_TMUX" "$APP/lib/reach-ring" \
+    doorbell --to "$RECEIVER" --from "$SENDER" --msg-id "<$question>" >"$WORK/out" 2>"$WORK/err" || true
+  has "$WORK/out" outcome=unresolved
+done
+[[ "$(jq -s --arg id "<$question>" '[.[] | select(.msg_id == $id)] | length' "$tries")" == 3 ]] ||
+  fail "three refused wakes did not leave three try rows: $(cat "$tries")"
+claude_lists "$pane_pid" interactive
+sed -i 's/"at":"[^"]*"/"at":"2000-01-01T00:00:00Z"/' "$tries"
+invoke pickup; expect_rc 0
+has "$WORK/out" "Card: $question_path"
+pass 'wakes refused for a window without its conversation leave the card to turn-end pickup'
+
 cat >"$WORK/orca" <<'SH'
 #!/usr/bin/env bash
 case "${1:-} ${2:-}" in
