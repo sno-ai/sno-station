@@ -3,8 +3,8 @@
 ## 2.5.2
 
 Mail reaches the conversation it was sent to. A conversation forked into the background no
-longer answers as the one it came from, and a wake is typed into a Claude window only while
-that window still holds its own conversation; otherwise the card waits in the inbox.
+longer answers as the one it came from, and a wake is typed into a Claude window in tmux or
+Orca only while that window still holds its own conversation; otherwise the card waits in the inbox.
 
 ## 2.5.1
 
