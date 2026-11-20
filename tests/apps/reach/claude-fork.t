@@ -97,7 +97,8 @@ SH
 chmod +x "$WORK/orca"
 "$APP/lib/reach-reachability" register --root "$STATE" --as "$OTHER" --channel orca --handle term-fork \
   --identity-kind orca-tab --identity tab-fork --harness claude-code --pid "$$" --host "$HOST" >/dev/null
-env ORCA_TERMINAL_HANDLE=term-fork sleep 60 &
+# The Claude process keeps the handle it started with; Orca has since reconnected the tab as term-fork.
+env ORCA_TAB_ID=tab-fork ORCA_TERMINAL_HANDLE=term-before-reconnect sleep 60 &
 window_claude=$!
 orca_doorbell() {
   env HOME="$TEST_HOME" SNO_REACH_ROOT="$STATE" ORCA_CLI_COMMAND="$WORK/orca" REACH_TEST_TRACE="$WORK/trace" \
