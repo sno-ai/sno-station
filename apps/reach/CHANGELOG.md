@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.5.2
+
+Mail reaches the conversation it was sent to. A conversation forked into the background no
+longer answers as the one it came from, and a wake is typed into a Claude window only while
+that window still holds its own conversation; otherwise the card waits in the inbox.
+
 ## 2.5.1
 
 The squad bar in a tmux window agents were started in has room for the longer line that says who is waiting
