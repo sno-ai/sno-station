@@ -257,6 +257,30 @@ describe("agent state view read-time semantics", () => {
 			expect(compactAgentView(result)).toContain("1 stuck: sno squad");
 		} finally { process.env.PATH = originalPath; }
 	});
+	it("does not count wakes Reach refused because the window held no conversation", async () => {
+		const root = join(home, "reach");
+		const holder = `coder.one@${hostname()}`;
+		const sender = `sender.one@${hostname()}`;
+		const id = "<refused@local>";
+		await mkdir(join(root, holder, "new"), { recursive: true });
+		await writeFile(join(root, ".reach-2.5-since"), "2026-11-17T00:00:00Z\n");
+		await writeFile(join(root, holder, "new/card"), `From: Sender <${sender}>\nTo: <${holder}>\nDelivered-To: ${holder}\nSubject: Answer the fork\nX-Type: question\nMessage-ID: ${id}\n\nAnswer it.\n`);
+		await writeFile(join(root, holder, "tries.jsonl"), [
+			{ msg_id: id, at: "2026-11-18T11:50:00Z", kind: "skip" },
+			{ msg_id: id, at: "2026-11-18T11:55:00Z", kind: "skip" },
+			{ msg_id: id, at: "2026-11-18T12:00:00Z", kind: "skip" },
+			{ msg_id: id, at: "2026-11-18T12:05:00Z", kind: "ring" },
+		].map(item => JSON.stringify(item)).join("\n") + "\n");
+		await writeFile(join(home, "sno"), `#!/bin/sh\nshift\nexec "${resolve("apps/reach/lib/reach-main")}" "$@"\n`, { mode: 0o700 });
+		const originalPath = process.env.PATH;
+		process.env.PATH = `${home}:${originalPath}`;
+		try {
+			const result = await view();
+			expect(result.stuck).toEqual([]);
+			expect(result.errors).toEqual([]);
+		} finally { process.env.PATH = originalPath; }
+	});
+
 	it("marks only the opened completion seen; passive reads and new completions stay unseen", async () => {
 		const path = await events("claude", "result", [{ event: "stop", input: { last_assistant_message: "First." } }]);
 		let result = await view();
