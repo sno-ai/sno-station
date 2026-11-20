@@ -444,6 +444,13 @@ ring_orca() {
     fi
     break
     done
+    local absent
+    if [[ "$(jq -r '.harness // empty' "$record")" == claude-code ]] &&
+       ! absent="$(claude_window_conversation orca "$terminal_handle")"; then
+        emit "$root" "$recipient" "$sender" "$message_id" unresolved \
+            "$absent: window $terminal_handle for $recipient; the card stays in the inbox"
+        return
+    fi
     if ! orca_json terminal wait --terminal "$terminal_handle" --for tui-idle \
         --timeout-ms 2500 | jq -e '.wait.satisfied == true' >/dev/null 2>&1; then
         emit "$root" "$recipient" "$sender" "$message_id" busy \
@@ -598,6 +605,41 @@ tmux_target_current() {
 # `sleep 86400` after the runtime exits.  Pane existence and pane-owned identity
 # proof are therefore not runtime liveness.  Walk only this pane's process tree
 # and require the actual interactive runtime before typing into an executor.
+process_environment() { # pid name: one variable from a running process's environment
+    if [[ -r "/proc/$1/environ" ]]; then
+        tr '\0' '\n' <"/proc/$1/environ" | sed -n "/^$2=/{s///p;q;}"
+    else
+        ps eww -o command= -p "$1" 2>/dev/null | tr ' ' '\n' | sed -n "/^$2=/{s///p;q;}"
+    fi
+}
+
+# A Claude Code window can stop holding the conversation that registered it: the conversation
+# ended, or the window only shows a background session (a fork), which a wake typed there would
+# reach instead. Claude lists its live conversations; the window must host an interactive one.
+claude_window_conversation() { # tmux|orca target; prints the reason when there is none
+    local channel="$1" target="$2" claude listed pid ancestor pane_pid=''
+    claude="$(command -v claude || printf '%s' "$HOME/.local/bin/claude")"
+    listed="$(timeout 10 "$claude" agents --json 2>/dev/null |
+        jq -r '.[] | select(.kind == "interactive" and (.pid | type == "number")) | .pid')" || {
+        printf 'Claude conversations could not be listed with %s agents --json' "$claude"
+        return 1
+    }
+    [[ "$channel" != tmux ]] || pane_pid="$(tmux display-message -pt "$target" '#{pane_pid}' 2>/dev/null)" || true
+    for pid in $listed; do
+        if [[ "$channel" == tmux ]]; then
+            ancestor="$pid"
+            while [[ -n "$pane_pid" && "$ancestor" =~ ^[0-9]+$ ]] && ((ancestor > 1)); do
+                [[ "$ancestor" != "$pane_pid" ]] || return 0
+                ancestor="$(ps -o ppid= -p "$ancestor" 2>/dev/null | tr -d ' ')"
+            done
+        elif [[ "$(process_environment "$pid" ORCA_TERMINAL_HANDLE)" == "$target" ]]; then
+            return 0
+        fi
+    done
+    printf 'no live Claude conversation in this window: it ended, or the window only shows a background session'
+    return 1
+}
+
 tmux_executor_runtime_live() { # pane-id runtime
     local target="$1" runtime="$2" pane_pid pid child comm args argument
     local -a queue=() arguments=()
@@ -663,6 +705,13 @@ ring_tmux() {
        ! tmux_executor_runtime_live "$target" "$runtime"; then
         emit "$root" "$recipient" "$sender" "$message_id" unresolved \
             "registered pane $target has no live ${runtime:-codex or claude} runtime for $recipient; close the retired pane and respawn the executor"
+        return
+    fi
+    local absent
+    if [[ "$(jq -r '.harness // empty' "$record")" == claude-code ]] &&
+       ! absent="$(claude_window_conversation tmux "$target")"; then
+        emit "$root" "$recipient" "$sender" "$message_id" unresolved \
+            "$absent: pane $target for $recipient; the card stays in the inbox"
         return
     fi
     nonce="$(printf '%04x%04x' "$((RANDOM & 65535))" "$(($$ & 65535))")"

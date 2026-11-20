@@ -3,7 +3,8 @@
 set -Eeuo pipefail
 release="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 kind="${1:?agent required}"
-register_env=(-u SNO_REACH_HARNESS)
+# The seat registered here is the new agent, not the conversation that spawned it.
+register_env=(-u SNO_REACH_HARNESS -u CLAUDE_PID)
 case "$kind" in
     claude) register_env+=(SNO_REACH_HARNESS=claude-code) ;;
     codex|hermes|openclaw|cursor) register_env+=("SNO_REACH_HARNESS=$kind") ;;

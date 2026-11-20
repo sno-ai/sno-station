@@ -11,6 +11,12 @@ if (($#)); then
     { printf 'reach whoami %s: expected no arguments\n' "$root" >>"$root/reach.log"; } 2>/dev/null || true
     exit 64
 fi
+# A Claude Code background session (a fork, --bg or a reused spare) inherits the seat address and
+# window variables of the conversation it came from, so neither identifies it.
+if [[ -n "${CLAUDE_PID:-}" ]] &&
+   [[ "$(jq -r '.kind // empty' "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/sessions/$CLAUDE_PID.json" 2>/dev/null)" == bg ]]; then
+    exit 1
+fi
 if [[ -n "${SNO_REACH_ADDR:-}" ]]; then
     printf '%s\n' "$SNO_REACH_ADDR"
     exit 0
