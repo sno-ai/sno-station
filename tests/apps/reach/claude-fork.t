@@ -64,6 +64,15 @@ RC=0; as_claude interactive "$REACH" register --as "$SENDER" --channel terminal 
 expect_rc 0
 pass 'register refuses a window from inside a background session and accepts it from an interactive one'
 
+# An agent such as Codex started from inside a fork inherits CLAUDE_PID, yet it is its own agent.
+ln -s "$(command -v bash)" "$WORK/test-bin/codex"
+RC=0; as_claude bg env SNO_REACH_ADDR="$SENDER" codex -c '"$0" whoami; status=$?; exit $status' "$REACH" || RC=$?
+expect_rc 0
+[[ "$(<"$WORK/out")" == "$SENDER" ]] || fail "an agent started from a fork lost its own seat: $(<"$WORK/out") $(<"$WORK/err")"
+RC=0; as_claude bg codex -c '"$0" register --as "$1" --channel terminal --handle tty:/dev/null; status=$?; exit $status' "$REACH" "$SENDER" || RC=$?
+expect_rc 0
+pass 'an agent started from inside a fork keeps its own seat and registers'
+
 # ---- delivery: type into a Claude window only while it holds a listed conversation ----
 initialize "$RECEIVER" Worker
 SNO_REACH_HARNESS=claude-code register "$RECEIVER"
@@ -83,6 +92,27 @@ has "$WORK/out" outcome=unresolved
 has "$WORK/err" 'no live Claude conversation'
 [[ "$(typed)" == "$before" ]] || fail 'a pane with no listed conversation was typed into'
 pass 'a tmux pane is rung only while its Claude conversation is listed'
+
+# A Claude without the list (an older version, or not found) leaves the wake as it was, with a note.
+rm -f "$REACH_TEST_CLAUDE_AGENTS"
+doorbell "$RECEIVER"
+[[ "$(<"$WORK/out")" == outcome=rang ]] || fail "an unreadable Claude list blocked the wake: $(<"$WORK/out") $(<"$WORK/err")"
+has "$WORK/err" 'without checking which conversation'
+pass 'an unreadable Claude list does not block the wake'
+
+# A Claude seat on a plain terminal is checked the same way, by the terminal device.
+initialize "tty.seat@$HOST" Terminal
+"$APP/lib/reach-reachability" register --root "$STATE" --as "tty.seat@$HOST" --channel terminal \
+  --handle "tty:$(tmux -L "$SERVER" display-message -p -t "$TEST_PANE" '#{pane_tty}')" --harness claude-code \
+  --pid "$$" --host "$HOST" >/dev/null
+claude_lists 4242 background
+doorbell "tty.seat@$HOST"
+has "$WORK/out" outcome=unresolved
+has "$WORK/err" 'no live Claude conversation'
+claude_lists "$pane_pid" interactive
+doorbell "tty.seat@$HOST"
+if grep -q outcome=unresolved "$WORK/out"; then fail "the conversation on its own terminal was refused: $(<"$WORK/err")"; fi
+pass 'a plain terminal is rung only while its Claude conversation is listed'
 
 # A refused wake typed nothing, so it must not use up the card's three tries: once the
 # conversation is back in its window, turn-end pickup still offers the card.
