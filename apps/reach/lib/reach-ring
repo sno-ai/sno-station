@@ -638,17 +638,23 @@ claude_window_conversation() { # tmux pane | orca tab; prints the reason when th
 }
 
 # A refused wake typed nothing, so it must not use up one of the card's three tries. Its try row
-# stays, keeping the five-minute spacing and the claim against a second offer, and is marked so
-# the count of three skips it. The file is rewritten in place under the writers' lock.
+# stays, keeping the five-minute spacing and the claim against a second offer, and its kind "ring"
+# is overwritten in place with "skip", the same length, so the file is never truncated or replaced.
 mark_try_refused() { # root recipient message-id
-    local file="$1/$2/tries.jsonl" fd marked
+    local file="$1/$2/tries.jsonl" fd offset
     [[ -f "$file" ]] || return 0
-    { exec {fd}>>"$file" && flock -x -w 1 "$fd"; } || return 0
-    if marked="$(jq -cs --arg id "$3" '
-        (map(.msg_id == $id and .kind == "ring") | rindex(true)) as $last |
-        if $last == null then empty else (.[$last].kind = "ring-refused") | .[] end' "$file")" &&
-       [[ -n "$marked" ]]; then
-        : >"$file" && printf '%s\n' "$marked" >>"$file" ||
+    if ! { exec {fd}>>"$file" && flock -x -w 5 "$fd"; }; then
+        printf 'reach-ring: could not lock %s; the refused wake still counts as a try\n' "$file" >&2
+        return 0
+    fi
+    # __try writes each row as {"msg_id":...,"at":...,"kind":"ring"}; the last such row for this card.
+    offset="$(LC_ALL=C awk -v id="\"msg_id\":\"$3\"" '
+        BEGIN { hit = -1 }
+        index($0, id) == 2 && substr($0, length($0) - 13) == "\"kind\":\"ring\"}" { hit = done + length($0) - 6 }
+        { done += length($0) + 1 }
+        END { print hit }' "$file")"
+    if ((offset >= 0)); then
+        printf skip | dd of="$file" bs=1 seek="$offset" conv=notrunc 2>/dev/null ||
             printf 'reach-ring: could not mark the refused wake in %s\n' "$file" >&2
     fi
     exec {fd}>&-
