@@ -136,6 +136,9 @@ for pass in 2 3; do
 done
 [[ "$(jq -s --arg id "<$question>" '[.[] | select(.msg_id == $id)] | length' "$tries")" == 3 ]] ||
   fail "three refused wakes did not leave three try rows: $(cat "$tries")"
+reach sent --as "$SENDER" --json >"$WORK/sent"
+[[ "$(jq -r --arg id "<$question>" '.[] | select(.msg_id == $id) | .tries' "$WORK/sent")" == unknown ]] ||
+  fail "the sender's view counted refused wakes as tries: $(cat "$WORK/sent")"
 # The cross-machine receiver rings through __ring-card, which takes the try in its own process.
 remote="remote-$$@$HOST"
 card "$remote" "$SENDER" "$RECEIVER" question pickup >"$WORK/card"

@@ -3216,7 +3216,7 @@ run_sent() {
                 [[ ! -f "$root/$caller/delivery-receipts/$(delivery_key "$id" "$recipient").json" ]] || placement=placed
                 local try_file="$root/$recipient/tries.jsonl"
                 [[ -f "$try_file" ]] || try_file=/dev/null
-                tries="$(jq -cs --arg id "$id" '[.[] | select(.msg_id == $id)] | if length == 0 then "unknown" else . end' "$try_file")" || exit 74
+                tries="$(jq -cs --arg id "$id" '[.[] | select(.msg_id == $id and .kind != "skip")] | if length == 0 then "unknown" else . end' "$try_file")" || exit 74
                 ring=unknown
                 if [[ -f "$ring_log" ]]; then
                     ring="$(grep -F -- "$id" "$ring_log" | jq -rs --arg id "$id" --arg to "$recipient" \
