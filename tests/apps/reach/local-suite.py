@@ -54,7 +54,7 @@ for script in ("default-environment.t", "remote-protocol.t", "seats/call-no-back
                "seats/cursor-spawn.t", "seats/cursor-heartbeat.t", "seats/cursor-ide.t",
                "seats/terminal-registration.t", "seats/terminal-relay.t"):
     CASES.append((script, ["bash", str(HERE / script)]))
-for script in ("pickup.t", "rewake.t", "whoami.t", "watch-notice.t"):
+for script in ("pickup.t", "rewake.t", "whoami.t", "claude-fork.t", "watch-notice.t"):
     CASES.append((script, ["bash", str(HERE / script)]))
 # Start the genuinely long, isolated groups first. The result order is stable.
 priority = {"seats/ring-real-tmux.t": 0, "seats/call-tmux.t": 1, "ACP integration": 2}

@@ -25,6 +25,8 @@ exit 127
 SH
 chmod +x "$WORK/test-bin/sno"
 export PATH="$WORK/test-bin:$PATH"
+# A run from inside a Claude Code conversation must not make every test seat a Claude seat.
+unset CLAUDECODE CLAUDE_PID CLAUDE_CODE_SESSION_ID
 cleanup() {
   local status=$?
   local record pid command_line
