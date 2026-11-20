@@ -71,6 +71,8 @@ expect_rc 0
 [[ "$(<"$WORK/out")" == "$SENDER" ]] || fail "an agent started from a fork lost its own seat: $(<"$WORK/out") $(<"$WORK/err")"
 RC=0; as_claude bg codex -c '"$0" register --as "$1" --channel terminal --handle tty:/dev/null; status=$?; exit $status' "$REACH" "$SENDER" || RC=$?
 expect_rc 0
+jq -e '.harness == "codex"' "$STATE/$SENDER/reachable.json" >/dev/null ||
+  fail "a Codex started from a Claude conversation was recorded as Claude: $(cat "$STATE/$SENDER/reachable.json")"
 pass 'an agent started from inside a fork keeps its own seat and registers'
 
 # ---- delivery: type into a Claude window only while it holds a listed conversation ----
