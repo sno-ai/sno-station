@@ -1232,6 +1232,12 @@ run_register() {
     fi
     # A Cursor IDE chat has no pane: its conversation is the seat (CURSOR_INVOKED_AS marks the CLI).
     [[ -n "$channel" || -z "${CURSOR_CONVERSATION_ID:-}" || -n "${CURSOR_INVOKED_AS:-}" ]] || channel="cursor-ide"
+    # A Claude Code background session (a fork, --bg or a reused spare) has no window of its own:
+    # its window variables belong to the conversation it came from, which wakes would then reach.
+    if [[ "$channel" == orca || "$channel" == tmux || "$channel" == terminal ]] && [[ -n "${CLAUDE_PID:-}" ]] &&
+       [[ "$(jq -r '.kind // empty' "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/sessions/$CLAUDE_PID.json" 2>/dev/null)" == bg ]]; then
+        die 65 "$CALLER runs in a Claude Code background session, which has no window of its own; stop it and resume it in the window it should own (claude stop <id>, then claude --resume <session id> there), then register from there"
+    fi
     case "$channel" in
         cursor-ide)
             identity="${CURSOR_CONVERSATION_ID:?a cursor-ide seat registers from inside its Cursor IDE chat}"
