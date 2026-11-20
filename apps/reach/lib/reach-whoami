@@ -11,23 +11,8 @@ if (($#)); then
     { printf 'reach whoami %s: expected no arguments\n' "$root" >>"$root/reach.log"; } 2>/dev/null || true
     exit 64
 fi
-# True only when the nearest agent above this process is a Claude Code background session (a fork,
-# --bg or a reused spare). CLAUDE_PID is inherited by everything a conversation starts, so an agent
-# such as Codex started from a fork is its own agent, not the fork.
-claude_background_session() {
-    local pid=$$ comm
-    [[ -n "${CLAUDE_PID:-}" ]] || return 1
-    while [[ "$pid" =~ ^[0-9]+$ ]] && ((pid > 1)); do
-        if [[ "$pid" == "$CLAUDE_PID" ]]; then
-            [[ "$(jq -r '.kind // empty' "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/sessions/$pid.json" 2>/dev/null)" == bg ]]
-            return
-        fi
-        comm="$(ps -o comm= -p "$pid" 2>/dev/null)"
-        case "${comm##*/}" in codex | codex-* | cursor-agent | hermes | openclaw) return 1 ;; esac
-        pid="$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ')"
-    done
-    return 1
-}
+# shellcheck source=reach-agent-identity.sh
+source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/reach-agent-identity.sh"
 # A background session inherits the seat address and window variables of the conversation it came
 # from, so neither identifies it.
 ! claude_background_session || exit 1
