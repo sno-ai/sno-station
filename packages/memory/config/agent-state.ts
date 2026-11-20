@@ -566,7 +566,7 @@ async function readTaker(root: string, sender: string, id: string, view: AgentVi
 	return (await readReachFile("read Reach taker", path, view, () => readFile(path, "utf8")))?.trim() || undefined;
 }
 
-const trySchema = z.object({ msg_id: z.string(), at: z.iso.datetime() });
+const trySchema = z.object({ msg_id: z.string(), at: z.iso.datetime(), kind: z.string().optional() });
 
 async function readExhausted(root: string, holder: string, view: AgentView): Promise<void> {
 	const mailbox = join(root, holder);
@@ -577,6 +577,8 @@ async function readExhausted(root: string, holder: string, view: AgentView): Pro
 	for (const line of contents.split("\n").filter(Boolean)) {
 		try {
 			const entry = trySchema.parse(JSON.parse(line));
+			// Reach marks a wake it refused, because the window held no conversation, as "skip"; it is not a try.
+			if (entry.kind === "skip") continue;
 			const previous = tries.get(entry.msg_id);
 			tries.set(entry.msg_id, { count: (previous?.count ?? 0) + 1, since: entry.at });
 		} catch (error) { view.errors.push(failure("parse Reach try", path, error, "some Reach tries unknown")); }
