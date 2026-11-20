@@ -446,7 +446,7 @@ ring_orca() {
     done
     local absent
     if [[ "$(jq -r '.harness // empty' "$record")" == claude-code ]] &&
-       ! absent="$(claude_window_conversation orca "$terminal_handle")"; then
+       ! absent="$(claude_window_conversation orca "$terminal_tab")"; then
         emit "$root" "$recipient" "$sender" "$message_id" unresolved \
             "$absent: window $terminal_handle for $recipient; the card stays in the inbox"
         return
@@ -616,7 +616,7 @@ process_environment() { # pid name: one variable from a running process's enviro
 # A Claude Code window can stop holding the conversation that registered it: the conversation
 # ended, or the window only shows a background session (a fork), which a wake typed there would
 # reach instead. Claude lists its live conversations; the window must host an interactive one.
-claude_window_conversation() { # tmux|orca target; prints the reason when there is none
+claude_window_conversation() { # tmux pane | orca tab; prints the reason when there is none
     local channel="$1" target="$2" claude listed pid ancestor pane_pid=''
     claude="$(command -v claude || printf '%s' "$HOME/.local/bin/claude")"
     listed="$(timeout 10 "$claude" agents --json 2>/dev/null |
@@ -632,7 +632,7 @@ claude_window_conversation() { # tmux|orca target; prints the reason when there 
                 [[ "$ancestor" != "$pane_pid" ]] || return 0
                 ancestor="$(ps -o ppid= -p "$ancestor" 2>/dev/null | tr -d ' ')"
             done
-        elif [[ "$(process_environment "$pid" ORCA_TERMINAL_HANDLE)" == "$target" ]]; then
+        elif [[ "$(process_environment "$pid" ORCA_TAB_ID)" == "$target" ]]; then
             return 0
         fi
     done
