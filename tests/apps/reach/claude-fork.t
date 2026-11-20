@@ -106,6 +106,13 @@ for pass in 2 3; do
 done
 [[ "$(jq -s --arg id "<$question>" '[.[] | select(.msg_id == $id)] | length' "$tries")" == 3 ]] ||
   fail "three refused wakes did not leave three try rows: $(cat "$tries")"
+# The cross-machine receiver rings through __ring-card, which takes the try in its own process.
+remote="remote-$$@$HOST"
+card "$remote" "$SENDER" "$RECEIVER" question pickup >"$WORK/card"
+invoke send --as "$SENDER" --no-ring <"$WORK/card"; expect_rc 0
+invoke __ring-card "$RECEIVER" "$SENDER" "$(message_path "$RECEIVER" "$remote")"
+[[ "$(jq -rs --arg id "<$remote>" '[.[] | select(.msg_id == $id) | .kind] | join(",")' "$tries")" == skip ]] ||
+  fail "a refused cross-machine wake was counted as a try: $(cat "$tries")"
 claude_lists "$pane_pid" interactive
 sed -i 's/"at":"[^"]*"/"at":"2000-01-01T00:00:00Z"/' "$tries"
 invoke pickup; expect_rc 0

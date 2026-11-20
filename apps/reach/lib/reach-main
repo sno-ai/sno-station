@@ -3126,7 +3126,7 @@ run_try() {
     id="$(mhdr -h message-id "$card")" || return 74
     # A wake refused because its window held no conversation typed nothing and is not counted.
     history="$(jq -rs --arg id "$id" '[.[] | select(.msg_id == $id)] |
-        [(map(select(.kind != "ring-refused")) | length), (map(.at) | max // "-")] | @tsv' "$file")" ||
+        [(map(select(.kind != "skip")) | length), (map(.at) | max // "-")] | @tsv' "$file")" ||
         { reach_failure "$root" 'read tries' "$file" 'invalid or unreadable record'; return 74; }
     IFS=$'\t' read -r count latest <<<"$history"
     if ((count >= 3)); then printf 'three tries already recorded: %s\n' "$id"; return 1; fi
@@ -3253,7 +3253,8 @@ ring_remote() {
 ring_received_card() {
     local root recipient="$1" sender="$2" card="$3" status=0
     root="$(mailbox_root)"
-    run_try --as "$recipient" --card "$card" --kind ring >/dev/null || status=$?
+    # In its own process, so the tries lock is released before the doorbell may mark the try.
+    (run_try --as "$recipient" --card "$card" --kind ring) >/dev/null || status=$?
     if ((status == 1)); then printf 'skipped\n'; return 0; fi
     ((status == 0)) || return "$status"
     SNO_REACH_ADDR="$sender" ring_card "$recipient" "$(mhdr -h message-id "$card")"
