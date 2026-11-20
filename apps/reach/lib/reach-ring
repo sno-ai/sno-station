@@ -177,6 +177,10 @@ ring_terminal() {
     local root="$1" recipient="$2" sender="$3" message_id="$4" record="$5" handle text error
     local -a command
     handle="$(jq -r .handle "$record")"
+    case "$handle" in
+        tty:*) ! claude_window_refused "$root" "$recipient" "$sender" "$message_id" "$record" tty "${handle#tty:}" || return ;;
+        relay:*) ! claude_window_refused "$root" "$recipient" "$sender" "$message_id" "$record" relay "${handle#relay:}" || return ;;
+    esac
     text="$DOORBELL_TOKEN Guide: $REPOSITORY/guide/agent-reach.md. State: $root. Seat: $recipient. Read your mailbox now."
     if [[ "$handle" == ghostty:* ]]; then
         command=(bash "$REPOSITORY/lib/reach-terminal-macos")
@@ -444,14 +448,7 @@ ring_orca() {
     fi
     break
     done
-    local absent
-    if [[ "$(jq -r '.harness // empty' "$record")" == claude-code ]] &&
-       ! absent="$(claude_window_conversation orca "$terminal_tab")"; then
-        emit "$root" "$recipient" "$sender" "$message_id" unresolved \
-            "$absent: window $terminal_handle for $recipient; the card stays in the inbox"
-        mark_try_refused "$root" "$recipient" "$message_id"
-        return
-    fi
+    ! claude_window_refused "$root" "$recipient" "$sender" "$message_id" "$record" orca "$terminal_tab" || return
     if ! orca_json terminal wait --terminal "$terminal_handle" --for tui-idle \
         --timeout-ms 2500 | jq -e '.wait.satisfied == true' >/dev/null 2>&1; then
         emit "$root" "$recipient" "$sender" "$message_id" busy \
@@ -613,28 +610,46 @@ process_environment() { # pid name: one variable from a running process's enviro
 # A Claude Code window can stop holding the conversation that registered it: the conversation
 # ended, or the window only shows a background session (a fork), which a wake typed there would
 # reach instead. Claude lists its live conversations; the window must host an interactive one.
-claude_window_conversation() { # tmux pane | orca tab; prints the reason when there is none
+# Exit 1: none is there. Exit 2: the list could not be read, so nothing is known either way.
+claude_window_conversation() { # tmux pane | orca tab | tty path | relay socket
     local channel="$1" target="$2" claude listed pid ancestor pane_pid=''
     claude="$(command -v claude || printf '%s' "$HOME/.local/bin/claude")"
     listed="$(timeout --foreground -k 2 10 "$claude" agents --json 2>/dev/null |
         jq -r '.[] | select(.kind == "interactive" and (.pid | type == "number")) | .pid')" || {
         printf 'Claude conversations could not be listed with %s agents --json' "$claude"
-        return 1
+        return 2
     }
     [[ "$channel" != tmux ]] || pane_pid="$(tmux display-message -pt "$target" '#{pane_pid}' 2>/dev/null)" || true
     for pid in $listed; do
-        if [[ "$channel" == tmux ]]; then
-            ancestor="$pid"
-            while [[ -n "$pane_pid" && "$ancestor" =~ ^[0-9]+$ ]] && ((ancestor > 1)); do
-                [[ "$ancestor" != "$pane_pid" ]] || return 0
-                ancestor="$(ps -o ppid= -p "$ancestor" 2>/dev/null | tr -d ' ')"
-            done
-        elif [[ "$(process_environment "$pid" ORCA_TAB_ID)" == "$target" ]]; then
-            return 0
-        fi
+        case "$channel" in
+            tmux)
+                ancestor="$pid"
+                while [[ -n "$pane_pid" && "$ancestor" =~ ^[0-9]+$ ]] && ((ancestor > 1)); do
+                    [[ "$ancestor" != "$pane_pid" ]] || return 0
+                    ancestor="$(ps -o ppid= -p "$ancestor" 2>/dev/null | tr -d ' ')"
+                done
+                ;;
+            orca) [[ "$(process_environment "$pid" ORCA_TAB_ID)" != "$target" ]] || return 0 ;;
+            tty) [[ "/dev/$(ps -o tty= -p "$pid" 2>/dev/null | tr -d ' ')" != "$target" ]] || return 0 ;;
+            relay) [[ "$(process_environment "$pid" SNO_REACH_TERMINAL_SOCKET)" != "$target" ]] || return 0 ;;
+        esac
     done
     printf 'no live Claude conversation in this window: it ended, or the window only shows a background session'
     return 1
+}
+
+# For a Claude Code seat, succeeds (after reporting unresolved and marking the try) when Claude
+# lists no conversation in its window. An unreadable list leaves the wake as it was, with a note.
+claude_window_refused() { # root recipient sender message-id record channel target
+    local absent rc=0
+    [[ "$(jq -r '.harness // empty' "$5")" == claude-code ]] || return 1
+    absent="$(claude_window_conversation "$6" "$7")" || rc=$?
+    if ((rc == 2)); then
+        printf 'reach-ring: %s; waking %s without checking which conversation its window holds\n' "$absent" "$2" >&2
+    fi
+    ((rc == 1)) || return 1
+    emit "$1" "$2" "$3" "$4" unresolved "$absent: $6 $7 for $2; the card stays in the inbox"
+    mark_try_refused "$1" "$2" "$4"
 }
 
 # A refused wake typed nothing, so it must not use up one of the card's three tries. Its try row
@@ -731,14 +746,7 @@ ring_tmux() {
             "registered pane $target has no live ${runtime:-codex or claude} runtime for $recipient; close the retired pane and respawn the executor"
         return
     fi
-    local absent
-    if [[ "$(jq -r '.harness // empty' "$record")" == claude-code ]] &&
-       ! absent="$(claude_window_conversation tmux "$target")"; then
-        emit "$root" "$recipient" "$sender" "$message_id" unresolved \
-            "$absent: pane $target for $recipient; the card stays in the inbox"
-        mark_try_refused "$root" "$recipient" "$message_id"
-        return
-    fi
+    ! claude_window_refused "$root" "$recipient" "$sender" "$message_id" "$record" tmux "$target" || return
     nonce="$(printf '%04x%04x' "$((RANDOM & 65535))" "$(($$ & 65535))")"
     # Executors need only the neutral cue that was measured to restart their reasoning
     # loop. A prompt-acceptance hook can print an ACK while the executor stays asleep, so

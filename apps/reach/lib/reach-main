@@ -1208,6 +1208,24 @@ run_terminal_info() {
     printf '%s\n' "$info"
 }
 
+# True only when the nearest agent above this process is a Claude Code background session (a fork,
+# --bg or a reused spare). CLAUDE_PID is inherited by everything a conversation starts, so an agent
+# such as Codex started from a fork is its own agent, not the fork.
+claude_background_session() {
+    local pid=$$ comm
+    [[ -n "${CLAUDE_PID:-}" ]] || return 1
+    while [[ "$pid" =~ ^[0-9]+$ ]] && ((pid > 1)); do
+        if [[ "$pid" == "$CLAUDE_PID" ]]; then
+            [[ "$(jq -r '.kind // empty' "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/sessions/$pid.json" 2>/dev/null)" == bg ]]
+            return
+        fi
+        comm="$(ps -o comm= -p "$pid" 2>/dev/null)"
+        case "${comm##*/}" in codex | codex-* | cursor-agent | hermes | openclaw) return 1 ;; esac
+        pid="$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ')"
+    done
+    return 1
+}
+
 run_register() {
     local root channel='' handle='' pane session server identity kind harness=codex recorded
     [[ ! -v CLAUDECODE ]] || harness=claude-code
@@ -1234,8 +1252,7 @@ run_register() {
     [[ -n "$channel" || -z "${CURSOR_CONVERSATION_ID:-}" || -n "${CURSOR_INVOKED_AS:-}" ]] || channel="cursor-ide"
     # A Claude Code background session (a fork, --bg or a reused spare) has no window of its own:
     # its window variables belong to the conversation it came from, which wakes would then reach.
-    if [[ "$channel" == orca || "$channel" == tmux || "$channel" == terminal ]] && [[ -n "${CLAUDE_PID:-}" ]] &&
-       [[ "$(jq -r '.kind // empty' "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/sessions/$CLAUDE_PID.json" 2>/dev/null)" == bg ]]; then
+    if [[ "$channel" == orca || "$channel" == tmux || "$channel" == terminal ]] && claude_background_session; then
         die 65 "$CALLER runs in a Claude Code background session, which has no window of its own; stop it and resume it in the window it should own (claude stop <id>, then claude --resume <session id> there), then register from there"
     fi
     case "$channel" in
