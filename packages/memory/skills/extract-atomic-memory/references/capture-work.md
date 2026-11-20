@@ -31,6 +31,8 @@ agrees with something the assistant said, cite the owner's agreeing turn in sour
 use the surrounding assistant statement only to resolve what the owner agreed to.
 Durable facts and pitfalls may come from an assistant turn only when the assistant established them, not when it guessed. A suggestion alone is not a decision.
 
+An assignment handed to a worker — a message or card that gives one piece of work, often with numbered items, acceptance checks, a time budget or a working directory — sets the scope, limits and steps of that piece of work only: "touch only these two files", "spend at most ten minutes", "send the result in one message" there are not lasting rules. Keep a sentence from it only when it says it applies to later work as well. Pasted text is not by itself an assignment; judge by what the text does.
+
 Use `subject_kind: user` and `subject: user` for claims about the owner, including project-specific preferences.
 Use `agent` for claims about the assistant, `named_entity` for a stated proper project or entity name,
 and `unresolved` when the text does not name the entity. Resolve pronouns against the fact's own source turn.
