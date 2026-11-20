@@ -95,6 +95,8 @@ question_path="$(message_path "$RECEIVER" "$question")"
 tries="$STATE/$RECEIVER/tries.jsonl"
 for ((i = 0; i < 100; i++)); do grep -qF "<$question>" "$WORK/rings.jsonl" 2>/dev/null && break; sleep 0.1; done
 has "$WORK/rings.jsonl" "<$question>"
+invoke __try --as "$RECEIVER" --card "$question_path" --kind ring; expect_rc 1
+has "$WORK/out" 'less than 300 seconds'
 for pass in 2 3; do
   sed -i 's/"at":"[^"]*"/"at":"2000-01-01T00:00:00Z"/' "$tries"
   invoke __try --as "$RECEIVER" --card "$question_path" --kind ring; expect_rc 0
