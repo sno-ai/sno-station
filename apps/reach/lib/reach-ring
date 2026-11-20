@@ -449,6 +449,7 @@ ring_orca() {
        ! absent="$(claude_window_conversation orca "$terminal_tab")"; then
         emit "$root" "$recipient" "$sender" "$message_id" unresolved \
             "$absent: window $terminal_handle for $recipient; the card stays in the inbox"
+        mark_try_refused "$root" "$recipient" "$message_id"
         return
     fi
     if ! orca_json terminal wait --terminal "$terminal_handle" --for tui-idle \
@@ -601,10 +602,6 @@ tmux_target_current() {
     [[ "$now_handle" == "$expected_handle" ]]
 }
 
-# A pane can outlive its executor: the launcher deliberately parks the pane on
-# `sleep 86400` after the runtime exits.  Pane existence and pane-owned identity
-# proof are therefore not runtime liveness.  Walk only this pane's process tree
-# and require the actual interactive runtime before typing into an executor.
 process_environment() { # pid name: one variable from a running process's environment
     if [[ -r "/proc/$1/environ" ]]; then
         tr '\0' '\n' <"/proc/$1/environ" | sed -n "/^$2=/{s///p;q;}"
@@ -619,7 +616,7 @@ process_environment() { # pid name: one variable from a running process's enviro
 claude_window_conversation() { # tmux pane | orca tab; prints the reason when there is none
     local channel="$1" target="$2" claude listed pid ancestor pane_pid=''
     claude="$(command -v claude || printf '%s' "$HOME/.local/bin/claude")"
-    listed="$(timeout 10 "$claude" agents --json 2>/dev/null |
+    listed="$(timeout --foreground -k 2 10 "$claude" agents --json 2>/dev/null |
         jq -r '.[] | select(.kind == "interactive" and (.pid | type == "number")) | .pid')" || {
         printf 'Claude conversations could not be listed with %s agents --json' "$claude"
         return 1
@@ -640,6 +637,27 @@ claude_window_conversation() { # tmux pane | orca tab; prints the reason when th
     return 1
 }
 
+# A refused wake typed nothing, so it must not use up one of the card's three tries. Its try row
+# stays, keeping the five-minute spacing and the claim against a second offer, and is marked so
+# the count of three skips it. The file is rewritten in place under the writers' lock.
+mark_try_refused() { # root recipient message-id
+    local file="$1/$2/tries.jsonl" fd marked
+    [[ -f "$file" ]] || return 0
+    { exec {fd}>>"$file" && flock -x -w 1 "$fd"; } || return 0
+    if marked="$(jq -cs --arg id "$3" '
+        (map(.msg_id == $id and .kind == "ring") | rindex(true)) as $last |
+        if $last == null then empty else (.[$last].kind = "ring-refused") | .[] end' "$file")" &&
+       [[ -n "$marked" ]]; then
+        : >"$file" && printf '%s\n' "$marked" >>"$file" ||
+            printf 'reach-ring: could not mark the refused wake in %s\n' "$file" >&2
+    fi
+    exec {fd}>&-
+}
+
+# A pane can outlive its executor: the launcher deliberately parks the pane on
+# `sleep 86400` after the runtime exits.  Pane existence and pane-owned identity
+# proof are therefore not runtime liveness.  Walk only this pane's process tree
+# and require the actual interactive runtime before typing into an executor.
 tmux_executor_runtime_live() { # pane-id runtime
     local target="$1" runtime="$2" pane_pid pid child comm args argument
     local -a queue=() arguments=()
@@ -712,6 +730,7 @@ ring_tmux() {
        ! absent="$(claude_window_conversation tmux "$target")"; then
         emit "$root" "$recipient" "$sender" "$message_id" unresolved \
             "$absent: pane $target for $recipient; the card stays in the inbox"
+        mark_try_refused "$root" "$recipient" "$message_id"
         return
     fi
     nonce="$(printf '%04x%04x' "$((RANDOM & 65535))" "$(($$ & 65535))")"
