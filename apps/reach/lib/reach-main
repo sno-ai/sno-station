@@ -3126,7 +3126,7 @@ run_try() {
     id="$(mhdr -h message-id "$card")" || return 74
     # A wake refused because its window held no conversation typed nothing and is not counted.
     history="$(jq -rs --arg id "$id" '[.[] | select(.msg_id == $id)] |
-        [map(select(.kind != "ring-refused")) | length, (map(.at) | max // "-")] | @tsv' "$file")" ||
+        [(map(select(.kind != "ring-refused")) | length), (map(.at) | max // "-")] | @tsv' "$file")" ||
         { reach_failure "$root" 'read tries' "$file" 'invalid or unreadable record'; return 74; }
     IFS=$'\t' read -r count latest <<<"$history"
     if ((count >= 3)); then printf 'three tries already recorded: %s\n' "$id"; return 1; fi
