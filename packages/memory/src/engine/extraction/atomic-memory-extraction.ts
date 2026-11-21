@@ -1907,7 +1907,14 @@ export async function runAtomicMemoryExtraction(
 				|| !["rule", "person"].includes(String(card.metadata?.precision_kind))
 				|| input.turns[card.globalTurnIndex - sourceTurnOffset]?.role !== "user") continue;
 			const stored = input.store.findByExtractionIdempotencyKey(input.projectId, card.idempotencyKey);
-			if (stored && JSON.parse(stored.metadata).overrides_shared === undefined) retirement.profileRowIds.push(stored.id);
+			if (!stored) continue;
+			const { overrides_shared: overriddenId }: Record<string, unknown> = JSON.parse(stored.metadata);
+			if (overriddenId !== undefined) {
+				if (card.metadata?.precision_kind !== "person" || typeof overriddenId !== "string") continue;
+				const overridden = input.store.getById(overriddenId);
+				if (!overridden || JSON.parse(overridden.metadata).precision_kind !== "person") continue;
+			}
+			retirement.profileRowIds.push(stored.id);
 		}
 	}
 	if (input.captureMode !== "work") {
