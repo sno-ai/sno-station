@@ -400,6 +400,25 @@ it("owner's person fact from a project, judged general: becomes shared and retir
 	expect.soft(other.body.contextText).toContain("LM Studio");
 	expect.soft(other.body.contextText).not.toContain("Ollama server");
 });
+it("two owner's person facts in one capture correcting the same shared fact, judged general: both become shared and the shared fact is retired", async () => {
+	const usesLmStudio = "The owner's local model server is LM Studio.";
+	const noOllama = "The owner has uninstalled Ollama.";
+	const shared = await plant("The owner runs local models on an Ollama server.", { precision_kind: "person" }, "global");
+	facts = [{ text: usesLmStudio, kind: "person", subject: "user" }, { text: noOllama, kind: "person", subject: "user" }];
+	answer = fact => ({ index: fact.index, rows: fact.rows.map(item => ({ id: item.id, relation: item.id === shared.id ? "replaces" : "unrelated" })) });
+	scope = "general";
+	await capture();
+	const first = written(usesLmStudio), second = written(noOllama);
+	expect.soft([first.project, second.project]).toEqual(["global", "global"]);
+	expect.soft(first.metadata).not.toHaveProperty("overrides_shared");
+	expect.soft(second.metadata).not.toHaveProperty("overrides_shared");
+	expect.soft(row(shared.id).metadata).toMatchObject({ supersede_reason: "write-judgement" });
+	expect.soft([first.id, second.id]).toContain(row(shared.id).metadata.superseded_by);
+	const other = await fixture.post("/v1/get-recall", { scope: { ...fixture.scope, project: "another-project", session: randomUUID() },
+		query: "hi", options: { source: "auto", injectionPhase: "session-start" } }, skin);
+	expect.soft(other.body.contextText).toContain("LM Studio");
+	expect.soft(other.body.contextText).not.toContain("Ollama server");
+});
 it.each(["project", "unsure"] as const)("owner's person fact from a project, judged %s: stays that project's exception and the shared fact stays open", async judged => {
 	const newServer = "The owner runs local models on LM Studio and has uninstalled Ollama.";
 	const shared = await plant("The owner runs local models on an Ollama server.", { precision_kind: "person" }, "global");
