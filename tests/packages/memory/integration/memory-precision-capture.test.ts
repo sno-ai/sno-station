@@ -20,6 +20,8 @@ let failedMode: boolean;
 let modePrompts: string[];
 let capturePrompts: string[];
 let scopeTexts: string[];
+let scopePrompts: string[];
+let failedScope: boolean;
 let scopeReplyAsArray: boolean;
 let modelEndpoint: string;
 let exactRepeat: boolean;
@@ -28,7 +30,7 @@ const skin = "hermes";
 beforeAll(async () => { embedder = await createTestEmbedder(); });
 beforeEach(async () => {
 	closers = []; facts = []; mode = "work"; failedMode = false;
-	modePrompts = []; capturePrompts = []; scopeTexts = [];
+	modePrompts = []; capturePrompts = []; scopeTexts = []; scopePrompts = []; failedScope = false;
 	scopeReplyAsArray = false; exactRepeat = false;
 	const recorder = await startRecorder(closers, ({ content, raw }) => {
 		if (exactRepeat && content.startsWith("Each fact is about to be stored as a memory.")) {
@@ -43,6 +45,8 @@ beforeEach(async () => {
 			return failedMode ? { status: 400, body: { error: "mode unavailable" } } : modelReply(JSON.stringify({ mode }), raw);
 		}
 		if (content.startsWith("For each owner's rule")) {
+			scopePrompts.push(content);
+			if (failedScope) return { status: 400, body: { error: "scope unavailable" } };
 			const data = JSON.parse(content.slice(content.lastIndexOf("\n") + 1)) as { rows: Array<{ id: string; text: string }> };
 			scopeTexts.push(...data.rows.map(row => row.text));
 			const rows = data.rows.map(row => ({ id: row.id, scope: facts.find(fact => fact.text === row.text)?.scope ?? "project" }));
@@ -288,6 +292,25 @@ describe("memory precision capture", () => {
 		expect(recalled.body.memoryIds).toHaveLength(2);
 		expect(recalled.body.contextText).toContain("The user requires API_TOKEN for authentication.");
 		expect(recalled.body.contextText).toContain("The user requires api_token for authentication.");
+	});
+	it("moves only a rule judged general: an unsure rule stays in its project, and the judgment is told repository workflow stays there", async () => {
+		facts = [
+			{ text: "The user requires concise reports.", kind: "rule", scope: "general" },
+			{ text: "The user requires finished work committed on a new branch.", kind: "rule", scope: "unsure", attribute: "preference.commits" },
+		];
+		await capture();
+		expect(rows().map(row => [row.text, row.project])).toEqual([
+			["The user requires concise reports.", "global"],
+			["The user requires finished work committed on a new branch.", "agent:mem-update"],
+		]);
+		expect(scopePrompts[0]).toContain("answer project unless its text says it applies to every project");
+	});
+	it("leaves a rule in its project when the scope judgment fails", async () => {
+		failedScope = true;
+		facts = [{ text: "The user requires concise reports.", kind: "rule", scope: "general" }];
+		await capture();
+		expect(scopePrompts.length).toBeGreaterThan(0);
+		expect(rows().map(row => [row.text, row.project])).toEqual([["The user requires concise reports.", "agent:mem-update"]]);
 	});
 	it("moves general preferences, leaves project and agent rules, and deletes a moved global duplicate", async () => {
 		facts = [

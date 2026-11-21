@@ -10,7 +10,7 @@ import { createMemUpdateFixture } from "../fixtures/mem-update-fixture";
 import { modelReply, startRecorder } from "./fixtures/model-recorders";
 
 type Relation = "unrelated" | "same" | "replaces" | "overlaps" | "maybe-same" | "maybe-replaces";
-type Fact = { text: string; kind: "rule" | "fact"; role?: "user" | "assistant"; occurrence?: boolean; time?: CalendarInstruction };
+type Fact = { text: string; kind: "rule" | "fact" | "person"; subject?: "user"; role?: "user" | "assistant"; occurrence?: boolean; time?: CalendarInstruction };
 type JudgedFact = { index: number; text: string; by: string; rows: Array<{ id: string; text: string; by: string }> };
 type Row = { id: string; text: string; project: string; lane: string; metadata: Record<string, unknown> };
 const oldPort = "The owner requires the service to use port 8070.";
@@ -27,11 +27,12 @@ let calls: Array<{ id: string; prompt: string }>;
 let judgments: JudgedFact[][];
 let answer: (fact: JudgedFact) => { index: number; rows: Array<{ id: string; relation: Relation }> } | undefined;
 let confirmation: boolean | "unreachable";
+let scope: "general" | "project" | "unsure";
 let endpoint: string;
 
 beforeAll(async () => { embedder = await createTestEmbedder(); });
 beforeEach(async () => {
-	closers = []; calls = []; judgments = []; confirmation = true;
+	closers = []; calls = []; judgments = []; confirmation = true; scope = "project";
 	facts = [{ text: newPort, kind: "rule" }];
 	answer = fact => ({ index: fact.index, rows: fact.rows.map(row => ({ id: row.id, relation: "replaces" })) });
 	// Keep the real model client and its reply parsing. Carry the call id to its external host port,
@@ -68,7 +69,7 @@ beforeEach(async () => {
 		if (content.startsWith("Judge whether this conversation's place")) return modelReply('{"mode":"work"}', raw);
 		if (content.startsWith("For each owner's rule")) {
 			const data = JSON.parse(lastLine) as { rows: Array<{ id: string }> };
-			return modelReply(JSON.stringify({ rows: data.rows.map(row => ({ id: row.id, scope: "project" })) }), raw);
+			return modelReply(JSON.stringify({ rows: data.rows.map(row => ({ id: row.id, scope })) }), raw);
 		}
 		if (content.includes("facts:\n")) {
 			const batch = JSON.parse(content.split("<take>\n").at(-1)?.split("\n</take>")[0] ?? "[]") as Array<{ id: number }>;
@@ -84,7 +85,7 @@ beforeEach(async () => {
 			const turns = JSON.parse(content.split("<take>\n").at(-1)?.split("\n</take>")[0] ?? "[]") as Array<{ turn_index: number; role: string; content: string }>;
 			const kept = facts.flatMap((fact, id) => {
 				const turn = turns.find(item => item.content.includes(fact.text));
-				return turn ? [{ id, fact: fact.text, kind: fact.kind, subject: "agent", subject_kind: "agent",
+				return turn ? [{ id, fact: fact.text, kind: fact.kind, subject: fact.subject ?? "agent", subject_kind: fact.subject ?? "agent",
 					temporal_phrase: null, ended_at_phrase: null, source_span: { turn_index: turn.turn_index, quote: fact.text } }] : [];
 			});
 			return modelReply(JSON.stringify({ claims_found: kept.map(fact => fact.source_span.turn_index),
@@ -381,6 +382,45 @@ it("project exception: links the project rule without marking the shared owner r
 	expect.soft(other.body.contextText).not.toContain(newPort);
 });
 
+it("owner's person fact from a project, judged general: becomes shared and retires the shared person fact", async () => {
+	const oldServer = "The owner runs local models on an Ollama server.";
+	const newServer = "The owner runs local models on LM Studio and has uninstalled Ollama.";
+	const shared = await plant(oldServer, { precision_kind: "person" }, "global");
+	facts = [{ text: newServer, kind: "person", subject: "user" }];
+	scope = "general";
+	await capture();
+	const current = written(newServer);
+	expect.soft(rows()).toHaveLength(2);
+	expect.soft(current.project).toBe("global");
+	expect.soft(current.metadata).not.toHaveProperty("overrides_shared");
+	expectClosed(shared.id, current.id);
+	const other = await fixture.post("/v1/get-recall", { scope: { ...fixture.scope, project: "another-project", session: randomUUID() },
+		query: "hi", options: { source: "auto", injectionPhase: "session-start" } }, skin);
+	expect.soft(other.body.memoryIds).toEqual([current.id]);
+	expect.soft(other.body.contextText).toContain("LM Studio");
+	expect.soft(other.body.contextText).not.toContain("Ollama server");
+});
+it.each(["project", "unsure"] as const)("owner's person fact from a project, judged %s: stays that project's exception and the shared fact stays open", async judged => {
+	const newServer = "The owner runs local models on LM Studio and has uninstalled Ollama.";
+	const shared = await plant("The owner runs local models on an Ollama server.", { precision_kind: "person" }, "global");
+	facts = [{ text: newServer, kind: "person", subject: "user" }];
+	scope = judged;
+	await capture();
+	const current = written(newServer);
+	expect.soft(current.project).toBe("agent:mem-update");
+	expect.soft(current.metadata.overrides_shared).toBe(shared.id);
+	expectOpen(shared.id);
+});
+it("owner's rule from a project, judged general: stays that project's exception and the shared rule stays open", async () => {
+	const shared = await plant(oldPort, {}, "global");
+	scope = "general";
+	facts = [{ text: newPort, kind: "rule", subject: "user" }];
+	await capture();
+	const current = written(newPort);
+	expect.soft(current.project).toBe("agent:mem-update");
+	expect.soft(current.metadata.overrides_shared).toBe(shared.id);
+	expectOpen(shared.id);
+});
 it("two real occurrences: keeps both facts and tells the judgement they are never the same", async () => {
 	const firstText = "The service owner restarted the service on Monday after a port 8070 outage.";
 	const secondText = "The service owner restarted the service on Tuesday after a port 8070 outage.";
