@@ -87,25 +87,36 @@ export async function scopeCapturedProfiles(
 			return superseded_by === undefined || superseded_by === null;
 		});
 		await store.moveRowsToGlobal(moving);
-		store.sqlite.transaction(() => {
-			for (const id of moving) {
-				const moved = store.getById(id);
-				if (moved?.projectId !== "global") continue;
-				const metadata: Record<string, unknown> = JSON.parse(moved.metadata);
-				if (typeof metadata.overrides_shared !== "string") continue;
-				closeMemoryRow(store.sqlite, {
-					targetRowId: metadata.overrides_shared, closingRowId: id,
-					closingOrder: readMemorySourceOrderOrOldest(moved.metadata),
-					closingValidFrom: typeof metadata.valid_from === "number" ? metadata.valid_from : null,
-					supersededAt: Date.now(), supersedeReason: "write-judgement",
-				});
-				delete metadata.overrides_shared;
-				store.sqlite.prepare("UPDATE nodix_memories SET metadata = ? WHERE id = ?").run(JSON.stringify(metadata), id);
-			}
-		}).immediate();
 	} catch (error) {
 		log.error("Profile move or retirement failed; the overridden shared row stays open", {
 			operation: "move-to-global", project_reason: projectId, row_ids: moving, error,
 		}, { event_name: "memory.precision.move.failed", file: "packages/memory/src/engine/extraction/precision-judgments.ts", function: "scopeCapturedProfiles", site_id: "memory.precision.move.failed" });
+		return;
+	}
+	for (const id of moving) {
+		try {
+			store.sqlite.transaction(() => {
+				const moved = store.getById(id);
+				if (moved?.projectId !== "global") return;
+				const metadata: Record<string, unknown> = JSON.parse(moved.metadata);
+				if (typeof metadata.overrides_shared !== "string") return;
+				const overridden = store.getById(metadata.overrides_shared);
+				const { superseded_by }: Record<string, unknown> = overridden ? JSON.parse(overridden.metadata) : {};
+				if (overridden && (superseded_by === undefined || superseded_by === null)) {
+					closeMemoryRow(store.sqlite, {
+						targetRowId: metadata.overrides_shared, closingRowId: id,
+						closingOrder: readMemorySourceOrderOrOldest(moved.metadata),
+						closingValidFrom: typeof metadata.valid_from === "number" ? metadata.valid_from : null,
+						supersededAt: Date.now(), supersedeReason: "write-judgement",
+					});
+				}
+				delete metadata.overrides_shared;
+				store.sqlite.prepare("UPDATE nodix_memories SET metadata = ? WHERE id = ?").run(JSON.stringify(metadata), id);
+			}).immediate();
+		} catch (error) {
+			log.error("Profile retirement failed; the moved row keeps its shared override", {
+				operation: "move-to-global", project_reason: projectId, row_ids: [id], error,
+			}, { event_name: "memory.precision.move.failed", file: "packages/memory/src/engine/extraction/precision-judgments.ts", function: "scopeCapturedProfiles", site_id: "memory.precision.move.retirement.failed" });
+		}
 	}
 }
