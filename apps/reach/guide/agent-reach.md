@@ -19,7 +19,9 @@ Use the exact returned agent address; do not invent or silently change it.
 
 For mail-reply calls, read the original `[CALL]` file and answer with
 `sno reach reply --as YOUR_ADDRESS --card ORIGINAL_FILE`, body on stdin and no
-`--state`. For task email, reply `--state accepted`, wait for that command to succeed,
+`--state`. For task email (a `decision` or `question` card that asks you to do
+work; there is no `task` card type), reply `--state accepted`, wait for that command
+to succeed,
 perform the work, then reply `--state completed` or `failed` on the original task.
 A saved message, accepted wake or queued turn is not evidence of a recipient response.
 
@@ -126,6 +128,8 @@ A question carrying `X-State: requires-action` is different: it asks you for inf
 ## Send one card and ring
 
 `send --as <sender>` reads one complete RFC 5322 message on stdin. Required singleton headers are From (display name plus one angle address), Subject, Date, Message-ID, X-Work and X-Type. Supply at least one To/Cc/Bcc recipient and a nonblank body. Generate a fresh real Date and Message-ID for every new card.
+
+To give another agent work to do, send a decision card: `X-Type: decision` with a Subject that starts with `[DECISION]`. `sno reach lint` refuses `X-Type: task` as an unknown type. The types a card can carry and their subject tags are listed in the [card contract](../spec/headers.md).
 
 To means action; Cc means informed only; Bcc receives a private copy. Info cards have no To. X-No-Reply:true puts copies directly in handled state and is invalid for questions. From must equal the caller. All destinations must be initialized; actionable To destinations must be registered before any delivery.
 
