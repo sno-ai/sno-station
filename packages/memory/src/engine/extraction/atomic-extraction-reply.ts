@@ -118,7 +118,9 @@ const wireRecordSchema = z
 		source_span: z
 			.object({ turn_index: z.number().int().nonnegative(), quote: z.string().min(1) })
 			.strip(),
-		relations: z.array(relationSchema),
+		relations: z
+			.array(relationSchema.nullable().catch(null))
+			.transform((relations) => relations.filter((relation) => relation !== null)),
 		single_claim: z.boolean(),
 	})
 	// Format slips are repaired in projectRecord, never refused: a refused reply costs every
