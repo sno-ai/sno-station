@@ -369,6 +369,27 @@ for runtime in claude-code codex; do
   expect "$runtime missing context named in fresh prompt" "$(last_call)/prompt" 'Earlier context was not found'
 done
 
+# A timed run keeps the permission mode the conversation last ran with, read from Claude's own transcript.
+mkdir -p "$CLAUDE_CONFIG_DIR/projects/-some-folder"
+printf '%s\n' '{"type":"user","permissionMode":"default","sessionId":"mode-session","message":{"content":"first"}}' \
+  '{"type":"permission-mode","permissionMode":"bypassPermissions","sessionId":"mode-session"}' \
+  '{"type":"assistant","sessionId":"mode-session","message":{"content":[]}}' \
+  >"$CLAUDE_CONFIG_DIR/projects/-some-folder/mode-session.jsonl"
+new_record claude-code mode-session
+set_due '2026-10-31 07:00 UTC' 'resume in the same mode'
+tick; finished
+equal 'closed Claude resumes in the mode its conversation ran with' "$(head -n5 "$(last_call)/argv")" $'-p\n--resume\nmode-session\n--permission-mode\nbypassPermissions'
+printf '%s\n' '{"type":"user","permissionMode":"default","sessionId":"plain-session","message":{"content":"first"}}' \
+  >"$CLAUDE_CONFIG_DIR/projects/-some-folder/plain-session.jsonl"
+new_record claude-code plain-session
+set_due '2026-10-31 07:00 UTC' 'resume in the default mode'
+tick; finished
+equal 'a conversation in the default mode resumes in the default mode' "$(head -n5 "$(last_call)/argv")" $'-p\n--resume\nplain-session\n--permission-mode\ndefault'
+new_record claude-code closed-session
+set_due '2026-10-31 07:00 UTC' 'resume without a recorded mode'
+tick; finished
+absent 'a conversation with no recorded mode gets no permission mode argument' "$(last_call)/argv" --permission-mode
+
 new_record claude-code open-session
 printf '{"pid":%s,"sessionId":"open-session","status":"idle"}\n' "$$" >"$CLAUDE_CONFIG_DIR/sessions/$$.json"
 set_due '2026-10-31 07:00 UTC' 'fork Claude'
