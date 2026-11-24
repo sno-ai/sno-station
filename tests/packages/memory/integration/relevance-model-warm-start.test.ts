@@ -1,7 +1,19 @@
 /** The local relevance model must be ready for the first message after the memory service starts. */
 import { tmpdir } from "node:os";
-import { expect, it } from "vitest";
+import { beforeAll, expect, it, vi } from "vitest";
 import { createEmbedder } from "../../../../packages/memory/src/engine/extraction/embedding-provider-client";
+
+beforeAll(async () => {
+	// Put the model file in the cache first, so the timed wait below covers only its load. The last dispose releases
+	// the loaded model, so the embedder in the test starts without one.
+	const first = createEmbedder({ provider: "local-onnx" }, tmpdir());
+	try {
+		await vi.waitFor(async () => { expect(await first.scoreRelevance("warm", ["up"])).toBeDefined(); },
+			{ timeout: 280_000, interval: 1000 });
+	} finally {
+		await first.dispose();
+	}
+}, 300_000);
 
 it("answers the first relevance request after warmup, without an earlier request to start its load", async () => {
 	const embedder = createEmbedder({ provider: "local-onnx" }, tmpdir());
