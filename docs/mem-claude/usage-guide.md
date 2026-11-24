@@ -182,11 +182,11 @@ transcripts are never imported.
 
 ### Read a memory store offline
 
-`sno memory dump` runs the dump tool shipped with the OpenClaw plugin package and reads the same store format. Running it
-through `npx` fetches that package into the npx cache and installs nothing into OpenClaw:
+`sno memory dump` prints memory rows as JSON Lines without changing the store. Without `--db` it reads your own store,
+the one named in `~/.sno/settings.json`:
 
 ```bash
-sno memory dump --db ~/.sno/sno-station-mem/$USER/memory.sqlite [--scope <scope>] [--id <id>] [--grep <text>] [--limit <n>] [--metadata]
+sno memory dump [--db <path>] [--scope <scope>] [--id <id>] [--grep <text>] [--limit <n>] [--metadata]
 ```
 
 ## Files and environment

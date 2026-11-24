@@ -40,7 +40,7 @@ Global options on every command: `--json` (machine-readable output), `-h` / `--h
 | `sno memory correct --harness H ID TEXT` | Stores a corrected memory and retires the old one | an agent |
 | `sno memory import --harness H (--repo ROOT \| --user)` | Queues existing agent notes for import | you or an agent |
 | `sno memory doctor --harness H` | Prints memory service health, hook state, permission rule state | you or an agent |
-| `sno memory dump --db PATH [--scope S] [--id ID] [--grep T] [--limit N] [--metadata]` | Reads the memory store and prints rows | you |
+| `sno memory dump [--db PATH] [--scope S] [--id ID] [--grep T] [--limit N] [--metadata]` | Reads the memory store (your own when no `--db` is given) and prints rows | you |
 | `sno memory hook EVENT --harness H` | Entry for the agent's hooks (SessionStart, UserPromptSubmit, Stop and so on); never blocks the agent | a timer |
 | `sno observe append EVENT_TYPE --agent=HARNESS --FIELD=VALUE` | Records one observability event; every event is kept until sno.ai has it | an agent or a timer |
 | `sno project status` / `sno project list` | Shows recorded project contexts and improvement outcomes; lists known projects | you or an agent |
