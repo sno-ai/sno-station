@@ -60,3 +60,19 @@ it.each(["claude", "codex"])("%s resolves and reuses the seat, picks up at stop,
 	run("permission-request", { tool_name: "AskUserQuestion" });
 	expect(await readFile(receipt, "utf8").catch(() => "")).toBe("");
 });
+
+it("a Codex hook asks for its seat with its own thread, not the app-server's environment", async () => {
+	// Codex hooks run under the shared app-server, whose environment has no thread id.
+	await writeFile(join(root, "sno"), `#!/bin/sh
+[ "$2" = whoami ] && [ -n "$CODEX_THREAD_ID" ] || exit 1
+printf 'thread.%s@local\\n' "$CODEX_THREAD_ID"
+`, { mode: 0o700 });
+	const profile = join(root, "profile");
+	const result = spawnSync(process.execPath, ["apps/mem-codex/dist/cli.js", "session-start"], {
+		input: JSON.stringify({ session_id: "01a20b46-c94d", cwd: root }), encoding: "utf8", timeout: 5000,
+		env: { ...process.env, PATH: `${root}:${process.env.PATH}`, SNO_PROFILE_DIR: profile, SNO_REACH_ROOT: join(root, "reach"), SNO_REACH_ADDR: "", CODEX_THREAD_ID: "" },
+	});
+	expect(result.status, result.stderr).toBe(0);
+	const [observation] = (await readFile(join(profile, "station", "agents", "codex--01a20b46-c94d.jsonl"), "utf8")).trim().split("\n").map(line => JSON.parse(line));
+	expect(observation.reachAddress).toBe("thread.01a20b46-c94d@local");
+});

@@ -142,12 +142,14 @@ async function hookHistory(target: string): Promise<AgentObservation[]> {
 	}
 }
 
-async function hookSeat(history: AgentObservation[], target: string): Promise<string | undefined> {
+async function hookSeat(history: AgentObservation[], target: string, harness: AgentHarness, sessionId: string): Promise<string | undefined> {
 	const cached = process.env.SNO_REACH_ADDR || history.findLast(item => item.reachAddress)?.reachAddress;
 	if (cached) return cached;
 	try {
 		// A sno without this Reach verb prints its help with exit 0; only a one-line address is a seat.
-		const address = (await execute("sno", ["reach", "whoami"], { timeout: 1000 })).stdout.trim();
+		// A Codex hook gets the app-server's environment, which carries no thread id; the session id is the thread.
+		const env = harness === "codex" ? { ...process.env, CODEX_THREAD_ID: sessionId } : process.env;
+		const address = (await execute("sno", ["reach", "whoami"], { timeout: 1000, env })).stdout.trim();
 		return /^[^\s@]+@[^\s@]+$/.test(address) ? address : undefined;
 	}
 	catch (error) {
@@ -225,7 +227,7 @@ export async function observeAgentEvent(harness: AgentHarness, event: string, ra
 		});
 		const needsSeat = agent && (event === "session-start" || event === "stop" || event === "permission-request");
 		const history = agent && (event === "post-tool-use" || (needsSeat && !process.env.SNO_REACH_ADDR)) ? await hookHistory(target) : [];
-		const reachAddress = needsSeat ? await hookSeat(history, target) :
+		const reachAddress = needsSeat ? await hookSeat(history, target, harness, sessionId) :
 			input.agent_id === undefined ? process.env.SNO_REACH_ADDR : undefined;
 		if (event === "stop" && agent && reachAddress) pickup = pickupSeat(reachAddress);
 		let cwd = text(input.cwd);

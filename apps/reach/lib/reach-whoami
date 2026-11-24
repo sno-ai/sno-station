@@ -20,10 +20,22 @@ if [[ -n "${SNO_REACH_ADDR:-}" ]]; then
     printf '%s\n' "$SNO_REACH_ADDR"
     exit 0
 fi
-orca="${ORCA_TAB_ID:-}" pane="${TMUX_PANE:-}"
-[[ -n "$orca$pane" ]] || exit 1
 shopt -s nullglob
 records=("$root"/*/reachable.json)
+# A Codex conversation is its thread. Under the app-server the window variables name the window that
+# started it, so there they identify nothing.
+if [[ "$(nearest_agent)" == codex ]]; then
+    if [[ -n "${CODEX_THREAD_ID:-}" ]] && (("${#records[@]}")) &&
+        matches="$(jq -r --arg prefix "codex:$CODEX_THREAD_ID:" '
+            select(.channel == "terminal" and (.handle | type == "string" and startswith($prefix))) |
+            .address | strings | select(length > 0)' "${records[@]}")" && [[ -n "$matches" ]]; then
+        printf '%s\n' "${matches%%$'\n'*}"
+        exit 0
+    fi
+    ! codex_app_server || exit 1
+fi
+orca="${ORCA_TAB_ID:-}" pane="${TMUX_PANE:-}"
+[[ -n "$orca$pane" ]] || exit 1
 (("${#records[@]}")) || exit 1
 
 handle=''
