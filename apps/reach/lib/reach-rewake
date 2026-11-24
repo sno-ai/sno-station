@@ -155,6 +155,11 @@ seat_liveness() {
                 if any(.result.terminals[]; .tabId == $id and .connected == true)
                 then "unknown" else "dead" end' <<<"$inventory"
             ;;
+        terminal)
+            # A Codex thread is reached through its app-server, which takes queued input with or
+            # without a window open on that thread.
+            if [[ "$identity" == codex:* ]]; then printf 'live\n'; else printf 'unknown\n'; fi
+            ;;
         *) printf 'unknown\n' ;;
     esac
 }

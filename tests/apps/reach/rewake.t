@@ -196,3 +196,32 @@ invoke rewake; expect_rc 0
 ring_count "$leftover" 0
 has "$handoff/stale.md" "Message-ID <$leftover>"
 pass 'the newest event of a seat decides: an older live pid does not keep a closed window live'
+
+# A Codex seat joined by its thread is reached through Codex's app-server, with or without a window
+# open on that thread, so its pid-less events still lead to a second ring.
+thread_seat="thread.seat@$HOST"; queued="queued@$HOST"
+initialize "$thread_seat" Thread
+thread_handle="codex:01a20b46-addf-76c0-a385-8ffa673d2f63:L2hvbWUvbGgvLmNvZGV4"
+jq -n --arg address "$thread_seat" --arg host "$HOST" --argjson pid "$$" --argjson at "$(date +%s)" \
+  --arg handle "$thread_handle" '
+  {address:$address, channel:"terminal", handle:$handle, identity:{kind:"terminal",value:$handle},
+   by:{pid:$pid,host:$host}, claimed_at:$at, refreshed_at:$at}
+' >"$STATE/$thread_seat/reachable.json"
+jq -nc --arg address "$thread_seat" '
+  {event:"stop",harness:"codex",sessionId:"thread",at:"2026-11-18T09:00:00.000Z",reachAddress:$address,input:{}}
+' >"$events/thread.jsonl"
+printf '# Session thread\n\n## Due\n\n## Notes\nUnchanged notes.\n' >"$handoff/thread.md"
+# Codex for this seat: `codex queue` is recorded, `codex app-server proxy` is the protocol fixture.
+rm -f "$WORK/heartbeat-bin/codex"
+# shellcheck disable=SC2016 # $1 and $* expand when the fake runs
+printf '#!/bin/sh\nif [ "$1" = queue ]; then printf "%%s\\n" "$*" >>%q; exit 0; fi\nexec node %q "$@"\n' \
+  "$WORK/codex-queue.log" "$TEST_DIR/codex-proxy-fixture.cjs" >"$WORK/heartbeat-bin/codex"
+chmod +x "$WORK/heartbeat-bin/codex"
+export WAKE_CASE=idle WAKE_LOG="$WORK/codex-wake.jsonl"
+send_fixture "$queued" "$SENDER" "$thread_seat" decision queued
+invoke rewake; expect_rc 0
+ring_count "$queued" 1
+has "$WORK/codex-queue.log" "queue --thread 01a20b46-addf-76c0-a385-8ffa673d2f63"
+has "$WORK/codex-wake.jsonl" '"method":"thread/queue/start"'
+if grep -Fq -- "Message-ID <$queued>" "$handoff/thread.md"; then fail 'a reachable Codex thread was resumed as a closed conversation'; fi
+pass 'a Codex seat joined by its thread is rung again while its card waits'

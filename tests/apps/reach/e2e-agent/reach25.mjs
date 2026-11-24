@@ -400,8 +400,9 @@ async function resume(t, harness) {
 	const session = await agent.finish();
 	const received = replies(await t.mail(agent.sender), id);
 	assert.deepEqual(received.map(card => header(card.text, "X-State")), ["accepted"], "sender must see acceptance before the conversation closes");
-	assert.ok((await t.events(session)).some(event => event.pid && event.processStart && event.reachAddress === agent.seat),
-		"real hook did not record the holder's process identity");
+	// Codex hooks run under the app-server shared by every window, so only Claude records the holder's process.
+	assert.ok((await t.events(session)).some(event => event.reachAddress === agent.seat && (harness !== "claude" || (event.pid && event.processStart))),
+		"real hook did not record the holder's seat and, for Claude, its process identity");
 	const handoff = join(t.profile, "station/handoff");
 	const progress = join(handoff, `${session}.md`);
 	await mkdir(handoff, { recursive: true });
