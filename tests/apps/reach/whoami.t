@@ -41,3 +41,25 @@ address="$(SNO_REACH_ROOT="$STATE" SNO_REACH_ADDR="$SENDER" ORCA_TAB_ID=tab-whoa
 ORCA_TAB_ID=unregistered invoke whoami; expect_rc 1
 [[ ! -s "$WORK/out" ]] || fail 'unregistered session emitted a seat'
 pass 'whoami resolves explicit, tmux and Orca seats, and prints nothing for an unregistered session'
+
+# A hook can run with TMUX_PANE set and TMUX unset; under LC_ALL=C tmux 3.4 then prints "_" for a
+# tab in its output, so the seat must be found without one.
+(
+    export TMUX_TMPDIR="$WORK/plain"
+    mkdir "$TMUX_TMPDIR"
+    trap 'env -u TMUX tmux kill-server 2>/dev/null || true' EXIT
+    env -u TMUX tmux -f /dev/null new-session -d -s plain cat
+    plain="plain.seat@$HOST"
+    initialize "$plain" Plain
+    pane="$(env -u TMUX tmux display-message -p -t plain '#{pane_id}')"
+    server="$(printf '%s\t%s\n' "$(env -u TMUX tmux display-message -p -t plain '#{socket_path}')" "$(env -u TMUX tmux display-message -p -t plain '#{pid}')" | sha256sum | cut -d ' ' -f1)"
+    jq -n --arg address "$plain" --arg host "$HOST" --argjson pid "$$" --arg at "$(date -u '+%FT%TZ')" \
+      --arg handle "tmux-$server:plain" --arg pane "$pane" '
+      {address:$address, channel:"tmux", handle:$handle, identity:{kind:"tmux-pane",value:$pane},
+       by:{pid:$pid,host:$host}, claimed_at:$at, refreshed_at:$at}
+    ' >"$STATE/$plain/reachable.json"
+    address="$(env -u TMUX -u SNO_REACH_ADDR -u ORCA_TAB_ID HOME="$TEST_HOME" SNO_REACH_ROOT="$STATE" TMUX_PANE="$pane" "$REACH" whoami)" ||
+      fail 'whoami found no seat for a pane when TMUX is unset'
+    [[ "$address" == "$plain" ]] || fail "whoami printed $address for the pane of $plain"
+)
+pass 'whoami resolves a tmux seat when only TMUX_PANE is set'
