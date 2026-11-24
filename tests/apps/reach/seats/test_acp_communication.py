@@ -127,13 +127,16 @@ class Communication(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         report = json.loads(result.stdout)
         self.assertTrue(report["verified"])
-        self.assertIn("RESULT-42", report["output"])
-        self.assertIn(report["deliveryReceipt"], report["output"])
+        self.assertEqual(report["output"], " RESULT-42")
         received = json.loads((self.root / "received.json").read_text())
         self.assertFalse(received["no_wait"])
         self.assertEqual(received["cwd"], str(self.cwd))
         self.assertEqual(received["name"], "probe")
-        self.assertIn("Report literal result", received["text"])
+        self.assertIn(f"sno reach inbox --as {self.address}", received["text"])
+        self.assertIn(report["deliveryReceipt"], received["text"])
+        self.assertTrue(any("Report literal result" in path.read_text()
+                            for folder in ("new", "cur") for path in (self.mail / self.address / folder).iterdir()
+                            if path.is_file()), "the call instruction is not in the recipient's mailbox")
         for mode in ("receipt-missing", "receipt-wrong"):
             self.mode(mode)
             refused = self.run_cli(MESSAGE, "--terminal", self.address,
@@ -176,7 +179,8 @@ class Communication(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         report = json.loads(result.stdout)
         self.assertTrue(report["verified"])
-        self.assertEqual(report["output"], report["deliveryReceipt"] + " RESULT-42" + "x" * 262144)
+        self.assertTrue(report["deliveryReceipt"].startswith("REACH-RECEIPT-"))
+        self.assertEqual(report["output"], " RESULT-42" + "x" * 262144)
         self.no_tmux()
 
     def test_follow_reads_assistant_events_without_prompting(self):
@@ -316,25 +320,9 @@ class Communication(unittest.TestCase):
 
     def test_timeout_fails_without_tmux(self):
         self.mode("timeout")
-        self.env["SNO_REACH_WAKE_NO_DETACH"] = "1"
-        result = self.run_cli(APP / "lib/reach-wake", "start", "--root", str(self.mail),
-            "--sender", f"tpm.sender@{HOST}", "--recipient", self.address,
-            "--message-id", f"<literal-message@{HOST}>", "--work", "acp-probe", "--mechanism", str(DOOR))
-        self.assertEqual(result.returncode, 5, result.stderr)
-        states = list((self.mail / self.address / "wake-attempts").glob("*.json"))
-        self.assertEqual(len(states), 1)
-        self.assertEqual(json.loads(states[0].read_text())["last_outcome"], "failed")
-        self.no_tmux()
-
-    def test_wake_engine_records_queue_ack_despite_vendor_stderr(self):
-        self.env["SNO_REACH_WAKE_NO_DETACH"] = "1"
-        result = self.run_cli(APP / "lib/reach-wake", "start", "--root", str(self.mail),
-            "--sender", f"tpm.sender@{HOST}", "--recipient", self.address,
-            "--message-id", f"<literal-message@{HOST}>", "--work", "acp-probe", "--mechanism", str(DOOR))
-        self.assertEqual(result.returncode, 0, result.stderr)
-        states = list((self.mail / self.address / "wake-attempts").glob("*.json"))
-        self.assertEqual(len(states), 1)
-        self.assertEqual(json.loads(states[0].read_text())["last_outcome"], "rang-unverified")
+        result = self.ring()
+        self.assertEqual(result.stdout, "outcome=failed\n", result.stderr)
+        self.assertIn("probe", result.stderr)
         self.no_tmux()
 
     def test_spawn_registration_failure_closes_session(self):
@@ -548,8 +536,16 @@ class Communication(unittest.TestCase):
             print(json.dumps(dict(wrong_channel_shape="valid-acp" if valid_shape else "channel-only",
                                   exit_code=result.returncode, delivered=delivered)))
             if valid_shape:
-                self.assertIn(result.returncode, (5, 6), result.stderr)
+                self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertTrue(delivered, "schema-valid wrong channel failed before actual delivery")
+                ring_log = self.mail / "reach-ring.jsonl"
+                deadline = time.monotonic() + 30
+                rows = []
+                while not rows and time.monotonic() < deadline:
+                    rows = [row for row in map(json.loads, ring_log.read_text().splitlines())
+                            if row.get("msg_id") == identity] if ring_log.exists() else []
+                    time.sleep(0.2)
+                self.assertEqual([row["outcome"] for row in rows], ["unresolved"], rows)
                 self.assertFalse((self.root / "received.json").exists(), "missing session unexpectedly received a prompt")
         self.record.write_text(json.dumps(saved))
 
