@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.5.3
+
+A message that waited while you typed in the agent's box is offered when the agent's turn ends,
+instead of five minutes later. Codex seats are woken again after five minutes when a message is
+still waiting, and each Codex window answers as its own seat, not as the window that started
+Codex. Agents in tmux find their own address at turn end when the terminal variable is missing.
+
 ## 2.5.2
 
 Mail reaches the conversation it was sent to. A conversation forked into the background no
