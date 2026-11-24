@@ -76,8 +76,10 @@ A task that could not start stays due. The reason is written beside it in plain 
 for example an expired login or a usage limit. It is tried again at the next check.
 Nothing is marked finished that was not started.
 
-A timed run uses your agent's own settings and adds no permissions. If the work needs a
-permission you have not given, allow it before you leave.
+A timed run uses your agent's own settings. When it continues a Claude Code conversation, it
+runs in the permission mode that conversation last used (a conversation left in plan mode
+continues in the mode it used before that). It is never given more than the conversation had.
+If the work needs a permission you have not given, allow it before you leave.
 
 ## Long runs and usage limits
 
