@@ -3129,9 +3129,10 @@ run_try() {
         return "$status"
     fi
     id="$(mhdr -h message-id "$card")" || return 74
-    # A wake refused because its window held no conversation typed nothing and is not counted.
-    history="$(jq -rs --arg id "$id" '[.[] | select(.msg_id == $id)] |
-        [(map(select(.kind != "skip")) | length), (map(.at) | max // "-")] | @tsv' "$file")" ||
+    # Refused wakes do not count as tries. Only pickup ignores them for spacing.
+    history="$(jq -rs --arg id "$id" --arg kind "$kind" '[.[] | select(.msg_id == $id)] |
+        [(map(select(.kind != "skip")) | length),
+         (map(select($kind != "pickup" or .kind != "skip") | .at) | max // "-")] | @tsv' "$file")" ||
         { reach_failure "$root" 'read tries' "$file" 'invalid or unreadable record'; return 74; }
     IFS=$'\t' read -r count latest <<<"$history"
     if ((count >= 3)); then printf 'three tries already recorded: %s\n' "$id"; return 1; fi
