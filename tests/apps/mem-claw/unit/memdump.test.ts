@@ -133,6 +133,28 @@ describe("sno-memdump", () => {
 		}
 	});
 
+	it("reads the store named in the settings file when no --db is given", () => {
+		const fixture = createTestDb();
+		try {
+			writeSettingsFixture(resolve(fixture.dbPath, ".."), { store: { path: fixture.dbPath, encryptionKey: fixture.encryptionKey } });
+			fixture.sqlite
+				.prepare(
+					"INSERT INTO nodix_memories(id, fact_id, text, category, project_id, importance, timestamp, timezone, metadata, content_hash) VALUES (?, ?, ?, 'profile', 'global', 0.7, ?, 'UTC', '{}', ?)",
+				)
+				.run("019memdumpbare00000000000001", "019memdumpbarefact0000000001",
+					"The user's local model server is LM Studio.", 1_786_147_200_000, "memdump-bare-content-hash");
+			fixture.sqlite.pragma("wal_checkpoint(TRUNCATE)");
+
+			const bare = runMemdump(["--limit", "5"]);
+			expect(bare.status, bare.stderr).toBe(0);
+			expect(bare.stdout.trim().split("\n").map(line => JSON.parse(line).text)).toContain(
+				"The user's local model server is LM Studio.",
+			);
+		} finally {
+			fixture.cleanup();
+		}
+	});
+
 	it("refuses a filter that was given an empty value", () => {
 		expect(() => parseMemdumpOptions(["--db", "/tmp/store.sqlite", "--scope", ""])).toThrow(
 			"--scope was given an empty value",

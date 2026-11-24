@@ -10,7 +10,7 @@ import { readSettings } from "../../contract/profile";
 import { initSqliteRuntime, openSqliteDatabaseReadonly } from "../../store/sqlite-runtime";
 
 export interface MemdumpOptions {
-	dbPath: string;
+	dbPath?: string;
 	scope?: string;
 	id?: string;
 	grep?: string;
@@ -69,7 +69,6 @@ export function parseMemdumpOptions(args: string[]): MemdumpOptions {
 		strict: true,
 		allowPositionals: false,
 	});
-	if (!parsed.values.db) throw new Error("--db <path> is required");
 	// A blank value used to be dropped, so an unset shell variable turned a scoped dump into a
 	// dump of every row — silently, and with --metadata that is every receipt too.
 	for (const name of ["db", "scope", "id", "grep"] as const) {
@@ -204,8 +203,9 @@ export function serializeMemoryRow(row: MemoryRow, includeMetadata = false): Dum
 
 export async function main(args: string[]): Promise<void> {
 	const options = parseMemdumpOptions(args);
-	initSqliteRuntime(readSettings().store.encryptionKey);
-	const handle = openSqliteDatabaseReadonly(options.dbPath);
+	const { store } = readSettings();
+	initSqliteRuntime(store.encryptionKey);
+	const handle = openSqliteDatabaseReadonly(options.dbPath ?? store.path);
 	try {
 		const query = buildMemdumpQuery(options);
 		const rows = handle.db.prepare(query.sql).all(...query.params) as MemoryRow[];
