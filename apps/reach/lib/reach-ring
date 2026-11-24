@@ -116,6 +116,9 @@ emit() {
     local root="$1" recipient="$2" sender="$3" message_id="$4"
     local outcome="$5" detail="${6:-}"
 
+    if [[ "$outcome" == busy ]]; then
+        mark_try_refused "$root" "$recipient" "$message_id"
+    fi
     if ! append_measurement "$root" "$recipient" "$sender" "$message_id" \
         "$outcome" "$detail"; then
         printf 'outcome=failed\n'
@@ -652,9 +655,8 @@ claude_window_refused() { # root recipient sender message-id record channel targ
     mark_try_refused "$1" "$2" "$4"
 }
 
-# A refused wake typed nothing, so it must not use up one of the card's three tries. Its try row
-# stays, keeping the five-minute spacing and the claim against a second offer, and its kind "ring"
-# is overwritten in place with "skip", the same length, so the file is never truncated or replaced.
+# A refused wake submitted nothing. Change its try from "ring" to "skip" in place to keep the
+# spacing for other kinds of tries without consuming a try or delaying pickup.
 mark_try_refused() { # root recipient message-id
     local file="$1/$2/tries.jsonl" fd offset
     [[ -f "$file" ]] || return 0

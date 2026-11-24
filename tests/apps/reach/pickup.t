@@ -150,3 +150,24 @@ if grep -F -e "[DECISION] $expired" -e "[DECISION] $replaced" "$WORK/out"; then
   fail 'inbox listed expired or superseded work'
 fi
 pass 'pickup claims To mail before printing, leaves its flags intact and retries within the bound'
+
+# A wake refused because a person is typing in the recipient's box typed nothing: the card is
+# offered when that agent's turn ends, and the refused wake is not one of the card's three tries.
+drafter="draft.seat@$HOST"; typed="typed-$$@$HOST"
+initialize "$drafter" Drafter
+draft_pane="$(tmux -L "$SERVER" new-window -d -P -F '#{pane_id}' -t proof "printf '\\342\\200\\272 half a sentence\\n'; exec cat")"
+for ((i = 0; i < 100; i++)); do tmux -L "$SERVER" capture-pane -p -t "$draft_pane" | grep -q 'half a sentence' && break; sleep 0.05; done
+reach register --as "$drafter" --channel tmux --handle "$draft_pane"
+card "$typed" "$SENDER" "$drafter" decision pickup >"$WORK/card"
+invoke send --as "$SENDER" <"$WORK/card"; expect_rc 0
+for ((i = 0; i < 300; i++)); do grep -F "<$typed>" "$WORK/rings.jsonl" 2>/dev/null | grep -q busy && break; sleep 0.1; done
+grep -F "<$typed>" "$WORK/rings.jsonl" | grep -q busy || fail "the wake into a typed draft was not refused as busy: $(cat "$WORK/rings.jsonl")"
+# The refused wake still spaces the next wake by five minutes; only the turn-end pickup passes it.
+invoke __try --as "$drafter" --card "$(message_path "$drafter" "$typed")" --kind ring; expect_rc 1
+has "$WORK/out" 'less than 300 seconds'
+TEST_PANE="$draft_pane"
+invoke pickup; expect_rc 0
+has "$WORK/out" "Card: $(message_path "$drafter" "$typed")"
+[[ "$(jq -rs --arg id "<$typed>" '[.[] | select(.msg_id == $id) | .kind] | join(",")' "$STATE/$drafter/tries.jsonl")" == skip,pickup ]] ||
+  fail "a busy wake was counted as a try: $(cat "$STATE/$drafter/tries.jsonl")"
+pass 'a card whose wake was refused as busy is offered at the next turn end'
