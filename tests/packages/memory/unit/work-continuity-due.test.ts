@@ -35,7 +35,7 @@ afterEach(() => {
 });
 
 describe.each(["claude", "codex"] as const)("%s timed-task session context", harness => {
-	it("delivers problem lines and instructions for writing and canceling a timed task", async () => {
+	it("delivers problem lines and instructions for writing a timed task", async () => {
 		const output = await composeContinuityContext(harness, "SessionStart",
 			{ session_id: "due-session", cwd: root }, async () => "");
 		const text = JSON.parse(output).hookSpecificOutput.additionalContext;
@@ -49,7 +49,14 @@ describe.each(["claude", "codex"] as const)("%s timed-task session context", har
 		expect(text).toContain("separated from other entries by a blank line");
 		expect(text).toContain('never write "last:"');
 		expect(text).toContain("## Next\nCheck the release report.\n");
-		expect(text).toContain('to the " | next: " that follows it');
+	});
+
+	it("explains how to copy the full timed task action for cancellation", async () => {
+		const output = await composeContinuityContext(harness, "SessionStart",
+			{ session_id: "due-session", cwd: root }, async () => "");
+		const text = JSON.parse(output).hookSpecificOutput.additionalContext;
+		expect(text).toContain('the do text runs from after "do: " to the " | next: " that follows it');
+		expect(text).toContain('the do text may itself contain " | "');
 		expect(text).not.toContain('to the next " | "');
 	});
 
