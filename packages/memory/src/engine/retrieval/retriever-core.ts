@@ -68,7 +68,11 @@ export class MemoryRetriever {
 			warn: (message: string, fields?: Record<string, unknown>) => void;
 		},
 		private readonly config: RetrievalConfig = DEFAULT_RETRIEVAL_CONFIG,
-	) {}
+	) {
+		if (config.rerank !== "none") {
+			void embedder.scoreRelevance?.("warmup", ["warmup"]).catch(() => undefined);
+		}
+	}
 
 	/** Enable aggregate retrieval statistics collection. */
 	setStatsCollector(collector: RetrievalStatsCollector): void {
