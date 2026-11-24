@@ -51,6 +51,15 @@ describe.each(["claude", "codex"] as const)("%s timed-task session context", har
 		expect(text).toContain("## Next\nCheck the release report.\n");
 	});
 
+	it("explains how to copy the full timed task action for cancellation", async () => {
+		const output = await composeContinuityContext(harness, "SessionStart",
+			{ session_id: "due-session", cwd: root }, async () => "");
+		const text = JSON.parse(output).hookSpecificOutput.additionalContext;
+		expect(text).toContain('the do text runs from after "do: " to the " | next: " that follows it');
+		expect(text).toContain('the do text may itself contain " | "');
+		expect(text).not.toContain('to the next " | "');
+	});
+
 	it("logs a failed problem read and still delivers the brief and memory", async () => {
 		vi.stubEnv("DUE_TEST_RESULT", "fail");
 		const log = vi.spyOn(console, "error").mockImplementation(() => {});
