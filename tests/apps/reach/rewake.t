@@ -155,3 +155,44 @@ TEST_PANE="$(jq -r .identity.value "$STATE/$SENDER/reachable.json")"
 invoke pickup; expect_rc 0
 if grep -Fq -- "Subject: [STATUS] $followup" "$WORK/out"; then fail 'the forwarded copy was still offered to the old holder'; fi
 pass 'rewake shares the try budget, resumes closed conversations and forwards released work once'
+
+# Codex runs its hooks under a shared app-server process, outside the conversation's own process,
+# so its events carry no pid. Such a seat is judged by its window: live while an agent runs there.
+nopid="nopid.seat@$HOST"; waiting="waiting@$HOST"; orphan="orphan@$HOST"
+initialize "$nopid" Codex
+ln -s "$(command -v sleep)" "$WORK/heartbeat-bin/codex"
+printf -v window_command '%q 600 & exec bash %q' "$WORK/heartbeat-bin/codex" "$TEST_DIR/fixtures/tmux-ack-actor.sh"
+nopid_pane="$(tmux -L "$SERVER" new-window -d -P -F '#{pane_id}' -t proof "$window_command")"
+for ((i = 0; i < 100; i++)); do tmux -L "$SERVER" capture-pane -p -t "$nopid_pane" | grep -q 'READY integration ACK actor' && break; sleep 0.05; done
+reach register --as "$nopid" --channel tmux --handle "$nopid_pane"
+jq -nc --arg address "$nopid" '
+  {event:"stop",harness:"codex",sessionId:"nopid",at:"2026-11-18T09:00:00.000Z",reachAddress:$address,input:{}}
+' >"$events/nopid.jsonl"
+printf '# Session nopid\n\n## Due\n\n## Notes\nUnchanged notes.\n' >"$handoff/nopid.md"
+send_fixture "$waiting" "$SENDER" "$nopid" decision waiting
+invoke rewake; expect_rc 0
+ring_count "$waiting" 1
+tmux -L "$SERVER" kill-pane -t "$nopid_pane"
+send_fixture "$orphan" "$SENDER" "$nopid" decision orphan
+invoke rewake; expect_rc 0
+has "$handoff/nopid.md" "Message-ID <$orphan>"
+pass 'a seat whose events carry no pid is rung while an agent runs in its window and resumed once the window is gone'
+
+# After an update the same conversation can hold an older event that recorded a process still
+# running (the shared Codex server) and a newer one without a pid: the newest event decides.
+stale="stale.seat@$HOST"; leftover="leftover@$HOST"
+initialize "$stale" Stale
+stale_pane="$(tmux -L "$SERVER" new-window -d -P -F '#{pane_id}' -t proof cat)"
+reach register --as "$stale" --channel tmux --handle "$stale_pane"
+{
+  jq -nc --arg address "$stale" --argjson pid "$$" --arg start "${fields[19]}" '
+    {event:"stop",harness:"codex",sessionId:"stale",at:"2026-11-18T09:00:00.000Z",reachAddress:$address,pid:$pid,processStart:$start,input:{}}'
+  jq -nc --arg address "$stale" '
+    {event:"stop",harness:"codex",sessionId:"stale",at:"2026-11-18T10:00:00.000Z",reachAddress:$address,input:{}}'
+} >"$events/stale.jsonl"
+printf '# Session stale\n\n## Due\n\n## Notes\nUnchanged notes.\n' >"$handoff/stale.md"
+send_fixture "$leftover" "$SENDER" "$stale" decision leftover
+invoke rewake; expect_rc 0
+ring_count "$leftover" 0
+has "$handoff/stale.md" "Message-ID <$leftover>"
+pass 'the newest event of a seat decides: an older live pid does not keep a closed window live'
