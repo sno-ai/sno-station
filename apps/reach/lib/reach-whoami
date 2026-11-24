@@ -28,9 +28,11 @@ records=("$root"/*/reachable.json)
 
 handle=''
 if [[ -n "$pane" ]]; then
-    terminal="$(tmux display-message -pt "$pane" $'#{socket_path}\t#{pid}\t#{session_name}' 2>/dev/null)" || exit 1
-    server="$(printf '%s\n' "${terminal%$'\t'*}" | sha256sum)"
-    handle="tmux-${server%% *}:${terminal##*$'\t'}"
+    socket="$(tmux display-message -pt "$pane" '#{socket_path}' 2>/dev/null)" || exit 1
+    pid="$(tmux display-message -pt "$pane" '#{pid}' 2>/dev/null)" || exit 1
+    session="$(tmux display-message -pt "$pane" '#S' 2>/dev/null)" || exit 1
+    server="$(printf '%s\t%s\n' "$socket" "$pid" | sha256sum)"
+    handle="tmux-${server%% *}:$session"
 fi
 if matches="$(jq -r --arg orca "$orca" --arg pane "$pane" --arg handle "$handle" '
     select(($pane == "" and $orca != "" and .channel == "orca" and
