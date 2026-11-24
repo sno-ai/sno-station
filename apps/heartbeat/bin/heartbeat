@@ -483,7 +483,7 @@ DUE_RESULT done|unfinished <why>|waiting-for-you <need>"
         command=(claude -p)
         if [[ $operation != fresh ]]; then
           command+=(--resume "$id")
-          if permission_mode="$(jq -ner 'last(inputs | objects | .permissionMode | strings)' \
+          if permission_mode="$(jq -ner 'last(inputs | objects | .permissionMode | strings | select(. != "plan"))' \
             -- "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/projects"/*/"$id.jsonl" 2>/dev/null)"; then
             command+=(--permission-mode "$permission_mode")
           fi
