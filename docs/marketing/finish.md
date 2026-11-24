@@ -61,7 +61,7 @@ Timed tasks start Claude Code and Codex only. Do not list the other agents here.
 
 The computer has to be on and awake. Do not write "even with the laptop closed".
 
-A timed run adds no permissions. Do not write that it "runs unattended with full access".
+A timed run is never given more than its conversation had. Do not write that it "runs unattended with full access".
 
 User instructions: [English](../finish.md) · [简体中文](../finish.zh-CN.md).
 Agent behavior: [Heartbeat guide](../../apps/heartbeat/README.md).
