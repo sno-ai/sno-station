@@ -450,10 +450,10 @@ export class MemoryContractRuntime implements MemoryContract {
 			} else {
 				retrievalSignal.throwIfAborted();
 				if (current === "prompt") {
-					const hasRelevanceLogit = hits.some(hit => hit.relevanceLogit !== undefined);
-					entries = hits.filter(hit => hasRelevanceLogit
-						? hit.relevanceLogit !== undefined && hit.relevanceLogit >= MIN_PROMPT_RELEVANCE_LOGIT
-						: hit.denseScore === undefined || hit.denseScore >= 0.5).slice(0, limit).map(hit => hit.entry);
+					entries = hits.filter(hit => hit.relevanceLogit !== undefined
+						? hit.relevanceLogit >= MIN_PROMPT_RELEVANCE_LOGIT
+						: hit.denseScore === undefined || hit.denseScore >= 0.5)
+						.slice(0, limit).map(hit => hit.entry);
 				}
 			}
 			prepared.push({ entries: [entries],
