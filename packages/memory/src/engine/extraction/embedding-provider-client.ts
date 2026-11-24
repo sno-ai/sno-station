@@ -306,7 +306,6 @@ export class Embedder {
 					function: "<anonymous callback>",
 					site_id: "embedding-provider-client.<anonymous callback>.32cc9ec43e",
 				});
-				void this.reranker.score("warmup", ["warmup"]).catch(() => undefined);
 			} catch (error) {
 				log.error("embedder warmup failed", { error }, {
 					event_name: "sno_station_mem.embedding-provider-client.embedder.warmup.failed",
