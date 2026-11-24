@@ -63,3 +63,32 @@ pass 'whoami resolves explicit, tmux and Orca seats, and prints nothing for an u
     [[ "$address" == "$plain" ]] || fail "whoami printed $address for the pane of $plain"
 )
 pass 'whoami resolves a tmux seat when only TMUX_PANE is set'
+
+# Codex runs the tools and hooks of every window under one app-server, whose terminal variables belong
+# to the window that started it: there a conversation is its thread, never the pane in TMUX_PANE.
+(
+    mkdir "$WORK/fake-codex"
+    printf '#!/bin/bash\nshift\n"$@"\n' >"$WORK/fake-codex/codex"
+    chmod +x "$WORK/fake-codex/codex"
+    thread_seat="thread.seat@$HOST"
+    initialize "$thread_seat" Thread
+    handle="codex:01a20b46-c94d-7152-8829-fdd5e6c914c6:L2hvbWUvbGgvLmNvZGV4"
+    jq -n --arg address "$thread_seat" --arg host "$HOST" --argjson pid "$$" --arg at "$(date -u '+%FT%TZ')" \
+      --arg handle "$handle" '
+      {address:$address, channel:"terminal", handle:$handle, identity:{kind:"terminal",value:$handle},
+       by:{pid:$pid,host:$host}, claimed_at:$at, refreshed_at:$at}
+    ' >"$STATE/$thread_seat/reachable.json"
+    under() { # role thread -- the pane of $RECEIVER is in TMUX_PANE, as in the app-server's environment
+        env -u SNO_REACH_ADDR -u ORCA_TAB_ID HOME="$TEST_HOME" SNO_REACH_ROOT="$STATE" \
+          TMUX="$TEST_TMUX" TMUX_PANE="$(jq -r .identity.value "$STATE/$RECEIVER/reachable.json")" \
+          CODEX_THREAD_ID="$2" "$WORK/fake-codex/codex" "$1" "$REACH" whoami
+    }
+    address="$(under app-server 01a20b46-c94d-7152-8829-fdd5e6c914c6)" || fail 'whoami found no seat for a joined Codex thread'
+    [[ "$address" == "$thread_seat" ]] || fail "a Codex thread resolved to $address instead of its own seat"
+    if address="$(under app-server 01a20b46-0000-7000-8000-000000000000)"; then
+        fail "a Codex thread with no seat under the app-server took $address from the pane variables"
+    fi
+    address="$(under tui 01a20b46-0000-7000-8000-000000000000)" || fail 'a Codex window outside the app-server lost its pane seat'
+    [[ "$address" == "$RECEIVER" ]] || fail "a Codex window outside the app-server resolved to $address"
+)
+pass 'whoami identifies a Codex conversation by its thread and ignores the app-server window variables'
