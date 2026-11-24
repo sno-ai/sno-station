@@ -295,6 +295,15 @@ describe("agent state view read-time semantics", () => {
 		expect(result.stuck).toEqual([]);
 		expect(compactAgentView(result)).not.toContain("stuck");
 	});
+	it("lists a quiet Codex seat as stuck once its registration is gone", async () => {
+		const holder = `gone.seat@${hostname()}`;
+		await mkdir(join(home, "reach", holder), { recursive: true });
+		await mkdir(join(home, "station/agents"), { recursive: true });
+		await writeFile(join(home, "station/agents", "codex--gone.jsonl"), JSON.stringify({
+			harness: "codex", sessionId: "gone", event: "stop", input: {}, at: new Date(now - 20 * 60_000).toISOString(), reachAddress: holder,
+		} satisfies AgentObservation) + "\n");
+		expect((await view()).stuck).toMatchObject([{ holder, reason: "silent" }]);
+	});
 
 	it("marks only the opened completion seen; passive reads and new completions stay unseen", async () => {
 		const path = await events("claude", "result", [{ event: "stop", input: { last_assistant_message: "First." } }]);
