@@ -385,6 +385,20 @@ new_record claude-code plain-session
 set_due '2026-10-31 07:00 UTC' 'resume in the default mode'
 tick; finished
 equal 'a conversation in the default mode resumes in the default mode' "$(head -n5 "$(last_call)/argv")" $'-p\n--resume\nplain-session\n--permission-mode\ndefault'
+# Plan mode cannot do scheduled work in a run nobody watches: the last other recorded mode is used instead.
+printf '%s\n' '{"type":"permission-mode","permissionMode":"bypassPermissions","sessionId":"planned-session"}' \
+  '{"type":"permission-mode","permissionMode":"plan","sessionId":"planned-session"}' \
+  >"$CLAUDE_CONFIG_DIR/projects/-some-folder/planned-session.jsonl"
+new_record claude-code planned-session
+set_due '2026-10-31 07:00 UTC' 'resume after plan mode'
+tick; finished
+equal 'a conversation last in plan mode resumes in its last other mode' "$(head -n5 "$(last_call)/argv")" $'-p\n--resume\nplanned-session\n--permission-mode\nbypassPermissions'
+printf '%s\n' '{"type":"permission-mode","permissionMode":"plan","sessionId":"only-plan-session"}' \
+  >"$CLAUDE_CONFIG_DIR/projects/-some-folder/only-plan-session.jsonl"
+new_record claude-code only-plan-session
+set_due '2026-10-31 07:00 UTC' 'resume with only plan mode recorded'
+tick; finished
+absent 'a conversation that recorded only plan mode gets no permission mode argument' "$(last_call)/argv" --permission-mode
 new_record claude-code closed-session
 set_due '2026-10-31 07:00 UTC' 'resume without a recorded mode'
 tick; finished
