@@ -72,7 +72,7 @@ pass 'whoami resolves a tmux seat when only TMUX_PANE is set'
     chmod +x "$WORK/fake-codex/codex"
     thread_seat="thread.seat@$HOST"
     initialize "$thread_seat" Thread
-    handle="codex:01a20b46-c94d-7152-8829-fdd5e6c914c6:L2hvbWUvbGgvLmNvZGV4"
+    handle="codex:01a20b46-c94d-7152-8829-fdd5e6c914c6:L2hvbWUvYWdlbnQvLmNvZGV4"
     jq -n --arg address "$thread_seat" --arg host "$HOST" --argjson pid "$$" --arg at "$(date -u '+%FT%TZ')" \
       --arg handle "$handle" '
       {address:$address, channel:"terminal", handle:$handle, identity:{kind:"terminal",value:$handle},

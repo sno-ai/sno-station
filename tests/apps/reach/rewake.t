@@ -201,7 +201,7 @@ pass 'the newest event of a seat decides: an older live pid does not keep a clos
 # open on that thread, so its pid-less events still lead to a second ring.
 thread_seat="thread.seat@$HOST"; queued="queued@$HOST"
 initialize "$thread_seat" Thread
-thread_handle="codex:01a20b46-addf-76c0-a385-8ffa673d2f63:L2hvbWUvbGgvLmNvZGV4"
+thread_handle="codex:01a20b46-addf-76c0-a385-8ffa673d2f63:L2hvbWUvYWdlbnQvLmNvZGV4"
 jq -n --arg address "$thread_seat" --arg host "$HOST" --argjson pid "$$" --argjson at "$(date +%s)" \
   --arg handle "$thread_handle" '
   {address:$address, channel:"terminal", handle:$handle, identity:{kind:"terminal",value:$handle},
