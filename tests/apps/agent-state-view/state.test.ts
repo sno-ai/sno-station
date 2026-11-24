@@ -373,6 +373,33 @@ describe("agent state view read-time semantics", () => {
 		expect(hook.status, hook.stderr).toBe(0);
 		expect(hook.stdout).toBe("");
 	});
+	it("records no process for a Codex hook run by a shared app-server, and the window's process when the window runs the hook", async () => {
+		// Codex in daemon mode runs every window's hooks under one app-server; only without it is the hook's ancestor the window.
+		await writeFile(join(home, "codex"), `#!/bin/sh
+if [ "$1" = app-server ] || [ "$1" = --no-daemon ]; then
+	[ "$1" = app-server ] || echo $$ > "$SNO_PROFILE_DIR/window-pid"
+	'${process.execPath}' --import tsx --input-type=module -e "$HOOK"
+	exit $?
+fi
+"$0" app-server --listen unix://
+exit $?
+`, { mode: 0o700 });
+		const run = (session: string, ...args: string[]) => spawnSync(join(home, "codex"), args, {
+			encoding: "utf8", timeout: 20000,
+			env: { ...process.env, PATH: `${home}:${process.env.PATH}`, SNO_REACH_ADDR: "", HOOK: `
+				import { observeAgentEvent } from "./packages/memory/config/agent-state.ts";
+				await observeAgentEvent("codex", "user-prompt-submit", { session_id: "${session}", prompt: "hello" });
+			` },
+		});
+		const recorded = async (session: string) => JSON.parse((await readFile(join(home, `station/agents/codex--${session}.jsonl`), "utf8")).trim());
+		const shared = run("shared");
+		expect(shared.status, shared.stderr).toBe(0);
+		expect(await recorded("shared")).not.toHaveProperty("pid");
+		expect(await recorded("shared")).not.toHaveProperty("processStart");
+		const own = run("own", "--no-daemon");
+		expect(own.status, own.stderr).toBe(0);
+		expect((await recorded("own")).pid).toBe(Number(await readFile(join(home, "window-pid"), "utf8")));
+	});
 	it("records a pre-tool-use event without looking up the Reach seat", async () => {
 		const calls = join(home, "sno-calls");
 		await writeFile(calls, "");

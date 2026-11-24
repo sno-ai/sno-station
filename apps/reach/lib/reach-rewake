@@ -31,7 +31,8 @@ if ! since="$(run "$lib/reach-main" __since)"; then
 fi
 host="$(hostname)"
 failed=0
-declare -A session=() latest=() dead=() live=() uncertain=()
+declare -A session=() latest=() check_window=() live=() uncertain=()
+declare -A observed_pid=() observed_start=()
 declare -A release=() release_at=()
 records=("$station"/agents/*.jsonl)
 observations=''
@@ -72,38 +73,47 @@ while IFS=$'\t' read -r kind address first second third fourth fifth; do
             if [[ "${latest[$address]:-}" < "$second" ]]; then
                 latest["$address"]="$second"
                 session["$address"]="$first"
-            fi
-            [[ "$third" != - ]] || continue
-            if [[ ! -d /proc/self || ! "$third" =~ ^[1-9][0-9]*$ || ! "$fourth" =~ ^[0-9]+$ ]]; then
-                uncertain["$address"]=1
-            elif [[ ! -d "/proc/$third" ]]; then
-                dead["$address"]=1
-            elif stat_line="$(<"/proc/$third/stat")"; then
-                read -r -a fields <<<"${stat_line##*) }"
-                if [[ -z "${fields[19]:-}" ]]; then
-                    uncertain["$address"]=1
-                elif [[ "${fields[19]}" == "$fourth" && "${fields[0]}" != Z ]]; then
-                    live["$address"]=1
-                else
-                    dead["$address"]=1
-                fi
-            elif [[ -d "/proc/$third" ]]; then
-                log "$address" "read /proc/$third/stat: process identity unavailable"
-                uncertain["$address"]=1
-                failed=74
-            else
-                dead["$address"]=1
+                observed_pid["$address"]="$third"
+                observed_start["$address"]="$fourth"
             fi
             ;;
     esac
 done <<<"$observations"
 
-# A live hook process is sufficient. For a dead one, confirm that the registered
-# window did not acquire a new agent that has yet to write its first hook event.
+for address in "${!session[@]}"; do
+    ((SECONDS < deadline)) || exit "$failed"
+    pid="${observed_pid[$address]}"
+    start="${observed_start[$address]}"
+    if [[ "$pid" == - ]]; then
+        check_window["$address"]=1
+    elif [[ ! -d /proc/self || ! "$pid" =~ ^[1-9][0-9]*$ || ! "$start" =~ ^[0-9]+$ ]]; then
+        uncertain["$address"]=1
+    elif [[ ! -d "/proc/$pid" ]]; then
+        check_window["$address"]=1
+    elif stat_line="$(<"/proc/$pid/stat")"; then
+        read -r -a fields <<<"${stat_line##*) }"
+        if [[ -z "${fields[19]:-}" ]]; then
+            uncertain["$address"]=1
+        elif [[ "${fields[19]}" == "$start" && "${fields[0]}" != Z ]]; then
+            live["$address"]=1
+        else
+            check_window["$address"]=1
+        fi
+    elif [[ -d "/proc/$pid" ]]; then
+        log "$address" "read /proc/$pid/stat: process identity unavailable"
+        uncertain["$address"]=1
+        failed=74
+    else
+        check_window["$address"]=1
+    fi
+done
+
+# A live hook process is sufficient. If observations point to dead processes or
+# have no PID, check whether the registered window still hosts an agent.
 seat_liveness() {
     local address="$1" record="$root/$1/reachable.json" registration channel identity pane pid inventory orca
     if [[ -n "${live[$address]:-}" ]]; then printf 'live\n'; return; fi
-    if [[ "$inventory_incomplete" == yes || -z "${dead[$address]:-}" || -n "${uncertain[$address]:-}" ]]; then
+    if [[ "$inventory_incomplete" == yes || -z "${check_window[$address]:-}" || -n "${uncertain[$address]:-}" ]]; then
         printf 'unknown\n'; return
     fi
     if [[ ! -e "$record" ]]; then printf 'dead\n'; return; fi

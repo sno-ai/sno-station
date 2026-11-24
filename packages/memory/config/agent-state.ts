@@ -88,6 +88,8 @@ async function observedProcess(harness: AgentHarness, input: Record<string, unkn
 		const fields = stat.slice(stat.lastIndexOf(")") + 2).split(" ");
 		const exe = await realpath(`/proc/${pid}/exe`);
 		const cmdline = (await readFile(`/proc/${pid}/cmdline`, "utf8")).split("\0");
+		// Codex app-server is shared across windows, so its ancestry cannot identify the session's process.
+		if (harness === "codex" && cmdline.includes("app-server")) return undefined;
 		if (pid === supplied || binaries.includes(exe) || cmdline.some(argument => binaries.includes(argument))) return agentProcessIdentity(pid);
 		pid = Number(fields[1]);
 	}
