@@ -281,6 +281,21 @@ describe("agent state view read-time semantics", () => {
 		} finally { process.env.PATH = originalPath; }
 	});
 
+	it("does not list an idle Codex seat as stuck when its hooks run under the shared app-server", async () => {
+		// Under the app-server no Codex hook records a process, so silence cannot tell idle from hung.
+		const holder = `thread.seat@${hostname()}`;
+		await mkdir(join(home, "reach", holder), { recursive: true });
+		await writeFile(join(home, "reach", holder, "reachable.json"), JSON.stringify({ address: holder, channel: "terminal", handle: "codex:thread:aG9tZQ" }));
+		await mkdir(join(home, "station/agents"), { recursive: true });
+		await writeFile(join(home, "station/agents", "codex--thread.jsonl"), JSON.stringify({
+			harness: "codex", sessionId: "thread", event: "stop", input: {}, at: new Date(now - 20 * 60_000).toISOString(), reachAddress: holder,
+		} satisfies AgentObservation) + "\n");
+		const result = await view();
+		expect(result.agents.find(row => row.reachAddress === holder)?.process).toBe("unknown");
+		expect(result.stuck).toEqual([]);
+		expect(compactAgentView(result)).not.toContain("stuck");
+	});
+
 	it("marks only the opened completion seen; passive reads and new completions stay unseen", async () => {
 		const path = await events("claude", "result", [{ event: "stop", input: { last_assistant_message: "First." } }]);
 		let result = await view();

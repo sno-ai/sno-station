@@ -647,6 +647,8 @@ async function readSeatStatus(root: string, view: AgentView, now: number): Promi
 	}
 	for (const [holder, rows] of seats) {
 		if (rows.some(row => row.process === "present" || row.process === "detached")) continue;
+		// Codex hooks under the shared app-server record no process, so a quiet Codex seat may just be idle.
+		if (rows.every(row => row.harness === "codex" && row.process === "unknown")) continue;
 		const latest = rows.map(row => row.lastEvent === "unknown" ? "" : row.lastEvent.at).sort().at(-1) || "unknown";
 		const age = agoSeconds(now, latest);
 		const registration = join(root, holder, "reachable.json");
