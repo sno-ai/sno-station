@@ -154,13 +154,14 @@ Object.assign(MemoryRetriever.prototype, {
 		const span = Math.max(1e-9, Math.max(...logits) - minimum);
 		const blended = head.map((candidate, index) => ({
 			candidate,
+			relevanceLogit: logits[index],
 			value: 0.5 * (((logits[index] ?? minimum) - minimum) / span) + 0.5 * candidate.score,
 		}));
 		blended.sort((a, b) => b.value - a.value || a.candidate.entry.id.localeCompare(b.candidate.entry.id));
 		const slots = head.map((candidate) => candidate.score).sort((a, b) => b - a);
-		const rescored = blended.map(({ candidate }, index) => {
+		const rescored = blended.map(({ candidate, relevanceLogit }, index) => {
 			const score = slots[index] ?? candidate.score;
-			return { ...candidate, score, rerankScore: score, sources: { ...candidate.sources, reranked: { score } } };
+			return { ...candidate, relevanceLogit, score, rerankScore: score, sources: { ...candidate.sources, reranked: { score } } };
 		});
 		log.debug("local reranker applied", { scored: head.length, duration_ms: performance.now() - started }, {
 			event_name: "memory.retriever_rerank.diagnostic", file: "packages/memory/src/engine/retrieval/retriever-rerank.ts",

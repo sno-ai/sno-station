@@ -337,5 +337,6 @@ export interface RetrievalResult {
 	bm25Score?: number;
 	fusedScore?: number;
 	rerankScore?: number;
+	relevanceLogit?: number;
 	mmrScore?: number;
 }
