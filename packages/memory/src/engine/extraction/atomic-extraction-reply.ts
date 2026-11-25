@@ -201,6 +201,32 @@ function projectRecord(record: z.infer<typeof wireRecordSchema>): AtomicExtracti
 	};
 }
 
+export function toAtomicWireRecord(record: AtomicExtractionRecord): unknown {
+	return {
+		kind: record.kind,
+		claim_text: record.claimText,
+		subject: record.subject,
+		subject_kind: record.subjectKind,
+		attribute: record.attribute,
+		value: record.value,
+		temporal_phrase: record.temporalPhrase,
+		time: record.time,
+		ended_time: record.endedTime,
+		ends_current: record.endsCurrent,
+		ended_at_phrase: record.endedAtPhrase,
+		importance: record.importance,
+		changes_current_state: record.changesCurrentState,
+		todo: record.todo,
+		close_reason: record.closeReason,
+		source_span: {
+			turn_index: record.sourceSpan.turnIndex,
+			quote: record.sourceSpan.quote,
+		},
+		relations: record.relations,
+		single_claim: record.singleClaim,
+	} satisfies Required<z.infer<typeof wireRecordSchema>>;
+}
+
 function validatePayload(value: unknown, turnCount: number): AtomicExtractionRecord[] | undefined {
 	let records: z.infer<typeof wireRecordSchema>[];
 	if (Array.isArray(value)) {
