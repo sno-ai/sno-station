@@ -39,6 +39,7 @@ import {
 	type AtomicExtractionRecord,
 	type AtomicExtractionTurn,
 	parseAtomicExtractionReply,
+	toAtomicWireRecord,
 } from "./atomic-extraction-reply";
 import {
 	ATOMIC_EXTRACTION_SKILL,
@@ -820,7 +821,7 @@ export function createAtomicResplitTransport(llm: LlmClient, locale: Locale): At
 	return {
 		async resplit(input): Promise<AtomicExtractionRecord[] | null> {
 			const data = renderAtomicPromptData(
-				{ ...input, turns: numberAtomicTurns(input.turns) },
+				{ records: input.records.map(toAtomicWireRecord), turns: numberAtomicTurns(input.turns) },
 				locale,
 			);
 			// Model call E4: split compound records.
