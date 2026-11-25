@@ -200,6 +200,8 @@ describe("memory precision capture", () => {
 			"outside fact", "took research", "project's own files",
 			"visible in the work once it is carried out", "not lasting",
 			"An assignment handed to a worker", "only when it says it applies to later work as well",
+			"A change the owner reports in their own setup", "what they use now, and separately what they no longer use, each only when the owner states it",
+			"such as a change in the owner's own setup",
 		]) expect.soft(capturePrompts[0]).toContain(phrase);
 		expect.soft(capturePrompts[0]).not.toContain("commitment");
 	});
