@@ -383,9 +383,9 @@ describe("atomic memory extraction production entrypoint", () => {
 			target.database.prepare("SELECT COUNT(*) AS count FROM nodix_memory_entities").get(),
 		).toEqual({ count: 1 });
 
-		const compound = rows.find((row) => row.disposition_reason === "compound");
-		expect(compound).toMatchObject({ lane: "parked", subject: null, attribute: null });
-		expect(compound ? target.store.isMemoryOnFactSurface(compound.id) : true).toBe(false);
+		// The split failed, so the sentence holding two facts is kept whole and used, without a key.
+		const compound = rows.find((row) => row.text === "The user prefers curry and jazz.");
+		expect(compound).toMatchObject({ lane: "active", disposition_reason: null, subject: "user", attribute: null });
 		expect(rows.some((row) => row.text.includes("halfway through"))).toBe(false);
 
 		const liveSchema = target.database

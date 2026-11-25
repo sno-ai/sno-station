@@ -296,6 +296,21 @@ describe("atomic profileKeying behavior", () => {
 		expect(output[0]).not.toHaveProperty("keyingNote");
 	});
 
+	it("gives no key to a sentence that holds two facts", async () => {
+		const base = {
+			...enhancedRecord(0, { attribute: null, singleClaim: false }), lane: "active" as const, dispositionReason: null, resplit: true,
+			category: "profile" as const, endsCurrent: false, endedAtPhrase: null, endedAt: null,
+			time: { kind: "none" as const }, endedTime: { kind: "none" as const },
+			sourceSpan: { turnIndex: 0, quote: TURNS[0]?.content ?? "", startOffset: 0, endOffset: (TURNS[0]?.content ?? "").length },
+			value: TURNS[0]?.content ?? "",
+		};
+		const output = await runAtomicProfileKeying({
+			baseRecords: [base as never], turns: TURNS, projectId: "compound-unkeyed",
+			transport: new ScriptedKeyingTransport(() => [{ ...base, attribute: "preference.food", singleClaim: true } as never]),
+		});
+		expect(output.map(item => item.attribute)).toEqual([null]);
+	});
+
 	it("drops profileKeying records that pair with no base record, compound ones included", async () => {
 		const base = baseRecord(0, { value: "tea" });
 		const ambiguous = enhancedRecord(0, { claimText: "Call 2 says coffee.", value: "coffee" });

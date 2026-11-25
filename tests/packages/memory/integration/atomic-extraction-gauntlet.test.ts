@@ -139,7 +139,7 @@ describe("atomic extraction gauntlet", () => {
 		expectCompound(output[0] as AtomicGauntletRecord);
 	});
 
-	it("keeps every suspect compound when re-split is unavailable, throws, or is empty", async () => {
+	it("keeps every suspect usable and without a key when re-split is unavailable, throws, or is empty", async () => {
 		const suspects = [
 			record({ claimText: "Compound one.", singleClaim: false }),
 			record({ claimText: "Compound two.", singleClaim: false }),
@@ -162,8 +162,25 @@ describe("atomic extraction gauntlet", () => {
 			});
 			expect(transport.calls).toHaveLength(1);
 			expect(output).toHaveLength(suspects.length);
-			for (const kept of output) expectCompound(kept, failure);
+			for (const kept of output) expect(kept).toMatchObject({
+				lane: "active", dispositionReason: null, subject: "user", attribute: null, singleClaim: false,
+				resplit: true, resplitFailure: failure,
+			});
 		}
+	});
+
+	// 4% of the sentences set aside on one real store share their quote with another one of the same turn (2026-11-24).
+	it("uses a piece whose quote fits two sentences and keeps both sentences, since it proves neither was split", async () => {
+		const suspects = [
+			record({ claimText: "Compound one.", singleClaim: false }),
+			record({ claimText: "Compound two.", singleClaim: false }),
+		];
+		const output = await runAtomicExtractionGauntlet({
+			records: suspects, turns: TURNS,
+			resplitTransport: { async resplit() { return [record({ claimText: "Piece." })]; } },
+		});
+		expect(output.map(item => [item.claimText, item.lane])).toEqual([
+			["Piece.", "active"], ["Compound one.", "active"], ["Compound two.", "active"]]);
 	});
 
 	it("applies attribution, first exact quote offsets, episodic retention, and relation fallback", async () => {
