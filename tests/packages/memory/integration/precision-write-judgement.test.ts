@@ -10,7 +10,7 @@ import { createMemUpdateFixture } from "../fixtures/mem-update-fixture";
 import { modelReply, startRecorder } from "./fixtures/model-recorders";
 
 type Relation = "unrelated" | "same" | "replaces" | "overlaps" | "maybe-same" | "maybe-replaces";
-type Fact = { text: string; kind: "rule" | "fact" | "person"; subject?: "user"; role?: "user" | "assistant"; occurrence?: boolean; time?: CalendarInstruction };
+type Fact = { text: string; kind: "rule" | "fact" | "person"; subject?: "user"; role?: "user" | "assistant"; occurrence?: boolean; compound?: true; time?: CalendarInstruction };
 type JudgedFact = { index: number; text: string; by: string; rows: Array<{ id: string; text: string; by: string }> };
 type Row = { id: string; text: string; project: string; lane: string; metadata: Record<string, unknown> };
 const oldPort = "The owner requires the service to use port 8070.";
@@ -28,11 +28,14 @@ let judgments: JudgedFact[][];
 let answer: (fact: JudgedFact) => { index: number; rows: Array<{ id: string; relation: Relation }> } | undefined;
 let confirmation: boolean | "unreachable";
 let scope: "general" | "project" | "unsure";
+let splitReply: string;
+let guarded: number | undefined;
+let refused: number[];
 let endpoint: string;
 
 beforeAll(async () => { embedder = await createTestEmbedder(); });
 beforeEach(async () => {
-	closers = []; calls = []; judgments = []; confirmation = true; scope = "project";
+	closers = []; calls = []; judgments = []; confirmation = true; scope = "project"; splitReply = ""; guarded = undefined; refused = [];
 	facts = [{ text: newPort, kind: "rule" }];
 	answer = fact => ({ index: fact.index, rows: fact.rows.map(row => ({ id: row.id, relation: "replaces" })) });
 	// Keep the real model client and its reply parsing. Carry the call id to its external host port,
@@ -71,13 +74,14 @@ beforeEach(async () => {
 			const data = JSON.parse(lastLine) as { rows: Array<{ id: string }> };
 			return modelReply(JSON.stringify({ rows: data.rows.map(row => ({ id: row.id, scope })) }), raw);
 		}
+		if (content.includes("Task: split each compound record")) return modelReply(splitReply, raw);
 		if (content.includes("facts:\n")) {
 			const batch = JSON.parse(content.split("<take>\n").at(-1)?.split("\n</take>")[0] ?? "[]") as Array<{ id: number }>;
 			return modelReply(JSON.stringify({ enrichments: batch.map(({ id }) => {
 				const fact = facts[id];
 				return { id, kind: fact?.occurrence ? "occurrence" : "standing", attribute: "preference.communication_style",
 					value: fact?.text, ends_current: false, importance: "high", changes_current_state: false,
-					todo: "none", close_reason: null, single_claim: true, relations: [],
+					todo: "none", close_reason: null, single_claim: fact?.compound !== true, relations: [],
 					time: fact?.time ?? { kind: "none" }, ended_time: { kind: "none" } };
 			}) }), raw);
 		}
@@ -91,7 +95,7 @@ beforeEach(async () => {
 			return modelReply(JSON.stringify({ claims_found: kept.map(fact => fact.source_span.turn_index),
 				decisions: turns.filter(turn => turn.role === "user").map(turn => ({ turn_index: turn.turn_index, progress_only: false })), facts: kept }), raw);
 		}
-		if (content.includes("durable_self_statement")) return modelReply(JSON.stringify({ decisions: facts.map((_, record_index) => ({ record_index, durable_self_statement: true })) }), raw);
+		if (content.includes("durable_self_statement")) return modelReply(JSON.stringify({ decisions: Array.from({ length: guarded ?? facts.length }, (_, record_index) => ({ record_index, durable_self_statement: !refused.includes(record_index) })) }), raw);
 		if (content.includes("Task: resolve each unresolved standing subject")) return modelReply('{"resolutions":[]}', raw);
 		if (content.includes('"new_display_name":')) return modelReply('{"entity_id":"new"}', raw);
 		return modelReply('{"profile_candidates":[],"records":[]}', raw);
@@ -399,6 +403,60 @@ it("owner's person fact from a project, judged general: becomes shared and retir
 	expect.soft(other.body.memoryIds).toEqual([current.id]);
 	expect.soft(other.body.contextText).toContain("LM Studio");
 	expect.soft(other.body.contextText).not.toContain("Ollama server");
+});
+const wholeSentence = "I switched my local model server to LM Studio today and uninstalled Ollama.";
+// One piece bound to no sentence of this capture: the split said nothing about the sentence it was asked to split.
+const unrelatedSplit = JSON.stringify({ records: [{ kind: "standing", claim_text: "The owner likes tea.", subject: "user", subject_kind: "user",
+	attribute: null, value: "tea", temporal_phrase: null, time: { kind: "none" }, ended_time: { kind: "none" }, ends_current: false,
+	ended_at_phrase: null, importance: "medium", changes_current_state: false, todo: "none", close_reason: null,
+	source_span: { turn_index: 0, quote: "I like tea." }, relations: [], single_claim: true }] });
+it.each([["cannot be read", "no JSON here"], ["is empty", '{"records":[]}'], ["is about something else", unrelatedSplit]])(
+	"a sentence holding two facts whose split %s is kept whole, reaches other projects and retires the old shared fact", async (_name, reply) => {
+		const shared = await plant("The owner runs local models on an Ollama server.", { precision_kind: "person" }, "global");
+		facts = [{ text: wholeSentence, kind: "person", subject: "user", compound: true }];
+		splitReply = reply; scope = "general";
+		await capture();
+		const current = written(wholeSentence);
+		expect(current).toMatchObject({ lane: "active", project: "global" });
+		// Two facts in one row must never share a key with a single fact: no row may be retired by key because of it.
+		expect(fixture.database.sqlite.prepare("SELECT attribute FROM nodix_memories WHERE id = ?").get(current.id)).toEqual({ attribute: null });
+		expectClosed(shared.id, current.id);
+		const other = await fixture.post("/v1/get-recall", { scope: { ...fixture.scope, project: "another-project", session: randomUUID() },
+			query: "hi", options: { source: "auto", injectionPhase: "session-start" } }, skin);
+		expect(other.body.memoryIds).toEqual([current.id]);
+	});
+it("a sentence holding two facts that was split is still set aside, and only its pieces are used", async () => {
+	const piece = (claim: string) => ({ ...JSON.parse(unrelatedSplit).records[0], claim_text: claim, value: claim,
+		source_span: { turn_index: 0, quote: wholeSentence } });
+	facts = [{ text: wholeSentence, kind: "person", subject: "user", compound: true }];
+	guarded = 2;
+	splitReply = JSON.stringify({ records: [piece("The owner's local model server is LM Studio."), piece("The owner has uninstalled Ollama.")] });
+	await capture();
+	expect(rows().filter(item => item.lane === "active").map(item => item.text).sort()).toEqual([
+		"The owner has uninstalled Ollama.", "The owner's local model server is LM Studio."]);
+	expect(rows().filter(item => item.lane === "parked").map(item => item.text)).toEqual([wholeSentence]);
+});
+// Real case (2026-11-24, 2 of 8 splits): the split was fine, but the check that follows refused one of its two pieces.
+const pieceOf = (claim: string) => ({ ...JSON.parse(unrelatedSplit).records[0], claim_text: claim, value: claim,
+	source_span: { turn_index: 0, quote: wholeSentence } });
+it("a sentence holding two facts is kept whole when one of its pieces is refused afterwards, so no half is lost", async () => {
+	facts = [{ text: wholeSentence, kind: "person", subject: "user", compound: true }];
+	guarded = 2; refused = [1]; scope = "general";
+	splitReply = JSON.stringify({ records: [pieceOf("The owner's local model server is LM Studio."), pieceOf("The owner has uninstalled Ollama.")] });
+	answer = fact => ({ index: fact.index, rows: fact.rows.map(row => ({ id: row.id, relation: "unrelated" })) });
+	await capture();
+	expect(rows().filter(item => item.lane === "active").map(item => [item.text, item.project]).sort()).toEqual([
+		[wholeSentence, "global"], ["The owner's local model server is LM Studio.", "global"]]);
+	expect(rows().filter(item => item.lane === "parked").map(item => item.text)).toEqual(["The owner has uninstalled Ollama."]);
+	expect(fixture.database.sqlite.prepare("SELECT attribute FROM nodix_memories WHERE id = ?").get(written(wholeSentence).id)).toEqual({ attribute: null });
+});
+it("a sentence holding two facts stays set aside when every one of its pieces is refused", async () => {
+	facts = [{ text: wholeSentence, kind: "person", subject: "user", compound: true }];
+	guarded = 2; refused = [0, 1];
+	splitReply = JSON.stringify({ records: [pieceOf("The owner's local model server is LM Studio."), pieceOf("The owner has uninstalled Ollama.")] });
+	await capture();
+	expect(rows().filter(item => item.lane === "active")).toEqual([]);
+	expect(rows().filter(item => item.lane === "parked").map(item => item.text)).toContain(wholeSentence);
 });
 it("two owner's person facts in one capture correcting the same shared fact, judged general: both become shared and the shared fact is retired", async () => {
 	const usesLmStudio = "The owner's local model server is LM Studio.";
