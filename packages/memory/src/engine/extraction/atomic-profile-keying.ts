@@ -314,7 +314,7 @@ function reconcileTurn(
 			// then parked. The adapter may only fill a missing key and add relations.
 			output.push({
 				...base,
-				attribute: base.attribute ?? adapterRecord.attribute,
+				attribute: base.singleClaim ? (base.attribute ?? adapterRecord.attribute) : null,
 				relations,
 			});
 		}

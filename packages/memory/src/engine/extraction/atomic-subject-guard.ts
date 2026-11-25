@@ -15,6 +15,7 @@ import {
 } from "./atomic-extraction-reply";
 import {
 	type AtomicGauntletRecord,
+	atomicCompoundSource,
 	runAtomicExtractionGauntlet,
 } from "./atomic-extraction-gauntlet";
 import {
@@ -242,6 +243,39 @@ async function repairMissingHalves(
 	return [...input.records, ...repaired.flat()];
 }
 
+function restorePartiallyRefusedCompounds(records: AtomicKeyedRecord[]): AtomicKeyedRecord[] {
+	const active = new Set<AtomicGauntletRecord>();
+	const refused = new Set<AtomicGauntletRecord>();
+	for (const record of records) {
+		const whole = record[atomicCompoundSource];
+		if (whole === undefined) continue;
+		if (record.lane === "active") active.add(whole);
+		if (record.dispositionReason === "subject-rejected" || record.dispositionReason === "subject-unverified") {
+			refused.add(whole);
+		}
+	}
+	if (refused.size === 0) return records;
+	return records.map((record) => {
+		const whole = record[atomicCompoundSource];
+		if (record.dispositionReason !== "compound" || whole === undefined || !active.has(whole) || !refused.has(whole)) {
+			return record;
+		}
+		// Category derivation already resolved standing subjects and normalizes active user profiles.
+		let subject = record.subject;
+		if (record.kind === "occurrence") subject = whole.subject;
+		if (record.kind === "standing" && record.subjectKind === "user" && whole.subject !== null) {
+			subject = "user";
+		}
+		return {
+			...record,
+			subject,
+			attribute: null,
+			lane: whole.lane,
+			dispositionReason: whole.dispositionReason,
+		};
+	});
+}
+
 export async function runAtomicSubjectGuard(
 	input: RunAtomicSubjectGuardInput,
 ): Promise<AtomicKeyedRecord[]> {
@@ -283,7 +317,7 @@ export async function runAtomicSubjectGuard(
 			const record = records[index];
 			if (record) records[index] = parkSubject(record, "subject-unverified");
 		}
-		return records;
+		return restorePartiallyRefusedCompounds(records);
 	}
 	let undecided = 0;
 	for (const [decisionIndex, recordIndex] of guardedIndexes.entries()) {
@@ -300,5 +334,5 @@ export async function runAtomicSubjectGuard(
 			guardedRecordCount: guardedRecords.length,
 		}, { event_name: "memory.atomic_subject_guard.diagnostic", file: "packages/memory/src/engine/extraction/atomic-subject-guard.ts", function: "runAtomicSubjectGuard", site_id: "extraction.atomic-subject-guard.runAtomicSubjectGuard.7fbb9c4f6d" });
 	}
-	return records;
+	return restorePartiallyRefusedCompounds(records);
 }

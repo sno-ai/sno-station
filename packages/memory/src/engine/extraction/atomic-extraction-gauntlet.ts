@@ -24,6 +24,9 @@ import {
 
 const log = createLogger("sno-station-mem:atomic-extraction-gauntlet");
 
+// Spread copies preserve the link, but prompts and storage projections do not serialize it.
+export const atomicCompoundSource: unique symbol = Symbol("atomicCompoundSource");
+
 export type AtomicExtractionDispositionReason =
 	| "compound"
 	| "subject-unverified"
@@ -49,6 +52,7 @@ export interface AtomicGauntletRecord
 	assertedBy?: "assistant";
 	lane: "active" | "parked";
 	dispositionReason: AtomicExtractionDispositionReason | null;
+	[atomicCompoundSource]?: AtomicGauntletRecord;
 	resplit: boolean;
 	resplitFailure?: string;
 	resolvedTimeInvalid?: boolean;
@@ -155,13 +159,23 @@ function normalizeRelations(record: AtomicExtractionRecord): AtomicGauntletRelat
 	}));
 }
 
+function parkCompound(record: AtomicGauntletRecord): AtomicGauntletRecord {
+	return {
+		...record,
+		subject: record.subjectKind === "named_entity" ? record.subject : null,
+		attribute: null,
+		lane: "parked",
+		dispositionReason: "compound",
+	};
+}
+
 function processRecord(
 	record: AtomicExtractionRecord,
 	turns: readonly AtomicExtractionTurn[],
 	locale: Locale,
 	resplit: boolean,
 	captureMode: import("../../store/store").CaptureMode = "chat",
-	forceCompound = false,
+	parkWhole = isCompoundSuspect(record),
 	resplitFailure?: string,
 ): AtomicGauntletRecord {
 	const span = resolveSpan(record.sourceSpan, turns, locale, captureMode === "work");
@@ -170,26 +184,21 @@ function processRecord(
 		&& record.subjectKind !== "user";
 	const subjectUnverified =
 		record.kind === "standing" && ((!assistantFact && sourceRole !== "user") || span === null);
-	const compound = forceCompound || isCompoundSuspect(record);
-	const dispositionReason = compound
-		? "compound"
-		: subjectUnverified
-			? "subject-unverified"
-			: null;
-	const unkeyed = compound || subjectUnverified || (record.kind === "occurrence" && span === null);
-	return {
+	const unkeyed = subjectUnverified || (record.kind === "occurrence" && span === null);
+	const processed: AtomicGauntletRecord = {
 		...record,
 		...(assistantFact && record.kind === "standing" ? { assertedBy: "assistant" as const } : {}),
 		subject: unkeyed && record.subjectKind !== "named_entity" ? null : record.subject,
-		attribute: unkeyed ? null : record.attribute,
+		attribute: unkeyed || isCompoundSuspect(record) ? null : record.attribute,
 		sourceSpan: span,
 		...(span === null ? { unresolvedSourceSpan: record.sourceSpan } : {}),
 		relations: normalizeRelations(record),
-		lane: dispositionReason === null ? "active" : "parked",
-		dispositionReason,
+		lane: subjectUnverified ? "parked" : "active",
+		dispositionReason: subjectUnverified ? "subject-unverified" : null,
 		resplit,
 		...(resplitFailure === undefined ? {} : { resplitFailure }),
 	};
+	return parkWhole ? parkCompound(processed) : processed;
 }
 
 export async function runAtomicExtractionGauntlet(
@@ -213,57 +222,67 @@ export async function runAtomicExtractionGauntlet(
 	const output = ordinary.map((record) =>
 		normalizeTemporal(processRecord(record, input.turns, locale, alreadyResplit, input.captureMode)),
 	);
-	const keepSuspects = (failure?: string): AtomicGauntletRecord[] => [
-		...output,
-		...suspects.map((record) =>
-			normalizeTemporal(processRecord(record, input.turns, locale, true, input.captureMode, true, failure)),
-		),
-	];
 	if (suspects.length === 0) return output;
 	if (alreadyResplit || input.resplitTransport === undefined) {
-		return keepSuspects();
+		return [
+			...output,
+			...suspects.map((record) =>
+				normalizeTemporal(processRecord(record, input.turns, locale, true, input.captureMode)),
+			),
+		];
 	}
 
-	let splitRecords: AtomicExtractionRecord[] | null;
+	let splitRecords: AtomicExtractionRecord[] | null = null;
+	let resplitFailure: string | undefined;
 	try {
 		const sanitized = sanitizeAtomicPromptValue(
 			{ records: suspects, turns: input.turns },
 			locale,
 		);
-		splitRecords = await input.resplitTransport.resplit(sanitized.value);
-		if (splitRecords !== null) {
-			splitRecords = splitRecords.map((record) =>
-				withAtomicSanitizerMatches(record, sanitized.matched),
-			);
-		}
+		const records = await input.resplitTransport.resplit(sanitized.value);
+		splitRecords = records?.map((record) => withAtomicSanitizerMatches(record, sanitized.matched)) ?? null;
 	} catch (error) {
-		const failure = error instanceof Error ? error.message : String(error);
+		resplitFailure = error instanceof Error ? error.message : String(error);
 		log.warn("atomic extraction re-split failed", { error, suspectCount: suspects.length }, { event_name: "memory.atomic_extraction_gauntlet.diagnostic", file: "packages/memory/src/engine/extraction/atomic-extraction-gauntlet.ts", function: "runAtomicExtractionGauntlet", site_id: "extraction.atomic-extraction-gauntlet.runAtomicExtractionGauntlet.365701f979" });
-		return keepSuspects(failure);
 	}
 	if (splitRecords === null) {
-		return keepSuspects("resplit-unavailable");
+		resplitFailure ??= "resplit-unavailable";
+	} else if (splitRecords.length === 0) {
+		resplitFailure = "resplit-empty";
 	}
-	if (splitRecords.length === 0) {
-		return keepSuspects("resplit-empty");
-	}
-	const boundSplitRecords = splitRecords.flatMap((record) => {
-		const suspect = suspects.find(
-			(suspect) =>
-				record.sourceSpan.turnIndex === suspect.sourceSpan.turnIndex &&
-				sanitizeAtomicPromptValue(suspect.sourceSpan.quote, locale).value.includes(
-					record.sourceSpan.quote,
-				),
+	const wholeRecords = suspects.map((record) => ({
+		sourceSpan: record.sourceSpan,
+		whole: normalizeTemporal(
+			processRecord(record, input.turns, locale, true, input.captureMode, false, resplitFailure),
+		),
+	}));
+	const wholesWithActiveSplit = new Set<AtomicGauntletRecord>();
+	const processedSplitRecords = (splitRecords ?? []).flatMap((record) => {
+		const [match, ambiguous] = wholeRecords.filter(
+			({ sourceSpan }) =>
+				record.sourceSpan.turnIndex === sourceSpan.turnIndex &&
+				sanitizeAtomicPromptValue(sourceSpan.quote, locale).value.includes(record.sourceSpan.quote),
 		);
-		return suspect === undefined ? [] : [{ ...record, ...(suspect.precisionKind === undefined ? {} : { precisionKind: suspect.precisionKind }) }];
+		if (match === undefined) return [];
+		const { whole } = match;
+		const splitRecord = {
+			...record,
+			...(whole.precisionKind === undefined ? {} : { precisionKind: whole.precisionKind }),
+		};
+		const processed = normalizeTemporal(
+			processRecord(splitRecord, input.turns, locale, true, input.captureMode),
+		);
+		if (ambiguous !== undefined || processed.lane !== "active") return [processed];
+		wholesWithActiveSplit.add(whole);
+		return [{ ...processed, [atomicCompoundSource]: whole }];
 	});
 	return [
 		...output,
-		...boundSplitRecords.map((record) =>
-			normalizeTemporal(processRecord(record, input.turns, locale, true, input.captureMode)),
-		),
-		...suspects.map((record) =>
-			normalizeTemporal(processRecord(record, input.turns, locale, true, input.captureMode, true)),
+		...processedSplitRecords,
+		...wholeRecords.map(({ whole }) =>
+			wholesWithActiveSplit.has(whole)
+				? { ...parkCompound(whole), [atomicCompoundSource]: whole }
+				: whole,
 		),
 	];
 }
