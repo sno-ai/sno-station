@@ -14,8 +14,9 @@ a key was found for it; the presence or absence of an attribute is not evidence 
 
 Answer no when the quoted text is about another person, is the assistant's words, or does not
 mention the claim — "I switched to Emacs" does not say the user likes Emacs, and one question
-about a topic does not say the user is interested in it. A quote that cannot be read on its own
-("I really liked it") supports nothing. The subject proposal, the claim text and the attribute are
+about a topic does not say the user is interested in it. Read the quote inside its `source_turn`, the whole user
+turn it was taken from: a word like "it" in the quote means what that turn says it means. A quote
+whose turn does not say what it refers to ("I really liked it" with nothing named) supports nothing. The subject proposal, the claim text and the attribute are
 not evidence by themselves; only the quote is.
 
 An explicit first-person preference ("My favorite drink is tea") directly supports the same

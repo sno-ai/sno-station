@@ -59,6 +59,7 @@ export interface AtomicSubjectGuardTransport {
 	}): Promise<AtomicExtractionRecord[] | null>;
 	guardUserSubjects(input: {
 		records: readonly AtomicKeyedRecord[];
+		sourceTurns: readonly (string | null)[];
 		locale?: Locale;
 	}): Promise<readonly (boolean | null)[] | null>;
 }
@@ -99,6 +100,7 @@ function buildMissingHalfPrompt(
 
 function buildSubjectGuardPrompt(
 	records: readonly AtomicKeyedRecord[],
+	sourceTurns: readonly (string | null)[],
 	locale: Locale,
 ): { prompt: string; matched: string[] } {
 	const evidence = records.map((record, recordIndex) => ({
@@ -108,6 +110,7 @@ function buildSubjectGuardPrompt(
 		attribute: record.attribute,
 		value: record.value,
 		source_quote: record.sourceSpan?.quote ?? null,
+		source_turn: sourceTurns[recordIndex] ?? null,
 	}));
 	const data = renderAtomicPromptData(evidence, locale);
 	return {
@@ -140,8 +143,8 @@ export function createAtomicSubjectGuardTransport(llm: LlmClient): AtomicSubject
 				? parsed.records.map((record) => withAtomicSanitizerMatches(record, built.matched))
 				: null;
 		},
-		async guardUserSubjects({ records, locale }) {
-			const built = buildSubjectGuardPrompt(records, locale ?? DEFAULT_LOCALE);
+		async guardUserSubjects({ records, sourceTurns, locale }) {
+			const built = buildSubjectGuardPrompt(records, sourceTurns, locale ?? DEFAULT_LOCALE);
 			// Model call E6: subject check.
 			// Mode routing table: [IMP]-single-settings-file/settings-inventory.md
 			const raw = await llm.completeJson<unknown>({
@@ -291,9 +294,13 @@ export async function runAtomicSubjectGuard(
 		return record === undefined ? [] : [record];
 	});
 	const locale = input.locale ?? DEFAULT_LOCALE;
-	const sanitizedGuard = guardedRecords.map((record) =>
-		sanitizeAtomicPromptValue(record, locale),
-	);
+	const sanitizedGuard = guardedRecords.map((record) => {
+		const turn = record.sourceSpan === null ? undefined : input.turns[record.sourceSpan.turnIndex];
+		return sanitizeAtomicPromptValue(
+			{ record, sourceTurn: turn?.role === "user" ? turn.content : null },
+			locale,
+		);
+	});
 	for (const [guardedIndex, index] of guardedIndexes.entries()) {
 		const record = records[index];
 		const sanitizerMatches = sanitizedGuard[guardedIndex]?.matched ?? [];
@@ -302,7 +309,8 @@ export async function runAtomicSubjectGuard(
 	let decisions: readonly (boolean | null)[] | null;
 	try {
 		decisions = await input.transport.guardUserSubjects({
-			records: sanitizedGuard.map(({ value }) => value),
+			records: sanitizedGuard.map(({ value }) => value.record),
+			sourceTurns: sanitizedGuard.map(({ value }) => value.sourceTurn),
 			locale,
 		});
 	} catch (error) {
