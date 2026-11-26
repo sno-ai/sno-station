@@ -74,7 +74,9 @@ function forceSplitOffset(
 			hi = mid - 1;
 		}
 	}
-	const end = lo;
+	// Never cut between the two halves of a surrogate pair (an emoji, for one):
+	// both chunks would hold a broken character. Stepping back only lowers the count.
+	const end = splitsSurrogatePair(text, lo) ? lo - 1 : lo;
 	// Try to snap back to a whitespace boundary while still >= targetTokens.
 	const minSnapTokens = Math.max(targetTokens, 1);
 	for (let i = end; i > start; i--) {
@@ -86,7 +88,15 @@ function forceSplitOffset(
 			}
 		}
 	}
-	return end > start ? end : Math.min(text.length, start + 1);
+	if (end > start) return end;
+	return Math.min(text.length, splitsSurrogatePair(text, start + 1) ? start + 2 : start + 1);
+}
+
+/** True when `offset` falls between a high surrogate and its low surrogate. */
+function splitsSurrogatePair(text: string, offset: number): boolean {
+	const before = text.charCodeAt(offset - 1);
+	const after = text.charCodeAt(offset);
+	return before >= 0xd800 && before <= 0xdbff && after >= 0xdc00 && after <= 0xdfff;
 }
 
 /** Per PRD §7.2. Never return a chunk end that violates maxTokens. */

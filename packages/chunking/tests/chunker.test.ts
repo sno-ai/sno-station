@@ -166,6 +166,20 @@ describe("chunk()", () => {
 			}
 		});
 
+		it("force-split never cuts an emoji in half", () => {
+			// One ASCII char puts every emoji on an odd offset, so the cut lands between
+			// the two UTF-16 halves of one unless it steps back.
+			const text = `a${"\u{1F600}".repeat(1000)}`;
+			const chunks = chunk(text, { contentType: "prose" });
+			expect(chunks.length).toBeGreaterThan(1);
+			const loneSurrogate = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
+			for (const c of chunks) {
+				expect(c.chunkText).not.toMatch(loneSurrogate);
+				expect(c.tokenCount).toBeLessThanOrEqual(448);
+			}
+			expect(chunks.at(-1)?.endOffset).toBe(text.length);
+		});
+
 		it("respects maxTokens after paragraph boundaries are exhausted", () => {
 			const intro = "a".repeat(900);
 			const boundarylessTail = "b".repeat(5000);
