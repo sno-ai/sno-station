@@ -765,6 +765,7 @@ class AtomicConversationSubjectGuard {
 		try {
 			const decisions = await this.transport.guardUserSubjects({
 				records,
+				sourceTurns: this.pending.flatMap(({ input }) => [...input.sourceTurns]),
 				...(this.pending[0]?.input.locale ? { locale: this.pending[0].input.locale } : {}),
 			});
 			let offset = 0;
