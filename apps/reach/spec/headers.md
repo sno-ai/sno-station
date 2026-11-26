@@ -12,6 +12,10 @@ Required: one nonblank unfolded From, Subject, Date, Message-ID, X-Work and X-Ty
 | done | DONE |
 | cancel | CANCEL |
 | call | CALL |
+| result | RESULT |
+| routine | ROUTINE |
+| approval | APPROVAL |
+| failure | FAILURE |
 
 The tag is bracketed at the start of Subject, optionally preceded by `Re: `. To is action, Cc informed, Bcc private. Each delivered copy has its own Delivered-To; Bcc is stripped. Info cannot name To. An answer includes the original work's Reply-To destination on To, or its From when Reply-To is absent. Blank/invalid Reply-To is an error.
 
