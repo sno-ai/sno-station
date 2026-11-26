@@ -14,6 +14,9 @@ import type {
 	AtomicExtractionRecord,
 	AtomicExtractionTurn,
 } from "../../../../packages/memory/src/engine/extraction/atomic-extraction-reply";
+import { createSignedAtomicMemoryExtractionTransports } from "../../../../packages/memory/src/engine/extraction/atomic-memory-extraction";
+import { withMemoryOperation } from "../../../../packages/memory/src/engine/operation-cancellation";
+import { defaultSettings } from "../../../../packages/memory/config/settings";
 import { LlmClientTerminalError } from "../../../../packages/memory/src/model/llm-client";
 import type {
 	LlmClient,
@@ -527,5 +530,29 @@ describe("atomic profileKeying behavior", () => {
 		expect(JSON.stringify(unknownSlug)).not.toContain('"slug":"knowledge.technical"');
 		expect(unknownSlug).not.toHaveProperty("lane");
 		expect(unknownSlug).not.toHaveProperty("dispositionReason");
+	});
+
+	// Measured 2026-11-25 on a test machine with default agent-native installs: this call carries only `user: <turn>`, the
+	// trained adapter's shape, so a host agent answers in chat ("Understood. I'll put finished work on ...") that
+	// can never parse; on Claude Code the child then thought past the 110 s deadline in about half the captures.
+	it("sends a host agent no profile-key request, since it gets no instruction for one", async () => {
+		const callIds: string[] = [];
+		const transports = createSignedAtomicMemoryExtractionTransports({
+			preset: "mem_claw/sno_ai_extract",
+			routing: { mode: "agent-native", language: "en", modelCalls: defaultSettings().modelCalls },
+			agentPort: {
+				async complete(request) {
+					callIds.push(request.callId);
+					return { kind: "ok", text: "Understood. I'll put finished work on a wip/<topic> branch and squash it into one commit." };
+				},
+			},
+		});
+		const records = await withMemoryOperation("capture", undefined, () => transports.profileKeying.keyTurn({
+			turnIndex: 0,
+			turn: { role: "user", content: "In this repository, always put finished work on a branch named wip/<topic> and squash it into one commit." },
+		}), performance.now() + 300_000);
+		// Null is what the keying already turns a host's chat reply into: base records keep their own key.
+		expect(records).toBeNull();
+		expect(callIds).toEqual([]);
 	});
 });
