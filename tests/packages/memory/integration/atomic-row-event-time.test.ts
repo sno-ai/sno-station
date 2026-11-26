@@ -269,3 +269,58 @@ it("keeps same-session standing claims in source order when the later claim name
 		expect(historicalCandidates?.candidateRows).toEqual([]);
 	} finally { await store.close(); fixture.cleanup(); }
 });
+
+it("lets a claim that ended today retire a claim said earlier in the same session", async () => {
+	const { closeAtomicArrivalRetirementTargets, readAtomicArrivalRetirementCandidateSet } = await import("../../../../packages/memory/src/store/memory-store-atomic-extraction-write-api");
+	const fixture = createTestDb();
+	const store = new MemoryStore({ dbPath: fixture.dbPath, embedder });
+	try {
+		async function writeClaim(turn: number, input: AtomicKeyedRecord) {
+			const cards = buildAtomicWriteCards({ records: [input], idempotencyKeys: [`ended-today-${turn}`], sourceTurnOffset: turn, sessionTimestampMs: SESSION_MS, timezone: "UTC" });
+			const key = { ...ledgerKey(`ended-today-${turn}`), conversationId: "same-session-ended-today" };
+			store.beginAtomicExtractionChunk({ ...key, rawChunk: input.claimText, routingSnapshotId: "ended-today", runParameters: RUN_PARAMETERS, nowMs: WRITE_MS + turn * 3 });
+			store.recordAtomicExtractionCalls(key, WRITE_MS + turn * 3 + 1);
+			const written = await store.storeAtomicExtractionChunk({ ledgerKey: key, projectId: PROJECT_ID, extractorVersion: EXTRACTOR_VERSION, nowMs: WRITE_MS + turn * 3 + 2, cards });
+			const id = written.cardIds[0];
+			if (!id) throw new Error("claim was not stored");
+			return id;
+		}
+		// The tester's two turns: "my local model server is Ollama", then "I switched today and uninstalled Ollama".
+		const olderId = await writeClaim(0, record({ kind: "standing", category: "profile", claimText: "The user's local model server is Ollama.", attribute: "tools.local_model_server", value: "Ollama", temporalPhrase: null, time: { kind: "none" }, resolvedTime: null }));
+		const endedTime = { kind: "relative", amount: 0, unit: "day", precision: "day" } as const;
+		const endedAt = calculateCalendarTime(endedTime, new Date(SESSION_MS).toISOString(), "UTC");
+		const newerId = await writeClaim(1, record({
+			kind: "standing", category: "profile", claimText: "The user no longer uses Ollama; they uninstalled it today.",
+			attribute: "tools.local_model_server", value: "Ollama", temporalPhrase: "today", time: { kind: "unresolved" }, resolvedTime: null,
+			endedTime, endsCurrent: true, endedAtPhrase: "today", endedAt,
+			changesCurrentState: true,
+		}));
+		// "Today" said at 09:00 must not be dated 00:00, before the claim it ends.
+		expect(fixture.sqlite.prepare("SELECT valid_from FROM nodix_memories WHERE id = ?").get(newerId)).toEqual({ valid_from: 1_780_563_600_000 });
+		const readerStore = store as unknown as Parameters<typeof readAtomicArrivalRetirementCandidateSet>[0];
+		const candidates = await readAtomicArrivalRetirementCandidateSet(readerStore, { projectId: PROJECT_ID, nominatedRowId: newerId, jobId: "ended-today" });
+		expect(candidates?.candidateRows.map((row) => row.text)).toEqual(["The user's local model server is Ollama."]);
+		await closeAtomicArrivalRetirementTargets(readerStore, { jobId: "ended-today", nominatedRowId: newerId, targetRowIds: [olderId], supersededAt: WRITE_MS + 10 });
+		const closedBy = JSON.parse(store.getById(olderId)?.metadata ?? "{}").superseded_by;
+		expect(store.getById(closedBy)?.text).toBe("The user no longer uses Ollama; they uninstalled it today.");
+
+		const todoStart = { kind: "relative", amount: -1, unit: "day", precision: "day" } as const;
+		const todoId = await writeClaim(2, record({
+			kind: "standing", category: "profile", claimText: "The user finished filing the report today.",
+			attribute: "active_tasks", value: "File the report", todo: "done", closeReason: "done",
+			time: todoStart, resolvedTime: calculateCalendarTime(todoStart, new Date(SESSION_MS).toISOString(), "UTC"),
+			endedTime, endsCurrent: true, endedAtPhrase: "today", endedAt,
+		}));
+		expect(fixture.sqlite.prepare("SELECT valid_until FROM nodix_memories WHERE id = ?").get(todoId)).toEqual({ valid_until: 1_780_531_200_000 });
+
+		const morningStart = { kind: "absolute", year: 2026, month: 6, day: 4, hour: 8, minute: 0, precision: "minute", timezone: "UTC" } as const;
+		const morningClaimId = await writeClaim(3, record({
+			kind: "standing", category: "profile", claimText: "The user started using LM Studio this morning and uninstalled it today.",
+			attribute: "tools.local_model_server", value: "LM Studio", temporalPhrase: "this morning",
+			time: morningStart, resolvedTime: calculateCalendarTime(morningStart),
+			endedTime, endsCurrent: true, endedAtPhrase: "today", endedAt,
+			changesCurrentState: true,
+		}));
+		expect(fixture.sqlite.prepare("SELECT valid_from FROM nodix_memories WHERE id = ?").get(morningClaimId)).toEqual({ valid_from: 1_780_563_600_000 });
+	} finally { await store.close(); fixture.cleanup(); }
+});

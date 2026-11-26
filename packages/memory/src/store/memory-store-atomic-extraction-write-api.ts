@@ -846,15 +846,21 @@ function endedCardStaysLive(card: AtomicExtractionWriteCard): boolean {
 }
 
 /**
- * A live ended claim takes effect when the user says it did, not when they said it: its
- * `valid_from` is the ended time when that is earlier, and it is settled BEFORE the insert so the
- * column, the order key in metadata and the arrival judgement all read the same value.
+ * A live ended claim takes effect at the session timestamp when that timestamp falls within its
+ * day-precision ending. Otherwise, its ending replaces a missing or later `valid_from`.
  */
 function effectiveFrom(prepared: PreparedAtomicCard): PreparedAtomicCard {
 	const { card } = prepared;
 	if (!endedCardStaysLive(card) || card.endedAt === null) return prepared;
-	if (card.validFrom !== null && card.endedAt >= card.validFrom) return prepared;
-	return { ...prepared, card: { ...card, validFrom: card.endedAt } };
+	const { ended_at_precision, ended_at_from, ended_at_until } = card.metadata ?? {};
+	const endsOnSessionDay =
+		ended_at_precision === "day" &&
+		typeof ended_at_from === "number" &&
+		typeof ended_at_until === "number" &&
+		ended_at_from <= card.timestamp &&
+		card.timestamp < ended_at_until;
+	if (!endsOnSessionDay && card.validFrom !== null && card.endedAt >= card.validFrom) return prepared;
+	return { ...prepared, card: { ...card, validFrom: endsOnSessionDay ? card.timestamp : card.endedAt } };
 }
 
 function closeEndedCardAtCreate(
