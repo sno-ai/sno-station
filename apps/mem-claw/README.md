@@ -28,7 +28,7 @@ across conversations.
 2. Install the plugin:
 
    ```bash
-   openclaw plugins install @snoai/mem-claw@2.3.2
+   openclaw plugins install @snoai/mem-claw@2.3.5
    ```
 
    To upgrade later, run `sno update`; OpenClaw refuses a second `openclaw plugins install` while its gateway is running.
