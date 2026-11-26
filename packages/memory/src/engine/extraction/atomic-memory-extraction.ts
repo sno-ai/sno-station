@@ -862,6 +862,7 @@ export function createSignedAtomicMemoryExtractionTransports(
 		...config,
 		preset: usesAgentTier ? config.preset : FIXED_MEMORY_SNO_EXTRACT_PROFILE,
 	});
+	const profileRoute = resolveLlmRoute({ callId: "E9", config: config.routing });
 	const verdictRoute = resolveLlmRoute({
 		callId: "E10",
 		config: config.routing,
@@ -870,7 +871,11 @@ export function createSignedAtomicMemoryExtractionTransports(
 	const adapterPrompt = !("off" in verdictRoute) && verdictRoute.tier === "snoRemMem";
 	return {
 		generic: createAtomicGenericExtractionTransport(chat),
-		profileKeying: createBProfileKeyingTransport(profile),
+		// E9 sends only the adapter's trained prompt shape, with no instruction for a host agent.
+		profileKeying:
+			!("off" in profileRoute) && profileRoute.tier === "agent"
+				? { keyTurn: async () => null }
+				: createBProfileKeyingTransport(profile),
 		resplit: createAtomicResplitTransport(chat, locale),
 		subjectGuard: createAtomicSubjectGuardTransport(chat),
 		retirementVerdict: {
