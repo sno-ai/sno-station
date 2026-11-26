@@ -139,7 +139,7 @@ describe("atomic subject guard boundary", () => {
 			const records = CASES.map(guardRecord);
 			const rounds: readonly boolean[][] = await Promise.all(
 				Array.from({ length: ROUNDS }, async () => {
-					const decisions = await transports.subjectGuard.guardUserSubjects({ records });
+					const decisions = await transports.subjectGuard.guardUserSubjects({ records, sourceTurns: records.map(() => null) });
 					if (decisions === null) throw new Error("the guard returned no decisions");
 					if (decisions.length !== CASES.length) {
 						throw new Error(

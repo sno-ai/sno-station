@@ -213,7 +213,7 @@ describe("atomic extraction prompt contract", () => {
 			turn,
 			turns: [turn],
 		});
-		await subjectTransport.guardUserSubjects({ records: [record] });
+		await subjectTransport.guardUserSubjects({ records: [record], sourceTurns: [turn.content] });
 
 		expect(new Set(client.requests.map(({ callId }) => callId))).toEqual(
 			new Set(["E1", "E9", "E4", "E5", "E6"]),
