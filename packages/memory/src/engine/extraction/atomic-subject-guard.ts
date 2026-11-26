@@ -37,6 +37,9 @@ import { DEFAULT_LOCALE, type Locale } from "../i18n/locales";
 
 const log = createLogger("sno-station-mem:atomic-subject-guard");
 
+// A word's referent is nearby, so keep the context without sending a whole pasted log.
+const SUBJECT_QUOTE_CONTEXT_CHARS = 400;
+
 const guardReplySchema = z
 	.object({
 		decisions: z.array(
@@ -295,11 +298,20 @@ export async function runAtomicSubjectGuard(
 	});
 	const locale = input.locale ?? DEFAULT_LOCALE;
 	const sanitizedGuard = guardedRecords.map((record) => {
-		const turn = record.sourceSpan === null ? undefined : input.turns[record.sourceSpan.turnIndex];
-		return sanitizeAtomicPromptValue(
-			{ record, sourceTurn: turn?.role === "user" ? turn.content : null },
-			locale,
-		);
+		const span = record.sourceSpan;
+		const turn = span === null ? undefined : input.turns[span.turnIndex];
+		let sourceTurn: string | null = null;
+		if (span !== null && turn?.role === "user") {
+			const start = span.startOffset ?? turn.content.indexOf(span.quote);
+			if (start !== -1) {
+				const end = span.endOffset ?? start + span.quote.length;
+				sourceTurn = turn.content.slice(
+					Math.max(0, start - SUBJECT_QUOTE_CONTEXT_CHARS),
+					end + SUBJECT_QUOTE_CONTEXT_CHARS,
+				);
+			}
+		}
+		return sanitizeAtomicPromptValue({ record, sourceTurn }, locale);
 	});
 	for (const [guardedIndex, index] of guardedIndexes.entries()) {
 		const record = records[index];

@@ -482,7 +482,31 @@ describe("atomic subject guard failure behavior", () => {
 		});
 		const prompt = String(client.jsonRequests[0]?.prompt);
 		expect(prompt.split(`"source_turn":${JSON.stringify(turn)}`)).toHaveLength(3);
-		expect(prompt).toContain('a word like "it" in the quote means what that turn says it');
+		expect(prompt).toContain('a word like "it" in the quote means what those words say it');
 		expect(output.map((record) => record.lane)).toEqual(["active", "active"]);
+	});
+
+	it("omits distant pasted log text from the subject check", async () => {
+		const log = "pasted-log-start\n".padEnd(5_000, "Build step completed.\n");
+		const quote = "Always run the tests with --runInBand in this repository.";
+		const turn = `${log}\n${quote}`;
+		const client = new RecordingClient(null, {
+			decisions: [{ record_index: 0, durable_self_statement: true }],
+		});
+		await runAtomicSubjectGuard({
+			records: [enhancedRecord(0, {
+				claimText: "The user wants tests in this repository run with --runInBand.",
+				attribute: null,
+				value: null,
+				sourceSpan: { turnIndex: 0, quote, startOffset: log.length + 1, endOffset: turn.length },
+			})],
+			turns: [{ role: "user", content: turn }],
+			transport: createAtomicSubjectGuardTransport(client),
+		});
+		const prompt = String(client.jsonRequests[0]?.prompt);
+		expect(prompt).toContain('"source_quote":"Always run the tests with --runInBand in this repository."');
+		expect(prompt).toContain('"source_turn":');
+		expect(prompt).not.toContain("pasted-log-start");
+		expect(prompt.length).toBeLessThan(40_000);
 	});
 });
