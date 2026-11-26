@@ -22,6 +22,8 @@ const MAJORITY = 2;
 interface GuardCase {
 	claim: string;
 	quote: string;
+	/** The whole user turn the quote was cut from; null for the assistant's words, which the product never sends. */
+	turn: string | null;
 	want: boolean;
 	why: string;
 }
@@ -37,30 +39,35 @@ const CASES: GuardCase[] = [
 	{
 		claim: "User needs to update research proposal on 2026-06-05.",
 		quote: "I actually need to update my research proposal today.",
+		turn: "Busy week ahead. I actually need to update my research proposal today.",
 		want: true,
 		why: "first-person intention",
 	},
 	{
 		claim: "User needs to schedule health appointments.",
 		quote: "I really need to schedule those health appointments.",
+		turn: "I really need to schedule those health appointments. They keep slipping.",
 		want: true,
 		why: "first-person intention",
 	},
 	{
 		claim: "User needs to visit the university library sometime soon.",
 		quote: "I also need to visit the university library sometime soon.",
+		turn: "I also need to visit the university library sometime soon.",
 		want: true,
 		why: "first-person intention, almost verbatim",
 	},
 	{
 		claim: "User needs to plan quiet research time for themselves soon.",
 		quote: "I need to plan some quiet research time for myself soon.",
+		turn: "I need to plan some quiet research time for myself soon.",
 		want: true,
 		why: "first-person intention, almost verbatim",
 	},
 	{
 		claim: "User is looking forward to exploring options for academic conference attendance.",
 		quote: "I'm looking forward to exploring the options.",
+		turn: "Thanks for the list of conferences. I'm looking forward to exploring the options.",
 		want: true,
 		why: "first-person anticipation",
 	},
@@ -68,24 +75,29 @@ const CASES: GuardCase[] = [
 		claim: "User is interested in quantum computing.",
 		quote:
 			'I was just thinking about how much technology has advanced lately, which made me wonder, what exactly is "quantum computing"?',
+		turn:
+			'I was just thinking about how much technology has advanced lately, which made me wonder, what exactly is "quantum computing"?',
 		want: false,
 		why: "one question about a topic is not an interest",
 	},
 	{
 		claim: 'User likes the book "The Great Gatsby".',
 		quote: "I really liked it",
+		turn: "I really liked it. Anyway, can you fix the failing test?",
 		want: false,
 		why: "the quote names nothing on its own",
 	},
 	{
 		claim: "User lives in Shenzhen.",
 		quote: "Zhang Wei is our backend engineer and he lives in Shenzhen.",
+		turn: "Zhang Wei is our backend engineer and he lives in Shenzhen. Ask him about the API.",
 		want: false,
 		why: "another person",
 	},
 	{
 		claim: "User prefers dark roast coffee.",
 		quote: "Dark roast is a great choice if you like a bolder cup.",
+		turn: null,
 		want: false,
 		why: "the assistant's words",
 	},
@@ -139,7 +151,7 @@ describe("atomic subject guard boundary", () => {
 			const records = CASES.map(guardRecord);
 			const rounds: readonly boolean[][] = await Promise.all(
 				Array.from({ length: ROUNDS }, async () => {
-					const decisions = await transports.subjectGuard.guardUserSubjects({ records, sourceTurns: records.map(() => null) });
+					const decisions = await transports.subjectGuard.guardUserSubjects({ records, sourceTurns: CASES.map(({ turn }) => turn) });
 					if (decisions === null) throw new Error("the guard returned no decisions");
 					if (decisions.length !== CASES.length) {
 						throw new Error(

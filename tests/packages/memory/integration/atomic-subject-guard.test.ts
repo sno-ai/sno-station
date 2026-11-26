@@ -324,7 +324,7 @@ describe("atomic subject guard failure behavior", () => {
 		});
 	});
 
-	it("keeps an unanswered episode alone and parks compound repair without another re-split", async () => {
+	it("keeps an unanswered episode alone and leaves a compound repair out without another re-split", async () => {
 		for (const answer of [null, [], new Error("ordinary repair failure")]) {
 			const transport = new ScriptedSubjectTransport(
 				() => {
@@ -446,25 +446,43 @@ describe("atomic subject guard failure behavior", () => {
 	// Measured 2026-11-26 on a test machine: with the quote "squash it into one commit" alone, Claude refused that
 	// half of the rule 32 of 40 times and Codex 9 of 10; with the whole turn beside the quote, 0 of 20 and 0 of 10.
 	it("shows the subject check the whole user turn each quote was taken from", async () => {
-		const turn = "In this repository, always put finished work on a branch named wip/<topic> and squash it into one commit.";
+		const turn =
+			"In this repository, always put finished work on a branch named wip/<topic> and squash it into one commit.";
 		const half = (claimText: string, quote: string): AtomicKeyedRecord => ({
-			...enhancedRecord(0), claimText, attribute: null, singleClaim: true,
-			sourceSpan: { turnIndex: 0, quote, startOffset: turn.indexOf(quote), endOffset: turn.indexOf(quote) + quote.length },
+			...enhancedRecord(0),
+			claimText,
+			attribute: null,
+			singleClaim: true,
+			sourceSpan: {
+				turnIndex: 0,
+				quote,
+				startOffset: turn.indexOf(quote),
+				endOffset: turn.indexOf(quote) + quote.length,
+			},
 		});
-		const client = new RecordingClient(null, { decisions: [
-			{ record_index: 0, durable_self_statement: true }, { record_index: 1, durable_self_statement: true },
-		] });
+		const client = new RecordingClient(null, {
+			decisions: [
+				{ record_index: 0, durable_self_statement: true },
+				{ record_index: 1, durable_self_statement: true },
+			],
+		});
 		const output = await runAtomicSubjectGuard({
 			records: [
-				half("In this repository, the user wants finished work always put on a branch named wip/<topic>.", "In this repository, always put finished work on a branch named wip/<topic>"),
-				half("In this repository, the user wants finished work always squashed into one commit.", "squash it into one commit"),
+				half(
+					"In this repository, the user wants finished work always put on a branch named wip/<topic>.",
+					"In this repository, always put finished work on a branch named wip/<topic>",
+				),
+				half(
+					"In this repository, the user wants finished work always squashed into one commit.",
+					"squash it into one commit",
+				),
 			],
 			turns: [{ role: "user", content: turn }],
 			transport: createAtomicSubjectGuardTransport(client),
 		});
 		const prompt = String(client.jsonRequests[0]?.prompt);
 		expect(prompt.split(`"source_turn":${JSON.stringify(turn)}`)).toHaveLength(3);
-		expect(prompt).toContain('a word like "it" in the quote means what that turn says it means');
-		expect(output.map(record => record.lane)).toEqual(["active", "active"]);
+		expect(prompt).toContain('a word like "it" in the quote means what that turn says it');
+		expect(output.map((record) => record.lane)).toEqual(["active", "active"]);
 	});
 });
