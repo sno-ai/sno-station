@@ -73,7 +73,12 @@ function enhancedRecord(
 		attribute: "preference.food",
 		value: `value-${turnIndex}`,
 		temporalPhrase: null,
+		time: { kind: "none" },
+		endedTime: { kind: "none" },
 		resolvedTime: null,
+		endsCurrent: false,
+		endedAtPhrase: null,
+		endedAt: null,
 		importance: "medium",
 		changesCurrentState: false,
 		todo: "none",
@@ -149,7 +154,7 @@ describe("atomic profileKeying behavior", () => {
 	it("processes every resolvable source turn in ordered batches of four", async () => {
 		const transport = new BatchTrackingTransport();
 		const baseRecords = TURNS.map((_, turnIndex) =>
-			baseRecord(turnIndex, { category: "episodic" }),
+			baseRecord(turnIndex),
 		);
 		baseRecords.push(baseRecord(0, { claimText: "Unresolved base.", sourceSpan: null }));
 
@@ -384,7 +389,6 @@ describe("atomic profileKeying behavior", () => {
 		expect(client.requests[0]?.prompt).not.toContain("<take>");
 		expect(output).toEqual([
 			expect.objectContaining({
-				category: "profile",
 				attribute: "preference.food",
 				sourceSpan: { turnIndex: 7, quote: turn.content },
 			}),
