@@ -566,7 +566,7 @@ describe("atomic sanitizer boundaries", () => {
 			turns: [{ role: "user", content: `Before ${ATTACK} after` }],
 			locale: "en",
 		});
-		await subjectTransport.guardUserSubjects({ records: [guarded], locale: "en" });
+		await subjectTransport.guardUserSubjects({ records: [guarded], sourceTurns: [`Before ${ATTACK} after`], locale: "en" });
 		expect(repairRequests).toHaveLength(1);
 		expect(guardRequests).toHaveLength(1);
 		expectSanitizedDataPrompt(repairRequests[0]?.prompt ?? "");
